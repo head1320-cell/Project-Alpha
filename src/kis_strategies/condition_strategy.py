@@ -139,6 +139,19 @@ def _apply_function(s: pd.Series, fn: str, p: dict) -> pd.Series | None:
     return None
 
 
+def _apply_inner(s: pd.Series, cond: dict) -> pd.Series | None:
+    """내부 함수(중첩) 적용 — 예: 순위(변화율_기간(종가,20)) 의 변화율_기간 부분.
+
+    inner_function_id 가 없으면 원 시리즈 그대로. 횡단면 함수(rank/ratio)는
+    내부 지표로 쓸 수 없음(None → 조건 건너뜀)."""
+    inner = (cond.get("inner_function_id") or "").strip()
+    if not inner or inner == "base":
+        return s
+    if inner in ("rank", "ratio"):
+        return None
+    return _apply_function(s, inner, cond.get("inner_params") or {})
+
+
 # ── 단일 조건 평가 → True / False / None(평가 불가) ───────────
 def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = None) -> bool | None:
     s = _base_series(df, cond.get("factor_token", ""))
@@ -146,6 +159,9 @@ def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = No
         fv = _fundamental_value(cond.get("factor_token", ""), fundamentals)
         if fv is not None:
             s = pd.Series([fv] * len(df), index=df.index)
+    if s is None or len(s) == 0:
+        return None
+    s = _apply_inner(s, cond)
     if s is None or len(s) == 0:
         return None
     series = _apply_function(s, cond.get("function_id", "base"), cond.get("params") or {})
@@ -200,11 +216,11 @@ def _compare(lhs: float, op: str, rhs, rhs2=None) -> bool | None:
 def _max_period(conds: list[dict]) -> int:
     mx = 0
     for c in conds or []:
-        p = c.get("params") or {}
-        try:
-            mx = max(mx, int(float(p.get("n", 0))))
-        except Exception:
-            pass
+        for p in (c.get("params"), c.get("inner_params")):
+            try:
+                mx = max(mx, int(float((p or {}).get("n", 0))))
+            except Exception:
+                pass
     return mx
 
 
@@ -260,7 +276,9 @@ class ConditionStrategy(BaseStrategy):
     # ── 횡단면(순위/비율) ──────────────────────────────────────
     def _cross_key(self, cond: dict) -> str:
         p = cond.get("params") or {}
-        return f"{cond.get('factor_token','')}|{cond.get('function_id','')}|{p.get('dir','DESC')}"
+        ip = cond.get("inner_params") or {}
+        return (f"{cond.get('factor_token','')}|{cond.get('function_id','')}|{p.get('dir','DESC')}"
+                f"|{cond.get('inner_function_id','')}|{ip.get('n','')}|{ip.get('v','')}")
 
     def prepare_panel(self, ohlcv_map: dict) -> None:
         """순위/비율 함수용 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
@@ -278,6 +296,10 @@ class ConditionStrategy(BaseStrategy):
             for tk, odf in ohlcv_map.items():
                 try:
                     s = _base_series(odf, token)
+                    if s is None or len(s) == 0:
+                        continue
+                    # 내부 지표(중첩): 순위(변화율_기간(종가,20)) — 파생 시리즈를 랭킹 대상으로
+                    s = _apply_inner(s, cond)
                     if s is None or len(s) == 0:
                         continue
                     idx = [d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d) for d in odf.index]

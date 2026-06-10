@@ -64,6 +64,8 @@ const mapConds = (cs: BacktestStrategy["buy"]["conditions"]) =>
   cs.map((c) => ({
     factor_token: c.factorToken, function_id: c.functionId, params: c.params,
     op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
+    inner_function_id: c.innerFunctionId ?? null,
+    inner_params: c.innerParams ?? null,
   }));
 
 // 전략 상태 → screenToBacktest payload 어댑터

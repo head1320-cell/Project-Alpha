@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import { Search, X, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { FACTOR_CATEGORIES, searchFactors, type GpFactor } from "../../lib/backtest/factorCatalog";
-import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, fillTemplate } from "../../lib/backtest/factorFunctions";
+import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from "../../lib/backtest/factorFunctions";
 import { TONES, type Tone } from "./kit";
 
 export interface FactorPick {
@@ -15,7 +15,10 @@ export interface FactorPick {
   factorToken: string;   // {고가}
   functionId: string;
   params: Record<string, string>;
-  expr: string;          // 이동평균({고가}, 20)
+  expr: string;          // 이동평균({고가}, 20) · 순위(변화율_기간({종가}, 20), 내림차순)
+  // 중첩(순위/비율 전용): 랭킹 대상을 파생 지표로 — 예: 순위(변화율_기간(종가,20))
+  innerFunctionId?: string;
+  innerParams?: Record<string, string>;
 }
 
 const R = "var(--bs-border-radius)";
@@ -33,21 +36,44 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const [factor, setFactor] = useState<GpFactor | null>(null);
   const [fnId, setFnId] = useState<string>(initial?.functionId ?? "base");
   const [params, setParams] = useState<Record<string, string>>(initial?.params ?? {});
+  const [innerFnId, setInnerFnId] = useState<string>(initial?.innerFunctionId ?? "base");
+  const [innerParams, setInnerParams] = useState<Record<string, string>>(initial?.innerParams ?? {});
 
   const results = useMemo(() => searchFactors(query), [query]);
   const fn = FUNCTIONS_BY_ID[fnId];
+  const isCross = fnId === "rank" || fnId === "ratio";
+  const innerFn = FUNCTIONS_BY_ID[innerFnId];
   const tk = factor ? baseToken(factor) : "{팩터}";
-  const expr = fillTemplate(fn.preview, tk, params);
+  // 중첩: 순위/비율의 {f} 자리에 내부 지표식을 넣는다 — 순위(변화율_기간({종가}, 20), 내림차순)
+  const innerExpr = isCross && innerFnId !== "base" ? fillTemplate(innerFn.preview, tk, innerParams) : tk;
+  const expr = fillTemplate(fn.preview, innerExpr, params);
   const accent = TONES[tone];
 
   if (!open) return null;
 
   const setParam = (kind: string, idx: number, v: string) =>
     setParams((p) => ({ ...p, [paramKey(kind, idx)]: v }));
+  const setInnerParam = (kind: string, idx: number, v: string) =>
+    setInnerParams((p) => ({ ...p, [paramKey(kind, idx)]: v }));
+
+  const pickInnerFn = (id: string) => {
+    setInnerFnId(id);
+    const f = FUNCTIONS_BY_ID[id];
+    const init: Record<string, string> = {};
+    (f?.params ?? []).forEach((p, i) => {
+      if (p.kind !== "direction") init[paramKey(p.kind, i)] = p.default;
+    });
+    setInnerParams(init);
+  };
 
   const submit = () => {
     if (!factor) return;
-    onInsert({ factorName: factor.name, factorToken: tk, functionId: fnId, params, expr });
+    const withInner = isCross && innerFnId !== "base";
+    onInsert({
+      factorName: factor.name, factorToken: tk, functionId: fnId, params, expr,
+      innerFunctionId: withInner ? innerFnId : undefined,
+      innerParams: withInner ? innerParams : undefined,
+    });
   };
 
   return (
@@ -164,6 +190,27 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* 내부 지표(중첩) — 순위/비율의 랭킹 대상을 파생 지표로 (예: 20일 수익률 순위) */}
+                {isCross && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>내부 지표 (랭킹 대상 · 선택)</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                      <select value={innerFnId} onChange={(e) => pickInnerFn(e.target.value)}
+                        style={{ fontSize: 13, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                        <option value="base">원값 (팩터 그대로)</option>
+                        {INNER_FUNCTIONS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                      {innerFnId !== "base" && innerFn.params.filter((p) => p.kind !== "direction").map((p, i) => (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{p.label}</span>
+                          <input type="number" value={innerParams[paramKey(p.kind, i)] ?? p.default} onChange={(e) => setInnerParam(p.kind, i, e.target.value)}
+                            style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, width: 90, padding: "6px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

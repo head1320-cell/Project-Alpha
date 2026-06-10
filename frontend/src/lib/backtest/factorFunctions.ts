@@ -53,6 +53,11 @@ export const FUNCTIONS_BY_ID: Record<string, FactorFunction> = Object.fromEntrie
   FACTOR_FUNCTIONS.map((f) => [f.id, f]),
 );
 
+/** 내부 지표(중첩)로 쓸 수 있는 함수 — 순위/비율의 랭킹 대상 파생용 (횡단면 함수 제외) */
+export const INNER_FUNCTIONS: FactorFunction[] = FACTOR_FUNCTIONS.filter(
+  (f) => !["base", "rank", "ratio"].includes(f.id),
+);
+
 /** 템플릿({f}{n}{v}{dir})을 실제 값으로 치환 */
 export function fillTemplate(
   tpl: string,

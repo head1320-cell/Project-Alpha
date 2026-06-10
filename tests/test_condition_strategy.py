@@ -177,3 +177,89 @@ def test_cross_sectional_without_panel_is_skipped(rising_prices):
          "op": "lte", "rhs": 1, "rhs2": None},
     ])
     assert s.generate_signal("000111", "테스트").action == Action.HOLD
+
+
+# ─── 중첩(내부 지표) — 순위/비율의 랭킹 대상을 파생 지표로 ────────────────────
+def make_trend_df(days: int, start: float, step: float) -> pd.DataFrame:
+    dates = pd.date_range("2024-01-02", periods=days, freq="B")
+    close = pd.Series([start + step * i for i in range(days)], index=dates)
+    return pd.DataFrame({
+        "date": dates.strftime("%Y-%m-%d"),
+        "open": close, "high": close, "low": close, "close": close,
+        "volume": [10_000] * days,
+    }, index=dates)
+
+
+def _level_vs_momentum_map() -> dict[str, pd.DataFrame]:
+    """가격 수준은 A>B>C, 20일 수익률(모멘텀)은 C>B>A — 두 랭킹이 정반대."""
+    return {
+        "000111": make_trend_df(30, 300.0, -1.0),  # 고가·하락 (모멘텀 최하)
+        "000222": make_trend_df(30, 200.0, 0.0),   # 중간·횡보
+        "000333": make_trend_df(30, 100.0, +2.0),  # 저가·급등 (모멘텀 최상)
+    }
+
+
+def nested_cond(fn: str, op: str, rhs: float, inner: str = "pct", inner_n: str = "20") -> dict:
+    return {"factor_token": "{종가}", "function_id": fn, "params": {"dir": "DESC"},
+            "op": op, "rhs": rhs, "rhs2": None,
+            "inner_function_id": inner, "inner_params": {"n": inner_n}}
+
+
+def _winners(monkeypatch, omap: dict, condition: dict) -> set:
+    s = cs.ConditionStrategy(buy_conditions=[condition])
+    s.prepare_panel(omap)
+    out = set()
+    for tk, df in omap.items():
+        monkeypatch.setattr(kis_data_fetcher, "get_daily_prices",
+                            lambda code, days, _df=df: _df)
+        if s.generate_signal(tk, tk).action == Action.BUY:
+            out.add(tk)
+    return out
+
+
+def test_nested_rank_ranks_derived_indicator_not_level(monkeypatch):
+    """순위(변화율_기간(종가,20),DESC)≤1 → 모멘텀 1위(000333). bare 순위(종가)와 정반대."""
+    omap = _level_vs_momentum_map()
+    bare = {"factor_token": "{종가}", "function_id": "rank", "params": {"dir": "DESC"},
+            "op": "lte", "rhs": 1, "rhs2": None}
+    assert _winners(monkeypatch, omap, bare) == {"000111"}            # 가격 수준 1위
+    assert _winners(monkeypatch, omap, nested_cond("rank", "lte", 1)) == {"000333"}  # 모멘텀 1위
+
+
+def test_nested_ratio_percentile_of_derived(monkeypatch):
+    """비율(변화율_기간(종가,20),DESC)≥67 → 모멘텀 상위 1/3 (000333)."""
+    omap = _level_vs_momentum_map()
+    assert _winners(monkeypatch, omap, nested_cond("ratio", "gte", 67)) == {"000333"}
+
+
+def test_nested_single_ticker_condition():
+    """단일종목 중첩: 이동평균(변화량_기간(종가,1), 5) — +1/일 상승장 → 정확히 1.0."""
+    df = make_rising_df(days=40)
+    c = {"factor_token": "{종가}", "function_id": "ma", "params": {"n": "5"},
+         "op": "eq", "rhs": 1.0, "rhs2": None,
+         "inner_function_id": "delta", "inner_params": {"n": "1"}}
+    assert cs._eval_condition(df, c) is True
+
+
+def test_inner_cross_function_is_invalid():
+    """내부 지표로 횡단면 함수(rank/ratio)는 불가 → 평가 불가(None) → 건너뜀."""
+    df = make_rising_df(days=40)
+    c = {"factor_token": "{종가}", "function_id": "ma", "params": {"n": "5"},
+         "op": "gte", "rhs": 0, "rhs2": None,
+         "inner_function_id": "rank", "inner_params": {}}
+    assert cs._eval_condition(df, c) is None
+
+
+def test_required_days_covers_inner_period():
+    """required_days 가 내부 함수 기간(n)도 반영 — 워밍업 부족 방지."""
+    s = cs.ConditionStrategy(buy_conditions=[nested_cond("rank", "lte", 1, inner_n="60")])
+    assert s.required_days >= 90  # 60 + 30
+
+
+def test_cross_key_distinguishes_inner_params():
+    """내부 함수·기간이 다르면 패널 캐시 키도 달라야 함 (pct5 vs pct20 별도 랭킹)."""
+    s = cs.ConditionStrategy()
+    k5 = s._cross_key(nested_cond("rank", "lte", 1, inner_n="5"))
+    k20 = s._cross_key(nested_cond("rank", "lte", 1, inner_n="20"))
+    bare = s._cross_key({"factor_token": "{종가}", "function_id": "rank", "params": {"dir": "DESC"}})
+    assert len({k5, k20, bare}) == 3

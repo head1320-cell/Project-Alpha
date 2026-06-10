@@ -882,6 +882,18 @@ export interface BacktestAdvancedParams {
   take_profit_pct?: number;
 }
 
+// 조건식 페이로드 (Genport식) — inner_*는 중첩: 순위(변화율_기간(종가,20)) 등
+export interface BacktestConditionPayload {
+  factor_token: string;
+  function_id: string;
+  params: Record<string, string>;
+  op: string;
+  rhs: number;
+  rhs2?: number | null;
+  inner_function_id?: string | null;
+  inner_params?: Record<string, string> | null;
+}
+
 export const backtestBridgeApi = {
 // 커스텀 전략(BuilderState) 백테스트 — 빌더에서 만든 임의 전략 실행
   customBacktest: async (body: {
@@ -937,12 +949,12 @@ export const backtestBridgeApi = {
     buy_divide_pct?: number;
     max_buy_per_day?: number | null;
     max_buy_count?: number | null;
-    buy_conditions?: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }> | null;
-    sell_conditions?: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }> | null;
+    buy_conditions?: BacktestConditionPayload[] | null;
+    sell_conditions?: BacktestConditionPayload[] | null;
     rebalance_period?: string | null;
     market_timing?: {
       index_ticker: string; action: string;
-      conditions: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }>;
+      conditions: BacktestConditionPayload[];
     } | null;
     caps?: string[] | null;
     sectors?: string[] | null;

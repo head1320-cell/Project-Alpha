@@ -21,6 +21,9 @@ export interface Condition {
   op: OpId;
   rhs: string;
   rhs2?: string;      // between 일 때 상한
+  // 중첩(순위/비율 전용): 랭킹 대상 파생 지표 — 예: 순위(변화율_기간(종가,20))
+  innerFunctionId?: string;
+  innerParams?: Record<string, string>;
 }
 
 type OpId = "gte" | "lte" | "eq" | "between";
@@ -37,7 +40,7 @@ const R = "var(--bs-border-radius)";
 const RL = "var(--bs-border-radius-lg)";
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-interface Draft { factorName: string; factorToken: string; functionId: string; params: Record<string, string>; expr: string; op: OpId; rhs: string; rhs2: string }
+interface Draft { factorName: string; factorToken: string; functionId: string; params: Record<string, string>; expr: string; op: OpId; rhs: string; rhs2: string; innerFunctionId?: string; innerParams?: Record<string, string> }
 const emptyDraft = (): Draft => ({ factorName: "", factorToken: "", functionId: "base", params: {}, expr: "", op: "lte", rhs: "", rhs2: "" });
 
 export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange }: {
@@ -48,20 +51,24 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
   const accent = TONES[tone];
 
   const applyPick = (p: FactorPick) => {
-    setDraft((d) => ({ ...d, factorName: p.factorName, factorToken: p.factorToken, functionId: p.functionId, params: p.params, expr: p.expr }));
+    setDraft((d) => ({ ...d, factorName: p.factorName, factorToken: p.factorToken, functionId: p.functionId, params: p.params, expr: p.expr, innerFunctionId: p.innerFunctionId, innerParams: p.innerParams }));
     setPickerOpen(false);
   };
 
   const save = () => {
     if (!draft.factorName || draft.rhs === "") return;
-    onChange([...conditions, { id: uid(), factorName: draft.factorName, factorToken: draft.factorToken, functionId: draft.functionId, params: draft.params, expr: draft.expr, op: draft.op, rhs: draft.rhs, rhs2: draft.op === "between" ? draft.rhs2 : undefined }]);
+    onChange([...conditions, { id: uid(), factorName: draft.factorName, factorToken: draft.factorToken, functionId: draft.functionId, params: draft.params, expr: draft.expr, op: draft.op, rhs: draft.rhs, rhs2: draft.op === "between" ? draft.rhs2 : undefined, innerFunctionId: draft.innerFunctionId, innerParams: draft.innerParams }]);
     setDraft(emptyDraft());
   };
   const remove = (id: string) => onChange(conditions.filter((c) => c.id !== id));
 
-  // NL 한 줄
+  // NL 한 줄 — 중첩이면 {f} 자리에 내부 지표 설명을 넣어 합성 ("20일 전 대비 종가 변화율 순위")
   const fn = FUNCTIONS_BY_ID[draft.functionId];
-  const human = draft.factorName ? fillTemplate(fn.sentence ?? fn.preview, draft.factorName, draft.params) : "";
+  const innerFn = draft.innerFunctionId ? FUNCTIONS_BY_ID[draft.innerFunctionId] : null;
+  const factorLabel = innerFn
+    ? fillTemplate(innerFn.sentence ?? innerFn.preview, draft.factorName, draft.innerParams ?? {})
+    : draft.factorName;
+  const human = draft.factorName ? fillTemplate(fn.sentence ?? fn.preview, factorLabel, draft.params) : "";
   const sentence = draft.factorName && draft.rhs !== ""
     ? (draft.op === "between"
         ? `${human}가 ${draft.rhs} ~ ${draft.rhs2 || "?"} 사이일 때 통과`
@@ -135,7 +142,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
       </div>
 
       <FactorPickerModal open={pickerOpen} tone={tone}
-        initial={{ functionId: draft.functionId, params: draft.params }}
+        initial={{ functionId: draft.functionId, params: draft.params, innerFunctionId: draft.innerFunctionId, innerParams: draft.innerParams }}
         onClose={() => setPickerOpen(false)} onInsert={applyPick} />
     </div>
   );
