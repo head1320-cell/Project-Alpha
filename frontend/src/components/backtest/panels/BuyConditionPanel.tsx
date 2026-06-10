@@ -13,6 +13,8 @@ export default function BuyConditionPanel({ s, set }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>;
 }) {
   const patchBuy = (p: Partial<BacktestStrategy["buy"]>) => set((x) => ({ ...x, buy: { ...x.buy, ...p } }));
+  const patchMt = (p: Partial<BacktestStrategy["marketTiming"]>) =>
+    set((x) => ({ ...x, marketTiming: { ...x.marketTiming, ...p } }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -26,6 +28,15 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="슬리피지">
           <QuickStepper value={s.slippagePct} onChange={(v) => set((x) => ({ ...x, slippagePct: v }))} unit="%" min={0} />
+        </Field>
+        <Field label="리밸런싱 주기">
+          <Segmented value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
+            options={[{ id: "daily", label: "매일" }, { id: "weekly", label: "매주" }, { id: "monthly", label: "매월" }]} />
+          {s.rebalancePeriod !== "daily" && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              신규 매수는 {s.rebalancePeriod === "weekly" ? "주" : "월"} 첫 거래일에만 · 청산룰은 매일 평가
+            </span>
+          )}
         </Field>
       </Section>
 
@@ -62,6 +73,23 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="재매수 방지">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
         </Field>
+      </Section>
+
+      <Section title="마켓타이밍" hint="지수 조건 포트폴리오 게이트" tone="neutral"
+        enabled={s.marketTiming.on} onToggle={(on) => patchMt({ on })}>
+        <Field label="기준 지수">
+          <Segmented value={s.marketTiming.index} onChange={(index) => patchMt({ index })}
+            options={[{ id: "KOSPI", label: "코스피" }, { id: "KOSDAQ", label: "코스닥" }]} />
+        </Field>
+        <Field label="조건 위반 시">
+          <Segmented value={s.marketTiming.mode} onChange={(mode) => patchMt({ mode })}
+            options={[{ id: "block_buy", label: "신규 매수 차단" }, { id: "exit_all", label: "전량 청산" }]} />
+        </Field>
+        <ConditionFormulaEditor tone="neutral" conditions={s.marketTiming.conditions}
+          onChange={(c: Condition[]) => patchMt({ conditions: c })} />
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          지수 봉에 평가 (전부 충족 시 ON) — 평균모멘텀스코어·변화율_기간 등 가격 함수 권장, 평가 불가 조건은 무시
+        </div>
       </Section>
 
     </div>

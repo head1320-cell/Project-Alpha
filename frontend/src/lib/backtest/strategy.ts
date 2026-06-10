@@ -59,6 +59,13 @@ export interface UniverseState {
   totalUniverse: number;
 }
 
+export interface MarketTimingState {
+  on: boolean;
+  index: "KOSPI" | "KOSDAQ";        // 기준 지수
+  mode: "block_buy" | "exit_all";   // 조건 위반(OFF) 시: 신규 매수 차단 | 전량 청산
+  conditions: Condition[];          // 지수 조건식 — 전부 충족 시 ON (가격 함수 권장: ams/pct 등)
+}
+
 export interface BacktestStrategy {
   name: string;
   capital: number;         // 투자 금액(만원)
@@ -66,6 +73,8 @@ export interface BacktestStrategy {
   endDate: string;
   feePct: number;
   slippagePct: number;
+  rebalancePeriod: "daily" | "weekly" | "monthly";  // 신규 매수일: 매일(기존) | 주·월 첫 거래일
+  marketTiming: MarketTimingState;
   buy: BuyState;
   sell: SellState;
   universe: UniverseState;
@@ -90,6 +99,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "투자금", value: `${s.capital.toLocaleString()}만원` },
         { label: "기간", value: yearsBetween(s.startDate, s.endDate) },
         { label: "수수료", value: `${s.feePct}%` },
+        { label: "리밸런싱", value: s.rebalancePeriod === "daily" ? "매일" : s.rebalancePeriod === "weekly" ? "매주" : "매월" },
       ]},
       { label: "매수 조건", rows: [
         { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미설정", muted: !b.conditions.length },
@@ -102,6 +112,13 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "체결가", value: fillPriceLabel(b.fillType) },
       ]},
       { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough], ["TWAP", b.twapBuy]]) },
+      { label: "마켓타이밍", rows: [
+        { label: "사용", value: s.marketTiming.on
+            ? `${s.marketTiming.index} · ${s.marketTiming.mode === "exit_all" ? "전량 청산" : "매수 차단"}`
+            : "미사용", muted: !s.marketTiming.on },
+        { label: "조건", value: s.marketTiming.conditions.length ? `${s.marketTiming.conditions.length}개` : "없음",
+          muted: !s.marketTiming.conditions.length },
+      ]},
     ];
   }
   if (tab === "sell") {

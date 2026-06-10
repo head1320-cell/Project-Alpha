@@ -162,6 +162,9 @@ class BacktestConfig:
     max_buy_per_day: int | None = None  # 일일 최대 신규 매수 종목 수
     max_buy_count: int | None = None    # 종목당 최대 분할 매수 횟수
     factor_weights: dict | None = None  # 종목별 팩터 가중치 {ticker: 0~1} (팩터가중 모드용)
+    # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②). 기본 비활성 = 기존 동작 불변
+    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"·"monthly"=주·월 첫 거래일에만 신규 매수
+    market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -239,10 +242,28 @@ class BacktestEngine:
             f"{self.cfg.symbols} | {len(sim_dates)} trading days"
         )
 
+        # 정기 리밸런싱(신규 매수일 게이트) + 마켓타이밍(지수 조건 포트폴리오 게이트)
+        rebalance_days = self._rebalance_days(sim_dates)
+        mt_df = self._load_market_timing_index(warmup_start) if self.cfg.market_timing else None
+        mt_action = str((self.cfg.market_timing or {}).get("action") or "block_buy")
+
         # Day-by-day 시뮬레이션
         for sim_date in sim_dates:
             date_str = sim_date.strftime("%Y-%m-%d")
             self._buys_today = 0  # 일일 신규 매수 카운터 (max_buy_per_day 제한용)
+
+            # 0. 마켓타이밍: 지수 조건 미충족(OFF) → 신규 매수 차단, exit_all이면 전량 청산
+            #    (포트폴리오 레벨 리스크오프 — min_hold_days보다 우선)
+            market_on = self._market_timing_on(mt_df, sim_date) if mt_df is not None else True
+            if not market_on and mt_action == "exit_all" and self.positions:
+                for ticker, _pos in list(self.positions.items()):
+                    if ticker not in ohlcv_map:
+                        continue
+                    df_to_date = ohlcv_map[ticker].loc[:sim_date]
+                    if df_to_date.empty:
+                        continue
+                    self._execute_sell(ticker, float(df_to_date["close"].iloc[-1]),
+                                       date_str, "Market-timing exit")
 
             # 1. 포지션 가격 업데이트 + 손절/익절 + 보유기간 매도 체크
             for ticker, pos in list(self.positions.items()):
@@ -291,10 +312,12 @@ class BacktestEngine:
                 close_price = float(df_slice["close"].iloc[-1])
 
                 if signal.action == Action.BUY and signal.is_actionable():
-                    buy_price = resolve_from_slice(self.cfg.buy_fill_type, df_slice)
-                    fw = (self.cfg.factor_weights or {}).get(ticker)
-                    self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
-                                      factor_weight=fw)
+                    # 신규 매수 게이트: 마켓타이밍 ON + (리밸런싱 미사용 또는 리밸런싱일)
+                    if market_on and (rebalance_days is None or sim_date in rebalance_days):
+                        buy_price = resolve_from_slice(self.cfg.buy_fill_type, df_slice)
+                        fw = (self.cfg.factor_weights or {}).get(ticker)
+                        self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
+                                          factor_weight=fw)
                 elif signal.action == Action.SELL and signal.is_actionable():
                     # 최소 보유기간 미달 시 신호 매도 보류
                     pos = self.positions.get(ticker)
@@ -601,6 +624,54 @@ class BacktestEngine:
         except Exception:
             return 0
 
+    def _rebalance_days(self, sim_dates) -> set | None:
+        """정기 리밸런싱: 주/월 첫 거래일 집합. None이면 게이트 없음(매일 신규 매수 가능)."""
+        period = (self.cfg.rebalance_period or "").lower()
+        if period not in ("weekly", "monthly"):
+            return None
+        days: set = set()
+        seen: set = set()
+        for d in sim_dates:
+            iso = d.isocalendar()
+            key = (iso[0], iso[1]) if period == "weekly" else (d.year, d.month)
+            if key not in seen:
+                seen.add(key)
+                days.add(d)
+        return days
+
+    def _load_market_timing_index(self, warmup_start: str):
+        """마켓타이밍 지수 OHLCV 로드 (벤치마크와 동일 경로). 실패 시 None → 개입 안 함."""
+        ticker = str((self.cfg.market_timing or {}).get("index_ticker") or "KOSPI")
+        try:
+            from src.data.ohlcv_loader import load_ohlcv_unified
+            df = load_ohlcv_unified(ticker, warmup_start, self.cfg.end_date, prefer="auto")
+        except Exception:
+            df = load_ohlcv(ticker, warmup_start, self.cfg.end_date)
+        if df is None or df.empty:
+            logger.warning(f"마켓타이밍 지수({ticker}) 데이터 없음 — 게이트 비활성(fail-open)")
+            return None
+        return df
+
+    def _market_timing_on(self, idx_df, sim_date) -> bool:
+        """지수 조건 전부 충족 시 ON. 평가 불가·데이터 부족이면 ON(fail-open — 개입 안 함).
+
+        조건식은 ConditionStrategy와 동일 모델(가격·거래량 토큰 + 18함수)을 지수 봉에 적용.
+        예: {종가} ams(20) >= 50 (평균모멘텀스코어), {종가} pct(20) >= 0 (20일 수익률).
+        """
+        if idx_df is None:
+            return True
+        conds = (self.cfg.market_timing or {}).get("conditions") or []
+        if not conds:
+            return True
+        sl = idx_df.loc[:sim_date]
+        if sl.empty:
+            return True
+        from src.kis_strategies.condition_strategy import _eval_condition
+        evals = [r for r in (_eval_condition(sl, c) for c in conds) if r is not None]
+        if not evals:
+            return True
+        return all(evals)
+
     def _check_risk_triggers(self, ticker: str, pos: Position,
                               curr_price: float, date_str: str):
         """손절/익절/트레일링 트리거 체크."""
@@ -884,6 +955,8 @@ def run_backtest(
     max_buy_per_day: int | None = None,
     max_buy_count: int | None = None,
     factor_weights: dict | None = None,
+    rebalance_period: str | None = None,
+    market_timing: dict | None = None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -928,6 +1001,8 @@ def run_backtest(
         max_buy_per_day=max_buy_per_day,
         max_buy_count=max_buy_count,
         factor_weights=factor_weights,
+        rebalance_period=rebalance_period,
+        market_timing=market_timing,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

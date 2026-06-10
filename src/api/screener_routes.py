@@ -923,6 +923,9 @@ class ScreenToBacktestRequest(BaseModel):
     # 각 조건 dict: {factor_token, function_id, params{n,v,dir}, op(gte|lte|eq|between), rhs, rhs2?}
     buy_conditions: list[dict] | None = None
     sell_conditions: list[dict] | None = None
+    # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②)
+    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"|"monthly"=주·월 첫 거래일에만 신규 매수
+    market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1044,6 +1047,8 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             max_buy_per_day=req.max_buy_per_day,
             max_buy_count=req.max_buy_count,
             factor_weights=factor_weights,
+            rebalance_period=req.rebalance_period,
+            market_timing=req.market_timing,
         )
 
         # 3) 통합 응답

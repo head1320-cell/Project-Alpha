@@ -29,6 +29,8 @@ function largeCapFilter(): FilterGroupNode {
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: "2023-01-01", endDate: "2024-12-31", feePct: 0.15, slippagePct: 0.05,
+  rebalancePeriod: "daily",
+  marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], primarySort: { expr: "{종합점수}", dir: "DESC" },
     limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
@@ -56,6 +58,13 @@ function capsToUniverse(caps: string[]): string {
   if (hasKosdaq && !hasKospi) return "kosdaq150";
   return "kospi200";
 }
+
+// 조건식 → 백엔드 condition dict
+const mapConds = (cs: BacktestStrategy["buy"]["conditions"]) =>
+  cs.map((c) => ({
+    factor_token: c.factorToken, function_id: c.functionId, params: c.params,
+    op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
+  }));
 
 // 전략 상태 → screenToBacktest payload 어댑터
 function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | null) {
@@ -94,14 +103,14 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     managed: s.universe.managed,
     supervised: s.universe.supervised,
     groups: s.universe.groups.map((g) => ({ mode: g.mode, tickers: g.tickers })),
-    buy_conditions: buy.conditions.map((c) => ({
-      factor_token: c.factorToken, function_id: c.functionId, params: c.params,
-      op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
-    })),
-    sell_conditions: sell.conditions.map((c) => ({
-      factor_token: c.factorToken, function_id: c.functionId, params: c.params,
-      op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
-    })),
+    buy_conditions: mapConds(buy.conditions),
+    sell_conditions: mapConds(sell.conditions),
+    rebalance_period: s.rebalancePeriod === "daily" ? null : s.rebalancePeriod,
+    market_timing: s.marketTiming.on && s.marketTiming.conditions.length ? {
+      index_ticker: s.marketTiming.index,
+      action: s.marketTiming.mode,
+      conditions: mapConds(s.marketTiming.conditions),
+    } : null,
   };
 }
 

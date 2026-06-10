@@ -939,6 +939,11 @@ export const backtestBridgeApi = {
     max_buy_count?: number | null;
     buy_conditions?: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }> | null;
     sell_conditions?: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }> | null;
+    rebalance_period?: string | null;
+    market_timing?: {
+      index_ticker: string; action: string;
+      conditions: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }>;
+    } | null;
     caps?: string[] | null;
     sectors?: string[] | null;
     etf?: boolean;
