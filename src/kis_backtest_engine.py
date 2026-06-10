@@ -316,8 +316,9 @@ class BacktestEngine:
                     if market_on and (rebalance_days is None or sim_date in rebalance_days):
                         buy_price = resolve_from_slice(self.cfg.buy_fill_type, df_slice)
                         fw = (self.cfg.factor_weights or {}).get(ticker)
+                        natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
                         self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
-                                          factor_weight=fw)
+                                          factor_weight=fw, atr_pct=natr)
                 elif signal.action == Action.SELL and signal.is_actionable():
                     # 최소 보유기간 미달 시 신호 매도 보류
                     pos = self.positions.get(ticker)
@@ -381,11 +382,13 @@ class BacktestEngine:
             fetcher.get_daily_prices = original_fn
             fetcher.get_current_price = original_cp
 
-    def _initial_alloc(self, factor_weight: float | None = None) -> float:
+    def _initial_alloc(self, factor_weight: float | None = None,
+                       atr_pct: float | None = None) -> float:
         """최초 진입 배분액 계산 (비중 조절 모드 반영).
 
         · equal(동일가중): 잔여 슬롯에 균등 배분 (기존 동작)
         · factor(팩터가중): factor_weight 비율로 배분 (0~1, 높을수록 큰 비중)
+        · atr(역변동성): NATR(ATR14/종가) 2% 기준 배수 — 저변동 종목에 더 큰 비중
         """
         slots = max(self.cfg.max_positions - len(self.positions), 1)
         base = self.cash * self.cfg.position_size_pct / slots
@@ -393,15 +396,33 @@ class BacktestEngine:
             # 팩터가중: 가중치를 동일가중 대비 배수로 (0.5~1.5 범위로 정규화)
             mult = 0.5 + max(0.0, min(1.0, factor_weight))
             base *= mult
+        elif self.cfg.buy_weight_mode == "atr" and atr_pct:
+            # ATR 비중: 기준 NATR 2% 대비 역비례 배수 (0.5~1.5 클램프) — 변동성 패리티 근사
+            base *= max(0.5, min(1.5, 2.0 / atr_pct))
         return min(base, self.cash * 0.95)
 
+    def _natr_pct(self, df_slice) -> float | None:
+        """NATR = ATR(14)/종가 ×100 — ATR 비중 사이징용. 데이터 부족 시 None(동일가중 폴백)."""
+        try:
+            from src.kis_indicators import calc_atr
+            if df_slice is None or len(df_slice) < 15:
+                return None
+            atr_val = float(calc_atr(df_slice, 14).iloc[-1])
+            close = float(df_slice["close"].iloc[-1])
+            if not (atr_val > 0 and close > 0):
+                return None
+            return atr_val / close * 100.0
+        except Exception:
+            return None
+
     def _execute_buy(self, ticker: str, price: float, date_str: str, reason: str,
-                     factor_weight: float | None = None):
+                     factor_weight: float | None = None, atr_pct: float | None = None):
         """매수 집행 — 신규 매수 + 분할 매수(add-on) 지원 (Phase 3).
 
         · 신규: max_positions 한도 + 일일 max_buy_per_day 제한 + 비중 조절
         · 분할매수: 이미 보유 중이면 max_buy_count까지 buy_divide_pct만큼 추가
         · factor_weight: 팩터가중 모드일 때 종목 가중치 (None이면 동일가중)
+        · atr_pct: ATR 비중 모드일 때 NATR% (None이면 동일가중 폴백)
         """
         existing = self.positions.get(ticker)
 
@@ -412,7 +433,7 @@ class BacktestEngine:
                 return  # 분할매수 미설정 → 기존 동작(중복 매수 스킵)
             if existing.buy_count >= max_bc:
                 return
-            add_alloc = self._initial_alloc(factor_weight) * (self.cfg.buy_divide_pct / 100.0)
+            add_alloc = self._initial_alloc(factor_weight, atr_pct) * (self.cfg.buy_divide_pct / 100.0)
             add_alloc = min(add_alloc, self.cash * 0.95)
             exec_price = price * (1 + self.cfg.slippage_rate)
             if add_alloc < exec_price:
@@ -444,7 +465,7 @@ class BacktestEngine:
         if self.cfg.max_buy_per_day is not None and getattr(self, "_buys_today", 0) >= self.cfg.max_buy_per_day:
             return
 
-        alloc = self._initial_alloc(factor_weight)
+        alloc = self._initial_alloc(factor_weight, atr_pct)
         if self.cfg.buy_divide_pct < 100.0:
             alloc *= (self.cfg.buy_divide_pct / 100.0)
         alloc = min(alloc, self.cash * 0.95)

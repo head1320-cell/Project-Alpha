@@ -103,7 +103,7 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     min_hold_days: sell.holdPeriod.on ? sell.holdPeriod.min : 0,
     sell_divide_pct: 100,
     max_sell_divisions: null as number | null,
-    buy_weight_mode: buy.weightMode === "atr" ? "factor" : "equal",
+    buy_weight_mode: buy.weightMode,  // equal | atr (엔진 역변동성 사이징)
     buy_divide_pct: 100,
     max_buy_per_day: null as number | null,
     max_buy_count: null as number | null,
