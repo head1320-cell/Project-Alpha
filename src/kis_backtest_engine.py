@@ -157,7 +157,8 @@ class BacktestConfig:
     sell_divide_pct: float = 100.0      # 분할 매도 비중 % (100=전량, 50=절반씩)
     max_sell_divisions: int | None = None  # 분할 매도 최대 횟수 (None=무제한, 도달 시 전량청산)
     # 매수 정밀화 (Phase 3). 기본값 = 기존 동작 불변
-    buy_weight_mode: str = "equal"      # 매수 비중: equal(동일가중) | factor(팩터가중)
+    breakthrough_buy: bool = False      # 돌파매수: 당일 고가가 전일 고가 돌파 시에만 진입
+    buy_weight_mode: str = "equal"      # 매수 비중: equal(동일가중) | factor(팩터가중) | atr(역변동성)
     buy_divide_pct: float = 100.0       # 분할 매수 비중 % (100=한번에, 50=절반씩 추가매수)
     max_buy_per_day: int | None = None  # 일일 최대 신규 매수 종목 수
     max_buy_count: int | None = None    # 종목당 최대 분할 매수 횟수
@@ -313,8 +314,14 @@ class BacktestEngine:
 
                 if signal.action == Action.BUY and signal.is_actionable():
                     # 신규 매수 게이트: 마켓타이밍 ON + (리밸런싱 미사용 또는 리밸런싱일)
-                    if market_on and (rebalance_days is None or sim_date in rebalance_days):
-                        buy_price = resolve_from_slice(self.cfg.buy_fill_type, df_slice)
+                    can_buy = market_on and (rebalance_days is None or sim_date in rebalance_days)
+                    bb_price = None
+                    if can_buy and self.cfg.breakthrough_buy:
+                        # 돌파매수: 전일 고가 미돌파면 오늘은 진입하지 않음
+                        bb_price = self._breakthrough_price(df_slice)
+                        can_buy = bb_price is not None
+                    if can_buy:
+                        buy_price = bb_price or resolve_from_slice(self.cfg.buy_fill_type, df_slice)
                         fw = (self.cfg.factor_weights or {}).get(ticker)
                         natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
                         self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
@@ -400,6 +407,22 @@ class BacktestEngine:
             # ATR 비중: 기준 NATR 2% 대비 역비례 배수 (0.5~1.5 클램프) — 변동성 패리티 근사
             base *= max(0.5, min(1.5, 2.0 / atr_pct))
         return min(base, self.cash * 0.95)
+
+    def _breakthrough_price(self, df_slice) -> float | None:
+        """돌파매수 체결가 — 당일 고가 ≥ 전일 고가면 max(시가, 전일고가), 미돌파면 None.
+
+        지정가를 전일 고가에 걸어둔 모델: 갭상승(시가>전일고가)이면 시가 체결."""
+        try:
+            if df_slice is None or len(df_slice) < 2:
+                return None
+            prev_high = float(df_slice["high"].iloc[-2])
+            today_high = float(df_slice["high"].iloc[-1])
+            today_open = float(df_slice["open"].iloc[-1])
+            if today_high < prev_high:
+                return None
+            return max(today_open, prev_high)
+        except Exception:
+            return None
 
     def _natr_pct(self, df_slice) -> float | None:
         """NATR = ATR(14)/종가 ×100 — ATR 비중 사이징용. 데이터 부족 시 None(동일가중 폴백)."""
@@ -976,6 +999,7 @@ def run_backtest(
     max_buy_per_day: int | None = None,
     max_buy_count: int | None = None,
     factor_weights: dict | None = None,
+    breakthrough_buy: bool = False,
     rebalance_period: str | None = None,
     market_timing: dict | None = None,
 ) -> dict:
@@ -1022,6 +1046,7 @@ def run_backtest(
         max_buy_per_day=max_buy_per_day,
         max_buy_count=max_buy_count,
         factor_weights=factor_weights,
+        breakthrough_buy=breakthrough_buy,
         rebalance_period=rebalance_period,
         market_timing=market_timing,
     )

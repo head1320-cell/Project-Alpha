@@ -47,8 +47,13 @@ export default function SellConditionPanel({ s, set }: {
         </SubToggle>
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>고급 옵션</div>
-          <SubToggle tone="sell" label="분할 익절" hint="목표가 도달 시 나눠 매도" on={v.splitTakeProfit} onChange={(on) => patch({ splitTakeProfit: on })} />
-          <SubToggle tone="sell" label="TWAP 매도" hint="시간 분산 평균 체결" on={v.twapSell} onChange={(on) => patch({ twapSell: on })} />
+          <SubToggle tone="sell" label="분할 매도" hint="신호·손익절 매도에 1회 비중 적용 · 최대 횟수 도달 시 전량" on={v.splitTakeProfit} onChange={(on) => patch({ splitTakeProfit: on })}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>1회</span>
+            <QuickStepper value={v.splitSellPct} onChange={(pct) => patch({ splitSellPct: pct })} chips={[25, 50]} unit="%" min={1} max={99} />
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>최대</span>
+            <QuickStepper value={v.splitSellCount} onChange={(c) => patch({ splitSellCount: c })} chips={[2, 3]} unit="회" min={1} />
+          </SubToggle>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>TWAP·VWAP 체결은 위 "체결가 유형"에서 선택</div>
         </div>
       </Section>
 

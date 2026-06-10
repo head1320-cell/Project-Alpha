@@ -953,6 +953,7 @@ export const backtestBridgeApi = {
     buy_divide_pct?: number;
     max_buy_per_day?: number | null;
     max_buy_count?: number | null;
+    breakthrough_buy?: boolean;
     buy_conditions?: BacktestConditionPayload[] | null;
     sell_conditions?: BacktestConditionPayload[] | null;
     rebalance_period?: string | null;

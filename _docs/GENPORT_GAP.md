@@ -24,12 +24,14 @@
 
 ## 🟡 부분 구현
 
-- **매수 비중**: 균등 / 팩터(종합점수) 비중은 동작. **ATR 비중**은 현재 팩터가중으로 매핑(진짜 ATR 변동성 사이징 아님).
-- **매수 정렬**: 1차/2차 정렬 UI는 있으나 어댑터가 `sort_by`로 완전히 전달하지 않음(스크리너 기본 정렬 사용). → 2차 정렬·정렬식 연결 필요.
+(현재 없음 — 아래 ✅로 이동)
+
+- ~~매수 비중 ATR~~ → ✅ **ATR 비중(역변동성)**: `buy_weight_mode="atr"` — NATR(ATR14/종가) 2% 기준 역비례 배수(0.5~1.5 클램프). `tests/test_atr_sizing.py`.
+- ~~매수 정렬~~ → ✅ **매수 우선순위 1차/2차 정렬**: `sort_screener_items`(키별 방향 독립, 동점 시 stock_code 결정적) + 라우트 `sort_dir/sort_by_secondary/sort_secondary_dir` + 매수 탭 정렬 UI. 후보 풀 정렬 = 엔진 매수 순회 순서. `tests/test_buy_sort.py`.
 
 ## 🔴 미해결 — 엔진/모델 작업 필요
 
-- **분할매수 / 돌파매수 / TWAP 체결**: UI 토글은 있으나 백엔드 체결 로직 미구현(현재 장식). buy_divide_pct/max_buy_count 골격만 존재.
+- ~~분할매수 / 돌파매수 / TWAP~~ → ✅ **분할매수**(토글+1회 비중%+최대 횟수 → buy_divide_pct/max_buy_count), ✅ **분할매도**(신호·손익절 매도 전반에 적용 — sell_divide_pct/max_sell_divisions), ✅ **돌파매수**(`breakthrough_buy` — 전일 고가 돌파 시에만 진입, 체결가 max(시가, 전일고가)). `tests/test_breakout_split.py`. **TWAP 토글은 제거** — 체결가 유형(twap/vwap, OHLC 근사)으로 일원화(분봉 연동 시 정밀화).
 
 ## ⛔ 미해결 — 데이터 부재
 

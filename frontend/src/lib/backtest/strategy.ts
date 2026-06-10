@@ -23,10 +23,11 @@ export interface BuyState {
   reBuyBlockDays: number;
   timeStart: string;
   timeEnd: string;
-  // 고급 체결(기본 꺼짐)
-  splitBuy: boolean;
-  breakthrough: boolean;
-  twapBuy: boolean;
+  // 고급 체결(기본 꺼짐) — TWAP은 체결가 유형(fillType)에서 선택
+  splitBuy: boolean;        // 분할 매수 (buy_divide_pct / max_buy_count)
+  splitBuyPct: number;      // 1회 매수 비중 %
+  splitBuyCount: number;    // 최대 분할 횟수
+  breakthrough: boolean;    // 돌파매수: 전일 고가 돌파 시에만 진입
   // #4: 펀더멘털 토큰을 조건 평가에 포함(스냅샷·look-ahead 근사). 기본 false.
   allowFundamentals: boolean;
 }
@@ -43,10 +44,11 @@ export interface SellState {
   liquidate: { on: boolean; mode: "close" | "time" };
   timeStart: string;
   timeEnd: string;
-  // 고급(기본 꺼짐)
-  splitTakeProfit: boolean;
+  // 고급(기본 꺼짐) — TWAP은 체결가 유형(fillType)에서 선택
+  splitTakeProfit: boolean; // 분할 매도 (sell_divide_pct / max_sell_divisions — 신호·손익절 매도 전반에 적용)
+  splitSellPct: number;     // 1회 매도 비중 %
+  splitSellCount: number;   // 최대 분할 횟수 (도달 시 잔량 전량 청산)
   expiryDateSell: boolean;
-  twapSell: boolean;
 }
 
 export interface UniverseState {
@@ -113,7 +115,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "대상 수", value: b.limitType === "MAX" ? "전체" : `${b.maxStocks}종목` },
         { label: "체결가", value: fillPriceLabel(b.fillType) },
       ]},
-      { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough], ["TWAP", b.twapBuy]]) },
+      { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough]]) },
       { label: "마켓타이밍", rows: [
         { label: "사용", value: s.marketTiming.on
             ? `${s.marketTiming.index} · ${s.marketTiming.mode === "exit_all" ? "전량 청산" : "매수 차단"}`

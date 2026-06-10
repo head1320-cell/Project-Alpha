@@ -918,6 +918,7 @@ class ScreenToBacktestRequest(BaseModel):
     sell_divide_pct: float = 100.0
     max_sell_divisions: int | None = None
     # 매수 정밀화 (Phase 3)
+    breakthrough_buy: bool = False  # 돌파매수: 당일 고가가 전일 고가 돌파 시에만 진입
     buy_weight_mode: str = "equal"
     buy_divide_pct: float = 100.0
     max_buy_per_day: int | None = None
@@ -1053,6 +1054,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             max_buy_per_day=req.max_buy_per_day,
             max_buy_count=req.max_buy_count,
             factor_weights=factor_weights,
+            breakthrough_buy=req.breakthrough_buy,
             rebalance_period=req.rebalance_period,
             market_timing=req.market_timing,
         )
