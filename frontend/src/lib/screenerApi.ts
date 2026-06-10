@@ -936,6 +936,17 @@ export const backtestBridgeApi = {
     buy_divide_pct?: number;
     max_buy_per_day?: number | null;
     max_buy_count?: number | null;
+    buy_conditions?: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }> | null;
+    sell_conditions?: Array<{ factor_token: string; function_id: string; params: Record<string, string>; op: string; rhs: number; rhs2?: number | null }> | null;
+    caps?: string[] | null;
+    sectors?: string[] | null;
+    etf?: boolean;
+    managed?: boolean;
+    supervised?: boolean;
+    groups?: Array<{ mode: string; tickers: string[] }> | null;
+    full_universe_eval?: boolean;
+    universe_eval_cap?: number;
+    allow_snapshot_fundamentals?: boolean;
   }): Promise<ScreenToBacktestResult> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/screen-to-backtest`, {
       method: "POST",

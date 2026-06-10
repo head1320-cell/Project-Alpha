@@ -225,6 +225,13 @@ class BacktestEngine:
         all_dates = ohlcv_map[ref_ticker].index
         sim_dates = all_dates[all_dates >= pd.Timestamp(self.cfg.start_date)]
 
+        # 횡단면(순위/비율) 전략용 패널 사전계산 — 전 종목 동일시점 값이 필요한 함수 지원
+        if hasattr(strategy, "prepare_panel"):
+            try:
+                strategy.prepare_panel(ohlcv_map)
+            except Exception as e:
+                logger.debug(f"prepare_panel skipped: {e}")
+
         logger.info(
             f"Backtest: {self.cfg.strategy_name} | "
             f"{self.cfg.symbols} | {len(sim_dates)} trading days"

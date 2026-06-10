@@ -918,6 +918,22 @@ class ScreenToBacktestRequest(BaseModel):
     buy_divide_pct: float = 100.0
     max_buy_per_day: int | None = None
     max_buy_count: int | None = None
+    # 조건식 기반 진입/청산 (Genport식). 있으면 strategy_name 무시하고 조건식 전략 사용.
+    # 각 조건 dict: {factor_token, function_id, params{n,v,dir}, op(gte|lte|eq|between), rhs, rhs2?}
+    buy_conditions: list[dict] | None = None
+    sell_conditions: list[dict] | None = None
+    # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
+    caps: list[str] | None = None
+    sectors: list[str] | None = None        # 실제 업종명 (/sectors)
+    etf: bool = False
+    managed: bool = False
+    supervised: bool = False
+    groups: list[dict] | None = None
+    # 전체 유니버스 일별 평가 (Genport식): 조건식이 후보 풀 전체를 매 봉 평가하도록 풀 확대
+    full_universe_eval: bool = False
+    universe_eval_cap: int = Field(default=200, ge=1, le=2000)
+    # #4: 펀더멘털 토큰(스냅샷)을 봉별 조건 평가에 포함. 기본 False (look-ahead 근사라 옵트인)
+    allow_snapshot_fundamentals: bool = False
 
 
 @router.post("/screen-to-backtest")
@@ -938,15 +954,35 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
         # 1) 스크리닝 (custom_tickers 있으면 관심그룹 종목을 유니버스로)
         screener = get_screener()
         ast = parse_group(req.filter_ast.model_dump())
-        _universe = req.custom_tickers if req.custom_tickers else req.universe
+        # granular 유니버스: caps/sectors/etf/groups 제공 시 후보 종목을 직접 구성
+        gran_tickers = None
+        if any([req.caps, req.sectors, req.etf, req.managed, req.supervised, req.groups]):
+            try:
+                from src.engine.universe_select import select_universe
+                gran_tickers, _gran_total = select_universe(
+                    caps=req.caps or [], sectors=req.sectors or [], etf=bool(req.etf),
+                    managed=bool(req.managed), supervised=bool(req.supervised),
+                    groups=req.groups or [],
+                )
+            except Exception:
+                gran_tickers = None
+        if req.custom_tickers:
+            _universe = req.custom_tickers
+        elif gran_tickers:
+            _universe = gran_tickers
+        else:
+            _universe = req.universe
+        # 후보 풀 크기: 전체 유니버스 일별 평가 시 확대(조건식이 매 봉 풀 전체를 평가, max_positions가 보유 한도)
+        eval_cap = req.universe_eval_cap if (req.full_universe_eval and (req.buy_conditions or req.sell_conditions)) else req.max_tickers
+        eval_cap = max(1, min(int(eval_cap), 2000))
         result = screener.run(
             universe=_universe,
             filter_ast=ast,
             sort_by=req.sort_by,
-            limit=req.max_tickers,
+            limit=eval_cap,
             liquidity_floor=req.liquidity_floor,
         )
-        screened = result.items[:req.max_tickers]
+        screened = result.items[:eval_cap]
         tickers = [it.stock_code for it in screened if getattr(it, "stock_code", None)]
 
         if not tickers:
@@ -969,13 +1005,26 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
                     t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()
                 }
 
+        # 조건식 전략 분기 (Genport식 진입/청산)
+        eff_strategy = req.strategy_name
+        eff_params = dict(req.strategy_params or {})
+        if req.buy_conditions or req.sell_conditions:
+            from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
+            _ = condition_strategy
+            eff_strategy = "Condition"
+            eff_params = {
+                "buy_conditions": req.buy_conditions or [],
+                "sell_conditions": req.sell_conditions or [],
+                "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
+            }
+
         # 2) 백테스트
         bt = run_backtest(
             symbols=tickers,
-            strategy_name=req.strategy_name,
+            strategy_name=eff_strategy,
             start_date=req.start_date,
             end_date=req.end_date,
-            strategy_params=req.strategy_params,
+            strategy_params=eff_params,
             initial_capital=req.initial_capital,
             commission_rate=req.commission_rate,
             slippage_rate=req.slippage_rate,
@@ -1006,7 +1055,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             "screened_count": len(tickers),
             "backtest": bt.get("result", bt),
             "backtest_config": {
-                "strategy": req.strategy_name,
+                "strategy": eff_strategy,
                 "period": f"{req.start_date} ~ {req.end_date}",
                 "initial_capital": req.initial_capital,
             },

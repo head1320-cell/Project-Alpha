@@ -2600,6 +2600,7 @@ try:
     from src.api.macro_routes import router as macro_router
     from src.api.narrative_routes import router as narrative_router
     from src.api.screener_routes import router as screener_router
+    from src.api.screener_universe_count import router as universe_count_router
     from src.api.stage11_routes import router as stage11_router
     from src.api.stage12_routes import router as stage12_router
     from src.api.stage13_extensions import router as stage13_ext_router
@@ -2612,6 +2613,7 @@ try:
     app.include_router(stage13_ext_router)
     app.include_router(valuation_router)
     app.include_router(screener_router)
+    app.include_router(universe_count_router)
     app.include_router(narrative_router)
     app.include_router(macro_router)
     app.include_router(trading_router)

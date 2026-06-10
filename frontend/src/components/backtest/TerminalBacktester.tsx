@@ -6,14 +6,11 @@ import {
   type FilterGroupNode, type BacktestTrade, type MonthlyReturn,
 } from "@/lib/screenerApi";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/lib/screenerHandoff";
-import {
-  listStrategies, saveStrategy, deleteStrategy, exportTradesCsv, exportSummaryCsv,
-  type SavedStrategy,
-} from "@/lib/strategyStorage";
-import {
-  listWatchlists, createWatchlist, deleteWatchlist, addTicker, removeTicker,
-  type Watchlist,
-} from "@/lib/watchlistStorage";
+import { exportTradesCsv, exportSummaryCsv } from "@/lib/strategyStorage";
+import BuyConditionPanel from "./panels/BuyConditionPanel";
+import SellConditionPanel from "./panels/SellConditionPanel";
+import UniversePanel, { CAPS } from "./panels/UniversePanel";
+import type { BacktestStrategy, SummaryTab } from "@/lib/backtest/strategy";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalBacktester — Variant "Strategy Performance Engine" 스타일
@@ -29,157 +26,100 @@ function largeCapFilter(): FilterGroupNode {
   };
 }
 
-export default function TerminalBacktester({ onEditStrategy, defaultStrategy }: { onEditStrategy?: (backendId: string) => void; defaultStrategy?: string } = {}) {
-  const [strategies, setStrategies] = useState<Array<{ id: string; label: string }>>([]);
-  const [strategy, setStrategy] = useState(defaultStrategy || "GoldenCross");
-  const [universe, setUniverse] = useState("kospi200");
-  const [startDate, setStartDate] = useState("2023-01-01");
-  const [endDate, setEndDate] = useState("2024-12-31");
-  const [maxTickers, setMaxTickers] = useState(10);
-  const [capital, setCapital] = useState(100_000_000);
-  // 고급 옵션
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [commissionBps, setCommissionBps] = useState(15);   // 0.15% = 15bp
-  const [slippageBps, setSlippageBps] = useState(5);         // 0.05% = 5bp
-  const [stopLoss, setStopLoss] = useState<number | "">("");
-  const [takeProfit, setTakeProfit] = useState<number | "">("");
-  // 체결가 유형 (Phase 1)
-  const [buyFillType, setBuyFillType] = useState("close");
-  const [sellFillType, setSellFillType] = useState("close");
-  const [fillGroups, setFillGroups] = useState<Array<{ id: string; label: string; types: Array<{ id: string; label: string }> }>>([]);
-  // 종목 선택 확장 (Phase 4) — 업종
-  const [sectors, setSectors] = useState<Array<{ id: string; label: string; size: number }>>([]);
-  // 매도 정밀화 (Phase 2)
-  const [maxHoldDays, setMaxHoldDays] = useState<number | "">("");
-  const [minHoldDays, setMinHoldDays] = useState<number | "">("");
-  const [sellDividePct, setSellDividePct] = useState(100);
-  const [maxSellDivisions, setMaxSellDivisions] = useState<number | "">("");
-  // 매수 정밀화 (Phase 3)
-  const [buyWeightMode, setBuyWeightMode] = useState("equal");
-  const [buyDividePct, setBuyDividePct] = useState(100);
-  const [maxBuyPerDay, setMaxBuyPerDay] = useState<number | "">("");
-  const [maxBuyCount, setMaxBuyCount] = useState<number | "">("");
+const initialStrategy = (): BacktestStrategy => ({
+  name: "내 전략",
+  capital: 5000, startDate: "2023-01-01", endDate: "2024-12-31", feePct: 0.15, slippagePct: 0.05,
+  buy: {
+    enabled: true, conditions: [], primarySort: { expr: "{종합점수}", dir: "DESC" },
+    limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
+    basePrice: { type: "전일 종가", pct: 0 }, reBuyBlockDays: 0, timeStart: "09:00", timeEnd: "15:30",
+    splitBuy: false, breakthrough: false, twapBuy: false, allowFundamentals: false,
+  },
+  sell: {
+    enabled: true, orderType: "MARKET", takeProfit: { on: false, pct: 15 }, stopLoss: { on: false, pct: 5 },
+    trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, conditions: [],
+    liquidate: { on: false, mode: "close" }, timeStart: "09:00", timeEnd: "15:30",
+    splitTakeProfit: false, expiryDateSell: false, twapSell: false,
+  },
+  universe: {
+    etf: false, managed: false, supervised: false,
+    caps: CAPS.map((c) => c.id), sectors: [],
+    groups: [], matched: 0, totalUniverse: 0,
+  },
+});
+
+// granular 시총군 → 백엔드 universe 프리셋(coarse). 시총군/업종 정밀 반영은 run 엔드포인트 확장 시.
+function capsToUniverse(caps: string[]): string {
+  const hasKospi = caps.some((c) => c.startsWith("kospi"));
+  const hasKosdaq = caps.some((c) => c.startsWith("kosdaq"));
+  if (hasKosdaq && !hasKospi) return "kosdaq150";
+  return "kospi200";
+}
+
+// 전략 상태 → screenToBacktest payload 어댑터
+function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | null) {
+  const { buy, sell } = s;
+  return {
+    universe: capsToUniverse(s.universe.caps),
+    custom_tickers: null as string[] | null,
+    filter_ast: handoff ? handoff.filterAst : largeCapFilter(),
+    liquidity_floor: "standard",
+    max_tickers: buy.maxStocks,
+    max_positions: buy.maxStocks,
+    full_universe_eval: buy.conditions.length > 0,
+    universe_eval_cap: 200,
+    allow_snapshot_fundamentals: buy.allowFundamentals,
+    strategy_name: "GoldenCross",
+    start_date: s.startDate, end_date: s.endDate,
+    initial_capital: s.capital * 10000,
+    commission_rate: s.feePct / 100,
+    slippage_rate: s.slippagePct / 100,
+    stop_loss_pct: sell.stopLoss.on ? sell.stopLoss.pct : null,
+    take_profit_pct: sell.takeProfit.on ? sell.takeProfit.pct : null,
+    buy_fill_type: "close",
+    sell_fill_type: "close",
+    max_hold_days: sell.holdPeriod.max ?? null,
+    min_hold_days: sell.holdPeriod.on ? sell.holdPeriod.min : 0,
+    sell_divide_pct: 100,
+    max_sell_divisions: null as number | null,
+    buy_weight_mode: buy.weightMode === "atr" ? "factor" : "equal",
+    buy_divide_pct: 100,
+    max_buy_per_day: null as number | null,
+    max_buy_count: null as number | null,
+    caps: s.universe.caps,
+    sectors: s.universe.sectors,
+    etf: s.universe.etf,
+    managed: s.universe.managed,
+    supervised: s.universe.supervised,
+    groups: s.universe.groups.map((g) => ({ mode: g.mode, tickers: g.tickers })),
+    buy_conditions: buy.conditions.map((c) => ({
+      factor_token: c.factorToken, function_id: c.functionId, params: c.params,
+      op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
+    })),
+    sell_conditions: sell.conditions.map((c) => ({
+      factor_token: c.factorToken, function_id: c.functionId, params: c.params,
+      op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
+    })),
+  };
+}
+
+export default function TerminalBacktester() {
+  const [s, setS] = useState<BacktestStrategy>(initialStrategy);
+  const [tab, setTab] = useState<SummaryTab>("buy");
   const [result, setResult] = useState<ScreenToBacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  // 스크리너에서 넘어온 조건식 (있으면 유니버스 필터로 사용)
   const [handoff, setHandoff] = useState<ScreenerStrategyHandoff | null>(null);
-  // 전략 저장/불러오기 (Phase 5-A)
-  const [savedList, setSavedList] = useState<SavedStrategy[]>([]);
-  const [showSaved, setShowSaved] = useState(false);
-  const [saveName, setSaveName] = useState("");
-  // 관심그룹 (Phase ③)
-  const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
-  const [showWatch, setShowWatch] = useState(false);
-  const [newWatchName, setNewWatchName] = useState("");
-  const [tickerInput, setTickerInput] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    backtestBridgeApi.strategies().then((d) => setStrategies(d.strategies)).catch(() => {});
-    backtestBridgeApi.fillPriceTypes().then((d) => setFillGroups(d.groups)).catch(() => {});
-    backtestBridgeApi.sectors().then((d) => setSectors(d.sectors)).catch(() => {});
-    setSavedList(listStrategies());
-    setWatchlists(listWatchlists());
-    // 스크리너 전략 전달 감지
     const h = getScreenerHandoff();
-    if (h) {
-      setHandoff(h);
-      setUniverse(h.universe);
-    }
+    if (h) setHandoff(h);
   }, []);
-
-  // 현재 설정을 객체로 수집 (저장용)
-  const collectConfig = (): SavedStrategy["config"] => ({
-    strategy, universe, startDate, endDate, maxTickers, capital,
-    commissionBps, slippageBps, stopLoss, takeProfit, buyFillType, sellFillType,
-    maxHoldDays, minHoldDays, sellDividePct, maxSellDivisions,
-    buyWeightMode, buyDividePct, maxBuyPerDay, maxBuyCount,
-  });
-
-  const handleSave = () => {
-    saveStrategy(saveName, collectConfig());
-    setSavedList(listStrategies());
-    setSaveName("");
-  };
-
-  const handleApply = (s: SavedStrategy) => {
-    const c = s.config;
-    setStrategy(c.strategy); setUniverse(c.universe);
-    setStartDate(c.startDate); setEndDate(c.endDate);
-    setMaxTickers(c.maxTickers); setCapital(c.capital);
-    setCommissionBps(c.commissionBps); setSlippageBps(c.slippageBps);
-    setStopLoss(c.stopLoss); setTakeProfit(c.takeProfit);
-    setBuyFillType(c.buyFillType); setSellFillType(c.sellFillType);
-    setMaxHoldDays(c.maxHoldDays); setMinHoldDays(c.minHoldDays);
-    setSellDividePct(c.sellDividePct); setMaxSellDivisions(c.maxSellDivisions);
-    setBuyWeightMode(c.buyWeightMode); setBuyDividePct(c.buyDividePct);
-    setMaxBuyPerDay(c.maxBuyPerDay); setMaxBuyCount(c.maxBuyCount);
-    setShowSaved(false);
-  };
-
-  const handleDelete = (id: string) => {
-    deleteStrategy(id);
-    setSavedList(listStrategies());
-  };
-
-  // 관심그룹 핸들러 (Phase ③)
-  const handleCreateWatch = () => {
-    createWatchlist(newWatchName);
-    setWatchlists(listWatchlists());
-    setNewWatchName("");
-  };
-  const handleDeleteWatch = (id: string) => {
-    deleteWatchlist(id);
-    setWatchlists(listWatchlists());
-    // 삭제된 관심그룹이 현재 선택돼 있으면 기본으로 되돌림
-    if (universe === `watchlist:${id}`) setUniverse("kospi200");
-  };
-  const handleAddTicker = (id: string) => {
-    const code = (tickerInput[id] || "").trim();
-    if (!code) return;
-    addTicker(id, code);
-    setWatchlists(listWatchlists());
-    setTickerInput((m) => ({ ...m, [id]: "" }));
-  };
-  const handleRemoveTicker = (id: string, ticker: string) => {
-    removeTicker(id, ticker);
-    setWatchlists(listWatchlists());
-  };
 
   const run = async () => {
     setLoading(true); setErr(null); setResult(null);
     try {
-      // 관심그룹 선택 시 종목 리스트를 custom_tickers로 전달
-      let customTickers: string[] | null = null;
-      let effUniverse = universe;
-      if (universe.startsWith("watchlist:")) {
-        const wid = universe.slice("watchlist:".length);
-        const wl = watchlists.find((w) => w.id === wid);
-        customTickers = wl && wl.tickers.length > 0 ? wl.tickers : null;
-        effUniverse = "custom";
-      }
-      const r = await backtestBridgeApi.screenToBacktest({
-        universe: effUniverse,
-        custom_tickers: customTickers,
-        filter_ast: handoff ? handoff.filterAst : largeCapFilter(),
-        liquidity_floor: "standard",
-        max_tickers: maxTickers, strategy_name: strategy,
-        start_date: startDate, end_date: endDate, initial_capital: capital,
-        commission_rate: commissionBps / 10000,
-        slippage_rate: slippageBps / 10000,
-        stop_loss_pct: stopLoss === "" ? null : Number(stopLoss),
-        take_profit_pct: takeProfit === "" ? null : Number(takeProfit),
-        buy_fill_type: buyFillType,
-        sell_fill_type: sellFillType,
-        max_hold_days: maxHoldDays === "" ? null : Number(maxHoldDays),
-        min_hold_days: minHoldDays === "" ? 0 : Number(minHoldDays),
-        sell_divide_pct: sellDividePct,
-        max_sell_divisions: maxSellDivisions === "" ? null : Number(maxSellDivisions),
-        buy_weight_mode: buyWeightMode,
-        buy_divide_pct: buyDividePct,
-        max_buy_per_day: maxBuyPerDay === "" ? null : Number(maxBuyPerDay),
-        max_buy_count: maxBuyCount === "" ? null : Number(maxBuyCount),
-      });
+      const r = await backtestBridgeApi.screenToBacktest(strategyToRun(s, handoff));
       if (r.error) setErr(r.message || "백테스트 실패");
       else setResult(r);
     } catch (e) { setErr((e as Error).message); }
@@ -223,245 +163,43 @@ export default function TerminalBacktester({ onEditStrategy, defaultStrategy }: 
         </div>
       )}
 
-      <div className="tbt-grid">
-        {/* 설정 패널 */}
-        <div className="tbt-config">
-          <div className="tbt-group">
-            <label className="tbt-label">Strategy Template</label>
-            <select className="tbt-input" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
-              {strategies.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-            {onEditStrategy && (
-              <button
-                onClick={() => onEditStrategy(strategy)}
-                style={{
-                  marginTop: 6, fontFamily: "var(--t-mono)", fontSize: 10,
-                  color: "var(--t-accent)", background: "transparent",
-                  border: "1px dashed var(--t-border)", borderRadius: 2,
-                  padding: "5px 8px", cursor: "pointer", textTransform: "uppercase",
-                  letterSpacing: "0.05em", width: "100%",
-                }}
-              >
-                ✎ 전략 설계에서 편집
-              </button>
-            )}
-          </div>
-          <div className="tbt-group">
-            <label className="tbt-label">Asset Universe</label>
-            <select className="tbt-input" value={universe} onChange={(e) => setUniverse(e.target.value)}>
-              <option value="kospi50">KOSPI 50</option>
-              <option value="kospi200">KOSPI 200</option>
-              <option value="kosdaq150">KOSDAQ 150</option>
-              {sectors.length > 0 && (
-                <optgroup label="업종·테마">
-                  {sectors.map((s) => (
-                    <option key={s.id} value={s.id}>{s.label} ({s.size})</option>
-                  ))}
-                </optgroup>
-              )}
-              {watchlists.length > 0 && (
-                <optgroup label="관심그룹">
-                  {watchlists.map((w) => (
-                    <option key={w.id} value={`watchlist:${w.id}`} disabled={w.tickers.length === 0}>
-                      {w.name} ({w.tickers.length})
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <button className="tbt-watch-toggle" onClick={() => setShowWatch((v) => !v)}>
-              {showWatch ? "▾" : "▸"} 관심그룹 관리 ({watchlists.length})
-            </button>
-          </div>
-          {showWatch && (
-            <div className="tbt-watch-panel">
-              <div className="tbt-watch-create">
-                <input type="text" className="tbt-input" value={newWatchName} placeholder="새 관심그룹 이름"
-                  onChange={(e) => setNewWatchName(e.target.value)} />
-                <button className="tbt-save-btn" onClick={handleCreateWatch}>추가</button>
-              </div>
-              {watchlists.length === 0 && (
-                <div className="tbt-saved-empty">관심그룹이 없습니다. 종목코드 6자리로 직접 묶어보세요.</div>
-              )}
-              {watchlists.map((w) => (
-                <div key={w.id} className="tbt-watch-item">
-                  <div className="tbt-watch-item-head">
-                    <span className="tbt-watch-name">{w.name} <span className="tbt-watch-count">{w.tickers.length}종목</span></span>
-                    <button className="tbt-saved-del" onClick={() => handleDeleteWatch(w.id)} title="그룹 삭제">✕</button>
-                  </div>
-                  <div className="tbt-watch-chips">
-                    {w.tickers.map((t) => (
-                      <span key={t} className="tbt-watch-chip">
-                        {t}<button onClick={() => handleRemoveTicker(w.id, t)} title="제거">×</button>
-                      </span>
-                    ))}
-                    {w.tickers.length === 0 && <span className="tbt-watch-empty-hint">종목 없음</span>}
-                  </div>
-                  <div className="tbt-watch-add">
-                    <input type="text" className="tbt-input" value={tickerInput[w.id] || ""} placeholder="종목코드 (예: 005930)"
-                      maxLength={6}
-                      onChange={(e) => setTickerInput((m) => ({ ...m, [w.id]: e.target.value.replace(/[^0-9]/g, "") }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAddTicker(w.id); }} />
-                    <button className="tbt-save-btn" onClick={() => handleAddTicker(w.id)}>+</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="tbt-group">
-            <label className="tbt-label">Simulation Period</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="text" className="tbt-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              <input type="text" className="tbt-input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
-          <div className="tbt-group">
-            <label className="tbt-label">Max Positions ({maxTickers})</label>
-            <input type="range" min="3" max="20" value={maxTickers} onChange={(e) => setMaxTickers(+e.target.value)} style={{ accentColor: "#1200ff" }} />
-          </div>
-          <div className="tbt-group">
-            <label className="tbt-label">Initial Capital (₩)</label>
-            <input type="text" className="tbt-input" value={capital.toLocaleString()} onChange={(e) => setCapital(Number(e.target.value.replace(/[^0-9]/g, "")) || 0)} />
-          </div>
+      {/* 매수 / 매도 / 매매 대상 탭 */}
+      <div className="tbt-mode-switch">
+        <button className={`tbt-mode${tab === "buy" ? " active" : ""}`} onClick={() => setTab("buy")}>
+          <span className="tbt-mode-num">01</span>
+          매수 조건
+          <span className="tbt-mode-sub">Buy</span>
+        </button>
+        <button className={`tbt-mode${tab === "sell" ? " active" : ""}`} onClick={() => setTab("sell")}>
+          <span className="tbt-mode-num">02</span>
+          매도 조건
+          <span className="tbt-mode-sub">Sell</span>
+        </button>
+        <button className={`tbt-mode${tab === "universe" ? " active" : ""}`} onClick={() => setTab("universe")}>
+          <span className="tbt-mode-num">03</span>
+          매매 대상
+          <span className="tbt-mode-sub">Universe</span>
+        </button>
+      </div>
 
-          {/* 고급 옵션 (접이식) */}
-          <button className="tbt-advanced-toggle" onClick={() => setShowAdvanced((v) => !v)}>
-            {showAdvanced ? "▾" : "▸"} 고급 옵션 (체결가·수수료·손익절)
-          </button>
-          {showAdvanced && (
-            <div className="tbt-advanced">
-              <div className="tbt-group">
-                <label className="tbt-label">매수 체결가</label>
-                <select className="tbt-input" value={buyFillType} onChange={(e) => setBuyFillType(e.target.value)}>
-                  {fillGroups.map((g) => (
-                    <optgroup key={g.id} label={g.label}>
-                      {g.types.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">매도 체결가</label>
-                <select className="tbt-input" value={sellFillType} onChange={(e) => setSellFillType(e.target.value)}>
-                  {fillGroups.map((g) => (
-                    <optgroup key={g.id} label={g.label}>
-                      {g.types.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div className="tbt-divider-label">매도 정밀화</div>
-              <div className="tbt-group">
-                <label className="tbt-label">보유기간 매도 (일, 비우면 미적용)</label>
-                <input type="text" className="tbt-input" value={maxHoldDays} placeholder="예: 20"
-                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setMaxHoldDays(v === "" ? "" : Number(v)); }} />
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">최소 보유 (일, 조기청산 방지)</label>
-                <input type="text" className="tbt-input" value={minHoldDays} placeholder="예: 5"
-                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setMinHoldDays(v === "" ? "" : Number(v)); }} />
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">매도 비중 ({sellDividePct}% {sellDividePct < 100 ? "분할" : "전량"})</label>
-                <input type="range" min="10" max="100" step="10" value={sellDividePct} onChange={(e) => setSellDividePct(+e.target.value)} style={{ accentColor: "#1200ff" }} />
-              </div>
-              {sellDividePct < 100 && (
-                <div className="tbt-group">
-                  <label className="tbt-label">분할 매도 최대 횟수 (비우면 무제한)</label>
-                  <input type="text" className="tbt-input" value={maxSellDivisions} placeholder="예: 3"
-                    onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setMaxSellDivisions(v === "" ? "" : Number(v)); }} />
-                </div>
-              )}
-              <div className="tbt-divider-label">매수 정밀화</div>
-              <div className="tbt-group">
-                <label className="tbt-label">매수 비중 방식</label>
-                <select className="tbt-input" value={buyWeightMode} onChange={(e) => setBuyWeightMode(e.target.value)}>
-                  <option value="equal">동일가중 (균등 배분)</option>
-                  <option value="factor">팩터가중 (점수 비례)</option>
-                </select>
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">매수 비중 ({buyDividePct}% {buyDividePct < 100 ? "분할" : "한번에"})</label>
-                <input type="range" min="10" max="100" step="10" value={buyDividePct} onChange={(e) => setBuyDividePct(+e.target.value)} style={{ accentColor: "#1200ff" }} />
-              </div>
-              {buyDividePct < 100 && (
-                <div className="tbt-group">
-                  <label className="tbt-label">분할 매수 최대 횟수 (비우면 미적용)</label>
-                  <input type="text" className="tbt-input" value={maxBuyCount} placeholder="예: 3"
-                    onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setMaxBuyCount(v === "" ? "" : Number(v)); }} />
-                </div>
-              )}
-              <div className="tbt-group">
-                <label className="tbt-label">일일 최대 매수 종목 (비우면 무제한)</label>
-                <input type="text" className="tbt-input" value={maxBuyPerDay} placeholder="예: 2"
-                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setMaxBuyPerDay(v === "" ? "" : Number(v)); }} />
-              </div>
-              <div className="tbt-divider-label">비용·손익절</div>
-              <div className="tbt-group">
-                <label className="tbt-label">수수료 ({(commissionBps / 100).toFixed(2)}%)</label>
-                <input type="range" min="0" max="50" value={commissionBps} onChange={(e) => setCommissionBps(+e.target.value)} style={{ accentColor: "#1200ff" }} />
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">슬리피지 ({(slippageBps / 100).toFixed(2)}%)</label>
-                <input type="range" min="0" max="30" value={slippageBps} onChange={(e) => setSlippageBps(+e.target.value)} style={{ accentColor: "#1200ff" }} />
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">손절 % (비우면 미적용)</label>
-                <input type="text" className="tbt-input" value={stopLoss} placeholder="예: 5"
-                  onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ""); setStopLoss(v === "" ? "" : Number(v)); }} />
-              </div>
-              <div className="tbt-group">
-                <label className="tbt-label">익절 % (비우면 미적용)</label>
-                <input type="text" className="tbt-input" value={takeProfit} placeholder="예: 15"
-                  onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ""); setTakeProfit(v === "" ? "" : Number(v)); }} />
-              </div>
-            </div>
-          )}
+      {/* 조건 설정 패널 */}
+      <div style={{ marginTop: 16 }}>
+        {tab === "buy" && <BuyConditionPanel s={s} set={setS} />}
+        {tab === "sell" && <SellConditionPanel s={s} set={setS} />}
+        {tab === "universe" && <UniversePanel s={s} set={setS} />}
+      </div>
 
-          <button className="tbt-run" onClick={run} disabled={loading}>
-            {loading ? "Running Simulation..." : "Run Simulation"}
-          </button>
-
-          {/* 전략 저장/불러오기 (Phase 5-A) */}
-          <div className="tbt-save-row">
-            <input type="text" className="tbt-input tbt-save-name" value={saveName} placeholder="전략 이름"
-              onChange={(e) => setSaveName(e.target.value)} />
-            <button className="tbt-save-btn" onClick={handleSave}>저장</button>
-            <button className="tbt-save-btn" onClick={() => setShowSaved((v) => !v)}>
-              저장됨 ({savedList.length})
-            </button>
+      {/* 실행 */}
+      <div style={{ marginTop: 16 }}>
+        <button className="tbt-run" onClick={run} disabled={loading} style={{ width: "100%" }}>
+          {loading ? "백테스트 실행 중..." : "백테스트 실행"}
+        </button>
+        {loading && (
+          <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", marginTop: 8, lineHeight: 1.5 }}>
+            과거 시세 로드 + 전략 시뮬레이션 중...<br />최대 ~15초 소요됩니다.
           </div>
-          {showSaved && savedList.length > 0 && (
-            <div className="tbt-saved-list">
-              {savedList.map((s) => (
-                <div key={s.id} className="tbt-saved-item">
-                  <button className="tbt-saved-apply" onClick={() => handleApply(s)} title="이 전략 불러오기">
-                    <span className="tbt-saved-name">{s.name}</span>
-                    <span className="tbt-saved-meta">{s.config.strategy} · {s.config.universe}</span>
-                  </button>
-                  <button className="tbt-saved-del" onClick={() => handleDelete(s.id)} title="삭제">✕</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {showSaved && savedList.length === 0 && (
-            <div className="tbt-saved-empty">저장된 전략이 없습니다</div>
-          )}
-          {loading && (
-            <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", marginTop: -8, lineHeight: 1.5 }}>
-              과거 시세 로드 + 전략 시뮬레이션 중...<br />최대 ~15초 소요됩니다.
-            </div>
-          )}
-
-          {st && (
-            <div className="tbt-quickstat">
-              <div className="tbt-label" style={{ marginBottom: 8 }}>Quick Stats</div>
-              TRADES: {st.num_trades}<br />
-              WIN RATE: {st.win_rate}%<br />
-              SHARPE: {st.sharpe_ratio}
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
         {/* 분석 뷰포트 */}
         <div className="tbt-viewport">
@@ -523,10 +261,10 @@ export default function TerminalBacktester({ onEditStrategy, defaultStrategy }: 
               {/* CSV 내보내기 툴바 (Phase 5-B) */}
               <div className="tbt-export-bar">
                 <span className="tbt-export-label">내보내기</span>
-                <button className="tbt-export-btn" onClick={() => exportTradesCsv((result.backtest.trades || []) as unknown as Array<Record<string, unknown>>, strategy)}>
+                <button className="tbt-export-btn" onClick={() => exportTradesCsv((result.backtest.trades || []) as unknown as Array<Record<string, unknown>>, s.name)}>
                   거래내역 CSV
                 </button>
-                <button className="tbt-export-btn" onClick={() => exportSummaryCsv(st as unknown as Record<string, number>, result.backtest.monthly_returns || [], strategy)}>
+                <button className="tbt-export-btn" onClick={() => exportSummaryCsv(st as unknown as Record<string, number>, result.backtest.monthly_returns || [], s.name)}>
                   요약·월별 CSV
                 </button>
               </div>
@@ -656,7 +394,6 @@ export default function TerminalBacktester({ onEditStrategy, defaultStrategy }: 
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
