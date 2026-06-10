@@ -6,8 +6,14 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
-import type { BacktestStrategy } from "../../../lib/backtest/strategy";
+import type { BacktestStrategy, SortDir } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
+import { SORT_FIELDS } from "../../../lib/backtest/sortFields";
+
+const selBox: React.CSSProperties = {
+  fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
+  borderRadius: "var(--bs-border-radius)", padding: "6px 9px", background: "var(--bg-card)", cursor: "pointer",
+};
 
 export default function BuyConditionPanel({ s, set }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>;
@@ -53,6 +59,27 @@ export default function BuyConditionPanel({ s, set }: {
       </Section>
 
       <Section title="매수 비중 설정" hint="종목당 비중·보유 수" tone="buy" enabled onToggle={() => {}}>
+        <Field label="매수 우선순위">
+          <select value={s.buy.primarySort.expr} style={selBox}
+            onChange={(e) => patchBuy({ primarySort: { ...s.buy.primarySort, expr: e.target.value } })}>
+            {SORT_FIELDS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+          <Segmented tone="buy" value={s.buy.primarySort.dir}
+            onChange={(dir: SortDir) => patchBuy({ primarySort: { ...s.buy.primarySort, dir } })}
+            options={[{ id: "DESC", label: "높은순" }, { id: "ASC", label: "낮은순" }]} />
+        </Field>
+        <Field label="2차 정렬">
+          <select value={s.buy.secondarySort?.expr ?? ""} style={selBox}
+            onChange={(e) => patchBuy({ secondarySort: e.target.value ? { expr: e.target.value, dir: s.buy.secondarySort?.dir ?? "DESC" } : undefined })}>
+            <option value="">사용 안 함</option>
+            {SORT_FIELDS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+          {s.buy.secondarySort && (
+            <Segmented tone="buy" value={s.buy.secondarySort.dir}
+              onChange={(dir: SortDir) => patchBuy({ secondarySort: { expr: s.buy.secondarySort!.expr, dir } })}
+              options={[{ id: "DESC", label: "높은순" }, { id: "ASC", label: "낮은순" }]} />
+          )}
+        </Field>
         <Field label="비중 방식">
           <Segmented tone="buy" value={s.buy.weightMode} onChange={(v) => patchBuy({ weightMode: v })}
             options={[{ id: "equal", label: "균등 비중" }, { id: "atr", label: "ATR 비중" }]} />

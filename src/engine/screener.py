@@ -198,6 +198,32 @@ class ScreenerResult:
     timestamp:          str = field(default_factory=lambda: datetime.now().isoformat())
 
 
+def sort_screener_items(
+    items: list,
+    sort_by: str,
+    ascending: bool = False,
+    sort_by_secondary: str | None = None,
+    sort_secondary_ascending: bool = False,
+) -> None:
+    """스크리닝 결과 제자리 정렬 — 1차/2차 키 + 동점 시 stock_code(결정적).
+
+    안정 정렬을 역순으로 3회 적용: stock_code → 2차 키 → 1차 키.
+    방향(asc/desc)을 키별로 독립 지정할 수 있다 (매수 우선순위 1차/2차 정렬).
+    """
+    if not items or not sort_by:
+        return
+    items.sort(key=lambda x: x.stock_code)
+    if sort_by_secondary:
+        items.sort(
+            key=lambda x: getattr(x, sort_by_secondary, 0) or 0,
+            reverse=not sort_secondary_ascending,
+        )
+    items.sort(
+        key=lambda x: getattr(x, sort_by, 0) or 0,
+        reverse=not ascending,
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # LRU + TTL Cache
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -304,6 +330,8 @@ class ValuationScreener:
         filters: ScreenerFilters | None = None,
         sort_by: str = "composite_score",
         ascending: bool = False,
+        sort_by_secondary: str | None = None,       # 2차 정렬 키 (동점 타이브레이크)
+        sort_secondary_ascending: bool = False,
         limit: int = 50,
         params: ValuationParams | None = None,
         filter_ast=None,            # M1: FilterGroup (있으면 우선, ScreenerFilters와 병행 — 하위호환)
@@ -409,12 +437,8 @@ class ValuationScreener:
         # 4. 정렬
         if sort_by and filtered:
             try:
-                # 동점 시 stock_code 보조키 → 결정적 정렬 (PIT 재현성 보장)
-                filtered.sort(key=lambda x: x.stock_code)
-                filtered.sort(
-                    key=lambda x: getattr(x, sort_by, 0) or 0,
-                    reverse=not ascending,
-                )
+                sort_screener_items(filtered, sort_by, ascending,
+                                    sort_by_secondary, sort_secondary_ascending)
             except Exception as e:
                 logger.warning(f"정렬 실패 ({sort_by}): {e}")
 

@@ -929,6 +929,10 @@ export const backtestBridgeApi = {
     filter_ast: FilterGroupNode;
     liquidity_floor: string;
     max_tickers: number;
+    sort_by?: string;
+    sort_dir?: string;
+    sort_by_secondary?: string | null;
+    sort_secondary_dir?: string;
     strategy_name: string;
     start_date: string;
     end_date: string;

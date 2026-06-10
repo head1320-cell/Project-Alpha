@@ -894,6 +894,9 @@ class ScreenToBacktestRequest(BaseModel):
     liquidity_floor: str = "standard"
     max_tickers: int = Field(default=10, ge=1, le=30)  # 백테스트할 상위 종목 수
     sort_by: str = "composite_score"
+    sort_dir: str = "desc"                       # 매수 우선순위 1차 방향 (desc|asc)
+    sort_by_secondary: str | None = None         # 2차 정렬 키 (동점 타이브레이크)
+    sort_secondary_dir: str = "desc"
     # 백테스트 설정
     strategy_name: str = "GoldenCross"
     strategy_params: dict = {}
@@ -983,6 +986,9 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             universe=_universe,
             filter_ast=ast,
             sort_by=req.sort_by,
+            ascending=(req.sort_dir == "asc"),
+            sort_by_secondary=req.sort_by_secondary,
+            sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
             limit=eval_cap,
             liquidity_floor=req.liquidity_floor,
         )

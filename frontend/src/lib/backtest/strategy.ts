@@ -6,6 +6,7 @@
 
 import type { Condition } from "../../components/backtest/ConditionFormulaEditor";
 import { fillPriceLabel } from "./fillPrice";
+import { sortFieldLabel } from "./sortFields";
 
 export type SortDir = "DESC" | "ASC";
 
@@ -103,7 +104,8 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
       ]},
       { label: "매수 조건", rows: [
         { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미설정", muted: !b.conditions.length },
-        { label: "우선순위", value: `${shortExpr(b.primarySort.expr)} ${b.primarySort.dir === "DESC" ? "↓" : "↑"}` },
+        { label: "우선순위", value: `${sortFieldLabel(b.primarySort.expr)} ${b.primarySort.dir === "DESC" ? "↓" : "↑"}` },
+        { label: "2차 정렬", value: b.secondarySort ? `${sortFieldLabel(b.secondarySort.expr)} ${b.secondarySort.dir === "DESC" ? "↓" : "↑"}` : "사용 안 함", muted: !b.secondarySort },
       ]},
       { label: "매수 비중", rows: [
         { label: "방식", value: b.weightMode === "equal" ? "균등" : "ATR" },
@@ -164,5 +166,3 @@ const advRows = (items: [string, boolean][]): SummaryRow[] => {
   const on = items.filter(([, v]) => v).map(([k]) => k);
   return [{ label: "사용", value: on.length ? on.join(", ") : "없음", muted: !on.length }];
 };
-
-const shortExpr = (e: string): string => (e.length > 10 ? e.slice(0, 9) + "…" : e || "—");
