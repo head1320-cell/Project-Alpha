@@ -88,9 +88,65 @@ def _status_codes() -> tuple[frozenset, frozenset]:
             frozenset(str(c).split(".")[0] for c in supervised))
 
 
+# 마스터 cap_size("1"대/"2"중/"3"소) → tier proxy (시총 결측 시)
+_CAP_SIZE_PROXY = {
+    "KOSPI": {"1": "kospi_l", "2": "kospi_m", "3": "kospi_m"},
+    "KOSDAQ": {"1": "kosdaq_l", "2": "kosdaq_m", "3": "kosdaq_s"},
+}
+
+
+def _master_frame() -> pd.DataFrame | None:
+    """KIS 마스터 플래그 캐시 → 전종목(~2,700) 프레임. 캐시 없으면 None(프리셋 폴백).
+
+    시총(억)은 마스터 값 → 실제 6단계 tier. 업종은 STOCK_SECTOR 한글명이 있으면 사용
+    (마스터 지수업종코드의 한글 라벨 매핑은 미보유 — 코드만 보존됨). ETF/ETN은 그룹코드."""
+    try:
+        from src.data.stock_master import load_master_flags
+        flags = load_master_flags()
+    except Exception:
+        return None
+    if not flags:
+        return None
+
+    sector_map: dict[str, str] = {}
+    try:
+        from src.engine.screener import get_sector_universe
+        for sector, codes in get_sector_universe().items():
+            for c in codes:
+                sector_map[str(c)] = sector
+    except Exception:
+        pass
+    etf_extra = _etf_codes()
+
+    rows = []
+    for code, f in flags.items():
+        market = (f.get("market") or "KOSDAQ").upper()
+        mcap = f.get("market_cap_억")
+        proxy = _CAP_SIZE_PROXY.get(market, {}).get(
+            str(f.get("cap_size") or ""),
+            "kospi_m" if market == "KOSPI" else "kosdaq_s",
+        )
+        tier = _tier_from_mcap(market, float(mcap) if mcap else None, proxy)
+        group = f.get("group_code") or "ST"
+        rows.append({
+            "ticker": str(code), "market": market, "tier": tier,
+            "sector": sector_map.get(str(code)),
+            "market_cap": float(mcap) if mcap else None,
+            "is_etf": group in ("EF", "EN") or str(code) in etf_extra,
+        })
+    return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector", "market_cap", "is_etf"])
+
+
 @lru_cache(maxsize=1)
 def load_universe_frame() -> pd.DataFrame:
-    """전체 매매가능 종목 프레임: ticker, market, tier, sector, market_cap, is_etf."""
+    """전체 매매가능 종목 프레임: ticker, market, tier, sector, market_cap, is_etf.
+
+    KIS 마스터 플래그 캐시(collect-master 실행 후)가 있으면 전종목 기준,
+    없으면 프리셋(kospi50/200/kosdaq150 + 업종) 폴백 — 기존 동작 불변."""
+    mf = _master_frame()
+    if mf is not None and not mf.empty:
+        return mf
+
     from src.engine.screener import UNIVERSE_PRESETS, get_sector_universe
 
     kospi50 = set(UNIVERSE_PRESETS.get("kospi50", []))

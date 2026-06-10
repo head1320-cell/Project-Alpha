@@ -31,6 +31,36 @@ logger = logging.getLogger(__name__)
 
 # 공시 시차 (분기말 후 N일에 공시 완료 가정)
 DISCLOSURE_LAG_DAYS = 45
+# 연간(사업보고서)은 결산 후 90일 이내 제출 — 보수적으로 90일 시차 적용
+ANNUAL_LAG_DAYS = 90
+
+# DART 보고서 코드
+REPRT_ANNUAL, REPRT_HALF, REPRT_Q1, REPRT_Q3 = "11011", "11012", "11013", "11014"
+
+
+def _period_asof(as_of_date: str) -> tuple[str, str] | None:
+    """as_of 시점에 공시 완료된 가장 최근 보고서 → (bsns_year, reprt_code).
+
+    분기말 + 공시시차(분기 45일 / 연간 90일) 경과 여부로 판별 — look-ahead 차단.
+    예: 2024-05-20 → 2024 1Q(3/31+45=5/15 공시완료, 11013)
+        2024-05-10 → 2023 연간(12/31+90=3/31 공시완료, 11011)"""
+    try:
+        d = datetime.strptime(as_of_date, "%Y-%m-%d")
+    except ValueError:
+        return None
+    candidates = []
+    for y in range(d.year, d.year - 3, -1):
+        candidates += [
+            (datetime(y, 12, 31), str(y), REPRT_ANNUAL, ANNUAL_LAG_DAYS),
+            (datetime(y, 9, 30), str(y), REPRT_Q3, DISCLOSURE_LAG_DAYS),
+            (datetime(y, 6, 30), str(y), REPRT_HALF, DISCLOSURE_LAG_DAYS),
+            (datetime(y, 3, 31), str(y), REPRT_Q1, DISCLOSURE_LAG_DAYS),
+        ]
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    for q_end, year, reprt, lag in candidates:
+        if q_end + timedelta(days=lag) <= d:
+            return (year, reprt)
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -106,6 +136,13 @@ class PITStore:
             if entry and time.time() - entry[0] < self.cache_ttl:
                 return entry[1]
 
+        # 실데이터 우선: DART 키 설정 시 해당 시점 공시 재무로 스냅샷 (실패 시 mock 폴백)
+        real = self._dart_snapshot(stock_code, as_of_date)
+        if real is not None:
+            with self._lock:
+                self._cache[cache_key] = (time.time(), real)
+            return real
+
         # 시점 변형 계수 (deterministic — 같은 종목/시점은 항상 동일)
         q_idx = _quarter_index(as_of_date)
         seed = sum(ord(c) for c in stock_code) + q_idx
@@ -140,6 +177,45 @@ class PITStore:
         with self._lock:
             self._cache[cache_key] = (time.time(), snapshot)
         return snapshot
+
+    def _dart_snapshot(self, stock_code: str, as_of_date: str) -> dict | None:
+        """DART 실데이터 PIT 스냅샷 — 키 없음·조회 실패 시 None(mock 폴백).
+
+        재무제표에서 직접 산출 가능한 비율(ROE/ROA/부채비율)만 실값으로 채운다.
+        가격 의존 지표(PER/PBR/배당수익률/시총)는 역사 시세 미연동이라 None —
+        소비자(screener._apply_pit)는 None 필드를 교체하지 않으므로 부분 적용된다."""
+        try:
+            from src.data.dart_client import DARTClient, get_corp_code
+            client = DARTClient()
+            if not client.is_configured:
+                return None
+            period = _period_asof(as_of_date)
+            if period is None:
+                return None
+            corp = get_corp_code(stock_code)
+            if not corp:
+                return None
+            year, reprt = period
+            fs = client.get_financial_statement_full(corp, year, reprt_code=reprt)
+            if fs is None or fs.total_equity is None:
+                return None
+            fs.compute_ratios()
+            return {
+                "roe_pct": fs.roe,
+                "roa_pct": fs.roa,
+                "per": None,
+                "pbr": None,
+                "debt_ratio_pct": fs.debt_ratio,
+                "dividend_yield_pct": None,
+                "fcf_억": None,
+                "market_cap_억": None,
+                "_as_of_date": as_of_date,
+                "_report": f"{year}/{reprt}",
+                "_source": "pit_dart",
+            }
+        except Exception as e:
+            logger.debug(f"PIT DART snapshot 실패 ({stock_code}@{as_of_date}): {e}")
+            return None
 
     def get_price_asof(self, stock_code: str, as_of_date: str, current_price: float) -> float:
         """as_of_date 시점 종가 (mock: deterministic 변형)."""

@@ -288,6 +288,19 @@ def check_backtest_flow(stock_code, kis_mock):
     else:
         warn("지수(KOSPI) 로드 실패 — 마켓타이밍은 미개입(fail-open), 벤치마크는 대형주 프록시 폴백")
 
+    # (d) 종목마스터 플래그 캐시 — 전종목 유니버스·관리/감리 제외의 데이터원 (키 불필요)
+    try:
+        from src.data.stock_master import MANAGED_CODES, SUPERVISED_CODES, load_master_flags
+        flags = load_master_flags()
+        if flags:
+            ok(f"마스터 플래그 캐시 {len(flags)}종목 · 관리/정지 {len(MANAGED_CODES)} · "
+               f"투자주의 {len(SUPERVISED_CODES)} — 전종목 유니버스·관리/감리 제외 활성")
+        else:
+            warn("마스터 플래그 캐시 없음 — POST /api/v1/symbols/collect-master 1회 실행 시 "
+                 "전종목(~2,700)·관리/감리 제외 활성 (인증 불필요)")
+    except Exception as e:
+        warn(f"마스터 플래그 조회 실패: {e}")
+
 
 def main():
     ap = argparse.ArgumentParser()

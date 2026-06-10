@@ -12,6 +12,7 @@
 # DART/KIS 캐시 (자동 생성, 용량 큼)
 src/data/corp_code_cache.json
 src/data/corp_name_cache.json
+src/data/master_flags_cache.json
 
 # ─── Python ───
 __pycache__/

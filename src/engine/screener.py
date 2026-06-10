@@ -104,6 +104,16 @@ def resolve_universe(universe: str | list[str]) -> list[str]:
     if isinstance(universe, str) and universe.startswith("sector:"):
         sector = universe.split(":", 1)[1]
         return get_sector_universe().get(sector, [])
+    if isinstance(universe, str) and universe in ("all", "all_listed"):
+        # 전종목(주권만) — KIS 마스터 캐시 필요 (collect-master 후). 없으면 kospi200 폴백.
+        try:
+            from src.data.stock_master import load_master_flags
+            flags = load_master_flags()
+            if flags:
+                return [c for c, f in flags.items() if (f.get("group_code") or "ST") == "ST"]
+        except Exception:
+            pass
+        return UNIVERSE_PRESETS.get("kospi200", KOSPI200_TICKERS)
     return UNIVERSE_PRESETS.get(universe, KOSPI200_TICKERS)
 
 

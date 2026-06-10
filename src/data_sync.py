@@ -112,14 +112,29 @@ async def sync_stock_metadata():
 # Daily Price Sync
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _all_listed_tickers() -> list[str]:
+    """전 상장 주권 코드 — KIS 마스터 캐시 기준 (collect-master 실행 후). 없으면 빈 리스트."""
+    try:
+        from src.data.stock_master import load_master_flags
+        flags = load_master_flags()
+        return [c for c, f in flags.items() if (f.get("group_code") or "ST") == "ST"]
+    except Exception:
+        return []
+
+
 async def sync_daily_prices(
     client: KISClient,
     days_back: int = 60,
     batch_size: int = 10,
+    all_listed: bool = False,
 ):
     """
     Fetch daily OHLCV for all tickers and upsert into daily_prices.
     Processes in batches to respect KIS rate limits and DB memory.
+
+    all_listed=True: KIS 마스터 캐시의 전 상장 주권(~2,700) 대상.
+      소요 ≈ 2,700콜 ÷ 15TPS ≈ 3분/일배치 (60일 회귀 기준 — 수년치 초기적재는 별도).
+      캐시 없으면 SEED_TICKERS 폴백. 기본 False = 기존 동작(52종목) 불변.
     """
     if not _engine_available:
         logger.warning("Async DB not available, skipping price sync")
@@ -132,6 +147,13 @@ async def sync_daily_prices(
     errors = 0
 
     tickers = [t[0] for t in SEED_TICKERS]
+    if all_listed:
+        full = _all_listed_tickers()
+        if full:
+            tickers = full
+            logger.info(f"all_listed: {len(tickers)} tickers from master cache")
+        else:
+            logger.warning("all_listed 요청됐으나 마스터 캐시 없음 — SEED 폴백 (collect-master 먼저 실행)")
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         for ticker in batch:

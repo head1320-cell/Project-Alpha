@@ -111,3 +111,55 @@ def test_empty_frame_returns_empty(monkeypatch):
                         lambda: pd.DataFrame(columns=["ticker", "market", "tier",
                                                       "sector", "market_cap", "is_etf"]))
     assert us.select_universe() == ([], 0)
+
+
+# ─── KIS 마스터 캐시 기반 전종목 프레임 ──────────────────────────────────────
+MASTER_FLAGS = {
+    "005930": {"market": "KOSPI", "group_code": "ST", "cap_size": "1",
+               "sector_code": "0013", "market_cap_억": 4_000_000},   # 대형 → kospi_l
+    "000270": {"market": "KOSPI", "group_code": "ST", "cap_size": "2",
+               "sector_code": "0011", "market_cap_억": 20_000},      # 2조 → kospi_m
+    "247540": {"market": "KOSDAQ", "group_code": "ST", "cap_size": "1",
+               "sector_code": "1001", "market_cap_억": 15_000},      # 1.5조 → kosdaq_l
+    "654321": {"market": "KOSDAQ", "group_code": "ST", "cap_size": "3",
+               "sector_code": "", "market_cap_억": None},            # 시총 결측 → cap_size proxy
+    "069500": {"market": "KOSPI", "group_code": "EF", "cap_size": "",
+               "sector_code": "", "market_cap_억": 50_000},          # ETF
+}
+
+
+@pytest.fixture
+def master_cache(monkeypatch):
+    import src.data.stock_master as sm
+    monkeypatch.setattr(sm, "load_master_flags", lambda: dict(MASTER_FLAGS))
+    us.load_universe_frame.cache_clear()
+    yield
+    us.load_universe_frame.cache_clear()
+
+
+def test_master_frame_builds_full_universe(master_cache, monkeypatch):
+    monkeypatch.setattr(us, "_status_codes", lambda: (frozenset(), frozenset()))
+    df = us.load_universe_frame()
+    assert len(df) == 5  # 프리셋이 아니라 마스터 전종목 기준
+    row = df.set_index("ticker")
+    assert row.loc["005930", "tier"] == "kospi_l"      # 실시총 4,000,000억 ≥ 3조
+    assert row.loc["000270", "tier"] == "kospi_m"
+    assert row.loc["247540", "tier"] == "kosdaq_l"     # ≥ 1조
+    assert row.loc["654321", "tier"] == "kosdaq_s"     # 시총 결측 → cap_size "3" proxy
+    assert bool(row.loc["069500", "is_etf"])           # group EF
+
+    tickers, total = us.select_universe()              # ETF 기본 제외
+    assert total == 5 and "069500" not in tickers and len(tickers) == 4
+
+
+def test_resolve_universe_all_listed(master_cache, monkeypatch):
+    import src.data.stock_master as sm
+    from src.engine import screener
+    monkeypatch.setattr(sm, "load_master_flags", lambda: dict(MASTER_FLAGS))
+    out = screener.resolve_universe("all_listed")
+    assert set(out) == {"005930", "000270", "247540", "654321"}  # 주권(ST)만, ETF 제외
+
+    # 캐시 없으면 kospi200 폴백
+    monkeypatch.setattr(sm, "load_master_flags", lambda: {})
+    fallback = screener.resolve_universe("all_listed")
+    assert fallback == screener.UNIVERSE_PRESETS.get("kospi200", fallback)
