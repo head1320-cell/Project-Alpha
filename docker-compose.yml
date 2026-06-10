@@ -1,0 +1,90 @@
+
+services:
+
+  # ─── PostgreSQL Database ──────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: ficc_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-ficc_user}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-ficc_password}
+      POSTGRES_DB: ${PG_DATABASE:-ficc_risk}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - ficc_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-ficc_user} -d ${PG_DATABASE:-ficc_risk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Backend (FastAPI) ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ficc_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # .env 없어도 기동 (아래 environment의 기본값 사용). 실키는 .env에 넣으면 자동 주입.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PG_HOST: db
+      PG_PORT: 5432
+      PG_USER: ${PG_USER:-ficc_user}
+      PG_PASSWORD: ${PG_PASSWORD:-ficc_password}
+      PG_DATABASE: ${PG_DATABASE:-ficc_risk}
+      DATABASE_URL_ASYNC: postgresql+asyncpg://${PG_USER:-ficc_user}:${PG_PASSWORD:-ficc_password}@db:5432/${PG_DATABASE:-ficc_risk}
+      KIS_MODE: ${KIS_MODE:-MOCK}
+      KIS_MOCK_APP_KEY: ${KIS_MOCK_APP_KEY:-}
+      KIS_MOCK_APP_SECRET: ${KIS_MOCK_APP_SECRET:-}
+      KIS_REAL_APP_KEY: ${KIS_REAL_APP_KEY:-}
+      KIS_REAL_APP_SECRET: ${KIS_REAL_APP_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ficc_net
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ─── Frontend (Next.js 14) ───────────────────────────────────────────────
+  # 변경: Streamlit(8501) → Next.js(3000)
+  # NEXT_PUBLIC_API_URL은 빌드 타임에 주입 (런타임 env 아님)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: ficc_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ficc_net
+
+# ─── Shared network ──────────────────────────────────────────────────────────
+networks:
+  ficc_net:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  pg_data:

@@ -1,0 +1,42 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# System dependencies (gcc for psycopg2 build, pg_isready for healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies first (Docker layer caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy ALL source code — ensures src/ and __init__.py files are present
+COPY . .
+
+# Ensure directories exist first (Git may drop empty folders)
+RUN mkdir -p src/models src/api src/migrations tests
+
+# Ensure all __init__.py exist (safety net if GitHub dropped empty files)
+RUN touch src/__init__.py \
+    && touch src/models/__init__.py \
+    && touch src/api/__init__.py \
+    && touch src/migrations/__init__.py \
+    && touch tests/__init__.py
+
+# Set PYTHONPATH so "from src.xxx import ..." always works
+ENV PYTHONPATH=/app
+
+# Do NOT run database init at build time — DB isn't available yet.
+# Instead, init_db() is called at FastAPI startup via @app.on_event("startup").
+
+# Expose backend port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Start FastAPI server
+CMD ["uvicorn", "main_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

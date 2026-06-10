@@ -1,0 +1,72 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Project Alpha — 프로젝트 설정 (ruff 린터/포매터 + pytest)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[project]
+name = "project-alpha"
+version = "2.0.4"
+description = "한국 주식 퀀트 투자 플랫폼 (스크리너 + 백테스터 + 밸류에이션 + 리스크)"
+requires-python = ">=3.10"
+
+[tool.ruff]
+# 대상 디렉토리
+src = ["src", "tests"]
+line-length = 120
+target-version = "py310"
+
+# 생성/벤더 디렉토리 제외
+extend-exclude = [
+    "frontend",
+    "*.ipynb",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# 활성 규칙군:
+#   E/W  : pycodestyle (스타일)
+#   F    : pyflakes (미사용 import/변수, undefined name — 실버그 탐지)
+#   I    : isort (import 정렬)
+#   B    : flake8-bugbear (흔한 버그 패턴)
+#   UP   : pyupgrade (구식 문법)
+select = ["E", "W", "F", "I", "B", "UP"]
+
+# 실용적 무시 규칙 (과도하게 엄격하지 않게):
+ignore = [
+    "E501",   # line too long (line-length로 충분)
+    "E741",   # ambiguous variable name (l, I 등 — 수식에서 흔함)
+    "E402",   # module import not at top (조건부 import 허용)
+    "E701",   # multiple statements on one line (colon) — 짧은 가드절 허용
+    "E702",   # multiple statements on one line (semicolon) — 변수 묶음 허용
+    "B008",   # function call in default arg (FastAPI Depends 패턴)
+    "B007",   # unused loop variable (관례적 _ 미사용 허용)
+    "B023",   # function uses loop variable (클로저 — 의도적 사용 많음)
+    "B904",   # raise without from (예외 체이닝 — 점진 개선, 비차단)
+    "B905",   # zip without strict (py310 호환)
+    "UP007",  # X | Y union (런타임 호환 위해 Optional 허용)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 테스트는 미사용 import/변수에 관대
+"tests/*" = ["F401", "F811", "B011"]
+# __init__.py는 re-export 위한 미사용 import 허용
+"__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+python_classes = ["Test*"]
+# 출력 옵션
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "slow: 느린 테스트 (백테스트 등)",
+    "integration: 통합 테스트 (실데이터 필요할 수 있음)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]

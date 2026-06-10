@@ -1,0 +1,507 @@
+"""
+Valuation Models — RIM, DCF, DDM 통합 가치평가 엔진
+========================================================
+밸리AI의 '종목 가치평가' 탭 (6종 모델)에 대응하는 핵심 모듈.
+
+3가지 가치평가 모델:
+
+① RIM (Residual Income Model, 잔여이익모델):
+   V₀ = BPS₀ + Σₜ₌₁ⁿ [(ROEₜ - Kₑ) × BPSₜ₋₁] / (1+Kₑ)ᵗ + TV
+   TV = [(ROEₙ - Kₑ) × BPSₙ] / [(Kₑ-g)(1+Kₑ)ⁿ]
+
+② DCF (Discounted Cash Flow, 현금흐름할인법):
+   V₀ = Σₜ₌₁ⁿ FCFₜ / (1+WACC)ᵗ + TV / (1+WACC)ⁿ
+   TV = FCFₙ × (1+g) / (WACC-g)
+
+③ DDM (Dividend Discount Model, 배당할인법):
+   V₀ = Σₜ₌₁ⁿ Dₜ / (1+Kₑ)ᵗ + Pₙ / (1+Kₑ)ⁿ
+
+통합 평가:
+   가중 평균 적정가 = w_rim × V_rim + w_dcf × V_dcf + w_ddm × V_ddm
+   괴리율 = (현재가 - 적정가) / 적정가 × 100
+
+파라미터:
+   Kₑ = Rf + β × (Rm - Rf)           자기자본비용 (CAPM)
+   WACC = Kₑ × (E/V) + Kd(1-t)(D/V)  가중평균자본비용
+   g = ROE × (1 - payout_ratio)       지속성장률
+   Rf = 한국 국채 10년 (3.5% 가정)
+   β = 시장 대비 변동성 (1.0 기본)
+   Market Premium = 6.0% (한국 ERP)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+
+from src.data.dart_client import DARTClient, FinancialStatement, get_corp_code
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class ValuationParams:
+    """가치평가 공통 파라미터."""
+    risk_free_rate:       float = 0.035    # 한국 국채 10년
+    market_premium:       float = 0.060    # 시장 위험 프리미엄 (ERP)
+    beta:                 float = 1.0      # CAPM 베타
+    terminal_growth_rate: float = 0.02     # 영구 성장률 (명목 GDP 근사)
+    projection_years:     int = 10         # 예측 기간
+    tax_rate:             float = 0.22     # 법인세율
+
+    # 가중치 (모델별)
+    weight_rim:           float = 0.40
+    weight_dcf:           float = 0.40
+    weight_ddm:           float = 0.20
+
+    @property
+    def cost_of_equity(self) -> float:
+        """CAPM: Kₑ = Rf + β(Rm-Rf)."""
+        return self.risk_free_rate + self.beta * self.market_premium
+
+    @property
+    def ke(self) -> float:
+        return self.cost_of_equity
+
+
+@dataclass
+class ValuationResult:
+    """단일 모델 가치평가 결과."""
+    model:          str           # "RIM" | "DCF" | "DDM"
+    intrinsic_value_per_share: float   # 적정 주가
+    components:     dict = field(default_factory=dict)
+    assumptions:    dict = field(default_factory=dict)
+    available:      bool = True
+    error:          str | None = None
+
+
+@dataclass
+class UnifiedValuation:
+    """통합 가치평가 결과 (3 모델 합산)."""
+    ticker:                 str
+    corp_name:              str
+    current_price:          float
+    intrinsic_value:        float     # 가중 평균 적정가
+    gap_pct:                float     # 괴리율 (%)
+    verdict:                str       # 저평가/적정/고평가
+    models:                 list      # [ValuationResult × 3]
+
+    financial_summary:      dict = field(default_factory=dict)
+    params:                 dict = field(default_factory=dict)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ① RIM — 잔여이익모델
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_rim(
+    fs: FinancialStatement,
+    params: ValuationParams,
+    future_roe_trajectory: list[float] | None = None,
+) -> ValuationResult:
+    """
+    Residual Income Model.
+    V₀ = BPS₀ + Σ [(ROEₜ - Kₑ) × BPSₜ₋₁] / (1+Kₑ)ᵗ + TV
+    """
+    try:
+        bps = fs.bps
+        roe_pct = fs.roe
+        if not bps or bps <= 0 or not roe_pct:
+            return ValuationResult("RIM", 0, available=False, error="BPS 또는 ROE 없음")
+
+        ke = params.ke
+        g = params.terminal_growth_rate
+        n = params.projection_years
+        roe_decimal = roe_pct / 100
+
+        # ROE 수렴 궤적 (현재 ROE → Ke로 점진 수렴)
+        if future_roe_trajectory:
+            roe_path = future_roe_trajectory[:n]
+        else:
+            # 선형 수렴: ROE → Ke + 약간
+            target_roe = max(ke + 0.01, roe_decimal * 0.6)
+            roe_path = [
+                roe_decimal + (target_roe - roe_decimal) * (t / n)
+                for t in range(n)
+            ]
+
+        # Residual Income 누적
+        pv_ri = 0.0
+        current_bps = bps
+        ri_details = []
+
+        for t in range(1, n + 1):
+            roe_t = roe_path[min(t - 1, len(roe_path) - 1)]
+            residual_income = (roe_t - ke) * current_bps
+            pv_factor = 1 / (1 + ke) ** t
+            pv_ri += residual_income * pv_factor
+
+            ri_details.append({
+                "year": t,
+                "roe": round(roe_t * 100, 2),
+                "bps": round(current_bps, 0),
+                "residual_income": round(residual_income, 0),
+                "pv_factor": round(pv_factor, 4),
+            })
+
+            # BPS 성장 (내부 유보)
+            payout = (fs.payout_ratio or 30) / 100
+            retention = 1 - payout
+            current_bps *= (1 + roe_t * retention)
+
+        # Terminal Value
+        last_roe = roe_path[-1]
+        if (ke - g) > 0.001:
+            tv_ri = ((last_roe - ke) * current_bps) / (ke - g)
+            pv_tv = tv_ri / (1 + ke) ** n
+        else:
+            pv_tv = 0
+
+        intrinsic = bps + pv_ri + pv_tv
+
+        return ValuationResult(
+            model="RIM",
+            intrinsic_value_per_share=max(0, round(intrinsic, 0)),
+            components={
+                "current_bps":   round(bps, 0),
+                "pv_residual":   round(pv_ri, 0),
+                "pv_terminal":   round(pv_tv, 0),
+                "intrinsic":     round(intrinsic, 0),
+            },
+            assumptions={
+                "ke_pct":             round(ke * 100, 2),
+                "current_roe_pct":    round(roe_decimal * 100, 2),
+                "terminal_roe_pct":   round(roe_path[-1] * 100, 2),
+                "terminal_growth_pct": round(g * 100, 2),
+                "projection_years":   n,
+            },
+        )
+    except Exception as e:
+        return ValuationResult("RIM", 0, available=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ② DCF — 현금흐름할인법
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_dcf(
+    fs: FinancialStatement,
+    params: ValuationParams,
+    fcf_growth_rates: list[float] | None = None,
+) -> ValuationResult:
+    """
+    Discounted Cash Flow.
+    V₀ = Σ FCFₜ / (1+WACC)ᵗ + TV / (1+WACC)ⁿ
+    """
+    try:
+        fcf_base = fs.fcf
+        shares = fs.shares_outstanding
+        if not fcf_base or fcf_base <= 0 or not shares or shares <= 0:
+            return ValuationResult("DCF", 0, available=False, error="FCF 또는 발행주식 없음")
+
+        # WACC 계산
+        ke = params.ke
+        equity = fs.total_equity or 1
+        debt = fs.total_liabilities or 0
+        total_value = equity + debt
+        kd = params.risk_free_rate + 0.015  # 차입 스프레드 1.5%
+        wacc = ke * (equity / total_value) + kd * (1 - params.tax_rate) * (debt / total_value)
+        wacc = max(wacc, 0.03)  # 최소 3%
+
+        g = params.terminal_growth_rate
+        n = params.projection_years
+
+        # FCF 성장 궤적
+        if fcf_growth_rates:
+            growth_rates = fcf_growth_rates[:n]
+        else:
+            # 현재 성장률에서 terminal rate로 수렴
+            initial_g = min(0.15, max(0.02, (fs.roe or 10) / 100 * 0.5))
+            growth_rates = [
+                initial_g + (g - initial_g) * (t / n)
+                for t in range(n)
+            ]
+
+        # FCF 예측 + PV
+        pv_fcf = 0.0
+        current_fcf = fcf_base
+        fcf_details = []
+
+        for t in range(1, n + 1):
+            gr = growth_rates[min(t - 1, len(growth_rates) - 1)]
+            current_fcf *= (1 + gr)
+            pv_factor = 1 / (1 + wacc) ** t
+            pv_fcf += current_fcf * pv_factor
+
+            fcf_details.append({
+                "year": t,
+                "fcf": round(current_fcf / 1e8, 1),  # 억원 단위
+                "growth_pct": round(gr * 100, 2),
+                "pv_factor": round(pv_factor, 4),
+            })
+
+        # Terminal Value (Gordon Growth)
+        if (wacc - g) > 0.001:
+            tv = current_fcf * (1 + g) / (wacc - g)
+            pv_tv = tv / (1 + wacc) ** n
+        else:
+            pv_tv = 0
+
+        enterprise_value = pv_fcf + pv_tv
+        equity_value = enterprise_value - debt
+        per_share = max(0, equity_value / shares)
+
+        return ValuationResult(
+            model="DCF",
+            intrinsic_value_per_share=round(per_share, 0),
+            components={
+                "base_fcf_억":       round(fcf_base / 1e8, 1),
+                "pv_fcf_억":         round(pv_fcf / 1e8, 1),
+                "pv_terminal_억":    round(pv_tv / 1e8, 1),
+                "enterprise_value_억": round(enterprise_value / 1e8, 1),
+                "net_debt_억":       round(debt / 1e8, 1),
+                "equity_value_억":   round(equity_value / 1e8, 1),
+                "per_share":         round(per_share, 0),
+            },
+            assumptions={
+                "wacc_pct":             round(wacc * 100, 2),
+                "ke_pct":               round(ke * 100, 2),
+                "kd_pct":               round(kd * 100, 2),
+                "terminal_growth_pct":  round(g * 100, 2),
+                "projection_years":     n,
+                "initial_fcf_growth_pct": round(growth_rates[0] * 100, 2),
+            },
+        )
+    except Exception as e:
+        return ValuationResult("DCF", 0, available=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ③ DDM — 배당할인법
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_ddm(
+    fs: FinancialStatement,
+    params: ValuationParams,
+    dividend_growth_rate: float | None = None,
+) -> ValuationResult:
+    """
+    Two-stage Dividend Discount Model.
+    V₀ = Σₜ₌₁ⁿ Dₜ/(1+Kₑ)ᵗ + Pₙ/(1+Kₑ)ⁿ
+    """
+    try:
+        dps = fs.dps
+        if not dps or dps <= 0:
+            return ValuationResult("DDM", 0, available=False, error="배당 없음 (DPS=0)")
+
+        ke = params.ke
+        g_terminal = params.terminal_growth_rate
+        n = params.projection_years
+
+        # 배당 성장률 추정
+        if dividend_growth_rate is not None:
+            g_high = dividend_growth_rate
+        else:
+            roe = (fs.roe or 10) / 100
+            payout = (fs.payout_ratio or 30) / 100
+            retention = 1 - payout
+            g_high = min(roe * retention, 0.10)  # 최대 10%
+
+        # Stage 1: 고성장기 (n/2 년)
+        high_growth_years = max(3, n // 2)
+        # Stage 2: 수렴기 → terminal
+        pv_dividends = 0.0
+        current_dps = dps
+        div_details = []
+
+        for t in range(1, n + 1):
+            if t <= high_growth_years:
+                gr = g_high
+            else:
+                # 선형 수렴
+                progress = (t - high_growth_years) / (n - high_growth_years)
+                gr = g_high + (g_terminal - g_high) * progress
+
+            current_dps *= (1 + gr)
+            pv_factor = 1 / (1 + ke) ** t
+            pv_dividends += current_dps * pv_factor
+
+            div_details.append({
+                "year": t,
+                "dps": round(current_dps, 0),
+                "growth_pct": round(gr * 100, 2),
+            })
+
+        # Terminal price (Gordon Growth at year n)
+        if (ke - g_terminal) > 0.001:
+            terminal_dps = current_dps * (1 + g_terminal)
+            terminal_price = terminal_dps / (ke - g_terminal)
+            pv_terminal = terminal_price / (1 + ke) ** n
+        else:
+            pv_terminal = 0
+
+        intrinsic = pv_dividends + pv_terminal
+
+        return ValuationResult(
+            model="DDM",
+            intrinsic_value_per_share=max(0, round(intrinsic, 0)),
+            components={
+                "current_dps":       round(dps, 0),
+                "pv_dividends":      round(pv_dividends, 0),
+                "pv_terminal_price": round(pv_terminal, 0),
+                "intrinsic":         round(intrinsic, 0),
+            },
+            assumptions={
+                "ke_pct":               round(ke * 100, 2),
+                "initial_div_growth_pct": round(g_high * 100, 2),
+                "terminal_growth_pct":  round(g_terminal * 100, 2),
+                "high_growth_years":    high_growth_years,
+                "total_years":          n,
+                "payout_ratio_pct":     round((fs.payout_ratio or 30), 1),
+            },
+        )
+    except Exception as e:
+        return ValuationResult("DDM", 0, available=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Unified Valuation Engine
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ValuationEngine:
+    """
+    3가지 모델을 통합 실행 + 가중 평균 적정가 산출.
+
+    Usage:
+        engine = ValuationEngine(dart_client=DARTClient())
+
+        result = engine.evaluate(
+            stock_code="005930",
+            current_price=71000,
+            params=ValuationParams(beta=1.1),
+        )
+
+        print(f"적정가: {result.intrinsic_value:,.0f}원")
+        print(f"괴리율: {result.gap_pct:+.1f}%")
+        print(f"판정: {result.verdict}")
+    """
+
+    def __init__(self, dart_client: DARTClient | None = None):
+        self.dart = dart_client or DARTClient()
+
+    def evaluate(
+        self,
+        stock_code: str,
+        current_price: float,
+        params: ValuationParams | None = None,
+        bsns_year: str | None = None,
+    ) -> UnifiedValuation:
+        """종목 코드 → 재무 데이터 수집 → 3 모델 평가 → 통합 결과."""
+        params = params or ValuationParams()
+
+        # 1. Corp code 변환
+        corp_code = get_corp_code(stock_code)
+        if not corp_code:
+            corp_code = stock_code  # Fallback: 직접 사용
+
+        # 2. 재무제표 수집
+        if bsns_year is None:
+            from datetime import datetime
+            bsns_year = str(datetime.now().year - 1)
+
+        fs = self.dart.get_financial_statement(corp_code, bsns_year)
+        if not fs:
+            return UnifiedValuation(
+                ticker=stock_code, corp_name="Unknown",
+                current_price=current_price,
+                intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
+                models=[],
+            )
+
+        fs.compute_ratios(current_price)
+        corp_info = self.dart.get_corp_info(corp_code)
+        corp_name = corp_info.corp_name if corp_info else fs.corp_name
+
+        # 3. 3 모델 실행
+        rim_result = compute_rim(fs, params)
+        dcf_result = compute_dcf(fs, params)
+        ddm_result = compute_ddm(fs, params)
+
+        models = [rim_result, dcf_result, ddm_result]
+
+        # 4. 가중 평균 적정가
+        total_weight = 0
+        weighted_sum = 0
+        weights = {
+            "RIM": params.weight_rim,
+            "DCF": params.weight_dcf,
+            "DDM": params.weight_ddm,
+        }
+
+        for m in models:
+            if m.available and m.intrinsic_value_per_share > 0:
+                w = weights[m.model]
+                weighted_sum += m.intrinsic_value_per_share * w
+                total_weight += w
+
+        if total_weight > 0:
+            intrinsic = weighted_sum / total_weight
+        else:
+            intrinsic = 0
+
+        # 5. 괴리율 + 판정
+        gap_pct = ((current_price - intrinsic) / intrinsic * 100) if intrinsic > 0 else 0
+
+        if gap_pct <= -30:
+            verdict = "극심한 저평가"
+        elif gap_pct <= -15:
+            verdict = "저평가"
+        elif gap_pct <= -5:
+            verdict = "약간 저평가"
+        elif gap_pct <= 5:
+            verdict = "적정"
+        elif gap_pct <= 15:
+            verdict = "약간 고평가"
+        elif gap_pct <= 30:
+            verdict = "고평가"
+        else:
+            verdict = "극심한 고평가"
+
+        # 6. 재무 요약
+        per = current_price / fs.eps if fs.eps and fs.eps > 0 else None
+        pbr = current_price / fs.bps if fs.bps and fs.bps > 0 else None
+
+        financial_summary = {
+            "revenue_억":          round(fs.revenue / 1e8, 0) if fs.revenue else None,
+            "operating_profit_억": round(fs.operating_profit / 1e8, 0) if fs.operating_profit else None,
+            "net_income_억":       round(fs.net_income / 1e8, 0) if fs.net_income else None,
+            "fcf_억":              round(fs.fcf / 1e8, 0) if fs.fcf else None,
+            "total_equity_억":     round(fs.total_equity / 1e8, 0) if fs.total_equity else None,
+            "roe_pct":             round(fs.roe, 2) if fs.roe else None,
+            "roa_pct":             round(fs.roa, 2) if fs.roa else None,
+            "debt_ratio_pct":      round(fs.debt_ratio, 1) if fs.debt_ratio else None,
+            "eps":                 round(fs.eps, 0) if fs.eps else None,
+            "bps":                 round(fs.bps, 0) if fs.bps else None,
+            "dps":                 round(fs.dps, 0) if fs.dps else None,
+            "per":                 round(per, 2) if per else None,
+            "pbr":                 round(pbr, 2) if pbr else None,
+            "dividend_yield_pct":  round(fs.dividend_yield, 2) if fs.dividend_yield else None,
+            "payout_ratio_pct":    round(fs.payout_ratio, 1) if fs.payout_ratio else None,
+            "bsns_year":           fs.bsns_year,
+        }
+
+        return UnifiedValuation(
+            ticker=stock_code,
+            corp_name=corp_name,
+            current_price=current_price,
+            intrinsic_value=round(intrinsic, 0),
+            gap_pct=round(gap_pct, 2),
+            verdict=verdict,
+            models=models,
+            financial_summary=financial_summary,
+            params=params.__dict__,
+        )

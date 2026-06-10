@@ -1,0 +1,1095 @@
+"""
+Valuation Screener API Routes
+==============================
+POST /api/v1/screener/run            — 전 종목 스캔 + 필터 + 정렬
+GET  /api/v1/screener/universes      — Universe 카탈로그
+GET  /api/v1/screener/cache/stats    — 캐시 통계
+POST /api/v1/screener/cache/clear    — 캐시 비우기
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from src.observability.logging_config import get_logger
+
+logger = get_logger("api.screener")
+
+router = APIRouter(prefix="/api/v1/screener", tags=["screener"])
+
+
+def _detect_data_source(items: list) -> dict:
+    """결과 종목의 데이터 출처 판별 (실데이터/mock 표시용)."""
+    import os
+    fund_real = False
+    try:
+        from src.data.fundamentals_store import FundamentalsStore
+        store = FundamentalsStore.get_default()
+        if items:
+            code = getattr(items[0], "stock_code", None)
+            if code:
+                f = store.get_factors(code)
+                fund_real = (f.get("_source") == "dart_real")
+    except Exception:
+        pass
+    kis_real = (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY")))
+    return {
+        "fundamentals": "dart_real" if fund_real else "mock",
+        "market_data":  "kis_real" if kis_real else "mock",
+        "fully_real":   fund_real and kis_real,
+    }
+
+
+# 싱글톤 (lazy)
+_SCREENER = None
+
+
+def get_screener():
+    global _SCREENER
+    if _SCREENER is None:
+        from src.data.dart_client import DARTClient
+        from src.engine.screener import ValuationScreener
+        from src.engine.valuation.valuation_models import ValuationEngine
+        client = DARTClient()
+        _SCREENER = ValuationScreener(
+            dart_client=client,
+            valuation_engine=ValuationEngine(client),
+        )
+    return _SCREENER
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Models
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FilterRequest(BaseModel):
+    min_market_cap_억:    float | None = None
+    max_market_cap_억:    float | None = None
+    min_roe_pct:          float | None = None
+    max_roe_pct:          float | None = None
+    min_gap_pct:          float | None = None
+    max_gap_pct:          float | None = None
+    min_per:              float | None = None
+    max_per:              float | None = None
+    min_pbr:              float | None = None
+    max_pbr:              float | None = None
+    min_dividend_yield:   float | None = None
+    max_debt_ratio:       float | None = None
+    sectors:              list[str] | None = None
+    require_positive_fcf: bool = False
+    verdicts:             list[str] | None = None
+
+
+class ScreenerRunRequest(BaseModel):
+    universe:        str = Field(default="kospi50",
+                                  description="kospi50 | kospi200 | kosdaq150 | mapped")
+    custom_tickers:  list[str] | None = None
+    filters:         FilterRequest = Field(default_factory=FilterRequest)
+    sort_by:         str = Field(default="composite_score",
+                                  description="composite_score | gap_pct | roe_pct | per | pbr")
+    ascending:       bool = False
+    limit:           int = Field(default=50, ge=1, le=200)
+    beta:            float = Field(default=1.0, ge=0.1, le=3.0)
+    projection_years: int = Field(default=10, ge=3, le=20)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/run")
+def screener_run(req: ScreenerRunRequest):
+    """전 종목 가치평가 스크리닝 실행."""
+    try:
+        from src.engine.screener import ScreenerFilters
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        screener = get_screener()
+
+        # 필터 변환
+        filters = ScreenerFilters(**req.filters.model_dump())
+
+        # Universe (custom 우선)
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+
+        # Params
+        params = ValuationParams(
+            beta=req.beta,
+            projection_years=req.projection_years,
+        )
+
+        result = screener.run(
+            universe=universe,
+            filters=filters,
+            sort_by=req.sort_by,
+            ascending=req.ascending,
+            limit=req.limit,
+            params=params,
+        )
+
+        return {
+            "universe":         result.universe,
+            "total_evaluated":  result.total_evaluated,
+            "total_passed":     result.total_passed,
+            "elapsed_seconds":  result.elapsed_seconds,
+            "cache_hits":       result.cache_hits,
+            "cache_misses":     result.cache_misses,
+            "failures":         result.failures,
+            "timestamp":        result.timestamp,
+            "items":            [it.to_dict() for it in result.items],
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/universes")
+def screener_universes():
+    """사용 가능한 universe 카탈로그."""
+    try:
+        from src.engine.screener import UNIVERSE_PRESETS
+        return {
+            "presets": [
+                {"id": k, "size": len(v), "sample": v[:5]}
+                for k, v in UNIVERSE_PRESETS.items()
+            ],
+            "filter_dimensions": [
+                "min_market_cap_억", "max_market_cap_억",
+                "min_roe_pct", "max_roe_pct",
+                "min_gap_pct (음수=저평가)", "max_gap_pct",
+                "min_per", "max_per", "min_pbr", "max_pbr",
+                "min_dividend_yield", "max_debt_ratio",
+                "sectors[]", "require_positive_fcf", "verdicts[]",
+            ],
+            "sort_fields": [
+                "composite_score", "gap_pct", "roe_pct",
+                "per", "pbr", "dividend_yield_pct",
+            ],
+            "scoring_formula": {
+                "composite": "gap × 0.6 + roe × 0.2 + stability × 0.2",
+                "gap_score":     "clamp(50 - gap_pct, 0, 100)",
+                "roe_score":     "clamp(roe_pct × 3.33, 0, 100)",
+                "stability":     "(100 - debt_ratio/2 + (fcf>0 ? 80 : 30)) / 2",
+            },
+            "valuation_models": {
+                "RIM": "V = BPS + Σ (ROE - Ke) × BPS / (1 + Ke)^t",
+                "DCF": "V = Σ FCF / (1 + WACC)^t + TV / (1 + WACC)^n",
+                "DDM": "V = Σ D / (1 + Ke)^t + Pn / (1 + Ke)^n",
+            },
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/sectors")
+def screener_sectors():
+    """업종(테마) 카탈로그 — 종목 선택용. {id, label, size, sample}."""
+    try:
+        from src.engine.screener import get_sector_universe
+        sectors = get_sector_universe()
+        return {
+            "sectors": [
+                {"id": f"sector:{name}", "label": name, "size": len(codes), "sample": codes[:5]}
+                for name, codes in sorted(sectors.items(), key=lambda x: -len(x[1]))
+            ]
+        }
+    except Exception:
+        logger.exception("업종 카탈로그 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/cache/stats")
+def screener_cache_stats():
+    """캐시 통계 (hit rate 등)."""
+    try:
+        return get_screener().cache_stats()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/cache/clear")
+def screener_cache_clear():
+    """캐시 비우기 (DART 데이터 갱신 후 등)."""
+    try:
+        get_screener().cache_clear()
+        return {"status": "cleared"}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Milestone 1 — Advanced Filter AST Endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ConditionModel(BaseModel):
+    field: str
+    op: str = "lt"
+    value: float | None = None
+    value2: float | None = None
+    rank_mode: str | None = None
+    rank_value: float | None = None
+    # V2 확장
+    kind: str = "field"
+    formula: str | None = None
+    peer_scope: str | None = None
+    peer_stat: str | None = None
+    indicator: str | None = None
+    event_type: str | None = None
+    within_days: int | None = None
+    estimate_field: str | None = None
+    z_field: str | None = None
+    z_window: int | None = None
+    behavior_signal: str | None = None
+    graph_target: str | None = None
+    graph_relation: str | None = None
+    graph_depth: int | None = None
+    sentiment_source: str | None = None
+    vector_ticker: str | None = None
+    vector_threshold: float | None = None
+
+
+class FilterGroupModel(BaseModel):
+    logic: str = "AND"
+    conditions: list[ConditionModel] = []
+    groups: list[FilterGroupModel] = []
+
+
+FilterGroupModel.model_rebuild()
+
+
+class AdvancedRunRequest(BaseModel):
+    universe: str = "kospi50"
+    custom_tickers: list[str] | None = None
+    filter_ast: FilterGroupModel
+    sort_by: str = "composite_score"
+    ascending: bool = False
+    limit: int = Field(default=50, ge=1, le=200)
+    beta: float = Field(default=1.0, ge=0.1, le=3.0)
+    projection_years: int = Field(default=10, ge=3, le=20)
+    use_macro: bool = False    # M3: 현재 국면 기반 동적 Composite 가중치
+    analyzers: list[str] = []  # V3 M0: 후처리 analyzer (collinearity/stress_test)
+    analyzer_params: dict = {}  # V3-M8: analyzer별 파라미터 (예: {"stress_test": {"scenario": "rate_hike_200bp"}})
+    liquidity_floor: str = "standard"  # V3-P1.5: 유동성 게이트 (off|relaxed|standard|institutional)
+
+
+@router.get("/fields")
+def screener_fields():
+    """필터 가능 필드 카탈로그 (카테고리 + 연산자 + 랭킹 모드)."""
+    try:
+        from src.engine.filter_ast import fields_catalog
+        return fields_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/run-advanced")
+def screener_run_advanced(req: AdvancedRunRequest):
+    """AST 기반 고급 스크리닝 (AND/OR 중첩 + 절대값 + 상대 랭킹)."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+
+        err = ast.validate()
+        if err:
+            raise HTTPException(400, f"필터 검증 실패: {err}")
+
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+        params = ValuationParams(beta=req.beta, projection_years=req.projection_years)
+
+        result = screener.run(
+            universe=universe,
+            sort_by=req.sort_by,
+            ascending=req.ascending,
+            limit=req.limit,
+            params=params,
+            filter_ast=ast,
+            use_macro=req.use_macro,
+            liquidity_floor=req.liquidity_floor,
+        )
+
+        # V3-P1.5: 유동성 게이트 통계
+        liq_stats = getattr(screener, "_liquidity_stats", {})
+
+        # V3 M0: 후처리 analyzer 실행 (요청 시)
+        analyzer_results = {}
+        if req.analyzers:
+            from src.engine.analyzers import run_analyzers
+            analyzer_results = run_analyzers(result.items, req.analyzers, req.analyzer_params)
+
+        return {
+            "universe":        result.universe,
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+            "cache_hits":      result.cache_hits,
+            "cache_misses":    result.cache_misses,
+            "failures":        result.failures,
+            "timestamp":       result.timestamp,
+            "items":           [it.to_dict() for it in result.items],
+            "analyzers":       analyzer_results,
+            "liquidity_gate":  liq_stats,
+            "data_source":     _detect_data_source(result.items),
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/count")
+def screener_count(req: AdvancedRunRequest):
+    """통과 종목 수만 반환 (Visual Builder 디바운스용 경량 엔드포인트)."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        err = ast.validate()
+        if err:
+            raise HTTPException(400, f"필터 검증 실패: {err}")
+
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+        params = ValuationParams(beta=req.beta, projection_years=req.projection_years)
+
+        result = screener.run(
+            universe=universe, limit=1, params=params, filter_ast=ast,
+        )
+        return {
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Milestone 3 — Macro-Adaptive Guidance
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# 국면별 추천 팩터 + 가이드 텍스트
+_REGIME_GUIDANCE = {
+    "Goldilocks": {
+        "text": "골디락스 국면 (성장↑·물가↓) — 성장주에 유리합니다. 높은 ROE·수익성 팩터 가중을 높이세요.",
+        "filters": [
+            {"field": "roe_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "ROE 상위 30%"},
+            {"field": "composite_score", "op": "gte", "value": 60, "label": "종합 점수 ≥ 60"},
+        ],
+    },
+    "Reflation": {
+        "text": "리플레이션 국면 (성장↑·물가↑) — 경기민감·가치주에 유리합니다. 저PER·저PBR 팩터를 강화하세요.",
+        "filters": [
+            {"field": "per", "op": "lt", "value": 12, "label": "PER < 12"},
+            {"field": "pbr", "op": "lt", "value": 1.5, "label": "PBR < 1.5"},
+        ],
+    },
+    "Stagflation": {
+        "text": "스태그플레이션 국면 (성장↓·물가↑) — 방어주·배당주에 유리합니다. 고배당·저부채·FCF 흑자 팩터 가중을 높이세요.",
+        "filters": [
+            {"field": "dividend_yield_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "배당수익률 상위 30%"},
+            {"field": "debt_ratio_pct", "op": "lt", "value": 100, "label": "부채비율 < 100%"},
+        ],
+    },
+    "Deflation": {
+        "text": "디플레이션 국면 (성장↓·물가↓) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하세요.",
+        "filters": [
+            {"field": "debt_ratio_pct", "op": "lt", "value": 80, "label": "부채비율 < 80%"},
+            {"field": "market_cap_억", "rank_mode": "top_pct", "rank_value": 40, "label": "시가총액 상위 40%"},
+        ],
+    },
+}
+
+
+@router.get("/macro-guidance")
+def screener_macro_guidance():
+    """현재 매크로 국면 기반 스크리닝 가이드 + 추천 팩터 + 동적 가중치."""
+    try:
+        from src.engine.regime_analyzer import get_regime_state
+        from src.engine.screener import ValuationScreener
+
+        state = get_regime_state()
+        guidance = _REGIME_GUIDANCE.get(state.regime, {
+            "text": "현재 국면 정보를 분석 중입니다.",
+            "filters": [],
+        })
+        w_gap, w_roe, w_stab = ValuationScreener._regime_weights(state.regime)
+
+        return {
+            "regime":             state.regime,
+            "stress_score":       state.stress_score,
+            "recommended_mode":   state.recommended_mode,
+            "description":        state.description,
+            "guidance_text":      guidance["text"],
+            "recommended_filters": guidance["filters"],
+            "recommended_weights": {
+                "gap": w_gap, "roe": w_roe, "stability": w_stab,
+            },
+            "asset_tilts":        state.asset_tilts,
+            "dynamic_risk_free_rate": state.dynamic_risk_free_rate,
+            "timestamp":          state.timestamp,
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Milestone 4 — Master Presets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/presets")
+def screener_presets():
+    """거장 + 국면 + 테마 프리셋 카탈로그."""
+    try:
+        from src.engine.screener_presets import list_presets
+        return list_presets()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/presets/{preset_id}")
+def screener_preset_detail(preset_id: str):
+    """단일 프리셋 상세 (filter_ast 포함 — FilterBuilder 로드용)."""
+    try:
+        from src.engine.screener_presets import get_preset
+        p = get_preset(preset_id)
+        if not p:
+            raise HTTPException(404, f"Preset '{preset_id}' not found")
+        return {"id": preset_id, **p}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class PresetRunRequest(BaseModel):
+    universe: str = "kospi50"
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+@router.post("/presets/{preset_id}/run")
+def screener_preset_run(preset_id: str, req: PresetRunRequest):
+    """프리셋 원클릭 실행."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.screener_presets import get_preset
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        preset = get_preset(preset_id)
+        if not preset:
+            raise HTTPException(404, f"Preset '{preset_id}' not found")
+
+        screener = get_screener()
+        ast = parse_group(preset["filter_ast"])
+
+        result = screener.run(
+            universe=req.universe,
+            sort_by="composite_score",
+            limit=req.limit,
+            params=ValuationParams(),
+            filter_ast=ast,
+            use_macro=preset.get("use_macro", False),
+        )
+
+        return {
+            "preset_id":       preset_id,
+            "preset_name":     preset["name"],
+            "master":          preset["master"],
+            "universe":        result.universe,
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+            "timestamp":       result.timestamp,
+            "items":           [it.to_dict() for it in result.items],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 1: Formula + Peer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FormulaValidateRequest(BaseModel):
+    formula: str
+
+
+@router.post("/validate-formula")
+def screener_validate_formula(req: FormulaValidateRequest):
+    """수식 사전 검증 + 사용 필드 추출 (FormulaEditor 실시간 검증용)."""
+    try:
+        from src.engine.filter_ast import FIELD_BY_ID
+        from src.engine.formula_parser import validate_formula
+        ok, err, used = validate_formula(req.formula, set(FIELD_BY_ID.keys()))
+        return {
+            "valid": ok,
+            "error": err,
+            "used_fields": sorted(used),
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/peer-groups")
+def screener_peer_groups(universe: str = "kospi50"):
+    """가용 Peer 그룹(섹터) 목록 + 종목 수 (PeerConditionEditor용)."""
+    try:
+        screener = get_screener()
+        result = screener.run(universe=universe, limit=300)
+        sectors: dict = {}
+        for it in result.items:
+            sec = it.sector or "기타"
+            sectors[sec] = sectors.get(sec, 0) + 1
+        return {
+            "scopes": [
+                {"id": "sector", "label": "동일 섹터", "groups": [{"name": k, "count": v} for k, v in sorted(sectors.items(), key=lambda x: -x[1])]},
+                {"id": "market", "label": "전체 시장", "groups": [{"name": "전체", "count": result.total_evaluated}]},
+            ],
+            "stats": [
+                {"id": "mean", "label": "평균"},
+                {"id": "median", "label": "중앙값"},
+                {"id": "rank_pct", "label": "그룹 내 상위 %"},
+            ],
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 2: AI NL2AST Copilot
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class NL2ASTRequest(BaseModel):
+    query: str
+
+
+@router.post("/nl2ast")
+def screener_nl2ast(req: NL2ASTRequest):
+    """자연어 → FilterGroup AST 변환 (Claude + Mock fallback)."""
+    try:
+        from src.services.screener_copilot import nl_to_ast
+        result = nl_to_ast(req.query)
+        return result
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/nl2ast/examples")
+def screener_nl2ast_examples():
+    """추천 자연어 예시."""
+    try:
+        from src.services.screener_copilot import EXAMPLE_QUERIES
+        return {"examples": EXAMPLE_QUERIES}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 3: Technical/Event Catalogs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/indicators")
+def screener_indicators():
+    """기술지표 + 수급 카탈로그 (기술적 지표, 수급)."""
+    try:
+        from src.data.market_data import indicators_catalog
+        return indicators_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/fill-price-types")
+def screener_fill_price_types():
+    """체결가 유형 카탈로그 (백테스터 매수/매도 체결가 선택용)."""
+    try:
+        from src.engine.fill_price import FILL_PRICE_GROUPS, FILL_PRICE_LABELS
+        return {
+            "groups": [
+                {
+                    "id": g["id"], "label": g["label"],
+                    "types": [{"id": t, "label": FILL_PRICE_LABELS[t]} for t in g["types"]],
+                }
+                for g in FILL_PRICE_GROUPS
+            ]
+        }
+    except Exception:
+        logger.exception("체결가 유형 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/events-catalog")
+def screener_events_catalog():
+    """이벤트 카탈로그 (실적 발표, 배당락)."""
+    try:
+        from src.data.event_calendar import events_catalog
+        return events_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 4: Point-in-Time Screening (타임머신)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class PITRunRequest(BaseModel):
+    universe: str = "kospi50"
+    custom_tickers: list[str] | None = None
+    filter_ast: FilterGroupModel
+    as_of_date: str
+    sort_by: str = "composite_score"
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+@router.get("/pit-dates")
+def screener_pit_dates():
+    """가용 PIT 스냅샷 일자 (분기말, look-ahead 차단)."""
+    try:
+        from src.engine.pit_store import DISCLOSURE_LAG_DAYS, available_snapshot_dates
+        return {
+            "dates": available_snapshot_dates(years_back=6),
+            "disclosure_lag_days": DISCLOSURE_LAG_DAYS,
+            "note": "분기말 기준. 공시 시차(45일) 경과분만 제공하여 look-ahead bias 차단.",
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/run-pit")
+def screener_run_pit(req: PITRunRequest):
+    """과거 시점 기준 스크리닝 (타임머신). Look-ahead bias 차단."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.pit_store import PITStore
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        # as_of_date 검증
+        err = PITStore.get_default().validate_asof(req.as_of_date)
+        if err:
+            raise HTTPException(400, f"기준일 오류: {err}")
+
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        verr = ast.validate()
+        if verr:
+            raise HTTPException(400, f"필터 검증 실패: {verr}")
+
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+        result = screener.run(
+            universe=universe,
+            sort_by=req.sort_by,
+            limit=req.limit,
+            params=ValuationParams(),
+            filter_ast=ast,
+            as_of_date=req.as_of_date,
+        )
+
+        return {
+            "as_of_date":      req.as_of_date,
+            "universe":        result.universe,
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+            "timestamp":       result.timestamp,
+            "items":           [it.to_dict() for it in result.items],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 0: Analyzer Catalog
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/analyzers")
+def screener_analyzers():
+    """가용 후처리 analyzer 카탈로그 (M7/M8)."""
+    try:
+        from src.engine.analyzers import analyzer_catalog
+        return analyzer_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 1: Estimates Catalog (M1)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/estimates-catalog")
+def screener_estimates_catalog():
+    """Forward-looking 추정치 카탈로그 (M1)."""
+    try:
+        from src.data.consensus_store import estimates_catalog
+        return estimates_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 1.5: Liquidity Gate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/liquidity-profiles")
+def screener_liquidity_profiles():
+    """유동성 게이트 프로파일 카탈로그 (off/relaxed/standard/institutional)."""
+    try:
+        from src.engine.liquidity_gate import liquidity_profiles_catalog
+        return liquidity_profiles_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 2: Behavioral (M3) + Graph (M4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/behavior-signals")
+def screener_behavior_signals():
+    """행동재무 신호 카탈로그 (M3)."""
+    try:
+        from src.data.market_data import behavior_signals_catalog
+        return behavior_signals_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/graph-meta")
+def screener_graph_meta():
+    """지식 그래프 메타 — 관계 유형 + 노드 목록 (M4)."""
+    try:
+        from src.engine.graph_store import graph_meta_catalog
+        return graph_meta_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/graph-search")
+def screener_graph_search(q: str = ""):
+    """그래프 타겟 종목 검색 (M4)."""
+    try:
+        from src.engine.graph_store import GraphStore
+        return {"results": GraphStore.get_default().search_stocks(q)}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/graph-relations/{stock_code}")
+def screener_graph_relations(stock_code: str):
+    """종목의 직접 밸류체인 관계 (M4)."""
+    try:
+        from src.engine.graph_store import GraphStore
+        return GraphStore.get_default().get_relations(stock_code)
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 3: Sentiment (M5) + Vector (M6)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/sentiment-catalog")
+def screener_sentiment_catalog():
+    """NLP 센티먼트 소스 카탈로그 (M5)."""
+    try:
+        from src.services.sentiment_worker import sentiment_catalog
+        return sentiment_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/vector-meta")
+def screener_vector_meta():
+    """벡터 유사도 메타 — 임베딩 차원 + 검색 가능 종목 (M6)."""
+    try:
+        from src.engine.vector_store import vector_meta_catalog
+        return vector_meta_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 4: Stress-Test Scenarios (M8)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/stress-scenarios")
+def screener_stress_scenarios():
+    """매크로 스트레스 테스트 시나리오 카탈로그 (M8)."""
+    try:
+        from src.engine.stress_test_analyzer import stress_scenarios_catalog
+        return stress_scenarios_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Fundamental Factor Library (FFL)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/fundamentals-catalog")
+def screener_fundamentals_catalog():
+    """학술 펀더멘털 팩터 카탈로그 (50+ 팩터, 카테고리별)."""
+    try:
+        from src.data.fundamentals_store import fundamentals_catalog
+        return fundamentals_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener → Backtester Bridge (스크리너 통과 종목 원클릭 백테스트)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ScreenToBacktestRequest(BaseModel):
+    # 스크리닝 조건
+    universe: str = "kospi200"
+    custom_tickers: list[str] | None = None  # 관심그룹 종목 직접 지정 (있으면 universe 무시)
+    filter_ast: FilterGroupModel
+    liquidity_floor: str = "standard"
+    max_tickers: int = Field(default=10, ge=1, le=30)  # 백테스트할 상위 종목 수
+    sort_by: str = "composite_score"
+    # 백테스트 설정
+    strategy_name: str = "GoldenCross"
+    strategy_params: dict = {}
+    start_date: str = "2023-01-01"
+    end_date: str = "2024-12-31"
+    initial_capital: float = 100_000_000
+    commission_rate: float = 0.0015
+    slippage_rate: float = 0.0005
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
+    max_positions: int = 5
+    # 체결가 유형 (Phase 1). 기본 close = 종가 체결
+    buy_fill_type: str = "close"
+    sell_fill_type: str = "close"
+    # 매도 정밀화 (Phase 2)
+    max_hold_days: int | None = None
+    min_hold_days: int = 0
+    sell_divide_pct: float = 100.0
+    max_sell_divisions: int | None = None
+    # 매수 정밀화 (Phase 3)
+    buy_weight_mode: str = "equal"
+    buy_divide_pct: float = 100.0
+    max_buy_per_day: int | None = None
+    max_buy_count: int | None = None
+
+
+@router.post("/screen-to-backtest")
+def screen_to_backtest(req: ScreenToBacktestRequest):
+    """
+    원클릭 워크플로우: 스크리닝 → 통과 종목을 그대로 백테스트.
+
+    1) filter_ast로 스크리닝 (유동성 게이트 + 펀더멘털 주입 포함)
+    2) 통과 종목 상위 max_tickers개 추출
+    3) 해당 종목들로 백테스트 실행 (DB → KIS → mock 자동)
+
+    스크리너와 백테스터를 잇는 핵심 연결 — 별도 입력 없이 흐름 완성.
+    """
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.kis_backtest_engine import run_backtest
+
+        # 1) 스크리닝 (custom_tickers 있으면 관심그룹 종목을 유니버스로)
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        _universe = req.custom_tickers if req.custom_tickers else req.universe
+        result = screener.run(
+            universe=_universe,
+            filter_ast=ast,
+            sort_by=req.sort_by,
+            limit=req.max_tickers,
+            liquidity_floor=req.liquidity_floor,
+        )
+        screened = result.items[:req.max_tickers]
+        tickers = [it.stock_code for it in screened if getattr(it, "stock_code", None)]
+
+        if not tickers:
+            return {
+                "error": True,
+                "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
+                "screened_count": 0,
+            }
+
+        # 팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵 생성
+        factor_weights = None
+        if req.buy_weight_mode == "factor":
+            scores = {it.stock_code: float(getattr(it, "composite_score", 0) or 0)
+                      for it in screened if getattr(it, "stock_code", None)}
+            if scores:
+                lo, hi = min(scores.values()), max(scores.values())
+                rng = hi - lo
+                # 점수가 높을수록 가중치↑ (0~1). 전부 같으면 0.5(동일가중)
+                factor_weights = {
+                    t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()
+                }
+
+        # 2) 백테스트
+        bt = run_backtest(
+            symbols=tickers,
+            strategy_name=req.strategy_name,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            strategy_params=req.strategy_params,
+            initial_capital=req.initial_capital,
+            commission_rate=req.commission_rate,
+            slippage_rate=req.slippage_rate,
+            stop_loss_pct=req.stop_loss_pct,
+            take_profit_pct=req.take_profit_pct,
+            max_positions=req.max_positions,
+            buy_fill_type=req.buy_fill_type,
+            sell_fill_type=req.sell_fill_type,
+            max_hold_days=req.max_hold_days,
+            min_hold_days=req.min_hold_days,
+            sell_divide_pct=req.sell_divide_pct,
+            max_sell_divisions=req.max_sell_divisions,
+            buy_weight_mode=req.buy_weight_mode,
+            buy_divide_pct=req.buy_divide_pct,
+            max_buy_per_day=req.max_buy_per_day,
+            max_buy_count=req.max_buy_count,
+            factor_weights=factor_weights,
+        )
+
+        # 3) 통합 응답
+        return {
+            "error": bt.get("error", False),
+            "screened_tickers": [
+                {"stock_code": it.stock_code, "corp_name": getattr(it, "corp_name", ""),
+                 "composite_score": getattr(it, "composite_score", None)}
+                for it in screened
+            ],
+            "screened_count": len(tickers),
+            "backtest": bt.get("result", bt),
+            "backtest_config": {
+                "strategy": req.strategy_name,
+                "period": f"{req.start_date} ~ {req.end_date}",
+                "initial_capital": req.initial_capital,
+            },
+            "data_source": _detect_data_source(screened),
+        }
+    except Exception as e:
+        raise HTTPException(500, f"screen-to-backtest 실패: {e}")
+
+
+@router.get("/backtest-strategies")
+def backtest_strategies():
+    """백테스트 가능 전략 목록 (스크리너 UI 드롭다운용)."""
+    try:
+        from src.kis_strategies.strategies import STRATEGY_REGISTRY
+        # 영문 키만 (한글 중복 제거)
+        seen, out = set(), []
+        labels = {
+            "GoldenCross": "골든크로스", "Momentum": "모멘텀", "Week52High": "52주 신고가",
+            "Consecutive": "연속 상승/하락", "Disparity": "이격도", "BreakoutFail": "돌파 실패",
+            "StrongClose": "강한 종가", "Volatility": "변동성 확장", "MeanReversion": "평균회귀",
+            "TrendFilter": "추세 필터",
+        }
+        for key in STRATEGY_REGISTRY:
+            if key in labels and key not in seen:
+                seen.add(key)
+                out.append({"id": key, "label": labels[key]})
+        return {"strategies": out}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Data Quality QA (데이터 인프라 품질)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/data-quality")
+def data_quality_check(req: AdvancedRunRequest):
+    """
+    스크리닝 결과의 데이터 품질 리포트.
+    종목명 해소율, 이상치, 결측, 품질 점수 산출.
+    """
+    try:
+        from src.data.stock_master import validate_dataset
+        from src.engine.filter_ast import parse_group
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        result = screener.run(
+            universe=req.universe, filter_ast=ast,
+            limit=req.limit, liquidity_floor=req.liquidity_floor,
+        )
+        report = validate_dataset(result.items)
+        report["data_source"] = _detect_data_source(result.items)
+        return report
+    except Exception as e:
+        raise HTTPException(500, f"데이터 품질 검사 실패: {e}")
+
+
+@router.get("/stock-master/stats")
+def stock_master_stats():
+    """종목 마스터 현황 (커버리지)."""
+    try:
+        import os
+
+        from src.data.stock_master import STOCK_MASTER, STOCK_SECTOR
+        # DART 캐시 여부
+        cache_path = os.path.join(os.path.dirname(__file__), "..", "data", "corp_name_cache.json")
+        dart_cached = os.path.exists(cache_path)
+        dart_count = 0
+        if dart_cached:
+            import json
+            try:
+                with open(cache_path) as f:
+                    dart_count = len(json.load(f))
+            except Exception:
+                pass
+        return {
+            "builtin_stocks": len(STOCK_MASTER),
+            "sector_mapped": len(STOCK_SECTOR),
+            "dart_cache_available": dart_cached,
+            "dart_cached_stocks": dart_count,
+            "total_resolvable": max(len(STOCK_MASTER), dart_count),
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")

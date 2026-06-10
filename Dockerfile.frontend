@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# FICC Frontend — Next.js 14 + TypeScript
+# node:18-alpine + Next.js (port 3000)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── deps: 런타임용 production 의존성만 (최종 이미지 경량화) ──
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+
+# ── builder: 빌드용 — devDependencies(typescript/tailwind/postcss 등)까지 전부 설치 ──
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# Next.js는 빌드 타임에 환경변수를 주입해야 함
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# 전체 의존성 설치 (빌드에 devDependencies 필수)
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci 2>/dev/null || npm install
+COPY frontend/ .
+# public 폴더 보장 (Git이 빈 폴더를 드롭해도 COPY 단계가 안 깨지게)
+RUN mkdir -p public
+RUN npm run build
+
+# ── runner: 경량 production 이미지 ──
+FROM node:18-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy build output (deps에서 production node_modules, builder에서 빌드 결과)
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/package.json ./package.json
+
+USER nextjs
+
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+CMD ["npm", "run", "start"]
