@@ -26,9 +26,9 @@ verify_connection.py — DART + KIS 실데이터 연동 검증
 ────────────────────────────────────────────────────────────────────────
 """
 
+import argparse
 import os
 import sys
-import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -74,6 +74,43 @@ def check_env():
         else:
             fail("KIS_USE_MOCK=0 인데 KIS_APP_KEY/SECRET 미설정")
     return dart, kis_mock, kis_key, kis_secret
+
+
+def check_network():
+    """키 없이 DART/KIS 서버 도달성만 점검 — 방화벽/프록시 문제와 키 문제를 분리 진단.
+
+    실서버는 키가 틀려도 JSON 에러를 돌려준다. JSON이 안 오면(프록시 HTML/타임아웃)
+    네트워크 차단이다. 샌드박스/사내망에서 "키를 넣어도 안 되는" 원인을 즉시 구분."""
+    head("【0.5】 네트워크 도달성 (키 불필요)")
+    try:
+        import httpx
+    except ImportError:
+        warn("httpx 미설치 — 도달성 점검 생략 (pip install httpx)")
+        return
+
+    # DART: 잘못된 키로 호출해도 실서버면 JSON status(010=미등록 키)가 온다
+    try:
+        r = httpx.get("https://opendart.fss.or.kr/api/fnlttSinglAcnt.json",
+                      params={"crtfc_key": "connectivity-probe"}, timeout=8)
+        d = r.json()
+        ok(f"DART 서버 도달 (status={d.get('status')}) — 방화벽 통과, 키만 넣으면 됨")
+    except Exception as e:
+        fail(f"DART 서버 도달 실패 ({type(e).__name__}) — 방화벽/프록시 차단. 키 문제 아님")
+
+    # KIS: 토큰 엔드포인트에 빈 요청 → 실서버면 JSON 에러 응답 (포트 9443/29443 주의)
+    try:
+        from src.execution.kis_client import KIS_BASE_URL_PAPER, KIS_BASE_URL_REAL
+    except Exception:
+        KIS_BASE_URL_REAL = "https://openapi.koreainvestment.com:9443"
+        KIS_BASE_URL_PAPER = "https://openapivts.koreainvestment.com:29443"
+    base = KIS_BASE_URL_PAPER if os.getenv("KIS_IS_PAPER", "1") == "1" else KIS_BASE_URL_REAL
+    host = base.split("//")[1]
+    try:
+        r = httpx.post(f"{base}/oauth2/tokenP", json={}, timeout=8)
+        r.json()
+        ok(f"KIS 서버 도달 ({host}, HTTP {r.status_code}) — 방화벽 통과, 키만 넣으면 됨")
+    except Exception as e:
+        fail(f"KIS 서버 도달 실패 ({host}, {type(e).__name__}) — 방화벽/프록시 차단 또는 포트 미개방")
 
 
 def check_dart(stock_code):
@@ -173,7 +210,7 @@ def check_kis(stock_code, kis_mock):
 
 
 def check_integration(stock_code, dart_ok, kis_ok):
-    head(f"【3】 통합 — 실데이터 기반 학술 팩터")
+    head("【3】 통합 — 실데이터 기반 학술 팩터")
     try:
         from src.data.fundamentals_store import FundamentalsStore
     except Exception as e:
@@ -198,6 +235,60 @@ def check_integration(stock_code, dart_ok, kis_ok):
     print(f"      매출성장률(YoY):     {f.get('revenue_growth_yoy')}%")
 
 
+def check_backtest_flow(stock_code, kis_mock):
+    """백테스터 실데이터 흐름 — 통합 로더·지수·OHLC 컬럼 무결성.
+
+    체결가 13종(시가/고저가/피벗), 돌파매수(전일 고가), ATR 비중(고저폭),
+    마켓타이밍·벤치마크(지수 일봉)가 전부 이 경로의 컬럼을 사용한다."""
+    head("【4】 백테스터 실데이터 흐름 — OHLCV·지수")
+    try:
+        from src.data.ohlcv_loader import load_ohlcv_unified
+    except Exception as e:
+        fail(f"ohlcv_loader import 실패: {e}")
+        return
+
+    from datetime import datetime, timedelta
+    end = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")
+
+    # (a) 종목 일봉 — mock 모드면 mock 직행(DB 시도 소음 차단), 실모드면 auto(DB→KIS)
+    prefer = "mock" if kis_mock == "1" else "auto"
+    df = load_ohlcv_unified(stock_code, start, end, prefer=prefer)
+    if df is None or df.empty:
+        fail("종목 OHLCV 로드 실패 — 백테스트 불가")
+        return
+    label = "mock (KIS_USE_MOCK=1)" if kis_mock == "1" else "DB/KIS 실데이터 경로"
+    ok(f"종목 일봉 {len(df)}봉 ({df.index[0].date()} ~ {df.index[-1].date()}) · 출처: {label}")
+
+    if kis_mock != "1":
+        kdf = load_ohlcv_unified(stock_code, start, end, prefer="kis")
+        if kdf is not None and not kdf.empty:
+            ok(f"KIS 직접 경로 일봉 {len(kdf)}봉 — 실시세 수신 확인")
+        else:
+            warn("KIS 직접 경로 빈 응답 — 키/모의투자 기간 제약 확인")
+
+    # (b) OHLC 컬럼 무결성 — 체결가·돌파매수·ATR 비중의 전제
+    missing = {"open", "high", "low", "close", "volume"} - set(df.columns)
+    if missing:
+        fail(f"누락 컬럼 {missing} — 체결가 유형/돌파매수/ATR 비중 사용 불가")
+    else:
+        sane = bool((df["high"] >= df["low"]).all() and (df["high"] >= df["close"]).all()
+                    and (df["low"] <= df["close"]).all())
+        if sane:
+            ok("OHLC 무결성 (고가≥종가≥저가) — 체결가 13종·돌파매수·ATR 비중 사용 가능")
+        else:
+            warn("OHLC 정합성 위반 행 존재 — 데이터 소스 점검 필요")
+
+    # (c) 지수 일봉 — 마켓타이밍·벤치마크 경로
+    idx_df = load_ohlcv_unified("KOSPI", start, end, prefer=prefer)
+    if idx_df is not None and not idx_df.empty:
+        ok(f"지수(KOSPI) 일봉 {len(idx_df)}봉 — 마켓타이밍·벤치마크 경로 정상")
+        if kis_mock == "1":
+            warn("mock 지수는 합성 곡선 — 실데이터에서 마켓타이밍/벤치마크가 의미값")
+    else:
+        warn("지수(KOSPI) 로드 실패 — 마켓타이밍은 미개입(fail-open), 벤치마크는 대형주 프록시 폴백")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stock", default="005930", help="검증할 종목코드 (기본 삼성전자)")
@@ -210,9 +301,11 @@ def main():
     print(f"{BOLD}{'='*64}{END}")
 
     dart, kis_mock, kis_key, kis_secret = check_env()
+    check_network()
     dart_ok = check_dart(code)
     kis_ok = check_kis(code, kis_mock)
     check_integration(code, dart_ok, kis_ok)
+    check_backtest_flow(code, kis_mock)
 
     head("【결과 요약】")
     print(f"  DART 재무:  {GREEN+'실데이터 ✓'+END if dart_ok else YELLOW+'mock'+END}")
