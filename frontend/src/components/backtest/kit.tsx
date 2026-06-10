@@ -20,6 +20,29 @@ export const TONES: Record<Tone, { accent: string; bg: string; text: string }> =
 const R = "var(--bs-border-radius)";
 const RL = "var(--bs-border-radius-lg)";
 
+// ── GroupedSelect (optgroup 드롭다운 — 체결가 유형 등) ────────
+export function GroupedSelect({ value, onChange, groups, width = 168 }: {
+  value: string; onChange: (id: string) => void;
+  groups: { label: string; options: { id: string; label: string }[] }[];
+  width?: number;
+}) {
+  return (
+    <select
+      value={value} onChange={(e) => onChange(e.target.value)}
+      style={{
+        fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
+        borderRadius: R, padding: "6px 9px", width, background: "var(--bg-card)", cursor: "pointer",
+      }}
+    >
+      {groups.map((g) => (
+        <optgroup key={g.label} label={g.label}>
+          {g.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
 // ── Toggle (pill switch) ──────────────────────────────────────
 export function Toggle({ on, onChange, tone = "neutral", size = "md" }: {
   on: boolean; onChange: (v: boolean) => void; tone?: Tone; size?: "sm" | "md";

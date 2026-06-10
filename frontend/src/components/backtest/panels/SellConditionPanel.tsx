@@ -4,9 +4,10 @@
 // 매도조건 화면(파랑). 목표가/손절가·트레일링 + 보유 기간 + 조건 매도(에디터) + 종목 청산 + 매도 시간.
 
 import { type Dispatch, type SetStateAction } from "react";
-import { Section, SubToggle, QuickStepper, Segmented, Field } from "../kit";
+import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
+import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
 
 const timeBox: React.CSSProperties = {
   fontFamily: "var(--bs-font-mono)", fontSize: 13, color: "var(--text-primary)",
@@ -29,6 +30,9 @@ export default function SellConditionPanel({ s, set }: {
         <Field label="매도 주문 방법">
           <Segmented tone="sell" value={v.orderType} onChange={(t) => patch({ orderType: t })}
             options={[{ id: "FIX", label: "지정가" }, { id: "MARKET", label: "시장가" }]} />
+        </Field>
+        <Field label="체결가 유형">
+          <GroupedSelect value={v.fillType} onChange={(id) => patch({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
         <SubToggle tone="sell" label="목표가 (익절)" on={v.takeProfit.on} onChange={(on) => patch({ takeProfit: { ...v.takeProfit, on } })}>
           <QuickStepper value={v.takeProfit.pct} onChange={(pct) => patch({ takeProfit: { ...v.takeProfit, pct } })} chips={[5, 10, 20]} unit="%" min={0} />

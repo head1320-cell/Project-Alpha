@@ -4,9 +4,10 @@
 // 매수조건 화면(빨강). 포트 기본 설정 + 매수 조건 설정(조건식 에디터) + 매수 비중 설정.
 
 import { type Dispatch, type SetStateAction } from "react";
-import { Section, SubToggle, QuickStepper, Segmented, Field } from "../kit";
+import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
+import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
 
 export default function BuyConditionPanel({ s, set }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>;
@@ -54,6 +55,9 @@ export default function BuyConditionPanel({ s, set }: {
           {s.buy.limitType === "LIMIT" && (
             <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} />
           )}
+        </Field>
+        <Field label="체결가 유형">
+          <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
         <Field label="재매수 방지">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />

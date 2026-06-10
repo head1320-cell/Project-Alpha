@@ -904,6 +904,7 @@ class ScreenToBacktestRequest(BaseModel):
     slippage_rate: float = 0.0005
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None  # 트레일링 스탑(드래깅 청산): 고점 대비 하락 %
     max_positions: int = 5
     # 체결가 유형 (Phase 1). 기본 close = 종가 체결
     buy_fill_type: str = "close"
@@ -1030,6 +1031,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             slippage_rate=req.slippage_rate,
             stop_loss_pct=req.stop_loss_pct,
             take_profit_pct=req.take_profit_pct,
+            trailing_stop_pct=req.trailing_stop_pct,
             max_positions=req.max_positions,
             buy_fill_type=req.buy_fill_type,
             sell_fill_type=req.sell_fill_type,

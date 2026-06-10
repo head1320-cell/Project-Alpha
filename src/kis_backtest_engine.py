@@ -116,6 +116,7 @@ class Position:
     take_profit_price: float | None = None
     sell_count: int = 0          # 분할 매도 횟수 (max_sell_divisions 제한용)
     buy_count: int = 1           # 분할 매수 횟수 (Phase 3)
+    peak_price: float = 0.0      # 보유 중 최고가(종가 기준) — 트레일링 스탑용
 
 
 @dataclass
@@ -144,6 +145,7 @@ class BacktestConfig:
     slippage_rate: float = 0.0005       # 0.05% 슬리피지
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None  # 트레일링 스탑: 보유 중 고점 대비 하락 % (None=미사용)
     position_size_pct: float = 0.95     # 포지션 크기 (자본 대비)
     max_positions: int = 5              # 동시 최대 포지션 수
     # 체결가 유형 (Phase 0: 주문 모델). 기본 "close" = 기존 동작 불변
@@ -251,6 +253,10 @@ class BacktestEngine:
                     continue
                 curr_price = float(df_to_date["close"].iloc[-1])
                 days_held = self._days_held(pos.entry_date, date_str)
+
+                # 트레일링 스탑용 고점 추적 — 손익절과 동일하게 종가 기준 (min_hold 중에도 추적)
+                if self.cfg.trailing_stop_pct:
+                    pos.peak_price = max(pos.peak_price, curr_price)
 
                 # 보유기간 매도: max_hold_days 경과 시 강제 청산 (분할 비중 적용)
                 if self.cfg.max_hold_days is not None and days_held >= self.cfg.max_hold_days:
@@ -400,6 +406,7 @@ class BacktestEngine:
             existing.avg_price = (existing.avg_price * existing.quantity + exec_price * qty) / new_qty
             existing.quantity = new_qty
             existing.buy_count += 1
+            existing.peak_price = max(existing.peak_price, exec_price)
             self.trades.append(Trade(
                 date=date_str, ticker=ticker, side="buy",
                 price=exec_price, quantity=qty, value=value,
@@ -453,6 +460,7 @@ class BacktestEngine:
             entry_date=date_str,
             stop_loss_price=stop_price,
             take_profit_price=tp_price,
+            peak_price=exec_price,
         )
         self.trades.append(Trade(
             date=date_str, ticker=ticker, side="buy",
@@ -595,11 +603,14 @@ class BacktestEngine:
 
     def _check_risk_triggers(self, ticker: str, pos: Position,
                               curr_price: float, date_str: str):
-        """손절/익절 트리거 체크."""
+        """손절/익절/트레일링 트리거 체크."""
         if pos.stop_loss_price and curr_price <= pos.stop_loss_price:
             self._execute_sell(ticker, curr_price, date_str, "Stop-loss triggered")
         elif pos.take_profit_price and curr_price >= pos.take_profit_price:
             self._execute_sell(ticker, curr_price, date_str, "Take-profit triggered")
+        elif (self.cfg.trailing_stop_pct and pos.peak_price > 0
+              and curr_price <= pos.peak_price * (1 - self.cfg.trailing_stop_pct / 100.0)):
+            self._execute_sell(ticker, curr_price, date_str, "Trailing-stop triggered")
 
     def _calc_equity(self, ohlcv_map: dict, sim_date: pd.Timestamp) -> float:
         """현재 포트폴리오 가치 계산."""
@@ -860,6 +871,7 @@ def run_backtest(
     slippage_rate: float = 0.0005,
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
+    trailing_stop_pct: float | None = None,
     max_positions: int = 5,
     buy_fill_type: str = "close",
     sell_fill_type: str = "close",
@@ -903,6 +915,7 @@ def run_backtest(
         slippage_rate=slippage_rate,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
+        trailing_stop_pct=trailing_stop_pct,
         max_positions=max_positions,
         buy_fill_type=buy_fill_type,
         sell_fill_type=sell_fill_type,

@@ -925,6 +925,7 @@ export const backtestBridgeApi = {
     slippage_rate?: number;
     stop_loss_pct?: number | null;
     take_profit_pct?: number | null;
+    trailing_stop_pct?: number | null;
     max_positions?: number;
     buy_fill_type?: string;
     sell_fill_type?: string;

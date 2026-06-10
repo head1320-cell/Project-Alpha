@@ -5,6 +5,7 @@
 // 아코디언 섹션과 우측 요약 레일이 "같은 상태"를 읽으므로 요약은 거의 공짜로 따라온다.
 
 import type { Condition } from "../../components/backtest/ConditionFormulaEditor";
+import { fillPriceLabel } from "./fillPrice";
 
 export type SortDir = "DESC" | "ASC";
 
@@ -17,7 +18,7 @@ export interface BuyState {
   maxStocks: number;                // LIMIT 일 때 종목 수
   weightPct: number;                // 종목당 비중 %
   weightMode: "equal" | "atr";
-  basePrice: { type: string; pct: number };
+  fillType: string;                 // 매수 체결가 유형 id (fillPrice.ts 13종 — 엔진 fill_price 와 동일)
   reBuyBlockDays: number;
   timeStart: string;
   timeEnd: string;
@@ -32,6 +33,7 @@ export interface BuyState {
 export interface SellState {
   enabled: boolean;
   orderType: "FIX" | "MARKET";
+  fillType: string;                 // 매도 체결가 유형 id (fillPrice.ts 13종)
   takeProfit: { on: boolean; pct: number };
   stopLoss: { on: boolean; pct: number };
   trailing: { on: boolean; pct: number };       // 드래깅 청산
@@ -97,6 +99,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "방식", value: b.weightMode === "equal" ? "균등" : "ATR" },
         { label: "종목당", value: `${b.weightPct}%` },
         { label: "대상 수", value: b.limitType === "MAX" ? "전체" : `${b.maxStocks}종목` },
+        { label: "체결가", value: fillPriceLabel(b.fillType) },
       ]},
       { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough], ["TWAP", b.twapBuy]]) },
     ];
@@ -106,6 +109,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
     return [
       { label: "목표가 / 손절가", rows: [
         { label: "주문 방법", value: v.orderType === "MARKET" ? "시장가" : "지정가" },
+        { label: "체결가", value: fillPriceLabel(v.fillType) },
         { label: "목표가", value: v.takeProfit.on ? `${v.takeProfit.pct}% 상승` : "미설정", muted: !v.takeProfit.on },
         { label: "손절가", value: v.stopLoss.on ? `${v.stopLoss.pct}% 하락` : "미설정", muted: !v.stopLoss.on },
         { label: "드래깅 청산", value: v.trailing.on ? `고점 -${v.trailing.pct}%` : "미사용", muted: !v.trailing.on },
