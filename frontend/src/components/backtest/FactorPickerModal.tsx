@@ -64,6 +64,27 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const results = useMemo(() => searchFactors(query), [query]);
   const fn = FUNCTIONS_BY_ID[fnId];
   const selInfo = factor ? supportInfo(factor.name) : null;
+
+  // 카탈로그 + 자체 팩터(지원 토큰 중 카탈로그에 없는 것 — "QMJ 점수" 등)
+  const allCategories = useMemo(() => {
+    if (!support) return FACTOR_CATEGORIES;
+    const known = new Set(FACTOR_CATEGORIES.flatMap((c) => c.factors.map((f) => f.name)));
+    const extra: GpFactor[] = Object.keys(support.supported)
+      .filter((n) => !known.has(n)).sort()
+      .map((n) => ({ name: n, expr: `{${n}}` }));
+    if (!extra.length) return FACTOR_CATEGORIES;
+    return [...FACTOR_CATEGORIES, { id: "_platform", label: "자체 팩터(플랫폼)", factors: extra }];
+  }, [support]);
+
+  const selectByName = (name: string) => {
+    for (const c of allCategories) {
+      const f = c.factors.find((x) => x.name === name);
+      if (f) {
+        setFactor(f);
+        return;
+      }
+    }
+  };
   const isCross = fnId === "rank" || fnId === "ratio";
   const innerFn = FUNCTIONS_BY_ID[innerFnId];
   const tk = factor ? baseToken(factor) : "{팩터}";
@@ -133,7 +154,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                     <FactorRow key={category.id + f.name} f={f} active={factor?.name === f.name} tone={tone} sub={category.label} info={supportInfo(f.name)} onClick={() => setFactor(f)} />
                   )) : <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 9px" }}>검색 결과가 없습니다</div>
                 ) : (
-                  FACTOR_CATEGORIES.map((c) => (
+                  allCategories.map((c) => (
                     <div key={c.id}>
                       <button type="button" onClick={() => setOpenCat(openCat === c.id ? "" : c.id)}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: openCat === c.id ? accent.text : "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "7px 9px", textAlign: "left" }}>
@@ -166,6 +187,21 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                     {selInfo && !selInfo.ok && (
                       <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--danger)", background: "var(--danger-light)", borderRadius: R, padding: "9px 11px" }}>
                         미지원 — {selInfo.reason}
+                      </div>
+                    )}
+                    {selInfo && !selInfo.ok && (support?.substitutes?.[factor.name]?.length ?? 0) > 0 && (
+                      <div style={{ marginTop: 9 }}>
+                        <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 5 }}>
+                          대체 제안 — 같은 의도의 자체 팩터 (클릭해 선택)
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {support!.substitutes![factor.name].map((n) => (
+                            <button key={n} type="button" onClick={() => selectByName(n)}
+                              style={{ fontSize: 12, color: accent.text, background: TONES[tone].bg, border: `1px solid ${accent.accent}`, borderRadius: R, padding: "4px 9px", cursor: "pointer" }}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {selInfo?.ok && support && ["fundamental", "market", "macro", "flow"].includes(selInfo.group ?? "") && (

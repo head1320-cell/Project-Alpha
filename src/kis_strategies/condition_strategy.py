@@ -85,10 +85,11 @@ def _fundamental_value(token: str, f: dict):
             return float(v) if v is not None else None
         except Exception:
             return None
-    # 카탈로그 별칭 → fundamentals_store 팩터 id (분기PBR→pbr 등 — 최신 스냅샷 근사)
+    # 별칭 → fundamentals dict 키 (수동 별칭 + 스토어 라벨 자동 별칭 — 분기PBR→pbr,
+    # 분기매출→revenue(억), "QMJ 점수"→qmj_score 등. 최신 스냅샷 근사)
     try:
-        from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
-        fid = FUNDAMENTAL_ALIASES.get(name)
+        from src.kis_strategies.factor_tokens import fundamental_field_for
+        fid = fundamental_field_for(name)
         if fid is not None:
             v = (f or {}).get(fid)
             return float(v) if v is not None else None
@@ -98,9 +99,18 @@ def _fundamental_value(token: str, f: dict):
 
 
 def _load_fundamentals(stock_code: str) -> dict:
+    """파생 팩터(64) + 원천 재무(42, 억 단위) 병합 — raw 금액 토큰(매출액·시가총액 등)
+    과 라벨 별칭이 실경로에서 평가되게 한다. 동명 키는 파생이 우선."""
     try:
         from src.data.fundamentals_store import FundamentalsStore
-        return FundamentalsStore.get_default().get_factors(stock_code) or {}
+        store = FundamentalsStore.get_default()
+        factors = store.get_factors(stock_code) or {}
+        raw = {}
+        try:
+            raw = store.get_raw_financials(stock_code) or {}
+        except Exception:
+            pass
+        return {**raw, **factors}
     except Exception:
         return {}
 

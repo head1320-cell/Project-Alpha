@@ -891,6 +891,7 @@ export interface TokenSupportMap {
   market_note?: string;
   macro_note?: string;
   flow_note?: string;
+  substitutes?: Record<string, string[]>;  // 뉴지 점수류 → 대체 제안 토큰(선택 가능)
 }
 
 // 조건식 페이로드 (Genport식) — inner_*는 중첩: 순위(변화율_기간(종가,20)) 등

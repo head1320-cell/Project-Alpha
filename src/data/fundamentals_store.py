@@ -160,13 +160,15 @@ class FundamentalsStore(DeterministicMockStore):
             lambda: self._build_factors(stock_code, item),
         )
 
-    def _build_factors(self, stock_code: str, item=None) -> dict:
-        """
-        DART 원천 재무를 mock 생성한 뒤 학술 팩터 계산.
-        실제로는 raw = dart.get_financials(stock_code) 로 대체.
-        """
-        raw = self._mock_raw_financials(stock_code, item)
-        return self._derive_factors(stock_code, raw)
+    def get_raw_financials(self, stock_code: str, item=None) -> dict:
+        """원천 재무 항목(42키, 단위: 억 / EPS류는 원) — 조건식 raw 금액 토큰용 공개 API.
+
+        get_factors와 동일 정책: DART 키 설정 시 실데이터, 아니면 결정론적 mock."""
+        return self.cached(
+            f"ffl_raw:{stock_code}",
+            lambda: (self._real_raw_financials(stock_code, item)
+                     or self._mock_raw_financials(stock_code, item)),
+        )
 
     def _build_factors(self, stock_code: str, item=None) -> dict:
         """

@@ -273,6 +273,66 @@ FUNDAMENTAL_ALIASES: dict[str, str] = {
     # 배당/안전성
     "배당수익률": "dividend_yield", "연간배당성향": "payout_ratio",
     "분기부채비율": "debt_to_equity", "분기유동비율": "current_ratio",
+    # ── raw 금액류 (fundamentals_store 원천, 단위: 억 / EPS는 원) ──
+    # 분기/T-(트레일링) 표기는 최신 스냅샷 근사 — fundamental_note 참조
+    "분기매출": "revenue", "T-매출": "revenue",
+    "분기영업이익": "operating_profit", "T-영업이익": "operating_profit",
+    "분기순이익": "net_income", "T-순이익": "net_income", "연간순이익": "net_income",
+    "분기매출총이익": "gross_profit",
+    "분기자산": "total_assets", "분기부채": "total_liabilities", "분기자본": "total_equity",
+    "분기유동자산": "current_assets", "분기유동부채": "current_liabilities",
+    "분기영업현금흐름": "operating_cf", "T-영업현금흐름": "operating_cf",
+    "분기EPS": "eps", "T-EPS": "eps", "전분기EPS": "eps_prev",
+    "총발행주식수": "shares", "T-총주식수": "shares",
+}
+
+
+def _label_aliases() -> dict[str, str]:
+    """fundamentals_store 한글 라벨 → 팩터 id 자동 별칭 (지연·캐시).
+
+    "QMJ 점수", "가치 종합점수" 등 플랫폼 자체 팩터를 카탈로그 밖에서도
+    조건식 토큰으로 쓸 수 있게 한다. 수동 별칭(FUNDAMENTAL_ALIASES)이 우선."""
+    global _LABEL_ALIAS_CACHE
+    if _LABEL_ALIAS_CACHE is None:
+        try:
+            from src.data.fundamentals_store import FUNDAMENTAL_FACTORS
+            _LABEL_ALIAS_CACHE = {
+                m.label: m.id for m in FUNDAMENTAL_FACTORS
+                if getattr(m, "label", None) and m.label not in FUNDAMENTAL_ALIASES
+            }
+        except Exception:
+            _LABEL_ALIAS_CACHE = {}
+    return _LABEL_ALIAS_CACHE
+
+
+_LABEL_ALIAS_CACHE: dict[str, str] | None = None
+
+
+def fundamental_field_for(token_name: str) -> str | None:
+    """토큰명 → fundamentals dict 키 (수동 별칭 → 라벨 별칭 순). 없으면 None."""
+    name = (token_name or "").strip().strip("{}").strip()
+    return FUNDAMENTAL_ALIASES.get(name) or _label_aliases().get(name)
+
+
+# ── 뉴지 점수류 대체 제안 — 원천 비공개 점수의 정직한 우회 (UI 칩) ───────────
+# 값은 "선택 가능한 토큰"(카탈로그 지원 토큰 또는 자체 팩터 라벨)이어야 한다.
+SUBSTITUTES: dict[str, list[str]] = {
+    "종합점수": ["가치 종합점수", "QMJ 점수", "Greenblatt 점수"],
+    "종합점수순위": ["가치 종합점수"],
+    "펀더멘탈점수": ["QMJ 점수", "F-SCORE"],
+    "펀더멘탈점수순위": ["QMJ 점수"],
+    "모멘텀점수": ["12-1 모멘텀", "RSI"],
+    "성장점수": ["성장 가속도", "분기매출성장률(YOY)"],
+    "매출액성장률점수": ["분기매출성장률(YOY)"],
+    "영업이익성장률점수": ["분기영업이익성장률(YOY)"],
+    "단기이익성장률점수": ["분기EPS성장률(YOY)"],
+    "자기자본이익률(ROE)점수": ["분기ROE"],
+    "주가수익률(PER)점수": ["주가수익률(PER)"],
+    "주가순자산률(PBR)점수": ["트레일링PBR"],
+    "배당수익률순위": ["배당수익률"],
+    "이격도점수": ["이격도"],
+    "10일거래대금점수": ["거래대금"],
+    "거래비율점수": ["20일평균거래량대비거래량"],
 }
 
 
@@ -655,6 +715,8 @@ def token_support() -> dict:
         supported[t] = "fundamental"  # 옵트인(스냅샷) — 펀더멘털 토글 필요
     for t in FUNDAMENTAL_ALIASES:
         supported[t] = "fundamental"
+    for t in _label_aliases():
+        supported[t] = "fundamental"  # 자체 팩터(스토어 라벨) — 픽커 '자체 팩터' 카테고리
     for t in market_tokens():
         supported[t] = "market"
     for t in ECOS_TOKENS:
@@ -677,4 +739,5 @@ def token_support() -> dict:
                      "세부 주체 포함·비공식 1회성), 이후 매일은 KIS 적재"
                      "(python -m src.data.kis_flows, 개인/외국인/기관 3주체). "
                      "적재 기간만 평가 가능 — 미적재 봉은 건너뜀",
+        "substitutes": dict(SUBSTITUTES),
     }

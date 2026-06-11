@@ -136,24 +136,47 @@ def test_unsupported_reasons_are_honest():
     assert "공매도비중" in UNSUPPORTED_REASONS          # 잔여 미연동 명시
 
 
-# ─── ③ 펀더멘털 별칭 (카탈로그 표기 → fundamentals_store id) ─────────────────
-def test_fundamental_aliases_map_to_real_store_ids():
-    """별칭이 가리키는 id가 전부 실재하는 스토어 팩터인지 (오타·드리프트 가드)."""
-    from src.data.fundamentals_store import FUNDAMENTAL_FACTORS
+# ─── ③ 펀더멘털 별칭 (카탈로그 표기 → fundamentals_store id/raw 키) ──────────
+def test_fundamental_aliases_map_to_real_store_keys():
+    """별칭 타깃이 전부 실재하는 키인지 — 파생 팩터 id ∪ 원천(raw) 키 (드리프트 가드)."""
+    from src.data.fundamentals_store import FUNDAMENTAL_FACTORS, FundamentalsStore
     from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
     valid = {m.id for m in FUNDAMENTAL_FACTORS}
+    valid |= set(FundamentalsStore.get_default().get_raw_financials("005930").keys())
     bad = {k: v for k, v in FUNDAMENTAL_ALIASES.items() if v not in valid}
-    assert bad == {}, f"존재하지 않는 스토어 id: {bad}"
+    assert bad == {}, f"존재하지 않는 스토어 키: {bad}"
 
 
 def test_fundamental_alias_evaluates():
-    f = {"pbr": 1.25, "per": 8.0, "piotroski_f": 7}
+    f = {"pbr": 1.25, "per": 8.0, "piotroski_f": 7, "revenue": 43000.0, "qmj_score": 52.1}
     assert cs._fundamental_value("{분기PBR}", f) == pytest.approx(1.25)
     assert cs._fundamental_value("{트레일링PER}", f) == pytest.approx(8.0)
     assert cs._fundamental_value("{F-SCORE}", f) == pytest.approx(7)
+    assert cs._fundamental_value("{분기매출}", f) == pytest.approx(43000.0)   # raw 별칭(억)
+    assert cs._fundamental_value("{QMJ 점수}", f) == pytest.approx(52.1)      # 라벨 자동 별칭
     assert cs._fundamental_value("{없는별칭}", f) is None
     ts = token_support()
     assert ts["supported"].get("트레일링PER") == "fundamental"
+    assert ts["supported"].get("분기매출") == "fundamental"
+    assert ts["supported"].get("QMJ 점수") == "fundamental"
+
+
+def test_load_fundamentals_merges_raw_and_derived():
+    """실경로(mock store): raw 병합으로 시가총액·매출 토큰이 실제 평가된다."""
+    f = cs._load_fundamentals("005930")
+    assert f.get("revenue") is not None and f.get("market_cap") is not None
+    assert f.get("per") is not None                       # 파생 공존
+    assert cs._fundamental_value("{시가총액}", f) is not None  # 죽어 있던 토큰 부활
+    assert cs._fundamental_value("{매출액}", f) is not None
+
+
+def test_substitutes_targets_all_selectable():
+    """대체 제안 타깃은 전부 지원 토큰 — 제안을 눌렀는데 또 미지원이면 기만."""
+    ts = token_support()
+    bad = [t for subs in ts["substitutes"].values() for t in subs
+           if t not in ts["supported"]]
+    assert bad == [], f"미지원 대체 타깃: {bad}"
+    assert "종합점수" in ts["substitutes"]
 
 
 # ─── ④ 시장(지수) 토큰 ───────────────────────────────────────────────────────
