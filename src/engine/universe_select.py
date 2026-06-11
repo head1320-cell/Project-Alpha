@@ -214,6 +214,36 @@ def tickers_asof(date: str, engine=None, min_count: int = 50) -> list[str]:
         return []
 
 
+def top_mktcap_asof(date: str, n: int = 200, engine=None) -> list[str]:
+    """해당일(없으면 직전 거래일) 시총 상위 N — 지수(KOSPI200 등) 편입의 근사 재구성.
+
+    KRX 백필의 mktcap 시계열 기반(상폐 종목 포함). 정확한 편입 이력이 아니라
+    시총 규칙 근사(통상 90%+ 일치)임을 명시. 데이터 없으면 빈 리스트(호출부 폴백)."""
+    try:
+        from sqlalchemy import text
+
+        if engine is None:
+            from src.database import get_engine
+            engine = get_engine()
+        if engine is None:
+            return []
+        with engine.connect() as conn:
+            ref = conn.execute(text(
+                "SELECT MAX(trade_date) FROM daily_prices "
+                "WHERE trade_date <= :d AND mktcap IS NOT NULL"
+            ), {"d": date}).scalar()
+            if not ref:
+                return []
+            rows = conn.execute(text(
+                "SELECT ticker FROM daily_prices "
+                "WHERE trade_date = :d AND mktcap IS NOT NULL "
+                "ORDER BY mktcap DESC LIMIT :n"
+            ), {"d": str(ref)[:10], "n": int(n)}).fetchall()
+        return [str(r[0]) for r in rows if len(str(r[0])) == 6 and str(r[0]).isdigit()]
+    except Exception:
+        return []
+
+
 def select_universe(
     caps: list[str] | None = None,
     sectors: list[str] | None = None,

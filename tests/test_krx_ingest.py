@@ -148,6 +148,51 @@ def test_rebuild_adj_close_handles_split(mem_engine):
     assert adj["2024-01-02"] == pytest.approx(50.0)
 
 
+# ─── 시총 시계열 (mktcap 저장 + 마이그레이션 + top-N 근사) ────────────────────
+def test_upsert_stores_mktcap_and_shares(mem_engine):
+    ki.ensure_table(mem_engine)
+    rows = parse_stock_rows([stock_row()], "KOSPI")  # MKTCAP/LIST_SHRS 포함 fixture
+    ki.bulk_upsert(mem_engine, rows)
+    with mem_engine.connect() as conn:
+        got = conn.execute(text(
+            "SELECT mktcap, list_shares FROM daily_prices WHERE ticker='005930'")).fetchone()
+    assert got[0] == pytest.approx(457_283_550_529_000)
+    assert got[1] == pytest.approx(5_969_782_550)
+
+
+def test_ensure_table_migrates_legacy_schema(mem_engine):
+    """구버전 테이블(mktcap 없음)에 ALTER 마이그레이션 후 적재가 동작해야 함."""
+    with mem_engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE daily_prices (ticker VARCHAR(12) NOT NULL, trade_date DATE NOT NULL, "
+            '"open" FLOAT, high FLOAT, low FLOAT, close FLOAT NOT NULL, volume BIGINT, '
+            "trading_value BIGINT, adj_close FLOAT, rsi_14 FLOAT, sma_20 FLOAT, sma_60 FLOAT, "
+            "return_1d FLOAT, PRIMARY KEY (ticker, trade_date))"))
+    ki.ensure_table(mem_engine)   # ALTER로 mktcap/list_shares 추가
+    ki.ensure_table(mem_engine)   # 재실행 멱등(이미 있음 에러 무시)
+    n = ki.bulk_upsert(mem_engine, parse_stock_rows([stock_row()], "KOSPI"))
+    assert n == 1
+    with mem_engine.connect() as conn:
+        assert conn.execute(text(
+            "SELECT mktcap FROM daily_prices")).scalar() == pytest.approx(457_283_550_529_000)
+
+
+def test_top_mktcap_asof(mem_engine):
+    from src.engine.universe_select import top_mktcap_asof
+    ki.ensure_table(mem_engine)
+    base = {"date": "2024-01-05", "open": 1, "high": 1, "low": 1, "close": 1.0,
+            "volume": 0, "trading_value": 0, "fluc_rt": None, "shares": None}
+    ki.bulk_upsert(mem_engine, [
+        {**base, "ticker": "000001", "mktcap": 100.0},
+        {**base, "ticker": "000002", "mktcap": 300.0},
+        {**base, "ticker": "000003", "mktcap": 200.0},
+        {**base, "ticker": "KOSPI", "mktcap": None},   # 지수 행 — mktcap 없음 → 제외
+    ])
+    # 주말(1/6) 기준 → 직전 거래일, 시총 내림차순 상위 2
+    assert top_mktcap_asof("2024-01-06", n=2, engine=mem_engine) == ["000002", "000003"]
+    assert top_mktcap_asof("2023-12-01", n=2, engine=mem_engine) == []  # 데이터 이전
+
+
 # ─── 시점 유니버스 (생존편향 보정) ────────────────────────────────────────────
 def test_tickers_asof_uses_prior_day_and_excludes_index(mem_engine):
     ki.ensure_table(mem_engine)

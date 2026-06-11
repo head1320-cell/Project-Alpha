@@ -362,6 +362,19 @@ def check_krx():
                 "COUNT(DISTINCT ticker) FROM daily_prices")).fetchone()
         if row and row[0]:
             ok(f"daily_prices 적재: {row[0]:,}거래일 ({row[1]} ~ {row[2]}) · {row[3]:,}종목")
+            try:
+                with engine.connect() as conn:
+                    mk = conn.execute(text(
+                        "SELECT SUM(CASE WHEN mktcap IS NOT NULL THEN 1 ELSE 0 END), COUNT(*) "
+                        "FROM daily_prices")).fetchone()
+                if mk and mk[1]:
+                    pct = (mk[0] or 0) / mk[1] * 100
+                    if pct > 0:
+                        ok(f"시총 시계열 채움 {pct:.0f}% — 역사 PER/PBR·top200_asof 근사 유니버스 가능")
+                    else:
+                        warn("시총(mktcap) 미채움 — 구버전 적재분. --force 재백필 시 채워짐")
+            except Exception:
+                warn("mktcap 컬럼 없음(구 스키마) — 다음 백필 실행 시 자동 마이그레이션")
         else:
             warn("daily_prices 비어있음 — python -m src.data.krx_ingest --start 2015-01-01 로 백필")
     except Exception:

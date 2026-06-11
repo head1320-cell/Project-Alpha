@@ -39,19 +39,28 @@ CREATE TABLE IF NOT EXISTS daily_prices (
     sma_20        FLOAT,
     sma_60        FLOAT,
     return_1d     FLOAT,
+    mktcap        FLOAT,
+    list_shares   FLOAT,
     PRIMARY KEY (ticker, trade_date)
 )
 """
 
+# 기존 테이블 마이그레이션용 — CREATE IF NOT EXISTS는 기존 테이블을 안 바꾸므로
+# ALTER를 시도하고 "이미 있음" 류 에러는 무시 (PG/SQLite 공통 안전)
+_MIGRATE_COLUMNS = ("mktcap FLOAT", "list_shares FLOAT")
+
 _UPSERT = """
 INSERT INTO daily_prices
-    (ticker, trade_date, "open", high, low, close, volume, trading_value, return_1d)
+    (ticker, trade_date, "open", high, low, close, volume, trading_value, return_1d,
+     mktcap, list_shares)
 VALUES
-    (:ticker, :trade_date, :open, :high, :low, :close, :volume, :trading_value, :fluc_rt)
+    (:ticker, :trade_date, :open, :high, :low, :close, :volume, :trading_value, :fluc_rt,
+     :mktcap, :list_shares)
 ON CONFLICT (ticker, trade_date) DO UPDATE SET
     "open"=EXCLUDED."open", high=EXCLUDED.high, low=EXCLUDED.low,
     close=EXCLUDED.close, volume=EXCLUDED.volume,
-    trading_value=EXCLUDED.trading_value, return_1d=EXCLUDED.return_1d
+    trading_value=EXCLUDED.trading_value, return_1d=EXCLUDED.return_1d,
+    mktcap=EXCLUDED.mktcap, list_shares=EXCLUDED.list_shares
 """
 
 
@@ -63,10 +72,16 @@ def _get_engine(engine=None):
 
 
 def ensure_table(engine) -> None:
-    """daily_prices 없으면 생성 (PG는 init_db가 이미 만들었으면 no-op, SQLite 폴백 안전)."""
+    """daily_prices 없으면 생성 + 신규 컬럼(mktcap 등) 마이그레이션."""
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
+    for col in _MIGRATE_COLUMNS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE daily_prices ADD COLUMN {col}"))
+        except Exception:
+            pass  # 이미 존재 — 정상
 
 
 def bulk_upsert(engine, rows: list[dict]) -> int:
@@ -80,6 +95,8 @@ def bulk_upsert(engine, rows: list[dict]) -> int:
         "close": r["close"], "volume": r.get("volume") or 0,
         "trading_value": r.get("trading_value") or 0,
         "fluc_rt": r.get("fluc_rt"),
+        "mktcap": r.get("mktcap"),
+        "list_shares": r.get("shares"),
     } for r in rows]
     stmt = text(_UPSERT)
     with engine.begin() as conn:

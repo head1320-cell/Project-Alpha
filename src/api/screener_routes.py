@@ -996,6 +996,11 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             from src.engine.universe_select import tickers_asof
             _asof = tickers_asof(req.start_date)
             _universe = _asof if _asof else "all_listed"  # 데이터 없으면 전종목→프리셋 폴백
+        elif req.universe == "top200_asof":
+            # 시작일 당시 시총 상위 200 — KOSPI200 편입의 근사 재구성 (mktcap 시계열 필요)
+            from src.engine.universe_select import top_mktcap_asof
+            _asof = top_mktcap_asof(req.start_date, 200)
+            _universe = _asof if _asof else "kospi200"
         else:
             _universe = req.universe
         # 후보 풀 크기: 전체 유니버스 일별 평가 시 확대(조건식이 매 봉 풀 전체를 평가, max_positions가 보유 한도)
