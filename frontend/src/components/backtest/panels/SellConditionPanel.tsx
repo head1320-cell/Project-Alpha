@@ -74,7 +74,8 @@ export default function SellConditionPanel({ s, set }: {
 
       <Section title="조건 매도" hint="팩터·논리식 기반 청산" tone="sell"
         enabled={v.conditions.length > 0 || true} onToggle={() => {}}>
-        <ConditionFormulaEditor tone="sell" conditions={v.conditions} onChange={(c: Condition[]) => patch({ conditions: c })} />
+        <ConditionFormulaEditor tone="sell" conditions={v.conditions} onChange={(c: Condition[]) => patch({ conditions: c })}
+          logicExpr={v.logicExpr} onLogicChange={(logicExpr) => patch({ logicExpr })} logicDefaultLabel="하나라도 (OR)" />
       </Section>
 
       <Section title="종목 청산" hint="장마감·시간 청산" tone="sell"

@@ -655,6 +655,27 @@ def screener_condition_tokens():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+class LogicValidateRequest(BaseModel):
+    expr: str = ""
+    n_conditions: int = Field(default=0, ge=0, le=26)
+
+
+@router.post("/condition-logic/validate")
+def validate_condition_logic(req: LogicValidateRequest):
+    """논리 조건식 검증 (젠포트 '조건식 검증하기') — 파서가 단일 진실 공급원.
+
+    ok=True면 lookback(시간 한정사 추가 룩백 봉 수) 포함. 오류는 한국어 메시지."""
+    from src.kis_strategies.condition_logic import max_lookback, parse_logic
+    expr = (req.expr or "").strip()
+    if not expr:
+        return {"ok": True, "lookback": 0, "empty": True}
+    try:
+        ast = parse_logic(expr, req.n_conditions)
+        return {"ok": True, "lookback": max_lookback(ast), "empty": False}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
 @router.get("/events-catalog")
 def screener_events_catalog():
     """이벤트 카탈로그 (실적 발표, 배당락)."""
@@ -940,6 +961,10 @@ class ScreenToBacktestRequest(BaseModel):
     # 각 조건 dict: {factor_token, function_id, params{n,v,dir}, op(gte|lte|eq|between), rhs, rhs2?}
     buy_conditions: list[dict] | None = None
     sell_conditions: list[dict] | None = None
+    # 논리 조건식 (젠포트 논리 레이어): 조건 라벨 A,B,C…를 and/or/not/before/any/every로
+    # 결합 — 예: "every(A,3) and (B or C)". 비우면 기존(매수=AND, 매도=OR).
+    buy_logic: str | None = None
+    sell_logic: str | None = None
     # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②)
     rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"|"monthly"=주·월 첫 거래일에만 신규 매수
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
@@ -1053,6 +1078,8 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
                 "buy_conditions": req.buy_conditions or [],
                 "sell_conditions": req.sell_conditions or [],
                 "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
+                "buy_logic": req.buy_logic,
+                "sell_logic": req.sell_logic,
             }
 
         # 2) 백테스트
@@ -1103,8 +1130,15 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             },
             "data_source": _detect_data_source(screened),
         }
-    except Exception as e:
-        raise HTTPException(500, f"screen-to-backtest 실패: {e}")
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # 논리 조건식 문법·라벨 오류 등 — 사용자가 고칠 수 있는 입력 오류
+        logger.warning(f"screen-to-backtest 입력 오류: {e}")
+        raise HTTPException(400, f"입력 오류: {e}")
+    except Exception:
+        logger.exception("screen-to-backtest 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
 @router.get("/backtest-strategies")

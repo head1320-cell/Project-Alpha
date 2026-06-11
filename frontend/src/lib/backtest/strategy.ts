@@ -13,6 +13,7 @@ export type SortDir = "DESC" | "ASC";
 export interface BuyState {
   enabled: boolean;
   conditions: Condition[];          // 매수 조건식 (A, B, …)
+  logicExpr: string;                // 논리 조건식 — 예: "every(A,3) and (B or C)". 비우면 모두 AND
   primarySort: { expr: string; dir: SortDir };
   secondarySort?: { expr: string; dir: SortDir };
   limitType: "MAX" | "LIMIT";
@@ -41,6 +42,7 @@ export interface SellState {
   trailing: { on: boolean; pct: number };       // 드래깅 청산
   holdPeriod: { on: boolean; min: number; max?: number };
   conditions: Condition[];                       // 조건 매도
+  logicExpr: string;                             // 매도 논리 조건식. 비우면 하나라도(OR)
   liquidate: { on: boolean; mode: "close" | "time" };
   timeStart: string;
   timeEnd: string;
@@ -108,6 +110,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
       ]},
       { label: "매수 조건", rows: [
         { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미설정", muted: !b.conditions.length },
+        { label: "논리식", value: b.logicExpr.trim() || "모두 AND", muted: !b.logicExpr.trim() },
         { label: "우선순위", value: `${sortFieldLabel(b.primarySort.expr)} ${b.primarySort.dir === "DESC" ? "↓" : "↑"}` },
         { label: "2차 정렬", value: b.secondarySort ? `${sortFieldLabel(b.secondarySort.expr)} ${b.secondarySort.dir === "DESC" ? "↓" : "↑"}` : "사용 안 함", muted: !b.secondarySort },
       ]},
@@ -143,6 +146,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
       ]},
       { label: "조건 매도", rows: [
         { label: "조건식", value: v.conditions.length ? v.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미사용", muted: !v.conditions.length },
+        { label: "논리식", value: v.logicExpr.trim() || "하나라도 (OR)", muted: !v.logicExpr.trim() },
       ]},
       { label: "매도 시간", rows: [{ label: "시간대", value: `${v.timeStart}~${v.timeEnd}` }] },
     ];

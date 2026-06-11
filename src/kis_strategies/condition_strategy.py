@@ -19,6 +19,7 @@ import pandas as pd
 
 from src import kis_data_fetcher as data_fetcher
 from src.kis_signal import Action, Signal
+from src.kis_strategies.condition_logic import eval_logic, max_lookback, parse_logic
 from src.kis_strategies.strategies import STRATEGY_REGISTRY, BaseStrategy
 
 logger = logging.getLogger(__name__)
@@ -299,16 +300,37 @@ def _max_period(conds: list[dict]) -> int:
     return mx
 
 
+def _date_keys(df: pd.DataFrame) -> list[str]:
+    """봉별 YYYY-MM-DD 키 — 패널(횡단면) 조회용. DatetimeIndex와
+    per-bar 엔진 슬라이스('date' 컬럼 YYYYMMDD) 양쪽 포맷 지원."""
+    if "date" in df.columns:
+        out = []
+        for d in df["date"].astype(str):
+            d = d.strip()
+            out.append(f"{d[:4]}-{d[4:6]}-{d[6:]}" if len(d) == 8 and d.isdigit() else d)
+        return out
+    return [d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d) for d in df.index]
+
+
 class ConditionStrategy(BaseStrategy):
     """매수/매도 조건식(팩터식) 기반 진입·청산 전략."""
 
     def __init__(self, buy_conditions: list[dict] | None = None,
                  sell_conditions: list[dict] | None = None,
-                 allow_snapshot_fundamentals: bool = False, **_ignore):
+                 allow_snapshot_fundamentals: bool = False,
+                 buy_logic: str | None = None, sell_logic: str | None = None,
+                 **_ignore):
         self.buy_conditions = list(buy_conditions or [])
         self.sell_conditions = list(sell_conditions or [])
         # #4: 펀더멘털 토큰을 봉별 평가에 포함(현재 스냅샷 상수). 기본 비활성 — 활성 시 look-ahead 근사.
         self.allow_snapshot_fundamentals = bool(allow_snapshot_fundamentals)
+        # 논리 조건식 (젠포트 논리 레이어): "every(A,3) and (B or C)" 등.
+        # 비우면 기존 정책(매수=전부 AND, 매도=하나라도 OR) 그대로.
+        # 문법·라벨 오류는 여기서 ValueError → API가 400(입력 오류)으로 안내.
+        self.buy_logic = (buy_logic or "").strip() or None
+        self.sell_logic = (sell_logic or "").strip() or None
+        self._buy_ast = parse_logic(self.buy_logic, len(self.buy_conditions)) if self.buy_logic else None
+        self._sell_ast = parse_logic(self.sell_logic, len(self.sell_conditions)) if self.sell_logic else None
         self._panels: dict = {}  # 횡단면(순위/비율) 사전계산 {key: DataFrame[date,ticker]}
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
 
@@ -326,7 +348,10 @@ class ConditionStrategy(BaseStrategy):
                        for c in (self.buy_conditions + self.sell_conditions)), default=0)
         except Exception:
             tok = 0
-        return max(base, tok + 10)
+        # 논리식 시간 한정사(every/any/before)의 추가 룩백
+        logic = max((max_lookback(a) for a in (self._buy_ast, self._sell_ast) if a is not None),
+                    default=0)
+        return max(base, tok + 10) + logic
 
     def generate_signal(self, stock_code: str, stock_name: str) -> Signal:
         df = data_fetcher.get_daily_prices(stock_code, self.required_days)
@@ -335,6 +360,20 @@ class ConditionStrategy(BaseStrategy):
                           action=Action.HOLD, strength=0.0, reason="데이터 부족")
 
         fund = _load_fundamentals(stock_code) if self.allow_snapshot_fundamentals else None
+
+        # 명시 논리 조건식 — 조건 시계열 전체를 3치로 평가해 마지막 봉 판정
+        # (every/any/before가 과거 봉의 성립 이력을 요구하므로 스칼라 평가 불가)
+        if self._buy_ast is not None or self._sell_ast is not None:
+            sell_hit, buy_hit = self._signal_hits(df, fund, stock_code)
+            if len(sell_hit) and bool(sell_hit[-1]):
+                return Signal(stock_code=stock_code, stock_name=stock_name,
+                              action=Action.SELL, strength=0.7, reason="매도 조건 충족")
+            if len(buy_hit) and bool(buy_hit[-1]):
+                return Signal(stock_code=stock_code, stock_name=stock_name,
+                              action=Action.BUY, strength=0.7, reason="매수 조건 충족")
+            return Signal(stock_code=stock_code, stock_name=stock_name,
+                          action=Action.HOLD, strength=0.0, reason="조건 미충족")
+
         as_of = str(df["date"].iloc[-1]) if "date" in df.columns else None
 
         def _ev(c: dict) -> bool | None:
@@ -425,30 +464,57 @@ class ConditionStrategy(BaseStrategy):
     def _precompute_ticker(self, tk: str, df: pd.DataFrame) -> pd.Series:
         import numpy as np
         fund = _load_fundamentals(tk) if self.allow_snapshot_fundamentals else None
+        sell_hit, buy_hit = self._signal_hits(df, fund, tk)
+        codes = np.zeros(len(df), dtype=np.int8)  # 0=HOLD
+        codes[buy_hit] = 1
+        codes[sell_hit] = 2                       # 매도 우선 (generate_signal과 동일)
+        return pd.Series(codes, index=df.index)
+
+    def _signal_hits(self, df: pd.DataFrame, fund: dict | None, tk: str):
+        """봉별 (매도 충족, 매수 충족) bool 배열.
+
+        논리식이 있으면 Kleene 3치(1/0/0.5)로 식을 평가해 정확히 1일 때만 발동 —
+        평가 불가(0.5)가 결과를 좌우하면 보류. 없으면 기존 정책:
+        매수=평가 가능 조건 전부 AND(불가는 건너뜀, 1개 이상 필요), 매도=하나라도 OR."""
+        import numpy as np
         n = len(df)
 
-        def arrays(conds):
-            out = []
-            for c in conds or []:
+        if self._sell_ast is not None:
+            env = [self._cond_tri(df, c, fund, tk) for c in self.sell_conditions]
+            sell_hit = eval_logic(self._sell_ast, env) >= 1.0
+        else:
+            sell_hit = np.zeros(n, dtype=bool)
+            for c in self.sell_conditions:
                 pair = self._cond_arrays(df, c, fund, tk)
                 if pair is not None:
-                    out.append(pair)
-            return out
+                    sell_hit |= pair[1]              # 평가 가능 & 충족 — 하나라도
 
-        sell_hit = np.zeros(n, dtype=bool)
-        for valid, ok in arrays(self.sell_conditions):
-            sell_hit |= ok                       # 평가 가능 & 충족 — 하나라도
-        any_valid = np.zeros(n, dtype=bool)
-        all_ok = np.ones(n, dtype=bool)
-        for valid, ok in arrays(self.buy_conditions):
-            any_valid |= valid
-            all_ok &= (ok | ~valid)              # 평가 불가 조건은 건너뜀
-        buy_hit = any_valid & all_ok             # 평가 가능 조건 ≥1 & 전부 충족
+        if self._buy_ast is not None:
+            env = [self._cond_tri(df, c, fund, tk) for c in self.buy_conditions]
+            buy_hit = eval_logic(self._buy_ast, env) >= 1.0
+        else:
+            any_valid = np.zeros(n, dtype=bool)
+            all_ok = np.ones(n, dtype=bool)
+            for c in self.buy_conditions:
+                pair = self._cond_arrays(df, c, fund, tk)
+                if pair is None:
+                    continue
+                valid, ok = pair
+                any_valid |= valid
+                all_ok &= (ok | ~valid)              # 평가 불가 조건은 건너뜀
+            buy_hit = any_valid & all_ok             # 평가 가능 조건 ≥1 & 전부 충족
+        return sell_hit, buy_hit
 
-        codes = np.zeros(n, dtype=np.int8)       # 0=HOLD
-        codes[buy_hit] = 1
-        codes[sell_hit] = 2                      # 매도 우선 (generate_signal과 동일)
-        return pd.Series(codes, index=df.index)
+    def _cond_tri(self, df: pd.DataFrame, cond: dict, fund: dict | None, tk: str):
+        """단일 조건 → 3치 배열 (1=충족, 0=불충족, 0.5=평가 불가). 전 봉 불가면 전부 0.5."""
+        import numpy as np
+        pair = self._cond_arrays(df, cond, fund, tk)
+        if pair is None:
+            return np.full(len(df), 0.5)
+        valid, ok = pair
+        tri = ok.astype(float)
+        tri[~valid] = 0.5
+        return tri
 
     def _cond_arrays(self, df: pd.DataFrame, cond: dict, fund: dict | None,
                      tk: str):
@@ -457,8 +523,7 @@ class ConditionStrategy(BaseStrategy):
             panel = self._panels.get(self._cross_key(cond))
             if panel is None or str(tk) not in panel.columns:
                 return None
-            date_strs = df.index.strftime("%Y-%m-%d")     # 패널 인덱스 포맷
-            vals = panel[str(tk)].reindex(date_strs)
+            vals = panel[str(tk)].reindex(_date_keys(df))  # 패널 인덱스 포맷(YYYY-MM-DD)
             return _vector_compare(vals, cond.get("op", "lte"),
                                    cond.get("rhs"), cond.get("rhs2"))
         s = _base_series(df, cond.get("factor_token", ""))

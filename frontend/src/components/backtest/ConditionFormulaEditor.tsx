@@ -6,9 +6,10 @@
 // 만드는 즉시 "이 조건 — …" NL 한 줄로 의미를 보여준다.
 
 import { useState } from "react";
-import { Plus, Pencil, X, Check, Variable, ArrowRight } from "lucide-react";
+import { Plus, Pencil, X, Check, Variable, ArrowRight, ShieldCheck } from "lucide-react";
 import FactorPickerModal, { type FactorPick } from "./FactorPickerModal";
 import { FUNCTIONS_BY_ID, fillTemplate } from "../../lib/backtest/factorFunctions";
+import { backtestBridgeApi } from "../../lib/screenerApi";
 import { Segmented, TONES, type Tone } from "./kit";
 
 export interface Condition {
@@ -43,12 +44,26 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 interface Draft { factorName: string; factorToken: string; functionId: string; params: Record<string, string>; expr: string; op: OpId; rhs: string; rhs2: string; innerFunctionId?: string; innerParams?: Record<string, string> }
 const emptyDraft = (): Draft => ({ factorName: "", factorToken: "", functionId: "base", params: {}, expr: "", op: "lte", rhs: "", rhs2: "" });
 
-export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange }: {
+export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange, logicExpr, onLogicChange, logicDefaultLabel = "모두 AND" }: {
   tone?: Tone; conditions: Condition[]; onChange: (c: Condition[]) => void;
+  /** 논리 조건식 (젠포트 논리 레이어) — 전달하면 조건 리스트 아래 입력·검증 UI 노출 */
+  logicExpr?: string; onLogicChange?: (v: string) => void; logicDefaultLabel?: string;
 }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [logicCheck, setLogicCheck] = useState<{ ok: boolean; msg: string } | null>(null);
   const accent = TONES[tone];
+
+  const verifyLogic = async () => {
+    const expr = (logicExpr ?? "").trim();
+    if (!expr) { setLogicCheck({ ok: true, msg: `비어 있음 — 기본(${logicDefaultLabel}) 적용` }); return; }
+    try {
+      const r = await backtestBridgeApi.validateLogic(expr, conditions.length);
+      setLogicCheck(r.ok
+        ? { ok: true, msg: `유효한 식${r.lookback ? ` · 추가 룩백 ${r.lookback}봉` : ""}` }
+        : { ok: false, msg: r.error ?? "식이 올바르지 않습니다" });
+    } catch { setLogicCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하세요" }); }
+  };
 
   const applyPick = (p: FactorPick) => {
     setDraft((d) => ({ ...d, factorName: p.factorName, factorToken: p.factorToken, functionId: p.functionId, params: p.params, expr: p.expr, innerFunctionId: p.innerFunctionId, innerParams: p.innerParams }));
@@ -96,6 +111,29 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px dashed var(--border-strong)", borderRadius: R, padding: "8px 0", cursor: "pointer" }}>
           <Plus size={13} /> 조건식 추가
         </button>
+
+        {/* 논리 조건식 (젠포트 논리 레이어) — and/or/not + before/any/every */}
+        {onLogicChange && conditions.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>논리 조건식</div>
+            <input value={logicExpr ?? ""} spellCheck={false}
+              onChange={(e) => { onLogicChange(e.target.value); setLogicCheck(null); }}
+              placeholder={`예: every(A,3) and (B or C) — 비우면 ${logicDefaultLabel}`}
+              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "9px 11px", border: `1px solid ${logicCheck && !logicCheck.ok ? "#dc2626" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <button type="button" onClick={verifyLogic}
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 9px", cursor: "pointer", flexShrink: 0 }}>
+                <ShieldCheck size={13} /> 조건식 검증
+              </button>
+              {logicCheck && (
+                <span style={{ fontSize: 11, color: logicCheck.ok ? "#16a34a" : "#dc2626" }}>{logicCheck.msg}</span>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
+              and · or · not(A) · before(A,n) n일 전 성립 · any(A,n) n일 내 한번이라도 · every(A,n) n일 연속
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 우: 조건식 설정(드래프트) */}

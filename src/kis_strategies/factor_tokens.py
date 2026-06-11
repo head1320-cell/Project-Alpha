@@ -470,9 +470,26 @@ def _market_df(prefix: str) -> pd.DataFrame | None:
     return df
 
 
+def _df_dates(df: pd.DataFrame) -> pd.DatetimeIndex:
+    """종목 df의 날짜 인덱스 — per-bar 엔진 슬라이스(RangeIndex + 'date' 컬럼,
+    YYYYMMDD)도 지원. (이전엔 RangeIndex가 1970년 epoch로 해석돼 시장·매크로·수급
+    토큰이 per-bar 경로에서 조용히 전부 NaN→건너뜀 — 벡터화 경로와 비일관)"""
+    if isinstance(df.index, pd.DatetimeIndex):
+        return df.index
+    if "date" in df.columns:
+        try:
+            return pd.DatetimeIndex(pd.to_datetime(df["date"].astype(str)))
+        except Exception:
+            pass
+    return pd.DatetimeIndex(df.index)
+
+
 def _align(s: pd.Series, df: pd.DataFrame) -> pd.Series:
-    """시장 시계열을 종목 df 날짜에 정렬 — 당일 없으면 직전값(ffill, look-ahead 없음)."""
-    return s.reindex(pd.DatetimeIndex(df.index), method="ffill")
+    """시장 시계열을 종목 df 날짜에 정렬 — 당일 없으면 직전값(ffill, look-ahead 없음).
+    원 인덱스를 보존해 호출부의 롤링·산술이 포맷과 무관하게 동작한다."""
+    out = s.reindex(_df_dates(df), method="ffill")
+    out.index = df.index
+    return out
 
 
 def _mt_signal(mdf: pd.DataFrame, mode: str) -> pd.Series:
@@ -710,7 +727,9 @@ def resolve_flow_token(df: pd.DataFrame, token: str) -> pd.Series | None:
     if s is None or s.empty:
         return None
     # 수급은 일별 사실값 — ffill 하지 않음(미적재일은 NaN → 해당 봉 건너뜀)
-    return s.reindex(pd.DatetimeIndex(df.index))
+    out = s.reindex(_df_dates(df))
+    out.index = df.index
+    return out
 
 
 def token_support() -> dict:

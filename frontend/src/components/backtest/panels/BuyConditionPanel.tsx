@@ -61,7 +61,8 @@ export default function BuyConditionPanel({ s, set }: {
 
       <Section title="매수 조건 설정" hint="팩터·함수 조건식" tone="buy"
         enabled={s.buy.enabled} onToggle={(v) => patchBuy({ enabled: v })}>
-        <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })} />
+        <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })}
+          logicExpr={s.buy.logicExpr} onLogicChange={(v) => patchBuy({ logicExpr: v })} logicDefaultLabel="모두 AND" />
         <SubToggle tone="buy" label="펀더멘털 조건 평가" hint="현재 스냅샷 기준 · look-ahead 주의" on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>고급 체결 옵션</div>

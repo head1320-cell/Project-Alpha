@@ -36,7 +36,7 @@ const initialStrategy = (): BacktestStrategy => ({
   rebalancePeriod: "daily", signalLag: 0,
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
-    enabled: true, conditions: [], primarySort: { expr: "composite_score", dir: "DESC" },
+    enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
     limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
     fillType: "close", reBuyBlockDays: 0, timeStart: "09:00", timeEnd: "15:30",
     splitBuy: false, splitBuyPct: 50, splitBuyCount: 2, breakthrough: false, allowFundamentals: false,
@@ -44,7 +44,7 @@ const initialStrategy = (): BacktestStrategy => ({
   sell: {
     enabled: true, orderType: "MARKET", fillType: "close",
     takeProfit: { on: false, pct: 15 }, stopLoss: { on: false, pct: 5 },
-    trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, conditions: [],
+    trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, conditions: [], logicExpr: "",
     liquidate: { on: false, mode: "close" }, timeStart: "09:00", timeEnd: "15:30",
     splitTakeProfit: false, splitSellPct: 50, splitSellCount: 3, expiryDateSell: false,
   },
@@ -116,6 +116,8 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     groups: s.universe.groups.map((g) => ({ mode: g.mode, tickers: g.tickers })),
     buy_conditions: mapConds(buy.conditions),
     sell_conditions: mapConds(sell.conditions),
+    buy_logic: buy.logicExpr.trim() || null,
+    sell_logic: sell.logicExpr.trim() || null,
     rebalance_period: s.rebalancePeriod === "daily" ? null : s.rebalancePeriod,
     signal_lag: s.signalLag,
     market_timing: s.marketTiming.on && s.marketTiming.conditions.length ? {

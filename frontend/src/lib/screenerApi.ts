@@ -968,6 +968,8 @@ export const backtestBridgeApi = {
     breakthrough_buy?: boolean;
     buy_conditions?: BacktestConditionPayload[] | null;
     sell_conditions?: BacktestConditionPayload[] | null;
+    buy_logic?: string | null;   // 논리 조건식 — 예: "every(A,3) and (B or C)"
+    sell_logic?: string | null;
     rebalance_period?: string | null;
     signal_lag?: number;  // 0=당일 봉(기존) | 1=전일 봉 기준 신호(젠포트식)
     market_timing?: {
@@ -1003,6 +1005,18 @@ export const backtestBridgeApi = {
   conditionTokens: async (): Promise<TokenSupportMap> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/condition-tokens`);
     if (!r.ok) throw new Error(`Condition tokens failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 논리 조건식 검증 (젠포트 '조건식 검증하기') — 파서가 단일 진실 공급원
+  validateLogic: async (expr: string, nConditions: number):
+    Promise<{ ok: boolean; lookback?: number; empty?: boolean; error?: string }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/condition-logic/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expr, n_conditions: nConditions }),
+    });
+    if (!r.ok) throw new Error(`Logic validate failed: ${r.status}`);
     return r.json();
   },
 
