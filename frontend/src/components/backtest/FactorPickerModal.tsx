@@ -4,11 +4,18 @@
 // 젠포트식 팩터 선택 창. STEP1(팩터 선택) → STEP2(함수 선택) → "입력" 시
 // onInsert 로 { factorName, expr, functionId, params } 를 부모(조건식 에디터)에 전달.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, X, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { FACTOR_CATEGORIES, searchFactors, type GpFactor } from "../../lib/backtest/factorCatalog";
 import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from "../../lib/backtest/factorFunctions";
+import { backtestBridgeApi, type TokenSupportMap } from "../../lib/screenerApi";
 import { TONES, type Tone } from "./kit";
+
+// 지원 맵 모듈 캐시 — 백엔드(/condition-tokens)가 단일 진실 공급원.
+// 로드 실패 시 null → 배지 없이 기존 동작 (오프라인 데모 호환).
+let _supportCache: TokenSupportMap | null = null;
+
+interface SupportInfo { ok: boolean; group?: string; reason?: string }
 
 export interface FactorPick {
   factorName: string;
@@ -34,13 +41,29 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const [query, setQuery] = useState("");
   const [openCat, setOpenCat] = useState<string>(FACTOR_CATEGORIES[0]?.id ?? "");
   const [factor, setFactor] = useState<GpFactor | null>(null);
+  const [support, setSupport] = useState<TokenSupportMap | null>(_supportCache);
   const [fnId, setFnId] = useState<string>(initial?.functionId ?? "base");
   const [params, setParams] = useState<Record<string, string>>(initial?.params ?? {});
   const [innerFnId, setInnerFnId] = useState<string>(initial?.innerFunctionId ?? "base");
   const [innerParams, setInnerParams] = useState<Record<string, string>>(initial?.innerParams ?? {});
 
+  useEffect(() => {
+    if (!open || support) return;
+    backtestBridgeApi.conditionTokens()
+      .then((s) => { _supportCache = s; setSupport(s); })
+      .catch(() => {});  // 실패 시 배지 없이 기존 동작
+  }, [open, support]);
+
+  const supportInfo = (name: string): SupportInfo => {
+    if (!support) return { ok: true };
+    const g = support.supported[name];
+    if (g) return { ok: true, group: g };
+    return { ok: false, reason: support.unsupported[name] ?? support.default_reason };
+  };
+
   const results = useMemo(() => searchFactors(query), [query]);
   const fn = FUNCTIONS_BY_ID[fnId];
+  const selInfo = factor ? supportInfo(factor.name) : null;
   const isCross = fnId === "rank" || fnId === "ratio";
   const innerFn = FUNCTIONS_BY_ID[innerFnId];
   const tk = factor ? baseToken(factor) : "{팩터}";
@@ -67,7 +90,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   };
 
   const submit = () => {
-    if (!factor) return;
+    if (!factor || (selInfo && !selInfo.ok)) return;  // 미지원 팩터는 입력 차단
     const withInner = isCross && innerFnId !== "base";
     onInsert({
       factorName: factor.name, factorToken: tk, functionId: fnId, params, expr,
@@ -107,7 +130,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
               <div style={{ border: "1px solid var(--border)", borderRadius: R, padding: 7, maxHeight: 320, overflow: "auto", display: "flex", flexDirection: "column", gap: 1 }}>
                 {query ? (
                   results.length ? results.map(({ category, factor: f }) => (
-                    <FactorRow key={category.id + f.name} f={f} active={factor?.name === f.name} tone={tone} sub={category.label} onClick={() => setFactor(f)} />
+                    <FactorRow key={category.id + f.name} f={f} active={factor?.name === f.name} tone={tone} sub={category.label} info={supportInfo(f.name)} onClick={() => setFactor(f)} />
                   )) : <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 9px" }}>검색 결과가 없습니다</div>
                 ) : (
                   FACTOR_CATEGORIES.map((c) => (
@@ -116,13 +139,15 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: openCat === c.id ? accent.text : "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "7px 9px", textAlign: "left" }}>
                         {openCat === c.id && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent.accent }} />}
                         <span style={{ flex: 1 }}>{c.label}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{c.factors.length}</span>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          {support ? `${c.factors.filter((f) => supportInfo(f.name).ok).length}/${c.factors.length}` : c.factors.length}
+                        </span>
                         {openCat === c.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                       </button>
                       {openCat === c.id && (
                         <div style={{ paddingLeft: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 4 }}>
                           {c.factors.map((f) => (
-                            <FactorRow key={f.name} f={f} active={factor?.name === f.name} tone={tone} onClick={() => setFactor(f)} />
+                            <FactorRow key={f.name} f={f} active={factor?.name === f.name} tone={tone} info={supportInfo(f.name)} onClick={() => setFactor(f)} />
                           ))}
                         </div>
                       )}
@@ -136,20 +161,33 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                 {factor ? (
                   <>
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 7 }}>선택된 팩터</div>
-                    <div style={{ fontSize: 17, fontWeight: 500, color: accent.text, marginBottom: 9 }}>{factor.name}</div>
+                    <div style={{ fontSize: 17, fontWeight: 500, color: selInfo && !selInfo.ok ? "var(--text-muted)" : accent.text, marginBottom: 9 }}>{factor.name}</div>
                     <div style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, color: "var(--text-secondary)" }}>{factor.expr}</div>
+                    {selInfo && !selInfo.ok && (
+                      <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--danger)", background: "var(--danger-light)", borderRadius: R, padding: "9px 11px" }}>
+                        미지원 — {selInfo.reason}
+                      </div>
+                    )}
+                    {selInfo?.ok && selInfo.group === "fundamental" && support && (
+                      <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)", background: "var(--bg-section)", borderRadius: R, padding: "9px 11px" }}>
+                        {support.fundamental_note}
+                      </div>
+                    )}
                     <div style={{ marginTop: "auto", paddingTop: 16, textAlign: "right" }}>
                       <span style={{ fontSize: 12, color: accent.text, display: "inline-flex", alignItems: "center", gap: 3 }}>이 팩터 더 알아보기 <ExternalLink size={12} /></span>
                     </div>
                   </>
                 ) : (
-                  <div style={{ margin: "auto", fontSize: 13, color: "var(--text-muted)", textAlign: "center" }}>왼쪽에서 팩터를 선택하세요</div>
+                  <div style={{ margin: "auto", fontSize: 13, color: "var(--text-muted)", textAlign: "center" }}>
+                    왼쪽에서 팩터를 선택하세요
+                    {support && <div style={{ fontSize: 11, marginTop: 8 }}>회색 팩터는 미지원 — 평가 시 무시되므로 선택할 수 없습니다</div>}
+                  </div>
                 )}
               </div>
             </div>
 
-            <button type="button" disabled={!factor} onClick={() => setStep("function")}
-              style={{ marginTop: 16, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 14, color: "#fff", background: factor ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "11px 0", cursor: factor ? "pointer" : "not-allowed" }}>
+            <button type="button" disabled={!factor || (selInfo ? !selInfo.ok : false)} onClick={() => setStep("function")}
+              style={{ marginTop: 16, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 14, color: "#fff", background: factor && (selInfo?.ok ?? true) ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "11px 0", cursor: factor && (selInfo?.ok ?? true) ? "pointer" : "not-allowed" }}>
               다음 단계 <ArrowRight size={15} />
             </button>
           </>
@@ -249,13 +287,23 @@ function Crumb({ active, disabled, onClick, children }: { active: boolean; disab
   );
 }
 
-function FactorRow({ f, active, tone, sub, onClick }: { f: GpFactor; active: boolean; tone: Tone; sub?: string; onClick: () => void }) {
+function FactorRow({ f, active, tone, sub, info, onClick }: {
+  f: GpFactor; active: boolean; tone: Tone; sub?: string; info?: SupportInfo; onClick: () => void;
+}) {
+  const unsupported = info ? !info.ok : false;
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} title={unsupported ? `미지원 — ${info?.reason}` : undefined}
       style={{ display: "flex", alignItems: "baseline", gap: 6, width: "100%", textAlign: "left", border: "none", cursor: "pointer",
-        fontSize: 13, padding: "5px 12px", borderRadius: 6,
-        background: active ? TONES[tone].bg : "transparent", color: active ? TONES[tone].text : "var(--text-secondary)" }}>
-      <span style={{ flex: 1 }}>{f.name}</span>
+        fontSize: 13, padding: "5px 12px", borderRadius: 6, opacity: unsupported ? 0.45 : 1,
+        background: active ? TONES[tone].bg : "transparent",
+        color: active ? TONES[tone].text : unsupported ? "var(--text-muted)" : "var(--text-secondary)" }}>
+      <span style={{ flex: 1, textDecoration: unsupported ? "line-through" : undefined }}>{f.name}</span>
+      {info?.ok && info.group === "fundamental" && (
+        <span style={{ fontSize: 9, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 4px" }}>재무</span>
+      )}
+      {unsupported && (
+        <span style={{ fontSize: 9, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 4px" }}>미지원</span>
+      )}
       {sub && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{sub}</span>}
     </button>
   );

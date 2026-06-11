@@ -33,7 +33,12 @@ def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
         return df[col].astype(float)
     if name in ("거래대금",):
         return df["close"].astype(float) * df["volume"].astype(float)
-    return None  # 펀더멘털/점수/파생 토큰 — 봉별 평가 불가
+    # 확장 토큰: 기술지표·모멘텀·가격 파생 (factor_tokens 레지스트리 — RSI/MACD/볼린저 등)
+    from src.kis_strategies.factor_tokens import resolve_ohlcv_token
+    s = resolve_ohlcv_token(df, name)
+    if s is not None:
+        return s
+    return None  # 시장/수급/뉴지 점수 등 — 봉별 단일종목 평가 불가(미지원)
 
 
 # ── 펀더멘털 토큰(스냅샷) — #4. 기본 비활성(look-ahead). 활성 시 현재 스냅샷을 상수 시계열로 평가 ──
@@ -242,7 +247,15 @@ class ConditionStrategy(BaseStrategy):
 
     @property
     def required_days(self) -> int:
-        return max(_max_period(self.buy_conditions), _max_period(self.sell_conditions)) + 30
+        base = max(_max_period(self.buy_conditions), _max_period(self.sell_conditions)) + 30
+        # 확장 토큰의 내재 룩백(예: 52주 신고가=252봉) 반영 — 워밍업 부족 시 조건이 NaN으로 무시됨
+        try:
+            from src.kis_strategies.factor_tokens import token_min_bars
+            tok = max((token_min_bars(c.get("factor_token", ""))
+                       for c in (self.buy_conditions + self.sell_conditions)), default=0)
+        except Exception:
+            tok = 0
+        return max(base, tok + 10)
 
     def generate_signal(self, stock_code: str, stock_name: str) -> Signal:
         df = data_fetcher.get_daily_prices(stock_code, self.required_days)

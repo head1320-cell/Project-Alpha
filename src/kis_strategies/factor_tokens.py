@@ -1,0 +1,325 @@
+"""젠포트 팩터 토큰 → 시리즈 리졸버 (조건식 평가 확장)
+==========================================================================
+카탈로그(genportFactors.json 344개) 중 종목 자신의 OHLCV에서 파생 가능한
+토큰을 실제 시리즈로 해석한다. kis_indicators 기존 함수를 최대 재사용.
+
+  · OHLCV_TOKENS: 토큰명 → df(open/high/low/close/volume) → Series
+  · UNSUPPORTED_REASONS: 평가 불가 토큰의 사유 (UI 배지·정직성)
+  · token_support(): 픽커/엔드포인트용 지원 맵 (백엔드가 단일 진실 공급원)
+
+설계 노트:
+  · 카탈로그의 카테고리 경계가 거칠어(가이드 PDF 병합셀) RSI·볼린저 등이
+    '뉴지지표'에 섞여 있음 → 지원 판정은 카테고리가 아닌 토큰 단위.
+  · 기간 파라미터가 이름에 없는 토큰은 통상 기본값(괄호 주석) 사용.
+  · 후행스팬·패턴류(이중바닥 등)·뉴지 점수류는 정직하게 미지원 표기.
+  · 시장 시계열(지수/환율/금리)·수급은 별도 단계(market/macro provider).
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+
+from src import kis_indicators as ind
+
+
+# ── 공통 헬퍼 ────────────────────────────────────────────────────────────────
+def _ohlcv(df: pd.DataFrame):
+    o = df["open"].astype(float)
+    h = df["high"].astype(float)
+    low = df["low"].astype(float)
+    c = df["close"].astype(float)
+    v = df["volume"].astype(float)
+    return o, h, low, c, v
+
+
+def _true_range(df: pd.DataFrame) -> pd.Series:
+    _, h, low, c, _ = _ohlcv(df)
+    prev_c = c.shift(1)
+    return pd.concat([h - low, (h - prev_c).abs(), (low - prev_c).abs()], axis=1).max(axis=1)
+
+
+def _dm(df: pd.DataFrame):
+    """+DM/-DM (calc_adx와 동일 로직)."""
+    _, h, low, _, _ = _ohlcv(df)
+    up, down = h.diff(), -low.diff()
+    plus_dm = ((up > down) & (up > 0)) * up
+    minus_dm = ((down > up) & (down > 0)) * down
+    return plus_dm.fillna(0.0), minus_dm.fillna(0.0)
+
+
+def _di(df: pd.DataFrame, period: int = 14):
+    plus_dm, minus_dm = _dm(df)
+    atr = ind.calc_atr(df, period)
+    plus_di = 100 * plus_dm.ewm(span=period, adjust=False).mean() / atr
+    minus_di = 100 * minus_dm.ewm(span=period, adjust=False).mean() / atr
+    return plus_di, minus_di
+
+
+def _force_index(df: pd.DataFrame, span: int) -> pd.Series:
+    _, _, _, c, v = _ohlcv(df)
+    return (c.diff() * v).ewm(span=span, adjust=False).mean()
+
+
+def _ad_line(df: pd.DataFrame) -> pd.Series:
+    _, h, low, c, v = _ohlcv(df)
+    rng = (h - low).replace(0, pd.NA)
+    mfm = (((c - low) - (h - c)) / rng).fillna(0.0)
+    return (mfm * v).cumsum()
+
+
+def _pivot(df: pd.DataFrame, kind: str) -> pd.Series:
+    """전일 HLC 피벗 (fill_price.py와 동일 공식)."""
+    _, h, low, c, _ = _ohlcv(df)
+    ph, pl, pc = h.shift(1), low.shift(1), c.shift(1)
+    p = (ph + pl + pc) / 3.0
+    if kind == "P":
+        return p
+    if kind == "R1":
+        return 2 * p - pl
+    if kind == "S1":
+        return 2 * p - ph
+    if kind == "R2":
+        return p + (ph - pl)
+    return p - (ph - pl)  # S2
+
+
+def _psych_line(df: pd.DataFrame, period: int = 12) -> pd.Series:
+    _, _, _, c, _ = _ohlcv(df)
+    return (c.diff() > 0).astype(float).rolling(period).mean() * 100.0
+
+
+def _vwma(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    _, _, _, c, v = _ohlcv(df)
+    return (c * v).rolling(period).sum() / v.rolling(period).sum()
+
+
+def _keltner_mid(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    return ind.calc_ema(df, period)
+
+
+def _keltner(df: pd.DataFrame, which: str) -> pd.Series:
+    mid = _keltner_mid(df)
+    band = 2.0 * ind.calc_atr(df, 10)
+    upper, lower = mid + band, mid - band
+    if which == "U":
+        return upper
+    if which == "L":
+        return lower
+    if which == "W":
+        return upper - lower
+    _, _, _, c, _ = _ohlcv(df)
+    return (c - lower) / (upper - lower).replace(0, pd.NA) * 100.0  # 위치(%)
+
+
+def _donchian(df: pd.DataFrame, which: str, period: int = 20) -> pd.Series:
+    u = ind.calc_donchian_upper(df, period)
+    low = ind.calc_donchian_lower(df, period)
+    if which == "U":
+        return u
+    if which == "L":
+        return low
+    if which == "M":
+        return (u + low) / 2.0
+    if which == "W":
+        return u - low
+    _, _, _, c, _ = _ohlcv(df)
+    return (c - low) / (u - low).replace(0, pd.NA) * 100.0
+
+
+def _downside_vol(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    _, _, _, c, _ = _ohlcv(df)
+    r = c.pct_change()
+    return r.where(r < 0, 0.0).rolling(period).std() * 100.0
+
+
+def _ichimoku(df: pd.DataFrame, which: str) -> pd.Series:
+    """일목균형표 — 선행스팬은 26일 전 산출값을 당일 위치로(shift +26 → look-ahead 없음)."""
+    _, h, low, c, _ = _ohlcv(df)
+
+    def mid(n):
+        return (h.rolling(n).max() + low.rolling(n).min()) / 2.0
+
+    conv, base = mid(9), mid(26)
+    if which == "conv":
+        return conv
+    if which == "base":
+        return base
+    if which == "span1":
+        return ((conv + base) / 2.0).shift(26)
+    return mid(52).shift(26)  # span2
+
+
+def _stoch_slow_d(df: pd.DataFrame) -> pd.Series:
+    return ind.calc_stochastic_d(df).rolling(3).mean()
+
+
+def _trix(df: pd.DataFrame, period: int = 15) -> pd.Series:
+    _, _, _, c, _ = _ohlcv(df)
+    e3 = c.ewm(span=period, adjust=False).mean().ewm(span=period, adjust=False).mean() \
+        .ewm(span=period, adjust=False).mean()
+    return e3.pct_change() * 100.0
+
+
+def _ratio_pct(num: pd.Series, den: pd.Series) -> pd.Series:
+    return (num / den.replace(0, pd.NA) - 1.0) * 100.0
+
+
+def _close(df):
+    return df["close"].astype(float)
+
+
+# ── 토큰 레지스트리: 종목 OHLCV 파생 (이름 = 카탈로그 표기 그대로) ───────────
+OHLCV_TOKENS: dict = {
+    # 기술지표 — DMI/추세
+    "DMI(+DI)": lambda df: _di(df)[0],
+    "DMI(-DI)": lambda df: _di(df)[1],
+    "DMI(+DI)DMI(-DI)대비값": lambda df: _di(df)[0] - _di(df)[1],
+    "DMI(ADX)": lambda df: ind.calc_adx(df, 14),
+    # 거래량 계열
+    "OBV": ind.calc_obv,
+    "MFI": lambda df: ind.calc_mfi(df, 14),
+    "AD_LINE": _ad_line,
+    "FORCE_INDEX(단기)": lambda df: _force_index(df, 2),
+    "FORCE_INDEX(장기)": lambda df: _force_index(df, 13),
+    "20일평균거래량대비거래량": lambda df: df["volume"].astype(float)
+        / ind.calc_volume_ma(df, 20).replace(0, pd.NA) * 100.0,
+    # 오실레이터
+    "CCI": lambda df: ind.calc_cci(df, 20),
+    "RSI": lambda df: ind.calc_rsi(df, 14),
+    "스토캐스틱(K)": lambda df: ind.calc_stochastic_k(df, 14),
+    "스토캐스틱(D)": lambda df: ind.calc_stochastic_d(df),
+    "스토캐스틱(slowD)": _stoch_slow_d,
+    "TRIX": _trix,
+    "TRIX시그널": lambda df: _trix(df).ewm(span=9, adjust=False).mean(),
+    "심리선": _psych_line,
+    # MACD
+    "MACD": lambda df: ind.calc_macd(df),
+    "MACD시그널": lambda df: ind.calc_macd_signal(df),
+    "MACD오실레이터": lambda df: ind.calc_macd_histogram(df),
+    # 밴드/채널
+    "볼린저밴드_상단값": lambda df: ind.calc_bb_upper(df, 20),
+    "볼린저밴드_하단값": lambda df: ind.calc_bb_lower(df, 20),
+    "볼린저밴드_밴드폭": lambda df: ind.calc_bb_width(df, 20),
+    "켈트너_중앙값": _keltner_mid,
+    "켈트너_상단값": lambda df: _keltner(df, "U"),
+    "켈트너_하단값": lambda df: _keltner(df, "L"),
+    "켈트너_밴드폭": lambda df: _keltner(df, "W"),
+    "켈트너_위치": lambda df: _keltner(df, "P"),
+    "돈치안_상단값": lambda df: _donchian(df, "U"),
+    "돈치안_하단값": lambda df: _donchian(df, "L"),
+    "돈치안_중앙값": lambda df: _donchian(df, "M"),
+    "돈치안_밴드폭": lambda df: _donchian(df, "W"),
+    "돈치안_위치": lambda df: _donchian(df, "P"),
+    # 변동성/레인지
+    "TrueRange": _true_range,
+    "하향변동성": _downside_vol,
+    "주가중심선": lambda df: (df["high"].astype(float) + df["low"].astype(float)
+                              + df["close"].astype(float)) / 3.0,
+    # 피벗 (전일 HLC)
+    "피벗_기준선": lambda df: _pivot(df, "P"),
+    "피벗_1차저항": lambda df: _pivot(df, "R1"),
+    "피벗_2차저항": lambda df: _pivot(df, "R2"),
+    "피벗_1차지지": lambda df: _pivot(df, "S1"),
+    "피벗_2차지지": lambda df: _pivot(df, "S2"),
+    # 일목균형표
+    "일목균형표전환선": lambda df: _ichimoku(df, "conv"),
+    "일목균형표기준선": lambda df: _ichimoku(df, "base"),
+    "일목균형표선행스팬1": lambda df: _ichimoku(df, "span1"),
+    "일목균형표선행스팬2": lambda df: _ichimoku(df, "span2"),
+    "VWMA": _vwma,
+    # 가격 — 수익률/이격/꼬리
+    "이격도": lambda df: ind.calc_disparity(df, 20),
+    "종가시초가대비율": lambda df: _ratio_pct(_close(df), df["open"].astype(float)),
+    "일별주가상승률": lambda df: _close(df).pct_change() * 100.0,
+    "주간주가상승률1주전": lambda df: _close(df).pct_change(5) * 100.0,
+    "월간주가상승률1개월전": lambda df: _close(df).pct_change(21) * 100.0,
+    "골든크로스(20일/60일)": lambda df: (ind.calc_ma(df, 20) > ind.calc_ma(df, 60)).astype(float),
+    "주가이동평균변화율": lambda df: ind.calc_ma(df, 20).pct_change() * 100.0,
+    "신고가갱신(52주)": lambda df: (_close(df) >= _close(df).rolling(252).max()).astype(float),
+    "신저가갱신(52주)": lambda df: (_close(df) <= _close(df).rolling(252).min()).astype(float),
+    "당일고가대비저가변동비율": lambda df: _ratio_pct(df["high"].astype(float), df["low"].astype(float)),
+    "최저가대비상승비율": lambda df: _ratio_pct(_close(df), _close(df).rolling(252).min()),
+    "최고가대비하락비율": lambda df: -_ratio_pct(_close(df), _close(df).rolling(252).max()),
+    "윗꼬리비율": lambda df: (df["high"].astype(float)
+                              - pd.concat([df["open"], df["close"]], axis=1).astype(float).max(axis=1))
+        / (df["high"].astype(float) - df["low"].astype(float)).replace(0, pd.NA) * 100.0,
+    "아래꼬리비율": lambda df: (pd.concat([df["open"], df["close"]], axis=1).astype(float).min(axis=1)
+                                - df["low"].astype(float))
+        / (df["high"].astype(float) - df["low"].astype(float)).replace(0, pd.NA) * 100.0,
+    "일별주가상승율250일변동성": lambda df: _close(df).pct_change().rolling(250).std() * 100.0,
+}
+
+# 기본 가격/거래량 토큰 (condition_strategy._PRICE_COL — 참조용 동기화 목록)
+BASE_TOKENS = ["시가", "고가", "저가", "종가", "현재가", "주가", "거래량", "거래대금"]
+
+# ── 미지원 토큰: 사유 (UI 배지 — 정직성) ────────────────────────────────────
+REASON_NEWZY = "뉴지스탁 독점 점수 — 원천 비공개라 재현 불가"
+REASON_PATTERN = "차트 패턴 인식 — 미지원"
+REASON_AMBIGUOUS = "정의 모호(파라미터 불명) — 미지원"
+REASON_LOOKAHEAD = "차트 표시용(미래 위치) — 변화율_기간(26)으로 대체 권장"
+REASON_MARKET = "시장 시계열(지수) — 연동 단계 예정"
+REASON_MACRO = "환율·금리(ECOS/FRED) — 연동 단계 예정"
+REASON_FLOW = "투자자별 수급 — KIS 적재 단계 예정"
+REASON_CONSENSUS = "컨센서스/유료 데이터 — 미지원"
+
+UNSUPPORTED_REASONS: dict[str, str] = {
+    "후행스팬": REASON_LOOKAHEAD,
+    "VPCI": REASON_AMBIGUOUS,
+    "상승추세": REASON_PATTERN, "하락추세": REASON_PATTERN,
+    "이중바닥": REASON_PATTERN, "이중천정": REASON_PATTERN,
+    "역망치": REASON_PATTERN,
+    "엔벨위치": REASON_AMBIGUOUS, "볼린저밴드": REASON_AMBIGUOUS,
+    "피보나치상승율": REASON_AMBIGUOUS, "피보나치하락율": REASON_AMBIGUOUS,
+}
+
+
+# 토큰별 최소 필요 봉수 — required_days 산정용 (없으면 기본 30).
+# 부족하면 롤링 결과가 전부 NaN → 조건이 조용히 무시되므로 워밍업을 충분히 잡는다.
+TOKEN_MIN_BARS: dict[str, int] = {
+    **{t: 260 for t in ("신고가갱신(52주)", "신저가갱신(52주)", "최저가대비상승비율",
+                         "최고가대비하락비율", "일별주가상승율250일변동성")},
+    **{t: 90 for t in ("일목균형표선행스팬1", "일목균형표선행스팬2",
+                        "일목균형표기준선", "골든크로스(20일/60일)")},
+    **{t: 60 for t in ("MACD", "MACD시그널", "MACD오실레이터", "TRIX", "TRIX시그널")},
+}
+
+
+def token_min_bars(token: str) -> int:
+    name = (token or "").strip().strip("{}").strip()
+    if name in TOKEN_MIN_BARS:
+        return TOKEN_MIN_BARS[name]
+    return 30 if name in OHLCV_TOKENS else 0
+
+
+def resolve_ohlcv_token(df: pd.DataFrame, token: str) -> pd.Series | None:
+    """카탈로그 토큰 → 종목 OHLCV 파생 시리즈. 미지원·계산 실패 시 None(건너뜀)."""
+    fn = OHLCV_TOKENS.get((token or "").strip())
+    if fn is None:
+        return None
+    try:
+        s = fn(df)
+        return s.astype(float) if s is not None else None
+    except Exception:
+        return None
+
+
+def token_support() -> dict:
+    """픽커/엔드포인트용 지원 맵 — 백엔드가 단일 진실 공급원.
+
+    supported: 토큰 → 그룹("base"|"ohlcv"|"fundamental")
+    unsupported: 토큰 → 사유 (명시된 것만 — 나머지 미등록 토큰은 프론트가 기본 사유 표시)
+    """
+    from src.kis_strategies.condition_strategy import _FUND_TOKENS
+    supported: dict[str, str] = {}
+    for t in BASE_TOKENS:
+        supported[t] = "base"
+    for t in OHLCV_TOKENS:
+        supported[t] = "ohlcv"
+    for t in _FUND_TOKENS:
+        supported[t] = "fundamental"  # 옵트인(스냅샷) — 펀더멘털 토글 필요
+    return {
+        "supported": supported,
+        "unsupported": dict(UNSUPPORTED_REASONS),
+        "default_reason": "미지원 — 평가 시 무시됨 (데이터/매핑 없음)",
+        "fundamental_note": "fundamental 그룹은 '펀더멘털 조건 평가' 토글(스냅샷·look-ahead 주의) 필요",
+    }

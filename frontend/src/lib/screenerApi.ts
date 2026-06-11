@@ -882,6 +882,14 @@ export interface BacktestAdvancedParams {
   take_profit_pct?: number;
 }
 
+// 조건식 토큰 지원 맵 (GET /condition-tokens)
+export interface TokenSupportMap {
+  supported: Record<string, string>;    // 토큰 → 그룹 (base | ohlcv | fundamental)
+  unsupported: Record<string, string>;  // 토큰 → 사유 (명시된 것만)
+  default_reason: string;
+  fundamental_note: string;
+}
+
 // 조건식 페이로드 (Genport식) — inner_*는 중첩: 순위(변화율_기간(종가,20)) 등
 export interface BacktestConditionPayload {
   factor_token: string;
@@ -983,6 +991,13 @@ export const backtestBridgeApi = {
   fillPriceTypes: async (): Promise<{ groups: Array<{ id: string; label: string; types: Array<{ id: string; label: string }> }> }> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/fill-price-types`);
     if (!r.ok) throw new Error(`Fill price types failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 조건식 팩터 토큰 지원 맵 — 픽커 배지용 (백엔드 단일 소스)
+  conditionTokens: async (): Promise<TokenSupportMap> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/condition-tokens`);
+    if (!r.ok) throw new Error(`Condition tokens failed: ${r.status}`);
     return r.json();
   },
 

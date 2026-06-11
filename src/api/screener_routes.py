@@ -642,6 +642,19 @@ def screener_fill_price_types():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.get("/condition-tokens")
+def screener_condition_tokens():
+    """백테스터 조건식 팩터 토큰 지원 맵 — 픽커의 지원/미지원 배지용 (백엔드 단일 소스).
+
+    supported: {토큰: 그룹(base|ohlcv|fundamental)} / unsupported: {토큰: 사유}"""
+    try:
+        from src.kis_strategies.factor_tokens import token_support
+        return token_support()
+    except Exception:
+        logger.exception("조건식 토큰 지원 맵 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 @router.get("/events-catalog")
 def screener_events_catalog():
     """이벤트 카탈로그 (실적 발표, 배당락)."""
