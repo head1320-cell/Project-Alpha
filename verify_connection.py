@@ -302,6 +302,72 @@ def check_backtest_flow(stock_code, kis_mock):
         warn(f"마스터 플래그 조회 실패: {e}")
 
 
+def check_krx():
+    """KRX OpenAPI — 도달성(키 불필요) → 키 검증(전종목 1콜 sanity) → DB 적재 현황."""
+    head("【5】 KRX OpenAPI — 장기 백테스트 적재")
+    key = os.getenv("KRX_API_KEY", "")
+    from datetime import datetime, timedelta
+
+    # (a) 도달성 — 더미 키로도 실서버면 JSON(에러 포함)이 온다
+    try:
+        import httpx
+
+        from src.data.krx_client import KRX_BASE_URL
+        r = httpx.get(f"{KRX_BASE_URL}/sto/stk_bydd_trd",
+                      params={"basDd": "20240105"},
+                      headers={"AUTH_KEY": key or "connectivity-probe"}, timeout=8)
+        r.json()
+        ok(f"KRX 서버 도달 (HTTP {r.status_code}) — 방화벽 통과")
+    except Exception as e:
+        fail(f"KRX 서버 도달 실패 ({type(e).__name__}) — 방화벽/프록시 차단. 키 문제 아님")
+
+    # (b) 키 검증 — 최근 평일 전종목 1콜 (행 수 + 삼성전자 종가로 필드 매핑 정합 확인)
+    if not key:
+        fail("KRX_API_KEY 미설정 → 장기 백필 불가 (.env에 키 입력)")
+    else:
+        try:
+            from src.data.krx_client import KRXClient
+            client = KRXClient()
+            rows = []
+            d = datetime.now() - timedelta(days=1)
+            for _ in range(7):  # 휴장 대비 최근 평일 역순 시도
+                if d.weekday() < 5:
+                    rows = client.get_daily_all("KOSPI", d.strftime("%Y-%m-%d"))
+                    if rows:
+                        break
+                d -= timedelta(days=1)
+            if rows:
+                ss = next((r for r in rows if r["ticker"] == "005930"), None)
+                ok(f"KOSPI 전종목 수신: {len(rows)}행 ({d.strftime('%Y-%m-%d')})")
+                if ss and ss["close"] > 0:
+                    ok(f"필드 매핑 정합: 삼성전자 종가 {ss['close']:,.0f} · 시총 {(ss.get('mktcap') or 0)/1e12:,.1f}조")
+                else:
+                    warn("삼성전자 행 미발견 — 필드 코드 매핑 점검 필요 (ISU_CD 형식)")
+                if len(rows) < 800:
+                    warn(f"행 수 {len(rows)} < 800 — 응답 구조/엔드포인트 확인 권장")
+            else:
+                fail("전종목 수신 실패 — 키 유효성·승인 상태·쿼터 확인")
+        except Exception as e:
+            fail(f"KRX 호출 오류: {e}")
+
+    # (c) DB 적재 현황 — 백테스트가 실제로 읽는 데이터
+    try:
+        from sqlalchemy import text
+
+        from src.database import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT COUNT(DISTINCT trade_date), MIN(trade_date), MAX(trade_date), "
+                "COUNT(DISTINCT ticker) FROM daily_prices")).fetchone()
+        if row and row[0]:
+            ok(f"daily_prices 적재: {row[0]:,}거래일 ({row[1]} ~ {row[2]}) · {row[3]:,}종목")
+        else:
+            warn("daily_prices 비어있음 — python -m src.data.krx_ingest --start 2015-01-01 로 백필")
+    except Exception:
+        warn("daily_prices 조회 불가 (DB 미기동 또는 테이블 없음) — 백필 시 자동 생성")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stock", default="005930", help="검증할 종목코드 (기본 삼성전자)")
@@ -319,6 +385,7 @@ def main():
     kis_ok = check_kis(code, kis_mock)
     check_integration(code, dart_ok, kis_ok)
     check_backtest_flow(code, kis_mock)
+    check_krx()
 
     head("【결과 요약】")
     print(f"  DART 재무:  {GREEN+'실데이터 ✓'+END if dart_ok else YELLOW+'mock'+END}")

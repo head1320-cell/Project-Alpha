@@ -978,6 +978,11 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             _universe = req.custom_tickers
         elif gran_tickers:
             _universe = gran_tickers
+        elif req.universe == "all_asof":
+            # 시점 유니버스: 백테스트 시작일 당시 거래 종목 (KRX 백필 후 상폐 포함 — 생존편향 보정)
+            from src.engine.universe_select import tickers_asof
+            _asof = tickers_asof(req.start_date)
+            _universe = _asof if _asof else "all_listed"  # 데이터 없으면 전종목→프리셋 폴백
         else:
             _universe = req.universe
         # 후보 풀 크기: 전체 유니버스 일별 평가 시 확대(조건식이 매 봉 풀 전체를 평가, max_positions가 보유 한도)

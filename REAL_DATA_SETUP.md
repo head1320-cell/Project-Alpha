@@ -1,4 +1,4 @@
-# 실데이터 연동 가이드 (DART + KIS)
+# 실데이터 연동 가이드 (DART + KIS + KRX)
 
 Project Alpha를 **mock에서 실데이터로 전환**하는 완전한 절차입니다.
 당신의 서버에서만 키를 주입하며, 코드는 키 유무에 따라 자동 분기합니다.
@@ -9,10 +9,12 @@ Project Alpha를 **mock에서 실데이터로 전환**하는 완전한 절차입
 
 | 데이터 | 소스 | 키 | 채워지는 것 |
 |---|---|---|---|
-| 재무제표 | DART | `DART_API_KEY` | 35개 학술 펀더멘털 팩터 (GP/A·Altman Z·F-Score·EV/EBITDA…) |
-| 시세·일봉 | KIS | `KIS_APP_KEY/SECRET` | 시총·PER·PBR·27개 기술지표·백테스트 |
+| 재무제표 | DART | `DART_API_KEY` | 35개 학술 펀더멘털 팩터 (GP/A·Altman Z·F-Score·EV/EBITDA…) + PIT 스냅샷 |
+| 시세·실거래 | KIS | `KIS_APP_KEY/SECRET` | 실시간 시세·시총·PER·27개 기술지표·주문 |
+| **역사 일봉 (장기 백테스트)** | **KRX OpenAPI** | `KRX_API_KEY` | **수년~20년 전종목 일봉 + 지수 + 시점 유니버스(생존편향 보정)** |
 
-**둘 다 없어도 동작**합니다(mock). 키를 넣는 만큼 실데이터로 바뀝니다.
+**전부 없어도 동작**합니다(mock). 키를 넣는 만큼 실데이터로 바뀝니다.
+역할 분담: **KRX = 과거(백테스트 DB 적재) · DART = 재무 · KIS = 현재(실시간·주문)**.
 
 ---
 
@@ -100,6 +102,25 @@ docker compose logs -f backend   # 로그 확인
 ```
 
 브라우저에서 `http://서버IP:3000` → 스크리너 탭 → 이제 **실제 재무·시세**로 스크리닝됩니다.
+
+---
+
+## 5단계 — KRX 장기 백테스트 적재 (한 번만)
+
+KRX OpenAPI(https://openapi.krx.co.kr 발급 키)는 **날짜 기준 전종목** API라
+백테스트용 역사 DB를 채우는 공급원으로 씁니다. 백테스트는 적재된 DB에서 읽습니다(젠포트식).
+
+```bash
+# .env에 KRX_API_KEY 입력 후:
+python verify_connection.py                      # 【5】 KRX 도달성·키·필드 정합 확인
+python -m src.data.krx_ingest --start 2015-01-01 # 10년 백필 ≈ 5,000콜 ≈ 50분
+```
+
+- **재개 가능**: 중단돼도 재실행하면 적재된 날짜는 건너뜀 (`--max-days N`으로 쿼터 분할 가능)
+- **지수 포함**: KOSPI/KOSDAQ 지수가 함께 적재 → 벤치마크·마켓타이밍 실데이터화
+- **수정종가**: 완료 시 등락률 체인으로 `adj_close` 자동 재구성 (분할·증자 점프 제거)
+- **생존편향 보정**: 백테스터에서 `universe="all_asof"` → 시작일 당시 거래 종목(이후 상폐 포함)으로 평가
+- 적재 후 `python verify_connection.py`의 【5】(c)에서 거래일·종목 수 확인
 
 ---
 

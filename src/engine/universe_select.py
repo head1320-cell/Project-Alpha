@@ -185,6 +185,35 @@ def load_universe_frame() -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector", "market_cap", "is_etf"])
 
 
+def tickers_asof(date: str, engine=None, min_count: int = 50) -> list[str]:
+    """해당일(없으면 직전 거래일) 거래된 종목 — DB(daily_prices) 기반 시점 유니버스.
+
+    KRX 백필(krx_ingest) 후에는 그날 상장돼 있던 전 종목(이후 상장폐지 포함)이라
+    생존편향이 보정된다. 데이터 없거나 표본이 너무 작으면 빈 리스트(호출부 폴백)."""
+    try:
+        from sqlalchemy import text
+
+        if engine is None:
+            from src.database import get_engine
+            engine = get_engine()
+        if engine is None:
+            return []
+        with engine.connect() as conn:
+            ref = conn.execute(text(
+                "SELECT MAX(trade_date) FROM daily_prices WHERE trade_date <= :d"
+            ), {"d": date}).scalar()
+            if not ref:
+                return []
+            rows = conn.execute(text(
+                "SELECT ticker FROM daily_prices WHERE trade_date = :d"
+            ), {"d": str(ref)[:10]})
+            tickers = [str(r[0]) for r in rows
+                       if len(str(r[0])) == 6 and str(r[0]).isdigit()]  # 지수(KOSPI 등) 행 제외
+        return tickers if len(tickers) >= min_count else []
+    except Exception:
+        return []
+
+
 def select_universe(
     caps: list[str] | None = None,
     sectors: list[str] | None = None,
