@@ -326,6 +326,7 @@ def save_master_flags(symbols: list[dict]) -> int:
         stocks[code] = {
             "name": s.get("name"),
             "market": s.get("market"),
+            "isin": s.get("isin", ""),
             "group_code": s.get("group_code", ""),
             "cap_size": s.get("cap_size", ""),
             "sector_code": s.get("sector_code", ""),

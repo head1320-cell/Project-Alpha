@@ -22,18 +22,32 @@ _CHUNK = 500
 
 _TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS investor_flows (
-    ticker     VARCHAR(12) NOT NULL,
-    trade_date DATE        NOT NULL,
-    prsn_qty   FLOAT,
-    frgn_qty   FLOAT,
-    orgn_qty   FLOAT,
-    prsn_amt   FLOAT,
-    frgn_amt   FLOAT,
-    orgn_amt   FLOAT,
+    ticker        VARCHAR(12) NOT NULL,
+    trade_date    DATE        NOT NULL,
+    prsn_qty      FLOAT,
+    frgn_qty      FLOAT,
+    orgn_qty      FLOAT,
+    prsn_amt      FLOAT,
+    frgn_amt      FLOAT,
+    orgn_amt      FLOAT,
+    pension_qty   FLOAT,
+    pension_amt   FLOAT,
+    trust_qty     FLOAT,
+    trust_amt     FLOAT,
+    pe_qty        FLOAT,
+    pe_amt        FLOAT,
+    othercorp_qty FLOAT,
+    othercorp_amt FLOAT,
     PRIMARY KEY (ticker, trade_date)
 )
 """
 
+# 세부 주체(연기금/투신/사모/기타법인)는 KRX MDC 백필(krx_mdc)만 제공 — 마이그레이션 대상
+_MIGRATE_COLUMNS = ("pension_qty FLOAT", "pension_amt FLOAT", "trust_qty FLOAT",
+                    "trust_amt FLOAT", "pe_qty FLOAT", "pe_amt FLOAT",
+                    "othercorp_qty FLOAT", "othercorp_amt FLOAT")
+
+# KIS 일별 적재용 — 3주체 컬럼만 갱신 (KRX 백필이 채운 세부 주체를 NULL로 덮지 않음)
 _UPSERT = """
 INSERT INTO investor_flows
     (ticker, trade_date, prsn_qty, frgn_qty, orgn_qty, prsn_amt, frgn_amt, orgn_amt)
@@ -43,6 +57,29 @@ ON CONFLICT (ticker, trade_date) DO UPDATE SET
     prsn_qty=EXCLUDED.prsn_qty, frgn_qty=EXCLUDED.frgn_qty, orgn_qty=EXCLUDED.orgn_qty,
     prsn_amt=EXCLUDED.prsn_amt, frgn_amt=EXCLUDED.frgn_amt, orgn_amt=EXCLUDED.orgn_amt
 """
+
+# KRX MDC 백필용 — 전 컬럼 갱신
+_UPSERT_FULL = """
+INSERT INTO investor_flows
+    (ticker, trade_date, prsn_qty, frgn_qty, orgn_qty, prsn_amt, frgn_amt, orgn_amt,
+     pension_qty, pension_amt, trust_qty, trust_amt, pe_qty, pe_amt,
+     othercorp_qty, othercorp_amt)
+VALUES
+    (:ticker, :trade_date, :prsn_qty, :frgn_qty, :orgn_qty, :prsn_amt, :frgn_amt, :orgn_amt,
+     :pension_qty, :pension_amt, :trust_qty, :trust_amt, :pe_qty, :pe_amt,
+     :othercorp_qty, :othercorp_amt)
+ON CONFLICT (ticker, trade_date) DO UPDATE SET
+    prsn_qty=EXCLUDED.prsn_qty, frgn_qty=EXCLUDED.frgn_qty, orgn_qty=EXCLUDED.orgn_qty,
+    prsn_amt=EXCLUDED.prsn_amt, frgn_amt=EXCLUDED.frgn_amt, orgn_amt=EXCLUDED.orgn_amt,
+    pension_qty=EXCLUDED.pension_qty, pension_amt=EXCLUDED.pension_amt,
+    trust_qty=EXCLUDED.trust_qty, trust_amt=EXCLUDED.trust_amt,
+    pe_qty=EXCLUDED.pe_qty, pe_amt=EXCLUDED.pe_amt,
+    othercorp_qty=EXCLUDED.othercorp_qty, othercorp_amt=EXCLUDED.othercorp_amt
+"""
+
+FLOW_FIELDS = ("prsn_qty", "frgn_qty", "orgn_qty", "prsn_amt", "frgn_amt", "orgn_amt",
+               "pension_qty", "pension_amt", "trust_qty", "trust_amt",
+               "pe_qty", "pe_amt", "othercorp_qty", "othercorp_amt")
 
 # 토큰 해석용 시리즈 캐시 — {(ticker, field): Series}
 _series_cache: dict[tuple[str, str], pd.Series | None] = {}
@@ -56,23 +93,28 @@ def _get_engine(engine=None):
 
 
 def ensure_flows_table(engine) -> None:
+    """테이블 생성 + 세부 주체 컬럼 마이그레이션 (ALTER 멱등 — 이미 있음 무시)."""
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
+    for col in _MIGRATE_COLUMNS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE investor_flows ADD COLUMN {col}"))
+        except Exception:
+            pass
 
 
-def bulk_upsert_flows(engine, ticker: str, rows: list[dict]) -> int:
-    """정규화 행(normalize_investor_rows 출력) UPSERT. 적재 행 수 반환."""
+def bulk_upsert_flows(engine, ticker: str, rows: list[dict], full: bool = False) -> int:
+    """정규화 행 UPSERT. full=True(KRX 백필)면 세부 주체 컬럼까지 갱신,
+    False(KIS 일별)면 3주체만 — KRX가 채운 세부 주체를 덮지 않는다."""
     if not rows:
         return 0
     from sqlalchemy import text
-    payload = [{
-        "ticker": ticker, "trade_date": r["date"],
-        "prsn_qty": r.get("prsn_qty"), "frgn_qty": r.get("frgn_qty"),
-        "orgn_qty": r.get("orgn_qty"), "prsn_amt": r.get("prsn_amt"),
-        "frgn_amt": r.get("frgn_amt"), "orgn_amt": r.get("orgn_amt"),
-    } for r in rows]
-    stmt = text(_UPSERT)
+    fields = FLOW_FIELDS if full else FLOW_FIELDS[:6]
+    payload = [{"ticker": ticker, "trade_date": r["date"],
+                **{f: r.get(f) for f in fields}} for r in rows]
+    stmt = text(_UPSERT_FULL if full else _UPSERT)
     with engine.begin() as conn:
         for i in range(0, len(payload), _CHUNK):
             conn.execute(stmt, payload[i:i + _CHUNK])
@@ -133,8 +175,7 @@ def load_flows_series(ticker: str, field: str, engine=None) -> pd.Series | None:
     try:
         from sqlalchemy import text
         engine = _get_engine(engine)
-        if engine is not None and field in ("prsn_qty", "frgn_qty", "orgn_qty",
-                                            "prsn_amt", "frgn_amt", "orgn_amt"):
+        if engine is not None and field in FLOW_FIELDS:
             with engine.connect() as conn:
                 rows = conn.execute(text(
                     f"SELECT trade_date, {field} FROM investor_flows "  # noqa: S608 — 필드 화이트리스트

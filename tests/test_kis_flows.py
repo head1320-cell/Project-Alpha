@@ -117,7 +117,7 @@ def test_resolve_flow_token_aligns_without_ffill(monkeypatch):
     df_no_attr = stock_df(["2024-01-04"])
     df_no_attr.attrs.clear()
     assert ft.resolve_flow_token(df_no_attr, "외국인순매수량") is None  # 종목 식별 불가
-    assert ft.resolve_flow_token(df, "연기금순매수량") is None          # 미지원 주체
+    assert ft.resolve_flow_token(df, "공매도비중") is None              # FLOW_TOKENS 외 — 미지원
 
 
 def test_pandas_attrs_survive_loc_slice():
@@ -131,8 +131,8 @@ def test_pandas_attrs_survive_loc_slice():
 def test_token_support_flow_and_fred():
     ts = ft.token_support()
     assert ts["supported"].get("외국인순매수량") == "flow"
+    assert ts["supported"].get("연기금순매수량") == "flow"     # KRX MDC 백필로 지원 전환
     assert ts["supported"].get("US국채(10년)") == "macro"     # FRED로 활성
     assert "US국채(10년)" not in ts["unsupported"]
-    assert "연기금순매수량" in ts["unsupported"]               # KIS 3주체 한계 명시
     assert "공매도비중" in ts["unsupported"]
     assert "flow_note" in ts

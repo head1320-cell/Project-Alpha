@@ -286,7 +286,6 @@ REASON_MACRO = "환율·금리(ECOS/FRED) — 연동 단계 예정"
 REASON_FLOW = "투자자별 수급 — KIS 적재 단계 예정"
 REASON_CONSENSUS = "컨센서스/유료 데이터 — 미지원"
 
-REASON_FLOW_DETAIL = "KIS 종목별 수급은 개인/외국인/기관계만 제공 — 세부 주체 미지원"
 REASON_SHORT = "공매도·신용 데이터 미연동"
 
 UNSUPPORTED_REASONS: dict[str, str] = {
@@ -297,9 +296,6 @@ UNSUPPORTED_REASONS: dict[str, str] = {
     "역망치": REASON_PATTERN,
     "엔벨위치": REASON_AMBIGUOUS, "볼린저밴드": REASON_AMBIGUOUS,
     "피보나치상승율": REASON_AMBIGUOUS, "피보나치하락율": REASON_AMBIGUOUS,
-    # 수급 세부 주체 — KIS 종목별 TR(FHKST01010900)은 개인/외국인/기관계 3주체만
-    **{f"{w}순매수{u}": REASON_FLOW_DETAIL
-       for w in ("연기금", "투신", "사모펀드", "기타법인") for u in ("량", "금액")},
     **{t: REASON_SHORT for t in ("공매도거래량", "공매도거래대금", "공매도평균가",
                                   "공매도비중", "공매도비중20일평균대비변화량", "신용잔고율")},
 }
@@ -615,6 +611,11 @@ def resolve_macro_token(df: pd.DataFrame, token: str) -> pd.Series | None:
 FLOW_TOKENS: dict[str, str] = {
     "외국인순매수량": "frgn_qty", "기관순매수량": "orgn_qty", "개인순매수량": "prsn_qty",
     "외국인순매수금액": "frgn_amt", "기관순매수금액": "orgn_amt", "개인순매수금액": "prsn_amt",
+    # 세부 주체 — KRX MDC 과거 백필(krx_mdc)만 제공 (KIS 일별은 3주체)
+    "연기금순매수량": "pension_qty", "연기금순매수금액": "pension_amt",
+    "투신순매수량": "trust_qty", "투신순매수금액": "trust_amt",
+    "사모펀드순매수량": "pe_qty", "사모펀드순매수금액": "pe_amt",
+    "기타법인순매수량": "othercorp_qty", "기타법인순매수금액": "othercorp_amt",
 }
 
 
@@ -672,7 +673,8 @@ def token_support() -> dict:
                        "해외(DOW 등)는 yfinance 네트워크 필요. 데이터 없으면 평가 시 건너뜀",
         "macro_note": "환율·국고채(ECOS — BOK_API_KEY) · 미국채(FRED — FRED_API_KEY). "
                       "무료 키, 없으면 평가 시 건너뜀",
-        "flow_note": "투자자별 수급(개인/외국인/기관) — KIS 일별 적재 필요"
-                     "(python -m src.data.kis_flows). KIS TR이 최근 ~30영업일만 제공하므로 "
-                     "매일 적재해 누적 — 적재 기간만 평가 가능",
+        "flow_note": "투자자별 수급 — 과거는 KRX 백필(python -m src.data.krx_mdc, "
+                     "세부 주체 포함·비공식 1회성), 이후 매일은 KIS 적재"
+                     "(python -m src.data.kis_flows, 개인/외국인/기관 3주체). "
+                     "적재 기간만 평가 가능 — 미적재 봉은 건너뜀",
     }

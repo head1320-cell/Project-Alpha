@@ -131,8 +131,9 @@ def test_required_days_covers_token_lookback():
 def test_unsupported_reasons_are_honest():
     assert "후행스팬" in UNSUPPORTED_REASONS      # look-ahead 사유 명시
     assert "대체" in UNSUPPORTED_REASONS["후행스팬"]
-    assert "US국채(10년)" not in UNSUPPORTED_REASONS  # FRED 연동으로 지원 전환
-    assert "연기금순매수량" in UNSUPPORTED_REASONS    # KIS 3주체 한계 명시
+    assert "US국채(10년)" not in UNSUPPORTED_REASONS   # FRED 연동으로 지원 전환
+    assert "연기금순매수량" not in UNSUPPORTED_REASONS  # KRX MDC 백필로 지원 전환
+    assert "공매도비중" in UNSUPPORTED_REASONS          # 잔여 미연동 명시
 
 
 # ─── ③ 펀더멘털 별칭 (카탈로그 표기 → fundamentals_store id) ─────────────────

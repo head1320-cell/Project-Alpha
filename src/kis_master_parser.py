@@ -137,12 +137,14 @@ def parse_krx_master(content: bytes, market: str) -> list[dict]:
         if len(line) < 61:
             continue
         code = line[0:9].decode("euc-kr", errors="ignore").strip()
+        isin = line[9:21].decode("euc-kr", errors="ignore").strip()  # 표준코드(ISIN) — KRX MDC 조회 키
         name = line[21:61].decode("euc-kr", errors="ignore").strip()
         if len(code) > 6:
             code = code[-6:]
         if not (code and name and code.isdigit()):
             continue
-        sym: dict = {"ticker": code, "name": name, "market": market}
+        sym: dict = {"ticker": code, "name": name, "market": market,
+                     "isin": isin if len(isin) == 12 else ""}
         tail = _parse_tail(line, market)
         if tail:
             sym.update({
