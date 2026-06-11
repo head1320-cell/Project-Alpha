@@ -368,6 +368,37 @@ def check_krx():
         warn("daily_prices 조회 불가 (DB 미기동 또는 테이블 없음) — 백필 시 자동 생성")
 
 
+def check_ecos():
+    """ECOS(한국은행) — 환율·금리 팩터 토큰. 키 검증 + 코드표 정합 sanity."""
+    head("【6】 ECOS — 환율·금리 팩터")
+    key = os.getenv("BOK_API_KEY", "")
+    if not key:
+        warn("BOK_API_KEY 미설정 → 환율·금리 토큰은 평가 시 건너뜀 (ecos.bok.or.kr 무료 발급)")
+        return
+    try:
+        from src.kis_strategies.factor_tokens import _ecos_series
+        usd = _ecos_series("US달러환율")
+        if usd is not None and len(usd):
+            v = float(usd.iloc[-1])
+            if 800 <= v <= 2500:
+                ok(f"US달러환율 수신: {v:,.1f}원 ({usd.index[-1].date()}, {len(usd):,}일)")
+            else:
+                warn(f"US달러환율 값 {v} — 항목 코드 매핑 점검 필요 (factor_tokens.ECOS_TOKENS)")
+        else:
+            fail("US달러환율 수신 실패 — 키 유효성/쿼터 확인")
+        ktb = _ecos_series("국고채(3년)")
+        if ktb is not None and len(ktb):
+            v = float(ktb.iloc[-1])
+            if 0 <= v <= 15:
+                ok(f"국고채(3년) 수신: {v:.3f}% ({len(ktb):,}일)")
+            else:
+                warn(f"국고채(3년) 값 {v} — 항목 코드 매핑 점검 필요")
+        else:
+            warn("국고채(3년) 수신 실패 — ECOS_TOKENS 항목 코드 확인 (통계표 817Y002)")
+    except Exception as e:
+        fail(f"ECOS 호출 오류: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stock", default="005930", help="검증할 종목코드 (기본 삼성전자)")
@@ -386,6 +417,7 @@ def main():
     check_integration(code, dart_ok, kis_ok)
     check_backtest_flow(code, kis_mock)
     check_krx()
+    check_ecos()
 
     head("【결과 요약】")
     print(f"  DART 재무:  {GREEN+'실데이터 ✓'+END if dart_ok else YELLOW+'mock'+END}")

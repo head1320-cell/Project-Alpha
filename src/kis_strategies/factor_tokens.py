@@ -252,6 +252,30 @@ OHLCV_TOKENS: dict = {
 # 기본 가격/거래량 토큰 (condition_strategy._PRICE_COL — 참조용 동기화 목록)
 BASE_TOKENS = ["시가", "고가", "저가", "종가", "현재가", "주가", "거래량", "거래대금"]
 
+# ── 펀더멘털 별칭: 카탈로그 표기 → fundamentals_store 팩터 id ────────────────
+# 의미가 정확히 일치하는 것만 매핑(스냅샷·옵트인 — 펀더멘털 토글 필요).
+# 주의: 분기/T-(트레일링) 표기는 스토어의 "최신 스냅샷" 기준 근사다.
+# 단위가 다르거나(시가총액(원)) 원천이 없는 항목(분기EPS·NCAV 금액 등)은 정직하게 제외.
+FUNDAMENTAL_ALIASES: dict[str, str] = {
+    # 밸류에이션
+    "주가수익률(PER)": "per", "트레일링PER": "per", "T-PER_종가": "per",
+    "분기PBR": "pbr", "트레일링PBR": "pbr", "T-PBR_종가": "pbr",
+    "분기PSR": "psr", "트레일링PSR": "psr", "T-PSR_종가": "psr",
+    "T-PCR": "pcr", "분기EV/EBITDA": "ev_ebitda", "분기BPS": "bps",
+    # 수익성/품질
+    "분기ROE": "roe", "T-ROE": "roe", "분기ROA": "roa", "분기ROIC": "roic",
+    "T-GP/A": "gp_to_assets", "F-SCORE": "piotroski_f",
+    "분기매출총이익률": "gross_margin", "분기자산회전율": "asset_turnover",
+    # 성장
+    "분기매출성장률(QOQ)": "revenue_qoq", "분기매출액성장률(QOQ)": "revenue_qoq",
+    "분기매출성장률(YOY)": "revenue_growth_yoy", "분기매출액성장률(YOY)": "revenue_growth_yoy",
+    "분기영업이익성장률(YOY)": "op_growth_yoy", "분기EPS성장률(YOY)": "eps_growth_yoy",
+    # 배당/안전성
+    "배당수익률": "dividend_yield", "연간배당성향": "payout_ratio",
+    "분기부채비율": "debt_to_equity", "분기유동비율": "current_ratio",
+}
+
+
 # ── 미지원 토큰: 사유 (UI 배지 — 정직성) ────────────────────────────────────
 REASON_NEWZY = "뉴지스탁 독점 점수 — 원천 비공개라 재현 불가"
 REASON_PATTERN = "차트 패턴 인식 — 미지원"
@@ -262,6 +286,8 @@ REASON_MACRO = "환율·금리(ECOS/FRED) — 연동 단계 예정"
 REASON_FLOW = "투자자별 수급 — KIS 적재 단계 예정"
 REASON_CONSENSUS = "컨센서스/유료 데이터 — 미지원"
 
+REASON_FRED = "미국 국채금리 — FRED 연동 예정(무료 키)"
+
 UNSUPPORTED_REASONS: dict[str, str] = {
     "후행스팬": REASON_LOOKAHEAD,
     "VPCI": REASON_AMBIGUOUS,
@@ -270,6 +296,7 @@ UNSUPPORTED_REASONS: dict[str, str] = {
     "역망치": REASON_PATTERN,
     "엔벨위치": REASON_AMBIGUOUS, "볼린저밴드": REASON_AMBIGUOUS,
     "피보나치상승율": REASON_AMBIGUOUS, "피보나치하락율": REASON_AMBIGUOUS,
+    **{f"US국채({n}년)": REASON_FRED for n in (1, 2, 3, 5, 7, 10, 20, 30)},
 }
 
 
@@ -288,6 +315,13 @@ def token_min_bars(token: str) -> int:
     name = (token or "").strip().strip("{}").strip()
     if name in TOKEN_MIN_BARS:
         return TOKEN_MIN_BARS[name]
+    if name == "베타":
+        return 260  # 252일 롤링 cov/var
+    if "_MT_" in name:
+        return 15
+    for base, n in TOKEN_MIN_BARS.items():  # 지수 파생: DOW_MACD → MACD 룩백
+        if name.endswith("_" + base):
+            return n
     return 30 if name in OHLCV_TOKENS else 0
 
 
@@ -301,6 +335,215 @@ def resolve_ohlcv_token(df: pd.DataFrame, token: str) -> pd.Series | None:
         return s.astype(float) if s is not None else None
     except Exception:
         return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 시장(지수) 시계열 토큰 — 모든 종목에 동일, 종목 df 날짜에 ffill 정렬
+#   국내(KOSPI/KOSDAQ): ohlcv_loader (KRX 백필 후 실데이터, mock 모드는 합성)
+#   해외(DOW/NASDAQ/니케이/상해/VIX): yfinance (키 불필요·네트워크 필요, 실패 시 건너뜀)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# 카탈로그 프리픽스 → (ohlcv_loader 심볼, yfinance 심볼)
+MARKET_SYMBOLS: dict[str, tuple[str | None, str | None]] = {
+    "KOSPI지수": ("KOSPI", None),
+    "KOSDAQ지수": ("KOSDAQ", None),
+    "DOW지수": (None, "^DJI"),
+    "NASDAQ지수": (None, "^IXIC"),
+    "니케이225지수": (None, "^N225"),
+    "상해종합지수": (None, "000001.SS"),
+    "VIX": (None, "^VIX"),
+}
+# 파생 토큰 프리픽스(DOW_MACD 등) → MARKET_SYMBOLS 키
+_DERIVED_PREFIX = {"DOW": "DOW지수", "NASDAQ": "NASDAQ지수",
+                   "KOSPI": "KOSPI지수", "KOSDAQ": "KOSDAQ지수"}
+_MARKET_FIELDS = {"시가": "open", "고가": "high", "저가": "low", "종가": "close", "거래량": "volume"}
+# 지수에 적용 가능한 파생 지표 (OHLCV_TOKENS 재사용)
+_MARKET_DERIVED = ("볼린저밴드_상단값", "볼린저밴드_하단값", "볼린저밴드_밴드폭",
+                   "MACD", "MACD시그널", "MACD오실레이터",
+                   "스토캐스틱(K)", "스토캐스틱(D)", "스토캐스틱(slowD)")
+
+_market_cache: dict[str, pd.DataFrame | None] = {}
+
+
+def _market_df(prefix: str) -> pd.DataFrame | None:
+    """지수 OHLCV 로드(캐시). 실패 시 None 캐시(반복 시도 방지)."""
+    if prefix in _market_cache:
+        return _market_cache[prefix]
+    loader_sym, yf_sym = MARKET_SYMBOLS.get(prefix, (None, None))
+    df = None
+    try:
+        if loader_sym:
+            from datetime import datetime
+
+            from src.data.ohlcv_loader import load_ohlcv_unified
+            df = load_ohlcv_unified(loader_sym, "2005-01-01",
+                                    datetime.now().strftime("%Y-%m-%d"), prefer="auto")
+        elif yf_sym:
+            import yfinance as yf
+            raw = yf.download(yf_sym, start="2005-01-01", progress=False, auto_adjust=False)
+            if raw is not None and not raw.empty:
+                if isinstance(raw.columns, pd.MultiIndex):
+                    raw.columns = raw.columns.get_level_values(0)
+                df = raw.rename(columns={"Open": "open", "High": "high", "Low": "low",
+                                          "Close": "close", "Volume": "volume"})
+                df = df[["open", "high", "low", "close", "volume"]]
+    except Exception:
+        df = None
+    if df is not None and df.empty:
+        df = None
+    _market_cache[prefix] = df
+    return df
+
+
+def _align(s: pd.Series, df: pd.DataFrame) -> pd.Series:
+    """시장 시계열을 종목 df 날짜에 정렬 — 당일 없으면 직전값(ffill, look-ahead 없음)."""
+    return s.reindex(pd.DatetimeIndex(df.index), method="ffill")
+
+
+def _mt_signal(mdf: pd.DataFrame, mode: str) -> pd.Series:
+    """MT(3_5_10): 종가>MA3>MA5>MA10 정배열 — and=전부 / or=하나라도 (0/1)."""
+    c = mdf["close"].astype(float)
+    ma3, ma5, ma10 = c.rolling(3).mean(), c.rolling(5).mean(), c.rolling(10).mean()
+    conds = [(c > ma3), (ma3 > ma5), (ma5 > ma10)]
+    out = conds[0] & conds[1] & conds[2] if mode == "and" else conds[0] | conds[1] | conds[2]
+    return out.astype(float)
+
+
+def resolve_market_token(df: pd.DataFrame, token: str) -> pd.Series | None:
+    """시장(지수) 토큰 해석 — 데이터 없으면 None(건너뜀)."""
+    import re
+    name = (token or "").strip()
+
+    # 베타: 종목 일수익률 vs KOSPI 일수익률, 252일 롤링 cov/var
+    if name == "베타":
+        mdf = _market_df("KOSPI지수")
+        if mdf is None:
+            return None
+        mret = _align(mdf["close"].astype(float), df).pct_change()
+        sret = df["close"].astype(float).pct_change()
+        var = mret.rolling(252).var()
+        return (sret.rolling(252).cov(mret) / var.replace(0, pd.NA)).astype(float)
+
+    # MT 시그널: DOW_MT_or(3_5_10) 등
+    m = re.match(r"^(DOW|NASDAQ|KOSPI|KOSDAQ)_MT_(or|and)\(3_5_10\)$", name)
+    if m:
+        mdf = _market_df(_DERIVED_PREFIX[m.group(1)])
+        return _align(_mt_signal(mdf, m.group(2)), df) if mdf is not None else None
+
+    # 프리픽스_필드 / 프리픽스_파생지표
+    for prefix in MARKET_SYMBOLS:
+        if not name.startswith(prefix + "_"):
+            continue
+        field = name[len(prefix) + 1:]
+        mdf = _market_df(prefix)
+        if mdf is None:
+            return None
+        col = _MARKET_FIELDS.get(field)
+        if col is not None:
+            return _align(mdf[col].astype(float), df)
+        if field == "거래대금":
+            return _align(mdf["close"].astype(float) * mdf["volume"].astype(float), df)
+        return None
+    # 지수 파생: DOW_볼린저밴드_상단값 / DOW_MACD 등 (OHLCV_TOKENS를 지수 df에 적용)
+    m = re.match(r"^(DOW|NASDAQ|KOSPI|KOSDAQ)_(.+)$", name)
+    if m and m.group(2) in _MARKET_DERIVED:
+        mdf = _market_df(_DERIVED_PREFIX[m.group(1)])
+        if mdf is None:
+            return None
+        s = resolve_ohlcv_token(mdf, m.group(2))
+        return _align(s, df) if s is not None else None
+    return None
+
+
+def market_tokens() -> list[str]:
+    """지원하는 시장 토큰 전체 목록 (카탈로그 존재분 기준)."""
+    out = ["베타"]
+    for prefix in MARKET_SYMBOLS:
+        fields = ["시가", "고가", "저가", "종가"] + (["거래량", "거래대금"] if prefix == "DOW지수" else [])
+        out += [f"{prefix}_{f}" for f in fields]
+    for p in ("DOW", "NASDAQ"):
+        out += [f"{p}_MT_or(3_5_10)", f"{p}_MT_and(3_5_10)"]
+    out += [f"DOW_{d}" for d in _MARKET_DERIVED]
+    return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 매크로(ECOS) 토큰 — 환율·국고채 금리. BOK_API_KEY 필요(무료), 일 주기.
+#   통계/항목 코드는 ECOS 코드표 기준 상수 — 실계정 첫 호출은 verify_connection
+#   【6】 sanity(값 범위)로 정합 확인. 코드 불일치 시 빈 응답 → 토큰 건너뜀(안전).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ECOS_BASE_URL = "https://ecos.bok.or.kr/api"
+
+# 토큰 → (통계표코드, 항목코드) — 731Y001 환율(매매기준율), 817Y002 시장금리(일별)
+ECOS_TOKENS: dict[str, tuple[str, str]] = {
+    "US달러환율": ("731Y001", "0000001"),
+    "엔환율": ("731Y001", "0000002"),      # 원/100엔
+    "국고채(1년)": ("817Y002", "010190000"),
+    "국고채(2년)": ("817Y002", "010195000"),
+    "국고채(3년)": ("817Y002", "010200000"),
+    "국고채(5년)": ("817Y002", "010210000"),
+    "국고채(10년)": ("817Y002", "010210001"),
+    "국고채(20년)": ("817Y002", "010220000"),
+    "국고채(30년)": ("817Y002", "010230000"),
+}
+
+_ecos_cache: dict[str, pd.Series | None] = {}
+
+
+def parse_ecos_rows(payload: dict) -> pd.Series | None:
+    """ECOS StatisticSearch 응답 → 날짜 인덱스 시리즈 (테스트 가능한 순수 파서)."""
+    try:
+        rows = (payload or {}).get("StatisticSearch", {}).get("row", []) or []
+        dates, vals = [], []
+        for r in rows:
+            t, v = str(r.get("TIME", "")).strip(), r.get("DATA_VALUE")
+            if len(t) != 8 or v in (None, ""):
+                continue
+            try:
+                vals.append(float(v))
+                dates.append(pd.Timestamp(f"{t[:4]}-{t[4:6]}-{t[6:]}"))
+            except (ValueError, TypeError):
+                continue
+        if not dates:
+            return None
+        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+    except Exception:
+        return None
+
+
+def _ecos_series(token: str) -> pd.Series | None:
+    """ECOS 일별 시계열 (캐시). 키 없음·실패 시 None."""
+    import os
+    if token in _ecos_cache:
+        return _ecos_cache[token]
+    key = os.getenv("BOK_API_KEY", "")
+    spec = ECOS_TOKENS.get(token)
+    s = None
+    if key and spec:
+        try:
+            from datetime import datetime
+
+            import httpx
+            stat, item = spec
+            end = datetime.now().strftime("%Y%m%d")
+            url = (f"{ECOS_BASE_URL}/StatisticSearch/{key}/json/kr/1/50000/"
+                   f"{stat}/D/20050101/{end}/{item}")
+            r = httpx.get(url, timeout=15)
+            s = parse_ecos_rows(r.json())
+        except Exception:
+            s = None
+    _ecos_cache[token] = s
+    return s
+
+
+def resolve_macro_token(df: pd.DataFrame, token: str) -> pd.Series | None:
+    """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀)."""
+    name = (token or "").strip()
+    if name not in ECOS_TOKENS:
+        return None
+    s = _ecos_series(name)
+    return _align(s, df) if s is not None else None
 
 
 def token_support() -> dict:
@@ -317,9 +560,20 @@ def token_support() -> dict:
         supported[t] = "ohlcv"
     for t in _FUND_TOKENS:
         supported[t] = "fundamental"  # 옵트인(스냅샷) — 펀더멘털 토글 필요
+    for t in FUNDAMENTAL_ALIASES:
+        supported[t] = "fundamental"
+    for t in market_tokens():
+        supported[t] = "market"
+    for t in ECOS_TOKENS:
+        supported[t] = "macro"
     return {
         "supported": supported,
         "unsupported": dict(UNSUPPORTED_REASONS),
         "default_reason": "미지원 — 평가 시 무시됨 (데이터/매핑 없음)",
-        "fundamental_note": "fundamental 그룹은 '펀더멘털 조건 평가' 토글(스냅샷·look-ahead 주의) 필요",
+        "fundamental_note": "fundamental 그룹은 '펀더멘털 조건 평가' 토글 필요 — 최신 스냅샷 근사"
+                            "(분기/트레일링 구분 없음 · look-ahead 주의)",
+        "market_note": "시장(지수) 시계열 — 국내는 KRX 적재(mock 모드는 합성), "
+                       "해외(DOW 등)는 yfinance 네트워크 필요. 데이터 없으면 평가 시 건너뜀",
+        "macro_note": "환율·국고채 금리(한국은행 ECOS) — BOK_API_KEY 필요(무료). "
+                      "키 없으면 평가 시 건너뜀",
     }

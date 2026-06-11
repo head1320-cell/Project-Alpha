@@ -884,10 +884,12 @@ export interface BacktestAdvancedParams {
 
 // 조건식 토큰 지원 맵 (GET /condition-tokens)
 export interface TokenSupportMap {
-  supported: Record<string, string>;    // 토큰 → 그룹 (base | ohlcv | fundamental)
+  supported: Record<string, string>;    // 토큰 → 그룹 (base | ohlcv | fundamental | market | macro)
   unsupported: Record<string, string>;  // 토큰 → 사유 (명시된 것만)
   default_reason: string;
   fundamental_note: string;
+  market_note?: string;
+  macro_note?: string;
 }
 
 // 조건식 페이로드 (Genport식) — inner_*는 중첩: 순위(변화율_기간(종가,20)) 등

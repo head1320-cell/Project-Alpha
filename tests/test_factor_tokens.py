@@ -131,3 +131,103 @@ def test_required_days_covers_token_lookback():
 def test_unsupported_reasons_are_honest():
     assert "후행스팬" in UNSUPPORTED_REASONS      # look-ahead 사유 명시
     assert "대체" in UNSUPPORTED_REASONS["후행스팬"]
+    assert "US국채(10년)" in UNSUPPORTED_REASONS  # FRED 연동 예정 명시
+
+
+# ─── ③ 펀더멘털 별칭 (카탈로그 표기 → fundamentals_store id) ─────────────────
+def test_fundamental_aliases_map_to_real_store_ids():
+    """별칭이 가리키는 id가 전부 실재하는 스토어 팩터인지 (오타·드리프트 가드)."""
+    from src.data.fundamentals_store import FUNDAMENTAL_FACTORS
+    from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
+    valid = {m.id for m in FUNDAMENTAL_FACTORS}
+    bad = {k: v for k, v in FUNDAMENTAL_ALIASES.items() if v not in valid}
+    assert bad == {}, f"존재하지 않는 스토어 id: {bad}"
+
+
+def test_fundamental_alias_evaluates():
+    f = {"pbr": 1.25, "per": 8.0, "piotroski_f": 7}
+    assert cs._fundamental_value("{분기PBR}", f) == pytest.approx(1.25)
+    assert cs._fundamental_value("{트레일링PER}", f) == pytest.approx(8.0)
+    assert cs._fundamental_value("{F-SCORE}", f) == pytest.approx(7)
+    assert cs._fundamental_value("{없는별칭}", f) is None
+    ts = token_support()
+    assert ts["supported"].get("트레일링PER") == "fundamental"
+
+
+# ─── ④ 시장(지수) 토큰 ───────────────────────────────────────────────────────
+def market_df(n: int = 320, base: float = 2500.0) -> pd.DataFrame:
+    idx = pd.date_range("2023-01-02", periods=n, freq="B")
+    c = pd.Series(np.linspace(base, base * 1.2, n), index=idx)
+    return pd.DataFrame({"open": c, "high": c * 1.005, "low": c * 0.995,
+                         "close": c, "volume": [4e5] * n})
+
+
+def test_market_token_aligns_to_stock_dates(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    mdf = market_df()
+    monkeypatch.setattr(ft, "_market_df", lambda prefix: mdf if prefix == "KOSPI지수" else None)
+    s = ft.resolve_market_token(DF, "KOSPI지수_종가")
+    assert s is not None and len(s) == len(DF)
+    # 같은 날짜는 같은 값 (정렬 정합)
+    common = DF.index[5]
+    assert float(s.loc[common]) == pytest.approx(float(mdf["close"].loc[common]))
+    # _base_series 체인 통합
+    assert cs._base_series(DF, "{KOSPI지수_종가}") is not None
+    assert ft.resolve_market_token(DF, "DOW지수_종가") is None  # 데이터 없음 → 건너뜀
+
+
+def test_beta_of_market_itself_is_one(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    mdf = market_df()
+    monkeypatch.setattr(ft, "_market_df", lambda prefix: mdf if prefix == "KOSPI지수" else None)
+    stock = mdf.copy()  # 시장과 동일한 종목 → 베타 1
+    beta = ft.resolve_market_token(stock, "베타")
+    assert float(beta.iloc[-1]) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_market_mt_signal_and_derived(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    mdf = market_df()
+    monkeypatch.setattr(ft, "_market_df", lambda prefix: mdf)
+    mt = ft.resolve_market_token(DF, "DOW_MT_and(3_5_10)")
+    assert float(mt.iloc[-1]) == 1.0          # 단조 상승 → 정배열
+    macd = ft.resolve_market_token(DF, "DOW_MACD")
+    assert macd is not None and np.isfinite(float(macd.iloc[-1]))
+
+
+# ─── ⑤ ECOS (환율·금리) ──────────────────────────────────────────────────────
+def test_parse_ecos_rows():
+    from src.kis_strategies.factor_tokens import parse_ecos_rows
+    payload = {"StatisticSearch": {"row": [
+        {"TIME": "20240104", "DATA_VALUE": "1310.5"},
+        {"TIME": "20240105", "DATA_VALUE": "1,315.2".replace(",", "")},
+        {"TIME": "bad", "DATA_VALUE": "1"},
+        {"TIME": "20240108", "DATA_VALUE": ""},
+    ]}}
+    s = parse_ecos_rows(payload)
+    assert len(s) == 2 and float(s.iloc[-1]) == pytest.approx(1315.2)
+    assert parse_ecos_rows({}) is None
+
+
+def test_macro_token_skips_without_key(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    monkeypatch.delenv("BOK_API_KEY", raising=False)
+    ft._ecos_cache.clear()
+    assert ft.resolve_macro_token(DF, "US달러환율") is None     # 키 없음 → 건너뜀
+    assert ft.resolve_macro_token(DF, "미등록환율") is None
+    ft._ecos_cache.clear()
+
+
+def test_macro_token_aligns_when_series_available(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    fx = pd.Series([1300.0, 1310.0], index=pd.DatetimeIndex([DF.index[0], DF.index[1]]))
+    monkeypatch.setattr(ft, "_ecos_series", lambda token: fx if token == "US달러환율" else None)
+    s = ft.resolve_macro_token(DF, "US달러환율")
+    assert float(s.iloc[1]) == pytest.approx(1310.0)
+    assert float(s.iloc[-1]) == pytest.approx(1310.0)  # 이후 날짜 ffill
+
+
+def test_token_min_bars_market_macro():
+    assert token_min_bars("베타") == 260
+    assert token_min_bars("DOW_MT_and(3_5_10)") == 15
+    assert token_min_bars("DOW_MACD") >= 60

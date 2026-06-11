@@ -33,12 +33,17 @@ def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
         return df[col].astype(float)
     if name in ("거래대금",):
         return df["close"].astype(float) * df["volume"].astype(float)
-    # 확장 토큰: 기술지표·모멘텀·가격 파생 (factor_tokens 레지스트리 — RSI/MACD/볼린저 등)
-    from src.kis_strategies.factor_tokens import resolve_ohlcv_token
-    s = resolve_ohlcv_token(df, name)
-    if s is not None:
-        return s
-    return None  # 시장/수급/뉴지 점수 등 — 봉별 단일종목 평가 불가(미지원)
+    # 확장 토큰: ① OHLCV 파생(RSI/MACD 등) ② 시장 지수(KOSPI지수_종가·베타 등) ③ 매크로(환율·금리)
+    from src.kis_strategies.factor_tokens import (
+        resolve_macro_token,
+        resolve_market_token,
+        resolve_ohlcv_token,
+    )
+    for resolver in (resolve_ohlcv_token, resolve_market_token, resolve_macro_token):
+        s = resolver(df, name)
+        if s is not None:
+            return s
+    return None  # 수급/뉴지 점수 등 — 미지원(건너뜀)
 
 
 # ── 펀더멘털 토큰(스냅샷) — #4. 기본 비활성(look-ahead). 활성 시 현재 스냅샷을 상수 시계열로 평가 ──
@@ -71,13 +76,22 @@ _FUND_TOKENS = {
 def _fundamental_value(token: str, f: dict):
     name = (token or "").strip().strip("{}").strip()
     fn = _FUND_TOKENS.get(name)
-    if fn is None:
-        return None
+    if fn is not None:
+        try:
+            v = fn(f or {})
+            return float(v) if v is not None else None
+        except Exception:
+            return None
+    # 카탈로그 별칭 → fundamentals_store 팩터 id (분기PBR→pbr 등 — 최신 스냅샷 근사)
     try:
-        v = fn(f or {})
-        return float(v) if v is not None else None
+        from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
+        fid = FUNDAMENTAL_ALIASES.get(name)
+        if fid is not None:
+            v = (f or {}).get(fid)
+            return float(v) if v is not None else None
     except Exception:
-        return None
+        pass
+    return None
 
 
 def _load_fundamentals(stock_code: str) -> dict:
