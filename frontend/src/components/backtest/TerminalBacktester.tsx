@@ -33,7 +33,7 @@ function largeCapFilter(): FilterGroupNode {
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: "2023-01-01", endDate: "2024-12-31", feePct: 0.15, slippagePct: 0.05,
-  rebalancePeriod: "daily",
+  rebalancePeriod: "daily", signalLag: 0,
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], primarySort: { expr: "composite_score", dir: "DESC" },
@@ -117,6 +117,7 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     buy_conditions: mapConds(buy.conditions),
     sell_conditions: mapConds(sell.conditions),
     rebalance_period: s.rebalancePeriod === "daily" ? null : s.rebalancePeriod,
+    signal_lag: s.signalLag,
     market_timing: s.marketTiming.on && s.marketTiming.conditions.length ? {
       index_ticker: s.marketTiming.index,
       action: s.marketTiming.mode,

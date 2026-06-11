@@ -168,6 +168,10 @@ class BacktestConfig:
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
     # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
     vectorize_signals: bool = True
+    # 신호 기준일 (젠포트 Tip 3: "전일 종가 기준 선정 → 익일 매매").
+    # 0 = 당일 봉 포함(기존 동작 불변, 종가 체결과 정합).
+    # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — 시가·전일종가류 체결의 look-ahead 제거.
+    signal_lag: int = 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -260,6 +264,9 @@ class BacktestEngine:
         mt_df = self._load_market_timing_index(warmup_start) if self.cfg.market_timing else None
         mt_action = str((self.cfg.market_timing or {}).get("action") or "block_buy")
 
+        # 신호 기준일 시차 (젠포트식 전일 종가 기준). 0=당일 봉(기존)
+        lag = max(0, int(self.cfg.signal_lag or 0))
+
         # Day-by-day 시뮬레이션
         for sim_date in sim_dates:
             date_str = sim_date.strftime("%Y-%m-%d")
@@ -267,7 +274,7 @@ class BacktestEngine:
 
             # 0. 마켓타이밍: 지수 조건 미충족(OFF) → 신규 매수 차단, exit_all이면 전량 청산
             #    (포트폴리오 레벨 리스크오프 — min_hold_days보다 우선)
-            market_on = self._market_timing_on(mt_df, sim_date) if mt_df is not None else True
+            market_on = self._market_timing_on(mt_df, sim_date, lag) if mt_df is not None else True
             if not market_on and mt_action == "exit_all" and self.positions:
                 for ticker, _pos in list(self.positions.items()):
                     if ticker not in ohlcv_map:
@@ -309,15 +316,18 @@ class BacktestEngine:
 
                 # as-of 슬라이스 (미래 데이터 차단 — look-ahead bias 방지)
                 df_slice = ohlcv_map[ticker].loc[:sim_date]
-                if len(df_slice) < strategy.required_days:
+                if len(df_slice) < strategy.required_days + lag:
                     continue
 
                 # ① 벡터화 조회(사전계산 시) → ② per-bar 폴백(data_fetcher slice 패치)
+                # signal_lag>0이면 신호는 lag봉 이전 데이터로 평가 (체결은 당일 가격 그대로)
                 signal = None
                 if self.cfg.vectorize_signals and hasattr(strategy, "signal_at"):
-                    signal = strategy.signal_at(ticker, sim_date)
+                    sig_date = sim_date if lag == 0 else df_slice.index[-1 - lag]
+                    signal = strategy.signal_at(ticker, sig_date)
                 if signal is None:
-                    signal = self._generate_signal_as_of(strategy, ticker, df_slice)
+                    sig_slice = df_slice.iloc[: len(df_slice) - lag] if lag else df_slice
+                    signal = self._generate_signal_as_of(strategy, ticker, sig_slice)
                 if signal is None:
                     continue
 
@@ -712,11 +722,12 @@ class BacktestEngine:
             return None
         return df
 
-    def _market_timing_on(self, idx_df, sim_date) -> bool:
+    def _market_timing_on(self, idx_df, sim_date, lag: int = 0) -> bool:
         """지수 조건 전부 충족 시 ON. 평가 불가·데이터 부족이면 ON(fail-open — 개입 안 함).
 
         조건식은 ConditionStrategy와 동일 모델(가격·거래량 토큰 + 18함수)을 지수 봉에 적용.
         예: {종가} ams(20) >= 50 (평균모멘텀스코어), {종가} pct(20) >= 0 (20일 수익률).
+        signal_lag>0이면 지수 판단도 종목 신호와 동일하게 lag봉 이전 데이터 기준.
         """
         if idx_df is None:
             return True
@@ -724,6 +735,10 @@ class BacktestEngine:
         if not conds:
             return True
         sl = idx_df.loc[:sim_date]
+        if lag:
+            if len(sl) <= lag:
+                return True  # 데이터 부족 — fail-open
+            sl = sl.iloc[: len(sl) - lag]
         if sl.empty:
             return True
         from src.kis_strategies.condition_strategy import _eval_condition
@@ -1018,6 +1033,7 @@ def run_backtest(
     breakthrough_buy: bool = False,
     rebalance_period: str | None = None,
     market_timing: dict | None = None,
+    signal_lag: int = 0,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1065,6 +1081,7 @@ def run_backtest(
         breakthrough_buy=breakthrough_buy,
         rebalance_period=rebalance_period,
         market_timing=market_timing,
+        signal_lag=signal_lag,
     )
     engine = BacktestEngine(cfg)
     return engine.run()
