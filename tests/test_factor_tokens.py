@@ -131,7 +131,8 @@ def test_required_days_covers_token_lookback():
 def test_unsupported_reasons_are_honest():
     assert "후행스팬" in UNSUPPORTED_REASONS      # look-ahead 사유 명시
     assert "대체" in UNSUPPORTED_REASONS["후행스팬"]
-    assert "US국채(10년)" in UNSUPPORTED_REASONS  # FRED 연동 예정 명시
+    assert "US국채(10년)" not in UNSUPPORTED_REASONS  # FRED 연동으로 지원 전환
+    assert "연기금순매수량" in UNSUPPORTED_REASONS    # KIS 3주체 한계 명시
 
 
 # ─── ③ 펀더멘털 별칭 (카탈로그 표기 → fundamentals_store id) ─────────────────
@@ -231,3 +232,33 @@ def test_token_min_bars_market_macro():
     assert token_min_bars("베타") == 260
     assert token_min_bars("DOW_MT_and(3_5_10)") == 15
     assert token_min_bars("DOW_MACD") >= 60
+
+
+# ─── FRED (미국 국채금리) ────────────────────────────────────────────────────
+def test_parse_fred_rows():
+    from src.kis_strategies.factor_tokens import parse_fred_rows
+    payload = {"observations": [
+        {"date": "2024-01-04", "value": "4.00"},
+        {"date": "2024-01-05", "value": "."},      # FRED 결측 표기 — skip
+        {"date": "2024-01-08", "value": "4.05"},
+    ]}
+    s = parse_fred_rows(payload)
+    assert len(s) == 2 and float(s.iloc[-1]) == pytest.approx(4.05)
+    assert parse_fred_rows({"observations": []}) is None
+
+
+def test_fred_token_skips_without_key(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    ft._fred_cache.clear()
+    assert ft.resolve_macro_token(DF, "US국채(10년)") is None
+    ft._fred_cache.clear()
+
+
+def test_fred_token_aligns_when_available(monkeypatch):
+    import src.kis_strategies.factor_tokens as ft
+    rate = pd.Series([4.0, 4.05], index=pd.DatetimeIndex([DF.index[0], DF.index[1]]))
+    monkeypatch.setattr(ft, "_fred_series", lambda token: rate if token == "US국채(10년)" else None)
+    s = ft.resolve_macro_token(DF, "US국채(10년)")
+    assert float(s.iloc[1]) == pytest.approx(4.05)
+    assert float(s.iloc[-1]) == pytest.approx(4.05)  # 이후 날짜 ffill (금리는 상태값)

@@ -286,7 +286,8 @@ REASON_MACRO = "환율·금리(ECOS/FRED) — 연동 단계 예정"
 REASON_FLOW = "투자자별 수급 — KIS 적재 단계 예정"
 REASON_CONSENSUS = "컨센서스/유료 데이터 — 미지원"
 
-REASON_FRED = "미국 국채금리 — FRED 연동 예정(무료 키)"
+REASON_FLOW_DETAIL = "KIS 종목별 수급은 개인/외국인/기관계만 제공 — 세부 주체 미지원"
+REASON_SHORT = "공매도·신용 데이터 미연동"
 
 UNSUPPORTED_REASONS: dict[str, str] = {
     "후행스팬": REASON_LOOKAHEAD,
@@ -296,7 +297,11 @@ UNSUPPORTED_REASONS: dict[str, str] = {
     "역망치": REASON_PATTERN,
     "엔벨위치": REASON_AMBIGUOUS, "볼린저밴드": REASON_AMBIGUOUS,
     "피보나치상승율": REASON_AMBIGUOUS, "피보나치하락율": REASON_AMBIGUOUS,
-    **{f"US국채({n}년)": REASON_FRED for n in (1, 2, 3, 5, 7, 10, 20, 30)},
+    # 수급 세부 주체 — KIS 종목별 TR(FHKST01010900)은 개인/외국인/기관계 3주체만
+    **{f"{w}순매수{u}": REASON_FLOW_DETAIL
+       for w in ("연기금", "투신", "사모펀드", "기타법인") for u in ("량", "금액")},
+    **{t: REASON_SHORT for t in ("공매도거래량", "공매도거래대금", "공매도평균가",
+                                  "공매도비중", "공매도비중20일평균대비변화량", "신용잔고율")},
 }
 
 
@@ -537,13 +542,100 @@ def _ecos_series(token: str) -> pd.Series | None:
     return s
 
 
+# ── FRED (미국 국채금리) — FRED_API_KEY 필요(무료, fred.stlouisfed.org) ──────
+FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
+
+FRED_TOKENS: dict[str, str] = {f"US국채({n}년)": f"DGS{n}" for n in (1, 2, 3, 5, 7, 10, 20, 30)}
+
+_fred_cache: dict[str, pd.Series | None] = {}
+
+
+def parse_fred_rows(payload: dict) -> pd.Series | None:
+    """FRED observations 응답 → 날짜 인덱스 시리즈 (결측 '.' 제외)."""
+    try:
+        rows = (payload or {}).get("observations", []) or []
+        dates, vals = [], []
+        for r in rows:
+            v = r.get("value")
+            if v in (None, "", "."):
+                continue
+            try:
+                vals.append(float(v))
+                dates.append(pd.Timestamp(r.get("date")))
+            except (ValueError, TypeError):
+                continue
+        if not dates:
+            return None
+        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+    except Exception:
+        return None
+
+
+def _fred_series(token: str) -> pd.Series | None:
+    """FRED 일별 시계열 (캐시). 키 없음·실패 시 None."""
+    import os
+    if token in _fred_cache:
+        return _fred_cache[token]
+    key = os.getenv("FRED_API_KEY", "")
+    series_id = FRED_TOKENS.get(token)
+    s = None
+    if key and series_id:
+        try:
+            import httpx
+            r = httpx.get(FRED_BASE_URL, params={
+                "series_id": series_id, "api_key": key, "file_type": "json",
+                "observation_start": "2005-01-01",
+            }, timeout=15)
+            s = parse_fred_rows(r.json())
+        except Exception:
+            s = None
+    _fred_cache[token] = s
+    return s
+
+
 def resolve_macro_token(df: pd.DataFrame, token: str) -> pd.Series | None:
     """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀)."""
     name = (token or "").strip()
-    if name not in ECOS_TOKENS:
+    if name in ECOS_TOKENS:
+        s = _ecos_series(name)
+        return _align(s, df) if s is not None else None
+    if name in FRED_TOKENS:
+        s = _fred_series(name)
+        return _align(s, df) if s is not None else None
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 수급(투자자별) 토큰 — KIS 종목별 투자자 TR을 일별 적재(kis_flows)한 DB에서 조회
+#   종목 식별: 엔진이 ohlcv df.attrs["ticker"]에 심어줌 (슬라이스에도 보존됨)
+#   주의: KIS TR은 최근 ~30영업일만 제공 → 매일 적재해 누적하는 구조.
+#         적재 안 된 날짜는 NaN → 그 봉의 조건은 건너뜀(정직).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+FLOW_TOKENS: dict[str, str] = {
+    "외국인순매수량": "frgn_qty", "기관순매수량": "orgn_qty", "개인순매수량": "prsn_qty",
+    "외국인순매수금액": "frgn_amt", "기관순매수금액": "orgn_amt", "개인순매수금액": "prsn_amt",
+}
+
+
+def resolve_flow_token(df: pd.DataFrame, token: str) -> pd.Series | None:
+    """수급 토큰 → 적재된 investor_flows에서 종목 시리즈. 미적재·식별 불가 시 None."""
+    name = (token or "").strip()
+    field = FLOW_TOKENS.get(name)
+    if field is None:
         return None
-    s = _ecos_series(name)
-    return _align(s, df) if s is not None else None
+    ticker = (df.attrs or {}).get("ticker")
+    if not ticker:
+        return None  # 엔진 외 호출 경로(실시간 등) — 종목 식별 불가 → 건너뜀
+    try:
+        from src.data.kis_flows import load_flows_series
+        s = load_flows_series(str(ticker), field)
+    except Exception:
+        return None
+    if s is None or s.empty:
+        return None
+    # 수급은 일별 사실값 — ffill 하지 않음(미적재일은 NaN → 해당 봉 건너뜀)
+    return s.reindex(pd.DatetimeIndex(df.index))
 
 
 def token_support() -> dict:
@@ -566,6 +658,10 @@ def token_support() -> dict:
         supported[t] = "market"
     for t in ECOS_TOKENS:
         supported[t] = "macro"
+    for t in FRED_TOKENS:
+        supported[t] = "macro"
+    for t in FLOW_TOKENS:
+        supported[t] = "flow"
     return {
         "supported": supported,
         "unsupported": dict(UNSUPPORTED_REASONS),
@@ -574,6 +670,9 @@ def token_support() -> dict:
                             "(분기/트레일링 구분 없음 · look-ahead 주의)",
         "market_note": "시장(지수) 시계열 — 국내는 KRX 적재(mock 모드는 합성), "
                        "해외(DOW 등)는 yfinance 네트워크 필요. 데이터 없으면 평가 시 건너뜀",
-        "macro_note": "환율·국고채 금리(한국은행 ECOS) — BOK_API_KEY 필요(무료). "
-                      "키 없으면 평가 시 건너뜀",
+        "macro_note": "환율·국고채(ECOS — BOK_API_KEY) · 미국채(FRED — FRED_API_KEY). "
+                      "무료 키, 없으면 평가 시 건너뜀",
+        "flow_note": "투자자별 수급(개인/외국인/기관) — KIS 일별 적재 필요"
+                     "(python -m src.data.kis_flows). KIS TR이 최근 ~30영업일만 제공하므로 "
+                     "매일 적재해 누적 — 적재 기간만 평가 가능",
     }

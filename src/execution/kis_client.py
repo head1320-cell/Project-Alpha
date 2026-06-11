@@ -73,7 +73,37 @@ TR_ID = {
     "PRICE":              "FHKST01010100",
     "DAILY_CHART":        "FHKST03010100",   # 국내주식 기간별시세(일/주/월/년)
     "DAILY_PRICE":        "FHKST01010400",   # 국내주식 일자별 (최근 30일)
+    "INVESTOR":           "FHKST01010900",   # 주식현재가 투자자 (개인/외국인/기관 일별, 최근 ~30일)
 }
+
+
+def normalize_investor_rows(rows: list) -> list[dict]:
+    """KIS 투자자별 응답(output) → 정규화 행.
+
+    반환: [{date "YYYY-MM-DD", prsn_qty, frgn_qty, orgn_qty,
+            prsn_amt, frgn_amt, orgn_amt}] (량=주, 금액=KIS pbmn 단위 그대로)"""
+    def _f(v):
+        try:
+            return float(str(v).replace(",", "").strip())
+        except (TypeError, ValueError):
+            return None
+
+    out = []
+    for r in rows or []:
+        d = str(r.get("stck_bsop_date") or "").strip()
+        if len(d) != 8:
+            continue
+        out.append({
+            "date": f"{d[:4]}-{d[4:6]}-{d[6:]}",
+            "prsn_qty": _f(r.get("prsn_ntby_qty")),
+            "frgn_qty": _f(r.get("frgn_ntby_qty")),
+            "orgn_qty": _f(r.get("orgn_ntby_qty")),
+            "prsn_amt": _f(r.get("prsn_ntby_tr_pbmn")),
+            "frgn_amt": _f(r.get("frgn_ntby_tr_pbmn")),
+            "orgn_amt": _f(r.get("orgn_ntby_tr_pbmn")),
+        })
+    out.reverse()  # KIS 최신→과거 → 과거→현재
+    return out
 
 
 @dataclass
@@ -514,6 +544,21 @@ class KISClient:
         result.reverse()
         return result[-days:] if len(result) > days else result
 
+    def get_investor_daily(self, ticker: str) -> list[dict]:
+        """종목별 투자자 일별 순매수 (개인/외국인/기관계, 최근 ~30영업일).
+
+        kis_flows가 매일 적재해 누적 — KIS TR 특성상 깊은 과거는 미제공."""
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": ticker,
+        }
+        headers = self._headers(TR_ID["INVESTOR"])
+        data = self._request(
+            "GET", "/uapi/domestic-stock/v1/quotations/inquire-investor",
+            headers, params=params,
+        )
+        return normalize_investor_rows(data.get("output", []) or [])
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Mock client (테스트용 — 실제 KIS 호출 없이 시뮬레이션)
@@ -535,6 +580,10 @@ class MockKISClient:
             "000660": 130000,   # SK하이닉스
             "035420": 200000,   # NAVER
         }
+
+    def get_investor_daily(self, ticker: str) -> list[dict]:
+        """mock엔 수급 데이터 없음 — 빈 리스트 (kis_flows가 실키 필요를 안내)."""
+        return []
 
     def place_order(self, ticker, side, quantity, order_type="MARKET", price=None):
         # 즉시 체결 시뮬레이션 (시장가 가정)

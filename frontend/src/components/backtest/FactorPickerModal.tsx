@@ -168,11 +168,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                         미지원 — {selInfo.reason}
                       </div>
                     )}
-                    {selInfo?.ok && support && (selInfo.group === "fundamental" || selInfo.group === "market" || selInfo.group === "macro") && (
+                    {selInfo?.ok && support && ["fundamental", "market", "macro", "flow"].includes(selInfo.group ?? "") && (
                       <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)", background: "var(--bg-section)", borderRadius: R, padding: "9px 11px" }}>
                         {selInfo.group === "fundamental" ? support.fundamental_note
                           : selInfo.group === "market" ? support.market_note
-                          : support.macro_note}
+                          : selInfo.group === "macro" ? support.macro_note
+                          : support.flow_note}
                       </div>
                     )}
                     <div style={{ marginTop: "auto", paddingTop: 16, textAlign: "right" }}>
@@ -302,7 +303,8 @@ function FactorRow({ f, active, tone, sub, info, onClick }: {
       <span style={{ flex: 1, textDecoration: unsupported ? "line-through" : undefined }}>{f.name}</span>
       {info?.ok && info.group && info.group !== "base" && info.group !== "ohlcv" && (
         <span style={{ fontSize: 9, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 4px" }}>
-          {info.group === "fundamental" ? "재무" : info.group === "market" ? "시장" : "매크로"}
+          {info.group === "fundamental" ? "재무" : info.group === "market" ? "시장"
+            : info.group === "macro" ? "매크로" : "수급"}
         </span>
       )}
       {unsupported && (

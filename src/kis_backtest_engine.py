@@ -221,6 +221,8 @@ class BacktestEngine:
                 #   기존엔 _generate_signal_as_of가 슬라이스마다 dt.strftime 호출 → O(N²) 병목
                 df = df.copy()
                 df["_date_str"] = df.index.strftime("%Y%m%d")
+                # 수급 토큰(외국인순매수량 등) 해석용 종목 식별 — pandas attrs는 슬라이스에도 보존
+                df.attrs["ticker"] = ticker
                 ohlcv_map[ticker] = df
 
         if not ohlcv_map:

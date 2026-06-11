@@ -33,17 +33,20 @@ def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
         return df[col].astype(float)
     if name in ("거래대금",):
         return df["close"].astype(float) * df["volume"].astype(float)
-    # 확장 토큰: ① OHLCV 파생(RSI/MACD 등) ② 시장 지수(KOSPI지수_종가·베타 등) ③ 매크로(환율·금리)
+    # 확장 토큰: ① OHLCV 파생(RSI/MACD 등) ② 시장 지수(KOSPI지수_종가·베타 등)
+    #            ③ 매크로(환율·금리 — ECOS/FRED) ④ 수급(투자자별 — KIS 적재)
     from src.kis_strategies.factor_tokens import (
+        resolve_flow_token,
         resolve_macro_token,
         resolve_market_token,
         resolve_ohlcv_token,
     )
-    for resolver in (resolve_ohlcv_token, resolve_market_token, resolve_macro_token):
+    for resolver in (resolve_ohlcv_token, resolve_market_token, resolve_macro_token,
+                     resolve_flow_token):
         s = resolver(df, name)
         if s is not None:
             return s
-    return None  # 수급/뉴지 점수 등 — 미지원(건너뜀)
+    return None  # 뉴지 점수·세부 수급 주체 등 — 미지원(건너뜀)
 
 
 # ── 펀더멘털 토큰(스냅샷) — #4. 기본 비활성(look-ahead). 활성 시 현재 스냅샷을 상수 시계열로 평가 ──

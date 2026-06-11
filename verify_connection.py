@@ -398,6 +398,55 @@ def check_ecos():
     except Exception as e:
         fail(f"ECOS 호출 오류: {e}")
 
+    # FRED — 미국 국채금리
+    fred_key = os.getenv("FRED_API_KEY", "")
+    if not fred_key:
+        warn("FRED_API_KEY 미설정 → US국채 토큰은 평가 시 건너뜀 (fred.stlouisfed.org 무료 발급)")
+        return
+    try:
+        from src.kis_strategies.factor_tokens import _fred_series
+        us10 = _fred_series("US국채(10년)")
+        if us10 is not None and len(us10):
+            v = float(us10.iloc[-1])
+            if 0 <= v <= 15:
+                ok(f"US국채(10년) 수신: {v:.2f}% ({us10.index[-1].date()}, {len(us10):,}일)")
+            else:
+                warn(f"US국채(10년) 값 {v} — FRED 시리즈 매핑 점검 필요")
+        else:
+            fail("US국채(10년) 수신 실패 — FRED 키 유효성 확인")
+    except Exception as e:
+        fail(f"FRED 호출 오류: {e}")
+
+
+def check_flows():
+    """KIS 투자자별 수급 적재 현황 — 수급 토큰(외국인순매수량 등)의 데이터원."""
+    head("【7】 KIS 수급 적재 (투자자별 순매수)")
+    if os.getenv("KIS_USE_MOCK", "1") == "1":
+        warn("KIS mock 모드 — 수급 적재는 실키 필요 (KIS_USE_MOCK=0 후 "
+             "python -m src.data.kis_flows --all-listed)")
+    try:
+        from sqlalchemy import text
+
+        from src.database import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT COUNT(DISTINCT trade_date), MIN(trade_date), MAX(trade_date), "
+                "COUNT(DISTINCT ticker) FROM investor_flows")).fetchone()
+            sample = conn.execute(text(
+                "SELECT ticker, trade_date, frgn_qty, frgn_amt FROM investor_flows "
+                "ORDER BY trade_date DESC LIMIT 1")).fetchone()
+        if row and row[0]:
+            ok(f"investor_flows 적재: {row[0]:,}거래일 ({row[1]} ~ {row[2]}) · {row[3]:,}종목")
+            if sample:
+                print(f"      샘플: {sample[0]} {sample[1]} 외국인 {sample[2]:,.0f}주 / "
+                      f"{sample[3]:,.0f} (금액 단위는 KIS pbmn — 이 값으로 확인)")
+            warn("KIS TR은 최근 ~30영업일만 제공 — cron 등으로 매일 적재해 누적하세요")
+        else:
+            warn("investor_flows 비어있음 — python -m src.data.kis_flows --all-listed 로 적재")
+    except Exception:
+        warn("investor_flows 조회 불가 (DB 미기동 또는 테이블 없음) — 적재 시 자동 생성")
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -418,6 +467,7 @@ def main():
     check_backtest_flow(code, kis_mock)
     check_krx()
     check_ecos()
+    check_flows()
 
     head("【결과 요약】")
     print(f"  DART 재무:  {GREEN+'실데이터 ✓'+END if dart_ok else YELLOW+'mock'+END}")
