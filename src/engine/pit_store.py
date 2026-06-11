@@ -179,40 +179,58 @@ class PITStore:
         return snapshot
 
     def _dart_snapshot(self, stock_code: str, as_of_date: str) -> dict | None:
-        """DART 실데이터 PIT 스냅샷 — 키 없음·조회 실패 시 None(mock 폴백).
+        """실데이터 PIT 스냅샷 — ① 적재된 financials_history(DB, 키 불필요·즉시)
+        ② 실시간 DART(키 필요) 순. 둘 다 실패 시 None(mock 폴백).
 
         재무제표에서 직접 산출 가능한 비율(ROE/ROA/부채비율)만 실값으로 채운다.
         가격 의존 지표(PER/PBR/배당수익률/시총)는 역사 시세 미연동이라 None —
         소비자(screener._apply_pit)는 None 필드를 교체하지 않으므로 부분 적용된다."""
-        try:
-            from src.data.dart_client import DARTClient, get_corp_code
-            client = DARTClient()
-            if not client.is_configured:
-                return None
-            period = _period_asof(as_of_date)
-            if period is None:
-                return None
-            corp = get_corp_code(stock_code)
-            if not corp:
-                return None
-            year, reprt = period
-            fs = client.get_financial_statement_full(corp, year, reprt_code=reprt)
-            if fs is None or fs.total_equity is None:
-                return None
-            fs.compute_ratios()
+        period = _period_asof(as_of_date)
+        if period is None:
+            return None
+        year, reprt = period
+
+        def _pack(ratios: dict, source: str) -> dict:
             return {
-                "roe_pct": fs.roe,
-                "roa_pct": fs.roa,
+                "roe_pct": ratios.get("roe_pct"),
+                "roa_pct": ratios.get("roa_pct"),
                 "per": None,
                 "pbr": None,
-                "debt_ratio_pct": fs.debt_ratio,
+                "debt_ratio_pct": ratios.get("debt_ratio_pct"),
                 "dividend_yield_pct": None,
                 "fcf_억": None,
                 "market_cap_억": None,
                 "_as_of_date": as_of_date,
                 "_report": f"{year}/{reprt}",
-                "_source": "pit_dart",
+                "_source": source,
             }
+
+        # ① DB 적재분 (dart_history 백필 후 — DART 키·쿼터 무소모)
+        try:
+            from src.data.dart_history import history_snapshot, ratios_from_row
+            row = history_snapshot(stock_code, year, reprt)
+            if row is not None:
+                ratios = ratios_from_row(row)
+                if ratios.get("roe_pct") is not None or ratios.get("debt_ratio_pct") is not None:
+                    return _pack(ratios, "pit_db")
+        except Exception as e:
+            logger.debug(f"PIT DB snapshot 실패 ({stock_code}@{as_of_date}): {e}")
+
+        # ② 실시간 DART 폴백
+        try:
+            from src.data.dart_client import DARTClient, get_corp_code
+            client = DARTClient()
+            if not client.is_configured:
+                return None
+            corp = get_corp_code(stock_code)
+            if not corp:
+                return None
+            fs = client.get_financial_statement_full(corp, year, reprt_code=reprt)
+            if fs is None or fs.total_equity is None:
+                return None
+            fs.compute_ratios()
+            return _pack({"roe_pct": fs.roe, "roa_pct": fs.roa,
+                          "debt_ratio_pct": fs.debt_ratio}, "pit_dart")
         except Exception as e:
             logger.debug(f"PIT DART snapshot 실패 ({stock_code}@{as_of_date}): {e}")
             return None

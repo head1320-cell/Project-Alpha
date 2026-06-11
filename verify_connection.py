@@ -461,6 +461,28 @@ def check_flows():
         warn("investor_flows 조회 불가 (DB 미기동 또는 테이블 없음) — 적재 시 자동 생성")
 
 
+def check_fin_history():
+    """DART 재무 시계열 적재 현황 — PIT(키 불필요 동작)·성장/흑자전환 팩터의 원천."""
+    head("【8】 DART 재무 시계열 적재")
+    try:
+        from sqlalchemy import text
+
+        from src.database import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT COUNT(*), COUNT(DISTINCT ticker), MIN(bsns_year), MAX(bsns_year) "
+                "FROM financials_history")).fetchone()
+        if row and row[0]:
+            ok(f"financials_history 적재: {row[0]:,}건 · {row[1]:,}종목 · {row[2]}~{row[3]}년")
+            print("      → PIT 스크리닝이 DB에서 즉시 동작 (DART 키·쿼터 무소모)")
+        else:
+            warn("financials_history 비어있음 — python -m src.data.dart_history "
+                 "--years 10 --all-listed --max-calls 18000 (일쿼터 분할, 재실행 시 이어서)")
+    except Exception:
+        warn("financials_history 조회 불가 (DB 미기동 또는 테이블 없음) — 백필 시 자동 생성")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stock", default="005930", help="검증할 종목코드 (기본 삼성전자)")
@@ -481,6 +503,7 @@ def main():
     check_krx()
     check_ecos()
     check_flows()
+    check_fin_history()
 
     head("【결과 요약】")
     print(f"  DART 재무:  {GREEN+'실데이터 ✓'+END if dart_ok else YELLOW+'mock'+END}")
