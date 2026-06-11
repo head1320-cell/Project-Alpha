@@ -43,6 +43,7 @@ export const FACTOR_FUNCTIONS: FactorFunction[] = [
   { id: "cmp", name: "비교", group: "all", desc: "팩터값과 입력값을 비교해 1, 0, -1을 부여합니다.", params: [V()], preview: "비교({f}, {v})", sentence: "{f} vs {v} 비교" },
   { id: "gt", name: "큰값", group: "all", desc: "팩터값과 입력값 중 더 큰 값을 사용합니다.", params: [V()], preview: "큰값({f}, {v})", sentence: "max({f}, {v})" },
   { id: "lt", name: "작은값", group: "all", desc: "팩터값과 입력값 중 더 작은 값을 사용합니다.", params: [V()], preview: "작은값({f}, {v})", sentence: "min({f}, {v})" },
+  { id: "pctf", name: "변화율_팩터", group: "all", desc: "두 팩터 간 % 차이입니다 — ((F1−F2)/|F2|)×100. 예: 변화율_팩터({당기순이익}, 과거값({당기순이익},1년)) = 전년 대비 성장률.", params: [], preview: "변화율_팩터({f}, …)", sentence: "{f} 대비 두 번째 팩터 변화율" },
   { id: "cntgt", name: "큰개수", group: "all", desc: "N일 이내 팩터값이 입력값보다 컸던 날을 셉니다.", params: [N(), V()], preview: "큰개수({f}, {n}, {v})", sentence: "{n}일 중 {f}>{v} 일수" },
   { id: "cntlt", name: "작은개수", group: "all", desc: "N일 이내 팩터값이 입력값보다 작았던 날을 셉니다.", params: [N(), V()], preview: "작은개수({f}, {n}, {v})", sentence: "{n}일 중 {f}<{v} 일수" },
   { id: "ams", name: "평균모멘텀스코어", group: "all", desc: "최근 팩터가 1~N일 동안의 팩터보다 컸던 비율(%)입니다.", params: [N()], preview: "평균모멘텀스코어({f}, {n})", sentence: "{f} 평균모멘텀스코어({n})" },
@@ -53,9 +54,9 @@ export const FUNCTIONS_BY_ID: Record<string, FactorFunction> = Object.fromEntrie
   FACTOR_FUNCTIONS.map((f) => [f.id, f]),
 );
 
-/** 내부 지표(중첩)로 쓸 수 있는 함수 — 순위/비율의 랭킹 대상 파생용 (횡단면 함수 제외) */
+/** 내부 지표(중첩)로 쓸 수 있는 함수 — 순위/비율의 랭킹 대상 파생용 (횡단면·두팩터 전용 제외) */
 export const INNER_FUNCTIONS: FactorFunction[] = FACTOR_FUNCTIONS.filter(
-  (f) => !["base", "rank", "ratio"].includes(f.id),
+  (f) => !["base", "rank", "ratio", "pctf"].includes(f.id),
 );
 
 /** 템플릿({f}{n}{v}{dir})을 실제 값으로 치환 */

@@ -905,6 +905,10 @@ export interface BacktestConditionPayload {
   rhs2?: number | null;
   inner_function_id?: string | null;
   inner_params?: Record<string, string> | null;
+  // 두 팩터 변형(비교/큰값/작은값/변화율_팩터): 두 번째 피연산자 + 자체 중첩
+  factor_token2?: string | null;
+  inner2_function_id?: string | null;
+  inner2_params?: Record<string, string> | null;
 }
 
 export const backtestBridgeApi = {

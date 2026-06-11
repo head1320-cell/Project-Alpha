@@ -25,6 +25,11 @@ export interface Condition {
   // 중첩(순위/비율 전용): 랭킹 대상 파생 지표 — 예: 순위(변화율_기간(종가,20))
   innerFunctionId?: string;
   innerParams?: Record<string, string>;
+  // 두 팩터 변형(비교/큰값/작은값/변화율_팩터)의 두 번째 피연산자 + 자체 중첩
+  factorName2?: string;
+  factorToken2?: string;
+  inner2FunctionId?: string;
+  inner2Params?: Record<string, string>;
 }
 
 type OpId = "gte" | "lte" | "eq" | "between";
@@ -41,7 +46,7 @@ const R = "var(--bs-border-radius)";
 const RL = "var(--bs-border-radius-lg)";
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-interface Draft { factorName: string; factorToken: string; functionId: string; params: Record<string, string>; expr: string; op: OpId; rhs: string; rhs2: string; innerFunctionId?: string; innerParams?: Record<string, string> }
+interface Draft { factorName: string; factorToken: string; functionId: string; params: Record<string, string>; expr: string; op: OpId; rhs: string; rhs2: string; innerFunctionId?: string; innerParams?: Record<string, string>; factorName2?: string; factorToken2?: string; inner2FunctionId?: string; inner2Params?: Record<string, string> }
 const emptyDraft = (): Draft => ({ factorName: "", factorToken: "", functionId: "base", params: {}, expr: "", op: "lte", rhs: "", rhs2: "" });
 
 export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange, logicExpr, onLogicChange, logicDefaultLabel = "모두 AND" }: {
@@ -66,24 +71,27 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
   };
 
   const applyPick = (p: FactorPick) => {
-    setDraft((d) => ({ ...d, factorName: p.factorName, factorToken: p.factorToken, functionId: p.functionId, params: p.params, expr: p.expr, innerFunctionId: p.innerFunctionId, innerParams: p.innerParams }));
+    setDraft((d) => ({ ...d, factorName: p.factorName, factorToken: p.factorToken, functionId: p.functionId, params: p.params, expr: p.expr, innerFunctionId: p.innerFunctionId, innerParams: p.innerParams, factorName2: p.factorName2, factorToken2: p.factorToken2, inner2FunctionId: p.inner2FunctionId, inner2Params: p.inner2Params }));
     setPickerOpen(false);
   };
 
   const save = () => {
     if (!draft.factorName || draft.rhs === "") return;
-    onChange([...conditions, { id: uid(), factorName: draft.factorName, factorToken: draft.factorToken, functionId: draft.functionId, params: draft.params, expr: draft.expr, op: draft.op, rhs: draft.rhs, rhs2: draft.op === "between" ? draft.rhs2 : undefined, innerFunctionId: draft.innerFunctionId, innerParams: draft.innerParams }]);
+    onChange([...conditions, { id: uid(), factorName: draft.factorName, factorToken: draft.factorToken, functionId: draft.functionId, params: draft.params, expr: draft.expr, op: draft.op, rhs: draft.rhs, rhs2: draft.op === "between" ? draft.rhs2 : undefined, innerFunctionId: draft.innerFunctionId, innerParams: draft.innerParams, factorName2: draft.factorName2, factorToken2: draft.factorToken2, inner2FunctionId: draft.inner2FunctionId, inner2Params: draft.inner2Params }]);
     setDraft(emptyDraft());
   };
   const remove = (id: string) => onChange(conditions.filter((c) => c.id !== id));
 
   // NL 한 줄 — 중첩이면 {f} 자리에 내부 지표 설명을 넣어 합성 ("20일 전 대비 종가 변화율 순위")
+  // 두 팩터 조건은 픽커가 만든 식(expr)을 그대로 사용
   const fn = FUNCTIONS_BY_ID[draft.functionId];
   const innerFn = draft.innerFunctionId ? FUNCTIONS_BY_ID[draft.innerFunctionId] : null;
   const factorLabel = innerFn
     ? fillTemplate(innerFn.sentence ?? innerFn.preview, draft.factorName, draft.innerParams ?? {})
     : draft.factorName;
-  const human = draft.factorName ? fillTemplate(fn.sentence ?? fn.preview, factorLabel, draft.params) : "";
+  const human = draft.factorName
+    ? (draft.factorToken2 ? draft.expr : fillTemplate(fn.sentence ?? fn.preview, factorLabel, draft.params))
+    : "";
   const sentence = draft.factorName && draft.rhs !== ""
     ? (draft.op === "between"
         ? `${human}가 ${draft.rhs} ~ ${draft.rhs2 || "?"} 사이일 때 통과`

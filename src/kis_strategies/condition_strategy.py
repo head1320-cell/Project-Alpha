@@ -5,16 +5,18 @@
 # 엔진(kis_backtest_engine)이 fetcher.get_daily_prices 를 종목별 OHLCV 슬라이스로
 # monkey-patch 하므로(look-ahead 방지), 이 전략은 그 슬라이스에서 팩터식을 계산한다.
 #
-# 지원 범위: 가격·거래량·기술 기반 팩터(시/고/저/종가, 거래량, 거래대금)와 18개 함수
-# (기본/과거값/이동평균/최고값/최저값/변화량_기간/변화율_기간/절대값/기간총합/비교/큰값/
-#  작은값/큰개수/작은개수/평균모멘텀스코어/표준편차). 비율·순위(횡단면)와 펀더멘털·점수·뉴지
-# 팩터는 봉별 단일종목 데이터로 평가 불가 → 무시(스크리닝 filter_ast 로 분리하는 게 맞음).
+# 지원 범위: 가격·거래량·기술 팩터 + 시장·매크로·수급 토큰 + 점수 근사(score_factors)
+# + 펀더멘털 스냅샷(옵트인). 함수 18종 + 두 팩터 변형(비교/큰값/작은값에 factor_token2,
+# 변화율_팩터=pctf — ((F1-F2)/|F2|)×100, 두 번째 피연산자도 inner2 중첩 지원).
+# 순위/비율(횡단면)·점수는 prepare_panel 사전계산 패널로 평가.
+# 논리 조건식(buy_logic/sell_logic)은 condition_logic 참조 — 없으면 매수=AND, 매도=OR.
 # 평가 불가 조건은 건너뛴다(매수는 평가 가능한 조건이 하나도 없으면 진입하지 않음).
 
 from __future__ import annotations
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 from src import kis_data_fetcher as data_fetcher
@@ -185,17 +187,38 @@ def _apply_function(s: pd.Series, fn: str, p: dict) -> pd.Series | None:
     return None
 
 
-def _apply_inner(s: pd.Series, cond: dict) -> pd.Series | None:
+def _apply_inner(s: pd.Series, cond: dict, prefix: str = "inner") -> pd.Series | None:
     """내부 함수(중첩) 적용 — 예: 순위(변화율_기간(종가,20)) 의 변화율_기간 부분.
 
     inner_function_id 가 없으면 원 시리즈 그대로. 횡단면 함수(rank/ratio)는
-    내부 지표로 쓸 수 없음(None → 조건 건너뜀)."""
-    inner = (cond.get("inner_function_id") or "").strip()
+    내부 지표로 쓸 수 없음(None → 조건 건너뜀). prefix="inner2"면 두 번째
+    피연산자(factor_token2)의 중첩 — 예: 변화율_팩터(당기순이익, 과거값(당기순이익,1년))."""
+    inner = (cond.get(f"{prefix}_function_id") or "").strip()
     if not inner or inner == "base":
         return s
     if inner in ("rank", "ratio"):
         return None
-    return _apply_function(s, inner, cond.get("inner_params") or {})
+    return _apply_function(s, inner, cond.get(f"{prefix}_params") or {})
+
+
+# 두 팩터 함수 (가이드: 비교(F1,F2)·큰값(F1,F2)·작은값(F1,F2)·변화율_팩터(F1,F2))
+_TWO_FACTOR_FNS = {"cmp", "gt", "lt", "pctf"}
+
+
+def _apply_two_factor(s1: pd.Series, s2: pd.Series, fn: str) -> pd.Series | None:
+    """두 피연산자 결합 — 비교=부호(1/0/-1), 큰값/작은값=원소별 max/min,
+    변화율_팩터=((F1-F2)/|F2|)×100 (가이드 종가시초가대비율 정의 그대로)."""
+    if fn == "cmp":
+        d = s1 - s2
+        return pd.Series(np.sign(d.to_numpy(dtype=float)), index=s1.index)
+    if fn == "gt":
+        return pd.concat([s1, s2], axis=1).max(axis=1)
+    if fn == "lt":
+        return pd.concat([s1, s2], axis=1).min(axis=1)
+    if fn == "pctf":
+        denom = s2.abs().replace(0.0, np.nan)
+        return (s1 - s2) / denom * 100.0
+    return None
 
 
 # ── 단일 조건 평가 → True / False / None(평가 불가) ───────────
@@ -272,7 +295,7 @@ def _vector_compare(vals: pd.Series, op: str, rhs, rhs2=None):
 def _max_period(conds: list[dict]) -> int:
     mx = 0
     for c in conds or []:
-        for p in (c.get("params"), c.get("inner_params")):
+        for p in (c.get("params"), c.get("inner_params"), c.get("inner2_params")):
             try:
                 mx = max(mx, int(float((p or {}).get("n", 0))))
             except Exception:
@@ -325,13 +348,13 @@ class ConditionStrategy(BaseStrategy):
         # 확장 토큰의 내재 룩백(예: 52주 신고가=252봉) 반영 — 워밍업 부족 시 조건이 NaN으로 무시됨
         try:
             from src.kis_strategies.factor_tokens import token_min_bars
-            tok = max((token_min_bars(c.get("factor_token", ""))
-                       for c in (self.buy_conditions + self.sell_conditions)), default=0)
+            tok = max((token_min_bars(c.get(k) or "")
+                       for c in (self.buy_conditions + self.sell_conditions)
+                       for k in ("factor_token", "factor_token2")), default=0)
         except Exception:
             tok = 0
         # 점수 토큰(60MA 이격도 + 변화율 합성) 워밍업
-        if any((c.get("factor_token") or "").strip().strip("{}").strip() in SCORE_TOKENS
-               for c in (self.buy_conditions + self.sell_conditions)):
+        if self._references_score():
             tok = max(tok, SCORE_MIN_BARS)
         # 논리식 시간 한정사(every/any/before)의 추가 룩백
         logic = max((max_lookback(a) for a in (self._buy_ast, self._sell_ast) if a is not None),
@@ -366,13 +389,17 @@ class ConditionStrategy(BaseStrategy):
         return (f"{cond.get('factor_token','')}|{cond.get('function_id','')}|{p.get('dir','DESC')}"
                 f"|{cond.get('inner_function_id','')}|{ip.get('n','')}|{ip.get('v','')}")
 
+    def _references_score(self) -> bool:
+        return any((c.get(k) or "").strip().strip("{}").strip() in SCORE_TOKENS
+                   for c in (self.buy_conditions + self.sell_conditions)
+                   for k in ("factor_token", "factor_token2"))
+
     def prepare_panel(self, ohlcv_map: dict) -> None:
         """순위/비율·점수 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
         self._panels = {}
         self._score_panels = {}
         # 점수 근사 패널 — 조건이 점수 토큰을 참조할 때만 (성장·가치 레그는 펀더멘털 토글 시)
-        if ohlcv_map and any((c.get("factor_token") or "").strip().strip("{}").strip() in SCORE_TOKENS
-                             for c in (self.buy_conditions + self.sell_conditions)):
+        if ohlcv_map and self._references_score():
             try:
                 fund_map = ({str(tk): _load_fundamentals(str(tk)) for tk in ohlcv_map}
                             if self.allow_snapshot_fundamentals else None)
@@ -506,7 +533,22 @@ class ConditionStrategy(BaseStrategy):
         s = _apply_inner(s, cond)
         if s is None or len(s) == 0:
             return None
-        series = _apply_function(s, cond.get("function_id", "base"), cond.get("params") or {})
+        fn = cond.get("function_id", "base")
+        tok2 = (cond.get("factor_token2") or "").strip()
+        if tok2 and fn in _TWO_FACTOR_FNS:
+            # 두 팩터 변형: 비교(F1,F2)·큰값·작은값·변화율_팩터 — 두 번째 피연산자도
+            # 토큰 해석 + 자체 중첩(inner2) 지원
+            s2 = self._token_series(df, {"factor_token": tok2}, fund, tk)
+            if s2 is None or len(s2) == 0:
+                return None
+            s2 = _apply_inner(s2.astype(float), cond, prefix="inner2")
+            if s2 is None or len(s2) == 0:
+                return None
+            series = _apply_two_factor(s.astype(float), s2, fn)
+        elif fn == "pctf":
+            return None  # 변화율_팩터는 두 번째 팩터 필수
+        else:
+            series = _apply_function(s, fn, cond.get("params") or {})
         if series is None or len(series) == 0:
             return None
         return _vector_compare(series, cond.get("op", "gte"),

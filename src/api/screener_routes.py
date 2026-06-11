@@ -958,7 +958,9 @@ class ScreenToBacktestRequest(BaseModel):
     max_buy_per_day: int | None = None
     max_buy_count: int | None = None
     # 조건식 기반 진입/청산 (Genport식). 있으면 strategy_name 무시하고 조건식 전략 사용.
-    # 각 조건 dict: {factor_token, function_id, params{n,v,dir}, op(gte|lte|eq|between), rhs, rhs2?}
+    # 각 조건 dict: {factor_token, function_id, params{n,v,dir}, op(gte|lte|eq|between), rhs, rhs2?,
+    #   inner_function_id?, inner_params?,                  ← 중첩(순위/비율 랭킹 대상)
+    #   factor_token2?, inner2_function_id?, inner2_params?} ← 두 팩터(비교/큰값/작은값/변화율_팩터)
     buy_conditions: list[dict] | None = None
     sell_conditions: list[dict] | None = None
     # 논리 조건식 (젠포트 논리 레이어): 조건 라벨 A,B,C…를 and/or/not/before/any/every로

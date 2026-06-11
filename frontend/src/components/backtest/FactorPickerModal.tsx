@@ -26,7 +26,16 @@ export interface FactorPick {
   // 중첩(순위/비율 전용): 랭킹 대상을 파생 지표로 — 예: 순위(변화율_기간(종가,20))
   innerFunctionId?: string;
   innerParams?: Record<string, string>;
+  // 두 팩터 변형(비교/큰값/작은값/변화율_팩터): 두 번째 피연산자 + 자체 중첩
+  // 예: 변화율_팩터({당기순이익}, 과거값({당기순이익}, 1년))
+  factorName2?: string;
+  factorToken2?: string;
+  inner2FunctionId?: string;
+  inner2Params?: Record<string, string>;
 }
+
+// 두 번째 피연산자를 팩터로 받을 수 있는 함수 (변화율_팩터는 팩터 필수)
+const TWO_FACTOR_IDS = new Set(["cmp", "gt", "lt", "pctf"]);
 
 const R = "var(--bs-border-radius)";
 const RL = "var(--bs-border-radius-lg)";
@@ -46,6 +55,11 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const [params, setParams] = useState<Record<string, string>>(initial?.params ?? {});
   const [innerFnId, setInnerFnId] = useState<string>(initial?.innerFunctionId ?? "base");
   const [innerParams, setInnerParams] = useState<Record<string, string>>(initial?.innerParams ?? {});
+  // 두 번째 피연산자 (비교/큰값/작은값=상수|팩터 선택, 변화율_팩터=팩터 필수)
+  const [operand2Mode, setOperand2Mode] = useState<"value" | "factor">(initial?.factorToken2 ? "factor" : "value");
+  const [factor2Name, setFactor2Name] = useState<string>(initial?.factorName2 ?? "");
+  const [inner2FnId, setInner2FnId] = useState<string>(initial?.inner2FunctionId ?? "base");
+  const [inner2Params, setInner2Params] = useState<Record<string, string>>(initial?.inner2Params ?? {});
 
   useEffect(() => {
     if (!open || support) return;
@@ -88,10 +102,23 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const isCross = fnId === "rank" || fnId === "ratio";
   const innerFn = FUNCTIONS_BY_ID[innerFnId];
   const tk = factor ? baseToken(factor) : "{팩터}";
+  // 두 팩터 모드: 변화율_팩터는 항상, 비교/큰값/작은값은 '팩터' 선택 시
+  const isTwoFactor = TWO_FACTOR_IDS.has(fnId) && (fnId === "pctf" || operand2Mode === "factor");
+  const inner2Fn = FUNCTIONS_BY_ID[inner2FnId];
+  const tk2 = factor2Name ? `{${factor2Name}}` : "{팩터2}";
+  const expr2 = inner2FnId !== "base" ? fillTemplate(inner2Fn.preview, tk2, inner2Params) : tk2;
   // 중첩: 순위/비율의 {f} 자리에 내부 지표식을 넣는다 — 순위(변화율_기간({종가}, 20), 내림차순)
   const innerExpr = isCross && innerFnId !== "base" ? fillTemplate(innerFn.preview, tk, innerParams) : tk;
-  const expr = fillTemplate(fn.preview, innerExpr, params);
+  const expr = isTwoFactor ? `${fn.name}(${tk}, ${expr2})` : fillTemplate(fn.preview, innerExpr, params);
   const accent = TONES[tone];
+  // 두 번째 팩터 후보: 지원 토큰만 (카테고리 optgroup)
+  const factor2Options = useMemo(() =>
+    allCategories.map((c) => ({
+      label: c.label,
+      names: c.factors.filter((f) => supportInfo(f.name).ok).map((f) => f.name),
+    })).filter((g) => g.names.length > 0),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [allCategories, support]);
 
   if (!open) return null;
 
@@ -110,13 +137,29 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
     setInnerParams(init);
   };
 
+  const pickInner2Fn = (id: string) => {
+    setInner2FnId(id);
+    const f = FUNCTIONS_BY_ID[id];
+    const init: Record<string, string> = {};
+    (f?.params ?? []).forEach((p, i) => {
+      if (p.kind !== "direction") init[paramKey(p.kind, i)] = p.default;
+    });
+    setInner2Params(init);
+  };
+
   const submit = () => {
     if (!factor || (selInfo && !selInfo.ok)) return;  // 미지원 팩터는 입력 차단
+    if (isTwoFactor && !factor2Name) return;          // 두 팩터 함수는 두 번째 팩터 필수
     const withInner = isCross && innerFnId !== "base";
+    const withInner2 = isTwoFactor && inner2FnId !== "base";
     onInsert({
       factorName: factor.name, factorToken: tk, functionId: fnId, params, expr,
       innerFunctionId: withInner ? innerFnId : undefined,
       innerParams: withInner ? innerParams : undefined,
+      factorName2: isTwoFactor ? factor2Name : undefined,
+      factorToken2: isTwoFactor ? `{${factor2Name}}` : undefined,
+      inner2FunctionId: withInner2 ? inner2FnId : undefined,
+      inner2Params: withInner2 ? inner2Params : undefined,
     });
   };
 
@@ -251,7 +294,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                 <div style={{ fontSize: 17, fontWeight: 500, color: "var(--text-primary)", marginBottom: 9 }}>{fn.name}</div>
                 <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 14 }}>{fn.desc}</div>
 
-                {fn.params.length > 0 && (
+                {!isTwoFactor && fn.params.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
                     {fn.params.map((p, i) => (
                       <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -268,6 +311,58 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* 두 번째 피연산자 — 비교/큰값/작은값: 상수|팩터 선택, 변화율_팩터: 팩터 필수 */}
+                {TWO_FACTOR_IDS.has(fnId) && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>두 번째 피연산자</span>
+                      {fnId !== "pctf" && (
+                        <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-strong)", borderRadius: R, overflow: "hidden" }}>
+                          {(["value", "factor"] as const).map((m) => (
+                            <button key={m} type="button" onClick={() => setOperand2Mode(m)}
+                              style={{ fontSize: 11, padding: "3px 9px", border: "none", cursor: "pointer",
+                                background: operand2Mode === m ? accent.accent : "var(--bg-card)",
+                                color: operand2Mode === m ? "#fff" : "var(--text-secondary)" }}>
+                              {m === "value" ? "상수" : "팩터"}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {isTwoFactor && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                        <select value={factor2Name} onChange={(e) => setFactor2Name(e.target.value)}
+                          style={{ fontSize: 13, maxWidth: 220, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                          <option value="">팩터 선택…</option>
+                          {factor2Options.map((g) => (
+                            <optgroup key={g.label} label={g.label}>
+                              {g.names.map((n) => <option key={n} value={n}>{n}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <select value={inner2FnId} onChange={(e) => pickInner2Fn(e.target.value)}
+                          style={{ fontSize: 13, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                          <option value="base">원값 (팩터 그대로)</option>
+                          {INNER_FUNCTIONS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                        </select>
+                        {inner2FnId !== "base" && inner2Fn.params.filter((p) => p.kind !== "direction").map((p, i) => (
+                          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{p.label}</span>
+                            <input type="number" value={inner2Params[paramKey(p.kind, i)] ?? p.default}
+                              onChange={(e) => setInner2Params((q) => ({ ...q, [paramKey(p.kind, i)]: e.target.value }))}
+                              style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, width: 90, padding: "6px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {fnId === "pctf" && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>
+                        ((F1 − F2) / |F2|) × 100 — 예: 변화율_팩터({"{당기순이익}"}, 과거값({"{당기순이익}"}, 1년)) = 전년 대비 성장률
+                      </div>
+                    )}
                   </div>
                 )}
 

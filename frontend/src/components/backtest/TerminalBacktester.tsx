@@ -70,6 +70,9 @@ const mapConds = (cs: BacktestStrategy["buy"]["conditions"]) =>
     op: c.op, rhs: Number(c.rhs), rhs2: c.rhs2 != null ? Number(c.rhs2) : null,
     inner_function_id: c.innerFunctionId ?? null,
     inner_params: c.innerParams ?? null,
+    factor_token2: c.factorToken2 ?? null,
+    inner2_function_id: c.inner2FunctionId ?? null,
+    inner2_params: c.inner2Params ?? null,
   }));
 
 // 전략 상태 → screenToBacktest payload 어댑터
