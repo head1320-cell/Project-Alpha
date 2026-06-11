@@ -230,6 +230,13 @@ python verify_connection.py
 - 사이드바 하단: SYSTEM OPERATIONAL 상태
 - main 영역: 코너마크 4개 + 그리드 오버레이
 - layout.tsx가 TerminalShell로 모든 페이지를 감쌈 (기존 TopNav 대체)
+- **루트(/)는 랜딩 페이지** — 셸이 pathname==="/"에서 풀블리드 렌더(셸 없음). 셸 브랜드/팔레트 홈은 /dashboard
+
+### 랜딩 (app/page.tsx — Variant 레퍼런스 3종 합성)
+- 구조: 다크 티커 마퀴 → 헤더(상태 점·UTC 시계·LAUNCH) → 분할 히어로("The operating system for quantitative research.") → INTEGRATED TOOLSET 5모듈 컬럼(설명+mono 메트릭+SVG 미니 비주얼) → PLATFORM METRICS 6종(실측 수치: 팩터 290+/체결가 13/함수 19/벡터화 142×/테스트 470/데이터소스 5) → 푸터(미니 티커+©)
+- 전부 정적(백엔드 미기동에도 동작), 시계만 클라이언트. CTA → /dashboard
+- 기존 Command Center 대시보드는 /dashboard로 이동 (내부 홈 링크 전부 갱신)
+- 스타일: globals.css lp-* (기존 디자인 토큰 사용, 반응형 1100/820px)
 
 ### 스크리너 (완성 — components/screener/TerminalScreener.tsx)
 - Variant 3-pane: 카테고리 → 빌더(필드 클릭으로 조건 추가) → 활성 필터 스택 + 라이브 카운트

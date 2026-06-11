@@ -23,7 +23,7 @@ function DerivativesContent() {
       <PageHeader
         title="파생상품 평가"
         subtitle="Black-76, SABR, Hull-White 등 학계 표준 모델로 옵션·금리 파생을 평가합니다"
-        breadcrumb={[{ label: "홈", href: "/" }, { label: "파생상품 평가" }]}
+        breadcrumb={[{ label: "홈", href: "/dashboard" }, { label: "파생상품 평가" }]}
       />
       <PageContent>
         <Tabs

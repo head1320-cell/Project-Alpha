@@ -44,11 +44,14 @@ const MODULES = [
 export function TerminalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
+  // 루트(/)는 랜딩 페이지 — 터미널 셸 없이 풀블리드 렌더 (CTA가 /dashboard로 진입)
+  if (pathname === "/") return <>{children}</>;
+
   return (
     <div className="terminal-root">
       {/* ─── Header ─── */}
       <header className="terminal-header">
-        <Link href="/" className="terminal-brand">
+        <Link href="/dashboard" className="terminal-brand">
           <div className="logo-box">
             <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
           </div>

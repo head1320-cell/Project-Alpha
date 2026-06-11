@@ -216,7 +216,7 @@ interface CommandItem {
 }
 
 const ALL_COMMANDS: CommandItem[] = [
-  { id: "home", label: "홈 대시보드", href: "/", category: "메인", icon: Home },
+  { id: "home", label: "홈 대시보드", href: "/dashboard", category: "메인", icon: Home },
   { id: "builder", label: "전략 빌더", href: "/builder", category: "메인", icon: Wrench },
   { id: "backtest", label: "백테스팅", href: "/backtest", category: "메인", icon: BarChart3 },
   { id: "screener", label: "종목 스크리너", href: "/screener", category: "메인", icon: Diamond },
