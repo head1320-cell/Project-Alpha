@@ -951,8 +951,9 @@ class ScreenToBacktestRequest(BaseModel):
     supervised: bool = False
     groups: list[dict] | None = None
     # 전체 유니버스 일별 평가 (Genport식): 조건식이 후보 풀 전체를 매 봉 평가하도록 풀 확대
+    # 상한 4000 = 코스피+코스닥 전 주권(~2,700) 커버 — 시그널 벡터화로 실용 시간 확보
     full_universe_eval: bool = False
-    universe_eval_cap: int = Field(default=200, ge=1, le=2000)
+    universe_eval_cap: int = Field(default=200, ge=1, le=4000)
     # #4: 펀더멘털 토큰(스냅샷)을 봉별 조건 평가에 포함. 기본 False (look-ahead 근사라 옵트인)
     allow_snapshot_fundamentals: bool = False
 
@@ -1005,7 +1006,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             _universe = req.universe
         # 후보 풀 크기: 전체 유니버스 일별 평가 시 확대(조건식이 매 봉 풀 전체를 평가, max_positions가 보유 한도)
         eval_cap = req.universe_eval_cap if (req.full_universe_eval and (req.buy_conditions or req.sell_conditions)) else req.max_tickers
-        eval_cap = max(1, min(int(eval_cap), 2000))
+        eval_cap = max(1, min(int(eval_cap), 4000))  # 벡터화로 전 주권(~2,700) 실용화
         result = screener.run(
             universe=_universe,
             filter_ast=ast,

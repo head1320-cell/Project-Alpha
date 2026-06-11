@@ -37,7 +37,8 @@
 
 - ~~관리종목/감리종목 제외~~ → ✅ **KIS 마스터 테일 파싱으로 해결 (KRX 불필요)**: `kis_master_parser`가 공식 스펙(KOSPI 227B/KOSDAQ 221B 테일)으로 관리종목·시장경고·투자주의환기·거래정지·시가총액·업종코드 추출 → `master_flags_cache.json` → `stock_master.MANAGED_CODES/SUPERVISED_CODES` 자동 활성. **사용자 환경에서 `POST /api/v1/symbols/collect-master` 1회 실행(인증 불필요)이 트리거** — 응답 sanity(삼성전자 시총·tail_parsed_pct)로 실파일 오프셋 정합 확인. `tests/test_master_parser.py`.
 - ~~펀더멘털 PIT 평가~~ → 🟡 **DART 연결 완료 (부분)**: `pit_store._period_asof`가 공시시차(분기 45일/연간 90일) 기준 공시완료 보고서를 선택해 DART에서 실값 조회(키 설정 시). **ROE/ROA/부채비율만 실값** — PER/PBR/배당/시총은 역사 시세 미연동이라 현재값 유지(소비자가 None 필드 비교체로 부분 적용). 키 없으면 기존 mock 불변. `tests/test_pit_dart.py`. 남은 것: 역사 시세 연동 시 가격 의존 지표 PIT화.
-- 🟡 **전체시장 일별 평가 (코드측 완성)**: `resolve_universe("all_listed")` + `load_universe_frame` 마스터 전종목(~2,700, 실시총 tier) + `sync_daily_prices(all_listed=True)`(~3분/일배치). 남은 것: 후보 풀 상한 2000 가드의 성능 검증. (수년치 초기 적재는 ↓ KRX 백필로 해결)
+- ~~전체시장 일별 평가~~ → ✅ **시그널 벡터화로 완성**: 조건식을 전 봉 1회 사전계산(`precompute_signals`/`signal_at`) — per-bar 대비 **실측 142×**(20종목×320봉 기준 12.5s→0.09s). 등가성을 전 봉 스위프 + 엔진 on/off 거래 완전 일치 테스트로 고정(인과 연산만 사용 — look-ahead 없음). 후보 풀 가드 2000→**4000**(전 주권 ~2,700 커버). `vectorize_signals=False`로 per-bar 디버그 가능. `tests/test_vectorized_signals.py`.
+  - 부수 수정: 엔진 슬라이스 date 포맷(YYYYMMDD) vs 패널 인덱스(YYYY-MM-DD) 불일치로 **횡단면(순위/비율) 조건이 엔진 경로에서 조용히 무시되던 버그** 수정 + per-bar 경로에도 수급 토큰 종목 식별(attrs) 일관성 부여.
 - ~~수년치 OHLCV 적재·생존편향~~ → ✅ **KRX OpenAPI 연동 (키 발급 완료)**: `krx_client`(날짜 기준 전종목 1콜) + `krx_ingest` 백필(`python -m src.data.krx_ingest --start 2015-01-01`, 재개 가능, 지수 포함) → daily_prices를 채워 백테스트는 DB에서(젠포트식 사전 적재). **수정종가**는 등락률 체인으로 `adj_close` 재구성(분할 점프 제거). **시점 유니버스** `universe="all_asof"` — 백테스트 시작일 당시 거래 종목(이후 상폐 포함) → 생존편향 보정. `tests/test_krx_ingest.py`. 실수신 검증: verify_connection 【5】.
 - **지수 편입 이력(KOSPI200 과거 구성)**: 여전히 미보유 — 편입 이력 기반 유니버스는 후속(KRX 지수 구성 API 또는 유료 데이터).
 

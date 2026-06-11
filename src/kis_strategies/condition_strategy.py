@@ -13,11 +13,15 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from src import kis_data_fetcher as data_fetcher
 from src.kis_signal import Action, Signal
 from src.kis_strategies.strategies import STRATEGY_REGISTRY, BaseStrategy
+
+logger = logging.getLogger(__name__)
 
 # ── 팩터 토큰 → OHLCV 베이스 시리즈 ────────────────────────────
 _PRICE_COL = {
@@ -232,6 +236,37 @@ def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = No
     return None
 
 
+def _vector_compare(vals: pd.Series, op: str, rhs, rhs2=None):
+    """_compare/_eval_condition의 연산자 의미를 전 봉 벡터로 — (valid, ok) bool 배열.
+
+    valid=평가 가능(NaN 아님), ok=valid & 충족. 연산자 불명·rhs 파싱 실패면 None."""
+    import numpy as np
+    try:
+        rhs_f = float(rhs)
+    except (TypeError, ValueError):
+        return None
+    v = pd.to_numeric(vals, errors="coerce")
+    valid = v.notna().to_numpy()
+    x = v.to_numpy(dtype=float)
+    with np.errstate(invalid="ignore"):
+        if op == "gte":
+            ok = x >= rhs_f
+        elif op == "lte":
+            ok = x <= rhs_f
+        elif op == "eq":
+            ok = np.abs(x - rhs_f) < 1e-9
+        elif op == "between":
+            try:
+                rhs2_f = float(rhs2)
+            except (TypeError, ValueError):
+                return None
+            lo, hi = (rhs_f, rhs2_f) if rhs_f <= rhs2_f else (rhs2_f, rhs_f)
+            ok = (x >= lo) & (x <= hi)
+        else:
+            return None
+    return valid, (ok & valid)
+
+
 def _compare(lhs: float, op: str, rhs, rhs2=None) -> bool | None:
     try:
         rhs = float(rhs)
@@ -275,6 +310,7 @@ class ConditionStrategy(BaseStrategy):
         # #4: 펀더멘털 토큰을 봉별 평가에 포함(현재 스냅샷 상수). 기본 비활성 — 활성 시 look-ahead 근사.
         self.allow_snapshot_fundamentals = bool(allow_snapshot_fundamentals)
         self._panels: dict = {}  # 횡단면(순위/비율) 사전계산 {key: DataFrame[date,ticker]}
+        self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
 
     @property
     def name(self) -> str:
@@ -365,9 +401,111 @@ class ConditionStrategy(BaseStrategy):
             else:  # 비율 → 0~100 (DESC → 큰 값이 100)
                 self._panels[key] = wide.rank(axis=1, ascending=(dirv == "DESC"), pct=True) * 100.0
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # 벡터화 — 전 봉 시그널 사전계산 (per-bar generate_signal과 동일 의미·결과)
+    #   등가성 근거: 모든 함수가 인과적(rolling/ewm/shift/cumsum)이라
+    #   전체 시리즈의 t시점 값 == t까지 슬라이스의 마지막 값.
+    #   NaN = 평가 불가 → 그 봉에서 해당 조건 건너뜀(기존 정책 그대로).
+    #   엔진이 봉 루프 전에 precompute_signals()를 호출하고 signal_at()으로 조회 —
+    #   실패·미계산이면 None을 돌려 엔진이 per-bar로 폴백한다.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def precompute_signals(self, ohlcv_map: dict) -> None:
+        """종목별 매수/매도 조건을 전체 시계열에 1회 평가 → 봉별 액션 코드 캐시."""
+        self._sig = {}
+        if not (self.buy_conditions or self.sell_conditions) or not ohlcv_map:
+            return
+        try:
+            for tk, df in ohlcv_map.items():
+                self._sig[str(tk)] = self._precompute_ticker(str(tk), df)
+        except Exception as e:
+            logger.debug(f"precompute_signals 실패 — per-bar 폴백: {e}")
+            self._sig = {}
+
+    def _precompute_ticker(self, tk: str, df: pd.DataFrame) -> pd.Series:
+        import numpy as np
+        fund = _load_fundamentals(tk) if self.allow_snapshot_fundamentals else None
+        n = len(df)
+
+        def arrays(conds):
+            out = []
+            for c in conds or []:
+                pair = self._cond_arrays(df, c, fund, tk)
+                if pair is not None:
+                    out.append(pair)
+            return out
+
+        sell_hit = np.zeros(n, dtype=bool)
+        for valid, ok in arrays(self.sell_conditions):
+            sell_hit |= ok                       # 평가 가능 & 충족 — 하나라도
+        any_valid = np.zeros(n, dtype=bool)
+        all_ok = np.ones(n, dtype=bool)
+        for valid, ok in arrays(self.buy_conditions):
+            any_valid |= valid
+            all_ok &= (ok | ~valid)              # 평가 불가 조건은 건너뜀
+        buy_hit = any_valid & all_ok             # 평가 가능 조건 ≥1 & 전부 충족
+
+        codes = np.zeros(n, dtype=np.int8)       # 0=HOLD
+        codes[buy_hit] = 1
+        codes[sell_hit] = 2                      # 매도 우선 (generate_signal과 동일)
+        return pd.Series(codes, index=df.index)
+
+    def _cond_arrays(self, df: pd.DataFrame, cond: dict, fund: dict | None,
+                     tk: str):
+        """단일 조건 → (valid, ok) bool 배열. 전 봉 평가 불가면 None(조건 건너뜀)."""
+        if cond.get("function_id") in ("rank", "ratio"):
+            panel = self._panels.get(self._cross_key(cond))
+            if panel is None or str(tk) not in panel.columns:
+                return None
+            date_strs = df.index.strftime("%Y-%m-%d")     # 패널 인덱스 포맷
+            vals = panel[str(tk)].reindex(date_strs)
+            return _vector_compare(vals, cond.get("op", "lte"),
+                                   cond.get("rhs"), cond.get("rhs2"))
+        s = _base_series(df, cond.get("factor_token", ""))
+        if (s is None or len(s) == 0) and fund is not None:
+            fv = _fundamental_value(cond.get("factor_token", ""), fund)
+            if fv is not None:
+                s = pd.Series([fv] * len(df), index=df.index)
+        if s is None or len(s) == 0:
+            return None
+        s = _apply_inner(s, cond)
+        if s is None or len(s) == 0:
+            return None
+        series = _apply_function(s, cond.get("function_id", "base"), cond.get("params") or {})
+        if series is None or len(series) == 0:
+            return None
+        return _vector_compare(series, cond.get("op", "gte"),
+                               cond.get("rhs"), cond.get("rhs2"))
+
+    def signal_at(self, stock_code: str, when) -> Signal | None:
+        """사전계산 시그널 조회. 미계산·미보유 날짜면 None → 엔진이 per-bar 폴백."""
+        sig_map = getattr(self, "_sig", None)
+        ser = sig_map.get(str(stock_code)) if sig_map else None
+        if ser is None:
+            return None
+        try:
+            if when not in ser.index:
+                return None
+            code = int(ser.loc[when])
+        except Exception:
+            return None
+        if code == 2:
+            return Signal(stock_code=stock_code, stock_name=stock_code,
+                          action=Action.SELL, strength=0.7, reason="매도 조건 충족")
+        if code == 1:
+            return Signal(stock_code=stock_code, stock_name=stock_code,
+                          action=Action.BUY, strength=0.7, reason="매수 조건 충족")
+        return Signal(stock_code=stock_code, stock_name=stock_code,
+                      action=Action.HOLD, strength=0.0, reason="조건 미충족")
+
     def _eval_cross(self, cond: dict, ticker: str, as_of: str | None) -> bool | None:
         if as_of is None:
             return None
+        # 엔진의 _date_str은 YYYYMMDD, 패널 인덱스는 YYYY-MM-DD — 정규화 (포맷 불일치로
+        # 횡단면 조건이 엔진 경로에서 조용히 무시되던 버그 수정)
+        as_of = str(as_of).strip()
+        if len(as_of) == 8 and as_of.isdigit():
+            as_of = f"{as_of[:4]}-{as_of[4:6]}-{as_of[6:]}"
         panel = self._panels.get(self._cross_key(cond))
         if panel is None:
             return None

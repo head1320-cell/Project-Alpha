@@ -166,6 +166,8 @@ class BacktestConfig:
     # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②). 기본 비활성 = 기존 동작 불변
     rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"·"monthly"=주·월 첫 거래일에만 신규 매수
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
+    # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
+    vectorize_signals: bool = True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -240,6 +242,14 @@ class BacktestEngine:
             except Exception as e:
                 logger.debug(f"prepare_panel skipped: {e}")
 
+        # 시그널 벡터화: 조건을 전 봉 1회 평가(인과 연산 — per-bar와 동일 결과 보장,
+        # 등가성 테스트로 고정). 실패·미지원 전략이면 루프에서 per-bar 폴백.
+        if self.cfg.vectorize_signals and hasattr(strategy, "precompute_signals"):
+            try:
+                strategy.precompute_signals(ohlcv_map)
+            except Exception as e:
+                logger.debug(f"precompute_signals skipped: {e}")
+
         logger.info(
             f"Backtest: {self.cfg.strategy_name} | "
             f"{self.cfg.symbols} | {len(sim_dates)} trading days"
@@ -302,10 +312,12 @@ class BacktestEngine:
                 if len(df_slice) < strategy.required_days:
                     continue
 
-                # 전략 실행을 위해 data_fetcher를 일시적으로 slice로 패치
-                signal = self._generate_signal_as_of(
-                    strategy, ticker, df_slice
-                )
+                # ① 벡터화 조회(사전계산 시) → ② per-bar 폴백(data_fetcher slice 패치)
+                signal = None
+                if self.cfg.vectorize_signals and hasattr(strategy, "signal_at"):
+                    signal = strategy.signal_at(ticker, sim_date)
+                if signal is None:
+                    signal = self._generate_signal_as_of(strategy, ticker, df_slice)
                 if signal is None:
                     continue
 
@@ -368,6 +380,8 @@ class BacktestEngine:
             "close": df_slice["close"].values,
             "volume": df_slice["volume"].values,
         })
+        # 수급 토큰의 종목 식별 — 벡터화 경로(ohlcv_map attrs)와 per-bar 경로 일관성
+        df_copy.attrs["ticker"] = df_slice.attrs.get("ticker", ticker)
 
         # 마지막 종가 기반 현재가 정보
         last = df_copy.iloc[-1]
