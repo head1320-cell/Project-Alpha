@@ -884,13 +884,14 @@ export interface BacktestAdvancedParams {
 
 // 조건식 토큰 지원 맵 (GET /condition-tokens)
 export interface TokenSupportMap {
-  supported: Record<string, string>;    // 토큰 → 그룹 (base | ohlcv | fundamental | market | macro)
+  supported: Record<string, string>;    // 토큰 → 그룹 (base | ohlcv | fundamental | market | macro | flow | score)
   unsupported: Record<string, string>;  // 토큰 → 사유 (명시된 것만)
   default_reason: string;
   fundamental_note: string;
   market_note?: string;
   macro_note?: string;
   flow_note?: string;
+  score_note?: string;                  // 점수 근사(뉴지랭크 공개 레시피) 설명
   substitutes?: Record<string, string[]>;  // 뉴지 점수류 → 대체 제안 토큰(선택 가능)
 }
 

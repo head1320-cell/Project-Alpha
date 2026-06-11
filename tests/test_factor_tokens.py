@@ -178,7 +178,10 @@ def test_substitutes_targets_all_selectable():
     bad = [t for subs in ts["substitutes"].values() for t in subs
            if t not in ts["supported"]]
     assert bad == [], f"미지원 대체 타깃: {bad}"
-    assert "종합점수" in ts["substitutes"]
+    # 종합점수는 공개 레시피 근사로 직접 지원 전환(score 그룹) — 대체 목록에서 졸업,
+    # 순위 변형은 대체 제안으로 본 점수를 가리킴
+    assert ts["supported"].get("종합점수") == "score"
+    assert ts["substitutes"]["종합점수순위"] == ["종합점수"]
 
 
 # ─── ④ 시장(지수) 토큰 ───────────────────────────────────────────────────────

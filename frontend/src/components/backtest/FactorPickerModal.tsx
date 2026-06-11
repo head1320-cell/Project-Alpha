@@ -204,11 +204,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                         </div>
                       </div>
                     )}
-                    {selInfo?.ok && support && ["fundamental", "market", "macro", "flow"].includes(selInfo.group ?? "") && (
+                    {selInfo?.ok && support && ["fundamental", "market", "macro", "flow", "score"].includes(selInfo.group ?? "") && (
                       <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)", background: "var(--bg-section)", borderRadius: R, padding: "9px 11px" }}>
                         {selInfo.group === "fundamental" ? support.fundamental_note
                           : selInfo.group === "market" ? support.market_note
                           : selInfo.group === "macro" ? support.macro_note
+                          : selInfo.group === "score" ? support.score_note
                           : support.flow_note}
                       </div>
                     )}
@@ -340,7 +341,7 @@ function FactorRow({ f, active, tone, sub, info, onClick }: {
       {info?.ok && info.group && info.group !== "base" && info.group !== "ohlcv" && (
         <span style={{ fontSize: 9, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 4px" }}>
           {info.group === "fundamental" ? "재무" : info.group === "market" ? "시장"
-            : info.group === "macro" ? "매크로" : "수급"}
+            : info.group === "macro" ? "매크로" : info.group === "score" ? "점수 근사" : "수급"}
         </span>
       )}
       {unsupported && (

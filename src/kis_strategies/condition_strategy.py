@@ -20,6 +20,7 @@ import pandas as pd
 from src import kis_data_fetcher as data_fetcher
 from src.kis_signal import Action, Signal
 from src.kis_strategies.condition_logic import eval_logic, max_lookback, parse_logic
+from src.kis_strategies.score_factors import SCORE_MIN_BARS, SCORE_TOKENS, build_score_panels
 from src.kis_strategies.strategies import STRATEGY_REGISTRY, BaseStrategy
 
 logger = logging.getLogger(__name__)
@@ -238,7 +239,7 @@ def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = No
 
 
 def _vector_compare(vals: pd.Series, op: str, rhs, rhs2=None):
-    """_compare/_eval_condition의 연산자 의미를 전 봉 벡터로 — (valid, ok) bool 배열.
+    """_eval_condition의 연산자 의미를 전 봉 벡터로 — (valid, ok) bool 배열.
 
     valid=평가 가능(NaN 아님), ok=valid & 충족. 연산자 불명·rhs 파싱 실패면 None."""
     import numpy as np
@@ -266,27 +267,6 @@ def _vector_compare(vals: pd.Series, op: str, rhs, rhs2=None):
         else:
             return None
     return valid, (ok & valid)
-
-
-def _compare(lhs: float, op: str, rhs, rhs2=None) -> bool | None:
-    try:
-        rhs = float(rhs)
-    except Exception:
-        return None
-    if op == "gte":
-        return lhs >= rhs
-    if op == "lte":
-        return lhs <= rhs
-    if op == "eq":
-        return abs(lhs - rhs) < 1e-9
-    if op == "between":
-        try:
-            rhs2 = float(rhs2)
-        except Exception:
-            return None
-        lo, hi = (rhs, rhs2) if rhs <= rhs2 else (rhs2, rhs)
-        return lo <= lhs <= hi
-    return None
 
 
 def _max_period(conds: list[dict]) -> int:
@@ -332,6 +312,7 @@ class ConditionStrategy(BaseStrategy):
         self._buy_ast = parse_logic(self.buy_logic, len(self.buy_conditions)) if self.buy_logic else None
         self._sell_ast = parse_logic(self.sell_logic, len(self.sell_conditions)) if self.sell_logic else None
         self._panels: dict = {}  # 횡단면(순위/비율) 사전계산 {key: DataFrame[date,ticker]}
+        self._score_panels: dict = {}  # 점수 근사 패널 {점수명: DataFrame[date,ticker]}
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
 
     @property
@@ -348,6 +329,10 @@ class ConditionStrategy(BaseStrategy):
                        for c in (self.buy_conditions + self.sell_conditions)), default=0)
         except Exception:
             tok = 0
+        # 점수 토큰(60MA 이격도 + 변화율 합성) 워밍업
+        if any((c.get("factor_token") or "").strip().strip("{}").strip() in SCORE_TOKENS
+               for c in (self.buy_conditions + self.sell_conditions)):
+            tok = max(tok, SCORE_MIN_BARS)
         # 논리식 시간 한정사(every/any/before)의 추가 룩백
         logic = max((max_lookback(a) for a in (self._buy_ast, self._sell_ast) if a is not None),
                     default=0)
@@ -361,38 +346,16 @@ class ConditionStrategy(BaseStrategy):
 
         fund = _load_fundamentals(stock_code) if self.allow_snapshot_fundamentals else None
 
-        # 명시 논리 조건식 — 조건 시계열 전체를 3치로 평가해 마지막 봉 판정
-        # (every/any/before가 과거 봉의 성립 이력을 요구하므로 스칼라 평가 불가)
-        if self._buy_ast is not None or self._sell_ast is not None:
-            sell_hit, buy_hit = self._signal_hits(df, fund, stock_code)
-            if len(sell_hit) and bool(sell_hit[-1]):
-                return Signal(stock_code=stock_code, stock_name=stock_name,
-                              action=Action.SELL, strength=0.7, reason="매도 조건 충족")
-            if len(buy_hit) and bool(buy_hit[-1]):
-                return Signal(stock_code=stock_code, stock_name=stock_name,
-                              action=Action.BUY, strength=0.7, reason="매수 조건 충족")
-            return Signal(stock_code=stock_code, stock_name=stock_name,
-                          action=Action.HOLD, strength=0.0, reason="조건 미충족")
-
-        as_of = str(df["date"].iloc[-1]) if "date" in df.columns else None
-
-        def _ev(c: dict) -> bool | None:
-            if c.get("function_id") in ("rank", "ratio"):
-                return self._eval_cross(c, stock_code, as_of)
-            return _eval_condition(df, c, fund)
-
-        # 매도: 평가 가능한 조건 중 하나라도 충족 → 청산
-        sell_eval = [b for b in (_ev(c) for c in self.sell_conditions) if b is not None]
-        if sell_eval and any(sell_eval):
+        # per-bar도 벡터화와 동일한 _signal_hits 단일 경로 — 조건 시계열 전체를 평가해
+        # 마지막 봉 판정. (스칼라 별도 경로는 토큰 종류마다 비일관 위험: 횡단면 날짜 포맷,
+        # 시장 토큰 1970 정렬, 점수 패널 등 — 같은 계열 버그 3건의 구조적 재발 방지)
+        sell_hit, buy_hit = self._signal_hits(df, fund, stock_code)
+        if len(sell_hit) and bool(sell_hit[-1]):
             return Signal(stock_code=stock_code, stock_name=stock_name,
                           action=Action.SELL, strength=0.7, reason="매도 조건 충족")
-
-        # 매수: 평가 가능한 조건이 있고 전부 충족 → 진입
-        buy_eval = [b for b in (_ev(c) for c in self.buy_conditions) if b is not None]
-        if buy_eval and all(buy_eval):
+        if len(buy_hit) and bool(buy_hit[-1]):
             return Signal(stock_code=stock_code, stock_name=stock_name,
                           action=Action.BUY, strength=0.7, reason="매수 조건 충족")
-
         return Signal(stock_code=stock_code, stock_name=stock_name,
                       action=Action.HOLD, strength=0.0, reason="조건 미충족")
 
@@ -404,8 +367,19 @@ class ConditionStrategy(BaseStrategy):
                 f"|{cond.get('inner_function_id','')}|{ip.get('n','')}|{ip.get('v','')}")
 
     def prepare_panel(self, ohlcv_map: dict) -> None:
-        """순위/비율 함수용 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
+        """순위/비율·점수 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
         self._panels = {}
+        self._score_panels = {}
+        # 점수 근사 패널 — 조건이 점수 토큰을 참조할 때만 (성장·가치 레그는 펀더멘털 토글 시)
+        if ohlcv_map and any((c.get("factor_token") or "").strip().strip("{}").strip() in SCORE_TOKENS
+                             for c in (self.buy_conditions + self.sell_conditions)):
+            try:
+                fund_map = ({str(tk): _load_fundamentals(str(tk)) for tk in ohlcv_map}
+                            if self.allow_snapshot_fundamentals else None)
+                self._score_panels = build_score_panels(ohlcv_map, fund_map)
+            except Exception as e:
+                logger.debug(f"score panels skipped: {e}")
+                self._score_panels = {}
         cross = [c for c in (self.buy_conditions + self.sell_conditions)
                  if c.get("function_id") in ("rank", "ratio")]
         if not cross or not ohlcv_map:
@@ -526,11 +500,7 @@ class ConditionStrategy(BaseStrategy):
             vals = panel[str(tk)].reindex(_date_keys(df))  # 패널 인덱스 포맷(YYYY-MM-DD)
             return _vector_compare(vals, cond.get("op", "lte"),
                                    cond.get("rhs"), cond.get("rhs2"))
-        s = _base_series(df, cond.get("factor_token", ""))
-        if (s is None or len(s) == 0) and fund is not None:
-            fv = _fundamental_value(cond.get("factor_token", ""), fund)
-            if fv is not None:
-                s = pd.Series([fv] * len(df), index=df.index)
+        s = self._token_series(df, cond, fund, tk)
         if s is None or len(s) == 0:
             return None
         s = _apply_inner(s, cond)
@@ -541,6 +511,24 @@ class ConditionStrategy(BaseStrategy):
             return None
         return _vector_compare(series, cond.get("op", "gte"),
                                cond.get("rhs"), cond.get("rhs2"))
+
+    def _token_series(self, df: pd.DataFrame, cond: dict, fund: dict | None, tk: str):
+        """조건의 좌항 베이스 시리즈 — 점수 패널 → OHLCV·시장·매크로·수급 → 펀더멘털 스냅샷.
+
+        점수 토큰은 횡단면 합성이라 prepare_panel에서 사전계산된 패널 열을 종목 날짜에
+        정렬해 돌려준다(이후 이동평균 등 함수 체인 적용 가능 — 가이드의 기간총합({종합점수},5일))."""
+        name = (cond.get("factor_token") or "").strip().strip("{}").strip()
+        if name in SCORE_TOKENS:
+            panel = (self._score_panels or {}).get(name)
+            if panel is None or str(tk) not in panel.columns:
+                return None
+            return pd.Series(panel[str(tk)].reindex(_date_keys(df)).values, index=df.index)
+        s = _base_series(df, cond.get("factor_token", ""))
+        if (s is None or len(s) == 0) and fund is not None:
+            fv = _fundamental_value(cond.get("factor_token", ""), fund)
+            if fv is not None:
+                s = pd.Series([fv] * len(df), index=df.index)
+        return s
 
     def signal_at(self, stock_code: str, when) -> Signal | None:
         """사전계산 시그널 조회. 미계산·미보유 날짜면 None → 엔진이 per-bar 폴백."""
@@ -562,26 +550,6 @@ class ConditionStrategy(BaseStrategy):
                           action=Action.BUY, strength=0.7, reason="매수 조건 충족")
         return Signal(stock_code=stock_code, stock_name=stock_code,
                       action=Action.HOLD, strength=0.0, reason="조건 미충족")
-
-    def _eval_cross(self, cond: dict, ticker: str, as_of: str | None) -> bool | None:
-        if as_of is None:
-            return None
-        # 엔진의 _date_str은 YYYYMMDD, 패널 인덱스는 YYYY-MM-DD — 정규화 (포맷 불일치로
-        # 횡단면 조건이 엔진 경로에서 조용히 무시되던 버그 수정)
-        as_of = str(as_of).strip()
-        if len(as_of) == 8 and as_of.isdigit():
-            as_of = f"{as_of[:4]}-{as_of[4:6]}-{as_of[6:]}"
-        panel = self._panels.get(self._cross_key(cond))
-        if panel is None:
-            return None
-        try:
-            val = panel.at[as_of, str(ticker)]
-        except Exception:
-            return None
-        if val is None or pd.isna(val):
-            return None
-        return _compare(float(val), cond.get("op", "lte"), cond.get("rhs"), cond.get("rhs2"))
-
 
 # 레지스트리 자기 등록 — 이 모듈이 import 되면 "Condition" 전략 사용 가능
 STRATEGY_REGISTRY["Condition"] = ConditionStrategy

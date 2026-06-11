@@ -329,14 +329,13 @@ def fundamental_field_for(token_name: str) -> str | None:
 
 
 # ── 뉴지 점수류 대체 제안 — 원천 비공개 점수의 정직한 우회 (UI 칩) ───────────
+# ※ 7개 핵심 점수(종합/모멘텀/펀더멘탈/가격/수급/성장/가치)는 가이드 공개 레시피
+#   기반 근사로 직접 지원으로 전환(score_factors.py) — 대체 목록에서 제거됨.
 # 값은 "선택 가능한 토큰"(카탈로그 지원 토큰 또는 자체 팩터 라벨)이어야 한다.
 SUBSTITUTES: dict[str, list[str]] = {
-    "종합점수": ["가치 종합점수", "QMJ 점수", "Greenblatt 점수"],
-    "종합점수순위": ["가치 종합점수"],
-    "펀더멘탈점수": ["QMJ 점수", "F-SCORE"],
-    "펀더멘탈점수순위": ["QMJ 점수"],
-    "모멘텀점수": ["12-1 모멘텀", "RSI"],
-    "성장점수": ["성장 가속도", "분기매출성장률(YOY)"],
+    "종합점수순위": ["종합점수"],
+    "펀더멘탈점수순위": ["펀더멘탈점수"],
+    "모멘텀점수순위": ["모멘텀점수"],
     "매출액성장률점수": ["분기매출성장률(YOY)"],
     "영업이익성장률점수": ["분기영업이익성장률(YOY)"],
     "단기이익성장률점수": ["분기EPS성장률(YOY)"],
@@ -390,6 +389,12 @@ def token_min_bars(token: str) -> int:
     name = (token or "").strip().strip("{}").strip()
     if name in TOKEN_MIN_BARS:
         return TOKEN_MIN_BARS[name]
+    try:
+        from src.kis_strategies.score_factors import SCORE_MIN_BARS, SCORE_TOKENS
+        if name in SCORE_TOKENS:
+            return SCORE_MIN_BARS  # 60MA 이격도 + 변화율 합성 워밍업
+    except Exception:
+        pass
     if name == "베타":
         return 260  # 252일 롤링 cov/var
     if "_MT_" in name:
@@ -758,6 +763,12 @@ def token_support() -> dict:
         supported[t] = "macro"
     for t in FLOW_TOKENS:
         supported[t] = "flow"
+    try:
+        from src.kis_strategies.score_factors import SCORE_TOKENS
+        for t in SCORE_TOKENS:
+            supported[t] = "score"  # 뉴지랭크 공개 레시피 근사 (score_factors.py)
+    except Exception:
+        pass
     return {
         "supported": supported,
         "unsupported": dict(UNSUPPORTED_REASONS),
@@ -772,5 +783,10 @@ def token_support() -> dict:
                      "세부 주체 포함·비공식 1회성), 이후 매일은 KIS 적재"
                      "(python -m src.data.kis_flows, 개인/외국인/기관 3주체). "
                      "적재 기간만 평가 가능 — 미적재 봉은 건너뜀",
+        "score_note": "뉴지랭크 공개 레시피('점수의 이해') 기반 근사 — 구성요소를 매매대상 풀의 "
+                      "날짜별 백분위(0~100)로 합성. 원본(비공개 가중치)과 다를 수 있음. "
+                      "가격·수급·모멘텀 점수는 가격·거래량만으로 항상 계산, "
+                      "성장·가치(→펀더멘탈·종합)는 '펀더멘털 조건 평가' 토글 필요(스냅샷 근사), "
+                      "수급 레그는 투자자별 수급 적재 시 자동 반영",
         "substitutes": dict(SUBSTITUTES),
     }
