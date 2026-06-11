@@ -66,12 +66,59 @@ def test_dart_snapshot_used_when_configured(fresh_store, monkeypatch):
     import src.data.dart_client as dc
     monkeypatch.setattr(dc, "DARTClient", FakeDART)
     monkeypatch.setattr(dc, "get_corp_code", lambda code: "00126380")
+    monkeypatch.setattr("src.engine.universe_select.mktcap_asof",
+                        lambda t, d, engine=None: None)  # 시총 미적재 환경
 
     snap = fresh_store.get_financials_asof("005930", "2024-05-20", CUR)
     assert snap["_source"] == "pit_dart"
     assert snap["_report"] == "2024/11013"          # as_of 기준 1분기 보고서
-    assert snap["roe_pct"] == 15.0 and snap["debt_ratio_pct"] == 100.0
-    assert snap["per"] is None and snap["market_cap_억"] is None  # 가격 의존 → 부분 적용
+    # 1Q 누적 손익 연환산: NI 15×4=60 / equity 100 → ROE 60%
+    assert snap["roe_pct"] == pytest.approx(60.0) and snap["_annualized"] is True
+    assert snap["debt_ratio_pct"] == 100.0
+    assert snap["per"] is None and snap["market_cap_억"] is None  # 시총 없음 → 부분 적용
+
+
+def test_pit_valuation_with_mktcap(fresh_store, monkeypatch):
+    """[C]시총 × [A]재무 결합 — 역사 PER/PBR 실값. 연간 보고서 + 시총 1,000억."""
+    row = {"net_income": 1e10, "total_equity": 5e10, "total_assets": 2e11,
+           "total_liabilities": 1.5e11}
+    monkeypatch.setattr("src.data.dart_history.history_snapshot",
+                        lambda t, y, r, engine=None: row)
+    monkeypatch.setattr("src.engine.universe_select.mktcap_asof",
+                        lambda t, d, engine=None: 1e11)
+
+    snap = fresh_store.get_financials_asof("005930", "2025-04-01", CUR)  # 2024 연간 공시 직후
+    assert snap["_source"] == "pit_db" and snap["_report"] == "2024/11011"
+    assert snap["_annualized"] is False
+    assert snap["per"] == pytest.approx(10.0)            # 1,000억 / 100억
+    assert snap["pbr"] == pytest.approx(2.0)             # 1,000억 / 500억
+    assert snap["market_cap_억"] == pytest.approx(1000.0)
+
+
+def test_pit_valuation_loss_company_per_none(fresh_store, monkeypatch):
+    """적자 기업 — PER 무의미(None), PBR·시총은 유지."""
+    row = {"net_income": -1e9, "total_equity": 5e10, "total_assets": 2e11,
+           "total_liabilities": 1.5e11}
+    monkeypatch.setattr("src.data.dart_history.history_snapshot",
+                        lambda t, y, r, engine=None: row)
+    monkeypatch.setattr("src.engine.universe_select.mktcap_asof",
+                        lambda t, d, engine=None: 1e11)
+    snap = fresh_store.get_financials_asof("005930", "2025-04-01", CUR)
+    assert snap["per"] is None
+    assert snap["pbr"] == pytest.approx(2.0)
+    assert snap["market_cap_억"] == pytest.approx(1000.0)
+
+
+def test_annualization_factors():
+    from src.data.dart_history import annualized_net_income, ratios_from_row
+    row = {"net_income": 30.0, "total_equity": 400.0, "total_assets": 1200.0,
+           "total_liabilities": 800.0}
+    assert annualized_net_income(row, "11013") == pytest.approx(120.0)   # 1Q ×4
+    assert annualized_net_income(row, "11012") == pytest.approx(60.0)    # 반기 ×2
+    assert annualized_net_income(row, "11014") == pytest.approx(40.0)    # 3Q ×4/3
+    assert annualized_net_income(row, "11011") == pytest.approx(30.0)
+    assert ratios_from_row(row, "11013")["roe_pct"] == pytest.approx(30.0)  # 120/400
+    assert ratios_from_row(row, "11013")["debt_ratio_pct"] == pytest.approx(200.0)  # BS 비연환산
 
 
 def test_mock_fallback_without_key(fresh_store, monkeypatch):

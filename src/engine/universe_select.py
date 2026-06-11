@@ -244,6 +244,29 @@ def top_mktcap_asof(date: str, n: int = 200, engine=None) -> list[str]:
         return []
 
 
+def mktcap_asof(ticker: str, date: str, engine=None) -> float | None:
+    """해당일(없으면 직전 거래일) 시가총액(원, KRX 적재값). 없으면 None.
+
+    [A] 재무 시계열과 결합해 역사 PER/PBR을 만드는 기반 — pit_store가 사용."""
+    try:
+        from sqlalchemy import text
+
+        if engine is None:
+            from src.database import get_engine
+            engine = get_engine()
+        if engine is None:
+            return None
+        with engine.connect() as conn:
+            v = conn.execute(text(
+                "SELECT mktcap FROM daily_prices "
+                "WHERE ticker=:t AND trade_date <= :d AND mktcap IS NOT NULL "
+                "ORDER BY trade_date DESC LIMIT 1"
+            ), {"t": str(ticker), "d": date}).scalar()
+        return float(v) if v is not None else None
+    except Exception:
+        return None
+
+
 def select_universe(
     caps: list[str] | None = None,
     sectors: list[str] | None = None,

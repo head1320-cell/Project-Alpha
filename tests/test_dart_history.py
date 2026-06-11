@@ -116,6 +116,8 @@ def test_pit_uses_db_history_without_key(monkeypatch):
            "total_liabilities": 1500.0}
     monkeypatch.setattr("src.data.dart_history.history_snapshot",
                         lambda t, y, r, engine=None: row if t == "005930" else None)
+    monkeypatch.setattr("src.engine.universe_select.mktcap_asof",
+                        lambda t, d, engine=None: None)  # 시총 미적재 환경
 
     class NoKeyDART:
         is_configured = False
@@ -124,5 +126,6 @@ def test_pit_uses_db_history_without_key(monkeypatch):
     snap = PITStore().get_financials_asof("005930", "2024-05-20",
                                           {"roe_pct": 1.0, "per": 10.0})
     assert snap["_source"] == "pit_db"                 # DART 키 없이 DB로 PIT
-    assert snap["roe_pct"] == pytest.approx(20.0)
-    assert snap["per"] is None                          # 가격 의존 — 부분 적용
+    # as_of 5/20 → 1Q 보고서 — 누적 손익 연환산 ×4: 400/500 = 80%
+    assert snap["roe_pct"] == pytest.approx(80.0)
+    assert snap["per"] is None                          # 시총 없음 — 부분 적용

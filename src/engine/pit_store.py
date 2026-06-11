@@ -190,29 +190,53 @@ class PITStore:
             return None
         year, reprt = period
 
-        def _pack(ratios: dict, source: str) -> dict:
+        def _pack(row: dict, source: str) -> dict | None:
+            """재무 행 + as_of 시총([C] KRX 적재) → PIT 스냅샷.
+
+            손익은 연환산(분기 누적 보정) — ROE/PER이 연간 기준과 비교 가능.
+            PER/PBR/시총은 시총 시계열이 있을 때만 실값(없으면 None — 부분 적용),
+            적자(연환산 순이익 ≤ 0)면 PER은 None(무의미)."""
+            from src.data.dart_history import annualized_net_income, ratios_from_row
+            ratios = ratios_from_row(row, reprt)
+            if ratios.get("roe_pct") is None and ratios.get("debt_ratio_pct") is None:
+                return None
+            per = pbr = mktcap_억 = None
+            try:
+                from src.engine.universe_select import mktcap_asof
+                mktcap = mktcap_asof(stock_code, as_of_date)  # 원 (KRX)
+            except Exception:
+                mktcap = None
+            if mktcap and mktcap > 0:
+                mktcap_억 = mktcap / 1e8
+                ni_ann = annualized_net_income(row, reprt)    # 원 (DART)
+                equity = row.get("total_equity")
+                if ni_ann is not None and ni_ann > 0:
+                    per = mktcap / ni_ann
+                if equity is not None and equity > 0:
+                    pbr = mktcap / equity
             return {
                 "roe_pct": ratios.get("roe_pct"),
                 "roa_pct": ratios.get("roa_pct"),
-                "per": None,
-                "pbr": None,
+                "per": per,
+                "pbr": pbr,
                 "debt_ratio_pct": ratios.get("debt_ratio_pct"),
                 "dividend_yield_pct": None,
                 "fcf_억": None,
-                "market_cap_억": None,
+                "market_cap_억": mktcap_억,
                 "_as_of_date": as_of_date,
                 "_report": f"{year}/{reprt}",
+                "_annualized": reprt != REPRT_ANNUAL,
                 "_source": source,
             }
 
         # ① DB 적재분 (dart_history 백필 후 — DART 키·쿼터 무소모)
         try:
-            from src.data.dart_history import history_snapshot, ratios_from_row
+            from src.data.dart_history import history_snapshot
             row = history_snapshot(stock_code, year, reprt)
             if row is not None:
-                ratios = ratios_from_row(row)
-                if ratios.get("roe_pct") is not None or ratios.get("debt_ratio_pct") is not None:
-                    return _pack(ratios, "pit_db")
+                snap = _pack(row, "pit_db")
+                if snap is not None:
+                    return snap
         except Exception as e:
             logger.debug(f"PIT DB snapshot 실패 ({stock_code}@{as_of_date}): {e}")
 
@@ -228,9 +252,9 @@ class PITStore:
             fs = client.get_financial_statement_full(corp, year, reprt_code=reprt)
             if fs is None or fs.total_equity is None:
                 return None
-            fs.compute_ratios()
-            return _pack({"roe_pct": fs.roe, "roa_pct": fs.roa,
-                          "debt_ratio_pct": fs.debt_ratio}, "pit_dart")
+            row = {"net_income": fs.net_income, "total_equity": fs.total_equity,
+                   "total_assets": fs.total_assets, "total_liabilities": fs.total_liabilities}
+            return _pack(row, "pit_dart")
         except Exception as e:
             logger.debug(f"PIT DART snapshot 실패 ({stock_code}@{as_of_date}): {e}")
             return None

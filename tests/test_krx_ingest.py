@@ -192,6 +192,12 @@ def test_top_mktcap_asof(mem_engine):
     assert top_mktcap_asof("2024-01-06", n=2, engine=mem_engine) == ["000002", "000003"]
     assert top_mktcap_asof("2023-12-01", n=2, engine=mem_engine) == []  # 데이터 이전
 
+    # 종목별 시점 시총 (역사 PER/PBR 기반)
+    from src.engine.universe_select import mktcap_asof
+    assert mktcap_asof("000002", "2024-01-06", engine=mem_engine) == pytest.approx(300.0)
+    assert mktcap_asof("없는종목", "2024-01-06", engine=mem_engine) is None
+    assert mktcap_asof("000002", "2023-12-01", engine=mem_engine) is None
+
 
 # ─── 시점 유니버스 (생존편향 보정) ────────────────────────────────────────────
 def test_tickers_asof_uses_prior_day_and_excludes_index(mem_engine):

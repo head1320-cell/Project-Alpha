@@ -195,13 +195,28 @@ def history_snapshot(ticker: str, bsns_year: str, reprt_code: str, engine=None) 
         return None
 
 
-def ratios_from_row(row: dict) -> dict:
-    """재무 행 → PIT 스냅샷 비율 (ROE/ROA/부채비율 %). 분모 없으면 None."""
+# 손익 연환산 계수 — DART 분기 보고서의 손익 항목은 누적(1Q=3개월, 반기=6개월, 3Q=9개월)
+# 기준이라 그대로 쓰면 ROE/PER이 ×4~×1.33 왜곡된다. (표준 XBRL 누적 가정 — 문서화)
+ANNUALIZE_FACTOR = {"11011": 1.0, "11012": 2.0, "11013": 4.0, "11014": 4.0 / 3.0}
+
+
+def annualized_net_income(row: dict, reprt_code: str | None) -> float | None:
+    ni = row.get("net_income")
+    if ni is None:
+        return None
+    return ni * ANNUALIZE_FACTOR.get(str(reprt_code or "11011"), 1.0)
+
+
+def ratios_from_row(row: dict, reprt_code: str | None = None) -> dict:
+    """재무 행 → PIT 스냅샷 비율 (ROE/ROA/부채비율 %). 분모 없으면 None.
+
+    reprt_code가 분기 보고서면 손익(순이익)을 연환산해 연간 기준과 비교 가능하게."""
     def _div(a, b):
         return (a / b * 100.0) if (a is not None and b not in (None, 0, 0.0)) else None
+    ni_ann = annualized_net_income(row, reprt_code)
     return {
-        "roe_pct": _div(row.get("net_income"), row.get("total_equity")),
-        "roa_pct": _div(row.get("net_income"), row.get("total_assets")),
+        "roe_pct": _div(ni_ann, row.get("total_equity")),
+        "roa_pct": _div(ni_ann, row.get("total_assets")),
         "debt_ratio_pct": _div(row.get("total_liabilities"), row.get("total_equity")),
     }
 
