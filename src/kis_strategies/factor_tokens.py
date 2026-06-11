@@ -284,6 +284,20 @@ FUNDAMENTAL_ALIASES: dict[str, str] = {
     "분기영업현금흐름": "operating_cf", "T-영업현금흐름": "operating_cf",
     "분기EPS": "eps", "T-EPS": "eps", "전분기EPS": "eps_prev",
     "총발행주식수": "shares", "T-총주식수": "shares",
+    # ── 시계열 파생 (financials_history 백필 필요 — dart_history.history_factors) ──
+    "3년연속당기순이익0이상": "ni_positive_3y", "3년연속영업이익0이상": "op_positive_3y",
+    "분기순이익흑자전환(YOY)": "ni_turnaround_yoy", "분기순이익흑자전환(QOQ)": "ni_turnaround_qoq",
+    "분기영업이익흑자전환(YOY)": "op_turnaround_yoy", "분기영업이익흑자전환(QOQ)": "op_turnaround_qoq",
+    "분기순이익성장률(YOY)": "ni_growth_yoy", "분기순이익성장률(QOQ)": "ni_growth_qoq",
+    "분기영업이익성장률(QOQ)": "op_growth_qoq",
+    "분기자산성장률(YOY)": "asset_growth_yoy", "분기자본성장률(YOY)": "equity_growth_yoy",
+    "분기부채비율성장률(YOY)": "debt_ratio_growth_yoy",
+    "분기유동비율성장률(YOY)": "current_ratio_growth_yoy",
+    "분기매출총이익률성장률(YOY)": "gross_margin_growth_yoy",
+    "분기자산회전율성장률(YOY)": "asset_turnover_growth_yoy",
+    "분기ROA성장률(YOY)": "roa_growth_yoy", "분기ROE성장률(YOY)": "roe_growth_yoy",
+    "3년연속배당금같거나상승2": "dps_up_3y",
+    "배당성장률": "dps_growth_yoy", "배당성장률2": "dps_growth_yoy",
 }
 
 

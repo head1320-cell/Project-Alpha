@@ -109,6 +109,66 @@ def test_empty_statement_not_saved(mem_engine):
     assert dh.upsert_statement(mem_engine, "005930", fs) is False
 
 
+# ─── 시계열 파생 팩터 (흑자전환·3년연속·성장률) ──────────────────────────────
+def seed_fs(engine, year, reprt, **kw):
+    fs = FinancialStatement(corp_code="c", corp_name="n", bsns_year=str(year),
+                            reprt_code=reprt)
+    for k, v in kw.items():
+        setattr(fs, k, v)
+    assert dh.upsert_statement(engine, "005930", fs)
+
+
+def test_history_factors_turnaround_and_3y(mem_engine):
+    dh.ensure_history_table(mem_engine)
+    # 연간 3개: 순이익 -50 → -10 → 80 (3년연속 X), 영업이익 5 → 10 → 20 (3년연속 O)
+    # 배당 100 → 100 → 120 (같거나상승 O)
+    seed_fs(mem_engine, 2022, "11011", net_income=-50.0, operating_profit=5.0, dps=100.0,
+            total_assets=1000.0, total_equity=500.0, total_liabilities=500.0, revenue=900.0)
+    seed_fs(mem_engine, 2023, "11011", net_income=-10.0, operating_profit=10.0, dps=100.0,
+            total_assets=1000.0, total_equity=500.0, total_liabilities=500.0, revenue=900.0)
+    seed_fs(mem_engine, 2024, "11011", net_income=80.0, operating_profit=20.0, dps=120.0,
+            total_assets=1100.0, total_equity=550.0, total_liabilities=550.0, revenue=1000.0)
+    # 1Q: 2024(-5, 누적) → 2025(+40) — YoY 흑자전환
+    seed_fs(mem_engine, 2024, "11013", net_income=-5.0, operating_profit=3.0,
+            total_assets=1050.0, total_equity=520.0, total_liabilities=530.0, revenue=240.0,
+            current_assets=400.0, current_liabilities=200.0, gross_profit=60.0)
+    seed_fs(mem_engine, 2025, "11013", net_income=40.0, operating_profit=15.0,
+            total_assets=1155.0, total_equity=572.0, total_liabilities=583.0, revenue=270.0,
+            current_assets=460.0, current_liabilities=200.0, gross_profit=81.0)
+
+    f = dh._compute_history_factors(dh.load_history("005930", engine=mem_engine))
+    assert f["ni_turnaround_yoy"] == 1.0            # 1Q: -5 → +40
+    assert f["op_turnaround_yoy"] == 0.0            # 3 → 15 (둘 다 흑자)
+    assert f["ni_positive_3y"] == 0.0 and f["op_positive_3y"] == 1.0
+    assert f["dps_up_3y"] == 1.0
+    assert f["dps_growth_yoy"] == pytest.approx(20.0)
+    assert f["asset_growth_yoy"] == pytest.approx(10.0)        # 1050 → 1155
+    assert f["equity_growth_yoy"] == pytest.approx(10.0)       # 520 → 572
+    assert f["ni_growth_yoy"] is None               # 전년 음수 분모 → 성장률 무의미(None)
+    assert f["gross_margin_growth_yoy"] == pytest.approx(
+        ((81 / 270) - (60 / 240)) / (60 / 240) * 100)
+    # QOQ: 2025 1Q의 직전 단일분기(2024 4Q = 연간-3Q)가 없음(3Q 미적재) → None
+    assert f["ni_growth_qoq"] is None and f["ni_turnaround_qoq"] is None
+
+
+def test_history_factors_qoq_single_quarter_diff(mem_engine):
+    """QOQ는 누적 차분 단일 분기값 — 반기(누적) - 1Q = 2Q 단일."""
+    dh.ensure_history_table(mem_engine)
+    seed_fs(mem_engine, 2025, "11013", net_income=-10.0, operating_profit=30.0)   # 1Q
+    seed_fs(mem_engine, 2025, "11012", net_income=20.0, operating_profit=75.0)    # 반기 누적
+    f = dh._compute_history_factors(dh.load_history("005930", engine=mem_engine))
+    # 2Q 단일 NI = 20-(-10) = 30, 1Q = -10 → 흑자전환 1.0
+    assert f["ni_turnaround_qoq"] == 1.0
+    assert f["op_growth_qoq"] == pytest.approx((45 - 30) / 30 * 100)  # 2Q 단일 op=45
+    assert f["ni_positive_3y"] is None              # 연간 3개 미만 → None(정직)
+
+
+def test_history_factors_empty_without_data(mem_engine):
+    dh.ensure_history_table(mem_engine)
+    f = dh._compute_history_factors(dh.load_history("005930", engine=mem_engine))
+    assert all(v is None for v in f.values())       # 전부 None → 조건 건너뜀
+
+
 # ─── PIT 연동: DB 적재분 우선 (키 불필요) ────────────────────────────────────
 def test_pit_uses_db_history_without_key(monkeypatch):
     from src.engine.pit_store import PITStore

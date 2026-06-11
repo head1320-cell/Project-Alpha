@@ -99,8 +99,10 @@ def _fundamental_value(token: str, f: dict):
 
 
 def _load_fundamentals(stock_code: str) -> dict:
-    """파생 팩터(64) + 원천 재무(42, 억 단위) 병합 — raw 금액 토큰(매출액·시가총액 등)
-    과 라벨 별칭이 실경로에서 평가되게 한다. 동명 키는 파생이 우선."""
+    """파생 팩터(64) + 원천 재무(42, 억) + 시계열 파생(흑자전환·3년연속 등 19) 병합.
+
+    raw 금액 토큰(매출액·시가총액)과 라벨 별칭, 시계열 토큰이 실경로에서
+    평가되게 한다. 시계열은 financials_history 적재 시에만 값(없으면 None→건너뜀)."""
     try:
         from src.data.fundamentals_store import FundamentalsStore
         store = FundamentalsStore.get_default()
@@ -110,7 +112,13 @@ def _load_fundamentals(stock_code: str) -> dict:
             raw = store.get_raw_financials(stock_code) or {}
         except Exception:
             pass
-        return {**raw, **factors}
+        hist = {}
+        try:
+            from src.data.dart_history import history_factors
+            hist = history_factors(stock_code) or {}
+        except Exception:
+            pass
+        return {**raw, **hist, **factors}
     except Exception:
         return {}
 

@@ -37,20 +37,24 @@ CREATE TABLE IF NOT EXISTS financials_history (
     operating_cf        FLOAT,
     capex               FLOAT,
     shares_outstanding  FLOAT,
+    dps                 FLOAT,
     fetched_at          VARCHAR(32),
     PRIMARY KEY (ticker, bsns_year, reprt_code)
 )
 """
 
+# 기존 테이블 마이그레이션 (ALTER 멱등 — 이미 있음 무시)
+_MIGRATE_COLUMNS = ("dps FLOAT",)
+
 _UPSERT = """
 INSERT INTO financials_history
     (ticker, bsns_year, reprt_code, revenue, operating_profit, net_income, gross_profit,
      total_assets, total_liabilities, total_equity, current_assets, current_liabilities,
-     operating_cf, capex, shares_outstanding, fetched_at)
+     operating_cf, capex, shares_outstanding, dps, fetched_at)
 VALUES
     (:ticker, :bsns_year, :reprt_code, :revenue, :operating_profit, :net_income, :gross_profit,
      :total_assets, :total_liabilities, :total_equity, :current_assets, :current_liabilities,
-     :operating_cf, :capex, :shares_outstanding, :fetched_at)
+     :operating_cf, :capex, :shares_outstanding, :dps, :fetched_at)
 ON CONFLICT (ticker, bsns_year, reprt_code) DO UPDATE SET
     revenue=EXCLUDED.revenue, operating_profit=EXCLUDED.operating_profit,
     net_income=EXCLUDED.net_income, gross_profit=EXCLUDED.gross_profit,
@@ -58,13 +62,13 @@ ON CONFLICT (ticker, bsns_year, reprt_code) DO UPDATE SET
     total_equity=EXCLUDED.total_equity, current_assets=EXCLUDED.current_assets,
     current_liabilities=EXCLUDED.current_liabilities, operating_cf=EXCLUDED.operating_cf,
     capex=EXCLUDED.capex, shares_outstanding=EXCLUDED.shares_outstanding,
-    fetched_at=EXCLUDED.fetched_at
+    dps=EXCLUDED.dps, fetched_at=EXCLUDED.fetched_at
 """
 
 _FIELDS = ("revenue", "operating_profit", "net_income", "gross_profit",
            "total_assets", "total_liabilities", "total_equity",
            "current_assets", "current_liabilities", "operating_cf", "capex",
-           "shares_outstanding")
+           "shares_outstanding", "dps")
 
 REPRT_ANNUAL = "11011"
 QUARTER_REPRTS = ("11013", "11012", "11014")  # 1Q, 반기, 3Q
@@ -81,6 +85,12 @@ def ensure_history_table(engine) -> None:
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
+    for col in _MIGRATE_COLUMNS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE financials_history ADD COLUMN {col}"))
+        except Exception:
+            pass  # 이미 존재 — 정상
 
 
 def upsert_statement(engine, ticker: str, fs) -> bool:
@@ -172,6 +182,7 @@ def backfill_financials(tickers: list[str] | None = None, all_listed: bool = Fal
                     logger.debug(f"재무 조회 실패 [{tk} {year}/{reprt}]: {e}")
         if stats["saved"] and stats["saved"] % 500 == 0:
             logger.info(f"DART 백필 진행: {stats['saved']:,}건 저장 / {stats['calls']:,}콜")
+    _HISTORY_CACHE.clear()  # 새 적재분 반영 (파생 팩터 캐시 무효화)
     return stats
 
 
@@ -205,6 +216,171 @@ def annualized_net_income(row: dict, reprt_code: str | None) -> float | None:
     if ni is None:
         return None
     return ni * ANNUALIZE_FACTOR.get(str(reprt_code or "11011"), 1.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 시계열 파생 팩터 — 흑자전환·3년연속·성장률류 (조건식 펀더멘털 토큰)
+#   · YoY = 동일 보고서(누적) 전년 대비 — 누적끼리 비교라 연환산 불필요
+#   · QOQ = 단일 분기값(누적 차분: 반기-1Q 등) 비교 — 인접 보고서 없으면 None(정직)
+#   · 3년연속 = 최근 3개 연간 보고서 기준 (부족하면 None)
+#   현재 스냅샷 기준(최신 적재 보고서) — 펀더멘털 토글과 동일한 look-ahead 근사.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_REPRT_MONTH = {"11013": 3, "11012": 6, "11014": 9, "11011": 12}
+
+HISTORY_FACTOR_IDS = (
+    "ni_positive_3y", "op_positive_3y",
+    "ni_turnaround_yoy", "ni_turnaround_qoq", "op_turnaround_yoy", "op_turnaround_qoq",
+    "ni_growth_yoy", "ni_growth_qoq", "op_growth_qoq",
+    "asset_growth_yoy", "equity_growth_yoy",
+    "debt_ratio_growth_yoy", "current_ratio_growth_yoy",
+    "gross_margin_growth_yoy", "asset_turnover_growth_yoy",
+    "roa_growth_yoy", "roe_growth_yoy",
+    "dps_up_3y", "dps_growth_yoy",
+)
+
+_HISTORY_CACHE: dict[str, dict] = {}
+
+
+def load_history(ticker: str, engine=None) -> list[dict]:
+    """종목의 전체 적재 행 (연대순 정렬, year/reprt/month 포함). 없으면 []."""
+    from sqlalchemy import text
+    try:
+        engine = _get_engine(engine)
+        if engine is None:
+            return []
+        cols = ", ".join(_FIELDS)
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                f"SELECT bsns_year, reprt_code, {cols} FROM financials_history "  # noqa: S608
+                "WHERE ticker=:t"), {"t": str(ticker)}).fetchall()
+        out = []
+        for r in rows:
+            year, reprt = str(r[0]), str(r[1])
+            month = _REPRT_MONTH.get(reprt)
+            if month is None:
+                continue
+            d = {f: (float(v) if v is not None else None) for f, v in zip(_FIELDS, r[2:])}
+            d.update({"year": int(year), "reprt": reprt, "month": month,
+                      "seq": int(year) * 12 + month})
+            out.append(d)
+        out.sort(key=lambda x: x["seq"])
+        return out
+    except Exception:
+        return []
+
+
+def _growth(cur, prev) -> float | None:
+    """성장률(%) — 기반(prev)이 양수일 때만 의미 있음.
+
+    음수 기반(전년 적자 등)의 '성장률'은 부호가 뒤집혀 오독을 유발 → None,
+    그 경우는 흑자전환(turnaround) 토큰이 담당한다."""
+    if cur is None or prev is None or prev <= 0:
+        return None
+    return (cur - prev) / prev * 100.0
+
+
+def _turnaround(cur, prev) -> float | None:
+    if cur is None or prev is None:
+        return None
+    return 1.0 if (prev <= 0 < cur) else 0.0
+
+
+def _ratio(a, b, scale=100.0) -> float | None:
+    if a is None or b in (None, 0, 0.0):
+        return None
+    return a / b * scale
+
+
+def _single_quarters(rows: list[dict], field: str) -> list[tuple[int, float]]:
+    """누적 손익 → 단일 분기값 [(seq, value)]. 1Q=누적, 이후는 직전 보고서와의 차분
+    (같은 연도 내 인접 보고서가 있을 때만 — 없으면 그 분기는 산출 불가)."""
+    by_key = {(r["year"], r["month"]): r.get(field) for r in rows}
+    singles = []
+    for r in rows:
+        v = r.get(field)
+        if v is None:
+            continue
+        if r["month"] == 3:
+            singles.append((r["seq"], v))
+            continue
+        prev = by_key.get((r["year"], r["month"] - 3))
+        if prev is not None:
+            singles.append((r["seq"], v - prev))
+    return singles
+
+
+def _compute_history_factors(rows: list[dict]) -> dict:
+    out: dict = dict.fromkeys(HISTORY_FACTOR_IDS)
+    if not rows:
+        return out
+    latest = rows[-1]
+
+    # 동일 보고서 전년(YoY) — 누적끼리 비교
+    prev_y = next((r for r in reversed(rows[:-1])
+                   if r["year"] == latest["year"] - 1 and r["reprt"] == latest["reprt"]), None)
+    if prev_y is not None:
+        out["ni_turnaround_yoy"] = _turnaround(latest.get("net_income"), prev_y.get("net_income"))
+        out["op_turnaround_yoy"] = _turnaround(latest.get("operating_profit"),
+                                               prev_y.get("operating_profit"))
+        out["ni_growth_yoy"] = _growth(latest.get("net_income"), prev_y.get("net_income"))
+        out["asset_growth_yoy"] = _growth(latest.get("total_assets"), prev_y.get("total_assets"))
+        out["equity_growth_yoy"] = _growth(latest.get("total_equity"), prev_y.get("total_equity"))
+        for fid, cur_v, prev_v in (
+            ("debt_ratio_growth_yoy",
+             _ratio(latest.get("total_liabilities"), latest.get("total_equity")),
+             _ratio(prev_y.get("total_liabilities"), prev_y.get("total_equity"))),
+            ("current_ratio_growth_yoy",
+             _ratio(latest.get("current_assets"), latest.get("current_liabilities")),
+             _ratio(prev_y.get("current_assets"), prev_y.get("current_liabilities"))),
+            ("gross_margin_growth_yoy",
+             _ratio(latest.get("gross_profit"), latest.get("revenue")),
+             _ratio(prev_y.get("gross_profit"), prev_y.get("revenue"))),
+            ("asset_turnover_growth_yoy",
+             _ratio(latest.get("revenue"), latest.get("total_assets"), 1.0),
+             _ratio(prev_y.get("revenue"), prev_y.get("total_assets"), 1.0)),
+            ("roa_growth_yoy",
+             _ratio(latest.get("net_income"), latest.get("total_assets")),
+             _ratio(prev_y.get("net_income"), prev_y.get("total_assets"))),
+            ("roe_growth_yoy",
+             _ratio(latest.get("net_income"), latest.get("total_equity")),
+             _ratio(prev_y.get("net_income"), prev_y.get("total_equity"))),
+        ):
+            out[fid] = _growth(cur_v, prev_v)
+
+    # 단일 분기(QOQ) — 누적 차분, 인접(3개월) 분기끼리만
+    for fid_g, fid_t, field in (("ni_growth_qoq", "ni_turnaround_qoq", "net_income"),
+                                ("op_growth_qoq", "op_turnaround_qoq", "operating_profit")):
+        singles = _single_quarters(rows, field)
+        if len(singles) >= 2 and singles[-1][0] - singles[-2][0] == 3:
+            out[fid_g] = _growth(singles[-1][1], singles[-2][1])
+            out[fid_t] = _turnaround(singles[-1][1], singles[-2][1])
+
+    # 3년연속 (연간 보고서 3개 필요)
+    annuals = [r for r in rows if r["reprt"] == REPRT_ANNUAL][-3:]
+    if len(annuals) == 3:
+        ni = [r.get("net_income") for r in annuals]
+        op = [r.get("operating_profit") for r in annuals]
+        if all(v is not None for v in ni):
+            out["ni_positive_3y"] = 1.0 if all(v > 0 for v in ni) else 0.0
+        if all(v is not None for v in op):
+            out["op_positive_3y"] = 1.0 if all(v > 0 for v in op) else 0.0
+        dps = [r.get("dps") for r in annuals]
+        if all(v is not None for v in dps):
+            out["dps_up_3y"] = 1.0 if (dps[0] <= dps[1] <= dps[2]) else 0.0
+    if len(annuals) >= 2:
+        out["dps_growth_yoy"] = _growth(annuals[-1].get("dps"), annuals[-2].get("dps"))
+    return out
+
+
+def history_factors(ticker: str, engine=None) -> dict:
+    """시계열 파생 팩터 (캐시) — 적재 없으면 전부 None(조건 건너뜀)."""
+    key = str(ticker)
+    if key in _HISTORY_CACHE:
+        return _HISTORY_CACHE[key]
+    out = _compute_history_factors(load_history(key, engine))
+    _HISTORY_CACHE[key] = out
+    return out
 
 
 def ratios_from_row(row: dict, reprt_code: str | None = None) -> dict:

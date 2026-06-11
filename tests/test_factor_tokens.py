@@ -138,11 +138,13 @@ def test_unsupported_reasons_are_honest():
 
 # ─── ③ 펀더멘털 별칭 (카탈로그 표기 → fundamentals_store id/raw 키) ──────────
 def test_fundamental_aliases_map_to_real_store_keys():
-    """별칭 타깃이 전부 실재하는 키인지 — 파생 팩터 id ∪ 원천(raw) 키 (드리프트 가드)."""
+    """별칭 타깃이 전부 실재하는 키인지 — 파생 id ∪ raw 키 ∪ 시계열 파생 id (드리프트 가드)."""
+    from src.data.dart_history import HISTORY_FACTOR_IDS
     from src.data.fundamentals_store import FUNDAMENTAL_FACTORS, FundamentalsStore
     from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
     valid = {m.id for m in FUNDAMENTAL_FACTORS}
     valid |= set(FundamentalsStore.get_default().get_raw_financials("005930").keys())
+    valid |= set(HISTORY_FACTOR_IDS)
     bad = {k: v for k, v in FUNDAMENTAL_ALIASES.items() if v not in valid}
     assert bad == {}, f"존재하지 않는 스토어 키: {bad}"
 
