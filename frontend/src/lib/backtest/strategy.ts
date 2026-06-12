@@ -88,6 +88,7 @@ export interface BacktestStrategy {
   rebalancePeriod: "daily" | "weekly" | "monthly";  // 신규 매수일: 매일(기존) | 주·월 첫 거래일
   signalLag: 0 | 1;        // 신호 기준: 0=당일 봉 포함(기존) | 1=전일 봉 기준(젠포트식 — 시가류 체결 정합)
   cashReservePct: number;  // 자산배분: 평가자산 대비 현금 상시 보유 % (0=미사용)
+  intradayFill: boolean;   // 하이브리드 체결: 적재된 분봉으로 매매 시간 윈도 내 정밀 체결
   marketTiming: MarketTimingState;
   buy: BuyState;
   sell: SellState;
@@ -115,6 +116,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "수수료", value: `${s.feePct}%` },
         { label: "리밸런싱", value: s.rebalancePeriod === "daily" ? "매일" : s.rebalancePeriod === "weekly" ? "매주" : "매월" },
         { label: "신호 기준", value: s.signalLag === 1 ? "전일 종가 (젠포트식)" : "당일 종가" },
+        { label: "분봉 체결", value: s.intradayFill ? "정밀 (적재된 날만)" : "일봉 모델", muted: !s.intradayFill },
       ]},
       { label: "매수 조건", rows: [
         { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미설정", muted: !b.conditions.length },

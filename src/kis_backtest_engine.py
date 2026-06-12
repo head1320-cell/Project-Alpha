@@ -49,6 +49,9 @@ def _get_sync_engine():
 # 테스트/주입용 override
 _engine_override = None
 
+# 하이브리드 체결 센티널 — "분봉 없음(일봉 폴백)"과 "지정가 미체결(None)"의 구분
+_NO_BARS = object()
+
 
 def set_engine(engine):
     """테스트 또는 의존성 주입 시 엔진을 직접 설정."""
@@ -185,6 +188,14 @@ class BacktestConfig:
     # 매수 실행 순서를 정렬 — max_positions/일일 한도가 상위 후보부터 소진된다.
     buy_sort_expr: str | None = None
     buy_sort_desc: bool = True          # True=식 값 높은순
+    # 하이브리드 체결 ("신호는 일봉, 체결만 분봉"): (종목,일자) 분봉이 적재돼 있으면
+    # 매매 시간 윈도 안에서 정밀 체결 — 지정가 도달/시장가(윈도 시작 시가)/TWAP·VWAP.
+    # 분봉 없는 날은 일봉 모델 폴백(결과 intraday에 적용/폴백 건수 보고 — 정직).
+    intraday_fill: bool = False
+    buy_time_start: str = "0900"        # 매수 시간 윈도 (HHMM)
+    buy_time_end: str = "1530"
+    sell_time_start: str = "0900"       # 매도 시간 윈도 (HHMM)
+    sell_time_end: str = "1530"
     # 신호 기준일 (젠포트 Tip 3: "전일 종가 기준 선정 → 익일 매매").
     # 0 = 당일 봉 포함(기존 동작 불변, 종가 체결과 정합).
     # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — 시가·전일종가류 체결의 look-ahead 제거.
@@ -210,6 +221,7 @@ class BacktestEngine:
         self.trades: list[Trade] = []
         self.equity_history: list[tuple] = []   # (date_str, equity)
         self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
+        self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
 
     def run(self) -> dict:
         """
@@ -510,12 +522,23 @@ class BacktestEngine:
 
         오프셋 0이면 기존 resolve 그대로(None 가능 — 호출부가 종가 폴백, 기존 불변).
         오프셋이 있으면 기준가×(1+off%)를 지정가로 보고 당일 도달 검증:
-        매수는 저가≤지정가일 때 min(지정가, 시가), 매도는 고가≥지정가일 때
-        max(지정가, 시가) — 갭이 지정가를 건너뛰면 시가 체결. 미도달이면 None."""
+        매수는 저가≤지정가일 때 min(지정가, 시가), 매도는 고가≤지정가일 때
+        max(지정가, 시가) — 갭이 지정가를 건너뛰면 시가 체결. 미도달이면 None.
+
+        intraday_fill이면 (종목,일자) 분봉이 있을 때 매매 시간 윈도 안에서 정밀
+        판정(지정가 도달·시장가·TWAP/VWAP) — 분봉 없으면 일봉 모델 폴백."""
         from src.engine.fill_price import resolve_from_slice
         fill_type = self.cfg.buy_fill_type if side == "buy" else self.cfg.sell_fill_type
         off = self.cfg.buy_fill_offset_pct if side == "buy" else self.cfg.sell_fill_offset_pct
         base = resolve_from_slice(fill_type, df_slice)
+
+        if self.cfg.intraday_fill:
+            refined = self._intraday_price(side, df_slice, fill_type, base, off)
+            if refined is not _NO_BARS:
+                self._intraday["applied"] += 1
+                return refined  # None = 윈도 내 지정가 미도달(미체결)
+            self._intraday["fallback"] += 1
+
         if not off:
             return base
         if base is None:
@@ -530,6 +553,50 @@ class BacktestEngine:
         if side == "buy":
             return min(p, open_) if low <= p else None
         return max(p, open_) if high >= p else None
+
+    def _intraday_price(self, side: str, df_slice, fill_type: str, base, off):
+        """분봉 정밀 체결 — 매매 시간 윈도 내에서.
+
+        반환: 체결가 | None(지정가 미도달=미체결) | _NO_BARS(분봉·윈도 없음 → 일봉 폴백).
+        close·전일가류 체결 유형은 윈도와 무관(장마감/전일 기준)이라 일봉 유지."""
+        try:
+            ticker = str(df_slice.attrs.get("ticker") or "")
+            date_iso = df_slice.index[-1].strftime("%Y-%m-%d")
+        except Exception:
+            return _NO_BARS
+        if not ticker:
+            return _NO_BARS
+        try:
+            from src.data.minute_bars import load_minute_bars
+            bars = load_minute_bars(ticker, date_iso)
+        except Exception:
+            return _NO_BARS
+        if bars is None or bars.empty:
+            return _NO_BARS
+        start = (self.cfg.buy_time_start if side == "buy" else self.cfg.sell_time_start) or "0900"
+        end = (self.cfg.buy_time_end if side == "buy" else self.cfg.sell_time_end) or "1530"
+        t4 = bars["time"].astype(str).str[:4]
+        w = bars[(t4 >= start.replace(":", "")[:4]) & (t4 <= end.replace(":", "")[:4])]
+        if w.empty:
+            return _NO_BARS
+        if off:
+            if base is None:
+                return _NO_BARS
+            p = base * (1 + off / 100.0)
+            first_open = float(w["open"].iloc[0])
+            if side == "buy":
+                return min(p, first_open) if float(w["low"].min()) <= p else None
+            return max(p, first_open) if float(w["high"].max()) >= p else None
+        if fill_type == "twap":
+            return float(w["close"].astype(float).mean())
+        if fill_type == "vwap":
+            v = w["volume"].astype(float)
+            c = w["close"].astype(float)
+            tv = float(v.sum())
+            return float((c * v).sum() / tv) if tv > 0 else float(c.mean())
+        if fill_type == "open":
+            return float(w["open"].iloc[0])  # 매매 시간 시작 시장가
+        return _NO_BARS
 
     def _breakthrough_price(self, df_slice) -> float | None:
         """돌파매수 체결가 — 당일 고가 ≥ 전일 고가면 max(시가, 전일고가), 미돌파면 None.
@@ -898,8 +965,16 @@ class BacktestEngine:
         # 벤치마크(코스피) 대비 — 동일 기간 매수후보유 곡선 + 초과수익/베타/알파
         benchmark = self._compute_benchmark(dates, equity_values, returns)
 
+        # 하이브리드 체결 통계 (정직: 분봉 적용/일봉 폴백 비율 공개)
+        intraday_meta = None
+        if self.cfg.intraday_fill:
+            tot = self._intraday["applied"] + self._intraday["fallback"]
+            intraday_meta = {**self._intraday,
+                             "applied_pct": round(self._intraday["applied"] / tot * 100, 1) if tot else 0.0}
+
         return {
             "currency": "KRW",
+            "intraday": intraday_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "ran_at": datetime.now().isoformat(),
@@ -1151,6 +1226,11 @@ def run_backtest(
     cash_reserve_pct: float = 0.0,
     buy_sort_expr: str | None = None,
     buy_sort_desc: bool = True,
+    intraday_fill: bool = False,
+    buy_time_start: str = "0900",
+    buy_time_end: str = "1530",
+    sell_time_start: str = "0900",
+    sell_time_end: str = "1530",
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1207,6 +1287,11 @@ def run_backtest(
         cash_reserve_pct=cash_reserve_pct,
         buy_sort_expr=buy_sort_expr,
         buy_sort_desc=buy_sort_desc,
+        intraday_fill=intraday_fill,
+        buy_time_start=buy_time_start,
+        buy_time_end=buy_time_end,
+        sell_time_start=sell_time_start,
+        sell_time_end=sell_time_end,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

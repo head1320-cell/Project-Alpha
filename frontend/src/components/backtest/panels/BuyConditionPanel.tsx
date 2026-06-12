@@ -84,6 +84,23 @@ export default function BuyConditionPanel({ s, set }: {
             </span>
           )}
         </Field>
+        <Field label="분봉 정밀 체결">
+          <Segmented value={s.intradayFill ? "on" : "off"}
+            onChange={(v) => set((x) => ({ ...x, intradayFill: v === "on" }))}
+            options={[{ id: "off", label: "일봉 모델" }, { id: "on", label: "분봉 정밀" }]} />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            적재된 (종목,일자) 분봉으로 매매 시간 윈도 내 지정가·시장가·TWAP 정밀 체결 —
+            없는 날은 일봉 폴백 (결과에 적용률 표시)
+          </span>
+        </Field>
+        {s.intradayFill && (
+          <Field label="매수 시간">
+            <input value={s.buy.timeStart} onChange={(e) => patchBuy({ timeStart: e.target.value })} style={dateBox} placeholder="09:00" />
+            <span style={{ color: "var(--text-secondary)" }}>~</span>
+            <input value={s.buy.timeEnd} onChange={(e) => patchBuy({ timeEnd: e.target.value })} style={dateBox} placeholder="15:30" />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>이 윈도 안의 분봉으로만 매수 체결</span>
+          </Field>
+        )}
       </Section>
 
       <Section title="매수 조건 설정" hint="팩터·함수 조건식" tone="buy"

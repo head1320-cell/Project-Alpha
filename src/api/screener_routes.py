@@ -1077,6 +1077,12 @@ class ScreenToBacktestRequest(BaseModel):
     # 매수 우선순위식 (일별) — 봉마다 후보들의 식 값으로 매수 순서 정렬
     buy_sort_expr: str | None = None
     buy_sort_desc: bool = True
+    # 하이브리드 체결: 적재된 분봉으로 매매 시간 윈도 내 정밀 체결 (없는 날은 일봉 폴백)
+    intraday_fill: bool = False
+    buy_time_start: str = "0900"
+    buy_time_end: str = "1530"
+    sell_time_start: str = "0900"
+    sell_time_end: str = "1530"
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1226,6 +1232,11 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             cash_reserve_pct=req.cash_reserve_pct,
             buy_sort_expr=req.buy_sort_expr,
             buy_sort_desc=req.buy_sort_desc,
+            intraday_fill=req.intraday_fill,
+            buy_time_start=req.buy_time_start,
+            buy_time_end=req.buy_time_end,
+            sell_time_start=req.sell_time_start,
+            sell_time_end=req.sell_time_end,
         )
 
         # 3) 통합 응답
@@ -1238,6 +1249,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             ],
             "screened_count": len(tickers),
             "backtest": bt.get("result", bt),
+            "intraday": bt.get("intraday"),  # 하이브리드 체결 적용/폴백 통계 (사용 시)
             "backtest_config": {
                 "strategy": eff_strategy,
                 "period": f"{req.start_date} ~ {req.end_date}",

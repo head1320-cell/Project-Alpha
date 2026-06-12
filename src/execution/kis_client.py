@@ -73,6 +73,8 @@ TR_ID = {
     "PRICE":              "FHKST01010100",
     "DAILY_CHART":        "FHKST03010100",   # 국내주식 기간별시세(일/주/월/년)
     "DAILY_PRICE":        "FHKST01010400",   # 국내주식 일자별 (최근 30일)
+    "MINUTE_TODAY":       "FHKST03010200",   # 주식당일분봉조회 (당일 1분봉, 30건/콜)
+    "MINUTE_DAILY":       "FHKST03010230",   # 주식일별분봉조회 (과거 일자 — 소급 한도는 실측)
     "INVESTOR":           "FHKST01010900",   # 주식현재가 투자자 (개인/외국인/기관 일별, 최근 ~30일)
 }
 
@@ -543,6 +545,70 @@ class KISClient:
         # KIS는 최신→과거 순으로 반환 → 과거→현재로 뒤집기
         result.reverse()
         return result[-days:] if len(result) > days else result
+
+    def _parse_minute_rows(self, rows: list) -> list[dict]:
+        out = []
+        for r in rows or []:
+            t = r.get("stck_cntg_hour")
+            if not t:
+                continue
+            out.append({
+                "time":   str(t),                                   # HHMMSS
+                "open":   float(r.get("stck_oprc") or 0),
+                "high":   float(r.get("stck_hgpr") or 0),
+                "low":    float(r.get("stck_lwpr") or 0),
+                "close":  float(r.get("stck_prpr") or 0),           # 분봉 체결가=종가
+                "volume": float(r.get("cntg_vol") or 0),
+            })
+        return out
+
+    def _page_minute_bars(self, path: str, tr_key: str, ticker: str,
+                          date: str | None = None, max_calls: int = 16) -> list[dict]:
+        """분봉 페이지네이션 — 15:30부터 30건씩 09:00까지 역방향 커서."""
+        bars: dict[str, dict] = {}
+        cursor = "153000"
+        for _ in range(max_calls):
+            params = {
+                "FID_ETC_CLS_CODE": "",
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": ticker,
+                "FID_INPUT_HOUR_1": cursor,
+                "FID_PW_DATA_INCU_YN": "Y",
+            }
+            if date is not None:
+                params["FID_INPUT_DATE_1"] = date
+                params["FID_FAKE_TICK_INCU_YN"] = ""
+            headers = self._headers(TR_ID[tr_key])
+            data = self._request("GET", path, headers, params=params)
+            page = self._parse_minute_rows(data.get("output2") or [])
+            if not page:
+                break
+            for b in page:
+                bars.setdefault(b["time"], b)
+            earliest = min(b["time"] for b in page)
+            if earliest <= "090100":
+                break
+            # 다음 커서 = 가장 이른 봉 - 1분
+            hh, mm = int(earliest[:2]), int(earliest[2:4])
+            total = hh * 60 + mm - 1
+            cursor = f"{total // 60:02d}{total % 60:02d}00"
+            if cursor < "090000":
+                break
+        return [bars[t] for t in sorted(bars)]
+
+    def get_minute_bars_today(self, ticker: str) -> list[dict]:
+        """당일 1분봉 전체 (FHKST03010200, 30건/콜 자동 페이지네이션 → ~13콜)."""
+        return self._page_minute_bars(
+            "/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
+            "MINUTE_TODAY", ticker)
+
+    def get_minute_bars_dated(self, ticker: str, date: str) -> list[dict]:
+        """과거 특정 일자 1분봉 (FHKST03010230 일별분봉조회).
+
+        소급 한도는 KIS가 문서에 명시하지 않음 — verify_connection 【9】로 실측."""
+        return self._page_minute_bars(
+            "/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice",
+            "MINUTE_DAILY", ticker, date=date)
 
     def get_investor_daily(self, ticker: str) -> list[dict]:
         """종목별 투자자 일별 순매수 (개인/외국인/기관계, 최근 ~30영업일).

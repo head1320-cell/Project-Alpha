@@ -483,6 +483,55 @@ def check_fin_history():
         warn("financials_history 조회 불가 (DB 미기동 또는 테이블 없음) — 백필 시 자동 생성")
 
 
+def check_minute_bars(stock_code, kis_mock):
+    """분봉 — 당일분봉 수신 + 일별분봉 소급 한도 실측 (하이브리드 체결의 데이터 계층)."""
+    head("【9】 KIS 분봉 (당일 수신 + 일별분봉 소급 한도 실측)")
+    # 적재 현황
+    try:
+        from src.data.minute_bars import bars_dir
+        files = sorted(bars_dir().glob("*.parquet"))
+        if files:
+            ok(f"분봉 적재: {len(files)}일치 ({files[0].stem} ~ {files[-1].stem})")
+        else:
+            warn("분봉 미적재 — 매일 장 마감 후: python -m src.data.minute_bars "
+                 "--file pool.txt (보유+후보 풀)")
+    except Exception:
+        pass
+    if kis_mock:
+        warn("mock 모드 — 실측은 KIS_USE_MOCK=0 + 실키에서. 수집기는 합성 분봉으로 동작")
+        return
+    # 당일분봉 1콜
+    try:
+        from src.execution.kis_client import get_kis_client
+        client = get_kis_client()
+        bars = client.get_minute_bars_today(stock_code)
+        if bars:
+            ok(f"당일분봉 수신: {len(bars)}봉 ({bars[0]['time']}~{bars[-1]['time']})")
+        else:
+            warn("당일분봉 0건 — 장 시작 전이거나 휴장일")
+    except Exception as e:
+        fail(f"당일분봉 실패: {e}")
+    # 일별분봉 소급 실측 — KIS가 한도를 문서화하지 않아 이것이 유일한 확정 방법
+    try:
+        from src.data.minute_bars import probe_history
+        results = probe_history(stock_code)
+        deepest = None
+        for r in results:
+            n = r.get("bars")
+            mark = "✓" if n else "✗"
+            print(f"      {mark} {r['offset_days']:>3}일 전({r.get('date')}): "
+                  f"{n if n is not None else '-'}봉" + (f" — {r['error']}" if r.get("error") else ""))
+            if n:
+                deepest = r["offset_days"]
+        if deepest:
+            ok(f"일별분봉 소급 한도 실측: 최소 {deepest}일 전까지 수신 확인 "
+               f"→ 이 범위는 과거 백필 가능")
+        else:
+            warn("일별분봉 과거 수신 0 — 당일분봉 누적 수집만 가능")
+    except Exception as e:
+        fail(f"일별분봉 실측 실패: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stock", default="005930", help="검증할 종목코드 (기본 삼성전자)")
@@ -504,6 +553,7 @@ def main():
     check_ecos()
     check_flows()
     check_fin_history()
+    check_minute_bars(code, kis_mock)
 
     head("【결과 요약】")
     print(f"  DART 재무:  {GREEN+'실데이터 ✓'+END if dart_ok else YELLOW+'mock'+END}")

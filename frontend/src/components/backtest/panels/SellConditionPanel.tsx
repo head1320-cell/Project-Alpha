@@ -22,7 +22,7 @@ function IntradayOnly({ children }: { children: React.ReactNode }) {
     <div>
       <div style={{ opacity: 0.45, pointerEvents: "none" }} aria-disabled>{children}</div>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>
-        ⏳ 분봉 데이터 연동 시 활성 — 현재 일봉 백테스트에는 반영되지 않습니다
+        ⏳ 매수조건 탭 포트 기본 설정의 &apos;분봉 정밀 체결&apos;을 켜고 분봉을 적재하면 활성됩니다
       </div>
     </div>
   );
@@ -120,11 +120,22 @@ export default function SellConditionPanel({ s, set }: {
 
       <Section title="매도 시간" hint={`${v.timeStart} ~ ${v.timeEnd}`} tone="sell" enabled onToggle={() => {}}>
         <Field label="시간대">
-          <IntradayOnly>
-            <input value={v.timeStart} onChange={(e) => patch({ timeStart: e.target.value })} style={timeBox} />
-            <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>~</span>
-            <input value={v.timeEnd} onChange={(e) => patch({ timeEnd: e.target.value })} style={timeBox} />
-          </IntradayOnly>
+          {s.intradayFill ? (
+            <>
+              <input value={v.timeStart} onChange={(e) => patch({ timeStart: e.target.value })} style={timeBox} />
+              <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>~</span>
+              <input value={v.timeEnd} onChange={(e) => patch({ timeEnd: e.target.value })} style={timeBox} />
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
+                분봉 정밀 체결 ON — 이 윈도 안의 분봉으로만 신호 매도 체결
+              </span>
+            </>
+          ) : (
+            <IntradayOnly>
+              <input value={v.timeStart} onChange={(e) => patch({ timeStart: e.target.value })} style={timeBox} />
+              <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>~</span>
+              <input value={v.timeEnd} onChange={(e) => patch({ timeEnd: e.target.value })} style={timeBox} />
+            </IntradayOnly>
+          )}
         </Field>
       </Section>
 

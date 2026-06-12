@@ -984,6 +984,11 @@ export const backtestBridgeApi = {
     sell_logic?: string | null;
     buy_sort_expr?: string | null;  // 매수 우선순위식 (일별 정렬)
     buy_sort_desc?: boolean;
+    intraday_fill?: boolean;        // 하이브리드 체결 (적재된 분봉으로 정밀, 없으면 일봉 폴백)
+    buy_time_start?: string;        // 매매 시간 윈도 (HHMM)
+    buy_time_end?: string;
+    sell_time_start?: string;
+    sell_time_end?: string;
     rebalance_period?: string | null;
     signal_lag?: number;  // 0=당일 봉(기존) | 1=전일 봉 기준 신호(젠포트식)
     rebuy_block_days?: number;  // 청산 후 N일 재매수 금지 (0=미사용)

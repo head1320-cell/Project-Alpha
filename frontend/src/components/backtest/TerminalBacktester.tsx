@@ -39,7 +39,7 @@ const yearsAgo = (n: number) => {
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
-  rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0,
+  rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0, intradayFill: false,
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
@@ -138,6 +138,11 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     sell_logic: sell.logicExpr.trim() || null,
     buy_sort_expr: buy.sortExpr.trim() || null,
     buy_sort_desc: buy.sortExprDesc,
+    intraday_fill: s.intradayFill,
+    buy_time_start: buy.timeStart.replace(":", ""),
+    buy_time_end: buy.timeEnd.replace(":", ""),
+    sell_time_start: sell.timeStart.replace(":", ""),
+    sell_time_end: sell.timeEnd.replace(":", ""),
     rebalance_period: s.rebalancePeriod === "daily" ? null : s.rebalancePeriod,
     signal_lag: s.signalLag,
     market_timing: s.marketTiming.on && s.marketTiming.conditions.length ? {
