@@ -1575,14 +1575,9 @@ h6 { font-size: 1rem; }
 .lp-brand { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .lp-logo { display: inline-flex; width: 21px; height: 21px; background: var(--bs-primary); border-radius: 2px; align-items: center; justify-content: center; }
 .lp-logo svg { width: 13px; height: 13px; fill: none; stroke: #fff; stroke-width: 2; }
-.lp-status { display: flex; align-items: center; gap: 7px; color: var(--bs-secondary-color); }
-.lp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bs-primary); animation: lp-pulse 2.2s ease-in-out infinite; }
-@keyframes lp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .lp-nav { margin-left: auto; display: flex; align-items: center; gap: 22px; color: var(--bs-secondary-color); }
 .lp-nav a { font-family: var(--bs-font-mono); font-size: 11px; letter-spacing: 0.05em; color: var(--bs-secondary-color); text-decoration: none; }
 .lp-nav a:hover { color: var(--bs-body-color); }
-.lp-launch-sm { color: #fff !important; background: var(--bs-primary); padding: 7px 13px; border-radius: 2px; }
-.lp-launch-sm:hover { background: var(--bs-primary-hover); }
 
 /* ③ 히어로 (분할) */
 .lp-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 64px; padding: 96px 44px 110px; max-width: 1480px; width: 100%; margin: 0 auto; box-sizing: border-box; }
@@ -1635,7 +1630,6 @@ h6 { font-size: 1rem; }
   .lp-hero { grid-template-columns: 1fr; padding: 56px 24px 64px; gap: 32px; }
   .lp-hero-right { border-left: none; padding-left: 0; margin-top: 0; border-top: 1px solid var(--bs-border-color); padding-top: 24px; }
   .lp-header { padding: 14px 24px; gap: 14px; flex-wrap: wrap; }
-  .lp-status { display: none; }
   .lp-section-head, .lp-footer { padding-left: 24px; padding-right: 24px; }
   .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }
 }

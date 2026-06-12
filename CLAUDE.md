@@ -233,8 +233,8 @@ python verify_connection.py
 - **루트(/)는 랜딩 페이지** — 셸이 pathname==="/"에서 풀블리드 렌더(셸 없음). 셸 브랜드/팔레트 홈은 /dashboard
 
 ### 랜딩 (app/page.tsx — Variant 레퍼런스 3종 합성)
-- 구조: 다크 티커 마퀴 → 헤더(상태 점·UTC 시계·LAUNCH) → 분할 히어로("The operating system for quantitative research.") → INTEGRATED TOOLSET 5모듈 컬럼(설명+mono 메트릭+SVG 미니 비주얼) → PLATFORM METRICS 6종(실측 수치: 팩터 290+/체결가 13/함수 19/벡터화 142×/테스트 470/데이터소스 5) → 푸터(미니 티커+©)
-- 전부 정적(백엔드 미기동에도 동작), 시계만 클라이언트. CTA → /dashboard
+- 구조: 다크 티커 마퀴 → 미니멀 헤더(브랜드+앵커 내비) → 분할 히어로("The operating system for quantitative research.") → INTEGRATED TOOLSET 5모듈 컬럼(설명+mono 메트릭+SVG 미니 비주얼) → PLATFORM METRICS 6종(실측 수치: 팩터 290+/체결가 13/함수 19/벡터화 142×/테스트 470/데이터소스 5) → 푸터(미니 티커+©)
+- 전부 정적(서버 컴포넌트 — 백엔드 미기동에도 동작). CTA는 히어로 Launch Terminal → /dashboard
 - 기존 Command Center 대시보드는 /dashboard로 이동 (내부 홈 링크 전부 갱신)
 - 스타일: globals.css lp-* (기존 디자인 토큰 사용, 반응형 1100/820px)
 

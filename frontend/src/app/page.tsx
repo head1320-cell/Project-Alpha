@@ -1,15 +1,12 @@
-"use client";
-
 /**
  * Landing — 루트(/) 첫 화면. Variant "Institutional Terminal" 랜딩 (레퍼런스 3종 합성):
- *   ① 다크 티커 마퀴 ② 미니멀 헤더(상태 점 + UTC 시계 + Launch) ③ 분할 히어로
+ *   ① 다크 티커 마퀴 ② 미니멀 헤더(브랜드 + 앵커 내비) ③ 분할 히어로
  *   ④ INTEGRATED TOOLSET — 5모듈 컬럼(설명 + mono 메트릭 + 미니 비주얼)
  *   ⑤ 플랫폼 지표 스트립(실제 수치) ⑥ 푸터(미니 티커 + ©)
  * 셸(TerminalShell)은 "/"에서 렌더하지 않음 — 풀블리드. CTA → /dashboard.
- * 데이터는 전부 정적(백엔드 미기동에도 완전 동작) — 시계만 클라이언트에서 흐름.
+ * 데이터·마크업 전부 정적(서버 컴포넌트) — 백엔드 미기동에도 완전 동작.
  */
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const TICKERS: Array<{ s: string; v: string; d: string; up: boolean | null }> = [
@@ -64,17 +61,6 @@ const PLATFORM_STATS: Array<[string, string, string]> = [
   ["TEST SUITE", "470", "passed — 등가성·회귀 고정"],
   ["DATA SOURCES", "5", "KRX·DART·KIS·ECOS·FRED (무료)"],
 ];
-
-function UtcClock() {
-  const [now, setNow] = useState<string>("");
-  useEffect(() => {
-    const tick = () => setNow(new Date().toISOString().slice(11, 19));
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, []);
-  return <span className="lp-mono">{now ? `UTC ${now}` : "UTC --:--:--"}</span>;
-}
 
 function TickerStrip() {
   const row = (key: string) => (
@@ -159,14 +145,9 @@ export default function Landing() {
           </span>
           Project Alpha
         </div>
-        <div className="lp-status">
-          <span className="lp-dot" /> <span className="lp-mono">CORE ENGINE OPERATIONAL / V2.4.0</span>
-        </div>
         <nav className="lp-nav">
           <a href="#toolset">MODULES</a>
           <a href="#metrics">METRICS</a>
-          <UtcClock />
-          <Link href="/dashboard" className="lp-launch-sm">LAUNCH →</Link>
         </nav>
       </header>
 
