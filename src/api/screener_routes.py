@@ -1088,6 +1088,10 @@ class ScreenToBacktestRequest(BaseModel):
     sell_fill_expr: str | None = None
     expiry_fill_type: str = "close"
     expiry_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    # 분할 래더 (가격변동%·비중% 단계, 신호 당일 유효) — [{"move_pct","weight_pct"}]
+    buy_ladder: list[dict] | None = None
+    sell_ladder: list[dict] | None = None
+    expiry_sell_method: str = "all"  # 만기: all=일괄 | ladder=분할(잔량 종가 청산)
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1246,6 +1250,9 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             sell_fill_expr=req.sell_fill_expr,
             expiry_fill_type=req.expiry_fill_type,
             expiry_fill_offset_pct=req.expiry_fill_offset_pct,
+            buy_ladder=req.buy_ladder,
+            sell_ladder=req.sell_ladder,
+            expiry_sell_method=req.expiry_sell_method,
         )
 
         # 3) 통합 응답

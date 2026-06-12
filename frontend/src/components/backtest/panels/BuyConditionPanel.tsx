@@ -7,6 +7,7 @@ import { type Dispatch, type SetStateAction } from "react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
 import OffsetInput from "./OffsetInput";
+import LadderEditor from "./LadderEditor";
 import type { BacktestStrategy, SortDir } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
 import { SORT_FIELDS } from "../../../lib/backtest/sortFields";
@@ -110,12 +111,12 @@ export default function BuyConditionPanel({ s, set }: {
         <SubToggle tone="buy" label="펀더멘털 조건 평가" hint="현재 스냅샷 기준 · look-ahead 주의" on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>고급 체결 옵션</div>
-          <SubToggle tone="buy" label="분할 매수" hint="1회 비중만큼 나눠 진입" on={s.buy.splitBuy} onChange={(v) => patchBuy({ splitBuy: v })}>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>1회</span>
-            <QuickStepper value={s.buy.splitBuyPct} onChange={(v) => patchBuy({ splitBuyPct: v })} chips={[25, 50]} unit="%" min={1} max={99} />
-            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>최대</span>
-            <QuickStepper value={s.buy.splitBuyCount} onChange={(v) => patchBuy({ splitBuyCount: v })} chips={[2, 3]} unit="회" min={1} />
-          </SubToggle>
+          <SubToggle tone="buy" label="분할 매수 (래더)" hint="가격변동 단계별 비중 체결"
+            on={s.buy.splitBuy}
+            onChange={(v) => patchBuy({ splitBuy: v, ladder: v && s.buy.ladder.length === 0 ? [{ movePct: 0, weightPct: 50 }, { movePct: -2, weightPct: 50 }] : s.buy.ladder })} />
+          {s.buy.splitBuy && (
+            <LadderEditor side="buy" steps={s.buy.ladder} onChange={(ladder) => patchBuy({ ladder })} />
+          )}
           <SubToggle tone="buy" label="돌파 매수" hint="전일 고가 돌파 시에만 진입 · 체결가 max(시가, 전일고가)" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>TWAP·VWAP 체결은 위 "체결가 유형"에서 선택</div>
         </div>

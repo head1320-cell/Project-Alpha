@@ -31,9 +31,10 @@ export interface BuyState {
   timeStart: string;
   timeEnd: string;
   // 고급 체결(기본 꺼짐) — TWAP은 체결가 유형(fillType)에서 선택
-  splitBuy: boolean;        // 분할 매수 (buy_divide_pct / max_buy_count)
-  splitBuyPct: number;      // 1회 매수 비중 %
-  splitBuyCount: number;    // 최대 분할 횟수
+  splitBuy: boolean;        // 분할 매수 (래더) 사용
+  ladder: Array<{ movePct: number; weightPct: number }>;  // 가격변동%·비중% 단계 (신호 당일 유효)
+  splitBuyPct: number;      // (레거시) 1회 매수 비중 % — 래더 미설정 시 폴백
+  splitBuyCount: number;    // (레거시) 최대 분할 횟수
   breakthrough: boolean;    // 돌파매수: 전일 고가 돌파 시에만 진입
   // #4: 펀더멘털 토큰을 조건 평가에 포함(스냅샷·look-ahead 근사). 기본 false.
   allowFundamentals: boolean;
@@ -58,9 +59,11 @@ export interface SellState {
   timeStart: string;
   timeEnd: string;
   // 고급(기본 꺼짐) — TWAP은 체결가 유형(fillType)에서 선택
-  splitTakeProfit: boolean; // 분할 매도 (sell_divide_pct / max_sell_divisions — 신호·손익절 매도 전반에 적용)
-  splitSellPct: number;     // 1회 매도 비중 %
-  splitSellCount: number;   // 최대 분할 횟수 (도달 시 잔량 전량 청산)
+  splitTakeProfit: boolean; // 분할 매도 (래더) 사용
+  ladder: Array<{ movePct: number; weightPct: number }>;  // 매도 래더 (신호 당일 유효)
+  splitSellPct: number;     // (레거시) 1회 매도 비중 %
+  splitSellCount: number;   // (레거시) 최대 분할 횟수
+  expirySellMethod: "all" | "ladder";  // 보유일 만기: 일괄 | 분할(잔량 종가 청산)
   expiryDateSell: boolean;
 }
 

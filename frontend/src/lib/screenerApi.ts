@@ -970,6 +970,9 @@ export const backtestBridgeApi = {
     sell_fill_expr?: string | null;
     expiry_fill_type?: string;      // 보유일 만기 매도 가격 기준
     expiry_fill_offset_pct?: number;
+    buy_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;   // 분할 래더
+    sell_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;
+    expiry_sell_method?: string;    // all | ladder
     max_buy_amount?: number | null; // 종목당 최대 매수 금액(원)
     cash_reserve_pct?: number;      // 자산배분: 현금 상시 보유 %
     max_hold_days?: number | null;

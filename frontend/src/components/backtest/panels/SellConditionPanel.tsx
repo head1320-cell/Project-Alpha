@@ -7,6 +7,7 @@ import { type Dispatch, type SetStateAction } from "react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
 import OffsetInput from "./OffsetInput";
+import LadderEditor from "./LadderEditor";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS, FILL_PRICE_GROUPS_NO_EXPR } from "../../../lib/backtest/fillPrice";
 
@@ -76,12 +77,12 @@ export default function SellConditionPanel({ s, set }: {
         </SubToggle>
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>고급 옵션</div>
-          <SubToggle tone="sell" label="분할 매도" hint="신호·손익절 매도에 1회 비중 적용 · 최대 횟수 도달 시 전량" on={v.splitTakeProfit} onChange={(on) => patch({ splitTakeProfit: on })}>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>1회</span>
-            <QuickStepper value={v.splitSellPct} onChange={(pct) => patch({ splitSellPct: pct })} chips={[25, 50]} unit="%" min={1} max={99} />
-            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>최대</span>
-            <QuickStepper value={v.splitSellCount} onChange={(c) => patch({ splitSellCount: c })} chips={[2, 3]} unit="회" min={1} />
-          </SubToggle>
+          <SubToggle tone="sell" label="분할 매도 (래더)" hint="가격변동 단계별 비중 매도 — 신호 매도에 적용"
+            on={v.splitTakeProfit}
+            onChange={(on) => patch({ splitTakeProfit: on, ladder: on && v.ladder.length === 0 ? [{ movePct: 0, weightPct: 50 }, { movePct: 2, weightPct: 50 }] : v.ladder })} />
+          {v.splitTakeProfit && (
+            <LadderEditor side="sell" steps={v.ladder} onChange={(ladder) => patch({ ladder })} />
+          )}
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>TWAP·VWAP 체결은 위 "체결가 유형"에서 선택</div>
         </div>
       </Section>
@@ -110,6 +111,18 @@ export default function SellConditionPanel({ s, set }: {
             </>
           )}
         </SubToggle>
+        {v.expiryDateSell && (
+          <Field label="만기 매도 방법">
+            <Segmented tone="sell" value={v.expirySellMethod}
+              onChange={(m) => patch({ expirySellMethod: m })}
+              options={[{ id: "all", label: "일괄 매도" }, { id: "ladder", label: "분할 매도 (래더 공유)" }]} />
+            {v.expirySellMethod === "ladder" && (
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                위 분할 매도 래더를 사용 · 미체결 잔량은 종가로 강제 청산 (만기는 반드시 종결)
+              </span>
+            )}
+          </Field>
+        )}
         {v.expiryDateSell && (
           <Field label="만기 매도 가격 기준">
             <GroupedSelect value={v.expiryFillType} onChange={(id) => patch({ expiryFillType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />

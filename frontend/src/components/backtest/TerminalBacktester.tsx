@@ -47,7 +47,7 @@ const initialStrategy = (): BacktestStrategy => ({
     limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
     fillType: "close", fillExpr: "", fillOffsetPct: 0, maxBuyAmount: 0,
     reBuyBlockDays: 0, maxBuyPerDay: 0, timeStart: "09:00", timeEnd: "15:30",
-    splitBuy: false, splitBuyPct: 50, splitBuyCount: 2, breakthrough: false, allowFundamentals: false,
+    splitBuy: false, ladder: [], splitBuyPct: 50, splitBuyCount: 2, breakthrough: false, allowFundamentals: false,
   },
   sell: {
     enabled: true, orderType: "MARKET", fillType: "close", fillExpr: "", fillOffsetPct: 0,
@@ -55,7 +55,8 @@ const initialStrategy = (): BacktestStrategy => ({
     takeProfit: { on: false, pct: 15 }, stopLoss: { on: false, pct: 5 },
     trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, dayTrade: false, conditions: [], logicExpr: "",
     liquidate: { on: false, mode: "close" }, timeStart: "09:00", timeEnd: "15:30",
-    splitTakeProfit: false, splitSellPct: 50, splitSellCount: 3, expiryDateSell: false,
+    splitTakeProfit: false, ladder: [], splitSellPct: 50, splitSellCount: 3,
+    expirySellMethod: "all", expiryDateSell: false,
   },
   universe: {
     etf: false, managed: false, supervised: false,
@@ -123,12 +124,18 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     max_hold_days: sell.dayTrade ? null : (sell.holdPeriod.max ?? null),
     min_hold_days: sell.dayTrade ? 0 : (sell.holdPeriod.on ? sell.holdPeriod.min : 0),
     day_trade: sell.dayTrade,
-    sell_divide_pct: sell.splitTakeProfit ? sell.splitSellPct : 100,
-    max_sell_divisions: sell.splitTakeProfit ? sell.splitSellCount : null,
+    sell_divide_pct: sell.splitTakeProfit && sell.ladder.length === 0 ? sell.splitSellPct : 100,
+    max_sell_divisions: sell.splitTakeProfit && sell.ladder.length === 0 ? sell.splitSellCount : null,
     buy_weight_mode: buy.weightMode,  // equal | atr (엔진 역변동성 사이징)
-    buy_divide_pct: buy.splitBuy ? buy.splitBuyPct : 100,
+    // 분할: 래더 우선 (래더 행이 있으면 가격 단계 모델, 없으면 레거시 횟수 모델)
+    buy_ladder: buy.splitBuy && buy.ladder.length > 0
+      ? buy.ladder.map((l) => ({ move_pct: l.movePct, weight_pct: l.weightPct })) : null,
+    sell_ladder: sell.splitTakeProfit && sell.ladder.length > 0
+      ? sell.ladder.map((l) => ({ move_pct: l.movePct, weight_pct: l.weightPct })) : null,
+    expiry_sell_method: sell.expirySellMethod,
+    buy_divide_pct: buy.splitBuy && buy.ladder.length === 0 ? buy.splitBuyPct : 100,
     max_buy_per_day: buy.maxBuyPerDay > 0 ? buy.maxBuyPerDay : null,
-    max_buy_count: buy.splitBuy ? buy.splitBuyCount : null,
+    max_buy_count: buy.splitBuy && buy.ladder.length === 0 ? buy.splitBuyCount : null,
     breakthrough_buy: buy.breakthrough,
     rebuy_block_days: buy.reBuyBlockDays,
     caps: s.universe.caps,

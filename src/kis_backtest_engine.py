@@ -179,6 +179,12 @@ class BacktestConfig:
     day_trade: bool = False
     sell_divide_pct: float = 100.0      # 분할 매도 비중 % (100=전량, 50=절반씩)
     max_sell_divisions: int | None = None  # 분할 매도 최대 횟수 (None=무제한, 도달 시 전량청산)
+    # 분할 래더 (젠포트 분할 매수/매도 — 가격변동%·비중% 단계). 기본 None=기존 불변.
+    # 보수적 해석: 래더는 신호 당일만 유효 — 도달한 단계만 체결, 미도달 단계는 소멸.
+    # 각 단계 dict: {"move_pct": 기준가 대비 변동%, "weight_pct": 배분 비중%}
+    buy_ladder: list | None = None
+    sell_ladder: list | None = None
+    expiry_sell_method: str = "all"     # 보유일 만기: all=일괄 | ladder=분할(잔량은 종가 청산)
     # 매수 정밀화 (Phase 3). 기본값 = 기존 동작 불변
     breakthrough_buy: bool = False      # 돌파매수: 당일 고가가 전일 고가 돌파 시에만 진입
     buy_weight_mode: str = "equal"      # 매수 비중: equal(동일가중) | factor(팩터가중) | atr(역변동성)
@@ -249,6 +255,16 @@ class BacktestEngine:
         # 매수 우선순위식 — 워밍업·패널 산정 전에 등록 (문법 오류는 ValueError 전파 → 400)
         if self.cfg.buy_sort_expr and hasattr(strategy, "set_priority_expr"):
             strategy.set_priority_expr(self.cfg.buy_sort_expr)
+
+        # 래더 검증 (비중 합 ≤100, 단계 ≤10)
+        for name, ladder in (("buy_ladder", self.cfg.buy_ladder),
+                             ("sell_ladder", self.cfg.sell_ladder)):
+            if ladder:
+                if len(ladder) > 10:
+                    raise ValueError(f"{name}: 분할 단계는 최대 10개입니다")
+                total_w = sum(float(s.get("weight_pct") or 0) for s in ladder)
+                if not (0 < total_w <= 100.0 + 1e-9):
+                    raise ValueError(f"{name}: 비중 합은 0~100% 사이여야 합니다 (현재 {total_w:g}%)")
 
         # 수식입력 기준가 — 파싱 선행 (횡단면 함수는 체결가 식에 쓸 수 없음)
         self._fill_asts = {}
@@ -356,9 +372,18 @@ class BacktestEngine:
 
                 # 보유기간 매도: max_hold_days 경과 시 강제 청산 (분할 비중·만기 가격 기준 적용)
                 if self.cfg.max_hold_days is not None and days_held >= self.cfg.max_hold_days:
+                    reason = f"보유기간 {self.cfg.max_hold_days}일 경과"
+                    if self.cfg.expiry_sell_method == "ladder" and self.cfg.sell_ladder:
+                        # 만기 래더 — 미체결 잔량은 종가로 강제 청산(만기는 반드시 종결)
+                        from src.engine.fill_price import resolve_from_slice
+                        base = resolve_from_slice(self.cfg.expiry_fill_type or "close", df_to_date)
+                        fills = self._ladder_fills("sell", self.cfg.sell_ladder,
+                                                   float(base or curr_price), df_to_date)
+                        self._execute_sell_ladder(ticker, fills, date_str, reason,
+                                                  force_close_rest=curr_price)
+                        continue
                     expiry_price = self._expiry_price(df_to_date, curr_price)
-                    self._execute_sell(ticker, expiry_price, date_str,
-                                       f"보유기간 {self.cfg.max_hold_days}일 경과",
+                    self._execute_sell(ticker, expiry_price, date_str, reason,
                                        sell_fraction=self.cfg.sell_divide_pct / 100.0)
                     continue
                 # 손절/익절: 최소 보유기간 이후에만 (min_hold_days)
@@ -407,6 +432,15 @@ class BacktestEngine:
                         days_held = self._days_held(pos.entry_date, date_str)
                         if days_held < self.cfg.min_hold_days:
                             continue
+                    # 분할 래더 매도 — 도달 단계만 (신호 당일 유효)
+                    if self.cfg.sell_ladder and pos is not None:
+                        base = self._fill_base("sell", df_slice)
+                        if base and base > 0:
+                            fills = self._ladder_fills("sell", self.cfg.sell_ladder,
+                                                       float(base), df_slice)
+                            if fills:
+                                self._execute_sell_ladder(ticker, fills, date_str, signal.reason)
+                        continue
                     sell_price = self._fill_with_offset("sell", df_slice)
                     if sell_price is None and self.cfg.sell_fill_offset_pct:
                         continue  # 지정가 미도달 — 그날 미체결(보유 지속)
@@ -520,6 +554,14 @@ class BacktestEngine:
             can_buy = bb_price is not None
         if not can_buy:
             return
+        # 분할 래더 — 기준가 대비 가격 단계별 비중 체결 (신호 당일만 유효, 신규 진입만)
+        if self.cfg.buy_ladder and ticker not in self.positions:
+            base = self._fill_base("buy", df_slice)
+            if base and base > 0:
+                fills = self._ladder_fills("buy", self.cfg.buy_ladder, float(base), df_slice)
+                if fills:
+                    self._execute_buy_ladder(ticker, fills, date_str, signal.reason)
+            return
         buy_price = bb_price or self._fill_with_offset("buy", df_slice)
         if buy_price is None and self.cfg.buy_fill_offset_pct:
             return  # 지정가(기준가±오프셋) 미도달 — 그날 미체결
@@ -528,6 +570,108 @@ class BacktestEngine:
         natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
         self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
                           factor_weight=fw, atr_pct=natr)
+
+    def _fill_base(self, side: str, df_slice) -> float | None:
+        """오프셋·래더 적용 전의 체결 기준가 (유형 20종 + 수식입력)."""
+        from src.engine.fill_price import resolve_from_slice
+        ft = self.cfg.buy_fill_type if side == "buy" else self.cfg.sell_fill_type
+        if ft == "expr":
+            return self._fill_expr_base(side, df_slice)
+        return resolve_from_slice(ft, df_slice)
+
+    def _ladder_fills(self, side: str, ladder: list, base: float, df_slice) -> list[tuple]:
+        """래더 단계 → 당일 도달 검증된 (체결가, 비중%) 목록.
+
+        보수적 해석: 신호 당일만 유효 — 저가/고가 도달 단계만 체결, 나머지 소멸.
+        갭이 지정가를 건너뛰면 시가 체결 (오프셋 지정가 모델과 동일 규칙)."""
+        try:
+            low = float(df_slice["low"].iloc[-1])
+            high = float(df_slice["high"].iloc[-1])
+            open_ = float(df_slice["open"].iloc[-1])
+        except Exception:
+            return []
+        fills = []
+        for s in ladder or []:
+            try:
+                move = float(s.get("move_pct") or 0)
+                w = float(s.get("weight_pct") or 0)
+            except (TypeError, ValueError):
+                continue
+            if w <= 0:
+                continue
+            p = base * (1 + move / 100.0)
+            if side == "buy":
+                if low <= p:
+                    fills.append((min(p, open_), w))
+            else:
+                if high >= p:
+                    fills.append((max(p, open_), w))
+        return fills
+
+    def _execute_buy_ladder(self, ticker: str, fills: list, date_str: str, reason: str):
+        """래더 분할 매수 — 도달 단계별 체결을 하나의 포지션으로 합산 (Trade는 단계별)."""
+        if self.positions.get(ticker) is not None:
+            return
+        if len(self.positions) >= self.cfg.max_positions:
+            return
+        if self.cfg.max_buy_per_day is not None and getattr(self, "_buys_today", 0) >= self.cfg.max_buy_per_day:
+            return
+        if self.cfg.rebuy_block_days > 0:
+            last = self._last_exit.get(ticker)
+            if last is not None and self._days_held(last, date_str) <= self.cfg.rebuy_block_days:
+                return
+        alloc_total = min(self._initial_alloc(), self._usable_cash() * 0.95)
+        if self.cfg.max_buy_amount is not None:
+            alloc_total = min(alloc_total, self.cfg.max_buy_amount)
+        legs, qty_total, cost_total = [], 0, 0.0
+        for price, w in fills:
+            exec_price = price * (1 + self.cfg.slippage_rate)
+            alloc = alloc_total * (w / 100.0)
+            qty = int(alloc / exec_price)
+            if qty <= 0:
+                continue
+            value = qty * exec_price
+            commission = value * self.cfg.commission_rate
+            if cost_total + value + commission > self._usable_cash():
+                break
+            legs.append((exec_price, qty, value, commission))
+            qty_total += qty
+            cost_total += value + commission
+        if qty_total <= 0:
+            return
+        self.cash -= cost_total
+        self._buys_today = getattr(self, "_buys_today", 0) + 1
+        avg = sum(p * q for p, q, _, _ in legs) / qty_total
+        stop = avg * (1 - self.cfg.stop_loss_pct / 100) if self.cfg.stop_loss_pct else None
+        tp = avg * (1 + self.cfg.take_profit_pct / 100) if self.cfg.take_profit_pct else None
+        self.positions[ticker] = Position(
+            ticker=ticker, quantity=qty_total, avg_price=avg, entry_date=date_str,
+            stop_loss_price=stop, take_profit_price=tp, peak_price=avg)
+        for i, (p, q, v, c) in enumerate(legs, 1):
+            self.trades.append(Trade(
+                date=date_str, ticker=ticker, side="buy", price=p, quantity=q,
+                value=v, commission=c, slippage=v * self.cfg.slippage_rate,
+                reason=f"{reason} (래더 {i}/{len(legs)})"))
+
+    def _execute_sell_ladder(self, ticker: str, fills: list, date_str: str, reason: str,
+                             force_close_rest: float | None = None):
+        """래더 분할 매도 — 단계 비중은 신호 시점 보유수량 기준.
+
+        force_close_rest가 주어지면(만기) 미체결 잔량을 그 가격(종가)으로 강제 청산."""
+        pos = self.positions.get(ticker)
+        if pos is None:
+            return
+        total_w = 0.0
+        for i, (price, w) in enumerate(fills, 1):
+            if ticker not in self.positions:
+                return
+            remaining_w = max(0.0, 100.0 - total_w)
+            frac = min(1.0, w / remaining_w) if remaining_w > 0 else 1.0
+            self._execute_sell(ticker, price, date_str, f"{reason} (래더 {i}/{len(fills)})",
+                               sell_fraction=frac)
+            total_w += w
+        if force_close_rest is not None and ticker in self.positions:
+            self._execute_sell(ticker, force_close_rest, date_str, f"{reason} (잔량 종가)")
 
     def _usable_cash(self) -> float:
         """매수 가용 현금 — 자산배분(현금 비중 유지) 시 예비금을 제외한 잔액."""
@@ -1307,6 +1451,9 @@ def run_backtest(
     sell_fill_expr: str | None = None,
     expiry_fill_type: str = "close",
     expiry_fill_offset_pct: float = 0.0,
+    buy_ladder: list | None = None,
+    sell_ladder: list | None = None,
+    expiry_sell_method: str = "all",
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1372,6 +1519,9 @@ def run_backtest(
         sell_fill_expr=sell_fill_expr,
         expiry_fill_type=expiry_fill_type,
         expiry_fill_offset_pct=expiry_fill_offset_pct,
+        buy_ladder=buy_ladder,
+        sell_ladder=sell_ladder,
+        expiry_sell_method=expiry_sell_method,
     )
     engine = BacktestEngine(cfg)
     return engine.run()
