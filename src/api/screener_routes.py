@@ -1083,6 +1083,11 @@ class ScreenToBacktestRequest(BaseModel):
     buy_time_end: str = "1530"
     sell_time_start: str = "0900"
     sell_time_end: str = "1530"
+    # 수식입력 기준가 (fill_type="expr") + 보유일 만기 매도 가격 기준
+    buy_fill_expr: str | None = None
+    sell_fill_expr: str | None = None
+    expiry_fill_type: str = "close"
+    expiry_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1237,6 +1242,10 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             buy_time_end=req.buy_time_end,
             sell_time_start=req.sell_time_start,
             sell_time_end=req.sell_time_end,
+            buy_fill_expr=req.buy_fill_expr,
+            sell_fill_expr=req.sell_fill_expr,
+            expiry_fill_type=req.expiry_fill_type,
+            expiry_fill_offset_pct=req.expiry_fill_offset_pct,
         )
 
         # 3) 통합 응답

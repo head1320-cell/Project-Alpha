@@ -31,14 +31,24 @@ class FillPriceType(str, Enum):
     PREV_HIGH = "prev_high"          # 전일 고가
     PREV_LOW = "prev_low"            # 전일 저가
     # 피벗류 (전일 고/저/종으로 계산)
-    PIVOT = "pivot"                  # 피벗 기준선 = (H+L+C)/3
+    PIVOT = "pivot"                  # 피벗 주가중심선 = (H+L+C)/3
+    PIVOT_MID = "pivot_mid"          # 피벗 기준선 = (H+L)/2 — 젠포트 별도 항목(보수적 해석)
     PIVOT_R1 = "pivot_r1"            # 1차 저항선 = 2*P - L
     PIVOT_R2 = "pivot_r2"            # 2차 저항선 = P + (H-L)
     PIVOT_S1 = "pivot_s1"            # 1차 지지선 = 2*P - H
     PIVOT_S2 = "pivot_s2"            # 2차 지지선 = P - (H-L)
+    # 이동평균류 (전일까지 N일 종가 평균 — 주문가는 장 시작 전 알 수 있어야 하므로 당일 제외)
+    MA5 = "ma5"
+    MA10 = "ma10"
+    MA20 = "ma20"
+    MA60 = "ma60"
+    MA120 = "ma120"
+    MA200 = "ma200"
     # 평균류
     TWAP = "twap"                    # 분봉 시간가중평균 (분봉 연결 전엔 OHLC 근사)
     VWAP = "vwap"                    # 거래량가중평균 (체결량 연결 전엔 (H+L+C)/3 근사)
+    # 수식입력 — 기준가를 자유 산술식으로 (엔진이 factor_expr로 평가)
+    EXPR = "expr"
 
 
 # 체결가 유형 메타 (UI 드롭다운용)
@@ -49,22 +59,36 @@ FILL_PRICE_LABELS: dict[str, str] = {
     "prev_open": "전일 시초가",
     "prev_high": "전일 고가",
     "prev_low": "전일 저가",
-    "pivot": "피벗 기준선",
+    "pivot": "피벗 주가중심선",
+    "pivot_mid": "피벗 기준선",
     "pivot_r1": "피벗 1차 저항선",
     "pivot_r2": "피벗 2차 저항선",
     "pivot_s1": "피벗 1차 지지선",
     "pivot_s2": "피벗 2차 지지선",
+    "ma5": "5일 이동평균",
+    "ma10": "10일 이동평균",
+    "ma20": "20일 이동평균",
+    "ma60": "60일 이동평균",
+    "ma120": "120일 이동평균",
+    "ma200": "200일 이동평균",
     "twap": "TWAP (시간가중)",
     "vwap": "VWAP (거래량가중)",
+    "expr": "수식입력",
 }
 
 # 카테고리 (UI 그룹화)
 FILL_PRICE_GROUPS = [
     {"id": "current", "label": "당일", "types": ["close", "open"]},
     {"id": "prev", "label": "전일", "types": ["prev_close", "prev_open", "prev_high", "prev_low"]},
-    {"id": "pivot", "label": "피벗", "types": ["pivot", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2"]},
+    {"id": "pivot", "label": "피벗",
+     "types": ["pivot", "pivot_mid", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2"]},
+    {"id": "ma", "label": "이동평균(전일까지)",
+     "types": ["ma5", "ma10", "ma20", "ma60", "ma120", "ma200"]},
     {"id": "avg", "label": "평균가", "types": ["twap", "vwap"]},
+    {"id": "expr", "label": "수식", "types": ["expr"]},
 ]
+
+_MA_BARS = {"ma5": 5, "ma10": 10, "ma20": 20, "ma60": 60, "ma120": 120, "ma200": 200}
 
 
 def _pivot_base(h: float, low: float, c: float) -> float:
@@ -100,9 +124,11 @@ def resolve_fill_price(
         return prev_low if prev_low is not None else today_low
 
     # 피벗류 — 전일 H/L/C 필요
-    if t in ("pivot", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2"):
+    if t in ("pivot", "pivot_mid", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2"):
         if prev_high is None or prev_low is None or prev_close is None:
             return today_close  # 전일 데이터 없으면 폴백
+        if t == "pivot_mid":
+            return (prev_high + prev_low) / 2.0  # 기준선 (보수적 해석 — 일목 기준선식)
         p = _pivot_base(prev_high, prev_low, prev_close)
         if t == "pivot":
             return p
@@ -136,6 +162,15 @@ def resolve_from_slice(price_type: str, df_slice, has_today: bool = True) -> flo
         return 0.0
     last = df_slice.iloc[-1]
     prev = df_slice.iloc[-2] if len(df_slice) >= 2 else None
+
+    # 이동평균류 — 전일까지 N일 종가 평균 (당일 제외: 주문가는 장 시작 전 계산 가능해야).
+    # 봉 수 부족 시 당일 종가 폴백(기존 패턴과 동일).
+    n = _MA_BARS.get(price_type or "")
+    if n is not None:
+        closes = df_slice["close"].iloc[:-1]
+        if len(closes) >= n:
+            return float(closes.iloc[-n:].mean())
+        return float(last["close"])
 
     return resolve_fill_price(
         price_type,

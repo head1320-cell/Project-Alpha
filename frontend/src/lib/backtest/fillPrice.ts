@@ -16,17 +16,33 @@ export const FILL_PRICE_GROUPS: FillPriceGroup[] = [
     { id: "prev_low", label: "전일 저가" },
   ]},
   { id: "pivot", label: "피벗", options: [
-    { id: "pivot", label: "피벗 기준선" },
+    { id: "pivot", label: "피벗 주가중심선" },
+    { id: "pivot_mid", label: "피벗 기준선" },
     { id: "pivot_r1", label: "피벗 1차 저항선" },
     { id: "pivot_r2", label: "피벗 2차 저항선" },
     { id: "pivot_s1", label: "피벗 1차 지지선" },
     { id: "pivot_s2", label: "피벗 2차 지지선" },
   ]},
+  { id: "ma", label: "이동평균 (전일까지)", options: [
+    { id: "ma5", label: "5일 이동평균" },
+    { id: "ma10", label: "10일 이동평균" },
+    { id: "ma20", label: "20일 이동평균" },
+    { id: "ma60", label: "60일 이동평균" },
+    { id: "ma120", label: "120일 이동평균" },
+    { id: "ma200", label: "200일 이동평균" },
+  ]},
   { id: "avg", label: "평균가", options: [
     { id: "twap", label: "TWAP (시간가중)" },
     { id: "vwap", label: "VWAP (거래량가중)" },
   ]},
+  { id: "expr", label: "수식", options: [
+    { id: "expr", label: "수식입력" },
+  ]},
 ];
+
+/** 만기 매도 등 수식입력을 받지 않는 위치용 (expr 그룹 제외) */
+export const FILL_PRICE_GROUPS_NO_EXPR: FillPriceGroup[] =
+  FILL_PRICE_GROUPS.filter((g) => g.id !== "expr");
 
 export function fillPriceLabel(id: string): string {
   for (const g of FILL_PRICE_GROUPS) {

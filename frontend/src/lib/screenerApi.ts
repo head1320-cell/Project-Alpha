@@ -966,6 +966,10 @@ export const backtestBridgeApi = {
     sell_fill_type?: string;
     buy_fill_offset_pct?: number;   // 체결 기준가 ± % (지정가 도달 검증 모델)
     sell_fill_offset_pct?: number;
+    buy_fill_expr?: string | null;  // fill_type="expr"일 때 기준가 산술식
+    sell_fill_expr?: string | null;
+    expiry_fill_type?: string;      // 보유일 만기 매도 가격 기준
+    expiry_fill_offset_pct?: number;
     max_buy_amount?: number | null; // 종목당 최대 매수 금액(원)
     cash_reserve_pct?: number;      // 자산배분: 현금 상시 보유 %
     max_hold_days?: number | null;

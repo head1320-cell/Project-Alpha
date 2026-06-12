@@ -22,7 +22,8 @@ export interface BuyState {
   maxStocks: number;                // LIMIT 일 때 종목 수
   weightPct: number;                // 종목당 비중 %
   weightMode: "equal" | "atr";
-  fillType: string;                 // 매수 체결가 유형 id (fillPrice.ts 13종 — 엔진 fill_price 와 동일)
+  fillType: string;                 // 매수 체결가 유형 id (fillPrice.ts — 엔진 fill_price 와 동일)
+  fillExpr: string;                 // fillType="expr"일 때의 기준가 산술식
   fillOffsetPct: number;            // 체결 기준가 ± 오프셋% (0=미사용, ≠0이면 지정가 도달 검증)
   maxBuyAmount: number;             // 종목당 최대 매수 금액(만원, 0=무제한)
   reBuyBlockDays: number;           // 재매수 방지: 청산 후 N일(캘린더) 재매수 금지 (0=미사용)
@@ -41,8 +42,11 @@ export interface BuyState {
 export interface SellState {
   enabled: boolean;
   orderType: "FIX" | "MARKET";
-  fillType: string;                 // 매도 체결가 유형 id (fillPrice.ts 13종)
+  fillType: string;                 // 매도 체결가 유형 id (fillPrice.ts)
+  fillExpr: string;                 // fillType="expr"일 때의 기준가 산술식
   fillOffsetPct: number;            // 매도 체결 기준가 ± 오프셋% (신호 매도에 적용)
+  expiryFillType: string;           // 보유일 만기 매도 가격 기준 (기본 close)
+  expiryFillOffsetPct: number;      // 만기 매도 ±% (미도달 시 종가 폴백 — 반드시 청산)
   takeProfit: { on: boolean; pct: number };
   stopLoss: { on: boolean; pct: number };
   trailing: { on: boolean; pct: number };       // 드래깅 청산

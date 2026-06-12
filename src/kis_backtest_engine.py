@@ -158,7 +158,15 @@ class BacktestConfig:
     # 0이 아니면 지정가 도달 검증: 매수는 당일 저가≤지정가일 때 min(지정가,시가) 체결,
     # 매도는 당일 고가≥지정가일 때 max(지정가,시가) 체결 — 미도달이면 그날 미체결.
     buy_fill_offset_pct: float = 0.0
-    sell_fill_offset_pct: float = 0.0   # 신호 매도에 적용 (손익절·만기·트레일링은 기존 트리거가 체결)
+    sell_fill_offset_pct: float = 0.0   # 신호 매도에 적용 (손익절·트레일링은 기존 트리거가 체결)
+    # 수식입력 기준가 (fill_type="expr"일 때) — factor_expr 산술식의 마지막 봉 값.
+    # 당일 종가를 포함하는 식은 look-ahead가 될 수 있음 — 전일 기준(과거값(...)) 권장.
+    buy_fill_expr: str | None = None
+    sell_fill_expr: str | None = None
+    # 보유일 만기 매도 가격 기준 (기본 close = 기존 동작 불변). 오프셋 지정가 미도달이면
+    # 종가 폴백(만기 청산은 반드시 종결 — 보수적)
+    expiry_fill_type: str = "close"
+    expiry_fill_offset_pct: float = 0.0
     # 종목당 최대 매수 금액 (원). None=무제한
     max_buy_amount: float | None = None
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
@@ -241,6 +249,16 @@ class BacktestEngine:
         # 매수 우선순위식 — 워밍업·패널 산정 전에 등록 (문법 오류는 ValueError 전파 → 400)
         if self.cfg.buy_sort_expr and hasattr(strategy, "set_priority_expr"):
             strategy.set_priority_expr(self.cfg.buy_sort_expr)
+
+        # 수식입력 기준가 — 파싱 선행 (횡단면 함수는 체결가 식에 쓸 수 없음)
+        self._fill_asts = {}
+        for side, txt in (("buy", self.cfg.buy_fill_expr), ("sell", self.cfg.sell_fill_expr)):
+            if (txt or "").strip():
+                from src.kis_strategies.factor_expr import collect_cross, parse_expr
+                ast = parse_expr(txt)
+                if collect_cross(ast):
+                    raise ValueError("체결가 수식에는 순위/비율(횡단면)을 쓸 수 없습니다")
+                self._fill_asts[side] = ast
 
         # 종목별 OHLCV 전체 로드 (DB에서 한 번만 읽음)
         warmup_start = (
@@ -336,9 +354,10 @@ class BacktestEngine:
                 if self.cfg.trailing_stop_pct:
                     pos.peak_price = max(pos.peak_price, curr_price)
 
-                # 보유기간 매도: max_hold_days 경과 시 강제 청산 (분할 비중 적용)
+                # 보유기간 매도: max_hold_days 경과 시 강제 청산 (분할 비중·만기 가격 기준 적용)
                 if self.cfg.max_hold_days is not None and days_held >= self.cfg.max_hold_days:
-                    self._execute_sell(ticker, curr_price, date_str,
+                    expiry_price = self._expiry_price(df_to_date, curr_price)
+                    self._execute_sell(ticker, expiry_price, date_str,
                                        f"보유기간 {self.cfg.max_hold_days}일 경과",
                                        sell_fraction=self.cfg.sell_divide_pct / 100.0)
                     continue
@@ -530,7 +549,12 @@ class BacktestEngine:
         from src.engine.fill_price import resolve_from_slice
         fill_type = self.cfg.buy_fill_type if side == "buy" else self.cfg.sell_fill_type
         off = self.cfg.buy_fill_offset_pct if side == "buy" else self.cfg.sell_fill_offset_pct
-        base = resolve_from_slice(fill_type, df_slice)
+        if fill_type == "expr":
+            base = self._fill_expr_base(side, df_slice)
+            if base is None:
+                return None if off else float(df_slice["close"].iloc[-1])  # 평가 불가 → 종가 폴백
+        else:
+            base = resolve_from_slice(fill_type, df_slice)
 
         if self.cfg.intraday_fill:
             refined = self._intraday_price(side, df_slice, fill_type, base, off)
@@ -553,6 +577,54 @@ class BacktestEngine:
         if side == "buy":
             return min(p, open_) if low <= p else None
         return max(p, open_) if high >= p else None
+
+    def _fill_expr_base(self, side: str, df_slice) -> float | None:
+        """수식입력 기준가 — 산술식을 슬라이스에 평가한 마지막 봉 값."""
+        ast = getattr(self, "_fill_asts", {}).get(side)
+        if ast is None:
+            return None
+        try:
+            from src.kis_strategies.condition_strategy import (
+                _apply_function,
+                _apply_two_factor,
+                _base_series,
+            )
+            from src.kis_strategies.factor_expr import eval_expr
+
+            def tok(name: str):
+                s = _base_series(df_slice, "{" + name + "}")
+                return None if s is None or len(s) == 0 else s.astype(float)
+
+            out = eval_expr(ast, {"token": tok, "cross": lambda k: None,
+                                  "apply": _apply_function, "two": _apply_two_factor})
+            if out is None or not hasattr(out, "iloc") or len(out) == 0:
+                return None
+            v = out.iloc[-1]
+            return float(v) if pd.notna(v) and float(v) > 0 else None
+        except Exception:
+            return None
+
+    def _expiry_price(self, df_slice, close_price: float) -> float:
+        """보유일 만기 매도가 — 가격 기준(±오프셋 지정가) 적용, 미도달 시 종가 폴백.
+
+        만기 청산은 반드시 그날 종결돼야 하므로 미체결 상태를 남기지 않는다(보수적)."""
+        from src.engine.fill_price import resolve_from_slice
+        t = self.cfg.expiry_fill_type or "close"
+        off = self.cfg.expiry_fill_offset_pct
+        if t == "close" and not off:
+            return close_price  # 기존 동작
+        base = resolve_from_slice(t, df_slice)
+        if base is None or base <= 0:
+            return close_price
+        if not off:
+            return float(base)
+        p = base * (1 + off / 100.0)
+        try:
+            high = float(df_slice["high"].iloc[-1])
+            open_ = float(df_slice["open"].iloc[-1])
+        except Exception:
+            return close_price
+        return max(p, open_) if high >= p else close_price  # 미도달 → 종가(시장가) 폴백
 
     def _intraday_price(self, side: str, df_slice, fill_type: str, base, off):
         """분봉 정밀 체결 — 매매 시간 윈도 내에서.
@@ -1231,6 +1303,10 @@ def run_backtest(
     buy_time_end: str = "1530",
     sell_time_start: str = "0900",
     sell_time_end: str = "1530",
+    buy_fill_expr: str | None = None,
+    sell_fill_expr: str | None = None,
+    expiry_fill_type: str = "close",
+    expiry_fill_offset_pct: float = 0.0,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1292,6 +1368,10 @@ def run_backtest(
         buy_time_end=buy_time_end,
         sell_time_start=sell_time_start,
         sell_time_end=sell_time_end,
+        buy_fill_expr=buy_fill_expr,
+        sell_fill_expr=sell_fill_expr,
+        expiry_fill_type=expiry_fill_type,
+        expiry_fill_offset_pct=expiry_fill_offset_pct,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

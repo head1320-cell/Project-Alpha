@@ -170,6 +170,17 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
+        {s.buy.fillType === "expr" && (
+          <Field label="기준가 수식">
+            <input value={s.buy.fillExpr} spellCheck={false}
+              onChange={(e) => patchBuy({ fillExpr: e.target.value })}
+              placeholder="예: (과거값({고가},{1일})+과거값({저가},{1일}))/2"
+              style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, minWidth: 280, padding: "7px 10px", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", background: "var(--bg-card)", color: "var(--text-primary)" }} />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              마지막 봉 값이 기준가 — 당일 종가 포함 식은 look-ahead, 과거값(…) 권장
+            </span>
+          </Field>
+        )}
         <Field label="매수 가격 기준">
           <OffsetInput value={s.buy.fillOffsetPct} onChange={(fillOffsetPct) => patchBuy({ fillOffsetPct })} />
         </Field>

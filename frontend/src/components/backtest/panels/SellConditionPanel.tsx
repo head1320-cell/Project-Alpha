@@ -8,7 +8,7 @@ import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } fro
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
 import OffsetInput from "./OffsetInput";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
-import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
+import { FILL_PRICE_GROUPS, FILL_PRICE_GROUPS_NO_EXPR } from "../../../lib/backtest/fillPrice";
 
 const timeBox: React.CSSProperties = {
   fontFamily: "var(--bs-font-mono)", fontSize: 13, color: "var(--text-primary)",
@@ -49,6 +49,17 @@ export default function SellConditionPanel({ s, set }: {
         <Field label="체결가 유형">
           <GroupedSelect value={v.fillType} onChange={(id) => patch({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
+        {v.fillType === "expr" && (
+          <Field label="기준가 수식">
+            <input value={v.fillExpr} spellCheck={false}
+              onChange={(e) => patch({ fillExpr: e.target.value })}
+              placeholder="예: 과거값({종가},{1일})*1.02"
+              style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, minWidth: 280, padding: "7px 10px", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", background: "var(--bg-card)", color: "var(--text-primary)" }} />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              마지막 봉 값이 기준가 — 과거값(…) 등 전일 기준 권장
+            </span>
+          </Field>
+        )}
         <Field label="매도 가격 기준">
           <OffsetInput value={v.fillOffsetPct} onChange={(fillOffsetPct) => patch({ fillOffsetPct })} />
         </Field>
@@ -99,6 +110,13 @@ export default function SellConditionPanel({ s, set }: {
             </>
           )}
         </SubToggle>
+        {v.expiryDateSell && (
+          <Field label="만기 매도 가격 기준">
+            <GroupedSelect value={v.expiryFillType} onChange={(id) => patch({ expiryFillType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
+            <OffsetInput value={v.expiryFillOffsetPct} onChange={(expiryFillOffsetPct) => patch({ expiryFillOffsetPct })} />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>지정가 미도달 시 종가 폴백 — 만기 청산은 반드시 종결</span>
+          </Field>
+        )}
         </>)}
       </Section>
 
