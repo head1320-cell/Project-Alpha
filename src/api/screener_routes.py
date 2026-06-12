@@ -972,6 +972,8 @@ class ScreenToBacktestRequest(BaseModel):
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
     # 신호 기준일 (젠포트 Tip 3): 0=당일 봉(기존), 1=전일 봉 기준 신호→당일 체결(시가류 체결 look-ahead 제거)
     signal_lag: int = Field(default=0, ge=0, le=5)
+    # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
+    rebuy_block_days: int = Field(default=0, ge=0, le=120)
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1113,6 +1115,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             rebalance_period=req.rebalance_period,
             market_timing=req.market_timing,
             signal_lag=req.signal_lag,
+            rebuy_block_days=req.rebuy_block_days,
         )
 
         # 3) 통합 응답

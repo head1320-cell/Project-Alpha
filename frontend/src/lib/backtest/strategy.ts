@@ -21,7 +21,8 @@ export interface BuyState {
   weightPct: number;                // 종목당 비중 %
   weightMode: "equal" | "atr";
   fillType: string;                 // 매수 체결가 유형 id (fillPrice.ts 13종 — 엔진 fill_price 와 동일)
-  reBuyBlockDays: number;
+  reBuyBlockDays: number;           // 재매수 방지: 청산 후 N일(캘린더) 재매수 금지 (0=미사용)
+  maxBuyPerDay: number;             // 1일 최대 신규 매수 종목 수 (0=무제한)
   timeStart: string;
   timeEnd: string;
   // 고급 체결(기본 꺼짐) — TWAP은 체결가 유형(fillType)에서 선택
@@ -118,6 +119,8 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "방식", value: b.weightMode === "equal" ? "균등" : "ATR" },
         { label: "종목당", value: `${b.weightPct}%` },
         { label: "대상 수", value: b.limitType === "MAX" ? "전체" : `${b.maxStocks}종목` },
+        { label: "1일 최대", value: b.maxBuyPerDay > 0 ? `${b.maxBuyPerDay}종목` : "무제한", muted: b.maxBuyPerDay === 0 },
+        { label: "재매수 방지", value: b.reBuyBlockDays > 0 ? `${b.reBuyBlockDays}일` : "미사용", muted: b.reBuyBlockDays === 0 },
         { label: "체결가", value: fillPriceLabel(b.fillType) },
       ]},
       { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough]]) },

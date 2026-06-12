@@ -14,6 +14,15 @@ const selBox: React.CSSProperties = {
   fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
   borderRadius: "var(--bs-border-radius)", padding: "6px 9px", background: "var(--bg-card)", cursor: "pointer",
 };
+const dateBox: React.CSSProperties = {
+  fontFamily: "var(--bs-font-mono)", fontSize: 13, color: "var(--text-primary)",
+  border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)",
+  padding: "6px 9px", background: "var(--bg-card)",
+};
+const chipBtn: React.CSSProperties = {
+  fontSize: 11, color: "var(--text-secondary)", border: "1px solid var(--border-strong)",
+  borderRadius: "var(--bs-border-radius)", padding: "5px 9px", background: "var(--bg-card)", cursor: "pointer",
+};
 
 export default function BuyConditionPanel({ s, set }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>;
@@ -28,6 +37,23 @@ export default function BuyConditionPanel({ s, set }: {
       <Section title="포트 기본 설정" hint="투자금·기간·비용" tone="neutral" enabled onToggle={() => {}}>
         <Field label="투자 금액">
           <QuickStepper value={s.capital} onChange={(v) => set((x) => ({ ...x, capital: v }))} chips={[1000, 5000]} unit="만원" min={0} />
+        </Field>
+        <Field label="투자 기간">
+          <input type="date" value={s.startDate} max={s.endDate}
+            onChange={(e) => set((x) => ({ ...x, startDate: e.target.value }))} style={dateBox} />
+          <span style={{ color: "var(--text-secondary)" }}>~</span>
+          <input type="date" value={s.endDate} min={s.startDate}
+            onChange={(e) => set((x) => ({ ...x, endDate: e.target.value }))} style={dateBox} />
+          <span style={{ display: "flex", gap: 5 }}>
+            {([["1년", 1], ["3년", 3], ["5년", 5], ["전체기간", 0]] as const).map(([label, yrs]) => (
+              <button key={label} type="button" onClick={() => set((x) => {
+                const end = x.endDate || new Date().toISOString().slice(0, 10);
+                const start = yrs === 0 ? "2015-01-01"
+                  : `${Number(end.slice(0, 4)) - yrs}${end.slice(4)}`;
+                return { ...x, startDate: start, endDate: end };
+              })} style={chipBtn}>{label}</button>
+            ))}
+          </span>
         </Field>
         <Field label="수수료율">
           <QuickStepper value={s.feePct} onChange={(v) => set((x) => ({ ...x, feePct: v }))} unit="%" min={0} />
@@ -116,8 +142,13 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
+        <SubToggle tone="buy" label="1일 최대 매수 종목 수" hint="하루 신규 진입 수 제한"
+          on={s.buy.maxBuyPerDay > 0} onChange={(on) => patchBuy({ maxBuyPerDay: on ? 1 : 0 })}>
+          <QuickStepper value={s.buy.maxBuyPerDay} onChange={(v) => patchBuy({ maxBuyPerDay: v })} chips={[1, 3, 5]} unit="종목" min={1} />
+        </SubToggle>
         <Field label="재매수 방지">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>청산 후 N일(캘린더) 재매수 금지 · 0=미사용</span>
         </Field>
       </Section>
 

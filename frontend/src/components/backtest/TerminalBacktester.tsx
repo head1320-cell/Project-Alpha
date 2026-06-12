@@ -30,15 +30,21 @@ function largeCapFilter(): FilterGroupNode {
   };
 }
 
+const today = () => new Date().toISOString().slice(0, 10);
+const yearsAgo = (n: number) => {
+  const d = today();
+  return `${Number(d.slice(0, 4)) - n}${d.slice(4)}`;
+};
+
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
-  capital: 5000, startDate: "2023-01-01", endDate: "2024-12-31", feePct: 0.15, slippagePct: 0.05,
+  capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
   rebalancePeriod: "daily", signalLag: 0,
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
     limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
-    fillType: "close", reBuyBlockDays: 0, timeStart: "09:00", timeEnd: "15:30",
+    fillType: "close", reBuyBlockDays: 0, maxBuyPerDay: 0, timeStart: "09:00", timeEnd: "15:30",
     splitBuy: false, splitBuyPct: 50, splitBuyCount: 2, breakthrough: false, allowFundamentals: false,
   },
   sell: {
@@ -108,9 +114,10 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     max_sell_divisions: sell.splitTakeProfit ? sell.splitSellCount : null,
     buy_weight_mode: buy.weightMode,  // equal | atr (엔진 역변동성 사이징)
     buy_divide_pct: buy.splitBuy ? buy.splitBuyPct : 100,
-    max_buy_per_day: null as number | null,
+    max_buy_per_day: buy.maxBuyPerDay > 0 ? buy.maxBuyPerDay : null,
     max_buy_count: buy.splitBuy ? buy.splitBuyCount : null,
     breakthrough_buy: buy.breakthrough,
+    rebuy_block_days: buy.reBuyBlockDays,
     caps: s.universe.caps,
     sectors: s.universe.sectors,
     etf: s.universe.etf,

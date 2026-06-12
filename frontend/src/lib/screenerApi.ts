@@ -977,6 +977,7 @@ export const backtestBridgeApi = {
     sell_logic?: string | null;
     rebalance_period?: string | null;
     signal_lag?: number;  // 0=당일 봉(기존) | 1=전일 봉 기준 신호(젠포트식)
+    rebuy_block_days?: number;  // 청산 후 N일 재매수 금지 (0=미사용)
     market_timing?: {
       index_ticker: string; action: string;
       conditions: BacktestConditionPayload[];

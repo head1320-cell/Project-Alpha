@@ -162,6 +162,7 @@ class BacktestConfig:
     buy_divide_pct: float = 100.0       # 분할 매수 비중 % (100=한번에, 50=절반씩 추가매수)
     max_buy_per_day: int | None = None  # 일일 최대 신규 매수 종목 수
     max_buy_count: int | None = None    # 종목당 최대 분할 매수 횟수
+    rebuy_block_days: int = 0           # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
     factor_weights: dict | None = None  # 종목별 팩터 가중치 {ticker: 0~1} (팩터가중 모드용)
     # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②). 기본 비활성 = 기존 동작 불변
     rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"·"monthly"=주·월 첫 거래일에만 신규 매수
@@ -192,6 +193,7 @@ class BacktestEngine:
         self.positions: dict[str, Position] = {}
         self.trades: list[Trade] = []
         self.equity_history: list[tuple] = []   # (date_str, equity)
+        self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
 
     def run(self) -> dict:
         """
@@ -513,6 +515,11 @@ class BacktestEngine:
             return
         if self.cfg.max_buy_per_day is not None and getattr(self, "_buys_today", 0) >= self.cfg.max_buy_per_day:
             return
+        # 재매수 방지: 청산 후 N일(캘린더) 이내면 진입하지 않음
+        if self.cfg.rebuy_block_days > 0:
+            last = self._last_exit.get(ticker)
+            if last is not None and self._days_held(last, date_str) <= self.cfg.rebuy_block_days:
+                return
 
         alloc = self._initial_alloc(factor_weight, atr_pct)
         if self.cfg.buy_divide_pct < 100.0:
@@ -599,6 +606,7 @@ class BacktestEngine:
         self.cash += proceeds
         if full_exit:
             del self.positions[ticker]
+            self._last_exit[ticker] = date_str  # 재매수 방지 기준일
         else:
             # 부분 매도: 잔여 수량 유지 (평단가·진입일 불변), 분할 횟수 증가
             pos.quantity -= sell_qty
@@ -1034,6 +1042,7 @@ def run_backtest(
     rebalance_period: str | None = None,
     market_timing: dict | None = None,
     signal_lag: int = 0,
+    rebuy_block_days: int = 0,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1082,6 +1091,7 @@ def run_backtest(
         rebalance_period=rebalance_period,
         market_timing=market_timing,
         signal_lag=signal_lag,
+        rebuy_block_days=rebuy_block_days,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

@@ -15,6 +15,18 @@ const timeBox: React.CSSProperties = {
   padding: "6px 11px", background: "var(--bg-card)", width: 84, textAlign: "center",
 };
 
+/** 분봉/틱 데이터가 있어야 의미 있는 설정 — 일봉 백테스트엔 반영되지 않음을 정직하게 표시 */
+function IntradayOnly({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ opacity: 0.45, pointerEvents: "none" }} aria-disabled>{children}</div>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>
+        ⏳ 분봉 데이터 연동 시 활성 — 현재 일봉 백테스트에는 반영되지 않습니다
+      </div>
+    </div>
+  );
+}
+
 export default function SellConditionPanel({ s, set }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>;
 }) {
@@ -28,8 +40,10 @@ export default function SellConditionPanel({ s, set }: {
         enabled={v.takeProfit.on || v.stopLoss.on || v.trailing.on}
         onToggle={(on) => patch({ takeProfit: { ...v.takeProfit, on }, stopLoss: { ...v.stopLoss, on }, trailing: { ...v.trailing, on: on && v.trailing.on } })}>
         <Field label="매도 주문 방법">
-          <Segmented tone="sell" value={v.orderType} onChange={(t) => patch({ orderType: t })}
-            options={[{ id: "FIX", label: "지정가" }, { id: "MARKET", label: "시장가" }]} />
+          <IntradayOnly>
+            <Segmented tone="sell" value={v.orderType} onChange={(t) => patch({ orderType: t })}
+              options={[{ id: "FIX", label: "지정가" }, { id: "MARKET", label: "시장가" }]} />
+          </IntradayOnly>
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={v.fillType} onChange={(id) => patch({ fillType: id })} groups={FILL_PRICE_GROUPS} />
@@ -81,16 +95,20 @@ export default function SellConditionPanel({ s, set }: {
       <Section title="종목 청산" hint="장마감·시간 청산" tone="sell"
         enabled={v.liquidate.on} onToggle={(on) => patch({ liquidate: { ...v.liquidate, on } })}>
         <Field label="청산 시점">
-          <Segmented tone="sell" value={v.liquidate.mode} onChange={(mode) => patch({ liquidate: { ...v.liquidate, mode } })}
-            options={[{ id: "close", label: "장마감 동시호가" }, { id: "time", label: "시간 지정" }]} />
+          <IntradayOnly>
+            <Segmented tone="sell" value={v.liquidate.mode} onChange={(mode) => patch({ liquidate: { ...v.liquidate, mode } })}
+              options={[{ id: "close", label: "장마감 동시호가" }, { id: "time", label: "시간 지정" }]} />
+          </IntradayOnly>
         </Field>
       </Section>
 
       <Section title="매도 시간" hint={`${v.timeStart} ~ ${v.timeEnd}`} tone="sell" enabled onToggle={() => {}}>
         <Field label="시간대">
-          <input value={v.timeStart} onChange={(e) => patch({ timeStart: e.target.value })} style={timeBox} />
-          <span style={{ color: "var(--text-secondary)" }}>~</span>
-          <input value={v.timeEnd} onChange={(e) => patch({ timeEnd: e.target.value })} style={timeBox} />
+          <IntradayOnly>
+            <input value={v.timeStart} onChange={(e) => patch({ timeStart: e.target.value })} style={timeBox} />
+            <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>~</span>
+            <input value={v.timeEnd} onChange={(e) => patch({ timeEnd: e.target.value })} style={timeBox} />
+          </IntradayOnly>
         </Field>
       </Section>
 
