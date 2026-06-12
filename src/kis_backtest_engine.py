@@ -181,6 +181,10 @@ class BacktestConfig:
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
     # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
     vectorize_signals: bool = True
+    # 매수 우선순위식 (젠포트 매수 종목 선택 우선순위): 봉마다 후보들의 식 값으로
+    # 매수 실행 순서를 정렬 — max_positions/일일 한도가 상위 후보부터 소진된다.
+    buy_sort_expr: str | None = None
+    buy_sort_desc: bool = True          # True=식 값 높은순
     # 신호 기준일 (젠포트 Tip 3: "전일 종가 기준 선정 → 익일 매매").
     # 0 = 당일 봉 포함(기존 동작 불변, 종가 체결과 정합).
     # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — 시가·전일종가류 체결의 look-ahead 제거.
@@ -221,6 +225,10 @@ class BacktestEngine:
         strategy = get_strategy(self.cfg.strategy_name, **self.cfg.strategy_params)
         if strategy is None:
             return self._error_response(f"Unknown strategy: {self.cfg.strategy_name}")
+
+        # 매수 우선순위식 — 워밍업·패널 산정 전에 등록 (문법 오류는 ValueError 전파 → 400)
+        if self.cfg.buy_sort_expr and hasattr(strategy, "set_priority_expr"):
+            strategy.set_priority_expr(self.cfg.buy_sort_expr)
 
         # 종목별 OHLCV 전체 로드 (DB에서 한 번만 읽음)
         warmup_start = (
@@ -327,6 +335,10 @@ class BacktestEngine:
                     self._check_risk_triggers(ticker, pos, curr_price, date_str)
 
             # 2. 전략 신호 생성 (각 종목별)
+            # 우선순위식이 있으면 매수는 큐에 모았다가 당일 식 값 순으로 실행
+            # (max_positions·일일 한도가 상위 후보부터 소진 — 젠포트 매수 우선순위)
+            from src.kis_signal import Action
+            buy_queue: list[tuple] | None = [] if self.cfg.buy_sort_expr else None
             for ticker in self.cfg.symbols:
                 if ticker not in ohlcv_map:
                     continue
@@ -336,11 +348,12 @@ class BacktestEngine:
                 if len(df_slice) < strategy.required_days + lag:
                     continue
 
+                # 신호 기준 봉: signal_lag>0이면 lag봉 이전 (체결은 당일 가격 그대로)
+                sig_date = sim_date if lag == 0 else df_slice.index[-1 - lag]
+
                 # ① 벡터화 조회(사전계산 시) → ② per-bar 폴백(data_fetcher slice 패치)
-                # signal_lag>0이면 신호는 lag봉 이전 데이터로 평가 (체결은 당일 가격 그대로)
                 signal = None
                 if self.cfg.vectorize_signals and hasattr(strategy, "signal_at"):
-                    sig_date = sim_date if lag == 0 else df_slice.index[-1 - lag]
                     signal = strategy.signal_at(ticker, sig_date)
                 if signal is None:
                     sig_slice = df_slice.iloc[: len(df_slice) - lag] if lag else df_slice
@@ -348,27 +361,14 @@ class BacktestEngine:
                 if signal is None:
                     continue
 
-                # 체결가: 유형별 계산 (기본 "close" = 종가, 기존 동작 불변)
-                from src.kis_signal import Action
-                close_price = float(df_slice["close"].iloc[-1])
-
                 if signal.action == Action.BUY and signal.is_actionable():
-                    # 신규 매수 게이트: 마켓타이밍 ON + (리밸런싱 미사용 또는 리밸런싱일)
-                    can_buy = market_on and (rebalance_days is None or sim_date in rebalance_days)
-                    bb_price = None
-                    if can_buy and self.cfg.breakthrough_buy:
-                        # 돌파매수: 전일 고가 미돌파면 오늘은 진입하지 않음
-                        bb_price = self._breakthrough_price(df_slice)
-                        can_buy = bb_price is not None
-                    if can_buy:
-                        buy_price = bb_price or self._fill_with_offset("buy", df_slice)
-                        if buy_price is None and self.cfg.buy_fill_offset_pct:
-                            pass  # 지정가(기준가±오프셋) 미도달 — 그날 미체결
-                        else:
-                            fw = (self.cfg.factor_weights or {}).get(ticker)
-                            natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
-                            self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
-                                              factor_weight=fw, atr_pct=natr)
+                    if buy_queue is not None:
+                        prio = (strategy.priority_at(ticker, sig_date)
+                                if hasattr(strategy, "priority_at") else None)
+                        buy_queue.append((prio, ticker, df_slice, signal))
+                    else:
+                        self._process_buy(ticker, df_slice, signal,
+                                          market_on, rebalance_days, sim_date, date_str)
                 elif signal.action == Action.SELL and signal.is_actionable():
                     # 최소 보유기간 미달 시 신호 매도 보류
                     pos = self.positions.get(ticker)
@@ -379,8 +379,19 @@ class BacktestEngine:
                     sell_price = self._fill_with_offset("sell", df_slice)
                     if sell_price is None and self.cfg.sell_fill_offset_pct:
                         continue  # 지정가 미도달 — 그날 미체결(보유 지속)
+                    close_price = float(df_slice["close"].iloc[-1])
                     self._execute_sell(ticker, sell_price or close_price, date_str, signal.reason,
                                        sell_fraction=self.cfg.sell_divide_pct / 100.0)
+
+            if buy_queue:
+                # 식 값 정렬 (None=평가 불가 → 후순위, 동률은 종목코드로 결정적)
+                sign = -1.0 if self.cfg.buy_sort_desc else 1.0
+                buy_queue.sort(key=lambda x: (x[0] is None,
+                                              sign * x[0] if x[0] is not None else 0.0,
+                                              x[1]))
+                for _prio, ticker, df_slice, signal in buy_queue:
+                    self._process_buy(ticker, df_slice, signal,
+                                      market_on, rebalance_days, sim_date, date_str)
 
             # 2.5 당일 매매: 오늘 진입한 포지션을 장 마감(당일 종가)에 전량 청산
             if self.cfg.day_trade and self.positions:
@@ -466,6 +477,26 @@ class BacktestEngine:
             # ATR 비중: 기준 NATR 2% 대비 역비례 배수 (0.5~1.5 클램프) — 변동성 패리티 근사
             base *= max(0.5, min(1.5, 2.0 / atr_pct))
         return min(base, usable * 0.95)
+
+    def _process_buy(self, ticker: str, df_slice, signal,
+                     market_on: bool, rebalance_days, sim_date, date_str: str):
+        """매수 신호 1건 처리 — 게이트(마켓타이밍·리밸런싱·돌파) + 체결가 + 집행."""
+        can_buy = market_on and (rebalance_days is None or sim_date in rebalance_days)
+        bb_price = None
+        if can_buy and self.cfg.breakthrough_buy:
+            # 돌파매수: 전일 고가 미돌파면 오늘은 진입하지 않음
+            bb_price = self._breakthrough_price(df_slice)
+            can_buy = bb_price is not None
+        if not can_buy:
+            return
+        buy_price = bb_price or self._fill_with_offset("buy", df_slice)
+        if buy_price is None and self.cfg.buy_fill_offset_pct:
+            return  # 지정가(기준가±오프셋) 미도달 — 그날 미체결
+        close_price = float(df_slice["close"].iloc[-1])
+        fw = (self.cfg.factor_weights or {}).get(ticker)
+        natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
+        self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
+                          factor_weight=fw, atr_pct=natr)
 
     def _usable_cash(self) -> float:
         """매수 가용 현금 — 자산배분(현금 비중 유지) 시 예비금을 제외한 잔액."""
@@ -1118,6 +1149,8 @@ def run_backtest(
     sell_fill_offset_pct: float = 0.0,
     max_buy_amount: float | None = None,
     cash_reserve_pct: float = 0.0,
+    buy_sort_expr: str | None = None,
+    buy_sort_desc: bool = True,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1172,6 +1205,8 @@ def run_backtest(
         sell_fill_offset_pct=sell_fill_offset_pct,
         max_buy_amount=max_buy_amount,
         cash_reserve_pct=cash_reserve_pct,
+        buy_sort_expr=buy_sort_expr,
+        buy_sort_desc=buy_sort_desc,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

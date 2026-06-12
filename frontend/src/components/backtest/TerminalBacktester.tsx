@@ -43,6 +43,7 @@ const initialStrategy = (): BacktestStrategy => ({
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
+    sortExpr: "", sortExprDesc: true,
     limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
     fillType: "close", fillOffsetPct: 0, maxBuyAmount: 0,
     reBuyBlockDays: 0, maxBuyPerDay: 0, timeStart: "09:00", timeEnd: "15:30",
@@ -80,6 +81,7 @@ const mapConds = (cs: BacktestStrategy["buy"]["conditions"]) =>
     factor_token2: c.factorToken2 ?? null,
     inner2_function_id: c.inner2FunctionId ?? null,
     inner2_params: c.inner2Params ?? null,
+    expr: c.direct ? c.expr : null,  // 직접 입력(자유 산술식)
   }));
 
 // 전략 상태 → screenToBacktest payload 어댑터
@@ -134,6 +136,8 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     sell_conditions: mapConds(sell.conditions),
     buy_logic: buy.logicExpr.trim() || null,
     sell_logic: sell.logicExpr.trim() || null,
+    buy_sort_expr: buy.sortExpr.trim() || null,
+    buy_sort_desc: buy.sortExprDesc,
     rebalance_period: s.rebalancePeriod === "daily" ? null : s.rebalancePeriod,
     signal_lag: s.signalLag,
     market_timing: s.marketTiming.on && s.marketTiming.conditions.length ? {

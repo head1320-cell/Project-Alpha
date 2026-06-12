@@ -114,6 +114,16 @@ export default function BuyConditionPanel({ s, set }: {
             onChange={(dir: SortDir) => patchBuy({ primarySort: { ...s.buy.primarySort, dir } })}
             options={[{ id: "DESC", label: "높은순" }, { id: "ASC", label: "낮은순" }]} />
         </Field>
+        <SubToggle tone="buy" label="우선순위식 (일별)" hint="봉마다 식 값으로 매수 순서 결정 — 위 정렬 대신"
+          on={s.buy.sortExpr.trim() !== ""} onChange={(on) => patchBuy({ sortExpr: on ? "{종합점수}" : "" })}>
+          <input value={s.buy.sortExpr} spellCheck={false}
+            onChange={(e) => patchBuy({ sortExpr: e.target.value })}
+            placeholder="예: {모멘텀점수} 또는 변화율_기간({종가},{20일})"
+            style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, minWidth: 220, padding: "6px 9px", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", background: "var(--bg-card)", color: "var(--text-primary)" }} />
+          <Segmented tone="buy" value={s.buy.sortExprDesc ? "desc" : "asc"}
+            onChange={(d) => patchBuy({ sortExprDesc: d === "desc" })}
+            options={[{ id: "desc", label: "높은순" }, { id: "asc", label: "낮은순" }]} />
+        </SubToggle>
         <Field label="2차 정렬">
           <select value={s.buy.secondarySort?.expr ?? ""} style={selBox}
             onChange={(e) => patchBuy({ secondarySort: e.target.value ? { expr: e.target.value, dir: s.buy.secondarySort?.dir ?? "DESC" } : undefined })}>

@@ -6,7 +6,7 @@
 // 만드는 즉시 "이 조건 — …" NL 한 줄로 의미를 보여준다.
 
 import { useState } from "react";
-import { Plus, Pencil, X, Check, Variable, ArrowRight, ShieldCheck, Save, FolderOpen } from "lucide-react";
+import { Plus, Pencil, X, Check, Variable, ArrowRight, ShieldCheck, Save, FolderOpen, Sparkles } from "lucide-react";
 import FactorPickerModal, { type FactorPick } from "./FactorPickerModal";
 import { FUNCTIONS_BY_ID, fillTemplate } from "../../lib/backtest/factorFunctions";
 import { backtestBridgeApi } from "../../lib/screenerApi";
@@ -22,7 +22,8 @@ export interface Condition {
   factorToken: string;
   functionId: string;
   params: Record<string, string>;
-  expr: string;       // 함수 적용 좌항 (예: "이동평균({고가}, 20)")
+  expr: string;       // 함수 적용 좌항 (예: "이동평균({고가}, 20)") — direct면 산술식 원문
+  direct?: boolean;   // 직접 입력(자유 산술식): expr를 백엔드 factor_expr로 평가
   op: OpId;
   rhs: string;
   rhs2?: string;      // between 일 때 상한
@@ -66,7 +67,65 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
   const [setsOpen, setSetsOpen] = useState(false);
   const [savedSets, setSavedSets] = useState<SavedConditionSet[]>([]);
   const [saveName, setSaveName] = useState("");
+  // 직접 입력(자유 산술식) 모드 + AI 자연어 변환
+  const [inputMode, setInputMode] = useState<"picker" | "direct">("picker");
+  const [directExpr, setDirectExpr] = useState("");
+  const [exprCheck, setExprCheck] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [nlQuery, setNlQuery] = useState("");
+  const [nlBusy, setNlBusy] = useState(false);
+  const [nlMsg, setNlMsg] = useState<string | null>(null);
   const accent = TONES[tone];
+
+  const verifyExpr = async () => {
+    const expr = directExpr.trim();
+    if (!expr) { setExprCheck(null); return; }
+    try {
+      const r = await backtestBridgeApi.validateExpr(expr);
+      if (!r.ok) setExprCheck({ ok: false, msg: r.error ?? "식이 올바르지 않습니다" });
+      else setExprCheck({
+        ok: true,
+        msg: `유효한 식${r.lookback ? ` · 룩백 ${r.lookback}봉` : ""}${r.unknown_tokens?.length ? ` · ⚠ 미지원 토큰(건너뜀): ${r.unknown_tokens.join(", ")}` : ""}`,
+      });
+    } catch { setExprCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하세요" }); }
+  };
+
+  const saveDirect = () => {
+    const expr = directExpr.trim();
+    if (!expr || draft.rhs === "") return;
+    onChange([...conditions, {
+      id: uid(), factorName: expr, factorToken: "", functionId: "expr", params: {},
+      expr, direct: true, op: draft.op, rhs: draft.rhs,
+      rhs2: draft.op === "between" ? draft.rhs2 : undefined,
+    }]);
+    setDirectExpr(""); setExprCheck(null); setDraft(emptyDraft());
+  };
+
+  const runNl = async () => {
+    const q = nlQuery.trim();
+    if (!q || nlBusy) return;
+    setNlBusy(true); setNlMsg(null);
+    try {
+      const r = await backtestBridgeApi.conditionNl(q);
+      const added: Condition[] = r.conditions.map((c) => ({
+        id: uid(),
+        factorName: c.expr ?? (c.factor_token ?? ""),
+        factorToken: c.factor_token ?? "",
+        functionId: c.expr ? "expr" : (c.function_id ?? "base"),
+        params: (c.params as Record<string, string>) ?? {},
+        expr: c.expr ?? `${c.factor_token ?? ""}`,
+        direct: !!c.expr,
+        op: (c.op as OpId) ?? "gte",
+        rhs: String(c.rhs ?? ""),
+      }));
+      if (added.length) onChange([...conditions, ...added]);
+      const skip = r.skipped?.length ? ` · 변환 불가 ${r.skipped.length}건` : "";
+      setNlMsg(added.length
+        ? `${added.length}개 조건 추가 (${r.source === "claude" ? "AI" : "규칙"})${skip} — 펀더멘털 토큰은 '펀더멘털 조건 평가' 토글 필요`
+        : `변환된 조건이 없습니다${skip}`);
+      setNlQuery("");
+    } catch { setNlMsg("변환 요청 실패 — 백엔드 연결을 확인하세요"); }
+    finally { setNlBusy(false); }
+  };
 
   const refreshSets = () => setSavedSets(sideKey ? listConditionSets(sideKey) : []);
   const toggleSets = () => { if (!setsOpen) refreshSets(); setSetsOpen(!setsOpen); };
@@ -202,9 +261,31 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
 
       {/* 우: 조건식 설정(드래프트) */}
       <div style={{ background: "var(--bg-section)", borderRadius: RL, padding: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 13 }}>조건식 설정</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>조건식 설정</span>
+          <Segmented tone={tone} value={inputMode} onChange={(m) => setInputMode(m)}
+            options={[{ id: "picker", label: "팩터 선택" }, { id: "direct", label: "직접 입력" }]} />
+        </div>
 
-        {/* 팩터+함수 선택 트리거 */}
+        {inputMode === "direct" ? (
+          <div style={{ marginBottom: 12 }}>
+            <input value={directExpr} spellCheck={false}
+              onChange={(e) => { setDirectExpr(e.target.value); setExprCheck(null); }}
+              placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})"
+              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "10px 12px", border: `1px solid ${exprCheck && !exprCheck.ok ? "#dc2626" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <button type="button" onClick={verifyExpr}
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 9px", cursor: "pointer", flexShrink: 0 }}>
+                <ShieldCheck size={13} /> 식 검증
+              </button>
+              {exprCheck && <span style={{ fontSize: 11, color: exprCheck.ok ? "#16a34a" : "#dc2626" }}>{exprCheck.msg}</span>}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
+              사칙연산(+,−,×,÷)·괄호·{"{팩터}"}·함수 조합 — 인용부호(&apos;)는 중첩 인자 묶음 · 우변은 아래 값
+            </div>
+          </div>
+        ) : (
+        /* 팩터+함수 선택 트리거 */
         <button type="button" onClick={() => setPickerOpen(true)}
           style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--bs-font-mono)", fontSize: 14, color: draft.factorName ? "var(--text-primary)" : "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border-strong)", borderRadius: R, padding: "10px 12px", cursor: "pointer", marginBottom: 12, textAlign: "left" }}>
           <Variable size={15} style={{ color: accent.accent, flexShrink: 0 }} />
@@ -213,6 +294,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           </span>
           <Pencil size={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }} />
         </button>
+        )}
 
         {/* 연산자 + 값 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13, flexWrap: "wrap" }}>
@@ -233,14 +315,42 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--bg-card)", border: `1px solid ${accent.accent}`, borderRadius: R, padding: "11px 12px", marginBottom: 14 }}>
           <ArrowRight size={15} style={{ color: accent.text, marginTop: 2, flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            {draft.factorName ? <>이 조건 — <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{sentence}</span></> : sentence}
+            {inputMode === "direct"
+              ? (directExpr.trim() && draft.rhs !== ""
+                  ? <>이 조건 — <span style={{ fontFamily: "var(--bs-font-mono)", color: "var(--text-primary)" }}>{directExpr.trim()} {opSym(draft.op)} {draft.rhs}{draft.op === "between" ? `~${draft.rhs2}` : ""}</span></>
+                  : "식을 입력하고 값을 넣으면 조건이 완성돼요.")
+              : (draft.factorName ? <>이 조건 — <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{sentence}</span></> : sentence)}
           </span>
         </div>
 
+        {inputMode === "direct" ? (
+          <button type="button" onClick={saveDirect} disabled={!directExpr.trim() || draft.rhs === ""}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "#fff", background: (directExpr.trim() && draft.rhs !== "") ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 0", cursor: (directExpr.trim() && draft.rhs !== "") ? "pointer" : "not-allowed" }}>
+            <Check size={14} /> 조건식 저장
+          </button>
+        ) : (
         <button type="button" onClick={save} disabled={!draft.factorName || draft.rhs === ""}
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "#fff", background: (draft.factorName && draft.rhs !== "") ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 0", cursor: (draft.factorName && draft.rhs !== "") ? "pointer" : "not-allowed" }}>
           <Check size={14} /> 조건식 저장
         </button>
+        )}
+
+        {/* AI 자연어 변환 (매수 조건 전용 — 젠포트 AI 버튼) */}
+        {sideKey === "buy" && (
+          <div style={{ marginTop: 12, borderTop: "1px dashed var(--border-strong)", paddingTop: 11 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input value={nlQuery} onChange={(e) => setNlQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") runNl(); }}
+                placeholder="자연어로 입력 — 예: PER 15 이하이고 ROE 상위 30%"
+                style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+              <button type="button" onClick={runNl} disabled={nlBusy || !nlQuery.trim()}
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, color: "#fff", background: nlBusy || !nlQuery.trim() ? "var(--border-strong)" : accent.accent, border: "none", borderRadius: R, padding: "8px 12px", cursor: nlBusy || !nlQuery.trim() ? "not-allowed" : "pointer", flexShrink: 0 }}>
+                <Sparkles size={13} /> {nlBusy ? "변환 중…" : "AI 변환"}
+              </button>
+            </div>
+            {nlMsg && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 5 }}>{nlMsg}</div>}
+          </div>
+        )}
       </div>
 
       <FactorPickerModal open={pickerOpen} tone={tone}

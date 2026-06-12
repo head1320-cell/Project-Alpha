@@ -655,6 +655,99 @@ def screener_condition_tokens():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+class ExprValidateRequest(BaseModel):
+    expr: str = ""
+
+
+@router.post("/factor-expr/validate")
+def validate_factor_expr(req: ExprValidateRequest):
+    """자유 산술 팩터식 검증 — 파서가 단일 진실 공급원.
+
+    ok=True면 lookback·사용 토큰·미지원 토큰 경고(평가 시 건너뜀) 포함."""
+    from src.kis_strategies.factor_expr import expr_lookback, expr_tokens, parse_expr
+    from src.kis_strategies.factor_tokens import token_support
+    expr = (req.expr or "").strip()
+    if not expr:
+        return {"ok": True, "empty": True, "lookback": 0, "tokens": [], "unknown_tokens": []}
+    try:
+        ast = parse_expr(expr)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    tokens = sorted(expr_tokens(ast))
+    try:
+        supported = set(token_support()["supported"])
+    except Exception:
+        supported = set()
+    unknown = [t for t in tokens if supported and t not in supported]
+    return {"ok": True, "empty": False, "lookback": expr_lookback(ast),
+            "tokens": tokens, "unknown_tokens": unknown}
+
+
+class ConditionNLRequest(BaseModel):
+    query: str
+
+
+@router.post("/condition-nl")
+def condition_from_nl(req: ConditionNLRequest):
+    """자연어 → 백테스터 조건식 (젠포트 AI 버튼) — nl2ast 재사용 후 조건 매핑.
+
+    field 조건 → 펀더멘털 토큰 조건, rank_mode → 비율내림차순/순위내림차순 산술식.
+    매핑 불가 항목은 skipped에 사유와 함께 — 조용히 버리지 않음."""
+    try:
+        from src.services.screener_copilot import nl_to_ast
+        result = nl_to_ast(req.query)
+        ast = result.get("ast") or {}
+        # 필드 id → 한글 라벨 (조건식 토큰으로 해석 가능한 이름)
+        id_to_label: dict[str, str] = {}
+        try:
+            from src.kis_strategies.factor_tokens import _label_aliases
+            for label, fid in _label_aliases().items():
+                id_to_label.setdefault(fid, label)
+        except Exception:
+            pass
+        try:
+            from src.engine.filter_ast import FIELD_BY_ID
+            for fid, f in FIELD_BY_ID.items():
+                id_to_label.setdefault(fid, getattr(f, "label", fid))
+        except Exception:
+            pass
+        _OP = {"gt": "gte", "gte": "gte", "lt": "lte", "lte": "lte", "eq": "eq"}
+        conds, skipped = [], []
+        for c in (ast.get("conditions") or []):
+            if c.get("kind") != "field":
+                skipped.append({"field": str(c.get("kind")), "reason": "필드 조건만 변환 가능"})
+                continue
+            fid = str(c.get("field") or "")
+            label = id_to_label.get(fid)
+            if not label:
+                skipped.append({"field": fid, "reason": "백테스터 토큰 매핑 없음"})
+                continue
+            rank_mode = c.get("rank_mode")
+            if rank_mode:
+                rv = float(c.get("rank_value") or 30)
+                if rank_mode == "top_pct":
+                    conds.append({"expr": f"비율내림차순({{{label}}})", "op": "gte", "rhs": 100 - rv})
+                elif rank_mode == "bottom_pct":
+                    conds.append({"expr": f"비율내림차순({{{label}}})", "op": "lte", "rhs": rv})
+                elif rank_mode == "top_n":
+                    conds.append({"expr": f"순위내림차순({{{label}}})", "op": "lte", "rhs": rv})
+                else:
+                    skipped.append({"field": fid, "reason": f"rank_mode {rank_mode} 미지원"})
+                continue
+            op = _OP.get(str(c.get("op") or "").lower())
+            if op is None or c.get("value") is None:
+                skipped.append({"field": fid, "reason": "연산자/값 없음"})
+                continue
+            conds.append({"factor_token": f"{{{label}}}", "function_id": "base",
+                          "params": {}, "op": op, "rhs": float(c["value"])})
+        return {"conditions": conds, "skipped": skipped,
+                "explanation": result.get("explanation"), "source": result.get("source"),
+                "note": "펀더멘털 토큰은 '펀더멘털 조건 평가' 토글이 켜져 있어야 평가됩니다 (스냅샷 근사)"}
+    except Exception:
+        logger.exception("condition-nl 변환 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 class LogicValidateRequest(BaseModel):
     expr: str = ""
     n_conditions: int = Field(default=0, ge=0, le=26)
@@ -981,6 +1074,9 @@ class ScreenToBacktestRequest(BaseModel):
     # 종목당 최대 매수 금액(원, None=무제한) + 자산배분 현금 비중 %
     max_buy_amount: float | None = Field(default=None, ge=0)
     cash_reserve_pct: float = Field(default=0.0, ge=0.0, le=90.0)
+    # 매수 우선순위식 (일별) — 봉마다 후보들의 식 값으로 매수 순서 정렬
+    buy_sort_expr: str | None = None
+    buy_sort_desc: bool = True
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1128,6 +1224,8 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             sell_fill_offset_pct=req.sell_fill_offset_pct,
             max_buy_amount=req.max_buy_amount,
             cash_reserve_pct=req.cash_reserve_pct,
+            buy_sort_expr=req.buy_sort_expr,
+            buy_sort_desc=req.buy_sort_desc,
         )
 
         # 3) 통합 응답

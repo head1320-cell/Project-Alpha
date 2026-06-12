@@ -16,6 +16,8 @@ export interface BuyState {
   logicExpr: string;                // 논리 조건식 — 예: "every(A,3) and (B or C)". 비우면 모두 AND
   primarySort: { expr: string; dir: SortDir };
   secondarySort?: { expr: string; dir: SortDir };
+  sortExpr: string;                 // 우선순위식 (일별) — 봉마다 식 값으로 매수 순서 정렬. 비우면 미사용
+  sortExprDesc: boolean;            // true=식 값 높은순
   limitType: "MAX" | "LIMIT";
   maxStocks: number;                // LIMIT 일 때 종목 수
   weightPct: number;                // 종목당 비중 %
@@ -117,7 +119,9 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
       { label: "매수 조건", rows: [
         { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미설정", muted: !b.conditions.length },
         { label: "논리식", value: b.logicExpr.trim() || "모두 AND", muted: !b.logicExpr.trim() },
-        { label: "우선순위", value: `${sortFieldLabel(b.primarySort.expr)} ${b.primarySort.dir === "DESC" ? "↓" : "↑"}` },
+        { label: "우선순위", value: b.sortExpr.trim()
+            ? `식: ${b.sortExpr.trim().slice(0, 24)}${b.sortExpr.trim().length > 24 ? "…" : ""} ${b.sortExprDesc ? "↓" : "↑"}`
+            : `${sortFieldLabel(b.primarySort.expr)} ${b.primarySort.dir === "DESC" ? "↓" : "↑"}` },
         { label: "2차 정렬", value: b.secondarySort ? `${sortFieldLabel(b.secondarySort.expr)} ${b.secondarySort.dir === "DESC" ? "↓" : "↑"}` : "사용 안 함", muted: !b.secondarySort },
       ]},
       { label: "매수 비중", rows: [

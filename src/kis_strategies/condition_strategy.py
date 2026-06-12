@@ -22,6 +22,13 @@ import pandas as pd
 from src import kis_data_fetcher as data_fetcher
 from src.kis_signal import Action, Signal
 from src.kis_strategies.condition_logic import eval_logic, max_lookback, parse_logic
+from src.kis_strategies.factor_expr import (
+    collect_cross,
+    eval_expr,
+    expr_lookback,
+    expr_tokens,
+    parse_expr,
+)
 from src.kis_strategies.score_factors import SCORE_MIN_BARS, SCORE_TOKENS, build_score_panels
 from src.kis_strategies.strategies import STRATEGY_REGISTRY, BaseStrategy
 
@@ -334,8 +341,18 @@ class ConditionStrategy(BaseStrategy):
         self.sell_logic = (sell_logic or "").strip() or None
         self._buy_ast = parse_logic(self.buy_logic, len(self.buy_conditions)) if self.buy_logic else None
         self._sell_ast = parse_logic(self.sell_logic, len(self.sell_conditions)) if self.sell_logic else None
+        # 자유 산술식 조건 ("expr" 키) — 파싱 선행 (문법 오류는 여기서 400으로)
+        for c in (self.buy_conditions + self.sell_conditions):
+            txt = (c.get("expr") or "").strip()
+            if txt:
+                ast = parse_expr(txt)
+                for _k, _f, _d, inner in collect_cross(ast):
+                    if collect_cross(inner):
+                        raise ValueError("순위/비율 안에 다시 순위/비율을 중첩할 수 없습니다")
+                c["_expr_ast"] = ast
         self._panels: dict = {}  # 횡단면(순위/비율) 사전계산 {key: DataFrame[date,ticker]}
         self._score_panels: dict = {}  # 점수 근사 패널 {점수명: DataFrame[date,ticker]}
+        self._expr_panels: dict = {}   # 산술식 내부 횡단면 패널 {canonical key: DataFrame}
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
 
     @property
@@ -345,12 +362,22 @@ class ConditionStrategy(BaseStrategy):
     @property
     def required_days(self) -> int:
         base = max(_max_period(self.buy_conditions), _max_period(self.sell_conditions)) + 30
+        # 자유 산술식(조건 + 우선순위식)의 중첩 기간 룩백
+        asts = [c.get("_expr_ast") for c in (self.buy_conditions + self.sell_conditions)]
+        asts.append(getattr(self, "_prio_ast", None))
+        for ast in asts:
+            if ast is not None:
+                base = max(base, expr_lookback(ast) + 30)
         # 확장 토큰의 내재 룩백(예: 52주 신고가=252봉) 반영 — 워밍업 부족 시 조건이 NaN으로 무시됨
         try:
             from src.kis_strategies.factor_tokens import token_min_bars
-            tok = max((token_min_bars(c.get(k) or "")
-                       for c in (self.buy_conditions + self.sell_conditions)
-                       for k in ("factor_token", "factor_token2")), default=0)
+            names: list[str] = []
+            for c in (self.buy_conditions + self.sell_conditions):
+                names += [c.get("factor_token") or "", c.get("factor_token2") or ""]
+            for ast in asts:
+                if ast is not None:
+                    names += ["{%s}" % t for t in expr_tokens(ast)]
+            tok = max((token_min_bars(n) for n in names), default=0)
         except Exception:
             tok = 0
         # 점수 토큰(60MA 이격도 + 변화율 합성) 워밍업
@@ -389,15 +416,43 @@ class ConditionStrategy(BaseStrategy):
         return (f"{cond.get('factor_token','')}|{cond.get('function_id','')}|{p.get('dir','DESC')}"
                 f"|{cond.get('inner_function_id','')}|{ip.get('n','')}|{ip.get('v','')}")
 
+    def set_priority_expr(self, expr: str) -> None:
+        """매수 우선순위식(일별) — 봉마다 후보들의 식 값으로 매수 순서를 정렬 (젠포트
+        매수 종목 선택 우선순위). prepare_panel 전에 호출해야 패널·워밍업에 반영된다."""
+        ast = parse_expr(expr)
+        for _k, _f, _d, inner in collect_cross(ast):
+            if collect_cross(inner):
+                raise ValueError("순위/비율 안에 다시 순위/비율을 중첩할 수 없습니다")
+        self._prio_ast = ast
+        self._prio: dict = {}
+
+    def priority_at(self, stock_code: str, when) -> float | None:
+        """사전계산된 우선순위식 값 조회 — 없거나 NaN이면 None(정렬 시 후순위)."""
+        ser = getattr(self, "_prio", {}).get(str(stock_code))
+        if ser is None:
+            return None
+        try:
+            if when not in ser.index:
+                return None
+            v = ser.loc[when]
+        except Exception:
+            return None
+        return float(v) if pd.notna(v) else None
+
     def _references_score(self) -> bool:
-        return any((c.get(k) or "").strip().strip("{}").strip() in SCORE_TOKENS
-                   for c in (self.buy_conditions + self.sell_conditions)
-                   for k in ("factor_token", "factor_token2"))
+        asts = [c.get("_expr_ast") for c in (self.buy_conditions + self.sell_conditions)]
+        asts.append(getattr(self, "_prio_ast", None))
+        for c in (self.buy_conditions + self.sell_conditions):
+            for k in ("factor_token", "factor_token2"):
+                if (c.get(k) or "").strip().strip("{}").strip() in SCORE_TOKENS:
+                    return True
+        return any(a is not None and expr_tokens(a) & SCORE_TOKENS for a in asts)
 
     def prepare_panel(self, ohlcv_map: dict) -> None:
-        """순위/비율·점수 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
+        """순위/비율·점수·산술식 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
         self._panels = {}
         self._score_panels = {}
+        self._expr_panels = {}
         # 점수 근사 패널 — 조건이 점수 토큰을 참조할 때만 (성장·가치 레그는 펀더멘털 토글 시)
         if ohlcv_map and self._references_score():
             try:
@@ -407,8 +462,60 @@ class ConditionStrategy(BaseStrategy):
             except Exception as e:
                 logger.debug(f"score panels skipped: {e}")
                 self._score_panels = {}
+        # 자유 산술식 내부의 횡단면(순위/비율) 노드 패널 — 식별 키(canonical)별 1회
+        fund_cache: dict = {}
+
+        def _fund(tk: str):
+            if not self.allow_snapshot_fundamentals:
+                return None
+            if tk not in fund_cache:
+                fund_cache[tk] = _load_fundamentals(tk)
+            return fund_cache[tk]
+
+        expr_asts = [c.get("_expr_ast") for c in (self.buy_conditions + self.sell_conditions)]
+        expr_asts.append(getattr(self, "_prio_ast", None))
+        expr_cross: dict[str, tuple] = {}
+        for ast in expr_asts:
+            if ast is not None:
+                for key, fn_id, dirv, inner in collect_cross(ast):
+                    expr_cross.setdefault(key, (fn_id, dirv, inner))
+        if expr_cross and ohlcv_map:
+            for key, (fn_id, dirv, inner) in expr_cross.items():
+                cols: dict = {}
+                for tk, odf in ohlcv_map.items():
+                    tk = str(tk)
+                    try:
+                        s = self._eval_expr_series(inner, odf, _fund(tk), tk)
+                    except Exception:
+                        s = None
+                    if s is None or len(s) == 0:
+                        continue
+                    idx = [d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)
+                           for d in odf.index]
+                    cols[tk] = pd.Series(s.values, index=idx)
+                if not cols:
+                    self._expr_panels[key] = None
+                    continue
+                wide = pd.DataFrame(cols)
+                if fn_id == "rank":
+                    self._expr_panels[key] = wide.rank(axis=1, ascending=(dirv != "DESC"), method="min")
+                else:
+                    self._expr_panels[key] = wide.rank(axis=1, ascending=(dirv == "DESC"), pct=True) * 100.0
+
+        # 매수 우선순위식 — 종목별 식 값 시계열 (엔진이 봉마다 priority_at으로 정렬)
+        if getattr(self, "_prio_ast", None) is not None and ohlcv_map:
+            self._prio = {}
+            for tk, odf in ohlcv_map.items():
+                tk = str(tk)
+                try:
+                    s = self._eval_expr_series(self._prio_ast, odf, _fund(tk), tk)
+                except Exception:
+                    s = None
+                if s is not None and len(s):
+                    self._prio[tk] = pd.Series(s.values, index=odf.index)
+
         cross = [c for c in (self.buy_conditions + self.sell_conditions)
-                 if c.get("function_id") in ("rank", "ratio")]
+                 if c.get("function_id") in ("rank", "ratio") and not c.get("_expr_ast")]
         if not cross or not ohlcv_map:
             return
         for cond in cross:
@@ -520,6 +627,20 @@ class ConditionStrategy(BaseStrategy):
     def _cond_arrays(self, df: pd.DataFrame, cond: dict, fund: dict | None,
                      tk: str):
         """단일 조건 → (valid, ok) bool 배열. 전 봉 평가 불가면 None(조건 건너뜀)."""
+        # 자유 산술식 조건 — 좌변을 식으로 평가 (가이드: 사칙연산 + 함수 + {팩터})
+        ast = cond.get("_expr_ast")
+        if ast is None and (cond.get("expr") or "").strip():
+            try:
+                ast = parse_expr(cond["expr"])
+                cond["_expr_ast"] = ast
+            except ValueError:
+                return None
+        if ast is not None:
+            series = self._eval_expr_series(ast, df, fund, tk)
+            if series is None or len(series) == 0:
+                return None
+            return _vector_compare(series, cond.get("op", "gte"),
+                                   cond.get("rhs"), cond.get("rhs2"))
         if cond.get("function_id") in ("rank", "ratio"):
             panel = self._panels.get(self._cross_key(cond))
             if panel is None or str(tk) not in panel.columns:
@@ -553,6 +674,22 @@ class ConditionStrategy(BaseStrategy):
             return None
         return _vector_compare(series, cond.get("op", "gte"),
                                cond.get("rhs"), cond.get("rhs2"))
+
+    def _eval_expr_series(self, ast: tuple, df: pd.DataFrame, fund: dict | None, tk: str):
+        """산술식 AST → 종목 시리즈. 미해석 토큰·횡단면 미계산이면 None(조건 건너뜀)."""
+        def tok(name: str):
+            s = self._token_series(df, {"factor_token": name}, fund, tk)
+            return None if s is None or len(s) == 0 else s.astype(float)
+
+        def cross(key: str):
+            panel = (self._expr_panels or {}).get(key)
+            if panel is None or str(tk) not in panel.columns:
+                return None
+            return pd.Series(panel[str(tk)].reindex(_date_keys(df)).values, index=df.index)
+
+        out = eval_expr(ast, {"token": tok, "cross": cross,
+                              "apply": _apply_function, "two": _apply_two_factor})
+        return out if isinstance(out, pd.Series) else None
 
     def _token_series(self, df: pd.DataFrame, cond: dict, fund: dict | None, tk: str):
         """조건의 좌항 베이스 시리즈 — 점수 패널 → OHLCV·시장·매크로·수급 → 펀더멘털 스냅샷.

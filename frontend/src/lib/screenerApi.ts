@@ -909,6 +909,8 @@ export interface BacktestConditionPayload {
   factor_token2?: string | null;
   inner2_function_id?: string | null;
   inner2_params?: Record<string, string> | null;
+  // 자유 산술식 (직접 입력) — 있으면 factor_token/function 무시하고 식 평가
+  expr?: string | null;
 }
 
 export const backtestBridgeApi = {
@@ -980,6 +982,8 @@ export const backtestBridgeApi = {
     sell_conditions?: BacktestConditionPayload[] | null;
     buy_logic?: string | null;   // 논리 조건식 — 예: "every(A,3) and (B or C)"
     sell_logic?: string | null;
+    buy_sort_expr?: string | null;  // 매수 우선순위식 (일별 정렬)
+    buy_sort_desc?: boolean;
     rebalance_period?: string | null;
     signal_lag?: number;  // 0=당일 봉(기존) | 1=전일 봉 기준 신호(젠포트식)
     rebuy_block_days?: number;  // 청산 후 N일 재매수 금지 (0=미사용)
@@ -1028,6 +1032,33 @@ export const backtestBridgeApi = {
       body: JSON.stringify({ expr, n_conditions: nConditions }),
     });
     if (!r.ok) throw new Error(`Logic validate failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 자유 산술 팩터식 검증 (직접 입력·우선순위식)
+  validateExpr: async (expr: string):
+    Promise<{ ok: boolean; lookback?: number; tokens?: string[]; unknown_tokens?: string[]; error?: string }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/factor-expr/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expr }),
+    });
+    if (!r.ok) throw new Error(`Expr validate failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 자연어 → 백테스터 조건식 (젠포트 AI 버튼)
+  conditionNl: async (query: string): Promise<{
+    conditions: BacktestConditionPayload[];
+    skipped: Array<{ field: string; reason: string }>;
+    explanation?: string; source?: string; note?: string;
+  }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/condition-nl`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!r.ok) throw new Error(`Condition NL failed: ${r.status}`);
     return r.json();
   },
 
