@@ -6,10 +6,14 @@
 // 만드는 즉시 "이 조건 — …" NL 한 줄로 의미를 보여준다.
 
 import { useState } from "react";
-import { Plus, Pencil, X, Check, Variable, ArrowRight, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, X, Check, Variable, ArrowRight, ShieldCheck, Save, FolderOpen } from "lucide-react";
 import FactorPickerModal, { type FactorPick } from "./FactorPickerModal";
 import { FUNCTIONS_BY_ID, fillTemplate } from "../../lib/backtest/factorFunctions";
 import { backtestBridgeApi } from "../../lib/screenerApi";
+import {
+  listConditionSets, saveConditionSet, deleteConditionSet, cloneConditions,
+  type SavedConditionSet,
+} from "../../lib/backtest/conditionSets";
 import { Segmented, TONES, type Tone } from "./kit";
 
 export interface Condition {
@@ -49,15 +53,35 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 interface Draft { factorName: string; factorToken: string; functionId: string; params: Record<string, string>; expr: string; op: OpId; rhs: string; rhs2: string; innerFunctionId?: string; innerParams?: Record<string, string>; factorName2?: string; factorToken2?: string; inner2FunctionId?: string; inner2Params?: Record<string, string> }
 const emptyDraft = (): Draft => ({ factorName: "", factorToken: "", functionId: "base", params: {}, expr: "", op: "lte", rhs: "", rhs2: "" });
 
-export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange, logicExpr, onLogicChange, logicDefaultLabel = "모두 AND" }: {
+export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange, logicExpr, onLogicChange, logicDefaultLabel = "모두 AND", sideKey }: {
   tone?: Tone; conditions: Condition[]; onChange: (c: Condition[]) => void;
   /** 논리 조건식 (젠포트 논리 레이어) — 전달하면 조건 리스트 아래 입력·검증 UI 노출 */
   logicExpr?: string; onLogicChange?: (v: string) => void; logicDefaultLabel?: string;
+  /** 조건식 세트 저장/불러오기 활성 (매수/매도 조건에서만 — 마켓타이밍 제외) */
+  sideKey?: "buy" | "sell";
 }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [logicCheck, setLogicCheck] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [setsOpen, setSetsOpen] = useState(false);
+  const [savedSets, setSavedSets] = useState<SavedConditionSet[]>([]);
+  const [saveName, setSaveName] = useState("");
   const accent = TONES[tone];
+
+  const refreshSets = () => setSavedSets(sideKey ? listConditionSets(sideKey) : []);
+  const toggleSets = () => { if (!setsOpen) refreshSets(); setSetsOpen(!setsOpen); };
+  const handleSaveSet = () => {
+    if (!sideKey || conditions.length === 0) return;
+    saveConditionSet(saveName, sideKey, conditions, (logicExpr ?? "").trim());
+    setSaveName("");
+    refreshSets();
+    setSetsOpen(true);
+  };
+  const handleLoadSet = (s: SavedConditionSet) => {
+    onChange(cloneConditions(s.conditions));
+    onLogicChange?.(s.logicExpr);
+    setLogicCheck(null);
+  };
 
   const verifyLogic = async () => {
     const expr = (logicExpr ?? "").trim();
@@ -103,7 +127,39 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
 
       {/* 좌: 조건 리스트 */}
       <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 9 }}>조건식</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>조건식</span>
+          {sideKey && (
+            <button type="button" onClick={toggleSets}
+              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "3px 8px", cursor: "pointer" }}>
+              <FolderOpen size={12} /> 불러오기·저장
+            </button>
+          )}
+        </div>
+        {sideKey && setsOpen && (
+          <div style={{ border: "1px solid var(--border-strong)", borderRadius: R, padding: 9, marginBottom: 9, display: "flex", flexDirection: "column", gap: 7 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="세트 이름"
+                style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "5px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+              <button type="button" onClick={handleSaveSet} disabled={conditions.length === 0}
+                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: conditions.length ? "#fff" : "var(--text-muted)", background: conditions.length ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "5px 9px", cursor: conditions.length ? "pointer" : "not-allowed", flexShrink: 0 }}>
+                <Save size={12} /> 저장
+              </button>
+            </div>
+            {savedSets.length === 0 ? (
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>저장된 조건식 세트가 없습니다</span>
+            ) : savedSets.map((sv) => (
+              <div key={sv.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button type="button" onClick={() => handleLoadSet(sv)} title="이 세트 불러오기"
+                  style={{ flex: 1, minWidth: 0, textAlign: "left", fontSize: 12, color: "var(--text-primary)", background: "var(--bg-section)", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 8px", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {sv.name} <span style={{ color: "var(--text-muted)" }}>({sv.conditions.length}개{sv.logicExpr ? " · 논리식" : ""})</span>
+                </button>
+                <button type="button" onClick={() => { deleteConditionSet(sv.id); refreshSets(); }} aria-label="세트 삭제"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", flexShrink: 0 }}><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
         {conditions.map((c, i) => (
           <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, background: accent.bg, border: `1px solid ${accent.accent}`, borderRadius: R, padding: "9px 11px", marginBottom: 7 }}>
             <div style={{ minWidth: 0 }}>

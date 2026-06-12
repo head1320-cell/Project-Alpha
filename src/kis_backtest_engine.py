@@ -163,6 +163,9 @@ class BacktestConfig:
     # 매도 정밀화 (Phase 2). 모두 기본 비활성 = 기존 동작 불변
     max_hold_days: int | None = None    # 보유기간 매도: N일 경과 시 강제 청산
     min_hold_days: int = 0              # 최소 보유: N일 전엔 손익절·신호 매도 보류
+    # 당일 매매: 당일 진입 포지션을 같은 봉 종가에 전량 청산 (시가류 매수 체결과
+    # 결합하면 시가 진입→종가 청산 데이트레이딩 근사). min/max_hold보다 우선
+    day_trade: bool = False
     sell_divide_pct: float = 100.0      # 분할 매도 비중 % (100=전량, 50=절반씩)
     max_sell_divisions: int | None = None  # 분할 매도 최대 횟수 (None=무제한, 도달 시 전량청산)
     # 매수 정밀화 (Phase 3). 기본값 = 기존 동작 불변
@@ -378,6 +381,17 @@ class BacktestEngine:
                         continue  # 지정가 미도달 — 그날 미체결(보유 지속)
                     self._execute_sell(ticker, sell_price or close_price, date_str, signal.reason,
                                        sell_fraction=self.cfg.sell_divide_pct / 100.0)
+
+            # 2.5 당일 매매: 오늘 진입한 포지션을 장 마감(당일 종가)에 전량 청산
+            if self.cfg.day_trade and self.positions:
+                for ticker, pos in list(self.positions.items()):
+                    if pos.entry_date != date_str or ticker not in ohlcv_map:
+                        continue
+                    df_to = ohlcv_map[ticker].loc[:sim_date]
+                    if df_to.empty:
+                        continue
+                    self._execute_sell(ticker, float(df_to["close"].iloc[-1]),
+                                       date_str, "당일 매매 청산")
 
             # 3. 포트폴리오 가치 기록
             equity = self._calc_equity(ohlcv_map, sim_date)
@@ -1087,6 +1101,7 @@ def run_backtest(
     sell_fill_type: str = "close",
     max_hold_days: int | None = None,
     min_hold_days: int = 0,
+    day_trade: bool = False,
     sell_divide_pct: float = 100.0,
     max_sell_divisions: int | None = None,
     buy_weight_mode: str = "equal",
@@ -1140,6 +1155,7 @@ def run_backtest(
         sell_fill_type=sell_fill_type,
         max_hold_days=max_hold_days,
         min_hold_days=min_hold_days,
+        day_trade=day_trade,
         sell_divide_pct=sell_divide_pct,
         max_sell_divisions=max_sell_divisions,
         buy_weight_mode=buy_weight_mode,

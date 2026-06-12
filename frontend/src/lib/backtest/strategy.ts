@@ -45,6 +45,7 @@ export interface SellState {
   stopLoss: { on: boolean; pct: number };
   trailing: { on: boolean; pct: number };       // 드래깅 청산
   holdPeriod: { on: boolean; min: number; max?: number };
+  dayTrade: boolean;                             // 당일 매매: 당일 진입을 같은 날 종가에 전량 청산
   conditions: Condition[];                       // 조건 매도
   logicExpr: string;                             // 매도 논리 조건식. 비우면 하나라도(OR)
   liquidate: { on: boolean; mode: "close" | "time" };
@@ -149,10 +150,12 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "손절가", value: v.stopLoss.on ? `${v.stopLoss.pct}% 하락` : "미설정", muted: !v.stopLoss.on },
         { label: "드래깅 청산", value: v.trailing.on ? `고점 -${v.trailing.pct}%` : "미사용", muted: !v.trailing.on },
       ]},
-      { label: "보유 기간", rows: [
-        { label: "최소 보유", value: v.holdPeriod.on ? `${v.holdPeriod.min}일` : "미설정", muted: !v.holdPeriod.on },
-        { label: "최대 보유", value: v.holdPeriod.max != null ? `${v.holdPeriod.max}일` : "미설정", muted: v.holdPeriod.max == null },
-      ]},
+      { label: "보유 기간", rows: v.dayTrade
+        ? [{ label: "방식", value: "당일 매매 (종가 청산)" }]
+        : [
+          { label: "최소 보유", value: v.holdPeriod.on ? `${v.holdPeriod.min}일` : "미설정", muted: !v.holdPeriod.on },
+          { label: "최대 보유", value: v.holdPeriod.max != null ? `${v.holdPeriod.max}일` : "미설정", muted: v.holdPeriod.max == null },
+        ]},
       { label: "조건 매도", rows: [
         { label: "조건식", value: v.conditions.length ? v.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미사용", muted: !v.conditions.length },
         { label: "논리식", value: v.logicExpr.trim() || "하나라도 (OR)", muted: !v.logicExpr.trim() },

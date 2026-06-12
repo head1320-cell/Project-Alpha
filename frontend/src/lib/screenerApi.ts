@@ -968,6 +968,7 @@ export const backtestBridgeApi = {
     cash_reserve_pct?: number;      // 자산배분: 현금 상시 보유 %
     max_hold_days?: number | null;
     min_hold_days?: number;
+    day_trade?: boolean;  // 당일 매매: 당일 진입을 같은 봉 종가에 전량 청산
     sell_divide_pct?: number;
     max_sell_divisions?: number | null;
     buy_weight_mode?: string;

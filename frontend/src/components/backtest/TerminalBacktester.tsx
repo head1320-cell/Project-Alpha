@@ -51,7 +51,7 @@ const initialStrategy = (): BacktestStrategy => ({
   sell: {
     enabled: true, orderType: "MARKET", fillType: "close", fillOffsetPct: 0,
     takeProfit: { on: false, pct: 15 }, stopLoss: { on: false, pct: 5 },
-    trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, conditions: [], logicExpr: "",
+    trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, dayTrade: false, conditions: [], logicExpr: "",
     liquidate: { on: false, mode: "close" }, timeStart: "09:00", timeEnd: "15:30",
     splitTakeProfit: false, splitSellPct: 50, splitSellCount: 3, expiryDateSell: false,
   },
@@ -113,8 +113,9 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     sell_fill_offset_pct: sell.fillOffsetPct,
     max_buy_amount: buy.maxBuyAmount > 0 ? buy.maxBuyAmount * 10000 : null,  // 만원 → 원
     cash_reserve_pct: s.cashReservePct,
-    max_hold_days: sell.holdPeriod.max ?? null,
-    min_hold_days: sell.holdPeriod.on ? sell.holdPeriod.min : 0,
+    max_hold_days: sell.dayTrade ? null : (sell.holdPeriod.max ?? null),
+    min_hold_days: sell.dayTrade ? 0 : (sell.holdPeriod.on ? sell.holdPeriod.min : 0),
+    day_trade: sell.dayTrade,
     sell_divide_pct: sell.splitTakeProfit ? sell.splitSellPct : 100,
     max_sell_divisions: sell.splitTakeProfit ? sell.splitSellCount : null,
     buy_weight_mode: buy.weightMode,  // equal | atr (엔진 역변동성 사이징)

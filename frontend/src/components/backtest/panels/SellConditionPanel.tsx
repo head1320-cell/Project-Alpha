@@ -75,8 +75,19 @@ export default function SellConditionPanel({ s, set }: {
         </div>
       </Section>
 
-      <Section title="보유 기간" hint="최소·최대 보유일" tone="sell"
-        enabled={v.holdPeriod.on} onToggle={(on) => patch({ holdPeriod: { ...v.holdPeriod, on } })}>
+      <Section title="보유 기간" hint={v.dayTrade ? "당일 매매" : "최소·최대 보유일"} tone="sell"
+        enabled={v.holdPeriod.on || v.dayTrade} onToggle={(on) => patch({ holdPeriod: { ...v.holdPeriod, on }, dayTrade: on ? v.dayTrade : false })}>
+        <Field label="보유 방식">
+          <Segmented tone="sell" value={v.dayTrade ? "day" : "period"}
+            onChange={(m) => patch({ dayTrade: m === "day" })}
+            options={[{ id: "day", label: "당일 매매" }, { id: "period", label: "기간 설정" }]} />
+          {v.dayTrade && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              당일 진입을 같은 날 종가에 전량 청산 — 매수 체결가를 시가류로 두면 시가 진입→종가 청산
+            </span>
+          )}
+        </Field>
+        {!v.dayTrade && (<>
         <Field label="최소 보유일">
           <QuickStepper value={v.holdPeriod.min} onChange={(min) => patch({ holdPeriod: { ...v.holdPeriod, min } })} chips={[1, 5, 10]} unit="일" min={0} />
         </Field>
@@ -88,12 +99,13 @@ export default function SellConditionPanel({ s, set }: {
             </>
           )}
         </SubToggle>
+        </>)}
       </Section>
 
       <Section title="조건 매도" hint="팩터·논리식 기반 청산" tone="sell"
         enabled={v.conditions.length > 0 || true} onToggle={() => {}}>
         <ConditionFormulaEditor tone="sell" conditions={v.conditions} onChange={(c: Condition[]) => patch({ conditions: c })}
-          logicExpr={v.logicExpr} onLogicChange={(logicExpr) => patch({ logicExpr })} logicDefaultLabel="하나라도 (OR)" />
+          logicExpr={v.logicExpr} onLogicChange={(logicExpr) => patch({ logicExpr })} logicDefaultLabel="하나라도 (OR)" sideKey="sell" />
       </Section>
 
       <Section title="종목 청산" hint="장마감·시간 청산" tone="sell"

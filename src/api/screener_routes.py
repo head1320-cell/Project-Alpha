@@ -949,6 +949,7 @@ class ScreenToBacktestRequest(BaseModel):
     # 매도 정밀화 (Phase 2)
     max_hold_days: int | None = None
     min_hold_days: int = 0
+    day_trade: bool = False  # 당일 매매: 당일 진입을 같은 봉 종가에 전량 청산
     sell_divide_pct: float = 100.0
     max_sell_divisions: int | None = None
     # 매수 정밀화 (Phase 3)
@@ -1110,6 +1111,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             sell_fill_type=req.sell_fill_type,
             max_hold_days=req.max_hold_days,
             min_hold_days=req.min_hold_days,
+            day_trade=req.day_trade,
             sell_divide_pct=req.sell_divide_pct,
             max_sell_divisions=req.max_sell_divisions,
             buy_weight_mode=req.buy_weight_mode,
