@@ -376,7 +376,7 @@ class ConditionStrategy(BaseStrategy):
                 names += [c.get("factor_token") or "", c.get("factor_token2") or ""]
             for ast in asts:
                 if ast is not None:
-                    names += ["{%s}" % t for t in expr_tokens(ast)]
+                    names += ["{" + t + "}" for t in expr_tokens(ast)]
             tok = max((token_min_bars(n) for n in names), default=0)
         except Exception:
             tok = 0
