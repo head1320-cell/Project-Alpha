@@ -985,6 +985,10 @@ export const backtestBridgeApi = {
     max_buy_per_day?: number | null;
     max_buy_count?: number | null;
     breakthrough_buy?: boolean;
+    breakthrough_base_type?: string;     // 돌파 기준가 유형
+    breakthrough_offset_pct?: number;    // 기준가 ± % 돌파 라인
+    breakthrough_direction?: string;     // up | both
+    buy_timing?: string;                 // pre_open | intraday
     buy_conditions?: BacktestConditionPayload[] | null;
     sell_conditions?: BacktestConditionPayload[] | null;
     buy_logic?: string | null;   // 논리 조건식 — 예: "every(A,3) and (B or C)"

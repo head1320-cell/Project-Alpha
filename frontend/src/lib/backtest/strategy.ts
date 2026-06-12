@@ -35,7 +35,11 @@ export interface BuyState {
   ladder: Array<{ movePct: number; weightPct: number }>;  // 가격변동%·비중% 단계 (신호 당일 유효)
   splitBuyPct: number;      // (레거시) 1회 매수 비중 % — 래더 미설정 시 폴백
   splitBuyCount: number;    // (레거시) 최대 분할 횟수
-  breakthrough: boolean;    // 돌파매수: 전일 고가 돌파 시에만 진입
+  breakthrough: boolean;    // 돌파매수: 기준가 돌파 시에만 진입
+  breakthroughBaseType: string;       // 돌파 기준가 유형 (기본 prev_high=전일 고가)
+  breakthroughOffsetPct: number;      // 기준가 ± % 돌파 라인
+  breakthroughDirection: "up" | "both";  // 상방 | 양방(하방 낙폭 진입 포함)
+  buyTiming: "pre_open" | "intraday"; // 매수 시점: 장 시작 전(시가 가능) | 장중(시가 갭 배제)
   // #4: 펀더멘털 토큰을 조건 평가에 포함(스냅샷·look-ahead 근사). 기본 false.
   allowFundamentals: boolean;
 }

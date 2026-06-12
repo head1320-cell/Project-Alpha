@@ -9,7 +9,7 @@ import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEdito
 import OffsetInput from "./OffsetInput";
 import LadderEditor from "./LadderEditor";
 import type { BacktestStrategy, SortDir } from "../../../lib/backtest/strategy";
-import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
+import { FILL_PRICE_GROUPS, FILL_PRICE_GROUPS_NO_EXPR } from "../../../lib/backtest/fillPrice";
 import { SORT_FIELDS } from "../../../lib/backtest/sortFields";
 
 const selBox: React.CSSProperties = {
@@ -117,7 +117,32 @@ export default function BuyConditionPanel({ s, set }: {
           {s.buy.splitBuy && (
             <LadderEditor side="buy" steps={s.buy.ladder} onChange={(ladder) => patchBuy({ ladder })} />
           )}
-          <SubToggle tone="buy" label="돌파 매수" hint="전일 고가 돌파 시에만 진입 · 체결가 max(시가, 전일고가)" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
+          <SubToggle tone="buy" label="돌파 매수" hint="기준가 돌파 시에만 진입" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
+          {s.buy.breakthrough && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>방향</span>
+                <Segmented tone="buy" value={s.buy.breakthroughDirection}
+                  onChange={(d) => patchBuy({ breakthroughDirection: d })}
+                  options={[{ id: "up", label: "상방" }, { id: "both", label: "양방" }]} />
+                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>기준가</span>
+                <GroupedSelect value={s.buy.breakthroughBaseType}
+                  onChange={(id) => patchBuy({ breakthroughBaseType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
+              </div>
+              <OffsetInput value={s.buy.breakthroughOffsetPct}
+                onChange={(breakthroughOffsetPct) => patchBuy({ breakthroughOffsetPct })} />
+              <span style={{ fontSize: 11, color: "#d97706" }}>
+                ⚠ 당일 시초가 등 변동성 큰 기준은 불공정 거래 소지에 유의하세요
+              </span>
+            </div>
+          )}
+          <Field label="매수 시점">
+            <Segmented tone="buy" value={s.buy.buyTiming} onChange={(t) => patchBuy({ buyTiming: t })}
+              options={[{ id: "pre_open", label: "장 시작 전" }, { id: "intraday", label: "장중 주문" }]} />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              장중 주문은 지정가류 매수에서 시가 갭 체결을 배제 (보수적)
+            </span>
+          </Field>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>TWAP·VWAP 체결은 위 "체결가 유형"에서 선택</div>
         </div>
       </Section>

@@ -1092,6 +1092,11 @@ class ScreenToBacktestRequest(BaseModel):
     buy_ladder: list[dict] | None = None
     sell_ladder: list[dict] | None = None
     expiry_sell_method: str = "all"  # 만기: all=일괄 | ladder=분할(잔량 종가 청산)
+    # 돌파 매수 확장: 기준가 유형·±%·방향(상방|양방) + 매수 시점(장 시작 전|장중)
+    breakthrough_base_type: str = "prev_high"
+    breakthrough_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    breakthrough_direction: str = "up"
+    buy_timing: str = "pre_open"
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1253,6 +1258,10 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             buy_ladder=req.buy_ladder,
             sell_ladder=req.sell_ladder,
             expiry_sell_method=req.expiry_sell_method,
+            breakthrough_base_type=req.breakthrough_base_type,
+            breakthrough_offset_pct=req.breakthrough_offset_pct,
+            breakthrough_direction=req.breakthrough_direction,
+            buy_timing=req.buy_timing,
         )
 
         # 3) 통합 응답

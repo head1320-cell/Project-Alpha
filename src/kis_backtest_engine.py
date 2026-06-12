@@ -186,7 +186,14 @@ class BacktestConfig:
     sell_ladder: list | None = None
     expiry_sell_method: str = "all"     # 보유일 만기: all=일괄 | ladder=분할(잔량은 종가 청산)
     # 매수 정밀화 (Phase 3). 기본값 = 기존 동작 불변
-    breakthrough_buy: bool = False      # 돌파매수: 당일 고가가 전일 고가 돌파 시에만 진입
+    breakthrough_buy: bool = False      # 돌파매수: 기준가 돌파 시에만 진입
+    breakthrough_base_type: str = "prev_high"   # 돌파 기준가 유형 (fill_price 20종)
+    breakthrough_offset_pct: float = 0.0        # 기준가 ± % (돌파 라인)
+    breakthrough_direction: str = "up"          # up=상방 | both=양방(상·하방 어느 쪽이든)
+    # 매수 시점 (젠포트 분할 매수의 '장 시작 전|장중 주문' — 보수적 해석):
+    # pre_open=장 시작 전 주문(시가 체결 가능, 기존) | intraday=장중 주문(지정가류
+    # 매수에서 시가 갭 혜택 배제 — min(지정가,시가) 대신 지정가 그대로)
+    buy_timing: str = "pre_open"
     buy_weight_mode: str = "equal"      # 매수 비중: equal(동일가중) | factor(팩터가중) | atr(역변동성)
     buy_divide_pct: float = 100.0       # 분할 매수 비중 % (100=한번에, 50=절반씩 추가매수)
     max_buy_per_day: int | None = None  # 일일 최대 신규 매수 종목 수
@@ -602,7 +609,7 @@ class BacktestEngine:
             p = base * (1 + move / 100.0)
             if side == "buy":
                 if low <= p:
-                    fills.append((min(p, open_), w))
+                    fills.append((self._entry_px(p, open_), w))
             else:
                 if high >= p:
                     fills.append((max(p, open_), w))
@@ -719,7 +726,7 @@ class BacktestEngine:
         except Exception:
             return p
         if side == "buy":
-            return min(p, open_) if low <= p else None
+            return self._entry_px(p, open_) if low <= p else None
         return max(p, open_) if high >= p else None
 
     def _fill_expr_base(self, side: str, df_slice) -> float | None:
@@ -801,7 +808,7 @@ class BacktestEngine:
             p = base * (1 + off / 100.0)
             first_open = float(w["open"].iloc[0])
             if side == "buy":
-                return min(p, first_open) if float(w["low"].min()) <= p else None
+                return self._entry_px(p, first_open) if float(w["low"].min()) <= p else None
             return max(p, first_open) if float(w["high"].max()) >= p else None
         if fill_type == "twap":
             return float(w["close"].astype(float).mean())
@@ -815,20 +822,38 @@ class BacktestEngine:
         return _NO_BARS
 
     def _breakthrough_price(self, df_slice) -> float | None:
-        """돌파매수 체결가 — 당일 고가 ≥ 전일 고가면 max(시가, 전일고가), 미돌파면 None.
+        """돌파매수 체결가 — 기준가(유형 선택)×(1±오프셋%)의 돌파 라인 도달 시 진입.
 
-        지정가를 전일 고가에 걸어둔 모델: 갭상승(시가>전일고가)이면 시가 체결."""
+        상방: 당일 고가 ≥ 라인 → max(시가, 라인) — 갭상승이면 시가 체결.
+        양방: 상방 또는 하방(저가 ≤ base×(1-|off|)) — 둘 다 도달 시 상방 우선(보수:
+        더 비싼 체결가). 기본(전일고가·0%·상방) = 기존 동작과 동일."""
         try:
             if df_slice is None or len(df_slice) < 2:
                 return None
-            prev_high = float(df_slice["high"].iloc[-2])
-            today_high = float(df_slice["high"].iloc[-1])
-            today_open = float(df_slice["open"].iloc[-1])
-            if today_high < prev_high:
+            from src.engine.fill_price import resolve_from_slice
+            base = resolve_from_slice(self.cfg.breakthrough_base_type or "prev_high", df_slice)
+            if not base or base <= 0:
                 return None
-            return max(today_open, prev_high)
+            off = abs(self.cfg.breakthrough_offset_pct) / 100.0
+            today_high = float(df_slice["high"].iloc[-1])
+            today_low = float(df_slice["low"].iloc[-1])
+            today_open = float(df_slice["open"].iloc[-1])
+            up_line = base * (1 + off)
+            if today_high >= up_line:
+                return max(today_open, up_line)
+            if self.cfg.breakthrough_direction == "both":
+                dn_line = base * (1 - off)
+                if today_low <= dn_line:
+                    return self._entry_px(dn_line, today_open)  # 하방 돌파 매수 (낙폭 진입)
+            return None
         except Exception:
             return None
+
+    def _entry_px(self, limit: float, open_: float) -> float:
+        """매수 지정가 체결가 — 장중 주문(intraday)이면 시가 갭 혜택 배제(보수)."""
+        if self.cfg.buy_timing == "intraday":
+            return limit
+        return min(limit, open_)
 
     def _natr_pct(self, df_slice) -> float | None:
         """NATR = ATR(14)/종가 ×100 — ATR 비중 사이징용. 데이터 부족 시 None(동일가중 폴백)."""
@@ -1454,6 +1479,10 @@ def run_backtest(
     buy_ladder: list | None = None,
     sell_ladder: list | None = None,
     expiry_sell_method: str = "all",
+    breakthrough_base_type: str = "prev_high",
+    breakthrough_offset_pct: float = 0.0,
+    breakthrough_direction: str = "up",
+    buy_timing: str = "pre_open",
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1522,6 +1551,10 @@ def run_backtest(
         buy_ladder=buy_ladder,
         sell_ladder=sell_ladder,
         expiry_sell_method=expiry_sell_method,
+        breakthrough_base_type=breakthrough_base_type,
+        breakthrough_offset_pct=breakthrough_offset_pct,
+        breakthrough_direction=breakthrough_direction,
+        buy_timing=buy_timing,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

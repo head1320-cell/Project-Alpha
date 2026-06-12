@@ -6,9 +6,8 @@
 ④ 만기 래더: 미체결 잔량은 종가 강제 청산 (반드시 종결)
 ⑤ 검증: 비중 합 >100% → 400(ValueError)
 """
-import pytest
-
 import pandas as pd
+import pytest
 
 from src.kis_backtest_engine import BacktestConfig, BacktestEngine
 from src.kis_strategies import condition_strategy  # noqa: F401
