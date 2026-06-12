@@ -151,6 +151,15 @@ class BacktestConfig:
     # 체결가 유형 (Phase 0: 주문 모델). 기본 "close" = 기존 동작 불변
     buy_fill_type: str = "close"        # 매수 체결가 유형
     sell_fill_type: str = "close"       # 매도 체결가 유형
+    # 체결 가격 기준 ± 오프셋% (젠포트 "전일종가 +0.5%" 지정가 모델). 0=미사용(기존 불변).
+    # 0이 아니면 지정가 도달 검증: 매수는 당일 저가≤지정가일 때 min(지정가,시가) 체결,
+    # 매도는 당일 고가≥지정가일 때 max(지정가,시가) 체결 — 미도달이면 그날 미체결.
+    buy_fill_offset_pct: float = 0.0
+    sell_fill_offset_pct: float = 0.0   # 신호 매도에 적용 (손익절·만기·트레일링은 기존 트리거가 체결)
+    # 종목당 최대 매수 금액 (원). None=무제한
+    max_buy_amount: float | None = None
+    # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
+    cash_reserve_pct: float = 0.0
     # 매도 정밀화 (Phase 2). 모두 기본 비활성 = 기존 동작 불변
     max_hold_days: int | None = None    # 보유기간 매도: N일 경과 시 강제 청산
     min_hold_days: int = 0              # 최소 보유: N일 전엔 손익절·신호 매도 보류
@@ -273,6 +282,9 @@ class BacktestEngine:
         for sim_date in sim_dates:
             date_str = sim_date.strftime("%Y-%m-%d")
             self._buys_today = 0  # 일일 신규 매수 카운터 (max_buy_per_day 제한용)
+            # 현금 비중 유지(자산배분): 당일 평가자산 1회 계산 — 매수 가용액 산정 기준
+            self._equity_today = (self._calc_equity(ohlcv_map, sim_date)
+                                  if self.cfg.cash_reserve_pct > 0 else 0.0)
 
             # 0. 마켓타이밍: 지수 조건 미충족(OFF) → 신규 매수 차단, exit_all이면 전량 청산
             #    (포트폴리오 레벨 리스크오프 — min_hold_days보다 우선)
@@ -334,7 +346,6 @@ class BacktestEngine:
                     continue
 
                 # 체결가: 유형별 계산 (기본 "close" = 종가, 기존 동작 불변)
-                from src.engine.fill_price import resolve_from_slice
                 from src.kis_signal import Action
                 close_price = float(df_slice["close"].iloc[-1])
 
@@ -347,11 +358,14 @@ class BacktestEngine:
                         bb_price = self._breakthrough_price(df_slice)
                         can_buy = bb_price is not None
                     if can_buy:
-                        buy_price = bb_price or resolve_from_slice(self.cfg.buy_fill_type, df_slice)
-                        fw = (self.cfg.factor_weights or {}).get(ticker)
-                        natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
-                        self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
-                                          factor_weight=fw, atr_pct=natr)
+                        buy_price = bb_price or self._fill_with_offset("buy", df_slice)
+                        if buy_price is None and self.cfg.buy_fill_offset_pct:
+                            pass  # 지정가(기준가±오프셋) 미도달 — 그날 미체결
+                        else:
+                            fw = (self.cfg.factor_weights or {}).get(ticker)
+                            natr = self._natr_pct(df_slice) if self.cfg.buy_weight_mode == "atr" else None
+                            self._execute_buy(ticker, buy_price or close_price, date_str, signal.reason,
+                                              factor_weight=fw, atr_pct=natr)
                 elif signal.action == Action.SELL and signal.is_actionable():
                     # 최소 보유기간 미달 시 신호 매도 보류
                     pos = self.positions.get(ticker)
@@ -359,7 +373,9 @@ class BacktestEngine:
                         days_held = self._days_held(pos.entry_date, date_str)
                         if days_held < self.cfg.min_hold_days:
                             continue
-                    sell_price = resolve_from_slice(self.cfg.sell_fill_type, df_slice)
+                    sell_price = self._fill_with_offset("sell", df_slice)
+                    if sell_price is None and self.cfg.sell_fill_offset_pct:
+                        continue  # 지정가 미도달 — 그날 미체결(보유 지속)
                     self._execute_sell(ticker, sell_price or close_price, date_str, signal.reason,
                                        sell_fraction=self.cfg.sell_divide_pct / 100.0)
 
@@ -426,7 +442,8 @@ class BacktestEngine:
         · atr(역변동성): NATR(ATR14/종가) 2% 기준 배수 — 저변동 종목에 더 큰 비중
         """
         slots = max(self.cfg.max_positions - len(self.positions), 1)
-        base = self.cash * self.cfg.position_size_pct / slots
+        usable = self._usable_cash()  # 자산배분(현금 비중) 반영 — 미사용 시 cash 그대로
+        base = usable * self.cfg.position_size_pct / slots
         if self.cfg.buy_weight_mode == "factor" and factor_weight is not None:
             # 팩터가중: 가중치를 동일가중 대비 배수로 (0.5~1.5 범위로 정규화)
             mult = 0.5 + max(0.0, min(1.0, factor_weight))
@@ -434,7 +451,40 @@ class BacktestEngine:
         elif self.cfg.buy_weight_mode == "atr" and atr_pct:
             # ATR 비중: 기준 NATR 2% 대비 역비례 배수 (0.5~1.5 클램프) — 변동성 패리티 근사
             base *= max(0.5, min(1.5, 2.0 / atr_pct))
-        return min(base, self.cash * 0.95)
+        return min(base, usable * 0.95)
+
+    def _usable_cash(self) -> float:
+        """매수 가용 현금 — 자산배분(현금 비중 유지) 시 예비금을 제외한 잔액."""
+        if self.cfg.cash_reserve_pct > 0:
+            reserve = getattr(self, "_equity_today", 0.0) * self.cfg.cash_reserve_pct / 100.0
+            return max(0.0, self.cash - reserve)
+        return self.cash
+
+    def _fill_with_offset(self, side: str, df_slice) -> float | None:
+        """체결가 유형 + 오프셋%(지정가 모델).
+
+        오프셋 0이면 기존 resolve 그대로(None 가능 — 호출부가 종가 폴백, 기존 불변).
+        오프셋이 있으면 기준가×(1+off%)를 지정가로 보고 당일 도달 검증:
+        매수는 저가≤지정가일 때 min(지정가, 시가), 매도는 고가≥지정가일 때
+        max(지정가, 시가) — 갭이 지정가를 건너뛰면 시가 체결. 미도달이면 None."""
+        from src.engine.fill_price import resolve_from_slice
+        fill_type = self.cfg.buy_fill_type if side == "buy" else self.cfg.sell_fill_type
+        off = self.cfg.buy_fill_offset_pct if side == "buy" else self.cfg.sell_fill_offset_pct
+        base = resolve_from_slice(fill_type, df_slice)
+        if not off:
+            return base
+        if base is None:
+            return None
+        p = base * (1 + off / 100.0)
+        try:
+            low = float(df_slice["low"].iloc[-1])
+            high = float(df_slice["high"].iloc[-1])
+            open_ = float(df_slice["open"].iloc[-1])
+        except Exception:
+            return p
+        if side == "buy":
+            return min(p, open_) if low <= p else None
+        return max(p, open_) if high >= p else None
 
     def _breakthrough_price(self, df_slice) -> float | None:
         """돌파매수 체결가 — 당일 고가 ≥ 전일 고가면 max(시가, 전일고가), 미돌파면 None.
@@ -485,7 +535,11 @@ class BacktestEngine:
             if existing.buy_count >= max_bc:
                 return
             add_alloc = self._initial_alloc(factor_weight, atr_pct) * (self.cfg.buy_divide_pct / 100.0)
-            add_alloc = min(add_alloc, self.cash * 0.95)
+            add_alloc = min(add_alloc, self._usable_cash() * 0.95)
+            # 종목당 최대 매수 금액: 기존 투자액 포함 총 한도
+            if self.cfg.max_buy_amount is not None:
+                remaining = self.cfg.max_buy_amount - existing.avg_price * existing.quantity
+                add_alloc = min(add_alloc, max(0.0, remaining))
             exec_price = price * (1 + self.cfg.slippage_rate)
             if add_alloc < exec_price:
                 return
@@ -494,7 +548,7 @@ class BacktestEngine:
                 return
             value = qty * exec_price
             commission = value * self.cfg.commission_rate
-            if value + commission > self.cash:
+            if value + commission > self._usable_cash():
                 return
             self.cash -= (value + commission)
             new_qty = existing.quantity + qty
@@ -524,7 +578,9 @@ class BacktestEngine:
         alloc = self._initial_alloc(factor_weight, atr_pct)
         if self.cfg.buy_divide_pct < 100.0:
             alloc *= (self.cfg.buy_divide_pct / 100.0)
-        alloc = min(alloc, self.cash * 0.95)
+        alloc = min(alloc, self._usable_cash() * 0.95)
+        if self.cfg.max_buy_amount is not None:
+            alloc = min(alloc, self.cfg.max_buy_amount)  # 종목당 최대 매수 금액
         if alloc < price:
             return
 
@@ -537,8 +593,8 @@ class BacktestEngine:
         commission = value * self.cfg.commission_rate
         total_cost = value + commission
 
-        if total_cost > self.cash:
-            quantity = int((self.cash * 0.95) / (exec_price * (1 + self.cfg.commission_rate)))
+        if total_cost > self._usable_cash():
+            quantity = int((self._usable_cash() * 0.95) / (exec_price * (1 + self.cfg.commission_rate)))
             if quantity <= 0:
                 return
             value = quantity * exec_price
@@ -1043,6 +1099,10 @@ def run_backtest(
     market_timing: dict | None = None,
     signal_lag: int = 0,
     rebuy_block_days: int = 0,
+    buy_fill_offset_pct: float = 0.0,
+    sell_fill_offset_pct: float = 0.0,
+    max_buy_amount: float | None = None,
+    cash_reserve_pct: float = 0.0,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1092,6 +1152,10 @@ def run_backtest(
         market_timing=market_timing,
         signal_lag=signal_lag,
         rebuy_block_days=rebuy_block_days,
+        buy_fill_offset_pct=buy_fill_offset_pct,
+        sell_fill_offset_pct=sell_fill_offset_pct,
+        max_buy_amount=max_buy_amount,
+        cash_reserve_pct=cash_reserve_pct,
     )
     engine = BacktestEngine(cfg)
     return engine.run()

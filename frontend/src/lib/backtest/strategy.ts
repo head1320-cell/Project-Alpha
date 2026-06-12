@@ -21,6 +21,8 @@ export interface BuyState {
   weightPct: number;                // 종목당 비중 %
   weightMode: "equal" | "atr";
   fillType: string;                 // 매수 체결가 유형 id (fillPrice.ts 13종 — 엔진 fill_price 와 동일)
+  fillOffsetPct: number;            // 체결 기준가 ± 오프셋% (0=미사용, ≠0이면 지정가 도달 검증)
+  maxBuyAmount: number;             // 종목당 최대 매수 금액(만원, 0=무제한)
   reBuyBlockDays: number;           // 재매수 방지: 청산 후 N일(캘린더) 재매수 금지 (0=미사용)
   maxBuyPerDay: number;             // 1일 최대 신규 매수 종목 수 (0=무제한)
   timeStart: string;
@@ -38,6 +40,7 @@ export interface SellState {
   enabled: boolean;
   orderType: "FIX" | "MARKET";
   fillType: string;                 // 매도 체결가 유형 id (fillPrice.ts 13종)
+  fillOffsetPct: number;            // 매도 체결 기준가 ± 오프셋% (신호 매도에 적용)
   takeProfit: { on: boolean; pct: number };
   stopLoss: { on: boolean; pct: number };
   trailing: { on: boolean; pct: number };       // 드래깅 청산
@@ -81,6 +84,7 @@ export interface BacktestStrategy {
   slippagePct: number;
   rebalancePeriod: "daily" | "weekly" | "monthly";  // 신규 매수일: 매일(기존) | 주·월 첫 거래일
   signalLag: 0 | 1;        // 신호 기준: 0=당일 봉 포함(기존) | 1=전일 봉 기준(젠포트식 — 시가류 체결 정합)
+  cashReservePct: number;  // 자산배분: 평가자산 대비 현금 상시 보유 % (0=미사용)
   marketTiming: MarketTimingState;
   buy: BuyState;
   sell: SellState;
@@ -120,8 +124,10 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "종목당", value: `${b.weightPct}%` },
         { label: "대상 수", value: b.limitType === "MAX" ? "전체" : `${b.maxStocks}종목` },
         { label: "1일 최대", value: b.maxBuyPerDay > 0 ? `${b.maxBuyPerDay}종목` : "무제한", muted: b.maxBuyPerDay === 0 },
+        { label: "종목당 한도", value: b.maxBuyAmount > 0 ? `${b.maxBuyAmount.toLocaleString()}만원` : "무제한", muted: b.maxBuyAmount === 0 },
         { label: "재매수 방지", value: b.reBuyBlockDays > 0 ? `${b.reBuyBlockDays}일` : "미사용", muted: b.reBuyBlockDays === 0 },
-        { label: "체결가", value: fillPriceLabel(b.fillType) },
+        { label: "체결가", value: `${fillPriceLabel(b.fillType)}${b.fillOffsetPct !== 0 ? ` ${b.fillOffsetPct > 0 ? "+" : ""}${b.fillOffsetPct}%` : ""}` },
+        { label: "현금 비중", value: s.cashReservePct > 0 ? `${s.cashReservePct}% 상시 보유` : "미사용", muted: s.cashReservePct === 0 },
       ]},
       { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough]]) },
       { label: "마켓타이밍", rows: [
@@ -138,7 +144,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
     return [
       { label: "목표가 / 손절가", rows: [
         { label: "주문 방법", value: v.orderType === "MARKET" ? "시장가" : "지정가" },
-        { label: "체결가", value: fillPriceLabel(v.fillType) },
+        { label: "체결가", value: `${fillPriceLabel(v.fillType)}${v.fillOffsetPct !== 0 ? ` ${v.fillOffsetPct > 0 ? "+" : ""}${v.fillOffsetPct}%` : ""}` },
         { label: "목표가", value: v.takeProfit.on ? `${v.takeProfit.pct}% 상승` : "미설정", muted: !v.takeProfit.on },
         { label: "손절가", value: v.stopLoss.on ? `${v.stopLoss.pct}% 하락` : "미설정", muted: !v.stopLoss.on },
         { label: "드래깅 청산", value: v.trailing.on ? `고점 -${v.trailing.pct}%` : "미사용", muted: !v.trailing.on },

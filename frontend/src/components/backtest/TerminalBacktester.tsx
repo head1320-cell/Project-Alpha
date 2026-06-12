@@ -39,16 +39,17 @@ const yearsAgo = (n: number) => {
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
-  rebalancePeriod: "daily", signalLag: 0,
+  rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0,
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
     limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
-    fillType: "close", reBuyBlockDays: 0, maxBuyPerDay: 0, timeStart: "09:00", timeEnd: "15:30",
+    fillType: "close", fillOffsetPct: 0, maxBuyAmount: 0,
+    reBuyBlockDays: 0, maxBuyPerDay: 0, timeStart: "09:00", timeEnd: "15:30",
     splitBuy: false, splitBuyPct: 50, splitBuyCount: 2, breakthrough: false, allowFundamentals: false,
   },
   sell: {
-    enabled: true, orderType: "MARKET", fillType: "close",
+    enabled: true, orderType: "MARKET", fillType: "close", fillOffsetPct: 0,
     takeProfit: { on: false, pct: 15 }, stopLoss: { on: false, pct: 5 },
     trailing: { on: false, pct: 3 }, holdPeriod: { on: false, min: 5 }, conditions: [], logicExpr: "",
     liquidate: { on: false, mode: "close" }, timeStart: "09:00", timeEnd: "15:30",
@@ -108,6 +109,10 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     trailing_stop_pct: sell.trailing.on ? sell.trailing.pct : null,
     buy_fill_type: buy.fillType,
     sell_fill_type: sell.fillType,
+    buy_fill_offset_pct: buy.fillOffsetPct,
+    sell_fill_offset_pct: sell.fillOffsetPct,
+    max_buy_amount: buy.maxBuyAmount > 0 ? buy.maxBuyAmount * 10000 : null,  // 만원 → 원
+    cash_reserve_pct: s.cashReservePct,
     max_hold_days: sell.holdPeriod.max ?? null,
     min_hold_days: sell.holdPeriod.on ? sell.holdPeriod.min : 0,
     sell_divide_pct: sell.splitTakeProfit ? sell.splitSellPct : 100,

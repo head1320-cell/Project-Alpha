@@ -974,6 +974,12 @@ class ScreenToBacktestRequest(BaseModel):
     signal_lag: int = Field(default=0, ge=0, le=5)
     # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
     rebuy_block_days: int = Field(default=0, ge=0, le=120)
+    # 체결 가격 기준 ± 오프셋% (지정가 모델 — 도달 검증, 미도달 시 그날 미체결)
+    buy_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    sell_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    # 종목당 최대 매수 금액(원, None=무제한) + 자산배분 현금 비중 %
+    max_buy_amount: float | None = Field(default=None, ge=0)
+    cash_reserve_pct: float = Field(default=0.0, ge=0.0, le=90.0)
     # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
     caps: list[str] | None = None
     sectors: list[str] | None = None        # 실제 업종명 (/sectors)
@@ -1116,6 +1122,10 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             market_timing=req.market_timing,
             signal_lag=req.signal_lag,
             rebuy_block_days=req.rebuy_block_days,
+            buy_fill_offset_pct=req.buy_fill_offset_pct,
+            sell_fill_offset_pct=req.sell_fill_offset_pct,
+            max_buy_amount=req.max_buy_amount,
+            cash_reserve_pct=req.cash_reserve_pct,
         )
 
         # 3) 통합 응답

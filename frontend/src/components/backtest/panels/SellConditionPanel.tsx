@@ -6,6 +6,7 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
+import OffsetInput from "./OffsetInput";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
 
@@ -47,6 +48,9 @@ export default function SellConditionPanel({ s, set }: {
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={v.fillType} onChange={(id) => patch({ fillType: id })} groups={FILL_PRICE_GROUPS} />
+        </Field>
+        <Field label="매도 가격 기준">
+          <OffsetInput value={v.fillOffsetPct} onChange={(fillOffsetPct) => patch({ fillOffsetPct })} />
         </Field>
         <SubToggle tone="sell" label="목표가 (익절)" on={v.takeProfit.on} onChange={(on) => patch({ takeProfit: { ...v.takeProfit, on } })}>
           <QuickStepper value={v.takeProfit.pct} onChange={(pct) => patch({ takeProfit: { ...v.takeProfit, pct } })} chips={[5, 10, 20]} unit="%" min={0} />

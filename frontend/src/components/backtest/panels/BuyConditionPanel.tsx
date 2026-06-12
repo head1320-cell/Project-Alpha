@@ -6,6 +6,7 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "../kit";
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
+import OffsetInput from "./OffsetInput";
 import type { BacktestStrategy, SortDir } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS } from "../../../lib/backtest/fillPrice";
 import { SORT_FIELDS } from "../../../lib/backtest/sortFields";
@@ -142,6 +143,14 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
+        <Field label="매수 가격 기준">
+          <OffsetInput value={s.buy.fillOffsetPct} onChange={(fillOffsetPct) => patchBuy({ fillOffsetPct })} />
+        </Field>
+        <SubToggle tone="buy" label="종목당 최대 매수 금액" hint="종목별 투자 한도"
+          on={s.buy.maxBuyAmount > 0} onChange={(on) => patchBuy({ maxBuyAmount: on ? 1000 : 0 })}>
+          <QuickStepper value={s.buy.maxBuyAmount} onChange={(v) => patchBuy({ maxBuyAmount: v })}
+            chips={[1000, 3000, 5000]} unit="만원" min={100} />
+        </SubToggle>
         <SubToggle tone="buy" label="1일 최대 매수 종목 수" hint="하루 신규 진입 수 제한"
           on={s.buy.maxBuyPerDay > 0} onChange={(on) => patchBuy({ maxBuyPerDay: on ? 1 : 0 })}>
           <QuickStepper value={s.buy.maxBuyPerDay} onChange={(v) => patchBuy({ maxBuyPerDay: v })} chips={[1, 3, 5]} unit="종목" min={1} />
@@ -149,6 +158,17 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="재매수 방지">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>청산 후 N일(캘린더) 재매수 금지 · 0=미사용</span>
+        </Field>
+      </Section>
+
+      <Section title="자산배분 옵션" hint="현금 비중 상시 보유" tone="neutral"
+        enabled={s.cashReservePct > 0} onToggle={(on) => set((x) => ({ ...x, cashReservePct: on ? 10 : 0 }))}>
+        <Field label="현금 비중">
+          <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
+            chips={[10, 20, 30]} unit="%" min={0} max={90} />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            평가자산의 N%를 현금으로 상시 유지 — 매수 가용액에서 제외
+          </span>
         </Field>
       </Section>
 
