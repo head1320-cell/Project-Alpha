@@ -220,6 +220,28 @@ def screener_sectors():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.get("/theme-tree")
+def screener_theme_tree():
+    """젠포트 고유 17그룹 → 88 세부업종 트리 + 세부별 종목 수.
+
+    구조는 젠포트 화면 전사(확정). 종목 매핑은 확신 대표주 best-effort 시드 + (마스터
+    적재 시) 미시드 세부업종은 0 — 사용자 오버라이드/캡처로 확장. 정직: 추론 분류."""
+    try:
+        from src.data.genport_themes import THEME_SEED, get_theme_tree
+        tree = get_theme_tree()
+        seeded = sum(1 for v in THEME_SEED.values() if v)
+        return {
+            **tree,
+            "seeded_subsectors": seeded,
+            "seeded_stocks": len({c for v in THEME_SEED.values() for c in v}),
+            "note": "구조는 젠포트 화면 그대로(88 확정). 종목 분류는 확신 대표주 추론 시드 — "
+                    "젠포트 실제 분류와 다를 수 있으며 미시드 세부업종은 비어 있음(확장 가능).",
+        }
+    except Exception:
+        logger.exception("테마 트리 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 @router.get("/stock-browse")
 def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = None):
     """관심종목 그룹 브라우저 (젠포트 관심종목 그룹 관리 모달의 데이터).

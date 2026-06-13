@@ -299,12 +299,42 @@ def select_universe(
     if tiers:
         mask &= df["tier"].isin(tiers)
 
-    # 업종(실제 업종명). 알 수 없는 값만 오면 no-op(전체 통과) — fake id 방어.
+    # 업종/테마 선택:
+    #   · 'theme:세부' / 'themegroup:그룹' (젠포트 88 taxonomy) → 시드 종목 코드로 필터
+    #   · 그 외(실제 업종명) → df["sector"] 매칭 (fake id는 no-op 방어)
     sectors = [s for s in (sectors or []) if s]
+    theme_tickers: set[str] = set()
+    plain_sectors: list[str] = []
+    theme_requested = False  # 유효 테마/그룹 id가 선택됐는지 (멤버 0이어도 필터 적용)
+    for s in sectors:
+        if s.startswith("theme:") or s.startswith("themegroup:"):
+            try:
+                from src.data.genport_themes import (
+                    SUBSECTOR_GROUP,
+                    THEME_TREE,
+                    group_members,
+                    theme_members,
+                )
+                key = s.split(":", 1)[1]
+                is_grp = s.startswith("themegroup:")
+                if (is_grp and key in THEME_TREE) or (not is_grp and key in SUBSECTOR_GROUP):
+                    theme_requested = True   # taxonomy에 존재하는 id → 빈 멤버여도 필터
+                    theme_tickers.update(group_members(key) if is_grp else theme_members(key))
+            except Exception:
+                pass
+        else:
+            plain_sectors.append(s)
     known = set(df["sector"].dropna().unique())
-    sel = [s for s in sectors if s in known]
+    sel = [s for s in plain_sectors if s in known]
+    tk_sel = df["ticker"].astype(str)
+    sector_mask = pd.Series(False, index=df.index)
+    any_sector = bool(sel) or theme_requested
     if sel:
-        mask &= df["sector"].isin(sel)
+        sector_mask |= df["sector"].isin(sel)
+    if theme_tickers:
+        sector_mask |= tk_sel.isin(theme_tickers)
+    if any_sector:
+        mask &= sector_mask
 
     # ETF — 미포함이면 제외
     if not etf:

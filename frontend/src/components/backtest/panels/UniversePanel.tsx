@@ -7,10 +7,11 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { Segmented } from "../kit";
-import { universeCount, fetchSectors, type SectorOption } from "../../../lib/backtest/universeApi";
+import { universeCount } from "../../../lib/backtest/universeApi";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
 import { listWatchlists, createWatchlist, deleteWatchlist } from "../../../lib/watchlistStorage";
 import WatchGroupModal from "./WatchGroupModal";
+import ThemeTree from "./ThemeTree";
 
 export const CAPS = [
   { id: "kospi_l", label: "코스피 대형" }, { id: "kospi_m", label: "코스피 중소형" },
@@ -59,13 +60,6 @@ export default function UniversePanel({ s, set, live = true }: {
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [u.caps, u.sectors, u.etf, u.managed, u.supervised, u.groups, live]);
-
-  const [sectorOpts, setSectorOpts] = useState<SectorOption[]>([]);
-  useEffect(() => {
-    const ctrl = new AbortController();
-    fetchSectors(ctrl.signal).then(setSectorOpts).catch(() => {});
-    return () => ctrl.abort();
-  }, []);
 
   const [groupModalOpen, setGroupModalOpen] = useState(false);
 
@@ -136,27 +130,10 @@ export default function UniversePanel({ s, set, live = true }: {
         })}
       </div>
 
-      {/* 업종 (실제 업종 — /sectors) */}
-      <SubHead label={`업종 (${sectorOpts.length || "…"}개)`} onAll={() => patch({ sectors: u.sectors.length === sectorOpts.length ? [] : sectorOpts.map((t) => t.id) })} allOn={sectorOpts.length > 0 && u.sectors.length === sectorOpts.length} />
-      {sectorOpts.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>업종 목록을 불러오는 중…</div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 16 }}>
-          {sectorOpts.map((t) => {
-            const on = u.sectors.includes(t.id);
-            return (
-              <button key={t.id} type="button" onClick={() => patch({ sectors: toggle(u.sectors, t.id) })}
-                style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", textAlign: "left",
-                  border: "1px solid var(--border)", borderRadius: R, padding: "8px 11px", background: "var(--bg-card)" }}>
-                <span style={{ width: 15, height: 15, borderRadius: 3, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border-strong)", background: on ? "var(--bg-section)" : "transparent" }}>
-                  {on && <Check size={11} style={{ color: "var(--text-secondary)" }} />}
-                </span>
-                <span style={{ fontSize: 13, color: on ? "var(--text-primary)" : "var(--text-secondary)" }}>{t.label}{t.size ? ` (${t.size})` : ""}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* 업종 (88) — 젠포트 17그룹 → 88 세부업종 트리 */}
+      <div style={{ marginBottom: 16 }}>
+        <ThemeTree selected={u.sectors} onChange={(next) => patch({ sectors: next })} />
+      </div>
 
       {/* 관심그룹 (watchlistStorage 연동) */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
