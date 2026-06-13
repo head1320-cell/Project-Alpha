@@ -197,20 +197,32 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
     ];
   }
   const u = s.universe;
+  const TOTAL_TIERS = 6;       // 코스피 중대형/중소형 + 코스닥 대형/중형/소형/초소형
+  const TOTAL_SUBSECTORS = 88; // 젠포트 17그룹 → 88 세부업종 (고정)
+  const themeSel = u.sectors.filter((x) => x.startsWith("theme:")).length;
+  const includeGroups = u.groups.filter((g) => g.mode === "include").length;
+  const excludeGroups = u.groups.filter((g) => g.mode === "exclude").length;
   return [
     { label: "매매 대상 종목", rows: [
-      { label: "대상", value: u.matched.toLocaleString() },
-      { label: "전체", value: u.totalUniverse.toLocaleString(), muted: true },
+      { label: "선택한 매매 대상", value: `${u.matched.toLocaleString()} 종목` },
+      { label: "전체 종목", value: `${u.totalUniverse.toLocaleString()} 종목`, muted: true },
     ]},
     { label: "기본 설정", rows: [
-      { label: "ETF", value: u.etf ? "포함" : "미포함" },
-      { label: "관리·감리", value: (u.managed || u.supervised) ? "일부 포함" : "미포함" },
+      { label: "ETF", value: u.etf ? "포함" : "미포함", muted: !u.etf },
+      { label: "관리 종목", value: u.managed ? "포함" : "미포함", muted: !u.managed },
+      { label: "감리 종목", value: u.supervised ? "포함" : "미포함", muted: !u.supervised },
     ]},
-    { label: "유니버스", rows: [{ label: "시총군", value: `${u.caps.length}군` }] },
-    { label: "업종", rows: [{ label: "포함 그룹", value: `${u.sectors.length}개` }] },
+    { label: "유니버스", rows: [
+      { label: "시총군", value: u.caps.length >= TOTAL_TIERS ? "전체" : `${u.caps.length}/${TOTAL_TIERS}군`,
+        muted: u.caps.length === 0 },
+    ]},
+    { label: "업종 선택", rows: [
+      { label: "포함 업종 수", value: themeSel > 0 ? `${themeSel}개` : "전체", muted: themeSel === 0 },
+      { label: "전체 업종 수", value: `${TOTAL_SUBSECTORS}개`, muted: true },
+    ]},
     { label: "관심그룹", rows: [
-      { label: "매수 대상", value: `${u.groups.filter((g) => g.mode === "include").length}그룹` },
-      { label: "매수 제외", value: `${u.groups.filter((g) => g.mode === "exclude").length}그룹`, muted: u.groups.every((g) => g.mode !== "exclude") },
+      { label: "매수 대상 종목", value: `${includeGroups}그룹`, muted: includeGroups === 0 },
+      { label: "매수 제외 종목", value: `${excludeGroups}그룹`, muted: excludeGroups === 0 },
     ]},
   ];
 }
