@@ -53,6 +53,21 @@ _engine_override = None
 _NO_BARS = object()
 
 
+def resolve_fill_price_safe(fill_type: str, df_slice) -> float:
+    """ETF 리밸런싱용 체결 기준가 — 실패 시 마지막 종가 폴백 (수식입력 제외)."""
+    try:
+        from src.engine.fill_price import resolve_from_slice
+        v = resolve_from_slice(fill_type or "close", df_slice)
+        if v and v > 0:
+            return float(v)
+    except Exception:
+        pass
+    try:
+        return float(df_slice["close"].iloc[-1])
+    except Exception:
+        return 0.0
+
+
 def set_engine(engine):
     """테스트 또는 의존성 주입 시 엔진을 직접 설정."""
     global _engine_override
@@ -171,6 +186,13 @@ class BacktestConfig:
     max_buy_amount: float | None = None
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
     cash_reserve_pct: float = 0.0
+    # 자산배분 ETF 바스켓 (젠포트 자산배분 옵션). None=미사용.
+    #   {"etf_pct": 30, "stock_pct": 60,            # 잔여(10%)=현금
+    #    "basket": [{"ticker":"069500","weight_pct":60}, ...],  # 바스켓 내 가중(합 100)
+    #    "rebalance_months": 3, "fill_type": "prev_close", "offset_pct": 0}
+    # 활성 시 주식 슬리브 가용현금 = equity×stock_pct/100 (cash_reserve_pct 일반화),
+    # ETF 슬리브는 주기 리밸런싱으로 바스켓 목표 비중 유지. 매수기준가 미도달분은 다음 주기 재시도.
+    asset_alloc: dict | None = None
     # 매도 정밀화 (Phase 2). 모두 기본 비활성 = 기존 동작 불변
     max_hold_days: int | None = None    # 보유기간 매도: N일 경과 시 강제 청산
     min_hold_days: int = 0              # 최소 보유: N일 전엔 손익절·신호 매도 보류
@@ -243,6 +265,7 @@ class BacktestEngine:
         self.equity_history: list[tuple] = []   # (date_str, equity)
         self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
         self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
+        self._etf_pos: dict[str, dict] = {}     # ETF 슬리브 보유 {ticker: {"qty","avg"}}
 
     def run(self) -> dict:
         """
@@ -309,6 +332,24 @@ class BacktestEngine:
         if not ohlcv_map:
             return self._error_response("No OHLCV data found in DB for given tickers/range")
 
+        # 자산배분 ETF 바스켓 OHLCV 로드 (주식 슬리브와 분리)
+        etf_map: dict[str, pd.DataFrame] = {}
+        basket = (self.cfg.asset_alloc or {}).get("basket") or []
+        if basket:
+            from src.data.ohlcv_loader import load_ohlcv_unified
+            for leg in basket:
+                tk = str(leg.get("ticker") or "").strip()
+                if not tk or tk in etf_map:
+                    continue
+                try:
+                    edf = load_ohlcv_unified(tk, warmup_start, self.cfg.end_date, prefer="auto")
+                except Exception:
+                    edf = pd.DataFrame()
+                if not edf.empty:
+                    edf = edf.copy()
+                    edf.attrs["ticker"] = tk
+                    etf_map[tk] = edf
+
         # 거래일 목록 (가장 많은 데이터를 가진 종목 기준)
         ref_ticker = max(ohlcv_map, key=lambda t: len(ohlcv_map[t]))
         all_dates = ohlcv_map[ref_ticker].index
@@ -339,6 +380,10 @@ class BacktestEngine:
         mt_df = self._load_market_timing_index(warmup_start) if self.cfg.market_timing else None
         mt_action = str((self.cfg.market_timing or {}).get("action") or "block_buy")
 
+        # 자산배분 ETF 리밸런싱일 (N개월마다 첫 거래일) + 주식 슬리브 비중
+        etf_rebal_days = self._etf_rebalance_days(sim_dates) if etf_map else set()
+        alloc_on = bool(self.cfg.asset_alloc and etf_map)
+
         # 신호 기준일 시차 (젠포트식 전일 종가 기준). 0=당일 봉(기존)
         lag = max(0, int(self.cfg.signal_lag or 0))
 
@@ -346,9 +391,13 @@ class BacktestEngine:
         for sim_date in sim_dates:
             date_str = sim_date.strftime("%Y-%m-%d")
             self._buys_today = 0  # 일일 신규 매수 카운터 (max_buy_per_day 제한용)
-            # 현금 비중 유지(자산배분): 당일 평가자산 1회 계산 — 매수 가용액 산정 기준
-            self._equity_today = (self._calc_equity(ohlcv_map, sim_date)
-                                  if self.cfg.cash_reserve_pct > 0 else 0.0)
+            # 현금/주식 비중 유지(자산배분): 당일 평가자산 1회 계산 — 매수 가용액·ETF 목표 산정
+            self._equity_today = (self._calc_equity(ohlcv_map, sim_date, etf_map)
+                                  if (self.cfg.cash_reserve_pct > 0 or alloc_on) else 0.0)
+
+            # 0.5 자산배분 ETF 슬리브 리밸런싱 (N개월마다) — 주식 신호 처리 전에 비중 정렬
+            if alloc_on and sim_date in etf_rebal_days:
+                self._rebalance_etf(etf_map, sim_date, date_str)
 
             # 0. 마켓타이밍: 지수 조건 미충족(OFF) → 신규 매수 차단, exit_all이면 전량 청산
             #    (포트폴리오 레벨 리스크오프 — min_hold_days보다 우선)
@@ -476,12 +525,12 @@ class BacktestEngine:
                     self._execute_sell(ticker, float(df_to["close"].iloc[-1]),
                                        date_str, "당일 매매 청산")
 
-            # 3. 포트폴리오 가치 기록
-            equity = self._calc_equity(ohlcv_map, sim_date)
+            # 3. 포트폴리오 가치 기록 (주식 + ETF 슬리브 + 현금)
+            equity = self._calc_equity(ohlcv_map, sim_date, etf_map)
             self.equity_history.append((date_str, equity))
 
         duration = (datetime.now() - started_at).total_seconds()
-        return self._build_result(duration, ohlcv_map)
+        return self._build_result(duration, ohlcv_map, etf_map)
 
     def _generate_signal_as_of(self, strategy, ticker: str, df_slice: pd.DataFrame):
         """
@@ -681,11 +730,127 @@ class BacktestEngine:
             self._execute_sell(ticker, force_close_rest, date_str, f"{reason} (잔량 종가)")
 
     def _usable_cash(self) -> float:
-        """매수 가용 현금 — 자산배분(현금 비중 유지) 시 예비금을 제외한 잔액."""
+        """주식 슬리브 매수 가용 현금.
+
+        자산배분 ETF 바스켓 활성 시: 주식 슬리브 = equity×stock_pct/100 한도(잔여는
+        ETF·현금 슬리브 몫). 단순 현금 비중(cash_reserve_pct)은 그 일반화의 특수형."""
+        eq = getattr(self, "_equity_today", 0.0)
+        aa = self.cfg.asset_alloc
+        if aa and aa.get("basket"):
+            stock_cap = eq * float(aa.get("stock_pct", 100)) / 100.0
+            etf_val = self._etf_value()
+            # 주식 슬리브가 쓸 수 있는 현금 = min(보유현금 - ETF몫 보존, 주식상한 - 현 주식가치)
+            stock_val = max(0.0, eq - self.cash - etf_val)
+            room = max(0.0, stock_cap - stock_val)
+            return max(0.0, min(self.cash - etf_val, room))
         if self.cfg.cash_reserve_pct > 0:
-            reserve = getattr(self, "_equity_today", 0.0) * self.cfg.cash_reserve_pct / 100.0
+            reserve = eq * self.cfg.cash_reserve_pct / 100.0
             return max(0.0, self.cash - reserve)
         return self.cash
+
+    def _etf_value(self, etf_map: dict | None = None,
+                   sim_date: pd.Timestamp | None = None) -> float:
+        """ETF 슬리브 평가액. etf_map·sim_date 미지정 시 마지막 평가가(_etf_last) 사용."""
+        total = 0.0
+        for tk, h in self._etf_pos.items():
+            px = None
+            if etf_map is not None and tk in etf_map and sim_date is not None:
+                sub = etf_map[tk].loc[:sim_date]
+                if not sub.empty:
+                    px = float(sub["close"].iloc[-1])
+            if px is None:
+                px = h.get("last", h.get("avg", 0.0))
+            else:
+                h["last"] = px
+            total += h["qty"] * px
+        return total
+
+    def _etf_rebalance_days(self, sim_dates) -> set:
+        """ETF 리밸런싱일 — N개월마다 각 월의 첫 거래일 (시작월 포함)."""
+        months = max(1, int((self.cfg.asset_alloc or {}).get("rebalance_months", 3)))
+        out, seen = set(), {}
+        for d in sim_dates:
+            ym = (d.year, d.month)
+            if ym not in seen:
+                seen[ym] = d  # 각 월 첫 거래일
+        ordered = sorted(seen.values())
+        for i, d in enumerate(ordered):
+            if i % months == 0:
+                out.add(d)
+        # 시작일이 첫 월 첫 거래일이 아니어도 최초 1회는 배분 (시작 시점 진입)
+        if len(sim_dates):
+            out.add(sim_dates[0])
+        return out
+
+    def _rebalance_etf(self, etf_map: dict, sim_date, date_str: str):
+        """ETF 바스켓을 목표 비중으로 정렬 — 목표 = equity×etf_pct/100 × leg_weight/100.
+
+        보수: 매수 기준가(±오프셋) 미도달분은 이번 주기 미체결(다음 주기 재시도).
+        ETF는 슬리피지·수수료 동일 적용, 별도 _etf_pos에 보유(주식 포지션과 무관)."""
+        aa = self.cfg.asset_alloc or {}
+        eq = getattr(self, "_equity_today", 0.0) or self._calc_equity({}, sim_date, etf_map)
+        etf_pct = float(aa.get("etf_pct", 0)) / 100.0
+        basket = aa.get("basket") or []
+        wsum = sum(float(b.get("weight_pct") or 0) for b in basket) or 1.0
+        fill_type = aa.get("fill_type", "close")
+        offset = float(aa.get("offset_pct", 0) or 0)
+        for leg in basket:
+            tk = str(leg.get("ticker") or "").strip()
+            if tk not in etf_map:
+                continue
+            sub = etf_map[tk].loc[:sim_date]
+            if sub.empty:
+                continue
+            target_val = eq * etf_pct * (float(leg.get("weight_pct") or 0) / wsum)
+            base = resolve_fill_price_safe(fill_type, sub)
+            px = base * (1 + offset / 100.0) if offset else base
+            if not px or px <= 0:
+                continue
+            held = self._etf_pos.get(tk, {"qty": 0, "avg": 0.0})
+            cur_val = held["qty"] * px
+            diff = target_val - cur_val
+            if abs(diff) < px:  # 1주 미만 차이는 무시
+                held["last"] = px
+                self._etf_pos[tk] = held
+                continue
+            if diff > 0:  # 매수
+                buy_px = px * (1 + self.cfg.slippage_rate)
+                qty = int(min(diff, self.cash) / buy_px)
+                if qty <= 0:
+                    continue
+                value = qty * buy_px
+                commission = value * self.cfg.commission_rate
+                if value + commission > self.cash:
+                    continue
+                self.cash -= (value + commission)
+                new_qty = held["qty"] + qty
+                held["avg"] = (held["avg"] * held["qty"] + buy_px * qty) / new_qty
+                held["qty"] = new_qty
+                held["last"] = px
+                self._etf_pos[tk] = held
+                self.trades.append(Trade(
+                    date=date_str, ticker=tk, side="buy", price=buy_px, quantity=qty,
+                    value=value, commission=commission, slippage=value * self.cfg.slippage_rate,
+                    reason="ETF 자산배분 리밸런싱"))
+            else:  # 매도 (목표 초과분)
+                sell_px = px * (1 - self.cfg.slippage_rate)
+                qty = min(held["qty"], int(-diff / sell_px))
+                if qty <= 0:
+                    continue
+                value = qty * sell_px
+                commission = value * self.cfg.commission_rate
+                self.cash += (value - commission)
+                pnl = value - commission - qty * held["avg"]
+                held["qty"] -= qty
+                held["last"] = px
+                if held["qty"] <= 0:
+                    self._etf_pos.pop(tk, None)
+                else:
+                    self._etf_pos[tk] = held
+                self.trades.append(Trade(
+                    date=date_str, ticker=tk, side="sell", price=sell_px, quantity=qty,
+                    value=value, commission=commission, slippage=value * self.cfg.slippage_rate,
+                    pnl=pnl, reason="ETF 자산배분 리밸런싱"))
 
     def _fill_with_offset(self, side: str, df_slice) -> float | None:
         """체결가 유형 + 오프셋%(지정가 모델).
@@ -1175,17 +1340,21 @@ class BacktestEngine:
               and curr_price <= pos.peak_price * (1 - self.cfg.trailing_stop_pct / 100.0)):
             self._execute_sell(ticker, curr_price, date_str, "Trailing-stop triggered")
 
-    def _calc_equity(self, ohlcv_map: dict, sim_date: pd.Timestamp) -> float:
-        """현재 포트폴리오 가치 계산."""
+    def _calc_equity(self, ohlcv_map: dict, sim_date: pd.Timestamp,
+                     etf_map: dict | None = None) -> float:
+        """현재 포트폴리오 가치 — 현금 + 주식 슬리브 + ETF 슬리브."""
         equity = self.cash
         for ticker, pos in self.positions.items():
             if ticker in ohlcv_map:
                 df_to = ohlcv_map[ticker].loc[:sim_date]
                 if not df_to.empty:
                     equity += pos.quantity * float(df_to["close"].iloc[-1])
+        if self._etf_pos:
+            equity += self._etf_value(etf_map, sim_date)
         return equity
 
-    def _build_result(self, duration: float, ohlcv_map: dict) -> dict:
+    def _build_result(self, duration: float, ohlcv_map: dict,
+                      etf_map: dict | None = None) -> dict:
         """ResultFormatter.to_api_response()와 동일한 구조 반환."""
         if not self.equity_history:
             return self._error_response("No simulation data produced")
@@ -1213,9 +1382,22 @@ class BacktestEngine:
             intraday_meta = {**self._intraday,
                              "applied_pct": round(self._intraday["applied"] / tot * 100, 1) if tot else 0.0}
 
+        # 자산배분 ETF 슬리브 최종 구성 (정직: 실제 달성 비중 공개)
+        alloc_meta = None
+        if self.cfg.asset_alloc and self._etf_pos:
+            last_eq = self.equity_history[-1][1] if self.equity_history else 0.0
+            etf_val = self._etf_value(etf_map, None)
+            alloc_meta = {
+                "etf_value": round(etf_val),
+                "etf_pct_actual": round(etf_val / last_eq * 100, 1) if last_eq else 0.0,
+                "holdings": [{"ticker": tk, "qty": h["qty"], "avg": round(h["avg"], 1)}
+                             for tk, h in self._etf_pos.items()],
+            }
+
         return {
             "currency": "KRW",
             "intraday": intraday_meta,
+            "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "ran_at": datetime.now().isoformat(),
@@ -1465,6 +1647,7 @@ def run_backtest(
     sell_fill_offset_pct: float = 0.0,
     max_buy_amount: float | None = None,
     cash_reserve_pct: float = 0.0,
+    asset_alloc: dict | None = None,
     buy_sort_expr: str | None = None,
     buy_sort_desc: bool = True,
     intraday_fill: bool = False,
@@ -1537,6 +1720,7 @@ def run_backtest(
         sell_fill_offset_pct=sell_fill_offset_pct,
         max_buy_amount=max_buy_amount,
         cash_reserve_pct=cash_reserve_pct,
+        asset_alloc=asset_alloc,
         buy_sort_expr=buy_sort_expr,
         buy_sort_desc=buy_sort_desc,
         intraday_fill=intraday_fill,

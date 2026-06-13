@@ -82,6 +82,18 @@ export interface UniverseState {
   totalUniverse: number;
 }
 
+export interface BasketLeg { ticker: string; name: string; weightPct: number }
+export interface AssetAllocState {
+  enabled: boolean;
+  preset: "neutral" | "aggressive" | "stable" | "custom";
+  etfPct: number;          // ETF 슬리브 비중 %
+  stockPct: number;        // 주식 슬리브 비중 % (잔여 = 현금)
+  basket: BasketLeg[];     // 바스켓 ETF 가중(합 100)
+  rebalanceMonths: number; // 리밸런싱 주기 (개월)
+  fillType: string;        // ETF 매수 기준가
+  offsetPct: number;       // 매수 기준 ± %
+}
+
 export interface MarketTimingState {
   on: boolean;
   index: "KOSPI" | "KOSDAQ";        // 기준 지수
@@ -98,7 +110,8 @@ export interface BacktestStrategy {
   slippagePct: number;
   rebalancePeriod: "daily" | "weekly" | "monthly";  // 신규 매수일: 매일(기존) | 주·월 첫 거래일
   signalLag: 0 | 1;        // 신호 기준: 0=당일 봉 포함(기존) | 1=전일 봉 기준(젠포트식 — 시가류 체결 정합)
-  cashReservePct: number;  // 자산배분: 평가자산 대비 현금 상시 보유 % (0=미사용)
+  cashReservePct: number;  // 자산배분(단순 현금): 평가자산 대비 현금 상시 보유 % (0=미사용)
+  assetAlloc: AssetAllocState;  // 자산배분 ETF 바스켓
   intradayFill: boolean;   // 하이브리드 체결: 적재된 분봉으로 매매 시간 윈도 내 정밀 체결
   marketTiming: MarketTimingState;
   buy: BuyState;
@@ -146,6 +159,9 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "재매수 방지", value: b.reBuyBlockDays > 0 ? `${b.reBuyBlockDays}일` : "미사용", muted: b.reBuyBlockDays === 0 },
         { label: "체결가", value: `${fillPriceLabel(b.fillType)}${b.fillOffsetPct !== 0 ? ` ${b.fillOffsetPct > 0 ? "+" : ""}${b.fillOffsetPct}%` : ""}` },
         { label: "현금 비중", value: s.cashReservePct > 0 ? `${s.cashReservePct}% 상시 보유` : "미사용", muted: s.cashReservePct === 0 },
+        { label: "ETF 자산배분", value: s.assetAlloc.enabled
+            ? `ETF ${s.assetAlloc.etfPct}% · 주식 ${s.assetAlloc.stockPct}% (${s.assetAlloc.basket.length}종)`
+            : "미사용", muted: !s.assetAlloc.enabled },
       ]},
       { label: "고급 체결", rows: advRows([["분할", b.splitBuy], ["돌파", b.breakthrough]]) },
       { label: "마켓타이밍", rows: [

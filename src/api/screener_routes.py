@@ -1117,6 +1117,8 @@ class ScreenToBacktestRequest(BaseModel):
     # 종목당 최대 매수 금액(원, None=무제한) + 자산배분 현금 비중 %
     max_buy_amount: float | None = Field(default=None, ge=0)
     cash_reserve_pct: float = Field(default=0.0, ge=0.0, le=90.0)
+    # 자산배분 ETF 바스켓: {etf_pct, stock_pct, basket:[{ticker,weight_pct}], rebalance_months, fill_type, offset_pct}
+    asset_alloc: dict | None = None
     # 매수 우선순위식 (일별) — 봉마다 후보들의 식 값으로 매수 순서 정렬
     buy_sort_expr: str | None = None
     buy_sort_desc: bool = True
@@ -1287,6 +1289,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             sell_fill_offset_pct=req.sell_fill_offset_pct,
             max_buy_amount=req.max_buy_amount,
             cash_reserve_pct=req.cash_reserve_pct,
+            asset_alloc=req.asset_alloc,
             buy_sort_expr=req.buy_sort_expr,
             buy_sort_desc=req.buy_sort_desc,
             intraday_fill=req.intraday_fill,
@@ -1318,6 +1321,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             "screened_count": len(tickers),
             "backtest": bt.get("result", bt),
             "intraday": bt.get("intraday"),  # 하이브리드 체결 적용/폴백 통계 (사용 시)
+            "asset_alloc": bt.get("asset_alloc"),  # ETF 슬리브 최종 구성 (사용 시)
             "backtest_config": {
                 "strategy": eff_strategy,
                 "period": f"{req.start_date} ~ {req.end_date}",

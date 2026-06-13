@@ -8,6 +8,7 @@ import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } fro
 import ConditionFormulaEditor, { type Condition } from "../ConditionFormulaEditor";
 import OffsetInput from "./OffsetInput";
 import LadderEditor from "./LadderEditor";
+import AssetAllocPanel from "./AssetAllocPanel";
 import type { BacktestStrategy, SortDir } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS, FILL_PRICE_GROUPS_NO_EXPR } from "../../../lib/backtest/fillPrice";
 import { SORT_FIELDS } from "../../../lib/backtest/sortFields";
@@ -225,16 +226,20 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
       </Section>
 
-      <Section title="자산배분 옵션" hint="현금 비중 상시 보유" tone="neutral"
-        enabled={s.cashReservePct > 0} onToggle={(on) => set((x) => ({ ...x, cashReservePct: on ? 10 : 0 }))}>
-        <Field label="현금 비중">
-          <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
-            chips={[10, 20, 30]} unit="%" min={0} max={90} />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            평가자산의 N%를 현금으로 상시 유지 — 매수 가용액에서 제외
-          </span>
-        </Field>
-      </Section>
+      {!s.assetAlloc.enabled && (
+        <Section title="현금 비중 (단순)" hint="평가자산 대비 현금 상시 보유" tone="neutral"
+          enabled={s.cashReservePct > 0} onToggle={(on) => set((x) => ({ ...x, cashReservePct: on ? 10 : 0 }))}>
+          <Field label="현금 비중">
+            <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
+              chips={[10, 20, 30]} unit="%" min={0} max={90} />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              평가자산의 N%를 현금으로 상시 유지 — 매수 가용액에서 제외 (ETF 자산배분 사용 시 이 항목은 그쪽으로 통합)
+            </span>
+          </Field>
+        </Section>
+      )}
+
+      <AssetAllocPanel s={s} set={set} />
 
       <Section title="마켓타이밍" hint="지수 조건 포트폴리오 게이트" tone="neutral"
         enabled={s.marketTiming.on} onToggle={(on) => patchMt({ on })}>

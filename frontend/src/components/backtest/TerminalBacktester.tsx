@@ -40,6 +40,8 @@ const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
   rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0, intradayFill: false,
+  assetAlloc: { enabled: false, preset: "aggressive", etfPct: 30, stockPct: 60, basket: [],
+    rebalanceMonths: 3, fillType: "prev_close", offsetPct: 0 },
   marketTiming: { on: false, index: "KOSPI", mode: "block_buy", conditions: [] },
   buy: {
     enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
@@ -123,6 +125,14 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     expiry_fill_offset_pct: sell.expiryFillOffsetPct,
     max_buy_amount: buy.maxBuyAmount > 0 ? buy.maxBuyAmount * 10000 : null,  // 만원 → 원
     cash_reserve_pct: s.cashReservePct,
+    asset_alloc: s.assetAlloc.enabled && s.assetAlloc.basket.length > 0 ? {
+      etf_pct: s.assetAlloc.etfPct,
+      stock_pct: s.assetAlloc.stockPct,
+      rebalance_months: s.assetAlloc.rebalanceMonths,
+      fill_type: s.assetAlloc.fillType,
+      offset_pct: s.assetAlloc.offsetPct,
+      basket: s.assetAlloc.basket.map((l) => ({ ticker: l.ticker, weight_pct: l.weightPct })),
+    } : null,
     max_hold_days: sell.dayTrade ? null : (sell.holdPeriod.max ?? null),
     min_hold_days: sell.dayTrade ? 0 : (sell.holdPeriod.on ? sell.holdPeriod.min : 0),
     day_trade: sell.dayTrade,

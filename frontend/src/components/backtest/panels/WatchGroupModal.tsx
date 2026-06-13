@@ -19,10 +19,10 @@ interface Catalog {
   total: number;
 }
 
-const CLS_LABELS: Array<{ id: "tier" | "sector" | "etf"; label: string }> = [
+const ALL_CLS: Array<{ id: "tier" | "sector" | "etf"; label: string }> = [
   { id: "tier", label: "주식 유니버스" },
   { id: "sector", label: "주식 업종" },
-  { id: "etf", label: "ETF" },
+  { id: "etf", label: "ETF 분류" },
 ];
 
 const tierLabel = (id: string) => CAPS.find((c) => c.id === id)?.label ?? id;
@@ -33,17 +33,20 @@ async function fetchJson(url: string): Promise<Record<string, unknown>> {
   return r.json();
 }
 
-export default function WatchGroupModal({ open, initialName, initialTickers, onClose, onSave }: {
+export default function WatchGroupModal({ open, initialName, initialTickers, onClose, onSave, etfOnly, title }: {
   open: boolean;
   initialName?: string;
   initialTickers?: string[];
   onClose: () => void;
-  onSave: (name: string, tickers: string[]) => void;
+  onSave: (name: string, tickers: string[], items: BrowseItem[]) => void;
+  etfOnly?: boolean;       // 자산군 그룹: ETF 분류만 노출
+  title?: string;
 }) {
   const [name, setName] = useState(initialName ?? "");
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [cls, setCls] = useState<"tier" | "sector" | "etf">("tier");
+  const clsList = etfOnly ? ALL_CLS.filter((c) => c.id === "etf") : ALL_CLS;
+  const [cls, setCls] = useState<"tier" | "sector" | "etf">(etfOnly ? "etf" : "tier");
   const [subId, setSubId] = useState<string>("");
   const [items, setItems] = useState<BrowseItem[]>([]);
   const [query, setQuery] = useState("");
@@ -117,7 +120,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
       <div onClick={(e) => e.stopPropagation()}
         style={{ width: "100%", maxWidth: 680, maxHeight: "86vh", overflow: "auto", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 18, boxShadow: "var(--bs-box-shadow)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>관심종목 그룹 관리</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>{title ?? "관심종목 그룹 관리"}</span>
           <button type="button" onClick={onClose} aria-label="닫기" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}><X size={17} /></button>
         </div>
 
@@ -157,7 +160,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
         {/* 카스케이드: 분류 → 하위 → 종목 */}
         <div style={{ display: "grid", gridTemplateColumns: "120px 168px minmax(0,1fr)", gap: 9, marginBottom: 14 }}>
           <div style={{ border: "1px solid var(--border)", borderRadius: R, overflow: "auto", maxHeight: 240 }}>
-            {CLS_LABELS.map((c) => (
+            {clsList.map((c) => (
               <button key={c.id} type="button" onClick={() => { setCls(c.id); setSubId(""); }}
                 style={{ display: "block", width: "100%", textAlign: "left", fontSize: 13, padding: "9px 11px", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", background: cls === c.id ? "var(--bg-section)" : "transparent", color: cls === c.id ? "var(--text-primary)" : "var(--text-secondary)" }}>
                 {c.label}{c.id === "etf" && catalog ? ` (${catalog.etf_size})` : ""}
@@ -191,7 +194,11 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
           <button type="button" onClick={onClose}
             style={{ fontSize: 13, color: "var(--text-secondary)", background: "var(--bg-section)", border: "1px solid var(--border-strong)", borderRadius: R, padding: "10px 22px", cursor: "pointer" }}>취소</button>
           <button type="button" disabled={!canSave}
-            onClick={() => { onSave(name.trim() || "관심그룹", Array.from(selected.keys())); onClose(); }}
+            onClick={() => {
+              const items = Array.from(selected.entries()).map(([code, nm]) => ({ code, name: nm }));
+              onSave(name.trim() || "관심그룹", Array.from(selected.keys()), items);
+              onClose();
+            }}
             style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: canSave ? "var(--bs-primary, #1200ff)" : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 24px", cursor: canSave ? "pointer" : "not-allowed" }}>
             저장하기
           </button>

@@ -975,6 +975,11 @@ export const backtestBridgeApi = {
     expiry_sell_method?: string;    // all | ladder
     max_buy_amount?: number | null; // 종목당 최대 매수 금액(원)
     cash_reserve_pct?: number;      // 자산배분: 현금 상시 보유 %
+    asset_alloc?: {                 // 자산배분 ETF 바스켓
+      etf_pct: number; stock_pct: number; rebalance_months: number;
+      fill_type: string; offset_pct: number;
+      basket: Array<{ ticker: string; weight_pct: number }>;
+    } | null;
     max_hold_days?: number | null;
     min_hold_days?: number;
     day_trade?: boolean;  // 당일 매매: 당일 진입을 같은 봉 종가에 전량 청산
