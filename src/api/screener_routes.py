@@ -200,6 +200,49 @@ def screener_sectors():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.get("/stock-browse")
+def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = None):
+    """관심종목 그룹 브라우저 (젠포트 관심종목 그룹 관리 모달의 데이터).
+
+    무인자: 분류 카탈로그(티어·업종·ETF 수) / cls+id: 분류별 종목 / q: 이름·코드 검색.
+    데이터는 보유 범위만 정직하게 — 마스터 적재(collect-master) 시 전 주권·ETF로 확장."""
+    try:
+        from src.data.stock_master import get_stock_name
+        from src.engine.universe_select import load_universe_frame
+        df = load_universe_frame()
+
+        def items_of(sub) -> list[dict]:
+            return [{"code": str(c), "name": get_stock_name(str(c))}
+                    for c in sub["ticker"].astype(str).tolist()[:500]]
+
+        if q:
+            ql = str(q).strip()
+            rows = []
+            for code in df["ticker"].astype(str):
+                nm = get_stock_name(code) or ""
+                if ql in code or ql in nm:
+                    rows.append({"code": code, "name": nm})
+                if len(rows) >= 30:
+                    break
+            return {"items": rows}
+        if cls == "tier" and id:
+            return {"items": items_of(df[df["tier"] == id])}
+        if cls == "sector" and id:
+            return {"items": items_of(df[df["sector"] == id])}
+        if cls == "etf":
+            return {"items": items_of(df[df["is_etf"]])}
+        tier_order = ["kospi_l", "kospi_m", "kosdaq_l", "kosdaq_m", "kosdaq_s", "kosdaq_xs"]
+        tiers = [{"id": t, "size": int((df["tier"] == t).sum())}
+                 for t in tier_order if bool((df["tier"] == t).any())]
+        sectors = [{"id": str(s_), "size": int(c)}
+                   for s_, c in df["sector"].dropna().value_counts().items()]
+        return {"tiers": tiers, "sectors": sectors, "etf_size": int(df["is_etf"].sum()),
+                "total": int(len(df))}
+    except Exception:
+        logger.exception("종목 브라우즈 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 @router.get("/cache/stats")
 def screener_cache_stats():
     """캐시 통계 (hit rate 등)."""

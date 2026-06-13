@@ -5,11 +5,12 @@
 // matched/totalUniverse 는 mock — 실제로는 시총군/업종/그룹 변경 시 스크리너 count API 로 재계산.
 
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { Segmented } from "../kit";
 import { universeCount, fetchSectors, type SectorOption } from "../../../lib/backtest/universeApi";
 import type { BacktestStrategy } from "../../../lib/backtest/strategy";
-import { listWatchlists } from "../../../lib/watchlistStorage";
+import { listWatchlists, createWatchlist, deleteWatchlist } from "../../../lib/watchlistStorage";
+import WatchGroupModal from "./WatchGroupModal";
 
 export const CAPS = [
   { id: "kospi_l", label: "코스피 대형" }, { id: "kospi_m", label: "코스피 중소형" },
@@ -66,14 +67,30 @@ export default function UniversePanel({ s, set, live = true }: {
     return () => ctrl.abort();
   }, []);
 
-  // 관심그룹: watchlistStorage 에서 실제 종목코드 로드 (mount 1회)
-  useEffect(() => {
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+
+  // 관심그룹: watchlistStorage 에서 실제 종목코드 로드. 모드(none/include/exclude)는 보존.
+  const reloadGroups = () => {
     try {
       const wls = listWatchlists();
-      patch({ groups: wls.map((w) => ({ id: w.id, name: w.name, mode: "none" as const, tickers: w.tickers })) });
+      const prevMode = new Map(u.groups.map((g) => [g.id, g.mode]));
+      patch({ groups: wls.map((w) => ({ id: w.id, name: w.name, mode: prevMode.get(w.id) ?? "none", tickers: w.tickers })) });
     } catch { /* ignore */ }
+  };
+  // mount 1회 로드
+  useEffect(() => {
+    reloadGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleSaveGroup = (name: string, tickers: string[]) => {
+    createWatchlist(name, tickers);
+    reloadGroups();
+  };
+  const handleDeleteGroup = (id: string) => {
+    deleteWatchlist(id);
+    reloadGroups();
+  };
 
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 16 }}>
@@ -144,22 +161,31 @@ export default function UniversePanel({ s, set, live = true }: {
       {/* 관심그룹 (watchlistStorage 연동) */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
         <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>관심그룹 · 매수 대상/제외</span>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{u.groups.length}개</span>
+        <button type="button" onClick={() => setGroupModalOpen(true)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "4px 9px", cursor: "pointer" }}>
+          <Plus size={12} /> 그룹 추가
+        </button>
       </div>
       {u.groups.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>관심그룹이 없습니다 — 관심목록에서 종목을 추가하세요.</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>관심그룹이 없습니다 — "그룹 추가"로 종목을 묶어보세요.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {u.groups.map((g, i) => (
             <div key={g.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--border)", borderRadius: R, padding: "8px 11px" }}>
               <span style={{ fontSize: 13, color: "var(--text-primary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name} ({g.tickers.length})</span>
-              <Segmented tone={g.mode === "exclude" ? "sell" : "buy"} value={g.mode}
-                onChange={(mode) => patch({ groups: u.groups.map((x, j) => (j === i ? { ...x, mode } : x)) })}
-                options={[{ id: "none", label: "선택 안 함" }, { id: "include", label: "대상" }, { id: "exclude", label: "제외" }]} />
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Segmented tone={g.mode === "exclude" ? "sell" : "buy"} value={g.mode}
+                  onChange={(mode) => patch({ groups: u.groups.map((x, j) => (j === i ? { ...x, mode } : x)) })}
+                  options={[{ id: "none", label: "선택 안 함" }, { id: "include", label: "대상" }, { id: "exclude", label: "제외" }]} />
+                <button type="button" aria-label="그룹 삭제" onClick={() => handleDeleteGroup(g.id)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", flexShrink: 0 }}><X size={14} /></button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <WatchGroupModal open={groupModalOpen} onClose={() => setGroupModalOpen(false)} onSave={handleSaveGroup} />
     </div>
   );
 }
