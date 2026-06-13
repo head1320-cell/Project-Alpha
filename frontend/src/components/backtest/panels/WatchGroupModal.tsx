@@ -1,7 +1,7 @@
 "use client";
-// 관심종목 그룹 관리 모달 (젠포트 미러) — 그룹명 + 종목 검색 + 분류 카스케이드
-// (주식 유니버스→티어 / 주식 업종 / ETF) → 종목 체크 → 저장(watchlistStorage).
-// 데이터는 백엔드 /stock-browse — 보유 분류만 정직하게 노출(마스터 적재 시 자동 확장).
+// 관심종목 그룹 관리 모달 (젠포트 미러) — 그룹명 + 종목 검색 + 4단 카스케이드:
+//   주식 유니버스(6티어) / 주식 업종(17그룹) / 주식 테마(88세부) / ETF 분류
+// → 종목 체크 → 저장(watchlistStorage). 데이터는 백엔드 /stock-browse.
 
 import { useEffect, useMemo, useState } from "react";
 import { X, Search } from "lucide-react";
@@ -11,17 +11,20 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const R = "var(--bs-border-radius)";
 const RL = "var(--bs-border-radius-lg)";
 
+type ClsId = "tier" | "group" | "theme" | "etf";
 interface BrowseItem { code: string; name: string }
 interface Catalog {
   tiers: Array<{ id: string; size: number }>;
-  sectors: Array<{ id: string; size: number }>;
+  groups: Array<{ id: string; size: number }>;
+  themes: Array<{ id: string; group: string; size: number }>;
   etf_size: number;
   total: number;
 }
 
-const ALL_CLS: Array<{ id: "tier" | "sector" | "etf"; label: string }> = [
+const ALL_CLS: Array<{ id: ClsId; label: string }> = [
   { id: "tier", label: "주식 유니버스" },
-  { id: "sector", label: "주식 업종" },
+  { id: "group", label: "주식 업종" },
+  { id: "theme", label: "주식 테마" },
   { id: "etf", label: "ETF 분류" },
 ];
 
@@ -46,7 +49,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const clsList = etfOnly ? ALL_CLS.filter((c) => c.id === "etf") : ALL_CLS;
-  const [cls, setCls] = useState<"tier" | "sector" | "etf">(etfOnly ? "etf" : "tier");
+  const [cls, setCls] = useState<ClsId>(etfOnly ? "etf" : "tier");
   const [subId, setSubId] = useState<string>("");
   const [items, setItems] = useState<BrowseItem[]>([]);
   const [query, setQuery] = useState("");
@@ -90,7 +93,8 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
   const subOptions = useMemo(() => {
     if (!catalog) return [];
     if (cls === "tier") return catalog.tiers.map((t) => ({ id: t.id, label: `${tierLabel(t.id)} (${t.size})` }));
-    if (cls === "sector") return catalog.sectors.map((s) => ({ id: s.id, label: `${s.id} (${s.size})` }));
+    if (cls === "group") return (catalog.groups ?? []).map((g) => ({ id: g.id, label: `${g.id} (${g.size})` }));
+    if (cls === "theme") return (catalog.themes ?? []).map((t) => ({ id: t.id, label: `${t.id} (${t.size})` }));
     return [];
   }, [catalog, cls]);
 
@@ -169,9 +173,11 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
           </div>
           <div style={{ border: "1px solid var(--border)", borderRadius: R, overflow: "auto", maxHeight: 240 }}>
             {cls === "etf" ? (
-              <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 10 }}>
-                {catalog?.etf_size ? "전체 ETF" : "ETF 데이터 없음 — 마스터 적재(collect-master) 후 표시"}
-              </div>
+              <button type="button" onClick={() => setSubId("__etf__")}
+                style={{ display: "block", width: "100%", textAlign: "left", fontSize: 13, padding: "8px 11px", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", background: subId === "__etf__" ? "var(--bg-section)" : "transparent", color: catalog?.etf_size ? "var(--text-secondary)" : "var(--text-muted)" }}>
+                전체 ETF{catalog?.etf_size ? ` (${catalog.etf_size})` : " — 마스터 적재 후"}
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>국내 시장지수·해외·채권 등 하위분류는 데이터 한계</div>
+              </button>
             ) : subOptions.length === 0 ? (
               <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 10 }}>분류 없음</div>
             ) : subOptions.map((o) => (

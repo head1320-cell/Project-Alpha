@@ -55,6 +55,21 @@ def test_theme_tree_endpoint():
     assert 반도체["subsectors"][0]["id"].startswith("theme:")
 
 
+def test_stock_browse_cascade():
+    # 관심종목 모달 4단 카스케이드 — 주식 업종(17)/주식 테마(88)
+    from src.api.screener_routes import stock_browse
+    cat = stock_browse()
+    assert len(cat["groups"]) == 17 and len(cat["themes"]) == 88
+    # 주식 업종 → 그룹 멤버
+    g = stock_browse(cls="group", id="반도체")["items"]
+    assert any(it["code"] == "005930" for it in g)        # 삼성전자
+    # 주식 테마 → 세부 멤버
+    t = stock_browse(cls="theme", id="반도체 장비")["items"]
+    assert any(it["code"] == "042700" for it in t)        # 한미반도체
+    # 미시드 테마 → 빈
+    assert stock_browse(cls="theme", id="블랙박스")["items"] == []
+
+
 def test_select_universe_theme(monkeypatch):
     from src.engine.universe_select import select_universe
     # 게임 세부 → 시드 종목만

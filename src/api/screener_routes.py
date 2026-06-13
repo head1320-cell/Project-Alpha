@@ -246,16 +246,35 @@ def screener_theme_tree():
 def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = None):
     """관심종목 그룹 브라우저 (젠포트 관심종목 그룹 관리 모달의 데이터).
 
-    무인자: 분류 카탈로그(티어·업종·ETF 수) / cls+id: 분류별 종목 / q: 이름·코드 검색.
-    데이터는 보유 범위만 정직하게 — 마스터 적재(collect-master) 시 전 주권·ETF로 확장."""
+    4단 카스케이드(젠포트 미러):
+      · tier  주식 유니버스 → 6티어 → 종목
+      · group 주식 업종     → 17 테마그룹 → 그룹 멤버 종목(시드)
+      · theme 주식 테마     → 88 세부업종 → 세부 멤버 종목(시드)
+      · etf   ETF 분류      → (하위분류 데이터 한계 — 전체 ETF) → 종목
+    무인자: 분류 카탈로그 / q: 이름·코드 검색. 마스터 적재 시 전 주권으로 확장."""
     try:
+        from src.data.genport_themes import (
+            THEME_TREE,
+            group_members,
+            theme_members,
+        )
         from src.data.stock_master import get_stock_name
         from src.engine.universe_select import load_universe_frame
         df = load_universe_frame()
+        listed = set(df["ticker"].astype(str))
 
-        def items_of(sub) -> list[dict]:
+        def items_of_frame(sub) -> list[dict]:
             return [{"code": str(c), "name": get_stock_name(str(c))}
                     for c in sub["ticker"].astype(str).tolist()[:500]]
+
+        def items_of_codes(codes: list[str]) -> list[dict]:
+            # 시드 종목 — 상장 프레임에 있는 것 우선, 이름은 마스터/DART
+            out = []
+            for c in codes:
+                c = str(c)
+                out.append({"code": c, "name": get_stock_name(c) or c,
+                            "listed": c in listed})
+            return out
 
         if q:
             ql = str(q).strip()
@@ -268,18 +287,27 @@ def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = 
                     break
             return {"items": rows}
         if cls == "tier" and id:
-            return {"items": items_of(df[df["tier"] == id])}
-        if cls == "sector" and id:
-            return {"items": items_of(df[df["sector"] == id])}
+            return {"items": items_of_frame(df[df["tier"] == id])}
+        if cls == "group" and id:        # 주식 업종 — 17 테마그룹
+            return {"items": items_of_codes(group_members(id))}
+        if cls == "theme" and id:        # 주식 테마 — 88 세부업종
+            return {"items": items_of_codes(theme_members(id))}
+        if cls == "sector" and id:       # (구) 실데이터 KRX 업종 — 호환 유지
+            return {"items": items_of_frame(df[df["sector"] == id])}
         if cls == "etf":
-            return {"items": items_of(df[df["is_etf"]])}
+            return {"items": items_of_frame(df[df["is_etf"]])}
+
+        # 카탈로그
         tier_order = ["kospi_l", "kospi_m", "kosdaq_l", "kosdaq_m", "kosdaq_s", "kosdaq_xs"]
         tiers = [{"id": t, "size": int((df["tier"] == t).sum())}
                  for t in tier_order if bool((df["tier"] == t).any())]
+        groups = [{"id": g, "size": len(group_members(g))} for g in THEME_TREE]
+        themes = [{"id": sub, "group": g, "size": len(theme_members(sub))}
+                  for g, subs in THEME_TREE.items() for sub in subs]
         sectors = [{"id": str(s_), "size": int(c)}
                    for s_, c in df["sector"].dropna().value_counts().items()]
-        return {"tiers": tiers, "sectors": sectors, "etf_size": int(df["is_etf"].sum()),
-                "total": int(len(df))}
+        return {"tiers": tiers, "groups": groups, "themes": themes, "sectors": sectors,
+                "etf_size": int(df["is_etf"].sum()), "total": int(len(df))}
     except Exception:
         logger.exception("종목 브라우즈 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
