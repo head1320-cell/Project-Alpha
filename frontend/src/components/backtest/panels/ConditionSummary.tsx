@@ -3,7 +3,7 @@
 // 현재 설정 전체를 읽기 전용 카드로 표시. buildSummary(strategy, tab)가 단일 소스.
 // 편집 패널과 같은 상태(s)를 읽으므로 설정 변경이 즉시 반영된다(라이브 미러).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { buildSummary, type BacktestStrategy, type SummaryTab } from "../../../lib/backtest/strategy";
 import { TONES, type Tone } from "../kit";
 
@@ -16,8 +16,22 @@ const TABS: Array<{ id: SummaryTab; label: string; tone: Tone }> = [
   { id: "universe", label: "매매대상", tone: "neutral" },
 ];
 
-export default function ConditionSummary({ s }: { s: BacktestStrategy }) {
-  const [tab, setTab] = useState<SummaryTab>("buy");
+export default function ConditionSummary({ s, activeTab, onTabChange }: {
+  s: BacktestStrategy;
+  /** 편집 중인 탭 — 요약이 이를 따라간다(동기화). 없으면 독립 동작 */
+  activeTab?: SummaryTab;
+  /** 요약 탭 클릭 시 편집 탭도 전환 (단일 소스 동기화) */
+  onTabChange?: (t: SummaryTab) => void;
+}) {
+  const [tab, setTab] = useState<SummaryTab>(activeTab ?? "buy");
+  // 편집 탭이 바뀌면 요약도 따라감 (#1). 요약 탭 클릭은 onTabChange로 편집 탭까지 전환.
+  useEffect(() => {
+    if (activeTab) setTab(activeTab);
+  }, [activeTab]);
+  const handleTab = (t: SummaryTab) => {
+    setTab(t);
+    onTabChange?.(t);
+  };
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
   const groups = buildSummary(s, tab);
 
@@ -31,7 +45,7 @@ export default function ConditionSummary({ s }: { s: BacktestStrategy }) {
       {/* 매수/매도/매매대상 탭 */}
       <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-strong)", borderRadius: R, overflow: "hidden", marginBottom: 14 }}>
         {TABS.map((t) => (
-          <button key={t.id} type="button" onClick={() => setTab(t.id)}
+          <button key={t.id} type="button" onClick={() => handleTab(t.id)}
             style={{ flex: 1, fontSize: 12, fontWeight: tab === t.id ? 600 : 400, padding: "7px 0", border: "none", cursor: "pointer",
               background: tab === t.id ? TONES[t.tone].bg : "var(--bg-card)",
               color: tab === t.id ? TONES[t.tone].text : "var(--text-secondary)" }}>

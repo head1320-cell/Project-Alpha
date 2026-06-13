@@ -827,12 +827,8 @@ h6 { font-size: 1rem; }
 .terminal-main .bottom-left { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
 .terminal-main .bottom-right { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
 
-/* Terminal meta-stamp (페이지에서 사용) */
-.meta-stamp {
-  position: absolute; top: -8px; right: 0;
-  font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
-  text-align: right; line-height: 1.6; z-index: 2; pointer-events: none;
-}
+/* Terminal meta-stamp — 전 페이지에서 숨김 (REF_ID/ENGINE/AUTH 장식 제거) */
+.meta-stamp { display: none !important; }
 .terminal-breadcrumb {
   font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
   margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;

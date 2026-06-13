@@ -162,6 +162,28 @@ export default function UniversePanel({ s, set, live = true }: {
         </div>
       )}
 
+      {/* 선택 현황 요약 — 매매 대상 탭 하단 채움 + 빠른 확인 */}
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px dashed var(--border-strong)" }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 9 }}>선택 현황</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+          {([
+            ["매매 대상", `${u.matched.toLocaleString()} / ${u.totalUniverse.toLocaleString()}`],
+            ["시총군", u.caps.length >= CAPS.length ? "전체" : `${u.caps.length} / ${CAPS.length}군`],
+            ["업종", u.sectors.filter((x) => x.startsWith("theme:")).length > 0
+              ? `${u.sectors.filter((x) => x.startsWith("theme:")).length} / 88개` : "전체"],
+            ["관심그룹", `${u.groups.filter((g) => g.mode !== "none").length}개 적용`],
+          ] as const).map(([label, val]) => (
+            <div key={label} style={{ border: "1px solid var(--border)", borderRadius: R, padding: "9px 10px" }}>
+              <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
+              <div style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{val}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+          매매 대상을 확정했으면 아래 <b>백테스트 실행</b>으로 진행하세요.
+        </div>
+      </div>
+
       <WatchGroupModal open={groupModalOpen} onClose={() => setGroupModalOpen(false)} onSave={handleSaveGroup} />
     </div>
   );

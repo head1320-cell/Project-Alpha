@@ -143,7 +143,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "분봉 체결", value: s.intradayFill ? "정밀 (적재된 날만)" : "일봉 모델", muted: !s.intradayFill },
       ]},
       { label: "매수 조건", rows: [
-        { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미설정", muted: !b.conditions.length },
+        { label: "조건식", value: b.conditions.length ? b.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "없음 (전 종목 대상)", muted: !b.conditions.length },
         { label: "논리식", value: b.logicExpr.trim() || "모두 AND", muted: !b.logicExpr.trim() },
         { label: "우선순위", value: b.sortExpr.trim()
             ? `식: ${b.sortExpr.trim().slice(0, 24)}${b.sortExpr.trim().length > 24 ? "…" : ""} ${b.sortExprDesc ? "↓" : "↑"}`
@@ -190,7 +190,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
           { label: "최대 보유", value: v.holdPeriod.max != null ? `${v.holdPeriod.max}일` : "미설정", muted: v.holdPeriod.max == null },
         ]},
       { label: "조건 매도", rows: [
-        { label: "조건식", value: v.conditions.length ? v.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "미사용", muted: !v.conditions.length },
+        { label: "조건식", value: v.conditions.length ? v.conditions.map((_, i) => String.fromCharCode(65 + i)).join(", ") : "없음 (신호 매도 미사용)", muted: !v.conditions.length },
         { label: "논리식", value: v.logicExpr.trim() || "하나라도 (OR)", muted: !v.logicExpr.trim() },
       ]},
       { label: "매도 시간", rows: [{ label: "시간대", value: `${v.timeStart}~${v.timeEnd}` }] },

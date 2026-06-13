@@ -56,21 +56,9 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
             <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
           </div>
           <div className="project-name">
-            Project Alpha <span className="version">v2.0.4</span>
+            Project Alpha
           </div>
         </Link>
-
-        <div className="header-actions">
-          <div className="search-trigger">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            Quick Search...
-            <span className="kbd">⌘ K</span>
-          </div>
-          <div className="account">
-            <div className="account-label">Institutional Terminal</div>
-            <div className="avatar" />
-          </div>
-        </div>
       </header>
 
       {/* ─── App body: sidebar + main ─── */}
@@ -89,17 +77,6 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-
-          <div className="system-status">
-            <div className="status-pill">
-              <div className="pulse" />
-              SYSTEM OPERATIONAL
-            </div>
-            <div className="status-meta">
-              LATENCY: 12ms<br />
-              NODE: KR-SEOUL-1
-            </div>
-          </div>
         </aside>
 
         <main className="terminal-main">

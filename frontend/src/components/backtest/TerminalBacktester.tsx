@@ -332,20 +332,22 @@ export default function TerminalBacktester() {
           </div>
         </div>
 
-        <ConditionSummary s={s} />
+        <ConditionSummary s={s} activeTab={tab} onTabChange={setTab} />
       </div>
 
-      {/* 실행 */}
-      <div style={{ marginTop: 16 }}>
-        <button className="tbt-run" onClick={run} disabled={loading} style={{ width: "100%" }}>
-          {loading ? "백테스트 실행 중..." : "백테스트 실행"}
-        </button>
-        {loading && (
-          <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", marginTop: 8, lineHeight: 1.5 }}>
-            과거 시세 로드 + 전략 시뮬레이션 중...<br />최대 ~15초 소요됩니다.
-          </div>
-        )}
-      </div>
+      {/* 실행 — 매매 대상 설정 탭에서만 노출 (혼동 방지) */}
+      {tab === "universe" && (
+        <div style={{ marginTop: 16 }}>
+          <button className="tbt-run" onClick={run} disabled={loading} style={{ width: "100%" }}>
+            {loading ? "백테스트 실행 중..." : "백테스트 실행"}
+          </button>
+          {loading && (
+            <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", marginTop: 8, lineHeight: 1.5 }}>
+              과거 시세 로드 + 전략 시뮬레이션 중...<br />최대 ~15초 소요됩니다.
+            </div>
+          )}
+        </div>
+      )}
 
         {/* 분석 뷰포트 */}
         <div className="tbt-viewport">
