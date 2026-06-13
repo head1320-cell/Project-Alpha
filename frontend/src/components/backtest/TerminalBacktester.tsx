@@ -8,7 +8,7 @@ import {
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/lib/screenerHandoff";
 import { exportTradesCsv, exportSummaryCsv } from "@/lib/strategyStorage";
 import {
-  STRATEGY_TEMPLATES, listSavedStrategies, saveBacktestStrategy, deleteSavedStrategy,
+  listSavedStrategies, saveBacktestStrategy, deleteSavedStrategy,
   mergeStrategy, type SavedBacktestStrategy,
 } from "@/lib/backtest/strategyLibrary";
 import BuyConditionPanel from "./panels/BuyConditionPanel";
@@ -190,6 +190,7 @@ export default function TerminalBacktester() {
   const [err, setErr] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<ScreenerStrategyHandoff | null>(null);
   const [saved, setSaved] = useState<SavedBacktestStrategy[]>([]);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const h = getScreenerHandoff();
@@ -200,9 +201,14 @@ export default function TerminalBacktester() {
   const handleSaveStrategy = () => {
     saveBacktestStrategy(s);
     setSaved(listSavedStrategies());
+    setSaveMsg(`'${s.name || "내 전략"}' 저장됨 — 새로고침·재방문 후에도 유지됩니다`);
+    setTimeout(() => setSaveMsg(null), 4000);
   };
-  const handleLoadStrategy = (item: SavedBacktestStrategy) =>
+  const handleLoadStrategy = (item: SavedBacktestStrategy) => {
     setS(mergeStrategy(initialStrategy(), item.strategy));
+    setSaveMsg(`'${item.name}' 불러옴`);
+    setTimeout(() => setSaveMsg(null), 3000);
+  };
   const handleDeleteStrategy = (id: string) => {
     deleteSavedStrategy(id);
     setSaved(listSavedStrategies());
@@ -255,54 +261,7 @@ export default function TerminalBacktester() {
         </div>
       )}
 
-      {/* 전략 라이브러리: 이름·저장 + 템플릿 + 저장된 전략 */}
-      <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-        <input
-          value={s.name}
-          onChange={(e) => setS((x) => ({ ...x, name: e.target.value }))}
-          placeholder="전략 이름"
-          style={{ fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
-            borderRadius: "var(--bs-border-radius)", padding: "7px 11px", width: 170, background: "var(--bg-card)" }}
-        />
-        <button type="button" onClick={handleSaveStrategy}
-          style={{ fontSize: 13, color: "#fff", background: "var(--text-primary)", border: "none",
-            borderRadius: "var(--bs-border-radius)", padding: "8px 14px", cursor: "pointer" }}>
-          저장
-        </button>
-        <span style={{ width: 1, alignSelf: "stretch", background: "var(--border)", margin: "0 4px" }} />
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>템플릿</span>
-        {STRATEGY_TEMPLATES.map((t) => (
-          <button key={t.id} type="button" title={t.desc} onClick={() => setS(t.apply(initialStrategy()))}
-            style={{ fontSize: 12, color: "var(--text-secondary)", background: "var(--bg-section)",
-              border: "1px solid var(--border)", borderRadius: "var(--bs-border-radius)", padding: "7px 11px", cursor: "pointer" }}>
-            {t.name}
-          </button>
-        ))}
-        {saved.length > 0 && (
-          <>
-            <span style={{ width: 1, alignSelf: "stretch", background: "var(--border)", margin: "0 4px" }} />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>내 전략 {saved.length}</span>
-            {saved.map((item) => (
-              <span key={item.id} style={{ display: "inline-flex", alignItems: "center", gap: 5,
-                border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)",
-                background: "var(--bg-card)", padding: "6px 9px" }}>
-                <button type="button" title={`불러오기 · ${new Date(item.savedAt).toLocaleDateString()}`}
-                  onClick={() => handleLoadStrategy(item)}
-                  style={{ fontSize: 12, color: "var(--text-primary)", background: "none", border: "none",
-                    cursor: "pointer", padding: 0, maxWidth: 140, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {item.name}
-                </button>
-                <button type="button" aria-label="삭제" onClick={() => handleDeleteStrategy(item.id)}
-                  style={{ fontSize: 12, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  ✕
-                </button>
-              </span>
-            ))}
-          </>
-        )}
-      </div>
-
-      {/* 편집 영역(좌) + 조건 요약(우) — 젠포트식 2컬럼 */}
+      {/* 편집 영역(좌) + 조건 요약·액션(우) — 젠포트식 2컬럼 */}
       <div className="tbt-config-row">
         <div className="tbt-config-main">
           {/* 매수 / 매도 / 매매 대상 탭 */}
@@ -332,22 +291,50 @@ export default function TerminalBacktester() {
           </div>
         </div>
 
-        <ConditionSummary s={s} activeTab={tab} onTabChange={setTab} />
-      </div>
+        {/* 우측 컬럼: 조건 요약(스크롤) + 액션 박스(하단 고정) */}
+        <div className="tbt-right-col">
+          <ConditionSummary s={s} activeTab={tab} onTabChange={setTab} />
 
-      {/* 실행 — 매매 대상 설정 탭에서만 노출 (혼동 방지) */}
-      {tab === "universe" && (
-        <div style={{ marginTop: 16 }}>
-          <button className="tbt-run" onClick={run} disabled={loading} style={{ width: "100%" }}>
-            {loading ? "백테스트 실행 중..." : "백테스트 실행"}
-          </button>
-          {loading && (
-            <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", marginTop: 8, lineHeight: 1.5 }}>
-              과거 시세 로드 + 전략 시뮬레이션 중...<br />최대 ~15초 소요됩니다.
+          {/* 액션 박스 — 전략 저장 + 백테스트 실행 (현재 설정 그대로 동작) */}
+          <div className="tbt-action-box">
+            <div className="tbt-action-row">
+              <input value={s.name} onChange={(e) => setS((x) => ({ ...x, name: e.target.value }))}
+                placeholder="전략 이름" className="tbt-action-name" />
+              <button type="button" onClick={handleSaveStrategy} className="tbt-action-save"
+                title="현재 설정을 브라우저에 저장 (새로고침·재방문 후에도 유지)">
+                전략 저장
+              </button>
             </div>
-          )}
+            <button type="button" onClick={run} disabled={loading} className="tbt-run" style={{ width: "100%" }}>
+              {loading ? "백테스트 실행 중..." : "백테스트 실행"}
+            </button>
+            {saveMsg && <div className="tbt-action-msg">{saveMsg}</div>}
+            {loading && (
+              <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                과거 시세 로드 + 전략 시뮬레이션 중... 최대 ~15초.
+              </div>
+            )}
+
+            {/* 저장된 전략 — 불러오기/삭제 (영속) */}
+            {saved.length > 0 && (
+              <div className="tbt-saved-list">
+                <div className="tbt-saved-head">저장된 전략 {saved.length}</div>
+                {saved.map((item) => (
+                  <div key={item.id} className="tbt-saved-item">
+                    <button type="button" className="tbt-saved-load"
+                      title={`불러오기 · ${new Date(item.savedAt).toLocaleString()}`}
+                      onClick={() => handleLoadStrategy(item)}>
+                      {item.name}
+                    </button>
+                    <button type="button" aria-label="삭제" className="tbt-saved-del"
+                      onClick={() => handleDeleteStrategy(item.id)}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
 
         {/* 분석 뷰포트 */}
         <div className="tbt-viewport">

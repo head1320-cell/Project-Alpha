@@ -36,7 +36,7 @@ export default function ConditionSummary({ s, activeTab, onTabChange }: {
   const groups = buildSummary(s, tab);
 
   return (
-    <aside className="tbt-summary" style={{ position: "sticky", top: 16, alignSelf: "start",
+    <aside className="tbt-summary" style={{
       background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>내가 설정한 조건 보기</span>

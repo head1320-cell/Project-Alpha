@@ -1630,11 +1630,37 @@ h6 { font-size: 1rem; }
   .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }
 }
 
-/* 백테스터 편집(좌) + 조건 요약(우) 2컬럼 — 젠포트식 */
+/* 백테스터 편집(좌) + 조건 요약·액션(우) 2컬럼 — 젠포트식 */
 .tbt-config-row { display: flex; gap: 16px; align-items: flex-start; margin-top: 16px; }
 .tbt-config-main { flex: 1; min-width: 0; }
-.tbt-summary { width: 320px; flex-shrink: 0; max-height: calc(100vh - 32px); overflow-y: auto; }
+/* 우측 컬럼: 뷰포트 높이에 고정, 요약은 스크롤 / 액션 박스는 하단 고정 */
+.tbt-right-col { width: 320px; flex-shrink: 0; position: sticky; top: 16px;
+  display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 32px); }
+.tbt-summary { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* 액션 박스 (전략 저장 + 백테스트 실행) */
+.tbt-action-box { flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--bs-border-radius-lg); padding: 12px; display: flex; flex-direction: column; gap: 9px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.03); }
+.tbt-action-row { display: flex; gap: 8px; }
+.tbt-action-name { flex: 1; min-width: 0; font-size: 13px; color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: var(--bs-border-radius); padding: 8px 10px; background: var(--bg-card); }
+.tbt-action-save { flex-shrink: 0; font-size: 13px; font-weight: 500; color: #fff; background: var(--text-primary);
+  border: none; border-radius: var(--bs-border-radius); padding: 8px 14px; cursor: pointer; }
+.tbt-action-save:hover { opacity: 0.9; }
+.tbt-action-msg { font-size: 11px; color: #16a34a; line-height: 1.5; }
+.tbt-saved-list { border-top: 1px dashed var(--border-strong); padding-top: 9px; display: flex; flex-direction: column; gap: 5px;
+  max-height: 160px; overflow-y: auto; }
+.tbt-saved-head { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.tbt-saved-item { display: flex; align-items: center; gap: 6px; }
+.tbt-saved-load { flex: 1; min-width: 0; text-align: left; font-size: 12px; color: var(--text-primary);
+  background: var(--bg-section); border: 1px solid var(--border-strong); border-radius: var(--bs-border-radius);
+  padding: 6px 9px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbt-saved-load:hover { border-color: var(--bs-primary, #1200ff); }
+.tbt-saved-del { flex-shrink: 0; font-size: 12px; color: var(--text-muted); background: none; border: none; cursor: pointer; }
+.tbt-saved-del:hover { color: #dc2626; }
 @media (max-width: 1180px) {
   .tbt-config-row { flex-direction: column; }
-  .tbt-summary { width: 100%; position: static !important; max-height: none; }
+  .tbt-right-col { width: 100%; position: static; max-height: none; }
+  .tbt-summary { max-height: none; }
 }
