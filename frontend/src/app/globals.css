@@ -1633,3 +1633,12 @@ h6 { font-size: 1rem; }
   .lp-section-head, .lp-footer { padding-left: 24px; padding-right: 24px; }
   .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }
 }
+
+/* 백테스터 편집(좌) + 조건 요약(우) 2컬럼 — 젠포트식 */
+.tbt-config-row { display: flex; gap: 16px; align-items: flex-start; margin-top: 16px; }
+.tbt-config-main { flex: 1; min-width: 0; }
+.tbt-summary { width: 320px; flex-shrink: 0; max-height: calc(100vh - 32px); overflow-y: auto; }
+@media (max-width: 1180px) {
+  .tbt-config-row { flex-direction: column; }
+  .tbt-summary { width: 100%; position: static !important; max-height: none; }
+}

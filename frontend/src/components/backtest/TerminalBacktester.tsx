@@ -14,6 +14,7 @@ import {
 import BuyConditionPanel from "./panels/BuyConditionPanel";
 import SellConditionPanel from "./panels/SellConditionPanel";
 import UniversePanel, { CAPS } from "./panels/UniversePanel";
+import ConditionSummary from "./panels/ConditionSummary";
 import type { BacktestStrategy, SummaryTab } from "@/lib/backtest/strategy";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -301,30 +302,37 @@ export default function TerminalBacktester() {
         )}
       </div>
 
-      {/* 매수 / 매도 / 매매 대상 탭 */}
-      <div className="tbt-mode-switch">
-        <button className={`tbt-mode${tab === "buy" ? " active" : ""}`} onClick={() => setTab("buy")}>
-          <span className="tbt-mode-num">01</span>
-          매수 조건
-          <span className="tbt-mode-sub">Buy</span>
-        </button>
-        <button className={`tbt-mode${tab === "sell" ? " active" : ""}`} onClick={() => setTab("sell")}>
-          <span className="tbt-mode-num">02</span>
-          매도 조건
-          <span className="tbt-mode-sub">Sell</span>
-        </button>
-        <button className={`tbt-mode${tab === "universe" ? " active" : ""}`} onClick={() => setTab("universe")}>
-          <span className="tbt-mode-num">03</span>
-          매매 대상
-          <span className="tbt-mode-sub">Universe</span>
-        </button>
-      </div>
+      {/* 편집 영역(좌) + 조건 요약(우) — 젠포트식 2컬럼 */}
+      <div className="tbt-config-row">
+        <div className="tbt-config-main">
+          {/* 매수 / 매도 / 매매 대상 탭 */}
+          <div className="tbt-mode-switch">
+            <button className={`tbt-mode${tab === "buy" ? " active" : ""}`} onClick={() => setTab("buy")}>
+              <span className="tbt-mode-num">01</span>
+              매수 조건
+              <span className="tbt-mode-sub">Buy</span>
+            </button>
+            <button className={`tbt-mode${tab === "sell" ? " active" : ""}`} onClick={() => setTab("sell")}>
+              <span className="tbt-mode-num">02</span>
+              매도 조건
+              <span className="tbt-mode-sub">Sell</span>
+            </button>
+            <button className={`tbt-mode${tab === "universe" ? " active" : ""}`} onClick={() => setTab("universe")}>
+              <span className="tbt-mode-num">03</span>
+              매매 대상
+              <span className="tbt-mode-sub">Universe</span>
+            </button>
+          </div>
 
-      {/* 조건 설정 패널 */}
-      <div style={{ marginTop: 16 }}>
-        {tab === "buy" && <BuyConditionPanel s={s} set={setS} />}
-        {tab === "sell" && <SellConditionPanel s={s} set={setS} />}
-        {tab === "universe" && <UniversePanel s={s} set={setS} />}
+          {/* 조건 설정 패널 */}
+          <div style={{ marginTop: 16 }}>
+            {tab === "buy" && <BuyConditionPanel s={s} set={setS} />}
+            {tab === "sell" && <SellConditionPanel s={s} set={setS} />}
+            {tab === "universe" && <UniversePanel s={s} set={setS} />}
+          </div>
+        </div>
+
+        <ConditionSummary s={s} />
       </div>
 
       {/* 실행 */}
