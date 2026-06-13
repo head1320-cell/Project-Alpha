@@ -185,15 +185,35 @@ def screener_universes():
 
 @router.get("/sectors")
 def screener_sectors():
-    """업종(테마) 카탈로그 — 종목 선택용. {id, label, size, sample}."""
+    """업종(테마) 카탈로그 — 종목 선택용. {id, label, size, sample}.
+
+    collect-master 적재 시: 마스터 지수업종 코드로 전 종목을 그룹화(평면 10 → 실데이터
+    세분). 미적재 시: curated STOCK_SECTOR(10) 폴백 — 기존 동작 불변."""
     try:
+        # 마스터 프레임이 있으면 실데이터 업종(전 종목)으로 확장
+        try:
+            from src.data.stock_master import load_master_flags
+            from src.engine.universe_select import load_universe_frame
+            if load_master_flags():
+                df = load_universe_frame()
+                sub = df[df["sector"].notna() & ~df["is_etf"]]
+                groups = sub.groupby("sector")["ticker"].apply(list)
+                items = [{"id": f"sector:{name}", "label": str(name), "size": len(codes),
+                          "sample": [str(c) for c in codes[:5]]}
+                         for name, codes in groups.items()]
+                if items:
+                    items.sort(key=lambda x: -x["size"])
+                    return {"sectors": items, "source": "master"}
+        except Exception:
+            pass
         from src.engine.screener import get_sector_universe
         sectors = get_sector_universe()
         return {
             "sectors": [
                 {"id": f"sector:{name}", "label": name, "size": len(codes), "sample": codes[:5]}
                 for name, codes in sorted(sectors.items(), key=lambda x: -len(x[1]))
-            ]
+            ],
+            "source": "curated",
         }
     except Exception:
         logger.exception("업종 카탈로그 조회 실패")

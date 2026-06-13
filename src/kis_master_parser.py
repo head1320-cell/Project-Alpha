@@ -151,6 +151,8 @@ def parse_krx_master(content: bytes, market: str) -> list[dict]:
                 "group_code": tail.get("그룹코드") or "",        # ST주권 / EF ETF / RT리츠 …
                 "cap_size": tail.get("시가총액규모") or "",       # 1대 / 2중 / 3소
                 "sector_code": tail.get("지수업종대분류") or "",
+                "sector_mid": tail.get("지수업종중분류") or "",   # 중분류 (세분류 트리용)
+                "sector_sub": tail.get("지수업종소분류") or "",   # 소분류
                 "is_managed": tail.get("관리종목") == "Y",
                 "alert_code": tail.get("시장경고") or "00",       # 00정상 / 01주의 / 02경고 / 03위험
                 "is_halted": tail.get("거래정지") == "Y",
@@ -320,11 +322,17 @@ async def collect_master_files(engine=None) -> dict:
             # sanity: 실파일 오프셋 정합 확인용 (삼성전자 시총 >100조=1,000,000억, 업종코드 채움 비율)
             ss = next((s for s in all_symbols if s["ticker"] == "005930"), None)
             with_tail = [s for s in all_symbols if "sector_code" in s]
+            etf_count = sum(1 for s in all_symbols if (s.get("group_code") or "") in ("EF", "EN"))
+            distinct_sectors = len({s.get("sector_code") for s in with_tail if s.get("sector_code")})
+            distinct_mids = len({s.get("sector_mid") for s in with_tail if s.get("sector_mid")})
             sanity = {
                 "samsung_mcap_억": (ss or {}).get("market_cap_억"),
                 "tail_parsed_pct": round(len(with_tail) / len(all_symbols) * 100, 1),
                 "sector_filled_pct": round(
                     sum(1 for s in with_tail if s.get("sector_code")) / max(len(with_tail), 1) * 100, 1),
+                "etf_count": etf_count,                    # ETF 모달 채워질 종목 수
+                "distinct_sector_codes": distinct_sectors,  # 업종 대분류 그룹 수 (세분류 트리)
+                "distinct_sector_mids": distinct_mids,      # 중분류 그룹 수
             }
         except Exception as e:
             logger.error(f"master flags cache save failed: {e}")

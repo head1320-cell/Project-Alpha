@@ -98,8 +98,10 @@ _CAP_SIZE_PROXY = {
 def _master_frame() -> pd.DataFrame | None:
     """KIS 마스터 플래그 캐시 → 전종목(~2,700) 프레임. 캐시 없으면 None(프리셋 폴백).
 
-    시총(억)은 마스터 값 → 실제 6단계 tier. 업종은 STOCK_SECTOR 한글명이 있으면 사용
-    (마스터 지수업종코드의 한글 라벨 매핑은 미보유 — 코드만 보존됨). ETF/ETN은 그룹코드."""
+    시총(억)은 마스터 값 → 실제 6단계 tier. ETF/ETN은 그룹코드.
+    업종(sector): curated STOCK_SECTOR 한글명 우선, 없으면 마스터 지수업종 대분류 코드를
+    라벨 해석(sector_labels — 오버라이드 있으면 한글, 없으면 '업종 {코드}' 정직 폴백).
+    sector_code/sector_mid 컬럼으로 세분류 트리 지원(전 종목 실데이터 그룹화)."""
     try:
         from src.data.stock_master import load_master_flags
         flags = load_master_flags()
@@ -116,6 +118,7 @@ def _master_frame() -> pd.DataFrame | None:
                 sector_map[str(c)] = sector
     except Exception:
         pass
+    from src.data.sector_labels import label_for
     etf_extra = _etf_codes()
 
     rows = []
@@ -128,13 +131,18 @@ def _master_frame() -> pd.DataFrame | None:
         )
         tier = _tier_from_mcap(market, float(mcap) if mcap else None, proxy)
         group = f.get("group_code") or "ST"
+        sec_code = str(f.get("sector_code") or "")
+        # curated 한글 우선 → 마스터 코드 라벨 → None
+        sector = sector_map.get(str(code)) or label_for(sec_code)
         rows.append({
             "ticker": str(code), "market": market, "tier": tier,
-            "sector": sector_map.get(str(code)),
+            "sector": sector, "sector_code": sec_code,
+            "sector_mid": str(f.get("sector_mid") or ""),
             "market_cap": float(mcap) if mcap else None,
             "is_etf": group in ("EF", "EN") or str(code) in etf_extra,
         })
-    return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector", "market_cap", "is_etf"])
+    return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector",
+                                       "sector_code", "sector_mid", "market_cap", "is_etf"])
 
 
 @lru_cache(maxsize=1)
@@ -180,9 +188,11 @@ def load_universe_frame() -> pd.DataFrame:
         tier = _tier_from_mcap(market, mcap, proxy)
         rows.append({
             "ticker": c, "market": market, "tier": tier,
-            "sector": sector_map.get(c), "market_cap": mcap, "is_etf": c in etf,
+            "sector": sector_map.get(c), "sector_code": "", "sector_mid": "",
+            "market_cap": mcap, "is_etf": c in etf,
         })
-    return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector", "market_cap", "is_etf"])
+    return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector",
+                                       "sector_code", "sector_mid", "market_cap", "is_etf"])
 
 
 def tickers_asof(date: str, engine=None, min_count: int = 50) -> list[str]:

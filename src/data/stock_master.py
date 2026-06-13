@@ -330,6 +330,8 @@ def save_master_flags(symbols: list[dict]) -> int:
             "group_code": s.get("group_code", ""),
             "cap_size": s.get("cap_size", ""),
             "sector_code": s.get("sector_code", ""),
+            "sector_mid": s.get("sector_mid", ""),
+            "sector_sub": s.get("sector_sub", ""),
             "is_managed": bool(s.get("is_managed")),
             "alert_code": s.get("alert_code", "00"),
             "is_halted": bool(s.get("is_halted")),
