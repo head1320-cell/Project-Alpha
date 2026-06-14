@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { analysisApi, verdictColor, formatKrw, type ScreenerItem } from "@/lib/screenerApi";
+import PageHeader from "@/components/layout/PageHeader";
+import SectionHead from "@/components/layout/SectionHead";
+import { MiniViz } from "@/components/common/MiniViz";
 
 const PRESET_TICKERS = [
   { code: "005930", name: "삼성전자" },
@@ -43,41 +46,47 @@ export default function CompanyPage() {
         STATUS: LIVE_FEED
       </div>
 
-      <div className="terminal-breadcrumb">Modules / <span>Company Analysis</span></div>
-
-      {/* 종목 선택 */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value.replace(/[^0-9]/g, ""))}
-          onKeyDown={(e) => e.key === "Enter" && lookup(ticker)}
-          placeholder="종목코드"
-          style={{ fontFamily: "var(--t-mono)", fontSize: 13, padding: "8px 12px", border: "1px solid var(--t-border)", borderRadius: 2, width: 120 }}
-        />
-        <button onClick={() => lookup(ticker)} style={{ fontFamily: "var(--t-mono)", fontSize: 12, padding: "8px 16px", background: "var(--t-accent)", color: "#fff", border: "none", borderRadius: 2, cursor: "pointer" }}>
-          ANALYZE
-        </button>
-        <div style={{ width: 1, height: 24, background: "var(--t-border)", margin: "0 4px" }} />
-        {PRESET_TICKERS.map((t) => (
-          <button key={t.code} onClick={() => lookup(t.code)}
-            style={{ fontSize: 12, padding: "6px 10px", border: `1px solid ${ticker === t.code ? "var(--t-accent)" : "var(--t-border)"}`, background: ticker === t.code ? "rgba(18,0,255,0.04)" : "#fff", color: ticker === t.code ? "var(--t-accent)" : "var(--t-muted)", borderRadius: 2, cursor: "pointer" }}>
-            {t.name}
-          </button>
-        ))}
-      </div>
+      <PageHeader
+        eyebrow="COMPANY / DEEP ANALYSIS"
+        index="04 / 05"
+        title="Company Analysis"
+        intro="DART 재무 PIT(공시시차 반영) 기반 심층 분석 — RIM·DCF·DDM 내재가치와 점수 분해를 제공합니다."
+        status="EXCHANGE: KRX"
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <input
+            className="tticker-input"
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value.replace(/[^0-9]/g, ""))}
+            onKeyDown={(e) => e.key === "Enter" && lookup(ticker)}
+            placeholder="종목코드"
+          />
+          <button className="tticker-analyze" onClick={() => lookup(ticker)}>ANALYZE</button>
+          <span className="tticker-divider" />
+          {PRESET_TICKERS.map((t) => (
+            <button
+              key={t.code}
+              onClick={() => lookup(t.code)}
+              className={`tchip-toggle${ticker === t.code ? " active" : ""}`}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      </PageHeader>
 
       {loading && <div style={{ color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 13 }}>[ LOADING ] 기업 분석 중...</div>}
-      {err && <div style={{ color: "#dc2626", fontFamily: "var(--t-mono)", fontSize: 13 }}>[ ERROR ] {err}</div>}
+      {err && <div style={{ color: "var(--color-bear)", fontFamily: "var(--t-mono)", fontSize: 13 }}>[ ERROR ] {err}</div>}
 
       {company && vc && (
         <div className="animate-fade-in">
-          {/* 기업 헤더 */}
+          {/* 기업 헤더 (페이지 타이틀과 구분 — div로 강등하여 h1 중복 방지) */}
           <div className="tcompany-header">
             <div>
-              <h1 style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em", margin: 0 }}>
+              <div style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em", margin: 0 }}>
                 {company.corp_name}
                 <span className="tticker-badge">{company.stock_code}</span>
-              </h1>
+              </div>
               <div style={{ fontSize: 14, color: "var(--t-muted)", marginTop: 4 }}>{company.sector || "—"}</div>
             </div>
             <div style={{ textAlign: "right" }}>
@@ -90,8 +99,8 @@ export default function CompanyPage() {
             </div>
           </div>
 
-          {/* 메트릭 바 */}
-          <div className="tmetrics-bar" style={{ marginBottom: 32 }}>
+          <SectionHead label="KEY METRICS" index="01 / 03" />
+          <div className="tmetrics-bar">
             {[
               { label: "Market Cap", value: company.market_cap_억 != null ? `₩${formatKrw(company.market_cap_억)}억` : "—" },
               { label: "P/E (LTM)", value: company.per != null ? `${company.per.toFixed(1)}x` : "—" },
@@ -107,25 +116,11 @@ export default function CompanyPage() {
             ))}
           </div>
 
-          {/* 가치평가 + 점수 */}
+          <SectionHead label="VALUATION & SCORE" index="02 / 03" />
           <div className="tlayout-row">
             {/* 내재가치 vs 현재가 */}
             <div className="tsection-card">
               <div className="tsection-label">Intrinsic Value vs Price (RIM · DCF · DDM)</div>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, color: "var(--t-muted)" }}>통합 내재가치</span>
-                  <span style={{ fontSize: 24, fontWeight: 600, fontFamily: "var(--t-mono)", color: vc.fg }}>
-                    ₩{Math.round(company.intrinsic_value).toLocaleString()}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span style={{ color: "var(--t-muted)" }}>괴리율</span>
-                  <span style={{ fontFamily: "var(--t-mono)", fontWeight: 600, color: vc.fg }}>
-                    {company.gap_pct >= 0 ? "+" : ""}{company.gap_pct.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
               <div className="tvaluation-row">
                 <span className="v-model">RIM (잔여이익)</span>
                 <span className="v-price">{company.rim_value != null ? `₩${Math.round(company.rim_value).toLocaleString()}` : "—"}</span>
@@ -138,32 +133,45 @@ export default function CompanyPage() {
                 <span className="v-model">DDM (배당할인)</span>
                 <span className="v-price">{company.ddm_value != null ? `₩${Math.round(company.ddm_value).toLocaleString()}` : "—"}</span>
               </div>
+              <div className="tmetric-rows">
+                <div className="mr">
+                  <span>통합 내재가치</span>
+                  <span className="mr-val" style={{ color: vc.fg, fontSize: 14 }}>₩{Math.round(company.intrinsic_value).toLocaleString()}</span>
+                </div>
+                <div className="mr">
+                  <span>현재가 대비 괴리율</span>
+                  <span className="mr-val" style={{ color: vc.fg }}>{company.gap_pct >= 0 ? "+" : ""}{company.gap_pct.toFixed(1)}%</span>
+                </div>
+              </div>
             </div>
 
             {/* 점수 분해 */}
             <div className="tsection-card">
-              <div className="tsection-label">Composite Score Breakdown</div>
-              <div style={{ textAlign: "center", marginBottom: 20 }}>
-                <div style={{ fontSize: 40, fontWeight: 600, fontFamily: "var(--t-mono)", color: vc.fg }}>
-                  {company.composite_score.toFixed(1)}
+              <div className="tsection-label">Composite Score &amp; Breakdown</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 40, fontWeight: 600, fontFamily: "var(--t-mono)", color: vc.fg, lineHeight: 1, letterSpacing: "-0.02em" }}>
+                    {company.composite_score.toFixed(1)}
+                  </div>
+                  <div className="tstat-sub" style={{ textTransform: "uppercase", marginTop: 6 }}>/ 100 · {company.verdict}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--t-muted)", fontFamily: "var(--t-mono)", textTransform: "uppercase" }}>Composite Score</div>
+                <div style={{ width: 120, flexShrink: 0 }}><MiniViz kind="gauge" /></div>
               </div>
-              {[
-                { label: "Valuation (괴리)", score: company.gap_score },
-                { label: "Profitability (ROE)", score: company.roe_score },
-                { label: "Stability (안정성)", score: company.stability_score },
-              ].map((s) => (
-                <div key={s.label} style={{ marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                    <span style={{ color: "var(--t-muted)" }}>{s.label}</span>
-                    <span style={{ fontFamily: "var(--t-mono)" }}>{s.score?.toFixed(0) ?? "—"}</span>
+              <div className="tmetric-rows">
+                {[
+                  { label: "Valuation (괴리)", score: company.gap_score },
+                  { label: "Profitability (ROE)", score: company.roe_score },
+                  { label: "Stability (안정성)", score: company.stability_score },
+                ].map((s) => (
+                  <div key={s.label} className="mr">
+                    <span>{s.label}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="mr-val">{s.score?.toFixed(0) ?? "—"}</span>
+                      <span className="tscore-bar"><i style={{ width: `${Math.min(100, s.score ?? 0)}%` }} /></span>
+                    </span>
                   </div>
-                  <div style={{ height: 6, background: "var(--t-surface)", borderRadius: 2, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, s.score ?? 0)}%`, background: "var(--t-accent)", borderRadius: 2 }} />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

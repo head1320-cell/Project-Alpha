@@ -1630,6 +1630,74 @@ h6 { font-size: 1rem; }
   .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Terminal Page Chrome — 랜딩(lp-*) 모티프를 셸(--t-* 토큰)로 이식
+   .terminal-main 40px 패딩 안에서 동작(풀블리드 아님 → 코너마크/그리드와 무충돌)
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* 모노 eyebrow — .lp-eyebrow + .lp-mono 미러 */
+.t-eyebrow { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--t-accent); display: block; margin-bottom: 14px; }
+/* 페이지 헤더 블록 (eyebrow + index + title + intro + status) */
+.tpage-head { margin-bottom: 36px; }
+.tpage-head-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.tpage-index { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
+  color: var(--t-muted); text-transform: uppercase; white-space: nowrap; }
+.tpage-intro { font-size: 13.5px; line-height: 1.7; color: var(--t-muted); max-width: 680px; margin-top: 14px; }
+.tpage-status { display: inline-flex; align-items: center; gap: 6px; font-family: var(--t-mono);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-muted); }
+.tpage-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-accent); }
+/* 인덱스 달린 구분선 섹션 헤드 — .lp-section-head 미러(패딩 내부) */
+.tpage-section-head { display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0; margin: 28px 0 20px;
+  border-top: 1px solid var(--t-border); border-bottom: 1px solid var(--t-border); color: var(--t-muted); }
+.tpage-section-head .sh-label { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--t-ink); }
+.tpage-section-head .sh-index { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--t-muted); }
+/* 큰 모노 스탯 값 — .lp-stat-val / .lp-stat-key / .lp-stat-sub 미러 */
+.tstat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1px solid var(--t-border); border-radius: 2px; }
+.tstat { padding: 22px 20px; border-right: 1px solid var(--t-border); border-bottom: 1px solid var(--t-border); }
+.tstat-key { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--t-muted); margin-bottom: 10px; display: block; }
+.tstat-val { font-family: var(--t-mono); font-size: 30px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1; margin-bottom: 8px; color: var(--t-ink); }
+.tstat-sub { font-size: 11.5px; color: var(--t-muted); opacity: 0.85; line-height: 1.5; }
+/* 점선 구분 메트릭 행 — .lp-module-metrics 미러 */
+.tmetric-rows { border-top: 1px dashed var(--t-border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.tmetric-rows .mr { display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--t-mono); font-size: 12px; color: var(--t-muted); }
+.tmetric-rows .mr-val { color: var(--t-ink); font-weight: 500; }
+/* 미니 비주얼 SVG 래퍼 (page.tsx Visual 5종 이식) */
+.t-miniviz { width: 100%; height: 38px; display: block; }
+/* 공용 토글 칩 — Company 프리셋 + Risk 시나리오 (.tscreener-cat-item.active 미러) */
+.tchip-toggle { font-family: var(--t-mono); font-size: 12px; padding: 6px 12px;
+  border: 1px solid var(--t-border); background: #fff; color: var(--t-muted); border-radius: 2px; cursor: pointer; }
+.tchip-toggle:hover { border-color: var(--t-muted); }
+.tchip-toggle.active { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,0.04); }
+.tscenario-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Company 티커 입력바 (인라인 스타일 → 클래스) */
+.tticker-input { font-family: var(--t-mono); font-size: 13px; padding: 8px 12px;
+  border: 1px solid var(--t-border); border-radius: 2px; width: 120px; }
+.tticker-analyze { font-family: var(--t-mono); font-size: 12px; padding: 8px 16px;
+  background: var(--t-accent); color: #fff; border: none; border-radius: 2px; cursor: pointer; }
+.tticker-analyze:hover { opacity: 0.92; }
+.tticker-divider { width: 1px; height: 24px; background: var(--t-border); margin: 0 4px; }
+/* Macro 자산배분 다이버징 바 (인라인 → 클래스, 부호 색은 데이터 구동) */
+.talloc-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+.talloc-name { width: 130px; font-size: 13px; }
+.talloc-track { flex: 1; height: 8px; background: var(--t-surface); border-radius: 2px; position: relative; }
+.talloc-fill { position: absolute; height: 100%; }
+.talloc-val { width: 64px; text-align: right; font-family: var(--t-mono); font-size: 12px; }
+/* Company 점수 분해 바 */
+.tscore-bar { height: 6px; width: 90px; background: var(--t-surface); border-radius: 2px; overflow: hidden;
+  display: inline-block; vertical-align: middle; }
+.tscore-bar > i { display: block; height: 100%; background: var(--t-accent); }
+/* 데이터 출처 배지 (REAL/MOCK) */
+.tdata-badge { font-family: var(--t-mono); font-size: 10px; padding: 2px 8px; border-radius: 2px;
+  background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
+.tdata-badge.real { background: var(--color-bull-bg); color: #15803d; border-color: var(--color-bull-bg); }
+
 /* 백테스터 편집(좌) + 조건 요약·액션(우) 2컬럼 — 젠포트식 */
 .tbt-config-row { display: flex; gap: 16px; align-items: flex-start; margin-top: 16px; }
 .tbt-config-main { flex: 1; min-width: 0; }

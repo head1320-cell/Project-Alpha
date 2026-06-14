@@ -3,6 +3,7 @@
 import { useState } from "react";
 import TerminalScreener from "@/components/screener/TerminalScreener";
 import StockDetail from "@/components/valuation/StockDetail";
+import PageHeader from "@/components/layout/PageHeader";
 import { type ScreenerItem } from "@/lib/screenerApi";
 
 export default function ScreenerPage() {
@@ -18,9 +19,13 @@ export default function ScreenerPage() {
       </div>
 
       {/* 헤더 */}
-      <div className="terminal-breadcrumb">Modules / <span>Equity Screener</span></div>
-      <div className="flex items-end justify-between" style={{ marginBottom: 32, gap: 24 }}>
-        <h1 className="terminal-h1" style={{ marginBottom: 0 }}>Universal Stock Screener</h1>
+      <PageHeader
+        eyebrow="EQUITY / MULTI-FACTOR SCREEN"
+        index="01 / 05"
+        title="Universal Stock Screener"
+        intro="~2,700개 전 주권을 290+ 팩터로 필터링 — 자연어 검색·라이브 카운트로 조건을 좁혀 그대로 백테스터로 전송합니다."
+        status="LIVE COUNT"
+      >
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <label style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Universe</label>
           <select
@@ -38,7 +43,7 @@ export default function ScreenerPage() {
             <option value="mapped">DART 매핑</option>
           </select>
         </div>
-      </div>
+      </PageHeader>
 
       {/* 스크리너 + 상세 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
