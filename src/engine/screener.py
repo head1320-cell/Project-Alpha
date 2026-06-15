@@ -348,6 +348,7 @@ class ValuationScreener:
         use_macro: bool = False,    # M3: 현재 국면 기반 동적 Composite 가중치
         as_of_date: str | None = None,  # V2-M4: PIT 스크리닝 기준일 (look-ahead 차단)
         liquidity_floor=None,       # V3-P1.5: 유동성 게이트 ("standard"|"off"|dict, 기본 standard)
+        progress_cb=None,           # 진행 콜백 (done, total, misses) — SSE 스트리밍 진행표시용
     ) -> ScreenerResult:
         """
         전체 파이프라인:
@@ -398,6 +399,9 @@ class ValuationScreener:
                 ex.submit(self._evaluate_one_safe, ticker, params): ticker
                 for ticker in tickers
             }
+            done = 0
+            total = len(tickers)
+            step = max(1, total // 100)   # 진행 이벤트 최대 ~100개로 throttle
             for future in as_completed(future_to_ticker):
                 ticker = future_to_ticker[future]
                 try:
@@ -409,6 +413,12 @@ class ValuationScreener:
                 except Exception as e:
                     logger.error(f"종목 {ticker} 평가 실패: {e}")
                     failures += 1
+                done += 1
+                if progress_cb is not None and (done % step == 0 or done == total):
+                    try:
+                        progress_cb(done, total, self.cache.misses - miss_start)
+                    except Exception:
+                        pass
 
         cache_hits = self.cache.hits - cache_start
         cache_misses = self.cache.misses - miss_start

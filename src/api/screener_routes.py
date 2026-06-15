@@ -400,62 +400,111 @@ def screener_fields():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
+    """run-advanced 본체 — /run-advanced 와 /run-advanced-stream 공용. progress_cb 로 진행 전달."""
+    from src.engine.filter_ast import parse_group
+    from src.engine.valuation.valuation_models import ValuationParams
+
+    screener = get_screener()
+    ast = parse_group(req.filter_ast.model_dump())
+
+    err = ast.validate()
+    if err:
+        raise HTTPException(400, f"필터 검증 실패: {err}")
+
+    universe = req.custom_tickers if req.custom_tickers else req.universe
+    params = ValuationParams(beta=req.beta, projection_years=req.projection_years)
+
+    result = screener.run(
+        universe=universe,
+        sort_by=req.sort_by,
+        ascending=req.ascending,
+        limit=req.limit,
+        params=params,
+        filter_ast=ast,
+        use_macro=req.use_macro,
+        liquidity_floor=req.liquidity_floor,
+        progress_cb=progress_cb,
+    )
+
+    # V3-P1.5: 유동성 게이트 통계
+    liq_stats = getattr(screener, "_liquidity_stats", {})
+
+    # V3 M0: 후처리 analyzer 실행 (요청 시)
+    analyzer_results = {}
+    if req.analyzers:
+        from src.engine.analyzers import run_analyzers
+        analyzer_results = run_analyzers(result.items, req.analyzers, req.analyzer_params)
+
+    return {
+        "universe":        result.universe,
+        "total_evaluated": result.total_evaluated,
+        "total_passed":    result.total_passed,
+        "elapsed_seconds": result.elapsed_seconds,
+        "cache_hits":      result.cache_hits,
+        "cache_misses":    result.cache_misses,
+        "failures":        result.failures,
+        "timestamp":       result.timestamp,
+        "items":           [it.to_dict() for it in result.items],
+        "analyzers":       analyzer_results,
+        "liquidity_gate":  liq_stats,
+        "data_source":     _detect_data_source(result.items),
+    }
+
+
 @router.post("/run-advanced")
 def screener_run_advanced(req: AdvancedRunRequest):
     """AST 기반 고급 스크리닝 (AND/OR 중첩 + 절대값 + 상대 랭킹)."""
     try:
-        from src.engine.filter_ast import parse_group
-        from src.engine.valuation.valuation_models import ValuationParams
-
-        screener = get_screener()
-        ast = parse_group(req.filter_ast.model_dump())
-
-        err = ast.validate()
-        if err:
-            raise HTTPException(400, f"필터 검증 실패: {err}")
-
-        universe = req.custom_tickers if req.custom_tickers else req.universe
-        params = ValuationParams(beta=req.beta, projection_years=req.projection_years)
-
-        result = screener.run(
-            universe=universe,
-            sort_by=req.sort_by,
-            ascending=req.ascending,
-            limit=req.limit,
-            params=params,
-            filter_ast=ast,
-            use_macro=req.use_macro,
-            liquidity_floor=req.liquidity_floor,
-        )
-
-        # V3-P1.5: 유동성 게이트 통계
-        liq_stats = getattr(screener, "_liquidity_stats", {})
-
-        # V3 M0: 후처리 analyzer 실행 (요청 시)
-        analyzer_results = {}
-        if req.analyzers:
-            from src.engine.analyzers import run_analyzers
-            analyzer_results = run_analyzers(result.items, req.analyzers, req.analyzer_params)
-
-        return {
-            "universe":        result.universe,
-            "total_evaluated": result.total_evaluated,
-            "total_passed":    result.total_passed,
-            "elapsed_seconds": result.elapsed_seconds,
-            "cache_hits":      result.cache_hits,
-            "cache_misses":    result.cache_misses,
-            "failures":        result.failures,
-            "timestamp":       result.timestamp,
-            "items":           [it.to_dict() for it in result.items],
-            "analyzers":       analyzer_results,
-            "liquidity_gate":  liq_stats,
-            "data_source":     _detect_data_source(result.items),
-        }
+        return _run_advanced_core(req)
     except HTTPException:
         raise
     except Exception:
         logger.exception("스크리너 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/run-advanced-stream")
+def screener_run_advanced_stream(req: AdvancedRunRequest):
+    """run-advanced 의 SSE 스트리밍판 — 종목별 평가 진행(done/total/misses)을 실시간 전송 후 결과.
+
+    프론트가 "N/유니버스 종목 업데이트" 진행표시에 사용. 평가 완료마다 progress 이벤트를
+    흘려보낸다(최대 ~100개로 throttle), 마지막에 result(또는 error) 1건."""
+    import json
+    import queue
+    import threading
+    from fastapi.responses import StreamingResponse
+
+    q: "queue.Queue" = queue.Queue()
+
+    def cb(done, total, misses):
+        q.put({"type": "progress", "done": done, "total": total, "misses": misses})
+
+    def worker():
+        try:
+            payload = _run_advanced_core(req, progress_cb=cb)
+            q.put({"type": "result", "data": payload})
+        except HTTPException as he:
+            q.put({"type": "error", "message": str(he.detail), "status": he.status_code})
+        except Exception:
+            logger.exception("스트리밍 스크리너 실패")
+            q.put({"type": "error", "message": "처리 중 오류가 발생했습니다."})
+        finally:
+            q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def gen():
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/count")

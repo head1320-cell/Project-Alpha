@@ -7,7 +7,7 @@
 //   · 종목 클릭 → '기업 분석 탭으로 가기' → /insights 핸드오프.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type MouseEvent as ReactMouseEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   screenerApiAdvanced, screenerApi, verdictColor,
@@ -19,6 +19,12 @@ import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/li
 import FactorPickerModal, { type FactorPick } from "@/components/backtest/FactorPickerModal";
 
 const OP_LABEL: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
+// 시가총액 빠른 필터 프리셋 (억 단위). 실데이터(KIS) 연결 시 market_cap_억 채워져 동작.
+const MCAP_PRESETS: Array<{ id: string; label: string; min: number | null; max: number | null }> = [
+  { id: "large", label: "대형 1조+", min: 10000, max: null },
+  { id: "mid", label: "중형 2천억~1조", min: 2000, max: 10000 },
+  { id: "small", label: "소형 ~2천억", min: null, max: 2000 },
+];
 
 interface FieldMeta { higher_better?: boolean; typical_min?: number; typical_max?: number; label: string; unit?: string }
 
@@ -47,7 +53,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [labelOverride, setLabelOverride] = useState<Record<string, string>>({});
   const [results, setResults] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [progN, setProgN] = useState(0);
+  const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
+  const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);
   const [sortCol, setSortCol] = useState("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
@@ -124,43 +131,55 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t); }, [notice]);
 
-  // ── 라이브 스크리닝 (group 변경 시 디바운스 실행) ──
+  // ── 라이브 스크리닝 (SSE 스트리밍 — 종목별 진행 실시간 + 최종 결과) ──
   useEffect(() => {
-    setLoading(true);
+    setLoading(true); setProg(null);
+    const ctrl = new AbortController();
+    let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const r = await screenerApiAdvanced.runAdvanced({
-          universe, filter_ast: group, sort_by: "composite_score",
-          ascending: false, limit: 200, liquidity_floor: "relaxed",
-        });
-        setResults(r);
-      } catch { /* noop */ }
-      finally { setLoading(false); }
+        const r = await screenerApiAdvanced.runAdvancedStream(
+          { universe, filter_ast: group, sort_by: "composite_score", ascending: false, limit: 200, liquidity_floor: "relaxed" },
+          (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); },
+          ctrl.signal,
+        );
+        if (!cancelled) setResults(r);
+      } catch { /* aborted or error */ }
+      finally { if (!cancelled) setLoading(false); }
     }, 350);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
   }, [group, universe]);
 
-  // ── 데이터 확충 진행 표시 (단일 호출이라, 로딩 중엔 추정 램프 → 완료 시 실측치) ──
-  const progTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ── 칩별 미리보기 카운트 (각 조건 단독 통과 종목 수, 디바운스) ──
   useEffect(() => {
-    const target = universeSizes[universe] ?? results?.total_evaluated ?? 130;
-    if (loading) {
-      setProgN(0);
-      const cap = Math.max(1, Math.floor(target * 0.9));
-      const step = Math.max(1, Math.floor(target / 22));
-      progTimer.current = setInterval(() => setProgN((p) => (p >= cap ? cap : p + step)), 55);
-    } else if (progTimer.current) {
-      clearInterval(progTimer.current); progTimer.current = null;
-    }
-    return () => { if (progTimer.current) { clearInterval(progTimer.current); progTimer.current = null; } };
-  }, [loading, universe, universeSizes, results]);
-  useEffect(() => { if (results && !loading) setProgN(results.total_evaluated); }, [results, loading]);
+    if (!group.conditions.length) { setChipCounts([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const counts = await Promise.all(group.conditions.map((c) =>
+        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: [c], groups: [] }, limit: 1 })
+          .then((r) => r.total_passed).catch(() => null),
+      ));
+      if (!cancelled) setChipCounts(counts);
+    }, 450);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [group, universe]);
 
   const removeCondition = (idx: number) => setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
   const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) =>
     setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
   const clearAll = () => { setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null); };
   const toggleLogic = () => setGroup((g) => ({ ...g, logic: g.logic === "AND" ? "OR" : "AND" }));
+  // 시가총액 빠른 필터 — market_cap_억 조건 교체
+  const applyMcap = (min: number | null, max: number | null) => {
+    setGroup((g) => {
+      const conds = g.conditions.filter((c) => c.field !== "market_cap_억");
+      if (min != null) conds.push({ kind: "field", field: "market_cap_억", op: "gte", value: min });
+      if (max != null) conds.push({ kind: "field", field: "market_cap_억", op: "lte", value: max });
+      return { ...g, conditions: conds };
+    });
+    setLabelOverride((m) => ({ ...m, market_cap_억: "시가총액" }));
+  };
+  const mcapActive = group.conditions.some((c) => c.field === "market_cap_억");
 
   const toggleFav = (code: string, e: ReactMouseEvent) => {
     e.stopPropagation();
@@ -233,6 +252,18 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             {group.conditions.length > 0 && <button className="bsc-rail-clear" onClick={clearAll}>전체 초기화</button>}
           </div>
           <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
+
+          {/* 시가총액 빠른 필터 (버틀러식) */}
+          <div className="bsc-mcap">
+            <div className="bsc-mcap-head">시가총액</div>
+            <div className="bsc-mcap-btns">
+              <button className={`bsc-mcap-btn${!mcapActive ? " active" : ""}`} onClick={() => applyMcap(null, null)}>전체</button>
+              {MCAP_PRESETS.map((p) => (
+                <button key={p.id} className="bsc-mcap-btn" onClick={() => applyMcap(p.min, p.max)}>{p.label}</button>
+              ))}
+            </div>
+            <div className="bsc-mcap-note">ⓘ 실데이터 연결 시 동작 (mock은 시총 미제공)</div>
+          </div>
 
           {group.conditions.length >= 2 && (
             <div className="bsc-logic">
@@ -315,6 +346,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                       <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onChange={(e) => updateCondition(idx, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
                     </>
                   )}
+                  {chipCounts[idx] != null && <span className="bsc-chip-count" title="이 조건 단독 통과 종목 수">{chipCounts[idx]!.toLocaleString()}</span>}
                   <span className="bsc-chip-del" onClick={() => removeCondition(idx)}>✕</span>
                 </span>
               );
@@ -331,10 +363,10 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <button className="bsc-bt-btn" onClick={exportCsv} disabled={!sortedItems.length} title="현재 결과를 CSV로 내보내기">⤓ CSV</button>
             <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">이 전략 백테스트 →</button>
           </div>
-          {/* 데이터 확충 진행 (작은 글씨) */}
+          {/* 데이터 확충 진행 (실시간 SSE — 작은 글씨) */}
           <div className="bsc-progress">
             {loading
-              ? <>데이터 확충 중… <b>{Math.min(progN, uniTotal).toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 업데이트</>
+              ? <>데이터 확충 중… <b>{(prog?.done ?? 0).toLocaleString()}</b>/{(prog?.total ?? uniTotal).toLocaleString()} 종목 업데이트{prog && prog.misses > 0 ? ` · 신규 ${prog.misses.toLocaleString()}` : ""}</>
               : results
                 ? <>평가 완료 <b>{results.total_evaluated.toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 · 신규 {results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s</>
                 : <>대기 중…</>}

@@ -1518,6 +1518,16 @@ h6 { font-size: 1rem; }
 /* 데이터 확충 진행 표시 (작은 글씨) */
 .bsc-progress { font-family: var(--t-mono); font-size: 11px; color: var(--t-muted); margin: -4px 2px 12px; }
 .bsc-progress b { color: var(--t-accent); font-weight: 600; }
+/* 칩 미리보기 카운트 (조건 단독 통과 수) */
+.bsc-chip-count { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 8px; padding: 0 5px; }
+/* 시가총액 빠른 필터 */
+.bsc-mcap { padding: 0 14px 12px; }
+.bsc-mcap-head { font-family: var(--t-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-muted); margin-bottom: 6px; }
+.bsc-mcap-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+.bsc-mcap-btn { font-size: 11px; padding: 4px 8px; border: 1px solid var(--t-border); background: #fff; color: var(--t-muted); border-radius: 2px; cursor: pointer; }
+.bsc-mcap-btn:hover { border-color: var(--t-accent); color: var(--t-accent); }
+.bsc-mcap-btn.active { background: var(--t-accent); color: #fff; border-color: var(--t-accent); }
+.bsc-mcap-note { font-size: 10px; color: var(--t-muted); margin-top: 6px; opacity: 0.85; }
 .bsc-field-tech { font-size: 9px; color: #7c3aed; border: 1px solid #ddd6fe; border-radius: 3px; padding: 0 4px; flex-shrink: 0; }
 
 /* 백테스터 편집(좌) + 조건 요약·액션(우) 2컬럼 — 젠포트식 */
