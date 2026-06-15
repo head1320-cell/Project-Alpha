@@ -1,578 +1,430 @@
 "use client";
+// ═══════════════════════════════════════════════════════════════════════════════
+// TerminalScreener — 버틀러 벤치마크 퀀트 스크리너
+//   좌측 "내 필터" rail + 라이브 종목 리스트 + 팩터 추가 모달.
+//   팩터(백테스터와 동일 라이브러리)를 추가하면 즉시 종목 리스트가 갱신되고,
+//   종목을 누르면 "기업 분석 탭으로 가기" 액션이 떠 /insights 로 이동한다.
+// ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  screenerApiAdvanced, verdictColor, emptyFilterGroup,
-  type FieldsCatalog, type FilterGroupNode, type FilterConditionNode,
-  type ScreenerResponse, type ScreenerItem,
+  screenerApiAdvanced, verdictColor,
+  type FieldsCatalog, type TechnicalIndicatorCatalog,
+  type FilterGroupNode, type FilterConditionNode,
+  type ScreenerResponse,
 } from "@/lib/screenerApi";
 import { setScreenerHandoff } from "@/lib/screenerHandoff";
-import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/lib/screenerPresets";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TerminalScreener — Variant "Institutional Terminal" 스타일 스크리너
-//   실제 screenerApiAdvanced 데이터 + 3-pane 워크스페이스 + 결과 테이블
-// ═══════════════════════════════════════════════════════════════════════════════
+const OP_LABEL: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
+// 영문 카테고리 라벨 → 한글
+const CAT_KO: Record<string, string> = { quality: "품질", safety: "안전성", composite: "종합", score: "종합 스코어" };
 
-const OPERATORS: Record<string, string> = {
-  gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=", neq: "≠",
-  between: "between", in: "in", not_in: "not in",
-};
+type PickKind = "field" | "technical";
+interface PickItem {
+  id: string; label: string; kind: PickKind; catLabel: string;
+  unit?: string; higher_better?: boolean; typical_min?: number; typical_max?: number;
+}
+interface PickCat { id: string; label: string; items: PickItem[] }
 
-export default function TerminalScreener({
-  universe, onSelect, selectedTicker,
-}: {
-  universe: string;
-  onSelect?: (item: ScreenerItem) => void;
-  selectedTicker?: string;
-}) {
+function condText(c: FilterConditionNode, label: (id: string) => string): string {
+  if (c.rank_mode) return `${label(c.field)} ${c.rank_mode === "top_pct" ? "상위" : "하위"} ${c.rank_value ?? 0}%`;
+  return `${label(c.field)} ${OP_LABEL[c.op || "gt"] || ">"} ${c.value ?? 0}`;
+}
+function fmtVal(v: unknown): string {
+  if (v == null) return "—";
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) return "—";
+    if (Math.abs(v) >= 10000) return Math.round(v).toLocaleString();
+    if (Math.abs(v) >= 100) return v.toFixed(0);
+    return v.toFixed(2);
+  }
+  return String(v);
+}
+
+export default function TerminalScreener({ universe }: { universe: string }) {
   const router = useRouter();
   const [catalog, setCatalog] = useState<FieldsCatalog | null>(null);
-  // 저장된 프리셋
-  const [presets, setPresets] = useState<ScreenerPreset[]>([]);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [presetName, setPresetName] = useState("");
-  const [activeCat, setActiveCat] = useState<string>("");
-  const [group, setGroup] = useState<FilterGroupNode>(emptyFilterGroup());
-  const [count, setCount] = useState<number | null>(null);
+  const [techCatalog, setTechCatalog] = useState<TechnicalIndicatorCatalog | null>(null);
+  const [group, setGroup] = useState<FilterGroupNode>({ logic: "AND", conditions: [], groups: [] });
   const [results, setResults] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  // 결과 테이블 컬럼 선택 + 정렬
-  const [selectedCols, setSelectedCols] = useState<string[]>(["per", "pbr", "roe_pct", "composite_score"]);
-  const [showColPicker, setShowColPicker] = useState(false);
-  const [sortCol, setSortCol] = useState<string>("composite_score");
+  const [sortCol, setSortCol] = useState("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  // 자연어 검색
-  const [nlQuery, setNlQuery] = useState("");
-  const [nlLoading, setNlLoading] = useState(false);
-  const [nlResult, setNlResult] = useState<{ explanation: string; confidence: number; source: string } | null>(null);
-  const [nlExamples, setNlExamples] = useState<string[]>([]);
-  // 지표 종류 토글 (펀더멘털 / 기술적) + 기술적 지표 카탈로그
-  const [indicatorMode, setIndicatorMode] = useState<"fundamental" | "technical">("fundamental");
-  const [techCatalog, setTechCatalog] = useState<import("@/lib/screenerApi").TechnicalIndicatorCatalog | null>(null);
-  const [activeTechCat, setActiveTechCat] = useState<string>("");
-  const [fieldSearch, setFieldSearch] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [favs, setFavs] = useState<Set<string>>(new Set());
 
-  // 필드 카탈로그 로드
+  // 팩터 추가 모달
+  const [modalOpen, setModalOpen] = useState(false);
+  const [mCat, setMCat] = useState("");
+  const [mSearch, setMSearch] = useState("");
+  const [mField, setMField] = useState<PickItem | null>(null);
+  const [mMode, setMMode] = useState<"value" | "rank">("value");
+  const [mOp, setMOp] = useState("gte");
+  const [mValue, setMValue] = useState("0");
+  const [mRankMode, setMRankMode] = useState<"top_pct" | "bottom_pct">("top_pct");
+  const [mRankValue, setMRankValue] = useState("30");
+  const [mPreview, setMPreview] = useState<number | null>(null);
+
+  // 카탈로그 + 즐겨찾기 로드
   useEffect(() => {
-    screenerApiAdvanced.fields().then((c) => {
-      setCatalog(c);
-      if (c.categories[0]) setActiveCat(c.categories[0].id);
-    }).catch(() => {});
-    screenerApiAdvanced.nl2astExamples().then((d) => setNlExamples(d.examples || [])).catch(() => {});
-    screenerApiAdvanced.indicators().then((c) => {
-      setTechCatalog(c);
-      if (c.categories[0]) setActiveTechCat(c.categories[0].label);
-    }).catch(() => {});
-    setPresets(listPresets());
+    screenerApiAdvanced.fields().then(setCatalog).catch(() => {});
+    screenerApiAdvanced.indicators().then(setTechCatalog).catch(() => {});
+    try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
   }, []);
 
-  // 기술적 지표 조건 추가 (kind=technical)
-  const addTechnicalCondition = useCallback((indicatorId: string) => {
-    const cond = {
-      kind: "technical", field: indicatorId, indicator: indicatorId,
-      op: "lt", value: 30,
-    } as unknown as FilterConditionNode;
-    setGroup((g) => ({ ...g, conditions: [...g.conditions, cond] }));
-  }, []);
+  // 팩터 picker 카테고리 (펀더멘털 fields + 기술적 indicators 병합)
+  const pickerCats: PickCat[] = useMemo(() => {
+    const cats: PickCat[] = [];
+    catalog?.categories.forEach((c) => cats.push({
+      id: c.id, label: CAT_KO[c.id] ?? CAT_KO[c.label] ?? c.label,
+      items: c.fields.map((f) => ({
+        id: f.id, label: f.label, kind: "field", catLabel: CAT_KO[c.id] ?? c.label,
+        unit: f.unit, higher_better: f.higher_better, typical_min: f.typical_min, typical_max: f.typical_max,
+      })),
+    }));
+    techCatalog?.categories.forEach((c) => cats.push({
+      id: "tech_" + c.label, label: `${c.label} · 기술적`,
+      items: c.indicators.map((i) => ({
+        id: i.id, label: i.label, kind: "technical", catLabel: c.label,
+        unit: i.unit, typical_min: i.typical_min, typical_max: i.typical_max,
+      })),
+    }));
+    return cats;
+  }, [catalog, techCatalog]);
 
-  // 자연어 → 필터 변환
-  const runNlSearch = useCallback(async (q: string) => {
-    const query = q.trim();
-    if (!query) return;
-    setNlLoading(true); setNlResult(null);
-    try {
-      const r = await screenerApiAdvanced.nl2ast(query);
-      // AST를 필터 그룹으로 적용
-      setGroup(r.ast);
-      setNlResult({ explanation: r.explanation, confidence: r.confidence, source: r.source });
-    } catch { /* noop */ }
-    finally { setNlLoading(false); }
-  }, []);
+  useEffect(() => { if (pickerCats.length && !mCat) setMCat(pickerCats[0].id); }, [pickerCats, mCat]);
 
-  // 디바운스 카운트
+  const flatItems = useMemo(() => pickerCats.flatMap((c) => c.items), [pickerCats]);
+  const fieldLabel = useCallback((id: string) => flatItems.find((f) => f.id === id)?.label ?? id, [flatItems]);
+
+  // ── 라이브 스크리닝 (group 변경 시 디바운스 실행) ──
   useEffect(() => {
-    if (!group.conditions.length) { setCount(null); return; }
+    setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const r = await screenerApiAdvanced.count({ universe, filter_ast: group, limit: 1 });
-        setCount(r.total_passed);
+        const r = await screenerApiAdvanced.runAdvanced({
+          universe, filter_ast: group, sort_by: "composite_score",
+          ascending: false, limit: 200, liquidity_floor: "relaxed",
+        });
+        setResults(r);
       } catch { /* noop */ }
-    }, 400);
+      finally { setLoading(false); }
+    }, 350);
     return () => clearTimeout(t);
   }, [group, universe]);
 
-  const addCondition = useCallback((field: string, label: string) => {
-    const cond: FilterConditionNode = {
-      kind: "field", field, op: "gt", value: 0,
-    } as FilterConditionNode;
-    setGroup((g) => ({ ...g, conditions: [...g.conditions, cond] }));
-  }, []);
+  // 모달 draft 조건
+  const draftCondition = useCallback((): FilterConditionNode | null => {
+    if (!mField) return null;
+    const base = { kind: mField.kind, field: mField.id } as FilterConditionNode;
+    if (mField.kind === "technical") base.indicator = mField.id;
+    if (mMode === "rank") { base.rank_mode = mRankMode; base.rank_value = Number(mRankValue) || 0; }
+    else { base.op = mOp as FilterConditionNode["op"]; base.value = Number(mValue) || 0; }
+    return base;
+  }, [mField, mMode, mOp, mValue, mRankMode, mRankValue]);
 
-  const removeCondition = useCallback((idx: number) => {
-    setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
-  }, []);
+  // ── 모달 실시간 미리보기 카운트 ──
+  useEffect(() => {
+    if (!modalOpen || !mField) { setMPreview(null); return; }
+    const dc = draftCondition();
+    if (!dc) return;
+    const t = setTimeout(async () => {
+      try {
+        const r = await screenerApiAdvanced.count({ universe, filter_ast: { ...group, conditions: [...group.conditions, dc] }, limit: 1 });
+        setMPreview(r.total_passed);
+      } catch { setMPreview(null); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [modalOpen, mField, draftCondition, group, universe]);
 
-  // 조건의 연산자/값 편집
-  const updateCondition = useCallback((idx: number, patch: Record<string, unknown>) => {
-    setGroup((g) => ({
-      ...g,
-      conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
-    }));
-  }, []);
-
-  const fieldLabel = useCallback((fieldId: string): string => {
-    if (catalog) {
-      for (const cat of catalog.categories) {
-        const f = cat.fields.find((x) => x.id === fieldId);
-        if (f) return f.label;
-      }
-    }
-    if (techCatalog) {
-      for (const cat of techCatalog.categories) {
-        const f = cat.indicators.find((x) => x.id === fieldId);
-        if (f) return f.label;
-      }
-    }
-    return fieldId;
-  }, [catalog, techCatalog]);
-
-  const execute = async () => {
-    if (!group.conditions.length) return;
-    setLoading(true);
-    try {
-      const r = await screenerApiAdvanced.runAdvanced({
-        universe, filter_ast: group, sort_by: "composite_score",
-        ascending: false, limit: 50, liquidity_floor: "standard",
-      });
-      setResults(r);
-    } catch { /* noop */ }
-    finally { setLoading(false); }
+  const selectField = (f: PickItem) => {
+    setMField(f); setMMode("value");
+    const hb = f.higher_better ?? true;
+    setMOp(hb ? "gte" : "lte");
+    const dv = hb ? (f.typical_min ?? 0) : (f.typical_max ?? 0);
+    setMValue(String(Math.round((dv as number) * 100) / 100));
   };
 
-  const activeCategory = catalog?.categories.find((c) => c.id === activeCat);
-  const activeTechCategory = techCatalog?.categories.find((c) => c.label === activeTechCat);
-
-  // 검색 필터된 필드/지표
-  const filteredFundFields = activeCategory?.fields.filter((f) =>
-    !fieldSearch || f.label.toLowerCase().includes(fieldSearch.toLowerCase()) || f.id.includes(fieldSearch.toLowerCase())
-  ) ?? [];
-  const filteredTechInds = activeTechCategory?.indicators.filter((f) =>
-    !fieldSearch || f.label.toLowerCase().includes(fieldSearch.toLowerCase()) || f.id.includes(fieldSearch.toLowerCase())
-  ) ?? [];
-
-  // ── 결과 테이블 컬럼 (펀더멘털 + 기술적 전체) ──
-  const allColumns = (() => {
-    const cols: { id: string; label: string; cat: string }[] = [];
-    catalog?.categories.forEach((c) => c.fields.forEach((f) => cols.push({ id: f.id, label: f.label, cat: c.label })));
-    techCatalog?.categories.forEach((c) => c.indicators.forEach((f) => cols.push({ id: f.id, label: f.label, cat: c.label })));
-    return cols;
-  })();
-  const colLabel = (id: string) => allColumns.find((c) => c.id === id)?.label ?? id;
-  const fmtVal = (v: unknown): string => {
-    if (v == null) return "—";
-    if (typeof v === "number") return Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);
-    return String(v);
+  const addFactor = () => {
+    const dc = draftCondition();
+    if (!dc) return;
+    setGroup((g) => ({ ...g, conditions: [...g.conditions, dc] }));
+    setModalOpen(false); setMField(null); setMSearch("");
   };
-  const toggleCol = (id: string) => setSelectedCols((cols) =>
-    cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id]);
+  const removeCondition = (idx: number) => setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
+  const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) =>
+    setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
+  const clearAll = () => { setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null); };
+
+  const toggleFav = (code: string, e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setFavs((s) => {
+      const n = new Set(s); if (n.has(code)) n.delete(code); else n.add(code);
+      try { localStorage.setItem("alpha_screener_favs", JSON.stringify([...n])); } catch { /* noop */ }
+      return n;
+    });
+  };
   const setSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     else { setSortCol(col); setSortDir("desc"); }
   };
-  // 정렬된 결과
-  const sortedItems = (() => {
-    if (!results) return [];
-    const items = [...results.items];
-    items.sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sortCol], bv = (b as Record<string, unknown>)[sortCol];
-      const an = typeof av === "number" ? av : -Infinity, bn = typeof bv === "number" ? bv : -Infinity;
-      return sortDir === "desc" ? bn - an : an - bn;
-    });
-    return items;
-  })();
-  // 컬럼 값의 min/max (히트맵 바 정규화용)
-  const colRange = (col: string): [number, number] => {
-    const vals = sortedItems.map((it) => (it as Record<string, unknown>)[col]).filter((v): v is number => typeof v === "number");
-    if (!vals.length) return [0, 1];
-    return [Math.min(...vals), Math.max(...vals)];
-  };
+  const sortArrow = (col: string) => (sortCol === col ? (sortDir === "desc" ? " ▼" : " ▲") : "");
 
-  // 조건식을 사람이 읽는 요약으로
-  const conditionSummary = (): string[] => {
-    const opMap: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
-    return group.conditions.map((c) => {
-      const cc = c as { field: string; op?: string; value?: unknown; rank_mode?: string; rank_value?: number };
-      if (cc.rank_mode) return `${fieldLabel(cc.field)} ${cc.rank_mode === "top_pct" ? "상위" : "하위"} ${cc.rank_value ?? 30}%`;
-      return `${fieldLabel(cc.field)} ${opMap[cc.op || "gt"] || ">"} ${cc.value ?? 0}`;
-    });
+  const goToCompany = (code: string, e: ReactMouseEvent) => {
+    e.stopPropagation();
+    try { sessionStorage.setItem("alpha_company_ticker", code); } catch { /* noop */ }
+    router.push("/insights");
   };
-
-  // 스크리너 조건식(전략)을 백테스터로 전송
   const sendToBacktester = () => {
     if (!group.conditions.length) return;
     setScreenerHandoff({
-      filterAst: group,
-      universe,
-      conditionSummary: conditionSummary(),
-      resultCount: results?.items.length ?? 0,
-      createdAt: Date.now(),
+      filterAst: group, universe,
+      conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)),
+      resultCount: results?.items.length ?? 0, createdAt: Date.now(),
     });
     router.push("/backtest");
   };
 
-  // 프리셋 저장/불러오기/삭제
-  const handleSavePreset = () => {
-    if (!group.conditions.length) return;
-    savePreset(presetName, group, universe);
-    setPresets(listPresets());
-    setPresetName("");
-    setShowSaveDialog(false);
-  };
-  const handleLoadPreset = (p: ScreenerPreset) => {
-    setGroup(JSON.parse(JSON.stringify(p.group)));
-    setResults(null);
-    setCount(null);
-  };
-  const handleDeletePreset = (id: string) => {
-    deletePreset(id);
-    setPresets(listPresets());
-  };
+  // 추가된 팩터 → 동적 컬럼 (중복 제거)
+  const factorCols = useMemo(() => {
+    const seen = new Set<string>(); const cols: { id: string; label: string }[] = [];
+    group.conditions.forEach((c) => {
+      const f = c.field;
+      if (f && !seen.has(f)) { seen.add(f); cols.push({ id: f, label: fieldLabel(f) }); }
+    });
+    return cols;
+  }, [group, fieldLabel]);
+
+  const sortedItems = useMemo(() => {
+    if (!results) return [];
+    return [...results.items].sort((a, b) => {
+      const av = (a as Record<string, unknown>)[sortCol], bv = (b as Record<string, unknown>)[sortCol];
+      const an = typeof av === "number" && Number.isFinite(av) ? av : -Infinity;
+      const bn = typeof bv === "number" && Number.isFinite(bv) ? bv : -Infinity;
+      return sortDir === "desc" ? bn - an : an - bn;
+    });
+  }, [results, sortCol, sortDir]);
+
+  const total = results?.total_passed ?? null;
+  const modalItems = mSearch
+    ? flatItems.filter((f) => f.label.toLowerCase().includes(mSearch.toLowerCase()) || f.id.includes(mSearch.toLowerCase()))
+    : (pickerCats.find((c) => c.id === mCat)?.items ?? []);
+  const colSpan = 6 + factorCols.length;
 
   return (
     <div>
-      {/* 자연어 검색 */}
-      <div className="tnl-search">
-        <div className="tnl-search-bar">
-          <span className="tnl-search-icon">⌕</span>
-          <input
-            className="tnl-search-input"
-            value={nlQuery}
-            onChange={(e) => setNlQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && runNlSearch(nlQuery)}
-            placeholder="자연어로 검색  ·  예: 부채 적고 배당 높은 방어주"
-          />
-          <button className="tnl-search-btn" onClick={() => runNlSearch(nlQuery)} disabled={nlLoading || !nlQuery.trim()}>
-            {nlLoading ? "변환 중..." : "AI 검색"}
-          </button>
-        </div>
-        {nlExamples.length > 0 && !nlResult && (
-          <div className="tnl-examples">
-            {nlExamples.slice(0, 5).map((ex) => (
-              <button key={ex} className="tnl-example-chip" onClick={() => { setNlQuery(ex); runNlSearch(ex); }}>
-                {ex}
-              </button>
-            ))}
+      <div className="bsc-workspace">
+        {/* ── 좌측: 내 필터 ── */}
+        <aside className="bsc-rail">
+          <div className="bsc-rail-head">
+            <span className="bsc-rail-title">내 필터</span>
+            {group.conditions.length > 0 && <button className="bsc-rail-clear" onClick={clearAll}>전체 초기화</button>}
           </div>
-        )}
-        {nlResult && (
-          <div className="tnl-result">
-            <span className="tnl-result-badge" style={{ background: nlResult.source === "claude" ? "#dcfce7" : "#fef3c7", color: nlResult.source === "claude" ? "#15803d" : "#a16207" }}>
-              {nlResult.source === "claude" ? "AI 해석" : "규칙 해석"} · 신뢰도 {(nlResult.confidence * 100).toFixed(0)}%
-            </span>
-            <span className="tnl-result-text">{nlResult.explanation}</span>
-          </div>
-        )}
-      </div>
-
-      {/* 3-pane 워크스페이스 */}
-      <div className="tscreener-workspace">
-        {/* 카테고리 */}
-        <div className="tscreener-cat">
-          {/* 펀더멘털 / 기술적 토글 */}
-          <div className="tind-mode-toggle">
-            <button
-              className={`tind-mode${indicatorMode === "fundamental" ? " active" : ""}`}
-              onClick={() => setIndicatorMode("fundamental")}
-            >펀더멘털</button>
-            <button
-              className={`tind-mode${indicatorMode === "technical" ? " active" : ""}`}
-              onClick={() => setIndicatorMode("technical")}
-            >기술적</button>
-          </div>
-
-          {indicatorMode === "fundamental"
-            ? catalog?.categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  className={`tscreener-cat-item${activeCat === cat.id ? " active" : ""}`}
-                  onClick={() => setActiveCat(cat.id)}
-                >
-                  {cat.label}
-                  <span className="cat-count">{cat.fields.length}</span>
-                </button>
-              ))
-            : techCatalog?.categories.map((cat) => (
-                <button
-                  key={cat.label}
-                  className={`tscreener-cat-item${activeTechCat === cat.label ? " active" : ""}`}
-                  onClick={() => setActiveTechCat(cat.label)}
-                >
-                  {cat.label}
-                  <span className="cat-count">{cat.indicators.length}</span>
-                </button>
-              ))
-          }
-        </div>
-
-        {/* 빌더 */}
-        <div className="tscreener-builder">
-          {group.conditions.length === 0 && (
-            <div style={{ color: "var(--t-muted)", fontSize: 13, fontFamily: "var(--t-mono)" }}>
-              [ NO_CONDITIONS ] — 우측 필드를 클릭해 조건을 추가하세요
-            </div>
-          )}
-          {group.conditions.map((cond, idx) => {
-            const c = cond as { field: string; op?: string; value?: unknown; kind?: string; rank_mode?: string; rank_value?: number };
-            const isTech = c.kind === "technical";
-            const isRank = !!c.rank_mode;
-            return (
-              <div key={idx} className={`tchip${isTech ? " tchip-tech" : ""}`}>
-                <span className="tchip-field">{fieldLabel(c.field)}</span>
-                {isRank ? (
-                  <>
-                    <span className="tchip-op">{c.rank_mode === "top_pct" ? "상위" : c.rank_mode === "bottom_pct" ? "하위" : "상위"}</span>
-                    <input
-                      className="tchip-input"
-                      type="number"
-                      value={String(c.rank_value ?? 30)}
-                      onChange={(e) => updateCondition(idx, { rank_value: Number(e.target.value) || 0 })}
-                    />
-                    <span className="tchip-unit">%</span>
-                  </>
-                ) : (
-                  <>
-                    <select
-                      className="tchip-op-select"
-                      value={c.op || "gt"}
-                      onChange={(e) => updateCondition(idx, { op: e.target.value })}
-                    >
-                      <option value="gt">&gt;</option>
-                      <option value="gte">≥</option>
-                      <option value="lt">&lt;</option>
-                      <option value="lte">≤</option>
-                      <option value="eq">=</option>
-                    </select>
-                    <input
-                      className="tchip-input"
-                      type="number"
-                      step="any"
-                      value={String(c.value ?? 0)}
-                      onChange={(e) => updateCondition(idx, { value: e.target.value === "" ? 0 : Number(e.target.value) })}
-                    />
-                  </>
-                )}
-                <span className="tchip-remove" onClick={() => removeCondition(idx)}>✕</span>
-              </div>
-            );
-          })}
-
-          {/* 현재 카테고리의 필드/지표 (클릭하여 추가) */}
-          <div style={{ marginTop: 8, borderTop: "1px solid var(--t-border)", paddingTop: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 12 }}>
-              <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {indicatorMode === "fundamental" ? activeCategory?.label : activeTechCategory?.label}
-                <span style={{ marginLeft: 6, opacity: 0.6 }}>
-                  {indicatorMode === "technical" ? "· 기술적 지표" : "· 펀더멘털"}
-                </span>
-              </span>
-              <input
-                className="tfield-search"
-                value={fieldSearch}
-                onChange={(e) => setFieldSearch(e.target.value)}
-                placeholder="지표 검색..."
-              />
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {indicatorMode === "fundamental"
-                ? filteredFundFields.map((f) => (
-                    <button key={f.id} className="tadd-condition" onClick={() => addCondition(f.id, f.label)}>
-                      + {f.label}
-                    </button>
-                  ))
-                : filteredTechInds.map((f) => (
-                    <button key={f.id} className="tadd-condition tadd-technical" onClick={() => addTechnicalCondition(f.id)}>
-                      + {f.label}
-                    </button>
-                  ))
-              }
-              {((indicatorMode === "fundamental" && filteredFundFields.length === 0) ||
-                (indicatorMode === "technical" && filteredTechInds.length === 0)) && (
-                <span style={{ color: "var(--t-muted)", fontSize: 12, fontFamily: "var(--t-mono)" }}>
-                  검색 결과 없음
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 스택 */}
-        <div className="tscreener-stack">
-          <div className="tstack-title">
-            Active Filters
-            <span className="tstack-count">{count !== null ? `${count} MATCHES` : "—"}</span>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {group.conditions.length === 0 ? (
-              <div style={{ color: "var(--t-muted)", fontSize: 12 }}>조건 없음</div>
-            ) : (
-              group.conditions.map((cond, idx) => (
-                <div key={idx} className="tapplied">
-                  <span>{fieldLabel((cond as { field: string }).field)} {OPERATORS[(cond as { op?: string }).op || "gt"]} {String((cond as { value?: unknown }).value ?? "")}</span>
-                  <span style={{ opacity: 0.3, cursor: "pointer" }} onClick={() => removeCondition(idx)}>✕</span>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* 저장된 전략 (프리셋) */}
-          <div className="tpreset-section">
-            <div className="tpreset-head">
-              <span>저장된 전략</span>
-              <button
-                className="tpreset-save-btn"
-                onClick={() => setShowSaveDialog((v) => !v)}
-                disabled={!group.conditions.length}
-                title={group.conditions.length ? "현재 조건을 저장" : "조건을 먼저 추가하세요"}
-              >
-                + 저장
-              </button>
-            </div>
-            {showSaveDialog && (
-              <div className="tpreset-dialog">
-                <input
-                  className="tpreset-input"
-                  placeholder="전략 이름 (예: 저PER 고배당)"
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSavePreset(); }}
-                  autoFocus
-                />
-                <button className="tpreset-confirm" onClick={handleSavePreset}>저장</button>
-              </div>
-            )}
-            {presets.length === 0 ? (
-              <div className="tpreset-empty">저장된 전략 없음</div>
-            ) : (
-              <div className="tpreset-list">
-                {presets.map((p) => (
-                  <div key={p.id} className="tpreset-chip">
-                    <span className="tpreset-chip-name" onClick={() => handleLoadPreset(p)} title={`${p.group.conditions.length}개 조건 불러오기`}>
-                      {p.name}
-                      <span className="tpreset-chip-count">{p.group.conditions.length}</span>
-                    </span>
-                    <span className="tpreset-chip-del" onClick={() => handleDeletePreset(p.id)} title="삭제">✕</span>
+          <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
+          {group.conditions.length === 0 ? (
+            <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 전 종목이 즉시 필터링됩니다.</div>
+          ) : (
+            <div className="bsc-rail-list">
+              {group.conditions.map((c, i) => (
+                <div key={i} className="bsc-rail-item">
+                  <div className="bsc-rail-item-body">
+                    <div className="bsc-rail-item-name">
+                      {fieldLabel(c.field)}
+                      {c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}
+                    </div>
+                    <div className="bsc-rail-item-cond">{condText(c, fieldLabel)}</div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button className="texecute-btn" onClick={execute} disabled={loading || !group.conditions.length}>
-            {loading ? "SCANNING..." : "EXECUTE SCAN [ENTER]"}
-          </button>
-        </div>
-      </div>
-
-      {/* 스캔 로딩 스켈레톤 */}
-      {loading && (
-        <div className="tresults animate-fade-in">
-          <div className="tscan-loading">
-            <span className="tscan-spinner" />
-            <span className="tscan-text">SCANNING UNIVERSE · 종목별 지표 계산 중...</span>
-          </div>
-          <div className="tskeleton-table">
-            {[...Array(8)].map((_, i) => (
-              <div className="tskeleton-row" key={i}>
-                {[...Array(6)].map((_, j) => (
-                  <div className="tskeleton-cell" key={j} style={{ animationDelay: `${(i * 6 + j) * 0.04}s` }} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 결과 테이블 */}
-      {results && !loading && (
-        <div className="tresults animate-fade-in">
-          <div className="tresults-toolbar">
-            <span className="tresults-count">{sortedItems.length} RESULTS</span>
-            <div className="tresults-actions">
-              <button className="tcol-btn" onClick={() => setShowColPicker((v) => !v)}>
-                ⚙ 컬럼 ({selectedCols.length})
-              </button>
-              <button className="tsend-bt-btn" onClick={sendToBacktester} title="이 조건식을 백테스터로 가져가 백테스팅">
-                이 전략으로 백테스트 →
-              </button>
-            </div>
-          </div>
-          {showColPicker && (
-            <div className="tcol-picker">
-              <div className="tcol-picker-head">표시할 지표 선택 ({selectedCols.length})</div>
-              <div className="tcol-picker-grid">
-                {allColumns.map((c) => (
-                  <label key={c.id} className={`tcol-chip${selectedCols.includes(c.id) ? " on" : ""}`}>
-                    <input type="checkbox" checked={selectedCols.includes(c.id)} onChange={() => toggleCol(c.id)} />
-                    {c.label}
-                  </label>
-                ))}
-              </div>
+                  <span className="bsc-rail-item-del" onClick={() => removeCondition(i)}>✕</span>
+                </div>
+              ))}
             </div>
           )}
-          <div className="tresults-scroll">
-            <table className="tresults-table">
+        </aside>
+
+        {/* ── 우측: 필터 칩 + 카운트 + 종목 리스트 ── */}
+        <div className="bsc-main">
+          <div className="bsc-toolbar">
+            <span className="bsc-toolbar-label">필터 추가하기</span>
+            {group.conditions.length === 0 && <span style={{ fontSize: 12, color: "var(--t-muted)" }}>조건 없음 — 전체 종목 표시 중</span>}
+            {group.conditions.map((c, idx) => {
+              const isRank = !!c.rank_mode;
+              return (
+                <span key={idx} className={`bsc-chip${c.kind === "technical" ? " bsc-chip-tech" : ""}`}>
+                  <span className="bsc-chip-name">{fieldLabel(c.field)}</span>
+                  {isRank ? (
+                    <>
+                      <select className="bsc-chip-op" value={c.rank_mode!} onChange={(e) => updateCondition(idx, { rank_mode: e.target.value as FilterConditionNode["rank_mode"] })}>
+                        <option value="top_pct">상위</option><option value="bottom_pct">하위</option>
+                      </select>
+                      <input className="bsc-chip-val" type="number" value={String(c.rank_value ?? 30)} onChange={(e) => updateCondition(idx, { rank_value: Number(e.target.value) || 0 })} />
+                      <span style={{ fontSize: 11, color: "var(--t-muted)" }}>%</span>
+                    </>
+                  ) : (
+                    <>
+                      <select className="bsc-chip-op" value={c.op || "gte"} onChange={(e) => updateCondition(idx, { op: e.target.value as FilterConditionNode["op"] })}>
+                        <option value="gt">&gt;</option><option value="gte">≥</option><option value="lt">&lt;</option><option value="lte">≤</option><option value="eq">=</option>
+                      </select>
+                      <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onChange={(e) => updateCondition(idx, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
+                    </>
+                  )}
+                  <span className="bsc-chip-del" onClick={() => removeCondition(idx)}>✕</span>
+                </span>
+              );
+            })}
+            <button className="bsc-chip-add" onClick={() => setModalOpen(true)}>＋ 팩터</button>
+          </div>
+
+          <div className="bsc-countbar">
+            <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개</span>
+            {loading && <span className="bsc-spinner" />}
+            <span className="bsc-countbar-spacer" />
+            <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">
+              이 전략 백테스트 →
+            </button>
+          </div>
+
+          <div className="bsc-table-wrap">
+            <table className="bsc-table">
               <thead>
                 <tr>
-                  <th>Ticker</th>
-                  <th>Company</th>
-                  {selectedCols.map((col) => (
-                    <th key={col} className="num sortable" onClick={() => setSort(col)}>
-                      {colLabel(col)}{sortCol === col && (sortDir === "desc" ? " ▼" : " ▲")}
-                    </th>
+                  <th className="bsc-rank">#</th>
+                  <th />
+                  <th>종목명</th>
+                  <th className="num sortable" onClick={() => setSort("current_price")}>현재가{sortArrow("current_price")}</th>
+                  <th className="num sortable" onClick={() => setSort("market_cap_억")}>시총(억){sortArrow("market_cap_억")}</th>
+                  {factorCols.map((fc) => (
+                    <th key={fc.id} className="num sortable" onClick={() => setSort(fc.id)}>{fc.label}{sortArrow(fc.id)}</th>
                   ))}
-                  <th className="num sortable" onClick={() => setSort("composite_score")}>
-                    Score{sortCol === "composite_score" && (sortDir === "desc" ? " ▼" : " ▲")}
-                  </th>
-                  <th>Verdict</th>
+                  <th className="num sortable" onClick={() => setSort("composite_score")}>종합점수{sortArrow("composite_score")}</th>
+                  <th>판정</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedItems.map((it) => {
+                {sortedItems.map((it, i) => {
                   const vc = verdictColor(it.verdict);
+                  const isSel = selected === it.stock_code;
                   return (
-                    <tr
-                      key={it.stock_code}
-                      className={selectedTicker === it.stock_code ? "selected" : ""}
-                      onClick={() => onSelect?.(it)}
-                    >
-                      <td className="tticker">{it.stock_code}</td>
-                      <td>{it.corp_name}{it.sector && <span style={{ color: "var(--t-muted)", fontSize: 11, marginLeft: 8 }}>{it.sector}</span>}</td>
-                      {selectedCols.map((col) => {
-                        const v = (it as Record<string, unknown>)[col];
-                        const [lo, hi] = colRange(col);
-                        const pct = (typeof v === "number" && hi > lo) ? (v - lo) / (hi - lo) : 0;
-                        return (
-                          <td key={col} className="num tcell-bar">
-                            <span className="tcell-fill" style={{ width: `${pct * 100}%` }} />
-                            <span className="tcell-val">{fmtVal(v)}</span>
+                    <Fragment key={it.stock_code}>
+                      <tr className={`bsc-row${isSel ? " selected" : ""}`} onClick={() => setSelected(isSel ? null : it.stock_code)}>
+                        <td className="bsc-rank">{i + 1}</td>
+                        <td>
+                          <span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>
+                            {favs.has(it.stock_code) ? "★" : "☆"}
+                          </span>
+                        </td>
+                        <td><span className="bsc-name">{it.corp_name}</span>{it.sector && <span className="bsc-sector">{it.sector}</span>}</td>
+                        <td className="num">{typeof it.current_price === "number" ? `${it.current_price.toLocaleString()}원` : "—"}</td>
+                        <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>
+                        {factorCols.map((fc) => (
+                          <td key={fc.id} className="num">{fmtVal((it as Record<string, unknown>)[fc.id])}</td>
+                        ))}
+                        <td className="num bsc-score" style={{ color: vc.fg }}>{it.composite_score.toFixed(1)}</td>
+                        <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
+                      </tr>
+                      {isSel && (
+                        <tr className="bsc-action-row">
+                          <td colSpan={colSpan}>
+                            <div className="bsc-action-inner">
+                              <span className="bsc-action-text">
+                                <b>{it.corp_name}</b> ({it.stock_code}) · 현재가 {typeof it.current_price === "number" ? it.current_price.toLocaleString() : "—"}원 · 종합점수 {it.composite_score.toFixed(1)} · {it.verdict}
+                              </span>
+                              <button className="bsc-go-company" onClick={(e) => goToCompany(it.stock_code, e)}>기업 분석 탭으로 가기 →</button>
+                            </div>
                           </td>
-                        );
-                      })}
-                      <td className="num talpha-score">{it.composite_score.toFixed(1)}</td>
-                      <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
-                    </tr>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
             </table>
+            {!loading && sortedItems.length === 0 && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없습니다</div>}
           </div>
-          {sortedItems.length === 0 && (
-            <div style={{ padding: 48, textAlign: "center", color: "var(--t-muted)", fontSize: 13, fontFamily: "var(--t-mono)" }}>
-              [ NO_MATCHES ] — 조건에 맞는 종목이 없습니다
+        </div>
+      </div>
+
+      {/* ── 팩터 추가 모달 ── */}
+      {modalOpen && (
+        <div className="bsc-modal-overlay" onClick={() => setModalOpen(false)}>
+          <div className="bsc-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bsc-modal-head">
+              <div className="bsc-modal-search">
+                <span style={{ color: "var(--t-muted)" }}>⌕</span>
+                <input value={mSearch} onChange={(e) => setMSearch(e.target.value)} placeholder="팩터를 직접 검색해 보세요  ·  예: ROE, PER, 부채비율, RSI" autoFocus />
+              </div>
+              <button className="bsc-modal-x" onClick={() => setModalOpen(false)}>✕</button>
             </div>
-          )}
+            <div className="bsc-modal-body">
+              {/* 카테고리 */}
+              <div className="bsc-modal-col">
+                {!mSearch ? pickerCats.map((c) => (
+                  <button key={c.id} className={`bsc-cat-item${mCat === c.id ? " active" : ""}`} onClick={() => setMCat(c.id)}>
+                    <span>{c.label}</span><span className="bsc-cat-count">{c.items.length}</span>
+                  </button>
+                )) : (
+                  <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--t-muted)", fontFamily: "var(--t-mono)" }}>
+                    검색 결과 {modalItems.length}건
+                  </div>
+                )}
+              </div>
+              {/* 팩터 목록 */}
+              <div className="bsc-modal-col">
+                {modalItems.slice(0, 300).map((f) => (
+                  <button key={f.kind + f.id} className={`bsc-field-item${mField?.id === f.id && mField?.kind === f.kind ? " active" : ""}`} onClick={() => selectField(f)}>
+                    <span>{f.label}</span>
+                    {f.kind === "technical" ? <span className="bsc-field-tech">기술</span> : <span className="bsc-cat-count">{f.catLabel}</span>}
+                  </button>
+                ))}
+                {modalItems.length === 0 && <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--t-muted)" }}>검색 결과 없음</div>}
+              </div>
+              {/* 조건 편집 */}
+              <div className="bsc-editor">
+                {mField ? (
+                  <>
+                    <div className="bsc-editor-label">{mField.label}</div>
+                    <div className="bsc-editor-meta">
+                      {mField.catLabel}{mField.unit ? ` · ${mField.unit}` : ""}{mField.kind === "technical" ? " · 기술적 지표" : ""}
+                    </div>
+                    <div className="bsc-editor-modetabs">
+                      <button className={`bsc-editor-modetab${mMode === "value" ? " active" : ""}`} onClick={() => setMMode("value")}>기준값</button>
+                      <button className={`bsc-editor-modetab${mMode === "rank" ? " active" : ""}`} onClick={() => setMMode("rank")}>순위</button>
+                    </div>
+                    {mMode === "value" ? (
+                      <div className="bsc-editor-row">
+                        <select className="bsc-editor-op" value={mOp} onChange={(e) => setMOp(e.target.value)}>
+                          <option value="gte">이상 (≥)</option><option value="gt">초과 (&gt;)</option>
+                          <option value="lte">이하 (≤)</option><option value="lt">미만 (&lt;)</option><option value="eq">같음 (=)</option>
+                        </select>
+                        <input className="bsc-editor-input" type="number" step="any" value={mValue} onChange={(e) => setMValue(e.target.value)} />
+                        {mField.unit && <span style={{ color: "var(--t-muted)", fontSize: 13 }}>{mField.unit}</span>}
+                      </div>
+                    ) : (
+                      <div className="bsc-editor-row">
+                        <select className="bsc-editor-op" value={mRankMode} onChange={(e) => setMRankMode(e.target.value as "top_pct" | "bottom_pct")}>
+                          <option value="top_pct">상위</option><option value="bottom_pct">하위</option>
+                        </select>
+                        <input className="bsc-editor-input" type="number" value={mRankValue} onChange={(e) => setMRankValue(e.target.value)} />
+                        <span style={{ color: "var(--t-muted)", fontSize: 13 }}>%</span>
+                      </div>
+                    )}
+                    {mField.typical_min != null && mField.typical_max != null && (
+                      <div className="bsc-editor-range">일반 범위 {mField.typical_min} ~ {mField.typical_max}</div>
+                    )}
+                    <div className="bsc-editor-preview">
+                      {mPreview != null ? <>이 조건 적용 시 <b>{mPreview.toLocaleString()}</b>개 종목</> : <span style={{ color: "var(--t-muted)" }}>미리보기 계산 중…</span>}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ margin: "auto", color: "var(--t-muted)", fontSize: 13, textAlign: "center" }}>왼쪽에서 팩터를 선택하세요</div>
+                )}
+              </div>
+            </div>
+            <div className="bsc-modal-foot">
+              <span className="bsc-modal-hint">{flatItems.length}개 스크리닝 팩터 · 백테스터와 동일 라이브러리</span>
+              <button className="bsc-modal-add" disabled={!mField} onClick={addFactor}>＋ 이 팩터 추가</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

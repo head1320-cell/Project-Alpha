@@ -34,9 +34,16 @@ export default function CompanyPage() {
 
   const vc = company ? verdictColor(company.verdict) : null;
 
-  // 최초 자동 조회 (삼성전자)
+  // 최초 자동 조회 — 스크리너에서 넘어온 종목(handoff)이 있으면 그 종목, 없으면 삼성전자
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { lookup("005930"); }, []);
+  useEffect(() => {
+    let code = "005930";
+    try {
+      const h = sessionStorage.getItem("alpha_company_ticker");
+      if (h && /^\d{6}$/.test(h)) { code = h; sessionStorage.removeItem("alpha_company_ticker"); }
+    } catch { /* noop */ }
+    lookup(code);
+  }, []);
 
   return (
     <div>
