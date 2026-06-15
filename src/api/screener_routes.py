@@ -768,6 +768,26 @@ def screener_condition_tokens():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.get("/factor-field-map")
+def screener_factor_field_map():
+    """젠포트 팩터 이름 → 스크리너 필드 id 매핑 (단면 스크리닝 가능 필드만).
+
+    백테스터 FactorPickerModal에서 고른 팩터를 스크리너 filter_ast 의 field id 로 해석할 때
+    프론트가 사용. fundamentals 별칭(FUNDAMENTAL_ALIASES) + 라벨 별칭을 병합하고,
+    실제 스크리너 필드(FIELD_BY_ID)에 존재하는 매핑만 노출한다."""
+    try:
+        from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES, _label_aliases
+        from src.engine.filter_ast import FIELD_BY_ID
+        merged: dict[str, str] = {}
+        merged.update(_label_aliases())     # 한글 라벨 → id (예: "ROE" → "roe")
+        merged.update(FUNDAMENTAL_ALIASES)  # 젠포트 이름 → id (예: "분기ROE" → "roe")
+        field_map = {name: fid for name, fid in merged.items() if fid in FIELD_BY_ID}
+        return {"map": field_map, "total": len(field_map)}
+    except Exception:
+        logger.exception("팩터-필드 매핑 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 class ExprValidateRequest(BaseModel):
     expr: str = ""
 

@@ -331,6 +331,13 @@ export const screenerApiAdvanced = {
     if (!r.ok) throw new Error(`Indicators failed: ${r.status}`);
     return r.json();
   },
+
+  // 젠포트 팩터 이름 → 스크리너 필드 id 매핑 (백테스터 FactorPickerModal 픽 → 스크리닝 필드)
+  factorFieldMap: async (): Promise<{ map: Record<string, string>; total: number }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/factor-field-map`);
+    if (!r.ok) throw new Error(`Factor field map failed: ${r.status}`);
+    return r.json();
+  },
 };
 
 // 기술적 지표 카탈로그 타입

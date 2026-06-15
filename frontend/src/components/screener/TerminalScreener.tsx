@@ -1,31 +1,26 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalScreener — 버틀러 벤치마크 퀀트 스크리너
-//   좌측 "내 필터" rail + 라이브 종목 리스트 + 팩터 추가 모달.
-//   팩터(백테스터와 동일 라이브러리)를 추가하면 즉시 종목 리스트가 갱신되고,
-//   종목을 누르면 "기업 분석 탭으로 가기" 액션이 떠 /insights 로 이동한다.
+//   · '팩터 추가' → 백테스터와 동일한 FactorPickerModal(똑같은 창)을 그대로 사용.
+//     고른 팩터는 factor-field-map 으로 스크리너 필드 id 로 해석 → 즉시 라이브 필터링.
+//   · 좌측 '내 필터' rail(AND/OR · 저장된 전략) + 라이브 종목 리스트 + 진행 표시 + CSV.
+//   · 종목 클릭 → '기업 분석 탭으로 가기' → /insights 핸드오프.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback, useMemo, Fragment, type MouseEvent as ReactMouseEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  screenerApiAdvanced, verdictColor,
+  screenerApiAdvanced, screenerApi, verdictColor,
   type FieldsCatalog, type TechnicalIndicatorCatalog,
-  type FilterGroupNode, type FilterConditionNode,
-  type ScreenerResponse,
+  type FilterGroupNode, type FilterConditionNode, type ScreenerResponse,
 } from "@/lib/screenerApi";
 import { setScreenerHandoff } from "@/lib/screenerHandoff";
+import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/lib/screenerPresets";
+import FactorPickerModal, { type FactorPick } from "@/components/backtest/FactorPickerModal";
 
 const OP_LABEL: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
-// 영문 카테고리 라벨 → 한글
-const CAT_KO: Record<string, string> = { quality: "품질", safety: "안전성", composite: "종합", score: "종합 스코어" };
 
-type PickKind = "field" | "technical";
-interface PickItem {
-  id: string; label: string; kind: PickKind; catLabel: string;
-  unit?: string; higher_better?: boolean; typical_min?: number; typical_max?: number;
-}
-interface PickCat { id: string; label: string; items: PickItem[] }
+interface FieldMeta { higher_better?: boolean; typical_min?: number; typical_max?: number; label: string; unit?: string }
 
 function condText(c: FilterConditionNode, label: (id: string) => string): string {
   if (c.rank_mode) return `${label(c.field)} ${c.rank_mode === "top_pct" ? "상위" : "하위"} ${c.rank_value ?? 0}%`;
@@ -46,57 +41,88 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const router = useRouter();
   const [catalog, setCatalog] = useState<FieldsCatalog | null>(null);
   const [techCatalog, setTechCatalog] = useState<TechnicalIndicatorCatalog | null>(null);
+  const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
+  const [universeSizes, setUniverseSizes] = useState<Record<string, number>>({});
   const [group, setGroup] = useState<FilterGroupNode>({ logic: "AND", conditions: [], groups: [] });
+  const [labelOverride, setLabelOverride] = useState<Record<string, string>>({});
   const [results, setResults] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progN, setProgN] = useState(0);
   const [sortCol, setSortCol] = useState("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
   const [favs, setFavs] = useState<Set<string>>(new Set());
-
-  // 팩터 추가 모달
+  const [notice, setNotice] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [mCat, setMCat] = useState("");
-  const [mSearch, setMSearch] = useState("");
-  const [mField, setMField] = useState<PickItem | null>(null);
-  const [mMode, setMMode] = useState<"value" | "rank">("value");
-  const [mOp, setMOp] = useState("gte");
-  const [mValue, setMValue] = useState("0");
-  const [mRankMode, setMRankMode] = useState<"top_pct" | "bottom_pct">("top_pct");
-  const [mRankValue, setMRankValue] = useState("30");
-  const [mPreview, setMPreview] = useState<number | null>(null);
+  // 저장된 전략(프리셋)
+  const [presets, setPresets] = useState<ScreenerPreset[]>([]);
+  const [presetName, setPresetName] = useState("");
+  const [showSave, setShowSave] = useState(false);
 
-  // 카탈로그 + 즐겨찾기 로드
+  // 카탈로그 / 매핑 / 즐겨찾기 / 프리셋 로드
   useEffect(() => {
     screenerApiAdvanced.fields().then(setCatalog).catch(() => {});
     screenerApiAdvanced.indicators().then(setTechCatalog).catch(() => {});
+    screenerApiAdvanced.factorFieldMap().then((d) => setAliasMap(d.map)).catch(() => {});
+    screenerApi.universes().then((d) => {
+      const m: Record<string, number> = {}; d.presets.forEach((p) => { m[p.id] = p.size; }); setUniverseSizes(m);
+    }).catch(() => {});
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
+    setPresets(listPresets());
   }, []);
 
-  // 팩터 picker 카테고리 (펀더멘털 fields + 기술적 indicators 병합)
-  const pickerCats: PickCat[] = useMemo(() => {
-    const cats: PickCat[] = [];
-    catalog?.categories.forEach((c) => cats.push({
-      id: c.id, label: CAT_KO[c.id] ?? CAT_KO[c.label] ?? c.label,
-      items: c.fields.map((f) => ({
-        id: f.id, label: f.label, kind: "field", catLabel: CAT_KO[c.id] ?? c.label,
-        unit: f.unit, higher_better: f.higher_better, typical_min: f.typical_min, typical_max: f.typical_max,
-      })),
+  // ── 팩터 해석용 인덱스 ──
+  const { labelToId, idSet, techIdSet, metaById } = useMemo(() => {
+    const labelToId = new Map<string, string>();
+    const idSet = new Set<string>();
+    const techIdSet = new Set<string>();
+    const metaById = new Map<string, FieldMeta>();
+    catalog?.categories.forEach((c) => c.fields.forEach((f) => {
+      idSet.add(f.id);
+      labelToId.set(f.label, f.id); labelToId.set(f.label.replace(/\s+/g, ""), f.id); labelToId.set(f.label.toLowerCase(), f.id);
+      metaById.set(f.id, { higher_better: f.higher_better, typical_min: f.typical_min, typical_max: f.typical_max, label: f.label, unit: f.unit });
     }));
-    techCatalog?.categories.forEach((c) => cats.push({
-      id: "tech_" + c.label, label: `${c.label} · 기술적`,
-      items: c.indicators.map((i) => ({
-        id: i.id, label: i.label, kind: "technical", catLabel: c.label,
-        unit: i.unit, typical_min: i.typical_min, typical_max: i.typical_max,
-      })),
+    techCatalog?.categories.forEach((c) => c.indicators.forEach((i) => {
+      idSet.add(i.id); techIdSet.add(i.id);
+      labelToId.set(i.label, i.id); labelToId.set(i.label.replace(/\s+/g, ""), i.id);
+      metaById.set(i.id, { typical_min: i.typical_min, typical_max: i.typical_max, label: i.label, unit: i.unit });
     }));
-    return cats;
+    return { labelToId, idSet, techIdSet, metaById };
   }, [catalog, techCatalog]);
 
-  useEffect(() => { if (pickerCats.length && !mCat) setMCat(pickerCats[0].id); }, [pickerCats, mCat]);
+  const fieldLabel = useCallback((id: string) => labelOverride[id] ?? metaById.get(id)?.label ?? id, [labelOverride, metaById]);
 
-  const flatItems = useMemo(() => pickerCats.flatMap((c) => c.items), [pickerCats]);
-  const fieldLabel = useCallback((id: string) => flatItems.find((f) => f.id === id)?.label ?? id, [flatItems]);
+  // 젠포트 팩터 이름 → 스크리너 필드 id (별칭맵 → 라벨맵)
+  const resolveFactor = useCallback((name: string): { id: string; kind: "field" | "technical" } | null => {
+    const n = name.trim().replace(/^\{+|\}+$/g, "").trim();
+    const id = aliasMap[n] ?? labelToId.get(n) ?? labelToId.get(n.replace(/\s+/g, "")) ?? labelToId.get(n.toLowerCase());
+    if (!id) return null;
+    return { id, kind: techIdSet.has(id) ? "technical" : "field" };
+  }, [aliasMap, labelToId, techIdSet]);
+
+  // FactorPickerModal 에서 팩터를 고르면 → 조건 추가 (똑같은 창, 스크리너로 연동)
+  const handlePick = useCallback((pick: FactorPick) => {
+    setModalOpen(false);
+    const r = resolveFactor(pick.factorName);
+    if (!r) {
+      setNotice(`‘${pick.factorName}’은(는) 단면 스크리닝에서 지원되지 않습니다 (백테스터 전용 시계열·수급 팩터).`);
+      return;
+    }
+    setNotice(null);
+    const meta = metaById.get(r.id);
+    const isRank = pick.functionId === "rank";
+    const cond: FilterConditionNode = isRank
+      ? { kind: r.kind, field: r.id, ...(r.kind === "technical" ? { indicator: r.id } : {}), rank_mode: "top_pct", rank_value: 30 }
+      : {
+          kind: r.kind, field: r.id, ...(r.kind === "technical" ? { indicator: r.id } : {}),
+          op: (meta?.higher_better ?? true) ? "gte" : "lte",
+          value: meta ? Math.round(((meta.higher_better ?? true ? meta.typical_min : meta.typical_max) ?? 0) * 100) / 100 : 0,
+        };
+    setLabelOverride((m) => ({ ...m, [r.id]: meta?.label ?? pick.factorName }));
+    setGroup((g) => ({ ...g, conditions: [...g.conditions, cond] }));
+  }, [resolveFactor, metaById]);
+
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t); }, [notice]);
 
   // ── 라이브 스크리닝 (group 변경 시 디바운스 실행) ──
   useEffect(() => {
@@ -114,61 +140,34 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return () => clearTimeout(t);
   }, [group, universe]);
 
-  // 모달 draft 조건
-  const draftCondition = useCallback((): FilterConditionNode | null => {
-    if (!mField) return null;
-    const base = { kind: mField.kind, field: mField.id } as FilterConditionNode;
-    if (mField.kind === "technical") base.indicator = mField.id;
-    if (mMode === "rank") { base.rank_mode = mRankMode; base.rank_value = Number(mRankValue) || 0; }
-    else { base.op = mOp as FilterConditionNode["op"]; base.value = Number(mValue) || 0; }
-    return base;
-  }, [mField, mMode, mOp, mValue, mRankMode, mRankValue]);
-
-  // ── 모달 실시간 미리보기 카운트 ──
+  // ── 데이터 확충 진행 표시 (단일 호출이라, 로딩 중엔 추정 램프 → 완료 시 실측치) ──
+  const progTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    if (!modalOpen || !mField) { setMPreview(null); return; }
-    const dc = draftCondition();
-    if (!dc) return;
-    const t = setTimeout(async () => {
-      try {
-        const r = await screenerApiAdvanced.count({ universe, filter_ast: { ...group, conditions: [...group.conditions, dc] }, limit: 1 });
-        setMPreview(r.total_passed);
-      } catch { setMPreview(null); }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [modalOpen, mField, draftCondition, group, universe]);
+    const target = universeSizes[universe] ?? results?.total_evaluated ?? 130;
+    if (loading) {
+      setProgN(0);
+      const cap = Math.max(1, Math.floor(target * 0.9));
+      const step = Math.max(1, Math.floor(target / 22));
+      progTimer.current = setInterval(() => setProgN((p) => (p >= cap ? cap : p + step)), 55);
+    } else if (progTimer.current) {
+      clearInterval(progTimer.current); progTimer.current = null;
+    }
+    return () => { if (progTimer.current) { clearInterval(progTimer.current); progTimer.current = null; } };
+  }, [loading, universe, universeSizes, results]);
+  useEffect(() => { if (results && !loading) setProgN(results.total_evaluated); }, [results, loading]);
 
-  const selectField = (f: PickItem) => {
-    setMField(f); setMMode("value");
-    const hb = f.higher_better ?? true;
-    setMOp(hb ? "gte" : "lte");
-    const dv = hb ? (f.typical_min ?? 0) : (f.typical_max ?? 0);
-    setMValue(String(Math.round((dv as number) * 100) / 100));
-  };
-
-  const addFactor = () => {
-    const dc = draftCondition();
-    if (!dc) return;
-    setGroup((g) => ({ ...g, conditions: [...g.conditions, dc] }));
-    setModalOpen(false); setMField(null); setMSearch("");
-  };
   const removeCondition = (idx: number) => setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
   const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) =>
     setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
   const clearAll = () => { setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null); };
+  const toggleLogic = () => setGroup((g) => ({ ...g, logic: g.logic === "AND" ? "OR" : "AND" }));
 
   const toggleFav = (code: string, e: ReactMouseEvent) => {
     e.stopPropagation();
-    setFavs((s) => {
-      const n = new Set(s); if (n.has(code)) n.delete(code); else n.add(code);
-      try { localStorage.setItem("alpha_screener_favs", JSON.stringify([...n])); } catch { /* noop */ }
-      return n;
-    });
+    setFavs((s) => { const n = new Set(s); if (n.has(code)) n.delete(code); else n.add(code);
+      try { localStorage.setItem("alpha_screener_favs", JSON.stringify([...n])); } catch { /* noop */ } return n; });
   };
-  const setSort = (col: string) => {
-    if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    else { setSortCol(col); setSortDir("desc"); }
-  };
+  const setSort = (col: string) => { if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc")); else { setSortCol(col); setSortDir("desc"); } };
   const sortArrow = (col: string) => (sortCol === col ? (sortDir === "desc" ? " ▼" : " ▲") : "");
 
   const goToCompany = (code: string, e: ReactMouseEvent) => {
@@ -178,21 +177,18 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   };
   const sendToBacktester = () => {
     if (!group.conditions.length) return;
-    setScreenerHandoff({
-      filterAst: group, universe,
-      conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)),
-      resultCount: results?.items.length ?? 0, createdAt: Date.now(),
-    });
+    setScreenerHandoff({ filterAst: group, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() });
     router.push("/backtest");
   };
 
-  // 추가된 팩터 → 동적 컬럼 (중복 제거)
+  // 프리셋 저장/불러오기/삭제
+  const handleSave = () => { if (!group.conditions.length || !presetName.trim()) return; savePreset(presetName.trim(), group, universe); setPresets(listPresets()); setPresetName(""); setShowSave(false); };
+  const handleLoad = (p: ScreenerPreset) => { setGroup(JSON.parse(JSON.stringify(p.group))); setSelected(null); };
+  const handleDelete = (id: string, e: ReactMouseEvent) => { e.stopPropagation(); deletePreset(id); setPresets(listPresets()); };
+
   const factorCols = useMemo(() => {
     const seen = new Set<string>(); const cols: { id: string; label: string }[] = [];
-    group.conditions.forEach((c) => {
-      const f = c.field;
-      if (f && !seen.has(f)) { seen.add(f); cols.push({ id: f, label: fieldLabel(f) }); }
-    });
+    group.conditions.forEach((c) => { if (c.field && !seen.has(c.field)) { seen.add(c.field); cols.push({ id: c.field, label: fieldLabel(c.field) }); } });
     return cols;
   }, [group, fieldLabel]);
 
@@ -206,10 +202,25 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     });
   }, [results, sortCol, sortDir]);
 
+  const exportCsv = () => {
+    if (!sortedItems.length) return;
+    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", "시총(억)", ...factorCols.map((c) => c.label), "종합점수", "판정"];
+    const rows = sortedItems.map((it, i) => [
+      i + 1, it.stock_code, it.corp_name, it.sector ?? "",
+      typeof it.current_price === "number" ? it.current_price : "",
+      it.market_cap_억 ?? "",
+      ...factorCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }),
+      it.composite_score, it.verdict,
+    ]);
+    const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href = url; a.download = `screener_${universe}_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
   const total = results?.total_passed ?? null;
-  const modalItems = mSearch
-    ? flatItems.filter((f) => f.label.toLowerCase().includes(mSearch.toLowerCase()) || f.id.includes(mSearch.toLowerCase()))
-    : (pickerCats.find((c) => c.id === mCat)?.items ?? []);
+  const uniTotal = universeSizes[universe] ?? results?.total_evaluated ?? 0;
   const colSpan = 6 + factorCols.length;
 
   return (
@@ -222,6 +233,17 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             {group.conditions.length > 0 && <button className="bsc-rail-clear" onClick={clearAll}>전체 초기화</button>}
           </div>
           <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
+
+          {group.conditions.length >= 2 && (
+            <div className="bsc-logic">
+              <span className="bsc-logic-label">조건 결합</span>
+              <button className="bsc-logic-toggle" onClick={toggleLogic}>
+                <span className={group.logic === "AND" ? "on" : ""}>모두(AND)</span>
+                <span className={group.logic === "OR" ? "on" : ""}>하나(OR)</span>
+              </button>
+            </div>
+          )}
+
           {group.conditions.length === 0 ? (
             <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 전 종목이 즉시 필터링됩니다.</div>
           ) : (
@@ -229,10 +251,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
               {group.conditions.map((c, i) => (
                 <div key={i} className="bsc-rail-item">
                   <div className="bsc-rail-item-body">
-                    <div className="bsc-rail-item-name">
-                      {fieldLabel(c.field)}
-                      {c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}
-                    </div>
+                    <div className="bsc-rail-item-name">{fieldLabel(c.field)}{c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}</div>
                     <div className="bsc-rail-item-cond">{condText(c, fieldLabel)}</div>
                   </div>
                   <span className="bsc-rail-item-del" onClick={() => removeCondition(i)}>✕</span>
@@ -240,6 +259,34 @@ export default function TerminalScreener({ universe }: { universe: string }) {
               ))}
             </div>
           )}
+
+          {/* 저장된 전략 (프리셋) */}
+          <div className="bsc-preset">
+            <div className="bsc-preset-head">
+              <span>저장된 전략</span>
+              <button className="bsc-preset-save" disabled={!group.conditions.length} onClick={() => setShowSave((v) => !v)}>＋ 저장</button>
+            </div>
+            {showSave && (
+              <div className="bsc-preset-dialog">
+                <input className="bsc-preset-input" placeholder="전략 이름 (예: 저PER 저PBR)" value={presetName} autoFocus
+                  onChange={(e) => setPresetName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }} />
+                <button className="bsc-preset-confirm" onClick={handleSave}>저장</button>
+              </div>
+            )}
+            {presets.length === 0 ? (
+              <div className="bsc-preset-empty">저장된 전략 없음</div>
+            ) : (
+              <div className="bsc-preset-list">
+                {presets.map((p) => (
+                  <div key={p.id} className="bsc-preset-chip" onClick={() => handleLoad(p)} title={`${p.group.conditions.length}개 조건 불러오기`}>
+                    <span className="bsc-preset-chip-name">{p.name}</span>
+                    <span className="bsc-preset-chip-count">{p.group.conditions.length}</span>
+                    <span className="bsc-preset-chip-del" onClick={(e) => handleDelete(p.id, e)}>✕</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* ── 우측: 필터 칩 + 카운트 + 종목 리스트 ── */}
@@ -275,13 +322,22 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <button className="bsc-chip-add" onClick={() => setModalOpen(true)}>＋ 팩터</button>
           </div>
 
+          {notice && <div className="bsc-notice">{notice}</div>}
+
           <div className="bsc-countbar">
-            <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개</span>
+            <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개{group.conditions.length >= 2 ? ` · ${group.logic === "AND" ? "모든 조건" : "하나라도"}` : ""}</span>
             {loading && <span className="bsc-spinner" />}
             <span className="bsc-countbar-spacer" />
-            <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">
-              이 전략 백테스트 →
-            </button>
+            <button className="bsc-bt-btn" onClick={exportCsv} disabled={!sortedItems.length} title="현재 결과를 CSV로 내보내기">⤓ CSV</button>
+            <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">이 전략 백테스트 →</button>
+          </div>
+          {/* 데이터 확충 진행 (작은 글씨) */}
+          <div className="bsc-progress">
+            {loading
+              ? <>데이터 확충 중… <b>{Math.min(progN, uniTotal).toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 업데이트</>
+              : results
+                ? <>평가 완료 <b>{results.total_evaluated.toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 · 신규 {results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s</>
+                : <>대기 중…</>}
           </div>
 
           <div className="bsc-table-wrap">
@@ -293,9 +349,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                   <th>종목명</th>
                   <th className="num sortable" onClick={() => setSort("current_price")}>현재가{sortArrow("current_price")}</th>
                   <th className="num sortable" onClick={() => setSort("market_cap_억")}>시총(억){sortArrow("market_cap_억")}</th>
-                  {factorCols.map((fc) => (
-                    <th key={fc.id} className="num sortable" onClick={() => setSort(fc.id)}>{fc.label}{sortArrow(fc.id)}</th>
-                  ))}
+                  {factorCols.map((fc) => <th key={fc.id} className="num sortable" onClick={() => setSort(fc.id)}>{fc.label}{sortArrow(fc.id)}</th>)}
                   <th className="num sortable" onClick={() => setSort("composite_score")}>종합점수{sortArrow("composite_score")}</th>
                   <th>판정</th>
                 </tr>
@@ -308,17 +362,11 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                     <Fragment key={it.stock_code}>
                       <tr className={`bsc-row${isSel ? " selected" : ""}`} onClick={() => setSelected(isSel ? null : it.stock_code)}>
                         <td className="bsc-rank">{i + 1}</td>
-                        <td>
-                          <span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>
-                            {favs.has(it.stock_code) ? "★" : "☆"}
-                          </span>
-                        </td>
+                        <td><span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>{favs.has(it.stock_code) ? "★" : "☆"}</span></td>
                         <td><span className="bsc-name">{it.corp_name}</span>{it.sector && <span className="bsc-sector">{it.sector}</span>}</td>
                         <td className="num">{typeof it.current_price === "number" ? `${it.current_price.toLocaleString()}원` : "—"}</td>
                         <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>
-                        {factorCols.map((fc) => (
-                          <td key={fc.id} className="num">{fmtVal((it as Record<string, unknown>)[fc.id])}</td>
-                        ))}
+                        {factorCols.map((fc) => <td key={fc.id} className="num">{fmtVal((it as Record<string, unknown>)[fc.id])}</td>)}
                         <td className="num bsc-score" style={{ color: vc.fg }}>{it.composite_score.toFixed(1)}</td>
                         <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
                       </tr>
@@ -326,9 +374,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                         <tr className="bsc-action-row">
                           <td colSpan={colSpan}>
                             <div className="bsc-action-inner">
-                              <span className="bsc-action-text">
-                                <b>{it.corp_name}</b> ({it.stock_code}) · 현재가 {typeof it.current_price === "number" ? it.current_price.toLocaleString() : "—"}원 · 종합점수 {it.composite_score.toFixed(1)} · {it.verdict}
-                              </span>
+                              <span className="bsc-action-text"><b>{it.corp_name}</b> ({it.stock_code}) · 현재가 {typeof it.current_price === "number" ? it.current_price.toLocaleString() : "—"}원 · 종합점수 {it.composite_score.toFixed(1)} · {it.verdict}</span>
                               <button className="bsc-go-company" onClick={(e) => goToCompany(it.stock_code, e)}>기업 분석 탭으로 가기 →</button>
                             </div>
                           </td>
@@ -344,89 +390,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
         </div>
       </div>
 
-      {/* ── 팩터 추가 모달 ── */}
-      {modalOpen && (
-        <div className="bsc-modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="bsc-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="bsc-modal-head">
-              <div className="bsc-modal-search">
-                <span style={{ color: "var(--t-muted)" }}>⌕</span>
-                <input value={mSearch} onChange={(e) => setMSearch(e.target.value)} placeholder="팩터를 직접 검색해 보세요  ·  예: ROE, PER, 부채비율, RSI" autoFocus />
-              </div>
-              <button className="bsc-modal-x" onClick={() => setModalOpen(false)}>✕</button>
-            </div>
-            <div className="bsc-modal-body">
-              {/* 카테고리 */}
-              <div className="bsc-modal-col">
-                {!mSearch ? pickerCats.map((c) => (
-                  <button key={c.id} className={`bsc-cat-item${mCat === c.id ? " active" : ""}`} onClick={() => setMCat(c.id)}>
-                    <span>{c.label}</span><span className="bsc-cat-count">{c.items.length}</span>
-                  </button>
-                )) : (
-                  <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--t-muted)", fontFamily: "var(--t-mono)" }}>
-                    검색 결과 {modalItems.length}건
-                  </div>
-                )}
-              </div>
-              {/* 팩터 목록 */}
-              <div className="bsc-modal-col">
-                {modalItems.slice(0, 300).map((f) => (
-                  <button key={f.kind + f.id} className={`bsc-field-item${mField?.id === f.id && mField?.kind === f.kind ? " active" : ""}`} onClick={() => selectField(f)}>
-                    <span>{f.label}</span>
-                    {f.kind === "technical" ? <span className="bsc-field-tech">기술</span> : <span className="bsc-cat-count">{f.catLabel}</span>}
-                  </button>
-                ))}
-                {modalItems.length === 0 && <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--t-muted)" }}>검색 결과 없음</div>}
-              </div>
-              {/* 조건 편집 */}
-              <div className="bsc-editor">
-                {mField ? (
-                  <>
-                    <div className="bsc-editor-label">{mField.label}</div>
-                    <div className="bsc-editor-meta">
-                      {mField.catLabel}{mField.unit ? ` · ${mField.unit}` : ""}{mField.kind === "technical" ? " · 기술적 지표" : ""}
-                    </div>
-                    <div className="bsc-editor-modetabs">
-                      <button className={`bsc-editor-modetab${mMode === "value" ? " active" : ""}`} onClick={() => setMMode("value")}>기준값</button>
-                      <button className={`bsc-editor-modetab${mMode === "rank" ? " active" : ""}`} onClick={() => setMMode("rank")}>순위</button>
-                    </div>
-                    {mMode === "value" ? (
-                      <div className="bsc-editor-row">
-                        <select className="bsc-editor-op" value={mOp} onChange={(e) => setMOp(e.target.value)}>
-                          <option value="gte">이상 (≥)</option><option value="gt">초과 (&gt;)</option>
-                          <option value="lte">이하 (≤)</option><option value="lt">미만 (&lt;)</option><option value="eq">같음 (=)</option>
-                        </select>
-                        <input className="bsc-editor-input" type="number" step="any" value={mValue} onChange={(e) => setMValue(e.target.value)} />
-                        {mField.unit && <span style={{ color: "var(--t-muted)", fontSize: 13 }}>{mField.unit}</span>}
-                      </div>
-                    ) : (
-                      <div className="bsc-editor-row">
-                        <select className="bsc-editor-op" value={mRankMode} onChange={(e) => setMRankMode(e.target.value as "top_pct" | "bottom_pct")}>
-                          <option value="top_pct">상위</option><option value="bottom_pct">하위</option>
-                        </select>
-                        <input className="bsc-editor-input" type="number" value={mRankValue} onChange={(e) => setMRankValue(e.target.value)} />
-                        <span style={{ color: "var(--t-muted)", fontSize: 13 }}>%</span>
-                      </div>
-                    )}
-                    {mField.typical_min != null && mField.typical_max != null && (
-                      <div className="bsc-editor-range">일반 범위 {mField.typical_min} ~ {mField.typical_max}</div>
-                    )}
-                    <div className="bsc-editor-preview">
-                      {mPreview != null ? <>이 조건 적용 시 <b>{mPreview.toLocaleString()}</b>개 종목</> : <span style={{ color: "var(--t-muted)" }}>미리보기 계산 중…</span>}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ margin: "auto", color: "var(--t-muted)", fontSize: 13, textAlign: "center" }}>왼쪽에서 팩터를 선택하세요</div>
-                )}
-              </div>
-            </div>
-            <div className="bsc-modal-foot">
-              <span className="bsc-modal-hint">{flatItems.length}개 스크리닝 팩터 · 백테스터와 동일 라이브러리</span>
-              <button className="bsc-modal-add" disabled={!mField} onClick={addFactor}>＋ 이 팩터 추가</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── 팩터 추가: 백테스터와 동일한 FactorPickerModal (똑같은 창) ── */}
+      <FactorPickerModal open={modalOpen} tone="neutral" onClose={() => setModalOpen(false)} onInsert={handlePick} />
     </div>
   );
 }
