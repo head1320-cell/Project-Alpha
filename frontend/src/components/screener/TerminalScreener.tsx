@@ -2,29 +2,30 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalScreener — 버틀러 벤치마크 퀀트 스크리너
 //   · '팩터 추가' → 백테스터와 동일한 FactorPickerModal(똑같은 창)을 그대로 사용.
-//     고른 팩터는 factor-field-map 으로 스크리너 필드 id 로 해석 → 즉시 라이브 필터링.
-//   · 좌측 '내 필터' rail(AND/OR · 저장된 전략) + 라이브 종목 리스트 + 진행 표시 + CSV.
-//   · 종목 클릭 → '기업 분석 탭으로 가기' → /insights 핸드오프.
+//   · 좌측 '내 필터' rail(AND/OR · 시총 · 저장된 전략) + 라이브 종목 리스트(SSE 진행).
+//   · 표시 컬럼 ≠ 필터 컬럼(보기전용 컬럼 분리) · 임계값 분포 히스토그램 · 셀 퍼센타일
+//     히트맵 · 전종목(전체) 유니버스 가상 스크롤 + 0개 진단 · 종목 클릭→기업 분석 이동.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback, useMemo, Fragment, type MouseEvent as ReactMouseEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   screenerApiAdvanced, screenerApi, verdictColor,
   type FieldsCatalog, type TechnicalIndicatorCatalog,
-  type FilterGroupNode, type FilterConditionNode, type ScreenerResponse,
+  type FilterGroupNode, type FilterConditionNode, type ScreenerResponse, type ScreenerItem,
 } from "@/lib/screenerApi";
 import { setScreenerHandoff } from "@/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/lib/screenerPresets";
 import FactorPickerModal, { type FactorPick } from "@/components/backtest/FactorPickerModal";
 
 const OP_LABEL: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
-// 시가총액 빠른 필터 프리셋 (억 단위). 실데이터(KIS) 연결 시 market_cap_억 채워져 동작.
 const MCAP_PRESETS: Array<{ id: string; label: string; min: number | null; max: number | null }> = [
   { id: "large", label: "대형 1조+", min: 10000, max: null },
   { id: "mid", label: "중형 2천억~1조", min: 2000, max: 10000 },
   { id: "small", label: "소형 ~2천억", min: null, max: 2000 },
 ];
+const ROW_H = 41;        // 가상 스크롤 행 높이(고정)
+const WINDOW_MIN = 60;   // 결과가 이보다 많으면 윈도잉 활성
 
 interface FieldMeta { higher_better?: boolean; typical_min?: number; typical_max?: number; label: string; unit?: string }
 
@@ -42,6 +43,34 @@ function fmtVal(v: unknown): string {
   }
   return String(v);
 }
+function passes(v: number, op: string | undefined, t: number): boolean {
+  switch (op) { case "gt": return v > t; case "lte": return v <= t; case "lt": return v < t; case "eq": return v === t; default: return v >= t; }
+}
+
+// 임계값 설정 보조 — 팩터 분포 미니 히스토그램 (통과=액센트, 미통과=회색, 빨강선=임계값)
+function MiniHistogram({ values, op, threshold }: { values: number[]; op?: string; threshold: number }) {
+  const finite = values.filter((v) => Number.isFinite(v));
+  if (finite.length < 4) return <span className="bsc-hist-empty">분포 표본 부족</span>;
+  const min = Math.min(...finite), max = Math.max(...finite), span = (max - min) || 1, BINS = 20;
+  const counts = new Array(BINS).fill(0);
+  finite.forEach((v) => { let b = Math.floor(((v - min) / span) * BINS); if (b >= BINS) b = BINS - 1; if (b < 0) b = 0; counts[b]++; });
+  const maxC = Math.max(...counts, 1);
+  const tx = Math.max(0, Math.min(1, (threshold - min) / span));
+  const passCount = finite.filter((v) => passes(v, op, threshold)).length;
+  return (
+    <>
+      <svg className="bsc-hist" viewBox="0 0 100 30" preserveAspectRatio="none">
+        {counts.map((c, i) => {
+          const mid = min + ((i + 0.5) / BINS) * span;
+          const h = (c / maxC) * 28;
+          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--t-accent)" : "#d4d4d8"} />;
+        })}
+        <line x1={tx * 100} y1={0} x2={tx * 100} y2={30} stroke="var(--color-bear)" strokeWidth="0.8" />
+      </svg>
+      <span className="bsc-hist-meta">통과 {passCount}/{finite.length} · 범위 {fmtVal(min)}~{fmtVal(max)}</span>
+    </>
+  );
+}
 
 export default function TerminalScreener({ universe }: { universe: string }) {
   const router = useRouter();
@@ -52,54 +81,60 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [group, setGroup] = useState<FilterGroupNode>({ logic: "AND", conditions: [], groups: [] });
   const [labelOverride, setLabelOverride] = useState<Record<string, string>>({});
   const [results, setResults] = useState<ScreenerResponse | null>(null);
+  const [sampleItems, setSampleItems] = useState<ScreenerItem[]>([]);   // 분포용 무필터 표본
   const [loading, setLoading] = useState(false);
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
   const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);
+  const [focusedChip, setFocusedChip] = useState<number | null>(null);
   const [sortCol, setSortCol] = useState("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  // 저장된 전략(프리셋)
+  // 표시(보기전용) 컬럼 — 필터와 분리
+  const [displayCols, setDisplayCols] = useState<string[]>([]);
+  const [showColPicker, setShowColPicker] = useState(false);
+  const [colSearch, setColSearch] = useState("");
+  // 가상 스크롤
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewH, setViewH] = useState(560);
+  // 프리셋
   const [presets, setPresets] = useState<ScreenerPreset[]>([]);
   const [presetName, setPresetName] = useState("");
   const [showSave, setShowSave] = useState(false);
 
-  // 카탈로그 / 매핑 / 즐겨찾기 / 프리셋 로드
   useEffect(() => {
     screenerApiAdvanced.fields().then(setCatalog).catch(() => {});
     screenerApiAdvanced.indicators().then(setTechCatalog).catch(() => {});
     screenerApiAdvanced.factorFieldMap().then((d) => setAliasMap(d.map)).catch(() => {});
-    screenerApi.universes().then((d) => {
-      const m: Record<string, number> = {}; d.presets.forEach((p) => { m[p.id] = p.size; }); setUniverseSizes(m);
-    }).catch(() => {});
+    screenerApi.universes().then((d) => { const m: Record<string, number> = {}; d.presets.forEach((p) => { m[p.id] = p.size; }); setUniverseSizes(m); }).catch(() => {});
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
+    try { const c = localStorage.getItem("alpha_screener_cols"); if (c) setDisplayCols(JSON.parse(c)); } catch { /* noop */ }
     setPresets(listPresets());
   }, []);
 
   // ── 팩터 해석용 인덱스 ──
-  const { labelToId, idSet, techIdSet, metaById } = useMemo(() => {
+  const { labelToId, techIdSet, metaById } = useMemo(() => {
     const labelToId = new Map<string, string>();
-    const idSet = new Set<string>();
     const techIdSet = new Set<string>();
     const metaById = new Map<string, FieldMeta>();
     catalog?.categories.forEach((c) => c.fields.forEach((f) => {
-      idSet.add(f.id);
       labelToId.set(f.label, f.id); labelToId.set(f.label.replace(/\s+/g, ""), f.id); labelToId.set(f.label.toLowerCase(), f.id);
       metaById.set(f.id, { higher_better: f.higher_better, typical_min: f.typical_min, typical_max: f.typical_max, label: f.label, unit: f.unit });
     }));
     techCatalog?.categories.forEach((c) => c.indicators.forEach((i) => {
-      idSet.add(i.id); techIdSet.add(i.id);
+      techIdSet.add(i.id);
       labelToId.set(i.label, i.id); labelToId.set(i.label.replace(/\s+/g, ""), i.id);
       metaById.set(i.id, { typical_min: i.typical_min, typical_max: i.typical_max, label: i.label, unit: i.unit });
     }));
-    return { labelToId, idSet, techIdSet, metaById };
+    return { labelToId, techIdSet, metaById };
   }, [catalog, techCatalog]);
 
   const fieldLabel = useCallback((id: string) => labelOverride[id] ?? metaById.get(id)?.label ?? id, [labelOverride, metaById]);
+  const allColOptions = useMemo(() => Array.from(metaById, ([id, m]) => ({ id, label: m.label })), [metaById]);
 
-  // 젠포트 팩터 이름 → 스크리너 필드 id (별칭맵 → 라벨맵)
   const resolveFactor = useCallback((name: string): { id: string; kind: "field" | "technical" } | null => {
     const n = name.trim().replace(/^\{+|\}+$/g, "").trim();
     const id = aliasMap[n] ?? labelToId.get(n) ?? labelToId.get(n.replace(/\s+/g, "")) ?? labelToId.get(n.toLowerCase());
@@ -107,31 +142,25 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return { id, kind: techIdSet.has(id) ? "technical" : "field" };
   }, [aliasMap, labelToId, techIdSet]);
 
-  // FactorPickerModal 에서 팩터를 고르면 → 조건 추가 (똑같은 창, 스크리너로 연동)
   const handlePick = useCallback((pick: FactorPick) => {
     setModalOpen(false);
     const r = resolveFactor(pick.factorName);
-    if (!r) {
-      setNotice(`‘${pick.factorName}’은(는) 단면 스크리닝에서 지원되지 않습니다 (백테스터 전용 시계열·수급 팩터).`);
-      return;
-    }
+    if (!r) { setNotice(`‘${pick.factorName}’은(는) 단면 스크리닝에서 지원되지 않습니다 (백테스터 전용 시계열·수급 팩터).`); return; }
     setNotice(null);
     const meta = metaById.get(r.id);
     const isRank = pick.functionId === "rank";
     const cond: FilterConditionNode = isRank
       ? { kind: r.kind, field: r.id, ...(r.kind === "technical" ? { indicator: r.id } : {}), rank_mode: "top_pct", rank_value: 30 }
-      : {
-          kind: r.kind, field: r.id, ...(r.kind === "technical" ? { indicator: r.id } : {}),
+      : { kind: r.kind, field: r.id, ...(r.kind === "technical" ? { indicator: r.id } : {}),
           op: (meta?.higher_better ?? true) ? "gte" : "lte",
-          value: meta ? Math.round(((meta.higher_better ?? true ? meta.typical_min : meta.typical_max) ?? 0) * 100) / 100 : 0,
-        };
+          value: meta ? Math.round(((meta.higher_better ?? true ? meta.typical_min : meta.typical_max) ?? 0) * 100) / 100 : 0 };
     setLabelOverride((m) => ({ ...m, [r.id]: meta?.label ?? pick.factorName }));
     setGroup((g) => ({ ...g, conditions: [...g.conditions, cond] }));
   }, [resolveFactor, metaById]);
 
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t); }, [notice]);
 
-  // ── 라이브 스크리닝 (SSE 스트리밍 — 종목별 진행 실시간 + 최종 결과) ──
+  // ── 라이브 스크리닝 (SSE 스트리밍) ──
   useEffect(() => {
     setLoading(true); setProg(null);
     const ctrl = new AbortController();
@@ -139,37 +168,49 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     const t = setTimeout(async () => {
       try {
         const r = await screenerApiAdvanced.runAdvancedStream(
-          { universe, filter_ast: group, sort_by: "composite_score", ascending: false, limit: 200, liquidity_floor: "relaxed" },
-          (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); },
-          ctrl.signal,
+          { universe, filter_ast: group, sort_by: "composite_score", ascending: false, limit: 500, liquidity_floor: "relaxed" },
+          (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); }, ctrl.signal,
         );
         if (!cancelled) setResults(r);
-      } catch { /* aborted or error */ }
+      } catch { /* aborted/error */ }
       finally { if (!cancelled) setLoading(false); }
     }, 350);
     return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
   }, [group, universe]);
 
-  // ── 칩별 미리보기 카운트 (각 조건 단독 통과 종목 수, 디바운스) ──
+  // ── 분포용 무필터 표본 (유니버스 변경 시) ──
+  useEffect(() => {
+    let cancelled = false;
+    screenerApiAdvanced.runAdvanced({ universe, filter_ast: { logic: "AND", conditions: [], groups: [] }, sort_by: "composite_score", ascending: false, limit: 300, liquidity_floor: "relaxed" })
+      .then((r) => { if (!cancelled) setSampleItems(r.items); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [universe]);
+
+  // ── 칩별 미리보기 카운트 ──
   useEffect(() => {
     if (!group.conditions.length) { setChipCounts([]); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
       const counts = await Promise.all(group.conditions.map((c) =>
-        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: [c], groups: [] }, limit: 1 })
-          .then((r) => r.total_passed).catch(() => null),
-      ));
+        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: [c], groups: [] }, limit: 1 }).then((r) => r.total_passed).catch(() => null)));
       if (!cancelled) setChipCounts(counts);
     }, 450);
     return () => { cancelled = true; clearTimeout(t); };
   }, [group, universe]);
 
+  // ── 가상 스크롤 컨테이너 높이 측정 ──
+  useEffect(() => {
+    const el = tableWrapRef.current; if (!el) return;
+    const update = () => setViewH(el.clientHeight || 560);
+    update();
+    const ro = new ResizeObserver(update); ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const removeCondition = (idx: number) => setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
-  const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) =>
-    setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
+  const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) => setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
   const clearAll = () => { setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null); };
   const toggleLogic = () => setGroup((g) => ({ ...g, logic: g.logic === "AND" ? "OR" : "AND" }));
-  // 시가총액 빠른 필터 — market_cap_억 조건 교체
   const applyMcap = (min: number | null, max: number | null) => {
     setGroup((g) => {
       const conds = g.conditions.filter((c) => c.field !== "market_cap_억");
@@ -180,6 +221,11 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     setLabelOverride((m) => ({ ...m, market_cap_억: "시가총액" }));
   };
   const mcapActive = group.conditions.some((c) => c.field === "market_cap_억");
+  const toggleDisplayCol = (id: string) => setDisplayCols((cols) => {
+    const next = cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id];
+    try { localStorage.setItem("alpha_screener_cols", JSON.stringify(next)); } catch { /* noop */ }
+    return next;
+  });
 
   const toggleFav = (code: string, e: ReactMouseEvent) => {
     e.stopPropagation();
@@ -188,28 +234,20 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   };
   const setSort = (col: string) => { if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc")); else { setSortCol(col); setSortDir("desc"); } };
   const sortArrow = (col: string) => (sortCol === col ? (sortDir === "desc" ? " ▼" : " ▲") : "");
-
-  const goToCompany = (code: string, e: ReactMouseEvent) => {
-    e.stopPropagation();
-    try { sessionStorage.setItem("alpha_company_ticker", code); } catch { /* noop */ }
-    router.push("/insights");
-  };
-  const sendToBacktester = () => {
-    if (!group.conditions.length) return;
-    setScreenerHandoff({ filterAst: group, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() });
-    router.push("/backtest");
-  };
-
-  // 프리셋 저장/불러오기/삭제
+  const goToCompany = (code: string, e: ReactMouseEvent) => { e.stopPropagation(); try { sessionStorage.setItem("alpha_company_ticker", code); } catch { /* noop */ } router.push("/insights"); };
+  const sendToBacktester = () => { if (!group.conditions.length) return; setScreenerHandoff({ filterAst: group, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() }); router.push("/backtest"); };
   const handleSave = () => { if (!group.conditions.length || !presetName.trim()) return; savePreset(presetName.trim(), group, universe); setPresets(listPresets()); setPresetName(""); setShowSave(false); };
   const handleLoad = (p: ScreenerPreset) => { setGroup(JSON.parse(JSON.stringify(p.group))); setSelected(null); };
   const handleDelete = (id: string, e: ReactMouseEvent) => { e.stopPropagation(); deletePreset(id); setPresets(listPresets()); };
 
-  const factorCols = useMemo(() => {
-    const seen = new Set<string>(); const cols: { id: string; label: string }[] = [];
-    group.conditions.forEach((c) => { if (c.field && !seen.has(c.field)) { seen.add(c.field); cols.push({ id: c.field, label: fieldLabel(c.field) }); } });
+  // 표시 컬럼 = 필터 팩터 컬럼 + 보기전용 컬럼 (중복/고정컬럼 제거)
+  const dataCols = useMemo(() => {
+    const seen = new Set<string>(["current_price", "market_cap_억", "composite_score"]);
+    const cols: { id: string; label: string; filtered: boolean }[] = [];
+    group.conditions.forEach((c) => { if (c.field && !seen.has(c.field)) { seen.add(c.field); cols.push({ id: c.field, label: fieldLabel(c.field), filtered: true }); } });
+    displayCols.forEach((id) => { if (!seen.has(id)) { seen.add(id); cols.push({ id, label: fieldLabel(id), filtered: false }); } });
     return cols;
-  }, [group, fieldLabel]);
+  }, [group, displayCols, fieldLabel]);
 
   const sortedItems = useMemo(() => {
     if (!results) return [];
@@ -221,16 +259,24 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     });
   }, [results, sortCol, sortDir]);
 
+  // 셀 퍼센타일 히트맵용 컬럼 min/max
+  const colRanges = useMemo(() => {
+    const r: Record<string, [number, number]> = {};
+    ["composite_score", ...dataCols.map((c) => c.id)].forEach((id) => {
+      const vals = sortedItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      if (vals.length) r[id] = [Math.min(...vals), Math.max(...vals)];
+    });
+    return r;
+  }, [sortedItems, dataCols]);
+
+  const sampleVals = useCallback((id: string) => sampleItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)), [sampleItems]);
+
   const exportCsv = () => {
     if (!sortedItems.length) return;
-    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", "시총(억)", ...factorCols.map((c) => c.label), "종합점수", "판정"];
-    const rows = sortedItems.map((it, i) => [
-      i + 1, it.stock_code, it.corp_name, it.sector ?? "",
-      typeof it.current_price === "number" ? it.current_price : "",
-      it.market_cap_억 ?? "",
-      ...factorCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }),
-      it.composite_score, it.verdict,
-    ]);
+    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", "시총(억)", ...dataCols.map((c) => c.label), "종합점수", "판정"];
+    const rows = sortedItems.map((it, i) => [i + 1, it.stock_code, it.corp_name, it.sector ?? "",
+      typeof it.current_price === "number" ? it.current_price : "", it.market_cap_억 ?? "",
+      ...dataCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }), it.composite_score, it.verdict]);
     const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -240,7 +286,54 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
   const total = results?.total_passed ?? null;
   const uniTotal = universeSizes[universe] ?? results?.total_evaluated ?? 0;
-  const colSpan = 6 + factorCols.length;
+  const colSpan = 7 + dataCols.length;
+  const selectedItem = selected ? sortedItems.find((it) => it.stock_code === selected) ?? null : null;
+  const focusCond = focusedChip != null ? group.conditions[focusedChip] : null;
+
+  // 가상 스크롤 윈도잉
+  const windowing = sortedItems.length > WINDOW_MIN;
+  const startIdx = windowing ? Math.max(0, Math.floor(scrollTop / ROW_H) - 8) : 0;
+  const visCount = windowing ? Math.ceil(viewH / ROW_H) + 16 : sortedItems.length;
+  const endIdx = Math.min(sortedItems.length, startIdx + visCount);
+  const visItems = sortedItems.slice(startIdx, endIdx);
+  const topPad = startIdx * ROW_H, botPad = (sortedItems.length - endIdx) * ROW_H;
+
+  // 0개 진단 — 가장 제한적인(단독 통과 최소) 조건
+  const diagnostic = useMemo(() => {
+    if (total !== 0 || !group.conditions.length || chipCounts.length !== group.conditions.length) return null;
+    let minI = -1, minC = Infinity;
+    chipCounts.forEach((c, i) => { if (c != null && c < minC) { minC = c; minI = i; } });
+    if (minI < 0) return null;
+    return { label: fieldLabel(group.conditions[minI].field), count: minC };
+  }, [total, group, chipCounts, fieldLabel]);
+
+  const heatCell = (id: string, v: unknown) => {
+    const range = colRanges[id];
+    const pct = range && typeof v === "number" && Number.isFinite(v) && range[1] > range[0] ? (v - range[0]) / (range[1] - range[0]) : 0;
+    return (
+      <td className="num bsc-cell" key={id}>
+        <span className="bsc-cell-fill" style={{ width: `${Math.round(pct * 100)}%` }} />
+        <span className="bsc-cell-val">{fmtVal(v)}</span>
+      </td>
+    );
+  };
+
+  const renderRow = (it: ScreenerItem, i: number) => {
+    const vc = verdictColor(it.verdict);
+    const isSel = selected === it.stock_code;
+    return (
+      <tr key={it.stock_code} className={`bsc-row${isSel ? " selected" : ""}`} onClick={() => setSelected(isSel ? null : it.stock_code)}>
+        <td className="bsc-rank">{i + 1}</td>
+        <td><span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>{favs.has(it.stock_code) ? "★" : "☆"}</span></td>
+        <td><span className="bsc-name">{it.corp_name}</span>{it.sector && <span className="bsc-sector">{it.sector}</span>}</td>
+        <td className="num">{typeof it.current_price === "number" ? `${it.current_price.toLocaleString()}원` : "—"}</td>
+        <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>
+        {dataCols.map((c) => heatCell(c.id, (it as Record<string, unknown>)[c.id]))}
+        {heatCell("composite_score", it.composite_score)}
+        <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
+      </tr>
+    );
+  };
 
   return (
     <div>
@@ -253,14 +346,11 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           </div>
           <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
 
-          {/* 시가총액 빠른 필터 (버틀러식) */}
           <div className="bsc-mcap">
             <div className="bsc-mcap-head">시가총액</div>
             <div className="bsc-mcap-btns">
               <button className={`bsc-mcap-btn${!mcapActive ? " active" : ""}`} onClick={() => applyMcap(null, null)}>전체</button>
-              {MCAP_PRESETS.map((p) => (
-                <button key={p.id} className="bsc-mcap-btn" onClick={() => applyMcap(p.min, p.max)}>{p.label}</button>
-              ))}
+              {MCAP_PRESETS.map((p) => <button key={p.id} className="bsc-mcap-btn" onClick={() => applyMcap(p.min, p.max)}>{p.label}</button>)}
             </div>
             <div className="bsc-mcap-note">ⓘ 실데이터 연결 시 동작 (mock은 시총 미제공)</div>
           </div>
@@ -291,7 +381,6 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             </div>
           )}
 
-          {/* 저장된 전략 (프리셋) */}
           <div className="bsc-preset">
             <div className="bsc-preset-head">
               <span>저장된 전략</span>
@@ -304,9 +393,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                 <button className="bsc-preset-confirm" onClick={handleSave}>저장</button>
               </div>
             )}
-            {presets.length === 0 ? (
-              <div className="bsc-preset-empty">저장된 전략 없음</div>
-            ) : (
+            {presets.length === 0 ? <div className="bsc-preset-empty">저장된 전략 없음</div> : (
               <div className="bsc-preset-list">
                 {presets.map((p) => (
                   <div key={p.id} className="bsc-preset-chip" onClick={() => handleLoad(p)} title={`${p.group.conditions.length}개 조건 불러오기`}>
@@ -320,7 +407,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           </div>
         </aside>
 
-        {/* ── 우측: 필터 칩 + 카운트 + 종목 리스트 ── */}
+        {/* ── 우측 ── */}
         <div className="bsc-main">
           <div className="bsc-toolbar">
             <span className="bsc-toolbar-label">필터 추가하기</span>
@@ -343,7 +430,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                       <select className="bsc-chip-op" value={c.op || "gte"} onChange={(e) => updateCondition(idx, { op: e.target.value as FilterConditionNode["op"] })}>
                         <option value="gt">&gt;</option><option value="gte">≥</option><option value="lt">&lt;</option><option value="lte">≤</option><option value="eq">=</option>
                       </select>
-                      <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onChange={(e) => updateCondition(idx, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
+                      <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(idx)}
+                        onChange={(e) => updateCondition(idx, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
                     </>
                   )}
                   {chipCounts[idx] != null && <span className="bsc-chip-count" title="이 조건 단독 통과 종목 수">{chipCounts[idx]!.toLocaleString()}</span>}
@@ -354,25 +442,55 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <button className="bsc-chip-add" onClick={() => setModalOpen(true)}>＋ 팩터</button>
           </div>
 
+          {/* 임계값 분포 히스토그램 (편집 중인 조건) */}
+          {focusCond && !focusCond.rank_mode && (
+            <div className="bsc-hist-panel">
+              <span className="bsc-hist-label">{fieldLabel(focusCond.field)} 분포 — 임계값 정하기</span>
+              <div className="bsc-hist-wrap"><MiniHistogram values={sampleVals(focusCond.field)} op={focusCond.op} threshold={Number(focusCond.value) || 0} /></div>
+            </div>
+          )}
+
           {notice && <div className="bsc-notice">{notice}</div>}
 
           <div className="bsc-countbar">
             <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개{group.conditions.length >= 2 ? ` · ${group.logic === "AND" ? "모든 조건" : "하나라도"}` : ""}</span>
             {loading && <span className="bsc-spinner" />}
             <span className="bsc-countbar-spacer" />
+            <button className="bsc-bt-btn" onClick={() => setShowColPicker((v) => !v)} title="표시 컬럼 추가 (필터와 별개)">⊞ 컬럼{displayCols.length ? ` (${displayCols.length})` : ""}</button>
             <button className="bsc-bt-btn" onClick={exportCsv} disabled={!sortedItems.length} title="현재 결과를 CSV로 내보내기">⤓ CSV</button>
             <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">이 전략 백테스트 →</button>
           </div>
-          {/* 데이터 확충 진행 (실시간 SSE — 작은 글씨) */}
+
+          {showColPicker && (
+            <div className="bsc-colpicker">
+              <div className="bsc-colpicker-head">
+                <span>표시 컬럼 (필터와 별개로 보기만)</span>
+                <input className="bsc-colpicker-search" placeholder="컬럼 검색…" value={colSearch} onChange={(e) => setColSearch(e.target.value)} />
+              </div>
+              <div className="bsc-colpicker-list">
+                {allColOptions.filter((o) => !colSearch || o.label.toLowerCase().includes(colSearch.toLowerCase()) || o.id.includes(colSearch.toLowerCase())).slice(0, 240).map((o) => (
+                  <label key={o.id} className={`bsc-colpicker-item${displayCols.includes(o.id) ? " on" : ""}`}>
+                    <input type="checkbox" checked={displayCols.includes(o.id)} onChange={() => toggleDisplayCol(o.id)} />{o.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bsc-progress">
             {loading
               ? <>데이터 확충 중… <b>{(prog?.done ?? 0).toLocaleString()}</b>/{(prog?.total ?? uniTotal).toLocaleString()} 종목 업데이트{prog && prog.misses > 0 ? ` · 신규 ${prog.misses.toLocaleString()}` : ""}</>
               : results
-                ? <>평가 완료 <b>{results.total_evaluated.toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 · 신규 {results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s</>
+                ? <>평가 완료 <b>{results.total_evaluated.toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 · 신규 {results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s{windowing ? ` · 가상 스크롤 ${sortedItems.length.toLocaleString()}행` : ""}</>
                 : <>대기 중…</>}
           </div>
 
-          <div className="bsc-table-wrap">
+          {/* 0개 진단 */}
+          {diagnostic && (
+            <div className="bsc-diag">조건에 맞는 종목 <b>0개</b> — 가장 제한적인 조건은 <b>{diagnostic.label}</b>(단독 {diagnostic.count.toLocaleString()}개)입니다. 완화하거나 제거해 보세요.</div>
+          )}
+
+          <div className="bsc-table-wrap" ref={tableWrapRef} onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}>
             <table className="bsc-table">
               <thead>
                 <tr>
@@ -381,48 +499,34 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                   <th>종목명</th>
                   <th className="num sortable" onClick={() => setSort("current_price")}>현재가{sortArrow("current_price")}</th>
                   <th className="num sortable" onClick={() => setSort("market_cap_억")}>시총(억){sortArrow("market_cap_억")}</th>
-                  {factorCols.map((fc) => <th key={fc.id} className="num sortable" onClick={() => setSort(fc.id)}>{fc.label}{sortArrow(fc.id)}</th>)}
+                  {dataCols.map((c) => (
+                    <th key={c.id} className={`num sortable${c.filtered ? "" : " viewcol"}`} onClick={() => setSort(c.id)} title={c.filtered ? "필터 컬럼" : "보기 컬럼"}>{c.label}{c.filtered ? "" : " ·"}{sortArrow(c.id)}</th>
+                  ))}
                   <th className="num sortable" onClick={() => setSort("composite_score")}>종합점수{sortArrow("composite_score")}</th>
                   <th>판정</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedItems.map((it, i) => {
-                  const vc = verdictColor(it.verdict);
-                  const isSel = selected === it.stock_code;
-                  return (
-                    <Fragment key={it.stock_code}>
-                      <tr className={`bsc-row${isSel ? " selected" : ""}`} onClick={() => setSelected(isSel ? null : it.stock_code)}>
-                        <td className="bsc-rank">{i + 1}</td>
-                        <td><span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>{favs.has(it.stock_code) ? "★" : "☆"}</span></td>
-                        <td><span className="bsc-name">{it.corp_name}</span>{it.sector && <span className="bsc-sector">{it.sector}</span>}</td>
-                        <td className="num">{typeof it.current_price === "number" ? `${it.current_price.toLocaleString()}원` : "—"}</td>
-                        <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>
-                        {factorCols.map((fc) => <td key={fc.id} className="num">{fmtVal((it as Record<string, unknown>)[fc.id])}</td>)}
-                        <td className="num bsc-score" style={{ color: vc.fg }}>{it.composite_score.toFixed(1)}</td>
-                        <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
-                      </tr>
-                      {isSel && (
-                        <tr className="bsc-action-row">
-                          <td colSpan={colSpan}>
-                            <div className="bsc-action-inner">
-                              <span className="bsc-action-text"><b>{it.corp_name}</b> ({it.stock_code}) · 현재가 {typeof it.current_price === "number" ? it.current_price.toLocaleString() : "—"}원 · 종합점수 {it.composite_score.toFixed(1)} · {it.verdict}</span>
-                              <button className="bsc-go-company" onClick={(e) => goToCompany(it.stock_code, e)}>기업 분석 탭으로 가기 →</button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                {windowing && topPad > 0 && <tr aria-hidden style={{ height: topPad }}><td colSpan={colSpan} style={{ padding: 0, border: 0 }} /></tr>}
+                {visItems.map((it, vi) => renderRow(it, startIdx + vi))}
+                {windowing && botPad > 0 && <tr aria-hidden style={{ height: botPad }}><td colSpan={colSpan} style={{ padding: 0, border: 0 }} /></tr>}
               </tbody>
             </table>
-            {!loading && sortedItems.length === 0 && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없습니다</div>}
+            {!loading && sortedItems.length === 0 && !diagnostic && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없습니다</div>}
           </div>
+
+          {/* 선택 종목 — 하단 고정 액션 바 */}
+          {selectedItem && (
+            <div className="bsc-action-bar">
+              <span className="bsc-action-text"><b>{selectedItem.corp_name}</b> ({selectedItem.stock_code}) · 현재가 {typeof selectedItem.current_price === "number" ? selectedItem.current_price.toLocaleString() : "—"}원 · 종합점수 {selectedItem.composite_score.toFixed(1)} · {selectedItem.verdict}</span>
+              <span className="bsc-countbar-spacer" />
+              <button className="bsc-go-company" onClick={(e) => goToCompany(selectedItem.stock_code, e)}>기업 분석 탭으로 가기 →</button>
+              <span className="bsc-action-close" onClick={() => setSelected(null)}>✕</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── 팩터 추가: 백테스터와 동일한 FactorPickerModal (똑같은 창) ── */}
       <FactorPickerModal open={modalOpen} tone="neutral" onClose={() => setModalOpen(false)} onInsert={handlePick} />
     </div>
   );

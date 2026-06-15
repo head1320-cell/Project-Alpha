@@ -1462,7 +1462,7 @@ h6 { font-size: 1rem; }
 .bsc-bt-btn:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
 .bsc-bt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 /* table */
-.bsc-table-wrap { border: 1px solid var(--t-border); border-radius: 2px; overflow-x: auto; }
+.bsc-table-wrap { border: 1px solid var(--t-border); border-radius: 2px; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 360px); position: relative; }
 .bsc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bsc-table th { position: sticky; top: 0; background: var(--t-surface); text-align: left;
   font-family: var(--t-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
@@ -1472,7 +1472,8 @@ h6 { font-size: 1rem; }
 .bsc-table th.sortable:hover { color: var(--t-ink); }
 .bsc-table td { padding: 10px 12px; border-bottom: 1px solid var(--t-border); white-space: nowrap; }
 .bsc-table td.num { text-align: right; font-family: var(--t-mono); font-size: 12.5px; color: var(--t-ink); }
-.bsc-table tbody tr.bsc-row { cursor: pointer; }
+.bsc-table tbody tr.bsc-row { cursor: pointer; height: 41px; }
+.bsc-table tbody tr.bsc-row td { height: 40px; padding-top: 0; padding-bottom: 0; }
 .bsc-table tbody tr.bsc-row:hover { background: var(--t-surface); }
 .bsc-table tbody tr.bsc-row.selected { background: rgba(18,0,255,0.05); }
 .bsc-rank { font-family: var(--t-mono); font-size: 11px; color: var(--t-muted); width: 34px; text-align: right; }
@@ -1529,6 +1530,35 @@ h6 { font-size: 1rem; }
 .bsc-mcap-btn.active { background: var(--t-accent); color: #fff; border-color: var(--t-accent); }
 .bsc-mcap-note { font-size: 10px; color: var(--t-muted); margin-top: 6px; opacity: 0.85; }
 .bsc-field-tech { font-size: 9px; color: #7c3aed; border: 1px solid #ddd6fe; border-radius: 3px; padding: 0 4px; flex-shrink: 0; }
+/* 셀 퍼센타일 히트맵 */
+.bsc-cell { position: relative; overflow: hidden; }
+.bsc-cell-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(18,0,255,0.10); }
+.bsc-cell-val { position: relative; z-index: 1; }
+/* 임계값 분포 히스토그램 */
+.bsc-hist-panel { display: flex; align-items: center; gap: 14px; padding: 9px 12px; margin-bottom: 10px; border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); }
+.bsc-hist-label { font-family: var(--t-mono); font-size: 11px; color: var(--t-ink); white-space: nowrap; }
+.bsc-hist-wrap { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bsc-hist { width: 240px; height: 30px; flex-shrink: 0; }
+.bsc-hist-meta { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); white-space: nowrap; }
+.bsc-hist-empty { font-size: 11px; color: var(--t-muted); }
+/* 표시 컬럼 피커 */
+.bsc-colpicker { border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 10px 12px; margin-bottom: 10px; }
+.bsc-colpicker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.bsc-colpicker-head > span { font-family: var(--t-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-muted); }
+.bsc-colpicker-search { font-size: 12px; padding: 5px 9px; border: 1px solid var(--t-border); border-radius: 2px; width: 180px; }
+.bsc-colpicker-list { display: flex; flex-wrap: wrap; gap: 5px; max-height: 170px; overflow-y: auto; }
+.bsc-colpicker-item { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 8px; cursor: pointer; }
+.bsc-colpicker-item.on { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,0.04); }
+.bsc-colpicker-item input { margin: 0; }
+.bsc-table th.viewcol { color: var(--t-muted); }
+/* 하단 고정 액션 바 (선택 종목) */
+.bsc-action-bar { display: flex; align-items: center; gap: 12px; padding: 11px 14px; margin-top: 10px;
+  border: 1px solid var(--t-accent); border-radius: 2px; background: rgba(18,0,255,0.04); position: sticky; bottom: 12px; }
+.bsc-action-close { cursor: pointer; color: var(--t-muted); font-size: 12px; }
+.bsc-action-close:hover { color: var(--color-bear); }
+/* 0개 진단 */
+.bsc-diag { font-size: 12.5px; color: #92610a; background: var(--color-caution-bg); border: 1px solid #fde68a; border-radius: 2px; padding: 10px 14px; margin-bottom: 10px; }
+.bsc-diag b { font-weight: 600; }
 
 /* 백테스터 편집(좌) + 조건 요약·액션(우) 2컬럼 — 젠포트식 */
 .tbt-config-row { display: flex; gap: 16px; align-items: flex-start; margin-top: 16px; }

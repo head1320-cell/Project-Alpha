@@ -36,6 +36,7 @@ export default function ScreenerPage() {
             <option value="kospi50">KOSPI 50</option>
             <option value="kospi200">KOSPI 200</option>
             <option value="kosdaq150">KOSDAQ 150</option>
+            <option value="all_listed">전체 (전종목)</option>
             <option value="mapped">DART 매핑</option>
           </select>
         </div>
