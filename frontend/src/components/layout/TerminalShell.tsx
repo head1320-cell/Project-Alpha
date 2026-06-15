@@ -64,19 +64,25 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
       {/* ─── App body: sidebar + main ─── */}
       <div className="terminal-body">
         <aside className="terminal-sidebar">
-          <div className="nav-label">Core Modules</div>
+          <div className="nav-label fade-x">Core Modules</div>
           <nav className="terminal-nav">
             {MODULES.map((m) => {
               const active = pathname === m.href || pathname.startsWith(m.href + "/");
               return (
-                <Link key={m.href} href={m.href} className={`nav-item${active ? " active" : ""}`}>
-                  <span className="nav-number">{m.n}</span>
+                <Link key={m.href} href={m.href} title={m.label} className={`nav-item${active ? " active" : ""}`}>
                   {m.icon}
-                  {m.label}
+                  <span className="nav-meta">
+                    <span className="nav-number">{m.n}</span>
+                    <span className="nav-text">{m.label}</span>
+                  </span>
                 </Link>
               );
             })}
           </nav>
+          <div className="sidebar-foot">
+            <span className="foot-dot" />
+            <span className="nav-text fade-x">System Operational</span>
+          </div>
         </aside>
 
         <main className="terminal-main">

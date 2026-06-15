@@ -728,6 +728,7 @@ h6 { font-size: 1rem; }
   --t-ink: #111111;
   --t-muted: #71717a;
   --t-sidebar-w: 260px;
+  --t-rail-w: 56px;
   --t-header-h: 64px;
   --t-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
@@ -777,13 +778,26 @@ h6 { font-size: 1rem; }
 .account .avatar { width: 24px; height: 24px; background: #eee; border-radius: 50%; border: 1px solid var(--t-border); }
 
 /* Body */
-.terminal-body { flex: 1; display: flex; overflow: hidden; }
+.terminal-body { flex: 1; display: flex; overflow: hidden; position: relative; }
 
-/* Sidebar */
+/* Sidebar — 호버/포커스 시에만 펼쳐지는 아이콘 레일 (오버레이: 본문 리플로우 없음) */
 .terminal-sidebar {
-  width: var(--t-sidebar-w); background: var(--t-surface);
-  border-right: 1px solid var(--t-border);
-  display: flex; flex-direction: column; padding: 24px 0; flex-shrink: 0;
+  position: absolute; left: 0; top: 0; bottom: 0; z-index: 50;
+  width: var(--t-rail-w); overflow: hidden;
+  background: var(--t-surface); border-right: 1px solid var(--t-border);
+  display: flex; flex-direction: column; padding: 24px 0;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+}
+.terminal-sidebar:hover, .terminal-sidebar:focus-within {
+  width: var(--t-sidebar-w); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.07);
+}
+/* 접힘 시 숨고 호버/포커스 때 페이드 인 (헤더·번호·라벨·푸터 텍스트 공통) */
+.terminal-sidebar .fade-x, .terminal-nav .nav-meta {
+  opacity: 0; transition: opacity 0.14s ease; white-space: nowrap;
+}
+.terminal-sidebar:hover .fade-x, .terminal-sidebar:focus-within .fade-x,
+.terminal-sidebar:hover .nav-meta, .terminal-sidebar:focus-within .nav-meta {
+  opacity: 1; transition-delay: 0.06s;
 }
 .terminal-sidebar .nav-label {
   font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
@@ -791,27 +805,30 @@ h6 { font-size: 1rem; }
 }
 .terminal-nav { display: flex; flex-direction: column; }
 .terminal-nav .nav-item {
-  position: relative; display: flex; align-items: center; gap: 12px;
-  padding: 14px 24px; text-decoration: none; color: var(--t-muted);
-  font-size: 14px; font-weight: 500; transition: all 0.1s ease;
+  position: relative; display: flex; align-items: center; gap: 0; height: 46px; padding: 0;
+  text-decoration: none; color: var(--t-muted); font-size: 14px; font-weight: 500;
+  transition: background 0.1s ease, color 0.1s ease;
 }
 .terminal-nav .nav-item:hover { color: var(--t-ink); background: rgba(18, 0, 255, 0.03); }
 .terminal-nav .nav-item.active { color: var(--t-ink); background: #fff; }
 .terminal-nav .nav-item.active::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-accent);
 }
+.terminal-nav .nav-item.active .nav-icon { stroke: var(--t-accent); }
+.terminal-nav .nav-icon { width: 18px; height: 18px; margin: 0 14px 0 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.5; fill: none; }
+.terminal-nav .nav-meta { display: flex; align-items: center; gap: 8px; }
 .terminal-nav .nav-number { font-family: var(--t-mono); font-size: 11px; opacity: 0.4; width: 16px; }
 .terminal-nav .active .nav-number { opacity: 1; color: var(--t-accent); }
-.terminal-nav .nav-icon { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.5; fill: none; }
 
-/* System status */
-.system-status { margin-top: auto; padding: 24px; border-top: 1px solid var(--t-border); }
-.status-pill { display: flex; align-items: center; gap: 8px; font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); }
-.status-pill .pulse { width: 6px; height: 6px; background: #10b981; border-radius: 50%; box-shadow: 0 0 0 4px rgba(16,185,129,0.1); }
-.status-meta { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); margin-top: 8px; }
+/* 하단 상태 푸터: 접힘=점만(중앙 정렬), 호버=점+텍스트 */
+.sidebar-foot { margin-top: auto; display: flex; align-items: center; height: 46px; }
+.sidebar-foot .foot-dot { width: 6px; height: 6px; border-radius: 50%; background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12); margin: 0 25px; flex-shrink: 0; }
+.sidebar-foot .nav-text { font-family: var(--t-mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--t-muted); }
 
 /* Main */
-.terminal-main { flex: 1; background: var(--t-bg); position: relative; padding: 40px; overflow-y: auto; }
+.terminal-main { flex: 1; margin-left: var(--t-rail-w); background: var(--t-bg); position: relative; padding: 40px; overflow-y: auto; }
 .terminal-content { position: relative; z-index: 1; }
 
 /* Terminal decorations */
