@@ -1521,6 +1521,7 @@ h6 { font-size: 1rem; }
 .bsc-progress b { color: var(--t-accent); font-weight: 600; }
 /* 칩 미리보기 카운트 (조건 단독 통과 수) */
 .bsc-chip-count { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 8px; padding: 0 5px; }
+.bsc-chip-delta { font-family: var(--t-mono); font-size: 10px; color: var(--color-bear); font-weight: 600; }
 /* 시가총액 빠른 필터 */
 .bsc-mcap { padding: 0 14px 12px; }
 .bsc-mcap-head { font-family: var(--t-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-muted); margin-bottom: 6px; }

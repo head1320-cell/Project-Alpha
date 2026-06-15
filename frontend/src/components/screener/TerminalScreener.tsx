@@ -85,6 +85,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [loading, setLoading] = useState(false);
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
   const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);
+  const [chipWithout, setChipWithout] = useState<(number | null)[]>([]);   // 조건 제외 시 통과 수 (Δ 임팩트용)
   const [focusedChip, setFocusedChip] = useState<number | null>(null);
   const [sortCol, setSortCol] = useState("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -186,14 +187,21 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return () => { cancelled = true; };
   }, [universe]);
 
-  // ── 칩별 미리보기 카운트 ──
+  // ── 칩별 미리보기 카운트(단독 통과) + 조건 제외 카운트(Δ 임팩트) ──
   useEffect(() => {
-    if (!group.conditions.length) { setChipCounts([]); return; }
+    if (!group.conditions.length) { setChipCounts([]); setChipWithout([]); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
-      const counts = await Promise.all(group.conditions.map((c) =>
-        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: [c], groups: [] }, limit: 1 }).then((r) => r.total_passed).catch(() => null)));
-      if (!cancelled) setChipCounts(counts);
+      const cnt = (conds: FilterConditionNode[], logic: "AND" | "OR" = "AND") =>
+        screenerApiAdvanced.count({ universe, filter_ast: { logic, conditions: conds, groups: [] }, limit: 1, liquidity_floor: "relaxed" }).then((r) => r.total_passed).catch(() => null);
+      const standalone = group.conditions.map((c) => cnt([c]));
+      // Δ 임팩트는 AND·2개 이상일 때만 의미 (조건 제외 시 통과 수)
+      const without = group.conditions.map((_, i) =>
+        group.logic === "AND" && group.conditions.length >= 2
+          ? cnt(group.conditions.filter((_, j) => j !== i), "AND")
+          : Promise.resolve<number | null>(null));
+      const [sc, wo] = await Promise.all([Promise.all(standalone), Promise.all(without)]);
+      if (!cancelled) { setChipCounts(sc); setChipWithout(wo); }
     }, 450);
     return () => { cancelled = true; clearTimeout(t); };
   }, [group, universe]);
@@ -269,14 +277,26 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return r;
   }, [sortedItems, dataCols]);
 
+  // ── 값이 전부 빈 컬럼 자동 숨김 (mock 시총 등). 필터 컬럼은 유지 ──
+  const emptyCols = useMemo(() => {
+    const s = new Set<string>();
+    if (!sortedItems.length) return s;
+    const allNull = (id: string) => sortedItems.every((it) => { const v = (it as Record<string, unknown>)[id]; return v == null || (typeof v === "number" && !Number.isFinite(v)); });
+    if (allNull("market_cap_억")) s.add("market_cap_억");
+    dataCols.forEach((c) => { if (!c.filtered && allNull(c.id)) s.add(c.id); });
+    return s;
+  }, [sortedItems, dataCols]);
+  const shownCols = useMemo(() => dataCols.filter((c) => c.filtered || !emptyCols.has(c.id)), [dataCols, emptyCols]);
+  const showMcap = !emptyCols.has("market_cap_억");
+
   const sampleVals = useCallback((id: string) => sampleItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)), [sampleItems]);
 
   const exportCsv = () => {
     if (!sortedItems.length) return;
-    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", "시총(억)", ...dataCols.map((c) => c.label), "종합점수", "판정"];
+    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", ...(showMcap ? ["시총(억)"] : []), ...shownCols.map((c) => c.label), "종합점수", "판정"];
     const rows = sortedItems.map((it, i) => [i + 1, it.stock_code, it.corp_name, it.sector ?? "",
-      typeof it.current_price === "number" ? it.current_price : "", it.market_cap_억 ?? "",
-      ...dataCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }), it.composite_score, it.verdict]);
+      typeof it.current_price === "number" ? it.current_price : "", ...(showMcap ? [it.market_cap_억 ?? ""] : []),
+      ...shownCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }), it.composite_score, it.verdict]);
     const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -286,7 +306,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
   const total = results?.total_passed ?? null;
   const uniTotal = universeSizes[universe] ?? results?.total_evaluated ?? 0;
-  const colSpan = 7 + dataCols.length;
+  const colSpan = 6 + (showMcap ? 1 : 0) + shownCols.length;
   const selectedItem = selected ? sortedItems.find((it) => it.stock_code === selected) ?? null : null;
   const focusCond = focusedChip != null ? group.conditions[focusedChip] : null;
 
@@ -310,9 +330,17 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const heatCell = (id: string, v: unknown) => {
     const range = colRanges[id];
     const pct = range && typeof v === "number" && Number.isFinite(v) && range[1] > range[0] ? (v - range[0]) / (range[1] - range[0]) : 0;
+    const hb = id === "composite_score" ? true : metaById.get(id)?.higher_better;
+    // 방향성: higher_better 면 큰 값=좋음(녹), 아니면 작은 값=좋음 → 좋을수록 길고 초록, 나쁠수록 짧고 빨강
+    let width = pct, fill = "rgba(18,0,255,0.10)";
+    if (hb !== undefined && range) {
+      const good = hb ? pct : 1 - pct;
+      width = good;
+      fill = good >= 0.5 ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.13)";
+    }
     return (
       <td className="num bsc-cell" key={id}>
-        <span className="bsc-cell-fill" style={{ width: `${Math.round(pct * 100)}%` }} />
+        <span className="bsc-cell-fill" style={{ width: `${Math.round(width * 100)}%`, background: fill }} />
         <span className="bsc-cell-val">{fmtVal(v)}</span>
       </td>
     );
@@ -327,8 +355,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
         <td><span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>{favs.has(it.stock_code) ? "★" : "☆"}</span></td>
         <td><span className="bsc-name">{it.corp_name}</span>{it.sector && <span className="bsc-sector">{it.sector}</span>}</td>
         <td className="num">{typeof it.current_price === "number" ? `${it.current_price.toLocaleString()}원` : "—"}</td>
-        <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>
-        {dataCols.map((c) => heatCell(c.id, (it as Record<string, unknown>)[c.id]))}
+        {showMcap && <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>}
+        {shownCols.map((c) => heatCell(c.id, (it as Record<string, unknown>)[c.id]))}
         {heatCell("composite_score", it.composite_score)}
         <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
       </tr>
@@ -435,6 +463,9 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                     </>
                   )}
                   {chipCounts[idx] != null && <span className="bsc-chip-count" title="이 조건 단독 통과 종목 수">{chipCounts[idx]!.toLocaleString()}</span>}
+                  {group.logic === "AND" && chipWithout[idx] != null && total != null && (chipWithout[idx]! - total) > 0 && (
+                    <span className="bsc-chip-delta" title="이 조건이 현재 조합에서 추가로 제거하는 종목 수">−{(chipWithout[idx]! - total).toLocaleString()}</span>
+                  )}
                   <span className="bsc-chip-del" onClick={() => removeCondition(idx)}>✕</span>
                 </span>
               );
@@ -498,8 +529,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                   <th />
                   <th>종목명</th>
                   <th className="num sortable" onClick={() => setSort("current_price")}>현재가{sortArrow("current_price")}</th>
-                  <th className="num sortable" onClick={() => setSort("market_cap_억")}>시총(억){sortArrow("market_cap_억")}</th>
-                  {dataCols.map((c) => (
+                  {showMcap && <th className="num sortable" onClick={() => setSort("market_cap_억")}>시총(억){sortArrow("market_cap_억")}</th>}
+                  {shownCols.map((c) => (
                     <th key={c.id} className={`num sortable${c.filtered ? "" : " viewcol"}`} onClick={() => setSort(c.id)} title={c.filtered ? "필터 컬럼" : "보기 컬럼"}>{c.label}{c.filtered ? "" : " ·"}{sortArrow(c.id)}</th>
                   ))}
                   <th className="num sortable" onClick={() => setSort("composite_score")}>종합점수{sortArrow("composite_score")}</th>
