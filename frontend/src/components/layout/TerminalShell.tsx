@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalShell — Variant "Institutional Terminal" 좌측 사이드바 셸
@@ -43,6 +44,8 @@ const MODULES = [
 
 export function TerminalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // 터치/클릭 토글 — 호버가 없는 환경에서 사이드바를 고정으로 펼침
+  const [pinned, setPinned] = useState(false);
 
   // 루트(/)는 랜딩 페이지 — 터미널 셸 없이 풀블리드 렌더 (CTA가 /dashboard로 진입)
   if (pathname === "/") return <>{children}</>;
@@ -63,13 +66,17 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
 
       {/* ─── App body: sidebar + main ─── */}
       <div className="terminal-body">
-        <aside className="terminal-sidebar">
+        <aside className={`terminal-sidebar${pinned ? " pinned" : ""}`}>
+          <button type="button" className="rail-toggle" aria-label={pinned ? "사이드바 접기" : "사이드바 펼치기"}
+            aria-expanded={pinned} onClick={() => setPinned((p) => !p)}>
+            <svg className="nav-icon" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+          </button>
           <div className="nav-label fade-x">Core Modules</div>
           <nav className="terminal-nav">
             {MODULES.map((m) => {
               const active = pathname === m.href || pathname.startsWith(m.href + "/");
               return (
-                <Link key={m.href} href={m.href} title={m.label} className={`nav-item${active ? " active" : ""}`}>
+                <Link key={m.href} href={m.href} title={m.label} onClick={() => setPinned(false)} className={`nav-item${active ? " active" : ""}`}>
                   {m.icon}
                   <span className="nav-meta">
                     <span className="nav-number">{m.n}</span>
@@ -84,6 +91,7 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
             <span className="nav-text fade-x">System Operational</span>
           </div>
         </aside>
+        {pinned && <div className="sidebar-backdrop" onClick={() => setPinned(false)} />}
 
         <main className="terminal-main">
           <div className="grid-overlay" />

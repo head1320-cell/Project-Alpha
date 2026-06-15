@@ -24,6 +24,11 @@ const MCAP_PRESETS: Array<{ id: string; label: string; min: number | null; max: 
   { id: "mid", label: "중형 2천억~1조", min: 2000, max: 10000 },
   { id: "small", label: "소형 ~2천억", min: null, max: 2000 },
 ];
+// 시총 슬라이더(0~100) ↔ 억 변환 — 로그 스케일 (10^2=100억 ~ 10^7=1000조)
+const MCAP_LO = 2, MCAP_HI = 7;
+const sliderToMcap = (s: number) => Math.round(Math.pow(10, MCAP_LO + (MCAP_HI - MCAP_LO) * (s / 100)));
+const mcapToSlider = (eok: number) => Math.round(Math.max(0, Math.min(100, ((Math.log10(eok) - MCAP_LO) / (MCAP_HI - MCAP_LO)) * 100)));
+const fmtMcapKo = (eok: number) => eok >= 10000 ? `${(eok / 10000).toFixed(eok >= 100000 ? 0 : 1)}조` : `${Math.round(eok).toLocaleString()}억`;
 const ROW_H = 41;        // 가상 스크롤 행 높이(고정)
 const WINDOW_MIN = 60;   // 결과가 이보다 많으면 윈도잉 활성
 
@@ -93,6 +98,9 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  // 시총 슬라이더 (0~100 핸들). [0,100] = 제한 없음
+  const [mcapRange, setMcapRange] = useState<[number, number]>([0, 100]);
+  const mcapInit = useRef(true);
   // 표시(보기전용) 컬럼 — 필터와 분리
   const [displayCols, setDisplayCols] = useState<string[]>([]);
   const [showColPicker, setShowColPicker] = useState(false);
@@ -219,16 +227,24 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) => setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
   const clearAll = () => { setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null); };
   const toggleLogic = () => setGroup((g) => ({ ...g, logic: g.logic === "AND" ? "OR" : "AND" }));
-  const applyMcap = (min: number | null, max: number | null) => {
+  // 시총 슬라이더 → market_cap_억 조건 반영 (디바운스, 마운트 스킵)
+  const commitMcapNow = useCallback((r: [number, number]) => {
+    const min = r[0] > 0 ? sliderToMcap(r[0]) : null;
+    const max = r[1] < 100 ? sliderToMcap(r[1]) : null;
     setGroup((g) => {
       const conds = g.conditions.filter((c) => c.field !== "market_cap_억");
       if (min != null) conds.push({ kind: "field", field: "market_cap_억", op: "gte", value: min });
       if (max != null) conds.push({ kind: "field", field: "market_cap_억", op: "lte", value: max });
       return { ...g, conditions: conds };
     });
-    setLabelOverride((m) => ({ ...m, market_cap_억: "시가총액" }));
-  };
-  const mcapActive = group.conditions.some((c) => c.field === "market_cap_억");
+    if (min != null || max != null) setLabelOverride((m) => ({ ...m, market_cap_억: "시가총액" }));
+  }, []);
+  useEffect(() => {
+    if (mcapInit.current) { mcapInit.current = false; return; }
+    const t = setTimeout(() => commitMcapNow(mcapRange), 280);
+    return () => clearTimeout(t);
+  }, [mcapRange, commitMcapNow]);
+  const mcapActive = mcapRange[0] !== 0 || mcapRange[1] !== 100;
   const toggleDisplayCol = (id: string) => setDisplayCols((cols) => {
     const next = cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id];
     try { localStorage.setItem("alpha_screener_cols", JSON.stringify(next)); } catch { /* noop */ }
@@ -375,10 +391,21 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
 
           <div className="bsc-mcap">
-            <div className="bsc-mcap-head">시가총액</div>
+            <div className="bsc-mcap-head">시가총액
+              <span className="bsc-mcap-vals">{mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ {mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}</span>
+            </div>
+            <div className="bsc-range">
+              <div className="bsc-range-fill" style={{ left: `${mcapRange[0]}%`, right: `${100 - mcapRange[1]}%` }} />
+              <input type="range" min={0} max={100} value={mcapRange[0]} className="bsc-range-input" aria-label="시총 최소"
+                onChange={(e) => { const v = Number(e.target.value); setMcapRange(([, hi]) => [Math.min(v, hi - 1), hi]); }} />
+              <input type="range" min={0} max={100} value={mcapRange[1]} className="bsc-range-input" aria-label="시총 최대"
+                onChange={(e) => { const v = Number(e.target.value); setMcapRange(([lo]) => [lo, Math.max(v, lo + 1)]); }} />
+            </div>
             <div className="bsc-mcap-btns">
-              <button className={`bsc-mcap-btn${!mcapActive ? " active" : ""}`} onClick={() => applyMcap(null, null)}>전체</button>
-              {MCAP_PRESETS.map((p) => <button key={p.id} className="bsc-mcap-btn" onClick={() => applyMcap(p.min, p.max)}>{p.label}</button>)}
+              <button className={`bsc-mcap-btn${!mcapActive ? " active" : ""}`} onClick={() => setMcapRange([0, 100])}>전체</button>
+              {MCAP_PRESETS.map((p) => (
+                <button key={p.id} className="bsc-mcap-btn" onClick={() => setMcapRange([p.min ? mcapToSlider(p.min) : 0, p.max ? mcapToSlider(p.max) : 100])}>{p.label}</button>
+              ))}
             </div>
             <div className="bsc-mcap-note">ⓘ 실데이터 연결 시 동작 (mock은 시총 미제공)</div>
           </div>
