@@ -92,8 +92,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [sampleItems, setSampleItems] = useState<ScreenerItem[]>([]);   // 분포용 무필터 표본
   const [loading, setLoading] = useState(false);
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
-  const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);
-  const [chipWithout, setChipWithout] = useState<(number | null)[]>([]);   // 조건 제외 시 통과 수 (Δ 임팩트용)
+  const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);   // 팩터별 단독 통과 수
   const [focusedChip, setFocusedChip] = useState<number | null>(null);
   const [sortCol, setSortCol] = useState("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -225,21 +224,15 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return () => { cancelled = true; };
   }, [universe]);
 
-  // ── 칩별 미리보기 카운트(단독 통과) + 조건 제외 카운트(Δ 임팩트) ──
+  // ── 팩터별 단독 통과 수 (선택도 표시) ──
   useEffect(() => {
-    if (!group.conditions.length) { setChipCounts([]); setChipWithout([]); return; }
+    if (!group.conditions.length) { setChipCounts([]); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
-      const cnt = (conds: FilterConditionNode[], logic: "AND" | "OR" = "AND") =>
-        screenerApiAdvanced.count({ universe, filter_ast: { logic, conditions: conds, groups: [] }, limit: 1, liquidity_floor: "relaxed" }).then((r) => r.total_passed).catch(() => null);
-      const standalone = group.conditions.map((c) => cnt([c]));
-      // Δ 임팩트는 AND·2개 이상일 때만 의미 (조건 제외 시 통과 수)
-      const without = group.conditions.map((_, i) =>
-        group.logic === "AND" && group.conditions.length >= 2
-          ? cnt(group.conditions.filter((_, j) => j !== i), "AND")
-          : Promise.resolve<number | null>(null));
-      const [sc, wo] = await Promise.all([Promise.all(standalone), Promise.all(without)]);
-      if (!cancelled) { setChipCounts(sc); setChipWithout(wo); }
+      const cnt = (conds: FilterConditionNode[]) =>
+        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: conds, groups: [] }, limit: 1, liquidity_floor: "relaxed" }).then((r) => r.total_passed).catch(() => null);
+      const sc = await Promise.all(group.conditions.map((c) => cnt([c])));
+      if (!cancelled) setChipCounts(sc);
     }, 450);
     return () => { cancelled = true; clearTimeout(t); };
   }, [group, universe]);
@@ -480,16 +473,38 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 「팩터1, 팩터2 …」로 위에 쌓이고, 조건식에 자동으로 들어갑니다.</div>
           ) : (
             <div className="bsc-rail-list">
-              {group.conditions.map((c, i) => (
-                <div key={i} className="bsc-rail-item">
-                  <span className="bsc-rail-item-tag">팩터{i + 1}</span>
-                  <div className="bsc-rail-item-body">
-                    <div className="bsc-rail-item-name">{fieldLabel(c.field)}{c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}</div>
-                    <div className="bsc-rail-item-cond">{condText(c, fieldLabel)}</div>
+              {group.conditions.map((c, i) => {
+                const isRank = !!c.rank_mode;
+                return (
+                  <div key={i} className="bsc-rail-item">
+                    <div className="bsc-rail-item-top">
+                      <span className="bsc-rail-item-tag">팩터{i + 1}</span>
+                      <span className="bsc-rail-item-name">{fieldLabel(c.field)}{c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}</span>
+                      {chipCounts[i] != null && <span className="bsc-rail-item-count" title="이 팩터 단독 통과 종목 수">{chipCounts[i]!.toLocaleString()}</span>}
+                      <span className="bsc-rail-item-del" onClick={() => removeCondition(i)}>✕</span>
+                    </div>
+                    <div className="bsc-rail-item-edit">
+                      {isRank ? (
+                        <>
+                          <select className="bsc-chip-op" value={c.rank_mode!} onChange={(e) => updateCondition(i, { rank_mode: e.target.value as FilterConditionNode["rank_mode"] })}>
+                            <option value="top_pct">상위</option><option value="bottom_pct">하위</option>
+                          </select>
+                          <input className="bsc-chip-val" type="number" value={String(c.rank_value ?? 30)} onChange={(e) => updateCondition(i, { rank_value: Number(e.target.value) || 0 })} />
+                          <span className="bsc-rail-item-unit">%</span>
+                        </>
+                      ) : (
+                        <>
+                          <select className="bsc-chip-op" value={c.op || "gte"} onChange={(e) => updateCondition(i, { op: e.target.value as FilterConditionNode["op"] })}>
+                            <option value="gt">&gt;</option><option value="gte">≥</option><option value="lt">&lt;</option><option value="lte">≤</option><option value="eq">=</option>
+                          </select>
+                          <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(i)}
+                            onChange={(e) => updateCondition(i, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <span className="bsc-rail-item-del" onClick={() => removeCondition(i)}>✕</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -521,43 +536,6 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
         {/* ── 우측 ── */}
         <div className="bsc-main">
-          <div className="bsc-toolbar">
-            <span className="bsc-toolbar-label">필터 추가하기</span>
-            {group.conditions.length === 0 && <span style={{ fontSize: 12, color: "var(--t-muted)" }}>조건 없음 — 전체 종목 표시 중</span>}
-            {group.conditions.map((c, idx) => {
-              const isRank = !!c.rank_mode;
-              return (
-                <span key={idx} className={`bsc-chip${c.kind === "technical" ? " bsc-chip-tech" : ""}`}>
-                  <span className="bsc-chip-tag">팩터{idx + 1}</span>
-                  <span className="bsc-chip-name">{fieldLabel(c.field)}</span>
-                  {isRank ? (
-                    <>
-                      <select className="bsc-chip-op" value={c.rank_mode!} onChange={(e) => updateCondition(idx, { rank_mode: e.target.value as FilterConditionNode["rank_mode"] })}>
-                        <option value="top_pct">상위</option><option value="bottom_pct">하위</option>
-                      </select>
-                      <input className="bsc-chip-val" type="number" value={String(c.rank_value ?? 30)} onChange={(e) => updateCondition(idx, { rank_value: Number(e.target.value) || 0 })} />
-                      <span style={{ fontSize: 11, color: "var(--t-muted)" }}>%</span>
-                    </>
-                  ) : (
-                    <>
-                      <select className="bsc-chip-op" value={c.op || "gte"} onChange={(e) => updateCondition(idx, { op: e.target.value as FilterConditionNode["op"] })}>
-                        <option value="gt">&gt;</option><option value="gte">≥</option><option value="lt">&lt;</option><option value="lte">≤</option><option value="eq">=</option>
-                      </select>
-                      <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(idx)}
-                        onChange={(e) => updateCondition(idx, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
-                    </>
-                  )}
-                  {chipCounts[idx] != null && <span className="bsc-chip-count" title="이 조건 단독 통과 종목 수">{chipCounts[idx]!.toLocaleString()}</span>}
-                  {group.logic === "AND" && chipWithout[idx] != null && total != null && (chipWithout[idx]! - total) > 0 && (
-                    <span className="bsc-chip-delta" title="이 조건이 현재 조합에서 추가로 제거하는 종목 수">−{(chipWithout[idx]! - total).toLocaleString()}</span>
-                  )}
-                  <span className="bsc-chip-del" onClick={() => removeCondition(idx)}>✕</span>
-                </span>
-              );
-            })}
-            <button className="bsc-chip-add" onClick={() => setModalOpen(true)}>＋ 팩터</button>
-          </div>
-
           {/* 조건식(불리언 표현식) — 팩터 토큰 + and/or/() 직접 작성 → SEARCH */}
           {group.conditions.length > 0 && (
             <div className="bsc-expr">
