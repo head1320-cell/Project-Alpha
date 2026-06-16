@@ -16,9 +16,12 @@ import {
 } from "@/lib/screenerApi";
 import { setScreenerHandoff } from "@/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/lib/screenerPresets";
+import { parseExpr, materialize, type ExprNode } from "@/lib/exprParser";
 import FactorPickerModal, { type FactorPick } from "@/components/backtest/FactorPickerModal";
 
 const OP_LABEL: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
+// 조건식 기본값 — 추가된 팩터 전부 AND ("팩터1 and 팩터2 and ...")
+const autoExpr = (n: number) => (n < 1 ? "" : Array.from({ length: n }, (_, i) => `팩터${i + 1}`).join(" and "));
 const MCAP_PRESETS: Array<{ id: string; label: string; min: number | null; max: number | null }> = [
   { id: "large", label: "대형 1조+", min: 10000, max: null },
   { id: "mid", label: "중형 2천억~1조", min: 2000, max: 10000 },
@@ -101,6 +104,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   // 시총 슬라이더 (0~100 핸들). [0,100] = 제한 없음
   const [mcapRange, setMcapRange] = useState<[number, number]>([0, 100]);
   const mcapInit = useRef(true);
+  // 시총 조건은 팩터 토큰과 분리 — 항상 AND 로 적용되는 유니버스 제약
+  const [mcapConds, setMcapConds] = useState<FilterConditionNode[]>([]);
   // 표시(보기전용) 컬럼 — 필터와 분리
   const [displayCols, setDisplayCols] = useState<string[]>([]);
   const [showColPicker, setShowColPicker] = useState(false);
@@ -113,6 +118,15 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [presets, setPresets] = useState<ScreenerPreset[]>([]);
   const [presetName, setPresetName] = useState("");
   const [showSave, setShowSave] = useState(false);
+  // 조건식(불리언 표현식) — 사용자가 "팩터1 and (팩터2 or 팩터3)" 처럼 직접 작성
+  const [exprText, setExprText] = useState("");
+  const [exprError, setExprError] = useState<string | null>(null);
+  const [committed, setCommitted] = useState<ExprNode | null>(null);   // 실제 검색에 쓰이는 구조 (null = 전 종목)
+  const exprTextRef = useRef("");          // 핸들러에서 최신 식 즉시 참조 (렌더 전 다중 추가 대응)
+  const countRef = useRef(0);              // 현재 팩터 수 (토큰 번호 부여용)
+  const exprInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { exprTextRef.current = exprText; }, [exprText]);
+  useEffect(() => { countRef.current = group.conditions.length; }, [group.conditions.length]);
 
   useEffect(() => {
     screenerApiAdvanced.fields().then(setCatalog).catch(() => {});
@@ -165,11 +179,27 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           value: meta ? Math.round(((meta.higher_better ?? true ? meta.typical_min : meta.typical_max) ?? 0) * 100) / 100 : 0 };
     setLabelOverride((m) => ({ ...m, [r.id]: meta?.label ?? pick.factorName }));
     setGroup((g) => ({ ...g, conditions: [...g.conditions, cond] }));
+    // 조건식에 새 토큰 자동 추가 ("... and 팩터N") + 즉시 미리보기 검색
+    const n = countRef.current + 1; countRef.current = n;
+    const prev = exprTextRef.current.trim();
+    const txt = prev ? `${prev} and 팩터${n}` : `팩터${n}`;
+    exprTextRef.current = txt; setExprText(txt);
+    const pr = parseExpr(txt, n);
+    if (pr.ok) { setCommitted(pr.ast); setExprError(null); }
   }, [resolveFactor, metaById]);
 
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t); }, [notice]);
 
-  // ── 라이브 스크리닝 (SSE 스트리밍) ──
+  // ── 조건식 → 실제 filter_ast (committed 구조 + 현재 조건 값) + 시총 AND 병합 ──
+  const effectiveAst = useMemo<FilterGroupNode>(() => {
+    const factorAst = committed ? (materialize(committed, group.conditions) as FilterGroupNode) : null;
+    if (factorAst && mcapConds.length) return { logic: "AND", conditions: [...mcapConds], groups: [factorAst] };
+    if (factorAst) return factorAst;
+    if (mcapConds.length) return { logic: "AND", conditions: [...mcapConds], groups: [] };
+    return { logic: "AND", conditions: [], groups: [] };
+  }, [committed, group.conditions, mcapConds]);
+
+  // ── 라이브 스크리닝 (SSE 스트리밍) — committed 조건식 또는 값 변경 시 재실행 ──
   useEffect(() => {
     setLoading(true); setProg(null);
     const ctrl = new AbortController();
@@ -177,7 +207,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     const t = setTimeout(async () => {
       try {
         const r = await screenerApiAdvanced.runAdvancedStream(
-          { universe, filter_ast: group, sort_by: "composite_score", ascending: false, limit: 500, liquidity_floor: "relaxed" },
+          { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 500, liquidity_floor: "relaxed" },
           (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); }, ctrl.signal,
         );
         if (!cancelled) setResults(r);
@@ -185,7 +215,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
       finally { if (!cancelled) setLoading(false); }
     }, 350);
     return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
-  }, [group, universe]);
+  }, [effectiveAst, universe]);
 
   // ── 분포용 무필터 표본 (유니버스 변경 시) ──
   useEffect(() => {
@@ -223,21 +253,50 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return () => ro.disconnect();
   }, []);
 
-  const removeCondition = (idx: number) => setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
+  // 팩터 제거 → 인덱스가 밀리므로 조건식을 기본 AND 로 재생성 (예측가능 동작)
+  const removeCondition = (idx: number) => {
+    setGroup((g) => ({ ...g, conditions: g.conditions.filter((_, i) => i !== idx) }));
+    const n = Math.max(0, countRef.current - 1); countRef.current = n;
+    const txt = autoExpr(n); exprTextRef.current = txt; setExprText(txt);
+    const pr = n >= 1 ? parseExpr(txt, n) : null;
+    setCommitted(pr && pr.ok ? pr.ast : null); setExprError(null);
+  };
   const updateCondition = (idx: number, patch: Partial<FilterConditionNode>) => setGroup((g) => ({ ...g, conditions: g.conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)) }));
-  const clearAll = () => { setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null); };
-  const toggleLogic = () => setGroup((g) => ({ ...g, logic: g.logic === "AND" ? "OR" : "AND" }));
-  // 시총 슬라이더 → market_cap_억 조건 반영 (디바운스, 마운트 스킵)
+  const clearAll = () => {
+    setGroup({ logic: "AND", conditions: [], groups: [] }); setSelected(null);
+    countRef.current = 0; exprTextRef.current = ""; setExprText(""); setCommitted(null); setExprError(null);
+  };
+  // 조건식 SEARCH/Enter — 현재 식을 파싱해 검색 실행 (빈 식 = 전 팩터 AND, 팩터 없으면 전 종목)
+  const runSearch = () => {
+    const txt = exprText.trim();
+    const n = group.conditions.length;
+    if (!txt) {
+      if (n >= 1) { const d = autoExpr(n); setExprText(d); exprTextRef.current = d; const pr = parseExpr(d, n); setCommitted(pr.ok ? pr.ast : null); }
+      else setCommitted(null);
+      setExprError(null); return;
+    }
+    const pr = parseExpr(txt, n);
+    if (pr.ok) { setCommitted(pr.ast); setExprError(null); } else setExprError(pr.error);
+  };
+  // 토큰/연산자를 커서 위치에 삽입
+  const insertAtCursor = (s: string) => {
+    const el = exprInputRef.current;
+    const cur = exprTextRef.current;
+    if (!el) { const next = cur + s; exprTextRef.current = next; setExprText(next); return; }
+    const start = el.selectionStart ?? cur.length, end = el.selectionEnd ?? cur.length;
+    const next = cur.slice(0, start) + s + cur.slice(end);
+    exprTextRef.current = next; setExprText(next);
+    requestAnimationFrame(() => { el.focus(); const pos = start + s.length; el.setSelectionRange(pos, pos); });
+  };
+  // 시총 슬라이더 → market_cap_억 조건 (팩터 토큰과 분리, 항상 AND)
   const commitMcapNow = useCallback((r: [number, number]) => {
     const min = r[0] > 0 ? sliderToMcap(r[0]) : null;
     const max = r[1] < 100 ? sliderToMcap(r[1]) : null;
-    setGroup((g) => {
-      const conds = g.conditions.filter((c) => c.field !== "market_cap_억");
-      if (min != null) conds.push({ kind: "field", field: "market_cap_억", op: "gte", value: min });
-      if (max != null) conds.push({ kind: "field", field: "market_cap_억", op: "lte", value: max });
-      return { ...g, conditions: conds };
-    });
-    if (min != null || max != null) setLabelOverride((m) => ({ ...m, market_cap_억: "시가총액" }));
+    const conds: FilterConditionNode[] = [];
+    if (min != null) conds.push({ kind: "field", field: "market_cap_억", op: "gte", value: min });
+    if (max != null) conds.push({ kind: "field", field: "market_cap_억", op: "lte", value: max });
+    setMcapConds(conds);
+    if (conds.length) setLabelOverride((m) => ({ ...m, market_cap_억: "시가총액" }));
   }, []);
   useEffect(() => {
     if (mcapInit.current) { mcapInit.current = false; return; }
@@ -259,9 +318,16 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const setSort = (col: string) => { if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc")); else { setSortCol(col); setSortDir("desc"); } };
   const sortArrow = (col: string) => (sortCol === col ? (sortDir === "desc" ? " ▼" : " ▲") : "");
   const goToCompany = (code: string, e: ReactMouseEvent) => { e.stopPropagation(); try { sessionStorage.setItem("alpha_company_ticker", code); } catch { /* noop */ } router.push("/insights"); };
-  const sendToBacktester = () => { if (!group.conditions.length) return; setScreenerHandoff({ filterAst: group, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() }); router.push("/backtest"); };
+  const sendToBacktester = () => { if (!group.conditions.length) return; setScreenerHandoff({ filterAst: effectiveAst, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() }); router.push("/backtest"); };
   const handleSave = () => { if (!group.conditions.length || !presetName.trim()) return; savePreset(presetName.trim(), group, universe); setPresets(listPresets()); setPresetName(""); setShowSave(false); };
-  const handleLoad = (p: ScreenerPreset) => { setGroup(JSON.parse(JSON.stringify(p.group))); setSelected(null); };
+  const handleLoad = (p: ScreenerPreset) => {
+    const g = JSON.parse(JSON.stringify(p.group)) as FilterGroupNode;
+    setGroup(g); setSelected(null);
+    const n = g.conditions.length; countRef.current = n;
+    const txt = autoExpr(n); exprTextRef.current = txt; setExprText(txt);
+    const pr = n >= 1 ? parseExpr(txt, n) : null;
+    setCommitted(pr && pr.ok ? pr.ast : null); setExprError(null);
+  };
   const handleDelete = (id: string, e: ReactMouseEvent) => { e.stopPropagation(); deletePreset(id); setPresets(listPresets()); };
 
   // 표시 컬럼 = 필터 팩터 컬럼 + 보기전용 컬럼 (중복/고정컬럼 제거)
@@ -410,22 +476,13 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <div className="bsc-mcap-note">ⓘ 실데이터 연결 시 동작 (mock은 시총 미제공)</div>
           </div>
 
-          {group.conditions.length >= 2 && (
-            <div className="bsc-logic">
-              <span className="bsc-logic-label">조건 결합</span>
-              <button className="bsc-logic-toggle" onClick={toggleLogic}>
-                <span className={group.logic === "AND" ? "on" : ""}>모두(AND)</span>
-                <span className={group.logic === "OR" ? "on" : ""}>하나(OR)</span>
-              </button>
-            </div>
-          )}
-
           {group.conditions.length === 0 ? (
-            <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 전 종목이 즉시 필터링됩니다.</div>
+            <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 「팩터1, 팩터2 …」로 위에 쌓이고, 조건식에 자동으로 들어갑니다.</div>
           ) : (
             <div className="bsc-rail-list">
               {group.conditions.map((c, i) => (
                 <div key={i} className="bsc-rail-item">
+                  <span className="bsc-rail-item-tag">팩터{i + 1}</span>
                   <div className="bsc-rail-item-body">
                     <div className="bsc-rail-item-name">{fieldLabel(c.field)}{c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}</div>
                     <div className="bsc-rail-item-cond">{condText(c, fieldLabel)}</div>
@@ -471,6 +528,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
               const isRank = !!c.rank_mode;
               return (
                 <span key={idx} className={`bsc-chip${c.kind === "technical" ? " bsc-chip-tech" : ""}`}>
+                  <span className="bsc-chip-tag">팩터{idx + 1}</span>
                   <span className="bsc-chip-name">{fieldLabel(c.field)}</span>
                   {isRank ? (
                     <>
@@ -500,6 +558,39 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <button className="bsc-chip-add" onClick={() => setModalOpen(true)}>＋ 팩터</button>
           </div>
 
+          {/* 조건식(불리언 표현식) — 팩터 토큰 + and/or/() 직접 작성 → SEARCH */}
+          {group.conditions.length > 0 && (
+            <div className="bsc-expr">
+              <div className="bsc-expr-row">
+                <span className="bsc-expr-label">조건식</span>
+                <input
+                  ref={exprInputRef}
+                  className={`bsc-expr-input${exprError ? " err" : ""}`}
+                  value={exprText}
+                  placeholder="예: 팩터1 and (팩터2 or 팩터3)"
+                  spellCheck={false}
+                  onChange={(e) => setExprText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
+                />
+                <button className="bsc-expr-search" onClick={runSearch} title="조건식으로 검색">SEARCH</button>
+              </div>
+              <div className="bsc-expr-tokens">
+                <span className="bsc-expr-hint">삽입:</span>
+                {group.conditions.map((c, i) => (
+                  <button key={i} className="bsc-expr-token" title={condText(c, fieldLabel)} onClick={() => insertAtCursor(`팩터${i + 1}`)}>팩터{i + 1}</button>
+                ))}
+                <span className="bsc-expr-sep" />
+                <button className="bsc-expr-op" onClick={() => insertAtCursor(" and ")}>and</button>
+                <button className="bsc-expr-op" onClick={() => insertAtCursor(" or ")}>or</button>
+                <button className="bsc-expr-op" onClick={() => insertAtCursor("(")}>(</button>
+                <button className="bsc-expr-op" onClick={() => insertAtCursor(")")}>)</button>
+              </div>
+              {exprError
+                ? <div className="bsc-expr-msg err">⚠ {exprError}</div>
+                : <div className="bsc-expr-msg ok">적용 중: <b>{committed ? exprText.trim() : "전체 종목 (조건식 없음)"}</b></div>}
+            </div>
+          )}
+
           {/* 임계값 분포 히스토그램 (편집 중인 조건) */}
           {focusCond && !focusCond.rank_mode && (
             <div className="bsc-hist-panel">
@@ -511,7 +602,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           {notice && <div className="bsc-notice">{notice}</div>}
 
           <div className="bsc-countbar">
-            <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개{group.conditions.length >= 2 ? ` · ${group.logic === "AND" ? "모든 조건" : "하나라도"}` : ""}</span>
+            <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개</span>
             {loading && <span className="bsc-spinner" />}
             <span className="bsc-countbar-spacer" />
             <button className="bsc-bt-btn" onClick={() => setShowColPicker((v) => !v)} title="표시 컬럼 추가 (필터와 별개)">⊞ 컬럼{displayCols.length ? ` (${displayCols.length})` : ""}</button>
@@ -585,7 +676,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
         </div>
       </div>
 
-      <FactorPickerModal open={modalOpen} tone="neutral" onClose={() => setModalOpen(false)} onInsert={handlePick} />
+      <FactorPickerModal key={modalOpen ? "open" : "closed"} open={modalOpen} tone="neutral" onClose={() => setModalOpen(false)} onInsert={handlePick} />
     </div>
   );
 }
