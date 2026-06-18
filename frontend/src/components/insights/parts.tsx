@@ -98,12 +98,16 @@ export function Spark({ values, color = ACCENT, w = 90, h = 26 }: { values: numb
 export function ValueBand({ price, models, intrinsic }: { price: number; models: ModelResult[]; intrinsic: number }) {
   const avail = models.filter((m) => m.value > 0);
   const vals = [price, intrinsic, ...avail.map((m) => m.value)].filter((v) => v > 0);
-  const lo = Math.min(...vals) * 0.96, hi = Math.max(...vals) * 1.04, span = (hi - lo) || 1;
-  const x = (v: number) => `${((v - lo) / span) * 100}%`;
+  const lo = Math.min(...vals) * 0.94, hi = Math.max(...vals) * 1.06;
+  // 로그 스케일 — RIM 등 한 모델이 매우 클 때(고ROE) 한쪽 쏠림 방지
+  const llo = Math.log(lo), lspan = (Math.log(hi) - llo) || 1;
+  const xp = (v: number) => Math.max(0, Math.min(100, ((Math.log(Math.max(v, 1)) - llo) / lspan) * 100));
+  const x = (v: number) => `${xp(v)}%`;
+  const wide = hi / lo > 4;
   return (
     <div className="ca-band">
       <div className="ca-band-track">
-        <div className="ca-band-fill" style={{ left: x(Math.min(price, intrinsic)), right: `${100 - ((Math.max(price, intrinsic) - lo) / span) * 100}%` }} />
+        <div className="ca-band-fill" style={{ left: x(Math.min(price, intrinsic)), right: `${100 - xp(Math.max(price, intrinsic))}%` }} />
         {avail.map((m) => (
           <div key={m.key} className="ca-band-tick" style={{ left: x(m.value) }} title={`${m.key} ${won(m.value)}`}>
             <span className="ca-band-tick-dot" /><span className="ca-band-tick-lbl">{m.key}</span>
@@ -112,7 +116,7 @@ export function ValueBand({ price, models, intrinsic }: { price: number; models:
         <div className="ca-band-marker price" style={{ left: x(price) }}><span className="ca-band-marker-lbl">현재가<br />{won(price)}</span></div>
         <div className="ca-band-marker intrinsic" style={{ left: x(intrinsic) }}><span className="ca-band-marker-lbl up">내재가치<br />{won(intrinsic)}</span></div>
       </div>
-      <div className="ca-band-axis"><span>{won(lo)}</span><span>{won(hi)}</span></div>
+      <div className="ca-band-axis"><span>{won(lo)}</span>{wide && <span className="ca-band-log">log scale</span>}<span>{won(hi)}</span></div>
     </div>
   );
 }

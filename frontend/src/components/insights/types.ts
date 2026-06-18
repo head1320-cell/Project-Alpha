@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // insights/types — Company Analysis 프로덕션 데이터 모델 + 포맷 헬퍼
-//   목업(insights-lab)과 프로덕션(CompanyCockpit) 공용. 실API 조립 결과가 이 형태.
+//   CompanyCockpit + companyData(lib) 공용. 실API 조립 결과가 이 형태.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type Tone = "bull" | "bear" | "caution" | "neutral";

@@ -1684,6 +1684,7 @@ h6 { font-size: 1rem; }
 .ca-band-marker-lbl { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-family: var(--t-mono); font-size: 10px; font-weight: 600; color: var(--t-ink); line-height: 1.25; }
 .ca-band-marker-lbl.up { color: var(--t-accent); }
 .ca-band-axis { display: flex; justify-content: space-between; font-family: var(--t-mono); font-size: 9px; color: var(--t-muted); margin-top: 16px; }
+.ca-band-log { opacity: 0.6; letter-spacing: 0.04em; }
 /* factor bar */
 .ca-fbar { display: grid; grid-template-columns: 1fr auto 64px 24px; align-items: center; gap: 8px; padding: 4px 0; }
 .ca-fbar-lbl { font-size: 12px; color: var(--t-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

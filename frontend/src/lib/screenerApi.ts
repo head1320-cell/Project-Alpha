@@ -1383,7 +1383,7 @@ export const companyApi = {
     return r.json();
   },
   // 기술 시그널
-  signal: async (code: string, name: string, strategy = "golden_cross"): Promise<SignalResp | null> => {
+  signal: async (code: string, name: string, strategy = "골든크로스"): Promise<SignalResp | null> => {
     const r = await POST(`/api/v1/strategies/signal`, { stock_code: code, stock_name: name, strategy, params: {} });
     if (!r.ok) return null;
     return r.json();

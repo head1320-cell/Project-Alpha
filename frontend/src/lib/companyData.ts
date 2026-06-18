@@ -78,15 +78,17 @@ function buildFactorGroups(item: ScreenerItem, catalog: FieldsCatalog, sample: S
 }
 
 // 일봉 → 차트용 다운샘플 / 합성 폴백
-function mapPrices(bars: { date: string; close: number }[]): PricePt[] {
+function mapPrices(bars: { date: string; close: number }[], current: number): PricePt[] {
   if (!bars.length) return [];
+  const lastClose = bars[bars.length - 1].close;
+  const scale = current > 0 && lastClose > 0 ? current / lastClose : 1; // 헤더 현재가에 정렬(실 KIS면 ≈1)
   const step = Math.max(1, Math.floor(bars.length / 60));
   const out: PricePt[] = [];
   for (let i = 0; i < bars.length; i += step) {
     const d = bars[i].date.slice(2).replace(/-/g, ".").slice(0, 5); // YY.MM
-    out.push({ t: d, p: Math.round(bars[i].close) });
+    out.push({ t: d, p: Math.round(bars[i].close * scale) });
   }
-  if (out.length && bars.length) out[out.length - 1] = { t: out[out.length - 1].t, p: Math.round(bars[bars.length - 1].close) };
+  out[out.length - 1] = { t: out[out.length - 1].t, p: Math.round(current) };
   return out;
 }
 function synthPrices(code: string, end: number): PricePt[] {
@@ -172,7 +174,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const peers = mapPeers([item, ...peerItems.filter((p) => p.stock_code !== code)], code);
 
   const years = mapYears(hist);
-  const price1y = bars.length ? mapPrices(bars) : synthPrices(code, price);
+  const price1y = bars.length ? mapPrices(bars, price) : synthPrices(code, price);
 
   const upside = Math.round((intrinsic / price - 1) * 1000) / 10;
   const divYield = pick("dividend_yield_pct", item.dividend_yield_pct);
@@ -231,7 +233,7 @@ export async function loadNetwork(code: string): Promise<NetworkInfo> {
 
 export async function loadRisk(code: string): Promise<RiskInfo> {
   const v = await companyApi.riskVar(code).catch(() => null);
-  if (!v) return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표는 일별 시세(DB) 적재가 필요합니다." };
+  if (!v) return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표(VaR·변동성)를 계산할 수 없습니다 — 일별 시세 표본 또는 리스크 엔진 제약(실데이터 환경에서 활성)." };
   const g = v as Record<string, unknown>;
   return {
     varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol),
