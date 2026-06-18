@@ -1303,7 +1303,9 @@ h6 { font-size: 1rem; }
 .lp-hero-glow { position: absolute; inset: 4% -2% 4% 8%; z-index: 0; pointer-events: none;
   background: radial-gradient(58% 56% at 62% 42%, rgba(18,0,255,0.13), rgba(18,0,255,0) 70%); filter: blur(6px); }
 .lp-deck { position: relative; z-index: 1; width: 100%; background: #fff; border: 1px solid var(--bs-border-color);
-  border-radius: 5px; overflow: hidden; box-shadow: 0 28px 64px -30px rgba(17,19,26,0.30), 0 2px 10px rgba(17,19,26,0.05); }
+  border-radius: 5px; overflow: hidden;
+  transform: perspective(2100px) rotateY(-8deg) rotateX(2.5deg); transform-origin: 64% 50%;
+  box-shadow: -14px 34px 74px -34px rgba(17,19,26,0.42), 0 3px 12px rgba(17,19,26,0.06); }
 .lp-deck-top { display: flex; align-items: center; gap: 12px; padding: 11px 15px; border-bottom: 1px solid var(--bs-border-color); background: #fafafa; }
 .lp-deck-dots { display: inline-flex; gap: 5px; }
 .lp-deck-dots i { width: 8px; height: 8px; border-radius: 50%; background: #e0e0e6; }
@@ -1323,6 +1325,10 @@ h6 { font-size: 1rem; }
 .lp-deck-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; }
 .lp-deck-card { border: 1px solid var(--bs-border-color); border-radius: 3px; padding: 11px 12px; }
 .lp-deck-card-h { font-family: var(--t-mono); font-size: 9.5px; letter-spacing: 0.05em; color: var(--bs-tertiary-color); margin-bottom: 10px; }
+.lp-deck-stats { display: flex; flex-direction: column; gap: 7px; }
+.lp-deck-srow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lp-deck-srow span { font-family: var(--t-mono); font-size: 10.5px; letter-spacing: 0.02em; color: var(--bs-secondary-color); }
+.lp-deck-srow b { font-family: var(--t-mono); font-size: 12.5px; font-weight: 600; color: var(--bs-body-color); }
 .lp-deck-frow { display: grid; grid-template-columns: 1fr 46px auto; align-items: center; gap: 9px; padding: 3.5px 0; }
 .lp-deck-fk { font-size: 12px; color: var(--bs-body-color); }
 .lp-deck-fbar { height: 4px; background: #eef0f4; border-radius: 2px; overflow: hidden; }
@@ -1370,6 +1376,8 @@ h6 { font-size: 1rem; }
   .lp-hero { grid-template-columns: 1fr; padding: 56px 24px 64px; gap: 32px; }
   .lp-hero-visual { min-height: auto; }
   .lp-deck-v { font-size: 28px; }
+  .lp-deck { transform: none; box-shadow: 0 16px 40px -22px rgba(17,19,26,0.32); }
+  .lp-hero-glow { display: none; }
   .lp-header { padding: 14px 24px; gap: 14px; flex-wrap: wrap; }
   .lp-section-head, .lp-footer { padding-left: 24px; padding-right: 24px; }
   .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }

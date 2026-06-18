@@ -107,34 +107,50 @@ function Visual({ kind }: { kind: string }) {
   );
 }
 
-// ─── 히어로 비주얼 — 퀀트 터미널 제품 프리뷰 (자체 SVG/HTML · 외부 의존 0) ───
+// Catmull-Rom → cubic bezier 스무딩 (자산곡선 곡선화)
+function smooth(pts: [number, number][]): string {
+  if (pts.length < 2) return "";
+  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+// ─── 히어로 비주얼 — 퀀트 백테스터 제품 프리뷰 (자체 SVG/HTML · 외부 의존 0) ───
 function HeroDeck() {
   const N = 22;
   const x = (i: number) => 10 + i * (460 / (N - 1));
   const eqY = [124, 118, 121, 110, 113, 103, 108, 95, 90, 96, 83, 88, 75, 69, 74, 61, 55, 60, 47, 39, 43, 32];
   const bcY = [126, 124, 125, 121, 122, 118, 120, 114, 112, 116, 110, 113, 108, 105, 108, 101, 98, 101, 94, 90, 93, 87];
-  const pts = (ys: number[]) => ys.map((y, i) => `${x(i).toFixed(1)},${y}`);
-  const eqArea = `M ${pts(eqY).join(" L ")} L ${x(N - 1).toFixed(1)},150 L ${x(0).toFixed(1)},150 Z`;
-  const factors: Array<[string, string, number]> = [
-    ["ROE", "27.5%", 86], ["GP / Assets", "0.41", 78], ["F-Score", "8 / 9", 89], ["Momentum 12-1", "+18.3%", 72],
+  const eqPts: [number, number][] = eqY.map((y, i) => [x(i), y]);
+  const bcPts: [number, number][] = bcY.map((y, i) => [x(i), y]);
+  const eqLine = smooth(eqPts);
+  const eqArea = `${eqLine} L ${x(N - 1).toFixed(1)},150 L ${x(0).toFixed(1)},150 Z`;
+  const stats: Array<[string, string]> = [
+    ["MAX DD", "−9.1%"], ["WIN RATE", "61.4%"], ["PROFIT FACTOR", "2.43"],
+    ["CALMAR", "2.70"], ["VOLATILITY", "11.2%"], ["TRADES", "312"],
   ];
-  const heat = [0.85, 0.4, 0.7, 0.25, 0.55, 0.9, 0.3, 0.62, 0.95, 0.45, 0.2, 0.5, 0.7, 0.35, 0.5, 0.82, 0.4, 0.65];
+  const months = [3.2, 1.1, -2.4, 4.6, 0.8, 2.1, -1.3, 5.2, 1.9, -0.6, 3.4, 2.7, 1.5, -3.1, 4.0, 2.2, 0.5, 3.8];
   return (
     <div className="lp-deck">
       <div className="lp-deck-top">
         <span className="lp-deck-dots"><i /><i /><i /></span>
-        <span className="lp-deck-title">ALPHA // QUANT TERMINAL</span>
+        <span className="lp-deck-title">BACKTESTER // MULTI-FACTOR VALUE</span>
         <span className="lp-deck-live"><i />LIVE</span>
       </div>
       <div className="lp-deck-body">
         <div className="lp-deck-headrow">
           <div className="lp-deck-stat">
-            <span className="lp-deck-k">STRATEGY EQUITY · YTD</span>
-            <span className="lp-deck-v">+38.24<em>%</em></span>
+            <span className="lp-deck-k">CAGR · 2019—2024</span>
+            <span className="lp-deck-v">+24.6<em>%</em></span>
           </div>
           <div className="lp-deck-pills">
             <span className="lp-deck-pill"><b>SHARPE</b>2.14</span>
-            <span className="lp-deck-pill"><b>MDD</b>−9.1%</span>
+            <span className="lp-deck-pill"><b>SORTINO</b>3.01</span>
           </div>
         </div>
         <svg className="lp-deck-chart" viewBox="0 0 480 150" preserveAspectRatio="none" aria-hidden>
@@ -145,28 +161,29 @@ function HeroDeck() {
           </defs>
           {[30, 66, 102, 138].map((y, i) => <line key={i} x1="0" y1={y} x2="480" y2={y} stroke="#eef0f4" strokeWidth="1" />)}
           <path d={eqArea} fill="url(#lp-eq)" />
-          <polyline points={pts(bcY).join(" ")} fill="none" stroke="#c7c8d0" strokeWidth="1.3" strokeDasharray="4 3" />
-          <polyline points={pts(eqY).join(" ")} fill="none" stroke="#1200ff" strokeWidth="2" />
+          <path d={smooth(bcPts)} fill="none" stroke="#c7c8d0" strokeWidth="1.3" strokeDasharray="4 3" />
+          <path d={eqLine} fill="none" stroke="#1200ff" strokeWidth="2" />
           <circle cx={x(N - 1)} cy={eqY[N - 1]} r="6.5" fill="#1200ff" opacity="0.16" />
           <circle cx={x(N - 1)} cy={eqY[N - 1]} r="3.4" fill="#1200ff" />
         </svg>
         <div className="lp-deck-grid">
           <div className="lp-deck-card">
-            <div className="lp-deck-card-h">TOP FACTORS · KOSPI 200</div>
-            {factors.map(([k, v, p]) => (
-              <div key={k} className="lp-deck-frow">
-                <span className="lp-deck-fk">{k}</span>
-                <span className="lp-deck-fbar"><i style={{ width: `${p}%` }} /></span>
-                <span className="lp-deck-fv">{v}</span>
-              </div>
-            ))}
+            <div className="lp-deck-card-h">PERFORMANCE</div>
+            <div className="lp-deck-stats">
+              {stats.map(([k, v]) => (
+                <div key={k} className="lp-deck-srow"><span>{k}</span><b>{v}</b></div>
+              ))}
+            </div>
           </div>
           <div className="lp-deck-card">
-            <div className="lp-deck-card-h">FACTOR Z-MAP</div>
+            <div className="lp-deck-card-h">MONTHLY P/L · 18M</div>
             <div className="lp-deck-heat">
-              {heat.map((o, i) => <span key={i} style={{ background: `rgba(18,0,255,${(0.1 + o * 0.62).toFixed(3)})` }} />)}
+              {months.map((m, i) => {
+                const o = Math.min(0.6, 0.12 + (Math.abs(m) / 8) * 0.58);
+                return <span key={i} style={{ background: m >= 0 ? `rgba(22,163,74,${o.toFixed(3)})` : `rgba(220,38,38,${o.toFixed(3)})` }} />;
+              })}
             </div>
-            <div className="lp-deck-heat-x"><span>VALUE</span><span>QUALITY</span><span>MOM</span></div>
+            <div className="lp-deck-heat-x"><span>LOSS</span><span>FLAT</span><span>GAIN</span></div>
           </div>
         </div>
       </div>
