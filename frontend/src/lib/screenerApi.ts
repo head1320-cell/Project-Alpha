@@ -1309,3 +1309,100 @@ export const analysisApi = {
     return r.json();
   },
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// companyApi — Company Analysis 페이지 전용 단일종목 데이터 (실API 조립)
+// ═══════════════════════════════════════════════════════════════════════════════
+const POST = (path: string, body: unknown) =>
+  fetch(`${API_BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export interface PriceBar { date: string; open: number; high: number; low: number; close: number; volume: number; trading_value?: number }
+export interface FinancialHistoryRow { year: string; revenue_억: number | null; operating_profit_억: number | null; net_income_억: number | null; total_assets_억: number | null; total_equity_억: number | null; fcf_억: number | null; roe_pct: number | null; roa_pct: number | null; debt_ratio_pct: number | null; eps: number | null; bps: number | null; dps: number | null }
+export interface FinancialHistory { stock_code: string; corp_name: string; sector: string; n_years: number; financials: FinancialHistoryRow[] }
+export interface EvaluateOverrides { beta?: number; risk_free_rate?: number; market_premium?: number; terminal_growth?: number; projection_years?: number }
+export interface SignalResp { stock_code: string; stock_name: string; action: string; strength: number; reason: string; is_actionable: boolean; is_strong: boolean; strategy: string }
+export interface NarrativeResp { content: string; model: string; input_tokens: number; output_tokens: number; total_tokens: number; cost_usd: number; cost_krw: number; elapsed_seconds: number; cached: boolean; error?: string | null }
+export interface SymbolItem { code: string; name: string; market?: string; sector?: string; listing_date?: string }
+
+export const companyApi = {
+  // 단일 종목 — 116팩터 + 점수 + valuation 요약 (custom_tickers로 임의 종목 대응)
+  byTicker: async (code: string): Promise<ScreenerItem | null> => {
+    const r = await POST(`/api/v1/screener/run-advanced`, {
+      universe: "all_listed", custom_tickers: [code],
+      filter_ast: { logic: "AND", conditions: [], groups: [] }, limit: 1, liquidity_floor: "off",
+    });
+    if (!r.ok) throw new Error(`company byTicker failed: ${r.status}`);
+    const d = await r.json();
+    return d.items?.[0] ?? null;
+  },
+  // 퍼센타일 계산용 유니버스 표본
+  universeSample: async (universe = "kospi200"): Promise<ScreenerItem[]> => {
+    const r = await POST(`/api/v1/screener/run-advanced`, {
+      universe, filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
+      limit: 300, liquidity_floor: "relaxed",
+    });
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+  // 섹터 피어
+  peersBySector: async (sector: string): Promise<ScreenerItem[]> => {
+    const r = await POST(`/api/v1/screener/run-advanced`, {
+      universe: `sector:${sector}`, filter_ast: { logic: "AND", conditions: [], groups: [] }, limit: 24, liquidity_floor: "off",
+    });
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+  // 3모형 상세 + 시나리오용 가정 오버라이드
+  evaluate: async (code: string, price: number, o: EvaluateOverrides = {}): Promise<ValuationDetail> => {
+    const r = await POST(`/api/v1/valuation/evaluate`, {
+      stock_code: code, current_price: price,
+      beta: o.beta ?? 1.0, risk_free_rate: o.risk_free_rate ?? 0.035, market_premium: o.market_premium ?? 0.06,
+      terminal_growth: o.terminal_growth ?? 0.02, projection_years: o.projection_years ?? 10,
+      weight_rim: 0.4, weight_dcf: 0.4, weight_ddm: 0.2,
+    });
+    if (!r.ok) throw new Error(`evaluate failed: ${r.status}`);
+    return r.json();
+  },
+  // 연도 재무 시계열 (미등록 종목은 404 → null)
+  financial: async (code: string, years = 8): Promise<FinancialHistory | null> => {
+    const r = await fetch(`${API_BASE}/api/v1/valuation/financial/${code}?years=${years}`);
+    if (r.status === 404) return null;
+    if (!r.ok) return null;
+    return r.json();
+  },
+  // 일봉 (DB 캐시 — 비어있으면 [] → 호출측 합성 폴백)
+  prices: async (code: string, days = 400): Promise<PriceBar[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/prices/${code}?days=${days}`);
+    if (!r.ok) return [];
+    return (await r.json()).prices ?? [];
+  },
+  // 밸류체인 관계 (M4)
+  graphRelations: async (code: string): Promise<GraphRelations> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/graph-relations/${code}`);
+    if (!r.ok) return { supplier: [], customer: [], competitor: [] };
+    return r.json();
+  },
+  // 기술 시그널
+  signal: async (code: string, name: string, strategy = "golden_cross"): Promise<SignalResp | null> => {
+    const r = await POST(`/api/v1/strategies/signal`, { stock_code: code, stock_name: name, strategy, params: {} });
+    if (!r.ok) return null;
+    return r.json();
+  },
+  // AI 내러티브 (Claude)
+  narrative: async (stockItem: object, valuationDetail: object): Promise<NarrativeResp> => {
+    const r = await POST(`/api/v1/narrative/stock`, { stock_item: stockItem, valuation_detail: valuationDetail, max_tokens: 1600 });
+    if (!r.ok) throw new Error(`narrative failed: ${r.status}`);
+    return r.json();
+  },
+  // 리스크 — VaR (DB 일봉 필요; 없으면 에러 → 호출측 graceful)
+  riskVar: async (code: string): Promise<Record<string, unknown> | null> => {
+    const r = await POST(`/calculate-var`, { ticker: code, portfolio_value: 1e8, confidence_level: 0.99, holding_period: 1, use_ewma: true });
+    if (!r.ok) return null;
+    return r.json();
+  },
+  symbolsSearch: async (q: string): Promise<SymbolItem[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/symbols/search?q=${encodeURIComponent(q)}&limit=12`);
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+};
