@@ -90,11 +90,20 @@ function mapPrices(bars: { date: string; close: number }[]): PricePt[] {
   return out;
 }
 function synthPrices(code: string, end: number): PricePt[] {
-  let s = Number(code) || 7, p = end * 0.8;
+  let s = Number(code) || 7;
   const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-  const pts: PricePt[] = []; const n = 60, drift = (end - p) / n;
-  for (let i = 0; i < n; i++) { p += drift + (rnd() - 0.5) * end * 0.045; const mo = (i % 12) + 1, yr = 25 + Math.floor(i / 12); pts.push({ t: `${yr}.${String(mo).padStart(2, "0")}`, p: Math.max(1, Math.round(p)) }); }
-  pts[pts.length - 1].p = end;
+  const n = 60;
+  const raw: number[] = [];
+  let p = end * (0.82 + rnd() * 0.12); // 시작가 = 현재가의 82~94%
+  for (let i = 0; i < n; i++) { p += (rnd() - 0.48) * end * 0.028; raw.push(p); }
+  // 끝점이 현재가에 정확히 닿도록 선형 보정(말단 꺾임 방지)
+  const corr = end - raw[n - 1];
+  const pts: PricePt[] = [];
+  for (let i = 0; i < n; i++) {
+    const v = raw[i] + corr * (i / (n - 1));
+    const mo = (i % 12) + 1, yr = 25 + Math.floor(i / 12);
+    pts.push({ t: `${yr}.${String(mo).padStart(2, "0")}`, p: Math.max(1, Math.round(v)) });
+  }
   return pts;
 }
 
@@ -167,10 +176,13 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
 
   const upside = Math.round((intrinsic / price - 1) * 1000) / 10;
   const divYield = pick("dividend_yield_pct", item.dividend_yield_pct);
+  // 시총: 실값 우선, 없으면 가격×(자기자본/BPS)=가격×발행주식수 로 도출 (mock에서 market_cap_억=null 대응)
+  const eqV = pick("total_equity_억"), bpsV = pick("bps");
+  const mktcap = (fin(item.market_cap_억) ?? 0) || (eqV > 0 && bpsV > 0 ? Math.round((price * eqV) / bpsV) : 0);
 
   return {
     code: item.stock_code, name: item.corp_name, sector: item.sector ?? "—",
-    price, changePct: 0, mktcap: fin(item.market_cap_억) ?? 0,
+    price, changePct: 0, mktcap,
     verdict: item.verdict, tone, intrinsic, gapPct: item.gap_pct,
     models,
     summary: {
