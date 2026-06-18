@@ -137,6 +137,45 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"KIS async DB startup failed: {e}")
 
+    # 실데이터 사전 워밍 (DART 키 있을 때만, 백그라운드 스레드):
+    #   ① corp_code 맵을 미리 로드 → 첫 스크린의 corp_code 미스("조회된 데이터 없음") 방지
+    #   ② 기본 유니버스 펀더멘털을 미리 계산 → 디스크 캐시 채움 → 사용자 첫 클릭이
+    #      44초를 기다리지 않게 함. 재시작 후엔 디스크 캐시 히트로 빠르게 재워밍.
+    try:
+        import os
+        if os.getenv("DART_API_KEY"):
+            import threading
+            threading.Thread(target=_prewarm_real_data, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"실데이터 사전 워밍 시작 실패: {e}")
+
+
+def _prewarm_real_data():
+    """백그라운드: corp_code 맵 + 기본 유니버스 펀더멘털을 미리 채운다 (블로킹, 데몬 스레드)."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.dart_client import _load_full_corp_map
+        n = len(_load_full_corp_map())
+        log.info(f"사전 워밍: corp_code 맵 {n}개 준비")
+    except Exception as e:
+        log.warning(f"사전 워밍 corp_code 실패: {e}")
+    try:
+        from src.data.fundamentals_store import FundamentalsStore
+        from src.engine.screener import KOSPI200_TICKERS
+        store = FundamentalsStore.get_default()
+        ok = 0
+        for code in KOSPI200_TICKERS:
+            try:
+                store.get_factors(code, None)
+                ok += 1
+            except Exception:
+                pass
+        log.info(f"사전 워밍: 펀더멘털 {ok}/{len(KOSPI200_TICKERS)}종목 캐시 완료")
+    except Exception as e:
+        log.warning(f"사전 워밍 펀더멘털 실패: {e}")
+
     # Load symbol master cache (non-blocking)
     try:
         from src.database import get_engine

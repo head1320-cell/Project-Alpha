@@ -42,6 +42,46 @@ logger = logging.getLogger(__name__)
 
 DART_BASE_URL = "https://opendart.fss.or.kr/api"
 
+# ── 디스크 응답 캐시 (재시작에도 살아남음) ───────────────────────────────────
+# 재무·기업개황은 분기 단위로만 바뀌므로 성공 응답을 디스크에 캐시한다.
+# 첫 조회만 네트워크(+throttle), 이후엔 즉시 → 스크리너/분석 체감속도가 결정적으로 개선.
+_DART_CACHE_DIR = os.path.join(os.path.dirname(__file__), "dart_cache")
+_DART_CACHE_TTL_SEC = 7 * 24 * 3600  # 7일 (분기 공시라 충분, 주 1회 갱신)
+
+
+def _dart_cache_path(key: str) -> str:
+    import hashlib
+    h = hashlib.sha1(key.encode("utf-8")).hexdigest()
+    return os.path.join(_DART_CACHE_DIR, f"{h}.json")
+
+
+def _dart_cache_get(key: str):
+    """성공 응답 디스크 캐시 조회 (TTL 내). 실패/없음 → None."""
+    try:
+        path = _dart_cache_path(key)
+        if not os.path.exists(path):
+            return None
+        if time.time() - os.path.getmtime(path) > _DART_CACHE_TTL_SEC:
+            return None
+        import json
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _dart_cache_set(key: str, data: dict) -> None:
+    """성공 응답만 디스크에 저장 (실패는 캐시하지 않음 → 일시적 오류 고착 방지)."""
+    try:
+        os.makedirs(_DART_CACHE_DIR, exist_ok=True)
+        import json
+        tmp = _dart_cache_path(key) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, _dart_cache_path(key))  # 원자적 교체
+    except Exception:
+        pass
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Models
@@ -105,6 +145,9 @@ class FinancialStatement:
     dividend_yield:      float | None = None
     payout_ratio:        float | None = None
 
+    # mock 폴백으로 만들어진 값인지 (실데이터 판별용). 실 DART 파싱 시 False 유지.
+    is_mock:             bool = False
+
     @property
     def fcf(self) -> float | None:
         """Free Cash Flow = 영업CF - CapEx."""
@@ -167,19 +210,26 @@ class DARTClient:
     # ─────────────────────────────────────────────────────────────────────
 
     def _throttle(self):
-        """DART 한도: 분당 1000건 → 안전하게 초당 1회."""
+        """DART 한도: 분당 1000건(≈16/s) → 안전하게 0.25초 간격(4/s).
+        디스크 캐시 히트 시엔 호출되지 않으므로, 워밍 후엔 throttle 영향 없음."""
         now = time.time()
         elapsed = now - self._last_call_time
-        if elapsed < 1.0:
-            time.sleep(1.0 - elapsed)
+        if elapsed < 0.25:
+            time.sleep(0.25 - elapsed)
         self._last_call_time = time.time()
 
     def _get(self, endpoint: str, params: dict) -> dict | None:
-        """공통 GET 요청."""
+        """공통 GET 요청. 성공 응답은 디스크 캐시(재시작에도 유지)."""
         if not self.is_configured:
             return None
         if requests is None:
             return None
+
+        # crtfc_key를 제외한 안정적 캐시 키
+        cache_key = endpoint + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        hit = _dart_cache_get(cache_key)
+        if hit is not None:
+            return hit
 
         self._throttle()
         params["crtfc_key"] = self.api_key
@@ -191,6 +241,7 @@ class DARTClient:
             if data.get("status") != "000":
                 logger.warning(f"DART {endpoint}: {data.get('message', 'error')}")
                 return None
+            _dart_cache_set(cache_key, data)  # 성공만 캐시
             return data
         except Exception as e:
             logger.error(f"DART API 오류 ({endpoint}): {e}")
@@ -469,6 +520,7 @@ class DARTClient:
             capex=base["capex"] * growth,
             shares_outstanding=base["shares_outstanding"],
             dps=base["dps"],
+            is_mock=True,
         )
         fs.compute_ratios()
         return fs
@@ -490,6 +542,18 @@ STOCK_TO_CORP: dict[str, str] = {
     "105560": "00527050",  # KB금융
     "055550": "00382199",  # 신한지주
 }
+
+
+_SHARED_DART_CLIENT: DARTClient | None = None
+
+
+def get_dart_client() -> DARTClient:
+    """프로세스 공용 DARTClient (인메모리 캐시를 종목·요청 간 공유).
+    종목마다 새 DARTClient()를 만들면 캐시가 매번 버려져 느려진다 → 단일 인스턴스 재사용."""
+    global _SHARED_DART_CLIENT
+    if _SHARED_DART_CLIENT is None:
+        _SHARED_DART_CLIENT = DARTClient()
+    return _SHARED_DART_CLIENT
 
 
 def get_corp_code(stock_code: str) -> str | None:

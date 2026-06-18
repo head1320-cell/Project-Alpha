@@ -191,11 +191,11 @@ class FundamentalsStore(DeterministicMockStore):
         try:
             from datetime import datetime
 
-            from src.data.dart_client import DARTClient, get_corp_code
+            from src.data.dart_client import get_corp_code, get_dart_client
         except Exception:
             return None
 
-        dart = DARTClient()
+        dart = get_dart_client()  # 공용 인스턴스 (캐시 공유)
         if not dart.is_configured:
             return None
 
@@ -203,13 +203,21 @@ class FundamentalsStore(DeterministicMockStore):
         if not corp_code:
             return None
 
-        cur_year = datetime.now().year - 1  # 직전 결산연도
-        fs = dart.get_financial_statement_full(corp_code, str(cur_year))
-        if fs is None or fs.revenue is None or fs.total_assets is None:
-            # 한 해 전 시도 (최신 미공시 가능)
-            fs = dart.get_financial_statement_full(corp_code, str(cur_year - 1))
-            cur_year -= 1
-        if fs is None or fs.revenue is None or fs.total_assets is None:
+        def _real(fs) -> bool:
+            # 실제 DART 데이터인지 (mock 폴백·빈값 아님)
+            return fs is not None and not getattr(fs, "is_mock", False) \
+                and fs.revenue is not None and fs.total_assets is not None
+
+        # 최신 결산연도부터 최대 3개 연도 후행 탐색 (미공시면 한 해씩 뒤로)
+        cur_year = datetime.now().year - 1
+        fs = None
+        for back in range(0, 3):
+            cand = dart.get_financial_statement_full(corp_code, str(cur_year - back))
+            if _real(cand):
+                fs = cand
+                cur_year -= back
+                break
+        if fs is None:
             return None
 
         # 전년 / 3년전 (성장률용)
