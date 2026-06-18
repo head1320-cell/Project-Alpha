@@ -9,16 +9,6 @@
 
 import Link from "next/link";
 
-const TICKERS: Array<{ s: string; v: string; d: string; up: boolean | null }> = [
-  { s: "KOSPI", v: "2,687.44", d: "+0.31%", up: true },
-  { s: "KOSDAQ", v: "868.93", d: "-0.42%", up: false },
-  { s: "USD/KRW", v: "1,362.50", d: "+0.12%", up: true },
-  { s: "US10Y", v: "4.215", d: "-0.8bp", up: false },
-  { s: "BTC/KRW", v: "94,210,000", d: "+2.04%", up: true },
-  { s: "SPX", v: "5,137.08", d: "+0.12%", up: true },
-  { s: "GOLD", v: "2,341.10", d: "-0.04%", up: false },
-];
-
 const MODULES = [
   {
     n: "01", code: "SCREENER", title: "Screener", href: "/screener",
@@ -28,7 +18,7 @@ const MODULES = [
   },
   {
     n: "02", code: "BACKTEST", title: "Backtester", href: "/backtest",
-    desc: "젠포트급 조건식 엔진 — 팩터 함수 19종, 논리식(every·any·before), 체결가 13종, 시그널 벡터화.",
+    desc: "룰 기반 조건식 엔진 — 팩터 함수 19종, 논리식(every·any·before), 체결가 13종, 시그널 벡터화.",
     metrics: [["FILL MODELS", "13"], ["VECTORIZED", "142×"], ["SIGNAL BASIS", "T-1 / T"]],
     visual: "line",
   },
@@ -61,21 +51,6 @@ const PLATFORM_STATS: Array<[string, string, string]> = [
   ["TEST SUITE", "470", "passed — 등가성·회귀 고정"],
   ["DATA SOURCES", "5", "KRX·DART·KIS·ECOS·FRED (무료)"],
 ];
-
-function TickerStrip() {
-  const row = (key: string) => (
-    <div className="lp-ticker-row" key={key} aria-hidden={key === "b"}>
-      {TICKERS.map((t) => (
-        <span key={`${key}-${t.s}`} className="lp-ticker-item">
-          <span className="lp-ticker-sym">{t.s}</span>
-          <span className="lp-ticker-val">{t.v}</span>
-          <span className={t.up === null ? "" : t.up ? "lp-up" : "lp-down"}>{t.d}</span>
-        </span>
-      ))}
-    </div>
-  );
-  return <div className="lp-ticker"><div className="lp-ticker-track">{row("a")}{row("b")}</div></div>;
-}
 
 // ─── 모듈 카드 미니 비주얼 (refs의 sparkline/heatmap/gauge 재현, 순수 SVG) ───
 function Visual({ kind }: { kind: string }) {
@@ -135,8 +110,6 @@ function Visual({ kind }: { kind: string }) {
 export default function Landing() {
   return (
     <div className="lp-root">
-      <TickerStrip />
-
       {/* ─── Header ─── */}
       <header className="lp-header">
         <div className="lp-brand">
@@ -160,13 +133,12 @@ export default function Landing() {
           </h1>
           <div className="lp-cta-row">
             <Link href="/dashboard" className="lp-launch">Launch Terminal</Link>
-            <span className="lp-mono lp-ver">v2.4.0-STABLE</span>
           </div>
         </div>
         <div className="lp-hero-right">
           <p>
             한국 주식 <strong>스크리닝 → 백테스트 → 자동매매</strong>를 하나의
-            아키텍처로. 젠포트급 조건식 백테스터와 290+ 팩터를 무료
+            아키텍처로. 전문가급 룰 기반 백테스터와 290+ 팩터를 무료
             데이터(KRX·DART·KIS·ECOS·FRED)로 구동합니다.
           </p>
           <p className="lp-hero-sub">
@@ -220,13 +192,7 @@ export default function Landing() {
 
       {/* ─── Footer ─── */}
       <footer className="lp-footer">
-        <div className="lp-footer-tickers lp-mono">
-          {TICKERS.slice(0, 5).map((t) => (
-            <span key={t.s}>
-              {t.s} <span className={t.up ? "lp-up" : "lp-down"}>{t.v}</span>
-            </span>
-          ))}
-        </div>
+        <div className="lp-mono lp-footer-left">PROJECT ALPHA · KOREAN EQUITY QUANT PLATFORM</div>
         <div className="lp-mono lp-footer-right">
           © 2026 PROJECT ALPHA SYSTEMS · BUILT FOR ACCURACY
         </div>

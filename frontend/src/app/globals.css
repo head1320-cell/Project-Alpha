@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,7 +20,7 @@
   --bs-body-color: #111111;
   --bs-body-color-rgb: 17, 17, 17;
   --bs-body-bg: #fff;
-  --bs-body-font-family: 'Geist', system-ui, -apple-system, "Segoe UI", "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --bs-body-font-family: 'IBM Plex Sans KR', 'IBM Plex Sans', system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --bs-font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", monospace;
   --bs-body-font-size: 0.875rem;       /* 14px */
   --bs-body-font-weight: 400;
@@ -310,7 +310,7 @@ h6 { font-size: 1rem; }
   .pv-link { color: var(--bs-primary); font-weight: 500; }
   .pv-link:hover { color: var(--bs-primary-hover); text-decoration: underline; }
 
-  .num { font-family: 'Roboto Mono', monospace; font-variant-numeric: tabular-nums; }
+  .num { font-family: var(--t-mono); font-variant-numeric: tabular-nums; }
 
   .positive { color: var(--bs-success); }
   .negative { color: var(--bs-danger); }
@@ -391,7 +391,7 @@ h6 { font-size: 1rem; }
 .pv-hero-stat-num {
   font-size: 1.875rem;
   font-weight: 700;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--t-mono);
   line-height: 1;
   color: #fff;
 }
@@ -1280,13 +1280,7 @@ h6 { font-size: 1rem; }
 .lp-down { color: #dc2626; }
 
 /* ① 다크 티커 마퀴 */
-.lp-ticker { background: #0a0a0a; color: #e5e5e5; overflow: hidden; border-bottom: 1px solid #1f1f1f; }
-.lp-ticker-track { display: flex; width: max-content; animation: lp-marquee 48s linear infinite; }
-.lp-ticker-row { display: flex; }
-.lp-ticker-item { display: inline-flex; gap: 7px; align-items: center; padding: 7px 26px; font-family: var(--bs-font-mono); font-size: 11px; white-space: nowrap; }
-.lp-ticker-sym { color: #fff; font-weight: 500; }
-.lp-ticker-val { color: #a1a1aa; }
-@keyframes lp-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* (랜딩 티커 마퀴 제거됨) */
 
 /* ② 헤더 */
 .lp-header { display: flex; align-items: center; gap: 26px; padding: 17px 44px; border-bottom: 1px solid var(--bs-border-color); }
@@ -1304,7 +1298,6 @@ h6 { font-size: 1rem; }
 .lp-cta-row { display: flex; align-items: center; gap: 18px; }
 .lp-launch { display: inline-block; background: var(--bs-primary); color: #fff; font-size: 14px; font-weight: 500; padding: 13px 26px; border-radius: 2px; text-decoration: none; }
 .lp-launch:hover { background: var(--bs-primary-hover); color: #fff; }
-.lp-ver { color: var(--bs-tertiary-color); }
 .lp-hero-right { border-left: 1px solid var(--bs-border-color); padding-left: 40px; align-self: start; margin-top: 56px; }
 .lp-hero-right p { font-size: 15px; line-height: 1.75; color: var(--bs-body-color); margin: 0 0 16px; }
 .lp-hero-right strong { font-weight: 600; }
@@ -1334,8 +1327,8 @@ h6 { font-size: 1rem; }
 
 /* ⑥ 푸터 */
 .lp-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 20px 44px; border-top: 1px solid var(--bs-border-color); flex-wrap: wrap; }
-.lp-footer-tickers { display: flex; gap: 22px; color: var(--bs-secondary-color); flex-wrap: wrap; }
 .lp-footer-right { color: var(--bs-tertiary-color); }
+.lp-footer-left { color: var(--bs-secondary-color); letter-spacing: 0.02em; font-size: 11px; }
 
 /* 반응형 */
 @media (max-width: 1100px) {

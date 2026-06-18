@@ -139,7 +139,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "기간", value: yearsBetween(s.startDate, s.endDate) },
         { label: "수수료", value: `${s.feePct}%` },
         { label: "리밸런싱", value: s.rebalancePeriod === "daily" ? "매일" : s.rebalancePeriod === "weekly" ? "매주" : "매월" },
-        { label: "신호 기준", value: s.signalLag === 1 ? "전일 종가 (젠포트식)" : "당일 종가" },
+        { label: "신호 기준", value: s.signalLag === 1 ? "전일 종가 기준" : "당일 종가" },
         { label: "분봉 체결", value: s.intradayFill ? "정밀 (적재된 날만)" : "일봉 모델", muted: !s.intradayFill },
       ]},
       { label: "매수 조건", rows: [

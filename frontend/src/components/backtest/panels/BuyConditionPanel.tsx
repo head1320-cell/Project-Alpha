@@ -75,14 +75,14 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="신호 기준">
           <Segmented value={String(s.signalLag)} onChange={(v) => set((x) => ({ ...x, signalLag: v === "1" ? 1 : 0 }))}
-            options={[{ id: "0", label: "당일 종가" }, { id: "1", label: "전일 종가 (젠포트식)" }]} />
+            options={[{ id: "0", label: "당일 종가" }, { id: "1", label: "전일 종가 기준" }]} />
           {s.signalLag === 0 && (s.buy.fillType !== "close" || s.sell.fillType !== "close") ? (
             <span style={{ fontSize: 11, color: "#d97706" }}>
               ⚠ 당일 종가로 만든 신호를 시가·전일가에 체결하면 look-ahead — 전일 종가 기준 권장
             </span>
           ) : (
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              젠포트는 전일 종가 기준 선정 → 익일 매매 (체결은 당일 가격)
+              전일 종가 기준으로 종목 선정 → 익일 매매 (체결은 당일 가격)
             </span>
           )}
         </Field>
