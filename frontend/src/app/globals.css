@@ -1292,16 +1292,14 @@ h6 { font-size: 1rem; }
 .lp-nav a:hover { color: var(--bs-body-color); }
 
 /* ③ 히어로 (분할) */
-.lp-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 64px; padding: 96px 44px 110px; max-width: 1480px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+.lp-hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 56px; padding: 84px 44px 96px; max-width: 1480px; width: 100%; margin: 0 auto; box-sizing: border-box; align-items: stretch; }
 .lp-eyebrow { color: var(--bs-primary); margin-bottom: 22px; }
 .lp-hero h1 { font-size: clamp(46px, 6.4vw, 84px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 600; margin: 0 0 40px; }
 .lp-cta-row { display: flex; align-items: center; gap: 18px; }
 .lp-launch { display: inline-block; background: var(--bs-primary); color: #fff; font-size: 14px; font-weight: 500; padding: 13px 26px; border-radius: 2px; text-decoration: none; }
 .lp-launch:hover { background: var(--bs-primary-hover); color: #fff; }
-.lp-hero-right { border-left: 1px solid var(--bs-border-color); padding-left: 40px; align-self: start; margin-top: 56px; }
-.lp-hero-right p { font-size: 15px; line-height: 1.75; color: var(--bs-body-color); margin: 0 0 16px; }
-.lp-hero-right strong { font-weight: 600; }
-.lp-hero-sub { color: var(--bs-secondary-color) !important; font-size: 13.5px !important; }
+.lp-hero-visual { align-self: stretch; min-height: 440px; border: 1px solid var(--bs-border-color); border-radius: 3px; overflow: hidden; background: #fff; }
+.lp-hero-art { display: block; width: 100%; height: 100%; min-height: 440px; }
 
 /* ④ 5모듈 툴셋 */
 .lp-section-head { display: flex; justify-content: space-between; padding: 13px 44px; border-top: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color); color: var(--bs-secondary-color); }
@@ -1339,7 +1337,8 @@ h6 { font-size: 1rem; }
 }
 @media (max-width: 820px) {
   .lp-hero { grid-template-columns: 1fr; padding: 56px 24px 64px; gap: 32px; }
-  .lp-hero-right { border-left: none; padding-left: 0; margin-top: 0; border-top: 1px solid var(--bs-border-color); padding-top: 24px; }
+  .lp-hero-visual { min-height: 240px; }
+  .lp-hero-art { min-height: 240px; }
   .lp-header { padding: 14px 24px; gap: 14px; flex-wrap: wrap; }
   .lp-section-head, .lp-footer { padding-left: 24px; padding-right: 24px; }
   .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }

@@ -107,6 +107,45 @@ function Visual({ kind }: { kind: string }) {
   );
 }
 
+// ─── 히어로 비주얼 — 금융가 스카이라인 (자체 SVG · 외부 의존 0 · 브랜드 팔레트) ───
+function HeroVisual() {
+  const W = 600, H = 680, BASE = 660;
+  const towers: Array<[number, number, number, string, boolean]> = [
+    [34, 96, 252, "#eef0f6", false],
+    [118, 122, 152, "#e7e9f1", false],
+    [228, 138, 66, "#fcfcfe", true],
+    [352, 108, 198, "#eaecf3", false],
+    [446, 132, 118, "#eef0f6", false],
+  ];
+  const floors = (top: number) => { const a: number[] = []; for (let y = top + 16; y < BASE - 4; y += 20) a.push(y); return a; };
+  const mull = (x: number, w: number) => { const a: number[] = []; for (let mx = x + 12; mx < x + w - 8; mx += 18) a.push(mx); return a; };
+  return (
+    <svg className="lp-hero-art" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax slice" role="img" aria-label="금융가 스카이라인">
+      <defs>
+        <linearGradient id="lp-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fafbfe" /><stop offset="0.72" stopColor="#f1f3f9" /><stop offset="1" stopColor="#e9ebf3" />
+        </linearGradient>
+      </defs>
+      <rect width={W} height={H} fill="url(#lp-sky)" />
+      {Array.from({ length: 7 }).map((_, i) => <line key={`g${i}`} x1={0} y1={i * 100} x2={W} y2={i * 100} stroke="#e7e8ee" strokeWidth="0.6" />)}
+      <polyline points="18,468 110,438 182,452 262,392 342,408 424,346 522,358 582,316" fill="none" stroke="#1200ff" strokeWidth="1.4" opacity="0.5" />
+      {towers.map(([x, w, top, tone, accent], ti) => (
+        <g key={ti}>
+          <rect x={x} y={top} width={w} height={BASE - top} fill={tone} stroke="#c9cad3" strokeWidth="1" />
+          {floors(top).map((y, i) => <line key={`f${i}`} x1={x + 4} y1={y} x2={x + w - 4} y2={y} stroke="#d6d7df" strokeWidth="0.8" />)}
+          {mull(x, w).map((mx, i) => <line key={`m${i}`} x1={mx} y1={top + 5} x2={mx} y2={BASE - 2} stroke="#dfe0e8" strokeWidth="0.6" />)}
+          {accent && <rect x={x + 5} y={top + 9} width={w - 10} height={12} fill="#1200ff" opacity="0.9" />}
+          {accent && <rect x={x} y={top} width={w} height={BASE - top} fill="none" stroke="#1200ff" strokeWidth="1.2" opacity="0.32" />}
+        </g>
+      ))}
+      <rect x={0} y={BASE} width={W} height={H - BASE} fill="#11131a" />
+      <rect x={0} y={BASE} width={W} height="2.5" fill="#1200ff" opacity="0.65" />
+      <path d="M14 14 h18 M14 14 v18" stroke="#9a9aa3" strokeWidth="1" fill="none" />
+      <path d={`M${W - 14} 14 h-18 M${W - 14} 14 v18`} stroke="#9a9aa3" strokeWidth="1" fill="none" />
+    </svg>
+  );
+}
+
 export default function Landing() {
   return (
     <div className="lp-root">
@@ -135,16 +174,8 @@ export default function Landing() {
             <Link href="/dashboard" className="lp-launch">Launch Terminal</Link>
           </div>
         </div>
-        <div className="lp-hero-right">
-          <p>
-            한국 주식 <strong>스크리닝 → 백테스트 → 자동매매</strong>를 하나의
-            아키텍처로. 전문가급 룰 기반 백테스터와 290+ 팩터를 무료
-            데이터(KRX·DART·KIS·ECOS·FRED)로 구동합니다.
-          </p>
-          <p className="lp-hero-sub">
-            전일 종가 기준 신호, 생존편향 보정 유니버스, 공시시차 PIT 재무 —
-            정확성이 기본값입니다.
-          </p>
+        <div className="lp-hero-visual">
+          <HeroVisual />
         </div>
       </section>
 
