@@ -13,7 +13,7 @@ import AttributionWaterfall from "@/components/multibacktest/AttributionWaterfal
 import RegimeAttributionTable from "@/components/multibacktest/RegimeAttributionTable";
 import CounterfactualCompare from "@/components/multibacktest/CounterfactualCompare";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_BASE } from "@/lib/apiBase";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 

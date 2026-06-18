@@ -16,6 +16,7 @@ Data sources (with graceful fallback to mock data):
 import asyncio
 import logging
 import math
+import os
 from datetime import datetime
 
 import numpy as np
@@ -26,6 +27,12 @@ logger = logging.getLogger(__name__)
 
 # Refresh interval (seconds) — 5 minutes per spec
 REFRESH_INTERVAL_SEC = 300
+
+# yfinance is heavily rate-limited (HTTP 429) from cloud IPs and is NOT required
+# for the Korean screener (which uses its own KIS/DART/mock data path). Default
+# OFF → use the deterministic mock snapshot, which keeps the FICC tables
+# populated without spamming the logs. Opt in with MARKET_PIPELINE_USE_YFINANCE=1.
+USE_YFINANCE = os.getenv("MARKET_PIPELINE_USE_YFINANCE", "0").strip().lower() in ("1", "true", "yes", "on")
 
 # Curated ticker lists — small enough for e2-micro
 EQUITY_TICKERS = [
@@ -61,6 +68,10 @@ async def fetch_equity_snapshot() -> list[dict]:
     Returns list of dicts ready for bulk insert.
     """
     rows = []
+    if not USE_YFINANCE:
+        # Default path: skip the rate-limited external feed entirely.
+        logger.info("Equity snapshot: using deterministic mock (MARKET_PIPELINE_USE_YFINANCE off)")
+        return _generate_mock_equity_data()
     try:
         import pandas as pd
         import yfinance as yf

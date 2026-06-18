@@ -21,6 +21,7 @@ import { Skeleton, SkeletonText } from "@/components/common";
 import { macroApi, type RegimeState, REGIME_COLORS } from "@/lib/macroApi";
 import { screenerApi, type ScreenerItem, verdictColor, formatPct } from "@/lib/screenerApi";
 import { narrativeApi, type NarrativeResponse } from "@/lib/narrativeApi";
+import { API_BASE } from "@/lib/apiBase";
 
 export default function CommandCenter() {
   return (
@@ -129,7 +130,7 @@ function LiveStatusBar() {
   const [health, setHealth] = useState<{ ok: boolean; mode?: string; kill?: string } | null>(null);
 
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    const API = API_BASE;
     fetch(`${API}/api/v1/live/health`)
       .then(r => r.ok ? r.json() : null)
       .then(d => setHealth(d ? { ok: true, mode: d.mode || "SHADOW", kill: d.kill_switch_status || "INACTIVE" } : { ok: false }))

@@ -4,7 +4,7 @@
 // 백엔드 신규 엔드포인트 POST /api/v1/screener/universe-count 를 호출한다.
 // 응답: { matched, total } — matched=현재 유니버스 게이트 통과 종목 수, total=전체 매매가능 종목 수.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_BASE } from "@/lib/apiBase";
 
 export interface UniverseCountRequest {
   caps: string[];        // 시총군 id (예: "kospi_l" …) — UniversePanel.CAPS 와 동일

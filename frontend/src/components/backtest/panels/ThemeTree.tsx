@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+import { API_BASE } from "@/lib/apiBase";
 const R = "var(--bs-border-radius)";
 
 interface Sub { id: string; label: string; size: number }

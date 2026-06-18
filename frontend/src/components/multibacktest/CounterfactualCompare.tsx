@@ -7,7 +7,7 @@ import {
 import { useMemo, useState } from "react";
 import { TrendingUp, Loader2, Play } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_BASE } from "@/lib/apiBase";
 
 interface ScenarioResult {
   name: string;

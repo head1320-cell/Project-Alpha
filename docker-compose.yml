@@ -69,11 +69,17 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        # 비워두면 브라우저는 같은 출처 프록시(/api/backend)를 사용 → IP/도메인 baking
+        # 불필요, CORS·방화벽·mixed-content 없이 어디든 동작. 별도 API 도메인을
+        # 쓸 때만 절대 URL(https://api.example.com)을 넣을 것.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: ficc_frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      # Next 서버(런타임)가 /api/backend/* 를 백엔드 컨테이너로 프록시할 주소
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
     depends_on:
       backend:
         condition: service_healthy
