@@ -1,20 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-// Same-origin API proxy. The browser calls "/api/backend/*" on the frontend's
-// own origin; Next forwards it to the backend over the server-side network.
-// BACKEND_URL is a RUNTIME env (read by `next start`), so it is NOT baked into
-// the client bundle — set it per-deployment (docker network: http://backend:8000).
-const BACKEND_URL = (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/+$/, "");
-
-const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/backend/:path*",
-        destination: `${BACKEND_URL}/:path*`,
-      },
-    ];
-  },
-};
+// NOTE: backend proxying is handled at RUNTIME by the route handler at
+// src/app/api/backend/[...path]/route.ts (reads BACKEND_URL per request).
+// We intentionally do NOT use next.config.js `rewrites()` for this: rewrites
+// bake their destination at BUILD time into routes-manifest.json, so a runtime
+// BACKEND_URL would be ignored and the baked localhost:8000 would 500 inside a
+// container. See that file's header for the full rationale.
+const nextConfig = {};
 
 module.exports = nextConfig;
