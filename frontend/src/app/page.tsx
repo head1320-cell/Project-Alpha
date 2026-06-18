@@ -107,42 +107,70 @@ function Visual({ kind }: { kind: string }) {
   );
 }
 
-// ─── 히어로 비주얼 — 금융가 스카이라인 (자체 SVG · 외부 의존 0 · 브랜드 팔레트) ───
-function HeroVisual() {
-  const W = 600, H = 680, BASE = 660;
-  const towers: Array<[number, number, number, string, boolean]> = [
-    [34, 96, 252, "#eef0f6", false],
-    [118, 122, 152, "#e7e9f1", false],
-    [228, 138, 66, "#fcfcfe", true],
-    [352, 108, 198, "#eaecf3", false],
-    [446, 132, 118, "#eef0f6", false],
+// ─── 히어로 비주얼 — 퀀트 터미널 제품 프리뷰 (자체 SVG/HTML · 외부 의존 0) ───
+function HeroDeck() {
+  const N = 22;
+  const x = (i: number) => 10 + i * (460 / (N - 1));
+  const eqY = [124, 118, 121, 110, 113, 103, 108, 95, 90, 96, 83, 88, 75, 69, 74, 61, 55, 60, 47, 39, 43, 32];
+  const bcY = [126, 124, 125, 121, 122, 118, 120, 114, 112, 116, 110, 113, 108, 105, 108, 101, 98, 101, 94, 90, 93, 87];
+  const pts = (ys: number[]) => ys.map((y, i) => `${x(i).toFixed(1)},${y}`);
+  const eqArea = `M ${pts(eqY).join(" L ")} L ${x(N - 1).toFixed(1)},150 L ${x(0).toFixed(1)},150 Z`;
+  const factors: Array<[string, string, number]> = [
+    ["ROE", "27.5%", 86], ["GP / Assets", "0.41", 78], ["F-Score", "8 / 9", 89], ["Momentum 12-1", "+18.3%", 72],
   ];
-  const floors = (top: number) => { const a: number[] = []; for (let y = top + 16; y < BASE - 4; y += 20) a.push(y); return a; };
-  const mull = (x: number, w: number) => { const a: number[] = []; for (let mx = x + 12; mx < x + w - 8; mx += 18) a.push(mx); return a; };
+  const heat = [0.85, 0.4, 0.7, 0.25, 0.55, 0.9, 0.3, 0.62, 0.95, 0.45, 0.2, 0.5, 0.7, 0.35, 0.5, 0.82, 0.4, 0.65];
   return (
-    <svg className="lp-hero-art" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax slice" role="img" aria-label="금융가 스카이라인">
-      <defs>
-        <linearGradient id="lp-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fafbfe" /><stop offset="0.72" stopColor="#f1f3f9" /><stop offset="1" stopColor="#e9ebf3" />
-        </linearGradient>
-      </defs>
-      <rect width={W} height={H} fill="url(#lp-sky)" />
-      {Array.from({ length: 7 }).map((_, i) => <line key={`g${i}`} x1={0} y1={i * 100} x2={W} y2={i * 100} stroke="#e7e8ee" strokeWidth="0.6" />)}
-      <polyline points="18,468 110,438 182,452 262,392 342,408 424,346 522,358 582,316" fill="none" stroke="#1200ff" strokeWidth="1.4" opacity="0.5" />
-      {towers.map(([x, w, top, tone, accent], ti) => (
-        <g key={ti}>
-          <rect x={x} y={top} width={w} height={BASE - top} fill={tone} stroke="#c9cad3" strokeWidth="1" />
-          {floors(top).map((y, i) => <line key={`f${i}`} x1={x + 4} y1={y} x2={x + w - 4} y2={y} stroke="#d6d7df" strokeWidth="0.8" />)}
-          {mull(x, w).map((mx, i) => <line key={`m${i}`} x1={mx} y1={top + 5} x2={mx} y2={BASE - 2} stroke="#dfe0e8" strokeWidth="0.6" />)}
-          {accent && <rect x={x + 5} y={top + 9} width={w - 10} height={12} fill="#1200ff" opacity="0.9" />}
-          {accent && <rect x={x} y={top} width={w} height={BASE - top} fill="none" stroke="#1200ff" strokeWidth="1.2" opacity="0.32" />}
-        </g>
-      ))}
-      <rect x={0} y={BASE} width={W} height={H - BASE} fill="#11131a" />
-      <rect x={0} y={BASE} width={W} height="2.5" fill="#1200ff" opacity="0.65" />
-      <path d="M14 14 h18 M14 14 v18" stroke="#9a9aa3" strokeWidth="1" fill="none" />
-      <path d={`M${W - 14} 14 h-18 M${W - 14} 14 v18`} stroke="#9a9aa3" strokeWidth="1" fill="none" />
-    </svg>
+    <div className="lp-deck">
+      <div className="lp-deck-top">
+        <span className="lp-deck-dots"><i /><i /><i /></span>
+        <span className="lp-deck-title">ALPHA // QUANT TERMINAL</span>
+        <span className="lp-deck-live"><i />LIVE</span>
+      </div>
+      <div className="lp-deck-body">
+        <div className="lp-deck-headrow">
+          <div className="lp-deck-stat">
+            <span className="lp-deck-k">STRATEGY EQUITY · YTD</span>
+            <span className="lp-deck-v">+38.24<em>%</em></span>
+          </div>
+          <div className="lp-deck-pills">
+            <span className="lp-deck-pill"><b>SHARPE</b>2.14</span>
+            <span className="lp-deck-pill"><b>MDD</b>−9.1%</span>
+          </div>
+        </div>
+        <svg className="lp-deck-chart" viewBox="0 0 480 150" preserveAspectRatio="none" aria-hidden>
+          <defs>
+            <linearGradient id="lp-eq" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#1200ff" stopOpacity="0.16" /><stop offset="1" stopColor="#1200ff" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[30, 66, 102, 138].map((y, i) => <line key={i} x1="0" y1={y} x2="480" y2={y} stroke="#eef0f4" strokeWidth="1" />)}
+          <path d={eqArea} fill="url(#lp-eq)" />
+          <polyline points={pts(bcY).join(" ")} fill="none" stroke="#c7c8d0" strokeWidth="1.3" strokeDasharray="4 3" />
+          <polyline points={pts(eqY).join(" ")} fill="none" stroke="#1200ff" strokeWidth="2" />
+          <circle cx={x(N - 1)} cy={eqY[N - 1]} r="6.5" fill="#1200ff" opacity="0.16" />
+          <circle cx={x(N - 1)} cy={eqY[N - 1]} r="3.4" fill="#1200ff" />
+        </svg>
+        <div className="lp-deck-grid">
+          <div className="lp-deck-card">
+            <div className="lp-deck-card-h">TOP FACTORS · KOSPI 200</div>
+            {factors.map(([k, v, p]) => (
+              <div key={k} className="lp-deck-frow">
+                <span className="lp-deck-fk">{k}</span>
+                <span className="lp-deck-fbar"><i style={{ width: `${p}%` }} /></span>
+                <span className="lp-deck-fv">{v}</span>
+              </div>
+            ))}
+          </div>
+          <div className="lp-deck-card">
+            <div className="lp-deck-card-h">FACTOR Z-MAP</div>
+            <div className="lp-deck-heat">
+              {heat.map((o, i) => <span key={i} style={{ background: `rgba(18,0,255,${(0.1 + o * 0.62).toFixed(3)})` }} />)}
+            </div>
+            <div className="lp-deck-heat-x"><span>VALUE</span><span>QUALITY</span><span>MOM</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -175,7 +203,8 @@ export default function Landing() {
           </div>
         </div>
         <div className="lp-hero-visual">
-          <HeroVisual />
+          <span className="lp-hero-glow" aria-hidden />
+          <HeroDeck />
         </div>
       </section>
 
