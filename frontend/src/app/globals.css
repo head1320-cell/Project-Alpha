@@ -788,10 +788,8 @@ h6 { font-size: 1rem; }
   display: flex; flex-direction: column; padding: 24px 0;
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
 }
-.terminal-sidebar:hover, .terminal-sidebar:focus-within {
-  width: var(--t-sidebar-w); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.07);
-}
-/* 터치/클릭 토글로 고정 펼침 (호버 없는 환경) */
+/* 호버 확장 제거 — 상단 토글(≡) 버튼 클릭으로만 펼침/닫힘 */
+/* 터치/클릭 토글로 고정 펼침 */
 .terminal-sidebar.pinned { width: var(--t-sidebar-w); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.07); }
 .terminal-sidebar.pinned .fade-x, .terminal-sidebar.pinned .nav-meta { opacity: 1; transition-delay: 0s; }
 .sidebar-backdrop { position: absolute; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.18); }
@@ -799,13 +797,9 @@ h6 { font-size: 1rem; }
   padding: 0; background: none; border: none; cursor: pointer; color: var(--t-muted); }
 .rail-toggle:hover { color: var(--t-ink); }
 .rail-toggle .nav-icon { width: 18px; height: 18px; margin: 0 14px 0 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.5; fill: none; }
-/* 접힘 시 숨고 호버/포커스 때 페이드 인 (헤더·번호·라벨·푸터 텍스트 공통) */
+/* 접힘 시 라벨/번호/푸터 텍스트 숨김 — pinned(토글 펼침)에서만 표시(.terminal-sidebar.pinned 규칙) */
 .terminal-sidebar .fade-x, .terminal-nav .nav-meta {
   opacity: 0; transition: opacity 0.14s ease; white-space: nowrap;
-}
-.terminal-sidebar:hover .fade-x, .terminal-sidebar:focus-within .fade-x,
-.terminal-sidebar:hover .nav-meta, .terminal-sidebar:focus-within .nav-meta {
-  opacity: 1; transition-delay: 0.06s;
 }
 .terminal-sidebar .nav-label {
   font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
