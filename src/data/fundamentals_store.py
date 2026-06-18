@@ -269,7 +269,27 @@ class FundamentalsStore(DeterministicMockStore):
         eps_prev = (ni_prev / shares * 10000) if shares else None
         eps_3y_ago = (ni_3y_ago / shares * 10000) if shares else None
 
-        return dict(
+        # ── 확장 원천 (기본 DART FS에 없는 항목 → 실 값 기반 근사) ──
+        cash = current_assets * 0.25 if current_assets else 0
+        receivables = current_assets * 0.25 if current_assets else 0
+        rnd = revenue * 0.03 if revenue else 0
+        sga = revenue * 0.12 if revenue else 0
+        depreciation = revenue * 0.04 if revenue else 0
+        tax = max(0.0, operating_profit * 0.25) if (operating_profit and operating_profit > 0) else 0.0
+        ta_prev = to_억(fs_prev.total_assets) if (fs_prev and fs_prev.total_assets) else (total_assets * 0.95)
+        ca_prev = to_억(fs_prev.current_assets) if (fs_prev and fs_prev.current_assets) else ((current_assets or 0) * 0.95)
+        cl_prev = to_억(fs_prev.current_liabilities) if (fs_prev and fs_prev.current_liabilities) else ((current_liabilities or 0) * 0.95)
+        inventory_prev = to_억(fs_prev.inventory) if (fs_prev and fs_prev.inventory) else ((inventory or 0) * 0.95)
+        receivables_prev = receivables * 0.95
+        equity_prev = to_억(fs_prev.total_equity) if (fs_prev and fs_prev.total_equity) else (total_equity * 0.95)
+        gross_profit_prev = (revenue_prev * (gross_profit / revenue)) if (revenue_prev and revenue and gross_profit) else ((gross_profit or 0) * 0.95)
+        rev_q = revenue / 4 if revenue else 0
+        rev_q_prev = revenue_prev / 4 if revenue_prev else 0
+        share_price = (mcap / shares * 100) if (mcap and shares) else 0
+
+        # mock 스키마를 베이스로 깔고(전 키 보장) 실값+근사로 덮어쓴다 → 스키마 누락(KeyError) 불가.
+        raw = self._mock_raw_financials(stock_code, item)
+        raw.update(dict(
             market_cap=mcap, revenue=revenue, gross_profit=gross_profit,
             operating_profit=operating_profit, net_income=net_income,
             total_assets=total_assets, total_equity=total_equity,
@@ -280,8 +300,16 @@ class FundamentalsStore(DeterministicMockStore):
             revenue_prev=revenue_prev, op_prev=op_prev, ni_prev=ni_prev,
             revenue_3y_ago=revenue_3y_ago, ni_3y_ago=ni_3y_ago,
             eps=eps or 0, eps_prev=eps_prev or 0, eps_3y_ago=eps_3y_ago or 0,
+            cash=cash, receivables=receivables, rnd=rnd, sga=sga,
+            depreciation=depreciation, tax=tax,
+            ta_prev=ta_prev, ca_prev=ca_prev, cl_prev=cl_prev,
+            inventory_prev=inventory_prev, receivables_prev=receivables_prev,
+            equity_prev=equity_prev, gross_profit_prev=gross_profit_prev,
+            rev_q=rev_q, rev_q_prev=rev_q_prev, share_price=share_price,
+            shares=shares,
             _source="dart_real",
-        )
+        ))
+        return raw
 
     def _mock_raw_financials(self, stock_code: str, item=None) -> dict:
         """결정론적 mock 원천 재무 (DART 스키마 모방, 단위: 억원)."""
