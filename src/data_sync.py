@@ -218,6 +218,37 @@ async def sync_daily_prices(
 # Scheduler Loop
 # ═══════════════════════════════════════════════════════════════════════════════
 
+async def sync_dart_fundamentals():
+    """야간: 기본 유니버스 펀더멘털(DART)을 재적재 → 디스크 캐시 워밍/갱신.
+    DART 키 없으면 건너뜀. 블로킹 작업이라 executor에서 실행(throttle·디스크캐시로 안전)."""
+    import os
+    if not os.getenv("DART_API_KEY"):
+        return
+    loop = asyncio.get_event_loop()
+
+    def _work() -> int:
+        from src.data.dart_client import _load_full_corp_map
+        _load_full_corp_map()
+        from src.data.fundamentals_store import FundamentalsStore
+        from src.engine.screener import KOSPI200_TICKERS
+        store = FundamentalsStore.get_default()
+        store.cache_clear()  # in-memory 비우고 재계산 (대부분 디스크 캐시 적중)
+        ok = 0
+        for code in KOSPI200_TICKERS:
+            try:
+                store.get_factors(code, None)
+                ok += 1
+            except Exception:
+                pass
+        return ok
+
+    try:
+        ok = await loop.run_in_executor(None, _work)
+        logger.info(f"DART 펀더멘털 야간 재적재: {ok}종목")
+    except Exception as e:
+        logger.error(f"DART 펀더멘털 야간 재적재 실패: {e}")
+
+
 async def daily_sync_scheduler():
     """
     Run a daily sync at 02:00 KST (17:00 UTC).
@@ -245,6 +276,7 @@ async def daily_sync_scheduler():
             client = KISClient()
             await sync_stock_metadata()
             await sync_daily_prices(client, days_back=5)  # incremental
+            await sync_dart_fundamentals()               # 펀더멘털 디스크 캐시 갱신
         except Exception as e:
             logger.error(f"Scheduled sync failed: {e}")
 

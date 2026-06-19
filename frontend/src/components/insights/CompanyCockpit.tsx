@@ -39,6 +39,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
   const [risk, setRisk] = useState<RiskInfo | undefined>();
   const [narr, setNarr] = useState<NarrativeInfo | undefined>();
   const [narrLoading, setNarrLoading] = useState(false);
+  const [finMode, setFinMode] = useState<"annual" | "quarter">("annual");
 
   // Overview 진입 시 signal/macro 백그라운드 로드
   useEffect(() => { let ok = true; setSignal(undefined); setMacro(undefined); setNetwork(undefined); setRisk(undefined); setNarr(undefined);
@@ -180,20 +181,36 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
           <div className="ca-cp-pad">
             {c.years.length ? (
               <>
-                <div className="ca-cp-fintabs"><button className="on">연도</button><button disabled title="분기 데이터 준비중">분기 <span className="ca-mockbadge">준비중</span></button></div>
-                <table className="ca-cp-fin">
-                  <thead><tr><th>항목 (억원)</th>{c.years.map((y) => <th key={y.year}>{y.year}</th>)}<th>추세</th></tr></thead>
-                  <tbody>
-                    {([["매출액", (y: CompanyData["years"][0]) => y.revenue, eok], ["영업이익", (y: CompanyData["years"][0]) => y.op, eok], ["순이익", (y: CompanyData["years"][0]) => y.ni, eok], ["자기자본", (y: CompanyData["years"][0]) => y.equity, eok], ["ROE %", (y: CompanyData["years"][0]) => y.roe, (n: number) => `${n}%`], ["부채비율 %", (y: CompanyData["years"][0]) => y.debt, (n: number) => `${n}%`], ["EPS", (y: CompanyData["years"][0]) => y.eps, won], ["BPS", (y: CompanyData["years"][0]) => y.bps, won], ["DPS", (y: CompanyData["years"][0]) => y.dps, won]] as [string, (y: CompanyData["years"][0]) => number, (n: number) => string][]).map(([lbl, get, fmt]) => (
-                      <tr key={lbl}><td className="lbl">{lbl}</td>{c.years.map((y) => <td key={y.year}>{dash(get(y), fmt)}</td>)}<td className="spark"><Spark values={c.years.map(get)} /></td></tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="ca-cp-kpibars">
-                  <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.years} dataKey="revenue" /></div>
-                  <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.years} dataKey="op" color="#16a34a" /></div>
-                  <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.years} dataKey="ni" color="#1200ff" /></div>
+                <div className="ca-cp-fintabs">
+                  <button className={finMode === "annual" ? "on" : ""} onClick={() => setFinMode("annual")}>연도</button>
+                  <button className={finMode === "quarter" ? "on" : ""} disabled={!c.quarters.length} onClick={() => c.quarters.length && setFinMode("quarter")} title={c.quarters.length ? "단일분기 (DART 누적보고서 차분)" : "분기 데이터 없음 — 실데이터(DART 분기보고서)에서 활성"}>분기{!c.quarters.length && <span className="ca-mockbadge">없음</span>}</button>
                 </div>
+                {finMode === "quarter" && c.quarters.length ? (
+                  <table className="ca-cp-fin">
+                    <thead><tr><th>항목 (억원)</th>{c.quarters.map((q) => <th key={q.q}>{q.q}</th>)}<th>추세</th></tr></thead>
+                    <tbody>
+                      {([["매출액", (q: CompanyData["quarters"][0]) => q.revenue, eok], ["영업이익", (q: CompanyData["quarters"][0]) => q.op, eok], ["순이익", (q: CompanyData["quarters"][0]) => q.ni, eok], ["영업이익률 %", (q: CompanyData["quarters"][0]) => q.opMargin, (n: number) => `${n}%`]] as [string, (q: CompanyData["quarters"][0]) => number, (n: number) => string][]).map(([lbl, get, fmt]) => (
+                        <tr key={lbl}><td className="lbl">{lbl}</td>{c.quarters.map((q) => <td key={q.q}>{dash(get(q), fmt)}</td>)}<td className="spark"><Spark values={c.quarters.map(get)} /></td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <>
+                    <table className="ca-cp-fin">
+                      <thead><tr><th>항목 (억원)</th>{c.years.map((y) => <th key={y.year}>{y.year}</th>)}<th>추세</th></tr></thead>
+                      <tbody>
+                        {([["매출액", (y: CompanyData["years"][0]) => y.revenue, eok], ["영업이익", (y: CompanyData["years"][0]) => y.op, eok], ["순이익", (y: CompanyData["years"][0]) => y.ni, eok], ["자기자본", (y: CompanyData["years"][0]) => y.equity, eok], ["ROE %", (y: CompanyData["years"][0]) => y.roe, (n: number) => `${n}%`], ["부채비율 %", (y: CompanyData["years"][0]) => y.debt, (n: number) => `${n}%`], ["EPS", (y: CompanyData["years"][0]) => y.eps, won], ["BPS", (y: CompanyData["years"][0]) => y.bps, won], ["DPS", (y: CompanyData["years"][0]) => y.dps, won]] as [string, (y: CompanyData["years"][0]) => number, (n: number) => string][]).map(([lbl, get, fmt]) => (
+                          <tr key={lbl}><td className="lbl">{lbl}</td>{c.years.map((y) => <td key={y.year}>{dash(get(y), fmt)}</td>)}<td className="spark"><Spark values={c.years.map(get)} /></td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="ca-cp-kpibars">
+                      <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.years} dataKey="revenue" /></div>
+                      <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.years} dataKey="op" color="#16a34a" /></div>
+                      <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.years} dataKey="ni" color="#1200ff" /></div>
+                    </div>
+                  </>
+                )}
               </>
             ) : <div className="ca-cp-empty">재무 시계열을 불러올 수 없습니다 (DART 미등록 종목이거나 데이터 없음).</div>}
           </div>
@@ -258,12 +275,18 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
               : risk.note ? <div className="ca-cp-empty">{risk.note}</div>
               : (
                 <div className="ca-cp-riskgrid">
-                  {[["VaR (99%, 1일)", risk.varPct != null ? pct(-Math.abs(risk.varPct)) : "—"], ["기대손실(ES)", risk.esAmount != null ? won(risk.esAmount) : "—"], ["연환산 변동성", risk.vol != null ? `${(risk.vol * 100).toFixed(1)}%` : "—"]].map(([k, v]) => (
+                  {[
+                    ["VaR (99%, 1일)", risk.varPct != null ? `-${Math.abs(risk.varPct).toFixed(2)}%` : "—"],
+                    ["기대손실 ES (1억)", risk.esAmount != null ? `-${won(Math.abs(risk.esAmount))}` : "—"],
+                    ["연환산 변동성", risk.vol != null ? `${risk.vol.toFixed(1)}%` : "—"],
+                    ["Sharpe (rf=0)", risk.sharpe != null ? risk.sharpe.toFixed(2) : "—"],
+                    ["최대낙폭 (MDD)", risk.mdd != null ? `${risk.mdd.toFixed(1)}%` : "—"],
+                  ].map(([k, v]) => (
                     <div key={k} className="ca-cp-riskcard"><span>{k}</span><b>{v}</b></div>
                   ))}
                 </div>
               )}
-            <div className="ca-cp-empty" style={{ marginTop: 8, fontSize: 11 }}>※ VaR/변동성은 종목 일별 시세(KIS→DB 적재)가 필요합니다. mock 환경에서는 표본이 비어 표시되지 않을 수 있습니다.</div>
+            <div className="ca-cp-empty" style={{ marginTop: 8, fontSize: 11 }}>※ 종목 일별 시세(최근 ~400봉)에서 역사적 VaR·ES·변동성·MDD·Sharpe를 직접 산출합니다. 시세가 적재되지 않은 종목은 표본 부족으로 표시되지 않을 수 있습니다.</div>
           </div>
         )}
 

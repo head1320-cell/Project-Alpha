@@ -421,6 +421,53 @@ class DARTClient:
 
         return history
 
+    def get_quarterly_history(
+        self, corp_code: str, n_quarters: int = 8,
+    ) -> list[FinancialStatement]:
+        """최근 N분기 단일분기 재무 (DART 누적보고서를 차분해 분기化).
+
+        DART 분기보고서는 누적(Q1=1~3월, 반기=1~6월, 3Q=1~9월, 사업=1~12월)이라
+        손익항목(매출·영업익·순익)은 직전 누적을 빼 단일분기로 만든다. 재무상태표
+        항목(자산·자본)은 분기말 스냅샷 그대로 사용.
+        """
+        cur_y = datetime.now().year
+        seq = [("11013", 1), ("11012", 2), ("11014", 3), ("11011", 4)]  # 누적 Q1/반기/3Q/연간
+        out: list[FinancialStatement] = []
+        for y in range(cur_y, cur_y - 3, -1):
+            prev_cum: FinancialStatement | None = None
+            year_rows: list[FinancialStatement] = []
+            for code, q in seq:
+                fs = self.get_financial_statement(corp_code, str(y), reprt_code=code)
+                if not fs or getattr(fs, "is_mock", False) or fs.revenue is None:
+                    prev_cum = None
+                    continue
+                disc = FinancialStatement(
+                    corp_code=corp_code, corp_name=fs.corp_name,
+                    bsns_year=f"{y}Q{q}", reprt_code=code,
+                )
+
+                def _diff(cur, prev):
+                    return (cur - prev) if (cur is not None and prev is not None) else cur
+
+                if prev_cum is not None:
+                    disc.revenue = _diff(fs.revenue, prev_cum.revenue)
+                    disc.operating_profit = _diff(fs.operating_profit, prev_cum.operating_profit)
+                    disc.net_income = _diff(fs.net_income, prev_cum.net_income)
+                else:
+                    disc.revenue, disc.operating_profit, disc.net_income = (
+                        fs.revenue, fs.operating_profit, fs.net_income)
+                # 재무상태표는 분기말 스냅샷
+                disc.total_assets = fs.total_assets
+                disc.total_liabilities = fs.total_liabilities
+                disc.total_equity = fs.total_equity
+                disc.shares_outstanding = fs.shares_outstanding
+                disc.compute_ratios()
+                year_rows.append(disc)
+                prev_cum = fs
+            out.extend(year_rows)
+        out.sort(key=lambda f: f.bsns_year, reverse=True)
+        return out[:n_quarters]
+
     # ─────────────────────────────────────────────────────────────────────
     # Helpers
     # ─────────────────────────────────────────────────────────────────────

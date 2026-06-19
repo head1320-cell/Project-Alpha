@@ -25,6 +25,7 @@ class EvaluateRequest(BaseModel):
     stock_code:      str = Field(..., min_length=4, max_length=10,
                                    description="KRX 종목코드 (예: 005930)")
     current_price:   float = Field(..., gt=0, description="현재 주가 (원)")
+    market_cap:      float | None = Field(None, description="시가총액(억원) — 발행주식수 도출용(BPS·EPS)")
     bsns_year:       str | None = Field(None, description="사업연도 (기본: 직전)")
     beta:            float = Field(default=1.0, ge=0.1, le=3.0)
     risk_free_rate:  float = Field(default=0.035, ge=0, le=0.15)
@@ -76,6 +77,7 @@ def valuation_evaluate(req: EvaluateRequest):
             current_price=req.current_price,
             params=params,
             bsns_year=req.bsns_year,
+            market_cap=req.market_cap,
         )
 
         return {
@@ -159,8 +161,11 @@ def valuation_compare(req: CompareRequest):
 def valuation_financial(
     stock_code: str,
     years: int = Query(5, ge=1, le=10),
+    period: str = Query("annual", description="annual | quarter"),
+    price: float | None = Query(None, gt=0, description="현재가(원) — EPS/BPS 도출용"),
+    market_cap: float | None = Query(None, description="시가총액(억원) — 발행주식수 도출용"),
 ):
-    """종목 재무제표 N년 시계열."""
+    """종목 재무제표 시계열 (period=annual: N년 / quarter: 최근 분기, 누적 차분)."""
     try:
         from src.data.dart_client import DARTClient, get_corp_code
 
@@ -169,13 +174,30 @@ def valuation_financial(
         if not corp_code:
             raise HTTPException(404, f"종목코드 {stock_code} 미등록")
 
-        history = client.get_financial_history(corp_code, years=years)
+        if period == "quarter":
+            history = client.get_quarterly_history(corp_code, n_quarters=max(4, years))
+        else:
+            history = client.get_financial_history(corp_code, years=years)
         corp_info = client.get_corp_info(corp_code)
+
+        # 발행주식수 도출(시총/주가) → DART 미제공 EPS·BPS 보강
+        shares = int(market_cap * 1e8 / price) if (market_cap and price and price > 0) else None
+
+        def _eps(fs):
+            if fs.eps:
+                return round(fs.eps, 0)
+            return round(fs.net_income / shares, 0) if (shares and fs.net_income) else None
+
+        def _bps(fs):
+            if fs.bps:
+                return round(fs.bps, 0)
+            return round(fs.total_equity / shares, 0) if (shares and fs.total_equity) else None
 
         return {
             "stock_code":  stock_code,
             "corp_name":   corp_info.corp_name if corp_info else "",
             "sector":      corp_info.sector if corp_info else "",
+            "period":      period,
             "n_years":     len(history),
             "financials": [
                 {
@@ -189,8 +211,8 @@ def valuation_financial(
                     "roe_pct":             round(fs.roe, 2) if fs.roe else None,
                     "roa_pct":             round(fs.roa, 2) if fs.roa else None,
                     "debt_ratio_pct":      round(fs.debt_ratio, 1) if fs.debt_ratio else None,
-                    "eps":                 round(fs.eps, 0) if fs.eps else None,
-                    "bps":                 round(fs.bps, 0) if fs.bps else None,
+                    "eps":                 _eps(fs),
+                    "bps":                 _bps(fs),
                     "dps":                 round(fs.dps, 0) if fs.dps else None,
                 }
                 for fs in history

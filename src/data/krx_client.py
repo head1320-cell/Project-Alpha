@@ -21,7 +21,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-KRX_BASE_URL = "http://data-dbg.krx.co.kr/svc/apis"
+KRX_BASE_URL = "https://data-dbg.krx.co.kr/svc/apis"  # https (http는 302 리다이렉트)
 
 # 시장 → 전종목 일별매매정보 엔드포인트
 STOCK_ENDPOINTS = {
@@ -146,6 +146,7 @@ class KRXClient:
                 params={"basDd": bas_dd},
                 headers={"AUTH_KEY": self.api_key},
                 timeout=self.timeout,
+                follow_redirects=True,  # http→https 302 추적 (이중 안전)
             )
             r.raise_for_status()
             return r.json().get("OutBlock_1") or []

@@ -399,8 +399,13 @@ class ValuationEngine:
         current_price: float,
         params: ValuationParams | None = None,
         bsns_year: str | None = None,
+        market_cap: float | None = None,
     ) -> UnifiedValuation:
-        """종목 코드 → 재무 데이터 수집 → 3 모델 평가 → 통합 결과."""
+        """종목 코드 → 재무 데이터 수집 → 3 모델 평가 → 통합 결과.
+
+        market_cap(억원)을 받으면 DART가 발행주식수를 안 줘도 시총/주가로 도출해
+        BPS·EPS를 채운다 → RIM·DCF가 활성화됨(이게 없으면 '재무 데이터 부족').
+        """
         params = params or ValuationParams()
 
         # 1. Corp code 변환
@@ -408,12 +413,12 @@ class ValuationEngine:
         if not corp_code:
             corp_code = stock_code  # Fallback: 직접 사용
 
-        # 2. 재무제표 수집
+        # 2. 재무제표 수집 (전체항목 — 현금흐름·유동자산 포함 → DCF용 FCF 확보)
         if bsns_year is None:
             from datetime import datetime
             bsns_year = str(datetime.now().year - 1)
 
-        fs = self.dart.get_financial_statement(corp_code, bsns_year)
+        fs = self.dart.get_financial_statement_full(corp_code, bsns_year)
         if not fs:
             return UnifiedValuation(
                 ticker=stock_code, corp_name="Unknown",
@@ -421,6 +426,13 @@ class ValuationEngine:
                 intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
                 models=[],
             )
+
+        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
+        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
+            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
+        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
+        if fs.capex is None and fs.investing_cf is not None:
+            fs.capex = abs(fs.investing_cf) * 0.5
 
         fs.compute_ratios(current_price)
         corp_info = self.dart.get_corp_info(corp_code)

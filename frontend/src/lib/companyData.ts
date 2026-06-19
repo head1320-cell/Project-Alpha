@@ -5,10 +5,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import {
   companyApi, analysisApi, screenerApiAdvanced,
-  type ScreenerItem, type ValuationDetail, type FieldsCatalog, type FinancialHistory,
+  type ScreenerItem, type ValuationDetail, type FieldsCatalog, type FinancialHistory, type PriceBar,
 } from "@/lib/screenerApi";
 import type {
-  CompanyData, FactorGroup, FactorVal, ModelResult, Scenario, YearFin, PricePt, Peer,
+  CompanyData, FactorGroup, FactorVal, ModelResult, Scenario, YearFin, QuarterFin, PricePt, Peer,
   SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo, MacroInfo,
 } from "@/components/insights/types";
 import { verdictTone } from "@/components/insights/types";
@@ -121,6 +121,18 @@ function mapYears(hist: FinancialHistory | null): YearFin[] {
   return rows;
 }
 
+function mapQuarters(hist: FinancialHistory | null): QuarterFin[] {
+  if (!hist?.financials?.length) return [];
+  const rows = hist.financials.map((f) => {
+    const rev = f.revenue_억 ?? 0;
+    const op = f.operating_profit_억 ?? 0;
+    return { q: f.year, revenue: rev, op, ni: f.net_income_억 ?? 0, opMargin: rev ? Math.round((op / rev) * 1000) / 10 : 0 };
+  });
+  // "2025Q3" 형식 → 과거→최근 오름차순
+  rows.sort((a, b) => a.q.localeCompare(b.q));
+  return rows;
+}
+
 function mapPeers(items: ScreenerItem[], selfCode: string): Peer[] {
   const peers = items.map((it) => ({
     code: it.stock_code, name: it.corp_name, price: it.current_price, per: Math.round((fin(it.per) ?? 0) * 100) / 100,
@@ -139,12 +151,14 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   ]);
   if (!item) throw new Error("NOT_FOUND");
   const price = item.current_price;
+  const mcapInput = fin(item.market_cap_억) ?? undefined;  // 발행주식수 도출용(BPS·EPS) → valuation 활성
   // wave 2
-  const [base, bull, bear, hist, bars, peerItems] = await Promise.all([
-    companyApi.evaluate(code, price).catch(() => null),
-    companyApi.evaluate(code, price, { terminal_growth: 0.03, market_premium: 0.05 }).catch(() => null),
-    companyApi.evaluate(code, price, { terminal_growth: 0.01, market_premium: 0.07 }).catch(() => null),
-    companyApi.financial(code, 8).catch(() => null),
+  const [base, bull, bear, hist, quarterHist, bars, peerItems] = await Promise.all([
+    companyApi.evaluate(code, price, { market_cap: mcapInput }).catch(() => null),
+    companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.03, market_premium: 0.05 }).catch(() => null),
+    companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.01, market_premium: 0.07 }).catch(() => null),
+    companyApi.financial(code, 8, "annual", price, mcapInput).catch(() => null),
+    companyApi.financial(code, 8, "quarter", price, mcapInput).catch(() => null),
     companyApi.prices(code, 400).catch(() => []),
     item.sector ? companyApi.peersBySector(item.sector).catch(() => [] as ScreenerItem[]) : Promise.resolve([] as ScreenerItem[]),
   ]);
@@ -174,6 +188,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const peers = mapPeers([item, ...peerItems.filter((p) => p.stock_code !== code)], code);
 
   const years = mapYears(hist);
+  const quarters = mapQuarters(quarterHist);
   const price1y = bars.length ? mapPrices(bars, price) : synthPrices(code, price);
 
   const upside = Math.round((intrinsic / price - 1) * 1000) / 10;
@@ -193,7 +208,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
       eps: pick("eps"), bps: pick("bps"), dps: pick("dps"),
       revenue: pick("revenue_억"), op: pick("operating_profit_억"), ni: pick("net_income_억"), fcf: pick("fcf_억", item.fcf_억), equity: pick("total_equity_억"),
     },
-    years, quarters: [], price1y, priceIsSynthetic: !bars.length,
+    years, quarters, price1y, priceIsSynthetic: !bars.length,
     fundamentals, priceFactors, strengths, weaknesses,
     shareholder: { divYield, payout: pick("payout_ratio_pct"), dps: pick("dps"), shYield: fin(item["shareholder_yield"]) ?? divYield },
     consensus: { fwdPer: pick("per", item.per), fwdEpsChg: 0, revision: 0, targetPrice: Math.round(intrinsic), targetUpside: upside },
@@ -232,13 +247,36 @@ export async function loadNetwork(code: string): Promise<NetworkInfo> {
 }
 
 export async function loadRisk(code: string): Promise<RiskInfo> {
+  // 1차: 일별 시세로 직접 계산 (VaR·ES·변동성·MDD·Sharpe) — 시세만 있으면 동작, 엔진 제약 회피
+  const bars = await companyApi.prices(code, 400).catch(() => [] as PriceBar[]);
+  const closes = bars.map((b) => b.close).filter((c) => c > 0);
+  if (closes.length >= 30) {
+    const rets: number[] = [];
+    for (let i = 1; i < closes.length; i++) rets.push(closes[i] / closes[i - 1] - 1);
+    const sorted = [...rets].sort((a, b) => a - b);
+    const idx1 = Math.max(0, Math.floor(0.01 * sorted.length));
+    const var99 = -sorted[idx1];                                   // 1일 99% VaR (손실, 양수)
+    const tail = sorted.slice(0, idx1 + 1);
+    const es = tail.length ? -(tail.reduce((s, r) => s + r, 0) / tail.length) : var99;
+    const mean = rets.reduce((s, r) => s + r, 0) / rets.length;
+    const sd = Math.sqrt(rets.reduce((s, r) => s + (r - mean) ** 2, 0) / Math.max(1, rets.length - 1));
+    let peak = closes[0], mdd = 0;
+    for (const c of closes) { if (c > peak) peak = c; const dd = (c - peak) / peak; if (dd < mdd) mdd = dd; }
+    return {
+      varPct: Math.round(var99 * 1000) / 10,                       // %
+      esAmount: Math.round(es * 1e8),                              // 1억 포트 기준 손실(원)
+      vol: Math.round(sd * Math.sqrt(252) * 1000) / 10,            // 연율 변동성 %
+      sharpe: sd > 0 ? Math.round((mean / sd) * Math.sqrt(252) * 100) / 100 : null,
+      mdd: Math.round(mdd * 1000) / 10,                            // 최대낙폭 % (음수)
+    };
+  }
+  // 2차: 백엔드 VaR 엔진 (DB 일봉 있으면)
   const v = await companyApi.riskVar(code).catch(() => null);
-  if (!v) return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표(VaR·변동성)를 계산할 수 없습니다 — 일별 시세 표본 또는 리스크 엔진 제약(실데이터 환경에서 활성)." };
-  const g = v as Record<string, unknown>;
-  return {
-    varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol),
-    sharpe: null, mdd: null,
-  };
+  if (v) {
+    const g = v as Record<string, unknown>;
+    return { varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol), sharpe: null, mdd: null };
+  }
+  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표를 계산할 수 없습니다 — 해당 종목 일별 시세가 아직 적재되지 않았습니다(시세 수집 후 활성)." };
 }
 
 export async function loadNarrative(item: object, valuationDetail: object): Promise<NarrativeInfo> {

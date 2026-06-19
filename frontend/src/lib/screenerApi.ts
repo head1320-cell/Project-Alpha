@@ -1319,7 +1319,7 @@ const POST = (path: string, body: unknown) =>
 export interface PriceBar { date: string; open: number; high: number; low: number; close: number; volume: number; trading_value?: number }
 export interface FinancialHistoryRow { year: string; revenue_억: number | null; operating_profit_억: number | null; net_income_억: number | null; total_assets_억: number | null; total_equity_억: number | null; fcf_억: number | null; roe_pct: number | null; roa_pct: number | null; debt_ratio_pct: number | null; eps: number | null; bps: number | null; dps: number | null }
 export interface FinancialHistory { stock_code: string; corp_name: string; sector: string; n_years: number; financials: FinancialHistoryRow[] }
-export interface EvaluateOverrides { beta?: number; risk_free_rate?: number; market_premium?: number; terminal_growth?: number; projection_years?: number }
+export interface EvaluateOverrides { beta?: number; risk_free_rate?: number; market_premium?: number; terminal_growth?: number; projection_years?: number; market_cap?: number }
 export interface SignalResp { stock_code: string; stock_name: string; action: string; strength: number; reason: string; is_actionable: boolean; is_strong: boolean; strategy: string }
 export interface NarrativeResp { content: string; model: string; input_tokens: number; output_tokens: number; total_tokens: number; cost_usd: number; cost_krw: number; elapsed_seconds: number; cached: boolean; error?: string | null }
 export interface SymbolItem { code: string; name: string; market?: string; sector?: string; listing_date?: string }
@@ -1355,7 +1355,7 @@ export const companyApi = {
   // 3모형 상세 + 시나리오용 가정 오버라이드
   evaluate: async (code: string, price: number, o: EvaluateOverrides = {}): Promise<ValuationDetail> => {
     const r = await POST(`/api/v1/valuation/evaluate`, {
-      stock_code: code, current_price: price,
+      stock_code: code, current_price: price, market_cap: o.market_cap ?? null,
       beta: o.beta ?? 1.0, risk_free_rate: o.risk_free_rate ?? 0.035, market_premium: o.market_premium ?? 0.06,
       terminal_growth: o.terminal_growth ?? 0.02, projection_years: o.projection_years ?? 10,
       weight_rim: 0.4, weight_dcf: 0.4, weight_ddm: 0.2,
@@ -1363,9 +1363,12 @@ export const companyApi = {
     if (!r.ok) throw new Error(`evaluate failed: ${r.status}`);
     return r.json();
   },
-  // 연도 재무 시계열 (미등록 종목은 404 → null)
-  financial: async (code: string, years = 8): Promise<FinancialHistory | null> => {
-    const r = await fetch(`${API_BASE}/api/v1/valuation/financial/${code}?years=${years}`);
+  // 재무 시계열 (period=annual: N년 / quarter: 분기). price·marketCap 주면 EPS/BPS 도출.
+  financial: async (code: string, years = 8, period: "annual" | "quarter" = "annual", price?: number, marketCap?: number): Promise<FinancialHistory | null> => {
+    const qs = new URLSearchParams({ years: String(years), period });
+    if (price && price > 0) qs.set("price", String(price));
+    if (marketCap && marketCap > 0) qs.set("market_cap", String(marketCap));
+    const r = await fetch(`${API_BASE}/api/v1/valuation/financial/${code}?${qs.toString()}`);
     if (r.status === 404) return null;
     if (!r.ok) return null;
     return r.json();
