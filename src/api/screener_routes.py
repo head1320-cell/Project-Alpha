@@ -144,6 +144,24 @@ def screener_run(req: ScreenerRunRequest):
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.post("/ingest")
+def screener_ingest(universe: str = "kospi200"):
+    """유니버스 팩터를 DB(factor_snapshot)에 적재 — 백그라운드 실행.
+    실데이터 모드에서 DART/KIS 실호출로 채우며, 이후 스크리너·분석은 DB에서 즉시 읽음."""
+    import threading
+
+    from src.data.snapshot_db import count, ingest_universe
+    threading.Thread(target=lambda: ingest_universe(universe), daemon=True).start()
+    return {"status": "started", "universe": universe, "current_db_rows": count()}
+
+
+@router.get("/snapshot-status")
+def screener_snapshot_status():
+    """factor_snapshot 적재 현황 (영속 캐시 활성 여부 + 행 수)."""
+    from src.data.snapshot_db import count, enabled
+    return {"persist_enabled": enabled(), "db_rows": count()}
+
+
 @router.get("/universes")
 def screener_universes():
     """사용 가능한 universe 카탈로그."""

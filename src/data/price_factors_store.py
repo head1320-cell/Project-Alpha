@@ -93,6 +93,8 @@ PRICE_CATEGORY_LABELS = {
 class PriceFactorsStore(DeterministicMockStore):
     """KIS OHLCV → 가격·수급 팩터. Mock + 실데이터 연결."""
 
+    PERSIST = True  # 계산된 가격·수급 팩터를 DB(factor_snapshot)에 영속
+
     _default = None
 
     @classmethod
@@ -291,6 +293,8 @@ class PriceFactorsStore(DeterministicMockStore):
 def attach_price_factors(items: list) -> int:
     """ScreenerItem 리스트에 가격·수급 팩터 주입 (attach_fundamentals와 동일 패턴)."""
     store = PriceFactorsStore.get_default()
+    codes = [c for c in (getattr(it, "stock_code", None) for it in items) if c]
+    store.prime([f"price_factors:{c}" for c in codes])  # DB → in-memory 벌크(1쿼리)
     count = 0
     for it in items:
         code = getattr(it, "stock_code", None)

@@ -226,27 +226,22 @@ async def sync_dart_fundamentals():
         return
     loop = asyncio.get_event_loop()
 
-    def _work() -> int:
+    def _work() -> dict:
         from src.data.dart_client import _load_full_corp_map
-        _load_full_corp_map()
         from src.data.fundamentals_store import FundamentalsStore
-        from src.engine.screener import KOSPI200_TICKERS
-        store = FundamentalsStore.get_default()
-        store.cache_clear()  # in-memory 비우고 재계산 (대부분 디스크 캐시 적중)
-        ok = 0
-        for code in KOSPI200_TICKERS:
-            try:
-                store.get_factors(code, None)
-                ok += 1
-            except Exception:
-                pass
-        return ok
+        from src.data.price_factors_store import PriceFactorsStore
+        from src.data.snapshot_db import ingest_universe
+        _load_full_corp_map()
+        # 신선 재적재를 위해 in-memory 비움 (디스크 캐시 7일 TTL이라 대부분 적중)
+        FundamentalsStore.get_default().cache_clear()
+        PriceFactorsStore.get_default().cache_clear()
+        return ingest_universe("kospi200")
 
     try:
-        ok = await loop.run_in_executor(None, _work)
-        logger.info(f"DART 펀더멘털 야간 재적재: {ok}종목")
+        r = await loop.run_in_executor(None, _work)
+        logger.info(f"펀더멘털 야간 재적재(factor_snapshot): {r}")
     except Exception as e:
-        logger.error(f"DART 펀더멘털 야간 재적재 실패: {e}")
+        logger.error(f"펀더멘털 야간 재적재 실패: {e}")
 
 
 async def daily_sync_scheduler():

@@ -35,7 +35,15 @@ class DeterministicMockStore:
     하위 클래스는 보통 다음만 구현:
       · get_default() (싱글톤)
       · 도메인별 조회 메서드 (내부에서 self._rng / self.cached 사용)
+
+    PERSIST=True 인 스토어(예: FundamentalsStore)는 cached()가 DB(factor_snapshot)에도
+    write-through/read-through → 재시작·다중 워커에도 팩터가 유지되고 스크리너는 prime()로
+    한 번에 벌크 로드. (실데이터 모드에서만 활성 — snapshot_db.enabled())
     """
+
+    # DB 영속 캐시 사용 여부 (하위 클래스가 켬). PERSIST_TTL 내 항목은 신선으로 간주.
+    PERSIST: bool = False
+    PERSIST_TTL: int = 3 * 24 * 3600  # 3일
 
     def __init__(self, cache_ttl: int = 3600 * 6):
         self.cache_ttl = cache_ttl
@@ -60,18 +68,50 @@ class DeterministicMockStore:
 
     # ─── 공통 캐시 ────────────────────────────────────────────────────
 
+    def _persist_on(self) -> bool:
+        if not self.PERSIST:
+            return False
+        try:
+            from src.data import snapshot_db
+            return snapshot_db.enabled()
+        except Exception:
+            return False
+
     def cached(self, key: str, builder: Callable[[], T]) -> T:
         """
-        캐시 조회 후 없으면 builder()로 생성하여 저장.
+        캐시 조회(in-memory → DB) 후 없으면 builder()로 생성하여 저장(in-memory + DB).
         """
         with self._lock:
             entry = self._cache.get(key)
             if entry and time.time() - entry[0] < self.cache_ttl:
                 return entry[1]
+        # DB 영속 캐시 (실데이터 모드, PERSIST 스토어)
+        if self._persist_on():
+            from src.data import snapshot_db
+            hit = snapshot_db.bulk_read([key], self.PERSIST_TTL).get(key)
+            if hit is not None:
+                with self._lock:
+                    self._cache[key] = (time.time(), hit)
+                return hit
         value = builder()
         with self._lock:
             self._cache[key] = (time.time(), value)
+        if self._persist_on():
+            from src.data import snapshot_db
+            snapshot_db.write(key, value)
         return value
+
+    def prime(self, keys: list[str]) -> int:
+        """DB에서 여러 키를 한 번에 in-memory로 적재 (스크리너 벌크 — N개 1쿼리)."""
+        if not keys or not self._persist_on():
+            return 0
+        from src.data import snapshot_db
+        hits = snapshot_db.bulk_read(keys, self.PERSIST_TTL)
+        now = time.time()
+        with self._lock:
+            for k, v in hits.items():
+                self._cache[k] = (now, v)
+        return len(hits)
 
     def cache_clear(self) -> None:
         with self._lock:

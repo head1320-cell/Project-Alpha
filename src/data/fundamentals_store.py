@@ -145,6 +145,8 @@ FACTOR_CATEGORY_LABELS = {
 class FundamentalsStore(DeterministicMockStore):
     """DART 원천 → 50+ 학술 팩터 도출 (Mock + 실데이터 연결 여지)."""
 
+    PERSIST = True  # 계산된 팩터를 DB(factor_snapshot)에 영속 → 재시작·벌크 읽기
+
     _singleton: FundamentalsStore | None = None
 
     @classmethod
@@ -600,6 +602,8 @@ def attach_fundamentals(items: list) -> int:
     Returns: 주입된 종목 수
     """
     store = FundamentalsStore.get_default()
+    codes = [c for c in (getattr(it, "stock_code", None) for it in items) if c]
+    store.prime([f"ffl:{c}" for c in codes])  # DB → in-memory 벌크(1쿼리) → 종목별 호출은 히트
     count = 0
     for it in items:
         code = getattr(it, "stock_code", None)

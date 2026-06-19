@@ -152,7 +152,8 @@ async def startup():
 
 
 def _prewarm_real_data():
-    """백그라운드: corp_code 맵 + 기본 유니버스 펀더멘털을 미리 채운다 (블로킹, 데몬 스레드)."""
+    """백그라운드(데몬 스레드): corp_code 맵 준비 + 기본 유니버스 팩터를 DB에 적재.
+    이미 DB(factor_snapshot)에 적재돼 있으면 디스크/DB 캐시 히트로 빠르게 끝남."""
     import logging
     log = logging.getLogger("api.main")
     try:
@@ -162,19 +163,11 @@ def _prewarm_real_data():
     except Exception as e:
         log.warning(f"사전 워밍 corp_code 실패: {e}")
     try:
-        from src.data.fundamentals_store import FundamentalsStore
-        from src.engine.screener import KOSPI200_TICKERS
-        store = FundamentalsStore.get_default()
-        ok = 0
-        for code in KOSPI200_TICKERS:
-            try:
-                store.get_factors(code, None)
-                ok += 1
-            except Exception:
-                pass
-        log.info(f"사전 워밍: 펀더멘털 {ok}/{len(KOSPI200_TICKERS)}종목 캐시 완료")
+        from src.data.snapshot_db import ingest_universe
+        r = ingest_universe("kospi200")  # 펀더멘털+가격 팩터 → DB 적재(write-through)
+        log.info(f"사전 워밍: factor_snapshot 적재 {r}")
     except Exception as e:
-        log.warning(f"사전 워밍 펀더멘털 실패: {e}")
+        log.warning(f"사전 워밍 적재 실패: {e}")
 
     # Load symbol master cache (non-blocking)
     try:
