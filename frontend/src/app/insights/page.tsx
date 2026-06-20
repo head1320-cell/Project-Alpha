@@ -17,6 +17,9 @@ const QUICK = [
 export default function CompanyPage() {
   const [code, setCode] = useState("005930");
   const [input, setInput] = useState("");
+  const [sug, setSug] = useState<{ code: string; name: string }[]>([]);
+  const [showSug, setShowSug] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const [data, setData] = useState<CompanyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,30 @@ export default function CompanyPage() {
     },
   }), [code, data]);
 
-  const go = (v: string) => { const m = v.match(/\d{6}/); if (m) setCode(m[0]); };
+  // 자동완성: 입력 변화 시 디바운스 검색 (이름/코드)
+  useEffect(() => {
+    const q = input.trim();
+    if (!q) { setSug([]); return; }
+    const t = setTimeout(() => {
+      companyApi.stockSearch(q, 12).then((items) => { setSug(items); setActiveIdx(-1); }).catch(() => setSug([]));
+    }, 140);
+    return () => clearTimeout(t);
+  }, [input]);
+
+  const pick = (c: string) => { setCode(c); setInput(""); setSug([]); setShowSug(false); setActiveIdx(-1); };
+  // 분석 버튼/Enter: 활성 추천 → 6자리 코드 → 첫 추천 순
+  const go = () => {
+    if (activeIdx >= 0 && sug[activeIdx]) return pick(sug[activeIdx].code);
+    const m = input.match(/\d{6}/);
+    if (m) return pick(m[0]);
+    if (sug[0]) return pick(sug[0].code);
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setShowSug(true); setActiveIdx((i) => Math.min(i + 1, sug.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, -1)); }
+    else if (e.key === "Enter") { e.preventDefault(); go(); }
+    else if (e.key === "Escape") { setShowSug(false); }
+  };
 
   return (
     <div>
@@ -59,8 +85,30 @@ export default function CompanyPage() {
         status="LIVE"
       >
         <div className="ca-pg-search">
-          <input value={input} onChange={(e) => setInput(e.target.value.replace(/[^0-9]/g, ""))} onKeyDown={(e) => { if (e.key === "Enter") go(input); }} placeholder="종목코드 (예: 005930)" maxLength={6} />
-          <button className="ca-pg-go" onClick={() => go(input)}>분석</button>
+          <div className="ca-pg-searchbox">
+            <input
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setShowSug(true); }}
+              onKeyDown={onKey}
+              onFocus={() => setShowSug(true)}
+              onBlur={() => setTimeout(() => setShowSug(false), 150)}
+              placeholder="기업명 또는 종목코드 (예: 삼성, 005930)"
+              autoComplete="off"
+            />
+            {showSug && sug.length > 0 && (
+              <ul className="ca-pg-sug">
+                {sug.map((s, i) => (
+                  <li key={s.code} className={`ca-pg-sug-item${i === activeIdx ? " on" : ""}`}
+                    onMouseDown={(e) => { e.preventDefault(); pick(s.code); }}
+                    onMouseEnter={() => setActiveIdx(i)}>
+                    <span className="ca-pg-sug-name">{s.name}</span>
+                    <span className="ca-pg-sug-code">{s.code}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button className="ca-pg-go" onClick={go}>분석</button>
           <span className="ca-pg-div" />
           {QUICK.map((q) => <button key={q.code} className={`ca-pg-chip${q.code === code ? " on" : ""}`} onClick={() => setCode(q.code)}>{q.name}</button>)}
         </div>

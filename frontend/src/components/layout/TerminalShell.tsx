@@ -11,6 +11,12 @@ import { useState } from "react";
 
 const MODULES = [
   {
+    n: "00", label: "Dashboard", href: "/dashboard",
+    icon: (
+      <svg className="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></svg>
+    ),
+  },
+  {
     n: "01", label: "Screener", href: "/screener",
     icon: (
       <svg className="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>
@@ -54,7 +60,7 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
     <div className="terminal-root">
       {/* ─── Header ─── */}
       <header className="terminal-header">
-        <Link href="/dashboard" className="terminal-brand">
+        <Link href="/" className="terminal-brand" title="랜딩 페이지로">
           <div className="logo-box">
             <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
           </div>

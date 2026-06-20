@@ -1,296 +1,211 @@
 "use client";
 
-/**
- * Command Center — 통합 인베스트먼트 대시보드 (Phase 5)
- * ==========================================================================
- * 플랫폼 진입 시 모든 엔진의 핵심 요약을 한눈에:
- *   · MacroRegimeStrip — Phase 4 국면 + RF + Stress
- *   · AIBriefingFeed   — Phase 3 일일 브리핑 (뉴스 피드)
- *   · TopPicksGrid     — Phase 2 스크리너 Top 3
- *   · LiveStatusBar    — Stage 13 실거래 상태
- *   · QuickNav         — 7개 카테고리 진입 그리드
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// Dashboard (00) — Institutional Terminal 콕핏
+//   5개 모듈(Screener·Backtester·Macro·Company·Risk)과 깊이 연동된 라이트 터미널 홈.
+//   · 글로벌 종목 검색(이름/코드 자동완성 → 기업분석)
+//   · 매크로 국면(실데이터) · 모듈 그리드 · 스크리너 저평가 Top · 데이터 적재 현황
+// ══════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  Sparkles, Globe, Diamond, Activity, Shield, Wrench, BarChart3,
-  Calculator, ArrowRight, Loader2, AlertTriangle, CheckCircle2, Command,
-} from "lucide-react";
-import { Skeleton, SkeletonText } from "@/components/common";
+import { useRouter } from "next/navigation";
+import PageHeader from "@/components/layout/PageHeader";
 import { macroApi, type RegimeState, REGIME_COLORS } from "@/lib/macroApi";
-import { screenerApi, type ScreenerItem, verdictColor, formatPct } from "@/lib/screenerApi";
-import { narrativeApi, type NarrativeResponse } from "@/lib/narrativeApi";
+import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/lib/screenerApi";
 import { API_BASE } from "@/lib/apiBase";
 
-export default function CommandCenter() {
-  return (
-    <div className="cockpit">
-      <div className="max-w-[1600px] mx-auto px-4 lg:px-8 py-6 space-y-5">
-        <HeroStrip />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2"><MacroRegimeStrip /></div>
-          <LiveStatusBar />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2"><AIBriefingFeed /></div>
-          <TopPicksGrid />
-        </div>
-        <QuickNav />
-      </div>
-    </div>
-  );
-}
-
-function HeroStrip() {
-  return (
-    <div className="flex items-center justify-between flex-wrap gap-4 animate-fade-in">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-2 h-2 rounded-full animate-pulse-glow" style={{ background: "#22c55e", ["--glow-color" as string]: "rgba(34,197,94,0.4)" } as React.CSSProperties} />
-          <span className="text-[11px] font-mono uppercase tracking-widest" style={{ color: "var(--cockpit-muted)" }}>
-            FICC Quant Platform · Command Center
-          </span>
-        </div>
-        <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: "var(--cockpit-text)" }}>
-          통합 인베스트먼트 대시보드
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--cockpit-muted)" }}>
-          Valuation · Screener · AI Narrative · Macro — 149개 API가 단일 콕핏에 통합되었습니다.
-        </p>
-      </div>
-      <button
-        onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition hover:scale-105"
-        style={{ background: "var(--cockpit-card)", border: "1px solid var(--cockpit-border)", color: "var(--cockpit-muted)" }}
-      >
-        <Command size={14} />
-        <span className="font-mono text-xs">⌘K 로 빠른 검색</span>
-      </button>
-    </div>
-  );
-}
-
-function MacroRegimeStrip() {
-  const [state, setState] = useState<RegimeState | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    macroApi.regime().then(setState).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="cockpit-card p-5">
-        <Skeleton className="h-4 mb-4" style={{ width: 120 }} />
-        <div className="grid grid-cols-4 gap-4">{[0,1,2,3].map(i => <Skeleton key={i} className="h-16" />)}</div>
-      </div>
-    );
-  }
-  if (!state) return <div className="cockpit-card p-5 text-sm" style={{ color: "var(--cockpit-muted)" }}>매크로 데이터 로드 실패</div>;
-
-  const rc = REGIME_COLORS[state.regime];
-  const modeColor = state.recommended_mode === "DEFENSIVE" ? "#ef4444" : state.recommended_mode === "CAUTIOUS" ? "#f59e0b" : "#22c55e";
-
-  return (
-    <Link href="/macro" className="block">
-      <div className="cockpit-card p-5 animate-fade-in" style={{ borderTop: `2px solid ${modeColor}` }}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Globe size={15} style={{ color: "#0891b2" }} />
-            <span className="text-sm font-bold" style={{ color: "var(--cockpit-text)" }}>매크로 국면</span>
-          </div>
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold" style={{ background: `${rc.fg}22`, color: rc.fg }}>{state.regime}</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <CockpitStat label="권고 모드" value={state.recommended_mode} color={modeColor} mono />
-          <CockpitStat label="Stress Index" value={state.stress_score.toFixed(0)} suffix=" / 100" color={state.stress_score >= 60 ? "#ef4444" : state.stress_score >= 40 ? "#f59e0b" : "#22c55e"} />
-          <CockpitStat label="Risk-Free (10Y)" value={state.dynamic_risk_free_rate != null ? (state.dynamic_risk_free_rate * 100).toFixed(2) : "—"} suffix="%" color="#22c55e" />
-          <CockpitStat label="Yield Curve" value={state.yield_inversion ? "역전" : "정상"} suffix={state.inversion_severity != null ? ` ${state.inversion_severity.toFixed(0)}bp` : ""} color={state.yield_inversion ? "#ef4444" : "#22c55e"} mono />
-        </div>
-        <div className="mt-4 pt-3 text-xs flex items-center gap-1.5" style={{ borderTop: "1px solid var(--cockpit-border)", color: "var(--cockpit-muted)" }}>
-          <span style={{ color: rc.fg }}>{state.description}</span>
-          <ArrowRight size={11} className="ml-auto" />
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function CockpitStat({ label, value, suffix = "", color, mono = false }: { label: string; value: string; suffix?: string; color: string; mono?: boolean }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--cockpit-muted)" }}>{label}</div>
-      <div className={`text-lg font-bold ${mono ? "" : "tabular-nums"}`} style={{ color }}>{value}<span className="text-xs opacity-70">{suffix}</span></div>
-    </div>
-  );
-}
-
-function LiveStatusBar() {
-  const [health, setHealth] = useState<{ ok: boolean; mode?: string; kill?: string } | null>(null);
-
-  useEffect(() => {
-    const API = API_BASE;
-    fetch(`${API}/api/v1/live/health`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setHealth(d ? { ok: true, mode: d.mode || "SHADOW", kill: d.kill_switch_status || "INACTIVE" } : { ok: false }))
-      .catch(() => setHealth({ ok: false }));
-  }, []);
-
-  const killActive = health?.kill && health.kill !== "INACTIVE";
-
-  return (
-    <Link href="/admin/live-trading" className="block">
-      <div className="cockpit-card p-5 h-full animate-fade-in">
-        <div className="flex items-center gap-2 mb-4">
-          <Activity size={15} style={{ color: killActive ? "#ef4444" : "#22c55e" }} />
-          <span className="text-sm font-bold" style={{ color: "var(--cockpit-text)" }}>실거래 상태</span>
-        </div>
-        {!health ? <SkeletonText lines={3} /> : (
-          <div className="space-y-3">
-            <StatusRow label="API 연결" value={health.ok ? "연결됨" : "오프라인"} ok={health.ok} />
-            <StatusRow label="거래 모드" value={health.mode || "SHADOW"} ok={true} neutral />
-            <StatusRow label="Kill Switch" value={killActive ? "🚨 발동" : "정상"} ok={!killActive} />
-          </div>
-        )}
-        <div className="mt-4 pt-3 text-[11px] flex items-center" style={{ borderTop: "1px solid var(--cockpit-border)", color: "var(--cockpit-muted)" }}>
-          콕핏 열기 <ArrowRight size={11} className="ml-auto" />
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function StatusRow({ label, value, ok, neutral = false }: { label: string; value: string; ok: boolean; neutral?: boolean }) {
-  const color = neutral ? "#94a3b8" : ok ? "#22c55e" : "#ef4444";
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs" style={{ color: "var(--cockpit-muted)" }}>{label}</span>
-      <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color }}>
-        {!neutral && (ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />)}{value}
-      </span>
-    </div>
-  );
-}
-
-function AIBriefingFeed() {
-  const [briefing, setBriefing] = useState<NarrativeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const sample = {
-      operations: { mode: "PAPER", orders_submitted: 23, orders_filled: 21, kill_switch_status: "INACTIVE" },
-      market: { regime: "Reflation", systemic_risk_score: 46, vix: 16.8 },
-      portfolio: { nav_krw: 100_840_000, daily_pnl_krw: 840_000, n_positions: 8 },
-      alerts: [{ severity: "INFO", message: "리밸런싱 완료", time: "09:30" }],
-    };
-    narrativeApi.daily(sample).then(setBriefing).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  const preview = briefing?.content ? briefing.content.replace(/[#*`>|-]/g, "").replace(/\n{2,}/g, "\n").slice(0, 600) : "";
-
-  return (
-    <div className="cockpit-card p-5 animate-fade-in">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Sparkles size={15} style={{ color: "#8b5cf6" }} />
-          <span className="text-sm font-bold" style={{ color: "var(--cockpit-text)" }}>AI 일일 브리핑</span>
-          {briefing?.cached && <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: "rgba(148,163,184,0.2)", color: "#94a3b8" }}>cached</span>}
-        </div>
-        <Link href="/insights?d=daily" className="text-[11px] flex items-center gap-1 transition hover:opacity-80" style={{ color: "#8b5cf6" }}>전체 보기 <ArrowRight size={11} /></Link>
-      </div>
-      {loading ? <SkeletonText lines={6} /> : (
-        <div className="text-sm leading-relaxed whitespace-pre-line" style={{ color: "var(--cockpit-muted)" }}>
-          {preview}{preview && <span style={{ color: "#8b5cf6" }}>... </span>}
-        </div>
-      )}
-      {briefing && !loading && (
-        <div className="mt-4 pt-3 text-[10px] font-mono flex items-center gap-3" style={{ borderTop: "1px solid var(--cockpit-border)", color: "var(--cockpit-muted)" }}>
-          <span>{briefing.model}</span><span>·</span><span>{briefing.total_tokens} tokens</span>
-          {briefing.cost_krw > 0 && <><span>·</span><span>{briefing.cost_krw.toFixed(1)}원</span></>}
-          <span className="ml-auto">{new Date(briefing.timestamp).toLocaleString("ko-KR")}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TopPicksGrid() {
-  const [picks, setPicks] = useState<ScreenerItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    screenerApi.run({ universe: "kospi50", limit: 3, sort_by: "composite_score" })
-      .then(r => setPicks(r.items)).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div className="cockpit-card p-5 animate-fade-in">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Diamond size={15} style={{ color: "#22c55e" }} />
-          <span className="text-sm font-bold" style={{ color: "var(--cockpit-text)" }}>오늘의 저평가 Top 3</span>
-        </div>
-        <Link href="/screener" className="text-[11px] flex items-center gap-1 transition hover:opacity-80" style={{ color: "#22c55e" }}>전체 <ArrowRight size={11} /></Link>
-      </div>
-      {loading ? (
-        <div className="space-y-3">{[0,1,2].map(i => <Skeleton key={i} className="h-14" />)}</div>
-      ) : picks.length === 0 ? (
-        <div className="text-sm py-4 text-center" style={{ color: "var(--cockpit-muted)" }}>데이터 없음</div>
-      ) : (
-        <div className="space-y-2">
-          {picks.map((p, i) => {
-            const vc = verdictColor(p.verdict);
-            return (
-              <Link key={p.stock_code} href={`/screener?stock=${p.stock_code}`}>
-                <div className="flex items-center gap-3 p-2.5 rounded-lg transition hover:scale-[1.02]" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--cockpit-border)" }}>
-                  <div className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: i === 0 ? "rgba(251,191,36,0.2)" : "rgba(148,163,184,0.15)", color: i === 0 ? "#fbbf24" : "#94a3b8" }}>{i + 1}</div>
-                  <div className="flex-grow min-w-0">
-                    <div className="text-sm font-bold truncate" style={{ color: "var(--cockpit-text)" }}>{p.corp_name}</div>
-                    <div className="text-[10px] font-mono" style={{ color: "var(--cockpit-muted)" }}>{p.stock_code}</div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-bold tabular-nums" style={{ color: "#22c55e" }}>{p.composite_score.toFixed(1)}</div>
-                    <div className="text-[10px] font-mono tabular-nums" style={{ color: vc.fg }}>{formatPct(p.gap_pct, 1)}</div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const NAV_ITEMS = [
-  { label: "전략 빌더", href: "/builder", icon: Wrench, color: "#6366f1", desc: "DAG 비주얼 빌더" },
-  { label: "백테스팅", href: "/backtest", icon: BarChart3, color: "#22c55e", desc: "PIT-safe 검증" },
-  { label: "스크리너", href: "/screener", icon: Diamond, color: "#16a34a", desc: "RIM·DCF·DDM" },
-  { label: "리스크 도구", href: "/risk-tools", icon: Shield, color: "#ef4444", desc: "VaR · 프론티어" },
-  { label: "파생상품", href: "/derivatives", icon: Calculator, color: "#fbbf24", desc: "옵션 · XVA" },
-  { label: "매크로", href: "/macro", icon: Globe, color: "#0891b2", desc: "4-Quadrant" },
-  { label: "AI 인사이트", href: "/insights", icon: Sparkles, color: "#8b5cf6", desc: "6 도메인 분석" },
+const MODULES = [
+  { n: "01", label: "Screener", href: "/screener", desc: "116팩터 멀티팩터 스크리닝 · 전종목/ETF" },
+  { n: "02", label: "Backtester", href: "/backtest", desc: "전략 실행·설계·비교 · 체결가 13종" },
+  { n: "03", label: "Macro", href: "/macro", desc: "4-국면도 · 동적 무위험수익률" },
+  { n: "04", label: "Company", href: "/insights", desc: "DART+KIS 통합 · RIM·DCF·DDM 내재가치" },
+  { n: "05", label: "Risk", href: "/risk-tools", desc: "VaR · 스트레스 시나리오 · 생존율" },
 ];
 
-function QuickNav() {
+export default function Dashboard() {
   return (
-    <div className="animate-fade-in-slow">
-      <div className="text-[11px] uppercase tracking-widest mb-3" style={{ color: "var(--cockpit-muted)" }}>전체 도구</div>
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        {NAV_ITEMS.map(item => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.href} href={item.href}>
-              <div className="cockpit-card p-4 h-full">
-                <Icon size={18} style={{ color: item.color }} />
-                <div className="text-sm font-bold mt-2" style={{ color: "var(--cockpit-text)" }}>{item.label}</div>
-                <div className="text-[10px] mt-0.5" style={{ color: "var(--cockpit-muted)" }}>{item.desc}</div>
-              </div>
-            </Link>
-          );
-        })}
+    <div>
+      <PageHeader
+        eyebrow="PLATFORM / COMMAND CENTER"
+        index="00"
+        title="Dashboard"
+        intro="스크리너 · 백테스터 · 매크로 · 기업분석 · 리스크 — 5개 모듈을 한 화면에서. DART+KIS 실데이터 연동."
+        status="LIVE"
+      >
+        <QuickSearch />
+      </PageHeader>
+
+      <MacroStrip />
+      <ModuleGrid />
+      <TopPicks />
+    </div>
+  );
+}
+
+// ─── 글로벌 종목 검색 (이름/코드 자동완성 → 기업분석) ───────────────────────────
+function QuickSearch() {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const [sug, setSug] = useState<{ code: string; name: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [idx, setIdx] = useState(-1);
+  const blurT = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const s = q.trim();
+    if (!s) { setSug([]); return; }
+    const t = setTimeout(() => {
+      companyApi.stockSearch(s, 12).then((r) => { setSug(r); setIdx(-1); }).catch(() => setSug([]));
+    }, 140);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const go = (code: string) => {
+    try { sessionStorage.setItem("alpha_company_ticker", code); } catch { /* noop */ }
+    setQ(""); setSug([]); setOpen(false);
+    router.push("/insights");
+  };
+  const submit = () => {
+    if (idx >= 0 && sug[idx]) return go(sug[idx].code);
+    const m = q.match(/\d{6}/); if (m) return go(m[0]);
+    if (sug[0]) return go(sug[0].code);
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setIdx((i) => Math.min(i + 1, sug.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => Math.max(i - 1, -1)); }
+    else if (e.key === "Enter") { e.preventDefault(); submit(); }
+    else if (e.key === "Escape") setOpen(false);
+  };
+
+  return (
+    <div className="dash-search">
+      <span className="dash-search-ic">⌕</span>
+      <input
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onKeyDown={onKey}
+        onFocus={() => setOpen(true)}
+        onBlur={() => { blurT.current = setTimeout(() => setOpen(false), 150); }}
+        placeholder="기업 검색 — 이름 또는 종목코드 (예: 삼성, 005930)"
+        autoComplete="off"
+      />
+      {open && sug.length > 0 && (
+        <ul className="dash-sug">
+          {sug.map((s, i) => (
+            <li key={s.code} className={`dash-sug-item${i === idx ? " on" : ""}`}
+              onMouseDown={(e) => { e.preventDefault(); go(s.code); }}
+              onMouseEnter={() => setIdx(i)}>
+              <span className="dash-sug-name">{s.name}</span>
+              <span className="dash-sug-code">{s.code}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── 매크로 국면 (실데이터) ────────────────────────────────────────────────────
+function MacroStrip() {
+  const [st, setSt] = useState<RegimeState | null | undefined>(undefined);
+  useEffect(() => { macroApi.regime().then(setSt).catch(() => setSt(null)); }, []);
+
+  if (st === undefined) return <div className="dash-card dash-macro"><div className="dash-skel" style={{ height: 92 }} /></div>;
+  if (!st) return <Link href="/macro" className="dash-card dash-macro dash-macro-empty">매크로 데이터 로드 실패 — 매크로 모듈 열기 →</Link>;
+
+  const rc = REGIME_COLORS[st.regime];
+  const modeColor = st.recommended_mode === "DEFENSIVE" ? "var(--color-bear)" : st.recommended_mode === "CAUTIOUS" ? "var(--color-caution)" : "var(--color-bull)";
+  const stress = st.stress_score;
+  const stat = (label: string, value: string, suffix = "", color = "var(--t-ink)") => (
+    <div className="dash-macro-stat"><div className="dash-macro-k">{label}</div><div className="dash-macro-v" style={{ color }}>{value}<i>{suffix}</i></div></div>
+  );
+
+  return (
+    <Link href="/macro" className="dash-card dash-macro" style={{ borderTop: `2px solid ${modeColor}` }}>
+      <div className="dash-macro-head">
+        <span className="dash-macro-title">◴ 매크로 국면</span>
+        <span className="dash-regime" style={{ background: rc.bg, color: rc.fg, borderColor: rc.border }}>{st.regime}</span>
       </div>
+      <div className="dash-macro-grid">
+        {stat("권고 모드", st.recommended_mode, "", modeColor)}
+        {stat("STRESS INDEX", stress.toFixed(0), " / 100", stress >= 60 ? "var(--color-bear)" : stress >= 40 ? "var(--color-caution)" : "var(--color-bull)")}
+        {stat("RISK-FREE (10Y)", st.dynamic_risk_free_rate != null ? (st.dynamic_risk_free_rate * 100).toFixed(2) : "—", "%")}
+        {stat("YIELD CURVE", st.yield_inversion ? "역전" : "정상", st.inversion_severity != null ? ` ${st.inversion_severity.toFixed(0)}bp` : "", st.yield_inversion ? "var(--color-bear)" : "var(--color-bull)")}
+      </div>
+      <div className="dash-macro-foot"><span style={{ color: rc.fg }}>{st.description}</span><span className="dash-arrow">→</span></div>
+    </Link>
+  );
+}
+
+// ─── 모듈 그리드 (5 툴) + 데이터 적재 현황 ───────────────────────────────────────
+function ModuleGrid() {
+  const [rows, setRows] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/v1/screener/snapshot-status`).then((r) => r.ok ? r.json() : null)
+      .then((d) => setRows(d?.db_rows ?? null)).catch(() => setRows(null));
+  }, []);
+  return (
+    <div className="dash-modgrid">
+      {MODULES.map((m) => (
+        <Link key={m.href} href={m.href} className="dash-card dash-mod">
+          <div className="dash-mod-top"><span className="dash-mod-n">{m.n}</span><span className="dash-arrow">→</span></div>
+          <div className="dash-mod-label">{m.label}</div>
+          <div className="dash-mod-desc">{m.desc}</div>
+        </Link>
+      ))}
+      <div className="dash-card dash-mod dash-mod-stat">
+        <div className="dash-mod-top"><span className="dash-mod-n">◆</span></div>
+        <div className="dash-mod-label">데이터 적재</div>
+        <div className="dash-mod-bignum">{rows == null ? "—" : rows.toLocaleString()}</div>
+        <div className="dash-mod-desc">factor_snapshot 행 (펀더멘털+가격)</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 스크리너 저평가 Top (실데이터) ─────────────────────────────────────────────
+function TopPicks() {
+  const [items, setItems] = useState<ScreenerItem[] | null>(null);
+  useEffect(() => {
+    screenerApiAdvanced.runAdvanced({
+      universe: "kospi200",
+      filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
+      sort_by: "composite_score", ascending: false, limit: 8, liquidity_floor: "relaxed",
+    }).then((r) => setItems(r.items)).catch(() => setItems([]));
+  }, []);
+
+  return (
+    <div className="dash-card dash-picks">
+      <div className="dash-picks-head">
+        <span className="dash-macro-title">◇ 스크리너 — 종합점수 Top</span>
+        <Link href="/screener" className="dash-picks-more">전체 스크리너 →</Link>
+      </div>
+      {items == null ? <div className="dash-skel" style={{ height: 180 }} />
+        : items.length === 0 ? <div className="dash-picks-empty">데이터 적재 후 표시됩니다.</div>
+          : (
+            <table className="dash-picks-table">
+              <thead><tr><th>#</th><th>종목</th><th className="num">현재가</th><th className="num">PER</th><th className="num">ROE</th><th className="num">종합점수</th><th>판정</th></tr></thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const v = it.verdict || "";
+                  const vc = v.includes("저평가") ? "var(--color-bull)" : v.includes("고평가") ? "var(--color-bear)" : "var(--t-muted)";
+                  const num = (x: unknown) => typeof x === "number" ? x : null;
+                  return (
+                    <tr key={it.stock_code} onClick={() => { try { sessionStorage.setItem("alpha_company_ticker", it.stock_code); } catch { /* noop */ } window.location.href = "/insights"; }}>
+                      <td className="dash-rank">{i + 1}</td>
+                      <td className="dash-nm"><b>{it.corp_name}</b> <span className="dash-cd">{it.stock_code}</span></td>
+                      <td className="num">{num(it.current_price)?.toLocaleString() ?? "—"}</td>
+                      <td className="num">{num(it.per)?.toFixed(1) ?? "—"}</td>
+                      <td className="num">{num(it.roe_pct)?.toFixed(1) ?? "—"}{num(it.roe_pct) != null ? "%" : ""}</td>
+                      <td className="num"><b>{num(it.composite_score)?.toFixed(1) ?? "—"}</b></td>
+                      <td><span className="dash-verdict" style={{ color: vc }}>{v || "—"}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
     </div>
   );
 }

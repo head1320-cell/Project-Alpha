@@ -162,6 +162,13 @@ def screener_snapshot_status():
     return {"persist_enabled": enabled(), "db_rows": count()}
 
 
+@router.get("/stock-search")
+def screener_stock_search(q: str, limit: int = 20):
+    """종목명/코드 부분일치 자동완성 ('삼' → 삼성전자·삼성SDI…). 전체 상장사 기준."""
+    from src.data.stock_master import search_stocks
+    return {"items": search_stocks(q, limit)}
+
+
 @router.get("/factor-sample")
 def screener_factor_sample(limit: int = 500):
     """factor_snapshot 기반 팩터 표본 (기업분석 퍼센타일 분포용 — DB에서 즉시).

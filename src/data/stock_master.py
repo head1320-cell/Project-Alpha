@@ -142,6 +142,35 @@ def resolve_name(stock_code: str, fallback: bool = True) -> str:
 REAL_KOSPI_TICKERS = list(STOCK_MASTER.keys())
 
 
+def search_stocks(q: str, limit: int = 20) -> list[dict]:
+    """종목명/코드 부분일치 검색 → [{code, name}]. 검색엔진식 자동완성용.
+    소스: DART corpCode 이름 캐시(전체 상장사) + 내장 마스터. 키 없으면 내장만."""
+    q = (q or "").strip()
+    if not q:
+        return []
+    _dart_name("__warm__")  # _DART_NAME_CACHE 로드 보장
+    names: dict[str, str] = {}
+    names.update(_DART_NAME_CACHE or {})
+    names.update(STOCK_MASTER)  # 내장 마스터 우선(정확한 이름)
+    ql = q.lower()
+    scored: list[tuple] = []
+    for code, name in names.items():
+        nl = (name or "").lower()
+        if code.startswith(q):
+            score = 0           # 코드 시작 일치
+        elif nl.startswith(ql):
+            score = 1           # 이름 시작 일치
+        elif ql in nl:
+            score = 2           # 이름 부분 일치
+        elif q in code:
+            score = 3           # 코드 부분 일치
+        else:
+            continue
+        scored.append((score, len(name or ""), code, name))
+    scored.sort()
+    return [{"code": c, "name": n} for _, _, c, n in scored[:limit]]
+
+
 def build_corp_name_cache_from_dart() -> int:
     """
     DART corpCode.xml에서 {종목코드: 종목명} 캐시 생성.

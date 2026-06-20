@@ -1414,4 +1414,10 @@ export const companyApi = {
     if (!r.ok) return [];
     return (await r.json()).items ?? [];
   },
+  // 종목명/코드 자동완성 (전체 상장사) — "삼" → 삼성전자·삼성SDI…
+  stockSearch: async (q: string, limit = 12): Promise<{ code: string; name: string }[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/stock-search?q=${encodeURIComponent(q)}&limit=${limit}`);
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
 };
