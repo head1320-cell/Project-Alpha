@@ -115,9 +115,22 @@ def resolve_universe(universe: str | list[str]) -> list[str]:
     if isinstance(universe, str) and universe.startswith("sector:"):
         sector = universe.split(":", 1)[1]
         return get_sector_universe().get(sector, [])
+    # KIS 마스터(collect-master 적재) 기반 실제 유니버스 우선:
+    #   kospi200/kosdaq150=실제 지수편입, etf=전 ETF(실명), kospi/kosdaq=시장전체, all_listed=전 주권
+    try:
+        from src.data.stock_master import build_master_universe
+        if universe in ("etf", "kospi", "kosdaq", "kospi200", "kosdaq150"):
+            u = build_master_universe(universe)
+            if u:
+                return u
+        if universe in ("all", "all_listed"):
+            u = build_master_universe("all_listed")
+            if u:
+                return u
+    except Exception:
+        pass
+    # all_listed 폴백: DART corpCode 전체(~3,970)
     if isinstance(universe, str) and universe in ("all", "all_listed"):
-        # 전체 상장 종목: DART corpCode 매핑(~3,970, 디스크 캐시) 우선 →
-        # KIS 마스터 ST 플래그 → kospi200 폴백.
         try:
             from src.data.dart_client import _load_full_corp_map
             codes = list(_load_full_corp_map().keys())
@@ -125,16 +138,8 @@ def resolve_universe(universe: str | list[str]) -> list[str]:
                 return codes
         except Exception:
             pass
-        try:
-            from src.data.stock_master import load_master_flags
-            flags = load_master_flags()
-            if flags:
-                st = [c for c, f in flags.items() if (f.get("group_code") or "ST") == "ST"]
-                if st:
-                    return st
-        except Exception:
-            pass
         return UNIVERSE_PRESETS.get("kospi200", KOSPI200_TICKERS)
+    # 프리셋 (마스터 미적재 시 하드코딩 폴백)
     return UNIVERSE_PRESETS.get(universe, KOSPI200_TICKERS)
 
 
@@ -790,19 +795,20 @@ class ValuationScreener:
     def _resolve_universe(self, universe: str | list[str]) -> list[str]:
         if isinstance(universe, list):
             return universe[:5000]  # 안전 제한 (관심그룹/커스텀)
-        # 전종목: 적재된 DB 종목과 연동 — 적재(ingest)가 늘면 유니버스도 자동 확장.
-        #   (적재 종목은 디스크/DB 캐시라 빠르게 평가 / 미적재 실시간 폭주 방지)
-        if isinstance(universe, str) and universe in ("all", "all_listed"):
+        full = resolve_universe(universe)  # 마스터 멤버십(실 지수·시장·ETF) 또는 폴백
+        # 대용량 유니버스(ETF/KOSPI/KOSDAQ/전종목)는 적재 DB와 연동 — 적재된 종목만 평가:
+        #   빠름(디스크/DB 캐시)·폭주방지·적재가 늘면 유니버스도 자동 확장.
+        #   소규모(KOSPI200/KOSDAQ150 등)는 전 멤버십 평가.
+        if isinstance(universe, str) and len(full) > 250:
             try:
                 from src.data.snapshot_db import enabled, ingested_codes
                 if enabled():
-                    codes = ingested_codes()
-                    if len(codes) >= 30:
-                        return codes
+                    ing = set(ingested_codes())
+                    inter = [c for c in full if c in ing]
+                    return inter if inter else full[:250]  # 적재 전: 250개만(폭주 방지)
             except Exception:
                 pass
-        # sector:, etf, 프리셋, (적재 전)all_listed → DART corpCode 전체 등 일관 처리
-        return resolve_universe(universe)
+        return full
 
     # ─────────────────────────────────────────────────────────────────────
     # Mock price provider

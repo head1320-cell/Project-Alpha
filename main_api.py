@@ -137,6 +137,17 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"KIS async DB startup failed: {e}")
 
+    # KIS 종목 마스터 자동 수집 (무료·인증불필요): 전종목 코드·실명·KOSPI200/KOSDAQ150·ETF 플래그.
+    # → 유니버스(실제 지수·시장전체·ETF 전체)와 종목명 해소의 단일 소스. 미적재 시에만.
+    try:
+        from src.data.stock_master import load_master_flags
+        if not load_master_flags():
+            from src.database import get_engine
+            asyncio.create_task(_collect_master_bg(get_engine()))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"마스터 수집 시작 실패: {e}")
+
     # 실데이터 사전 워밍 (DART 키 있을 때만, 백그라운드 스레드):
     #   ① corp_code 맵을 미리 로드 → 첫 스크린의 corp_code 미스("조회된 데이터 없음") 방지
     #   ② 기본 유니버스 펀더멘털을 미리 계산 → 디스크 캐시 채움 → 사용자 첫 클릭이
@@ -149,6 +160,18 @@ async def startup():
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"실데이터 사전 워밍 시작 실패: {e}")
+
+
+async def _collect_master_bg(engine):
+    """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.kis_master_parser import collect_master_files
+        r = await collect_master_files(engine)
+        log.info(f"KIS 마스터 수집 완료: KOSPI {r.get('KOSPI')} + KOSDAQ {r.get('KOSDAQ')}")
+    except Exception as e:
+        log.warning(f"KIS 마스터 수집 실패(폴백 유지): {e}")
 
 
 def _prewarm_real_data():

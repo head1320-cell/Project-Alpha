@@ -117,6 +117,10 @@ def get_stock_name(stock_code: str) -> str | None:
     # 내장 마스터 우선 (빠름)
     if code in STOCK_MASTER:
         return STOCK_MASTER[code]
+    # KIS 마스터(collect-master) — ETF·전종목 실명 (가장 포괄적)
+    nm = master_name(code)
+    if nm:
+        return nm
     if code in ETF_NAMES:
         return ETF_NAMES[code]
     # DART corpCode 역매핑 시도
@@ -173,7 +177,14 @@ def search_stocks(q: str, limit: int = 20) -> list[dict]:
     names: dict[str, str] = {}
     names.update(_DART_NAME_CACHE or {})
     names.update(ETF_NAMES)     # ETF (DART에 없음)
-    names.update(STOCK_MASTER)  # 내장 마스터 우선(정확한 이름)
+    # KIS 마스터(collect-master) 전종목 실명 — ETF·코스닥 포함 가장 포괄적
+    try:
+        for c, f in load_master_flags().items():
+            if f.get("name"):
+                names[c] = f["name"]
+    except Exception:
+        pass
+    names.update(STOCK_MASTER)  # 내장 마스터 최우선(정확한 이름)
     ql = q.lower()
     scored: list[tuple] = []
     for code, name in names.items():
@@ -379,6 +390,9 @@ def save_master_flags(symbols: list[dict]) -> int:
             "market": s.get("market"),
             "isin": s.get("isin", ""),
             "group_code": s.get("group_code", ""),
+            "is_etf": bool(s.get("is_etf")),
+            "is_kospi200": bool(s.get("is_kospi200")),
+            "is_kosdaq150": bool(s.get("is_kosdaq150")),
             "cap_size": s.get("cap_size", ""),
             "sector_code": s.get("sector_code", ""),
             "sector_mid": s.get("sector_mid", ""),
@@ -416,6 +430,50 @@ def load_master_flags() -> dict:
         except Exception as e:
             logger.warning(f"master flags cache load failed: {e}")
     return _MASTER_FLAGS
+
+
+def master_name(stock_code: str) -> str | None:
+    """KIS 마스터 플래그 캐시의 종목명 (collect-master 적재 시 — ETF·전종목 실명)."""
+    f = load_master_flags().get((stock_code or "").strip())
+    return (f or {}).get("name") if f else None
+
+
+def build_master_universe(kind: str) -> list[str]:
+    """KIS 마스터(collect-master 적재) 기반 유니버스 코드 목록. 미적재 시 []."""
+    flags = load_master_flags()
+    if not flags:
+        return []
+    items = list(flags.items())
+
+    def mkt(f):
+        return (f.get("market") or "").upper()
+
+    def grp(f):
+        return f.get("group_code") or ""
+
+    def mcap(f):
+        return f.get("market_cap_억") or 0
+
+    def _topn(market: str, n: int) -> list[str]:
+        rows = [(c, f) for c, f in items if mkt(f) == market and grp(f) == "ST"]
+        rows.sort(key=lambda x: mcap(x[1]), reverse=True)
+        return [c for c, _ in rows[:n]]
+
+    if kind in ("etf",):
+        return [c for c, f in items if f.get("is_etf") or grp(f) in ("EF", "EN")]
+    if kind == "kospi":
+        return [c for c, f in items if mkt(f) == "KOSPI" and grp(f) == "ST"]
+    if kind == "kosdaq":
+        return [c for c, f in items if mkt(f) == "KOSDAQ" and grp(f) == "ST"]
+    if kind in ("all", "all_listed"):
+        return [c for c, f in items if grp(f) == "ST"]
+    if kind == "kospi200":
+        flagged = [c for c, f in items if f.get("is_kospi200")]
+        return flagged if 150 <= len(flagged) <= 260 else _topn("KOSPI", 200)
+    if kind == "kosdaq150":
+        flagged = [c for c, f in items if f.get("is_kosdaq150")]
+        return flagged if 100 <= len(flagged) <= 200 else _topn("KOSDAQ", 150)
+    return []
 
 
 def _refresh_status_lists() -> None:

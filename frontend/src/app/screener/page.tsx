@@ -33,12 +33,12 @@ export default function ScreenerPage() {
               color: "var(--t-ink)", cursor: "pointer", minWidth: 140,
             }}
           >
-            <option value="kospi50">KOSPI 50</option>
             <option value="kospi200">KOSPI 200</option>
             <option value="kosdaq150">KOSDAQ 150</option>
-            <option value="etf">ETF</option>
+            <option value="kospi">KOSPI 전체</option>
+            <option value="kosdaq">KOSDAQ 전체</option>
+            <option value="etf">ETF 전체</option>
             <option value="all_listed">전체 (전종목)</option>
-            <option value="mapped">DART 매핑</option>
           </select>
         </div>
       </PageHeader>

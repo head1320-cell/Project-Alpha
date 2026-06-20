@@ -147,8 +147,12 @@ def parse_krx_master(content: bytes, market: str) -> list[dict]:
                      "isin": isin if len(isin) == 12 else ""}
         tail = _parse_tail(line, market)
         if tail:
+            k200 = tail.get("KOSPI200섹터업종")  # KOSPI 전용 (1자리 섹터코드, 0/공백=비편입)
             sym.update({
-                "group_code": tail.get("그룹코드") or "",        # ST주권 / EF ETF / RT리츠 …
+                "group_code": tail.get("그룹코드") or "",        # ST주권 / EF ETF / EN ETN / RT리츠 …
+                "is_etf": (tail.get("그룹코드") or "") in ("EF", "EN"),
+                "is_kospi200": bool(k200) and k200 != "0",       # KOSPI200 지수 편입
+                "is_kosdaq150": tail.get("KOSDAQ150") == "Y",    # KOSDAQ150 지수 편입
                 "cap_size": tail.get("시가총액규모") or "",       # 1대 / 2중 / 3소
                 "sector_code": tail.get("지수업종대분류") or "",
                 "sector_mid": tail.get("지수업종중분류") or "",   # 중분류 (세분류 트리용)
