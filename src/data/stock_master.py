@@ -89,15 +89,36 @@ STOCK_SECTOR: dict[str, str] = {
 }
 
 
+# 주요 ETF 종목명 (ETF는 DART corpCode에 없음 → 별도 매핑). 지수·레버리지/인버스·섹터·채권·원자재.
+ETF_NAMES: dict[str, str] = {
+    "069500": "KODEX 200", "102110": "TIGER 200", "148020": "KBSTAR 200",
+    "278530": "KODEX 200TR", "069660": "KOSEF 200", "226490": "KODEX 코스피",
+    "122630": "KODEX 레버리지", "252670": "KODEX 200선물인버스2X", "114800": "KODEX 인버스",
+    "251340": "KODEX 코스닥150선물인버스", "229200": "KODEX 코스닥150", "233740": "KODEX 코스닥150레버리지",
+    "091160": "KODEX 반도체", "091230": "TIGER 반도체", "117460": "KODEX 에너지화학",
+    "305720": "KODEX 2차전지산업", "305540": "TIGER 2차전지테마", "364980": "TIGER KRX2차전지K-뉴딜",
+    "091170": "KODEX 은행", "102780": "KODEX 삼성그룹", "266370": "KODEX IT",
+    "117680": "KODEX 철강", "091180": "KODEX 자동차", "140710": "KODEX 운송",
+    "244580": "KODEX 바이오", "261070": "TIGER 코스닥150바이오테크", "143860": "TIGER 헬스케어",
+    "227540": "TIGER 200 헬스케어", "139660": "TIGER 200 IT", "139270": "TIGER 200 중공업",
+    "139290": "TIGER 200 경기소비재", "139250": "TIGER 200 에너지화학",
+    "273130": "KODEX 종합채권액티브", "153130": "KODEX 단기채권", "214980": "KODEX 단기채권PLUS",
+    "132030": "KODEX 골드선물(H)", "130680": "TIGER 원유선물Enhanced(H)",
+    "278540": "KODEX MSCI Korea TR", "195930": "TIGER 선진국MSCI World", "143850": "TIGER 미국S&P500선물(H)",
+}
+
+
 def get_stock_name(stock_code: str) -> str | None:
     """
     종목코드 → 종목명. 우선순위:
-    1) DART corpCode (실데이터)  2) 내장 마스터  3) None
+    1) 내장 마스터  2) ETF 매핑  3) DART corpCode (실데이터)  4) None
     """
     code = (stock_code or "").replace(".KS", "").replace(".KQ", "").strip()
     # 내장 마스터 우선 (빠름)
     if code in STOCK_MASTER:
         return STOCK_MASTER[code]
+    if code in ETF_NAMES:
+        return ETF_NAMES[code]
     # DART corpCode 역매핑 시도
     name = _dart_name(code)
     if name:
@@ -151,6 +172,7 @@ def search_stocks(q: str, limit: int = 20) -> list[dict]:
     _dart_name("__warm__")  # _DART_NAME_CACHE 로드 보장
     names: dict[str, str] = {}
     names.update(_DART_NAME_CACHE or {})
+    names.update(ETF_NAMES)     # ETF (DART에 없음)
     names.update(STOCK_MASTER)  # 내장 마스터 우선(정확한 이름)
     ql = q.lower()
     scored: list[tuple] = []

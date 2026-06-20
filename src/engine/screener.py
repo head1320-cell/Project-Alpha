@@ -76,18 +76,14 @@ KOSDAQ150_TICKERS = [
 ] + [f"{i:06d}" for i in range(200000, 200132)]
 
 # 주요 ETF (지수·섹터·테마·채권·원자재) — DART 재무 없음(가격·수급 팩터로 스크리닝).
-ETF_TICKERS = [
-    "069500", "102110", "148020", "278530", "069660", "226490",  # 코스피200/TR
-    "122630", "252670", "114800", "251340",                       # 레버리지/인버스
-    "229200", "233740", "251310",                                 # 코스닥150
-    "091160", "091230", "117460", "305720", "305540", "364980",   # 반도체/2차전지/에너지
-    "091170", "102780", "266370", "117680", "091180", "140710",   # 은행/삼성/IT/철강/자동차/운송
-    "244580", "261070", "143860", "227540",                       # 바이오/헬스케어
-    "139660", "139270", "139290", "139250",                       # 섹터 200
-    "273130", "153130", "214980", "136340",                       # 채권
-    "132030", "130680", "139310",                                 # 골드/원유/금
-    "278540", "195930", "143850", "238720",                       # 해외/배당
-]
+# 종목명 단일 소스(stock_master.ETF_NAMES)에서 코드 목록 도출 → 이름 100% 해소.
+def _build_etf_tickers() -> list[str]:
+    try:
+        from src.data.stock_master import ETF_NAMES
+        return list(ETF_NAMES.keys())
+    except Exception:
+        return []
+ETF_TICKERS = _build_etf_tickers()
 
 UNIVERSE_PRESETS: dict[str, list[str]] = {
     "kospi50":    KOSPI50_TICKERS,
@@ -647,8 +643,10 @@ class ValuationScreener:
         if type(client).__name__ == "MockKISClient":
             return 0
 
+        # 대용량 유니버스(전종목) 보호: 실시세 보강은 요청당 상한까지만 (KIS 폭주 방지).
+        max_enrich = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
         n = 0
-        for it in items:
+        for it in items[:max_enrich]:
             code = getattr(it, "stock_code", None)
             if not code:
                 continue
@@ -791,17 +789,20 @@ class ValuationScreener:
 
     def _resolve_universe(self, universe: str | list[str]) -> list[str]:
         if isinstance(universe, list):
-            return universe[:500]  # 안전 제한
-        # 업종 기반: "sector:반도체"
-        if isinstance(universe, str) and universe.startswith("sector:"):
-            sector = universe.split(":", 1)[1]
-            return get_sector_universe().get(sector, [])
-        if universe in UNIVERSE_PRESETS:
-            return UNIVERSE_PRESETS[universe]
-        if universe == "mapped" or universe == "all":
-            return UNIVERSE_PRESETS["mapped"]
-        # Fallback
-        return UNIVERSE_PRESETS["kospi50"]
+            return universe[:5000]  # 안전 제한 (관심그룹/커스텀)
+        # 전종목: 적재된 DB 종목과 연동 — 적재(ingest)가 늘면 유니버스도 자동 확장.
+        #   (적재 종목은 디스크/DB 캐시라 빠르게 평가 / 미적재 실시간 폭주 방지)
+        if isinstance(universe, str) and universe in ("all", "all_listed"):
+            try:
+                from src.data.snapshot_db import enabled, ingested_codes
+                if enabled():
+                    codes = ingested_codes()
+                    if len(codes) >= 30:
+                        return codes
+            except Exception:
+                pass
+        # sector:, etf, 프리셋, (적재 전)all_listed → DART corpCode 전체 등 일관 처리
+        return resolve_universe(universe)
 
     # ─────────────────────────────────────────────────────────────────────
     # Mock price provider

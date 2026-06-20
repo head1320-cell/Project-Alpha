@@ -131,6 +131,21 @@ def count() -> int:
         return 0
 
 
+def ingested_codes() -> list[str]:
+    """factor_snapshot에 적재된 종목코드 목록 (ffl: 키 기준). 스크리너 '전종목'을
+    적재 DB와 연동 — 적재가 늘면 유니버스도 자동으로 늘어남."""
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            rows = c.execute(text(f"SELECT cache_key FROM {_TABLE} WHERE cache_key LIKE 'ffl:%'"))
+            return [r[0].split(":", 1)[1] for r in rows]
+    except Exception as e:
+        logger.warning(f"ingested_codes 실패: {e}")
+        return []
+
+
 def sample_factors(limit: int = 500) -> list[dict]:
     """factor_snapshot에서 종목별 팩터(펀더멘털+가격) 표본을 병합해 반환.
     기업분석 퍼센타일 계산의 분포로 사용 — 라이브 130종목 재계산 대신 DB에서 즉시.
