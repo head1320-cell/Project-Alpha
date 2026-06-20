@@ -1344,6 +1344,12 @@ export const companyApi = {
     if (!r.ok) return [];
     return (await r.json()).items ?? [];
   },
+  // 퍼센타일 분포 — factor_snapshot(DB)에서 즉시 (라이브 130종목 재계산 회피). 비면 [].
+  factorSample: async (limit = 600): Promise<ScreenerItem[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/factor-sample?limit=${limit}`);
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
   // 섹터 피어
   peersBySector: async (sector: string): Promise<ScreenerItem[]> => {
     const r = await POST(`/api/v1/screener/run-advanced`, {

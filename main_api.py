@@ -2326,37 +2326,38 @@ async def v1_get_prices(
     ticker: str,
     days: int = Query(60, ge=1, le=500),
 ):
-    """Return recent daily OHLCV from the DB cache."""
+    """일별 OHLCV — DB→KIS(온디맨드)→mock 통합 로더. KIS 성공 시 DB에 적재(다음부턴 즉시).
+    리스크 지표·가격차트가 미적재 종목에서도 동작하게 함."""
     try:
-        from sqlalchemy import select
+        import asyncio
+        from datetime import datetime, timedelta
 
-        from src.database_async import async_session_scope
-        from src.kis_models import DailyPrice
+        from src.data.ohlcv_loader import load_ohlcv_unified
 
-        async with async_session_scope() as session:
-            stmt = (
-                select(DailyPrice)
-                .where(DailyPrice.ticker == ticker)
-                .order_by(DailyPrice.trade_date.desc())
-                .limit(days)
-            )
-            result = await session.execute(stmt)
-            rows = result.scalars().all()
-            rows.reverse()  # chronological order
+        end = datetime.now().strftime("%Y-%m-%d")
+        start = (datetime.now() - timedelta(days=int(days * 1.7) + 40)).strftime("%Y-%m-%d")
+        loop = asyncio.get_event_loop()
+        df = await loop.run_in_executor(None, lambda: load_ohlcv_unified(ticker, start, end, "auto"))
+        if df is None or df.empty:
+            return {"ticker": ticker, "count": 0, "prices": []}
+        df = df.tail(days)
 
-            return {
-                "ticker": ticker,
-                "count": len(rows),
-                "prices": [
-                    {
-                        "date": r.trade_date.isoformat(),
-                        "open": r.open, "high": r.high, "low": r.low,
-                        "close": r.close, "volume": r.volume,
-                        "trading_value": r.trading_value,
-                    }
-                    for r in rows
-                ],
-            }
+        def _f(v):
+            try:
+                return float(v)
+            except Exception:
+                return None
+
+        prices = []
+        for idx, r in df.iterrows():
+            dt = idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx)[:10]
+            prices.append({
+                "date": dt,
+                "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")),
+                "close": _f(r.get("close")), "volume": _f(r.get("volume")),
+                "trading_value": _f(r.get("trading_value")) if "trading_value" in r else None,
+            })
+        return {"ticker": ticker, "count": len(prices), "prices": prices}
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")

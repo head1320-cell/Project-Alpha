@@ -131,6 +131,37 @@ def count() -> int:
         return 0
 
 
+def sample_factors(limit: int = 500) -> list[dict]:
+    """factor_snapshot에서 종목별 팩터(펀더멘털+가격) 표본을 병합해 반환.
+    기업분석 퍼센타일 계산의 분포로 사용 — 라이브 130종목 재계산 대신 DB에서 즉시.
+    적재된 게 없으면 빈 리스트(호출측이 라이브 폴백)."""
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        merged: dict[str, dict] = {}
+        with engine.connect() as c:
+            rows = c.execute(text(
+                f"SELECT cache_key, value FROM {_TABLE} "
+                "WHERE cache_key LIKE 'ffl:%' OR cache_key LIKE 'price_factors:%' "
+                "LIMIT :lim"
+            ), {"lim": limit * 2})
+            for k, v in rows:
+                try:
+                    code = k.split(":", 1)[1]
+                    d = merged.setdefault(code, {"stock_code": code})
+                    payload = json.loads(v)
+                    for fk, fv in payload.items():
+                        if not fk.startswith("_"):
+                            d[fk] = fv
+                except Exception:
+                    pass
+        return list(merged.values())[:limit]
+    except Exception as e:
+        logger.warning(f"sample_factors 실패: {e}")
+        return []
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Batch ingestion — 전 유니버스 팩터를 DB에 적재
 # ═══════════════════════════════════════════════════════════════════════════════

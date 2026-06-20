@@ -151,7 +151,12 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   // wave 1
   const [item, sample, catalog] = await Promise.all([
     companyApi.byTicker(code),
-    companyApi.universeSample("kospi200").catch(() => [] as ScreenerItem[]),
+    // 퍼센타일 분포: DB 적재 표본(factor_snapshot) 우선 → 비면(미적재) 라이브 kospi200 폴백.
+    (async () => {
+      const db = await companyApi.factorSample(600).catch(() => [] as ScreenerItem[]);
+      if (db.length >= 20) return db;
+      return companyApi.universeSample("kospi200").catch(() => [] as ScreenerItem[]);
+    })(),
     screenerApiAdvanced.fields().catch(() => ({ categories: [], operators: [], rank_modes: [] } as FieldsCatalog)),
   ]);
   if (!item) throw new Error("NOT_FOUND");

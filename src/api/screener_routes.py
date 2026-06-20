@@ -162,6 +162,14 @@ def screener_snapshot_status():
     return {"persist_enabled": enabled(), "db_rows": count()}
 
 
+@router.get("/factor-sample")
+def screener_factor_sample(limit: int = 500):
+    """factor_snapshot 기반 팩터 표본 (기업분석 퍼센타일 분포용 — DB에서 즉시).
+    적재 전이면 빈 items → 프론트가 라이브 표본으로 폴백."""
+    from src.data.snapshot_db import sample_factors
+    return {"items": sample_factors(limit)}
+
+
 @router.get("/universes")
 def screener_universes():
     """사용 가능한 universe 카탈로그."""
