@@ -75,10 +75,25 @@ KOSDAQ150_TICKERS = [
     "293490", "240810", "058470", "121600", "078340", "215000",
 ] + [f"{i:06d}" for i in range(200000, 200132)]
 
+# 주요 ETF (지수·섹터·테마·채권·원자재) — DART 재무 없음(가격·수급 팩터로 스크리닝).
+ETF_TICKERS = [
+    "069500", "102110", "148020", "278530", "069660", "226490",  # 코스피200/TR
+    "122630", "252670", "114800", "251340",                       # 레버리지/인버스
+    "229200", "233740", "251310",                                 # 코스닥150
+    "091160", "091230", "117460", "305720", "305540", "364980",   # 반도체/2차전지/에너지
+    "091170", "102780", "266370", "117680", "091180", "140710",   # 은행/삼성/IT/철강/자동차/운송
+    "244580", "261070", "143860", "227540",                       # 바이오/헬스케어
+    "139660", "139270", "139290", "139250",                       # 섹터 200
+    "273130", "153130", "214980", "136340",                       # 채권
+    "132030", "130680", "139310",                                 # 골드/원유/금
+    "278540", "195930", "143850", "238720",                       # 해외/배당
+]
+
 UNIVERSE_PRESETS: dict[str, list[str]] = {
     "kospi50":    KOSPI50_TICKERS,
     "kospi200":   KOSPI200_TICKERS,
     "kosdaq150":  KOSDAQ150_TICKERS,
+    "etf":        ETF_TICKERS,
     "mapped":     list(STOCK_TO_CORP.keys()),    # DART corp_code 매핑된 종목만
 }
 
@@ -105,12 +120,22 @@ def resolve_universe(universe: str | list[str]) -> list[str]:
         sector = universe.split(":", 1)[1]
         return get_sector_universe().get(sector, [])
     if isinstance(universe, str) and universe in ("all", "all_listed"):
-        # 전종목(주권만) — KIS 마스터 캐시 필요 (collect-master 후). 없으면 kospi200 폴백.
+        # 전체 상장 종목: DART corpCode 매핑(~3,970, 디스크 캐시) 우선 →
+        # KIS 마스터 ST 플래그 → kospi200 폴백.
+        try:
+            from src.data.dart_client import _load_full_corp_map
+            codes = list(_load_full_corp_map().keys())
+            if len(codes) >= 200:
+                return codes
+        except Exception:
+            pass
         try:
             from src.data.stock_master import load_master_flags
             flags = load_master_flags()
             if flags:
-                return [c for c, f in flags.items() if (f.get("group_code") or "ST") == "ST"]
+                st = [c for c, f in flags.items() if (f.get("group_code") or "ST") == "ST"]
+                if st:
+                    return st
         except Exception:
             pass
         return UNIVERSE_PRESETS.get("kospi200", KOSPI200_TICKERS)

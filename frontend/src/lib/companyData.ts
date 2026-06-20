@@ -126,7 +126,12 @@ function mapQuarters(hist: FinancialHistory | null): QuarterFin[] {
   const rows = hist.financials.map((f) => {
     const rev = f.revenue_억 ?? 0;
     const op = f.operating_profit_억 ?? 0;
-    return { q: f.year, revenue: rev, op, ni: f.net_income_억 ?? 0, opMargin: rev ? Math.round((op / rev) * 1000) / 10 : 0 };
+    return {
+      q: f.year, revenue: rev, op, ni: f.net_income_억 ?? 0,
+      equity: f.total_equity_억 ?? 0, roe: f.roe_pct ?? 0, debt: f.debt_ratio_pct ?? 0,
+      eps: f.eps ?? 0, bps: f.bps ?? 0, dps: f.dps ?? 0,
+      opMargin: rev ? Math.round((op / rev) * 1000) / 10 : 0,
+    };
   });
   // "2025Q3" 형식 → 과거→최근 오름차순
   rows.sort((a, b) => a.q.localeCompare(b.q));

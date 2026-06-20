@@ -189,7 +189,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                   <table className="ca-cp-fin">
                     <thead><tr><th>항목 (억원)</th>{c.quarters.map((q) => <th key={q.q}>{q.q}</th>)}<th>추세</th></tr></thead>
                     <tbody>
-                      {([["매출액", (q: CompanyData["quarters"][0]) => q.revenue, eok], ["영업이익", (q: CompanyData["quarters"][0]) => q.op, eok], ["순이익", (q: CompanyData["quarters"][0]) => q.ni, eok], ["영업이익률 %", (q: CompanyData["quarters"][0]) => q.opMargin, (n: number) => `${n}%`]] as [string, (q: CompanyData["quarters"][0]) => number, (n: number) => string][]).map(([lbl, get, fmt]) => (
+                      {([["매출액", (q: CompanyData["quarters"][0]) => q.revenue, eok], ["영업이익", (q: CompanyData["quarters"][0]) => q.op, eok], ["순이익", (q: CompanyData["quarters"][0]) => q.ni, eok], ["자기자본", (q: CompanyData["quarters"][0]) => q.equity, eok], ["ROE %", (q: CompanyData["quarters"][0]) => q.roe, (n: number) => `${n}%`], ["부채비율 %", (q: CompanyData["quarters"][0]) => q.debt, (n: number) => `${n}%`], ["영업이익률 %", (q: CompanyData["quarters"][0]) => q.opMargin, (n: number) => `${n}%`], ["EPS", (q: CompanyData["quarters"][0]) => q.eps, won], ["BPS", (q: CompanyData["quarters"][0]) => q.bps, won], ["DPS", (q: CompanyData["quarters"][0]) => q.dps, won]] as [string, (q: CompanyData["quarters"][0]) => number, (n: number) => string][]).map(([lbl, get, fmt]) => (
                         <tr key={lbl}><td className="lbl">{lbl}</td>{c.quarters.map((q) => <td key={q.q}>{dash(get(q), fmt)}</td>)}<td className="spark"><Spark values={c.quarters.map(get)} /></td></tr>
                       ))}
                     </tbody>

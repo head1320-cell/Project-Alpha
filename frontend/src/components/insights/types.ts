@@ -8,7 +8,7 @@ export type Tone = "bull" | "bear" | "caution" | "neutral";
 export interface FactorVal { id: string; label: string; value: number; unit: string; pct: number; higherBetter: boolean }
 export interface FactorGroup { id: string; label: string; factors: FactorVal[] }
 export interface YearFin { year: string; revenue: number; op: number; ni: number; equity: number; fcf: number; roe: number; debt: number; eps: number; bps: number; dps: number }
-export interface QuarterFin { q: string; revenue: number; op: number; ni: number; opMargin: number }
+export interface QuarterFin { q: string; revenue: number; op: number; ni: number; equity: number; roe: number; debt: number; eps: number; bps: number; dps: number; opMargin: number }
 export interface ModelResult { key: "RIM" | "DCF" | "DDM"; label: string; value: number; weight: number; assumptions: { k: string; v: string }[]; components: { k: string; v: string }[] }
 export interface Peer { code: string; name: string; price: number; per: number; pbr: number; roe: number; gap: number; mktcap: number; self?: boolean }
 export interface Scenario { key: "bull" | "base" | "bear"; label: string; value: number; gap: number; note: string }

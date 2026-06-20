@@ -424,47 +424,61 @@ class DARTClient:
     def get_quarterly_history(
         self, corp_code: str, n_quarters: int = 8,
     ) -> list[FinancialStatement]:
-        """최근 N분기 단일분기 재무 (DART 누적보고서를 차분해 분기化).
+        """최근 N분기 단일분기 재무.
 
-        DART 분기보고서는 누적(Q1=1~3월, 반기=1~6월, 3Q=1~9월, 사업=1~12월)이라
-        손익항목(매출·영업익·순익)은 직전 누적을 빼 단일분기로 만든다. 재무상태표
-        항목(자산·자본)은 분기말 스냅샷 그대로 사용.
+        DART 분기보고서(11013/11012/11014/11011)의 손익항목이 '누적'인지 '단일분기'인지
+        보고서마다 다르므로, 연도별로 매출 추이를 보고 자동 판별:
+          · 분기 진행에 따라 매출이 단조증가 → 누적 → 직전 누적을 빼 단일분기化.
+          · 아니면 단일분기 보고로 보고 raw 사용.
+        재무상태표(자산·자본)는 분기말 스냅샷. 결측·음수 분기는 스킵(이상치 방지).
         """
         cur_y = datetime.now().year
-        seq = [("11013", 1), ("11012", 2), ("11014", 3), ("11011", 4)]  # 누적 Q1/반기/3Q/연간
+        seq = [("11013", 1), ("11012", 2), ("11014", 3), ("11011", 4)]  # Q1/반기/3Q/사업
         out: list[FinancialStatement] = []
         for y in range(cur_y, cur_y - 3, -1):
-            prev_cum: FinancialStatement | None = None
-            year_rows: list[FinancialStatement] = []
+            reps: dict[int, FinancialStatement] = {}
             for code, q in seq:
                 fs = self.get_financial_statement(corp_code, str(y), reprt_code=code)
-                if not fs or getattr(fs, "is_mock", False) or fs.revenue is None:
-                    prev_cum = None
-                    continue
+                if fs and not getattr(fs, "is_mock", False) and fs.revenue is not None:
+                    reps[q] = fs
+            if not reps:
+                continue
+            # 누적 여부 판별 (매출 단조증가 + 마지막이 첫 분기의 1.4배↑)
+            revs = [reps[q].revenue for q in sorted(reps) if reps[q].revenue is not None]
+            cumulative = (
+                len(revs) >= 2
+                and all(revs[i] <= revs[i + 1] * 1.05 for i in range(len(revs) - 1))
+                and revs[-1] > revs[0] * 1.4
+            )
+            for q in sorted(reps):
+                fs = reps[q]
                 disc = FinancialStatement(
                     corp_code=corp_code, corp_name=fs.corp_name,
-                    bsns_year=f"{y}Q{q}", reprt_code=code,
+                    bsns_year=f"{y}Q{q}", reprt_code=fs.reprt_code,
                 )
 
-                def _diff(cur, prev):
+                def _d(cur, prev):
                     return (cur - prev) if (cur is not None and prev is not None) else cur
 
-                if prev_cum is not None:
-                    disc.revenue = _diff(fs.revenue, prev_cum.revenue)
-                    disc.operating_profit = _diff(fs.operating_profit, prev_cum.operating_profit)
-                    disc.net_income = _diff(fs.net_income, prev_cum.net_income)
+                if cumulative and q > 1:
+                    if (q - 1) not in reps:
+                        continue  # 중간 보고서 결측 → 신뢰 불가, 스킵
+                    prev = reps[q - 1]
+                    disc.revenue = _d(fs.revenue, prev.revenue)
+                    disc.operating_profit = _d(fs.operating_profit, prev.operating_profit)
+                    disc.net_income = _d(fs.net_income, prev.net_income)
                 else:
                     disc.revenue, disc.operating_profit, disc.net_income = (
                         fs.revenue, fs.operating_profit, fs.net_income)
+                if disc.revenue is not None and disc.revenue < 0:
+                    continue  # 음수 매출 = 이상치 → 스킵
                 # 재무상태표는 분기말 스냅샷
                 disc.total_assets = fs.total_assets
                 disc.total_liabilities = fs.total_liabilities
                 disc.total_equity = fs.total_equity
                 disc.shares_outstanding = fs.shares_outstanding
                 disc.compute_ratios()
-                year_rows.append(disc)
-                prev_cum = fs
-            out.extend(year_rows)
+                out.append(disc)
         out.sort(key=lambda f: f.bsns_year, reverse=True)
         return out[:n_quarters]
 

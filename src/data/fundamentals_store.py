@@ -601,14 +601,23 @@ def attach_fundamentals(items: list) -> int:
     field kind가 getattr(item, factor_id)로 접근하므로 setattr로 부착.
     Returns: 주입된 종목 수
     """
+    import os
     store = FundamentalsStore.get_default()
     codes = [c for c in (getattr(it, "stock_code", None) for it in items) if c]
     store.prime([f"ffl:{c}" for c in codes])  # DB → in-memory 벌크(1쿼리) → 종목별 호출은 히트
+    # 미적재(캐시 미스) 종목의 실시간 계산은 요청당 상한 — 전종목(~3,970) 선택 시
+    # DART 쿼터 폭발/지연 방지. 적재(ingest)는 이 경로를 안 거치므로 전체 적재엔 무영향.
+    max_live = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
+    live = 0
     count = 0
     for it in items:
         code = getattr(it, "stock_code", None)
         if not code:
             continue
+        if f"ffl:{code}" not in store._cache:
+            if live >= max_live:
+                continue  # 한도 초과: 미적재 종목은 이번엔 스킵 (ingest 후 표시)
+            live += 1
         factors = store.get_factors(code, it)
         for fid, val in factors.items():
             if not fid.startswith("_"):

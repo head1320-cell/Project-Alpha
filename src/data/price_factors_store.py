@@ -292,14 +292,21 @@ class PriceFactorsStore(DeterministicMockStore):
 
 def attach_price_factors(items: list) -> int:
     """ScreenerItem 리스트에 가격·수급 팩터 주입 (attach_fundamentals와 동일 패턴)."""
+    import os
     store = PriceFactorsStore.get_default()
     codes = [c for c in (getattr(it, "stock_code", None) for it in items) if c]
     store.prime([f"price_factors:{c}" for c in codes])  # DB → in-memory 벌크(1쿼리)
+    max_live = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
+    live = 0
     count = 0
     for it in items:
         code = getattr(it, "stock_code", None)
         if not code:
             continue
+        if f"price_factors:{code}" not in store._cache:
+            if live >= max_live:
+                continue
+            live += 1
         factors = store.get_factors(code, it)
         for fid, val in factors.items():
             if not fid.startswith("_"):
