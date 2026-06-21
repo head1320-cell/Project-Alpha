@@ -319,6 +319,11 @@ async def collect_master_files(engine=None) -> dict:
             from src.data import stock_master as sm
             flags_saved = sm.save_master_flags(all_symbols)
             sm.reload_master_flags()  # MANAGED/SUPERVISED 모듈 변수 + _status_codes 캐시 갱신
+            try:  # 전종목 프레임 캐시 무효화 → 백테스터 유니버스가 전종목으로 갱신
+                from src.engine.universe_select import invalidate_universe_frame
+                invalidate_universe_frame()
+            except Exception:
+                pass
             managed_count = sum(1 for s in all_symbols if s.get("is_managed") or s.get("is_halted") or s.get("is_clearing"))
             alerted_count = sum(1 for s in all_symbols
                                 if (s.get("alert_code") or "00") != "00" or s.get("is_caution"))

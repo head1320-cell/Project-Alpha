@@ -145,14 +145,28 @@ def _master_frame() -> pd.DataFrame | None:
                                        "sector_code", "sector_mid", "market_cap", "is_etf"])
 
 
-@lru_cache(maxsize=1)
+_UNIVERSE_FRAME: pd.DataFrame | None = None
+
+
+def invalidate_universe_frame() -> None:
+    """마스터(collect-master) 적재 후 프레임 캐시 무효화 → 다음 호출에 전종목 반영."""
+    global _UNIVERSE_FRAME
+    _UNIVERSE_FRAME = None
+
+
 def load_universe_frame() -> pd.DataFrame:
     """전체 매매가능 종목 프레임: ticker, market, tier, sector, market_cap, is_etf.
 
     KIS 마스터 플래그 캐시(collect-master 실행 후)가 있으면 전종목 기준,
-    없으면 프리셋(kospi50/200/kosdaq150 + 업종) 폴백 — 기존 동작 불변."""
+    없으면 프리셋(kospi50/200/kosdaq150 + 업종) 폴백.
+    ★ 실 마스터 프레임만 캐시(폴백은 캐시 안 함) → 부팅 중 폴백이 고착되지 않고,
+      collect-master 완료 후 다음 호출부터 전종목으로 갱신."""
+    global _UNIVERSE_FRAME
+    if _UNIVERSE_FRAME is not None:
+        return _UNIVERSE_FRAME
     mf = _master_frame()
     if mf is not None and not mf.empty:
+        _UNIVERSE_FRAME = mf
         return mf
 
     from src.engine.screener import UNIVERSE_PRESETS, get_sector_universe
@@ -193,6 +207,10 @@ def load_universe_frame() -> pd.DataFrame:
         })
     return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector",
                                        "sector_code", "sector_mid", "market_cap", "is_etf"])
+
+
+# lru_cache 호환 API (기존 호출부 .cache_clear() 유지)
+load_universe_frame.cache_clear = invalidate_universe_frame
 
 
 def tickers_asof(date: str, engine=None, min_count: int = 50) -> list[str]:
