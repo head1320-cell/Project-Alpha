@@ -209,13 +209,15 @@ class DARTClient:
     # Rate limit
     # ─────────────────────────────────────────────────────────────────────
 
+    # DART 분당 1000건(≈16/s) 한도 → 기본 0.15초(≈400/min, 안전). 디스크 캐시 히트 시엔
+    # 호출 안 됨(워밍 후 무영향). DART_THROTTLE_SEC로 조정 가능.
+    _THROTTLE_SEC = float(os.getenv("DART_THROTTLE_SEC", "0.15"))
+
     def _throttle(self):
-        """DART 한도: 분당 1000건(≈16/s) → 안전하게 0.25초 간격(4/s).
-        디스크 캐시 히트 시엔 호출되지 않으므로, 워밍 후엔 throttle 영향 없음."""
         now = time.time()
         elapsed = now - self._last_call_time
-        if elapsed < 0.25:
-            time.sleep(0.25 - elapsed)
+        if elapsed < self._THROTTLE_SEC:
+            time.sleep(self._THROTTLE_SEC - elapsed)
         self._last_call_time = time.time()
 
     def _get(self, endpoint: str, params: dict) -> dict | None:

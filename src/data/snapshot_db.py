@@ -182,24 +182,24 @@ def sample_factors(limit: int = 500) -> list[dict]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def ingest_universe(universe: str = "kospi200") -> dict:
-    """유니버스 종목의 펀더멘털+가격 팩터를 계산해 DB에 적재.
-    실데이터 모드면 DART/KIS 실호출(throttle·디스크캐시) → DB write-through.
-    스토어의 get_factors가 PERSIST로 자동 write하므로 호출만 하면 적재됨."""
-    from src.data.fundamentals_store import FundamentalsStore
-    from src.data.price_factors_store import PriceFactorsStore
-    from src.engine.screener import resolve_universe
+    """유니버스 전 종목을 평가해 완성된 ScreenerItem(item:CODE)을 DB에 적재.
+    이후 스크리너가 평가 없이 즉시 서빙(로딩 없음). 청크(<상한)로 돌려 캡 미발동·전부 저장.
+    실데이터 모드면 DART/KIS 실호출(throttle·디스크캐시) → 1회성, 이후 즉시."""
+    from src.engine.screener import ValuationScreener, resolve_universe
 
     codes = resolve_universe(universe)
-    fstore = FundamentalsStore.get_default()
-    pstore = PriceFactorsStore.get_default()
+    sc = ValuationScreener()
+    CHUNK = 300  # 평가/보강 상한(400) 미만 → 청크 전부 평가·저장
     ok = 0
-    for code in codes:
+    for i in range(0, len(codes), CHUNK):
+        chunk = codes[i:i + CHUNK]
         try:
-            fstore.get_factors(code)
-            pstore.get_factors(code)
-            ok += 1
-        except Exception:
-            pass
+            res = sc.run(universe=chunk, filter_ast=None, liquidity_floor="off",
+                         limit=len(chunk), no_cap=True)
+            ok += res.total_evaluated
+            logger.info(f"적재 진행: {min(i + CHUNK, len(codes))}/{len(codes)} ({universe})")
+        except Exception as e:
+            logger.warning(f"적재 청크 실패 [{i}]: {e}")
     result = {"universe": universe, "ingested": ok, "total": len(codes), "db_rows": count()}
     logger.info(f"factor_snapshot 적재 완료: {result}")
     return result

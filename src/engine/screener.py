@@ -219,6 +219,18 @@ class ScreenerItem:
             pass
         return d
 
+    @classmethod
+    def from_dict(cls, d: dict) -> ScreenerItem:
+        """to_dict() 산출물 → ScreenerItem 복원 (평가/DART 없이 즉시 — 스냅샷 서빙용)."""
+        import dataclasses
+        fnames = {f.name for f in dataclasses.fields(cls)}
+        base = {k: d.get(k) for k in fnames}
+        item = cls(**base)
+        for k, v in d.items():
+            if k not in fnames and not str(k).startswith("_"):
+                setattr(item, k, v)
+        return item
+
 
 @dataclass
 class ScreenerResult:
@@ -357,6 +369,40 @@ class ValuationScreener:
         self.max_workers = max_workers
 
     # ─────────────────────────────────────────────────────────────────────
+    # 스냅샷 아이템 캐시 (적재 후 즉시 서빙 — 평가 생략)
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _load_cached_items(self, codes: list[str]) -> dict:
+        """factor_snapshot의 item:CODE에서 ScreenerItem 즉시 복원 (평가/DART 없이)."""
+        try:
+            from src.data.snapshot_db import bulk_read, enabled
+            if not enabled() or not codes:
+                return {}
+            hits = bulk_read([f"item:{c}" for c in codes], 3 * 24 * 3600)
+            out: dict = {}
+            for k, v in hits.items():
+                try:
+                    out[k.split(":", 1)[1]] = ScreenerItem.from_dict(v)
+                except Exception:
+                    pass
+            return out
+        except Exception:
+            return {}
+
+    def _store_items(self, items: list) -> None:
+        """평가된 ScreenerItem을 item:CODE로 저장 → 다음 조회부터 즉시 서빙."""
+        try:
+            from src.data.snapshot_db import enabled, write_many
+            if not enabled() or not items:
+                return
+            payload = {f"item:{it.stock_code}": it.to_dict()
+                       for it in items if getattr(it, "stock_code", None)}
+            if payload:
+                write_many(payload)
+        except Exception:
+            pass
+
+    # ─────────────────────────────────────────────────────────────────────
     # 핵심: run
     # ─────────────────────────────────────────────────────────────────────
 
@@ -375,6 +421,7 @@ class ValuationScreener:
         as_of_date: str | None = None,  # V2-M4: PIT 스크리닝 기준일 (look-ahead 차단)
         liquidity_floor=None,       # V3-P1.5: 유동성 게이트 ("standard"|"off"|dict, 기본 standard)
         progress_cb=None,           # 진행 콜백 (done, total, misses) — SSE 스트리밍 진행표시용
+        no_cap: bool = False,       # True면 미적재 평가 상한 해제 (ingest 배치 전용)
     ) -> ScreenerResult:
         """
         전체 파이프라인:
@@ -414,37 +461,55 @@ class ValuationScreener:
                 cache_hits=0, cache_misses=0, failures=0,
             )
 
-        # 2. 병렬 평가
+        # 2. 평가 — 적재된 item:CODE는 즉시 복원(평가 생략), 나머지만 평가
         cache_start = self.cache.hits
         miss_start = self.cache.misses
-        items: list[ScreenerItem] = []
         failures = 0
+        fresh_items: list[ScreenerItem] = []
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
-            future_to_ticker = {
-                ex.submit(self._evaluate_one_safe, ticker, params): ticker
-                for ticker in tickers
-            }
-            done = 0
-            total = len(tickers)
-            step = max(1, total // 100)   # 진행 이벤트 최대 ~100개로 throttle
-            for future in as_completed(future_to_ticker):
-                ticker = future_to_ticker[future]
-                try:
-                    item = future.result()
-                    if item:
-                        items.append(item)
-                    else:
-                        failures += 1
-                except Exception as e:
-                    logger.error(f"종목 {ticker} 평가 실패: {e}")
-                    failures += 1
-                done += 1
-                if progress_cb is not None and (done % step == 0 or done == total):
+        cached_items = self._load_cached_items(tickers)   # {code: ScreenerItem} — 즉시
+        items: list[ScreenerItem] = list(cached_items.values())
+        to_eval = [t for t in tickers if t not in cached_items]
+        # 미적재 평가 상한 (대용량 폭주 방지). ingest 배치(no_cap)는 해제.
+        if not no_cap:
+            import os
+            max_eval = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
+            to_eval = to_eval[:max_eval]
+
+        if to_eval:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
+                future_to_ticker = {
+                    ex.submit(self._evaluate_one_safe, ticker, params): ticker
+                    for ticker in to_eval
+                }
+                done = 0
+                total = len(to_eval)
+                step = max(1, total // 100)   # 진행 이벤트 최대 ~100개로 throttle
+                base = len(cached_items)
+                for future in as_completed(future_to_ticker):
+                    ticker = future_to_ticker[future]
                     try:
-                        progress_cb(done, total, self.cache.misses - miss_start)
-                    except Exception:
-                        pass
+                        item = future.result()
+                        if item:
+                            items.append(item)
+                            fresh_items.append(item)
+                        else:
+                            failures += 1
+                    except Exception as e:
+                        logger.error(f"종목 {ticker} 평가 실패: {e}")
+                        failures += 1
+                    done += 1
+                    if progress_cb is not None and (done % step == 0 or done == total):
+                        try:
+                            progress_cb(base + done, len(tickers), self.cache.misses - miss_start)
+                        except Exception:
+                            pass
+        elif progress_cb is not None:
+            # 전부 적재됨 → 즉시 완료 신호 (로딩 없이 바로 표시)
+            try:
+                progress_cb(len(tickers), len(tickers), 0)
+            except Exception:
+                pass
 
         cache_hits = self.cache.hits - cache_start
         cache_misses = self.cache.misses - miss_start
@@ -456,22 +521,23 @@ class ValuationScreener:
         floor = resolve_floor(liquidity_floor if liquidity_floor is not None else "standard")
         items, self._liquidity_stats = apply_liquidity_gate(items, floor)
 
-        # ★ 실데이터: KIS 실시세로 시총·PER·PBR 보강 (KIS_USE_MOCK=0 + 키 설정 시)
-        #   시총이 펀더멘털 팩터(EV/EBITDA, FCF Yield 등) 계산의 입력이므로 먼저 주입
-        try:
-            self._enrich_kis_quotes(items)
-        except Exception as e:
-            logger.debug(f"KIS 시세 보강 실패 (mock 유지): {e}")
-
-        # ★ FFL: 펀더멘털 팩터 주입 (게이트 통과 종목에만 — lazy 효율)
-        #   50+ 학술 팩터를 ScreenerItem에 동적 속성으로 부착 → field kind가 getattr로 접근
-        try:
-            from src.data.fundamentals_store import attach_fundamentals
-            attach_fundamentals(items)
-            from src.data.price_factors_store import attach_price_factors
-            attach_price_factors(items)
-        except Exception as e:
-            logger.debug(f"펀더멘털 주입 실패: {e}")
+        # 신규 평가 종목만 시세보강·팩터주입 (적재 복원분은 이미 완비 → 즉시)
+        fresh_set = {it.stock_code for it in fresh_items}
+        fresh_in_items = [it for it in items if it.stock_code in fresh_set]
+        if fresh_in_items:
+            try:
+                self._enrich_kis_quotes(fresh_in_items)
+            except Exception as e:
+                logger.debug(f"KIS 시세 보강 실패 (mock 유지): {e}")
+            try:
+                from src.data.fundamentals_store import attach_fundamentals
+                attach_fundamentals(fresh_in_items)
+                from src.data.price_factors_store import attach_price_factors
+                attach_price_factors(fresh_in_items)
+            except Exception as e:
+                logger.debug(f"펀더멘털 주입 실패: {e}")
+            # 신규 평가분을 item:CODE로 저장 → 다음 조회부터 즉시 서빙(로딩 없음)
+            self._store_items(fresh_in_items)
 
         # 4. 필터 적용 — filter_ast(M1) 우선, 없으면 기존 ScreenerFilters (하위호환)
         if filter_ast is not None and not filter_ast.is_empty():
