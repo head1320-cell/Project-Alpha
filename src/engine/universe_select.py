@@ -120,6 +120,12 @@ def _master_frame() -> pd.DataFrame | None:
         pass
     from src.data.sector_labels import label_for
     etf_extra = _etf_codes()
+    # 전 종목 → 젠포트 그룹 배정 (시드→업종코드 다수결 전파→큐레이션→기타)
+    try:
+        from src.data.genport_themes import build_group_assignment
+        group_assign = build_group_assignment(flags)
+    except Exception:
+        group_assign = {}
 
     rows = []
     for code, f in flags.items():
@@ -138,11 +144,13 @@ def _master_frame() -> pd.DataFrame | None:
             "ticker": str(code), "market": market, "tier": tier,
             "sector": sector, "sector_code": sec_code,
             "sector_mid": str(f.get("sector_mid") or ""),
+            "genport_group": group_assign.get(str(code), "기타"),
             "market_cap": float(mcap) if mcap else None,
             "is_etf": group in ("EF", "EN") or str(code) in etf_extra,
         })
     return pd.DataFrame(rows, columns=["ticker", "market", "tier", "sector",
-                                       "sector_code", "sector_mid", "market_cap", "is_etf"])
+                                       "sector_code", "sector_mid", "genport_group",
+                                       "market_cap", "is_etf"])
 
 
 _UNIVERSE_FRAME: pd.DataFrame | None = None
@@ -318,12 +326,14 @@ def select_universe(
         mask &= df["tier"].isin(tiers)
 
     # 업종/테마 선택:
-    #   · 'theme:세부' / 'themegroup:그룹' (젠포트 88 taxonomy) → 시드 종목 코드로 필터
-    #   · 그 외(실제 업종명) → df["sector"] 매칭 (fake id는 no-op 방어)
+    #   · 'theme:세부'/'themegroup:그룹' → 해당 젠포트 그룹의 '전 종목'(genport_group 컬럼)
+    #     으로 필터 → 전 종목 커버(전체 업종=전체 종목). 세부 시드는 정밀 보강으로 추가.
+    #   · 그 외(실제 업종명) → df["sector"] 매칭.
     sectors = [s for s in (sectors or []) if s]
-    theme_tickers: set[str] = set()
+    sel_groups: set[str] = set()     # 선택된 젠포트 그룹 (그룹 전 종목 커버)
+    theme_tickers: set[str] = set()  # 세부 시드 (보강)
     plain_sectors: list[str] = []
-    theme_requested = False  # 유효 테마/그룹 id가 선택됐는지 (멤버 0이어도 필터 적용)
+    theme_requested = False
     for s in sectors:
         if s.startswith("theme:") or s.startswith("themegroup:"):
             try:
@@ -335,9 +345,14 @@ def select_universe(
                 )
                 key = s.split(":", 1)[1]
                 is_grp = s.startswith("themegroup:")
-                if (is_grp and key in THEME_TREE) or (not is_grp and key in SUBSECTOR_GROUP):
-                    theme_requested = True   # taxonomy에 존재하는 id → 빈 멤버여도 필터
-                    theme_tickers.update(group_members(key) if is_grp else theme_members(key))
+                if is_grp and key in THEME_TREE:
+                    theme_requested = True
+                    sel_groups.add(key)
+                    theme_tickers.update(group_members(key))
+                elif (not is_grp) and key in SUBSECTOR_GROUP:
+                    theme_requested = True
+                    sel_groups.add(SUBSECTOR_GROUP[key])  # 세부의 상위 그룹 → 그룹 전 종목
+                    theme_tickers.update(theme_members(key))
             except Exception:
                 pass
         else:
@@ -349,6 +364,8 @@ def select_universe(
     any_sector = bool(sel) or theme_requested
     if sel:
         sector_mask |= df["sector"].isin(sel)
+    if sel_groups and "genport_group" in df.columns:
+        sector_mask |= df["genport_group"].isin(sel_groups)
     if theme_tickers:
         sector_mask |= tk_sel.isin(theme_tickers)
     if any_sector:

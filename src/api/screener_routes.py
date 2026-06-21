@@ -321,7 +321,9 @@ def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = 
             return {"items": rows}
         if cls == "tier" and id:
             return {"items": items_of_frame(df[df["tier"] == id])}
-        if cls == "group" and id:        # 주식 업종 — 17 테마그룹
+        if cls == "group" and id:        # 주식 업종 — 17 테마그룹 (전 종목 커버)
+            if "genport_group" in df.columns:
+                return {"items": items_of_frame(df[df["genport_group"] == id])}
             return {"items": items_of_codes(group_members(id))}
         if cls == "theme" and id:        # 주식 테마 — 88 세부업종
             return {"items": items_of_codes(theme_members(id))}
@@ -334,7 +336,8 @@ def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = 
         tier_order = ["kospi_l", "kospi_m", "kosdaq_l", "kosdaq_m", "kosdaq_s", "kosdaq_xs"]
         tiers = [{"id": t, "size": int((df["tier"] == t).sum())}
                  for t in tier_order if bool((df["tier"] == t).any())]
-        groups = [{"id": g, "size": len(group_members(g))} for g in THEME_TREE]
+        _gg = df["genport_group"].value_counts().to_dict() if "genport_group" in df.columns else {}
+        groups = [{"id": g, "size": int(_gg.get(g, len(group_members(g))))} for g in THEME_TREE]
         themes = [{"id": sub, "group": g, "size": len(theme_members(sub))}
                   for g, subs in THEME_TREE.items() for sub in subs]
         sectors = [{"id": str(s_), "size": int(c)}

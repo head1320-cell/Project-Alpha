@@ -126,3 +126,51 @@ def group_members(group: str) -> list[str]:
     for sub in THEME_TREE.get((group or "").strip(), []):
         out.extend(THEME_SEED.get(sub, []))
     return sorted(set(out))
+
+
+# 큐레이션 업종명(stock_master.STOCK_SECTOR) → 젠포트 그룹
+_CURATED_TO_GROUP: dict[str, str] = {
+    "반도체": "반도체", "금융": "금융", "바이오": "바이오/헬스케어",
+    "2차전지": "자동차/배터리", "게임": "레저/게임", "인터넷": "IT/플랫폼",
+    "자동차": "자동차/배터리", "철강": "기계/철강", "통신": "IT/플랫폼", "화학": "건설/소재",
+}
+
+
+def _seed_group_map() -> dict[str, str]:
+    """시드 종목코드 → 젠포트 그룹."""
+    m: dict[str, str] = {}
+    for sub, codes in THEME_SEED.items():
+        g = SUBSECTOR_GROUP.get(sub)
+        if g:
+            for c in codes:
+                m[str(c)] = g
+    return m
+
+
+def build_group_assignment(flags: dict) -> dict[str, str]:
+    """전 종목 → 젠포트 그룹 배정. 모든 종목이 한 그룹에 속하게 해 '전체 업종=전체 종목'.
+    ① 시드(직접) → ② 업종코드(대분류) 다수결 전파(시드 라벨로 학습) → ③ 큐레이션 → ④ 기타."""
+    from collections import Counter
+
+    from src.data.stock_master import STOCK_SECTOR
+    seed_group = _seed_group_map()
+    # 업종코드 → 그룹 (해당 코드의 시드들 다수결)
+    votes: dict[str, Counter] = {}
+    for code, f in flags.items():
+        sc = str((f or {}).get("sector_code") or "")
+        g = seed_group.get(str(code))
+        if sc and g:
+            votes.setdefault(sc, Counter())[g] += 1
+    code_to_group = {sc: cnt.most_common(1)[0][0] for sc, cnt in votes.items()}
+
+    out: dict[str, str] = {}
+    for code, f in flags.items():
+        c = str(code)
+        g = seed_group.get(c)
+        if not g:
+            g = code_to_group.get(str((f or {}).get("sector_code") or ""))
+        if not g:
+            cur = STOCK_SECTOR.get(c)
+            g = _CURATED_TO_GROUP.get(cur) if cur else None
+        out[c] = g or "기타"
+    return out
