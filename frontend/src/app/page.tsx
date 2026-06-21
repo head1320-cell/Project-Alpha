@@ -216,7 +216,7 @@ export default function Landing() {
             The operating<br />system for<br />quantitative<br />research.
           </h1>
           <div className="lp-cta-row">
-            <Link href="/dashboard" className="lp-launch">Launch Terminal</Link>
+            <Link href="/dashboard" className="lp-launch">Dashboard</Link>
           </div>
         </div>
         <div className="lp-hero-visual">

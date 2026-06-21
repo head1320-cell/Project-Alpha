@@ -896,3 +896,92 @@ KIS OHLCV에서 파생되는 가격·수급 팩터 28개 추가. 재무와 무�
 ### 빌드 통과 증명
 - 백엔드: ruff 통과, 185 라우트, 회귀 52거래 -8.1%
 - 프론트: build 성공, public 빌드 후 존재, .next 정상, npm start 스크립트 확인
+
+---
+
+# 🌐 GCP 실배포 + 실데이터 적재 세션 (컨텍스트 압축 요약)
+
+> **배포 주소**: `http://34.58.206.52:3000/` (docker-compose: `ficc_backend`/`ficc_frontend`/`ficc_db`, 네트워크 `ficc_net`)
+> 아래는 GCP 실배포 후 "아무것도 안 보임 → 실데이터 전종목 흐름"까지의 대규모 세션 요약.
+> 새 세션은 이 블록부터 읽으면 현재 상태를 이어받음.
+
+## 0. 한 줄 현황
+GCP에 docker-compose로 배포됨. **KIS/DART 실데이터가 흐르고**(verify_connection 통과), KIS master(무료)로
+**전종목(약 3,992)** 적재 + 실제 종목명 + 업종분류 완료. 스크리너/백테스터/컴퍼니/대시보드가 서버 DB와 연동.
+**핵심 원칙: KIS·DART는 무료. mock은 키 없을 때만. 키 설정 시 자동 실데이터 전환.**
+
+## 1. GCP API 연결 — 런타임 동일출처 프록시 (★가장 중요한 근본수정★)
+- **증상**: GCP 배포 후 모든 탭이 빈 화면, "Screen-to-backtest failed: 500". 프론트가 `localhost:8000`을 치고 있었음.
+- **근본원인**: `NEXT_PUBLIC_*`/`next.config.js` rewrites는 **빌드 타임에 목적지가 박힘** → 컨테이너 런타임 IP를 모름.
+- **해결 (런타임 프록시)**:
+  - `frontend/src/app/api/backend/[...path]/route.ts` — **route handler가 런타임에** `process.env.BACKEND_URL`을 읽어 백엔드로 프록시 (GET/POST/PUT/DELETE, 스트리밍).
+  - `frontend/src/lib/apiBase.ts` — 모든 API를 **동일출처 `/api/backend/...`** 로 보냄 (브라우저는 자기 origin만 앎 → IP 무관).
+  - `docker-compose.yml`: frontend에 `BACKEND_URL=http://backend:8000` (compose 내부 DNS).
+- **교훈**: Next.js에서 런타임 가변 백엔드 주소는 **반드시 route handler 프록시**. 빌드타임 env/rewrites 금지.
+
+## 2. 실데이터 DB 적재 아키텍처 (재로딩 제거 → 즉시 서빙)
+- **요구**: "유니버스 바꿀 때마다 로딩 → DB 한번 쌓이면 바로 리스트". 전종목을 가져오되 매번 재평가 금지.
+- **신규 `src/data/snapshot_db.py`**:
+  - `factor_snapshot` 테이블 (`cache_key` PK, `value` JSON, `updated_at`) — 포터블 UPSERT(`ON CONFLICT`).
+  - **item 캐시**: 종목당 `ScreenerItem.to_dict()` 전체를 `item:{CODE}` 로 저장 → `ScreenerItem.from_dict()`로 **재평가 없이 즉시 복원**.
+  - `ingested_codes()`, `bulk_read/write_many`, `sample_factors()`, `ingest_universe(no_cap)`(청크 run() → item 저장).
+- **`src/engine/screener.py`**:
+  - `ScreenerItem.from_dict/to_dict` 왕복, `_load_cached_items`/`_store_items`.
+  - `run()` 패스트패스: `item:CODE` 있으면 평가 스킵·즉시 반환, 없으면 평가 후 저장. `no_cap` 파라미터(ingest용).
+  - `_resolve_universe`: 큰 유니버스(>250)는 `ingested_codes()` 사용, 그 외 `resolve_universe`.
+- **DART 디스크 캐시**(`dart_cache/`) + 공유 싱글턴 `DARTClient` + throttle(`DART_THROTTLE_SEC=0.15`).
+- **`SCREENER_MAX_LIVE_COMPUTE`(=400)**: 라이브 DART 호출 상한(ingest는 no_cap으로 무제한).
+- **검증**: ingest 후 0.006s 즉시 서빙(재평가 0), DB read-through 센티넬 증명.
+
+## 3. KIS master 유니버스 — 전종목·실명·플래그 (무료, 인증 불필요)
+- **핵심 발견**: KIS master 파일은 **무료·무인증** — `https://new.real.download.dws.co.kr/common/master/{kospi,kosdaq}_code.mst.zip`.
+  여기에 KOSPI200/KOSDAQ150 편입 플래그, ETF group_code(EF/EN), 시가총액, **실제 종목명**, 지수업종(섹터) 코드가 전부 들어있음.
+- **`src/kis_master_parser.py`**: mst 파싱 → 플래그(`is_etf/is_kospi200/is_kosdaq150`)·시총·명칭·섹터코드. `collect_master_files()`가
+  `save_master_flags()` + `reload_master_flags()` + `invalidate_universe_frame()` 호출.
+- **`src/data/stock_master.py`**: `ETF_NAMES`(40 ETF), `get_stock_name`(STOCK_MASTER→master_name→ETF_NAMES→DART 순),
+  `search_stocks`, `build_master_universe`, `save/load_master_flags`. → **"종목 102110" 같은 코드 표기 박멸, 실제 ETF명 표기**.
+- **`main_api.py` startup**: `load_master_flags()` 없으면 `_collect_master_bg`(백그라운드 자동 수집), `_prewarm_real_data`(kospi200 ingest).
+- **유니버스 종류**: kospi50/kospi200/kosdaq150/kospi/kosdaq/etf/all_listed/mapped — `resolve_universe`가 master→DART→preset 순으로 해소.
+- **결과**: 전종목 약 3,992개, 실제 종목명·ETF명, KOSPI200=전체 편입종목(이전 50/130 한계 제거).
+
+## 4. 전 종목 업종 분류 — "전체 업종 = 전종목" (다수결 전파)
+- **증상**: 백테스터 "전체 업종" 선택 시 125→123종목만 (젠포트 테마 시드 129개만 잡힘). 전체 선택인데 전종목이 안 나옴.
+- **`src/data/genport_themes.py`**: `build_group_assignment(flags)` —
+  ① 시드(KRX 섹터코드 라벨) → ② **같은 섹터코드 종목에 다수결 전파** → ③ 큐레이션(`_CURATED_TO_GROUP`) → ④ 미분류는 "기타".
+  THEME_TREE 17그룹(기타 포함), THEME_SEED 129, SUBSECTOR_GROUP 88.
+- **`src/engine/universe_select.py`**: `_master_frame()`에 `genport_group` 컬럼 추가. `load_universe_frame()`을
+  **수동 캐시로 전환**(실 master 프레임만 캐시, fallback은 캐시 안 함) + `invalidate_universe_frame()`.
+  `select_universe()`가 `df["genport_group"].isin(sel_groups)`로 필터 → **전체 업종 선택 = 전종목**.
+- **버그·수정**:
+  - lru_cache가 collect-master 완료 전 fallback(125개)을 캐시 → 수동캐시 + invalidate로 해결. 테스트 호환 위해 `load_universe_frame.cache_clear = invalidate_universe_frame` 별칭.
+  - `test_resolve_universe_all_listed`: `>=200` 임계 너무 빡빡 → `if u:`(비어있지 않으면)로 완화.
+
+## 5. Company Analysis — 실데이터 Cockpit (계획 distributed-hatching-kurzweil 실행)
+- `/insights`를 얕은 1콜 페이지 → **실데이터 구동 Cockpit**으로 교체. 백엔드 무변경, 프론트 조립.
+- **`frontend/src/lib/companyData.ts`**: `loadCompanyCore(code)` — companyLookup + valuation evaluate(base/bull/bear ×3 실재계산) +
+  financial(연도 시계열) + prices(실주가) + 유니버스 표본(percentile 순위) + 피어 + fields 메타를 `Promise.all` 병렬 로드.
+- **`components/insights/CompanyCockpit.tsx`** + `parts.tsx`/`types.ts`: 7탭 — Overview/Valuation/Financials/Factors/Peers·Network/Risk/AI.
+  Risk(VaR/GARCH/Sharpe)·Network(graph-relations)·AI(narrative)는 **lazy 온디맨드**.
+- **수정된 실데이터 버그**:
+  - Factors 퍼센타일이 전부 50 → 라이브 표본 실패가 원인 → **DB factor-sample** 경로로 교체.
+  - `/prices`가 DB-only라 빈 결과 → `ohlcv_loader.load_ohlcv_unified`(DB→KIS→mock)로 교체.
+  - 분기 재무: 누적 vs 단독 자동판별, 연간과 동일 지표 셋.
+  - 리스크 탭: 실주가 시계열에서 산출. Valuation: 실 시총 사용.
+- **정직한 한계**: 분기 컨센서스·이벤트·수급 일부는 mock/"준비중" 배지.
+
+## 6. 대시보드 재구축 + 검색/로고/랜딩
+- **`frontend/src/app/dashboard/page.tsx`**: 라이트 터미널 톤으로 재구축 — QuickSearch/MacroStrip/ModuleGrid/TopPicks(`dash-*` CSS). 5개 툴과 통합.
+- **로고→랜딩**: `TerminalShell` 브랜드 링크 `href="/"`, 셸은 `pathname==="/"`에서 풀블리드(랜딩).
+- **컴퍼니 검색 자동완성**: 종목명·코드로 `symbols/search` + sessionStorage `alpha_company_ticker` 핸드오프.
+- **랜딩 히어로 CTA**: 버튼 텍스트 **"Launch Terminal" → "Dashboard"** (`app/page.tsx`, href `/dashboard` 유지).
+- **브라우저 탭 로고(favicon)**: 기존 브랜드 로고(큐브/레이어 `M12 2L2 7...`, accent #1200ff, 흰 스트로크)로
+  **`frontend/src/app/icon.svg`** 생성(Next.js App Router 자동 favicon). `public/favicon.svg`도 동일 로고로 교체(이전 "M" 글자 불일치 수정).
+
+## 7. 운영·보안 메모
+- **DART_API_KEY는 한때 채팅에 노출됨 → 사용자 재발급 완료**("dart 키는 재발급 했어"). `.env`는 절대 커밋 금지.
+- 전 백엔드 테스트 스위트 **539 passed / 10 skipped / 0 failed** 유지.
+- 작업 브랜치: `claude/keen-thompson-bdk3e8` (이 브랜치 외 푸시 금지, PR은 명시 요청 시에만).
+- **프론트 변경 후 stale `.next` 주의**: 렌더 실패 시 `pkill -9 node && rm -rf .next && npx next build`.
+
+## 8. 다음 후보
+- 전종목 ingest 진행률/상태 UI, 수급(외국인·기관) 실연결, 컨센서스 유료데이터, 분기 재무 실엔드포인트, 매크로 BOK/FRED 실연동.
