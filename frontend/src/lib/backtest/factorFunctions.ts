@@ -71,3 +71,68 @@ export function fillTemplate(
     .replace(/\{v\}/g, params.v ?? "값")
     .replace(/\{dir\}/g, params.dir === "ASC" ? "오름차순" : "내림차순");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 백엔드(factor_expr.py) valid 산술식 렌더러 — 수식 빌더(FormulaBuilder)가 사용.
+//   ★ 기간 인자는 반드시 {N일} 형태. 백엔드는 평범한 20을 "식 인자"로 해석해 거부한다.
+//     (이동평균({종가}, 20) → 인자 2개 오류 / 이동평균({종가}, {20일}) → 정상)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const dirToken = (dir?: string) => (dir === "ASC" ? "{오름차순}" : "{내림차순}");
+
+/** 함수 1개를 백엔드 valid 형식으로 적용. 예: renderFn("ma","{종가}",{n:"20"}) → "이동평균({종가}, {20일})" */
+export function renderFn(
+  fnId: string,
+  inner: string,
+  params: Record<string, string>,
+): string {
+  const fn = FUNCTIONS_BY_ID[fnId];
+  if (!fn || fnId === "base") return inner;
+  // 큰개수/작은개수(기간+임계값)의 값은 {0} 처럼 브레이스(=인자), 비교/큰값/작은값의 값은 bare(=피연산자 식).
+  const valueIsParam = fn.params.some((p) => p.kind === "period");
+  const args: string[] = [inner];
+  for (const p of fn.params) {
+    if (p.kind === "period") args.push(`{${params.n ?? p.default}일}`);
+    else if (p.kind === "value") args.push(valueIsParam ? `{${params.v ?? p.default}}` : String(params.v ?? p.default));
+    else if (p.kind === "direction") args.push(dirToken(params.dir));
+  }
+  return `${fn.name}(${args.join(", ")})`;
+}
+
+/** 팩터+함수 1개 항의 명세 — FactorPickerModal 의 FactorPick 과 호환되는 부분집합 */
+export interface TermSpec {
+  factorToken: string;
+  factorName?: string;
+  functionId: string;
+  params?: Record<string, string>;
+  innerFunctionId?: string;
+  innerParams?: Record<string, string>;
+  factorToken2?: string;
+  inner2FunctionId?: string;
+  inner2Params?: Record<string, string>;
+}
+
+/** 팩터+함수(+중첩/두번째 팩터) 1개 항을 백엔드 valid 산술식으로 렌더링 */
+export function renderTermExpr(p: TermSpec): string {
+  const tk = p.factorToken || `{${p.factorName ?? ""}}`;
+  // 중첩(순위/비율의 랭킹 대상): 내부 함수를 먼저 적용
+  let base = tk;
+  if (p.innerFunctionId && p.innerFunctionId !== "base") {
+    base = renderFn(p.innerFunctionId, tk, p.innerParams ?? {});
+  }
+  // 두 팩터 함수(비교/큰값/작은값/변화율_팩터): 두 번째 피연산자는 식
+  if (p.factorToken2) {
+    let op2 = p.factorToken2;
+    if (p.inner2FunctionId && p.inner2FunctionId !== "base") {
+      op2 = renderFn(p.inner2FunctionId, p.factorToken2, p.inner2Params ?? {});
+    }
+    const fn = FUNCTIONS_BY_ID[p.functionId];
+    return `${fn?.name ?? p.functionId}(${base}, ${op2})`;
+  }
+  return renderFn(p.functionId, base, p.params ?? {});
+}
+
+/** 사람이 읽는 항 라벨 — 중괄호 제거 (예: 이동평균(종가, 20일)) */
+export function termLabel(p: TermSpec): string {
+  return renderTermExpr(p).replace(/[{}]/g, "");
+}

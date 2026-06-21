@@ -985,3 +985,28 @@ GCP에 docker-compose로 배포됨. **KIS/DART 실데이터가 흐르고**(verif
 
 ## 8. 다음 후보
 - 전종목 ingest 진행률/상태 UI, 수급(외국인·기관) 실연결, 컨센서스 유료데이터, 분기 재무 실엔드포인트, 매크로 BOK/FRED 실연동.
+
+---
+
+## 🧮 백테스터 조건식 — 수식 빌더 (젠포트식 다항 팩터 조합)
+
+[배경] 백테스터 매수/매도 조건에서 팩터가 1개만 들어가고 연산자를 못 넣는다는 피드백.
+실제로는 백엔드(`factor_expr.py`)가 이미 자유 산술식(`{종가} - 이동평균({종가}, {20일}) > 0`)을 평가하고,
+`mapConds`가 `expr`(direct)를 직렬화 중이었음 → **백엔드 무변경, 순수 프론트 UX 격차**였다.
+
+### 핵심 아키텍처 (변경 불필요한 것)
+- `/backtest` → `TerminalBacktester` → `panels/{Buy,Sell}ConditionPanel` → **`ConditionFormulaEditor`** (매수/매도/마켓타이밍 공용).
+- `mapConds()`(TerminalBacktester): `expr: c.direct ? c.expr : null` → `screen-to-backtest` → `ConditionStrategy`(`condition_strategy.py`) → `parse_expr`(`factor_expr.py`).
+- 백엔드 문법: 팩터 `{토큰}`, 함수 한국어명, **기간 인자는 반드시 `{N일}`**(평범한 `20`은 "식 인자"로 해석돼 거부), 사칙연산 `+-*/`·괄호·인용부호.
+
+### 추가/변경 (프론트 전용)
+- **NEW `lib/backtest/factorFunctions.ts`**: `renderFn`/`renderTermExpr`/`termLabel` — FactorPick(팩터+함수+중첩+두번째팩터)을 **백엔드 valid 산술식**으로 렌더(★기간 `{N일}`, 큰개수/작은개수 임계값은 `{0}` 브레이스, 비교/큰값/작은값은 bare).
+- **NEW `components/backtest/FormulaBuilder.tsx`**: 칩 기반 비주얼 수식 빌더 — `[+ 팩터]`(FactorPickerModal 재사용)·`+ − × ÷`·괄호·상수(인라인 입력)·지우기. `FormulaToken[]` → `buildExpr()`(백엔드식)/`buildLabel()`(친화 표기).
+- **`ConditionFormulaEditor.tsx` 재작성**: 모드 토글 `수식 빌더 | 직접 입력`(기존 단일 "팩터 선택" 대체 — 1항도 수식). 저장 시 모두 `direct` 조건(expr)으로 통일. 조건 **편집(연필)** 추가(직접 입력 칸으로 재로드). 논리식(every/any/before)·세트 저장·AI 자연어 변환·식 검증 유지.
+- **`FactorPickerModal.tsx`**: `allowNesting` prop 추가 — 켜면 단일시계열 함수 전부에 "내부 지표(먼저 적용할 함수)" 노출 → `이동평균(과거값({종가},1),20)` 같은 중첩 가능. 기본 off(스크리너 호환, 스크리너는 픽을 이름으로만 해석).
+
+### 검증
+- `parse_expr`가 렌더러 출력 **36/36 통과**(18함수 단일+중첩+다항결합), 평범한 `20`은 정상 거부.
+- `ConditionStrategy` 평가 E2E: `종가-MA20≥0`→BUY, 사용자 예시 `전일종가-MA(전일,20)≥0`→BUY, 거짓→HOLD, `(종가-MA5)/MA20≥0`→BUY (4/4).
+- 백엔드 조건/식 테스트 63 통과, tsc 0, next build 16/16(/backtest 25.1kB).
+- 한계: 샌드박스 DB 무(daily_prices 없음)로 풀 백테스트 실거래 생성은 GCP에서. 조건 평가 로직은 합성 시계열로 검증됨.

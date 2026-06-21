@@ -42,8 +42,10 @@ const RL = "var(--bs-border-radius-lg)";
 
 const baseToken = (f: GpFactor) => (/^\{[^{}]+\}$/.test(f.expr) ? f.expr : `{${f.name}}`);
 
-export default function FactorPickerModal({ open, tone = "neutral", initial, onClose, onInsert }: {
+export default function FactorPickerModal({ open, tone = "neutral", initial, allowNesting = false, onClose, onInsert }: {
   open: boolean; tone?: Tone; initial?: Partial<FactorPick>;
+  /** 중첩(내부 함수)을 모든 단일시계열 함수에 허용 — 수식 빌더 전용. 기본은 순위/비율만(스크리너 호환). */
+  allowNesting?: boolean;
   onClose: () => void; onInsert: (pick: FactorPick) => void;
 }) {
   const [step, setStep] = useState<"factor" | "function">("factor");
@@ -100,6 +102,10 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
     }
   };
   const isCross = fnId === "rank" || fnId === "ratio";
+  // 내부 함수(중첩) 허용 — 수식 빌더(allowNesting)에선 단일 시계열 함수 전부
+  // (예: 이동평균(과거값({종가},1),20)). 그 외(스크리너)는 기존처럼 순위/비율만.
+  // base(원값)·두 팩터 함수(비교/큰값/작은값/변화율_팩터)는 제외.
+  const allowInner = allowNesting ? (fnId !== "base" && !TWO_FACTOR_IDS.has(fnId)) : isCross;
   const innerFn = FUNCTIONS_BY_ID[innerFnId];
   const tk = factor ? baseToken(factor) : "{팩터}";
   // 두 팩터 모드: 변화율_팩터는 항상, 비교/큰값/작은값은 '팩터' 선택 시
@@ -107,8 +113,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const inner2Fn = FUNCTIONS_BY_ID[inner2FnId];
   const tk2 = factor2Name ? `{${factor2Name}}` : "{팩터2}";
   const expr2 = inner2FnId !== "base" ? fillTemplate(inner2Fn.preview, tk2, inner2Params) : tk2;
-  // 중첩: 순위/비율의 {f} 자리에 내부 지표식을 넣는다 — 순위(변화율_기간({종가}, 20), 내림차순)
-  const innerExpr = isCross && innerFnId !== "base" ? fillTemplate(innerFn.preview, tk, innerParams) : tk;
+  // 중첩: 함수의 {f} 자리에 내부 지표식을 넣는다 — 이동평균(과거값({종가},1),20) · 순위(변화율_기간({종가},20),내림차순)
+  const innerExpr = allowInner && innerFnId !== "base" ? fillTemplate(innerFn.preview, tk, innerParams) : tk;
   const expr = isTwoFactor ? `${fn.name}(${tk}, ${expr2})` : fillTemplate(fn.preview, innerExpr, params);
   const accent = TONES[tone];
   // 두 번째 팩터 후보: 지원 토큰만 (카테고리 optgroup)
@@ -150,7 +156,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
   const submit = () => {
     if (!factor || (selInfo && !selInfo.ok)) return;  // 미지원 팩터는 입력 차단
     if (isTwoFactor && !factor2Name) return;          // 두 팩터 함수는 두 번째 팩터 필수
-    const withInner = isCross && innerFnId !== "base";
+    const withInner = allowInner && innerFnId !== "base";
     const withInner2 = isTwoFactor && inner2FnId !== "base";
     onInsert({
       factorName: factor.name, factorToken: tk, functionId: fnId, params, expr,
@@ -366,10 +372,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, onC
                   </div>
                 )}
 
-                {/* 내부 지표(중첩) — 순위/비율의 랭킹 대상을 파생 지표로 (예: 20일 수익률 순위) */}
-                {isCross && (
+                {/* 내부 지표(중첩) — 함수에 넣기 전 팩터에 먼저 적용 (예: 이동평균(과거값({종가},1),20)) */}
+                {allowInner && (
                   <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>내부 지표 (랭킹 대상 · 선택)</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                      {isCross ? "내부 지표 (랭킹 대상 · 선택)" : "내부 지표 (먼저 적용할 함수 · 선택)"}
+                    </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
                       <select value={innerFnId} onChange={(e) => pickInnerFn(e.target.value)}
                         style={{ fontSize: 13, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
