@@ -121,12 +121,7 @@ export default function StrategyComparison() {
   const hasResults = results.some((r) => r.stats);
 
   return (
-    <div>
-      <div className="meta-stamp">
-        REF_ID: ALPHA_CMP_301<br />
-        MODE: STRATEGY_COMPARE<br />
-        AUTH: SIG_VERIFIED
-      </div>
+    <div className="tpage-fade">
       <div className="terminal-breadcrumb">Modules / Backtester / <span>Strategy Comparison</span></div>
       <h1 className="terminal-h1">Strategy Comparison</h1>
 

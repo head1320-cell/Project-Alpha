@@ -48,13 +48,7 @@ export default function CustomBacktestRunner({
   const nExit = spec.exit?.conditions?.length ?? 0;
 
   return (
-    <div>
-      <div className="meta-stamp">
-        REF_ID: ALPHA_CUSTOM<br />
-        MODE: USER_STRATEGY<br />
-        AUTH: SIG_VERIFIED
-      </div>
-
+    <div className="tpage-fade">
       <div className="terminal-breadcrumb">Modules / Backtester / <span>Custom Strategy</span></div>
       <div className="flex items-center justify-between" style={{ marginBottom: 8, gap: 16, flexWrap: "wrap" }}>
         <h1 className="terminal-h1" style={{ marginBottom: 0 }}>{spec.metadata?.name || "커스텀 전략"}</h1>

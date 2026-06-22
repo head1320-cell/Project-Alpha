@@ -25,7 +25,7 @@ const MODULES = [
 
 export default function Dashboard() {
   return (
-    <div>
+    <div className="tpage-fade">
       <PageHeader
         eyebrow="PLATFORM / COMMAND CENTER"
         index="00"

@@ -6,6 +6,7 @@ import CompanyCockpit, { type LazyLoaders } from "@/components/insights/CompanyC
 import { loadCompanyCore, loadSignal, loadMacro, loadNetwork, loadRisk, loadNarrative } from "@/lib/companyData";
 import { companyApi } from "@/lib/screenerApi";
 import type { CompanyData } from "@/components/insights/types";
+import { LoadingState, ErrorState } from "@/components/layout/States";
 
 const QUICK = [
   { code: "005930", name: "삼성전자" },
@@ -75,8 +76,7 @@ export default function CompanyPage() {
   };
 
   return (
-    <div>
-      <div className="meta-stamp">SEC_CODE: {code}<br />EXCHANGE: KRX<br />STATUS: LIVE_FEED</div>
+    <div className="tpage-fade">
       <PageHeader
         eyebrow="COMPANY / DEEP ANALYSIS"
         index="04 / 05"
@@ -114,13 +114,8 @@ export default function CompanyPage() {
         </div>
       </PageHeader>
 
-      {loading && (
-        <div className="ca-pg-loading">
-          <span className="ca-pg-spin" />
-          <span>{code} — 가치평가 · 재무 · 116팩터 · 피어 로딩 중…</span>
-        </div>
-      )}
-      {error && !loading && <div className="ca-pg-error">⚠ {error}</div>}
+      {loading && <LoadingState label={`${code} — 가치평가 · 재무 · 116팩터 · 피어 로딩 중`} />}
+      {error && !loading && <ErrorState sub={error} />}
       {data && !loading && <CompanyCockpit company={data} onPick={setCode} lazy={lazy} />}
     </div>
   );

@@ -5,6 +5,7 @@ import { analysisApi, type MacroRegime } from "@/lib/screenerApi";
 import PageHeader from "@/components/layout/PageHeader";
 import SectionHead from "@/components/layout/SectionHead";
 import { StatGrid, Stat } from "@/components/common/MiniViz";
+import { LoadingState, ErrorState } from "@/components/layout/States";
 
 const QUADRANTS = [
   { key: "Reflation", label: "Reflation", sub: "성장↑ / 인플↓" },
@@ -30,13 +31,7 @@ export default function MacroPage() {
     : null;
 
   return (
-    <div>
-      <div className="meta-stamp">
-        REF_ID: MACRO_SYS_112<br />
-        SOURCE: BOK·FRED<br />
-        AUTH: SIG_VERIFIED
-      </div>
-
+    <div className="tpage-fade">
       <PageHeader
         eyebrow="MACRO / REGIME INTELLIGENCE"
         index="03 / 05"
@@ -45,8 +40,8 @@ export default function MacroPage() {
         status={regime ? `REGIME · ${regime.regime}` : "SOURCE: BOK·FRED"}
       />
 
-      {loading && <div style={{ color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 13 }}>[ LOADING ] 거시 데이터 수집 중...</div>}
-      {err && <div style={{ color: "var(--color-bear)", fontFamily: "var(--t-mono)", fontSize: 13 }}>[ ERROR ] {err}</div>}
+      {loading && <LoadingState label="거시 데이터 수집 중" />}
+      {err && <ErrorState sub={err} />}
 
       {regime && (
         <div className="animate-fade-in">

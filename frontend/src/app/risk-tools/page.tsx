@@ -5,6 +5,7 @@ import { analysisApi } from "@/lib/screenerApi";
 import PageHeader from "@/components/layout/PageHeader";
 import SectionHead from "@/components/layout/SectionHead";
 import { StatGrid, Stat, MiniViz } from "@/components/common/MiniViz";
+import { LoadingState } from "@/components/layout/States";
 
 type StressResult = Awaited<ReturnType<typeof analysisApi.stressTest>>;
 
@@ -35,13 +36,7 @@ export default function RiskPage() {
   const casualties = st?.casualties ?? [];
 
   return (
-    <div>
-      <div className="meta-stamp">
-        REF_ID: ALPHA_RM_104<br />
-        MKT: KR_CLOSE<br />
-        AUTH: SIG_VERIFIED
-      </div>
-
+    <div className="tpage-fade">
       <PageHeader
         eyebrow="RISK / STRESS & SURVIVAL"
         index="05 / 05"
@@ -123,7 +118,7 @@ export default function RiskPage() {
           </table>
         </div>
       )}
-      {loading && <div style={{ color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 13 }}>[ RUNNING ] 스트레스 테스트 실행 중...</div>}
+      {loading && <LoadingState label="스트레스 테스트 실행 중" />}
     </div>
   );
 }

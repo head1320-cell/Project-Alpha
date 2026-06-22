@@ -8,13 +8,7 @@ export default function ScreenerPage() {
   const [universe, setUniverse] = useState("kospi200");
 
   return (
-    <div>
-      {/* 메타 스탬프 (우상단, 숨김) */}
-      <div className="meta-stamp">
-        SCR_ID: ALPHA_EQUITY_MOD<br />
-        AUTH: SIG_VERIFIED
-      </div>
-
+    <div className="tpage-fade">
       <PageHeader
         eyebrow="EQUITY / MULTI-FACTOR SCREEN"
         index="01 / 05"
