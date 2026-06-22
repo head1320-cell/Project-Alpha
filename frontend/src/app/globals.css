@@ -2244,3 +2244,15 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .tchip-toggle:hover:not(.active), .ca-pg-chip:hover:not(.on) {
   border-color: var(--t-accent); background: rgba(18,0,255,.03);
 }
+
+/* 4) 키보드 포커스 링 — 일관된 접근성 큐(:focus-visible = 키보드 탐색에만 표시).
+   셸 콘텐츠 영역(.terminal-main) 한정 — 랜딩 미적용. 기존에 .btn-primary만 포커스링 보유. */
+.terminal-main button:focus-visible,
+.terminal-main a:focus-visible,
+.terminal-main input:focus-visible,
+.terminal-main select:focus-visible,
+.terminal-main textarea:focus-visible,
+.terminal-main [role="button"]:focus-visible,
+.terminal-main [tabindex]:focus-visible {
+  outline: 2px solid var(--t-accent); outline-offset: 2px;
+}

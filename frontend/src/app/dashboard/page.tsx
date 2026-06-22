@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/layout/States";
 import { macroApi, type RegimeState, REGIME_COLORS } from "@/lib/macroApi";
 import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/lib/screenerApi";
 import { API_BASE } from "@/lib/apiBase";
@@ -182,7 +183,7 @@ function TopPicks() {
         <Link href="/screener" className="dash-picks-more">전체 스크리너 →</Link>
       </div>
       {items == null ? <div className="dash-skel" style={{ height: 180 }} />
-        : items.length === 0 ? <div className="dash-picks-empty">데이터 적재 후 표시됩니다.</div>
+        : items.length === 0 ? <EmptyState label="데이터 적재 후 표시됩니다" sub="스크리너 스냅샷이 쌓이면 자동 표시됩니다" />
           : (
             <table className="dash-picks-table">
               <thead><tr><th>#</th><th>종목</th><th className="num">현재가</th><th className="num">PER</th><th className="num">ROE</th><th className="num">종합점수</th><th>판정</th></tr></thead>
