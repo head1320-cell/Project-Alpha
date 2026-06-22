@@ -2219,3 +2219,28 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   .skeleton, .dash-skel, .tbt-skeleton-line, .tbt-skeleton-chart,
   .tpage-status-dot, .animate-pulse-dot, .animate-pulse-glow { animation: none !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tool-page cohesion — 2차 패스: 섹션헤더 액센트 · 테이블 행 · 인터랙션 통일 (절제).
+   전부 CSS·기존 클래스 대상(later-source 오버라이드). 새 색·번잡한 모션 없음.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1) 섹션 헤더 — 라벨 앞 액센트 틱(활성 내비 3px 바 모티프 재사용) */
+.tpage-section-head .sh-label { display: inline-flex; align-items: center; gap: 8px; }
+.tpage-section-head .sh-label::before {
+  content: ""; width: 3px; height: 11px; border-radius: 1px; background: var(--t-accent); flex-shrink: 0;
+}
+
+/* 2) 데이터 테이블 — 일관된 행 하이라이트(액센트 좌측 틱 + 옅은 틴트) */
+.trisk-table tbody tr, .tbt-tradelog tbody tr, .dash-picks-table tbody tr {
+  transition: background .12s ease, box-shadow .12s ease;
+}
+.trisk-table tbody tr:hover, .tbt-tradelog tbody tr:hover, .dash-picks-table tbody tr:hover {
+  background: rgba(18,0,255,.035); box-shadow: inset 2px 0 0 0 var(--t-accent);
+}
+
+/* 3) 인터랙션 칩 — 호버 피드백 통일(테두리→액센트, 옅은 틴트) */
+.tchip-toggle, .ca-pg-chip { transition: border-color .12s ease, color .12s ease, background .12s ease; }
+.tchip-toggle:hover:not(.active), .ca-pg-chip:hover:not(.on) {
+  border-color: var(--t-accent); background: rgba(18,0,255,.03);
+}
