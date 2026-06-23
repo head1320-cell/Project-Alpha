@@ -6,7 +6,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Search, X, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, Check, ExternalLink } from "lucide-react";
-import { FACTOR_CATEGORIES, searchFactors, type GpFactor } from "../../lib/backtest/factorCatalog";
+import { type GpFactor } from "../../lib/backtest/factorCatalog";
+import { BUTLER_CATEGORIES, butlerToken } from "../../lib/backtest/butlerFactors";
 import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from "../../lib/backtest/factorFunctions";
 import { backtestBridgeApi, type TokenSupportMap } from "../../lib/screenerApi";
 import { TONES, type Tone } from "./kit";
@@ -41,6 +42,11 @@ const R = "var(--bs-border-radius)";
 const RL = "var(--bs-border-radius-lg)";
 
 const baseToken = (f: GpFactor) => (/^\{[^{}]+\}$/.test(f.expr) ? f.expr : `{${f.name}}`);
+// 팩터 → 백엔드 토큰(지원 판정·평가). Butler 표시명은 토큰과 다를 수 있으므로 토큰으로 판정.
+const tokenOf = (f: GpFactor) => butlerToken(f);
+const BUTLER_FLAT: { catLabel: string; f: GpFactor }[] = BUTLER_CATEGORIES.flatMap(
+  (c) => c.groups.flatMap((g) => g.factors.map((f) => ({ catLabel: c.label, f }))),
+);
 
 export default function FactorPickerModal({ open, tone = "neutral", initial, allowNesting = false, onClose, onInsert }: {
   open: boolean; tone?: Tone; initial?: Partial<FactorPick>;
@@ -50,7 +56,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
 }) {
   const [step, setStep] = useState<"factor" | "function">("factor");
   const [query, setQuery] = useState("");
-  const [openCat, setOpenCat] = useState<string>(FACTOR_CATEGORIES[0]?.id ?? "");
+  const [openCat, setOpenCat] = useState<string>(BUTLER_CATEGORIES[0]?.id ?? "");
   const [factor, setFactor] = useState<GpFactor | null>(null);
   const [support, setSupport] = useState<TokenSupportMap | null>(_supportCache);
   const [fnId, setFnId] = useState<string>(initial?.functionId ?? "base");
@@ -77,29 +83,16 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
     return { ok: false, reason: support.unsupported[name] ?? support.default_reason };
   };
 
-  const results = useMemo(() => searchFactors(query), [query]);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? BUTLER_FLAT.filter((x) => x.f.name.toLowerCase().includes(q)) : [];
+  }, [query]);
   const fn = FUNCTIONS_BY_ID[fnId];
-  const selInfo = factor ? supportInfo(factor.name) : null;
-
-  // 카탈로그 + 자체 팩터(지원 토큰 중 카탈로그에 없는 것 — "QMJ 점수" 등)
-  const allCategories = useMemo(() => {
-    if (!support) return FACTOR_CATEGORIES;
-    const known = new Set(FACTOR_CATEGORIES.flatMap((c) => c.factors.map((f) => f.name)));
-    const extra: GpFactor[] = Object.keys(support.supported)
-      .filter((n) => !known.has(n)).sort()
-      .map((n) => ({ name: n, expr: `{${n}}` }));
-    if (!extra.length) return FACTOR_CATEGORIES;
-    return [...FACTOR_CATEGORIES, { id: "_platform", label: "자체 팩터(플랫폼)", factors: extra }];
-  }, [support]);
+  const selInfo = factor ? supportInfo(tokenOf(factor)) : null;
 
   const selectByName = (name: string) => {
-    for (const c of allCategories) {
-      const f = c.factors.find((x) => x.name === name);
-      if (f) {
-        setFactor(f);
-        return;
-      }
-    }
+    const hit = BUTLER_FLAT.find((x) => x.f.name === name || tokenOf(x.f) === name);
+    if (hit) setFactor(hit.f);
   };
   const isCross = fnId === "rank" || fnId === "ratio";
   // 내부 함수(중첩) 허용 — 수식 빌더(allowNesting)에선 단일 시계열 함수 전부
@@ -119,12 +112,13 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   const accent = TONES[tone];
   // 두 번째 팩터 후보: 지원 토큰만 (카테고리 optgroup)
   const factor2Options = useMemo(() =>
-    allCategories.map((c) => ({
+    BUTLER_CATEGORIES.map((c) => ({
       label: c.label,
-      names: c.factors.filter((f) => supportInfo(f.name).ok).map((f) => f.name),
+      names: [...new Set(c.groups.flatMap((g) => g.factors)
+        .filter((f) => supportInfo(tokenOf(f)).ok).map((f) => tokenOf(f)))],
     })).filter((g) => g.names.length > 0),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [allCategories, support]);
+  [support]);
 
   if (!open) return null;
 
@@ -199,30 +193,37 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
               {/* left: category + factor list (or search results) */}
               <div style={{ border: "1px solid var(--border)", borderRadius: R, padding: 7, maxHeight: 320, overflow: "auto", display: "flex", flexDirection: "column", gap: 1 }}>
                 {query ? (
-                  results.length ? results.map(({ category, factor: f }) => (
-                    <FactorRow key={category.id + f.name} f={f} active={factor?.name === f.name} tone={tone} sub={category.label} info={supportInfo(f.name)} onClick={() => setFactor(f)} />
+                  results.length ? results.map(({ catLabel, f }, i) => (
+                    <FactorRow key={catLabel + f.name + i} f={f} active={factor?.name === f.name && factor?.expr === f.expr} tone={tone} sub={catLabel} info={supportInfo(tokenOf(f))} onClick={() => setFactor(f)} />
                   )) : <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 9px" }}>검색 결과가 없습니다</div>
                 ) : (
-                  allCategories.map((c) => (
-                    <div key={c.id}>
-                      <button type="button" onClick={() => setOpenCat(openCat === c.id ? "" : c.id)}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: openCat === c.id ? accent.text : "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "7px 9px", textAlign: "left" }}>
-                        {openCat === c.id && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent.accent }} />}
-                        <span style={{ flex: 1 }}>{c.label}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                          {support ? `${c.factors.filter((f) => supportInfo(f.name).ok).length}/${c.factors.length}` : c.factors.length}
-                        </span>
-                        {openCat === c.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      </button>
-                      {openCat === c.id && (
-                        <div style={{ paddingLeft: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 4 }}>
-                          {c.factors.map((f) => (
-                            <FactorRow key={f.name} f={f} active={factor?.name === f.name} tone={tone} info={supportInfo(f.name)} onClick={() => setFactor(f)} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
+                  BUTLER_CATEGORIES.map((c) => {
+                    const flat = c.groups.flatMap((g) => g.factors);
+                    const okN = support ? flat.filter((f) => supportInfo(tokenOf(f)).ok).length : flat.length;
+                    return (
+                      <div key={c.id}>
+                        <button type="button" onClick={() => setOpenCat(openCat === c.id ? "" : c.id)}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: openCat === c.id ? accent.text : "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "7px 9px", textAlign: "left" }}>
+                          {openCat === c.id && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent.accent }} />}
+                          <span style={{ flex: 1 }}>{c.label}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{support ? `${okN}/${flat.length}` : flat.length}</span>
+                          {openCat === c.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                        {openCat === c.id && (
+                          <div style={{ paddingLeft: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 4 }}>
+                            {c.groups.map((g) => (
+                              <div key={g.label}>
+                                <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.02em", color: "var(--text-muted)", padding: "7px 9px 3px" }}>{g.label}</div>
+                                {g.factors.map((f, fi) => (
+                                  <FactorRow key={g.label + f.name + fi} f={f} active={factor?.name === f.name && factor?.expr === f.expr} tone={tone} info={supportInfo(tokenOf(f))} onClick={() => setFactor(f)} />
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
 

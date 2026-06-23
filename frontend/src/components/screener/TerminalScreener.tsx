@@ -166,7 +166,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
   const handlePick = useCallback((pick: FactorPick) => {
     setModalOpen(false);
-    const r = resolveFactor(pick.factorName);
+    const r = resolveFactor(pick.factorToken) ?? resolveFactor(pick.factorName);
     if (!r) { setNotice(`‘${pick.factorName}’은(는) 단면 스크리닝에서 지원되지 않습니다 (백테스터 전용 시계열·수급 팩터).`); return; }
     setNotice(null);
     const meta = metaById.get(r.id);
