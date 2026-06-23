@@ -312,14 +312,22 @@ def _label_aliases() -> dict[str, str]:
     조건식 토큰으로 쓸 수 있게 한다. 수동 별칭(FUNDAMENTAL_ALIASES)이 우선."""
     global _LABEL_ALIAS_CACHE
     if _LABEL_ALIAS_CACHE is None:
+        cache: dict[str, str] = {}
         try:
             from src.data.fundamentals_store import FUNDAMENTAL_FACTORS
-            _LABEL_ALIAS_CACHE = {
-                m.label: m.id for m in FUNDAMENTAL_FACTORS
-                if getattr(m, "label", None) and m.label not in FUNDAMENTAL_ALIASES
-            }
+            for m in FUNDAMENTAL_FACTORS:
+                if getattr(m, "label", None) and m.label not in FUNDAMENTAL_ALIASES:
+                    cache[m.label] = m.id
         except Exception:
-            _LABEL_ALIAS_CACHE = {}
+            pass
+        try:  # Butler 확장 팩터(배당·사업·재무파생 등) 라벨 자동 별칭
+            from src.data.extended_factors_store import EXTENDED_FACTORS
+            for m in EXTENDED_FACTORS:
+                if m.label and m.label not in FUNDAMENTAL_ALIASES:
+                    cache[m.label] = m.id
+        except Exception:
+            pass
+        _LABEL_ALIAS_CACHE = cache
     return _LABEL_ALIAS_CACHE
 
 
@@ -825,7 +833,7 @@ def token_support() -> dict:
         pass
     return {
         "supported": supported,
-        "unsupported": dict(UNSUPPORTED_REASONS),
+        "unsupported": {k: v for k, v in UNSUPPORTED_REASONS.items() if k not in supported},
         "default_reason": "미지원 — 평가 시 무시됨 (데이터/매핑 없음)",
         "fundamental_note": "fundamental 그룹은 '펀더멘털 조건 평가' 토글 필요 — 최신 스냅샷 근사"
                             "(분기/트레일링 구분 없음 · look-ahead 주의)",
