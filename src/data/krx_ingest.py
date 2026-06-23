@@ -220,6 +220,56 @@ def rebuild_adj_close(engine=None, tickers: list[str] | None = None) -> int:
     return updated
 
 
+def auto_backfill(loop: bool = False) -> dict:
+    """startup용 자동 백필 — env 설정·키 게이트. 키 없으면 즉시 no-op(현행 불변).
+
+    env:
+      KRX_AUTOBACKFILL  (기본 "1", "0"이면 비활성)
+      KRX_BACKFILL_START(기본 "2020-01-01")
+      KRX_BACKFILL_MAX_DAYS(기본 0=무제한 — 데몬이라 비차단)
+      KRX_REFRESH_SEC   (loop=True 증분 주기, 기본 12h)
+    loop=True → 초기 백필 후 주기적으로 최신일까지 증분(skip_existing이 과거를 건너뜀).
+    """
+    import os
+    import time
+    if os.getenv("KRX_AUTOBACKFILL", "1") == "0":
+        return {"skipped": "KRX_AUTOBACKFILL=0"}
+    try:
+        from src.data.krx_client import KRXClient
+        if not KRXClient().is_configured:
+            return {"skipped": "KRX_API_KEY 미설정 — 백필 건너뜀"}
+    except Exception as e:
+        return {"skipped": f"krx_client 로드 실패: {e}"}
+
+    start = os.getenv("KRX_BACKFILL_START", "2020-01-01")
+    try:
+        max_days = int(os.getenv("KRX_BACKFILL_MAX_DAYS", "0")) or None
+    except ValueError:
+        max_days = None
+
+    def _run_once() -> dict:
+        end = datetime.now().strftime("%Y-%m-%d")
+        stats = backfill(start=start, end=end, max_days=max_days, skip_existing=True)
+        if not stats.get("error") and stats.get("rows"):
+            try:
+                stats["adj_rows"] = rebuild_adj_close()
+            except Exception as e:
+                logger.warning(f"adj_close 재구성 실패: {e}")
+        logger.info(f"KRX 자동 백필: {stats}")
+        return stats
+
+    stats = _run_once()
+    if loop:
+        period = max(3600, int(os.getenv("KRX_REFRESH_SEC", str(12 * 3600)) or 0))
+        while True:
+            time.sleep(period)
+            try:
+                _run_once()
+            except Exception as e:
+                logger.warning(f"KRX 증분 백필 실패: {e}")
+    return stats
+
+
 def main() -> None:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

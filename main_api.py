@@ -161,6 +161,19 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"실데이터 사전 워밍 시작 실패: {e}")
 
+    # KRX 전종목 장기 일봉 자동 백필 (KRX_API_KEY 있을 때만, 데몬 스레드):
+    #   날짜기준 전종목 일봉을 daily_prices에 적재 → 백테스터(ohlcv_loader DB 1순위)가
+    #   장기 기간을 KRX 실데이터로 로딩(생존편향 보정·지수 포함). 재개 가능·비차단.
+    #   KRX_AUTOBACKFILL=0으로 비활성, KRX_BACKFILL_START로 범위 조절.
+    try:
+        import os
+        if os.getenv("KRX_API_KEY") and os.getenv("KRX_AUTOBACKFILL", "1") != "0":
+            import threading
+            threading.Thread(target=_krx_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KRX 자동 백필 시작 실패: {e}")
+
 
 async def _collect_master_bg(engine):
     """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
@@ -201,6 +214,57 @@ def _prewarm_real_data():
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Symbol cache load skipped: {e}")
+
+
+def _krx_backfill_bg():
+    """백그라운드(데몬): KRX 전종목 장기 일봉 → daily_prices 자동 백필 + 주기 증분.
+    키 없거나 KRX_AUTOBACKFILL=0이면 auto_backfill이 즉시 no-op."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.krx_ingest import auto_backfill
+        auto_backfill(loop=True)  # 초기 백필 후 주기 증분 (데몬이라 비차단)
+    except Exception as e:
+        log.warning(f"KRX 자동 백필 실패(폴백 유지): {e}")
+
+
+@app.get("/api/v1/data/krx-status")
+def krx_status():
+    """KRX 적재(daily_prices) 커버리지 — 자동 백필 진행상황 관측."""
+    import os
+    out = {
+        "krx_key": bool(os.getenv("KRX_API_KEY")),
+        "autobackfill": os.getenv("KRX_AUTOBACKFILL", "1") != "0",
+        "backfill_start": os.getenv("KRX_BACKFILL_START", "2020-01-01"),
+    }
+    try:
+        from sqlalchemy import text
+
+        from src.database import get_engine
+        engine = get_engine()
+        if engine is None:
+            return {**out, "available": False}
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                'SELECT MIN(trade_date), MAX(trade_date), '
+                'COUNT(DISTINCT ticker), COUNT(*) FROM daily_prices')).fetchone()
+            idx = conn.execute(text(
+                "SELECT COUNT(*) FROM daily_prices "
+                "WHERE ticker IN ('KOSPI','KOSDAQ')")).scalar()
+        out.update({
+            "available": True,
+            "start_date": str(row[0])[:10] if row and row[0] else None,
+            "end_date": str(row[1])[:10] if row and row[1] else None,
+            "tickers": int(row[2]) if row and row[2] else 0,
+            "rows": int(row[3]) if row and row[3] else 0,
+            "index_rows": int(idx) if idx else 0,
+        })
+    except Exception as e:
+        import logging
+        logging.getLogger("api.main").debug(f"krx-status 조회 실패: {e}")
+        out.update({"available": False})
+    return out
+
 
 # ─── Auto-trading state (in-memory) ─────────────────────────────────────────
 trading_config = {"auto_mode": False, "var_limit": 5_000_000, "last_order": None}
