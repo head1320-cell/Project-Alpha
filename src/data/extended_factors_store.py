@@ -123,21 +123,29 @@ class ExtendedFactorsStore(DeterministicMockStore):
             cls._default = cls()
         return cls._default
 
-    def get_factors(self, stock_code: str, item=None) -> dict:
-        return self.cached(f"ext_factors:{stock_code}", lambda: self._build(stock_code))
+    def get_factors(self, stock_code: str, item=None, live: bool = False) -> dict:
+        # live=True(소수 종목 조회)면 종목당 추가 DART/KIS 실호출까지; False(대량 스크리닝)면 mock+파생만.
+        return self.cached(f"ext_factors:{stock_code}", lambda: self._build(stock_code, live=live))
 
-    def _build(self, stock_code: str) -> dict:
+    def _build(self, stock_code: str, live: bool = False) -> dict:
         # 1) 메타 typical 범위로 결정론적 mock 채움
         out: dict = {}
         for m in EXTENDED_FACTORS:
             v = self._uniform(stock_code, m.id, lo=m.typical_min, hi=m.typical_max)
             out[m.id] = round(v) if m.unit in _INT_UNITS else round(v, 2)
-        # 2) 실데이터 hook(외국인지분율·주당배당금·직원/임원) — 가능 시 override
-        for k, v in {**self._real_ownership(stock_code), **self._real_dividend(stock_code),
-                     **self._real_business(stock_code)}.items():
+        # 2) 실데이터 hook override — 비용에 따라 분리:
+        #    · _real_dividend: 이미 캐시된 raw(ffl_raw, 펀더멘털 경로가 적재)를 재사용 → 저렴 → 항상.
+        #    · _real_ownership(KIS get_price 1콜)·_real_business(DART empSttus+exctvSttus 2콜)은
+        #      종목당 '새' 네트워크 호출 → live=True(소수 종목)일 때만. 대량 스크리닝(live=False)에서 켜면
+        #      수백 종목×3콜로 요청이 프론트 프록시 타임아웃을 넘겨 502가 났다 → 대량은 건너뜀.
+        overrides = dict(self._real_dividend(stock_code))
+        if live:
+            overrides.update(self._real_ownership(stock_code))
+            overrides.update(self._real_business(stock_code))
+        for k, v in overrides.items():
             if v is not None:
                 out[k] = v
-        # 3) 실공식 파생(기존 raw·가격) — 가능 항목 override
+        # 3) 실공식 파생(기존 raw·가격 — 캐시 재사용이라 저렴) — 가능 항목 override
         for k, v in self._derive(stock_code, out).items():
             if v is not None:
                 out[k] = v
@@ -284,22 +292,29 @@ class ExtendedFactorsStore(DeterministicMockStore):
 
 
 def attach_extended_factors(items: list) -> int:
-    """ScreenerItem 리스트에 확장 팩터 주입 (attach_price_factors 동일 패턴)."""
+    """ScreenerItem 리스트에 확장 팩터 주입 (attach_price_factors 동일 패턴).
+
+    종목당 비싼 실호출(_real_business=DART 2콜·_real_ownership=KIS 1콜)은 소수 종목 조회
+    (컴퍼니/관심그룹 등, 기본 ≤3종목)에서만 수행한다. 광범위 스크리닝(수백 종목)에서 켜면
+    수백×3 실호출로 요청이 프론트 프록시 타임아웃(undici ≈300s)을 넘겨 502가 났다(원인).
+    따라서 대량은 mock+파생(캐시 재사용)만 → 빠르게 유지. 임계값은 EXT_FACTORS_LIVE_MAXN로 조절.
+    """
     store = ExtendedFactorsStore.get_default()
     codes = [c for c in (getattr(it, "stock_code", None) for it in items) if c]
     store.prime([f"ext_factors:{c}" for c in codes])
+    live = len(set(codes)) <= int(os.getenv("EXT_FACTORS_LIVE_MAXN", "3"))
     max_live = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
-    live = 0
+    computed = 0
     count = 0
     for it in items:
         code = getattr(it, "stock_code", None)
         if not code:
             continue
         if f"ext_factors:{code}" not in store._cache:
-            if live >= max_live:
+            if computed >= max_live:
                 continue
-            live += 1
-        for fid, val in store.get_factors(code, it).items():
+            computed += 1
+        for fid, val in store.get_factors(code, it, live=live).items():
             if not fid.startswith("_"):
                 setattr(it, fid, val)
         count += 1

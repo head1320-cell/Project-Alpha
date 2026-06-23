@@ -974,7 +974,10 @@ export const backtestBridgeApi = {
         initial_capital: body.initial_capital,
       }),
     });
-    if (!r.ok) throw new Error(`Custom backtest failed: ${r.status}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || `Custom backtest failed: ${r.status}`);
+    }
     return r.json();
   },
 
@@ -1068,7 +1071,12 @@ export const backtestBridgeApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!r.ok) throw new Error(`Screen-to-backtest failed: ${r.status}`);
+    if (!r.ok) {
+      // 프록시/백엔드가 실어보낸 사유(detail)를 그대로 노출 — "502"만 보이던 문제 해결.
+      // 504=시간초과(분석 과대), 502=백엔드 연결불가 등 메시지로 구분됨.
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || `Screen-to-backtest failed: ${r.status}`);
+    }
     return r.json();
   },
 
