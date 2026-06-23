@@ -180,6 +180,14 @@ class DslStrategy(BaseStrategy):
                     snap[k] = v
         except Exception as e:
             logger.warning(f"가격 팩터 스냅샷 실패 [{stock_code}]: {e}")
+        # Butler 확장 팩터(배당·지분율·사업정보) 병합
+        try:
+            from src.data.extended_factors_store import ExtendedFactorsStore
+            for k, v in ExtendedFactorsStore.get_default().get_factors(stock_code).items():
+                if not k.startswith("_"):
+                    snap[k] = v
+        except Exception as e:
+            logger.warning(f"확장 팩터 스냅샷 실패 [{stock_code}]: {e}")
         self._fund_cache[stock_code] = snap
         return snap
 

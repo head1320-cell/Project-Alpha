@@ -101,11 +101,29 @@ def _register_price_fields():
 
 _register_price_fields()  # 가격·수급 팩터 병합
 
+
+def _register_extended_fields():
+    """Butler 확장 팩터(배당·지분율·사업정보 — extended_factors_store)를 FIELD_CATALOG에 병합."""
+    try:
+        from src.data.extended_factors_store import EXTENDED_FACTORS
+        for fac in EXTENDED_FACTORS:
+            if fac.id not in FIELD_BY_ID:
+                meta = FieldMeta(fac.id, fac.label, fac.category, fac.unit,
+                                 fac.higher_better, fac.typical_min, fac.typical_max)
+                FIELD_CATALOG.append(meta)
+                FIELD_BY_ID[fac.id] = meta
+    except Exception as e:
+        logger.debug(f"확장 팩터 등록 실패: {e}")
+
+_register_extended_fields()  # Butler 확장 팩터 병합
+
 CATEGORY_LABELS = {
     "valuation":     "밸류에이션",
     "profitability": "수익성",
     "growth":        "성장성",
     "dividend":      "배당",
+    "ownership":     "지분율",
+    "business":      "사업정보",
     "stability":     "안정성",
     "score":         "종합 스코어",
     "momentum":      "모멘텀",

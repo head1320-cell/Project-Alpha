@@ -298,6 +298,10 @@ FUNDAMENTAL_ALIASES: dict[str, str] = {
     "분기ROA성장률(YOY)": "roa_growth_yoy", "분기ROE성장률(YOY)": "roe_growth_yoy",
     "3년연속배당금같거나상승2": "dps_up_3y",
     "배당성장률": "dps_growth_yoy", "배당성장률2": "dps_growth_yoy",
+    # ── Butler 확장 팩터(extended_factors_store) — Tier1/2 실연동 ──
+    "주당배당금": "dps", "자사주보유비율": "treasury_ratio", "외국인지분율": "foreign_ownership",
+    "직원수": "employees", "평균급여": "avg_salary", "1인당매출액": "rev_per_emp",
+    "1인당영업이익": "op_per_emp", "임원수": "executives",
 }
 
 
@@ -418,6 +422,10 @@ UNSUPPORTED_REASONS: dict[str, str] = {
         "매출채권회전율", "재고자산회전율", "현금회전일수", "POR", "주당순자산증가율",
         "거래대금증가율", "주가변동률1년")},
 }
+# Tier1/2 실연동된 팩터는 미지원 목록에서 제거(extended_factors_store) — 지원으로 승격.
+for _t in ("주당배당금", "자사주보유비율", "외국인지분율",
+           "직원수", "평균급여", "1인당매출액", "1인당영업이익", "임원수"):
+    UNSUPPORTED_REASONS.pop(_t, None)
 
 
 # 토큰별 최소 필요 봉수 — required_days 산정용 (없으면 기본 30).

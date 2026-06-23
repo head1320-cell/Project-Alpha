@@ -142,9 +142,11 @@ def test_fundamental_aliases_map_to_real_store_keys():
     from src.data.dart_history import HISTORY_FACTOR_IDS
     from src.data.fundamentals_store import FUNDAMENTAL_FACTORS, FundamentalsStore
     from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
+    from src.data.extended_factors_store import EXTENDED_FACTORS
     valid = {m.id for m in FUNDAMENTAL_FACTORS}
     valid |= set(FundamentalsStore.get_default().get_raw_financials("005930").keys())
     valid |= set(HISTORY_FACTOR_IDS)
+    valid |= {m.id for m in EXTENDED_FACTORS}  # Butler Tier1/2 확장 팩터
     bad = {k: v for k, v in FUNDAMENTAL_ALIASES.items() if v not in valid}
     assert bad == {}, f"존재하지 않는 스토어 키: {bad}"
 

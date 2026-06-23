@@ -534,6 +534,8 @@ class ValuationScreener:
                 attach_fundamentals(fresh_in_items)
                 from src.data.price_factors_store import attach_price_factors
                 attach_price_factors(fresh_in_items)
+                from src.data.extended_factors_store import attach_extended_factors
+                attach_extended_factors(fresh_in_items)
             except Exception as e:
                 logger.debug(f"펀더멘털 주입 실패: {e}")
             # 신규 평가분을 item:CODE로 저장 → 다음 조회부터 즉시 서빙(로딩 없음)

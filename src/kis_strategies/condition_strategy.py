@@ -133,7 +133,14 @@ def _load_fundamentals(stock_code: str) -> dict:
             hist = history_factors(stock_code) or {}
         except Exception:
             pass
-        return {**raw, **hist, **factors}
+        ext = {}
+        try:
+            from src.data.extended_factors_store import ExtendedFactorsStore
+            ext = {k: v for k, v in ExtendedFactorsStore.get_default().get_factors(stock_code).items()
+                   if not k.startswith("_")}
+        except Exception:
+            pass
+        return {**raw, **hist, **factors, **ext}
     except Exception:
         return {}
 
