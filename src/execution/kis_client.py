@@ -537,36 +537,56 @@ class KISClient:
             [{date, open, high, low, close, volume}, ...] 과거→현재 순
         """
         from datetime import datetime, timedelta
-        end = datetime.now()
-        start = end - timedelta(days=int(days * 1.6) + 10)  # 영업일 환산 여유
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD":          ticker,
-            "FID_INPUT_DATE_1":        start.strftime("%Y%m%d"),
-            "FID_INPUT_DATE_2":        end.strftime("%Y%m%d"),
-            "FID_PERIOD_DIV_CODE":     period,
-            "FID_ORG_ADJ_PRC":         "0",   # 0=수정주가, 1=원주가
-        }
-        headers = self._headers(TR_ID["DAILY_CHART"])
-        data = self._request(
-            "GET", "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
-            headers, params=params,
-        )
-        rows = data.get("output2", []) or []
-        result = []
-        for r in rows:
-            if not r.get("stck_bsop_date"):
-                continue
-            result.append({
-                "date":   r.get("stck_bsop_date"),
-                "open":   float(r.get("stck_oprc") or 0),
-                "high":   float(r.get("stck_hgpr") or 0),
-                "low":    float(r.get("stck_lwpr") or 0),
-                "close":  float(r.get("stck_clpr") or 0),
-                "volume": float(r.get("acml_vol") or 0),
-            })
-        # KIS는 최신→과거 순으로 반환 → 과거→현재로 뒤집기
-        result.reverse()
+
+        # KIS inquire-daily-itemchartprice 는 1콜 최대 ~100봉만 반환한다. 장기 역사를 얻으려면
+        # 날짜 윈도를 과거로 옮기며 페이지네이션해야 한다. 윈도는 ~120일(영업일 ~80<100)로 잡아
+        # 잘림 없이 수집하고, days 만큼 모이거나 더 과거 데이터가 없을 때(상장 시작 도달)까지 반복.
+        collected: dict[str, dict] = {}
+        end_cursor = datetime.now()
+        max_pages = max(1, min(int(days / 70) + 3, 500))   # 무한루프 방지 상한
+        for _ in range(max_pages):
+            start_cursor = end_cursor - timedelta(days=120)
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD":          ticker,
+                "FID_INPUT_DATE_1":        start_cursor.strftime("%Y%m%d"),
+                "FID_INPUT_DATE_2":        end_cursor.strftime("%Y%m%d"),
+                "FID_PERIOD_DIV_CODE":     period,
+                "FID_ORG_ADJ_PRC":         "0",   # 0=수정주가, 1=원주가
+            }
+            headers = self._headers(TR_ID["DAILY_CHART"])
+            try:
+                data = self._request(
+                    "GET", "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+                    headers, params=params,
+                )
+            except Exception:
+                break  # 윈도 조회 실패 → 지금까지 수집분 반환
+            rows = data.get("output2", []) or []
+            oldest = None
+            new = 0
+            for r in rows:
+                d = r.get("stck_bsop_date")
+                if not d:
+                    continue
+                if d not in collected:
+                    collected[d] = {
+                        "date":   d,
+                        "open":   float(r.get("stck_oprc") or 0),
+                        "high":   float(r.get("stck_hgpr") or 0),
+                        "low":    float(r.get("stck_lwpr") or 0),
+                        "close":  float(r.get("stck_clpr") or 0),
+                        "volume": float(r.get("acml_vol") or 0),
+                    }
+                    new += 1
+                if oldest is None or d < oldest:
+                    oldest = d
+            if not rows or new == 0 or oldest is None:
+                break  # 더 이상 과거 데이터 없음(상장 시작 도달)
+            if len(collected) >= days:
+                break
+            end_cursor = datetime.strptime(oldest, "%Y%m%d") - timedelta(days=1)
+        result = [collected[d] for d in sorted(collected)]  # 과거→현재
         return result[-days:] if len(result) > days else result
 
     def _parse_minute_rows(self, rows: list) -> list[dict]:

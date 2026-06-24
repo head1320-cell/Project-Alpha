@@ -215,9 +215,17 @@ def _prewarm_real_data():
     except Exception as e:
         log.warning(f"사전 워밍 corp_code 실패: {e}")
     try:
+        import os
+
         from src.data.snapshot_db import ingest_universe
-        r = ingest_universe("kospi200")  # 펀더멘털+가격 팩터 → DB 적재(write-through)
-        log.info(f"사전 워밍: factor_snapshot 적재 {r}")
+        # 공통 유니버스 먼저(빠르게 준비) → 전종목 펀더멘털까지 확장(조건식이 ROE 등 펀더멘털을
+        # 써도 전종목이 DB 캐시에서 즉시). DART 호출이 크지만 재개 가능(item:CODE/디스크캐시) + 데몬.
+        unis = ["kospi200"]
+        if os.getenv("FUNDAMENTALS_PREWARM_ALL", "1") != "0":
+            unis += ["kosdaq150", "all_listed"]
+        for uni in unis:
+            r = ingest_universe(uni)  # 펀더멘털+가격 팩터 → factor_snapshot 적재(write-through)
+            log.info(f"사전 워밍[{uni}]: factor_snapshot 적재 {r}")
     except Exception as e:
         log.warning(f"사전 워밍 적재 실패: {e}")
 
@@ -256,7 +264,7 @@ def _prewarm_ohlcv_bg():
     try:
         from src.data.ohlcv_loader import prewarm_ohlcv
         from src.engine.screener import resolve_universe
-        days = int(os.getenv("OHLCV_PREWARM_DAYS", "730") or 730)
+        days = int(os.getenv("OHLCV_PREWARM_DAYS", "3650") or 3650)  # 기본 ~10년(페이지네이션)
         unis = ["kospi200", "kosdaq150"]
         if os.getenv("OHLCV_PREWARM_ALL", "1") != "0":
             unis.append("all_listed")

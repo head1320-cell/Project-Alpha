@@ -91,7 +91,10 @@ def _kis_ohlcv_df(ticker: str, start_date: str, end_date: str):
                     - datetime.strptime(start_date, "%Y-%m-%d")).days
         except Exception:
             days = 365
-        days = max(60, min(days + 10, 600))  # KIS 페이지네이션 고려
+        # 상한을 크게(기본 5000≈20년) — get_daily_ohlcv가 페이지네이션으로 장기 역사를 채운다.
+        # 요청 기간이 길수록 콜이 늘지만(콜드시), 적재 후엔 DB 히트라 무관.
+        _max = int(os.getenv("KIS_OHLCV_MAX_DAYS", "5000") or 5000)
+        days = max(60, min(days + 10, _max))
         rows = client.get_daily_ohlcv(ticker, days=days)
         if not rows or len(rows) < 20:
             return None
@@ -223,21 +226,26 @@ def ingest_to_db(tickers: list, days: int = 400) -> dict:
     return result
 
 
-def _loaded_ticker_set(engine, min_rows: int = 60) -> set:
-    """daily_prices에 이미 min_rows 이상 적재된 ticker 집합 (사전적재 재개·중복 스킵용)."""
+def _covered_ticker_set(engine, start_date: str, min_rows: int = 60) -> set:
+    """start_date 이전까지 이미 적재된 ticker 집합 (사전적재 재개·중복 스킵용).
+
+    날짜 기준(MIN(trade_date) <= start_date)이라 '장기 심화'를 지원한다 — 얕게만(최근 N개월)
+    적재된 종목은 covered 가 아니므로 다시 '깊게' 받는다. (상장이 start_date 이후인 종목은
+    full 역사를 받아도 covered 판정이 안 돼 매 실행 재수집될 수 있으나, 콜 수가 적어 저비용.)"""
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
             rows = conn.execute(
-                text("SELECT ticker FROM daily_prices GROUP BY ticker HAVING COUNT(*) >= :m"),
-                {"m": int(min_rows)},
+                text("SELECT ticker FROM daily_prices GROUP BY ticker "
+                     "HAVING MIN(trade_date) <= :sd AND COUNT(*) >= :m"),
+                {"sd": start_date, "m": int(min_rows)},
             ).fetchall()
         return {r[0] for r in rows}
     except Exception:
         return set()
 
 
-def prewarm_ohlcv(tickers: list, days: int = 730, workers: int | None = None,
+def prewarm_ohlcv(tickers: list, days: int = 3650, workers: int | None = None,
                   skip_existing: bool = True, min_rows: int = 60) -> dict:
     """여러 종목의 KIS 일봉을 daily_prices에 '병렬'로 사전 적재 (백테스터 DB 1순위 가속).
 
@@ -259,7 +267,7 @@ def prewarm_ohlcv(tickers: list, days: int = 730, workers: int | None = None,
             from src.database import get_engine
             eng = get_engine()
             if eng is not None:
-                skip = _loaded_ticker_set(eng, min_rows)
+                skip = _covered_ticker_set(eng, start, min_rows)
         except Exception:
             skip = set()
     todo = [t for t in uniq if t not in skip]
