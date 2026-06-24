@@ -103,6 +103,21 @@ EXTENDED_FACTORS: list[ExtFactorMeta] = [
     _M("ir_count", "기업설명회횟수", "ir", "회", True, 0, 12, "DART 공시", "최근 1년 IR 횟수"),
 ]
 EXT_FACTOR_BY_ID = {f.id: f for f in EXTENDED_FACTORS}
+
+# 실데이터 경로가 있는 팩터 — _derive(기존 DART raw·KIS 가격에서 실파생) 또는 _real_*(DART/KIS 훅).
+# 키 설정 시 실값이 채워진다. 그 외(MOCK_ONLY)는 공시 항목 등 실데이터 미연동이라 키가 있어도
+# 합성값 → 실데이터 원칙상 픽커/조건식에서 비활성(factor_tokens가 unsupported로 표시).
+REAL_CAPABLE_IDS = {
+    # _derive (기존 raw·가격에서 실파생)
+    "cogs_ratio", "inv_turnover", "recv_turnover", "ccc", "net_fin_asset", "capex_amt",
+    "por", "fcf_payout", "bps_growth", "tangible_ratio", "gp_growth", "inv_growth",
+    "recv_growth", "salary_total", "rev_per_emp", "op_per_emp", "female_emp", "male_emp",
+    "return_1y", "investor_return", "total_return", "amount_growth",
+    # _real_* 훅 (DART/KIS)
+    "dps", "foreign_ownership", "employees", "avg_salary", "executives",
+}
+MOCK_ONLY_IDS = {f.id for f in EXTENDED_FACTORS if f.id not in REAL_CAPABLE_IDS}
+MOCK_ONLY_LABELS = {f.label for f in EXTENDED_FACTORS if f.id in MOCK_ONLY_IDS}
 EXT_CATEGORY_LABELS = {
     "dividend": "배당·자사주", "ownership": "지분율", "business": "사업정보",
     "financials": "재무정보", "fundamental": "펀더멘탈", "valuation": "밸류에이션",

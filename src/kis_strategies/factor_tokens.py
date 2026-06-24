@@ -320,10 +320,10 @@ def _label_aliases() -> dict[str, str]:
                     cache[m.label] = m.id
         except Exception:
             pass
-        try:  # Butler 확장 팩터(배당·사업·재무파생 등) 라벨 자동 별칭
-            from src.data.extended_factors_store import EXTENDED_FACTORS
+        try:  # Butler 확장 팩터 라벨 자동 별칭 — 실데이터 경로 있는 것만(mock 전용은 비활성)
+            from src.data.extended_factors_store import EXTENDED_FACTORS, MOCK_ONLY_IDS
             for m in EXTENDED_FACTORS:
-                if m.label and m.label not in FUNDAMENTAL_ALIASES:
+                if m.label and m.id not in MOCK_ONLY_IDS and m.label not in FUNDAMENTAL_ALIASES:
                     cache[m.label] = m.id
         except Exception:
             pass
@@ -430,8 +430,9 @@ UNSUPPORTED_REASONS: dict[str, str] = {
         "매출채권회전율", "재고자산회전율", "현금회전일수", "POR", "주당순자산증가율",
         "거래대금증가율", "주가변동률1년")},
 }
-# Tier1/2 실연동된 팩터는 미지원 목록에서 제거(extended_factors_store) — 지원으로 승격.
-for _t in ("주당배당금", "자사주보유비율", "외국인지분율",
+# Tier1/2 실연동된 팩터만 미지원 목록에서 제거 — 지원으로 승격. (자사주보유비율은 DART 자기주식
+# 공시 미연동=합성값이라 제외 → 미지원 유지. 실데이터 원칙: 합성 팩터는 픽커에서 비활성.)
+for _t in ("주당배당금", "외국인지분율",
            "직원수", "평균급여", "1인당매출액", "1인당영업이익", "임원수"):
     UNSUPPORTED_REASONS.pop(_t, None)
 
@@ -813,8 +814,13 @@ def token_support() -> dict:
         supported[t] = "ohlcv"
     for t in _FUND_TOKENS:
         supported[t] = "fundamental"  # 옵트인(스냅샷) — 펀더멘털 토글 필요
-    for t in FUNDAMENTAL_ALIASES:
-        supported[t] = "fundamental"
+    try:
+        from src.data.extended_factors_store import MOCK_ONLY_IDS as _MOCK_IDS
+    except Exception:
+        _MOCK_IDS = set()
+    for t, _fid in FUNDAMENTAL_ALIASES.items():
+        if _fid not in _MOCK_IDS:   # 실데이터 미연동(합성) 확장팩터 별칭은 지원에서 제외
+            supported[t] = "fundamental"
     for t in _label_aliases():
         supported[t] = "fundamental"  # 자체 팩터(스토어 라벨) — 픽커 '자체 팩터' 카테고리
     for t in market_tokens():
