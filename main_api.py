@@ -203,6 +203,30 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"DART 재무 시계열 백필 시작 실패: {e}")
 
+    # KIS 투자자별 수급(최근 ~30영업일) 매일 적재 (KIS 실키 있을 때만, 데몬):
+    #   수급 토큰(외국인·기관 순매수) 백테스트의 최근 구간 실데이터(investor_flows). FLOWS_SYNC=0 비활성.
+    try:
+        import os
+        if (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))
+                and os.getenv("FLOWS_SYNC", "1") != "0"):
+            import threading
+            threading.Thread(target=_kis_flows_sync_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KIS 수급 적재 시작 실패: {e}")
+
+    # KRX MDC 투자자별 수급 '과거' 1회 백필 (opt-in — 비공식 스크래핑, 깊은 역사 + 세부 주체):
+    #   KIS는 최근 ~30일만 → 깊은 수급 역사는 KRX MDC로 1회 적재. 마스터(ISIN) 준비 후 실행.
+    #   비공식 엔드포인트라 기본 OFF — KRX_FLOWS_BACKFILL=1 로 명시 활성, KRX_FLOWS_START 로 범위.
+    try:
+        import os
+        if os.getenv("KRX_FLOWS_BACKFILL", "0") == "1":
+            import threading
+            threading.Thread(target=_krx_flows_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KRX 수급 과거 백필 시작 실패: {e}")
+
 
 async def _collect_master_bg(engine):
     """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
@@ -320,6 +344,48 @@ def _dart_history_backfill_bg():
                 time.sleep(24 * 3600)        # 완료 → 다음날 증분 재확인
     except Exception as e:
         log.warning(f"DART 재무 시계열 백필 실패(폴백 유지): {e}")
+
+
+def _kis_flows_sync_bg():
+    """백그라운드(데몬): KIS 투자자별 수급(최근 ~30영업일)을 investor_flows에 매일 누적.
+    수급 토큰(외국인·기관 순매수) 백테스트의 최근 구간 실데이터. mock/키 없으면 error→종료."""
+    import logging
+    import os
+    import time
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.kis_flows import sync_investor_flows
+        time.sleep(int(os.getenv("FLOWS_SYNC_DELAY_SEC", "120") or 120))  # 마스터 수집 선행 여유
+        while True:
+            stats = sync_investor_flows(all_listed=True)
+            log.info(f"KIS 수급 적재: {stats}")
+            if isinstance(stats, dict) and stats.get("error"):
+                return  # mock/키 없음/DB 없음 → 종료
+            time.sleep(24 * 3600)  # 매일 누적 (KIS는 최근 ~30일 윈도만 반환)
+    except Exception as e:
+        log.warning(f"KIS 수급 적재 실패(폴백 유지): {e}")
+
+
+def _krx_flows_backfill_bg():
+    """백그라운드(데몬): KRX MDC 투자자별 수급 '과거' 1회 백필(비공식) → 깊은 수급 역사 + 세부 주체.
+    마스터(ISIN)가 준비될 때까지 대기 후 1회 실행(재적재 없음). 비공식 스크래핑이라 opt-in."""
+    import logging
+    import os
+    import time
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.krx_mdc import backfill_flows_krx
+        start = os.getenv("KRX_FLOWS_START", "2018-01-01")
+        for _ in range(30):  # 마스터(collect-master) 준비 대기 — 최대 ~30분
+            stats = backfill_flows_krx(start=start, all_listed=True)
+            log.info(f"KRX 수급 과거 백필: {stats}")
+            if (isinstance(stats, dict) and stats.get("error")
+                    and "마스터" in str(stats.get("message", ""))):
+                time.sleep(60)
+                continue  # 마스터 아직 미준비 → 재시도
+            return  # 완료/다른 에러 → 종료 (1회성)
+    except Exception as e:
+        log.warning(f"KRX 수급 과거 백필 실패(폴백 유지): {e}")
 
 
 @app.get("/api/v1/data/krx-status")
