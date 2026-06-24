@@ -174,6 +174,22 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"KRX 자동 백필 시작 실패: {e}")
 
+    # KIS 일봉 전종목 사전 적재 (KIS 실데이터 키 있고 + KRX 백필 비활성일 때만, 데몬 스레드):
+    #   KRX 키 없이도 daily_prices를 전종목 OHLCV로 미리 채워 백테스터(조건식 포함)를 즉시 DB-가속
+    #   (이전엔 백테스트한 종목만 reactively 적재 → 첫 콜드런이 느림). 우선순위 kospi200→kosdaq150→
+    #   전종목, 재개 가능(이미 적재분 스킵). KRX 활성 시엔 KRX가 더 깊은 역사를 담당하므로 스킵.
+    #   OHLCV_PREWARM=0 비활성 · OHLCV_PREWARM_ALL=0 공통 유니버스까지만 · OHLCV_PREWARM_DAYS 범위.
+    try:
+        import os
+        _kis_real = os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))
+        _krx_active = bool(os.getenv("KRX_API_KEY")) and os.getenv("KRX_AUTOBACKFILL", "1") != "0"
+        if _kis_real and not _krx_active and os.getenv("OHLCV_PREWARM", "1") != "0":
+            import threading
+            threading.Thread(target=_prewarm_ohlcv_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"OHLCV 사전 적재 시작 실패: {e}")
+
 
 async def _collect_master_bg(engine):
     """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
@@ -228,6 +244,35 @@ def _krx_backfill_bg():
         log.warning(f"KRX 자동 백필 실패(폴백 유지): {e}")
 
 
+def _prewarm_ohlcv_bg():
+    """백그라운드(데몬): KIS 일봉을 daily_prices에 전종목 사전 적재 → 백테스터(조건식 포함) DB 즉시 가속.
+
+    우선순위 kospi200 → kosdaq150 → 전종목(all_listed)로 공통 유니버스를 먼저 준비.
+    prewarm_ohlcv는 병렬(스레드 안전 KIS 클라이언트)·재개 가능(이미 적재분 스킵)이며,
+    mock/키 없음이면 즉시 no-op. KRX 백필 활성 시엔 startup 게이트에서 이 데몬을 스킵."""
+    import logging
+    import os
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.ohlcv_loader import prewarm_ohlcv
+        from src.engine.screener import resolve_universe
+        days = int(os.getenv("OHLCV_PREWARM_DAYS", "730") or 730)
+        unis = ["kospi200", "kosdaq150"]
+        if os.getenv("OHLCV_PREWARM_ALL", "1") != "0":
+            unis.append("all_listed")
+        for uni in unis:
+            try:
+                tickers = resolve_universe(uni)
+            except Exception:
+                tickers = []
+            if not tickers:
+                continue
+            r = prewarm_ohlcv(tickers, days=days)
+            log.info(f"OHLCV 사전적재[{uni}]: {r}")
+    except Exception as e:
+        log.warning(f"OHLCV 사전 적재 실패(폴백 유지): {e}")
+
+
 @app.get("/api/v1/data/krx-status")
 def krx_status():
     """KRX 적재(daily_prices) 커버리지 — 자동 백필 진행상황 관측."""
@@ -236,6 +281,12 @@ def krx_status():
         "krx_key": bool(os.getenv("KRX_API_KEY")),
         "autobackfill": os.getenv("KRX_AUTOBACKFILL", "1") != "0",
         "backfill_start": os.getenv("KRX_BACKFILL_START", "2020-01-01"),
+        # KIS 기반 전종목 OHLCV 사전 적재 활성 여부 (KRX 키 없이 daily_prices를 채우는 경로)
+        "kis_prewarm": (
+            os.getenv("KIS_USE_MOCK", "1") == "0"
+            and bool(os.getenv("KIS_APP_KEY"))
+            and os.getenv("OHLCV_PREWARM", "1") != "0"
+        ),
     }
     try:
         from sqlalchemy import text

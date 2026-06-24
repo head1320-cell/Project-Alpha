@@ -221,3 +221,86 @@ def ingest_to_db(tickers: list, days: int = 400) -> dict:
     total = sum(result.values())
     logger.info(f"OHLCV 배치 적재: {len([v for v in result.values() if v])}종목, {total}행")
     return result
+
+
+def _loaded_ticker_set(engine, min_rows: int = 60) -> set:
+    """daily_prices에 이미 min_rows 이상 적재된 ticker 집합 (사전적재 재개·중복 스킵용)."""
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT ticker FROM daily_prices GROUP BY ticker HAVING COUNT(*) >= :m"),
+                {"m": int(min_rows)},
+            ).fetchall()
+        return {r[0] for r in rows}
+    except Exception:
+        return set()
+
+
+def prewarm_ohlcv(tickers: list, days: int = 730, workers: int | None = None,
+                  skip_existing: bool = True, min_rows: int = 60) -> dict:
+    """여러 종목의 KIS 일봉을 daily_prices에 '병렬'로 사전 적재 (백테스터 DB 1순위 가속).
+
+    - 병렬: 스레드 안전 KIS 클라이언트 + 전역 RateLimiter(≤18/s)로 안전. 네트워크 지연만 파이프라인.
+    - skip_existing: 이미 min_rows 이상 적재된 종목은 KIS 호출 자체를 스킵(재개 가능·증분).
+    - mock 모드·키 없음이면 _kis_ohlcv_df 가 None → 전부 0행(no-op). 안전.
+
+    Returns: {"requested": n, "skipped": n, "loaded": n_종목, "rows": 총행수}
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    uniq = [t for t in dict.fromkeys(tickers) if t]
+    end = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=int(days))).strftime("%Y-%m-%d")
+
+    skip: set = set()
+    if skip_existing:
+        try:
+            from src.database import get_engine
+            eng = get_engine()
+            if eng is not None:
+                skip = _loaded_ticker_set(eng, min_rows)
+        except Exception:
+            skip = set()
+    todo = [t for t in uniq if t not in skip]
+
+    # 토큰 1회 프리워밍 (병렬 호출 전 — 동시 토큰 발급 경쟁 회피)
+    try:
+        from src.execution.kis_client import get_kis_client
+        c = get_kis_client()
+        if hasattr(c, "prewarm_token"):
+            c.prewarm_token()
+    except Exception:
+        pass
+
+    if workers is None:
+        workers = max(1, min(int(os.getenv("OHLCV_PREWARM_WORKERS", "8") or 8), 24))
+
+    def _one(t: str):
+        try:
+            df = _kis_ohlcv_df(t, start, end)
+        except Exception:
+            df = None
+        if df is not None and not df.empty:
+            try:
+                return ingest_df_to_db(t, df)
+            except Exception:
+                return 0
+        return 0
+
+    loaded = 0
+    rows = 0
+    if todo:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = [ex.submit(_one, t) for t in todo]
+            for fut in as_completed(futs):
+                try:
+                    n = fut.result()
+                except Exception:
+                    n = 0
+                if n:
+                    loaded += 1
+                    rows += n
+    out = {"requested": len(uniq), "skipped": len(uniq) - len(todo), "loaded": loaded, "rows": rows}
+    logger.info(f"OHLCV 사전적재(병렬): {out}")
+    return out
