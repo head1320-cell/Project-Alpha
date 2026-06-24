@@ -190,6 +190,19 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"OHLCV 사전 적재 시작 실패: {e}")
 
+    # 전종목 과거 재무(financials_history) 백필 (DART 키 있을 때만, 데몬 스레드):
+    #   PIT 펀더멘털 백테스트(look-ahead 없는 ROE/PER 등)의 실데이터 원천. DART 일 20,000콜 한도라
+    #   max_calls로 분할하고 매일 이어서 적재(resume). 키 없으면 즉시 no-op.
+    #   DART_HISTORY_BACKFILL=0 비활성 · DART_HISTORY_YEARS 깊이 · DART_HISTORY_QUARTERS=1 분기까지.
+    try:
+        import os
+        if os.getenv("DART_API_KEY") and os.getenv("DART_HISTORY_BACKFILL", "1") != "0":
+            import threading
+            threading.Thread(target=_dart_history_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"DART 재무 시계열 백필 시작 실패: {e}")
+
 
 async def _collect_master_bg(engine):
     """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
@@ -279,6 +292,34 @@ def _prewarm_ohlcv_bg():
             log.info(f"OHLCV 사전적재[{uni}]: {r}")
     except Exception as e:
         log.warning(f"OHLCV 사전 적재 실패(폴백 유지): {e}")
+
+
+def _dart_history_backfill_bg():
+    """백그라운드(데몬): 전종목 과거 재무 → financials_history 적재 (PIT 펀더멘털 백테스트 원천).
+
+    DART 일 20,000콜 한도라 max_calls로 분할하고, 쿼터 도달 시 대기 후 이어서(resume) 적재한다.
+    완료되면 하루 뒤 증분(최신 보고서) 재확인. 키 없으면 backfill_financials가 즉시 error 반환→종료."""
+    import logging
+    import os
+    import time
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.dart_history import backfill_financials
+        years = int(os.getenv("DART_HISTORY_YEARS", "10") or 10)
+        quarters = os.getenv("DART_HISTORY_QUARTERS", "0") != "0"  # 1=분기까지(4배 콜)
+        max_calls = int(os.getenv("DART_HISTORY_MAX_CALLS", "18000") or 18000)
+        while True:
+            stats = backfill_financials(all_listed=True, years=years,
+                                        include_quarters=quarters, max_calls=max_calls)
+            log.info(f"DART 재무 시계열 백필: {stats}")
+            if isinstance(stats, dict) and stats.get("error"):
+                return  # 키 없음/DB 없음 → 종료
+            if isinstance(stats, dict) and stats.get("stopped_at_quota"):
+                time.sleep(3 * 3600)        # 일쿼터 도달 → 리셋 대기 후 이어서
+            else:
+                time.sleep(24 * 3600)        # 완료 → 다음날 증분 재확인
+    except Exception as e:
+        log.warning(f"DART 재무 시계열 백필 실패(폴백 유지): {e}")
 
 
 @app.get("/api/v1/data/krx-status")

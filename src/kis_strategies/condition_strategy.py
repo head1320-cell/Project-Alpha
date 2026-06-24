@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import numpy as np
 import pandas as pd
@@ -89,6 +90,12 @@ _FUND_TOKENS = {
     "매출액증가율": lambda f: (f.get("revenue_cagr_3y") * 100) if f.get("revenue_cagr_3y") is not None else None,
     "PEG": lambda f: f.get("peg"),
 }
+
+# PIT(시점) 평가를 지원하는 펀더멘털 토큰 — financials_history 적재 시 봉별 시계열로 평가
+# (look-ahead 없음). 매출액증가율·PEG는 단순 시계열화가 어려워 제외(적재돼도 스냅샷 폴백/건너뜀).
+_PIT_FUND_TOKENS = {"시가총액", "시총", "PER", "PBR", "PSR", "PCR", "ROE",
+                    "부채비율", "매출액", "영업이익", "순이익", "EPS"}
+_PIT_UNBUILT = object()  # 종목별 PIT 패널 캐시 센티넬 (미빌드 구분)
 
 
 def _fundamental_value(token: str, f: dict):
@@ -361,6 +368,7 @@ class ConditionStrategy(BaseStrategy):
         self._score_panels: dict = {}  # 점수 근사 패널 {점수명: DataFrame[date,ticker]}
         self._expr_panels: dict = {}   # 산술식 내부 횡단면 패널 {canonical key: DataFrame}
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
+        self._pit_base_cache: dict = {}  # 종목별 PIT 재무 패널 캐시 (financials_history 기반)
 
     @property
     def name(self) -> str:
@@ -698,8 +706,116 @@ class ConditionStrategy(BaseStrategy):
                               "apply": _apply_function, "two": _apply_two_factor})
         return out if isinstance(out, pd.Series) else None
 
+    def _build_pit_base(self, tk: str, df: pd.DataFrame):
+        """financials_history → df.index에 정렬된 PIT 재무 패널(억 단위, 봉별 step + 봉별 시총).
+
+        각 보고서의 '공시 가능일'(기간말 + 시차: 연간 90일/분기 45일) 이후 봉부터 그 값을 사용
+        → look-ahead 차단. 적재 없으면 None. 손익은 연환산(분기 누적 보정), 시총은 봉별 종가×주식수."""
+        import datetime as _dt
+        try:
+            from src.data.dart_history import ANNUALIZE_FACTOR, load_history
+            rows = load_history(tk)
+        except Exception:
+            return None
+        if not rows:
+            return None
+        _PEND = {"11013": (3, 31), "11012": (6, 30), "11014": (9, 30), "11011": (12, 31)}
+        recs = []
+        for r in rows:
+            pe = _PEND.get(r.get("reprt"))
+            if not pe:
+                continue
+            try:
+                end = _dt.date(int(r["year"]), pe[0], pe[1])
+            except Exception:
+                continue
+            lag = 90 if r["reprt"] == "11011" else 45
+            af = ANNUALIZE_FACTOR.get(r["reprt"], 1.0)
+
+            def _v(val, annualize=False, _af=af):
+                # 원 → 억. 손익(annualize=True)은 분기 누적 → 연환산.
+                return (val * (_af if annualize else 1.0) / 1e8) if val is not None else None
+            recs.append({
+                "avail": end + _dt.timedelta(days=lag),
+                "net_income": _v(r.get("net_income"), True),
+                "revenue": _v(r.get("revenue"), True),
+                "operating_profit": _v(r.get("operating_profit"), True),
+                "operating_cf": _v(r.get("operating_cf"), True),
+                "total_equity": _v(r.get("total_equity")),
+                "total_liabilities": _v(r.get("total_liabilities")),
+                "shares": r.get("shares_outstanding"),
+            })
+        if not recs:
+            return None
+        recs.sort(key=lambda x: x["avail"])
+        fields = ("net_income", "revenue", "operating_profit", "operating_cf",
+                  "total_equity", "total_liabilities", "shares")
+        cols: dict = {f: [] for f in fields}
+        cur = dict.fromkeys(fields)
+        ri = 0
+        for d in df.index:
+            bd = d.date() if hasattr(d, "date") else None
+            if bd is not None:
+                while ri < len(recs) and recs[ri]["avail"] <= bd:
+                    for f in fields:
+                        if recs[ri][f] is not None:
+                            cur[f] = recs[ri][f]
+                    ri += 1
+            for f in fields:
+                cols[f].append(cur[f])
+        panel = {f: pd.Series(cols[f], index=df.index, dtype="float64") for f in fields}
+        try:
+            panel["market_cap"] = df["close"].astype(float) * panel["shares"] / 1e8  # 억
+        except Exception:
+            panel["market_cap"] = pd.Series([np.nan] * len(df), index=df.index)
+        return panel
+
+    def _pit_fund_series(self, tk: str, name: str, df: pd.DataFrame):
+        """PIT 펀더멘털 토큰 → 봉별 시계열 (financials_history 적재 시). 미적재/미지원이면 None."""
+        if os.getenv("BACKTEST_PIT_FUNDAMENTALS", "1") == "0" or name not in _PIT_FUND_TOKENS:
+            return None
+        panel = self._pit_base_cache.get(tk, _PIT_UNBUILT)
+        if panel is _PIT_UNBUILT:
+            try:
+                panel = self._build_pit_base(tk, df)
+            except Exception:
+                panel = None
+            self._pit_base_cache[tk] = panel
+        if not panel:
+            return None
+        ni, te, rev = panel["net_income"], panel["total_equity"], panel["revenue"]
+        op, tl, ocf, sh = (panel["operating_profit"], panel["total_liabilities"],
+                           panel["operating_cf"], panel["shares"])
+        mc = panel["market_cap"]
+
+        def pos(s):  # 분모 ≤0 은 NaN (평가 불가) — 적자 PER 등 무의미값 차단
+            return s.where(s > 0)
+        if name in ("시가총액", "시총"):
+            return mc
+        if name == "PER":
+            return mc / pos(ni)
+        if name == "PBR":
+            return mc / pos(te)
+        if name == "PSR":
+            return mc / pos(rev)
+        if name == "PCR":
+            return mc / pos(ocf)
+        if name == "ROE":
+            return ni / pos(te) * 100.0
+        if name == "부채비율":
+            return tl / pos(te) * 100.0
+        if name == "매출액":
+            return rev
+        if name == "영업이익":
+            return op
+        if name == "순이익":
+            return ni
+        if name == "EPS":
+            return ni * 1e8 / pos(sh)
+        return None
+
     def _token_series(self, df: pd.DataFrame, cond: dict, fund: dict | None, tk: str):
-        """조건의 좌항 베이스 시리즈 — 점수 패널 → OHLCV·시장·매크로·수급 → 펀더멘털 스냅샷.
+        """조건의 좌항 베이스 시리즈 — 점수 패널 → OHLCV·시장·매크로·수급 → PIT 재무 → 스냅샷.
 
         점수 토큰은 횡단면 합성이라 prepare_panel에서 사전계산된 패널 열을 종목 날짜에
         정렬해 돌려준다(이후 이동평균 등 함수 체인 적용 가능 — 가이드의 기간총합({종합점수},5일))."""
@@ -710,10 +826,16 @@ class ConditionStrategy(BaseStrategy):
                 return None
             return pd.Series(panel[str(tk)].reindex(_date_keys(df)).values, index=df.index)
         s = _base_series(df, cond.get("factor_token", ""))
-        if (s is None or len(s) == 0) and fund is not None:
-            fv = _fundamental_value(cond.get("factor_token", ""), fund)
-            if fv is not None:
-                s = pd.Series([fv] * len(df), index=df.index)
+        if s is None or len(s) == 0:
+            # ① PIT 우선 — 봉별 시점 재무(financials_history). look-ahead 없음·allow_snapshot 무관.
+            pit = self._pit_fund_series(tk, name, df)
+            if pit is not None:
+                return pit
+            # ② 폴백 — 현재 스냅샷 상수 (opt-in: allow_snapshot_fundamentals, financials_history 미적재 시)
+            if fund is not None:
+                fv = _fundamental_value(cond.get("factor_token", ""), fund)
+                if fv is not None:
+                    s = pd.Series([fv] * len(df), index=df.index)
         return s
 
     def signal_at(self, stock_code: str, when) -> Signal | None:
