@@ -188,6 +188,7 @@ export default function TerminalBacktester() {
   const [tab, setTab] = useState<SummaryTab>("buy");
   const [result, setResult] = useState<ScreenToBacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<{ phase: string; done?: number; total?: number; count?: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<ScreenerStrategyHandoff | null>(null);
   const [saved, setSaved] = useState<SavedBacktestStrategy[]>([]);
@@ -216,13 +217,17 @@ export default function TerminalBacktester() {
   };
 
   const run = async () => {
-    setLoading(true); setErr(null); setResult(null);
+    setLoading(true); setErr(null); setResult(null); setProgress(null);
     try {
-      const r = await backtestBridgeApi.screenToBacktest(strategyToRun(s, handoff));
+      // 스트리밍: 진행률(스크리닝→시세로드 k/total→시뮬레이션)을 받으며 실행 → 프록시 타임아웃 면제
+      const r = await backtestBridgeApi.screenToBacktestStream(
+        strategyToRun(s, handoff),
+        (evt) => setProgress(evt),
+      );
       if (r.error) setErr(r.message || "백테스트 실패");
       else setResult(r);
     } catch (e) { setErr((e as Error).message); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setProgress(null); }
   };
 
   const st = result?.backtest?.statistics;
@@ -362,7 +367,7 @@ export default function TerminalBacktester() {
                 <span className="tbt-spinner" />
                 <span className="tbt-progress-label">SIMULATION RUNNING</span>
               </div>
-              <BacktestProgress />
+              <BacktestProgress progress={progress} />
               {/* 결과 스켈레톤 미리보기 */}
               <div className="tbt-skeleton-stats">
                 {[...Array(6)].map((_, i) => (
@@ -643,28 +648,35 @@ function TradeLog({ trades }: { trades: BacktestTrade[] }) {
   );
 }
 
-// 백테스트 진행 단계 표시 (15초 대기 체감 단축)
-function BacktestProgress() {
+// 백테스트 진행 단계 — 백엔드 스트림의 실제 진행률(phase/done/total)로 구동.
+// 가장 긴 "시세 데이터 로드" 단계는 종목 k/total·% 를 실시간 표시 → 빈 화면/체감 대기 제거.
+function BacktestProgress({ progress }: {
+  progress: { phase: string; done?: number; total?: number; count?: number } | null;
+}) {
   const stages = [
-    "과거 시세 데이터 로드",
-    "종목별 지표 계산",
-    "진입·청산 시그널 생성",
-    "포지션 시뮬레이션",
-    "성과 지표 집계",
+    { keys: ["screening", "screened"], label: "종목 스크리닝" },
+    { keys: ["loading"], label: "과거 시세 데이터 로드" },
+    { keys: ["simulating", "done"], label: "포지션 시뮬레이션·성과 집계" },
   ];
-  const [stage, setStage] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setStage((s) => Math.min(s + 1, stages.length - 1)), 3200);
-    return () => clearInterval(t);
-  }, []);
+  const phase = progress?.phase ?? "screening";
+  const foundIdx = stages.findIndex((s) => s.keys.includes(phase));
+  const activeIdx = foundIdx < 0 ? 0 : foundIdx;
+  const pct = progress?.total ? Math.round(((progress.done ?? 0) / progress.total) * 100) : 0;
   return (
     <div className="tbt-stages">
-      {stages.map((label, i) => (
-        <div key={i} className={`tbt-stage${i < stage ? " done" : i === stage ? " active" : ""}`}>
-          <span className="tbt-stage-dot">{i < stage ? "✓" : i + 1}</span>
-          <span className="tbt-stage-label">{label}</span>
-        </div>
-      ))}
+      {stages.map((s, i) => {
+        const cls = i < activeIdx ? " done" : i === activeIdx ? " active" : "";
+        const showCount = i === activeIdx && phase === "loading" && !!progress?.total;
+        return (
+          <div key={i} className={`tbt-stage${cls}`}>
+            <span className="tbt-stage-dot">{i < activeIdx ? "✓" : i + 1}</span>
+            <span className="tbt-stage-label">
+              {s.label}
+              {showCount ? ` — ${progress?.done ?? 0}/${progress?.total} 종목 (${pct}%)` : ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -257,8 +258,9 @@ class BacktestEngine:
     pandas + our DB 기반으로 재구현합니다.
     """
 
-    def __init__(self, config: BacktestConfig):
+    def __init__(self, config: BacktestConfig, progress_cb=None):
         self.cfg = config
+        self.progress_cb = progress_cb          # 스트리밍 진행률 콜백(옵션) — dict 이벤트 수신
         self.cash = config.initial_capital
         self.positions: dict[str, Position] = {}
         self.trades: list[Trade] = []
@@ -266,6 +268,21 @@ class BacktestEngine:
         self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
         self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
         self._etf_pos: dict[str, dict] = {}     # ETF 슬리브 보유 {ticker: {"qty","avg"}}
+
+    def _emit(self, phase: str, done: int | None = None, total: int | None = None):
+        """진행률 콜백 발행(스트리밍용). 콜백 미설정/예외 시 무시 — 백테스트 결과엔 영향 없음."""
+        cb = self.progress_cb
+        if cb is None:
+            return
+        evt: dict = {"phase": phase}
+        if done is not None:
+            evt["done"] = done
+        if total is not None:
+            evt["total"] = total
+        try:
+            cb(evt)
+        except Exception:
+            pass
 
     def run(self) -> dict:
         """
@@ -313,21 +330,61 @@ class BacktestEngine:
         ).strftime("%Y-%m-%d")
 
         ohlcv_map: dict[str, pd.DataFrame] = {}
-        for ticker in self.cfg.symbols:
-            # 통합 로더: DB → KIS 실시간 → mock 자동 선택
+        symbols = list(self.cfg.symbols)
+        total_syms = len(symbols)
+
+        def _load_one(tk: str):
+            """단일 종목 OHLCV 로드 (워커 스레드 — I/O 위주, GIL 해제). 후처리는 메인에서."""
+            # 통합 로더: DB → KIS 실시간 → mock 자동 선택 (KIS 경로는 daily_prices에 write-back)
             try:
                 from src.data.ohlcv_loader import load_ohlcv_unified
-                df = load_ohlcv_unified(ticker, warmup_start, self.cfg.end_date, prefer="auto")
+                d = load_ohlcv_unified(tk, warmup_start, self.cfg.end_date, prefer="auto")
             except Exception:
-                df = load_ohlcv(ticker, warmup_start, self.cfg.end_date)
-            if not df.empty:
-                # ★ 최적화: 날짜 문자열을 여기서 1회만 생성 (매 거래일 strftime 제거)
-                #   기존엔 _generate_signal_as_of가 슬라이스마다 dt.strftime 호출 → O(N²) 병목
-                df = df.copy()
-                df["_date_str"] = df.index.strftime("%Y%m%d")
-                # 수급 토큰(외국인순매수량 등) 해석용 종목 식별 — pandas attrs는 슬라이스에도 보존
-                df.attrs["ticker"] = ticker
-                ohlcv_map[ticker] = df
+                try:
+                    d = load_ohlcv(tk, warmup_start, self.cfg.end_date)
+                except Exception:
+                    d = pd.DataFrame()
+            return tk, d
+
+        def _absorb(tk: str, d):
+            """메인 스레드에서만 호출 — ohlcv_map 갱신(딕셔너리 경쟁 없음)."""
+            if d is not None and not d.empty:
+                # ★ 날짜 문자열 1회 생성 (매 거래일 strftime 제거 — O(N²) 병목 방지)
+                d = d.copy()
+                d["_date_str"] = d.index.strftime("%Y%m%d")
+                d.attrs["ticker"] = tk  # 수급 토큰 해석용 (pandas attrs는 슬라이스에도 보존)
+                ohlcv_map[tk] = d
+
+        # KIS 토큰 1회 프리워밍 (병렬 호출 전 — 동시 토큰 발급 경쟁 회피)
+        try:
+            from src.execution.kis_client import get_kis_client
+            _kc = get_kis_client()
+            if hasattr(_kc, "prewarm_token"):
+                _kc.prewarm_token()
+        except Exception:
+            pass
+
+        # 종목별 OHLCV 병렬 로드: 직렬 K×(KIS 지연) 병목 제거. RateLimiter(18/s)가 총량을 묶으므로
+        # KIS 부담은 동일하고 네트워크 지연만 파이프라인됨. 결과는 ticker 키 dict라 완료 순서 무관
+        # → 직렬과 동일 결과(결정론 불변). 진행률은 완료 종목마다 _emit("loading", done/total).
+        workers = max(1, min(int(os.getenv("BACKTEST_OHLCV_WORKERS", "10") or 10), 32))
+        self._emit("loading", done=0, total=total_syms)
+        done = 0
+        if workers <= 1 or total_syms <= 1:
+            for tk in symbols:
+                _t, _d = _load_one(tk)
+                _absorb(_t, _d)
+                done += 1
+                self._emit("loading", done=done, total=total_syms)
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futs = [ex.submit(_load_one, tk) for tk in symbols]
+                for fut in as_completed(futs):
+                    _t, _d = fut.result()
+                    _absorb(_t, _d)
+                    done += 1
+                    self._emit("loading", done=done, total=total_syms)
 
         if not ohlcv_map:
             return self._error_response("No OHLCV data found in DB for given tickers/range")
@@ -388,6 +445,7 @@ class BacktestEngine:
         lag = max(0, int(self.cfg.signal_lag or 0))
 
         # Day-by-day 시뮬레이션
+        self._emit("simulating", done=0, total=len(sim_dates))
         for sim_date in sim_dates:
             date_str = sim_date.strftime("%Y-%m-%d")
             self._buys_today = 0  # 일일 신규 매수 카운터 (max_buy_per_day 제한용)
@@ -1666,6 +1724,7 @@ def run_backtest(
     breakthrough_offset_pct: float = 0.0,
     breakthrough_direction: str = "up",
     buy_timing: str = "pre_open",
+    progress_cb=None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1740,5 +1799,5 @@ def run_backtest(
         breakthrough_direction=breakthrough_direction,
         buy_timing=buy_timing,
     )
-    engine = BacktestEngine(cfg)
+    engine = BacktestEngine(cfg, progress_cb=progress_cb)
     return engine.run()

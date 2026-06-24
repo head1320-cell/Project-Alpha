@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -136,48 +137,58 @@ class KISToken:
 
 @dataclass
 class RateLimiter:
-    """초당 N회 API 호출 제한."""
+    """초당 N회 API 호출 제한 (스레드 안전 — 병렬 OHLCV 로딩 등 동시 호출 대응).
+
+    여러 워커 스레드가 동시에 acquire()를 불러도 _last_calls 경쟁 없이 합산 ≤ N/s 유지.
+    페이싱(sleep)은 락 안에서 하지만, 실제 HTTP 요청은 acquire() 반환 후(락 밖)라 동시 실행됨.
+    """
     calls_per_second: float = 18.0   # 한도 20, 안전 마진 2
     _last_calls: list = field(default_factory=list)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def acquire(self):
-        now = time.time()
-        # 1초 이전 호출 제거
-        self._last_calls = [t for t in self._last_calls if now - t < 1.0]
-        if len(self._last_calls) >= self.calls_per_second:
-            sleep_for = 1.0 - (now - self._last_calls[0]) + 0.01
-            time.sleep(max(0, sleep_for))
-        self._last_calls.append(time.time())
+        with self._lock:
+            now = time.time()
+            # 1초 이전 호출 제거
+            self._last_calls = [t for t in self._last_calls if now - t < 1.0]
+            if len(self._last_calls) >= self.calls_per_second:
+                sleep_for = 1.0 - (now - self._last_calls[0]) + 0.01
+                time.sleep(max(0, sleep_for))
+            self._last_calls.append(time.time())
 
 
 @dataclass
 class CircuitBreaker:
-    """N회 연속 실패 시 차단."""
+    """N회 연속 실패 시 차단 (스레드 안전)."""
     failure_threshold: int = 5
     reset_timeout_seconds: float = 30.0
     failure_count: int = 0
     last_failure_time: datetime | None = None
     state: str = "CLOSED"
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def call_allowed(self) -> bool:
-        if self.state == "OPEN" and self.last_failure_time:
-            if (datetime.now() - self.last_failure_time).total_seconds() > self.reset_timeout_seconds:
-                self.state = "HALF_OPEN"
-                self.failure_count = 0
-                return True
-            return False
-        return True
+        with self._lock:
+            if self.state == "OPEN" and self.last_failure_time:
+                if (datetime.now() - self.last_failure_time).total_seconds() > self.reset_timeout_seconds:
+                    self.state = "HALF_OPEN"
+                    self.failure_count = 0
+                    return True
+                return False
+            return True
 
     def record_success(self):
-        self.failure_count = 0
-        self.state = "CLOSED"
+        with self._lock:
+            self.failure_count = 0
+            self.state = "CLOSED"
 
     def record_failure(self):
-        self.failure_count += 1
-        self.last_failure_time = datetime.now()
-        if self.failure_count >= self.failure_threshold:
-            self.state = "OPEN"
-            logger.error(f"Circuit breaker OPEN after {self.failure_count} failures")
+        with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = datetime.now()
+            if self.failure_count >= self.failure_threshold:
+                self.state = "OPEN"
+                logger.error(f"Circuit breaker OPEN after {self.failure_count} failures")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -219,16 +230,28 @@ class KISClient:
         self.token: KISToken | None = None
         self.rate_limiter = RateLimiter()
         self.circuit_breaker = CircuitBreaker()
+        self._token_lock = threading.Lock()  # 동시 첫 호출 시 토큰 1회만 발급
 
     # ─────────────────────────────────────────────────────────────────────
     # OAuth Token
     # ─────────────────────────────────────────────────────────────────────
 
     def _ensure_token(self):
-        """토큰 유효성 확인 + 만료 시 재발급."""
+        """토큰 유효성 확인 + 만료 시 재발급 (스레드 안전: double-checked locking)."""
         if self.token and self.token.is_valid:
             return
-        self._fetch_token()
+        with self._token_lock:
+            # 락 안에서 재확인 — 다른 스레드가 이미 발급했으면 재사용(중복 발급 방지)
+            if self.token and self.token.is_valid:
+                return
+            self._fetch_token()
+
+    def prewarm_token(self):
+        """병렬 호출 전에 토큰을 1회 미리 확보 (토큰 발급 경쟁 회피). 실패해도 무시."""
+        try:
+            self._ensure_token()
+        except Exception as e:
+            logger.debug(f"KIS 토큰 프리워밍 실패(무시): {e}")
 
     def _fetch_token(self):
         """새 토큰 발급."""

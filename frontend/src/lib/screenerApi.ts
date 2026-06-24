@@ -954,6 +954,88 @@ export interface BacktestConditionPayload {
   expr?: string | null;
 }
 
+/** screen-to-backtest 요청 바디 — unary(screenToBacktest)와 스트리밍(screenToBacktestStream) 공용. */
+export interface ScreenToBacktestBody {
+  universe: string;
+  custom_tickers?: string[] | null;
+  filter_ast: FilterGroupNode;
+  liquidity_floor: string;
+  max_tickers: number;
+  sort_by?: string;
+  sort_dir?: string;
+  sort_by_secondary?: string | null;
+  sort_secondary_dir?: string;
+  strategy_name: string;
+  start_date: string;
+  end_date: string;
+  initial_capital?: number;
+  commission_rate?: number;
+  slippage_rate?: number;
+  stop_loss_pct?: number | null;
+  take_profit_pct?: number | null;
+  trailing_stop_pct?: number | null;
+  max_positions?: number;
+  buy_fill_type?: string;
+  sell_fill_type?: string;
+  buy_fill_offset_pct?: number;
+  sell_fill_offset_pct?: number;
+  buy_fill_expr?: string | null;
+  sell_fill_expr?: string | null;
+  expiry_fill_type?: string;
+  expiry_fill_offset_pct?: number;
+  buy_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;
+  sell_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;
+  expiry_sell_method?: string;
+  max_buy_amount?: number | null;
+  cash_reserve_pct?: number;
+  asset_alloc?: {
+    etf_pct: number; stock_pct: number; rebalance_months: number;
+    fill_type: string; offset_pct: number;
+    basket: Array<{ ticker: string; weight_pct: number }>;
+  } | null;
+  max_hold_days?: number | null;
+  min_hold_days?: number;
+  day_trade?: boolean;
+  sell_divide_pct?: number;
+  max_sell_divisions?: number | null;
+  buy_weight_mode?: string;
+  buy_divide_pct?: number;
+  max_buy_per_day?: number | null;
+  max_buy_count?: number | null;
+  breakthrough_buy?: boolean;
+  breakthrough_base_type?: string;
+  breakthrough_offset_pct?: number;
+  breakthrough_direction?: string;
+  buy_timing?: string;
+  buy_conditions?: BacktestConditionPayload[] | null;
+  sell_conditions?: BacktestConditionPayload[] | null;
+  buy_logic?: string | null;
+  sell_logic?: string | null;
+  buy_sort_expr?: string | null;
+  buy_sort_desc?: boolean;
+  intraday_fill?: boolean;
+  buy_time_start?: string;
+  buy_time_end?: string;
+  sell_time_start?: string;
+  sell_time_end?: string;
+  rebalance_period?: string | null;
+  signal_lag?: number;
+  rebuy_block_days?: number;
+  market_timing?: {
+    index_ticker: string; action: string;
+    conditions: BacktestConditionPayload[];
+  } | null;
+  caps?: string[] | null;
+  sectors?: string[] | null;
+  etf?: boolean;
+  managed?: boolean;
+  supervised?: boolean;
+  groups?: Array<{ mode: string; tickers: string[] }> | null;
+  full_universe_eval?: boolean;
+  universe_eval_cap?: number;
+  allow_snapshot_fundamentals?: boolean;
+}
+
 export const backtestBridgeApi = {
 // 커스텀 전략(BuilderState) 백테스트 — 빌더에서 만든 임의 전략 실행
   customBacktest: async (body: {
@@ -986,86 +1068,7 @@ export const backtestBridgeApi = {
     if (!r.ok) throw new Error(`Strategies failed: ${r.status}`);
     return r.json();
   },
-  screenToBacktest: async (body: {
-    universe: string;
-    custom_tickers?: string[] | null;
-    filter_ast: FilterGroupNode;
-    liquidity_floor: string;
-    max_tickers: number;
-    sort_by?: string;
-    sort_dir?: string;
-    sort_by_secondary?: string | null;
-    sort_secondary_dir?: string;
-    strategy_name: string;
-    start_date: string;
-    end_date: string;
-    initial_capital?: number;
-    commission_rate?: number;
-    slippage_rate?: number;
-    stop_loss_pct?: number | null;
-    take_profit_pct?: number | null;
-    trailing_stop_pct?: number | null;
-    max_positions?: number;
-    buy_fill_type?: string;
-    sell_fill_type?: string;
-    buy_fill_offset_pct?: number;   // 체결 기준가 ± % (지정가 도달 검증 모델)
-    sell_fill_offset_pct?: number;
-    buy_fill_expr?: string | null;  // fill_type="expr"일 때 기준가 산술식
-    sell_fill_expr?: string | null;
-    expiry_fill_type?: string;      // 보유일 만기 매도 가격 기준
-    expiry_fill_offset_pct?: number;
-    buy_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;   // 분할 래더
-    sell_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;
-    expiry_sell_method?: string;    // all | ladder
-    max_buy_amount?: number | null; // 종목당 최대 매수 금액(원)
-    cash_reserve_pct?: number;      // 자산배분: 현금 상시 보유 %
-    asset_alloc?: {                 // 자산배분 ETF 바스켓
-      etf_pct: number; stock_pct: number; rebalance_months: number;
-      fill_type: string; offset_pct: number;
-      basket: Array<{ ticker: string; weight_pct: number }>;
-    } | null;
-    max_hold_days?: number | null;
-    min_hold_days?: number;
-    day_trade?: boolean;  // 당일 매매: 당일 진입을 같은 봉 종가에 전량 청산
-    sell_divide_pct?: number;
-    max_sell_divisions?: number | null;
-    buy_weight_mode?: string;
-    buy_divide_pct?: number;
-    max_buy_per_day?: number | null;
-    max_buy_count?: number | null;
-    breakthrough_buy?: boolean;
-    breakthrough_base_type?: string;     // 돌파 기준가 유형
-    breakthrough_offset_pct?: number;    // 기준가 ± % 돌파 라인
-    breakthrough_direction?: string;     // up | both
-    buy_timing?: string;                 // pre_open | intraday
-    buy_conditions?: BacktestConditionPayload[] | null;
-    sell_conditions?: BacktestConditionPayload[] | null;
-    buy_logic?: string | null;   // 논리 조건식 — 예: "every(A,3) and (B or C)"
-    sell_logic?: string | null;
-    buy_sort_expr?: string | null;  // 매수 우선순위식 (일별 정렬)
-    buy_sort_desc?: boolean;
-    intraday_fill?: boolean;        // 하이브리드 체결 (적재된 분봉으로 정밀, 없으면 일봉 폴백)
-    buy_time_start?: string;        // 매매 시간 윈도 (HHMM)
-    buy_time_end?: string;
-    sell_time_start?: string;
-    sell_time_end?: string;
-    rebalance_period?: string | null;
-    signal_lag?: number;  // 0=당일 봉(기존) | 1=전일 봉 기준 신호(젠포트식)
-    rebuy_block_days?: number;  // 청산 후 N일 재매수 금지 (0=미사용)
-    market_timing?: {
-      index_ticker: string; action: string;
-      conditions: BacktestConditionPayload[];
-    } | null;
-    caps?: string[] | null;
-    sectors?: string[] | null;
-    etf?: boolean;
-    managed?: boolean;
-    supervised?: boolean;
-    groups?: Array<{ mode: string; tickers: string[] }> | null;
-    full_universe_eval?: boolean;
-    universe_eval_cap?: number;
-    allow_snapshot_fundamentals?: boolean;
-  }): Promise<ScreenToBacktestResult> => {
+  screenToBacktest: async (body: ScreenToBacktestBody): Promise<ScreenToBacktestResult> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/screen-to-backtest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1078,6 +1081,45 @@ export const backtestBridgeApi = {
       throw new Error(err.detail || `Screen-to-backtest failed: ${r.status}`);
     }
     return r.json();
+  },
+
+  // SSE 스트리밍 백테스트 — screen-to-backtest 의 진행률판. 단계(screening→loading k/total→
+  // simulating→done)를 onProgress 로 흘리고 최종 결과 반환. 스트림이라 프록시 하드 타임아웃
+  // 면제 → 긴 실데이터 백테스트도 안 끊기고 진행바 표시됨.
+  screenToBacktestStream: async (
+    body: ScreenToBacktestBody,
+    onProgress?: (evt: { phase: string; done?: number; total?: number; count?: number }) => void,
+    signal?: AbortSignal,
+  ): Promise<ScreenToBacktestResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/screen-to-backtest-stream`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal,
+    });
+    if (!r.ok || !r.body) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || `Screen-to-backtest failed: ${r.status}`);
+    }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let result: ScreenToBacktestResult | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() ?? "";
+      for (const part of parts) {
+        const dataLine = part.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+        let obj: { type: string; phase?: string; done?: number; total?: number; count?: number; data?: ScreenToBacktestResult; message?: string };
+        try { obj = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+        if (obj.type === "progress") onProgress?.({ phase: obj.phase ?? "", done: obj.done, total: obj.total, count: obj.count });
+        else if (obj.type === "result") result = obj.data ?? null;
+        else if (obj.type === "error") throw new Error(obj.message || "stream error");
+      }
+    }
+    if (!result) throw new Error("스트림 결과 없음");
+    return result;
   },
 
   fillPriceTypes: async (): Promise<{ groups: Array<{ id: string; label: string; types: Array<{ id: string; label: string }> }> }> => {

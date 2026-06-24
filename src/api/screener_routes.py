@@ -1333,22 +1333,26 @@ class ScreenToBacktestRequest(BaseModel):
     allow_snapshot_fundamentals: bool = False
 
 
-@router.post("/screen-to-backtest")
-def screen_to_backtest(req: ScreenToBacktestRequest):
-    """
-    원클릭 워크플로우: 스크리닝 → 통과 종목을 그대로 백테스트.
+def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
+    """screen-to-backtest 핵심 로직 (unary + 스트리밍 공용).
 
-    1) filter_ast로 스크리닝 (유동성 게이트 + 펀더멘털 주입 포함)
-    2) 통과 종목 상위 max_tickers개 추출
-    3) 해당 종목들로 백테스트 실행 (DB → KIS → mock 자동)
-
-    스크리너와 백테스터를 잇는 핵심 연결 — 별도 입력 없이 흐름 완성.
+    1) filter_ast로 스크리닝 → 2) 통과 종목 추출 → 3) 해당 종목 백테스트.
+    progress_cb(evt:dict) 가 있으면 단계별 진행률 발행: screening → screened →
+    loading(종목별 OHLCV done/total) → simulating → done. 콜백은 백테스트 결과에 영향 없음.
     """
+    def _emit(evt):
+        if progress_cb:
+            try:
+                progress_cb(evt)
+            except Exception:
+                pass
+
     try:
         from src.engine.filter_ast import parse_group
         from src.kis_backtest_engine import run_backtest
 
         # 1) 스크리닝 (custom_tickers 있으면 관심그룹 종목을 유니버스로)
+        _emit({"phase": "screening"})
         screener = get_screener()
         ast = parse_group(req.filter_ast.model_dump())
         # granular 유니버스: caps/sectors/etf/groups 제공 시 후보 종목을 직접 구성
@@ -1401,6 +1405,7 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
                 "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
                 "screened_count": 0,
             }
+        _emit({"phase": "screened", "count": len(tickers)})
 
         # 팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵 생성
         factor_weights = None
@@ -1484,9 +1489,11 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
             breakthrough_offset_pct=req.breakthrough_offset_pct,
             breakthrough_direction=req.breakthrough_direction,
             buy_timing=req.buy_timing,
+            progress_cb=progress_cb,
         )
 
         # 3) 통합 응답
+        _emit({"phase": "done"})
         return {
             "error": bt.get("error", False),
             "screened_tickers": [
@@ -1514,6 +1521,56 @@ def screen_to_backtest(req: ScreenToBacktestRequest):
     except Exception:
         logger.exception("screen-to-backtest 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/screen-to-backtest")
+def screen_to_backtest(req: ScreenToBacktestRequest):
+    """원클릭: 스크리닝 → 통과 종목 백테스트 (동기). 긴 실데이터 백테스트는
+    /screen-to-backtest-stream(진행률 스트리밍) 사용 권장."""
+    return _screen_to_backtest_core(req)
+
+
+@router.post("/screen-to-backtest-stream")
+def screen_to_backtest_stream(req: ScreenToBacktestRequest):
+    """screen-to-backtest 의 SSE 스트리밍판 — 진행률(screening→loading k/total→simulating→done)을
+    실시간 전송 후 최종 result 1건. 실데이터 대량 백테스트가 프록시 타임아웃 벽을 넘지 않게 함
+    (스트리밍 응답은 프론트 프록시의 하드 데드라인 면제 + 진행 표시로 빈 화면 제거)."""
+    import json
+    import queue
+    import threading
+
+    from fastapi.responses import StreamingResponse
+
+    q: queue.Queue = queue.Queue()
+
+    def cb(evt: dict):
+        q.put({"type": "progress", **evt})
+
+    def worker():
+        try:
+            payload = _screen_to_backtest_core(req, progress_cb=cb)
+            q.put({"type": "result", "data": payload})
+        except HTTPException as he:
+            q.put({"type": "error", "message": str(he.detail), "status": he.status_code})
+        except Exception:
+            logger.exception("스트리밍 screen-to-backtest 실패")
+            q.put({"type": "error", "message": "처리 중 오류가 발생했습니다."})
+        finally:
+            q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def gen():
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/backtest-strategies")
