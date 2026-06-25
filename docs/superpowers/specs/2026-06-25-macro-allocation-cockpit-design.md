@@ -123,3 +123,30 @@ MacroMicro(지표 차트+해석).
 - 샌드박스는 키/네트워크 없어 실 매크로 값·US ETF는 GCP에서 실측 — 여기선 로직·게이트·빌드·라벨 검증.
 - 미래 실적/컨센서스는 유료라 제외(추천은 매크로 국면 기반).
 - yfinance는 클라우드 IP 429 가능 — KIS 해외주식 우선, 캐시/일배치로 완화.
+
+## 구현 진행 (Implementation Progress) — ★압축 후 이어가기용★
+브랜치 `claude/keen-thompson-bdk3e8`. 검증/커밋 패턴: 단계마다 `python -m ruff check <files>` +
+`KIS_USE_MOCK=1 python -m pytest tests/ -q`(기준 544 passed/10 skipped) + 프론트는
+`cd frontend && npx tsc --noEmit`(0) + `npx next build`. 커밋 트레일러
+`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` + `Claude-Session: https://claude.ai/code/session_01NSAuFjWec6ZwXi9wq7SbrA`.
+모델ID 커밋 금지. 푸시 `git push -u origin claude/keen-thompson-bdk3e8`. 결정: US⇄KR 토글·추천3종·전체범위·정교한 터미널 UI.
+
+✅ 완료(커밋):
+- Phase 1 `23e9e7b`: `src/data/etf_prices.py`(US 24 + KR 매핑 US_TO_KR, monthly_closes/daily_closes via load_ohlcv_unified) ·
+  `src/engine/tactical_allocations.py`(헬퍼 _ret/_score_13612/_accel/_above_ma_m/_above_ma_d + 13전략 s_* + `compute_strategies(market)`) ·
+  `GET /macro/strategies?market=us|kr`(macro_routes.py) · `tests/test_tactical_allocations.py`.
+- Phase 2 `37e2d75`: `src/engine/macro_recommender.py`(`recommend(market)` → regime+13랭킹+top+narrative, _ARCHETYPE/_FIT 국면×아키타입) ·
+  `GET /macro/recommend?market=us|kr`. narrative는 ANTHROPIC_API_KEY 있으면 Claude(claude_client) 없으면 규칙.
+
+⏳ 남음:
+- **Phase 3 (백엔드 엔드포인트)** — macro_routes.py에 추가:
+  · `GET /macro/dashboard?market=` : `MacroCollector.get_default().collect_all()`의 series를 6테마(성장/물가/금리·통화/유동성·신용/수급·심리/한국)로 그룹화 + 각 지표 최근값·Δ·z-score·sparkline(최근 N) 반환. (BOK_INDICATORS/FRED_INDICATORS 메타 활용, macro_collector.py:139/212.)
+  · `GET /macro/valuation` : 자산군(주식/채권/금/원자재/리츠) z-score(가격/금리) + 한국 시장·섹터 밸류(시장 PER/PBR/배당 분포 + 11섹터) — `snapshot_db.sample_factors()` 또는 fundamentals_store 집계 + genport_themes 섹터.
+- **Phase 4 (프론트 — 대규모)**:
+  · `frontend/src/lib/macroData.ts`(병렬 로더, companyData.ts 패턴) + `frontend/src/components/macro/macroTypes.ts`.
+  · `screenerApi.ts`(analysisApi)에 macro API 추가: macroStrategies(market)·macroRecommend(market)·macroDashboard(market)·macroValuation(). 이미 macroRegime() 있음.
+  · `frontend/src/components/macro/MacroCockpit.tsx` — 6 서브탭(01 Overview·02 Indicators·03 Regime·04 Valuation·05 Strategies·06 Recommend) + 고정 레짐 배너.
+  · `parts/` 컴포넌트: IndicatorCard·ZHeatmap(risk-tools 히트맵 패턴 재사용)·RegimeQuadrant(scatter+궤적)·CycleClock·YieldCurve·Gauge·ValuationHeatmap·StrategyBoard(US⇄KR 토글, [백테스트→])·AllocDonut·RecommendCard·DrillDownModal.
+  · `frontend/src/app/macro/page.tsx`를 MacroCockpit 렌더로 교체(현재 4분면만). 디자인 토큰: globals.css "Institutional Terminal"(Geist+JetBrains Mono, accent #1200ff, radius 2px), 숫자=mono.
+  · 백테스터 이식: `backtestBridgeApi.screenToBacktest`의 `asset_alloc`(basket) / `market_timing` 필드에 추천 배분 프리필 → router.push("/backtest").
+- 검증: tsc 0 · next build(현재 16페이지) · 라이브 6서브탭. 정직성: 키 없으면 패널별 "미연동" 라벨(합성 금지).
