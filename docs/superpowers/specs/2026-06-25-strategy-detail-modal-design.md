@@ -120,3 +120,18 @@
 - 전략별 풀 동적 백테스트(리밸런싱 재현) — 백테스터 탭 이식으로 충분.
 - 전략 간 다중 비교 모달 — StrategyComparison(백테스터)과 중복, 제외.
 - 레퍼런스 PDF 임베드 — 제목·출처 텍스트로 충분.
+
+---
+
+## 8. 구현 완료 (Implementation — ★기록★)
+브랜치 `claude/keen-thompson-bdk3e8`. 2 커밋 + 푸시 완료.
+- `62d531d` 백엔드: `src/engine/strategy_profiles.py`(22 PROFILES + get_profile + _perf_curve + _regime_fit +
+  build_detail) + 엔드포인트 2개(GET /macro/strategy/{id}, POST /macro/strategy/{id}/ai) + `tests/test_strategy_profiles.py`(10, TDD red→green).
+- `3d1abd5` 프론트: `StrategyModal.tsx`(개념·작동방식·근거·국면적합도 4분면·보유 도넛+표·과거성과 곡선+요약·
+  레퍼런스·AI 온디맨드) + 카드 클릭 연결(MacroCockpit) + screenerApi/macroData 로더 + globals.css sm-*.
+
+검증(완료): `KIS_USE_MOCK=1 pytest` **576 passed/10 skipped**(566+10), ruff 통과, tsc 0, next build 16/16(/macro 25.5kB).
+E2E: /macro/strategy/hrp 8보유·4국면적합도·61점 성과곡선·레퍼런스, AI 키없음 폴백, 알 수 없는 id 404.
+
+정직성: 과거 성과 곡선 = 현재 비중 고정 월리밸런스 buy&hold("현재 배분 기준" 배지) — 동적 리밸런싱 풀백테스트 아님.
+mock 시세에선 곡선·국면적합도 절대수치 합성, 실값은 GCP. AI는 ANTHROPIC_API_KEY 있을 때만.
