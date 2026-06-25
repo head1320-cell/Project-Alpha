@@ -369,3 +369,57 @@ def macro_regime_trajectory():
         logger.exception("매크로 국면 궤적 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
+
+@router.get("/strategy/{sid}")
+def macro_strategy_detail(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
+    """전략 상세 — 큐레이션 프로파일 + 라이브 보유·시그널 + 국면적합도 + 과거성과 곡선 + 레퍼런스."""
+    try:
+        from src.engine.strategy_profiles import build_detail
+        d = build_detail(sid, market)
+        if d is None:
+            raise HTTPException(404, "전략을 찾을 수 없습니다.")
+        return d
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("전략 상세 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/strategy/{sid}/ai")
+def macro_strategy_ai(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
+    """전략 AI 심층분석 (온디맨드) — 프로파일+현재 국면+보유 컨텍스트로 Claude 생성. 키 없으면 폴백."""
+    try:
+        from src.engine.strategy_profiles import build_detail
+        d = build_detail(sid, market)
+        if d is None:
+            raise HTTPException(404, "전략을 찾을 수 없습니다.")
+        from src.services.narrative.claude_client import ClaudeClient, NarrativeRequest
+        client = ClaudeClient.get_default()
+        if not client.is_configured:
+            return {"content": "", "tokens": 0, "cost_krw": 0.0, "cached": False,
+                    "error": "ANTHROPIC_API_KEY 미설정 — 키 설정 시 AI 심층분석이 활성화됩니다."}
+        try:
+            from src.engine.regime_analyzer import RegimeAnalyzer
+            st = RegimeAnalyzer().analyze()
+            regime, stress = st.regime, float(st.stress_score or 50)
+        except Exception:
+            regime, stress = "—", 50.0
+        prof = d["profile"]
+        holdings_str = ", ".join(f"{h['us_label']} {h['weight']}%" for h in d["holdings"][:8])
+        fit_str = ", ".join(f"{x['quadrant_kr'].split('(')[0]} {int(x['fit'] * 100)}" for x in d["regime_fit"])
+        sys_p = "너는 매크로 기반 자산배분 애널리스트다. 한국어로 4~6문장, 과장 없이 균형있게 강점·약점·유의점을 설명한다."
+        user_p = (f"전략: {d['name']} ({d['archetype_kr']} 아키타입)\n개념: {prof['concept']}\n"
+                  f"작동: {' '.join(prof['mechanism'])}\n"
+                  f"현재 시장 국면: {regime} (Stress {stress:.0f})\n국면별 적합도: {fit_str}\n"
+                  f"현재 배분: {holdings_str}\n최근 12개월 추정수익(현재비중 기준): {d['recent_return_12m']}%\n"
+                  f"이 전략이 '지금 이 국면'에 적합한지 근거와 함께 평가하라.")
+        resp = client.invoke(NarrativeRequest(system_prompt=sys_p, user_prompt=user_p, max_tokens=900))
+        return {"content": resp.content, "tokens": resp.total_tokens, "cost_krw": resp.cost_krw,
+                "cached": resp.cached, "error": resp.error}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("전략 AI 분석 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
