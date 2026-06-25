@@ -2487,3 +2487,9 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   .mc-reco { flex-direction: column; gap: 16px; }
   .mc-ext { grid-template-columns: 1fr; }
 }
+
+/* Macro Cockpit — strategy family 그룹 섹션 (05 Strategies) */
+.mc-fam { display: flex; flex-direction: column; gap: 10px; }
+.mc-fam-h { display: flex; align-items: center; gap: 8px; padding: 4px 0 2px; border-bottom: 2px solid var(--t-accent); }
+.mc-fam-lbl { font-family: var(--t-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--t-ink); }
+.mc-fam-n { font-family: var(--t-mono); font-size: 10px; color: #fff; background: var(--t-accent); border-radius: 2px; padding: 0 6px; line-height: 16px; }

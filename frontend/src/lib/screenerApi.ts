@@ -1311,7 +1311,7 @@ export interface MacroRegime {
 
 // ── Macro Cockpit 추가 타입 (전략·추천·대시보드·밸류) ──
 export interface TacticalHolding { ticker: string; label: string; us_ticker: string; us_label: string; weight: number }
-export interface TacticalStrategy { id: string; name: string; description: string; signal: string; holdings: TacticalHolding[] }
+export interface TacticalStrategy { id: string; name: string; description: string; signal: string; family?: string; holdings: TacticalHolding[] }
 export interface MacroStrategies { market: string; as_of: string; strategies: TacticalStrategy[] }
 export interface RecommendRankItem { id: string; name: string; composite: number; fit_score: number; recent_return_12m: number | null; archetype_kr: string; signal: string }
 export interface MacroRecommend {

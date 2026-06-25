@@ -5,7 +5,7 @@
 //   04 Valuation · 05 Strategies(US⇄KR) · 06 Recommend(규칙+성과+AI).
 //   전부 실데이터(키 있으면) — 백엔드 mock 폴백 시 출처 배지로 정직 표기.
 // ═══════════════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   LayoutDashboard, Activity, Target, Scale, Boxes, Sparkles,
   TrendingUp, TrendingDown, ArrowRightLeft, Play,
@@ -320,22 +320,40 @@ function MarketToggle({ market, setMarket }: { market: Market; setMarket: (m: Ma
   );
 }
 
+const FAMILY_LABELS: Record<string, string> = {
+  risk: "리스크 기반 · 공분산 구동", optim: "최적화 기반", trend: "추세추종 (매니지드 퓨처스/CTA)",
+  sizing: "성장최적 사이징", momentum: "모멘텀 · 추세 타이밍", benchmark: "벤치마크",
+};
+const FAMILY_ORDER = ["risk", "optim", "trend", "sizing", "momentum", "benchmark"];
+
 function StrategiesTab({ strategies, market, setMarket, loading, onTransplant }: {
   strategies: MacroStrategies | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
   onTransplant: (s: { name: string; holdings: TacticalHolding[] }) => void;
 }) {
+  const groups = useMemo(() => {
+    const by: Record<string, TacticalStrategy[]> = {};
+    for (const s of strategies?.strategies ?? []) {
+      const f = s.family ?? "momentum";
+      (by[f] ||= []).push(s);
+    }
+    return FAMILY_ORDER.filter((f) => by[f]?.length).map((f) => ({ family: f, label: FAMILY_LABELS[f] ?? f, items: by[f] }));
+  }, [strategies]);
+  const total = strategies?.strategies?.length ?? 0;
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">택티컬 자산배분 13전략 <span className="mc-card-sub">jasan-calc식 · 현재 시점 비중·시그널</span></div>
+        <div className="mc-strat-title">택티컬 자산배분 {total}전략 <span className="mc-card-sub">모멘텀 + 리스크·최적화 · 현재 시점 비중·시그널</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
       {loading && <div className="mc-empty-sm">{market === "kr" ? "국내 ETF" : "US ETF"} 비중 계산 중…</div>}
-      {!loading && strategies?.strategies?.length ? (
-        <div className="mc-stratgrid">
-          {strategies.strategies.map((s) => <StrategyCard key={s.id} s={s} onTransplant={onTransplant} />)}
+      {!loading && groups.length ? groups.map((g) => (
+        <div key={g.family} className="mc-fam">
+          <div className="mc-fam-h"><span className="mc-fam-lbl">{g.label}</span><span className="mc-fam-n">{g.items.length}</span></div>
+          <div className="mc-stratgrid">
+            {g.items.map((s) => <StrategyCard key={s.id} s={s} onTransplant={onTransplant} />)}
+          </div>
         </div>
-      ) : !loading && <div className="mc-empty-sm">전략 데이터 없음</div>}
+      )) : !loading && <div className="mc-empty-sm">전략 데이터 없음</div>}
     </div>
   );
 }
