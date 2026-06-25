@@ -42,3 +42,13 @@ def test_deterministic():
     b = compute_strategies("us")
     assert [h["weight"] for s in a["strategies"] for h in s["holdings"]] == \
            [h["weight"] for s in b["strategies"] for h in s["holdings"]]
+
+
+def test_recommend_structure():
+    from src.engine.macro_recommender import recommend
+    r = recommend("us")
+    assert r["regime"]["quadrant"] in ("Reflation", "Overheating", "Stagflation", "Disinflation")
+    assert len(r["ranking"]) == 13
+    assert r["ranking"][0]["id"] == r["top"]["id"]
+    assert r["narrative"] and r["narrative_source"] in ("rule", "claude")
+    assert r["top"]["holdings"] and r["top"]["fit_score"] is not None

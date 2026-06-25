@@ -231,3 +231,15 @@ def macro_strategies(market: str = Query("us", pattern="^(us|kr)$")):
         logger.exception("매크로 전략 시그널 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
+
+@router.get("/recommend")
+def macro_recommend(market: str = Query("us", pattern="^(us|kr)$")):
+    """현 국면에 유리한 자산배분 전략 추천 (규칙+성과+AI 서술 3종 종합).
+    국면(regime_analyzer) × 전략 아키타입 적합도 + 트레일링 성과 → composite 랭킹 + 최상위 추천."""
+    try:
+        from src.engine.macro_recommender import recommend
+        return recommend(market)
+    except Exception:
+        logger.exception("매크로 추천 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
