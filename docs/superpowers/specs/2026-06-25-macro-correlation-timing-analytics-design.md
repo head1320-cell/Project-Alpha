@@ -140,3 +140,19 @@ Regime 탭은 *현재 점*만 보여줌 → 경로 추가. regime_analyzer 내�
 ### 검증 추가
 - etf_prices 윈도우 확장 후 기존 22전략 산출 불변(회귀), 분석 시계열 길이↑ 확인.
 - `prewarm_etf_universe` mock no-op·키 있을 때 KR 코드 대상 확인(스레드 안전·재개).
+
+---
+
+## 10. 구현 완료 (Implementation — ★기록★)
+브랜치 `claude/keen-thompson-bdk3e8`. 2 커밋 단위 + 푸시 완료.
+- `1db3b1d` 백엔드: `src/engine/macro_analytics.py`(correlation_panel/timing_panel/regime_trajectory + 헬퍼) +
+  엔드포인트 3개 + `tests/test_macro_analytics.py`(11, TDD red→green). 장기 DB: etf_prices 윈도우 ~5년 확장 +
+  `prewarm_etf_universe()` + main_api gated 데몬.
+- `2430c11` 프론트: `analyticsParts.tsx`(CorrMatrix·RollingCorrChart·AvgCorrChart·ComponentBars·TimingHistory·
+  TrendTable·RegimeTrajectory) + 콕핏 07/08 탭 + Regime 궤적 + screenerApi/macroData lazy 로더 + globals.css mca-*.
+
+검증(완료): `KIS_USE_MOCK=1 pytest` **566 passed/10 skipped**(555+11), ruff 통과, tsc 0, next build 16/16(/macro 24kB).
+E2E: /correlations 13자산·롤링 SPY-TLT 178점·평균상관, /timing 종합+5신호+18M추이+13자산추세, /regime-trajectory 18M 경로.
+장기 DB 개선 확인: daily_closes 400→1304(~5년) → 롤링 추이 자동 장기화, DB 누적 시 추가 장기화.
+
+정직성 유지: mock 상관/타이밍 절대수치는 합성(구조·부호·로직 검증) — 실값은 GCP 실시세. 출처 배지 표기.
