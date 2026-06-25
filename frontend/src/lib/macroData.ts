@@ -4,7 +4,7 @@
 //   lazy: 시장토글(strategies/recommend by market) · 지표 드릴다운(series 36M).
 //   전부 실데이터(키 있으면) — 없으면 백엔드가 결정론적 mock 폴백(패널별 출처 배지로 정직 표기).
 // ═══════════════════════════════════════════════════════════════════════════════
-import { analysisApi, type MacroStrategies, type MacroRecommend, type MacroDashboard, type MacroValuation, type MacroCorrelations, type MacroTiming, type MacroTrajectory } from "@/lib/screenerApi";
+import { analysisApi, type MacroStrategies, type MacroRecommend, type MacroDashboard, type MacroValuation, type MacroCorrelations, type MacroTiming, type MacroTrajectory, type StrategyDetail, type StrategyAI } from "@/lib/screenerApi";
 import { macroApi, type RegimeState, type MacroSeries } from "@/lib/macroApi";
 
 export type Market = "us" | "kr";
@@ -45,6 +45,12 @@ export const loadTiming = (m: Market): Promise<MacroTiming | null> =>
   analysisApi.macroTiming(m).catch(() => null);
 export const loadTrajectory = (): Promise<MacroTrajectory | null> =>
   analysisApi.macroTrajectory().catch(() => null);
+
+// ── 전략 상세 모달 lazy ──
+export const loadStrategyDetail = (sid: string, m: Market): Promise<StrategyDetail | null> =>
+  analysisApi.macroStrategyDetail(sid, m).catch(() => null);
+export const loadStrategyAI = (sid: string, m: Market): Promise<StrategyAI | null> =>
+  analysisApi.macroStrategyAI(sid, m).catch(() => null);
 
 // 4-Quadrant 해소 (regime 문자열 → 축 폴백). 백엔드 라벨이 Goldilocks/Deflation일 수 있어 매핑.
 export function resolveQuadrant(regime: RegimeState | null): "Reflation" | "Overheating" | "Stagflation" | "Disinflation" {

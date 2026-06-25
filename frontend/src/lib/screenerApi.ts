@@ -1356,6 +1356,25 @@ export interface MacroTrajectory {
   sources: { fred: boolean; bok: boolean };
 }
 
+// ── 전략 상세 (strategy_profiles) ──
+export interface StrategyReference { authors: string; year: string; title: string; venue?: string }
+export interface StrategyProfile {
+  concept: string; mechanism: string[]; rationale: string; regime_note: string;
+  params: Record<string, string>; references: StrategyReference[];
+}
+export interface RegimeFit { quadrant: string; quadrant_kr: string; fit: number }
+export interface PerfPoint { t: string; v: number }
+export interface PerfSummary {
+  total_return_pct: number; cagr_pct: number; mdd_pct: number; vol_pct: number; recent_12m_pct: number | null;
+}
+export interface StrategyDetail {
+  id: string; name: string; family: string; signal: string; archetype: string; archetype_kr: string;
+  holdings: TacticalHolding[]; profile: StrategyProfile; regime_fit: RegimeFit[];
+  perf: { curve: PerfPoint[]; summary: PerfSummary }; recent_return_12m: number | null;
+  sources: { prices: boolean };
+}
+export interface StrategyAI { content: string; tokens: number; cost_krw: number; cached: boolean; error?: string | null }
+
 export interface ValuationResult {
   stock_code: string;
   corp_name?: string;
@@ -1405,6 +1424,16 @@ export const analysisApi = {
   macroTrajectory: async (): Promise<MacroTrajectory> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/regime-trajectory`);
     if (!r.ok) throw new Error(`Macro trajectory failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategyDetail: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyDetail> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}?market=${market}`);
+    if (!r.ok) throw new Error(`Strategy detail failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategyAI: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyAI> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/ai?market=${market}`, { method: "POST" });
+    if (!r.ok) throw new Error(`Strategy AI failed: ${r.status}`);
     return r.json();
   },
   // 종목 단건 평가: 스크리너로 해당 종목을 찾아 가치평가 결과(intrinsic/gap/verdict + 펀더멘털) 반환
