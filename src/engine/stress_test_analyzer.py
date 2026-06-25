@@ -54,39 +54,39 @@ def _stock_shock(item, scenario: str) -> float:
     """
     시나리오가 종목에 주는 추정 점수 충격 (%, 음수=악재).
 
-    종목 펀더멘털 특성 + 종목 고유 민감도(결정론적)로 추정.
+    종목 펀더멘털(부채·PER·ROE·배당) + 실 베타(KOSPI 대비 경기민감도)로 추정.
+    베타는 price_factors의 실측값(beta_1y) — 미적재면 0(이전의 합성 해시 ±6% 대신 실데이터만).
     """
-    import hashlib
     debt = getattr(item, "debt_ratio_pct", None) or 100
     per = getattr(item, "per", None) or 15
     div = getattr(item, "dividend_yield_pct", None) or 2
     roe = getattr(item, "roe_pct", None) or 8
-    # 종목 고유 민감도 (섹터/사업특성 프록시 — 결정론적 ±6%)
-    code = getattr(item, "stock_code", "000000")
-    h = int(hashlib.md5(f"{code}:{scenario}".encode()).hexdigest()[:6], 16)
-    idio = (h % 1200) / 100.0 - 6.0  # -6% ~ +6%
+    # 실 베타로 경기민감도 반영: β>1(시장보다 민감)은 위험회피 시나리오서 추가 타격, β<1은 방어.
+    # 베타 미상이면 0 — 합성(해시) 항을 만들지 않음(실데이터 원칙).
+    beta = getattr(item, "beta_1y", None)
+    beta_tilt = -(float(beta) - 1.0) if beta is not None else 0.0
 
     if scenario == "rate_hike_200bp":
-        # 고부채 + 고PER일수록 타격 (할인율 상승)
+        # 고부채 + 고PER일수록 타격 (할인율 상승). 고베타 추가 타격.
         debt_impact = -(debt / 100) * 9       # 부채비율 100%당 -9%
         per_impact = -(per / 15) * 7          # PER 15당 -7%
-        return round(debt_impact + per_impact + 2 + idio, 1)
+        return round(debt_impact + per_impact + 2 + beta_tilt * 6, 1)
 
     if scenario == "oil_spike_50":
-        # 부채 많은 제조업 가정 — 부채 높을수록 비용 민감
-        return round(-(debt / 100) * 8 - (per / 15) * 2 + idio, 1)
+        # 부채 많은 제조업 가정 — 부채 높을수록 비용 민감.
+        return round(-(debt / 100) * 8 - (per / 15) * 2 + beta_tilt * 3, 1)
 
     if scenario == "krw_depreciation":
-        # 고ROE 수출주는 수혜(+), 그 외 타격
+        # 고ROE 수출주는 수혜(+), 그 외 타격.
         if roe > 15:
-            return round((roe / 15) * 5 - 2 + idio, 1)   # 수출 경쟁력 → 수혜
-        return round(-7 - (debt / 100) * 4 + idio, 1)
+            return round((roe / 15) * 5 - 2 + beta_tilt * 2, 1)   # 수출 경쟁력 → 수혜
+        return round(-7 - (debt / 100) * 4 + beta_tilt * 3, 1)
 
     if scenario == "recession":
-        # 고배당·저부채는 방어적(+), 고PER은 타격
+        # 고배당·저부채는 방어적(+), 고PER은 타격. 고베타(경기민감) 추가 타격.
         defensive = (div / 2) * 4 - (debt / 100) * 4
         growth_hit = -(per / 15) * 8
-        return round(defensive + growth_hit + 3 + idio, 1)
+        return round(defensive + growth_hit + 3 + beta_tilt * 6, 1)
 
     return 0.0
 
