@@ -165,3 +165,20 @@ on 자산에 역변동성 가중 wᵢ ∝ signalᵢ/σᵢ → 정규화 100. 전
 - 멀티에셋 리스크프리미아(value/carry/defensive 신호) — ETF 가격만으론 데이터 부족 → 제외.
 - CPPI/포트폴리오 보험 — 경로의존(상태 필요) → 시점 스냅샷 모델 부적합 → 제외.
 - 정통 TSMOM 숏/레버리지, BL 실시총, 동적 vol-targeting 오버레이 — 후속 후보.
+
+---
+
+## 8. 구현 완료 (Implementation — ★기록★)
+브랜치 `claude/keen-thompson-bdk3e8`. 3 커밋 단위 + 푸시 완료.
+- `572345c` Unit 1: `src/engine/risk_allocations.py`(9전략 + 헬퍼 + scipy/sklearn 가드 폴백) +
+  `tests/test_risk_allocations.py`(10개, TDD red→green). 합100·long-only·결정론·균등·현금·BL 뷰이동 검증.
+- `a0eef32` Unit 2: `tactical_allocations.py` family 필드 + `ALL_STRATEGIES`(22) + `compute_strategies` family 출력 ·
+  `macro_recommender.py` `_ARCHETYPE` 9종 매핑 · `test_tactical_allocations.py` 카운트 13→22 + family 파티션.
+- `4eb5158` Unit 3: `screenerApi.ts` family 타입 · `MacroCockpit.tsx` StrategiesTab family 그룹핑 · `globals.css` mc-fam*.
+
+검증(완료): `KIS_USE_MOCK=1 pytest` **555 passed/10 skipped**, ruff 통과, tsc 0, next build 16/16(/macro 21.1kB).
+E2E: `/macro/strategies` 22전략 6family, `/macro/recommend` 22랭킹. mock 산출 차별화 확인
+(리스크기반 분산·optim 집중·BL SPY 50.9% 국면틸트 반영). 실 분산효과는 GCP 실시세에서.
+
+검증 후 평가(블랙-리터만 long-only/완전투자 형태에서 Kelly와 max_sharpe 수렴 경향은 mock 한계 —
+실데이터서 분리). 정직 라벨·폴백·회귀 불변(모멘텀 13·52거래 -8.1%) 유지.
