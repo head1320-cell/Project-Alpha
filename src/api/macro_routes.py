@@ -336,3 +336,36 @@ def macro_valuation():
         logger.exception("매크로 밸류에이션 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
+
+@router.get("/correlations")
+def macro_correlations(market: str = Query("us", pattern="^(us|kr)$")):
+    """13자산 상관행렬 + 롤링 주식-채권 상관 추이 + 평균 페어상관(분산 국면). 일간 시세 기반."""
+    try:
+        from src.engine.macro_analytics import correlation_panel
+        return correlation_panel(market)
+    except Exception:
+        logger.exception("매크로 상관 분석 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/timing")
+def macro_timing(market: str = Query("us", pattern="^(us|kr)$")):
+    """마켓타이밍 종합(위험 온/오프) + 5구성요소 + 월별 추이 + 자산별 추세표."""
+    try:
+        from src.engine.macro_analytics import timing_panel
+        return timing_panel(market)
+    except Exception:
+        logger.exception("매크로 타이밍 분석 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/regime-trajectory")
+def macro_regime_trajectory():
+    """최근 18개월 국면 궤적(성장×물가 테마-z) + 분면 전환 시점."""
+    try:
+        from src.engine.macro_analytics import regime_trajectory
+        return regime_trajectory()
+    except Exception:
+        logger.exception("매크로 국면 궤적 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+

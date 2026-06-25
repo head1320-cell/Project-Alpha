@@ -314,6 +314,14 @@ def _prewarm_ohlcv_bg():
                 continue
             r = prewarm_ohlcv(tickers, days=days)
             log.info(f"OHLCV 사전적재[{uni}]: {r}")
+        # 크로스에셋 ETF 유니버스(매크로 상관/타이밍 추이 장기화) — gated
+        if os.getenv("OHLCV_PREWARM_ETF", "1") != "0":
+            try:
+                from src.data.etf_prices import prewarm_etf_universe
+                r = prewarm_etf_universe("kr")
+                log.info(f"OHLCV 사전적재[etf_universe]: {r}")
+            except Exception as e:
+                log.warning(f"ETF 유니버스 prewarm 실패: {e}")
     except Exception as e:
         log.warning(f"OHLCV 사전 적재 실패(폴백 유지): {e}")
 

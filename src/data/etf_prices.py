@@ -13,9 +13,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# 일간 히스토리 적재 윈도우 (장기 상관/타이밍 추이용). DB가 깊을수록 롤링 분석이 자동 장기화.
+# 기본 ~5년. mock도 이 길이만큼 결정론 생성 → 샌드박스 롤링 차트도 길어짐.
+_HISTORY_DAYS = int(os.getenv("ETF_HISTORY_DAYS", "1825") or 1825)
 
 # ── 미국 ETF 유니버스 (전략들이 참조) ──────────────────────────────────────────
 US_UNIVERSE: dict[str, str] = {
@@ -58,7 +63,7 @@ _CACHE: dict[tuple[str, str], list[float]] = {}
 def _daily_df(ticker: str):
     from src.data.ohlcv_loader import load_ohlcv_unified
     end = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=600)).strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=_HISTORY_DAYS)).strftime("%Y-%m-%d")
     return load_ohlcv_unified(ticker, start, end, prefer="auto")
 
 
@@ -99,3 +104,20 @@ def daily_closes(ticker: str, market: str = "us", days: int = 300) -> list[float
 
 def cache_clear() -> None:
     _CACHE.clear()
+
+
+def prewarm_etf_universe(market: str = "kr") -> dict:
+    """크로스에셋 ETF 유니버스의 KR 코드를 daily_prices에 깊게 사전적재 (장기 상관/타이밍 추이용).
+
+    US_UNIVERSE의 각 티커를 KR ETF 코드로 매핑(중복 제거) → prewarm_ohlcv로 ~5년 병렬 적재.
+    mock/키 없음이면 prewarm_ohlcv가 즉시 no-op. KR ETF는 도메스틱 경로라 KIS/KRX로 적재 가능.
+    """
+    from src.data.ohlcv_loader import prewarm_ohlcv
+    codes: list[str] = []
+    seen: set[str] = set()
+    for us in US_UNIVERSE:
+        code, _ = resolve(us, market)
+        if code and code not in seen:
+            seen.add(code)
+            codes.append(code)
+    return prewarm_ohlcv(codes, days=_HISTORY_DAYS)
