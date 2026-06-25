@@ -138,15 +138,18 @@ MacroMicro(지표 차트+해석).
 - Phase 2 `37e2d75`: `src/engine/macro_recommender.py`(`recommend(market)` → regime+13랭킹+top+narrative, _ARCHETYPE/_FIT 국면×아키타입) ·
   `GET /macro/recommend?market=us|kr`. narrative는 ANTHROPIC_API_KEY 있으면 Claude(claude_client) 없으면 규칙.
 
-⏳ 남음:
-- **Phase 3 (백엔드 엔드포인트)** — macro_routes.py에 추가:
-  · `GET /macro/dashboard?market=` : `MacroCollector.get_default().collect_all()`의 series를 6테마(성장/물가/금리·통화/유동성·신용/수급·심리/한국)로 그룹화 + 각 지표 최근값·Δ·z-score·sparkline(최근 N) 반환. (BOK_INDICATORS/FRED_INDICATORS 메타 활용, macro_collector.py:139/212.)
-  · `GET /macro/valuation` : 자산군(주식/채권/금/원자재/리츠) z-score(가격/금리) + 한국 시장·섹터 밸류(시장 PER/PBR/배당 분포 + 11섹터) — `snapshot_db.sample_factors()` 또는 fundamentals_store 집계 + genport_themes 섹터.
-- **Phase 4 (프론트 — 대규모)**:
-  · `frontend/src/lib/macroData.ts`(병렬 로더, companyData.ts 패턴) + `frontend/src/components/macro/macroTypes.ts`.
-  · `screenerApi.ts`(analysisApi)에 macro API 추가: macroStrategies(market)·macroRecommend(market)·macroDashboard(market)·macroValuation(). 이미 macroRegime() 있음.
-  · `frontend/src/components/macro/MacroCockpit.tsx` — 6 서브탭(01 Overview·02 Indicators·03 Regime·04 Valuation·05 Strategies·06 Recommend) + 고정 레짐 배너.
-  · `parts/` 컴포넌트: IndicatorCard·ZHeatmap(risk-tools 히트맵 패턴 재사용)·RegimeQuadrant(scatter+궤적)·CycleClock·YieldCurve·Gauge·ValuationHeatmap·StrategyBoard(US⇄KR 토글, [백테스트→])·AllocDonut·RecommendCard·DrillDownModal.
-  · `frontend/src/app/macro/page.tsx`를 MacroCockpit 렌더로 교체(현재 4분면만). 디자인 토큰: globals.css "Institutional Terminal"(Geist+JetBrains Mono, accent #1200ff, radius 2px), 숫자=mono.
-  · 백테스터 이식: `backtestBridgeApi.screenToBacktest`의 `asset_alloc`(basket) / `market_timing` 필드에 추천 배분 프리필 → router.push("/backtest").
-- 검증: tsc 0 · next build(현재 16페이지) · 라이브 6서브탭. 정직성: 키 없으면 패널별 "미연동" 라벨(합성 금지).
+- Phase 3 `75c1b72`: `GET /macro/dashboard`(25지표 BOK6+FRED19 → 6테마 그룹화, 각 최근값·Δ·z-score(5년)·sparkline24M) ·
+  `GET /macro/valuation`(자산군 6종 가격 z-score 5년 + 한국 시장 PER/PBR 중앙값 from snapshot_db) ·
+  macro_collector FRED 16→25 확장(GDPC1/INDPRO/UNRATE/PAYEMS/UMCSENT/T10YIE/DFII10/M2SL/DCOILWTICO).
+  ★버그수정: _THEME_MAP이 BOK stat코드 대신 collect_all() 시맨틱키(KR_BASE_RATE/KR_CPI/KOSPI/USD_KRW) 사용★
+- Phase 4 `c607ce3`: 프론트 콕핏 완성.
+  · `lib/macroData.ts`(코어 병렬로더 + 시장토글/드릴다운 lazy + resolveQuadrant) · `lib/macroHandoff.ts`(매크로→백테스터 자산배분 전달).
+  · `screenerApi.ts` analysisApi에 macroStrategies/macroRecommend/macroDashboard/macroValuation + 타입.
+  · `components/macro/cockpitParts.tsx`(recharts: RegimeScatter·CycleClock·ArcGauge·YieldCurveChart·Sparkline·ZBar·IndicatorCard·ZHeatmap·ValuationBars·HoldingsDonut·SignalBadge·CompositeRow·DrillDownModal) ·
+    `MacroCockpit.tsx`(고정 레짐배너 + 6서브탭 + US⇄KR 토글 + 출처배지).
+  · `app/macro/page.tsx` MacroCockpit 교체 + 추천배분 이식(asset_alloc 바스켓 프리필→/backtest) ·
+    `TerminalBacktester.tsx` getMacroHandoff() 마운트 감지 → ETF100% 프리필 + 배너 · `globals.css` mc-*.
+  · 검증: tsc 0 · next build 16/16(/macro 20.8kB) · 4엔드포인트 동작 · pytest 544 passed 불변.
+
+✅ 콕핏 전체 완료. 향후 후보(선택): market_timing 이식(현재 asset_alloc만), 자산군 z-score를 금리/실질금리축까지 확장,
+strategies 백테스트 결과를 콕핏 내 인라인 표시, 실데이터(GCP 키)에서 라이브 검증.
