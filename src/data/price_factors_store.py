@@ -209,11 +209,31 @@ class PriceFactorsStore(DeterministicMockStore):
             "volume_trend_20d": vol_trend, "turnover_rate": None,  # 상장주식수 필요
             "amount_20d_avg": round((vol20 or 0) * cur / 1e8, 1) if vol20 else None,
             "volume_spike": vol_spike, "price_volume_corr": self._corr(closes[-20:], vols[-20:]),
-            # 수급은 별도 KIS 투자자동향 API → 실데이터 단계, 현재 None
-            "foreign_net_5d": None, "foreign_net_20d": None,
-            "inst_net_5d": None, "inst_net_20d": None,
+            # 수급(외국인·기관 순매수 N일 합) — investor_flows 적재(#3) 시 실값, 미적재면 None
+            **self._supply_factors(stock_code),
             "_source": "kis_real",
         }
+        return out
+
+    def _supply_factors(self, stock_code: str) -> dict:
+        """investor_flows(KIS/KRX MDC 적재)에서 외국인·기관 순매수 N일 합. 미적재면 전부 None."""
+        out = {"foreign_net_5d": None, "foreign_net_20d": None,
+               "inst_net_5d": None, "inst_net_20d": None}
+        try:
+            from src.data.kis_flows import load_flows_series
+        except Exception:
+            return out
+
+        def _sum_last(field: str, days: int):
+            s = load_flows_series(stock_code, field)
+            if s is None or len(s) == 0:
+                return None
+            tail = s.dropna().tail(days)
+            return round(float(tail.sum()), 0) if len(tail) else None
+        out["foreign_net_5d"] = _sum_last("frgn_qty", 5)
+        out["foreign_net_20d"] = _sum_last("frgn_qty", 20)
+        out["inst_net_5d"] = _sum_last("orgn_qty", 5)
+        out["inst_net_20d"] = _sum_last("orgn_qty", 20)
         return out
 
     @staticmethod
