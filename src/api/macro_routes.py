@@ -243,3 +243,96 @@ def macro_recommend(market: str = Query("us", pattern="^(us|kr)$")):
         logger.exception("매크로 추천 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
+
+# 6테마 그룹 (지표 id → 테마). 25지표(BOK 6 + FRED 19)를 성장/물가/금리/유동성/심리/한국으로.
+# ★BOK 키는 collect_all()의 시맨틱 키(KR_BASE_RATE 등) — stat 코드 아님★
+_THEME_MAP: dict[str, list[str]] = {
+    "growth": ["GDPC1", "INDPRO", "UNRATE", "PAYEMS"],
+    "inflation": ["CPIAUCSL", "T10YIE", "DCOILWTICO", "KR_CPI"],
+    "rates": ["FEDFUNDS", "DGS3MO", "DGS2", "DGS10", "DGS30", "T10Y2Y", "DFII10",
+              "KR_BASE_RATE", "KR_3Y", "KR_10Y"],
+    "liquidity": ["BAMLH0A0HYM2", "M2SL"],
+    "sentiment": ["VIXCLS", "UMCSENT", "DTWEXBGS"],
+    "korea": ["KOSPI", "USD_KRW"],
+}
+_THEME_LABEL = {"growth": "성장", "inflation": "물가", "rates": "금리·통화",
+                "liquidity": "유동성·신용", "sentiment": "수급·심리", "korea": "한국"}
+
+
+@router.get("/dashboard")
+def macro_dashboard():
+    """6테마 매크로 지표 대시보드 — 각 지표 최근값·Δ·z-score(5년)·sparkline. FRED+ECOS 실데이터(키 없으면 mock)."""
+    import os
+    try:
+        from src.services.macro_collector import MacroCollector
+        snap = MacroCollector.get_default().collect_all().to_dict()
+        series = snap.get("series", {})
+        themes = []
+        for key, ids in _THEME_MAP.items():
+            inds = []
+            for sid in ids:
+                s = series.get(sid)
+                if not s:
+                    continue
+                vals = [v for v in (s.get("values") or []) if v is not None]
+                prev = vals[-2] if len(vals) >= 2 else None
+                latest = s.get("latest")
+                delta = round(latest - prev, 3) if (latest is not None and prev is not None) else None
+                inds.append({
+                    "id": sid, "name": s.get("name"), "unit": s.get("unit"),
+                    "latest": latest, "z_score": s.get("z_score"), "percentile": s.get("percentile"),
+                    "delta": delta, "spark": [round(v, 4) for v in vals[-24:]],
+                })
+            themes.append({"key": key, "label": _THEME_LABEL[key], "indicators": inds})
+        return {
+            "as_of": snap.get("timestamp"),
+            "themes": themes,
+            "sources": {"fred": bool(os.getenv("FRED_API_KEY")), "bok": bool(os.getenv("BOK_API_KEY"))},
+        }
+    except Exception:
+        logger.exception("매크로 대시보드 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/valuation")
+def macro_valuation():
+    """자산군 밸류에이션 z-score(가격 5년) + 한국 시장 밸류(PER/PBR/배당 분포). 키 없으면 mock."""
+    import os
+    try:
+        from src.data.etf_prices import monthly_closes
+
+        def _zlast(ticker: str):
+            c = [v for v in monthly_closes(ticker, "us", 60) if v]
+            if len(c) < 12:
+                return None
+            mean = sum(c) / len(c)
+            var = sum((x - mean) ** 2 for x in c) / len(c)
+            sd = var ** 0.5
+            return round((c[-1] - mean) / sd, 2) if sd > 0 else 0.0
+
+        assets = [
+            {"key": "stock", "label": "주식(SPY)", "z": _zlast("SPY")},
+            {"key": "bond", "label": "장기채(TLT)", "z": _zlast("TLT")},
+            {"key": "gold", "label": "금(GLD)", "z": _zlast("GLD")},
+            {"key": "commodity", "label": "원자재(PDBC)", "z": _zlast("PDBC")},
+            {"key": "reit", "label": "리츠(VNQ)", "z": _zlast("VNQ")},
+            {"key": "em", "label": "신흥국(EEM)", "z": _zlast("EEM")},
+        ]
+        # 한국 시장 밸류 — 적재된 factor_snapshot 표본(있으면)
+        kr = None
+        try:
+            from src.data.snapshot_db import sample_factors
+            samp = sample_factors(600) or []
+            pers = sorted(x for x in (s.get("per") for s in samp) if isinstance(x, (int, float)) and x > 0)
+            pbrs = sorted(x for x in (s.get("pbr") for s in samp) if isinstance(x, (int, float)) and x > 0)
+            if pers and pbrs:
+                kr = {"n": len(samp), "per_median": round(pers[len(pers) // 2], 2),
+                      "pbr_median": round(pbrs[len(pbrs) // 2], 2)}
+        except Exception:
+            kr = None
+        return {"assets": assets, "kr_market": kr,
+                "sources": {"prices": bool(os.getenv("KIS_APP_KEY")), "fundamentals": bool(os.getenv("DART_API_KEY"))}}
+    except Exception:
+        logger.exception("매크로 밸류에이션 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+

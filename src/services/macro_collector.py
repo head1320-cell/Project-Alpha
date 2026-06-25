@@ -220,6 +220,16 @@ FRED_INDICATORS = {
     "DTWEXBGS":   {"name": "DXY (광역지수)",     "unit": "지수"},
     "CPIAUCSL":   {"name": "US CPI",             "unit": "지수"},
     "BAMLH0A0HYM2": {"name": "HY Credit Spread", "unit": "%p"},
+    # 성장·물가·유동성·심리 확장 (5 API 최대 활용 — 키 없으면 결정론적 mock)
+    "GDPC1":      {"name": "US 실질GDP",          "unit": "지수"},
+    "INDPRO":     {"name": "산업생산",            "unit": "지수"},
+    "UNRATE":     {"name": "실업률",              "unit": "%"},
+    "PAYEMS":     {"name": "비농업고용",          "unit": "천명"},
+    "UMCSENT":    {"name": "소비자심리",          "unit": "지수"},
+    "T10YIE":     {"name": "기대인플레(10Y)",     "unit": "%"},
+    "DFII10":     {"name": "실질금리(10Y)",       "unit": "%"},
+    "M2SL":       {"name": "M2 통화량",           "unit": "지수"},
+    "DCOILWTICO": {"name": "WTI 유가",            "unit": "$"},
 }
 
 
