@@ -120,16 +120,35 @@ class PriceFactorsStore(DeterministicMockStore):
         return self._mock_factors(stock_code)
 
     def _fetch_ohlcv(self, stock_code: str):
-        """KIS 일봉 조회. KIS_USE_MOCK이거나 키 없으면 None → mock."""
+        """가격 팩터용 일봉 — 사전적재 daily_prices(DB) 우선 → KIS(없으면). 실데이터만(mock 안 씀).
+
+        이전엔 종목마다 KIS를 직접 호출했으나, 사전적재(OHLCV prewarm/KRX)된 DB를 1순위로 읽어
+        스크리닝 시 종목당 KIS 호출을 제거(백테스터와 동일 데이터원). KIS_USE_MOCK이면 None→_mock."""
         import os
         if os.getenv("KIS_USE_MOCK", "1") == "1":
             return None
         try:
-            from src.execution.kis_client import get_kis_client
-            client = get_kis_client()
-            return client.get_daily_ohlcv(stock_code, days=252)
+            from datetime import datetime, timedelta
+
+            from src.data.ohlcv_loader import _db_ohlcv_df, _kis_ohlcv_df, ingest_df_to_db
+            end = datetime.now().strftime("%Y-%m-%d")
+            start = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d")
+            df = _db_ohlcv_df(stock_code, start, end)
+            if df is None or df.empty or len(df) < 60:
+                df = _kis_ohlcv_df(stock_code, start, end)  # DB 미적재분 → KIS 후 적재(다음부터 DB)
+                if df is not None and not df.empty:
+                    try:
+                        ingest_df_to_db(stock_code, df)
+                    except Exception:
+                        pass
+            if df is None or df.empty:
+                return None
+            return [{"date": (i.strftime("%Y%m%d") if hasattr(i, "strftime") else str(i)),
+                     "open": float(r["open"]), "high": float(r["high"]), "low": float(r["low"]),
+                     "close": float(r["close"]), "volume": float(r.get("volume", 0) or 0)}
+                    for i, r in df.iterrows()]
         except Exception as e:
-            logger.debug(f"KIS OHLCV 조회 실패 [{stock_code}]: {e}")
+            logger.debug(f"가격팩터 OHLCV 조회 실패 [{stock_code}]: {e}")
             return None
 
     # ── 실데이터 계산 ──────────────────────────────────────────────────────────
@@ -199,14 +218,15 @@ class PriceFactorsStore(DeterministicMockStore):
             "momentum_12_1": round((r12m or 0) - (r1m or 0), 2) if r12m is not None else None,
             "momentum_6_1": round((r6m or 0) - (r1m or 0), 2) if r6m is not None else None,
             "volatility_20d": annualized_vol(20), "volatility_60d": annualized_vol(60),
-            "beta_1y": None,  # 시장지수 필요 → 실데이터 단계에서 KOSPI 대비 계산
+            "beta_1y": self._beta(ohlcv),  # KOSPI(daily_prices) 대비 1년 베타 — 지수 미적재면 None
             "max_drawdown_1y": round(abs(mdd) * 100, 2),
             "downside_vol": dvol, "skewness": self._skew(rets_all),
             "price_to_52w_high": round(cur / hi52 * 100, 2) if hi52 > 0 else None,
             "price_to_52w_low": round(cur / lo52 * 100, 2) if lo52 > 0 else None,
             "dist_ma20": dist(cur, ma20), "dist_ma60": dist(cur, ma60), "dist_ma120": dist(cur, ma120),
             "rsi_14": rsi, "ma_alignment": align,
-            "volume_trend_20d": vol_trend, "turnover_rate": None,  # 상장주식수 필요
+            "volume_trend_20d": vol_trend,
+            "turnover_rate": self._turnover(stock_code, (vols[-1] * cur) if vols else None),
             "amount_20d_avg": round((vol20 or 0) * cur / 1e8, 1) if vol20 else None,
             "volume_spike": vol_spike, "price_volume_corr": self._corr(closes[-20:], vols[-20:]),
             # 수급(외국인·기관 순매수 N일 합) — investor_flows 적재(#3) 시 실값, 미적재면 None
@@ -235,6 +255,69 @@ class PriceFactorsStore(DeterministicMockStore):
         out["inst_net_5d"] = _sum_last("orgn_qty", 5)
         out["inst_net_20d"] = _sum_last("orgn_qty", 20)
         return out
+
+    def _market_returns(self):
+        """시장지수(KOSPI 우선, 없으면 KOSDAQ) 일간수익률 — daily_prices 실적재분만(mock 없음).
+        전 종목 공통이라 6시간 캐시. 지수 미적재면 None → 베타도 None(합성 안 함)."""
+        import time
+        now = time.time()
+        c = getattr(self, "_mkt_ret_cache", None)
+        if c and now - c[0] < 6 * 3600:
+            return c[1]
+        s = None
+        try:
+            from datetime import datetime, timedelta
+
+            from src.data.ohlcv_loader import _db_ohlcv_df
+            end = datetime.now().strftime("%Y-%m-%d")
+            start = (datetime.now() - timedelta(days=480)).strftime("%Y-%m-%d")
+            for idx in ("KOSPI", "KOSDAQ"):
+                df = _db_ohlcv_df(idx, start, end)
+                if df is not None and not df.empty and len(df) >= 60:
+                    s = df["close"].astype(float).pct_change().dropna()
+                    break
+        except Exception:
+            s = None
+        self._mkt_ret_cache = (now, s)
+        return s
+
+    def _beta(self, ohlcv: list):
+        """종목 일간수익률 vs 시장지수 1년 베타 (cov/var). 지수·표본 부족 시 None."""
+        mkt = self._market_returns()
+        if mkt is None or len(mkt) < 60:
+            return None
+        try:
+            import pandas as pd
+            rows = [(r.get("date"), r.get("close")) for r in ohlcv if r.get("close")]
+            if len(rows) < 60:
+                return None
+            idx = pd.to_datetime([str(d) for d, _ in rows], format="%Y%m%d", errors="coerce")
+            sret = pd.Series([float(c) for _, c in rows], index=idx).pct_change().dropna()
+            j = pd.concat([sret, mkt], axis=1, join="inner").dropna().tail(252)
+            if len(j) < 60:
+                return None
+            mser = j.iloc[:, 1]
+            var = float(mser.var())
+            if var <= 0:
+                return None
+            return round(float(j.iloc[:, 0].cov(mser)) / var, 2)
+        except Exception:
+            return None
+
+    def _turnover(self, stock_code: str, trading_value):
+        """거래대금/시가총액 × 100 (회전율 근사). 시총(DART get_raw_financials, 억) 미상이면 None.
+        (volume×close=원, market_cap_억×1e8=원 → 단위 정합 비율.)"""
+        if not trading_value:
+            return None
+        try:
+            from src.data.fundamentals_store import FundamentalsStore
+            raw = FundamentalsStore.get_default().get_raw_financials(stock_code) or {}
+            mcap_억 = raw.get("market_cap")
+            if mcap_억 and mcap_억 > 0:
+                return round(trading_value / (mcap_억 * 1e8) * 100, 3)
+        except Exception:
+            pass
+        return None
 
     @staticmethod
     def _rsi(closes, period=14):
