@@ -227,51 +227,77 @@ def get_profile(sid: str) -> dict | None:
     return PROFILES.get(sid)
 
 
-# ── 과거 성과 곡선 (현재 비중 고정 월리밸런스 buy&hold) ──────────────────────────
-def _perf_curve(holdings: list[dict], mk: str, months: int = 60) -> dict:
-    from src.data.etf_prices import monthly_closes
-    rets: dict[str, tuple[list[float], float]] = {}
-    L: int | None = None
-    for h in holdings:
-        c = monthly_closes(h["us_ticker"], mk, months + 1)
-        if len(c) >= 13:
-            r = [c[i] / c[i - 1] - 1 for i in range(1, len(c)) if c[i - 1] > 0]
-            if len(r) >= 12:
-                rets[h["us_ticker"]] = (r, float(h["weight"]))
-                L = len(r) if L is None else min(L, len(r))
-    if not rets or not L:
-        return {"curve": [], "summary": {}}
-    wsum = sum(w for _, w in rets.values()) or 1.0
-    port = []
-    for i in range(L):
-        pr = 0.0
-        for r, w in rets.values():
-            pr += (w / wsum) * r[len(r) - L + i]
-        port.append(pr)
-    vals = [100.0]
-    for pr in port:
-        vals.append(vals[-1] * (1 + pr))
+# ── 동적 전략 백테스트 (★매월 전략 로직 재평가·리밸런스·복리 — buy&hold 아님★) ──
+_BACKTEST_MONTHS = 48
+
+
+def _curve_summary(vals: list[float], port: list[float], months: int) -> dict:
     today = datetime.now()
     n = len(vals)
     curve = [{"t": (today - timedelta(days=(n - 1 - i) * 30)).strftime("%y.%m"), "v": round(v, 1)}
              for i, v in enumerate(vals)]
-    total = vals[-1] / vals[0] - 1
-    years = L / 12.0
-    cagr = (vals[-1] / vals[0]) ** (1 / years) - 1 if years > 0 else 0.0
+    total = vals[-1] / vals[0] - 1 if vals[0] > 0 else 0.0
+    years = months / 12.0
+    cagr = (vals[-1] / vals[0]) ** (1 / years) - 1 if (years > 0 and vals[0] > 0) else 0.0
     peak, mdd = vals[0], 0.0
     for v in vals:
         peak = max(peak, v)
         mdd = min(mdd, (v - peak) / peak)
-    mean = sum(port) / len(port)
-    var = sum((x - mean) ** 2 for x in port) / len(port)
+    mean = sum(port) / len(port) if port else 0.0
+    var = sum((x - mean) ** 2 for x in port) / len(port) if port else 0.0
     vol = math.sqrt(var) * math.sqrt(12)
     recent12 = (vals[-1] / vals[-13] - 1) if len(vals) >= 13 else None
-    summary = {
+    return {"curve": curve, "summary": {
         "total_return_pct": round(total * 100, 1), "cagr_pct": round(cagr * 100, 1),
         "mdd_pct": round(mdd * 100, 1), "vol_pct": round(vol * 100, 1),
         "recent_12m_pct": round(recent12 * 100, 1) if recent12 is not None else None,
-    }
-    return {"curve": curve, "summary": summary}
+    }}
+
+
+def backtest_strategy(sid: str, mk: str, months: int = _BACKTEST_MONTHS) -> dict:
+    """동적 백테스트 — 매월 그 시점 데이터로 전략 비중을 재계산(as_of)하고 다음 달 수익을 복리.
+
+    전략의 실제 리밸런싱(모멘텀 로테이션·타이밍 전환)을 재현 — 현재 비중 buy&hold가 아님.
+    각 월 m: as_of(m)로 m개월 전 시점 비중 산출 → 그 비중으로 m→m-1 실현수익 적립.
+    """
+    from src.data import etf_prices
+    from src.data.etf_prices import US_UNIVERSE, monthly_closes
+    from src.engine.tactical_allocations import ALL_STRATEGIES
+    entry = next((s for s in ALL_STRATEGIES if s[0] == sid), None)
+    if not entry:
+        return {"curve": [], "summary": {}}
+    fn = entry[4]
+    mk = "kr" if mk == "kr" else "us"
+    # 유니버스 월말 종가(오프셋 없음) 선계산 → 실현수익 조회용
+    closes: dict[str, list[float]] = {}
+    for tk in US_UNIVERSE:
+        c = monthly_closes(tk, mk, months + 3)
+        if len(c) >= 2:
+            closes[tk] = c
+    if not closes:
+        return {"curve": [], "summary": {}}
+    avail = min(len(c) for c in closes.values())
+    span = min(months, avail - 1)
+    if span < 6:
+        return {"curve": [], "summary": {}}
+    vals, port = [100.0], []
+    for m in range(span, 0, -1):
+        with etf_prices.as_of(m):  # m개월 전 시점 비중
+            try:
+                w = fn(mk)
+            except Exception:
+                w = {"BIL": 100.0}
+        wsum = sum(v for v in w.values() if v > 0) or 1.0
+        pr = 0.0
+        for tk, wt in w.items():
+            if wt <= 0:
+                continue
+            c = closes.get(tk)
+            if c and len(c) > m and c[-m - 1] > 0:  # m→m-1 실현수익
+                pr += (wt / wsum) * (c[-m] / c[-m - 1] - 1.0)
+        vals.append(vals[-1] * (1 + pr))
+        port.append(pr)
+    return _curve_summary(vals, port, span)
 
 
 # ── 국면 적합도 (recommender 아키타입 × 국면) ────────────────────────────────────
@@ -319,7 +345,7 @@ def build_detail(sid: str, market: str = "us") -> dict | None:
     from src.engine.tactical_allocations import _signal
     weights = {h["us_ticker"]: h["weight"] for h in holdings}
     arch = _ARCHETYPE.get(sid, "diversified")
-    perf = _perf_curve(holdings, mk)
+    perf = backtest_strategy(sid, mk)
     return {
         "id": sid, "name": name, "family": family,
         "signal": _signal(weights), "archetype": arch, "archetype_kr": _ARCH_KR.get(arch, arch),

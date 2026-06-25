@@ -97,7 +97,7 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
                   </div>
                 </div>
               </Section>
-              <Section title={<>과거 성과 <span className="sm-badge">현재 배분 기준 · {detail.sources.prices ? "실시세" : "mock"}</span></>}>
+              <Section title={<>전략 백테스트 <span className="sm-badge">월 리밸런스 · 시점평가 · {detail.sources.prices ? "실시세" : "mock"}</span></>}>
                 {detail.perf.curve.length ? (
                   <>
                     <ResponsiveContainer width="100%" height={150}>

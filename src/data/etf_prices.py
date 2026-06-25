@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,27 @@ logger = logging.getLogger(__name__)
 # 일간 히스토리 적재 윈도우 (장기 상관/타이밍 추이용). DB가 깊을수록 롤링 분석이 자동 장기화.
 # 기본 ~5년. mock도 이 길이만큼 결정론 생성 → 샌드박스 롤링 차트도 길어짐.
 _HISTORY_DAYS = int(os.getenv("ETF_HISTORY_DAYS", "1825") or 1825)
+
+# ── Point-in-time 절단 (동적 전략 백테스트용) ─────────────────────────────────
+# as_of(m): 시세 시계열의 끝에서 m개월(일간은 m*21봉)을 가려 "m개월 전 시점"으로 평가.
+# 스레드 로컬 → FastAPI 스레드풀에서 동시 요청 간 간섭 없음. 전략 함수 재작성 없이 시점 평가 가능.
+_tls = threading.local()
+_TRADING_DAYS_PER_MONTH = 21
+
+
+def _month_off() -> int:
+    return int(getattr(_tls, "off_m", 0) or 0)
+
+
+@contextmanager
+def as_of(months_back: int):
+    """이 컨텍스트 안에서 monthly_closes/daily_closes가 months_back개월 전까지만 반환."""
+    prev = getattr(_tls, "off_m", 0)
+    _tls.off_m = max(0, int(months_back))
+    try:
+        yield
+    finally:
+        _tls.off_m = prev
 
 # ── 미국 ETF 유니버스 (전략들이 참조) ──────────────────────────────────────────
 US_UNIVERSE: dict[str, str] = {
@@ -68,38 +91,47 @@ def _daily_df(ticker: str):
 
 
 def monthly_closes(ticker: str, market: str = "us", n: int = 14) -> list[float]:
-    """최근 n개 '월말' 종가 (모멘텀 산정용). 데이터 부족 시 가능한 만큼."""
+    """최근 n개 '월말' 종가 (모멘텀 산정용). as_of 활성 시 그 시점까지만."""
     key = (f"m:{market}", ticker)
     if key in _CACHE:
-        return _CACHE[key][-n:]
-    code, _ = resolve(ticker, market)
-    out: list[float] = []
-    try:
-        df = _daily_df(code)
-        if df is not None and not df.empty:
-            m = df["close"].astype(float).resample("ME").last().dropna()
-            out = [float(x) for x in m.tolist()]
-    except Exception as e:
-        logger.debug(f"monthly_closes 실패 [{ticker}/{market}]: {e}")
-    _CACHE[key] = out
-    return out[-n:]
+        full = _CACHE[key]
+    else:
+        code, _ = resolve(ticker, market)
+        full = []
+        try:
+            df = _daily_df(code)
+            if df is not None and not df.empty:
+                m = df["close"].astype(float).resample("ME").last().dropna()
+                full = [float(x) for x in m.tolist()]
+        except Exception as e:
+            logger.debug(f"monthly_closes 실패 [{ticker}/{market}]: {e}")
+        _CACHE[key] = full
+    off = _month_off()
+    if off:
+        full = full[:-off] if off < len(full) else []
+    return full[-n:]
 
 
 def daily_closes(ticker: str, market: str = "us", days: int = 300) -> list[float]:
-    """최근 일간 종가 (이동평균 산정용)."""
+    """최근 일간 종가 (이동평균 산정용). as_of 활성 시 그 시점까지만(월×21봉)."""
     key = (f"d:{market}", ticker)
     if key in _CACHE:
-        return _CACHE[key][-days:]
-    code, _ = resolve(ticker, market)
-    out: list[float] = []
-    try:
-        df = _daily_df(code)
-        if df is not None and not df.empty:
-            out = [float(x) for x in df["close"].astype(float).tolist()]
-    except Exception as e:
-        logger.debug(f"daily_closes 실패 [{ticker}/{market}]: {e}")
-    _CACHE[key] = out
-    return out[-days:]
+        full = _CACHE[key]
+    else:
+        code, _ = resolve(ticker, market)
+        full = []
+        try:
+            df = _daily_df(code)
+            if df is not None and not df.empty:
+                full = [float(x) for x in df["close"].astype(float).tolist()]
+        except Exception as e:
+            logger.debug(f"daily_closes 실패 [{ticker}/{market}]: {e}")
+        _CACHE[key] = full
+    off = _month_off()
+    if off:
+        d = off * _TRADING_DAYS_PER_MONTH
+        full = full[:-d] if d < len(full) else []
+    return full[-days:]
 
 
 def cache_clear() -> None:

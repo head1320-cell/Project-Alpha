@@ -4,7 +4,7 @@ import os
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine.strategy_profiles import (  # noqa: E402
-    PROFILES, _perf_curve, _regime_fit, build_detail, get_profile,
+    PROFILES, _regime_fit, backtest_strategy, build_detail, get_profile,
 )
 from src.engine.tactical_allocations import ALL_STRATEGIES  # noqa: E402
 
@@ -41,19 +41,29 @@ def test_regime_fit():
         assert x["quadrant_kr"]
 
 
-def test_perf_curve():
-    holdings = [{"us_ticker": "SPY", "weight": 60.0}, {"us_ticker": "TLT", "weight": 40.0}]
-    pc = _perf_curve(holdings, "us")
-    assert pc["curve"] and len(pc["curve"]) > 0
+def test_backtest_is_dynamic():
+    # 동적 전략 백테스트: 월별 재선택·리밸런스로 곡선 산출 (buy&hold 아님)
+    pc = backtest_strategy("classic_dm", "us", months=36)
+    assert pc["curve"] and len(pc["curve"]) > 6
     assert abs(pc["curve"][0]["v"] - 100.0) < 0.01  # 시작 100
     s = pc["summary"]
     for k in ("total_return_pct", "cagr_pct", "mdd_pct", "vol_pct", "recent_12m_pct"):
         assert k in s
 
 
-def test_perf_curve_empty():
-    pc = _perf_curve([], "us")
-    assert pc["curve"] == [] and pc["summary"] == {}
+def test_backtest_unknown_empty():
+    assert backtest_strategy("__nope__", "us")["curve"] == []
+
+
+def test_as_of_truncates_point_in_time():
+    # ★동적 백테스트의 핵심: as_of로 과거 시점 데이터만 보이게 절단★
+    from src.data.etf_prices import as_of, cache_clear, monthly_closes
+    cache_clear()
+    full = monthly_closes("SPY", "us", 200)
+    with as_of(6):
+        past = monthly_closes("SPY", "us", 200)
+    assert len(past) == len(full) - 6
+    assert past[-1] == full[-7]  # 6개월 전이 마지막 관측치
 
 
 def test_build_detail_all_22():
