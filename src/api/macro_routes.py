@@ -218,3 +218,16 @@ def macro_health():
         return c.cache_stats()
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@router.get("/strategies")
+def macro_strategies(market: str = Query("us", pattern="^(us|kr)$")):
+    """13 택티컬 자산배분 전략의 현재 보유자산·비중 + 시그널 (jasan-calc식).
+    market='us'(원본 ETF) | 'kr'(국내 ETF 매핑). 데이터 없으면 결정론적 mock으로 산출."""
+    try:
+        from src.engine.tactical_allocations import compute_strategies
+        return compute_strategies(market)
+    except Exception:
+        logger.exception("매크로 전략 시그널 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
