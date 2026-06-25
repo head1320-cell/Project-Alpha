@@ -16,10 +16,16 @@ logger = logging.getLogger(__name__)
 
 # 전략 → 아키타입
 _ARCHETYPE: dict[str, str] = {
+    # 모멘텀 13
     "classic_dm": "aggressive", "accel_dm": "aggressive", "vaa": "aggressive", "daa": "aggressive",
     "permanent": "defensive", "laa": "defensive", "gtaa": "defensive", "paa": "defensive",
     "bond_dynamic": "income", "raa": "income",
     "composite_dm": "diversified", "faa": "diversified", "aaa": "diversified",
+    # 리스크·최적화 9
+    "min_var": "defensive",
+    "max_sharpe": "aggressive", "kelly": "aggressive",
+    "risk_parity": "diversified", "hrp": "diversified", "max_div": "diversified",
+    "black_litterman": "diversified", "managed_futures": "diversified", "equal_weight": "diversified",
 }
 # 4국면 × 아키타입 적합도(0~1)
 _FIT: dict[str, dict[str, float]] = {

@@ -203,21 +203,27 @@ def s_bond_dynamic(mk: str) -> dict:
     return _norm({t: 1 for t in top})
 
 
-STRATEGIES: list[tuple[str, str, str, object]] = [
-    ("classic_dm", "전통 듀얼모멘텀", "절대+상대 모멘텀 1자산 집중", s_classic_dm),
-    ("composite_dm", "종합 듀얼모멘텀", "4슬리브(주식·채권·부동산·대체) 듀얼모멘텀", s_composite_dm),
-    ("accel_dm", "가속 듀얼모멘텀", "1+3+6개월 가속 모멘텀", s_accel_dm),
-    ("permanent", "영구 포트폴리오", "주식·장기채·금·현금 25% 고정", s_permanent),
-    ("laa", "LAA", "정적 3자산 + 경기 스위치(QQQ/SHY)", s_laa),
-    ("raa", "RAA", "5자산 절대모멘텀 동일가중", s_raa),
-    ("gtaa", "GTAA", "5자산 10개월 이동평균 타이밍", s_gtaa),
-    ("paa", "PAA", "위험자산 MA 타이밍 + 채권 보호", s_paa),
-    ("vaa", "VAA", "공격/방어 13612W 카나리아", s_vaa),
-    ("faa", "FAA", "모멘텀 상위 3 동일가중", s_faa),
-    ("aaa", "AAA", "13612W 상위 + 위험회피 방어", s_aaa),
-    ("daa", "DAA", "카나리아(EEM·AGG) 공격/방어", s_daa),
-    ("bond_dynamic", "채권 동적배분", "채권 모멘텀 상위 3", s_bond_dynamic),
+# (id, 이름, 설명, family, fn) — 기존 13은 전부 "momentum" family
+STRATEGIES: list[tuple] = [
+    ("classic_dm", "전통 듀얼모멘텀", "절대+상대 모멘텀 1자산 집중", "momentum", s_classic_dm),
+    ("composite_dm", "종합 듀얼모멘텀", "4슬리브(주식·채권·부동산·대체) 듀얼모멘텀", "momentum", s_composite_dm),
+    ("accel_dm", "가속 듀얼모멘텀", "1+3+6개월 가속 모멘텀", "momentum", s_accel_dm),
+    ("permanent", "영구 포트폴리오", "주식·장기채·금·현금 25% 고정", "momentum", s_permanent),
+    ("laa", "LAA", "정적 3자산 + 경기 스위치(QQQ/SHY)", "momentum", s_laa),
+    ("raa", "RAA", "5자산 절대모멘텀 동일가중", "momentum", s_raa),
+    ("gtaa", "GTAA", "5자산 10개월 이동평균 타이밍", "momentum", s_gtaa),
+    ("paa", "PAA", "위험자산 MA 타이밍 + 채권 보호", "momentum", s_paa),
+    ("vaa", "VAA", "공격/방어 13612W 카나리아", "momentum", s_vaa),
+    ("faa", "FAA", "모멘텀 상위 3 동일가중", "momentum", s_faa),
+    ("aaa", "AAA", "13612W 상위 + 위험회피 방어", "momentum", s_aaa),
+    ("daa", "DAA", "카나리아(EEM·AGG) 공격/방어", "momentum", s_daa),
+    ("bond_dynamic", "채권 동적배분", "채권 모멘텀 상위 3", "momentum", s_bond_dynamic),
 ]
+
+# 리스크·최적화 9전략 합성 → compute_strategies/추천/콕핏이 22종 자동 인식
+from src.engine.risk_allocations import RISK_STRATEGIES  # noqa: E402
+
+ALL_STRATEGIES: list[tuple] = STRATEGIES + RISK_STRATEGIES
 
 
 def _signal(weights: dict[str, float]) -> str:
@@ -235,7 +241,7 @@ def compute_strategies(market: str = "us") -> dict:
     from src.data.etf_prices import resolve
     mk = "kr" if market == "kr" else "us"
     out = []
-    for sid, name, desc, fn in STRATEGIES:
+    for sid, name, desc, family, fn in ALL_STRATEGIES:
         try:
             weights = fn(mk)
         except Exception:
@@ -243,6 +249,6 @@ def compute_strategies(market: str = "us") -> dict:
         holdings = [{"ticker": resolve(t, mk)[0], "label": resolve(t, mk)[1],
                      "us_ticker": t, "us_label": US_UNIVERSE.get(t, t), "weight": w}
                     for t, w in sorted(weights.items(), key=lambda x: -x[1])]
-        out.append({"id": sid, "name": name, "description": desc,
+        out.append({"id": sid, "name": name, "description": desc, "family": family,
                     "signal": _signal(weights), "holdings": holdings})
     return {"market": mk, "as_of": datetime.now().strftime("%Y-%m-%d"), "strategies": out}
