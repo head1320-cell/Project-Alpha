@@ -1290,6 +1290,7 @@ export const dataQualityApi = {
 
 // ─── Macro / Company / Risk (분석 탭) ─────────────────────────────────────────
 
+export interface YieldCurvePoint { label: string; years: number; yield_pct: number; trend?: string }
 export interface MacroRegime {
   timestamp: string;
   regime: string;
@@ -1297,12 +1298,36 @@ export interface MacroRegime {
   inflation_axis: number;
   confidence: number;
   stress_score: number;
-  yield_curve: { spread_2y10y_bp?: number } | null;
+  yield_curve: { spread_2y10y_bp?: number; points?: YieldCurvePoint[] } | null;
   yield_inversion: boolean;
   inversion_severity: number | null;
   recommended_mode: string;
-  asset_tilts: Record<string, number>;
+  asset_tilts: Record<string, number | string>;
   description: string;
+  stress_components?: Record<string, number>;
+  dynamic_risk_free_rate?: number;
+  dynamic_kill_dd_threshold?: number;
+}
+
+// ── Macro Cockpit 추가 타입 (전략·추천·대시보드·밸류) ──
+export interface TacticalHolding { ticker: string; label: string; us_ticker: string; us_label: string; weight: number }
+export interface TacticalStrategy { id: string; name: string; description: string; signal: string; holdings: TacticalHolding[] }
+export interface MacroStrategies { market: string; as_of: string; strategies: TacticalStrategy[] }
+export interface RecommendRankItem { id: string; name: string; composite: number; fit_score: number; recent_return_12m: number | null; archetype_kr: string; signal: string }
+export interface MacroRecommend {
+  market: string; as_of: string;
+  regime: { quadrant: string; quadrant_kr: string; stress: number; cycle: string };
+  top: { id: string; name: string; signal: string; fit_score: number; composite: number; holdings: TacticalHolding[] };
+  narrative: string; narrative_source: "rule" | "claude";
+  ranking: RecommendRankItem[];
+}
+export interface MacroIndicator { id: string; name: string; unit: string; latest: number | null; z_score: number | null; percentile: number | null; delta: number | null; spark: number[] }
+export interface MacroTheme { key: string; label: string; indicators: MacroIndicator[] }
+export interface MacroDashboard { as_of: string; themes: MacroTheme[]; sources: { fred: boolean; bok: boolean } }
+export interface MacroValuation {
+  assets: Array<{ key: string; label: string; z: number | null }>;
+  kr_market: { n: number; per_median: number; pbr_median: number } | null;
+  sources: { prices: boolean; fundamentals: boolean };
 }
 
 export interface ValuationResult {
@@ -1319,6 +1344,26 @@ export const analysisApi = {
   macroRegime: async (): Promise<MacroRegime> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/regime`);
     if (!r.ok) throw new Error(`Macro regime failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategies: async (market: "us" | "kr" = "us"): Promise<MacroStrategies> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategies?market=${market}`);
+    if (!r.ok) throw new Error(`Macro strategies failed: ${r.status}`);
+    return r.json();
+  },
+  macroRecommend: async (market: "us" | "kr" = "us"): Promise<MacroRecommend> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/recommend?market=${market}`);
+    if (!r.ok) throw new Error(`Macro recommend failed: ${r.status}`);
+    return r.json();
+  },
+  macroDashboard: async (): Promise<MacroDashboard> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/dashboard`);
+    if (!r.ok) throw new Error(`Macro dashboard failed: ${r.status}`);
+    return r.json();
+  },
+  macroValuation: async (): Promise<MacroValuation> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/valuation`);
+    if (!r.ok) throw new Error(`Macro valuation failed: ${r.status}`);
     return r.json();
   },
   // 종목 단건 평가: 스크리너로 해당 종목을 찾아 가치평가 결과(intrinsic/gap/verdict + 펀더멘털) 반환

@@ -6,6 +6,7 @@ import {
   type FilterGroupNode, type BacktestTrade, type MonthlyReturn,
 } from "@/lib/screenerApi";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/lib/screenerHandoff";
+import { getMacroHandoff, clearMacroHandoff, type MacroAllocHandoff } from "@/lib/macroHandoff";
 import { exportTradesCsv, exportSummaryCsv } from "@/lib/strategyStorage";
 import {
   listSavedStrategies, saveBacktestStrategy, deleteSavedStrategy,
@@ -191,12 +192,27 @@ export default function TerminalBacktester() {
   const [progress, setProgress] = useState<{ phase: string; done?: number; total?: number; count?: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<ScreenerStrategyHandoff | null>(null);
+  const [macroHandoff, setMacroHandoffState] = useState<MacroAllocHandoff | null>(null);
   const [saved, setSaved] = useState<SavedBacktestStrategy[]>([]);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const h = getScreenerHandoff();
     if (h) setHandoff(h);
+    // 매크로 콕핏 추천 배분 이식 → asset_alloc 바스켓 프리필 (ETF 100% 슬리브)
+    const mh = getMacroHandoff();
+    if (mh && mh.basket.length) {
+      setMacroHandoffState(mh);
+      setS((prev) => ({
+        ...prev,
+        name: mh.strategyName || prev.name,
+        assetAlloc: {
+          ...prev.assetAlloc, enabled: true, preset: "custom", etfPct: 100, stockPct: 0,
+          rebalanceMonths: mh.rebalanceMonths || 3,
+          basket: mh.basket.map((l) => ({ ticker: l.ticker, name: l.name, weightPct: l.weightPct })),
+        },
+      }));
+    }
     setSaved(listSavedStrategies());
   }, []);
 
@@ -261,6 +277,26 @@ export default function TerminalBacktester() {
             </div>
           </div>
           <button className="tscreener-handoff-clear" onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>
+            ✕ 해제
+          </button>
+        </div>
+      )}
+
+      {/* 매크로 콕핏 추천 배분 이식 배너 */}
+      {macroHandoff && (
+        <div className="tscreener-handoff" style={{ borderColor: "var(--t-accent)" }}>
+          <div className="tscreener-handoff-main">
+            <span className="tscreener-handoff-badge" style={{ background: "var(--t-accent)" }}>매크로 추천 배분</span>
+            <span className="tscreener-handoff-text">
+              {macroHandoff.strategyName} · {macroHandoff.market === "kr" ? "국내 ETF" : "US ETF"} {macroHandoff.basket.length}종 → ETF 100% 자산배분으로 백테스트
+            </span>
+            <div className="tscreener-handoff-conds">
+              {macroHandoff.basket.map((l, i) => (
+                <span key={i} className="tscreener-handoff-cond">{l.name} {l.weightPct}%</span>
+              ))}
+            </div>
+          </div>
+          <button className="tscreener-handoff-clear" onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>
             ✕ 해제
           </button>
         </div>

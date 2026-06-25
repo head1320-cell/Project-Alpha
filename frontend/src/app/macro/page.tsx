@@ -1,140 +1,55 @@
 "use client";
 
-import { useState, useEffect, type CSSProperties } from "react";
-import { analysisApi, type MacroRegime } from "@/lib/screenerApi";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
-import SectionHead from "@/components/layout/SectionHead";
-import { StatGrid, Stat } from "@/components/common/MiniViz";
 import { LoadingState, ErrorState } from "@/components/layout/States";
-
-const QUADRANTS = [
-  { key: "Reflation", label: "Reflation", sub: "성장↑ / 인플↓" },
-  { key: "Overheating", label: "Overheating", sub: "성장↑ / 인플↑" },
-  { key: "Disinflation", label: "Disinflation", sub: "성장↓ / 인플↓" },
-  { key: "Stagflation", label: "Stagflation", sub: "성장↓ / 인플↑" },
-];
+import MacroCockpit, { type TransplantPayload } from "@/components/macro/MacroCockpit";
+import { loadMacroCore, type MacroCore } from "@/lib/macroData";
+import { setMacroHandoff } from "@/lib/macroHandoff";
 
 export default function MacroPage() {
-  const [regime, setRegime] = useState<MacroRegime | null>(null);
+  const router = useRouter();
+  const [core, setCore] = useState<MacroCore | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    analysisApi.macroRegime().then(setRegime).catch((e) => setErr(e.message)).finally(() => setLoading(false));
+    loadMacroCore()
+      .then(setCore)
+      .catch((e) => setErr(e instanceof Error ? e.message : "로드 실패"))
+      .finally(() => setLoading(false));
   }, []);
 
-  const activeQuadrant = regime
-    ? (QUADRANTS.find((q) => regime.regime.toLowerCase().includes(q.key.toLowerCase()))?.key
-      ?? (regime.growth_axis >= 0
-        ? (regime.inflation_axis >= 0 ? "Overheating" : "Reflation")
-        : (regime.inflation_axis >= 0 ? "Stagflation" : "Disinflation")))
-    : null;
+  // 추천 배분 → 백테스터 이식 (asset_alloc 바스켓 프리필 + 라우팅)
+  const onTransplant = (p: TransplantPayload) => {
+    const total = p.holdings.reduce((s, h) => s + h.weight, 0) || 1;
+    setMacroHandoff({
+      strategyName: p.strategyName,
+      market: p.market,
+      basket: p.holdings.map((h) => ({
+        ticker: h.ticker,
+        name: p.market === "kr" ? h.label : h.us_label,
+        weightPct: Math.round((h.weight / total) * 1000) / 10,
+      })),
+      rebalanceMonths: 3,
+      createdAt: Date.now(),
+    });
+    router.push("/backtest");
+  };
 
   return (
     <div className="tpage-fade">
       <PageHeader
-        eyebrow="MACRO / REGIME INTELLIGENCE"
+        eyebrow="MACRO / ALLOCATION COCKPIT"
         index="03 / 05"
-        title="Economic Regime Intelligence"
-        intro="4-국면 매크로 레짐과 금리·환율 실데이터로 시장 국면을 진단하고, 전략적 자산배분·섹터 틸트에 활용합니다."
-        status={regime ? `REGIME · ${regime.regime}` : "SOURCE: BOK·FRED"}
+        title="Macro Allocation Cockpit"
+        intro="자산배분·마켓타이밍에 직결되는 매크로 지표를 5개 무료 API(BOK·FRED·KIS·DART·KRX)로 수집·정규화하고, 현 국면에 유리한 택티컬 자산배분 전략을 규칙+성과+AI로 추천합니다."
+        status={core?.regime ? `REGIME · ${core.regime.regime}` : "SOURCE: BOK·FRED·KIS"}
       />
-
-      {loading && <LoadingState label="거시 데이터 수집 중" />}
-      {err && <ErrorState sub={err} />}
-
-      {regime && (
-        <div className="animate-fade-in">
-          <SectionHead label="REGIME MATRIX" index="01 / 03" />
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.1fr) minmax(0,1fr)", gap: 16, alignItems: "start" }}>
-            <div className="tregime">
-              {QUADRANTS.map((q) => {
-                const active = q.key === activeQuadrant;
-                return (
-                  <div key={q.key} className={`tquadrant${active ? " active" : ""}`}>
-                    <span className="tquadrant-label" style={active ? { color: "var(--t-accent)" } : {}}>{q.label}</span>
-                    <span className="tquadrant-sub">{q.sub}</span>
-                    {active && <div className="tregime-dot" />}
-                  </div>
-                );
-              })}
-            </div>
-            <StatGrid>
-              <Stat
-                k="Growth Axis"
-                v={`${regime.growth_axis >= 0 ? "+" : ""}${regime.growth_axis.toFixed(2)}`}
-                valueColor={regime.growth_axis >= 0 ? "var(--color-bull)" : "var(--color-bear)"}
-                sub="실질 성장 모멘텀"
-              />
-              <Stat
-                k="Inflation Axis"
-                v={`${regime.inflation_axis >= 0 ? "+" : ""}${regime.inflation_axis.toFixed(2)}`}
-                valueColor={regime.inflation_axis >= 0 ? "var(--color-bear)" : "var(--color-bull)"}
-                sub="물가 기조"
-              />
-              <Stat
-                k="Stress Index"
-                v={regime.stress_score?.toFixed(0)}
-                valueColor={regime.stress_score > 60 ? "var(--color-bear)" : regime.stress_score > 30 ? "var(--color-caution)" : "var(--color-bull)"}
-                sub="시스템 리스크"
-              />
-              <Stat
-                k="Confidence"
-                v={`${(regime.confidence * 100).toFixed(0)}%`}
-                sub={`국면 신뢰도 · ${regime.regime}`}
-              />
-            </StatGrid>
-          </div>
-          {regime.description && (
-            <p style={{ fontSize: 13, color: "var(--t-muted)", marginTop: 16, maxWidth: 680, lineHeight: 1.7 }}>
-              {regime.description}
-            </p>
-          )}
-
-          <SectionHead label="KEY INDICATORS" index="02 / 03" />
-          <div className="tmetrics-grid">
-            <div className="tmetric-card">
-              <span className="tmetric-label">2Y-10Y Spread</span>
-              <span className="tmetric-value" style={{ color: regime.yield_inversion ? "var(--color-bear)" : "var(--t-ink)" }}>
-                {regime.yield_curve?.spread_2y10y_bp != null ? `${Math.round(regime.yield_curve.spread_2y10y_bp)}bp` : "—"}
-              </span>
-              {regime.yield_inversion && <div className="tmetric-trend" style={{ color: "var(--color-bear)" }}>역전 — 침체 신호</div>}
-            </div>
-            <div className="tmetric-card">
-              <span className="tmetric-label">Recommended Mode</span>
-              <span className="tmetric-value" style={{ fontSize: 14, wordBreak: "break-word" }}>{regime.recommended_mode}</span>
-            </div>
-          </div>
-
-          {regime.asset_tilts && Object.keys(regime.asset_tilts).length > 0 && (
-            <>
-              <SectionHead label="ASSET ALLOCATION" index="03 / 03" />
-              <div style={{ border: "1px solid var(--t-border)", borderRadius: 2, padding: "14px 18px" }}>
-                {Object.entries(regime.asset_tilts).map(([asset, tilt]) => {
-                  const finite = Number.isFinite(tilt);
-                  const color = !finite ? "var(--t-muted)" : tilt >= 0 ? "var(--color-bull)" : "var(--color-bear)";
-                  const fillStyle: CSSProperties = {
-                    width: finite ? `${Math.abs(tilt) * 50}%` : "0%",
-                    background: color,
-                    ...(tilt >= 0 ? { left: "50%" } : { right: "50%" }),
-                  };
-                  return (
-                    <div key={asset} className="talloc-row">
-                      <span className="talloc-name">{asset}</span>
-                      <div className="talloc-track">
-                        <div className="talloc-fill" style={fillStyle} />
-                      </div>
-                      <span className="talloc-val" style={{ color }}>
-                        {finite ? `${tilt >= 0 ? "+" : ""}${(tilt * 100).toFixed(0)}%` : "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {loading && <LoadingState label="매크로 데이터 수집 중" />}
+      {err && !loading && <ErrorState sub={err} />}
+      {core && !loading && <MacroCockpit core={core} onTransplant={onTransplant} />}
     </div>
   );
 }
