@@ -2493,3 +2493,40 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-fam-h { display: flex; align-items: center; gap: 8px; padding: 4px 0 2px; border-bottom: 2px solid var(--t-accent); }
 .mc-fam-lbl { font-family: var(--t-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--t-ink); }
 .mc-fam-n { font-family: var(--t-mono); font-size: 10px; color: #fff; background: var(--t-accent); border-radius: 2px; padding: 0 6px; line-height: 16px; }
+
+/* Macro Cockpit — 07 Correlations / 08 Timing (analyticsParts) */
+.mca-matrix { display: grid; gap: 2px; font-family: var(--t-mono); }
+.mca-mx-corner { }
+.mca-mx-head { font-size: 9px; color: var(--t-muted); text-align: center; padding: 2px 0; font-weight: 600; }
+.mca-mx-row { font-size: 9px; color: var(--t-ink); font-weight: 600; display: flex; align-items: center; padding-right: 4px; }
+.mca-mx-cell { aspect-ratio: 1; min-height: 22px; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: var(--t-ink); border-radius: 1px; font-variant-numeric: tabular-nums; }
+.mca-corr-grad { width: 120px; height: 8px; border-radius: 2px;
+  background: linear-gradient(90deg, rgba(37,99,235,0.82), rgba(113,113,122,0.1), rgba(220,38,38,0.82)); }
+
+/* 타이밍 신호별 기여 */
+.mca-comps { display: flex; flex-direction: column; gap: 9px; }
+.mca-comp { display: grid; grid-template-columns: 150px 1fr 36px 52px; gap: 10px; align-items: center; }
+.mca-comp-lbl { font-size: 11.5px; color: var(--t-ink); display: flex; flex-direction: column; }
+.mca-comp-lbl em { font-style: normal; font-family: var(--t-mono); font-size: 9px; color: var(--t-muted); }
+.mca-comp-track { height: 8px; background: var(--t-surface); border-radius: 2px; overflow: hidden; }
+.mca-comp-track i { display: block; height: 100%; }
+.mca-comp-sc { font-family: var(--t-mono); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.mca-comp-val { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); text-align: right; }
+
+/* 자산별 추세표 */
+.mca-trend { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.mca-trend th { font-family: var(--t-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--t-muted); text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--t-border); font-weight: 500; }
+.mca-trend th.n, .mca-trend td.n { text-align: right; font-family: var(--t-mono); font-variant-numeric: tabular-nums; }
+.mca-trend td { padding: 7px 8px; border-bottom: 1px solid var(--t-border); }
+.mca-trend td b { font-family: var(--t-mono); font-size: 11px; }
+.mca-trend-nm { color: var(--t-muted); font-size: 10.5px; }
+.mca-trend-badge { font-family: var(--t-mono); font-size: 10px; font-weight: 600; padding: 1px 8px; border: 1px solid; border-radius: 2px; }
+
+/* 국면 전환 타임라인 */
+.mca-transitions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mca-trans { font-family: var(--t-mono); font-size: 10.5px; color: var(--t-muted); background: var(--t-surface);
+  border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 9px; }
+.mca-trans em { font-style: normal; color: var(--t-accent); margin-right: 4px; }
+.mca-trans b { color: var(--t-ink); }

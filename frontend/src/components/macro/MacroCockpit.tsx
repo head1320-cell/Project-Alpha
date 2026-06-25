@@ -8,19 +8,26 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   LayoutDashboard, Activity, Target, Scale, Boxes, Sparkles,
-  TrendingUp, TrendingDown, ArrowRightLeft, Play,
+  TrendingUp, TrendingDown, ArrowRightLeft, Play, GitCompare, Crosshair,
 } from "lucide-react";
 import type { MacroSeries } from "@/lib/macroApi";
 import { stressColor } from "@/lib/macroApi";
-import type { MacroStrategies, MacroRecommend, TacticalStrategy, TacticalHolding } from "@/lib/screenerApi";
+import type {
+  MacroStrategies, MacroRecommend, TacticalStrategy, TacticalHolding,
+  MacroCorrelations, MacroTiming, MacroTrajectory,
+} from "@/lib/screenerApi";
 import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
+  loadCorrelations, loadTiming, loadTrajectory,
 } from "@/lib/macroData";
 import {
   RegimeScatter, CycleClock, ArcGauge, YieldCurveChart, IndicatorCard, ZHeatmap,
   ValuationBars, HoldingsDonut, donutColor, SignalBadge, CompositeRow, DrillDownModal,
   fmtNum, fmtZ, fmtPct, sigColor,
 } from "./cockpitParts";
+import {
+  CorrMatrix, RollingCorrChart, AvgCorrChart, ComponentBars, TimingHistory, TrendTable, RegimeTrajectory,
+} from "./analyticsParts";
 
 const TABS = [
   { id: "overview", label: "Overview", n: "01", icon: LayoutDashboard },
@@ -29,6 +36,8 @@ const TABS = [
   { id: "valuation", label: "Valuation", n: "04", icon: Scale },
   { id: "strategies", label: "Strategies", n: "05", icon: Boxes },
   { id: "recommend", label: "Recommend", n: "06", icon: Sparkles },
+  { id: "correlations", label: "Correlations", n: "07", icon: GitCompare },
+  { id: "timing", label: "Timing", n: "08", icon: Crosshair },
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
@@ -50,6 +59,27 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
   const [mktLoading, setMktLoading] = useState(false);
   // 드릴다운
   const [drill, setDrill] = useState<{ id: string; series: MacroSeries | null; loading: boolean } | null>(null);
+  // 07/08 lazy (탭 진입·시장 변경 시 로드) + 국면 궤적
+  const [corr, setCorr] = useState<MacroCorrelations | null>(null);
+  const [timing, setTiming] = useState<MacroTiming | null>(null);
+  const [traj, setTraj] = useState<MacroTrajectory | null>(null);
+  const [tabLoading, setTabLoading] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "correlations") return;
+    let ok = true; setTabLoading(true);
+    loadCorrelations(market).then((c) => { if (ok) { setCorr(c); setTabLoading(false); } });
+    return () => { ok = false; };
+  }, [tab, market]);
+  useEffect(() => {
+    if (tab !== "timing") return;
+    let ok = true; setTabLoading(true);
+    loadTiming(market).then((t) => { if (ok) { setTiming(t); setTabLoading(false); } });
+    return () => { ok = false; };
+  }, [tab, market]);
+  useEffect(() => {
+    if (tab === "regime" && !traj) loadTrajectory().then(setTraj);
+  }, [tab, traj]);
 
   const regime = core.regime;
   const quad = resolveQuadrant(regime);
@@ -110,10 +140,12 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
 
       {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} />}
       {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} />}
-      {tab === "regime" && <RegimeTab regime={regime} />}
+      {tab === "regime" && <RegimeTab regime={regime} traj={traj} />}
       {tab === "valuation" && <ValuationTab core={core} />}
       {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
       {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
+      {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} />}
+      {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} loading={tabLoading} />}
 
       {drill && <DrillDownModal series={drill.series} loading={drill.loading} onClose={() => setDrill(null)} />}
     </div>
@@ -218,7 +250,7 @@ function IndicatorsTab({ core, onDrill }: { core: MacroCore; onDrill: (id: strin
 // ─────────────────────────────────────────────────────────────────────────────
 // 03 Regime
 // ─────────────────────────────────────────────────────────────────────────────
-function RegimeTab({ regime }: { regime: NonNullable<MacroCore["regime"]> }) {
+function RegimeTab({ regime, traj }: { regime: NonNullable<MacroCore["regime"]>; traj: MacroTrajectory | null }) {
   const sc = Object.entries(regime.stress_components ?? {});
   const tilts = Object.entries(regime.asset_tilts ?? {});
   const tiltMap: Record<string, { v: number; lbl: string }> = {
@@ -228,7 +260,18 @@ function RegimeTab({ regime }: { regime: NonNullable<MacroCore["regime"]> }) {
   return (
     <div className="mc-grid">
       <div className="mc-card span2">
-        <div className="mc-card-h">국면 좌표 (성장 × 물가)</div>
+        <div className="mc-card-h">국면 궤적 — 최근 18개월 경로 <span className="mc-card-sub">성장×물가 테마-z</span></div>
+        {traj?.path?.length ? <RegimeTrajectory path={traj.path} /> : <div className="mc-empty-sm">궤적 불러오는 중…</div>}
+        {!!traj?.transitions?.length && (
+          <div className="mca-transitions">
+            {traj.transitions.map((tr, i) => (
+              <span key={i} className="mca-trans"><em>{tr.t}</em> {tr.from} → <b>{tr.to}</b></span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mc-card span2">
+        <div className="mc-card-h">국면 좌표 (성장 × 물가) — 현재</div>
         <RegimeScatter g={regime.growth_axis} i={regime.inflation_axis} />
       </div>
       <div className="mc-card">
@@ -443,6 +486,83 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
           <p className="mc-card-note">성과는 각 전략의 현재 비중을 트레일링 12개월 수익률에 적용한 추정치입니다(실 ETF 시세 — 키 없으면 mock). 미래 수익을 보장하지 않습니다.</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 07 Correlations
+// ─────────────────────────────────────────────────────────────────────────────
+function CorrelationsTab({ corr, market, setMarket, loading }: {
+  corr: MacroCorrelations | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
+}) {
+  const sb = corr?.stock_bond_now;
+  const sbColor = sb?.verdict === "헤지" ? "var(--color-bull)" : sb?.verdict === "동조" ? "var(--color-bear)" : "var(--t-muted)";
+  return (
+    <div className="mc-stack">
+      <div className="mc-strat-bar">
+        <div className="mc-strat-title">자산 상관관계 <span className="mc-card-sub">13자산 · 일간수익률 · {corr?.sources.prices ? "실시세" : "mock"}</span></div>
+        <MarketToggle market={market} setMarket={setMarket} />
+      </div>
+      {loading && !corr && <div className="mc-empty-sm">상관 계산 중…</div>}
+      {corr && (
+        <div className="mc-grid">
+          <div className="mc-card span2">
+            <div className="mc-card-h">주식-채권 상관 추이 — 헤지 작동 여부 {sb?.corr != null && <span className="mc-card-sub" style={{ color: sbColor }}>현재 {sb.corr.toFixed(2)} · {sb.verdict}</span>}</div>
+            <RollingCorrChart pairs={corr.pairs} />
+            <p className="mc-card-note">주식-장기채(SPY-TLT) 상관이 음(−)이면 채권이 주식 위험을 헤지(전통 60/40·리스크패리티 유효), 양(+)이면 동조화(2022형 — 분산 효과 약화). 자산배분 마켓타이밍 핵심 신호.</p>
+          </div>
+          <div className="mc-card span2">
+            <div className="mc-card-h">평균 페어 상관 — 분산 국면</div>
+            <AvgCorrChart avg={corr.avg_corr} />
+            <p className="mc-card-note">전체 자산쌍 평균 상관. 1에 근접할수록 "상관 붕괴"(전부 동조 → 분산 무력화, 위기 동반). 낮을수록 건강한 분산 효과.</p>
+          </div>
+          <div className="mc-card span2">
+            <div className="mc-card-h">상관 매트릭스 — 최근 1년</div>
+            <CorrMatrix m={corr.matrix} />
+            <div className="mc-zlegend"><span>음(−) 분산</span><i className="mca-corr-grad" /><span>양(+) 동조</span></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 08 Timing
+// ─────────────────────────────────────────────────────────────────────────────
+function TimingTab({ timing, market, setMarket, loading }: {
+  timing: MacroTiming | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
+}) {
+  const comp = timing?.composite;
+  const cColor = comp ? (comp.score >= 60 ? "var(--color-bull)" : comp.score <= 40 ? "var(--color-bear)" : "var(--color-caution)") : "var(--t-muted)";
+  return (
+    <div className="mc-stack">
+      <div className="mc-strat-bar">
+        <div className="mc-strat-title">마켓타이밍 <span className="mc-card-sub">위험 온/오프 · {timing?.sources.fred ? "FRED" : "mock"}</span></div>
+        <MarketToggle market={market} setMarket={setMarket} />
+      </div>
+      {loading && !timing && <div className="mc-empty-sm">타이밍 계산 중…</div>}
+      {timing && comp && (
+        <div className="mc-grid">
+          <div className="mc-card">
+            <div className="mc-card-h">위험 선호도 종합</div>
+            <ArcGauge value={comp.score} color={cColor} label={comp.label} />
+          </div>
+          <div className="mc-card">
+            <div className="mc-card-h">신호별 기여 (가중)</div>
+            <ComponentBars comps={timing.components} />
+          </div>
+          <div className="mc-card span2">
+            <div className="mc-card-h">위험 선호도 추이 — 온(≥60)/오프(≤40)</div>
+            <TimingHistory history={timing.history} />
+          </div>
+          <div className="mc-card span2">
+            <div className="mc-card-h">자산별 추세 상태 — 어디가 타이밍상 유리한가</div>
+            <TrendTable assets={timing.assets} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

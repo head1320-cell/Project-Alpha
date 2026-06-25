@@ -1330,6 +1330,32 @@ export interface MacroValuation {
   sources: { prices: boolean; fundamentals: boolean };
 }
 
+// ── 상관/타이밍/궤적 (macro_analytics) ──
+export interface CorrPoint { t: string; corr: number }
+export interface CorrPair { key: string; label: string; series: CorrPoint[] }
+export interface MacroCorrelations {
+  matrix: { tickers: string[]; labels: string[]; values: number[][] };
+  pairs: CorrPair[];
+  avg_corr: CorrPoint[];
+  stock_bond_now: { corr: number | null; verdict: string };
+  sources: { prices: boolean };
+}
+export interface TimingComponent { key: string; label: string; value: number | null; score: number; weight: number }
+export interface TrendRow { ticker: string; label: string; vs_ma200_pct: number | null; mom_12m: number | null; dist_52w_high: number | null; rsi: number | null; trend: string }
+export interface MacroTiming {
+  composite: { score: number; label: string };
+  components: TimingComponent[];
+  history: Array<{ t: string; score: number }>;
+  assets: TrendRow[];
+  sources: { prices: boolean; fred: boolean };
+}
+export interface TrajectoryPoint { t: string; growth: number; inflation: number; quadrant: string }
+export interface MacroTrajectory {
+  path: TrajectoryPoint[];
+  transitions: Array<{ t: string; from: string; to: string }>;
+  sources: { fred: boolean; bok: boolean };
+}
+
 export interface ValuationResult {
   stock_code: string;
   corp_name?: string;
@@ -1364,6 +1390,21 @@ export const analysisApi = {
   macroValuation: async (): Promise<MacroValuation> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/valuation`);
     if (!r.ok) throw new Error(`Macro valuation failed: ${r.status}`);
+    return r.json();
+  },
+  macroCorrelations: async (market: "us" | "kr" = "us"): Promise<MacroCorrelations> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/correlations?market=${market}`);
+    if (!r.ok) throw new Error(`Macro correlations failed: ${r.status}`);
+    return r.json();
+  },
+  macroTiming: async (market: "us" | "kr" = "us"): Promise<MacroTiming> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/timing?market=${market}`);
+    if (!r.ok) throw new Error(`Macro timing failed: ${r.status}`);
+    return r.json();
+  },
+  macroTrajectory: async (): Promise<MacroTrajectory> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime-trajectory`);
+    if (!r.ok) throw new Error(`Macro trajectory failed: ${r.status}`);
     return r.json();
   },
   // 종목 단건 평가: 스크리너로 해당 종목을 찾아 가치평가 결과(intrinsic/gap/verdict + 펀더멘털) 반환
