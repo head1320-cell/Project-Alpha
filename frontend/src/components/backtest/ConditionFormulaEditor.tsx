@@ -38,12 +38,14 @@ export interface Condition {
   inner2Params?: Record<string, string>;
 }
 
-type OpId = "gte" | "lte" | "eq" | "between";
+type OpId = "gte" | "lte" | "eq" | "between" | "cross_above" | "cross_below";
 const OPS: { id: OpId; label: string; word: string }[] = [
   { id: "gte", label: "≥", word: "이상" },
   { id: "lte", label: "≤", word: "이하" },
   { id: "eq", label: "=", word: "와 같을 때" },
   { id: "between", label: "범위", word: "사이" },
+  { id: "cross_above", label: "↑돌파", word: "상향 돌파" },
+  { id: "cross_below", label: "↓돌파", word: "하향 돌파" },
 ];
 const opSym = (id: OpId) => OPS.find((o) => o.id === id)!.label;
 const opWord = (id: OpId) => OPS.find((o) => o.id === id)!.word;
@@ -292,6 +294,11 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           <Segmented tone={tone} value={op} onChange={setOp} options={OPS.map((o) => ({ id: o.id, label: o.label }))} />
           <input type="number" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값"
             style={{ width: 70, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 11px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+          {(op === "cross_above" || op === "cross_below") && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              기준선을 {op === "cross_above" ? "상향" : "하향"} 돌파한 봉만 (골든크로스: 좌변=두 MA의 차이, 값=0)
+            </span>
+          )}
           {op === "between" && (
             <>
               <span style={{ color: "var(--text-secondary)" }}>~</span>

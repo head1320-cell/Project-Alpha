@@ -266,6 +266,11 @@ def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = No
         rhs = float(cond.get("rhs"))
     except Exception:
         return None
+    if op in ("cross_above", "cross_below"):
+        if len(series) < 2 or pd.isna(series.iloc[-2]):
+            return None
+        pv = float(series.iloc[-2])
+        return (lhs > rhs and pv <= rhs) if op == "cross_above" else (lhs < rhs and pv >= rhs)
     if op == "gte":
         return lhs >= rhs
     if op == "lte":
@@ -308,6 +313,12 @@ def _vector_compare(vals: pd.Series, op: str, rhs, rhs2=None):
                 return None
             lo, hi = (rhs_f, rhs2_f) if rhs_f <= rhs2_f else (rhs2_f, rhs_f)
             ok = (x >= lo) & (x <= hi)
+        elif op in ("cross_above", "cross_below"):
+            # 상향/하향 돌파: 직전 봉은 반대편, 현재 봉이 기준선(rhs)을 넘김(=신호 봉만 True).
+            xp = v.shift(1).to_numpy(dtype=float)
+            valid = valid & v.shift(1).notna().to_numpy()   # 직전 봉도 유효해야 판정
+            ok = (((x > rhs_f) & (xp <= rhs_f)) if op == "cross_above"
+                  else ((x < rhs_f) & (xp >= rhs_f)))
         else:
             return None
     return valid, (ok & valid)
@@ -671,6 +682,16 @@ class ConditionStrategy(BaseStrategy):
             return None
         fn = cond.get("function_id", "base")
         tok2 = (cond.get("factor_token2") or "").strip()
+        op = cond.get("op", "gte")
+        # 두 팩터 교차(상향/하향 돌파): (s1 - s2)가 0선을 교차 — 예: MA5 cross_above MA20(골든크로스).
+        if tok2 and op in ("cross_above", "cross_below"):
+            s2c = self._token_series(df, {"factor_token": tok2}, fund, tk)
+            if s2c is None or len(s2c) == 0:
+                return None
+            s2c = _apply_inner(s2c.astype(float), cond, prefix="inner2")
+            if s2c is None or len(s2c) == 0:
+                return None
+            return _vector_compare(s.astype(float) - s2c, op, 0.0)
         if tok2 and fn in _TWO_FACTOR_FNS:
             # 두 팩터 변형: 비교(F1,F2)·큰값·작은값·변화율_팩터 — 두 번째 피연산자도
             # 토큰 해석 + 자체 중첩(inner2) 지원
