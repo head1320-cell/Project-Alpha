@@ -114,3 +114,29 @@ Regime 탭은 *현재 점*만 보여줌 → 경로 추가. regime_analyzer 내�
 - 상관 클러스터 시각화(HRP 재사용) — 가치 있으나 별도 viz 필요, 후속 후보.
 - 수급(외국인·기관) 기반 타이밍 — price_factors_store에 있으나 별도 데이터정합 필요, 후속.
 - 인트라데이/실시간 상관, lead-lag 인과분석, 상관 예측 — 범위 외.
+
+---
+
+## 9. 장기 데이터 DB 준비도 검토 + 한계 개선 (★이번 구현에 포함★)
+
+### 현황 (검토 결과)
+적재 substrate는 완비:
+- `daily_prices`(UPSERT write-back `ingest_df_to_db`) + `load_ohlcv_unified`(DB→KIS→mock 자가워밍) +
+  `prewarm_ohlcv(tickers, days=3650, 병렬·재개가능)` + 시작 데몬 `_prewarm_ohlcv_bg`.
+
+갭 2가지:
+- **갭1**: `_prewarm_ohlcv_bg`가 KR 주식(kospi200/kosdaq150/all_listed)만 적재 — 크로스에셋 ETF 13종 미적재.
+- **갭2**: `etf_prices._daily_df`가 600일 고정 요청 — DB 깊이를 안 씀(롤링 ~18개월 한계의 원인).
+
+### 개선 (구현 포함)
+- **etf_prices 윈도우 확장**: `_daily_df`를 `_HISTORY_DAYS = env("ETF_HISTORY_DAYS", 1825)`(~5년) 요청으로.
+  `daily_closes`/`monthly_closes`는 전체 시계열을 캐시하고 tail 반환 → 호출자가 깊은 history 사용 가능.
+  · 안전: 기존 22전략은 tail(`_ret`는 끝에서 인덱스, monthly_closes 기본 n=14)만 쓰므로 불변. risk_allocations는
+    `_COV_LOOKBACK=252`로 캡 → 불변. mock 생성도 5년치(결정론) → **샌드박스 롤링차트도 길어져 검증 강화**.
+- **ETF 유니버스 prewarm**: `prewarm_etf_universe()`(US_TO_KR의 KR 코드 13종 → `prewarm_ohlcv`) 추가 +
+  `_prewarm_ohlcv_bg`에 gated 추가(env `OHLCV_PREWARM_ETF`). KR ETF는 도메스틱 경로로 적재 → DB 누적.
+- 결과: DB가 쌓일수록(prewarm·write-back) 롤링 상관·타이밍 추이가 **자동 장기화**. 한계가 시간이 지나며 해소.
+
+### 검증 추가
+- etf_prices 윈도우 확장 후 기존 22전략 산출 불변(회귀), 분석 시계열 길이↑ 확인.
+- `prewarm_etf_universe` mock no-op·키 있을 때 KR 코드 대상 확인(스레드 안전·재개).
