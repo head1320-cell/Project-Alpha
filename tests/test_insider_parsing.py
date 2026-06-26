@@ -35,3 +35,18 @@ def test_parse_insider_rows_empty_or_bad():
     assert DARTClient._parse_insider_rows({"status": "013", "message": "no data"}) == []
     assert DARTClient._parse_insider_rows({}) == []
     assert DARTClient._parse_insider_rows({"list": []}) == []
+
+
+def test_get_insider_disclosures_uses_get(monkeypatch):
+    c = DARTClient(api_key="x" * 20)
+    monkeypatch.setattr(c, "_get", lambda endpoint, params: _ELESTOCK_OK
+                        if endpoint == "elestock.json" else None)
+    rows = c.get_insider_disclosures("00126380")
+    assert len(rows) == 4
+    assert rows[0]["rcept_date"] == "20260610"
+
+
+def test_get_insider_disclosures_no_data(monkeypatch):
+    c = DARTClient(api_key="x" * 20)
+    monkeypatch.setattr(c, "_get", lambda endpoint, params: None)
+    assert c.get_insider_disclosures("00126380") == []

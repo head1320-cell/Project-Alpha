@@ -249,6 +249,12 @@ class DARTClient:
             logger.error(f"DART API 오류 ({endpoint}): {e}")
             return None
 
+    def get_insider_disclosures(self, corp_code: str) -> list[dict]:
+        """임원·주요주주 특정증권등 소유상황보고(elestock) → 파싱 행 리스트.
+        성공 응답은 _get가 디스크 캐시. 미설정/실패/빈 → []."""
+        data = self._get("elestock.json", {"corp_code": corp_code})
+        return self._parse_insider_rows(data)
+
     # ─────────────────────────────────────────────────────────────────────
     # 기업 개황
     # ─────────────────────────────────────────────────────────────────────
