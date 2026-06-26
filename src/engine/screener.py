@@ -757,9 +757,10 @@ class ValuationScreener:
                 elif m.model == "DDM":
                     ddm_val = m.intrinsic_value_per_share
 
-        # Market cap (= 발행주식수 × 현재가)
-        market_cap = None
-        # 발행주식수는 financial_statement에 있지만 summary에 없으므로 추정 생략
+        # 시가총액(억) — KIS master 적재분에서 직접(무료·전종목). 없으면 None(합성 안 함).
+        # _enrich_kis_quotes가 라이브 시총으로 덮어쓸 수 있음. 마스터 없으면(샌드박스) None.
+        from src.data.stock_master import get_market_cap
+        market_cap = get_market_cap(stock_code)
 
         # Sector — DART corp_info에서
         sector = None

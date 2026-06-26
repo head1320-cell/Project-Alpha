@@ -432,6 +432,20 @@ def load_master_flags() -> dict:
     return _MASTER_FLAGS
 
 
+def get_market_cap(stock_code: str) -> float | None:
+    """KIS master 적재분의 시가총액(억). 없으면 None — 합성하지 않음(정직 "—").
+
+    KIS master 파일(무료·전종목)에서 파싱한 `시가총액`을 그대로 반환. per-ticker API 호출 불요.
+    운영(GCP, master 적재)서 전종목 시총 해소, 샌드박스(master 미적재)선 None.
+    """
+    flags = load_master_flags()
+    rec = flags.get((stock_code or "").strip())
+    if not rec:
+        return None
+    v = rec.get("market_cap_억")
+    return float(v) if isinstance(v, (int, float)) and v > 0 else None
+
+
 def master_name(stock_code: str) -> str | None:
     """KIS 마스터 플래그 캐시의 종목명 (collect-master 적재 시 — ETF·전종목 실명)."""
     f = load_master_flags().get((stock_code or "").strip())
