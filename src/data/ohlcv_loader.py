@@ -159,9 +159,13 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
             pass
         return df
 
-    # 최종 fallback: mock
-    logger.info(f"OHLCV mock fallback: {code} (DB/KIS 모두 미가용)")
-    return _mock_ohlcv_df(code, start_date, end_date)
+    # 최종 fallback: mock 모드만 합성, 운영선 빈 df(정직 — 실데이터 없음)
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
+        logger.info(f"OHLCV mock fallback: {code} (DB/KIS 모두 미가용)")
+        return _mock_ohlcv_df(code, start_date, end_date)
+    logger.info(f"OHLCV 미가용(실데이터 없음, 합성 금지): {code}")
+    return pd.DataFrame()
 
 
 def ingest_df_to_db(ticker: str, df) -> int:

@@ -174,11 +174,14 @@ class FundamentalsStore(DeterministicMockStore):
 
     def _build_factors(self, stock_code: str, item=None) -> dict:
         """
-        DART 실데이터 우선 → 실패 시 mock fallback.
+        DART 실데이터 우선 → 실패 시: mock 모드만 합성, 운영선 빈 팩터(정직 "—").
         DART_API_KEY 설정 시 실제 재무제표로 학술 팩터 계산.
         """
         raw = self._real_raw_financials(stock_code, item)
         if raw is None:
+            from src.data.mock_gate import mock_allowed
+            if not mock_allowed():
+                return {}  # 운영 — DART 실패 시 합성 금지(지표 "—")
             raw = self._mock_raw_financials(stock_code, item)
         return self._derive_factors(stock_code, raw)
 

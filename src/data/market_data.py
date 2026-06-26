@@ -264,19 +264,24 @@ class MarketDataProvider:
 
     def _compute_all_indicators(self, stock_code: str) -> dict:
         """백테스터 kis_indicators 함수로 전 지표 계산 (동일 공식 보장)."""
-        # 수급은 항상 mock (시세 무관)
+        from src.data.mock_gate import mock_allowed
+        allow = mock_allowed()
+        # 수급: mock 모드서만 합성. 운영(실키)선 None — 실 수급 미연동 시 합성 대신 정직 None.
         data = {
-            "foreign_net_5d":     _mock_supply(stock_code, "foreign_net"),
-            "institution_net_5d": _mock_supply(stock_code, "institution_net"),
-            "insider_net_20d":    _mock_supply(stock_code, "insider_net") * 0.3,
-            "retail_net_5d":      _mock_supply(stock_code, "retail_net"),
-            "_source": "mock_kis_indicators",
+            "foreign_net_5d":     _mock_supply(stock_code, "foreign_net") if allow else None,
+            "institution_net_5d": _mock_supply(stock_code, "institution_net") if allow else None,
+            "insider_net_20d":    (_mock_supply(stock_code, "insider_net") * 0.3) if allow else None,
+            "retail_net_5d":      _mock_supply(stock_code, "retail_net") if allow else None,
+            "_source": "mock_kis_indicators" if allow else "unavailable",
         }
         try:
             import src.kis_indicators as ki
-            # 실제 KIS 일봉 우선, 없으면 deterministic mock
+            # 실제 KIS 일봉 우선. 없으면: mock 모드만 합성, 운영선 지표 미산출(정직 "—").
             df = _real_kis_ohlcv(stock_code, days=150)
             if df is None:
+                if not allow:
+                    data["_source"] = "unavailable"
+                    return data  # 운영 — 실 OHLCV 없음 → 합성 금지
                 df = _mock_ohlcv(stock_code, days=150)
                 data["_source"] = "mock_kis_indicators"
             else:
@@ -324,12 +329,13 @@ class MarketDataProvider:
             data["vwap_gap"]   = round((close - vwap) / vwap * 100, 2) if vwap else None
         except Exception as e:
             logger.debug(f"지표 계산 실패 ({stock_code}), fallback: {e}")
-            # fallback: 핵심 지표만 자체 계산
-            prices = _mock_prices(stock_code, 90)
-            data.setdefault("rsi_14", compute_rsi(prices, 14))
-            data.setdefault("macd_hist", compute_macd_hist(prices))
-            data.setdefault("price_vs_ma20", compute_ma_disparity(prices, 20))
-            data.setdefault("price_vs_ma60", compute_ma_disparity(prices, 60))
+            # fallback: 핵심 지표만 자체 계산 — mock 모드서만(운영선 합성 금지, 미산출 "—")
+            if allow:
+                prices = _mock_prices(stock_code, 90)
+                data.setdefault("rsi_14", compute_rsi(prices, 14))
+                data.setdefault("macd_hist", compute_macd_hist(prices))
+                data.setdefault("price_vs_ma20", compute_ma_disparity(prices, 20))
+                data.setdefault("price_vs_ma60", compute_ma_disparity(prices, 60))
         return data
 
     def cache_clear(self):

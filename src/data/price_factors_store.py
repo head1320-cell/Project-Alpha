@@ -110,14 +110,15 @@ class PriceFactorsStore(DeterministicMockStore):
         )
 
     def _build_factors(self, stock_code: str, item=None) -> dict:
-        """실데이터(KIS OHLCV) 우선 → 실패 시 mock."""
+        """실데이터(KIS OHLCV) 우선 → 실패 시: mock 모드만 합성, 운영선 빈 팩터(정직 "—")."""
         ohlcv = self._fetch_ohlcv(stock_code)
         if ohlcv and len(ohlcv) >= 60:
             try:
                 return self._derive_from_ohlcv(stock_code, ohlcv)
             except Exception as e:
-                logger.warning(f"가격 팩터 계산 실패 [{stock_code}]: {e}, mock 폴백")
-        return self._mock_factors(stock_code)
+                logger.warning(f"가격 팩터 계산 실패 [{stock_code}]: {e}")
+        from src.data.mock_gate import mock_allowed
+        return self._mock_factors(stock_code) if mock_allowed() else {}
 
     def _fetch_ohlcv(self, stock_code: str):
         """가격 팩터용 일봉 — 사전적재 daily_prices(DB) 우선 → KIS(없으면). 실데이터만(mock 안 씀).

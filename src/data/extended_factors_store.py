@@ -143,11 +143,13 @@ class ExtendedFactorsStore(DeterministicMockStore):
         return self.cached(f"ext_factors:{stock_code}", lambda: self._build(stock_code, live=live))
 
     def _build(self, stock_code: str, live: bool = False) -> dict:
-        # 1) 메타 typical 범위로 결정론적 mock 채움
+        # 1) 결정론적 mock 베이스 — mock 모드서만. 운영선 생략(실 override만 남김 → 미충족은 "—").
+        from src.data.mock_gate import mock_allowed
         out: dict = {}
-        for m in EXTENDED_FACTORS:
-            v = self._uniform(stock_code, m.id, lo=m.typical_min, hi=m.typical_max)
-            out[m.id] = round(v) if m.unit in _INT_UNITS else round(v, 2)
+        if mock_allowed():
+            for m in EXTENDED_FACTORS:
+                v = self._uniform(stock_code, m.id, lo=m.typical_min, hi=m.typical_max)
+                out[m.id] = round(v) if m.unit in _INT_UNITS else round(v, 2)
         # 2) 실데이터 hook override — 비용에 따라 분리:
         #    · _real_dividend: 이미 캐시된 raw(ffl_raw, 펀더멘털 경로가 적재)를 재사용 → 저렴 → 항상.
         #    · _real_ownership(KIS get_price 1콜)·_real_business(DART empSttus+exctvSttus 2콜)은
