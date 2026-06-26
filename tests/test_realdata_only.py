@@ -108,3 +108,40 @@ def test_extended_factors_real_mode_no_synthetic_base(monkeypatch):
     monkeypatch.setenv("KIS_USE_MOCK", "0")
     real = s._build("005930")
     assert len(real) < n_mock     # 운영 — 합성 베이스 생략(실 override만, 미충족 "—")
+
+
+# ── 수급 재배선 (investor_flows 금액 + DART 내부자) ──
+def test_market_supply_real_mode_from_flows(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    import pandas as pd
+
+    import src.data.market_data as md
+    # investor_flows 금액 시리즈 stub (last-5 합)
+    def fake_series(ticker, field, engine=None):
+        base = {"frgn_amt": [10, 20, 30, 40, 50], "orgn_amt": [1, 2, 3, 4, 5],
+                "prsn_amt": [-5, -5, -5, -5, -5]}.get(field)
+        return pd.Series(base) if base else None
+    monkeypatch.setattr("src.data.kis_flows.load_flows_series", fake_series)
+    # 실 OHLCV 존재 → close 확보 → 내부자 가격주입 경로 작동
+    df = pd.DataFrame({"open": [50000] * 150, "high": [51000] * 150, "low": [49000] * 150,
+                       "close": [50000] * 150, "volume": [1000] * 150})
+    monkeypatch.setattr(md, "_real_kis_ohlcv", lambda code, days=150: df)
+    monkeypatch.setattr("src.data.insider_flows.insider_net",
+                        lambda code, days=20, price=None, as_of=None: 7.0)
+    data = md.MarketDataProvider.get_default()._compute_all_indicators("005930")
+    assert data["foreign_net_5d"] == 150       # 10+20+30+40+50 (금액)
+    assert data["institution_net_5d"] == 15
+    assert data["retail_net_5d"] == -25
+    assert data["insider_net_20d"] == 7.0      # close 주입 후 set
+    assert data["_source"] == "kis_real"
+
+
+def test_market_supply_real_mode_empty_flows(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    import src.data.market_data as md
+    monkeypatch.setattr("src.data.kis_flows.load_flows_series", lambda *a, **k: None)
+    monkeypatch.setattr(md, "_real_kis_ohlcv", lambda code, days=150: None)  # OHLCV 없음
+    data = md.MarketDataProvider.get_default()._compute_all_indicators("005930")
+    assert data["foreign_net_5d"] is None       # 미적재 → 정직 None
+    assert data["insider_net_20d"] is None      # 가격 없음(OHLCV None) → 주입 안 됨
+    assert data["_source"] == "unavailable"

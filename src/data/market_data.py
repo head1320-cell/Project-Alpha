@@ -266,14 +266,18 @@ class MarketDataProvider:
         """백테스터 kis_indicators 함수로 전 지표 계산 (동일 공식 보장)."""
         from src.data.mock_gate import mock_allowed
         allow = mock_allowed()
-        # 수급: mock 모드서만 합성. 운영(실키)선 None — 실 수급 미연동 시 합성 대신 정직 None.
-        data = {
-            "foreign_net_5d":     _mock_supply(stock_code, "foreign_net") if allow else None,
-            "institution_net_5d": _mock_supply(stock_code, "institution_net") if allow else None,
-            "insider_net_20d":    (_mock_supply(stock_code, "insider_net") * 0.3) if allow else None,
-            "retail_net_5d":      _mock_supply(stock_code, "retail_net") if allow else None,
-            "_source": "mock_kis_indicators" if allow else "unavailable",
-        }
+        # 수급: mock 모드선 합성, 운영선 investor_flows(금액). 내부자는 close 확보 후 주입.
+        if allow:
+            data = {
+                "foreign_net_5d":     _mock_supply(stock_code, "foreign_net"),
+                "institution_net_5d": _mock_supply(stock_code, "institution_net"),
+                "insider_net_20d":    _mock_supply(stock_code, "insider_net") * 0.3,
+                "retail_net_5d":      _mock_supply(stock_code, "retail_net"),
+                "_source": "mock_kis_indicators",
+            }
+        else:
+            data = self._real_supply(stock_code)
+            data["_source"] = "unavailable"
         try:
             import src.kis_indicators as ki
             # 실제 KIS 일봉 우선. 없으면: mock 모드만 합성, 운영선 지표 미산출(정직 "—").
@@ -287,6 +291,9 @@ class MarketDataProvider:
             else:
                 data["_source"] = "kis_real"
             close = df["close"].iloc[-1]
+            if not allow:   # 운영 — close 확보됨 → DART 내부자 순매수(억) 주입
+                from src.data.insider_flows import insider_net
+                data["insider_net_20d"] = insider_net(stock_code, days=20, price=float(close))
 
             # 모멘텀
             data["rsi_14"]    = _safe_last(ki.calc_rsi(df, 14))
@@ -337,6 +344,27 @@ class MarketDataProvider:
                 data.setdefault("price_vs_ma20", compute_ma_disparity(prices, 20))
                 data.setdefault("price_vs_ma60", compute_ma_disparity(prices, 60))
         return data
+
+    def _real_supply(self, stock_code: str) -> dict:
+        """운영 수급 — investor_flows 금액(외국인/기관/개인 last-5). 미적재면 None.
+        내부자는 가격 필요 → 호출부서 close 확보 후 주입(placeholder None)."""
+        out = {"foreign_net_5d": None, "institution_net_5d": None,
+               "insider_net_20d": None, "retail_net_5d": None}
+        try:
+            from src.data.kis_flows import load_flows_series
+
+            def _sum5(field: str):
+                s = load_flows_series(stock_code, field)
+                if s is None or len(s) == 0:
+                    return None
+                tail = s.dropna().tail(5)
+                return round(float(tail.sum()), 0) if len(tail) else None
+            out["foreign_net_5d"] = _sum5("frgn_amt")
+            out["institution_net_5d"] = _sum5("orgn_amt")
+            out["retail_net_5d"] = _sum5("prsn_amt")
+        except Exception as e:
+            logger.debug(f"실 수급 조회 실패 ({stock_code}): {e}")
+        return out
 
     def cache_clear(self):
         with self._lock:
