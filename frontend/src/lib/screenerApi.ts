@@ -1375,6 +1375,25 @@ export interface StrategyDetail {
 }
 export interface StrategyAI { content: string; tokens: number; cost_krw: number; cached: boolean; error?: string | null }
 
+// ── 전략 → 백테스터 셋업 구성 (하이브리드) ──
+export interface StrategyBacktestConfig {
+  id: string; name: string; family: string; market: string;
+  mode: "conditions" | "asset_alloc" | "engine"; note: string;
+  // conditions
+  universe_codes?: string[];
+  buy_conditions?: Array<{ expr: string; op?: string; rhs?: number }>;
+  buy_logic?: string | null;
+  sort_expr?: string | null;
+  sort_desc?: boolean;
+  max_tickers?: number;
+  rebalance_period?: string;
+  // asset_alloc
+  basket?: Array<{ ticker: string; name: string; weight_pct: number }>;
+  rebalance_months?: number;
+  // engine
+  engine_strategy?: string;
+}
+
 export interface ValuationResult {
   stock_code: string;
   corp_name?: string;
@@ -1434,6 +1453,11 @@ export const analysisApi = {
   macroStrategyAI: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyAI> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/ai?market=${market}`, { method: "POST" });
     if (!r.ok) throw new Error(`Strategy AI failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategyBacktestConfig: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyBacktestConfig> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/backtest-config?market=${market}`);
+    if (!r.ok) throw new Error(`Strategy backtest-config failed: ${r.status}`);
     return r.json();
   },
   // 종목 단건 평가: 스크리너로 해당 종목을 찾아 가치평가 결과(intrinsic/gap/verdict + 펀더멘털) 반환

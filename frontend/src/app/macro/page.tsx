@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
 import { LoadingState, ErrorState } from "@/components/layout/States";
 import MacroCockpit, { type TransplantPayload } from "@/components/macro/MacroCockpit";
-import { loadMacroCore, type MacroCore } from "@/lib/macroData";
+import { loadMacroCore, loadStrategyBacktestConfig, type MacroCore } from "@/lib/macroData";
 import { setMacroHandoff } from "@/lib/macroHandoff";
 
 export default function MacroPage() {
@@ -21,21 +21,19 @@ export default function MacroPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 추천 배분 → 백테스터 이식 (asset_alloc 바스켓 프리필 + 라우팅)
-  const onTransplant = (p: TransplantPayload) => {
-    const total = p.holdings.reduce((s, h) => s + h.weight, 0) || 1;
-    setMacroHandoff({
-      strategyName: p.strategyName,
-      market: p.market,
-      basket: p.holdings.map((h) => ({
-        ticker: h.ticker,
-        name: p.market === "kr" ? h.label : h.us_label,
-        weightPct: Math.round((h.weight / total) * 1000) / 10,
-      })),
-      rebalanceMonths: 3,
-      createdAt: Date.now(),
-    });
-    router.push("/backtest");
+  // 전략 백테스트 → 백테스터 셋업 이식 (전략별 mode 구성 fetch + 라우팅)
+  const [bridging, setBridging] = useState(false);
+  const onTransplant = async (p: TransplantPayload) => {
+    setBridging(true);
+    try {
+      const cfg = await loadStrategyBacktestConfig(p.sid, p.market);
+      if (cfg) {
+        setMacroHandoff({ config: cfg, createdAt: Date.now() });
+        router.push("/backtest");
+      }
+    } finally {
+      setBridging(false);
+    }
   };
 
   return (
@@ -48,6 +46,7 @@ export default function MacroPage() {
         status={core?.regime ? `REGIME · ${core.regime.regime}` : "SOURCE: BOK·FRED·KIS"}
       />
       {loading && <LoadingState label="매크로 데이터 수집 중" />}
+      {bridging && <LoadingState label="전략을 백테스터로 구성하는 중" />}
       {err && !loading && <ErrorState sub={err} />}
       {core && !loading && <MacroCockpit core={core} onTransplant={onTransplant} />}
     </div>

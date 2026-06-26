@@ -6,7 +6,9 @@ import {
   type FilterGroupNode, type BacktestTrade, type MonthlyReturn,
 } from "@/lib/screenerApi";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/lib/screenerHandoff";
-import { getMacroHandoff, clearMacroHandoff, type MacroAllocHandoff } from "@/lib/macroHandoff";
+import { getMacroHandoff, clearMacroHandoff, type MacroBacktestHandoff } from "@/lib/macroHandoff";
+import type { StrategyBacktestConfig } from "@/lib/screenerApi";
+import type { Condition } from "./ConditionFormulaEditor";
 import { exportTradesCsv, exportSummaryCsv } from "@/lib/strategyStorage";
 import {
   listSavedStrategies, saveBacktestStrategy, deleteSavedStrategy,
@@ -94,11 +96,13 @@ const mapConds = (cs: BacktestStrategy["buy"]["conditions"]) =>
   }));
 
 // 전략 상태 → screenToBacktest payload 어댑터
-function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | null) {
+function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | null, macroCfg: StrategyBacktestConfig | null = null) {
   const { buy, sell } = s;
+  const macroUniverse = macroCfg && (macroCfg.mode === "conditions" || macroCfg.mode === "engine") && macroCfg.universe_codes?.length
+    ? macroCfg.universe_codes : null;
   return {
     universe: capsToUniverse(s.universe.caps),
-    custom_tickers: null as string[] | null,
+    custom_tickers: macroUniverse as string[] | null,
     filter_ast: handoff ? handoff.filterAst : largeCapFilter(),
     liquidity_floor: "standard",
     max_tickers: buy.maxStocks,
@@ -110,7 +114,8 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     full_universe_eval: buy.conditions.length > 0,
     universe_eval_cap: 200,
     allow_snapshot_fundamentals: buy.allowFundamentals,
-    strategy_name: "GoldenCross",
+    strategy_name: macroCfg?.mode === "engine" && macroCfg.engine_strategy
+      ? `tactical:${macroCfg.engine_strategy}` : "GoldenCross",
     start_date: s.startDate, end_date: s.endDate,
     initial_capital: s.capital * 10000,
     commission_rate: s.feePct / 100,
@@ -184,6 +189,41 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
   };
 }
 
+// 매크로 전략 백테스트 구성(mode별) → 백테스터 상태 프리필
+function applyMacroConfig(prev: BacktestStrategy, cfg: StrategyBacktestConfig): BacktestStrategy {
+  if (cfg.mode === "asset_alloc") {
+    return {
+      ...prev, name: cfg.name,
+      assetAlloc: {
+        ...prev.assetAlloc, enabled: true, preset: "custom", etfPct: 100, stockPct: 0,
+        rebalanceMonths: cfg.rebalance_months || 3,
+        basket: (cfg.basket || []).map((b) => ({ ticker: b.ticker, name: b.name, weightPct: b.weight_pct })),
+      },
+    };
+  }
+  if (cfg.mode === "conditions") {
+    const conds: Condition[] = (cfg.buy_conditions || []).map((c, i) => ({
+      id: `mc${i}`, factorName: cfg.name, factorToken: "", functionId: "expr", params: {},
+      expr: c.expr, label: cfg.name, direct: true,
+      op: (c.op as Condition["op"]) || "gte", rhs: String(c.rhs ?? 0),
+    }));
+    return {
+      ...prev, name: cfg.name, rebalancePeriod: "monthly",
+      buy: {
+        ...prev.buy, enabled: true, conditions: conds, logicExpr: cfg.buy_logic || "",
+        limitType: "LIMIT", maxStocks: cfg.max_tickers || prev.buy.maxStocks,
+        sortExpr: cfg.sort_expr || "", sortExprDesc: cfg.sort_desc ?? true,
+        primarySort: cfg.sort_expr
+          ? { expr: cfg.sort_expr, dir: (cfg.sort_desc ?? true) ? "DESC" : "ASC" }
+          : prev.buy.primarySort,
+      },
+      assetAlloc: { ...prev.assetAlloc, enabled: false },
+    };
+  }
+  // engine: 조건 비움(백엔드가 strategy_name="tactical:.." 유지) — strategy_name·custom_tickers는 strategyToRun에서
+  return { ...prev, name: cfg.name, buy: { ...prev.buy, conditions: [] }, assetAlloc: { ...prev.assetAlloc, enabled: false } };
+}
+
 export default function TerminalBacktester() {
   const [s, setS] = useState<BacktestStrategy>(initialStrategy);
   const [tab, setTab] = useState<SummaryTab>("buy");
@@ -192,26 +232,18 @@ export default function TerminalBacktester() {
   const [progress, setProgress] = useState<{ phase: string; done?: number; total?: number; count?: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<ScreenerStrategyHandoff | null>(null);
-  const [macroHandoff, setMacroHandoffState] = useState<MacroAllocHandoff | null>(null);
+  const [macroHandoff, setMacroHandoffState] = useState<MacroBacktestHandoff | null>(null);
   const [saved, setSaved] = useState<SavedBacktestStrategy[]>([]);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const h = getScreenerHandoff();
     if (h) setHandoff(h);
-    // 매크로 콕핏 추천 배분 이식 → asset_alloc 바스켓 프리필 (ETF 100% 슬리브)
+    // 매크로 전략 백테스트 이식 → mode별(conditions/asset_alloc/engine) 백테스터 구성 프리필
     const mh = getMacroHandoff();
-    if (mh && mh.basket.length) {
+    if (mh?.config) {
       setMacroHandoffState(mh);
-      setS((prev) => ({
-        ...prev,
-        name: mh.strategyName || prev.name,
-        assetAlloc: {
-          ...prev.assetAlloc, enabled: true, preset: "custom", etfPct: 100, stockPct: 0,
-          rebalanceMonths: mh.rebalanceMonths || 3,
-          basket: mh.basket.map((l) => ({ ticker: l.ticker, name: l.name, weightPct: l.weightPct })),
-        },
-      }));
+      setS((prev) => applyMacroConfig(prev, mh.config));
     }
     setSaved(listSavedStrategies());
   }, []);
@@ -237,7 +269,7 @@ export default function TerminalBacktester() {
     try {
       // 스트리밍: 진행률(스크리닝→시세로드 k/total→시뮬레이션)을 받으며 실행 → 프록시 타임아웃 면제
       const r = await backtestBridgeApi.screenToBacktestStream(
-        strategyToRun(s, handoff),
+        strategyToRun(s, handoff, macroHandoff?.config ?? null),
         (evt) => setProgress(evt),
       );
       if (r.error) setErr(r.message || "백테스트 실패");
@@ -282,25 +314,35 @@ export default function TerminalBacktester() {
         </div>
       )}
 
-      {/* 매크로 콕핏 추천 배분 이식 배너 */}
-      {macroHandoff && (
-        <div className="tscreener-handoff" style={{ borderColor: "var(--t-accent)" }}>
-          <div className="tscreener-handoff-main">
-            <span className="tscreener-handoff-badge" style={{ background: "var(--t-accent)" }}>매크로 추천 배분</span>
-            <span className="tscreener-handoff-text">
-              {macroHandoff.strategyName} · {macroHandoff.market === "kr" ? "국내 ETF" : "US ETF"} {macroHandoff.basket.length}종 → ETF 100% 자산배분으로 백테스트
-            </span>
-            <div className="tscreener-handoff-conds">
-              {macroHandoff.basket.map((l, i) => (
-                <span key={i} className="tscreener-handoff-cond">{l.name} {l.weightPct}%</span>
-              ))}
+      {/* 매크로 전략 백테스트 이식 배너 (mode별) */}
+      {macroHandoff && (() => {
+        const cfg = macroHandoff.config;
+        const modeLabel = cfg.mode === "conditions" ? "조건식 (편집 가능)"
+          : cfg.mode === "asset_alloc" ? "ETF 자산배분" : "동적 엔진 (최적화형)";
+        const uni = cfg.universe_codes?.length ?? cfg.basket?.length ?? 0;
+        return (
+          <div className="tscreener-handoff" style={{ borderColor: "var(--t-accent)" }}>
+            <div className="tscreener-handoff-main">
+              <span className="tscreener-handoff-badge" style={{ background: "var(--t-accent)" }}>매크로 전략</span>
+              <span className="tscreener-handoff-text">
+                {cfg.name} · {modeLabel} · {uni}종 → RUN으로 백테스트
+              </span>
+              <div className="tscreener-handoff-conds">
+                {cfg.mode === "conditions" && (cfg.buy_conditions || []).map((c, i) => (
+                  <span key={i} className="tscreener-handoff-cond">{c.expr} ≥ {c.rhs ?? 0}</span>
+                ))}
+                {cfg.mode === "asset_alloc" && (cfg.basket || []).map((b, i) => (
+                  <span key={i} className="tscreener-handoff-cond">{b.name} {b.weight_pct}%</span>
+                ))}
+                {cfg.mode === "engine" && <span className="tscreener-handoff-cond">{cfg.note}</span>}
+              </div>
             </div>
+            <button className="tscreener-handoff-clear" onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>
+              ✕ 해제
+            </button>
           </div>
-          <button className="tscreener-handoff-clear" onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>
-            ✕ 해제
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 편집 영역(좌) + 조건 요약·액션(우) — 젠포트식 2컬럼 */}
       <div className="tbt-config-row">

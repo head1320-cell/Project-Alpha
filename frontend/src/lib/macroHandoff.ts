@@ -1,33 +1,30 @@
-// 매크로 콕핏 → 백테스터 자산배분 전달 (탭 간 추천 배분 이식)
+// 매크로 콕핏 → 백테스터 전략 셋업 전달 (탭 간 전체 백테스트 구성 이식)
 // screenerHandoff와 동일 패턴: 모듈 store + sessionStorage 폴백.
-// 매크로 추천/전략의 보유 ETF 바스켓을 백테스터 asset_alloc 슬리브로 프리필.
+// 전략 백테스트 버튼이 backtest-config(mode별 구성)를 담아 백테스터가 그대로 셋업.
 
-export interface MacroAllocLeg { ticker: string; name: string; weightPct: number }
+import type { StrategyBacktestConfig } from "@/lib/screenerApi";
 
-export interface MacroAllocHandoff {
-  strategyName: string;
-  market: "us" | "kr";
-  basket: MacroAllocLeg[];      // 합 ≈ 100 (정규화된 비중)
-  rebalanceMonths: number;
+export interface MacroBacktestHandoff {
+  config: StrategyBacktestConfig;
   createdAt: number;
 }
 
 const KEY = "alpha:macro-handoff";
 
-let _handoff: MacroAllocHandoff | null = null;
+let _handoff: MacroBacktestHandoff | null = null;
 const _listeners = new Set<() => void>();
 
-export function setMacroHandoff(h: MacroAllocHandoff) {
+export function setMacroHandoff(h: MacroBacktestHandoff) {
   _handoff = h;
   try { sessionStorage.setItem(KEY, JSON.stringify(h)); } catch { /* 메모리만 */ }
   _listeners.forEach((fn) => fn());
 }
 
-export function getMacroHandoff(): MacroAllocHandoff | null {
+export function getMacroHandoff(): MacroBacktestHandoff | null {
   if (_handoff) return _handoff;
   try {
     const raw = sessionStorage.getItem(KEY);
-    if (raw) { _handoff = JSON.parse(raw) as MacroAllocHandoff; return _handoff; }
+    if (raw) { _handoff = JSON.parse(raw) as MacroBacktestHandoff; return _handoff; }
   } catch { /* noop */ }
   return null;
 }

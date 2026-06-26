@@ -50,7 +50,7 @@ const QUAD_TONE: Record<string, string> = {
   Reflation: "var(--color-bull)", Overheating: "#ea580c", Stagflation: "var(--color-bear)", Disinflation: "#2563eb",
 };
 
-export interface TransplantPayload { strategyName: string; holdings: TacticalHolding[]; market: Market }
+export interface TransplantPayload { sid: string; name: string; market: Market }
 
 export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; onTransplant?: (p: TransplantPayload) => void }) {
   const [tab, setTab] = useState<TabId>("overview");
@@ -105,8 +105,8 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
     loadSeries(id).then((s) => setDrill((d) => (d && d.id === id ? { ...d, series: s, loading: false } : d)));
   }, []);
 
-  const transplant = (s: { name: string; holdings: TacticalHolding[] }) =>
-    onTransplant?.({ strategyName: s.name, holdings: s.holdings, market });
+  const transplant = (sid: string, name: string) =>
+    onTransplant?.({ sid, name, market });
 
   const openStrategy = useCallback((sid: string) => {
     setStratModal({ sid, detail: null, loading: true });
@@ -161,7 +161,7 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
         <StrategyModal
           detail={stratModal.detail} loading={stratModal.loading} currentQuad={quad} market={market}
           onClose={() => setStratModal(null)}
-          onBacktest={(d) => { transplant({ name: d.name, holdings: d.holdings }); setStratModal(null); }}
+          onBacktest={(d) => { transplant(d.id, d.name); setStratModal(null); }}
         />
       )}
     </div>
@@ -173,7 +173,7 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
 // ─────────────────────────────────────────────────────────────────────────────
 function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
   core: MacroCore; regime: NonNullable<MacroCore["regime"]>; quad: string; recommend: MacroRecommend | null;
-  onTransplant: (s: { name: string; holdings: TacticalHolding[] }) => void; onDrill: (id: string) => void;
+  onTransplant: (sid: string, name: string) => void; onDrill: (id: string) => void;
 }) {
   const yc = regime.yield_curve;
   const allInd = (core.dashboard?.themes ?? []).flatMap((t) => t.indicators);
@@ -211,7 +211,7 @@ function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
                   <span key={h.ticker} className="mc-hchip"><i style={{ background: donutColor(idx) }} />{h.us_label} {h.weight}%</span>
                 ))}
               </div>
-              <button className="mc-bt-btn" onClick={() => onTransplant({ name: recommend.top.name, holdings: recommend.top.holdings })}><Play size={12} /> 이 배분으로 백테스트 →</button>
+              <button className="mc-bt-btn" onClick={() => onTransplant(recommend.top.id, recommend.top.name)}><Play size={12} /> 이 전략 백테스트 →</button>
             </div>
           </div>
         ) : <div className="mc-empty-sm">추천 데이터 없음</div>}
@@ -387,7 +387,7 @@ const FAMILY_ORDER = ["risk", "optim", "trend", "sizing", "momentum", "benchmark
 
 function StrategiesTab({ strategies, market, setMarket, loading, onTransplant, onOpen }: {
   strategies: MacroStrategies | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
-  onTransplant: (s: { name: string; holdings: TacticalHolding[] }) => void; onOpen: (sid: string) => void;
+  onTransplant: (sid: string, name: string) => void; onOpen: (sid: string) => void;
 }) {
   const groups = useMemo(() => {
     const by: Record<string, TacticalStrategy[]> = {};
@@ -417,14 +417,14 @@ function StrategiesTab({ strategies, market, setMarket, loading, onTransplant, o
   );
 }
 
-function StrategyCard({ s, onTransplant, onOpen }: { s: TacticalStrategy; onTransplant: (s: { name: string; holdings: TacticalHolding[] }) => void; onOpen: (sid: string) => void }) {
+function StrategyCard({ s, onTransplant, onOpen }: { s: TacticalStrategy; onTransplant: (sid: string, name: string) => void; onOpen: (sid: string) => void }) {
   const top = [...s.holdings].sort((a, b) => b.weight - a.weight).slice(0, 6);
   return (
     <div className="mc-stratcard mc-stratcard-click" onClick={() => onOpen(s.id)} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(s.id); }}>
       <div className="mc-stratcard-h">
         <div><b>{s.name}</b><SignalBadge signal={s.signal} /></div>
-        <button className="mc-bt-btn sm" onClick={(e) => { e.stopPropagation(); onTransplant({ name: s.name, holdings: s.holdings }); }}><Play size={11} /> 백테스트</button>
+        <button className="mc-bt-btn sm" onClick={(e) => { e.stopPropagation(); onTransplant(s.id, s.name); }}><Play size={11} /> 백테스트</button>
       </div>
       <p className="mc-stratcard-desc">{s.description}</p>
       <div className="mc-stratcard-body">
@@ -450,7 +450,7 @@ function StrategyCard({ s, onTransplant, onOpen }: { s: TacticalStrategy; onTran
 // ─────────────────────────────────────────────────────────────────────────────
 function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
   recommend: MacroRecommend | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
-  onTransplant: (s: { name: string; holdings: TacticalHolding[] }) => void;
+  onTransplant: (sid: string, name: string) => void;
 }) {
   if (loading) return <div className="mc-empty-sm">추천 재계산 중…</div>;
   if (!recommend) return <div className="mc-empty-sm">추천 데이터 없음</div>;
@@ -483,7 +483,7 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
                   </div>
                 ))}
               </div>
-              <button className="mc-bt-btn" onClick={() => onTransplant({ name: top.name, holdings: top.holdings })}><Play size={12} /> 이 배분으로 백테스트 →</button>
+              <button className="mc-bt-btn" onClick={() => onTransplant(top.id, top.name)}><Play size={12} /> 이 전략 백테스트 →</button>
             </div>
           </div>
         </div>
