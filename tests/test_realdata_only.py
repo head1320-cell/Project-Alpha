@@ -145,3 +145,26 @@ def test_market_supply_real_mode_empty_flows(monkeypatch):
     assert data["foreign_net_5d"] is None       # 미적재 → 정직 None
     assert data["insider_net_20d"] is None      # 가격 없음(OHLCV None) → 주입 안 됨
     assert data["_source"] == "unavailable"
+
+
+def test_price_supply_uses_amt_and_new_fields(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    import pandas as pd
+
+    from src.data.price_factors_store import PRICE_FACTOR_BY_ID, PriceFactorsStore
+    # 신규 필드 메타 등록 확인
+    assert "retail_net_5d" in PRICE_FACTOR_BY_ID
+    assert "retail_net_20d" in PRICE_FACTOR_BY_ID
+    assert "insider_net_20d" in PRICE_FACTOR_BY_ID
+    seen = {}
+
+    def fake_series(ticker, field, engine=None):
+        seen[field] = True
+        return pd.Series([1, 2, 3, 4, 5]) if field.endswith("_amt") else None
+    monkeypatch.setattr("src.data.kis_flows.load_flows_series", fake_series)
+    s = PriceFactorsStore.get_default()
+    out = s._supply_factors("005930")
+    assert out["foreign_net_5d"] == 15        # amt 합 (qty 아님)
+    assert out["retail_net_5d"] == 15
+    assert "frgn_amt" in seen and "prsn_amt" in seen   # 금액 컬럼 사용
+    assert "frgn_qty" not in seen                       # qty 미사용

@@ -77,6 +77,9 @@ PRICE_FACTORS: list[PriceFactorMeta] = [
     PriceFactorMeta("foreign_net_20d", "외국인 20일 순매수", "supply", "억", True, -2000, 2000, "KIS 투자자동향", "최근 20일 외국인 순매수"),
     PriceFactorMeta("inst_net_5d", "기관 5일 순매수", "supply", "억", True, -500, 500, "KIS 투자자동향", "최근 5일 기관 순매수 금액"),
     PriceFactorMeta("inst_net_20d", "기관 20일 순매수", "supply", "억", True, -2000, 2000, "KIS 투자자동향", "최근 20일 기관 순매수"),
+    PriceFactorMeta("retail_net_5d", "개인 5일 순매수", "supply", "억", False, -500, 500, "KIS 투자자동향", "최근 5일 개인 순매수 금액(역추세 참고)"),
+    PriceFactorMeta("retail_net_20d", "개인 20일 순매수", "supply", "억", False, -2000, 2000, "KIS 투자자동향", "최근 20일 개인 순매수"),
+    PriceFactorMeta("insider_net_20d", "내부자 20일 순매수", "supply", "억", True, -300, 300, "DART 지분공시", "최근 20일 임원·주요주주 순취득(억)"),
 ]
 
 PRICE_FACTOR_BY_ID = {f.id: f for f in PRICE_FACTORS}
@@ -230,31 +233,39 @@ class PriceFactorsStore(DeterministicMockStore):
             "turnover_rate": self._turnover(stock_code, (vols[-1] * cur) if vols else None),
             "amount_20d_avg": round((vol20 or 0) * cur / 1e8, 1) if vol20 else None,
             "volume_spike": vol_spike, "price_volume_corr": self._corr(closes[-20:], vols[-20:]),
-            # 수급(외국인·기관 순매수 N일 합) — investor_flows 적재(#3) 시 실값, 미적재면 None
-            **self._supply_factors(stock_code),
+            # 수급(외국인·기관·개인 금액 + DART 내부자) — 적재 시 실값, 미적재면 None
+            **self._supply_factors(stock_code, cur),
             "_source": "kis_real",
         }
         return out
 
-    def _supply_factors(self, stock_code: str) -> dict:
-        """investor_flows(KIS/KRX MDC 적재)에서 외국인·기관 순매수 N일 합. 미적재면 전부 None."""
+    def _supply_factors(self, stock_code: str, price: float | None = None) -> dict:
+        """investor_flows 금액(외국인/기관/개인 N일 합) + DART 내부자(20d). 미적재면 None."""
         out = {"foreign_net_5d": None, "foreign_net_20d": None,
-               "inst_net_5d": None, "inst_net_20d": None}
+               "inst_net_5d": None, "inst_net_20d": None,
+               "retail_net_5d": None, "retail_net_20d": None, "insider_net_20d": None}
         try:
             from src.data.kis_flows import load_flows_series
-        except Exception:
-            return out
 
-        def _sum_last(field: str, days: int):
-            s = load_flows_series(stock_code, field)
-            if s is None or len(s) == 0:
-                return None
-            tail = s.dropna().tail(days)
-            return round(float(tail.sum()), 0) if len(tail) else None
-        out["foreign_net_5d"] = _sum_last("frgn_qty", 5)
-        out["foreign_net_20d"] = _sum_last("frgn_qty", 20)
-        out["inst_net_5d"] = _sum_last("orgn_qty", 5)
-        out["inst_net_20d"] = _sum_last("orgn_qty", 20)
+            def _sum_last(field: str, days: int):
+                s = load_flows_series(stock_code, field)
+                if s is None or len(s) == 0:
+                    return None
+                tail = s.dropna().tail(days)
+                return round(float(tail.sum()), 0) if len(tail) else None
+            out["foreign_net_5d"] = _sum_last("frgn_amt", 5)
+            out["foreign_net_20d"] = _sum_last("frgn_amt", 20)
+            out["inst_net_5d"] = _sum_last("orgn_amt", 5)
+            out["inst_net_20d"] = _sum_last("orgn_amt", 20)
+            out["retail_net_5d"] = _sum_last("prsn_amt", 5)
+            out["retail_net_20d"] = _sum_last("prsn_amt", 20)
+        except Exception:
+            pass
+        try:
+            from src.data.insider_flows import insider_net
+            out["insider_net_20d"] = insider_net(stock_code, days=20, price=price)
+        except Exception:
+            pass
         return out
 
     def _market_returns(self):
@@ -390,6 +401,9 @@ class PriceFactorsStore(DeterministicMockStore):
             "foreign_net_20d": round(nm(stock_code, "f20", mu=0, sigma=400), 1),
             "inst_net_5d": round(nm(stock_code, "i5", mu=0, sigma=100), 1),
             "inst_net_20d": round(nm(stock_code, "i20", mu=0, sigma=350), 1),
+            "retail_net_5d": round(nm(stock_code, "r5", mu=0, sigma=110), 1),
+            "retail_net_20d": round(nm(stock_code, "r20", mu=0, sigma=380), 1),
+            "insider_net_20d": round(nm(stock_code, "ins20", mu=0, sigma=40), 1),
             "_source": "price_mock",
         }
 
