@@ -63,7 +63,14 @@ class ConsensusStore(DeterministicMockStore):
         )
 
     def _build_estimates(self, stock_code: str) -> dict:
-        # 종목별 결정론적 추정치
+        # 운영(KIS_USE_MOCK=0) — 실 컨센서스 소스 미연결(유료 FnGuide/DataGuide 등 필요).
+        # 합성 추정치 금지 → 정직 None. estimate 필터는 데이터 없음으로 매칭 안 됨("—").
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            out: dict = {e.id: None for e in ESTIMATE_CATALOG}
+            out["_source"] = "unavailable"
+            return out
+        # 종목별 결정론적 추정치 (mock 모드 — 개발/샌드박스/CI)
         eps_chg = round(self._normal(stock_code, "fwd_eps", mu=2.0, sigma=8.0), 2)
         fwd_per = round(abs(self._normal(stock_code, "fwd_per", mu=14.0, sigma=7.0)) + 3, 2)
         # 리비전은 EPS 변화와 약한 상관 (상향 조정 시 점수↑)

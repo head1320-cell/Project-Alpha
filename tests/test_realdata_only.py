@@ -80,6 +80,25 @@ def test_ohlcv_loader_mock_mode_synthetic(monkeypatch):
     assert df is not None and not df.empty      # mock df(회귀)
 
 
+# ── 컨센서스 추정치 (실 소스 미연결 — 운영선 합성 금지) ──
+def test_consensus_real_mode_no_synthetic(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    from src.data.consensus_store import ESTIMATE_CATALOG, ConsensusStore
+    s = ConsensusStore.get_default()
+    est = s._build_estimates("005930")
+    assert all(est.get(e.id) is None for e in ESTIMATE_CATALOG)  # 운영 — 합성 추정치 금지
+    assert est["_source"] == "unavailable"
+
+
+def test_consensus_mock_mode_synthetic(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    from src.data.consensus_store import ConsensusStore
+    s = ConsensusStore.get_default()
+    est = s._build_estimates("005930")
+    assert est["_source"] == "consensus_mock"        # mock 모드 — 합성(회귀)
+    assert est.get("fwd_per") is not None
+
+
 # ── 확장 팩터 (합성 베이스 vs 운영) ──
 def test_extended_factors_real_mode_no_synthetic_base(monkeypatch):
     from src.data.extended_factors_store import ExtendedFactorsStore
