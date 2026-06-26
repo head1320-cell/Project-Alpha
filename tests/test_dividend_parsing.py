@@ -58,3 +58,24 @@ def test_get_financial_statement_full_sets_dps(monkeypatch):
     fs = c.get_financial_statement_full("00126380", "2025")
     assert fs is not None
     assert fs.dps == 1444.0     # alotMatter 배선으로 실 dps 주입
+
+
+# ── fundamentals_store: 0.25×NI 날조 제거, 실 현금배당성향 기반 ──
+class _FakeDart:
+    def __init__(self, payout):
+        self._payout = payout
+
+    def get_dividend_info(self, corp, year, reprt_code="11011"):
+        return {"dps": 1000.0, "payout_pct": self._payout, "yield_pct": 2.0}
+
+
+def test_real_dividend_from_payout():
+    from src.data.fundamentals_store import _real_dividend
+    # 현금배당성향 30% × 순이익 1000억 = 300억 (0.25×NI=250억 아님)
+    assert _real_dividend(_FakeDart(30.0), "00126380", 2025, 1000.0) == 300.0
+
+
+def test_real_dividend_no_disclosure_zero():
+    from src.data.fundamentals_store import _real_dividend
+    # 공시에 배당 없음 → 0 (무배당, 날조 0.25 제거)
+    assert _real_dividend(_FakeDart(None), "x", 2025, 1000.0) == 0.0

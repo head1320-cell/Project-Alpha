@@ -142,6 +142,18 @@ FACTOR_CATEGORY_LABELS = {
 # Fundamentals Store
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _real_dividend(dart, corp_code: str, year, net_income: float | None) -> float:
+    """실 alotMatter 현금배당성향 기반 배당(억). 미공시 → 0(무배당, 0.25×NI 날조 금지)."""
+    try:
+        div = dart.get_dividend_info(corp_code, str(year))
+    except Exception:
+        div = {}
+    payout = div.get("payout_pct")
+    if payout is not None and net_income and net_income > 0:
+        return payout / 100 * net_income
+    return 0.0
+
+
 class FundamentalsStore(DeterministicMockStore):
     """DART 원천 → 50+ 학술 팩터 도출 (Mock + 실데이터 연결 여지)."""
 
@@ -258,8 +270,8 @@ class FundamentalsStore(DeterministicMockStore):
             mcap = total_equity * 1.2
 
         interest_expense = total_liabilities * 0.03 if total_liabilities else 0
-        # 배당/자사주는 별도 공시 → 근사 (순이익의 일부)
-        dividend = net_income * 0.25 if net_income and net_income > 0 else 0
+        # 배당: 실 alotMatter(현금배당성향) 기반 — 미공시면 0(무배당). 날조 0.25×NI 제거.
+        dividend = _real_dividend(dart, corp_code, cur_year, net_income)
         buyback = 0
 
         # 전년/3년전
