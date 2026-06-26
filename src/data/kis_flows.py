@@ -190,6 +190,29 @@ def load_flows_series(ticker: str, field: str, engine=None) -> pd.Series | None:
     return s
 
 
+def flows_status(engine=None) -> dict:
+    """investor_flows 적재 현황 — 행수/종목수/날짜범위/세부주체 보유. 테이블 없으면 0(정직)."""
+    out = {"rows": 0, "tickers": 0, "min_date": None, "max_date": None, "has_detail": False}
+    engine = _get_engine(engine)
+    if engine is None:
+        return out
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT COUNT(*), COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date), "
+                "COUNT(pension_qty) FROM investor_flows")).fetchone()
+        if row:
+            out["rows"] = int(row[0] or 0)
+            out["tickers"] = int(row[1] or 0)
+            out["min_date"] = str(row[2])[:10] if row[2] else None
+            out["max_date"] = str(row[3])[:10] if row[3] else None
+            out["has_detail"] = int(row[4] or 0) > 0
+    except Exception:
+        pass
+    return out
+
+
 def main() -> None:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

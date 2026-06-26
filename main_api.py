@@ -2774,6 +2774,50 @@ def symbol_status():
     }
 
 
+# ── 투자자 수급(investor_flows) 적재 점검 + 과거 백필 ───────────────────────────
+
+_FLOWS_BACKFILL_RUNNING = {"krx": False}
+
+
+@app.get("/api/v1/symbols/flows/status")
+def symbols_flows_status():
+    """investor_flows 수급 적재 현황 — 행수/종목수/날짜범위/세부주체 + 실행중 여부."""
+    from src.data.kis_flows import flows_status
+    st = flows_status()
+    st["krx_backfill_running"] = _FLOWS_BACKFILL_RUNNING["krx"]
+    return st
+
+
+@app.post("/api/v1/symbols/flows/backfill-krx")
+def symbols_flows_backfill_krx(start: str = "2018-01-01", all_listed: bool = True):
+    """KRX MDC 과거 수급 확정치 백필 시작(백그라운드). KIS ~30영업일 제한 보완.
+    운영(실데이터) 모드 전용 — mock 모드선 거부. 진행은 flows/status로 확인."""
+    import threading
+
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
+        return {"started": False,
+                "message": "mock 모드 — 실 KRX 백필은 실데이터 모드(KIS_USE_MOCK=0)에서만"}
+    if _FLOWS_BACKFILL_RUNNING["krx"]:
+        return {"started": False, "message": "이미 실행 중"}
+
+    def _run():
+        _FLOWS_BACKFILL_RUNNING["krx"] = True
+        try:
+            from src.data.krx_mdc import backfill_flows_krx
+            logger.info(f"KRX 수급 백필 시작 (start={start}, all_listed={all_listed})")
+            stats = backfill_flows_krx(start=start, all_listed=all_listed)
+            logger.info(f"KRX 수급 백필 완료: {stats}")
+        except Exception:
+            logger.exception("KRX 수급 백필 실패")
+        finally:
+            _FLOWS_BACKFILL_RUNNING["krx"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"started": True, "start": start, "all_listed": all_listed,
+            "message": "KRX 과거 수급 백필 시작(백그라운드). flows/status로 진행 확인."}
+
+
 # ── 계좌 조회 ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/account/holdings")

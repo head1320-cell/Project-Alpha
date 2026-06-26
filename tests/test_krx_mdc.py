@@ -108,6 +108,26 @@ def test_backfill_requires_master(mem_engine, monkeypatch):
     assert stats.get("error") and "collect-master" in stats["message"]
 
 
+# ─── 적재 현황(flows_status) — API/UI 점검용 ──────────────────────────────────
+def test_flows_status_empty(mem_engine):
+    kf.ensure_flows_table(mem_engine)
+    st = kf.flows_status(mem_engine)
+    assert st["rows"] == 0 and st["tickers"] == 0 and st["has_detail"] is False
+    assert st["min_date"] is None and st["max_date"] is None
+
+
+def test_flows_status_after_backfill(mem_engine, monkeypatch):
+    monkeypatch.setattr("src.data.stock_master.load_master_flags",
+                        lambda: {"005930": {"isin": "KR7005930003", "group_code": "ST"}})
+    km.backfill_flows_krx("2024-01-01", "2024-01-31", tickers=["005930"],
+                          engine=mem_engine, fetcher=fake_fetcher)
+    st = kf.flows_status(mem_engine)
+    assert st["rows"] == 1
+    assert st["tickers"] == 1
+    assert st["max_date"] == "2024-01-05"
+    assert st["has_detail"] is True       # KRX 백필 → 세부 주체(연기금 등) 채워짐
+
+
 def test_date_chunks():
     chunks = list(km._date_chunks("2015-01-01", "2018-12-31"))
     assert len(chunks) >= 2 and chunks[0][0] == "2015-01-01" and chunks[-1][1] == "2018-12-31"
