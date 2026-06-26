@@ -437,13 +437,17 @@ class MacroCollector:
         except Exception as e:
             logger.warning(f"{source} fetcher 실패 ({key}): {e}")
 
-        # Fallback to Mock
+        # Fallback to Mock — mock 모드만. 운영(KIS_USE_MOCK=0)선 합성 금지 → 정직 unavailable.
         if not values:
-            profile = MOCK_PROFILES.get(key, {"base": 100, "vol": 5, "trend": 0})
-            timestamps, values = _generate_mock_series(
-                key, length=60, **profile,
-            )
-            actual_source = "MOCK"
+            from src.data.mock_gate import mock_allowed
+            if mock_allowed():
+                profile = MOCK_PROFILES.get(key, {"base": 100, "vol": 5, "trend": 0})
+                timestamps, values = _generate_mock_series(
+                    key, length=60, **profile,
+                )
+                actual_source = "MOCK"
+            else:
+                actual_source = "unavailable"   # 운영 — 실 BOK/FRED 미수신(키 미설정/실패) → "—"
 
         # 정규화 + 메트릭
         clean = [v for v in values if v is not None and not math.isnan(v)]
@@ -486,3 +490,17 @@ class MacroCollector:
                 "bok_configured": self.bok.is_configured,
                 "fred_configured": self.fred.is_configured,
             }
+
+    def connection_status(self) -> dict:
+        """매크로 실연결 점검 — 소스별 키 설정 + 모드. 운영서 키 없으면 지표 'unavailable'."""
+        from src.data.mock_gate import mock_allowed
+        allow = mock_allowed()
+        return {
+            "mock_allowed": allow,
+            "real_mode": not allow,
+            "bok_configured": self.bok.is_configured,
+            "fred_configured": self.fred.is_configured,
+            "note": ("mock 모드 — 키 없으면 합성 MOCK 서빙"
+                     if allow else
+                     "운영 모드 — 실 BOK/FRED만, 미설정 지표는 unavailable(정직 '—')"),
+        }

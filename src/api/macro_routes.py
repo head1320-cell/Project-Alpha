@@ -44,6 +44,13 @@ def macro_snapshot(use_cache: bool = Query(True)):
         raise HTTPException(500, str(e))
 
 
+@router.get("/connection-status")
+def macro_connection_status():
+    """매크로 실연결 점검 — BOK/FRED 키 설정 + 모드. 운영서 미설정 지표는 unavailable('—')."""
+    from src.services.macro_collector import MacroCollector
+    return MacroCollector.get_default().connection_status()
+
+
 @router.get("/regime")
 def macro_regime():
     """4-Quadrant 국면 + Stress + Yield Curve + 동적 파라미터."""
