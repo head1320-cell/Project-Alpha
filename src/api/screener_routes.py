@@ -1351,6 +1351,15 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         from src.engine.filter_ast import parse_group
         from src.kis_backtest_engine import run_backtest
 
+        # 0) 택티컬/최적화 전략 충실 백테스트 — strategy_name="tactical:<sid>" → 동적 엔진 어댑터
+        if (req.strategy_name or "").startswith("tactical:"):
+            from src.engine.strategy_backtest_map import run_tactical_backtest
+            _emit({"phase": "simulating"})
+            out = run_tactical_backtest(req.strategy_name.split(":", 1)[1], "kr",
+                                        req.start_date, req.end_date, req.initial_capital)
+            _emit({"phase": "done"})
+            return out
+
         # 1) 스크리닝 (custom_tickers 있으면 관심그룹 종목을 유니버스로)
         _emit({"phase": "screening"})
         screener = get_screener()

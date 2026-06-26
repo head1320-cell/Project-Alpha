@@ -386,6 +386,22 @@ def macro_strategy_detail(sid: str, market: str = Query("us", pattern="^(us|kr)$
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.get("/strategy/{sid}/backtest-config")
+def macro_strategy_backtest_config(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
+    """전략 → 백테스터 셋업 구성(하이브리드): 모멘텀=조건식·정적=asset_alloc·최적화=엔진."""
+    try:
+        from src.engine.strategy_backtest_map import backtest_config
+        c = backtest_config(sid, market)
+        if c is None:
+            raise HTTPException(404, "전략을 찾을 수 없습니다.")
+        return c
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("전략 백테스트 구성 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 @router.post("/strategy/{sid}/ai")
 def macro_strategy_ai(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
     """전략 AI 심층분석 (온디맨드) — 프로파일+현재 국면+보유 컨텍스트로 Claude 생성. 키 없으면 폴백."""
