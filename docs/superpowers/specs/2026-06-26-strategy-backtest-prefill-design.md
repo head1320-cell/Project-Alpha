@@ -107,3 +107,19 @@
 ## 8. 비범위 (YAGNI)
 - 최적화 전략을 백테스터 조건 UI에서 편집 — 불가능(공분산 최적화). 엔진 모드로 충실 실행만.
 - 벤치마크 자동(엔진 모드)은 선택 — 우선 곡선·통계. 추후 _compute_benchmark 연결 가능.
+
+---
+
+## 9. 구현 완료 (Implementation — ★기록★)
+브랜치 `claude/keen-thompson-bdk3e8`. 2 커밋 + 푸시.
+- `cb6ffef` 백엔드: `strategy_backtest_map.py`(backtest_config 22→mode + 모멘텀12 조건식 큐레이션 + run_tactical_backtest 어댑터) +
+  `screen_to_backtest` "tactical:<sid>" 라우팅 + `GET /macro/strategy/{sid}/backtest-config` + `tests/test_strategy_backtest_map.py`(9, TDD).
+  ★factor_expr 산술전용 → cond는 값식 + op=gte/rhs=0. laa는 타자산 MA 참조라 engine 모드(최적화7+laa=8).★
+- `6516551` 프론트: macroHandoff(config 이식) + screenerApi/macroData 로더 + MacroCockpit(sid 전달) +
+  page onTransplant(config fetch→handoff→/backtest) + TerminalBacktester applyMacroConfig(mode별) + 배너.
+
+검증: pytest 586 passed/10 skipped(577+9), ruff, tsc 0, next build 16/16. E2E: tactical:hrp 라우팅(총47%·sharpe0.9·49pt),
+모멘텀 조건식 parse 통과, 엔진/조건/자산배분 3모드 셋업 확인.
+
+정직한 한계(개정): 모멘텀은 조건식 변환(편집가능, 일부 근사) — 정확 동적실행은 상세모달 backtest_strategy·엔진모드와 동일.
+엔진모드 거래통계(승률·손익비)는 월기반. 유니버스=국내 ETF 코드 → 실측은 GCP. mock 절대수치는 합성.
