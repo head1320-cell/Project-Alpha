@@ -73,7 +73,7 @@ def backtest_config(sid: str, market: str = "us") -> dict | None:
         spec = _MOMENTUM[sid]
         return {**base, "mode": "conditions",
                 "universe_codes": _codes(spec["universe"], mk),
-                "buy_conditions": [{"expr": spec["cond"], "op": "gt", "rhs": 0}],
+                "buy_conditions": [{"expr": spec["cond"], "op": "gte", "rhs": 0}],
                 "buy_logic": None,
                 "sort_expr": spec.get("sort"), "sort_desc": True,
                 "max_tickers": spec["max"], "rebalance_period": "monthly",
