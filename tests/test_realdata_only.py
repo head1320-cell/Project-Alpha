@@ -168,3 +168,16 @@ def test_price_supply_uses_amt_and_new_fields(monkeypatch):
     assert out["retail_net_5d"] == 15
     assert "frgn_amt" in seen and "prsn_amt" in seen   # 금액 컬럼 사용
     assert "frgn_qty" not in seen                       # qty 미사용
+
+
+def test_behavioral_signal_real_path(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    from src.data.market_data import eval_behavioral_signal
+    # 내부자 매수 + 개인 매도 → insider_buy_retail_sell 참
+    ind = {"insider_net_20d": 5.0, "retail_net_5d": -10.0,
+           "foreign_net_5d": 0, "institution_net_5d": 0}
+    assert eval_behavioral_signal(ind, "insider_buy_retail_sell") is True
+    # 데이터 없음(None) → 시그널 거짓 (정직, 합성 안 함)
+    empty = {"insider_net_20d": None, "retail_net_5d": None,
+             "foreign_net_5d": None, "institution_net_5d": None}
+    assert eval_behavioral_signal(empty, "insider_buy_retail_sell") is False
