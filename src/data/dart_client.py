@@ -255,6 +255,13 @@ class DARTClient:
         data = self._get("elestock.json", {"corp_code": corp_code})
         return self._parse_insider_rows(data)
 
+    def get_dividend_info(self, corp_code: str, bsns_year: str, reprt_code: str = "11011") -> dict:
+        """배당에 관한 사항(alotMatter) → {dps, payout_pct, yield_pct}. 미설정/실패 → 전부 None."""
+        data = self._get("alotMatter.json", {
+            "corp_code": corp_code, "bsns_year": bsns_year, "reprt_code": reprt_code,
+        })
+        return self._parse_dividend_rows(data)
+
     # ─────────────────────────────────────────────────────────────────────
     # 기업 개황
     # ─────────────────────────────────────────────────────────────────────
@@ -409,6 +416,11 @@ class DARTClient:
         if fs.gross_profit is None and fs.revenue is not None and fs.cogs is not None:
             fs.gross_profit = fs.revenue - fs.cogs
 
+        # 배당공시(alotMatter)에서 실 주당배당금 주입 → compute_ratios가 dividend_yield/payout 산출
+        _div = self.get_dividend_info(corp_code, bsns_year, reprt_code)
+        if _div.get("dps") is not None:
+            fs.dps = _div["dps"]
+
         fs.compute_ratios()
         self._cache[cache_key] = fs
         return fs
@@ -520,6 +532,26 @@ class DARTClient:
                          "irds_cnt": int(irds) if irds is not None else 0,
                          "repror": it.get("repror", "")})
         return rows
+
+    @staticmethod
+    def _parse_dividend_rows(data: dict | None) -> dict:
+        """alotMatter(배당에 관한 사항) → {dps, payout_pct, yield_pct}(보통주). 빈/실패 → 전부 None."""
+        out = {"dps": None, "payout_pct": None, "yield_pct": None}
+        if not data or data.get("status") != "000":
+            return out
+        for it in data.get("list", []) or []:
+            se = str(it.get("se", "")).strip()
+            knd = str(it.get("stock_knd", ""))
+            val = DARTClient._parse_amount(it.get("thstrm"))
+            if val is None:
+                continue
+            if se.startswith("주당 현금배당금") and "보통" in knd and out["dps"] is None:
+                out["dps"] = val
+            elif se.startswith("현금배당성향") and out["payout_pct"] is None:
+                out["payout_pct"] = val
+            elif se.startswith("현금배당수익률") and ("보통" in knd or not knd) and out["yield_pct"] is None:
+                out["yield_pct"] = val
+        return out
 
     # ─────────────────────────────────────────────────────────────────────
     # Mock (DART_API_KEY 미설정 시)
