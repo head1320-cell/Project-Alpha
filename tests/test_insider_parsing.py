@@ -50,3 +50,34 @@ def test_get_insider_disclosures_no_data(monkeypatch):
     c = DARTClient(api_key="x" * 20)
     monkeypatch.setattr(c, "_get", lambda endpoint, params: None)
     assert c.get_insider_disclosures("00126380") == []
+
+
+def test_insider_net_window_and_price(monkeypatch):
+    import src.data.insider_flows as inf
+    monkeypatch.setenv("KIS_USE_MOCK", "0")  # 운영 — 실데이터 경로
+    monkeypatch.setattr(inf, "get_corp_code", lambda code: "00126380")
+    monkeypatch.setattr(inf, "_disclosures", lambda corp: [
+        {"rcept_date": "20260610", "irds_cnt": 10000},
+        {"rcept_date": "20260605", "irds_cnt": -2000},
+        {"rcept_date": "20260102", "irds_cnt": 500},   # 윈도우 밖
+    ])
+    # as_of=2026-06-12, days=20 → 6/10·6/5 포함(8000주), 1/2 제외. price=50,000원
+    net = inf.insider_net("005930", days=20, price=50000.0, as_of="20260612")
+    assert net == round(8000 * 50000 / 1e8, 1)   # 4.0 억
+
+
+def test_insider_net_real_mode_no_price_or_data(monkeypatch):
+    import src.data.insider_flows as inf
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    monkeypatch.setattr(inf, "get_corp_code", lambda code: "00126380")
+    monkeypatch.setattr(inf, "_disclosures", lambda corp: [{"rcept_date": "20260610", "irds_cnt": 10000}])
+    assert inf.insider_net("005930", days=20, price=None, as_of="20260612") is None   # 가격없음→None
+    monkeypatch.setattr(inf, "_disclosures", lambda corp: [])
+    assert inf.insider_net("005930", days=20, price=50000.0, as_of="20260612") is None  # 데이터없음→None
+
+
+def test_insider_net_mock_mode_synthetic(monkeypatch):
+    import src.data.insider_flows as inf
+    monkeypatch.setenv("KIS_USE_MOCK", "1")  # mock — 합성(가격·공시 무관)
+    v = inf.insider_net("005930", days=20, price=None, as_of="20260612")
+    assert isinstance(v, float)
