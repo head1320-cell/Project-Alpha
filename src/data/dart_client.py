@@ -498,6 +498,23 @@ class DARTClient:
         except (ValueError, TypeError):
             return None
 
+    @staticmethod
+    def _parse_insider_rows(data: dict | None) -> list[dict]:
+        """elestock 응답 → [{"rcept_date":"YYYYMMDD","irds_cnt":int(±),"repror":str}].
+        '-'/빈값/가비지 증감은 0. status!=000 또는 list 없음 → []."""
+        if not data or data.get("status") != "000":
+            return []
+        rows = []
+        for it in data.get("list", []) or []:
+            rcept = str(it.get("rcept_no", ""))[:8]
+            if len(rcept) != 8 or not rcept.isdigit():
+                continue
+            irds = DARTClient._parse_amount(it.get("sp_stock_lmp_irds_cnt"))
+            rows.append({"rcept_date": rcept,
+                         "irds_cnt": int(irds) if irds is not None else 0,
+                         "repror": it.get("repror", "")})
+        return rows
+
     # ─────────────────────────────────────────────────────────────────────
     # Mock (DART_API_KEY 미설정 시)
     # ─────────────────────────────────────────────────────────────────────
