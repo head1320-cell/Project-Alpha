@@ -190,6 +190,20 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"OHLCV 사전 적재 시작 실패: {e}")
 
+    # 크로스에셋 ETF 유니버스 적재 (★KIS/KRX 분기 무관★ — KRX 전종목 백필은 '주식'만 다루므로
+    #   ETF는 별도 적재 필요. 매크로 전략·자산배분 백테스트(LAA 등)의 ETF 가격 원천.
+    #   실데이터 가용(KIS 실키 또는 KRX 활성) + OHLCV_PREWARM_ETF≠0일 때. mock/키 없음이면 no-op.):
+    try:
+        import os
+        _real_ohlcv = (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))) \
+            or (bool(os.getenv("KRX_API_KEY")) and os.getenv("KRX_AUTOBACKFILL", "1") != "0")
+        if _real_ohlcv and os.getenv("OHLCV_PREWARM_ETF", "1") != "0":
+            import threading
+            threading.Thread(target=_prewarm_etf_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"ETF 유니버스 prewarm 시작 실패: {e}")
+
     # 전종목 과거 재무(financials_history) 백필 (DART 키 있을 때만, 데몬 스레드):
     #   PIT 펀더멘털 백테스트(look-ahead 없는 ROE/PER 등)의 실데이터 원천. DART 일 20,000콜 한도라
     #   max_calls로 분할하고 매일 이어서 적재(resume). 키 없으면 즉시 no-op.
@@ -314,16 +328,22 @@ def _prewarm_ohlcv_bg():
                 continue
             r = prewarm_ohlcv(tickers, days=days)
             log.info(f"OHLCV 사전적재[{uni}]: {r}")
-        # 크로스에셋 ETF 유니버스(매크로 상관/타이밍 추이 장기화) — gated
-        if os.getenv("OHLCV_PREWARM_ETF", "1") != "0":
-            try:
-                from src.data.etf_prices import prewarm_etf_universe
-                r = prewarm_etf_universe("kr")
-                log.info(f"OHLCV 사전적재[etf_universe]: {r}")
-            except Exception as e:
-                log.warning(f"ETF 유니버스 prewarm 실패: {e}")
     except Exception as e:
         log.warning(f"OHLCV 사전 적재 실패(폴백 유지): {e}")
+
+
+def _prewarm_etf_bg():
+    """백그라운드(데몬): 크로스에셋 ETF 유니버스(US→KR 매핑)를 daily_prices에 적재.
+    ★KIS/KRX 분기와 무관히 실행★ — KRX 전종목 백필은 '주식'만 다루므로 ETF는 여기서 별도 적재.
+    매크로 전략·자산배분 백테스트(LAA 등)의 ETF 가격 원천. mock/키 없음이면 prewarm_ohlcv가 no-op."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.etf_prices import prewarm_etf_universe
+        r = prewarm_etf_universe("kr")
+        log.info(f"OHLCV 사전적재[etf_universe]: {r}")
+    except Exception as e:
+        log.warning(f"ETF 유니버스 prewarm 실패: {e}")
 
 
 def _dart_history_backfill_bg():
