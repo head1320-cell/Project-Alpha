@@ -462,12 +462,14 @@ def krx_status():
 
 # ── 통합 DB 적재 점검 + 적재 트리거 (SSH 없이 브라우저서 전 도구 데이터 상태 확인) ──
 
-_INGEST_RUNNING = {"index": False, "etf": False}
+_INGEST_RUNNING = {k: False for k in ("index", "etf", "stocks", "factors", "financials", "flows")}
+_INGEST_TARGETS = ("index", "etf", "stocks", "factors", "financials", "flows")
 
 
 @app.get("/api/v1/data/db-status")
 def db_status():
-    """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요)."""
+    """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요).
+    대용량 daily_prices가 적재 쓰기 중이어도 빠르게 응답하도록 추정치(reltuples)+statement_timeout 사용."""
     import os
     out: dict = {"available": False, "config": {}, "tables": {}, "tools": {}}
     out["config"] = {
@@ -480,36 +482,50 @@ def db_status():
     try:
         from sqlalchemy import text
 
+        from src.data.etf_prices import US_TO_KR
+        from src.data.kis_flows import flows_status
         from src.database import get_engine
         engine = get_engine()
         if engine is None:
+            out["ingest_running"] = dict(_INGEST_RUNNING)
             return out
 
-        def _row(sql: str, params: dict | None = None):
-            try:
-                with engine.connect() as c:
-                    return c.execute(text(sql), params or {}).fetchone()
-            except Exception:
-                return None
-
-        dp = _row("SELECT COUNT(*), COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices")
-        idxr = _row("SELECT COUNT(*) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
-        from src.data.etf_prices import US_TO_KR
         etf_codes = sorted({c for c, _ in US_TO_KR.values()})
         ph = ",".join(f":c{i}" for i in range(len(etf_codes)))
-        etf = _row(f"SELECT COUNT(DISTINCT ticker) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
-                   {f"c{i}": c for i, c in enumerate(etf_codes)})
-        fs = _row("SELECT COUNT(*) FROM factor_snapshot")
-        fh = _row("SELECT COUNT(*) FROM financials_history")
-        from src.data.kis_flows import flows_status
+
+        # AUTOCOMMIT: 각 쿼리 독립 트랜잭션 → statement_timeout 컷이 다음 쿼리를 오염시키지 않음.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as c:
+            try:
+                c.execute(text("SET statement_timeout = 5000"))  # Postgres: 슬로우/락대기 5s 컷
+            except Exception:
+                pass
+
+            def q(sql: str, params: dict | None = None):
+                try:
+                    return c.execute(text(sql), params or {}).fetchone()
+                except Exception:
+                    return None
+
+            # daily_prices 행수: 대용량 → Postgres 추정치(reltuples, 즉시) 우선, 실패 시 COUNT
+            est = q("SELECT reltuples::bigint FROM pg_class WHERE relname='daily_prices'")
+            dp_rows = int(est[0]) if (est and est[0] and int(est[0]) > 0) else None
+            if dp_rows is None:
+                cnt = q("SELECT COUNT(*) FROM daily_prices")
+                dp_rows = int(cnt[0] or 0) if cnt else 0
+            dp_meta = q("SELECT COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices")
+            idxr = q("SELECT COUNT(*) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
+            etf = q(f"SELECT COUNT(DISTINCT ticker) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
+                    {f"c{i}": code for i, code in enumerate(etf_codes)})
+            fs = q("SELECT COUNT(*) FROM factor_snapshot")
+            fh = q("SELECT COUNT(*) FROM financials_history")
         fl = flows_status(engine)
 
         out["available"] = True
         out["tables"] = {
-            "daily_prices": {"rows": int(dp[0] or 0) if dp else 0,
-                             "tickers": int(dp[1] or 0) if dp else 0,
-                             "start": str(dp[2])[:10] if dp and dp[2] else None,
-                             "end": str(dp[3])[:10] if dp and dp[3] else None},
+            "daily_prices": {"rows": dp_rows,
+                             "tickers": int(dp_meta[0] or 0) if dp_meta else 0,
+                             "start": str(dp_meta[1])[:10] if (dp_meta and dp_meta[1]) else None,
+                             "end": str(dp_meta[2])[:10] if (dp_meta and dp_meta[2]) else None},
             "index_kospi_kosdaq": {"rows": int(idxr[0] or 0) if idxr else 0},
             "etf_cross_asset": {"loaded": int(etf[0] or 0) if etf else 0, "total": len(etf_codes)},
             "investor_flows": {"rows": fl.get("rows", 0), "tickers": fl.get("tickers", 0),
@@ -519,12 +535,12 @@ def db_status():
         }
         t = out["tables"]
         out["tools"] = {
-            "스크리너(펀더멘털)": t["factor_snapshot"]["rows"] > 0,
-            "백테스터(종목)": t["daily_prices"]["tickers"] > 5,
+            "스크리너(펀더멘털)": (t["factor_snapshot"]["rows"] or 0) > 0,
+            "백테스터(종목)": (t["daily_prices"]["tickers"] or 0) > 5,
             "백테스터(매크로·ETF)": t["etf_cross_asset"]["loaded"] >= max(1, int(t["etf_cross_asset"]["total"] * 0.6)),
-            "벤치마크·국면": t["index_kospi_kosdaq"]["rows"] > 0,
-            "수급 시그널": t["investor_flows"]["rows"] > 0,
-            "PIT 펀더멘털": t["financials_history"]["rows"] > 0,
+            "벤치마크·국면": (t["index_kospi_kosdaq"]["rows"] or 0) > 0,
+            "수급 시그널": (t["investor_flows"]["rows"] or 0) > 0,
+            "PIT 펀더멘털": (t["financials_history"]["rows"] or 0) > 0,
         }
     except Exception:
         logger.exception("db-status 조회 실패")
@@ -532,56 +548,63 @@ def db_status():
     return out
 
 
-@app.post("/api/v1/data/ingest/index")
-def ingest_index_trigger():
-    """KOSPI/KOSDAQ 지수 백필 시작(백그라운드). KRX 키 필요."""
+def _ingest_run(target: str):
+    """단일 타깃 적재(동기) — 백그라운드 스레드서 호출. 키 없는 소스는 내부서 no-op(안전)."""
     import os
+    start = os.getenv("KRX_BACKFILL_START", "2010-01-04")
+    if target == "index":
+        from src.data.krx_ingest import backfill_index
+        return backfill_index(start=start)
+    if target == "etf":
+        from src.data.etf_prices import prewarm_etf_universe
+        return prewarm_etf_universe("kr")
+    if target == "stocks":
+        from src.data.krx_ingest import backfill
+        return backfill(start=start)            # KRX 전종목 일봉(+지수) 1회 백필
+    if target == "factors":
+        from src.data.snapshot_db import ingest_universe
+        return {uni: ingest_universe(uni) for uni in ("kospi200", "kosdaq150", "all_listed")}
+    if target == "financials":
+        _dart_history_backfill_bg()             # DART 재무 시계열(resume 기반)
+        return {"ok": True}
+    if target == "flows":
+        from src.data.kis_flows import sync_investor_flows
+        return sync_investor_flows(all_listed=True)
+    return {"error": f"unknown target: {target}"}
+
+
+@app.post("/api/v1/data/ingest/{target}")
+def ingest_trigger(target: str):
+    """테이블별/전체 적재 백그라운드 트리거. target ∈ {index,etf,stocks,factors,financials,flows,all}.
+    키 없는 소스는 내부서 no-op. 중복 실행 가드. 진행은 db-status의 ingest_running."""
     import threading
-    if not os.getenv("KRX_API_KEY"):
-        return {"started": False, "message": "KRX_API_KEY 필요"}
-    if _INGEST_RUNNING["index"]:
-        return {"started": False, "message": "이미 실행 중"}
+    if target == "all":
+        targets = list(_INGEST_TARGETS)
+    elif target in _INGEST_TARGETS:
+        targets = [target]
+    else:
+        raise HTTPException(404, f"unknown target: {target}")
 
-    def _run():
-        _INGEST_RUNNING["index"] = True
-        try:
-            from src.data.krx_ingest import backfill_index
-            start = os.getenv("KRX_BACKFILL_START", "2010-01-04")
-            logger.info(f"지수 백필(수동) 시작: {start}~")
-            logger.info(f"지수 백필(수동) 완료: {backfill_index(start=start)}")
-        except Exception:
-            logger.exception("지수 백필(수동) 실패")
-        finally:
-            _INGEST_RUNNING["index"] = False
+    started = []
+    for t in targets:
+        if _INGEST_RUNNING.get(t):
+            continue
 
-    threading.Thread(target=_run, daemon=True).start()
-    return {"started": True, "message": "지수 백필 시작(백그라운드). db-status로 확인."}
+        def _run(tt: str):
+            _INGEST_RUNNING[tt] = True
+            try:
+                logger.info(f"적재(수동) 시작: {tt}")
+                logger.info(f"적재(수동) 완료 [{tt}]: {_ingest_run(tt)}")
+            except Exception:
+                logger.exception(f"적재(수동) 실패 [{tt}]")
+            finally:
+                _INGEST_RUNNING[tt] = False
 
+        threading.Thread(target=_run, args=(t,), daemon=True).start()
+        started.append(t)
 
-@app.post("/api/v1/data/ingest/etf")
-def ingest_etf_trigger():
-    """크로스에셋 ETF(US→KR 매핑) prewarm 시작(백그라운드). KIS 실키 또는 KRX 키 필요."""
-    import os
-    import threading
-    real = (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))) \
-        or bool(os.getenv("KRX_API_KEY"))
-    if not real:
-        return {"started": False, "message": "실데이터 키(KIS 실키 또는 KRX) 필요"}
-    if _INGEST_RUNNING["etf"]:
-        return {"started": False, "message": "이미 실행 중"}
-
-    def _run():
-        _INGEST_RUNNING["etf"] = True
-        try:
-            from src.data.etf_prices import prewarm_etf_universe
-            logger.info(f"ETF prewarm(수동) 완료: {prewarm_etf_universe('kr')}")
-        except Exception:
-            logger.exception("ETF prewarm(수동) 실패")
-        finally:
-            _INGEST_RUNNING["etf"] = False
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"started": True, "message": "ETF prewarm 시작(백그라운드). db-status로 확인."}
+    return {"started": started, "running": dict(_INGEST_RUNNING),
+            "message": (f"적재 시작: {', '.join(started)}" if started else "모두 이미 실행 중")}
 
 
 # ─── Auto-trading state (in-memory) ─────────────────────────────────────────

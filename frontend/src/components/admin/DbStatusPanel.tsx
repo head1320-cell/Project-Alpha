@@ -43,10 +43,10 @@ export default function DbStatusPanel() {
     return () => clearInterval(id);
   }, [anyRunning, load]);
 
-  const trigger = async (fn: () => Promise<{ started: boolean; message: string }>) => {
+  const trigger = async (target: string) => {
     setMsg(null);
     try {
-      setMsg((await fn()).message);
+      setMsg((await api.ingest(target)).message);
       void load();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -128,26 +128,33 @@ export default function DbStatusPanel() {
             </table>
           </section>
 
-          {/* 적재 트리거 */}
+          {/* 적재 트리거 — 테이블별 + 전체 */}
           <section className="mb-2 rounded-sm border border-[#e5e5e5] p-3">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#71717a]">적재 실행 (백그라운드)</h2>
             <div className="flex flex-wrap gap-2">
+              {([
+                ["index", "지수"], ["etf", "ETF"], ["stocks", "주식 일봉"],
+                ["factors", "펀더멘털"], ["financials", "재무시계열"], ["flows", "수급(KIS)"],
+              ] as const).map(([target, label]) => (
+                <button
+                  key={target}
+                  onClick={() => void trigger(target)}
+                  disabled={!!st.ingest_running?.[target]}
+                  className="rounded-sm border border-[#1200ff] bg-white px-3 py-1.5 text-xs font-semibold text-[#1200ff] hover:bg-[#f0f0ff] disabled:opacity-50"
+                >
+                  {st.ingest_running?.[target] ? `${label} 적재 중…` : label}
+                </button>
+              ))}
               <button
-                onClick={() => void trigger(api.ingestIndex)}
-                disabled={st.ingest_running?.index}
+                onClick={() => void trigger("all")}
+                disabled={anyRunning}
                 className="rounded-sm bg-[#1200ff] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
               >
-                {st.ingest_running?.index ? "지수 적재 중…" : "지수(KOSPI/KOSDAQ) 적재"}
-              </button>
-              <button
-                onClick={() => void trigger(api.ingestEtf)}
-                disabled={st.ingest_running?.etf}
-                className="rounded-sm bg-[#1200ff] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {st.ingest_running?.etf ? "ETF 적재 중…" : "크로스에셋 ETF 적재"}
+                {anyRunning ? "적재 중…" : "★ 전체 적재"}
               </button>
             </div>
-            {msg && <p className="mt-2 text-xs text-[#1200ff]">{msg}</p>}
+            <p className="mt-2 text-xs text-[#71717a]">키 없는 소스는 자동 건너뜀(no-op). 진행은 "새로고침"으로 확인.</p>
+            {msg && <p className="mt-1 text-xs text-[#1200ff]">{msg}</p>}
           </section>
         </>
       )}

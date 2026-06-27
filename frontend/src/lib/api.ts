@@ -134,10 +134,10 @@ export const api = {
       ingest_running: Record<string, boolean>;
     }>("/api/v1/data/db-status"),
 
-  ingestIndex: () =>
-    post<{ started: boolean; message: string }>("/api/v1/data/ingest/index", {}),
-  ingestEtf: () =>
-    post<{ started: boolean; message: string }>("/api/v1/data/ingest/etf", {}),
+  // target ∈ index | etf | stocks | factors | financials | flows | all
+  ingest: (target: string) =>
+    post<{ started: string[]; running: Record<string, boolean>; message: string }>(
+      `/api/v1/data/ingest/${target}`, {}),
 
   getHoldings: () =>
     get<{ mode: string; count: number; positions: Position[] }>(
