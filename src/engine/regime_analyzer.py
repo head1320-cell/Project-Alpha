@@ -97,14 +97,22 @@ class RegimeAnalyzer:
         snapshot = snapshot or self.collector.collect_all()
         s = snapshot.series
 
+        # 실데이터 부족 점검 — 운영서 매크로가 전부 unavailable이면 허위 국면 분류 금지(정직).
+        real_count = sum(1 for v in s.values()
+                         if getattr(v, "source", "") != "unavailable" and v.latest is not None)
+        insufficient = real_count < 3
+
         # 1. Growth Axis (Z-Score 가중 평균)
         growth_axis = self._compute_growth_axis(s)
 
         # 2. Inflation Axis
         inflation_axis = self._compute_inflation_axis(s)
 
-        # 3. Regime 판별
-        regime, confidence = self._classify_regime(growth_axis, inflation_axis)
+        # 3. Regime 판별 — 데이터 부족 시 허위 국면(Reflation 등) 대신 '데이터 부족'
+        if insufficient:
+            regime, confidence = "데이터 부족", 0.0
+        else:
+            regime, confidence = self._classify_regime(growth_axis, inflation_axis)
 
         # 4. Market Stress Index
         stress_score, stress_components = self._compute_stress(s)
@@ -143,7 +151,8 @@ class RegimeAnalyzer:
             inversion_severity=inversion_severity,
             recommended_mode=mode,
             asset_tilts=REGIME_TILTS.get(regime, {}),
-            description=REGIME_DESCRIPTIONS.get(regime, ""),
+            description=("실 매크로 데이터 부족 — BOK/FRED 키 설정 후 국면 분류 (현재 지표 unavailable)"
+                        if insufficient else REGIME_DESCRIPTIONS.get(regime, "")),
             dynamic_risk_free_rate=dynamic_rf,
             dynamic_kill_dd_threshold=dynamic_dd,
         )

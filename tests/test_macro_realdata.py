@@ -37,3 +37,25 @@ def test_macro_connection_status(monkeypatch):
     assert "bok_configured" in st
     assert "fred_configured" in st
     assert st["mock_allowed"] is False
+
+
+# ── regime 분석기 하드닝: 실데이터 부족 시 허위 국면 금지 ──
+def test_regime_insufficient_data(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    from src.engine.regime_analyzer import RegimeAnalyzer
+    c = MacroCollector()
+    c.cache_clear()
+    state = RegimeAnalyzer(collector=c).analyze()
+    assert state.regime == "데이터 부족"     # 운영 무데이터 → 허위 국면(Reflation 등) 금지
+    assert state.confidence == 0.0
+    assert state.asset_tilts == {}
+
+
+def test_regime_with_data_classifies(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "1")   # mock 데이터 → 정상 분류(회귀)
+    from src.engine.regime_analyzer import RegimeAnalyzer
+    c = MacroCollector()
+    c.cache_clear()
+    state = RegimeAnalyzer(collector=c).analyze()
+    assert state.regime in ("Goldilocks", "Reflation", "Stagflation", "Deflation")
+    assert state.confidence > 0
