@@ -460,6 +460,130 @@ def krx_status():
     return out
 
 
+# ── 통합 DB 적재 점검 + 적재 트리거 (SSH 없이 브라우저서 전 도구 데이터 상태 확인) ──
+
+_INGEST_RUNNING = {"index": False, "etf": False}
+
+
+@app.get("/api/v1/data/db-status")
+def db_status():
+    """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요)."""
+    import os
+    out: dict = {"available": False, "config": {}, "tables": {}, "tools": {}}
+    out["config"] = {
+        "kis_real": os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY")),
+        "dart_key": bool(os.getenv("DART_API_KEY")),
+        "krx_key": bool(os.getenv("KRX_API_KEY")),
+        "bok_key": bool(os.getenv("BOK_API_KEY")),
+        "fred_key": bool(os.getenv("FRED_API_KEY")),
+    }
+    try:
+        from sqlalchemy import text
+
+        from src.database import get_engine
+        engine = get_engine()
+        if engine is None:
+            return out
+
+        def _row(sql: str, params: dict | None = None):
+            try:
+                with engine.connect() as c:
+                    return c.execute(text(sql), params or {}).fetchone()
+            except Exception:
+                return None
+
+        dp = _row("SELECT COUNT(*), COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices")
+        idxr = _row("SELECT COUNT(*) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
+        from src.data.etf_prices import US_TO_KR
+        etf_codes = sorted({c for c, _ in US_TO_KR.values()})
+        ph = ",".join(f":c{i}" for i in range(len(etf_codes)))
+        etf = _row(f"SELECT COUNT(DISTINCT ticker) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
+                   {f"c{i}": c for i, c in enumerate(etf_codes)})
+        fs = _row("SELECT COUNT(*) FROM factor_snapshot")
+        fh = _row("SELECT COUNT(*) FROM financials_history")
+        from src.data.kis_flows import flows_status
+        fl = flows_status(engine)
+
+        out["available"] = True
+        out["tables"] = {
+            "daily_prices": {"rows": int(dp[0] or 0) if dp else 0,
+                             "tickers": int(dp[1] or 0) if dp else 0,
+                             "start": str(dp[2])[:10] if dp and dp[2] else None,
+                             "end": str(dp[3])[:10] if dp and dp[3] else None},
+            "index_kospi_kosdaq": {"rows": int(idxr[0] or 0) if idxr else 0},
+            "etf_cross_asset": {"loaded": int(etf[0] or 0) if etf else 0, "total": len(etf_codes)},
+            "investor_flows": {"rows": fl.get("rows", 0), "tickers": fl.get("tickers", 0),
+                               "max_date": fl.get("max_date")},
+            "factor_snapshot": {"rows": int(fs[0] or 0) if fs else 0},
+            "financials_history": {"rows": int(fh[0] or 0) if fh else 0},
+        }
+        t = out["tables"]
+        out["tools"] = {
+            "스크리너(펀더멘털)": t["factor_snapshot"]["rows"] > 0,
+            "백테스터(종목)": t["daily_prices"]["tickers"] > 5,
+            "백테스터(매크로·ETF)": t["etf_cross_asset"]["loaded"] >= max(1, int(t["etf_cross_asset"]["total"] * 0.6)),
+            "벤치마크·국면": t["index_kospi_kosdaq"]["rows"] > 0,
+            "수급 시그널": t["investor_flows"]["rows"] > 0,
+            "PIT 펀더멘털": t["financials_history"]["rows"] > 0,
+        }
+    except Exception:
+        logger.exception("db-status 조회 실패")
+    out["ingest_running"] = dict(_INGEST_RUNNING)
+    return out
+
+
+@app.post("/api/v1/data/ingest/index")
+def ingest_index_trigger():
+    """KOSPI/KOSDAQ 지수 백필 시작(백그라운드). KRX 키 필요."""
+    import os
+    import threading
+    if not os.getenv("KRX_API_KEY"):
+        return {"started": False, "message": "KRX_API_KEY 필요"}
+    if _INGEST_RUNNING["index"]:
+        return {"started": False, "message": "이미 실행 중"}
+
+    def _run():
+        _INGEST_RUNNING["index"] = True
+        try:
+            from src.data.krx_ingest import backfill_index
+            start = os.getenv("KRX_BACKFILL_START", "2020-01-01")
+            logger.info(f"지수 백필(수동) 시작: {start}~")
+            logger.info(f"지수 백필(수동) 완료: {backfill_index(start=start)}")
+        except Exception:
+            logger.exception("지수 백필(수동) 실패")
+        finally:
+            _INGEST_RUNNING["index"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"started": True, "message": "지수 백필 시작(백그라운드). db-status로 확인."}
+
+
+@app.post("/api/v1/data/ingest/etf")
+def ingest_etf_trigger():
+    """크로스에셋 ETF(US→KR 매핑) prewarm 시작(백그라운드). KIS 실키 또는 KRX 키 필요."""
+    import os
+    import threading
+    real = (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))) \
+        or bool(os.getenv("KRX_API_KEY"))
+    if not real:
+        return {"started": False, "message": "실데이터 키(KIS 실키 또는 KRX) 필요"}
+    if _INGEST_RUNNING["etf"]:
+        return {"started": False, "message": "이미 실행 중"}
+
+    def _run():
+        _INGEST_RUNNING["etf"] = True
+        try:
+            from src.data.etf_prices import prewarm_etf_universe
+            logger.info(f"ETF prewarm(수동) 완료: {prewarm_etf_universe('kr')}")
+        except Exception:
+            logger.exception("ETF prewarm(수동) 실패")
+        finally:
+            _INGEST_RUNNING["etf"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"started": True, "message": "ETF prewarm 시작(백그라운드). db-status로 확인."}
+
+
 # ─── Auto-trading state (in-memory) ─────────────────────────────────────────
 trading_config = {"auto_mode": False, "var_limit": 5_000_000, "last_order": None}
 

@@ -124,6 +124,21 @@ export const api = {
       {}
     ),
 
+  // ── 통합 DB 적재 점검 + 적재 트리거 ──
+  dbStatus: () =>
+    get<{
+      available: boolean;
+      config: Record<string, boolean>;
+      tables: Record<string, Record<string, number | string | null>>;
+      tools: Record<string, boolean>;
+      ingest_running: Record<string, boolean>;
+    }>("/api/v1/data/db-status"),
+
+  ingestIndex: () =>
+    post<{ started: boolean; message: string }>("/api/v1/data/ingest/index", {}),
+  ingestEtf: () =>
+    post<{ started: boolean; message: string }>("/api/v1/data/ingest/etf", {}),
+
   getHoldings: () =>
     get<{ mode: string; count: number; positions: Position[] }>(
       "/api/v1/account/holdings"
