@@ -513,11 +513,11 @@ def db_status():
                 cnt = q("SELECT COUNT(*) FROM daily_prices")
                 dp_rows = int(cnt[0] or 0) if cnt else 0
             dp_meta = q("SELECT COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices")
-            idxr = q("SELECT COUNT(*) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
-            etf = q(f"SELECT COUNT(DISTINCT ticker) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
+            idxr = q("SELECT COUNT(*), MIN(trade_date), MAX(trade_date) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
+            etf = q(f"SELECT COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
                     {f"c{i}": code for i, code in enumerate(etf_codes)})
             fs = q("SELECT COUNT(*) FROM factor_snapshot")
-            fh = q("SELECT COUNT(*) FROM financials_history")
+            fh = q("SELECT COUNT(*), MIN(bsns_year), MAX(bsns_year) FROM financials_history")
         fl = flows_status(engine)
 
         out["available"] = True
@@ -526,12 +526,18 @@ def db_status():
                              "tickers": int(dp_meta[0] or 0) if dp_meta else 0,
                              "start": str(dp_meta[1])[:10] if (dp_meta and dp_meta[1]) else None,
                              "end": str(dp_meta[2])[:10] if (dp_meta and dp_meta[2]) else None},
-            "index_kospi_kosdaq": {"rows": int(idxr[0] or 0) if idxr else 0},
-            "etf_cross_asset": {"loaded": int(etf[0] or 0) if etf else 0, "total": len(etf_codes)},
+            "index_kospi_kosdaq": {"rows": int(idxr[0] or 0) if idxr else 0,
+                                   "start": str(idxr[1])[:10] if (idxr and idxr[1]) else None,
+                                   "end": str(idxr[2])[:10] if (idxr and idxr[2]) else None},
+            "etf_cross_asset": {"loaded": int(etf[0] or 0) if etf else 0, "total": len(etf_codes),
+                                "start": str(etf[1])[:10] if (etf and etf[1]) else None,
+                                "end": str(etf[2])[:10] if (etf and etf[2]) else None},
             "investor_flows": {"rows": fl.get("rows", 0), "tickers": fl.get("tickers", 0),
-                               "max_date": fl.get("max_date")},
+                               "start": fl.get("min_date"), "end": fl.get("max_date")},
             "factor_snapshot": {"rows": int(fs[0] or 0) if fs else 0},
-            "financials_history": {"rows": int(fh[0] or 0) if fh else 0},
+            "financials_history": {"rows": int(fh[0] or 0) if fh else 0,
+                                   "start": str(fh[1]) if (fh and fh[1]) else None,
+                                   "end": str(fh[2]) if (fh and fh[2]) else None},
         }
         t = out["tables"]
         out["tools"] = {

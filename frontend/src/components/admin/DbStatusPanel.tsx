@@ -2,30 +2,49 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import PageHeader from "@/components/layout/PageHeader";
+import SectionHead from "@/components/layout/SectionHead";
+import { ErrorState, LoadingState } from "@/components/layout/States";
 import { api } from "@/lib/api";
 
 type DbStatus = Awaited<ReturnType<typeof api.dbStatus>>;
+type Cell = number | string | null;
 
 const TABLE_LABELS: Record<string, string> = {
-  daily_prices: "일봉(주식)",
-  index_kospi_kosdaq: "지수(KOSPI/KOSDAQ)",
+  daily_prices: "일봉 (주식)",
+  index_kospi_kosdaq: "지수 (KOSPI/KOSDAQ)",
   etf_cross_asset: "크로스에셋 ETF",
   investor_flows: "투자자 수급",
   factor_snapshot: "펀더멘털 스냅샷",
-  financials_history: "재무 시계열(PIT)",
+  financials_history: "재무 시계열 (PIT)",
 };
+
+const INGEST_TARGETS: [string, string][] = [
+  ["index", "지수"], ["etf", "ETF"], ["stocks", "주식 일봉"],
+  ["factors", "펀더멘털"], ["financials", "재무시계열"], ["flows", "수급(KIS)"],
+];
+
+const fmtNum = (v: Cell | undefined) =>
+  typeof v === "number" ? v.toLocaleString() : v == null ? "—" : String(v);
+
+function period(t: Record<string, Cell>): string {
+  const s = t.start, e = t.end;
+  return s || e ? `${s ?? "—"} ~ ${e ?? "—"}` : "—";
+}
 
 export default function DbStatusPanel() {
   const [st, setSt] = useState<DbStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setErr(null);
     try {
       setSt(await api.dbStatus());
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -36,7 +55,7 @@ export default function DbStatusPanel() {
   }, [load]);
 
   // 적재 실행 중이면 폴링
-  const anyRunning = st?.ingest_running && Object.values(st.ingest_running).some(Boolean);
+  const anyRunning = !!(st?.ingest_running && Object.values(st.ingest_running).some(Boolean));
   useEffect(() => {
     if (!anyRunning) return;
     const id = setInterval(() => void load(), 5000);
@@ -53,110 +72,108 @@ export default function DbStatusPanel() {
     }
   };
 
-  const fmt = (v: number | string | null | undefined) =>
-    v === null || v === undefined ? "—" : typeof v === "number" ? v.toLocaleString() : String(v);
+  const toolsReady = st ? Object.values(st.tools).filter(Boolean).length : 0;
+  const toolsTotal = st ? Object.keys(st.tools).length : 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 pt-6 font-mono text-sm text-[#111111]">
-      <header className="mb-4 border-b border-[#e5e5e5] pb-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold tracking-tight">데이터 인프라 점검 (DB Status)</h1>
-          <button
-            onClick={() => void load()}
-            disabled={loading}
-            className="rounded-sm border border-[#e5e5e5] bg-white px-2 py-1 text-xs hover:border-[#1200ff] disabled:opacity-50"
-          >
-            {loading ? "조회 중…" : "새로고침"}
-          </button>
-        </div>
-        <p className="mt-1 text-xs text-[#71717a]">모든 도구가 쓰는 핵심 테이블 적재 현황을 한 화면에서 — SSH 불필요.</p>
-      </header>
+    <div className="tpage-fade">
+      <PageHeader
+        eyebrow="DATA / INFRASTRUCTURE"
+        index="06 / 06"
+        title="Data Infrastructure Status"
+        intro="모든 도구가 쓰는 핵심 테이블의 적재 현황(행수·종목·기간)을 한 화면에서 점검하고, 부족분을 직접 적재합니다."
+        status={st?.config?.kis_real ? "MODE: REAL" : "MODE: MOCK"}
+      >
+        <button className="tchip-toggle" onClick={() => void load()} disabled={loading}>
+          {loading ? "조회 중…" : "↻ 새로고침"}
+        </button>
+      </PageHeader>
 
-      {!st && <p className="text-xs text-[#71717a]">{loading ? "조회 중…" : "데이터 없음"}</p>}
+      {loading && !st && <LoadingState label="DB 적재 현황을 점검하는 중" />}
+      {err && !st && <ErrorState label="DB 상태 조회 실패" sub={err} />}
 
       {st && (
-        <>
-          {/* 키 설정 */}
-          <section className="mb-4 rounded-sm border border-[#e5e5e5] bg-[#fafafa] p-3">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#71717a]">키 / 모드</h2>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              {Object.entries(st.config).map(([k, v]) => (
-                <span key={k} className={v ? "text-[#111111]" : "text-[#a1a1aa]"}>
-                  {v ? "●" : "○"} {k}
-                </span>
-              ))}
-            </div>
-          </section>
+        <div className="animate-fade-in">
+          {/* 데이터 소스 키 */}
+          <SectionHead label="DATA SOURCES" index="KEYS" />
+          <div className="tscenario-bar">
+            {Object.entries(st.config).map(([k, v]) => (
+              <span key={k} className={`tchip-toggle${v ? " active" : ""}`} style={{ cursor: "default" }}>
+                {v ? "● " : "○ "}
+                {k}
+              </span>
+            ))}
+          </div>
 
           {/* 도구별 준비상태 */}
-          <section className="mb-4 rounded-sm border border-[#e5e5e5] p-3">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#71717a]">도구별 준비상태</h2>
-            <div className="grid grid-cols-2 gap-y-1 sm:grid-cols-3">
-              {Object.entries(st.tools).map(([k, ok]) => (
-                <span key={k} className="text-xs">
-                  <span className={ok ? "text-green-600" : "text-red-600"}>{ok ? "✓" : "✗"}</span> {k}
-                </span>
-              ))}
-            </div>
-          </section>
+          <SectionHead label="TOOL READINESS" index={`${toolsReady} / ${toolsTotal}`} />
+          <div className="tscenario-bar">
+            {Object.entries(st.tools).map(([k, ok]) => (
+              <span
+                key={k}
+                className="tchip-toggle"
+                style={{ cursor: "default", color: ok ? "var(--color-bull)" : "var(--color-bear)" }}
+              >
+                {ok ? "✓ " : "✗ "}
+                {k}
+              </span>
+            ))}
+          </div>
 
           {/* 테이블 적재 현황 */}
-          <section className="mb-4 overflow-hidden rounded-sm border border-[#e5e5e5]">
-            <table className="w-full text-xs">
-              <thead className="bg-[#fafafa] text-[#71717a]">
-                <tr>
-                  <th className="px-3 py-1.5 text-left font-medium">테이블</th>
-                  <th className="px-3 py-1.5 text-right font-medium">행/종목</th>
-                  <th className="px-3 py-1.5 text-right font-medium">상세</th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {Object.entries(st.tables).map(([k, v]) => (
-                  <tr key={k} className="border-t border-[#f0f0f0]">
-                    <td className="px-3 py-1.5">{TABLE_LABELS[k] ?? k}</td>
-                    <td className="px-3 py-1.5 text-right">
-                      {fmt(v.rows ?? v.loaded)}
-                      {v.tickers !== undefined && ` / ${fmt(v.tickers)}`}
-                      {v.total !== undefined && ` / ${fmt(v.total)}`}
+          <SectionHead label="TABLE COVERAGE" index="ROWS · TICKERS · PERIOD" />
+          <table className="trisk-table">
+            <thead>
+              <tr>
+                <th>테이블</th>
+                <th className="num">행수</th>
+                <th className="num">종목</th>
+                <th>기간 (최초 ~ 최근)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(st.tables).map(([key, t]) => {
+                const cells = t as Record<string, Cell>;
+                const rows = cells.rows ?? cells.loaded;
+                return (
+                  <tr key={key}>
+                    <td>{TABLE_LABELS[key] ?? key}</td>
+                    <td className="num" style={{ fontFamily: "var(--t-mono)" }}>
+                      {fmtNum(rows)}
+                      {cells.total != null ? ` / ${fmtNum(cells.total)}` : ""}
                     </td>
-                    <td className="px-3 py-1.5 text-right text-[#71717a]">
-                      {v.start ? `${fmt(v.start)}~${fmt(v.end)}` : v.max_date ? `~${fmt(v.max_date)}` : ""}
-                    </td>
+                    <td className="num" style={{ fontFamily: "var(--t-mono)" }}>{fmtNum(cells.tickers)}</td>
+                    <td style={{ fontFamily: "var(--t-mono)", color: "var(--t-muted)" }}>{period(cells)}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+                );
+              })}
+            </tbody>
+          </table>
 
-          {/* 적재 트리거 — 테이블별 + 전체 */}
-          <section className="mb-2 rounded-sm border border-[#e5e5e5] p-3">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#71717a]">적재 실행 (백그라운드)</h2>
-            <div className="flex flex-wrap gap-2">
-              {([
-                ["index", "지수"], ["etf", "ETF"], ["stocks", "주식 일봉"],
-                ["factors", "펀더멘털"], ["financials", "재무시계열"], ["flows", "수급(KIS)"],
-              ] as const).map(([target, label]) => (
-                <button
-                  key={target}
-                  onClick={() => void trigger(target)}
-                  disabled={!!st.ingest_running?.[target]}
-                  className="rounded-sm border border-[#1200ff] bg-white px-3 py-1.5 text-xs font-semibold text-[#1200ff] hover:bg-[#f0f0ff] disabled:opacity-50"
-                >
-                  {st.ingest_running?.[target] ? `${label} 적재 중…` : label}
-                </button>
-              ))}
+          {/* 적재 실행 */}
+          <SectionHead label="INGEST" index="BACKGROUND" />
+          <div className="tscenario-bar">
+            {INGEST_TARGETS.map(([target, label]) => (
               <button
-                onClick={() => void trigger("all")}
-                disabled={anyRunning}
-                className="rounded-sm bg-[#1200ff] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                key={target}
+                className="tchip-toggle"
+                disabled={!!st.ingest_running?.[target]}
+                onClick={() => void trigger(target)}
               >
-                {anyRunning ? "적재 중…" : "★ 전체 적재"}
+                {st.ingest_running?.[target] ? `${label} 적재 중…` : label}
               </button>
-            </div>
-            <p className="mt-2 text-xs text-[#71717a]">키 없는 소스는 자동 건너뜀(no-op). 진행은 "새로고침"으로 확인.</p>
-            {msg && <p className="mt-1 text-xs text-[#1200ff]">{msg}</p>}
-          </section>
-        </>
+            ))}
+            <button className="tchip-toggle active" disabled={anyRunning} onClick={() => void trigger("all")}>
+              {anyRunning ? "적재 중…" : "★ 전체 적재"}
+            </button>
+          </div>
+          <p className="tpage-intro" style={{ marginTop: 10 }}>
+            키 없는 소스는 자동 건너뜀(no-op) · 진행은 "↻ 새로고침"으로 확인 · 대형 백필은 백그라운드 수 시간.
+          </p>
+          {msg && (
+            <p style={{ marginTop: 8, fontFamily: "var(--t-mono)", fontSize: 12, color: "var(--t-accent)" }}>{msg}</p>
+          )}
+        </div>
       )}
     </div>
   );

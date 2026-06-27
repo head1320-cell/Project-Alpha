@@ -111,19 +111,6 @@ export const api = {
       "/api/v1/symbols/status"
     ),
 
-  // ── 투자자 수급(investor_flows) 적재 점검 + 과거 백필 ──
-  flowsStatus: () =>
-    get<{
-      rows: number; tickers: number; min_date: string | null; max_date: string | null;
-      has_detail: boolean; krx_backfill_running: boolean;
-    }>("/api/v1/symbols/flows/status"),
-
-  backfillFlowsKrx: (start = "2018-01-01", all_listed = true) =>
-    post<{ started: boolean; message: string; start?: string; all_listed?: boolean }>(
-      `/api/v1/symbols/flows/backfill-krx?start=${encodeURIComponent(start)}&all_listed=${all_listed}`,
-      {}
-    ),
-
   // ── 통합 DB 적재 점검 + 적재 트리거 ──
   dbStatus: () =>
     get<{
