@@ -179,6 +179,63 @@ def backfill(start: str, end: str | None = None,
     return stats
 
 
+def index_loaded_dates(engine) -> set[str]:
+    """지수(KOSPI/KOSDAQ) 행이 이미 있는 날짜 — backfill_index skip 판정용."""
+    from sqlalchemy import text
+    engine = _get_engine(engine)
+    if engine is None:
+        return set()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT DISTINCT trade_date FROM daily_prices "
+                "WHERE ticker IN ('KOSPI','KOSDAQ')")).fetchall()
+        return {str(r[0])[:10] for r in rows}
+    except Exception:
+        return set()
+
+
+def backfill_index(start: str, end: str | None = None,
+                   markets: tuple = ("KOSPI", "KOSDAQ"), skip_existing: bool = True,
+                   max_days: int | None = None, engine=None, client=None) -> dict:
+    """지수(KOSPI/KOSDAQ) 전용 백필 — ★주식 done-set과 독립★.
+    기존 backfill은 주식이 적재된 날을 통째로 skip(line: day in done) → 그날의 지수는 영영
+    안 채워지던 버그를 분리. 지수 보유 날짜(index_loaded_dates) 기준으로만 skip."""
+    from src.data.krx_client import KRXClient
+    client = client or KRXClient()
+    if not client.is_configured:
+        return {"error": True, "message": "KRX_API_KEY 미설정"}
+    engine = _get_engine(engine)
+    if engine is None:
+        return {"error": True, "message": "DB engine 없음"}
+    ensure_table(engine)
+
+    end = end or datetime.now().strftime("%Y-%m-%d")
+    done = index_loaded_dates(engine) if skip_existing else set()
+    stats = {"days_requested": 0, "index_rows": 0, "days_skipped": 0, "days_empty": 0}
+
+    for day in _weekdays(start, end):
+        if max_days is not None and (stats["days_requested"] - stats["days_skipped"]) >= max_days:
+            break
+        stats["days_requested"] += 1
+        if day in done:
+            stats["days_skipped"] += 1
+            continue
+        idx_rows = []
+        for m in markets:
+            try:
+                idx = client.get_index_daily(m, day)
+            except Exception:
+                idx = None
+            if idx:
+                idx_rows.append({**idx, "ticker": m, "trading_value": 0.0})
+        if not idx_rows:
+            stats["days_empty"] += 1
+            continue
+        stats["index_rows"] += bulk_upsert(engine, idx_rows)
+    return stats
+
+
 def rebuild_adj_close(engine=None, tickers: list[str] | None = None) -> int:
     """등락률(return_1d) 체인으로 adj_close 역산 재구성. 갱신 행 수 반환.
 
@@ -250,6 +307,11 @@ def auto_backfill(loop: bool = False) -> dict:
     def _run_once() -> dict:
         end = datetime.now().strftime("%Y-%m-%d")
         stats = backfill(start=start, end=end, max_days=max_days, skip_existing=True)
+        # 지수(KOSPI/KOSDAQ) 독립 백필 — 주식 done-set과 무관(이미 적재된 날도 지수 채움)
+        try:
+            stats["index_backfill"] = backfill_index(start=start, end=end)
+        except Exception as e:
+            logger.warning(f"지수 백필 실패: {e}")
         if not stats.get("error") and stats.get("rows"):
             try:
                 stats["adj_rows"] = rebuild_adj_close()

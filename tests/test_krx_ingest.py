@@ -121,6 +121,27 @@ def test_backfill_requires_key(mem_engine):
     assert stats.get("error")
 
 
+def test_backfill_index_decoupled_from_stock_doneset(mem_engine):
+    """★지수 적재 버그 회귀★ — 주식이 이미 적재된 날(done)이어도 지수는 별도로 채워진다.
+    (기존 backfill은 주식 적재된 날을 통째로 skip → 지수가 영영 안 채워짐)."""
+    client = FakeKRX()
+    # 1) 주식만 적재(지수 제외) → 사용자 GCP 상태(주식 있고 index_rows=0) 모사
+    ki.backfill("2024-01-03", "2024-01-05", markets=("KOSPI",),
+                engine=mem_engine, client=client, full_day_min_rows=2, include_index=False)
+    with mem_engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM daily_prices WHERE ticker='KOSPI'")).scalar() == 0
+    # 2) 지수 전용 백필 — 주식 done-set 무관하게 지수 적재
+    stats = ki.backfill_index("2024-01-03", "2024-01-05", markets=("KOSPI",),
+                              engine=mem_engine, client=client)
+    assert stats["index_rows"] == 2   # 1/4, 1/5 (1/3 휴장)
+    with mem_engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM daily_prices WHERE ticker='KOSPI'")).scalar() == 2
+    # 3) 재실행 → 이미 적재된 지수 날짜는 skip
+    stats2 = ki.backfill_index("2024-01-03", "2024-01-05", markets=("KOSPI",),
+                               engine=mem_engine, client=client)
+    assert stats2["index_rows"] == 0 and stats2["days_skipped"] == 2
+
+
 # ─── 수정종가 재구성 (등락률 체인 — 분할 점프 제거) ──────────────────────────
 def test_rebuild_adj_close_handles_split(mem_engine):
     ki.ensure_table(mem_engine)
