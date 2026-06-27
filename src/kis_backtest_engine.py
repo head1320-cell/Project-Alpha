@@ -1476,6 +1476,8 @@ class BacktestEngine:
                 "monthly_returns": monthly_returns,
                 "benchmark": benchmark,
                 "trades": trade_dicts[:500],
+                "round_trips": _round_trips(self.trades)[:500],
+                "trade_mode": "per_trade",
                 "symbol_results": symbol_results,
                 "charts": {
                     "equity": {
@@ -1631,6 +1633,56 @@ def _compute_statistics(
 def _compute_drawdown(equity: pd.Series) -> pd.Series:
     rolling_max = equity.cummax()
     return (equity - rolling_max) / rolling_max
+
+
+def _round_trips(trades: list[Trade]) -> list[dict]:
+    """매수/매도 leg을 종목별 FIFO로 매칭해 라운드트립(체결 쌍) 리스트 생성.
+
+    매도 leg 하나당 한 행. 소비한 매수 lot들의 가중평균 단가를 진입가로,
+    진입일은 가장 이른 매수일로 한다. 부분매도·추가매수도 수량 기준 정확 매칭.
+    프론트 거래로그가 기대하는 라운드트립 스키마(entry/exit/return_pct)를 제공
+    — leg 포맷(result.trades)과는 별도 필드(result.round_trips).
+    """
+    from collections import defaultdict, deque
+
+    from src.data.stock_master import get_stock_name
+
+    lots: dict[str, deque] = defaultdict(deque)  # ticker → 미청산 매수 lot 큐
+    out: list[dict] = []
+    for t in trades:
+        if t.side == "buy":
+            lots[t.ticker].append({"date": t.date, "price": t.price, "qty": t.quantity})
+            continue
+        # 매도 leg → 앞에서부터 매수 lot 소비(FIFO)
+        dq = lots[t.ticker]
+        remaining, matched, cost_sum = t.quantity, 0, 0.0
+        entry_date, first = t.date, True
+        while remaining > 0 and dq:
+            lot = dq[0]
+            take = min(remaining, lot["qty"])
+            if first:
+                entry_date, first = lot["date"], False
+            cost_sum += take * lot["price"]
+            matched += take
+            lot["qty"] -= take
+            remaining -= take
+            if lot["qty"] <= 0:
+                dq.popleft()
+        entry_price = (cost_sum / matched) if matched > 0 else t.price
+        ret_pct = ((t.price / entry_price - 1) * 100) if entry_price > 0 else 0.0
+        out.append({
+            "stock_code": t.ticker,
+            "corp_name": get_stock_name(t.ticker) or t.ticker,
+            "entry_date": entry_date,
+            "exit_date": t.date,
+            "entry_price": round(entry_price, 2),
+            "exit_price": round(t.price, 2),
+            "quantity": t.quantity,
+            "return_pct": round(ret_pct, 2),
+            "pnl": round(t.pnl, 0) if t.pnl is not None else None,
+            "reason": t.reason,
+        })
+    return out
 
 
 def _compute_monthly_returns(daily_returns: pd.Series) -> list[dict]:

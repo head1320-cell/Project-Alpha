@@ -479,7 +479,7 @@ export default function TerminalBacktester() {
               {/* CSV 내보내기 툴바 (Phase 5-B) */}
               <div className="tbt-export-bar">
                 <span className="tbt-export-label">내보내기</span>
-                <button className="tbt-export-btn" onClick={() => exportTradesCsv((result.backtest.trades || []) as unknown as Array<Record<string, unknown>>, s.name)}>
+                <button className="tbt-export-btn" onClick={() => exportTradesCsv((result.backtest.round_trips || result.backtest.trades || []) as unknown as Array<Record<string, unknown>>, s.name)}>
                   거래내역 CSV
                 </button>
                 <button className="tbt-export-btn" onClick={() => exportSummaryCsv(st as unknown as Record<string, number>, result.backtest.monthly_returns || [], s.name)}>
@@ -582,14 +582,24 @@ export default function TerminalBacktester() {
                 </div>
               )}
 
-              {/* 거래 내역 */}
-              {result.backtest.trades?.length > 0 && (
+              {/* 거래 내역 — 라운드트립(매수/매도 매칭) */}
+              {(result.backtest.round_trips?.length ?? 0) > 0 && (
                 <div className="tbt-chart">
                   <div className="tbt-chart-head">
-                    <div className="tbt-chart-title">Trade Log ({result.backtest.trades.length})</div>
-                    <div className="tbt-chart-title">최근 {Math.min(15, result.backtest.trades.length)}건</div>
+                    <div className="tbt-chart-title">Trade Log ({result.backtest.round_trips!.length})</div>
+                    <div className="tbt-chart-title">최근 {Math.min(15, result.backtest.round_trips!.length)}건</div>
                   </div>
-                  <TradeLog trades={result.backtest.trades} />
+                  <TradeLog trades={result.backtest.round_trips!} />
+                </div>
+              )}
+              {/* 매크로 월간 리밸런싱 전략은 개별 체결 로그가 없음 — 안내 */}
+              {(result.backtest.round_trips?.length ?? 0) === 0 && result.backtest.trade_mode === "rebalance" && (
+                <div className="tbt-chart">
+                  <div className="tbt-chart-head"><div className="tbt-chart-title">Trade Log</div></div>
+                  <div style={{ padding: "14px 4px", color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 12, lineHeight: 1.6 }}>
+                    월간 리밸런싱 전략 — 개별 체결 로그가 없습니다.<br />
+                    월 단위 성과는 위의 <strong>Monthly Returns</strong> 히트맵을 참고하세요.
+                  </div>
                 </div>
               )}
 

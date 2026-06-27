@@ -883,6 +883,8 @@ export interface BacktestTrade {
   exit_price?: number;
   return_pct?: number;
   pnl?: number;
+  quantity?: number;
+  reason?: string;
 }
 
 export interface MonthlyReturn {
@@ -910,6 +912,8 @@ export interface ScreenToBacktestResult {
       alpha_pct: number;
     };
     trades: BacktestTrade[];
+    round_trips?: BacktestTrade[];   // 매수/매도 매칭 라운드트립(조건모드) — 거래로그 표시용
+    trade_mode?: string;             // "per_trade"(조건모드) | "rebalance"(매크로 월간)
   };
   backtest_config: { strategy: string; period: string; initial_capital: number };
   data_source: { fundamentals: string; market_data: string; fully_real: boolean };

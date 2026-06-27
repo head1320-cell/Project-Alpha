@@ -168,7 +168,8 @@ def run_tactical_backtest(sid: str, mk: str, start: str, end: str, capital: floa
     cap = float(capital or 0) or 10_000_000.0
     cfg = {"strategy": f"tactical:{sid}", "period": f"{start} ~ {end}", "initial_capital": cap}
     empty_bt = {"statistics": {}, "equity_curve": [], "equity_dates": [],
-                "drawdown_curve": [], "monthly_returns": [], "trades": []}
+                "drawdown_curve": [], "monthly_returns": [], "trades": [],
+                "round_trips": [], "trade_mode": "rebalance"}
 
     months = _months_between(start, end)
     bt = backtest_strategy(sid, mk, months)
@@ -192,6 +193,8 @@ def run_tactical_backtest(sid: str, mk: str, start: str, end: str, capital: floa
             "drawdown_curve": _dd_curve(vals),
             "monthly_returns": [{"month": labels[i + 1], "return_pct": round(port[i] * 100, 2)} for i in range(len(port))],
             "trades": [],
+            "round_trips": [],
+            "trade_mode": "rebalance",
         },
         "backtest_config": cfg, "data_source": _ds(),
     }
