@@ -26,6 +26,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 from sqlalchemy import text
 
+from src.engine.quant_metrics import compute_metrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -1423,15 +1425,22 @@ class BacktestEngine:
         eq_series = pd.Series(equity_values, index=pd.to_datetime(dates))
         returns = eq_series.pct_change().dropna()
 
+        # 벤치마크(코스피) 대비 — 동일 기간 매수후보유 곡선 + 초과수익/베타/알파.
+        # 정보비율(IR) 계산에 벤치마크 기간수익률이 필요하므로 통계보다 먼저 산출.
+        benchmark = self._compute_benchmark(dates, equity_values, returns)
+        bench_curve = benchmark.get("curve") if benchmark else None
+        bench_rets = None
+        if bench_curve and len(bench_curve) > 1:
+            bench_rets = pd.Series(bench_curve, dtype=float).pct_change().dropna().tolist()
+
         stats = _compute_statistics(
-            eq_series, returns, self.trades, self.cfg.initial_capital
+            eq_series, returns, self.trades, self.cfg.initial_capital,
+            benchmark_returns=bench_rets,
         )
         drawdown = _compute_drawdown(eq_series)
         monthly_returns = _compute_monthly_returns(returns)
         trade_dicts = [self._trade_to_dict(t) for t in self.trades]
         symbol_results = _compute_symbol_results(self.trades, self.cfg.symbols)
-        # 벤치마크(코스피) 대비 — 동일 기간 매수후보유 곡선 + 초과수익/베타/알파
-        benchmark = self._compute_benchmark(dates, equity_values, returns)
 
         # 하이브리드 체결 통계 (정직: 분봉 적용/일봉 폴백 비율 공개)
         intraday_meta = None
@@ -1547,6 +1556,7 @@ def _compute_statistics(
     trades: list[Trade],
     initial_capital: float,
     risk_free_rate: float = 0.035,
+    benchmark_returns: list | None = None,
 ) -> dict:
     """KIS ResultFormatter._convert_statistics()와 동일한 키 구조."""
     final_equity = float(equity.iloc[-1])
@@ -1589,7 +1599,7 @@ def _compute_statistics(
     total_commission = sum(t.commission for t in trades)
     total_slippage = sum(t.slippage for t in trades)
 
-    return {
+    base = {
         "total_return": round(total_return, 0),
         "total_return_pct": round(total_return_pct * 100, 2),
         "cagr": round(cagr * 100, 2),
@@ -1607,6 +1617,15 @@ def _compute_statistics(
         "total_commission": round(total_commission, 0),
         "total_slippage": round(total_slippage, 0),
     }
+
+    # QuantStats 표준 보강 지표 병합 (신규 키만 추가, 기존 키는 base 우선)
+    extra = compute_metrics(
+        returns, equity, periods_per_year=252,
+        trades_pnl=[t.pnl for t in sell_trades],
+        benchmark_returns=benchmark_returns,
+        risk_free=risk_free_rate,
+    )
+    return {**extra, **base}
 
 
 def _compute_drawdown(equity: pd.Series) -> pd.Series:

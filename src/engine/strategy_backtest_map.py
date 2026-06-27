@@ -13,6 +13,8 @@ import math
 import os
 from datetime import datetime
 
+from src.engine.quant_metrics import compute_metrics
+
 
 # ── 모멘텀 조건식 빌더 (factor_expr 문법: 기간은 {N일} 브레이스, 비교는 > ) ──
 def _mom(n: int) -> str:
@@ -146,13 +148,16 @@ def _full_stats(vals: list[float], port: list[float]) -> dict:
     wins, losses = [x for x in port if x > 0], [x for x in port if x < 0]
     win_rate = len(wins) / n_m * 100 if n_m else 0.0
     pf = (sum(wins) / abs(sum(losses))) if losses else (999.0 if wins else 0.0)
-    return {
+    base = {
         "total_return_pct": round(total * 100, 2), "cagr": round(cagr * 100, 2),
         "sharpe_ratio": round(sharpe, 3), "sortino_ratio": round(sortino, 3), "calmar_ratio": round(calmar, 3),
         "max_drawdown_pct": round(abs(mdd) * 100, 2), "num_trades": n_m,
         "win_rate": round(win_rate, 2), "profit_factor": round(pf, 3),
         "avg_trade_return": round(mean_m * 100, 4), "total_commission": 0.0, "total_slippage": 0.0,
     }
+    # QuantStats 표준 보강 지표 병합 (월간 경로 → periods_per_year=12, 기존 키 우선)
+    extra = compute_metrics(port, vals, periods_per_year=12)
+    return {**extra, **base}
 
 
 def run_tactical_backtest(sid: str, mk: str, start: str, end: str, capital: float) -> dict:

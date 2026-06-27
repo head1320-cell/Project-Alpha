@@ -156,10 +156,12 @@ def compute_metrics(
         al = float(-loss.mean()) if loss.size > 0 else 0.0  # 양수
         out["avg_win"] = round(aw, 2)
         out["avg_loss"] = round(al, 2)
-        out["payoff_ratio"] = round(aw / al, 4) if al > 0 else None
+        payoff = aw / al if al > 0 else None
+        out["payoff_ratio"] = round(payoff, 4) if payoff is not None else None
         wr = wins.size / t.size
         out["expectancy"] = round(wr * aw - (1 - wr) * al, 2)
-        out["kelly_pct"] = round((wr - (1 - wr) / (aw / al)) * 100, 2) if al > 0 else None
+        # 켈리는 손익비(payoff>0)가 정의될 때만. 승리 거래 0이면(payoff=0) 정의 불가.
+        out["kelly_pct"] = round((wr - (1 - wr) / payoff) * 100, 2) if payoff else None
 
     # ── 벤치마크 정보비율 ──
     b = _arr(benchmark_returns)
