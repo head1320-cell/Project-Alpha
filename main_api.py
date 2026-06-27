@@ -423,7 +423,7 @@ def krx_status():
     out = {
         "krx_key": bool(os.getenv("KRX_API_KEY")),
         "autobackfill": os.getenv("KRX_AUTOBACKFILL", "1") != "0",
-        "backfill_start": os.getenv("KRX_BACKFILL_START", "2020-01-01"),
+        "backfill_start": os.getenv("KRX_BACKFILL_START", "2010-01-04"),
         # KIS 기반 전종목 OHLCV 사전 적재 활성 여부 (KRX 키 없이 daily_prices를 채우는 경로)
         "kis_prewarm": (
             os.getenv("KIS_USE_MOCK", "1") == "0"
@@ -546,7 +546,7 @@ def ingest_index_trigger():
         _INGEST_RUNNING["index"] = True
         try:
             from src.data.krx_ingest import backfill_index
-            start = os.getenv("KRX_BACKFILL_START", "2020-01-01")
+            start = os.getenv("KRX_BACKFILL_START", "2010-01-04")
             logger.info(f"지수 백필(수동) 시작: {start}~")
             logger.info(f"지수 백필(수동) 완료: {backfill_index(start=start)}")
         except Exception:

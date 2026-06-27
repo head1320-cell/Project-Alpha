@@ -282,7 +282,7 @@ def auto_backfill(loop: bool = False) -> dict:
 
     env:
       KRX_AUTOBACKFILL  (기본 "1", "0"이면 비활성)
-      KRX_BACKFILL_START(기본 "2020-01-01")
+      KRX_BACKFILL_START(기본 "2010-01-04" — KRX 제공 최초)
       KRX_BACKFILL_MAX_DAYS(기본 0=무제한 — 데몬이라 비차단)
       KRX_REFRESH_SEC   (loop=True 증분 주기, 기본 12h)
     loop=True → 초기 백필 후 주기적으로 최신일까지 증분(skip_existing이 과거를 건너뜀).
@@ -298,7 +298,7 @@ def auto_backfill(loop: bool = False) -> dict:
     except Exception as e:
         return {"skipped": f"krx_client 로드 실패: {e}"}
 
-    start = os.getenv("KRX_BACKFILL_START", "2020-01-01")
+    start = os.getenv("KRX_BACKFILL_START", "2010-01-04")  # KRX 제공 최초(2010)부터 — 깊은 역사
     try:
         max_days = int(os.getenv("KRX_BACKFILL_MAX_DAYS", "0")) or None
     except ValueError:

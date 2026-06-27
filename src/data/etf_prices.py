@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # 일간 히스토리 적재 윈도우 (장기 상관/타이밍 추이용). DB가 깊을수록 롤링 분석이 자동 장기화.
 # 기본 ~5년. mock도 이 길이만큼 결정론 생성 → 샌드박스 롤링 차트도 길어짐.
-_HISTORY_DAYS = int(os.getenv("ETF_HISTORY_DAYS", "1825") or 1825)
+_HISTORY_DAYS = int(os.getenv("ETF_HISTORY_DAYS", "5840") or 5840)  # ~16년 (상장일 한계까지 최대한 깊게)
 
 # ── Point-in-time 절단 (동적 전략 백테스트용) ─────────────────────────────────
 # as_of(m): 시세 시계열의 끝에서 m개월(일간은 m*21봉)을 가려 "m개월 전 시점"으로 평가.

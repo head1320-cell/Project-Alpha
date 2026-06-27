@@ -45,6 +45,14 @@ BOK_BASE_URL = "https://ecos.bok.or.kr/api"
 FRED_BASE_URL = "https://api.stlouisfed.org/fred"
 
 
+def _history_years() -> int:
+    """매크로 시계열 적재 깊이(년). 기본 15 — BOK/FRED는 수십 년 제공(과거 5년 하드코딩 제거)."""
+    try:
+        return max(1, int(os.getenv("MACRO_HISTORY_YEARS", "15")))
+    except ValueError:
+        return 15
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Models
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -180,7 +188,7 @@ class BokClient:
         if not end:
             end = datetime.now().strftime("%Y%m" if period == "M" else "%Y")
         if not start:
-            yr = int(end[:4]) - 5
+            yr = int(end[:4]) - _history_years()
             start = f"{yr}{end[4:6]}" if period == "M" else str(yr)
 
         url = f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/1000/{stat_code}/{period}/{start}/{end}/{item_code}"
@@ -262,7 +270,7 @@ class FredClient:
             return [], []
 
         if not start:
-            start = (datetime.now() - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+            start = (datetime.now() - timedelta(days=365 * _history_years())).strftime("%Y-%m-%d")
         if not end:
             end = datetime.now().strftime("%Y-%m-%d")
 
