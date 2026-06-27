@@ -1076,6 +1076,28 @@ h6 { font-size: 1rem; }
 }
 .tbt-substats b { color: var(--t-ink); font-family: var(--t-mono); margin-left: 4px; }
 
+/* QuantStats 티어시트 — 그룹별 지표 표 */
+.tbt-tearsheet {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+}
+@media (max-width: 1100px) { .tbt-tearsheet { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px)  { .tbt-tearsheet { grid-template-columns: 1fr; } }
+.tbt-ts-group {
+  border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface);
+  padding: 12px 14px;
+}
+.tbt-ts-gtitle {
+  font-family: var(--t-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--t-accent); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--t-border);
+}
+.tbt-ts-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  padding: 5px 0; border-bottom: 1px dotted var(--t-border);
+}
+.tbt-ts-row:last-child { border-bottom: none; }
+.tbt-ts-label { font-size: 12px; color: var(--t-muted); }
+.tbt-ts-value { font-family: var(--t-mono); font-size: 13px; color: var(--t-ink); font-weight: 600; }
+
 .tbt-tradelog { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tbt-tradelog th {
   text-align: left; font-family: var(--t-mono); font-size: 9px; text-transform: uppercase;

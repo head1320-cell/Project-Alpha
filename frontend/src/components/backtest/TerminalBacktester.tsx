@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   backtestBridgeApi, type ScreenToBacktestResult,
-  type FilterGroupNode, type BacktestTrade, type MonthlyReturn,
+  type FilterGroupNode, type BacktestTrade, type MonthlyReturn, type BacktestStatistics,
 } from "@/lib/screenerApi";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/lib/screenerHandoff";
 import { getMacroHandoff, clearMacroHandoff, type MacroBacktestHandoff } from "@/lib/macroHandoff";
@@ -524,6 +524,9 @@ export default function TerminalBacktester() {
                 <span>슬리피지 <b>₩{Math.round(st.total_slippage).toLocaleString()}</b></span>
               </div>
 
+              {/* 전체 성과지표 — QuantStats 티어시트 */}
+              <MetricsTearsheet st={st} />
+
               {/* 자산 곡선 */}
               <div className="tbt-chart">
                 <div className="tbt-chart-head">
@@ -702,6 +705,86 @@ function MonthlyHeatmap({ data }: { data: Array<MonthlyReturn | number> }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// 전체 성과지표 — QuantStats 티어시트식 그룹 표 (헤드라인 6카드 보강)
+function MetricsTearsheet({ st }: { st: BacktestStatistics }) {
+  const has = (x: number | null | undefined): x is number => x !== null && x !== undefined;
+  const pct = (x: number | null | undefined, dp = 2) => (has(x) ? `${x.toFixed(dp)}%` : "—");
+  const num = (x: number | null | undefined, dp = 2) => (has(x) ? x.toFixed(dp) : "—");
+  const won = (x: number | null | undefined) => (has(x) ? `₩${Math.round(x).toLocaleString()}` : "—");
+  const days = (x: number | null | undefined) => (has(x) ? `${Math.round(x)}일` : "—");
+  const RED = "#dc2626", GREEN = "#16a34a";
+
+  type Row = { label: string; value: string; hint?: string; color?: string };
+  const groups: { title: string; rows: Row[] }[] = [
+    {
+      title: "위험 · Risk",
+      rows: [
+        { label: "연변동성", value: pct(st.volatility_pct), hint: "Volatility (ann.)" },
+        { label: "하방변동성", value: pct(st.downside_deviation_pct), hint: "Downside deviation" },
+        { label: "VaR 95%", value: pct(st.var_pct), hint: "1기간 하위 5% 손실", color: has(st.var_pct) ? RED : undefined },
+        { label: "CVaR 95%", value: pct(st.cvar_pct), hint: "꼬리손실 평균", color: has(st.cvar_pct) ? RED : undefined },
+        { label: "Ulcer Index", value: num(st.ulcer_index), hint: "낙폭 깊이·지속" },
+        { label: "평균낙폭", value: pct(st.avg_drawdown_pct), hint: "Avg drawdown", color: has(st.avg_drawdown_pct) ? RED : undefined },
+        { label: "최장 수중기간", value: days(st.max_drawdown_days), hint: "Max DD duration" },
+      ],
+    },
+    {
+      title: "위험조정 · Risk-Adjusted",
+      rows: [
+        { label: "Omega", value: num(st.omega, 3), hint: "이익합/손실합" },
+        { label: "Gain-to-Pain", value: num(st.gain_to_pain, 3), hint: "순수익/총손실" },
+        { label: "Recovery Factor", value: num(st.recovery_factor, 3), hint: "총수익/최대낙폭" },
+        { label: "Tail Ratio", value: num(st.tail_ratio, 3), hint: "우측/좌측 꼬리" },
+        { label: "Information Ratio", value: num(st.information_ratio, 3), hint: "벤치 초과/추적오차" },
+      ],
+    },
+    {
+      title: "분포 · Distribution",
+      rows: [
+        { label: "왜도 Skew", value: num(st.skew, 3), hint: "수익분포 비대칭" },
+        { label: "첨도 Kurtosis", value: num(st.kurtosis, 3), hint: "초과첨도(정규=0)" },
+        { label: "최고 기간수익", value: pct(st.best_period_pct), color: has(st.best_period_pct) ? GREEN : undefined },
+        { label: "최저 기간수익", value: pct(st.worst_period_pct), color: has(st.worst_period_pct) ? RED : undefined },
+      ],
+    },
+    {
+      title: "거래 · Trades",
+      rows: [
+        { label: "손익비 Payoff", value: num(st.payoff_ratio), hint: "평균이익/평균손실" },
+        { label: "기대값 Expectancy", value: won(st.expectancy), hint: "거래당 기대손익", color: has(st.expectancy) ? (st.expectancy! >= 0 ? GREEN : RED) : undefined },
+        { label: "평균이익", value: won(st.avg_win), color: has(st.avg_win) ? GREEN : undefined },
+        { label: "평균손실", value: won(st.avg_loss), color: has(st.avg_loss) ? RED : undefined },
+        { label: "Kelly 비중", value: pct(st.kelly_pct), hint: "최적 베팅비율" },
+      ],
+    },
+  ];
+  // 값이 전부 "—"인 그룹은 숨김(엔진모드/무거래 시 거래 그룹 자동 제거)
+  const visible = groups.filter((g) => g.rows.some((r) => r.value !== "—"));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="tbt-chart">
+      <div className="tbt-chart-head">
+        <div className="tbt-chart-title">전체 성과지표</div>
+        <div className="tbt-chart-title" style={{ color: "var(--t-muted)" }}>QuantStats 표준</div>
+      </div>
+      <div className="tbt-tearsheet">
+        {visible.map((g) => (
+          <div key={g.title} className="tbt-ts-group">
+            <div className="tbt-ts-gtitle">{g.title}</div>
+            {g.rows.map((r) => (
+              <div key={r.label} className="tbt-ts-row" title={r.hint || ""}>
+                <span className="tbt-ts-label">{r.label}</span>
+                <span className="tbt-ts-value" style={r.color && r.value !== "—" ? { color: r.color } : undefined}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -872,6 +872,28 @@ export interface BacktestStatistics {
   avg_trade_return: number;
   total_commission: number;
   total_slippage: number;
+  // ── QuantStats 표준 보강 지표 (옵셔널 — 없으면 "—") ──
+  volatility_pct?: number | null;
+  downside_deviation_pct?: number | null;
+  var_pct?: number | null;
+  cvar_pct?: number | null;
+  ulcer_index?: number | null;
+  max_drawdown_days?: number | null;
+  avg_drawdown_pct?: number | null;
+  omega?: number | null;
+  recovery_factor?: number | null;
+  gain_to_pain?: number | null;
+  tail_ratio?: number | null;
+  skew?: number | null;
+  kurtosis?: number | null;
+  best_period_pct?: number | null;
+  worst_period_pct?: number | null;
+  payoff_ratio?: number | null;
+  avg_win?: number | null;
+  avg_loss?: number | null;
+  expectancy?: number | null;
+  kelly_pct?: number | null;
+  information_ratio?: number | null;
 }
 
 export interface BacktestTrade {
