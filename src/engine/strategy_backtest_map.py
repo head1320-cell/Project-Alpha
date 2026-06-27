@@ -115,9 +115,37 @@ def _iso(label: str) -> str:
         return label
 
 
-def _ds() -> dict:
-    real = bool(os.getenv("KIS_APP_KEY"))
-    return {"fundamentals": "mock", "market_data": "KIS" if real else "mock", "fully_real": real}
+def _market_data_real(holdings: list | None, mk: str) -> bool:
+    """대표 ETF 1종을 실제 로드해 시세 실데이터 여부를 정직하게 판별.
+
+    샌드박스(KIS_USE_MOCK=1)나 키 없음 → 항상 False(mock).
+    운영(KIS_USE_MOCK=0 + 키)에서 ETF 시계열이 실 DB/KIS면 True,
+    mock 폴백/빈값이면 False — '키 유무'가 아니라 '실제 사용한 데이터' 기준.
+    """
+    if os.getenv("KIS_USE_MOCK", "1") != "0" or not os.getenv("KIS_APP_KEY"):
+        return False
+    try:
+        from src.data.etf_prices import _daily_df, resolve
+        for h in (holdings or []):
+            tk = h.get("us_ticker") if isinstance(h, dict) else None
+            if not tk:
+                continue
+            code, _ = resolve(tk, mk)
+            df = _daily_df(code)
+            if df is not None and not df.empty:
+                return df.attrs.get("source") in ("db", "kis")
+        return False
+    except Exception:
+        return False
+
+
+def _ds(market_real: bool = False) -> dict:
+    """데이터 출처(정직). market_real = 실제 사용한 ETF 시세가 실데이터인지 여부."""
+    return {
+        "fundamentals": "mock",  # 택티컬 자산배분은 DART 펀더멘털 미사용
+        "market_data": "kis_real" if market_real else "mock",
+        "fully_real": bool(market_real),
+    }
 
 
 def _dd_curve(vals: list[float]) -> list[float]:
@@ -176,12 +204,13 @@ def run_tactical_backtest(sid: str, mk: str, start: str, end: str, capital: floa
     curve = bt.get("curve") or []
     if not curve:
         return {"error": True, "message": "전략 백테스트 데이터가 없습니다.", "screened_count": 0,
-                "backtest": empty_bt, "backtest_config": cfg, "data_source": _ds()}
+                "backtest": empty_bt, "backtest_config": cfg, "data_source": _ds(False)}
 
     vals = [pt["v"] for pt in curve]
     labels = [pt["t"] for pt in curve]
     port = [vals[i] / vals[i - 1] - 1 for i in range(1, len(vals)) if vals[i - 1] > 0]
     _n, _f, holdings = _strategy_holdings(sid, mk)
+    market_real = _market_data_real(holdings, mk)  # 실제 사용한 ETF 시세의 실/mock 판별(정직)
     screened = [{"stock_code": resolve(h["us_ticker"], mk)[0], "corp_name": h["us_label"], "composite_score": None}
                 for h in (holdings or [])]
     return {
@@ -196,5 +225,5 @@ def run_tactical_backtest(sid: str, mk: str, start: str, end: str, capital: floa
             "round_trips": [],
             "trade_mode": "rebalance",
         },
-        "backtest_config": cfg, "data_source": _ds(),
+        "backtest_config": cfg, "data_source": _ds(market_real),
     }

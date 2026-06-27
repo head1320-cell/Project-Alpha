@@ -71,6 +71,7 @@ def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
         prev = px
 
     df = pd.DataFrame(rows, index=pd.DatetimeIndex(dates, name="date"))
+    df.attrs["source"] = "mock"   # 데이터 출처 태그(정직성 — 합성 시계열)
     return df
 
 
@@ -148,6 +149,7 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
     # auto: DB → KIS → mock
     df = _db_ohlcv_df(code, start_date, end_date)
     if df is not None and not df.empty and len(df) >= 20:
+        df.attrs["source"] = "db"   # 실데이터(적재 DB)
         return df
 
     df = _kis_ohlcv_df(code, start_date, end_date)
@@ -157,6 +159,7 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
             ingest_df_to_db(code, df)
         except Exception:
             pass
+        df.attrs["source"] = "kis"  # 실데이터(KIS 실시간)
         return df
 
     # 최종 fallback: mock 모드만 합성, 운영선 빈 df(정직 — 실데이터 없음)
