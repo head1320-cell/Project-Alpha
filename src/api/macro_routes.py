@@ -228,7 +228,7 @@ def macro_health():
 
 
 @router.get("/strategies")
-def macro_strategies(market: str = Query("us", pattern="^(us|kr)$")):
+def macro_strategies(market: str = Query("kr", pattern="^(us|kr)$")):
     """13 택티컬 자산배분 전략의 현재 보유자산·비중 + 시그널 (jasan-calc식).
     market='us'(원본 ETF) | 'kr'(국내 ETF 매핑). 데이터 없으면 결정론적 mock으로 산출."""
     try:
@@ -240,7 +240,7 @@ def macro_strategies(market: str = Query("us", pattern="^(us|kr)$")):
 
 
 @router.get("/recommend")
-def macro_recommend(market: str = Query("us", pattern="^(us|kr)$")):
+def macro_recommend(market: str = Query("kr", pattern="^(us|kr)$")):
     """현 국면에 유리한 자산배분 전략 추천 (규칙+성과+AI 서술 3종 종합).
     국면(regime_analyzer) × 전략 아키타입 적합도 + 트레일링 성과 → composite 랭킹 + 최상위 추천."""
     try:
@@ -309,7 +309,7 @@ def macro_valuation():
         from src.data.etf_prices import monthly_closes
 
         def _zlast(ticker: str):
-            c = [v for v in monthly_closes(ticker, "us", 60) if v]
+            c = [v for v in monthly_closes(ticker, "kr", 60) if v]
             if len(c) < 12:
                 return None
             mean = sum(c) / len(c)
@@ -345,7 +345,7 @@ def macro_valuation():
 
 
 @router.get("/correlations")
-def macro_correlations(market: str = Query("us", pattern="^(us|kr)$")):
+def macro_correlations(market: str = Query("kr", pattern="^(us|kr)$")):
     """13자산 상관행렬 + 롤링 주식-채권 상관 추이 + 평균 페어상관(분산 국면). 일간 시세 기반."""
     try:
         from src.engine.macro_analytics import correlation_panel
@@ -356,7 +356,7 @@ def macro_correlations(market: str = Query("us", pattern="^(us|kr)$")):
 
 
 @router.get("/timing")
-def macro_timing(market: str = Query("us", pattern="^(us|kr)$")):
+def macro_timing(market: str = Query("kr", pattern="^(us|kr)$")):
     """마켓타이밍 종합(위험 온/오프) + 5구성요소 + 월별 추이 + 자산별 추세표."""
     try:
         from src.engine.macro_analytics import timing_panel
@@ -378,7 +378,7 @@ def macro_regime_trajectory():
 
 
 @router.get("/strategy/{sid}")
-def macro_strategy_detail(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
+def macro_strategy_detail(sid: str, market: str = Query("kr", pattern="^(us|kr)$")):
     """전략 상세 — 큐레이션 프로파일 + 라이브 보유·시그널 + 국면적합도 + 과거성과 곡선 + 레퍼런스."""
     try:
         from src.engine.strategy_profiles import build_detail
@@ -394,7 +394,7 @@ def macro_strategy_detail(sid: str, market: str = Query("us", pattern="^(us|kr)$
 
 
 @router.get("/strategy/{sid}/backtest-config")
-def macro_strategy_backtest_config(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
+def macro_strategy_backtest_config(sid: str, market: str = Query("kr", pattern="^(us|kr)$")):
     """전략 → 백테스터 셋업 구성(하이브리드): 모멘텀=조건식·정적=asset_alloc·최적화=엔진."""
     try:
         from src.engine.strategy_backtest_map import backtest_config
@@ -410,7 +410,7 @@ def macro_strategy_backtest_config(sid: str, market: str = Query("us", pattern="
 
 
 @router.post("/strategy/{sid}/ai")
-def macro_strategy_ai(sid: str, market: str = Query("us", pattern="^(us|kr)$")):
+def macro_strategy_ai(sid: str, market: str = Query("kr", pattern="^(us|kr)$")):
     """전략 AI 심층분석 (온디맨드) — 프로파일+현재 국면+보유 컨텍스트로 Claude 생성. 키 없으면 폴백."""
     try:
         from src.engine.strategy_profiles import build_detail

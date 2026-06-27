@@ -332,7 +332,7 @@ def _strategy_holdings(sid: str, mk: str):
 _ARCH_KR = {"aggressive": "공격", "defensive": "방어", "income": "인컴", "diversified": "분산"}
 
 
-def build_detail(sid: str, market: str = "us") -> dict | None:
+def build_detail(sid: str, market: str = "kr") -> dict | None:
     """전략 상세 = 정적 프로파일 + 라이브 보유·시그널 + 국면적합도 + 과거성과 곡선."""
     prof = get_profile(sid)
     if prof is None:

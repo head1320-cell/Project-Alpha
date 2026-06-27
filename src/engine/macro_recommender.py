@@ -85,7 +85,7 @@ def _ai_narrative(quad: str, stress: float, top: dict) -> tuple[str, str]:
         return rule, "rule"
 
 
-def recommend(market: str = "us") -> dict:
+def recommend(market: str = "kr") -> dict:
     """현 국면 유리 전략 추천 (3종 종합)."""
     from src.engine.tactical_allocations import compute_strategies
     mk = "kr" if market == "kr" else "us"

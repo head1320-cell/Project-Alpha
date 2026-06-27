@@ -59,7 +59,7 @@ def _codes(us_tickers: list[str], mk: str) -> list[str]:
     return out
 
 
-def backtest_config(sid: str, market: str = "us") -> dict | None:
+def backtest_config(sid: str, market: str = "kr") -> dict | None:
     """전략 id → 백테스터 셋업 구성 (mode + 파라미터)."""
     from src.engine.tactical_allocations import ALL_STRATEGIES
     entry = next((s for s in ALL_STRATEGIES if s[0] == sid), None)

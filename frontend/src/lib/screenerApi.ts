@@ -1410,12 +1410,12 @@ export const analysisApi = {
     if (!r.ok) throw new Error(`Macro regime failed: ${r.status}`);
     return r.json();
   },
-  macroStrategies: async (market: "us" | "kr" = "us"): Promise<MacroStrategies> => {
+  macroStrategies: async (market: "us" | "kr" = "kr"): Promise<MacroStrategies> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/strategies?market=${market}`);
     if (!r.ok) throw new Error(`Macro strategies failed: ${r.status}`);
     return r.json();
   },
-  macroRecommend: async (market: "us" | "kr" = "us"): Promise<MacroRecommend> => {
+  macroRecommend: async (market: "us" | "kr" = "kr"): Promise<MacroRecommend> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/recommend?market=${market}`);
     if (!r.ok) throw new Error(`Macro recommend failed: ${r.status}`);
     return r.json();
@@ -1430,12 +1430,12 @@ export const analysisApi = {
     if (!r.ok) throw new Error(`Macro valuation failed: ${r.status}`);
     return r.json();
   },
-  macroCorrelations: async (market: "us" | "kr" = "us"): Promise<MacroCorrelations> => {
+  macroCorrelations: async (market: "us" | "kr" = "kr"): Promise<MacroCorrelations> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/correlations?market=${market}`);
     if (!r.ok) throw new Error(`Macro correlations failed: ${r.status}`);
     return r.json();
   },
-  macroTiming: async (market: "us" | "kr" = "us"): Promise<MacroTiming> => {
+  macroTiming: async (market: "us" | "kr" = "kr"): Promise<MacroTiming> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/timing?market=${market}`);
     if (!r.ok) throw new Error(`Macro timing failed: ${r.status}`);
     return r.json();
@@ -1445,17 +1445,17 @@ export const analysisApi = {
     if (!r.ok) throw new Error(`Macro trajectory failed: ${r.status}`);
     return r.json();
   },
-  macroStrategyDetail: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyDetail> => {
+  macroStrategyDetail: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyDetail> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}?market=${market}`);
     if (!r.ok) throw new Error(`Strategy detail failed: ${r.status}`);
     return r.json();
   },
-  macroStrategyAI: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyAI> => {
+  macroStrategyAI: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyAI> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/ai?market=${market}`, { method: "POST" });
     if (!r.ok) throw new Error(`Strategy AI failed: ${r.status}`);
     return r.json();
   },
-  macroStrategyBacktestConfig: async (sid: string, market: "us" | "kr" = "us"): Promise<StrategyBacktestConfig> => {
+  macroStrategyBacktestConfig: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyBacktestConfig> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/backtest-config?market=${market}`);
     if (!r.ok) throw new Error(`Strategy backtest-config failed: ${r.status}`);
     return r.json();

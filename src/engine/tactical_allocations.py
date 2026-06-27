@@ -236,8 +236,8 @@ def _signal(weights: dict[str, float]) -> str:
     return "중립 (혼합)"
 
 
-def compute_strategies(market: str = "us") -> dict:
-    """13전략의 현재 보유자산·비중 + 시그널. market: 'us' | 'kr'."""
+def compute_strategies(market: str = "kr") -> dict:
+    """13전략의 현재 보유자산·비중 + 시그널. market: 'kr'(국내 ETF 실데이터, 기본) | 'us'(원본, KIS 미제공→mock)."""
     from src.data.etf_prices import resolve
     mk = "kr" if market == "kr" else "us"
     out = []

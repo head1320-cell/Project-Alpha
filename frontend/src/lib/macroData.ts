@@ -13,8 +13,8 @@ export interface MacroCore {
   regime: RegimeState | null;
   dashboard: MacroDashboard | null;
   valuation: MacroValuation | null;
-  strategies: MacroStrategies | null; // 기본 us
-  recommend: MacroRecommend | null;   // 기본 us
+  strategies: MacroStrategies | null; // 기본 kr (국내 ETF 실데이터)
+  recommend: MacroRecommend | null;   // 기본 kr
 }
 
 export async function loadMacroCore(): Promise<MacroCore> {
@@ -22,8 +22,8 @@ export async function loadMacroCore(): Promise<MacroCore> {
     macroApi.regime().catch(() => null),
     analysisApi.macroDashboard().catch(() => null),
     analysisApi.macroValuation().catch(() => null),
-    analysisApi.macroStrategies("us").catch(() => null),
-    analysisApi.macroRecommend("us").catch(() => null),
+    analysisApi.macroStrategies("kr").catch(() => null),
+    analysisApi.macroRecommend("kr").catch(() => null),
   ]);
   return { regime, dashboard, valuation, strategies, recommend };
 }

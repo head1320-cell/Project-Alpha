@@ -90,7 +90,7 @@ def _daily_df(ticker: str):
     return load_ohlcv_unified(ticker, start, end, prefer="auto")
 
 
-def monthly_closes(ticker: str, market: str = "us", n: int = 14) -> list[float]:
+def monthly_closes(ticker: str, market: str = "kr", n: int = 14) -> list[float]:
     """최근 n개 '월말' 종가 (모멘텀 산정용). as_of 활성 시 그 시점까지만."""
     key = (f"m:{market}", ticker)
     if key in _CACHE:
@@ -112,7 +112,7 @@ def monthly_closes(ticker: str, market: str = "us", n: int = 14) -> list[float]:
     return full[-n:]
 
 
-def daily_closes(ticker: str, market: str = "us", days: int = 300) -> list[float]:
+def daily_closes(ticker: str, market: str = "kr", days: int = 300) -> list[float]:
     """최근 일간 종가 (이동평균 산정용). as_of 활성 시 그 시점까지만(월×21봉)."""
     key = (f"d:{market}", ticker)
     if key in _CACHE:

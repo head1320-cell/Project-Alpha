@@ -54,7 +54,7 @@ export interface TransplantPayload { sid: string; name: string; market: Market }
 
 export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; onTransplant?: (p: TransplantPayload) => void }) {
   const [tab, setTab] = useState<TabId>("overview");
-  const [market, setMarket] = useState<Market>("us");
+  const [market, setMarket] = useState<Market>("kr");
   const [strategies, setStrategies] = useState<MacroStrategies | null>(core.strategies);
   const [recommend, setRecommend] = useState<MacroRecommend | null>(core.recommend);
   const [mktLoading, setMktLoading] = useState(false);
@@ -92,7 +92,7 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
   // 시장 토글 → strategies/recommend 재로드 (us는 코어 캐시 사용)
   useEffect(() => {
     let ok = true;
-    if (market === "us") { setStrategies(core.strategies); setRecommend(core.recommend); return; }
+    if (market === "kr") { setStrategies(core.strategies); setRecommend(core.recommend); return; }
     setMktLoading(true);
     Promise.all([loadStrategies(market), loadRecommend(market)]).then(([s, r]) => {
       if (!ok) return; setStrategies(s); setRecommend(r); setMktLoading(false);
