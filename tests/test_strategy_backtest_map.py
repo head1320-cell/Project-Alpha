@@ -4,7 +4,11 @@ import os
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine.strategy_backtest_map import (  # noqa: E402
-    _ENGINE, _MOMENTUM, _STATIC, backtest_config, run_tactical_backtest,
+    _ENGINE,
+    _MOMENTUM,
+    _STATIC,
+    backtest_config,
+    run_tactical_backtest,
 )
 from src.engine.tactical_allocations import ALL_STRATEGIES  # noqa: E402
 from src.kis_strategies.factor_expr import parse_expr  # noqa: E402

@@ -25,7 +25,6 @@ def test_backtest_config_default_market_kr():
 
 def test_macro_strategies_endpoint_default_kr():
     from fastapi.testclient import TestClient
-
     from main_api import app
     c = TestClient(app)
     r = c.get("/api/v1/macro/strategies")   # market 미지정 → 기본 kr

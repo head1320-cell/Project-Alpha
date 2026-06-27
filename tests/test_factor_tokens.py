@@ -140,9 +140,9 @@ def test_unsupported_reasons_are_honest():
 def test_fundamental_aliases_map_to_real_store_keys():
     """별칭 타깃이 전부 실재하는 키인지 — 파생 id ∪ raw 키 ∪ 시계열 파생 id (드리프트 가드)."""
     from src.data.dart_history import HISTORY_FACTOR_IDS
+    from src.data.extended_factors_store import EXTENDED_FACTORS
     from src.data.fundamentals_store import FUNDAMENTAL_FACTORS, FundamentalsStore
     from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES
-    from src.data.extended_factors_store import EXTENDED_FACTORS
     valid = {m.id for m in FUNDAMENTAL_FACTORS}
     valid |= set(FundamentalsStore.get_default().get_raw_financials("005930").keys())
     valid |= set(HISTORY_FACTOR_IDS)

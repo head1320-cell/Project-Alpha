@@ -4,7 +4,11 @@ import os
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine.strategy_profiles import (  # noqa: E402
-    PROFILES, _regime_fit, backtest_strategy, build_detail, get_profile,
+    PROFILES,
+    _regime_fit,
+    backtest_strategy,
+    build_detail,
+    get_profile,
 )
 from src.engine.tactical_allocations import ALL_STRATEGIES  # noqa: E402
 
