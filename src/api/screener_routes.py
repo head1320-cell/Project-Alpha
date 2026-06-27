@@ -416,7 +416,7 @@ class AdvancedRunRequest(BaseModel):
     filter_ast: FilterGroupModel
     sort_by: str = "composite_score"
     ascending: bool = False
-    limit: int = Field(default=50, ge=1, le=1000)  # 전종목(전체) 유니버스 대응 — 상한 200→1000
+    limit: int = Field(default=50, ge=1, le=4000)  # 전종목(all_listed ~2,900) 유니버스 전체 반환 대응
     beta: float = Field(default=1.0, ge=0.1, le=3.0)
     projection_years: int = Field(default=10, ge=3, le=20)
     use_macro: bool = False    # M3: 현재 국면 기반 동적 Composite 가중치

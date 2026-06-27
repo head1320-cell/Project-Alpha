@@ -206,7 +206,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     const t = setTimeout(async () => {
       try {
         const r = await screenerApiAdvanced.runAdvancedStream(
-          { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 500, liquidity_floor: "relaxed" },
+          // 유니버스 전체 반환 — 백엔드가 유니버스 크기로 캡(kospi200→200, all_listed→~2,900). 상한 4000.
+          { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 4000, liquidity_floor: "relaxed" },
           (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); }, ctrl.signal,
         );
         if (!cancelled) setResults(r);
