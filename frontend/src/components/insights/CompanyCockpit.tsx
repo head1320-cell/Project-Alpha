@@ -186,6 +186,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                   <button className={finMode === "quarter" ? "on" : ""} disabled={!c.quarters.length} onClick={() => c.quarters.length && setFinMode("quarter")} title={c.quarters.length ? "단일분기 (DART 누적보고서 차분)" : "분기 데이터 없음 — 실데이터(DART 분기보고서)에서 활성"}>분기{!c.quarters.length && <span className="ca-mockbadge">없음</span>}</button>
                 </div>
                 {finMode === "quarter" && c.quarters.length ? (
+                  <>
                   <table className="ca-cp-fin">
                     <thead><tr><th>항목 (억원)</th>{c.quarters.map((q) => <th key={q.q}>{q.q}</th>)}<th>추세</th></tr></thead>
                     <tbody>
@@ -194,6 +195,12 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                       ))}
                     </tbody>
                   </table>
+                  <div className="ca-cp-kpibars">
+                    <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.quarters} dataKey="revenue" xKey="q" /></div>
+                    <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.quarters} dataKey="op" color="#16a34a" xKey="q" /></div>
+                    <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.quarters} dataKey="ni" color="#1200ff" xKey="q" /></div>
+                  </div>
+                  </>
                 ) : (
                   <>
                     <table className="ca-cp-fin">

@@ -68,12 +68,12 @@ export function PriceChart({ data, tone = "neutral", height = 220, intrinsic }: 
   );
 }
 
-export function KpiBars({ data, dataKey, color = ACCENT, height = 130, fmt = eok }: { data: CompanyData["years"]; dataKey: string; color?: string; height?: number; fmt?: (n: number) => string }) {
-  const num = (d: CompanyData["years"][number]) => d[dataKey as keyof typeof d] as number;
+export function KpiBars({ data, dataKey, xKey = "year", color = ACCENT, height = 130, fmt = eok }: { data: ReadonlyArray<CompanyData["years"][number] | CompanyData["quarters"][number]>; dataKey: string; xKey?: string; color?: string; height?: number; fmt?: (n: number) => string }) {
+  const num = (d: CompanyData["years"][number] | CompanyData["quarters"][number]) => (d as unknown as Record<string, number>)[dataKey];
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data as unknown[]} margin={{ top: 14, right: 4, bottom: 0, left: 4 }}>
-        <XAxis dataKey="year" tick={{ fontSize: 10, fill: MUTED, fontFamily: "var(--t-mono)" }} tickLine={false} axisLine={{ stroke: BORDER }} />
+        <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: MUTED, fontFamily: "var(--t-mono)" }} tickLine={false} axisLine={{ stroke: BORDER }} />
         <Tooltip formatter={(v: number) => [fmt(v), ""]} contentStyle={{ fontFamily: "var(--t-mono)", fontSize: 11, borderRadius: 2, border: `1px solid ${BORDER}` }} cursor={{ fill: "rgba(18,0,255,0.04)" }} />
         <Bar dataKey={dataKey} radius={[2, 2, 0, 0]}>
           {data.map((d, i) => <Cell key={i} fill={num(d) < 0 ? BEAR : i === data.length - 1 ? color : "#c7c7cf"} />)}
