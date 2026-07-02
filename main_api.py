@@ -479,6 +479,24 @@ def db_status():
         "bok_key": bool(os.getenv("BOK_API_KEY")),
         "fred_key": bool(os.getenv("FRED_API_KEY")),
     }
+
+    # 유니버스 적재 진행 — 마스터(전 상장) 대비 factor_snapshot 적재 수 (스크리너 유니버스 크기의 근거)
+    def _universe_progress() -> dict:
+        try:
+            from src.data.snapshot_db import enabled as _sn_en
+            from src.data.snapshot_db import ingested_codes
+            from src.data.stock_master import build_master_universe, master_composition
+            ing = set(ingested_codes()) if _sn_en() else set()
+            prog = {}
+            for k in ("kospi", "kosdaq", "etf", "all_listed"):
+                m = build_master_universe(k)
+                if m:
+                    prog[k] = {"master": len(m), "ingested": sum(1 for c in m if c in ing)}
+            return {"progress": prog, "composition": master_composition()}
+        except Exception:
+            return {"progress": {}, "composition": {}}
+
+    out["universe_progress"] = _universe_progress()
     try:
         from sqlalchemy import text
 

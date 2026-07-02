@@ -119,6 +119,10 @@ export const api = {
       tables: Record<string, Record<string, number | string | null>>;
       tools: Record<string, boolean>;
       ingest_running: Record<string, boolean>;
+      universe_progress?: {
+        progress: Record<string, { master: number; ingested: number }>;
+        composition: Record<string, Record<string, number>>;
+      };
     }>("/api/v1/data/db-status"),
 
   // target ∈ index | etf | stocks | factors | financials | flows | all

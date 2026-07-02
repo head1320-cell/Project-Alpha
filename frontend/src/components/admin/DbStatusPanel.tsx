@@ -150,6 +150,34 @@ export default function DbStatusPanel() {
             </tbody>
           </table>
 
+          {/* 유니버스 적재 진행 — 스크리너 유니버스가 마스터(전 상장) 대비 얼마나 채워졌는지 */}
+          {st.universe_progress && Object.keys(st.universe_progress.progress ?? {}).length > 0 && (
+            <>
+              <SectionHead label="UNIVERSE COVERAGE" index="INGESTED / MASTER" />
+              <table className="trisk-table">
+                <thead>
+                  <tr><th>유니버스</th><th className="num">마스터</th><th className="num">적재</th><th className="num">진행률</th></tr>
+                </thead>
+                <tbody>
+                  {(["kospi", "kosdaq", "etf", "all_listed"] as const).map((k) => {
+                    const p = st.universe_progress!.progress[k];
+                    if (!p) return null;
+                    const pct = p.master > 0 ? Math.round((p.ingested / p.master) * 100) : 0;
+                    const label = { kospi: "KOSPI", kosdaq: "KOSDAQ", etf: "ETF", all_listed: "전체 (전종목)" }[k];
+                    return (
+                      <tr key={k}>
+                        <td>{label}</td>
+                        <td className="num" style={{ fontFamily: "var(--t-mono)" }}>{p.master.toLocaleString()}</td>
+                        <td className="num" style={{ fontFamily: "var(--t-mono)" }}>{p.ingested.toLocaleString()}</td>
+                        <td className="num" style={{ fontFamily: "var(--t-mono)", color: pct >= 100 ? "#16a34a" : pct >= 50 ? "var(--t-ink)" : "#dc2626" }}>{pct}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+
           {/* 적재 실행 */}
           <SectionHead label="INGEST" index="BACKGROUND" />
           <div className="tscenario-bar">
