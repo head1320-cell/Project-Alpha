@@ -4,7 +4,7 @@
 //   · '팩터 추가' → 백테스터와 동일한 FactorPickerModal(똑같은 창)을 그대로 사용.
 //   · 좌측 '내 필터' rail(AND/OR · 시총 · 저장된 전략) + 라이브 종목 리스트(SSE 진행).
 //   · 표시 컬럼 ≠ 필터 컬럼(보기전용 컬럼 분리) · 임계값 분포 히스토그램 · 셀 퍼센타일
-//     히트맵 · 전종목(전체) 유니버스 가상 스크롤 + 0개 진단 · 종목 클릭→기업 분석 이동.
+//     히트맵 · 결과 100행/페이지 페이지네이션 + 0개 진단 · 종목 클릭→기업 분석 이동.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
@@ -32,8 +32,7 @@ const MCAP_LO = 2, MCAP_HI = 7;
 const sliderToMcap = (s: number) => Math.round(Math.pow(10, MCAP_LO + (MCAP_HI - MCAP_LO) * (s / 100)));
 const mcapToSlider = (eok: number) => Math.round(Math.max(0, Math.min(100, ((Math.log10(eok) - MCAP_LO) / (MCAP_HI - MCAP_LO)) * 100)));
 const fmtMcapKo = (eok: number) => eok >= 10000 ? `${(eok / 10000).toFixed(eok >= 100000 ? 0 : 1)}조` : `${Math.round(eok).toLocaleString()}억`;
-const ROW_H = 41;        // 가상 스크롤 행 높이(고정)
-const WINDOW_MIN = 60;   // 결과가 이보다 많으면 윈도잉 활성
+const PAGE_SIZE = 100;   // 결과 테이블 페이지당 행 수
 
 interface FieldMeta { higher_better?: boolean; typical_min?: number; typical_max?: number; label: string; unit?: string }
 
@@ -111,10 +110,9 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [displayCols, setDisplayCols] = useState<string[]>([]);
   const [showColPicker, setShowColPicker] = useState(false);
   const [colSearch, setColSearch] = useState("");
-  // 가상 스크롤
+  // 결과 페이지네이션 (100행/페이지) — 렌더 행수 고정으로 렉 방지
   const tableWrapRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewH, setViewH] = useState(560);
+  const [page, setPage] = useState(0);
   // 프리셋
   const [presets, setPresets] = useState<ScreenerPreset[]>([]);
   const [presetName, setPresetName] = useState("");
@@ -239,15 +237,6 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     }, 450);
     return () => { cancelled = true; clearTimeout(t); };
   }, [group, universe, gateOn]);
-
-  // ── 가상 스크롤 컨테이너 높이 측정 ──
-  useEffect(() => {
-    const el = tableWrapRef.current; if (!el) return;
-    const update = () => setViewH(el.clientHeight || 560);
-    update();
-    const ro = new ResizeObserver(update); ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // 팩터 제거 → 인덱스가 밀리므로 조건식을 기본 AND 로 재생성 (예측가능 동작)
   const removeCondition = (idx: number) => {
@@ -384,17 +373,26 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
   const total = results?.total_passed ?? null;
   const uniTotal = results?.universe_size || universeSizes[universe] || results?.total_evaluated || 0;
-  const colSpan = 6 + (showMcap ? 1 : 0) + shownCols.length;
   const selectedItem = selected ? sortedItems.find((it) => it.stock_code === selected) ?? null : null;
   const focusCond = focusedChip != null ? group.conditions[focusedChip] : null;
 
-  // 가상 스크롤 윈도잉
-  const windowing = sortedItems.length > WINDOW_MIN;
-  const startIdx = windowing ? Math.max(0, Math.floor(scrollTop / ROW_H) - 8) : 0;
-  const visCount = windowing ? Math.ceil(viewH / ROW_H) + 16 : sortedItems.length;
-  const endIdx = Math.min(sortedItems.length, startIdx + visCount);
-  const visItems = sortedItems.slice(startIdx, endIdx);
-  const topPad = startIdx * ROW_H, botPad = (sortedItems.length - endIdx) * ROW_H;
+  // 페이지네이션 계산 — 정렬/새 결과 시 1페이지로 리셋
+  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+  const curPage = Math.min(page, pageCount - 1);
+  const pageItems = sortedItems.slice(curPage * PAGE_SIZE, (curPage + 1) * PAGE_SIZE);
+  useEffect(() => { setPage(0); }, [results, sortCol, sortDir]);
+  const gotoPage = (p: number) => {
+    setPage(Math.max(0, Math.min(pageCount - 1, p)));
+    tableWrapRef.current?.scrollTo({ top: 0 });
+  };
+  const pageNums = useMemo(() => {
+    const out: (number | "…")[] = [];
+    for (let i = 0; i < pageCount; i++) {
+      if (i === 0 || i === pageCount - 1 || Math.abs(i - curPage) <= 2) out.push(i);
+      else if (out[out.length - 1] !== "…") out.push("…");
+    }
+    return out;
+  }, [pageCount, curPage]);
 
   // 0개 진단 — 가장 제한적인(단독 통과 최소) 조건
   const diagnostic = useMemo(() => {
@@ -636,7 +634,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <div className="bsc-diag">조건에 맞는 종목 <b>0개</b> — 가장 제한적인 조건은 <b>{diagnostic.label}</b>(단독 {diagnostic.count.toLocaleString()}개)입니다. 완화하거나 제거해 보세요.</div>
           )}
 
-          <div className="bsc-table-wrap" ref={tableWrapRef} onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}>
+          <div className="bsc-table-wrap" ref={tableWrapRef}>
             <table className="bsc-table">
               <thead>
                 <tr>
@@ -653,13 +651,25 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                 </tr>
               </thead>
               <tbody>
-                {windowing && topPad > 0 && <tr aria-hidden style={{ height: topPad }}><td colSpan={colSpan} style={{ padding: 0, border: 0 }} /></tr>}
-                {visItems.map((it, vi) => renderRow(it, startIdx + vi))}
-                {windowing && botPad > 0 && <tr aria-hidden style={{ height: botPad }}><td colSpan={colSpan} style={{ padding: 0, border: 0 }} /></tr>}
+                {pageItems.map((it, vi) => renderRow(it, curPage * PAGE_SIZE + vi))}
               </tbody>
             </table>
             {!loading && sortedItems.length === 0 && !diagnostic && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없습니다</div>}
           </div>
+
+          {/* 페이지 바 — 100행/페이지 */}
+          {pageCount > 1 && (
+            <div className="bsc-pager">
+              <button onClick={() => gotoPage(curPage - 1)} disabled={curPage === 0}>◀ 이전</button>
+              {pageNums.map((p, i) => p === "…"
+                ? <span key={`e${i}`}>…</span>
+                : <button key={p} className={p === curPage ? "on" : ""} onClick={() => gotoPage(p)}>{p + 1}</button>)}
+              <button onClick={() => gotoPage(curPage + 1)} disabled={curPage >= pageCount - 1}>다음 ▶</button>
+              <span className="bsc-pager-range">
+                {(curPage * PAGE_SIZE + 1).toLocaleString()}–{Math.min(sortedItems.length, (curPage + 1) * PAGE_SIZE).toLocaleString()} / {sortedItems.length.toLocaleString()}
+              </span>
+            </div>
+          )}
 
           {/* 선택 종목 — 하단 고정 액션 바 */}
           {selectedItem && (
