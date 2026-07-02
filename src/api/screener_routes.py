@@ -179,13 +179,25 @@ def screener_factor_sample(limit: int = 500):
 
 @router.get("/universes")
 def screener_universes():
-    """사용 가능한 universe 카탈로그."""
+    """사용 가능한 universe 카탈로그 — 마스터 적재 시 실제 크기, 미적재 시 프리셋 폴백."""
     try:
         from src.engine.screener import UNIVERSE_PRESETS
+        sizes = {k: len(v) for k, v in UNIVERSE_PRESETS.items()}
+        samples = {k: v[:5] for k, v in UNIVERSE_PRESETS.items()}
+        try:
+            from src.data.stock_master import build_master_universe, load_master_flags
+            if load_master_flags():
+                for kind in ("kospi", "kosdaq", "kospi200", "kosdaq150", "etf", "all_listed"):
+                    u = build_master_universe(kind)
+                    if u:
+                        sizes[kind] = len(u)
+                        samples[kind] = u[:5]
+        except Exception:
+            pass
         return {
             "presets": [
-                {"id": k, "size": len(v), "sample": v[:5]}
-                for k, v in UNIVERSE_PRESETS.items()
+                {"id": k, "size": sizes[k], "sample": samples.get(k, [])}
+                for k in sizes
             ],
             "filter_dimensions": [
                 "min_market_cap_억", "max_market_cap_억",
