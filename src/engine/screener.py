@@ -243,6 +243,10 @@ class ScreenerResult:
     cache_hits:         int
     cache_misses:       int
     failures:           int
+    universe_size:      int = 0      # 마스터/프리셋 기준 유니버스 총원 (적재 교집합 前)
+    ingested_count:     int = 0      # 유니버스 중 스냅샷 적재 종목 수
+    evaluated_actual:   int = 0      # 실제 산출 아이템 수 (복원+평가 성공, 게이트 前)
+    capped:             bool = False # SCREENER_MAX_LIVE_COMPUTE 상한 발동 여부
     timestamp:          str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -367,6 +371,7 @@ class ValuationScreener:
         self.price_provider = price_provider or self._mock_price
         self.cache = _ValuationCache(ttl_seconds=cache_ttl)
         self.max_workers = max_workers
+        self._universe_meta: dict = {"universe_size": 0, "ingested_count": 0}
 
     # ─────────────────────────────────────────────────────────────────────
     # 스냅샷 아이템 캐시 (적재 후 즉시 서빙 — 평가 생략)
@@ -459,6 +464,8 @@ class ValuationScreener:
                 universe=str(universe), total_evaluated=0, total_passed=0,
                 items=[], elapsed_seconds=0,
                 cache_hits=0, cache_misses=0, failures=0,
+                universe_size=self._universe_meta["universe_size"],
+                ingested_count=self._universe_meta["ingested_count"],
             )
 
         # 2. 평가 — 적재된 item:CODE는 즉시 복원(평가 생략), 나머지만 평가
@@ -471,9 +478,11 @@ class ValuationScreener:
         items: list[ScreenerItem] = list(cached_items.values())
         to_eval = [t for t in tickers if t not in cached_items]
         # 미적재 평가 상한 (대용량 폭주 방지). ingest 배치(no_cap)는 해제.
+        capped = False
         if not no_cap:
             import os
             max_eval = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
+            capped = len(to_eval) > max_eval
             to_eval = to_eval[:max_eval]
 
         if to_eval:
@@ -513,6 +522,7 @@ class ValuationScreener:
 
         cache_hits = self.cache.hits - cache_start
         cache_misses = self.cache.misses - miss_start
+        evaluated_actual = len(items)  # 복원+평가 성공분 (게이트 前) — 정직 평가 수
 
         # 3. 필터 적용
         # ★ V3-P1.5: 유동성 게이트 — 모든 필터보다 먼저, 가장 무겁게 (기관급 디폴트)
@@ -566,6 +576,10 @@ class ValuationScreener:
             cache_hits=cache_hits,
             cache_misses=cache_misses,
             failures=failures,
+            universe_size=self._universe_meta["universe_size"],
+            ingested_count=self._universe_meta["ingested_count"],
+            evaluated_actual=evaluated_actual,
+            capped=capped,
         )
 
     # ─────────────────────────────────────────────────────────────────────
@@ -863,20 +877,27 @@ class ValuationScreener:
 
     def _resolve_universe(self, universe: str | list[str]) -> list[str]:
         if isinstance(universe, list):
-            return universe[:5000]  # 안전 제한 (관심그룹/커스텀)
-        full = resolve_universe(universe)  # 마스터 멤버십(실 지수·시장·ETF) 또는 폴백
+            full = universe[:5000]  # 안전 제한 (관심그룹/커스텀)
+        else:
+            full = resolve_universe(universe)  # 마스터 멤버십(실 지수·시장·ETF) 또는 폴백
+        # 적재 현황 1회 조회 — 정직 카운터(universe_size/ingested_count) + 대용량 교집합 공용
+        ing: set[str] | None = None
+        try:
+            from src.data.snapshot_db import enabled, ingested_codes
+            if enabled():
+                ing = set(ingested_codes())
+        except Exception:
+            ing = None
+        self._universe_meta = {
+            "universe_size": len(full),
+            "ingested_count": sum(1 for c in full if c in ing) if ing is not None else 0,
+        }
         # 대용량 유니버스(ETF/KOSPI/KOSDAQ/전종목)는 적재 DB와 연동 — 적재된 종목만 평가:
         #   빠름(디스크/DB 캐시)·폭주방지·적재가 늘면 유니버스도 자동 확장.
         #   소규모(KOSPI200/KOSDAQ150 등)는 전 멤버십 평가.
-        if isinstance(universe, str) and len(full) > 250:
-            try:
-                from src.data.snapshot_db import enabled, ingested_codes
-                if enabled():
-                    ing = set(ingested_codes())
-                    inter = [c for c in full if c in ing]
-                    return inter if inter else full[:250]  # 적재 전: 250개만(폭주 방지)
-            except Exception:
-                pass
+        if isinstance(universe, str) and len(full) > 250 and ing is not None:
+            inter = [c for c in full if c in ing]
+            return inter if inter else full[:250]  # 적재 전: 250개만(폭주 방지)
         return full
 
     # ─────────────────────────────────────────────────────────────────────
