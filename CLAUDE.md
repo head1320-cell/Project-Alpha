@@ -1010,3 +1010,46 @@ GCP에 docker-compose로 배포됨. **KIS/DART 실데이터가 흐르고**(verif
 - `ConditionStrategy` 평가 E2E: `종가-MA20≥0`→BUY, 사용자 예시 `전일종가-MA(전일,20)≥0`→BUY, 거짓→HOLD, `(종가-MA5)/MA20≥0`→BUY (4/4).
 - 백엔드 조건/식 테스트 63 통과, tsc 0, next build 16/16(/backtest 25.1kB).
 - 한계: 샌드박스 DB 무(daily_prices 없음)로 풀 백테스트 실거래 생성은 GCP에서. 조건 평가 로직은 합성 시계열로 검증됨.
+
+---
+
+## 🌐 스크리너 유니버스 실수치화 + 숫자 정직화 + 100행 페이지네이션
+
+[배경] 사용자: 유니버스가 KRX 실제 상장 수(KOSPI 946/KOSDAQ 1,822/전체 2,875)보다 작음(전체 833 등),
+"검색된 기업"≠"평가 완료" 격차, 가상 스크롤 혼란 → 진단 후 4갈래로 해결. 스펙/플랜:
+docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-02-….md
+
+### 진단 (핵심 — 재발 시 참조)
+- **유니버스 크기 = 적재 진행률**: 대형 유니버스(>250)는 `_resolve_universe`가 ingested_codes()와 교집합
+  (screener.py). GCP 833 = 적재 중단 지점(395 KOSPI+438 KOSDAQ). 적재는 재개 가능(스냅샷 fast-path 스킵).
+- **검색<평가 = 유동성 게이트**: UI가 항상 relaxed(시총300억·거래대금3억) 전송 → 무표시 탈락.
+- **199/130 = 하드코딩 프리셋 분모**: /universes가 UNIVERSE_PRESETS 크기만 반환했음.
+- **가상 스크롤 = 윈도잉 렌더** (보이는 ~20행만 그리는 성능 기법. 라벨이 혼란 유발).
+
+### 구현 (6커밋)
+1. **그룹 확장**: stock_master.py `UNIVERSE_GROUP_CODES=(ST,RT,FS,MF,IF,SC,DR)` — kospi/kosdaq/all_listed가
+   리츠·외국주 등 포함(KRX 공식 수 대응). ETF/ETN/ELW 제외 유지. KONEX 제외(사용자 결정).
+   `master_composition()` = 시장별×그룹별 종목 수(잔차 원인 리포트).
+2. **/universes master-aware**: 마스터 적재 시 build_master_universe 실크기(kospi/kosdaq/all_listed 포함),
+   미적재 시 프리셋 폴백 → 199/130 해소.
+3. **정직 카운터**: ScreenerResult += universe_size/ingested_count/evaluated_actual/capped.
+   _resolve_universe가 적재 현황 1회 조회로 메타 수집. run-advanced 응답에 4필드(하위호환).
+4. **적재 가시화**: db-status += universe_progress{kospi/kosdaq/etf/all_listed:{master,ingested}}+composition.
+   Data Infra에 UNIVERSE COVERAGE 섹션(마스터/적재/진행률).
+5. **게이트 기본 OFF**: TerminalScreener gateOn state(기본 false→liquidity_floor "off") + 카운트바 토글.
+   기본 상태에서 검색된 기업==평가 완료. ON 시 "유동성 제외 N" 표시. 헤더 재구성:
+   "유니버스 M종목 · 적재 A · 평가 E · 신규 · 캐시 · 초" + capped 배지 + 적재 미완 힌트(bsc-ingest-hint).
+6. **페이지네이션**: 윈도잉 전면 제거 → PAGE_SIZE=100, 페이지 바(이전/다음/압축번호/범위), 정렬·새결과 시
+   1페이지 리셋. CSV/컬럼선택/히트맵은 전체 결과 기준 유지. CSS bsc-pager/bsc-gate-toggle 등.
+
+### 검증
+- 백엔드 668 passed/10 skipped(신규 TDD 11: universe_groups 5·universes_endpoint 2·honest_counts 3·db_status 1), ruff 통과.
+- tsc 0, next build 16/16. 라이브(mock+Playwright): kospi200 130종목 → "검색된 기업 130개",
+  헤더 "유니버스 130종목 · 적재 0 · 평가 130", 페이저 "1–100/130"→"101–130/130" 페이지 전환 확인.
+- 게이트 ON API: 50평가→47표시, liquidity_gate.filtered_out=3 (헤더 "유동성 제외 3" 근거).
+
+### GCP 런북 (실수치 도달 절차 — 사용자 실행)
+1. 배포 후 Admin → Data Infra → "펀더멘털"(또는 ★전체) 적재 실행 — 전종목 수 시간, 중단돼도 재실행 시 이어짐.
+2. UNIVERSE COVERAGE에서 KOSPI/KOSDAQ 적재가 마스터 크기까지 차오르는지 확인.
+3. 스크리너 유니버스가 실수치(KOSPI ≈946 / KOSDAQ ≈1,822 / 전체 ≈2,768) 도달 확인.
+4. 잔차가 있으면 db-status의 master_composition(그룹별 종목 수)으로 원인 확인 — 필요 시 UNIVERSE_GROUP_CODES 조정.
