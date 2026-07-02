@@ -100,6 +100,8 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  // 유동성 게이트 — 기본 OFF (검색된 기업 == 평가 완료). ON 시 시총300억·거래대금3억·스프레드1% 필터
+  const [gateOn, setGateOn] = useState(false);
   // 시총 슬라이더 (0~100 핸들). [0,100] = 제한 없음
   const [mcapRange, setMcapRange] = useState<[number, number]>([0, 100]);
   const mcapInit = useRef(true);
@@ -207,7 +209,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
       try {
         const r = await screenerApiAdvanced.runAdvancedStream(
           // 유니버스 전체 반환 — 백엔드가 유니버스 크기로 캡(kospi200→200, all_listed→~2,900). 상한 4000.
-          { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 4000, liquidity_floor: "relaxed" },
+          { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 4000, liquidity_floor: gateOn ? "relaxed" : "off" },
           (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); }, ctrl.signal,
         );
         if (!cancelled) setResults(r);
@@ -215,15 +217,15 @@ export default function TerminalScreener({ universe }: { universe: string }) {
       finally { if (!cancelled) setLoading(false); }
     }, 350);
     return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
-  }, [effectiveAst, universe]);
+  }, [effectiveAst, universe, gateOn]);
 
   // ── 분포용 무필터 표본 (유니버스 변경 시) ──
   useEffect(() => {
     let cancelled = false;
-    screenerApiAdvanced.runAdvanced({ universe, filter_ast: { logic: "AND", conditions: [], groups: [] }, sort_by: "composite_score", ascending: false, limit: 300, liquidity_floor: "relaxed" })
+    screenerApiAdvanced.runAdvanced({ universe, filter_ast: { logic: "AND", conditions: [], groups: [] }, sort_by: "composite_score", ascending: false, limit: 300, liquidity_floor: gateOn ? "relaxed" : "off" })
       .then((r) => { if (!cancelled) setSampleItems(r.items); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [universe]);
+  }, [universe, gateOn]);
 
   // ── 팩터별 단독 통과 수 (선택도 표시) ──
   useEffect(() => {
@@ -231,12 +233,12 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     let cancelled = false;
     const t = setTimeout(async () => {
       const cnt = (conds: FilterConditionNode[]) =>
-        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: conds, groups: [] }, limit: 1, liquidity_floor: "relaxed" }).then((r) => r.total_passed).catch(() => null);
+        screenerApiAdvanced.count({ universe, filter_ast: { logic: "AND", conditions: conds, groups: [] }, limit: 1, liquidity_floor: gateOn ? "relaxed" : "off" }).then((r) => r.total_passed).catch(() => null);
       const sc = await Promise.all(group.conditions.map((c) => cnt([c])));
       if (!cancelled) setChipCounts(sc);
     }, 450);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [group, universe]);
+  }, [group, universe, gateOn]);
 
   // ── 가상 스크롤 컨테이너 높이 측정 ──
   useEffect(() => {
@@ -381,7 +383,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   };
 
   const total = results?.total_passed ?? null;
-  const uniTotal = universeSizes[universe] ?? results?.total_evaluated ?? 0;
+  const uniTotal = results?.universe_size || universeSizes[universe] || results?.total_evaluated || 0;
   const colSpan = 6 + (showMcap ? 1 : 0) + shownCols.length;
   const selectedItem = selected ? sortedItems.find((it) => it.stock_code === selected) ?? null : null;
   const focusCond = focusedChip != null ? group.conditions[focusedChip] : null;
@@ -582,6 +584,10 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
           <div className="bsc-countbar">
             <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개</span>
+            <label className="bsc-gate-toggle" title="시가총액 300억↑ · 일평균 거래대금 3억↑ · 스프레드 1%↓ 종목만 포함">
+              <input type="checkbox" checked={gateOn} onChange={(e) => setGateOn(e.target.checked)} />
+              유동성 게이트
+            </label>
             {loading && <span className="bsc-spinner" />}
             <span className="bsc-countbar-spacer" />
             <button className="bsc-bt-btn" onClick={() => setShowColPicker((v) => !v)} title="표시 컬럼 추가 (필터와 별개)">⊞ 컬럼{displayCols.length ? ` (${displayCols.length})` : ""}</button>
@@ -609,9 +615,21 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             {loading
               ? <>데이터 확충 중… <b>{(prog?.done ?? 0).toLocaleString()}</b>/{(prog?.total ?? uniTotal).toLocaleString()} 종목 업데이트{prog && prog.misses > 0 ? ` · 신규 ${prog.misses.toLocaleString()}` : ""}</>
               : results
-                ? <>평가 완료 <b>{results.total_evaluated.toLocaleString()}</b>/{uniTotal.toLocaleString()} 종목 · 신규 {results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s{windowing ? ` · 가상 스크롤 ${sortedItems.length.toLocaleString()}행` : ""}</>
+                ? <>
+                    유니버스 <b>{uniTotal.toLocaleString()}</b>종목 · 적재 {(results.ingested_count ?? 0).toLocaleString()} · 평가 {(results.evaluated_actual ?? results.total_evaluated).toLocaleString()}
+                    {gateOn && (results.liquidity_gate?.filtered_out ?? 0) > 0 ? <> · 유동성 제외 {(results.liquidity_gate?.filtered_out ?? 0).toLocaleString()}</> : null}
+                    {" · 신규 "}{results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s
+                    {results.capped ? <span className="bsc-capped-badge" title="미적재 종목이 많아 이번 실행에서 일부만 평가되었습니다. Data Infra에서 전체 적재를 실행하면 해소됩니다.">평가 상한 발동</span> : null}
+                  </>
                 : <>대기 중…</>}
           </div>
+
+          {/* 적재 미완 안내 — 유니버스가 실제 상장 수보다 작게 보이는 이유를 명시 */}
+          {results && !loading && (results.ingested_count ?? 0) < (results.universe_size ?? 0) && (
+            <div className="bsc-ingest-hint">
+              이 유니버스는 마스터 {(results.universe_size ?? 0).toLocaleString()}종목 중 <b>{(results.ingested_count ?? 0).toLocaleString()}</b>종목만 적재되어 있습니다 — Admin → Data Infra에서 <b>펀더멘털 적재</b>를 실행하면 전 종목으로 확장됩니다.
+            </div>
+          )}
 
           {/* 0개 진단 */}
           {diagnostic && (

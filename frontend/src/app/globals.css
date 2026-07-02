@@ -1605,6 +1605,11 @@ h6 { font-size: 1rem; }
 /* 데이터 확충 진행 표시 (작은 글씨) */
 .bsc-progress { font-family: var(--t-mono); font-size: 11px; color: var(--t-muted); margin: -4px 2px 12px; }
 .bsc-progress b { color: var(--t-accent); font-weight: 600; }
+/* 유동성 게이트 토글 + 정직 카운터 배지/힌트 */
+.bsc-gate-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--t-muted); cursor: pointer; margin-left: 14px; }
+.bsc-gate-toggle input { accent-color: var(--t-accent); }
+.bsc-capped-badge { margin-left: 8px; padding: 1px 7px; border: 1px solid #f59e0b; color: #b45309; background: #fffbeb; border-radius: 2px; font-size: 10px; font-family: var(--t-mono); }
+.bsc-ingest-hint { margin: 6px 0 10px; padding: 8px 12px; border: 1px dashed var(--t-border); background: var(--t-surface); color: var(--t-muted); font-size: 12px; border-radius: 2px; }
 /* 시가총액 빠른 필터 */
 .bsc-mcap { padding: 0 14px 12px; }
 .bsc-mcap-head { font-family: var(--t-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-muted); margin-bottom: 6px; }

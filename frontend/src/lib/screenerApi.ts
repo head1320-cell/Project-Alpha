@@ -82,6 +82,12 @@ export interface ScreenerResponse {
   failures: number;
   timestamp: string;
   items: ScreenerItem[];
+  // 정직 카운터 (신규 — 옵셔널: 구버전 응답 호환)
+  universe_size?: number;      // 마스터/프리셋 기준 유니버스 총원
+  ingested_count?: number;     // 적재된 종목 수
+  evaluated_actual?: number;   // 실제 산출 아이템 수 (게이트 전)
+  capped?: boolean;            // 평가 상한(400) 발동
+  liquidity_gate?: { before?: number; after?: number; filtered_out?: number };
 }
 
 export interface UniversesResponse {
