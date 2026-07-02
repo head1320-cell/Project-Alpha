@@ -370,6 +370,10 @@ def _master_flags_path() -> str:
 
 _MASTER_FLAGS: dict | None = None  # {"005930": {...}} (지연 로드)
 
+# KRX 공식 상장 수 대응 유니버스 포함 그룹 (파생·펀드형 제외 — EF/EN/EW/SW/SR 등)
+#   ST 주권(보통·우선) · RT 리츠 · FS 외국주권 · MF 투자회사 · IF 인프라투융자 · SC 선박투자 · DR 예탁증서
+UNIVERSE_GROUP_CODES: tuple[str, ...] = ("ST", "RT", "FS", "MF", "IF", "SC", "DR")
+
 # 관리 취급 = 관리종목 + 거래정지 + 정리매매 (매매 불가/위험 — 백테스트 안전 우선)
 # 감리(투자주의) 취급 = 시장경고(01주의/02경고/03위험) + 투자주의환기(코스닥)
 MANAGED_CODES: list[str] = []
@@ -476,11 +480,11 @@ def build_master_universe(kind: str) -> list[str]:
     if kind in ("etf",):
         return [c for c, f in items if f.get("is_etf") or grp(f) in ("EF", "EN")]
     if kind == "kospi":
-        return [c for c, f in items if mkt(f) == "KOSPI" and grp(f) == "ST"]
+        return [c for c, f in items if mkt(f) == "KOSPI" and grp(f) in UNIVERSE_GROUP_CODES]
     if kind == "kosdaq":
-        return [c for c, f in items if mkt(f) == "KOSDAQ" and grp(f) == "ST"]
+        return [c for c, f in items if mkt(f) == "KOSDAQ" and grp(f) in UNIVERSE_GROUP_CODES]
     if kind in ("all", "all_listed"):
-        return [c for c, f in items if grp(f) == "ST"]
+        return [c for c, f in items if grp(f) in UNIVERSE_GROUP_CODES]
     if kind == "kospi200":
         flagged = [c for c, f in items if f.get("is_kospi200")]
         return flagged if 150 <= len(flagged) <= 260 else _topn("KOSPI", 200)
@@ -488,6 +492,18 @@ def build_master_universe(kind: str) -> list[str]:
         flagged = [c for c, f in items if f.get("is_kosdaq150")]
         return flagged if 100 <= len(flagged) <= 200 else _topn("KOSDAQ", 150)
     return []
+
+
+def master_composition() -> dict:
+    """시장별×그룹코드별 종목 수 — KRX 공식 상장 수와의 잔차 원인 확인용(정직 리포트)."""
+    flags = load_master_flags()
+    out: dict[str, dict[str, int]] = {}
+    for _c, f in flags.items():
+        m = (f.get("market") or "?").upper()
+        g = f.get("group_code") or "?"
+        out.setdefault(m, {})
+        out[m][g] = out[m].get(g, 0) + 1
+    return out
 
 
 def _refresh_status_lists() -> None:
