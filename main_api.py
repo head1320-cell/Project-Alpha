@@ -611,13 +611,24 @@ def _ingest_run(target: str):
         return backfill(start=start)            # KRX 전종목 일봉(+지수) 1회 백필
     if target == "factors":
         from src.data.snapshot_db import ingest_universe
+        from src.engine.screener import resolve_universe
         st = _INGEST_STATUS.setdefault("factors", {})
         out = {}
+        # 지수 유니버스 먼저(빠른 부분 가용) → all_listed는 남은 종목만.
+        # kospi200·kosdaq150 ⊂ all_listed 이므로 코드 단위 dedup으로 재평가·DART 낭비를 원천 차단.
+        # (스냅샷 캐시가 재호출 자체는 이미 막지만, dedup은 재스캔 compute까지 제거하고 의도를 명확히 함)
+        seen: set[str] = set()
         for uni in ("kospi200", "kosdaq150", "all_listed"):
+            codes = [c for c in resolve_universe(uni) if c not in seen]
+            seen.update(codes)
+            if not codes:
+                out[uni] = {"universe": uni, "skipped": "중복 제거 — 이미 처리됨", "saved": 0}
+                continue
+
             def _cb(done, total, saved, fails, _u=uni, _st=st):
                 _st["progress"] = {"stage": _u, "done": done, "total": total,
                                    "saved": saved, "failures": fails}
-            r = ingest_universe(uni, progress_cb=_cb)
+            r = ingest_universe(codes, progress_cb=_cb)
             out[uni] = r
             if r.get("aborted"):
                 st["last_error"] = r["aborted"]  # DART 한도 등 — UI에 사유 노출
@@ -726,9 +737,12 @@ def ingest_doctor():
         out["kis"] = {"ok": False, "message": "mock 모드 또는 KIS 키 미설정"}
     else:
         try:
-            from src.execution.kis_client import KISClient
+            from src.execution import kis_client as _kc
             t0 = _t.time()
-            KISClient().prewarm_token()
+            client = _kc.get_kis_client(force_reload=True)  # 팩토리(.env 분기) — KISClient()는 creds 필수
+            pw = getattr(client, "prewarm_token", None)
+            if callable(pw):
+                pw()
             ms = round((_t.time() - t0) * 1000)
             out["kis"] = {"ok": True, "message": f"토큰 정상 ({ms}ms)", "latency_ms": ms}
         except Exception as e:
