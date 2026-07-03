@@ -1092,3 +1092,37 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
 - 재배포+하드새로고침 후: 매크로 헤더 두 카드의 실데이터 국면 확인. BOK 신규 2종은 Indicators
   소스 패널에서 real/unavailable 확인 — unavailable이면 bok_targets의 item 코드 2줄만 조정.
 - 백테스트: 전종목+상한 '전체'로 실행(첫 실행 수 분), 결과 하단 종목별 성과 테이블·행 클릭 상세.
+
+---
+
+## 🔧 적재(Ingest) 정체 해소 — 관측성 + DART 쿼터 감지 + 표시 정확화
+
+[배경] Data Infra에서 적재 버튼을 눌러도 UNIVERSE COVERAGE 불변, 일봉 848만 행인데
+"종목 0 · 기간 —", 백테스터(종목) X. "KRX/DART 문제인가?" → 원인 4개 확정 후 수정.
+스펙/플랜: docs/superpowers/specs·plans/2026-07-03-ingest-observability*.md
+
+### 진단 (재발 시 참조)
+- **일봉은 이미 적재돼 있었음(KRX 정상)** — db-status의 COUNT(DISTINCT)+MIN/MAX 결합 쿼리가
+  statement_timeout(5s) 초과 → "종목 0" 오표시 + 백테스터(종목) 거짓 X.
+- **펀더멘털 정체 = DART 일일 한도(20k) 경쟁 + 침묵 실패**: financials 백필과 factors 적재가
+  같은 키 공유. 한도 도달(status 020)이 logger.warning으로만 사라짐 → UI는 "적재 중…"만.
+- **빈 팩터 영속 오염**: mock_base.cached()가 빈 결과도 무조건 persist + 빈 히트 서빙 → 재시도 차단.
+- **ETF 유니버스(1,250) 팩터 적재 경로 부재**: "etf" 버튼=크로스에셋 15종 시세.
+
+### 수정 (7커밋, TDD 10종)
+1. cached(): truthy만 영속, 빈 결과 EMPTY_RETRY_TTL(60s) 재시도, 오염 빈 히트 miss 취급(자가 치유).
+2. dart_client: _USAGE 카운터(요청/에러별) + status 020/'한도' → quota_exhausted + dart_usage().
+3. ingest_universe(progress_cb): done/total/saved/failures 보고 + 쿼터 감지 조기중단(사유 명시).
+   main_api._INGEST_STATUS(타깃별 진행/에러/결과) → db-status 노출.
+4. db-status: n_distinct 추정 + 개별 MIN/MAX + 미확정 None("—") + 백테스터(종목) EXISTS 판정.
+5. GET /api/v1/data/ingest-doctor: DART/KRX/KIS 경량 실호출 진단 {ok,message,latency}.
+6. Data Infra UI: 타깃별 진행 라인·last_error 빨강·DART 사용량/한도 경고·🩺 연결 진단 버튼·
+   ETF "시세 전용" 정직 라벨 + DART 한도 공유 주의문(권장: 재무시계열 완주 후 펀더멘털).
+
+### 검증: 691 passed / 10 skipped, ruff·tsc 0, next build 17/17.
+
+### GCP 런북
+1. 재배포 → Data Infra "🩺 연결 진단": DART/KRX/KIS ✓/✗ 즉시 확인.
+2. 일봉 행이 "종목 —"가 아닌 추정치(~2,700)로 표시 + 백테스터(종목) ✓ 복구 확인.
+3. 펀더멘털 적재 실행 → 타깃별 진행 라인에 stage/저장/실패 표시. "DART 일일 한도" 뜨면
+   자동 중단된 것 — 내일 재실행 시 캐시로 이어짐(재무시계열과 동시 실행 지양).
