@@ -121,12 +121,14 @@ def recommend(market: str = "kr") -> dict:
     from src.engine.tactical_allocations import compute_strategies
     mk = "kr" if market == "kr" else "us"
 
-    # 국면
+    # 국면 — ★market 연결(버그 수정): 이전엔 analyze()가 인자 없이 항상 KR을 봤음.
+    confidence = 0.5
     try:
         from src.engine.regime_analyzer import RegimeAnalyzer
-        state = RegimeAnalyzer().analyze()
+        state = RegimeAnalyzer().analyze(market=mk)
         quad = _quadrant(state)
         stress = float(getattr(state, "stress_score", 50) or 50)
+        confidence = float(getattr(state, "confidence", 0.5) or 0.5)
         cycle = getattr(state, "cycle_phase", None) or getattr(state, "regime", quad)
     except Exception as e:
         logger.debug(f"regime 분석 폴백: {e}")
@@ -166,13 +168,24 @@ def recommend(market: str = "kr") -> dict:
     top = ranked[0]
     narrative, nsrc = _ai_narrative(quad, stress, top)
 
+    # 신뢰도 가중 디리스킹 — 저확신 국면이면 위험 배분을 현금성 앵커로 축소(표시 배분).
+    holdings_final = confidence_overlay(top["holdings"], confidence)
+    cash_final = next((h["weight"] for h in holdings_final if h.get("us_ticker") == "BIL"), 0.0)
+
     return {
         "market": mk, "as_of": sig["as_of"],
+        "confidence": round(confidence, 3),
+        "low_conviction": confidence < 0.35,
+        "data_lag_note": ("매크로 지표는 후행(CPI 등 ~1개월). 시장가 선행신호(VIX·신용스프레드·"
+                          "수익률곡선)는 Stress에 반영됨. 지표별 실제 시점은 Indicators 탭 참조."),
         "regime": {"quadrant": quad, "quadrant_kr": _QUAD_KR.get(quad, quad),
-                   "stress": round(stress, 0), "cycle": cycle},
+                   "stress": round(stress, 0), "cycle": cycle,
+                   "confidence": round(confidence, 3)},
         "top": {"id": top["id"], "name": top["name"], "signal": top["signal"],
                 "fit_score": top["fit_score"], "composite": top["composite"],
-                "holdings": top["holdings"]},
+                "holdings": top["holdings"],
+                "holdings_final": holdings_final,
+                "cash_overlay_pct": round(cash_final, 1)},
         "narrative": narrative, "narrative_source": nsrc,
         "ranking": [{"id": s["id"], "name": s["name"], "composite": s["composite"],
                      "fit_score": s["fit_score"], "recent_return_12m": s["recent_return_12m"],
