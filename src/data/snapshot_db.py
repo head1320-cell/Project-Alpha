@@ -181,25 +181,46 @@ def sample_factors(limit: int = 500) -> list[dict]:
 # Batch ingestion — 전 유니버스 팩터를 DB에 적재
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def ingest_universe(universe: str = "kospi200") -> dict:
+def ingest_universe(universe: str = "kospi200", progress_cb=None) -> dict:
     """유니버스 전 종목을 평가해 완성된 ScreenerItem(item:CODE)을 DB에 적재.
     이후 스크리너가 평가 없이 즉시 서빙(로딩 없음). 청크(<상한)로 돌려 캡 미발동·전부 저장.
-    실데이터 모드면 DART/KIS 실호출(throttle·디스크캐시) → 1회성, 이후 즉시."""
+    실데이터 모드면 DART/KIS 실호출(throttle·디스크캐시) → 1회성, 이후 즉시.
+
+    progress_cb(done, total, saved, failures): 청크마다 진행 보고 (UI 표면화).
+    DART 일일 한도(quota_exhausted) 감지 시 조기 중단 — 사유를 결과에 명시(내일 캐시로 이어짐)."""
     from src.engine.screener import ValuationScreener, resolve_universe
 
     codes = resolve_universe(universe)
     sc = ValuationScreener()
     CHUNK = 300  # 평가/보강 상한(400) 미만 → 청크 전부 평가·저장
-    ok = 0
+    ok = saved = failures = 0
+    aborted: str | None = None
     for i in range(0, len(codes), CHUNK):
+        # DART 쿼터 확인 — 한도 도달이면 침묵 대신 명시적 중단(성공분은 캐시·DB에 이미 저장됨)
+        try:
+            from src.data.dart_client import dart_usage
+            if dart_usage().get("quota_exhausted"):
+                aborted = "DART 일일 한도 초과 — 중단됨 (성공분은 저장, 내일 재실행 시 이어짐)"
+                break
+        except Exception:
+            pass
         chunk = codes[i:i + CHUNK]
         try:
             res = sc.run(universe=chunk, filter_ast=None, liquidity_floor="off",
                          limit=len(chunk), no_cap=True)
             ok += res.total_evaluated
+            saved += getattr(res, "evaluated_actual", 0)
+            failures += getattr(res, "failures", 0)
             logger.info(f"적재 진행: {min(i + CHUNK, len(codes))}/{len(codes)} ({universe})")
         except Exception as e:
+            failures += len(chunk)
             logger.warning(f"적재 청크 실패 [{i}]: {e}")
-    result = {"universe": universe, "ingested": ok, "total": len(codes), "db_rows": count()}
+        if progress_cb is not None:
+            try:
+                progress_cb(min(i + CHUNK, len(codes)), len(codes), saved, failures)
+            except Exception:
+                pass
+    result = {"universe": universe, "ingested": ok, "saved": saved, "failures": failures,
+              "total": len(codes), "db_rows": count(), "aborted": aborted}
     logger.info(f"factor_snapshot 적재 완료: {result}")
     return result

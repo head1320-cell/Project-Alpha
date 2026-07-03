@@ -464,6 +464,8 @@ def krx_status():
 
 _INGEST_RUNNING = {k: False for k in ("index", "etf", "stocks", "factors", "financials", "flows")}
 _INGEST_TARGETS = ("index", "etf", "stocks", "factors", "financials", "flows")
+# 타깃별 상세 상태 — 진행(stage/done/total)·저장/실패·마지막 에러·결과 (UI 표면화, "조용한 멈춤" 제거)
+_INGEST_STATUS: dict = {}
 
 
 @app.get("/api/v1/data/db-status")
@@ -497,6 +499,14 @@ def db_status():
             return {"progress": {}, "composition": {}}
 
     out["universe_progress"] = _universe_progress()
+
+    # 적재 상세 상태 + DART 사용량 — "버튼 눌러도 조용함"의 원인을 화면에 노출
+    out["ingest_status"] = {k: dict(v) for k, v in _INGEST_STATUS.items()}
+    try:
+        from src.data.dart_client import dart_usage
+        out["dart_usage"] = dart_usage()
+    except Exception:
+        out["dart_usage"] = None
     try:
         from sqlalchemy import text
 
@@ -587,7 +597,18 @@ def _ingest_run(target: str):
         return backfill(start=start)            # KRX 전종목 일봉(+지수) 1회 백필
     if target == "factors":
         from src.data.snapshot_db import ingest_universe
-        return {uni: ingest_universe(uni) for uni in ("kospi200", "kosdaq150", "all_listed")}
+        st = _INGEST_STATUS.setdefault("factors", {})
+        out = {}
+        for uni in ("kospi200", "kosdaq150", "all_listed"):
+            def _cb(done, total, saved, fails, _u=uni, _st=st):
+                _st["progress"] = {"stage": _u, "done": done, "total": total,
+                                   "saved": saved, "failures": fails}
+            r = ingest_universe(uni, progress_cb=_cb)
+            out[uni] = r
+            if r.get("aborted"):
+                st["last_error"] = r["aborted"]  # DART 한도 등 — UI에 사유 노출
+                break
+        return out
     if target == "financials":
         _dart_history_backfill_bg()             # DART 재무 시계열(resume 기반)
         return {"ok": True}
@@ -615,13 +636,22 @@ def ingest_trigger(target: str):
             continue
 
         def _run(tt: str):
+            from datetime import datetime as _dt
             _INGEST_RUNNING[tt] = True
+            st = _INGEST_STATUS.setdefault(tt, {})
+            st.update({"running": True, "started_at": _dt.now().isoformat(timespec="seconds"),
+                       "finished_at": None, "last_error": None, "result": None, "progress": None})
             try:
                 logger.info(f"적재(수동) 시작: {tt}")
-                logger.info(f"적재(수동) 완료 [{tt}]: {_ingest_run(tt)}")
-            except Exception:
+                r = _ingest_run(tt)
+                st["result"] = r
+                logger.info(f"적재(수동) 완료 [{tt}]: {r}")
+            except Exception as e:
+                st["last_error"] = str(e)[:300]  # UI 표면화 — "조용한 실패" 제거
                 logger.exception(f"적재(수동) 실패 [{tt}]")
             finally:
+                st["running"] = False
+                st["finished_at"] = _dt.now().isoformat(timespec="seconds")
                 _INGEST_RUNNING[tt] = False
 
         threading.Thread(target=_run, args=(t,), daemon=True).start()
