@@ -675,6 +675,73 @@ def ingest_trigger(target: str):
             "message": (f"적재 시작: {', '.join(started)}" if started else "모두 이미 실행 중")}
 
 
+@app.get("/api/v1/data/ingest-doctor")
+def ingest_doctor():
+    """적재 데이터 소스(DART/KRX/KIS) 실도달 진단 — "가져오기가 되는가"를 UI에서 즉답.
+
+    각 소스에 경량 실호출 1건: DART 기업개황(삼성전자) · KRX 지수 일별시세(최근 영업일) ·
+    KIS 토큰. 키 미설정/mock은 정직하게 ok=False + 사유. DART 사용량 요약 동봉."""
+    import os
+    import time as _t
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    out: dict = {}
+
+    # DART
+    if not os.getenv("DART_API_KEY"):
+        out["dart"] = {"ok": False, "message": "DART_API_KEY 미설정"}
+    else:
+        try:
+            from src.data.dart_client import STOCK_TO_CORP, DARTClient
+            t0 = _t.time()
+            c = DARTClient()
+            data = c._get("company.json", {"corp_code": STOCK_TO_CORP.get("005930", "00126380")})
+            ms = round((_t.time() - t0) * 1000)
+            out["dart"] = ({"ok": True, "message": f"정상 (기업개황 응답 {ms}ms)", "latency_ms": ms}
+                           if data else {"ok": False, "message": "응답 실패 — 아래 dart_usage.last_error 참조", "latency_ms": ms})
+        except Exception as e:
+            out["dart"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
+
+    # KRX
+    if not os.getenv("KRX_API_KEY"):
+        out["krx"] = {"ok": False, "message": "KRX_API_KEY 미설정"}
+    else:
+        try:
+            from src.data.krx_client import KRXClient
+            kc = KRXClient()
+            t0 = _t.time()
+            day = (_dt.now() - _td(days=1))
+            while day.weekday() >= 5:  # 최근 평일
+                day -= _td(days=1)
+            rows = kc.get_daily_all("KOSPI", day.strftime("%Y%m%d"))
+            ms = round((_t.time() - t0) * 1000)
+            out["krx"] = ({"ok": True, "message": f"정상 (KOSPI {len(rows)}행, {ms}ms)", "latency_ms": ms}
+                          if rows else {"ok": False, "message": f"0행 응답 (휴장일/승인 범위 확인, {ms}ms)", "latency_ms": ms})
+        except Exception as e:
+            out["krx"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
+
+    # KIS
+    if os.getenv("KIS_USE_MOCK", "1") != "0" or not os.getenv("KIS_APP_KEY"):
+        out["kis"] = {"ok": False, "message": "mock 모드 또는 KIS 키 미설정"}
+    else:
+        try:
+            from src.execution.kis_client import KISClient
+            t0 = _t.time()
+            KISClient().prewarm_token()
+            ms = round((_t.time() - t0) * 1000)
+            out["kis"] = {"ok": True, "message": f"토큰 정상 ({ms}ms)", "latency_ms": ms}
+        except Exception as e:
+            out["kis"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
+
+    try:
+        from src.data.dart_client import dart_usage
+        out["dart_usage"] = dart_usage()
+    except Exception:
+        out["dart_usage"] = None
+    return out
+
+
 # ─── Auto-trading state (in-memory) ─────────────────────────────────────────
 trading_config = {"auto_mode": False, "var_limit": 5_000_000, "last_order": None}
 
