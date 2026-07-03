@@ -540,7 +540,21 @@ def db_status():
             if dp_rows is None:
                 cnt = q("SELECT COUNT(*) FROM daily_prices")
                 dp_rows = int(cnt[0] or 0) if cnt else 0
-            dp_meta = q("SELECT COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices")
+            # 종목 수/기간 — 848만 행에서 COUNT(DISTINCT)+MIN+MAX 결합 쿼리가 5s 타임아웃
+            # → "종목 0 · 기간 —" 오표시 + 백테스터(종목) 거짓 X이던 버그:
+            #   ① 종목 수는 pg_stats n_distinct 추정(즉시), 실패 시에만 정확 카운트
+            #   ② MIN/MAX는 개별 쿼리(인덱스 스캔, 각자 5s 컷) ③ 미확정은 None(0 금지 — 프론트 "—")
+            nd = q("SELECT n_distinct FROM pg_stats WHERE tablename='daily_prices' AND attname='ticker'")
+            dp_tickers = None
+            if nd and nd[0] is not None:
+                ndv = float(nd[0])
+                dp_tickers = int(-ndv * (dp_rows or 0)) if ndv < 0 else int(ndv)
+            if dp_tickers is None:
+                cnt = q("SELECT COUNT(DISTINCT ticker) FROM daily_prices")
+                dp_tickers = int(cnt[0]) if (cnt and cnt[0] is not None) else None
+            dmin = q("SELECT MIN(trade_date) FROM daily_prices")
+            dmax = q("SELECT MAX(trade_date) FROM daily_prices")
+            dp_exists = q("SELECT 1 FROM daily_prices LIMIT 1") is not None
             idxr = q("SELECT COUNT(*), MIN(trade_date), MAX(trade_date) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
             etf = q(f"SELECT COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
                     {f"c{i}": code for i, code in enumerate(etf_codes)})
@@ -551,9 +565,9 @@ def db_status():
         out["available"] = True
         out["tables"] = {
             "daily_prices": {"rows": dp_rows,
-                             "tickers": int(dp_meta[0] or 0) if dp_meta else 0,
-                             "start": str(dp_meta[1])[:10] if (dp_meta and dp_meta[1]) else None,
-                             "end": str(dp_meta[2])[:10] if (dp_meta and dp_meta[2]) else None},
+                             "tickers": dp_tickers,
+                             "start": str(dmin[0])[:10] if (dmin and dmin[0]) else None,
+                             "end": str(dmax[0])[:10] if (dmax and dmax[0]) else None},
             "index_kospi_kosdaq": {"rows": int(idxr[0] or 0) if idxr else 0,
                                    "start": str(idxr[1])[:10] if (idxr and idxr[1]) else None,
                                    "end": str(idxr[2])[:10] if (idxr and idxr[2]) else None},
@@ -570,7 +584,7 @@ def db_status():
         t = out["tables"]
         out["tools"] = {
             "스크리너(펀더멘털)": (t["factor_snapshot"]["rows"] or 0) > 0,
-            "백테스터(종목)": (t["daily_prices"]["tickers"] or 0) > 5,
+            "백테스터(종목)": dp_exists and (dp_tickers is None or dp_tickers > 5),
             "백테스터(매크로·ETF)": t["etf_cross_asset"]["loaded"] >= max(1, int(t["etf_cross_asset"]["total"] * 0.6)),
             "벤치마크·국면": (t["index_kospi_kosdaq"]["rows"] or 0) > 0,
             "수급 시그널": (t["investor_flows"]["rows"] or 0) > 0,
