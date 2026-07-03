@@ -38,5 +38,13 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Start FastAPI server
-CMD ["uvicorn", "main_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Start FastAPI server — SINGLE worker (의도적).
+#  이 플랫폼은 워커별로 복제되면 안 되는 공유 in-memory 상태에 의존한다:
+#   · 캐시(_ValuationCache / fundamentals·price 팩터 / 마스터 플래그)
+#   · 적재 관측성(_INGEST_STATUS·_INGEST_RUNNING) + DART 사용량(_USAGE)
+#   · 부팅 시 1회만 돌아야 하는 무거운 startup(KIS 마스터 수집·prewarm 적재·DART 백필)
+#  워커를 늘리면 startup·DART 호출이 중복되고(공유 20k/일 한도 2배 소진),
+#  적재 진행률이 폴링 워커에 따라 빈 값으로 보인다. 3.8GB 단일 VM에서 메모리도 2배.
+#  단일 워커라도 async + 내부 ThreadPool로 동시성은 충분. 다중 인스턴스가 필요해지면
+#  상태를 Redis/DB로 옮긴 뒤 UVICORN_WORKERS를 올릴 것.
+CMD ["uvicorn", "main_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
