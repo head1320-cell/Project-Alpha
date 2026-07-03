@@ -1722,39 +1722,46 @@ def _compute_monthly_returns(daily_returns: pd.Series) -> list[dict]:
 
 
 def _compute_symbol_results(trades: list[Trade], symbols: list[str]) -> list[dict]:
-    """KIS ResultFormatter._calculate_symbol_results()와 동일 로직."""
-    data: dict[str, dict] = {
-        s: {"ticker": s, "buy_amount": 0.0, "sell_pnl": 0.0,
-            "num_trades": 0, "wins": 0, "losses": 0}
-        for s in symbols
-    }
-    for t in trades:
-        if t.ticker not in data:
-            data[t.ticker] = {"ticker": t.ticker, "buy_amount": 0.0,
-                               "sell_pnl": 0.0, "num_trades": 0,
-                               "wins": 0, "losses": 0}
-        d = data[t.ticker]
-        d["num_trades"] += 1
-        if t.side == "buy":
-            d["buy_amount"] += t.value
-        elif t.side == "sell" and t.pnl is not None:
-            d["sell_pnl"] += t.pnl
-            if t.pnl > 0:
-                d["wins"] += 1
-            else:
-                d["losses"] += 1
+    """종목별 성과 — 라운드트립 기반 (실현손익/평균수익률/평균보유일/기여도 포함)."""
+    from datetime import datetime as _dt
 
+    from src.data.stock_master import get_stock_name
+
+    rts = _round_trips(trades)
+    by_sym: dict[str, list[dict]] = {s: [] for s in symbols}
+    for rt in rts:
+        by_sym.setdefault(rt["stock_code"], []).append(rt)
+    buy_amount: dict[str, float] = {}
+    for t in trades:
+        if t.side == "buy":
+            buy_amount[t.ticker] = buy_amount.get(t.ticker, 0.0) + t.value
+
+    def _days(rt) -> float:
+        try:
+            d0 = _dt.strptime(rt["entry_date"][:10], "%Y-%m-%d")
+            d1 = _dt.strptime(rt["exit_date"][:10], "%Y-%m-%d")
+            return max(0.0, float((d1 - d0).days))
+        except Exception:
+            return 0.0
+
+    total_pnl = sum((rt["pnl"] or 0.0) for rt in rts)
     results = []
-    for ticker, d in data.items():
-        total_rt = d["num_trades"]
-        win_rate = d["wins"] / total_rt * 100 if total_rt > 0 else 0
-        return_pct = d["sell_pnl"] / d["buy_amount"] * 100 \
-            if d["buy_amount"] > 0 else 0
+    for ticker, lst in by_sym.items():
+        n = len(lst)
+        pnl = sum((rt["pnl"] or 0.0) for rt in lst)
+        wins = sum(1 for rt in lst if (rt["pnl"] or 0.0) > 0)
+        ba = buy_amount.get(ticker, 0.0)
         results.append({
             "symbol": ticker,
-            "total_return_pct": round(return_pct, 2),
-            "num_trades": total_rt,
-            "win_rate": round(win_rate, 1),
+            "corp_name": get_stock_name(ticker) or ticker,
+            "total_return_pct": round(pnl / ba * 100, 2) if ba > 0 else 0.0,
+            "num_trades": sum(1 for t in trades if t.ticker == ticker),
+            "round_trips": n,
+            "win_rate": round(wins / n * 100, 1) if n else 0.0,
+            "realized_pnl": round(pnl, 0),
+            "avg_return_pct": round(sum(rt["return_pct"] for rt in lst) / n, 2) if n else 0.0,
+            "avg_hold_days": round(sum(_days(rt) for rt in lst) / n, 1) if n else 0.0,
+            "contribution_pct": round(pnl / total_pnl * 100, 1) if total_pnl else 0.0,
         })
     return results
 
