@@ -308,7 +308,7 @@ class FredClient:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _generate_mock_series(
-    indicator: str, length: int = 60,
+    indicator: str, length: int = 84,
     base: float = 100, vol: float = 5, trend: float = 0.0,
 ) -> tuple[list[str], list[float]]:
     """Mock 시계열 생성 (deterministic by indicator hash)."""
@@ -345,6 +345,14 @@ MOCK_PROFILES = {
     "DTWEXBGS":      {"base": 121.4, "vol": 1.2, "trend": -0.05},
     "CPIAUCSL":      {"base": 308,  "vol": 0.6,  "trend": 0.25},
     "BAMLH0A0HYM2":  {"base": 3.45, "vol": 0.5,  "trend": -0.01},
+    # 국면 축 실물 지표 — mock도 현실적 스케일 (기본 {base:100,vol:5}는 실업률 100% 같은 왜곡 유발)
+    "KR_LEADING_CYCLE": {"base": 100.2, "vol": 0.35, "trend": -0.02},
+    "KR_IP":         {"base": 112.5, "vol": 1.1,  "trend": 0.12},
+    "INDPRO":        {"base": 103.2, "vol": 0.5,  "trend": 0.06},
+    "UNRATE":        {"base": 4.0,  "vol": 0.12, "trend": 0.008},
+    "PAYEMS":        {"base": 158_000, "vol": 250, "trend": 130},
+    "GDPC1":         {"base": 22_700, "vol": 70,  "trend": 38},
+    "T10YIE":        {"base": 2.30, "vol": 0.07, "trend": 0.001},
 }
 
 
@@ -399,6 +407,9 @@ class MacroCollector:
             ("KR_CPI",       "901Y009", "0",         "한국 CPI", "지수"),
             ("USD_KRW",      "731Y001", "0000001",   "원/달러 환율", "원"),
             ("KOSPI",        "802Y001", "0001000",   "KOSPI 종합", "포인트"),
+            # 국면 성장축(실물) — ECOS 코드는 GCP 실호출로 검증, 실패 시 unavailable → 축에서 자동 제외
+            ("KR_LEADING_CYCLE", "901Y067", "I16E", "경기선행지수 순환변동치", "지수"),
+            ("KR_IP",            "901Y033", "A00",  "산업생산지수", "지수"),
         ]
         for key, stat, item, name, unit in bok_targets:
             series_map[key] = self._collect_one(
@@ -462,14 +473,19 @@ class MacroCollector:
         norm = _normalize(clean)
         latest = clean[-1] if clean else None
         prev = clean[-2] if len(clean) >= 2 else None
-        yoy = (clean[-1] - clean[-13]) if len(clean) >= 13 else None
+        # YoY: 금리 등 %단위는 %p 차이, 지수/레벨형은 % 변화 (이전엔 지수도 점차로 빼던 버그)
+        if len(clean) >= 13:
+            yoy = (clean[-1] - clean[-13]) if unit == "%" \
+                else ((clean[-1] / clean[-13] - 1) * 100 if clean[-13] > 0 else None)
+        else:
+            yoy = None
         mom_pct = ((clean[-1] - clean[-2]) / clean[-2] * 100) \
             if (len(clean) >= 2 and clean[-2] != 0) else None
 
         series = MacroSeries(
             indicator=key, name=name, unit=unit, source=actual_source,
-            timestamps=timestamps[-36:],   # 최근 36개월만 저장 (메모리 절약)
-            values=clean[-36:] if clean else [],
+            timestamps=timestamps[-72:],   # 최근 72개월 저장 — YoY 변환 후에도 5년 z-표본 확보
+            values=clean[-72:] if clean else [],
             latest=round(latest, 4) if latest is not None else None,
             prev=round(prev, 4) if prev is not None else None,
             yoy=round(yoy, 3) if yoy is not None else None,
