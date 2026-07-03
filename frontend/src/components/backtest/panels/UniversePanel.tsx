@@ -130,6 +130,21 @@ export default function UniversePanel({ s, set, live = true }: {
         })}
       </div>
 
+      {/* 평가 종목 상한 — 전종목 선택 시 200으로 잘리던 문제의 사용자 제어 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>평가 종목 상한</span>
+        <select value={s.evalCap ?? 4000} onChange={(e) => set((x) => ({ ...x, evalCap: Number(e.target.value) }))}
+          style={{ fontSize: 12, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+          <option value={500}>500 종목</option>
+          <option value={1000}>1,000 종목</option>
+          <option value={2000}>2,000 종목</option>
+          <option value={4000}>전체 (제한 없음)</option>
+        </select>
+        <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+          첫 실행은 미적재 종목 시세 수집으로 수 분 걸릴 수 있음(진행률 표시) — 이후 DB에서 즉시
+        </span>
+      </div>
+
       {/* 업종 (88) — 젠포트 17그룹 → 88 세부업종 트리 */}
       <div style={{ marginBottom: 16 }}>
         <ThemeTree selected={u.sectors} onChange={(next) => patch({ sectors: next })} />

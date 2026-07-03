@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   backtestBridgeApi, type ScreenToBacktestResult,
   type FilterGroupNode, type BacktestTrade, type MonthlyReturn, type BacktestStatistics,
+  type SymbolPerf,
 } from "@/lib/screenerApi";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/lib/screenerHandoff";
 import { getMacroHandoff, clearMacroHandoff, type MacroBacktestHandoff } from "@/lib/macroHandoff";
@@ -44,6 +45,7 @@ const yearsAgo = (n: number) => {
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
+  evalCap: 4000,  // 평가 종목 상한 — 기본 전체(유니버스 선택 존중)
   rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0, intradayFill: false,
   assetAlloc: { enabled: false, preset: "aggressive", etfPct: 30, stockPct: 60, basket: [],
     rebalanceMonths: 3, fillType: "prev_close", offsetPct: 0 },
@@ -112,7 +114,7 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     sort_secondary_dir: (buy.secondarySort?.dir ?? "DESC") === "ASC" ? "asc" : "desc",
     max_positions: buy.maxStocks,
     full_universe_eval: buy.conditions.length > 0,
-    universe_eval_cap: 200,
+    universe_eval_cap: s.evalCap || 4000,  // 기본 전체 — "전종목" 선택이 200으로 잘리던 문제 수정
     allow_snapshot_fundamentals: buy.allowFundamentals,
     strategy_name: macroCfg?.mode === "engine" && macroCfg.engine_strategy
       ? `tactical:${macroCfg.engine_strategy}` : "GoldenCross",
@@ -522,6 +524,9 @@ export default function TerminalBacktester() {
                 <span>평균손익 <b style={{ color: posColor(st.avg_trade_return) }}>{fmt(st.avg_trade_return, "%", 2)}</b></span>
                 <span>수수료 <b>₩{Math.round(st.total_commission).toLocaleString()}</b></span>
                 <span>슬리피지 <b>₩{Math.round(st.total_slippage).toLocaleString()}</b></span>
+                {(st.eod_liquidated ?? 0) > 0 && (
+                  <span title="백테스트 종료일에 보유 중이던 종목을 종가로 청산해 통계에 반영">기간종료 청산 <b>{st.eod_liquidated}종목</b></span>
+                )}
               </div>
 
               {/* 전체 성과지표 — QuantStats 티어시트 */}
@@ -606,7 +611,7 @@ export default function TerminalBacktester() {
                 </div>
               )}
 
-              {/* 종목 + 데이터 출처 */}
+              {/* 종목별 성과 + 데이터 출처 — 거래 있는 종목의 실현손익/보유일/기여도 + 행 클릭 상세 */}
               <div className="tbt-chart">
                 <div className="tbt-chart-head">
                   <div className="tbt-chart-title">Constituents ({result.screened_count})</div>
@@ -614,13 +619,11 @@ export default function TerminalBacktester() {
                     {result.data_source.fully_real ? "REAL_DATA" : "MOCK_DATA"}
                   </span>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {result.screened_tickers.slice(0, 12).map((t) => (
-                    <span key={t.stock_code} style={{ fontFamily: "var(--t-mono)", fontSize: 12, padding: "4px 10px", border: "1px solid var(--t-border)", borderRadius: 2 }}>
-                      {t.corp_name || t.stock_code}
-                    </span>
-                  ))}
-                </div>
+                <SymbolPerfTable
+                  rows={result.backtest.symbol_results ?? []}
+                  roundTrips={result.backtest.round_trips ?? []}
+                  screened={result.screened_tickers}
+                />
               </div>
             </div>
           )}
@@ -785,6 +788,145 @@ function MetricsTearsheet({ st }: { st: BacktestStatistics }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// 종목별 성과 테이블 — 실현손익/평균수익률/보유일/기여도, 행 클릭 → 개별 거래 상세
+function SymbolPerfTable({ rows, roundTrips, screened }: {
+  rows: SymbolPerf[];
+  roundTrips: BacktestTrade[];
+  screened: Array<{ stock_code: string; corp_name: string }>;
+}) {
+  const [sortKey, setSortKey] = useState<string>("contribution_pct");
+  const [desc, setDesc] = useState(true);
+  const [tradedOnly, setTradedOnly] = useState(true);
+  const [page, setPage] = useState(0);
+  const [openSym, setOpenSym] = useState<string | null>(null);
+  const PER_PAGE = 20;
+
+  const sorted = useMemo(() => {
+    const base = tradedOnly ? rows.filter((r) => (r.round_trips ?? 0) > 0) : [...rows];
+    base.sort((a, b) => {
+      const av = ((a as unknown as Record<string, unknown>)[sortKey] as number) ?? -Infinity;
+      const bv = ((b as unknown as Record<string, unknown>)[sortKey] as number) ?? -Infinity;
+      return desc ? bv - av : av - bv;
+    });
+    return base;
+  }, [rows, sortKey, desc, tradedOnly]);
+
+  useEffect(() => { setPage(0); }, [sortKey, desc, tradedOnly, rows]);
+
+  // 구버전/엔진모드 응답(symbol_results 없음) → 기존 칩 폴백
+  if (!rows.length) {
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {screened.slice(0, 12).map((t) => (
+          <span key={t.stock_code} style={{ fontFamily: "var(--t-mono)", fontSize: 12, padding: "4px 10px", border: "1px solid var(--t-border)", borderRadius: 2 }}>
+            {t.corp_name || t.stock_code}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+  const cur = Math.min(page, pageCount - 1);
+  const view = sorted.slice(cur * PER_PAGE, (cur + 1) * PER_PAGE);
+  const won = (v: number | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}₩${Math.abs(Math.round(v)).toLocaleString()}`);
+  const pct = (v: number | undefined, dp = 2) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}%`);
+  const col = (v: number | undefined) => ((v ?? 0) >= 0 ? "#16a34a" : "#dc2626");
+  const head = (key: string, label: string) => (
+    <th className="num" style={{ cursor: "pointer" }} onClick={() => { if (sortKey === key) setDesc(!desc); else { setSortKey(key); setDesc(true); } }}>
+      {label}{sortKey === key ? (desc ? " ▼" : " ▲") : ""}
+    </th>
+  );
+  const daysOf = (t: BacktestTrade) => {
+    try {
+      if (!t.entry_date || !t.exit_date) return "—";
+      const d = Math.round((new Date(t.exit_date).getTime() - new Date(t.entry_date).getTime()) / 864e5);
+      return `${Math.max(0, d)}일`;
+    } catch { return "—"; }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, fontSize: 12, color: "var(--t-muted)" }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          <input type="checkbox" checked={tradedOnly} onChange={(e) => setTradedOnly(e.target.checked)} style={{ accentColor: "var(--t-accent)" }} />
+          거래 발생 종목만 ({rows.filter((r) => (r.round_trips ?? 0) > 0).length}/{rows.length})
+        </label>
+        <span style={{ marginLeft: "auto", fontFamily: "var(--t-mono)", fontSize: 11 }}>
+          행 클릭 → 개별 거래 상세
+        </span>
+      </div>
+      <table className="tbt-tradelog">
+        <thead>
+          <tr>
+            <th>종목</th>
+            {head("round_trips", "거래")}
+            {head("win_rate", "승률")}
+            {head("realized_pnl", "실현손익")}
+            {head("avg_return_pct", "평균수익률")}
+            {head("avg_hold_days", "평균보유")}
+            {head("contribution_pct", "기여도")}
+          </tr>
+        </thead>
+        <tbody>
+          {view.map((r) => {
+            const open = openSym === r.symbol;
+            const trs = open ? roundTrips.filter((t) => t.stock_code === r.symbol) : [];
+            return [
+              <tr key={r.symbol} onClick={() => setOpenSym(open ? null : r.symbol)} style={{ cursor: "pointer", background: open ? "var(--t-surface)" : undefined }}>
+                <td>{r.corp_name || r.symbol} <span style={{ color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 10 }}>{r.symbol}</span></td>
+                <td className="num">{r.round_trips ?? 0}회</td>
+                <td className="num">{(r.win_rate ?? 0).toFixed(0)}%</td>
+                <td className="num" style={{ color: col(r.realized_pnl), fontWeight: 600 }}>{won(r.realized_pnl)}</td>
+                <td className="num" style={{ color: col(r.avg_return_pct) }}>{pct(r.avg_return_pct)}</td>
+                <td className="num">{r.avg_hold_days != null ? `${r.avg_hold_days}일` : "—"}</td>
+                <td className="num">{r.contribution_pct != null ? `${r.contribution_pct}%` : "—"}</td>
+              </tr>,
+              open && (
+                <tr key={`${r.symbol}-detail`}>
+                  <td colSpan={7} style={{ padding: "6px 10px 12px", background: "var(--t-surface)" }}>
+                    {trs.length === 0
+                      ? <span style={{ fontSize: 12, color: "var(--t-muted)" }}>표시 가능한 개별 거래 없음 (거래 로그 500건 초과분은 생략될 수 있음)</span>
+                      : (
+                        <table className="tbt-tradelog" style={{ margin: 0 }}>
+                          <thead>
+                            <tr><th>진입일</th><th>청산일</th><th className="num">진입가</th><th className="num">청산가</th><th className="num">수량</th><th className="num">수익률</th><th className="num">손익</th><th>보유</th><th>사유</th></tr>
+                          </thead>
+                          <tbody>
+                            {trs.map((t, i) => (
+                              <tr key={i}>
+                                <td>{t.entry_date || "—"}</td>
+                                <td>{t.exit_date || "—"}</td>
+                                <td className="num">{t.entry_price?.toLocaleString() ?? "—"}</td>
+                                <td className="num">{t.exit_price?.toLocaleString() ?? "—"}</td>
+                                <td className="num">{t.quantity?.toLocaleString() ?? "—"}</td>
+                                <td className="num" style={{ color: col(t.return_pct), fontWeight: 600 }}>{pct(t.return_pct)}</td>
+                                <td className="num" style={{ color: col(t.pnl) }}>{won(t.pnl)}</td>
+                                <td>{daysOf(t)}</td>
+                                <td style={{ color: "var(--t-muted)", fontSize: 11 }}>{t.reason || "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                  </td>
+                </tr>
+              ),
+            ];
+          })}
+        </tbody>
+      </table>
+      {pageCount > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 0 2px", fontFamily: "var(--t-mono)", fontSize: 12 }}>
+          <button className="tbt-export-btn" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>◀ 이전</button>
+          <span>{cur + 1} / {pageCount}</span>
+          <button className="tbt-export-btn" onClick={() => setPage(Math.min(pageCount - 1, cur + 1))} disabled={cur >= pageCount - 1}>다음 ▶</button>
+        </div>
+      )}
     </div>
   );
 }

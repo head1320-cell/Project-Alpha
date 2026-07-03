@@ -900,6 +900,21 @@ export interface BacktestStatistics {
   expectancy?: number | null;
   kelly_pct?: number | null;
   information_ratio?: number | null;
+  eod_liquidated?: number;          // 기간종료 청산 종목 수
+}
+
+// 종목별 성과 (symbol_results — 라운드트립 기반)
+export interface SymbolPerf {
+  symbol: string;
+  corp_name?: string;
+  total_return_pct: number;
+  num_trades: number;
+  round_trips?: number;
+  win_rate: number;
+  realized_pnl?: number;
+  avg_return_pct?: number;
+  avg_hold_days?: number;
+  contribution_pct?: number;
 }
 
 export interface BacktestTrade {
@@ -942,6 +957,7 @@ export interface ScreenToBacktestResult {
     trades: BacktestTrade[];
     round_trips?: BacktestTrade[];   // 매수/매도 매칭 라운드트립(조건모드) — 거래로그 표시용
     trade_mode?: string;             // "per_trade"(조건모드) | "rebalance"(매크로 월간)
+    symbol_results?: SymbolPerf[];   // 종목별 성과 (실현손익·평균수익률·보유일·기여도)
   };
   backtest_config: { strategy: string; period: string; initial_capital: number };
   data_source: { fundamentals: string; market_data: string; fully_real: boolean };
