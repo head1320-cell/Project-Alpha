@@ -1053,3 +1053,42 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
 2. UNIVERSE COVERAGE에서 KOSPI/KOSDAQ 적재가 마스터 크기까지 차오르는지 확인.
 3. 스크리너 유니버스가 실수치(KOSPI ≈946 / KOSDAQ ≈1,822 / 전체 ≈2,768) 도달 확인.
 4. 잔차가 있으면 db-status의 master_composition(그룹별 종목 수)으로 원인 확인 — 필요 시 UNIVERSE_GROUP_CODES 조정.
+
+---
+
+## 🔧 백테스터 4수정 + 매크로 국면 재구축 (KR/US)
+
+[배경] ① 전종목 백테스트가 "200/200"으로 잘림 ② +366%인데 승률/PF/거래 0 ③ Constituents가
+종목명 칩뿐 ④ 매크로 국면이 항상 Stagflation(의심) → 4건 모두 코드 원인 확정 후 수정.
+스펙/플랜: docs/superpowers/specs·plans/2026-07-02-backtest-macro-fixes*.md
+
+### 진단→수정 (7커밋)
+1. **기간종료 청산**: 매도 미발동 전략은 통계가 청산 거래만 집계해 전부 0이던 문제 —
+   BacktestConfig.liquidate_at_end(엔진 기본 OFF·API 기본 ON), 마지막 거래일 종가 전량청산
+   (reason "기간종료 청산", 비용 반영, 곡선 끝=실현 자산), stats.eod_liquidated.
+2. **symbol_results 확장**: 라운드트립 기반 corp_name/round_trips/realized_pnl/avg_return_pct/
+   avg_hold_days/contribution_pct (기존 필드 유지).
+3. **평가상한**: TerminalBacktester 하드코딩 universe_eval_cap:200 제거 → 전략상태 evalCap
+   (기본 4000=전체), UniversePanel 셀렉트(500/1k/2k/전체). Constituents → SymbolPerfTable
+   (정렬/20행 페이지/거래종목만 토글/행 클릭 → 개별 거래 상세). 보조바 "기간종료 청산 N종목".
+4. **매크로 핵심 버그**: CPI 등 지수형을 레벨 z-score → 물가 축 영구 +1.5~2.0 고정(관측 +1.78).
+   NEW src/engine/regime_axes.py — 지수형은 YoY% 변환 후 z(변환은 이 모듈에서만 — collector/차트
+   원시값 유지). yoy 단위 인지 수정(지수는 %변화), 저장 36→72개월, 실물 mock 프로파일 현실화.
+5. **축 재정의(실물)**: US 성장=산업생산·고용·실업률(역)·GDP YoY / KR 성장=경기선행 순환변동치·
+   산업생산 YoY·KOSPI YoY (BOK 901Y067/901Y033 신규 수집 — 코드는 GCP 검증, 실패 시 축에서 자동
+   제외·재정규화). 물가=CPI YoY+기대인플레(T10YIE).
+6. **KR/US 분리**: analyze(market), get_regime_states, /macro/regime에 markets.kr/us(최상위=KR
+   하위호환), 궤적도 동일 축 공유(regime_trajectory(market=)) + 사분면 명칭 통일
+   (Goldilocks/Reflation/Stagflation/Deflation — Overheating/Disinflation 제거).
+7. **콕핏**: 레짐 배너 KR/US 두 카드(국면·축·신뢰도) + 공통 Stress/모드.
+
+### 검증
+- 681 passed / 10 skipped (신규 TDD 13), ruff·tsc 0, next build 17/17.
+- 라이브(mock): 매수만 전략 → 거래 3·승률 66.7%·청산 3·SK하이닉스 realized_pnl/보유178일/기여도
+  채워짐, round_trips reason "기간종료 청산". /macro 배너 2카드(KR Goldilocks / US Stagflation —
+  mock 데이터 기준, 물가 축 +1.78 고정 해방 확인).
+
+### GCP 확인 항목 (사용자)
+- 재배포+하드새로고침 후: 매크로 헤더 두 카드의 실데이터 국면 확인. BOK 신규 2종은 Indicators
+  소스 패널에서 real/unavailable 확인 — unavailable이면 bok_targets의 item 코드 2줄만 조정.
+- 백테스트: 전종목+상한 '전체'로 실행(첫 실행 수 분), 결과 하단 종목별 성과 테이블·행 클릭 상세.
