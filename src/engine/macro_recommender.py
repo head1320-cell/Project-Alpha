@@ -38,6 +38,37 @@ _QUAD_KR = {"Reflation": "리플레이션(성장↑·물가↓)", "Overheating":
             "Stagflation": "스태그플레이션(성장↓·물가↑)", "Disinflation": "디스인플레이션(성장↓·물가↓)"}
 
 
+def confidence_overlay(holdings: list, confidence: float, max_derisk: float = 0.6,
+                       anchor: str = "BIL", anchor_label: str = "현금성(BIL 1-3M)") -> list:
+    """신뢰도 가중 디리스킹 — 저확신 국면일수록 위험 배분을 현금성 앵커로 축소.
+
+    cash = (1 - clamp(confidence)) * max_derisk. 위험 holdings를 (1-cash)로 비례 축소하고
+    앵커에 cash를 배정(앵커가 이미 있으면 합산). 합 100 정규화. conf≈1이면 원본 불변.
+    기관 크리틱("신뢰도 27%인데 위험자산 고비중")의 자동 완화 — 표시 배분에만 적용."""
+    if not holdings:
+        return []
+    conf = max(0.0, min(1.0, float(confidence)))
+    cash = (1.0 - conf) * max(0.0, min(1.0, max_derisk))
+    if cash <= 1e-9:
+        return [dict(h) for h in holdings]
+    keep = 1.0 - cash
+    out: list = []
+    anchor_w = 0.0
+    for h in holdings:
+        if h.get("us_ticker") == anchor:
+            anchor_w += float(h.get("weight", 0.0)) * keep  # 기존 앵커도 축소 후 합산
+            continue
+        out.append({**h, "weight": round(float(h.get("weight", 0.0)) * keep, 2)})
+    anchor_w += cash * 100.0
+    out.append({"us_ticker": anchor, "us_label": anchor_label, "weight": round(anchor_w, 2)})
+    total = sum(h["weight"] for h in out)   # 반올림 잔차 → 합 100 정규화
+    if total > 0 and abs(total - 100.0) > 1e-6:
+        k = 100.0 / total
+        for h in out:
+            h["weight"] = round(h["weight"] * k, 2)
+    return out
+
+
 def _quadrant(state) -> str:
     name = (getattr(state, "regime", "") or "").lower()
     for q in ("reflation", "overheating", "stagflation", "disinflation"):
