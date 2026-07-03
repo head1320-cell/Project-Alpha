@@ -20,7 +20,7 @@ const TABLE_LABELS: Record<string, string> = {
 };
 
 const INGEST_TARGETS: [string, string][] = [
-  ["index", "지수"], ["etf", "ETF"], ["stocks", "주식 일봉"],
+  ["index", "지수"], ["etf", "ETF 시세(크로스에셋 15)"], ["stocks", "주식 일봉"],
   ["factors", "펀더멘털"], ["financials", "재무시계열"], ["flows", "수급(KIS)"],
 ];
 
@@ -37,6 +37,19 @@ export default function DbStatusPanel() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // 연결 진단 (DART/KRX/KIS 실도달)
+  const [doctor, setDoctor] = useState<Awaited<ReturnType<typeof api.ingestDoctor>> | null>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const runDoctor = async () => {
+    setDocLoading(true);
+    try {
+      setDoctor(await api.ingestDoctor());
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDocLoading(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -163,7 +176,7 @@ export default function DbStatusPanel() {
                     const p = st.universe_progress!.progress[k];
                     if (!p) return null;
                     const pct = p.master > 0 ? Math.round((p.ingested / p.master) * 100) : 0;
-                    const label = { kospi: "KOSPI", kosdaq: "KOSDAQ", etf: "ETF", all_listed: "전체 (전종목)" }[k];
+                    const label = { kospi: "KOSPI", kosdaq: "KOSDAQ", etf: "ETF (시세 전용 — 펀더멘털 적재 대상 아님)", all_listed: "전체 (전종목)" }[k];
                     return (
                       <tr key={k}>
                         <td>{label}</td>
@@ -194,9 +207,49 @@ export default function DbStatusPanel() {
             <button className="tchip-toggle active" disabled={anyRunning} onClick={() => void trigger("all")}>
               {anyRunning ? "적재 중…" : "★ 전체 적재"}
             </button>
+            <button className="tchip-toggle" disabled={docLoading} onClick={() => void runDoctor()}>
+              {docLoading ? "진단 중…" : "🩺 연결 진단"}
+            </button>
           </div>
+
+          {/* 타깃별 진행/에러 — "버튼 눌러도 조용함" 제거 */}
+          {st.ingest_status && Object.keys(st.ingest_status).length > 0 && (
+            <div style={{ marginTop: 10, display: "grid", gap: 5 }}>
+              {Object.entries(st.ingest_status).map(([k, s]) => (
+                <div key={k} style={{ fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-muted)" }}>
+                  <b style={{ color: "var(--t-ink)" }}>{k}</b>
+                  {" · "}{s.running ? "실행 중" : s.finished_at ? `완료 ${s.finished_at}` : "대기"}
+                  {s.progress ? ` · ${s.progress.stage ?? ""} ${(s.progress.done ?? 0).toLocaleString()}/${(s.progress.total ?? 0).toLocaleString()} (저장 ${(s.progress.saved ?? 0).toLocaleString()} · 실패 ${(s.progress.failures ?? 0).toLocaleString()})` : ""}
+                  {s.last_error ? <span style={{ color: "#dc2626" }}> · {s.last_error}</span> : null}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* DART 사용량 — 일일 한도(20,000건) 도달이 적재 정체의 흔한 원인 */}
+          {st.dart_usage && (
+            <p style={{ marginTop: 8, fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-muted)" }}>
+              DART 사용량(프로세스 기동 이후): 요청 {st.dart_usage.requests.toLocaleString()} · 에러 {Object.values(st.dart_usage.errors).reduce((a, b) => a + b, 0).toLocaleString()}
+              {st.dart_usage.quota_exhausted && <b style={{ color: "#dc2626" }}> · 일일 한도 도달 — 적재 자동 중단, 내일 재실행 시 이어짐</b>}
+              {st.dart_usage.last_error && <span> · 최근 에러: [{st.dart_usage.last_error.status}] {st.dart_usage.last_error.message}</span>}
+            </p>
+          )}
+
+          {/* 연결 진단 결과 */}
+          {doctor && (
+            <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+              {(["dart", "krx", "kis"] as const).map((s) => (
+                <div key={s} style={{ fontFamily: "var(--t-mono)", fontSize: 11 }}>
+                  <b style={{ color: doctor[s].ok ? "#16a34a" : "#dc2626" }}>{doctor[s].ok ? "✓" : "✗"} {s.toUpperCase()}</b>
+                  <span style={{ color: "var(--t-muted)" }}> — {doctor[s].message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <p className="tpage-intro" style={{ marginTop: 10 }}>
             키 없는 소스는 자동 건너뜀(no-op) · 진행은 "↻ 새로고침"으로 확인 · 대형 백필은 백그라운드 수 시간.
+            펀더멘털과 재무시계열은 같은 DART 일일 한도를 공유 — 동시 실행 시 한도 도달이 빨라집니다(권장: 재무시계열 완주 후 펀더멘털).
           </p>
           {msg && (
             <p style={{ marginTop: 8, fontFamily: "var(--t-mono)", fontSize: 12, color: "var(--t-accent)" }}>{msg}</p>

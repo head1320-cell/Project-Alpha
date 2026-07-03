@@ -123,7 +123,26 @@ export const api = {
         progress: Record<string, { master: number; ingested: number }>;
         composition: Record<string, Record<string, number>>;
       };
+      ingest_status?: Record<string, {
+        running?: boolean; started_at?: string | null; finished_at?: string | null;
+        last_error?: string | null;
+        progress?: { stage?: string; done?: number; total?: number; saved?: number; failures?: number } | null;
+      }>;
+      dart_usage?: {
+        requests: number; errors: Record<string, number>;
+        last_error: { endpoint?: string; status?: string; message?: string } | null;
+        quota_exhausted: boolean;
+      } | null;
     }>("/api/v1/data/db-status"),
+
+  // 적재 소스(DART/KRX/KIS) 실도달 진단 — 각 소스 경량 실호출 1건
+  ingestDoctor: () =>
+    get<{
+      dart: { ok: boolean; message: string; latency_ms?: number };
+      krx: { ok: boolean; message: string; latency_ms?: number };
+      kis: { ok: boolean; message: string; latency_ms?: number };
+      dart_usage: { requests: number; quota_exhausted: boolean } | null;
+    }>("/api/v1/data/ingest-doctor"),
 
   // target ∈ index | etf | stocks | factors | financials | flows | all
   ingest: (target: string) =>
