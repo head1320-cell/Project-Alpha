@@ -1270,6 +1270,7 @@ class ScreenToBacktestRequest(BaseModel):
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
     trailing_stop_pct: float | None = None  # 트레일링 스탑(드래깅 청산): 고점 대비 하락 %
+    liquidate_at_end: bool = True           # 기간종료 잔여 포지션 종가 청산(통계 실현화) — 기본 ON
     max_positions: int = 5
     # 체결가 유형 (Phase 1). 기본 close = 종가 체결
     buy_fill_type: str = "close"
@@ -1491,6 +1492,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             market_timing=req.market_timing,
             signal_lag=req.signal_lag,
             rebuy_block_days=req.rebuy_block_days,
+            liquidate_at_end=req.liquidate_at_end,
             buy_fill_offset_pct=req.buy_fill_offset_pct,
             sell_fill_offset_pct=req.sell_fill_offset_pct,
             max_buy_amount=req.max_buy_amount,

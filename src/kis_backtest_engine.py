@@ -224,6 +224,7 @@ class BacktestConfig:
     max_buy_per_day: int | None = None  # 일일 최대 신규 매수 종목 수
     max_buy_count: int | None = None    # 종목당 최대 분할 매수 횟수
     rebuy_block_days: int = 0           # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
+    liquidate_at_end: bool = False      # 기간종료 시 잔여 포지션 종가 전량청산 — 통계를 실현 기준으로
     factor_weights: dict | None = None  # 종목별 팩터 가중치 {ticker: 0~1} (팩터가중 모드용)
     # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②). 기본 비활성 = 기존 동작 불변
     rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"·"monthly"=주·월 첫 거래일에만 신규 매수
@@ -268,6 +269,7 @@ class BacktestEngine:
         self.trades: list[Trade] = []
         self.equity_history: list[tuple] = []   # (date_str, equity)
         self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
+        self._eod_liquidated = 0                # 기간종료 청산 종목 수 (통계 표기용)
         self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
         self._etf_pos: dict[str, dict] = {}     # ETF 슬리브 보유 {ticker: {"qty","avg"}}
 
@@ -588,6 +590,24 @@ class BacktestEngine:
             # 3. 포트폴리오 가치 기록 (주식 + ETF 슬리브 + 현금)
             equity = self._calc_equity(ohlcv_map, sim_date, etf_map)
             self.equity_history.append((date_str, equity))
+
+        # 기간종료 청산 — 잔여 포지션을 마지막 거래일 종가로 전량 실현(수수료·슬리피지 반영).
+        # 매도 미발동 전략도 승률/PF/거래수/라운드트립이 채워진다 (min_hold 등 규칙은 강제 청산이라 미적용).
+        if self.cfg.liquidate_at_end and self.positions and self.equity_history:
+            last_date_str = self.equity_history[-1][0]
+            for ticker in list(self.positions.keys()):
+                df = ohlcv_map.get(ticker)
+                if df is None or df.empty:
+                    continue
+                df_to = df.loc[:sim_date]
+                if df_to.empty:
+                    continue
+                self._execute_sell(ticker, float(df_to["close"].iloc[-1]),
+                                   last_date_str, "기간종료 청산")
+                self._eod_liquidated += 1
+            # 마지막 자산 기록을 청산 반영값으로 교체 (곡선 끝 == 실현 자산)
+            self.equity_history[-1] = (last_date_str,
+                                       self._calc_equity(ohlcv_map, sim_date, etf_map))
 
         duration = (datetime.now() - started_at).total_seconds()
         return self._build_result(duration, ohlcv_map, etf_map)
@@ -1437,6 +1457,7 @@ class BacktestEngine:
             eq_series, returns, self.trades, self.cfg.initial_capital,
             benchmark_returns=bench_rets,
         )
+        stats["eod_liquidated"] = getattr(self, "_eod_liquidated", 0)
         drawdown = _compute_drawdown(eq_series)
         monthly_returns = _compute_monthly_returns(returns)
         trade_dicts = [self._trade_to_dict(t) for t in self.trades]
@@ -1796,6 +1817,7 @@ def run_backtest(
     breakthrough_direction: str = "up",
     buy_timing: str = "pre_open",
     progress_cb=None,
+    liquidate_at_end: bool = True,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1846,6 +1868,7 @@ def run_backtest(
         market_timing=market_timing,
         signal_lag=signal_lag,
         rebuy_block_days=rebuy_block_days,
+        liquidate_at_end=liquidate_at_end,
         buy_fill_offset_pct=buy_fill_offset_pct,
         sell_fill_offset_pct=sell_fill_offset_pct,
         max_buy_amount=max_buy_amount,
