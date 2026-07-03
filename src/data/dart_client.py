@@ -42,6 +42,33 @@ logger = logging.getLogger(__name__)
 
 DART_BASE_URL = "https://opendart.fss.or.kr/api"
 
+
+# ── 사용량·쿼터 관측 (프로세스 수명) ─────────────────────────────────────────
+# DART 무료 키는 일 20,000건 — 한도 도달(status 020)이 로그에만 남아 적재가
+# "조용히 멈춘 것처럼" 보이던 문제를 UI(db-status/ingest-doctor)로 표면화한다.
+def _fresh_usage() -> dict:
+    return {"requests": 0, "errors": {}, "last_error": None, "quota_exhausted": False}
+
+
+_USAGE = _fresh_usage()
+
+
+def _record_request() -> None:
+    _USAGE["requests"] += 1
+
+
+def _record_error(endpoint: str, status: str, message: str) -> None:
+    _USAGE["errors"][status] = _USAGE["errors"].get(status, 0) + 1
+    _USAGE["last_error"] = {"endpoint": endpoint, "status": status, "message": message}
+    if status == "020" or "한도" in (message or ""):
+        _USAGE["quota_exhausted"] = True
+
+
+def dart_usage() -> dict:
+    """DART 사용량/에러/쿼터 상태 스냅샷 (관측용 — 카운터는 프로세스 시작 이후)."""
+    return {"requests": _USAGE["requests"], "errors": dict(_USAGE["errors"]),
+            "last_error": _USAGE["last_error"], "quota_exhausted": _USAGE["quota_exhausted"]}
+
 # ── 디스크 응답 캐시 (재시작에도 살아남음) ───────────────────────────────────
 # 재무·기업개황은 분기 단위로만 바뀌므로 성공 응답을 디스크에 캐시한다.
 # 첫 조회만 네트워크(+throttle), 이후엔 즉시 → 스크리너/분석 체감속도가 결정적으로 개선.
@@ -221,7 +248,7 @@ class DARTClient:
         self._last_call_time = time.time()
 
     def _get(self, endpoint: str, params: dict) -> dict | None:
-        """공통 GET 요청. 성공 응답은 디스크 캐시(재시작에도 유지)."""
+        """공통 GET 요청. 성공 응답은 디스크 캐시(재시작에도 유지). 사용량/쿼터를 _USAGE에 집계."""
         if not self.is_configured:
             return None
         if requests is None:
@@ -238,14 +265,17 @@ class DARTClient:
         url = f"{DART_BASE_URL}/{endpoint}"
 
         try:
+            _record_request()
             resp = requests.get(url, params=params, timeout=self.timeout)
             data = resp.json()
             if data.get("status") != "000":
+                _record_error(endpoint, str(data.get("status", "?")), str(data.get("message", "error")))
                 logger.warning(f"DART {endpoint}: {data.get('message', 'error')}")
                 return None
             _dart_cache_set(cache_key, data)  # 성공만 캐시
             return data
         except Exception as e:
+            _record_error(endpoint, "EXC", str(e))
             logger.error(f"DART API 오류 ({endpoint}): {e}")
             return None
 
