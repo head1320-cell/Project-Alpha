@@ -66,6 +66,7 @@ class RegimeState:
     recommended_mode:    str = "NORMAL"          # NORMAL/CAUTIOUS/DEFENSIVE
     asset_tilts:         dict = field(default_factory=dict)
     description:         str = ""
+    market:              str = "kr"              # 분석 대상 시장 (kr | us)
 
     # 동적 파라미터 (다른 모듈에 주입할 값)
     dynamic_risk_free_rate:  float | None = None
@@ -93,7 +94,7 @@ class RegimeAnalyzer:
     # 메인 분석
     # ─────────────────────────────────────────────────────────────────────
 
-    def analyze(self, snapshot: MacroSnapshot | None = None) -> RegimeState:
+    def analyze(self, snapshot: MacroSnapshot | None = None, market: str = "kr") -> RegimeState:
         snapshot = snapshot or self.collector.collect_all()
         s = snapshot.series
 
@@ -102,11 +103,11 @@ class RegimeAnalyzer:
                          if getattr(v, "source", "") != "unavailable" and v.latest is not None)
         insufficient = real_count < 3
 
-        # 1. Growth Axis (Z-Score 가중 평균)
-        growth_axis = self._compute_growth_axis(s)
-
-        # 2. Inflation Axis
-        inflation_axis = self._compute_inflation_axis(s)
+        # 1-2. Growth/Inflation Axis — regime_axes 단일 정의 (지수형은 YoY 변환 후 z)
+        from src.engine.regime_axes import AXES, compute_axis
+        g_def, i_def = AXES.get(market, AXES["kr"])
+        growth_axis = compute_axis(s, g_def)
+        inflation_axis = compute_axis(s, i_def)
 
         # 3. Regime 판별 — 데이터 부족 시 허위 국면(Reflation 등) 대신 '데이터 부족'
         if insufficient:
@@ -144,6 +145,7 @@ class RegimeAnalyzer:
             growth_axis=round(growth_axis, 3),
             inflation_axis=round(inflation_axis, 3),
             confidence=round(confidence, 3),
+            market=market,
             stress_score=round(stress_score, 2),
             stress_components=stress_components,
             yield_curve=yield_curve,
@@ -158,102 +160,14 @@ class RegimeAnalyzer:
         )
 
     # ─────────────────────────────────────────────────────────────────────
-    # Growth / Inflation 축 계산
-    # ─────────────────────────────────────────────────────────────────────
-
-    def _compute_growth_axis(self, s: dict[str, MacroSeries]) -> float:
-        """
-        Growth Axis: 양수일수록 성장 강함.
-        가중치: KOSPI(0.3) + T10Y2Y(-0.3, 역수) + VIX(-0.2, 역수) + DXY(-0.2, 역수)
-        """
-        signals = []
-        weights = []
-
-        # KOSPI 추세 (Z-Score 양수 = 성장)
-        kospi = s.get("KOSPI")
-        if kospi and kospi.z_score is not None:
-            signals.append(kospi.z_score)
-            weights.append(0.3)
-
-        # T10Y2Y (양수 = 정상 = 성장 기대)
-        t10y2y = s.get("T10Y2Y")
-        if t10y2y and t10y2y.z_score is not None:
-            signals.append(t10y2y.z_score)
-            weights.append(0.3)
-
-        # VIX (낮을수록 = 성장 = 양수 axis)
-        vix = s.get("VIXCLS")
-        if vix and vix.z_score is not None:
-            signals.append(-vix.z_score)
-            weights.append(0.2)
-
-        # DXY (강달러 = 미국 매력도 높음 but EM 압박)
-        dxy = s.get("DTWEXBGS")
-        if dxy and dxy.z_score is not None:
-            signals.append(-dxy.z_score)
-            weights.append(0.2)
-
-        if not signals:
-            return 0.0
-        total_w = sum(weights)
-        return sum(sig * w for sig, w in zip(signals, weights)) / total_w if total_w > 0 else 0.0
-
-    def _compute_inflation_axis(self, s: dict[str, MacroSeries]) -> float:
-        """
-        Inflation Axis: 양수일수록 인플레이션 강함.
-        가중치: KR_CPI(0.3) + US_CPI(0.3) + KR_10Y(0.2) + Credit_Spread(-0.2)
-        """
-        signals = []
-        weights = []
-
-        kr_cpi = s.get("KR_CPI")
-        if kr_cpi and kr_cpi.z_score is not None:
-            signals.append(kr_cpi.z_score)
-            weights.append(0.3)
-
-        us_cpi = s.get("CPIAUCSL")
-        if us_cpi and us_cpi.z_score is not None:
-            signals.append(us_cpi.z_score)
-            weights.append(0.3)
-
-        kr_10y = s.get("KR_10Y")
-        if kr_10y and kr_10y.z_score is not None:
-            signals.append(kr_10y.z_score)
-            weights.append(0.2)
-
-        # Credit spread 확대 = 디스인플레이션/위험 회피
-        credit = s.get("BAMLH0A0HYM2")
-        if credit and credit.z_score is not None:
-            signals.append(-credit.z_score * 0.5)
-            weights.append(0.2)
-
-        if not signals:
-            return 0.0
-        total_w = sum(weights)
-        return sum(sig * w for sig, w in zip(signals, weights)) / total_w if total_w > 0 else 0.0
-
-    # ─────────────────────────────────────────────────────────────────────
-    # Regime 분류
+    # Regime 분류 — 축 계산은 regime_axes(단일 정의)에서 수행
     # ─────────────────────────────────────────────────────────────────────
 
     @staticmethod
     def _classify_regime(growth: float, inflation: float) -> tuple[str, float]:
-        """
-        4-Quadrant 분류 + 신뢰도.
-            성장↑ + 물가↓ → Goldilocks
-            성장↑ + 물가↑ → Reflation
-            성장↓ + 물가↑ → Stagflation
-            성장↓ + 물가↓ → Deflation
-        """
-        if growth >= 0 and inflation < 0:
-            regime = "Goldilocks"
-        elif growth >= 0 and inflation >= 0:
-            regime = "Reflation"
-        elif growth < 0 and inflation >= 0:
-            regime = "Stagflation"
-        else:
-            regime = "Deflation"
-
+        """4-Quadrant 분류 + 신뢰도 — 사분면 명칭은 regime_axes.quadrant 공용."""
+        from src.engine.regime_axes import quadrant
+        regime = quadrant(growth, inflation)
         # 신뢰도: 두 축의 절댓값 평균 → tanh
         confidence = math.tanh((abs(growth) + abs(inflation)) / 2)
         return regime, max(0.1, confidence)
@@ -376,6 +290,16 @@ def get_regime_state(use_cache: bool = True) -> RegimeState:
         _ANALYZER_INSTANCE = RegimeAnalyzer()
     snapshot = _ANALYZER_INSTANCE.collector.collect_all(use_cache=use_cache)
     return _ANALYZER_INSTANCE.analyze(snapshot)
+
+
+def get_regime_states() -> dict:
+    """KR/US 국면 동시 — 콕핏 두 카드용 (스냅샷 1회 수집 공유)."""
+    global _ANALYZER_INSTANCE
+    if _ANALYZER_INSTANCE is None:
+        _ANALYZER_INSTANCE = RegimeAnalyzer()
+    snap = _ANALYZER_INSTANCE.collector.collect_all(use_cache=True)
+    return {"kr": _ANALYZER_INSTANCE.analyze(snap, market="kr"),
+            "us": _ANALYZER_INSTANCE.analyze(snap, market="us")}
 
 
 def get_dynamic_risk_free_rate() -> float:

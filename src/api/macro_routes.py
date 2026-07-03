@@ -53,11 +53,18 @@ def macro_connection_status():
 
 @router.get("/regime")
 def macro_regime():
-    """4-Quadrant 국면 + Stress + Yield Curve + 동적 파라미터."""
+    """4-Quadrant 국면 + Stress + Yield Curve + 동적 파라미터.
+
+    최상위 필드 = KR 국면(하위호환). markets.kr / markets.us 로 두 시장 동시 제공.
+    """
     try:
         analyzer = _get_analyzer()
-        state = analyzer.analyze()
-        return asdict(state)
+        snap = analyzer.collector.collect_all(use_cache=True)
+        kr = analyzer.analyze(snap, market="kr")
+        us = analyzer.analyze(snap, market="us")
+        out = asdict(kr)
+        out["markets"] = {"kr": asdict(kr), "us": asdict(us)}
+        return out
     except Exception as e:
         logger.error(f"regime 실패: {e}", exc_info=True)
         raise HTTPException(500, str(e))
@@ -367,11 +374,11 @@ def macro_timing(market: str = Query("kr", pattern="^(us|kr)$")):
 
 
 @router.get("/regime-trajectory")
-def macro_regime_trajectory():
-    """최근 18개월 국면 궤적(성장×물가 테마-z) + 분면 전환 시점."""
+def macro_regime_trajectory(market: str = Query("kr")):
+    """최근 18개월 국면 궤적 — 헤더 국면과 동일한 축 정의(regime_axes) 공유."""
     try:
         from src.engine.macro_analytics import regime_trajectory
-        return regime_trajectory()
+        return regime_trajectory(market=market)
     except Exception:
         logger.exception("매크로 국면 궤적 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

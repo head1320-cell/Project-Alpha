@@ -298,39 +298,20 @@ def timing_panel(mk: str = "us") -> dict:
             "sources": {"prices": _real_prices(), "fred": _real_fred()}}
 
 
-# ── 국면 궤적 (테마-z 프록시) ─────────────────────────────────────────────────
-_GROWTH_DEF = [("INDPRO", 1), ("GDPC1", 1), ("PAYEMS", 1), ("UNRATE", -1)]
-_INFL_DEF = [("CPIAUCSL", 1), ("T10YIE", 1), ("DCOILWTICO", 1), ("KR_CPI", 1)]
-
-
-def _quadrant_of(g: float, i: float) -> str:
-    if g >= 0:
-        return "Overheating" if i >= 0 else "Reflation"
-    return "Stagflation" if i >= 0 else "Disinflation"
-
-
-def regime_trajectory(n_months: int = 18) -> dict:
+# ── 국면 궤적 — regime_axes 단일 정의 공유 (헤더 국면과 항상 일치) ────────────
+def regime_trajectory(n_months: int = 18, market: str = "kr") -> dict:
+    from src.engine.regime_axes import AXES, compute_axis, quadrant
     series = _macro_series()
-
-    def axis_at(defs, back):
-        zs = []
-        for sid, sign in defs:
-            s = series.get(sid)
-            if not s or s.std_5y in (None, 0) or s.mean_5y is None:
-                continue
-            vals = [v for v in s.values if v is not None]
-            if len(vals) <= back:
-                continue
-            zs.append((vals[-1 - back] - s.mean_5y) / s.std_5y * sign)
-        return sum(zs) / len(zs) if zs else 0.0
+    g_def, i_def = AXES.get(market, AXES["kr"])
 
     today = datetime.now()
     path = []
     for back in range(n_months - 1, -1, -1):
-        g = _clamp1(axis_at(_GROWTH_DEF, back) / 2.0)
-        infl = _clamp1(axis_at(_INFL_DEF, back) / 2.0)
+        g = _clamp1(compute_axis(series, g_def, back=back) / 2.0)
+        infl = _clamp1(compute_axis(series, i_def, back=back) / 2.0)
         path.append({"t": (today - timedelta(days=back * 30)).strftime("%y.%m"),
-                     "growth": round(g, 3), "inflation": round(infl, 3), "quadrant": _quadrant_of(g, infl)})
+                     "growth": round(g, 3), "inflation": round(infl, 3), "quadrant": quadrant(g, infl)})
     transitions = [{"t": path[i]["t"], "from": path[i - 1]["quadrant"], "to": path[i]["quadrant"]}
                    for i in range(1, len(path)) if path[i]["quadrant"] != path[i - 1]["quadrant"]]
-    return {"path": path, "transitions": transitions, "sources": {"fred": _real_fred(), "bok": bool(os.getenv("BOK_API_KEY"))}}
+    return {"path": path, "transitions": transitions, "market": market,
+            "sources": {"fred": _real_fred(), "bok": bool(os.getenv("BOK_API_KEY"))}}
