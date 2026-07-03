@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# 빈 결과(수집 실패)의 in-memory 재시도 간격(초) — 쿼터/일시 장애 회복 후 자동 재계산
+EMPTY_RETRY_TTL = 60.0
+
 
 class DeterministicMockStore:
     """
@@ -80,23 +83,29 @@ class DeterministicMockStore:
     def cached(self, key: str, builder: Callable[[], T]) -> T:
         """
         캐시 조회(in-memory → DB) 후 없으면 builder()로 생성하여 저장(in-memory + DB).
+
+        빈 결과(실패 — 예: DART 쿼터 초과로 팩터 {})는 영속하지 않고 in-memory도
+        EMPTY_RETRY_TTL만 유지 → 원인 해소 후 자동 재시도. 과거에 영속된 빈 히트도
+        miss로 취급해 재계산한다(오염 자가 치유).
         """
         with self._lock:
             entry = self._cache.get(key)
-            if entry and time.time() - entry[0] < self.cache_ttl:
-                return entry[1]
-        # DB 영속 캐시 (실데이터 모드, PERSIST 스토어)
+            if entry:
+                ttl = self.cache_ttl if entry[1] else EMPTY_RETRY_TTL
+                if time.time() - entry[0] < ttl:
+                    return entry[1]
+        # DB 영속 캐시 (실데이터 모드, PERSIST 스토어) — truthy 히트만 (빈값=miss)
         if self._persist_on():
             from src.data import snapshot_db
             hit = snapshot_db.bulk_read([key], self.PERSIST_TTL).get(key)
-            if hit is not None:
+            if hit:
                 with self._lock:
                     self._cache[key] = (time.time(), hit)
                 return hit
         value = builder()
         with self._lock:
             self._cache[key] = (time.time(), value)
-        if self._persist_on():
+        if value and self._persist_on():
             from src.data import snapshot_db
             snapshot_db.write(key, value)
         return value
