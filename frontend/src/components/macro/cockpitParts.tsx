@@ -70,7 +70,7 @@ export function RegimeScatter({ g, i }: { g: number; i: number }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CycleClock — 경기순환 시계 (4국면 원형 배치 + 현재 위치 바늘)
-//   각도: atan2(inflation, growth). Reflation(우하)→Overheating(우상)→Stagflation(좌상)→Disinflation(좌하)
+//   각도: atan2(inflation, growth). Goldilocks(우하)→Reflation(우상)→Stagflation(좌상)→Deflation(좌하)
 // ─────────────────────────────────────────────────────────────────────────────
 export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: number }) {
   const cx = size / 2, cy = size / 2, R = size * 0.4;

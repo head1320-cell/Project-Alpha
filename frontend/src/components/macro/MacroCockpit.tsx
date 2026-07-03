@@ -42,12 +42,13 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
+// 사분면 명칭 통일 — 백엔드 regime_axes.quadrant와 동일 (Goldilocks/Reflation/Stagflation/Deflation)
 const QUAD_KR: Record<string, string> = {
-  Reflation: "리플레이션 · 성장↑·물가↓", Overheating: "과열 · 성장↑·물가↑",
-  Stagflation: "스태그플레이션 · 성장↓·물가↑", Disinflation: "디스인플레이션 · 성장↓·물가↓",
+  Goldilocks: "골디락스 · 성장↑·물가↓", Reflation: "리플레이션 · 성장↑·물가↑",
+  Stagflation: "스태그플레이션 · 성장↓·물가↑", Deflation: "디플레이션 · 성장↓·물가↓",
 };
 const QUAD_TONE: Record<string, string> = {
-  Reflation: "var(--color-bull)", Overheating: "#ea580c", Stagflation: "var(--color-bear)", Disinflation: "#2563eb",
+  Goldilocks: "var(--color-bull)", Reflation: "#ea580c", Stagflation: "var(--color-bear)", Deflation: "#2563eb",
 };
 
 export interface TransplantPayload { sid: string; name: string; market: Market }
@@ -118,19 +119,27 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
 
   return (
     <div className="mc">
-      {/* ── 고정 레짐 배너 ── */}
+      {/* ── 고정 레짐 배너 — 한국/미국 국면 나란히 (성장×물가 실물지표 축) ── */}
       <div className="mc-banner">
-        <div className="mc-banner-quad" style={{ borderColor: QUAD_TONE[quad] }}>
-          <span className="mc-banner-lbl">현재 국면</span>
-          <b style={{ color: QUAD_TONE[quad] }}>{quad}</b>
-          <em>{QUAD_KR[quad]}</em>
-        </div>
+        {([["KR 국면", regime.markets?.kr ?? regime], ["US 국면", regime.markets?.us ?? null]] as const).map(([lbl, st]) => {
+          if (!st) return null;
+          const q = resolveQuadrant(st);
+          return (
+            <div key={lbl} className="mc-banner-quad" style={{ borderColor: QUAD_TONE[q] }}>
+              <span className="mc-banner-lbl">{lbl}</span>
+              <b style={{ color: QUAD_TONE[q] }}>{q}</b>
+              <em>{QUAD_KR[q]}</em>
+              <em style={{ fontFamily: "var(--t-mono)" }}>
+                성장 <b style={{ color: st.growth_axis >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{st.growth_axis >= 0 ? "+" : ""}{st.growth_axis.toFixed(2)}</b>
+                {" · "}물가 <b style={{ color: st.inflation_axis >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{st.inflation_axis >= 0 ? "+" : ""}{st.inflation_axis.toFixed(2)}</b>
+                {" · "}신뢰도 {(st.confidence * 100).toFixed(0)}%
+              </em>
+            </div>
+          );
+        })}
         <div className="mc-banner-axes">
-          <div className="mc-axis"><span>성장</span><b style={{ color: regime.growth_axis >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{regime.growth_axis >= 0 ? "+" : ""}{regime.growth_axis.toFixed(2)}</b></div>
-          <div className="mc-axis"><span>물가</span><b style={{ color: regime.inflation_axis >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{regime.inflation_axis >= 0 ? "+" : ""}{regime.inflation_axis.toFixed(2)}</b></div>
           <div className="mc-axis"><span>Stress</span><b style={{ color: stressColor(regime.stress_score) }}>{regime.stress_score.toFixed(0)}</b></div>
           <div className="mc-axis"><span>모드</span><b className="mc-axis-mode">{regime.recommended_mode}</b></div>
-          <div className="mc-axis"><span>신뢰도</span><b>{(regime.confidence * 100).toFixed(0)}%</b></div>
         </div>
         <div className="mc-banner-meta">
           <span className={`mc-src ${realData ? "real" : "mock"}`}>{realData ? "실데이터" : "MOCK"}</span>

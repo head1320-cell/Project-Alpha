@@ -61,6 +61,9 @@ export interface RegimeState {
 
   dynamic_risk_free_rate: number | null;
   dynamic_kill_dd_threshold: number | null;
+
+  market?: "kr" | "us";                                     // 분석 대상 시장
+  markets?: { kr: RegimeState; us: RegimeState };           // KR/US 동시 (두 카드용)
 }
 
 export interface HeatmapRow {
