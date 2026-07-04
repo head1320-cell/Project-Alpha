@@ -197,13 +197,45 @@ class FundamentalsStore(DeterministicMockStore):
             raw = self._mock_raw_financials(stock_code, item)
         return self._derive_factors(stock_code, raw)
 
+    @staticmethod
+    def _fs_from_history(stock_code: str, year: int):
+        """financials_history(백필된 재무시계열, 원 단위)를 FinancialStatement로 매핑.
+
+        재무시계열 적재분을 스크리너 펀더멘털 원천으로 재사용 → DART 쿼터 무소모로
+        전종목 팩터 확보. 핵심값(매출·자산) 없으면 None(상장 전 연도 등)."""
+        try:
+            from src.data.dart_client import FinancialStatement
+            from src.data.dart_history import history_snapshot
+            snap = history_snapshot(str(stock_code), str(year), "11011")
+        except Exception:
+            return None
+        if not snap or (snap.get("revenue") is None and snap.get("total_assets") is None):
+            return None
+        fs = FinancialStatement(corp_code="", corp_name="", bsns_year=str(year), reprt_code="11011")
+        for f in ("revenue", "operating_profit", "net_income", "gross_profit",
+                  "total_assets", "total_liabilities", "total_equity",
+                  "current_assets", "current_liabilities", "operating_cf",
+                  "shares_outstanding", "dps"):
+            v = snap.get(f)
+            if v is not None:
+                setattr(fs, f, v)
+        return fs  # is_mock=False 유지 → 실데이터 판별 통과
+
+    def _get_fs(self, dart, corp_code, stock_code, year):
+        """연도 재무 1건 — financials_history(DB) 우선, 없으면 라이브 DART 폴백."""
+        fs = self._fs_from_history(stock_code, year)
+        if fs is not None:
+            return fs
+        if dart is not None and getattr(dart, "is_configured", False) and corp_code:
+            return dart.get_financial_statement_full(corp_code, str(year))
+        return None
+
     def _real_raw_financials(self, stock_code: str, item=None) -> dict | None:
         """
-        DART 실데이터에서 원천 재무 구성 (FFL 팩터용).
-        DART_API_KEY 없거나 조회 실패 시 None 반환 → mock fallback.
+        실 원천 재무 구성 (FFL 팩터용) — financials_history(DB) 우선 → 라이브 DART 폴백.
+        DB·DART 모두 없으면 None → 호출측이 mock(허용 시)/빈값 처리.
 
-        단위: DART는 '원' → 억원으로 변환 (/1e8).
-        성장률 계산용 전년/3년전 재무도 함께 조회.
+        단위: 원 → 억원으로 변환 (/1e8). 성장률 계산용 전년/3년전 재무도 함께 조회.
         """
         try:
             from datetime import datetime
@@ -212,16 +244,11 @@ class FundamentalsStore(DeterministicMockStore):
         except Exception:
             return None
 
-        dart = get_dart_client()  # 공용 인스턴스 (캐시 공유)
-        if not dart.is_configured:
-            return None
-
-        corp_code = get_corp_code(stock_code)
-        if not corp_code:
-            return None
+        dart = get_dart_client()  # 공용 인스턴스 (캐시 공유). DB만 있어도 동작하므로 미설정도 통과.
+        corp_code = get_corp_code(stock_code)  # None이어도 DB 경로는 동작
 
         def _real(fs) -> bool:
-            # 실제 DART 데이터인지 (mock 폴백·빈값 아님)
+            # 실제 데이터인지 (mock 폴백·빈값 아님)
             return fs is not None and not getattr(fs, "is_mock", False) \
                 and fs.revenue is not None and fs.total_assets is not None
 
@@ -229,7 +256,7 @@ class FundamentalsStore(DeterministicMockStore):
         cur_year = datetime.now().year - 1
         fs = None
         for back in range(0, 3):
-            cand = dart.get_financial_statement_full(corp_code, str(cur_year - back))
+            cand = self._get_fs(dart, corp_code, stock_code, cur_year - back)
             if _real(cand):
                 fs = cand
                 cur_year -= back
@@ -237,9 +264,9 @@ class FundamentalsStore(DeterministicMockStore):
         if fs is None:
             return None
 
-        # 전년 / 3년전 (성장률용)
-        fs_prev = dart.get_financial_statement_full(corp_code, str(cur_year - 1))
-        fs_3y = dart.get_financial_statement_full(corp_code, str(cur_year - 3))
+        # 전년 / 3년전 (성장률용) — DB 우선
+        fs_prev = self._get_fs(dart, corp_code, stock_code, cur_year - 1)
+        fs_3y = self._get_fs(dart, corp_code, stock_code, cur_year - 3)
 
         E8 = 1e8  # 원 → 억원
         def to_억(v):
@@ -270,8 +297,9 @@ class FundamentalsStore(DeterministicMockStore):
             mcap = total_equity * 1.2
 
         interest_expense = total_liabilities * 0.03 if total_liabilities else 0
-        # 배당: 실 alotMatter(현금배당성향) 기반 — 미공시면 0(무배당). 날조 0.25×NI 제거.
-        dividend = _real_dividend(dart, corp_code, cur_year, net_income)
+        # 배당: 실 alotMatter(현금배당성향) 기반 — 미공시/DB전용경로면 0(팩터 영속 비차단).
+        dividend = _real_dividend(dart, corp_code, cur_year, net_income) \
+            if (corp_code and getattr(dart, "is_configured", False)) else 0.0
         buyback = 0
 
         # 전년/3년전
