@@ -12,6 +12,7 @@ try:
     print("   _fs_from_history 존재      :", hasattr(FundamentalsStore, "_fs_from_history"))  # DB-우선
     print("   _get_fs 존재               :", hasattr(FundamentalsStore, "_get_fs"))
     import inspect
+
     from src.engine.screener import ValuationScreener
     print("   run(reattach_fundamentals) :", "reattach_fundamentals" in inspect.signature(ValuationScreener.run).parameters)
     import src.data.snapshot_db as sdb
@@ -74,7 +75,7 @@ try:
     raw = st._real_raw_financials(probe)
     print(f"   _real_raw_financials       : {'dict(비어있지않음)' if raw else 'None/빈값'}")
     fac = st._build_factors(probe)
-    print(f"   _build_factors             : {'팩터 {}개'.format(len(fac)) if fac else '빈 dict {} → 영속 안 됨'}")
+    print(f"   _build_factors             : {f'팩터 {len(fac)}개' if fac else '빈 dict {} → 영속 안 됨'}")
     if fac:
         print(f"   샘플 팩터 roe/per          : {fac.get('roe')}, {fac.get('per')}")
 except Exception as e:
