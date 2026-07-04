@@ -91,6 +91,36 @@ def test_backfill_unknown_corp_skipped(mem_engine, corp_map):
     assert stats["no_corp"] == 1 and stats["calls"] == 0
 
 
+def test_backfill_all_listed_flags_fallback_when_master_empty(monkeypatch, mem_engine, corp_map):
+    """마스터 캐시 미비(부팅 경쟁 등)로 SEED 30종목 폴백된 사실을 stats에 남긴다 —
+    호출부가 '오늘은 진짜 완료'와 '경쟁으로 축소됨'을 구분해 재시도 간격을 조절할 수 있게."""
+    import src.data_sync as ds
+    monkeypatch.setattr(ds, "_all_listed_tickers", lambda: [])
+    client = FakeDART()
+    stats = dh.backfill_financials(tickers=None, all_listed=True, years=1,
+                                   engine=mem_engine, client=client)
+    assert stats["fallback_to_seed"] is True
+    assert stats["tickers"] == len(ds.SEED_TICKERS)
+
+
+def test_backfill_all_listed_no_fallback_when_master_present(monkeypatch, mem_engine, corp_map):
+    import src.data_sync as ds
+    monkeypatch.setattr(ds, "_all_listed_tickers", lambda: ["005930", "000660"])
+    client = FakeDART()
+    stats = dh.backfill_financials(tickers=None, all_listed=True, years=1,
+                                   engine=mem_engine, client=client)
+    assert stats["fallback_to_seed"] is False
+    assert stats["tickers"] == 2
+
+
+def test_backfill_progress_cb_reports_per_ticker(mem_engine, corp_map):
+    client = FakeDART()
+    seen = []
+    dh.backfill_financials(tickers=["005930", "000660"], years=1, engine=mem_engine,
+                           client=client, progress_cb=lambda done, total, saved, calls: seen.append((done, total)))
+    assert seen[-1] == (2, 2)   # 마지막 콜백이 전체 완료를 보고
+
+
 def test_history_snapshot_and_ratios(mem_engine):
     dh.ensure_history_table(mem_engine)
     dh.upsert_statement(mem_engine, "005930", make_fs("2023"))

@@ -346,6 +346,24 @@ def _prewarm_etf_bg():
         log.warning(f"ETF 유니버스 prewarm 실패: {e}")
 
 
+def _dart_backfill_sleep_seconds(stats: dict) -> int:
+    """백필 1회 결과에 따른 다음 시도까지 대기(초).
+
+    부팅 시 KIS 마스터 수집과 이 백필이 동시 스레드로 시작되는데, 백필이 먼저 돌면
+    마스터 캐시가 비어 all_listed가 SEED 30종목으로 조용히 축소된다(dart_history.
+    backfill_financials의 fallback_to_seed). 이걸 '오늘은 완료'로 오판해 24시간
+    자면, 마스터가 수 초~수 분 뒤 채워져도 다음날까지 재시도를 안 해 정체된 것처럼
+    보인다(실측: last_fetch가 이틀째 정지) — 그래서 fallback이면 짧게 재시도한다."""
+    import os
+    if not isinstance(stats, dict):
+        return 24 * 3600
+    if stats.get("stopped_at_quota"):
+        return 3 * 3600                                              # 일쿼터 도달 → 리셋 대기
+    if stats.get("fallback_to_seed"):
+        return int(os.getenv("DART_HISTORY_RETRY_SEC", "300") or 300)  # 마스터캐시 경쟁 → 곧 재시도
+    return 24 * 3600                                                  # 실제 완료 → 다음날 증분
+
+
 def _dart_history_backfill_bg():
     """백그라운드(데몬): 전종목 과거 재무 → financials_history 적재 (PIT 펀더멘털 백테스트 원천).
 
@@ -366,10 +384,7 @@ def _dart_history_backfill_bg():
             log.info(f"DART 재무 시계열 백필: {stats}")
             if isinstance(stats, dict) and stats.get("error"):
                 return  # 키 없음/DB 없음 → 종료
-            if isinstance(stats, dict) and stats.get("stopped_at_quota"):
-                time.sleep(3 * 3600)        # 일쿼터 도달 → 리셋 대기 후 이어서
-            else:
-                time.sleep(24 * 3600)        # 완료 → 다음날 증분 재확인
+            time.sleep(_dart_backfill_sleep_seconds(stats))
     except Exception as e:
         log.warning(f"DART 재무 시계열 백필 실패(폴백 유지): {e}")
 
@@ -635,8 +650,19 @@ def _ingest_run(target: str):
                 break
         return out
     if target == "financials":
-        _dart_history_backfill_bg()             # DART 재무 시계열(resume 기반)
-        return {"ok": True}
+        # 무한루프인 _dart_history_backfill_bg()를 그대로 재사용하면 수동 버튼이 영원히
+        # 안 끝나던 버그 — backfill_financials를 1회만 직접 호출(resume 기반이라 안전).
+        from src.data.dart_history import backfill_financials
+        years = int(os.getenv("DART_HISTORY_YEARS", "10") or 10)
+        quarters = os.getenv("DART_HISTORY_QUARTERS", "0") != "0"
+        max_calls = int(os.getenv("DART_HISTORY_MAX_CALLS", "18000") or 18000)
+        st = _INGEST_STATUS.setdefault("financials", {})
+
+        def _cb(done, total, saved, calls, _st=st):
+            _st["progress"] = {"stage": "all_listed", "done": done, "total": total,
+                               "saved": saved, "failures": 0}
+        return backfill_financials(all_listed=True, years=years, include_quarters=quarters,
+                                   max_calls=max_calls, progress_cb=_cb)
     if target == "flows":
         from src.data.kis_flows import sync_investor_flows
         return sync_investor_flows(all_listed=True)

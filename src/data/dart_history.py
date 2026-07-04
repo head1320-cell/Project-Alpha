@@ -123,8 +123,13 @@ def existing_keys(engine) -> set[tuple]:
 def backfill_financials(tickers: list[str] | None = None, all_listed: bool = False,
                         years: int = 10, include_quarters: bool = False,
                         max_calls: int | None = None,
-                        engine=None, client=None) -> dict:
-    """종목×연도(×분기) 재무 백필 — DART 일쿼터 대응 max_calls 분할 + resume."""
+                        engine=None, client=None, progress_cb=None) -> dict:
+    """종목×연도(×분기) 재무 백필 — DART 일쿼터 대응 max_calls 분할 + resume.
+
+    progress_cb(done, total, saved, calls): 종목 1건 처리할 때마다 보고(UI 표면화).
+    fallback_to_seed: all_listed=True인데 마스터 캐시가 비어(부팅 시 수집 경쟁 등) SEED
+    30종목으로 축소됐는지 — 호출부가 '진짜 완료'와 '축소 실행'을 구분해 재시도 간격을
+    조절할 수 있게(짧게 재시도 vs 다음날 증분)."""
     from src.data.dart_client import DARTClient, get_corp_code
     client = client or DARTClient()
     if not client.is_configured:
@@ -135,10 +140,13 @@ def backfill_financials(tickers: list[str] | None = None, all_listed: bool = Fal
         return {"error": True, "message": "DB engine 없음"}
     ensure_history_table(engine)
 
+    fallback_to_seed = False
     if tickers is None:
         if all_listed:
             from src.data_sync import _all_listed_tickers
             tickers = _all_listed_tickers()
+            if not tickers:
+                fallback_to_seed = True
         if not tickers:
             from src.data_sync import SEED_TICKERS
             tickers = [t[0] for t in SEED_TICKERS]
@@ -149,9 +157,9 @@ def backfill_financials(tickers: list[str] | None = None, all_listed: bool = Fal
 
     done = existing_keys(engine)
     stats = {"tickers": len(tickers), "calls": 0, "saved": 0,
-             "skipped": 0, "empty": 0, "no_corp": 0}
+             "skipped": 0, "empty": 0, "no_corp": 0, "fallback_to_seed": fallback_to_seed}
 
-    for tk in tickers:
+    for i, tk in enumerate(tickers):
         corp = None
         corp_missing = False  # corp_code 매핑 실패 — 전부 skip된 종목과 구분(resume 버그 방지)
         for year in year_list:
@@ -182,6 +190,11 @@ def backfill_financials(tickers: list[str] | None = None, all_listed: bool = Fal
                     logger.debug(f"재무 조회 실패 [{tk} {year}/{reprt}]: {e}")
         if stats["saved"] and stats["saved"] % 500 == 0:
             logger.info(f"DART 백필 진행: {stats['saved']:,}건 저장 / {stats['calls']:,}콜")
+        if progress_cb is not None:
+            try:
+                progress_cb(i + 1, len(tickers), stats["saved"], stats["calls"])
+            except Exception:
+                pass
     _HISTORY_CACHE.clear()  # 새 적재분 반영 (파생 팩터 캐시 무효화)
     return stats
 
