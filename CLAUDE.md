@@ -1126,3 +1126,39 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
 2. 일봉 행이 "종목 —"가 아닌 추정치(~2,700)로 표시 + 백테스터(종목) ✓ 복구 확인.
 3. 펀더멘털 적재 실행 → 타깃별 진행 라인에 stage/저장/실패 표시. "DART 일일 한도" 뜨면
    자동 중단된 것 — 내일 재실행 시 캐시로 이어짐(재무시계열과 동시 실행 지양).
+
+---
+
+## 🎯 매크로 추천 — 신뢰도 가중 배분 + market 버그 수정 + 정직화
+
+[배경] 기관 퀀트 관점 크리틱(Goldman Strats/GSAM 경력 가정): "US 신뢰도 27%인데 위험자산
+고비중은 블랙박스", "Kelly 공식 오용 우려", "매크로 데이터 후행성". 코드 검증 후 반영.
+스펙: docs/superpowers/specs/2026-07-03-macro-confidence-allocation-design.md
+
+### 코드 검증 결과
+- **Kelly 지적은 오독**: `s_kelly`는 22전략 중 1개일 뿐이고 `Σ⁻¹μ` long-only + 100% 완전투자
+  정규화(무레버리지) — 팻테일/레버리지 리스크 구조적으로 없음. 라벨만 명확화.
+- **market 버그는 실제**: `macro_recommender.recommend()`가 `RegimeAnalyzer().analyze()`를
+  market 인자 없이 호출 → US 탭 추천이 항상 KR 국면으로 계산되고 있었음.
+- **신뢰도 무반영도 실제**: confidence를 산출만 하고 배분에 전혀 안 씀 — 27%든 80%든 top
+  전략 100%.
+
+### 수정 (3커밋, TDD 8종)
+1. `confidence_overlay(holdings, confidence, max_derisk=0.6)`: cash=(1-conf)*max_derisk,
+   위험자산 비례축소 + 현금성(BIL) 앵커 배정, 합100 정규화. conf≈1이면 원본 불변.
+2. `recommend()`: `analyze(market=mk)`로 연결(버그 수정) + confidence/low_conviction(<0.35)/
+   data_lag_note 반환 + `top.holdings_final`(오버레이 적용)/`cash_overlay_pct`. 랭킹·성과는
+   원 holdings 기준 불변(오버레이는 표시 배분에만).
+3. Kelly desc 정직화 + 프론트(MacroCockpit): 신뢰도%·저확신 배지·holdings_final 표시·
+   data_lag_note.
+
+### 검증
+- mock 라이브: KR=Reflation(신뢰도.23) vs US=Stagflation(신뢰도.26) — market 버그 수정 전엔
+  둘 다 KR로 동일했음. 저확신 → 현금 오버레이 ~44-46% 자동 확인.
+- 702 passed/10 skipped, ruff·tsc 0, next build 17/17.
+
+### 범위 밖(의도적)
+- 전체 배분 MVO/RP 강제 교체 — 이미 22후보에 risk_parity/min_var/max_sharpe/hrp/
+  black_litterman 포함, 사용자가 고르면 1위로 표면화.
+- 국면 히스테리시스/전환비용 페널티, NLP 나우캐스팅 — 신뢰도 가중이 경계 요동을 상당 흡수,
+  나머지는 별도 대형 과제.
