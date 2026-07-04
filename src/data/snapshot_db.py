@@ -131,6 +131,20 @@ def count() -> int:
         return 0
 
 
+def ingested_count() -> int:
+    """factor_snapshot에 ffl: 키로 적재된 종목 수 — 스크리너 유니버스 크기(=적재 진행률).
+    ingested_codes()보다 가벼움(COUNT). 적재 '실제 저장' 카운터의 정직화에 사용."""
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            return int(c.execute(text(
+                f"SELECT COUNT(*) FROM {_TABLE} WHERE cache_key LIKE 'ffl:%'")).scalar() or 0)
+    except Exception:
+        return 0
+
+
 def ingested_codes() -> list[str]:
     """factor_snapshot에 적재된 종목코드 목록 (ffl: 키 기준). 스크리너 '전종목'을
     적재 DB와 연동 — 적재가 늘면 유니버스도 자동으로 늘어남."""
@@ -193,8 +207,12 @@ def ingest_universe(universe: str = "kospi200", progress_cb=None) -> dict:
     codes = resolve_universe(universe)
     sc = ValuationScreener()
     CHUNK = 300  # 평가/보강 상한(400) 미만 → 청크 전부 평가·저장
-    ok = saved = failures = 0
+    ok = failures = 0
     aborted: str | None = None
+    # '저장'을 실제 ffl: 영속 증가분으로 보고(정직). evaluated_actual(평가 아이템 수)을
+    # '저장'으로 쓰면 "저장 2,349인데 유니버스 불변"처럼 오해를 유발했음.
+    base_ffl = ingested_count()
+    last_ffl = base_ffl
     for i in range(0, len(codes), CHUNK):
         # DART 쿼터 확인 — 한도 도달이면 침묵 대신 명시적 중단(성공분은 캐시·DB에 이미 저장됨)
         try:
@@ -209,18 +227,20 @@ def ingest_universe(universe: str = "kospi200", progress_cb=None) -> dict:
             res = sc.run(universe=chunk, filter_ast=None, liquidity_floor="off",
                          limit=len(chunk), no_cap=True)
             ok += res.total_evaluated
-            saved += getattr(res, "evaluated_actual", 0)
             failures += getattr(res, "failures", 0)
+            last_ffl = ingested_count()
             logger.info(f"적재 진행: {min(i + CHUNK, len(codes))}/{len(codes)} ({universe})")
         except Exception as e:
             failures += len(chunk)
             logger.warning(f"적재 청크 실패 [{i}]: {e}")
+        saved = max(0, last_ffl - base_ffl)   # 실제 새로 영속된 종목 수
         if progress_cb is not None:
             try:
                 progress_cb(min(i + CHUNK, len(codes)), len(codes), saved, failures)
             except Exception:
                 pass
-    result = {"universe": universe, "ingested": ok, "saved": saved, "failures": failures,
-              "total": len(codes), "db_rows": count(), "aborted": aborted}
+    newly = max(0, last_ffl - base_ffl)
+    result = {"universe": universe, "ingested": ok, "evaluated": ok, "saved": newly,
+              "failures": failures, "total": len(codes), "db_rows": count(), "aborted": aborted}
     logger.info(f"factor_snapshot 적재 완료: {result}")
     return result
