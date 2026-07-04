@@ -206,17 +206,23 @@ function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
         <div className="mc-card-h">추천 자산배분 <span className="mc-card-sub">{quad} 국면 · 규칙+성과+AI</span></div>
         {recommend?.top ? (
           <div className="mc-reco-mini">
+            {recommend.low_conviction && (
+              <div className="mc-warn" style={{ marginBottom: 6 }}>
+                저확신(신뢰도 {(recommend.confidence * 100).toFixed(0)}%) — 현금성 {recommend.top.cash_overlay_pct.toFixed(0)}%로 배분 확대
+              </div>
+            )}
             <div className="mc-reco-mini-l">
-              <HoldingsDonut holdings={recommend.top.holdings} size={108} />
+              <HoldingsDonut holdings={recommend.top.holdings_final} size={108} />
             </div>
             <div className="mc-reco-mini-r">
               <div className="mc-reco-mini-nm"><b>{recommend.top.name}</b><SignalBadge signal={recommend.top.signal} /></div>
               <div className="mc-reco-mini-stats">
                 <span>적합도 <b>{recommend.top.fit_score.toFixed(0)}</b></span>
                 <span>종합 <b>{recommend.top.composite.toFixed(0)}</b></span>
+                <span>신뢰도 <b>{(recommend.confidence * 100).toFixed(0)}%</b></span>
               </div>
               <div className="mc-reco-mini-hold">
-                {recommend.top.holdings.slice(0, 6).map((h, idx) => (
+                {recommend.top.holdings_final.slice(0, 6).map((h, idx) => (
                   <span key={h.ticker} className="mc-hchip"><i style={{ background: donutColor(idx) }} />{h.us_label} {h.weight}%</span>
                 ))}
               </div>
@@ -464,25 +470,33 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
   if (loading) return <div className="mc-empty-sm">추천 재계산 중…</div>;
   if (!recommend) return <div className="mc-empty-sm">추천 데이터 없음</div>;
   const top = recommend.top;
+  const confPct = (recommend.confidence * 100).toFixed(0);
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">국면 기반 추천 <span className="mc-card-sub">{recommend.regime.quadrant_kr} · Stress {recommend.regime.stress.toFixed(0)}</span></div>
+        <div className="mc-strat-title">
+          국면 기반 추천 <span className="mc-card-sub">{recommend.regime.quadrant_kr} · Stress {recommend.regime.stress.toFixed(0)} · 신뢰도 {confPct}%</span>
+        </div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
+      {recommend.low_conviction && (
+        <div className="mc-warn">
+          저확신 국면(신뢰도 {confPct}%) — 배분에 현금성 {top.cash_overlay_pct.toFixed(0)}%를 자동 편입해 방향성 오류 리스크를 낮췄습니다.
+        </div>
+      )}
       <div className="mc-grid">
         <div className="mc-card span2">
           <div className="mc-card-h">최우선 추천 <SignalBadge signal={top.signal} /></div>
           <div className="mc-reco">
             <div className="mc-reco-l">
-              <HoldingsDonut holdings={top.holdings} size={150} />
+              <HoldingsDonut holdings={top.holdings_final} size={150} />
               <ArcGauge value={top.fit_score} color={sigColor(top.signal)} label="적합도" height={104} />
             </div>
             <div className="mc-reco-r">
               <div className="mc-reco-nm">{top.name}</div>
-              <div className="mc-reco-comp">종합점수 <b>{top.composite.toFixed(0)}</b> / 100</div>
+              <div className="mc-reco-comp">종합점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도 가중 배분(현금 {top.cash_overlay_pct.toFixed(0)}%)</div>
               <div className="mc-reco-holds">
-                {top.holdings.map((h, idx) => (
+                {top.holdings_final.map((h, idx) => (
                   <div key={h.ticker} className="mc-hold-row">
                     <i style={{ background: donutColor(idx) }} />
                     <span className="mc-hold-nm">{h.us_label}</span>
@@ -510,6 +524,7 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
             ))}
           </div>
           <p className="mc-card-note">성과는 각 전략의 현재 비중을 트레일링 12개월 수익률에 적용한 추정치입니다(실 ETF 시세 — 키 없으면 mock). 미래 수익을 보장하지 않습니다.</p>
+          <p className="mc-card-note">{recommend.data_lag_note}</p>
         </div>
       </div>
     </div>

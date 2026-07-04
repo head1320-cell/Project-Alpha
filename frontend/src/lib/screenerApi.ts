@@ -1364,8 +1364,16 @@ export interface MacroStrategies { market: string; as_of: string; strategies: Ta
 export interface RecommendRankItem { id: string; name: string; composite: number; fit_score: number; recent_return_12m: number | null; archetype_kr: string; signal: string }
 export interface MacroRecommend {
   market: string; as_of: string;
-  regime: { quadrant: string; quadrant_kr: string; stress: number; cycle: string };
-  top: { id: string; name: string; signal: string; fit_score: number; composite: number; holdings: TacticalHolding[] };
+  confidence: number;            // 0~1, 국면 분류 신뢰도
+  low_conviction: boolean;       // confidence < 0.35
+  data_lag_note: string;         // 매크로 지표 후행성 안내
+  regime: { quadrant: string; quadrant_kr: string; stress: number; cycle: string; confidence: number };
+  top: {
+    id: string; name: string; signal: string; fit_score: number; composite: number;
+    holdings: TacticalHolding[];         // 원 전략 배분(랭킹 계산 기준)
+    holdings_final: TacticalHolding[];   // 신뢰도 오버레이 적용 — 화면 표시용
+    cash_overlay_pct: number;            // holdings_final 중 현금성(BIL) 비중
+  };
   narrative: string; narrative_source: "rule" | "claude";
   ranking: RecommendRankItem[];
 }

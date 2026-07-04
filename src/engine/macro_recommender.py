@@ -60,7 +60,8 @@ def confidence_overlay(holdings: list, confidence: float, max_derisk: float = 0.
             continue
         out.append({**h, "weight": round(float(h.get("weight", 0.0)) * keep, 2)})
     anchor_w += cash * 100.0
-    out.append({"us_ticker": anchor, "us_label": anchor_label, "weight": round(anchor_w, 2)})
+    out.append({"ticker": anchor, "label": anchor_label,
+                "us_ticker": anchor, "us_label": anchor_label, "weight": round(anchor_w, 2)})
     total = sum(h["weight"] for h in out)   # 반올림 잔차 → 합 100 정규화
     if total > 0 and abs(total - 100.0) > 1e-6:
         k = 100.0 / total

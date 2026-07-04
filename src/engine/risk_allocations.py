@@ -392,5 +392,5 @@ RISK_STRATEGIES: list[tuple] = [
     ("max_sharpe", "최대 샤프", "탄젠시 포트폴리오 (Ledoit-Wolf 수축)", "optim", s_max_sharpe),
     ("black_litterman", "블랙-리터만", "시장균형 + 국면 뷰 결합 (Goldman)", "optim", s_black_litterman),
     ("managed_futures", "매니지드 퓨처스", "시계열 모멘텀 추세추종 (AQR/CTA, long-flat)", "trend", s_managed_futures),
-    ("kelly", "켈리 성장최적", "Σ⁻¹μ 성장최적 비중 (long-only)", "sizing", s_kelly),
+    ("kelly", "켈리 성장최적", "Σ⁻¹μ 성장최적 · long-only·완전투자(무레버리지) — 22전략 중 1개", "sizing", s_kelly),
 ]
