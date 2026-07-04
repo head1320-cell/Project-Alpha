@@ -427,6 +427,7 @@ class ValuationScreener:
         liquidity_floor=None,       # V3-P1.5: 유동성 게이트 ("standard"|"off"|dict, 기본 standard)
         progress_cb=None,           # 진행 콜백 (done, total, misses) — SSE 스트리밍 진행표시용
         no_cap: bool = False,       # True면 미적재 평가 상한 해제 (ingest 배치 전용)
+        reattach_fundamentals: bool = False,  # True면 복원(item:) 종목도 펀더멘털 재주입·재저장
     ) -> ScreenerResult:
         """
         전체 파이프라인:
@@ -531,7 +532,7 @@ class ValuationScreener:
         floor = resolve_floor(liquidity_floor if liquidity_floor is not None else "standard")
         items, self._liquidity_stats = apply_liquidity_gate(items, floor)
 
-        # 신규 평가 종목만 시세보강·팩터주입 (적재 복원분은 이미 완비 → 즉시)
+        # 시세보강(KIS 실호출)은 신규 평가분만 — 복원분은 이미 시세 완비.
         fresh_set = {it.stock_code for it in fresh_items}
         fresh_in_items = [it for it in items if it.stock_code in fresh_set]
         if fresh_in_items:
@@ -539,17 +540,25 @@ class ValuationScreener:
                 self._enrich_kis_quotes(fresh_in_items)
             except Exception as e:
                 logger.debug(f"KIS 시세 보강 실패 (mock 유지): {e}")
+
+        # 펀더멘털·팩터 주입 + 저장:
+        #   기본은 신규 평가분만. ingest 재적재(reattach_fundamentals=True)면 복원분 포함 전체 —
+        #   ★핵심★ 과거 빈 팩터로 item:만 저장되고 ffl:은 없던 종목이, 재실행 시 to_eval에서
+        #   빠져(복원) 펀더멘털 주입이 통째로 스킵되던 문제 해소. DB(financials_history) 기반이라
+        #   DART 쿼터 무소모로 ffl:을 채워 스크리너 유니버스가 실제로 확장된다.
+        fund_targets = items if reattach_fundamentals else fresh_in_items
+        if fund_targets:
             try:
                 from src.data.fundamentals_store import attach_fundamentals
-                attach_fundamentals(fresh_in_items)
+                attach_fundamentals(fund_targets)
                 from src.data.price_factors_store import attach_price_factors
-                attach_price_factors(fresh_in_items)
+                attach_price_factors(fund_targets)
                 from src.data.extended_factors_store import attach_extended_factors
-                attach_extended_factors(fresh_in_items)
+                attach_extended_factors(fund_targets)
             except Exception as e:
                 logger.debug(f"펀더멘털 주입 실패: {e}")
-            # 신규 평가분을 item:CODE로 저장 → 다음 조회부터 즉시 서빙(로딩 없음)
-            self._store_items(fresh_in_items)
+            # item:CODE 저장 → 다음 조회부터 즉시 서빙(재적재 시 최신 펀더멘털로 갱신)
+            self._store_items(fund_targets)
 
         # 4. 필터 적용 — filter_ast(M1) 우선, 없으면 기존 ScreenerFilters (하위호환)
         if filter_ast is not None and not filter_ast.is_empty():

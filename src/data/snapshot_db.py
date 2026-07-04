@@ -225,7 +225,7 @@ def ingest_universe(universe: str = "kospi200", progress_cb=None) -> dict:
         chunk = codes[i:i + CHUNK]
         try:
             res = sc.run(universe=chunk, filter_ast=None, liquidity_floor="off",
-                         limit=len(chunk), no_cap=True)
+                         limit=len(chunk), no_cap=True, reattach_fundamentals=True)
             ok += res.total_evaluated
             failures += getattr(res, "failures", 0)
             last_ffl = ingested_count()
