@@ -121,6 +121,61 @@ def test_db_served_path_makes_no_network_call(monkeypatch):
     assert fac and fac.get("dividend_yield") is not None
 
 
+def test_loss_making_company_no_crash_derive():
+    """적자기업(음수 eps, 3년전 흑자) → (음수)**(1/3)=복소수로 round() 크래시하던 회귀 방지.
+
+    ★ 실데이터 적자기업에서 _derive_factors가 예외를 던져 attach_fundamentals가
+    청크 중간에 중단 → 뒤 종목 ffl:이 통째로 누락(정직 카운터 '저장 1')된 진짜 원인.
+    mock eps는 항상 양수라 그동안 미검출됨."""
+    st = FundamentalsStore()
+    raw = st._mock_raw_financials("900010")
+    raw["eps"] = -500.0        # 당기 적자
+    raw["eps_3y_ago"] = 800.0  # 3년전 흑자 → 비율 음수 → 3제곱근 복소수
+    raw["net_income"] = -100.0
+    fac = st._derive_factors("900010", raw)   # 이전엔 TypeError: complex __round__
+    assert fac                                 # 팩터 생성됨(빈 dict 아님)
+    assert fac.get("eps_cagr_3y") is None      # 부호전환 → CAGR 미정의(정직)
+
+
+def test_loss_making_company_no_crash_build(monkeypatch):
+    """end-to-end: 적자 완전연도 종목도 _build_factors가 팩터를 만든다(ffl: 영속 가능)."""
+    cy = datetime.now().year - 1
+    by_year = {
+        str(cy): _snap(revenue=900e8, operating_profit=-30e8, net_income=-50e8,   # 당기 적자
+                       total_assets=1900e8, total_liabilities=800e8, total_equity=1100e8,
+                       current_assets=700e8, current_liabilities=400e8, operating_cf=-20e8),
+        str(cy - 3): _snap(revenue=1200e8, operating_profit=150e8, net_income=120e8,  # 3년전 흑자
+                           total_assets=2100e8, total_liabilities=900e8, total_equity=1200e8),
+    }
+    _install(monkeypatch, by_year)
+    st = FundamentalsStore()
+    fac = st._build_factors("900005")          # 이전엔 TypeError
+    assert fac and fac.get("roe") is not None   # 나머지 팩터 정상
+    assert fac.get("eps_cagr_3y") is None
+
+
+def test_attach_fundamentals_isolates_bad_code(monkeypatch):
+    """한 종목 계산이 예외를 던져도 나머지 종목 주입은 계속(배치 격리)."""
+    import src.data.fundamentals_store as fsmod
+
+    class _It:
+        def __init__(self, code):
+            self.stock_code = code
+    store = fsmod.FundamentalsStore.get_default()
+    monkeypatch.setattr(store, "prime", lambda keys: None)
+    store._cache["ffl:AAA"] = (0, {})  # in-cache로 표시해 live-cap 무관하게 진입
+
+    def _gf(code, it=None):
+        if code == "BBB":
+            raise ValueError("boom")
+        return {"roe": 1.0}
+    monkeypatch.setattr(store, "get_factors", _gf)
+    items = [_It("AAA"), _It("BBB"), _It("CCC")]
+    n = fsmod.attach_fundamentals(items)
+    assert n == 2                      # AAA·CCC 주입, BBB만 건너뜀(중단 아님)
+    assert getattr(items[2], "roe", None) == 1.0   # BBB 예외 후에도 CCC 처리됨
+
+
 def test_no_usable_year_returns_none_honest(monkeypatch):
     """모든 연도가 이익·자본 결측이면 정직하게 None(합성 금지) — 경계 고정."""
     cy = datetime.now().year - 1

@@ -1221,3 +1221,22 @@ GCP 진단(diag_fundamentals.py)이 `get_corp_code`의 corpCode.xml(수 MB) **�
 - diag: corp_code 맵 1회 프리워밍(메시지) → 루프 중 멈춤 방지. 실패해도 DB 경로 동작.
 - tests/test_fundamentals_partial_year.py +1: DB 서빙 시 corp_code/라이브배당 **호출 0** 검증(BOOM 가드).
 - 검증: 724 passed / 10 skipped, ruff 통과.
+
+### ★진짜 근본 원인★ 적자기업 CAGR 복소수 크래시 (진단이 확정)
+diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
+`TypeError: type complex doesn't define __round__ method` @ `_derive_factors`의
+`eps_cagr_3y = pct((eps/eps_3y_ago or 1)**(1/3) - 1)`.
+- **원인**: 적자기업은 당기 eps<0, 3년전 eps>0 → 비율<0 → **(음수)**(1/3)=복소수** →
+  `round(복소수)` 크래시. mock eps는 항상 양수라 그동안 미검출(테스트 통과했던 이유).
+- **파급**: ingest에서 `attach_fundamentals`가 이 예외로 **청크 중간에 중단** → screener의
+  `except→logger.debug`가 삼킴 → 그 뒤 종목 ffl:이 통째로 누락. item:은 이후 `_store_items`가
+  저장 → item:(2,806) > ffl:(2,089) 비대칭 + 정직 카운터 "저장 1"의 진짜 정체.
+- **수정** (src/data/fundamentals_store.py):
+  1. revenue_cagr_3y·eps_cagr_3y: 비율>0일 때만 3제곱근(부호전환이면 CAGR 미정의 → None, 정직).
+  2. `attach_fundamentals`: **종목별 try/except 격리** — 한 종목 예외가 청크 전체를 날리지
+     않게(방어). logger.exception으로 트레이스 보존.
+- tests/test_fundamentals_partial_year.py +3: 적자 _derive/_build 무크래시, 배치 격리.
+- 검증: 727 passed / 10 skipped, ruff 통과.
+
+주의(교훈): mock은 항상 흑자·양수라 실데이터 적자·부호전환 경로를 못 밟는다. 파생식에
+분수승/로그/제곱근이 있으면 음수 입력을 반드시 가드(적자기업 실데이터에서만 터짐).

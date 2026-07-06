@@ -514,8 +514,13 @@ class FundamentalsStore(DeterministicMockStore):
         revenue_growth_yoy = pct(safe_div(rev - r["revenue_prev"], abs(r["revenue_prev"])))
         op_growth_yoy = pct(safe_div(op - r["op_prev"], abs(r["op_prev"])))
         eps_growth_yoy = pct(eps_growth)
-        revenue_cagr_3y = pct((safe_div(rev, r["revenue_3y_ago"]) or 1) ** (1/3) - 1) if r["revenue_3y_ago"] > 0 else None
-        eps_cagr_3y = pct((safe_div(r["eps"], r["eps_3y_ago"]) or 1) ** (1/3) - 1) if r["eps_3y_ago"] > 0 else None
+        # CAGR: 비율이 양수일 때만 3제곱근이 실수. 부호 전환(적자→흑자/흑자→적자)이면
+        #   비율<0 → (음수)**(1/3)=복소수 → round() 크래시. 실데이터 적자기업에서 터지던
+        #   버그(mock eps는 항상 양수라 미검출) → 비율≤0이면 CAGR 미정의로 None(정직).
+        _rev_ratio = safe_div(rev, r["revenue_3y_ago"])
+        revenue_cagr_3y = pct(_rev_ratio ** (1/3) - 1) if (r["revenue_3y_ago"] > 0 and _rev_ratio and _rev_ratio > 0) else None
+        _eps_ratio = safe_div(r["eps"], r["eps_3y_ago"])
+        eps_cagr_3y = pct(_eps_ratio ** (1/3) - 1) if (r["eps_3y_ago"] > 0 and _eps_ratio and _eps_ratio > 0) else None
         price_momentum_12_1 = round(self._normal(stock_code, "mom121", mu=8, sigma=22), 1)
         pead_score = round(self._normal(stock_code, "pead", mu=0.2, sigma=1.0), 2)
 
@@ -683,7 +688,13 @@ def attach_fundamentals(items: list) -> int:
             if live >= max_live:
                 continue  # 한도 초과: 미적재 종목은 이번엔 스킵 (ingest 후 표시)
             live += 1
-        factors = store.get_factors(code, it)
+        # 종목별 격리 — 한 종목 계산이 예외를 던져도 청크 전체(뒤 종목들)의 주입·영속이
+        # 중단되지 않게. (적자기업 CAGR 크래시처럼 한 건이 배치를 통째로 날리던 문제 방어)
+        try:
+            factors = store.get_factors(code, it)
+        except Exception:
+            logger.exception(f"펀더멘털 계산 실패 [{code}] — 이 종목만 건너뜀")
+            continue
         for fid, val in factors.items():
             if not fid.startswith("_"):
                 setattr(it, fid, val)
