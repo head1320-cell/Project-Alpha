@@ -219,6 +219,13 @@ class FundamentalsStore(DeterministicMockStore):
             v = snap.get(f)
             if v is not None:
                 setattr(fs, f, v)
+        # 회계 항등식으로 결측 보완(정확 — 날조 아님): 자본총계=자산총계-부채총계.
+        # DART 일부 공시가 자본총계 라인을 누락(자산·부채만) → 자본 결측만으로 팩터 전체가
+        # 탈락하던 것을 방지. 역방향(부채=자산-자본)도 동일.
+        if fs.total_equity is None and fs.total_assets is not None and fs.total_liabilities is not None:
+            fs.total_equity = fs.total_assets - fs.total_liabilities
+        if fs.total_liabilities is None and fs.total_assets is not None and fs.total_equity is not None:
+            fs.total_liabilities = fs.total_assets - fs.total_equity
         return fs  # is_mock=False 유지 → 실데이터 판별 통과
 
     def _get_fs(self, dart, corp_code, stock_code, year):
@@ -247,17 +254,21 @@ class FundamentalsStore(DeterministicMockStore):
         dart = get_dart_client()  # 공용 인스턴스 (캐시 공유). DB만 있어도 동작하므로 미설정도 통과.
         corp_code = get_corp_code(stock_code)  # None이어도 DB 경로는 동작
 
-        def _real(fs) -> bool:
-            # 실제 데이터인지 (mock 폴백·빈값 아님)
-            return fs is not None and not getattr(fs, "is_mock", False) \
-                and fs.revenue is not None and fs.total_assets is not None
+        def _complete(fs) -> bool:
+            # 팩터 계산에 필요한 핵심 5필드가 모두 실측(mock·빈값 아님)인 '완전한' 연도.
+            # ★ 최신 연도가 조기·부분 공시(매출·자산만)면 여기서 걸러 직전 완전연도를 쓴다 →
+            #   과거엔 부분연도를 선택하고 5필드 게이트에서 탈락해 유니버스가 정체됐음.
+            return fs is not None and not getattr(fs, "is_mock", False) and all(
+                getattr(fs, k, None) is not None for k in
+                ("revenue", "operating_profit", "net_income", "total_assets", "total_equity"))
 
-        # 최신 결산연도부터 최대 3개 연도 후행 탐색 (미공시면 한 해씩 뒤로)
+        # 최신 결산연도부터 최대 8개 연도 후행 탐색 — 재무시계열 10년 적재분을 활용해
+        # '완전한' 연도를 찾는다(미공시·부분공시면 한 해씩 뒤로). 없으면 정직하게 None.
         cur_year = datetime.now().year - 1
         fs = None
-        for back in range(0, 3):
+        for back in range(0, 8):
             cand = self._get_fs(dart, corp_code, stock_code, cur_year - back)
-            if _real(cand):
+            if _complete(cand):
                 fs = cand
                 cur_year -= back
                 break

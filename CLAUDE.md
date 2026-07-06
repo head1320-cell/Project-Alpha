@@ -1162,3 +1162,50 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
   black_litterman 포함, 사용자가 고르면 1위로 표면화.
 - 국면 히스테리시스/전환비용 페널티, NLP 나우캐스팅 — 신뢰도 가중이 경계 요동을 상당 흡수,
   나머지는 별도 대형 과제.
+
+---
+
+## 🔧 펀더멘털 적재 정체 근본 원인 — 부분연도/자본결측 탈락 (유니버스 ~40% 고착 해소)
+
+[증상] e2-standard-4 재배포 후 펀더멘털 적재를 눌러도 유니버스가 재무시계열 종목수
+(~2,562)까지 안 차고 ~40%(ffl: 1,996)에서 멈춤. 정직 카운터 "factors 완료 all_listed
+2,350/2,350 (저장 1)". financials_history엔 재무가 있는데 ffl:(팩터)이 안 생김.
+
+### 진단 (스모킹건: item: 2,805 > ffl: 1,996)
+- item:(ScreenerItem 스냅샷)은 무조건 저장되는데 ffl:(팩터)만 안 생기는 비대칭 = 809종목이
+  `_store_items`엔 들어갔지만 `get_factors`가 **빈 dict {}** 반환 → `cached()`가 truthy만
+  영속하므로 ffl: 미기록. `_build_factors`가 {}를 반환한 것.
+- `_build_factors`가 {} 반환 = `_real_raw_financials`가 None (운영 모드, 합성 금지). 원인 2가지:
+  1. **부분연도 탈락**: `_real_raw_financials`가 최신 결산연도부터 3년만 훑고, 첫 "매출+자산"
+     연도를 선택한 뒤 5핵심필드(매출·영업이익·순이익·자산·자본) 엄격 게이트에서 탈락. 오늘
+     시점 2025 사업보고서가 조기·부분 공시(매출·자산만, 순이익 미기재)면 2025를 선택하고
+     탈락 — 정작 2024는 완전한데도 못 씀.
+  2. **자본총계 결측**: DART 일부 공시가 자본총계 라인 누락(자산·부채만) → total_equity=None
+     → 5필드 게이트 탈락. 회계 항등식(자본=자산-부채)으로 정확 복구 가능한데 안 함.
+- 단독 진단(`_build_factors("450330")`)이 65팩터로 성공했던 건 450330이 우연히 완전연도를
+  가진 종목이라서 — 부분연도/자본결측 종목은 조용히 {}로 탈락(실패 0, 저장 0).
+
+### 수정 (src/data/fundamentals_store.py, TDD)
+- `_fs_from_history`: 매핑 후 **회계 항등식 보완** — 자본 결측이면 자산-부채, 부채 결측이면
+  자산-자본 (정확값, 날조 아님).
+- `_real_raw_financials`: 3년→**8년** 후행 탐색 + 선택 기준을 "매출+자산"→**완전연도**(5핵심
+  필드 모두 실측)로 강화. 최신 부분연도를 건너뛰고 직전 완전연도를 사용. 완전연도 없으면
+  정직하게 None(합성 금지 유지).
+- tests/test_fundamentals_partial_year.py (3): 부분최신연도→직전완전연도 선택, 자본 항등식
+  복구, 무-완전연도→정직 None.
+
+### 정직한 잔여 (별도 과제)
+- **금융업(은행·보험·지주)**: 손익계산서에 "매출액" 라인이 없고 영업수익/이자수익만 → DART
+  파서가 revenue=None → 완전연도 없음으로 잔존 탈락. 매출 정의 확장이 필요한 소수 버킷.
+  scripts/diag_fundamentals.py가 이 잔여를 `financial_no_revenue`로 분류·계량.
+
+### 검증
+- 723 passed / 10 skipped (신규 3), ruff 통과.
+- scripts/diag_fundamentals.py 확장: 미충족 표본에 싱글턴 `get_factors` 실경로로 ffl: 영속
+  증가분 + 미복구 원인 분류(recovered/financial_no_revenue/no_usable_year) 출력.
+
+### GCP 런북 (사용자)
+1. 재배포 후 `docker compose exec backend python scripts/diag_fundamentals.py` —
+   6)의 "ffl: 실제 영속 증가분"이 0보다 크면 수정 유효.
+2. Data Infra "펀더멘털" 재적재 → 유니버스가 재무시계열 종목수(~2,562)까지 차오름.
+   (금융업 소수는 잔존 — 정직 한계, 위 진단의 financial_no_revenue 수치로 확인)

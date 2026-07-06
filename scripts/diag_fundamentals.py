@@ -90,6 +90,62 @@ try:
     print("  ", dart_usage())
 except Exception as e:
     print("   ERR:", e)
+
 print("=" * 70)
-print("진단 끝. 4)에서 history_snapshot='데이터 있음'인데 _build_factors가 '빈 dict'면")
-print("→ DB 매핑/파싱 문제. history_snapshot='없음'이면 → 티커 포맷/연도 불일치.")
+print("6) ★수정 효과★ 미충족 종목 표본에 실제 적재 경로(get_factors)로 팩터가 생기는지")
+print("   (완전연도 탐색+회계항등식 수정 반영 확인. buckets = 왜 비었었나 분류)")
+try:
+    import src.data.snapshot_db as sdb
+    from src.data.fundamentals_store import FundamentalsStore
+    store = FundamentalsStore.get_default()  # ingest와 동일한 싱글턴 경로
+    sample = [t for t in tickers_fh if t not in ffl_codes][:40]
+    print(f"   표본(미충족 종목): {len(sample)}개")
+    base = sdb.ingested_count()
+    built = empty = 0
+    buckets = {"recovered_complete_year": 0, "financial_no_revenue": 0,
+               "no_usable_year": 0}
+    for code in sample:
+        try:
+            raw = store._real_raw_financials(code)
+        except Exception:
+            raw = None
+        if raw is not None:
+            buckets["recovered_complete_year"] += 1
+        else:
+            # 왜 여전히 None인가 — 연도별 필드 스캔으로 잔여 원인 분류
+            rev_seen = eq_or_ni_seen = False
+            for y in range(2025, 2017, -1):
+                try:
+                    from src.data.dart_history import history_snapshot
+                    s = history_snapshot(str(code), str(y), "11011")
+                except Exception:
+                    s = None
+                if not s:
+                    continue
+                if s.get("revenue") is not None:
+                    rev_seen = True
+                if s.get("net_income") is not None or s.get("total_equity") is not None:
+                    eq_or_ni_seen = True
+            if eq_or_ni_seen and not rev_seen:
+                buckets["financial_no_revenue"] += 1   # 금융업 등 매출액 라인 부재(정직 잔여)
+            else:
+                buckets["no_usable_year"] += 1
+        # 싱글턴 get_factors — ingest가 실제로 밟는 영속 경로
+        fac = store.get_factors(code, None)
+        if fac:
+            built += 1
+        else:
+            empty += 1
+    after = sdb.ingested_count()
+    print(f"   get_factors 비어있지않음: {built} / 빈 dict: {empty}")
+    print(f"   ffl: 실제 영속 증가분   : {after - base}  (이게 0보다 크면 수정으로 유니버스 확장됨)")
+    print(f"   미복구 원인 분류        : {buckets}")
+    print("   → recovered_complete_year 多 = 수정 효과. financial_no_revenue = 금융업(정직 잔여, 별도 과제).")
+except Exception as e:
+    import traceback
+    print("   ERR:", e)
+    traceback.print_exc()
+
+print("=" * 70)
+print("진단 끝. 6)의 'ffl: 실제 영속 증가분'이 표본에서 0보다 크면 수정이 유효 →")
+print("전체 재적재(Data Infra '펀더멘털' 버튼) 시 유니버스가 재무시계열 종목수까지 차오름.")
