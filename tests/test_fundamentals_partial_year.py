@@ -83,6 +83,44 @@ def test_equity_derived_from_accounting_identity(monkeypatch):
     assert fac and fac.get("pbr") is not None
 
 
+def test_db_served_path_makes_no_network_call(monkeypatch):
+    """DB가 서빙하면 corp_code 다운로드·라이브 배당 호출 0 — 재배포 직후 적재 정체 방지.
+
+    배당은 DB 적재 dps로 산출(라이브 get_dividend_info 미호출)."""
+    cy = datetime.now().year - 1
+    by_year = {
+        str(cy): _snap(revenue=900e8, operating_profit=120e8, net_income=90e8,
+                       total_assets=1900e8, total_liabilities=800e8, total_equity=1100e8,
+                       current_assets=700e8, current_liabilities=400e8, operating_cf=100e8,
+                       shares_outstanding=5000, dps=300.0),  # dps=원/주, shares=만주
+        str(cy - 1): _snap(revenue=850e8, operating_profit=110e8, net_income=85e8,
+                           total_assets=1850e8, total_liabilities=780e8, total_equity=1070e8),
+    }
+    import src.data.dart_client as dc
+    import src.data.dart_history as dh
+    monkeypatch.setattr(dh, "history_snapshot",
+                        lambda t, y, r, engine=None: by_year.get(str(y)))
+
+    def _boom_corp(*a, **k):
+        raise AssertionError("corp_code 다운로드 호출됨 — DB 서빙 경로에서 네트워크 발생")
+
+    class _Dart:
+        is_configured = True        # 설정돼 있어도 DB가 서빙하면 corp_code 불필요
+
+        def get_dividend_info(self, *a, **k):
+            raise AssertionError("라이브 배당 호출됨 — DB dps로 대체됐어야 함")
+    monkeypatch.setattr(dc, "get_corp_code", _boom_corp)
+    monkeypatch.setattr(dc, "get_dart_client", lambda: _Dart())
+
+    st = FundamentalsStore()
+    raw = st._real_raw_financials("900004")     # BOOM 없이 통과해야 함
+    assert raw is not None
+    # 배당(억) = dps 300 × shares 5000(만주) / 1e4 = 150억
+    assert abs(raw["dividend"] - 300.0 * 5000 / 1e4) < 1e-6
+    fac = st._build_factors("900004")
+    assert fac and fac.get("dividend_yield") is not None
+
+
 def test_no_usable_year_returns_none_honest(monkeypatch):
     """모든 연도가 이익·자본 결측이면 정직하게 None(합성 금지) — 경계 고정."""
     cy = datetime.now().year - 1

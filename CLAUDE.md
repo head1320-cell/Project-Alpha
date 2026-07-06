@@ -1209,3 +1209,15 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
    6)의 "ffl: 실제 영속 증가분"이 0보다 크면 수정 유효.
 2. Data Infra "펀더멘털" 재적재 → 유니버스가 재무시계열 종목수(~2,562)까지 차오름.
    (금융업 소수는 잔존 — 정직 한계, 위 진단의 financial_no_revenue 수치로 확인)
+
+### 후속: 적재 속도·정체 방지 — DB 전용 핫패스 (진단 로그로 확인된 2차 병목)
+GCP 진단(diag_fundamentals.py)이 `get_corp_code`의 corpCode.xml(수 MB) **라이브 다운로드**에서
+멈춤. 원인은 `_real_raw_financials`가 (a) corp_code를 **선(先) 조회**(DB 서빙 종목도 불필요),
+(b) 종목마다 **라이브 배당 호출**(`_real_dividend`→`get_dividend_info`)을 하던 것. 완전연도 수정으로
+게이트를 통과하는 종목이 늘자 이 두 비용이 종목당 네트워크로 드러남(재배포 직후 corp 맵 미캐시 시 정체).
+- `_get_fs`: corp_code **지연 조회**(DB 미스 + DART 설정 시에만) + 성장연도(전년/3년전)는 `db_only=True`로
+  네트워크 금지(근사 폴백 존재). → DB로 서빙되는 종목은 corpCode.xml 다운로드 0.
+- 배당: 라이브 호출 제거 → **DB 적재 dps**(주당배당금)×발행주식수로 산출(정직, 쿼터·지연 0). 미적재면 0.
+- diag: corp_code 맵 1회 프리워밍(메시지) → 루프 중 멈춤 방지. 실패해도 DB 경로 동작.
+- tests/test_fundamentals_partial_year.py +1: DB 서빙 시 corp_code/라이브배당 **호출 0** 검증(BOOM 가드).
+- 검증: 724 passed / 10 skipped, ruff 통과.

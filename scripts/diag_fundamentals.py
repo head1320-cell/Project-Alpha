@@ -98,6 +98,15 @@ try:
     import src.data.snapshot_db as sdb
     from src.data.fundamentals_store import FundamentalsStore
     store = FundamentalsStore.get_default()  # ingest와 동일한 싱글턴 경로
+    # corp_code 맵 1회 프리워밍(최초 다운로드 ~30초일 수 있음 — 기다려주세요). 수정으로
+    # DB 서빙 종목은 이 맵이 필요 없지만, 완전 DB연도가 없는 잔여 종목이 라이브 DART로
+    # 폴백할 때만 사용 → 여기서 미리 채워 루프 중 멈춤을 방지. 실패해도 DB 경로는 동작.
+    print("   corp_code 맵 프리워밍 중(최초 1회 ~30초, 기다려주세요)...", flush=True)
+    try:
+        from src.data.dart_client import _load_full_corp_map
+        print(f"   corp_code 맵: {len(_load_full_corp_map())}개")
+    except Exception as e:
+        print(f"   corp_code 맵 프리워밍 실패(무시, DB 경로는 동작): {e}")
     sample = [t for t in tickers_fh if t not in ffl_codes][:40]
     print(f"   표본(미충족 종목): {len(sample)}개")
     base = sdb.ingested_count()

@@ -228,13 +228,23 @@ class FundamentalsStore(DeterministicMockStore):
             fs.total_liabilities = fs.total_assets - fs.total_equity
         return fs  # is_mock=False 유지 → 실데이터 판별 통과
 
-    def _get_fs(self, dart, corp_code, stock_code, year):
-        """연도 재무 1건 — financials_history(DB) 우선, 없으면 라이브 DART 폴백."""
+    def _get_fs(self, dart, stock_code, year, db_only=False):
+        """연도 재무 1건 — financials_history(DB) 우선, 없으면 라이브 DART 폴백.
+
+        corp_code는 DB 미스 + DART 설정 시에만 지연 조회 → DB로 서빙되는 종목은
+        corpCode.xml(수 MB) 다운로드 없이 즉시 반환. 콜드 프로세스·재배포 직후
+        전종목이 corp_code 다운로드에 묶여 적재가 느려지던 것을 방지.
+        db_only=True(성장연도용): 근사 폴백이 있으므로 네트워크 금지."""
         fs = self._fs_from_history(stock_code, year)
         if fs is not None:
             return fs
-        if dart is not None and getattr(dart, "is_configured", False) and corp_code:
-            return dart.get_financial_statement_full(corp_code, str(year))
+        if db_only:
+            return None
+        if dart is not None and getattr(dart, "is_configured", False):
+            from src.data.dart_client import get_corp_code
+            corp_code = get_corp_code(stock_code)
+            if corp_code:
+                return dart.get_financial_statement_full(corp_code, str(year))
         return None
 
     def _real_raw_financials(self, stock_code: str, item=None) -> dict | None:
@@ -247,12 +257,11 @@ class FundamentalsStore(DeterministicMockStore):
         try:
             from datetime import datetime
 
-            from src.data.dart_client import get_corp_code, get_dart_client
+            from src.data.dart_client import get_dart_client
         except Exception:
             return None
 
         dart = get_dart_client()  # 공용 인스턴스 (캐시 공유). DB만 있어도 동작하므로 미설정도 통과.
-        corp_code = get_corp_code(stock_code)  # None이어도 DB 경로는 동작
 
         def _complete(fs) -> bool:
             # 팩터 계산에 필요한 핵심 5필드가 모두 실측(mock·빈값 아님)인 '완전한' 연도.
@@ -267,7 +276,7 @@ class FundamentalsStore(DeterministicMockStore):
         cur_year = datetime.now().year - 1
         fs = None
         for back in range(0, 8):
-            cand = self._get_fs(dart, corp_code, stock_code, cur_year - back)
+            cand = self._get_fs(dart, stock_code, cur_year - back)
             if _complete(cand):
                 fs = cand
                 cur_year -= back
@@ -275,9 +284,9 @@ class FundamentalsStore(DeterministicMockStore):
         if fs is None:
             return None
 
-        # 전년 / 3년전 (성장률용) — DB 우선
-        fs_prev = self._get_fs(dart, corp_code, stock_code, cur_year - 1)
-        fs_3y = self._get_fs(dart, corp_code, stock_code, cur_year - 3)
+        # 전년 / 3년전 (성장률용) — DB 전용(네트워크 금지, 근사 폴백 존재)
+        fs_prev = self._get_fs(dart, stock_code, cur_year - 1, db_only=True)
+        fs_3y = self._get_fs(dart, stock_code, cur_year - 3, db_only=True)
 
         E8 = 1e8  # 원 → 억원
         def to_억(v):
@@ -308,9 +317,6 @@ class FundamentalsStore(DeterministicMockStore):
             mcap = total_equity * 1.2
 
         interest_expense = total_liabilities * 0.03 if total_liabilities else 0
-        # 배당: 실 alotMatter(현금배당성향) 기반 — 미공시/DB전용경로면 0(팩터 영속 비차단).
-        dividend = _real_dividend(dart, corp_code, cur_year, net_income) \
-            if (corp_code and getattr(dart, "is_configured", False)) else 0.0
         buyback = 0
 
         # 전년/3년전
@@ -321,6 +327,11 @@ class FundamentalsStore(DeterministicMockStore):
         ni_3y_ago = to_억(fs_3y.net_income) if (fs_3y and fs_3y.net_income) else (net_income * 0.78)
 
         shares = fs.shares_outstanding or 10000  # 만주 근사
+        # 배당(억): DB 적재 dps(주당배당금, 원) × 발행주식수 — 라이브 DART(get_dividend_info)
+        # 호출/ corp_code 다운로드 없이 실적재분으로 산출(적재 속도·쿼터 보호). dps=원/주,
+        # shares=만주 → dividend억 = dps×(shares×1e4주)/1e8 = dps×shares/1e4. 미적재면 0(무배당).
+        _dps = getattr(fs, "dps", None)
+        dividend = (_dps * shares / 1e4) if (_dps and shares) else 0.0
         eps = fs.eps if fs.eps else (net_income / shares * 10000 if shares else None)
         eps_prev = (ni_prev / shares * 10000) if shares else None
         eps_3y_ago = (ni_3y_ago / shares * 10000) if shares else None
