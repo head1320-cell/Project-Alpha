@@ -1602,6 +1602,17 @@ export interface FinancialDeep {
   roic_wacc: { roic: number; wacc: number; spread: number; verdict: string; note: string } | null;
 }
 
+export interface RiskDeep {
+  altman: { z: number | null; zone: string | null;
+    components: { id: string; label: string; weight: number; value: number; contribution: number }[] };
+  beneish: { available: boolean; note?: string; m_score: number | null; flag: string | null;
+    indices: { id: string; label: string; value: number; basis: "real" | "approx" | "neutral" }[] };
+  coverage: { years: number[]; interest_coverage: (number | null)[];
+    net_debt_to_ebitda: (number | null)[]; note: string };
+  rate_stress: { rows: { shock_bp: number; interest_coverage: number | null;
+    dcf_value: number | null; unified_value: number | null }[]; note: string };
+}
+
 export const companyApi = {
   // 단일 종목 — 116팩터 + 점수 + valuation 요약 (custom_tickers로 임의 종목 대응)
   byTicker: async (code: string): Promise<ScreenerItem | null> => {
@@ -1650,6 +1661,12 @@ export const companyApi = {
   financialDeep: async (code: string): Promise<FinancialDeep> => {
     const r = await fetch(`${API_BASE}/api/v1/company/${code}/financial-deep`);
     if (!r.ok) throw new Error(`financial-deep failed: ${r.status}`);
+    return r.json();
+  },
+  // 기업분석 심화: Altman 분해·Beneish 8지수·커버리지·금리 스트레스 (1콜)
+  riskDeep: async (code: string, price: number): Promise<RiskDeep> => {
+    const r = await fetch(`${API_BASE}/api/v1/company/${code}/risk-deep?price=${price}`);
+    if (!r.ok) throw new Error(`risk-deep failed: ${r.status}`);
     return r.json();
   },
   // 3모형 상세 + 시나리오용 가정 오버라이드

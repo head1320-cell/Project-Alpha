@@ -2679,3 +2679,7 @@ i.ca-ff-dot.ca-ff-peer_per { background: #4a5fc1; } i.ca-ff-dot.ca-ff-peer_pbr {
 .ca-fd-wf-bar.src { background: #0e7c4a; opacity: .8; }
 .ca-fd-wf-bar.use { background: #b0325a; opacity: .7; }
 .ca-fd-wf-val { width: 90px; flex: none; text-align: right; font-family: var(--t-mono, monospace); }
+.ca-rd-basis { display: inline-block; padding: 1px 7px; border-radius: 2px; font-size: 10px; }
+.ca-rd-basis.real { background: #e8f5ee; color: #0e7c4a; }
+.ca-rd-basis.approx { background: #fdf3e0; color: #8a6d00; }
+.ca-rd-basis.neutral { background: var(--t-surface, #fafafa); color: var(--t-muted, #71717a); border: 1px solid var(--t-border, #e5e5e5); }

@@ -10,6 +10,7 @@ import { won, eok, pct, toneColor, pctColor } from "./types";
 import { PriceChart, KpiBars, ValueBand, FactorBar, Gauge, ScoreRing, Spark, Radar, ScenarioCards, VerdictBadge } from "./parts";
 import ValuationTab from "./ValuationTab";
 import FinancialsDeepTab from "./FinancialsDeepTab";
+import RiskDeepTab from "./RiskDeepTab";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -281,6 +282,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
 
         {tab === "risk" && (
           <div className="ca-cp-pad">
+            <RiskDeepTab code={c.code} price={c.price} />
             <div className="ca-cp-card-h plain">리스크 지표 (VaR / 변동성)</div>
             {risk === undefined ? <div className="ca-cp-empty">리스크 지표 계산 중…</div>
               : risk.note ? <div className="ca-cp-empty">{risk.note}</div>

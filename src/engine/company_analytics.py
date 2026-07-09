@@ -313,6 +313,114 @@ def financial_deep(code: str) -> dict:
             "dupont": dupont, "roic_wacc": roic_wacc}
 
 
+_BENEISH_COEF = {"dsri": 0.92, "gmi": 0.528, "aqi": 0.404, "sgi": 0.892,
+                 "depi": 0.115, "sgai": -0.172, "tata": 4.679, "lvgi": -0.327}
+_BENEISH_LABEL = {"dsri": "매출채권 지수", "gmi": "매출총이익률 지수", "aqi": "자산의 질 지수",
+                  "sgi": "매출성장 지수", "depi": "감가상각률 지수", "sgai": "판관비 지수",
+                  "tata": "총발생액/총자산", "lvgi": "레버리지 지수"}
+
+
+def risk_deep(code: str, price: float) -> dict:
+    """Altman 분해 · Beneish 실측 8지수 · 커버리지 추이 · 금리 스트레스.
+
+    Beneish: 원천 있는 지수(GMI/SGI/LVGI/TATA + AQI 근사)만 실측, 매출채권·감가상각·
+    판관비 지수는 중립 1.0 + 라벨(정직). 근사값엔 근사 라벨."""
+    # ① Altman 분해 — 팩터와 동일 원천(get_raw_financials, 억)으로 X1~X5 재구성
+    altman = {"z": None, "zone": None, "components": []}
+    try:
+        from src.data.fundamentals_store import FundamentalsStore
+        r = FundamentalsStore.get_default().get_raw_financials(code)
+        ta = r["total_assets"]
+        wc = (r["current_assets"] or 0) - (r["current_liabilities"] or 0)
+        comps = [("x1", "운전자본/총자산", 1.2, wc / ta if ta else 0),
+                 ("x2", "이익잉여금(근사)/총자산", 1.4, (r["net_income"] * 0.6) / ta if ta else 0),
+                 ("x3", "영업이익/총자산", 3.3, r["operating_profit"] / ta if ta else 0),
+                 ("x4", "시총/총부채", 0.6, (r["market_cap"] / r["total_liabilities"])
+                  if r.get("total_liabilities") else 0),
+                 ("x5", "매출/총자산", 1.0, r["revenue"] / ta if ta else 0)]
+        z = sum(w * v for _, _, w, v in comps)
+        zone = "안전 (>3.0)" if z > 3 else ("회색지대 (1.8~3.0)" if z > 1.8 else "위험 (<1.8)")
+        altman = {"z": round(z, 2), "zone": zone,
+                  "components": [{"id": i, "label": lb, "weight": w, "value": round(v, 3),
+                                  "contribution": round(w * v, 3)} for i, lb, w, v in comps]}
+    except Exception as e:
+        logger.debug(f"altman 분해 실패 [{code}]: {e}")
+
+    # ② Beneish 8지수 — 당년/전년 연간 재무
+    rows2 = _annual_rows(code)[-2:]
+    if len(rows2) < 2:
+        beneish = {"available": False, "note": "전년 재무 미적재 — 지수 산출 불가",
+                   "m_score": None, "flag": None, "indices": []}
+    else:
+        p, c = rows2[0], rows2[1]
+
+        def sd(a, b):
+            return (a / b) if (a is not None and b not in (None, 0, 0.0)) else None
+        gm_c = sd(_v(c, "gross_profit"), _v(c, "revenue"))
+        gm_p = sd(_v(p, "gross_profit"), _v(p, "revenue"))
+        sgi_v = sd(_v(c, "revenue"), _v(p, "revenue"))
+        lvg_p = sd(_v(p, "total_liabilities"), _v(p, "total_assets"))
+        lvg_c = sd(_v(c, "total_liabilities"), _v(c, "total_assets"))
+        idx: dict[str, tuple[float, str]] = {
+            "dsri": (1.0, "neutral"), "depi": (1.0, "neutral"), "sgai": (1.0, "neutral"),
+            "gmi": ((gm_p / gm_c) if (gm_p and gm_c) else 1.0,
+                    "real" if (gm_p and gm_c) else "neutral"),
+            "sgi": (sgi_v or 1.0, "real" if sgi_v else "neutral"),
+            "lvgi": ((lvg_c / lvg_p) if (lvg_c and lvg_p) else 1.0,
+                     "real" if (lvg_c and lvg_p) else "neutral"),
+            "tata": (((_v(c, "net_income") or 0) - (_v(c, "operating_cf") or 0)) /
+                     (_v(c, "total_assets") or 1), "real"),
+        }
+        aqi_c = 1 - (sd(_v(c, "current_assets"), _v(c, "total_assets")) or 0)
+        aqi_p = 1 - (sd(_v(p, "current_assets"), _v(p, "total_assets")) or 0)
+        idx["aqi"] = ((aqi_c / aqi_p) if aqi_p else 1.0, "approx")
+        m = -4.84 + sum(_BENEISH_COEF[k] * v for k, (v, _) in idx.items())
+        beneish = {"available": True, "m_score": round(m, 2),
+                   "flag": "조작 위험 신호 (M > -1.78)" if m > -1.78 else "안전 지대",
+                   "indices": [{"id": k, "label": _BENEISH_LABEL[k], "value": round(v, 3),
+                                "basis": basis} for k, (v, basis) in idx.items()],
+                   "note": "매출채권·감가상각·판관비 원천 미보유 → 해당 지수 중립(1.0) 처리"}
+
+    # ③ 커버리지 추이 (근사 라벨) + ④ 금리 스트레스
+    d = resolve_default_params(code)
+    base_rate = d["rf"] + 0.02   # Kd 근사
+    hist = _annual_rows(code)[-10:]
+    years, ic_series, nd_series = [], [], []
+    for r0 in hist:
+        op, tl = _v(r0, "operating_profit"), _v(r0, "total_liabilities")
+        rev0, ca0 = _v(r0, "revenue"), _v(r0, "current_assets")
+        years.append(int(r0["year"]))
+        ic_series.append(round(op / (tl * base_rate), 2) if (op and tl) else None)
+        ebitda = (op or 0) + (rev0 or 0) * 0.05
+        net_debt = (tl or 0) - (ca0 or 0) * 0.25
+        nd_series.append(round(net_debt / ebitda, 2) if ebitda > 0 else None)
+    coverage = {"years": years, "interest_coverage": ic_series,
+                "net_debt_to_ebitda": nd_series,
+                "note": "이자비용=총부채×(Rf+2%p)·현금=유동자산×25%·EBITDA=영업이익+매출×5% 근사"}
+
+    stress_rows = []
+    last = hist[-1] if hist else None
+    eng, mcap = _engine(), _mcap(code)
+    for bp in (0, 100, 200, 300):
+        ic = None
+        if last and _v(last, "operating_profit") and _v(last, "total_liabilities"):
+            ic = round(_v(last, "operating_profit") /
+                       (_v(last, "total_liabilities") * (base_rate + bp / 1e4)), 2)
+        try:
+            rr = eng.evaluate(code, price, params=_make_params(d["rf"] + bp / 1e4, d["beta"],
+                              d["erp"], d["g"], d["years"]), market_cap=mcap)
+            dcf = next((m.intrinsic_value_per_share for m in rr.models
+                        if m.model == "DCF" and m.available), None)
+            uni = rr.intrinsic_value if rr.intrinsic_value > 0 else None
+        except Exception:
+            dcf = uni = None
+        stress_rows.append({"shock_bp": bp, "interest_coverage": ic,
+                            "dcf_value": round(dcf, 0) if dcf else None,
+                            "unified_value": round(uni, 0) if uni else None})
+    return {"altman": altman, "beneish": beneish, "coverage": coverage,
+            "rate_stress": {"rows": stress_rows, "note": "충격=할인율 전체 평행이동(+Kd)"}}
+
+
 def comps_table(code: str) -> dict:
     """상대가치 매트릭스 — 자사+동일섹터 피어의 멀티플 표 + 중간값 + 재평가 암시가.
 

@@ -29,3 +29,9 @@ def test_financial_deep_endpoint():
     r = client.get("/api/v1/company/005930/financial-deep")
     assert r.status_code == 200
     assert {"qoe", "nwc", "waterfall", "dupont"} <= set(r.json())
+
+
+def test_risk_deep_endpoint():
+    r = client.get("/api/v1/company/005930/risk-deep", params={"price": 70000})
+    assert r.status_code == 200
+    assert {"altman", "beneish", "coverage", "rate_stress"} <= set(r.json())

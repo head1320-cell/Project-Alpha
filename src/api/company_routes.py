@@ -50,3 +50,14 @@ def company_financial_deep(code: str):
     except Exception:
         logger.exception("financial-deep 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/{code}/risk-deep")
+def company_risk_deep(code: str, price: float = Query(..., gt=0)):
+    """Altman 분해·Beneish 8지수·커버리지·금리 스트레스 (Risk 탭 1콜)."""
+    try:
+        from src.engine import company_analytics as ca
+        return ca.risk_deep(code, price)
+    except Exception:
+        logger.exception("risk-deep 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")

@@ -128,3 +128,42 @@ def test_financial_deep_unavailable_without_history(monkeypatch):
     _install_history(monkeypatch, [])
     out = ca.financial_deep("900104")
     assert out["available"] is False and "미적재" in out["note"]
+
+
+# ── risk_deep ──
+
+def test_altman_contributions_sum_to_z():
+    out = ca.risk_deep(CODE, PRICE)
+    alt = out["altman"]
+    s = sum(c["contribution"] for c in alt["components"])
+    assert abs(s - alt["z"]) < 0.05
+
+
+def test_beneish_labels_and_score(monkeypatch):
+    rows = [_year(2023, 1000e8, 100e8, 80e8, 2000e8, 800e8, 1200e8, 700e8, 400e8,
+                  90e8, 30e8, 5000, 100),
+            _year(2024, 1300e8, 120e8, 95e8, 2100e8, 900e8, 1200e8, 720e8, 410e8,
+                  60e8, 35e8, 5000, 120)]
+    _install_history(monkeypatch, rows)
+    out = ca.risk_deep("900200", PRICE)
+    b = out["beneish"]
+    assert b["available"] is True
+    basis = {i["id"]: i["basis"] for i in b["indices"]}
+    assert basis["sgi"] == "real" and basis["dsri"] == "neutral" and basis["aqi"] == "approx"
+    sgi = next(i for i in b["indices"] if i["id"] == "sgi")
+    assert sgi["value"] == pytest.approx(1.3, abs=0.01)
+
+
+def test_beneish_unavailable_without_prev_year(monkeypatch):
+    rows = [_year(2024, 1000e8, 100e8, 80e8, 2000e8, 800e8, 1200e8, 700e8, 400e8,
+                  90e8, 30e8, 5000, 100)]
+    _install_history(monkeypatch, rows)
+    out = ca.risk_deep("900201", PRICE)
+    assert out["beneish"]["available"] is False
+
+
+def test_rate_stress_direction():
+    out = ca.risk_deep(CODE, PRICE)
+    rows = out["rate_stress"]["rows"]
+    ics = [r["interest_coverage"] for r in rows if r["interest_coverage"] is not None]
+    assert ics == sorted(ics, reverse=True), "금리 충격이 커질수록 커버리지는 하락해야"

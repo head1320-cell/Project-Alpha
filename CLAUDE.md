@@ -1277,3 +1277,55 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
 1. 재배포 후 **"재무시계열"** 재실행 → 백필(resume, 대부분 skip) 후 금융업 revenue 재조회
    (진행 라인 `revenue_refetch(금융업)`). → **"펀더멘털"** 재적재 → 금융업 유니버스 편입.
 2. 백테스터: 매매대상 탭 **유동성 게이트=전종목**(기본)이면 선택 전 종목 백테스트(적자·소형 포함).
+
+---
+
+## 🏛️ 기업분석 탭 심화 — FAS/DD 실무 대개편 (Gemini 추천 → 실무 교정 구현)
+
+[배경] 사용자 제공 Gemini 컨설팅 추천(7라운드 PDF)을 AX 파트너 실무 관점으로 교정해 구현.
+스펙: docs/superpowers/specs/2026-07-09-company-analysis-deep-design.md
+플랜: docs/superpowers/plans/2026-07-09-company-analysis-deep.md
+
+### 구조 (탭당 1콜, 기존 lazy 패턴)
+- **백엔드**: src/engine/company_analytics.py (순수 함수) + src/api/company_routes.py
+  - GET /api/v1/company/{code}/valuation-sandbox?price=&rf=&beta=&erp=&g=&years=
+  - GET /api/v1/company/{code}/financial-deep
+  - GET /api/v1/company/{code}/risk-deep?price=
+- **프론트**: components/insights/{ValuationTab,FinancialsDeepTab,RiskDeepTab}.tsx —
+  CompanyCockpit 각 탭 상단에 삽입(기존 콘텐츠 보존). 자체 SVG(외부 라이브러리 無).
+  screenerApi.ts companyApi.{valuationSandbox,financialDeep,riskDeep} + 타입.
+
+### Valuation 탭
+- **Football Field**: DCF/RIM/DDM(Bear~Bull 시나리오 밴드)·52주·그레이엄·피어 PER/PBR
+  25~75분위 암시가 + 현재가 세로선. 무배당 DDM 등은 available:false+사유.
+- **가정 샌드박스**: Rf/β/ERP/g/연수 슬라이더(350ms 디바운스 재평가). 기본값 실측 주입 —
+  Rf=get_dynamic_risk_free_rate()(ECOS), β=price_factors beta_1y(KIS). 출처 배지, 복원 버튼.
+- **민감도 매트릭스**: Ke×g 5×5 (ke축=rf 평행이동, g≥ke−0.5%p 칸은 TV 발산→null).
+  초록=현재가 대비 업사이드.
+- **Comps 테이블**: 자사+동일섹터 피어(≤15) — 시총/PER/PBR/EV/EBITDA/ROE/영업이익률/
+  매출성장 + 피어 중간값 행 + 재평가 암시가 3종(현재가×중간값/자사 멀티플).
+
+### Financials 탭
+- **QoE**: NI vs OCF 10년 오버레이 + 발생액/자산 + Red Flag 규칙(R1 OCF<NI 3년연속=bad,
+  R2 발생액 3년 상승=warn, R3 NWC/매출 3년 상승=warn).
+- **NWC**: 유동자산−유동부채·NWC/매출% 10년.
+- **자본배치 워터폴**: OCF→CapEx/배당(dps×주식수/1e8)/부채상환(감소분)/잔여.
+  자사주 미보유 명시. 부채 순증 연도는 "조달" 주석.
+- **듀폰 3단 분해**(접이식 보조) + **ROIC−WACC 스프레드**(Kd=Rf+2%p 근사 라벨).
+
+### Risk 탭
+- **Altman Z 분해**: X1~X5 값·가중치·기여도 바 (get_raw_financials 동일 원천 — 팩터와 일관).
+- **Beneish 실측 8지수**: GMI/SGI/LVGI/TATA 실측 + AQI 근사 + DSRI/DEPI/SGAI 중립 1.0
+  (매출채권·감가상각·판관비 원천 미보유 — basis 라벨 real/approx/neutral로 정직).
+  원 논문 계수로 M-Score 재산출, 전년 무데이터 → available:false.
+- **커버리지 추이**: 이자보상배율(총부채×(Rf+2%p) 근사)·순부채/EBITDA 10년.
+- **금리충격 스트레스**: +100/200/300bp(할인율 평행이동) → 커버리지·DCF·통합가 재평가.
+
+### 정직한 한계 (스펙 명시, 의도적 제외)
+- 컨센서스/12M Fwd/어닝리비전(FnGuide 유료), 글로벌 피어, Normalized EBITDA(주석 필요),
+  국면 팩터 하이라이트(퀀트용 — 실무 아님), 주석 RAG/M&A 시뮬레이터/보고서 생성(별도 과제).
+
+### 검증
+- 신규 TDD 19개(test_company_analytics 15 + test_company_routes 4): 민감도 단조성·TV 발산
+  가드·듀폰 곱=ROE·워터폴 항등·QoE 규칙 발화/비발화·Beneish 수식/라벨/무전년·Altman 기여
+  합=Z·스트레스 방향성. tsc 0, next build(/insights 18kB), 217 라우트.
