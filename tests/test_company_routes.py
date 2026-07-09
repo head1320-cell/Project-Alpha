@@ -4,7 +4,6 @@ import os
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from fastapi.testclient import TestClient  # noqa: E402
-
 from main_api import app  # noqa: E402
 
 client = TestClient(app)
