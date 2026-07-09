@@ -9,6 +9,7 @@ import type { CompanyData, SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo, Mac
 import { won, eok, pct, toneColor, pctColor } from "./types";
 import { PriceChart, KpiBars, ValueBand, FactorBar, Gauge, ScoreRing, Spark, Radar, ScenarioCards, VerdictBadge } from "./parts";
 import ValuationTab from "./ValuationTab";
+import FinancialsDeepTab from "./FinancialsDeepTab";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -181,6 +182,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
 
         {tab === "financials" && (
           <div className="ca-cp-pad">
+            <FinancialsDeepTab code={c.code} />
             {c.years.length ? (
               <>
                 <div className="ca-cp-fintabs">

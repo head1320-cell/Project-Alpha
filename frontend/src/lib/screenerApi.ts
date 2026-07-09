@@ -1590,6 +1590,18 @@ export interface ValuationSandbox {
     implied: { per_based: number | null; pbr_based: number | null; ev_ebitda_based: number | null } };
 }
 
+export interface FinancialDeep {
+  available: boolean; note?: string;
+  qoe: { years: number[]; ni: number[]; ocf: number[]; gap: number[];
+    accruals: (number | null)[]; red_flags: { rule: string; severity: string; msg: string }[] };
+  nwc: { years: number[]; nwc: number[]; nwc_to_rev_pct: (number | null)[] };
+  waterfall: { years: number[]; ocf: number[]; capex: number[]; dividends: number[];
+    debt_delta: (number | null)[]; residual: number[]; note: string };
+  dupont: { years: number[]; net_margin: (number | null)[]; asset_turnover: (number | null)[];
+    leverage: (number | null)[]; roe: (number | null)[] };
+  roic_wacc: { roic: number; wacc: number; spread: number; verdict: string; note: string } | null;
+}
+
 export const companyApi = {
   // 단일 종목 — 116팩터 + 점수 + valuation 요약 (custom_tickers로 임의 종목 대응)
   byTicker: async (code: string): Promise<ScreenerItem | null> => {
@@ -1632,6 +1644,12 @@ export const companyApi = {
     for (const [k, v] of Object.entries(o)) if (v != null) qs.set(k, String(v));
     const r = await fetch(`${API_BASE}/api/v1/company/${code}/valuation-sandbox?${qs.toString()}`);
     if (!r.ok) throw new Error(`valuation-sandbox failed: ${r.status}`);
+    return r.json();
+  },
+  // 기업분석 심화: QoE·NWC·워터폴·듀폰 (1콜)
+  financialDeep: async (code: string): Promise<FinancialDeep> => {
+    const r = await fetch(`${API_BASE}/api/v1/company/${code}/financial-deep`);
+    if (!r.ok) throw new Error(`financial-deep failed: ${r.status}`);
     return r.json();
   },
   // 3모형 상세 + 시나리오용 가정 오버라이드
