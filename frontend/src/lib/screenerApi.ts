@@ -1569,6 +1569,27 @@ export interface SignalResp { stock_code: string; stock_name: string; action: st
 export interface NarrativeResp { content: string; model: string; input_tokens: number; output_tokens: number; total_tokens: number; cost_usd: number; cost_krw: number; elapsed_seconds: number; cached: boolean; error?: string | null }
 export interface SymbolItem { code: string; name: string; market?: string; sector?: string; listing_date?: string }
 
+// ── 기업분석 심화 (valuation-sandbox / financial-deep / risk-deep) ──
+export interface SandboxAssumption { key: string; label: string; value: number; source: string }
+export interface FootballBand {
+  id: string; label: string; available?: boolean; note?: string;
+  lo: number | null; hi: number | null; mid: number | null;
+}
+export interface CompsRow {
+  code: string; name: string; mcap: number | null; per: number | null; pbr: number | null;
+  ev_ebitda: number | null; roe: number | null; op_margin: number | null; rev_growth: number | null;
+}
+export interface ValuationSandbox {
+  unified: { value: number; gap_pct: number; verdict: string;
+    models: { model: string; value: number; available: boolean; error: string | null }[] };
+  assumptions: SandboxAssumption[];
+  sensitivity: { ke_axis: number[]; g_axis: number[]; grid: (number | null)[][]; current_price: number };
+  defaults: { rf: number; beta: number; erp: number; g: number; years: number };
+  football_field: { current_price: number; bands: FootballBand[] };
+  comps: { sector?: string; rows: CompsRow[]; median_row: Partial<CompsRow>;
+    implied: { per_based: number | null; pbr_based: number | null; ev_ebitda_based: number | null } };
+}
+
 export const companyApi = {
   // 단일 종목 — 116팩터 + 점수 + valuation 요약 (custom_tickers로 임의 종목 대응)
   byTicker: async (code: string): Promise<ScreenerItem | null> => {
@@ -1602,6 +1623,16 @@ export const companyApi = {
     });
     if (!r.ok) return [];
     return (await r.json()).items ?? [];
+  },
+  // 기업분석 심화: 샌드박스+민감도+풋볼필드+Comps (1콜)
+  valuationSandbox: async (code: string, price: number,
+    o: { rf?: number; beta?: number; erp?: number; g?: number; years?: number } = {},
+  ): Promise<ValuationSandbox> => {
+    const qs = new URLSearchParams({ price: String(price) });
+    for (const [k, v] of Object.entries(o)) if (v != null) qs.set(k, String(v));
+    const r = await fetch(`${API_BASE}/api/v1/company/${code}/valuation-sandbox?${qs.toString()}`);
+    if (!r.ok) throw new Error(`valuation-sandbox failed: ${r.status}`);
+    return r.json();
   },
   // 3모형 상세 + 시나리오용 가정 오버라이드
   evaluate: async (code: string, price: number, o: EvaluateOverrides = {}): Promise<ValuationDetail> => {

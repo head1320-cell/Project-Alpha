@@ -8,6 +8,7 @@ import { LayoutDashboard, Calculator, BarChart3, Boxes, Users, ShieldAlert, Spar
 import type { CompanyData, SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo, MacroInfo } from "./types";
 import { won, eok, pct, toneColor, pctColor } from "./types";
 import { PriceChart, KpiBars, ValueBand, FactorBar, Gauge, ScoreRing, Spark, Radar, ScenarioCards, VerdictBadge } from "./parts";
+import ValuationTab from "./ValuationTab";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -155,6 +156,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
 
         {tab === "valuation" && (
           <div className="ca-cp-pad">
+            <ValuationTab code={c.code} price={c.price} />
             {c.models.length ? (
               <div className="ca-cp-models">
                 {c.models.map((m) => (

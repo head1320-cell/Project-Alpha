@@ -2619,3 +2619,44 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .sm-ai-body { background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 2px; padding: 12px 14px; }
 .sm-ai-meta { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); margin-top: 8px; }
 @media (max-width: 720px) { .sm-grid2 { grid-template-columns: 1fr; } .sm-perf-stats { grid-template-columns: repeat(3, 1fr); } }
+
+/* ── 기업분석 심화: 섹션 / Football Field / 히트맵 / Comps / 샌드박스 ── */
+.ca-cp-sec { background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; padding: 14px 16px; margin-bottom: 14px; }
+.ca-cp-sec > h4 { font-size: 13px; font-weight: 600; margin: 0 0 10px; display: flex; align-items: baseline; gap: 8px; }
+.ca-cp-sub { font-size: 11px; font-weight: 400; color: var(--t-muted, #71717a); }
+.ca-vt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .ca-vt-grid { grid-template-columns: 1fr; } }
+.ca-ff-svg { display: block; }
+.ca-ff-band { opacity: .78; }
+.ca-ff-dcf { fill: #1200ff; } .ca-ff-rim { fill: #0e7c4a; } .ca-ff-ddm { fill: #8a6d00; }
+.ca-ff-w52 { fill: #71717a; } .ca-ff-graham { fill: #b0325a; }
+.ca-ff-peer_per { fill: #4a5fc1; } .ca-ff-peer_pbr { fill: #2a8f9d; }
+.ca-ff-mid { stroke: #111; stroke-width: .4; }
+.ca-ff-price { stroke: #d00; stroke-width: .6; stroke-dasharray: 2 1.4; }
+.ca-ff-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11px; margin-top: 8px; }
+.ca-ff-leg { display: inline-flex; align-items: center; gap: 4px; }
+.ca-ff-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.ca-ff-dot.ca-ff-cur { background: #d00; }
+i.ca-ff-dot.ca-ff-dcf { background: #1200ff; } i.ca-ff-dot.ca-ff-rim { background: #0e7c4a; }
+i.ca-ff-dot.ca-ff-ddm { background: #8a6d00; } i.ca-ff-dot.ca-ff-w52 { background: #71717a; }
+i.ca-ff-dot.ca-ff-graham { background: #b0325a; }
+i.ca-ff-dot.ca-ff-peer_per { background: #4a5fc1; } i.ca-ff-dot.ca-ff-peer_pbr { background: #2a8f9d; }
+.ca-ff-na { color: var(--t-muted, #71717a); font-style: italic; }
+.ca-vt-slider { margin-bottom: 8px; }
+.ca-vt-slider input[type="range"] { width: 100%; }
+.ca-vt-slabel { display: flex; gap: 8px; font-size: 12px; align-items: baseline; }
+.ca-vt-slabel .ca-vt-src { margin-left: auto; font-size: 10px; color: var(--t-muted, #71717a); font-style: normal; }
+.ca-vt-reset { font-size: 11px; margin-left: 10px; cursor: pointer; border: 1px solid var(--t-border, #e5e5e5); background: var(--t-bg, #fff); border-radius: 2px; padding: 2px 8px; }
+.ca-vt-derived { margin-top: 10px; font-size: 12px; }
+.ca-heat { border-collapse: collapse; font-size: 11px; font-family: var(--t-mono, monospace); }
+.ca-heat th, .ca-heat td { border: 1px solid var(--t-border, #e5e5e5); padding: 4px 8px; text-align: right; }
+.ca-heat-c.up { background: rgba(14, 124, 74, .16); }  /* 내재가치 ≥ 현재가 → 업사이드 */
+.ca-heat-c.dn { background: rgba(18, 0, 255, .08); }
+.ca-heat-c.na { color: var(--t-muted, #71717a); }
+.ca-comps { border-collapse: collapse; font-size: 12px; width: 100%; }
+.ca-comps th, .ca-comps td { border-bottom: 1px solid var(--t-border, #e5e5e5); padding: 5px 8px; text-align: right; white-space: nowrap; }
+.ca-comps td:first-child, .ca-comps th:first-child { text-align: left; }
+.ca-comps tr.self { background: rgba(18, 0, 255, .06); font-weight: 600; }
+.ca-comps tr.median { background: var(--t-surface, #fafafa); font-weight: 600; }
+.ca-comps-implied { margin-top: 8px; font-size: 12px; }
+.ca-cp-note { font-size: 12px; color: var(--t-muted, #71717a); padding: 10px 2px; }
