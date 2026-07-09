@@ -213,6 +213,106 @@ def football_field(code: str, price: float) -> dict:
     return {"current_price": price, "bands": bands}
 
 
+def _annual_rows(code: str) -> list[dict]:
+    """financials_history 연간 행(원 단위, 과거→최근). 미적재면 []."""
+    try:
+        from src.data.dart_history import REPRT_ANNUAL, load_history
+        return [r for r in load_history(str(code)) if r.get("reprt") == REPRT_ANNUAL]
+    except Exception:
+        return []
+
+
+def _v(row, key):
+    x = row.get(key)
+    return float(x) if isinstance(x, (int, float)) else None
+
+
+def financial_deep(code: str) -> dict:
+    """QoE·NWC·자본배치 워터폴·듀폰 — financials_history 연간(최대 10년, 억 단위 반환).
+
+    Red Flag 규칙(FDD 관례):
+      R1 OCF<NI 3년 연속 · R2 발생액비율 3년 상승 · R3 NWC/매출 3년 상승."""
+    rows = _annual_rows(code)[-10:]
+    if not rows:
+        return {"available": False,
+                "note": "재무 시계열 미적재 — Data Infra에서 '재무시계열' 적재 후 표시",
+                "qoe": {"years": [], "red_flags": []}, "nwc": {"years": []},
+                "waterfall": {"years": []}, "dupont": {"years": []}, "roic_wacc": None}
+    E8 = 1e8
+    years = [int(r["year"]) for r in rows]
+
+    ni = [(_v(r, "net_income") or 0) / E8 for r in rows]
+    ocf = [(_v(r, "operating_cf") or 0) / E8 for r in rows]
+    ta = [(_v(r, "total_assets") or 0) / E8 for r in rows]
+    accr = [round((n - o) / t * 100, 2) if t else None for n, o, t in zip(ni, ocf, ta)]
+    gap = [round(o - n, 1) for n, o in zip(ni, ocf)]
+
+    red: list[dict] = []
+    if len(rows) >= 3 and all(o < n for o, n in zip(ocf[-3:], ni[-3:])):
+        red.append({"rule": "R1", "severity": "bad",
+                    "msg": "OCF < 순이익 3년 연속 — 보고이익이 현금으로 뒷받침되지 않음"})
+    accr3 = [a for a in accr[-3:] if a is not None]
+    if len(accr3) == 3 and accr3[0] < accr3[1] < accr3[2]:
+        red.append({"rule": "R2", "severity": "warn",
+                    "msg": "발생액 비율 3년 연속 상승 — 이익의 질 저하 신호"})
+
+    nwc = [round(((_v(r, "current_assets") or 0) - (_v(r, "current_liabilities") or 0)) / E8, 1)
+           for r in rows]
+    rev = [(_v(r, "revenue") or 0) / E8 for r in rows]
+    nwc_ratio = [round(n / v * 100, 1) if v else None for n, v in zip(nwc, rev)]
+    r3 = [x for x in nwc_ratio[-3:] if x is not None]
+    if len(r3) == 3 and r3[0] < r3[1] < r3[2]:
+        red.append({"rule": "R3", "severity": "warn",
+                    "msg": "NWC/매출 3년 연속 상승 — 운전자본 잠김 심화(현금전환 악화)"})
+
+    capex = [abs(_v(r, "capex") or 0) / E8 for r in rows]
+    # 배당(억) = dps(원/주) × 발행주식수(주) / 1e8 — dart_client가 주 단위로 백필함
+    div = [round(((_v(r, "dps") or 0) * (_v(r, "shares_outstanding") or 0)) / E8, 1)
+           for r in rows]
+    tl = [(_v(r, "total_liabilities") or 0) / E8 for r in rows]
+    debt_delta: list[float | None] = [None] + [round(tl[i] - tl[i - 1], 1)
+                                               for i in range(1, len(tl))]
+    residual = []
+    for i in range(len(rows)):
+        repay = max(0.0, -(debt_delta[i] or 0.0))   # 부채 감소분만 '상환' 지출로
+        residual.append(round(ocf[i] - capex[i] - div[i] - repay, 1))
+
+    te = [(_v(r, "total_equity") or 0) / E8 for r in rows]
+    dupont = {"years": years,
+              "net_margin": [round(n / v * 100, 2) if v else None for n, v in zip(ni, rev)],
+              "asset_turnover": [round(v / t, 3) if t else None for v, t in zip(rev, ta)],
+              "leverage": [round(t / e, 3) if e else None for t, e in zip(ta, te)],
+              "roe": [round(n / e * 100, 2) if e else None for n, e in zip(ni, te)]}
+
+    roic_wacc = None
+    try:
+        from src.data.fundamentals_store import FundamentalsStore
+        roic = FundamentalsStore.get_default().get_factors(code).get("roic")
+        d = resolve_default_params(code)
+        ke = d["rf"] + d["beta"] * d["erp"]
+        ev = te[-1] + tl[-1]
+        wacc = (ke * (te[-1] / ev) + (d["rf"] + 0.02) * 0.78 * (tl[-1] / ev)) if ev else ke
+        if roic is not None:
+            spread = round(float(roic) - wacc * 100, 2)
+            roic_wacc = {"roic": round(float(roic), 2), "wacc": round(wacc * 100, 2),
+                         "spread": spread, "note": "Kd=Rf+2%p 근사",
+                         "verdict": "가치 창출 (ROIC > WACC)" if spread > 0
+                         else "가치 훼손 (ROIC < WACC)"}
+    except Exception:
+        pass
+
+    return {"available": True,
+            "qoe": {"years": years, "ni": [round(x, 1) for x in ni],
+                    "ocf": [round(x, 1) for x in ocf], "gap": gap, "accruals": accr,
+                    "red_flags": red},
+            "nwc": {"years": years, "nwc": nwc, "nwc_to_rev_pct": nwc_ratio},
+            "waterfall": {"years": years, "ocf": [round(x, 1) for x in ocf],
+                          "capex": [round(x, 1) for x in capex], "dividends": div,
+                          "debt_delta": debt_delta, "residual": residual,
+                          "note": "자사주 매입 데이터 미보유 — 항목 제외"},
+            "dupont": dupont, "roic_wacc": roic_wacc}
+
+
 def comps_table(code: str) -> dict:
     """상대가치 매트릭스 — 자사+동일섹터 피어의 멀티플 표 + 중간값 + 재평가 암시가.
 

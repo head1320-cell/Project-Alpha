@@ -64,3 +64,67 @@ def test_comps_table_has_median_and_implied():
     assert "median_row" in out and "implied" in out
     imp = out["implied"]
     assert set(imp) >= {"per_based", "pbr_based", "ev_ebitda_based"}
+
+
+# ── financial_deep (합성 financials_history로 수식 검증) ──
+
+def _install_history(monkeypatch, rows):
+    import src.engine.company_analytics as camod
+    monkeypatch.setattr(camod, "_annual_rows", lambda code: rows)
+
+
+def _year(y, rev, op, ni, ta, tl, te, ca_, cl, ocf, capex, shares, dps):
+    return {"year": y, "reprt": "11011", "revenue": rev, "operating_profit": op,
+            "net_income": ni, "total_assets": ta, "total_liabilities": tl,
+            "total_equity": te, "current_assets": ca_, "current_liabilities": cl,
+            "operating_cf": ocf, "capex": capex, "shares_outstanding": shares,
+            "dps": dps, "gross_profit": rev * 0.3}
+
+
+def test_dupont_product_equals_roe(monkeypatch):
+    rows = [_year(2022 + i, 1000e8, 100e8, 80e8, 2000e8, 800e8, 1200e8,
+                  700e8, 400e8, 90e8, 30e8, 5000, 100) for i in range(3)]
+    _install_history(monkeypatch, rows)
+    out = ca.financial_deep("900100")
+    d = out["dupont"]
+    for i in range(len(d["years"])):
+        prod = d["net_margin"][i] / 100 * d["asset_turnover"][i] * d["leverage"][i]
+        assert abs(prod * 100 - d["roe"][i]) < 0.5, "듀폰 곱 ≠ ROE"
+
+
+def test_nwc_and_waterfall_identity(monkeypatch):
+    rows = [_year(2023, 1000e8, 100e8, 80e8, 2000e8, 800e8, 1200e8, 700e8, 400e8,
+                  90e8, 30e8, 5000, 100),
+            _year(2024, 1100e8, 120e8, 95e8, 2100e8, 850e8, 1250e8, 720e8, 410e8,
+                  110e8, 35e8, 5000, 120)]
+    _install_history(monkeypatch, rows)
+    out = ca.financial_deep("900101")
+    assert out["nwc"]["nwc"][-1] == pytest.approx((720e8 - 410e8) / 1e8)
+    w = out["waterfall"]
+    i = len(w["years"]) - 1
+    # OCF - CapEx - 배당 - 부채상환(감소분) = 잔여 (항등식)
+    assert w["residual"][i] == pytest.approx(
+        w["ocf"][i] - w["capex"][i] - w["dividends"][i] - max(0.0, -(w["debt_delta"][i] or 0)),
+        abs=0.5)
+
+
+def test_qoe_red_flag_fires_when_ocf_below_ni(monkeypatch):
+    rows = [_year(2021 + i, 1000e8, 100e8, 90e8, 2000e8, 800e8, 1200e8, 700e8, 400e8,
+                  40e8, 30e8, 5000, 100) for i in range(4)]   # OCF 40 < NI 90 매년
+    _install_history(monkeypatch, rows)
+    out = ca.financial_deep("900102")
+    assert any(f["rule"] == "R1" for f in out["qoe"]["red_flags"])
+
+
+def test_qoe_no_flag_when_healthy(monkeypatch):
+    rows = [_year(2021 + i, 1000e8, 100e8, 80e8, 2000e8, 800e8, 1200e8, 700e8, 400e8,
+                  120e8, 30e8, 5000, 100) for i in range(4)]  # OCF 120 > NI 80
+    _install_history(monkeypatch, rows)
+    out = ca.financial_deep("900103")
+    assert not any(f["rule"] == "R1" for f in out["qoe"]["red_flags"])
+
+
+def test_financial_deep_unavailable_without_history(monkeypatch):
+    _install_history(monkeypatch, [])
+    out = ca.financial_deep("900104")
+    assert out["available"] is False and "미적재" in out["note"]

@@ -39,3 +39,14 @@ def company_valuation_sandbox(
     except Exception:
         logger.exception("valuation-sandbox 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/{code}/financial-deep")
+def company_financial_deep(code: str):
+    """QoE·NWC·자본배치 워터폴·듀폰 (Financials 탭 1콜)."""
+    try:
+        from src.engine import company_analytics as ca
+        return ca.financial_deep(code)
+    except Exception:
+        logger.exception("financial-deep 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")

@@ -23,3 +23,9 @@ def test_valuation_sandbox_overrides():
     assert r.status_code == 200
     a = {x["key"]: x for x in r.json()["assumptions"]}
     assert a["rf"]["value"] == 0.04 and a["rf"]["source"] == "사용자 조정"
+
+
+def test_financial_deep_endpoint():
+    r = client.get("/api/v1/company/005930/financial-deep")
+    assert r.status_code == 200
+    assert {"qoe", "nwc", "waterfall", "dupont"} <= set(r.json())
