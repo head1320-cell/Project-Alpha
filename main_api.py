@@ -3288,6 +3288,7 @@ def batch_execute_orders(req: BatchOrderRequest):
 
 # ═══ Stage 11/12/13/Valuation Routers (auto-integrated) ═══════════════════════
 try:
+    from src.api.company_routes import router as company_router
     from src.api.macro_routes import router as macro_router
     from src.api.narrative_routes import router as narrative_router
     from src.api.screener_routes import router as screener_router
@@ -3303,6 +3304,7 @@ try:
     app.include_router(stage13_router)
     app.include_router(stage13_ext_router)
     app.include_router(valuation_router)
+    app.include_router(company_router)
     app.include_router(screener_router)
     app.include_router(universe_count_router)
     app.include_router(narrative_router)
