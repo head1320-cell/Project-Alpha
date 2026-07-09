@@ -109,6 +109,9 @@ export interface BacktestStrategy {
   feePct: number;
   slippagePct: number;
   evalCap: number;         // 평가 종목 상한 (4000=전체) — 전종목 유니버스 존중
+  // 유동성 게이트: "off"=전종목(선택 존중, 기본) | "relaxed"=시총300억+ADV3억 | "standard"=시총1000억+ADV10억
+  //   "off"면 filter_ast도 비워 per>0(적자기업 탈락) 필터를 걸지 않음 → 선택한 전 종목이 백테스트에 들어감
+  liquidityGate: "off" | "relaxed" | "standard";
   rebalancePeriod: "daily" | "weekly" | "monthly";  // 신규 매수일: 매일(기존) | 주·월 첫 거래일
   signalLag: 0 | 1;        // 신호 기준: 0=당일 봉 포함(기존) | 1=전일 봉 기준(젠포트식 — 시가류 체결 정합)
   cashReservePct: number;  // 자산배분(단순 현금): 평가자산 대비 현금 상시 보유 % (0=미사용)

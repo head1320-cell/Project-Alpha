@@ -47,8 +47,17 @@ def test_manual_financials_trigger_completes_once_and_reports(monkeypatch):
         return {"tickers": 1, "calls": 5, "saved": 5, "skipped": 0, "empty": 0,
                 "no_corp": 0, "fallback_to_seed": False}
 
+    refetch_calls: list[dict] = []
+
+    def fake_refetch(**kwargs):
+        refetch_calls.append(kwargs)
+        return {"candidates": 3, "updated": 3, "calls": 3, "still_null": 0}
+
     monkeypatch.setattr(dh, "backfill_financials", fake_backfill)
+    monkeypatch.setattr(dh, "refetch_revenue_null", fake_refetch)
     result = _ingest_run("financials")
-    assert result["saved"] == 5                      # 실제 결과가 즉시 반환됨(무한루프 아님)
+    assert result["backfill"]["saved"] == 5           # 1단계 결과가 즉시 반환됨(무한루프 아님)
+    assert result["revenue_refetch"]["updated"] == 3  # 2단계 금융업 revenue 재조회도 실행
+    assert len(refetch_calls) == 1
     assert calls[0].get("all_listed") is True
     assert callable(calls[0].get("progress_cb"))

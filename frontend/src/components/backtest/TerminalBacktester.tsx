@@ -36,6 +36,12 @@ function largeCapFilter(): FilterGroupNode {
   };
 }
 
+// 전종목 모드: 빈 필터(사전 스크리닝 없음). per>0(적자기업 탈락)조차 걸지 않아 선택한 전 종목이
+// 백테스트 유니버스로 들어간다. 진입/청산은 매 봉 조건식으로 판단.
+function emptyFilter(): FilterGroupNode {
+  return { logic: "AND", conditions: [] as FilterGroupNode["conditions"], groups: [] };
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
 const yearsAgo = (n: number) => {
   const d = today();
@@ -46,6 +52,7 @@ const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
   evalCap: 4000,  // 평가 종목 상한 — 기본 전체(유니버스 선택 존중)
+  liquidityGate: "off",  // 기본 전종목 — 유동성/per>0 필터로 선택이 잘리지 않게
   rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0, intradayFill: false,
   assetAlloc: { enabled: false, preset: "aggressive", etfPct: 30, stockPct: 60, basket: [],
     rebalanceMonths: 3, fillType: "prev_close", offsetPct: 0 },
@@ -105,8 +112,9 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
   return {
     universe: capsToUniverse(s.universe.caps),
     custom_tickers: macroUniverse as string[] | null,
-    filter_ast: handoff ? handoff.filterAst : largeCapFilter(),
-    liquidity_floor: "standard",
+    // 전종목 모드(off): 사전 필터 없음 → 선택한 전 종목이 유니버스. 필터 모드: per>0 최소필터.
+    filter_ast: handoff ? handoff.filterAst : (s.liquidityGate === "off" ? emptyFilter() : largeCapFilter()),
+    liquidity_floor: s.liquidityGate ?? "off",
     max_tickers: buy.maxStocks,
     sort_by: buy.primarySort.expr,
     sort_dir: buy.primarySort.dir === "ASC" ? "asc" : "desc",

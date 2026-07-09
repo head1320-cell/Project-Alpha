@@ -103,6 +103,21 @@ export default function UniversePanel({ s, set, live = true }: {
         </span>
       </div>
 
+      {/* 유동성 게이트 — 전종목이면 선택한 전 종목이 백테스트에 들어감(적자·소형 포함) */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>유동성 게이트</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {s.liquidityGate === "off" ? "전종목 — 선택 전부 백테스트(적자·소형 포함)"
+              : s.liquidityGate === "relaxed" ? "시총 ≥ 300억 · 거래대금 ≥ 3억"
+              : "시총 ≥ 1000억 · 거래대금 ≥ 10억"}
+          </span>
+        </div>
+        <Segmented tone="neutral" value={s.liquidityGate ?? "off"}
+          onChange={(t) => set((x) => ({ ...x, liquidityGate: t as BacktestStrategy["liquidityGate"] }))}
+          options={[{ id: "off", label: "전종목" }, { id: "relaxed", label: "완화" }, { id: "standard", label: "표준" }]} />
+      </div>
+
       {/* ETF / 관리 / 감리 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
         {([["ETF", "etf"], ["관리종목", "managed"], ["감리종목", "supervised"]] as const).map(([label, key]) => (

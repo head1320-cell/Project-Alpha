@@ -652,7 +652,7 @@ def _ingest_run(target: str):
     if target == "financials":
         # 무한루프인 _dart_history_backfill_bg()를 그대로 재사용하면 수동 버튼이 영원히
         # 안 끝나던 버그 — backfill_financials를 1회만 직접 호출(resume 기반이라 안전).
-        from src.data.dart_history import backfill_financials
+        from src.data.dart_history import backfill_financials, refetch_revenue_null
         years = int(os.getenv("DART_HISTORY_YEARS", "10") or 10)
         quarters = os.getenv("DART_HISTORY_QUARTERS", "0") != "0"
         max_calls = int(os.getenv("DART_HISTORY_MAX_CALLS", "18000") or 18000)
@@ -661,8 +661,19 @@ def _ingest_run(target: str):
         def _cb(done, total, saved, calls, _st=st):
             _st["progress"] = {"stage": "all_listed", "done": done, "total": total,
                                "saved": saved, "failures": 0}
-        return backfill_financials(all_listed=True, years=years, include_quarters=quarters,
-                                   max_calls=max_calls, progress_cb=_cb)
+        r1 = backfill_financials(all_listed=True, years=years, include_quarters=quarters,
+                                 max_calls=max_calls, progress_cb=_cb)
+        # 2단계: 금융업 등 revenue=NULL 행을 확장 파서(영업수익/이자수익)로 재조회.
+        # 쿼터 소진 중단이 아니면 남은 한도로 실행(멱등 — 이미 채워진 건 후보에서 빠짐).
+        r2 = None
+        if not r1.get("stopped_at_quota"):
+            remaining = max(0, max_calls - int(r1.get("calls", 0)))
+
+            def _cb2(done, total, updated, calls, _st=st):
+                _st["progress"] = {"stage": "revenue_refetch(금융업)", "done": done,
+                                   "total": total, "saved": updated, "failures": 0}
+            r2 = refetch_revenue_null(max_calls=remaining or None, progress_cb=_cb2)
+        return {"backfill": r1, "revenue_refetch": r2}
     if target == "flows":
         from src.data.kis_flows import sync_investor_flows
         return sync_investor_flows(all_listed=True)

@@ -442,6 +442,25 @@ class DARTClient:
                 elif "재무활동" in account and "현금흐름" in account:
                     fs.financing_cf = value
 
+        # 금융업(은행·보험·증권·지주) 매출 정의: 손익계산서에 "매출액" 라인이 없고
+        # 영업수익/수입보험료/이자수익만 있는 업종 → 이를 revenue로 채택(우선순위 순).
+        # 이것이 없으면 revenue=None으로 완전연도 게이트에서 탈락해 유니버스에서 빠졌음.
+        if fs.revenue is None:
+            fin_cand: dict[str, float] = {}
+            for item in data["list"]:
+                if item.get("sj_div") not in ("IS", "CIS"):
+                    continue
+                acc = item.get("account_nm", "")
+                for key in ("영업수익", "수입보험료", "보험료수익", "이자수익"):
+                    if key in acc and key not in fin_cand:
+                        v = self._parse_amount(item.get("thstrm_amount"))
+                        if v is not None:
+                            fin_cand[key] = v
+            for key in ("영업수익", "수입보험료", "보험료수익", "이자수익"):
+                if key in fin_cand:
+                    fs.revenue = fin_cand[key]
+                    break
+
         # 매출총이익 미제공 시 매출-원가로 계산
         if fs.gross_profit is None and fs.revenue is not None and fs.cogs is not None:
             fs.gross_profit = fs.revenue - fs.cogs

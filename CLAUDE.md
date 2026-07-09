@@ -1240,3 +1240,40 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
 
 주의(교훈): mock은 항상 흑자·양수라 실데이터 적자·부호전환 경로를 못 밟는다. 파생식에
 분수승/로그/제곱근이 있으면 음수 입력을 반드시 가드(적자기업 실데이터에서만 터짐).
+
+---
+
+## 🧩 백테스터 전종목 사용 + 금융업 펀더멘털 편입
+
+[배경] 유니버스 적재가 96%(전체 2,583/2,698)에 도달했는데, ① 백테스터가 선택 2,523종목 중
+665개만 사용 ② 금융업 ~160종목이 여전히 유니버스에서 빠짐. 둘 다 코드 원인 확정 후 수정.
+
+### ① 백테스터 전종목 사용 (프론트, 즉시)
+- **원인 2개**: TerminalBacktester가 `liquidity_floor: "standard"`(시총≥1000억) 하드코딩 →
+  2,523→665로 필터. 추가로 `filter_ast: largeCapFilter()`(=per>0)가 **적자기업까지 탈락**시킴.
+- **수정**: `BacktestStrategy.liquidityGate`("off"|"relaxed"|"standard", 기본 **off**) 추가.
+  - `strategyToRun`: off면 `liquidity_floor:"off"` + `filter_ast: emptyFilter()`(사전필터 없음) →
+    선택한 전 종목이 백테스트 유니버스. relaxed/standard면 게이트+per>0.
+  - UniversePanel에 유동성 게이트 Segmented(전종목/완화/표준) — 스크리너 토글과 동일 패턴.
+  - 백엔드 무변경: `resolve_floor("off")→None`(게이트 스킵), 빈 filter_ast→`is_empty()` 스킵.
+    병렬 OHLCV 로더(ThreadPoolExecutor 10워커)+진행률 스트리밍 이미 구현 → 2,500+종목 실용.
+
+### ② 금융업 펀더멘털 (파서 확장 + 재조회)
+- **원인**: 금융업(은행·보험·증권·지주)은 DART 손익계산서에 "매출액" 라인이 없어(영업수익/
+  이자수익만) `get_financial_statement_full`가 revenue=NULL로 적재 → 완전연도 게이트 탈락.
+- **수정**:
+  1. `dart_client.get_financial_statement_full`: 매출액 부재 시 **영업수익>수입보험료>이자수익**
+     순으로 revenue 채택(금융업 매출 정의). 제조업(매출액 有)은 불변.
+  2. `dart_history.refetch_revenue_null()`: revenue=NULL이고 net_income 있는 행을 확장 파서로
+     재조회·UPSERT. 멱등(채워진 건 후보 제외), max_calls 쿼터 보호.
+  3. `_ingest_run("financials")`: 백필 후 **2단계로 refetch 자동 실행**(새 버튼 없이 "재무시계열"
+     하나로). 쿼터 소진 아니면 남은 한도로.
+- tests/test_financial_revenue.py(6): 영업수익/이자수익 매핑·우선순위·제조업 회귀·재조회 갱신/멱등.
+
+### 검증
+- 733 passed / 10 skipped(신규 6), ruff·tsc 0, next build 16/16(/backtest 29.6kB), 216 라우트.
+
+### GCP 런북 (사용자)
+1. 재배포 후 **"재무시계열"** 재실행 → 백필(resume, 대부분 skip) 후 금융업 revenue 재조회
+   (진행 라인 `revenue_refetch(금융업)`). → **"펀더멘털"** 재적재 → 금융업 유니버스 편입.
+2. 백테스터: 매매대상 탭 **유동성 게이트=전종목**(기본)이면 선택 전 종목 백테스트(적자·소형 포함).

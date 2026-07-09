@@ -199,6 +199,67 @@ def backfill_financials(tickers: list[str] | None = None, all_listed: bool = Fal
     return stats
 
 
+def refetch_revenue_null(engine=None, client=None, max_calls: int | None = None,
+                         progress_cb=None) -> dict:
+    """금융업 등 revenue=NULL로 적재된 (ticker, year, reprt) 행을 확장 파서로 재조회·갱신.
+
+    매출액 라인이 없어 revenue=NULL이던 금융업(은행·보험·증권·지주)을, DART 파서에
+    영업수익/이자수익 매핑을 추가한 뒤 다시 채운다. net_income이 있는 행만 대상(진짜
+    결측 아님 → 매출 정의만 빠진 것). 파서 확장 후 fs.revenue가 채워진 건만 UPSERT.
+
+    progress_cb(done, total, updated, calls): 재조회 진행 보고.
+    이미 revenue가 채워졌으면 후보에서 빠져 재실행이 저렴(멱등)."""
+    from src.data.dart_client import DARTClient, get_corp_code
+    client = client or DARTClient()
+    if not client.is_configured:
+        return {"error": True, "message": "DART_API_KEY 미설정"}
+    engine = _get_engine(engine)
+    if engine is None:
+        return {"error": True, "message": "DB engine 없음"}
+    ensure_history_table(engine)
+
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT ticker, bsns_year, reprt_code FROM financials_history "
+            "WHERE revenue IS NULL AND net_income IS NOT NULL "
+            "ORDER BY ticker, bsns_year DESC"
+        )).fetchall()
+    targets = [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+    stats = {"candidates": len(targets), "calls": 0, "updated": 0,
+             "still_null": 0, "no_corp": 0, "tickers": len({t[0] for t in targets})}
+    corp_cache: dict[str, str | None] = {}
+    for tk, year, reprt in targets:
+        if max_calls is not None and stats["calls"] >= max_calls:
+            stats["stopped_at_quota"] = True
+            break
+        if tk not in corp_cache:
+            corp_cache[tk] = get_corp_code(tk)
+        corp = corp_cache[tk]
+        if not corp:
+            stats["no_corp"] += 1
+            continue
+        try:
+            fs = client.get_financial_statement_full(corp, year, reprt_code=reprt)
+            stats["calls"] += 1
+            if fs is not None and getattr(fs, "revenue", None) is not None:
+                upsert_statement(engine, tk, fs)   # 확장 파서로 revenue 채워짐 → 갱신
+                stats["updated"] += 1
+            else:
+                stats["still_null"] += 1           # 영업수익도 없음(진짜 매출 정의 없음) — 잔여
+        except Exception as e:
+            stats["still_null"] += 1
+            logger.debug(f"revenue 재조회 실패 [{tk} {year}/{reprt}]: {e}")
+        if progress_cb is not None:
+            try:
+                progress_cb(stats["calls"], len(targets), stats["updated"], stats["calls"])
+            except Exception:
+                pass
+    _HISTORY_CACHE.clear()  # 갱신분 반영
+    return stats
+
+
 def history_snapshot(ticker: str, bsns_year: str, reprt_code: str, engine=None) -> dict | None:
     """적재된 (종목, 연도, 보고서) 재무 1건 → dict. 없으면 None (PIT가 실시간 폴백)."""
     from sqlalchemy import text
