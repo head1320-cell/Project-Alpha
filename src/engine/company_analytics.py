@@ -153,18 +153,30 @@ def football_field(code: str, price: float) -> dict:
              _model_band("DDM", "DDM (배당할인)")]
 
     # 52주 밴드 (일봉 — DB→KIS→mock 통합 로더)
+    #  · 시계열을 현재가에 정렬(scale = 현재가/마지막종가) — 시세 소스간 미세 괴리 보정
+    #  · ±45% 초과 단일봉 점프(액면분할·권리락 미보정 시그니처) 감지 시 available:false(정직)
     try:
         from src.data.ohlcv_loader import load_ohlcv_unified
         end = datetime.now().strftime("%Y-%m-%d")
         start = (datetime.now() - timedelta(days=370)).strftime("%Y-%m-%d")
         df = load_ohlcv_unified(code, start, end, prefer="auto")
         if df is not None and len(df) > 20:
-            lo_col = "low" if "low" in df.columns else "close"
-            hi_col = "high" if "high" in df.columns else "close"
-            bands.append({"id": "w52", "label": "52주 최저~최고", "available": True,
-                          "lo": round(float(df[lo_col].min()), 0),
-                          "hi": round(float(df[hi_col].max()), 0), "mid": None,
-                          "note": "일봉 기준"})
+            closes = [float(x) for x in df["close"].tolist() if x and x > 0]
+            jump = any(abs(closes[i] / closes[i - 1] - 1) > 0.45
+                       for i in range(1, len(closes)) if closes[i - 1] > 0)
+            last_close = closes[-1] if closes else 0
+            if jump:
+                bands.append({"id": "w52", "label": "52주 최저~최고", "available": False,
+                              "lo": None, "hi": None, "mid": None,
+                              "note": "가격 시계열 불연속 감지 — 수정주가 검증 필요"})
+            else:
+                scale = (price / last_close) if (price and last_close > 0) else 1.0
+                lo_col = "low" if "low" in df.columns else "close"
+                hi_col = "high" if "high" in df.columns else "close"
+                bands.append({"id": "w52", "label": "52주 최저~최고", "available": True,
+                              "lo": round(float(df[lo_col].min()) * scale, 0),
+                              "hi": round(float(df[hi_col].max()) * scale, 0), "mid": None,
+                              "note": "일봉 기준 (현재가 정렬)"})
         else:
             bands.append({"id": "w52", "label": "52주 최저~최고", "available": False,
                           "lo": None, "hi": None, "mid": None, "note": "일봉 미적재"})
@@ -439,12 +451,39 @@ def comps_table(code: str) -> dict:
         def num(attr):
             v = getattr(it, attr, None)
             return round(float(v), 2) if isinstance(v, (int, float)) else None
+        # 업사이드 = 내재가/현재가 − 1 (스크리너 통합평가 기반)
+        iv, cp = getattr(it, "intrinsic_value", None), getattr(it, "current_price", None)
+        upside = round((iv / cp - 1) * 100, 1) if (iv and cp and cp > 0 and iv > 0) else None
         return {"code": it.stock_code, "name": it.corp_name,
                 "mcap": num("market_cap_억"), "per": num("per"), "pbr": num("pbr"),
                 "ev_ebitda": num("ev_ebitda"), "roe": num("roe_pct"),
-                "op_margin": num("operating_margin"), "rev_growth": num("revenue_growth_yoy")}
+                "op_margin": num("operating_margin"), "rev_growth": num("revenue_growth_yoy"),
+                "upside": upside, "altman_z": num("altman_z"), "beneish_m": num("beneish_m"),
+                "sloan": num("sloan_accruals")}
 
     rows = [_row(me)] + [_row(it) for it in peer_res.items if it.stock_code != code][:15]
+
+    # 리스크-리턴-퀄리티 스캐터 (CIO: 딜 성격 1초 정의) — X=퀄리티(피어 내 백분위 통합),
+    # Y=업사이드. 퀄리티 = Altman(↑)·Beneish(↓)·Sloan발생액(↓) 백분위 평균 × 100.
+    def _pct_rank(vals, v, higher_better=True):
+        xs = sorted(x for x in vals if x is not None)
+        if v is None or len(xs) < 3:
+            return None
+        below = sum(1 for x in xs if x <= v) / len(xs)
+        return below if higher_better else (1 - below)
+
+    alt_all = [r["altman_z"] for r in rows]
+    ben_all = [r["beneish_m"] for r in rows]
+    slo_all = [r["sloan"] for r in rows]
+    scatter = []
+    for r in rows:
+        parts = [p for p in (_pct_rank(alt_all, r["altman_z"], True),
+                             _pct_rank(ben_all, r["beneish_m"], False),
+                             _pct_rank(slo_all, r["sloan"], False)) if p is not None]
+        quality = round(sum(parts) / len(parts) * 100, 1) if parts else None
+        if quality is not None and r["upside"] is not None:
+            scatter.append({"code": r["code"], "name": r["name"], "upside": r["upside"],
+                            "quality": quality, "self": r["code"] == code})
 
     def _median(key):
         vals = sorted(r[key] for r in rows[1:] if isinstance(r.get(key), (int, float)))
@@ -461,4 +500,5 @@ def comps_table(code: str) -> dict:
         return round(price * m_med / m_self, 0)
     implied = {"per_based": _implied("per"), "pbr_based": _implied("pbr"),
                "ev_ebitda_based": _implied("ev_ebitda")}
-    return {"sector": sector, "rows": rows, "median_row": median_row, "implied": implied}
+    return {"sector": sector, "rows": rows, "median_row": median_row, "implied": implied,
+            "scatter": scatter}

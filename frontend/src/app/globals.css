@@ -2683,3 +2683,37 @@ i.ca-ff-dot.ca-ff-peer_per { background: #4a5fc1; } i.ca-ff-dot.ca-ff-peer_pbr {
 .ca-rd-basis.real { background: #e8f5ee; color: #0e7c4a; }
 .ca-rd-basis.approx { background: #fdf3e0; color: #8a6d00; }
 .ca-rd-basis.neutral { background: var(--t-surface, #fafafa); color: var(--t-muted, #71717a); border: 1px solid var(--t-border, #e5e5e5); }
+/* 풋볼필드 v2 — HTML 행 기반 수평 박스플롯 (로버스트 축) */
+.ca-ff2 { position: relative; padding: 6px 0; }
+.ca-ff2-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ca-ff2-label { width: 158px; flex: none; font-size: 11px; color: var(--t-text, #111); text-align: right; line-height: 1.25; }
+.ca-ff2-track { position: relative; flex: 1; height: 18px; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; overflow: hidden; }
+.ca-ff2-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; opacity: .8; min-width: 3px; }
+.ca-ff2-mid { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #111; }
+.ca-ff2-val { width: 170px; flex: none; font-size: 11px; font-family: var(--t-mono, monospace); text-align: left; white-space: nowrap; }
+.ca-ff2-val.dn { color: #b0325a; }
+.ca-ff2-price { position: absolute; top: 0; bottom: 26px; width: 0; border-left: 2px dashed #d00; z-index: 2; pointer-events: none; }
+.ca-ff2-price-tag { position: absolute; top: -4px; left: 4px; font-size: 10px; color: #d00; white-space: nowrap; background: var(--t-bg, #fff); padding: 0 3px; }
+.ca-ff2-axis { margin-bottom: 0; height: 16px; }
+.ca-ff2-tick { position: absolute; transform: translateX(-50%); font-size: 10px; color: var(--t-muted, #71717a); font-family: var(--t-mono, monospace); }
+div.ca-ff2-bar.ca-ff-dcf { background: #1200ff; } div.ca-ff2-bar.ca-ff-rim { background: #0e7c4a; }
+div.ca-ff2-bar.ca-ff-ddm { background: #8a6d00; } div.ca-ff2-bar.ca-ff-w52 { background: #71717a; }
+div.ca-ff2-bar.ca-ff-graham { background: #b0325a; }
+div.ca-ff2-bar.ca-ff-peer_per { background: #4a5fc1; } div.ca-ff2-bar.ca-ff-peer_pbr { background: #2a8f9d; }
+div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
+/* 리스크-리턴 사분면 + 3D 등축 표면 + 히트맵 토글 */
+.ca-rr-svg { width: 100%; height: 320px; display: block; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; }
+.ca-rr-axis { stroke: var(--t-border, #d5d5d5); stroke-width: .3; stroke-dasharray: 1.5 1; }
+.ca-rr-node { fill: #71717a; opacity: .75; }
+.ca-rr-node.self { fill: #1200ff; opacity: 1; }
+.ca-rr-name { font-size: 3px; fill: #1200ff; font-weight: 600; }
+.ca-rr-qlabel { font-size: 2.6px; fill: var(--t-muted, #8a8a93); }
+.ca-rr-popup { position: absolute; right: 16px; top: 44px; z-index: 5; background: var(--t-bg, #fff); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; padding: 10px 12px; font-size: 12px; max-width: 340px; box-shadow: 0 4px 14px rgba(0,0,0,.10); }
+.ca-rr-popup button { float: right; border: none; background: none; cursor: pointer; font-size: 12px; }
+.ca-heat-toggle { margin-left: auto; display: inline-flex; gap: 4px; }
+.ca-heat-toggle button { font-size: 11px; padding: 2px 9px; border: 1px solid var(--t-border, #e5e5e5); background: var(--t-bg, #fff); border-radius: 2px; cursor: pointer; }
+.ca-heat-toggle button.on { background: var(--t-surface, #f0f0ff); border-color: #1200ff; color: #1200ff; }
+.ca-iso-svg { width: 100%; height: 300px; display: block; }
+.ca-iso-cell { stroke: #fff; stroke-width: .25; }
+.ca-iso-cell.up { fill: #0e7c4a; opacity: .78; }
+.ca-iso-cell.dn { fill: #4a5fc1; opacity: .68; }

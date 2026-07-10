@@ -90,26 +90,32 @@ def _default_fetcher(isin: str, start: str, end: str, value_type: str) -> list[d
 
 
 def rows_to_flow_records(qty_rows: list[dict], amt_rows: list[dict]) -> list[dict]:
-    """량/금액 행 병합 → investor_flows 레코드 (KIS 3주체 정합 + 세부 4주체)."""
+    """량/금액 행 병합 → investor_flows 레코드 (KIS 3주체 정합 + 세부 4주체).
+
+    금액은 ★억원 단위로 정규화★ 저장 — KRX MDC 거래대금은 원 단위 → /1e8.
+    (KIS pbmn=백만원과 혼합 저장돼 표시가 100배 뻥튀기되던 문제 — 적재 단일화)"""
     amt_by_date = {r["date"]: r for r in amt_rows or []}
 
     def _sum(row, names):
         vals = [row.get(n) for n in names if row.get(n) is not None]
         return sum(vals) if vals else None
 
+    def _억(v):  # 원 → 억원
+        return (v / 1e8) if v is not None else None
+
     out = []
     for q in qty_rows or []:
         a = amt_by_date.get(q["date"], {})
         out.append({
             "date": q["date"],
-            "prsn_qty": q.get("개인"), "prsn_amt": a.get("개인"),
+            "prsn_qty": q.get("개인"), "prsn_amt": _억(a.get("개인")),
             "frgn_qty": _sum(q, ("외국인", "기타외국인")),
-            "frgn_amt": _sum(a, ("외국인", "기타외국인")),
-            "orgn_qty": _sum(q, _ORGN_MEMBERS), "orgn_amt": _sum(a, _ORGN_MEMBERS),
-            "pension_qty": q.get("연기금"), "pension_amt": a.get("연기금"),
-            "trust_qty": q.get("투신"), "trust_amt": a.get("투신"),
-            "pe_qty": q.get("사모"), "pe_amt": a.get("사모"),
-            "othercorp_qty": q.get("기타법인"), "othercorp_amt": a.get("기타법인"),
+            "frgn_amt": _억(_sum(a, ("외국인", "기타외국인"))),
+            "orgn_qty": _sum(q, _ORGN_MEMBERS), "orgn_amt": _억(_sum(a, _ORGN_MEMBERS)),
+            "pension_qty": q.get("연기금"), "pension_amt": _억(a.get("연기금")),
+            "trust_qty": q.get("투신"), "trust_amt": _억(a.get("투신")),
+            "pe_qty": q.get("사모"), "pe_amt": _억(a.get("사모")),
+            "othercorp_qty": q.get("기타법인"), "othercorp_amt": _억(a.get("기타법인")),
         })
     return out
 

@@ -92,7 +92,7 @@ def test_db_served_path_makes_no_network_call(monkeypatch):
         str(cy): _snap(revenue=900e8, operating_profit=120e8, net_income=90e8,
                        total_assets=1900e8, total_liabilities=800e8, total_equity=1100e8,
                        current_assets=700e8, current_liabilities=400e8, operating_cf=100e8,
-                       shares_outstanding=5000, dps=300.0),  # dps=원/주, shares=만주
+                       shares_outstanding=100_000_000, dps=300.0),  # dps=원/주, shares=주(1억주)
         str(cy - 1): _snap(revenue=850e8, operating_profit=110e8, net_income=85e8,
                            total_assets=1850e8, total_liabilities=780e8, total_equity=1070e8),
     }
@@ -115,8 +115,8 @@ def test_db_served_path_makes_no_network_call(monkeypatch):
     st = FundamentalsStore()
     raw = st._real_raw_financials("900004")     # BOOM 없이 통과해야 함
     assert raw is not None
-    # 배당(억) = dps 300 × shares 5000(만주) / 1e4 = 150억
-    assert abs(raw["dividend"] - 300.0 * 5000 / 1e4) < 1e-6
+    # 배당(억) = dps 300원/주 × 1억주 / 1e8 = 300억 (원천 주식수는 '주' 단위 — 내부 만주 정규화)
+    assert abs(raw["dividend"] - 300.0 * 100_000_000 / 1e8) < 1e-6
     fac = st._build_factors("900004")
     assert fac and fac.get("dividend_yield") is not None
 

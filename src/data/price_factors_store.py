@@ -225,8 +225,12 @@ class PriceFactorsStore(DeterministicMockStore):
             "beta_1y": self._beta(ohlcv),  # KOSPI(daily_prices) 대비 1년 베타 — 지수 미적재면 None
             "max_drawdown_1y": round(abs(mdd) * 100, 2),
             "downside_vol": dvol, "skewness": self._skew(rets_all),
-            "price_to_52w_high": round(cur / hi52 * 100, 2) if hi52 > 0 else None,
-            "price_to_52w_low": round(cur / lo52 * 100, 2) if lo52 > 0 else None,
+            # 52주: 시계열에 ±45% 초과 단일봉 점프(액면분할·권리락 미보정 시그니처)가 있으면
+            # None(정직 결측) — "52주 저가 대비 +517%" 같은 왜곡 노출 방지 (CIO 실사)
+            "price_to_52w_high": (round(cur / hi52 * 100, 2)
+                                  if (hi52 > 0 and not self._has_discontinuity(closes)) else None),
+            "price_to_52w_low": (round(cur / lo52 * 100, 2)
+                                 if (lo52 > 0 and not self._has_discontinuity(closes)) else None),
             "dist_ma20": dist(cur, ma20), "dist_ma60": dist(cur, ma60), "dist_ma120": dist(cur, ma120),
             "rsi_14": rsi, "ma_alignment": align,
             "volume_trend_20d": vol_trend,
@@ -238,6 +242,16 @@ class PriceFactorsStore(DeterministicMockStore):
             "_source": "kis_real",
         }
         return out
+
+    @staticmethod
+    def _has_discontinuity(closes: list, threshold: float = 0.45) -> bool:
+        """일봉 시계열에 ±threshold 초과 단일봉 점프가 있는지 — 액면분할/권리락 미보정
+        시그니처. 있으면 52주류 위치 팩터를 신뢰할 수 없음(정직 결측 처리용)."""
+        for i in range(1, len(closes)):
+            prev = closes[i - 1]
+            if prev and prev > 0 and abs(closes[i] / prev - 1) > threshold:
+                return True
+        return False
 
     def _supply_factors(self, stock_code: str, price: float | None = None) -> dict:
         """investor_flows 금액(외국인/기관/개인 N일 합) + DART 내부자(20d). 미적재면 None."""
@@ -252,7 +266,11 @@ class PriceFactorsStore(DeterministicMockStore):
                 if s is None or len(s) == 0:
                     return None
                 tail = s.dropna().tail(days)
-                return round(float(tail.sum()), 0) if len(tail) else None
+                if not len(tail):
+                    return None
+                # investor_flows 금액은 적재 시 '억' 단위로 정규화됨 (kis_flows — CIO 실사
+                # "-1519조" 수정: KIS pbmn=백만원/KRX=원 혼합 저장이 원인, 소스별 환산 단일화)
+                return round(float(tail.sum()), 0)
             out["foreign_net_5d"] = _sum_last("frgn_amt", 5)
             out["foreign_net_20d"] = _sum_last("frgn_amt", 20)
             out["inst_net_5d"] = _sum_last("orgn_amt", 5)

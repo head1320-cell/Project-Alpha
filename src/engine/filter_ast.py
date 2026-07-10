@@ -60,7 +60,8 @@ FIELD_CATALOG: list[FieldMeta] = [
     # 안정성
     FieldMeta("debt_ratio_pct", "부채비율",      "stability",     "%",   False, 0,   300),
     FieldMeta("fcf_억",         "잉여현금흐름",   "stability",     "억",  True,  -5000, 50000),
-    FieldMeta("market_cap_억",  "시가총액",      "stability",     "억",  True,  0,   5000000),
+    # 시가총액은 규모(Size) 팩터 — 안정성 아님 (CIO 실사: 팩터 분류 체계 재정립)
+    FieldMeta("market_cap_억",  "시가총액",      "size",          "억",  True,  0,   5000000),
     # 종합 스코어
     FieldMeta("composite_score", "종합 점수",     "score",         "점",  True,  0,   100),
     FieldMeta("gap_score",      "저평가 점수",    "score",         "점",  True,  0,   100),
@@ -118,6 +119,7 @@ def _register_extended_fields():
 _register_extended_fields()  # Butler 확장 팩터 병합
 
 CATEGORY_LABELS = {
+    "size":          "규모",
     "valuation":     "밸류에이션",
     "profitability": "수익성",
     "growth":        "성장성",

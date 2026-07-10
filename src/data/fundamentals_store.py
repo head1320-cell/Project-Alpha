@@ -228,6 +228,30 @@ class FundamentalsStore(DeterministicMockStore):
             fs.total_liabilities = fs.total_assets - fs.total_equity
         return fs  # is_mock=False 유지 → 실데이터 판별 통과
 
+    def _market_snapshot(self, stock_code: str) -> dict:
+        """실측 시총(억, KIS master)+최근 종가(원, daily_prices) — 주식수 파생·시총 단일화용.
+
+        네트워크 0 (마스터 캐시 + DB 1행). 없으면 None → 호출측이 기존 근사 유지."""
+        out: dict = {"mcap_억": None, "price": None}
+        try:
+            from src.data.stock_master import get_market_cap
+            out["mcap_억"] = get_market_cap(stock_code)
+        except Exception:
+            pass
+        try:
+            from sqlalchemy import text
+
+            from src.database import get_engine
+            with get_engine().connect() as c:
+                row = c.execute(text(
+                    "SELECT close FROM daily_prices WHERE ticker=:t "
+                    "ORDER BY trade_date DESC LIMIT 1"), {"t": str(stock_code)}).fetchone()
+            if row and row[0]:
+                out["price"] = float(row[0])
+        except Exception:
+            pass
+        return out
+
     def _get_fs(self, dart, stock_code, year, db_only=False):
         """연도 재무 1건 — financials_history(DB) 우선, 없으면 라이브 DART 폴백.
 
@@ -326,12 +350,33 @@ class FundamentalsStore(DeterministicMockStore):
         revenue_3y_ago = to_억(fs_3y.revenue) if (fs_3y and fs_3y.revenue) else (revenue * 0.8)
         ni_3y_ago = to_억(fs_3y.net_income) if (fs_3y and fs_3y.net_income) else (net_income * 0.78)
 
-        shares = fs.shares_outstanding or 10000  # 만주 근사
-        # 배당(억): DB 적재 dps(주당배당금, 원) × 발행주식수 — 라이브 DART(get_dividend_info)
-        # 호출/ corp_code 다운로드 없이 실적재분으로 산출(적재 속도·쿼터 보호). dps=원/주,
-        # shares=만주 → dividend억 = dps×(shares×1e4주)/1e8 = dps×shares/1e4. 미적재면 0(무배당).
+        # ── 발행주식수 정규화(만주) — CIO 실사 "BPS ₩566만" 버그의 근본 수정 ──
+        # 원인 2중: ① financials_history의 shares_outstanding은 대부분 NULL(DART 재무제표
+        #   API가 주식수를 안 줌) → 10000 만주 폴백 → BPS≈자본총계(억) 그대로 노출.
+        #   ② 값이 있어도 원천은 '주' 단위인데 이 모듈은 '만주' 의미로 사용 — 단위 불일치.
+        # 수정: 실측 시총(KIS master)÷현재가(daily_prices)로 파생 주식수를 구해 단일 진실로.
+        #   시총·주가 모두 액면분할 후(post-split) 값이라 분할 보정이 자동으로 성립한다.
+        #   DART 주식수(만주 환산)와 2배 이상 괴리하면 파생값 채택(분할 미보정·오염 차단).
+        dart_shares = (fs.shares_outstanding / 1e4) if fs.shares_outstanding else None  # 주→만주
+        snap = self._market_snapshot(stock_code)
+        derived = None
+        if snap["mcap_억"] and snap["price"] and snap["price"] > 0:
+            derived = snap["mcap_억"] * 1e8 / snap["price"] / 1e4   # 만주
+        shares = dart_shares
+        if derived and derived > 0:
+            if not shares or shares <= 0 or \
+                    max(shares, derived) / max(1e-9, min(shares, derived)) > 2:
+                shares = derived
+        if not shares or shares <= 0:
+            shares = 10000  # 최후 근사 (마스터·주가 모두 미적재)
+        # 시총도 실측 우선: item(KIS 주입) > master 실측 > PBR≈1.2 근사(기존)
+        if (not getattr(item, "market_cap_억", None) if item else True) and snap["mcap_억"]:
+            mcap = snap["mcap_억"]
+
+        # 배당(억) = dps(원/주) × shares(만주) / 1e4. dps 미적재(None)면 dividend=None —
+        # '무배당(0)'과 '미상(None)'을 구분(정직): dividend_yield/payout이 None으로 전파.
         _dps = getattr(fs, "dps", None)
-        dividend = (_dps * shares / 1e4) if (_dps and shares) else 0.0
+        dividend = (_dps * shares / 1e4) if (_dps is not None and shares) else None
         eps = fs.eps if fs.eps else (net_income / shares * 10000 if shares else None)
         eps_prev = (ni_prev / shares * 10000) if shares else None
         eps_3y_ago = (ni_3y_ago / shares * 10000) if shares else None
@@ -350,8 +395,10 @@ class FundamentalsStore(DeterministicMockStore):
         receivables_prev = receivables * 0.95
         equity_prev = to_억(fs_prev.total_equity) if (fs_prev and fs_prev.total_equity) else (total_equity * 0.95)
         gross_profit_prev = (revenue_prev * (gross_profit / revenue)) if (revenue_prev and revenue and gross_profit) else ((gross_profit or 0) * 0.95)
-        rev_q = revenue / 4 if revenue else 0
-        rev_q_prev = revenue_prev / 4 if revenue_prev else 0
+        # 분기(QoQ): 연간/4 근사는 YoY와 수치가 완전히 같아지는 복사버그(CIO 실사 지적) —
+        # 실 분기 원천(financials_history 분기 보고서) 없이는 None(정직). 적재 시 후속 연결.
+        rev_q = None
+        rev_q_prev = None
         share_price = (mcap / shares * 100) if (mcap and shares) else 0
 
         # mock 스키마를 베이스로 깔고(전 키 보장) 실값+근사로 덮어쓴다 → 스키마 누락(KeyError) 불가.
@@ -480,6 +527,8 @@ class FundamentalsStore(DeterministicMockStore):
 
         rev = r["revenue"]; mcap = r["market_cap"]; ni = r["net_income"]
         op = r["operating_profit"]; ta = r["total_assets"]; te = r["total_equity"]
+        # 실데이터 경로 여부 — mock 난수 성분(모멘텀·PEAD·결측시뮬 등)을 실팩터에 섞지 않음(CIO 실사)
+        is_real = r.get("_source") == "dart_real"
 
         # ── Phase A: 수익성 ──
         operating_margin = pct(safe_div(op, rev))
@@ -508,7 +557,9 @@ class FundamentalsStore(DeterministicMockStore):
         fcf_yield = pct(safe_div(r["fcf"], mcap))
         earnings_yield = pct(safe_div(ni, mcap))
         acquirers_multiple = round(safe_div(ev, op) or 0, 2) if op > 0 else None
-        shareholder_yield = pct(safe_div(r["dividend"] + r["buyback"], mcap))
+        # 배당 미상(None)이면 주주환원도 미상 — 0%로 단정하지 않음(정직)
+        _div_total = (r["dividend"] + r["buyback"]) if r["dividend"] is not None else None
+        shareholder_yield = pct(safe_div(_div_total, mcap))
 
         # ── Phase C: 성장성 ──
         revenue_growth_yoy = pct(safe_div(rev - r["revenue_prev"], abs(r["revenue_prev"])))
@@ -521,8 +572,9 @@ class FundamentalsStore(DeterministicMockStore):
         revenue_cagr_3y = pct(_rev_ratio ** (1/3) - 1) if (r["revenue_3y_ago"] > 0 and _rev_ratio and _rev_ratio > 0) else None
         _eps_ratio = safe_div(r["eps"], r["eps_3y_ago"])
         eps_cagr_3y = pct(_eps_ratio ** (1/3) - 1) if (r["eps_3y_ago"] > 0 and _eps_ratio and _eps_ratio > 0) else None
-        price_momentum_12_1 = round(self._normal(stock_code, "mom121", mu=8, sigma=22), 1)
-        pead_score = round(self._normal(stock_code, "pead", mu=0.2, sigma=1.0), 2)
+        # 실데이터: 모멘텀은 가격팩터 momentum_12_1(실측)이 담당, PEAD는 컨센서스 필요 → None
+        price_momentum_12_1 = None if is_real else round(self._normal(stock_code, "mom121", mu=8, sigma=22), 1)
+        pead_score = None if is_real else round(self._normal(stock_code, "pead", mu=0.2, sigma=1.0), 2)
 
         # ── Phase D: 안정성 ──
         # Altman Z (제조업 모델): 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5
@@ -533,10 +585,17 @@ class FundamentalsStore(DeterministicMockStore):
         x4 = safe_div(mcap, r["total_liabilities"]) or 0
         x5 = safe_div(rev, ta) or 0
         altman_z = round(1.2*x1 + 1.4*x2 + 3.3*x3 + 0.6*x4 + 1.0*x5, 2)
-        # Beneish M (간이 5변수 근사)
-        dsri = self._uniform(stock_code, "dsri", lo=0.9, hi=1.3)
-        gmi = self._uniform(stock_code, "gmi", lo=0.9, hi=1.2)
-        aqi = self._uniform(stock_code, "aqi", lo=0.95, hi=1.15)
+        # Beneish M — 실데이터: 산출 가능한 지수만 실측(GMI·SGI·발생액), 원천 없는 지수는
+        # 중립 1.0 (mock 난수 오염 금지 — Risk 탭 8지수 드릴다운과 일관). mock 모드는 기존 유지.
+        if is_real:
+            gm_cur = safe_div(r["gross_profit"], rev)
+            gm_prev = safe_div(r.get("gross_profit_prev"), r.get("revenue_prev"))
+            dsri, aqi = 1.0, 1.0
+            gmi = (gm_prev / gm_cur) if (gm_prev and gm_cur) else 1.0
+        else:
+            dsri = self._uniform(stock_code, "dsri", lo=0.9, hi=1.3)
+            gmi = self._uniform(stock_code, "gmi", lo=0.9, hi=1.2)
+            aqi = self._uniform(stock_code, "aqi", lo=0.95, hi=1.15)
         sgi = 1 + (revenue_growth_yoy or 0) / 100
         accr = safe_div(ni - r["operating_cf"], ta) or 0
         beneish_m = round(-4.84 + 0.92*dsri + 0.528*gmi + 0.404*aqi + 0.892*sgi + 4.679*accr, 2)
@@ -601,9 +660,12 @@ class FundamentalsStore(DeterministicMockStore):
         ncav_to_mcap = round(safe_div(r["current_assets"] - r["total_liabilities"], mcap) or 0, 3)  # 그레이엄 NCAV
 
         # ── 성장성 심화 (growth) ──
-        revenue_qoq = pct(safe_div(r["rev_q"] - r["rev_q_prev"], abs(r["rev_q_prev"])))  # 분기 QoQ
-        # 성장 가속도: 올해 성장률 - 작년 성장률
-        growth_acceleration = round((revenue_growth_yoy or 0) - (self._normal(stock_code, "g_accel", mu=5, sigma=10)), 2)
+        # 분기 QoQ: 실 분기 원천 없으면 None (연간/4 근사는 YoY 복사값이 되던 버그 — CIO 실사)
+        revenue_qoq = pct(safe_div(r["rev_q"] - r["rev_q_prev"], abs(r["rev_q_prev"]))) \
+            if (r.get("rev_q") is not None and r.get("rev_q_prev") not in (None, 0)) else None
+        # 성장 가속도: 전기 성장률 원천(t-2 매출) 미보유 → 실데이터는 None(정직), mock은 기존
+        growth_acceleration = None if is_real else \
+            round((revenue_growth_yoy or 0) - (self._normal(stock_code, "g_accel", mu=5, sigma=10)), 2)
         sustainable_growth = pct((safe_div(ni, te) or 0) * (1 - (safe_div(r["dividend"], ni) or 0)))  # 지속가능성장률 g=ROE×유보율
         # FCF 성장: 영업이익 성장률을 프록시로 사용 (FCF 전년값 미보유)
         _fcf_g = (op_growth_yoy or 0) / 100
@@ -656,10 +718,11 @@ class FundamentalsStore(DeterministicMockStore):
             graham_number=graham_number, greenblatt_score=greenblatt_score, value_composite=value_composite,
         )
 
-        # 결측 시뮬 (일부 팩터는 데이터 부족) — 핵심 팩터는 유지
-        optional_missing = ["ev_fcf", "pcr", "peg", "revenue_cagr_3y", "eps_cagr_3y", "interest_coverage"]
-        for k in optional_missing:
-            factors[k] = self._maybe_missing(stock_code, f"m_{k}", value=factors[k], missing_rate=0.10)
+        # 결측 시뮬 — mock 전용 (실데이터에 인위 결측을 섞으면 오염 — CIO 실사)
+        if not is_real:
+            optional_missing = ["ev_fcf", "pcr", "peg", "revenue_cagr_3y", "eps_cagr_3y", "interest_coverage"]
+            for k in optional_missing:
+                factors[k] = self._maybe_missing(stock_code, f"m_{k}", value=factors[k], missing_rate=0.10)
 
         factors["_source"] = "dart_real" if r.get("_source") == "dart_real" else "ffl_mock"
         return factors
@@ -698,6 +761,15 @@ def attach_fundamentals(items: list) -> int:
         for fid, val in factors.items():
             if not fid.startswith("_"):
                 setattr(it, fid, val)
+        # 동일 지표 단일화(CIO 실사: 헤더 PER 36.99 vs 팩터 15.05 불일치) — 실데이터에선
+        # ffl 팩터를 단일 진실로 삼아 기본 필드(roe_pct/per 등)를 동기화. mock은 불변.
+        if factors.get("_source") == "dart_real":
+            for src_key, dst_attr in (("roe", "roe_pct"), ("roa", "roa_pct"),
+                                      ("per", "per"), ("pbr", "pbr"),
+                                      ("dividend_yield", "dividend_yield_pct")):
+                v = factors.get(src_key)
+                if v is not None:
+                    setattr(it, dst_attr, v)
         count += 1
     return count
 

@@ -202,7 +202,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const price1y = bars.length ? mapPrices(bars, price) : synthPrices(code, price);
 
   const upside = Math.round((intrinsic / price - 1) * 1000) / 10;
-  const divYield = pick("dividend_yield_pct", item.dividend_yield_pct);
+  const divYield = fin(item.dividend_yield_pct) ?? pick("dividend_yield_pct");
   // 시총: 실값 우선, 없으면 가격×(자기자본/BPS)=가격×발행주식수 로 도출 (mock에서 market_cap_억=null 대응)
   const eqV = pick("total_equity_억"), bpsV = pick("bps");
   const mktcap = (fin(item.market_cap_억) ?? 0) || (eqV > 0 && bpsV > 0 ? Math.round((price * eqV) / bpsV) : 0);
@@ -213,8 +213,11 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
     verdict: item.verdict, tone, intrinsic, gapPct: item.gap_pct,
     models,
     summary: {
-      per: pick("per", item.per), pbr: pick("pbr", item.pbr), roe: pick("roe_pct", item.roe_pct), roa: pick("roa_pct", item.roa_pct),
-      debt: pick("debt_ratio_pct", item.debt_ratio_pct), divYield, payout: pick("payout_ratio_pct"),
+      // 단일 소스: item 팩터(ffl — 실측 시총 기반) 우선, evaluate 요약은 폴백 —
+      // 헤더 PER 36.99 vs 팩터 15.05 불일치(CIO 실사) 제거
+      per: fin(item.per) ?? pick("per"), pbr: fin(item.pbr) ?? pick("pbr"),
+      roe: fin(item.roe_pct) ?? pick("roe_pct"), roa: fin(item.roa_pct) ?? pick("roa_pct"),
+      debt: fin(item.debt_ratio_pct) ?? pick("debt_ratio_pct"), divYield, payout: pick("payout_ratio_pct"),
       eps: pick("eps"), bps: pick("bps"), dps: pick("dps"),
       revenue: pick("revenue_억"), op: pick("operating_profit_억"), ni: pick("net_income_억"), fcf: pick("fcf_억", item.fcf_억), equity: pick("total_equity_억"),
     },

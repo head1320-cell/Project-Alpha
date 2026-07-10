@@ -66,6 +66,16 @@ def test_comps_table_has_median_and_implied():
     assert set(imp) >= {"per_based", "pbr_based", "ev_ebitda_based"}
 
 
+def test_comps_scatter_quality_upside():
+    """리스크-리턴-퀄리티 스캐터: 퀄리티 0~100 백분위, 업사이드 존재, 자사 self 표시."""
+    out = ca.comps_table(CODE)
+    sc = out.get("scatter", [])
+    if len(sc) >= 3:   # mock 피어 수에 따라 3 미만이면 스캐터 생략(프론트도 미렌더)
+        assert any(p["self"] for p in sc)
+        assert all(0 <= p["quality"] <= 100 for p in sc)
+        assert all(isinstance(p["upside"], (int, float)) for p in sc)
+
+
 # ── financial_deep (합성 financials_history로 수식 검증) ──
 
 def _install_history(monkeypatch, rows):

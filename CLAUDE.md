@@ -1329,3 +1329,54 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
 - 신규 TDD 19개(test_company_analytics 15 + test_company_routes 4): 민감도 단조성·TV 발산
   가드·듀폰 곱=ROE·워터폴 항등·QoE 규칙 발화/비발화·Beneish 수식/라벨/무전년·Altman 기여
   합=Z·스트레스 방향성. tsc 0, next build(/insights 18kB), 217 라우트.
+
+---
+
+## 🩺 기업분석 라운드2 — CIO 실사 데이터 정합성 백본 + 기관급 시각화
+
+[배경] 사용자 제공 Gemini 라운드2 PDF: CIO 실사가 GCP 실화면에서 치명적 데이터 오류 고발
+(BPS ₩566만, PER 36.99 vs 15.05 불일치, YoY==QoQ, 52주 +517%, 수급 -1519조, 시총 1672조,
+시총이 안정성 카테고리) + 시각화 기관급 격상 요구. 스펙 없이 직접 구현(사용자 지시).
+
+### ① 데이터 정합성 백본 (tests/test_data_integrity_round2.py 8종 + 기존 갱신)
+1. **주식수/시총 단일 진실** (BPS ₩566만·시총 1672조·그레이엄 759만 공통 근본):
+   financials_history.shares_outstanding은 대부분 NULL(DART FS API가 주식수 미제공) →
+   10000만주 폴백 → BPS≈자본총계(억). 있어도 단위(주vs만주) 불일치.
+   → `_market_snapshot(code)`: KIS master 시총(억)+daily_prices 최근종가로 **파생 주식수**
+   (시총/주가 — 둘 다 post-split이라 액면분할 자동 보정). DART 주식수(만주 환산)와 2배 이상
+   괴리 시 파생값 채택. mcap도 item>master>PBR1.2근사 순.
+2. **수급 -1519조 (100배)**: KIS pbmn=백만원·KRX=원 혼합 저장 + '억' 라벨.
+   → 적재 시 억 단일화(kis_client /100, krx_mdc /1e8) + scripts/migrate_flows_units.py
+   (기존 행 1회 변환, 멱등 마커 meta:flows_unit, --dry-run 지원).
+3. **YoY==QoQ 복사버그**: 실경로 rev_q=연간/4 → QoQ≡YoY. → 분기 원천 없으면 None(정직).
+4. **실팩터 mock 오염 제거**: price_momentum_12_1/pead_score/growth_acceleration(난수) →
+   실경로 None. beneish_m mock 지수 → 실측(GMI·SGI·발생액)+중립. _maybe_missing(인위결측) mock 전용화.
+5. **배당 미상 vs 무배당**: dps NULL→dividend_yield None / dps=0→0 (구분).
+6. **52주 +517%**: ±45% 단일봉 점프(분할·권리락 미보정 시그니처) 감지 시 52주류 팩터 None +
+   football field 52주 밴드 available:false. 정상 시 현재가 정렬(scale=price/last_close).
+7. **PER/PBR/배당 단일화**: attach_fundamentals가 실데이터일 때 item 기본필드(roe_pct/per/
+   pbr/dividend_yield_pct)를 ffl 팩터로 동기화 + 프론트 헤더가 item 팩터 우선(evaluate 요약은 폴백).
+8. **분류 재정립**: market_cap_억 → size("규모") 카테고리 (안정성에서 제거).
+
+### ② 시각화 기관급 (프론트, 외부 라이브러리 無)
+- **Football Field v2**: SVG→HTML 행 박스플롯. 로버스트 축(현재가 4배↑/0.15배↓ 밴드는 축
+  계산 제외 + "축 범위 밖" 정직 표기 — 그레이엄 아웃라이어가 차트 뭉개던 렌더 버그 해결),
+  현재가 관통 기준선+태그, 축 눈금, 행별 값 라벨(고평가 밴드 붉은색).
+- **리스크-리턴-퀄리티 사분면**: comps_table에 scatter 추가 — Y=업사이드(내재가/현재가−1),
+  X=퀄리티(Altman↑·Beneish↓·Sloan↓ 피어 내 백분위 통합×100). 자사 강조, 사분면 라벨
+  (우량·고수익/투기적/안정/회피), **노드 클릭 → 듀폰 3단 분해 팝업**(financialDeep lazy).
+- **Ke×g 3D 등축 표면**: 민감도 섹션 2D/3D 토글 — SVG 폴리곤 등축투영, TV 발산 칸은 절벽(구멍),
+  현재가 대비 up/dn 색. "금리·성장 동시 악화 시 가치 절벽" 임계점 시각화.
+
+### 제외 (정직 — 별도 대형 과제)
+- RAG 주석 드릴다운·Generative UI·에이전틱 차팅(LLM 인프라 선행), 마르코프 확률 국면 엔진
+  (기존 regime+trajectory와 중복), 섹터특화 밸류 우회(컨센서스 필요).
+
+### 검증: 761 passed / 10 skipped, ruff·tsc 0, next build(/insights 19.6kB).
+라이브: 스캐터 4노드(자사 self)·52주 밴드 현재가 정렬·풋볼필드 로버스트 축 확인.
+
+### GCP 런북 (사용자)
+1. 재배포 → `docker compose exec backend python scripts/migrate_flows_units.py --dry-run`
+   (변환 대상 확인) → `--dry-run` 없이 실행 (수급 단위 1회 변환, 멱등).
+2. **"펀더멘털" 재적재** → 주식수/시총/PER/PBR/배당이 실측 기반으로 재산출(BPS·그레이엄 정상화).
+3. 기업분석 탭에서 헤더 PER == 팩터 PER 일치, 풋볼필드 정상 렌더, 스캐터·3D 표면 확인.

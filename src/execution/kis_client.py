@@ -84,12 +84,18 @@ def normalize_investor_rows(rows: list) -> list[dict]:
     """KIS 투자자별 응답(output) → 정규화 행.
 
     반환: [{date "YYYY-MM-DD", prsn_qty, frgn_qty, orgn_qty,
-            prsn_amt, frgn_amt, orgn_amt}] (량=주, 금액=KIS pbmn 단위 그대로)"""
+            prsn_amt, frgn_amt, orgn_amt}] — 량=주, 금액=★억원 단위로 정규화★.
+    KIS pbmn 필드는 백만원 단위 → /100. (원본을 단위 그대로 저장하던 시절 표시가
+    '외국인 20일 순매수 -1519조'로 100배 뻥튀기 — CIO 실사. 적재 시 억 단일화)"""
     def _f(v):
         try:
             return float(str(v).replace(",", "").strip())
         except (TypeError, ValueError):
             return None
+
+    def _억(v):  # pbmn(백만원) → 억원
+        x = _f(v)
+        return (x / 100.0) if x is not None else None
 
     out = []
     for r in rows or []:
@@ -101,9 +107,9 @@ def normalize_investor_rows(rows: list) -> list[dict]:
             "prsn_qty": _f(r.get("prsn_ntby_qty")),
             "frgn_qty": _f(r.get("frgn_ntby_qty")),
             "orgn_qty": _f(r.get("orgn_ntby_qty")),
-            "prsn_amt": _f(r.get("prsn_ntby_tr_pbmn")),
-            "frgn_amt": _f(r.get("frgn_ntby_tr_pbmn")),
-            "orgn_amt": _f(r.get("orgn_ntby_tr_pbmn")),
+            "prsn_amt": _억(r.get("prsn_ntby_tr_pbmn")),
+            "frgn_amt": _억(r.get("frgn_ntby_tr_pbmn")),
+            "orgn_amt": _억(r.get("orgn_ntby_tr_pbmn")),
         })
     out.reverse()  # KIS 최신→과거 → 과거→현재
     return out

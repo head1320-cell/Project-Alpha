@@ -1587,7 +1587,8 @@ export interface ValuationSandbox {
   defaults: { rf: number; beta: number; erp: number; g: number; years: number };
   football_field: { current_price: number; bands: FootballBand[] };
   comps: { sector?: string; rows: CompsRow[]; median_row: Partial<CompsRow>;
-    implied: { per_based: number | null; pbr_based: number | null; ev_ebitda_based: number | null } };
+    implied: { per_based: number | null; pbr_based: number | null; ev_ebitda_based: number | null };
+    scatter?: { code: string; name: string; upside: number; quality: number; self: boolean }[] };
 }
 
 export interface FinancialDeep {

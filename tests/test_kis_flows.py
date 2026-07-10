@@ -34,7 +34,7 @@ def test_normalize_investor_rows():
     assert [r["date"] for r in rows] == ["2024-01-04", "2024-01-05"]  # 과거→현재 반전
     assert rows[1]["frgn_qty"] == 1234.0 and rows[1]["orgn_qty"] == -567.0
     assert rows[0]["frgn_qty"] == -2000.0
-    assert rows[1]["frgn_amt"] == 88800.0
+    assert rows[1]["frgn_amt"] == 888.0   # pbmn(백만원) 88,800 → 888억 (적재 시 억 정규화)
 
 
 # ─── 적재 (sqlite in-memory) ──────────────────────────────────────────────────

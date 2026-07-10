@@ -50,52 +50,144 @@ export default function ValuationTab({ code, price }: { code: string; price: num
           onReset={() => { setOv({}); load({}); }} />
         <SensitivityHeatmap s={data.sensitivity} />
       </div>
+      <RiskReturnScatter scatter={data.comps.scatter ?? []} sector={data.comps.sector} />
       <CompsTable comps={data.comps} selfCode={code} />
     </div>
   );
 }
 
+// 리스크-리턴-퀄리티 사분면 (CIO: 딜 성격 1초 정의) — X=퀄리티(Altman·Beneish·Sloan
+// 피어 내 백분위 통합), Y=업사이드(내재가/현재가−1). 노드 클릭 → 듀폰 3단 분해 팝업.
+function RiskReturnScatter({ scatter, sector }: {
+  scatter: NonNullable<ValuationSandbox["comps"]["scatter"]>; sector?: string;
+}) {
+  const [popup, setPopup] = useState<{ code: string; name: string; body: string } | null>(null);
+  if (scatter.length < 3) return null;
+  const ups = scatter.map((p) => p.upside);
+  const yLo = Math.min(-20, ...ups), yHi = Math.max(20, ...ups);
+  const X = (q: number) => (q / 100) * 100;
+  const Y = (u: number) => 64 - ((u - yLo) / (yHi - yLo || 1)) * 60;
+
+  const onNode = async (p: { code: string; name: string }) => {
+    try {
+      const fd = await companyApi.financialDeep(p.code);
+      const d = fd.dupont;
+      const i = d.years.length - 1;
+      const body = i >= 0
+        ? `${d.years[i]}년 ROE ${d.roe[i] ?? "—"}% = 순이익률 ${d.net_margin[i] ?? "—"}% × 회전율 ${d.asset_turnover[i] ?? "—"} × 레버리지 ${d.leverage[i] ?? "—"}`
+        : "듀폰 분해 데이터 없음 (재무 시계열 미적재)";
+      setPopup({ code: p.code, name: p.name, body });
+    } catch {
+      setPopup({ code: p.code, name: p.name, body: "듀폰 분해 로드 실패" });
+    }
+  };
+
+  return (
+    <section className="ca-cp-sec" style={{ position: "relative" }}>
+      <h4>리스크-리턴-퀄리티 매트릭스
+        <span className="ca-cp-sub">{sector ?? ""} 피어 · X=퀄리티(백분위) · Y=업사이드% · 노드 클릭=듀폰</span></h4>
+      <svg viewBox="0 0 100 68" className="ca-rr-svg" preserveAspectRatio="none">
+        <line x1={50} x2={50} y1={2} y2={64} className="ca-rr-axis" />
+        <line x1={0} x2={100} y1={Y(0)} y2={Y(0)} className="ca-rr-axis" />
+        <text x={97} y={Y(0) - 2} className="ca-rr-qlabel" textAnchor="end">우량·고수익</text>
+        <text x={3} y={Y(0) - 2} className="ca-rr-qlabel">저퀄리티·고수익 (투기적)</text>
+        <text x={97} y={62} className="ca-rr-qlabel" textAnchor="end">우량·저수익 (안정)</text>
+        <text x={3} y={62} className="ca-rr-qlabel">저퀄리티·저수익 (회피)</text>
+        {scatter.map((p) => (
+          <g key={p.code} onClick={() => onNode(p)} style={{ cursor: "pointer" }}>
+            <circle cx={X(p.quality)} cy={Y(p.upside)} r={p.self ? 2.2 : 1.4}
+              className={p.self ? "ca-rr-node self" : "ca-rr-node"}>
+              <title>{p.name} · 업사이드 {p.upside}% · 퀄리티 {p.quality}</title>
+            </circle>
+            {p.self && (
+              <text x={X(p.quality) + 3} y={Y(p.upside) + 1} className="ca-rr-name">{p.name}</text>
+            )}
+          </g>
+        ))}
+      </svg>
+      {popup && (
+        <div className="ca-rr-popup">
+          <b>{popup.name}</b> <button onClick={() => setPopup(null)}>✕</button>
+          <div>{popup.body}</div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
-  const bands = ff.bands.filter((b) => b.available !== false && b.lo != null && b.hi != null);
+  const P = ff.current_price;
+  const all = ff.bands.filter((b) => b.available !== false && b.lo != null && b.hi != null);
   const unavailable = ff.bands.filter((b) => b.available === false);
-  if (!bands.length) return <div className="ca-cp-note">밴드 산출 불가 — 재무 데이터 부족</div>;
-  const values = [...bands.flatMap((b) => [b.lo as number, b.hi as number]), ff.current_price];
-  const lo = Math.min(...values) * 0.95, hi = Math.max(...values) * 1.05 || 1;
-  const X = (v: number) => ((v - lo) / (hi - lo)) * 100;
-  const H = bands.length * 34 + 20;
+  if (!all.length) return <div className="ca-cp-note">밴드 산출 불가 — 재무 데이터 부족</div>;
+
+  // 로버스트 축: 현재가와 극단 괴리(4배↑/0.15배↓) 밴드는 축 계산에서 제외하고
+  // '축 범위 밖'으로 정직 표기 — 그레이엄 넘버 같은 아웃라이어 1개가 차트를 뭉개는 것 방지.
+  const inRange = all.filter((b) => (b.lo as number) <= P * 4 && (b.hi as number) >= P * 0.15);
+  const outliers = all.filter((b) => !inRange.includes(b));
+  const shown = inRange.length ? inRange : all;
+  const values = [...shown.flatMap((b) => [b.lo as number, b.hi as number]), P];
+  const lo = Math.min(...values) * 0.93;
+  const hi = Math.max(...values) * 1.07 || 1;
+  const X = (v: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+  const ticks = [lo, (lo + hi) / 2, hi];
+
   return (
     <section className="ca-cp-sec">
-      <h4>Valuation Football Field <span className="ca-cp-sub">현재가 대비 가치 밴드</span></h4>
-      <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="ca-ff-svg"
-        style={{ width: "100%", height: H * 2.2 }}>
-        {bands.map((b, i) => {
-          const y = 12 + i * 34;
-          const x1 = X(b.lo as number), x2 = Math.max(X(b.hi as number), x1 + 0.6);
+      <h4>Valuation Football Field <span className="ca-cp-sub">현재가 기준선 대비 가치 밴드 (수평 박스플롯)</span></h4>
+      <div className="ca-ff2">
+        {/* 현재가 기준선 (전 행 관통) */}
+        <div className="ca-ff2-price" style={{ left: `calc(168px + (100% - 258px) * ${X(P) / 100})` }}>
+          <span className="ca-ff2-price-tag">현재가 {fmtW(P)}</span>
+        </div>
+        {shown.map((b) => {
+          const x1 = X(b.lo as number), x2 = Math.max(X(b.hi as number), x1 + 0.8);
+          const below = (b.hi as number) < P;   // 밴드 전체가 현재가 아래 = 고평가 신호
           return (
-            <g key={b.id}>
-              <rect x={x1} y={y} width={x2 - x1} height={14} rx={1}
-                className={`ca-ff-band ca-ff-${b.id}`} />
-              {b.mid != null && (
-                <line x1={X(b.mid)} x2={X(b.mid)} y1={y - 1} y2={y + 15} className="ca-ff-mid" />
-              )}
-            </g>
+            <div key={b.id} className="ca-ff2-row">
+              <span className="ca-ff2-label" title={b.note ?? ""}>{b.label}</span>
+              <div className="ca-ff2-track">
+                <div className={`ca-ff2-bar ca-ff-${b.id}`}
+                  style={{ left: `${x1}%`, width: `${x2 - x1}%` }}>
+                  {b.mid != null && (b.mid as number) >= (b.lo as number) && (
+                    <i className="ca-ff2-mid" style={{
+                      left: `${(((b.mid as number) - (b.lo as number)) /
+                        Math.max(1e-9, (b.hi as number) - (b.lo as number))) * 100}%` }} />
+                  )}
+                </div>
+              </div>
+              <span className={`ca-ff2-val ${below ? "dn" : ""}`}>
+                {fmtW(b.lo)} ~ {fmtW(b.hi)}
+              </span>
+            </div>
           );
         })}
-        <line x1={X(ff.current_price)} x2={X(ff.current_price)} y1={2} y2={H - 2}
-          className="ca-ff-price" />
-      </svg>
-      <div className="ca-ff-legend">
-        {bands.map((b) => (
-          <span key={b.id} className="ca-ff-leg">
-            <i className={`ca-ff-dot ca-ff-${b.id}`} />
-            {b.label} <b>{fmtW(b.lo)}~{fmtW(b.hi)}</b>{b.note ? ` · ${b.note}` : ""}
-          </span>
-        ))}
-        <span className="ca-ff-leg"><i className="ca-ff-dot ca-ff-cur" />현재가 <b>{fmtW(ff.current_price)}</b></span>
-        {unavailable.map((b) => (
-          <span key={b.id} className="ca-ff-leg ca-ff-na">{b.label}: {b.note}</span>
-        ))}
+        {/* 축 눈금 */}
+        <div className="ca-ff2-row ca-ff2-axis">
+          <span className="ca-ff2-label" />
+          <div className="ca-ff2-track" style={{ border: "none", background: "none" }}>
+            {ticks.map((t, i) => (
+              <span key={i} className="ca-ff2-tick" style={{ left: `${X(t)}%` }}>
+                {Math.round(t / 1000).toLocaleString()}k
+              </span>
+            ))}
+          </div>
+          <span className="ca-ff2-val" />
+        </div>
       </div>
+      {(outliers.length > 0 || unavailable.length > 0) && (
+        <div className="ca-ff-legend" style={{ marginTop: 8 }}>
+          {outliers.map((b) => (
+            <span key={b.id} className="ca-ff-leg ca-ff-na">
+              ⚠ {b.label} {fmtW(b.lo)}{b.lo !== b.hi ? `~${fmtW(b.hi)}` : ""} — 축 범위 밖
+              (현재가 대비 극단 괴리 · 원천 데이터 검증 필요)
+            </span>
+          ))}
+          {unavailable.map((b) => (
+            <span key={b.id} className="ca-ff-leg ca-ff-na">{b.label}: {b.note}</span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -133,31 +225,80 @@ function AssumptionPanel({ data, ov, onSlide, onReset }: {
 }
 
 function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
+  const [mode, setMode] = useState<"2d" | "3d">("2d");
   return (
     <section className="ca-cp-sec">
-      <h4>민감도 매트릭스 <span className="ca-cp-sub">Ke(행) × g(열) — 초록=현재가 대비 업사이드</span></h4>
-      <div style={{ overflowX: "auto" }}>
-        <table className="ca-heat">
-          <thead><tr><th>Ke \ g</th>{s.g_axis.map((g) => <th key={g}>{(g * 100).toFixed(1)}%</th>)}</tr></thead>
-          <tbody>
-            {s.grid.map((row, i) => (
-              <tr key={i}>
-                <th>{(s.ke_axis[i] * 100).toFixed(1)}%</th>
-                {row.map((v, j) => {
-                  const cls = v == null ? "na" : v >= s.current_price ? "up" : "dn";
-                  return <td key={j} className={`ca-heat-c ${cls}`}
-                    title={v == null ? "TV 발산 (g≈Ke)" : fmtW(v)}>
-                    {v == null ? "—" : `${Math.round(v / 1000).toLocaleString()}k`}</td>;
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <h4>민감도 매트릭스
+        <span className="ca-cp-sub">Ke(행) × g(열) — 초록=현재가 대비 업사이드</span>
+        <span className="ca-heat-toggle">
+          <button className={mode === "2d" ? "on" : ""} onClick={() => setMode("2d")}>2D</button>
+          <button className={mode === "3d" ? "on" : ""} onClick={() => setMode("3d")}>3D 표면</button>
+        </span>
+      </h4>
+      {mode === "2d" ? (
+        <div style={{ overflowX: "auto" }}>
+          <table className="ca-heat">
+            <thead><tr><th>Ke \ g</th>{s.g_axis.map((g) => <th key={g}>{(g * 100).toFixed(1)}%</th>)}</tr></thead>
+            <tbody>
+              {s.grid.map((row, i) => (
+                <tr key={i}>
+                  <th>{(s.ke_axis[i] * 100).toFixed(1)}%</th>
+                  {row.map((v, j) => {
+                    const cls = v == null ? "na" : v >= s.current_price ? "up" : "dn";
+                    return <td key={j} className={`ca-heat-c ${cls}`}
+                      title={v == null ? "TV 발산 (g≈Ke)" : fmtW(v)}>
+                      {v == null ? "—" : `${Math.round(v / 1000).toLocaleString()}k`}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <SurfaceIso s={s} />
+      )}
       <div className="ca-cp-sub" style={{ marginTop: 6 }}>
-        — 칸은 영구성장률이 할인율에 근접해 잔존가치(TV)가 발산하는 조합(산출 불가).
+        {mode === "2d"
+          ? "— 칸은 영구성장률이 할인율에 근접해 잔존가치(TV)가 발산하는 조합(산출 불가)."
+          : "높이=내재가치. Ke·g가 동시에 악화될 때 가치가 절벽처럼 꺾이는 위험 임계점(TV 발산 부근)이 드러남."}
       </div>
     </section>
+  );
+}
+
+// Ke×g 3D 등축(isometric) 표면 — 외부 라이브러리 없이 SVG 폴리곤. 뒤→앞 렌더.
+function SurfaceIso({ s }: { s: ValuationSandbox["sensitivity"] }) {
+  const vals = s.grid.flat().filter((v): v is number => v != null);
+  if (!vals.length) return <div className="ca-cp-note">표면 산출 불가 (전 칸 TV 발산)</div>;
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const CX = 6.5, CY = 3.4, HMAX = 26;   // 등축 셀 폭/깊이, 최대 높이
+  const px = (i: number, j: number) => 50 + (j - i) * CX;
+  const py = (i: number, j: number, v: number | null) =>
+    16 + (i + j) * CY - (v == null ? 0 : ((v - lo) / span) * HMAX) + HMAX;
+  const cells: { i: number; j: number; quad: string; up: boolean }[] = [];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      const c = [s.grid[i][j], s.grid[i][j + 1], s.grid[i + 1][j + 1], s.grid[i + 1][j]];
+      if (c.some((v) => v == null)) continue;   // TV 발산 구멍 — 절벽으로 시각화됨
+      const quad = [
+        `${px(i, j)},${py(i, j, c[0])}`, `${px(i, j + 1)},${py(i, j + 1, c[1])}`,
+        `${px(i + 1, j + 1)},${py(i + 1, j + 1, c[2])}`, `${px(i + 1, j)},${py(i + 1, j, c[3])}`,
+      ].join(" ");
+      const avg = (c as number[]).reduce((a, b) => a + b, 0) / 4;
+      cells.push({ i, j, quad, up: avg >= s.current_price });
+    }
+  }
+  cells.sort((a, b) => (a.i + a.j) - (b.i + b.j));   // 뒤→앞
+  return (
+    <svg viewBox="0 0 100 78" className="ca-iso-svg" preserveAspectRatio="xMidYMid meet">
+      {cells.map((c, k) => (
+        <polygon key={k} points={c.quad} className={`ca-iso-cell ${c.up ? "up" : "dn"}`}>
+          <title>Ke {(s.ke_axis[c.i] * 100).toFixed(1)}~{(s.ke_axis[c.i + 1] * 100).toFixed(1)}% · g {(s.g_axis[c.j] * 100).toFixed(1)}~{(s.g_axis[c.j + 1] * 100).toFixed(1)}%</title>
+        </polygon>
+      ))}
+      <text x={50 - 4 * CX - 2} y={16 + 4 * CY + HMAX + 6} className="ca-rr-qlabel">Ke↑ (할인율)</text>
+      <text x={50 + 4 * CX - 12} y={16 + 4 * CY + HMAX + 6} className="ca-rr-qlabel">g↑ (영구성장)</text>
+    </svg>
   );
 }
 
