@@ -82,10 +82,10 @@ export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: 
   const nx = cx + R * Math.cos(ang), ny = cy - R * Math.sin(ang);
   const mag = Math.min(1, Math.hypot(clamp1(g), clamp1(i)));
   const sectors = [
-    { a0: -45, a1: 45, fill: "rgba(234,88,12,0.10)", lbl: "OVERHEAT", lx: cx + R * 0.7, ly: cy - R * 0.62 },
+    { a0: -45, a1: 45, fill: "rgba(234,88,12,0.10)", lbl: "REFLATE", lx: cx + R * 0.7, ly: cy - R * 0.62 },
     { a0: 45, a1: 135, fill: "rgba(220,38,38,0.10)", lbl: "STAGFLATE", lx: cx - R * 0.7, ly: cy - R * 0.62 },
     { a0: 135, a1: 225, fill: "rgba(37,99,235,0.10)", lbl: "DISINFLATE", lx: cx - R * 0.7, ly: cy + R * 0.72 },
-    { a0: 225, a1: 315, fill: "rgba(22,163,74,0.10)", lbl: "REFLATE", lx: cx + R * 0.7, ly: cy + R * 0.72 },
+    { a0: 225, a1: 315, fill: "rgba(22,163,74,0.10)", lbl: "GOLDILOCKS", lx: cx + R * 0.7, ly: cy + R * 0.72 },
   ];
   const arc = (a0: number, a1: number) => {
     const p0 = [cx + R * Math.cos((a0 * Math.PI) / 180), cy - R * Math.sin((a0 * Math.PI) / 180)];
@@ -289,5 +289,166 @@ export function DrillDownModal({ series, loading, onClose }: { series: MacroSeri
         )}
       </div>
     </div>
+  );
+}
+
+// ═══ v2 (CIO 리팩토링) — 확률·분해·게이지·배분 시각화 ═══════════════════════════
+
+// ProbBars — 사분면 확률 분포 (정적 '신뢰도 %' 텍스트 대체, 합=1)
+const QUAD_ORDER = ["Goldilocks", "Reflation", "Stagflation", "Disinflation"] as const;
+const QUAD_COLOR: Record<string, string> = {
+  Goldilocks: "#16a34a", Reflation: "#ea580c", Stagflation: "#dc2626", Disinflation: "#2563eb",
+};
+export function ProbBars({ probs, compact = false }: { probs: Record<string, number>; compact?: boolean }) {
+  if (!probs || !Object.keys(probs).length) return null;
+  return (
+    <div className={`mc-probbars${compact ? " compact" : ""}`}>
+      {QUAD_ORDER.map((q) => {
+        const p = (probs[q] ?? 0) * 100;
+        return (
+          <div key={q} className="mc-pb-row" title={`${q} ${p.toFixed(1)}%`}>
+            <span className="mc-pb-k">{compact ? q.slice(0, 4).toUpperCase() : q}</span>
+            <div className="mc-pb-track"><i style={{ width: `${Math.max(1.5, p)}%`, background: QUAD_COLOR[q] }} /></div>
+            <span className="mc-pb-v">{p.toFixed(0)}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// AxisBreakdown — 축 스코어의 지표별 분해(변환 z·모멘텀 z·기여) 테이블.
+//   "CPI 레벨 +2.17σ인데 축 -0.28" 모순의 투명화: 축이 실제로 먹는 z(YoY 변환)를 그대로 표시.
+export function AxisBreakdown({ title, detail }: { title: string; detail?: { score: number; se: number; components: Array<{ key: string; transform: string; z: number; z_mom: number | null; weight: number; contribution: number }> } }) {
+  if (!detail || !detail.components?.length) return null;
+  return (
+    <div className="mc-axisbd">
+      <div className="mc-axisbd-h">{title} <b>{detail.score >= 0 ? "+" : ""}{detail.score.toFixed(2)}</b> <em>±{detail.se.toFixed(2)}</em></div>
+      <table className="mc-axisbd-t">
+        <thead><tr><th>지표</th><th>변환</th><th>z</th><th>모멘텀z</th><th>가중</th><th>기여</th></tr></thead>
+        <tbody>
+          {detail.components.map((c) => (
+            <tr key={c.key}>
+              <td>{c.key}</td>
+              <td>{c.transform === "yoy" ? "YoY" : "레벨"}</td>
+              <td style={{ color: c.z >= 0 ? "#dc2626" : "#2563eb" }}>{c.z >= 0 ? "+" : ""}{c.z.toFixed(2)}</td>
+              <td>{c.z_mom == null ? "—" : `${c.z_mom >= 0 ? "+" : ""}${c.z_mom.toFixed(2)}`}</td>
+              <td>{(c.weight * 100).toFixed(0)}%</td>
+              <td><b>{c.contribution >= 0 ? "+" : ""}{c.contribution.toFixed(3)}</b></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// CbGauge — 중앙은행 매파/비둘기 게이지 (-1 완화 ~ +1 긴축)
+export function CbGauge({ name, bank }: { name: string; bank?: { available: boolean; score?: number; label?: string; hawkish_hits?: number; dovish_hits?: number; terms?: string[]; note?: string } }) {
+  if (!bank) return null;
+  if (!bank.available) {
+    return <div className="mc-cbg"><div className="mc-cbg-h">{name}</div><div className="mc-empty-sm">{bank.note ?? "미수집"}</div></div>;
+  }
+  const s = bank.score ?? 0;
+  const pos = ((s + 1) / 2) * 100;
+  return (
+    <div className="mc-cbg">
+      <div className="mc-cbg-h">{name} <b style={{ color: s > 0.2 ? "#dc2626" : s < -0.2 ? "#2563eb" : "var(--t-muted)" }}>{bank.label}</b></div>
+      <div className="mc-cbg-track">
+        <i className="mc-cbg-marker" style={{ left: `${pos}%` }} />
+      </div>
+      <div className="mc-cbg-scale"><span>-1 완화</span><span>0</span><span>+1 긴축</span></div>
+      <div className="mc-cbg-meta">매파 용어 {bank.hawkish_hits} · 비둘기 {bank.dovish_hits}{bank.terms?.length ? ` · ${bank.terms.slice(0, 4).join(", ")}` : ""}</div>
+    </div>
+  );
+}
+
+// AllocAttribution — 비중 결정 요인 분해 (base+성장+물가+스트레스 = 최종, 룰 항 정확 분해)
+export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label: string; base: number; growth: number; inflation: number; stress: number; final: number }> }) {
+  const TERMS = [["growth", "성장", "#16a34a"], ["inflation", "물가", "#ea580c"], ["stress", "스트레스", "#dc2626"]] as const;
+  const maxAbs = Math.max(...rows.flatMap((r) => [Math.abs(r.growth), Math.abs(r.inflation), Math.abs(r.stress)]), 1);
+  return (
+    <div className="mc-attr">
+      {rows.map((r) => (
+        <div key={r.ticker} className="mc-attr-row">
+          <span className="mc-attr-nm">{r.label}</span>
+          <span className="mc-attr-base">기본 {r.base.toFixed(0)}%</span>
+          <div className="mc-attr-terms">
+            {TERMS.map(([k, lbl, color]) => {
+              const v = r[k];
+              return (
+                <span key={k} className="mc-attr-term" title={`${lbl} ${v >= 0 ? "+" : ""}${v.toFixed(1)}%p`}>
+                  <i style={{ width: `${(Math.abs(v) / maxAbs) * 46}px`, background: color, opacity: v >= 0 ? 0.85 : 0.35 }} />
+                  <em style={{ color: v >= 0 ? color : "var(--t-muted)" }}>{v >= 0 ? "+" : ""}{v.toFixed(1)}</em>
+                </span>
+              );
+            })}
+          </div>
+          <b className="mc-attr-final">{r.final.toFixed(1)}%</b>
+        </div>
+      ))}
+      <div className="mc-attr-legend">기본(전천후 중립) + <i style={{ background: "#16a34a" }} />성장 + <i style={{ background: "#ea580c" }} />물가 + <i style={{ background: "#dc2626" }} />스트레스 = 최종 (룰 항 정확 분해)</div>
+    </div>
+  );
+}
+
+// AllocBands — MC 신뢰구간 (p10–p90 밴드 + p50 마커): 단일 점추정 대신 불확실성 제시
+export function AllocBands({ bands }: { bands: Array<{ ticker: string; label: string; p10: number; p50: number; p90: number }> }) {
+  const hi = Math.max(...bands.map((b) => b.p90), 10);
+  return (
+    <div className="mc-bands">
+      {bands.map((b) => (
+        <div key={b.ticker} className="mc-band-row" title={`${b.label} p10 ${b.p10}% · p50 ${b.p50}% · p90 ${b.p90}%`}>
+          <span className="mc-band-nm">{b.label}</span>
+          <div className="mc-band-track">
+            <i className="mc-band-range" style={{ left: `${(b.p10 / hi) * 100}%`, width: `${Math.max(1, ((b.p90 - b.p10) / hi) * 100)}%` }} />
+            <i className="mc-band-med" style={{ left: `${(b.p50 / hi) * 100}%` }} />
+          </div>
+          <span className="mc-band-v">{b.p10.toFixed(0)}~{b.p90.toFixed(0)}%</span>
+        </div>
+      ))}
+      <div className="mc-attr-legend">국면 스코어 불확실성(±se) 하 MC 400회 — 밴드=p10~p90, 마커=중앙값</div>
+    </div>
+  );
+}
+
+// CausalGraphView — 그레인저(예측적) 인과 그래프: 원형 배치 + 방향 엣지(화살표)
+export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; label: string }>; edges: Array<{ from: string; to: string; lag: number; p: number }> }) {
+  if (!nodes.length) return <div className="mc-empty-sm">그래프 데이터 없음 (시계열 표본 부족)</div>;
+  const R = 118, CX = 170, CY = 140;
+  const pos: Record<string, { x: number; y: number }> = {};
+  nodes.forEach((n, k) => {
+    const a = (k / nodes.length) * 2 * Math.PI - Math.PI / 2;
+    pos[n.id] = { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) };
+  });
+  return (
+    <svg viewBox="0 0 340 280" className="mc-causal">
+      <defs>
+        <marker id="mcArrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={5} markerHeight={5} orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#1200ff" opacity={0.65} />
+        </marker>
+      </defs>
+      {edges.map((e, k) => {
+        const a = pos[e.from], b = pos[e.to];
+        if (!a || !b) return null;
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+        const sx = a.x + (dx / len) * 16, sy = a.y + (dy / len) * 16;
+        const ex = b.x - (dx / len) * 20, ey = b.y - (dy / len) * 20;
+        const w = Math.max(0.6, 2.4 - e.p * 20);   // p 낮을수록 굵게
+        return (
+          <g key={k}>
+            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke="#1200ff" strokeWidth={w} opacity={0.5} markerEnd="url(#mcArrow)">
+              <title>{e.from} → {e.to} · lag {e.lag}개월 · p={e.p}</title>
+            </line>
+          </g>
+        );
+      })}
+      {nodes.map((n) => (
+        <g key={n.id}>
+          <circle cx={pos[n.id].x} cy={pos[n.id].y} r={13} fill="var(--t-surface, #fafafa)" stroke="var(--t-border, #d5d5d5)" />
+          <text x={pos[n.id].x} y={pos[n.id].y + 24} textAnchor="middle" fontSize={7.5} fill="var(--t-muted)">{n.label}</text>
+        </g>
+      ))}
+    </svg>
   );
 }

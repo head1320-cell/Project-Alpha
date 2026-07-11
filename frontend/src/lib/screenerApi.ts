@@ -1376,6 +1376,31 @@ export interface MacroRecommend {
   };
   narrative: string; narrative_source: "rule" | "claude";
   ranking: RecommendRankItem[];
+  // ── v2 (CIO 리팩토링) ──
+  regime_probs?: Record<string, number>;   // 사분면 확률(합=1) — 정적 신뢰도% 대체
+  macro_allocation?: MacroAllocation;      // 매크로 임베딩 4계절 배분 (1순위 추천)
+}
+export interface MacroAllocAttribution {
+  ticker: string; label: string; base: number; growth: number; inflation: number;
+  stress: number; final: number;
+}
+export interface MacroAllocBand { ticker: string; label: string; p10: number; p50: number; p90: number }
+export interface MacroAllocation {
+  holdings: TacticalHolding[];
+  attribution: MacroAllocAttribution[];
+  bands: MacroAllocBand[];
+  inputs: { growth: number; inflation: number; stress: number; se_g: number; se_i: number };
+  method: string; note: string;
+}
+export interface CbSentimentBank {
+  available: boolean; score?: number; label?: string; hawkish_hits?: number;
+  dovish_hits?: number; terms?: string[]; note?: string; source?: string;
+}
+export interface CbSentiment { as_of: string; banks: { fed?: CbSentimentBank; bok?: CbSentimentBank }; method: string }
+export interface CausalEdge { from: string; to: string; from_label: string; to_label: string; lag: number; p: number }
+export interface CausalGraph {
+  available: boolean; nodes: { id: string; label: string }[]; edges: CausalEdge[];
+  method?: string; note?: string;
 }
 export interface MacroIndicator { id: string; name: string; unit: string; latest: number | null; z_score: number | null; percentile: number | null; delta: number | null; spark: number[] }
 export interface MacroTheme { key: string; label: string; indicators: MacroIndicator[] }
@@ -1499,6 +1524,17 @@ export const analysisApi = {
   macroTrajectory: async (): Promise<MacroTrajectory> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/regime-trajectory`);
     if (!r.ok) throw new Error(`Macro trajectory failed: ${r.status}`);
+    return r.json();
+  },
+  // v2: 중앙은행 센티먼트 게이지 + 그레인저 인과 그래프
+  cbSentiment: async (): Promise<CbSentiment> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/cb-sentiment`);
+    if (!r.ok) throw new Error(`CB sentiment failed: ${r.status}`);
+    return r.json();
+  },
+  causalGraph: async (): Promise<CausalGraph> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/causal-graph`);
+    if (!r.ok) throw new Error(`Causal graph failed: ${r.status}`);
     return r.json();
   },
   macroStrategyDetail: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyDetail> => {

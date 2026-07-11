@@ -1380,3 +1380,54 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
    (변환 대상 확인) → `--dry-run` 없이 실행 (수급 단위 1회 변환, 멱등).
 2. **"펀더멘털" 재적재** → 주식수/시총/PER/PBR/배당이 실측 기반으로 재산출(BPS·그레이엄 정상화).
 3. 기업분석 탭에서 헤더 PER == 팩터 PER 일치, 풋볼필드 정상 렌더, 스캐터·3D 표면 확인.
+
+---
+
+## 🌐 매크로 탭 대개편 — CIO(헤지펀드 퀀트) 리팩토링 + 혁신 3과제
+
+[배경] 사용자 제공 Gemini 진단(4대 정합성 버그 + 깃허브 트렌드 3혁신)을 코드로 검증 후 구현.
+추가 적발: 사분면 명명이 모듈 간 정반대(recommender 'Reflation'=성장↑물가↓ vs axes =성장↑물가↑).
+
+### ① 4대 버그 수정 (tests/test_macro_v2.py 9종)
+1. **명명 통일**: Deflation→**Disinflation**(물가 z<0=상승 둔화) + 全모듈 단일 컨벤션
+   (Goldilocks 성장↑물가↓/Reflation 성장↑물가↑/Stagflation/Disinflation) — axes·analyzer·
+   recommender·strategy_profiles·screener 국면가중치·프론트 라벨·CycleClock까지.
+2. **축 분해·모멘텀**(regime_axes.compute_axis_detail): 지표별 변환 z(YoY)·모멘텀 z·가중·기여
+   + 불확실성 se. 축 = 레벨 75% + 3개월 모멘텀 25%. "CPI 레벨 +2.17σ vs 축 -0.28 모순"의
+   정체 = UI가 원시 레벨 z를 축 입력처럼 표시 → Regime 탭 '축 스코어 분해' 카드로 투명화.
+3. **스트레스 v2**: 수익률곡선 10Y-2Y(역전 패널티 15%) + 실질금리(10Y−T10YIE) z(10%) 추가
+   — "실질금리 +1.7σ 긴축인데 Normal 44" 수정(역전+실질긴축 시나리오 47.8→90+).
+4. **좌표축 동적 스케일**(cockpitParts/analyticsParts): domain [-1,1] 고정+클램프 → ±ceil(max)
+   동적 — KR 성장 +2.06 마커 소실 버그 수정. 코너 라벨 통일 명명으로 교체.
+
+### ② 매크로 임베딩 TAA (macro_allocation.py + recommend 통합)
+- 국면 스코어(성장·물가)가 **직접 입력**인 4계절 선형 틸트(base 전천후 중립 + 감도×스코어
+  + 스트레스 디리스킹) — 가격 모멘텀 추천(S&P 88%)이 매크로 환경과 충돌하던 문제 해소.
+- **XAI 기여 분해**: 자산별 base+성장+물가+스트레스 = 최종 (룰 항 정확 분해 — 근사 SHAP보다 강함).
+- **MC 신뢰구간**: (g,i)~N(score,se) 400드로우(시드 고정) → 비중 p10/p50/p90 밴드.
+- recommend() 응답에 macro_allocation + regime_probs. Recommend 탭 1순위 카드(도넛+기여
+  워터폴+밴드). 기존 22전략 랭킹은 유지(참고용).
+
+### ③ 확률적 신뢰도 (quadrant_probs)
+- P(사분면)=Φ(g/se)·Φ(i/se) 조합(합=1), 신뢰도=최대 확률(기존 tanh 대체).
+- 배너 두 카드에 ProbBars(4분포 미니바), Regime 탭 확률 카드 — 정적 "신뢰도 80%" 텍스트 대체.
+
+### ④ 혁신 — CB 센티먼트 + 그레인저 인과 그래프 (tests/test_macro_innovations.py 6종)
+- **cb_sentiment.py**: Fed/BOK 정책문 매파/비둘기 렉시콘 스코어(-1~+1, 결정론). 수집 실패 시
+  available:false(합성 금지). Indicators 탭 게이지 2종. GET /macro/cb-sentiment.
+- **causal_graph.py**: statsmodels 그레인저(maxlag 3, p<0.10) → 방향 엣지. Correlations 탭
+  원형 노드-엣지 SVG + 상위 엣지 목록. **정직 라벨: 예측적 인과(구조적 아님)**.
+  GET /macro/causal-graph. (DoWhy/FinBERT 등 무거운 의존성 대신 검증가능한 대체 — 정직)
+
+### 제외 (별도 과제)
+- LLM(FinBERT) 파인튜닝 센티먼트·뉴스 크롤러 파이프라인, Black-Litterman 전면 교체(기존
+  22전략에 이미 존재 — 매크로 뷰 주입은 후속), Generative UI/에이전틱 차팅(LLM 인프라).
+
+### 검증
+- 776 passed / 10 skipped (신규 15) · ruff·tsc 0 · next build(/macro 29kB) · 221 라우트.
+- 라이브: Goldilocks P=54%, SPY 기여분해(18.0+1.1+0.2−0.2=19.0), TLT 밴드 19.0~23.8,
+  그레인저 엣지 13개(mock), CB 센티먼트 정직 결측(샌드박스 네트워크 차단).
+
+### 운영 노트 (컨테이너 재수화 관련)
+- fastapi는 반드시 requirements 고정 버전(0.111.0) — 최신 0.139에선 include_router가 깨져
+  라우터가 등록되지 않음(94 vs 221 라우트). 새 환경 셋업 시 `pip install -r requirements.txt`.

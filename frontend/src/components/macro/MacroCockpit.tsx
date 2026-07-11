@@ -15,7 +15,9 @@ import { stressColor } from "@/lib/macroApi";
 import type {
   MacroStrategies, MacroRecommend, TacticalStrategy, TacticalHolding,
   MacroCorrelations, MacroTiming, MacroTrajectory, StrategyDetail,
+  CbSentiment, CausalGraph,
 } from "@/lib/screenerApi";
+import { analysisApi } from "@/lib/screenerApi";
 import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
   loadCorrelations, loadTiming, loadTrajectory, loadStrategyDetail,
@@ -25,6 +27,7 @@ import {
   RegimeScatter, CycleClock, ArcGauge, YieldCurveChart, IndicatorCard, ZHeatmap,
   ValuationBars, HoldingsDonut, donutColor, SignalBadge, CompositeRow, DrillDownModal,
   fmtNum, fmtZ, fmtPct, sigColor,
+  ProbBars, AxisBreakdown, CbGauge, AllocAttribution, AllocBands, CausalGraphView,
 } from "./cockpitParts";
 import {
   CorrMatrix, RollingCorrChart, AvgCorrChart, ComponentBars, TimingHistory, TrendTable, RegimeTrajectory,
@@ -66,6 +69,15 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
   const [timing, setTiming] = useState<MacroTiming | null>(null);
   const [traj, setTraj] = useState<MacroTrajectory | null>(null);
   const [tabLoading, setTabLoading] = useState(false);
+  // v2 lazy: CB 센티먼트(Indicators) + 그레인저 인과 그래프(Correlations)
+  const [cbSent, setCbSent] = useState<CbSentiment | null | undefined>(undefined);
+  const [causal, setCausal] = useState<CausalGraph | null | undefined>(undefined);
+  useEffect(() => {
+    if (tab === "indicators" && cbSent === undefined)
+      analysisApi.cbSentiment().then(setCbSent).catch(() => setCbSent(null));
+    if (tab === "correlations" && causal === undefined)
+      analysisApi.causalGraph().then(setCausal).catch(() => setCausal(null));
+  }, [tab, cbSent, causal]);
   // 전략 상세 모달
   const [stratModal, setStratModal] = useState<{ sid: string; detail: StrategyDetail | null; loading: boolean } | null>(null);
 
@@ -132,8 +144,10 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
               <em style={{ fontFamily: "var(--t-mono)" }}>
                 성장 <b style={{ color: st.growth_axis >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{st.growth_axis >= 0 ? "+" : ""}{st.growth_axis.toFixed(2)}</b>
                 {" · "}물가 <b style={{ color: st.inflation_axis >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{st.inflation_axis >= 0 ? "+" : ""}{st.inflation_axis.toFixed(2)}</b>
-                {" · "}신뢰도 {(st.confidence * 100).toFixed(0)}%
+                {" · "}P(국면) {(st.confidence * 100).toFixed(0)}%
               </em>
+              {/* 정적 신뢰도% → 사분면 확률 분포 (CIO §확률적 제시) */}
+              {st.regime_probs && <ProbBars probs={st.regime_probs} compact />}
             </div>
           );
         })}
@@ -157,12 +171,12 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
       </div>
 
       {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} />}
-      {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} />}
+      {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} />}
       {tab === "regime" && <RegimeTab regime={regime} traj={traj} />}
       {tab === "valuation" && <ValuationTab core={core} />}
       {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
       {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
-      {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} />}
+      {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
       {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} loading={tabLoading} />}
 
       {drill && <DrillDownModal series={drill.series} loading={drill.loading} onClose={() => setDrill(null)} />}
@@ -256,11 +270,24 @@ function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // 02 Indicators
 // ─────────────────────────────────────────────────────────────────────────────
-function IndicatorsTab({ core, onDrill }: { core: MacroCore; onDrill: (id: string) => void }) {
+function IndicatorsTab({ core, onDrill, cbSent }: { core: MacroCore; onDrill: (id: string) => void; cbSent?: CbSentiment | null }) {
   const d = core.dashboard;
   if (!d) return <div className="mc-empty-sm">대시보드 데이터 없음</div>;
   return (
     <div className="mc-stack">
+      {/* Text-as-Data: 중앙은행 커뮤니케이션 톤 (하드데이터 후행성 보완) */}
+      <div className="mc-card">
+        <div className="mc-card-h">Central Bank Sentiment — 정책문 매파/비둘기 톤
+          <span className="mc-card-sub">{cbSent?.method ?? "렉시콘 기반 (수집 중…)"}</span></div>
+        {cbSent === undefined && <div className="mc-empty-sm">정책문 분석 중…</div>}
+        {cbSent === null && <div className="mc-empty-sm">센티먼트 로드 실패</div>}
+        {cbSent && (
+          <div className="mc-cbg-grid">
+            <CbGauge name="Fed (FOMC 성명)" bank={cbSent.banks.fed} />
+            <CbGauge name="한국은행 (통화정책방향)" bank={cbSent.banks.bok} />
+          </div>
+        )}
+      </div>
       <div className="mc-card">
         <div className="mc-card-h">매크로 히트맵 — 25지표 × Z-Score(5년) <span className="mc-card-sub">{d.sources.fred ? "FRED" : "mock"} · {d.sources.bok ? "ECOS" : "mock"}</span></div>
         <ZHeatmap themes={d.themes} onPick={(ind) => onDrill(ind.id)} />
@@ -305,6 +332,24 @@ function RegimeTab({ regime, traj }: { regime: NonNullable<MacroCore["regime"]>;
         <div className="mc-card-h">국면 좌표 (성장 × 물가) — 현재</div>
         <RegimeScatter g={regime.growth_axis} i={regime.inflation_axis} />
       </div>
+      {/* 축 분해 — "지표 σ와 축 스코어가 왜 다른가"에 대한 답: 축이 실제로 먹는 변환 z(YoY)와
+          레벨/모멘텀 블렌드 기여를 지표별로 공개. 히트맵의 레벨 σ와 구분(투명화). */}
+      {regime.axis_detail && (
+        <div className="mc-card span2">
+          <div className="mc-card-h">축 스코어 분해 — 지표별 기여 <span className="mc-card-sub">레벨 z(YoY 변환) 75% + 3개월 모멘텀 z 25%</span></div>
+          <div className="mc-axisbd-grid">
+            <AxisBreakdown title="성장 축" detail={regime.axis_detail.growth} />
+            <AxisBreakdown title="물가 축" detail={regime.axis_detail.inflation} />
+          </div>
+          <p className="mc-card-note">히트맵의 σ는 원시 레벨 z(지수형은 항상 우상향 → 구조적 +)이고, 국면 축은 YoY 변환 z를 사용합니다 — 두 수치가 다른 것은 모순이 아니라 변환 차이입니다. 이 표가 축의 실제 입력입니다.</p>
+        </div>
+      )}
+      {regime.regime_probs && (
+        <div className="mc-card">
+          <div className="mc-card-h">사분면 확률 <span className="mc-card-sub">축 불확실성(±se) 기반 · 합=1</span></div>
+          <ProbBars probs={regime.regime_probs} />
+        </div>
+      )}
       <div className="mc-card">
         <div className="mc-card-h">순환 시계</div>
         <div className="mc-center"><CycleClock g={regime.growth_axis} i={regime.inflation_axis} size={188} /></div>
@@ -485,6 +530,27 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
         </div>
       )}
       <div className="mc-grid">
+        {/* ★1순위: 매크로 임베딩 배분 (CIO §3) — 국면 스코어가 직접 입력. 가격 모멘텀 전략이
+            매크로 환경과 충돌하던 문제의 해소 + XAI 기여분해 + MC 신뢰구간. */}
+        {recommend.macro_allocation && (
+          <div className="mc-card span2 mc-featured">
+            <div className="mc-card-h">매크로 임베딩 배분 — 국면 직결 (1순위)
+              <span className="mc-card-sub">성장 {recommend.macro_allocation.inputs.growth >= 0 ? "+" : ""}{recommend.macro_allocation.inputs.growth.toFixed(2)} · 물가 {recommend.macro_allocation.inputs.inflation >= 0 ? "+" : ""}{recommend.macro_allocation.inputs.inflation.toFixed(2)} · Stress {recommend.macro_allocation.inputs.stress.toFixed(0)} → 4계절 틸트</span></div>
+            <div className="mc-reco">
+              <div className="mc-reco-l">
+                <HoldingsDonut holdings={recommend.macro_allocation.holdings} size={150} />
+                {recommend.regime_probs && <ProbBars probs={recommend.regime_probs} compact />}
+              </div>
+              <div className="mc-reco-r">
+                <div className="mc-alloc-sub">Weight Attribution — 비중 결정 요인 (룰 항 정확 분해)</div>
+                <AllocAttribution rows={recommend.macro_allocation.attribution} />
+                <div className="mc-alloc-sub" style={{ marginTop: 10 }}>비중 신뢰구간 — 몬테카를로 400회</div>
+                <AllocBands bands={recommend.macro_allocation.bands} />
+              </div>
+            </div>
+            <p className="mc-card-note">{recommend.macro_allocation.method} · {recommend.macro_allocation.note}</p>
+          </div>
+        )}
         <div className="mc-card span2">
           <div className="mc-card-h">최우선 추천 <SignalBadge signal={top.signal} /></div>
           <div className="mc-reco">
@@ -534,8 +600,9 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // 07 Correlations
 // ─────────────────────────────────────────────────────────────────────────────
-function CorrelationsTab({ corr, market, setMarket, loading }: {
+function CorrelationsTab({ corr, market, setMarket, loading, causal }: {
   corr: MacroCorrelations | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
+  causal?: CausalGraph | null;
 }) {
   const sb = corr?.stock_bond_now;
   const sbColor = sb?.verdict === "헤지" ? "var(--color-bull)" : sb?.verdict === "동조" ? "var(--color-bear)" : "var(--t-muted)";
@@ -562,6 +629,22 @@ function CorrelationsTab({ corr, market, setMarket, loading }: {
             <div className="mc-card-h">상관 매트릭스 — 최근 1년</div>
             <CorrMatrix m={corr.matrix} />
             <div className="mc-zlegend"><span>음(−) 분산</span><i className="mca-corr-grad" /><span>양(+) 동조</span></div>
+          </div>
+          {/* 상관(무방향)을 넘어선 방향성 선행 구조 — 그레인저 예측 인과 */}
+          <div className="mc-card span2">
+            <div className="mc-card-h">Causal Graph — 그레인저 예측 인과
+              <span className="mc-card-sub">{causal?.method ?? "검정 중…"}</span></div>
+            {causal === undefined && <div className="mc-empty-sm">인과 검정 중…</div>}
+            {causal === null && <div className="mc-empty-sm">인과 그래프 로드 실패</div>}
+            {causal && <CausalGraphView nodes={causal.nodes} edges={causal.edges} />}
+            {causal?.edges?.length ? (
+              <div className="mc-causal-list">
+                {causal.edges.slice(0, 6).map((e, k) => (
+                  <span key={k} className="mc-causal-edge">{e.from_label} → <b>{e.to_label}</b> <em>lag {e.lag}M · p={e.p}</em></span>
+                ))}
+              </div>
+            ) : null}
+            <p className="mc-card-note">{causal?.note ?? ""} 엣지 굵기 = 유의성(p 낮을수록 굵음). 상관 히트맵이 답하지 못하는 &quot;누가 누구를 선행하는가&quot;를 보여줍니다.</p>
           </div>
         </div>
       )}

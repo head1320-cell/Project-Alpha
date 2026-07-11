@@ -41,12 +41,21 @@ export interface YieldCurvePoint {
   trend: string;
 }
 
+export interface AxisComponent {
+  key: string; transform: "yoy" | "level"; sign: number; weight: number;
+  z: number; z_mom: number | null; blend: number; contribution: number;
+}
+export interface AxisDetail { score: number; se: number; components: AxisComponent[] }
+
 export interface RegimeState {
   timestamp: string;
   regime: Regime;
   growth_axis: number;
   inflation_axis: number;
   confidence: number;
+  // v2: 축 분해(지표별 변환 z·기여 — 'CPI 레벨 σ vs 축' 표시 모순 해소) + 사분면 확률
+  axis_detail?: { growth: AxisDetail; inflation: AxisDetail };
+  regime_probs?: Record<string, number>;
 
   stress_score: number;
   stress_components: Record<string, number>;

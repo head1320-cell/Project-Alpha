@@ -2717,3 +2717,49 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .ca-iso-cell { stroke: #fff; stroke-width: .25; }
 .ca-iso-cell.up { fill: #0e7c4a; opacity: .78; }
 .ca-iso-cell.dn { fill: #4a5fc1; opacity: .68; }
+
+/* ── 매크로 v2: 확률 바 / 축 분해 / CB 게이지 / 배분 기여·밴드 / 인과 그래프 ── */
+.mc-probbars { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; width: 100%; }
+.mc-pb-row { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+.mc-pb-k { width: 76px; flex: none; color: var(--t-muted); font-family: var(--t-mono, monospace); }
+.mc-probbars.compact .mc-pb-k { width: 40px; }
+.mc-pb-track { flex: 1; height: 7px; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; overflow: hidden; }
+.mc-pb-track i { display: block; height: 100%; }
+.mc-pb-v { width: 32px; flex: none; text-align: right; font-family: var(--t-mono, monospace); }
+.mc-axisbd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .mc-axisbd-grid { grid-template-columns: 1fr; } }
+.mc-axisbd-h { font-size: 12px; margin-bottom: 6px; }
+.mc-axisbd-h em { color: var(--t-muted); font-style: normal; font-size: 10px; }
+.mc-axisbd-t { border-collapse: collapse; width: 100%; font-size: 10.5px; font-family: var(--t-mono, monospace); }
+.mc-axisbd-t th, .mc-axisbd-t td { border-bottom: 1px solid var(--t-border, #e5e5e5); padding: 3px 6px; text-align: right; }
+.mc-axisbd-t th:first-child, .mc-axisbd-t td:first-child { text-align: left; }
+.mc-cbg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .mc-cbg-grid { grid-template-columns: 1fr; } }
+.mc-cbg-h { font-size: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+.mc-cbg-track { position: relative; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #2563eb 0%, #e5e5e5 50%, #dc2626 100%); opacity: .85; }
+.mc-cbg-marker { position: absolute; top: -3px; bottom: -3px; width: 3px; background: #111; border-radius: 1px; transform: translateX(-50%); }
+.mc-cbg-scale { display: flex; justify-content: space-between; font-size: 9px; color: var(--t-muted); margin-top: 3px; font-family: var(--t-mono, monospace); }
+.mc-cbg-meta { font-size: 10px; color: var(--t-muted); margin-top: 6px; }
+.mc-attr { display: flex; flex-direction: column; gap: 4px; }
+.mc-attr-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.mc-attr-nm { width: 110px; flex: none; }
+.mc-attr-base { width: 62px; flex: none; color: var(--t-muted); font-family: var(--t-mono, monospace); font-size: 10px; }
+.mc-attr-terms { flex: 1; display: flex; gap: 10px; }
+.mc-attr-term { display: inline-flex; align-items: center; gap: 3px; }
+.mc-attr-term i { display: inline-block; height: 8px; border-radius: 1px; min-width: 2px; }
+.mc-attr-term em { font-style: normal; font-size: 9.5px; font-family: var(--t-mono, monospace); }
+.mc-attr-final { width: 52px; flex: none; text-align: right; font-family: var(--t-mono, monospace); }
+.mc-attr-legend { font-size: 9.5px; color: var(--t-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.mc-attr-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
+.mc-bands { display: flex; flex-direction: column; gap: 4px; }
+.mc-band-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.mc-band-nm { width: 110px; flex: none; }
+.mc-band-track { position: relative; flex: 1; height: 12px; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; }
+.mc-band-range { position: absolute; top: 2px; bottom: 2px; background: rgba(18, 0, 255, .22); border-radius: 1px; }
+.mc-band-med { position: absolute; top: 0; bottom: 0; width: 2px; background: #1200ff; }
+.mc-band-v { width: 66px; flex: none; text-align: right; font-family: var(--t-mono, monospace); font-size: 10px; }
+.mc-causal { width: 100%; max-width: 520px; height: 300px; display: block; margin: 0 auto; }
+.mc-causal-list { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 10.5px; margin-top: 6px; }
+.mc-causal-edge em { color: var(--t-muted); font-style: normal; font-family: var(--t-mono, monospace); }
+.mc-featured { border: 1.5px solid #1200ff !important; }
+.mc-alloc-sub { font-size: 11px; font-weight: 600; margin-bottom: 5px; }
