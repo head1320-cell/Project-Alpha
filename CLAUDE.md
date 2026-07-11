@@ -1431,3 +1431,21 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
 ### 운영 노트 (컨테이너 재수화 관련)
 - fastapi는 반드시 requirements 고정 버전(0.111.0) — 최신 0.139에선 include_router가 깨져
   라우터가 등록되지 않음(94 vs 221 라우트). 새 환경 셋업 시 `pip install -r requirements.txt`.
+
+### v3 — 밸리AI 거시경제 분석 UI/UX 흡수 (편의성·전문성·기능성·접근성)
+[배경] 사용자 제공 밸리AI 랜딩 캡처의 장점(사이클 히트 스트립·하위요인 분해·자산군
+밸류에이션 스트립·국가 비교·스토리텔링 UX)을 우리 데이터 현실 내 정직 구현.
+- **백엔드 src/engine/macro_visuals.py** (TDD 4종, 순수 함수 — regime_axes 정의 재사용):
+  cycle_strips(지표×18개월 변환 z 스트립) · axis_history(축 하위요인 기여 스택 시계열,
+  기여 합=축 항등) · asset_strips(자산 가격 위치 5년 백분위 — "시세 기반, 멀티플 아님"
+  정직 라벨) · kr_us_compare(동일 변환 z 2국 비교 — 다국 지표 소스 미연동 명시).
+  GET /macro/{cycle-strips,axis-history,asset-strips,compare-krus} (225 라우트).
+- **프론트**: 배너 아래 **한줄 브리핑**(규칙 자동문장: 국면 P%·성장/물가 주도 지표·Stress)
+  + **스토리 앵커 칩**(성장·물가→지표·CB톤→자산 밸류→상관·인과→배분 — 밸리 '차례로 짚기').
+  Overview에 KR/US 비교 테이블, Regime에 사이클 스트립+성장/물가 하위요인 스택차트,
+  Valuation에 자산 스트립 타임라인, Indicators에 **지표 검색** 인풋.
+  visualParts.tsx 신규(CycleStripGrid/AxisStackChart/AssetStripGrid/KrUsCompareTable/buildBriefing).
+- 검증: 780 passed/10 skipped · tsc 0 · next build(/macro 31.2kB) · 4 엔드포인트 smoke
+  (스트립 6지표·히스토리 18pt·자산 10종·비교 6행).
+- 제외(정직): 다국가(중·일·유럽) 지표(수집 소스 없음 — FRED 확장 별도 과제), 멀티플 기반
+  자산 밸류에이션(컨센서스/지수 PER 데이터 필요).

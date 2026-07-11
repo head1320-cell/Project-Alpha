@@ -2763,3 +2763,26 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .mc-causal-edge em { color: var(--t-muted); font-style: normal; font-family: var(--t-mono, monospace); }
 .mc-featured { border: 1.5px solid #1200ff !important; }
 .mc-alloc-sub { font-size: 11px; font-weight: 600; margin-bottom: 5px; }
+
+/* ── 매크로 v3 (밸리AI 흡수): 브리핑·스트립·비교·검색 ── */
+.mc-brief { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; }
+.mc-brief-txt { font-size: 12px; font-weight: 500; }
+.mc-brief-chips { display: inline-flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.mc-brief-chip { font-size: 11px; padding: 3px 10px; border: 1px solid var(--t-border, #e5e5e5); background: var(--t-bg, #fff); border-radius: 12px; cursor: pointer; color: var(--t-muted, #71717a); }
+.mc-brief-chip.on, .mc-brief-chip:hover { border-color: #1200ff; color: #1200ff; }
+.mv-strips { display: flex; flex-direction: column; gap: 4px; }
+.mv-strip-row { display: flex; align-items: center; gap: 8px; }
+.mv-strip-lbl { width: 128px; flex: none; font-size: 11px; text-align: right; }
+.mv-strip-lbl em { color: var(--t-muted); font-style: normal; font-size: 9px; }
+.mv-strip-cells { flex: 1; display: flex; gap: 2px; height: 16px; }
+.mv-strip-cells i { flex: 1; border-radius: 1px; }
+.mv-strip-now { width: 48px; flex: none; font-size: 10.5px; font-family: var(--t-mono, monospace); text-align: right; }
+.mv-strip-axis { display: flex; justify-content: space-between; margin-left: 136px; margin-right: 56px; font-size: 9px; color: var(--t-muted); font-family: var(--t-mono, monospace); }
+.mv-strip-legend { font-size: 10px; color: var(--t-muted); display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.mv-strip-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 1px; }
+.mv-cmp { border-collapse: collapse; width: 100%; font-size: 12px; }
+.mv-cmp th, .mv-cmp td { border-bottom: 1px solid var(--t-border, #e5e5e5); padding: 6px 10px; text-align: center; }
+.mv-cmp td:first-child, .mv-cmp th:first-child { text-align: left; }
+.mv-cmp td { font-family: var(--t-mono, monospace); }
+.mc-search { width: 100%; padding: 8px 12px; font-size: 12px; border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; background: var(--t-bg, #fff); }
+.mc-search:focus { outline: none; border-color: #1200ff; }

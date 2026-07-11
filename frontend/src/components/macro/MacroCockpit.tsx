@@ -32,6 +32,10 @@ import {
 import {
   CorrMatrix, RollingCorrChart, AvgCorrChart, ComponentBars, TimingHistory, TrendTable, RegimeTrajectory,
 } from "./analyticsParts";
+import {
+  CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
+} from "./visualParts";
+import type { CycleStrips, AxisHistory, AssetStrips, KrUsCompare } from "@/lib/screenerApi";
 
 const TABS = [
   { id: "overview", label: "Overview", n: "01", icon: LayoutDashboard },
@@ -72,12 +76,25 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
   // v2 lazy: CB 센티먼트(Indicators) + 그레인저 인과 그래프(Correlations)
   const [cbSent, setCbSent] = useState<CbSentiment | null | undefined>(undefined);
   const [causal, setCausal] = useState<CausalGraph | null | undefined>(undefined);
+  // v3 lazy (밸리AI 흡수): 사이클 스트립·하위요인(Regime), 자산 스트립(Valuation), KR/US(Overview)
+  const [strips, setStrips] = useState<CycleStrips | null | undefined>(undefined);
+  const [axisHist, setAxisHist] = useState<AxisHistory | null | undefined>(undefined);
+  const [aStrips, setAStrips] = useState<AssetStrips | null | undefined>(undefined);
+  const [krus, setKrus] = useState<KrUsCompare | null | undefined>(undefined);
   useEffect(() => {
     if (tab === "indicators" && cbSent === undefined)
       analysisApi.cbSentiment().then(setCbSent).catch(() => setCbSent(null));
     if (tab === "correlations" && causal === undefined)
       analysisApi.causalGraph().then(setCausal).catch(() => setCausal(null));
-  }, [tab, cbSent, causal]);
+    if (tab === "overview" && krus === undefined)
+      analysisApi.compareKrUs().then(setKrus).catch(() => setKrus(null));
+    if (tab === "regime" && strips === undefined) {
+      analysisApi.cycleStrips("kr").then(setStrips).catch(() => setStrips(null));
+      analysisApi.axisHistory("kr").then(setAxisHist).catch(() => setAxisHist(null));
+    }
+    if (tab === "valuation" && aStrips === undefined)
+      analysisApi.assetStrips("kr").then(setAStrips).catch(() => setAStrips(null));
+  }, [tab, cbSent, causal, krus, strips, aStrips]);
   // 전략 상세 모달
   const [stratModal, setStratModal] = useState<{ sid: string; detail: StrategyDetail | null; loading: boolean } | null>(null);
 
@@ -161,6 +178,17 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
         </div>
       </div>
 
+      {/* ── 한줄 브리핑 + 스토리 앵커 (밸리AI '차례로 짚어보기' UX) ── */}
+      <div className="mc-brief">
+        <span className="mc-brief-txt">{buildBriefing(regime.markets?.kr ?? regime)}</span>
+        <span className="mc-brief-chips">
+          {([["성장·물가", "regime"], ["지표·CB톤", "indicators"], ["자산 밸류", "valuation"],
+             ["상관·인과", "correlations"], ["배분 추천", "recommend"]] as const).map(([lbl, t]) => (
+            <button key={t} className={`mc-brief-chip${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>{lbl} →</button>
+          ))}
+        </span>
+      </div>
+
       {/* ── 서브탭 ── */}
       <div className="mc-tabs">
         {TABS.map((t) => { const I = t.icon; return (
@@ -170,10 +198,10 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
         ); })}
       </div>
 
-      {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} />}
+      {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} krus={krus} />}
       {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} />}
-      {tab === "regime" && <RegimeTab regime={regime} traj={traj} />}
-      {tab === "valuation" && <ValuationTab core={core} />}
+      {tab === "regime" && <RegimeTab regime={regime} traj={traj} strips={strips} axisHist={axisHist} />}
+      {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} />}
       {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
       {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
       {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
@@ -194,9 +222,10 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
 // ─────────────────────────────────────────────────────────────────────────────
 // 01 Overview
 // ─────────────────────────────────────────────────────────────────────────────
-function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
+function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill, krus }: {
   core: MacroCore; regime: NonNullable<MacroCore["regime"]>; quad: string; recommend: MacroRecommend | null;
   onTransplant: (sid: string, name: string) => void; onDrill: (id: string) => void;
+  krus?: KrUsCompare | null;
 }) {
   const yc = regime.yield_curve;
   const allInd = (core.dashboard?.themes ?? []).flatMap((t) => t.indicators);
@@ -207,6 +236,14 @@ function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
         <div className="mc-card-h">국면 좌표 — 성장 × 물가</div>
         <RegimeScatter g={regime.growth_axis} i={regime.inflation_axis} />
         <p className="mc-card-note">{regime.description}</p>
+      </div>
+      {/* 국가경제 비교 (밸리AI '국가경제 분석'의 2국 정직 버전) */}
+      <div className="mc-card span2">
+        <div className="mc-card-h">국가경제 비교 — KR vs US <span className="mc-card-sub">동일 변환 z 나란히</span></div>
+        {krus === undefined && <div className="mc-empty-sm">비교 계산 중…</div>}
+        {krus === null && <div className="mc-empty-sm">비교 로드 실패</div>}
+        {krus && <KrUsCompareTable data={krus} />}
+        {krus && <p className="mc-card-note">{krus.note}</p>}
       </div>
       <div className="mc-card">
         <div className="mc-card-h">경기순환 시계</div>
@@ -272,9 +309,16 @@ function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill }: {
 // ─────────────────────────────────────────────────────────────────────────────
 function IndicatorsTab({ core, onDrill, cbSent }: { core: MacroCore; onDrill: (id: string) => void; cbSent?: CbSentiment | null }) {
   const d = core.dashboard;
+  const [q, setQ] = useState("");
   if (!d) return <div className="mc-empty-sm">대시보드 데이터 없음</div>;
+  // 지표 검색 (밸리AI 접근성 흡수 — 30+ 지표에서 원하는 것 즉시)
+  const themes = q.trim()
+    ? d.themes.map((t) => ({ ...t, indicators: t.indicators.filter((i) => (i.name + i.id).toLowerCase().includes(q.trim().toLowerCase())) })).filter((t) => t.indicators.length)
+    : d.themes;
   return (
     <div className="mc-stack">
+      <input className="mc-search" placeholder="지표 검색 — 예: CPI, 실업, 금리, VIX…"
+        value={q} onChange={(e) => setQ(e.target.value)} aria-label="지표 검색" />
       {/* Text-as-Data: 중앙은행 커뮤니케이션 톤 (하드데이터 후행성 보완) */}
       <div className="mc-card">
         <div className="mc-card-h">Central Bank Sentiment — 정책문 매파/비둘기 톤
@@ -290,10 +334,10 @@ function IndicatorsTab({ core, onDrill, cbSent }: { core: MacroCore; onDrill: (i
       </div>
       <div className="mc-card">
         <div className="mc-card-h">매크로 히트맵 — 25지표 × Z-Score(5년) <span className="mc-card-sub">{d.sources.fred ? "FRED" : "mock"} · {d.sources.bok ? "ECOS" : "mock"}</span></div>
-        <ZHeatmap themes={d.themes} onPick={(ind) => onDrill(ind.id)} />
+        <ZHeatmap themes={themes} onPick={(ind) => onDrill(ind.id)} />
         <div className="mc-zlegend"><span>낮음</span><i className="mc-zleg-grad" /><span>높음</span><em>· 셀 클릭 → 36개월 시계열</em></div>
       </div>
-      {d.themes.map((t) => (
+      {themes.map((t) => (
         <div key={t.key} className="mc-card">
           <div className="mc-card-h">{t.label} <span className="mc-card-sub">{t.indicators.length}지표</span></div>
           {t.indicators.length ? (
@@ -308,7 +352,10 @@ function IndicatorsTab({ core, onDrill, cbSent }: { core: MacroCore; onDrill: (i
 // ─────────────────────────────────────────────────────────────────────────────
 // 03 Regime
 // ─────────────────────────────────────────────────────────────────────────────
-function RegimeTab({ regime, traj }: { regime: NonNullable<MacroCore["regime"]>; traj: MacroTrajectory | null }) {
+function RegimeTab({ regime, traj, strips, axisHist }: {
+  regime: NonNullable<MacroCore["regime"]>; traj: MacroTrajectory | null;
+  strips?: CycleStrips | null; axisHist?: AxisHistory | null;
+}) {
   const sc = Object.entries(regime.stress_components ?? {});
   const tilts = Object.entries(regime.asset_tilts ?? {});
   const tiltMap: Record<string, { v: number; lbl: string }> = {
@@ -332,6 +379,28 @@ function RegimeTab({ regime, traj }: { regime: NonNullable<MacroCore["regime"]>;
         <div className="mc-card-h">국면 좌표 (성장 × 물가) — 현재</div>
         <RegimeScatter g={regime.growth_axis} i={regime.inflation_axis} />
       </div>
+      {/* 사이클 히트 스트립 (밸리AI '사이클 분석' 흡수) — 지표×18개월 변환 z 색 띠 */}
+      <div className="mc-card span2">
+        <div className="mc-card-h">사이클 스트립 — 지표별 18개월 국면 흐름 <span className="mc-card-sub">셀=시점별 z (축과 동일 변환)</span></div>
+        {strips === undefined && <div className="mc-empty-sm">스트립 계산 중…</div>}
+        {strips === null && <div className="mc-empty-sm">스트립 로드 실패</div>}
+        {strips && <CycleStripGrid data={strips} />}
+        {strips && <p className="mc-card-note">{strips.note}</p>}
+      </div>
+      {/* 하위요인 시계열 분해 (밸리AI '하위요인 분석' 흡수) — 축 스코어의 지표 기여 스택 */}
+      {axisHist && (
+        <>
+          <div className="mc-card span2">
+            <div className="mc-card-h">성장 축 하위요인 — 시간에 따른 지표 기여 <span className="mc-card-sub">스택=기여 · 검정선=축 스코어</span></div>
+            <AxisStackChart hist={axisHist} axis="growth" />
+          </div>
+          <div className="mc-card span2">
+            <div className="mc-card-h">물가 축 하위요인 — 시간에 따른 지표 기여</div>
+            <AxisStackChart hist={axisHist} axis="inflation" />
+            <p className="mc-card-note">{axisHist.note}</p>
+          </div>
+        </>
+      )}
       {/* 축 분해 — "지표 σ와 축 스코어가 왜 다른가"에 대한 답: 축이 실제로 먹는 변환 z(YoY)와
           레벨/모멘텀 블렌드 기여를 지표별로 공개. 히트맵의 레벨 σ와 구분(투명화). */}
       {regime.axis_detail && (
@@ -402,11 +471,19 @@ function RegimeTab({ regime, traj }: { regime: NonNullable<MacroCore["regime"]>;
 // ─────────────────────────────────────────────────────────────────────────────
 // 04 Valuation
 // ─────────────────────────────────────────────────────────────────────────────
-function ValuationTab({ core }: { core: MacroCore }) {
+function ValuationTab({ core, aStrips }: { core: MacroCore; aStrips?: AssetStrips | null }) {
   const v = core.valuation;
   if (!v) return <div className="mc-empty-sm">밸류에이션 데이터 없음</div>;
   return (
     <div className="mc-grid">
+      {/* 자산군 스트립 타임라인 (밸리AI '자산군 밸류에이션' 흡수 — 시세 기반 정직 버전) */}
+      <div className="mc-card span2">
+        <div className="mc-card-h">자산군 가격 위치 스트립 — 18개월 흐름 <span className="mc-card-sub">트레일링 5년 백분위</span></div>
+        {aStrips === undefined && <div className="mc-empty-sm">스트립 계산 중…</div>}
+        {aStrips === null && <div className="mc-empty-sm">스트립 로드 실패</div>}
+        {aStrips && <AssetStripGrid data={aStrips} />}
+        {aStrips && <p className="mc-card-note">{aStrips.note}</p>}
+      </div>
       <div className="mc-card span2">
         <div className="mc-card-h">자산군 밸류에이션 — 가격 Z-Score(5년) <span className="mc-card-sub">{v.sources.prices ? "KIS 실시세" : "mock"}</span></div>
         <ValuationBars assets={v.assets} />

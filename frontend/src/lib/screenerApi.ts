@@ -1402,6 +1402,24 @@ export interface CausalGraph {
   available: boolean; nodes: { id: string; label: string }[]; edges: CausalEdge[];
   method?: string; note?: string;
 }
+// ── v3 시각화 (밸리AI 흡수) ──
+export interface CycleStrips {
+  market: string; months: string[]; note: string;
+  indicators: { key: string; label: string; transform: string; cells: (number | null)[] }[];
+}
+export interface AxisHistory {
+  market: string; note: string;
+  points: { t: string; growth: number; inflation: number;
+    growth_parts: Record<string, number>; inflation_parts: Record<string, number> }[];
+}
+export interface AssetStrips {
+  market: string; months: number; note: string;
+  assets: { ticker: string; label: string; cells: (number | null)[]; now: number | null }[];
+}
+export interface KrUsCompare {
+  note: string;
+  rows: { label: string; kr: number | null; us: number | null; gap: number | null }[];
+}
 export interface MacroIndicator { id: string; name: string; unit: string; latest: number | null; z_score: number | null; percentile: number | null; delta: number | null; spark: number[] }
 export interface MacroTheme { key: string; label: string; indicators: MacroIndicator[] }
 export interface MacroDashboard { as_of: string; themes: MacroTheme[]; sources: { fred: boolean; bok: boolean } }
@@ -1535,6 +1553,27 @@ export const analysisApi = {
   causalGraph: async (): Promise<CausalGraph> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/causal-graph`);
     if (!r.ok) throw new Error(`Causal graph failed: ${r.status}`);
+    return r.json();
+  },
+  // v3: 사이클 스트립 · 하위요인 시계열 · 자산 스트립 · KR/US 비교
+  cycleStrips: async (market: "kr" | "us" = "kr"): Promise<CycleStrips> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/cycle-strips?market=${market}`);
+    if (!r.ok) throw new Error(`cycle-strips failed: ${r.status}`);
+    return r.json();
+  },
+  axisHistory: async (market: "kr" | "us" = "kr"): Promise<AxisHistory> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/axis-history?market=${market}`);
+    if (!r.ok) throw new Error(`axis-history failed: ${r.status}`);
+    return r.json();
+  },
+  assetStrips: async (market: "kr" | "us" = "kr"): Promise<AssetStrips> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/asset-strips?market=${market}`);
+    if (!r.ok) throw new Error(`asset-strips failed: ${r.status}`);
+    return r.json();
+  },
+  compareKrUs: async (): Promise<KrUsCompare> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/compare-krus`);
+    if (!r.ok) throw new Error(`compare-krus failed: ${r.status}`);
     return r.json();
   },
   macroStrategyDetail: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyDetail> => {
