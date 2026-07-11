@@ -142,21 +142,56 @@ export function TimingHistory({ history }: { history: MacroTiming["history"] }) 
 }
 
 // ── TrendTable — 자산별 추세 상태 ──
+// 조건부 서식 셀 — ▲/▼ 화살표 + 옅은 배경 틴트 (Gemini UI 개편 2순위: 테이블의 꽃)
+function PctCell({ v }: { v: number | null | undefined }) {
+  if (v == null) return <td className="n">—</td>;
+  const up = v >= 0;
+  return (
+    <td className="n" style={{
+      color: up ? "var(--color-bull)" : "var(--color-bear)",
+      background: up ? "rgba(22,163,74,.06)" : "rgba(220,38,38,.05)",
+    }}>
+      <span className="mca-arrow">{up ? "▲" : "▼"}</span> {up ? "+" : ""}{v.toFixed(1)}%
+    </td>
+  );
+}
+
+const TREND_PILL: Record<string, { fg: string; bg: string }> = {
+  "상승": { fg: "#0e7c4a", bg: "rgba(22,163,74,.12)" },
+  "하락": { fg: "#b91c1c", bg: "rgba(220,38,38,.10)" },
+  "중립": { fg: "#71717a", bg: "rgba(113,113,122,.10)" },
+};
+
 export function TrendTable({ assets }: { assets: TrendRow[] }) {
   return (
-    <table className="mca-trend">
+    <table className="mca-trend v2">
       <thead><tr><th>자산</th><th className="n">200일선 대비</th><th className="n">12M 모멘텀</th><th className="n">52주高 거리</th><th className="n">RSI</th><th>추세</th></tr></thead>
       <tbody>
-        {assets.map((a) => (
-          <tr key={a.ticker}>
-            <td><b>{a.ticker}</b> <span className="mca-trend-nm">{a.label}</span></td>
-            <td className="n" style={{ color: (a.vs_ma200_pct ?? 0) >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{fmt1(a.vs_ma200_pct)}%</td>
-            <td className="n" style={{ color: (a.mom_12m ?? 0) >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{fmt1(a.mom_12m)}%</td>
-            <td className="n">{fmt1(a.dist_52w_high)}%</td>
-            <td className="n">{a.rsi != null ? a.rsi.toFixed(0) : "—"}</td>
-            <td><span className="mca-trend-badge" style={{ color: trendColor(a.trend), borderColor: trendColor(a.trend) }}>{a.trend}</span></td>
-          </tr>
-        ))}
+        {assets.map((a) => {
+          const pill = TREND_PILL[a.trend] ?? TREND_PILL["중립"];
+          const rsi = a.rsi;
+          return (
+            <tr key={a.ticker}>
+              <td><b>{a.ticker}</b> <span className="mca-trend-nm">{a.label}</span></td>
+              <PctCell v={a.vs_ma200_pct} />
+              <PctCell v={a.mom_12m} />
+              <td className="n" style={{ color: (a.dist_52w_high ?? 0) > -3 ? "var(--color-bull)" : "var(--t-muted)" }}>{fmt1(a.dist_52w_high)}%</td>
+              <td className="n">
+                {rsi != null ? (
+                  <span className="mca-rsi" title={`RSI ${rsi.toFixed(0)} (30 과매도 · 70 과매수)`}>
+                    <span className="mca-rsi-track">
+                      <i className="mca-rsi-zone" />
+                      <i className="mca-rsi-dot" style={{ left: `${Math.max(0, Math.min(100, rsi))}%`,
+                        background: rsi >= 70 ? "#dc2626" : rsi <= 30 ? "#2563eb" : "#71717a" }} />
+                    </span>
+                    {rsi.toFixed(0)}
+                  </span>
+                ) : "—"}
+              </td>
+              <td><span className="mca-trend-pill" style={{ color: pill.fg, background: pill.bg }}>{a.trend}</span></td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

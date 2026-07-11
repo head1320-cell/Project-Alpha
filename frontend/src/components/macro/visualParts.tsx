@@ -121,6 +121,105 @@ export function KrUsCompareTable({ data }: { data: KrUsCompare }) {
   );
 }
 
+// ═══ 상단 3분할 카드 (Gemini UI 개편 1순위 — 도넛 중심 국면 요약) ═══════════════
+
+const QUAD_TONE2: Record<string, string> = {
+  Goldilocks: "#16a34a", Reflation: "#ea580c", Stagflation: "#dc2626", Disinflation: "#2563eb",
+};
+const QUAD_SHORT: Record<string, string> = {
+  Goldilocks: "골디락스", Reflation: "리플레이션", Stagflation: "스태그플레이션", Disinflation: "디스인플레이션",
+};
+
+// 도넛 링 (SVG) — 중앙 타이포 공간 활용: P% 볼드 + 국면명
+function DonutRing({ pct, color, big, small, size = 108 }: {
+  pct: number; color: string; big: string; small: string; size?: number;
+}) {
+  const r = 42, C = 2 * Math.PI * r;
+  const filled = Math.max(0.02, Math.min(1, pct)) * C;
+  return (
+    <svg width={size} height={size} viewBox="0 0 108 108" className="mv-donut" role="img"
+      aria-label={`${small} ${big}`}>
+      <circle cx={54} cy={54} r={r} fill="none" stroke="var(--t-border, #ececf0)" strokeWidth={11} />
+      <circle cx={54} cy={54} r={r} fill="none" stroke={color} strokeWidth={11}
+        strokeDasharray={`${filled} ${C - filled}`} strokeLinecap="round"
+        transform="rotate(-90 54 54)" />
+      <text x={54} y={52} textAnchor="middle" className="mv-donut-big">{big}</text>
+      <text x={54} y={68} textAnchor="middle" className="mv-donut-small">{small}</text>
+    </svg>
+  );
+}
+
+// ▲/▼ 필 배지 — 서브 지표 톤다운 (성장/물가 축)
+function AxisPill({ label, v, upGood }: { label: string; v: number; upGood: boolean }) {
+  const up = v >= 0;
+  const good = up === upGood;
+  const fg = good ? "#0e7c4a" : "#b0325a";
+  const bg = good ? "rgba(22,163,74,.10)" : "rgba(220,38,38,.09)";
+  return (
+    <span className="mv-pill" style={{ color: fg, background: bg }}>
+      {label} {up ? "▲" : "▼"} {up ? "+" : ""}{v.toFixed(2)}
+    </span>
+  );
+}
+
+// KR/US 국면 카드 — 도넛(1위 확률) + 국면명 + 서브 필 + 상위 2개 확률
+export function RegimeDonutCard({ label, state }: { label: string; state: RegimeState }) {
+  const probs = state.regime_probs ?? {};
+  const top = state.regime && probs[state.regime] != null ? state.regime
+    : (Object.entries(probs).sort((a, b) => b[1] - a[1])[0]?.[0] ?? state.regime);
+  const p = probs[top] ?? state.confidence ?? 0;
+  const color = QUAD_TONE2[top] ?? "#1200ff";
+  const others = Object.entries(probs).filter(([k]) => k !== top).sort((a, b) => b[1] - a[1]).slice(0, 2);
+  return (
+    <div className="mv-rcard" style={{ borderTopColor: color }}>
+      <DonutRing pct={p} color={color} big={`${Math.round(p * 100)}%`} small={top} />
+      <div className="mv-rcard-r">
+        <span className="mv-rcard-lbl">{label}</span>
+        <b className="mv-rcard-quad" style={{ color }}>{QUAD_SHORT[top] ?? top}</b>
+        <div className="mv-rcard-pills">
+          <AxisPill label="성장" v={state.growth_axis} upGood />
+          <AxisPill label="물가" v={state.inflation_axis} upGood={false} />
+        </div>
+        <div className="mv-rcard-others">
+          {others.map(([k, v]) => (
+            <span key={k}><i style={{ background: QUAD_TONE2[k] }} />{k.slice(0, 4).toUpperCase()} {(v * 100).toFixed(0)}%</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Stress·모드 카드 — 도넛(0-100) + 모드 뱃지 + 역전 경고
+export function StressModeCard({ state, realData, asOf }: { state: RegimeState; realData: boolean; asOf: string }) {
+  const s = state.stress_score;
+  const color = s >= 70 ? "#dc2626" : s >= 50 ? "#d97706" : "#16a34a";
+  const modeBg = state.recommended_mode === "DEFENSIVE" ? "rgba(220,38,38,.12)"
+    : state.recommended_mode === "CAUTIOUS" ? "rgba(217,119,6,.12)" : "rgba(22,163,74,.10)";
+  const modeFg = state.recommended_mode === "DEFENSIVE" ? "#b91c1c"
+    : state.recommended_mode === "CAUTIOUS" ? "#b45309" : "#0e7c4a";
+  return (
+    <div className="mv-rcard" style={{ borderTopColor: color }}>
+      <DonutRing pct={s / 100} color={color} big={s.toFixed(0)} small="STRESS" />
+      <div className="mv-rcard-r">
+        <span className="mv-rcard-lbl">시장 스트레스 · 모드</span>
+        <b className="mv-rcard-quad"><span className="mv-pill" style={{ color: modeFg, background: modeBg }}>{state.recommended_mode}</span></b>
+        <div className="mv-rcard-pills">
+          {state.yield_inversion && (
+            <span className="mv-pill" style={{ color: "#b0325a", background: "rgba(220,38,38,.09)" }}>
+              수익률곡선 역전 {state.inversion_severity != null ? `${state.inversion_severity.toFixed(0)}bp` : ""}
+            </span>
+          )}
+        </div>
+        <div className="mv-rcard-others">
+          <span className={realData ? "mv-src-real" : "mv-src-mock"}>{realData ? "실데이터" : "MOCK"}</span>
+          <span>{asOf}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 한줄 브리핑 (밸리의 '차례로 짚어보기' 스토리텔링 — 규칙 기반 자동 문장) ──
 export function buildBriefing(st: RegimeState): string {
   const probs = st.regime_probs ?? {};

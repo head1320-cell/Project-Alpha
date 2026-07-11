@@ -34,6 +34,7 @@ import {
 } from "./analyticsParts";
 import {
   CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
+  RegimeDonutCard, StressModeCard,
 } from "./visualParts";
 import type { CycleStrips, AxisHistory, AssetStrips, KrUsCompare } from "@/lib/screenerApi";
 
@@ -49,14 +50,7 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-// 사분면 명칭 통일 — 백엔드 regime_axes.quadrant와 동일 (Goldilocks/Reflation/Stagflation/Disinflation)
-const QUAD_KR: Record<string, string> = {
-  Goldilocks: "골디락스 · 성장↑·물가↓", Reflation: "리플레이션 · 성장↑·물가↑",
-  Stagflation: "스태그플레이션 · 성장↓·물가↑", Disinflation: "디스인플레이션 · 성장↓·물가↓(둔화)",
-};
-const QUAD_TONE: Record<string, string> = {
-  Goldilocks: "var(--color-bull)", Reflation: "#ea580c", Stagflation: "var(--color-bear)", Disinflation: "#2563eb",
-};
+// 사분면 명칭·색은 visualParts(RegimeDonutCard)의 통일 맵 사용 — 배너 카드화로 이 파일 로컬 맵 제거
 
 export interface TransplantPayload { sid: string; name: string; market: Market }
 
@@ -148,34 +142,11 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
 
   return (
     <div className="mc">
-      {/* ── 고정 레짐 배너 — 한국/미국 국면 나란히 (성장×물가 실물지표 축) ── */}
-      <div className="mc-banner">
-        {([["KR 국면", regime.markets?.kr ?? regime], ["US 국면", regime.markets?.us ?? null]] as const).map(([lbl, st]) => {
-          if (!st) return null;
-          const q = resolveQuadrant(st);
-          return (
-            <div key={lbl} className="mc-banner-quad" style={{ borderColor: QUAD_TONE[q] }}>
-              <span className="mc-banner-lbl">{lbl}</span>
-              <b style={{ color: QUAD_TONE[q] }}>{q}</b>
-              <em>{QUAD_KR[q]}</em>
-              <em style={{ fontFamily: "var(--t-mono)" }}>
-                성장 <b style={{ color: st.growth_axis >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{st.growth_axis >= 0 ? "+" : ""}{st.growth_axis.toFixed(2)}</b>
-                {" · "}물가 <b style={{ color: st.inflation_axis >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{st.inflation_axis >= 0 ? "+" : ""}{st.inflation_axis.toFixed(2)}</b>
-                {" · "}P(국면) {(st.confidence * 100).toFixed(0)}%
-              </em>
-              {/* 정적 신뢰도% → 사분면 확률 분포 (CIO §확률적 제시) */}
-              {st.regime_probs && <ProbBars probs={st.regime_probs} compact />}
-            </div>
-          );
-        })}
-        <div className="mc-banner-axes">
-          <div className="mc-axis"><span>Stress</span><b style={{ color: stressColor(regime.stress_score) }}>{regime.stress_score.toFixed(0)}</b></div>
-          <div className="mc-axis"><span>모드</span><b className="mc-axis-mode">{regime.recommended_mode}</b></div>
-        </div>
-        <div className="mc-banner-meta">
-          <span className={`mc-src ${realData ? "real" : "mock"}`}>{realData ? "실데이터" : "MOCK"}</span>
-          <span className="mc-asof">{asOf}</span>
-        </div>
+      {/* ── 상단 3분할 카드 — 도넛 중심 국면 요약 (정보 위계: 결론 먼저, 서브지표 톤다운) ── */}
+      <div className="mc-banner3">
+        <RegimeDonutCard label="KR 국면" state={regime.markets?.kr ?? regime} />
+        {regime.markets?.us && <RegimeDonutCard label="US 국면" state={regime.markets.us} />}
+        <StressModeCard state={regime} realData={realData} asOf={asOf} />
       </div>
 
       {/* ── 한줄 브리핑 + 스토리 앵커 (밸리AI '차례로 짚어보기' UX) ── */}
