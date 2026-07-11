@@ -478,3 +478,52 @@ def macro_causal_graph():
     except Exception:
         logger.exception("causal-graph 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══ v3 시각화 (밸리AI 장점 흡수) — 사이클 스트립·하위요인·자산 스트립·KR/US 비교 ═══
+
+@router.get("/cycle-strips")
+def macro_cycle_strips(market: str = Query("kr")):
+    """지표×월 사이클 히트 스트립 (변환 z 18개월 타임라인)."""
+    try:
+        from src.engine.macro_visuals import cycle_strips
+        snap = _get_analyzer().collector.collect_all(use_cache=True)
+        return cycle_strips(snap.series, market=market)
+    except Exception:
+        logger.exception("cycle-strips 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/axis-history")
+def macro_axis_history(market: str = Query("kr")):
+    """성장/물가 축의 월별 하위요인(지표 기여) 분해 — 스택 차트."""
+    try:
+        from src.engine.macro_visuals import axis_history
+        snap = _get_analyzer().collector.collect_all(use_cache=True)
+        return axis_history(snap.series, market=market)
+    except Exception:
+        logger.exception("axis-history 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/asset-strips")
+def macro_asset_strips(market: str = Query("kr")):
+    """자산군 가격 위치 백분위 스트립 (시세 기반 — 멀티플 아님, 정직 라벨)."""
+    try:
+        from src.engine.macro_visuals import asset_strips
+        return asset_strips(market=market)
+    except Exception:
+        logger.exception("asset-strips 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/compare-krus")
+def macro_compare_krus():
+    """KR vs US 핵심 지표 z 나란히 비교."""
+    try:
+        from src.engine.macro_visuals import kr_us_compare
+        snap = _get_analyzer().collector.collect_all(use_cache=True)
+        return kr_us_compare(snap.series)
+    except Exception:
+        logger.exception("compare-krus 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
