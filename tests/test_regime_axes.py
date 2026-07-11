@@ -56,4 +56,4 @@ def test_missing_all_series_zero():
 
 def test_quadrant_names():
     assert quadrant(1, -1) == "Goldilocks" and quadrant(1, 1) == "Reflation"
-    assert quadrant(-1, 1) == "Stagflation" and quadrant(-1, -1) == "Deflation"
+    assert quadrant(-1, 1) == "Stagflation" and quadrant(-1, -1) == "Disinflation"

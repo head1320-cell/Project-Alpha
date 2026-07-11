@@ -54,17 +54,17 @@ export const loadStrategyAI = (sid: string, m: Market): Promise<StrategyAI | nul
 export const loadStrategyBacktestConfig = (sid: string, m: Market): Promise<StrategyBacktestConfig | null> =>
   analysisApi.macroStrategyBacktestConfig(sid, m).catch(() => null);
 
-// 4-Quadrant 해소 — 백엔드 regime_axes와 동일한 통일 명칭(Goldilocks/Reflation/Stagflation/Deflation)
-export type Quadrant = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation";
+// 4-Quadrant 해소 — 백엔드 regime_axes와 동일한 통일 명칭(Goldilocks/Reflation/Stagflation/Disinflation)
+export type Quadrant = "Goldilocks" | "Reflation" | "Stagflation" | "Disinflation";
 
 export function resolveQuadrant(regime: RegimeState | null): Quadrant {
-  if (!regime) return "Deflation";
+  if (!regime) return "Disinflation";
   const n = (regime.regime || "").toLowerCase();
   if (n.includes("goldilocks")) return "Goldilocks";
   if (n.includes("stagflation")) return "Stagflation";
   if (n.includes("reflation") || n.includes("overheat")) return "Reflation";
-  if (n.includes("deflation") || n.includes("disinflation")) return "Deflation";
+  if (n.includes("deflation") || n.includes("disinflation")) return "Disinflation";
   const g = regime.growth_axis ?? 0, i = regime.inflation_axis ?? 0;
   if (g >= 0) return i >= 0 ? "Reflation" : "Goldilocks";
-  return i >= 0 ? "Stagflation" : "Deflation";
+  return i >= 0 ? "Stagflation" : "Disinflation";
 }

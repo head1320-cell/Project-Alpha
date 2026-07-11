@@ -94,7 +94,7 @@ def test_regime_trajectory_structure():
     tj = regime_trajectory()
     assert tj["path"]
     # 사분면 명칭 통일: 헤더(regime_analyzer)와 동일한 regime_axes.quadrant 공용
-    quads = {"Goldilocks", "Reflation", "Stagflation", "Deflation"}
+    quads = {"Goldilocks", "Reflation", "Stagflation", "Disinflation"}
     for p in tj["path"]:
         assert p["quadrant"] in quads
         assert -1.0001 <= p["growth"] <= 1.0001

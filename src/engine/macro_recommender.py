@@ -27,14 +27,15 @@ _ARCHETYPE: dict[str, str] = {
     "risk_parity": "diversified", "hrp": "diversified", "max_div": "diversified",
     "black_litterman": "diversified", "managed_futures": "diversified", "equal_weight": "diversified",
 }
-# 4국면 × 아키타입 적합도(0~1)
+# 4국면 × 아키타입 적합도(0~1) — 명명 통일: regime_axes.quadrant 공용
+# (Goldilocks=성장↑물가↓, Reflation=성장↑물가↑ — 과거 'Overheating/자체 Reflation' 상충 제거)
 _FIT: dict[str, dict[str, float]] = {
-    "Reflation":    {"aggressive": 1.0, "diversified": 0.75, "income": 0.45, "defensive": 0.30},
-    "Overheating":  {"aggressive": 0.70, "diversified": 0.80, "income": 0.55, "defensive": 0.60},
+    "Goldilocks":   {"aggressive": 1.0, "diversified": 0.75, "income": 0.45, "defensive": 0.30},
+    "Reflation":    {"aggressive": 0.70, "diversified": 0.80, "income": 0.55, "defensive": 0.60},
     "Stagflation":  {"aggressive": 0.20, "diversified": 0.60, "income": 0.70, "defensive": 1.00},
     "Disinflation": {"aggressive": 0.45, "diversified": 0.70, "income": 1.00, "defensive": 0.85},
 }
-_QUAD_KR = {"Reflation": "리플레이션(성장↑·물가↓)", "Overheating": "과열(성장↑·물가↑)",
+_QUAD_KR = {"Goldilocks": "골디락스(성장↑·물가↓)", "Reflation": "리플레이션(성장↑·물가↑)",
             "Stagflation": "스태그플레이션(성장↓·물가↑)", "Disinflation": "디스인플레이션(성장↓·물가↓)"}
 
 
@@ -71,15 +72,12 @@ def confidence_overlay(holdings: list, confidence: float, max_derisk: float = 0.
 
 
 def _quadrant(state) -> str:
-    name = (getattr(state, "regime", "") or "").lower()
-    for q in ("reflation", "overheating", "stagflation", "disinflation"):
-        if q in name:
-            return q.capitalize()
-    g = getattr(state, "growth_axis", 0) or 0
-    i = getattr(state, "inflation_axis", 0) or 0
-    if g >= 0:
-        return "Overheating" if i >= 0 else "Reflation"
-    return "Stagflation" if i >= 0 else "Disinflation"
+    name = (getattr(state, "regime", "") or "")
+    if name in _FIT:
+        return name   # regime_analyzer가 공용 명칭을 반환 (명명 통일)
+    from src.engine.regime_axes import quadrant
+    return quadrant(getattr(state, "growth_axis", 0) or 0,
+                    getattr(state, "inflation_axis", 0) or 0)
 
 
 def _strategy_return_12m(strat: dict, mk: str) -> float | None:
@@ -124,6 +122,8 @@ def recommend(market: str = "kr") -> dict:
 
     # 국면 — ★market 연결(버그 수정): 이전엔 analyze()가 인자 없이 항상 KR을 봤음.
     confidence = 0.5
+    growth_axis, inflation_axis, se_g, se_i = 0.0, 0.0, 0.3, 0.3
+    regime_probs: dict = {}
     try:
         from src.engine.regime_analyzer import RegimeAnalyzer
         state = RegimeAnalyzer().analyze(market=mk)
@@ -131,9 +131,18 @@ def recommend(market: str = "kr") -> dict:
         stress = float(getattr(state, "stress_score", 50) or 50)
         confidence = float(getattr(state, "confidence", 0.5) or 0.5)
         cycle = getattr(state, "cycle_phase", None) or getattr(state, "regime", quad)
+        growth_axis = float(getattr(state, "growth_axis", 0) or 0)
+        inflation_axis = float(getattr(state, "inflation_axis", 0) or 0)
+        detail = getattr(state, "axis_detail", {}) or {}
+        se_g = float((detail.get("growth") or {}).get("se", 0.3) or 0.3)
+        se_i = float((detail.get("inflation") or {}).get("se", 0.3) or 0.3)
+        regime_probs = dict(getattr(state, "regime_probs", {}) or {})
     except Exception as e:
         logger.debug(f"regime 분석 폴백: {e}")
         quad, stress, cycle = "Disinflation", 50.0, "—"
+    if not regime_probs:
+        from src.engine.regime_axes import quadrant_probs
+        regime_probs = quadrant_probs(growth_axis, inflation_axis, se_g, se_i)
 
     fit_map = _FIT.get(quad, _FIT["Disinflation"])
     sig = compute_strategies(mk)
@@ -173,7 +182,15 @@ def recommend(market: str = "kr") -> dict:
     holdings_final = confidence_overlay(top["holdings"], confidence)
     cash_final = next((h["weight"] for h in holdings_final if h.get("us_ticker") == "BIL"), 0.0)
 
+    # ★매크로 임베딩 배분 (CIO §3) — 국면 스코어가 직접 입력인 4계절 틸트를 1순위 추천으로.
+    # 가격 모멘텀 전략(듀얼모멘텀 등)이 매크로 환경과 충돌하는 문제의 해소 + 기여분해/MC밴드.
+    from src.engine.macro_allocation import macro_embedded_allocation
+    macro_alloc = macro_embedded_allocation(growth_axis, inflation_axis, stress,
+                                            se_g=se_g, se_i=se_i)
+
     return {
+        "regime_probs": regime_probs,
+        "macro_allocation": macro_alloc,
         "market": mk, "as_of": sig["as_of"],
         "confidence": round(confidence, 3),
         "low_conviction": confidence < 0.35,

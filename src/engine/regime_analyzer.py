@@ -17,7 +17,6 @@ Macro Regime Analyzer — Phase 4
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
 
 from src.services.macro_collector import MacroCollector, MacroSeries, MacroSnapshot
@@ -30,17 +29,17 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 REGIME_DESCRIPTIONS = {
-    "Goldilocks":  "성장↑ + 물가↓ — 위험자산 최적 (성장주 우위)",
-    "Reflation":   "성장↑ + 물가↑ — 원자재/금융주 우위, 채권 회피",
-    "Stagflation": "성장↓ + 물가↑ — 현금/금/단기채 방어",
-    "Deflation":   "성장↓ + 물가↓ — 장기채/방어주 (디플레이션)",
+    "Goldilocks":   "성장↑ + 물가↓ — 위험자산 최적 (성장주 우위)",
+    "Reflation":    "성장↑ + 물가↑ — 원자재/금융주 우위, 채권 회피",
+    "Stagflation":  "성장↓ + 물가↑ — 현금/금/단기채 방어",
+    "Disinflation": "성장↓ + 물가↓(상승 둔화) — 장기채/방어주 우위",
 }
 
 REGIME_TILTS = {
-    "Goldilocks":  {"growth_stocks": "+", "value_stocks": "-", "bonds": "-", "commodities": "0", "cash": "-"},
-    "Reflation":   {"growth_stocks": "0", "value_stocks": "+", "bonds": "--", "commodities": "++", "cash": "0"},
-    "Stagflation": {"growth_stocks": "-", "value_stocks": "0", "bonds": "-", "commodities": "+", "cash": "++"},
-    "Deflation":   {"growth_stocks": "-", "value_stocks": "0", "bonds": "++", "commodities": "--", "cash": "+"},
+    "Goldilocks":   {"growth_stocks": "+", "value_stocks": "-", "bonds": "-", "commodities": "0", "cash": "-"},
+    "Reflation":    {"growth_stocks": "0", "value_stocks": "+", "bonds": "--", "commodities": "++", "cash": "0"},
+    "Stagflation":  {"growth_stocks": "-", "value_stocks": "0", "bonds": "-", "commodities": "+", "cash": "++"},
+    "Disinflation": {"growth_stocks": "-", "value_stocks": "0", "bonds": "++", "commodities": "--", "cash": "+"},
 }
 
 
@@ -48,7 +47,7 @@ REGIME_TILTS = {
 class RegimeState:
     """현재 매크로 국면 + 시장 스트레스."""
     timestamp:           str
-    regime:              str                    # Goldilocks/Reflation/Stagflation/Deflation
+    regime:              str                    # Goldilocks/Reflation/Stagflation/Disinflation
     growth_axis:         float                  # -3.0 ~ +3.0 (Z-Score)
     inflation_axis:      float                  # -3.0 ~ +3.0
     confidence:          float                  # 0-1 (분류 신뢰도)
@@ -71,6 +70,10 @@ class RegimeState:
     # 동적 파라미터 (다른 모듈에 주입할 값)
     dynamic_risk_free_rate:  float | None = None
     dynamic_kill_dd_threshold: float | None = None
+
+    # v2: 축 분해(지표별 변환 z·가중·기여 — "CPI 레벨 z vs 축" 표시 모순의 투명화) + 확률
+    axis_detail:         dict = field(default_factory=dict)   # {"growth": {...}, "inflation": {...}}
+    regime_probs:        dict = field(default_factory=dict)   # {사분면: P} 합=1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -103,17 +106,23 @@ class RegimeAnalyzer:
                          if getattr(v, "source", "") != "unavailable" and v.latest is not None)
         insufficient = real_count < 3
 
-        # 1-2. Growth/Inflation Axis — regime_axes 단일 정의 (지수형은 YoY 변환 후 z)
-        from src.engine.regime_axes import AXES, compute_axis
+        # 1-2. Growth/Inflation Axis — regime_axes 단일 정의 (지수형은 YoY 변환 후 z,
+        #      레벨+3개월 모멘텀 블렌드). 지표별 분해·불확실성(se)까지 수집(투명화).
+        from src.engine.regime_axes import AXES, compute_axis_detail, quadrant_probs
         g_def, i_def = AXES.get(market, AXES["kr"])
-        growth_axis = compute_axis(s, g_def)
-        inflation_axis = compute_axis(s, i_def)
+        g_detail = compute_axis_detail(s, g_def)
+        i_detail = compute_axis_detail(s, i_def)
+        growth_axis = g_detail["score"]
+        inflation_axis = i_detail["score"]
 
-        # 3. Regime 판별 — 데이터 부족 시 허위 국면(Reflation 등) 대신 '데이터 부족'
+        # 3. Regime 판별 — 데이터 부족 시 허위 국면 대신 '데이터 부족'.
+        #    신뢰도 = 최대 사분면 확률(축 불확실성 기반 — 정적 tanh 대체).
+        probs = quadrant_probs(growth_axis, inflation_axis, g_detail["se"], i_detail["se"])
         if insufficient:
             regime, confidence = "데이터 부족", 0.0
         else:
-            regime, confidence = self._classify_regime(growth_axis, inflation_axis)
+            regime = self._classify_regime(growth_axis, inflation_axis)
+            confidence = max(probs.values())
 
         # 4. Market Stress Index
         stress_score, stress_components = self._compute_stress(s)
@@ -157,6 +166,8 @@ class RegimeAnalyzer:
                         if insufficient else REGIME_DESCRIPTIONS.get(regime, "")),
             dynamic_risk_free_rate=dynamic_rf,
             dynamic_kill_dd_threshold=dynamic_dd,
+            axis_detail={"growth": g_detail, "inflation": i_detail},
+            regime_probs=probs,
         )
 
     # ─────────────────────────────────────────────────────────────────────
@@ -164,13 +175,10 @@ class RegimeAnalyzer:
     # ─────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _classify_regime(growth: float, inflation: float) -> tuple[str, float]:
-        """4-Quadrant 분류 + 신뢰도 — 사분면 명칭은 regime_axes.quadrant 공용."""
+    def _classify_regime(growth: float, inflation: float) -> str:
+        """4-Quadrant 분류 — 사분면 명칭은 regime_axes.quadrant 공용."""
         from src.engine.regime_axes import quadrant
-        regime = quadrant(growth, inflation)
-        # 신뢰도: 두 축의 절댓값 평균 → tanh
-        confidence = math.tanh((abs(growth) + abs(inflation)) / 2)
-        return regime, max(0.1, confidence)
+        return quadrant(growth, inflation)
 
     # ─────────────────────────────────────────────────────────────────────
     # Market Stress Index
@@ -178,8 +186,11 @@ class RegimeAnalyzer:
 
     def _compute_stress(self, s: dict[str, MacroSeries]) -> tuple[float, dict]:
         """
-        스트레스 지수 0-100.
-        구성: VIX(30%) + Credit Spread(25%) + USD/KRW 변동성(20%) + Yield 변동성(15%) + DXY(10%)
+        스트레스 지수 0-100 (v2 — CIO 리팩토링).
+        구성: VIX(25%) + Credit(20%) + FX변동성(15%) + 금리변동성(10%) + DXY(5%)
+              + ★수익률곡선 10Y-2Y(15%, 역전 패널티) + ★실질금리 z(10%)
+        v1은 곡선·실질금리 항이 없어 '실질금리 +1.7σ 긴축인데 Normal 44'가 났음 —
+        시장가 기반 선행 리스크(커브·실질금리)를 합성 지수에 내재화.
         """
         components = {}
         total_score = 0.0
@@ -191,45 +202,58 @@ class RegimeAnalyzer:
                 return 50.0
             return max(0, min(100, 50 + z * 20))
 
+        def add(name: str, score: float | None, weight: float):
+            nonlocal total_score, total_weight
+            if score is None:
+                return
+            components[name] = round(score, 1)
+            total_score += score * weight
+            total_weight += weight
+
         # 1. VIX (높을수록 스트레스)
         vix = s.get("VIXCLS")
         if vix and vix.z_score is not None:
-            v_score = score_z(vix.z_score)
-            components["vix"] = round(v_score, 1)
-            total_score += v_score * 0.30
-            total_weight += 0.30
+            add("vix", score_z(vix.z_score), 0.25)
 
         # 2. Credit Spread
         credit = s.get("BAMLH0A0HYM2")
         if credit and credit.z_score is not None:
-            c_score = score_z(credit.z_score)
-            components["credit_spread"] = round(c_score, 1)
-            total_score += c_score * 0.25
-            total_weight += 0.25
+            add("credit_spread", score_z(credit.z_score), 0.20)
 
         # 3. USD/KRW 변동성 (Z-Score)
         usdkrw = s.get("USD_KRW")
         if usdkrw and usdkrw.z_score is not None:
-            fx_score = score_z(abs(usdkrw.z_score))  # 양/음 모두 변동성
-            components["fx_volatility"] = round(fx_score, 1)
-            total_score += fx_score * 0.20
-            total_weight += 0.20
+            add("fx_volatility", score_z(abs(usdkrw.z_score)), 0.15)
 
         # 4. 금리 변동성 (KR_10Y mom_pct)
         kr_10y = s.get("KR_10Y")
         if kr_10y and kr_10y.mom_pct is not None:
-            r_score = max(0, min(100, abs(kr_10y.mom_pct) * 8 + 40))
-            components["rate_volatility"] = round(r_score, 1)
-            total_score += r_score * 0.15
-            total_weight += 0.15
+            add("rate_volatility", max(0, min(100, abs(kr_10y.mom_pct) * 8 + 40)), 0.10)
 
         # 5. DXY (강달러 = EM 스트레스)
         dxy = s.get("DTWEXBGS")
         if dxy and dxy.z_score is not None:
-            d_score = score_z(max(0, dxy.z_score))
-            components["dxy_strength"] = round(d_score, 1)
-            total_score += d_score * 0.10
-            total_weight += 0.10
+            add("dxy_strength", score_z(max(0, dxy.z_score)), 0.05)
+
+        # 6. ★수익률곡선(10Y-2Y): 평탄/역전 = 침체 선행 신호. spread +1.5% → ~20(완화),
+        #    0% → 58, 역전(-0.6%) → 58+15+13 ≈ 86 상한 100.
+        t2, t10 = s.get("DGS2"), s.get("DGS10")
+        if t2 and t10 and t2.latest is not None and t10.latest is not None:
+            spread = t10.latest - t2.latest
+            curve_score = max(0.0, min(100.0, 58 - spread * 25 + (15 if spread < 0 else 0)))
+            add("yield_curve", curve_score, 0.15)
+
+        # 7. ★실질금리(10Y − 기대인플레) 레벨 z: 급긴축(실질금리 급등)이 숨은 리스크.
+        if t10 and s.get("T10YIE"):
+            from src.engine.regime_axes import zscore_at
+            t10_vals = list(getattr(t10, "values", None) or [])
+            tie_vals = list(getattr(s["T10YIE"], "values", None) or [])
+            n = min(len(t10_vals), len(tie_vals))
+            real = [(a - b) if (a is not None and b is not None) else None
+                    for a, b in zip(t10_vals[-n:], tie_vals[-n:])]
+            rz = zscore_at(real)
+            if rz is not None:
+                add("real_rate", score_z(rz), 0.10)
 
         final = total_score / total_weight if total_weight > 0 else 50.0
         return final, components

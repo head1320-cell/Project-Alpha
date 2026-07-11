@@ -661,13 +661,13 @@ class ValuationScreener:
           Goldilocks  — 성장주 유리: ROE 가중↑
           Reflation   — 가치/경기민감: gap 가중↑
           Stagflation — 방어/배당: stability 가중↑
-          Deflation   — 안정성 최우선: stability 가중↑
+          Disinflation — 안정성 최우선: stability 가중↑
         """
         WEIGHTS = {
             "Goldilocks":  (0.50, 0.35, 0.15),
             "Reflation":   (0.60, 0.25, 0.15),
             "Stagflation": (0.55, 0.15, 0.30),
-            "Deflation":   (0.50, 0.20, 0.30),
+            "Disinflation": (0.50, 0.20, 0.30),
         }
         return WEIGHTS.get(regime, (0.60, 0.20, 0.20))
 

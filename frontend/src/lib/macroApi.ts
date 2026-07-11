@@ -32,7 +32,7 @@ export interface MacroSnapshot {
   count: number;
 }
 
-export type Regime = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation";
+export type Regime = "Goldilocks" | "Reflation" | "Stagflation" | "Disinflation";
 
 export interface YieldCurvePoint {
   label: string;
@@ -142,7 +142,7 @@ export const REGIME_COLORS: Record<Regime, { fg: string; bg: string; border: str
   Goldilocks:  { fg: "#15803d", bg: "#dcfce7", border: "#86efac" },
   Reflation:   { fg: "#a16207", bg: "#fef3c7", border: "#fcd34d" },
   Stagflation: { fg: "#b91c1c", bg: "#fee2e2", border: "#fca5a5" },
-  Deflation:   { fg: "#1e40af", bg: "#dbeafe", border: "#93c5fd" },
+  Disinflation: { fg: "#1e40af", bg: "#dbeafe", border: "#93c5fd" },
 };
 
 export function zScoreColor(z: number | null): string {

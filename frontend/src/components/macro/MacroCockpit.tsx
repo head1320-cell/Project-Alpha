@@ -42,13 +42,13 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-// 사분면 명칭 통일 — 백엔드 regime_axes.quadrant와 동일 (Goldilocks/Reflation/Stagflation/Deflation)
+// 사분면 명칭 통일 — 백엔드 regime_axes.quadrant와 동일 (Goldilocks/Reflation/Stagflation/Disinflation)
 const QUAD_KR: Record<string, string> = {
   Goldilocks: "골디락스 · 성장↑·물가↓", Reflation: "리플레이션 · 성장↑·물가↑",
-  Stagflation: "스태그플레이션 · 성장↓·물가↑", Deflation: "디플레이션 · 성장↓·물가↓",
+  Stagflation: "스태그플레이션 · 성장↓·물가↑", Disinflation: "디스인플레이션 · 성장↓·물가↓(둔화)",
 };
 const QUAD_TONE: Record<string, string> = {
-  Goldilocks: "var(--color-bull)", Reflation: "#ea580c", Stagflation: "var(--color-bear)", Deflation: "#2563eb",
+  Goldilocks: "var(--color-bull)", Reflation: "#ea580c", Stagflation: "var(--color-bear)", Disinflation: "#2563eb",
 };
 
 export interface TransplantPayload { sid: string; name: string; market: Market }

@@ -40,22 +40,26 @@ const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", bor
 // RegimeScatter — 성장(x) × 물가(y) 2D 산점도 + 4국면 배경 + 현재위치 글로우 마커
 // ─────────────────────────────────────────────────────────────────────────────
 export function RegimeScatter({ g, i }: { g: number; i: number }) {
-  const x = clamp1(g), y = clamp1(i);
+  // ★동적 스케일(CIO §2): 축 한계를 데이터에 맞춰 확장 — 스코어 +2.06이 [-1,1] 고정축에
+  //   클램프돼 마커가 안 보이던 버그 수정. 코너 라벨도 통일 명명(Reflation=성장↑·물가↑).
+  const lim = Math.max(1, Math.ceil(Math.max(Math.abs(g), Math.abs(i))));
+  const ticks = [-lim, -lim / 2, 0, lim / 2, lim];
+  const x = g, y = i;
   const pt = [{ x, y }];
   return (
     <div className="mc-scatter">
-      <span className="mc-quad tr">OVERHEATING<em>성장↑·물가↑</em></span>
+      <span className="mc-quad tr">REFLATION<em>성장↑·물가↑</em></span>
       <span className="mc-quad tl">STAGFLATION<em>성장↓·물가↑</em></span>
-      <span className="mc-quad br">REFLATION<em>성장↑·물가↓</em></span>
+      <span className="mc-quad br">GOLDILOCKS<em>성장↑·물가↓</em></span>
       <span className="mc-quad bl">DISINFLATION<em>성장↓·물가↓</em></span>
       <ResponsiveContainer width="100%" height={340}>
         <ScatterChart margin={{ top: 14, right: 18, bottom: 22, left: 6 }}>
-          <ReferenceArea x1={0} x2={1} y1={-1} y2={0} fill="rgba(22,163,74,0.07)" stroke="none" />
-          <ReferenceArea x1={0} x2={1} y1={0} y2={1} fill="rgba(234,88,12,0.07)" stroke="none" />
-          <ReferenceArea x1={-1} x2={0} y1={0} y2={1} fill="rgba(220,38,38,0.07)" stroke="none" />
-          <ReferenceArea x1={-1} x2={0} y1={-1} y2={0} fill="rgba(37,99,235,0.07)" stroke="none" />
-          <XAxis type="number" dataKey="x" domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "성장 모멘텀 →", position: "insideBottom", offset: -10, fontSize: 10, fill: "var(--t-muted)" }} />
-          <YAxis type="number" dataKey="y" domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "물가 →", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
+          <ReferenceArea x1={0} x2={lim} y1={-lim} y2={0} fill="rgba(22,163,74,0.07)" stroke="none" />
+          <ReferenceArea x1={0} x2={lim} y1={0} y2={lim} fill="rgba(234,88,12,0.07)" stroke="none" />
+          <ReferenceArea x1={-lim} x2={0} y1={0} y2={lim} fill="rgba(220,38,38,0.07)" stroke="none" />
+          <ReferenceArea x1={-lim} x2={0} y1={-lim} y2={0} fill="rgba(37,99,235,0.07)" stroke="none" />
+          <XAxis type="number" dataKey="x" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "성장 →", position: "insideBottom", offset: -10, fontSize: 10, fill: "var(--t-muted)" }} />
+          <YAxis type="number" dataKey="y" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "물가 →", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
           <ReferenceLine x={0} stroke="var(--t-border)" strokeWidth={1} />
           <ReferenceLine y={0} stroke="var(--t-border)" strokeWidth={1} />
           <ReferenceDot x={x} y={y} r={18} fill="var(--t-accent)" fillOpacity={0.12} stroke="none" />
@@ -70,7 +74,7 @@ export function RegimeScatter({ g, i }: { g: number; i: number }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CycleClock — 경기순환 시계 (4국면 원형 배치 + 현재 위치 바늘)
-//   각도: atan2(inflation, growth). Goldilocks(우하)→Reflation(우상)→Stagflation(좌상)→Deflation(좌하)
+//   각도: atan2(inflation, growth). Goldilocks(우하)→Reflation(우상)→Stagflation(좌상)→Disinflation(좌하)
 // ─────────────────────────────────────────────────────────────────────────────
 export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: number }) {
   const cx = size / 2, cy = size / 2, R = size * 0.4;

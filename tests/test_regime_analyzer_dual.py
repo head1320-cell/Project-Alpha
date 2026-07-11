@@ -5,7 +5,7 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine.regime_analyzer import RegimeAnalyzer, get_regime_states  # noqa: E402
 
-REGIMES = ("Goldilocks", "Reflation", "Stagflation", "Deflation", "데이터 부족")
+REGIMES = ("Goldilocks", "Reflation", "Stagflation", "Disinflation", "데이터 부족")
 
 
 def test_analyze_market_param():

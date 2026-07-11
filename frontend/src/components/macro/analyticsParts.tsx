@@ -167,20 +167,23 @@ export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
   if (!path.length) return <div className="mc-empty-sm">궤적 데이터 없음</div>;
   const data = path.map((p) => ({ x: p.growth, y: p.inflation, t: p.t }));
   const last = data[data.length - 1];
+  // ★동적 스케일(CIO §2) — 궤적 전체가 축 안에 들어오도록. 라벨 통일 명명.
+  const lim = Math.max(1, Math.ceil(Math.max(...data.map((d) => Math.max(Math.abs(d.x), Math.abs(d.y))))));
+  const ticks = [-lim, -lim / 2, 0, lim / 2, lim];
   return (
     <div className="mc-scatter">
-      <span className="mc-quad tr">OVERHEATING<em>성장↑·물가↑</em></span>
+      <span className="mc-quad tr">REFLATION<em>성장↑·물가↑</em></span>
       <span className="mc-quad tl">STAGFLATION<em>성장↓·물가↑</em></span>
-      <span className="mc-quad br">REFLATION<em>성장↑·물가↓</em></span>
+      <span className="mc-quad br">GOLDILOCKS<em>성장↑·물가↓</em></span>
       <span className="mc-quad bl">DISINFLATION<em>성장↓·물가↓</em></span>
       <ResponsiveContainer width="100%" height={320}>
         <ScatterChart margin={{ top: 14, right: 18, bottom: 22, left: 6 }}>
-          <ReferenceArea x1={0} x2={1} y1={-1} y2={0} fill="rgba(22,163,74,0.06)" stroke="none" />
-          <ReferenceArea x1={0} x2={1} y1={0} y2={1} fill="rgba(234,88,12,0.06)" stroke="none" />
-          <ReferenceArea x1={-1} x2={0} y1={0} y2={1} fill="rgba(220,38,38,0.06)" stroke="none" />
-          <ReferenceArea x1={-1} x2={0} y1={-1} y2={0} fill="rgba(37,99,235,0.06)" stroke="none" />
-          <XAxis type="number" dataKey="x" domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "성장 →", position: "insideBottom", offset: -10, fontSize: 10, fill: "var(--t-muted)" }} />
-          <YAxis type="number" dataKey="y" domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "물가 →", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
+          <ReferenceArea x1={0} x2={lim} y1={-lim} y2={0} fill="rgba(22,163,74,0.06)" stroke="none" />
+          <ReferenceArea x1={0} x2={lim} y1={0} y2={lim} fill="rgba(234,88,12,0.06)" stroke="none" />
+          <ReferenceArea x1={-lim} x2={0} y1={0} y2={lim} fill="rgba(220,38,38,0.06)" stroke="none" />
+          <ReferenceArea x1={-lim} x2={0} y1={-lim} y2={0} fill="rgba(37,99,235,0.06)" stroke="none" />
+          <XAxis type="number" dataKey="x" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "성장 →", position: "insideBottom", offset: -10, fontSize: 10, fill: "var(--t-muted)" }} />
+          <YAxis type="number" dataKey="y" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "물가 →", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
           <ReferenceLine x={0} stroke="var(--t-border)" />
           <ReferenceLine y={0} stroke="var(--t-border)" />
           <Tooltip contentStyle={TIP} cursor={{ strokeDasharray: "3 3" }} formatter={(v: number | string) => Number(v).toFixed(2)} />

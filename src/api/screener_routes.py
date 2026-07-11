@@ -618,8 +618,8 @@ _REGIME_GUIDANCE = {
             {"field": "debt_ratio_pct", "op": "lt", "value": 100, "label": "부채비율 < 100%"},
         ],
     },
-    "Deflation": {
-        "text": "디플레이션 국면 (성장↓·물가↓) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하세요.",
+    "Disinflation": {
+        "text": "디스인플레이션 국면 (성장↓·물가↓ 둔화) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하세요.",
         "filters": [
             {"field": "debt_ratio_pct", "op": "lt", "value": 80, "label": "부채비율 < 80%"},
             {"field": "market_cap_억", "rank_mode": "top_pct", "rank_value": 40, "label": "시가총액 상위 40%"},

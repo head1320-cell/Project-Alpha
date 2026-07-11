@@ -305,7 +305,7 @@ def _regime_fit(sid: str) -> list[dict]:
     from src.engine.macro_recommender import _ARCHETYPE, _FIT, _QUAD_KR
     arch = _ARCHETYPE.get(sid, "diversified")
     out = []
-    for quad in ("Reflation", "Overheating", "Stagflation", "Disinflation"):
+    for quad in ("Goldilocks", "Reflation", "Stagflation", "Disinflation"):  # 명명 통일(regime_axes)
         fit = _FIT.get(quad, {}).get(arch, 0.5)
         out.append({"quadrant": quad, "quadrant_kr": _QUAD_KR.get(quad, quad), "fit": round(fit, 2)})
     return out

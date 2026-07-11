@@ -39,7 +39,7 @@ def test_get_profile_fallback():
 def test_regime_fit():
     f = _regime_fit("risk_parity")
     assert len(f) == 4
-    assert {x["quadrant"] for x in f} == {"Reflation", "Overheating", "Stagflation", "Disinflation"}
+    assert {x["quadrant"] for x in f} == {"Goldilocks", "Reflation", "Stagflation", "Disinflation"}
     for x in f:
         assert 0.0 <= x["fit"] <= 1.0
         assert x["quadrant_kr"]

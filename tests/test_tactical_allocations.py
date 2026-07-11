@@ -60,7 +60,7 @@ def test_deterministic():
 def test_recommend_structure():
     from src.engine.macro_recommender import recommend
     r = recommend("us")
-    assert r["regime"]["quadrant"] in ("Reflation", "Overheating", "Stagflation", "Disinflation")
+    assert r["regime"]["quadrant"] in ("Goldilocks", "Reflation", "Stagflation", "Disinflation")
     assert len(r["ranking"]) == 22
     assert r["ranking"][0]["id"] == r["top"]["id"]
     assert r["narrative"] and r["narrative_source"] in ("rule", "claude")

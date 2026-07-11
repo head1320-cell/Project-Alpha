@@ -57,5 +57,5 @@ def test_regime_with_data_classifies(monkeypatch):
     c = MacroCollector()
     c.cache_clear()
     state = RegimeAnalyzer(collector=c).analyze()
-    assert state.regime in ("Goldilocks", "Reflation", "Stagflation", "Deflation")
+    assert state.regime in ("Goldilocks", "Reflation", "Stagflation", "Disinflation")
     assert state.confidence > 0
