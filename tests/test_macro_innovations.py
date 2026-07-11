@@ -5,7 +5,6 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 import math  # noqa: E402
 
-
 # ── CB 센티먼트 (Text-as-Data) ──
 
 def test_hawkish_text_scores_positive():
