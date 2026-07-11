@@ -453,3 +453,28 @@ def macro_strategy_ai(sid: str, market: str = Query("kr", pattern="^(us|kr)$")):
         logger.exception("전략 AI 분석 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
+
+
+# ═══ v2 혁신 — CB 센티먼트 · 그레인저 인과 그래프 (CIO 리팩토링) ═══════════════════
+
+@router.get("/cb-sentiment")
+def macro_cb_sentiment():
+    """중앙은행(Fed/BOK) 정책문 매파/비둘기 게이지 — 렉시콘 기반, 수집 실패 시 정직 결측."""
+    try:
+        from src.engine.cb_sentiment import cb_sentiment
+        return cb_sentiment()
+    except Exception:
+        logger.exception("cb-sentiment 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/causal-graph")
+def macro_causal_graph():
+    """매크로 변수 그레인저(예측적) 인과 그래프 — 방향 엣지(from→to, lag, p)."""
+    try:
+        from src.engine.causal_graph import granger_edges
+        snap = _get_analyzer().collector.collect_all(use_cache=True)
+        return granger_edges(snap.series)
+    except Exception:
+        logger.exception("causal-graph 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
