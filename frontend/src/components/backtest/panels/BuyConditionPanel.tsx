@@ -13,6 +13,10 @@ import type { BacktestStrategy, SortDir } from "../../../lib/backtest/strategy";
 import { FILL_PRICE_GROUPS, FILL_PRICE_GROUPS_NO_EXPR } from "../../../lib/backtest/fillPrice";
 import { SORT_FIELDS } from "../../../lib/backtest/sortFields";
 
+const REBALANCE_PERIOD_UNIT: Record<Exclude<BacktestStrategy["rebalancePeriod"], "daily">, string> = {
+  weekly: "주", monthly: "월", quarterly: "분기", semiannual: "반기", annual: "연",
+};
+
 const selBox: React.CSSProperties = {
   fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
   borderRadius: "var(--bs-border-radius)", padding: "6px 9px", background: "var(--bg-card)", cursor: "pointer",
@@ -66,10 +70,15 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="리밸런싱 주기">
           <Segmented value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
-            options={[{ id: "daily", label: "매일" }, { id: "weekly", label: "매주" }, { id: "monthly", label: "매월" }]} />
+            options={[
+              { id: "daily", label: "매일" }, { id: "weekly", label: "매주" },
+              { id: "monthly", label: "매월" }, { id: "quarterly", label: "분기" },
+              { id: "semiannual", label: "반기" }, { id: "annual", label: "연간" },
+            ]} />
           {s.rebalancePeriod !== "daily" && (
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              신규 매수는 {s.rebalancePeriod === "weekly" ? "주" : "월"} 첫 거래일에만 · 청산룰은 매일 평가
+              순위이탈 보유종목 정리는 {REBALANCE_PERIOD_UNIT[s.rebalancePeriod]} 첫 거래일에만
+              · 빈자리 재편입·손익절은 매일 평가
             </span>
           )}
         </Field>

@@ -18,8 +18,11 @@ export default function OffsetInput({ value, onChange }: {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <input type="number" step={0.1} value={value}
-          onChange={(e) => onChange(Number(e.target.value) || 0)} style={box} />
+        <input type="number" step={0.1} min={-10} max={10} value={value}
+          onChange={(e) => {
+            const n = Number(e.target.value) || 0;
+            onChange(Math.max(-10, Math.min(10, n)));
+          }} style={box} />
         <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>%</span>
         {[-1, -0.5, 0, 0.5, 1].map((v) => (
           <button key={v} type="button" onClick={() => onChange(v)}

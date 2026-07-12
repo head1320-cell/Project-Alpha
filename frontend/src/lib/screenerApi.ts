@@ -1084,6 +1084,27 @@ export interface ScreenToBacktestBody {
   allow_snapshot_fundamentals?: boolean;
 }
 
+// FastAPI 에러 응답의 detail을 사람이 읽을 수 있는 문자열로 변환.
+// 보통은 string이지만, Pydantic 422 검증 실패는 detail이 [{loc,msg,type}, ...] 배열로 옴 —
+// 이를 그대로 new Error()에 넣으면 "[object Object]"로 뭉개지므로 여기서 join.
+function extractErrorDetail(err: unknown, fallback: string): string {
+  const detail = (err as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((d) => {
+        if (d && typeof d === "object") {
+          const loc = Array.isArray((d as { loc?: unknown[] }).loc) ? (d as { loc: unknown[] }).loc.join(".") : "";
+          const msg = (d as { msg?: string }).msg ?? JSON.stringify(d);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(d);
+      })
+      .join("; ");
+  }
+  return fallback;
+}
+
 export const backtestBridgeApi = {
 // 커스텀 전략(BuilderState) 백테스트 — 빌더에서 만든 임의 전략 실행
   customBacktest: async (body: {
@@ -1106,7 +1127,7 @@ export const backtestBridgeApi = {
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(err.detail || `Custom backtest failed: ${r.status}`);
+      throw new Error(extractErrorDetail(err, `Custom backtest failed: ${r.status}`));
     }
     return r.json();
   },
@@ -1124,9 +1145,10 @@ export const backtestBridgeApi = {
     });
     if (!r.ok) {
       // 프록시/백엔드가 실어보낸 사유(detail)를 그대로 노출 — "502"만 보이던 문제 해결.
-      // 504=시간초과(분석 과대), 502=백엔드 연결불가 등 메시지로 구분됨.
+      // 504=시간초과(분석 과대), 502=백엔드 연결불가 등 메시지로 구분됨. 422(입력값 검증 실패)는
+      // detail이 배열로 오므로 extractErrorDetail로 사람이 읽을 수 있게 변환.
       const err = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(err.detail || `Screen-to-backtest failed: ${r.status}`);
+      throw new Error(extractErrorDetail(err, `Screen-to-backtest failed: ${r.status}`));
     }
     return r.json();
   },
@@ -1144,7 +1166,7 @@ export const backtestBridgeApi = {
     });
     if (!r.ok || !r.body) {
       const err = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(err.detail || `Screen-to-backtest failed: ${r.status}`);
+      throw new Error(extractErrorDetail(err, `Screen-to-backtest failed: ${r.status}`));
     }
     const reader = r.body.getReader();
     const dec = new TextDecoder();

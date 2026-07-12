@@ -145,15 +145,18 @@ export default function UniversePanel({ s, set, live = true }: {
         })}
       </div>
 
-      {/* 평가 종목 상한 — 전종목 선택 시 200으로 잘리던 문제의 사용자 제어 */}
+      {/* 평가 종목 상한 — 전종목 선택 시 200으로 잘리던 문제의 사용자 제어.
+          기본 200 = 조건 추가 시에도 안전한 속도(수 초). 큰 값은 사용자가 명시적으로 선택했을
+          때만(수 분 소요 가능 — 미적재 종목은 시세 수집 필요) */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>평가 종목 상한</span>
-        <select value={s.evalCap ?? 4000} onChange={(e) => set((x) => ({ ...x, evalCap: Number(e.target.value) }))}
+        <select value={s.evalCap ?? 200} onChange={(e) => set((x) => ({ ...x, evalCap: Number(e.target.value) }))}
           style={{ fontSize: 12, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+          <option value={200}>200 종목 (기본, 빠름)</option>
           <option value={500}>500 종목</option>
           <option value={1000}>1,000 종목</option>
           <option value={2000}>2,000 종목</option>
-          <option value={4000}>전체 (제한 없음)</option>
+          <option value={4000}>전체 (제한 없음, 대형 유니버스는 수 분 소요될 수 있음)</option>
         </select>
         <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
           첫 실행은 미적재 종목 시세 수집으로 수 분 걸릴 수 있음(진행률 표시) — 이후 DB에서 즉시

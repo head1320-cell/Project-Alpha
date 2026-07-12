@@ -227,8 +227,17 @@ class BacktestConfig:
     liquidate_at_end: bool = False      # 기간종료 시 잔여 포지션 종가 전량청산 — 통계를 실현 기준으로
     factor_weights: dict | None = None  # 종목별 팩터 가중치 {ticker: 0~1} (팩터가중 모드용)
     # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②). 기본 비활성 = 기존 동작 불변
-    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"·"monthly"=주·월 첫 거래일에만 신규 매수
+    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"|"monthly"|"quarterly"|
+    # "semiannual"|"annual"=주/월/분기/반기/연 첫 거래일에만 신규 매수 (매도는 매일 평가)
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
+    # 동적 재편입 (젠포트화 Phase 6). 기본 활성 — Top-N이 매도 후에도 계속 고정되던 문제 해결.
+    # 매도로 빈 슬롯이 생기면 그날 즉시, replenishment_pool 중 미보유 종목을 모멘텀점수
+    # (가격+수급, look-ahead 없는 시점별 횡단면 퍼센타일) 랭킹 상위부터 채운다. rebalance_period
+    # 설정 시엔 그 주기 첫 거래일에 "순위 밖으로 밀려난 보유종목"도 추가로 정리(같은 날 재편입이
+    # 자동 리필). replenishment_pool이 None/빈 리스트면 사실상 비활성(레거시 동작, symbols 밖
+    # 종목을 알 수 없으므로). 사용자향 API에는 끄는 스위치를 노출하지 않음 — 회귀비교용 내부 값.
+    dynamic_replenishment: bool = True
+    replenishment_pool: list[str] | None = None  # 재편입 후보풀(symbols의 상위집합). None=비활성
     # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
     vectorize_signals: bool = True
     # 매수 우선순위식 (젠포트 매수 종목 선택 우선순위): 봉마다 후보들의 식 값으로
@@ -334,7 +343,10 @@ class BacktestEngine:
         ).strftime("%Y-%m-%d")
 
         ohlcv_map: dict[str, pd.DataFrame] = {}
-        symbols = list(self.cfg.symbols)
+        # 재편입 후보풀(symbols의 상위집합)도 같은 병렬 로더로 함께 적재 — 재편입 랭킹 비용을
+        # universe_eval_cap(최대4000) 규모와 분리(재편입 pool은 훨씬 작게 별도 제한됨).
+        repl_pool = list(dict.fromkeys(self.cfg.replenishment_pool or []))
+        symbols = list(dict.fromkeys(list(self.cfg.symbols) + repl_pool))
         total_syms = len(symbols)
 
         def _load_one(tk: str):
@@ -423,6 +435,21 @@ class BacktestEngine:
             except Exception as e:
                 logger.debug(f"prepare_panel skipped: {e}")
 
+        # 동적 재편입용 랭킹 패널 — 모멘텀점수(가격+수급, 펀더멘탈 미포함)만 사용.
+        # build_score_panels는 그 날짜까지의 rolling/pct_change만 쓰는 시점별 횡단면 퍼센타일이라
+        # 구조적으로 룩어헤드가 없음(전략의 prepare_panel과 별개 — 전략이 무엇이든 항상 계산).
+        # 재무 포함 완전한 시점별 종합점수는 실시간 DART 재계산이 필요해 인프라 부재로 미지원
+        # (정직한 한계 — trade reason에도 "재무 미반영" 명시).
+        self._repl_panel = None
+        if self.cfg.dynamic_replenishment and repl_pool:
+            try:
+                from src.kis_strategies.score_factors import build_score_panels
+                panels = build_score_panels(ohlcv_map)
+                self._repl_panel = panels.get("모멘텀점수")
+            except Exception as e:
+                logger.debug(f"replenishment score panel skipped: {e}")
+                self._repl_panel = None
+
         # 시그널 벡터화: 조건을 전 봉 1회 평가(인과 연산 — per-bar와 동일 결과 보장,
         # 등가성 테스트로 고정). 실패·미지원 전략이면 루프에서 per-bar 폴백.
         if self.cfg.vectorize_signals and hasattr(strategy, "precompute_signals"):
@@ -473,6 +500,11 @@ class BacktestEngine:
                         continue
                     self._execute_sell(ticker, float(df_to_date["close"].iloc[-1]),
                                        date_str, "Market-timing exit")
+
+            # 0.8 정기 리밸런싱 순위이탈 정리 — rebalance_period 첫 거래일에만, 보유종목 중
+            #     현재 랭킹 상위 max_positions 밖으로 밀려난 종목만 매도(상위권은 유지).
+            #     생긴 빈자리는 아래 2.6 동적 재편입이 같은 날 자동으로 채운다.
+            self._rebalance_prune(ohlcv_map, sim_date, date_str, rebalance_days)
 
             # 1. 포지션 가격 업데이트 + 손절/익절 + 보유기간 매도 체크
             for ticker, pos in list(self.positions.items()):
@@ -575,6 +607,11 @@ class BacktestEngine:
                 for _prio, ticker, df_slice, signal in buy_queue:
                     self._process_buy(ticker, df_slice, signal,
                                       market_on, rebalance_days, sim_date, date_str)
+
+            # 2.6 동적 재편입: 오늘 매도(0.8 순위이탈·1 손익절/보유만기·2 신호매도 등)로 열린
+            #     빈자리를, 리밸런싱 주기와 무관하게 그날 즉시 채운다(사용자 확정: 매도 시점 기준).
+            #     max_buy_per_day는 다른 매수와 동일 카운터를 공유(사용자 확정).
+            self._replenish_slots(ohlcv_map, sim_date, date_str, market_on)
 
             # 2.5 당일 매매: 오늘 진입한 포지션을 장 마감(당일 종가)에 전량 청산
             if self.cfg.day_trade and self.positions:
@@ -1273,6 +1310,112 @@ class BacktestEngine:
             pnl=pnl, reason=reason,
         ))
 
+    def _replenish_slots(self, ohlcv_map: dict, sim_date, date_str: str, market_on: bool):
+        """동적 재편입 — 빈 슬롯을 그날 즉시 모멘텀점수 랭킹 상위 미보유 종목으로 채운다.
+
+        어떤 이유로든(순위이탈·손익절·보유만기·신호매도 등) 슬롯이 열리면 rebalance_period와
+        무관하게 항상 실행된다(사용자 확정). _process_buy를 거치지 않고 직접 _execute_buy를
+        호출 — 돌파매수·래더는 '시그널' 개념이라 포트폴리오 슬롯 보충과 성격이 다르다.
+        마켓타이밍 리스크오프(market_on=False)는 다른 신규 매수와 동일하게 존중한다.
+        """
+        if not (self.cfg.dynamic_replenishment and self._repl_panel is not None
+                and self.cfg.replenishment_pool):
+            return
+        if not market_on:
+            return
+        open_slots = self.cfg.max_positions - len(self.positions)
+        if open_slots <= 0:
+            return
+        if date_str not in self._repl_panel.index:
+            return
+
+        row = self._repl_panel.loc[date_str]
+        candidates: list[tuple[float, str]] = []
+        for ticker in self.cfg.replenishment_pool:
+            if ticker in self.positions or ticker not in ohlcv_map:
+                continue
+            if self.cfg.rebuy_block_days > 0:
+                last = self._last_exit.get(ticker)
+                if last is not None and self._days_held(last, date_str) <= self.cfg.rebuy_block_days:
+                    continue
+            score = row.get(ticker) if ticker in row.index else None
+            if score is None or pd.isna(score):
+                continue
+            candidates.append((float(score), ticker))
+        if not candidates:
+            return
+        candidates.sort(key=lambda x: (-x[0], x[1]))  # 점수 내림차순, 동률은 종목코드로 결정적
+
+        # buy_weight_mode="factor"용 — 재편입 후보풀 내에서 0~1 min-max 정규화(초기선정과
+        # 동일한 정규화 방식). 범위 밖 종목이 암묵적으로 동일가중 폴백되던 불일치를 해소.
+        scores_only = [s for s, _ in candidates]
+        lo, hi = min(scores_only), max(scores_only)
+        rng = hi - lo
+
+        bought = 0
+        for score, ticker in candidates:
+            if bought >= open_slots:
+                break
+            df_slice = ohlcv_map[ticker].loc[:sim_date]
+            if df_slice.empty:
+                continue
+            buy_price = self._fill_with_offset("buy", df_slice)
+            if buy_price is None and self.cfg.buy_fill_offset_pct:
+                continue  # 지정가 미도달 — 그날 미체결
+            close_price = float(df_slice["close"].iloc[-1])
+            fw = ((score - lo) / rng if rng > 0 else 0.5) if self.cfg.buy_weight_mode == "factor" else None
+            before = len(self.positions)
+            self._execute_buy(ticker, buy_price or close_price, date_str,
+                              "동적 재편입 — 모멘텀점수(가격+수급) 기준, 재무 미반영",
+                              factor_weight=fw)
+            if len(self.positions) > before:
+                bought += 1
+
+    def _rebalance_prune(self, ohlcv_map: dict, sim_date, date_str: str, rebalance_days):
+        """정기 리밸런싱 순위이탈 정리 — rebalance_period 첫 거래일에만 실행.
+
+        보유종목+재편입후보풀을 모멘텀점수로 재랭킹해 상위 max_positions 밖으로 밀려난
+        '보유종목만' 매도(상위권 보유종목은 그대로 유지 — 전량 리셋 아님). 랭킹 근거가 없는
+        (패널에 값 없는) 보유종목은 정리 대상에서 제외(정직 — 판단 근거 없으면 보수적 유지).
+        생긴 빈자리는 같은 날 뒤이어 실행되는 _replenish_slots가 자동으로 채운다.
+        """
+        if rebalance_days is None or sim_date not in rebalance_days:
+            return
+        if not (self.cfg.dynamic_replenishment and self._repl_panel is not None
+                and self.cfg.replenishment_pool and self.positions):
+            return
+        if date_str not in self._repl_panel.index:
+            return
+
+        row = self._repl_panel.loc[date_str]
+        pool = set(self.cfg.replenishment_pool) | set(self.positions.keys())
+        ranked: list[tuple[float, str]] = []
+        for ticker in pool:
+            score = row.get(ticker) if ticker in row.index else None
+            if score is None or pd.isna(score):
+                continue
+            ranked.append((float(score), ticker))
+        if not ranked:
+            return
+        ranked.sort(key=lambda x: (-x[0], x[1]))
+        top_n = {tk for _, tk in ranked[: self.cfg.max_positions]}
+        ranked_tickers = {tk for _, tk in ranked}
+
+        for ticker in list(self.positions.keys()):
+            if ticker not in ranked_tickers or ticker in top_n:
+                continue  # 랭킹 불가 또는 상위권 → 유지
+            if ticker not in ohlcv_map:
+                continue
+            pos = self.positions[ticker]
+            if self._days_held(pos.entry_date, date_str) < self.cfg.min_hold_days:
+                continue
+            df_to_date = ohlcv_map[ticker].loc[:sim_date]
+            if df_to_date.empty:
+                continue
+            sell_price = self._fill_with_offset("sell", df_to_date)
+            close_price = float(df_to_date["close"].iloc[-1])
+            self._execute_sell(ticker, sell_price or close_price, date_str, "리밸런싱 순위이탈 매도")
+
     def _compute_benchmark(self, dates: list, equity_values: list, strat_returns) -> dict:
         """벤치마크(코스피) 대비 지표. 동일 기간 매수후보유 곡선 + 초과수익/베타/알파.
 
@@ -1357,15 +1500,24 @@ class BacktestEngine:
             return 0
 
     def _rebalance_days(self, sim_dates) -> set | None:
-        """정기 리밸런싱: 주/월 첫 거래일 집합. None이면 게이트 없음(매일 신규 매수 가능)."""
+        """정기 리밸런싱: 주/월/분기/반기/연 첫 거래일 집합. None이면 게이트 없음(매일 신규 매수 가능)."""
         period = (self.cfg.rebalance_period or "").lower()
-        if period not in ("weekly", "monthly"):
+        if period not in ("weekly", "monthly", "quarterly", "semiannual", "annual"):
             return None
         days: set = set()
         seen: set = set()
         for d in sim_dates:
-            iso = d.isocalendar()
-            key = (iso[0], iso[1]) if period == "weekly" else (d.year, d.month)
+            if period == "weekly":
+                iso = d.isocalendar()
+                key = (iso[0], iso[1])
+            elif period == "monthly":
+                key = (d.year, d.month)
+            elif period == "quarterly":
+                key = (d.year, (d.month - 1) // 3)
+            elif period == "semiannual":
+                key = (d.year, (d.month - 1) // 6)
+            else:  # annual
+                key = (d.year,)
             if key not in seen:
                 seen.add(key)
                 days.add(d)
@@ -1528,7 +1680,9 @@ class BacktestEngine:
             "data_range": {
                 "start": self.cfg.start_date,
                 "end": self.cfg.end_date,
-                "symbols_used": len(self.cfg.symbols),
+                # 동적 재편입 활성 시 실제 거래 가능한 유니버스는 symbols(초기 보유) +
+                # replenishment_pool(재편입 후보) 합집합 — 재편입으로 편입된 종목도 반영.
+                "symbols_used": len(set(self.cfg.symbols) | set(self.cfg.replenishment_pool or [])),
             },
             "cost_analysis": {
                 "total_trades": stats["num_trades"],
@@ -1825,6 +1979,8 @@ def run_backtest(
     buy_timing: str = "pre_open",
     progress_cb=None,
     liquidate_at_end: bool = True,
+    dynamic_replenishment: bool = True,
+    replenishment_pool: list[str] | None = None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -1899,6 +2055,8 @@ def run_backtest(
         breakthrough_offset_pct=breakthrough_offset_pct,
         breakthrough_direction=breakthrough_direction,
         buy_timing=buy_timing,
+        dynamic_replenishment=dynamic_replenishment,
+        replenishment_pool=replenishment_pool,
     )
     engine = BacktestEngine(cfg, progress_cb=progress_cb)
     return engine.run()

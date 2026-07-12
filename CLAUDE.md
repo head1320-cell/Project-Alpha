@@ -1460,3 +1460,82 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
   (상승 초록/하락 빨강/중립 회색 배경형), RSI 미니 트랙(30~70 존 + 위치 도트), 숫자 우측
   정렬·패딩 확대. 스파크라인은 timing API에 시계열이 없어 정직 생략(백엔드 확장 시 후속).
 - 서브탭 필 스타일 강화(hover/on 테두리+배경). 검증: tsc 0 · build(/macro 32.2kB).
+
+---
+
+## 🎯 젠포트화 Phase 6 — 동적 재편입(Dynamic Replenishment) + 백테스터 버그 3건 수정
+
+[배경] 사용자 보고: ①백테스트가 초기 선정 Top-N 종목만 계속 보유(매도 후 빈자리가 재편입 안 됨)
+②커스텀 매도조건을 설정해도 트레이드 로그에 "데드크로스"가 찍힘 ③조건 추가·고급옵션(체결가
+오프셋) 수정 시 `[ERROR] network error`. 3개 Explore 에이전트(백엔드 엔진/프론트 UI/백엔드
+요청·스트리밍) + 1개 Plan 에이전트(재편입 아키텍처)로 전수 조사 후 근본원인 확정·수정.
+
+### ① Dynamic Replenishment — Top-N 고정 문제 해결
+- **근본원인**: `_screen_to_backtest_core`가 스크리너를 요청 시점 1회만 호출해 정적
+  `tickers: list[str]`을 확정(`screener_routes.py`) → `BacktestConfig.symbols`가 불변 필드라
+  메인루프(`for ticker in self.cfg.symbols`)가 이 고정 리스트만 순회. 매도로 빈자리가 생겨도
+  이 리스트 밖 종목은 절대 편입 불가능했음(엔진에 `composite_score` 개념 자체가 없었음).
+- **재사용 인프라**: `src/kis_strategies/score_factors.py::build_score_panels()` — 가격+수급만
+  사용하는 "모멘텀점수"는 그 날짜까지의 rolling/pct_change만 쓰는 시점별 횡단면 퍼센타일이라
+  **구조적으로 룩어헤드 없음**. 재무 포함 완전한 시점별 종합점수 재계산은 RIM/DCF/DDM이
+  종목당 실시간 DART 호출을 요구해 인프라 부재로 미지원 — **정직한 한계**로 명시. 재편입
+  trade reason에 "동적 재편입 — 모멘텀점수(가격+수급) 기준, 재무 미반영"을 항상 표기.
+- **두 메커니즘** (`kis_backtest_engine.py`):
+  1. **연속 재편입**(`_replenish_slots`): 어떤 이유로든 슬롯이 빈 그날 즉시, 미보유
+     `replenishment_pool` 후보를 모멘텀점수 상위부터 채움. `rebalance_period`와 무관하게 항상
+     실행(사용자 확정: "매도 시점 기준"). `max_buy_per_day`는 다른 매수와 동일 카운터 공유.
+  2. **정기 리밸런싱 순위이탈 정리**(`_rebalance_prune`): `rebalance_period` 설정 시 그 주기
+     첫 거래일에만, 보유종목 중 현재 랭킹 상위 `max_positions` 밖으로 밀려난 종목만 매도
+     (reason: "리밸런싱 순위이탈 매도" — 상위권 보유종목은 유지, 전량 리셋 아님). 생긴 빈자리는
+     같은 날 뒤이어 실행되는 1이 자동으로 채움(중복 매수로직 불필요).
+- **후보풀 분리**: 신규 `replenishment_pool_cap`(기본100, `screener_routes.py`)이
+  `universe_eval_cap`(조건식 봉별평가용, 최대4000)과 완전히 분리된 별도 상한 — 스크리너를
+  1회만 호출해 `tickers`(초기보유)와 `pool_tickers`(재편입후보, 상위집합)를 같은 결과에서
+  슬라이스. `BacktestConfig.replenishment_pool`이 symbols와 함께 OHLCV 병렬로더에 로드되어
+  `universe_eval_cap` 규모와 완전히 독립적인 작고 예측 가능한 추가 비용만 발생.
+- **기본 강제 적용**: `BacktestConfig.dynamic_replenishment: bool = True`(기본값, API에 끄는
+  스위치 비노출). `replenishment_pool_cap=0`(내부/회귀테스트 전용)이나 `replenishment_pool`을
+  아예 넘기지 않는 기존 호출자는 완전히 비활성(레거시 동작 100% 재현 — 회귀 안전).
+- `buy_weight_mode="factor"` 시 재편입 종목의 factor_weight도 같은 랭킹 패널에서 0~1
+  정규화해 부여(기존엔 범위 밖 종목이 암묵적으로 동일가중 폴백되던 불일치 수정).
+
+### ② '데드크로스' 매도사유 하드코딩 — 완전 확정 후 수정
+- **위치**: `src/kis_strategies/strategies.py:61-97` `GoldenCrossStrategy` — MA5/MA20 크로스
+  고정 전략, SELL reason이 `f"데드크로스 (MA{...} < MA{...})"`로 하드코딩.
+- **트리거**: `TerminalBacktester.tsx`의 메인 "전략 실행" 모드가 매크로 엔진 모드가 아닌 한
+  항상 `strategy_name: "GoldenCross"`를 하드코딩 전송(이 UI엔애초에 전략을 명시 선택할 방법이
+  없었음). 백엔드가 `buy_conditions`/`sell_conditions`가 **둘 다 비어있을 때**(조건 칩 없이
+  손절/익절/트레일링/보유기간 등 리스크룰만 설정한 경우)는 override가 발동하지 않아 실제
+  `GoldenCrossStrategy`가 실행 — 사용자 의도와 무관하게 "데드크로스"가 정당하게 출력됨.
+- **수정**: `strategyToRun()`이 이제 `"Condition"`을 항상 명시 전송(매크로 엔진 모드 제외).
+  백엔드 `_screen_to_backtest_core`도 `strategy_name == "Condition"`이면 조건이 비어있어도
+  `eff_params`를 올바르게 구성하도록 분기 조건 확장(`buy_conditions or sell_conditions` →
+  `... or req.strategy_name == "Condition"`). 조건이 비어있으면 `ConditionStrategy`는 자체
+  신호를 내지 않고(HOLD만) 진입은 전부 동적 재편입이, 청산은 사용자가 설정한 손절/익절/트레일링/
+  보유기간 규칙만 담당 — "데드크로스" 등 원치 않는 하드코딩 시그널이 다시는 섞이지 않음.
+
+### ③ "network error" — 별개의 백엔드/프론트 버그 2건 확정 후 수정
+- **버그 A(고급옵션 수정 시)**: `OffsetInput.tsx`에 min/max 클램프가 없어 백엔드
+  `Field(ge=-10.0, le=10.0)` 제약(체결가 오프셋 4필드)을 벗어난 값 입력 시 422 발생, 그
+  `detail`(FastAPI 배열 형태)을 `screenerApi.ts`가 그대로 `new Error()`에 넣어 `[object
+  Object]`로 뭉개짐 → 수정: `OffsetInput`에 클램프 추가 + `extractErrorDetail()` 헬퍼로 422
+  배열을 사람이 읽을 수 있는 메시지로 변환.
+- **버그 B(조건 추가 시)**: `TerminalBacktester.tsx`가 조건 1개만 추가해도
+  `full_universe_eval`을 자동 true로, `universe_eval_cap` 기본값 4000을 그대로 사용 →
+  10종목→최대4000종목 평가로 폭증, 인프라 타임아웃/OOM으로 SSE `error` 이벤트조차 못 보내고
+  커넥션이 끊김(브라우저 네이티브 fetch 예외 = 사용자가 본 "network error"의 정체) →
+  수정: `evalCap` 기본값을 200(백엔드 자체 기본값과 동일)으로 낮추고, 큰 값은 UniversePanel
+  드롭다운에서 사용자가 명시 선택해야만 사용되도록 함(①의 `replenishment_pool_cap` 도입으로
+  "재편입 후보 확보"라는 원래 목적은 이미 별도의 작은 비용으로 해결됨).
+
+### 검증
+- 신규 `tests/test_dynamic_replenishment.py`(4개): pool 미지정 시 `dynamic_replenishment`
+  플래그 값과 무관하게 완전 비활성(레거시 호출자 무영향 증명) · symbols 밖 종목이 손절로 열린
+  슬롯에 재편입되는지 · rebalance_period 순위이탈 정리+즉시재편입이 상위권 보유종목은 건드리지
+  않고 정확히 이탈종목만 교체하는지.
+- **정직한 참고**: 이 변경은 매도가 발생하는 모든 시나리오의 거래수·수익률을 바꾸는 것이 설계
+  의도(빈자리가 더 이상 비어있지 않음) — 기존 CLAUDE.md의 "52거래 -8.1%" 등 수동 회귀 수치는
+  이 변경 이후 재현되지 않는다(예상된 변화). `replenishment_pool`을 넘기지 않는 호출 경로는
+  100% 이전과 동일(위 4개 테스트 중 처음 2개로 고정). 신규 `dynamic_replenishment=True` 실행
+  결과를 새 기준선으로 삼으려면, 기존에 회귀비교에 쓰던 실제 mock 시나리오(kospi200 샘플 등)를
+  재실행해 실측치를 확인할 것 — 예측치를 여기 미리 적지 않음(기존 "정직" 원칙 일관 적용).

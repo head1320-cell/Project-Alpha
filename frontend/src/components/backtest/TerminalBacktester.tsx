@@ -51,7 +51,10 @@ const yearsAgo = (n: number) => {
 const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
-  evalCap: 4000,  // 평가 종목 상한 — 기본 전체(유니버스 선택 존중)
+  // 평가 종목 상한 — 기본 200(조건 추가 시에도 안전한 속도). 조건 추가만으로 자동 전종목(4000)
+  // 평가로 튀어 타임아웃/네트워크 에러가 나던 문제 수정 — 큰 값은 UniversePanel에서 사용자가
+  // 명시적으로 선택.
+  evalCap: 200,
   liquidityGate: "off",  // 기본 전종목 — 유동성/per>0 필터로 선택이 잘리지 않게
   rebalancePeriod: "daily", signalLag: 0, cashReservePct: 0, intradayFill: false,
   assetAlloc: { enabled: false, preset: "aggressive", etfPct: 30, stockPct: 60, basket: [],
@@ -122,10 +125,15 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     sort_secondary_dir: (buy.secondarySort?.dir ?? "DESC") === "ASC" ? "asc" : "desc",
     max_positions: buy.maxStocks,
     full_universe_eval: buy.conditions.length > 0,
-    universe_eval_cap: s.evalCap || 4000,  // 기본 전체 — "전종목" 선택이 200으로 잘리던 문제 수정
+    universe_eval_cap: s.evalCap || 200,  // 기본 200(안전) — 큰 값은 UniversePanel에서 명시 선택
     allow_snapshot_fundamentals: buy.allowFundamentals,
+    // "GoldenCross"는 사용자가 이 화면에서 선택할 방법이 없는 내부 기본값이었음 — 조건 칩이
+    // 비어 있어도(리스크룰만 설정) "Condition" 전략을 명시 전송해, 하드코딩된 이동평균
+    // 크로스 전략(예: "데드크로스" 매도사유)이 조용히 대신 실행되는 것을 막는다. 진입/재편입은
+    // 동적 재편입(빈자리 보충) 로직이 담당하고, 청산은 사용자가 설정한 조건·손절/익절/트레일링/
+    // 보유기간 룰만 적용된다.
     strategy_name: macroCfg?.mode === "engine" && macroCfg.engine_strategy
-      ? `tactical:${macroCfg.engine_strategy}` : "GoldenCross",
+      ? `tactical:${macroCfg.engine_strategy}` : "Condition",
     start_date: s.startDate, end_date: s.endDate,
     initial_capital: s.capital * 10000,
     commission_rate: s.feePct / 100,
@@ -598,20 +606,10 @@ export default function TerminalBacktester() {
                 </div>
               )}
 
-              {/* 거래 내역 — 라운드트립(매수/매도 매칭) */}
-              {(result.backtest.round_trips?.length ?? 0) > 0 && (
-                <div className="tbt-chart">
-                  <div className="tbt-chart-head">
-                    <div className="tbt-chart-title">Trade Log ({result.backtest.round_trips!.length})</div>
-                    <div className="tbt-chart-title">최근 {Math.min(15, result.backtest.round_trips!.length)}건</div>
-                  </div>
-                  <TradeLog trades={result.backtest.round_trips!} />
-                </div>
-              )}
               {/* 매크로 월간 리밸런싱 전략은 개별 체결 로그가 없음 — 안내 */}
               {(result.backtest.round_trips?.length ?? 0) === 0 && result.backtest.trade_mode === "rebalance" && (
                 <div className="tbt-chart">
-                  <div className="tbt-chart-head"><div className="tbt-chart-title">Trade Log</div></div>
+                  <div className="tbt-chart-head"><div className="tbt-chart-title">거래내역</div></div>
                   <div style={{ padding: "14px 4px", color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 12, lineHeight: 1.6 }}>
                     월간 리밸런싱 전략 — 개별 체결 로그가 없습니다.<br />
                     월 단위 성과는 위의 <strong>Monthly Returns</strong> 히트맵을 참고하세요.
@@ -619,10 +617,11 @@ export default function TerminalBacktester() {
                 </div>
               )}
 
-              {/* 종목별 성과 + 데이터 출처 — 거래 있는 종목의 실현손익/보유일/기여도 + 행 클릭 상세 */}
+              {/* 거래내역 — 종목별 요약(구 Constituents)·전체 거래내역(구 Trade Log) 통합 뷰.
+                  둘 다 같은 round_trips/symbol_results 데이터를 공유 — 데이터 손실 없이 병합. */}
               <div className="tbt-chart">
                 <div className="tbt-chart-head">
-                  <div className="tbt-chart-title">Constituents ({result.screened_count})</div>
+                  <div className="tbt-chart-title">거래내역 ({result.screened_count})</div>
                   <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, padding: "2px 8px", borderRadius: 2, background: result.data_source.fully_real ? "#dcfce7" : "#fafafa", color: result.data_source.fully_real ? "#15803d" : "var(--t-muted)", border: "1px solid var(--t-border)" }}>
                     {result.data_source.fully_real ? "REAL_DATA" : "MOCK_DATA"}
                   </span>
@@ -801,11 +800,15 @@ function MetricsTearsheet({ st }: { st: BacktestStatistics }) {
 }
 
 // 종목별 성과 테이블 — 실현손익/평균수익률/보유일/기여도, 행 클릭 → 개별 거래 상세
+// 거래내역 — "종목별 요약"(구 Constituents: 종목당 집계 + 행 클릭 상세)과 "전체 거래내역"
+// (구 Trade Log의 상위호환: 모든 라운드트립을 종목 구분 없이 최신순 나열, 수량/손익/사유/
+// 보유일수 포함) 두 뷰를 토글. 두 뷰 모두 같은 rows/roundTrips를 공유 — 데이터 손실 없음.
 function SymbolPerfTable({ rows, roundTrips, screened }: {
   rows: SymbolPerf[];
   roundTrips: BacktestTrade[];
   screened: Array<{ stock_code: string; corp_name: string }>;
 }) {
+  const [view, setView] = useState<"summary" | "flat">("summary");
   const [sortKey, setSortKey] = useState<string>("contribution_pct");
   const [desc, setDesc] = useState(true);
   const [tradedOnly, setTradedOnly] = useState(true);
@@ -823,32 +826,17 @@ function SymbolPerfTable({ rows, roundTrips, screened }: {
     return base;
   }, [rows, sortKey, desc, tradedOnly]);
 
-  useEffect(() => { setPage(0); }, [sortKey, desc, tradedOnly, rows]);
+  // 전체 거래내역(플랫) — 청산일 기준 최신순, 청산일 없으면 진입일 기준
+  const flatTrades = useMemo(() => {
+    const dateOf = (t: BacktestTrade) => t.exit_date || t.entry_date || "";
+    return [...roundTrips].sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  }, [roundTrips]);
 
-  // 구버전/엔진모드 응답(symbol_results 없음) → 기존 칩 폴백
-  if (!rows.length) {
-    return (
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {screened.slice(0, 12).map((t) => (
-          <span key={t.stock_code} style={{ fontFamily: "var(--t-mono)", fontSize: 12, padding: "4px 10px", border: "1px solid var(--t-border)", borderRadius: 2 }}>
-            {t.corp_name || t.stock_code}
-          </span>
-        ))}
-      </div>
-    );
-  }
+  useEffect(() => { setPage(0); }, [sortKey, desc, tradedOnly, rows, view]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
-  const cur = Math.min(page, pageCount - 1);
-  const view = sorted.slice(cur * PER_PAGE, (cur + 1) * PER_PAGE);
   const won = (v: number | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}₩${Math.abs(Math.round(v)).toLocaleString()}`);
   const pct = (v: number | undefined, dp = 2) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}%`);
   const col = (v: number | undefined) => ((v ?? 0) >= 0 ? "#16a34a" : "#dc2626");
-  const head = (key: string, label: string) => (
-    <th className="num" style={{ cursor: "pointer" }} onClick={() => { if (sortKey === key) setDesc(!desc); else { setSortKey(key); setDesc(true); } }}>
-      {label}{sortKey === key ? (desc ? " ▼" : " ▲") : ""}
-    </th>
-  );
   const daysOf = (t: BacktestTrade) => {
     try {
       if (!t.entry_date || !t.exit_date) return "—";
@@ -856,9 +844,93 @@ function SymbolPerfTable({ rows, roundTrips, screened }: {
       return `${Math.max(0, d)}일`;
     } catch { return "—"; }
   };
+  const tradeRow = (t: BacktestTrade, i: number | string) => (
+    <tr key={i}>
+      <td>{t.corp_name || t.stock_code || "—"}</td>
+      <td>{t.entry_date || "—"}</td>
+      <td>{t.exit_date || "—"}</td>
+      <td className="num">{t.entry_price?.toLocaleString() ?? "—"}</td>
+      <td className="num">{t.exit_price?.toLocaleString() ?? "—"}</td>
+      <td className="num">{t.quantity?.toLocaleString() ?? "—"}</td>
+      <td className="num" style={{ color: col(t.return_pct), fontWeight: 600 }}>{pct(t.return_pct)}</td>
+      <td className="num" style={{ color: col(t.pnl) }}>{won(t.pnl)}</td>
+      <td>{daysOf(t)}</td>
+      <td style={{ color: "var(--t-muted)", fontSize: 11 }}>{t.reason || "—"}</td>
+    </tr>
+  );
+
+  const viewToggle = (
+    <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+      {([["summary", "종목별 요약"], ["flat", "전체 거래내역"]] as const).map(([id, label]) => (
+        <button key={id} type="button" onClick={() => setView(id)}
+          className="tbt-export-btn" aria-pressed={view === id}
+          style={view === id ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : undefined}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // 구버전/엔진모드 응답(symbol_results 없음) → 기존 칩 폴백 (요약 뷰만 해당, 플랫 뷰는 그대로 동작)
+  if (!rows.length && view === "summary") {
+    return (
+      <div>
+        {viewToggle}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {screened.slice(0, 12).map((t) => (
+            <span key={t.stock_code} style={{ fontFamily: "var(--t-mono)", fontSize: 12, padding: "4px 10px", border: "1px solid var(--t-border)", borderRadius: 2 }}>
+              {t.corp_name || t.stock_code}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "flat") {
+    const pageCount = Math.max(1, Math.ceil(flatTrades.length / PER_PAGE));
+    const cur = Math.min(page, pageCount - 1);
+    const pageRows = flatTrades.slice(cur * PER_PAGE, (cur + 1) * PER_PAGE);
+    return (
+      <div>
+        {viewToggle}
+        {flatTrades.length === 0 ? (
+          <span style={{ fontSize: 12, color: "var(--t-muted)" }}>거래 내역 없음</span>
+        ) : (
+          <>
+            <table className="tbt-tradelog">
+              <thead>
+                <tr><th>종목</th><th>진입일</th><th>청산일</th><th className="num">진입가</th><th className="num">청산가</th><th className="num">수량</th><th className="num">수익률</th><th className="num">손익</th><th>보유</th><th>사유</th></tr>
+              </thead>
+              <tbody>
+                {pageRows.map((t, i) => tradeRow(t, i))}
+              </tbody>
+            </table>
+            {pageCount > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 0 2px", fontFamily: "var(--t-mono)", fontSize: 12 }}>
+                <button className="tbt-export-btn" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>◀ 이전</button>
+                <span>{cur + 1} / {pageCount}</span>
+                <button className="tbt-export-btn" onClick={() => setPage(Math.min(pageCount - 1, cur + 1))} disabled={cur >= pageCount - 1}>다음 ▶</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+  const cur = Math.min(page, pageCount - 1);
+  const pageRows = sorted.slice(cur * PER_PAGE, (cur + 1) * PER_PAGE);
+  const head = (key: string, label: string) => (
+    <th className="num" style={{ cursor: "pointer" }} onClick={() => { if (sortKey === key) setDesc(!desc); else { setSortKey(key); setDesc(true); } }}>
+      {label}{sortKey === key ? (desc ? " ▼" : " ▲") : ""}
+    </th>
+  );
 
   return (
     <div>
+      {viewToggle}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, fontSize: 12, color: "var(--t-muted)" }}>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
           <input type="checkbox" checked={tradedOnly} onChange={(e) => setTradedOnly(e.target.checked)} style={{ accentColor: "var(--t-accent)" }} />
@@ -881,7 +953,7 @@ function SymbolPerfTable({ rows, roundTrips, screened }: {
           </tr>
         </thead>
         <tbody>
-          {view.map((r) => {
+          {pageRows.map((r) => {
             const open = openSym === r.symbol;
             const trs = open ? roundTrips.filter((t) => t.stock_code === r.symbol) : [];
             return [
@@ -936,36 +1008,6 @@ function SymbolPerfTable({ rows, roundTrips, screened }: {
         </div>
       )}
     </div>
-  );
-}
-
-// 거래 내역 테이블
-function TradeLog({ trades }: { trades: BacktestTrade[] }) {
-  const rows = trades.slice(-15).reverse();
-  const f = (v: number | undefined) => (v == null ? "—" : v.toLocaleString());
-  return (
-    <table className="tbt-tradelog">
-      <thead>
-        <tr>
-          <th>종목</th><th>진입일</th><th>청산일</th>
-          <th className="num">진입가</th><th className="num">청산가</th><th className="num">수익률</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((t, i) => (
-          <tr key={i}>
-            <td>{t.corp_name || t.stock_code || "—"}</td>
-            <td>{t.entry_date || "—"}</td>
-            <td>{t.exit_date || "—"}</td>
-            <td className="num">{f(t.entry_price)}</td>
-            <td className="num">{f(t.exit_price)}</td>
-            <td className="num" style={{ color: (t.return_pct ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-              {t.return_pct == null ? "—" : `${t.return_pct >= 0 ? "+" : ""}${t.return_pct.toFixed(2)}%`}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
 

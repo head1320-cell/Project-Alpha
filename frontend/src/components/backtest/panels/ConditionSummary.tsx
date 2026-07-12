@@ -39,7 +39,7 @@ export default function ConditionSummary({ s, activeTab, onTabChange }: {
     <aside className="tbt-summary" style={{
       background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>내가 설정한 조건 보기</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>전략 요약</span>
       </div>
 
       {/* 매수/매도/매매대상 탭 */}

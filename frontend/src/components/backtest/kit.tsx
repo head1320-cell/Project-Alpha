@@ -166,7 +166,7 @@ export function Segmented<T extends string>({ options, value, onChange, tone = "
   );
 }
 
-// ── SummaryRail (always-on "내가 설정한 조건") ───────────────
+// ── SummaryRail (always-on "전략 요약") ───────────────
 const TAB_TONE: Record<SummaryTab, Tone> = { buy: "buy", sell: "sell", universe: "neutral" };
 const TAB_LABEL: Record<SummaryTab, string> = { buy: "매수", sell: "매도", universe: "대상" };
 
@@ -177,7 +177,7 @@ export function SummaryRail({ strategy, tab, onTab, onClose }: {
   return (
     <aside style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: "14px 13px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>내가 설정한 조건</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>전략 요약</span>
         {onClose && <button type="button" onClick={onClose} aria-label="닫기" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-tertiary, var(--text-muted))", display: "flex" }}><X size={15} /></button>}
       </div>
       <div style={{ display: "flex", gap: 3, background: "var(--bg-section)", borderRadius: R, padding: 3, marginBottom: 14 }}>

@@ -19,7 +19,7 @@ export const BUTLER_CATEGORIES: ButlerCategory[] = [
   {
     id: "basic", label: "기본정보",
     groups: [
-      { label: "시장 정보", factors: [f("시가총액"), f("버틀러 랭킹", "종합점수")] },
+      { label: "시장 정보", factors: [f("시가총액"), f("종합점수")] },
     ],
   },
   {

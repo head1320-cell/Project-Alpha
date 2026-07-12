@@ -1298,7 +1298,10 @@ class ScreenToBacktestRequest(BaseModel):
     buy_logic: str | None = None
     sell_logic: str | None = None
     # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②)
-    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"|"monthly"=주·월 첫 거래일에만 신규 매수
+    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"|"monthly"|"quarterly"|
+    # "semiannual"|"annual"=주/월/분기/반기/연 첫 거래일에만 신규 매수(매도는 매일 평가).
+    # 동적 재편입(빈자리 즉시 보충)은 이 주기와 무관하게 항상 실행됨 — 이 필드는 "순위이탈
+    # 보유종목 정리"가 발생하는 주기만 결정한다.
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
     # 신호 기준일 (젠포트 Tip 3): 0=당일 봉(기존), 1=전일 봉 기준 신호→당일 체결(시가류 체결 look-ahead 제거)
     signal_lag: int = Field(default=0, ge=0, le=5)
@@ -1348,6 +1351,12 @@ class ScreenToBacktestRequest(BaseModel):
     universe_eval_cap: int = Field(default=200, ge=1, le=4000)
     # #4: 펀더멘털 토큰(스냅샷)을 봉별 조건 평가에 포함. 기본 False (look-ahead 근사라 옵트인)
     allow_snapshot_fundamentals: bool = False
+    # 동적 재편입(젠포트화 Phase 6) 후보풀 크기 — max_tickers(초기 보유)보다 넓게 스크리너
+    # 결과를 슬라이스해, 매도로 빈 슬롯이 생기면 그 시점 모멘텀점수 상위 미보유 종목으로 채운다.
+    # universe_eval_cap(최대4000, 조건식 봉별평가용)과는 완전히 분리된 별도 상한 — 재편입
+    # 후보 확보를 위해 조건 추가만으로 대규모 평가를 유발하지 않는다. 0=비활성(레거시 동작,
+    # 내부/회귀테스트 전용 — 프론트 API에 끄는 스위치로 노출하지 않음).
+    replenishment_pool_cap: int = Field(default=100, ge=0, le=1000)
 
 
 def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
@@ -1410,8 +1419,14 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         else:
             _universe = req.universe
         # 후보 풀 크기: 전체 유니버스 일별 평가 시 확대(조건식이 매 봉 풀 전체를 평가, max_positions가 보유 한도)
-        eval_cap = req.universe_eval_cap if (req.full_universe_eval and (req.buy_conditions or req.sell_conditions)) else req.max_tickers
+        full_eval_on = bool(req.full_universe_eval and (req.buy_conditions or req.sell_conditions))
+        eval_cap = req.universe_eval_cap if full_eval_on else req.max_tickers
         eval_cap = max(1, min(int(eval_cap), 4000))  # 벡터화로 전 주권(~2,700) 실용화
+        # 동적 재편입(Phase 6) 후보풀 — eval_cap(초기 보유)보다 넓은 상위집합, 스크리너를
+        # 1회만 호출해 같은 결과에서 슬라이스(중복 호출 없음). universe_eval_cap과 분리된
+        # 별도 상한이라 조건 추가만으로 대규모 평가가 유발되지 않는다. full_universe_eval
+        # 모드는 이미 symbols 자체가 큰 후보군이므로 별도 확장 없이 그대로 재사용.
+        pool_cap = eval_cap if full_eval_on else max(eval_cap, min(int(req.replenishment_pool_cap), 4000))
         result = screener.run(
             universe=_universe,
             filter_ast=ast,
@@ -1419,11 +1434,13 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             ascending=(req.sort_dir == "asc"),
             sort_by_secondary=req.sort_by_secondary,
             sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
-            limit=eval_cap,
+            limit=pool_cap,
             liquidity_floor=req.liquidity_floor,
         )
         screened = result.items[:eval_cap]
         tickers = [it.stock_code for it in screened if getattr(it, "stock_code", None)]
+        pool_tickers = ([it.stock_code for it in result.items[:pool_cap] if getattr(it, "stock_code", None)]
+                        if req.replenishment_pool_cap > 0 else [])
 
         if not tickers:
             return {
@@ -1449,7 +1466,11 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         # 조건식 전략 분기 (Genport식 진입/청산)
         eff_strategy = req.strategy_name
         eff_params = dict(req.strategy_params or {})
-        if req.buy_conditions or req.sell_conditions:
+        # strategy_name이 명시적으로 "Condition"이면 조건이 비어있어도(리스크룰만 설정) 이 분기를
+        # 태워 eff_params를 채운다 — 그래야 ConditionStrategy가 올바른 buy/sell_conditions로
+        # 생성되고, "GoldenCross" 같은 하드코딩 기본 전략(데드크로스 등 원치 않는 매도사유)으로
+        # 조용히 대체되지 않는다.
+        if req.buy_conditions or req.sell_conditions or req.strategy_name == "Condition":
             from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
             _ = condition_strategy
             eff_strategy = "Condition"
@@ -1517,6 +1538,8 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             breakthrough_direction=req.breakthrough_direction,
             buy_timing=req.buy_timing,
             progress_cb=progress_cb,
+            dynamic_replenishment=bool(pool_tickers),
+            replenishment_pool=pool_tickers or None,
         )
 
         # 3) 통합 응답

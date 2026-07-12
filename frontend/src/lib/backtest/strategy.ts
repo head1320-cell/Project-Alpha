@@ -112,7 +112,9 @@ export interface BacktestStrategy {
   // 유동성 게이트: "off"=전종목(선택 존중, 기본) | "relaxed"=시총300억+ADV3억 | "standard"=시총1000억+ADV10억
   //   "off"면 filter_ast도 비워 per>0(적자기업 탈락) 필터를 걸지 않음 → 선택한 전 종목이 백테스트에 들어감
   liquidityGate: "off" | "relaxed" | "standard";
-  rebalancePeriod: "daily" | "weekly" | "monthly";  // 신규 매수일: 매일(기존) | 주·월 첫 거래일
+  // 신규 매수일: 매일(기존) | 주/월/분기/반기/연 첫 거래일. 동적 재편입(빈자리 즉시 보충)은
+  // 이 값과 무관하게 항상 실행 — 이 값은 "순위이탈 보유종목 정리"가 발생하는 주기만 결정.
+  rebalancePeriod: "daily" | "weekly" | "monthly" | "quarterly" | "semiannual" | "annual";
   signalLag: 0 | 1;        // 신호 기준: 0=당일 봉 포함(기존) | 1=전일 봉 기준(젠포트식 — 시가류 체결 정합)
   cashReservePct: number;  // 자산배분(단순 현금): 평가자산 대비 현금 상시 보유 % (0=미사용)
   assetAlloc: AssetAllocState;  // 자산배분 ETF 바스켓
@@ -134,6 +136,11 @@ const yearsBetween = (a: string, b: string): string => {
   return isFinite(d) && d > 0 ? `약 ${Math.round(d)}년` : "—";
 };
 
+const REBALANCE_LABELS: Record<BacktestStrategy["rebalancePeriod"], string> = {
+  daily: "매일", weekly: "매주", monthly: "매월",
+  quarterly: "분기", semiannual: "반기", annual: "연간",
+};
+
 export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup[] {
   if (tab === "buy") {
     const b = s.buy;
@@ -142,7 +149,7 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "투자금", value: `${s.capital.toLocaleString()}만원` },
         { label: "기간", value: yearsBetween(s.startDate, s.endDate) },
         { label: "수수료", value: `${s.feePct}%` },
-        { label: "리밸런싱", value: s.rebalancePeriod === "daily" ? "매일" : s.rebalancePeriod === "weekly" ? "매주" : "매월" },
+        { label: "리밸런싱", value: REBALANCE_LABELS[s.rebalancePeriod] ?? s.rebalancePeriod },
         { label: "신호 기준", value: s.signalLag === 1 ? "전일 종가 기준" : "당일 종가" },
         { label: "분봉 체결", value: s.intradayFill ? "정밀 (적재된 날만)" : "일봉 모델", muted: !s.intradayFill },
       ]},
