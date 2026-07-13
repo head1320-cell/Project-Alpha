@@ -92,6 +92,31 @@ class UnifiedValuation:
 
     financial_summary:      dict = field(default_factory=dict)
     params:                 dict = field(default_factory=dict)
+    is_mock:                bool = False   # True면 재무 원천이 합성(mock) 데이터 — 운영에선 발생 안 함
+
+
+def compute_gap_pct(current_price: float, intrinsic: float) -> float:
+    """괴리율 = (현재가 - 적정가) / 적정가 × 100. 적정가 없으면 0(정의 불가)."""
+    return ((current_price - intrinsic) / intrinsic * 100) if intrinsic > 0 else 0
+
+
+def gap_pct_to_verdict(gap_pct: float) -> str:
+    """괴리율 → 저평가/적정/고평가 판정 — evaluate()와 screener._enrich_kis_quotes(실시세
+    보강 후 재판정)가 동일 임계값을 공유해 두 계산 경로가 어긋나지 않도록 한다."""
+    if gap_pct <= -30:
+        return "극심한 저평가"
+    elif gap_pct <= -15:
+        return "저평가"
+    elif gap_pct <= -5:
+        return "약간 저평가"
+    elif gap_pct <= 5:
+        return "적정"
+    elif gap_pct <= 15:
+        return "약간 고평가"
+    elif gap_pct <= 30:
+        return "고평가"
+    else:
+        return "극심한 고평가"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -420,11 +445,29 @@ class ValuationEngine:
 
         fs = self.dart.get_financial_statement_full(corp_code, bsns_year)
         if not fs:
+            from src.data.stock_master import get_stock_name
             return UnifiedValuation(
-                ticker=stock_code, corp_name="Unknown",
+                ticker=stock_code, corp_name=get_stock_name(stock_code) or stock_code,
                 current_price=current_price,
                 intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
                 models=[],
+            )
+        # DART가 실패해(키미설정/쿼터초과/네트워크 에러 등) 내부적으로 mock 재무제표로 폴백한
+        # 경우 — fundamentals_store.py는 이미 이 플래그를 방어하지만(is_mock 체크 후 8년 재탐색
+        # + mock_gate 게이트), 이 밸류에이션 엔진에는 동일 방어가 없어 운영(KIS_USE_MOCK=0)에서도
+        # DART 호출이 실패하면 합성 재무로 RIM/DCF/DDM이 조용히 계산되던 버그. mock이 허용되지
+        # 않는 환경(mock_gate.mock_allowed()=False)이면 "데이터 없음"과 동일한 형태로 정직하게
+        # 반환(계산 안 함) — mock이 허용되는 개발/CI 환경에서는 기존처럼 계산은 진행하되
+        # is_mock=True로 투명하게 표시한다.
+        from src.data.mock_gate import mock_allowed
+        fs_is_mock = bool(getattr(fs, "is_mock", False))
+        if fs_is_mock and not mock_allowed():
+            from src.data.stock_master import get_stock_name
+            return UnifiedValuation(
+                ticker=stock_code, corp_name=get_stock_name(stock_code) or stock_code,
+                current_price=current_price,
+                intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
+                models=[], is_mock=True,
             )
 
         # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
@@ -466,22 +509,8 @@ class ValuationEngine:
             intrinsic = 0
 
         # 5. 괴리율 + 판정
-        gap_pct = ((current_price - intrinsic) / intrinsic * 100) if intrinsic > 0 else 0
-
-        if gap_pct <= -30:
-            verdict = "극심한 저평가"
-        elif gap_pct <= -15:
-            verdict = "저평가"
-        elif gap_pct <= -5:
-            verdict = "약간 저평가"
-        elif gap_pct <= 5:
-            verdict = "적정"
-        elif gap_pct <= 15:
-            verdict = "약간 고평가"
-        elif gap_pct <= 30:
-            verdict = "고평가"
-        else:
-            verdict = "극심한 고평가"
+        gap_pct = compute_gap_pct(current_price, intrinsic)
+        verdict = gap_pct_to_verdict(gap_pct)
 
         # 6. 재무 요약
         per = current_price / fs.eps if fs.eps and fs.eps > 0 else None
@@ -516,4 +545,5 @@ class ValuationEngine:
             models=models,
             financial_summary=financial_summary,
             params=params.__dict__,
+            is_mock=fs_is_mock,
         )

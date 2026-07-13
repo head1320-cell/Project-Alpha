@@ -4,9 +4,10 @@
 //   lazy: network / signal / risk / narrative / macro
 // ═══════════════════════════════════════════════════════════════════════════════
 import {
-  companyApi, analysisApi, screenerApiAdvanced,
+  companyApi, screenerApiAdvanced,
   type ScreenerItem, type ValuationDetail, type FieldsCatalog, type FinancialHistory, type PriceBar,
 } from "@/lib/screenerApi";
+import type { RegimeState } from "@/lib/macroApi";
 import type {
   CompanyData, FactorGroup, FactorVal, ModelResult, Scenario, YearFin, QuarterFin, PricePt, Peer,
   SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo, MacroInfo,
@@ -240,8 +241,10 @@ export async function loadSignal(code: string, name: string): Promise<SignalInfo
   return { action: s.action, strength: s.strength, reason: s.reason, strategy: s.strategy };
 }
 
-export async function loadMacro(): Promise<MacroInfo | null> {
-  const m = await analysisApi.macroRegime().catch(() => null);
+// 순수 변환(fetch 아님) — CompanyCockpit이 매크로 탭과 동일한 react-query 캐시 키
+// (["macro","regime"])로 macroApi.regime()을 직접 호출하고, 그 원시 결과를 이 함수로
+// MacroInfo로 변환한다(두 탭 간 중복 호출을 캐시 레벨에서 공유하기 위해 fetch/변환을 분리).
+export function regimeToMacroInfo(m: RegimeState | null | undefined): MacroInfo | null {
   if (!m) return null;
   const mm = m as unknown as Record<string, unknown>;
   return { regime: String(mm.regime ?? mm.description ?? "—"), riskFree: fin(mm.dynamic_risk_free_rate), recommendedMode: mm.recommended_mode as string | undefined };

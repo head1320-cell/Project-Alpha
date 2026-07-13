@@ -121,15 +121,96 @@ def test_auto_trading_toggle():
     assert res.json()["auto_mode"] is False
 
 
-# ─── Broker (demo mode) ──────────────────────────────────────────────────────
-def test_sync_broker_demo():
-    """Should return demo data when no API key is set."""
-    res = client.get("/sync-broker")
+# ─── Account (정식 KIS 클라이언트 경유, execution/kis_client.py) ─────────────────
+def test_account_holdings_uses_sanctioned_client(monkeypatch):
+    """/api/v1/account/holdings — get_kis_client() 경유 확인(구 3중 kis_client.py 통합 회귀)."""
+    import src.execution.kis_client as kis_mod
+    mock_client = kis_mod.MockKISClient()
+    monkeypatch.setattr(kis_mod, "get_kis_client", lambda: mock_client)
+    res = client.get("/api/v1/account/holdings")
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "success"
-    assert "holdings" in data
-    assert len(data["holdings"]) > 0
+    assert data["mode"] == "mock"
+    assert data["positions"] == []
+    assert data["count"] == 0
+
+
+def test_account_balance_uses_sanctioned_client(monkeypatch):
+    """/api/v1/account/balance — deposit/eval_amount/profit_loss/profit_rate 어댑터 확인."""
+    import src.execution.kis_client as kis_mod
+    mock_client = kis_mod.MockKISClient(initial_cash=50_000_000)
+    monkeypatch.setattr(kis_mod, "get_kis_client", lambda: mock_client)
+    res = client.get("/api/v1/account/balance")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mode"] == "mock"
+    assert data["deposit"] == 50_000_000
+    assert data["eval_amount"] == 50_000_000
+    assert data["profit_loss"] == 0
+    assert data["profit_rate"] == 0
+
+
+def test_sync_broker_and_place_order_removed():
+    """구 broker_kis.py 경로(안전장치 전무, dry-run 없이 즉시 실주문 가능) 삭제 확인 — 재도입 방지 가드."""
+    assert client.get("/sync-broker").status_code == 404
+    assert client.post("/place-order", json={"ticker": "005930", "qty": 1}).status_code == 404
+
+
+# ─── Orders (TradingEngine 경유 — 구 OrderExecutor(KISClient()) 직접생성 안전장치 우회 수정) ───
+def test_orders_execute_dry_run_never_places_real_order(monkeypatch):
+    """/api/v1/orders/execute — 항상 dry_run 고정이라 place_order()가 절대 호출되지 않음
+    (예전엔 OrderExecutor(KISClient())를 직접 생성해 TradingEngine의 dry-run 기본값을
+    완전히 우회했던 버그 — 이 테스트가 그 회귀를 고정)."""
+    import src.execution.kis_client as kis_mod
+    mock_client = kis_mod.MockKISClient()
+    called = {"place_order": False}
+    orig_place_order = mock_client.place_order
+
+    def _tracking_place_order(*a, **kw):
+        called["place_order"] = True
+        return orig_place_order(*a, **kw)
+
+    monkeypatch.setattr(mock_client, "place_order", _tracking_place_order)
+    monkeypatch.setattr(kis_mod, "get_kis_client", lambda: mock_client)
+
+    res = client.post("/api/v1/orders/execute", json={
+        "stock_code": "005930", "stock_name": "삼성전자", "action": "buy", "strength": 1.0,
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mode"] == "dry_run"
+    assert data["success"] is True
+    assert data["stock_code"] == "005930"
+    assert data["quantity"] > 0
+    assert data["order_no"] == "DRY-RUN"
+    assert called["place_order"] is False
+
+
+def test_orders_execute_hold_action_blocked(monkeypatch):
+    import src.execution.kis_client as kis_mod
+    monkeypatch.setattr(kis_mod, "get_kis_client", lambda: kis_mod.MockKISClient())
+
+    res = client.post("/api/v1/orders/execute", json={"stock_code": "005930", "action": "hold"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["blocked_by"] == "hold"
+    assert data["success"] is False
+
+
+def test_orders_batch_dry_run(monkeypatch):
+    import src.execution.kis_client as kis_mod
+    monkeypatch.setattr(kis_mod, "get_kis_client", lambda: kis_mod.MockKISClient())
+
+    res = client.post("/api/v1/orders/batch", json={"orders": [
+        {"stock_code": "005930", "action": "buy", "strength": 1.0},
+        {"stock_code": "000660", "action": "buy", "strength": 1.0},
+    ]})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    assert data["mode"] == "dry_run"
+    assert len(data["orders"]) == 2
+    assert data["success"] == data["total"] - data["failed"]
 
 
 # ─── PIT Backtest: Unit Tests ────────────────────────────────────────────────

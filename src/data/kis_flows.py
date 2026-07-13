@@ -126,11 +126,11 @@ def sync_investor_flows(tickers: list[str] | None = None, all_listed: bool = Fal
     """종목 루프로 최근 ~30영업일 수급을 적재 (일배치 — 누적용).
 
     KIS_USE_MOCK=1 또는 MockKISClient면 실데이터가 없으므로 안내 후 종료."""
-    import os
+    from src.data.mock_gate import mock_allowed
     if client is None:
         from src.execution.kis_client import get_kis_client
         client = get_kis_client()
-    if os.getenv("KIS_USE_MOCK", "1") == "1" or type(client).__name__ == "MockKISClient":
+    if mock_allowed() or type(client).__name__ == "MockKISClient":
         return {"error": True,
                 "message": "KIS mock 모드 — 수급 적재는 실키 필요 (KIS_USE_MOCK=0)"}
 

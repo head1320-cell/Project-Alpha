@@ -70,6 +70,11 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* 백테스터 숫자 입력 — 네이티브 스피너 화살표 숨김(좁은 폭에서 텍스트 공간 확보) */
+.bs-numbox::-webkit-inner-spin-button,
+.bs-numbox::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.bs-numbox { -moz-appearance: textfield; }
+
 html, body {
   background-color: var(--bs-body-bg);
   color: var(--bs-body-color);

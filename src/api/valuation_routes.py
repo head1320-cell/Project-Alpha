@@ -87,6 +87,7 @@ def valuation_evaluate(req: EvaluateRequest):
             "intrinsic_value":     result.intrinsic_value,
             "gap_pct":             result.gap_pct,
             "verdict":             result.verdict,
+            "is_mock":             result.is_mock,
             "models": [
                 {
                     "model":            m.model,
@@ -136,6 +137,7 @@ def valuation_compare(req: CompareRequest):
                     "intrinsic_value": r.intrinsic_value,
                     "gap_pct":         r.gap_pct,
                     "verdict":         r.verdict,
+                    "is_mock":         r.is_mock,
                     "roe_pct":         r.financial_summary.get("roe_pct"),
                     "per":             r.financial_summary.get("per"),
                     "pbr":             r.financial_summary.get("pbr"),

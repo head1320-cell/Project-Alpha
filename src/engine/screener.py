@@ -25,6 +25,7 @@ RIM + DCF + DDM 통합 가치평가를 전 종목에 병렬 적용 → 정량 �
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -198,6 +199,12 @@ class ScreenerItem:
     rim_value:         float | None = None
     dcf_value:         float | None = None
     ddm_value:         float | None = None
+
+    # 데이터 품질(정직) — price_is_mock 기본 True(증명 전엔 mock으로 간주): KIS_USE_MOCK=0 +
+    # 실 클라이언트로 _enrich_kis_quotes가 실제 시세 patch에 성공했을 때만 False.
+    # fundamentals_is_mock은 ValuationEngine.evaluate()의 UnifiedValuation.is_mock 그대로 전파.
+    price_is_mock:        bool = True
+    fundamentals_is_mock: bool = False
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -671,16 +678,18 @@ class ValuationScreener:
         }
         return WEIGHTS.get(regime, (0.60, 0.20, 0.20))
 
-    def _compute_scores(self, uv: UnifiedValuation) -> tuple[float, float, float, float]:
+    def _compute_scores(self, gap_pct: float, fin: dict) -> tuple[float, float, float, float]:
         """
         (composite, gap_score, roe_score, stability_score)
         모두 0~100 스케일.
-        """
-        fin = uv.financial_summary
 
+        gap_pct/fin을 UnifiedValuation 전체가 아니라 개별로 받는다 — 초기 평가(_to_item)와
+        _enrich_kis_quotes(실시세 보강 후 재계산)가 동일 함수를 공유해 두 계산 경로가
+        어긋나지 않도록 한다(uv 객체가 없는 재계산 시점에도 호출 가능).
+        """
         # 1. Gap Score: 저평가일수록 점수 高
         # gap_pct -50% → 100점, 0% → 50점, +50% → 0점
-        gap_pct = uv.gap_pct or 0
+        gap_pct = gap_pct or 0
         gap_score = max(0.0, min(100.0, 50 - gap_pct))
         # 포화(100) 시 gap_pct 깊이를 미세 반영 — 동일점수 붕괴 방지(mock에서도 종목 변별)
         # -50%→+0, -100%→+5 가산 (순위 보존, 상한 살짝 초과 허용 후 합산서 정규화)
@@ -725,10 +734,17 @@ class ValuationScreener:
         KIS 실시세로 시총·PER·PBR·현재가 보강 (KIS_USE_MOCK=0 + 키 설정 시).
         시총은 펀더멘털 팩터 계산의 입력이므로 fundamentals 주입 전에 호출.
         mock 모드면 즉시 반환 (외부 호출 없음).
+
+        ★ 정직성 수정: current_price를 실가로 패치할 뿐 gap_pct/verdict/composite_score를
+        재계산하지 않으면, "화면엔 진짜 가격인데 저평가 판정은 가짜 가격 기준"인 내적
+        불일치가 생긴다(_mock_price 기본 price_provider가 늘 적용되기 때문 — 이 함수가
+        실가로 되돌리는 유일한 지점). intrinsic_value는 가격과 무관하므로 이미 계산된
+        값을 그대로 두고, 가격에 의존하는 파생값(gap_pct/verdict/composite_score/gap_score)
+        만 valuation_models의 공유 헬퍼로 재계산 — 추가 네트워크 호출 없는 순수 산술.
         Returns: 보강된 종목 수
         """
-        import os
-        if os.getenv("KIS_USE_MOCK", "1") == "1":
+        from src.data.mock_gate import mock_allowed
+        if mock_allowed():
             return 0
         try:
             from src.execution.kis_client import get_kis_client
@@ -738,6 +754,8 @@ class ValuationScreener:
         # MockKISClient면 보강 의미 없음
         if type(client).__name__ == "MockKISClient":
             return 0
+
+        from src.engine.valuation.valuation_models import compute_gap_pct, gap_pct_to_verdict
 
         # 대용량 유니버스(전종목) 보호: 실시세 보강은 요청당 상한까지만 (KIS 폭주 방지).
         max_enrich = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
@@ -751,6 +769,16 @@ class ValuationScreener:
                 cp = q.get("current_price")
                 if cp and cp > 0:
                     it.current_price = cp
+                    it.price_is_mock = False
+                    if it.intrinsic_value and it.intrinsic_value > 0:
+                        it.gap_pct = round(compute_gap_pct(cp, it.intrinsic_value), 2)
+                        it.verdict = gap_pct_to_verdict(it.gap_pct)
+                        composite, gap, roe_s, stab = self._compute_scores(
+                            it.gap_pct,
+                            {"roe_pct": it.roe_pct, "debt_ratio_pct": it.debt_ratio_pct, "fcf_억": it.fcf_억},
+                        )
+                        it.composite_score, it.gap_score = composite, gap
+                        it.roe_score, it.stability_score = roe_s, stab
                 mc = q.get("market_cap_억")
                 if mc and mc > 0:
                     it.market_cap_억 = mc
@@ -766,7 +794,7 @@ class ValuationScreener:
         return n
 
     def _to_item(self, uv: UnifiedValuation, stock_code: str) -> ScreenerItem:
-        composite, gap, roe_s, stab = self._compute_scores(uv)
+        composite, gap, roe_s, stab = self._compute_scores(uv.gap_pct, uv.financial_summary)
         fin = uv.financial_summary
 
         # 3-모델 적정가
@@ -825,6 +853,7 @@ class ValuationScreener:
             rim_value=rim_val,
             dcf_value=dcf_val,
             ddm_value=ddm_val,
+            fundamentals_is_mock=uv.is_mock,
         )
 
     # ─────────────────────────────────────────────────────────────────────

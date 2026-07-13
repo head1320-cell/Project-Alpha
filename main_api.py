@@ -14,9 +14,8 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from src.api.broker_kis import KoreaInvestmentAPI
 from src.data_loader import MarketDataLoader
-from src.database import get_trade_history, init_db, log_trade
+from src.database import get_trade_history, init_db
 from src.models.ai_engine import AIVolatilityEngine
 from src.models.backtest import VaRBacktester
 from src.models.credit_spread_idr import (
@@ -181,7 +180,9 @@ async def startup():
     #   OHLCV_PREWARM=0 비활성 · OHLCV_PREWARM_ALL=0 공통 유니버스까지만 · OHLCV_PREWARM_DAYS 범위.
     try:
         import os
-        _kis_real = os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))
+
+        from src.data.mock_gate import mock_allowed
+        _kis_real = not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))
         _krx_active = bool(os.getenv("KRX_API_KEY")) and os.getenv("KRX_AUTOBACKFILL", "1") != "0"
         if _kis_real and not _krx_active and os.getenv("OHLCV_PREWARM", "1") != "0":
             import threading
@@ -195,7 +196,9 @@ async def startup():
     #   실데이터 가용(KIS 실키 또는 KRX 활성) + OHLCV_PREWARM_ETF≠0일 때. mock/키 없음이면 no-op.):
     try:
         import os
-        _real_ohlcv = (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))) \
+
+        from src.data.mock_gate import mock_allowed
+        _real_ohlcv = (not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))) \
             or (bool(os.getenv("KRX_API_KEY")) and os.getenv("KRX_AUTOBACKFILL", "1") != "0")
         if _real_ohlcv and os.getenv("OHLCV_PREWARM_ETF", "1") != "0":
             import threading
@@ -221,7 +224,9 @@ async def startup():
     #   수급 토큰(외국인·기관 순매수) 백테스트의 최근 구간 실데이터(investor_flows). FLOWS_SYNC=0 비활성.
     try:
         import os
-        if (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY"))
+
+        from src.data.mock_gate import mock_allowed
+        if (not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))
                 and os.getenv("FLOWS_SYNC", "1") != "0"):
             import threading
             threading.Thread(target=_kis_flows_sync_bg, daemon=True).start()
@@ -435,13 +440,15 @@ def _krx_flows_backfill_bg():
 def krx_status():
     """KRX 적재(daily_prices) 커버리지 — 자동 백필 진행상황 관측."""
     import os
+
+    from src.data.mock_gate import mock_allowed
     out = {
         "krx_key": bool(os.getenv("KRX_API_KEY")),
         "autobackfill": os.getenv("KRX_AUTOBACKFILL", "1") != "0",
         "backfill_start": os.getenv("KRX_BACKFILL_START", "2010-01-04"),
         # KIS 기반 전종목 OHLCV 사전 적재 활성 여부 (KRX 키 없이 daily_prices를 채우는 경로)
         "kis_prewarm": (
-            os.getenv("KIS_USE_MOCK", "1") == "0"
+            not mock_allowed()
             and bool(os.getenv("KIS_APP_KEY"))
             and os.getenv("OHLCV_PREWARM", "1") != "0"
         ),
@@ -488,9 +495,11 @@ def db_status():
     """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요).
     대용량 daily_prices가 적재 쓰기 중이어도 빠르게 응답하도록 추정치(reltuples)+statement_timeout 사용."""
     import os
+
+    from src.data.mock_gate import mock_allowed
     out: dict = {"available": False, "config": {}, "tables": {}, "tools": {}}
     out["config"] = {
-        "kis_real": os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY")),
+        "kis_real": not mock_allowed() and bool(os.getenv("KIS_APP_KEY")),
         "dart_key": bool(os.getenv("DART_API_KEY")),
         "krx_key": bool(os.getenv("KRX_API_KEY")),
         "bok_key": bool(os.getenv("BOK_API_KEY")),
@@ -770,7 +779,8 @@ def ingest_doctor():
             out["krx"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
 
     # KIS
-    if os.getenv("KIS_USE_MOCK", "1") != "0" or not os.getenv("KIS_APP_KEY"):
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed() or not os.getenv("KIS_APP_KEY"):
         out["kis"] = {"ok": False, "message": "mock 모드 또는 KIS 키 미설정"}
     else:
         try:
@@ -850,12 +860,6 @@ class AggregateVaRRequest(BaseModel):
 class AutoTradingConfig(BaseModel):
     auto_mode: bool
     var_limit: float
-    username: str = "admin"
-
-class OrderRequest(BaseModel):
-    ticker: str
-    qty: int
-    side: str = "sell"
     username: str = "admin"
 
 
@@ -2796,29 +2800,6 @@ def calculate_hedge(req: HedgeRequest):
 # ═══════════════════════════════════════════════════════════════════════════════
 # BROKER / ACCOUNT
 # ═══════════════════════════════════════════════════════════════════════════════
-@app.get("/sync-broker")
-def sync_broker():
-    try:
-        broker    = KoreaInvestmentAPI()
-        holdings  = broker.fetch_portfolio()
-        total_val = sum(h["total_value"] for h in holdings)
-        return {"status": "success", "total_value": total_val, "holdings": holdings}
-    except Exception:
-        logger.exception("요청 처리 실패")
-        raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
-
-@app.post("/place-order")
-def place_order(req: OrderRequest):
-    try:
-        broker = KoreaInvestmentAPI()
-        result = broker.place_order(req.ticker, req.qty, req.side)
-        log_trade(req.username, req.ticker, req.qty, req.side,
-                  result.get("status", "SUBMITTED"))
-        return result
-    except Exception:
-        logger.exception("요청 처리 실패")
-        raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
-
 @app.get("/trade-history/{username}")
 def trade_history(username: str):
     return {"history": get_trade_history(username)}
@@ -3173,17 +3154,24 @@ def symbols_flows_backfill_krx(start: str = "2018-01-01", all_listed: bool = Tru
 
 # ── 계좌 조회 ─────────────────────────────────────────────────────────────────
 
+def _kis_mode_label(client) -> str:
+    """정식 KIS 클라이언트(execution/kis_client.py) 인스턴스 → "mock"|"paper"|"real" 표시용 라벨."""
+    if type(client).__name__ == "MockKISClient":
+        return "mock"
+    return "paper" if getattr(getattr(client, "creds", None), "is_paper", True) else "real"
+
+
 @app.get("/api/v1/account/holdings")
 def get_holdings():
     """KIS API로 현재 보유 종목 조회."""
     try:
-        from src.kis_client import KISClient
+        from src.execution.kis_client import get_kis_client
         from src.kis_order_executor import PositionManager
-        client = KISClient()
+        client = get_kis_client()
         pm = PositionManager(client)
         positions = pm.get_positions(refresh=True)
         return {
-            "mode": client.mode,
+            "mode": _kis_mode_label(client),
             "count": len(positions),
             "positions": [p.to_dict() for p in positions],
         }
@@ -3196,10 +3184,16 @@ def get_holdings():
 def get_balance():
     """예수금 및 평가금액 조회."""
     try:
-        from src.kis_client import KISClient
-        client = KISClient()
-        balance = client.get_account_balance()
-        return {"mode": client.mode, **balance}
+        from src.execution.kis_client import get_kis_client
+        client = get_kis_client()
+        balance = client.get_balance()
+        return {
+            "mode": _kis_mode_label(client),
+            "deposit": balance.get("deposit", 0),
+            "eval_amount": balance.get("evaluated_total", 0),
+            "profit_loss": balance.get("profit_loss", 0),
+            "profit_rate": balance.get("profit_rate", 0),
+        }
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -3220,28 +3214,39 @@ class BatchOrderRequest(BaseModel):
     orders: list[OrderRequest]
 
 
+def _trade_record_to_legacy(rec: dict) -> dict:
+    """TradeRecord.to_dict() → 구 OrderResult.to_dict() 응답 형태로 역변환(레거시 호환)."""
+    return {
+        "success": rec["success"], "stock_code": rec["stock_code"],
+        "stock_name": rec["stock_name"], "action": rec["action"],
+        "quantity": rec["quantity"], "price": rec["price"],
+        "order_no": rec["order_no"], "message": rec["message"],
+        "timestamp": rec["timestamp"], "blocked_by": rec.get("blocked_by"),
+    }
+
+
 @app.post("/api/v1/orders/execute")
 def execute_order(req: OrderRequest):
     """
-    단일 주문 실행.
-    KIS_MODE=MOCK이면 실제 주문 없이 로그만 기록.
-    KIS_MODE=REAL이면 KIS TR 호출.
+    단일 주문 실행 — TradingEngine(6중 안전장치) 경유.
+
+    quantity/target_price는 참고용(미사용) — 포지션 사이징은 안전장치(SafetyConfig)가
+    strength 기반으로 산정. 항상 dry_run(모의 실행)만 수행 — 실거래/세부 안전설정이
+    필요하면 /api/v1/trading/execute(safety 파라미터로 전체 제어 가능)를 사용할 것.
     """
     try:
-        from src.kis_client import KISClient
-        from src.kis_order_executor import OrderExecutor
+        from src.engine.trading_engine import SafetyConfig, TradeSignal, TradingEngine
 
-        client = KISClient()
-        executor = OrderExecutor(client)
-        result = executor.execute(
+        engine = TradingEngine(safety=SafetyConfig(dry_run=True))
+        signal = TradeSignal(
             stock_code=req.stock_code,
             stock_name=req.stock_name or req.stock_code,
             action=req.action.lower(),
             strength=req.strength,
-            quantity=req.quantity,
-            target_price=req.target_price,
         )
-        return result.to_dict()
+        result = engine.execute_signals([signal])
+        rec = (result["executed"] or result["blocked"])[0]
+        return {**_trade_record_to_legacy(rec), "mode": result["mode"]}
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -3249,31 +3254,30 @@ def execute_order(req: OrderRequest):
 
 @app.post("/api/v1/orders/batch")
 def batch_execute_orders(req: BatchOrderRequest):
-    """시그널 일괄 주문 (batch-signal 결과를 그대로 투입)."""
+    """
+    시그널 일괄 실행 — TradingEngine(6중 안전장치) 경유, 항상 dry_run(모의 실행).
+    매도 시그널이 매수보다 먼저 처리됨(현금 확보 우선, TradingEngine 기본 동작) —
+    응답 순서가 req.orders 입력 순서와 다를 수 있음.
+    """
     try:
-        from src.kis_client import KISClient
-        from src.kis_order_executor import OrderExecutor
+        from src.engine.trading_engine import SafetyConfig, TradeSignal, TradingEngine
 
-        client = KISClient()
-        executor = OrderExecutor(client)
-        results = []
-        for o in req.orders:
-            r = executor.execute(
-                stock_code=o.stock_code,
-                stock_name=o.stock_name or o.stock_code,
-                action=o.action.lower(),
-                strength=o.strength,
-                quantity=o.quantity,
-                target_price=o.target_price,
-            )
-            results.append(r.to_dict())
-
-        success_count = sum(1 for r in results if r["success"])
+        engine = TradingEngine(safety=SafetyConfig(dry_run=True))
+        signals = [TradeSignal(
+            stock_code=o.stock_code,
+            stock_name=o.stock_name or o.stock_code,
+            action=o.action.lower(),
+            strength=o.strength,
+        ) for o in req.orders]
+        result = engine.execute_signals(signals)
+        orders_out = [_trade_record_to_legacy(rec) for rec in result["executed"] + result["blocked"]]
+        success_count = sum(1 for r in orders_out if r["success"])
         return {
-            "total": len(results),
+            "total": len(orders_out),
             "success": success_count,
-            "failed": len(results) - success_count,
-            "orders": results,
+            "failed": len(orders_out) - success_count,
+            "orders": orders_out,
+            "mode": result["mode"],
         }
     except Exception:
         logger.exception("요청 처리 실패")

@@ -128,8 +128,8 @@ class PriceFactorsStore(DeterministicMockStore):
 
         이전엔 종목마다 KIS를 직접 호출했으나, 사전적재(OHLCV prewarm/KRX)된 DB를 1순위로 읽어
         스크리닝 시 종목당 KIS 호출을 제거(백테스터와 동일 데이터원). KIS_USE_MOCK이면 None→_mock."""
-        import os
-        if os.getenv("KIS_USE_MOCK", "1") == "1":
+        from src.data.mock_gate import mock_allowed
+        if mock_allowed():
             return None
         try:
             from datetime import datetime, timedelta

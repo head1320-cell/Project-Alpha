@@ -63,7 +63,7 @@ const initialStrategy = (): BacktestStrategy => ({
   buy: {
     enabled: true, conditions: [], logicExpr: "", primarySort: { expr: "composite_score", dir: "DESC" },
     sortExpr: "", sortExprDesc: true,
-    limitType: "LIMIT", maxStocks: 10, weightPct: 10, weightMode: "equal",
+    maxStocks: 10, weightPct: 10, weightMode: "equal",
     fillType: "close", fillExpr: "", fillOffsetPct: 0, maxBuyAmount: 0,
     reBuyBlockDays: 0, maxBuyPerDay: 0, timeStart: "09:00", timeEnd: "15:30",
     splitBuy: false, ladder: [], splitBuyPct: 50, splitBuyCount: 2,
@@ -124,8 +124,9 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     sort_by_secondary: buy.secondarySort?.expr ?? null,
     sort_secondary_dir: (buy.secondarySort?.dir ?? "DESC") === "ASC" ? "asc" : "desc",
     max_positions: buy.maxStocks,
-    full_universe_eval: buy.conditions.length > 0,
-    universe_eval_cap: s.evalCap || 200,  // 기본 200(안전) — 큰 값은 UniversePanel에서 명시 선택
+    // 스크리닝 후보 풀 크기 — 조건식 유무와 무관하게 항상 적용(백엔드가 더 이상 게이팅하지
+    // 않음). 기본 200(안전) — 큰 값은 UniversePanel "평가 종목 상한"에서 명시 선택.
+    universe_eval_cap: s.evalCap || 200,
     allow_snapshot_fundamentals: buy.allowFundamentals,
     // "GoldenCross"는 사용자가 이 화면에서 선택할 방법이 없는 내부 기본값이었음 — 조건 칩이
     // 비어 있어도(리스크룰만 설정) "Condition" 전략을 명시 전송해, 하드코딩된 이동평균
@@ -229,7 +230,7 @@ function applyMacroConfig(prev: BacktestStrategy, cfg: StrategyBacktestConfig): 
       ...prev, name: cfg.name, rebalancePeriod: "monthly",
       buy: {
         ...prev.buy, enabled: true, conditions: conds, logicExpr: cfg.buy_logic || "",
-        limitType: "LIMIT", maxStocks: cfg.max_tickers || prev.buy.maxStocks,
+        maxStocks: cfg.max_tickers || prev.buy.maxStocks,
         sortExpr: cfg.sort_expr || "", sortExprDesc: cfg.sort_desc ?? true,
         primarySort: cfg.sort_expr
           ? { expr: cfg.sort_expr, dir: (cfg.sort_desc ?? true) ? "DESC" : "ASC" }

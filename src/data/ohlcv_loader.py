@@ -77,7 +77,8 @@ def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
 
 def _kis_ohlcv_df(ticker: str, start_date: str, end_date: str):
     """KIS 실시간 일봉 → DataFrame (date index). 실패 시 None."""
-    if os.getenv("KIS_USE_MOCK", "1") == "1":
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
         return None
     try:
         import pandas as pd

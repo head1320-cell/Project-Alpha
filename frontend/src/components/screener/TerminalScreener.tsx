@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   screenerApiAdvanced, screenerApi, verdictColor,
   type FieldsCatalog, type TechnicalIndicatorCatalog,
@@ -81,14 +82,22 @@ function MiniHistogram({ values, op, threshold }: { values: number[]; op?: strin
 
 export default function TerminalScreener({ universe }: { universe: string }) {
   const router = useRouter();
-  const [catalog, setCatalog] = useState<FieldsCatalog | null>(null);
-  const [techCatalog, setTechCatalog] = useState<TechnicalIndicatorCatalog | null>(null);
-  const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
-  const [universeSizes, setUniverseSizes] = useState<Record<string, number>>({});
+  // 카탈로그류(fields/indicators/factorFieldMap/universes) — 탭 재방문 시 재요청 없이 캐시
+  // 재사용(staleTime 24h, 전역 QueryClient 기본값). 변수명은 기존 useState와 동일하게 유지해
+  // 아래 로직을 건드리지 않음.
+  const { data: catalog } = useQuery({ queryKey: ["screener", "fields"], queryFn: () => screenerApiAdvanced.fields() });
+  const { data: techCatalog } = useQuery({ queryKey: ["screener", "indicators"], queryFn: () => screenerApiAdvanced.indicators() });
+  const { data: aliasMapData } = useQuery({ queryKey: ["screener", "factor-field-map"], queryFn: () => screenerApiAdvanced.factorFieldMap() });
+  const aliasMap = aliasMapData?.map ?? {};
+  const { data: universesData } = useQuery({ queryKey: ["screener", "universes"], queryFn: () => screenerApi.universes() });
+  const universeSizes = useMemo(() => {
+    const m: Record<string, number> = {};
+    universesData?.presets.forEach((p) => { m[p.id] = p.size; });
+    return m;
+  }, [universesData]);
   const [group, setGroup] = useState<FilterGroupNode>({ logic: "AND", conditions: [], groups: [] });
   const [labelOverride, setLabelOverride] = useState<Record<string, string>>({});
   const [results, setResults] = useState<ScreenerResponse | null>(null);
-  const [sampleItems, setSampleItems] = useState<ScreenerItem[]>([]);   // 분포용 무필터 표본
   const [loading, setLoading] = useState(false);
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
   const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);   // 팩터별 단독 통과 수
@@ -128,10 +137,6 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   useEffect(() => { countRef.current = group.conditions.length; }, [group.conditions.length]);
 
   useEffect(() => {
-    screenerApiAdvanced.fields().then(setCatalog).catch(() => {});
-    screenerApiAdvanced.indicators().then(setTechCatalog).catch(() => {});
-    screenerApiAdvanced.factorFieldMap().then((d) => setAliasMap(d.map)).catch(() => {});
-    screenerApi.universes().then((d) => { const m: Record<string, number> = {}; d.presets.forEach((p) => { m[p.id] = p.size; }); setUniverseSizes(m); }).catch(() => {});
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
     try { const c = localStorage.getItem("alpha_screener_cols"); if (c) setDisplayCols(JSON.parse(c)); } catch { /* noop */ }
     setPresets(listPresets());
@@ -217,13 +222,13 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
   }, [effectiveAst, universe, gateOn]);
 
-  // ── 분포용 무필터 표본 (유니버스 변경 시) ──
-  useEffect(() => {
-    let cancelled = false;
-    screenerApiAdvanced.runAdvanced({ universe, filter_ast: { logic: "AND", conditions: [], groups: [] }, sort_by: "composite_score", ascending: false, limit: 300, liquidity_floor: gateOn ? "relaxed" : "off" })
-      .then((r) => { if (!cancelled) setSampleItems(r.items); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [universe, gateOn]);
+  // ── 분포용 무필터 표본 (유니버스 변경 시) ── react-query로 캐시(동일 universe/gateOn
+  // 재방문 시 재요청 없음)
+  const { data: sampleData } = useQuery({
+    queryKey: ["screener", "sample", universe, gateOn],
+    queryFn: () => screenerApiAdvanced.runAdvanced({ universe, filter_ast: { logic: "AND", conditions: [], groups: [] }, sort_by: "composite_score", ascending: false, limit: 300, liquidity_floor: gateOn ? "relaxed" : "off" }),
+  });
+  const sampleItems = useMemo(() => sampleData?.items ?? [], [sampleData]);
 
   // ── 팩터별 단독 통과 수 (선택도 표시) ──
   useEffect(() => {

@@ -118,8 +118,8 @@ export function Field({ label, width = 84, children }: { label: string; width?: 
 
 const numBox: React.CSSProperties = {
   fontFamily: "var(--bs-font-mono)", fontSize: 14, color: "var(--text-primary)",
-  border: "1px solid var(--border-strong)", borderRadius: R, padding: "6px 11px",
-  width: 64, textAlign: "center", background: "var(--bg-card)",
+  border: "1px solid var(--border-strong)", borderRadius: R, padding: "6px 8px",
+  width: 100, textAlign: "center", background: "var(--bg-card)",
 };
 
 // ── QuickStepper (number + quick +/- chips) ──────────────────
@@ -129,7 +129,8 @@ export function QuickStepper({ value, onChange, chips = [], unit = "", min, max 
   const clamp = (n: number) => Math.max(min ?? -Infinity, Math.min(max ?? Infinity, n));
   return (
     <>
-      <input type="number" value={value} onChange={(e) => onChange(clamp(Number(e.target.value)))} style={numBox} />
+      <input type="number" className="bs-numbox" value={value}
+        onChange={(e) => onChange(clamp(Number(e.target.value)))} style={numBox} />
       {unit && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{unit}</span>}
       <span style={{ display: "flex", gap: 5 }}>
         {chips.map((c) => (

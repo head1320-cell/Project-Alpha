@@ -1,11 +1,11 @@
 "use client";
 // Company Analysis — 실데이터 Cockpit. 코어 병렬 로드 + 탭별 lazy. 스크리너 핸드오프 지원.
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import PageHeader from "@/components/layout/PageHeader";
 import CompanyCockpit, { type LazyLoaders } from "@/components/insights/CompanyCockpit";
-import { loadCompanyCore, loadSignal, loadMacro, loadNetwork, loadRisk, loadNarrative } from "@/lib/companyData";
+import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/lib/companyData";
 import { companyApi } from "@/lib/screenerApi";
-import type { CompanyData } from "@/components/insights/types";
 import { LoadingState, ErrorState } from "@/components/layout/States";
 
 const QUICK = [
@@ -21,26 +21,23 @@ export default function CompanyPage() {
   const [sug, setSug] = useState<{ code: string; name: string }[]>([]);
   const [showSug, setShowSug] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const [data, setData] = useState<CompanyData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // 종목코드별로 캐시(staleTime 24h) — 같은 종목 재방문(탭 이동 포함) 시 재요청 없음.
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["company", "core", code],
+    queryFn: () => loadCompanyCore(code),
+  });
+  const error = queryError
+    ? ((queryError as Error)?.message === "NOT_FOUND" ? `종목 ${code}을(를) 찾을 수 없습니다.` : "데이터를 불러오지 못했습니다 (백엔드 확인).")
+    : null;
 
   // 스크리너 핸드오프 (sessionStorage)
   useEffect(() => {
     try { const h = sessionStorage.getItem("alpha_company_ticker"); if (h && /^\d{6}$/.test(h)) { setCode(h); sessionStorage.removeItem("alpha_company_ticker"); } } catch { /* noop */ }
   }, []);
 
-  useEffect(() => {
-    let ok = true; setLoading(true); setError(null);
-    loadCompanyCore(code)
-      .then((d) => { if (ok) { setData(d); setLoading(false); } })
-      .catch((e: Error) => { if (ok) { setError(e?.message === "NOT_FOUND" ? `종목 ${code}을(를) 찾을 수 없습니다.` : "데이터를 불러오지 못했습니다 (백엔드 확인)."); setLoading(false); } });
-    return () => { ok = false; };
-  }, [code]);
-
+  // signal/macro는 CompanyCockpit이 직접 useQuery로 로드(매크로 탭과 캐시 키 공유) — 여기서는
+  // 탭 클릭 시에만 필요한 network/risk/narrative만 남김.
   const lazy: LazyLoaders = useMemo(() => ({
-    signal: () => (data ? loadSignal(code, data.name) : Promise.resolve(null)),
-    macro: () => loadMacro(),
     network: () => loadNetwork(code),
     risk: () => loadRisk(code),
     narrative: async () => {

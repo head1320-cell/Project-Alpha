@@ -43,11 +43,11 @@ services:
       PG_PASSWORD: ${PG_PASSWORD:-ficc_password}
       PG_DATABASE: ${PG_DATABASE:-ficc_risk}
       DATABASE_URL_ASYNC: postgresql+asyncpg://${PG_USER:-ficc_user}:${PG_PASSWORD:-ficc_password}@db:5432/${PG_DATABASE:-ficc_risk}
-      KIS_MODE: ${KIS_MODE:-MOCK}
-      KIS_MOCK_APP_KEY: ${KIS_MOCK_APP_KEY:-}
-      KIS_MOCK_APP_SECRET: ${KIS_MOCK_APP_SECRET:-}
-      KIS_REAL_APP_KEY: ${KIS_REAL_APP_KEY:-}
-      KIS_REAL_APP_SECRET: ${KIS_REAL_APP_SECRET:-}
+      KIS_USE_MOCK: ${KIS_USE_MOCK:-1}
+      KIS_IS_PAPER: ${KIS_IS_PAPER:-1}
+      KIS_APP_KEY: ${KIS_APP_KEY:-}
+      KIS_APP_SECRET: ${KIS_APP_SECRET:-}
+      KIS_ACCOUNT_NO: ${KIS_ACCOUNT_NO:-}
     depends_on:
       db:
         condition: service_healthy

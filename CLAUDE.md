@@ -132,6 +132,13 @@ python -c "import sys; sys.path.insert(0,'.'); from src.engine.screener import V
 - 자동매매는 **기본이 `dry_run=True`** (실주문 없이 시뮬)
 - `dry_run=false` + `real` 모드 = **실제 자금 거래** → 반드시 모의투자(`KIS_IS_PAPER=1`)에서 충분히 검증 후 사용
 - `trading_engine.py`의 6중 안전장치를 우회하는 코드 작성 금지
+- **`src.kis_order_executor.OrderExecutor`를 `TradingEngine` 밖에서 직접 생성 금지** — 이 클래스는 자체 안전장치가
+  전혀 없어(dry-run/한도/킬스위치 검증 없이 곧장 `client.place_order()` 호출) `TradingEngine(safety=SafetyConfig)`가
+  감싸야만 안전. `tests/test_no_order_executor_bypass.py`가 CI에서 정적으로 강제(`trading_engine.py` 밖에서
+  `from src.kis_order_executor import ... OrderExecutor ...` 발견 시 실패). KIS 연동은 `src/execution/kis_client.py`의
+  `get_kis_client()` 팩토리 **단일 경로**만 사용 — `KIS_USE_MOCK`(정확히 `"1"`일 때만 mock)이 유일한 판정 기준
+  (`src/data/mock_gate.py::mock_allowed()`). `KIS_MODE`/`KIS_REAL_APP_KEY` 등의 구 변수는 완전히 제거됨(2026-07,
+  아래 세션 기록 참고) — 재도입 금지.
 
 ### 5. 종목명
 - 항상 `stock_master.py`의 `resolve_name()` / `get_stock_name()` 사용
@@ -1539,3 +1546,201 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
   100% 이전과 동일(위 4개 테스트 중 처음 2개로 고정). 신규 `dynamic_replenishment=True` 실행
   결과를 새 기준선으로 삼으려면, 기존에 회귀비교에 쓰던 실제 mock 시나리오(kospi200 샘플 등)를
   재실행해 실측치를 확인할 것 — 예측치를 여기 미리 적지 않음(기존 "정직" 원칙 일관 적용).
+
+---
+
+## 📐 (설계 가이드, 미구현) 나이틀리 배치 프리컴퓨트 — 매크로/밸류에이션 스냅샷
+
+캐싱 작업(react-query 프론트 캐시 + `_RUN_ADVANCED_CACHE` 백엔드 응답 캐시)으로 "탭 이동마다
+재로딩" 문제는 해결됐지만, **첫 접속(콜드 캐시) 로딩은 여전히 실시간 계산**이다. 매일 DB
+적재(Backfill)가 끝난 시점에 매크로·밸류에이션 스냅샷을 미리 계산해두면 콜드 로딩도 즉시
+응답 가능 — 아래는 기존 인프라를 그대로 재사용하는 설계안(구현은 이번 범위 밖, 필요 시 후속
+요청).
+
+### 재사용할 기존 인프라
+- `main_api.py:480-483`의 `_INGEST_TARGETS`/`_INGEST_STATUS`/`_INGEST_RUNNING` — 이미
+  `("index","etf","stocks","factors","financials","flows")` 6개 타깃을 백그라운드 스레드로
+  실행하고 진행상황을 `db-status`로 노출하는 패턴이 완성돼 있음(`POST /api/v1/data/ingest/
+  {target}`, `main_api.py:683-723`의 `ingest_trigger`).
+- `src/data/snapshot_db.py`의 `factor_snapshot` 테이블(UPSERT, `ingest_universe`) — 이미
+  펀더멘털/가격 팩터 스냅샷을 이 방식으로 영속화 중.
+
+### 설계안
+1. `_INGEST_TARGETS`에 `"macro_snapshot"` 타깃 추가.
+2. 새 함수 `snapshot_macro()` — `analysisApi`가 호출하는 5종(regime/dashboard/valuation/
+   strategies/recommend)을 서버 프로세스 내에서 직접 호출해 계산한 뒤, `factor_snapshot`과
+   같은 패턴의 새 테이블(예: `macro_snapshot(cache_key, value, updated_at)`) 또는 기존
+   `MacroCollector._cache`(TTL 6h)에 결과를 미리 채워 넣는 방식 — 후자가 더 적은 신규 코드로
+   충분(이미 6h TTL 캐시가 있으므로, 매일 1회 이 캐시를 "미리 워밍"만 해주면 됨).
+3. `ingest_trigger("macro_snapshot")`가 이 워밍 함수를 백그라운드 스레드로 실행 — 기존
+   `_INGEST_STATUS[target]`에 진행상황 기록(패턴 그대로 재사용, 신규 상태 관리 불필요).
+4. Data Infra 관리자 패널(`frontend/src/app/admin/data/page.tsx`)에 "매크로 스냅샷" 버튼 1개
+   추가(다른 5개 타깃과 동일한 UI 패턴).
+
+### 신규로 필요한 것 (기존 확장이 아님 — 별도 결정 필요)
+- **스케줄러 자체가 이 코드베이스에 없음**(APScheduler/cron/celery 전무 확인됨,
+  `docker-compose.yml`에 워커 컨테이너 없음). "매일 자동 실행"까지 원하면:
+  - 옵션A: FastAPI 시작 시 `APScheduler`(경량, 별도 프로세스/컨테이너 불필요)로 매일 1회
+    `snapshot_macro()`/`ingest_universe()` 호출 — 가장 적은 인프라 변경.
+  - 옵션B: 배포 환경의 OS/Docker 레벨 cron(예: `docker compose exec backend python -m
+    scripts.nightly_snapshot`)이 `POST /api/v1/data/ingest/macro_snapshot`을 매일 1회 호출 —
+    앱 코드 변경 없이 배포 설정만으로 가능, 이 프로젝트의 "배포 환경마다 다를 수 있는 운영
+    설정"이라는 기존 관례(`docker-compose.yml`/`setup_server.sh`)와 더 잘 맞음.
+  - 둘 다 신규 인프라 도입이라 이번 캐싱 작업 범위에서는 제외 — 필요하면 별도 요청으로 진행.
+
+---
+
+## 🛠️ 백테스터 버그수정 + 프론트/백엔드 캐싱 + Mock 거버넌스 + KIS 클라이언트 3중 통합
+
+사용자가 제시한 스크린샷 4건(①백테스터 UI/데이터 버그 ②캐싱 성능 ③DART mock 누출 ④하드코딩
+mock 시세)을 순서대로 작업. 조사(Explore 3 + Plan 1 에이전트) 중 스크린샷에 없던 더 큰 문제
+(KIS 클라이언트 3중 구현 + 실주문 엔드포인트의 안전장치 완전 우회)를 발견해 사용자 확인 후
+범위에 포함. 4개 전부 완료.
+
+### ① 백테스터 UI/데이터 버그
+- **투자금액 3자리 잘림**: `kit.tsx`의 `numBox`(모든 `QuickStepper` 공용)가 `width:64` →
+  `100`으로 확장 + 네이티브 스피너 화살표 CSS로 숨김. `ConditionFormulaEditor.tsx`의 rhs/rhs2
+  입력폭(70→104px)도 동일 사유로 함께 확장.
+- **"대상 종목 수: 전체" 선택해도 100종목 고정 (★자기회귀★)**: 근본원인은 직전 세션의 Dynamic
+  Replenishment 구현 자체의 설계공백 — `screener_routes.py`의 `full_eval_on = bool(
+  full_universe_eval and (buy_conditions or sell_conditions))`가 매수조건이 하나도 없는
+  기본 상태(앱 초기값)에서 `eval_cap`을 `max_tickers`(≤30)로 쪼그라뜨려, `replenishment_pool_cap`
+  기본값 100이 "약간의 top-up"이 아니라 사실상 전체 유니버스가 되어버렸음.
+  → `full_eval_on` 게이팅 완전 제거, `eval_cap`이 조건식 유무와 무관하게 항상
+  `req.universe_eval_cap`을 사용하도록 단순화.
+- **컨트롤 통합**: "대상 종목 수"(`BuyConditionPanel`)와 "평가 종목 상한"(`UniversePanel`)이
+  서로 다른 개념(포트폴리오 슬롯 수 vs 스크리닝 후보 풀 크기)을 혼란스럽게 나눠 통제하던 문제 —
+  "전체/제한" MAX/LIMIT 토글(`limitType`) 완전 제거, "대상 종목 수"는 라벨을
+  "최대 보유 종목 수"로 명확화해 항상 유한한 보유슬롯 수로 남기고, 스크리닝 풀 크기 개념은
+  "평가 종목 상한" 하나로 통합.
+- 신규 회귀 테스트: `tests/test_backtest_universe_cap.py`(4개) — `eval_cap`이 조건식 유무와
+  무관하게 `universe_eval_cap`을 따르고, `max_positions`는 독립적으로 전달되는지 확인.
+
+### ② 프론트/백엔드 캐싱 성능최적화
+- **근본원인**: `@tanstack/react-query`(v5)가 설치는 됐으나 `QueryClientProvider`가 어디에도
+  없었음(부분 세팅이 아니라 아예 미착수) — 모든 탭이 `useEffect`+`useState` 수동 페칭으로
+  탭 이동마다 100% 재요청.
+- 신규 `frontend/src/lib/queryClient.ts`(`staleTime`/`gcTime` 24h) + `components/layout/
+  Providers.tsx` → `app/layout.tsx`가 `<TerminalShell>`을 감쌈.
+- **Screener**: 카탈로그 4종(fields/indicators/factorFieldMap/universes) + 300행 샘플을
+  `useQuery`로 마이그레이션. 메인 스캔(`run-advanced-stream`)은 SSE라 그대로 유지(진행률 UX 보존).
+- **Macro**: `loadMacroCore`의 5개 병렬 호출(regime/dashboard/valuation/strategies/recommend)을
+  개별 `useQuery`로 분리 — `loadMacroCore()` 함수 자체는 삭제. `MacroCockpit`의 `compareKrUs`도
+  `useQuery`화.
+- **Company**: `loadCompanyCore` + Cockpit 마운트이펙트(`signal`/`macroRegime`)를 `useQuery`화.
+  **`macroRegime()` 캐시 키를 Macro 탭과 동일(`["macro","regime"]`)하게 맞춰 두 탭 간 중복
+  호출을 프론트 캐시 레벨에서 자동 해소**(백엔드 변경 없이 낭비 제거).
+- **Prefetch**: `TerminalShell.tsx` 사이드바 `<Link>`에 `onMouseEnter`로 핵심 진입 쿼리
+  prefetch(이 코드베이스 최초의 hover-prefetch 패턴).
+- **백엔드 응답 캐시**: 기존에 3곳 반복되던 `_XCache`(TTL+LRU+`.stats()`/`.clear()`) 관례를
+  그대로 재사용 — `screener_routes.py`에 `_ResponseCache`+`_RUN_ADVANCED_CACHE` 신설,
+  `/cache/stats`·`/cache/clear`가 기존 `_ValuationCache`와 함께 보고.
+- **나이틀리 배치**: 요청이 "선택 사항 + 가이드 제안"이라 설계만 문서화(위 섹션 참고), 실제
+  스케줄러(APScheduler 등) 도입은 범위 밖.
+
+### ③ DART/가격 Mock 데이터 거버넌스
+- **DART 재무 침묵 폴백 차단**: `dart_client.py`는 키 미설정/쿼터초과/네트워크 에러를 전부
+  `None`으로 뭉개고, 그 위 계층이 무조건 mock `FinancialStatement(is_mock=True)`로 폴백 —
+  `fundamentals_store.py`는 이미 이 플래그를 방어했지만 `valuation_models.py::evaluate()`는
+  무방비였음(운영에서도 DART 호출이 한 번이라도 실패하면 RIM/DCF/DDM이 합성 재무로 조용히
+  계산되고 있었음). → `UnifiedValuation.is_mock: bool` 필드 추가 + `evaluate()`에
+  `fs.is_mock and not mock_allowed()` 가드 추가(운영에서 mock 재무 감지 시 계산 대신 정직하게
+  "데이터 없음" 반환, 종목명은 `stock_master.get_stock_name()` — "Unknown Corp" 금지 규칙 준수).
+  `valuation_routes.py`의 `/evaluate`·`/compare` 응답에 `is_mock` 노출.
+- **하드코딩 mock 시세가 게이트 없이 상시 적용되던 문제**: `screener.py`의 `_mock_price()`(10종목
+  하드코딩)가 `ValuationScreener`의 **기본 `price_provider`**로 4개 프로덕션 생성 지점
+  전부에서 `KIS_USE_MOCK`/키 설정과 무관하게 상시 적용 — 사후 `_enrich_kis_quotes()`가
+  `current_price`만 실가로 패치하고 `gap_pct`/`verdict`/`composite_score`는 재계산 안 해
+  "화면엔 진짜 가격, 저평가 판정은 가짜 가격 기준"인 내적 불일치가 있었음(자동매매 종목선정
+  로직까지 영향). → `_enrich_kis_quotes`가 패치 후 `compute_gap_pct`/`gap_pct_to_verdict`/
+  `_compute_scores`(시그니처를 `(gap_pct, fin)`로 리팩터링해 초기계산과 공유)를 재실행하도록 수정
+  (순수 산술, 추가 네트워크 호출 0). `ScreenerItem`에 `price_is_mock`/`fundamentals_is_mock`
+  필드 추가(데이터 품질 투명화).
+- **부수 발견·수정**: `screener.py`에 `import os`가 누락돼 있었음 — `_enrich_kis_quotes`의
+  `os.getenv("SCREENER_MAX_LIVE_COMPUTE",...)`가 실제 KIS 연동 시(mock 아닐 때) 항상
+  `NameError`로 크래시하는 잠재 버그(기존 테스트 전부가 mock 경로만 태워 미발견). 이번에
+  같은 함수를 수정하던 중 발견해 함께 수정.
+- `mock_gate.py::mock_allowed()`(정확히 `"1"`일 때만 True)로 산재된 인라인 `os.getenv(
+  "KIS_USE_MOCK",...)` 체크 14개 파일 21곳 일원화(`main_api.py`/`trading_routes.py`/
+  `screener.py`/`snapshot_db.py`/`minute_bars.py` 등). 2곳(`!= "0"` 패턴)은 `mock_allowed()`로
+  바꾸며 의도적으로 엄격화(`KIS_USE_MOCK=banana` 같은 쓰레기값이 이제 mock으로 안전하게 처리).
+- 신규 테스트: `tests/test_valuation_mock_leak.py`(3), `tests/test_screener_price_enrichment.py`(3).
+
+### ④ KIS 클라이언트 3중 구현 통합 + 실주문 안전장치 우회 제거 (★가장 중요★)
+- **발견된 문제**: KIS 연동이 3개의 독립 구현체로 쪼개져 있었음 —
+  1. `src/execution/kis_client.py`(`KISClient`/`MockKISClient`) — `KIS_USE_MOCK` 게이트, 문서화됨,
+     `TradingEngine`이 쓰는 **정식 경로**.
+  2. `src/api/broker_kis.py`(`KoreaInvestmentAPI`) — 별도 미문서화 변수 `KIS_MODE`로 게이트,
+     `place_order()`에 안전장치가 전혀 없음. `/sync-broker`·`/place-order`가 사용.
+  3. `src/kis_client.py`(최상위) — 역시 `KIS_MODE`+`KIS_MOCK_APP_KEY`/`KIS_REAL_APP_KEY`(문서화
+     안 됨)로 게이트. `/api/v1/account/holdings`·`/api/v1/account/balance`·
+     **`/api/v1/orders/execute`·`/api/v1/orders/batch`가 `OrderExecutor(KISClient())`를
+     직접 생성 — `TradingEngine`/`SafetyConfig`(6중 안전장치)를 완전히 우회**하고 있었음.
+  → CLAUDE.md가 문서화한 "KIS_USE_MOCK=0 + KIS_APP_KEY로 실거래 전환" 절차를 따라도 이 5개
+  엔드포인트는 전혀 영향받지 않는(별도 미설정 `KIS_MODE`가 계속 mock 지배) 심각한 문서-실제 괴리였음.
+  프론트 전체 grep으로 이 5개 엔드포인트를 호출하는 코드가 0건임을 확인 후(라이브 자동매매
+  패널은 전부 `trading_routes.py`(정상 경로)만 사용) 안전하게 통합 진행.
+- **`/sync-broker`+`/place-order` 삭제**: `src/api/broker_kis.py` 파일 자체 삭제(안전장치
+  전무, dry-run 없이 즉시 실주문 가능했던 가장 위험한 경로, 미사용 확인됨). 기존
+  `tests/test_api.py::test_sync_broker_demo`(구 데모 엔드포인트를 테스트하던 것)를
+  `/sync-broker`·`/place-order`가 404로 사라졌는지 확인하는 재도입 방지 가드로 교체.
+- **`/api/v1/account/holdings`·`/api/v1/account/balance` 재배선**: `get_kis_client()`(정식
+  경로)로 교체. `PositionManager(client)`가 요구하는 `client.get_balance()` 메서드가 구
+  `src.kis_client.KISClient`엔 아예 없어(`get_account_balance()`만 존재) 이 엔드포인트는
+  **실제로 이미 조용히 깨져 있었음**(호출 시 `AttributeError`→500) — 재배선 자체가 버그 수정.
+  응답 형태 유지를 위해 `execution/kis_client.py::get_balance()`에 이미 파싱되지 않고 있던
+  `evlu_pfls_smtl_amt`(profit_loss)/`asst_icdc_erng_rt`(profit_rate) 필드를 추가 파싱(동일
+  응답에서 이미 도착해 있던 필드, 새 네트워크 호출 없음). `mode`는 `"mock"|"paper"|"real"`
+  문자열로 합성(`trading_engine.py`의 기존 관례와 동일 패턴).
+- **`/api/v1/orders/execute`·`/api/v1/orders/batch` 재배선(핵심 안전 수정)**: `TradeSignal`
+  구성 후 `TradingEngine(safety=SafetyConfig(dry_run=True)).execute_signals()` 경유로 재배선
+  (`trading_routes.py`의 기존 `/api/v1/trading/execute`와 동일 패턴). 세부 안전설정(dry_run
+  끄기 등)이 필요하면 이미 존재하는 `/api/v1/trading/execute`(safety 파라미터 전체 제어 가능)를
+  쓰도록 안내 — 레거시 형태 엔드포인트는 항상 dry_run 고정, 이중 설정 표면을 만들지 않음.
+  `quantity`/`target_price` 파라미터는 받되 미사용(포지션 사이징은 `SafetyConfig`가 강도 기반
+  산정) — 명시적으로 문서화. 응답은 `TradeRecord`→구 `OrderResult.to_dict()` 형태로 역변환.
+  - **부수 발견·수정**: `TradingEngine.execute_signals()`가 `sells + buys`만 순회해 `action:
+    "hold"` 시그널이 통째로 누락되던 버그 발견(양쪽 리스트 어디에도 안 잡혀 `_execute_one`의
+    hold 처리 분기가 죽은 코드였음) — 사전에 없던 회귀테스트로 즉시 발견, `sells + buys +
+    others`로 수정. 기존 `/api/v1/trading/execute`(사전 존재)에도 동일하게 영향받던 버그라
+    양쪽 다 수정 효과.
+- **`src/kis_client.py`(3번째 구현체) 완전 삭제**: 유일한 남은 사용처
+  `src/data_sync.py`(나이틀리 KIS 동기화 잡, `main_api.py` startup에서 실제로 기동 중인
+  라이브 코드)를 `get_kis_client()`로 재배선. API 차이(구
+  `get_daily_prices(ticker,start,end)`→신 `get_daily_ohlcv(ticker,days=)`) 흡수, `client.
+  throttle()` 호출 제거(신 클라이언트는 자체 `RateLimiter`로 이미 스로틀 — 중복 불필요).
+  `DailyPrice.trading_value` 컬럼을 위해 `get_daily_ohlcv()`에 `acml_tr_pbmn`(거래대금) 추가
+  파싱(실·mock 클라이언트 양쪽, 동일 응답에서 이미 도착해 있던 필드).
+- **CI 가드 테스트**: `tests/test_no_order_executor_bypass.py` — `src.kis_order_executor.
+  OrderExecutor`(자체 안전장치 없음)가 `trading_engine.py` 밖에서 import되면 실패. 이름만 같은
+  별개 클래스 `src.execution.order_executor.OrderExecutor`(Stage13 전용, 자체 kill_switch/
+  risk_gateway/audit_trail 보유)는 정규식으로 명확히 구분해 오탐 없음.
+- **환경변수 정리**: `docker-compose.yml`/`setup_server.sh`의 `KIS_MODE`/`KIS_MOCK_APP_KEY`/
+  `KIS_MOCK_APP_SECRET`/`KIS_REAL_APP_KEY`/`KIS_REAL_APP_SECRET`를 표준 `KIS_USE_MOCK`/
+  `KIS_IS_PAPER`/`KIS_APP_KEY`/`KIS_APP_SECRET`/`KIS_ACCOUNT_NO`로 교체(코드가 이미 안 읽는
+  변수를 인프라 설정에 남겨두지 않음).
+- 신규 테스트: `tests/test_api.py`에 계좌·주문 엔드포인트 6개(mock 클라이언트 주입, `place_order()`
+  가 dry-run 경로에서 절대 호출 안 되는지 직접 검증) + `test_no_order_executor_bypass.py`(2개).
+
+### 정직한 한계 / 범위 밖
+- **Stage13 Live Trading 시스템**(`/api/v1/live/*`, `src/api/stage13_routes.py`) — 조사 중
+  발견한 완전히 별개의 3번째 실거래 시스템(자체 `KillSwitch`/`RiskGateway`/`AuditTrail` 보유,
+  프론트 `ProductionMonitor.tsx`/`admin/live-trading` 페이지가 실제로 호출하는 살아있는 코드).
+  `TradingEngine`과는 독립된 별도 안전장치라 이 코드베이스엔 서로 다른 안전장치를 가진 병렬
+  실거래 경로가 최소 2개 존재하는 셈 — 통합·정리는 이번 범위보다 훨씬 큰 별도 아키텍처 결정
+  (유지/통합/폐기)이 필요해 **의도적으로 손대지 않음**. 후속 별도 작업 권장.
+- **KIS_MODE가 저장소 밖(호스트 env/CI 시크릿)에 수동 설정된 배포가 있는지는 코드로 확인
+  불가** — 실거래 재배선(이번 작업) 적용 후 사용자가 직접 확인 필요.
+- **`/api/v1/orders/execute`·`/batch`·`/api/v1/account/*`의 실거래·모의투자 동작은 이 샌드박스
+  에서 검증 불가**(mock 클라이언트로만 검증됨) — CLAUDE.md 규칙대로 반드시 모의투자
+  (`KIS_IS_PAPER=1`)에서 수동 검증 후 사용할 것: ①dry_run 기본값이 실제로 KIS 호출 0건인지
+  ②`/api/v1/trading/execute`의 명시적 `dry_run=false` 시 모의투자 TR_ID로 정상 주문되는지
+  ③안전장치(한도·킬스위치) 개별 차단 확인 ④holdings/balance 숫자가 KIS 앱 화면과 일치하는지.
+
+### 검증
+- 백엔드: 이 세션 전체 작업 후 `pytest tests/` **799 passed / 10 skipped / 0 failed**
+  (신규 테스트 다수 포함, ①②③④ 전부 반영). `ruff check` 통과.
+- 프론트: `npx tsc --noEmit` 0 errors, `npx next build` 전체 페이지 성공 예정(아래 최종
+  검증에서 재확인).
+- 회귀: 백테스터 엔진 로직 무변경(체결가·매도/매수 정밀화·재편입 등 직전 세션 기능 전부 불변),
+  기존 스크리너/백테스터/매크로/기업분석 테스트 전부 green.

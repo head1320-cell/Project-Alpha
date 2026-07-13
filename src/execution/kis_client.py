@@ -31,6 +31,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from src.data.mock_gate import mock_allowed
+
 try:
     import requests
 except ImportError:
@@ -491,6 +493,8 @@ class KISClient:
             "evaluated_total": float(output2.get("tot_evlu_amt") or 0),
             "stock_value":     float(output2.get("scts_evlu_amt") or 0),
             "deposit":         float(output2.get("dnca_tot_amt") or 0),
+            "profit_loss":     float(output2.get("evlu_pfls_smtl_amt") or 0),
+            "profit_rate":     float(output2.get("asst_icdc_erng_rt") or 0),
             "positions":       positions,
             "n_positions":     len(positions),
             "raw":             data,
@@ -583,6 +587,7 @@ class KISClient:
                         "low":    float(r.get("stck_lwpr") or 0),
                         "close":  float(r.get("stck_clpr") or 0),
                         "volume": float(r.get("acml_vol") or 0),
+                        "trading_value": float(r.get("acml_tr_pbmn") or 0),
                     }
                     new += 1
                 if oldest is None or d < oldest:
@@ -737,24 +742,32 @@ class MockKISClient:
     def get_balance(self):
         evaluated = self.cash
         positions = []
+        total_pnl = 0.0
+        cost_basis = 0.0
         for ticker, pos in self.positions.items():
             cp = self.prices.get(ticker, pos["avg_price"])
             eval_amount = pos["quantity"] * cp
             pnl_pct = (cp / pos["avg_price"] - 1) * 100 if pos["avg_price"] > 0 else 0
+            pnl_krw = (cp - pos["avg_price"]) * pos["quantity"]
             evaluated += eval_amount
+            total_pnl += pnl_krw
+            cost_basis += pos["avg_price"] * pos["quantity"]
             positions.append({
                 "ticker": ticker, "quantity": pos["quantity"],
                 "avg_price": pos["avg_price"], "current_price": cp,
                 "eval_amount": eval_amount,
                 "pnl_pct": pnl_pct,
-                "pnl_krw": (cp - pos["avg_price"]) * pos["quantity"],
+                "pnl_krw": pnl_krw,
             })
         return {
             "cash_krw":        self.cash,
             "evaluated_total": evaluated,
             "stock_value":     evaluated - self.cash,
+            "deposit":         self.cash,
             "positions":       positions,
             "n_positions":     len(positions),
+            "profit_loss":     total_pnl,
+            "profit_rate":     (total_pnl / cost_basis * 100) if cost_basis > 0 else 0.0,
             "raw":             {"mock": True},
         }
 
@@ -782,9 +795,11 @@ class MockKISClient:
         rows = []
         for px in closes:
             spread = px * rng.uniform(0.005, 0.02)
+            volume = rng.uniform(5e5, 5e6)
             rows.append({
                 "date": "MOCK", "open": px - spread*0.3, "high": px + spread,
-                "low": px - spread, "close": px, "volume": rng.uniform(5e5, 5e6),
+                "low": px - spread, "close": px, "volume": volume,
+                "trading_value": px * volume,
             })
         return rows
 
@@ -814,7 +829,7 @@ def get_kis_client(force_reload: bool = False):
     if _kis_singleton is not None and not force_reload:
         return _kis_singleton
 
-    use_mock = os.getenv("KIS_USE_MOCK", "1") == "1"
+    use_mock = mock_allowed()
     if use_mock:
         _kis_singleton = MockKISClient()
         logger.info("KIS: MockKISClient (KIS_USE_MOCK=1)")

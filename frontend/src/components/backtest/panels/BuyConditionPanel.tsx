@@ -196,12 +196,12 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="종목당 비중">
           <QuickStepper value={s.buy.weightPct} onChange={(v) => patchBuy({ weightPct: v })} chips={[1, 5, 10]} unit="%" min={0} max={100} />
         </Field>
-        <Field label="대상 종목 수">
-          <Segmented tone="buy" value={s.buy.limitType} onChange={(v) => patchBuy({ limitType: v })}
-            options={[{ id: "MAX", label: "전체" }, { id: "LIMIT", label: "제한" }]} />
-          {s.buy.limitType === "LIMIT" && (
-            <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} />
-          )}
+        <Field label="최대 보유 종목 수">
+          <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            동시 보유 가능한 포트폴리오 슬롯 수 — 스크리닝 후보 풀 크기는 매매대상 탭의
+            &quot;평가 종목 상한&quot;에서 별도 설정
+          </span>
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />

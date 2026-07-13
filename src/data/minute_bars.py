@@ -27,6 +27,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.data.mock_gate import mock_allowed
+
 logger = logging.getLogger(__name__)
 
 COLUMNS = ["ticker", "time", "open", "high", "low", "close", "volume"]
@@ -99,7 +101,7 @@ def _mock_minute_bars(ticker: str, date: str) -> list[dict]:
 
 def _fetch_minute_bars(ticker: str, date: str) -> list[dict]:
     """KIS 분봉 1종목 — 당일이면 당일분봉, 과거면 일별분봉. mock 모드는 합성."""
-    if os.getenv("KIS_USE_MOCK", "1") == "1":
+    if mock_allowed():
         return _mock_minute_bars(ticker, date)
     from src.execution.kis_client import get_kis_client
     client = get_kis_client()
@@ -147,7 +149,7 @@ def collect_day(tickers: list[str], date: str | None = None,
         for b in bars:
             rows.append({"ticker": tk, **b})
         ok += 1
-        if throttle > 0 and os.getenv("KIS_USE_MOCK", "1") != "1":
+        if throttle > 0 and not mock_allowed():
             time.sleep(throttle)
     out_path = found
     if rows:
@@ -200,7 +202,7 @@ def probe_history(ticker: str = "005930") -> list[dict]:
     """과거 N일 전 일자들의 일별분봉을 1콜씩 — 어느 시점까지 데이터가 오는지 실측.
 
     KIS가 소급 한도를 문서화하지 않아 이것이 유일한 확정 방법. 실키 필요."""
-    if os.getenv("KIS_USE_MOCK", "1") == "1":
+    if mock_allowed():
         return [{"offset_days": o, "date": None, "bars": None,
                  "note": "mock 모드 — 실키(KIS_USE_MOCK=0)에서만 실측 가능"}
                 for o in PROBE_OFFSETS]

@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.database_async import _engine_available, async_session_scope
-from src.kis_client import KISClient
+from src.execution.kis_client import get_kis_client
 from src.kis_models import DailyPrice, Stock
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ def _all_listed_tickers() -> list[str]:
 
 
 async def sync_daily_prices(
-    client: KISClient,
+    client,
     days_back: int = 60,
     batch_size: int = 10,
     all_listed: bool = False,
@@ -140,9 +140,6 @@ async def sync_daily_prices(
         logger.warning("Async DB not available, skipping price sync")
         return
 
-    end_date = datetime.today().strftime("%Y%m%d")
-    start_date = (datetime.today() - timedelta(days=days_back)).strftime("%Y%m%d")
-
     total = 0
     errors = 0
 
@@ -158,13 +155,13 @@ async def sync_daily_prices(
         batch = tickers[i:i + batch_size]
         for ticker in batch:
             try:
-                # KIS call is sync — wrap in executor to not block event loop
+                # KIS call is sync — wrap in executor to not block event loop.
+                # get_kis_client()는 자체 RateLimiter로 이미 스로틀함(초당 18회) — 별도 throttle 불필요.
                 loop = asyncio.get_running_loop()
                 rows = await loop.run_in_executor(
                     None,
-                    lambda: client.get_daily_prices(ticker, start_date, end_date),
+                    lambda: client.get_daily_ohlcv(ticker, days=days_back),
                 )
-                client.throttle()
 
                 if not rows:
                     continue
@@ -172,16 +169,14 @@ async def sync_daily_prices(
                 # Bulk upsert
                 async with async_session_scope() as session:
                     for r in rows:
-                        trade_date = datetime.strptime(
-                            r["trade_date"], "%Y%m%d"
-                        ).date()
+                        trade_date = datetime.strptime(r["date"], "%Y%m%d").date()
                         stmt = pg_insert(DailyPrice).values(
-                            ticker=r["ticker"],
+                            ticker=ticker,
                             trade_date=trade_date,
                             open=r["open"], high=r["high"], low=r["low"],
                             close=r["close"],
                             volume=r["volume"],
-                            trading_value=r["trading_value"],
+                            trading_value=r.get("trading_value", 0),
                         )
                         try:
                             stmt = stmt.on_conflict_do_update(
@@ -268,7 +263,7 @@ async def daily_sync_scheduler():
         await asyncio.sleep(wait_seconds)
 
         try:
-            client = KISClient()
+            client = get_kis_client()
             await sync_stock_metadata()
             await sync_daily_prices(client, days_back=5)  # incremental
             await sync_dart_fundamentals()               # 펀더멘털 디스크 캐시 갱신
@@ -287,7 +282,7 @@ async def run_full_sync():
 
     await sync_stock_metadata()
     try:
-        client = KISClient()
+        client = get_kis_client()
         result = await sync_daily_prices(client, days_back=60)
     except Exception as e:
         return {"error": str(e), "elapsed_sec": 0}

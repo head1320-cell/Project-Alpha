@@ -207,11 +207,13 @@ class TradingEngine:
         balance = self._safe_balance()
         executed, blocked = [], []
 
-        # 매도 먼저 (현금 확보), 매수 나중
+        # 매도 먼저 (현금 확보), 매수 나중, 그 외(hold 등)는 순서 무관 — sells+buys만 돌면
+        # hold 시그널이 통째로 누락돼 executed/blocked 어디에도 안 잡히는 버그였음
         sells = [s for s in signals if s.action == "sell"]
         buys = [s for s in signals if s.action == "buy"]
+        others = [s for s in signals if s.action not in ("sell", "buy")]
 
-        for signal in sells + buys:
+        for signal in sells + buys + others:
             rec = self._execute_one(signal, balance)
             if rec.blocked_by:
                 blocked.append(rec.to_dict())

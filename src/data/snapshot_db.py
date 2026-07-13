@@ -24,6 +24,8 @@ import os
 import time
 from typing import Any
 
+from src.data.mock_gate import mock_allowed
+
 logger = logging.getLogger(__name__)
 
 _TABLE = "factor_snapshot"
@@ -38,7 +40,7 @@ def enabled() -> bool:
     if flag in ("1", "true", "yes", "on"):
         return True
     # auto: 실데이터 모드일 때만 (DART 키 또는 KIS 실연동)
-    return bool(os.getenv("DART_API_KEY")) or os.getenv("KIS_USE_MOCK", "1").strip() == "0"
+    return bool(os.getenv("DART_API_KEY")) or not mock_allowed()
 
 
 def _engine():

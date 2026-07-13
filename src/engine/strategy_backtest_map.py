@@ -13,6 +13,7 @@ import math
 import os
 from datetime import datetime
 
+from src.data.mock_gate import mock_allowed
 from src.engine.quant_metrics import compute_metrics
 
 
@@ -122,7 +123,7 @@ def _market_data_real(holdings: list | None, mk: str) -> bool:
     운영(KIS_USE_MOCK=0 + 키)에서 ETF 시계열이 실 DB/KIS면 True,
     mock 폴백/빈값이면 False — '키 유무'가 아니라 '실제 사용한 데이터' 기준.
     """
-    if os.getenv("KIS_USE_MOCK", "1") != "0" or not os.getenv("KIS_APP_KEY"):
+    if mock_allowed() or not os.getenv("KIS_APP_KEY"):
         return False
     try:
         from src.data.etf_prices import _daily_df, resolve

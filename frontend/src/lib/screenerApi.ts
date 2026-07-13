@@ -1079,7 +1079,6 @@ export interface ScreenToBacktestBody {
   managed?: boolean;
   supervised?: boolean;
   groups?: Array<{ mode: string; tickers: string[] }> | null;
-  full_universe_eval?: boolean;
   universe_eval_cap?: number;
   allow_snapshot_fundamentals?: boolean;
 }

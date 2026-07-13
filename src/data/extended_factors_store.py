@@ -21,6 +21,7 @@ import os
 from dataclasses import dataclass
 
 from src.data.mock_base import DeterministicMockStore
+from src.data.mock_gate import mock_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +249,7 @@ class ExtendedFactorsStore(DeterministicMockStore):
 
     # ── 실데이터 hook ───────────────────────────────────────────────────────────
     def _real_ownership(self, code: str) -> dict:
-        if os.getenv("KIS_USE_MOCK", "1") == "1":
+        if mock_allowed():
             return {}
         try:
             from src.execution.kis_client import get_kis_client

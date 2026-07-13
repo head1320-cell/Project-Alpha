@@ -206,8 +206,8 @@ def _real_kis_ohlcv(stock_code: str, days: int = 150):
     KIS_USE_MOCK=0 + 키 설정 시 실제 시세, 아니면 None 반환 → mock fallback.
     """
     try:
-        import os
-        if os.getenv("KIS_USE_MOCK", "1") == "1":
+        from src.data.mock_gate import mock_allowed
+        if mock_allowed():
             return None  # mock 모드 → fallback
         import pandas as pd
 

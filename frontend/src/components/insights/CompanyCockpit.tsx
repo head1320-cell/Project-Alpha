@@ -4,13 +4,16 @@
 //   코어는 props.company(실API 조립). Network/Risk/AI/Signal/Macro는 lazy.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { LayoutDashboard, Calculator, BarChart3, Boxes, Users, ShieldAlert, Sparkles } from "lucide-react";
-import type { CompanyData, SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo, MacroInfo } from "./types";
+import type { CompanyData, SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo } from "./types";
 import { won, eok, pct, toneColor, pctColor } from "./types";
 import { PriceChart, KpiBars, ValueBand, FactorBar, Gauge, ScoreRing, Spark, Radar, ScenarioCards, VerdictBadge } from "./parts";
 import ValuationTab from "./ValuationTab";
 import FinancialsDeepTab from "./FinancialsDeepTab";
 import RiskDeepTab from "./RiskDeepTab";
+import { loadSignal, regimeToMacroInfo } from "@/lib/companyData";
+import { macroApi } from "@/lib/macroApi";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -24,8 +27,6 @@ const TABS = [
 type TabId = typeof TABS[number]["id"];
 
 export interface LazyLoaders {
-  signal: () => Promise<SignalInfo | null>;
-  macro: () => Promise<MacroInfo | null>;
   network: () => Promise<NetworkInfo>;
   risk: () => Promise<RiskInfo>;
   narrative: () => Promise<NarrativeInfo>;
@@ -36,20 +37,25 @@ const dash = (n: number, f: (x: number) => string = (x) => String(x)) => (n && N
 export default function CompanyCockpit({ company, onPick, lazy }: { company: CompanyData; onPick?: (code: string) => void; lazy: LazyLoaders }) {
   const [tab, setTab] = useState<TabId>("overview");
   const c = company;
-  const [signal, setSignal] = useState<SignalInfo | null | undefined>(undefined);
-  const [macro, setMacro] = useState<MacroInfo | null | undefined>(undefined);
+  // signal: 종목코드별 캐시. macro: 매크로 탭(macro/page.tsx)과 동일한 queryKey(["macro","regime"])
+  // 로 캐시를 공유 — 두 탭을 오가도 /api/v1/macro/regime을 중복 호출하지 않는다.
+  const { data: signal } = useQuery({
+    queryKey: ["company", "signal", c.code],
+    queryFn: () => loadSignal(c.code, c.name),
+  });
+  const { data: regimeRaw } = useQuery({
+    queryKey: ["macro", "regime"],
+    queryFn: () => macroApi.regime().catch(() => null),
+  });
+  const macro = regimeToMacroInfo(regimeRaw);
   const [network, setNetwork] = useState<NetworkInfo | undefined>();
   const [risk, setRisk] = useState<RiskInfo | undefined>();
   const [narr, setNarr] = useState<NarrativeInfo | undefined>();
   const [narrLoading, setNarrLoading] = useState(false);
   const [finMode, setFinMode] = useState<"annual" | "quarter">("annual");
 
-  // Overview 진입 시 signal/macro 백그라운드 로드
-  useEffect(() => { let ok = true; setSignal(undefined); setMacro(undefined); setNetwork(undefined); setRisk(undefined); setNarr(undefined);
-    lazy.signal().then((s) => ok && setSignal(s)).catch(() => ok && setSignal(null));
-    lazy.macro().then((m) => ok && setMacro(m)).catch(() => ok && setMacro(null));
-    return () => { ok = false; };
-  }, [c.code, lazy]);
+  // 종목 변경 시 탭별 lazy 상태 리셋 (signal/macro는 useQuery가 종목코드/공유키로 자체 관리)
+  useEffect(() => { setNetwork(undefined); setRisk(undefined); setNarr(undefined); }, [c.code]);
   // 탭별 lazy
   useEffect(() => { if (tab === "peers" && network === undefined) lazy.network().then(setNetwork).catch(() => setNetwork({ groups: [], note: "불러오기 실패" })); }, [tab, network, lazy]);
   useEffect(() => { if (tab === "risk" && risk === undefined) lazy.risk().then(setRisk).catch(() => setRisk({ varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "불러오기 실패" })); }, [tab, risk, lazy]);

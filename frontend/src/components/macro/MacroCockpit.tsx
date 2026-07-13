@@ -6,6 +6,7 @@
 //   전부 실데이터(키 있으면) — 백엔드 mock 폴백 시 출처 배지로 정직 표기.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Activity, Target, Scale, Boxes, Sparkles,
   TrendingUp, TrendingDown, ArrowRightLeft, Play, GitCompare, Crosshair,
@@ -74,21 +75,22 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
   const [strips, setStrips] = useState<CycleStrips | null | undefined>(undefined);
   const [axisHist, setAxisHist] = useState<AxisHistory | null | undefined>(undefined);
   const [aStrips, setAStrips] = useState<AssetStrips | null | undefined>(undefined);
-  const [krus, setKrus] = useState<KrUsCompare | null | undefined>(undefined);
+  // krus(overview 기본탭)는 마운트 시 항상 발화하던 유일한 호출이라 useQuery로 캐시(다른
+  // 서브탭 7종은 이미 탭 클릭 시에만 발화하는 지연로딩이라 그대로 유지).
+  const { data: krusData } = useQuery({ queryKey: ["macro", "compare-krus"], queryFn: () => analysisApi.compareKrUs() });
+  const krus = krusData ?? undefined;
   useEffect(() => {
     if (tab === "indicators" && cbSent === undefined)
       analysisApi.cbSentiment().then(setCbSent).catch(() => setCbSent(null));
     if (tab === "correlations" && causal === undefined)
       analysisApi.causalGraph().then(setCausal).catch(() => setCausal(null));
-    if (tab === "overview" && krus === undefined)
-      analysisApi.compareKrUs().then(setKrus).catch(() => setKrus(null));
     if (tab === "regime" && strips === undefined) {
       analysisApi.cycleStrips("kr").then(setStrips).catch(() => setStrips(null));
       analysisApi.axisHistory("kr").then(setAxisHist).catch(() => setAxisHist(null));
     }
     if (tab === "valuation" && aStrips === undefined)
       analysisApi.assetStrips("kr").then(setAStrips).catch(() => setAStrips(null));
-  }, [tab, cbSent, causal, krus, strips, aStrips]);
+  }, [tab, cbSent, causal, strips, aStrips]);
   // 전략 상세 모달
   const [stratModal, setStratModal] = useState<{ sid: string; detail: StrategyDetail | null; loading: boolean } | null>(null);
 

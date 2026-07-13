@@ -17,17 +17,6 @@ export interface MacroCore {
   recommend: MacroRecommend | null;   // 기본 kr
 }
 
-export async function loadMacroCore(): Promise<MacroCore> {
-  const [regime, dashboard, valuation, strategies, recommend] = await Promise.all([
-    macroApi.regime().catch(() => null),
-    analysisApi.macroDashboard().catch(() => null),
-    analysisApi.macroValuation().catch(() => null),
-    analysisApi.macroStrategies("kr").catch(() => null),
-    analysisApi.macroRecommend("kr").catch(() => null),
-  ]);
-  return { regime, dashboard, valuation, strategies, recommend };
-}
-
 // ── 시장 토글 lazy (US⇄KR) ──
 export const loadStrategies = (m: Market): Promise<MacroStrategies | null> =>
   analysisApi.macroStrategies(m).catch(() => null);

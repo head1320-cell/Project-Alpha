@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { screenerApiAdvanced, screenerApi, analysisApi } from "@/lib/screenerApi";
+import { macroApi } from "@/lib/macroApi";
+import { loadCompanyCore } from "@/lib/companyData";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalShell — Variant "Institutional Terminal" 좌측 사이드바 셸
@@ -54,10 +58,38 @@ const MODULES = [
   },
 ];
 
+// 사이드바 hover → 탭 핵심 진입 데이터 prefetch (react-query 캐시에 미리 채워둠 — 이 코드베이스
+// 최초의 hover-prefetch 패턴). 탭 클릭 전에 이미 로드가 끝나 있으면 스피너 없이 즉시 렌더된다.
+// 각 탭의 useQuery와 정확히 같은 queryKey/queryFn을 써야 캐시가 재사용됨.
+function usePrefetchers() {
+  const qc = useQueryClient();
+  const prefetch: Record<string, () => void> = {
+    "/screener": () => {
+      qc.prefetchQuery({ queryKey: ["screener", "fields"], queryFn: () => screenerApiAdvanced.fields() });
+      qc.prefetchQuery({ queryKey: ["screener", "indicators"], queryFn: () => screenerApiAdvanced.indicators() });
+      qc.prefetchQuery({ queryKey: ["screener", "factor-field-map"], queryFn: () => screenerApiAdvanced.factorFieldMap() });
+      qc.prefetchQuery({ queryKey: ["screener", "universes"], queryFn: () => screenerApi.universes() });
+    },
+    "/macro": () => {
+      qc.prefetchQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "dashboard"], queryFn: () => analysisApi.macroDashboard().catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "valuation"], queryFn: () => analysisApi.macroValuation().catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "strategies", "kr"], queryFn: () => analysisApi.macroStrategies("kr").catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "recommend", "kr"], queryFn: () => analysisApi.macroRecommend("kr").catch(() => null) });
+    },
+    "/insights": () => {
+      // 페이지 기본 종목(005930)과 동일 — 다른 종목으로 들어오면 그 종목만 별도 요청됨(정상)
+      qc.prefetchQuery({ queryKey: ["company", "core", "005930"], queryFn: () => loadCompanyCore("005930") });
+    },
+  };
+  return (href: string) => prefetch[href]?.();
+}
+
 export function TerminalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // 터치/클릭 토글 — 호버가 없는 환경에서 사이드바를 고정으로 펼침
   const [pinned, setPinned] = useState(false);
+  const prefetchTab = usePrefetchers();
 
   // 루트(/)는 랜딩 페이지 — 터미널 셸 없이 풀블리드 렌더 (CTA가 /dashboard로 진입)
   if (pathname === "/") return <>{children}</>;
@@ -88,7 +120,8 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
             {MODULES.map((m) => {
               const active = pathname === m.href || pathname.startsWith(m.href + "/");
               return (
-                <Link key={m.href} href={m.href} title={m.label} onClick={() => setPinned(false)} className={`nav-item${active ? " active" : ""}`}>
+                <Link key={m.href} href={m.href} title={m.label} onClick={() => setPinned(false)}
+                  onMouseEnter={() => prefetchTab(m.href)} className={`nav-item${active ? " active" : ""}`}>
                   {m.icon}
                   <span className="nav-meta">
                     <span className="nav-number">{m.n}</span>

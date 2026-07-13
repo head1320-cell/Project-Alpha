@@ -17,6 +17,8 @@ import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.data.mock_gate import mock_allowed
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/trading", tags=["trading"])
 
@@ -92,7 +94,7 @@ def trading_status():
 @router.get("/mode")
 def trading_mode():
     """현재 KIS 연동 모드 안내."""
-    use_mock = os.getenv("KIS_USE_MOCK", "1") == "1"
+    use_mock = mock_allowed()
     is_paper = os.getenv("KIS_IS_PAPER", "1") == "1"
     has_key = bool(os.getenv("KIS_APP_KEY"))
     if use_mock or not has_key:

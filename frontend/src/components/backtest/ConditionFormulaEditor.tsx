@@ -292,8 +292,8 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         {/* 연산자 + 값 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13, flexWrap: "wrap" }}>
           <Segmented tone={tone} value={op} onChange={setOp} options={OPS.map((o) => ({ id: o.id, label: o.label }))} />
-          <input type="number" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값"
-            style={{ width: 70, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 11px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+          <input type="number" className="bs-numbox" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값"
+            style={{ width: 104, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
           {(op === "cross_above" || op === "cross_below") && (
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
               기준선을 {op === "cross_above" ? "상향" : "하향"} 돌파한 봉만 (골든크로스: 좌변=두 MA의 차이, 값=0)
@@ -302,8 +302,8 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           {op === "between" && (
             <>
               <span style={{ color: "var(--text-secondary)" }}>~</span>
-              <input type="number" value={rhs2} onChange={(e) => setRhs2(e.target.value)} placeholder="상한"
-                style={{ width: 70, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 11px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+              <input type="number" className="bs-numbox" value={rhs2} onChange={(e) => setRhs2(e.target.value)} placeholder="상한"
+                style={{ width: 104, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
             </>
           )}
         </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { TerminalShell } from "@/components/layout/TerminalShell";
+import Providers from "@/components/layout/Providers";
 
 export const metadata: Metadata = {
   title: "Project Alpha | Quant Platform",
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
-        <TerminalShell>{children}</TerminalShell>
+        <Providers>
+          <TerminalShell>{children}</TerminalShell>
+        </Providers>
       </body>
     </html>
   );

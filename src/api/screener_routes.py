@@ -9,6 +9,11 @@ POST /api/v1/screener/cache/clear    — 캐시 비우기
 
 from __future__ import annotations
 
+import hashlib
+import threading
+import time
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -19,9 +24,75 @@ logger = get_logger("api.screener")
 router = APIRouter(prefix="/api/v1/screener", tags=["screener"])
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 전체 응답 캐시(run-advanced/run-advanced-stream) — src.engine.screener._ValuationCache와
+# 동일한 TTL+LRU+lock 관례. 종목별 캐시는 이미 있지만 필터링·정렬·직렬화는 매 요청 재실행
+# 되던 부분을 커버(동일 요청 파라미터 반복 시 즉시 반환).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class _ResponseCache:
+    """요청 파라미터 해시 → 전체 응답 dict 캐시 (메모리, TTL + LRU)."""
+
+    def __init__(self, max_size: int = 200, ttl_seconds: int = 3600):
+        self.max_size = max_size
+        self.ttl = ttl_seconds
+        self._data: dict[str, tuple[float, Any]] = {}
+        self._lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> Any | None:
+        with self._lock:
+            entry = self._data.get(key)
+            if not entry:
+                self.misses += 1
+                return None
+            ts, value = entry
+            if time.time() - ts > self.ttl:
+                self._data.pop(key, None)
+                self.misses += 1
+                return None
+            self.hits += 1
+            return value
+
+    def set(self, key: str, value: Any):
+        with self._lock:
+            if len(self._data) >= self.max_size:
+                oldest_key = min(self._data, key=lambda k: self._data[k][0])
+                self._data.pop(oldest_key, None)
+            self._data[key] = (time.time(), value)
+
+    def stats(self) -> dict:
+        with self._lock:
+            total = self.hits + self.misses
+            return {
+                "size": len(self._data), "max_size": self.max_size,
+                "hits": self.hits, "misses": self.misses,
+                "hit_rate": self.hits / total if total > 0 else 0,
+                "ttl_seconds": self.ttl,
+            }
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+            self.hits = 0
+            self.misses = 0
+
+
+_RUN_ADVANCED_CACHE = _ResponseCache(max_size=200, ttl_seconds=3600)
+
+
+def _advanced_cache_key(req: AdvancedRunRequest) -> str:
+    """요청 필드 전체(필터·정렬·유니버스 등)를 결정적으로 해시 — 동일 요청이면 동일 키."""
+    payload = req.model_dump_json()
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _detect_data_source(items: list) -> dict:
     """결과 종목의 데이터 출처 판별 (실데이터/mock 표시용)."""
     import os
+
+    from src.data.mock_gate import mock_allowed
     fund_real = False
     try:
         from src.data.fundamentals_store import FundamentalsStore
@@ -33,7 +104,7 @@ def _detect_data_source(items: list) -> dict:
                 fund_real = (f.get("_source") == "dart_real")
     except Exception:
         pass
-    kis_real = (os.getenv("KIS_USE_MOCK", "1") == "0" and bool(os.getenv("KIS_APP_KEY")))
+    kis_real = (not mock_allowed() and bool(os.getenv("KIS_APP_KEY")))
     return {
         "fundamentals": "dart_real" if fund_real else "mock",
         "market_data":  "kis_real" if kis_real else "mock",
@@ -363,9 +434,12 @@ def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = 
 
 @router.get("/cache/stats")
 def screener_cache_stats():
-    """캐시 통계 (hit rate 등)."""
+    """캐시 통계 (hit rate 등) — 종목별 평가 캐시 + run-advanced 전체 응답 캐시."""
     try:
-        return get_screener().cache_stats()
+        return {
+            "valuation": get_screener().cache_stats(),
+            "run_advanced": _RUN_ADVANCED_CACHE.stats(),
+        }
     except Exception:
         logger.exception("스크리너 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -373,9 +447,10 @@ def screener_cache_stats():
 
 @router.post("/cache/clear")
 def screener_cache_clear():
-    """캐시 비우기 (DART 데이터 갱신 후 등)."""
+    """캐시 비우기 (DART 데이터 갱신 후 등) — 두 캐시 레이어 전부."""
     try:
         get_screener().cache_clear()
+        _RUN_ADVANCED_CACHE.clear()
         return {"status": "cleared"}
     except Exception:
         logger.exception("스크리너 처리 실패")
@@ -449,7 +524,18 @@ def screener_fields():
 
 
 def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
-    """run-advanced 본체 — /run-advanced 와 /run-advanced-stream 공용. progress_cb 로 진행 전달."""
+    """run-advanced 본체 — /run-advanced 와 /run-advanced-stream 공용. progress_cb 로 진행 전달.
+
+    동일 요청 파라미터(필터·정렬·유니버스 등 전부)가 반복되면 _RUN_ADVANCED_CACHE에서 즉시
+    반환 — 필터링/정렬/직렬화까지 포함한 전체 응답 캐시(종목별 _ValuationCache와는 별개 레이어).
+    캐시 히트 시 progress_cb는 발화하지 않음(스트리밍 클라이언트는 progress 이벤트 없이 바로
+    result를 받게 되는데, 프론트가 이미 그 경우를 정상 처리하도록 구현돼 있음).
+    """
+    cache_key = _advanced_cache_key(req)
+    cached = _RUN_ADVANCED_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     from src.engine.filter_ast import parse_group
     from src.engine.valuation.valuation_models import ValuationParams
 
@@ -484,7 +570,7 @@ def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
         from src.engine.analyzers import run_analyzers
         analyzer_results = run_analyzers(result.items, req.analyzers, req.analyzer_params)
 
-    return {
+    payload = {
         "universe":        result.universe,
         "total_evaluated": result.total_evaluated,
         "total_passed":    result.total_passed,
@@ -502,6 +588,8 @@ def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
         "liquidity_gate":  liq_stats,
         "data_source":     _detect_data_source(result.items),
     }
+    _RUN_ADVANCED_CACHE.set(cache_key, payload)
+    return payload
 
 
 @router.post("/run-advanced")
@@ -1345,9 +1433,11 @@ class ScreenToBacktestRequest(BaseModel):
     managed: bool = False
     supervised: bool = False
     groups: list[dict] | None = None
-    # 전체 유니버스 일별 평가 (Genport식): 조건식이 후보 풀 전체를 매 봉 평가하도록 풀 확대
-    # 상한 4000 = 코스피+코스닥 전 주권(~2,700) 커버 — 시그널 벡터화로 실용 시간 확보
-    full_universe_eval: bool = False
+    # 평가 종목 상한(Genport식 전체 유니버스 일별 평가): 조건식 유무와 무관하게 항상 적용됨
+    # — 스크리닝 후보 풀 크기를 결정하는 단일 컨트롤. 상한 4000 = 코스피+코스닥 전 주권(~2,700)
+    # 커버 — 시그널 벡터화로 실용 시간 확보. (이전엔 buy/sell_conditions가 있을 때만 적용되는
+    # `full_universe_eval` 플래그로 게이팅됐음 — 조건식 없는 기본 상태에서 이 상한이 무시되고
+    # eval_cap이 max_tickers(≤30)로 쪼그라드는 회귀가 있었음. 게이팅 제거로 근본 수정.)
     universe_eval_cap: int = Field(default=200, ge=1, le=4000)
     # #4: 펀더멘털 토큰(스냅샷)을 봉별 조건 평가에 포함. 기본 False (look-ahead 근사라 옵트인)
     allow_snapshot_fundamentals: bool = False
@@ -1418,15 +1508,14 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             _universe = _asof if _asof else "kospi200"
         else:
             _universe = req.universe
-        # 후보 풀 크기: 전체 유니버스 일별 평가 시 확대(조건식이 매 봉 풀 전체를 평가, max_positions가 보유 한도)
-        full_eval_on = bool(req.full_universe_eval and (req.buy_conditions or req.sell_conditions))
-        eval_cap = req.universe_eval_cap if full_eval_on else req.max_tickers
-        eval_cap = max(1, min(int(eval_cap), 4000))  # 벡터화로 전 주권(~2,700) 실용화
+        # 후보 풀 크기: "평가 종목 상한"(universe_eval_cap)이 스크리닝 후보 풀 크기를 조건식
+        # 유무와 무관하게 항상 결정 (조건식 존재 여부로 게이팅하지 않음 — 근본 수정, 위 필드
+        # 주석 참고).
+        eval_cap = max(1, min(int(req.universe_eval_cap), 4000))  # 벡터화로 전 주권(~2,700) 실용화
         # 동적 재편입(Phase 6) 후보풀 — eval_cap(초기 보유)보다 넓은 상위집합, 스크리너를
-        # 1회만 호출해 같은 결과에서 슬라이스(중복 호출 없음). universe_eval_cap과 분리된
-        # 별도 상한이라 조건 추가만으로 대규모 평가가 유발되지 않는다. full_universe_eval
-        # 모드는 이미 symbols 자체가 큰 후보군이므로 별도 확장 없이 그대로 재사용.
-        pool_cap = eval_cap if full_eval_on else max(eval_cap, min(int(req.replenishment_pool_cap), 4000))
+        # 1회만 호출해 같은 결과에서 슬라이스(중복 호출 없음). replenishment_pool_cap은
+        # eval_cap이 이미 크면 max()에 의해 항상 eval_cap이 이겨 "약간의 top-up"으로만 작용.
+        pool_cap = max(eval_cap, min(int(req.replenishment_pool_cap), 4000))
         result = screener.run(
             universe=_universe,
             filter_ast=ast,
@@ -1437,6 +1526,10 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             limit=pool_cap,
             liquidity_floor=req.liquidity_floor,
         )
+        # screened(≤eval_cap)는 조건식 신호 평가용 후보 풀 — "대상 종목 수"(max_tickers)와는
+        # 무관하게 넓게 유지한다(조건식이 넓은 풀에서 매치를 찾아야 하므로). 동시 보유 가능
+        # 종목 수는 별도로 max_positions(=req.max_positions, "대상 종목 수" 스테퍼 값)가
+        # 엔진 레벨에서 항상 강제 — tickers/symbols가 넓어도 실제 보유는 이 값을 넘지 않는다.
         screened = result.items[:eval_cap]
         tickers = [it.stock_code for it in screened if getattr(it, "stock_code", None)]
         pool_tickers = ([it.stock_code for it in result.items[:pool_cap] if getattr(it, "stock_code", None)]
