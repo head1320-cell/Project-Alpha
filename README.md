@@ -304,7 +304,7 @@ POST /api/v1/narrative/cache/clear
 
 ## 📂 디렉토리 구조
 
-자세한 트리는 [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) 참조.
+자세한 트리와 현재 규모는 [CLAUDE.md](./CLAUDE.md)의 "아키텍처" 섹션 참조.
 
 ```
 .
@@ -357,20 +357,12 @@ POST /api/v1/narrative/cache/clear
 | **Phase 4** | 한국 매크로 + 4-Quadrant + Yield Curve + Dynamic Linkage | ✅ |
 | **Phase 5** | Premium UX — Command Center + Command Palette + Regime-Aware Theme | ✅ |
 
-자세한 비교 분석은 [PLATFORM_EVOLUTION.md](./PLATFORM_EVOLUTION.md) 참조.
-
 ---
 
 ## 📚 문서
 
-| 문서 | 내용 |
-|---|---|
-| [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) | 전체 디렉토리 트리 + 모듈 설명 |
-| [INTEGRATION_NOTES.md](./INTEGRATION_NOTES.md) | Stage 11~13 + Valuation 통합 가이드 |
-| [STAGE11_INTEGRATION.md](./STAGE11_INTEGRATION.md) | Multi-Backtest 사용 가이드 |
-| [STAGE12_INTEGRATION.md](./STAGE12_INTEGRATION.md) | Realism Engine 사용 가이드 |
-| [STAGE13_INTEGRATION.md](./STAGE13_INTEGRATION.md) | Live Trading 가이드 + 안전 체크리스트 |
-| [PLATFORM_EVOLUTION.md](./PLATFORM_EVOLUTION.md) | 밸리AI/젠포트 비교 + 5-Phase 로드맵 |
+프로젝트 컨텍스트, 아키텍처, 실데이터 연동 가이드, 개발 규칙, 전체 개발 이력은
+[CLAUDE.md](./CLAUDE.md) 하나로 통합되어 있습니다.
 
 ---
 

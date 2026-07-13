@@ -1,7 +1,43 @@
 # Project Alpha — 한국 주식 퀀트 플랫폼
 
 > 이 파일은 Claude Code가 프로젝트 맥락을 파악하기 위해 자동으로 읽습니다.
-> 새 세션을 시작할 때 이 문서 + `PLATFORM_EVOLUTION.md`를 먼저 읽으면 전체 맥락을 이어받습니다.
+> 새 세션을 시작할 때 이 문서 하나만 읽으면 전체 맥락(아키텍처·개발 이력·안전규칙)을 이어받습니다.
+
+---
+
+## 목차
+
+### 빠른 참조 (항상 먼저 볼 것)
+(렌더러에 따라 앵커 링크가 정확히 안 열릴 수 있음 — 안 열리면 제목으로 텍스트 검색)
+- [환경 (Windows 기준)](#환경-windows-기준)
+- [아키텍처](#아키텍처)
+- [스크리너 V3 핵심 (★절대 깨뜨리지 말 것★)](#스크리너-v3-핵심-절대-깨뜨리지-말-것)
+- [실데이터 연동 (DART + KIS + KRX)](#실데이터-연동-dart-kis-krx)
+- [완성된 기능 (4대 우선순위 전부 완료)](#완성된-기능-4대-우선순위-전부-완료)
+- [개발 규칙 (★작업 시 반드시 준수★)](#개발-규칙-작업-시-반드시-준수)
+- [빌드 & 실행 (Windows)](#빌드--실행-windows)
+- [알려진 제약 / 주의](#알려진-제약--주의)
+- [디자인 시스템 — Variant "Institutional Terminal" (적용됨)](#디자인-시스템--variant-institutional-terminal-적용됨)
+
+### 개발 이력 (연대기순 — 오래된 것부터, 각 섹션 제목 그대로)
+1. P0 안정화(배포 준비도) · 실데이터 검증 전략 · 실데이터 전용 게이트(mock_gate.py)
+2. 백엔드 기능 UI 연결 · 통합 지표 시스템 · 스크리너↔백테스터 펀더멘털 통합
+3. 펀더멘털 팩터 35→64개 · 가격·수급 팩터 추가 · UI/UX 개선 1차
+4. 스크리너→백테스터 전략 전달 · 프로덕션 준비 a+b+d · main_api 에러처리(완성+마무리) · 전략 비교 UI
+5. 젠포트화 Phase 0~5(주문모델·체결가·매도/매수 정밀화·팩터가중·종목선택·전략관리)
+6. 실데이터 연결 준비 · mock 점수 다양화 · 관심그룹(Watchlists) · UI/UX 다듬기
+7. GCP 배포 에러 수정(1차·2차) · 죽은 코드 정리
+8. **GCP 실배포 + 실데이터 적재 세션**(런타임 프록시·DB 적재·KIS master 유니버스·업종분류·
+   Company Analysis Cockpit·대시보드 재구축)
+9. 매크로 콕핏 최초 구축(6탭) · 상관관계·타이밍·국면궤적(07/08탭) · 리스크·최적화 전략 9종(13→22) ·
+   전략 상세 모달 · 배당 실데이터 · 내부자·개인 수급 실데이터 · 전략→백테스터 프리필 · 성과지표 확장
+10. 백테스터 조건식 수식 빌더 · 스크리너 유니버스 실수치화 · 백테스터 4수정+매크로 국면 재구축 ·
+    적재 정체 해소 · 매크로 추천 신뢰도 가중 · DART 백필 정체 수정 · financials_history DB 연결
+11. 펀더멘털 적재 정체 근본원인(부분연도/자본결측/CAGR 복소수) · 백테스터 전종목 사용+금융업 편입
+12. 기업분석 탭 심화(FAS/DD) · 기업분석 라운드2(CIO 실사) · 매크로 탭 대개편(CIO 리팩토링+혁신 3과제)
+13. 젠포트화 Phase 6(동적 재편입) · 나이틀리 배치 프리컴퓨트(설계 가이드, 미구현)
+14. 백테스터 버그수정+캐싱+Mock 거버넌스+KIS 클라이언트 3중 통합
+15. **CLAUDE.md 단일화**(이 세션 — 파편화된 .md 문서 33개 조사·병합·삭제) ← 최신
 
 ---
 
@@ -24,7 +60,7 @@ FastAPI(백엔드) + Next.js 14(프론트엔드) + PostgreSQL + Docker 기반의
 
 ```
 ficc-platform/
-├─ main_api.py              # FastAPI 진입점 (106 endpoints, 포트 8000)
+├─ main_api.py              # FastAPI 진입점 (223 endpoints, 포트 8000)
 ├─ requirements.txt         # Python 의존성
 ├─ verify_connection.py     # DART/KIS 실데이터 연동 검증 스크립트
 ├─ docker-compose.yml       # db(5432) + backend(8000) + frontend(3000)
@@ -54,13 +90,26 @@ ficc-platform/
 └─ frontend/
    └─ src/
       ├─ components/screener/
-      │  ├─ FilterBuilder.tsx    # 3단 빌더 (메인 UI)
+      │  ├─ TerminalScreener.tsx # 3-pane 메인 UI (Institutional Terminal 디자인, FilterBuilder.tsx 후속)
       │  ├─ AnalyzerPanel.tsx    # M7/M8 분석
       │  ├─ BacktestPanel.tsx    # 백테스트 패널
       │  ├─ LiveTradingPanel.tsx # ★자동매매 패널
       │  └─ DataQualityPanel.tsx # ★데이터 품질 패널
       └─ lib/screenerApi.ts      # API 클라이언트 (모든 fetch)
 ```
+
+### 현재 규모 (실측)
+| 영역 | 파일 수 | 비고 |
+|---|---|---|
+| `src/**/*.py` | 178 | 백엔드 전체 |
+| `tests/*.py` | 84 | pytest (평탄 구조, 하위폴더 없음) |
+| `src/engine/` | 45 | 스크리너·백테스트·매크로·리스크·가치평가 핵심 엔진 |
+| `src/data/` | 23 | DART·KIS·KRX 데이터 계층 |
+| `src/models/` | 33 | SQLAlchemy 모델 + 파생상품/리스크 계량 모델 |
+| `src/api/` | 13 | FastAPI 라우터(`main_api.py`가 11개 include_router) |
+| `src/execution/` | 8 | 실거래 클라이언트·킬스위치·리스크게이트웨이 |
+| `src/kis_strategies/` | 8 | 조건식 DSL·전략 프리셋 |
+| `frontend/src/` | app/·components/·lib/·store/·types/ | app 하위 10모듈(admin/backtest/builder/dashboard/derivatives/insights/macro/risk-tools/screener 등), components 하위 15개 도메인 디렉터리 |
 
 ---
 
@@ -81,18 +130,62 @@ ficc-platform/
 
 ---
 
-## 실데이터 연동 (DART + KIS)
+## 실데이터 연동 (DART + KIS + KRX)
 
-`.env`에 키를 넣으면 **자동으로 실데이터**, 없으면 mock fallback (코드 수정 불필요).
+`.env`에 키를 넣으면 **자동으로 실데이터**, 없으면 mock fallback (코드 수정 불필요). 역할 분담:
+**KRX = 과거(장기 백테스트 DB 적재) · DART = 재무 · KIS = 현재(실시간 시세·주문)**.
 
-| 환경변수 | 의미 |
-|---|---|
-| `DART_API_KEY` | DART 재무제표 (있으면 35개 펀더멘털 팩터 실데이터화) |
-| `KIS_USE_MOCK` | `1`=mock(기본), `0`=실제 KIS 호출 |
-| `KIS_IS_PAPER` | `1`=모의투자, `0`=실계좌(⚠ 실제 자금) |
-| `KIS_APP_KEY` / `KIS_APP_SECRET` / `KIS_ACCOUNT_NO` | KIS 인증 |
+| 데이터 | 소스 | 환경변수 | 채워지는 것 |
+|---|---|---|---|
+| 재무제표 | DART | `DART_API_KEY` | 펀더멘털 팩터(64개) 실데이터화 + PIT 스냅샷 |
+| 시세·실거래 | KIS | `KIS_USE_MOCK`(`1`=mock 기본/`0`=실호출) · `KIS_IS_PAPER`(`1`=모의투자/`0`=실계좌⚠) · `KIS_APP_KEY`/`KIS_APP_SECRET`/`KIS_ACCOUNT_NO`/`KIS_ACCOUNT_PRDT` | 실시간 시세·시총·PER·PBR·기술지표·주문 |
+| 역사 일봉(장기 백테스트) | KRX OpenAPI | `KRX_API_KEY` | 수년~20년 전종목 일봉 + 지수 + 시점 유니버스(생존편향 보정) |
 
-검증: `python verify_connection.py` (자세한 건 `REAL_DATA_SETUP.md`)
+### 키 발급
+- **DART**(무료): https://opendart.fss.or.kr/ 가입 → 인증키 즉시 발급(40자리).
+- **KIS**: 모의투자용/실전용 앱키가 **다름**(둘 다 있으면 OK). 데이터 조회만 할 거면 실전 키 +
+  주문 안 함이 일봉 데이터가 더 안정적. **키 종류와 `KIS_IS_PAPER`를 맞출 것** — 안 맞으면
+  "토큰 발급 실패"/401 에러.
+- **KRX**: https://openapi.krx.co.kr 에서 발급 (날짜 기준 전종목 API).
+
+### 검증
+```powershell
+python verify_connection.py                 # 단계별 연동 검증(DART/KIS/KRX 순)
+python verify_connection.py --stock 000660   # 다른 종목으로 검증
+```
+성공 시 각 단계(DART 재무제표·KIS 시세·통합 실데이터 팩터)가 실제 수치와 함께 출력됨.
+
+### KRX 장기 백테스트 DB 적재 (최초 1회)
+KRX OpenAPI는 날짜 기준 전종목 API라 백테스트용 역사 DB를 채우는 공급원으로 씀 — 백테스트는
+적재된 DB에서 읽는다(젠포트식).
+```powershell
+python verify_connection.py                       REM 【5】 KRX 도달성·키·필드 정합 확인
+python -m src.data.krx_ingest --start 2015-01-01  REM 10년 백필 ≈ 5,000콜 ≈ 50분
+```
+- **재개 가능**: 중단돼도 재실행하면 적재된 날짜는 건너뜀(`--max-days N`으로 쿼터 분할 가능).
+- **지수 포함**: KOSPI/KOSDAQ 지수가 함께 적재 → 벤치마크·마켓타이밍 실데이터화.
+- **수정종가**: 완료 시 등락률 체인으로 `adj_close` 자동 재구성(분할·증자 점프 제거).
+- **생존편향 보정**: 백테스터 `universe="all_asof"` → 시작일 당시 거래 종목(이후 상폐 포함)으로 평가.
+
+### mock → 실데이터 전환 요약
+| 설정 | 펀더멘털 | 시세/지표 |
+|---|---|---|
+| 키 없음 | mock | mock |
+| DART만 | 실데이터 | mock |
+| KIS만(`KIS_USE_MOCK=0`) | mock | 실데이터 |
+| 둘 다 | 실데이터 | 실데이터 |
+
+### 트러블슈팅
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `corp_code를 찾을 수 없음` | corpCode.xml 미다운로드 | `DART_API_KEY` 확인 → 최초 실행 시 자동 다운로드 |
+| KIS `토큰 발급 실패` | 키 종류 ≠ `KIS_IS_PAPER` | 모의/실전 키와 `KIS_IS_PAPER` 일치 확인 |
+| KIS `1분당 1회 초과` | 토큰 재발급 과다 | 1분 대기(토큰은 24h 캐시됨) |
+| `펀더멘털 = mock` | DART 키 없음/조회 실패 | `verify_connection.py`로 DART 단계 점검 |
+
+### 보안
+`.env`는 **절대 git 커밋 금지**(`.env.example`만 커밋). API 키를 채팅·이슈·로그에 노출 금지.
+실계좌(`KIS_IS_PAPER=0`)는 주문 코드가 실제 자금을 거래 — 데이터 조회만 할 거면 주문 함수 호출 금지.
 
 ---
 
@@ -103,7 +196,7 @@ ficc-platform/
 3. **실거래 자동매매** — `trading_engine.py`, 6중 안전장치(Kill Switch·손실한도·주문상한·일일한도·포지션제한·Dry-run 기본)
 4. **데이터 인프라 QA** — `stock_master.py`(종목명 100% 해소) + 데이터 품질 검증
 
-전체 진행 이력은 **`PLATFORM_EVOLUTION.md`**에 V1~V3 + 4대 우선순위가 기록됨.
+전체 진행 이력은 이 문서 아래 연대기적 세션 로그(V1~V3 + 4대 우선순위부터)에 기록됨.
 
 ---
 
@@ -216,7 +309,7 @@ python verify_connection.py
 
 ## 첫 세션 추천 시작 멘트
 
-> "CLAUDE.md와 PLATFORM_EVOLUTION.md를 읽고 현재 상태를 파악해줘.
+> "CLAUDE.md를 읽고 현재 상태를 파악해줘.
 > 그다음 `cd frontend && npx tsc --noEmit`로 빌드가 정상인지 확인해줘."
 
 ---
@@ -350,6 +443,28 @@ python verify_connection.py                 # 실키로 (실제 도달, 사용�
 - test_api.py: 157 + 10 skip(torch)
 - test_quant_models.py: 71
 - test_realdata_parsing.py: 45 (신규)
+
+---
+
+## 🔒 실데이터 전용 게이트 (mock_gate.py) + 시가총액 "—" 해결
+
+운영(실키 설정, `KIS_USE_MOCK=0`)에서 실 호출이 실패/빈값이면 조용히 mock으로 대체되던 지점이
+다수 있었음(`market_data.py`/`fundamentals_store.py`/`price_factors_store.py`/`ohlcv_loader.py`/
+`kis_client.py`/`kis_flows.py`) — 사용자가 실키를 설정해도 화면에 가짜 숫자가 뜰 수 있는 구조였음.
+
+### 해결
+- `src/data/mock_gate.py::mock_allowed()` 신설 — `KIS_USE_MOCK`이 정확히 `"1"`일 때만 True(합성
+  데이터 허용). 위 산재된 지점을 이 게이트로 통일: 운영선 실패 시 mock 대신 정직한 `None`/빈값,
+  개발·테스트(mock 모드)선 기존처럼 100% 합성 동작(회귀 불변).
+- 시가총액 "—" 문제(KOSPI200 편입 종목도 시총 결측 표시)는 KIS master 파일이 이미 전종목 시총을
+  무료로 제공 중임을 활용해 해결 — 실시간 API 호출 없이 `screener.py::_to_item`에서
+  `load_master_flags()`로 채움, `_enrich_kis_quotes`가 더 신선한 실시세로 덮어쓸 수 있으면 우선.
+- "실데이터 전용"의 대가: 실데이터에 빈 곳이 있으면 합성으로 가리지 않고 더 많은 "—"가 정직하게
+  보임 — 의도된 트레이드오프.
+
+### 검증
+`tests/test_mock_gate.py`+`tests/test_realdata_only.py` 신설, 회귀 전량 불변(mock 모드 동작 100%
+동일). 이후 이 게이트가 스크리너/백테스터/자동매매 전반의 mock 판정 단일 기준으로 자리잡음.
 
 ---
 
@@ -790,7 +905,9 @@ KIS OHLCV에서 파생되는 가격·수급 팩터 28개 추가. 재무와 무�
 - 데이터 출처 배너 (TerminalBacktester): 결과 상단에 prov 배너 — "실데이터/Mock 백테스트 · 시세 KIS/mock · 재무 DART/mock", fully_real일 때 초록. mock일 때 "결과는 합성 데이터 기준" 주석. CSS tbt-prov-*
   - data_source는 _detect_data_source가 이미 반환 중이었음(market_data/fundamentals/fully_real), 프론트 표시만 추가
 - 벤치마크 현실화 (ohlcv_loader._mock_ohlcv_df): 지수 티커(KOSPI/^KS11 등) 인식 → 시장다운 곡선(base 2500, drift 0.0001~0.0004, vol 0.008 = 개별주 절반). 벤치마크 KOSPI 총수익 +94.8%→+41.76% 현실화
-- REAL_DATA_SETUP.md: GCP 배포 절차 + 백테스터 기능별 실데이터 영향표 + "실데이터서 비로소 의미있는 것"(팩터가중/벤치마크/시초가체결) + 코스피 지수 소스 안내
+- 실데이터 전환 시 "비로소 의미 있어지는" 백테스터 기능 정리: 팩터가중(mock은 composite_score
+  균일이라 동일가중 폴백, 실데이터는 종목별 점수 차등 → 비중 실제 차등), 벤치마크 대비(실 코스피
+  대비 α·β), 당일시초가 체결(mock은 시가≈종가라 체결가 선택 영향 미미, 실데이터는 실제 영향)
 
 ### ② mock 점수 다양화
 - 원인: gap_score가 100 포화(모든 종목 저평가) → composite 79.21로 붕괴. roe_pct None(ffl_mock 경로)
@@ -995,6 +1112,190 @@ GCP에 docker-compose로 배포됨. **KIS/DART 실데이터가 흐르고**(verif
 
 ---
 
+## 🌌 매크로 콕핏 최초 구축 — 6개 탭 (Overview·Indicators·Regime·Valuation·Strategies·Recommend)
+
+`/macro` 탭이 4분면 레짐 매트릭스 + 금리·환율 스탯 몇 개뿐이던 것을, 5개 실데이터 API
+(BOK/ECOS·FRED·KRX·DART·KIS)를 최대 활용하는 6탭 콕핏으로 전면 개편. 밸리AI(국면·하위요인·
+사이클·밸류 히트맵)·MacroMicro(지표 해석) 참고, jasan-calc식 택티컬 전략 현재비중 개념 채택.
+
+### 구조
+- 상단 고정 레짐 배너(국면·사이클·Stress·추천 헤드라인) + 좌측 6서브탭:
+  01 Overview(핵심 게이지+추천카드) · 02 Indicators(6테마 지표+z-score 히트맵) ·
+  03 Regime(4분면+사이클시계+수익률곡선+Stress) · 04 Valuation(자산군+한국 시장/섹터 밸류 히트맵) ·
+  05 Strategies(13전략 현재비중, US⇄KR 토글) · 06 Recommend(규칙+백테스트+AI 3종 종합).
+- `src/engine/tactical_allocations.py`(13개 모멘텀/타이밍 전략) 신규 —
+  전통/종합/가속 듀얼모멘텀·영구포트·LAA·RAA·GTAA·PAA·VAA·FAA·AAA·DAA·채권동적.
+- `src/engine/macro_recommender.py`(국면×아키타입 적합도 + 백테스트 + AI 서술 3종 추천).
+- `src/data/etf_prices.py`(US ETF 24종 + KR 매핑, US_TO_KR 토글).
+- `GET /macro/{dashboard,valuation,strategies,recommend}` 엔드포인트.
+- 프론트: `MacroCockpit.tsx`(배너+6탭) + `components/macro/cockpitParts.tsx`(RegimeScatter·CycleClock·
+  ArcGauge·YieldCurveChart·ZHeatmap·ValuationBars·HoldingsDonut 등) + `lib/macroData.ts`(병렬 로더).
+- 매크로→백테스터 이식: 추천 배분을 asset_alloc 바스켓으로 프리필(`macroHandoff.ts`).
+
+### 검증
+`KIS_USE_MOCK=1 pytest` 544 passed 불변, tsc 0, next build 16/16(/macro 20.8kB).
+
+### 정직한 한계
+샌드박스는 키/네트워크 없어 실 매크로 값·US ETF는 GCP에서 실측 — 여기선 로직·게이트·빌드·라벨
+검증. 컨센서스/미래실적은 유료라 제외.
+
+---
+
+## 📊 매크로 콕핏 — 상관관계 추이·마켓타이밍·국면 궤적 (07/08 탭)
+
+콕핏이 "현재 국면 → 추천"까지는 하지만 자산배분의 두 축(마켓타이밍, 상관관계)이 비어 있던 것을,
+새 외부 데이터 없이 기존 5-API 데이터(`daily_closes`+`MacroCollector`)만으로 채움.
+
+### 구현
+- **07 Correlations**(`/macro/correlations`): 13자산(SPY/QQQ/IWM/EFA/EEM/TLT/IEF/LQD/HYG/GLD/
+  PDBC/VNQ/TIP) 13×13 상관행렬, 롤링 60일 상관 5쌍(SPY-TLT 주식-채권 헤지축 등), 평균 페어상관
+  (분산 국면 판정), 현재 주식-채권 상관 헤지/동조화 판정.
+- **08 Timing**(`/macro/timing`): risk-on/off 종합점수(0~100, breadth·모멘텀폭·수익률곡선·
+  신용스프레드·VIX 5개 가중 서브지표), 월별 히스토리, 13자산 추세표(200일선·12M모멘텀·52주고점·RSI).
+- **국면 궤적**(`/macro/regime-trajectory`): 최근 18개월 국면 경로(테마-z 프록시, 결합도 낮춘 투명한
+  근사) + 분면 전환 타임라인 — Regime 탭이 "현재 점"만 보여주던 것에 경로 추가.
+- `src/engine/macro_analytics.py` 신규. 장기 데이터 준비도 개선도 함께: `etf_prices` 조회 윈도우
+  600일 → `ETF_HISTORY_DAYS`(기본 1825일, ~5년)로 확장 + ETF 유니버스 prewarm 데몬 추가 →
+  DB가 쌓일수록 롤링 상관·타이밍 추이가 자동으로 길어짐.
+
+### 검증
+`pytest` 566 passed(555+11), tsc 0, next build 16/16(/macro 24kB). mock 상관/타이밍 절대수치는
+합성(구조·부호·로직만 검증) — 실값은 GCP 실시세에서.
+
+---
+
+## 📈 리스크·최적화 기반 자산배분 전략 9종 추가 (13 → 22)
+
+기존 13전략이 전부 모멘텀·추세 타이밍 로테이션이라, 자산배분의 나머지 절반인 **리스크 기반
+(공분산 구동)·최적화 기반·추세추종**이 통째로 비어 있었음.
+
+### 추가 9종 (`src/engine/risk_allocations.py` 신규)
+동일가중(벤치마크) · 리스크 패리티(ERC, Bridgewater식) · **HRP**(López de Prado 2016, 계층적
+클러스터링, 행렬역산 없음) · 최소분산(Ledoit-Wolf 수축 공분산) · 최대분산(TOBAM) · 최대샤프(탄젠시) ·
+**블랙-리터만**(시장균형 prior + `regime_analyzer.asset_tilts`를 뷰로 주입 — 국면 분석을 자산배분에
+직결하는 콕핏 차별화 포인트) · 매니지드 퓨처스(TSMOM, long-flat) · 하프켈리(Σ⁻¹μ×0.5, 롱온리 클립).
+전부 long-only·합100%, `scipy`/`sklearn` 미설치 시 역변동성 폴백 가드.
+
+### 배선
+`tactical_allocations.py`에 `family` 필드 추가(모멘텀/리스크/최적화/추세/사이징/벤치마크) +
+`ALL_STRATEGIES = STRATEGIES + RISK_STRATEGIES`(22개). `macro_recommender.py`의 국면×아키타입
+매핑에 9종 편입 → 추천 랭킹 자동 22종. 프론트 StrategyBoard가 family별 그룹 섹션으로 표시.
+
+### 검증
+`pytest` 555 passed, tsc 0, next build. 회귀 불변(모멘텀 13종 산출 동일).
+
+### 정직한 한계
+mock 공분산은 샌드박스 합성 가격 기반이라 분산효과가 비현실적(로직·합100·폴백·결정론만 검증,
+실 분산효과는 GCP 실시세). max_sharpe/kelly/BL은 기대수익 추정오차에 민감 — Ledoit-Wolf 수축·
+하프켈리·롱온리 제약으로 완화하되 만능은 아님(UI에 명시).
+
+---
+
+## 🔎 전략 상세 모달 — 22전략 큐레이션 설명 + 학술 레퍼런스 + 실제 동적 백테스트 + AI
+
+05 Strategies 탭 카드가 이름·시그널·한줄설명뿐이라, 카드 클릭 시 전략을 깊이 이해할 수 있는
+상세 모달 추가.
+
+### 구현
+- `src/engine/strategy_profiles.py` 신규 — 22전략 전부의 큐레이션 카탈로그(개념·작동방식 단계·
+  경제적 근거·유리/불리 국면·파라미터·학술 레퍼런스). 레퍼런스는 Antonacci·Faber·Keller & Keuning·
+  López de Prado·Black & Litterman·Kelly 등 실제 논문/저서 출처(정확성 확인됨) — 구조화 데이터로
+  코드에 보존.
+- **과거 성과 곡선**: 현재 비중 고정 buy&hold가 아니라, 매월 그 시점까지의 데이터만 보고 전략
+  비중을 실제로 재계산하는 **동적 백테스트**(모멘텀 로테이션·타이밍 전환을 재현). 월 리밸런스,
+  수수료/슬리피지 미반영, 월말 종가 기준 — 정밀 비용/체결은 백테스터 탭 이식으로.
+- 국면 적합도 4분면 막대, 현재 보유 도넛, AI 심층분석(온디맨드, `ANTHROPIC_API_KEY` 있을 때만).
+- `GET /macro/strategy/{sid}`(모달 오픈 시) + `POST /macro/strategy/{sid}/ai`(버튼 클릭 시만).
+
+### 검증
+`pytest` 576 passed(566+10), tsc 0, next build 16/16(/macro 25.5kB).
+
+---
+
+## 💰 배당 팩터 실데이터 연결 (DART `alotMatter`)
+
+배당 관련 수치 두 곳이 실데이터가 아니었음: ① `dart_client`의 `FinancialStatement.dps`가 항상
+`None`(배당공시를 아예 호출 안 함) ② `fundamentals_store`가 `dividend = net_income * 0.25`로
+**날조 근사**(DART 키가 있어도 실배당이 아니라 순이익의 25%를 씀 — 실데이터 전용 원칙 위반).
+
+### 해결
+`dart_client.py`에 `get_dividend_info(corp_code, year)`(+ 순수 파서 `_parse_dividend_rows`) 신규 —
+DART `alotMatter.json`에서 주당 현금배당금·현금배당성향·현금배당수익률 파싱. `get_financial_statement_full`
+배선(dps 채움) + `fundamentals_store._real_raw_financials`의 날조 0.25 계수를 실제 `payout_pct` 기반
+계산으로 교체(공시상 배당 항목이 없으면 정직하게 0 — "무배당"과 "미상"을 구분).
+
+### 검증
+`tests/test_dividend_parsing.py` 신규(픽스처 기반, 키 없이 파싱/배선 검증). mock 모드는 기존 합성
+유지(회귀 불변).
+
+---
+
+## 👥 내부자·개인 수급 팩터 실데이터 연결
+
+behavioral 수급 4개 필드(`foreign_net_5d`/`institution_net_5d`/`insider_net_20d`/`retail_net_5d`)와
+이를 쓰는 시그널 4종(내부자매수+개인매도 등)이 mock 전용이라 운영(`mock_gate` 적용 후)에선 전부
+`None`으로 평가 불가였음. 확인 결과 외국인·기관·개인은 이미 적재 중인 `investor_flows` 테이블에
+데이터가 있었고(배선만 안 됨), 진짜 없는 건 내부자(insider)뿐 — DART 지분공시 필요.
+
+### 구현 (독립 3단위)
+- `dart_client.get_insider_disclosures(corp_code)` 신규 — DART `elestock.json`(임원·주요주주 소유
+  변동 공시) 파싱.
+- `src/data/insider_flows.py` 신규 — `insider_net(stock_code, days=20)`: 최근 N일 공시 순취득
+  주식수 합산 → 억원 환산(최근가 없으면 정직하게 `None`, 단위 혼용 금지). `mock_gate` 게이트.
+- `market_data.py`에 `_real_supply()` 추가 — 외국인/기관/개인은 `kis_flows`의 금액 필드(`*_amt`)
+  최근 N일 합, 내부자는 위 모듈. 부수로 `price_factors_store`의 기존 qty/amt 단위 불일치도 함께
+  수정(두 스토어가 하나의 정의 공유). `price_factors_store`에 `insider_net_20d`/`retail_net_20d`
+  필드 신규 추가 — 스크리너 컬럼·필터로도 노출.
+
+### 검증
+`tests/test_insider_parsing.py` 신규 + `test_realdata_only.py` 확장(픽스처/mock DB 기반, 키 없이
+파싱·배선·게이트 검증). 실 수급 데이터는 사용자 GCP 실키 환경에서 채워짐.
+
+---
+
+## 🔀 전략 → 백테스터 원클릭 프리필 (전략 유형별 하이브리드 표현)
+
+"백테스트" 버튼이 `asset_alloc`(정적 바스켓 buy&hold)만 셋업해, 모멘텀/타이밍/최적화 같은 동적
+전략엔 부정확했던 문제.
+
+### 하이브리드 표현 (`src/engine/strategy_backtest_map.py` 신규)
+전략 유형에 따라 3가지로 백테스터에 매핑: **모멘텀 12종**은 편집 가능한 조건식(`factor_expr`
+산술식 + 정렬 + 월 리밸런스 — 사용자가 보고 수정 후 RUN) · **정적 2종**(영구포트·동일가중)은
+`asset_alloc` 바스켓 · **최적화 8종**(리스크패리티·HRP·최소분산 등 + LAA)은 조건식으로 표현 불가해
+`screen_to_backtest`에 `strategy_name="tactical:<sid>"` 라우팅을 신설, 실제 동적 배분 엔진을
+그대로 실행(조건 편집은 불가, UI에 명시). 유니버스는 US 티커를 국내 ETF 코드로 매핑(US_TO_KR)해
+GCP 실데이터로 백테스트 가능.
+
+### 검증
+`pytest` 586 passed(577+9), tsc 0, next build 16/16. E2E: `tactical:hrp` 라우팅 정상, 모멘텀
+조건식 파싱 통과, 3모드(조건식/자산배분/엔진) 셋업 확인.
+
+---
+
+## 📐 백테스트 성과지표 대폭 확장 + 거래로그/데이터소스 정직화
+
+성과지표가 14종뿐이고 다수가 공백("—")으로 보였으며, 매크로(PAA 등) 백테스트에 `MOCK_DATA`
+배지가 실제 사용 데이터와 무관하게 표시되던 문제(키 유무만 보고 판정 — 실제 사용한 ETF
+시계열이 mock 폴백이었는지는 무관하게 `fully_real` 계산). QuantStats/empyrical 참고해 개선.
+
+### 구현
+- `src/engine/quant_metrics.py` 신규 — `compute_metrics(returns, equity, periods_per_year, ...)`
+  순수함수. 위험(변동성·VaR·CVaR·Ulcer index·최장 수중구간) · 위험조정(Omega·회복계수·
+  gain-to-pain·tail ratio, 기존 Sharpe/Sortino/Calmar 유지) · 분포(왜도·첨도) · 거래
+  (손익비·기대값·Kelly%) · 벤치마크(정보비율) 지표 산출. daily(252)/월간(12) 양쪽 경로 공용.
+- 조건식 백테스트(`kis_backtest_engine`)·매크로 엔진(`strategy_backtest_map`) 양쪽에 병합
+  배선(기존 키 유지 + 신규 추가, 하위호환).
+- 거래로그를 매수/매도 개별 leg에서 **라운드트립**(진입일·청산일·진입가·청산가·수익률) 형태로
+  재구성 — 프론트가 기대하던 필드와 백엔드 응답 불일치가 전부 "—"로 보이던 원인 해소.
+- 매크로 엔진의 `data_source.fully_real` 판정을 "키 유무"에서 "실제 사용한 ETF 시계열이
+  mock 폴백이었는지" 기준으로 교정.
+
+### 검증
+`pytest` 641 passed 기준(신규 지표 테스트 포함), ruff·tsc·build 통과. 기존 stats 키/값 회귀 불변
+(하위호환, 신규 키만 추가).
+
+---
+
 ## 🧮 백테스터 조건식 — 수식 빌더 (젠포트식 다항 팩터 조합)
 
 [배경] 백테스터 매수/매도 조건에서 팩터가 1개만 들어가고 연산자를 못 넣는다는 피드백.
@@ -1023,8 +1324,7 @@ GCP에 docker-compose로 배포됨. **KIS/DART 실데이터가 흐르고**(verif
 ## 🌐 스크리너 유니버스 실수치화 + 숫자 정직화 + 100행 페이지네이션
 
 [배경] 사용자: 유니버스가 KRX 실제 상장 수(KOSPI 946/KOSDAQ 1,822/전체 2,875)보다 작음(전체 833 등),
-"검색된 기업"≠"평가 완료" 격차, 가상 스크롤 혼란 → 진단 후 4갈래로 해결. 스펙/플랜:
-docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-02-….md
+"검색된 기업"≠"평가 완료" 격차, 가상 스크롤 혼란 → 진단 후 4갈래로 해결.
 
 ### 진단 (핵심 — 재발 시 참조)
 - **유니버스 크기 = 적재 진행률**: 대형 유니버스(>250)는 `_resolve_universe`가 ingested_codes()와 교집합
@@ -1067,7 +1367,6 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
 
 [배경] ① 전종목 백테스트가 "200/200"으로 잘림 ② +366%인데 승률/PF/거래 0 ③ Constituents가
 종목명 칩뿐 ④ 매크로 국면이 항상 Stagflation(의심) → 4건 모두 코드 원인 확정 후 수정.
-스펙/플랜: docs/superpowers/specs·plans/2026-07-02-backtest-macro-fixes*.md
 
 ### 진단→수정 (7커밋)
 1. **기간종료 청산**: 매도 미발동 전략은 통계가 청산 거래만 집계해 전부 0이던 문제 —
@@ -1106,7 +1405,6 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
 
 [배경] Data Infra에서 적재 버튼을 눌러도 UNIVERSE COVERAGE 불변, 일봉 848만 행인데
 "종목 0 · 기간 —", 백테스터(종목) X. "KRX/DART 문제인가?" → 원인 4개 확정 후 수정.
-스펙/플랜: docs/superpowers/specs·plans/2026-07-03-ingest-observability*.md
 
 ### 진단 (재발 시 참조)
 - **일봉은 이미 적재돼 있었음(KRX 정상)** — db-status의 COUNT(DISTINCT)+MIN/MAX 결합 쿼리가
@@ -1140,7 +1438,6 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
 
 [배경] 기관 퀀트 관점 크리틱(Goldman Strats/GSAM 경력 가정): "US 신뢰도 27%인데 위험자산
 고비중은 블랙박스", "Kelly 공식 오용 우려", "매크로 데이터 후행성". 코드 검증 후 반영.
-스펙: docs/superpowers/specs/2026-07-03-macro-confidence-allocation-design.md
 
 ### 코드 검증 결과
 - **Kelly 지적은 오독**: `s_kelly`는 22전략 중 1개일 뿐이고 `Σ⁻¹μ` long-only + 100% 완전투자
@@ -1169,6 +1466,45 @@ docs/superpowers/specs/2026-07-02-…-design.md, docs/superpowers/plans/2026-07-
   black_litterman 포함, 사용자가 고르면 1위로 표면화.
 - 국면 히스테리시스/전환비용 페널티, NLP 나우캐스팅 — 신뢰도 가중이 경계 요동을 상당 흡수,
   나머지는 별도 대형 과제.
+
+---
+
+## 🩹 DART 재무시계열 백필 정체 — 마스터캐시 경쟁 + 무한루프 재사용 수정
+
+부팅 시 KIS 마스터 수집과 DART 재무 백필이 별도 스레드로 동시 시작 → 백필 루프 첫 반복이
+마스터 캐시가 채워지기 전에 실행되면 전종목 목록이 빈 결과 → 조용히 30종목 시드 리스트로
+폴백 → 이후 "정상 종료"로 보고되어 24시간 그대로 잠들어버리는 경쟁조건. 부수로 수동 "재무시계열"
+버튼이 무한루프 백그라운드 함수를 그대로 재사용해 절대 끝나지 않던 잠재 버그도 확인.
+
+### 수정
+`backfill_financials`가 전종목 목록 조회 실패로 시드 폴백했을 때 `fallback_to_seed` 플래그를
+남기도록 수정. `_dart_backfill_sleep_seconds(stats)`(순수함수) 신설 — 쿼터소진 3시간, 폴백 발생
+시 짧은 재시도(`DART_HISTORY_RETRY_SEC` 기본 300초), 정상 완료 24시간으로 sleep 시간 분기. 수동
+"재무시계열" 버튼은 무한루프 함수 대신 `backfill_financials`를 1회만 직접 호출하도록 교체(진행률
+연결) — 버튼이 실제로 종료됨.
+
+### 검증
+fallback 플래그(마스터 있음/없음 2케이스) + sleep 분기 TDD, 기존 `test_dart_history.py` 회귀 불변.
+
+---
+
+## 🔗 스크리너 펀더멘털이 financials_history DB를 쓰도록 연결 (유니버스 884 정체 해소)
+
+스크리너 유니버스 크기가 884에서 고착 — 원인은 펀더멘털 팩터 조회(`_real_raw_financials`)가
+**라이브 DART만 호출하고, 이미 25,616행·2,562종목이 백필된 `financials_history` DB를 전혀
+읽지 않던 것**. 운영에서 DART가 쿼터/throttle로 실패하면 빈 결과가 나고, 빈 결과는 (정당하게)
+캐시에 영속되지 않아 유니버스가 못 자람 — 백필 파이프라인과 스크리너 읽기 경로가 분리돼 있었음.
+
+### 해결 (DB 우선 주입)
+`FundamentalsStore._fs_from_history(stock_code, year)` 신규 — `financials_history`의 원시 스냅샷을
+`FinancialStatement`로 매핑. `_get_fs(dart, corp_code, stock_code, year)` 신규 — **DB 우선 → 라이브
+DART 폴백**. `_real_raw_financials`가 이 경로를 쓰도록 교체 — corp_code나 DART 설정이 없어도 DB에
+데이터만 있으면 동작. 배당은 corp_code 있을 때만 best-effort(실패해도 팩터 영속을 막지 않음).
+
+### 효과 / 검증
+백필된 2,562종목이 DART 쿼터 소모 없이 실 펀더멘털로 반영 → 유니버스가 ~2,562까지 확장(DB에
+없는 신규상장 등 ~135종목은 정직하게 미포함). 기존 `test_realdata_parsing`(45)·`test_dart_history`
+회귀 불변(DB가 비어있으면 기존처럼 DART 폴백).
 
 ---
 
@@ -1290,8 +1626,6 @@ diag 재실행이 침묵 {}가 아니라 **실제 예외**를 잡음:
 ## 🏛️ 기업분석 탭 심화 — FAS/DD 실무 대개편 (Gemini 추천 → 실무 교정 구현)
 
 [배경] 사용자 제공 Gemini 컨설팅 추천(7라운드 PDF)을 AX 파트너 실무 관점으로 교정해 구현.
-스펙: docs/superpowers/specs/2026-07-09-company-analysis-deep-design.md
-플랜: docs/superpowers/plans/2026-07-09-company-analysis-deep.md
 
 ### 구조 (탭당 1콜, 기존 lazy 패턴)
 - **백엔드**: src/engine/company_analytics.py (순수 함수) + src/api/company_routes.py
@@ -1744,3 +2078,48 @@ mock 시세)을 순서대로 작업. 조사(Explore 3 + Plan 1 에이전트) 중
   검증에서 재확인).
 - 회귀: 백테스터 엔진 로직 무변경(체결가·매도/매수 정밀화·재편입 등 직전 세션 기능 전부 불변),
   기존 스크리너/백테스터/매크로/기업분석 테스트 전부 green.
+
+---
+
+## 📚 CLAUDE.md 단일화 — 파편화된 .md 문서 33개 조사·병합·삭제
+
+레포지토리 전체에 흩어진 33개 `.md` 파일(README.md·CLAUDE.md 제외, 6,778줄)을 전수 조사해
+현재 코드베이스와 대조·팩트체크한 뒤, 유효한 내용은 이 파일로 통합하고 전부 영구 삭제. 목적:
+향후 문서관리 도구 도입을 원활하게 하고, 세션 시작 시 AI가 읽는 컨텍스트에서 구버전/폐기
+자료로 인한 오염을 제거.
+
+### 조사 (3 Explore + 1 Plan 에이전트 병렬, + 직접 전문 정독)
+- **루트 4개**(전부 README.md가 링크): `PROJECT_STRUCTURE.md`는 TopNav/PortfolioVisualizer
+  디자인·존재하지 않는 STAGE11/12/13_INTEGRATION.md·삭제된 Streamlit UI 등을 참조하는 완전
+  구식 스냅샷 — 병합 없이 삭제. `PLATFORM_EVOLUTION.md`(밸리AI/젠포트 갭분석+로드맵)는 파일
+  자체가 "Phase 1~5 완료" 선언 상태로 이 문서 초반 섹션과 중복 — 병합 없이 삭제.
+  `INTEGRATION_NOTES.md`(1회성 구버전 VM 배포기록)도 완전 대체됨 — 삭제. `REAL_DATA_SETUP.md`
+  (DART/KIS/KRX 가이드)만 진짜 유효 — "실데이터 연동" 섹션에 병합(KRX 장기적재 절차 포함).
+- **`_docs/` 8개**: CLAUDE.md·README.md 어디서도 참조 0건, 2026-07-02 하루짜리 "다운로드해서
+  Claude Cowork에서 이어개발" 일회성 핸드오프 패키지, 2개는 자체적으로 "압축 전 스냅샷"이라
+  명시 — 전부 삭제.
+- **`docs/superpowers/plans/` 5개**(TDD 구현계획, pytest 원문 포함): 파일들 스스로가 마지막
+  태스크를 "CLAUDE.md에 요약 추가"로 끝맺는 빌드 스캐폴딩 — 최대(1,233줄) 파일조차 CLAUDE.md
+  기존 섹션과 대조 시 이미 비교 가능한 밀도로 문서화돼 있음 확인. 고유 정보(테스트 원문·정확한
+  계수)는 `tests/`·해당 소스 모듈에 이미 보존 — 전부 삭제.
+- **`docs/superpowers/specs/` 16개**: 5개는 CLAUDE.md 해당 섹션과 진단·커밋 단위까지 대조
+  확인된 완전 중복 — 삭제. 11개는 CLAUDE.md에 대응 서술이 전혀 없던 진짜 문서화 공백(매크로
+  콕핏 최초설계·리스크전략 9종·전략모달·배당/수급 실데이터화·`mock_gate.py` 설계·백테스터
+  프리필·성과지표 확장·DART 백필버그·DB우선 펀더멘털 등) — 코드로 각 claim을 재검증
+  (`get_dividend_info`·`insider_net`·`mock_allowed`·`compute_metrics`·`_dart_backfill_sleep_seconds`·
+  `_fs_from_history` 전부 실존 확인) 후 이 문서에 신규 섹션 11개로 압축 이식, 학술 레퍼런스·
+  Beneish 계수 등 코드에 이미 보존된 상세는 재복제하지 않음(코드가 단일 권위 출처).
+
+### 실행 (2단계 커밋)
+Phase A(내용): 위 신규 섹션 11개 삽입 + REAL_DATA_SETUP.md 병합 + 현재 규모 실측 통계표
+추가(PROJECT_STRUCTURE.md 대체) + 이 문서 자체의 죽은 자기참조 11곳(삭제 예정 파일 언급) 전부
+제거 + 목차 신설 + README.md 문서 표 정리(깨질 링크 4개 + 기존부터 있던 죽은 링크 3개).
+Phase B(삭제): 33개 파일 전부 `git rm`(원본 rm 아님 — git 히스토리에 보존, 필요시 이전 커밋에서
+복원 가능) — 삭제 전 레포 전체 재검색으로 참조 0건 재확인 후 실행.
+
+### 검증
+순수 문서 변경이라 `pytest`/`tsc`/`next build`에 영향 없음 — `ruff check .`로 회귀 없음만 확인.
+
+### 정직한 한계
+`docs/superpowers/` 워크플로(스펙→플랜→구현→CLAUDE.md 요약) 자체는 계속 유효한 관례라
+디렉터리 구조는 유지(내용물만 삭제) — 향후 세션이 같은 패턴을 다시 쓸 수 있음.
