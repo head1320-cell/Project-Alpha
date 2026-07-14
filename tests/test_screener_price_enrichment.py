@@ -71,3 +71,38 @@ def test_new_item_defaults_price_is_mock_true():
     item = _make_item(current_price=71_000)
     assert item.price_is_mock is True
     assert item.fundamentals_is_mock is False  # _to_item이 uv.is_mock으로 명시 설정하는 필드
+
+
+def test_enrich_multi_item_parallel_all_patched(monkeypatch):
+    # 동시성 리팩터(ThreadPoolExecutor) 후에도 모든 항목이 정확히 패치되는지 —
+    # 결과가 스레드 스케줄링과 무관하게 결정적이어야 함.
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+
+    class _MultiClient:
+        def get_price(self, code: str) -> dict:
+            return {"current_price": 200_000, "market_cap_억": 5_000_000, "per": 15.0, "pbr": 2.0}
+
+    monkeypatch.setattr("src.execution.kis_client.get_kis_client", lambda: _MultiClient())
+    screener = ValuationScreener()
+    items = [_make_item(current_price=71_000) for _ in range(12)]
+    for i, it in enumerate(items):
+        it.stock_code = f"{100000 + i:06d}"
+    n = screener._enrich_kis_quotes(items)
+    assert n == 12
+    assert all(it.current_price == 200_000 and it.price_is_mock is False for it in items)
+    assert all(it.gap_pct == 100.0 and it.verdict == "극심한 고평가" for it in items)
+
+
+def test_enrich_noop_when_active_asof_set(monkeypatch):
+    # PIT(과거 시점) 모드에서는 실시세 보강이 완전히 스킵돼야 함 — 안 그러면
+    # _evaluate_one_safe가 세팅한 PIT 시점 가격을 오늘자 라이브 시세로 되돌려
+    # look-ahead bias가 재발한다.
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    monkeypatch.setattr("src.execution.kis_client.get_kis_client", lambda: _FakeRealClient())
+    screener = ValuationScreener()
+    screener._active_asof = "2020-06-15"
+    item = _make_item(current_price=71_000)
+    n = screener._enrich_kis_quotes([item])
+    assert n == 0
+    assert item.current_price == 71_000
+    assert item.price_is_mock is True

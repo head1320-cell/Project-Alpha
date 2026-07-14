@@ -83,6 +83,7 @@ const initialStrategy = (): BacktestStrategy => ({
     etf: false, managed: false, supervised: false,
     caps: CAPS.map((c) => c.id), sectors: [],
     groups: [], matched: 0, totalUniverse: 0,
+    survivorshipMode: "off",
   },
 });
 
@@ -112,8 +113,14 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
   const { buy, sell } = s;
   const macroUniverse = macroCfg && (macroCfg.mode === "conditions" || macroCfg.mode === "engine") && macroCfg.universe_codes?.length
     ? macroCfg.universe_codes : null;
+  // 생존편향 보정 모드: 시작일 당시 실제 거래 종목(상장폐지 포함) 기준으로 백엔드가 직접
+  // 유니버스를 구성 — caps 등 세분화 필터는 보내지 않는다(분기 우선순위상 세분화 필터가
+  // 먼저 체크되므로, 안 비우면 이 모드가 있으나 마나가 됨).
+  const survivorship = s.universe.survivorshipMode ?? "off";
   return {
-    universe: capsToUniverse(s.universe.caps),
+    universe: survivorship !== "off"
+      ? (survivorship === "all" ? "all_asof" : "top200_asof")
+      : capsToUniverse(s.universe.caps),
     custom_tickers: macroUniverse as string[] | null,
     // 전종목 모드(off): 사전 필터 없음 → 선택한 전 종목이 유니버스. 필터 모드: per>0 최소필터.
     filter_ast: handoff ? handoff.filterAst : (s.liquidityGate === "off" ? emptyFilter() : largeCapFilter()),
@@ -181,12 +188,12 @@ function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | n
     breakthrough_direction: buy.breakthroughDirection,
     buy_timing: buy.buyTiming,
     rebuy_block_days: buy.reBuyBlockDays,
-    caps: s.universe.caps,
-    sectors: s.universe.sectors,
-    etf: s.universe.etf,
-    managed: s.universe.managed,
-    supervised: s.universe.supervised,
-    groups: s.universe.groups.map((g) => ({ mode: g.mode, tickers: g.tickers })),
+    caps: survivorship !== "off" ? [] : s.universe.caps,
+    sectors: survivorship !== "off" ? [] : s.universe.sectors,
+    etf: survivorship !== "off" ? false : s.universe.etf,
+    managed: survivorship !== "off" ? false : s.universe.managed,
+    supervised: survivorship !== "off" ? false : s.universe.supervised,
+    groups: survivorship !== "off" ? [] : s.universe.groups.map((g) => ({ mode: g.mode, tickers: g.tickers })),
     buy_conditions: mapConds(buy.conditions),
     sell_conditions: mapConds(sell.conditions),
     buy_logic: buy.logicExpr.trim() || null,

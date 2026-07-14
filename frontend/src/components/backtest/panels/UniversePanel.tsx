@@ -41,7 +41,10 @@ export default function UniversePanel({ s, set, live = true }: {
   // 백엔드 미가동/실패 시엔 기존 숫자를 그대로 유지(데모는 오프라인에서도 동작).
   const [counting, setCounting] = useState(false);
   useEffect(() => {
-    if (!live) return;
+    // 생존편향 보정 모드에서는 caps 등 세분화 필터가 백엔드로 전송되지 않으므로
+    // (screener_routes.py — all_asof/top200_asof가 우선) 이 카운트가 실제 유니버스와
+    // 무관해진다 — 오해를 부르는 숫자를 보여주지 않도록 재계산 자체를 건너뜀.
+    if (!live || u.survivorshipMode !== "off") return;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       setCounting(true);
@@ -59,7 +62,7 @@ export default function UniversePanel({ s, set, live = true }: {
     }, 300);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [u.caps, u.sectors, u.etf, u.managed, u.supervised, u.groups, live]);
+  }, [u.caps, u.sectors, u.etf, u.managed, u.supervised, u.groups, u.survivorshipMode, live]);
 
   const [groupModalOpen, setGroupModalOpen] = useState(false);
 
@@ -101,6 +104,26 @@ export default function UniversePanel({ s, set, live = true }: {
           <span style={{ fontFamily: "var(--bs-font-mono)", fontSize: 15, fontWeight: 500, color: "var(--text-primary)", opacity: counting ? 0.45 : 1, transition: "opacity .15s" }}>{u.matched.toLocaleString()}</span>
           <span style={{ color: "var(--text-muted)" }}>/ {u.totalUniverse.toLocaleString()} 종목</span>
         </span>
+      </div>
+
+      {/* 유니버스 구성 방식 — 생존편향 보정: 시작일 당시 실제 거래 종목(상장폐지 포함) 기준.
+          가장 근본적인 "후보 종목을 어떻게 정할지" 결정이라 아래 모든 세분화 필터보다 먼저. */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>유니버스 구성 방식</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {(u.survivorshipMode ?? "off") === "off"
+              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 사용"
+              : "시작일 당시 실제 거래 종목 기준(상장폐지 포함) — 아래 시총군·업종·ETF·관심그룹 선택은 적용되지 않습니다"}
+          </span>
+        </div>
+        <Segmented tone="neutral" value={u.survivorshipMode ?? "off"}
+          onChange={(t) => patch({ survivorshipMode: t as BacktestStrategy["universe"]["survivorshipMode"] })}
+          options={[
+            { id: "off", label: "직접 선택(기본)" },
+            { id: "all", label: "전체(생존편향 보정)" },
+            { id: "top200", label: "TOP200(생존편향 보정)" },
+          ]} />
       </div>
 
       {/* 유동성 게이트 — 전종목이면 선택한 전 종목이 백테스트에 들어감(적자·소형 포함) */}

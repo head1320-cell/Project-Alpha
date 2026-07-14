@@ -30,6 +30,29 @@ def test_period_asof_invalid_date():
     assert _period_asof("not-a-date") is None
 
 
+# ─── annual_only (RIM/DCF/DDM — 연간 재무만, look-ahead bias 수정) ────────────
+@pytest.mark.parametrize("as_of,expected", [
+    ("2024-05-14", ("2023", "11011")),  # 기본값과 동일(원래도 연간이 선택됨)
+    ("2024-05-15", ("2023", "11011")),  # 기본값은 2024 1Q(11013) — annual_only는 분기 건너뛰고 직전 연간
+    ("2024-08-14", ("2023", "11011")),  # 기본값은 2024 반기(11012)
+    ("2024-11-14", ("2023", "11011")),  # 기본값은 2024 3분기(11014)
+    ("2025-02-01", ("2023", "11011")),  # 기본값은 2024 3분기(11014)
+    ("2025-03-31", ("2024", "11011")),  # 연간 공시 완료 시점 — 기본값과 일치
+])
+def test_period_asof_annual_only(as_of, expected):
+    assert _period_asof(as_of, annual_only=True) == expected
+
+
+def test_period_asof_annual_only_never_none_for_valid_date():
+    # 3년치 후보 중 최고령 연간 후보의 공시시차 마감일은 항상 d보다 전이므로
+    # (연도 자체가 바뀌기 전에 이미 지남) 파싱 가능한 날짜에서 None이 나오지 않는다.
+    assert _period_asof("2015-01-01", annual_only=True) is not None
+
+
+def test_period_asof_annual_only_invalid_date():
+    assert _period_asof("not-a-date", annual_only=True) is None
+
+
 # ─── DART 분기 / mock 폴백 ────────────────────────────────────────────────────
 class FakeFS:
     """compute_ratios 후 roe/roa/debt_ratio를 갖는 가짜 재무제표."""

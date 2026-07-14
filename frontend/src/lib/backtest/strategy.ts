@@ -80,6 +80,11 @@ export interface UniverseState {
   groups: { id: string; name: string; mode: "none" | "include" | "exclude"; tickers: string[] }[];
   matched: number;         // 실시간 매매 대상 종목 수
   totalUniverse: number;
+  // "off"=아래 caps/sectors/etf/managed/supervised/groups 선택을 그대로 사용(기본).
+  // "all"|"top200"=시작일 당시 실제 거래 종목 기준(상장폐지 포함, 생존편향 보정) —
+  // 이때는 caps 등 세분화 필터를 전송하지 않는다(백엔드 분기 우선순위상 세분화 필터가
+  // all_asof/top200_asof보다 먼저 체크되므로, 비우지 않으면 이 모드가 무력화됨).
+  survivorshipMode: "off" | "all" | "top200";
 }
 
 export interface BasketLeg { ticker: string; name: string; weightPct: number }

@@ -1492,6 +1492,11 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
                 )
             except Exception:
                 gran_tickers = None
+        # all_asof/top200_asof에서만 채움 — screener.run()에 시점을 전달해 이 시점 유니버스로
+        # 편입된(상장폐지 포함) 종목이 오늘자 라이브 재무로 평가돼 "데이터 없음"으로 다시
+        # 걸러지는 것을 방지(PIT 평가 경로, _evaluate_one_safe가 이 값으로 시점별 bsns_year를
+        # 역산). 다른 유니버스 값은 기존처럼 None 그대로 — 일반 경로 무영향.
+        _asof_date_for_screener = None
         if req.custom_tickers:
             _universe = req.custom_tickers
         elif gran_tickers:
@@ -1501,11 +1506,13 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             from src.engine.universe_select import tickers_asof
             _asof = tickers_asof(req.start_date)
             _universe = _asof if _asof else "all_listed"  # 데이터 없으면 전종목→프리셋 폴백
+            _asof_date_for_screener = req.start_date
         elif req.universe == "top200_asof":
             # 시작일 당시 시총 상위 200 — KOSPI200 편입의 근사 재구성 (mktcap 시계열 필요)
             from src.engine.universe_select import top_mktcap_asof
             _asof = top_mktcap_asof(req.start_date, 200)
             _universe = _asof if _asof else "kospi200"
+            _asof_date_for_screener = req.start_date
         else:
             _universe = req.universe
         # 후보 풀 크기: "평가 종목 상한"(universe_eval_cap)이 스크리닝 후보 풀 크기를 조건식
@@ -1525,6 +1532,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
             limit=pool_cap,
             liquidity_floor=req.liquidity_floor,
+            as_of_date=_asof_date_for_screener,
         )
         # screened(≤eval_cap)는 조건식 신호 평가용 후보 풀 — "대상 종목 수"(max_tickers)와는
         # 무관하게 넓게 유지한다(조건식이 넓은 풀에서 매치를 찾아야 하므로). 동시 보유 가능

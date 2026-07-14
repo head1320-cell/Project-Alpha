@@ -613,6 +613,7 @@ class ValuationScreener:
             uv = self.cache.get(cache_key)
             if uv is None:
                 price = self._get_price_safe(stock_code)
+                bsns_year = None
                 if asof:
                     # PIT: 해당 시점 가격으로 변환
                     try:
@@ -620,7 +621,20 @@ class ValuationScreener:
                         price = PITStore.get_default().get_price_asof(stock_code, asof, price)
                     except Exception:
                         pass
-                uv = self.engine.evaluate(stock_code, price, params)
+                    # RIM/DCF/DDM은 연간 재무 기준 — as_of 시점에 실제 공시됐을 연도로
+                    # bsns_year를 명시 전달하지 않으면 evaluate()가 datetime.now() 기준
+                    # 현재 연도로 디폴트해 look-ahead bias가 생긴다(과거 시점 평가에
+                    # 미래 재무가 섞임). annual_only=True: 분기 코드를 그대로 넘기면
+                    # evaluate()가 항상 연간 조회라 데이터 없음/연환산 누락으로 왜곡됨.
+                    from src.engine.pit_store import _period_asof
+                    period = _period_asof(asof, annual_only=True)
+                    if period is None:
+                        # 파싱 불가한 as_of만 여기 도달 — wall-clock 폴백 대신 정직하게 스킵
+                        # (look-ahead 재발 방지가 핵심 불변식).
+                        logger.debug(f"PIT 평가 스킵 ({stock_code}@{asof}): as_of_date 파싱 실패")
+                        return None
+                    bsns_year = period[0]
+                uv = self.engine.evaluate(stock_code, price, params, bsns_year=bsns_year)
                 self.cache.set(cache_key, uv)
 
             item = self._to_item(uv, stock_code)
@@ -746,6 +760,12 @@ class ValuationScreener:
         from src.data.mock_gate import mock_allowed
         if mock_allowed():
             return 0
+        if getattr(self, "_active_asof", None):
+            # PIT(과거 시점) 평가 중에는 실시세로 덮어쓰지 않는다 — _evaluate_one_safe가
+            # PITStore.get_price_asof로 이미 세팅한 그 시점 가격을 오늘자 라이브 KIS
+            # 시세로 되돌리면 look-ahead bias가 재발한다. run() 호출 전 인스턴스는
+            # _active_asof가 아예 없을 수 있어 getattr로 안전하게 조회.
+            return 0
         try:
             from src.execution.kis_client import get_kis_client
         except Exception:
@@ -759,11 +779,14 @@ class ValuationScreener:
 
         # 대용량 유니버스(전종목) 보호: 실시세 보강은 요청당 상한까지만 (KIS 폭주 방지).
         max_enrich = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
-        n = 0
-        for it in items[:max_enrich]:
+        targets = items[:max_enrich]
+
+        def _one(it) -> bool:
+            """종목 1개 보강 — 서로 다른 ScreenerItem만 건드리므로 스레드 간 데이터
+            경합 없음(_compute_scores는 self._active_weights를 읽기만 함)."""
             code = getattr(it, "stock_code", None)
             if not code:
-                continue
+                return False
             try:
                 q = client.get_price(code)
                 cp = q.get("current_price")
@@ -786,9 +809,26 @@ class ValuationScreener:
                     it.per = q["per"]
                 if q.get("pbr") is not None:
                     it.pbr = q["pbr"]
-                n += 1
+                return True
             except Exception:
-                continue
+                return False
+
+        # 순차 동기 호출(종목당 KIS API 1회)이 400종목 기준 40초~1분 지연을 유발하던
+        # 실제 타임아웃 원인 — DART 평가 단계(위 run())와 동일한 ThreadPoolExecutor
+        # 패턴으로 병렬화. KIS RateLimiter가 이미 스레드 세이프하게 처리율을 제한하므로
+        # (execution/kis_client.py) 워커 수를 DART용 self.max_workers(기본 4)보다
+        # 키워도 안전 — 별도 env var로 독립 튜닝.
+        n = 0
+        if targets:
+            workers = max(1, min(int(os.getenv("SCREENER_ENRICH_WORKERS", "8") or 8), 24))
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futures = [ex.submit(_one, it) for it in targets]
+                for fut in as_completed(futures):
+                    try:
+                        if fut.result():
+                            n += 1
+                    except Exception:
+                        pass
         if n:
             logger.info(f"KIS 실시세 보강: {n}종목")
         return n

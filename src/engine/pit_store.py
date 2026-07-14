@@ -38,12 +38,18 @@ ANNUAL_LAG_DAYS = 90
 REPRT_ANNUAL, REPRT_HALF, REPRT_Q1, REPRT_Q3 = "11011", "11012", "11013", "11014"
 
 
-def _period_asof(as_of_date: str) -> tuple[str, str] | None:
+def _period_asof(as_of_date: str, annual_only: bool = False) -> tuple[str, str] | None:
     """as_of 시점에 공시 완료된 가장 최근 보고서 → (bsns_year, reprt_code).
 
     분기말 + 공시시차(분기 45일 / 연간 90일) 경과 여부로 판별 — look-ahead 차단.
     예: 2024-05-20 → 2024 1Q(3/31+45=5/15 공시완료, 11013)
-        2024-05-10 → 2023 연간(12/31+90=3/31 공시완료, 11011)"""
+        2024-05-10 → 2023 연간(12/31+90=3/31 공시완료, 11011)
+
+    annual_only=True면 연간(11011) 후보만 고려 — RIM/DCF/DDM처럼 연간 재무 기준
+    지표(eps/bps/fcf/dps)를 쓰는 호출부용. 분기 코드를 그대로 넘기면
+    get_financial_statement_full이 항상 연간(11011)으로 조회하면서(reprt_code
+    미전달) compute_ratios가 분기 누적치를 연환산 없이 그대로 써 밸류에이션이
+    왜곡되거나, 아직 미공시 연도라 데이터 없음이 되는 문제를 방지."""
     try:
         d = datetime.strptime(as_of_date, "%Y-%m-%d")
     except ValueError:
@@ -58,6 +64,8 @@ def _period_asof(as_of_date: str) -> tuple[str, str] | None:
         ]
     candidates.sort(key=lambda x: x[0], reverse=True)
     for q_end, year, reprt, lag in candidates:
+        if annual_only and reprt != REPRT_ANNUAL:
+            continue
         if q_end + timedelta(days=lag) <= d:
             return (year, reprt)
     return None
