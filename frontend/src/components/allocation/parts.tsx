@@ -36,24 +36,38 @@ export function lambdaOptimalIdx(curve: { return: number; volatility: number }[]
   return best;
 }
 
+// 확률 구름 점 — sharpe 상대순위에 따라 투명도·크기 그라데이션 (Gemini ④: 선이 아니라 구름)
+function CloudDot(props: { cx?: number; cy?: number; payload?: { q?: number } }) {
+  const { cx = 0, cy = 0, payload } = props;
+  const q = payload?.q ?? 0.3; // 0(저샤프)~1(고샤프)
+  return <circle cx={cx} cy={cy} r={1.6 + q * 1.4} fill="var(--t-accent)"
+    opacity={0.08 + q * 0.34} />;
+}
+
 export function FrontierChart({ result, lam }: { result: AnalyzeResult; lam: number }) {
   const cloud = result.frontier.cloud;
-  const cloudData = cloud.volatilities.map((v, i) => ({ x: v, y: cloud.returns[i] }));
+  const sh = cloud.sharpes || [];
+  const shMin = sh.length ? Math.min(...sh) : 0;
+  const shRange = sh.length ? (Math.max(...sh) - shMin || 1) : 1;
+  const cloudData = cloud.volatilities.map((v, i) => ({
+    x: v, y: cloud.returns[i],
+    q: sh.length ? (sh[i] - shMin) / shRange : 0.3,
+  }));
   const curveData = result.frontier.curve.map((p) => ({ x: p.volatility, y: p.return }));
   const lamIdx = lambdaOptimalIdx(result.frontier.curve, lam);
   const lamPt = lamIdx >= 0 ? curveData[lamIdx] : null;
   const pts = result.points;
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ScatterChart margin={{ top: 12, right: 18, bottom: 8, left: -6 }}>
+    <ResponsiveContainer width="100%" height={256}>
+      <ScatterChart margin={{ top: 10, right: 14, bottom: 6, left: -8 }}>
         <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" />
-        <XAxis type="number" dataKey="x" name="변동성" unit="%" tick={{ fontSize: 10, fontFamily: "var(--t-mono)" }}
-          label={{ value: "Risk (연 변동성 %)", position: "insideBottom", offset: -4, fontSize: 10, fill: "var(--t-muted)" }} />
-        <YAxis type="number" dataKey="y" name="수익률" unit="%" tick={{ fontSize: 10, fontFamily: "var(--t-mono)" }}
-          label={{ value: "Return %", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
+        <XAxis type="number" dataKey="x" name="변동성" unit="%" tick={{ fontSize: 9.5, fontFamily: "var(--t-mono)" }}
+          label={{ value: "Risk (연 변동성 %)", position: "insideBottom", offset: -4, fontSize: 9.5, fill: "var(--t-muted)" }} />
+        <YAxis type="number" dataKey="y" name="수익률" unit="%" tick={{ fontSize: 9.5, fontFamily: "var(--t-mono)" }}
+          label={{ value: "Return %", angle: -90, position: "insideLeft", fontSize: 9.5, fill: "var(--t-muted)" }} />
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${Number(val).toFixed(2)}%`, name === "y" ? "수익률" : "변동성"]} />
-        <Scatter data={cloudData} fill="var(--t-accent)" opacity={0.14} isAnimationActive={false} shape="circle" />
-        <Scatter data={curveData} fill="var(--t-accent)" line={{ stroke: "var(--t-accent)", strokeWidth: 2 }} isAnimationActive={false} shape={() => <g />} />
+        <Scatter data={cloudData} isAnimationActive={false} shape={<CloudDot />} />
+        <Scatter data={curveData} fill="var(--t-accent)" line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} isAnimationActive={false} shape={() => <g />} />
         {pts?.market && <ReferenceDot x={pts.market.volatility_pct} y={pts.market.return_pct} r={5} fill="#64748b" stroke="#fff" label={{ value: "시장", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
         {pts?.current && <ReferenceDot x={pts.current.volatility_pct} y={pts.current.return_pct} r={5} fill="#0891b2" stroke="#fff" label={{ value: "현재", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
         {pts?.optimal && <ReferenceDot x={pts.optimal.volatility_pct} y={pts.optimal.return_pct} r={7} fill="#dc2626" stroke="#fff" strokeWidth={1.5} label={{ value: "★ 최적", fontSize: 10, position: "top", fill: "#dc2626" }} />}

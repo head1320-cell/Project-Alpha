@@ -10,7 +10,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import PageHeader from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/layout/States";
 import { macroApi, type RegimeState, REGIME_COLORS } from "@/lib/macroApi";
 import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/lib/screenerApi";
@@ -27,15 +26,10 @@ const MODULES = [
 export default function Dashboard() {
   return (
     <div className="tpage-fade">
-      <PageHeader
-        eyebrow="PLATFORM / COMMAND CENTER"
-        index="00"
-        title="Dashboard"
-        intro="스크리너 · 백테스터 · 매크로 · 기업분석 · 리스크 — 5개 모듈을 한 화면에서. DART+KIS 실데이터 연동."
-        status="LIVE"
-      >
+      {/* 슬림 툴바 — 헤더 제거, 글로벌 검색만 유지 */}
+      <div className="t-toolbar" style={{ justifyContent: "stretch" }}>
         <QuickSearch />
-      </PageHeader>
+      </div>
 
       <MacroStrip />
       <ModuleGrid />

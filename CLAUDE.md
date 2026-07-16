@@ -40,8 +40,10 @@
 15. CLAUDE.md 단일화(파편화된 .md 문서 33개 조사·병합·삭제)
 16. PIT look-ahead bias 수정 · 스크리너 enrichment 동시성 · 생존편향 유니버스 UI 노출
 17. 백테스트 SSE 진행률 무음 구간 제거(Celery/Redis 전제 조사·기각, 최소 수정 적용)
-18. **Allocation Studio 신규 탭**(이 세션 — Two Sigma Venn 벤치마킹, 사용자 뷰
-    Black-Litterman + 3-존 콕핏) ← 최신
+18. Allocation Studio 신규 탭(Two Sigma Venn 벤치마킹, 사용자 뷰 Black-Litterman +
+    3-존 콕핏)
+19. **Research OS 개편**(이 세션 — 전 탭 헤더 제거 + Allocation Studio 밀도·레짐/
+    카나리 컨텍스트·인과 체인·확률구름·타임라인, R2/R3 로드맵) ← 최신
 
 ---
 
@@ -2301,3 +2303,68 @@ TDD로 고정.
   KOSPI200 캡가중, 미적재 시 "유니버스 평균" 정직 라벨.
 - mock 모드에선 ETF도 합성 펀더멘털이 있어 커버리지 100%로 보임 — 실데이터에서
   ETF 펀더멘털 결측 재정규화가 실제로 작동(설계·테스트로 고정).
+
+---
+
+## 🧭 Research OS 개편 — 전 탭 헤더 제거 + Allocation Studio 밀도·컨텍스트·인과 UI
+
+사용자가 캡처 3장 + Gemini 텍스트 피드백(Research OS 4지침) + "Allocation Research
+Operating System" 비전 문서로 요청: ① 모든 탭의 PageHeader(eyebrow·타이틀·인트로)와
+사이드바 "System Operational" 도트 제거 후 콘텐츠 끌어올리기 ② Gemini 4지침 반영
+③ Venn식 3패널 유지 + Research-first 철학 통합(기존 코드 최대 재사용, DAG는 v2).
+
+### 전 탭 헤더 제거 (Part A)
+- `components/layout/PageHeader.tsx` **삭제** — 사용처 8곳 정리: children 없는 4곳
+  (risk-tools/macro/allocation/TerminalBacktester)은 통삭제, children 있는 4곳은
+  기능 컨트롤만 **슬림 툴바**(`.t-toolbar`, 우측 정렬 한 줄)로 이동 — 스크리너
+  (Universe 셀렉트), 기업분석(종목 검색박스), 대시보드(QuickSearch), DbStatusPanel
+  (새로고침 + `MODE: REAL/MOCK` 배지 `.t-mode-badge` — mock 거버넌스 정보 보존).
+- `.tpage-head/-head-top/-index/-status(-dot)`·`.t-eyebrow` CSS 삭제(`.tpage-fade`·
+  `.tpage-intro`는 사용 중 — 유지). TerminalShell `.sidebar-foot`(System
+  Operational) JSX+CSS 삭제. 파생상품 탭은 다른 PageHeader(`@/components/ui`,
+  비-사이드바 레거시) — 무변경.
+
+### Allocation Studio "Research OS" R1 (Part B — 렌더링/CSS만, 동작 로직 불변)
+- **밀도(Gemini ①)**: `.as-*` gap 12→8, 카드 패딩 12/14→8/10, 폰트 축소,
+  tabular-nums 명시, **얇은 슬라이더**(트랙 2px+썸 10px 커스텀 — `.as-root
+  input[type=range]` 전역).
+- **ContextStrip(Gemini ② + 비전 "화면 시작=Regime·Canary")**: 신규
+  `components/allocation/ContextStrip.tsx` — `CURRENT: {국면} CONF {p}%` 배지
+  (클릭→/macro) + 권고모드 + STRESS + **카나리 4종**(VIX·US10Y·HY Spread·10Y-2Y:
+  latest+z색+스파크). 데이터는 `["macro","regime"]`/`["macro","dashboard"]` 기존
+  쿼리 캐시 공유(신규 fetch 0) — 지표 id VIXCLS/DGS10/BAMLH0A0HYM2/T10Y2Y
+  (macro_collector FRED 시리즈). 결측 "—" 정직.
+- **테제 인과 체인(Gemini ③)**: ViewBuilder 재렌더 — `[테제 입력] ➔ [자산 칩] ➔
+  [▲Overweight n%/년] ➔ [신뢰도 슬라이더]` 노드 체인(`.as-chain-*`), 핸들러
+  (onChange/onCommit) 완전 불변.
+- **확률 구름(Gemini ④a)**: FrontierChart 클라우드를 sharpe 상대순위 기반
+  크기·투명도 그라데이션 점(CloudDot)으로 — 프론티어 곡선은 1.5px "능선".
+- **Research Timeline(Gemini ④b, Research Memory 1단계)**: 신규
+  `ResearchTimeline.tsx` + `logEvent()` — **하드코딩 아닌 실제 액션 로그**(뷰
+  추가/삭제·재최적화(모델·λ·τ·뷰 수)·시나리오 전환·스터디 저장, hh:mm). 세션
+  한정(영속화는 R2).
+- **Robustness 상시 카드(비전)**: 우측 레일 `ROBUSTNESS` — 시나리오 미니 셀렉트 +
+  추정충격/최대낙폭 요약, 기존 stressQ/catalogQ 상태 재사용(같은 데이터의 2번째 뷰,
+  하단 상세 탭 유지).
+- **Explainability 미니트리(비전 "왜 이 비중")**: OPTIMIZED WEIGHTS 행 클릭 →
+  `① Market Prior → ② User View(BL) Δ → ③ Optimizer·제약 Δ` 인라인 분해 — 이미
+  받은 `result.flow` 3열 재렌더(신규 fetch 0). Regime·Factor 단계는 "R2 로드맵"
+  정직 라벨.
+
+### Research OS 로드맵 (비전 문서 회신 — 기존 코드 재사용 매핑, 구현은 후속)
+- **R2**: ① 테제 NL→P/Q/Ω 자동변환(nl2ast의 Claude 게이트 패턴 + 기존
+  `build_user_views` 재사용) ② Probability Frontier(레짐 confidence·se 기반
+  프론티어 밴드 — `macro_allocation`의 MC p10/50/90 밴드 패턴 이식) ③ 레짐 연동
+  BL prior(`regime_analyzer.asset_tilts`→자산 매핑 재사용, 사용자 뷰와 P/Q 스택)
+  ④ Explainability Tree 완전판(allocation_studio.optimize가 단계별 μ/w 기여
+  breakdown 반환) ⑤ Research Memory 영속(스터디에 timeline 필드+자동 저장).
+- **R3(v2)**: Research Graph DAG(reactflow 설치돼 있음)·Factor Mapping 엔진·
+  Model Sensitivity 실시간·멀티 워크스페이스. 상태관리는 현행 useState+react-query
+  유지(R2까지 충분), 워크스페이스 다중화 시 zustand 승격 검토.
+
+### 검증
+백엔드 무변경(844 passed/10 skipped 불변, ruff 통과), tsc 0, next build 18/18.
+Playwright 라이브: 8개 탭 전부 200+헤더 부재+보존 컨트롤 작동, /allocation
+스크린샷 — ContextStrip(Goldilocks CONF 54%·카나리 4종 스파크), 테제 체인,
+확률구름, ROBUSTNESS 카드(-15.6%), Explainability 분해(+4.1%p 뷰 기여),
+타임라인 실기록("재최적화 — BL · λ 2.5 · τ 0.05 · 뷰 1개") 확인.

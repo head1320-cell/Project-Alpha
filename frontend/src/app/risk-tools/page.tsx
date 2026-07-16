@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { analysisApi } from "@/lib/screenerApi";
-import PageHeader from "@/components/layout/PageHeader";
 import SectionHead from "@/components/layout/SectionHead";
 import { StatGrid, Stat, MiniViz } from "@/components/common/MiniViz";
 import { LoadingState } from "@/components/layout/States";
@@ -37,14 +36,6 @@ export default function RiskPage() {
 
   return (
     <div className="tpage-fade">
-      <PageHeader
-        eyebrow="RISK / STRESS & SURVIVAL"
-        index="05 / 05"
-        title="Portfolio Exposure & Sensitivity"
-        intro="시나리오 스트레스 테스트로 포트폴리오 생존율과 취약 종목을 식별하고, 하방 리스크 노출을 진단합니다."
-        status="MKT: KR_CLOSE"
-      />
-
       <SectionHead label="STRESS SCENARIO" index="SELECT" />
       <div className="tscenario-bar">
         {scenarios.map((s) => (

@@ -2,7 +2,6 @@
 // Company Analysis — 실데이터 Cockpit. 코어 병렬 로드 + 탭별 lazy. 스크리너 핸드오프 지원.
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import PageHeader from "@/components/layout/PageHeader";
 import CompanyCockpit, { type LazyLoaders } from "@/components/insights/CompanyCockpit";
 import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/lib/companyData";
 import { companyApi } from "@/lib/screenerApi";
@@ -74,13 +73,8 @@ export default function CompanyPage() {
 
   return (
     <div className="tpage-fade">
-      <PageHeader
-        eyebrow="COMPANY / DEEP ANALYSIS"
-        index="04 / 05"
-        title="Company Analysis"
-        intro="DART 재무 + KIS 시세 + 116팩터 + RIM·DCF·DDM 내재가치를 한 화면에 — 가치평가·재무·팩터·피어·네트워크·리스크·AI까지 통합 분석."
-        status="LIVE"
-      >
+      {/* 슬림 툴바 — 헤더 제거 후 검색 컨트롤만 유지 */}
+      <div className="t-toolbar">
         <div className="ca-pg-search">
           <div className="ca-pg-searchbox">
             <input
@@ -109,7 +103,7 @@ export default function CompanyPage() {
           <span className="ca-pg-div" />
           {QUICK.map((q) => <button key={q.code} className={`ca-pg-chip${q.code === code ? " on" : ""}`} onClick={() => setCode(q.code)}>{q.name}</button>)}
         </div>
-      </PageHeader>
+      </div>
 
       {loading && <LoadingState label={`${code} — 가치평가 · 재무 · 116팩터 · 피어 로딩 중`} />}
       {error && !loading && <ErrorState sub={error} />}

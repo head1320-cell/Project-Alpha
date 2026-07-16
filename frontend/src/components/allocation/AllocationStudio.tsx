@@ -16,6 +16,8 @@ import {
 import { saveStudy, type AllocationStudy } from "@/lib/allocationStorage";
 import { PortfolioBuilder, equalize, type Holding } from "./PortfolioBuilder";
 import { ViewBuilder, overallConfidence } from "./ViewBuilder";
+import { ContextStrip } from "./ContextStrip";
+import { ResearchTimeline, type TimelineEvent } from "./ResearchTimeline";
 import {
   AllocationSankey, ConfidenceGauge, FactorXRayBars, FrontierChart,
   McHistogram, MetricsTable, RiskContribDonut, StressChart, fmtSign, lambdaOptimalIdx,
@@ -44,7 +46,13 @@ export default function AllocationStudio() {
   const [saveName, setSaveName] = useState("");
   const [saveNote, setSaveNote] = useState("");
   const [showSave, setShowSave] = useState(false);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [explainCode, setExplainCode] = useState<string | null>(null);
   const lastReqRef = useRef<string>("");
+
+  // Research Memory 1단계 — 실제 액션의 세션 로그 (영속화는 R2 로드맵)
+  const logEvent = (msg: string) =>
+    setTimeline((l) => [{ t: new Date().toTimeString().slice(0, 5), msg }, ...l].slice(0, 40));
 
   const holdingsMap = useMemo(() => {
     const m: Record<string, number> = {};
@@ -74,6 +82,7 @@ export default function AllocationStudio() {
     if (key === lastReqRef.current) return; // 동일 요청 중복 방지
     lastReqRef.current = key;
     analyzeMut.mutate(req);
+    logEvent(`재최적화 — ${req.model.toUpperCase()} · λ ${delta.toFixed(1)} · τ ${req.tau} · 뷰 ${req.views.length}개`);
   };
 
   // 팩터 X-ray / 스트레스 — holdings 기반 (analyze와 독립 lazy 로드)
@@ -119,15 +128,24 @@ export default function AllocationStudio() {
     const names: Record<string, string> = {};
     holdings.forEach((h) => { names[h.code] = h.name; });
     saveStudy(saveName, { holdings: holdingsMap, names, views, model, delta, tau, note: saveNote });
+    logEvent(`스터디 저장 — ${saveName.trim() || "이름 없음"}`);
     setStudiesVersion((v) => v + 1);
     setShowSave(false); setSaveName(""); setSaveNote("");
   };
 
   const scenarios = catalogQ.data?.scenarios || [];
   const pending = analyzeMut.isPending;
+  const pickScenario = (id: string) => {
+    setScenario(id);
+    const label = scenarios.find((x) => x.id === id)?.label || id;
+    logEvent(`시나리오 전환 — ${label}`);
+  };
 
   return (
     <div className="as-root">
+      {/* ── 컨텍스트: Current Regime + Canary (Research OS — 포지션의 '왜') ── */}
+      <ContextStrip />
+
       {/* ── 스테퍼 ── */}
       <div className="as-stepper">
         {[["01", "Thesis & Views", "as-sec-views"], ["02", "Build Portfolio", "as-sec-build"], ["03", "Analysis", "as-sec-analysis"]].map(([n, label, anchor]) => (
@@ -173,7 +191,11 @@ export default function AllocationStudio() {
             <section className="as-card as-thesis">
               <div className="as-card-title">INVESTMENT THESIS <span className="as-note-inline">Black-Litterman 뷰</span></div>
               <ViewBuilder views={views} holdings={holdings}
-                onChange={setViews} onCommit={() => runAnalyze()} />
+                onChange={(next) => {
+                  if (next.length > views.length) logEvent("테제(뷰) 추가");
+                  else if (next.length < views.length) logEvent("테제(뷰) 삭제");
+                  setViews(next);
+                }} onCommit={() => runAnalyze()} />
               {result && !result.views_applied && views.length > 0 && (
                 <div className="as-note">유효한 뷰 없음(대상 자산·크기 확인) — 시장균형으로 계산됨</div>
               )}
@@ -183,7 +205,7 @@ export default function AllocationStudio() {
             </section>
             <section className="as-card">
               <div className="as-card-title">VIEW CONFIDENCE</div>
-              <ConfidenceGauge value={conf} />
+              <ConfidenceGauge value={conf} height={100} />
             </section>
             <section className="as-card">
               <div className="as-card-title">OPTIMIZATION ENGINE</div>
@@ -251,7 +273,7 @@ export default function AllocationStudio() {
                   {scenarios.map((s) => (
                     <button key={s.id} disabled={!s.available} title={s.reason || s.description}
                       className={`as-scen${scenario === s.id ? " on" : ""}${!s.available ? " off" : ""}`}
-                      onClick={() => setScenario(s.id)}>
+                      onClick={() => pickScenario(s.id)}>
                       <span>{s.label}</span>
                       <em>{s.mode === "historical" ? (s.available ? "역사 리플레이" : "데이터 미보유") : "가상"}</em>
                     </button>
@@ -313,6 +335,34 @@ export default function AllocationStudio() {
             {xrayQ.data?.note && <div className="as-note">{xrayQ.data.note}</div>}
           </section>
           <section className="as-card">
+            <div className="as-card-title">ROBUSTNESS <span className="as-note-inline">상시 스트레스</span></div>
+            <select className="as-scen-mini" value={scenario} onChange={(e) => pickScenario(e.target.value)}>
+              {scenarios.map((sc) => (
+                <option key={sc.id} value={sc.id} disabled={!sc.available}>
+                  {sc.label}{!sc.available ? " (데이터 미보유)" : ""}
+                </option>
+              ))}
+            </select>
+            {!holdings.length && <div className="as-empty">포트폴리오 구성 후 표시</div>}
+            {holdings.length > 0 && stressQ.isLoading && <div className="as-empty">계산 중…</div>}
+            {stressQ.data?.available && stressQ.data.mode === "hypothetical" && (
+              <div className="as-robust-row">
+                <span>추정 충격 <b className="num" style={{ color: (stressQ.data.portfolio_shock_pct ?? 0) >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{fmtSign(stressQ.data.portfolio_shock_pct ?? 0, 1)}%</b></span>
+                <span className="as-note-inline">상세: 하단 SCENARIO ANALYSIS</span>
+              </div>
+            )}
+            {stressQ.data?.available && stressQ.data.mode === "historical" && (
+              <div className="as-robust-row">
+                <span>최대낙폭 <b className="num" style={{ color: "var(--color-bear)" }}>{stressQ.data.max_dd_pct?.toFixed(1)}%</b></span>
+                {stressQ.data.benchmark_max_dd_pct != null && <span>벤치 <b className="num">{stressQ.data.benchmark_max_dd_pct.toFixed(1)}%</b></span>}
+                {stressQ.data.total_return_pct != null && <span>기간수익 <b className="num">{fmtSign(stressQ.data.total_return_pct, 1)}%</b></span>}
+              </div>
+            )}
+            {stressQ.data && !stressQ.data.available && (
+              <div className="as-note">{stressQ.data.reason || "데이터 미보유"}</div>
+            )}
+          </section>
+          <section className="as-card">
             <div className="as-card-title">RISK CONTRIBUTION</div>
             {result ? <RiskContribDonut contributions={result.risk_contributions} labels={result.labels} />
               : <div className="as-empty">Re-optimize 실행 시 표시</div>}
@@ -321,15 +371,37 @@ export default function AllocationStudio() {
             <div className="as-card-title">OPTIMIZED WEIGHTS</div>
             {result ? (
               <div className="as-weights">
-                {Object.entries(result.weights.optimized).sort((a, b) => b[1] - a[1]).map(([c, w]) => (
-                  <div key={c} className="as-wrow">
-                    <span className="as-wrow-nm">{result.labels[c] || c}</span>
-                    <div className="as-wrow-bar"><i style={{ width: `${Math.min(w, 100)}%` }} /></div>
-                    <span className="num">{w.toFixed(1)}%</span>
-                  </div>
-                ))}
+                {Object.entries(result.weights.optimized).sort((a, b) => b[1] - a[1]).map(([c, w]) => {
+                  const mkt = result.flow.market[c] ?? 0;
+                  const vw = result.flow.view_applied[c] ?? 0;
+                  const open = explainCode === c;
+                  return (
+                    <React.Fragment key={c}>
+                      <button className="as-wrow-btn" title="왜 이 비중인가 — 단계 분해"
+                        onClick={() => setExplainCode(open ? null : c)}>
+                        <span className="as-wrow-nm">{open ? "▾ " : "▸ "}{result.labels[c] || c}</span>
+                        <div className="as-wrow-bar"><i style={{ width: `${Math.min(w, 100)}%` }} /></div>
+                        <span className="num">{w.toFixed(1)}%</span>
+                      </button>
+                      {open && (
+                        <div className="as-explain">
+                          <div className="as-explain-step"><em>① Market Prior(캡가중)</em><b className="num">{mkt.toFixed(1)}%</b></div>
+                          <div className="as-explain-step"><em>② User View(BL)</em><b className="num">{vw.toFixed(1)}%</b>
+                            <span className="delta num" style={{ color: vw - mkt >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{fmtSign(vw - mkt, 1)}%p</span></div>
+                          <div className="as-explain-step"><em>③ Optimizer·제약(long-only)</em><b className="num">{w.toFixed(1)}%</b>
+                            <span className="delta num" style={{ color: w - vw >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{fmtSign(w - vw, 1)}%p</span></div>
+                          <div className="as-explain-road">Regime·Factor 단계 분해는 R2(레짐 연동 prior) 로드맵</div>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             ) : <div className="as-empty">Re-optimize 실행 시 표시</div>}
+          </section>
+          <section className="as-card">
+            <div className="as-card-title">RESEARCH TIMELINE <span className="as-note-inline">세션 기록</span></div>
+            <ResearchTimeline events={timeline} />
           </section>
         </aside>
       </div>

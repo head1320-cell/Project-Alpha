@@ -1,8 +1,8 @@
 "use client";
 // INVESTMENT THESIS — 사용자 뷰(Black-Litterman) 빌더.
-// 각 뷰: 대상 자산(들) · 방향 · 크기(연 %) · 신뢰도 슬라이더 0~100.
-// 슬라이더 드래그 중엔 로컬 상태만(백엔드 호출 0), 릴리스(커밋) 시 onCommit —
-// Gemini 아키텍처 리뷰 ②(틱마다 솔버 호출 금지) 반영.
+// Research OS: 단순 폼이 아니라 `[테제] ➔ [자산] ➔ [방향·크기] ➔ [신뢰도]`의
+// 인과관계 노드 체인으로 렌더 (Gemini ③). 동작 로직(onChange/onCommit)은 이전과
+// 동일 — 태그 구조와 클래스만 변경. 슬라이더 드래그 중 로컬만, 릴리스 시 재최적화.
 import React from "react";
 import type { AllocationViewInput } from "@/lib/allocationApi";
 import type { Holding } from "./PortfolioBuilder";
@@ -49,37 +49,46 @@ export function ViewBuilder({ views, holdings, onChange, onCommit }: {
         <div className="as-empty">뷰 없음 — 시장균형(캡가중) 그대로. &quot;+ 뷰 추가&quot;로 테제를 입력하세요.</div>
       )}
       {views.map((v, i) => (
-        <div key={i} className="as-view">
-          <div className="as-view-top">
-            <input className="as-input as-view-label" placeholder={`테제 ${i + 1} (예: 반도체가 시장을 상회할 것)`}
+        <div key={i} className="as-chain">
+          {/* ① 테제 */}
+          <span className="as-chain-node as-chain-thesis">
+            <input placeholder={`테제 ${i + 1} (예: 반도체 강세)`}
               value={v.label || ""} onChange={(e) => patch(i, { label: e.target.value })} onBlur={onCommit} />
-            <button className="as-x" title="뷰 삭제" onClick={() => removeView(i)}>×</button>
-          </div>
-          <div className="as-view-assets">
+          </span>
+          <span className="as-chain-arrow">➔</span>
+          {/* ② 대상 자산 */}
+          <span className="as-chain-node" style={{ gap: 4, flexWrap: "wrap" }}>
+            {holdings.length === 0 && <em className="as-note-inline">자산 없음</em>}
             {holdings.map((h) => (
-              <button key={h.code} className={`as-chip${v.assets.includes(h.code) ? " on" : ""}`}
+              <button key={h.code} className={`as-chip sm${v.assets.includes(h.code) ? " on" : ""}`}
                 onClick={() => { toggleAsset(i, h.code); }} onBlur={onCommit} title={h.code}>
                 {h.name}
               </button>
             ))}
-          </div>
-          <div className="as-view-ctrl">
-            <div className="as-seg">
-              <button className={v.direction === 1 ? "on" : ""} onClick={() => { patch(i, { direction: 1 }); onCommit(); }}>▲ 상회</button>
-              <button className={v.direction === -1 ? "on" : ""} onClick={() => { patch(i, { direction: -1 }); onCommit(); }}>▼ 하회</button>
-            </div>
-            <label className="as-mini">크기
-              <input className="as-w-input num" type="number" min={0.5} max={30} step={0.5} value={v.magnitude_pct}
-                onChange={(e) => patch(i, { magnitude_pct: parseFloat(e.target.value) || 0 })} onBlur={onCommit} />
-              <span className="as-w-unit">%/년</span>
-            </label>
-            <label className="as-conf">
-              <span className="as-mini">신뢰도 <b className="num">{Math.round(v.confidence)}%</b></span>
-              <input type="range" min={0} max={100} step={5} value={v.confidence}
-                onChange={(e) => patch(i, { confidence: parseFloat(e.target.value) })}
-                onMouseUp={onCommit} onTouchEnd={onCommit} onKeyUp={onCommit} />
-            </label>
-          </div>
+          </span>
+          <span className="as-chain-arrow">➔</span>
+          {/* ③ 방향·크기 */}
+          <span className="as-chain-node accent">
+            <button className="as-chip sm" style={{ border: "none", background: "none", padding: 0,
+              color: v.direction === 1 ? "var(--color-bull)" : "var(--color-bear)", fontWeight: 600 }}
+              title="클릭으로 상회/하회 전환"
+              onClick={() => { patch(i, { direction: v.direction === 1 ? -1 : 1 }); onCommit(); }}>
+              {v.direction === 1 ? "▲ Overweight" : "▼ Underweight"}
+            </button>
+            <input className="as-w-input num" style={{ width: 44 }} type="number" min={0.5} max={30} step={0.5}
+              value={v.magnitude_pct}
+              onChange={(e) => patch(i, { magnitude_pct: parseFloat(e.target.value) || 0 })} onBlur={onCommit} />
+            <span className="as-w-unit">%/년</span>
+          </span>
+          <span className="as-chain-arrow">➔</span>
+          {/* ④ 신뢰도 */}
+          <span className="as-chain-conf">
+            <input type="range" min={0} max={100} step={5} value={v.confidence}
+              onChange={(e) => patch(i, { confidence: parseFloat(e.target.value) })}
+              onMouseUp={onCommit} onTouchEnd={onCommit} onKeyUp={onCommit} />
+            <b className="num">{Math.round(v.confidence)}%</b>
+          </span>
+          <button className="as-x" title="뷰 삭제" onClick={() => removeView(i)}>×</button>
         </div>
       ))}
       <button className="as-add-view" onClick={addView} disabled={!holdings.length}>+ 뷰 추가</button>

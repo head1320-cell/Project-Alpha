@@ -142,10 +142,6 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div className="sidebar-foot">
-            <span className="foot-dot" />
-            <span className="nav-text fade-x">System Operational</span>
-          </div>
         </aside>
         {pinned && <div className="sidebar-backdrop" onClick={() => setPinned(false)} />}
 

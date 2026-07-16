@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import PageHeader from "@/components/layout/PageHeader";
 import SectionHead from "@/components/layout/SectionHead";
 import { ErrorState, LoadingState } from "@/components/layout/States";
 import { api } from "@/lib/api";
@@ -90,17 +89,15 @@ export default function DbStatusPanel() {
 
   return (
     <div className="tpage-fade">
-      <PageHeader
-        eyebrow="DATA / INFRASTRUCTURE"
-        index="06 / 06"
-        title="Data Infrastructure Status"
-        intro="모든 도구가 쓰는 핵심 테이블의 적재 현황(행수·종목·기간)을 한 화면에서 점검하고, 부족분을 직접 적재합니다."
-        status={st?.config?.kis_real ? "MODE: REAL" : "MODE: MOCK"}
-      >
+      {/* 슬림 툴바 — 헤더 제거, MODE 배지(mock 거버넌스 정보)와 새로고침만 유지 */}
+      <div className="t-toolbar">
+        <span className="t-mode-badge" data-real={st?.config?.kis_real ? "1" : "0"}>
+          {st?.config?.kis_real ? "MODE: REAL" : "MODE: MOCK"}
+        </span>
         <button className="tchip-toggle" onClick={() => void load()} disabled={loading}>
           {loading ? "조회 중…" : "↻ 새로고침"}
         </button>
-      </PageHeader>
+      </div>
 
       {loading && !st && <LoadingState label="DB 적재 현황을 점검하는 중" />}
       {err && !st && <ErrorState label="DB 상태 조회 실패" sub={err} />}

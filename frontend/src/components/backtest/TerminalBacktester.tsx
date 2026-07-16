@@ -19,7 +19,6 @@ import BuyConditionPanel from "./panels/BuyConditionPanel";
 import SellConditionPanel from "./panels/SellConditionPanel";
 import UniversePanel, { CAPS } from "./panels/UniversePanel";
 import ConditionSummary from "./panels/ConditionSummary";
-import PageHeader from "@/components/layout/PageHeader";
 import type { BacktestStrategy, SummaryTab } from "@/lib/backtest/strategy";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -311,14 +310,6 @@ export default function TerminalBacktester() {
 
   return (
     <div className="tpage-fade">
-      <PageHeader
-        eyebrow="BACKTEST / STRATEGY ENGINE"
-        index="02 / 05"
-        title="Strategy Performance Engine"
-        intro="룰 기반 조건식으로 매수·매도 전략을 설계하고, 과거 시세로 수익·낙폭·벤치마크 대비를 검증합니다."
-        status="ENGINE · V2.0.4"
-      />
-
       {/* 스크리너 전략 전달 배너 */}
       {handoff && (
         <div className="tscreener-handoff">
