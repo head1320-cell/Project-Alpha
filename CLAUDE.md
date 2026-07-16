@@ -39,8 +39,9 @@
 14. 백테스터 버그수정+캐싱+Mock 거버넌스+KIS 클라이언트 3중 통합
 15. CLAUDE.md 단일화(파편화된 .md 문서 33개 조사·병합·삭제)
 16. PIT look-ahead bias 수정 · 스크리너 enrichment 동시성 · 생존편향 유니버스 UI 노출
-17. **백테스트 SSE 진행률 무음 구간 제거**(이 세션 — Celery/Redis 전제 조사·기각, 최소 수정
-    적용) ← 최신
+17. 백테스트 SSE 진행률 무음 구간 제거(Celery/Redis 전제 조사·기각, 최소 수정 적용)
+18. **Allocation Studio 신규 탭**(이 세션 — Two Sigma Venn 벤치마킹, 사용자 뷰
+    Black-Litterman + 3-존 콕핏) ← 최신
 
 ---
 
@@ -2224,3 +2225,79 @@ AskUserQuestion으로 조사 결과 제시 → 사용자가 "SSE 격차만 수�
   별도의 더 큰 과제.
 - `_INGEST_STATUS` 패턴을 일반화한 task_id 기반 submit/poll API — Redis 없는 대안으로
   검토됐으나 사용자가 최소 옵션(SSE 격차만 수정)을 선택.
+
+---
+
+## 🎛️ Allocation Studio — 신규 사이드바 탭 (Two Sigma Venn 벤치마킹)
+
+사용자가 3개 PDF(ChatGPT RAS 기획안 + Gemini 프로토타입 프롬프트 + Gemini 아키텍처
+리뷰)와 다크 테마 목업으로 새 탭을 요청("데이터 인프라 탭 바로 위, 색은 기존 라이트
+팔레트 유지"). AskUserQuestion 3답 확정: 풀 콕핏 1라운드 · KR 주식+ETF 통합 유니버스
+(daily_prices) · 이름 "Allocation Studio" 라우트 `/allocation`.
+
+### 조사 핵심 발견 (2 병렬 에이전트)
+이 코드베이스엔 자산배분 스택이 2개 병렬 존재 — 매크로 탭 스택(risk_allocations 9종,
+8-ETF 고정, BL 뷰가 regime_analyzer에 하드와이어)과 **퀀트/리스크툴 스택**
+(`kis_portfolio_analyzer.py` + `src/models/`): 후자는 임의 tickers+weights로 scipy
+SLSQP **효율적 프론티어(점별 자산 가중치 포함)** · risk_contributions · MC Dirichlet
+클라우드 · 리밸런싱 시뮬까지 이미 보유(`POST /api/v1/portfolio/analyze` 라이브).
+**진짜 신규는 "사용자 뷰 Black-Litterman"뿐** — 나머지는 조립.
+
+### 백엔드 (커밋 25ee9d6)
+- **`src/engine/allocation_studio.py`(신규)**: `build_user_views()` — 뷰
+  {assets(그룹 지원), direction, magnitude_pct(연 %), confidence 0~100} → P/Q/Ω.
+  **Ω = diag(P·τΣ·Pᵀ) × (100-conf)/max(conf,1)** (conf 50=Idzorek 관례, 100=뷰 강제,
+  0=시장균형 복귀 — 신뢰도 슬라이더의 수학적 정체). `bl_posterior()`는
+  risk_allocations.s_black_litterman(331-333행)과 동일 공식. `market_cap_weights()`
+  KIS master 시총 캡가중(결측은 중앙값 대체+보고). `weights_for_model()` —
+  mvo/bl/risk_parity(ERC)/hrp/min_var, risk_allocations의 `_cov`(Ledoit-Wolf)/`_opt`/
+  `_hrp_weights` 헬퍼를 커스텀 R로 호출. **뷰 없는 BL = 캡가중 prior**(레퍼런스와 동일).
+- **`src/api/allocation_routes.py`(신규, `/api/v1/allocation`)**: `POST /analyze`
+  (수익률 행렬 1로드 → 프론티어 30점+클라우드 1500점+모델 최적화+Sankey 3단계
+  flow[시장→뷰반영→최적화]+리스크기여+상관+요약지표 vs KOSPI+GBM 1년 MC 분포) ·
+  `POST /factor-xray`(종목 팩터 가중 z vs 유니버스 표본, **팩터별 커버리지 %** —
+  ETF 펀더멘털 결측은 재정규화+표기, 조용한 0 금지) · `POST /stress`(M8 펀더멘털
+  충격 가중합 + 역사 윈도우 리플레이 2008/2018/2020/2022 — DB 범위 밖은 정직
+  unavailable) · `GET /stress-catalog`. 시계열<30일 자산 excluded 보고, 2자산 미만
+  정직 에러.
+- **mock 폴백(mock_gate 준수)**: DB 무(빈 load_returns) + `KIS_USE_MOCK=1`일 때만
+  `load_ohlcv_unified(prefer="mock")`로 합성 수익률/팩터 표본 — 응답에
+  `coverage.source: "mock"` 표기(운영은 빈 결과 그대로 정직 에러). 개발 기본값에서
+  전체 콕핏이 작동, GCP 실데이터에선 자동으로 DB 경로.
+
+### 프론트엔드
+- **사이드바**: TerminalShell MODULES에 "06 Allocation Studio"(파이차트 아이콘)
+  삽입, Data Infra는 "07"로. `/allocation` prefetch(stress-catalog).
+- **`app/allocation/page.tsx`** + **`components/allocation/`**: AllocationStudio
+  (3-존 grid + 스테퍼 01 Thesis&Views/02 Build/03 Analysis), PortfolioBuilder
+  (symbols/search 검색 + 6자리 코드 직접 추가 폴백 + 관심그룹 가져오기 + 균등배분 +
+  저장 스터디), ViewBuilder(테제 문장+대상 자산 칩+방향+크기+신뢰도 슬라이더),
+  parts.tsx(FrontierChart[recharts Scatter 클라우드+곡선+마커+λ점], AllocationSankey
+  [recharts Sankey 3열], FactorXRayBars, RiskContribDonut, StressChart[자체 SVG dd],
+  McHistogram, ConfidenceGauge, MetricsTable[Portfolio/Benchmark/Active]).
+- **인터랙션(Gemini 리뷰 반영)**: 신뢰도/τ 슬라이더 드래그 중 로컬만, 릴리스 시
+  `/analyze` mutation. **λ는 클라이언트 사이드** — 이미 받은 프론티어 30점(점별
+  가중치 포함)에서 u=μ-(λ/2)σ² argmax 점만 이동(백엔드 호출 0). MOCK 데이터 배지
+  (coverage.source). 노드 캔버스·AI 뷰 생성·Execution 스텝·상관 네트워크는 Gemini
+  리뷰의 스코프 크립 경고대로 명시 제외.
+- **`lib/allocationApi.ts`**(macroApi 관례) + **`lib/allocationStorage.ts`**
+  (`alpha_allocation_studies`, strategyStorage idiom, 메모 필드 = Decision Journal
+  1라운드).
+
+### 검증
+844 passed / 10 skipped(신규 21: views 11 + routes 10), ruff·tsc 0, next build
+18/18(`/allocation` 17.2kB). Playwright 라이브 스모크(mock): 3종목 추가 → 뷰 추가
+(신뢰도 60%) → Re-optimize → **BL 뷰 적용 배지 + Sankey 3열 가중치 이동(33.3%→
+25.1/37.5/37.4) + 프론티어 클라우드/마커/λ점 + 팩터 8종 z 막대 + 리스크 도넛 +
+시나리오 목록** 전부 렌더 확인. 강한 뷰(+15%/90%)가 대상 비중을 키우는 방향성은
+TDD로 고정.
+
+### 정직한 한계 / 범위 밖
+- DRO·Entropy Pooling·Factor 모델 토글, Sensitivity Map, Correlation Network 탭,
+  Historical Backtest 탭(기존 백테스터 프리필 링크로 후속 가능), AI View Generator,
+  드래그&드롭 캔버스 — 후순위 명시(1라운드 제외).
+- 역사 리플레이는 DB 커버리지 의존(KRX 백필 10년 기본 → 2008 금융위기는 대부분
+  미보유, disabled+사유 표기). 팩터 X-ray 벤치마크는 master 플래그 적재 시
+  KOSPI200 캡가중, 미적재 시 "유니버스 평균" 정직 라벨.
+- mock 모드에선 ETF도 합성 펀더멘털이 있어 커버리지 100%로 보임 — 실데이터에서
+  ETF 펀더멘털 결측 재정규화가 실제로 작동(설계·테스트로 고정).

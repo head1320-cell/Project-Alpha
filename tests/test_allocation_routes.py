@@ -98,10 +98,22 @@ def test_analyze_excludes_short_history(monkeypatch):
 
 
 def test_analyze_honest_error_below_two_assets(monkeypatch):
+    # 운영(KIS_USE_MOCK=0) 경로 재현 — mock 합성 폴백을 꺼서 정직 에러를 고정
     _patch_returns(monkeypatch, pd.DataFrame())
+    monkeypatch.setattr(ar, "_mock_returns_fallback", lambda *a, **k: None)
     out = allocation_analyze(AnalyzeRequest(tickers=["005930", "000660"]))
     assert out["error"] is True
     assert len(out["excluded"]) == 2
+
+
+def test_analyze_mock_fallback_in_mock_mode(monkeypatch):
+    # DB 무(빈 load_returns) + KIS_USE_MOCK=1 → 합성 수익률로 정상 동작 + source=mock 표기
+    _patch_returns(monkeypatch, pd.DataFrame())
+    _patch_caps(monkeypatch)
+    out = allocation_analyze(AnalyzeRequest(tickers=T3, model="mvo", lookback_days=400))
+    assert out["error"] is False
+    assert out["coverage"]["source"] == "mock"
+    assert len(out["frontier"]["curve"]) >= 10
 
 
 # ── /factor-xray ─────────────────────────────────────────────────────────────
@@ -186,8 +198,10 @@ def test_stress_hypothetical_weighted_sum(monkeypatch):
 
 
 def test_stress_historical_unavailable_when_no_data(monkeypatch):
+    # 운영 경로 재현 — mock 합성 폴백 차단 시 정직 unavailable
     monkeypatch.setattr("src.kis_portfolio_analyzer.load_returns",
                         lambda tickers, start, end: pd.DataFrame())
+    monkeypatch.setattr(ar, "_mock_returns_fallback", lambda *a, **k: None)
     out = allocation_stress(StressRequest(
         holdings={"005930": 100}, scenario="hist_2008_gfc"))
     assert out["mode"] == "historical"

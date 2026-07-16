@@ -68,6 +68,31 @@ class StressRequest(BaseModel):
 
 
 # ── 공용 헬퍼 ─────────────────────────────────────────────────────────────────
+def _mock_returns_fallback(want: list[str], start: str, end: str):
+    """DB 무(빈 결과)일 때 mock 모드 한정 합성 수익률 — 기존 로더 체인 재사용.
+
+    mock_gate 원칙: KIS_USE_MOCK=1(개발 기본)에서만 합성 허용, 운영에선 빈
+    결과를 그대로 정직 반환(상위에서 excluded/에러로 보고).
+    """
+    from src.data.mock_gate import mock_allowed
+    if not mock_allowed():
+        return None
+    import pandas as pd
+
+    from src.data.ohlcv_loader import load_ohlcv_unified
+    cols = {}
+    for t in want:
+        try:
+            df = load_ohlcv_unified(t, start, end, prefer="mock")
+            if df is not None and len(df) > _MIN_OBS:
+                cols[t] = df["close"].pct_change()
+        except Exception:
+            continue
+    if not cols:
+        return None
+    return pd.DataFrame(cols).dropna(how="all")
+
+
 def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days: int):
     """load_returns → (returns_df[keep], bench_series|None, excluded, coverage)."""
     from src.kis_portfolio_analyzer import load_returns
@@ -75,6 +100,12 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
     start = end - timedelta(days=int(lookback_days * 1.6) + 30)  # 캘린더 여유
     want = list(dict.fromkeys(tickers + ([benchmark] if benchmark else [])))
     df = load_returns(want, start.isoformat(), end.isoformat())
+    src_mock = False
+    if df is None or df.empty:
+        mock_df = _mock_returns_fallback(want, start.isoformat(), end.isoformat())
+        if mock_df is not None:
+            df = mock_df
+            src_mock = True
 
     excluded = []
     bench = None
@@ -100,6 +131,7 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
         "end": str(returns.index.max().date()) if len(returns) else None,
         "n_obs": int(len(returns)),
         "benchmark_available": bench is not None and len(bench) >= _MIN_OBS,
+        "source": "mock" if src_mock else "db",
     }
     return returns, bench, excluded, coverage
 
@@ -345,6 +377,23 @@ def allocation_factor_xray(req: XrayRequest):
         holdings = {c: w / tot for c, w in holdings.items()}
 
         sample = sample_factors(500) or []
+        if not sample:
+            # DB 무 → mock 모드 한정 합성 유니버스 표본 (mock 스토어는 종목별 결정론)
+            from src.data.mock_gate import mock_allowed
+            if mock_allowed():
+                from src.data.fundamentals_store import FundamentalsStore
+                from src.data.price_factors_store import PriceFactorsStore
+                fs = FundamentalsStore.get_default()
+                ps = PriceFactorsStore.get_default()
+                for i in range(60):
+                    code = f"{100 + i * 137 % 900:03d}{i * 41 % 1000:03d}"
+                    row = {"stock_code": code}
+                    try:
+                        row.update(fs.get_factors(code, None) or {})
+                        row.update(ps.get_factors(code, None) or {})
+                    except Exception:
+                        continue
+                    sample.append(row)
         flags = load_master_flags() or {}
         k200 = {c for c, f in flags.items() if f.get("is_kospi200")}
 
@@ -454,6 +503,11 @@ def allocation_stress(req: StressRequest):
             win = _HIST_WINDOWS[req.scenario]
             from src.kis_portfolio_analyzer import load_returns
             df = load_returns(list(holdings) + [req.benchmark], win["start"], win["end"])
+            if df is None or df.empty:
+                mock_df = _mock_returns_fallback(list(holdings) + [req.benchmark],
+                                                 win["start"], win["end"])
+                if mock_df is not None:
+                    df = mock_df
             avail = [c for c in holdings if not df.empty and c in df.columns
                      and int(df[c].dropna().shape[0]) >= _MIN_OBS]
             if not avail:
@@ -535,13 +589,15 @@ def allocation_stress_catalog():
                     min_date = str(row[0])
         except Exception:
             pass
+        from src.data.mock_gate import mock_allowed
         hist = []
         for k, v in _HIST_WINDOWS.items():
             available = True
             reason = None
             if min_date is None:
-                available = False
-                reason = "시세 DB 미적재"
+                # mock 모드는 합성 리플레이 가능(개발), 운영은 정직 unavailable
+                available = mock_allowed()
+                reason = "mock 합성 리플레이" if available else "시세 DB 미적재"
             elif v["end"] < min_date:
                 available = False
                 reason = f"데이터 미보유 (DB 시작 {min_date})"

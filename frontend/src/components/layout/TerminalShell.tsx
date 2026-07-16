@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { screenerApiAdvanced, screenerApi, analysisApi } from "@/lib/screenerApi";
 import { macroApi } from "@/lib/macroApi";
 import { loadCompanyCore } from "@/lib/companyData";
+import { allocationApi } from "@/lib/allocationApi";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalShell — Variant "Institutional Terminal" 좌측 사이드바 셸
@@ -51,7 +52,13 @@ const MODULES = [
     ),
   },
   {
-    n: "06", label: "Data Infra", href: "/admin/data",
+    n: "06", label: "Allocation Studio", href: "/allocation",
+    icon: (
+      <svg className="nav-icon" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></svg>
+    ),
+  },
+  {
+    n: "07", label: "Data Infra", href: "/admin/data",
     icon: (
       <svg className="nav-icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5" /><path d="M3 12a9 3 0 0 0 18 0" /></svg>
     ),
@@ -80,6 +87,10 @@ function usePrefetchers() {
     "/insights": () => {
       // 페이지 기본 종목(005930)과 동일 — 다른 종목으로 들어오면 그 종목만 별도 요청됨(정상)
       qc.prefetchQuery({ queryKey: ["company", "core", "005930"], queryFn: () => loadCompanyCore("005930") });
+    },
+    "/allocation": () => {
+      // Allocation Studio의 유일한 마운트 시 쿼리 — 시나리오 카탈로그 (나머지는 사용자 액션 구동)
+      qc.prefetchQuery({ queryKey: ["allocation", "stress-catalog"], queryFn: () => allocationApi.stressCatalog().catch(() => null) });
     },
   };
   return (href: string) => prefetch[href]?.();
