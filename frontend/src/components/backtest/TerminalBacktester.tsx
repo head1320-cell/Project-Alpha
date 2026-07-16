@@ -1037,7 +1037,9 @@ function BacktestProgress({ progress }: {
     <div className="tbt-stages">
       {stages.map((s, i) => {
         const cls = i < activeIdx ? " done" : i === activeIdx ? " active" : "";
-        const showCount = i === activeIdx && phase === "loading" && !!progress?.total;
+        const showCount = i === activeIdx
+          && (phase === "loading" || phase === "screening" || phase === "simulating")
+          && !!progress?.total;
         return (
           <div key={i} className={`tbt-stage${cls}`}>
             <span className="tbt-stage-dot">{i < activeIdx ? "✓" : i + 1}</span>

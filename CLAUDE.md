@@ -37,7 +37,10 @@
 12. 기업분석 탭 심화(FAS/DD) · 기업분석 라운드2(CIO 실사) · 매크로 탭 대개편(CIO 리팩토링+혁신 3과제)
 13. 젠포트화 Phase 6(동적 재편입) · 나이틀리 배치 프리컴퓨트(설계 가이드, 미구현)
 14. 백테스터 버그수정+캐싱+Mock 거버넌스+KIS 클라이언트 3중 통합
-15. **CLAUDE.md 단일화**(이 세션 — 파편화된 .md 문서 33개 조사·병합·삭제) ← 최신
+15. CLAUDE.md 단일화(파편화된 .md 문서 33개 조사·병합·삭제)
+16. PIT look-ahead bias 수정 · 스크리너 enrichment 동시성 · 생존편향 유니버스 UI 노출
+17. **백테스트 SSE 진행률 무음 구간 제거**(이 세션 — Celery/Redis 전제 조사·기각, 최소 수정
+    적용) ← 최신
 
 ---
 
@@ -2123,3 +2126,101 @@ Phase B(삭제): 33개 파일 전부 `git rm`(원본 rm 아님 — git 히스토
 ### 정직한 한계
 `docs/superpowers/` 워크플로(스펙→플랜→구현→CLAUDE.md 요약) 자체는 계속 유효한 관례라
 디렉터리 구조는 유지(내용물만 삭제) — 향후 세션이 같은 패턴을 다시 쓸 수 있음.
+
+---
+
+## 🎯 PIT look-ahead bias 수정 + 스크리너 enrichment 동시성 + 생존편향 유니버스 UI 노출
+
+사용자가 "백테스트 루프가 매 리밸런싱마다 실시간 KIS/DART를 호출해 타임아웃 난다"는
+진단(AI 프롬프트 초안 4개)을 제시했으나, 3개 병렬 Explore 에이전트가 이 메커니즘이
+`kis_backtest_engine.py`엔 존재하지 않음을 grep 전수조사로 확인(백테스터는 스크리너·
+가치평가 엔진을 아예 호출 안 함 — 의도된 설계, 기존에 정직하게 문서화됨). 대신 진짜
+버그 3개를 다른 위치에서 발견해 사용자 확정("실제 버그 3개만 수정") 후 수정:
+
+1. **Look-ahead bias**: `ValuationEngine.evaluate()`의 유일한 PIT 인지 호출부
+   (`screener.py::_evaluate_one_safe`, `/run-pit` 경유)가 `bsns_year`를 안 넘겨 과거
+   시점 평가에서도 재무가 현재 연도 기준으로 셈. `pit_store.py::_period_asof()`에
+   `annual_only: bool = False` 추가(연간 보고서 코드만 필터 — 분기 코드를 그대로
+   넘기면 `compute_ratios()`가 연환산 안 해 밸류에이션 2~4배 왜곡되는 별개 버그를
+   새로 만들 뻔했음, 사전에 발견해 회피) → `_evaluate_one_safe`가 `annual_only=True`로
+   구한 `bsns_year`를 명시 전달, 파싱 불가 시 wall-clock 폴백 없이 평가 스킵.
+2. **PIT 가격 재오염 방지**: `_enrich_kis_quotes`가 `_active_asof` 설정 시(PIT 모드)
+   조기 반환 — 과거 시점 가격을 오늘자 라이브 시세로 덮어쓰지 않음.
+3. **`_enrich_kis_quotes` 동시성**(실제 타임아웃 원인): 최대 400종목 동기 `for` 루프를
+   `ThreadPoolExecutor`로 교체(`screener.py:497` DART 단계와 동일 패턴 재사용).
+   신규 env var `SCREENER_ENRICH_WORKERS`(기본 8, 상한 24).
+4. **생존편향 보정 유니버스 UI 노출**: 백엔드(`universe_select.tickers_asof`/
+   `top_mktcap_asof`)는 이미 구현·테스트돼 있었으나 프론트가 값을 전혀 안 보내
+   도달 불가능한 죽은 기능이었음. `UniverseState.survivorshipMode`("off"|"all"|
+   "top200") 추가, 활성 시 `caps`/`sectors`/`etf`/`managed`/`supervised`/`groups`를
+   전부 비워 전송(안 비우면 백엔드 분기 우선순위상 `gran_tickers`가 먼저 걸려 무력화).
+   `screener_routes.py`의 `all_asof`/`top200_asof` 분기에서만 `as_of_date`를
+   `screener.run()`에 전달(1번 수정 선행 필요 — 안 그러면 상폐 종목이 유니버스엔
+   포함돼도 라이브 재무 없어 "데이터 없음"으로 재탈락).
+
+### 검증
+818 passed / 10 skipped, ruff 통과, tsc 0, next build 통과. `kis_backtest_engine.py`는
+전 구간 무변경 확인(트레이딩 백테스트 결과 회귀 없음).
+
+### 정직한 한계
+`/run-pit` 엔드포인트 자체를 화면에 재연결하는 작업, 생존편향 모드의 라이브 종목수
+카운트 연동은 범위 밖 — 백엔드 정확성만 수정.
+
+---
+
+## 🔍 백테스트 SSE 진행률 무음 구간 제거 (Celery/Redis 전제 조사 → 기각 → 최소 수정)
+
+사용자가 "Mission: Transition Backtest Engine to Asynchronous Task Queue Architecture
+(Institutional-Grade)"라는 상세 프롬프트(스크린샷 5개)로 `kis_backtest_engine.py`를
+Celery(태스크 큐)+Redis(브로커) 백그라운드 아키텍처로 전면 전환할 것을 요청. 3개 병렬
+Explore 에이전트로 전제를 독립 검증한 결과 대부분 성립하지 않음이 드러남 — 상세 조사
+기록은 `/root/.claude/plans/distributed-hatching-kurzweil.md` 참고, 핵심만 요약:
+
+- **"동기 엔진 → async-sync 브릿지 필요"**: 전제 자체가 틀림 — `kis_backtest_engine.py`
+  전체에 `async`/`await` 0건(grep 전수확인). 브릿지할 async 코드가 애초에 없음.
+- **"SSE 진행률 인프라 부재"**: 틀림 — `/screen-to-backtest-stream`이 이미 존재하고
+  `progress_cb`가 `BacktestEngine._emit()`까지 관통해 시뮬레이션 엔진 내부까지 배선돼
+  있음. 단, **진짜 격차 2곳**은 확인됨: (a) 일별 시뮬레이션 루프가 루프 시작 시 1회만
+  emit하고 이후 전혀 안 함(가장 오래 걸리는 구간이 정확히 무음), (b) `_screen_to_
+  backtest_core`의 스크리닝 호출이 `screener.run()`에 `progress_cb`를 안 넘김
+  (`_run_advanced_core`는 넘기는데 이쪽만 누락). 이 정확한 실패 모드(SSE 장시간 무음
+  → 인프라 비활성 타임아웃 → "network error")는 이미 이 프로젝트에서 실제로 발생한
+  적 있음(Phase 6 세션, 원인은 달랐지만 동일 메커니즘).
+- **"타임아웃 원인"**: 진짜였으나 원인이 다름 — 2,500종목×750거래일 시뮬레이션 루프를
+  합성 벤치마크로 실측하니 최선의 경우도 174초+(벡터화 안 된 10개 기본전략은
+  `_generate_signal_as_of`가 매 호출마다 전체 슬라이스 재계산해 사실상 `O(기간²)`로
+  더 나쁨). 이건 CPU-bound 순수 루프 비효율 — Celery로 감싸도 174초는 그대로(위치만
+  옮겨질 뿐 안 줄어듦), 별도의 벡터화 과제.
+- **인프라 현황**: `docker-compose.yml`엔 db/backend/frontend 3개뿐, redis/celery
+  0건. `Dockerfile.backend`가 `--workers 1`을 고정한 이유를 스스로 주석에 명시(
+  `_ValuationCache`/DART 쿼터 카운터/`_INGEST_STATUS` 등 프로세스 로컬 인메모리 상태
+  때문 — "다중 인스턴스 필요해지면 상태를 Redis/DB로 옮긴 뒤 워커를 올릴 것") — 즉
+  celery-worker 컨테이너는 정확히 이 주석이 경고하는 "두 번째 프로세스" 시나리오라,
+  스크린샷엔 없던 캐시 이전 설계가 새로 필요해짐.
+
+AskUserQuestion으로 조사 결과 제시 → 사용자가 "SSE 격차만 수정"(신규 인프라 0개) 선택.
+
+### 구현 (3파일, 최소 수정)
+- `src/kis_backtest_engine.py`: 시뮬레이션 루프에 `screener.py:504`와 동일한 throttle
+  관용구(`step = max(1, total // 100)`)로 구간별 `self._emit("simulating", done=, total=)`
+  추가(최대 ~100개 이벤트로 상한, 오버헤드 무시 가능 — dict 하나만 큐에 push).
+- `src/api/screener_routes.py`: `_screen_to_backtest_core`에 `_screen_progress(done,
+  total, misses)` 어댑터 신설 — `screener.run()`의 위치인자 콜백을 `_emit({"phase":
+  "screening", ...})` dict 이벤트로 변환해 배선.
+- `frontend/.../TerminalBacktester.tsx`: `BacktestProgress`의 `showCount` 게이트를
+  `"loading"` 전용에서 `"screening"`/`"simulating"`까지 확장(스테이지 구성 무변경).
+
+### 검증
+823 passed / 10 skipped(신규 5: `test_backtest_progress_emit.py` 2개 +
+`test_screen_to_backtest_progress.py` 3개), ruff 통과, tsc 0, next build 통과
+(`/backtest` 30.1kB).
+
+### 정직한 한계 / 범위 밖 (사용자 명시 제외)
+- Celery/Redis 등 신규 태스크 큐 인프라 — 크래시 생존성·프로세스 간 확장·정식 취소가
+  실제로 필요해지기 전까진 정당화 안 됨. 필요해지면 `_ValuationCache`/DART 쿼터
+  카운터 등 기존 인메모리 상태를 Redis로 이전하는 설계가 선행돼야 함.
+- 시뮬레이션 루프 자체의 성능 최적화(벡터화) — 이번 수정은 진행률만 보이게 할 뿐
+  174초+ 원시 성능 문제 자체는 해결 안 됨. 특히 10개 기본전략의 `O(기간²)` 낭비는
+  별도의 더 큰 과제.
+- `_INGEST_STATUS` 패턴을 일반화한 task_id 기반 submit/poll API — Redis 없는 대안으로
+  검토됐으나 사용자가 최소 옵션(SSE 격차만 수정)을 선택.

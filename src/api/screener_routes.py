@@ -1523,6 +1523,10 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         # 1회만 호출해 같은 결과에서 슬라이스(중복 호출 없음). replenishment_pool_cap은
         # eval_cap이 이미 크면 max()에 의해 항상 eval_cap이 이겨 "약간의 top-up"으로만 작용.
         pool_cap = max(eval_cap, min(int(req.replenishment_pool_cap), 4000))
+
+        def _screen_progress(done, total, misses):
+            _emit({"phase": "screening", "done": done, "total": total})
+
         result = screener.run(
             universe=_universe,
             filter_ast=ast,
@@ -1533,6 +1537,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             limit=pool_cap,
             liquidity_floor=req.liquidity_floor,
             as_of_date=_asof_date_for_screener,
+            progress_cb=_screen_progress,
         )
         # screened(≤eval_cap)는 조건식 신호 평가용 후보 풀 — "대상 종목 수"(max_tickers)와는
         # 무관하게 넓게 유지한다(조건식이 넓은 풀에서 매치를 찾아야 하므로). 동시 보유 가능

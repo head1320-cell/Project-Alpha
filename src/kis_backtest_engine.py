@@ -476,9 +476,13 @@ class BacktestEngine:
         lag = max(0, int(self.cfg.signal_lag or 0))
 
         # Day-by-day 시뮬레이션
-        self._emit("simulating", done=0, total=len(sim_dates))
-        for sim_date in sim_dates:
+        _sim_total = len(sim_dates)
+        _sim_step = max(1, _sim_total // 100)  # 진행 이벤트 최대 ~100개로 throttle
+        self._emit("simulating", done=0, total=_sim_total)
+        for _sim_idx, sim_date in enumerate(sim_dates, start=1):
             date_str = sim_date.strftime("%Y-%m-%d")
+            if _sim_idx % _sim_step == 0 or _sim_idx == _sim_total:
+                self._emit("simulating", done=_sim_idx, total=_sim_total)
             self._buys_today = 0  # 일일 신규 매수 카운터 (max_buy_per_day 제한용)
             # 현금/주식 비중 유지(자산배분): 당일 평가자산 1회 계산 — 매수 가용액·ETF 목표 산정
             self._equity_today = (self._calc_equity(ohlcv_map, sim_date, etf_map)
