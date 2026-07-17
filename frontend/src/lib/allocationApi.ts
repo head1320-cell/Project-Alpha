@@ -133,6 +133,19 @@ export interface StressResult {
   dropped?: string[];
 }
 
+export interface SensitivityResult {
+  error: boolean;
+  message?: string;
+  names: string[];
+  labels: Record<string, string>;
+  base_weights: number[];          // %
+  matrix: number[][];              // 행=충격 자산, 열=반응 비중 Δ%p
+  bump_pct: number;
+  views_applied: boolean;
+  excluded: { ticker: string; reason: string }[];
+  coverage: { start: string | null; end: string | null; n_obs: number; source?: "db" | "mock" };
+}
+
 export interface SymbolHit { ticker: string; name: string; market?: string }
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -165,6 +178,18 @@ export const allocationApi = {
       body: JSON.stringify({ holdings, scenario }),
     });
     if (!r.ok) throw new Error(`Stress failed: ${r.status}`);
+    return r.json();
+  },
+
+  sensitivity: async (req: {
+    tickers: string[]; views?: AllocationViewInput[]; delta?: number; tau?: number; bump_pct?: number;
+  }): Promise<SensitivityResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/sensitivity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`Sensitivity failed: ${r.status}`);
     return r.json();
   },
 

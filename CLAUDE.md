@@ -42,8 +42,10 @@
 17. 백테스트 SSE 진행률 무음 구간 제거(Celery/Redis 전제 조사·기각, 최소 수정 적용)
 18. Allocation Studio 신규 탭(Two Sigma Venn 벤치마킹, 사용자 뷰 Black-Litterman +
     3-존 콕핏)
-19. **Research OS 개편**(이 세션 — 전 탭 헤더 제거 + Allocation Studio 밀도·레짐/
-    카나리 컨텍스트·인과 체인·확률구름·타임라인, R2/R3 로드맵) ← 최신
+19. Research OS 개편(전 탭 헤더 제거 + Allocation Studio 밀도·레짐/카나리
+    컨텍스트·인과 체인·확률구름·타임라인)
+20. **Research OS v2**(이 세션 — 마이크로 워크스페이스 6분할 + Sensitivity
+    Heatmap + Decision Journal + vNext 설계 원칙) ← 최신
 
 ---
 
@@ -2368,3 +2370,87 @@ Playwright 라이브: 8개 탭 전부 200+헤더 부재+보존 컨트롤 작동,
 스크린샷 — ContextStrip(Goldilocks CONF 54%·카나리 4종 스파크), 테제 체인,
 확률구름, ROBUSTNESS 카드(-15.6%), Explainability 분해(+4.1%p 뷰 기여),
 타임라인 실기록("재최적화 — BL · λ 2.5 · τ 0.05 · 뷰 1개") 확인.
+
+---
+
+## 🏗️ Research OS v2 — 마이크로 워크스페이스 + Sensitivity Heatmap + Decision Journal
+
+사용자가 설계 피드백("89/100이지만 Optimizer 중심 도구에 머묾 — Workflow 중심
+Research OS로") + 구현 지시("단일 화면 협소 — 중첩 라우팅 마이크로 워크스페이스로
+확장, `b086cef` 기반") 5장을 첨부. 설계서 업그레이드와 구현을 함께 수행.
+
+### Research OS Design Principles (vNext) — 파이프라인 단계 ↔ 화면 매핑
+플랫폼 철학 = **Linear Research Pipeline**. 모든 화면·컴포넌트는 이 파이프라인의
+한 단계를 담당한다:
+
+| 파이프라인 단계 | 담당 화면/컴포넌트 | 상태 |
+|---|---|---|
+| Macro Intelligence | /macro (MacroCockpit) | 기존 |
+| Current Regime · Canary Signals | ContextStrip (allocation 전 워크스페이스 상단 고정) | R1 |
+| Research Thesis | /allocation/thesis (인과 체인 ViewBuilder) | **v2** |
+| Factor Mapping | thesis 내 Factor Exposure Preview → R2 자동매핑 | v2=Preview |
+| Portfolio Construction (BL) | /allocation/optimizer (모델 스위치+Frontier+Flow) | **v2** |
+| Robustness (Sensitivity) | /allocation/robustness (**Sensitivity Heatmap**+시나리오) | **v2 신규** |
+| Explainability | /allocation/explainability (Attribution 테이블+상관구조) | **v2** |
+| Decision Journal (Research Memory) | /allocation/journal (구조화 저널+세션 타임라인) | **v2 신규** |
+
+**데이터 파이프라인(DFD)**: `MacroCollector(BOK·FRED) → RegimeAnalyzer →
+{regime, confidence, canary(VIXCLS·DGS10·BAMLH0A0HYM2·T10Y2Y)} → ContextStrip
+(캐시 공유 ["macro","*"]) → [R2: BL prior 추천 자동 주입] →
+allocation_studio.optimize(views→P/Q/Ω→posterior) → 프론티어/흐름/민감도/저널`.
+현재 Macro→Allocation은 표시 연결(ContextStrip)까지, prior 자동 주입은 R2.
+
+### 구현 (커밋 단위 1개)
+- **백엔드**: `allocation_studio.sensitivity_matrix()` — 자산 i의 μ에 +bump(연
+  %p) 충격 → max-sharpe 재최적화 → `matrix[i][j]=Δw_j`(%p, N×N). base μ는
+  /analyze와 동일 경로(뷰 있으면 BL posterior — Robustness가 검증하는 대상이
+  실제 사용 기대수익이 되도록). `POST /api/v1/allocation/sensitivity`
+  (_load_clean_returns 재사용, mock 폴백·excluded·coverage 관례 동일).
+  TDD 3종: 대각 우세(+5%p에서 자기 반응 최대), 행 Δ합≈0(완전투자 제약), 정직
+  에러. **847 passed / 10 skipped**.
+- **중첩 라우팅**: `app/allocation/layout.tsx` = `AllocationProvider`(구
+  AllocationStudio 상태·로직 전체를 Context로 리프트 — App Router layout은
+  자식 라우트 전환에도 유지되므로 워크스페이스 간 이동 시 유니버스·뷰·결과
+  보존) + ContextStrip + SubNav(Hub·Thesis·Optimizer·Robustness·Explainability·
+  Journal). `useAllocation()` 훅. AllocationStudio.tsx 삭제(허브+서브로 분해).
+- **Hub**(`/allocation`): 요약 위젯 그리드(포트폴리오·프론티어 미니·최적 비중·
+  팩터·Robustness·리스크 도넛·타임라인) — 각 카드 `[↗]` 드릴다운(Master-Detail).
+- **Robustness 워크스페이스**: 좌(시나리오 8종 + μ bump 슬라이더 0.5~5%p, 릴리스
+  시 재계산) / 우(**Sensitivity Heatmap** — 행=충격 자산·열=비중 반응 Δ%p,
+  초록/빨강 발산색+base 열+정직 해설, 라이브 검증: 대각 +7.3/+6.0/+6.2 우세) +
+  시나리오 상세(기존 스트레스 테이블/차트 이식).
+- **Journal 워크스페이스**: Decision Journal 스키마 — `AllocationStudy +=
+  {macro_view, changed, reason, result_summary, review}` + `updateStudyReview()`.
+  새 엔트리 폼(Macro View는 현재 레짐 자동 스냅샷+편집, Result는 최적화 결과
+  자동 첨부), 목록(5필드 그리드), Review 사후 편집. 세션 타임라인 병치.
+- **Thesis/Optimizer/Explainability**: 기존 컴포넌트를 넓은 전용 화면으로 이식
+  (Frontier 340px, Attribution 전 자산 테이블, CorrelationMini 신규).
+
+### R2 스펙 확장 (설계 — 기존 코드 재사용 매핑)
+① **Factor-first Research**: `POST /allocation/factor-map` {thesis_text} →
+  {factor_tilts, asset_views} — nl2ast의 Claude 게이트 패턴 + build_user_views
+  재사용. Thesis 워크스페이스의 Preview가 이 출력의 표시면이 됨.
+② **Economic-driven BL**: 거시 테마→자산 View 추상화 레이어(예: "AI Capex↑ →
+  GPU Demand → 반도체 Growth") — risk_allocations `_TILT_TO_ASSETS` 일반화 +
+  genport_themes 그룹 매핑 재사용.
+③ **Probability Frontier**: 프론티어 각 점에 레짐확률(quadrant_probs) 가중
+  수익분포 + 테일확률 밴드 — macro_allocation의 MC p10/50/90 밴드 패턴 이식.
+④ **Decision Journal 완전판**: Result 자동 사후검증(저장 시점 가중치를 이후
+  실측 수익률과 대조하는 배치) — 이번 스키마가 선행 저장 구조.
+⑤ **레짐 연동 BL prior**: ContextStrip이 표시 중인 regime_analyzer.asset_tilts를
+  "추천 prior" 버튼으로 P/Q에 스택(사용자 뷰와 병합).
+
+### 검증
+847 passed/10 skipped(+3 sensitivity), ruff·tsc 0, next build **23/23**
+(/allocation 6라우트). Playwright E2E: Thesis에서 3종목+뷰 추가 → Re-optimize →
+SubNav로 Robustness 이동 → **holdings 유지 + 히트맵 12셀 렌더(상태 보존 증명)**
+→ Hub 요약 유지 → Journal 엔트리 저장(Macro View 자동 스냅샷 "Goldilocks
+(신뢰도 54%) · CAUTIOUS · Stress 52" + Result 자동 첨부) 확인.
+
+### 정직한 한계 / 범위 밖
+- R2 5건은 설계만(위 매핑) — LLM 팩터매핑·Probability Frontier 수학·레짐 prior
+  주입·사후검증 배치는 미구현.
+- Sensitivity는 max-sharpe 경로 기준(공분산 전용 모델은 μ 충격에 무반응이므로
+  의미 없음 — BL/MVO 사용 시 유의미). N회 SLSQP라 자산 30개 상한.
+- zustand 승격은 멀티 워크스페이스(동시 다중 스터디) 시점으로 유보 — 현재
+  Context 1개로 충분.

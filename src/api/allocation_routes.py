@@ -61,6 +61,15 @@ class XrayRequest(BaseModel):
     holdings: dict[str, float] = Field(..., min_length=1)   # {code: weight_pct}
 
 
+class SensitivityRequest(BaseModel):
+    tickers: list[str] = Field(..., min_length=2, max_length=30)
+    views: list[AllocationView] | None = None
+    delta: float = Field(2.5, ge=0.5, le=10)
+    tau: float = Field(0.05, ge=0.001, le=1.0)
+    bump_pct: float = Field(2.0, ge=0.5, le=10)   # μ 충격 크기 (연 %p)
+    lookback_days: int = Field(756, ge=90, le=3650)
+
+
 class StressRequest(BaseModel):
     holdings: dict[str, float] = Field(..., min_length=1)
     scenario: str = "rate_hike_200bp"
@@ -564,6 +573,34 @@ def allocation_stress(req: StressRequest):
         }
     except Exception:
         logger.exception("stress 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/sensitivity")
+def allocation_sensitivity(req: SensitivityRequest):
+    """Sensitivity Heatmap — 자산별 기대수익 +bump 충격 → 최적 비중 변화 N×N.
+
+    Robustness 재정의(Research OS): 결과 산점이 아니라 "입력(μ) 변동에 대한
+    가중치 안정성"을 검증. base μ는 /analyze와 동일(뷰 있으면 BL posterior).
+    """
+    try:
+        returns, _bench, excluded, coverage = _load_clean_returns(
+            req.tickers, None, req.lookback_days)
+        if returns is None or len(returns.columns) < 2:
+            return {"error": True,
+                    "message": "분석 가능한 자산이 2개 미만입니다.",
+                    "excluded": excluded}
+        names = list(returns.columns)
+        from src.engine.allocation_studio import sensitivity_matrix
+        views = [v.model_dump() for v in (req.views or [])]
+        out = sensitivity_matrix(names, returns.values, views=views or None,
+                                 delta=req.delta, tau=req.tau,
+                                 bump_pct=req.bump_pct)
+        out.update({"error": False, "labels": _labels(names),
+                    "excluded": excluded, "coverage": coverage})
+        return out
+    except Exception:
+        logger.exception("sensitivity 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 

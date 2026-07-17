@@ -44,7 +44,7 @@ function CloudDot(props: { cx?: number; cy?: number; payload?: { q?: number } })
     opacity={0.08 + q * 0.34} />;
 }
 
-export function FrontierChart({ result, lam }: { result: AnalyzeResult; lam: number }) {
+export function FrontierChart({ result, lam, height = 256 }: { result: AnalyzeResult; lam: number; height?: number }) {
   const cloud = result.frontier.cloud;
   const sh = cloud.sharpes || [];
   const shMin = sh.length ? Math.min(...sh) : 0;
@@ -58,7 +58,7 @@ export function FrontierChart({ result, lam }: { result: AnalyzeResult; lam: num
   const lamPt = lamIdx >= 0 ? curveData[lamIdx] : null;
   const pts = result.points;
   return (
-    <ResponsiveContainer width="100%" height={256}>
+    <ResponsiveContainer width="100%" height={height}>
       <ScatterChart margin={{ top: 10, right: 14, bottom: 6, left: -8 }}>
         <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" />
         <XAxis type="number" dataKey="x" name="변동성" unit="%" tick={{ fontSize: 9.5, fontFamily: "var(--t-mono)" }}
@@ -299,6 +299,90 @@ export function ConfidenceGauge({ value, height = 120 }: { value: number; height
         </RadialBarChart>
       </ResponsiveContainer>
       <div className="as-gauge-c"><b>{Math.round(v)}</b><span>Overall Confidence</span><em>{label}</em></div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SensitivityHeatmap — 기댓값 변동(행: μ+bump 충격 자산) → 최적 비중 반응(열) Δ%p
+//   Robustness 재정의(Research OS): 입력 불확실성에 대한 가중치 안정성 검증.
+// ─────────────────────────────────────────────────────────────────────────────
+function heatColor(v: number, maxAbs: number): string {
+  if (!Number.isFinite(v) || maxAbs <= 0) return "transparent";
+  const t = Math.max(-1, Math.min(1, v / maxAbs));
+  const a = 0.06 + 0.6 * Math.abs(t);
+  return t >= 0 ? `rgba(22,163,74,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+
+export function SensitivityHeatmap({ names, labels, matrix, baseWeights, bumpPct }: {
+  names: string[]; labels: Record<string, string>;
+  matrix: number[][]; baseWeights: number[]; bumpPct: number;
+}) {
+  const maxAbs = Math.max(0.01, ...matrix.flat().map((v) => Math.abs(v)));
+  const nm = (c: string) => labels[c] || c;
+  return (
+    <div className="as-heat-wrap">
+      <table className="as-heat">
+        <thead>
+          <tr>
+            <th className="as-heat-corner">충격 ＼ 반응</th>
+            {names.map((c) => <th key={c} title={c}>{nm(c)}</th>)}
+            <th className="as-heat-base">base</th>
+          </tr>
+        </thead>
+        <tbody>
+          {names.map((rc, i) => (
+            <tr key={rc}>
+              <th title={`${nm(rc)} 기대수익 +${bumpPct}%p 충격`}>{nm(rc)} <em>+{bumpPct}%</em></th>
+              {names.map((cc, j) => (
+                <td key={cc} className="num" style={{ background: heatColor(matrix[i][j], maxAbs) }}
+                  title={`${nm(rc)} μ+${bumpPct}%p → ${nm(cc)} 비중 ${fmtSign(matrix[i][j], 2)}%p`}>
+                  {fmtSign(matrix[i][j], 1)}
+                </td>
+              ))}
+              <td className="num as-heat-base">{baseWeights[i]?.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="as-note">셀 = 행 자산의 기대수익을 +{bumpPct}%p 올렸을 때 열 자산의 최적 비중 변화(%p).
+        초록=증가·빨강=감소. 행 합≈0(완전투자 제약). 대각이 크고 비대각이 작을수록 안정적.</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CorrelationMini — 상관행렬 미니 히트맵 (result.correlation 재사용)
+// ─────────────────────────────────────────────────────────────────────────────
+export function CorrelationMini({ correlation, names, labels }: {
+  correlation: Record<string, Record<string, number>>;
+  names: string[]; labels: Record<string, string>;
+}) {
+  const nm = (c: string) => labels[c] || c;
+  return (
+    <div className="as-heat-wrap">
+      <table className="as-heat">
+        <thead>
+          <tr><th className="as-heat-corner" />{names.map((c) => <th key={c}>{nm(c)}</th>)}</tr>
+        </thead>
+        <tbody>
+          {names.map((r) => (
+            <tr key={r}>
+              <th>{nm(r)}</th>
+              {names.map((c) => {
+                const v = correlation[r]?.[c];
+                return (
+                  <td key={c} className="num"
+                    style={{ background: v == null ? "transparent" : heatColor(v, 1) }}
+                    title={`${nm(r)} × ${nm(c)}`}>
+                    {v == null ? "—" : v.toFixed(2)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

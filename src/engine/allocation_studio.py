@@ -214,5 +214,47 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         "skipped_views": skipped_views,
         "cap_missing": cap_missing,
         "mu_annual": (R.mean(axis=0) * 252.0),
+        "mu_used": (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0),
         "sigma_annual": S,
+    }
+
+
+# ── Sensitivity Heatmap (Robustness 재정의 — 기댓값 변동 → Weight 민감도) ──────
+def sensitivity_matrix(names: list[str], R: np.ndarray,
+                       views: list[dict] | None = None,
+                       delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
+                       bump_pct: float = 2.0) -> dict:
+    """자산 i의 기대수익 μ_i에 +bump(연 %p) 충격 → max-sharpe 재최적화 →
+    matrix[i][j] = w_j(shock i) − w_j(base) (%p, N×N).
+
+    base μ는 optimize()와 동일 경로(뷰 있으면 BL posterior, 없으면 히스토리컬
+    연율 평균) — Robustness가 검증하는 대상이 실제 사용 중인 기대수익이 되도록.
+    행별 Δ 합은 합1 제약으로 ≈0. SLSQP N회(N≤30)라 수 초 내.
+    """
+    n = len(names)
+    base = optimize("bl" if views else "mvo", names, R, views=views,
+                    delta=delta, tau=tau)
+    S = base["sigma_annual"]
+    mu0 = np.asarray(base["mu_used"], dtype=float)
+    w0 = np.asarray(base["weights"], dtype=float)
+    bump = float(bump_pct) / 100.0
+
+    matrix: list[list[float]] = []
+    for i in range(n):
+        mu = mu0.copy()
+        mu[i] += bump
+        w = _max_sharpe_w(mu, S, n)
+        if w is None or not np.all(np.isfinite(w)) or w.sum() <= 0:
+            w = w0  # 최적화 실패 시 base 유지(Δ=0 행 — 정직한 무반응)
+        else:
+            w = np.maximum(np.asarray(w, dtype=float), 0.0)
+            w = w / w.sum()
+        matrix.append([round(float((w[j] - w0[j]) * 100.0), 2) for j in range(n)])
+
+    return {
+        "names": names,
+        "base_weights": [round(float(x) * 100.0, 2) for x in w0],
+        "matrix": matrix,           # 행=충격 자산, 열=반응 비중 Δ%p
+        "bump_pct": bump_pct,
+        "views_applied": base["views_applied"],
     }

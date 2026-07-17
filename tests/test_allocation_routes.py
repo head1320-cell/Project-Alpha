@@ -17,10 +17,12 @@ import pandas as pd  # noqa: E402
 import src.api.allocation_routes as ar  # noqa: E402
 from src.api.allocation_routes import (  # noqa: E402
     AnalyzeRequest,
+    SensitivityRequest,
     StressRequest,
     XrayRequest,
     allocation_analyze,
     allocation_factor_xray,
+    allocation_sensitivity,
     allocation_stress,
 )
 
@@ -114,6 +116,42 @@ def test_analyze_mock_fallback_in_mock_mode(monkeypatch):
     assert out["error"] is False
     assert out["coverage"]["source"] == "mock"
     assert len(out["frontier"]["curve"]) >= 10
+
+
+# ── /sensitivity ─────────────────────────────────────────────────────────────
+
+def test_sensitivity_shape_and_constraints(monkeypatch):
+    _patch_returns(monkeypatch, _fake_returns_df(T3, include_bench=False))
+    _patch_caps(monkeypatch)
+    out = allocation_sensitivity(SensitivityRequest(tickers=T3, bump_pct=2.0))
+    assert out["error"] is False
+    n = len(out["names"])
+    assert n == 3
+    assert len(out["matrix"]) == n and all(len(row) == n for row in out["matrix"])
+    # 합1 제약 → 각 행의 Δ 합 ≈ 0
+    for row in out["matrix"]:
+        assert abs(sum(row)) < 0.5, row
+    # 자기 자산 μ↑ 충격 → 자기 비중은 감소하지 않아야 함(대각 ≥ 0, 수치 여유)
+    for i in range(n):
+        assert out["matrix"][i][i] >= -0.5, out["matrix"][i]
+    assert abs(sum(out["base_weights"]) - 100.0) < 1.0
+
+
+def test_sensitivity_diagonal_dominant_response(monkeypatch):
+    # 큰 충격(+5%p)이면 대각(자기 반응)이 그 행에서 최대여야 함
+    _patch_returns(monkeypatch, _fake_returns_df(T3, include_bench=False))
+    _patch_caps(monkeypatch)
+    out = allocation_sensitivity(SensitivityRequest(tickers=T3, bump_pct=5.0))
+    m = out["matrix"]
+    diag_wins = sum(1 for i in range(3) if m[i][i] >= max(m[i]) - 1e-9)
+    assert diag_wins >= 2  # 최소 대다수 행에서 자기 자산이 최대 반응
+
+
+def test_sensitivity_honest_error_no_data(monkeypatch):
+    _patch_returns(monkeypatch, pd.DataFrame())
+    monkeypatch.setattr(ar, "_mock_returns_fallback", lambda *a, **k: None)
+    out = allocation_sensitivity(SensitivityRequest(tickers=["005930", "000660"]))
+    assert out["error"] is True
 
 
 # ── /factor-xray ─────────────────────────────────────────────────────────────

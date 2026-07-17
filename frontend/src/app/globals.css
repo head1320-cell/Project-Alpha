@@ -3020,3 +3020,49 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-explain-step b { font-variant-numeric: tabular-nums; }
 .as-explain-step .delta { font-size: 9.5px; }
 .as-explain-road { font-size: 9px; color: var(--t-muted); }
+
+/* ── Research OS v2 — 마이크로 워크스페이스 (.as-* 확장) ── */
+/* 서브 내비게이션 (워크스페이스 탭) */
+.as-subnav { display: flex; gap: 4px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 3px 6px; }
+.as-subnav-tab { font-size: 11px; letter-spacing: .03em; color: var(--t-muted); text-decoration: none; padding: 3px 10px; border: 1px solid transparent; border-radius: 2px; }
+.as-subnav-tab:hover { border-color: var(--t-border); background: var(--t-surface); }
+.as-subnav-tab.on { color: var(--t-accent); border-color: var(--t-accent); background: rgba(18,0,255,.05); font-weight: 600; }
+
+/* 허브 */
+.as-hub { display: flex; flex-direction: column; gap: 8px; }
+.as-hub-bar { display: flex; align-items: center; gap: 12px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 6px 10px; flex-wrap: wrap; }
+.as-hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: start; }
+.as-expand { margin-left: auto; font-size: 12px; color: var(--t-muted); text-decoration: none; border: 1px solid var(--t-border); border-radius: 2px; padding: 0 5px; line-height: 1.4; }
+.as-expand:hover { color: var(--t-accent); border-color: var(--t-accent); }
+
+/* 워크스페이스 2-열 공통 */
+.as-ws2 { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 8px; align-items: start; }
+.as-ws2 aside { min-width: 0; }
+.as-ws2 main { min-width: 0; }
+.as-ws-opt { grid-template-columns: 320px minmax(0, 1fr); }
+.as-ws-exp { grid-template-columns: minmax(0, 1fr) 320px; }
+.as-ws-jr { grid-template-columns: 340px minmax(0, 1fr); }
+@media (max-width: 1000px) { .as-ws2, .as-ws-opt, .as-ws-exp, .as-ws-jr { grid-template-columns: 1fr; } }
+
+/* Sensitivity Heatmap */
+.as-heat-wrap { overflow-x: auto; }
+.as-heat { border-collapse: collapse; font-size: 10px; width: 100%; }
+.as-heat th { font-family: var(--t-mono); font-weight: 500; color: var(--t-muted); padding: 3px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--t-border); }
+.as-heat tbody th { text-align: left; border-bottom: 1px solid var(--t-surface); }
+.as-heat tbody th em { font-style: normal; font-size: 8.5px; color: var(--t-accent); }
+.as-heat td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--t-surface); font-variant-numeric: tabular-nums; min-width: 52px; }
+.as-heat .as-heat-corner { text-align: left; font-size: 8.5px; }
+.as-heat .as-heat-base { color: var(--t-muted); border-left: 1px solid var(--t-border); }
+
+/* Decision Journal */
+.as-jr-field { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; }
+.as-jr-field em { font-style: normal; color: var(--t-muted); font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .04em; }
+.as-jr-entry { border: 1px solid var(--t-border); border-left: 3px solid var(--t-accent); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.as-jr-head { display: flex; align-items: baseline; gap: 10px; }
+.as-jr-head b { font-size: 12px; }
+.as-jr-head .as-x { margin-left: auto; }
+.as-jr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 14px; }
+.as-jr-grid em, .as-jr-review em { font-style: normal; color: var(--t-muted); font-family: var(--t-mono); font-size: 9px; letter-spacing: .05em; display: block; }
+.as-jr-grid p { font-size: 11px; line-height: 1.5; margin: 1px 0 0; }
+.as-jr-review { border-top: 1px dashed var(--t-border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.as-jr-review p { font-size: 11px; margin: 0; }
