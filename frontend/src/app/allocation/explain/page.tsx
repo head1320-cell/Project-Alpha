@@ -12,7 +12,7 @@ export default function ExplainabilityWorkspace() {
     return (
       <section className="as-card">
         <div className="as-card-title">EXPLAINABILITY</div>
-        <div className="as-empty">Optimizer에서 Re-optimize 실행 후 표시됩니다 — Market Prior → User View(BL) → Optimizer 제약의 단계별 비중 분해.</div>
+        <div className="as-empty">상단 Re-optimize 실행 후 표시됩니다 — Market Prior → User View(BL) → Optimizer 제약의 단계별 비중 분해.</div>
       </section>
     );
   }

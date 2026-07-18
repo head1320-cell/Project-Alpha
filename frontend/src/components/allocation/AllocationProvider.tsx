@@ -27,6 +27,28 @@ export const MODELS: { id: AllocationModel; label: string }[] = [
 
 export const COV_ONLY: AllocationModel[] = ["risk_parity", "hrp", "min_var"];
 
+// 7단계 순차 리서치 파이프라인 — 라우트 순서·라벨·헤더 메타 (레퍼런스: Aladdin/Venn/Marquee)
+export interface StageMeta { n: string; href: string; label: string; title: string; desc: string }
+export const STAGES: StageMeta[] = [
+  { n: "00", href: "/allocation", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운" },
+  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 검색·비중·집중도" },
+  { n: "02", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도" },
+  { n: "03", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름" },
+  { n: "04", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "기댓값 변동 → 비중 민감도 + 시나리오" },
+  { n: "05", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조" },
+  { n: "06", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 — Macro View→Changed→Reason→Result→Review" },
+];
+export function stageIndex(pathname: string): number {
+  // 가장 긴 매칭 우선 (/allocation은 정확 매칭, 나머지는 prefix)
+  let best = 0;
+  STAGES.forEach((s, i) => {
+    if (s.href === "/allocation" ? pathname === "/allocation" : pathname.startsWith(s.href)) {
+      if (s.href.length >= STAGES[best].href.length) best = i;
+    }
+  });
+  return best;
+}
+
 interface AllocationCtx {
   holdings: Holding[];
   setHoldingsReset: (next: Holding[]) => void;
@@ -42,12 +64,15 @@ interface AllocationCtx {
   setTau: (v: number) => void;
   result: AnalyzeResult | null;
   scenario: string;
+  bump: number;
+  setBump: (v: number) => void;
   pickScenario: (id: string) => void;
   scenarios: StressScenarioMeta[];
   timeline: TimelineEvent[];
   logEvent: (msg: string) => void;
   canRun: boolean;
   pending: boolean;
+  lastRun: string;
   analyzeError: string | null;
   runAnalyze: (over?: { model?: AllocationModel; tau?: number; views?: AllocationViewInput[] }) => void;
   xrayQ: UseQueryResult<XrayResult | null>;
@@ -75,8 +100,10 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [tau, setTau] = useState(0.05);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [scenario, setScenario] = useState<string>("rate_hike_200bp");
+  const [bump, setBump] = useState(2.0);
   const [studiesVersion, setStudiesVersion] = useState(0);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [lastRun, setLastRun] = useState("—:—:—");
   const lastReqRef = useRef<string>("");
 
   const logEvent = (msg: string) =>
@@ -91,7 +118,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
 
   const analyzeMut = useMutation({
     mutationFn: allocationApi.analyze,
-    onSuccess: (data) => { if (!data.error) setResult(data); },
+    onSuccess: (data) => { if (!data.error) { setResult(data); setLastRun(new Date().toTimeString().slice(0, 8)); } },
   });
 
   const canRun = holdings.length >= 2;
@@ -183,9 +210,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     holdings, setHoldingsReset, holdingsMap, holdingsKey,
     views, setViewsLogged,
     model, setModel, delta, setDelta, tau, setTau,
-    result, scenario, pickScenario, scenarios,
+    result, scenario, bump, setBump, pickScenario, scenarios,
     timeline, logEvent,
-    canRun, pending: analyzeMut.isPending,
+    canRun, pending: analyzeMut.isPending, lastRun,
     analyzeError: analyzeMut.data?.error ? (analyzeMut.data.message ?? "분석 실패") : null,
     runAnalyze, xrayQ, stressQ,
     saveStudyFull, loadStudy, studiesVersion,

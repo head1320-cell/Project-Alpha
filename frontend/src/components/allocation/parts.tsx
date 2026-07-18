@@ -19,6 +19,61 @@ const DONUT_COLORS = ["#1200ff", "#16a34a", "#ea580c", "#0891b2", "#a16207", "#7
 export const fmtSign = (v: number | null | undefined, d = 2): string =>
   v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}`;
 
+export const paletteColor = (i: number): string => DONUT_COLORS[i % DONUT_COLORS.length];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 01 CONSTRUCT 프리미티브 — AllocationMap · WeightComparison · Concentration
+// ─────────────────────────────────────────────────────────────────────────────
+export function AllocationMap({ items }: { items: { code: string; name: string; weight: number }[] }) {
+  const tot = items.reduce((a, x) => a + Math.max(x.weight, 0), 0) || 1;
+  const shown = items.filter((x) => x.weight > 0);
+  if (!shown.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
+  return (
+    <div className="aas-map">
+      {shown.map((x, i) => (
+        <div key={x.code} className="aas-map-b" title={`${x.name} ${x.weight.toFixed(1)}%`}
+          style={{ flex: `${(x.weight / tot) * 100} 0 0`, background: paletteColor(i) }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "#fff" }}>{x.name}</span>
+          <span className="num" style={{ fontSize: 10, color: "rgba(255,255,255,.85)" }}>{x.weight.toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function WeightComparison({ rows }: {
+  rows: { code: string; name: string; current: number; market: number; optimized: number }[];
+}) {
+  const mx = Math.max(1, ...rows.flatMap((r) => [r.current, r.market, r.optimized]));
+  const w = (v: number) => `${Math.min((v / mx) * 100, 100)}%`;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      {rows.map((r) => (
+        <div key={r.code} className="aas-cmp-row">
+          <span style={{ fontSize: 10.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+          <div className="aas-cmp-bars">
+            <div><i style={{ width: w(r.current), background: "var(--t-accent)", opacity: 0.85 }} /></div>
+            <div><i style={{ width: w(r.market), background: "#a1a1aa" }} /></div>
+            <div><i style={{ width: w(r.optimized), background: "#16a34a", opacity: 0.8 }} /></div>
+          </div>
+          <span className="num" style={{ fontSize: 9.5, textAlign: "right", color: "var(--t-muted)" }}>
+            {r.current.toFixed(1)} / {r.market.toFixed(1)} / {r.optimized.toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function concentration(weightsPct: number[]): { hhi: number; top3: number; neff: number } {
+  const tot = weightsPct.reduce((a, w) => a + Math.max(w, 0), 0) || 1;
+  const frac = weightsPct.map((w) => Math.max(w, 0) / tot);        // 0~1
+  const hhi = frac.reduce((a, f) => a + f * f, 0) * 10000;          // Σw²×10⁴
+  const top3 = [...frac].sort((a, b) => b - a).slice(0, 3).reduce((a, f) => a + f, 0) * 100;
+  const neff = hhi > 0 ? 10000 / hhi : 0;
+  return { hhi, top3, neff };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FrontierChart — MC 클라우드(산점) + SLSQP 프론티어 곡선 + 마커 4종
 //   λ(위험회피)는 클라이언트 사이드: 이미 받은 곡선 30점에서 u=μ-(λ/2)σ² argmax

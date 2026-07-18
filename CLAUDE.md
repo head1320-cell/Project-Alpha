@@ -44,8 +44,10 @@
     3-존 콕핏)
 19. Research OS 개편(전 탭 헤더 제거 + Allocation Studio 밀도·레짐/카나리
     컨텍스트·인과 체인·확률구름·타임라인)
-20. **Research OS v2**(이 세션 — 마이크로 워크스페이스 6분할 + Sensitivity
-    Heatmap + Decision Journal + vNext 설계 원칙) ← 최신
+20. Research OS v2(마이크로 워크스페이스 6분할 + Sensitivity Heatmap +
+    Decision Journal + vNext 설계 원칙)
+21. **Allocation Studio 파이프라인 리디자인**(이 세션 — Claude Design 핸드오프
+    구현, 7단계 순차 리서치 파이프라인 + 공유 크롬) ← 최신
 
 ---
 
@@ -2454,3 +2456,71 @@ SubNav로 Robustness 이동 → **holdings 유지 + 히트맵 12셀 렌더(상�
   의미 없음 — BL/MVO 사용 시 유의미). N회 SLSQP라 자산 30개 상한.
 - zustand 승격은 멀티 워크스페이스(동시 다중 스터디) 시점으로 유보 — 현재
   Context 1개로 충분.
+
+---
+
+## 🎬 Allocation Studio 파이프라인 리디자인 (Claude Design 핸드오프 구현)
+
+사용자가 v2를 "UI/UX 최악 — Aladdin·Venn·Marquee 레퍼런스로 고도화, 설계를
+순서대로 진행"이라 평가한 뒤, **Claude Design 프로젝트**(`c6ab0f11`, "Asset
+Allocation Studio UI 개선")의 고충실도 핸드오프 `Asset Allocation Studio.dc.html`
+(107KB·7페이지)를 첨부하고 "기존 코드베이스 패턴대로 재구현"을 지시. DesignSync
+MCP(read-only)로 README·전체 HTML·parts 레퍼런스를 정독 후 구현.
+
+### 핵심: 평평한 탭 → 7단계 순차 리서치 파이프라인
+v2의 6개 평평한 워크스페이스(순서 없음·빈 화면·주 액션 부재)를 **탭 내부 7단계
+순차 파이프라인**으로 재편: `00 OVERVIEW → 01 CONSTRUCT → 02 THESIS → 03 OPTIMIZE
+→ 04 STRESS → 05 EXPLAIN → 06 JOURNAL`. 공유 크롬이 모든 단계를 감싼다.
+
+### 백엔드 무변경 (프론트 전용)
+기존 `/analyze`·`/sensitivity`·`/factor-xray`·`/stress` 응답으로 모든 화면 구동 —
+Python 파일 0개 변경(847 passed 불변, ruff 통과). 디자인의 목업 수치를 실 API로 대체.
+
+### 공유 크롬 — `app/allocation/layout.tsx` 전면 재작성 (SubNav 대체)
+`AllocationProvider` + StageChrome:
+- **브레드크럼** `MODULE 06 / ALLOCATION STUDIO / NN STAGE`
+- **페이지 헤더**: 제목 `Allocation Studio — {Stage}` + 설명 + MOCK 배지(실 소스
+  mock일 때) + 데이터 범위(coverage) + 최근 실행(lastRun) + **RE-OPTIMIZE**
+  버튼(accent, pending 처리, 성공 시 lastRun 갱신 — runAnalyze 재사용)
+- **ContextStrip**(레짐+카나리, 기존) · **PipelineBar**(신규) · 콘텐츠(aasFade,
+  `key={pathname}`) · **하단 nav 바**(← 이전 / RESEARCH PIPELINE · NN / 다음 →)
+- **PipelineBar**(`components/allocation/PipelineBar.tsx`): 7칩 = 상태점(완료 시
+  accent) + 번호 + 라벨 + **파생 서브텍스트**(`N ASSETS · TW%` / `N VIEWS · CONF
+  C%` / `BL · λ 2.5` / 시나리오명 등) + 커넥터선, 활성칩 accent 테두리+tint,
+  `router.push` 이동 + **←/→ 키보드**(input 포커스 시 제외), overflow-x 스크롤.
+
+### 라우트 7개 (기존 6개 재편)
+`git mv` optimizer→optimize·robustness→stress·explainability→explain, `/construct`
+신설, `/allocation`(허브)·`/thesis`·`/journal` 유지. `AllocationProvider`에 STAGES
+메타(순서·href·라벨·타이틀·설명) + `lastRun` + `stageIndex(pathname)` 추가. 각
+page는 자체 헤더 제거(크롬이 layout으로 승격) — 순수 콘텐츠만.
+
+### 화면 (기존 parts 재사용 + 신규 소량)
+- **00 OVERVIEW 재설계**: 6칸 KPI(기대수익·변동성·Sharpe·95%VaR·최대낙폭·뷰신뢰도
+  — summary/mc/conf) + 12-col 그리드(FrontierChart span5 · OPTIMIZED WEIGHTS
+  span4(Δ vs 현재) · RiskContribDonut span3 · FactorXRayBars span4 · ROBUSTNESS
+  요약 span4 · ResearchTimeline span4), 각 카드 `NN ↗` 크로스링크.
+- **01 CONSTRUCT 신설**: PortfolioBuilder(재사용) + 신규 3프리미티브 —
+  `AllocationMap`(비중 비례 팔레트 블록), `WeightComparison`(현재/캡가중/최적 3중
+  바), `concentration()`(HHI=Σw²×10⁴·TOP3·Neff=10⁴/HHI 순수함수) + DATA COVERAGE.
+- **02 THESIS**: 뷰 빌더(인과 체인)만 — 자산 구성은 CONSTRUCT로 분리. 게이지 +
+  팩터 프리뷰.
+- **03~06**: 기존 optimizer/robustness/explainability/journal 콘텐츠 이식(헤더만
+  제거) — 디자인과 이미 일치.
+
+### CSS
+globals.css `.aas-*` 신규(aasFade·크롬·파이프라인 칩·KPI·12-col·map·cmp·conc) +
+구 `.as-subnav` 제거. 라이트 Institutional Terminal 토큰(#1200ff) 유지 = 디자인
+토큰과 동일 체계.
+
+### 검증
+tsc 0 · next build **24/24**(/allocation 7라우트) · ruff 통과 · pytest 847(무변경).
+Playwright E2E: CONSTRUCT에서 3종목 → 헤더 Re-optimize → 하단 nav로 THESIS(뷰
+추가)→OPTIMIZE→STRESS 완주 → 파이프라인 칩으로 OVERVIEW 복귀, **상태 전 구간
+보존**. 스크린샷 — Overview(6 KPI+12-col+크로스링크+파이프라인 상태), Construct
+(ALLOCATION MAP 팔레트 블록·WEIGHT COMPARISON 3중 바·CONCENTRATION HHI 3,333).
+
+### 정직한 한계
+- 디자인 목업 수치 → 실 API 값 대체(완전 픽셀 일치 아님, 레이아웃·타이포·
+  인터랙션 고충실도 재현). Re-optimize의 800ms 시뮬은 실 API 호출로 대체.
+- DesignSync는 읽기만 사용(디자인 역동기화 안 함) — 요청은 코드 구현.

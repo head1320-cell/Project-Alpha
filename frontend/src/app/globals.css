@@ -3023,10 +3023,71 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
 /* ── Research OS v2 — 마이크로 워크스페이스 (.as-* 확장) ── */
 /* 서브 내비게이션 (워크스페이스 탭) */
-.as-subnav { display: flex; gap: 4px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 3px 6px; }
-.as-subnav-tab { font-size: 11px; letter-spacing: .03em; color: var(--t-muted); text-decoration: none; padding: 3px 10px; border: 1px solid transparent; border-radius: 2px; }
-.as-subnav-tab:hover { border-color: var(--t-border); background: var(--t-surface); }
-.as-subnav-tab.on { color: var(--t-accent); border-color: var(--t-accent); background: rgba(18,0,255,.05); font-weight: 600; }
+/* ── Allocation Studio 파이프라인 크롬 (Claude Design 핸드오프) ── */
+@keyframes aasFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.aas-root { display: flex; flex-direction: column; gap: 8px; }
+.aas-crumb { font-size: 11px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .05em; }
+.aas-crumb span { color: var(--t-accent); }
+.aas-header { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.aas-header-title { font-size: 22px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+.aas-header-desc { font-size: 11px; color: var(--t-muted); margin-top: 3px; }
+.aas-header-sp { flex: 1; }
+.aas-header-mock { font-size: 9px; color: #a16207; border: 1px solid #a16207; border-radius: 2px; padding: 1px 5px; letter-spacing: .04em; align-self: center; }
+.aas-header-cov { font-size: 10px; color: var(--t-muted); align-self: center; }
+.aas-run { border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent); color: #fff; font-size: 11px; font-weight: 600; padding: 7px 16px; cursor: pointer; letter-spacing: .05em; font-family: var(--t-mono); text-transform: uppercase; }
+.aas-run:hover:not(:disabled) { opacity: .88; }
+.aas-run:disabled { opacity: .5; cursor: default; }
+
+/* 파이프라인 바 */
+.aas-pipe { display: flex; align-items: stretch; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 4px 6px; overflow-x: auto; }
+.aas-pipe-seg { display: flex; align-items: center; flex: 1; min-width: 0; }
+.aas-pipe-conn { flex: none; width: 14px; height: 1px; background: var(--t-border); margin: 0 2px; }
+.aas-pipe-chip { flex: 1; min-width: 118px; display: flex; align-items: center; gap: 8px; padding: 4px 9px; border: 1px solid transparent; border-radius: 2px; background: none; cursor: pointer; text-align: left; }
+.aas-pipe-chip:hover { border-color: var(--t-border); background: var(--t-surface); }
+.aas-pipe-chip.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); }
+.aas-pipe-dot { flex: none; width: 5px; height: 5px; background: #fff; border: 1px solid var(--t-border); }
+.aas-pipe-dot.done { background: var(--t-accent); border-color: var(--t-accent); }
+.aas-pipe-n { font-size: 10px; color: var(--t-muted); }
+.aas-pipe-chip.on .aas-pipe-n { color: var(--t-accent); }
+.aas-pipe-meta { min-width: 0; display: flex; flex-direction: column; }
+.aas-pipe-label { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aas-pipe-sub { font-size: 8.5px; color: var(--t-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aas-pipe-kbd { flex: none; align-self: center; font-size: 9px; color: var(--t-muted); padding: 0 8px; white-space: nowrap; }
+
+.aas-content { animation: aasFade .18s ease-out; display: flex; flex-direction: column; gap: 8px; }
+
+/* 하단 nav */
+.aas-botnav { display: flex; align-items: center; gap: 12px; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 2px; padding: 6px 10px; margin-top: 2px; }
+.aas-botnav-prev, .aas-botnav-next { font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 5px 12px; cursor: pointer; color: var(--t-ink); }
+.aas-botnav-prev:hover:not(:disabled), .aas-botnav-next:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
+.aas-botnav-next { background: var(--t-accent); color: #fff; border-color: var(--t-accent); margin-left: auto; }
+.aas-botnav-next:hover:not(:disabled) { opacity: .88; color: #fff; }
+.aas-botnav-prev:disabled, .aas-botnav-next:disabled { opacity: .4; cursor: default; }
+.aas-botnav-mid { font-size: 9.5px; color: var(--t-muted); margin: 0 auto; }
+
+/* 00 OVERVIEW — KPI + 12-col */
+.aas-kpi { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 1100px) { .aas-kpi { grid-template-columns: repeat(3, 1fr); } }
+.aas-kpi-c { border: 1px solid var(--t-border); border-radius: 2px; padding: 9px 12px; background: #fff; min-width: 0; }
+.aas-kpi-l { font-size: 9.5px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aas-kpi-v { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.aas-kpi-s { font-size: 9.5px; margin-top: 5px; white-space: nowrap; }
+.aas-ov { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: start; }
+@media (max-width: 1100px) { .aas-ov { grid-template-columns: repeat(6, 1fr); } }
+.aas-ov > section { min-width: 0; }
+.aas-xlink { margin-left: auto; font-size: 10px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 1px 6px; background: none; cursor: pointer; text-decoration: none; }
+.aas-xlink:hover { color: var(--t-accent); border-color: var(--t-accent); }
+
+/* 01 CONSTRUCT — 프리미티브 */
+.aas-map { display: flex; height: 72px; border-radius: 2px; overflow: hidden; gap: 1px; }
+.aas-map-b { display: flex; flex-direction: column; justify-content: center; padding: 0 8px; min-width: 0; }
+.aas-map-b span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aas-cmp-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 132px; gap: 10px; align-items: center; }
+.aas-cmp-bars { display: flex; flex-direction: column; gap: 2px; }
+.aas-cmp-bars > div { height: 5px; background: var(--t-surface); }
+.aas-cmp-bars i { display: block; height: 100%; }
+.aas-conc { display: flex; gap: 18px; flex-wrap: wrap; font-size: 10.5px; color: var(--t-muted); }
+.aas-conc b { font-family: var(--t-mono); color: var(--t-ink); font-variant-numeric: tabular-nums; }
 
 /* 허브 */
 .as-hub { display: flex; flex-direction: column; gap: 8px; }
