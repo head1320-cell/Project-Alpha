@@ -2524,3 +2524,62 @@ Playwright E2E: CONSTRUCT에서 3종목 → 헤더 Re-optimize → 하단 nav로
 - 디자인 목업 수치 → 실 API 값 대체(완전 픽셀 일치 아님, 레이아웃·타이포·
   인터랙션 고충실도 재현). Re-optimize의 800ms 시뮬은 실 API 호출로 대체.
 - DesignSync는 읽기만 사용(디자인 역동기화 안 함) — 요청은 코드 구현.
+
+---
+
+## 🧭 Allocation Studio — Multi-Stage Wizard 전면 리디자인 (목표 게이트 + 3-페이즈 파이프라인)
+
+직전 파이프라인 리디자인(커밋 `9f65a5c`)이 평평한 7-스테이지였던 것을, 사용자 첨부
+스크린샷(Portfolio Visualizer 위저드 원형 + "Progressive Disclosure / Contextual
+Isolation / Multi-stage Wizard" 지시)에 따라 **목표 선택 진입점 + 3 매크로 페이즈 순차
+위저드**로 재편. "전략 수립의 프로세스를 밟아나가는" 전문 퀀트 운용 느낌. **프론트 전용 —
+백엔드/엔진 100% 무변경, 기존 tool·service·차트 전부 보존(기능 손실 0)**. ui-ux-pro-max
+스킬(progressive-disclosure·multi-step-progress·primary-action·state-preservation) 적용.
+(21st.dev/Figma/Canva 커넥터는 세션 중 MCP 오프라인이라 미사용 — 라이트 Institutional
+Terminal 토큰으로 직접 구현. zip 핸드오프의 7-스테이지 스펙은 이미 100% 구현돼 있었음을
+확인하고, 스크린샷의 새 위저드 IA를 그 위에 얹음.)
+
+### 라우팅/IA (라우트 7→8)
+- `/allocation` = **목표 선택 게이트**(신규, bare 렌더) — layout의 `isGate` 분기. Overview
+  대시보드는 `/allocation/overview`로 이관(near-verbatim, Xlink 유효). 7 스테이지를 3 페이즈로:
+  **SETUP**=01 Construct · **LOGIC**=02 Thesis·03 Optimize · **VALIDATION**=04 Stress·05 Explain,
+  00 Overview·06 Journal 북엔드. 사이드바 active(`startsWith`)·딥링크 무변경, hover-prefetch에
+  `["macro","regime"]`·`["screener","sectors"]` 추가.
+
+### 신규/변경 컴포넌트
+- **`GoalGate.tsx`**(신규): "어떤 목표의 포트폴리오를 만드시겠습니까?" + 목표 카드 6종(성장→mvo·
+  방어→min_var·균형→risk_parity·테마→bl+강세뷰·현재 국면→regime 권고모드·직접 구성). 각 카드 =
+  재사용 시드(`setModel`+`setHoldingsReset(equalize)`+옵션 `setViewsLogged` → `/construct`).
+  시드 유니버스는 `backtestBridgeApi.sectors().sample` + `macroApi.regime()` + 큐레이션 폴백
+  (항상 ≥2 종목 보장). 푸터: 관심그룹·저장 스터디·빈 상태·**Resume**(sessionStorage)·대시보드 건너뛰기.
+- **`WizardTracker.tsx`**(신규, PipelineBar 삭제): 3 페이즈 세그먼트 + 하위 스텝 칩(완료점·번호·
+  라벨·서브텍스트) + Overview/Journal 북엔드 + 칩 클릭 점프 + ←/→ 키보드. 완료는 Provider
+  `stageComplete[]` 단일 소스.
+- **`layout.tsx`** 재작성: `isGate` 분기 · 헤더 **상시 RE-OPTIMIZE 제거**(경쟁 주액션 → 화면당
+  단일 주액션 원칙, coverage/lastRun/MOCK 유지 + "☰ 목표" ghost) · `.aas-intent` "이 단계에서 할 일"
+  · WizardTracker · 하단 **단일 주 CTA "다음 단계로 →"**(WizardNav, VALIDATION 진입 시
+  `ensureFreshRun()`).
+- **`AllocationProvider.tsx`**: STAGES에 `phase`/`intent` + `PHASES` 메타 · `goal/setGoal` ·
+  파생 `stageComplete[]`/`isResultStale`/`ensureFreshRun()`(runAnalyze dedupe라 무해) ·
+  **sessionStorage 하이드레이트/persist**(goal/pos/wip, `result`는 미persist·재계산) —
+  하이드레이트 후에만 persist(빈 상태 덮어쓰기 방지). → **위저드 중간 전체 새로고침이 비파괴적**
+  (이전엔 파괴적).
+- **각 단계 Progressive Disclosure**: Optimize(엔진·λ·τ) / Stress(μ-bump) / Explain(상관행렬)을
+  네이티브 `<details className="aas-adv">`로 접기 — **신규 의존성 0, 기능 제거 0**. Optimize는 자체
+  Re-optimize 유지 + `isResultStale` 인라인 어포던스. empty-state를 "01 CONSTRUCT →" 백-CTA로 표준화.
+- CSS: `globals.css`에 `.aas-gate*`/`.aas-goal*`/`.aas-wiz*`/`.aas-intent`/`.aas-adv`/
+  `.aas-botnav-next.primary` 신설(라이트 토큰). `parts.tsx` 차트 프리미티브 verbatim 유지.
+
+### 검증
+- `tsc` 0 · `next build` **25 페이지 / allocation 8 라우트** · `pytest` 백엔드 무변경(allocation
+  24 통과, 전체 847 불변) · ruff.
+- **라이브(시스템 Playwright + 사전설치 Chromium, mock 서버 2개, 프로젝트 devDependency 0)**:
+  게이트(6 카드) → "성장 추구" 선택 → Construct 6종목 시드(MVO·λ2.5) → "다음 단계로" ×3 →
+  Stress(VALIDATION, auto-run) 도달, **상태 전 구간 보존** → **중간 새로고침 재개**(sessionStorage)
+  → 게이트 Resume 노출. **콘솔/페이지 에러 0(하이드레이트 이슈 없음)**. 스크린샷으로 게이트·
+  Construct(브레드크럼 phase·인텐트·3-페이즈 트래커·단일 주 CTA) 확인.
+
+### 정직한 한계 / 범위 밖
+- 백엔드/엔진 무변경(전부 기존 `/api/v1/allocation/*` 재사용). 21st.dev/shadcn **실사용**은 커넥터
+  재연결 시(세션 중 오프라인). R2(테제 NL→팩터 자동매핑·Probability Frontier·레짐 prior 주입)는
+  문서만. Execution 단계·드래그&드롭 캔버스·AI View Generator는 후순위 제외.

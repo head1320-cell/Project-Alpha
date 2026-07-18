@@ -1,13 +1,14 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// AllocationProvider — Research OS 전역 상태 (마이크로 워크스페이스 공유)
+// AllocationProvider — Multi-Stage Wizard 전역 상태 (전략 수립 파이프라인 공유)
 //   app/allocation/layout.tsx가 마운트 — App Router에서 layout은 자식 라우트
-//   전환에도 유지되므로 /allocation ↔ /allocation/robustness 이동 시 유니버스·
-//   뷰·가중치·결과가 증발하지 않는다 (지시서의 useContext 채택 — 워크스페이스
-//   다중화 시 zustand 승격은 R3 문서화).
-//   로직은 구 AllocationStudio.tsx에서 그대로 리프트 (동작 불변).
+//   전환에도 유지되므로 게이트 ↔ 각 스테이지 이동 시 유니버스·뷰·가중치·결과가
+//   증발하지 않는다 (스크린샷의 "Session이나 상태 관리 툴(Context API)" 채택 —
+//   워크스페이스 다중화 시 zustand 승격은 R3 문서화).
+//   + 위저드 확장: goal(진입 목표)·stageComplete[]·isResultStale·ensureFreshRun·
+//     sessionStorage(goal/pos/wip) 하이드레이트·persist → 중간 새로고침 비파괴.
 // ═══════════════════════════════════════════════════════════════════════════════
-import React, { createContext, useContext, useMemo, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   allocationApi, type AllocationModel, type AllocationViewInput, type AnalyzeResult,
@@ -27,27 +28,49 @@ export const MODELS: { id: AllocationModel; label: string }[] = [
 
 export const COV_ONLY: AllocationModel[] = ["risk_parity", "hrp", "min_var"];
 
-// 7단계 순차 리서치 파이프라인 — 라우트 순서·라벨·헤더 메타 (레퍼런스: Aladdin/Venn/Marquee)
-export interface StageMeta { n: string; href: string; label: string; title: string; desc: string }
+// ── 7단계 순차 리서치 파이프라인 (레퍼런스: Portfolio Visualizer 위저드 / Aladdin / Venn) ──
+// 00 Overview·06 Journal은 북엔드, 01~05는 3 매크로 페이즈(SETUP/LOGIC/VALIDATION).
+export type PhaseKey = "setup" | "logic" | "validation";
+export interface StageMeta {
+  n: string; href: string; label: string; title: string; desc: string;
+  intent: string;            // "이 단계에서 할 일" — StageChrome이 렌더
+  phase?: PhaseKey;          // 북엔드(overview/journal)는 undefined
+}
 export const STAGES: StageMeta[] = [
-  { n: "00", href: "/allocation", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운" },
-  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 검색·비중·집중도" },
-  { n: "02", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도" },
-  { n: "03", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름" },
-  { n: "04", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "기댓값 변동 → 비중 민감도 + 시나리오" },
-  { n: "05", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조" },
-  { n: "06", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 — Macro View→Changed→Reason→Result→Review" },
+  { n: "00", href: "/allocation/overview", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운", intent: "현재 포트폴리오를 한눈에 점검하고 필요한 단계로 이동하세요." },
+  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 검색·비중·집중도", intent: "자산을 2개 이상 담고 비중 합계를 100%로 맞추세요.", phase: "setup" },
+  { n: "02", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도", intent: "거시 테제를 자산·방향·신뢰도로 변환하세요 (선택).", phase: "logic" },
+  { n: "03", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
+  { n: "04", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "기댓값 변동 → 비중 민감도 + 시나리오", intent: "시나리오와 기대수익 충격으로 배분의 견고성을 검증하세요.", phase: "validation" },
+  { n: "05", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
+  { n: "06", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
 ];
+
+export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: number[] }
+export const PHASES: PhaseMeta[] = [
+  { key: "setup", label: "SETUP", ko: "설정", steps: [1] },        // 01 Construct
+  { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3] },     // 02 Thesis · 03 Optimize
+  { key: "validation", label: "VALIDATION", ko: "검증", steps: [4, 5] }, // 04 Stress · 05 Explain
+];
+
 export function stageIndex(pathname: string): number {
-  // 가장 긴 매칭 우선 (/allocation은 정확 매칭, 나머지는 prefix)
-  let best = 0;
+  // 가장 긴(정확) 매칭 우선. 게이트(/allocation)는 어떤 스테이지도 매칭 안 됨 → 0 폴백
+  // (게이트 라우트는 layout의 isGate 분기에서 stageIndex를 소비하지 않으므로 무해).
+  let best = -1; let bestLen = -1;
   STAGES.forEach((s, i) => {
-    if (s.href === "/allocation" ? pathname === "/allocation" : pathname.startsWith(s.href)) {
-      if (s.href.length >= STAGES[best].href.length) best = i;
+    if (pathname === s.href || pathname.startsWith(s.href + "/")) {
+      if (s.href.length > bestLen) { best = i; bestLen = s.href.length; }
     }
   });
-  return best;
+  return best >= 0 ? best : 0;
 }
+
+export interface AllocationGoal { id: string; label: string }
+
+// sessionStorage 키 (localStorage 스터디와 별개 — 세션 한정, 중간 새로고침 재개용)
+const SS_GOAL = "alpha_alloc_goal";
+const SS_WIP = "alpha_alloc_wip";
+const SS_POS = "alpha_alloc_pos";
 
 interface AllocationCtx {
   holdings: Holding[];
@@ -82,6 +105,14 @@ interface AllocationCtx {
   loadStudy: (s: AllocationStudy) => void;
   studiesVersion: number;
   bumpStudies: () => void;
+  // ── 위저드 확장 ──
+  goal: AllocationGoal | null;
+  setGoal: (g: AllocationGoal | null) => void;
+  lastPos: string | null;                 // 마지막 방문 스테이지 href (Resume용)
+  noteVisit: (href: string) => void;      // layout이 pathname 변경 시 호출
+  stageComplete: boolean[];               // STAGES 인덱스별 완료 (단일 소스)
+  isResultStale: boolean;                 // 현재 입력 대비 result가 낡았나
+  ensureFreshRun: () => void;             // 다음 단계 진입 시 stale이면 재최적화
 }
 
 const Ctx = createContext<AllocationCtx | null>(null);
@@ -104,6 +135,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [studiesVersion, setStudiesVersion] = useState(0);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [lastRun, setLastRun] = useState("—:—:—");
+  const [goal, setGoalState] = useState<AllocationGoal | null>(null);
+  const [lastPos, setLastPos] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
   const lastReqRef = useRef<string>("");
 
   const logEvent = (msg: string) =>
@@ -116,12 +150,49 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   }, [holdings]);
   const holdingsKey = useMemo(() => JSON.stringify(holdingsMap), [holdingsMap]);
 
+  // ── sessionStorage 하이드레이트 (마운트 1회, 클라이언트 전용 — SSR 불일치 회피) ──
+  useEffect(() => {
+    if (typeof window === "undefined") { setHydrated(true); return; }
+    try {
+      const g = sessionStorage.getItem(SS_GOAL);
+      if (g) setGoalState(JSON.parse(g));
+      const p = sessionStorage.getItem(SS_POS);
+      if (p) setLastPos(p);
+      const w = sessionStorage.getItem(SS_WIP);
+      if (w) {
+        const wip = JSON.parse(w);
+        if (Array.isArray(wip.holdings) && wip.holdings.length) setHoldings(wip.holdings);
+        if (Array.isArray(wip.views)) setViews(wip.views);
+        if (wip.model) setModel(wip.model);
+        if (typeof wip.delta === "number") setDelta(wip.delta);
+        if (typeof wip.tau === "number") setTau(wip.tau);
+      }
+    } catch { /* 파싱 실패는 무시 — 빈 상태로 시작 */ }
+    setHydrated(true);
+  }, []);
+
+  // ── 작업셋 persist (하이드레이트 이후에만 — 하이드레이트 전 빈 상태로 덮어쓰기 방지) ──
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") return;
+    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau })); }
+    catch { /* 용량 초과 등 무시 */ }
+  }, [hydrated, holdings, views, model, delta, tau]);
+
   const analyzeMut = useMutation({
     mutationFn: allocationApi.analyze,
     onSuccess: (data) => { if (!data.error) { setResult(data); setLastRun(new Date().toTimeString().slice(0, 8)); } },
   });
 
   const canRun = holdings.length >= 2;
+
+  // 현재 입력 서명 — runAnalyze의 req와 동일 키 순서/값이어야 stale 판정이 정확
+  const currentSig = useMemo(() => JSON.stringify({
+    tickers: holdings.map((h) => h.code),
+    weights: holdingsMap,
+    views: views.filter((v) => v.assets.length > 0 && v.magnitude_pct > 0),
+    model, delta, tau,
+  }), [holdings, holdingsMap, views, model, delta, tau]);
+  const isResultStale = !result || currentSig !== lastReqRef.current;
 
   const runAnalyze = (over?: { model?: AllocationModel; tau?: number; views?: AllocationViewInput[] }) => {
     if (!canRun || analyzeMut.isPending) return;
@@ -139,6 +210,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     analyzeMut.mutate(req);
     logEvent(`재최적화 — ${req.model.toUpperCase()} · λ ${delta.toFixed(1)} · τ ${req.tau} · 뷰 ${req.views.length}개`);
   };
+
+  // 다음 단계 진입(특히 VALIDATION) 시 결과가 낡았으면 자동 재최적화 (dedupe라 무해)
+  const ensureFreshRun = () => { if (canRun && !analyzeMut.isPending && isResultStale) runAnalyze(); };
 
   const xrayQ = useQuery({
     queryKey: ["allocation", "xray", holdingsKey],
@@ -206,6 +280,31 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setStudiesVersion((v) => v + 1);
   };
 
+  // ── 위저드 상태 ──
+  const setGoal = (g: AllocationGoal | null) => {
+    setGoalState(g);
+    try {
+      if (typeof window !== "undefined") {
+        if (g) sessionStorage.setItem(SS_GOAL, JSON.stringify(g));
+        else sessionStorage.removeItem(SS_GOAL);
+      }
+    } catch { /* ignore */ }
+  };
+  const noteVisit = (href: string) => {
+    setLastPos(href);
+    try { if (typeof window !== "undefined") sessionStorage.setItem(SS_POS, href); } catch { /* ignore */ }
+  };
+
+  const stageComplete = useMemo(() => [
+    !!result,                                             // 00 overview
+    holdings.length >= 2,                                 // 01 construct (SETUP)
+    views.length > 0,                                     // 02 thesis    (LOGIC)
+    !!result,                                             // 03 optimize  (LOGIC)
+    !!result,                                             // 04 stress    (VALIDATION)
+    !!result,                                             // 05 explain   (VALIDATION)
+    timeline.some((e) => e.msg.startsWith("스터디 저장")),  // 06 journal
+  ], [result, holdings.length, views.length, timeline]);
+
   const value: AllocationCtx = {
     holdings, setHoldingsReset, holdingsMap, holdingsKey,
     views, setViewsLogged,
@@ -217,6 +316,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     runAnalyze, xrayQ, stressQ,
     saveStudyFull, loadStudy, studiesVersion,
     bumpStudies: () => setStudiesVersion((v) => v + 1),
+    goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

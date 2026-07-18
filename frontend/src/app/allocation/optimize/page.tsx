@@ -10,7 +10,7 @@ import {
 export default function OptimizerWorkspace() {
   const {
     result, model, setModel, delta, setDelta, tau, setTau,
-    runAnalyze, canRun, pending, analyzeError, views,
+    runAnalyze, canRun, pending, analyzeError, views, isResultStale,
   } = useAllocation();
 
   const lamIdx = result ? lambdaOptimalIdx(result.frontier.curve, delta) : -1;
@@ -28,28 +28,35 @@ export default function OptimizerWorkspace() {
       <aside className="as-center">
         <section className="as-card">
           <div className="as-card-title">OPTIMIZATION ENGINE</div>
-          <div className="as-seg as-models">
-            {MODELS.map((m) => (
-              <button key={m.id} className={model === m.id ? "on" : ""}
-                onClick={() => { setModel(m.id); runAnalyze({ model: m.id }); }}>{m.label}</button>
-            ))}
-          </div>
-          <label className="as-param">
-            <span>Risk Aversion (λ) <b className="num">{delta.toFixed(1)}</b></span>
-            <input type="range" min={0.5} max={8} step={0.1} value={delta}
-              onChange={(e) => setDelta(parseFloat(e.target.value))} />
-            <em className="as-note-inline">드래그 = 프론티어 위 선택점 이동 (재계산 없음)</em>
-          </label>
-          <label className="as-param">
-            <span>Uncertainty (τ) <b className="num">{tau.toFixed(3)}</b></span>
-            <input type="range" min={0.01} max={0.2} step={0.005} value={tau}
-              onChange={(e) => setTau(parseFloat(e.target.value))}
-              onMouseUp={() => runAnalyze()} onTouchEnd={() => runAnalyze()} onKeyUp={() => runAnalyze()} />
-          </label>
+          <div className="as-engine-cur">현재 엔진 <b>{MODELS.find((m) => m.id === model)?.label ?? model.toUpperCase()}</b></div>
           <button className="as-run" disabled={!canRun || pending} onClick={() => runAnalyze()}>
-            {pending ? "최적화 중…" : "Re-optimize"}
+            {pending ? "최적화 중…" : result ? "Re-optimize" : "최적화 실행"}
           </button>
-          {!canRun && <div className="as-note">Thesis 워크스페이스에서 자산 2개 이상 추가</div>}
+          {result && isResultStale && (
+            <div className="as-note" style={{ color: "var(--t-accent)" }}>설정이 바뀌었습니다 — 재최적화 후 다음 단계로 진행하세요.</div>
+          )}
+          <details className="aas-adv">
+            <summary>고급 설정 — 엔진 · λ · τ</summary>
+            <div className="as-seg as-models">
+              {MODELS.map((m) => (
+                <button key={m.id} className={model === m.id ? "on" : ""}
+                  onClick={() => { setModel(m.id); runAnalyze({ model: m.id }); }}>{m.label}</button>
+              ))}
+            </div>
+            <label className="as-param">
+              <span>Risk Aversion (λ) <b className="num">{delta.toFixed(1)}</b></span>
+              <input type="range" min={0.5} max={8} step={0.1} value={delta}
+                onChange={(e) => setDelta(parseFloat(e.target.value))} />
+              <em className="as-note-inline">드래그 = 프론티어 위 선택점 이동 (재계산 없음)</em>
+            </label>
+            <label className="as-param">
+              <span>Uncertainty (τ) <b className="num">{tau.toFixed(3)}</b></span>
+              <input type="range" min={0.01} max={0.2} step={0.005} value={tau}
+                onChange={(e) => setTau(parseFloat(e.target.value))}
+                onMouseUp={() => runAnalyze()} onTouchEnd={() => runAnalyze()} onKeyUp={() => runAnalyze()} />
+            </label>
+          </details>
+          {!canRun && <div className="as-note">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
           {analyzeError && <div className="as-err">{analyzeError}</div>}
           {result && COV_ONLY.includes(result.model) && views.length > 0 && (
             <div className="as-note">뷰는 Black-Litterman 모델에서만 기대수익에 반영됩니다</div>

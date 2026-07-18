@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { screenerApiAdvanced, screenerApi, analysisApi } from "@/lib/screenerApi";
+import { screenerApiAdvanced, screenerApi, analysisApi, backtestBridgeApi } from "@/lib/screenerApi";
 import { macroApi } from "@/lib/macroApi";
 import { loadCompanyCore } from "@/lib/companyData";
 import { allocationApi } from "@/lib/allocationApi";
@@ -89,8 +89,10 @@ function usePrefetchers() {
       qc.prefetchQuery({ queryKey: ["company", "core", "005930"], queryFn: () => loadCompanyCore("005930") });
     },
     "/allocation": () => {
-      // Allocation Studio의 유일한 마운트 시 쿼리 — 시나리오 카탈로그 (나머지는 사용자 액션 구동)
+      // 게이트(목표 선택) 시드 소스 + 시나리오 카탈로그를 미리 워밍 → 목표 카드 즉시 시드
       qc.prefetchQuery({ queryKey: ["allocation", "stress-catalog"], queryFn: () => allocationApi.stressCatalog().catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["screener", "sectors"], queryFn: () => backtestBridgeApi.sectors().catch(() => null) });
     },
   };
   return (href: string) => prefetch[href]?.();

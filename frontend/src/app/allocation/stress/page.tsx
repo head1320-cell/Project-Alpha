@@ -44,14 +44,18 @@ export default function RobustnessWorkspace() {
         </section>
         <section className="as-card">
           <div className="as-card-title">SENSITIVITY 충격 변수</div>
-          <label className="as-param">
-            <span>기대수익 충격 (μ bump) <b className="num">+{bump.toFixed(1)}%p</b></span>
-            <input type="range" min={0.5} max={5} step={0.5} value={bump}
-              onChange={(e) => setBump(parseFloat(e.target.value))}
-              onMouseUp={() => setBumpCommitted(bump)} onTouchEnd={() => setBumpCommitted(bump)}
-              onKeyUp={() => setBumpCommitted(bump)} />
-            <em className="as-note-inline">릴리스 시 N회 재최적화 실행 (자산 수만큼)</em>
-          </label>
+          <div className="as-note">기대수익 충격 <b className="num" style={{ color: "var(--t-ink)" }}>+{bump.toFixed(1)}%p</b> 기준 민감도</div>
+          <details className="aas-adv">
+            <summary>고급 — 충격 크기 조절</summary>
+            <label className="as-param">
+              <span>기대수익 충격 (μ bump) <b className="num">+{bump.toFixed(1)}%p</b></span>
+              <input type="range" min={0.5} max={5} step={0.5} value={bump}
+                onChange={(e) => setBump(parseFloat(e.target.value))}
+                onMouseUp={() => setBumpCommitted(bump)} onTouchEnd={() => setBumpCommitted(bump)}
+                onKeyUp={() => setBumpCommitted(bump)} />
+              <em className="as-note-inline">릴리스 시 N회 재최적화 실행 (자산 수만큼)</em>
+            </label>
+          </details>
           {sensQ.data && (sensQ.data.coverage as { source?: string })?.source === "mock" && (
             <span className="as-badge" style={{ color: "#a16207", borderColor: "#a16207", alignSelf: "flex-start" }}>MOCK 데이터</span>
           )}
@@ -60,7 +64,7 @@ export default function RobustnessWorkspace() {
       <main className="as-center">
         <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`}>
           <div className="as-card-title">SENSITIVITY HEATMAP <span className="as-note-inline">기댓값 변동 → 최적 비중 반응 (Δ%p)</span></div>
-          {!canRun && <div className="as-empty">Thesis에서 자산 2개 이상 추가 시 표시</div>}
+          {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
           {canRun && sensQ.isLoading && <div className="as-empty">민감도 계산 중… (자산별 재최적화)</div>}
           {sensQ.data && !sensQ.data.error && (
             <SensitivityHeatmap names={sensQ.data.names} labels={sensQ.data.labels}

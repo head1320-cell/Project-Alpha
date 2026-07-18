@@ -3089,6 +3089,85 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .aas-conc { display: flex; gap: 18px; flex-wrap: wrap; font-size: 10.5px; color: var(--t-muted); }
 .aas-conc b { font-family: var(--t-mono); color: var(--t-ink); font-variant-numeric: tabular-nums; }
 
+/* ═══ Multi-Stage Wizard — 게이트 · 진행 트래커 · 인텐트 · 고급 접기 · 주 CTA ═══ */
+/* 헤더: 상시 RE-OPTIMIZE 대신 게이트 복귀 ghost 버튼 */
+.aas-header-gate { align-self: center; font-size: 10px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 5px 10px; background: #fff; cursor: pointer; letter-spacing: .04em; }
+.aas-header-gate:hover { border-color: var(--t-accent); color: var(--t-accent); }
+
+/* "이 단계에서 할 일" 인텐트 라인 (Contextual Isolation) */
+.aas-intent { font-size: 11px; color: var(--t-muted); border-left: 2px solid var(--t-accent); padding: 1px 0 1px 9px; line-height: 1.5; }
+.aas-intent b { color: var(--t-ink); font-weight: 600; font-size: 10.5px; margin-right: 2px; }
+
+/* 고급 옵션 접기 (Progressive Disclosure) — 네이티브 <details> */
+.aas-adv { border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); }
+.aas-adv > summary { cursor: pointer; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--t-muted); padding: 6px 9px; list-style: none; user-select: none; }
+.aas-adv > summary::-webkit-details-marker { display: none; }
+.aas-adv > summary::before { content: "▸"; color: var(--t-accent); margin-right: 5px; }
+.aas-adv[open] > summary::before { content: "▾"; }
+.aas-adv > summary:hover { color: var(--t-accent); }
+.aas-adv > *:not(summary) { margin: 6px 9px 9px; }
+
+/* Optimize — 현재 엔진 요약 */
+.as-engine-cur { font-size: 11px; color: var(--t-muted); }
+.as-engine-cur b { color: var(--t-ink); font-family: var(--t-mono); }
+
+/* 하단 가이드 nav — 단일 주 CTA 강조 + 재시작 ghost */
+.aas-botnav-next.primary { font-size: 12px; font-weight: 700; padding: 8px 20px; }
+.aas-botnav-restart { margin-left: auto; font-size: 11px; font-family: var(--t-mono); border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 5px 12px; cursor: pointer; color: var(--t-muted); letter-spacing: .03em; }
+.aas-botnav-restart:hover { border-color: var(--t-accent); color: var(--t-accent); }
+
+/* ── 목표 선택 게이트 ── */
+.aas-gate { max-width: 980px; margin: 0 auto; padding: 22px 8px 40px; display: flex; flex-direction: column; gap: 14px; }
+.aas-gate-crumb { font-size: 11px; color: var(--t-muted); letter-spacing: .05em; text-transform: uppercase; }
+.aas-gate-q { font-size: 26px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.15; margin: 0; }
+.aas-gate-lead { font-size: 12px; color: var(--t-muted); line-height: 1.65; max-width: 740px; margin: 0; }
+.aas-gate-lead b { color: var(--t-ink); font-weight: 600; }
+.aas-gate-resume { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--t-accent); background: rgba(18,0,255,.05); border-radius: 2px; padding: 10px 14px; cursor: pointer; font-size: 12px; color: var(--t-ink); text-align: left; }
+.aas-gate-resume:hover { background: rgba(18,0,255,.09); }
+.aas-gate-resume em { font-style: normal; color: var(--t-accent); }
+.aas-gate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-top: 2px; }
+.aas-goal { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 14px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; min-height: 108px; }
+.aas-goal:hover:not(:disabled) { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
+.aas-goal:disabled { opacity: .5; cursor: default; }
+.aas-goal-head { display: flex; align-items: center; gap: 9px; }
+.aas-goal-ic { width: 22px; height: 22px; color: var(--t-accent); flex: none; }
+.aas-goal-t { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.aas-goal-d { font-size: 11px; color: var(--t-muted); flex: 1; }
+.aas-goal-seed { display: flex; flex-wrap: wrap; gap: 5px; }
+.aas-goal-seed span { font-size: 9px; color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 1px 5px; background: var(--t-surface); }
+.aas-goal-custom { border-style: dashed; }
+.aas-gate-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; border-top: 1px solid var(--t-border); padding-top: 14px; }
+.aas-gate-footsec { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.aas-gate-footlab { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--t-muted); min-width: 132px; }
+.aas-gate-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.aas-gate-skip { font-size: 11px; font-family: var(--t-mono); color: var(--t-muted); background: none; border: none; cursor: pointer; padding: 2px 0; }
+.aas-gate-skip:hover { color: var(--t-accent); }
+
+/* ── 위저드 진행 트래커 (3 페이즈 + 북엔드) ── */
+.aas-wiz { display: flex; align-items: stretch; gap: 6px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 5px 7px; overflow-x: auto; }
+.aas-wiz-sep { flex: none; align-self: center; width: 12px; height: 1px; background: var(--t-border); }
+.aas-wiz-book { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 60px; border: 1px solid transparent; border-radius: 2px; background: var(--t-surface); cursor: pointer; padding: 4px 6px; color: var(--t-muted); }
+.aas-wiz-book:hover { border-color: var(--t-border); }
+.aas-wiz-book.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); color: var(--t-ink); }
+.aas-wiz-booklab { font-size: 8px; letter-spacing: .05em; white-space: nowrap; }
+.aas-wiz-phase { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--t-border); border-radius: 2px; padding: 4px 6px; background: var(--t-surface); }
+.aas-wiz-phase.on { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
+.aas-wiz-phaselab { display: flex; align-items: baseline; gap: 6px; }
+.aas-wiz-phaselab b { font-size: 9px; letter-spacing: .08em; color: var(--t-ink); }
+.aas-wiz-phaselab em { font-style: normal; font-size: 9px; color: var(--t-muted); }
+.aas-wiz-phasenum { margin-left: auto; font-size: 8px; color: var(--t-muted); }
+.aas-wiz-steps { display: flex; gap: 4px; min-width: 0; }
+.aas-wiz-step { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 2px; background: #fff; cursor: pointer; padding: 3px 7px; text-align: left; }
+.aas-wiz-step:hover { border-color: var(--t-border); }
+.aas-wiz-step.on { border-color: var(--t-accent); background: rgba(18,0,255,.06); }
+.aas-wiz-dot { flex: none; width: 6px; height: 6px; background: #fff; border: 1px solid var(--t-border); border-radius: 50%; }
+.aas-wiz-step.done .aas-wiz-dot, .aas-wiz-book.done .aas-wiz-dot { background: var(--t-accent); border-color: var(--t-accent); }
+.aas-wiz-meta { min-width: 0; display: flex; flex-direction: column; }
+.aas-wiz-lab { font-size: 10px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aas-wiz-lab b { color: var(--t-accent); font-weight: 600; }
+.aas-wiz-sub { font-size: 8.5px; color: var(--t-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aas-wiz-kbd { flex: none; align-self: center; font-size: 9px; color: var(--t-muted); padding: 0 4px; white-space: nowrap; }
+
 /* 허브 */
 .as-hub { display: flex; flex-direction: column; gap: 8px; }
 .as-hub-bar { display: flex; align-items: center; gap: 12px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 6px 10px; flex-wrap: wrap; }

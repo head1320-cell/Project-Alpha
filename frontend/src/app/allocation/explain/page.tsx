@@ -69,9 +69,11 @@ export default function ExplainabilityWorkspace() {
           <div className="as-note">한계 리스크 기여(marginal × weight) — 비중이 아니라 변동성 기여 기준.</div>
         </section>
         <section className="as-card">
-          <div className="as-card-title">CORRELATION STRUCTURE</div>
-          <CorrelationMini correlation={result.correlation} names={result.names} labels={result.labels} />
-          <div className="as-note">높은 상관 쌍은 분산 효과가 작아 동반 축소/확대되기 쉬움 — Sensitivity Heatmap의 비대각 반응과 함께 볼 것.</div>
+          <details className="aas-adv">
+            <summary>상관 구조 보기 (Correlation)</summary>
+            <CorrelationMini correlation={result.correlation} names={result.names} labels={result.labels} />
+            <div className="as-note">높은 상관 쌍은 분산 효과가 작아 동반 축소/확대되기 쉬움 — Sensitivity Heatmap의 비대각 반응과 함께 볼 것.</div>
+          </details>
         </section>
       </aside>
     </div>

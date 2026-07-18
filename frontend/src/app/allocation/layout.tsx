@@ -1,32 +1,45 @@
 "use client";
-// Allocation Studio 공유 크롬 — 7단계 파이프라인의 브레드크럼·헤더·컨텍스트
-// 스트립·파이프라인 바·하단 nav를 layout에서 렌더(자식 라우트 전환에도 유지 →
-// 상태 보존). 각 하부 page는 순수 콘텐츠만 렌더. (Claude Design 핸드오프 구현)
-import React from "react";
+// Allocation Studio 공유 크롬 — 위저드(7단계 파이프라인)의 브레드크럼·헤더·인텐트·
+// 컨텍스트 스트립·진행 트래커·하단 가이드 nav를 layout에서 렌더(자식 라우트 전환에도
+// Provider 유지 → 상태 보존). /allocation(게이트)은 isGate 분기로 크롬 없이 bare 렌더.
+import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AllocationProvider, STAGES, stageIndex, useAllocation } from "@/components/allocation/AllocationProvider";
+import { AllocationProvider, PHASES, STAGES, stageIndex, useAllocation } from "@/components/allocation/AllocationProvider";
 import { ContextStrip } from "@/components/allocation/ContextStrip";
-import { PipelineBar } from "@/components/allocation/PipelineBar";
+import { WizardTracker } from "@/components/allocation/WizardTracker";
 
 function StageChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const idx = stageIndex(pathname);
   const stage = STAGES[idx];
-  const { canRun, pending, lastRun, runAnalyze, result } = useAllocation();
+  const phase = stage.phase ? PHASES.find((p) => p.key === stage.phase) : null;
+  const { lastRun, result, noteVisit, ensureFreshRun } = useAllocation();
   const isMock = result && (result.coverage as { source?: string }).source === "mock";
   const cov = result
     ? `${result.coverage.start} ~ ${result.coverage.end} · ${result.coverage.n_obs}일`
     : "2019-07-17 ~ 2026-07-16 · 1,712일";
 
+  // 마지막 방문 스테이지 기록 (게이트의 Resume용)
+  useEffect(() => { noteVisit(stage.href); }, [stage.href, noteVisit]);
+
+  const isLast = idx === STAGES.length - 1;                 // 06 journal
+  const nextStage = idx < STAGES.length - 1 ? STAGES[idx + 1] : null;
+  const goNext = () => {
+    if (!nextStage) return;
+    if (nextStage.phase === "validation") ensureFreshRun();  // Validation 진입 시 stale이면 재최적화
+    router.push(nextStage.href);
+  };
+  const nextLabel = idx === 5 ? "저널로 마무리" : nextStage ? `다음 단계로 — ${nextStage.n} ${nextStage.label}` : "";
+
   return (
     <div className="aas-root tpage-fade">
-      {/* 브레드크럼 */}
+      {/* 브레드크럼 (페이즈 포함) */}
       <div className="aas-crumb num">
-        MODULE 06 / ALLOCATION STUDIO / <span>{stage.n} {stage.label}</span>
+        MODULE 06 / ALLOCATION STUDIO{phase ? ` / ${phase.label} 단계` : ""} / <span>{stage.n} {stage.label}</span>
       </div>
 
-      {/* 페이지 헤더 */}
+      {/* 페이지 헤더 — 상시 RE-OPTIMIZE 제거(경쟁 주액션), coverage/lastRun/MOCK 유지 */}
       <div className="aas-header">
         <div className="aas-header-tt">
           <div className="aas-header-title">Allocation Studio — {stage.title}</div>
@@ -35,41 +48,48 @@ function StageChrome({ children }: { children: React.ReactNode }) {
         <span className="aas-header-sp" />
         {isMock && <span className="aas-header-mock">MOCK 데이터</span>}
         <span className="aas-header-cov num">{cov} · 최근 실행 {lastRun}</span>
-        <button className="aas-run" disabled={!canRun || pending} onClick={() => runAnalyze()}
-          title={canRun ? "재최적화" : "자산 2개 이상 필요 (01 CONSTRUCT)"}>
-          {pending ? "최적화 중…" : "RE-OPTIMIZE"}
-        </button>
+        <button className="aas-header-gate" onClick={() => router.push("/allocation")} title="목표 선택으로 돌아가기">☰ 목표</button>
       </div>
+
+      {/* 이 단계에서 할 일 (Contextual Isolation 인텐트) */}
+      <div className="aas-intent"><b>이 단계에서 할 일</b> — {stage.intent}</div>
 
       {/* 컨텍스트 스트립 (레짐 + 카나리) */}
       <ContextStrip />
 
-      {/* 파이프라인 바 */}
-      <PipelineBar />
+      {/* 위저드 진행 트래커 */}
+      <WizardTracker />
 
       {/* 콘텐츠 (라우트 전환 페이드) */}
       <div key={pathname} className="aas-content">{children}</div>
 
-      {/* 하단 nav */}
+      {/* 하단 가이드 nav — 단일 주 CTA "다음 단계로" */}
       <div className="aas-botnav">
         <button className="aas-botnav-prev" disabled={idx === 0}
           onClick={() => idx > 0 && router.push(STAGES[idx - 1].href)}>
-          ← {idx > 0 ? `${STAGES[idx - 1].n} ${STAGES[idx - 1].label}` : "이전 스테이지"}
+          ← {idx > 0 ? `${STAGES[idx - 1].n} ${STAGES[idx - 1].label}` : "이전 단계"}
         </button>
-        <span className="aas-botnav-mid num">RESEARCH PIPELINE · {stage.n} {stage.label}</span>
-        <button className="aas-botnav-next" disabled={idx === STAGES.length - 1}
-          onClick={() => idx < STAGES.length - 1 && router.push(STAGES[idx + 1].href)}>
-          {idx < STAGES.length - 1 ? `${STAGES[idx + 1].n} ${STAGES[idx + 1].label}` : "마지막 스테이지"} →
-        </button>
+        <span className="aas-botnav-mid num">RESEARCH PIPELINE · {phase ? `${phase.label} 단계` : stage.label}</span>
+        {isLast
+          ? <button className="aas-botnav-restart" onClick={() => router.push("/allocation")}>새 목표 (게이트로) →</button>
+          : <button className="aas-botnav-next primary" onClick={goNext}>{nextLabel} →</button>}
       </div>
     </div>
   );
 }
 
+function LayoutInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  // 게이트(/allocation)는 크롬 없이 bare 렌더 (page.tsx가 GoalGate를 렌더) — Provider 안이라
+  // 게이트에서 세팅한 시드가 상태로 유지되어 Construct로 그대로 이어짐.
+  if (pathname === "/allocation") return <>{children}</>;
+  return <StageChrome>{children}</StageChrome>;
+}
+
 export default function AllocationLayout({ children }: { children: React.ReactNode }) {
   return (
     <AllocationProvider>
-      <StageChrome>{children}</StageChrome>
+      <LayoutInner>{children}</LayoutInner>
     </AllocationProvider>
   );
 }
