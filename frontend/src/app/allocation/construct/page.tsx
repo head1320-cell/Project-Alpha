@@ -1,13 +1,15 @@
 "use client";
-// 01 CONSTRUCT — 자산 구성. 좌 PortfolioBuilder / 우 ALLOCATION MAP · WEIGHT
-// COMPARISON(현재/캡가중/최적) · CONCENTRATION(HHI·TOP3·Neff) · DATA COVERAGE.
-import React, { useMemo } from "react";
+// 01 CONSTRUCT — 자산 구성. 좌 직접 구성(PortfolioBuilder) | 팩터 빌더(FactorBuilder) /
+// 우 ALLOCATION MAP · WEIGHT COMPARISON(현재/캡가중/최적) · CONCENTRATION · DATA COVERAGE.
+import React, { useMemo, useState } from "react";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { PortfolioBuilder } from "@/components/allocation/PortfolioBuilder";
+import { FactorBuilder } from "@/components/allocation/FactorBuilder";
 import { AllocationMap, WeightComparison, concentration } from "@/components/allocation/parts";
 
 export default function ConstructStage() {
   const { holdings, setHoldingsReset, loadStudy, studiesVersion, result } = useAllocation();
+  const [mode, setMode] = useState<"direct" | "factor">("direct");
 
   const cmpRows = useMemo(() => holdings.map((h) => ({
     code: h.code, name: h.name,
@@ -24,8 +26,14 @@ export default function ConstructStage() {
   return (
     <div className="as-ws2">
       <aside>
-        <PortfolioBuilder holdings={holdings} studiesVersion={studiesVersion}
-          onChange={setHoldingsReset} onLoadStudy={loadStudy} />
+        <div className="as-seg as-fb-mode">
+          <button className={mode === "direct" ? "on" : ""} onClick={() => setMode("direct")}>직접 구성</button>
+          <button className={mode === "factor" ? "on" : ""} onClick={() => setMode("factor")}>팩터 빌더</button>
+        </div>
+        {mode === "direct"
+          ? <PortfolioBuilder holdings={holdings} studiesVersion={studiesVersion}
+              onChange={setHoldingsReset} onLoadStudy={loadStudy} />
+          : <FactorBuilder holdings={holdings} onApply={setHoldingsReset} />}
       </aside>
       <main className="as-center">
         <section className="as-card">

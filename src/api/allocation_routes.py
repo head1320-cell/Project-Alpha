@@ -74,6 +74,58 @@ class StressRequest(BaseModel):
     holdings: dict[str, float] = Field(..., min_length=1)
     scenario: str = "rate_hike_200bp"
     benchmark: str = "KOSPI"
+    severity: float = Field(1.0, ge=0.25, le=3.0)   # 가상 시나리오 충격 배율(0.25~3×)
+
+
+# ── 팩터 기반 포트폴리오 ──────────────────────────────────────────────────────
+class FactorSpec(BaseModel):
+    id: str                                  # 팩터 필드 id (fundamentals/price 스토어)
+    weight: float = Field(1.0, ge=0, le=10)  # 상대 가중치
+    direction: int = 0                       # 0=자동(higher_better) · 1=상위선호 · -1=하위선호
+
+
+class FactorPortfolioRequest(BaseModel):
+    factors: list[FactorSpec] = Field(..., min_length=1, max_length=12)
+    tickers: list[str] | None = None         # 후보 풀(명시) — 없으면 유니버스 표본
+    top_k: int = Field(10, ge=2, le=30)
+    weighting: str = "equal"                 # equal|factor_tilt|inverse_vol|risk_parity|min_var|hrp
+    lookback_days: int = Field(756, ge=90, le=3650)
+    sample_size: int = Field(400, ge=50, le=1500)
+
+
+# ── 카나리·마켓타이밍 ────────────────────────────────────────────────────────
+class CanarySpec(BaseModel):
+    kind: str = "asset"                      # asset|indicator
+    id: str                                  # 자산 티커 또는 매크로 시리즈 id(VIXCLS 등)
+    signal: str = "score_13612"              # abs_mom|score_13612|ma_month|ma_day|threshold
+    lookback: int = Field(12, ge=1, le=252)
+    threshold: float = 0.0
+    direction: str = "above"                 # above|below (threshold/indicator 통과 방향)
+
+
+class TimingRequest(BaseModel):
+    market: str = "kr"                       # kr|us
+    canaries: list[CanarySpec] = Field(..., min_length=1, max_length=8)
+    min_breadth: int = Field(0, ge=0, le=8)  # 0 = 전부 통과 · k = k-of-N
+    risk_on_assets: list[str] = Field(default_factory=list)
+    risk_off_assets: list[str] = Field(default_factory=list)
+    holdings: dict[str, float] | None = None  # 현재 포트폴리오(리스크-온 유지 + 오버레이 대상)
+    overlay: dict | None = None              # {"type":"ma_day"|"abs_mom"|"none","n":200,"lookback":12}
+
+
+# ── 상관-국면 스트레스 ───────────────────────────────────────────────────────
+class StressCorrRequest(BaseModel):
+    tickers: list[str] = Field(..., min_length=2, max_length=30)
+    weights: dict[str, float] | None = None
+    lookback_days: int = Field(756, ge=90, le=3650)
+    target_rho: float = Field(0.9, ge=0.0, le=0.99)     # 위기 시 수렴 상관
+    intensity: float = Field(1.0, ge=0.0, le=1.0)        # 충격 강도(0=무·1=완전)
+    confidence_level: float = Field(0.95, ge=0.8, le=0.999)
+    portfolio_value: float = Field(1e8, gt=0)
+
+
+class ResolveNamesRequest(BaseModel):
+    codes: list[str] = Field(..., min_length=1, max_length=300)
 
 
 # ── 공용 헬퍼 ─────────────────────────────────────────────────────────────────
@@ -553,11 +605,12 @@ def allocation_stress(req: StressRequest):
         from src.engine.stress_test_analyzer import STRESS_SCENARIOS, _stock_shock
         if req.scenario not in STRESS_SCENARIOS:
             return {"error": True, "message": f"미지원 시나리오: {req.scenario}"}
+        sev = float(req.severity)
         rows = []
         port_shock = 0.0
         for code, w in holdings.items():
             item = _shock_inputs(code)
-            shock = _stock_shock(item, req.scenario)
+            shock = round(_stock_shock(item, req.scenario) * sev, 2)
             port_shock += w * shock
             rows.append({"stock_code": code, "corp_name": item.corp_name,
                          "weight_pct": round(w * 100, 2), "shock_pct": shock,
@@ -565,11 +618,11 @@ def allocation_stress(req: StressRequest):
         rows.sort(key=lambda x: x["shock_pct"])
         return {
             "error": False, "mode": "hypothetical", "available": True,
-            "scenario": req.scenario,
+            "scenario": req.scenario, "severity": sev,
             "label": STRESS_SCENARIOS[req.scenario]["label"],
             "portfolio_shock_pct": round(port_shock, 2),
             "rows": rows,
-            "note": "종목 펀더멘털(부채·PER·배당·ROE·베타) 기반 M8 충격 추정의 가중합.",
+            "note": f"종목 펀더멘털(부채·PER·배당·ROE·베타) 기반 M8 충격 추정의 가중합 (배율 {sev:g}×).",
         }
     except Exception:
         logger.exception("stress 실패")
@@ -645,4 +698,331 @@ def allocation_stress_catalog():
         return {"scenarios": hypo + hist}
     except Exception:
         logger.exception("stress-catalog 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ── /resolve-names ───────────────────────────────────────────────────────────
+@router.post("/resolve-names")
+def allocation_resolve_names(req: ResolveNamesRequest):
+    """코드 목록 → 종목명 라벨(단일 진실 공급원 stock_master). 초기 포트폴리오 구성 시
+    종목코드 대신 종목명을 보여주기 위한 배치 해소 (검색·관심그룹·게이트 시드 공통)."""
+    codes = [str(c).strip() for c in req.codes if str(c).strip()]
+    return {"labels": _labels(codes)}
+
+
+# ── /factor-portfolio ────────────────────────────────────────────────────────
+def _factor_sample_rows(n: int) -> list[dict]:
+    """유니버스 팩터 표본 행 — factor-xray와 동일 소스(snapshot_db + mock 폴백)."""
+    from src.data.snapshot_db import sample_factors
+    sample = sample_factors(n) or []
+    if not sample:
+        from src.data.mock_gate import mock_allowed
+        if mock_allowed():
+            from src.data.fundamentals_store import FundamentalsStore
+            from src.data.price_factors_store import PriceFactorsStore
+            fs = FundamentalsStore.get_default()
+            ps = PriceFactorsStore.get_default()
+            for i in range(80):
+                code = f"{100 + i * 137 % 900:03d}{i * 41 % 1000:03d}"
+                row = {"stock_code": code}
+                try:
+                    row.update(fs.get_factors(code, None) or {})
+                    row.update(ps.get_factors(code, None) or {})
+                except Exception:
+                    continue
+                sample.append(row)
+    return sample
+
+
+def _rows_for_tickers(tickers: list[str]) -> list[dict]:
+    from src.data.fundamentals_store import FundamentalsStore
+    from src.data.price_factors_store import PriceFactorsStore
+    fs = FundamentalsStore.get_default()
+    ps = PriceFactorsStore.get_default()
+    rows = []
+    for c in tickers:
+        row: dict = {"stock_code": c}
+        try:
+            row.update(fs.get_factors(c, None) or {})
+            row.update(ps.get_factors(c, None) or {})
+        except Exception:
+            pass
+        rows.append(row)
+    return rows
+
+
+def _factor_weights(codes: list[str], score_map: dict[str, float],
+                    weighting: str, lookback: int) -> dict[str, float]:
+    """top-K 종목 → 비중(%). equal/factor_tilt는 시세 불필요, 나머지는 수익률 기반."""
+    n = len(codes)
+    if weighting == "equal" or n == 0:
+        w = 1.0 / max(n, 1)
+        return {c: round(w * 100, 2) for c in codes}
+    if weighting == "factor_tilt":
+        s = np.array([score_map.get(c, 0.0) for c in codes], dtype=float)
+        s = s - s.min() + 1e-6                 # 양수 시프트(순위 보존)
+        s = s / s.sum()
+        return {codes[i]: round(float(s[i]) * 100, 2) for i in range(n)}
+    # 수익률 기반 (inverse_vol|risk_parity|min_var|hrp) — 시세 없으면 균등 폴백
+    returns, _b, _ex, _cov = _load_clean_returns(codes, None, lookback)
+    if returns is None or len(returns.columns) < 2:
+        w = 1.0 / n
+        return {c: round(w * 100, 2) for c in codes}
+    names = list(returns.columns)
+    R = returns.values
+    from src.engine.allocation_studio import _inverse_vol_w, weights_for_model
+    wv = _inverse_vol_w(R) if weighting == "inverse_vol" else weights_for_model(weighting, R)
+    return {names[i]: round(float(wv[i]) * 100, 2) for i in range(len(names))}
+
+
+@router.post("/factor-portfolio")
+def allocation_factor_portfolio(req: FactorPortfolioRequest):
+    """팩터 기반 포트폴리오 — 방향 인지 z-score 가중합으로 후보 유니버스를 점수화하고
+    상위 K종목을 선정, 지정 방식(균등/팩터틸트/역변동성/리스크패리티/최소분산/HRP)으로 비중화."""
+    try:
+        from src.data.stock_master import get_stock_name
+        from src.engine.filter_ast import FIELD_BY_ID
+
+        rows = _rows_for_tickers(req.tickers) if req.tickers else _factor_sample_rows(req.sample_size)
+        rows = [r for r in rows if r.get("stock_code")]
+        if len(rows) < max(req.top_k, 3):
+            return {"error": True,
+                    "message": "후보 종목이 부족합니다. 유니버스를 적재하거나 종목을 직접 지정하세요.",
+                    "candidates": len(rows)}
+
+        total_w = sum(max(f.weight, 0.0) for f in req.factors) or 1.0
+        scores: dict[str, float] = {}
+        cov_w: dict[str, float] = {}
+        factor_meta = []
+        for f in req.factors:
+            meta = FIELD_BY_ID.get(f.id)
+            hb = bool(getattr(meta, "higher_better", True)) if meta else True
+            direction = f.direction if f.direction in (1, -1) else (1 if hb else -1)
+            pairs = [(r["stock_code"], _xf(r.get(f.id), None)) for r in rows]
+            arr = np.array([v for _, v in pairs if v is not None], dtype=float)
+            covered = arr.size >= 10 and float(arr.std(ddof=1)) > 1e-12
+            factor_meta.append({"id": f.id, "label": getattr(meta, "label", f.id),
+                                "direction": direction, "covered": covered, "n": int(arr.size)})
+            if not covered:
+                continue
+            mean, std = float(arr.mean()), float(arr.std(ddof=1))
+            wf = max(f.weight, 0.0) / total_w
+            for code, v in pairs:
+                if v is None:
+                    continue
+                z = float(np.clip((v - mean) / std * direction, -3.0, 3.0))
+                scores[code] = scores.get(code, 0.0) + wf * z
+                cov_w[code] = cov_w.get(code, 0.0) + wf
+
+        ranked = sorted(((c, scores[c] / cov_w[c]) for c in scores if cov_w[c] > 0),
+                        key=lambda x: x[1], reverse=True)
+        if len(ranked) < 2:
+            return {"error": True,
+                    "message": "선택한 팩터로 점수화 가능한 종목이 부족합니다(팩터 데이터 결측).",
+                    "factors": factor_meta, "candidates": len(rows)}
+
+        top = ranked[: req.top_k]
+        codes = [c for c, _ in top]
+        score_map = {c: round(s, 3) for c, s in top}
+        weights = _factor_weights(codes, score_map, req.weighting, req.lookback_days)
+        holdings = [{"code": c, "name": get_stock_name(c) or c,
+                     "weight": weights.get(c, 0.0), "score": score_map[c],
+                     "coverage_pct": round(cov_w.get(c, 0.0) * 100, 0)}
+                    for c in codes]
+        holdings = [h for h in holdings if h["weight"] > 0]
+        holdings.sort(key=lambda h: h["weight"], reverse=True)
+        return {"error": False, "holdings": holdings, "factors": factor_meta,
+                "weighting": req.weighting, "candidates": len(rows), "ranked": len(ranked),
+                "note": "유니버스 표본 방향 인지 z-score 가중합 → 상위 K 선정. 커버리지 <100%는 일부 팩터 결측 재정규화."}
+    except Exception:
+        logger.exception("factor-portfolio 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ── /timing ──────────────────────────────────────────────────────────────────
+def _canary_eval(c: CanarySpec, mk: str):
+    """단일 카나리 평가 → (통과 여부|None, 표시값|None)."""
+    if c.kind == "indicator":
+        from src.engine.macro_analytics import _latest, _macro_series
+        val = _latest(_macro_series(), c.id)
+        if val is None:
+            return None, None
+        ok = (float(val) > c.threshold) if c.direction == "above" else (float(val) < c.threshold)
+        return ok, round(float(val), 3)
+    from src.engine.tactical_allocations import (
+        _above_ma_d,
+        _above_ma_m,
+        _abs_mom,
+        _score_13612,
+    )
+    if c.signal == "abs_mom":
+        v = _abs_mom(c.id, mk, c.lookback)
+        return (v is not None and v > c.threshold), (round(v, 4) if v is not None else None)
+    if c.signal == "score_13612":
+        v = _score_13612(c.id, mk)
+        return (v is not None and v > c.threshold), (round(v, 4) if v is not None else None)
+    if c.signal == "ma_month":
+        v = _above_ma_m(c.id, mk, max(c.lookback, 2))
+        return (v is True), (1.0 if v else 0.0 if v is not None else None)
+    if c.signal == "ma_day":
+        v = _above_ma_d(c.id, mk, max(c.lookback, 5))
+        return (v is True), (1.0 if v else 0.0 if v is not None else None)
+    v = _abs_mom(c.id, mk, c.lookback)
+    return (v is not None and v > c.threshold), (round(v, 4) if v is not None else None)
+
+
+def _timing_holding(t: str, mk: str) -> tuple[str, str]:
+    from src.data.etf_prices import resolve
+    from src.data.stock_master import get_stock_name
+    code, name = resolve(t, mk)
+    if not name or name == code or name == t:
+        name = get_stock_name(code) or get_stock_name(t) or name or code
+    return code, name
+
+
+@router.post("/timing")
+def allocation_timing(req: TimingRequest):
+    """카나리(자산·지표) 브레드스 게이트 → 위험-온/오프 자산군 스위치 + 추세 오버레이.
+    시장 타이밍 컴포짓(timing_panel)을 함께 반환. VAA/PAA/DAA 규칙을 사용자 파라미터로 일반화."""
+    try:
+        from src.engine.tactical_allocations import _above_ma_d, _abs_mom, _signal
+
+        mk = req.market if req.market in ("kr", "us") else "kr"
+        details, hits = [], 0
+        for c in req.canaries:
+            ok, val = _canary_eval(c, mk)
+            if ok:
+                hits += 1
+            _, lbl = _timing_holding(c.id, mk) if c.kind == "asset" else (c.id, c.id)
+            details.append({"kind": c.kind, "id": c.id, "signal": c.signal,
+                            "label": lbl, "value": val, "pass": bool(ok)})
+        total = len(req.canaries)
+        need = req.min_breadth if req.min_breadth > 0 else total
+        risk_on = hits >= need
+
+        # 리스크-온/오프 자산군 결정
+        weights: dict[str, float] = {}      # ticker -> weight%
+        if risk_on:
+            if req.risk_on_assets:
+                w = round(100.0 / len(req.risk_on_assets), 2)
+                weights = {t: w for t in req.risk_on_assets}
+            elif req.holdings:
+                tot = sum(max(v, 0.0) for v in req.holdings.values()) or 1.0
+                weights = {t: round(max(v, 0.0) / tot * 100, 2) for t, v in req.holdings.items()}
+        else:
+            off = req.risk_off_assets or ["IEF", "SHY"]
+            w = round(100.0 / len(off), 2)
+            weights = {t: w for t in off}
+
+        # 추세 오버레이 (마켓타이밍) — 추세 이탈 자산은 현금(단기채)으로
+        overlay = req.overlay or {}
+        otype = overlay.get("type", "none")
+        cash_pct = 0.0
+        holdings_out = []
+        for t, w in weights.items():
+            code, name = _timing_holding(t, mk)
+            in_trend = True
+            if otype in ("ma_day", "abs_mom") and w > 0:
+                if otype == "ma_day":
+                    r = _above_ma_d(t, mk, int(overlay.get("n", 200)))
+                    in_trend = bool(r) if r is not None else True
+                else:
+                    r = _abs_mom(t, mk, int(overlay.get("lookback", 12)))
+                    in_trend = (r is not None and r > 0)
+            wt = w if in_trend else 0.0
+            if not in_trend:
+                cash_pct += w
+            holdings_out.append({"ticker": t, "code": code, "label": name,
+                                 "weight": round(wt, 2), "in_trend": in_trend})
+        cash_pct = round(cash_pct, 2)
+        if cash_pct > 0:
+            cc, cn = _timing_holding("BIL", mk)
+            holdings_out.append({"ticker": "BIL", "code": cc, "label": cn,
+                                 "weight": cash_pct, "in_trend": True, "is_cash": True})
+
+        signal_label = _signal({h["ticker"]: h["weight"] for h in holdings_out})
+
+        # 시장 타이밍 컴포짓 (재사용) — 실패해도 카나리 결과는 유효
+        market_timing = None
+        try:
+            from src.engine.macro_analytics import timing_panel
+            tp = timing_panel(mk)
+            market_timing = {"composite": tp.get("composite"),
+                             "components": tp.get("components"),
+                             "assets": tp.get("assets")}
+        except Exception as e:
+            logger.debug(f"timing_panel 실패(무시): {e}")
+
+        return {"error": False, "market": mk,
+                "canary": {"signal": "risk_on" if risk_on else "risk_off",
+                           "hits": hits, "total": total, "need": need, "details": details},
+                "holdings": holdings_out, "cash_pct": cash_pct,
+                "signal_label": signal_label, "overlay": otype,
+                "market_timing": market_timing}
+    except Exception:
+        logger.exception("timing 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ── /stress-correlation ──────────────────────────────────────────────────────
+@router.post("/stress-correlation")
+def allocation_stress_correlation(req: StressCorrRequest):
+    """상관-국면 스트레스 — 위기 시 상관이 target_rho로 수렴한다고 가정하고 공분산을 재구성,
+    포트폴리오 변동성·VaR·자산별 기여 VaR의 base 대비 변화를 산출 (PortfolioRiskModel 재사용)."""
+    try:
+        from scipy.stats import norm
+
+        from src.models.portfolio_risk import PortfolioRiskModel
+
+        returns, _b, excluded, coverage = _load_clean_returns(req.tickers, None, req.lookback_days)
+        if returns is None or len(returns.columns) < 2:
+            return {"error": True, "message": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded}
+        names = list(returns.columns)
+        n = len(names)
+        if req.weights:
+            w = np.array([max(float(req.weights.get(t, 0.0)), 0.0) for t in names], dtype=float)
+            if w.sum() <= 0:
+                w = np.ones(n)
+        else:
+            w = np.ones(n)
+        w = w / w.sum()
+
+        ann = math.sqrt(252.0)
+        prm = PortfolioRiskModel(confidence_level=req.confidence_level)
+        base_var, base_vol_d = prm.calculate_portfolio_var(returns, w, req.portfolio_value)
+        base_comp = prm.component_var(returns, w, req.portfolio_value)
+
+        sig = returns.std().values
+        corr = returns.corr().values
+        off = ~np.eye(n, dtype=bool)
+        stressed = corr.copy()
+        stressed[off] = corr[off] + (req.target_rho - corr[off]) * req.intensity
+        np.fill_diagonal(stressed, 1.0)
+        cov_s = np.outer(sig, sig) * stressed
+        var_d = float(w @ cov_s @ w)
+        s_vol_d = float(np.sqrt(max(var_d, 0.0)))
+        z = float(norm.ppf(req.confidence_level))
+        s_var = z * s_vol_d * req.portfolio_value
+        s_marg = (cov_s @ w) / (s_vol_d + 1e-12) * z * req.portfolio_value
+        s_comp = w * s_marg
+
+        labels = _labels(names)
+        return {
+            "error": False, "names": names, "labels": labels,
+            "confidence_level": req.confidence_level, "target_rho": req.target_rho,
+            "intensity": req.intensity,
+            "base": {"port_vol_pct": round(base_vol_d * ann * 100, 2),
+                     "var_amount": round(base_var, 0),
+                     "component_var": {names[i]: round(float(base_comp[i]), 0) for i in range(n)}},
+            "stressed": {"port_vol_pct": round(s_vol_d * ann * 100, 2),
+                         "var_amount": round(s_var, 0),
+                         "component_var": {names[i]: round(float(s_comp[i]), 0) for i in range(n)}},
+            "delta_vol_pct": round((s_vol_d / base_vol_d - 1) * 100, 1) if base_vol_d > 0 else None,
+            "delta_var_pct": round((s_var / base_var - 1) * 100, 1) if base_var > 0 else None,
+            "corr_shift": {"from_avg_rho": round(float(corr[off].mean()), 3),
+                           "to_avg_rho": round(float(stressed[off].mean()), 3)},
+            "excluded": excluded, "coverage": coverage,
+        }
+    except Exception:
+        logger.exception("stress-correlation 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

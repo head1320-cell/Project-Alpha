@@ -3206,3 +3206,55 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-jr-grid p { font-size: 11px; line-height: 1.5; margin: 1px 0 0; }
 .as-jr-review { border-top: 1px dashed var(--t-border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
 .as-jr-review p { font-size: 11px; margin: 0; }
+
+/* ══ Allocation Studio 신규 툴 (팩터 빌더 · 타이밍 · 상관국면 · 위저드 우측유틸) ══ */
+/* 위저드 트래커 우측 유틸 (제거된 헤더의 MOCK·목표 재배치) */
+.aas-wiz-right { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.aas-wiz-mock { font-size: 8.5px; color: #a16207; border: 1px solid #a16207; border-radius: 2px; padding: 1px 4px; letter-spacing: .04em; }
+.aas-wiz-gate { font-size: 9.5px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 7px; background: #fff; cursor: pointer; white-space: nowrap; }
+.aas-wiz-gate:hover { border-color: var(--t-accent); color: var(--t-accent); }
+
+/* Factor Builder (01 Construct — 팩터 빌더 모드) */
+.as-fb { display: flex; flex-direction: column; gap: 8px; }
+.as-fb-mode { margin-bottom: 6px; }
+.as-fb-row { display: flex; flex-direction: column; gap: 5px; }
+.as-fb-add, .as-fb-params select, .as-tm-kind, .as-tm-sig, .as-tm-set select { border: 1px solid var(--t-border); border-radius: 2px; font-size: 11px; padding: 4px 6px; background: #fff; }
+.as-fb-presets { display: flex; flex-wrap: wrap; gap: 4px; }
+.as-fb-fac { display: flex; align-items: center; gap: 6px; font-size: 11px; border-bottom: 1px solid var(--t-surface); padding: 3px 0; }
+.as-fb-fac-nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-fb-fac-w { color: var(--t-muted); font-size: 10px; white-space: nowrap; }
+.as-fb-fac-w input { width: 46px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 2px 4px; text-align: right; }
+.as-fb-dir { display: inline-flex; border: 1px solid var(--t-border); border-radius: 2px; overflow: hidden; }
+.as-fb-dir button { border: none; background: #fff; font-size: 9.5px; padding: 2px 5px; cursor: pointer; color: var(--t-muted); }
+.as-fb-dir button.on { background: rgba(18,0,255,.06); color: var(--t-accent); font-weight: 600; }
+.as-fb-params { display: flex; flex-direction: column; gap: 6px; }
+.as-fb-params label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--t-muted); }
+.as-fb-params input[type="range"] { accent-color: var(--t-accent); }
+.as-fb-result { margin-top: 6px; border-top: 1px solid var(--t-border); padding-top: 6px; }
+.as-fb-result-head { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--t-muted); margin-bottom: 4px; }
+.as-fb-apply { border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent); color: #fff; font-size: 10.5px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
+.as-fb-apply:hover:not(:disabled) { opacity: .9; }
+.as-fb-apply:disabled { opacity: .45; cursor: default; }
+.as-fb-code { color: var(--t-muted); font-size: 9.5px; }
+
+/* Timing (03 — 카나리·마켓타이밍) */
+.as-tm-canary { display: flex; align-items: center; gap: 5px; padding: 3px 0; border-bottom: 1px solid var(--t-surface); flex-wrap: wrap; }
+.as-tm-id { width: 68px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 3px 5px; font-family: var(--t-mono); text-transform: uppercase; }
+.as-tm-num { width: 52px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 3px 5px; text-align: right; }
+.as-tm-sig { flex: 1; min-width: 90px; }
+.as-tm-set { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--t-muted); margin-top: 4px; }
+.as-tm-set input, .as-tm-set select { border: 1px solid var(--t-border); border-radius: 2px; font-size: 11px; padding: 4px 6px; background: #fff; }
+.as-tm-verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px; }
+.as-tm-sig-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 2px; letter-spacing: .03em; }
+.as-tm-sig-badge.risk_on { background: rgba(22,163,74,.1); color: #16a34a; border: 1px solid #16a34a; }
+.as-tm-sig-badge.risk_off { background: rgba(220,38,38,.08); color: var(--color-bear); border: 1px solid var(--color-bear); }
+.as-tm-mkt { display: flex; align-items: center; gap: 12px; }
+.as-tm-mkt-lab { display: flex; flex-direction: column; }
+.as-tm-mkt-lab b { font-size: 13px; }
+.as-tm-comps { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 4px 12px; margin: 6px 0; }
+.as-tm-comp { display: flex; align-items: baseline; justify-content: space-between; font-size: 10.5px; color: var(--t-muted); }
+.as-tm-corr-head { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.as-tm-corr-head > div { display: flex; flex-direction: column; }
+.as-tm-corr-head span { font-size: 9.5px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .04em; }
+.as-tm-corr-head b { font-size: 12px; font-variant-numeric: tabular-nums; }
+.as-tm-corr-head em { font-style: normal; font-size: 10px; }

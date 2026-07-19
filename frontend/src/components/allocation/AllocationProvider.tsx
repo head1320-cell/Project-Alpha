@@ -12,7 +12,8 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   allocationApi, type AllocationModel, type AllocationViewInput, type AnalyzeResult,
-  type StressResult, type StressScenarioMeta, type XrayResult,
+  type CanaryInput, type StressResult, type StressScenarioMeta, type TimingResult,
+  type XrayResult,
 } from "@/lib/allocationApi";
 import { saveStudy, type AllocationStudy } from "@/lib/allocationStorage";
 import type { Holding } from "./PortfolioBuilder";
@@ -38,20 +39,44 @@ export interface StageMeta {
 }
 export const STAGES: StageMeta[] = [
   { n: "00", href: "/allocation/overview", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운", intent: "현재 포트폴리오를 한눈에 점검하고 필요한 단계로 이동하세요." },
-  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 검색·비중·집중도", intent: "자산을 2개 이상 담고 비중 합계를 100%로 맞추세요.", phase: "setup" },
+  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 직접 구성 · 팩터 빌더", intent: "자산을 2개 이상 담거나(직접) 팩터로 자동 구성하고 비중을 맞추세요.", phase: "setup" },
   { n: "02", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도", intent: "거시 테제를 자산·방향·신뢰도로 변환하세요 (선택).", phase: "logic" },
-  { n: "03", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
-  { n: "04", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "기댓값 변동 → 비중 민감도 + 시나리오", intent: "시나리오와 기대수익 충격으로 배분의 견고성을 검증하세요.", phase: "validation" },
-  { n: "05", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
-  { n: "06", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
+  { n: "03", href: "/allocation/timing", label: "TIMING", title: "Timing", desc: "카나리 신호 + 마켓타이밍 — 위험 국면 게이트", intent: "카나리 자산·지표와 추세 필터로 위험-온/오프를 판단하세요 (선택).", phase: "logic" },
+  { n: "04", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
+  { n: "05", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "민감도 + 시나리오 severity + 상관-국면 스트레스", intent: "시나리오·충격·상관국면으로 배분의 견고성을 검증하세요.", phase: "validation" },
+  { n: "06", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
+  { n: "07", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
 ];
 
 export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: number[] }
 export const PHASES: PhaseMeta[] = [
-  { key: "setup", label: "SETUP", ko: "설정", steps: [1] },        // 01 Construct
-  { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3] },     // 02 Thesis · 03 Optimize
-  { key: "validation", label: "VALIDATION", ko: "검증", steps: [4, 5] }, // 04 Stress · 05 Explain
+  { key: "setup", label: "SETUP", ko: "설정", steps: [1] },           // 01 Construct
+  { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3, 4] },     // 02 Thesis · 03 Timing · 04 Optimize
+  { key: "validation", label: "VALIDATION", ko: "검증", steps: [5, 6] }, // 05 Stress · 06 Explain
 ];
+
+// ── 타이밍(카나리·마켓타이밍) 설정 — 위저드 공유 상태 ──
+export interface TimingConfig {
+  market: "kr" | "us";
+  canaries: CanaryInput[];
+  minBreadth: number;                 // 0 = 전부 통과, k = k-of-N
+  riskOnAssets: string[];             // 비면 현재 포트폴리오 유지
+  riskOffAssets: string[];
+  overlay: { type: "ma_day" | "abs_mom" | "none"; n: number; lookback: number };
+}
+export const DEFAULT_TIMING: TimingConfig = {
+  market: "kr",
+  canaries: [
+    { kind: "asset", id: "SPY", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
+    { kind: "asset", id: "EFA", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
+    { kind: "asset", id: "EEM", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
+    { kind: "asset", id: "AGG", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
+  ],
+  minBreadth: 0,
+  riskOnAssets: [],
+  riskOffAssets: ["IEF", "SHY"],
+  overlay: { type: "none", n: 200, lookback: 12 },
+};
 
 export function stageIndex(pathname: string): number {
   // 가장 긴(정확) 매칭 우선. 게이트(/allocation)는 어떤 스테이지도 매칭 안 됨 → 0 폴백
@@ -89,8 +114,15 @@ interface AllocationCtx {
   scenario: string;
   bump: number;
   setBump: (v: number) => void;
+  severity: number;
+  setSeverity: (v: number) => void;
   pickScenario: (id: string) => void;
   scenarios: StressScenarioMeta[];
+  // ── 타이밍(카나리·마켓타이밍) ──
+  timingCfg: TimingConfig;
+  setTimingCfg: (next: TimingConfig) => void;
+  timingQ: UseQueryResult<TimingResult | null>;
+  applyTiming: () => void;             // 타이밍 결과 배분을 포트폴리오에 적용
   timeline: TimelineEvent[];
   logEvent: (msg: string) => void;
   canRun: boolean;
@@ -132,6 +164,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [scenario, setScenario] = useState<string>("rate_hike_200bp");
   const [bump, setBump] = useState(2.0);
+  const [severity, setSeverity] = useState(1.0);
+  const [timingCfg, setTimingCfgState] = useState<TimingConfig>(DEFAULT_TIMING);
   const [studiesVersion, setStudiesVersion] = useState(0);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [lastRun, setLastRun] = useState("—:—:—");
@@ -166,6 +200,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         if (wip.model) setModel(wip.model);
         if (typeof wip.delta === "number") setDelta(wip.delta);
         if (typeof wip.tau === "number") setTau(wip.tau);
+        if (wip.timingCfg && typeof wip.timingCfg === "object") setTimingCfgState(wip.timingCfg);
       }
     } catch { /* 파싱 실패는 무시 — 빈 상태로 시작 */ }
     setHydrated(true);
@@ -174,9 +209,32 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   // ── 작업셋 persist (하이드레이트 이후에만 — 하이드레이트 전 빈 상태로 덮어쓰기 방지) ──
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
-    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau })); }
+    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg })); }
     catch { /* 용량 초과 등 무시 */ }
-  }, [hydrated, holdings, views, model, delta, tau]);
+  }, [hydrated, holdings, views, model, delta, tau, timingCfg]);
+
+  // ── 종목명 해소 (초기 구성 시 코드 대신 이름 표시 — 게이트 시드/관심그룹/직접코드 공통) ──
+  //   이름이 코드 그대로인 홀딩만 배치 해소 → 이름만 패치(비중·키 불변 → 재분석 없음).
+  const resolvedNamesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const pend = holdings
+      .filter((h) => h.name === h.code || /^\d{6}$/.test(h.name))
+      .map((h) => h.code)
+      .filter((c) => c && !resolvedNamesRef.current.has(c));
+    if (!pend.length) return;
+    pend.forEach((c) => resolvedNamesRef.current.add(c));
+    allocationApi.resolveNames(pend).then((labels) => {
+      setHoldings((prev) => {
+        let changed = false;
+        const next = prev.map((h) => {
+          const nm = labels[h.code];
+          if (nm && nm !== h.code && nm !== h.name) { changed = true; return { ...h, name: nm }; }
+          return h;
+        });
+        return changed ? next : prev;
+      });
+    }).catch(() => { /* 해소 실패는 코드 폴백 유지 */ });
+  }, [holdings]);
 
   const analyzeMut = useMutation({
     mutationFn: allocationApi.analyze,
@@ -224,10 +282,28 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     queryFn: () => allocationApi.stressCatalog().catch(() => null),
   });
   const stressQ = useQuery({
-    queryKey: ["allocation", "stress", holdingsKey, scenario],
-    queryFn: () => allocationApi.stress(holdingsMap, scenario).catch(() => null),
+    queryKey: ["allocation", "stress", holdingsKey, scenario, severity],
+    queryFn: () => allocationApi.stress(holdingsMap, scenario, severity).catch(() => null),
     enabled: holdings.length >= 1 && !!scenario,
   });
+
+  // ── 타이밍(카나리·마켓타이밍) 쿼리 — 설정/보유 변경 시 자동 재계산 ──
+  const timingCfgKey = useMemo(() => JSON.stringify(timingCfg), [timingCfg]);
+  const timingQ = useQuery({
+    queryKey: ["allocation", "timing", timingCfgKey, holdingsKey],
+    queryFn: () => allocationApi.timing({
+      market: timingCfg.market,
+      canaries: timingCfg.canaries,
+      min_breadth: timingCfg.minBreadth,
+      risk_on_assets: timingCfg.riskOnAssets,
+      risk_off_assets: timingCfg.riskOffAssets,
+      holdings: holdings.length ? holdingsMap : null,
+      overlay: timingCfg.overlay,
+    }).catch(() => null),
+    enabled: timingCfg.canaries.length >= 1,
+  });
+
+  const setTimingCfg = (next: TimingConfig) => setTimingCfgState(next);
 
   const scenarios = catalogQ.data?.scenarios || [];
   const pickScenario = (id: string) => {
@@ -240,6 +316,15 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setHoldings(next);
     setResult(null);
     lastReqRef.current = "";
+  };
+
+  const applyTiming = () => {
+    const data = timingQ.data;
+    if (!data || data.error || !data.holdings?.length) return;
+    setHoldingsReset(data.holdings
+      .filter((h) => h.weight > 0)
+      .map((h) => ({ code: h.code, name: h.label || h.code, weight: h.weight })));
+    logEvent(`타이밍 배분 적용 — ${data.canary.signal === "risk_on" ? "위험-온" : "위험-오프"}`);
   };
 
   const setViewsLogged = (next: AllocationViewInput[]) => {
@@ -299,17 +384,19 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     !!result,                                             // 00 overview
     holdings.length >= 2,                                 // 01 construct (SETUP)
     views.length > 0,                                     // 02 thesis    (LOGIC)
-    !!result,                                             // 03 optimize  (LOGIC)
-    !!result,                                             // 04 stress    (VALIDATION)
-    !!result,                                             // 05 explain   (VALIDATION)
-    timeline.some((e) => e.msg.startsWith("스터디 저장")),  // 06 journal
-  ], [result, holdings.length, views.length, timeline]);
+    !!timingQ.data && !timingQ.data.error,                // 03 timing    (LOGIC)
+    !!result,                                             // 04 optimize  (LOGIC)
+    !!result,                                             // 05 stress    (VALIDATION)
+    !!result,                                             // 06 explain   (VALIDATION)
+    timeline.some((e) => e.msg.startsWith("스터디 저장")),  // 07 journal
+  ], [result, holdings.length, views.length, timeline, timingQ.data]);
 
   const value: AllocationCtx = {
     holdings, setHoldingsReset, holdingsMap, holdingsKey,
     views, setViewsLogged,
     model, setModel, delta, setDelta, tau, setTau,
-    result, scenario, bump, setBump, pickScenario, scenarios,
+    result, scenario, bump, setBump, severity, setSeverity, pickScenario, scenarios,
+    timingCfg, setTimingCfg, timingQ, applyTiming,
     timeline, logEvent,
     canRun, pending: analyzeMut.isPending, lastRun,
     analyzeError: analyzeMut.data?.error ? (analyzeMut.data.message ?? "분석 실패") : null,

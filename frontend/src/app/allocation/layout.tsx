@@ -14,44 +14,24 @@ function StageChrome({ children }: { children: React.ReactNode }) {
   const idx = stageIndex(pathname);
   const stage = STAGES[idx];
   const phase = stage.phase ? PHASES.find((p) => p.key === stage.phase) : null;
-  const { lastRun, result, noteVisit, ensureFreshRun } = useAllocation();
-  const isMock = result && (result.coverage as { source?: string }).source === "mock";
-  const cov = result
-    ? `${result.coverage.start} ~ ${result.coverage.end} · ${result.coverage.n_obs}일`
-    : "2019-07-17 ~ 2026-07-16 · 1,712일";
+  const { noteVisit, ensureFreshRun } = useAllocation();
 
   // 마지막 방문 스테이지 기록 (게이트의 Resume용)
   useEffect(() => { noteVisit(stage.href); }, [stage.href, noteVisit]);
 
-  const isLast = idx === STAGES.length - 1;                 // 06 journal
+  const isLast = idx === STAGES.length - 1;                 // 07 journal
   const nextStage = idx < STAGES.length - 1 ? STAGES[idx + 1] : null;
   const goNext = () => {
     if (!nextStage) return;
     if (nextStage.phase === "validation") ensureFreshRun();  // Validation 진입 시 stale이면 재최적화
     router.push(nextStage.href);
   };
-  const nextLabel = idx === 5 ? "저널로 마무리" : nextStage ? `다음 단계로 — ${nextStage.n} ${nextStage.label}` : "";
+  const nextLabel = nextStage?.label === "JOURNAL" ? "저널로 마무리"
+    : nextStage ? `다음 단계로 — ${nextStage.n} ${nextStage.label}` : "";
 
   return (
     <div className="aas-root tpage-fade">
-      {/* 브레드크럼 (페이즈 포함) */}
-      <div className="aas-crumb num">
-        MODULE 06 / ALLOCATION STUDIO{phase ? ` / ${phase.label} 단계` : ""} / <span>{stage.n} {stage.label}</span>
-      </div>
-
-      {/* 페이지 헤더 — 상시 RE-OPTIMIZE 제거(경쟁 주액션), coverage/lastRun/MOCK 유지 */}
-      <div className="aas-header">
-        <div className="aas-header-tt">
-          <div className="aas-header-title">Allocation Studio — {stage.title}</div>
-          <div className="aas-header-desc">{stage.desc}</div>
-        </div>
-        <span className="aas-header-sp" />
-        {isMock && <span className="aas-header-mock">MOCK 데이터</span>}
-        <span className="aas-header-cov num">{cov} · 최근 실행 {lastRun}</span>
-        <button className="aas-header-gate" onClick={() => router.push("/allocation")} title="목표 선택으로 돌아가기">☰ 목표</button>
-      </div>
-
-      {/* 이 단계에서 할 일 (Contextual Isolation 인텐트) */}
+      {/* 이 단계에서 할 일 (Contextual Isolation 인텐트) — 헤더 블록(제목/브레드크럼/커버리지)은 제거됨 */}
       <div className="aas-intent"><b>이 단계에서 할 일</b> — {stage.intent}</div>
 
       {/* 컨텍스트 스트립 (레짐 + 카나리) */}

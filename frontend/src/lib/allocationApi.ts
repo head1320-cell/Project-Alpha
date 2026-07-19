@@ -119,6 +119,7 @@ export interface StressResult {
   label: string;
   reason?: string;
   // hypothetical
+  severity?: number;
   portfolio_shock_pct?: number;
   rows?: { stock_code: string; corp_name: string; weight_pct: number; shock_pct: number; contribution_pct: number }[];
   note?: string;
@@ -148,6 +149,103 @@ export interface SensitivityResult {
 
 export interface SymbolHit { ticker: string; name: string; market?: string }
 
+// ─── 팩터 기반 포트폴리오 ─────────────────────────────────────────────────────
+export type FactorWeighting = "equal" | "factor_tilt" | "inverse_vol" | "risk_parity" | "min_var" | "hrp";
+
+export interface FactorPortfolioInput {
+  factors: { id: string; weight: number; direction?: number }[];
+  tickers?: string[] | null;
+  top_k: number;
+  weighting: FactorWeighting;
+  lookback_days?: number;
+  sample_size?: number;
+}
+
+export interface FactorPortfolioResult {
+  error: boolean;
+  message?: string;
+  holdings: { code: string; name: string; weight: number; score: number; coverage_pct: number }[];
+  factors: { id: string; label: string; direction?: number; covered: boolean; n: number }[];
+  weighting: string;
+  candidates: number;
+  ranked: number;
+  note: string;
+}
+
+// ─── 카나리·마켓타이밍 ────────────────────────────────────────────────────────
+export type CanarySignalType = "abs_mom" | "score_13612" | "ma_month" | "ma_day" | "threshold";
+
+export interface CanaryInput {
+  kind: "asset" | "indicator";
+  id: string;
+  signal: CanarySignalType;
+  lookback: number;
+  threshold: number;
+  direction: "above" | "below";
+}
+
+export interface TimingInput {
+  market: "kr" | "us";
+  canaries: CanaryInput[];
+  min_breadth: number;
+  risk_on_assets: string[];
+  risk_off_assets: string[];
+  holdings?: Record<string, number> | null;
+  overlay?: { type: "ma_day" | "abs_mom" | "none"; n?: number; lookback?: number };
+}
+
+export interface TimingAssetTrend {
+  ticker: string; label: string; vs_ma200_pct: number | null; mom_12m: number | null;
+  dist_52w_high: number | null; rsi: number | null; trend: string;
+}
+
+export interface TimingResult {
+  error: boolean;
+  message?: string;
+  market: string;
+  canary: {
+    signal: "risk_on" | "risk_off"; hits: number; total: number; need: number;
+    details: { kind: string; id: string; signal: string; label: string; value: number | null; pass: boolean }[];
+  };
+  holdings: { ticker: string; code: string; label: string; weight: number; in_trend: boolean; is_cash?: boolean }[];
+  cash_pct: number;
+  signal_label: string;
+  overlay: string;
+  market_timing: {
+    composite: { score: number; label: string } | null;
+    components: { key: string; label: string; value: number | null; score: number; weight: number }[] | null;
+    assets: TimingAssetTrend[] | null;
+  } | null;
+}
+
+// ─── 상관-국면 스트레스 ───────────────────────────────────────────────────────
+export interface StressCorrInput {
+  tickers: string[];
+  weights?: Record<string, number>;
+  lookback_days?: number;
+  target_rho: number;
+  intensity: number;
+  confidence_level: number;
+  portfolio_value?: number;
+}
+
+export interface StressCorrResult {
+  error: boolean;
+  message?: string;
+  names: string[];
+  labels: Record<string, string>;
+  confidence_level: number;
+  target_rho: number;
+  intensity: number;
+  base: { port_vol_pct: number; var_amount: number; component_var: Record<string, number> };
+  stressed: { port_vol_pct: number; var_amount: number; component_var: Record<string, number> };
+  delta_vol_pct: number | null;
+  delta_var_pct: number | null;
+  corr_shift: { from_avg_rho: number; to_avg_rho: number };
+  excluded: { ticker: string; reason: string }[];
+  coverage: { start: string | null; end: string | null; n_obs: number; source?: "db" | "mock" };
+}
+
 // ─── Client ──────────────────────────────────────────────────────────────────
 
 export const allocationApi = {
@@ -171,11 +269,11 @@ export const allocationApi = {
     return r.json();
   },
 
-  stress: async (holdings: Record<string, number>, scenario: string): Promise<StressResult> => {
+  stress: async (holdings: Record<string, number>, scenario: string, severity = 1.0): Promise<StressResult> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/stress`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ holdings, scenario }),
+      body: JSON.stringify({ holdings, scenario, severity }),
     });
     if (!r.ok) throw new Error(`Stress failed: ${r.status}`);
     return r.json();
@@ -204,5 +302,45 @@ export const allocationApi = {
     if (!r.ok) throw new Error(`Symbol search failed: ${r.status}`);
     const j = await r.json();
     return (j.items || []) as SymbolHit[];
+  },
+
+  resolveNames: async (codes: string[]): Promise<Record<string, string>> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/resolve-names`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codes }),
+    });
+    if (!r.ok) throw new Error(`resolve-names failed: ${r.status}`);
+    return ((await r.json()).labels || {}) as Record<string, string>;
+  },
+
+  factorPortfolio: async (req: FactorPortfolioInput): Promise<FactorPortfolioResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/factor-portfolio`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`factor-portfolio failed: ${r.status}`);
+    return r.json();
+  },
+
+  timing: async (req: TimingInput): Promise<TimingResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/timing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`timing failed: ${r.status}`);
+    return r.json();
+  },
+
+  stressCorrelation: async (req: StressCorrInput): Promise<StressCorrResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/stress-correlation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`stress-correlation failed: ${r.status}`);
+    return r.json();
   },
 };

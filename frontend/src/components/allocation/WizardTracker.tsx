@@ -12,20 +12,26 @@ export function WizardTracker() {
   const router = useRouter();
   const pathname = usePathname();
   const active = stageIndex(pathname);
-  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete } = useAllocation();
+  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ } = useAllocation();
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
   const conf = Math.round(overallConfidence(views));
   const scenLabel = scenarios.find((s) => s.id === scenario)?.label ?? "—";
+  const isMock = !!result && (result.coverage as { source?: string }).source === "mock";
+  const tm = timingQ.data && !timingQ.data.error ? timingQ.data : null;
+  const timingSub = tm
+    ? `${tm.canary.signal === "risk_on" ? "위험-온" : "위험-오프"} ${tm.canary.hits}/${tm.canary.total}`
+    : "미평가";
 
   const sub = [
-    result ? `${result.names.length} 자산` : "미실행",
-    holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음",
-    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",
-    `${model.toUpperCase()} · λ${delta.toFixed(1)}`,
-    scenLabel,
-    result ? "분해 준비" : "미실행",
-    stageComplete[6] ? "저장됨" : "미기록",
+    result ? `${result.names.length} 자산` : "미실행",            // 00 overview
+    holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음", // 01 construct
+    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",     // 02 thesis
+    timingSub,                                                     // 03 timing
+    `${model.toUpperCase()} · λ${delta.toFixed(1)}`,               // 04 optimize
+    scenLabel,                                                     // 05 stress
+    result ? "분해 준비" : "미실행",                                // 06 explain
+    stageComplete[7] ? "저장됨" : "미기록",                         // 07 journal
   ];
 
   // ←/→ 로 이전/다음 스테이지 (입력 필드 포커스 시 제외)
@@ -82,8 +88,12 @@ export function WizardTracker() {
         );
       })}
       <span className="aas-wiz-sep" />
-      {Bookend(6)}
-      <span className="aas-wiz-kbd num" title="키보드 ←/→ 로 단계 이동">◀ ▶</span>
+      {Bookend(7)}
+      <span className="aas-wiz-right">
+        {isMock && <span className="aas-wiz-mock" title="현재 결과는 합성(mock) 데이터 기준">MOCK</span>}
+        <button className="aas-wiz-gate" title="목표 선택으로 돌아가기" onClick={() => router.push("/allocation")}>☰ 목표</button>
+        <span className="aas-wiz-kbd num" title="키보드 ←/→ 로 단계 이동">◀ ▶</span>
+      </span>
     </div>
   );
 }

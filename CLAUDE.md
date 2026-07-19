@@ -2583,3 +2583,69 @@ Terminal 토큰으로 직접 구현. zip 핸드오프의 7-스테이지 스펙�
 - 백엔드/엔진 무변경(전부 기존 `/api/v1/allocation/*` 재사용). 21st.dev/shadcn **실사용**은 커넥터
   재연결 시(세션 중 오프라인). R2(테제 NL→팩터 자동매핑·Probability Frontier·레짐 prior 주입)는
   문서만. Execution 단계·드래그&드롭 캔버스·AI View Generator는 후순위 제외.
+
+---
+
+## 🛠️ Allocation Studio 심화 툴 4종 + 헤더 제거 + 초기 구성 종목명 표시
+
+[배경] 사용자가 Allocation Studio(모듈 06)에서 ① **팩터 기반 포트폴리오** ② **카나리 자산·지표**
+③ **robustness** ④ **마켓타이밍** 4개 영역을 "더 깊이 있고 정교하게 커스텀"할 수 있는 툴 추가를
+요청. 부수로 ⑤ Construct 스테이지 헤더 블록(스크린샷: 브레드크럼·큰 제목·자산 구성 부제·
+`2019-07-17 ~ … 1,712일 · 최근 실행` 커버리지) 제거 + ⑥ **초기 포트폴리오 구성 시 종목코드 대신
+종목명 표시**. 3개 병렬 Explore 에이전트로 factor/canary·timing/robustness 인프라를 전수 매핑 후,
+전부 **기존 엔진 헬퍼 재사용 + 소형 신규 엔드포인트**로 구현(엔진 로직 무변경).
+
+### 백엔드 (전부 `src/api/allocation_routes.py`에 추가 — 엔진 파일 무변경)
+- **`POST /resolve-names`** {codes} → {labels}: `_labels()`/`stock_master.get_stock_name`(단일 진실
+  공급원) 배치 해소. 게이트 시드·관심그룹·직접코드 입력의 코드→이름 공통 해결.
+- **`POST /factor-portfolio`** {factors[{id,weight,direction}], top_k, weighting, tickers?}:
+  유니버스 표본(`snapshot_db.sample_factors` + mock 폴백)에 **방향 인지 z-score 가중합**(factor-xray
+  `_z` 패턴 재사용, direction 0=`FIELD_BY_ID[id].higher_better` 자동) → 상위 K 선정 →
+  비중화(균등/팩터틸트/역변동성/리스크패리티/최소분산/HRP는 `allocation_studio.weights_for_model`
+  재사용, 임의 R 행렬). 커버리지 재정규화·정직 라벨.
+- **`POST /timing`** {market, canaries[{kind,id,signal,lookback,threshold,direction}], min_breadth,
+  risk_on_assets, risk_off_assets, holdings?, overlay}: VAA/PAA/DAA 규칙을 사용자 파라미터로 일반화 —
+  `tactical_allocations`의 `_abs_mom`/`_score_13612`/`_above_ma_m`/`_above_ma_d`/`_norm`/`_signal` +
+  `macro_analytics._macro_series`/`_latest`(지표 카나리) + `etf_prices.resolve`(US→KR ETF 매핑) 재사용.
+  브레드스 게이트(k-of-N), 위험-온(현재 포트폴리오 유지 가능)/위험-오프 자산군 스위치, 추세
+  오버레이(이탈 자산 현금화), `timing_panel` 컴포짓·자산추세표 병기.
+- **`POST /stress-correlation`** {tickers, weights?, target_rho, intensity, confidence_level}:
+  위기 시 상관이 target_rho로 수렴하는 공분산 재구성 → `models.portfolio_risk.PortfolioRiskModel`
+  (calculate_portfolio_var/component_var) 재사용해 base vs 위기의 변동성·VaR·기여VaR Δ 산출.
+- **`StressRequest.severity`**(0.25~3×): 가상 시나리오 M8 충격에 배율 곱(역사 리플레이 제외).
+- 신규 `tests/test_allocation_tools.py`(11): 이름해소·팩터 방향/랭킹/틸트/부족에러·타이밍
+  온·오프·k-of-N·오버레이 현금화·severity 선형·상관국면 변동성상승/무강도무변화.
+
+### 프론트엔드
+- **헤더 제거**(`app/allocation/layout.tsx`): `.aas-crumb`·`.aas-header` 블록 삭제. 인텐트 라인·
+  ContextStrip·WizardTracker·하단 nav 유지. ☰목표·MOCK 배지는 `WizardTracker` 우측으로 재배치
+  (게이트 접근·데이터 정직성 보존). `저널로 마무리` 분기를 인덱스 하드코딩→라벨 기반으로 교정.
+- **종목명 표시**(`AllocationProvider`): holdings 중 `name===code`(6자리 코드)인 항목을 배치
+  `resolveNames`로 이름 패치하는 useEffect(비중·키 불변 → 재분석 없음, resolvedRef 중복가드).
+  게이트 시드·관심그룹·직접코드 **전 경로 일괄 해결**. (라이브: 삼성전자·SK하이닉스·… 코드잔여 0)
+- **신규 03 TIMING 스테이지**: `STAGES`에 삽입(00 Overview·01 Construct·02 Thesis·**03 Timing**·
+  04 Optimize·05 Stress·06 Explain·07 Journal), PHASES logic=[2,3,4]/validation=[5,6],
+  `stageComplete` 8칸, WizardTracker sub 8칸+북엔드 인덱스 갱신. `app/allocation/timing/page.tsx`
+  (카나리 편집·게이트·자산군·오버레이 / 판정·권고배분·마켓타이밍 컴포짓) + Provider `timingCfg`/
+  `timingQ`/`applyTiming`(+ sessionStorage wip 지속).
+- **팩터 빌더**(Construct 모드 토글 `직접 구성|팩터 빌더`): `FactorBuilder.tsx` — `screenerApiAdvanced.
+  fields()` 카탈로그로 팩터 다중선택(가중·방향 자동/고/저) + 프리셋(가치·퀄리티·모멘텀·저변동·배당)
+  + 유니버스/top-N/비중방식 → `/factor-portfolio` → 상위 K 표(비중·점수·커버리지) → "이 포트폴리오로
+  적용"(setHoldingsReset).
+- **Stress 심화**(`stress/page.tsx`): 시나리오 강도(severity) 슬라이더 + μ bump 범위 5→10 확대 +
+  **상관-국면 스트레스 카드**(목표 ρ·강도·VaR 신뢰수준 → base→위기 변동성·VaR·기여VaR 표).
+- `lib/allocationApi.ts`: resolveNames/factorPortfolio/timing/stressCorrelation + 타입. `stress`에
+  severity 인자. `globals.css` `.as-fb-*`/`.as-tm-*`/`.aas-wiz-right·mock·gate` 신설.
+
+### 검증
+- 백엔드 **858 passed / 10 skipped**(+11 신규), ruff 통과. tsc 0, next build **26 페이지 / allocation
+  9 라우트**(신규 `/allocation/timing`).
+- 라이브(mock, 시스템 Playwright + 사전설치 Chromium, 프로젝트 devDep 0): 게이트→성장추구→Construct
+  (**헤더 부재·종목명 표시·코드잔여 0**)→팩터빌더(가치 프리셋→상위10)→Timing(카나리4·RISK-OFF·컴포짓
+  83)→Stress(severity·상관국면 vol +130%) **콘솔 에러 0**.
+
+### 정직한 한계
+- mock 유니버스 표본(`sample_factors`)은 합성 코드라 팩터빌더 결과 종목명이 코드로 표시됨 — GCP
+  실적재 유니버스에선 실코드→실명. mock ETF 시세는 결정론적 합성이라 카나리·컴포짓 절대수치는
+  참고용(구조·부호·로직만 검증), 실값은 GCP. `market_timing` 컴포짓은 시장 전반(timing_panel)
+  기준으로 카나리 판정과 독립(UI에 명시). BAA 등 미구현 전략·다국가 지표는 범위 밖.
