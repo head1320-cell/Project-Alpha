@@ -1701,6 +1701,158 @@ h6 { font-size: 1rem; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Backtester v2 — Modernized "Institutional Terminal"
+   ---------------------------------------------------------------------------
+   라이트 터미널 정체성(#1200ff 액센트 · JetBrains Mono 메타 · 각진 크리스프)은
+   유지하되, 평면 1px 하이라인 일변도였던 것을 절제된 엘리베이션·리듬·마이크로
+   인터랙션으로 현대화. 전부 .bt2 스코프 아래에서만 적용 → 다른 탭/컴포넌트 무영향.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.bt2 {
+  --bt-shadow-1: 0 1px 2px rgba(17,17,17,0.05);
+  --bt-shadow-2: 0 1px 3px rgba(17,17,17,0.07), 0 1px 2px rgba(17,17,17,0.04);
+  --bt-shadow-lift: 0 10px 26px -10px rgba(18,0,255,0.16), 0 2px 6px rgba(17,17,17,0.05);
+  --bt-radius: 4px;
+  --bt-pos: #16a34a;
+  --bt-neg: #dc2626;
+  --bt-accent-soft: rgba(18,0,255,0.05);
+}
+
+/* ── 모드 전환기 (매수/매도/매매대상) — 부드러운 세그먼트 컨트롤 ── */
+.bt2 .tbt-mode-switch {
+  background: #fff; box-shadow: var(--bt-shadow-1);
+  border-radius: var(--bt-radius); border-color: var(--t-border);
+}
+.bt2 .tbt-mode { background: #fff; transition: color .16s ease, background .16s ease; }
+.bt2 .tbt-mode:hover { background: var(--bt-accent-soft); color: var(--t-ink); }
+.bt2 .tbt-mode.active::after {
+  height: 2px; box-shadow: 0 0 10px rgba(18,0,255,0.45);
+  animation: bt-underline .22s ease;
+}
+@keyframes bt-underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* ── KPI 타일 — 백테스터의 히어로. 엘리베이션 + hover lift + 상단 액센트 ── */
+.bt2 .tbt-stats { gap: 12px; margin-bottom: 20px; }
+.bt2 .tbt-stat {
+  position: relative; padding: 15px 16px 16px; background: #fff;
+  border: 1px solid var(--t-border); border-radius: var(--bt-radius);
+  box-shadow: var(--bt-shadow-1); overflow: hidden;
+  transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+}
+.bt2 .tbt-stat::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  background: linear-gradient(90deg, var(--t-accent), rgba(18,0,255,0.3));
+  opacity: 0; transition: opacity .18s ease;
+}
+.bt2 .tbt-stat:hover {
+  box-shadow: var(--bt-shadow-lift); transform: translateY(-2px);
+  border-color: rgba(18,0,255,0.22);
+}
+.bt2 .tbt-stat:hover::before { opacity: 1; }
+.bt2 .tbt-stat-label { font-size: 9.5px; letter-spacing: 0.08em; margin-bottom: 7px; }
+.bt2 .tbt-stat-value { font-size: 23px; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.bt2 .tbt-stat-hero {
+  background: linear-gradient(180deg, rgba(18,0,255,0.045), #fff 62%);
+  border-color: rgba(18,0,255,0.22);
+}
+.bt2 .tbt-stat-hero::before { opacity: 1; }
+.bt2 .tbt-stat-hero .tbt-stat-value { font-size: 27px; }
+
+/* ── 카드 chrome (차트/표 컨테이너) — 얕은 엘리베이션 + 제목 액센트 틱 ── */
+.bt2 .tbt-chart {
+  background: #fff; border: 1px solid var(--t-border);
+  border-radius: var(--bt-radius); box-shadow: var(--bt-shadow-1);
+  padding: 20px 22px;
+}
+.bt2 .tbt-chart-head {
+  margin-bottom: 16px; padding-bottom: 13px; border-bottom: 1px solid var(--t-border);
+}
+.bt2 .tbt-chart-head .tbt-chart-title:first-child {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--t-ink); font-weight: 600; font-size: 11px;
+}
+.bt2 .tbt-chart-head .tbt-chart-title:first-child::before {
+  content: ""; width: 3px; height: 13px; border-radius: 1px;
+  background: var(--t-accent); display: inline-block;
+}
+
+/* ── 보조 지표 바 · 티어시트 그룹 ── */
+.bt2 .tbt-substats {
+  background: #fff; box-shadow: var(--bt-shadow-1);
+  border-radius: var(--bt-radius); padding: 14px 18px; gap: 22px;
+}
+.bt2 .tbt-substats > span { display: inline-flex; align-items: center; gap: 6px; }
+.bt2 .tbt-ts-group {
+  background: #fff; box-shadow: var(--bt-shadow-1); border-radius: var(--bt-radius);
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+.bt2 .tbt-ts-group:hover { box-shadow: var(--bt-shadow-2); transform: translateY(-1px); }
+
+/* ── 거래내역 표 — 얼터네이트 로우 + 액센트 hover ── */
+.bt2 .tbt-tradelog tbody tr:nth-child(even) { background: rgba(250,250,250,0.55); }
+.bt2 .tbt-tradelog tbody tr:hover { background: var(--bt-accent-soft); }
+
+/* ── 데이터 출처 · 전달 배너 — 좌측 액센트 레일 + soft radius ── */
+.bt2 .tbt-prov {
+  border-radius: var(--bt-radius); box-shadow: var(--bt-shadow-1);
+  border-left: 3px solid var(--t-border); padding-left: 14px;
+}
+.bt2 .tbt-prov.real { border-left-color: var(--bt-pos); }
+.bt2 .tbt-prov.mock { border-left-color: #a1a1aa; }
+.bt2 .tscreener-handoff {
+  border-radius: var(--bt-radius); box-shadow: var(--bt-shadow-1);
+  border-left: 3px solid var(--t-accent);
+}
+
+/* ── 액션 박스 + 실행 CTA — 단일 주액션 강조 ── */
+.bt2 .tbt-action-box { border-radius: var(--bt-radius); box-shadow: var(--bt-shadow-2); }
+.bt2 .tbt-run {
+  border-radius: var(--bt-radius); padding: 13px; font-size: 12px; letter-spacing: 0.06em;
+  box-shadow: 0 2px 8px rgba(18,0,255,0.22);
+  transition: transform .12s ease, box-shadow .18s ease, opacity .12s ease;
+}
+.bt2 .tbt-run:hover:not(:disabled) {
+  transform: translateY(-1px); opacity: 1;
+  box-shadow: 0 7px 18px rgba(18,0,255,0.3);
+}
+.bt2 .tbt-run:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 8px rgba(18,0,255,0.22); }
+
+/* ── 입력 포커스 링 (매수/매도 패널 포함) ── */
+.bt2 .tbt-input:focus,
+.bt2 input:focus-visible,
+.bt2 select:focus-visible {
+  outline: none; border-color: var(--t-accent);
+  box-shadow: 0 0 0 3px rgba(18,0,255,0.12);
+}
+
+/* ── 모던 빈 상태 ── */
+.bt2 .tbt-empty {
+  min-height: 440px; flex-direction: column; gap: 16px;
+  border-radius: var(--bt-radius);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(18,0,255,0.025), transparent 60%),
+    repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(17,17,17,0.02) 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(17,17,17,0.02) 24px);
+}
+.bt-empty-glyph {
+  width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--t-border); border-radius: 12px; background: #fff;
+  box-shadow: var(--bt-shadow-2); color: var(--t-accent);
+}
+.bt-empty-glyph svg { display: block; }
+.bt-empty-kbd {
+  font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.bt-empty-title { font-size: 14px; color: var(--t-ink); font-weight: 600; }
+.bt-empty-sub { font-size: 12px; color: var(--t-muted); max-width: 320px; line-height: 1.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bt2 .tbt-stat, .bt2 .tbt-run, .bt2 .tbt-ts-group, .bt2 .tbt-mode { transition: none; }
+  .bt2 .tbt-stat:hover, .bt2 .tbt-run:hover:not(:disabled), .bt2 .tbt-ts-group:hover { transform: none; }
+  .bt2 .tbt-mode.active::after { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Company Analysis 후보 (insights-lab) — ca-* 패밀리. 라이트 터미널 토큰만 사용.
    ═══════════════════════════════════════════════════════════════════════════ */
 /* ── lab 비교 바 ── */

@@ -309,7 +309,7 @@ export default function TerminalBacktester() {
   const posColor = (v: number | undefined) => ((v ?? 0) >= 0 ? "#16a34a" : "#dc2626");
 
   return (
-    <div className="tpage-fade">
+    <div className="tpage-fade bt2">
       {/* 스크리너 전략 전달 배너 */}
       {handoff && (
         <div className="tscreener-handoff">
@@ -449,9 +449,17 @@ export default function TerminalBacktester() {
 
           {!result && !err && !loading && (
             <div className="tbt-empty">
-              <div>
-                <div style={{ fontFamily: "var(--t-mono)", fontSize: 11, marginBottom: 16 }}>[ EMPTY_STATE_NULL ]</div>
-                Initialize simulation parameters to begin analysis
+              <div className="bt-empty-glyph" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 22h22" />
+                  <path d="M4 22V13l5 4 5-8 5 6 3-9" />
+                </svg>
+              </div>
+              <div className="bt-empty-kbd">[ AWAITING_SIMULATION ]</div>
+              <div className="bt-empty-title">전략을 실행할 준비가 되었습니다</div>
+              <div className="bt-empty-sub">
+                좌측에서 매수·매도 조건과 매매 대상을 설정한 뒤 우측의 <b>백테스트 실행</b>을 누르면
+                자산곡선·성과지표·거래내역이 여기에 표시됩니다.
               </div>
             </div>
           )}
@@ -505,7 +513,7 @@ export default function TerminalBacktester() {
               </div>
               {/* 6개 지표 카드 */}
               <div className="tbt-stats tbt-stats-6">
-                <div className="tbt-stat">
+                <div className="tbt-stat tbt-stat-hero">
                   <div className="tbt-stat-label">Total Return</div>
                   <div className="tbt-stat-value" style={{ color: posColor(st.total_return_pct) }}>{fmt(st.total_return_pct, "%")}</div>
                 </div>
