@@ -134,6 +134,7 @@ export function GoalGate() {
     router.push("/allocation/construct");
   };
   const startEmpty = () => { setGoal({ id: "custom", label: "직접 구성" }); setModel("bl"); setHoldingsReset([]); router.push("/allocation/construct"); };
+  const startStrategy = () => { setGoal({ id: "strategy", label: "매크로 전략" }); setHoldingsReset([]); logEvent("매크로 전략 라이브러리에서 시작"); router.push("/allocation/construct"); };
 
   const canResume = !!lastPos && holdings.length >= 1;
   const regimeReady = !!regime;
@@ -166,6 +167,14 @@ export function GoalGate() {
             </div>
           </button>
         ))}
+        <button className="aas-goal aas-goal-strategy" onClick={startStrategy}>
+          <div className="aas-goal-head">
+            <Ic d="M4 19V5M4 19h16M8 15l4-6 3 3 5-8" />
+            <span className="aas-goal-t">매크로 전략 기반</span>
+          </div>
+          <div className="aas-goal-d">듀얼모멘텀·리스크패리티·HRP 등 22전략 불러오기</div>
+          <div className="aas-goal-seed num"><span>매크로 탭 전략</span><span>+ 재최적화</span></div>
+        </button>
         <button className="aas-goal aas-goal-custom" onClick={startEmpty}>
           <div className="aas-goal-head"><Ic d="M12 5v14M5 12h14" /><span className="aas-goal-t">직접 구성</span></div>
           <div className="aas-goal-d">빈 상태에서 자산을 직접 담기</div>

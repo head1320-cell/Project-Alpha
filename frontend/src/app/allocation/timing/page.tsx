@@ -19,10 +19,56 @@ const ASSET_SIGNALS: { id: CanarySignalType; label: string }[] = [
 ];
 const parseList = (s: string) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 
+// ── 마켓 지수 게이트 프리셋 — 백테스터 탭 '마켓타이밍'(지수 조건 → 위험 시 방어 전환)을
+//    자산배분 맥락으로 일반화. 위험-온이면 현재/전략 포트폴리오 유지, 위험-오프면 방어자산 전환
+//    (백테스터 exit_all 대응). 위험자산 추세 프록시는 ETF 매핑(SPY→국내 대형주 ETF)을 사용. ──
+type Gate = { id: string; label: string; sub: string; build: (mk: "kr" | "us") => TimingConfig };
+const OFF_DEFENSIVE = ["IEF", "SHY"];
+const MARKET_GATES: Gate[] = [
+  {
+    id: "trend200", label: "추세 게이트 (200일선)",
+    sub: "위험자산이 200일 이동평균 위 → 위험-온 · 아래 → 방어 전환",
+    build: (mk) => ({ market: mk,
+      canaries: [{ kind: "asset", id: "SPY", signal: "ma_day", lookback: 200, threshold: 0, direction: "above" }],
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 } }),
+  },
+  {
+    id: "mom13612", label: "가속 모멘텀 게이트 (13612W)",
+    sub: "1·3·6·12M 가속 모멘텀 > 0 → 위험-온 (VAA/DAA식)",
+    build: (mk) => ({ market: mk,
+      canaries: [{ kind: "asset", id: "SPY", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" }],
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 } }),
+  },
+  {
+    id: "dual", label: "이중 확인 게이트",
+    sub: "추세(200일) + 가속 모멘텀 둘 다 통과해야 위험-온",
+    build: (mk) => ({ market: mk,
+      canaries: [
+        { kind: "asset", id: "SPY", signal: "ma_day", lookback: 200, threshold: 0, direction: "above" },
+        { kind: "asset", id: "EFA", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
+      ],
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 } }),
+  },
+  {
+    id: "trend_overlay", label: "추세 + 자산별 청산",
+    sub: "게이트 + 보유자산 개별 추세 이탈분 현금화 (백테스터 exit_all 근사)",
+    build: (mk) => ({ market: mk,
+      canaries: [{ kind: "asset", id: "SPY", signal: "ma_day", lookback: 200, threshold: 0, direction: "above" }],
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "ma_day", n: 200, lookback: 12 } }),
+  },
+];
+
 export default function TimingWorkspace() {
-  const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings } = useAllocation();
+  const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings, loadedStrategy } = useAllocation();
   const [onText, setOnText] = useState(timingCfg.riskOnAssets.join(", "));
   const [offText, setOffText] = useState(timingCfg.riskOffAssets.join(", "));
+
+  const applyGate = (g: Gate) => {
+    const cfg = g.build(timingCfg.market);
+    setTimingCfg(cfg);
+    setOnText(cfg.riskOnAssets.join(", "));
+    setOffText(cfg.riskOffAssets.join(", "));
+  };
 
   const setCfg = (patch: Partial<TimingConfig>) => setTimingCfg({ ...timingCfg, ...patch });
   const updCanary = (i: number, patch: Partial<CanaryInput>) =>
@@ -36,8 +82,31 @@ export default function TimingWorkspace() {
 
   return (
     <div className="as-ws2 as-ws-tm">
-      {/* ── 좌: 카나리 · 게이트 · 오버레이 설정 ── */}
+      {/* ── 좌: 마켓 지수 게이트 프리셋 · 카나리 · 게이트 · 오버레이 설정 ── */}
       <aside className="as-center">
+        <section className="as-card">
+          <div className="as-card-title">마켓 지수 게이트 <span className="as-note-inline">백테스터 마켓타이밍 → 자산배분 적용</span></div>
+          <div className="as-seg as-seg-2">
+            {(["kr", "us"] as const).map((m) => (
+              <button key={m} className={timingCfg.market === m ? "on" : ""}
+                onClick={() => setTimingCfg({ ...timingCfg, market: m })}>{m === "kr" ? "국내 ETF" : "미국 원본"}</button>
+            ))}
+          </div>
+          <div className="as-tm-gates">
+            {MARKET_GATES.map((g) => (
+              <button key={g.id} className="as-tm-gate" onClick={() => applyGate(g)}>
+                <span className="as-tm-gate-t">{g.label}</span>
+                <span className="as-tm-gate-s">{g.sub}</span>
+              </button>
+            ))}
+          </div>
+          <div className="as-note">
+            지수 추세·모멘텀이 <b>위험-온</b>이면 {loadedStrategy ? `불러온 전략(${loadedStrategy.name})` : "현재 포트폴리오"}를 유지,
+            <b> 위험-오프</b>면 방어자산(IEF·SHY)으로 전환합니다 — 백테스터의 지수 조건 게이트(전량 청산)를 정적 배분에 적용한 형태.
+            {timingCfg.market === "kr" && " 위험자산 프록시는 국내 대형주 ETF로 매핑됩니다."}
+          </div>
+        </section>
+
         <section className="as-card">
           <div className="as-card-title">카나리 신호 <span className="as-note-inline">위험-온/오프를 결정하는 관문 지표</span></div>
           {timingCfg.canaries.map((c, i) => (

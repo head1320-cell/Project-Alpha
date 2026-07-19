@@ -16,6 +16,7 @@ import {
   type XrayResult,
 } from "@/lib/allocationApi";
 import { saveStudy, type AllocationStudy } from "@/lib/allocationStorage";
+import type { TacticalStrategy } from "@/lib/screenerApi";
 import type { Holding } from "./PortfolioBuilder";
 import type { TimelineEvent } from "./ResearchTimeline";
 
@@ -92,6 +93,12 @@ export function stageIndex(pathname: string): number {
 
 export interface AllocationGoal { id: string; label: string }
 
+// 매크로 탭에서 불러온 자산배분 전략의 출처 마커 (원 전략 비중 = 최적화 비교 기준선)
+export interface LoadedStrategy {
+  id: string; name: string; family: string; market: "kr" | "us";
+  signal: string; weights: Record<string, number>;
+}
+
 // sessionStorage 키 (localStorage 스터디와 별개 — 세션 한정, 중간 새로고침 재개용)
 const SS_GOAL = "alpha_alloc_goal";
 const SS_WIP = "alpha_alloc_wip";
@@ -137,6 +144,10 @@ interface AllocationCtx {
   loadStudy: (s: AllocationStudy) => void;
   studiesVersion: number;
   bumpStudies: () => void;
+  // ── 매크로 전략 로드 (매크로 탭 자산배분 전략 → AAS) ──
+  loadedStrategy: LoadedStrategy | null;
+  loadStrategy: (strat: TacticalStrategy, market: "kr" | "us") => void;
+  clearLoadedStrategy: () => void;
   // ── 위저드 확장 ──
   goal: AllocationGoal | null;
   setGoal: (g: AllocationGoal | null) => void;
@@ -170,6 +181,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [lastRun, setLastRun] = useState("—:—:—");
   const [goal, setGoalState] = useState<AllocationGoal | null>(null);
+  const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
   const [lastPos, setLastPos] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
   const lastReqRef = useRef<string>("");
@@ -201,6 +213,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         if (typeof wip.delta === "number") setDelta(wip.delta);
         if (typeof wip.tau === "number") setTau(wip.tau);
         if (wip.timingCfg && typeof wip.timingCfg === "object") setTimingCfgState(wip.timingCfg);
+        if (wip.loadedStrategy && typeof wip.loadedStrategy === "object") setLoadedStrategy(wip.loadedStrategy);
       }
     } catch { /* 파싱 실패는 무시 — 빈 상태로 시작 */ }
     setHydrated(true);
@@ -209,9 +222,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   // ── 작업셋 persist (하이드레이트 이후에만 — 하이드레이트 전 빈 상태로 덮어쓰기 방지) ──
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
-    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg })); }
+    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg, loadedStrategy })); }
     catch { /* 용량 초과 등 무시 */ }
-  }, [hydrated, holdings, views, model, delta, tau, timingCfg]);
+  }, [hydrated, holdings, views, model, delta, tau, timingCfg, loadedStrategy]);
 
   // ── 종목명 해소 (초기 구성 시 코드 대신 이름 표시 — 게이트 시드/관심그룹/직접코드 공통) ──
   //   이름이 코드 그대로인 홀딩만 배치 해소 → 이름만 패치(비중·키 불변 → 재분석 없음).
@@ -316,7 +329,22 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setHoldings(next);
     setResult(null);
     lastReqRef.current = "";
+    setLoadedStrategy(null);   // 수동 편집·타 소스 로드는 매크로 전략 출처를 해제
   };
+
+  // 매크로 탭 자산배분 전략 → AAS 포트폴리오. 원 전략 비중을 마커에 보존(비교 기준선).
+  const loadStrategy = (strat: TacticalStrategy, market: "kr" | "us") => {
+    const hold: Holding[] = (strat.holdings || [])
+      .filter((h) => h.weight > 0)
+      .map((h) => ({ code: h.ticker, name: h.label || h.ticker, weight: h.weight }));
+    setHoldingsReset(hold);   // 마커 초기화 후
+    setLoadedStrategy({       // 이 전략으로 재설정
+      id: strat.id, name: strat.name, family: strat.family ?? "momentum", market,
+      signal: strat.signal, weights: Object.fromEntries(hold.map((h) => [h.code, h.weight])),
+    });
+    logEvent(`매크로 전략 불러오기 — ${strat.name} (${strat.holdings?.length ?? 0}자산)`);
+  };
+  const clearLoadedStrategy = () => setLoadedStrategy(null);
 
   const applyTiming = () => {
     const data = timingQ.data;
@@ -343,6 +371,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setTau(s.tau);
     setResult(null);
     lastReqRef.current = "";
+    setLoadedStrategy(null);
     logEvent(`스터디 로드 — ${s.name}`);
   };
 
@@ -403,6 +432,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     runAnalyze, xrayQ, stressQ,
     saveStudyFull, loadStudy, studiesVersion,
     bumpStudies: () => setStudiesVersion((v) => v + 1),
+    loadedStrategy, loadStrategy, clearLoadedStrategy,
     goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
   };
 

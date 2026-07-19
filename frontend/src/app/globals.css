@@ -3410,3 +3410,49 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-tm-corr-head span { font-size: 9.5px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .04em; }
 .as-tm-corr-head b { font-size: 12px; font-variant-numeric: tabular-nums; }
 .as-tm-corr-head em { font-style: normal; font-size: 10px; }
+
+/* 3-way / 2-way 세그먼트 (Construct 모드 · Timing 마켓) */
+.as-seg-3 button, .as-seg-2 button { flex: 1; text-align: center; }
+
+/* ── 마켓 지수 게이트 프리셋 (Timing — 백테스터 마켓타이밍 브릿지) ── */
+.as-tm-gates { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+@media (max-width: 1180px) { .as-tm-gates { grid-template-columns: 1fr; } }
+.as-tm-gate { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 8px 10px;
+  border: 1px solid var(--t-border); border-radius: 3px; background: #fff; cursor: pointer; transition: all .14s ease; }
+.as-tm-gate:hover { border-color: var(--t-accent); background: rgba(18,0,255,.03); transform: translateY(-1px); box-shadow: 0 3px 10px -4px rgba(18,0,255,.2); }
+.as-tm-gate-t { font-size: 11.5px; font-weight: 600; color: var(--t-ink); }
+.as-tm-gate-s { font-size: 10px; color: var(--t-muted); line-height: 1.4; }
+
+/* ── 매크로 전략 라이브러리 (Construct 3번째 모드) ── */
+.as-sl { display: flex; flex-direction: column; gap: 8px; }
+.as-sl-search { border: 1px solid var(--t-border); border-radius: 2px; font-size: 11px; padding: 5px 8px; background: #fff; }
+.as-sl-search:focus { outline: none; border-color: var(--t-accent); box-shadow: 0 0 0 3px rgba(18,0,255,.1); }
+.as-sl-list { display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 260px); overflow-y: auto; padding-right: 2px; }
+.as-sl-group { display: flex; flex-direction: column; gap: 5px; }
+.as-sl-fam { font-family: var(--t-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--t-accent);
+  padding-bottom: 3px; border-bottom: 1px solid var(--t-border); }
+.as-sl-fam b { color: var(--t-muted); font-weight: 400; margin-left: 4px; }
+.as-sl-card { border: 1px solid var(--t-border); border-radius: 3px; padding: 8px 10px; background: #fff;
+  display: flex; flex-direction: column; gap: 5px; transition: box-shadow .14s ease, border-color .14s ease; }
+.as-sl-card:hover { box-shadow: 0 2px 8px -3px rgba(17,17,17,.12); }
+.as-sl-card.on { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
+.as-sl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.as-sl-name { font-size: 12px; font-weight: 600; color: var(--t-ink); }
+.as-sl-sig { font-size: 9.5px; white-space: nowrap; }
+.as-sl-desc { font-size: 10px; color: var(--t-muted); line-height: 1.4; }
+.as-sl-holds { display: flex; flex-wrap: wrap; gap: 4px; }
+.as-sl-hold { font-size: 9.5px; padding: 1px 6px; border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); color: var(--t-ink); }
+.as-sl-hold b { color: var(--t-muted); }
+.as-sl-more { font-size: 9.5px; color: var(--t-muted); align-self: center; }
+.as-sl-load { align-self: flex-start; margin-top: 2px; }
+
+/* ── 불러온 전략 배너 (Construct main 상단) ── */
+.as-sl-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; margin-bottom: 4px;
+  border: 1px solid rgba(18,0,255,.2); border-left: 3px solid var(--t-accent); border-radius: 3px; background: rgba(18,0,255,.035); }
+.as-sl-banner-badge { font-family: var(--t-mono); font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
+  padding: 2px 7px; background: var(--t-accent); color: #fff; border-radius: 2px; }
+.as-sl-banner-name { font-size: 13px; font-weight: 600; color: var(--t-ink); }
+.as-sl-banner-sig { font-size: 10.5px; color: var(--t-muted); }
+.as-sl-banner-x { margin-left: auto; font-family: var(--t-mono); font-size: 10px; padding: 3px 8px;
+  background: transparent; border: 1px solid var(--t-border); border-radius: 2px; color: var(--t-muted); cursor: pointer; transition: all .12s; }
+.as-sl-banner-x:hover { border-color: var(--color-bear); color: var(--color-bear); }

@@ -5,11 +5,16 @@ import React, { useMemo, useState } from "react";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { PortfolioBuilder } from "@/components/allocation/PortfolioBuilder";
 import { FactorBuilder } from "@/components/allocation/FactorBuilder";
+import { StrategyLibrary } from "@/components/allocation/StrategyLibrary";
 import { AllocationMap, WeightComparison, concentration } from "@/components/allocation/parts";
 
+type ConstructMode = "direct" | "factor" | "strategy";
+
 export default function ConstructStage() {
-  const { holdings, setHoldingsReset, loadStudy, studiesVersion, result } = useAllocation();
-  const [mode, setMode] = useState<"direct" | "factor">("direct");
+  const { holdings, setHoldingsReset, loadStudy, studiesVersion, result, goal, loadedStrategy, clearLoadedStrategy } = useAllocation();
+  // 매크로 전략 목표로 진입했거나 이미 전략을 불러온 상태면 전략 모드로 착지
+  const [mode, setMode] = useState<ConstructMode>(
+    goal?.id === "strategy" || !!loadedStrategy ? "strategy" : "direct");
 
   const cmpRows = useMemo(() => holdings.map((h) => ({
     code: h.code, name: h.name,
@@ -26,23 +31,35 @@ export default function ConstructStage() {
   return (
     <div className="as-ws2">
       <aside>
-        <div className="as-seg as-fb-mode">
+        <div className="as-seg as-fb-mode as-seg-3">
           <button className={mode === "direct" ? "on" : ""} onClick={() => setMode("direct")}>직접 구성</button>
           <button className={mode === "factor" ? "on" : ""} onClick={() => setMode("factor")}>팩터 빌더</button>
+          <button className={mode === "strategy" ? "on" : ""} onClick={() => setMode("strategy")}>매크로 전략</button>
         </div>
         {mode === "direct"
           ? <PortfolioBuilder holdings={holdings} studiesVersion={studiesVersion}
               onChange={setHoldingsReset} onLoadStudy={loadStudy} />
-          : <FactorBuilder holdings={holdings} onApply={setHoldingsReset} />}
+          : mode === "factor"
+            ? <FactorBuilder holdings={holdings} onApply={setHoldingsReset} />
+            : <StrategyLibrary />}
       </aside>
       <main className="as-center">
+        {loadedStrategy && (
+          <div className="as-sl-banner">
+            <span className="as-sl-banner-badge">매크로 전략</span>
+            <span className="as-sl-banner-name">{loadedStrategy.name}</span>
+            <span className="as-sl-banner-sig num">{loadedStrategy.signal}</span>
+            <span className="as-note-inline">현재 비중 = 전략 원본 · 캡가중/최적화와 비교 후 재최적화 가능</span>
+            <button className="as-sl-banner-x" title="전략 출처 해제" onClick={clearLoadedStrategy}>✕ 해제</button>
+          </div>
+        )}
         <section className="as-card">
           <div className="as-card-title">ALLOCATION MAP <span className="as-note-inline">현재 비중 · 블록 = 비중 비례</span></div>
           {holdings.length ? <AllocationMap items={holdings} />
             : <div className="as-empty">좌측에서 자산을 추가하세요 (2개 이상).</div>}
         </section>
         <section className="as-card">
-          <div className="as-card-title">WEIGHT COMPARISON <span className="as-note-inline">■ 현재 · ■ 캡가중 시장 · ■ 최적화</span></div>
+          <div className="as-card-title">WEIGHT COMPARISON <span className="as-note-inline">■ {loadedStrategy ? "전략 원본" : "현재"} · ■ 캡가중 시장 · ■ 최적화</span></div>
           {cmpRows.length ? <WeightComparison rows={cmpRows} />
             : <div className="as-empty">자산 추가 후 표시</div>}
           {!result && cmpRows.length > 0 && (
