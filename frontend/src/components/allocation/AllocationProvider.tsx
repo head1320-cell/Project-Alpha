@@ -12,8 +12,8 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   allocationApi, type AllocationModel, type AllocationViewInput, type AnalyzeResult,
-  type CanaryInput, type StressResult, type StressScenarioMeta, type TimingResult,
-  type XrayResult,
+  type CanaryInput, type ConstraintsInput, type StressResult, type StressScenarioMeta,
+  type TimingResult, type XrayResult,
 } from "@/lib/allocationApi";
 import { saveStudy, type AllocationStudy } from "@/lib/allocationStorage";
 import { researchApi } from "@/lib/researchApi";
@@ -157,6 +157,9 @@ interface AllocationCtx {
   // ── Alpha Lab (P2) ──
   alphaTouched: boolean;                                  // 검증/저장 1회 이상 → 스테이지 완료
   markAlphaTouched: () => void;
+  // ── 제약 최적화 (P3) ──
+  constraints: ConstraintsInput | null;                   // null = 무제약(기존 동작)
+  setConstraints: (c: ConstraintsInput | null) => void;
   // ── 위저드 확장 ──
   goal: AllocationGoal | null;
   setGoal: (g: AllocationGoal | null) => void;
@@ -194,6 +197,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [runsVersion, setRunsVersion] = useState(0);
   const [alphaTouched, setAlphaTouched] = useState(false);
+  const [constraints, setConstraints] = useState<ConstraintsInput | null>(null);
   const [lastPos, setLastPos] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
   const lastReqRef = useRef<string>("");
@@ -226,6 +230,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         if (typeof wip.tau === "number") setTau(wip.tau);
         if (wip.timingCfg && typeof wip.timingCfg === "object") setTimingCfgState(wip.timingCfg);
         if (wip.loadedStrategy && typeof wip.loadedStrategy === "object") setLoadedStrategy(wip.loadedStrategy);
+        if (wip.constraints && typeof wip.constraints === "object") setConstraints(wip.constraints);
       }
     } catch { /* 파싱 실패는 무시 — 빈 상태로 시작 */ }
     setHydrated(true);
@@ -234,9 +239,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   // ── 작업셋 persist (하이드레이트 이후에만 — 하이드레이트 전 빈 상태로 덮어쓰기 방지) ──
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
-    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg, loadedStrategy })); }
+    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints })); }
     catch { /* 용량 초과 등 무시 */ }
-  }, [hydrated, holdings, views, model, delta, tau, timingCfg, loadedStrategy]);
+  }, [hydrated, holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints]);
 
   // ── 종목명 해소 (초기 구성 시 코드 대신 이름 표시 — 게이트 시드/관심그룹/직접코드 공통) ──
   //   이름이 코드 그대로인 홀딩만 배치 해소 → 이름만 패치(비중·키 불변 → 재분석 없음).
@@ -273,8 +278,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     tickers: holdings.map((h) => h.code),
     weights: holdingsMap,
     views: views.filter((v) => v.assets.length > 0 && v.magnitude_pct > 0),
-    model, delta, tau,
-  }), [holdings, holdingsMap, views, model, delta, tau]);
+    model, delta, tau, constraints,
+  }), [holdings, holdingsMap, views, model, delta, tau, constraints]);
   const isResultStale = !result || currentSig !== lastReqRef.current;
 
   const runAnalyze = (over?: { model?: AllocationModel; tau?: number; views?: AllocationViewInput[] }) => {
@@ -286,6 +291,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       model: over?.model ?? model,
       delta,
       tau: over?.tau ?? tau,
+      constraints: constraints ?? undefined,
     };
     const key = JSON.stringify(req);
     if (key === lastReqRef.current) return; // 동일 요청 중복 방지
@@ -369,6 +375,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         weights: holdingsMap,
         views: views.filter((v) => v.assets.length > 0 && v.magnitude_pct > 0),
         model, delta, tau,
+        constraints: constraints ?? undefined,
         record_run: true, run_name: name.trim() || undefined,
       });
       if (data.error) return null;
@@ -479,6 +486,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     loadedStrategy, loadStrategy, clearLoadedStrategy,
     activeRunId, recordRun, runsVersion,
     alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
+    constraints, setConstraints,
     goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
   };
 

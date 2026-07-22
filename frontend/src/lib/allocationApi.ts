@@ -18,6 +18,27 @@ export interface AllocationViewInput {
   label?: string;
 }
 
+export interface ConstraintsInput {
+  max_weight_pct?: number | null;
+  min_weight_pct?: number;
+  group_caps_pct?: Record<string, number>;
+  turnover_cap_pct?: number | null;
+  beta_min?: number | null;
+  beta_max?: number | null;
+  cash_min_pct?: number;
+  cash_max_pct?: number;
+}
+
+export interface ConstraintsReport {
+  status: "ok" | "approx" | "infeasible";
+  violations: { kind: string; detail: string; amount_pct?: number }[];
+  binding: string[];
+  relaxed: string[];
+  notes: string[];
+  reason?: string | null;
+  projected?: boolean;
+}
+
 export interface AnalyzeRequest {
   tickers: string[];
   weights?: Record<string, number>;
@@ -27,6 +48,7 @@ export interface AnalyzeRequest {
   tau?: number;
   lookback_days?: number;
   benchmark?: string;
+  constraints?: ConstraintsInput | null;   // P3 — 없으면 무제약(기존 동작)
   // ResearchRun 기록 (opt-in — 명시 요청 시에만 서버가 run_id 스탬프)
   record_run?: boolean;
   run_name?: string;
@@ -83,6 +105,8 @@ export interface AnalyzeResult {
     cvar95_pct: number;
     note: string;
   };
+  // P3 제약 엔진 — constraints 지정 시에만 존재
+  constraints_report?: ConstraintsReport | null;
   // record_run=true 요청 시에만 존재 — null이면 DB 미가용(정직 보고)
   run_id?: string | null;
   run_recorded?: boolean;

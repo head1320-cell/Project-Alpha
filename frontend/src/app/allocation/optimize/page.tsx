@@ -1,11 +1,86 @@
 "use client";
-// Optimization Workspace — 엔진 제어(BL/모델·λ·τ) + 대형 Efficient Frontier +
-// Allocation Flow + 요약 지표. λ는 클라이언트 사이드 프론티어 점 선택(재계산 0).
-import React, { useMemo } from "react";
+// Optimization Workspace — 엔진 제어(BL/모델·λ·τ) + P3 제약 조건(박스·그룹·회전율·β·현금)
+// + 대형 Efficient Frontier + Allocation Flow + 요약 지표. 제약 결과는 지시서 3분법
+// (충족/근사+위반목록/infeasible+사유)으로 정직 표시.
+import React, { useMemo, useState } from "react";
 import { COV_ONLY, MODELS, useAllocation } from "@/components/allocation/AllocationProvider";
 import {
   AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
 } from "@/components/allocation/parts";
+
+function num(v: string): number | null {
+  const f = parseFloat(v);
+  return Number.isFinite(f) ? f : null;
+}
+
+function ConstraintsPanel() {
+  const { constraints, setConstraints, runAnalyze, result } = useAllocation();
+  const c = constraints ?? {};
+  const [groupText, setGroupText] = useState(
+    Object.entries(c.group_caps_pct ?? {}).map(([g, v]) => `${g}:${v}`).join(", "));
+  const set = (patch: Partial<typeof c>) => setConstraints({ ...c, ...patch });
+  const rep = result?.constraints_report;
+
+  const parseGroups = () => {
+    const caps: Record<string, number> = {};
+    groupText.split(",").map((s) => s.trim()).filter(Boolean).forEach((pair) => {
+      const [g, v] = pair.split(":").map((x) => x.trim());
+      const f = parseFloat(v);
+      if (g && Number.isFinite(f)) caps[g] = f;
+    });
+    set({ group_caps_pct: caps });
+  };
+
+  return (
+    <details className="aas-adv" open={!!constraints}>
+      <summary>제약 조건 — 종목·그룹 상한 · 회전율 · β · 현금 밴드 {constraints ? "· 적용 중" : ""}</summary>
+      <div className="as-ct-grid">
+        <label><span>종목당 상한 %</span>
+          <input className="as-input num" type="number" min={1} max={100} placeholder="없음"
+            value={c.max_weight_pct ?? ""} onChange={(e) => set({ max_weight_pct: num(e.target.value) })} /></label>
+        <label><span>종목당 하한 %</span>
+          <input className="as-input num" type="number" min={0} max={50} placeholder="0"
+            value={c.min_weight_pct ?? ""} onChange={(e) => set({ min_weight_pct: num(e.target.value) ?? 0 })} /></label>
+        <label><span>회전율 상한 % <em title="현재 보유 대비 편도 회전율">vs 보유</em></span>
+          <input className="as-input num" type="number" min={0} max={200} placeholder="없음"
+            value={c.turnover_cap_pct ?? ""} onChange={(e) => set({ turnover_cap_pct: num(e.target.value) })} /></label>
+        <label><span>β 상한 <em title="벤치마크(KOSPI) 대비 포트폴리오 베타">KOSPI</em></span>
+          <input className="as-input num" type="number" step={0.1} min={-2} max={3} placeholder="없음"
+            value={c.beta_max ?? ""} onChange={(e) => set({ beta_max: num(e.target.value) })} /></label>
+        <label><span>현금 최소 %</span>
+          <input className="as-input num" type="number" min={0} max={90} placeholder="0"
+            value={c.cash_min_pct ?? ""} onChange={(e) => set({ cash_min_pct: num(e.target.value) ?? 0 })} /></label>
+        <label><span>현금 최대 %</span>
+          <input className="as-input num" type="number" min={0} max={90} placeholder="0 (완전투자)"
+            value={c.cash_max_pct ?? ""} onChange={(e) => set({ cash_max_pct: num(e.target.value) ?? 0 })} /></label>
+      </div>
+      <label className="as-tm-set"><span>섹터 그룹 상한 <em>예: 반도체·전자:30, 금융:20</em></span>
+        <input value={groupText} placeholder="그룹명:상한%, 그룹명:상한%"
+          onChange={(e) => setGroupText(e.target.value)} onBlur={parseGroups} /></label>
+      <div className="as-wl-row" style={{ marginTop: 6 }}>
+        <button className="as-fb-apply" onClick={() => runAnalyze()}>제약 적용 재최적화 →</button>
+        {constraints && <button className="as-chip" onClick={() => { setConstraints(null); runAnalyze(); }}>제약 해제</button>}
+      </div>
+
+      {rep && (
+        <div className={`as-ct-report ${rep.status}`}>
+          <b>
+            {rep.status === "ok" ? "✓ 제약 충족 해"
+              : rep.status === "approx" ? "△ 근사해 — 위반 목록 확인"
+                : "✕ INFEASIBLE — 해 없음"}
+          </b>
+          {rep.reason && <div className="as-ct-line">{rep.reason}</div>}
+          {rep.relaxed.length > 0 && <div className="as-ct-line">완화된 제약: {rep.relaxed.join(", ")} (보고되는 완화 — 임의 완화 아님)</div>}
+          {rep.violations.map((v, i) => (
+            <div key={i} className="as-ct-line viol">위반 · {v.detail}{v.amount_pct != null ? ` (+${v.amount_pct}%p)` : ""}</div>
+          ))}
+          {rep.binding.length > 0 && <div className="as-ct-line">바인딩(딱 걸림): {rep.binding.join(" · ")}</div>}
+          {rep.notes.map((n, i) => <div key={i} className="as-ct-line">• {n}</div>)}
+        </div>
+      )}
+    </details>
+  );
+}
 
 export default function OptimizerWorkspace() {
   const {
@@ -56,6 +131,7 @@ export default function OptimizerWorkspace() {
                 onMouseUp={() => runAnalyze()} onTouchEnd={() => runAnalyze()} onKeyUp={() => runAnalyze()} />
             </label>
           </details>
+          <ConstraintsPanel />
           {!canRun && <div className="as-note">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
           {analyzeError && <div className="as-err">{analyzeError}</div>}
           {result && COV_ONLY.includes(result.model) && views.length > 0 && (

@@ -3446,6 +3446,23 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-sl-more { font-size: 9.5px; color: var(--t-muted); align-self: center; }
 .as-sl-load { align-self: flex-start; margin-top: 2px; }
 
+/* ── 제약 조건 패널 (05 Optimize — P3) ── */
+.as-ct-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 6px 0; }
+.as-ct-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--t-muted); }
+.as-ct-grid label em { font-style: normal; font-size: 8.5px; opacity: .8; }
+.as-ct-grid .as-input { padding: 4px 6px; font-size: 11px; }
+.as-ct-report { margin-top: 8px; border: 1px solid var(--t-border); border-left-width: 3px;
+  border-radius: 3px; padding: 8px 10px; font-size: 10.5px; display: flex; flex-direction: column; gap: 3px; }
+.as-ct-report b { font-size: 11px; }
+.as-ct-report.ok { border-left-color: var(--color-bull); }
+.as-ct-report.ok b { color: var(--color-bull); }
+.as-ct-report.approx { border-left-color: #d97706; }
+.as-ct-report.approx b { color: #92610a; }
+.as-ct-report.infeasible { border-left-color: var(--color-bear); background: rgba(220,38,38,.04); }
+.as-ct-report.infeasible b { color: var(--color-bear); }
+.as-ct-line { color: var(--t-muted); line-height: 1.45; }
+.as-ct-line.viol { color: #92610a; }
+
 /* ── Alpha Lab (02 — P2) ── */
 .as-al-expr { font-family: var(--t-mono); font-size: 12px; resize: vertical; }
 .as-al-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }

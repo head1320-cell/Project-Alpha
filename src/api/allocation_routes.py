@@ -45,6 +45,18 @@ class AllocationView(BaseModel):
     label: str | None = None                # 테제 문장 (표시용, 계산 미사용)
 
 
+class ConstraintsInput(BaseModel):
+    """전부 선택 — 지정된 것만 적용 (P3 제약 엔진). 퍼센트 단위."""
+    max_weight_pct: float | None = Field(None, ge=1, le=100)
+    min_weight_pct: float = Field(0.0, ge=0, le=50)
+    group_caps_pct: dict[str, float] = Field(default_factory=dict)
+    turnover_cap_pct: float | None = Field(None, ge=0, le=200)
+    beta_min: float | None = Field(None, ge=-2, le=3)
+    beta_max: float | None = Field(None, ge=-2, le=3)
+    cash_min_pct: float = Field(0.0, ge=0, le=90)
+    cash_max_pct: float = Field(0.0, ge=0, le=90)
+
+
 class AnalyzeRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=30)
     weights: dict[str, float] | None = None          # 없으면 균등
@@ -55,6 +67,7 @@ class AnalyzeRequest(BaseModel):
     lookback_days: int = Field(756, ge=90, le=3650)   # 거래일 기준 ~3년
     benchmark: str = "KOSPI"
     mc_paths: int = Field(500, ge=100, le=2000)
+    constraints: ConstraintsInput | None = None       # P3 — 없으면 기존 무제약 동작 불변
     # ── ResearchRun 기록 (opt-in) — 슬라이더 드래그마다 DB에 쓰지 않도록 명시 요청 시에만 ──
     record_run: bool = False
     run_name: str | None = Field(None, max_length=200)
@@ -258,6 +271,30 @@ def allocation_analyze(req: AnalyzeRequest):
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau)
 
+        # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
+        #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
+        constraints_report = None
+        if req.constraints is not None:
+            from src.engine.constrained_opt import Constraints, constrained_solve, sector_groups_for
+            cobj = Constraints(**req.constraints.model_dump())
+            if cobj.any_active():
+                sol = constrained_solve(
+                    req.model, names, R,
+                    mu=np.asarray(opt["mu_used"], dtype=float),
+                    S=np.asarray(opt["sigma_annual"], dtype=float),
+                    constraints=cobj,
+                    w_current=req.weights,
+                    groups_of=sector_groups_for(names),
+                    bench_returns=(bench.values if bench is not None
+                                   and len(bench) == R.shape[0] else None),
+                )
+                constraints_report = {k: sol.get(k) for k in
+                                      ("status", "violations", "binding", "relaxed",
+                                       "notes", "reason", "projected")}
+                if sol["status"] != "infeasible" and sol.get("weights") is not None:
+                    opt["weights"] = np.asarray(sol["weights"], dtype=float)
+                    opt["flow"]["optimized"] = opt["weights"]
+
         # 2) 현재(사용자) 가중치 분석 — 리스크 기여·상관 (기존 PortfolioAnalyzer)
         from src.kis_portfolio_analyzer import PortfolioAnalyzer
         user_w = None
@@ -370,6 +407,7 @@ def allocation_analyze(req: AnalyzeRequest):
                                   "cvar_pct": extra.get("cvar_pct"),
                                   "information_ratio": extra.get("information_ratio")}},
             "mc": mc_dist,
+            "constraints_report": constraints_report,
         }
 
         # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
