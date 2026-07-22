@@ -27,6 +27,9 @@ export interface AnalyzeRequest {
   tau?: number;
   lookback_days?: number;
   benchmark?: string;
+  // ResearchRun 기록 (opt-in — 명시 요청 시에만 서버가 run_id 스탬프)
+  record_run?: boolean;
+  run_name?: string;
 }
 
 export interface FrontierPoint {
@@ -80,6 +83,9 @@ export interface AnalyzeResult {
     cvar95_pct: number;
     note: string;
   };
+  // record_run=true 요청 시에만 존재 — null이면 DB 미가용(정직 보고)
+  run_id?: string | null;
+  run_recorded?: boolean;
 }
 
 export interface PointRV { return_pct: number; volatility_pct: number }

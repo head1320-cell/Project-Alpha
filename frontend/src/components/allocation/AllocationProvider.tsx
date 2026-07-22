@@ -16,6 +16,7 @@ import {
   type XrayResult,
 } from "@/lib/allocationApi";
 import { saveStudy, type AllocationStudy } from "@/lib/allocationStorage";
+import { researchApi } from "@/lib/researchApi";
 import type { TacticalStrategy } from "@/lib/screenerApi";
 import type { Holding } from "./PortfolioBuilder";
 import type { TimelineEvent } from "./ResearchTimeline";
@@ -148,6 +149,10 @@ interface AllocationCtx {
   loadedStrategy: LoadedStrategy | null;
   loadStrategy: (strat: TacticalStrategy, market: "kr" | "us") => void;
   clearLoadedStrategy: () => void;
+  // ── ResearchRun (P1 재현성) ──
+  activeRunId: string | null;
+  recordRun: (name: string) => Promise<string | null>;   // 현재 결과를 런으로 기록
+  runsVersion: number;                                    // 목록 갱신 신호
   // ── 위저드 확장 ──
   goal: AllocationGoal | null;
   setGoal: (g: AllocationGoal | null) => void;
@@ -182,6 +187,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [lastRun, setLastRun] = useState("—:—:—");
   const [goal, setGoalState] = useState<AllocationGoal | null>(null);
   const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [runsVersion, setRunsVersion] = useState(0);
   const [lastPos, setLastPos] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
   const lastReqRef = useRef<string>("");
@@ -346,6 +353,37 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   };
   const clearLoadedStrategy = () => setLoadedStrategy(null);
 
+  // ── ResearchRun 기록 — 서버측 opt-in 경로: analyze를 record_run=true로 재실행해
+  //    서버가 계산한 결과를 서버가 스탬프(inputs/outputs 정합 + code_version 보존).
+  //    스터디(localStorage 초안)와 별개의, DB 영속 재현성 단위.
+  const recordRun = async (name: string): Promise<string | null> => {
+    if (!canRun) return null;
+    try {
+      const data = await allocationApi.analyze({
+        tickers: holdings.map((h) => h.code),
+        weights: holdingsMap,
+        views: views.filter((v) => v.assets.length > 0 && v.magnitude_pct > 0),
+        model, delta, tau,
+        record_run: true, run_name: name.trim() || undefined,
+      });
+      if (data.error) return null;
+      setResult(data);
+      setLastRun(new Date().toTimeString().slice(0, 8));
+      const rid = data.run_id ?? null;
+      if (rid) {
+        setActiveRunId(rid);
+        setRunsVersion((v) => v + 1);
+        logEvent(`런 기록 — ${name.trim() || rid} (${model.toUpperCase()})`);
+      } else {
+        logEvent("런 기록 실패 — DB 미가용");
+      }
+      return rid;
+    } catch {
+      logEvent("런 기록 실패 — 네트워크 오류");
+      return null;
+    }
+  };
+
   const applyTiming = () => {
     const data = timingQ.data;
     if (!data || data.error || !data.holdings?.length) return;
@@ -433,6 +471,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     saveStudyFull, loadStudy, studiesVersion,
     bumpStudies: () => setStudiesVersion((v) => v + 1),
     loadedStrategy, loadStrategy, clearLoadedStrategy,
+    activeRunId, recordRun, runsVersion,
     goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
   };
 

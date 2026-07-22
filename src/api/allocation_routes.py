@@ -55,6 +55,9 @@ class AnalyzeRequest(BaseModel):
     lookback_days: int = Field(756, ge=90, le=3650)   # 거래일 기준 ~3년
     benchmark: str = "KOSPI"
     mc_paths: int = Field(500, ge=100, le=2000)
+    # ── ResearchRun 기록 (opt-in) — 슬라이더 드래그마다 DB에 쓰지 않도록 명시 요청 시에만 ──
+    record_run: bool = False
+    run_name: str | None = Field(None, max_length=200)
 
 
 class XrayRequest(BaseModel):
@@ -340,7 +343,7 @@ def allocation_analyze(req: AnalyzeRequest):
             "note": "GBM 정규근사 1년 시뮬레이션 (히스토리컬 μ·σ 기반)",
         }
 
-        return {
+        payload = {
             "error": False,
             "names": names,
             "labels": _labels(names),
@@ -368,6 +371,25 @@ def allocation_analyze(req: AnalyzeRequest):
                                   "information_ratio": extra.get("information_ratio")}},
             "mc": mc_dist,
         }
+
+        # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
+        #    outputs는 재계산 가능한 대형 산출물(프론티어 클라우드·MC bins) 제외 요약만.
+        if req.record_run:
+            from src.data.research_runs import KIND_ANALYZE, record_run
+            rid = record_run(
+                KIND_ANALYZE,
+                inputs=req.model_dump(exclude={"record_run", "run_name"}),
+                outputs={"weights": payload["weights"], "flow": payload["flow"],
+                         "summary": payload["summary"], "labels": payload["labels"],
+                         "views_applied": payload["views_applied"]},
+                snapshot={"coverage": coverage, "excluded": excluded,
+                          "cap_missing": opt["cap_missing"]},
+                name=req.run_name,
+            )
+            payload["run_id"] = rid              # None이면 DB 미가용 — 정직 보고
+            payload["run_recorded"] = rid is not None
+
+        return payload
     except HTTPException:
         raise
     except Exception:

@@ -9,6 +9,7 @@ import {
   deleteStudy, listStudies, updateStudyReview, type AllocationStudy,
 } from "@/lib/allocationStorage";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
+import { ResearchRunsPanel } from "@/components/allocation/ResearchRunsPanel";
 import { ResearchTimeline } from "@/components/allocation/ResearchTimeline";
 
 function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () => void }) {
@@ -104,6 +105,7 @@ export default function JournalWorkspace() {
         </section>
       </aside>
       <main className="as-center">
+        <ResearchRunsPanel />
         <section className="as-card">
           <div className="as-card-title">JOURNAL ENTRIES <span className="as-note-inline">{studies.length}건 · localStorage</span></div>
           {studies.length === 0 && <div className="as-empty">저장된 저널 없음 — 좌측에서 첫 엔트리를 기록하세요.</div>}
