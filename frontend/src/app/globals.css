@@ -3446,6 +3446,39 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-sl-more { font-size: 9.5px; color: var(--t-muted); align-self: center; }
 .as-sl-load { align-self: flex-start; margin-top: 2px; }
 
+/* ── Alpha Lab (02 — P2) ── */
+.as-al-expr { font-family: var(--t-mono); font-size: 12px; resize: vertical; }
+.as-al-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.as-al-fund { border-style: dashed; }
+.as-al-lint { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.as-al-lint-item { font-size: 10.5px; padding: 4px 8px; border-radius: 2px; border: 1px solid var(--t-border); }
+.as-al-lint-item b { font-family: var(--t-mono); font-size: 9px; margin-right: 6px; }
+.as-al-lint-item.error { border-color: var(--color-bear); color: var(--color-bear); background: rgba(220,38,38,.05); }
+.as-al-lint-item.warn { border-color: #d97706; color: #92610a; background: rgba(217,119,6,.06); }
+.as-al-lint-item.info { color: var(--t-muted); }
+.as-al-item { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--t-surface); padding: 3px 0; }
+.as-al-item.on .as-al-name { color: var(--t-accent); }
+.as-al-pick { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: none; border: none; cursor: pointer; text-align: left; padding: 3px 2px; }
+.as-al-name { font-size: 11.5px; font-weight: 600; color: var(--t-ink); display: inline-flex; align-items: center; gap: 5px; }
+.as-al-tpl { font-style: normal; font-family: var(--t-mono); font-size: 8px; padding: 1px 4px;
+  border: 1px solid var(--t-border); border-radius: 2px; color: var(--t-muted); }
+.as-al-ver { font-style: normal; font-size: 9px; color: var(--t-muted); }
+.as-al-status { font-size: 9.5px; padding: 1px 7px; border-radius: 2px; border: 1px solid var(--t-border); color: var(--t-muted); white-space: nowrap; }
+.as-al-status.s-experimental { border-color: #d97706; color: #92610a; }
+.as-al-status.s-validated { border-color: var(--t-accent); color: var(--t-accent); }
+.as-al-status.s-approved { border-color: var(--color-bull); color: var(--color-bull); }
+.as-al-status.s-retired { opacity: .5; }
+.as-al-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px; }
+@media (max-width: 1180px) { .as-al-kpis { grid-template-columns: repeat(3, 1fr); } }
+.as-al-kpi { border: 1px solid var(--t-border); border-radius: 3px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
+.as-al-kpi em { font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--t-muted); }
+.as-al-kpi b { font-size: 14px; }
+.as-al-qbars { display: flex; align-items: stretch; gap: 10px; height: 84px; padding: 6px 2px 0; }
+.as-al-qcol { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.as-al-qbar { width: 70%; border-radius: 2px 2px 0 0; }
+.as-al-qcol .num { font-size: 9px; color: var(--t-muted); }
+
 /* ── ResearchRuns 패널 (Journal — P1 재현성) ── */
 .as-rr-record { display: flex; gap: 6px; margin-bottom: 8px; }
 .as-rr-record .as-input { flex: 1; }

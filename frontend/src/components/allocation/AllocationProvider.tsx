@@ -41,20 +41,21 @@ export interface StageMeta {
 }
 export const STAGES: StageMeta[] = [
   { n: "00", href: "/allocation/overview", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운", intent: "현재 포트폴리오를 한눈에 점검하고 필요한 단계로 이동하세요." },
-  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 직접 구성 · 팩터 빌더", intent: "자산을 2개 이상 담거나(직접) 팩터로 자동 구성하고 비중을 맞추세요.", phase: "setup" },
-  { n: "02", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도", intent: "거시 테제를 자산·방향·신뢰도로 변환하세요 (선택).", phase: "logic" },
-  { n: "03", href: "/allocation/timing", label: "TIMING", title: "Timing", desc: "카나리 신호 + 마켓타이밍 — 위험 국면 게이트", intent: "카나리 자산·지표와 추세 필터로 위험-온/오프를 판단하세요 (선택).", phase: "logic" },
-  { n: "04", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
-  { n: "05", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "민감도 + 시나리오 severity + 상관-국면 스트레스", intent: "시나리오·충격·상관국면으로 배분의 견고성을 검증하세요.", phase: "validation" },
-  { n: "06", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
-  { n: "07", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
+  { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 직접 구성 · 팩터 빌더 · 매크로 전략", intent: "자산을 2개 이상 담거나(직접) 팩터로 자동 구성하고 비중을 맞추세요.", phase: "setup" },
+  { n: "02", href: "/allocation/alphalab", label: "ALPHA LAB", title: "Alpha Lab", desc: "알파 표현식 · lint · IC/ICIR 검증 · 레지스트리", intent: "독립 알파를 정의·검증하고 레지스트리로 관리하세요 (선택).", phase: "logic" },
+  { n: "03", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도", intent: "거시 테제를 자산·방향·신뢰도로 변환하세요 (선택).", phase: "logic" },
+  { n: "04", href: "/allocation/timing", label: "TIMING", title: "Timing", desc: "카나리 신호 + 마켓타이밍 — 위험 국면 게이트", intent: "카나리 자산·지표와 추세 필터로 위험-온/오프를 판단하세요 (선택).", phase: "logic" },
+  { n: "05", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
+  { n: "06", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "민감도 + 시나리오 severity + 상관-국면 스트레스", intent: "시나리오·충격·상관국면으로 배분의 견고성을 검증하세요.", phase: "validation" },
+  { n: "07", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
+  { n: "08", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 + ResearchRun — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
 ];
 
 export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: number[] }
 export const PHASES: PhaseMeta[] = [
-  { key: "setup", label: "SETUP", ko: "설정", steps: [1] },           // 01 Construct
-  { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3, 4] },     // 02 Thesis · 03 Timing · 04 Optimize
-  { key: "validation", label: "VALIDATION", ko: "검증", steps: [5, 6] }, // 05 Stress · 06 Explain
+  { key: "setup", label: "SETUP", ko: "설정", steps: [1] },              // 01 Construct
+  { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3, 4, 5] },     // 02 Alpha Lab · 03 Thesis · 04 Timing · 05 Optimize
+  { key: "validation", label: "VALIDATION", ko: "검증", steps: [6, 7] }, // 06 Stress · 07 Explain
 ];
 
 // ── 타이밍(카나리·마켓타이밍) 설정 — 위저드 공유 상태 ──
@@ -153,6 +154,9 @@ interface AllocationCtx {
   activeRunId: string | null;
   recordRun: (name: string) => Promise<string | null>;   // 현재 결과를 런으로 기록
   runsVersion: number;                                    // 목록 갱신 신호
+  // ── Alpha Lab (P2) ──
+  alphaTouched: boolean;                                  // 검증/저장 1회 이상 → 스테이지 완료
+  markAlphaTouched: () => void;
   // ── 위저드 확장 ──
   goal: AllocationGoal | null;
   setGoal: (g: AllocationGoal | null) => void;
@@ -189,6 +193,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [runsVersion, setRunsVersion] = useState(0);
+  const [alphaTouched, setAlphaTouched] = useState(false);
   const [lastPos, setLastPos] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
   const lastReqRef = useRef<string>("");
@@ -450,13 +455,14 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const stageComplete = useMemo(() => [
     !!result,                                             // 00 overview
     holdings.length >= 2,                                 // 01 construct (SETUP)
-    views.length > 0,                                     // 02 thesis    (LOGIC)
-    !!timingQ.data && !timingQ.data.error,                // 03 timing    (LOGIC)
-    !!result,                                             // 04 optimize  (LOGIC)
-    !!result,                                             // 05 stress    (VALIDATION)
-    !!result,                                             // 06 explain   (VALIDATION)
-    timeline.some((e) => e.msg.startsWith("스터디 저장")),  // 07 journal
-  ], [result, holdings.length, views.length, timeline, timingQ.data]);
+    alphaTouched,                                         // 02 alpha lab (LOGIC)
+    views.length > 0,                                     // 03 thesis    (LOGIC)
+    !!timingQ.data && !timingQ.data.error,                // 04 timing    (LOGIC)
+    !!result,                                             // 05 optimize  (LOGIC)
+    !!result,                                             // 06 stress    (VALIDATION)
+    !!result,                                             // 07 explain   (VALIDATION)
+    timeline.some((e) => e.msg.startsWith("스터디 저장") || e.msg.startsWith("런 기록")),  // 08 journal
+  ], [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched]);
 
   const value: AllocationCtx = {
     holdings, setHoldingsReset, holdingsMap, holdingsKey,
@@ -472,6 +478,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     bumpStudies: () => setStudiesVersion((v) => v + 1),
     loadedStrategy, loadStrategy, clearLoadedStrategy,
     activeRunId, recordRun, runsVersion,
+    alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
     goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
   };
 

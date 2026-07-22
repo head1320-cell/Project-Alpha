@@ -3293,6 +3293,7 @@ def batch_execute_orders(req: BatchOrderRequest):
 # ═══ Stage 11/12/13/Valuation Routers (auto-integrated) ═══════════════════════
 try:
     from src.api.allocation_routes import router as allocation_router
+    from src.api.alpha_routes import router as alpha_router
     from src.api.company_routes import router as company_router
     from src.api.macro_routes import router as macro_router
     from src.api.narrative_routes import router as narrative_router
@@ -3318,6 +3319,7 @@ try:
     app.include_router(trading_router)
     app.include_router(allocation_router)
     app.include_router(research_router)
+    app.include_router(alpha_router)
     print("✓ Stage 11/12/13/Valuation/Screener/Narrative/Macro/Trading/Research 라우터 등록 완료")
 except ImportError as e:
     print(f"⚠ Stage 11+ 라우터 import 실패 (선택적): {e}")

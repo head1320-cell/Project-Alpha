@@ -12,7 +12,7 @@ export function WizardTracker() {
   const router = useRouter();
   const pathname = usePathname();
   const active = stageIndex(pathname);
-  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ } = useAllocation();
+  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched } = useAllocation();
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
   const conf = Math.round(overallConfidence(views));
@@ -26,12 +26,13 @@ export function WizardTracker() {
   const sub = [
     result ? `${result.names.length} 자산` : "미실행",            // 00 overview
     holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음", // 01 construct
-    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",     // 02 thesis
-    timingSub,                                                     // 03 timing
-    `${model.toUpperCase()} · λ${delta.toFixed(1)}`,               // 04 optimize
-    scenLabel,                                                     // 05 stress
-    result ? "분해 준비" : "미실행",                                // 06 explain
-    stageComplete[7] ? "저장됨" : "미기록",                         // 07 journal
+    alphaTouched ? "검증됨" : "미검증",                             // 02 alpha lab
+    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",     // 03 thesis
+    timingSub,                                                     // 04 timing
+    `${model.toUpperCase()} · λ${delta.toFixed(1)}`,               // 05 optimize
+    scenLabel,                                                     // 06 stress
+    result ? "분해 준비" : "미실행",                                // 07 explain
+    stageComplete[8] ? "저장됨" : "미기록",                         // 08 journal
   ];
 
   // ←/→ 로 이전/다음 스테이지 (입력 필드 포커스 시 제외)
@@ -88,7 +89,7 @@ export function WizardTracker() {
         );
       })}
       <span className="aas-wiz-sep" />
-      {Bookend(7)}
+      {Bookend(STAGES.length - 1)}
       <span className="aas-wiz-right">
         {isMock && <span className="aas-wiz-mock" title="현재 결과는 합성(mock) 데이터 기준">MOCK</span>}
         <button className="aas-wiz-gate" title="목표 선택으로 돌아가기" onClick={() => router.push("/allocation")}>☰ 목표</button>
