@@ -761,6 +761,38 @@ def allocation_stress_catalog():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+# ── 국내 시나리오팩 (P3-b) ────────────────────────────────────────────────────
+class KrScenarioRequest(BaseModel):
+    holdings: dict[str, float] = Field(..., min_length=1)
+    scenario: str = "semi_selloff"
+    severity: float = Field(1.0, ge=0.25, le=3.0)
+    sleeves: dict[str, str] | None = None    # code → 슬리브명 (있으면 취약 슬리브 귀속)
+
+
+@router.get("/kr-scenario-catalog")
+def allocation_kr_scenario_catalog():
+    """국내 7종 시나리오 목록 — 라벨·설명·충격 출처."""
+    try:
+        from src.engine.kr_scenario_pack import catalog
+        return {"scenarios": catalog()}
+    except Exception:
+        logger.exception("kr-scenario-catalog 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/kr-scenario")
+def allocation_kr_scenario(req: KrScenarioRequest):
+    """국내 시나리오 팩터 충격 — 종목·팩터·슬리브별 P&L + VaR/CVaR 프록시 + 실행 가능성."""
+    try:
+        from src.engine.kr_scenario_pack import run_scenario
+        holdings = {str(c): max(float(w), 0.0) for c, w in req.holdings.items()}
+        return run_scenario(list(holdings), holdings, req.scenario,
+                            severity=req.severity, sleeves=req.sleeves)
+    except Exception:
+        logger.exception("kr-scenario 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 # ── /resolve-names ───────────────────────────────────────────────────────────
 @router.post("/resolve-names")
 def allocation_resolve_names(req: ResolveNamesRequest):

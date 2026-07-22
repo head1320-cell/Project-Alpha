@@ -373,4 +373,41 @@ export const allocationApi = {
     if (!r.ok) throw new Error(`stress-correlation failed: ${r.status}`);
     return r.json();
   },
+
+  krScenarioCatalog: async (): Promise<{ scenarios: KrScenarioMeta[] }> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/kr-scenario-catalog`);
+    if (!r.ok) throw new Error(`kr-scenario-catalog failed: ${r.status}`);
+    return r.json();
+  },
+  krScenario: async (req: { holdings: Record<string, number>; scenario: string; severity?: number;
+    sleeves?: Record<string, string> | null }): Promise<KrScenarioResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/kr-scenario`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`kr-scenario failed: ${r.status}`);
+    return r.json();
+  },
 };
+
+// ── 국내 시나리오팩 (P3-b) ──
+export interface KrScenarioMeta { id: string; label: string; description: string; source: string }
+export interface KrScenarioResult {
+  error: boolean;
+  message?: string;
+  scenario?: string;
+  label?: string;
+  description?: string;
+  source?: string;
+  severity?: number;
+  portfolio_shock_pct?: number;
+  market_shock_pct?: number;
+  factor_attribution?: { factor: string; label: string; contribution_pct: number }[];
+  rows?: { stock_code: string; corp_name: string; weight_pct: number; shock_pct: number; contribution_pct: number }[];
+  most_vulnerable?: { stock_code: string; corp_name: string; shock_pct: number }[];
+  sleeve_attribution?: { sleeve: string; contribution_pct: number }[] | null;
+  assumptions?: { correlation_rise: number; volatility_rise: number; liquidity_deterioration: number; stressed_vol_pct: number };
+  risk_proxy?: { var95_pct: number; cvar95_pct: number; mdd_proxy_pct: number };
+  execution_feasibility?: string;
+  hedge_note?: string;
+  notes?: string[];
+}

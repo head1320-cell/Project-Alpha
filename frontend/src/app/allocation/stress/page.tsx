@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { allocationApi } from "@/lib/allocationApi";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { SensitivityHeatmap, StressChart, fmtSign } from "@/components/allocation/parts";
+import { KrScenarioPack } from "@/components/allocation/KrScenarioPack";
 
 export default function RobustnessWorkspace() {
   const {
@@ -106,6 +107,7 @@ export default function RobustnessWorkspace() {
         </section>
       </aside>
       <main className="as-center">
+        <KrScenarioPack />
         <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`}>
           <div className="as-card-title">SENSITIVITY HEATMAP <span className="as-note-inline">기댓값 변동 → 최적 비중 반응 (Δ%p)</span></div>
           {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
