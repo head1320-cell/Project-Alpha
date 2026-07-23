@@ -7,6 +7,7 @@ import { COV_ONLY, MODELS, useAllocation } from "@/components/allocation/Allocat
 import {
   AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
 } from "@/components/allocation/parts";
+import { NeutralizePanel } from "@/components/allocation/NeutralizePanel";
 
 function num(v: string): number | null {
   const f = parseFloat(v);
@@ -149,6 +150,7 @@ export default function OptimizerWorkspace() {
           <div className="as-card-title">RETURN DISTRIBUTION <span className="as-note-inline">MC 1년</span></div>
           {result ? <McHistogram mc={result.mc} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
         </section>
+        <NeutralizePanel />
       </aside>
       <main className="as-center">
         <section className={`as-card${pending ? " as-loading" : ""}`}>

@@ -6,6 +6,7 @@ import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { PortfolioBuilder } from "@/components/allocation/PortfolioBuilder";
 import { FactorBuilder } from "@/components/allocation/FactorBuilder";
 import { StrategyLibrary } from "@/components/allocation/StrategyLibrary";
+import { SleeveStudio } from "@/components/allocation/SleeveStudio";
 import { AllocationMap, WeightComparison, concentration } from "@/components/allocation/parts";
 
 type ConstructMode = "direct" | "factor" | "strategy";
@@ -82,6 +83,7 @@ export default function ConstructStage() {
             <div className="as-note">시총 미보유 자산은 중앙값 대체(캡가중 prior). 팩터 결측 자산은 재정규화.</div>
           </section>
         </div>
+        <SleeveStudio />
       </main>
     </div>
   );

@@ -3303,6 +3303,7 @@ try:
     from src.api.research_routes import router as research_router
     from src.api.screener_routes import router as screener_router
     from src.api.screener_universe_count import router as universe_count_router
+    from src.api.sleeve_routes import router as sleeve_router
     from src.api.stage11_routes import router as stage11_router
     from src.api.stage12_routes import router as stage12_router
     from src.api.stage13_extensions import router as stage13_ext_router
@@ -3326,6 +3327,7 @@ try:
     app.include_router(execution_router)
     app.include_router(attribution_router)
     app.include_router(experimental_router)
+    app.include_router(sleeve_router)
     print("✓ Stage 11/12/13/Valuation/Screener/Narrative/Macro/Trading/Research 라우터 등록 완료")
 except ImportError as e:
     print(f"⚠ Stage 11+ 라우터 import 실패 (선택적): {e}")

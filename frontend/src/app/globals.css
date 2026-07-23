@@ -3716,3 +3716,35 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-aa-cat-badge.on { background: var(--color-bull-bg); color: #15803d; }
 .as-aa-cat-badge.off { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
 .as-aa-cat-desc { font-size: 9px; color: var(--t-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Neutralize · Sleeve Studio (Full Expansion P3 잔여)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-neu-ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.as-neu-opt { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--t-muted); }
+.as-neu-beta { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--t-muted); }
+.as-neu-beta input { width: 56px; padding: 3px 6px; border: 1px solid var(--t-border); border-radius: 2px; font-family: var(--t-mono); font-size: 11px; }
+.as-neu-rep { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10.5px; margin: 4px 0; }
+.as-neu-ok { color: var(--color-bull); }
+.as-neu-bad { color: var(--color-bear); }
+.as-neu-warn { font-size: 10px; color: #b45309; background: #fffbeb; border-radius: 2px; padding: 4px 7px; width: 100%; }
+
+.as-slv { display: flex; flex-direction: column; gap: 7px; }
+.as-slv-save { display: flex; gap: 6px; }
+.as-slv-save input { flex: 1; }
+.as-slv-list { display: flex; flex-direction: column; gap: 3px; }
+.as-slv-item { display: flex; align-items: center; gap: 7px; padding: 4px 7px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; }
+.as-slv-item.on { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
+.as-slv-name { flex: 1; font-weight: 600; color: var(--t-ink); }
+.as-slv-budget { width: 52px; padding: 2px 5px; border: 1px solid var(--t-accent); border-radius: 2px; font-family: var(--t-mono); font-size: 10px; }
+.as-slv-ctrl { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.as-slv-res { margin-top: 4px; }
+.as-slv-clusters { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0; }
+.as-slv-cl { font-size: 10px; padding: 2px 7px; border-radius: 2px; border: 1px solid var(--t-border); }
+.as-slv-cl.cl-0 { background: rgba(18,0,255,.08); border-color: rgba(18,0,255,.3); }
+.as-slv-cl.cl-1 { background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.35); }
+.as-slv-cl.cl-2 { background: rgba(217,119,6,.10); border-color: rgba(217,119,6,.35); }
+.as-slv-cl.cl-3 { background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.3); }
+.as-slv-cl.cl-4 { background: rgba(124,58,237,.10); border-color: rgba(124,58,237,.35); }
+.as-slv-cl.cl-5 { background: rgba(8,145,178,.10); border-color: rgba(8,145,178,.35); }
+.as-chip.sm { font-size: 9.5px; padding: 2px 7px; }
