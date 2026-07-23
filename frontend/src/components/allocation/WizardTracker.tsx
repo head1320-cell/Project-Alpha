@@ -12,7 +12,7 @@ export function WizardTracker() {
   const router = useRouter();
   const pathname = usePathname();
   const active = stageIndex(pathname);
-  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched } = useAllocation();
+  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched } = useAllocation();
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
   const conf = Math.round(overallConfidence(views));
@@ -32,7 +32,8 @@ export function WizardTracker() {
     `${model.toUpperCase()} · λ${delta.toFixed(1)}`,               // 05 optimize
     scenLabel,                                                     // 06 stress
     result ? "분해 준비" : "미실행",                                // 07 explain
-    stageComplete[8] ? "저장됨" : "미기록",                         // 08 journal
+    executionTouched ? "계획 검토" : "미준비",                       // 08 execution
+    stageComplete[9] ? "저장됨" : "미기록",                         // 09 journal
   ];
 
   // ←/→ 로 이전/다음 스테이지 (입력 필드 포커스 시 제외)

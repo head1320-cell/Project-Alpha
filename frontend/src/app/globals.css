@@ -3536,3 +3536,94 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-sl-banner-x { margin-left: auto; font-family: var(--t-mono); font-size: 10px; padding: 3px 8px;
   background: transparent; border: 1px solid var(--t-border); border-radius: 2px; color: var(--t-muted); cursor: pointer; transition: all .12s; }
 .as-sl-banner-x:hover { border-color: var(--color-bear); color: var(--color-bear); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Execution Readiness Room (Full Expansion P4) — 오더 diff·비용·pre-trade·워크플로
+   한국 관례: 매수=빨강 · 매도=파랑 (손익 bull/bear 색과 별개).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-exec { display: flex; flex-direction: column; gap: 12px; }
+.as-exec-buy { color: #dc2626; font-weight: 600; }
+.as-exec-sell { color: #2563eb; font-weight: 600; }
+
+/* 설정 행 */
+.as-exec-cfg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 8px 0 4px; }
+.as-exec-cfg label { display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: var(--t-muted); letter-spacing: .03em; }
+.as-exec-cfg input { width: 130px; padding: 5px 7px; border: 1px solid var(--t-border); border-radius: 2px;
+  font-family: var(--t-mono); font-size: 11.5px; background: var(--t-bg, #fff); color: var(--t-ink); }
+.as-exec-cfg input::-webkit-outer-spin-button, .as-exec-cfg input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.as-exec-cfg input[type=number] { -moz-appearance: textfield; }
+.as-exec-restr input, .as-exec-restr { width: 210px; }
+.as-exec-hint { font-size: 9.5px; color: var(--t-muted); }
+.as-exec-limits { margin: 0; }
+.as-exec-limits .as-exec-cfg { padding: 4px 9px 9px; }
+.as-exec-run { padding: 7px 16px; border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent);
+  color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .04em; cursor: pointer; transition: opacity .12s; }
+.as-exec-run:disabled { opacity: .55; cursor: default; }
+
+/* KPI 스트립 */
+.as-exec-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.as-exec-kpi { border: 1px solid var(--t-border); border-radius: 3px; background: var(--t-surface); padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px; }
+.as-exec-kpi .k { font-size: 9px; letter-spacing: .07em; text-transform: uppercase; color: var(--t-muted); }
+.as-exec-kpi b { font-size: 17px; font-weight: 700; color: var(--t-ink); font-variant-numeric: tabular-nums; }
+.as-exec-kpi em { font-size: 9px; color: var(--t-muted); font-style: normal; }
+.as-exec-kpi.verdict.pass { border-color: var(--color-bull); }
+.as-exec-kpi.verdict.warning { border-color: #d97706; }
+.as-exec-kpi.verdict.block { border-color: var(--color-bear); background: var(--color-bear-bg); }
+.as-exec-kpi.verdict b { font-size: 14px; }
+
+/* 본문 그리드 */
+.as-exec-grid { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(260px, 1fr); gap: 12px; }
+.as-exec-side { display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 1000px) { .as-exec-grid { grid-template-columns: 1fr; } .as-exec-kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* 오더 테이블 */
+.as-exec-tablewrap { overflow-x: auto; }
+.as-exec-table { font-size: 10.5px; margin-top: 6px; }
+.as-exec-table td { white-space: nowrap; }
+.as-exec-warn-row td { background: rgba(217,119,6,.05); }
+.as-exec-code { display: block; font-size: 8.5px; color: var(--t-muted); }
+.as-exec-stage { color: var(--t-muted); font-size: 8.5px; }
+.as-exec-tick { display: block; font-size: 8px; color: var(--t-muted); }
+.as-exec-costchips { display: inline-flex; gap: 5px; margin-left: 6px; font-size: 8px; color: var(--t-muted); }
+.as-exec-costchips span { border: 1px solid var(--t-border); border-radius: 2px; padding: 0 3px; }
+.as-exec-warnlist { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--t-border);
+  font-size: 10px; color: #b45309; display: flex; flex-direction: column; gap: 3px; }
+.as-exec-warnlist b { color: var(--t-ink); }
+
+/* pre-trade 체크 */
+.as-exec-checks { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.as-exec-checks li { display: flex; align-items: center; gap: 7px; font-size: 10.5px; padding: 4px 6px; border-radius: 2px; }
+.as-exec-checks li.warning { background: rgba(217,119,6,.05); }
+.as-exec-checks li.block { background: var(--color-bear-bg); }
+.as-exec-chk { font-size: 8.5px; font-weight: 700; letter-spacing: .04em; padding: 1px 6px; border-radius: 2px; flex-shrink: 0; }
+.as-exec-chk.pass { background: var(--color-bull-bg); color: #15803d; }
+.as-exec-chk.warning { background: #fef3c7; color: #b45309; }
+.as-exec-chk.block { background: var(--color-bear); color: #fff; }
+.as-exec-chk-name { font-weight: 600; color: var(--t-ink); }
+.as-exec-chk-detail { margin-left: auto; color: var(--t-muted); font-size: 9.5px; }
+.as-exec-total td { border-top: 1px solid var(--t-border); }
+
+/* 워크플로 */
+.as-exec-save { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.as-exec-save input { padding: 6px 9px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 11.5px; width: 220px; }
+.as-exec-save button, .as-exec-wf-btns button { padding: 6px 13px; border: 1px solid var(--t-border); border-radius: 2px;
+  background: var(--t-surface); color: var(--t-ink); font-size: 10.5px; font-weight: 600; cursor: pointer; transition: all .12s; }
+.as-exec-save button.primary, .as-exec-wf-btns button.primary { background: var(--t-accent); border-color: var(--t-accent); color: #fff; }
+.as-exec-save button:disabled, .as-exec-wf-btns button:disabled { opacity: .5; cursor: default; }
+.as-exec-dbwarn { font-size: 10px; color: #b45309; }
+.as-exec-wf { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.as-exec-wf-head { display: flex; align-items: center; gap: 10px; font-size: 11.5px; }
+.as-exec-status { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; padding: 2px 9px; border-radius: 2px;
+  background: var(--t-surface); border: 1px solid var(--t-border); color: var(--t-ink); }
+.as-exec-status.approved, .as-exec-status.paper_submitted { background: var(--color-bull-bg); color: #15803d; border-color: transparent; }
+.as-exec-status.filled, .as-exec-status.reconciled { background: var(--t-accent); color: #fff; border-color: transparent; }
+.as-exec-status.cancelled, .as-exec-status.rejected { background: var(--color-bear-bg); color: #b91c1c; border-color: transparent; }
+.as-exec-noapprove { font-size: 10px; color: var(--color-bear); font-weight: 600; }
+.as-exec-wf-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.as-exec-audit { margin-top: 4px; }
+.as-exec-auditlist { list-style: none; margin: 0; padding: 6px 9px; display: flex; flex-direction: column; gap: 3px; }
+.as-exec-auditlist li { display: flex; gap: 8px; font-size: 10px; color: var(--t-ink); align-items: baseline; }
+.as-exec-audit-t { color: var(--t-muted); font-size: 9px; flex-shrink: 0; }
+.as-exec-audit-a { font-weight: 600; }
+.as-exec-audit-d { color: var(--t-muted); }

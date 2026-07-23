@@ -1,5 +1,5 @@
 "use client";
-// Allocation Studio 공유 크롬 — 위저드(7단계 파이프라인)의 브레드크럼·헤더·인텐트·
+// Allocation Studio 공유 크롬 — 위저드(8단계 파이프라인)의 브레드크럼·헤더·인텐트·
 // 컨텍스트 스트립·진행 트래커·하단 가이드 nav를 layout에서 렌더(자식 라우트 전환에도
 // Provider 유지 → 상태 보존). /allocation(게이트)은 isGate 분기로 크롬 없이 bare 렌더.
 import React, { useEffect } from "react";
@@ -19,7 +19,7 @@ function StageChrome({ children }: { children: React.ReactNode }) {
   // 마지막 방문 스테이지 기록 (게이트의 Resume용)
   useEffect(() => { noteVisit(stage.href); }, [stage.href, noteVisit]);
 
-  const isLast = idx === STAGES.length - 1;                 // 07 journal
+  const isLast = idx === STAGES.length - 1;                 // 09 journal
   const nextStage = idx < STAGES.length - 1 ? STAGES[idx + 1] : null;
   const goNext = () => {
     if (!nextStage) return;

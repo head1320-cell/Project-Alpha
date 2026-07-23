@@ -48,14 +48,15 @@ export const STAGES: StageMeta[] = [
   { n: "05", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
   { n: "06", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "민감도 + 시나리오 severity + 상관-국면 스트레스", intent: "시나리오·충격·상관국면으로 배분의 견고성을 검증하세요.", phase: "validation" },
   { n: "07", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
-  { n: "08", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 + ResearchRun — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
+  { n: "08", href: "/allocation/execution", label: "EXECUTION", title: "Execution", desc: "실행 준비실 — 오더 diff·비용 추정·pre-trade·승인 워크플로", intent: "목표 배분으로의 주문 차이·비용·pre-trade를 점검하고 승인 워크플로를 진행하세요 (실 주문 없음).", phase: "validation" },
+  { n: "09", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 + ResearchRun — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
 ];
 
 export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: number[] }
 export const PHASES: PhaseMeta[] = [
   { key: "setup", label: "SETUP", ko: "설정", steps: [1] },              // 01 Construct
   { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3, 4, 5] },     // 02 Alpha Lab · 03 Thesis · 04 Timing · 05 Optimize
-  { key: "validation", label: "VALIDATION", ko: "검증", steps: [6, 7] }, // 06 Stress · 07 Explain
+  { key: "validation", label: "VALIDATION", ko: "검증", steps: [6, 7, 8] }, // 06 Stress · 07 Explain · 08 Execution
 ];
 
 // ── 타이밍(카나리·마켓타이밍) 설정 — 위저드 공유 상태 ──
@@ -157,6 +158,9 @@ interface AllocationCtx {
   // ── Alpha Lab (P2) ──
   alphaTouched: boolean;                                  // 검증/저장 1회 이상 → 스테이지 완료
   markAlphaTouched: () => void;
+  // ── Execution Readiness (P4) ──
+  executionTouched: boolean;                              // 계획 미리보기 1회 이상 → 스테이지 완료
+  markExecutionTouched: () => void;
   // ── 제약 최적화 (P3) ──
   constraints: ConstraintsInput | null;                   // null = 무제약(기존 동작)
   setConstraints: (c: ConstraintsInput | null) => void;
@@ -197,6 +201,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [runsVersion, setRunsVersion] = useState(0);
   const [alphaTouched, setAlphaTouched] = useState(false);
+  const [executionTouched, setExecutionTouched] = useState(false);
   const [constraints, setConstraints] = useState<ConstraintsInput | null>(null);
   const [lastPos, setLastPos] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
@@ -468,8 +473,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     !!result,                                             // 05 optimize  (LOGIC)
     !!result,                                             // 06 stress    (VALIDATION)
     !!result,                                             // 07 explain   (VALIDATION)
-    timeline.some((e) => e.msg.startsWith("스터디 저장") || e.msg.startsWith("런 기록")),  // 08 journal
-  ], [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched]);
+    executionTouched,                                     // 08 execution (VALIDATION)
+    timeline.some((e) => e.msg.startsWith("스터디 저장") || e.msg.startsWith("런 기록")),  // 09 journal
+  ], [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched, executionTouched]);
 
   const value: AllocationCtx = {
     holdings, setHoldingsReset, holdingsMap, holdingsKey,
@@ -486,6 +492,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     loadedStrategy, loadStrategy, clearLoadedStrategy,
     activeRunId, recordRun, runsVersion,
     alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
+    executionTouched, markExecutionTouched: () => setExecutionTouched(true),
     constraints, setConstraints,
     goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
   };

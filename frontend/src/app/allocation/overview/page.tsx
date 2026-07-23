@@ -55,14 +55,14 @@ export default function OverviewStage() {
         <section className="as-card" style={{ gridColumn: "span 5" }}>
           <div className="as-card-title">EFFICIENT FRONTIER
             {result?.views_applied && <span className="as-badge">BL 뷰 적용</span>}
-            <Xlink to="/allocation/optimize" label="03" />
+            <Xlink to="/allocation/optimize" label="05" />
           </div>
           {result ? <FrontierChart result={result} lam={delta} height={210} />
             : <div className="as-empty" style={{ height: 210, display: "flex", alignItems: "center", justifyContent: "center" }}>01 CONSTRUCT → 03 OPTIMIZE에서 실행</div>}
         </section>
 
         <section className="as-card" style={{ gridColumn: "span 4" }}>
-          <div className="as-card-title">OPTIMIZED WEIGHTS <span className="as-note-inline">Δ vs 현재</span><Xlink to="/allocation/explain" label="05" /></div>
+          <div className="as-card-title">OPTIMIZED WEIGHTS <span className="as-note-inline">Δ vs 현재</span><Xlink to="/allocation/explain" label="07" /><Xlink to="/allocation/execution" label="08" /></div>
           {optW.length ? optW.slice(0, 6).map(([c, w]) => {
             const cur = holdings.find((h) => h.code === c)?.weight ?? 0;
             const d = w - cur;
@@ -78,19 +78,19 @@ export default function OverviewStage() {
         </section>
 
         <section className="as-card" style={{ gridColumn: "span 3" }}>
-          <div className="as-card-title">RISK CONTRIBUTION<Xlink to="/allocation/explain" label="05" /></div>
+          <div className="as-card-title">RISK CONTRIBUTION<Xlink to="/allocation/explain" label="07" /></div>
           {result ? <RiskContribDonut contributions={result.risk_contributions} labels={result.labels} size={96} />
             : <div className="as-empty">미실행</div>}
         </section>
 
         <section className="as-card" style={{ gridColumn: "span 4" }}>
-          <div className="as-card-title">FACTOR X-RAY <span className="as-note-inline">{xrayQ.data?.benchmark_label || "vs 유니버스"}</span><Xlink to="/allocation/thesis" label="02" /></div>
+          <div className="as-card-title">FACTOR X-RAY <span className="as-note-inline">{xrayQ.data?.benchmark_label || "vs 유니버스"}</span><Xlink to="/allocation/thesis" label="03" /></div>
           {xrayQ.data?.factors?.length ? <FactorXRayBars factors={xrayQ.data.factors.slice(0, 6)} />
             : <div className="as-empty">{holdings.length ? "계산 중…" : "01 CONSTRUCT에서 자산 추가"}</div>}
         </section>
 
         <section className="as-card" style={{ gridColumn: "span 4" }}>
-          <div className="as-card-title">ROBUSTNESS <span className="as-note-inline">최악 시나리오</span><Xlink to="/allocation/stress" label="04" /></div>
+          <div className="as-card-title">ROBUSTNESS <span className="as-note-inline">최악 시나리오</span><Xlink to="/allocation/stress" label="06" /></div>
           {robust.length ? robust.map((r, i) => (
             <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 10.5 }}>
               <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.l}</span>
@@ -102,7 +102,7 @@ export default function OverviewStage() {
         </section>
 
         <section className="as-card" style={{ gridColumn: "span 4" }}>
-          <div className="as-card-title">RESEARCH TIMELINE <span className="as-note-inline">세션 실기록</span><Xlink to="/allocation/journal" label="06" /></div>
+          <div className="as-card-title">RESEARCH TIMELINE <span className="as-note-inline">세션 실기록</span><Xlink to="/allocation/journal" label="09" /></div>
           <ResearchTimeline events={timeline.slice(0, 6)} />
         </section>
       </div>
