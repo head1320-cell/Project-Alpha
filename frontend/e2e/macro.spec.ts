@@ -30,3 +30,24 @@ test("Macro: all sub-tabs render with zero page/console/API errors + Korean enco
   expect(uniq(sink.pageErrors), "macro page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "macro console errors").toEqual([]);
 });
+
+// Hardening regression: a PARTIAL /macro/recommend payload (top/regime dropped — the shape
+// real BOK/FRED data can produce when a recommendation can't be fully computed) must render
+// an honest unavailable state, NOT crash the tab.
+test("Macro: partial recommend payload → honest unavailable state, no crash", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.route("**/api/v1/macro/recommend**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ error: false, confidence: 0.2, low_conviction: true, top: null, macro_allocation: null }),
+    }),
+  );
+
+  await page.goto("/macro", { waitUntil: "networkidle" });
+  await page.locator(".mc-tab", { hasText: "Recommend" }).first().click();
+  await page.waitForTimeout(1500);
+
+  await expect(page.getByText(/추천 데이터가 불완전|데이터 미가용|추천 데이터 없음/).first()).toBeVisible();
+  expect(uniq(sink.pageErrors), "no crash on partial recommend").toEqual([]);
+});

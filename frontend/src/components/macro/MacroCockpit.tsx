@@ -228,7 +228,7 @@ function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill, kru
       </div>
       <div className="mc-card span2">
         <div className="mc-card-h">추천 자산배분 <span className="mc-card-sub">{quad} 국면 · 규칙+성과+AI</span></div>
-        {recommend?.top ? (
+        {recommend?.top && Array.isArray(recommend.top.holdings_final) ? (
           <div className="mc-reco-mini">
             {recommend.low_conviction && (
               <div className="mc-warn" style={{ marginBottom: 6 }}>
@@ -564,6 +564,15 @@ function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
 }) {
   if (loading) return <div className="mc-empty-sm">추천 재계산 중…</div>;
   if (!recommend) return <div className="mc-empty-sm">추천 데이터 없음</div>;
+  // 실데이터에서 추천이 부분 계산되면(top/regime/보유목록 결측) 크래시 대신 정직한 미가용 상태.
+  if (!recommend.top || !recommend.regime || !Array.isArray(recommend.top.holdings_final)) {
+    return (
+      <div className="mc-empty-sm">
+        추천 데이터가 불완전합니다 — 국면·전략 계산에 필요한 값이 부족해 표시할 수 없습니다 (데이터 미가용).
+        데이터 적재 후 다시 시도하세요.
+      </div>
+    );
+  }
   const top = recommend.top;
   const confPct = (recommend.confidence * 100).toFixed(0);
   return (
