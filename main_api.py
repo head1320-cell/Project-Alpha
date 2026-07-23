@@ -3295,6 +3295,7 @@ try:
     from src.api.allocation_routes import router as allocation_router
     from src.api.alpha_routes import router as alpha_router
     from src.api.attribution_routes import router as attribution_router
+    from src.api.backtest_run_routes import router as backtest_run_router
     from src.api.company_routes import router as company_router
     from src.api.execution_routes import router as execution_router
     from src.api.experimental_routes import router as experimental_router
@@ -3328,6 +3329,7 @@ try:
     app.include_router(attribution_router)
     app.include_router(experimental_router)
     app.include_router(sleeve_router)
+    app.include_router(backtest_run_router)
     print("✓ Stage 11/12/13/Valuation/Screener/Narrative/Macro/Trading/Research 라우터 등록 완료")
 except ImportError as e:
     print(f"⚠ Stage 11+ 라우터 import 실패 (선택적): {e}")

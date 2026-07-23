@@ -220,6 +220,31 @@ def transition(run_id: str, to_status: str, message: str | None = None,
         return {"ok": False, "reason": "DB 오류로 전이 실패."}
 
 
+def advance(run_id: str, to_status: str, message: str | None = None,
+            progress: float | None = None) -> dict:
+    """현재 단계에서 to_status까지 STAGE_ORDER를 따라 순차 전이(이미 지난 단계는 스킵).
+    백그라운드 워커가 어떤 진행 이벤트가 오든 목표 단계에 안전히 도달하게 한다."""
+    p = get_status(run_id)
+    if p is None:
+        return {"ok": False, "reason": "실행을 찾을 수 없습니다."}
+    if p["status"] in TERMINAL:
+        return {"ok": False, "reason": f"종료 상태({p['status']})."}
+    if to_status not in STAGE_ORDER or p["status"] not in STAGE_ORDER:
+        return transition(run_id, to_status, message, progress)
+    ci, ti = STAGE_ORDER.index(p["status"]), STAGE_ORDER.index(to_status)
+    if ti <= ci:   # 이미 도달/초과 — 진행률·메시지만 갱신
+        if progress is not None or message is not None:
+            update_progress(run_id, progress if progress is not None else (p["progress_percent"] or 0), message)
+        return {"ok": True}
+    r = {"ok": True}
+    for i in range(ci + 1, ti + 1):
+        last = i == ti
+        r = transition(run_id, STAGE_ORDER[i], message if last else None, progress if last else None)
+        if not r["ok"]:
+            return r
+    return r
+
+
 def update_progress(run_id: str, progress: float, message: str | None = None,
                     stage: str | None = None) -> bool:
     """상태 변경 없이 진행률/메시지만 갱신 (시뮬레이션 루프의 세부 진행)."""
