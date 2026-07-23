@@ -11,6 +11,7 @@ import {
 } from "@/lib/alphaApi";
 import { equalize } from "@/components/allocation/PortfolioBuilder";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
+import { AutoAlphaLab } from "@/components/allocation/AutoAlphaLab";
 
 const STATUS_LABEL: Record<AlphaStatus, string> = {
   draft: "초안", experimental: "실험", validated: "검증됨", approved: "승인", retired: "폐기",
@@ -291,6 +292,9 @@ export default function AlphaLabStage() {
             <div className="as-note">알파 점수 상위 종목을 균등가중으로 01 Construct에 적재 — 이후 최적화·스트레스는 동일 파이프라인.</div>
           </section>
         )}
+
+        {/* P6 실험 — AutoAlpha 후보 생성 샌드박스 (자동 채택 금지) */}
+        <AutoAlphaLab onUseExpr={(e) => { setExpr(e); setLint(null); markAlphaTouched(); }} />
       </main>
     </div>
   );
