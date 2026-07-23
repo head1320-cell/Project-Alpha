@@ -31,7 +31,7 @@ export function WizardTracker() {
     timingSub,                                                     // 04 timing
     `${model.toUpperCase()} · λ${delta.toFixed(1)}`,               // 05 optimize
     scenLabel,                                                     // 06 stress
-    result ? "분해 준비" : "미실행",                                // 07 explain
+    result ? "귀인 준비" : "미실행",                                // 07 attribution
     executionTouched ? "계획 검토" : "미준비",                       // 08 execution
     stageComplete[9] ? "저장됨" : "미기록",                         // 09 journal
   ];

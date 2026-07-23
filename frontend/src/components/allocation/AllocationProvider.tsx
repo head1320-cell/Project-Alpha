@@ -47,7 +47,7 @@ export const STAGES: StageMeta[] = [
   { n: "04", href: "/allocation/timing", label: "TIMING", title: "Timing", desc: "카나리 신호 + 마켓타이밍 — 위험 국면 게이트", intent: "카나리 자산·지표와 추세 필터로 위험-온/오프를 판단하세요 (선택).", phase: "logic" },
   { n: "05", href: "/allocation/optimize", label: "OPTIMIZE", title: "Optimize", desc: "모델·λ·τ + 효율적 프론티어 + 배분 흐름", intent: "엔진과 위험회피(λ)를 조정해 최적 배분을 산출하세요.", phase: "logic" },
   { n: "06", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "민감도 + 시나리오 severity + 상관-국면 스트레스", intent: "시나리오·충격·상관국면으로 배분의 견고성을 검증하세요.", phase: "validation" },
-  { n: "07", href: "/allocation/explain", label: "EXPLAIN", title: "Explain", desc: "단계별 비중 분해 + 리스크·상관 구조", intent: "왜 이 비중인지 단계별로 분해해 확인하세요.", phase: "validation" },
+  { n: "07", href: "/allocation/explain", label: "ATTRIBUTION", title: "Attribution", desc: "사전 기대 vs 사후 실측 — 수익·기여·비용·리스크 귀인", intent: "결정 시점의 기대와 실제 결과를 대조해 귀인하세요 (런 기록 필요).", phase: "validation" },
   { n: "08", href: "/allocation/execution", label: "EXECUTION", title: "Execution", desc: "실행 준비실 — 오더 diff·비용 추정·pre-trade·승인 워크플로", intent: "목표 배분으로의 주문 차이·비용·pre-trade를 점검하고 승인 워크플로를 진행하세요 (실 주문 없음).", phase: "validation" },
   { n: "09", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 + ResearchRun — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
 ];

@@ -195,6 +195,22 @@ def record_fills(plan_id: str, fills: list[dict], actor: str = "user") -> dict:
         return {"ok": False, "reason": "DB 오류."}
 
 
+def find_by_run(run_id: str) -> dict | None:
+    """run_id로 연결된 최신 실행계획 전체 (Attribution의 체결·비용 연결용)."""
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            r = c.execute(text(
+                f"SELECT {_COLS} FROM {_TABLE} WHERE run_id = :rid ORDER BY updated_at DESC LIMIT 1"),
+                {"rid": run_id}).fetchone()
+        return _row(r, full=True) if r else None
+    except Exception as e:
+        logger.warning(f"execution plan run 조회 실패: {e}")
+        return None
+
+
 def delete_plan(plan_id: str) -> bool:
     try:
         engine = _engine()

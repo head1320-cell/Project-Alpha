@@ -11,6 +11,8 @@ import {
 import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { ResearchRunsPanel } from "@/components/allocation/ResearchRunsPanel";
 import { ResearchTimeline } from "@/components/allocation/ResearchTimeline";
+import { DecisionJournal } from "@/components/allocation/DecisionJournal";
+import { StrategyHealthPanel } from "@/components/allocation/StrategyHealthPanel";
 
 function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () => void }) {
   const [text, setText] = useState(study.review || "");
@@ -103,11 +105,13 @@ export default function JournalWorkspace() {
           <div className="as-card-title">SESSION TIMELINE <span className="as-note-inline">이번 세션 실기록</span></div>
           <ResearchTimeline events={timeline} />
         </section>
+        <StrategyHealthPanel />
       </aside>
       <main className="as-center">
         <ResearchRunsPanel />
+        <DecisionJournal />
         <section className="as-card">
-          <div className="as-card-title">JOURNAL ENTRIES <span className="as-note-inline">{studies.length}건 · localStorage</span></div>
+          <div className="as-card-title">QUICK NOTES <span className="as-note-inline">{studies.length}건 · localStorage(세션 메모)</span></div>
           {studies.length === 0 && <div className="as-empty">저장된 저널 없음 — 좌측에서 첫 엔트리를 기록하세요.</div>}
           {studies.map((s) => (
             <div key={s.id} className="as-jr-entry">

@@ -3627,3 +3627,56 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-exec-audit-t { color: var(--t-muted); font-size: 9px; flex-shrink: 0; }
 .as-exec-audit-a { font-weight: 600; }
 .as-exec-audit-d { color: var(--t-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Attribution · Decision Journal · Strategy Health (Full Expansion P5)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-attr { display: flex; flex-direction: column; gap: 10px; }
+.as-attr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 10.5px; color: var(--t-muted); }
+.as-attr-run { font-weight: 600; color: var(--t-ink); }
+.as-attr-warn { color: #b45309; font-weight: 600; font-size: 10px; }
+.as-attr-basis { font-size: 8px; font-weight: 700; letter-spacing: .03em; padding: 1px 5px; border-radius: 2px; margin-left: 5px; vertical-align: middle; }
+.as-attr-basis.real { background: var(--color-bull-bg); color: #15803d; }
+.as-attr-basis.mock { background: #fef3c7; color: #b45309; }
+.as-attr-basis.unavailable { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
+.as-attr-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.as-attr-cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 900px) { .as-attr-cards, .as-attr-cards2 { grid-template-columns: 1fr; } }
+.as-attr-card { border: 1px solid var(--t-border); border-radius: 3px; background: var(--t-surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+.as-attr-card .k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--t-muted); }
+.as-attr-card b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--t-ink); }
+.as-attr-link { font-size: 10.5px; color: var(--t-muted); padding: 8px 10px; border: 1px dashed var(--t-border); border-radius: 3px; }
+.as-attr-link b { color: var(--t-accent); }
+
+/* Decision Journal (서버) */
+.as-dj-form { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.as-dj-runrow { font-size: 10px; }
+.as-dj-run { color: var(--t-accent); font-weight: 600; }
+.as-dj-list { display: flex; flex-direction: column; gap: 8px; }
+.as-dj-attr { font-size: 10px; color: var(--t-ink); background: var(--t-surface); border-radius: 2px; padding: 4px 7px; margin: 4px 0; }
+.as-dq { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 2px; background: var(--t-surface); border: 1px solid var(--t-border); color: var(--t-ink); margin-left: 6px; }
+.as-dq.good_outcome_good_process { background: var(--color-bull-bg); color: #15803d; border-color: transparent; }
+.as-dq.bad_outcome_bad_process { background: var(--color-bear-bg); color: #b91c1c; border-color: transparent; }
+.as-dq.good_outcome_bad_process, .as-dq.bad_outcome_good_process { background: #fef3c7; color: #b45309; border-color: transparent; }
+
+/* Strategy Health */
+.as-health-counts { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; }
+.as-health-pill { font-size: 9px; font-weight: 700; letter-spacing: .03em; padding: 2px 7px; border-radius: 2px; }
+.as-health-pill.healthy { background: var(--color-bull-bg); color: #15803d; }
+.as-health-pill.watch { background: #fef3c7; color: #b45309; }
+.as-health-pill.de_risk { background: var(--color-bear-bg); color: #b91c1c; }
+.as-health-pill.paused { background: #e5e7eb; color: #374151; }
+.as-health-pill.retired { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
+.as-health-derisk { font-size: 10px; color: #b91c1c; background: var(--color-bear-bg); border-radius: 2px; padding: 5px 8px; margin-bottom: 6px; }
+.as-health-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.as-health-item { display: flex; align-items: center; gap: 7px; font-size: 10.5px; padding: 3px 5px; border-radius: 2px; }
+.as-health-item.de_risk, .as-health-item.paused { background: rgba(220,38,38,.04); }
+.as-health-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.as-health-dot.healthy { background: var(--color-bull); }
+.as-health-dot.watch { background: #d97706; }
+.as-health-dot.de_risk { background: var(--color-bear); }
+.as-health-dot.paused { background: #6b7280; }
+.as-health-dot.retired { background: var(--t-border); }
+.as-health-name { flex: 1; font-weight: 600; color: var(--t-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-health-status { font-size: 9.5px; color: var(--t-muted); }
+.as-health-sig { font-size: 9px; color: var(--t-muted); }
