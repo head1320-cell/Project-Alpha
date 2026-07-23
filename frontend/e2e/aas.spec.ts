@@ -37,3 +37,23 @@ test("AAS: walk every stage + fire actions → zero 404, zero console errors", a
   expect(uniq(sink.pageErrors), "AAS page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "AAS console errors").toEqual([]);
 });
+
+// A stale sessionStorage Resume target (e.g. a renamed/removed route) must never
+// dead-link to a Next.js 404 — the guard drops unknown routes.
+test("AAS: stale Resume target is dropped (no dead-link 404)", async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem("alpha_alloc_pos", "/allocation/optimizer"); // old, since renamed to /optimize
+    sessionStorage.setItem("alpha_alloc_goal", JSON.stringify({ id: "custom", label: "직접 구성" }));
+    sessionStorage.setItem("alpha_alloc_wip", JSON.stringify({
+      holdings: [{ code: "005930", name: "삼성전자", weight: 100 }], views: [], model: "bl",
+    }));
+  });
+  await page.goto("/allocation", { waitUntil: "networkidle" });
+  const resume = page.locator(".aas-gate-resume");
+  if (await resume.count()) {
+    await resume.click();
+    await page.waitForLoadState("networkidle");
+  }
+  await expect(page.getByText("This page could not be found")).toHaveCount(0);
+  expect(page.url(), "never routes to the removed /optimizer").not.toContain("/allocation/optimizer");
+});

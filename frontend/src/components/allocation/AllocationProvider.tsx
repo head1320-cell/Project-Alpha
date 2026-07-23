@@ -82,6 +82,15 @@ export const DEFAULT_TIMING: TimingConfig = {
   overlay: { type: "none", n: 200, lookback: 12 },
 };
 
+// A pathname is a known Allocation Studio route iff it is the gate or exactly one of the
+// stage hrefs. Guards against stale sessionStorage `lastPos` (e.g. a renamed/removed route
+// like the old /allocation/optimizer) producing a dead URL → hard 404 on Resume.
+export function isKnownAllocationRoute(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  if (pathname === "/allocation") return true;
+  return STAGES.some((s) => pathname === s.href);
+}
+
 export function stageIndex(pathname: string): number {
   // 가장 긴(정확) 매칭 우선. 게이트(/allocation)는 어떤 스테이지도 매칭 안 됨 → 0 폴백
   // (게이트 라우트는 layout의 isGate 분기에서 stageIndex를 소비하지 않으므로 무해).
@@ -224,7 +233,10 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       const g = sessionStorage.getItem(SS_GOAL);
       if (g) setGoalState(JSON.parse(g));
       const p = sessionStorage.getItem(SS_POS);
-      if (p) setLastPos(p);
+      // Only restore a Resume target that is still a real route (stale/renamed → drop it,
+      // never resurface a dead URL that would 404).
+      if (p && isKnownAllocationRoute(p)) setLastPos(p);
+      else if (p) sessionStorage.removeItem(SS_POS);
       const w = sessionStorage.getItem(SS_WIP);
       if (w) {
         const wip = JSON.parse(w);
@@ -460,6 +472,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     } catch { /* ignore */ }
   };
   const noteVisit = (href: string) => {
+    if (!isKnownAllocationRoute(href)) return;   // never record a route we can't route back to
     setLastPos(href);
     try { if (typeof window !== "undefined") sessionStorage.setItem(SS_POS, href); } catch { /* ignore */ }
   };

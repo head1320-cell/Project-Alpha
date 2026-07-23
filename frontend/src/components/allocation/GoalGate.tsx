@@ -11,7 +11,7 @@ import { backtestBridgeApi } from "@/lib/screenerApi";
 import { macroApi, type RegimeState } from "@/lib/macroApi";
 import type { AllocationModel, AllocationViewInput } from "@/lib/allocationApi";
 import { equalize, type Holding } from "./PortfolioBuilder";
-import { useAllocation } from "./AllocationProvider";
+import { isKnownAllocationRoute, useAllocation } from "./AllocationProvider";
 import { listStudies, type AllocationStudy } from "@/lib/allocationStorage";
 import { listWatchlists, type Watchlist } from "@/lib/watchlistStorage";
 
@@ -136,7 +136,7 @@ export function GoalGate() {
   const startEmpty = () => { setGoal({ id: "custom", label: "직접 구성" }); setModel("bl"); setHoldingsReset([]); router.push("/allocation/construct"); };
   const startStrategy = () => { setGoal({ id: "strategy", label: "매크로 전략" }); setHoldingsReset([]); logEvent("매크로 전략 라이브러리에서 시작"); router.push("/allocation/construct"); };
 
-  const canResume = !!lastPos && holdings.length >= 1;
+  const canResume = !!lastPos && isKnownAllocationRoute(lastPos) && holdings.length >= 1;
   const regimeReady = !!regime;
 
   return (
@@ -149,7 +149,8 @@ export function GoalGate() {
       </p>
 
       {canResume && (
-        <button className="aas-gate-resume" onClick={() => router.push(lastPos!)}>
+        <button className="aas-gate-resume"
+          onClick={() => router.push(isKnownAllocationRoute(lastPos) ? lastPos! : "/allocation/construct")}>
           <span>이어서 계속 — 마지막 작업 재개</span>
           <em className="num">{holdings.length}종목 담긴 상태 →</em>
         </button>
