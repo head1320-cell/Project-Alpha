@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { backtestRunApi } from "@/lib/backtestRunApi";
 import {
-  backtestBridgeApi, type ScreenToBacktestResult,
+  type ScreenToBacktestResult,
   type FilterGroupNode, type BacktestTrade, type MonthlyReturn, type BacktestStatistics,
   type SymbolPerf,
 } from "@/lib/screenerApi";
@@ -289,18 +291,20 @@ export default function TerminalBacktester() {
     setSaved(listSavedStrategies());
   };
 
+  const router = useRouter();
+  // Backtest 클릭 → durable BacktestRun 생성 → 전용 로딩 페이지로 이동(결과는 고정 URL에서).
+  // 설정 폼 아래에 결과를 렌더하지 않는다(스펙). 유효 run_id 확보 전엔 이동하지 않는다.
   const run = async () => {
     setLoading(true); setErr(null); setResult(null); setProgress(null);
     try {
-      // 스트리밍: 진행률(스크리닝→시세로드 k/total→시뮬레이션)을 받으며 실행 → 프록시 타임아웃 면제
-      const r = await backtestBridgeApi.screenToBacktestStream(
-        strategyToRun(s, handoff, macroHandoff?.config ?? null),
-        (evt) => setProgress(evt),
-      );
-      if (r.error) setErr(r.message || "백테스트 실패");
-      else setResult(r);
-    } catch (e) { setErr((e as Error).message); }
-    finally { setLoading(false); setProgress(null); }
+      const config = strategyToRun(s, handoff, macroHandoff?.config ?? null) as unknown as Record<string, unknown>;
+      const stratName = String(config.strategy_name ?? handoff?.conditionSummary?.[0] ?? "백테스트").slice(0, 100);
+      const { run_id } = await backtestRunApi.create({ config, strategy_name: stratName });
+      router.push(`/backtest/runs/${run_id}/loading`);
+    } catch (e) {
+      setErr((e as Error).message || "백테스트 생성 실패");
+      setLoading(false);
+    }
   };
 
   const st = result?.backtest?.statistics;
