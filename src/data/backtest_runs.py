@@ -146,16 +146,28 @@ def create_run(strategy_name: str, input_snapshot: dict,
         return None
 
 
-def get_run(run_id: str) -> dict | None:
-    return _fetch(run_id, full=True)
+class BacktestStoreError(Exception):
+    """저장소(DB) 접근 실패 — '실행 없음(None)'과 구분해야 하는 일시적 오류.
+
+    API 계층이 이걸 잡아 404(진짜 없음)가 아닌 503(일시적 오류)으로 응답하면, 프론트 로딩
+    페이지가 '만료된 링크'로 오인해 폴링을 포기하지 않고 재시도할 수 있다.
+    """
 
 
-def get_status(run_id: str) -> dict | None:
-    """폴링용 경량 상태 (스냅샷·result 제외)."""
-    return _fetch(run_id, full=False)
+def get_run(run_id: str, strict: bool = False) -> dict | None:
+    return _fetch(run_id, full=True, strict=strict)
 
 
-def _fetch(run_id: str, full: bool) -> dict | None:
+def get_status(run_id: str, strict: bool = False) -> dict | None:
+    """폴링용 경량 상태 (스냅샷·result 제외).
+
+    strict=False(기본, 내부 전이 로직용): DB 오류를 None으로 삼킴(방어적).
+    strict=True(API 엔드포인트용): DB 오류를 BacktestStoreError로 올려 404와 구분.
+    """
+    return _fetch(run_id, full=False, strict=strict)
+
+
+def _fetch(run_id: str, full: bool, strict: bool = False) -> dict | None:
     try:
         engine = _engine()
         _ensure(engine)
@@ -166,6 +178,8 @@ def _fetch(run_id: str, full: bool) -> dict | None:
         return _row(r, full=full) if r else None
     except Exception as e:
         logger.warning(f"backtest run 조회 실패: {e}")
+        if strict:
+            raise BacktestStoreError(str(e)) from e
         return None
 
 

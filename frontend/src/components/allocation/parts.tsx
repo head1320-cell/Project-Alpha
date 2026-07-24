@@ -345,15 +345,18 @@ export function McHistogram({ mc }: { mc: AnalyzeResult["mc"] }) {
 export function ConfidenceGauge({ value, height = 120 }: { value: number; height?: number }) {
   const v = Math.max(0, Math.min(100, value || 0));
   const label = v >= 75 ? "High" : v >= 50 ? "Moderately High" : v >= 25 ? "Moderate" : "Low";
+  // 반원(180°) 게이지는 폭 ≈ 2×반지름이 필요 — flex 컨텍스트(.as-tm-mkt)에서 폭이 0으로
+  // 접혀 차트가 뭉개지고 중앙 텍스트가 옆 라벨로 넘치던 문제 방지: 높이 기준으로 폭 고정.
+  const w = Math.round(height * 1.8);
   return (
-    <div className="as-gauge">
-      <ResponsiveContainer width="100%" height={height}>
+    <div className="as-gauge" style={{ width: w, flex: "none" }}>
+      <ResponsiveContainer width={w} height={height}>
         <RadialBarChart innerRadius="66%" outerRadius="100%" data={[{ name: "v", value: v }]} startAngle={180} endAngle={0} barSize={12}>
           <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
           <RadialBar background={{ fill: "var(--t-border)" }} dataKey="value" cornerRadius={6} fill="var(--t-accent)" isAnimationActive={false} />
         </RadialBarChart>
       </ResponsiveContainer>
-      <div className="as-gauge-c"><b>{Math.round(v)}</b><span>Overall Confidence</span><em>{label}</em></div>
+      <div className="as-gauge-c" style={{ top: height * 0.42 }}><b>{Math.round(v)}</b><span>Overall Confidence</span><em>{label}</em></div>
     </div>
   );
 }

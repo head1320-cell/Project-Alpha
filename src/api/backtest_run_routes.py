@@ -129,7 +129,11 @@ def list_runs(limit: int = Query(30, ge=1, le=100)):
 
 @router.get("/runs/{run_id}/status")
 def run_status(run_id: str):
-    st = br.get_status(run_id)
+    # strict=True → DB 오류는 503(일시적, 프론트가 재시도), 진짜 없음만 404
+    try:
+        st = br.get_status(run_id, strict=True)
+    except br.BacktestStoreError:
+        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
     if st is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return st
@@ -137,7 +141,10 @@ def run_status(run_id: str):
 
 @router.get("/runs/{run_id}")
 def run_full(run_id: str):
-    r = br.get_run(run_id)
+    try:
+        r = br.get_run(run_id, strict=True)
+    except br.BacktestStoreError:
+        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return r

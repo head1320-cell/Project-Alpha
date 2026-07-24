@@ -49,3 +49,29 @@ test("Breadcrumb renders with the correct module on each tool tab", async ({ pag
     await expect(cur).toContainText(label);
   }
 });
+
+// The breadcrumb must not overlap a tab's own top toolbar (Company search / Screener universe).
+const intersects = (a: { x: number; y: number; width: number; height: number } | null, b: typeof a) =>
+  !!a && !!b && !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+
+test("Breadcrumb does not overlap the tab top toolbar (Company + Screener)", async ({ page }) => {
+  for (const path of ["/insights", "/screener"]) {
+    await page.goto(path, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    const crumb = await page.locator(".tcrumb").boundingBox();
+    const toolbar = await page.locator(".t-toolbar").first().boundingBox();
+    expect(intersects(crumb, toolbar), `crumb/toolbar overlap on ${path}`).toBe(false);
+  }
+  // the Company 분석 button (in the toolbar) is visible/clickable, not covered
+  await page.goto("/insights", { waitUntil: "networkidle" });
+  await expect(page.locator(".ca-pg-go")).toBeVisible();
+});
+
+test("AAS Timing gauge value does not overlap the composite label", async ({ page }) => {
+  await page.goto("/allocation/timing", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500);
+  const gaugeNum = await page.locator(".as-gauge-c b").first().boundingBox().catch(() => null);
+  const label = await page.locator(".as-tm-mkt-lab").first().boundingBox().catch(() => null);
+  // if the composite section rendered, the big number and the label must not intersect
+  if (gaugeNum && label) expect(intersects(gaugeNum, label), "gauge value overlaps label").toBe(false);
+});

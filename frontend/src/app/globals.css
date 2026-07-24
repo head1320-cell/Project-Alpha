@@ -831,10 +831,11 @@ h6 { font-size: 1rem; }
 .terminal-main { flex: 1; margin-left: var(--t-rail-w); background: var(--t-bg); position: relative; padding: 40px; overflow-y: auto; }
 .terminal-content { position: relative; z-index: 1; }
 
-/* ── Breadcrumb (셸 레벨, 전 툴 탭 상단) — 스티키 글래스 바 ── */
-/* terminal-main 의 40px 패딩을 음수 마진으로 상쇄해 상단·좌우로 블리드, 스크롤 시 상단 고정 */
-.tcrumb { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px;
-  margin: -40px -40px 22px; padding: 11px 40px;
+/* ── Breadcrumb (셸 레벨, 전 툴 탭 상단) — 정적 글래스 헤더 스트립 ── */
+/* terminal-main 의 40px 패딩을 음수 마진으로 상쇄해 상단·좌우로 블리드하는 풀폭 헤더.
+   position: static(정적) — 스크롤해도 각 탭의 상단 툴바(.t-toolbar 등)를 절대 덮지 않음. */
+.tcrumb { position: static; display: flex; align-items: center; gap: 8px;
+  margin: -40px -40px 20px; padding: 12px 40px;
   background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px);
   border-bottom: 1px solid var(--t-border); font-family: var(--t-mono); font-size: 11px; letter-spacing: .04em; }
 .tcrumb-home { color: var(--t-muted); text-decoration: none; font-size: 13px; line-height: 1; transition: color .15s; }
@@ -3809,6 +3810,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-progress { height: 8px; background: var(--t-surface); border-radius: 4px; overflow: hidden; }
 .brun-progress i { display: block; height: 100%; background: var(--t-accent); transition: width .5s ease; }
 .brun-msg { font-size: 10.5px; color: var(--t-muted); font-family: var(--t-mono); }
+.brun-reconnect { color: var(--color-caution, #d97706); margin-left: 6px; animation: tpulse 1.4s ease-in-out infinite; }
 .brun-stage { font-size: 12px; }
 
 .brun-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; }

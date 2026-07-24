@@ -35,20 +35,38 @@ export function RunMonitor({ runId }: { runId: string }) {
   const statusQ = useQuery({
     queryKey: ["btrun", "status", runId],
     queryFn: () => backtestRunApi.status(runId),
+    // 실행이 끝날 때까지 계속 폴링 — 에러가 나도 마지막 상태를 유지한 채 재시도(로딩 페이지를
+    // 일시적 프록시 504/DB hiccup으로 죽이지 않음). 종료 상태에서만 폴링 중지.
     refetchInterval: (q) => (q.state.data && TERMINAL.includes(q.state.data.status) ? false : 1000),
+    refetchIntervalInBackground: true,
+    // 404(진짜 없음)는 재시도 없이 즉시 확정 → 잘못된/만료 링크는 빠르게 안내. 그 외(5xx/네트워크)는
+    // 일시적 → 최대 4회 재시도로 blip 흡수(로딩 페이지를 죽이지 않음).
+    retry: (count, e) => ((e as { httpStatus?: number })?.httpStatus === 404 ? false : count < 4),
+    retryDelay: (i) => Math.min(1000 * 2 ** i, 4000),
   });
 
-  const st = statusQ.data;
+  const st = statusQ.data;                                   // 마지막으로 성공한 상태(에러 중에도 유지)
+  const err = statusQ.error as { httpStatus?: number } | null;
+  // 백엔드는 진짜 없는 실행만 404, DB 일시 오류는 503 → 404만 "만료/잘못된 링크"로 확정 처리.
+  const trulyGone = statusQ.isLoadingError && err?.httpStatus === 404;
+  const reconnecting = statusQ.isError && !!st && !TERMINAL.includes(st.status as RunStatus);
+
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
     if (st?.status === "completed") router.replace(`/backtest/runs/${runId}/results`);
   }, [st?.status, runId, router]);
 
-  if (statusQ.isError || (statusQ.isSuccess && !st)) {
+  // 진짜 없는 실행(첫 로드 404): 만료/잘못된 링크
+  if (trulyGone) {
     return <div className="brun-shell"><div className="brun-err">실행을 찾을 수 없습니다 — 만료되었거나 잘못된 링크일 수 있습니다.
       <button className="brun-btn" onClick={() => router.push("/backtest")}>← 전략 편집기로</button></div></div>;
   }
-  if (!st) return <div className="brun-shell"><div className="brun-loading">실행 상태 불러오는 중…</div></div>;
+  // 아직 첫 상태가 없음 — 로딩 중(또는 일시적 오류로 재시도 중, 폴링은 계속됨)
+  if (!st) {
+    return <div className="brun-shell"><div className="brun-loading">
+      {statusQ.isError ? "실행 상태를 불러오는 중 — 연결이 불안정해 재시도 중입니다…" : "실행 상태 불러오는 중…"}
+    </div></div>;
+  }
 
   const cfg = (fullQ.data?.input_snapshot ?? {}) as Record<string, unknown>;
   const startMs = (st.started_at ?? st.created_at) * 1000;
@@ -98,7 +116,10 @@ export function RunMonitor({ runId }: { runId: string }) {
               <span className="num">{Math.round(st.progress_percent)}%</span>
             </div>
             <div className="brun-progress"><i style={{ width: `${Math.max(2, Math.min(100, st.progress_percent))}%` }} /></div>
-            <div className="brun-msg">{st.status_message}</div>
+            <div className="brun-msg">
+              {st.status_message}
+              {reconnecting && <span className="brun-reconnect">· 연결이 불안정합니다 — 재시도 중</span>}
+            </div>
           </div>
 
           <div className="brun-grid">

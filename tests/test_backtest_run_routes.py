@@ -102,6 +102,22 @@ def test_unknown_run_404(client):
     assert client.post("/api/v1/backtest/runs/bt_nope/cancel").status_code == 409
 
 
+def test_db_error_is_503_not_404(client, monkeypatch):
+    """DB 일시 오류는 503(재시도 가능)로 구분 — 404(진짜 없음)로 뭉개지 않음.
+
+    이래야 프론트 로딩 페이지가 일시적 프록시/DB blip을 '만료된 링크'로 오인해 폴링을
+    포기하지 않는다. (진짜 없는 실행은 계속 404)
+    """
+    # 저장소 조회가 DB 오류를 던지도록 강제
+    def _boom_fetch(run_id, full, strict=False):
+        if strict:
+            raise br.BacktestStoreError("connection reset")
+        return None
+    monkeypatch.setattr(br, "_fetch", _boom_fetch)
+    assert client.get("/api/v1/backtest/runs/bt_any/status").status_code == 503
+    assert client.get("/api/v1/backtest/runs/bt_any").status_code == 503
+
+
 def test_retry_creates_new_run(client):
     rid = client.post("/api/v1/backtest/runs", json={"config": {"universe": "k"}, "strategy_name": "S"}).json()["run_id"]
     _wait_terminal(client, rid)

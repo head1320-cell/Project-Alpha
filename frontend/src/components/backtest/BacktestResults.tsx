@@ -77,11 +77,24 @@ const col = (v: number | null | undefined) => (num(v) == null ? undefined : (v a
 
 export function BacktestResults({ runId }: { runId: string }) {
   const router = useRouter();
-  const q = useQuery({ queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId) });
+  const q = useQuery({
+    queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId),
+    retry: (count, e) => ((e as { httpStatus?: number })?.httpStatus === 404 ? false : count < 3),
+  });
 
   if (q.isLoading) return <div className="brun-shell"><div className="brun-loading">결과 불러오는 중…</div></div>;
-  if (q.isError || !q.data) return <div className="brun-shell"><div className="brun-err">결과를 찾을 수 없습니다.
-    <button className="brun-btn" onClick={() => router.push("/backtest")}>← 편집기로</button></div></div>;
+  if (q.isError || !q.data) {
+    // 404(진짜 없음)만 확정 실패, 그 외(5xx/네트워크)는 일시적 → 재시도 유도
+    const gone = (q.error as { httpStatus?: number } | null)?.httpStatus === 404;
+    return <div className="brun-shell"><div className="brun-err">
+      {gone ? "결과를 찾을 수 없습니다 — 만료되었거나 잘못된 링크일 수 있습니다."
+            : "결과를 일시적으로 불러오지 못했습니다 — 연결을 확인하고 재시도하세요."}
+      <div className="brun-err-actions" style={{ marginTop: 10 }}>
+        {!gone && <button className="brun-btn primary" onClick={() => q.refetch()}>재시도</button>}
+        <button className="brun-btn" onClick={() => router.push("/backtest")}>← 편집기로</button>
+      </div>
+    </div></div>;
+  }
 
   const run = q.data;
   if (run.status !== "completed" || !run.result) {

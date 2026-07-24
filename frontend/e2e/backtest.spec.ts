@@ -16,6 +16,48 @@ import { trackErrors, uniq } from "./helpers";
 //  encoding, and refresh recovery are verified deterministically and fast.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Resilience regression (stubbed, deterministic): a transient status-poll error (proxy 504 / DB
+// blip) must NOT flip the loading page to the terminal "만료된 링크" state — it keeps polling and
+// shows live progress. Stubs the run API so it's fast and independent of the real engine.
+const RESIL_ID = "bt_resil_e2e_1";
+function simStatus() {
+  return {
+    run_id: RESIL_ID, status: "simulating", progress_percent: 55, current_stage: "simulating",
+    status_message: "시뮬레이션 400/785일", strategy_name: "Condition",
+    created_at: 1_700_000_000, started_at: 1_700_000_001, completed_at: null,
+    error_code: null, error_message: null, correlation_id: RESIL_ID,
+    is_mock_data: true, is_pit_verified: false, engine_version: "dev",
+  };
+}
+
+test("Backtest: loading survives transient status errors (keeps polling, no dead-end)", async ({ page }) => {
+  let n = 0;
+  await page.route(new RegExp(`/runs/${RESIL_ID}/status`), (route) => {
+    n += 1;
+    // first 4 polls fail transiently (503), then recover to a live 'simulating' status
+    if (n <= 4) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "temporary" }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(simStatus()) });
+  });
+  await page.route(new RegExp(`/runs/${RESIL_ID}$`), (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...simStatus(), input_snapshot: { universe: "kospi200" }, parameter_snapshot: {}, result: null }) }));
+
+  await page.goto(`/backtest/runs/${RESIL_ID}/loading`, { waitUntil: "domcontentloaded" });
+  // through the transient window the terminal not-found must never appear
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(1000);
+    expect(await page.locator("body").innerText(), "no terminal not-found during transient errors")
+      .not.toContain("만료되었거나 잘못된 링크");
+  }
+  // it recovered to live progress
+  await expect(page.locator(".brun-progress")).toBeVisible();
+  await expect(page.locator(".brun-stage")).toContainText("시뮬레이션");
+});
+
+test("Backtest: a genuinely missing run shows the honest not-found (real 404)", async ({ page }) => {
+  await page.goto("/backtest/runs/bt_missing_e2e_xyz/loading", { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("만료되었거나 잘못된 링크")).toBeVisible({ timeout: 15_000 });
+});
+
 test("Backtest: run button creates a run + navigates to loading (never in-form) + honest cancel", async ({ page }) => {
   const sink = trackErrors(page);
 

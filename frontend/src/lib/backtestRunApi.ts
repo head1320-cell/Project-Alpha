@@ -45,11 +45,22 @@ export interface RunFull extends RunStatusLite {
   result: ScreenToBacktestResult | null;
 }
 
+// HTTP 상태 코드를 실은 에러 — 로딩 페이지가 404(진짜 없음)와 5xx/네트워크(일시적, 재시도)를
+// 구분해 폴링을 이어갈 수 있게 한다.
+export class ApiError extends Error {
+  httpStatus: number;
+  constructor(message: string, httpStatus: number) {
+    super(message);
+    this.name = "ApiError";
+    this.httpStatus = httpStatus;
+  }
+}
+
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
     let detail = `${r.status}`;
     try { detail = (await r.json())?.detail ?? detail; } catch { /* keep status */ }
-    throw new Error(String(detail));
+    throw new ApiError(String(detail), r.status);
   }
   return r.json();
 }
