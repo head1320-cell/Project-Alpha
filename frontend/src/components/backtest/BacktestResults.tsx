@@ -16,21 +16,53 @@ import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } fro
 
 type Stat = keyof BacktestStatistics;
 interface MetricDef { k: Stat; label: string; tip: string; suffix?: string; digits?: number; signed?: boolean }
-const METRICS: MetricDef[] = [
-  { k: "total_return_pct", label: "총수익률", tip: "기간 전체 누적 수익률", suffix: "%", signed: true },
-  { k: "cagr", label: "CAGR", tip: "연평균 복리 성장률", suffix: "%", signed: true },
-  { k: "max_drawdown_pct", label: "최대낙폭(MDD)", tip: "고점 대비 최대 하락폭", suffix: "%" },
-  { k: "volatility_pct", label: "변동성(연)", tip: "연율화 표준편차", suffix: "%" },
-  { k: "sharpe_ratio", label: "Sharpe", tip: "무위험 대비 위험조정수익 (초과수익/변동성)", digits: 2 },
-  { k: "sortino_ratio", label: "Sortino", tip: "하방위험 기준 위험조정수익", digits: 2 },
-  { k: "calmar_ratio", label: "Calmar", tip: "CAGR / |MDD|", digits: 2 },
-  { k: "win_rate", label: "승률", tip: "이익 거래 비율", suffix: "%" },
-  { k: "profit_factor", label: "손익비(PF)", tip: "총이익 / 총손실", digits: 2 },
-  { k: "num_trades", label: "거래수", tip: "총 체결(라운드트립) 수", digits: 0 },
-  { k: "var_pct", label: "95% VaR", tip: "95% 신뢰수준 최대손실 추정", suffix: "%" },
-  { k: "cvar_pct", label: "95% CVaR", tip: "VaR 초과 시 평균손실(꼬리)", suffix: "%" },
-  { k: "total_commission", label: "수수료", tip: "누적 수수료(원)", digits: 0 },
-  { k: "total_slippage", label: "슬리피지", tip: "누적 슬리피지(원)", digits: 0 },
+// 엔진이 실제 산출하는 지표만 그룹으로 배치 — 데이터 없는 항목은 렌더 시 생략(정직).
+const METRIC_GROUPS: { title: string; metrics: MetricDef[] }[] = [
+  { title: "수익", metrics: [
+    { k: "total_return_pct", label: "총수익률", tip: "기간 전체 누적 수익률", suffix: "%", signed: true },
+    { k: "cagr", label: "CAGR", tip: "연평균 복리 성장률", suffix: "%", signed: true },
+    { k: "best_period_pct", label: "최고 구간", tip: "단일 구간 최대 수익률", suffix: "%", signed: true },
+    { k: "worst_period_pct", label: "최악 구간", tip: "단일 구간 최대 손실률", suffix: "%", signed: true },
+  ] },
+  { title: "리스크", metrics: [
+    { k: "max_drawdown_pct", label: "최대낙폭(MDD)", tip: "고점 대비 최대 하락폭", suffix: "%" },
+    { k: "avg_drawdown_pct", label: "평균 낙폭", tip: "낙폭 구간 평균 깊이", suffix: "%" },
+    { k: "max_drawdown_days", label: "최장 수중일", tip: "고점 회복까지 최장 경과일", suffix: "일", digits: 0 },
+    { k: "volatility_pct", label: "변동성(연)", tip: "연율화 표준편차", suffix: "%" },
+    { k: "downside_deviation_pct", label: "하방편차", tip: "손실만의 표준편차 (Sortino 분모)", suffix: "%" },
+    { k: "ulcer_index", label: "Ulcer", tip: "낙폭의 깊이·지속성 결합 지수 (낮을수록 좋음)", digits: 2 },
+    { k: "var_pct", label: "95% VaR", tip: "95% 신뢰수준 최대손실 추정", suffix: "%" },
+    { k: "cvar_pct", label: "95% CVaR", tip: "VaR 초과 시 평균손실(꼬리)", suffix: "%" },
+  ] },
+  { title: "위험조정", metrics: [
+    { k: "sharpe_ratio", label: "Sharpe", tip: "무위험 대비 위험조정수익 (초과수익/변동성)", digits: 2 },
+    { k: "sortino_ratio", label: "Sortino", tip: "하방위험 기준 위험조정수익", digits: 2 },
+    { k: "calmar_ratio", label: "Calmar", tip: "CAGR / |MDD|", digits: 2 },
+    { k: "omega", label: "Omega", tip: "이익/손실 확률가중 비율 (>1이면 우호적)", digits: 2 },
+    { k: "gain_to_pain", label: "Gain/Pain", tip: "총이익 / 총손실 절대합", digits: 2 },
+    { k: "tail_ratio", label: "Tail Ratio", tip: "우측꼬리 / 좌측꼬리 (95/5 분위 비율)", digits: 2 },
+    { k: "recovery_factor", label: "회복계수", tip: "총수익 / |MDD|", digits: 2 },
+    { k: "information_ratio", label: "정보비율(IR)", tip: "벤치 대비 초과수익 / 추적오차", digits: 2 },
+  ] },
+  { title: "분포", metrics: [
+    { k: "skew", label: "왜도", tip: "수익률 분포의 비대칭 (양수=우편향)", digits: 2 },
+    { k: "kurtosis", label: "첨도", tip: "꼬리 두께 (높을수록 극단값 빈발)", digits: 2 },
+  ] },
+  { title: "거래 품질", metrics: [
+    { k: "num_trades", label: "거래수", tip: "총 체결(라운드트립) 수", digits: 0 },
+    { k: "win_rate", label: "승률", tip: "이익 거래 비율", suffix: "%" },
+    { k: "profit_factor", label: "손익비(PF)", tip: "총이익 / 총손실", digits: 2 },
+    { k: "payoff_ratio", label: "손익배율", tip: "평균이익 / 평균손실", digits: 2 },
+    { k: "avg_trade_return", label: "평균 거래수익", tip: "거래당 평균 수익률", suffix: "%", signed: true },
+    { k: "expectancy", label: "기댓값", tip: "거래당 기대 손익(원)", digits: 0, signed: true },
+    { k: "avg_win", label: "평균 이익", tip: "이익 거래 평균 손익(원)", digits: 0 },
+    { k: "avg_loss", label: "평균 손실", tip: "손실 거래 평균 손익(원)", digits: 0 },
+    { k: "kelly_pct", label: "Kelly%", tip: "켈리 최적 베팅 비율", suffix: "%" },
+  ] },
+  { title: "비용", metrics: [
+    { k: "total_commission", label: "수수료", tip: "누적 수수료(원)", digits: 0 },
+    { k: "total_slippage", label: "슬리피지", tip: "누적 슬리피지(원)", digits: 0 },
+  ] },
 ];
 
 const num = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? null : v);
@@ -93,25 +125,35 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         <div className="brun-rhead-r">
           <span className={`brun-badge ${isMock ? "mock" : "real"}`}>{isMock ? "MOCK 데이터" : "실데이터"}</span>
           <span className={`brun-badge ${run.is_pit_verified ? "real" : "warn"}`}>{run.is_pit_verified ? "PIT 검증" : "PIT 미검증"}</span>
+          <button className="brun-btn" onClick={() => router.push(`/backtest/runs/${runId}/compare`)}>비교</button>
           <button className="brun-btn" onClick={retry}>동일 설정 재실행</button>
           <button className="brun-btn primary" onClick={() => router.push("/backtest")}>← 편집기로</button>
         </div>
       </header>
       {isMock && <div className="brun-mocknote">합성(mock) 데이터 기준 결과입니다 — 수치는 참고용. 실데이터는 GCP 적재 후 자동 반영됩니다.</div>}
 
-      {/* Overview */}
+      {/* Overview — 엔진이 산출한 모든 지표를 그룹별로(데이터 없는 항목 생략) */}
       <section className="brun-card">
-        <div className="brun-card-t">개요 지표 <span className="brun-note">데이터 없는 지표는 표시하지 않음</span></div>
-        <div className="brun-kpis">
-          {METRICS.filter((m) => num(stats[m.k] as number) != null).map((m) => (
-            <div key={m.k} className="brun-kpi" title={m.tip}>
-              <div className="brun-kpi-l">{m.label}</div>
-              <div className="brun-kpi-v num" style={{ color: m.signed ? col(stats[m.k] as number) : undefined }}>
-                {fmtStat(stats[m.k] as number, m)}
+        <div className="brun-card-t">개요 · 진단 지표 <span className="brun-note">데이터 없는 지표는 표시하지 않음</span></div>
+        {METRIC_GROUPS.map((g) => {
+          const avail = g.metrics.filter((m) => num(stats[m.k] as number) != null);
+          if (avail.length === 0) return null;
+          return (
+            <div key={g.title} className="brun-mgroup">
+              <div className="brun-mgroup-t">{g.title}</div>
+              <div className="brun-kpis">
+                {avail.map((m) => (
+                  <div key={m.k} className="brun-kpi" title={m.tip}>
+                    <div className="brun-kpi-l">{m.label}</div>
+                    <div className="brun-kpi-v num" style={{ color: m.signed ? col(stats[m.k] as number) : undefined }}>
+                      {fmtStat(stats[m.k] as number, m)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
         {stats.eod_liquidated ? <div className="brun-note">기간종료 청산 {stats.eod_liquidated}종목 — 마지막 거래일 종가로 실현.</div> : null}
       </section>
 
@@ -170,12 +212,58 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         </section>
       )}
 
+      {/* Attribution — 종목 기여도 (엔진 산출 contribution_pct) */}
+      {bt.symbol_results && bt.symbol_results.some((s) => s.contribution_pct != null) && (
+        <AttributionChart rows={bt.symbol_results} />
+      )}
+
       {/* Symbols */}
       {bt.symbol_results && bt.symbol_results.length > 0 && <SymbolTable rows={bt.symbol_results} />}
 
       {/* Trades */}
       {roundTrips.length > 0 && <TradesTable trades={roundTrips} />}
+
+      {/* Diagnostics — 정직 표기: 엔진 미산출 지표는 만들지 않음 */}
+      <section className="brun-card brun-diag">
+        <div className="brun-card-t">진단 · 데이터 범위</div>
+        <ul className="brun-diag-list">
+          {!run.is_pit_verified && <li>PIT 미검증 — 시점(point-in-time) 재무 정합이 확인되지 않아 look-ahead 편향 가능성이 있습니다.</li>}
+          {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요합니다.</li>}
+          {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·유니버스·기간을 점검하세요.</li>}
+          <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않습니다(추정치로 대체하지 않음).</li>
+        </ul>
+      </section>
     </div>
+  );
+}
+
+function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
+  const data = useMemo(() => {
+    const withC = rows.filter((r) => r.contribution_pct != null);
+    const sorted = [...withC].sort((a, b) => (b.contribution_pct as number) - (a.contribution_pct as number));
+    const top = sorted.slice(0, 8);
+    const bot = sorted.slice(-8).filter((r) => !top.includes(r));
+    return [...top, ...bot].map((r) => ({
+      name: r.corp_name || r.symbol, contribution: r.contribution_pct as number,
+    }));
+  }, [rows]);
+  if (data.length === 0) return null;
+  const h = Math.max(140, data.length * 22 + 30);
+  return (
+    <section className="brun-card">
+      <div className="brun-card-t">기여도 분해 (Attribution) <span className="brun-note">상위 기여·하위 기여 종목</span></div>
+      <ResponsiveContainer width="100%" height={h}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+          <CartesianGrid strokeDasharray="2 3" stroke="#eee" horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `${v}%`} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={92} />
+          <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
+          <Bar dataKey="contribution">
+            {data.map((d, i) => <Cell key={i} fill={d.contribution >= 0 ? "#16a34a" : "#dc2626"} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </section>
   );
 }
 

@@ -114,10 +114,16 @@ test("Backtest: completed run → results workspace renders + refresh recovery (
   await page.goto(`/backtest/runs/${STUB_RUN_ID}/loading`, { waitUntil: "networkidle" });
   await page.waitForURL(new RegExp(`/backtest/runs/${STUB_RUN_ID}/results`), { timeout: 15_000 });
 
-  // Results workspace: header, KPIs (only metrics with data), honesty badges, Korean intact.
+  // Results workspace: header, grouped diagnostics, attribution, honesty badges, Korean intact.
   await expect(page.locator("h1")).toContainText("골든크로스");
   await expect(page.locator(".brun-kpi").first()).toBeVisible();
   expect(await page.locator(".brun-kpi").count(), "KPI cards for available metrics").toBeGreaterThan(6);
+  // metrics are grouped into honest diagnostic sections (only groups with data render)
+  const groups = await page.locator(".brun-mgroup-t").allInnerTexts();
+  expect(groups.length, "grouped metric sections").toBeGreaterThan(2);
+  // attribution chart (from engine contribution_pct) + honest omission note
+  await expect(page.locator(".brun-card-t", { hasText: "Attribution" })).toBeVisible();
+  await expect(page.locator(".brun-diag-omit")).toContainText("MFE/MAE");
   await expect(page.getByText("MOCK 데이터").first()).toBeVisible();
   await expect(page.getByText("PIT 미검증").first()).toBeVisible();
   await expect(page.locator("table").first()).toBeVisible(); // symbols / trades
@@ -132,4 +138,46 @@ test("Backtest: completed run → results workspace renders + refresh recovery (
 
   expect(uniq(sink.api404), "results API 404s").toEqual([]);
   expect(uniq(sink.pageErrors), "results page errors").toEqual([]);
+});
+
+test("Backtest: compare two completed runs → overlay + metric delta + config diff (stubbed)", async ({ page }) => {
+  const sink = trackErrors(page);
+  const a = completedRun();
+  // run B: a distinct completed run (different id, config, stronger stats).
+  const B_ID = "bt_stub_e2e_2";
+  const bFull = JSON.parse(JSON.stringify(a.full));
+  bFull.run_id = B_ID; bFull.correlation_id = B_ID; bFull.strategy_name = "모멘텀 (E2E)";
+  bFull.result.backtest.statistics.total_return_pct = 24.9;
+  bFull.result.backtest.statistics.sharpe_ratio = 1.15;
+  bFull.result.backtest.equity_curve = [100, 106, 110, 115, 121];
+  bFull.input_snapshot = { ...a.full.input_snapshot, strategy_name: "모멘텀", start_date: "2022-06-01" };
+  const bLite = { ...a.lite, run_id: B_ID, strategy_name: "모멘텀 (E2E)" };
+
+  await page.route("**/api/v1/backtest/runs", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ runs: [a.lite, bLite] }) }));
+  await page.route(new RegExp(`/api/v1/backtest/runs/${STUB_RUN_ID}$`), (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(a.full) }));
+  await page.route(new RegExp(`/api/v1/backtest/runs/${B_ID}$`), (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(bFull) }));
+
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/compare`, { waitUntil: "networkidle" });
+  await expect(page.locator("h1")).toContainText("실행 비교");
+  // pick run B from the candidate list (completed, not A)
+  const select = page.locator(".brun-select");
+  await expect(select).toBeVisible();
+  await select.selectOption(B_ID);
+
+  // overlay + metric delta + config diff all render
+  await expect(page.locator(".brun-card-t", { hasText: "정규화 자산곡선" })).toBeVisible();
+  await expect(page.locator(".brun-card-t", { hasText: "지표 델타" })).toBeVisible();
+  await expect(page.locator(".brun-card-t", { hasText: "설정 차이" })).toBeVisible();
+  expect(await page.locator(".brun-cmp tbody tr").count(), "delta+diff rows").toBeGreaterThan(4);
+  // config diff highlights the differing strategy/date rows
+  await expect(page.locator(".brun-cmp-diff").first()).toBeVisible();
+  const body = await page.locator("body").innerText();
+  expect(body).toContain("모멘텀");
+  expect(body).not.toMatch(/�/);
+
+  expect(uniq(sink.api404), "compare API 404s").toEqual([]);
+  expect(uniq(sink.pageErrors), "compare page errors").toEqual([]);
 });
