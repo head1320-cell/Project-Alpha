@@ -44,6 +44,12 @@ const MODULES = [
     metrics: [["SCENARIOS", "10+"], ["STRESS TEST", "LIVE"]],
     visual: "gauge",
   },
+  {
+    n: "06", code: "ALLOCATION", title: "Allocation Studio", href: "/allocation",
+    desc: "사용자 뷰 Black-Litterman + 효율적 프론티어. 팩터 포트폴리오·리스크 배분·마켓타이밍을 8단계 리서치 파이프라인으로.",
+    metrics: [["MODELS", "BL·HRP·MVO"], ["VIEWS", "P/Q/Ω"], ["PIPELINE", "8-STAGE"]],
+    visual: "donut",
+  },
 ];
 
 // 플랫폼 실측 지표 — 과장 없이 코드베이스에서 나온 수치
@@ -103,6 +109,26 @@ function Visual({ kind }: { kind: string }) {
       </svg>
     );
   }
+  if (kind === "donut") {
+    // 자산배분 링 — 3개 세그먼트(accent + 두 단계 회색). r=13, 둘레≈81.68.
+    const C = 2 * Math.PI * 13;
+    const segs = [
+      { frac: 0.5, color: "var(--bs-primary)", off: 0 },
+      { frac: 0.3, color: "#a5b4fc", off: 0.5 },
+      { frac: 0.2, color: "#d4d4d8", off: 0.8 },
+    ];
+    return (
+      <svg className="lp-visual" viewBox="0 0 120 36">
+        <g transform="translate(60,18) rotate(-90)">
+          {segs.map((s, i) => (
+            <circle key={i} className="lp-vdonut" cx="0" cy="0" r="13" fill="none"
+              stroke={s.color} strokeWidth="5"
+              strokeDasharray={`${s.frac * C} ${C}`} strokeDashoffset={-s.off * C} pathLength={C} />
+          ))}
+        </g>
+      </svg>
+    );
+  }
   // gauge
   return (
     <svg className="lp-visual" viewBox="0 0 120 36">
@@ -157,7 +183,7 @@ export default function Landing() {
       <section className="lp-toolset" id="toolset">
         <div className="lp-section-head">
           <span className="lp-mono">INTEGRATED TOOLSET</span>
-          <span className="lp-mono">01 — 05</span>
+          <span className="lp-mono">01 — 06</span>
         </div>
         <Reveal className="lp-modules" stagger>
           {MODULES.map((m) => (

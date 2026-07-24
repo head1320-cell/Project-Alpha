@@ -831,6 +831,26 @@ h6 { font-size: 1rem; }
 .terminal-main { flex: 1; margin-left: var(--t-rail-w); background: var(--t-bg); position: relative; padding: 40px; overflow-y: auto; }
 .terminal-content { position: relative; z-index: 1; }
 
+/* ── Breadcrumb (셸 레벨, 전 툴 탭 상단) — 스티키 글래스 바 ── */
+/* terminal-main 의 40px 패딩을 음수 마진으로 상쇄해 상단·좌우로 블리드, 스크롤 시 상단 고정 */
+.tcrumb { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px;
+  margin: -40px -40px 22px; padding: 11px 40px;
+  background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--t-border); font-family: var(--t-mono); font-size: 11px; letter-spacing: .04em; }
+.tcrumb-home { color: var(--t-muted); text-decoration: none; font-size: 13px; line-height: 1; transition: color .15s; }
+.tcrumb-home:hover { color: var(--t-accent); }
+.tcrumb-brand { color: var(--t-muted); font-weight: 600; letter-spacing: .08em; }
+.tcrumb-sep { color: var(--t-border); }
+.tcrumb-cur { display: inline-flex; align-items: center; gap: 6px; color: var(--t-ink); font-weight: 600; text-decoration: none; position: relative; }
+.tcrumb-cur::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 1.5px; background: var(--t-accent); transform: scaleX(0); transform-origin: left; transition: transform .18s ease; }
+.tcrumb-cur:hover::after { transform: scaleX(1); }
+.tcrumb-n { color: var(--t-accent); font-weight: 700; }
+.tcrumb-sub { color: var(--t-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .dash-mod, .dash-mod:hover, .dash-macro, .dash-macro:hover { transform: none !important; transition: none !important; }
+  .tcrumb-cur::after { transition: none !important; }
+}
+
 /* Terminal decorations */
 .terminal-main .grid-overlay {
   position: absolute; inset: 0; pointer-events: none; opacity: 0.03;
@@ -1360,7 +1380,7 @@ h6 { font-size: 1rem; }
 
 /* ④ 5모듈 툴셋 */
 .lp-section-head { display: flex; justify-content: space-between; padding: 13px 44px; border-top: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color); color: var(--bs-secondary-color); }
-.lp-modules { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.lp-modules { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .lp-module { display: flex; flex-direction: column; padding: 30px 26px 26px; border-right: 1px solid var(--bs-border-color); text-decoration: none; color: inherit; min-height: 360px; transition: background 0.15s; }
 .lp-module:last-child { border-right: none; }
 .lp-module:hover { background: var(--bs-tertiary-bg); }
@@ -1386,6 +1406,11 @@ h6 { font-size: 1rem; }
 .lp-footer-left { color: var(--bs-secondary-color); letter-spacing: 0.02em; font-size: 11px; }
 
 /* 반응형 */
+@media (max-width: 1440px) and (min-width: 1101px) {
+  .lp-modules { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lp-module { border-bottom: 1px solid var(--bs-border-color); min-height: 0; }
+  .lp-module:nth-child(3n) { border-right: none; }
+}
 @media (max-width: 1100px) {
   .lp-modules { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-module { border-bottom: 1px solid var(--bs-border-color); min-height: 0; }
@@ -2189,8 +2214,11 @@ h6 { font-size: 1rem; }
 .dash-sug-name { font-size: 13px; color: var(--t-ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash-sug-code { font-family: var(--t-mono); font-size: 11px; color: var(--t-muted); flex-shrink: 0; }
 
-/* 매크로 스트립 */
-.dash-macro { padding: 18px 20px; margin-top: 4px; }
+/* 매크로 스트립 — 글래스모피즘(그리드 오버레이 위에 은은히 뜸) */
+.dash-macro { padding: 18px 20px; margin-top: 4px; background: rgba(255,255,255,0.72);
+  backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 10px 28px rgba(18,0,255,0.05); transition: box-shadow .18s, transform .18s; }
+.dash-macro:hover { box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 14px 34px rgba(18,0,255,0.08); }
 .dash-macro-empty { color: var(--t-muted); font-size: 13px; }
 .dash-macro-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .dash-macro-title { font-family: var(--t-mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--t-ink); }
@@ -2202,15 +2230,21 @@ h6 { font-size: 1rem; }
 .dash-macro-foot { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--t-border); font-size: 12px; color: var(--t-muted); }
 .dash-macro-foot .dash-arrow { margin-left: auto; }
 
-/* 모듈 그리드 */
-.dash-modgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-.dash-mod { padding: 16px 18px; min-height: 112px; display: flex; flex-direction: column; transition: border-color .15s, box-shadow .15s; }
-.dash-mod:hover { border-color: var(--t-accent); box-shadow: 0 4px 16px rgba(18,0,255,0.06); }
+/* 모듈 그리드 — 6개 모듈 카드(2행×3) + 데이터 적재 풀폭 스트립 */
+.dash-modgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+.dash-mod { padding: 16px 18px; min-height: 112px; display: flex; flex-direction: column; transition: border-color .18s, box-shadow .18s, transform .18s; }
+.dash-mod:hover { border-color: var(--t-accent); box-shadow: 0 6px 20px rgba(18,0,255,0.08); transform: translateY(-2px); }
 .dash-mod-top { display: flex; align-items: center; justify-content: space-between; }
 .dash-mod-n { font-family: var(--t-mono); font-size: 12px; font-weight: 700; color: var(--t-accent); }
 .dash-mod-label { font-size: 17px; font-weight: 700; color: var(--t-ink); margin-top: 8px; }
 .dash-mod-desc { font-size: 12px; color: var(--t-muted); margin-top: 5px; line-height: 1.45; }
-.dash-mod-stat .dash-mod-bignum { font-family: var(--t-mono); font-size: 26px; font-weight: 700; color: var(--t-ink); margin-top: 6px; }
+/* 데이터 적재 — 풀폭 가로 스트립(라벨 좌 · 큰 수치 우) */
+.dash-mod-stat { grid-column: 1 / -1; min-height: 0; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.dash-mod-stat .dash-mod-stat-l { display: flex; flex-direction: column; gap: 4px; }
+.dash-mod-stat .dash-mod-top { justify-content: flex-start; gap: 8px; }
+.dash-mod-stat .dash-mod-label { margin-top: 0; }
+.dash-mod-stat .dash-mod-desc { margin-top: 0; }
+.dash-mod-stat .dash-mod-bignum { font-family: var(--t-mono); font-size: 28px; font-weight: 700; color: var(--t-ink); line-height: 1; }
 
 /* 저평가 Top 테이블 */
 .dash-picks { padding: 16px 18px 6px; margin-top: 12px; }
@@ -2341,6 +2375,8 @@ h6 { font-size: 1rem; }
 .lp-vrow { transform-box: fill-box; transform-origin: left; }
 .lp-module:hover .lp-vrow { animation: lp-fillx .5s ease both; }
 @keyframes lp-fillx { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.lp-vdonut { transform-box: fill-box; transform-origin: center; }
+.lp-module:hover .lp-vdonut { animation: lp-pop .45s cubic-bezier(.2,.8,.2,1) both; }
 
 /* ── 지표: 등장 시 액센트 밑줄 드로우 ── */
 .lp-stat-val::after { content: ""; display: block; width: 0; height: 2px; margin-top: 9px;
@@ -2356,7 +2392,7 @@ h6 { font-size: 1rem; }
 @media (prefers-reduced-motion: reduce) {
   .lp-reveal, .lp-reveal:not(.lp-stagger), .lp-stagger > *,
   .lp-deck-area, .lp-deck-cell, .lp-deck-end,
-  .lp-vbar, .lp-vline, .lp-vline2, .lp-vheat, .lp-vrow, .lp-vgauge {
+  .lp-vbar, .lp-vline, .lp-vline2, .lp-vheat, .lp-vrow, .lp-vgauge, .lp-vdonut {
     opacity: 1 !important; transform: none !important; animation: none !important;
   }
   .lp-deck-eq, .lp-deck-bc, .lp-vline, .lp-vline2, .lp-vgauge {

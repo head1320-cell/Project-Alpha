@@ -8,6 +8,7 @@ import { screenerApiAdvanced, screenerApi, analysisApi, backtestBridgeApi } from
 import { macroApi } from "@/lib/macroApi";
 import { loadCompanyCore } from "@/lib/companyData";
 import { allocationApi } from "@/lib/allocationApi";
+import { Breadcrumb } from "./Breadcrumb";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TerminalShell — Variant "Institutional Terminal" 좌측 사이드바 셸
@@ -153,7 +154,10 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
           <div className="corner-mark top-right" />
           <div className="corner-mark bottom-left" />
           <div className="corner-mark bottom-right" />
-          <div className="terminal-content">{children}</div>
+          <div className="terminal-content">
+            <Breadcrumb />
+            {children}
+          </div>
         </main>
       </div>
     </div>
