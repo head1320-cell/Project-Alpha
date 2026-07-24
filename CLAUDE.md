@@ -46,8 +46,12 @@
     컨텍스트·인과 체인·확률구름·타임라인)
 20. Research OS v2(마이크로 워크스페이스 6분할 + Sensitivity Heatmap +
     Decision Journal + vNext 설계 원칙)
-21. **Allocation Studio 파이프라인 리디자인**(이 세션 — Claude Design 핸드오프
-    구현, 7단계 순차 리서치 파이프라인 + 공유 크롬) ← 최신
+21. Allocation Studio 파이프라인 리디자인(Claude Design 핸드오프 구현, 7단계 순차
+    리서치 파이프라인 + 공유 크롬) · Allocation Studio Multi-Stage Wizard 전면
+    리디자인(목표 게이트 + 3-페이즈) · Allocation Studio 심화 툴 4종
+22. **백테스트 실행 워크플로 영속화(BacktestRun) + AAS 404·매크로 에러 근본수정 +
+    Playwright E2E 하네스**(이 세션 — 스펙/플랜 문서화 → 버그 2건 근본수정 →
+    BacktestRun 도메인·API·로딩·결과·비교 5단계) ← 최신
 
 ---
 
@@ -2649,3 +2653,120 @@ Terminal 토큰으로 직접 구현. zip 핸드오프의 7-스테이지 스펙�
   실적재 유니버스에선 실코드→실명. mock ETF 시세는 결정론적 합성이라 카나리·컴포짓 절대수치는
   참고용(구조·부호·로직만 검증), 실값은 GCP. `market_timing` 컴포짓은 시장 전반(timing_panel)
   기준으로 카나리 판정과 독립(UI에 명시). BAA 등 미구현 전략·다국가 지표는 범위 밖.
+
+---
+
+## 🧩 백테스트 실행 워크플로 영속화(BacktestRun) + AAS 404·매크로 에러 근본수정 + Playwright E2E
+
+[배경] 사용자가 캡처(AAS 게이트 진입 시 404)와 함께 4건을 요청: ① 백테스터를 "설정 → 클릭 →
+같은 화면에 결과"에서 **"설정 → BacktestRun 생성 → 전용 로딩 페이지 → 전용 결과 페이지"**로
+전환(새로고침·북마크·재방문 가능한 고정 URL, 완료 전 결과를 폼 아래에 절대 렌더하지 않음,
+유효한 run_id 없이 절대 이동하지 않음) ② AAS 버튼 간헐적 404 근본수정(증거 기반) ③ 매크로 탭
+에러 재현 후 근본수정(제네릭 ErrorBoundary 금지, 5가지 정직한 상태) ④ 회귀가 조용히 재발하지
+않도록 커버리지 추가. **필수 절차**: Step 0 조사 전용(제품코드 금지) → Step 1 스펙 문서 단독
+커밋 → Step 2 플랜 문서 단독 커밋 → Step 3 TDD 소단위 커밋. 순서는 AskUserQuestion으로
+"버그 먼저 → 백테스트" 확정, E2E는 `@playwright/test` 신규 도입 확정.
+
+### Step 0 조사 (증거, 제품코드 없이)
+- 백테스트: `TerminalBacktester.run()`이 SSE로 결과를 **로컬 상태**에 저장해 폼 아래 렌더 —
+  `run_id`도 영속도 새로고침 복구도 없음. 참고 가능한 영속 패턴은 이미 존재
+  (`multibacktest_runs`/`stage11_routes.py`, `main_api.py`의 `_INGEST_STATUS` 스레드+폴링).
+- **AAS 404·매크로 에러 둘 다 현재 HEAD(mock)에서 재현 안 됨** — 모든 AAS/매크로 엔드포인트가
+  등록돼 있고(`allocation_routes.py` 4라우터, `macro_routes.py`), 런타임 프록시가 전 메서드를
+  지원, `next.config.js`에 충돌 rewrite 없음. **결론: GCP 배포 프론트/백엔드 버전 불일치**(구
+  프론트가 신 백엔드에 없는 걸 치거나 그 반대) — 코드 결함이 아니라 스테일 빌드. 그럼에도
+  방어적 하드닝 + 회귀 잠금은 진행(재발 시 CI가 즉시 감지하도록).
+
+### Step 1~2 — 문서 (단독 커밋)
+`docs/specs/backtest-run-workflow.md`(`docs(spec):`) + `docs/plans/backtest-run-workflow-plan.md`
+(`docs(plan):`) — BacktestRun 상태모델, 로딩/결과 IA, AAS/매크로 요구사항, 인수기준+테스트
+매트릭스, 재사용 맵, 단계별 파일.
+
+### E2E 하네스 (Phase 2)
+`frontend/playwright.config.ts` — `next start`가 **실제 `main_api`**(`KIS_USE_MOCK=1`,
+SQLite)와 **실제 Next.js**를 `webServer`로 기동(모킹 스텁 아님 → "0×404/0 콘솔에러" 단언이
+의미있음). `e2e/helpers.ts::trackErrors()` — pageerror/console error/`/api/backend/` 4xx·5xx를
+수집하는 공용 싱크(외부 폰트 net::ERR_ 등은 노이즈로 제외).
+
+### AAS 404 하드닝 (Phase 4, `fix(aas):`)
+`AllocationProvider.tsx`에 `isKnownAllocationRoute(pathname)`(게이트 또는 정확한 STAGES href만
+허용) 신설 — `GoalGate.tsx`의 **Resume**이 스테일 `sessionStorage` 경로(과거 세션의 구 라우트
+등)를 가리킬 때 죽은 링크로 이동하는 대신 `/construct`로 안전 폴백. `e2e/aas.spec.ts` —
+전 위저드 스테이지 순회 + 액션 버튼 전수 클릭(ACTION_RE) → 0×404·0 콘솔에러 단언, 스테일
+Resume 타깃 시드 → 죽은 링크 없음 단언.
+
+### 매크로 에러 하드닝 (Phase 3, `fix(macro):`)
+`MacroCockpit.tsx`의 `RecommendTab`이 `recommend.top`/`recommend.regime`이 없거나
+`holdings_final`이 배열이 아닌 **부분 페이로드**(실 BOK/FRED 데이터가 추천을 완전히 산출 못할 때
+실제로 나올 수 있는 형태)를 만나면 크래시하던 지점에 정직한 미가용 상태 가드 추가(제네릭
+ErrorBoundary 아님 — 원인 지점에서 직접 처리). `tests/test_macro_contract.py`(3) — 추천 페이로드
+형태 고정(`top.holdings_final` 리스트 등) + 한글 UTF-8 왕복 검증. `e2e/macro.spec.ts` — 8개
+서브탭 전수 순회(0에러+한글 인코딩 검증) + `/macro/recommend` 부분 응답 스텁 → 크래시 없이
+"데이터 미가용" 상태 렌더 단언.
+
+### BacktestRun 워크플로 (Phase 5, 5단계 TDD)
+- **5a 도메인**(`src/data/backtest_runs.py`, `feat(backtest): ... (5a)`): raw-SQL DB-optional
+  영속 스토어(기존 `research_runs.py`/`execution_store.py` 관례 재사용). 상태 lifecycle
+  `draft→queued→validating→loading_data→simulating→calculating_metrics→persisting_results→
+  completed` + 터미널 `failed/cancelled/expired`, `_TRANSITIONS` 맵으로 불법 전이 차단.
+  `input/parameter_snapshot`·`progress_percent`·`current_stage`·`status_message`·
+  `error_code/message`·`correlation_id`·`is_mock_data`·`is_pit_verified` 보관.
+  `tests/test_backtest_runs.py`(8): 생성→queued, 정상 lifecycle, 불법 전이 거부, 터미널 불변,
+  새로고침 복구(다른 커넥션에서 영속 진행률 읽기), list 최신순.
+- **5b API**(`src/api/backtest_run_routes.py`, `(5b)`): `POST /api/v1/backtest/runs`가 즉시
+  `run_id`를 반환하고 백그라운드 스레드(`main_api.py`의 `_INGEST_STATUS` 스레딩 패턴 재사용)가
+  기존 `_screen_to_backtest_core(progress_cb=)`를 실행하며 각 단계로 `advance()` — 취소는
+  `_Cancelled` 예외로 다음 progress_cb 콜 지점에서 협조적으로 중단. `GET .../status`(경량 폴링)·
+  `GET .../{id}`(전체 결과)·`POST .../cancel`(터미널이면 409)·`POST .../retry`(input_snapshot으로
+  신규 run)·`GET /runs`(목록). `tests/test_backtest_run_routes.py`(6): 생성→폴링→완료, 엔진
+  실패 시 안전 메시지(내부 정보 누출 0), 새로고침 복구, 미존재 404, retry, list.
+- **5c 프론트 배선**(`(5c)`): `lib/backtestRunApi.ts` + `RunMonitor.tsx`
+  (`/backtest/runs/[runId]/loading`) + `BacktestResults.tsx`
+  (`/backtest/runs/[runId]/results`). `TerminalBacktester.run()`을 로컬 결과 렌더에서
+  `POST /runs` → `router.push(.../loading)`로 교체 — **결과를 폼 아래에 절대 렌더하지 않고,
+  유효한 run_id 없이 절대 이동하지 않음**. 로딩 페이지 = 실제 잡 모니터(전략명·run id·설정
+  요약·데이터 출처·**실제** 현재 단계·**백엔드가 제공할 때만** 진행률·경과시간·활동
+  타임라인·real/mock 배지·안전 취소/재시도·비민감 에러). `e2e/backtest.spec.ts` — (A) 실제
+  백엔드로 클릭→로딩 이동(폼 미렌더 확인)→실제 단계/설정 표시→안전 취소→정직한 취소 상태,
+  (B) 실스키마 스텁 완료 run으로 결정론적 결과 렌더+새로고침 복구 검증.
+- **5d 결과 심화**(`(5d)`, 코드와 함께): 엔진이 실제 반환하는 **36개 통계 전부**를 수익/
+  리스크/위험조정/분포/거래품질/비용 6개 그룹으로 재구성(기존 14개 노출 → 32개 렌더, Ulcer·
+  Omega·Tail Ratio·gain-to-pain·recovery/information ratio·skew/kurtosis·기댓값·손익배율 등
+  추가) — 데이터 없는 지표·그룹은 렌더 생략. `symbol_results.contribution_pct` 기반 **기여도
+  분해(Attribution) 차트**(상위/하위 기여 종목) 신규. **진단 패널**: PIT 미검증/mock/무거래
+  정직 경고 + "롤링 지표·시점별 익스포저·거래별 MFE/MAE는 엔진이 산출하지 않아 표시하지
+  않는다"는 명시적 생략 고지(추정치로 대체 안 함).
+- **5e 실행 비교**(`(5e)`, 신규 백엔드 없음 — 기존 `list()`/`get()`만 재사용):
+  `BacktestCompare.tsx` + `/backtest/runs/[runId]/compare` — 완료된 다른 실행 B 선택 →
+  정규화 자산곡선(시작=100) 오버레이 + 지표 델타 표(Δ=B−A, 우위 방향 색상) + 설정/스냅샷
+  차이(다른 행 강조) + 비교 불가 상태 정직 표기(A/B 중 미완료면 사유와 함께 차단). 결과 헤더에
+  "비교" 링크 추가.
+
+### 검증 (풀 게이트, 전부 라이브 확인)
+- 백엔드 **943 passed / 10 skipped / 0 failed**(신규 backtest_runs 8 + backtest_run_routes 6 +
+  macro_contract 3), `ruff check` 통과.
+- 프론트: `tsc` 0, `next build` 전 라우트 성공(`/backtest/runs/[runId]/{loading,results,compare}`
+  포함). **Playwright 7/7**(aas 2 + backtest 3 + macro 2).
+- **실 브라우저 라이브 검증**(스텁 아님): "백테스트 실행" 클릭 → `/backtest`가 아닌
+  `/backtest/runs/{id}/loading`로 이동 → 실 엔진이 **785일 시뮬레이션**을 실제로 진행(진행률
+  57%→100% 실시간 폴링 확인) → 완료 시 `/results`로 자동 전환 → **32개 KPI·기여도 차트·2개
+  테이블·3개 차트·"MOCK 데이터"/"PIT 미검증" 배지·한글 인코딩 정상(mojibake 0)·페이지 에러
+  0·API 404 0** → 새로고침 후에도 동일 결과 유지. 취소 경로: 실제 단계("시점(PIT) 데이터
+  로딩") 노출 중 취소 클릭 → "실행이 취소되었습니다" 정직 상태 도달. 비교: 두 실 완료 run
+  간 오버레이+델타(17행)+설정차이 렌더, 콘솔 에러 0.
+- 트러블슈팅 메모: `next build` 후 이전 `next start`가 살아있으면 스테일 청크 해시로
+  `ChunkLoadError`/React #423 발생 — 반드시 기존 `next` 프로세스를 전부 죽인 뒤 재기동
+  (기존 "stale .next" 교훈과 동일 계열, 이번엔 프로세스 중복이 원인).
+
+### 정직한 한계
+- AAS 404·매크로 에러는 **현재 코드베이스에서 재현되지 않음** — 원래 증상은 GCP의 프론트/백엔드
+  버전 불일치로 추정. 이번 세션은 근본원인 자체보다 **재발 방지 하드닝 + 회귀 잠금**(가드
+  코드 + E2E)에 집중. 사용자는 `docker compose build --no-cache frontend backend`로 클린
+  재배포 권장.
+- 5d 진단은 **엔진이 실제로 계산하는 값만** 그룹화해 노출한 것 — 롤링(구간별) 지표, 시점별
+  포지션 익스포저, 거래별 MFE/MAE는 엔진에 그 데이터가 없어 UI가 만들어내지 않고 명시적으로
+  "표시 안 함"이라고 고지. 필요하면 엔진 확장이 선행돼야 함(범위 밖).
+- 비교(5e)는 신규 백엔드 없이 기존 결과 페이로드만으로 클라이언트에서 계산 — 두 실행의 기간·
+  길이가 다르면 자산곡선은 절대 날짜가 아닌 **인덱스 기준 정렬**임을 UI에 명시(절대 비교 주의).
+- E2E 결과/비교 테스트는 **결정론적 검증을 위해 실스키마 스텁 페이로드**를 사용(엔진 자체는
+  5c의 실행 A 테스트와 백엔드 pytest가 커버) — 로딩→취소 테스트만 실 엔진·실 시뮬레이션을 탄다.
