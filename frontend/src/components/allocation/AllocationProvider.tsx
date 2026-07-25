@@ -69,6 +69,8 @@ export interface TimingConfig {
   riskOnAssets: string[];             // 비면 현재 포트폴리오 유지
   riskOffAssets: string[];
   overlay: { type: "ma_day" | "abs_mom" | "none"; n: number; lookback: number };
+  regimeBlend: boolean;               // 국면확률 가중 연속 노출(휩쏘 억제)
+  targetVolPct: number | null;        // 목표 변동성(연 %) — 위험자산 노출 스케일
 }
 export const DEFAULT_TIMING: TimingConfig = {
   market: "kr",
@@ -82,6 +84,8 @@ export const DEFAULT_TIMING: TimingConfig = {
   riskOnAssets: [],
   riskOffAssets: ["IEF", "SHY"],
   overlay: { type: "none", n: 200, lookback: 12 },
+  regimeBlend: false,
+  targetVolPct: null,
 };
 
 // A pathname is a known Allocation Studio route iff it is the gate or exactly one of the
@@ -349,6 +353,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       risk_off_assets: timingCfg.riskOffAssets,
       holdings: holdings.length ? holdingsMap : null,
       overlay: timingCfg.overlay,
+      regime_blend: timingCfg.regimeBlend,
+      target_vol_pct: timingCfg.targetVolPct,
     }).catch(() => null),
     enabled: timingCfg.canaries.length >= 1,
   });

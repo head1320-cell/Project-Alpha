@@ -142,6 +142,8 @@ class TimingRequest(BaseModel):
     risk_off_assets: list[str] = Field(default_factory=list)
     holdings: dict[str, float] | None = None  # 현재 포트폴리오(리스크-온 유지 + 오버레이 대상)
     overlay: dict | None = None              # {"type":"ma_day"|"abs_mom"|"none","n":200,"lookback":12}
+    regime_blend: bool = False               # 이진 게이트 대신 국면확률 가중 연속 노출(휩쏘 억제)
+    target_vol_pct: float | None = Field(None, ge=2, le=40)  # 목표 변동성(연 %) — 위험자산 노출 스케일
 
 
 # ── 상관-국면 스트레스 ───────────────────────────────────────────────────────
@@ -1039,6 +1041,45 @@ def _timing_holding(t: str, mk: str) -> tuple[str, str]:
     return code, name
 
 
+def _timing_regime_probs(mk: str) -> dict | None:
+    """현재 국면 확률(4사분면, 합=1) — 리짐-확률 블렌드용. 실패 시 None(정직 폴백)."""
+    try:
+        from src.engine.regime_analyzer import RegimeAnalyzer
+        state = RegimeAnalyzer().analyze(market=("kr" if mk == "kr" else "us"))
+        probs = dict(getattr(state, "regime_probs", {}) or {})
+        if probs:
+            return probs
+        from src.engine.regime_axes import quadrant_probs
+        return quadrant_probs(float(getattr(state, "growth_axis", 0) or 0),
+                              float(getattr(state, "inflation_axis", 0) or 0))
+    except Exception as e:
+        logger.debug(f"timing 국면확률 실패(무시): {e}")
+        return None
+
+
+def _timing_realized_vol_pct(weights_pct: dict[str, float], mk: str) -> float | None:
+    """위험자산 비중 바스켓의 실현 연율 변동성(%) — etf_prices 일별 수익 + Ledoit-Wolf 공분산."""
+    tickers = [t for t, w in weights_pct.items() if w > 0]
+    if len(tickers) < 1:
+        return None
+    try:
+        from src.engine.macro_analytics import _aligned_returns, _closes_map
+        from src.engine.risk_allocations import _cov
+        names, R = _aligned_returns(_closes_map(tickers, mk, 400))
+        if not names or R is None or R.shape[0] < 60:
+            return None
+        w = np.array([max(weights_pct.get(t, 0.0), 0.0) for t in names], dtype=float)
+        s = w.sum()
+        if s <= 0:
+            return None
+        w = w / s
+        var_d = float(w @ _cov(R) @ w)
+        return float(np.sqrt(max(var_d, 0.0) * 252.0) * 100.0)
+    except Exception as e:
+        logger.debug(f"timing 실현변동성 실패(무시): {e}")
+        return None
+
+
 @router.post("/timing")
 def allocation_timing(req: TimingRequest):
     """카나리(자산·지표) 브레드스 게이트 → 위험-온/오프 자산군 스위치 + 추세 오버레이.
@@ -1059,19 +1100,54 @@ def allocation_timing(req: TimingRequest):
         need = req.min_breadth if req.min_breadth > 0 else total
         risk_on = hits >= need
 
-        # 리스크-온/오프 자산군 결정
-        weights: dict[str, float] = {}      # ticker -> weight%
-        if risk_on:
+        # 리스크-온/오프 자산군 구성
+        def _on_basket() -> dict[str, float]:
             if req.risk_on_assets:
-                w = round(100.0 / len(req.risk_on_assets), 2)
-                weights = {t: w for t in req.risk_on_assets}
-            elif req.holdings:
+                w = 100.0 / len(req.risk_on_assets)
+                return {t: w for t in req.risk_on_assets}
+            if req.holdings:
                 tot = sum(max(v, 0.0) for v in req.holdings.values()) or 1.0
-                weights = {t: round(max(v, 0.0) / tot * 100, 2) for t, v in req.holdings.items()}
-        else:
+                return {t: max(v, 0.0) / tot * 100 for t, v in req.holdings.items()}
+            return {}
+
+        def _off_basket() -> dict[str, float]:
             off = req.risk_off_assets or ["IEF", "SHY"]
-            w = round(100.0 / len(off), 2)
-            weights = {t: w for t in off}
+            w = 100.0 / len(off)
+            return {t: w for t in off}
+
+        # 국면-확률 블렌드: 이진 게이트 대신 P(위험선호)로 온/오프 바스켓 연속 혼합(휩쏘 억제)
+        regime_block = None
+        weights: dict[str, float] = {}      # ticker -> weight%
+        if req.regime_blend:
+            probs = _timing_regime_probs(mk)
+            if probs:
+                p_on = float(probs.get("Goldilocks", 0) + probs.get("Reflation", 0))  # 성장+ 국면=위험선호
+                p_on = max(0.0, min(1.0, p_on))
+                on_b, off_b = _on_basket(), _off_basket()
+                for t, w in on_b.items():
+                    weights[t] = weights.get(t, 0.0) + w * p_on
+                for t, w in off_b.items():
+                    weights[t] = weights.get(t, 0.0) + w * (1.0 - p_on)
+                weights = {t: round(v, 2) for t, v in weights.items() if v > 0.05}
+                regime_block = {"probs": probs, "p_risk_on": round(p_on * 100, 1),
+                                "note": "국면확률 가중 연속 노출 — 이진 게이트의 경계 휩쏘를 완화(성장+ 국면=위험선호)."}
+        if not weights:  # 블렌드 미사용/실패 → 기존 이진 게이트
+            src_b = _on_basket() if risk_on else _off_basket()
+            weights = {t: round(v, 2) for t, v in src_b.items()}
+
+        # 목표 변동성(vol targeting): 위험자산 실현 변동성이 목표를 넘으면 노출 축소(잔여=현금)
+        vol_block = None
+        vt_cash = 0.0
+        if req.target_vol_pct is not None and weights:
+            realized = _timing_realized_vol_pct(weights, mk)
+            if realized is not None and realized > 0:
+                scale = min(1.0, float(req.target_vol_pct) / realized)
+                before = sum(weights.values())
+                weights = {t: round(v * scale, 2) for t, v in weights.items()}
+                vt_cash = round(before - sum(weights.values()), 2)
+                vol_block = {"target_pct": req.target_vol_pct, "realized_pct": round(realized, 1),
+                             "scale": round(scale, 3), "cash_added_pct": vt_cash,
+                             "note": "위험자산 실현 변동성 기준 노출 스케일 — CTA/리스크패리티식 연속 리스크 제어."}
 
         # 추세 오버레이 (마켓타이밍) — 추세 이탈 자산은 현금(단기채)으로
         overlay = req.overlay or {}
@@ -1093,7 +1169,7 @@ def allocation_timing(req: TimingRequest):
                 cash_pct += w
             holdings_out.append({"ticker": t, "code": code, "label": name,
                                  "weight": round(wt, 2), "in_trend": in_trend})
-        cash_pct = round(cash_pct, 2)
+        cash_pct = round(cash_pct + vt_cash, 2)   # 추세 이탈 현금 + 목표변동성 현금
         if cash_pct > 0:
             cc, cn = _timing_holding("BIL", mk)
             holdings_out.append({"ticker": "BIL", "code": cc, "label": cn,
@@ -1117,6 +1193,7 @@ def allocation_timing(req: TimingRequest):
                            "hits": hits, "total": total, "need": need, "details": details},
                 "holdings": holdings_out, "cash_pct": cash_pct,
                 "signal_label": signal_label, "overlay": otype,
+                "regime_blend": regime_block, "vol_target": vol_block,
                 "market_timing": market_timing}
     except Exception:
         logger.exception("timing 실패")

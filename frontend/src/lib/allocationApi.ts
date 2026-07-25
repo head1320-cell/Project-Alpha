@@ -223,6 +223,8 @@ export interface TimingInput {
   risk_off_assets: string[];
   holdings?: Record<string, number> | null;
   overlay?: { type: "ma_day" | "abs_mom" | "none"; n?: number; lookback?: number };
+  regime_blend?: boolean;
+  target_vol_pct?: number | null;
 }
 
 export interface TimingAssetTrend {
@@ -242,6 +244,8 @@ export interface TimingResult {
   cash_pct: number;
   signal_label: string;
   overlay: string;
+  regime_blend?: { probs: Record<string, number>; p_risk_on: number; note: string } | null;
+  vol_target?: { target_pct: number; realized_pct: number; scale: number; cash_added_pct: number; note: string } | null;
   market_timing: {
     composite: { score: number; label: string } | null;
     components: { key: string; label: string; value: number | null; score: number; weight: number }[] | null;

@@ -3425,6 +3425,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-fb-apply:hover:not(:disabled) { opacity: .9; }
 .as-fb-apply:disabled { opacity: .45; cursor: default; }
 
+.as-tm-risk { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.as-tm-risk-row { display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 4px 8px; background: rgba(18,0,255,.03); border-left: 2px solid var(--t-accent); border-radius: 2px; }
+.as-tm-risk-k { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-muted); }
+.as-tm-risk-row b { color: var(--t-accent); }
 .as-enb { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--t-surface); font-size: 11px; }
 .as-enb-k { color: var(--t-muted); text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; }
 .as-enb b { font-size: 16px; color: var(--t-accent); }

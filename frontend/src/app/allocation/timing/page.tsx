@@ -30,14 +30,16 @@ const MARKET_GATES: Gate[] = [
     sub: "위험자산이 200일 이동평균 위 → 위험-온 · 아래 → 방어 전환",
     build: (mk) => ({ market: mk,
       canaries: [{ kind: "asset", id: "SPY", signal: "ma_day", lookback: 200, threshold: 0, direction: "above" }],
-      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 } }),
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 },
+      regimeBlend: false, targetVolPct: null }),
   },
   {
     id: "mom13612", label: "가속 모멘텀 게이트 (13612W)",
     sub: "1·3·6·12M 가속 모멘텀 > 0 → 위험-온 (VAA/DAA식)",
     build: (mk) => ({ market: mk,
       canaries: [{ kind: "asset", id: "SPY", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" }],
-      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 } }),
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 },
+      regimeBlend: false, targetVolPct: null }),
   },
   {
     id: "dual", label: "이중 확인 게이트",
@@ -47,14 +49,16 @@ const MARKET_GATES: Gate[] = [
         { kind: "asset", id: "SPY", signal: "ma_day", lookback: 200, threshold: 0, direction: "above" },
         { kind: "asset", id: "EFA", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
       ],
-      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 } }),
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "none", n: 200, lookback: 12 },
+      regimeBlend: false, targetVolPct: null }),
   },
   {
     id: "trend_overlay", label: "추세 + 자산별 청산",
     sub: "게이트 + 보유자산 개별 추세 이탈분 현금화 (백테스터 exit_all 근사)",
     build: (mk) => ({ market: mk,
       canaries: [{ kind: "asset", id: "SPY", signal: "ma_day", lookback: 200, threshold: 0, direction: "above" }],
-      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "ma_day", n: 200, lookback: 12 } }),
+      minBreadth: 0, riskOnAssets: [], riskOffAssets: OFF_DEFENSIVE, overlay: { type: "ma_day", n: 200, lookback: 12 },
+      regimeBlend: false, targetVolPct: null }),
   },
 ];
 
@@ -192,6 +196,22 @@ export default function TimingWorkspace() {
                 onChange={(e) => setCfg({ overlay: { ...timingCfg.overlay, lookback: parseInt(e.target.value) } })} /></label>
           )}
         </section>
+
+        <section className="as-card">
+          <div className="as-card-title">리스크 제어 <span className="as-note-inline">이진 게이트 → 연속 노출</span></div>
+          <label className="as-tm-set" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span>국면-확률 블렌드 <em className="as-note-inline">휩쏘 억제</em></span>
+            <input type="checkbox" checked={timingCfg.regimeBlend}
+              onChange={(e) => setCfg({ regimeBlend: e.target.checked })} />
+          </label>
+          <label className="as-tm-set" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span>목표 변동성(연 %) <em className="as-note-inline">위험자산 노출 스케일</em></span>
+            <input className="as-tm-num" type="number" min={0} max={40} step={1}
+              value={timingCfg.targetVolPct ?? ""} placeholder="off"
+              onChange={(e) => setCfg({ targetVolPct: e.target.value === "" ? null : Math.max(2, Math.min(40, +e.target.value)) })} />
+          </label>
+          <div className="as-note">블렌드: 국면확률로 온/오프 바스켓 연속 혼합. 목표변동성: 실현 변동성이 목표 초과 시 노출 축소(잔여 현금).</div>
+        </section>
       </aside>
 
       {/* ── 우: 판정 · 배분 · 시장 타이밍 ── */}
@@ -209,6 +229,24 @@ export default function TimingWorkspace() {
                 <span className="num">통과 {data.canary.hits} / {data.canary.total} · 필요 {data.canary.need}</span>
                 <span className="as-note-inline">{data.signal_label}</span>
               </div>
+              {(data.regime_blend || data.vol_target) && (
+                <div className="as-tm-risk">
+                  {data.regime_blend && (
+                    <div className="as-tm-risk-row" title={data.regime_blend.note}>
+                      <span className="as-tm-risk-k">국면-확률 블렌드</span>
+                      <b className="num">P(위험선호) {data.regime_blend.p_risk_on}%</b>
+                      <span className="as-note-inline">{Object.entries(data.regime_blend.probs).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(" · ")}</span>
+                    </div>
+                  )}
+                  {data.vol_target && (
+                    <div className="as-tm-risk-row" title={data.vol_target.note}>
+                      <span className="as-tm-risk-k">목표 변동성</span>
+                      <b className="num">{data.vol_target.target_pct}% ← 실현 {data.vol_target.realized_pct}%</b>
+                      <span className="as-note-inline">노출 ×{data.vol_target.scale} · 현금 +{data.vol_target.cash_added_pct}%p</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <table className="as-metrics">
                 <thead><tr><th>카나리</th><th>신호</th><th>값</th><th>통과</th></tr></thead>
                 <tbody>
