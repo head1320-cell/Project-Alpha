@@ -5,7 +5,7 @@
 //   데이터 honesty 배지를 표시. completed → 결과 페이지로 replace. failed/cancelled →
 //   전체 에러 상태(안전 재시도). 서버 영속 상태라 새로고침·직접 URL·네트워크 단절 복구.
 // ═══════════════════════════════════════════════════════════════════════════════
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -50,6 +50,26 @@ export function RunMonitor({ runId }: { runId: string }) {
   // 백엔드는 진짜 없는 실행만 404, DB 일시 오류는 503 → 404만 "만료/잘못된 링크"로 확정 처리.
   const trulyGone = statusQ.isLoadingError && err?.httpStatus === 404;
   const reconnecting = statusQ.isError && !!st && !TERMINAL.includes(st.status as RunStatus);
+
+  // "재연결 중"(폴링 자체가 실패)과 "정상 응답이지만 진행이 오래 안 움직임"(느린 연산)을 구분 —
+  // 둘 다 사용자 눈엔 "안 움직인다"로 보이지만 원인이 달라 문구를 분리해 오해를 줄인다.
+  const lastProgressRef = useRef<{ pct: number; at: number } | null>(null);
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (!st || TERMINAL.includes(st.status as RunStatus)) { lastProgressRef.current = null; setStalled(false); return; }
+    const prev = lastProgressRef.current;
+    if (prev == null || prev.pct !== st.progress_percent) {
+      lastProgressRef.current = { pct: st.progress_percent, at: Date.now() };
+      setStalled(false);
+    }
+  }, [st?.progress_percent, st?.status]);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const prev = lastProgressRef.current;
+      if (prev && !reconnecting) setStalled(Date.now() - prev.at > 45_000);
+    }, 2000);
+    return () => clearInterval(t);
+  }, [reconnecting]);
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -119,6 +139,9 @@ export function RunMonitor({ runId }: { runId: string }) {
             <div className="brun-msg">
               {st.status_message}
               {reconnecting && <span className="brun-reconnect">· 연결이 불안정합니다 — 재시도 중</span>}
+              {!reconnecting && stalled && (
+                <span className="brun-stalled">· 이 실행은 예상보다 오래 걸리고 있습니다 (여전히 실행 중 — 취소/재시도 가능)</span>
+              )}
             </div>
           </div>
 

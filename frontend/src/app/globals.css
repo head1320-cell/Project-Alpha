@@ -3307,7 +3307,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
 /* ── 목표 선택 게이트 ── */
 .aas-gate { max-width: 980px; margin: 0 auto; padding: 22px 8px 40px; display: flex; flex-direction: column; gap: 14px; }
-.aas-gate-crumb { font-size: 11px; color: var(--t-muted); letter-spacing: .05em; text-transform: uppercase; }
 .aas-gate-q { font-size: 26px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.15; margin: 0; }
 .aas-gate-lead { font-size: 12px; color: var(--t-muted); line-height: 1.65; max-width: 740px; margin: 0; }
 .aas-gate-lead b { color: var(--t-ink); font-weight: 600; }
@@ -3839,6 +3838,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-progress i { display: block; height: 100%; background: var(--t-accent); transition: width .5s ease; }
 .brun-msg { font-size: 10.5px; color: var(--t-muted); font-family: var(--t-mono); }
 .brun-reconnect { color: var(--color-caution, #d97706); margin-left: 6px; animation: tpulse 1.4s ease-in-out infinite; }
+.brun-stalled { color: var(--t-muted); margin-left: 6px; }
 .brun-stage { font-size: 12px; }
 
 .brun-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; }

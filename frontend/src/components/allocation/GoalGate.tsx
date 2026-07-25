@@ -142,7 +142,6 @@ export function GoalGate() {
 
   return (
     <div className="aas-gate tpage-fade">
-      <div className="aas-gate-crumb num">MODULE 06 / ALLOCATION STUDIO</div>
       <h1 className="aas-gate-q">어떤 목표의 포트폴리오를 만드시겠습니까?</h1>
       <p className="aas-gate-lead">
         전략 수립을 <b>Setup → Logic → Validation</b> 단계로 순서대로 진행합니다. 목표를 고르면
