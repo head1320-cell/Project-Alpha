@@ -27,9 +27,11 @@ export const MODELS: { id: AllocationModel; label: string }[] = [
   { id: "risk_parity", label: "Risk Parity" },
   { id: "hrp", label: "HRP" },
   { id: "min_var", label: "Min Var" },
+  { id: "max_div", label: "Max Div" },
+  { id: "min_cvar", label: "Min CVaR" },
 ];
 
-export const COV_ONLY: AllocationModel[] = ["risk_parity", "hrp", "min_var"];
+export const COV_ONLY: AllocationModel[] = ["risk_parity", "hrp", "min_var", "max_div", "min_cvar"];
 
 // ── 7단계 순차 리서치 파이프라인 (레퍼런스: Portfolio Visualizer 위저드 / Aladdin / Venn) ──
 // 00 Overview·06 Journal은 북엔드, 01~05는 3 매크로 페이즈(SETUP/LOGIC/VALIDATION).

@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 DELTA_DEFAULT = 2.5   # 위험회피(균형 기대수익 스케일) — risk_allocations와 동일
 TAU_DEFAULT = 0.05    # prior 불확실성 — risk_allocations와 동일
 
-MODELS = ("mvo", "bl", "risk_parity", "hrp", "min_var")
+MODELS = ("mvo", "bl", "risk_parity", "hrp", "min_var", "max_div", "min_cvar")
 
 
 # ── 시가총액 prior ────────────────────────────────────────────────────────────
@@ -105,6 +105,28 @@ def bl_posterior(pi: np.ndarray, sigma: np.ndarray, P: np.ndarray,
 
 
 # ── 모델 스위치 ───────────────────────────────────────────────────────────────
+def effective_number_of_bets(w: np.ndarray, S: np.ndarray) -> float:
+    """Meucci ENB — 상관을 고려한 실질 분산도. Σ의 고유분해로 주성분 포트폴리오의
+    분산 기여 분포 엔트로피 = exp(-Σ pᵢ ln pᵢ). HHI/Neff와 달리 상관을 반영한다.
+    무상관·등리스크면 ENB=N, 완전집중이면 →1. (1 ≤ ENB ≤ N)"""
+    w = np.asarray(w, dtype=float)
+    n = w.size
+    try:
+        vals, vecs = np.linalg.eigh(S)          # Σ = V Λ Vᵀ (대칭)
+        vals = np.maximum(vals, 1e-16)
+        expo = vecs.T @ w                        # 주성분 노출
+        contrib = (expo ** 2) * vals            # 주성분별 분산 기여
+        tot = contrib.sum()
+        if not np.isfinite(tot) or tot <= 0:
+            return float(n)
+        p = contrib / tot
+        p = p[p > 1e-12]
+        ent = -float(np.sum(p * np.log(p)))
+        return float(np.exp(ent))
+    except Exception:
+        return float(n)
+
+
 def _inverse_vol_w(R: np.ndarray) -> np.ndarray:
     vol = R.std(axis=0)
     vol = np.where(vol > 1e-9, vol, 1e-9)
@@ -156,6 +178,20 @@ def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None 
             w = _hrp_weights(S) if _HAS_HCLUST else None
         except Exception:
             w = None
+    elif model == "max_div":
+        # 최대분산(TOBAM): maximize (wᵀσ)/√(wᵀΣw) — risk_allocations.s_max_div 로직 재사용
+        sig = np.sqrt(np.maximum(np.diag(S), 1e-12))
+        w = _opt(lambda x: -(x @ sig) / (np.sqrt(x @ S @ x) + 1e-12), n)
+    elif model == "min_cvar":
+        # 최소 CVaR (Rockafellar-Uryasev) — 히스토리컬 최악 α% 평균손실 최소화
+        alpha = 0.05
+        k = max(1, int(np.ceil(alpha * R.shape[0])))
+
+        def _cvar(x):
+            pl = R @ x                        # 포트 일별 수익
+            worst = np.sort(pl)[:k]           # 최악 α%
+            return -float(worst.mean())       # 손실(음수수익)의 크기 최소화
+        w = _opt(_cvar, n)
     else:  # "mvo" | "bl"
         mu = mu_override if mu_override is not None else R.mean(axis=0) * 252.0
         w = _max_sharpe_w(mu, S, n)

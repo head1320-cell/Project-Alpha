@@ -265,6 +265,18 @@ def _w_dict(names: list[str], w: np.ndarray) -> dict[str, float]:
             if w[i] > 0.0005}
 
 
+def _enb_report(w, S, names: list[str]) -> dict:
+    """실질 분산도 — Meucci ENB(상관 반영) vs Neff(비중 집중만). Explain 패널용."""
+    from src.engine.allocation_studio import effective_number_of_bets
+    wa = np.asarray(w, dtype=float)
+    n = len(names)
+    hhi = float(np.sum(wa ** 2))
+    neff = (1.0 / hhi) if hhi > 0 else float(n)
+    enb = effective_number_of_bets(wa, np.asarray(S, dtype=float))
+    return {"enb": round(enb, 2), "neff": round(neff, 2), "n_assets": n,
+            "note": "ENB는 상관을 반영한 실질 분산 베팅 수(≤ Neff). Neff는 비중 집중만 반영."}
+
+
 # ── /analyze ─────────────────────────────────────────────────────────────────
 @router.post("/analyze")
 def allocation_analyze(req: AnalyzeRequest):
@@ -414,6 +426,7 @@ def allocation_analyze(req: AnalyzeRequest):
             "points": points,
             "risk_contributions": {k: round(float(v) * 100, 2)
                                    for k, v in metrics.risk_contributions.items()},
+            "enb": _enb_report(opt["weights"], opt["sigma_annual"], names),
             "correlation": metrics.correlation_matrix.round(3).to_dict(),
             "summary": {"portfolio": pf_stats, "benchmark": bench_stats or None,
                         "active": active or None,

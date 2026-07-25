@@ -145,6 +145,13 @@ export default function OptimizerWorkspace() {
         <section className="as-card">
           <div className="as-card-title">SUMMARY METRICS</div>
           {result ? <MetricsTable summary={result.summary} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
+          {result?.enb && (
+            <div className="as-enb" title={result.enb.note}>
+              <span className="as-enb-k">실질 분산 (ENB)</span>
+              <b className="num">{result.enb.enb.toFixed(2)}</b>
+              <span className="as-note-inline">/ {result.enb.n_assets}자산 · Neff {result.enb.neff.toFixed(2)} (상관 반영 vs 비중만)</span>
+            </div>
+          )}
         </section>
         <section className="as-card">
           <div className="as-card-title">RETURN DISTRIBUTION <span className="as-note-inline">MC 1년</span></div>

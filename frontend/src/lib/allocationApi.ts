@@ -8,7 +8,7 @@ import { API_BASE } from "@/lib/apiBase";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type AllocationModel = "mvo" | "bl" | "risk_parity" | "hrp" | "min_var";
+export type AllocationModel = "mvo" | "bl" | "risk_parity" | "hrp" | "min_var" | "max_div" | "min_cvar";
 
 export interface AllocationViewInput {
   assets: string[];
@@ -91,6 +91,7 @@ export interface AnalyzeResult {
   points: { current: PointRV; market: PointRV; optimal: PointRV };
   risk_contributions: Record<string, number>;
   correlation: Record<string, Record<string, number>>;
+  enb?: { enb: number; neff: number; n_assets: number; note: string };
   summary: {
     portfolio: SummaryStats;
     benchmark: SummaryStats | null;
