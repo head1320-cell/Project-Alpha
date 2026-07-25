@@ -278,6 +278,43 @@ export interface StressCorrResult {
 
 // ─── Client ──────────────────────────────────────────────────────────────────
 
+export interface BacktestInput {
+  tickers: string[];
+  model?: AllocationModel;
+  views?: AllocationViewInput[];
+  constraints?: ConstraintsInput | null;
+  benchmark?: string;
+  rebalance?: "M" | "Q";
+  window_days?: number | null;      // null = expanding
+  cost_bps?: number;
+  lookback_days?: number;
+  delta?: number;
+  tau?: number;
+}
+
+export interface BacktestResult {
+  error: boolean;
+  message?: string;
+  dates?: string[];
+  equity_curve?: number[];
+  bench_curve?: number[] | null;
+  drawdown_curve?: number[];
+  rebalances?: { date: string; weights: Record<string, number>; turnover_pct: number }[];
+  n_rebalances?: number;
+  turnover_avg_pct?: number;
+  metrics?: Record<string, number | null>;
+  summary?: {
+    total_return_pct: number; cagr_pct: number; volatility_pct: number;
+    sharpe_ratio: number; sortino_ratio: number; calmar_ratio: number; max_drawdown_pct: number;
+    active_return_pct: number | null; information_ratio: number | null;
+  };
+  config?: { model: string; rebalance: string; window: string; cost_bps: number; n_obs: number };
+  labels?: Record<string, string>;
+  coverage?: { source?: string; start?: string; end?: string; n_obs?: number };
+  benchmark_label?: string | null;
+  excluded?: { ticker: string; reason: string }[];
+}
+
 export const allocationApi = {
   analyze: async (req: AnalyzeRequest): Promise<AnalyzeResult> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/analyze`, {
@@ -286,6 +323,16 @@ export const allocationApi = {
       body: JSON.stringify(req),
     });
     if (!r.ok) throw new Error(`Allocation analyze failed: ${r.status}`);
+    return r.json();
+  },
+
+  backtest: async (req: BacktestInput): Promise<BacktestResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/backtest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`Allocation backtest failed: ${r.status}`);
     return r.json();
   },
 

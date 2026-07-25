@@ -13,6 +13,7 @@ import { ResearchRunsPanel } from "@/components/allocation/ResearchRunsPanel";
 import { ResearchTimeline } from "@/components/allocation/ResearchTimeline";
 import { DecisionJournal } from "@/components/allocation/DecisionJournal";
 import { StrategyHealthPanel } from "@/components/allocation/StrategyHealthPanel";
+import { PolicyBacktest } from "@/components/allocation/PolicyBacktest";
 
 function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () => void }) {
   const [text, setText] = useState(study.review || "");
@@ -76,6 +77,11 @@ export default function JournalWorkspace() {
   return (
     <div className="as-ws2 as-ws-jr">
       <aside className="as-center">
+        <section className="as-card">
+          <div className="as-card-title">정책 백테스트 (Walk-Forward · OOS)
+            <span className="as-note-inline">현재 모델·뷰·제약을 시점 밖으로 재현 — 신뢰도 검증</span></div>
+          <PolicyBacktest />
+        </section>
         <section className="as-card">
           <div className="as-card-title">NEW JOURNAL ENTRY <span className="as-note-inline">Macro View → Changed → Reason → Result → Review</span></div>
           <label className="as-jr-field"><em>이름</em>

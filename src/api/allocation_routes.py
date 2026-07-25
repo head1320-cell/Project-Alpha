@@ -73,6 +73,21 @@ class AnalyzeRequest(BaseModel):
     run_name: str | None = Field(None, max_length=200)
 
 
+class BacktestRequest(BaseModel):
+    """정책 walk-forward 백테스트 — /analyze 와 동일 정책(모델·뷰·제약)을 OOS로 재현."""
+    tickers: list[str] = Field(..., min_length=2, max_length=30)
+    model: str = "mvo"                                # mvo|bl|risk_parity|hrp|min_var
+    views: list[AllocationView] | None = None
+    constraints: ConstraintsInput | None = None
+    benchmark: str = "KOSPI"
+    rebalance: str = Field("M", pattern="^[MQ]$")     # M=월 · Q=분기
+    window_days: int | None = Field(None, ge=63, le=1260)   # None=expanding, 값=rolling
+    cost_bps: float = Field(10.0, ge=0, le=100)       # 편도 회전율 비용(bp)
+    lookback_days: int = Field(1008, ge=252, le=3650)  # 기본 ~4년(리밸런싱 충분)
+    delta: float = Field(2.5, ge=0.5, le=10)
+    tau: float = Field(0.05, ge=0.001, le=1.0)
+
+
 class XrayRequest(BaseModel):
     holdings: dict[str, float] = Field(..., min_length=1)   # {code: weight_pct}
 
@@ -432,6 +447,45 @@ def allocation_analyze(req: AnalyzeRequest):
         raise
     except Exception:
         logger.exception("allocation analyze 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ── /backtest — 정책 walk-forward(OOS) ────────────────────────────────────────
+@router.post("/backtest")
+def allocation_backtest(req: BacktestRequest):
+    """정책(모델+뷰+제약+리밸런싱+비용)을 시점 밖으로 재현 — 각 리밸런싱 가중치는
+    과거 데이터로만 산출(look-ahead 없음). OOS 자산곡선 + compute_metrics 지표 반환."""
+    try:
+        returns, bench, excluded, coverage = _load_clean_returns(
+            req.tickers, req.benchmark, req.lookback_days)
+        if returns is None or len(returns.columns) < 2:
+            return {"error": True, "excluded": excluded,
+                    "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요."}
+
+        names = list(returns.columns)
+        from src.engine.allocation_backtest import walk_forward
+        cobj = None
+        if req.constraints is not None:
+            from src.engine.constrained_opt import Constraints
+            cobj = Constraints(**req.constraints.model_dump())
+        views = [v.model_dump() for v in (req.views or [])]
+        bench_arr = (bench.reindex(returns.index).fillna(0.0).values
+                     if bench is not None else None)
+
+        out = walk_forward(
+            names, returns.values, list(returns.index),
+            model=req.model, views=views or None, constraints=cobj,
+            rebalance=req.rebalance, window_days=req.window_days,
+            cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau)
+
+        out["excluded"] = excluded
+        if not out.get("error"):
+            out["labels"] = _labels(names)
+            out["coverage"] = coverage
+            out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
+        return out
+    except Exception:
+        logger.exception("allocation backtest 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 

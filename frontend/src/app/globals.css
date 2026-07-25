@@ -3424,6 +3424,26 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-fb-apply { border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent); color: #fff; font-size: 10.5px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
 .as-fb-apply:hover:not(:disabled) { opacity: .9; }
 .as-fb-apply:disabled { opacity: .45; cursor: default; }
+
+/* ── Policy Backtest (walk-forward OOS) ── */
+.as-bt-controls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.as-bt-controls .as-tm-set { margin-top: 0; }
+.as-bt-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 6px; font-size: 10.5px; color: var(--t-muted); }
+.as-bt-badge { font-size: 9.5px; font-weight: 600; letter-spacing: .03em; padding: 2px 7px; border-radius: 2px; border: 1px solid var(--t-border); background: var(--t-surface); color: var(--t-muted); }
+.as-bt-badge.mock { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.as-bt-badge.real { color: #16a34a; background: #dcfce7; border-color: #bbf7d0; }
+.as-bt-badge.ok { color: var(--t-accent); background: rgba(18,0,255,.05); border-color: rgba(18,0,255,.2); }
+.as-bt-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 8px 0; }
+.as-bt-kpi { border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); padding: 6px 8px; }
+.as-bt-kpi-l { font-size: 8.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--t-muted); }
+.as-bt-kpi-v { font-size: 15px; font-weight: 700; color: var(--t-ink); }
+.as-bt-card { margin-top: 10px; }
+.as-bt-t { font-size: 11px; font-weight: 600; color: var(--t-ink); margin-bottom: 4px; }
+.as-bt-wtbl-wrap { overflow-x: auto; }
+.as-bt-wtbl { width: 100%; border-collapse: collapse; font-size: 10.5px; white-space: nowrap; }
+.as-bt-wtbl th { text-align: right; font-size: 9px; color: var(--t-muted); border-bottom: 1px solid var(--t-border); padding: 4px 7px; font-weight: 500; }
+.as-bt-wtbl th:first-child, .as-bt-wtbl td:first-child { text-align: left; }
+.as-bt-wtbl td { text-align: right; padding: 3px 7px; border-bottom: 1px solid var(--t-surface); font-variant-numeric: tabular-nums; }
 .as-fb-code { color: var(--t-muted); font-size: 9.5px; }
 
 /* Timing (03 — 카나리·마켓타이밍) */
