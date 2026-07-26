@@ -29,6 +29,9 @@ FastAPI + Next.js 14 App Router + PostgreSQL. docker-compose 3컨테이너
 
 **프론트엔드는 Feature-Sliced Design** — 의존 방향은 위에서 아래로만.
 각 슬라이스의 `index.ts`가 Public API이니 **내부 구현을 뒤지지 말고 배럴만 읽으세요.**
+단 **배럴은 "발견"용, `import`는 실제 모듈에서** — 배럴로 import하면 그 슬라이스 전부가
+번들에 끌려옵니다(실측: `@/entities/backtest` 배럴이 30KB `genportFactors.json`을
+`/allocation`까지 끌고 가 First Load +9KB. 모듈 직접 import로 111KB로 회복).
 
 | 계층 | 내용 |
 |---|---|

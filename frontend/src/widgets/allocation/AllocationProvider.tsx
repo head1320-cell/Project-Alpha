@@ -17,7 +17,7 @@ import {
 } from "@/entities/allocation/api";
 import { saveStudy, type AllocationStudy } from "@/shared/lib/allocationStorage";
 import { researchApi } from "@/entities/research/api";
-import type { TacticalStrategy } from "@/shared/api/screenerApi";
+import type { TacticalStrategy } from "@/entities/macro";
 import type { Holding } from "./PortfolioBuilder";
 import type { TimelineEvent } from "./ResearchTimeline";
 

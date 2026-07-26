@@ -2,7 +2,7 @@
 // FinancialsDeepTab — FDD 실무: QoE(NI vs OCF)·Red Flag·NWC·자본배치 워터폴·듀폰(보조).
 // 마운트 시 1콜(financialDeep). 미적재면 note 그대로 렌더(정직).
 import { useEffect, useState } from "react";
-import { companyApi, type FinancialDeep } from "@/shared/api/screenerApi";
+import { companyApi, type FinancialDeep } from "@/entities/company";
 
 const eokF = (v: number | null | undefined) =>
   v == null ? "—" : `${Math.round(v).toLocaleString()}억`;

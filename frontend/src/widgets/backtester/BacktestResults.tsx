@@ -12,7 +12,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
-import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } from "@/shared/api/screenerApi";
+import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } from "@/entities/backtest/bridgeModel";
 
 type Stat = keyof BacktestStatistics;
 interface MetricDef { k: Stat; label: string; tip: string; suffix?: string; digits?: number; signed?: boolean }

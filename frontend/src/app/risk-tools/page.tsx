@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { analysisApi } from "@/shared/api/screenerApi";
+import { analysisApi } from "@/entities/macro";
 import SectionHead from "@/widgets/layout/SectionHead";
 import { StatGrid, Stat, MiniViz } from "@/shared/ui/MiniViz";
 import { LoadingState } from "@/widgets/layout/States";

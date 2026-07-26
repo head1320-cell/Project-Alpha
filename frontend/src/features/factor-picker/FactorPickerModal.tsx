@@ -9,7 +9,8 @@ import { Search, X, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, Check, Ext
 import { type GpFactor } from "@/entities/backtest/factorCatalog";
 import { BUTLER_CATEGORIES, butlerToken } from "@/entities/backtest/butlerFactors";
 import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from "@/entities/backtest/factorFunctions";
-import { backtestBridgeApi, type TokenSupportMap } from "@/shared/api/screenerApi";
+import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
+import { type TokenSupportMap } from "@/entities/backtest/bridgeModel";
 import { TONES, type Tone } from "@/shared/ui/kit";
 
 // 지원 맵 모듈 캐시 — 백엔드(/condition-tokens)가 단일 진실 공급원.

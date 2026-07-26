@@ -12,7 +12,7 @@ import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
-import type { BacktestStatistics } from "@/shared/api/screenerApi";
+import type { BacktestStatistics } from "@/entities/backtest/bridgeModel";
 
 interface Row { k: keyof BacktestStatistics; label: string; suffix?: string; digits?: number; higherBetter: boolean }
 const CMP_METRICS: Row[] = [

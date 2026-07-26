@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { X } from "lucide-react";
 import { zScoreColor, type YieldCurvePoint, type MacroSeries } from "@/entities/macro/api";
-import type { MacroIndicator, MacroTheme, TacticalHolding } from "@/shared/api/screenerApi";
+import type { MacroIndicator, MacroTheme, TacticalHolding } from "@/entities/macro";
 
 // ── 포맷·색 helpers ──
 export const fmtNum = (v: number | null | undefined, d = 2): string =>

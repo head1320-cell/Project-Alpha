@@ -1,7 +1,7 @@
 // 스크리너 조건 프리셋 저장/불러오기 (localStorage 기반)
 // 사용자가 자주 쓰는 필터 조합을 이름 붙여 저장하고 재사용.
 
-import type { FilterGroupNode } from "@/shared/api/screenerApi";
+import type { FilterGroupNode } from "@/shared/model";
 
 export interface ScreenerPreset {
   id: string;

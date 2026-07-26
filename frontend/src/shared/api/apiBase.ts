@@ -42,3 +42,28 @@ function resolveApiBase(): string {
 }
 
 export const API_BASE: string = resolveApiBase();
+
+// FastAPI 에러 응답의 detail을 사람이 읽을 수 있는 문자열로 변환.
+// 보통은 string이지만, Pydantic 422 검증 실패는 detail이 [{loc,msg,type}, ...] 배열로 옴 —
+// 이를 그대로 new Error()에 넣으면 "[object Object]"로 뭉개지므로 여기서 join.
+export function extractErrorDetail(err: unknown, fallback: string): string {
+  const detail = (err as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((d) => {
+        if (d && typeof d === "object") {
+          const loc = Array.isArray((d as { loc?: unknown[] }).loc) ? (d as { loc: unknown[] }).loc.join(".") : "";
+          const msg = (d as { msg?: string }).msg ?? JSON.stringify(d);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(d);
+      })
+      .join("; ");
+  }
+  return fallback;
+}
+
+/** JSON POST 단축 — 응답 파싱/에러 처리는 호출자 책임(기존 동작 유지). */
+export const postJson = (path: string, body: unknown) =>
+  fetch(`${API_BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

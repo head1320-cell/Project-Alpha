@@ -3,4 +3,3 @@
 // legacyApi: 이름 충돌로 배럴 제외 — `@/shared/api/legacyApi` 로 직접 import
 export * from "./apiBase";
 export * from "./queryClient";
-export * from "./screenerApi";

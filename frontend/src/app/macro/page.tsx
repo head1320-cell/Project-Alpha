@@ -7,7 +7,7 @@ import { LoadingState, ErrorState } from "@/widgets/layout/States";
 import MacroCockpit, { type TransplantPayload } from "@/widgets/macro/MacroCockpit";
 import { loadStrategyBacktestConfig, type MacroCore } from "@/entities/macro/data";
 import { setMacroHandoff } from "@/shared/lib/macroHandoff";
-import { analysisApi } from "@/shared/api/screenerApi";
+import { analysisApi } from "@/entities/macro";
 import { macroApi } from "@/entities/macro/api";
 
 export default function MacroPage() {

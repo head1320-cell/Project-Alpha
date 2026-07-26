@@ -12,7 +12,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/widgets/layout/States";
 import { macroApi, type RegimeState, REGIME_COLORS } from "@/entities/macro/api";
-import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/shared/api/screenerApi";
+import { companyApi } from "@/entities/company";
+import { screenerApiAdvanced } from "@/entities/screener/api/ast";
+import type { ScreenerItem } from "@/shared/model";
 import { API_BASE } from "@/shared/api/apiBase";
 
 const MODULES = [

@@ -10,11 +10,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import {
-  screenerApiAdvanced, screenerApi, verdictColor,
-  type FieldsCatalog, type TechnicalIndicatorCatalog,
-  type FilterGroupNode, type FilterConditionNode, type ScreenerResponse, type ScreenerItem,
-} from "@/shared/api/screenerApi";
+import { screenerApiAdvanced } from "@/entities/screener/api/ast";
+import { screenerApi } from "@/entities/screener/api/core";
+import { type ScreenerResponse, type TechnicalIndicatorCatalog } from "@/entities/screener/model";
+import type { FieldsCatalog, FilterConditionNode, FilterGroupNode, ScreenerItem } from "@/shared/model";
+import { verdictColor } from "@/shared/lib/format";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";
 import { parseExpr, materialize, type ExprNode } from "@/shared/lib/exprParser";

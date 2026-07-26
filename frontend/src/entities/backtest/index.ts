@@ -12,3 +12,5 @@ export * from "./sortFields";
 export * from "./strategy";
 export * from "./strategyLibrary";
 export * from "./universeApi";
+export * from "./bridgeModel";
+export * from "./bridgeApi";

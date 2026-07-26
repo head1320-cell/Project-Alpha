@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { backtestBridgeApi, type ScreenToBacktestResult } from "@/shared/api/screenerApi";
+import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
+import { type ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
 import type { BuilderState } from "@/entities/strategy/model";
 
 // ═══════════════════════════════════════════════════════════════════════════════

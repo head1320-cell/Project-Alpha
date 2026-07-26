@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import CompanyCockpit, { type LazyLoaders } from "@/widgets/company/CompanyCockpit";
 import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/entities/company/data";
-import { companyApi } from "@/shared/api/screenerApi";
+import { companyApi } from "@/entities/company";
 import { LoadingState, ErrorState } from "@/widgets/layout/States";
 
 const QUICK = [

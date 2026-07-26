@@ -8,7 +8,7 @@
  */
 
 import { API_BASE } from "@/shared/api/apiBase";
-import type { ScreenToBacktestResult } from "@/shared/api/screenerApi";
+import type { ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
 
 export type RunStatus =
   | "draft" | "queued" | "validating" | "loading_data" | "simulating"

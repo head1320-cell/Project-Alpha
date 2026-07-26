@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, X } from "lucide-react";
 import { useBuilderStore } from "@/features/strategy-builder/store";
-import { screenerApiAdvanced } from "@/shared/api/screenerApi";
+import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import type { BuilderCondition, ConditionOperand, ConditionOperator } from "@/entities/strategy/model";
 
 const OPS: { value: ConditionOperator; label: string }[] = [

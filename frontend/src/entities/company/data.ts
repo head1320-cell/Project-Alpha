@@ -3,10 +3,9 @@
 //   코어: 병렬 로드(byTicker + evaluate×3 + financial + prices + 표본 + 피어 + fields)
 //   lazy: network / signal / risk / narrative / macro
 // ═══════════════════════════════════════════════════════════════════════════════
-import {
-  companyApi, screenerApiAdvanced,
-  type ScreenerItem, type ValuationDetail, type FieldsCatalog, type FinancialHistory, type PriceBar,
-} from "@/shared/api/screenerApi";
+import { companyApi, type FinancialHistory, type PriceBar } from "@/entities/company";
+import { screenerApiAdvanced } from "@/entities/screener/api/ast";
+import type { FieldsCatalog, ScreenerItem, ValuationDetail } from "@/shared/model";
 import type { RegimeState } from "@/entities/macro/api";
 import type {
   CompanyData, FactorGroup, FactorVal, ModelResult, Scenario, YearFin, QuarterFin, PricePt, Peer,

@@ -7,10 +7,9 @@ import {
   ComposedChart, Line, Cell,
 } from "recharts";
 import { TrendingDown, TrendingUp, Minus, Info, X } from "lucide-react";
-import {
-  screenerApi, formatKrw, formatPct, verdictColor, gapColor,
-  type ValuationDetail, type ScreenerItem,
-} from "@/shared/api/screenerApi";
+import { screenerApi } from "@/entities/screener/api/core";
+import type { ScreenerItem, ValuationDetail } from "@/shared/model";
+import { formatKrw, formatPct, gapColor, verdictColor } from "@/shared/lib/format";
 
 /**
  * StockDetail — 종목 가치평가 상세 대시보드

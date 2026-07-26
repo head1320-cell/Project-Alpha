@@ -4,7 +4,8 @@
 // 백엔드 POST /allocation/factor-portfolio (스크리너 팩터 스토어 + allocation 가중 엔진 재사용).
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { type FieldMeta, screenerApiAdvanced } from "@/shared/api/screenerApi";
+import { screenerApiAdvanced } from "@/entities/screener/api/ast";
+import type { FieldMeta } from "@/shared/model";
 import { allocationApi, type FactorWeighting } from "@/entities/allocation/api";
 import type { Holding } from "./PortfolioBuilder";
 

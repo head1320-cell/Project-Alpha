@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  backtestBridgeApi, type ScreenToBacktestResult,
-  type FilterGroupNode,
-} from "@/shared/api/screenerApi";
+import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
+import { type ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
+import type { FilterGroupNode } from "@/shared/model";
 
 // 대형주 유니버스 필터 (기본)
 function largeCapFilter(): FilterGroupNode {

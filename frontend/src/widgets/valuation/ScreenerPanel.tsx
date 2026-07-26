@@ -5,10 +5,10 @@ import {
   Search, RefreshCw, Loader2, TrendingDown, TrendingUp, Minus,
   ChevronRight, Sliders, Award,
 } from "lucide-react";
-import {
-  screenerApi, formatPct, verdictColor,
-  type ScreenerItem, type ScreenerFilters, type ScreenerResponse,
-} from "@/shared/api/screenerApi";
+import { screenerApi } from "@/entities/screener/api/core";
+import { type ScreenerFilters, type ScreenerResponse } from "@/entities/screener/model";
+import type { ScreenerItem } from "@/shared/model";
+import { formatPct, verdictColor } from "@/shared/lib/format";
 
 /**
  * ScreenerPanel — 필터 컨트롤 + 결과 리더보드 + Quick Flip

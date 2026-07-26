@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { X, Check, ArrowRight, ShieldCheck, Save, FolderOpen, Sparkles, Pencil } from "lucide-react";
 import FormulaBuilder, { buildExpr, buildLabel, type FormulaToken } from "./FormulaBuilder";
-import { backtestBridgeApi } from "@/shared/api/screenerApi";
+import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import {
   listConditionSets, saveConditionSet, deleteConditionSet, cloneConditions,
   type SavedConditionSet,

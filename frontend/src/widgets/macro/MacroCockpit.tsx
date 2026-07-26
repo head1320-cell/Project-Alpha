@@ -13,12 +13,8 @@ import {
 } from "lucide-react";
 import type { MacroSeries } from "@/entities/macro/api";
 import { stressColor } from "@/entities/macro/api";
-import type {
-  MacroStrategies, MacroRecommend, TacticalStrategy, TacticalHolding,
-  MacroCorrelations, MacroTiming, MacroTrajectory, StrategyDetail,
-  CbSentiment, CausalGraph,
-} from "@/shared/api/screenerApi";
-import { analysisApi } from "@/shared/api/screenerApi";
+import type { CausalGraph, CbSentiment, MacroCorrelations, MacroRecommend, MacroStrategies, MacroTiming, MacroTrajectory, StrategyDetail, TacticalHolding, TacticalStrategy } from "@/entities/macro";
+import { analysisApi } from "@/entities/macro";
 import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
   loadCorrelations, loadTiming, loadTrajectory, loadStrategyDetail,
@@ -37,7 +33,7 @@ import {
   CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
   RegimeDonutCard, StressModeCard,
 } from "./visualParts";
-import type { CycleStrips, AxisHistory, AssetStrips, KrUsCompare } from "@/shared/api/screenerApi";
+import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro";
 
 const TABS = [
   { id: "overview", label: "Overview", n: "01", icon: LayoutDashboard },

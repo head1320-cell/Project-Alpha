@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { backtestBridgeApi } from "@/shared/api/screenerApi";
+import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { macroApi, type RegimeState } from "@/entities/macro/api";
 import type { AllocationModel, AllocationViewInput } from "@/entities/allocation/api";
 import { equalize, type Holding } from "./PortfolioBuilder";

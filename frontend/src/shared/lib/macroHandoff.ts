@@ -2,7 +2,7 @@
 // screenerHandoff와 동일 패턴: 모듈 store + sessionStorage 폴백.
 // 전략 백테스트 버튼이 backtest-config(mode별 구성)를 담아 백테스터가 그대로 셋업.
 
-import type { StrategyBacktestConfig } from "@/shared/api/screenerApi";
+import type { StrategyBacktestConfig } from "@/entities/macro";
 
 export interface MacroBacktestHandoff {
   config: StrategyBacktestConfig;

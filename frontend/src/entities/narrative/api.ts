@@ -5,6 +5,7 @@
  */
 
 import { API_BASE } from "@/shared/api/apiBase";
+import type { ValuationDetail } from "@/shared/model";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
