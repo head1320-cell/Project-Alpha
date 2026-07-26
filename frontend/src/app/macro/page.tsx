@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { LoadingState, ErrorState } from "@/widgets/layout/States";
+import { LoadingState, ErrorState } from "@/shared/ui/States";
 import MacroCockpit, { type TransplantPayload } from "@/widgets/macro/MacroCockpit";
 import { loadStrategyBacktestConfig, type MacroCore } from "@/entities/macro/data";
-import { setMacroHandoff } from "@/shared/lib/macroHandoff";
-import { analysisApi } from "@/entities/macro";
+import { setMacroHandoff } from "@/entities/macro/handoff";
+import { analysisApi } from "@/entities/macro/analysisApi";
 import { macroApi } from "@/entities/macro/api";
 
 export default function MacroPage() {

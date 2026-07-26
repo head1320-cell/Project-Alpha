@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { TrendingDown, TrendingUp, Minus, Info, X } from "lucide-react";
 import { screenerApi } from "@/entities/screener/api/core";
-import type { ScreenerItem, ValuationDetail } from "@/shared/model";
+import type { ScreenerItem, ValuationDetail } from "@/shared/model/domain";
 import { formatKrw, formatPct, gapColor, verdictColor } from "@/shared/lib/format";
 
 /**

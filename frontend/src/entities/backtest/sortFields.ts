@@ -1,4 +1,4 @@
-import type { ScreenerItem } from "@/shared/model";
+import type { ScreenerItem } from "@/shared/model/domain";
 // 매수 우선순위 정렬 필드 — 백엔드 ScreenerItem 속성과 1:1 (screen-to-backtest sort_by).
 // 후보 풀 정렬 = 엔진 매수 순회 순서 → 동시 신호 시 매수 우선순위가 된다.
 

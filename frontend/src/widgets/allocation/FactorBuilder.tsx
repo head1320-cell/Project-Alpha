@@ -5,7 +5,7 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
-import type { FieldMeta } from "@/shared/model";
+import type { FieldMeta } from "@/shared/model/domain";
 import { allocationApi, type FactorWeighting } from "@/entities/allocation/api";
 import type { Holding } from "./PortfolioBuilder";
 

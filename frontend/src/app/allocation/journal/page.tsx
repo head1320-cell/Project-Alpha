@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { macroApi, type RegimeState } from "@/entities/macro/api";
 import {
   deleteStudy, listStudies, updateStudyReview, type AllocationStudy,
-} from "@/shared/lib/allocationStorage";
+} from "@/entities/allocation/storage";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { ResearchRunsPanel } from "@/widgets/allocation/ResearchRunsPanel";
 import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";

@@ -5,7 +5,7 @@
  * ==========================================================================
  *  · Skeleton / SkeletonText / SkeletonCard / SkeletonTable
  *  · TickValue       — 수치 변경 시 0.6초 flash + tabular-nums
- *  · RegimeBadge     — Phase 4 Stress 기반 모드 표시 (헤더)
+ *  (RegimeBadge / useRegimeInfo 는 macroApi 의존이라 entities/macro 로 이동)
  *  · MetricCard      — 균질 KPI 카드
  *  · Sparkline       — 미니 SVG line
  *  · CommandPalette  — Ctrl+K 전역 검색 (자체 구현)
@@ -20,7 +20,6 @@ import {
   Wrench, ArrowRight, Hash, Command, CheckCircle2,
   TrendingUp, TrendingDown, Activity,
 } from "lucide-react";
-import { macroApi } from "@/entities/macro/api";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -99,54 +98,7 @@ export function TickValue({
   return <span className={`tabular-nums ${flashCls} ${className}`}>{formatted}{suffix}</span>;
 }
 
-// ─── RegimeBadge ────────────────────────────────────────────────────────────────
 
-interface RegimeInfo { regime: string; mode: "NORMAL" | "CAUTIOUS" | "DEFENSIVE"; stress: number; }
-
-export function useRegimeInfo() {
-  const [info, setInfo] = useState<RegimeInfo | null>(null);
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await macroApi.regime();
-        setInfo({ regime: r.regime, mode: r.recommended_mode, stress: r.stress_score });
-      } catch {}
-    };
-    load();
-    const t = setInterval(load, 60000);
-    return () => clearInterval(t);
-  }, []);
-  return info;
-}
-
-export function RegimeBadge() {
-  const info = useRegimeInfo();
-  if (!info) return <Skeleton className="h-5" style={{ width: 90 }} />;
-
-  const color =
-    info.mode === "DEFENSIVE" ? { bg: "#fee2e2", fg: "#b91c1c", dot: "#dc2626", glow: "#dc2626" } :
-    info.mode === "CAUTIOUS"  ? { bg: "#fef3c7", fg: "#a16207", dot: "#f59e0b", glow: "#f59e0b" } :
-                                  { bg: "#dcfce7", fg: "#15803d", dot: "#22c55e", glow: "#22c55e" };
-
-  return (
-    <Link
-      href="/macro"
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[10px] font-bold transition hover:scale-105"
-      style={{ background: color.bg, color: color.fg }}
-      title={`현재 시장 국면 — Stress ${info.stress.toFixed(0)} / 100`}
-    >
-      <span
-        className="inline-block rounded-full animate-pulse-glow"
-        style={{ width: 6, height: 6, background: color.dot, ["--glow-color" as string]: `${color.glow}66` } as React.CSSProperties}
-      />
-      <span className="uppercase tracking-wider">{info.regime}</span>
-      <span className="opacity-60">·</span>
-      <span>{info.stress.toFixed(0)}</span>
-    </Link>
-  );
-}
-
-// ─── MetricCard ────────────────────────────────────────────────────────────────
 
 export function MetricCard({
   label, value, unit = "", delta, sublabel, color = "#1200ff", icon: Icon,

@@ -15,9 +15,9 @@ import {
   type CanaryInput, type ConstraintsInput, type StressResult, type StressScenarioMeta,
   type TimingResult, type XrayResult,
 } from "@/entities/allocation/api";
-import { saveStudy, type AllocationStudy } from "@/shared/lib/allocationStorage";
+import { saveStudy, type AllocationStudy } from "@/entities/allocation/storage";
 import { researchApi } from "@/entities/research/api";
-import type { TacticalStrategy } from "@/entities/macro";
+import type { TacticalStrategy } from "@/entities/macro/analysisModel";
 import type { Holding } from "./PortfolioBuilder";
 import type { TimelineEvent } from "./ResearchTimeline";
 

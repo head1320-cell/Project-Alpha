@@ -2,7 +2,7 @@
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 
 import { API_BASE, postJson } from "@/shared/api/apiBase";
-import type { GraphRelations, ScreenerItem, ValuationDetail } from "@/shared/model";
+import type { FieldsCatalog, GraphRelations, ScreenerItem, ValuationDetail } from "@/shared/model/domain";
 import type {
   EvaluateOverrides,
   FinancialDeep,
@@ -16,6 +16,14 @@ import type {
 } from "./model";
 
 export const companyApi = {
+  /** 필드 카탈로그(퍼센타일 라벨용). screener가 소유한 엔드포인트지만 entity→entity 런타임
+   *  의존을 만들지 않으려고 여기서 직접 읽는다 — 같은 경로·같은 응답. */
+  fieldsCatalog: async (): Promise<FieldsCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/fields`);
+    if (!r.ok) throw new Error(`Fields fetch failed: ${r.status}`);
+    return r.json();
+  },
+
   // 단일 종목 — 116팩터 + 점수 + valuation 요약 (custom_tickers로 임의 종목 대응)
   byTicker: async (code: string): Promise<ScreenerItem | null> => {
     const r = await postJson(`/api/v1/screener/run-advanced`, {

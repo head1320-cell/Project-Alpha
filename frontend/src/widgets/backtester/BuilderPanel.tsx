@@ -7,9 +7,7 @@ import { PRESET_STRATEGIES } from "@/features/strategy-builder/presets";
 import { IndicatorPanel } from "@/features/strategy-builder/IndicatorPanel";
 import { ConditionPanel } from "@/features/strategy-builder/ConditionPanel";
 import { RiskPanel, MetaPanel, PreviewPanel } from "@/features/strategy-builder/Panels";
-import {
-  Tabs, Spinner, Section, Field, ErrorMsg,
-} from "@/shared/ui";
+import { ErrorMsg, Field, Section, Spinner, Tabs } from "@/shared/ui/primitives";
 import { Upload, RotateCcw, FileCode, Sparkles, BookOpen } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";

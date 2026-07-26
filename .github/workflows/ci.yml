@@ -58,6 +58,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # FSD 의존 규칙(역방향·peer import 금지)을 여기서 강제한다.
+      # .eslintrc.js 가 실제 디렉터리에서 zone 을 생성하므로 슬라이스 추가 시 설정 수정 불필요.
+      # 기존 lint 백로그는 warning 으로 남겨 두었고, error 만 차단한다.
+      - name: Lint (FSD dependency rules)
+        run: npx eslint src --ext .ts,.tsx --max-warnings=-1
+
       - name: Type check
         run: npx tsc --noEmit
 

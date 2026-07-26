@@ -2,7 +2,7 @@
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 
 import { API_BASE } from "@/shared/api/apiBase";
-import type { FilterGroupNode } from "@/shared/model";
+import type { FilterGroupNode } from "@/shared/model/domain";
 
 export interface TradingMode {
   mode: "mock" | "paper" | "real";

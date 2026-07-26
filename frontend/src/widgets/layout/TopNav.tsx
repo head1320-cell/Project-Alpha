@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { RegimeBadge, CommandHint, useRegimeInfo } from "@/shared/ui";
+import { CommandHint } from "@/shared/ui/feedback";
+import { RegimeBadge, useRegimeInfo } from "@/entities/macro/RegimeBadge";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";

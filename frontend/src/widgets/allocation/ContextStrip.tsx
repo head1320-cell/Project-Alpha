@@ -7,7 +7,8 @@ import React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { macroApi, REGIME_COLORS, zScoreColor, type RegimeState } from "@/entities/macro/api";
-import { analysisApi, type MacroIndicator } from "@/entities/macro";
+import { analysisApi } from "@/entities/macro/analysisApi";
+import { type MacroIndicator } from "@/entities/macro/analysisModel";
 
 const CANARY: { id: string; label: string }[] = [
   { id: "VIXCLS", label: "VIX" },

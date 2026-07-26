@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import { screenerApi } from "@/entities/screener/api/core";
 import { type ScreenerResponse, type TechnicalIndicatorCatalog } from "@/entities/screener/model";
-import type { FieldsCatalog, FilterConditionNode, FilterGroupNode, ScreenerItem } from "@/shared/model";
+import type { FieldsCatalog, FilterConditionNode, FilterGroupNode, ScreenerItem } from "@/shared/model/domain";
 import { verdictColor } from "@/shared/lib/format";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";

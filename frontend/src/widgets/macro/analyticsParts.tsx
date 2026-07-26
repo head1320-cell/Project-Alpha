@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, LineChart, Line, AreaChart, Area, ScatterChart, Scatter,
   ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import type { MacroCorrelations, MacroTiming, TimingComponent, TrajectoryPoint, TrendRow } from "@/entities/macro";
+import type { MacroCorrelations, MacroTiming, TimingComponent, TrajectoryPoint, TrendRow } from "@/entities/macro/analysisModel";
 
 const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 const PAIR_COLORS: Record<string, string> = {

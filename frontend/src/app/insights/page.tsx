@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import CompanyCockpit, { type LazyLoaders } from "@/widgets/company/CompanyCockpit";
 import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/entities/company/data";
-import { companyApi } from "@/entities/company";
-import { LoadingState, ErrorState } from "@/widgets/layout/States";
+import { companyApi } from "@/entities/company/api";
+import { LoadingState, ErrorState } from "@/shared/ui/States";
 
 const QUICK = [
   { code: "005930", name: "삼성전자" },

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
-import type { FilterGroupNode } from "@/shared/model";
+import type { FilterGroupNode } from "@/shared/model/domain";
 
 // 대형주 유니버스 필터 (기본)
 function largeCapFilter(): FilterGroupNode {

@@ -3,9 +3,11 @@
 //   코어: 병렬 로드(byTicker + evaluate×3 + financial + prices + 표본 + 피어 + fields)
 //   lazy: network / signal / risk / narrative / macro
 // ═══════════════════════════════════════════════════════════════════════════════
-import { companyApi, type FinancialHistory, type PriceBar } from "@/entities/company";
-import { screenerApiAdvanced } from "@/entities/screener/api/ast";
-import type { FieldsCatalog, ScreenerItem, ValuationDetail } from "@/shared/model";
+import { companyApi } from "./api";
+import { type FinancialHistory, type PriceBar } from "./model";
+import type { FieldsCatalog, ScreenerItem, ValuationDetail } from "@/shared/model/domain";
+// 타입만 참조 — 런타임 결합 없음(regimeToMacroInfo 의 입력 타입).
+// eslint-disable-next-line import/no-restricted-paths
 import type { RegimeState } from "@/entities/macro/api";
 import type {
   CompanyData, FactorGroup, FactorVal, ModelResult, Scenario, YearFin, QuarterFin, PricePt, Peer,
@@ -157,7 +159,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
       if (db.length >= 20) return db;
       return companyApi.universeSample("kospi200").catch(() => [] as ScreenerItem[]);
     })(),
-    screenerApiAdvanced.fields().catch(() => ({ categories: [], operators: [], rank_modes: [] } as FieldsCatalog)),
+    companyApi.fieldsCatalog().catch(() => ({ categories: [], operators: [], rank_modes: [] } as FieldsCatalog)),
   ]);
   if (!item) throw new Error("NOT_FOUND");
   const price = item.current_price;

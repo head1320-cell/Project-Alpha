@@ -2,9 +2,9 @@
 // 초기 전략 · 유니버스 매핑 · 조건 변환 · 매크로 설정 반영 · run 페이로드 조립.
 // (TerminalBacktester.tsx에서 분리 — 내용 불변)
 
-import type { FilterGroupNode } from "@/shared/model";
+import type { FilterGroupNode } from "@/shared/model/domain";
 import type { ScreenerStrategyHandoff } from "@/shared/lib/screenerHandoff";
-import type { StrategyBacktestConfig } from "@/entities/macro";
+import type { StrategyBacktestConfig } from "@/entities/macro/analysisModel";
 import type { BacktestStrategy } from "@/entities/backtest/strategy";
 import type { Condition } from "@/entities/backtest/conditionTypes";
 import { CAPS } from "./panels/UniversePanel";

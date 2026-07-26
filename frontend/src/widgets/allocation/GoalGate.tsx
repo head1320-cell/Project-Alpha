@@ -12,7 +12,7 @@ import { macroApi, type RegimeState } from "@/entities/macro/api";
 import type { AllocationModel, AllocationViewInput } from "@/entities/allocation/api";
 import { equalize, type Holding } from "./PortfolioBuilder";
 import { isKnownAllocationRoute, useAllocation } from "./AllocationProvider";
-import { listStudies, type AllocationStudy } from "@/shared/lib/allocationStorage";
+import { listStudies, type AllocationStudy } from "@/entities/allocation/storage";
 import { listWatchlists, type Watchlist } from "@/shared/lib/watchlistStorage";
 
 type Sector = { id: string; label: string; size: number; sample: string[] };

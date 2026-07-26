@@ -1,4 +1,4 @@
-import type { FilterGroupNode, ScreenerItem } from "@/shared/model";
+import type { FilterGroupNode, ScreenerItem } from "@/shared/model/domain";
 // 스크리너 도메인 모델 — 필터 AST · 카탈로그 · 응답 타입 (SSOT).
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 

@@ -10,11 +10,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { EmptyState } from "@/widgets/layout/States";
+import { EmptyState } from "@/shared/ui/States";
 import { macroApi, type RegimeState, REGIME_COLORS } from "@/entities/macro/api";
-import { companyApi } from "@/entities/company";
+import { companyApi } from "@/entities/company/api";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
-import type { ScreenerItem } from "@/shared/model";
+import type { ScreenerItem } from "@/shared/model/domain";
 import { API_BASE } from "@/shared/api/apiBase";
 
 const MODULES = [

@@ -1,4 +1,4 @@
-import type { FilterGroupNode } from "@/shared/model";
+import type { FilterGroupNode } from "@/shared/model/domain";
 // 스크리너 → 백테스터 브릿지 모델 (백테스트 통계·거래·요청 페이로드).
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 

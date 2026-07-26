@@ -2,7 +2,7 @@
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 
 import type { MacroGuidance } from "./model";
-import type { FilterConditionNode, FilterGroupNode } from "@/shared/model";
+import type { FilterConditionNode, FilterGroupNode } from "@/shared/model/domain";
 export function emptyFilterGroup(): FilterGroupNode {
   return { logic: "AND", conditions: [], groups: [] };
 }

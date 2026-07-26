@@ -3,7 +3,7 @@
 
 import { API_BASE } from "@/shared/api/apiBase";
 import type { AdvancedRunRequest, MacroGuidance, ScreenerResponse, TechnicalIndicatorCatalog } from "../model";
-import type { FieldsCatalog, FilterConditionNode, FilterGroupNode } from "@/shared/model";
+import type { FieldsCatalog, FilterConditionNode, FilterGroupNode } from "@/shared/model/domain";
 
 export const screenerApiAdvanced = {
   fields: async (): Promise<FieldsCatalog> => {

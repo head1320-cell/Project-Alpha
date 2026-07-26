@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
-import { analysisApi } from "@/entities/macro";
+import { analysisApi } from "@/entities/macro/analysisApi";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import { screenerApi } from "@/entities/screener/api/core";
 import { macroApi } from "@/entities/macro/api";

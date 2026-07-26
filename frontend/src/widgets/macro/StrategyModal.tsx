@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { X, Sparkles, Play } from "lucide-react";
-import type { StrategyAI, StrategyDetail, TacticalHolding } from "@/entities/macro";
+import type { StrategyAI, StrategyDetail, TacticalHolding } from "@/entities/macro/analysisModel";
 import type { Market } from "@/entities/macro/data";
 import { loadStrategyAI } from "@/entities/macro/data";
 import { HoldingsDonut, donutColor, SignalBadge, fmtPct } from "./cockpitParts";

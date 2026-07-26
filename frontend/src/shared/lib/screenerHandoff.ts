@@ -2,7 +2,7 @@
 // Next.js 클라이언트 라우팅에서 모듈 상태가 유지되므로 간단한 전역 store로 충분.
 // sessionStorage 폴백으로 새로고침에도 일부 대응.
 
-import type { FilterGroupNode } from "@/shared/model";
+import type { FilterGroupNode } from "@/shared/model/domain";
 
 export interface ScreenerStrategyHandoff {
   filterAst: FilterGroupNode;

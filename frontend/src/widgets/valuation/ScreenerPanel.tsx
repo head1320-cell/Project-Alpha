@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { screenerApi } from "@/entities/screener/api/core";
 import { type ScreenerFilters, type ScreenerResponse } from "@/entities/screener/model";
-import type { ScreenerItem } from "@/shared/model";
+import type { ScreenerItem } from "@/shared/model/domain";
 import { formatPct, verdictColor } from "@/shared/lib/format";
 
 /**

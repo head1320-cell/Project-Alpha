@@ -3,7 +3,7 @@
 
 import { API_BASE } from "@/shared/api/apiBase";
 import type { ScreenerResponse, ScreenerRunRequest, UniversesResponse } from "../model";
-import type { ValuationDetail } from "@/shared/model";
+import type { ValuationDetail } from "@/shared/model/domain";
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 

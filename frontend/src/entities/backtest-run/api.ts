@@ -8,6 +8,11 @@
  */
 
 import { API_BASE } from "@/shared/api/apiBase";
+// 타입만 참조 — 런타임 결합 없음(빌드 시 소거). BacktestRun 은 백테스트 결과를 담는
+// 것이 본질이라 이 타입을 알아야 하고, 거대한 타입 클로저를 shared 로 끌어내리면
+// 커널이 잡동사니가 된다. @typescript-eslint 미설치로 규칙이 type-only 를 구분 못 해
+// 여기서만 예외 처리한다.
+// eslint-disable-next-line import/no-restricted-paths
 import type { ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
 
 export type RunStatus =

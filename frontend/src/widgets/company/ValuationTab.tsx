@@ -2,7 +2,8 @@
 // ValuationTab — 실무 밸류에이션: Football Field + 가정 샌드박스 + Ke×g 민감도 + Comps.
 // 마운트 시 1콜(valuationSandbox), 슬라이더 변경 시 디바운스 재호출.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { companyApi, type ValuationSandbox } from "@/entities/company";
+import { companyApi } from "@/entities/company/api";
+import { type ValuationSandbox } from "@/entities/company/model";
 
 const fmtW = (v: number | null | undefined) =>
   v == null ? "—" : `₩${Math.round(v).toLocaleString()}`;

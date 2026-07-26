@@ -2,7 +2,8 @@
 // RiskDeepTab — 리스크 드릴다운: Altman Z 기여 분해 · Beneish 실측 8지수 · 커버리지 추이 ·
 // 금리충격 스트레스. 마운트 시 1콜(riskDeep). 근사/중립 지수는 basis 라벨로 정직 표기.
 import { useEffect, useState } from "react";
-import { companyApi, type RiskDeep } from "@/entities/company";
+import { companyApi } from "@/entities/company/api";
+import { type RiskDeep } from "@/entities/company/model";
 import { MiniLine } from "./FinancialsDeepTab";
 
 const fmtW = (v: number | null | undefined) =>

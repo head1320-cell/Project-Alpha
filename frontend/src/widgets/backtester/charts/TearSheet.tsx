@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Download, TrendingUp, TrendingDown, Shield, Activity } from "lucide-react";
-import { EquityChart, MonthlyHeatmap } from "@/shared/ui/charts/EquityChart";
+import { EquityChart, MonthlyHeatmap } from "./EquityChart";
 import type { BacktestResult } from "@/entities/backtest/chartModel";
 
 function fmt(v: number, pct = false, decimals = 2) {

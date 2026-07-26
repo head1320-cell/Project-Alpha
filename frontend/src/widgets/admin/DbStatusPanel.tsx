@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import SectionHead from "@/widgets/layout/SectionHead";
-import { ErrorState, LoadingState } from "@/widgets/layout/States";
+import SectionHead from "@/shared/ui/SectionHead";
+import { ErrorState, LoadingState } from "@/shared/ui/States";
 import { api } from "@/shared/api/legacyApi";
 
 type DbStatus = Awaited<ReturnType<typeof api.dbStatus>>;

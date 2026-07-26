@@ -4,7 +4,8 @@
 //   lazy: 시장토글(strategies/recommend by market) · 지표 드릴다운(series 36M).
 //   전부 실데이터(키 있으면) — 없으면 백엔드가 결정론적 mock 폴백(패널별 출처 배지로 정직 표기).
 // ═══════════════════════════════════════════════════════════════════════════════
-import { analysisApi, type MacroCorrelations, type MacroDashboard, type MacroRecommend, type MacroStrategies, type MacroTiming, type MacroTrajectory, type MacroValuation, type StrategyAI, type StrategyBacktestConfig, type StrategyDetail } from "@/entities/macro";
+import { analysisApi } from "./analysisApi";
+import { type MacroCorrelations, type MacroDashboard, type MacroRecommend, type MacroStrategies, type MacroTiming, type MacroTrajectory, type MacroValuation, type StrategyAI, type StrategyBacktestConfig, type StrategyDetail } from "./analysisModel";
 import { macroApi, type RegimeState, type MacroSeries } from "@/entities/macro/api";
 
 export type Market = "us" | "kr";

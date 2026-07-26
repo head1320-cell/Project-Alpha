@@ -4,7 +4,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { allocationApi, type SymbolHit } from "@/entities/allocation/api";
 import { listWatchlists, type Watchlist } from "@/shared/lib/watchlistStorage";
-import { deleteStudy, listStudies, type AllocationStudy } from "@/shared/lib/allocationStorage";
+import { deleteStudy, listStudies, type AllocationStudy } from "@/entities/allocation/storage";
 
 export interface Holding { code: string; name: string; weight: number }
 

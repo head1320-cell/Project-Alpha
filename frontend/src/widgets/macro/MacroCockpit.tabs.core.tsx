@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import type { MacroSeries } from "@/entities/macro/api";
 import { stressColor } from "@/entities/macro/api";
-import type { CausalGraph, CbSentiment, MacroCorrelations, MacroRecommend, MacroStrategies, MacroTiming, MacroTrajectory, StrategyDetail, TacticalHolding, TacticalStrategy } from "@/entities/macro";
-import { analysisApi } from "@/entities/macro";
+import type { CausalGraph, CbSentiment, MacroCorrelations, MacroRecommend, MacroStrategies, MacroTiming, MacroTrajectory, StrategyDetail, TacticalHolding, TacticalStrategy } from "@/entities/macro/analysisModel";
+import { analysisApi } from "@/entities/macro/analysisApi";
 import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
   loadCorrelations, loadTiming, loadTrajectory, loadStrategyDetail,
@@ -31,7 +31,7 @@ import {
   CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
   RegimeDonutCard, StressModeCard,
 } from "./visualParts";
-import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro";
+import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 01 Overview

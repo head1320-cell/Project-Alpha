@@ -5,7 +5,8 @@
 // 백엔드 무변경 — 기존 GET /macro/strategies (analysisApi.macroStrategies) 재사용.
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { analysisApi, type TacticalStrategy } from "@/entities/macro";
+import { analysisApi } from "@/entities/macro/analysisApi";
+import { type TacticalStrategy } from "@/entities/macro/analysisModel";
 import { useAllocation } from "./AllocationProvider";
 
 // 매크로 콕핏과 동일한 family 라벨·순서 (일관성)

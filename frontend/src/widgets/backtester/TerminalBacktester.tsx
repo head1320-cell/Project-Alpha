@@ -4,10 +4,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { backtestRunApi } from "@/entities/backtest-run/api";
 import { type BacktestStatistics, type BacktestTrade, type MonthlyReturn, type ScreenToBacktestResult, type SymbolPerf } from "@/entities/backtest/bridgeModel";
-import type { FilterGroupNode } from "@/shared/model";
+import type { FilterGroupNode } from "@/shared/model/domain";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/shared/lib/screenerHandoff";
-import { getMacroHandoff, clearMacroHandoff, type MacroBacktestHandoff } from "@/shared/lib/macroHandoff";
-import type { StrategyBacktestConfig } from "@/entities/macro";
+import { getMacroHandoff, clearMacroHandoff, type MacroBacktestHandoff } from "@/entities/macro/handoff";
+import type { StrategyBacktestConfig } from "@/entities/macro/analysisModel";
 import type { Condition } from "./ConditionFormulaEditor";
 import { exportTradesCsv, exportSummaryCsv } from "@/shared/lib/strategyStorage";
 import {

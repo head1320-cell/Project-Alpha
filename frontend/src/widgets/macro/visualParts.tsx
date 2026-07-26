@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ReferenceLine,
 } from "recharts";
 import { zFill } from "./cockpitParts";
-import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro";
+import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 import type { RegimeState } from "@/entities/macro/api";
 
 const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11 } as const;
