@@ -11,6 +11,7 @@
 API 계약만 검증하기 위해 canned 결과로 대체(빠르고 결정론적).
 """
 import os
+import threading
 import time
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
@@ -19,7 +20,6 @@ import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import src.api.screener_routes as sr  # noqa: E402
 import src.data.backtest_runs as br  # noqa: E402
@@ -30,8 +30,13 @@ CANNED = {"stats": {"total_return_pct": 12.3, "sharpe": 1.1}, "trades": [],
 
 
 @pytest.fixture
-def client(monkeypatch):
-    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+def client(monkeypatch, tmp_path):
+    # ★파일 DB + 스레드별 커넥션★ — in-memory StaticPool은 하나의 DBAPI 커넥션을 모든
+    # 스레드에 동시에 넘긴다. 워커의 engine.begin() 트랜잭션과 폴링 스레드의 읽기가 같은
+    # 커넥션에서 겹치면 워커 쓰기가 조용히 실패해 실행이 비종료로 남는다(간헐 실패).
+    # 운영은 커넥션 풀(Postgres)이라 스레드마다 별도 커넥션 — 그 구조를 그대로 모사한다.
+    eng = create_engine(f"sqlite:///{tmp_path}/runs.db",
+                        connect_args={"check_same_thread": False, "timeout": 30})
     monkeypatch.setattr(br, "_engine", lambda: eng)
     monkeypatch.setattr(br, "_inited", False)
 
@@ -45,16 +50,32 @@ def client(monkeypatch):
     app = FastAPI()
     app.include_router(router)
     yield TestClient(app)
+    # ★워커 스레드를 반드시 배수한 뒤 정리★ — 실행 워커는 daemon 스레드이고
+    # backtest_runs._engine은 모듈 전역이라 호출 시점에 읽힌다. 살아남은 이전 테스트의
+    # 워커가 다음 테스트의 엔진에 쓰기를 하면 상태가 뒤섞여 간헐 실패가 난다.
+    _drain_workers()
     eng.dispose()
 
 
-def _wait_terminal(client, rid, timeout=5.0):
+def _drain_workers(timeout: float = 15.0) -> None:
+    """이 테스트가 띄운 백테스트 워커 스레드가 끝날 때까지 기다린다."""
+    from src.api import backtest_run_routes as brr
+    end = time.time() + timeout
+    for t in list(threading.enumerate()):
+        if t is threading.current_thread() or not t.is_alive():
+            continue
+        if getattr(t, "_target", None) is brr._worker:
+            t.join(max(0.05, end - time.time()))
+
+
+def _wait_terminal(client, rid, timeout=20.0):
+    """워커가 종료 상태에 도달할 때까지 폴링(간격은 파일 SQLite 쓰기 경합을 줄이려 느슨하게)."""
     end = time.time() + timeout
     while time.time() < end:
         st = client.get(f"/api/v1/backtest/runs/{rid}/status").json()
         if st["status"] in br.TERMINAL:
             return st
-        time.sleep(0.03)
+        time.sleep(0.1)
     return client.get(f"/api/v1/backtest/runs/{rid}/status").json()
 
 
@@ -99,7 +120,9 @@ def test_status_is_light_and_refresh_recovers(client):
 def test_unknown_run_404(client):
     assert client.get("/api/v1/backtest/runs/bt_nope/status").status_code == 404
     assert client.get("/api/v1/backtest/runs/bt_nope").status_code == 404
-    assert client.post("/api/v1/backtest/runs/bt_nope/cancel").status_code == 409
+    # cancel도 '없음'은 404 — 예전엔 없음·DB오류·이미종료가 전부 409로 뭉개져
+    # 프론트가 "이미 끝난 실행"으로 오해했다(test_backtest_run_recovery가 3종을 고정).
+    assert client.post("/api/v1/backtest/runs/bt_nope/cancel").status_code == 404
 
 
 def test_db_error_is_503_not_404(client, monkeypatch):
@@ -130,9 +153,9 @@ def test_retry_creates_new_run(client):
 
 
 def test_list_runs(client):
-    # serialize (finish each run before the next) — the in-memory StaticPool shares a single
-    # connection across worker threads, so concurrent posts would contend; production uses a
-    # pooled engine. The API contract under test is "list returns created runs, newest first".
+    # serialize (finish each run before the next) — SQLite serializes writers, so concurrent
+    # posts would contend; production uses Postgres. The API contract under test is
+    # "list returns created runs, newest first".
     ids = []
     for _ in range(2):
         rid = client.post("/api/v1/backtest/runs", json={"config": {"universe": "k"}}).json()["run_id"]

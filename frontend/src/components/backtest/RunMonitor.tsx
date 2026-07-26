@@ -30,29 +30,47 @@ export function RunMonitor({ runId }: { runId: string }) {
   const [now, setNow] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
 
-  // 설정 스냅샷(1회) — 진행률은 경량 status 폴링으로 분리
-  const fullQ = useQuery({ queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId), staleTime: Infinity });
+  // 설정 스냅샷(1회) — 진행률은 경량 status 폴링으로 분리.
+  // ★키를 ["btrun","config"]로 분리★: 예전엔 ["btrun","full"]을 staleTime:Infinity로 심어
+  // 결과 페이지가 같은 키를 읽어 "실행 시작 직후 스냅샷"(loading_data)을 영원히 렌더했다.
+  const fullQ = useQuery({
+    queryKey: ["btrun", "config", runId],
+    queryFn: () => backtestRunApi.get(runId),
+    staleTime: Infinity,
+  });
   const statusQ = useQuery({
     queryKey: ["btrun", "status", runId],
     queryFn: () => backtestRunApi.status(runId),
-    // 실행이 끝날 때까지 계속 폴링 — 에러가 나도 마지막 상태를 유지한 채 재시도(로딩 페이지를
-    // 일시적 프록시 504/DB hiccup으로 죽이지 않음). 종료 상태에서만 폴링 중지.
-    refetchInterval: (q) => (q.state.data && TERMINAL.includes(q.state.data.status) ? false : 1000),
+    // 실행이 끝날 때까지 계속 폴링 — 에러가 나도 마지막 상태를 유지한 채 다음 tick이 다시 시도.
+    // 404(진짜 없음)면 폴링 중지(만료·잘못된 링크), 종료 상태에서도 중지.
+    refetchInterval: (q) => {
+      if (q.state.data && TERMINAL.includes(q.state.data.status)) return false;
+      if ((q.state.error as { httpStatus?: number } | null)?.httpStatus === 404) return false;
+      return 1000;
+    },
     refetchIntervalInBackground: true,
-    // 404(진짜 없음)는 재시도 없이 즉시 확정 → 잘못된/만료 링크는 빠르게 안내. 그 외(5xx/네트워크)는
-    // 일시적 → 최대 4회 재시도로 blip 흡수(로딩 페이지를 죽이지 않음).
-    retry: (count, e) => ((e as { httpStatus?: number })?.httpStatus === 404 ? false : count < 4),
-    retryDelay: (i) => Math.min(1000 * 2 ** i, 4000),
+    // ★retry:false + networkMode:"always"★ — 폴링 쿼리에서 retryer는 순손해다.
+    // react-query의 retryer는 재시도 대기 후 canContinue()에서 focusManager.isFocused()를
+    // 확인하고, 탭이 숨겨져 있으면 timeout 없이 pause()한다. 그러면 1초 interval은 전부
+    // dedupe되어 그 멈춘 promise를 돌려주고(continueRetry는 재개시키지 않음) 브라우저에서
+    // 요청이 한 건도 나가지 않는다 — 사용자가 터미널을 보는 동안 UI가 마지막 스냅샷에
+    // 얼어붙은 채 "재시도 중"만 띄우던 실제 원인. 폴링 자체가 재시도이므로 retryer를 빼고
+    // networkMode:"always"로 숨겨진 탭에서도 새 요청이 시작되게 한다.
+    retry: false,
+    networkMode: "always",
   });
 
   const st = statusQ.data;                                   // 마지막으로 성공한 상태(에러 중에도 유지)
   const err = statusQ.error as { httpStatus?: number } | null;
   // 백엔드는 진짜 없는 실행만 404, DB 일시 오류는 503 → 404만 "만료/잘못된 링크"로 확정 처리.
   const trulyGone = statusQ.isLoadingError && err?.httpStatus === 404;
-  const reconnecting = statusQ.isError && !!st && !TERMINAL.includes(st.status as RunStatus);
+  // 1초 폴링 + retry:false라 한 번의 blip으로도 isError가 되므로, 연속 실패가 몇 번 쌓였을
+  // 때만 표시(깜빡임 방지). failureCount는 성공하면 0으로 리셋된다.
+  const reconnecting = statusQ.failureCount >= 3 && !!st && !TERMINAL.includes(st.status as RunStatus);
 
-  // "재연결 중"(폴링 자체가 실패)과 "정상 응답이지만 진행이 오래 안 움직임"(느린 연산)을 구분 —
-  // 둘 다 사용자 눈엔 "안 움직인다"로 보이지만 원인이 달라 문구를 분리해 오해를 줄인다.
+  // "재연결 중"(폴링 자체가 실패)과 "정상 응답이지만 진행이 오래 안 움직임"(느린 연산)은 원인이
+  // 다르다. ★두 상태를 독립적으로 판정★ — 예전엔 stalled를 !reconnecting으로 억제해, 폴링이
+  // 실패하는 동안에는 "오래 걸림"을 영원히 띄우지 못했다.
   const lastProgressRef = useRef<{ pct: number; at: number } | null>(null);
   const [stalled, setStalled] = useState(false);
   useEffect(() => {
@@ -66,10 +84,14 @@ export function RunMonitor({ runId }: { runId: string }) {
   useEffect(() => {
     const t = setInterval(() => {
       const prev = lastProgressRef.current;
-      if (prev && !reconnecting) setStalled(Date.now() - prev.at > 45_000);
+      if (prev) setStalled(Date.now() - prev.at > 45_000);
     }, 2000);
     return () => clearInterval(t);
-  }, [reconnecting]);
+  }, []);
+
+  // 멈춘 폴링을 사용자가 직접 깨울 수 있는 탈출구 — refetch는 cancelRefetch:true로 나가므로
+  // 어떤 이유로든 진행 중인 요청이 묶여 있어도 새 요청을 강제한다.
+  const recheck = () => { void statusQ.refetch(); };
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -138,9 +160,17 @@ export function RunMonitor({ runId }: { runId: string }) {
             <div className="brun-progress"><i style={{ width: `${Math.max(2, Math.min(100, st.progress_percent))}%` }} /></div>
             <div className="brun-msg">
               {st.status_message}
-              {reconnecting && <span className="brun-reconnect">· 연결이 불안정합니다 — 재시도 중</span>}
-              {!reconnecting && stalled && (
+              {stalled && (
                 <span className="brun-stalled">· 이 실행은 예상보다 오래 걸리고 있습니다 (여전히 실행 중 — 취소/재시도 가능)</span>
+              )}
+              {reconnecting && (
+                <>
+                  <span className="brun-reconnect">
+                    · 상태를 불러오지 못하고 있습니다 — 아래 숫자는 마지막으로 받은 값입니다.
+                    서버에서는 계속 실행 중일 수 있습니다.
+                  </span>
+                  <button className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
+                </>
               )}
             </div>
           </div>

@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "backtest_runs"
 _inited = False
+# heartbeat_at 컬럼 사용 가능 여부 (_ensure가 실측으로 확정) — 마이그레이션이 막힌 배포에서도
+# 진행률 기록이 깨지지 않도록, 이 플래그가 False면 하트비트 절만 빼고 동일하게 동작한다.
+_has_heartbeat = False
 
 STATUSES = (
     "draft", "queued", "validating", "loading_data", "simulating",
@@ -60,6 +63,15 @@ _COLS = ("run_id, created_at, started_at, completed_at, requested_by, strategy_n
          "status, progress_percent, current_stage, status_message, input_snapshot, "
          "parameter_snapshot, data_snapshot_id, engine_version, result_version, "
          "error_code, error_message, correlation_id, is_mock_data, is_pit_verified, result")
+# 폴링용 좁은 투영 — `result`(완료 시 수 MB까지 자라는 TEXT blob)를 제외한다. 1초 주기로
+# 도는 status 폴링이 결과 전체를 매번 실어 나르면 커넥션 점유가 길어져, 정작 실행 중인
+# 워커의 진행 기록과 커넥션 풀(pool_size=5 + overflow=10)을 두고 경합한다.
+# _row(full=False)가 인덱스 0..19만 읽으므로 마지막 컬럼만 떼면 매핑은 그대로 유효하다.
+_STATUS_COLS = _COLS.rsplit(",", 1)[0]
+
+# 하트비트가 이 시간 이상 끊긴 비종료 실행은 고아로 판정(컨테이너 재시작 등으로 워커
+# 스레드가 사라진 경우). 진행 이벤트 간격보다 넉넉해야 정상 실행을 죽이지 않는다.
+ORPHAN_SILENCE_SEC = 900.0
 
 
 def engine_version() -> str:
@@ -89,6 +101,25 @@ def _ensure(engine) -> None:
             "is_mock_data INTEGER, is_pit_verified INTEGER, result TEXT)"
         ))
         c.execute(text(f"CREATE INDEX IF NOT EXISTS ix_btr_created ON {_TABLE} (created_at)"))
+    # 하트비트 컬럼(후행 추가) — 이미 운영 중인 DB에는 테이블이 존재하므로 ALTER로 붙인다.
+    # SQLite는 ADD COLUMN에 IF NOT EXISTS를 지원하지 않아 "이미 있음"도 예외로 오므로 삼킨다.
+    # _COLS에는 넣지 않는다 — 넣으면 _row의 위치 인덱스가 전부 밀린다.
+    global _has_heartbeat
+    try:
+        with engine.begin() as c:
+            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN heartbeat_at DOUBLE PRECISION"))
+    except Exception:
+        pass
+    # ★실제로 붙었는지 확인★ — 권한 등으로 ALTER가 실패했는데 이후 쿼리가 이 컬럼을
+    # 참조하면 진행률 기록이 통째로 깨진다(수정 전보다 나쁨). 없으면 하트비트 기능만
+    # 끄고 나머지는 그대로 동작시킨다(고아 정리는 created_at 폴백으로 계속 가능).
+    try:
+        with engine.connect() as c:
+            c.execute(text(f"SELECT heartbeat_at FROM {_TABLE} LIMIT 1"))
+        _has_heartbeat = True
+    except Exception as e:
+        _has_heartbeat = False
+        logger.warning(f"backtest_runs.heartbeat_at 사용 불가 — 하트비트 없이 동작: {e}")
     _inited = True
 
 
@@ -172,8 +203,9 @@ def _fetch(run_id: str, full: bool, strict: bool = False) -> dict | None:
         engine = _engine()
         _ensure(engine)
         from sqlalchemy import text
+        cols = _COLS if full else _STATUS_COLS
         with engine.connect() as c:
-            r = c.execute(text(f"SELECT {_COLS} FROM {_TABLE} WHERE run_id = :id"),
+            r = c.execute(text(f"SELECT {cols} FROM {_TABLE} WHERE run_id = :id"),
                           {"id": run_id}).fetchone()
         return _row(r, full=full) if r else None
     except Exception as e:
@@ -190,7 +222,7 @@ def list_runs(limit: int = 30) -> list[dict]:
         from sqlalchemy import text
         with engine.connect() as c:
             rows = c.execute(text(
-                f"SELECT {_COLS} FROM {_TABLE} ORDER BY created_at DESC LIMIT :l"),
+                f"SELECT {_STATUS_COLS} FROM {_TABLE} ORDER BY created_at DESC LIMIT :l"),
                 {"l": max(1, min(int(limit), 100))}).fetchall()
         return [_row(r, full=False) for r in rows]
     except Exception as e:
@@ -219,9 +251,12 @@ def transition(run_id: str, to_status: str, message: str | None = None,
         from sqlalchemy import text
         now = time.time()
         pct = progress if progress is not None else _STAGE_PCT.get(to_status, p.get("progress_percent") or 0)
-        sets = ["status = :s", "current_stage = :s", "progress_percent = :pct", "status_message = :msg"]
+        sets = ["status = :s", "current_stage = :s", "progress_percent = :pct",
+                "status_message = :msg"]
         params = {"s": to_status, "pct": pct,
                   "msg": message or _default_msg(to_status), "id": run_id}
+        if _has_heartbeat:
+            sets.append("heartbeat_at = :hb"); params["hb"] = now
         if cur == "queued" and to_status == "validating":
             sets.append("started_at = :sa"); params["sa"] = now
         if to_status in TERMINAL:
@@ -240,9 +275,12 @@ def advance(run_id: str, to_status: str, message: str | None = None,
     백그라운드 워커가 어떤 진행 이벤트가 오든 목표 단계에 안전히 도달하게 한다."""
     p = get_status(run_id)
     if p is None:
-        return {"ok": False, "reason": "실행을 찾을 수 없습니다."}
+        return {"ok": False, "reason": "실행을 찾을 수 없습니다.", "missing": True}
     if p["status"] in TERMINAL:
-        return {"ok": False, "reason": f"종료 상태({p['status']})."}
+        # 호출자(워커)가 별도 get_status 없이 취소를 감지할 수 있게 플래그로 알린다 —
+        # 진행 이벤트마다 커넥션을 한 번이라도 덜 잡기 위함.
+        return {"ok": False, "reason": f"종료 상태({p['status']}).",
+                "terminal": True, "cancelled": p["status"] == "cancelled"}
     if to_status not in STAGE_ORDER or p["status"] not in STAGE_ORDER:
         return transition(run_id, to_status, message, progress)
     ci, ti = STAGE_ORDER.index(p["status"]), STAGE_ORDER.index(to_status)
@@ -268,6 +306,8 @@ def update_progress(run_id: str, progress: float, message: str | None = None,
         from sqlalchemy import text
         sets = ["progress_percent = :p"]
         params: dict[str, Any] = {"p": max(0.0, min(100.0, float(progress))), "id": run_id}
+        if _has_heartbeat:
+            sets.append("heartbeat_at = :hb"); params["hb"] = time.time()
         if message is not None:
             sets.append("status_message = :m"); params["m"] = message
         if stage is not None:
@@ -278,6 +318,88 @@ def update_progress(run_id: str, progress: float, message: str | None = None,
     except Exception as e:
         logger.warning(f"backtest progress 갱신 실패: {e}")
         return False
+
+
+def touch_progress(run_id: str, progress: float, message: str | None = None) -> str:
+    """진행률 갱신의 단일 쿼리 핫패스 — 커넥션 체크아웃 1회.
+
+    워커는 진행 이벤트마다 (취소 확인 SELECT + advance의 SELECT + UPDATE) 3회를 잡고 있었다.
+    이미 진입한 단계 안에서의 세부 진행은 조건부 UPDATE 한 번이면 충분하다:
+    종료 상태(취소 포함)면 WHERE에 걸려 rowcount 0 → 호출자가 그때만 상태를 확인하면 된다.
+
+    반환: "updated"(정상) · "blocked"(없거나 종료 상태 — 호출자가 확인) · "error"(DB 오류)
+    """
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        sets = ["progress_percent = :p"]
+        params: dict[str, Any] = {"p": max(0.0, min(100.0, float(progress))), "id": run_id}
+        if _has_heartbeat:
+            sets.append("heartbeat_at = :hb"); params["hb"] = time.time()
+        if message is not None:
+            sets.append("status_message = :m"); params["m"] = message
+        placeholders = ", ".join(f":t{i}" for i in range(len(TERMINAL)))
+        params.update({f"t{i}": s for i, s in enumerate(TERMINAL)})
+        with engine.begin() as c:
+            res = c.execute(text(
+                f"UPDATE {_TABLE} SET {', '.join(sets)} "
+                f"WHERE run_id = :id AND status NOT IN ({placeholders})"), params)
+        return "updated" if res.rowcount else "blocked"
+    except Exception as e:
+        logger.warning(f"backtest progress 갱신 실패: {e}")
+        return "error"
+
+
+def heartbeat(run_id: str) -> None:
+    """살아있음 표시만 갱신(진행률 변화가 없는 긴 구간용)."""
+    try:
+        engine = _engine()
+        _ensure(engine)
+        if not _has_heartbeat:
+            return
+        from sqlalchemy import text
+        with engine.begin() as c:
+            c.execute(text(f"UPDATE {_TABLE} SET heartbeat_at = :hb WHERE run_id = :id"),
+                      {"hb": time.time(), "id": run_id})
+    except Exception as e:
+        logger.debug(f"backtest heartbeat 실패: {e}")
+
+
+def sweep_orphaned(max_silence_sec: float = ORPHAN_SILENCE_SEC) -> int:
+    """고아 실행 정리 — 워커 스레드가 사라졌는데 비종료로 남은 행을 failed로 확정.
+
+    실행 워커는 daemon 스레드라 컨테이너 재시작·배포 시 정리 없이 사라진다. 그러면 그 행은
+    영원히 `loading_data` 같은 비종료 상태로 남고, 결과 페이지는 끝나지 않는 실행을 계속
+    보여준다. 기동 시 한 번 훑어 하트비트가 끊긴 것만 정직한 사유와 함께 종료 처리한다.
+    (하트비트가 아직 없는 구버전 행은 created_at을 대신 본다.)
+
+    반환: 정리된 행 수.
+    """
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        cutoff = time.time() - max(60.0, float(max_silence_sec))
+        placeholders = ", ".join(f":t{i}" for i in range(len(TERMINAL)))
+        params: dict[str, Any] = {f"t{i}": s for i, s in enumerate(TERMINAL)}
+        params.update({"cut": cutoff, "co": time.time()})
+        # 하트비트 컬럼이 없는 배포에서는 created_at만으로 판정(기능 축소, 동작 유지)
+        age = "COALESCE(heartbeat_at, created_at)" if _has_heartbeat else "created_at"
+        with engine.begin() as c:
+            res = c.execute(text(
+                f"UPDATE {_TABLE} SET status='failed', current_stage='failed', "
+                "status_message='중단됨', error_code='worker_lost', "
+                "error_message='서버가 재시작되어 이 실행의 워커가 중단되었습니다. "
+                "다시 실행해 주세요.', completed_at=:co "
+                f"WHERE status NOT IN ({placeholders}) AND {age} < :cut"), params)
+        n = int(res.rowcount or 0)
+        if n:
+            logger.warning(f"고아 backtest run {n}건을 failed로 정리(워커 유실)")
+        return n
+    except Exception as e:
+        logger.warning(f"backtest 고아 정리 실패: {e}")
+        return 0
 
 
 def set_result(run_id: str, result: dict, is_mock_data: bool | None = None,
@@ -331,12 +453,21 @@ def set_error(run_id: str, error_code: str, error_message: str) -> dict:
 
 
 def cancel(run_id: str) -> dict:
-    """취소 — 비종료 상태에서만."""
-    p = get_status(run_id)
+    """취소 — 비종료 상태에서만.
+
+    실패 사유를 구분해 돌려준다(예전엔 셋 다 뭉뚱그려 409가 됐다):
+    missing=실행 없음(404) · store_error=DB 오류(503) · terminal=이미 종료(409).
+    """
+    try:
+        p = get_status(run_id, strict=True)
+    except BacktestStoreError as e:
+        return {"ok": False, "reason": "실행 저장소(DB)에 접근할 수 없습니다.",
+                "store_error": True, "detail": str(e)}
     if p is None:
-        return {"ok": False, "reason": "실행을 찾을 수 없습니다."}
+        return {"ok": False, "reason": "실행을 찾을 수 없습니다.", "missing": True}
     if p["status"] in TERMINAL:
-        return {"ok": False, "reason": f"이미 종료 상태({p['status']}) — 취소 불가."}
+        return {"ok": False, "reason": f"이미 종료 상태({p['status']}) — 취소 불가.",
+                "terminal": True}
     try:
         engine = _engine()
         from sqlalchemy import text
@@ -349,7 +480,7 @@ def cancel(run_id: str) -> dict:
         return {"ok": True}
     except Exception as e:
         logger.warning(f"backtest 취소 실패: {e}")
-        return {"ok": False, "reason": "DB 오류."}
+        return {"ok": False, "reason": "DB 오류.", "store_error": True}
 
 
 def delete_run(run_id: str) -> bool:

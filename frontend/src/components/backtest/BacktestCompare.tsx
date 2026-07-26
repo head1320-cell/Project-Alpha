@@ -45,10 +45,17 @@ const normalize = (curve: number[] | undefined) => {
 
 export function BacktestCompare({ runId }: { runId: string }) {
   const router = useRouter();
-  const aQ = useQuery({ queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId) });
-  const listQ = useQuery({ queryKey: ["btrun", "list"], queryFn: () => backtestRunApi.list() });
+  // 결과 페이지와 같은 이유로 항상 최신 상태를 읽는다(전역 staleTime 24h 회피).
+  const aQ = useQuery({
+    queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId),
+    staleTime: 0, refetchOnMount: "always",
+  });
+  const listQ = useQuery({ queryKey: ["btrun", "list"], queryFn: () => backtestRunApi.list(), staleTime: 0 });
   const [bId, setBId] = useState<string>("");
-  const bQ = useQuery({ queryKey: ["btrun", "full", bId], queryFn: () => backtestRunApi.get(bId), enabled: !!bId });
+  const bQ = useQuery({
+    queryKey: ["btrun", "full", bId], queryFn: () => backtestRunApi.get(bId), enabled: !!bId,
+    staleTime: 0, refetchOnMount: "always",
+  });
 
   const candidates = useMemo(
     () => (listQ.data?.runs ?? []).filter((r) => r.status === "completed" && r.run_id !== runId),

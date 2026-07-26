@@ -77,9 +77,13 @@ const col = (v: number | null | undefined) => (num(v) == null ? undefined : (v a
 
 export function BacktestResults({ runId }: { runId: string }) {
   const router = useRouter();
+  // 결과 페이지는 항상 DB의 현재 상태를 반영해야 한다 — 전역 기본 staleTime이 24h라
+  // 캐시된 스냅샷을 그대로 그리면 이미 끝난 실행이 "loading_data 상태입니다"로 보인다.
   const q = useQuery({
     queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId),
     retry: (count, e) => ((e as { httpStatus?: number })?.httpStatus === 404 ? false : count < 3),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   if (q.isLoading) return <div className="brun-shell"><div className="brun-loading">결과 불러오는 중…</div></div>;

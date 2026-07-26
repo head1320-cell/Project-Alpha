@@ -53,6 +53,49 @@ test("Backtest: loading survives transient status errors (keeps polling, no dead
   await expect(page.locator(".brun-stage")).toContainText("시뮬레이션");
 });
 
+// ★실제 인시던트 회귀★ — 숨겨진 탭에서 폴링이 영구 정지하던 문제.
+// react-query의 retryer는 재시도 대기 후 canContinue()에서 focusManager.isFocused()를 보고,
+// 탭이 숨겨져 있으면 timeout 없이 pause()한다. 그 뒤 1초 interval은 전부 dedupe되어 멈춘
+// promise를 돌려주므로 브라우저에서 요청이 한 건도 나가지 않는다 — 사용자가 터미널을 보는
+// 동안 UI가 마지막 스냅샷("시뮬레이션 63/728일")에 얼어붙은 채 "재시도 중"만 띄웠던 원인.
+// 수정(retry:false + networkMode:"always")은 retryer를 폴링 루프에서 제거한다.
+const HIDDEN_ID = "bt_hidden_e2e_1";
+
+test("Backtest: polling survives a hidden tab (no permanent retryer pause)", async ({ page }) => {
+  let polls = 0;
+  let failing = true;
+  await page.route(new RegExp(`/runs/${HIDDEN_ID}/status`), (route) => {
+    polls += 1;
+    if (failing) {
+      return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "temporary" }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...simStatus(), run_id: HIDDEN_ID }) });
+  });
+  await page.route(new RegExp(`/runs/${HIDDEN_ID}$`), (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...simStatus(), run_id: HIDDEN_ID, input_snapshot: { universe: "kospi200" }, parameter_snapshot: {}, result: null }) }));
+
+  await page.goto(`/backtest/runs/${HIDDEN_ID}/loading`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
+
+  // 탭을 숨긴다 — 사용자가 터미널로 전환한 순간을 재현
+  await page.emulateMedia({ reducedMotion: null });
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true });
+    Object.defineProperty(document, "hidden", { get: () => true, configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
+  const atHide = polls;
+  await page.waitForTimeout(6000);
+  // 수정 전: 여기서 polls가 전혀 늘지 않았다(retryer pause). 수정 후: 계속 나간다.
+  expect(polls - atHide, "polling must continue while the tab is hidden").toBeGreaterThan(2);
+
+  // 숨겨진 채로 서버가 회복되면 UI도 따라와야 한다
+  failing = false;
+  await page.waitForTimeout(3000);
+  await expect(page.locator(".brun-stage")).toContainText("시뮬레이션");
+});
+
 test("Backtest: a genuinely missing run shows the honest not-found (real 404)", async ({ page }) => {
   await page.goto("/backtest/runs/bt_missing_e2e_xyz/loading", { waitUntil: "domcontentloaded" });
   await expect(page.getByText("만료되었거나 잘못된 링크")).toBeVisible({ timeout: 15_000 });

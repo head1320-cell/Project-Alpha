@@ -113,6 +113,15 @@ async def startup():
         import logging
         logging.getLogger(__name__).error(f"init_db failed (DB 준비 전일 수 있음): {e}")
 
+    # 고아 백테스트 실행 정리 — 실행 워커는 daemon 스레드라 재시작 시 정리 없이 사라진다.
+    # 훑지 않으면 그 행이 영원히 비종료로 남아 결과 페이지가 끝나지 않는 실행을 보여준다.
+    try:
+        from src.data.backtest_runs import sweep_orphaned
+        sweep_orphaned()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
+
     # Initialize screener tables (legacy sync path)
     try:
         from src.database import get_engine

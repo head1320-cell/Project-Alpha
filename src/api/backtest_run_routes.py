@@ -53,20 +53,37 @@ def _worker(run_id: str, config: dict) -> None:
         seen = {"stage": "validating"}
 
         def cb(evt: dict) -> None:
-            # 취소 요청을 협조적으로 감지 (paper 워커는 강제 종료 없이 정지)
-            st = br.get_status(run_id)
-            if st and st["status"] == "cancelled":
-                raise _Cancelled()
+            """진행 보고 + 협조적 취소 감지.
+
+            ★커넥션 1회★: 예전엔 이벤트마다 (취소확인 SELECT + advance의 SELECT + UPDATE)로
+            풀(pool_size=5 + overflow=10)에서 3번 체크아웃했다. 같은 단계 안의 세부 진행은
+            조건부 UPDATE 한 번(touch_progress)이면 되고, 그 UPDATE가 걸리지 않을 때만
+            (= 없거나 종료 상태) 상태를 확인한다. 단계가 바뀔 때만 advance로 전이한다.
+            """
             phase = evt.get("phase")
             done, total = evt.get("done"), evt.get("total")
             if phase in ("screening", "screened", "loading"):
+                stage = "loading_data"
                 pct = 10 + (18 * done / total if done and total else 0)
-                br.advance(run_id, "loading_data", message=(f"데이터 로딩 {done}/{total}" if total else None), progress=pct)
-                seen["stage"] = "loading_data"
+                msg = f"데이터 로딩 {done}/{total}" if total else None
             elif phase == "simulating":
+                stage = "simulating"
                 pct = 30 + (55 * done / total if done and total else 0)
-                br.advance(run_id, "simulating", message=(f"시뮬레이션 {done}/{total}일" if total else "주문·체결 시뮬레이션"), progress=pct)
-                seen["stage"] = "simulating"
+                msg = f"시뮬레이션 {done}/{total}일" if total else "주문·체결 시뮬레이션"
+            else:
+                return
+
+            if seen["stage"] == stage:
+                if br.touch_progress(run_id, pct, msg) == "blocked":
+                    st = br.get_status(run_id)
+                    if st and st["status"] == "cancelled":
+                        raise _Cancelled()
+                return
+
+            r = br.advance(run_id, stage, message=msg, progress=pct)
+            if r.get("cancelled"):
+                raise _Cancelled()
+            seen["stage"] = stage
 
         try:
             result = _screen_to_backtest_core(req, progress_cb=cb)
@@ -154,6 +171,12 @@ def run_full(run_id: str):
 def run_cancel(run_id: str):
     r = br.cancel(run_id)
     if not r["ok"]:
+        # 사유별로 정직하게 구분 — 예전엔 '없음'과 'DB 오류'까지 409로 나가 프론트가
+        # "이미 끝난 실행"으로 오해했다. run_status와 같은 매핑을 쓴다.
+        if r.get("missing"):
+            raise HTTPException(404, r["reason"])
+        if r.get("store_error"):
+            raise HTTPException(503, r["reason"])
         raise HTTPException(409, r["reason"])
     return {"ok": True, "status": "cancelled"}
 

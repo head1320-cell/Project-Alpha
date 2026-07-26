@@ -3889,6 +3889,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-msg { font-size: 10.5px; color: var(--t-muted); font-family: var(--t-mono); }
 .brun-reconnect { color: var(--color-caution, #d97706); margin-left: 6px; animation: tpulse 1.4s ease-in-out infinite; }
 .brun-stalled { color: var(--t-muted); margin-left: 6px; }
+.brun-recheck { margin-left: 6px; font-size: 10.5px; padding: 2px 7px; border: 1px solid var(--t-accent);
+  border-radius: 2px; background: #fff; color: var(--t-accent); cursor: pointer; }
+.brun-recheck:hover { background: rgba(18,0,255,.06); }
 .brun-stage { font-size: 12px; }
 
 .brun-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; }

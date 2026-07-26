@@ -65,6 +65,21 @@ async function j<T>(r: Response): Promise<T> {
   return r.json();
 }
 
+/** 상태 폴링 요청 상한(ms). 프록시 예산은 300초(app/api/backend/[...path]/route.ts)라
+ *  브라우저가 중단하지 않으면 폴링 하나가 5분을 점유할 수 있다 — 1초 주기 폴링에선
+ *  그 자체가 정지로 보이므로, 훨씬 짧게 끊고 다음 tick이 새로 요청하게 한다. */
+export const STATUS_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export const backtestRunApi = {
   create: async (body: { config: Record<string, unknown>; strategy_name?: string; requested_by?: string }):
     Promise<{ run_id: string; status: RunStatus }> =>
@@ -73,7 +88,7 @@ export const backtestRunApi = {
     })),
 
   status: async (runId: string): Promise<RunStatusLite> =>
-    j(await fetch(`${API_BASE}/api/v1/backtest/runs/${runId}/status`)),
+    j(await fetchWithTimeout(`${API_BASE}/api/v1/backtest/runs/${runId}/status`, STATUS_TIMEOUT_MS)),
 
   get: async (runId: string): Promise<RunFull> =>
     j(await fetch(`${API_BASE}/api/v1/backtest/runs/${runId}`)),

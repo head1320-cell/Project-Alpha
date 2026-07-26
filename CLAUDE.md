@@ -2849,3 +2849,86 @@ ErrorBoundary 아님 — 원인 지점에서 직접 처리). `tests/test_macro_c
 - mock 모드에선 `daily_prices`가 비어 역사 리플레이가 합성으로 "가용" 표시됨(운영은 실적재
   범위로 정직 판정). 국내팩 충격 계수는 시장 구조 **가정**이며 실측 이벤트 리플레이가 아님
   (각 항목 `source`에 명시).
+
+---
+
+## 🧊 백테스트 "연결이 불안정합니다" 정지 — 프론트 폴링 정지가 원인 (백엔드 아님)
+
+[배경] GCP 실행(`bt_1785031374_221ca21f`, kospi200, Condition, 728거래일)이
+"주문·체결 시뮬레이션 35% · 시뮬레이션 63/728일 · 연결이 불안정합니다 — 재시도 중"에서
+10분간 얼어붙고, 결과 URL은 "이 실행은 loading_data 상태입니다"를 표시. 외부 진단은
+"FastAPI 이벤트 루프가 막혔다 → ProcessPoolExecutor/Celery/서버 증설"을 제시.
+
+### 그 진단이 틀린 이유 (사용자 로그가 반증)
+- **`/health`가 침묵 구간 내내 30초마다 200 (1ms)**. `/health`는 sync `def`
+  (`main_api.py:874`)라 다른 핸들러와 **같은 anyio 40스레드 풀**로 디스패치된다 —
+  초록불이면 이벤트 루프도 스레드풀도 자유롭다는 뜻. 막힌 게 없었다.
+- 작업은 이미 요청 경로 밖: `POST /runs`가 7~8ms에 반환하고 daemon 스레드로 실행
+  (`backtest_run_routes.py:111`). 이 라우터엔 `async def`가 **한 개도 없다**.
+- 10분 침묵 동안 **상태 요청이 백엔드에 0건 도달**. 백엔드가 느렸던 게 아니라
+  아무도 묻지 않았다 — 묻지 않는 클라이언트는 서버를 빠르게 해도 낫지 않는다.
+- `cancel → 409`는 `f"이미 종료 상태({status})"` — **백테스트는 이미 끝나 있었다**.
+- 화면 숫자도 실제 백엔드 스냅샷: `30 + 55×63/728 = 34.76 → 35%`가
+  `backtest_run_routes.py:67-68`과 정확히 일치. UI는 마지막으로 받은 값을 정직하게
+  그리고 있었을 뿐, 그 뒤로 아무것도 받지 못했다.
+- 제안된 예시 코드는 `ProcessPoolExecutor` 워커 안에서 모듈 전역 dict를 갱신한다 —
+  그 dict는 **다른 프로세스**에 있어 API가 영원히 못 본다(진행 보고가 구조적으로 불가).
+  게다가 `Dockerfile.backend`는 이유를 주석으로 남기고 `--workers 1`을 고정 중.
+
+### 진짜 원인 (프론트 3종)
+1. **탭이 숨겨지면 react-query retryer가 영구 pause** (`retryer.js:42`
+   `canContinue = () => focusManager.isFocused() && …`). 첫 실패 후 재시도 대기 →
+   `visibilityState === "hidden"` → **timeout 없이 pause()**. 이후 1초 interval은 전부
+   dedupe되어 멈춘 promise를 돌려주고(`continueRetry`는 재개시키지 않음) **브라우저에서
+   요청이 한 건도 나가지 않는다**. `refetchIntervalInBackground: true`는 interval 게이트만
+   푼다. 사용자가 터미널에서 `docker compose logs`를 보던 정황과 정확히 일치.
+2. **상태 fetch에 timeout 없음** + 프록시 예산 300초 → 폴링 하나가 5분을 점유.
+3. **결과 페이지의 `loading_data`는 stale 캐시** — RunMonitor가 `["btrun","full",runId]`를
+   `staleTime: Infinity`로 심고(마운트 = 실행 직후), BacktestResults가 같은 키를 전역
+   기본 24h staleTime으로 읽어 요청 없이 시작 시점 스냅샷을 렌더. DB와 무관했다.
+
+### 수정
+- **RunMonitor**: `retry: false` + `networkMode: "always"`(폴링 자체가 재시도 — retryer를
+  루프에서 제거), 404면 `refetchInterval` 중지, `reconnecting`은 `failureCount >= 3`으로
+  깜빡임 방지, **stalled를 reconnecting과 독립 판정**(예전엔 `!reconnecting`으로 억제돼
+  폴링 실패 중엔 영원히 못 떴다), "서버에서는 계속 실행 중일 수 있습니다" 문구 +
+  **"지금 다시 확인"** 버튼(`refetch`는 `cancelRefetch:true`라 묶인 요청을 끊는다).
+- **backtestRunApi**: 상태 fetch에 `AbortController` 20초 상한(`STATUS_TIMEOUT_MS`).
+- **캐시 키 분리**: 설정 스냅샷을 `["btrun","config",runId]`로 이전, 결과/비교 페이지는
+  `staleTime: 0` + `refetchOnMount: "always"`.
+- **백엔드**: status 투영에서 `result` blob 제외(`_STATUS_COLS`) · `heartbeat_at` 컬럼 +
+  기동 시 `sweep_orphaned()`(daemon 워커가 재시작으로 사라져 비종료로 영구 잔류하던 행을
+  정직한 사유 `worker_lost`로 종료 — `expired`는 정의만 있고 아무도 쓰지 않았다) ·
+  진행 핫패스를 `touch_progress()` **단일 조건부 UPDATE**로(이벤트당 3 체크아웃 → 1) ·
+  cancel을 **404/503/409로 구분**(예전엔 없음·DB오류까지 409) · 로딩 emit throttle 추가 +
+  `progress_step()`으로 통일(구 `total // 100`은 total=199에서 step=1이라 상한이 아니었음).
+- **마이그레이션 안전장치**: ALTER 후 컬럼 존재를 실측해 `_has_heartbeat`로 확정 —
+  권한 등으로 실패한 배포에서도 하트비트 절만 빠지고 진행률 기록은 그대로 동작.
+
+### 검증
+- 1003 passed / 10 skipped (신규 `test_backtest_run_recovery.py` 12 + progress_emit 2),
+  ruff·tsc 0, next build, **Playwright 22/22**.
+- **회귀 테스트가 실제로 잡는지 증명**: 수정 전 코드로 되돌려 hidden-tab 스펙을 돌리면
+  `polling must continue while the tab is hidden`으로 실패, 수정 후 통과.
+- 라이브(실 백엔드·실 브라우저): 탭을 숨긴 채로도 폴링 지속 → 결과 페이지 자동 전환 →
+  KPI 32개 → 새로고침 후에도 "…상태입니다" 없이 동일 결과 · API 4xx 0.
+
+### 부수 수정 — 테스트 하네스의 진짜 결함
+간헐 실패(`test_retry_creates_new_run`)의 원인은 제품이 아니라 하네스였다: `StaticPool`은
+**하나의 DBAPI 커넥션을 모든 스레드에 동시에** 넘기므로, 워커의 `engine.begin()` 트랜잭션과
+폴링 스레드의 읽기가 같은 커넥션에서 겹쳐 워커 쓰기가 조용히 실패했다(운영은 Postgres 풀이라
+스레드마다 별도 커넥션). 파일 SQLite + 스레드별 커넥션으로 교체하고, fixture teardown에서
+워커 스레드를 배수(`_drain_workers`)해 다음 테스트의 엔진을 오염시키지 않게 했다.
+전체 스위트 2회 연속 1003 passed로 flake 해소 확인.
+
+### 하지 않은 것 / 정직한 한계
+- **Celery·Redis·ProcessPoolExecutor 미도입** — 전제가 반증됐고, 풀 방식은 진행 보고를
+  깨뜨리며 `--workers 1` 불변식을 위반한다.
+- **서버 증설 불필요** — 마지막 스냅샷(시뮬레이션 시작 13초 시점 63일 ≈ 4.8일/초)은 전체
+  728일에 약 150초를 시사하고, 실제로 실행은 종료 상태에 도달했다. CPU는 이번 병목이 아니다.
+- **200종목 엔진 성능은 프로파일하지 않았다** — 조사 중 세션 한도로 중단됐다. 이번 정지의
+  원인이 아니라는 것만 증거로 말할 수 있고, 시뮬레이션 루프 효율(특히 조건이 빈 `Condition`이
+  per-bar 폴백을 타는지)은 별도 과제로 남는다.
+- GCP 프론트 로그의 `Failed to find Server Action … older or newer deployment` /
+  `Cannot read properties of null (reading 'digest')`는 브라우저가 구 번들을 들고 있는
+  기존 staleness 이슈 — `docker compose build --no-cache frontend backend` + 하드 새로고침 권장.

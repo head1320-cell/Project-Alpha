@@ -35,6 +35,19 @@ logger = logging.getLogger(__name__)
 # 1. DB Data Provider (as-of 날짜 지원)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+PROGRESS_MAX_EVENTS = 100
+
+
+def progress_step(total: int, max_events: int = PROGRESS_MAX_EVENTS) -> int:
+    """진행 이벤트를 max_events 이하로 묶는 보고 간격.
+
+    `total // max_events`는 실제로 상한이 아니다 — total=199면 step=1이 되어 199건이
+    그대로 나간다. 각 이벤트가 워커에서 DB 쓰기로 이어지므로(진행률 영속) 올림으로
+    계산해 진짜 상한을 만든다.
+    """
+    return max(1, math.ceil(max(0, int(total)) / max(1, int(max_events))))
+
+
 def _get_sync_engine():
     """
     테스트 시 monkey-patch 가능하도록 모듈 레벨 변수 사용.
@@ -386,12 +399,17 @@ class BacktestEngine:
         workers = max(1, min(int(os.getenv("BACKTEST_OHLCV_WORKERS", "10") or 10), 32))
         self._emit("loading", done=0, total=total_syms)
         done = 0
+        # 시뮬레이션 루프(_sim_step)와 같은 throttle — 종목마다 emit하면 400종목 = 400 이벤트가
+        # 되고, 각 이벤트가 진행률을 DB에 쓰므로 로딩 구간이 커넥션 풀을 그만큼 두드린다.
+        # 마지막 종목은 항상 보고해 100%가 누락되지 않게 한다.
+        _load_step = progress_step(total_syms)
         if workers <= 1 or total_syms <= 1:
             for tk in symbols:
                 _t, _d = _load_one(tk)
                 _absorb(_t, _d)
                 done += 1
-                self._emit("loading", done=done, total=total_syms)
+                if done % _load_step == 0 or done == total_syms:
+                    self._emit("loading", done=done, total=total_syms)
         else:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -400,7 +418,8 @@ class BacktestEngine:
                     _t, _d = fut.result()
                     _absorb(_t, _d)
                     done += 1
-                    self._emit("loading", done=done, total=total_syms)
+                    if done % _load_step == 0 or done == total_syms:
+                        self._emit("loading", done=done, total=total_syms)
 
         if not ohlcv_map:
             return self._error_response("No OHLCV data found in DB for given tickers/range")
@@ -477,7 +496,7 @@ class BacktestEngine:
 
         # Day-by-day 시뮬레이션
         _sim_total = len(sim_dates)
-        _sim_step = max(1, _sim_total // 100)  # 진행 이벤트 최대 ~100개로 throttle
+        _sim_step = progress_step(_sim_total)  # 진행 이벤트 최대 100개로 throttle
         self._emit("simulating", done=0, total=_sim_total)
         for _sim_idx, sim_date in enumerate(sim_dates, start=1):
             date_str = sim_date.strftime("%Y-%m-%d")
