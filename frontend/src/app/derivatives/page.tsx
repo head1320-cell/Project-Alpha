@@ -2,10 +2,10 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api } from "@/shared/api/legacyApi";
 import {
   PageHeader, PageContent, Tabs, Spinner, Section, Field, FormRow, ErrorMsg, StatCard,
-} from "@/components/ui";
+} from "@/shared/ui/primitives";   // 배럴(@/shared/ui) 대신 직접 — 아래 주석 참고
 import { Play } from "lucide-react";
 
 function DerivativesContent() {

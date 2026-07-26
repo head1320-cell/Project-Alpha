@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { analysisApi } from "@/lib/screenerApi";
-import SectionHead from "@/components/layout/SectionHead";
-import { StatGrid, Stat, MiniViz } from "@/components/common/MiniViz";
-import { LoadingState } from "@/components/layout/States";
+import { analysisApi } from "@/shared/api/screenerApi";
+import SectionHead from "@/widgets/layout/SectionHead";
+import { StatGrid, Stat, MiniViz } from "@/shared/ui/MiniViz";
+import { LoadingState } from "@/widgets/layout/States";
 
 type StressResult = Awaited<ReturnType<typeof analysisApi.stressTest>>;
 

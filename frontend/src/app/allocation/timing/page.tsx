@@ -4,10 +4,10 @@
 // (적용) + 시장 타이밍 컴포짓(timing_panel 재사용) + 자산 추세표. 백엔드 POST /allocation/timing.
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { type TimingConfig, useAllocation } from "@/components/allocation/AllocationProvider";
-import { ConfidenceGauge } from "@/components/allocation/parts";
-import { TimingFactorModal } from "@/components/allocation/TimingFactorModal";
-import { allocationApi, type CanaryInput } from "@/lib/allocationApi";
+import { type TimingConfig, useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { ConfidenceGauge } from "@/widgets/allocation/parts";
+import { TimingFactorModal } from "@/widgets/allocation/TimingFactorModal";
+import { allocationApi, type CanaryInput } from "@/entities/allocation/api";
 
 const ASSET_SUGGEST = ["SPY", "QQQ", "IWM", "EFA", "EEM", "AGG", "TLT", "IEF", "SHY", "LQD", "HYG", "GLD", "VNQ", "BIL"];
 const IND_SUGGEST: [string, string][] = [

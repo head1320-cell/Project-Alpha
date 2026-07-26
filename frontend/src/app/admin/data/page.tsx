@@ -1,4 +1,4 @@
-import DbStatusPanel from "@/components/admin/DbStatusPanel";
+import DbStatusPanel from "@/widgets/admin/DbStatusPanel";
 
 export const metadata = {
   title: "Data Infra · DB Status",

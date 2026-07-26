@@ -4,16 +4,16 @@
 //   → Review(사후 검증, 나중에 편집). 세션 타임라인은 보조 피드로 함께.
 import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { macroApi, type RegimeState } from "@/lib/macroApi";
+import { macroApi, type RegimeState } from "@/entities/macro/api";
 import {
   deleteStudy, listStudies, updateStudyReview, type AllocationStudy,
-} from "@/lib/allocationStorage";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { ResearchRunsPanel } from "@/components/allocation/ResearchRunsPanel";
-import { ResearchTimeline } from "@/components/allocation/ResearchTimeline";
-import { DecisionJournal } from "@/components/allocation/DecisionJournal";
-import { StrategyHealthPanel } from "@/components/allocation/StrategyHealthPanel";
-import { PolicyBacktest } from "@/components/allocation/PolicyBacktest";
+} from "@/shared/lib/allocationStorage";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { ResearchRunsPanel } from "@/widgets/allocation/ResearchRunsPanel";
+import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";
+import { DecisionJournal } from "@/widgets/allocation/DecisionJournal";
+import { StrategyHealthPanel } from "@/widgets/allocation/StrategyHealthPanel";
+import { PolicyBacktest } from "@/widgets/allocation/PolicyBacktest";
 
 function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () => void }) {
   const [text, setText] = useState(study.review || "");

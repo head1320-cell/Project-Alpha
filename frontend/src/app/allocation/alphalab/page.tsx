@@ -8,11 +8,11 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   alphaApi, type AlphaDef, type AlphaStatus, type AlphaValidationReport, type LintResult,
-} from "@/lib/alphaApi";
-import { equalize } from "@/components/allocation/PortfolioBuilder";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { AutoAlphaLab } from "@/components/allocation/AutoAlphaLab";
-import { AlphaFactorModal } from "@/components/allocation/AlphaFactorModal";
+} from "@/entities/alpha/api";
+import { equalize } from "@/widgets/allocation/PortfolioBuilder";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { AutoAlphaLab } from "@/widgets/allocation/AutoAlphaLab";
+import { AlphaFactorModal } from "@/widgets/allocation/AlphaFactorModal";
 
 const STATUS_LABEL: Record<AlphaStatus, string> = {
   draft: "초안", experimental: "실험", validated: "검증됨", approved: "승인", retired: "폐기",

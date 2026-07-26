@@ -5,11 +5,11 @@
 // /stress-scenarios(통합 카탈로그).
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { allocationApi, type StressFamily } from "@/lib/allocationApi";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { SensitivityHeatmap, StressChart, fmtSign } from "@/components/allocation/parts";
-import { KrScenarioPack } from "@/components/allocation/KrScenarioPack";
-import { StressScenarioModal } from "@/components/allocation/StressScenarioModal";
+import { allocationApi, type StressFamily } from "@/entities/allocation/api";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { SensitivityHeatmap, StressChart, fmtSign } from "@/widgets/allocation/parts";
+import { KrScenarioPack } from "@/widgets/allocation/KrScenarioPack";
+import { StressScenarioModal } from "@/widgets/allocation/StressScenarioModal";
 
 const FAMILY_LABEL: Record<StressFamily, string> = {
   hypothetical: "가상 충격", historical: "역사 리플레이", kr_pack: "국내 시나리오팩",

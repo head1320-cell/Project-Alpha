@@ -5,9 +5,9 @@
 //   기존 ex-ante 비중 분해(Market→BL→Optimizer)는 보조 섹션으로 보존.
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { attributionApi, type AttributionReport, type Basis } from "@/lib/attributionApi";
-import { CorrelationMini, RiskContribDonut, fmtSign } from "@/components/allocation/parts";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { attributionApi, type AttributionReport, type Basis } from "@/entities/attribution/api";
+import { CorrelationMini, RiskContribDonut, fmtSign } from "@/widgets/allocation/parts";
 
 function BasisTag({ b }: { b: Basis }) {
   const ko = b === "real" ? "실측" : b === "mock" ? "합성" : "미측정";

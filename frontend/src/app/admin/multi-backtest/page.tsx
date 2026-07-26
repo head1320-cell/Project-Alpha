@@ -6,14 +6,14 @@ import {
   TrendingUp, BarChart3, GitBranch,
 } from "lucide-react";
 
-import BacktestConfigPanel from "@/components/multibacktest/BacktestConfigPanel";
-import WeightTimeseriesChart from "@/components/multibacktest/WeightTimeseriesChart";
-import EquityWithRegimeBand from "@/components/multibacktest/EquityWithRegimeBand";
-import AttributionWaterfall from "@/components/multibacktest/AttributionWaterfall";
-import RegimeAttributionTable from "@/components/multibacktest/RegimeAttributionTable";
-import CounterfactualCompare from "@/components/multibacktest/CounterfactualCompare";
+import BacktestConfigPanel from "@/widgets/multibacktest/BacktestConfigPanel";
+import WeightTimeseriesChart from "@/widgets/multibacktest/WeightTimeseriesChart";
+import EquityWithRegimeBand from "@/widgets/multibacktest/EquityWithRegimeBand";
+import AttributionWaterfall from "@/widgets/multibacktest/AttributionWaterfall";
+import RegimeAttributionTable from "@/widgets/multibacktest/RegimeAttributionTable";
+import CounterfactualCompare from "@/widgets/multibacktest/CounterfactualCompare";
 
-import { API_BASE } from "@/lib/apiBase";
+import { API_BASE } from "@/shared/api/apiBase";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 

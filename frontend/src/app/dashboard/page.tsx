@@ -10,10 +10,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { EmptyState } from "@/components/layout/States";
-import { macroApi, type RegimeState, REGIME_COLORS } from "@/lib/macroApi";
-import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/lib/screenerApi";
-import { API_BASE } from "@/lib/apiBase";
+import { EmptyState } from "@/widgets/layout/States";
+import { macroApi, type RegimeState, REGIME_COLORS } from "@/entities/macro/api";
+import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/shared/api/screenerApi";
+import { API_BASE } from "@/shared/api/apiBase";
 
 const MODULES = [
   { n: "01", label: "Screener", href: "/screener", desc: "116팩터 멀티팩터 스크리닝 · 전종목/ETF" },

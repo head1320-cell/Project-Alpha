@@ -2,12 +2,12 @@
 // 01 CONSTRUCT — 자산 구성. 좌 직접 구성(PortfolioBuilder) | 팩터 빌더(FactorBuilder) /
 // 우 ALLOCATION MAP · WEIGHT COMPARISON(현재/캡가중/최적) · CONCENTRATION · DATA COVERAGE.
 import React, { useMemo, useState } from "react";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { PortfolioBuilder } from "@/components/allocation/PortfolioBuilder";
-import { FactorBuilder } from "@/components/allocation/FactorBuilder";
-import { StrategyLibrary } from "@/components/allocation/StrategyLibrary";
-import { SleeveStudio } from "@/components/allocation/SleeveStudio";
-import { AllocationMap, WeightComparison, concentration } from "@/components/allocation/parts";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { PortfolioBuilder } from "@/widgets/allocation/PortfolioBuilder";
+import { FactorBuilder } from "@/widgets/allocation/FactorBuilder";
+import { StrategyLibrary } from "@/widgets/allocation/StrategyLibrary";
+import { SleeveStudio } from "@/widgets/allocation/SleeveStudio";
+import { AllocationMap, WeightComparison, concentration } from "@/widgets/allocation/parts";
 
 type ConstructMode = "direct" | "factor" | "strategy";
 

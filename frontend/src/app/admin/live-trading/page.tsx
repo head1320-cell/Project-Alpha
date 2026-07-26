@@ -7,7 +7,7 @@ import {
   CircleAlert, CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 
-import { API_BASE } from "@/lib/apiBase";
+import { API_BASE } from "@/shared/api/apiBase";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types

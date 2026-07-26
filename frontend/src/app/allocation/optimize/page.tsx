@@ -3,11 +3,11 @@
 // + 대형 Efficient Frontier + Allocation Flow + 요약 지표. 제약 결과는 지시서 3분법
 // (충족/근사+위반목록/infeasible+사유)으로 정직 표시.
 import React, { useMemo, useState } from "react";
-import { COV_ONLY, MODELS, useAllocation } from "@/components/allocation/AllocationProvider";
+import { COV_ONLY, MODELS, useAllocation } from "@/widgets/allocation/AllocationProvider";
 import {
   AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
-} from "@/components/allocation/parts";
-import { NeutralizePanel } from "@/components/allocation/NeutralizePanel";
+} from "@/widgets/allocation/parts";
+import { NeutralizePanel } from "@/widgets/allocation/NeutralizePanel";
 
 function num(v: string): number | null {
   const f = parseFloat(v);

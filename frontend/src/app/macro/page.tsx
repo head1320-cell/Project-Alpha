@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { LoadingState, ErrorState } from "@/components/layout/States";
-import MacroCockpit, { type TransplantPayload } from "@/components/macro/MacroCockpit";
-import { loadStrategyBacktestConfig, type MacroCore } from "@/lib/macroData";
-import { setMacroHandoff } from "@/lib/macroHandoff";
-import { analysisApi } from "@/lib/screenerApi";
-import { macroApi } from "@/lib/macroApi";
+import { LoadingState, ErrorState } from "@/widgets/layout/States";
+import MacroCockpit, { type TransplantPayload } from "@/widgets/macro/MacroCockpit";
+import { loadStrategyBacktestConfig, type MacroCore } from "@/entities/macro/data";
+import { setMacroHandoff } from "@/shared/lib/macroHandoff";
+import { analysisApi } from "@/shared/api/screenerApi";
+import { macroApi } from "@/entities/macro/api";
 
 export default function MacroPage() {
   const router = useRouter();

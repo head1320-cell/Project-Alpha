@@ -2,9 +2,9 @@
 // 02 THESIS — 거시 테제 → Black-Litterman 뷰 + 신뢰도 + 팩터 노출 프리뷰.
 // 자산 구성은 01 CONSTRUCT로 분리됨. 최적화는 상단 헤더의 Re-optimize.
 import React from "react";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { ViewBuilder, overallConfidence } from "@/components/allocation/ViewBuilder";
-import { ConfidenceGauge, FactorXRayBars } from "@/components/allocation/parts";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { ViewBuilder, overallConfidence } from "@/widgets/allocation/ViewBuilder";
+import { ConfidenceGauge, FactorXRayBars } from "@/widgets/allocation/parts";
 
 export default function ThesisStage() {
   const { holdings, views, setViewsLogged, runAnalyze, xrayQ, result } = useAllocation();

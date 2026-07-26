@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { TerminalShell } from "@/components/layout/TerminalShell";
-import Providers from "@/components/layout/Providers";
+import { TerminalShell } from "@/widgets/layout/TerminalShell";
+import Providers from "@/widgets/layout/Providers";
 
 export const metadata: Metadata = {
   title: "Project Alpha | Quant Platform",

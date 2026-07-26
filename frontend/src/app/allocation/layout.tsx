@@ -4,9 +4,9 @@
 // Provider 유지 → 상태 보존). /allocation(게이트)은 isGate 분기로 크롬 없이 bare 렌더.
 import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AllocationProvider, PHASES, STAGES, stageIndex, useAllocation } from "@/components/allocation/AllocationProvider";
-import { ContextStrip } from "@/components/allocation/ContextStrip";
-import { WizardTracker } from "@/components/allocation/WizardTracker";
+import { AllocationProvider, PHASES, STAGES, stageIndex, useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { ContextStrip } from "@/widgets/allocation/ContextStrip";
+import { WizardTracker } from "@/widgets/allocation/WizardTracker";
 
 function StageChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();

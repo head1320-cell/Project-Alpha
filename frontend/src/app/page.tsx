@@ -9,9 +9,9 @@
  */
 
 import Link from "next/link";
-import Reveal from "@/components/landing/Reveal";
-import CountUp from "@/components/landing/CountUp";
-import HeroDeckLive from "@/components/landing/HeroDeckLive";
+import Reveal from "@/widgets/landing/Reveal";
+import CountUp from "@/widgets/landing/CountUp";
+import HeroDeckLive from "@/widgets/landing/HeroDeckLive";
 
 const MODULES = [
   {

@@ -1,0 +1,1831 @@
+/**
+ * Screener API Client + Types
+ * ==========================================================================
+ * Wraps the backend /api/v1/screener/* endpoints with full TypeScript types.
+ */
+
+import { API_BASE } from "@/shared/api/apiBase";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface ScreenerFilters {
+  min_market_cap_억?: number | null;
+  max_market_cap_억?: number | null;
+  min_roe_pct?: number | null;
+  max_roe_pct?: number | null;
+  min_gap_pct?: number | null;
+  max_gap_pct?: number | null;
+  min_per?: number | null;
+  max_per?: number | null;
+  min_pbr?: number | null;
+  max_pbr?: number | null;
+  min_dividend_yield?: number | null;
+  max_debt_ratio?: number | null;
+  sectors?: string[] | null;
+  require_positive_fcf?: boolean;
+  verdicts?: string[] | null;
+}
+
+export interface ScreenerRunRequest {
+  universe?: string;
+  custom_tickers?: string[] | null;
+  filters?: ScreenerFilters;
+  sort_by?: string;
+  ascending?: boolean;
+  limit?: number;
+  beta?: number;
+  projection_years?: number;
+  use_macro?: boolean;
+  liquidity_floor?: string;
+  analyzers?: string[];
+  analyzer_params?: Record<string, unknown>;
+}
+
+export interface ScreenerItem {
+  stock_code: string;
+  corp_name: string;
+  sector?: string | null;
+
+  current_price: number;
+  intrinsic_value: number;
+  gap_pct: number;
+  verdict: string;
+
+  composite_score: number;
+  gap_score: number;
+  roe_score: number;
+  stability_score: number;
+
+  roe_pct?: number | null;
+  roa_pct?: number | null;
+  per?: number | null;
+  pbr?: number | null;
+  debt_ratio_pct?: number | null;
+  dividend_yield_pct?: number | null;
+  market_cap_억?: number | null;
+  fcf_억?: number | null;
+
+  rim_value?: number | null;
+  dcf_value?: number | null;
+  ddm_value?: number | null;
+  // 동적 팩터 (펀더멘털 64 + 가격수급 28) — fieldId로 접근
+  [key: string]: number | string | null | undefined;
+}
+
+export interface ScreenerResponse {
+  universe: string;
+  total_evaluated: number;
+  total_passed: number;
+  elapsed_seconds: number;
+  cache_hits: number;
+  cache_misses: number;
+  failures: number;
+  timestamp: string;
+  items: ScreenerItem[];
+  // 정직 카운터 (신규 — 옵셔널: 구버전 응답 호환)
+  universe_size?: number;      // 마스터/프리셋 기준 유니버스 총원
+  ingested_count?: number;     // 적재된 종목 수
+  evaluated_actual?: number;   // 실제 산출 아이템 수 (게이트 전)
+  capped?: boolean;            // 평가 상한(400) 발동
+  liquidity_gate?: { before?: number; after?: number; filtered_out?: number };
+}
+
+export interface UniversesResponse {
+  presets: Array<{ id: string; size: number; sample: string[] }>;
+  filter_dimensions: string[];
+  sort_fields: string[];
+  scoring_formula: Record<string, string>;
+  valuation_models: Record<string, string>;
+}
+
+// ─── Detailed evaluation (single stock) ──────────────────────────────────────
+
+export interface ValuationDetail {
+  ticker: string;
+  corp_name: string;
+  current_price: number;
+  intrinsic_value: number;
+  gap_pct: number;
+  verdict: string;
+  models: Array<{
+    model: "RIM" | "DCF" | "DDM";
+    intrinsic_value: number;
+    available: boolean;
+    error?: string | null;
+    components: Record<string, number>;
+    assumptions: Record<string, number>;
+  }>;
+  financial_summary: Record<string, number | null>;
+  params: Record<string, unknown>;
+}
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+
+export const screenerApi = {
+  run: async (req: ScreenerRunRequest): Promise<ScreenerResponse> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`Screener run failed: ${r.status}`);
+    return r.json();
+  },
+
+  universes: async (): Promise<UniversesResponse> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/universes`);
+    if (!r.ok) throw new Error("Universes fetch failed");
+    return r.json();
+  },
+
+  cacheStats: async () => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/cache/stats`);
+    return r.ok ? r.json() : null;
+  },
+
+  cacheClear: async () => {
+    await fetch(`${API_BASE}/api/v1/screener/cache/clear`, { method: "POST" });
+  },
+
+  // Single stock detailed evaluation
+  evaluate: async (
+    stockCode: string,
+    currentPrice: number,
+    opts: Partial<{ beta: number; projection_years: number }> = {},
+  ): Promise<ValuationDetail> => {
+    const r = await fetch(`${API_BASE}/api/v1/valuation/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        stock_code: stockCode,
+        current_price: currentPrice,
+        beta: opts.beta ?? 1.0,
+        projection_years: opts.projection_years ?? 10,
+      }),
+    });
+    if (!r.ok) throw new Error(`Evaluation failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+// ─── Verdict styling helpers ────────────────────────────────────────────────
+
+export function verdictColor(verdict: string): {
+  fg: string;
+  bg: string;
+  border: string;
+} {
+  if (verdict.includes("극심한 저평가"))
+    return { fg: "#15803d", bg: "#dcfce7", border: "#86efac" };
+  if (verdict.includes("저평가") && !verdict.includes("약간"))
+    return { fg: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" };
+  if (verdict === "약간 저평가")
+    return { fg: "#65a30d", bg: "#f7fee7", border: "#d9f99d" };
+  if (verdict === "적정")
+    return { fg: "#525252", bg: "#fafafa", border: "#e5e5e5" };
+  if (verdict === "약간 고평가")
+    return { fg: "#ea580c", bg: "#fff7ed", border: "#fed7aa" };
+  if (verdict.includes("극심한 고평가"))
+    return { fg: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
+  return { fg: "#dc2626", bg: "#fef2f2", border: "#fecaca" }; // 고평가
+}
+
+export function gapColor(gapPct: number): string {
+  if (gapPct <= -30) return "#15803d";  // 짙은 녹색
+  if (gapPct <= -15) return "#16a34a";
+  if (gapPct <= -5)  return "#65a30d";
+  if (gapPct <= 5)   return "#737373";  // 회색
+  if (gapPct <= 15)  return "#ea580c";
+  if (gapPct <= 30)  return "#dc2626";
+  return "#b91c1c";                       // 짙은 빨강
+}
+
+export function formatKrw(v: number | null | undefined): string {
+  if (v == null) return "—";
+  if (Math.abs(v) >= 10000) return `${(v / 10000).toFixed(1)}만`;
+  return v.toLocaleString();
+}
+
+export function formatPct(v: number | null | undefined, digits = 1): string {
+  if (v == null) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
+}
+
+
+// ─── Milestone 1: Filter AST ──────────────────────────────────────────────────
+
+export interface FilterConditionNode {
+  field: string;
+  op?: "lt" | "lte" | "gt" | "gte" | "eq" | "between";
+  value?: number | null;
+  value2?: number | null;
+  rank_mode?: "top_pct" | "bottom_pct" | "top_n" | null;
+  rank_value?: number | null;
+  // V2 확장
+  kind?: "field" | "formula" | "peer" | "technical" | "event" | "estimate" | "z_score" | "behavioral" | "graph" | "sentiment" | "vector_sim";
+  formula?: string | null;
+  peer_scope?: "sector" | "market" | null;
+  peer_stat?: "mean" | "median" | "rank_pct" | null;
+  indicator?: string | null;
+  event_type?: string | null;
+  within_days?: number | null;
+  estimate_field?: string | null;
+  z_field?: string | null;
+  z_window?: number | null;
+  behavior_signal?: string | null;
+  graph_target?: string | null;
+  graph_relation?: string | null;
+  graph_depth?: number | null;
+  sentiment_source?: string | null;
+  vector_ticker?: string | null;
+  vector_threshold?: number | null;
+}
+
+export interface FilterGroupNode {
+  logic: "AND" | "OR";
+  conditions: FilterConditionNode[];
+  groups: FilterGroupNode[];
+}
+
+export interface FieldMeta {
+  id: string;
+  label: string;
+  category: string;
+  unit: string;
+  higher_better: boolean;
+  typical_min: number;
+  typical_max: number;
+}
+
+export interface FieldsCatalog {
+  categories: Array<{ id: string; label: string; fields: FieldMeta[] }>;
+  operators: Array<{ id: string; label: string; name: string }>;
+  rank_modes: Array<{ id: string; label: string; name: string }>;
+}
+
+export interface AdvancedRunRequest {
+  universe?: string;
+  custom_tickers?: string[] | null;
+  filter_ast: FilterGroupNode;
+  sort_by?: string;
+  ascending?: boolean;
+  limit?: number;
+  beta?: number;
+  projection_years?: number;
+  use_macro?: boolean;
+  liquidity_floor?: string;
+  analyzers?: string[];
+  analyzer_params?: Record<string, unknown>;
+}
+
+// Extend screenerApi with M1 methods
+export const screenerApiAdvanced = {
+  fields: async (): Promise<FieldsCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/fields`);
+    if (!r.ok) throw new Error(`Fields fetch failed: ${r.status}`);
+    return r.json();
+  },
+
+  runAdvanced: async (req: AdvancedRunRequest): Promise<ScreenerResponse> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/run-advanced`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`Advanced run failed: ${r.status}`);
+    return r.json();
+  },
+
+  count: async (req: AdvancedRunRequest): Promise<{
+    total_evaluated: number; total_passed: number; elapsed_seconds: number;
+  }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/count`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`Count failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 자연어 → 필터 AST 변환 (Claude + 키워드 룰 fallback)
+  nl2ast: async (query: string): Promise<{
+    ast: FilterGroupNode;
+    explanation: string;
+    confidence: number;
+    source: "claude" | "mock";
+    error: string | null;
+  }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/nl2ast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!r.ok) throw new Error(`NL2AST failed: ${r.status}`);
+    return r.json();
+  },
+
+  nl2astExamples: async (): Promise<{ examples: string[] }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/nl2ast/examples`);
+    if (!r.ok) throw new Error(`Examples failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 기술적 지표 카탈로그 (RSI/MACD/볼린저 등 — 스크리너 technical 필터용)
+  indicators: async (): Promise<TechnicalIndicatorCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/indicators`);
+    if (!r.ok) throw new Error(`Indicators failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 젠포트 팩터 이름 → 스크리너 필드 id 매핑 (백테스터 FactorPickerModal 픽 → 스크리닝 필드)
+  factorFieldMap: async (): Promise<{ map: Record<string, string>; total: number }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/factor-field-map`);
+    if (!r.ok) throw new Error(`Factor field map failed: ${r.status}`);
+    return r.json();
+  },
+
+  // SSE 스트리밍 실행 — 종목별 평가 진행(done/total/misses)을 onProgress 로 흘려보내고 최종 결과 반환
+  runAdvancedStream: async (
+    req: AdvancedRunRequest,
+    onProgress?: (done: number, total: number, misses: number) => void,
+    signal?: AbortSignal,
+  ): Promise<ScreenerResponse> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/run-advanced-stream`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req), signal,
+    });
+    if (!r.ok || !r.body) throw new Error(`Stream failed: ${r.status}`);
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let result: ScreenerResponse | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() ?? "";
+      for (const part of parts) {
+        const dataLine = part.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+        let obj: { type: string; done?: number; total?: number; misses?: number; data?: ScreenerResponse; message?: string };
+        try { obj = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+        if (obj.type === "progress") onProgress?.(obj.done ?? 0, obj.total ?? 0, obj.misses ?? 0);
+        else if (obj.type === "result") result = obj.data ?? null;
+        else if (obj.type === "error") throw new Error(obj.message || "stream error");
+      }
+    }
+    if (!result) throw new Error("스트림 결과 없음");
+    return result;
+  },
+};
+
+// 기술적 지표 카탈로그 타입
+export interface TechnicalIndicatorMeta {
+  id: string;
+  label: string;
+  category?: string;
+  unit?: string;
+  typical_min?: number;
+  typical_max?: number;
+}
+export interface TechnicalIndicatorCatalog {
+  categories: Array<{ id?: string; label: string; indicators: TechnicalIndicatorMeta[] }>;
+}
+
+// Helper: 빈 필터 그룹 생성
+export function emptyFilterGroup(): FilterGroupNode {
+  return { logic: "AND", conditions: [], groups: [] };
+}
+
+// Helper: 조건 라벨 생성 (UI 표시용)
+export function conditionLabel(cond: FilterConditionNode, fieldLabel: string): string {
+  if (cond.rank_mode === "top_pct") return `${fieldLabel} 상위 ${cond.rank_value}%`;
+  if (cond.rank_mode === "bottom_pct") return `${fieldLabel} 하위 ${cond.rank_value}%`;
+  if (cond.rank_mode === "top_n") return `${fieldLabel} 상위 ${cond.rank_value}종목`;
+  const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥", eq: "=", between: "~" };
+  if (cond.op === "between") return `${fieldLabel} ${cond.value}~${cond.value2}`;
+  return `${fieldLabel} ${opMap[cond.op || "lt"]} ${cond.value}`;
+}
+
+
+// ─── Milestone 3: Macro-Adaptive Guidance ────────────────────────────────────
+
+export interface MacroGuidance {
+  regime: string;
+  stress_score: number;
+  recommended_mode: "NORMAL" | "CAUTIOUS" | "DEFENSIVE";
+  description: string;
+  guidance_text: string;
+  recommended_filters: Array<{
+    field: string;
+    op?: string;
+    value?: number;
+    rank_mode?: string;
+    rank_value?: number;
+    label: string;
+  }>;
+  recommended_weights: { gap: number; roe: number; stability: number };
+  asset_tilts: Record<string, string>;
+  dynamic_risk_free_rate: number | null;
+  timestamp: string;
+}
+
+export async function fetchMacroGuidance(): Promise<MacroGuidance> {
+  const r = await fetch(`${API_BASE}/api/v1/screener/macro-guidance`);
+  if (!r.ok) throw new Error(`Macro guidance failed: ${r.status}`);
+  return r.json();
+}
+
+// 추천 필터 → FilterConditionNode 변환
+export function guidanceFilterToNode(f: MacroGuidance["recommended_filters"][0]): FilterConditionNode {
+  if (f.rank_mode) {
+    return {
+      field: f.field,
+      rank_mode: f.rank_mode as FilterConditionNode["rank_mode"],
+      rank_value: f.rank_value ?? null,
+    };
+  }
+  return {
+    field: f.field,
+    op: (f.op ?? "lt") as FilterConditionNode["op"],
+    value: f.value ?? null,
+  };
+}
+
+
+// ─── Milestone 4: Presets ─────────────────────────────────────────────────────
+
+export interface PresetItem {
+  id: string;
+  name: string;
+  master: string;
+  category: string;
+  icon: string;
+  description: string;
+  use_macro: boolean;
+  condition_count: number;
+}
+
+export interface PresetCatalog {
+  categories: Array<{ id: string; label: string; presets: PresetItem[] }>;
+  total: number;
+}
+
+export interface PresetDetail extends PresetItem {
+  filter_ast: FilterGroupNode;
+}
+
+export const presetApi = {
+  list: async (): Promise<PresetCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/presets`);
+    if (!r.ok) throw new Error(`Presets fetch failed: ${r.status}`);
+    return r.json();
+  },
+  detail: async (id: string): Promise<PresetDetail> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/presets/${id}`);
+    if (!r.ok) throw new Error(`Preset detail failed: ${r.status}`);
+    return r.json();
+  },
+  run: async (id: string, universe = "kospi50", limit = 50): Promise<ScreenerResponse & { preset_name: string; master: string }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/presets/${id}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ universe, limit }),
+    });
+    if (!r.ok) throw new Error(`Preset run failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V2 M1: Formula + Peer ───────────────────────────────────────────
+
+export interface FormulaValidation {
+  valid: boolean;
+  error: string | null;
+  used_fields: string[];
+}
+
+export interface PeerGroups {
+  scopes: Array<{
+    id: string;
+    label: string;
+    groups: Array<{ name: string; count: number }>;
+  }>;
+  stats: Array<{ id: string; label: string }>;
+}
+
+export const screenerV2Api = {
+  validateFormula: async (formula: string): Promise<FormulaValidation> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/validate-formula`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formula }),
+    });
+    if (!r.ok) throw new Error(`Formula validation failed: ${r.status}`);
+    return r.json();
+  },
+  peerGroups: async (universe = "kospi50"): Promise<PeerGroups> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/peer-groups?universe=${universe}`);
+    if (!r.ok) throw new Error(`Peer groups failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+// V2 조건 라벨 (수식/Peer 포함)
+export function conditionLabelV2(cond: FilterConditionNode, fieldLabel: (id: string) => string): string {
+  if (cond.kind === "sentiment") {
+    const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥" };
+    const srcMap: Record<string, string> = { news_score: "뉴스", call_tone: "콜 톤" };
+    return `💬 ${srcMap[cond.sentiment_source || ""] || cond.sentiment_source} ${opMap[cond.op || "lt"]} ${cond.value}`;
+  }
+  if (cond.kind === "vector_sim") {
+    return `👯 ${cond.vector_ticker} 유사도 ≥ ${cond.vector_threshold}`;
+  }
+  if (cond.kind === "behavioral") {
+    return `🧠 ${fieldLabel(cond.behavior_signal || "")}`;
+  }
+  if (cond.kind === "graph") {
+    const relMap: Record<string, string> = { supplier: "공급사", customer: "고객사", competitor: "경쟁사" };
+    return `🕸 ${cond.graph_target} ${relMap[cond.graph_relation || ""]} ${cond.graph_depth}-hop`;
+  }
+  if (cond.kind === "estimate") {
+    const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥" };
+    return `🔮 ${fieldLabel(cond.estimate_field || "")} ${opMap[cond.op || "lt"]} ${cond.value}`;
+  }
+  if (cond.kind === "z_score") {
+    const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥" };
+    const win = cond.z_window ? `${Math.round(cond.z_window / 4)}년` : "";
+    return `📉 ${fieldLabel(cond.z_field || "")} ${win} Z ${opMap[cond.op || "lt"]} ${cond.value}σ`;
+  }
+  if (cond.kind === "technical") {
+    const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥" };
+    return `📊 ${fieldLabel(cond.indicator || "")} ${opMap[cond.op || "lt"]} ${cond.value}`;
+  }
+  if (cond.kind === "event") {
+    return `📅 ${fieldLabel(cond.event_type || "")} ${cond.within_days}일 이내`;
+  }
+  if (cond.kind === "formula") {
+    const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥", eq: "=", between: "~" };
+    return `∑ (${cond.formula}) ${opMap[cond.op || "lt"]} ${cond.value}`;
+  }
+  if (cond.kind === "peer") {
+    const scopeLabel = cond.peer_scope === "market" ? "전체" : "섹터";
+    if (cond.peer_stat === "rank_pct") return `⚖ ${fieldLabel(cond.field)} ${scopeLabel} 상위 ${cond.rank_value}%`;
+    const statLabel = cond.peer_stat === "median" ? "중앙값" : "평균";
+    const opMap: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥" };
+    return `⚖ ${fieldLabel(cond.field)} ${opMap[cond.op || "lt"]} ${scopeLabel} ${statLabel}`;
+  }
+  return conditionLabel(cond, fieldLabel(cond.field));
+}
+
+
+// ─── Screener V2 M2: NL2AST Copilot ───────────────────────────────────────────
+
+export interface NL2ASTResult {
+  ast: FilterGroupNode | null;
+  explanation: string;
+  confidence: number;
+  source: "claude" | "mock" | "none";
+  error: string | null;
+}
+
+export const copilotApi = {
+  nl2ast: async (query: string): Promise<NL2ASTResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/nl2ast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!r.ok) throw new Error(`NL2AST failed: ${r.status}`);
+    return r.json();
+  },
+  examples: async (): Promise<{ examples: string[] }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/nl2ast/examples`);
+    if (!r.ok) throw new Error(`Examples failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V2 M3: Technical/Event ──────────────────────────────────────────
+
+export interface IndicatorMeta {
+  id: string; label: string; unit: string;
+  typical_min: number; typical_max: number; description: string;
+}
+export interface IndicatorCatalog {
+  categories: Array<{ id: string; label: string; indicators: IndicatorMeta[] }>;
+}
+export interface EventCatalog {
+  events: Array<{ id: string; label: string; description: string }>;
+}
+
+export const screenerV2DataApi = {
+  indicators: async (): Promise<IndicatorCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/indicators`);
+    if (!r.ok) throw new Error(`Indicators failed: ${r.status}`);
+    return r.json();
+  },
+  eventsCatalog: async (): Promise<EventCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/events-catalog`);
+    if (!r.ok) throw new Error(`Events catalog failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V2 M4: Point-in-Time ────────────────────────────────────────────
+
+export interface PITDates {
+  dates: string[];
+  disclosure_lag_days: number;
+  note: string;
+}
+
+export interface PITRunRequest {
+  universe?: string;
+  custom_tickers?: string[] | null;
+  filter_ast: FilterGroupNode;
+  as_of_date: string;
+  sort_by?: string;
+  limit?: number;
+}
+
+export const screenerPITApi = {
+  dates: async (): Promise<PITDates> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/pit-dates`);
+    if (!r.ok) throw new Error(`PIT dates failed: ${r.status}`);
+    return r.json();
+  },
+  runPit: async (req: PITRunRequest): Promise<ScreenerResponse & { as_of_date: string }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/run-pit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || `PIT run failed: ${r.status}`);
+    }
+    return r.json();
+  },
+};
+
+
+// ─── Screener V3 Phase 1: Estimates (M1) + Z-Score (M2) ───────────────────────
+
+export interface EstimateCatalog {
+  category: {
+    id: string;
+    label: string;
+    fields: Array<{
+      id: string; label: string; unit: string;
+      typical_min: number; typical_max: number;
+      higher_better: boolean; description: string;
+    }>;
+  };
+}
+
+export const screenerV3Api = {
+  estimatesCatalog: async (): Promise<EstimateCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/estimates-catalog`);
+    if (!r.ok) throw new Error(`Estimates catalog failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V3 Phase 1.5: Liquidity Gate ────────────────────────────────────
+
+export interface LiquidityProfiles {
+  profiles: Array<{ id: string; label: string; description: string }>;
+  default: string;
+}
+
+export interface LiquidityGateStats {
+  applied: boolean;
+  before: number;
+  after: number;
+  filtered_out: number;
+  floor?: {
+    min_adv_value_억: number;
+    min_market_cap_억: number;
+    max_spread_pct: number;
+    require_tradable: boolean;
+  };
+}
+
+export const liquidityApi = {
+  profiles: async (): Promise<LiquidityProfiles> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/liquidity-profiles`);
+    if (!r.ok) throw new Error(`Liquidity profiles failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V3 Phase 2: Behavioral (M3) + Graph (M4) ────────────────────────
+
+export interface BehaviorSignals {
+  signals: Array<{ id: string; label: string; description: string }>;
+}
+export interface GraphMeta {
+  relations: Array<{ id: string; label: string; description: string }>;
+  max_depth: number;
+  nodes: Array<{ code: string; name: string }>;
+}
+export interface GraphRelations {
+  supplier: Array<{ code: string; name: string }>;
+  customer: Array<{ code: string; name: string }>;
+  competitor: Array<{ code: string; name: string }>;
+}
+
+export const behavioralApi = {
+  signals: async (): Promise<BehaviorSignals> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/behavior-signals`);
+    if (!r.ok) throw new Error(`Behavior signals failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+export const graphApi = {
+  meta: async (): Promise<GraphMeta> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/graph-meta`);
+    if (!r.ok) throw new Error(`Graph meta failed: ${r.status}`);
+    return r.json();
+  },
+  search: async (q: string): Promise<{ results: Array<{ code: string; name: string }> }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/graph-search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error(`Graph search failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V3 Phase 3: Sentiment (M5) + Vector (M6) ────────────────────────
+
+export interface SentimentCatalog {
+  sources: Array<{ id: string; label: string; unit: string; typical_min: number; typical_max: number; description: string }>;
+  note: string;
+}
+export interface VectorMeta {
+  embed_dim: number;
+  nodes: Array<{ code: string; name: string }>;
+  note: string;
+}
+
+export const sentimentApi = {
+  catalog: async (): Promise<SentimentCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/sentiment-catalog`);
+    if (!r.ok) throw new Error(`Sentiment catalog failed: ${r.status}`);
+    return r.json();
+  },
+};
+export const vectorApi = {
+  meta: async (): Promise<VectorMeta> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/vector-meta`);
+    if (!r.ok) throw new Error(`Vector meta failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V3 Phase 4: Analyzers (M7 Collinearity + M8 Stress) ─────────────
+
+export interface CollinearityResult {
+  available: boolean;
+  error?: string;
+  n_stocks?: number;
+  correlation?: { labels: string[]; matrix: number[][] };
+  warnings?: string[];
+  high_correlation_pairs?: Array<{ a: string; b: string; corr: number }>;
+  style_concentration?: Record<string, number>;
+  optimization?: {
+    method: string;
+    method_label: string;
+    weights: Array<{ stock_code: string; corp_name: string; weight_pct: number; risk_score: number }>;
+    effective_n: number;
+    concentration_hhi: number;
+    note: string;
+  };
+}
+
+export interface StressTestResult {
+  available: boolean;
+  error?: string;
+  scenario?: string;
+  scenario_label?: string;
+  n_stocks?: number;
+  n_survivors?: number;
+  n_casualties?: number;
+  survival_rate?: number;
+  avg_shock_pct?: number;
+  casualties?: Array<{ stock_code: string; corp_name: string; base_score: number; shock_pct: number; stressed_score: number; survived: boolean }>;
+  most_resilient?: Array<{ stock_code: string; corp_name: string; shock_pct: number }>;
+  note?: string;
+}
+
+export interface StressScenarios {
+  scenarios: Array<{ id: string; label: string; description: string; icon: string }>;
+}
+
+export const analyzerApi = {
+  stressScenarios: async (): Promise<StressScenarios> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/stress-scenarios`);
+    if (!r.ok) throw new Error(`Stress scenarios failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener V3 Fundamental Factor Library (FFL) ─────────────────────────────
+
+export interface FundamentalsCatalog {
+  categories: Array<{
+    id: string;
+    label: string;
+    factors: Array<{
+      id: string; label: string; unit: string; higher_better: boolean;
+      typical_min: number; typical_max: number; source: string; description: string;
+    }>;
+  }>;
+  total: number;
+}
+
+export const fundamentalsApi = {
+  catalog: async (): Promise<FundamentalsCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/fundamentals-catalog`);
+    if (!r.ok) throw new Error(`Fundamentals catalog failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Screener → Backtester Bridge ─────────────────────────────────────────────
+
+export interface BacktestStatistics {
+  total_return_pct: number;
+  cagr: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  calmar_ratio: number;
+  max_drawdown_pct: number;
+  num_trades: number;
+  win_rate: number;
+  profit_factor: number;
+  avg_trade_return: number;
+  total_commission: number;
+  total_slippage: number;
+  // ── QuantStats 표준 보강 지표 (옵셔널 — 없으면 "—") ──
+  volatility_pct?: number | null;
+  downside_deviation_pct?: number | null;
+  var_pct?: number | null;
+  cvar_pct?: number | null;
+  ulcer_index?: number | null;
+  max_drawdown_days?: number | null;
+  avg_drawdown_pct?: number | null;
+  omega?: number | null;
+  recovery_factor?: number | null;
+  gain_to_pain?: number | null;
+  tail_ratio?: number | null;
+  skew?: number | null;
+  kurtosis?: number | null;
+  best_period_pct?: number | null;
+  worst_period_pct?: number | null;
+  payoff_ratio?: number | null;
+  avg_win?: number | null;
+  avg_loss?: number | null;
+  expectancy?: number | null;
+  kelly_pct?: number | null;
+  information_ratio?: number | null;
+  eod_liquidated?: number;          // 기간종료 청산 종목 수
+}
+
+// 종목별 성과 (symbol_results — 라운드트립 기반)
+export interface SymbolPerf {
+  symbol: string;
+  corp_name?: string;
+  total_return_pct: number;
+  num_trades: number;
+  round_trips?: number;
+  win_rate: number;
+  realized_pnl?: number;
+  avg_return_pct?: number;
+  avg_hold_days?: number;
+  contribution_pct?: number;
+}
+
+export interface BacktestTrade {
+  stock_code?: string;
+  corp_name?: string;
+  entry_date?: string;
+  exit_date?: string;
+  entry_price?: number;
+  exit_price?: number;
+  return_pct?: number;
+  pnl?: number;
+  quantity?: number;
+  reason?: string;
+}
+
+export interface MonthlyReturn {
+  month: string;
+  return_pct: number;
+}
+
+export interface ScreenToBacktestResult {
+  error?: boolean;
+  message?: string;
+  screened_tickers: Array<{ stock_code: string; corp_name: string; composite_score: number | null }>;
+  screened_count: number;
+  backtest: {
+    statistics: BacktestStatistics;
+    equity_curve: number[];
+    equity_dates: string[];
+    drawdown_curve: number[];
+    monthly_returns: Array<MonthlyReturn | number>;
+    benchmark?: {
+      label: string;
+      curve: number[];
+      total_return_pct: number;
+      excess_return_pct: number;
+      beta: number;
+      alpha_pct: number;
+    };
+    trades: BacktestTrade[];
+    round_trips?: BacktestTrade[];   // 매수/매도 매칭 라운드트립(조건모드) — 거래로그 표시용
+    trade_mode?: string;             // "per_trade"(조건모드) | "rebalance"(매크로 월간)
+    symbol_results?: SymbolPerf[];   // 종목별 성과 (실현손익·평균수익률·보유일·기여도)
+  };
+  backtest_config: { strategy: string; period: string; initial_capital: number };
+  data_source: { fundamentals: string; market_data: string; fully_real: boolean };
+}
+
+// 백테스트 고급 옵션 (수수료/슬리피지/손절/익절)
+export interface BacktestAdvancedParams {
+  commission_rate?: number;
+  slippage_rate?: number;
+  stop_loss_pct?: number;
+  take_profit_pct?: number;
+}
+
+// 조건식 토큰 지원 맵 (GET /condition-tokens)
+export interface TokenSupportMap {
+  supported: Record<string, string>;    // 토큰 → 그룹 (base | ohlcv | fundamental | market | macro | flow | score)
+  unsupported: Record<string, string>;  // 토큰 → 사유 (명시된 것만)
+  default_reason: string;
+  fundamental_note: string;
+  market_note?: string;
+  macro_note?: string;
+  flow_note?: string;
+  score_note?: string;                  // 점수 근사(뉴지랭크 공개 레시피) 설명
+  substitutes?: Record<string, string[]>;  // 뉴지 점수류 → 대체 제안 토큰(선택 가능)
+}
+
+// 조건식 페이로드 (Genport식) — inner_*는 중첩: 순위(변화율_기간(종가,20)) 등
+export interface BacktestConditionPayload {
+  factor_token: string;
+  function_id: string;
+  params: Record<string, string>;
+  op: string;
+  rhs: number;
+  rhs2?: number | null;
+  inner_function_id?: string | null;
+  inner_params?: Record<string, string> | null;
+  // 두 팩터 변형(비교/큰값/작은값/변화율_팩터): 두 번째 피연산자 + 자체 중첩
+  factor_token2?: string | null;
+  inner2_function_id?: string | null;
+  inner2_params?: Record<string, string> | null;
+  // 자유 산술식 (직접 입력) — 있으면 factor_token/function 무시하고 식 평가
+  expr?: string | null;
+}
+
+/** screen-to-backtest 요청 바디 — unary(screenToBacktest)와 스트리밍(screenToBacktestStream) 공용. */
+export interface ScreenToBacktestBody {
+  universe: string;
+  custom_tickers?: string[] | null;
+  filter_ast: FilterGroupNode;
+  liquidity_floor: string;
+  max_tickers: number;
+  sort_by?: string;
+  sort_dir?: string;
+  sort_by_secondary?: string | null;
+  sort_secondary_dir?: string;
+  strategy_name: string;
+  start_date: string;
+  end_date: string;
+  initial_capital?: number;
+  commission_rate?: number;
+  slippage_rate?: number;
+  stop_loss_pct?: number | null;
+  take_profit_pct?: number | null;
+  trailing_stop_pct?: number | null;
+  max_positions?: number;
+  buy_fill_type?: string;
+  sell_fill_type?: string;
+  buy_fill_offset_pct?: number;
+  sell_fill_offset_pct?: number;
+  buy_fill_expr?: string | null;
+  sell_fill_expr?: string | null;
+  expiry_fill_type?: string;
+  expiry_fill_offset_pct?: number;
+  buy_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;
+  sell_ladder?: Array<{ move_pct: number; weight_pct: number }> | null;
+  expiry_sell_method?: string;
+  max_buy_amount?: number | null;
+  cash_reserve_pct?: number;
+  asset_alloc?: {
+    etf_pct: number; stock_pct: number; rebalance_months: number;
+    fill_type: string; offset_pct: number;
+    basket: Array<{ ticker: string; weight_pct: number }>;
+  } | null;
+  max_hold_days?: number | null;
+  min_hold_days?: number;
+  day_trade?: boolean;
+  sell_divide_pct?: number;
+  max_sell_divisions?: number | null;
+  buy_weight_mode?: string;
+  buy_divide_pct?: number;
+  max_buy_per_day?: number | null;
+  max_buy_count?: number | null;
+  breakthrough_buy?: boolean;
+  breakthrough_base_type?: string;
+  breakthrough_offset_pct?: number;
+  breakthrough_direction?: string;
+  buy_timing?: string;
+  buy_conditions?: BacktestConditionPayload[] | null;
+  sell_conditions?: BacktestConditionPayload[] | null;
+  buy_logic?: string | null;
+  sell_logic?: string | null;
+  buy_sort_expr?: string | null;
+  buy_sort_desc?: boolean;
+  intraday_fill?: boolean;
+  buy_time_start?: string;
+  buy_time_end?: string;
+  sell_time_start?: string;
+  sell_time_end?: string;
+  rebalance_period?: string | null;
+  signal_lag?: number;
+  rebuy_block_days?: number;
+  market_timing?: {
+    index_ticker: string; action: string;
+    conditions: BacktestConditionPayload[];
+  } | null;
+  caps?: string[] | null;
+  sectors?: string[] | null;
+  etf?: boolean;
+  managed?: boolean;
+  supervised?: boolean;
+  groups?: Array<{ mode: string; tickers: string[] }> | null;
+  universe_eval_cap?: number;
+  allow_snapshot_fundamentals?: boolean;
+}
+
+// FastAPI 에러 응답의 detail을 사람이 읽을 수 있는 문자열로 변환.
+// 보통은 string이지만, Pydantic 422 검증 실패는 detail이 [{loc,msg,type}, ...] 배열로 옴 —
+// 이를 그대로 new Error()에 넣으면 "[object Object]"로 뭉개지므로 여기서 join.
+function extractErrorDetail(err: unknown, fallback: string): string {
+  const detail = (err as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((d) => {
+        if (d && typeof d === "object") {
+          const loc = Array.isArray((d as { loc?: unknown[] }).loc) ? (d as { loc: unknown[] }).loc.join(".") : "";
+          const msg = (d as { msg?: string }).msg ?? JSON.stringify(d);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(d);
+      })
+      .join("; ");
+  }
+  return fallback;
+}
+
+export const backtestBridgeApi = {
+// 커스텀 전략(BuilderState) 백테스트 — 빌더에서 만든 임의 전략 실행
+  customBacktest: async (body: {
+    universe: string; max_tickers: number;
+    spec: unknown;  // BuilderState
+    start_date: string; end_date: string; initial_capital: number;
+  }): Promise<ScreenToBacktestResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/screen-to-backtest`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        universe: body.universe,
+        filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
+        liquidity_floor: "standard",
+        max_tickers: body.max_tickers,
+        strategy_name: "__custom__",
+        strategy_params: { spec: body.spec },
+        start_date: body.start_date, end_date: body.end_date,
+        initial_capital: body.initial_capital,
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(extractErrorDetail(err, `Custom backtest failed: ${r.status}`));
+    }
+    return r.json();
+  },
+
+  strategies: async (): Promise<{ strategies: Array<{ id: string; label: string }> }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/backtest-strategies`);
+    if (!r.ok) throw new Error(`Strategies failed: ${r.status}`);
+    return r.json();
+  },
+  screenToBacktest: async (body: ScreenToBacktestBody): Promise<ScreenToBacktestResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/screen-to-backtest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      // 프록시/백엔드가 실어보낸 사유(detail)를 그대로 노출 — "502"만 보이던 문제 해결.
+      // 504=시간초과(분석 과대), 502=백엔드 연결불가 등 메시지로 구분됨. 422(입력값 검증 실패)는
+      // detail이 배열로 오므로 extractErrorDetail로 사람이 읽을 수 있게 변환.
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(extractErrorDetail(err, `Screen-to-backtest failed: ${r.status}`));
+    }
+    return r.json();
+  },
+
+  // SSE 스트리밍 백테스트 — screen-to-backtest 의 진행률판. 단계(screening→loading k/total→
+  // simulating→done)를 onProgress 로 흘리고 최종 결과 반환. 스트림이라 프록시 하드 타임아웃
+  // 면제 → 긴 실데이터 백테스트도 안 끊기고 진행바 표시됨.
+  screenToBacktestStream: async (
+    body: ScreenToBacktestBody,
+    onProgress?: (evt: { phase: string; done?: number; total?: number; count?: number }) => void,
+    signal?: AbortSignal,
+  ): Promise<ScreenToBacktestResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/screen-to-backtest-stream`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal,
+    });
+    if (!r.ok || !r.body) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(extractErrorDetail(err, `Screen-to-backtest failed: ${r.status}`));
+    }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let result: ScreenToBacktestResult | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() ?? "";
+      for (const part of parts) {
+        const dataLine = part.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+        let obj: { type: string; phase?: string; done?: number; total?: number; count?: number; data?: ScreenToBacktestResult; message?: string };
+        try { obj = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+        if (obj.type === "progress") onProgress?.({ phase: obj.phase ?? "", done: obj.done, total: obj.total, count: obj.count });
+        else if (obj.type === "result") result = obj.data ?? null;
+        else if (obj.type === "error") throw new Error(obj.message || "stream error");
+      }
+    }
+    if (!result) throw new Error("스트림 결과 없음");
+    return result;
+  },
+
+  fillPriceTypes: async (): Promise<{ groups: Array<{ id: string; label: string; types: Array<{ id: string; label: string }> }> }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/fill-price-types`);
+    if (!r.ok) throw new Error(`Fill price types failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 조건식 팩터 토큰 지원 맵 — 픽커 배지용 (백엔드 단일 소스)
+  conditionTokens: async (): Promise<TokenSupportMap> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/condition-tokens`);
+    if (!r.ok) throw new Error(`Condition tokens failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 논리 조건식 검증 (젠포트 '조건식 검증하기') — 파서가 단일 진실 공급원
+  validateLogic: async (expr: string, nConditions: number):
+    Promise<{ ok: boolean; lookback?: number; empty?: boolean; error?: string }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/condition-logic/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expr, n_conditions: nConditions }),
+    });
+    if (!r.ok) throw new Error(`Logic validate failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 자유 산술 팩터식 검증 (직접 입력·우선순위식)
+  validateExpr: async (expr: string):
+    Promise<{ ok: boolean; lookback?: number; tokens?: string[]; unknown_tokens?: string[]; error?: string }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/factor-expr/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expr }),
+    });
+    if (!r.ok) throw new Error(`Expr validate failed: ${r.status}`);
+    return r.json();
+  },
+
+  // 자연어 → 백테스터 조건식 (젠포트 AI 버튼)
+  conditionNl: async (query: string): Promise<{
+    conditions: BacktestConditionPayload[];
+    skipped: Array<{ field: string; reason: string }>;
+    explanation?: string; source?: string; note?: string;
+  }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/condition-nl`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!r.ok) throw new Error(`Condition NL failed: ${r.status}`);
+    return r.json();
+  },
+
+  sectors: async (): Promise<{ sectors: Array<{ id: string; label: string; size: number; sample: string[] }> }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/sectors`);
+    if (!r.ok) throw new Error(`Sectors failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+
+// ─── Live Trading (자동매매) ──────────────────────────────────────────────────
+
+export interface TradingMode {
+  mode: "mock" | "paper" | "real";
+  description: string;
+  kis_use_mock: boolean;
+  kis_is_paper: boolean;
+  has_key: boolean;
+}
+
+export interface AccountStatus {
+  mode: string;
+  cash_krw: number;
+  evaluated_total: number;
+  stock_value: number;
+  n_positions: number;
+  positions: Array<{ ticker: string; name: string; quantity: number; avg_price: number; current_price: number; eval_amount: number; pnl_pct: number }>;
+  safety: Record<string, unknown>;
+}
+
+export interface SafetyConfig {
+  kill_switch: boolean;
+  dry_run: boolean;
+  max_position_pct: number;
+  max_order_amount_krw: number;
+  max_daily_invest_krw: number;
+  max_positions: number;
+  daily_loss_limit_pct: number;
+  min_order_amount_krw: number;
+  allow_duplicate_buy: boolean;
+}
+
+export interface TradeExecutionResult {
+  mode: string;
+  executed: Array<{ stock_code: string; stock_name: string; action: string; quantity: number; price: number; amount_krw: number; success: boolean; message: string }>;
+  blocked: Array<{ stock_code: string; stock_name: string; blocked_by: string; amount_krw: number }>;
+  summary: { n_signals: number; n_executed: number; n_blocked: number; daily_invested_krw: number; warnings: string[] };
+  screened_tickers?: Array<{ stock_code: string; corp_name: string; composite_score: number | null }>;
+  screened_count?: number;
+}
+
+const DEFAULT_SAFETY: SafetyConfig = {
+  kill_switch: false, dry_run: true, max_position_pct: 0.20,
+  max_order_amount_krw: 10_000_000, max_daily_invest_krw: 50_000_000,
+  max_positions: 10, daily_loss_limit_pct: -5.0, min_order_amount_krw: 100_000,
+  allow_duplicate_buy: false,
+};
+
+export const tradingApi = {
+  mode: async (): Promise<TradingMode> => {
+    const r = await fetch(`${API_BASE}/api/v1/trading/mode`);
+    if (!r.ok) throw new Error(`Mode failed: ${r.status}`);
+    return r.json();
+  },
+  status: async (): Promise<AccountStatus> => {
+    const r = await fetch(`${API_BASE}/api/v1/trading/status`);
+    if (!r.ok) throw new Error(`Status failed: ${r.status}`);
+    return r.json();
+  },
+  screenToTrade: async (body: {
+    universe: string; filter_ast: FilterGroupNode; liquidity_floor: string;
+    max_tickers: number; action?: string; equal_weight?: boolean;
+    safety?: Partial<SafetyConfig>;
+  }): Promise<TradeExecutionResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/trading/screen-to-trade`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "buy", equal_weight: true, ...body,
+        safety: { ...DEFAULT_SAFETY, ...(body.safety || {}) } }),
+    });
+    if (!r.ok) throw new Error(`Screen-to-trade failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+export { DEFAULT_SAFETY };
+
+
+// ─── Data Quality (데이터 인프라 QA) ──────────────────────────────────────────
+
+export interface DataQualityReport {
+  n_items: number;
+  avg_score: number;
+  health: "excellent" | "good" | "fair" | "poor" | "no_data";
+  unknown_names: number;
+  unknown_pct: number;
+  issues_total: number;
+  problem_items: Array<{ stock_code: string; corp_name: string; score: number; issues: string[]; missing: string[] }>;
+  data_source: { fundamentals: string; market_data: string; fully_real: boolean };
+}
+
+export const dataQualityApi = {
+  check: async (body: { universe: string; filter_ast: FilterGroupNode; liquidity_floor: string; limit: number }): Promise<DataQualityReport> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/data-quality`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`Data quality failed: ${r.status}`);
+    return r.json();
+  },
+  masterStats: async (): Promise<{ builtin_stocks: number; sector_mapped: number; dart_cache_available: boolean; dart_cached_stocks: number; total_resolvable: number }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/stock-master/stats`);
+    if (!r.ok) throw new Error(`Master stats failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+// ─── Macro / Company / Risk (분석 탭) ─────────────────────────────────────────
+
+export interface YieldCurvePoint { label: string; years: number; yield_pct: number; trend?: string }
+export interface MacroRegime {
+  timestamp: string;
+  regime: string;
+  growth_axis: number;
+  inflation_axis: number;
+  confidence: number;
+  stress_score: number;
+  yield_curve: { spread_2y10y_bp?: number; points?: YieldCurvePoint[] } | null;
+  yield_inversion: boolean;
+  inversion_severity: number | null;
+  recommended_mode: string;
+  asset_tilts: Record<string, number | string>;
+  description: string;
+  stress_components?: Record<string, number>;
+  dynamic_risk_free_rate?: number;
+  dynamic_kill_dd_threshold?: number;
+}
+
+// ── Macro Cockpit 추가 타입 (전략·추천·대시보드·밸류) ──
+export interface TacticalHolding { ticker: string; label: string; us_ticker: string; us_label: string; weight: number }
+export interface TacticalStrategy { id: string; name: string; description: string; signal: string; family?: string; holdings: TacticalHolding[] }
+export interface MacroStrategies { market: string; as_of: string; strategies: TacticalStrategy[] }
+export interface RecommendRankItem { id: string; name: string; composite: number; fit_score: number; recent_return_12m: number | null; archetype_kr: string; signal: string }
+export interface MacroRecommend {
+  market: string; as_of: string;
+  confidence: number;            // 0~1, 국면 분류 신뢰도
+  low_conviction: boolean;       // confidence < 0.35
+  data_lag_note: string;         // 매크로 지표 후행성 안내
+  regime: { quadrant: string; quadrant_kr: string; stress: number; cycle: string; confidence: number };
+  top: {
+    id: string; name: string; signal: string; fit_score: number; composite: number;
+    holdings: TacticalHolding[];         // 원 전략 배분(랭킹 계산 기준)
+    holdings_final: TacticalHolding[];   // 신뢰도 오버레이 적용 — 화면 표시용
+    cash_overlay_pct: number;            // holdings_final 중 현금성(BIL) 비중
+  };
+  narrative: string; narrative_source: "rule" | "claude";
+  ranking: RecommendRankItem[];
+  // ── v2 (CIO 리팩토링) ──
+  regime_probs?: Record<string, number>;   // 사분면 확률(합=1) — 정적 신뢰도% 대체
+  macro_allocation?: MacroAllocation;      // 매크로 임베딩 4계절 배분 (1순위 추천)
+}
+export interface MacroAllocAttribution {
+  ticker: string; label: string; base: number; growth: number; inflation: number;
+  stress: number; final: number;
+}
+export interface MacroAllocBand { ticker: string; label: string; p10: number; p50: number; p90: number }
+export interface MacroAllocation {
+  holdings: TacticalHolding[];
+  attribution: MacroAllocAttribution[];
+  bands: MacroAllocBand[];
+  inputs: { growth: number; inflation: number; stress: number; se_g: number; se_i: number };
+  method: string; note: string;
+}
+export interface CbSentimentBank {
+  available: boolean; score?: number; label?: string; hawkish_hits?: number;
+  dovish_hits?: number; terms?: string[]; note?: string; source?: string;
+}
+export interface CbSentiment { as_of: string; banks: { fed?: CbSentimentBank; bok?: CbSentimentBank }; method: string }
+export interface CausalEdge { from: string; to: string; from_label: string; to_label: string; lag: number; p: number }
+export interface CausalGraph {
+  available: boolean; nodes: { id: string; label: string }[]; edges: CausalEdge[];
+  method?: string; note?: string;
+}
+// ── v3 시각화 (밸리AI 흡수) ──
+export interface CycleStrips {
+  market: string; months: string[]; note: string;
+  indicators: { key: string; label: string; transform: string; cells: (number | null)[] }[];
+}
+export interface AxisHistory {
+  market: string; note: string;
+  points: { t: string; growth: number; inflation: number;
+    growth_parts: Record<string, number>; inflation_parts: Record<string, number> }[];
+}
+export interface AssetStrips {
+  market: string; months: number; note: string;
+  assets: { ticker: string; label: string; cells: (number | null)[]; now: number | null }[];
+}
+export interface KrUsCompare {
+  note: string;
+  rows: { label: string; kr: number | null; us: number | null; gap: number | null }[];
+}
+export interface MacroIndicator { id: string; name: string; unit: string; latest: number | null; z_score: number | null; percentile: number | null; delta: number | null; spark: number[] }
+export interface MacroTheme { key: string; label: string; indicators: MacroIndicator[] }
+export interface MacroDashboard { as_of: string; themes: MacroTheme[]; sources: { fred: boolean; bok: boolean } }
+export interface MacroValuation {
+  assets: Array<{ key: string; label: string; z: number | null }>;
+  kr_market: { n: number; per_median: number; pbr_median: number } | null;
+  sources: { prices: boolean; fundamentals: boolean };
+}
+
+// ── 상관/타이밍/궤적 (macro_analytics) ──
+export interface CorrPoint { t: string; corr: number }
+export interface CorrPair { key: string; label: string; series: CorrPoint[] }
+export interface MacroCorrelations {
+  matrix: { tickers: string[]; labels: string[]; values: number[][] };
+  pairs: CorrPair[];
+  avg_corr: CorrPoint[];
+  stock_bond_now: { corr: number | null; verdict: string };
+  sources: { prices: boolean };
+}
+export interface TimingComponent { key: string; label: string; value: number | null; score: number; weight: number }
+export interface TrendRow { ticker: string; label: string; vs_ma200_pct: number | null; mom_12m: number | null; dist_52w_high: number | null; rsi: number | null; trend: string }
+export interface MacroTiming {
+  composite: { score: number; label: string };
+  components: TimingComponent[];
+  history: Array<{ t: string; score: number }>;
+  assets: TrendRow[];
+  sources: { prices: boolean; fred: boolean };
+}
+export interface TrajectoryPoint { t: string; growth: number; inflation: number; quadrant: string }
+export interface MacroTrajectory {
+  path: TrajectoryPoint[];
+  transitions: Array<{ t: string; from: string; to: string }>;
+  sources: { fred: boolean; bok: boolean };
+}
+
+// ── 전략 상세 (strategy_profiles) ──
+export interface StrategyReference { authors: string; year: string; title: string; venue?: string }
+export interface StrategyProfile {
+  concept: string; mechanism: string[]; rationale: string; regime_note: string;
+  params: Record<string, string>; references: StrategyReference[];
+}
+export interface RegimeFit { quadrant: string; quadrant_kr: string; fit: number }
+export interface PerfPoint { t: string; v: number }
+export interface PerfSummary {
+  total_return_pct: number; cagr_pct: number; mdd_pct: number; vol_pct: number; recent_12m_pct: number | null;
+}
+export interface StrategyDetail {
+  id: string; name: string; family: string; signal: string; archetype: string; archetype_kr: string;
+  holdings: TacticalHolding[]; profile: StrategyProfile; regime_fit: RegimeFit[];
+  perf: { curve: PerfPoint[]; summary: PerfSummary }; recent_return_12m: number | null;
+  sources: { prices: boolean };
+}
+export interface StrategyAI { content: string; tokens: number; cost_krw: number; cached: boolean; error?: string | null }
+
+// ── 전략 → 백테스터 셋업 구성 (하이브리드) ──
+export interface StrategyBacktestConfig {
+  id: string; name: string; family: string; market: string;
+  mode: "conditions" | "asset_alloc" | "engine"; note: string;
+  // conditions
+  universe_codes?: string[];
+  buy_conditions?: Array<{ expr: string; op?: string; rhs?: number }>;
+  buy_logic?: string | null;
+  sort_expr?: string | null;
+  sort_desc?: boolean;
+  max_tickers?: number;
+  rebalance_period?: string;
+  // asset_alloc
+  basket?: Array<{ ticker: string; name: string; weight_pct: number }>;
+  rebalance_months?: number;
+  // engine
+  engine_strategy?: string;
+}
+
+export interface ValuationResult {
+  stock_code: string;
+  corp_name?: string;
+  current_price: number;
+  intrinsic_value: number;
+  gap_pct: number;
+  verdict: string;
+  models: Array<{ model: string; intrinsic_value: number; weight: number }>;
+}
+
+export const analysisApi = {
+  macroRegime: async (): Promise<MacroRegime> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime`);
+    if (!r.ok) throw new Error(`Macro regime failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategies: async (market: "us" | "kr" = "kr"): Promise<MacroStrategies> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategies?market=${market}`);
+    if (!r.ok) throw new Error(`Macro strategies failed: ${r.status}`);
+    return r.json();
+  },
+  macroRecommend: async (market: "us" | "kr" = "kr"): Promise<MacroRecommend> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/recommend?market=${market}`);
+    if (!r.ok) throw new Error(`Macro recommend failed: ${r.status}`);
+    return r.json();
+  },
+  macroDashboard: async (): Promise<MacroDashboard> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/dashboard`);
+    if (!r.ok) throw new Error(`Macro dashboard failed: ${r.status}`);
+    return r.json();
+  },
+  macroValuation: async (): Promise<MacroValuation> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/valuation`);
+    if (!r.ok) throw new Error(`Macro valuation failed: ${r.status}`);
+    return r.json();
+  },
+  macroCorrelations: async (market: "us" | "kr" = "kr"): Promise<MacroCorrelations> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/correlations?market=${market}`);
+    if (!r.ok) throw new Error(`Macro correlations failed: ${r.status}`);
+    return r.json();
+  },
+  macroTiming: async (market: "us" | "kr" = "kr"): Promise<MacroTiming> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/timing?market=${market}`);
+    if (!r.ok) throw new Error(`Macro timing failed: ${r.status}`);
+    return r.json();
+  },
+  macroTrajectory: async (): Promise<MacroTrajectory> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime-trajectory`);
+    if (!r.ok) throw new Error(`Macro trajectory failed: ${r.status}`);
+    return r.json();
+  },
+  // v2: 중앙은행 센티먼트 게이지 + 그레인저 인과 그래프
+  cbSentiment: async (): Promise<CbSentiment> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/cb-sentiment`);
+    if (!r.ok) throw new Error(`CB sentiment failed: ${r.status}`);
+    return r.json();
+  },
+  causalGraph: async (): Promise<CausalGraph> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/causal-graph`);
+    if (!r.ok) throw new Error(`Causal graph failed: ${r.status}`);
+    return r.json();
+  },
+  // v3: 사이클 스트립 · 하위요인 시계열 · 자산 스트립 · KR/US 비교
+  cycleStrips: async (market: "kr" | "us" = "kr"): Promise<CycleStrips> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/cycle-strips?market=${market}`);
+    if (!r.ok) throw new Error(`cycle-strips failed: ${r.status}`);
+    return r.json();
+  },
+  axisHistory: async (market: "kr" | "us" = "kr"): Promise<AxisHistory> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/axis-history?market=${market}`);
+    if (!r.ok) throw new Error(`axis-history failed: ${r.status}`);
+    return r.json();
+  },
+  assetStrips: async (market: "kr" | "us" = "kr"): Promise<AssetStrips> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/asset-strips?market=${market}`);
+    if (!r.ok) throw new Error(`asset-strips failed: ${r.status}`);
+    return r.json();
+  },
+  compareKrUs: async (): Promise<KrUsCompare> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/compare-krus`);
+    if (!r.ok) throw new Error(`compare-krus failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategyDetail: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyDetail> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}?market=${market}`);
+    if (!r.ok) throw new Error(`Strategy detail failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategyAI: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyAI> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/ai?market=${market}`, { method: "POST" });
+    if (!r.ok) throw new Error(`Strategy AI failed: ${r.status}`);
+    return r.json();
+  },
+  macroStrategyBacktestConfig: async (sid: string, market: "us" | "kr" = "kr"): Promise<StrategyBacktestConfig> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/strategy/${sid}/backtest-config?market=${market}`);
+    if (!r.ok) throw new Error(`Strategy backtest-config failed: ${r.status}`);
+    return r.json();
+  },
+  // 종목 단건 평가: 스크리너로 해당 종목을 찾아 가치평가 결과(intrinsic/gap/verdict + 펀더멘털) 반환
+  companyLookup: async (universe: string, stockCode: string): Promise<import("@/shared/api/screenerApi").ScreenerItem | null> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/run-advanced`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        universe,
+        filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
+        limit: 200, liquidity_floor: "relaxed",
+      }),
+    });
+    if (!r.ok) throw new Error(`Company lookup failed: ${r.status}`);
+    const data = await r.json();
+    return data.items.find((it: { stock_code: string }) => it.stock_code === stockCode) ?? null;
+  },
+  // 리스크: 스크리너 stress_test analyzer 재사용
+  stressTest: async (universe: string, scenario: string): Promise<{
+    analyzers: { stress_test?: { survival_rate: number; n_survivors: number; n_casualties: number; avg_shock_pct: number; casualties: Array<{ stock_code: string; corp_name: string; shock_pct: number; survived: boolean }>; scenario_label?: string } };
+    data_source: { fundamentals: string; market_data: string; fully_real: boolean };
+    total_passed: number;
+  }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/run-advanced`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        universe,
+        filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
+        limit: 30, liquidity_floor: "standard",
+        analyzers: ["stress_test"], analyzer_params: { stress_test: { scenario } },
+      }),
+    });
+    if (!r.ok) throw new Error(`Stress test failed: ${r.status}`);
+    return r.json();
+  },
+  stressScenarios: async (): Promise<{ scenarios: Array<{ id: string; label: string }> }> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/stress-scenarios`);
+    if (!r.ok) throw new Error(`Scenarios failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// companyApi — Company Analysis 페이지 전용 단일종목 데이터 (실API 조립)
+// ═══════════════════════════════════════════════════════════════════════════════
+const POST = (path: string, body: unknown) =>
+  fetch(`${API_BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export interface PriceBar { date: string; open: number; high: number; low: number; close: number; volume: number; trading_value?: number }
+export interface FinancialHistoryRow { year: string; revenue_억: number | null; operating_profit_억: number | null; net_income_억: number | null; total_assets_억: number | null; total_equity_억: number | null; fcf_억: number | null; roe_pct: number | null; roa_pct: number | null; debt_ratio_pct: number | null; eps: number | null; bps: number | null; dps: number | null }
+export interface FinancialHistory { stock_code: string; corp_name: string; sector: string; n_years: number; financials: FinancialHistoryRow[] }
+export interface EvaluateOverrides { beta?: number; risk_free_rate?: number; market_premium?: number; terminal_growth?: number; projection_years?: number; market_cap?: number }
+export interface SignalResp { stock_code: string; stock_name: string; action: string; strength: number; reason: string; is_actionable: boolean; is_strong: boolean; strategy: string }
+export interface NarrativeResp { content: string; model: string; input_tokens: number; output_tokens: number; total_tokens: number; cost_usd: number; cost_krw: number; elapsed_seconds: number; cached: boolean; error?: string | null }
+export interface SymbolItem { code: string; name: string; market?: string; sector?: string; listing_date?: string }
+
+// ── 기업분석 심화 (valuation-sandbox / financial-deep / risk-deep) ──
+export interface SandboxAssumption { key: string; label: string; value: number; source: string }
+export interface FootballBand {
+  id: string; label: string; available?: boolean; note?: string;
+  lo: number | null; hi: number | null; mid: number | null;
+}
+export interface CompsRow {
+  code: string; name: string; mcap: number | null; per: number | null; pbr: number | null;
+  ev_ebitda: number | null; roe: number | null; op_margin: number | null; rev_growth: number | null;
+}
+export interface ValuationSandbox {
+  unified: { value: number; gap_pct: number; verdict: string;
+    models: { model: string; value: number; available: boolean; error: string | null }[] };
+  assumptions: SandboxAssumption[];
+  sensitivity: { ke_axis: number[]; g_axis: number[]; grid: (number | null)[][]; current_price: number };
+  defaults: { rf: number; beta: number; erp: number; g: number; years: number };
+  football_field: { current_price: number; bands: FootballBand[] };
+  comps: { sector?: string; rows: CompsRow[]; median_row: Partial<CompsRow>;
+    implied: { per_based: number | null; pbr_based: number | null; ev_ebitda_based: number | null };
+    scatter?: { code: string; name: string; upside: number; quality: number; self: boolean }[] };
+}
+
+export interface FinancialDeep {
+  available: boolean; note?: string;
+  qoe: { years: number[]; ni: number[]; ocf: number[]; gap: number[];
+    accruals: (number | null)[]; red_flags: { rule: string; severity: string; msg: string }[] };
+  nwc: { years: number[]; nwc: number[]; nwc_to_rev_pct: (number | null)[] };
+  waterfall: { years: number[]; ocf: number[]; capex: number[]; dividends: number[];
+    debt_delta: (number | null)[]; residual: number[]; note: string };
+  dupont: { years: number[]; net_margin: (number | null)[]; asset_turnover: (number | null)[];
+    leverage: (number | null)[]; roe: (number | null)[] };
+  roic_wacc: { roic: number; wacc: number; spread: number; verdict: string; note: string } | null;
+}
+
+export interface RiskDeep {
+  altman: { z: number | null; zone: string | null;
+    components: { id: string; label: string; weight: number; value: number; contribution: number }[] };
+  beneish: { available: boolean; note?: string; m_score: number | null; flag: string | null;
+    indices: { id: string; label: string; value: number; basis: "real" | "approx" | "neutral" }[] };
+  coverage: { years: number[]; interest_coverage: (number | null)[];
+    net_debt_to_ebitda: (number | null)[]; note: string };
+  rate_stress: { rows: { shock_bp: number; interest_coverage: number | null;
+    dcf_value: number | null; unified_value: number | null }[]; note: string };
+}
+
+export const companyApi = {
+  // 단일 종목 — 116팩터 + 점수 + valuation 요약 (custom_tickers로 임의 종목 대응)
+  byTicker: async (code: string): Promise<ScreenerItem | null> => {
+    const r = await POST(`/api/v1/screener/run-advanced`, {
+      universe: "all_listed", custom_tickers: [code],
+      filter_ast: { logic: "AND", conditions: [], groups: [] }, limit: 1, liquidity_floor: "off",
+    });
+    if (!r.ok) throw new Error(`company byTicker failed: ${r.status}`);
+    const d = await r.json();
+    return d.items?.[0] ?? null;
+  },
+  // 퍼센타일 계산용 유니버스 표본
+  universeSample: async (universe = "kospi200"): Promise<ScreenerItem[]> => {
+    const r = await POST(`/api/v1/screener/run-advanced`, {
+      universe, filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
+      limit: 300, liquidity_floor: "relaxed",
+    });
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+  // 퍼센타일 분포 — factor_snapshot(DB)에서 즉시 (라이브 130종목 재계산 회피). 비면 [].
+  factorSample: async (limit = 600): Promise<ScreenerItem[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/factor-sample?limit=${limit}`);
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+  // 섹터 피어
+  peersBySector: async (sector: string): Promise<ScreenerItem[]> => {
+    const r = await POST(`/api/v1/screener/run-advanced`, {
+      universe: `sector:${sector}`, filter_ast: { logic: "AND", conditions: [], groups: [] }, limit: 24, liquidity_floor: "off",
+    });
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+  // 기업분석 심화: 샌드박스+민감도+풋볼필드+Comps (1콜)
+  valuationSandbox: async (code: string, price: number,
+    o: { rf?: number; beta?: number; erp?: number; g?: number; years?: number } = {},
+  ): Promise<ValuationSandbox> => {
+    const qs = new URLSearchParams({ price: String(price) });
+    for (const [k, v] of Object.entries(o)) if (v != null) qs.set(k, String(v));
+    const r = await fetch(`${API_BASE}/api/v1/company/${code}/valuation-sandbox?${qs.toString()}`);
+    if (!r.ok) throw new Error(`valuation-sandbox failed: ${r.status}`);
+    return r.json();
+  },
+  // 기업분석 심화: QoE·NWC·워터폴·듀폰 (1콜)
+  financialDeep: async (code: string): Promise<FinancialDeep> => {
+    const r = await fetch(`${API_BASE}/api/v1/company/${code}/financial-deep`);
+    if (!r.ok) throw new Error(`financial-deep failed: ${r.status}`);
+    return r.json();
+  },
+  // 기업분석 심화: Altman 분해·Beneish 8지수·커버리지·금리 스트레스 (1콜)
+  riskDeep: async (code: string, price: number): Promise<RiskDeep> => {
+    const r = await fetch(`${API_BASE}/api/v1/company/${code}/risk-deep?price=${price}`);
+    if (!r.ok) throw new Error(`risk-deep failed: ${r.status}`);
+    return r.json();
+  },
+  // 3모형 상세 + 시나리오용 가정 오버라이드
+  evaluate: async (code: string, price: number, o: EvaluateOverrides = {}): Promise<ValuationDetail> => {
+    const r = await POST(`/api/v1/valuation/evaluate`, {
+      stock_code: code, current_price: price, market_cap: o.market_cap ?? null,
+      beta: o.beta ?? 1.0, risk_free_rate: o.risk_free_rate ?? 0.035, market_premium: o.market_premium ?? 0.06,
+      terminal_growth: o.terminal_growth ?? 0.02, projection_years: o.projection_years ?? 10,
+      weight_rim: 0.4, weight_dcf: 0.4, weight_ddm: 0.2,
+    });
+    if (!r.ok) throw new Error(`evaluate failed: ${r.status}`);
+    return r.json();
+  },
+  // 재무 시계열 (period=annual: N년 / quarter: 분기). price·marketCap 주면 EPS/BPS 도출.
+  financial: async (code: string, years = 8, period: "annual" | "quarter" = "annual", price?: number, marketCap?: number): Promise<FinancialHistory | null> => {
+    const qs = new URLSearchParams({ years: String(years), period });
+    if (price && price > 0) qs.set("price", String(price));
+    if (marketCap && marketCap > 0) qs.set("market_cap", String(marketCap));
+    const r = await fetch(`${API_BASE}/api/v1/valuation/financial/${code}?${qs.toString()}`);
+    if (r.status === 404) return null;
+    if (!r.ok) return null;
+    return r.json();
+  },
+  // 일봉 (DB 캐시 — 비어있으면 [] → 호출측 합성 폴백)
+  prices: async (code: string, days = 400): Promise<PriceBar[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/prices/${code}?days=${days}`);
+    if (!r.ok) return [];
+    return (await r.json()).prices ?? [];
+  },
+  // 밸류체인 관계 (M4)
+  graphRelations: async (code: string): Promise<GraphRelations> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/graph-relations/${code}`);
+    if (!r.ok) return { supplier: [], customer: [], competitor: [] };
+    return r.json();
+  },
+  // 기술 시그널
+  signal: async (code: string, name: string, strategy = "골든크로스"): Promise<SignalResp | null> => {
+    const r = await POST(`/api/v1/strategies/signal`, { stock_code: code, stock_name: name, strategy, params: {} });
+    if (!r.ok) return null;
+    return r.json();
+  },
+  // AI 내러티브 (Claude)
+  narrative: async (stockItem: object, valuationDetail: object): Promise<NarrativeResp> => {
+    const r = await POST(`/api/v1/narrative/stock`, { stock_item: stockItem, valuation_detail: valuationDetail, max_tokens: 1600 });
+    if (!r.ok) throw new Error(`narrative failed: ${r.status}`);
+    return r.json();
+  },
+  // 리스크 — VaR (DB 일봉 필요; 없으면 에러 → 호출측 graceful)
+  riskVar: async (code: string): Promise<Record<string, unknown> | null> => {
+    const r = await POST(`/calculate-var`, { ticker: code, portfolio_value: 1e8, confidence_level: 0.99, holding_period: 1, use_ewma: true });
+    if (!r.ok) return null;
+    return r.json();
+  },
+  symbolsSearch: async (q: string): Promise<SymbolItem[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/symbols/search?q=${encodeURIComponent(q)}&limit=12`);
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+  // 종목명/코드 자동완성 (전체 상장사) — "삼" → 삼성전자·삼성SDI…
+  stockSearch: async (q: string, limit = 12): Promise<{ code: string; name: string }[]> => {
+    const r = await fetch(`${API_BASE}/api/v1/screener/stock-search?q=${encodeURIComponent(q)}&limit=${limit}`);
+    if (!r.ok) return [];
+    return (await r.json()).items ?? [];
+  },
+};

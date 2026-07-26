@@ -4,7 +4,7 @@
 // v1 범위: paper portfolio·rebalance preview·execution plan·approval workflow.
 // 실 주문·계좌 제어·자동매매는 v1 범위 밖 (지시서).
 import React from "react";
-import { ExecutionRoom } from "@/components/allocation/ExecutionRoom";
+import { ExecutionRoom } from "@/widgets/allocation/ExecutionRoom";
 
 export default function ExecutionWorkspace() {
   return <ExecutionRoom />;

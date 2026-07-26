@@ -4,12 +4,12 @@
 // (위저드 진입점은 게이트(/allocation) — 이 화면은 "요약" 북엔드로 접근.)
 import React from "react";
 import { useRouter } from "next/navigation";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { overallConfidence } from "@/components/allocation/ViewBuilder";
-import { ResearchTimeline } from "@/components/allocation/ResearchTimeline";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { overallConfidence } from "@/widgets/allocation/ViewBuilder";
+import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";
 import {
   FactorXRayBars, FrontierChart, RiskContribDonut, fmtSign,
-} from "@/components/allocation/parts";
+} from "@/widgets/allocation/parts";
 
 function Xlink({ to, label }: { to: string; label: string }) {
   const router = useRouter();
