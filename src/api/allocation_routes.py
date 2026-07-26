@@ -849,6 +849,57 @@ class KrScenarioRequest(BaseModel):
     sleeves: dict[str, str] | None = None    # code → 슬리브명 (있으면 취약 슬리브 귀속)
 
 
+_STRESS_FAMILY_LABEL = {
+    "hypothetical": "가상 충격", "historical": "역사 리플레이", "kr_pack": "국내 시나리오팩",
+}
+_STRESS_NOTE = (
+    "가상·국내팩은 팩터 민감도로 추정한 충격이라 severity 배율이 적용됩니다. "
+    "역사 리플레이는 실제 시세를 그대로 재생하므로 배율이 적용되지 않으며, "
+    "적재된 시세 범위를 벗어난 구간은 합성하지 않고 미가용으로 표시합니다."
+)
+
+
+@router.get("/stress-scenarios")
+def allocation_stress_scenarios():
+    """통합 시나리오 카탈로그 — 가상(M8) · 역사 리플레이 · 국내팩을 한 창에서.
+
+    기존 /stress-catalog(가상+역사)와 /kr-scenario-catalog(국내)를 패밀리로 묶어
+    검색·분류 가능한 단일 카탈로그로 제공. 두 레거시 엔드포인트는 그대로 유지.
+    """
+    try:
+        legacy = allocation_stress_catalog()["scenarios"]
+        groups: list[dict] = []
+        for fam in ("hypothetical", "historical"):
+            items = [{
+                "id": s["id"], "label": s["label"], "description": s["description"],
+                "family": fam, "mode": s["mode"], "available": bool(s.get("available")),
+                "severity_applies": fam == "hypothetical",
+                "source": ("종목 펀더멘털·베타 민감도 기반 추정 충격 (M8 analyzer)"
+                           if fam == "hypothetical" else "적재된 실제 일봉 시세 리플레이"),
+                **({"reason": s["reason"]} if s.get("reason") else {}),
+            } for s in legacy if s.get("mode") == fam]
+            if items:
+                groups.append({"family": fam, "label": _STRESS_FAMILY_LABEL[fam], "items": items})
+
+        kr = allocation_kr_scenario_catalog()["scenarios"]
+        groups.append({"family": "kr_pack", "label": _STRESS_FAMILY_LABEL["kr_pack"], "items": [{
+            "id": s["id"], "label": s["label"], "description": s["description"],
+            "family": "kr_pack", "mode": "kr_pack", "available": True,
+            "severity_applies": True, "source": s.get("source") or "국내 시장 구조 가정",
+        } for s in kr]})
+
+        return {
+            "groups": groups,
+            "families": [{"id": g["family"], "label": g["label"]} for g in groups],
+            "note": _STRESS_NOTE,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("stress-scenarios 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 @router.get("/kr-scenario-catalog")
 def allocation_kr_scenario_catalog():
     """국내 7종 시나리오 목록 — 라벨·설명·충격 출처."""

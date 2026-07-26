@@ -1,19 +1,40 @@
 "use client";
-// 05 STRESS — 견고성 검증. 좌: 시나리오 + 강도(severity) + μ충격 + 상관-국면 컨트롤 /
+// 05 STRESS — 견고성 검증. 좌: 통합 시나리오 창 + μ충격 + 상관-국면 컨트롤 /
 // 우: Sensitivity Heatmap(기댓값→비중 민감도) + 상관-국면 스트레스(위기 상관 수렴 → Δ변동성·ΔVaR)
-// + 시나리오 상세. 백엔드: /sensitivity · /stress(severity) · /stress-correlation.
+// + 선택 시나리오 상세. 백엔드: /sensitivity · /stress(severity) · /stress-correlation ·
+// /stress-scenarios(통합 카탈로그).
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { allocationApi } from "@/lib/allocationApi";
+import { allocationApi, type StressFamily } from "@/lib/allocationApi";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { SensitivityHeatmap, StressChart, fmtSign } from "@/components/allocation/parts";
 import { KrScenarioPack } from "@/components/allocation/KrScenarioPack";
+import { StressScenarioModal } from "@/components/allocation/StressScenarioModal";
+
+const FAMILY_LABEL: Record<StressFamily, string> = {
+  hypothetical: "가상 충격", historical: "역사 리플레이", kr_pack: "국내 시나리오팩",
+};
 
 export default function RobustnessWorkspace() {
   const {
     holdings, holdingsMap, views, delta, tau, scenario, pickScenario, scenarios,
     stressQ, canRun, severity, setSeverity,
   } = useAllocation();
+  // 통합 시나리오 창 — 세 패밀리 중 무엇이 활성인지로 상세 카드 순서를 결정
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [family, setFamily] = useState<StressFamily>("hypothetical");
+  const [krScenario, setKrScenario] = useState("semi_selloff");
+  const activeId = family === "kr_pack" ? krScenario : scenario;
+  // 라벨·강도적용 여부는 통합 카탈로그에서 (모달과 동일 쿼리 키 → 캐시 공유, 추가 요청 0)
+  const scenCatQ = useQuery({
+    queryKey: ["allocation", "stress-scenarios"],
+    queryFn: () => allocationApi.stressScenarios(),
+    staleTime: Infinity,
+  });
+  const activeMeta = (scenCatQ.data?.groups ?? [])
+    .flatMap((g) => g.items).find((i) => i.id === activeId);
+  const activeLabel = activeMeta?.label
+    ?? scenarios.find((s) => s.id === scenario)?.label ?? activeId;
   const [bump, setBump] = useState(2.0);          // μ 충격 크기 (연 %p) — 커밋 시 재계산
   const [bumpCommitted, setBumpCommitted] = useState(2.0);
   // 상관-국면 스트레스
@@ -49,23 +70,28 @@ export default function RobustnessWorkspace() {
     <div className="as-ws2 as-ws-rob">
       <aside className="as-center">
         <section className="as-card">
-          <div className="as-card-title">SCENARIOS</div>
-          <div className="as-scenario-list">
-            {scenarios.map((s) => (
-              <button key={s.id} disabled={!s.available} title={s.reason || s.description}
-                className={`as-scen${scenario === s.id ? " on" : ""}${!s.available ? " off" : ""}`}
-                onClick={() => pickScenario(s.id)}>
-                <span>{s.label}</span>
-                <em>{s.mode === "historical" ? (s.available ? "역사 리플레이" : "데이터 미보유") : "가상"}</em>
-              </button>
-            ))}
+          <div className="as-card-title">SCENARIO <span className="as-note-inline">가상 · 역사 리플레이 · 국내팩 통합</span></div>
+          <div className="tfc-list">
+            <div className="tfc-chip">
+              <div className="tfc-chip-main">
+                <span className="tfc-chip-t">{activeLabel}</span>
+                <span className="tfc-chip-tk">{FAMILY_LABEL[family]}</span>
+                <span className="tfc-chip-cond num">
+                  {activeMeta?.severity_applies === false ? "강도 미적용" : `${severity.toFixed(2)}×`}
+                </span>
+              </div>
+            </div>
           </div>
-          <label className="as-param">
-            <span>시나리오 강도 (severity) <b className="num">{severity.toFixed(2)}×</b></span>
-            <input type="range" min={0.25} max={3} step={0.25} value={severity}
-              onChange={(e) => setSeverity(parseFloat(e.target.value))} />
-            <em className="as-note-inline">가상 시나리오 충격을 배율만큼 확대/축소 (역사 리플레이 제외)</em>
-          </label>
+          <button className="as-fb-apply" onClick={() => setPickerOpen(true)}>+ 시나리오 창에서 선택</button>
+          <div className="as-note">
+            15종을 한 창에서 검색·비교합니다. 미가용 시나리오는 창에 사유가 함께 표시됩니다.
+          </div>
+          <StressScenarioModal open={pickerOpen} onClose={() => setPickerOpen(false)}
+            selectedId={activeId} severity={severity} onSeverity={setSeverity}
+            onPick={(s) => {
+              setFamily(s.family);
+              if (s.family === "kr_pack") setKrScenario(s.id); else pickScenario(s.id);
+            }} />
         </section>
         <section className="as-card">
           <div className="as-card-title">SENSITIVITY 충격 변수</div>
@@ -107,7 +133,8 @@ export default function RobustnessWorkspace() {
         </section>
       </aside>
       <main className="as-center">
-        <KrScenarioPack />
+        {/* 선택한 패밀리의 결과를 위로 — 두 상세 카드는 항상 렌더(정보 손실 없음), 순서만 포커스 */}
+        {family === "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={setKrScenario} />}
         <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`}>
           <div className="as-card-title">SENSITIVITY HEATMAP <span className="as-note-inline">기댓값 변동 → 최적 비중 반응 (Δ%p)</span></div>
           {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
@@ -191,6 +218,7 @@ export default function RobustnessWorkspace() {
             <div className="as-empty">{stressQ.data.reason || "해당 시나리오 데이터 미보유"}</div>
           )}
         </section>
+        {family !== "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={(id) => { setKrScenario(id); setFamily("kr_pack"); }} />}
       </main>
     </div>
   );

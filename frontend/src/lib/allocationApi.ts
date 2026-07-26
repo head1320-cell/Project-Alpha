@@ -141,6 +141,25 @@ export interface StressScenarioMeta {
   reason?: string;
 }
 
+// ── 통합 시나리오 카탈로그 (가상 · 역사 리플레이 · 국내팩) ──
+export type StressFamily = "hypothetical" | "historical" | "kr_pack";
+export interface StressScenarioItem {
+  id: string;
+  label: string;
+  description: string;
+  family: StressFamily;
+  mode: StressFamily;
+  available: boolean;
+  severity_applies: boolean;
+  source: string;
+  reason?: string;
+}
+export interface StressScenarioCatalog {
+  groups: { family: StressFamily; label: string; items: StressScenarioItem[] }[];
+  families: { id: StressFamily; label: string }[];
+  note: string;
+}
+
 export interface StressResult {
   error: boolean;
   message?: string;
@@ -432,6 +451,12 @@ export const allocationApi = {
       body: JSON.stringify(req),
     });
     if (!r.ok) throw new Error(`Sensitivity failed: ${r.status}`);
+    return r.json();
+  },
+
+  stressScenarios: async (): Promise<StressScenarioCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/stress-scenarios`);
+    if (!r.ok) throw new Error(`stress-scenarios failed: ${r.status}`);
     return r.json();
   },
 

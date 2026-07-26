@@ -8,9 +8,15 @@ import { useAllocation } from "./AllocationProvider";
 
 const col = (v: number) => (v >= 0 ? "var(--color-bull)" : "var(--color-bear)");
 
-export function KrScenarioPack() {
+export function KrScenarioPack({ scenario: controlled, onPick }: {
+  /** 통합 시나리오 창이 선택을 주도할 때 — 미지정이면 기존처럼 자체 상태 사용(하위호환). */
+  scenario?: string;
+  onPick?: (id: string) => void;
+} = {}) {
   const { holdingsMap, canRun, severity } = useAllocation();
-  const [scenario, setScenario] = useState("semi_selloff");
+  const [own, setOwn] = useState("semi_selloff");
+  const scenario = controlled ?? own;
+  const setScenario = (id: string) => (onPick ? onPick(id) : setOwn(id));
 
   const catQ = useQuery({
     queryKey: ["allocation", "kr-scen-catalog"],
@@ -28,14 +34,18 @@ export function KrScenarioPack() {
   return (
     <section className={`as-card${runQ.isLoading ? " as-loading" : ""}`}>
       <div className="as-card-title">국내 시나리오팩 <span className="as-note-inline">7종 · 팩터 기반 충격 · 강도 {severity.toFixed(2)}×</span></div>
-      <div className="as-scenario-list as-krs-list">
-        {cats.map((s) => (
-          <button key={s.id} title={`${s.description}\n출처: ${s.source}`}
-            className={`as-scen${scenario === s.id ? " on" : ""}`} onClick={() => setScenario(s.id)}>
-            <span>{s.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* 통합 시나리오 창이 선택을 주도하면 중복 목록은 렌더하지 않는다
+          (hidden 속성은 .as-scenario-list의 display:flex에 밀리므로 조건부 렌더) */}
+      {!onPick && (
+        <div className="as-scenario-list as-krs-list">
+          {cats.map((s) => (
+            <button key={s.id} title={`${s.description}\n출처: ${s.source}`}
+              className={`as-scen${scenario === s.id ? " on" : ""}`} onClick={() => setScenario(s.id)}>
+              <span>{s.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
       {canRun && runQ.isLoading && <div className="as-empty">시나리오 충격 계산 중…</div>}
       {runQ.data?.error && <div className="as-err">{runQ.data.message}</div>}

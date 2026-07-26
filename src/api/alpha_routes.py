@@ -52,23 +52,78 @@ class PromoteRequest(BaseModel):
     note: str = Field("", max_length=1000)
 
 
+# ── 표현식 카탈로그 (통합 팩터 창용) ─────────────────────────────────────────
+# 함수는 파서가 실제로 허용하는 것만 노출 — 죽은 버튼 금지(test_stage_catalogs가 강제).
+#   insert: append = 식에 항 추가 · wrap = 현재 식을 감싸기 · wrap2 = 2항 함수
+_FUNC_META: list[dict] = [
+    {"id": "rank", "label": "rank(x)", "family": "transform", "insert": "wrap",
+     "desc": "크로스섹션 [0,1] 순위 — 이상치에 강건, 스케일 통일"},
+    {"id": "zscore", "label": "zscore(x)", "family": "transform", "insert": "wrap",
+     "desc": "크로스섹션 표준화 (평균0·표준편차1) — 팩터 결합의 기본"},
+    {"id": "winsorize", "label": "winsorize(x)", "family": "transform", "insert": "wrap",
+     "desc": "상하위 5% 클립 — 극단값이 결합을 지배하는 것을 방지"},
+    {"id": "log1p_abs", "label": "log1p_abs(x)", "family": "transform", "insert": "wrap",
+     "desc": "부호 보존 로그 압축 — 롱테일 분포 완화"},
+    {"id": "abs", "label": "abs(x)", "family": "transform", "insert": "wrap", "desc": "절대값"},
+    {"id": "sign", "label": "sign(x)", "family": "transform", "insert": "wrap", "desc": "부호(-1/0/+1)"},
+    {"id": "neg", "label": "neg(x)", "family": "transform", "insert": "wrap",
+     "desc": "부호 반전 — 낮을수록 좋은 지표를 알파 방향으로 뒤집을 때"},
+    {"id": "sector_neutralize", "label": "sector_neutralize(x)", "family": "combine", "insert": "wrap",
+     "desc": "섹터 그룹 내 demean — 업종 베팅을 제거하고 종목 선택력만 남김"},
+    {"id": "min2", "label": "min2(a,b)", "family": "combine", "insert": "wrap2",
+     "desc": "원소별 최소 — 두 조건을 모두 만족할 때만 높은 점수"},
+    {"id": "max2", "label": "max2(a,b)", "family": "combine", "insert": "wrap2",
+     "desc": "원소별 최대 — 둘 중 하나만 강해도 점수 부여"},
+]
+_FAMILY_LABEL = {
+    "price": "가격·거래", "fund": "펀더멘털", "transform": "변환", "combine": "결합·중립화",
+}
+# 펀더멘털은 연간 보고서 + 공시랙 근사 — 필드별 정직 라벨(테스트가 존재를 강제)
+_FUND_PROVENANCE = {
+    "roe": "DART 연간 재무 · 공시랙 적용(PIT 근사)",
+    "net_margin": "DART 연간 재무 · 공시랙 적용(PIT 근사)",
+    "debt_ratio": "DART 연간 재무 · 공시랙 적용(PIT 근사)",
+    "earnings_yield": "DART 연간 EPS ÷ 실주가 · 공시랙 적용(PIT 근사)",
+    "book_yield": "DART 연간 BPS ÷ 실주가 · 공시랙 적용(PIT 근사)",
+    "dividend_yield_f": "DART 배당공시(alotMatter) 연간 DPS · 공시랙 적용",
+    "eps_yoy": "DART 연간 EPS 변화율 — 컨센서스 미보유 대용(정직 한계)",
+}
+_CATALOG_NOTE = (
+    "필드는 그 날짜까지의 데이터로만 계산되며, 펀더멘털은 연간 보고서에 공시랙을 적용한 "
+    "PIT 근사입니다(분기 원천·컨센서스는 미보유). 시계열 연산(ts_*)은 피처 정의에 내장돼 "
+    "있어 표현식 레벨에서는 노출하지 않습니다."
+)
+
+
 @router.get("/alpha-lab/fields")
 def alpha_fields():
+    """피처·연산자 카탈로그. 평탄 키(fields/functions)는 하위호환, groups가 통합 창용."""
     from src.engine.alpha_lab import FIELDS, FUNCS_1, FUNCS_2
+
+    fields = [{"id": f[0], "label": f[1], "family": f[2], "desc": f[3]} for f in FIELDS]
+    allowed = set(FUNCS_1) | set(FUNCS_2)
+    funcs = [f for f in _FUNC_META if f["id"] in allowed]
+
+    groups = []
+    for fam in ("price", "fund"):
+        items = [{**f, "kind": "field", "insert": "append",
+                  "provenance": _FUND_PROVENANCE.get(f["id"], "KIS/KRX 일봉 — 그 날짜까지의 시세만 사용")}
+                 for f in fields if f["family"] == fam]
+        if items:
+            groups.append({"family": fam, "label": _FAMILY_LABEL[fam], "items": items})
+    for fam in ("transform", "combine"):
+        items = [{**f, "kind": "function", "provenance": "표현식 연산자 — 파서 내장"}
+                 for f in funcs if f["family"] == fam]
+        if items:
+            groups.append({"family": fam, "label": _FAMILY_LABEL[fam], "items": items})
+
     return {
-        "fields": [{"id": f[0], "label": f[1], "family": f[2], "desc": f[3]} for f in FIELDS],
-        "functions": [
-            {"id": "rank", "label": "rank(x)", "desc": "크로스섹션 [0,1] 순위"},
-            {"id": "zscore", "label": "zscore(x)", "desc": "크로스섹션 표준화"},
-            {"id": "winsorize", "label": "winsorize(x)", "desc": "상하위 5% 클립"},
-            {"id": "sector_neutralize", "label": "sector_neutralize(x)", "desc": "섹터 그룹 내 demean"},
-            {"id": "abs", "label": "abs(x)", "desc": "절대값"},
-            {"id": "sign", "label": "sign(x)", "desc": "부호"},
-            {"id": "log1p_abs", "label": "log1p_abs(x)", "desc": "부호 보존 로그 압축"},
-            {"id": "min2", "label": "min2(a,b)", "desc": "원소별 최소"},
-            {"id": "max2", "label": "max2(a,b)", "desc": "원소별 최대"},
-        ],
+        "fields": fields,
+        "functions": [{"id": f["id"], "label": f["label"], "desc": f["desc"]} for f in funcs],
+        "groups": groups,
+        "families": [{"id": g["family"], "label": g["label"]} for g in groups],
         "allowed": {"funcs1": list(FUNCS_1), "funcs2": list(FUNCS_2)},
+        "note": _CATALOG_NOTE,
         "notes": ["시계열 연산(ts_*)은 피처 정의에 내장 — 표현식 레벨 ts_*는 v2.",
                   "펀더멘털 필드는 연간 보고서 + 공시랙 적용 (PIT 근사, lint가 안내)."],
     }

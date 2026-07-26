@@ -7,6 +7,26 @@ import { API_BASE } from "@/lib/apiBase";
 export interface AlphaFieldMeta { id: string; label: string; family: "price" | "fund"; desc: string }
 export interface AlphaFuncMeta { id: string; label: string; desc: string }
 
+// ── 통합 표현식 카탈로그 (팩터 창) — 백엔드 alpha_routes._FUNC_META/_FAMILY_LABEL과 1:1 ──
+export type AlphaFamily = "price" | "fund" | "transform" | "combine";
+export interface AlphaCatalogItem {
+  id: string;
+  label: string;
+  family: AlphaFamily;
+  desc: string;
+  kind: "field" | "function";
+  insert: "append" | "wrap" | "wrap2";
+  provenance: string;
+}
+export interface AlphaCatalog {
+  fields: AlphaFieldMeta[];
+  functions: AlphaFuncMeta[];
+  groups: { family: AlphaFamily; label: string; items: AlphaCatalogItem[] }[];
+  families: { id: AlphaFamily; label: string }[];
+  note: string;
+  notes: string[];
+}
+
 export interface LintIssue { level: "error" | "warn" | "info"; code: string; message: string }
 export interface LintResult { ok: boolean; issues: LintIssue[]; fields: string[]; funcs: string[] }
 
@@ -54,7 +74,7 @@ export interface AlphaDef {
 }
 
 export const alphaApi = {
-  fields: async (): Promise<{ fields: AlphaFieldMeta[]; functions: AlphaFuncMeta[]; notes: string[] }> => {
+  fields: async (): Promise<AlphaCatalog> => {
     const r = await fetch(`${API_BASE}/api/v1/alpha-lab/fields`);
     if (!r.ok) throw new Error(`fields failed: ${r.status}`);
     return r.json();

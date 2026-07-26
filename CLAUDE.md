@@ -2770,3 +2770,82 @@ ErrorBoundary 아님 — 원인 지점에서 직접 처리). `tests/test_macro_c
   길이가 다르면 자산곡선은 절대 날짜가 아닌 **인덱스 기준 정렬**임을 UI에 명시(절대 비교 주의).
 - E2E 결과/비교 테스트는 **결정론적 검증을 위해 실스키마 스텁 페이로드**를 사용(엔진 자체는
   5c의 실행 A 테스트와 백엔드 pytest가 커버) — 로딩→취소 테스트만 실 엔진·실 시뮬레이션을 탄다.
+
+---
+
+## 🪟 AAS 스테이지 팩터/시나리오 창 통합 (TIMING → ALPHA LAB → STRESS)
+
+[배경] 사용자가 "AAS TIMING의 마켓타이밍 팩터를 백테스터처럼 하나의 팩터 창으로 통합"을
+요청했고, 이어서 "LOGIC-ALPHA EXPRESSION · ALPHA REGISTRY · VALIDATION-STRESS 탭도 같은
+방식으로 개선"을 요청. 세 스테이지 모두 **선택지가 비좁은 인라인 편집기 / 설명 없는 칩 벽 /
+여러 카드에 흩어진 목록**이라는 같은 병을 앓고 있었음 → **검색 + 패밀리 분류 + 설명·출처 +
+설정 패널**을 갖춘 단일 창(`.tfm-*` 셸 공유)으로 통일.
+
+### ① TIMING — 통합 팩터 창 + TimingRule 스키마 (커밋 f99929d)
+- **`src/engine/timing_factors.py`(신규)**: 사용자 제안 스키마를 그대로 옮긴 `TimingRule`
+  dataclass(universe·signal_family·observation_window·entry/exit_condition·risk_off_asset·
+  rebalance_or_holding_period·position_sizing·leverage_cap·transaction_cost_and_slippage·
+  **point_in_time_data_timestamp**(평가 시점 각인 — 룩어헤드 감사용)) + 5패밀리
+  (momentum/deviation/breakout/overnight/regime) 12팩터 카탈로그. 기존 AAS 카나리 4종을
+  같은 카탈로그로 흡수하고 `_ret`/`_abs_mom`/`_score_13612`/`_above_ma` 프리미티브 재사용
+  (수식 중복 0).
+- 신규 시그널: `avg_abs_momentum`(systrader79 — 1~N개월 수익률 중 양(+) 비율을 **이진
+  게이트가 아니라 연속 위험자산 비중**으로 사용, 원 규칙대로) · `accel_momentum` ·
+  `disparity`(이격도) · `vol_breakout` · `channel_breakout`(자기참조 방지로 당일 봉 제외) ·
+  `overnight_return` · `defense_first`(**역발상 — 값이 음수일 때 위험-온**).
+- `src/data/etf_prices.py`에 `daily_ohlc()`(돌파·오버나이트용 고저가, 동일 `as_of` PIT 절단
+  관례) · `src/data/timing_rules.py`(규칙 세트 영속) · `GET /timing-factors` ·
+  `POST/GET/DELETE /timing-rules`.
+- 프론트 `TimingFactorModal.tsx` + 타이밍 페이지가 비좁은 인라인 행 → `.tfc-chip` 칩 목록.
+- **정직성 경계(사용자 명시 제약 준수)**: 백석꾼 등 **유료 컨텐츠의 정확한 조건식은 추정하지
+  않음** — 공개된 개념만 일반 구현하고 이격도/돌파/오버나이트는 `provenance="generic"`으로
+  표기, 창 하단에 "유료 컨텐츠의 조건식을 재현한 것이 아닙니다" 상시 노출(테스트가 강제).
+
+### ② ALPHA LAB — 표현식 팩터 창 + 레지스트리 검색·필터
+- **문제**: 필드 17 + 함수 9가 구분 없는 `as-chip sm` 칩 벽으로 깔리고 설명은 title 툴팁에만.
+  클릭하면 무조건 `" + 필드"`를 덧붙이거나 식 전체를 함수로 감쌈(삽입 방식 선택 불가).
+  레지스트리는 검색·필터가 없고, 승격 노트 입력칸이 목록 맨 아래에 떠 있어 **어떤 알파에
+  붙는 노트인지 모호**했음.
+- **백엔드** `GET /alpha-lab/fields`에 `groups`(가격·거래/펀더멘털/변환/결합·중립화 4패밀리)
+  + `kind`(field|function) + `insert`(append|wrap|wrap2) + **필드별 `provenance`** 추가.
+  평탄 키(`fields`/`functions`)는 하위호환 유지. 노출 함수는 파서가 실제 허용하는 것만
+  (`FUNCS_1|FUNCS_2` 교집합 — 죽은 버튼 금지, 테스트가 강제).
+- **프론트** `AlphaFactorModal.tsx`(신규): 검색 + 패밀리 탭 + 설명/출처 + **삽입 방식**
+  (더하기/빼기/식 교체, 연산자는 감싸기) + **적용 결과 미리보기**(`applyInsert` 순수함수).
+  레지스트리는 검색 인풋 + 상태 필터 칩(개수 배지) + **승격 노트를 승격 대상 행 바로 아래
+  인라인**으로 이동.
+
+### ③ STRESS — 3패밀리 통합 시나리오 창
+- **문제**: 시나리오가 세 곳에 흩어져 있었음 — 좌측 레일의 가상 4 + 역사 4 버튼, 우측
+  `KrScenarioPack` 카드 안의 국내 7 버튼. 검색·분류 없고 **미가용 사유는 disabled 버튼
+  툴팁에만** 있었음.
+- **백엔드** `GET /allocation/stress-scenarios`(신규): 기존 `/stress-catalog`(가상+역사)와
+  `/kr-scenario-catalog`(국내)를 패밀리로 묶은 상위집합(레거시 2개는 그대로 유지).
+  각 항목에 `family`·`available`·`reason`·`source`·**`severity_applies`**.
+- **프론트** `StressScenarioModal.tsx`(신규): 15종을 한 창에서 검색·분류, **미가용 사유를
+  목록 행에 그대로 노출**(툴팁 아님), 강도(severity)도 같은 창에서 조정. 좌측 레일은 선택
+  시나리오 칩 + "시나리오 창에서 선택" 하나로 축소. `KrScenarioPack`은 선택 주도 시
+  `scenario`/`onPick` prop으로 제어(미지정이면 기존 자체 상태 — 하위호환).
+- **정직성**: 역사 리플레이는 실제 시세 재생이라 **강도 배율이 적용되지 않음**을 창이 명시
+  (`severity_applies=false`), 적재 범위 밖 구간은 합성하지 않고 미가용 표기.
+
+### 검증
+- 백엔드 **989 passed / 10 skipped**(신규 `test_stage_catalogs.py` 6 + 직전 timing 22), ruff 통과.
+- tsc 0 · `next build` 전 라우트 성공 · **Playwright 13/13**(신규 `stage-windows.spec.ts` 4 +
+  aas 2 + nav 5 + timing-factors 2).
+- 라이브(실 백엔드·실 브라우저, mock): 알파 창 4패밀리 · "모멘텀" 검색 5행 · 미리보기
+  `zscore(mom_6m) - zscore(vol_60d) + mom_1m` · 감싸기 `zscore(…)` · 레지스트리 칩
+  `전체 6/초안 1/실험 5` · 스트레스 창 3패밀리(4+4+7=15) · 국내팩 선택 시 좌측 칩 갱신 ·
+  **한글 정상(mojibake 0) · API 4xx 0**.
+
+### 이번에 잡은 실제 결함
+- `KrScenarioPack`의 중복 목록을 `hidden` 속성으로 감추려 했으나 `.as-scenario-list`의
+  `display:flex`(작성자 규칙)가 UA의 `hidden{display:none}`을 이겨 **그대로 보였음** —
+  조건부 렌더로 교체하고 E2E로 회귀 고정(`.as-krs-list` count 0).
+
+### 정직한 한계
+- 세 창은 **표시·조작 계층 통합**이며 산출 로직은 무변경 — 알파 검증(IC/ICIR)·스트레스
+  계산·타이밍 판정은 기존 엔진 그대로.
+- mock 모드에선 `daily_prices`가 비어 역사 리플레이가 합성으로 "가용" 표시됨(운영은 실적재
+  범위로 정직 판정). 국내팩 충격 계수는 시장 구조 **가정**이며 실측 이벤트 리플레이가 아님
+  (각 항목 `source`에 명시).

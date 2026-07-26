@@ -1,9 +1,9 @@
 "use client";
 // 02 ALPHA LAB — 알파 표현식 작성·lint·IC/ICIR 검증·레지스트리 (Full Expansion P2).
-// 좌: 표현식 에디터(필드/함수 칩 + lint) + 슬리브 템플릿·레지스트리(상태 배지·승격)
+// 좌: 표현식 에디터(통합 팩터 창 + lint) + 레지스트리(검색·상태 필터·인라인 승격)
 // 우: 검증 리포트(IC·ICIR·t·Hit·Decay + 분위 막대 + 롱숏 곡선 + IS/OOS + 정직 노트)
 //    + "상위 종목 → 포트폴리오" 브릿지(01 Construct와 연결).
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import {
 import { equalize } from "@/components/allocation/PortfolioBuilder";
 import { useAllocation } from "@/components/allocation/AllocationProvider";
 import { AutoAlphaLab } from "@/components/allocation/AutoAlphaLab";
+import { AlphaFactorModal } from "@/components/allocation/AlphaFactorModal";
 
 const STATUS_LABEL: Record<AlphaStatus, string> = {
   draft: "초안", experimental: "실험", validated: "검증됨", approved: "승인", retired: "폐기",
@@ -19,6 +20,7 @@ const STATUS_LABEL: Record<AlphaStatus, string> = {
 const STATUS_NEXT: Partial<Record<AlphaStatus, AlphaStatus>> = {
   draft: "experimental", experimental: "validated", validated: "approved",
 };
+const STATUS_ORDER: AlphaStatus[] = ["draft", "experimental", "validated", "approved", "retired"];
 const UNIVERSES: [string, string][] = [
   ["kospi50", "KOSPI 50"], ["kospi200", "KOSPI 200"], ["kosdaq150", "KOSDAQ 150"],
 ];
@@ -86,10 +88,26 @@ export default function AlphaLabStage() {
   const [selAlpha, setSelAlpha] = useState<string | null>(null);
   const [promoteNote, setPromoteNote] = useState("");
   const [regMsg, setRegMsg] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [regQuery, setRegQuery] = useState("");
+  const [regStatus, setRegStatus] = useState<AlphaStatus | "all">("all");
+  const [promoteFor, setPromoteFor] = useState<string | null>(null);
 
-  const fieldsQ = useQuery({ queryKey: ["alpha", "fields"], queryFn: () => alphaApi.fields().catch(() => null) });
   const regQ = useQuery({ queryKey: ["alpha", "registry"], queryFn: () => alphaApi.registry().catch(() => null) });
   const alphas: AlphaDef[] = regQ.data?.alphas ?? [];
+
+  const statusCounts = useMemo(() => {
+    const c: Partial<Record<AlphaStatus, number>> = {};
+    alphas.forEach((a) => { c[a.status] = (c[a.status] ?? 0) + 1; });
+    return c;
+  }, [alphas]);
+  const visibleAlphas = useMemo(() => {
+    const s = regQuery.trim().toLowerCase();
+    return alphas.filter((a) =>
+      (regStatus === "all" || a.status === regStatus) &&
+      (!s || a.name.toLowerCase().includes(s) || (a.expr ?? "").toLowerCase().includes(s) ||
+        (a.tags ?? []).some((t) => t.toLowerCase().includes(s))));
+  }, [alphas, regQuery, regStatus]);
 
   const lintMut = useMutation({
     mutationFn: () => alphaApi.lint(expr),
@@ -135,7 +153,7 @@ export default function AlphaLabStage() {
     const res = await alphaApi.promote(a.alpha_id, next, promoteNote).catch(() => null);
     if (!res) { setRegMsg("승격 요청 실패"); return; }
     setRegMsg(res.ok ? null : res.reason ?? "승격 불가");
-    if (res.ok) { setPromoteNote(""); regQ.refetch(); }
+    if (res.ok) { setPromoteNote(""); setPromoteFor(null); regQ.refetch(); }
   };
 
   const applyTop = () => {
@@ -156,21 +174,9 @@ export default function AlphaLabStage() {
           <div className="as-card-title">ALPHA EXPRESSION <span className="as-note-inline">크로스섹션 결합 — rank/zscore/sector_neutralize</span></div>
           <textarea className="as-input as-al-expr" rows={3} value={expr}
             onChange={(e) => { setExpr(e.target.value); setLint(null); }} spellCheck={false} />
-          <div className="as-al-chips">
-            {(fieldsQ.data?.fields ?? []).map((f) => (
-              <button key={f.id} className={`as-chip sm${f.family === "fund" ? " as-al-fund" : ""}`}
-                title={`${f.label} — ${f.desc}`} onClick={() => setExpr((x) => x + (x.trim() ? " + " : "") + f.id)}>
-                {f.id}
-              </button>
-            ))}
-          </div>
-          <div className="as-al-chips">
-            {(fieldsQ.data?.functions ?? []).map((f) => (
-              <button key={f.id} className="as-chip sm" title={f.desc}
-                onClick={() => setExpr((x) => `${f.id}(${x.trim() || "mom_6m"})`)}>
-                {f.label}
-              </button>
-            ))}
+          <div className="as-wl-row">
+            <button className="as-fb-apply" onClick={() => setPickerOpen(true)}>+ 팩터 창에서 추가</button>
+            <span className="as-note-inline">가격·펀더멘털 피처와 변환·중립화 연산자를 한 창에서 검색</span>
           </div>
           <div className="as-wl-row">
             <select className="as-fb-add" value={universe} onChange={(e) => setUniverse(e.target.value)}>
@@ -185,6 +191,8 @@ export default function AlphaLabStage() {
             </button>
           </div>
           <LintBadges lint={lint} />
+          <AlphaFactorModal open={pickerOpen} onClose={() => setPickerOpen(false)} expr={expr}
+            onApply={(next) => { setExpr(next); setLint(null); }} />
         </section>
 
         <section className="as-card">
@@ -203,29 +211,59 @@ export default function AlphaLabStage() {
             </div>
           )}
           {regMsg && <div className="as-err">{regMsg}</div>}
-          {alphas.map((a) => (
-            <div key={a.alpha_id} className={`as-al-item${selAlpha === a.alpha_id ? " on" : ""}`}>
-              <button className="as-al-pick" onClick={() => pickAlpha(a)} title={a.description || a.expr}>
-                <span className="as-al-name">
-                  {a.name}
-                  {a.is_template && <em className="as-al-tpl">TPL</em>}
-                  <em className="num as-al-ver">v{a.version}</em>
-                </span>
-                <span className={`as-al-status s-${a.status}`}>{STATUS_LABEL[a.status]}</span>
+
+          {/* 검색 + 상태 필터 — 알파가 늘어도 원하는 항목을 바로 찾도록 */}
+          <input className="tfm-search" placeholder="알파 검색 — 이름·표현식·태그"
+            value={regQuery} onChange={(e) => setRegQuery(e.target.value)} />
+          <div className="tfm-fams">
+            <button className={regStatus === "all" ? "on" : ""} onClick={() => setRegStatus("all")}>
+              전체 {alphas.length}
+            </button>
+            {STATUS_ORDER.filter((s) => statusCounts[s]).map((s) => (
+              <button key={s} className={regStatus === s ? "on" : ""} onClick={() => setRegStatus(s)}>
+                {STATUS_LABEL[s]} {statusCounts[s]}
               </button>
-              {STATUS_NEXT[a.status] && !a.is_template && (
-                <button className="as-chip sm" title={`→ ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 승격`}
-                  onClick={() => doPromote(a)}>↑ {STATUS_LABEL[STATUS_NEXT[a.status]!]}</button>
+            ))}
+          </div>
+
+          {visibleAlphas.length === 0 && (
+            <div className="as-empty">{alphas.length ? "조건에 맞는 알파가 없습니다" : "레지스트리가 비어 있습니다"}</div>
+          )}
+          {visibleAlphas.map((a) => (
+            <React.Fragment key={a.alpha_id}>
+              <div className={`as-al-item${selAlpha === a.alpha_id ? " on" : ""}`}>
+                <button className="as-al-pick" onClick={() => pickAlpha(a)} title={a.description || a.expr}>
+                  <span className="as-al-name">
+                    {a.name}
+                    {a.is_template && <em className="as-al-tpl">TPL</em>}
+                    <em className="num as-al-ver">v{a.version}</em>
+                  </span>
+                  <span className={`as-al-status s-${a.status}`}>{STATUS_LABEL[a.status]}</span>
+                </button>
+                {STATUS_NEXT[a.status] && !a.is_template && (
+                  <button className="as-chip sm" title={`→ ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 승격`}
+                    onClick={() => setPromoteFor(promoteFor === a.alpha_id ? null : a.alpha_id)}>
+                    ↑ {STATUS_LABEL[STATUS_NEXT[a.status]!]}
+                  </button>
+                )}
+                {!a.is_template && (
+                  <button className="as-x" title="삭제"
+                    onClick={() => alphaApi.remove(a.alpha_id).then(() => regQ.refetch()).catch(() => {})}>×</button>
+                )}
+              </div>
+              {/* 승격 노트를 승격 대상 행 바로 아래에 — 어떤 알파에 붙는 노트인지 모호하지 않게 */}
+              {promoteFor === a.alpha_id && (
+                <div className="as-al-promote">
+                  <input className="as-input" autoFocus value={promoteNote}
+                    placeholder={`${STATUS_LABEL[a.status]} → ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 사유 (approved는 필수)`}
+                    onChange={(e) => setPromoteNote(e.target.value)} />
+                  <button className="as-fb-apply" onClick={() => doPromote(a)}>승격</button>
+                  <button className="as-chip sm" onClick={() => { setPromoteFor(null); setPromoteNote(""); }}>취소</button>
+                </div>
               )}
-              {!a.is_template && (
-                <button className="as-x" title="삭제"
-                  onClick={() => alphaApi.remove(a.alpha_id).then(() => regQ.refetch()).catch(() => {})}>×</button>
-              )}
-            </div>
+            </React.Fragment>
           ))}
-          <input className="as-input" placeholder="승인 노트 (approved 승격 시 필수)" value={promoteNote}
-            onChange={(e) => setPromoteNote(e.target.value)} style={{ marginTop: 6 }} />
-          <div className="as-note">템플릿 6종은 정직 라벨(데이터 미보유·프록시)을 설명에 명시. validated 승격은 검증 run 필수.</div>
+          <div className="as-note">템플릿은 정직 라벨(데이터 미보유·프록시)을 설명에 명시. validated 승격은 검증 run 필수.</div>
         </section>
       </aside>
 

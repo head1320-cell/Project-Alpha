@@ -3459,6 +3459,20 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tfm-sel-t { font-size: 13px; font-weight: 700; color: var(--t-ink); }
 .tfm-sel-d { font-size: 10.5px; color: var(--t-muted); line-height: 1.5; margin-bottom: 4px; }
 .tfm-note { padding: 8px 14px; border-top: 1px solid var(--t-border); font-size: 9.5px; color: var(--t-muted); line-height: 1.5; background: var(--t-surface); }
+/* 알파·스트레스 팩터 창 추가 프리미티브 (타이밍 창과 동일 셸 공유) */
+.tfm-kind { font-style: normal; font-size: 8.5px; font-weight: 700; letter-spacing: .05em; color: var(--t-accent);
+  border: 1px solid var(--t-accent); border-radius: 2px; padding: 0 4px; }
+.tfm-off { font-style: normal; font-size: 8.5px; font-weight: 700; letter-spacing: .05em; color: #fff; background: var(--t-muted); border-radius: 2px; padding: 1px 4px; }
+.tfm-row.off { opacity: .62; }
+.tfm-row.off:hover { border-color: var(--t-border); background: #fff; }
+.tfm-prev-l { font-size: 9.5px; letter-spacing: .06em; color: var(--t-muted); margin-top: 4px; }
+.tfm-prev { display: block; font-family: var(--t-mono); font-size: 11px; line-height: 1.5; color: var(--t-ink);
+  border: 1px solid var(--t-border); border-left: 2px solid var(--t-accent); border-radius: 2px;
+  padding: 7px 8px; background: var(--t-surface); word-break: break-all; }
+/* 승격 노트 — 승격 대상 행 바로 아래 인라인 */
+.as-al-promote { display: flex; align-items: center; gap: 5px; padding: 6px 8px; margin: -2px 0 4px;
+  border: 1px solid var(--t-accent); border-top: none; border-radius: 0 0 2px 2px; background: rgba(18,0,255,.04); }
+.as-al-promote .as-input { flex: 1; min-width: 0; }
 .tfc-list { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; }
 .tfc-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   border: 1px solid var(--t-border); border-left: 2px solid var(--t-accent); border-radius: 2px; padding: 6px 8px; background: var(--t-surface); }
@@ -3582,8 +3596,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
 /* ── Alpha Lab (02 — P2) ── */
 .as-al-expr { font-family: var(--t-mono); font-size: 12px; resize: vertical; }
-.as-al-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-.as-al-fund { border-style: dashed; }
 .as-al-lint { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 .as-al-lint-item { font-size: 10.5px; padding: 4px 8px; border-radius: 2px; border: 1px solid var(--t-border); }
 .as-al-lint-item b { font-family: var(--t-mono); font-size: 9px; margin-right: 6px; }
