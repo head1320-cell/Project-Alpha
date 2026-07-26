@@ -134,6 +134,37 @@ def daily_closes(ticker: str, market: str = "kr", days: int = 300) -> list[float
     return full[-days:]
 
 
+def daily_ohlc(ticker: str, market: str = "kr", days: int = 300) -> list[dict]:
+    """최근 일간 OHLC 바 리스트 — 돌파(변동성/채널)·오버나이트 시그널용.
+
+    daily_closes와 동일한 캐시·as_of(시점 절단) 관례. 종가만으로는 계산 불가한
+    시그널(전일 레인지 돌파·N일 채널·시가/전일종가 갭)을 위해 OHLC를 그대로 노출한다.
+    반환: [{"open","high","low","close"}] (오름차순, 결측 바는 제외).
+    """
+    key = (f"ohlc:{market}", ticker)
+    if key in _CACHE:
+        full = _CACHE[key]
+    else:
+        code, _ = resolve(ticker, market)
+        full = []
+        try:
+            df = _daily_df(code)
+            if df is not None and not df.empty:
+                cols = {c.lower() for c in df.columns}
+                if {"open", "high", "low", "close"}.issubset(cols):
+                    sub = df[["open", "high", "low", "close"]].astype(float).dropna()
+                    full = [{"open": float(o), "high": float(h), "low": float(low), "close": float(c)}
+                            for o, h, low, c in sub.itertuples(index=False, name=None)]
+        except Exception as e:
+            logger.debug(f"daily_ohlc 실패 [{ticker}/{market}]: {e}")
+        _CACHE[key] = full
+    off = _month_off()
+    if off:
+        d = off * _TRADING_DAYS_PER_MONTH
+        full = full[:-d] if d < len(full) else []
+    return full[-days:]
+
+
 def cache_clear() -> None:
     _CACHE.clear()
 

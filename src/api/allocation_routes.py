@@ -17,7 +17,7 @@ import math
 from datetime import date, timedelta
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger("api.allocation")
@@ -128,10 +128,21 @@ class FactorPortfolioRequest(BaseModel):
 class CanarySpec(BaseModel):
     kind: str = "asset"                      # asset|indicator
     id: str                                  # 자산 티커 또는 매크로 시리즈 id(VIXCLS 등)
-    signal: str = "score_13612"              # abs_mom|score_13612|ma_month|ma_day|threshold
+    # 기존 4종 + 신규 팩터 id(avg_abs_momentum·accel_momentum·disparity·vol_breakout·
+    # channel_breakout·overnight_return·defense_first) — timing_factors.CATALOG와 동일 id 체계
+    signal: str = "score_13612"
     lookback: int = Field(12, ge=1, le=252)
     threshold: float = 0.0
     direction: str = "above"                 # above|below (threshold/indicator 통과 방향)
+    params: dict[str, float] = Field(default_factory=dict)   # 팩터별 파라미터(ma_days·k·days 등)
+    # ── TimingRule 공통 스키마(선택) — 지정 시 규칙 등록/저장에 그대로 실림 ──
+    universe: list[str] = Field(default_factory=list)
+    risk_off_asset: list[str] = Field(default_factory=list)
+    rebalance_or_holding_period: str | None = None
+    position_sizing: str | None = None
+    leverage_cap: float | None = Field(None, ge=0, le=5)
+    entry_condition: str | None = None
+    exit_condition: str | None = None
 
 
 class TimingRequest(BaseModel):
@@ -1010,6 +1021,20 @@ def _canary_eval(c: CanarySpec, mk: str):
             return None, None
         ok = (float(val) > c.threshold) if c.direction == "above" else (float(val) < c.threshold)
         return ok, round(float(val), 3)
+    # 신규 팩터(모멘텀 연속비중·이격도·돌파·오버나이트·Defense First) — timing_factors 카탈로그
+    from src.engine import timing_factors as _tf
+    if c.signal in _tf.CATALOG_BY_ID and c.signal not in (
+            "score_13612", "abs_mom", "ma_month", "ma_day", "indicator"):
+        p = dict(c.params or {})
+        # lookback 하나로 조작하던 기존 UI 호환 — 팩터별 주 파라미터에 매핑
+        meta = _tf.CATALOG_BY_ID[c.signal]
+        for k in ("months", "days", "max_months", "ma_days"):
+            if k in (meta.get("params") or {}) and k not in p and c.lookback:
+                p[k] = c.lookback
+        v = _tf.evaluate(c.signal, c.id, mk, p)
+        ok = _tf.passes(v, c.threshold, c.direction)
+        return ok, (round(v, 4) if v is not None else None)
+
     from src.engine.tactical_allocations import (
         _above_ma_d,
         _above_ma_m,
@@ -1078,6 +1103,63 @@ def _timing_realized_vol_pct(weights_pct: dict[str, float], mk: str) -> float | 
     except Exception as e:
         logger.debug(f"timing 실현변동성 실패(무시): {e}")
         return None
+
+
+# ── 타이밍 팩터 카탈로그 · 규칙 세트 (통합 팩터 창) ──────────────────────────
+@router.get("/timing-factors")
+def allocation_timing_factors():
+    """팩터 창 카탈로그 — 패밀리별 그룹 + TimingRule 공통 스키마 필드 + 정직성 노트."""
+    try:
+        from src.engine.timing_factors import catalog
+        return catalog()
+    except Exception:
+        logger.exception("timing-factors 카탈로그 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class TimingRuleSetRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    market: str = "kr"
+    rules: list[dict] = Field(default_factory=list)   # TimingRule 스펙 리스트
+    gate: dict = Field(default_factory=dict)          # 브레드스·자산군·오버레이·리스크제어
+    notes: str | None = Field(None, max_length=2000)
+    set_id: str | None = None                         # 지정 시 갱신
+
+
+@router.post("/timing-rules")
+def allocation_timing_rules_save(req: TimingRuleSetRequest):
+    """규칙 세트 저장/갱신 — 각 rule은 TimingRule 스키마로 정규화해 보관(재현 가능)."""
+    try:
+        from src.data.timing_rules import save_rule_set
+        from src.engine.timing_factors import rule_from_spec, stamp_pit
+        norm = [stamp_pit(rule_from_spec(r)).to_dict() for r in (req.rules or [])]
+        sid = save_rule_set(req.name, req.market, norm, req.gate, req.notes, req.set_id)
+        if sid is None:
+            raise HTTPException(503, "규칙 저장소(DB)를 사용할 수 없습니다.")
+        return {"set_id": sid, "rules": norm}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("timing rule set 저장 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/timing-rules")
+def allocation_timing_rules_list(limit: int = Query(50, ge=1, le=200)):
+    try:
+        from src.data.timing_rules import list_rule_sets
+        return {"sets": list_rule_sets(limit=limit)}
+    except Exception:
+        logger.exception("timing rule set 목록 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.delete("/timing-rules/{set_id}")
+def allocation_timing_rules_delete(set_id: str):
+    from src.data.timing_rules import delete_rule_set
+    if not delete_rule_set(set_id):
+        raise HTTPException(404, "규칙 세트를 찾을 수 없습니다.")
+    return {"deleted": True}
 
 
 @router.post("/timing")

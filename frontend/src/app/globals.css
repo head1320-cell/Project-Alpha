@@ -3432,6 +3432,44 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-enb-k { color: var(--t-muted); text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; }
 .as-enb b { font-size: 16px; color: var(--t-accent); }
 
+/* ── AAS TIMING 통합 팩터 창 (TimingFactorModal) + 팩터 칩 ── */
+.tfm-backdrop { position: fixed; inset: 0; z-index: 9998; background: rgba(15,23,42,.45);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.tfm { width: min(920px, 96vw); max-height: 86vh; display: flex; flex-direction: column;
+  background: #fff; border: 1px solid var(--t-border); border-radius: 3px; box-shadow: 0 18px 50px rgba(0,0,0,.18); overflow: hidden; }
+.tfm-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid var(--t-border); }
+.tfm-title { font-size: 13px; font-weight: 700; color: var(--t-ink); }
+.tfm-body { display: grid; grid-template-columns: 1.35fr 1fr; gap: 0; min-height: 0; flex: 1; }
+.tfm-left { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-right: 1px solid var(--t-border); min-height: 0; }
+.tfm-search { border: 1px solid var(--t-border); border-radius: 2px; font-size: 12px; padding: 7px 9px; }
+.tfm-search:focus { outline: none; border-color: var(--t-accent); }
+.tfm-fams { display: flex; flex-wrap: wrap; gap: 4px; }
+.tfm-fams button { font-size: 10.5px; padding: 3px 8px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; color: var(--t-muted); cursor: pointer; }
+.tfm-fams button.on { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,.05); font-weight: 600; }
+.tfm-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.tfm-row { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px;
+  border: 1px solid var(--t-border); border-radius: 2px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
+.tfm-row:hover { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
+.tfm-row.on { border-color: var(--t-accent); background: rgba(18,0,255,.06); }
+.tfm-row-t { font-size: 12px; font-weight: 600; color: var(--t-ink); display: flex; align-items: center; gap: 6px; }
+.tfm-new { font-style: normal; font-size: 8.5px; font-weight: 700; letter-spacing: .05em; color: #fff; background: var(--t-accent); border-radius: 2px; padding: 1px 4px; }
+.tfm-row-d { font-size: 10px; color: var(--t-muted); line-height: 1.45; }
+.tfm-row-p { font-family: var(--t-mono); font-size: 9px; color: var(--t-accent); opacity: .75; }
+.tfm-right { display: flex; flex-direction: column; gap: 6px; padding: 12px; overflow-y: auto; min-height: 0; }
+.tfm-sel-t { font-size: 13px; font-weight: 700; color: var(--t-ink); }
+.tfm-sel-d { font-size: 10.5px; color: var(--t-muted); line-height: 1.5; margin-bottom: 4px; }
+.tfm-note { padding: 8px 14px; border-top: 1px solid var(--t-border); font-size: 9.5px; color: var(--t-muted); line-height: 1.5; background: var(--t-surface); }
+.tfc-list { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; }
+.tfc-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: 1px solid var(--t-border); border-left: 2px solid var(--t-accent); border-radius: 2px; padding: 6px 8px; background: var(--t-surface); }
+.tfc-chip-main { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.tfc-chip-t { font-size: 11.5px; font-weight: 600; color: var(--t-ink); }
+.tfc-chip-tk { font-size: 10px; color: var(--t-accent); }
+.tfc-chip-cond { font-size: 10px; color: var(--t-muted); }
+.tfc-chip-acts { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.tfc-chip-acts .as-tm-num { width: 62px; }
+@media (max-width: 820px) { .tfm-body { grid-template-columns: 1fr; } .tfm-left { border-right: none; border-bottom: 1px solid var(--t-border); } }
+
 /* ── Policy Backtest (walk-forward OOS) ── */
 .as-bt-controls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .as-bt-controls .as-tm-set { margin-top: 0; }

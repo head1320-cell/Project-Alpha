@@ -3,19 +3,15 @@
 // 게이트(k-of-N) + 위험-온/오프 자산군 + 추세 오버레이 / 우: 위험-온·오프 판정 + 결과 배분
 // (적용) + 시장 타이밍 컴포짓(timing_panel 재사용) + 자산 추세표. 백엔드 POST /allocation/timing.
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { type TimingConfig, useAllocation } from "@/components/allocation/AllocationProvider";
 import { ConfidenceGauge } from "@/components/allocation/parts";
-import type { CanaryInput, CanarySignalType } from "@/lib/allocationApi";
+import { TimingFactorModal } from "@/components/allocation/TimingFactorModal";
+import { allocationApi, type CanaryInput } from "@/lib/allocationApi";
 
 const ASSET_SUGGEST = ["SPY", "QQQ", "IWM", "EFA", "EEM", "AGG", "TLT", "IEF", "SHY", "LQD", "HYG", "GLD", "VNQ", "BIL"];
 const IND_SUGGEST: [string, string][] = [
   ["VIXCLS", "VIX 변동성"], ["DGS10", "미 10년물"], ["BAMLH0A0HYM2", "HY 스프레드"], ["T10Y2Y", "10Y-2Y"],
-];
-const ASSET_SIGNALS: { id: CanarySignalType; label: string }[] = [
-  { id: "score_13612", label: "13612W 가속모멘텀" },
-  { id: "abs_mom", label: "절대모멘텀(N개월)" },
-  { id: "ma_month", label: "N개월 이동평균 상회" },
-  { id: "ma_day", label: "N일 이동평균 상회" },
 ];
 const parseList = (s: string) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 
@@ -66,6 +62,18 @@ export default function TimingWorkspace() {
   const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings, loadedStrategy } = useAllocation();
   const [onText, setOnText] = useState(timingCfg.riskOnAssets.join(", "));
   const [offText, setOffText] = useState(timingCfg.riskOffAssets.join(", "));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // 팩터 라벨/메타 — 칩 표시에 사용(카탈로그 1회 로드, 모달과 캐시 공유)
+  const catQ = useQuery({
+    queryKey: ["allocation", "timing-factors"],
+    queryFn: () => allocationApi.timingFactors(),
+    staleTime: Infinity,
+  });
+  const factorMeta = React.useMemo(() => {
+    const m: Record<string, { label: string }> = {};
+    (catQ.data?.groups ?? []).forEach((g) => g.factors.forEach((f) => { m[f.id] = f; }));
+    return m;
+  }, [catQ.data]);
 
   const applyGate = (g: Gate) => {
     const cfg = g.build(timingCfg.market);
@@ -77,8 +85,6 @@ export default function TimingWorkspace() {
   const setCfg = (patch: Partial<TimingConfig>) => setTimingCfg({ ...timingCfg, ...patch });
   const updCanary = (i: number, patch: Partial<CanaryInput>) =>
     setCfg({ canaries: timingCfg.canaries.map((c, ix) => (ix === i ? { ...c, ...patch } : c)) });
-  const addCanary = () =>
-    setCfg({ canaries: [...timingCfg.canaries, { kind: "asset", id: "SPY", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" }] });
   const rmCanary = (i: number) => setCfg({ canaries: timingCfg.canaries.filter((_, ix) => ix !== i) });
 
   const data = timingQ.data && !timingQ.data.error ? timingQ.data : null;
@@ -112,43 +118,46 @@ export default function TimingWorkspace() {
         </section>
 
         <section className="as-card">
-          <div className="as-card-title">카나리 신호 <span className="as-note-inline">위험-온/오프를 결정하는 관문 지표</span></div>
-          {timingCfg.canaries.map((c, i) => (
-            <div key={i} className="as-tm-canary">
-              <button className="as-x" title="제거" onClick={() => rmCanary(i)}>×</button>
-              <select className="as-tm-kind" value={c.kind}
-                onChange={(e) => updCanary(i, { kind: e.target.value as "asset" | "indicator", id: e.target.value === "indicator" ? "VIXCLS" : "SPY", signal: e.target.value === "indicator" ? "threshold" : "score_13612" })}>
-                <option value="asset">자산</option>
-                <option value="indicator">지표</option>
-              </select>
-              <input className="as-tm-id" list={c.kind === "asset" ? "tm-assets" : "tm-inds"} value={c.id}
-                onChange={(e) => updCanary(i, { id: e.target.value.toUpperCase() })} />
-              {c.kind === "asset" ? (
-                <>
-                  <select className="as-tm-sig" value={c.signal} onChange={(e) => updCanary(i, { signal: e.target.value as CanarySignalType })}>
-                    {ASSET_SIGNALS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </select>
-                  {(c.signal === "abs_mom" || c.signal === "ma_month" || c.signal === "ma_day") && (
-                    <input className="as-tm-num num" type="number" min={1} max={252} value={c.lookback}
-                      title={c.signal === "ma_day" ? "일" : "개월"}
-                      onChange={(e) => updCanary(i, { lookback: parseInt(e.target.value) || 1 })} />
-                  )}
-                </>
-              ) : (
-                <>
-                  <select className="as-tm-sig" value={c.direction} onChange={(e) => updCanary(i, { direction: e.target.value as "above" | "below" })}>
-                    <option value="above">임계 초과 시 통과</option>
-                    <option value="below">임계 미만 시 통과</option>
-                  </select>
-                  <input className="as-tm-num num" type="number" step={0.1} value={c.threshold}
-                    title="임계값" onChange={(e) => updCanary(i, { threshold: parseFloat(e.target.value) || 0 })} />
-                </>
-              )}
-            </div>
-          ))}
-          <button className="as-chip sm" onClick={addCanary}>+ 카나리 추가</button>
-          <div className="as-note">모멘텀 관문(0 초과)은 VAA·DAA식 위험-온 판정과 동일. 지표는 임계 방향으로 통과.</div>
+          <div className="as-card-title">타이밍 팩터
+            <span className="as-note-inline">위험-온/오프를 결정하는 관문 — 팩터 창에서 통합 관리</span>
+          </div>
+          {timingCfg.canaries.length === 0 && (
+            <div className="as-empty">팩터가 없습니다 — 아래에서 추가하세요.</div>
+          )}
+          <div className="tfc-list">
+            {timingCfg.canaries.map((c, i) => {
+              const meta = factorMeta[c.signal];
+              const pv = Object.entries(c.params || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
+              return (
+                <div key={i} className="tfc-chip">
+                  <div className="tfc-chip-main">
+                    <span className="tfc-chip-t">{meta?.label ?? c.signal}</span>
+                    <span className="tfc-chip-tk num">{c.id}</span>
+                    <span className="tfc-chip-cond num">
+                      {c.direction === "above" ? ">" : "<"} {c.threshold}
+                      {pv ? ` · ${pv}` : ""}
+                    </span>
+                  </div>
+                  <div className="tfc-chip-acts">
+                    <button className="as-chip sm" title="임계 방향 전환"
+                      onClick={() => updCanary(i, { direction: c.direction === "above" ? "below" : "above" })}>⇄</button>
+                    <input className="as-tm-num num" type="number" step={0.1} value={c.threshold}
+                      title="임계값" onChange={(e) => updCanary(i, { threshold: parseFloat(e.target.value) || 0 })} />
+                    <button className="as-x" title="제거" onClick={() => rmCanary(i)}>×</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button className="as-fb-apply" onClick={() => setPickerOpen(true)}>+ 팩터 창에서 추가</button>
+          <div className="as-note">
+            모멘텀·이격도·돌파·오버나이트·국면 팩터를 한 창에서 검색·추가합니다. 각 팩터는
+            TimingRule 공통 스키마로 등록되어 규칙 세트로 저장·재사용할 수 있습니다.
+          </div>
         </section>
+
+        <TimingFactorModal open={pickerOpen} onClose={() => setPickerOpen(false)}
+          onAdd={(c) => setCfg({ canaries: [...timingCfg.canaries, c] })} />
 
         <section className="as-card">
           <div className="as-card-title">브레드스 게이트</div>

@@ -204,7 +204,62 @@ export interface FactorPortfolioResult {
 }
 
 // ─── 카나리·마켓타이밍 ────────────────────────────────────────────────────────
-export type CanarySignalType = "abs_mom" | "score_13612" | "ma_month" | "ma_day" | "threshold";
+// 기존 4종 + 신규 팩터 — 백엔드 timing_factors.CATALOG와 동일 id 체계(통합 팩터 창)
+export type CanarySignalType =
+  | "abs_mom" | "score_13612" | "ma_month" | "ma_day" | "threshold"
+  | "avg_abs_momentum" | "accel_momentum" | "disparity" | "vol_breakout"
+  | "channel_breakout" | "overnight_return" | "defense_first" | "indicator";
+
+export type TimingFamily = "momentum" | "deviation" | "breakout" | "overnight" | "regime";
+
+export interface TimingFactorMeta {
+  id: string;
+  label: string;
+  family: TimingFamily;
+  params: Record<string, number>;
+  default_threshold: number;
+  default_direction: "above" | "below";
+  unit: string;
+  desc: string;
+  provenance: string;
+  existing: boolean;
+}
+
+export interface TimingFactorCatalog {
+  groups: { family: TimingFamily; label: string; factors: TimingFactorMeta[] }[];
+  families: { id: TimingFamily; label: string }[];
+  schema: string[];
+  note: string;
+}
+
+/** TimingRule 공통 스키마 — 팩터 + 실행/리스크 컨텍스트 (백엔드 dataclass와 1:1) */
+export interface TimingRuleSpec {
+  factor_id: string;
+  universe?: string[];
+  signal_family?: TimingFamily;
+  observation_window?: Record<string, number>;
+  entry_condition?: string;
+  exit_condition?: string;
+  risk_off_asset?: string[];
+  rebalance_or_holding_period?: string;
+  position_sizing?: string;
+  leverage_cap?: number;
+  transaction_cost_and_slippage?: { cost_bps: number; slippage_bps: number };
+  point_in_time_data_timestamp?: string | null;
+  params?: Record<string, number>;
+  label?: string;
+}
+
+export interface TimingRuleSet {
+  set_id: string;
+  name: string;
+  market: string;
+  rules: TimingRuleSpec[];
+  gate: Record<string, unknown>;
+  notes?: string | null;
+  created_at?: number;
+  updated_at?: number;
+}
 
 export interface CanaryInput {
   kind: "asset" | "indicator";
@@ -213,6 +268,13 @@ export interface CanaryInput {
   lookback: number;
   threshold: number;
   direction: "above" | "below";
+  params?: Record<string, number>;      // 팩터별 파라미터(ma_days·k·days…)
+  // ── TimingRule 공통 스키마(선택) — 지정 시 규칙 저장에 그대로 실림 ──
+  universe?: string[];
+  risk_off_asset?: string[];
+  rebalance_or_holding_period?: string;
+  position_sizing?: string;
+  leverage_cap?: number;
 }
 
 export interface TimingInput {
@@ -403,6 +465,35 @@ export const allocationApi = {
       body: JSON.stringify(req),
     });
     if (!r.ok) throw new Error(`factor-portfolio failed: ${r.status}`);
+    return r.json();
+  },
+
+  timingFactors: async (): Promise<TimingFactorCatalog> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/timing-factors`);
+    if (!r.ok) throw new Error(`timing-factors failed: ${r.status}`);
+    return r.json();
+  },
+
+  saveTimingRules: async (req: {
+    name: string; market: string; rules: TimingRuleSpec[];
+    gate?: Record<string, unknown>; notes?: string | null; set_id?: string | null;
+  }): Promise<{ set_id: string; rules: TimingRuleSpec[] }> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/timing-rules`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`timing-rules save failed: ${r.status}`);
+    return r.json();
+  },
+
+  listTimingRules: async (): Promise<{ sets: TimingRuleSet[] }> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/timing-rules`);
+    if (!r.ok) throw new Error(`timing-rules list failed: ${r.status}`);
+    return r.json();
+  },
+
+  deleteTimingRules: async (setId: string): Promise<{ deleted: boolean }> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/timing-rules/${setId}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`timing-rules delete failed: ${r.status}`);
     return r.json();
   },
 
