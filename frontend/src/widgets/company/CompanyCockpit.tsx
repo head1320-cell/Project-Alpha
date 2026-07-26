@@ -6,8 +6,8 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LayoutDashboard, Calculator, BarChart3, Boxes, Users, ShieldAlert, Sparkles } from "lucide-react";
-import type { CompanyData, SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo } from "@/shared/lib/insights/types";
-import { won, eok, pct, toneColor, pctColor } from "@/shared/lib/insights/types";
+import type { CompanyData, SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo } from "@/entities/company/insightsModel";
+import { won, eok, pct, toneColor, pctColor } from "@/entities/company/insightsModel";
 import { PriceChart, KpiBars, ValueBand, FactorBar, Gauge, ScoreRing, Spark, Radar, ScenarioCards, VerdictBadge } from "./parts";
 import ValuationTab from "./ValuationTab";
 import FinancialsDeepTab from "./FinancialsDeepTab";

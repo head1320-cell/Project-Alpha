@@ -17,7 +17,7 @@ import {
   MOCK_CAPACITIES,
   computeRealismKPIs,
   computeErosionWaterfall,
-  type BacktestResult,
+  type RealismBacktestResult,
 } from "@/entities/realism/data";
 
 import { API_BASE } from "@/shared/api/apiBase";
@@ -26,8 +26,8 @@ import { API_BASE } from "@/shared/api/apiBase";
 
 export default function RealismDashboard() {
   const [mode, setMode] = useState<"ideal" | "reality">("reality");
-  const [ideal, setIdeal] = useState<BacktestResult>(MOCK_IDEAL);
-  const [reality, setReality] = useState<BacktestResult>(MOCK_REALITY);
+  const [ideal, setIdeal] = useState<RealismBacktestResult>(MOCK_IDEAL);
+  const [reality, setReality] = useState<RealismBacktestResult>(MOCK_REALITY);
   const [loading, setLoading] = useState(false);
   const [useMockData, setUseMockData] = useState(true);
 

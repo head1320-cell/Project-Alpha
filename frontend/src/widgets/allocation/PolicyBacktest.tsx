@@ -12,7 +12,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
 } from "recharts";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
-import { allocationApi, type BacktestResult } from "@/entities/allocation/api";
+import { allocationApi, type AllocationBacktestResult } from "@/entities/allocation/api";
 
 const fmt = (v: number | null | undefined, s = "", d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : `${v.toLocaleString("ko-KR", { maximumFractionDigits: d })}${s}`;
@@ -25,7 +25,7 @@ export function PolicyBacktest() {
   const [windowDays, setWindowDays] = useState(252);
   const [costBps, setCostBps] = useState(10);
 
-  const mut = useMutation<BacktestResult>({
+  const mut = useMutation<AllocationBacktestResult>({
     mutationFn: () => allocationApi.backtest({
       tickers: holdings.map((h) => h.code),
       model, views, constraints,

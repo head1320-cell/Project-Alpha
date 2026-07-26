@@ -378,7 +378,7 @@ export interface BacktestInput {
   tau?: number;
 }
 
-export interface BacktestResult {
+export interface AllocationBacktestResult {
   error: boolean;
   message?: string;
   dates?: string[];
@@ -412,7 +412,7 @@ export const allocationApi = {
     return r.json();
   },
 
-  backtest: async (req: BacktestInput): Promise<BacktestResult> => {
+  backtest: async (req: BacktestInput): Promise<AllocationBacktestResult> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/backtest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

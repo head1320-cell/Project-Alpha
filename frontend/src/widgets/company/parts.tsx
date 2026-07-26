@@ -4,12 +4,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
-import type { CompanyData, FactorVal, FactorGroup, ModelResult, Scenario, Tone } from "@/shared/lib/insights/types";
-import { won, eok, pct, toneColor, pctColor } from "@/shared/lib/insights/types";
+import type { CompanyData, FactorVal, FactorGroup, ModelResult, Scenario, VerdictTone } from "@/entities/company/insightsModel";
+import { won, eok, pct, toneColor, pctColor } from "@/entities/company/insightsModel";
 
 const ACCENT = "#1200ff", BULL = "#16a34a", BEAR = "#dc2626", MUTED = "#71717a", BORDER = "#e5e5e5";
 
-export function VerdictBadge({ verdict, tone, big }: { verdict: string; tone: Tone; big?: boolean }) {
+export function VerdictBadge({ verdict, tone, big }: { verdict: string; tone: VerdictTone; big?: boolean }) {
   const c = toneColor(tone);
   return (
     <span className={`ca-verdict${big ? " big" : ""}`} style={{ color: c, borderColor: c, background: `color-mix(in srgb, ${c} 9%, transparent)` }}>
@@ -47,7 +47,7 @@ export function ScoreRing({ score, size = 84 }: { score: number; size?: number }
   );
 }
 
-export function PriceChart({ data, tone = "neutral", height = 220, intrinsic }: { data: CompanyData["price1y"]; tone?: Tone; height?: number; intrinsic?: number }) {
+export function PriceChart({ data, tone = "neutral", height = 220, intrinsic }: { data: CompanyData["price1y"]; tone?: VerdictTone; height?: number; intrinsic?: number }) {
   const stroke = tone === "bull" ? BULL : tone === "bear" ? BEAR : ACCENT;
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -157,7 +157,7 @@ export function Radar({ groups, size = 240 }: { groups: FactorGroup[]; size?: nu
 }
 
 export function ScenarioCards({ scenarios, price }: { scenarios: Scenario[]; price: number }) {
-  const tone = (k: string): Tone => k === "bull" ? "bull" : k === "bear" ? "bear" : "neutral";
+  const tone = (k: string): VerdictTone => k === "bull" ? "bull" : k === "bear" ? "bear" : "neutral";
   return (
     <div className="ca-scen">
       {scenarios.map((s) => {

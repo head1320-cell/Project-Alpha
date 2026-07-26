@@ -40,7 +40,7 @@ export interface DailyRecord {
   rebalanced?: boolean;
 }
 
-export interface BacktestResult {
+export interface RealismBacktestResult {
   success: boolean;
   summary: BacktestSummary;
   daily_records: DailyRecord[];
@@ -112,7 +112,7 @@ const REGIME_TIMELINE = [
   { day: 460,  regime: "GOLDILOCKS" },
 ];
 
-export const MOCK_IDEAL: BacktestResult = {
+export const MOCK_IDEAL: RealismBacktestResult = {
   success: true,
   n_trading_days: TRADING_DAYS,
   summary: {
@@ -131,7 +131,7 @@ export const MOCK_IDEAL: BacktestResult = {
   daily_records: generateEquityCurve(77.57, 0.018, REGIME_TIMELINE, 42),
 };
 
-export const MOCK_REALITY: BacktestResult = {
+export const MOCK_REALITY: RealismBacktestResult = {
   success: true,
   n_trading_days: TRADING_DAYS,
   summary: {
@@ -179,7 +179,7 @@ export interface RealismKPIs {
 }
 
 export function computeRealismKPIs(
-  ideal: BacktestResult, reality: BacktestResult,
+  ideal: RealismBacktestResult, reality: RealismBacktestResult,
 ): RealismKPIs {
   const rs = reality.realism_stats!;
   return {
@@ -206,7 +206,7 @@ export interface WaterfallStep {
 }
 
 export function computeErosionWaterfall(
-  ideal: BacktestResult, reality: BacktestResult,
+  ideal: RealismBacktestResult, reality: RealismBacktestResult,
 ): WaterfallStep[] {
   const idealReturn = ideal.summary.total_return_pct;
   const realReturn = reality.summary.total_return_pct;

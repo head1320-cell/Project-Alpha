@@ -12,8 +12,8 @@ import type { RegimeState } from "@/entities/macro/api";
 import type {
   CompanyData, FactorGroup, FactorVal, ModelResult, Scenario, YearFin, QuarterFin, PricePt, Peer,
   SignalInfo, RiskInfo, NetworkInfo, NarrativeInfo, MacroInfo,
-} from "@/shared/lib/insights/types";
-import { verdictTone } from "@/shared/lib/insights/types";
+} from "./insightsModel";
+import { verdictTone } from "./insightsModel";
 
 const fin = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 

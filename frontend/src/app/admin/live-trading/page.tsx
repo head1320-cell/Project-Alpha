@@ -13,7 +13,7 @@ import { API_BASE } from "@/shared/api/apiBase";
 // Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import type { Balance, KillStatus, Mode, Order, Position } from "@/widgets/live-trading/model";
+import type { Balance, KillStatus, Mode, Order, Position } from "@/entities/trading/liveModel";
 import {
   ConfirmModal, EmptyState, EquityCard, ModeButton, OrderRow, Section, SpecBlock, Td, Th, fmtKrw,
 } from "@/widgets/live-trading/CockpitParts";

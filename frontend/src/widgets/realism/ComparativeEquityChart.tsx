@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceArea, Legend,
 } from "recharts";
 import { TrendingUp, Sparkles, Zap } from "lucide-react";
-import type { BacktestResult } from "@/entities/realism/data";
+import type { RealismBacktestResult } from "@/entities/realism/data";
 
 const REGIME_BG: Record<string, string> = {
   GOLDILOCKS:  "rgba(222,255,154,0.04)",
@@ -23,8 +23,8 @@ const REGIME_LABEL: Record<string, { color: string; label: string }> = {
 };
 
 interface Props {
-  ideal: BacktestResult;
-  reality: BacktestResult;
+  ideal: RealismBacktestResult;
+  reality: RealismBacktestResult;
   mode: "ideal" | "reality";
   maxPoints?: number;
 }

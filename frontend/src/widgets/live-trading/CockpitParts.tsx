@@ -5,7 +5,7 @@
 
 import type { ReactNode } from "react";
 import { CheckCircle2, CircleAlert, Clock, X, XCircle } from "lucide-react";
-import type { Order } from "./model";
+import type { Order } from "@/entities/trading/liveModel";
 
 export function ModeButton({ value, current, onClick, icon: Icon, color, label }: any) {
   const active = current === value;

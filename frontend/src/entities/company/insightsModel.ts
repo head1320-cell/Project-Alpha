@@ -1,9 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// insights/types — Company Analysis 프로덕션 데이터 모델 + 포맷 헬퍼
-//   CompanyCockpit + companyData(lib) 공용. 실API 조립 결과가 이 형태.
+// entities/company/insightsModel — Company Analysis 프로덕션 데이터 모델 + 포맷 헬퍼
+//   CompanyCockpit + entities/company/data.ts 공용. 실API 조립 결과가 이 형태.
+//
+// 원래 shared/lib/insights/types.ts 였다. 이름만 shared 였고 내용은 company 도메인
+// 모델이라(소비자도 entities/company · widgets/company 뿐) 소속을 바로잡았다.
+//
+// `Tone` → `VerdictTone` 개명: shared/ui/kit.tsx 의 `Tone`("buy"|"sell"|"neutral")
+// 과 이름이 겹쳐 grep 이 두 곳을 물어 왔다. 이쪽은 밸류에이션 판정 색조이므로
+// 이름으로 구분되게 했다(타입 전용 개명 — 런타임 영향 0).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type Tone = "bull" | "bear" | "caution" | "neutral";
+export type VerdictTone = "bull" | "bear" | "caution" | "neutral";
 
 export interface FactorVal { id: string; label: string; value: number; unit: string; pct: number; higherBetter: boolean }
 export interface FactorGroup { id: string; label: string; factors: FactorVal[] }
@@ -26,7 +33,7 @@ export interface CompanyData {
   code: string; name: string; sector: string;
   market?: string; listingDate?: string;
   price: number; changePct: number; mktcap: number; // 억
-  verdict: string; tone: Tone;
+  verdict: string; tone: VerdictTone;
   intrinsic: number; gapPct: number;
   models: ModelResult[];
   summary: { per: number; pbr: number; roe: number; roa: number; debt: number; divYield: number; payout: number; eps: number; bps: number; dps: number; revenue: number; op: number; ni: number; fcf: number; equity: number };
@@ -62,6 +69,6 @@ export const eok = (n: number) => {
   return `${Math.round(n).toLocaleString()}억`;
 };
 export const pct = (n: number, d = 1) => `${n > 0 ? "+" : ""}${n.toFixed(d)}%`;
-export const toneColor = (t: Tone) => t === "bull" ? "var(--color-bull)" : t === "bear" ? "var(--color-bear)" : t === "caution" ? "var(--color-caution)" : "var(--t-muted)";
-export const verdictTone = (v: string): Tone => v.includes("저평가") ? "bull" : v.includes("고평가") ? "bear" : "neutral";
+export const toneColor = (t: VerdictTone) => t === "bull" ? "var(--color-bull)" : t === "bear" ? "var(--color-bear)" : t === "caution" ? "var(--color-caution)" : "var(--t-muted)";
+export const verdictTone = (v: string): VerdictTone => v.includes("저평가") ? "bull" : v.includes("고평가") ? "bear" : "neutral";
 export const pctColor = (p: number) => p >= 66 ? "var(--color-bull)" : p <= 33 ? "var(--color-bear)" : "var(--color-caution)";

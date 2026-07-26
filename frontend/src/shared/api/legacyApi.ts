@@ -1,3 +1,17 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// shared/api/legacyApi — 초기 대시보드/파생상품 시절의 단일 api 객체.
+//
+// ★현황(실측)★ 외부에서 import 되는 것은 `api` 하나뿐이고, 실제로 호출되는 메서드는
+// 4개다: optionPrice(/derivatives) · dbStatus/ingest/ingestDoctor(widgets/admin).
+// 이 파일의 타입 12개는 **어디에서도 import 되지 않는다** — 파일 내부 반환형 주석 전용.
+//
+// 그래서 BacktestResult/Position/SymbolItem 세 이름이 entities 의 정본과 충돌해
+// grep 이 두 곳을 물어 왔다. Legacy* 접두사를 붙여 정본 쪽만 검색되게 했다
+// (타입 전용 개명 — 런타임 영향 0). 정본은 각각:
+//   entities/backtest/chartModel.ts · entities/trading/liveModel.ts · entities/company/model.ts
+//
+// 미사용 메서드 정리는 별개 판단이라 손대지 않았다.
+// ═══════════════════════════════════════════════════════════════════════════════
 import { API_BASE as BASE } from "@/shared/api/apiBase";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,7 +63,7 @@ export const api = {
     stop_loss_pct?: number | null;
     take_profit_pct?: number | null;
     max_positions?: number;
-  }) => post<BacktestResult>("/api/v1/strategies/backtest", body),
+  }) => post<LegacyBacktestResult>("/api/v1/strategies/backtest", body),
 
   dslValidate: (expression: string) =>
     post<{ valid: boolean; message: string }>("/api/v1/strategies/dsl/validate", { expression }),
@@ -63,7 +77,7 @@ export const api = {
     end_date: string;
     initial_capital: number;
     commission_rate: number;
-  }) => post<BacktestResult>("/api/v1/strategies/dsl/backtest", body),
+  }) => post<LegacyBacktestResult>("/api/v1/strategies/dsl/backtest", body),
 
   batchSignal: (body: {
     stocks: Array<{ code: string; name: string }>;
@@ -101,7 +115,7 @@ export const api = {
   symbolSearch: (q: string, market?: string, limit = 30) => {
     const params = new URLSearchParams({ q, limit: String(limit) });
     if (market) params.set("market", market);
-    return get<{ query: string; total: number; items: SymbolItem[] }>(
+    return get<{ query: string; total: number; items: LegacySymbolItem[] }>(
       `/api/v1/symbols/search?${params}`
     );
   },
@@ -150,7 +164,7 @@ export const api = {
       `/api/v1/data/ingest/${target}`, {}),
 
   getHoldings: () =>
-    get<{ mode: string; count: number; positions: Position[] }>(
+    get<{ mode: string; count: number; positions: LegacyPosition[] }>(
       "/api/v1/account/holdings"
     ),
 
@@ -185,7 +199,7 @@ export const api = {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export interface BacktestResult {
+export interface LegacyBacktestResult {
   error?: boolean;
   message?: string;
   result: {
@@ -249,8 +263,8 @@ export interface Stock { ticker: string; name: string; market: string; sector: s
 export interface OHLCV { date: string; open: number; high: number; low: number; close: number; volume: number }
 
 // Phase 4 types
-export interface SymbolItem { ticker: string; name: string; market: string }
-export interface Position {
+export interface LegacySymbolItem { ticker: string; name: string; market: string }
+export interface LegacyPosition {
   stock_code: string; stock_name: string; quantity: number;
   avg_price: number; current_price: number;
   eval_amount: number; profit_loss: number; profit_rate: number;
