@@ -26,18 +26,16 @@ FastAPI + Next.js 14 App Router + PostgreSQL. docker-compose 3컨테이너
 | `src/execution/` | 실거래 — KIS 클라이언트, 킬스위치, 리스크 게이트웨이 |
 | `src/models/` | 계량 모델 (VaR·GARCH·CVA·파생) |
 | `src/observability/` | 구조화 로깅 + 요청 추적 ID 미들웨어 |
-| `frontend/src/` | FSD 계층 — 아래 표 참고 |
 
-프론트엔드는 Feature-Sliced Design입니다. **의존 방향은 위에서 아래로만** (`app → widgets →
-features → entities → shared`). 각 슬라이스의 `index.ts`가 Public API이니, **내부 구현을 뒤지지
-말고 배럴만 읽으세요.**
+**프론트엔드는 Feature-Sliced Design** — 의존 방향은 위에서 아래로만.
+각 슬라이스의 `index.ts`가 Public API이니 **내부 구현을 뒤지지 말고 배럴만 읽으세요.**
 
 | 계층 | 내용 |
 |---|---|
-| `app/` | Next.js 라우트 (파일시스템 라우팅 — 이 디렉터리는 FSD의 app 계층이 아니라 Next 전용) |
+| `app/` | Next.js 라우트 (파일시스템 라우팅 — FSD의 app 계층이 아니라 Next 전용) |
 | `widgets/` | 라우트에 붙는 완성 패널 (screener · backtester · macro · company · allocation · layout …) |
 | `features/` | 재사용 기능 단위 (strategy-builder · factor-picker) |
-| `entities/` | 도메인 모델 + API 클라이언트 (allocation · macro · company · backtest-run · strategy …) |
+| `entities/` | 도메인 모델 + API 클라이언트 (allocation · macro · company · backtest-run …) |
 | `shared/` | `api/`(apiBase·queryClient·screenerApi) · `ui/`(프리미티브·차트) · `lib/`(스토리지·파서) |
 
 UI 모듈: 01 Screener · 02 Backtester · 03 Macro · 04 Company · 05 Risk · 06 Allocation Studio · 07 Data Infra.
