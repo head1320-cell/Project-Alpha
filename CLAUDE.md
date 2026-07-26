@@ -37,7 +37,7 @@ FastAPI + Next.js 14 App Router + PostgreSQL. docker-compose 3컨테이너
 | `widgets/` | 라우트에 붙는 완성 패널 (screener · backtester · macro · company · allocation · layout …) |
 | `features/` | 재사용 기능 단위 (strategy-builder · factor-picker) |
 | `entities/` | 도메인 모델 + API 클라이언트 (allocation · macro · company · backtest-run …) |
-| `shared/` | `api/`(apiBase·queryClient·screenerApi) · `ui/`(프리미티브·차트) · `lib/`(스토리지·파서) |
+| `shared/` | `api/`(apiBase·queryClient) · `model/`(엔티티 공통 타입) · `ui/` · `lib/`(스토리지·포맷) |
 
 UI 모듈: 01 Screener · 02 Backtester · 03 Macro · 04 Company · 05 Risk · 06 Allocation Studio · 07 Data Infra.
 
