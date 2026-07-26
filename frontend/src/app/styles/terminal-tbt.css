@@ -1,0 +1,369 @@
+/* ═════════════════════════════════════════════════════════════════════════
+   Legacy variable aliases — for pages still referencing old names
+   ═════════════════════════════════════════════════════════════════════════ */
+:root {
+  --accent: var(--bs-primary);
+  --accent-hover: var(--bs-link-hover-color);
+  --accent-light: var(--bs-primary-bg-subtle);
+  --bg-page: var(--bs-body-bg);
+  --bg-section: var(--bs-tertiary-bg);
+  --bg-card: var(--bs-body-bg);
+  --border: var(--bs-border-color);
+  --border-strong: #cbd5e0;
+  --text-primary: var(--bs-body-color);
+  --text-secondary: var(--bs-secondary-color);
+  --text-muted: rgba(33, 37, 41, 0.6);
+  --text-link: var(--bs-link-color);
+  --success: var(--bs-success);
+  --success-light: #d1e7dd;
+  --danger: var(--bs-danger);
+  --danger-light: var(--bs-danger-bg);
+  --warning: var(--bs-warning);
+  --warning-light: var(--bs-warning-bg);
+  --green: var(--bs-success);
+  --red: var(--bs-danger);
+  --amber: var(--bs-warning);
+  --slate: var(--bs-tertiary-bg);
+  --slate-light: var(--bs-tertiary-bg);
+  --navy: var(--bs-body-bg);
+  --bg-hero: var(--pv-hero-bg);
+}
+
+/* card utility classes used by pages */
+.card-sm {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  padding: 0.75rem;
+}
+.card-md {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  padding: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Phase 5 — Premium Design System Additions
+   ═══════════════════════════════════════════════════════════════════════════════ */
+:root {
+  --color-bull: #16a34a; --color-bull-bg: #dcfce7; --color-bull-glow: rgba(34,197,94,0.18);
+  --color-bear: #dc2626; --color-bear-bg: #fee2e2; --color-bear-glow: rgba(220,38,38,0.18);
+  --color-caution: #d97706; --color-caution-bg: #fef3c7;
+  --cockpit-bg: #0b1020; --cockpit-surface: #131a2e; --cockpit-card: #1a2342;
+  --cockpit-border: rgba(255,255,255,0.08); --cockpit-text: #e2e8f0;
+  --cockpit-muted: #94a3b8; --cockpit-accent: #22c55e; --cockpit-glow: rgba(34,197,94,0.18);
+}
+.tabular-nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; border-radius: 4px; animation: skeleton-shimmer 1.4s ease-in-out infinite; }
+@keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes flash-bull { 0% { background-color: var(--color-bull-glow); } 100% { background-color: transparent; } }
+@keyframes flash-bear { 0% { background-color: var(--color-bear-glow); } 100% { background-color: transparent; } }
+.animate-flash-bull { animation: flash-bull 0.6s ease-out; }
+.animate-flash-bear { animation: flash-bear 0.6s ease-out; }
+@keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, var(--cockpit-glow)); } 50% { box-shadow: 0 0 0 6px transparent; } }
+.animate-pulse-glow { animation: pulse-glow 2s ease-out infinite; }
+@keyframes fade-in-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in { animation: fade-in-up 0.35s ease-out; }
+.animate-fade-in-slow { animation: fade-in-up 0.6s ease-out; }
+.glass-card { background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04); border-radius: 8px; }
+.glass-card-dark { background: rgba(26,35,66,0.72); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border: 1px solid var(--cockpit-border); border-radius: 8px; color: var(--cockpit-text); }
+.cockpit { background: radial-gradient(circle at 0% 0%, rgba(34,197,94,0.06) 0%, transparent 50%), radial-gradient(circle at 100% 100%, rgba(18,0,255,0.05) 0%, transparent 50%), var(--cockpit-bg); color: var(--cockpit-text); min-height: 100vh; }
+.cockpit-card { background: var(--cockpit-card); border: 1px solid var(--cockpit-border); border-radius: 8px; transition: border-color 0.15s, transform 0.15s; }
+.cockpit-card:hover { border-color: rgba(34,197,94,0.3); transform: translateY(-1px); }
+.regime-border-normal { border-bottom: 2px solid rgba(34,197,94,0.6); box-shadow: 0 1px 12px rgba(34,197,94,0.15); }
+.regime-border-caution { border-bottom: 2px solid rgba(245,158,11,0.7); box-shadow: 0 1px 12px rgba(245,158,11,0.18); }
+.regime-border-danger { border-bottom: 2px solid rgba(239,68,68,0.8); box-shadow: 0 1px 12px rgba(239,68,68,0.22); }
+.cmd-palette-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; animation: fade-in-up 0.18s ease-out; }
+.cmd-palette { width: min(680px, 92vw); background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden; }
+.cmd-palette-item:hover, .cmd-palette-item[data-active="true"] { background: #f8fafc; }
+.sparkline svg { vertical-align: middle; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Variant "Institutional Terminal" Shell — 좌측 사이드바 레이아웃
+   ═══════════════════════════════════════════════════════════════════════════════ */
+:root {
+  --t-bg: #ffffff;
+  --t-surface: #fafafa;
+  --t-border: #e5e5e5;
+  --t-accent: #1200ff;
+  --t-ink: #111111;
+  --t-muted: #71717a;
+  --t-sidebar-w: 260px;
+  --t-rail-w: 56px;
+  --t-header-h: 64px;
+  --t-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.terminal-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-bg);
+  color: var(--t-ink);
+  overflow: hidden;
+}
+
+/* Header */
+.terminal-header {
+  height: var(--t-header-h);
+  border-bottom: 1px solid var(--t-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 100;
+  background: var(--t-bg);
+  flex-shrink: 0;
+}
+.terminal-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--t-ink); }
+.terminal-brand .logo-box {
+  width: 24px; height: 24px; background: var(--t-accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.terminal-brand .logo-box svg { width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 1.5; }
+.terminal-brand .project-name { font-weight: 600; font-size: 14px; letter-spacing: -0.02em; text-transform: uppercase; }
+.terminal-brand .version { opacity: 0.3; font-weight: 400; margin-left: 4px; }
+.header-actions { display: flex; align-items: center; gap: 24px; }
+.search-trigger {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border: 1px solid var(--t-border); border-radius: 2px;
+  color: var(--t-muted); font-size: 13px; cursor: pointer; transition: all 0.1s ease;
+}
+.search-trigger:hover { border-color: var(--t-ink); color: var(--t-ink); }
+.search-trigger .kbd {
+  font-family: var(--t-mono); font-size: 11px;
+  border: 1px solid var(--t-border); padding: 0 4px; border-radius: 2px;
+}
+.account { display: flex; align-items: center; gap: 10px; padding-left: 24px; border-left: 1px solid var(--t-border); height: 32px; }
+.account-label { font-size: 13px; font-weight: 500; }
+.account .avatar { width: 24px; height: 24px; background: #eee; border-radius: 50%; border: 1px solid var(--t-border); }
+
+/* Body */
+.terminal-body { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+/* Sidebar — 호버/포커스 시에만 펼쳐지는 아이콘 레일 (오버레이: 본문 리플로우 없음) */
+.terminal-sidebar {
+  position: absolute; left: 0; top: 0; bottom: 0; z-index: 50;
+  width: var(--t-rail-w); overflow: hidden;
+  background: var(--t-surface); border-right: 1px solid var(--t-border);
+  display: flex; flex-direction: column; padding: 24px 0;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+}
+/* 호버 확장 제거 — 상단 토글(≡) 버튼 클릭으로만 펼침/닫힘 */
+/* 터치/클릭 토글로 고정 펼침 */
+.terminal-sidebar.pinned { width: var(--t-sidebar-w); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.07); }
+.terminal-sidebar.pinned .fade-x, .terminal-sidebar.pinned .nav-meta { opacity: 1; transition-delay: 0s; }
+.sidebar-backdrop { position: absolute; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.18); }
+.rail-toggle { display: flex; align-items: center; height: 44px; width: 100%; margin-bottom: 4px;
+  padding: 0; background: none; border: none; cursor: pointer; color: var(--t-muted); }
+.rail-toggle:hover { color: var(--t-ink); }
+.rail-toggle .nav-icon { width: 18px; height: 18px; margin: 0 14px 0 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.5; fill: none; }
+/* 접힘 시 라벨/번호/푸터 텍스트 숨김 — pinned(토글 펼침)에서만 표시(.terminal-sidebar.pinned 규칙) */
+.terminal-sidebar .fade-x, .terminal-nav .nav-meta {
+  opacity: 0; transition: opacity 0.14s ease; white-space: nowrap;
+}
+.terminal-sidebar .nav-label {
+  font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
+  text-transform: uppercase; padding: 0 24px 12px 24px; letter-spacing: 0.1em;
+}
+.terminal-nav { display: flex; flex-direction: column; }
+.terminal-nav .nav-item {
+  position: relative; display: flex; align-items: center; gap: 0; height: 46px; padding: 0;
+  text-decoration: none; color: var(--t-muted); font-size: 14px; font-weight: 500;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.terminal-nav .nav-item:hover { color: var(--t-ink); background: rgba(18, 0, 255, 0.03); }
+.terminal-nav .nav-item.active { color: var(--t-ink); background: #fff; }
+.terminal-nav .nav-item.active::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-accent);
+}
+.terminal-nav .nav-item.active .nav-icon { stroke: var(--t-accent); }
+.terminal-nav .nav-icon { width: 18px; height: 18px; margin: 0 14px 0 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.5; fill: none; }
+.terminal-nav .nav-meta { display: flex; align-items: center; gap: 8px; }
+.terminal-nav .nav-number { font-family: var(--t-mono); font-size: 11px; opacity: 0.4; width: 16px; }
+.terminal-nav .active .nav-number { opacity: 1; color: var(--t-accent); }
+
+/* Main */
+.terminal-main { flex: 1; margin-left: var(--t-rail-w); background: var(--t-bg); position: relative; padding: 40px; overflow-y: auto; }
+.terminal-content { position: relative; z-index: 1; }
+
+/* ── Breadcrumb (셸 레벨, 전 툴 탭 상단) — 정적 글래스 헤더 스트립 ── */
+/* terminal-main 의 40px 패딩을 음수 마진으로 상쇄해 상단·좌우로 블리드하는 풀폭 헤더.
+   position: static(정적) — 스크롤해도 각 탭의 상단 툴바(.t-toolbar 등)를 절대 덮지 않음. */
+.tcrumb { position: static; display: flex; align-items: center; gap: 8px;
+  margin: -40px -40px 20px; padding: 12px 40px;
+  background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--t-border); font-family: var(--t-mono); font-size: 11px; letter-spacing: .04em; }
+.tcrumb-home { color: var(--t-muted); text-decoration: none; font-size: 13px; line-height: 1; transition: color .15s; }
+.tcrumb-home:hover { color: var(--t-accent); }
+.tcrumb-brand { color: var(--t-muted); font-weight: 600; letter-spacing: .08em; }
+.tcrumb-sep { color: var(--t-border); }
+.tcrumb-cur { display: inline-flex; align-items: center; gap: 6px; color: var(--t-ink); font-weight: 600; text-decoration: none; position: relative; }
+.tcrumb-cur::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 1.5px; background: var(--t-accent); transform: scaleX(0); transform-origin: left; transition: transform .18s ease; }
+.tcrumb-cur:hover::after { transform: scaleX(1); }
+.tcrumb-n { color: var(--t-accent); font-weight: 700; }
+.tcrumb-sub { color: var(--t-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .dash-mod, .dash-mod:hover, .dash-macro, .dash-macro:hover { transform: none !important; transition: none !important; }
+  .tcrumb-cur::after { transition: none !important; }
+}
+
+/* Terminal decorations */
+.terminal-main .grid-overlay {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.03;
+  background-image: linear-gradient(to right, var(--t-border) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--t-border) 1px, transparent 1px);
+  background-size: 100px 100px;
+}
+.terminal-main .corner-mark { position: absolute; width: 8px; height: 8px; border: 1px solid var(--t-border); z-index: 2; }
+.terminal-main .top-left { top: 20px; left: 20px; border-right: 0; border-bottom: 0; }
+.terminal-main .top-right { top: 20px; right: 20px; border-left: 0; border-bottom: 0; }
+.terminal-main .bottom-left { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
+.terminal-main .bottom-right { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
+
+/* Terminal meta-stamp — 전 페이지에서 숨김 (REF_ID/ENGINE/AUTH 장식 제거) */
+.meta-stamp { display: none !important; }
+.terminal-breadcrumb {
+  font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+  margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.terminal-breadcrumb span { color: var(--t-accent); }
+.terminal-h1 { font-size: 32px; font-weight: 500; letter-spacing: -0.03em; margin-bottom: 32px; }
+
+.tverdict {
+  display: inline-block; padding: 2px 8px; border-radius: 2px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; font-family: var(--t-mono);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Terminal Backtester — Variant 백테스터 스타일
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.tbt-grid { display: grid; grid-template-columns: 280px 1fr; gap: 32px; }
+.tbt-config {
+  display: flex; flex-direction: column; gap: 20px;
+  padding-right: 24px; border-right: 1px solid var(--t-border);
+}
+.tbt-group { display: flex; flex-direction: column; gap: 8px; }
+.tbt-label {
+  font-family: var(--t-mono); font-size: 10px; text-transform: uppercase;
+  color: var(--t-muted); letter-spacing: 0.05em;
+}
+.tbt-input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--t-border);
+  background: var(--t-surface); font-size: 13px; font-family: var(--bs-body-font-family);
+  color: var(--t-ink); border-radius: 2px;
+}
+.tbt-input:focus { outline: none; border-color: var(--t-accent); }
+.tbt-run {
+  background: var(--t-accent); color: #fff; border: none; padding: 12px;
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  cursor: pointer; margin-top: 4px; border-radius: 2px; font-family: var(--t-mono);
+  transition: opacity 0.1s;
+}
+.tbt-run:hover { opacity: 0.9; }
+.tbt-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.tbt-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px; }
+.tbt-stat { padding: 16px; border: 1px solid var(--t-border); border-radius: 2px; }
+.tbt-stat-label {
+  font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.tbt-stat-value { font-size: 20px; font-weight: 600; font-family: var(--t-mono); letter-spacing: -0.02em; }
+
+.tbt-chart {
+  border: 1px solid var(--t-border); padding: 24px; margin-bottom: 24px;
+  position: relative; border-radius: 2px;
+}
+.tbt-chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.tbt-chart-title {
+  font-family: var(--t-mono); font-size: 11px; text-transform: uppercase; color: var(--t-muted);
+  letter-spacing: 0.05em;
+}
+.tbt-quickstat {
+  margin-top: auto; border-top: 1px solid var(--t-border); padding-top: 20px;
+  font-family: var(--t-mono); font-size: 11px; line-height: 2; color: var(--t-muted);
+}
+.tbt-empty {
+  border: 1px dashed var(--t-border); border-radius: 2px;
+  height: 400px; display: flex; align-items: center; justify-content: center;
+  color: var(--t-muted); font-size: 13px; text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Terminal Macro / Company / Risk — Variant 분석 탭 스타일
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 공통 패널 */
+.tpanel { border: 1px solid var(--t-border); border-radius: 2px; padding: 24px; margin-bottom: 24px; }
+.tpanel-label {
+  font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+/* Macro — 4-quadrant 국면 */
+.tregime { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; aspect-ratio: 1.6; max-width: 560px; margin: 32px auto; position: relative; background: var(--t-border); }
+.tquadrant {
+  background: var(--t-surface); padding: 20px; display: flex; flex-direction: column; gap: 4px;
+  position: relative; font-size: 13px;
+}
+.tquadrant.active { background: rgba(18,0,255,0.04); }
+.tquadrant-label { font-weight: 600; font-size: 14px; }
+.tquadrant-sub { opacity: 0.5; font-size: 11px; }
+.tregime-dot {
+  position: absolute; width: 12px; height: 12px; background: var(--t-accent);
+  border-radius: 50%; box-shadow: 0 0 0 4px rgba(18,0,255,0.15);
+  top: 50%; left: 50%; transform: translate(-50%,-50%);
+}
+.tmetrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; }
+.tmetric-card { padding: 16px; border: 1px solid var(--t-border); border-radius: 2px; }
+.tmetric-label { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); text-transform: uppercase; display: block; margin-bottom: 8px; }
+.tmetric-value { font-size: 22px; font-weight: 600; font-family: var(--t-mono); letter-spacing: -0.02em; }
+.tmetric-trend { font-family: var(--t-mono); font-size: 11px; margin-top: 6px; color: var(--t-muted); }
+.tmetric-trend span { opacity: 0.6; }
+
+/* Company — 헤더 + 메트릭 바 */
+.tcompany-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding-bottom: 24px; border-bottom: 1px solid var(--t-border); margin-bottom: 24px;
+}
+.tticker-badge {
+  font-family: var(--t-mono); font-size: 13px; background: var(--t-accent); color: #fff;
+  padding: 2px 8px; border-radius: 2px; margin-left: 12px; vertical-align: middle; font-weight: 500;
+}
+.tmetrics-bar {
+  display: flex; gap: 32px; flex-wrap: wrap; padding: 20px 0;
+  border-top: 1px solid var(--t-border); border-bottom: 1px solid var(--t-border);
+}
+.tmetric-item { display: flex; flex-direction: column; gap: 4px; }
+.tmetric-item .metric-label { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); text-transform: uppercase; }
+.tmetric-item .metric-value { font-size: 16px; font-weight: 600; font-family: var(--t-mono); }
+.tsection-card { border: 1px solid var(--t-border); border-radius: 2px; padding: 20px; }
+.tsection-label { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+.tvaluation-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--t-border); font-size: 13px; }
+.tvaluation-row:last-child { border-bottom: none; }
+.tvaluation-row .v-model { color: var(--t-muted); font-family: var(--t-mono); font-size: 12px; }
+.tvaluation-row .v-price { font-family: var(--t-mono); font-weight: 600; }
+
+/* Risk — 스트레스 테이블 + survival bar */
+.trisk-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.trisk-table th { text-align: left; font-family: var(--t-mono); font-size: 10px; text-transform: uppercase; color: var(--t-muted); padding: 12px 16px; border-bottom: 1px solid var(--t-border); font-weight: 500; }
+.trisk-table th.num, .trisk-table td.num { text-align: right; }
+.trisk-table td { padding: 14px 16px; border-bottom: 1px solid var(--t-border); }
+.trisk-table td.num { font-family: var(--t-mono); }
+.tsurvival-wrap { display: flex; align-items: center; gap: 10px; }
+.tsurvival-bar { flex: 1; height: 6px; background: var(--t-surface); border-radius: 2px; overflow: hidden; min-width: 80px; }
+.tsurvival-fill { height: 100%; border-radius: 2px; }
+.tlayout-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 1024px) { .tlayout-row { grid-template-columns: 1fr; } }
+
+/* Backtester 스피너 */
+.tbt-spinner {
+  width: 24px; height: 24px; margin: 0 auto;
+  border: 2px solid var(--t-border); border-top-color: var(--t-accent);
+  border-radius: 50%; animation: tbt-spin 0.8s linear infinite;
+}
+@keyframes tbt-spin { to { transform: rotate(360deg); } }
+
