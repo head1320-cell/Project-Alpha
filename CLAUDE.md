@@ -27,10 +27,9 @@ FastAPI + Next.js 14 App Router + PostgreSQL. docker-compose 3컨테이너
 | `src/models/` | 계량 모델 (VaR·GARCH·CVA·파생) |
 | `src/observability/` | 구조화 로깅 + 요청 추적 ID 미들웨어 |
 
-**프론트엔드는 Feature-Sliced Design** — 의존 방향은 위에서 아래로만.
-각 슬라이스의 `index.ts`가 Public API이니 **내부 구현을 뒤지지 말고 배럴만 읽으세요.**
-단 **배럴은 "발견"용, `import`는 실제 모듈에서** — 배럴로 import하면 슬라이스 전체가 번들에
-끌려옵니다(실측: `@/entities/backtest` 배럴이 30KB JSON을 `/allocation`까지 +9KB 끌고 갔음).
+**프론트엔드는 FSD** — 의존 방향은 위에서 아래로만. 슬라이스의 `index.ts`가 Public API이니
+**구현을 뒤지지 말고 배럴만 읽으세요.** 단 **배럴은 "발견"용, `import`는 실제 모듈에서** —
+배럴 import는 슬라이스 전체를 번들에 끌어옵니다(실측 +9KB).
 
 | 계층 | 내용 |
 |---|---|
