@@ -3,7 +3,7 @@ import os
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
-from main_api import db_status  # noqa: E402
+from src.api.data_routes import db_status  # noqa: E402
 
 
 def test_universe_progress_key_present():

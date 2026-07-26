@@ -15,8 +15,12 @@ FastAPI + Next.js 14 App Router + PostgreSQL. docker-compose 3컨테이너
 
 | 위치 | 역할 |
 |---|---|
-| `main_api.py` | FastAPI 엔트리 — 자체 라우트 + `include_router` 19개 (앱 전체 268 경로) |
-| `src/api/` | 도메인 라우터 (screener · macro · allocation · trading · backtest_run · valuation …) |
+| `main_api.py` | **얇은 진입점(23줄)** — `create_app()` 호출만. `uvicorn main_api:app` 계약 유지 |
+| `src/app_factory.py` | 앱 조립 — CORS · 관측성 · 기동 훅 · `ROUTER_MODULES` 목록으로 라우터 30개 등록 |
+| `src/api/` | 도메인 라우터 (앱 전체 268 경로). 라우터 추가는 `ROUTER_MODULES`에 한 줄 |
+| `src/api/legacy_schemas.py` | 레거시 엔드포인트의 요청/응답 Pydantic 모델 모음 |
+| `src/startup/lifecycle.py` | 기동 시퀀스 + 백그라운드 사전적재 데몬 |
+| `src/state/` | 프로세스 로컬 공유 상태 (`ingest_state` · `trading_state`) |
 | `src/engine/` | 핵심 로직 — 스크리너·백테스트·매크로·자산배분·리스크 |
 | `src/data/` | 데이터 계층 — DART/KIS/KRX 클라이언트, 팩터 스토어, 스냅샷 DB, `mock_gate` |
 | `src/execution/` | 실거래 — KIS 클라이언트, 킬스위치, 리스크 게이트웨이 |
