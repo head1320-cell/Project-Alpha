@@ -3984,3 +3984,33 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-trow { cursor: pointer; } .brun-trow:hover { background: var(--t-surface); }
 .brun-tdetail td { background: rgba(18,0,255,.03); text-align: left; font-size: 10px; color: var(--t-muted); display: flex; gap: 16px; flex-wrap: wrap; }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   30. .devui-*  —  /dev/ui  shared/ui 프리미티브 격리 갤러리 (내부 라우트)
+   갤러리 프레임 전용. 표본 안의 앱 클래스(.pv-* · .tstate-* …)는 건드리지 않는다.
+   기존 규칙 위에 **추가만** 한다 — 이 블록은 파일 맨 끝이어야 한다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.devui { max-width: 1080px; margin: 0 auto; padding: 24px 16px 80px; }
+.devui-head { border-bottom: 2px solid var(--t-ink, #111); padding-bottom: 14px; margin-bottom: 28px; }
+.devui-title { font-size: 20px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 6px; }
+.devui-sub { font-size: 12px; line-height: 1.6; color: var(--t-muted, #666); margin: 0 0 4px; }
+.devui-sub code { font-family: var(--bs-font-mono, monospace); font-size: 11px; background: var(--t-surface, #f4f4f5); padding: 1px 4px; border-radius: 3px; }
+.devui-omit { color: var(--t-muted, #666); }
+
+.devui-group { margin-bottom: 40px; }
+.devui-group-title { font-family: var(--bs-font-mono, monospace); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--t-muted, #666); border-bottom: 1px solid var(--border, #e4e4e7); padding-bottom: 6px; margin: 0 0 14px; }
+.devui-group-note { font-size: 11.5px; line-height: 1.6; color: var(--t-muted, #666); margin: -6px 0 16px; }
+.devui-group-note code { font-family: var(--bs-font-mono, monospace); background: var(--t-surface, #f4f4f5); padding: 1px 4px; border-radius: 3px; }
+
+.devui-item { border: 1px solid var(--border, #e4e4e7); border-radius: 6px; margin-bottom: 14px; overflow: hidden; background: var(--bg-card, #fff); }
+.devui-item-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; background: var(--t-surface, #f4f4f5); border-bottom: 1px solid var(--border, #e4e4e7); }
+.devui-item-name { font-family: var(--bs-font-mono, monospace); font-size: 12.5px; font-weight: 700; }
+.devui-item-from { font-family: var(--bs-font-mono, monospace); font-size: 10px; color: var(--t-muted, #666); }
+.devui-item-note { font-size: 11.5px; line-height: 1.55; color: var(--t-muted, #666); margin: 8px 12px 0; }
+.devui-stage { padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; }
+
+.devui-variant { display: flex; flex-direction: column; gap: 5px; }
+.devui-variant-label { font-family: var(--bs-font-mono, monospace); font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--t-muted, #666); }
+.devui-variant-body { min-width: 0; }
+.devui-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.devui-inline-note { font-size: 11.5px; color: var(--t-muted, #666); }
