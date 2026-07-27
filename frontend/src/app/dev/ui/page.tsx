@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // /dev/ui — shared/ui 프리미티브 격리 갤러리
 //
-// 목적: shared/ui 의 컴포넌트 export 34개 중 32개를 **데이터 없이** 한 화면에서 렌더한다.
+// 목적: shared/ui 의 컴포넌트 export **32개 전부**를 데이터 없이 한 화면에서 렌더한다.
 //   · 에이전트가 "이 프리미티브가 어떻게 생겼나"를 알려고 소비 화면을 뒤지지 않아도 된다.
 //   · Playwright(e2e/dev-ui.spec.ts)가 여기서 **클래스 계약을 회귀 검사**한다.
 //     프리미티브가 내보내는 클래스명(.pv-* · .tstate-* · .tstat-* · .skeleton …)이
@@ -15,16 +15,9 @@
 //
 // 네트워크 호출 0. nav 에 링크되지 않은 내부 라우트다.
 //
-// 제외한 2개와 그 이유(정직하게):
-//   · CommandPalette — Ctrl+K 전역 오버레이. **앱 어디에도 마운트되어 있지 않다.**
-//     여기에서만 마운트하면 이 페이지에서만 동작하는 착각을 만든다.
-//   · CommandHint — 클릭 시 window 에 합성 Ctrl+K keydown 을 쏘는 전역 트리거.
-//
-// 실측(별도 보고 사항): Ctrl+K 계통 전체가 죽어 있다.
-//   TopNav 는 배럴에서만 참조되고 렌더되는 곳이 없다 → TopNav 가 CommandHint 의 유일한
-//   사용처 → CommandHint 가 쏘는 keydown 을 받는 것은 CommandPalette 뿐 → 그 팔레트는
-//   마운트되지 않는다. 즉 20개짜리 명령 레지스트리는 실행될 수 없다.
-//   삭제는 기능 제거 판단이라 여기서 하지 않는다.
+// 제외 없음. 처음엔 CommandPalette / CommandHint 두 개를 뺐었는데, 그 둘은 도달 불가
+// 코드로 확인되어 같은 브랜치에서 삭제했다(TopNav 포함). 지금은 shared/ui 의 컴포넌트
+// export 와 이 갤러리의 표본이 1:1 로 맞는다 — 스펙이 그 일치를 강제한다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
@@ -145,13 +138,6 @@ function LivePSection() {
   );
 }
 
-// MetricCard 의 icon prop 은 `ComponentType<{size?: number; style?: CSSProperties}>` 로
-// 선언되어 있는데, 이 프로젝트가 쓰는 lucide 아이콘은 `size?: string | number` 라서 그대로는
-// 들어가지 않는다(tsc 가 거부). shared/ui/feedback 의 MetricCard 는 **소비자가 0개**여서
-// 이 prop 이 한 번도 실행되지 않았고 그래서 지금까지 드러나지 않았다 — 별도 보고 사항.
-// shared/ui 수정은 이 단계 범위 밖이라 어댑터로 감싸 경로만 실행해 둔다.
-const ActivityIcon = (p: { size?: number; style?: React.CSSProperties }) => <Activity {...p} />;
-
 const SPARK_UP = [10, 12, 11, 14, 13, 17, 19, 18, 22];
 const SPARK_DOWN = [22, 20, 21, 17, 15, 16, 12, 11, 9];
 const MINIVIZ_KINDS: MiniVizKind[] = ["bars", "line", "heat", "rows", "gauge"];
@@ -166,8 +152,7 @@ export default function DevUiPage() {
           <code>e2e/dev-ui.spec.ts</code> 가 여기서 클래스 계약을 회귀 검사합니다.
         </p>
         <p className="devui-sub devui-omit">
-          제외: <code>CommandPalette</code>(앱 어디에도 마운트되지 않은 전역 오버레이) ·
-          <code>CommandHint</code>(합성 keydown 을 쏘는 전역 트리거).
+          shared/ui 의 컴포넌트 export 32개를 빠짐없이 렌더합니다 — 스펙이 이 1:1 대응을 강제합니다.
         </p>
       </header>
 
@@ -309,7 +294,7 @@ export default function DevUiPage() {
         </Specimen>
 
         <Specimen name="MetricCard" from="feedback" note="loading=true 면 SkeletonCard 로 대체됩니다.">
-          <Variant label="delta 양수 + icon"><MetricCard label="샤프" value={1.42} delta={3.1} sublabel="전월 대비" icon={ActivityIcon} /></Variant>
+          <Variant label="delta 양수 + icon"><MetricCard label="샤프" value={1.42} delta={3.1} sublabel="전월 대비" icon={Activity} /></Variant>
           <Variant label="delta 음수"><MetricCard label="변동성" value={18.7} unit="%" delta={-2.4} color="#dc2626" /></Variant>
           <Variant label="value=null"><MetricCard label="미집계" value={null} /></Variant>
           <Variant label="loading=true"><MetricCard label="로딩" value={0} loading /></Variant>

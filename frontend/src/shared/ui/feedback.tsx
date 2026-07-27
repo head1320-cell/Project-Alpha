@@ -1,25 +1,19 @@
 "use client";
 
 /**
- * Phase 5 Common Components
+ * shared/ui/feedback — 데이터 없이 렌더되는 피드백/표시 프리미티브.
  * ==========================================================================
  *  · Skeleton / SkeletonText / SkeletonCard / SkeletonTable
  *  · TickValue       — 수치 변경 시 0.6초 flash + tabular-nums
- *  (RegimeBadge / useRegimeInfo 는 macroApi 의존이라 entities/macro 로 이동)
  *  · MetricCard      — 균질 KPI 카드
  *  · Sparkline       — 미니 SVG line
- *  · CommandPalette  — Ctrl+K 전역 검색 (자체 구현)
- *  · CommandHint     — TopNav ⌘K 힌트
+ *
+ *  (RegimeBadge / useRegimeInfo 는 macroApi 의존이라 entities/macro 로 이동)
+ *  (CommandPalette / CommandHint 는 삭제 — 도달 불가 코드였다. 커밋 메시지 참고)
  */
 
-import { useEffect, useState, useRef, useMemo } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import {
-  Search, Home, BarChart3, Shield, Calculator, Diamond, Sparkles, Globe,
-  Wrench, ArrowRight, Hash, Command, CheckCircle2,
-  TrendingUp, TrendingDown, Activity,
-} from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -110,7 +104,10 @@ export function MetricCard({
   delta?: number | null;
   sublabel?: string;
   color?: string;
-  icon?: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+  // size 는 `string | number` 여야 한다 — lucide 아이콘의 시그니처가 그렇고, 이 프로젝트의
+  // 아이콘은 전부 lucide 다. `number` 로 좁혀 두면 icon={Activity} 가 tsc 에서 거부된다.
+  // (이 컴포넌트는 소비자가 0개였던 탓에 그 사실이 드러난 적이 없었다.)
+  icon?: React.ComponentType<{ size?: string | number; style?: React.CSSProperties }>;
   loading?: boolean;
   format?: "number" | "currency" | "percent";
   digits?: number;
@@ -157,136 +154,5 @@ export function Sparkline({
         <polyline points={points} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
       </svg>
     </span>
-  );
-}
-
-// ─── Command Palette ────────────────────────────────────────────────────────────
-
-interface CommandItem {
-  id: string; label: string; description?: string; href: string;
-  category: "메인" | "스크리너" | "분석" | "운영"; icon: React.ElementType;
-}
-
-const ALL_COMMANDS: CommandItem[] = [
-  { id: "home", label: "홈 대시보드", href: "/dashboard", category: "메인", icon: Home },
-  { id: "builder", label: "전략 빌더", href: "/builder", category: "메인", icon: Wrench },
-  { id: "backtest", label: "백테스팅", href: "/backtest", category: "메인", icon: BarChart3 },
-  { id: "screener", label: "종목 스크리너", href: "/screener", category: "메인", icon: Diamond },
-  { id: "risk", label: "리스크 도구", href: "/risk-tools", category: "메인", icon: Shield },
-  { id: "deriv", label: "파생상품 평가", href: "/derivatives", category: "메인", icon: Calculator },
-  { id: "macro", label: "매크로 레이더", href: "/macro", category: "메인", icon: Globe },
-  { id: "insights", label: "AI 인사이트", href: "/insights", category: "메인", icon: Sparkles },
-  { id: "scr-top", label: "Top 저평가 종목", href: "/screener?sort=composite", category: "스크리너", icon: TrendingUp },
-  { id: "scr-div", label: "고배당주 필터", href: "/screener?filter=dividend", category: "스크리너", icon: Hash },
-  { id: "scr-qual", label: "재무 우량주", href: "/screener?filter=quality", category: "스크리너", icon: CheckCircle2 },
-  { id: "ai-stock", label: "AI 종목 분석", href: "/insights?d=stock", category: "분석", icon: Sparkles },
-  { id: "ai-portfolio", label: "AI 포트폴리오 보고서", href: "/insights?d=portfolio", category: "분석", icon: Sparkles },
-  { id: "ai-macro", label: "AI 매크로 브리핑", href: "/insights?d=macro", category: "분석", icon: Sparkles },
-  { id: "ai-ops", label: "AI 운영 사건 분석", href: "/insights?d=operations", category: "분석", icon: Sparkles },
-  { id: "live", label: "실거래 콕핏", href: "/admin/live-trading", category: "운영", icon: Activity },
-  { id: "multi-bt", label: "Multi-Backtest", href: "/admin/multi-backtest", category: "운영", icon: BarChart3 },
-  { id: "realism", label: "Realism Engine", href: "/admin/realism", category: "운영", icon: Shield },
-];
-
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeIdx, setActiveIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); setOpen(o => !o); }
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  useEffect(() => {
-    if (open) { setTimeout(() => inputRef.current?.focus(), 30); setQuery(""); setActiveIdx(0); }
-  }, [open]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return ALL_COMMANDS;
-    return ALL_COMMANDS.filter(c => (c.label + " " + (c.description || "") + " " + c.href).toLowerCase().includes(q));
-  }, [query]);
-
-  const grouped = useMemo(() => {
-    const g: Record<string, CommandItem[]> = {};
-    filtered.forEach(c => { g[c.category] = g[c.category] || []; g[c.category].push(c); });
-    return g;
-  }, [filtered]);
-
-  const select = (cmd: CommandItem) => { setOpen(false); router.push(cmd.href); };
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, filtered.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter") { e.preventDefault(); if (filtered[activeIdx]) select(filtered[activeIdx]); }
-  };
-
-  if (!open) return null;
-  let runningIdx = -1;
-
-  return (
-    <div className="cmd-palette-backdrop" onClick={() => setOpen(false)}>
-      <div className="cmd-palette" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-default">
-          <Search size={16} className="text-secondary" />
-          <input
-            ref={inputRef} value={query}
-            onChange={e => { setQuery(e.target.value); setActiveIdx(0); }}
-            onKeyDown={onKeyDown}
-            placeholder="페이지, 종목, 도구 검색..."
-            className="flex-grow text-sm outline-none bg-transparent text-primary"
-          />
-          <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-light rounded text-secondary border border-default">ESC</kbd>
-        </div>
-        <div className="max-h-[420px] overflow-y-auto">
-          {filtered.length === 0 && <div className="p-6 text-center text-sm text-secondary">결과 없음</div>}
-          {Object.entries(grouped).map(([category, items]) => (
-            <div key={category}>
-              <div className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-wider text-secondary font-bold">{category}</div>
-              {items.map(cmd => {
-                runningIdx++;
-                const isActive = runningIdx === activeIdx;
-                const Icon = cmd.icon;
-                return (
-                  <button
-                    key={cmd.id} onClick={() => select(cmd)} onMouseEnter={() => setActiveIdx(runningIdx)}
-                    data-active={isActive ? "true" : "false"}
-                    className="cmd-palette-item w-full flex items-center gap-3 px-4 py-2.5 text-left transition"
-                  >
-                    <div className="w-7 h-7 rounded bg-light flex items-center justify-center text-secondary flex-shrink-0"><Icon size={14} /></div>
-                    <div className="flex-grow min-w-0"><div className="text-sm font-medium text-primary truncate">{cmd.label}</div></div>
-                    <ArrowRight size={12} className="text-secondary flex-shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-        <div className="px-4 py-2 border-t border-default text-[10px] text-secondary flex items-center gap-3 font-mono">
-          <span><kbd className="px-1 bg-light rounded">↑↓</kbd> 이동</span>
-          <span><kbd className="px-1 bg-light rounded">↵</kbd> 선택</span>
-          <span className="ml-auto">{filtered.length} 항목</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function CommandHint() {
-  return (
-    <div
-      className="hidden md:flex items-center gap-1 text-[10px] font-mono text-white/60 px-2 py-1 rounded border border-white/20 hover:border-white/40 transition cursor-pointer"
-      onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
-      title="명령 팔레트 열기 (Ctrl+K)"
-    >
-      <Command size={10} /><span>K</span>
-    </div>
   );
 }

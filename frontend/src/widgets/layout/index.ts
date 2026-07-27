@@ -5,4 +5,3 @@ export { default as Providers } from "./Providers";
 export { default as SectionHead } from "@/shared/ui/SectionHead";
 export * from "@/shared/ui/States";
 export * from "./TerminalShell";
-export { default as TopNav } from "./TopNav";
