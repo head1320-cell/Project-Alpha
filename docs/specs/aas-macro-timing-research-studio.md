@@ -67,22 +67,74 @@ Existing assets are **extended, not duplicated**: `TimingRule`, `timing_factors.
 
 Pydantic contracts, backend-owned. No untyped dicts where a stable domain object belongs.
 
-### 3.1 `RegimeSnapshot` — the missing durable bridge
+### 3.1 Point-in-time correctness — `MacroObservation`
 
-Immutable, versioned, referenced **by ID**. This is the object whose absence is the core gap.
+> **Corrected after review (P0).** An earlier draft of this spec proposed filtering on
+> `release_effective <= as_of`. That is **not sufficient and was not even implementable** with
+> the current collector. Recorded here rather than quietly edited, because the failure is
+> instructive.
+
+Verified in `src/services/macro_collector.py` (`FredClient.fetch_series`, L277–300):
+
+```python
+params = {"series_id": …, "observation_start": start,
+          "observation_end": end, "frequency": "m"}
+…
+for o in obs:
+    timestamps.append(o["date"]); values.append(float(o["value"]))
+```
+
+Three defects for PIT purposes:
+
+1. **No `realtime_start` / `realtime_end`.** The FRED `series/observations` endpoint defaults to
+   *today's* real-time period, so it returns the **latest revised vintage**. Asking for
+   observations dated 2020 returns 2020 periods **as revised today**, not as published in 2020.
+   GDP, CPI, PAYEMS and INDPRO are all heavily revised — this leaks the future directly into
+   historical values.
+2. **`o["realtime_start"]` is discarded**, so there is no per-observation publication timestamp
+   to filter on. The proposed `release_effective` field had no data source; populating it would
+   have meant inventing it — the exact dishonesty this spec exists to prevent.
+3. **`frequency: "m"`** aggregates server-side, destroying intra-month release timing.
+
+**Correct design.** Every macro datum is a `MacroObservation` with six *independent* timestamps:
+
+```
+series_id
+observation_period      # the period the number describes  (FRED "date")
+release_timestamp       # when this value was first published (ALFRED realtime_start)
+vintage_id              # which revision this is            (ALFRED realtime period)
+retrieved_at            # when we fetched it
+market_cutoff           # last market time usable for a decision at as_of
+execution_timestamp     # when a decision on it could actually be acted on
+value, data_status
+```
+
+Historical replay selects, for each `series_id`, the row maximising `release_timestamp` subject to
+`release_timestamp <= as_of` — i.e. **the vintage as known then**, not the period filter alone.
+Fetching uses ALFRED semantics (`realtime_start`/`realtime_end`, or `vintage_dates`) and drops
+`frequency` aggregation.
+
+**Mandatory validation test (written before the implementation):** for a heavily revised series
+(`GDPC1`), assert that a snapshot at `as_of = T` reproduces the *originally published* value and
+**not** the current revision, and that no row with `release_timestamp > T` is reachable. A test
+that only checks `observation_period <= as_of` does not satisfy this and must not be written.
+
+`RegimeSnapshot` then references observations rather than embedding bare numbers:
 
 ```
 snapshot_id, created_at, as_of
 growth_axis, inflation_axis, phase_probabilities{}, stress_score, confidence
-source_timestamps{series_id: observed_at}      # per-series, not one global stamp
-release_effective{series_id: released_at}      # publication time, for PIT replay
-data_status: real|mock|delayed|stale|partial|unavailable
-model_version, engine_version, explanation
+observations[]: MacroObservation      # full identity per input series
+data_status, model_version, engine_version, explanation
 ```
 
-`as_of` is the **decision date**. `release_effective` is when each input was actually published.
-Historical replay filters on `release_effective <= as_of`, which is what makes look-ahead
-structurally impossible rather than merely discouraged.
+Immutable, versioned, referenced **by ID**. This is the object whose absence is the core gap.
+
+#### ALFRED cost, stated honestly
+Vintage-correct history costs more API calls and storage than the current single-vintage pull, and
+ECOS has no comparable public vintage API — Korean series therefore get
+`data_status = partial` with `vintage_id = null` and are **excluded from historical simulation**
+under §3.5, rather than being silently treated as revision-free.
 
 ### 3.2 `TimingFactorDefinition`
 
@@ -119,6 +171,39 @@ composition. There is no boolean that a missing value can default to `true`.
 `TimingEvaluation` (per-factor state, composite state, transitions, exposure, **explanation
 string**) · `ScenarioPackV2` (§5) · `DataLineage` · `ResearchContext` (§4) ·
 `ResearchRun` extensions (snapshot ID, rule-set version, scenario pack, engine version).
+
+### 3.5 "Fetchable" ≠ "backtest-eligible"
+
+> Added after review (P1). Being able to *retrieve* a series says nothing about whether it may be
+> used in a **historical simulation**. Conflating the two is how revision bias and short-history
+> bias enter a backtest.
+
+Two orthogonal enums, both required on every factor and every observation:
+
+```
+DataStatus     = real | mock | delayed | stale | partial | unavailable
+ResearchUsage  = backtest_eligible | forward_only | unavailable
+```
+
+`ResearchUsage` is **derived, never hand-set**, from three properties:
+
+| Condition | Result |
+|---|---|
+| No vintage history (revisions cannot be reconstructed) | `forward_only` |
+| History shorter than the requested simulation window | `forward_only` |
+| Publication lag unknown or unmodelled | `forward_only` |
+| Vintage-correct, lag modelled, sufficient depth | `backtest_eligible` |
+| No source | `unavailable` |
+
+**Enforcement is structural, not advisory.** The historical-simulation endpoint rejects any rule
+set containing a `forward_only` factor with an explicit error naming the factor and the reason.
+It does not warn and proceed.
+
+Worked consequence — KIS investor flows: `src/data/kis_flows.py` documents that the KIS TR
+(`FHKST01010900`) returns only **~30 business days**. That is `forward_only`. It may drive a live
+signal or a forward paper study; it is **blocked from historical backtesting**, and the UI shows
+`forward_only` on the factor card rather than hiding the limit in a tooltip. ECOS-sourced Korean
+macro is `forward_only` for the same structural reason (no public vintage API, §3.1).
 
 ---
 
@@ -175,18 +260,43 @@ overnight return/reversal, mean-reversion bands, drawdown/recovery filters. Labe
 handling, mock fallback): 19 FRED series and 6 ECOS series, including `DGS3MO/2/10/30`, `T10Y2Y`,
 `DFII10`, `T10YIE`, `BAMLH0A0HYM2`, `VIXCLS`, and ECOS `722Y001 · 817Y002/003 · 901Y009 · 731Y001`.
 
-| Factor group | Status | Source |
-|---|---|---|
-| Yield-curve level / slope / slope change | **available** | FRED (already collected) |
-| Real yields, inflation breakeven | **available** | FRED `DFII10`, `T10YIE` |
-| Credit spread | **available** | FRED `BAMLH0A0HYM2` |
-| VIX level | **available** | FRED `VIXCLS` |
-| USD/KRW, KR policy rate, KTB, CPI | **available** | ECOS |
-| Financial conditions (NFCI) | **add series** | FRED `NFCI` |
-| VIX term structure | **add series** | FRED `VXVCLS` vs `VIXCLS` |
-| Foreign / institutional flows | **partial** | `data/kis_flows.py` — KIS TR returns only ~30 business days; **no deep history**. Forward research only, and the UI must say so |
-| ETF premium/discount, liquidity, capacity | **partial** | `data/etf_prices.py` DB→KIS→mock; US ETFs mock in sandbox |
-| VIX skew, borrow / short interest, option-implied correlation, crowding, news/alt-data | **unavailable** | No source. Catalogue-visible, **non-enableable**, with a concrete reason |
+Availability and *research usage* (§3.5) are separate columns, because they genuinely differ:
+
+| Factor group | Fetchable | Usage | Source / note |
+|---|---|---|---|
+| Yield-curve level / slope / slope change | yes | `backtest_eligible`¹ | FRED, already collected |
+| Real yields, inflation breakeven | yes | `backtest_eligible`¹ | `DFII10`, `T10YIE` |
+| Credit spread | yes | `backtest_eligible`¹ | `BAMLH0A0HYM2` |
+| VIX level | yes | `backtest_eligible`¹ | `VIXCLS` (not revised, but see §6.2 on timing) |
+| USD/KRW, KR policy rate, KTB, CPI | yes | **`forward_only`** | ECOS — no public vintage API (§3.1) |
+| Financial conditions (NFCI) | add series | `backtest_eligible`¹ | FRED `NFCI` — **weekly, revised**; vintage required |
+| VIX term structure | add series | `backtest_eligible`¹ | See §6.2 — needs a real definition, not just a series |
+| Foreign / institutional flows | partial | **`forward_only`** | `data/kis_flows.py` — KIS TR returns ~30 business days. Blocked from historical simulation |
+| ETF premium/discount, liquidity, capacity | partial | **`forward_only`** | `data/etf_prices.py` DB→KIS→mock; US ETFs mock in sandbox |
+| VIX skew, borrow / short interest, option-implied correlation, crowding, alt-data | no | `unavailable` | No source. Catalogue-visible, **non-enableable**, concrete reason shown |
+
+¹ `backtest_eligible` **only after** the ALFRED vintage work in §3.1 lands. Until then every FRED
+series is `forward_only`. Marking them eligible on the strength of the current single-vintage
+collector would reintroduce exactly the revision bias §3.1 exists to remove.
+
+### 6.2 VIX term structure — definition, not just a series
+
+> Added after review (P2). "Add `VXVCLS`" is a data task, not a factor definition.
+
+- **`VIXCLS`** = 30-day implied vol. **`VXVCLS`** = 3-month implied vol. Both are CBOE indices
+  republished by FRED.
+- **Form:** the factor is the **ratio** `VIXCLS / VXVCLS`, not the spread. The ratio is unit-free
+  and comparable across volatility levels; a spread of 2 points means something different at
+  VIX 12 than at VIX 45. Ratio `< 1` = contango (calm), `> 1` = backwardation (stress). The
+  spread variant is offered as a separate, explicitly-labelled factor for users who want it.
+- **Timezone alignment — a look-ahead vector.** Both are **US close** values. A Korean trading
+  decision on date `D` must use the US close of `D-1`, because `D`'s US close occurs *after* the
+  KRX session ends. Using same-calendar-date US close in a KR backtest is look-ahead. This is
+  encoded in `market_cutoff` / `execution_timestamp` (§3.1), and asserted by a dedicated PIT test
+  using a KR holiday and a US holiday to force the edge cases apart.
+- **Missing dates:** US and KR holiday calendars differ. Missing values are **not**
+  forward-filled into a signal; the factor returns `unavailable`, which composes to `risk_off`
+  (§3.3). Forward-filling would manufacture a stale-but-confident signal.
 
 Phase-1 factors (built first, all from data on hand): time-series momentum across asset classes ·
 relative momentum · equity breadth incl. equal- vs cap-weight · realized vol, vol regime,
@@ -214,9 +324,40 @@ one endpoint per frontend component.
 
 ## 8. UI information architecture
 
-New stage `/allocation/macro` (Macro Phase). **Existing route paths and stage numbering are
-unchanged** — `STAGES` indices, `stageComplete[]`, and the Resume `lastPos` sessionStorage values
-all stay valid. The mission's ordering is the documented narrative, not a physical reshuffle.
+New stage `/allocation/macro` (Macro Phase).
+
+> **Corrected after review (P1).** An earlier draft claimed "stage numbering is unchanged" while
+> also describing the new stage as "00.5" — i.e. inserted before `Construct`. Those cannot both be
+> true. The audit below shows insertion is genuinely unsafe today, so the spec now requires a
+> de-indexing step *before* the route is added.
+
+**Measured index coupling** (`widgets/allocation/`):
+
+| Coupling | Location | Breaks on insert? |
+|---|---|---|
+| `stageComplete[9]` hardcoded for Journal | `WizardTracker.tsx:36` | **Yes — silently.** No type error, the badge just reads the wrong stage |
+| Positional 10-entry subtitle array | `WizardTracker.tsx:28–37` | **Yes — silently.** Every label shifts by one |
+| `PHASES[].steps` = `[1]`, `[2,3,4,5]`, `[6,7,8]` | `AllocationProvider.tsx:58–62` | **Yes.** Phase membership becomes wrong |
+| `stageComplete` positional array literal | `AllocationProvider.tsx:488` | Yes |
+| `isKnownAllocationRoute` / `stageIndex` | `AllocationProvider.tsx:94–110` | No — derived from `STAGES` |
+| Resume `lastPos` (sessionStorage) | `AllocationProvider.tsx:123` | No — stores **href**, not index |
+
+So Resume and route-validation are safe, but three positional couplings would break **without a
+compile error**. That is the real hazard, and it exists independently of this feature.
+
+**Resolution — de-index first, then add the stage.** A preparatory phase (Plan 0.5) replaces
+positional indexing with href-keyed lookup: `stageComplete` becomes
+`Record<StageHref, boolean>`, `PHASES[].steps` holds hrefs, and the `WizardTracker` subtitle array
+is keyed by href. After that, inserting a stage anywhere is a one-line `STAGES` edit and
+*numbering genuinely stops mattering*. This is a small, independently testable refactor that
+removes a whole class of silent bug.
+
+The alternative the reviewer raised — embedding Macro Phase as a Sheet or sub-route under
+Timing/Thesis — needs no `STAGES` change at all and is a legitimate cheaper option. It is not
+chosen because the mission calls for Macro Phase Analysis as a first-class stage and the user
+selected the dedicated route; the de-indexing work is justified on its own merits regardless.
+
+Existing route paths remain stable throughout; only the internal indexing changes.
 
 Per-stage requirements (Overview, Construct, Alpha Lab, Thesis, Timing, Optimize, Stress,
 Attribution, Execution, Journal) follow the brief. Two that drive the most change:

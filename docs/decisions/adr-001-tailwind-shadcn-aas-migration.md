@@ -73,6 +73,12 @@ benefit, and would still leave the accessibility gap that motivated the brief.
    untouched until deliberately converted.
 6. **Amend the `CLAUDE.md` frontend rule only after this ADR is accepted**, and amend it to state
    what is actually true, including which surfaces are migrated and which are not.
+7. **Styling work is sequenced after the research vertical slice.** Per the review, the plan now
+   delivers `RegimeSnapshot → PIT signals → TimingRuleSet → AAS integration → ResearchRun
+   round-trip` **first**, reusing the existing unstyled components. The shadcn scaffold is Plan
+   Phase 5 and the four-modal merge is Phase 6. Rationale: styling risk must never sit on the
+   critical path of research correctness, and the vertical slice validates the data contracts that
+   the catalogue UI is built to expose.
 
 ### 2.1 Token mapping
 
@@ -127,12 +133,54 @@ not for its default visual style.
   component change, with the spec updated atomically.
 
 ### Risks and mitigations
-| Risk | Mitigation |
-|---|---|
-| shadcn variables collide with existing `:root` | Additive block at EOF; rule-level emitted-CSS diff each phase |
-| Preflight changes legacy pages | Preflight **already applies today**; adopting shadcn adds no new global reset |
-| Generated code drifts from our conventions | Vendored under `shared/ui/shadcn`, reviewed like hand-written code |
-| FSD erosion | `components.json` aliases + the existing `import/no-restricted-paths` ESLint guardrail |
+
+> **Scoped after review (P2).** Tailwind's pre-existence removes exactly **one** risk — a new
+> global reset — and no others. shadcn CSS variables, Radix portals, and the Playwright class
+> contracts are independent risks that the pre-existing install says nothing about. The earlier
+> "materially de-risks" framing was too broad; it is narrowed here.
+
+| Risk | Reduced by Tailwind already existing? | Mitigation |
+|---|---|---|
+| New global reset on legacy pages | **Yes** — preflight already applies to every route today | None needed; verified by rule-level CSS diff |
+| Build pipeline / PostCSS integration | **Yes** — already working | — |
+| shadcn CSS variables colliding with the four `:root` blocks | **No** | Additive block at EOF; four `:root` blocks must stay byte-identical |
+| **Radix portals** rendering outside the React tree | **No** | See below — affects live Playwright selectors |
+| Playwright class contracts (`.as-*`, `.tfm-*`, no `data-testid`) | **No** | Selector updates ship atomically with component changes |
+| Bundle growth from Radix | **No** | Per-route table each phase; ≥4 kB unexplained reverted |
+| Generated code drifting from our conventions | **No** | Vendored under `shared/ui/shadcn`, reviewed like hand-written code |
+| FSD erosion | **No** | `components.json` aliases + existing `import/no-restricted-paths` rule |
+
+#### Radix portals — a concrete, already-observed hazard
+Radix `Dialog`, `Popover`, `Tooltip`, and `Select` render their content into a portal attached to
+`document.body`, **outside** the component's DOM subtree. Any Playwright assertion scoped to a
+container will stop matching once a modal becomes a Radix `Dialog`.
+
+This is not hypothetical for this repository: `e2e/dev-ui.spec.ts` was deliberately rewritten to
+scope every count assertion to the `.devui` root. Those assertions would silently under-count
+portalled content. The migration must therefore either keep portalled content assertions
+page-rooted, or set an explicit portal container. Decided per component in the POC, not improvised.
+
+### POC gate before any bulk migration
+
+Migration does **not** begin with the four-modal merge. It begins with a single POC converting
+**one** AAS component set — `Dialog` + `Sheet` + `Tabs` + `Command` inside the Timing factor
+window — with these exit criteria, all of which must pass before further conversion:
+
+1. `.tfm-*` and `.as-*` contracts either preserved or updated atomically with their specs.
+2. Portal behaviour resolved and documented; the affected specs pass.
+3. **Visual-regression check on non-migrated routes.** The suite asserts classes and geometry, not
+   pixels, so it cannot catch a cascade change on its own. The POC captures Playwright screenshots
+   of three representative unmigrated routes (`/screener`, `/backtest`, `/macro`) before and
+   after, and diffs them. This is the only gate that can catch a global-cascade regression.
+4. Emitted-CSS rule-level diff shows **additions only** — zero removals, zero modifications to
+   existing rules.
+5. Per-route bundle table: no unexplained growth ≥4 kB.
+6. Baseline preserved: 33/33 Playwright · tsc 0 · eslint 0.
+
+**Explicit rollback criteria.** Abandon the shadcn migration (keeping Tailwind) if any of:
+a rule-level CSS diff shows unintended removals or modifications that cannot be contained;
+the POC needs more than ~15 changed selectors to stay green; portal behaviour forces rewriting
+unrelated specs; or bundle growth exceeds 15 kB on any AAS route without a clear cause.
 
 ### Rollback
 Each phase is one commit on a feature branch. Rolling back the ADR means reverting the shadcn

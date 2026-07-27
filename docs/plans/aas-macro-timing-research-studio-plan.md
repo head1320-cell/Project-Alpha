@@ -32,10 +32,54 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 
 ## Phases
 
+> **Restructured after review (P1).** The original 0–9 breakdown was feature-horizontal: nothing
+> was end-to-end usable until very late. Phases 1–4 below are now a **thin vertical slice** —
+> `RegimeSnapshot → 2 PIT signals → TimingRuleSet → AAS integration → ResearchRun save/refresh` —
+> that a user can actually exercise. Catalogue breadth, scenarios, and the shadcn migration come
+> *after* that slice proves the architecture.
+>
+> Consequence: the shadcn/ADR work moved from Phase 1 to Phase 6. The vertical slice reuses the
+> **existing** modal and strip components, unstyled-migration, so styling risk never blocks
+> research correctness.
+
 ### Phase 0 — Documentation (this commit)
 Spec, plan, ADR. No code. **Stop for approval.**
 
-### Phase 1 — ADR acceptance + shadcn scaffold
+### Phase 0.5 — De-index the wizard *(prerequisite, no feature)*
+Replace positional stage indexing with href-keyed lookup. Fixes three silent-break couplings
+found in the audit: `stageComplete[9]` hardcoded at `WizardTracker.tsx:36`, the positional
+10-entry subtitle array at `WizardTracker.tsx:28–37`, and `PHASES[].steps` index arrays at
+`AllocationProvider.tsx:58–62`.
+**Why first:** inserting any stage today breaks these **without a compile error**. After this,
+adding a stage is a one-line `STAGES` edit.
+**Gate:** 33/33 E2E unchanged; no route or class changes; pure refactor.
+
+### Phase 1 — PIT foundation *(vertical slice, step 1)*
+ALFRED-correct fetching in `macro_collector.py`: `realtime_start`/`realtime_end`, drop
+`frequency` aggregation, persist the full `MacroObservation` identity (spec §3.1).
+**TDD, test written first:** `GDPC1` at `as_of = T` reproduces the **originally published** value,
+not today's revision, and no row with `release_timestamp > T` is reachable.
+**Gate:** pytest. Also lands the `DataStatus` / `ResearchUsage` enums (§3.5) with the
+`forward_only` rejection path on the historical-simulation endpoint.
+
+### Phase 2 — `RegimeSnapshot` *(slice step 2)*
+Model, `regime_snapshots` persistence (reuse the `research_runs` raw-SQL idiom),
+`regime_snapshot_routes.py` in `ROUTER_MODULES`. Snapshots reference observations from Phase 1.
+
+### Phase 3 — Two PIT signals + minimal `TimingRuleSetV2` *(slice step 3)*
+Exactly **two** factors — one price-based (TSMOM, no revision problem) and one macro-based (curve
+slope, exercises the vintage path). Three-state `SignalState`, `unavailable → risk_off`,
+`k_of_n` combination, hysteresis, cooldown.
+**Deliberately not** the full catalogue: the goal is to prove the contract end-to-end.
+
+### Phase 4 — AAS integration + ResearchRun round-trip *(slice step 4 — first user-visible value)*
+Adds `/allocation/macro`, "Open in Allocation Studio" from Macro with mapping preview, Research
+Context content in `ContextStrip` (keeping `.as-ctx*`), and ResearchRun save → **refresh recovery**.
+**Gate:** new E2E — create a snapshot in `/macro`, open it in AAS, save a run, reload the browser,
+and reopen the identical run with the same snapshot ID and rule-set version.
+**This is the milestone that proves the architecture.** Everything after it is breadth.
+
+### Phase 5 — ADR acceptance + shadcn scaffold
 Amend the `CLAUDE.md` frontend clause to state what is true (Tailwind already present, 46
 components, AAS migrating, legacy plain-CSS untouched). Add `components.json` aliased to
 `src/shared/ui/shadcn`, the token bridge appended at EOF of `globals.css`, and 2–3 primitives
@@ -44,29 +88,6 @@ rendered on `/dev/ui` beside existing ones.
 33/33 E2E; no legacy visual diff.
 **Rollback:** revert one commit; Tailwind is untouched.
 
-### Phase 2 — `RegimeSnapshot` backend
-Pydantic model, `regime_snapshots` persistence (reuse the `research_runs` raw-SQL idiom),
-`regime_snapshot_routes.py` registered in `ROUTER_MODULES`.
-**TDD:** look-ahead test first — a snapshot with `as_of = T` must never include a series whose
-`release_effective > T`, including revised values.
-**Gate:** pytest; route parity check.
-
-### Phase 3 — Macro → AAS bridge
-"Open in Allocation Studio" action in Macro, mapping preview before apply, AAS references the
-snapshot **by ID**. `loadedStrategy`'s ephemeral path is replaced, not duplicated.
-**Gate:** new E2E — snapshot created in `/macro` reopens in AAS after a reload.
-
-### Phase 4 — Research Context strip
-Rewrite `ContextStrip` content; keep `.as-ctx*` classes and the layout slot. Surface the existing
-`isResultStale` as the pending-changes indicator.
-**Gate:** E2E asserts identity, as-of, data status, and reproducibility IDs are visible.
-
-### Phase 5 — `TimingRuleSetV2` + evaluation engine
-Extend the `TimingRule` dataclass; add combination methods, hysteresis, cooldown, conflict policy.
-**TDD:** three-state `SignalState` with `unavailable → risk_off`; Defense First inversion;
-frequency alignment; k-of-N and weighted composition.
-**Gate:** pytest. Highest research risk in the plan — no UI work in this commit.
-
 ### Phase 6 — Unified catalogue shell *(largest UI risk)*
 One shadcn three-pane shell replaces `TimingFactorModal`, `StressScenarioModal`,
 `AlphaFactorModal`, and Backtester `FactorPickerModal`.
@@ -74,16 +95,18 @@ One shadcn three-pane shell replaces `TimingFactorModal`, `StressScenarioModal`,
 `stage-windows.spec.ts` and `timing-factors.spec.ts` updated in the same commit; keyboard/focus/
 mobile tests added. Not combined with any backend phase.
 
-### Phase 7 — Phase-1 institutional factors
-TSMOM, relative momentum, breadth (incl. equal- vs cap-weight), realized vol / vol regime /
-target-vol sizing, drawdown + speed + recovery, rolling correlation, Korea set. All from data
-already on hand. **TDD per factor.**
+### Phase 7 — Factor catalogue breadth
+The remaining Phase-1 factors: relative momentum, breadth (incl. equal- vs cap-weight), realized
+vol / vol regime / target-vol sizing, drawdown + speed + recovery, rolling correlation, Korea set.
+(TSMOM and curve slope already shipped in Phase 3.) **TDD per factor.**
 
 ### Phase 7b — Data-source extension
-Add FRED `NFCI` and `VXVCLS` to `macro_collector.py`; wire curve / real-yield / credit /
-financial-conditions factors. Surface the `kis_flows` **~30 business day** limit and ETF mock
-status in the UI as first-class labels.
-**Gate:** pytest incl. cache, rate-limit, and missing-API-key fallback paths.
+Add FRED `NFCI` (weekly, **revised** — requires the Phase 1 vintage path) and `VXVCLS` to
+`macro_collector.py`. Implement the VIX term-structure factor to the spec §6.2 definition:
+**ratio** `VIXCLS/VXVCLS`, US-close→KR next-session alignment, no forward-fill of missing dates.
+Surface `kis_flows` `forward_only` and ETF mock status as first-class UI labels.
+**Gate:** pytest incl. cache, rate-limit, missing-API-key fallback, a **KR-holiday / US-holiday
+alignment test**, and rejection of `forward_only` factors by the historical-simulation endpoint.
 
 ### Phase 8 — `ScenarioPackV2`
 Extend the stress catalogue and `kr_scenario_pack.py`. Baseline vs timing-adjusted vs
@@ -111,10 +134,14 @@ test evidence (exit codes) · real-data limitations · remaining risks · next p
 
 | Risk | Phase | Mitigation |
 |---|---|---|
-| Selector break across 4 modal migrations | 6 | Atomic spec+component commits; className-multiset comparison |
-| Look-ahead slipping into historical replay | 2, 5, 7 | `release_effective <= as_of` filter enforced in the type, test-first |
-| Missing signal read as positive | 5 | Three-state enum; no boolean can default true |
+| **Revision bias** — FRED returns today's vintage, so history is scored with revised data | 1 | ALFRED `realtime_*` fetching; `GDPC1` originally-published test written **before** the code |
+| Silent stage-index break on insert | 0.5 | De-index to href-keyed lookup before any stage is added |
+| `forward_only` data used in a backtest | 1, 7b | `ResearchUsage` derived, not hand-set; simulation endpoint **rejects** with a named reason |
+| Look-ahead via US-close in a KR session | 7b | `market_cutoff`/`execution_timestamp`; KR+US holiday alignment test |
+| Missing signal read as positive | 3 | Three-state `SignalState`; no boolean can default true |
+| Selector break across 4 modal migrations | 6 | Atomic spec+component commits; POC gate first |
+| **Radix portals** escaping container-scoped assertions | 5, 6 | Resolved in the POC; `dev-ui.spec.ts` is already container-scoped and would under-count |
+| Cascade regression on unmigrated routes | 5, 6 | Screenshot diff of `/screener`, `/backtest`, `/macro` — the suite checks classes, not pixels |
 | Mock result mistaken for validation | all | `mock_gate`; unavailable factors non-enableable |
-| shadcn variables colliding with `:root` | 1 | Additive EOF block; rule-level CSS diff |
-| Bundle growth from Radix | 1, 6 | Per-route table each phase; ≥4 kB reverted |
-| `kis_flows` shallow history misread as deep | 7b | 30-day limit shown in UI, not only in docs |
+| Bundle growth from Radix | 5, 6 | Per-route table each phase; ≥4 kB reverted, >15 kB aborts the migration |
+| `kis_flows` shallow history misread as deep | 7b | `forward_only` label in UI **and** enforced server-side |
