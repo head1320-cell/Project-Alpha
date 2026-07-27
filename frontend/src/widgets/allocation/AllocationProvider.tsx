@@ -41,8 +41,15 @@ export interface StageMeta {
   intent: string;            // "이 단계에서 할 일" — StageChrome이 렌더
   phase?: PhaseKey;          // 북엔드(overview/journal)는 undefined
 }
-export const STAGES: StageMeta[] = [
-  { n: "00", href: "/allocation/overview", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운", intent: "현재 포트폴리오를 한눈에 점검하고 필요한 단계로 이동하세요." },
+// ★인덱스가 아니라 href 가 스테이지의 신원이다★
+// 예전에는 stageComplete·PHASES.steps·WizardTracker 부제가 전부 배열 위치로 스테이지를
+// 가리켰다. 그 상태에서 스테이지를 중간에 하나 끼우면 **타입 에러 없이** 완료 배지와
+// 페이즈 소속과 부제가 한 칸씩 밀린다(실제로 stageComplete[9] 가 하드코딩돼 있었다).
+// `as const` 로 href 리터럴을 뽑아 Record 키로 쓰면 컴파일러가 누락을 잡는다.
+export const STAGES = [
+  // phase: undefined 를 **명시**한다 — 생략하면 as const 가 이 객체에서 phase 키를 아예
+  // 없애 버려 union 접근(s.phase)이 컴파일되지 않는다. 겸사겸사 "북엔드"임이 데이터에 드러난다.
+  { n: "00", href: "/allocation/overview", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운", intent: "현재 포트폴리오를 한눈에 점검하고 필요한 단계로 이동하세요.", phase: undefined },
   { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 직접 구성 · 팩터 빌더 · 매크로 전략", intent: "자산을 2개 이상 담거나(직접) 팩터로 자동 구성하고 비중을 맞추세요.", phase: "setup" },
   { n: "02", href: "/allocation/alphalab", label: "ALPHA LAB", title: "Alpha Lab", desc: "알파 표현식 · lint · IC/ICIR 검증 · 레지스트리", intent: "독립 알파를 정의·검증하고 레지스트리로 관리하세요 (선택).", phase: "logic" },
   { n: "03", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도", intent: "거시 테제를 자산·방향·신뢰도로 변환하세요 (선택).", phase: "logic" },
@@ -51,14 +58,20 @@ export const STAGES: StageMeta[] = [
   { n: "06", href: "/allocation/stress", label: "STRESS", title: "Stress", desc: "민감도 + 시나리오 severity + 상관-국면 스트레스", intent: "시나리오·충격·상관국면으로 배분의 견고성을 검증하세요.", phase: "validation" },
   { n: "07", href: "/allocation/explain", label: "ATTRIBUTION", title: "Attribution", desc: "사전 기대 vs 사후 실측 — 수익·기여·비용·리스크 귀인", intent: "결정 시점의 기대와 실제 결과를 대조해 귀인하세요 (런 기록 필요).", phase: "validation" },
   { n: "08", href: "/allocation/execution", label: "EXECUTION", title: "Execution", desc: "실행 준비실 — 오더 diff·비용 추정·pre-trade·승인 워크플로", intent: "목표 배분으로의 주문 차이·비용·pre-trade를 점검하고 승인 워크플로를 진행하세요 (실 주문 없음).", phase: "validation" },
-  { n: "09", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 + ResearchRun — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요." },
-];
+  { n: "09", href: "/allocation/journal", label: "JOURNAL", title: "Journal", desc: "의사결정 기록 + ResearchRun — Macro View→Changed→Reason→Result→Review", intent: "이번 의사결정을 기록하고 사후 검증을 예약하세요.", phase: undefined },
+] as const satisfies readonly StageMeta[];
 
-export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: number[] }
+/** 스테이지 신원 = href. 인덱스가 아니다. */
+export type StageHref = (typeof STAGES)[number]["href"];
+
+/** 북엔드(overview·journal)는 phase 가 없는 스테이지 — 위치가 아니라 이 속성으로 판별한다. */
+export const BOOKENDS = STAGES.filter((s) => !s.phase).map((s) => s.href) as StageHref[];
+
+export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: StageHref[] }
 export const PHASES: PhaseMeta[] = [
-  { key: "setup", label: "SETUP", ko: "설정", steps: [1] },              // 01 Construct
-  { key: "logic", label: "LOGIC", ko: "설계", steps: [2, 3, 4, 5] },     // 02 Alpha Lab · 03 Thesis · 04 Timing · 05 Optimize
-  { key: "validation", label: "VALIDATION", ko: "검증", steps: [6, 7, 8] }, // 06 Stress · 07 Explain · 08 Execution
+  { key: "setup", label: "SETUP", ko: "설정", steps: ["/allocation/construct"] },
+  { key: "logic", label: "LOGIC", ko: "설계", steps: ["/allocation/alphalab", "/allocation/thesis", "/allocation/timing", "/allocation/optimize"] },
+  { key: "validation", label: "VALIDATION", ko: "검증", steps: ["/allocation/stress", "/allocation/explain", "/allocation/execution"] },
 ];
 
 // ── 타이밍(카나리·마켓타이밍) 설정 — 위저드 공유 상태 ──
@@ -184,7 +197,7 @@ interface AllocationCtx {
   setGoal: (g: AllocationGoal | null) => void;
   lastPos: string | null;                 // 마지막 방문 스테이지 href (Resume용)
   noteVisit: (href: string) => void;      // layout이 pathname 변경 시 호출
-  stageComplete: boolean[];               // STAGES 인덱스별 완료 (단일 소스)
+  stageComplete: Record<StageHref, boolean>;  // href 별 완료 (단일 소스) — 인덱스 아님
   isResultStale: boolean;                 // 현재 입력 대비 result가 낡았나
   ensureFreshRun: () => void;             // 다음 단계 진입 시 stale이면 재최적화
 }
@@ -485,18 +498,19 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     try { if (typeof window !== "undefined") sessionStorage.setItem(SS_POS, href); } catch { /* ignore */ }
   };
 
-  const stageComplete = useMemo(() => [
-    !!result,                                             // 00 overview
-    holdings.length >= 2,                                 // 01 construct (SETUP)
-    alphaTouched,                                         // 02 alpha lab (LOGIC)
-    views.length > 0,                                     // 03 thesis    (LOGIC)
-    !!timingQ.data && !timingQ.data.error,                // 04 timing    (LOGIC)
-    !!result,                                             // 05 optimize  (LOGIC)
-    !!result,                                             // 06 stress    (VALIDATION)
-    !!result,                                             // 07 explain   (VALIDATION)
-    executionTouched,                                     // 08 execution (VALIDATION)
-    timeline.some((e) => e.msg.startsWith("스터디 저장") || e.msg.startsWith("런 기록")),  // 09 journal
-  ], [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched, executionTouched]);
+  // href 키 — 스테이지를 추가하면 이 Record 에 항목이 빠졌다고 tsc 가 잡아 준다.
+  const stageComplete = useMemo<Record<StageHref, boolean>>(() => ({
+    "/allocation/overview":  !!result,
+    "/allocation/construct": holdings.length >= 2,
+    "/allocation/alphalab":  alphaTouched,
+    "/allocation/thesis":    views.length > 0,
+    "/allocation/timing":    !!timingQ.data && !timingQ.data.error,
+    "/allocation/optimize":  !!result,
+    "/allocation/stress":    !!result,
+    "/allocation/explain":   !!result,
+    "/allocation/execution": executionTouched,
+    "/allocation/journal":   timeline.some((e) => e.msg.startsWith("스터디 저장") || e.msg.startsWith("런 기록")),
+  }), [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched, executionTouched]);
 
   const value: AllocationCtx = {
     holdings, setHoldingsReset, holdingsMap, holdingsKey,

@@ -2,16 +2,23 @@
 // 위저드 진행 트래커 — 7 스테이지를 3 매크로 페이즈(SETUP/LOGIC/VALIDATION)로
 // 묶고, 00 Overview·06 Journal은 북엔드 칩으로. 각 스텝 칩: 상태점(완료 시 accent) +
 // 번호 + 라벨 + 파생 서브텍스트. 현재 페이즈 강조. 칩 클릭 점프 + ←/→ 키보드 이동
-// (입력 포커스 시 제외). 완료 파생은 Provider의 stageComplete[] 단일 소스.
+// (입력 포커스 시 제외). 완료 파생은 Provider의 stageComplete 단일 소스.
+//
+// ★스테이지 참조는 전부 href★ — 예전엔 부제 배열·완료 배지·페이즈 소속이 배열 위치였고
+// stageComplete[9] 가 하드코딩돼 있어서, 스테이지를 하나 끼우면 타입 에러 없이 전부
+// 한 칸씩 밀렸다. 순서가 실제로 필요한 곳(←/→ 이동)만 인덱스를 쓴다.
 import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { PHASES, STAGES, stageIndex, useAllocation } from "./AllocationProvider";
+import { BOOKENDS, PHASES, STAGES, stageIndex, useAllocation, type StageHref } from "./AllocationProvider";
 import { overallConfidence } from "./ViewBuilder";
+
+const BY_HREF = new Map(STAGES.map((s) => [s.href as StageHref, s]));
 
 export function WizardTracker() {
   const router = useRouter();
   const pathname = usePathname();
-  const active = stageIndex(pathname);
+  const active = stageIndex(pathname);              // ←/→ 이동에만 — 여기선 순서가 진짜 의미다
+  const activeHref = STAGES[active].href as StageHref;
   const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched } = useAllocation();
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
@@ -23,18 +30,18 @@ export function WizardTracker() {
     ? `${tm.canary.signal === "risk_on" ? "위험-온" : "위험-오프"} ${tm.canary.hits}/${tm.canary.total}`
     : "미평가";
 
-  const sub = [
-    result ? `${result.names.length} 자산` : "미실행",            // 00 overview
-    holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음", // 01 construct
-    alphaTouched ? "검증됨" : "미검증",                             // 02 alpha lab
-    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",     // 03 thesis
-    timingSub,                                                     // 04 timing
-    `${model.toUpperCase()} · λ${delta.toFixed(1)}`,               // 05 optimize
-    scenLabel,                                                     // 06 stress
-    result ? "귀인 준비" : "미실행",                                // 07 attribution
-    executionTouched ? "계획 검토" : "미준비",                       // 08 execution
-    stageComplete[9] ? "저장됨" : "미기록",                         // 09 journal
-  ];
+  const sub: Record<StageHref, string> = {
+    "/allocation/overview":  result ? `${result.names.length} 자산` : "미실행",
+    "/allocation/construct": holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음",
+    "/allocation/alphalab":  alphaTouched ? "검증됨" : "미검증",
+    "/allocation/thesis":    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",
+    "/allocation/timing":    timingSub,
+    "/allocation/optimize":  `${model.toUpperCase()} · λ${delta.toFixed(1)}`,
+    "/allocation/stress":    scenLabel,
+    "/allocation/explain":   result ? "귀인 준비" : "미실행",
+    "/allocation/execution": executionTouched ? "계획 검토" : "미준비",
+    "/allocation/journal":   stageComplete["/allocation/journal"] ? "저장됨" : "미기록",
+  };
 
   // ←/→ 로 이전/다음 스테이지 (입력 필드 포커스 시 제외)
   useEffect(() => {
@@ -48,34 +55,40 @@ export function WizardTracker() {
     return () => window.removeEventListener("keydown", onKey);
   }, [active, router]);
 
-  const Step = (i: number) => (
-    <button key={i} title={STAGES[i].desc}
-      className={`aas-wiz-step${i === active ? " on" : ""}${stageComplete[i] ? " done" : ""}`}
-      onClick={() => router.push(STAGES[i].href)}>
-      <span className="aas-wiz-dot" />
-      <span className="aas-wiz-meta">
-        <span className="aas-wiz-lab"><b className="num">{STAGES[i].n}</b> {STAGES[i].label}</span>
-        <span className="aas-wiz-sub num">{sub[i]}</span>
-      </span>
-    </button>
-  );
+  const Step = (href: StageHref) => {
+    const s = BY_HREF.get(href)!;
+    return (
+      <button key={href} title={s.desc}
+        className={`aas-wiz-step${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}`}
+        onClick={() => router.push(href)}>
+        <span className="aas-wiz-dot" />
+        <span className="aas-wiz-meta">
+          <span className="aas-wiz-lab"><b className="num">{s.n}</b> {s.label}</span>
+          <span className="aas-wiz-sub num">{sub[href]}</span>
+        </span>
+      </button>
+    );
+  };
 
-  const Bookend = (i: number) => (
-    <button title={STAGES[i].desc}
-      className={`aas-wiz-book${i === active ? " on" : ""}${stageComplete[i] ? " done" : ""}`}
-      onClick={() => router.push(STAGES[i].href)}>
-      <span className="aas-wiz-dot" />
-      <span className="num">{STAGES[i].n}</span>
-      <span className="aas-wiz-booklab">{STAGES[i].label}</span>
-    </button>
-  );
+  const Bookend = (href: StageHref) => {
+    const s = BY_HREF.get(href)!;
+    return (
+      <button title={s.desc}
+        className={`aas-wiz-book${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}`}
+        onClick={() => router.push(href)}>
+        <span className="aas-wiz-dot" />
+        <span className="num">{s.n}</span>
+        <span className="aas-wiz-booklab">{s.label}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="aas-wiz">
-      {Bookend(0)}
+      {Bookend(BOOKENDS[0])}
       {PHASES.map((p, pi) => {
-        const done = p.steps.every((si) => stageComplete[si]);
-        const here = p.steps.includes(active);
+        const done = p.steps.every((h) => stageComplete[h]);
+        const here = p.steps.includes(activeHref);
         return (
           <React.Fragment key={p.key}>
             <span className="aas-wiz-sep" />
@@ -90,7 +103,7 @@ export function WizardTracker() {
         );
       })}
       <span className="aas-wiz-sep" />
-      {Bookend(STAGES.length - 1)}
+      {Bookend(BOOKENDS[BOOKENDS.length - 1])}
       <span className="aas-wiz-right">
         {isMock && <span className="aas-wiz-mock" title="현재 결과는 합성(mock) 데이터 기준">MOCK</span>}
         <button className="aas-wiz-gate" title="목표 선택으로 돌아가기" onClick={() => router.push("/allocation")}>☰ 목표</button>
