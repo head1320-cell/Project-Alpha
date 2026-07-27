@@ -97,6 +97,41 @@ def list_all(limit: int = Query(50, ge=1, le=200)):
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.post("/from-current")
+def create_from_current(market: str = Query("kr", pattern="^(kr|us)$")):
+    """지금 국면 판정을 그대로 스냅샷으로 굳힌다 — Macro 탭의 "Allocation Studio에서 열기".
+
+    주의(정직): 대시보드 수집기는 아직 빈티지를 모르므로(ALFRED 경로는 Phase 7b) 이렇게 만든
+    스냅샷은 **forward_only + partial** 로 내려간다. 전방 리서치 맥락으로는 쓸 수 있지만
+    과거 시뮬레이션에서는 차단된다. 응답에 그대로 실어 보내 UI 가 숨기지 않게 한다.
+    """
+    from src.data.regime_snapshots import LookAheadError
+    from src.engine.regime_snapshot_builder import build_and_store
+    try:
+        sid = build_and_store(market=market)
+    except LookAheadError as e:
+        # 데이터 정합성 위반이지 서버 장애가 아니다 → 422.
+        # 실제로 도달 가능하다: 수집기의 last_update 가 분석기 timestamp 보다 뒤면 PIT 게이트가 걸린다.
+        raise HTTPException(422, str(e))
+    except Exception:
+        logger.exception("현재 국면 스냅샷 생성 실패")
+        raise HTTPException(500, "국면 수집/판정에 실패했습니다.")
+
+    if sid is None:
+        return {"recorded": False, "snapshot_id": None,
+                "message": "DB 미가용 — 스냅샷이 저장되지 않았습니다."}
+
+    from src.data.regime_snapshots import get_snapshot
+    saved = get_snapshot(sid) or {}
+    return {
+        "recorded": True,
+        "snapshot_id": sid,
+        "as_of": saved.get("as_of"),
+        "research_usage": saved.get("research_usage"),
+        "data_status": saved.get("data_status"),
+    }
+
+
 @router.get("/compare")
 def compare(a: str = Query(..., min_length=1), b: str = Query(..., min_length=1)):
     """두 스냅샷의 축·스트레스·확률 차이. 국면이 언제 어떻게 바뀌었는지 보기 위한 것."""

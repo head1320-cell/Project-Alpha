@@ -103,6 +103,49 @@ def test_get_missing_returns_404(client):
     assert client.get("/api/v1/regime-snapshots/rgs_nope").status_code == 404
 
 
+def test_from_current_creates_a_forward_only_snapshot(client):
+    """실제 엔진 경유(mock 데이터). 빈티지가 없으므로 backtest_eligible 이면 안 된다."""
+    r = client.post("/api/v1/regime-snapshots/from-current", params={"market": "kr"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["recorded"] is True and d["snapshot_id"].startswith("rgs_")
+    assert d["research_usage"] == "forward_only", (
+        "수집기가 빈티지를 모르는데 backtest_eligible 로 나오면 과거 시뮬레이션에 샌다"
+    )
+    assert d["data_status"] in ("partial", "mock")
+
+    got = client.get(f"/api/v1/regime-snapshots/{d['snapshot_id']}").json()
+    assert got["observations"], "관측치가 비어 있으면 재현 근거가 없다"
+    assert all(o["vintage_id"] == "" for o in got["observations"])
+
+
+def test_from_current_lookahead_is_422_not_500(client, monkeypatch):
+    """수집기의 last_update 가 분석기 timestamp 보다 뒤면 PIT 게이트가 걸린다.
+    이것은 데이터 정합성 위반이지 서버 장애가 아니므로 422 여야 한다."""
+    import src.engine.regime_snapshot_builder as bld
+    from src.data.regime_snapshots import LookAheadError
+
+    def boom(market="kr"):
+        raise LookAheadError("as_of=2026-07-27 이후에 공표된 관측치: FRED_T10Y@2026-07-28")
+    monkeypatch.setattr(bld, "build_and_store", boom)
+
+    r = client.post("/api/v1/regime-snapshots/from-current")
+    assert r.status_code == 422, f"정합성 위반을 500 으로 보고하면 안 된다: {r.status_code}"
+    assert "FRED_T10Y" in r.text
+
+
+def test_from_current_rejects_unknown_market(client):
+    assert client.post("/api/v1/regime-snapshots/from-current",
+                       params={"market": "jp"}).status_code == 422
+
+
+def test_from_current_is_not_swallowed_by_the_id_route(client):
+    """POST /from-current 는 /{snapshot_id} 와 메서드가 달라 충돌하지 않지만, 경로 등록
+    순서가 바뀌어도 404 가 나지 않는지 명시적으로 고정한다."""
+    r = client.post("/api/v1/regime-snapshots/from-current")
+    assert r.status_code != 404, "from-current 가 ID 라우트에 잡아먹혔다"
+
+
 def test_db_unavailable_reports_honestly_not_500(client, monkeypatch):
     def boom():
         raise RuntimeError("no db")
