@@ -50,6 +50,7 @@ export const STAGES = [
   // phase: undefined 를 **명시**한다 — 생략하면 as const 가 이 객체에서 phase 키를 아예
   // 없애 버려 union 접근(s.phase)이 컴파일되지 않는다. 겸사겸사 "북엔드"임이 데이터에 드러난다.
   { n: "00", href: "/allocation/overview", label: "OVERVIEW", title: "Overview", desc: "전체 워크플로우 요약 — 각 단계로 드릴다운", intent: "현재 포트폴리오를 한눈에 점검하고 필요한 단계로 이동하세요.", phase: undefined },
+  { n: "0M", href: "/allocation/macro", label: "MACRO PHASE", title: "Macro Phase", desc: "매크로 국면 스냅샷 — 리서치 컨텍스트로 고정", intent: "Macro 탭에서 넘어온 국면 스냅샷을 확인하고 리서치 컨텍스트로 붙이세요 (선택).", phase: "setup" },
   { n: "01", href: "/allocation/construct", label: "CONSTRUCT", title: "Construct", desc: "자산 구성 — 직접 구성 · 팩터 빌더 · 매크로 전략", intent: "자산을 2개 이상 담거나(직접) 팩터로 자동 구성하고 비중을 맞추세요.", phase: "setup" },
   { n: "02", href: "/allocation/alphalab", label: "ALPHA LAB", title: "Alpha Lab", desc: "알파 표현식 · lint · IC/ICIR 검증 · 레지스트리", intent: "독립 알파를 정의·검증하고 레지스트리로 관리하세요 (선택).", phase: "logic" },
   { n: "03", href: "/allocation/thesis", label: "THESIS", title: "Thesis", desc: "거시 테제 → Black-Litterman 뷰 + 신뢰도", intent: "거시 테제를 자산·방향·신뢰도로 변환하세요 (선택).", phase: "logic" },
@@ -69,7 +70,7 @@ export const BOOKENDS = STAGES.filter((s) => !s.phase).map((s) => s.href) as Sta
 
 export interface PhaseMeta { key: PhaseKey; label: string; ko: string; steps: StageHref[] }
 export const PHASES: PhaseMeta[] = [
-  { key: "setup", label: "SETUP", ko: "설정", steps: ["/allocation/construct"] },
+  { key: "setup", label: "SETUP", ko: "설정", steps: ["/allocation/macro", "/allocation/construct"] },
   { key: "logic", label: "LOGIC", ko: "설계", steps: ["/allocation/alphalab", "/allocation/thesis", "/allocation/timing", "/allocation/optimize"] },
   { key: "validation", label: "VALIDATION", ko: "검증", steps: ["/allocation/stress", "/allocation/explain", "/allocation/execution"] },
 ];
@@ -134,6 +135,9 @@ export interface LoadedStrategy {
 const SS_GOAL = "alpha_alloc_goal";
 const SS_WIP = "alpha_alloc_wip";
 const SS_POS = "alpha_alloc_pos";
+// 붙여 둔 스냅샷의 **ID 만** 세션에 남긴다. 본문은 서버가 진실이고 여기 복사하지 않는다 —
+// 새로고침 후에도 같은 ID 로 서버에서 다시 읽어 오므로 재현이 성립한다.
+const SS_SNAP = "alpha_alloc_snapshot";
 
 interface AllocationCtx {
   holdings: Holding[];
@@ -180,6 +184,13 @@ interface AllocationCtx {
   loadStrategy: (strat: TacticalStrategy, market: "kr" | "us") => void;
   clearLoadedStrategy: () => void;
   // ── ResearchRun (P1 재현성) ──
+  // ── Macro Phase 스냅샷 (Phase 3b) ──
+  // ★ID 만 들고 있는다★ — 스냅샷 본문은 서버가 소유하고 react-query 가 캐시한다.
+  // 브라우저 상태에 본문을 복사해 두면 새로고침·공유 시 재현이 깨진다(스펙 금지사항).
+  attachedSnapshotId: string | null;
+  attachSnapshot: (id: string) => void;
+  detachSnapshot: () => void;
+
   activeRunId: string | null;
   recordRun: (name: string) => Promise<string | null>;   // 현재 결과를 런으로 기록
   runsVersion: number;                                    // 목록 갱신 신호
@@ -227,6 +238,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [goal, setGoalState] = useState<AllocationGoal | null>(null);
   const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [attachedSnapshotId, setAttachedSnapshotId] = useState<string | null>(null);
   const [runsVersion, setRunsVersion] = useState(0);
   const [alphaTouched, setAlphaTouched] = useState(false);
   const [executionTouched, setExecutionTouched] = useState(false);
@@ -251,6 +263,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     try {
       const g = sessionStorage.getItem(SS_GOAL);
       if (g) setGoalState(JSON.parse(g));
+      // 붙여 둔 스냅샷 ID 복원 — 본문이 아니라 ID 뿐이라 서버가 여전히 진실이다.
+      const snap = sessionStorage.getItem(SS_SNAP);
+      if (snap) setAttachedSnapshotId(snap);
       const p = sessionStorage.getItem(SS_POS);
       // Only restore a Resume target that is still a real route (stale/renamed → drop it,
       // never resurface a dead URL that would 404).
@@ -492,6 +507,17 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       }
     } catch { /* ignore */ }
   };
+  const attachSnapshot = (id: string) => {
+    setAttachedSnapshotId(id);
+    try { if (typeof window !== "undefined") sessionStorage.setItem(SS_SNAP, id); } catch { /* ignore */ }
+    logEvent(`매크로 국면 스냅샷 연결 — ${id}`);
+  };
+  const detachSnapshot = () => {
+    setAttachedSnapshotId(null);
+    try { if (typeof window !== "undefined") sessionStorage.removeItem(SS_SNAP); } catch { /* ignore */ }
+    logEvent("매크로 국면 스냅샷 해제");
+  };
+
   const noteVisit = (href: string) => {
     if (!isKnownAllocationRoute(href)) return;   // never record a route we can't route back to
     setLastPos(href);
@@ -501,6 +527,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   // href 키 — 스테이지를 추가하면 이 Record 에 항목이 빠졌다고 tsc 가 잡아 준다.
   const stageComplete = useMemo<Record<StageHref, boolean>>(() => ({
     "/allocation/overview":  !!result,
+    "/allocation/macro":     !!attachedSnapshotId,
     "/allocation/construct": holdings.length >= 2,
     "/allocation/alphalab":  alphaTouched,
     "/allocation/thesis":    views.length > 0,
@@ -510,7 +537,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     "/allocation/explain":   !!result,
     "/allocation/execution": executionTouched,
     "/allocation/journal":   timeline.some((e) => e.msg.startsWith("스터디 저장") || e.msg.startsWith("런 기록")),
-  }), [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched, executionTouched]);
+  }), [result, holdings.length, views.length, timeline, timingQ.data, alphaTouched, executionTouched, attachedSnapshotId]);
 
   const value: AllocationCtx = {
     holdings, setHoldingsReset, holdingsMap, holdingsKey,
@@ -525,6 +552,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     saveStudyFull, loadStudy, studiesVersion,
     bumpStudies: () => setStudiesVersion((v) => v + 1),
     loadedStrategy, loadStrategy, clearLoadedStrategy,
+    attachedSnapshotId, attachSnapshot, detachSnapshot,
     activeRunId, recordRun, runsVersion,
     alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
     executionTouched, markExecutionTouched: () => setExecutionTouched(true),

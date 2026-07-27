@@ -9,6 +9,9 @@ import { useQuery } from "@tanstack/react-query";
 import { macroApi, REGIME_COLORS, zScoreColor, type RegimeState } from "@/entities/macro/api";
 import { analysisApi } from "@/entities/macro/analysisApi";
 import { type MacroIndicator } from "@/entities/macro/analysisModel";
+import { regimeSnapshotApi } from "@/entities/regime-snapshot/api";
+import { USAGE_LABEL, USAGE_REASON } from "@/entities/regime-snapshot/model";
+import { useAllocation } from "./AllocationProvider";
 
 const CANARY: { id: string; label: string }[] = [
   { id: "VIXCLS", label: "VIX" },
@@ -29,6 +32,27 @@ function Spark({ values }: { values: number[] }) {
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="as-ctx-spark">
       <polyline points={pts} fill="none" stroke="currentColor" strokeWidth={1.1} opacity={0.55} />
     </svg>
+  );
+}
+
+/** 붙여 둔 스냅샷 표기 — ID·as-of·연구 사용등급. 없으면 아무것도 렌더하지 않는다. */
+function AttachedSnapshot() {
+  const { attachedSnapshotId } = useAllocation();
+  const q = useQuery({
+    queryKey: ["regime-snapshot", attachedSnapshotId],
+    queryFn: () => (attachedSnapshotId ? regimeSnapshotApi.get(attachedSnapshotId) : Promise.resolve(null)),
+    enabled: !!attachedSnapshotId,
+  });
+  if (!attachedSnapshotId) return null;
+  const s = q.data;
+  return (
+    <Link href={`/allocation/macro`} className="as-ctx-snap" title={
+      s ? `${USAGE_REASON[s.research_usage]}\nas-of ${s.as_of}` : "스냅샷을 불러오는 중"
+    }>
+      <em>SNAP</em>
+      <b className="num">{attachedSnapshotId.replace(/^rgs_/, "").slice(0, 12)}</b>
+      {s && <span className={`as-ctx-usage as-usage-${s.research_usage}`}>{USAGE_LABEL[s.research_usage]}</span>}
+    </Link>
   );
 }
 
@@ -59,6 +83,7 @@ export function ContextStrip() {
           STRESS {Math.round(st.stress_score)}
         </span>
       )}
+      <AttachedSnapshot />
       <span className="as-ctx-fill" />
       {CANARY.map(({ id, label }) => {
         const ind = byId.get(id);

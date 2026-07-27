@@ -19,7 +19,7 @@ export function WizardTracker() {
   const pathname = usePathname();
   const active = stageIndex(pathname);              // ←/→ 이동에만 — 여기선 순서가 진짜 의미다
   const activeHref = STAGES[active].href as StageHref;
-  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched } = useAllocation();
+  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched, attachedSnapshotId } = useAllocation();
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
   const conf = Math.round(overallConfidence(views));
@@ -32,6 +32,7 @@ export function WizardTracker() {
 
   const sub: Record<StageHref, string> = {
     "/allocation/overview":  result ? `${result.names.length} 자산` : "미실행",
+    "/allocation/macro":     attachedSnapshotId ? "스냅샷 연결됨" : "미연결",
     "/allocation/construct": holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음",
     "/allocation/alphalab":  alphaTouched ? "검증됨" : "미검증",
     "/allocation/thesis":    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",

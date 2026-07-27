@@ -55,7 +55,14 @@ import { RecommendTab, StrategiesTab } from "./MacroCockpit.tabs.strategy";
 import { CorrelationsTab, TimingTab } from "./MacroCockpit.tabs.analytics";
 
 
-export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; onTransplant?: (p: TransplantPayload) => void }) {
+export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy, aasError }: {
+  core: MacroCore;
+  onTransplant?: (p: TransplantPayload) => void;
+  /** 현재 국면을 스냅샷으로 굳혀 Allocation Studio 로 넘긴다(서버 저장 → ?snapshot=<id>). */
+  onOpenInAAS?: () => void;
+  aasBusy?: boolean;
+  aasError?: string | null;
+}) {
   const [tab, setTab] = useState<TabId>("overview");
   const [market, setMarket] = useState<Market>("kr");
   const [strategies, setStrategies] = useState<MacroStrategies | null>(core.strategies);
@@ -159,8 +166,16 @@ export default function MacroCockpit({ core, onTransplant }: { core: MacroCore; 
              ["상관·인과", "correlations"], ["배분 추천", "recommend"]] as const).map(([lbl, t]) => (
             <button key={t} className={`mc-brief-chip${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>{lbl} →</button>
           ))}
+          {/* 현재 국면을 불변 스냅샷으로 고정해 AAS 로 — 휘발성 복사가 아니라 서버 ID 전달 */}
+          {onOpenInAAS && (
+            <button className="mc-brief-chip mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}
+              title="현재 국면 판정을 스냅샷으로 저장하고 Allocation Studio 에서 엽니다">
+              {aasBusy ? "스냅샷 생성 중…" : "Allocation Studio에서 열기 →"}
+            </button>
+          )}
         </span>
       </div>
+      {aasError && <div className="mc-aas-err" role="alert">{aasError}</div>}
 
       {/* ── 서브탭 ── */}
       <div className="mc-tabs">

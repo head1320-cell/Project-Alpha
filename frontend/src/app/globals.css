@@ -3942,3 +3942,45 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .devui-variant-body { min-width: 0; }
 .devui-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .devui-inline-note { font-size: 11.5px; color: var(--t-muted, #666); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   31. Macro Phase 스냅샷 — 0M 스테이지(.as-macro-*) · 컨텍스트 스트립 배지(.as-ctx-snap)
+   · Macro 탭 액션(.mc-open-aas). 추가만 — 기존 규칙 수정 없음.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.mc-open-aas { font-weight: 600; }
+.mc-open-aas:disabled { opacity: .55; cursor: progress; }
+.mc-aas-err { margin: 6px 0 0; padding: 8px 12px; border-radius: 6px; font-size: 12px;
+  background: var(--bs-danger-bg, #f8d7da); color: #58151c; border: 1px solid rgba(220,53,69,.25); }
+
+/* 컨텍스트 스트립: 붙어 있는 스냅샷 */
+.as-ctx-snap { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px;
+  border: 1px solid var(--t-border); background: var(--t-surface); text-decoration: none; color: inherit; font-size: 11px; }
+.as-ctx-snap:hover { border-color: var(--t-accent); }
+.as-ctx-snap em { font-style: normal; font-size: 9px; letter-spacing: .08em; color: var(--t-muted); }
+.as-ctx-usage { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+
+/* 사용 등급 색 — forward_only 는 경고색으로 눈에 띄게(과거 검증 불가라는 사실을 숨기지 않는다) */
+.as-usage-backtest_eligible { background: #dcfce7; color: #15803d; }
+.as-usage-forward_only      { background: #fef3c7; color: #a16207; }
+.as-usage-unavailable       { background: #f4f4f5; color: #71717a; }
+
+/* 0M 스테이지 */
+.as-macro-map { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.as-macro-row { display: flex; align-items: baseline; gap: 10px; }
+.as-macro-k { width: 132px; flex-shrink: 0; font-size: 12px; color: var(--t-muted); }
+.as-macro-v { font-size: 15px; font-weight: 600; }
+.as-macro-sub { font-size: 11px; color: var(--t-muted); }
+.as-macro-expl { margin: 10px 0; font-size: 13px; line-height: 1.6; }
+.as-macro-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.as-macro-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; background: var(--t-surface);
+  border: 1px solid var(--t-border); }
+.as-macro-warn { border-left: 3px solid #f59e0b; padding-left: 10px; }
+.as-macro-repro { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; padding-top: 10px;
+  border-top: 1px solid var(--t-border); font-size: 10px; color: var(--t-muted); }
+.as-macro-repro code { font-size: 10px; }
+.as-macro-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.as-macro-attached { font-size: 12px; font-weight: 600; color: #15803d; }
+.as-macro-detach { font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--t-border); background: var(--bg-card); color: var(--t-muted); }
+.as-macro-detach:hover { border-color: var(--danger, #dc2626); color: var(--danger, #dc2626); }
+.as-macro-missing code { font-size: 11px; }
