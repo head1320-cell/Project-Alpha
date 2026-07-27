@@ -73,12 +73,16 @@ benefit, and would still leave the accessibility gap that motivated the brief.
    untouched until deliberately converted.
 6. **Amend the `CLAUDE.md` frontend rule only after this ADR is accepted**, and amend it to state
    what is actually true, including which surfaces are migrated and which are not.
-7. **Styling work is sequenced after the research vertical slice.** Per the review, the plan now
-   delivers `RegimeSnapshot → PIT signals → TimingRuleSet → AAS integration → ResearchRun
-   round-trip` **first**, reusing the existing unstyled components. The shadcn scaffold is Plan
-   Phase 5 and the four-modal merge is Phase 6. Rationale: styling risk must never sit on the
-   critical path of research correctness, and the vertical slice validates the data contracts that
-   the catalogue UI is built to expose.
+7. **Styling work runs immediately after the vertical slice, ahead of all remaining backend.**
+   The review's P1 correctly moved styling off the critical path of research correctness — the
+   slice (`PIT → RegimeSnapshot → Macro bridge → Research Context`) reuses existing unstyled
+   components and lands first. But the P1 revision then buried Tailwind/shadcn behind five
+   phases, which understated how explicitly it was requested. Corrected sequencing:
+   **scaffold at Plan Phase 5, catalogue shell at Phase 6**, both **before** the remaining
+   backend work (7, 8, 8b, 9).
+   The shell migrates **three** of the four duplicate modals. `TimingFactorModal` is deferred to
+   **Phase 6b**, after Phase 7 reshapes `TimingRuleSetV2` underneath it — migrating first would
+   mean building that window twice.
 
 ### 2.1 Token mapping
 

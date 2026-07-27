@@ -30,17 +30,41 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 
 ---
 
+## Execution order
+
+| # | Phase | Kind | Status |
+|---|---|---|---|
+| 0 | Documentation (spec · plan · ADR) | docs | ✅ `6dec39a` `e2e4a7d` |
+| 0.5 | De-index the wizard | refactor | ✅ `279ef60` |
+| 1 | PIT foundation (ALFRED vintages) | backend | ✅ `1dcfdbd` |
+| 2 | `RegimeSnapshot` persistence + API | backend | ✅ `d331e96` |
+| 3a | Macro→AAS bridge — builder + `from-current` | backend | ✅ `84d6180` |
+| 3b | Macro→AAS bridge — client · action · preview | **frontend** | next |
+| 4 | Research Context + ResearchRun round-trip | frontend | |
+| 5 | ADR acceptance + shadcn scaffold | **UI** | |
+| 6 | Catalogue shell — 3 of 4 modals | **UI** | |
+| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | |
+| 6b | `TimingFactorModal` → shell (deferred 4th) | UI | |
+| 7b | **Macro overlay semantics** (restored) | both | |
+| 8 | Factor catalogue breadth | backend | |
+| 8b | Data-source extension (NFCI · VXVCLS) | backend | |
+| 9 | `ScenarioPackV2` | both | |
+| 10 | Stage wiring (Optimize · Attribution · Execution · Journal) | both | |
+
 ## Phases
 
-> **Restructured after review (P1).** The original 0–9 breakdown was feature-horizontal: nothing
-> was end-to-end usable until very late. Phases 1–4 below are now a **thin vertical slice** —
-> `RegimeSnapshot → 2 PIT signals → TimingRuleSet → AAS integration → ResearchRun save/refresh` —
-> that a user can actually exercise. Catalogue breadth, scenarios, and the shadcn migration come
-> *after* that slice proves the architecture.
+> **Two revisions to the original ordering.**
 >
-> Consequence: the shadcn/ADR work moved from Phase 1 to Phase 6. The vertical slice reuses the
-> **existing** modal and strip components, unstyled-migration, so styling risk never blocks
-> research correctness.
+> **(1) Vertical slice first (review P1).** The original 0–9 breakdown was feature-horizontal —
+> nothing was end-to-end usable until very late. Phases 1–4 are a thin vertical slice a user can
+> actually exercise.
+>
+> **(2) UI work pulled ahead of the remaining backend (user request).** Tailwind/shadcn was the
+> most explicitly stated requirement in the mission brief, and the P1 revision had pushed it
+> behind five phases. It now runs at 5–6, immediately after the slice completes and **ahead of**
+> all remaining backend work (7, 8, 8b, 9). The one dependency this creates is handled by
+> splitting the catalogue-shell migration: three modals at Phase 6, and `TimingFactorModal` at 6b
+> after Phase 7 reshapes the model underneath it — otherwise that window would be built twice.
 
 ### Phase 0 — Documentation (this commit)
 Spec, plan, ADR. No code. **Stop for approval.**
@@ -66,18 +90,32 @@ not today's revision, and no row with `release_timestamp > T` is reachable.
 Model, `regime_snapshots` persistence (reuse the `research_runs` raw-SQL idiom),
 `regime_snapshot_routes.py` in `ROUTER_MODULES`. Snapshots reference observations from Phase 1.
 
-### Phase 3 — Two PIT signals + minimal `TimingRuleSetV2` *(slice step 3)*
-Exactly **two** factors — one price-based (TSMOM, no revision problem) and one macro-based (curve
-slope, exercises the vintage path). Three-state `SignalState`, `unavailable → risk_off`,
-`k_of_n` combination, hysteresis, cooldown.
-**Deliberately not** the full catalogue: the goal is to prove the contract end-to-end.
+### Phase 3 — Macro → AAS bridge *(slice step 3)*
 
-### Phase 4 — AAS integration + ResearchRun round-trip *(slice step 4 — first user-visible value)*
-Adds `/allocation/macro`, "Open in Allocation Studio" from Macro with mapping preview, Research
-Context content in `ContextStrip` (keeping `.as-ctx*`), and ResearchRun save → **refresh recovery**.
-**Gate:** new E2E — create a snapshot in `/macro`, open it in AAS, save a run, reload the browser,
-and reopen the identical run with the same snapshot ID and rule-set version.
-**This is the milestone that proves the architecture.** Everything after it is breadth.
+> **Numbering correction.** This slot originally read "Two PIT signals + minimal
+> `TimingRuleSetV2`". What actually shipped in `84d6180` — and was labelled "Phase 3a" in its
+> commit message — is the Macro→AAS bridge backend, i.e. the old Phase 4's territory. The timing
+> signals were **not** built. Rather than leave the record wrong, the bridge keeps slot 3 and the
+> timing work moves to Phase 7. Commits referencing "Phase 3a" mean the bridge backend.
+
+- **3a — done (`84d6180`).** `src/engine/regime_snapshot_builder.py` +
+  `POST /regime-snapshots/from-current`. Snapshots from the live engine are honestly
+  `forward_only` + `partial` (the collector is not vintage-aware until Phase 8b).
+  Also fixed: `LookAheadError` was reported as 500 instead of 422.
+- **3b — next.** `entities/regime-snapshot` client; Macro action carrying `?snapshot=<id>` in the
+  **URL** (not the `sessionStorage` handoff used for the Backtester — the spec forbids browser
+  storage as the source of truth); mapping preview in AAS with Apply/Dismiss; `ContextStrip`
+  shows the attached ID, `as_of`, and `research_usage` badge (`.as-ctx*` contract preserved);
+  `/allocation/macro` stage added (safe now that Phase 0.5 de-indexed the wizard).
+  **Gate:** E2E must prove **durability across a browser reload**, not just navigation — a test
+  that only checks the button routes would pass against the old ephemeral behaviour.
+
+### Phase 4 — Research Context + ResearchRun round-trip
+Consolidate the **three** live `["macro","regime"]` queries (`ContextStrip.tsx:37`,
+`GoalGate.tsx:112`, `journal/page.tsx:53`) onto the attached snapshot, and add ResearchRun
+save → refresh recovery.
+**Gate:** E2E — save a run, reload, reopen the identical run with the same snapshot ID and
+rule-set version. **This is the milestone that proves the architecture.**
 
 ### Phase 5 — ADR acceptance + shadcn scaffold
 Amend the `CLAUDE.md` frontend clause to state what is true (Tailwind already present, 46
@@ -89,18 +127,50 @@ rendered on `/dev/ui` beside existing ones.
 **Rollback:** revert one commit; Tailwind is untouched.
 
 ### Phase 6 — Unified catalogue shell *(largest UI risk)*
-One shadcn three-pane shell replaces `TimingFactorModal`, `StressScenarioModal`,
-`AlphaFactorModal`, and Backtester `FactorPickerModal`.
-**Gate:** `.tfm-*` / `.as-*` selector updates land **atomically** with the component change;
-`stage-windows.spec.ts` and `timing-factors.spec.ts` updated in the same commit; keyboard/focus/
-mobile tests added. Not combined with any backend phase.
+One shadcn three-pane shell replaces the duplicate modals.
 
-### Phase 7 — Factor catalogue breadth
+**Migrate three now, defer one.** `StressScenarioModal`, `AlphaFactorModal`, and Backtester
+`FactorPickerModal` move to the shell in this phase. **`TimingFactorModal` does not** — Phase 7
+reshapes the timing model underneath it, and migrating first would mean rebuilding the same window
+twice. It follows immediately after Phase 7 as **6b**.
+**Gate:** `.tfm-*` / `.as-*` selector updates land **atomically** with the component change;
+`stage-windows.spec.ts` updated in the same commit; keyboard/focus/mobile tests added.
+Not combined with any backend phase.
+
+### Phase 7 — `TimingRuleSetV2` + two PIT signals *(the deferred slice step)*
+Exactly **two** factors — one price-based (TSMOM, no revision problem) and one macro-based (curve
+slope, exercises the vintage path). Three-state `SignalState`, `unavailable → risk_off`,
+`k_of_n` combination, hysteresis, cooldown, conflict policy.
+**Deliberately not** the full catalogue: the goal is to prove the contract end-to-end.
+**TDD:** direction (esp. Defense First inversion), frequency alignment, missing-data behaviour.
+
+### Phase 6b — `TimingFactorModal` → catalogue shell
+The deferred fourth modal, once its underlying model is stable.
+**Gate:** `timing-factors.spec.ts` updated atomically.
+
+### Phase 7b — Macro overlay semantics *(restored — was missing from this plan)*
+
+> This was in the spec (§8, lines 365–372) but had **no phase**. It is the semantic half of
+> "Macro Phase Analysis Integration" and three of the mission's nine requirements for it:
+> optional overlay, three-way comparison, conflict explanation. Phase 7 is the first point where
+> it is buildable, because all three need a rule set to compare against.
+
+- **Optional overlay, not an opaque override.** Macro adjusts a rule set; it never silently
+  replaces it. The user can see and disable the overlay independently of the rules.
+- **Three-way comparison in the Timing desk** — baseline vs timing-only vs timing+macro.
+  The mission asks for this in **two** places; the Timing desk is the primary one, and Phase 9's
+  Stress comparison reuses this machinery rather than reinventing it.
+- **Conflict explanation in plain language** — e.g. "추세는 risk-on이지만 매크로 신뢰도가 낮고
+  금융환경이 긴축적입니다." Every risk-on/risk-off decision carries its reason.
+- **Gate:** E2E asserting the three-way comparison is legible and that disabling the overlay
+  visibly changes the composite state.
+
+### Phase 8 — Factor catalogue breadth
 The remaining Phase-1 factors: relative momentum, breadth (incl. equal- vs cap-weight), realized
 vol / vol regime / target-vol sizing, drawdown + speed + recovery, rolling correlation, Korea set.
-(TSMOM and curve slope already shipped in Phase 3.) **TDD per factor.**
+(TSMOM and curve slope ship in Phase 7.) **TDD per factor.**
 
-### Phase 7b — Data-source extension
+### Phase 8b — Data-source extension
 Add FRED `NFCI` (weekly, **revised** — requires the Phase 1 vintage path) and `VXVCLS` to
 `macro_collector.py`. Implement the VIX term-structure factor to the spec §6.2 definition:
 **ratio** `VIXCLS/VXVCLS`, US-close→KR next-session alignment, no forward-fill of missing dates.
@@ -108,11 +178,12 @@ Surface `kis_flows` `forward_only` and ETF mock status as first-class UI labels.
 **Gate:** pytest incl. cache, rate-limit, missing-API-key fallback, a **KR-holiday / US-holiday
 alignment test**, and rejection of `forward_only` factors by the historical-simulation endpoint.
 
-### Phase 8 — `ScenarioPackV2`
+### Phase 9 — `ScenarioPackV2`
 Extend the stress catalogue and `kr_scenario_pack.py`. Baseline vs timing-adjusted vs
-macro-conditioned comparison in Stress. Historical/hypothetical labelling enforced in the type.
+macro-conditioned comparison in Stress — **reusing the Phase 7b comparison machinery**, not a
+second implementation. Historical/hypothetical labelling enforced in the type.
 
-### Phase 9 — Stage wiring
+### Phase 10 — Stage wiring
 Optimize (timing as explicit constraint/overlay, before/after + infeasibility reasons),
 Attribution (allocation / timing / selection / factor / cost / residual; ex-ante vs ex-post),
 Execution (paper-only preview, costs, liquidity, borrow, approval states — **no live orders**),
@@ -136,12 +207,14 @@ test evidence (exit codes) · real-data limitations · remaining risks · next p
 |---|---|---|
 | **Revision bias** — FRED returns today's vintage, so history is scored with revised data | 1 | ALFRED `realtime_*` fetching; `GDPC1` originally-published test written **before** the code |
 | Silent stage-index break on insert | 0.5 | De-index to href-keyed lookup before any stage is added |
-| `forward_only` data used in a backtest | 1, 7b | `ResearchUsage` derived, not hand-set; simulation endpoint **rejects** with a named reason |
-| Look-ahead via US-close in a KR session | 7b | `market_cutoff`/`execution_timestamp`; KR+US holiday alignment test |
-| Missing signal read as positive | 3 | Three-state `SignalState`; no boolean can default true |
-| Selector break across 4 modal migrations | 6 | Atomic spec+component commits; POC gate first |
-| **Radix portals** escaping container-scoped assertions | 5, 6 | Resolved in the POC; `dev-ui.spec.ts` is already container-scoped and would under-count |
-| Cascade regression on unmigrated routes | 5, 6 | Screenshot diff of `/screener`, `/backtest`, `/macro` — the suite checks classes, not pixels |
+| `forward_only` data used in a backtest | 1, 8b | `ResearchUsage` derived, not hand-set; simulation endpoint **rejects** with a named reason |
+| Look-ahead via US-close in a KR session | 8b | `market_cutoff`/`execution_timestamp`; KR+US holiday alignment test |
+| Missing signal read as positive | 7 | Three-state `SignalState`; no boolean can default true |
+| Selector break across modal migrations | 6, 6b | Atomic spec+component commits; POC gate first |
+| **Radix portals** escaping container-scoped assertions | 5, 6, 6b | Resolved in the POC; `dev-ui.spec.ts` is already container-scoped and would under-count |
+| Cascade regression on unmigrated routes | 5, 6, 6b | Screenshot diff of `/screener`, `/backtest`, `/macro` — the suite checks classes, not pixels |
 | Mock result mistaken for validation | all | `mock_gate`; unavailable factors non-enableable |
-| Bundle growth from Radix | 5, 6 | Per-route table each phase; ≥4 kB reverted, >15 kB aborts the migration |
-| `kis_flows` shallow history misread as deep | 7b | `forward_only` label in UI **and** enforced server-side |
+| Bundle growth from Radix | 5, 6, 6b | Per-route table each phase; ≥4 kB reverted, >15 kB aborts the migration |
+| `kis_flows` shallow history misread as deep | 8b | `forward_only` label in UI **and** enforced server-side |
+| **Timing window built twice** — shell migrated before its model changes | 6, 6b | `TimingFactorModal` deliberately deferred to 6b, after Phase 7 |
+| **Macro overlay silently overriding rules** — the requirement this plan had lost | 7b | Overlay is separately disableable; three-way comparison makes its effect visible |
