@@ -11,6 +11,7 @@ import { screenerApi } from "@/entities/screener/api/core";
 import { macroApi } from "@/entities/macro/api";
 import { loadCompanyCore } from "@/entities/company/data";
 import { allocationApi } from "@/entities/allocation/api";
+import { RegimeBadge } from "@/entities/macro/RegimeBadge";
 import { Breadcrumb } from "./Breadcrumb";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -123,6 +124,12 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
             Project Alpha
           </div>
         </Link>
+
+        {/* 현재 시장 국면 배지 — 클릭하면 /macro 로. 삭제된 TopNav 가 유일 소비자였던
+            것을 셸로 옮겨 살렸다. .header-actions 는 이미 정의만 되어 있던 빈 슬롯. */}
+        <div className="header-actions">
+          <RegimeBadge />
+        </div>
       </header>
 
       {/* ─── App body: sidebar + main ─── */}

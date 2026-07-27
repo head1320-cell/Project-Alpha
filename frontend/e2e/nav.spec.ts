@@ -67,6 +67,32 @@ test("Breadcrumb does not overlap the tab top toolbar (Company + Screener)", asy
   await expect(page.locator(".ca-pg-go")).toBeVisible();
 });
 
+test("Shell header: RegimeBadge loads real regime data and links to /macro", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+
+  // 셸 헤더의 우측 슬롯 — 삭제된 TopNav 에 있던 것을 TerminalShell 로 옮겼다.
+  const slot = page.locator(".terminal-header .header-actions");
+  await expect(slot).toBeVisible();
+
+  // 배지는 macroApi.regime() 이 돌아오기 전까지 .skeleton 을 렌더한다.
+  // 로딩 상태로 굳지 않고 실제 데이터로 바뀌는 것까지 확인한다 — 이게 이 테스트의 핵심이다.
+  const badge = slot.locator('a[href="/macro"]');
+  await expect(badge).toBeVisible({ timeout: 20_000 });
+  await expect(slot.locator(".skeleton")).toHaveCount(0);
+
+  // regime 라벨 + stress 점수(정수)가 함께 표시된다
+  await expect(badge).toHaveAttribute("title", /Stress\s+\d+\s*\/\s*100/);
+  expect((await badge.innerText()).trim().length, "배지에 텍스트가 있어야 한다").toBeGreaterThan(0);
+
+  // 셸에 붙었으므로 다른 탭에서도 나와야 한다
+  await page.goto("/screener", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('.terminal-header .header-actions a[href="/macro"]')).toBeVisible({ timeout: 20_000 });
+
+  expect(uniq(sink.pageErrors), "regime badge page errors").toEqual([]);
+  expect(uniq([...sink.api404, ...sink.apiOther4xx5xx]), "regime 조회가 4xx/5xx 면 안 된다").toEqual([]);
+});
+
 test("AAS Timing gauge value does not overlap the composite label", async ({ page }) => {
   await page.goto("/allocation/timing", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);
