@@ -102,4 +102,8 @@ def build_and_store(market: str = "kr") -> str | None:
         stress_score=float(getattr(state, "stress_score", 0.0) or 0.0),
         confidence=float(getattr(state, "confidence", 0.0) or 0.0),
         explanation=explanation,
+        # Phase 4a: 표시 문자열이 아니라 **필드**로 넘긴다 — 스트립이 explanation 을
+        # 파싱하지 않아도 국면 배지를 그릴 수 있어야 한다.
+        regime=regime,
+        recommended_mode=mode,
     )

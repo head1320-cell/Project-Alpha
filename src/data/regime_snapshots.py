@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "regime_snapshots"
 _inited = False
+# regime / recommended_mode 는 후행 추가 열이다(Phase 4a).
+# ★ALTER 성공 여부를 반드시 확인한다★ — 권한 등으로 ALTER 가 실패했는데 이후 SELECT 가
+# 그 열을 참조하면 스냅샷 조회가 통째로 깨진다(수정 전보다 나쁨).
+# backtest_runs.py:104~122 가 heartbeat_at 에 대해 같은 이유로 쓰는 패턴을 따른다.
+_has_regime_cols = False
 
 # 국면 판정 모델 버전 — 축·확률 산출 로직이 바뀌면 올린다(과거 스냅샷과 구분하기 위해).
 MODEL_VERSION = "regime-axes-v1"
@@ -52,7 +57,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited
+    global _inited, _has_regime_cols
     if _inited:
         return
     from sqlalchemy import text
@@ -73,11 +78,33 @@ def _ensure_table(engine) -> None:
             "model_version VARCHAR(40), "
             "engine_version VARCHAR(40), "
             "code_version VARCHAR(60), "
-            "explanation TEXT)"
+            "explanation TEXT, "
+            "regime VARCHAR(40), "
+            "recommended_mode VARCHAR(20))"
         ))
         c.execute(text(
             f"CREATE INDEX IF NOT EXISTS ix_rgs_asof_created ON {_TABLE} (as_of, created_at)"
         ))
+
+    # 이미 운영 중인 DB에는 테이블이 있으므로 ALTER 로 붙인다.
+    # SQLite 는 ADD COLUMN 에 IF NOT EXISTS 를 지원하지 않아 "이미 있음"도 예외로 온다 → 삼킨다.
+    for col, ddl in (("regime", "VARCHAR(40)"), ("recommended_mode", "VARCHAR(20)")):
+        try:
+            with engine.begin() as c:
+                c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN {col} {ddl}"))
+        except Exception:
+            pass
+
+    # ★실제로 붙었는지 확인★ — 못 붙었으면 두 열만 포기하고 나머지는 그대로 동작시킨다.
+    # (무조건 SELECT 하면 조회 전체가 깨져서 수정 전보다 나빠진다.)
+    try:
+        with engine.connect() as c:
+            c.execute(text(f"SELECT regime, recommended_mode FROM {_TABLE} LIMIT 1"))
+        _has_regime_cols = True
+    except Exception as e:  # noqa: BLE001
+        _has_regime_cols = False
+        logger.warning("regime_snapshots.regime/recommended_mode 사용 불가 — 국면 라벨 없이 동작: %s", e)
+
     _inited = True
 
 
@@ -130,6 +157,8 @@ def create_snapshot(
     stress_score: float,
     confidence: float,
     explanation: str = "",
+    regime: str | None = None,
+    recommended_mode: str | None = None,
 ) -> str | None:
     """불변 스냅샷을 만든다. 성공 시 snapshot_id, DB 미가용 시 None.
 
@@ -144,14 +173,16 @@ def create_snapshot(
         engine = _engine()
         _ensure_table(engine)
         from sqlalchemy import text
+        cols = ("snapshot_id, created_at, as_of, growth_axis, inflation_axis, "
+                "phase_probabilities, stress_score, confidence, observations, "
+                "data_status, research_usage, model_version, engine_version, code_version, explanation")
+        vals = (":sid, :ts, :asof, :g, :i, :probs, :stress, :conf, :obs, "
+                ":status, :usage, :mver, :ever, :cver, :expl")
+        if _has_regime_cols:
+            cols += ", regime, recommended_mode"
+            vals += ", :regime, :mode"
         with engine.begin() as c:
-            c.execute(text(
-                f"INSERT INTO {_TABLE} (snapshot_id, created_at, as_of, growth_axis, "
-                "inflation_axis, phase_probabilities, stress_score, confidence, observations, "
-                "data_status, research_usage, model_version, engine_version, code_version, explanation) "
-                "VALUES (:sid, :ts, :asof, :g, :i, :probs, :stress, :conf, :obs, "
-                ":status, :usage, :mver, :ever, :cver, :expl)"
-            ), {
+            c.execute(text(f"INSERT INTO {_TABLE} ({cols}) VALUES ({vals})"), {
                 "sid": sid, "ts": time.time(), "asof": as_of,
                 "g": growth_axis, "i": inflation_axis,
                 "probs": json.dumps(phase_probabilities, ensure_ascii=False),
@@ -161,6 +192,7 @@ def create_snapshot(
                 "status": status.value, "usage": usage.value,
                 "mver": MODEL_VERSION, "ever": ENGINE_VERSION, "cver": code_version(),
                 "expl": explanation,
+                **({"regime": regime, "mode": recommended_mode} if _has_regime_cols else {}),
             })
         return sid
     except Exception as e:  # noqa: BLE001
@@ -168,9 +200,14 @@ def create_snapshot(
         return None
 
 
-_COLS = ("snapshot_id, created_at, as_of, growth_axis, inflation_axis, phase_probabilities, "
-         "stress_score, confidence, observations, data_status, research_usage, "
-         "model_version, engine_version, code_version, explanation")
+_BASE_COLS = ("snapshot_id, created_at, as_of, growth_axis, inflation_axis, phase_probabilities, "
+              "stress_score, confidence, observations, data_status, research_usage, "
+              "model_version, engine_version, code_version, explanation")
+
+
+def _cols() -> str:
+    """새 열은 **끝에만** 붙인다 — 앞에 넣으면 _row_to_dict 의 위치 인덱스가 전부 밀린다."""
+    return _BASE_COLS + (", regime, recommended_mode" if _has_regime_cols else "")
 
 
 def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
@@ -188,6 +225,9 @@ def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
         "data_status": row[9], "research_usage": row[10],
         "model_version": row[11], "engine_version": row[12], "code_version": row[13],
         "explanation": row[14],
+        # 후행 추가 열 — 없으면 None(있는 척하지 않는다)
+        "regime": row[15] if _has_regime_cols and len(row) > 15 else None,
+        "recommended_mode": row[16] if _has_regime_cols and len(row) > 16 else None,
     }
     # 목록에서는 관측치 배열을 빼고 개수만 (payload 비대 방지) — 단건은 전부 준다.
     if full:
@@ -203,7 +243,7 @@ def get_snapshot(snapshot_id: str) -> dict[str, Any] | None:
         _ensure_table(engine)
         from sqlalchemy import text
         with engine.connect() as c:
-            row = c.execute(text(f"SELECT {_COLS} FROM {_TABLE} WHERE snapshot_id = :sid"),
+            row = c.execute(text(f"SELECT {_cols()} FROM {_TABLE} WHERE snapshot_id = :sid"),
                             {"sid": snapshot_id}).fetchone()
         return _row_to_dict(row, full=True) if row else None
     except Exception as e:  # noqa: BLE001
@@ -219,7 +259,7 @@ def list_snapshots(limit: int = 50) -> list[dict[str, Any]]:
         from sqlalchemy import text
         with engine.connect() as c:
             rows = c.execute(
-                text(f"SELECT {_COLS} FROM {_TABLE} ORDER BY created_at DESC, snapshot_id DESC LIMIT :lim"),
+                text(f"SELECT {_cols()} FROM {_TABLE} ORDER BY created_at DESC, snapshot_id DESC LIMIT :lim"),
                 {"lim": max(1, min(int(limit), 200))},
             ).fetchall()
         return [_row_to_dict(r, full=False) for r in rows]

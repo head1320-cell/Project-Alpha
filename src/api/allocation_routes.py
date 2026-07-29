@@ -71,6 +71,9 @@ class AnalyzeRequest(BaseModel):
     # ── ResearchRun 기록 (opt-in) — 슬라이더 드래그마다 DB에 쓰지 않도록 명시 요청 시에만 ──
     record_run: bool = False
     run_name: str | None = Field(None, max_length=200)
+    # ── Phase 4a: 이 결정을 내릴 때 붙어 있던 매크로 국면 스냅샷 (선택) ──
+    #    런을 나중에 다시 열었을 때 "어떤 국면 아래에서 내린 결정인지" 알 수 있게 한다.
+    regime_snapshot_id: str | None = Field(None, max_length=40)
 
 
 class BacktestRequest(BaseModel):
@@ -294,6 +297,15 @@ def _enb_report(w, S, names: list[str]) -> dict:
 @router.post("/analyze")
 def allocation_analyze(req: AnalyzeRequest):
     """포트폴리오 종합 분석 — 하나의 수익률 행렬에서 전 패널 파생 (추가 DB 조회 0)."""
+    # 스냅샷 링크 검증을 **계산 전에** 한다 — 없는 ID 를 조용히 기록하면 나중에 런을 열었을 때
+    # 국면을 복원할 수 없고, 그때는 왜 비었는지 알 방법이 없다. 값비싼 계산 뒤가 아니라 앞에서 막는다.
+    if req.regime_snapshot_id:
+        from src.data.regime_snapshots import get_snapshot
+        if get_snapshot(req.regime_snapshot_id) is None:
+            raise HTTPException(
+                422, f"국면 스냅샷을 찾을 수 없습니다: {req.regime_snapshot_id}. "
+                     "삭제되었거나 다른 환경의 ID 일 수 있습니다."
+            )
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
             req.tickers, req.benchmark, req.lookback_days)
@@ -461,8 +473,12 @@ def allocation_analyze(req: AnalyzeRequest):
                 outputs={"weights": payload["weights"], "flow": payload["flow"],
                          "summary": payload["summary"], "labels": payload["labels"],
                          "views_applied": payload["views_applied"]},
+                # regime_snapshot_id 를 snapshot 에도 넣는다 — list_runs 는 inputs 를 제외하고
+                # snapshot 은 포함하므로(research_runs._row_to_dict, full=False), 여기 없으면
+                # 런 목록에서 스냅샷을 볼 수 없어 재열기 UI 가 성립하지 않는다.
                 snapshot={"coverage": coverage, "excluded": excluded,
-                          "cap_missing": opt["cap_missing"]},
+                          "cap_missing": opt["cap_missing"],
+                          "regime_snapshot_id": req.regime_snapshot_id},
                 name=req.run_name,
             )
             payload["run_id"] = rid              # None이면 DB 미가용 — 정직 보고

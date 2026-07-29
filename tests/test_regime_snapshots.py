@@ -178,3 +178,80 @@ def test_db_unavailable_returns_none_not_fake(monkeypatch):
                               confidence=0.0) is None
     assert rs.get_snapshot("rgs_x") is None
     assert rs.list_snapshots() == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 4a — regime 라벨 / recommended_mode 를 **필드로** 보관.
+#
+# Phase 2/3a 에서는 이 둘이 explanation 문자열("[Goldilocks · 권고 NORMAL] …") 안에만
+# 있었다. 리서치 컨텍스트 스트립이 국면 배지를 그리려면 표시 문자열을 파싱해야 했는데,
+# 그러면 문구를 한 번 다듬는 순간 배지가 조용히 깨진다. 열로 승격해 근원을 고친다.
+# ═══════════════════════════════════════════════════════════════════════════════
+def test_regime_and_mode_roundtrip_as_fields(mem_rs):
+    sid = rs.create_snapshot(
+        as_of=AS_OF, observations=OBS_OK, growth_axis=0.8, inflation_axis=-0.3,
+        phase_probabilities={"Goldilocks": 0.6}, stress_score=41.0, confidence=0.64,
+        explanation="성장 우위", regime="Goldilocks", recommended_mode="NORMAL",
+    )
+    snap = rs.get_snapshot(sid)
+    assert snap["regime"] == "Goldilocks"
+    assert snap["recommended_mode"] == "NORMAL"
+
+
+def test_regime_fields_are_optional(mem_rs):
+    """호출자가 안 넘기면 None — 없는 값을 빈 문자열로 위장하지 않는다."""
+    sid = rs.create_snapshot(as_of=AS_OF, observations=OBS_OK, growth_axis=0.0,
+                             inflation_axis=0.0, phase_probabilities={}, stress_score=0.0,
+                             confidence=0.0)
+    snap = rs.get_snapshot(sid)
+    assert snap["regime"] is None
+    assert snap["recommended_mode"] is None
+
+
+def test_regime_fields_appear_in_list_summary(mem_rs):
+    """스트립·목록이 관측치 배열 없이도 국면을 보여줄 수 있어야 한다."""
+    rs.create_snapshot(as_of=AS_OF, observations=OBS_OK, growth_axis=0.0, inflation_axis=0.0,
+                       phase_probabilities={}, stress_score=0.0, confidence=0.0,
+                       regime="Stagflation", recommended_mode="DEFENSIVE")
+    row = rs.list_snapshots()[0]
+    assert row["regime"] == "Stagflation"
+    assert row["recommended_mode"] == "DEFENSIVE"
+    assert "observations" not in row
+
+
+def test_pre_migration_rows_still_read(mem_rs):
+    """★기존 운영 DB 시나리오★ — 두 열이 없는 테이블에 든 행도 그대로 읽혀야 한다.
+
+    열을 추가하고 무조건 SELECT 하면, ALTER 가 권한 등으로 실패했을 때 스냅샷 조회가
+    통째로 깨진다(수정 전보다 나쁨). backtest_runs.py:115~122 가 같은 이유로 ALTER 적용
+    여부를 확인하고 기능만 끄는 패턴을 쓴다 — 여기서도 그것을 따른다.
+    """
+    from sqlalchemy import text
+
+    # 구 스키마(두 열 없음)를 직접 만들고 행을 하나 넣는다
+    with mem_rs.begin() as c:
+        c.execute(text(f"DROP TABLE IF EXISTS {rs._TABLE}"))
+        c.execute(text(
+            f"CREATE TABLE {rs._TABLE} ("
+            "snapshot_id VARCHAR(40) PRIMARY KEY, created_at DOUBLE PRECISION, "
+            "as_of VARCHAR(32), growth_axis DOUBLE PRECISION, inflation_axis DOUBLE PRECISION, "
+            "phase_probabilities TEXT, stress_score DOUBLE PRECISION, confidence DOUBLE PRECISION, "
+            "observations TEXT, data_status VARCHAR(20), research_usage VARCHAR(24), "
+            "model_version VARCHAR(40), engine_version VARCHAR(40), code_version VARCHAR(60), "
+            "explanation TEXT)"
+        ))
+        c.execute(text(
+            f"INSERT INTO {rs._TABLE} (snapshot_id, created_at, as_of, growth_axis, "
+            "inflation_axis, phase_probabilities, stress_score, confidence, observations, "
+            "data_status, research_usage, model_version, engine_version, code_version, explanation) "
+            "VALUES ('rgs_old_1', 1.0, '2020-01-01', 0.1, 0.2, '{}', 5.0, 0.5, '[]', "
+            "'real', 'forward_only', 'v1', 'v1', 'dev', '구버전 행')"
+        ))
+    rs._inited = False   # 다음 호출에서 마이그레이션이 돌게
+
+    snap = rs.get_snapshot("rgs_old_1")
+    assert snap is not None, "구 스키마 행을 못 읽으면 마이그레이션이 파괴적이다"
+    assert snap["as_of"] == "2020-01-01"
+    assert snap["explanation"] == "구버전 행"
+    # 마이그레이션이 성공했다면 새 열은 None, 실패했다면 키가 없거나 None — 둘 다 허용
+    assert snap.get("regime") is None

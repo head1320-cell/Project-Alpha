@@ -161,3 +161,12 @@ def test_engine_failure_propagates_not_silently_zero(monkeypatch, mem):
     monkeypatch.setattr(bld, "_collect", boom)
     with pytest.raises(RuntimeError):
         bld.build_and_store(market="kr")
+
+
+# ─── Phase 4a: 국면 라벨·권고모드가 **필드로** 저장되는가 ──────────────────────
+def test_regime_and_mode_are_stored_as_fields(mem, stub_engine):
+    snap = rs.get_snapshot(bld.build_and_store(market="kr"))
+    assert snap["regime"] == "Goldilocks", "explanation 파싱 없이 국면을 읽을 수 있어야 한다"
+    assert snap["recommended_mode"] == "NORMAL"
+    # 산문 설명도 여전히 남아 있다(둘 다 필요하다 — 하나가 다른 하나를 대체하지 않는다)
+    assert "Goldilocks" in snap["explanation"]
