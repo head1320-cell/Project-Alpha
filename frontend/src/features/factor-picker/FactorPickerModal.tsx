@@ -175,7 +175,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   return (
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-[18px]"
     >
       {/* ★대화상자 계약★ — CatalogueShell 이 세 창에 준 것과 같은 수준을 여기에도 맞춘다.
           이 창은 role 도 aria-modal 도 Escape 도 없었다(backdrop 클릭만 닫힘). 그러면
