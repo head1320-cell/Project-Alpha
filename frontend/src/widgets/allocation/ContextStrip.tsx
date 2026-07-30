@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { REGIME_COLORS, zScoreColor } from "@/entities/macro/api";
 import { analysisApi } from "@/entities/macro/analysisApi";
+import { allocationApi } from "@/entities/allocation/api";
 import { type MacroIndicator } from "@/entities/macro/analysisModel";
 import { STATUS_LABEL, USAGE_LABEL, USAGE_REASON } from "@/entities/regime-snapshot/model";
 import { useAllocation } from "./AllocationProvider";
@@ -47,8 +48,21 @@ export function ContextStrip() {
   const rg = useResearchRegime();
   const {
     activeStudy, activeRunId, attachedSnapshotId, holdings, timingCfg,
-    scenario, scenarios, isResultStale, result,
+    scenario, scenarios, isResultStale, result, activeRuleSet,
   } = useAllocation();
+
+  // ★박힌 버전이 아직 실재하는지 확인한다★
+  // 확인하지 않으면 삭제된 버전 번호를 그대로 보여주게 되고, 사용자는 그 런이 재현됐다고 믿는다.
+  const rvQ = useQuery({
+    queryKey: ["allocation", "timing-rule-versions", activeRuleSet?.id],
+    queryFn: () => allocationApi.timingRuleVersions(activeRuleSet!.id),
+    enabled: !!activeRuleSet?.id,
+    staleTime: 30_000,
+  });
+  // 확인이 끝나기 전에는 단정하지 않는다 — 로딩 중에 "미상"이라 적으면 잘못된 경보다.
+  const versionResolved = activeRuleSet?.version != null && rvQ.isSuccess
+    ? rvQ.data.versions.some((v) => v.version === activeRuleSet.version)
+    : null;
 
   const dashQ = useQuery({ queryKey: ["macro", "dashboard"], queryFn: () => analysisApi.macroDashboard().catch(() => null) });
   const byId = new Map<string, MacroIndicator>();
@@ -62,8 +76,9 @@ export function ContextStrip() {
 
   // ⑦ 시나리오 — 선택된 항목의 label. "팩(pack)" 신원은 Phase 9(ScenarioPackV2) 소관이다.
   const scenLabel = scenarios.find((s) => s.id === scenario)?.label ?? null;
-  // ⑦ 룰셋 — 저장된 rule set 신원을 프론트가 아직 들고 있지 않다(timingCfg 는 미저장 설정).
-  //    그래서 "설정 요약"으로 정직하게 표기한다. 버전 있는 룰셋은 Phase 7(TimingRuleSetV2).
+  // ⑦ 룰셋 — 저장된 룰셋이 붙어 있으면 **신원(id v버전)**을, 없으면 미저장 설정 요약을 적는다.
+  //    둘은 다른 것이다: 전자는 서버에 불변으로 남아 재현되고, 후자는 이 브라우저의 임시 상태다.
+  //    같은 칸에 같은 모양으로 적으면 사용자는 저장되지 않은 설정을 재현 가능한 것으로 오해한다.
   const timingSummary = `카나리 ${timingCfg.canaries.length}${
     timingCfg.minBreadth ? `·k${timingCfg.minBreadth}` : ""}${
     timingCfg.overlay.type !== "none" ? `·${timingCfg.overlay.type}` : ""}`;
@@ -129,9 +144,27 @@ export function ContextStrip() {
       </span>
 
       {/* ⑦ 룰셋 · 시나리오 */}
-      <span className="as-ctx-rules num" title="타이밍 설정 요약 (버전 있는 룰셋은 이후 단계)">
-        {timingSummary}
-      </span>
+      {activeRuleSet ? (
+        <span className="as-ctx-rules num"
+          title={activeRuleSet.version == null
+            ? `타이밍 룰셋 ${activeRuleSet.id} — 버전이 기록되지 않았습니다. 이 런이 어떤 룰로 계산됐는지 단정할 수 없습니다`
+            : versionResolved === false
+              ? `타이밍 룰셋 ${activeRuleSet.id} v${activeRuleSet.version} — 이 버전이 서버에 없습니다(삭제되었거나 저장에 실패). 현재 버전으로 대신 보여주지 않습니다`
+              : `타이밍 룰셋 ${activeRuleSet.id} v${activeRuleSet.version} — 이 버전의 내용은 서버에 불변으로 보관됩니다`}>
+          <em>RULES</em> {activeRuleSet.id.replace(/^tr_/, "").slice(0, 10)}
+          {/* ★버전을 못 찾으면 현재 버전을 대신 보여주지 않는다★
+              그러면 사용자는 재현됐다고 믿게 된다 — 모르면 모른다고 적는다. */}
+          {activeRuleSet.version == null
+            ? <span className="as-ctx-rules-na"> 버전 미기록</span>
+            : versionResolved === false
+              ? <span className="as-ctx-rules-na"> v{activeRuleSet.version} 확인 불가</span>
+              : ` v${activeRuleSet.version}`}
+        </span>
+      ) : (
+        <span className="as-ctx-rules num" title="저장되지 않은 타이밍 설정 요약 — 재현 좌표가 아닙니다">
+          {timingSummary}
+        </span>
+      )}
       {scenLabel && (
         <span className="as-ctx-scen" title="선택된 스트레스 시나리오">{scenLabel}</span>
       )}

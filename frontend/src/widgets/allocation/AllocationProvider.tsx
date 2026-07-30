@@ -138,6 +138,7 @@ const SS_POS = "alpha_alloc_pos";
 // 붙여 둔 스냅샷의 **ID 만** 세션에 남긴다. 본문은 서버가 진실이고 여기 복사하지 않는다 —
 // 새로고침 후에도 같은 ID 로 서버에서 다시 읽어 오므로 재현이 성립한다.
 const SS_SNAP = "alpha_alloc_snapshot";
+const SS_RULESET = "alpha_alloc_ruleset";
 
 interface AllocationCtx {
   holdings: Holding[];
@@ -200,6 +201,13 @@ interface AllocationCtx {
   attachSnapshot: (id: string) => void;
   detachSnapshot: () => void;
 
+  /**
+   * 분석에 쓰인 타이밍 룰셋의 신원 — 스냅샷과 같은 취급을 받는다(둘 다 재현 좌표다).
+   * 버전이 없으면 어떤 룰이었는지 나중에 알 수 없으므로 id 만으로는 부족하다.
+   */
+  activeRuleSet: { id: string; version: number | null } | null;
+  setActiveRuleSet: (r: { id: string; version: number | null } | null) => void;
+
   activeRunId: string | null;
   recordRun: (name: string) => Promise<string | null>;   // 현재 결과를 런으로 기록
   runsVersion: number;                                    // 목록 갱신 신호
@@ -248,6 +256,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [attachedSnapshotId, setAttachedSnapshotId] = useState<string | null>(null);
+  const [activeRuleSet, setActiveRuleSetState] =
+    useState<{ id: string; version: number | null } | null>(null);
   const [activeStudy, setActiveStudy] = useState<{ id: string; name: string } | null>(null);
   const [runsVersion, setRunsVersion] = useState(0);
   const [alphaTouched, setAlphaTouched] = useState(false);
@@ -276,6 +286,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       // 붙여 둔 스냅샷 ID 복원 — 본문이 아니라 ID 뿐이라 서버가 여전히 진실이다.
       const snap = sessionStorage.getItem(SS_SNAP);
       if (snap) setAttachedSnapshotId(snap);
+      // 룰셋도 ID+버전만 복원한다 — 본문은 서버의 timing_rule_set_versions 가 진실이다.
+      const rs = sessionStorage.getItem(SS_RULESET);
+      if (rs) { try { setActiveRuleSetState(JSON.parse(rs)); } catch { /* 손상된 값은 버린다 */ } }
       const p = sessionStorage.getItem(SS_POS);
       // Only restore a Resume target that is still a real route (stale/renamed → drop it,
       // never resurface a dead URL that would 404).
@@ -443,6 +456,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         // ★런이 "어떤 국면 아래에서 내린 결정인지"를 서버에 함께 남긴다★
         //   이게 없으면 나중에 런을 다시 열어도 맥락을 복원할 수 없다.
         regime_snapshot_id: attachedSnapshotId ?? undefined,
+        // 스냅샷과 나란히 — 런의 snapshot 에 함께 박혀야 재열기 때 같은 룰로 돌아온다.
+        timing_rule_set_id: activeRuleSet?.id ?? undefined,
+        timing_rule_set_version: activeRuleSet?.version ?? undefined,
       });
       if (data.error) return null;
       setResult(data);
@@ -511,6 +527,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       views?: AllocationViewInput[]; model?: AllocationModel;
       delta?: number; tau?: number; constraints?: ConstraintsInput | null;
       regime_snapshot_id?: string | null;
+      timing_rule_set_id?: string | null;
+      timing_rule_set_version?: number | null;
     };
 
     // 비중은 inputs.weights 우선, 없으면 균등(티커만 남은 옛 런) — 0 으로 채우지 않는다.
@@ -538,6 +556,13 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       ?? ((run.snapshot as { regime_snapshot_id?: string | null })?.regime_snapshot_id ?? null);
     if (sid) attachSnapshot(sid);
     else detachSnapshot();
+
+    // ★룰셋도 같은 방식으로 되돌린다★ inputs 우선, 없으면 snapshot 에 박힌 값.
+    const snapObj = (run.snapshot ?? {}) as {
+      timing_rule_set_id?: string | null; timing_rule_set_version?: number | null };
+    const rsId = inp.timing_rule_set_id ?? snapObj.timing_rule_set_id ?? null;
+    const rsVer = inp.timing_rule_set_version ?? snapObj.timing_rule_set_version ?? null;
+    setActiveRuleSet(rsId ? { id: rsId, version: rsVer } : null);
 
     setActiveRunId(run.run_id);
     logEvent(`런 되돌리기 — ${run.name || run.run_id}${sid ? ` (국면 ${sid})` : " (국면 링크 없음)"}`);
@@ -580,6 +605,17 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     try { if (typeof window !== "undefined") sessionStorage.setItem(SS_SNAP, id); } catch { /* ignore */ }
     logEvent(`매크로 국면 스냅샷 연결 — ${id}`);
   };
+  const setActiveRuleSet = (r: { id: string; version: number | null } | null) => {
+    setActiveRuleSetState(r);
+    try {
+      if (typeof window === "undefined") return;
+      if (r) sessionStorage.setItem(SS_RULESET, JSON.stringify(r));
+      else sessionStorage.removeItem(SS_RULESET);
+    } catch { /* ignore */ }
+    logEvent(r
+      ? `타이밍 룰셋 연결 — ${r.id}${r.version != null ? ` v${r.version}` : " (버전 미상)"}`
+      : "타이밍 룰셋 해제");
+  };
   const detachSnapshot = () => {
     setAttachedSnapshotId(null);
     try { if (typeof window !== "undefined") sessionStorage.removeItem(SS_SNAP); } catch { /* ignore */ }
@@ -621,6 +657,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     bumpStudies: () => setStudiesVersion((v) => v + 1),
     loadedStrategy, loadStrategy, clearLoadedStrategy,
     activeStudy, attachedSnapshotId, attachSnapshot, detachSnapshot,
+    activeRuleSet, setActiveRuleSet,
     activeRunId, recordRun, runsVersion,
     alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
     executionTouched, markExecutionTouched: () => setExecutionTouched(true),

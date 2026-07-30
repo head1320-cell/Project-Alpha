@@ -4174,3 +4174,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   text-transform: uppercase; }
 .as-3w-ov-none { color: var(--t-muted); line-height: 1.6; display: block; }
 .as-3w-ov-na, .as-3w-ov-off { font-size: 9.5px; color: var(--t-muted); flex-basis: 100%; }
+
+/* §35b 룰셋 버전 미상 — 재현 좌표가 없다는 사실을 눈에 띄게 (7c) */
+.as-ctx-rules-na { color: var(--color-bear); font-weight: 700; }
+.as-3w-save { font-size: 9.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--t-accent); color: var(--t-accent); background: transparent;
+  cursor: pointer; }
+.as-3w-save:disabled { opacity: .45; cursor: not-allowed; }

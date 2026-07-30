@@ -135,3 +135,65 @@ def test_reads_still_work_when_the_version_column_is_unavailable(monkeypatch):
     assert got["name"] == "degrade"
     assert got["version"] is None, "모르는 값을 1 로 지어내지 않는다"
     assert tr.list_rule_sets(limit=200) != []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HTTP 표면 (Phase 7c) — 룰셋 신원을 화면이 정직하게 그릴 수 있으려면 필요한 두 가지
+# ═══════════════════════════════════════════════════════════════════════════════
+def _client():
+    from fastapi.testclient import TestClient
+
+    from src.app_factory import create_app
+    return TestClient(create_app())
+
+
+def test_save_returns_the_version_it_wrote():
+    """★저장 응답에 버전이 없으면 호출자가 재현 좌표를 들 수 없다★
+
+    id 만으로는 "어떤 룰이었는지" 를 지목하지 못한다 — 룰셋은 갱신될 수 있기 때문이다.
+    """
+    with _client() as c:
+        r = c.post("/api/v1/allocation/timing-rules", json={
+            "name": "t", "market": "kr",
+            "rules": [{"factor_id": "avg_abs_momentum", "universe": ["SPY"]}]})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert "version" in body, "저장 응답에 버전이 없다"
+        assert body["version"] == 1 or body["version"] is None
+
+
+def test_a_degraded_version_column_reports_none_not_one(monkeypatch):
+    """버전 열을 못 쓰는 DB 에서는 버전이 **None** 이어야 한다 — 1 로 지어내지 않는다.
+
+    ★픽스처에서 `_has_version=False` 로 두는 것으로는 이 경로가 재현되지 않는다★
+    `_ensure()` 가 테이블을 version 열까지 포함해 새로 만들고 그 플래그를 True 로 되돌린다.
+    (같은 함정을 regime_snapshots 픽스처에서도 겪었다 — 초기화 함수가 플래그를 다시 쓴다면
+    픽스처가 미리 내려 둔 값은 아무 의미가 없다.) 그래서 초기화가 끝난 **뒤에** 내린다.
+    """
+    sid = tr.save_rule_set("t", "kr", [{"factor_id": "disparity"}])
+    assert sid and tr.get_rule_set(sid)["version"] == 1     # 정상 경로
+    monkeypatch.setattr(tr, "_has_version", False)          # 이제 열을 못 쓴다고 치자
+    assert tr.get_rule_set(sid)["version"] is None, "버전을 모르는데 1 이라고 답했다"
+
+
+def test_versions_endpoint_lists_only_versions_that_exist():
+    """없는 세트는 빈 목록 — 현재 버전으로 대신 채우지 않는다."""
+    with _client() as c:
+        r = c.get("/api/v1/allocation/timing-rules/tr_does_not_exist/versions")
+        assert r.status_code == 200, r.text
+        assert r.json()["versions"] == []
+
+
+def test_updating_a_deleted_rule_set_says_so_instead_of_blaming_the_database():
+    """★두 실패를 같은 말로 보고하지 않는다★
+
+    `save_rule_set` 은 "갱신할 세트가 없다" 와 "저장소를 못 쓴다" 를 똑같이 None 으로 준다.
+    둘 다 503 으로 보고하면, 룰셋이 삭제된 사용자는 **고칠 수 있는 문제**를 인프라 장애로
+    오해하고 그대로 막힌다(그리고 이 경로는 실제로 막혔다 — 갱신 실패 → 복구 수단 없음).
+    """
+    with _client() as c:
+        r = c.post("/api/v1/allocation/timing-rules", json={
+            "name": "t", "market": "kr", "set_id": "tr_gone",
+            "rules": [{"factor_id": "disparity", "universe": ["SPY"]}]})
+        assert r.status_code == 422, f"{r.status_code}: {r.text}"
+        assert "tr_gone" in r.text and "찾을 수 없습니다" in r.text

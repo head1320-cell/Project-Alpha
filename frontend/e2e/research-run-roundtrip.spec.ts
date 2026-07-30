@@ -147,3 +147,85 @@ test("런 왕복: 되돌리기 버튼이 삭제와 혼동되지 않는다", asyn
   await expect(item.locator(".as-rr-reopen")).toHaveCount(1);
   await expect(item.locator(".as-x")).toHaveCount(1);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 룰셋 버전 왕복 (Phase 7c) — 스냅샷과 **같은 성질**을 룰셋에도 요구한다.
+//
+// 스냅샷만 돌아오고 룰셋이 안 돌아오면, 되돌린 런은 "같은 국면에서 다른 규칙으로" 계산된
+// 것이 되고 그건 재현이 아니다. 그래서 여기서도 "뭔가 붙었다" 가 아니라 **같은 id·같은 버전**을
+// 대조한다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 타이밍 데스크에서 카탈로그 팩터를 담고 룰셋으로 저장한다. 저장된 신원 텍스트를 돌려준다. */
+async function saveRuleSet(page: import("@playwright/test").Page): Promise<string> {
+  await page.goto("/allocation/timing", { waitUntil: "networkidle" });
+  await page.locator(".as-fb-apply", { hasText: "팩터 창에서 추가" }).first().click();
+  await expect(page.locator(".tfm-row").first()).toBeVisible({ timeout: 20_000 });
+  await page.locator(".tfm-row").first().click();
+  await page.locator(".as-fb-apply", { hasText: "이 팩터 추가" }).click();
+
+  const save = page.locator(".as-3w-save");
+  await expect(save).toBeEnabled({ timeout: 30_000 });
+  await save.click();
+
+  // 저장되면 컨텍스트 스트립이 설정 요약이 아니라 **룰셋 신원**을 보여준다.
+  const rules = page.locator(".as-ctx-rules");
+  await expect(rules).toContainText("RULES", { timeout: 30_000 });
+  return (await rules.innerText()).trim();
+}
+
+test("룰셋 왕복: 되돌린 런이 같은 룰셋 id·버전을 복원한다", async ({ page }) => {
+  const sink = trackErrors(page);
+  const RUN_NAME = uniqueRunName("룰셋 왕복 런");
+
+  await attachSnapshot(page);
+  await seedHoldings(page);
+  const identity = await saveRuleSet(page);
+  // 버전이 없으면 재현 좌표가 아니다 — 화면이 그 사실을 감추지 않는지도 함께 본다.
+  expect(identity, "룰셋 신원에 버전이 없다").toMatch(/v\d+|버전 미기록|확인 불가/);
+
+  await page.goto("/allocation/journal", { waitUntil: "domcontentloaded" });
+  const rec = page.locator(".as-rr-record");
+  await expect(rec).toBeVisible({ timeout: 20_000 });
+  await rec.locator("input.as-input").fill(RUN_NAME);
+  const saveBtn = rec.locator("button.as-fb-apply");
+  await expect(saveBtn).toBeEnabled({ timeout: 30_000 });
+  await saveBtn.click();
+  await expect(page.locator(".as-rr-item", { hasText: RUN_NAME })).toBeVisible({ timeout: 40_000 });
+
+  // ★새로고침★ — 여기부터 휘발성 메모리로는 통과할 수 없다
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  const target = page.locator(".as-rr-item", { hasText: RUN_NAME });
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  page.once("dialog", (d) => d.accept());
+  await target.locator(".as-rr-reopen").click();
+  await expect(target).toHaveClass(/active/, { timeout: 20_000 });
+
+  // 되돌린 뒤에도 **같은** 신원이어야 한다 — 현재 룰셋으로 대체되면 재현이 아니다.
+  await expect(page.locator(".as-ctx-rules")).toHaveText(identity, { timeout: 20_000 });
+
+  expect(uniq(sink.pageErrors), "uncaught page errors").toEqual([]);
+});
+
+test("룰셋 왕복: 사라진 버전은 현재 버전으로 대체되지 않고 '확인 불가'로 표시된다", async ({ page, request }) => {
+  // ★재현성 표시의 정직성 게이트★
+  // 런에 박힌 버전이 서버에서 사라졌을 때 화면이 현재 버전을 대신 보여주면, 사용자는 그 런이
+  // 재현됐다고 믿는다 — 실제로는 다른 규칙으로 계산된 결과를 보고 있다.
+  await saveRuleSet(page);
+
+  // 전체 id 는 title 속성에 있다(화면 표기는 앞 10자로 잘린다).
+  const title = await page.locator(".as-ctx-rules").getAttribute("title") ?? "";
+  const setId = title.match(/tr_[0-9a-z_]+/)?.[0];
+  expect(setId, `룰셋 id 를 title 에서 찾지 못했다: ${title}`).toBeTruthy();
+
+  // 서버에서 룰셋을 지운다 → 박힌 버전은 더 이상 해석되지 않는다.
+  const del = await request.delete(`/api/backend/api/v1/allocation/timing-rules/${setId}`);
+  expect(del.ok(), "룰셋 삭제가 실패하면 이 테스트는 아무것도 검증하지 못한다").toBeTruthy();
+
+  await page.reload({ waitUntil: "networkidle" });
+  const rules = page.locator(".as-ctx-rules");
+  await expect(rules).toContainText("RULES", { timeout: 20_000 });
+  await expect(rules, "사라진 버전을 그대로/현재 버전으로 보여주고 있다")
+    .toContainText("확인 불가", { timeout: 20_000 });
+});

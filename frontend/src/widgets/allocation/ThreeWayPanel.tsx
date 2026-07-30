@@ -19,6 +19,7 @@ import {
   allocationApi, type CanaryInput, type SignalStateValue,
   type ThreeWayLeg, type TimingRuleSpec,
 } from "@/entities/allocation/api";
+import { useAllocation } from "./AllocationProvider";
 
 const STATE_LABEL: Record<SignalStateValue, string> = {
   risk_on: "위험-온",
@@ -75,6 +76,9 @@ export function ThreeWayPanel({
 }) {
   const [overlayOn, setOverlayOn] = useState(true);
   const [combination, setCombination] = useState("continuous");
+  const { activeRuleSet, setActiveRuleSet } = useAllocation();
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   // 카탈로그가 팩터 id 의 단일 진실 — 프론트에 목록을 복제하지 않는다.
   const catQ = useQuery({
@@ -119,11 +123,49 @@ export function ThreeWayPanel({
   const legs = q.data?.legs;
   const ov = q.data?.overlay ?? null;
 
+  /**
+   * 지금 규칙을 **버전 있는 룰셋으로 고정**한다 — 그래야 이 판단이 나중에 재현된다.
+   * 저장 전까지 timingCfg 는 이 브라우저의 임시 상태일 뿐이고, 런에 박을 좌표가 없다.
+   */
+  const saveRules = async () => {
+    setSaving(true); setSaveErr(null);
+    const body = {
+      name: `타이밍 룰셋 ${new Date().toLocaleString("ko-KR")}`,
+      market, rules, gate: { combination, overlay_enabled: overlayOn },
+    };
+    try {
+      let r;
+      try {
+        r = await allocationApi.saveTimingRules({
+          ...body, set_id: activeRuleSet?.id ?? null,   // 있으면 갱신 → 버전이 올라간다
+        });
+      } catch (e) {
+        // 붙어 있던 룰셋이 서버에서 사라진 경우(삭제됨) — 여기서 막히면 사용자는 복구할 길이
+        // 없다. 새 룰셋으로 저장해 진행시키되, **조용히 하지 않고** 무슨 일이 있었는지 적는다.
+        if (!activeRuleSet || !/찾을 수 없습니다/.test((e as Error).message)) throw e;
+        r = await allocationApi.saveTimingRules({ ...body, set_id: null });
+        setSaveErr(`이전 룰셋(${activeRuleSet.id})이 서버에 없어 새 룰셋으로 저장했습니다 — `
+          + "이전 런들이 가리키던 버전은 여전히 복원되지 않습니다.");
+      }
+      // ★버전이 null 로 오면 null 로 둔다★ 1 로 채우면 재현 가능한 척하게 된다.
+      setActiveRuleSet({ id: r.set_id, version: r.version ?? null });
+    } catch (e) {
+      setSaveErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section className={`as-card as-3w${q.isFetching ? " as-loading" : ""}`}>
       <div className="as-card-title">
         3자 비교
         <span className="as-note-inline">기준 · 타이밍만 · 타이밍+매크로</span>
+        <button className="as-3w-save" disabled={saving || rules.length === 0}
+          onClick={saveRules}
+          title="현재 규칙을 버전 있는 룰셋으로 저장해 이 판단을 재현 가능하게 만듭니다">
+          {saving ? "저장 중…" : activeRuleSet ? "룰셋 갱신 (버전 +1)" : "룰셋으로 저장"}
+        </button>
         <label className="as-3w-toggle" title="매크로 국면 오버레이를 규칙과 독립적으로 끕니다">
           <input type="checkbox" checked={overlayOn}
             onChange={(e) => setOverlayOn(e.target.checked)} />
@@ -148,6 +190,7 @@ export function ThreeWayPanel({
           엔진의 평가 대상이 아니므로 이 비교에 섞지 않습니다.
         </div>
       )}
+      {saveErr && <div className="as-3w-save-err as-err">룰셋 저장 실패: {saveErr}</div>}
       {q.isError && (
         <div className="as-3w-err as-err">{(q.error as Error).message}</div>
       )}

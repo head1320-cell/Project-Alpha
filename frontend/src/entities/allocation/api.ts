@@ -54,6 +54,12 @@ export interface AnalyzeRequest {
   run_name?: string;
   /** 이 결정을 내릴 때 붙어 있던 매크로 국면 스냅샷 (Phase 4a — 서버가 런에 함께 스탬프) */
   regime_snapshot_id?: string | null;
+  /**
+   * 이 결정에 쓰인 타이밍 룰셋의 신원 (Phase 7 — 서버가 런에 함께 스탬프).
+   * 스냅샷과 짝을 이루는 재현 좌표다. 서버는 계산 **전에** 검증하고, 없는 조합이면 422 다.
+   */
+  timing_rule_set_id?: string | null;
+  timing_rule_set_version?: number | null;
 }
 
 export interface FrontierPoint {
@@ -633,17 +639,37 @@ export const allocationApi = {
   saveTimingRules: async (req: {
     name: string; market: string; rules: TimingRuleSpec[];
     gate?: Record<string, unknown>; notes?: string | null; set_id?: string | null;
-  }): Promise<{ set_id: string; rules: TimingRuleSpec[] }> => {
+    // version 은 저장된 버전. 버전 열이 없는 DB 에서는 null 로 온다 — 1 로 지어내지 않는다.
+  }): Promise<{ set_id: string; version: number | null; rules: TimingRuleSpec[] }> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/timing-rules`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
     });
-    if (!r.ok) throw new Error(`timing-rules save failed: ${r.status}`);
+    if (!r.ok) {
+      // 상태 코드만 던지면 "갱신할 룰셋이 없다"(고칠 수 있음)와 "저장소를 못 쓴다"(못 고침)가
+      // 호출자에게 같은 것으로 보인다 — 서버가 구별해 보낸 사유를 삼키지 않는다.
+      let why = `timing-rules save failed: ${r.status}`;
+      try { why = (await r.json()).detail || why; } catch { /* 본문이 JSON 이 아니면 상태만 */ }
+      throw new Error(why);
+    }
     return r.json();
   },
 
   listTimingRules: async (): Promise<{ sets: TimingRuleSet[] }> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/timing-rules`);
     if (!r.ok) throw new Error(`timing-rules list failed: ${r.status}`);
+    return r.json();
+  },
+
+  /**
+   * 룰셋 버전 이력. 런에 박힌 버전이 아직 실재하는지 확인하는 데 쓴다 —
+   * 없으면 현재 버전으로 대신 보여주지 말고 "확인 불가"라고 적어야 한다.
+   */
+  timingRuleVersions: async (setId: string): Promise<{
+    set_id: string; versions: { version: number; created_at: number; name: string }[];
+  }> => {
+    const r = await fetch(
+      `${API_BASE}/api/v1/allocation/timing-rules/${encodeURIComponent(setId)}/versions`);
+    if (!r.ok) throw new Error(`timing-rule versions failed: ${r.status}`);
     return r.json();
   },
 

@@ -1250,8 +1250,21 @@ def allocation_timing_rules_save(req: TimingRuleSetRequest):
         norm = [stamp_pit(rule_from_spec(r)).to_dict() for r in (req.rules or [])]
         sid = save_rule_set(req.name, req.market, norm, req.gate, req.notes, req.set_id)
         if sid is None:
+            # ★두 실패를 같은 말로 보고하지 않는다★
+            # `save_rule_set` 은 "갱신할 세트가 없다" 와 "저장소를 못 쓴다" 를 똑같이 None 으로
+            # 돌려준다. 둘 다 503("DB 를 쓸 수 없습니다")이라고 말하면, 세트가 삭제된 사용자는
+            # 고칠 수 있는 문제를 인프라 장애로 오해하고 그대로 막힌다.
+            if req.set_id:
+                raise HTTPException(
+                    422, f"갱신할 타이밍 룰셋을 찾을 수 없습니다: {req.set_id}. "
+                         "삭제되었을 수 있습니다 — 새 룰셋으로 저장하세요.")
             raise HTTPException(503, "규칙 저장소(DB)를 사용할 수 없습니다.")
-        return {"set_id": sid, "rules": norm}
+        # 저장된 버전을 함께 돌려준다 — 호출자가 재현 좌표(id + version)를 바로 들 수 있어야
+        # 한다. ★버전 열이 degraded 면 None 을 준다 — 1 로 지어내지 않는다★ 그러면 이후에
+        # 그 런이 어떤 룰로 계산됐는지 복원할 수 없는데도 복원 가능한 척하게 된다.
+        from src.data.timing_rules import get_rule_set
+        cur = get_rule_set(sid) or {}
+        return {"set_id": sid, "version": cur.get("version"), "rules": norm}
     except HTTPException:
         raise
     except Exception:
@@ -1267,6 +1280,19 @@ def allocation_timing_rules_list(limit: int = Query(50, ge=1, le=200)):
     except Exception:
         logger.exception("timing rule set 목록 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/timing-rules/{set_id}/versions")
+def allocation_timing_rule_versions(set_id: str):
+    """룰셋의 버전 이력 — 런에 박힌 버전이 **아직 실재하는지** 확인하는 용도.
+
+    ★없는 버전을 현재 버전으로 대신 보여주면 안 된다★
+    런은 계산 시점의 버전을 기록한다. 그 버전이 사라졌는데 화면이 현재 버전을 보여주면
+    사용자는 그 런이 재현됐다고 믿는다 — 실제로는 다른 규칙으로 계산된 결과를 보고 있다.
+    그래서 이 엔드포인트는 존재하는 버전만 돌려주고, 판단은 호출자가 한다.
+    """
+    from src.data.timing_rules import list_rule_set_versions
+    return {"set_id": set_id, "versions": list_rule_set_versions(set_id)}
 
 
 @router.delete("/timing-rules/{set_id}")

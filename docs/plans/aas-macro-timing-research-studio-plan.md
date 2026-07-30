@@ -478,6 +478,34 @@ strip already carries. The backend half is done: `timing_rule_sets.version`,
 than showing the current version under the old label — `get_rule_set_version` already returns `None`
 instead of falling back.
 
+#### 7c 실행 기록 — **done**
+
+계획은 "백엔드 절반은 끝났고 남은 건 ContextStrip + E2E" 라고 적었는데, **틀렸다.**
+`saveTimingRules()` 는 클라이언트에만 있고 **호출자가 없었다** — UI 에서 룰셋을 만들 방법이
+아예 없었으므로 `activeRuleSet` 은 런 재열기 말고는 채워질 길이 없었다. 그래서 이 단계는
+표시만이 아니라 **생산 경로**까지 만들어야 했다:
+
+- `ThreeWayPanel` 에 "룰셋으로 저장 / 갱신(버전 +1)" 액션. 저장 전 `timingCfg` 는 이 브라우저의
+  임시 상태일 뿐이고 런에 박을 좌표가 없다 — 컨텍스트 스트립도 그 둘을 다른 모양으로 적는다.
+- `POST /timing-rules` 가 **기록한 버전을 함께 반환**하도록 했다. id 만으로는 "어떤 룰이었는지"
+  를 지목할 수 없다(룰셋은 갱신되니까). 버전 열이 degraded 면 **None** 을 준다 — 1 로 지어내면
+  복원 불가능한데 복원 가능한 척하게 된다.
+- `GET /timing-rules/{set_id}/versions` — 스트립이 **박힌 버전이 아직 실재하는지** 확인한다.
+  이 확인이 없으면 삭제된 버전 번호를 그대로 그리게 되고, 그건 "재현됐다" 는 거짓 신호다.
+  확인이 끝나기 전에는 단정하지 않는다(로딩 중에 "미상" 이라 적으면 잘못된 경보다).
+
+세 가지 표시를 구분한다: `v3`(확인됨) · `v3 확인 불가`(서버에 없음) · `버전 미기록`(애초에
+버전이 없음). 셋을 한 모양으로 적으면 사용자는 구별할 수 없다.
+
+**게이트:** 룰셋 왕복(새로고침 후 되돌리기 → 같은 id·버전) + **사라진 버전이 현재 버전으로
+대체되지 않는지**. 후자는 저장된 룰셋을 API 로 삭제한 뒤 화면이 "확인 불가" 를 말하는지 본다 —
+이 분기를 테스트 없이 두면 정직성 주장이 코드 주석에만 남는다.
+
+**또 같은 픽스처 함정에 걸렸다.** `_has_version=False` 로 degraded DB 를 흉내 내려 했지만
+`_ensure()` 가 테이블을 version 열까지 새로 만들며 플래그를 True 로 되돌린다 —
+regime_snapshots 에서 겪은 것과 **같은 패턴**이다. 일반화하면: **초기화 함수가 다시 쓰는
+플래그는 픽스처가 미리 내려 봐야 소용없다.** 초기화 이후에 내려야 한다.
+
 ### Phase 8 — Factor catalogue breadth
 The remaining Phase-1 factors: relative momentum, breadth (incl. equal- vs cap-weight), realized
 vol / vol regime / target-vol sizing, drawdown + speed + recovery, rolling correlation, Korea set.
