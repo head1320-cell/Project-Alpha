@@ -76,6 +76,22 @@ export function StressScenarioModal({ open, onClose, selectedId, severity, onSev
       note={catQ.data?.note}
       applyLabel="이 시나리오로 검증 →"
       applyDisabled={!sel?.available}
+      comparison={sel ? {
+        // 적용된 시나리오가 없으면 null — "차이 없음"과 구별한다.
+        active: selectedId ? { "시나리오": selectedId, "강도": `${severity.toFixed(2)}×` } : null,
+        // 강도는 슬라이더가 즉시 반영하므로 초안과 적용본이 늘 같다 — diff 가 알아서 걸러낸다.
+        draft: { "시나리오": sel.id, "강도": `${severity.toFixed(2)}×` },
+      } : undefined}
+      presets={sel ? {
+        namespace: "stress-scenario",
+        draft: { severity },
+        onLoad: (p) => {
+          const it = flat.find((x) => x.id === p.itemId);
+          if (it) setSel(it);
+          const sv = p.payload.severity;
+          if (typeof sv === "number") onSeverity(sv);
+        },
+      } : undefined}
       onApply={() => { if (sel) { onPick(sel); onClose(); } }}
     >
       {sel && (

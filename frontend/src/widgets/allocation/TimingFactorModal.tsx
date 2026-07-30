@@ -71,10 +71,24 @@ function toCatalogueItem(f: TimingFactorMeta): CatalogueItem {
   };
 }
 
-export function TimingFactorModal({ open, onClose, onAdd }: {
+/** 카나리 하나를 비교용 라벨→값 맵으로. 셸은 도메인을 모르므로 표시 문자열까지 여기서 만든다. */
+function canaryFields(c: CanaryInput): Record<string, string> {
+  const out: Record<string, string> = {
+    "티커": c.id || "—",
+    "임계": String(c.threshold),
+    "방향": c.direction === "above" ? "이상" : "이하",
+    "리밸런싱": c.rebalance_or_holding_period || "month_end",
+  };
+  Object.entries(c.params ?? {}).forEach(([k, v]) => { out[`파라미터 ${k}`] = String(v); });
+  return out;
+}
+
+export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
   open: boolean;
   onClose: () => void;
   onAdd: (c: CanaryInput) => void;
+  /** 이미 담겨 있는 카나리들 — 초안 vs 적용본 비교(§8.1 요구 12)의 '적용본' 쪽. */
+  active?: CanaryInput[];
 }) {
   const catQ = useQuery({
     queryKey: ["allocation", "timing-factors"],
@@ -96,6 +110,11 @@ export function TimingFactorModal({ open, onClose, onAdd }: {
   useEffect(() => { if (!open) { setSel(null); setDraft(null); } }, [open]);
 
   const pick = (f: TimingFactorMeta) => { setSel(f); setDraft(canaryFromFactor(f)); };
+
+  // 같은 팩터가 이미 담겨 있으면 그것이 '적용본'. 없으면 null — "차이 없음"과 다른 사실이다.
+  const activeCanary = useMemo(
+    () => (sel ? active.find((c) => c.signal === sel.id) ?? null : null),
+    [active, sel]);
   const upd = (patch: Partial<CanaryInput>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const updParam = (k: string, v: number) =>
     setDraft((d) => (d ? { ...d, params: { ...(d.params || {}), [k]: v }, lookback: v } : d));
@@ -134,6 +153,20 @@ export function TimingFactorModal({ open, onClose, onAdd }: {
       loading={catQ.isLoading} error={catQ.isError}
       errorText="카탈로그를 불러오지 못했습니다."
       note={catQ.data?.note}
+      comparison={draft ? {
+        active: activeCanary ? canaryFields(activeCanary) : null,
+        draft: canaryFields(draft),
+      } : undefined}
+      presets={draft ? {
+        namespace: "timing-factor",
+        draft: draft as unknown as Record<string, unknown>,
+        onLoad: (p) => {
+          // 프리셋이 가리키는 팩터를 먼저 고른 뒤 설정을 되먹인다 — 다른 팩터에 남의 설정을
+          // 얹으면 파라미터 이름이 맞지 않는다.
+          const f = flat.find((x) => x.id === p.itemId);
+          if (f) { setSel(f); setDraft(p.payload as unknown as CanaryInput); }
+        },
+      } : undefined}
       applyLabel="이 팩터 추가 →"
       onApply={() => { if (draft && !sel?.requires_as_of) { onAdd(draft); onClose(); } }}
       applyDisabled={!draft || !!sel?.requires_as_of}

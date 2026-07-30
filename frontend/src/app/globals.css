@@ -4181,3 +4181,46 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px solid var(--t-accent); color: var(--t-accent); background: transparent;
   cursor: pointer; }
 .as-3w-save:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §36 카탈로그 셸 — 프리셋 + 초안/적용본 비교 (스펙 §8.1 요구 11·12, Phase 6d).
+   ★클래스명이 E2E 계약이다★ 바꾸면 catalogue-presets.spec.ts 도 함께 고칠 것.
+   ══════════════════════════════════════════════════════════════════════════ */
+.tfm-cmp, .tfm-preset { margin-top: 10px; padding: 8px 9px; border-radius: 7px;
+  border: 1px solid var(--t-border); background: var(--t-panel); }
+.tfm-cmp-h, .tfm-preset-h { font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--t-muted); margin-bottom: 6px; }
+
+.tfm-cmp-none, .tfm-cmp-same { font-size: 9.5px; line-height: 1.55; color: var(--t-muted); }
+.tfm-cmp-list { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: 3px; }
+.tfm-cmp-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px;
+  align-items: baseline; font-size: 10px; }
+.tfm-cmp-k { color: var(--t-muted); }
+/* 이전 값은 죽은 값이라는 걸 눈으로 알 수 있게 — 두 값이 같은 무게면 어느 쪽이 새것인지 모른다 */
+.tfm-cmp-from { color: var(--t-muted); text-decoration: line-through; }
+.tfm-cmp-arrow { color: var(--t-muted); }
+.tfm-cmp-to { color: var(--t-accent); font-weight: 700; }
+
+.tfm-preset-save { display: flex; gap: 5px; margin-bottom: 6px; }
+.tfm-preset-name { flex: 1; min-width: 0; font-size: 10px; padding: 4px 7px;
+  border: 1px solid var(--t-border); border-radius: 5px;
+  background: var(--t-bg); color: var(--t-text); }
+.tfm-preset-add { font-size: 9.5px; font-weight: 700; padding: 4px 10px; border-radius: 5px;
+  border: 1px solid var(--t-accent); color: var(--t-accent); background: transparent;
+  cursor: pointer; white-space: nowrap; }
+.tfm-preset-add:disabled { opacity: .45; cursor: not-allowed; }
+.tfm-preset-empty { font-size: 9.5px; color: var(--t-muted); }
+.tfm-preset-list { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: 2px; }
+.tfm-preset-row { display: flex; align-items: center; gap: 4px; }
+.tfm-preset-load { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px;
+  text-align: left; font-size: 10px; padding: 4px 7px; border-radius: 5px;
+  border: 1px solid transparent; background: transparent; color: var(--t-text);
+  cursor: pointer; }
+.tfm-preset-load:hover { border-color: var(--t-border); background: var(--t-bg); }
+.tfm-preset-item { font-size: 9px; color: var(--t-muted); }
+.tfm-preset-del { font-size: 12px; line-height: 1; padding: 2px 6px; border-radius: 5px;
+  border: 1px solid transparent; background: transparent; color: var(--t-muted); cursor: pointer; }
+.tfm-preset-del:hover { color: var(--color-bear); border-color: var(--t-border); }
+.tfm-preset-note { margin-top: 6px; font-size: 9px; line-height: 1.5; color: var(--t-muted); }

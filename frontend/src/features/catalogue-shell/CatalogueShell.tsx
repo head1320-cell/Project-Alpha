@@ -32,6 +32,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/shared/ui/shadcn/toggle-group";
 import { cn } from "@/shared/lib/cn";
+import {
+  deletePreset, listPresets, savePreset,
+  type CataloguePreset, type PresetNamespace,
+} from "./cataloguePresets";
 
 /** 좌측 목록 한 줄. 도메인 타입을 셸이 알지 않도록 최소 표면만 받는다. */
 export interface CatalogueItem {
@@ -96,6 +100,33 @@ export interface CatalogueShellProps {
   /** ── 선택적 슬롯 (Phase 6 은 비워 둔다 · 6b 가 채운다) ── */
   previewSlot?: React.ReactNode;
   frequencyWarningSlot?: React.ReactNode;
+
+  /** ── Phase 6d: 저장된 프리셋 (스펙 §8.1 요구 11) ──
+   *  창이 네임스페이스와 현재 draft 를 주면 셸이 저장/불러오기 UI 를 그린다.
+   *  주지 않으면 프리셋 줄 자체가 없다 — 쓸 수 없는 버튼을 보여 주지 않는다. */
+  presets?: {
+    namespace: PresetNamespace;
+    /** 지금 설정 — 저장 버튼이 이걸 담는다. */
+    draft: Record<string, unknown>;
+    /** 불러오기 — 창이 자기 draft 상태에 되먹인다. itemId 로 대상 항목도 함께 복원한다. */
+    onLoad: (preset: CataloguePreset) => void;
+  };
+
+  /** ── Phase 6d: 초안 vs 적용본 비교 (스펙 §8.1 요구 12) ──
+   *  라벨 → 값 맵. 셸은 도메인을 모르므로 **표시용 값**을 그대로 받아 다른 항목만 나열한다.
+   *  `active` 가 없으면 "아직 적용된 것이 없다" 는 뜻이며, 그 경우 비교가 아니라 그 사실을 적는다. */
+  comparison?: {
+    active: Record<string, string> | null;
+    draft: Record<string, string>;
+  };
+}
+
+/** 초안과 적용본에서 **달라진 항목만** 뽑는다. 같은 값을 나열하면 무엇이 바뀌었는지 묻힌다. */
+function diffFields(active: Record<string, string>, draft: Record<string, string>) {
+  const keys = Array.from(new Set([...Object.keys(active), ...Object.keys(draft)]));
+  return keys
+    .map((k) => ({ key: k, from: active[k] ?? "—", to: draft[k] ?? "—" }))
+    .filter((d) => d.from !== d.to);
 }
 
 /** 검색 매칭 — 라벨·설명·id·추가 문자열. 한글/영문 모두 소문자 비교. */
@@ -111,14 +142,23 @@ export function CatalogueShell(props: CatalogueShellProps) {
     families, family, onFamilyChange, items, allItems,
     selectedId, onSelect, activeId, loading, error, errorText, note,
     children, applyLabel, onApply, applyDisabled,
-    previewSlot, frequencyWarningSlot,
+    previewSlot, frequencyWarningSlot, presets, comparison,
   } = props;
 
   const [q, setQ] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { if (!open) setQ(""); }, [open]);
+  // 프리셋 목록은 localStorage 라 렌더 중에 읽지 않는다(SSR 불일치). 창이 열릴 때 한 번.
+  const [presetRows, setPresetRows] = useState<CataloguePreset[]>([]);
+  const [presetName, setPresetName] = useState("");
+  const ns = presets?.namespace;
+  const refreshPresets = React.useCallback(() => {
+    setPresetRows(ns ? listPresets(ns) : []);
+  }, [ns]);
+  useEffect(() => { if (open) refreshPresets(); }, [open, refreshPresets]);
+
+  useEffect(() => { if (!open) { setQ(""); setPresetName(""); } }, [open]);
 
   // Escape 로 닫기 — 기존 창들은 backdrop 클릭만 지원했다(스펙 §8.1: Escape close).
   useEffect(() => {
@@ -201,6 +241,79 @@ export function CatalogueShell(props: CatalogueShellProps) {
                 {/* 선택적 슬롯 — Phase 6 은 넘기지 않는다(6b 소관) */}
                 {previewSlot}
                 {frequencyWarningSlot}
+
+                {/* ── 초안 vs 적용본 (§8.1 요구 12) ── */}
+                {comparison && (
+                  <div className="tfm-cmp">
+                    <div className="tfm-cmp-h">초안 vs 적용본</div>
+                    {comparison.active === null ? (
+                      // ★비교 대상이 없다는 것과 "차이가 없다"는 다른 사실이다★
+                      <div className="tfm-cmp-none">
+                        아직 적용된 설정이 없습니다 — 비교할 대상이 없습니다(차이가 없는 것이 아닙니다).
+                      </div>
+                    ) : (() => {
+                      const rows = diffFields(comparison.active, comparison.draft);
+                      return rows.length === 0 ? (
+                        <div className="tfm-cmp-same">적용본과 같습니다 — 적용해도 바뀌는 것이 없습니다.</div>
+                      ) : (
+                        <ul className="tfm-cmp-list">
+                          {rows.map((d) => (
+                            <li key={d.key} className="tfm-cmp-row">
+                              <span className="tfm-cmp-k">{d.key}</span>
+                              <span className="tfm-cmp-from num">{d.from}</span>
+                              <span className="tfm-cmp-arrow">→</span>
+                              <span className="tfm-cmp-to num">{d.to}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* ── 저장된 프리셋 (§8.1 요구 11) ── */}
+                {presets && (
+                  <div className="tfm-preset">
+                    <div className="tfm-preset-h">프리셋</div>
+                    <div className="tfm-preset-save">
+                      <input className="tfm-preset-name" value={presetName}
+                        placeholder="이 설정에 이름을 붙여 저장"
+                        aria-label="프리셋 이름"
+                        onChange={(e) => setPresetName(e.target.value)} />
+                      <button className="tfm-preset-add" disabled={!selectedId}
+                        onClick={() => {
+                          savePreset(presets.namespace, presetName, selectedId!, presets.draft);
+                          setPresetName("");
+                          refreshPresets();
+                        }}>저장</button>
+                    </div>
+                    {presetRows.length === 0 ? (
+                      <div className="tfm-preset-empty">저장된 프리셋이 없습니다.</div>
+                    ) : (
+                      <ul className="tfm-preset-list">
+                        {presetRows.map((p) => (
+                          <li key={p.id} className="tfm-preset-row">
+                            <button className="tfm-preset-load"
+                              onClick={() => presets.onLoad(p)}>
+                              {p.name}
+                              <span className="tfm-preset-item num">{p.itemId}</span>
+                            </button>
+                            <button className="tfm-preset-del" aria-label={`${p.name} 삭제`}
+                              onClick={() => { deletePreset(presets.namespace, p.id); refreshPresets(); }}>
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {/* ★프리셋은 재현 좌표가 아니다★ 룰셋 버전과 혼동하면 안 된다. */}
+                    <div className="tfm-preset-note">
+                      프리셋은 이 브라우저에만 저장됩니다 — 런에 기록되지 않으므로 재현 좌표가
+                      아닙니다.
+                    </div>
+                  </div>
+                )}
+
                 <button className="as-fb-apply" disabled={applyDisabled} onClick={onApply}>
                   {applyLabel}
                 </button>

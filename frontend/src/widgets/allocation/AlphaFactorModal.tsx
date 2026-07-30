@@ -93,6 +93,23 @@ export function AlphaFactorModal({ open, onClose, expr, onApply }: {
       errorText="카탈로그를 불러오지 못했습니다."
       note={catQ.data?.note}
       applyLabel="표현식에 넣기 →"
+      comparison={sel ? {
+        // 빈 표현식은 "적용된 것이 없다" 이지 "빈 문자열이 적용됐다" 가 아니다.
+        active: expr.trim() ? { "표현식": expr } : null,
+        draft: { "표현식": preview },
+      } : undefined}
+      presets={sel ? {
+        namespace: "alpha-factor",
+        draft: { mode },
+        onLoad: (p) => {
+          const it = flat.find((x) => x.id === p.itemId);
+          if (it) setSel(it);
+          // 유효한 모드만 되먹인다. 목록을 손으로 적으면 모드가 늘 때 조용히 빠지므로
+          // MODE_LABEL(단일 출처)의 키로 검사한다.
+          const m = String(p.payload.mode ?? "");
+          if (m in MODE_LABEL) setMode(m as AlphaInsertMode);
+        },
+      } : undefined}
       onApply={() => { onApply(preview); onClose(); }}
     >
       {sel && (

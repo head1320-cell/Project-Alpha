@@ -18,8 +18,8 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 57 passed (was 33 at Phase 0; 53 before Phase 6b-2) |
-| pytest | 1193 passed, 10 skipped (was 1003 at Phase 0; 1171 before Phase 6b-2) |
+| Playwright | 70 passed 확인 (33 at Phase 0 · 64 before 7b) · 6d 로 77건으로 늘어남 |
+| pytest | 1247 passed, 10 skipped (1003 at Phase 0 · 1214 before 7b) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -47,10 +47,10 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ `18a77ff` |
 | 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | ✅ `2ff6570` `16bdca3` `b54a1a4` |
 | 6c | `FactorPickerModal` — E2E net + dialog contract (**Tailwind 전환 미완**) | UI | ⚠️ `8c608a2` `55ed5c2` `9421a1f` |
-| 6c-2 | 인라인 스타일 76개 → Tailwind (배치 단위 재시도 필요) | UI | |
-| 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
-| 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
-| 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | |
+| 6c-2 | 인라인 스타일 76개 → Tailwind (`style={{` 76→1) | UI | ✅ `dc8a286` |
+| 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | ✅ (이번 커밋) |
+| 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | ✅ `e6e05c1` `8ef491f` `e695ecc` |
+| 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | ✅ `8c8db18` |
 | 8 | Factor catalogue breadth | backend | |
 | 8b | Data-source extension (NFCI · VXVCLS) | backend | |
 | 9 | `ScenarioPackV2` | both | |
@@ -190,6 +190,23 @@ undetectable. Its two-step-wizard shape may warrant a shell variant rather than 
 Spec §8.1 requirements **11** (saved presets) and **12** (draft-vs-active comparison) exist in **none**
 of the four modals — they are net-new features, not migrations. Kept out of Phase 6 so its gate
 could stay "no capability lost". This phase owns them.
+
+**Shipped.** `features/catalogue-shell/cataloguePresets.ts` (네임스페이스 하나로 세 창이 공유하는
+localStorage 저장소) + 셸의 `presets`/`comparison` 프롭. 세 창(타이밍 팩터·스트레스 시나리오·
+알파 팩터)이 모두 채웠다. E2E 7건, 뮤테이션 프로브 3건 전부 잡힘.
+
+**두 개의 "같아 보이지만 다른 사실"을 구분한 것이 이 단계의 핵심이다.**
+- *비교 대상 없음* ≠ *차이 없음*. 처음 담는 팩터에 "적용본과 같습니다" 라고 말하면 사용자는
+  이미 담은 줄 안다. (타입이 먼저 막는다 — `active: Record | null` 이라 null 을 diff 에 넘기면
+  컴파일이 안 된다. 프로브로 확인했고, 그래서 문구 분기를 따로 검증했다.)
+- *프리셋* ≠ *룰셋 버전(7c)*. 프리셋은 이 브라우저에만 있고 어떤 런도 가리키지 않는다.
+  둘을 같은 말로 적으면 재현 가능하다고 오해한다 — 화면에 그대로 적었다.
+
+비교는 **바뀐 항목만** 나열한다. 전부 나열하면 무엇이 바뀌었는지 묻힌다(프로브 P1 이 이걸 잡는다).
+
+**AlphaFactorModal 의 모드 검증에서 실수 하나.** 프리셋을 되먹일 때 `add`/`replace` 만
+허용하도록 손으로 적었는데 실제 union 은 `add|sub|replace|wrap` 이라 두 모드가 조용히 버려졌다.
+`MODE_LABEL`(단일 출처)의 키로 검사하도록 고쳤다 — 목록을 손으로 복제하면 늘 때 빠진다.
 
 ### Phase 7 — `TimingRuleSetV2` + two PIT signals *(the deferred slice step)*
 Exactly **two** factors — one price-based (TSMOM, no revision problem) and one macro-based (curve

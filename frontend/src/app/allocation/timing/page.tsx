@@ -116,6 +116,7 @@ export default function TimingWorkspace() {
         </section>
 
         <TimingFactorModal open={pickerOpen} onClose={() => setPickerOpen(false)}
+          active={timingCfg.canaries}
           onAdd={(c) => setCfg({ canaries: [...timingCfg.canaries, c] })} />
 
         <section className="as-card">
