@@ -41,9 +41,9 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 3a | Macro→AAS bridge — builder + `from-current` | backend | ✅ `84d6180` |
 | 3b | Macro→AAS bridge — client · action · preview | **frontend** | ✅ `813cec2` |
 | 4 | Research Context + ResearchRun round-trip | frontend | ✅ `3afe2d8` `ac04674` +4c |
-| 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ (this commit) |
-| 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ (this commit) |
-| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ (this commit) |
+| 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ `8df9c7b` |
+| 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ `515cfb1` |
+| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
 | 6b | `TimingFactorModal` → shell + §8.1 items 4·13 | UI | |
 | 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
