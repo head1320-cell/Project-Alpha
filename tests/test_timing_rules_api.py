@@ -40,7 +40,10 @@ def _patch_timing(monkeypatch):
 def test_catalog_endpoint_shape():
     cat = allocation_timing_factors()
     assert {g["family"] for g in cat["groups"]} == {
-        "momentum", "deviation", "breakout", "overnight", "regime"}
+        "momentum", "deviation", "breakout", "overnight", "regime",
+        # Phase 8 — 브레드스·변동성·낙폭·상관. regime 에 몰아넣지 않은 이유는
+        # 그 패밀리가 잡동사니가 되면 패밀리 필터가 쓸모없어지기 때문이다.
+        "breadth", "volatility", "drawdown", "correlation"}
     ids = {f["id"] for g in cat["groups"] for f in g["factors"]}
     # 기존 4종 + 신규 팩터가 하나의 창에 통합됨
     assert {"score_13612", "abs_mom", "ma_month", "ma_day"} <= ids          # 기존 AAS 카나리

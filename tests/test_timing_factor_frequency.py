@@ -28,6 +28,17 @@ EXPECTED = {
     "defense_first": "month",       # 13612 스코어(월봉)
     "indicator": "day",             # VIXCLS·DGS10 등 일간 매크로 시리즈
     "curve_slope": "day",           # T10Y2Y 일간
+    # ── Phase 8 ──
+    "relative_momentum": "month",   # monthly_closes 2종
+    "breadth_above_ma": "day",      # daily_closes 바스켓
+    "equal_vs_cap": "month",        # monthly_closes 2종
+    "realized_vol": "day",          # daily_closes 수익률 표준편차
+    "vol_regime": "day",            # daily_closes 단기/장기
+    "target_vol_size": "day",       # realized_vol 파생
+    "drawdown": "day",              # daily_closes 고점 대비
+    "drawdown_speed": "day",        # daily_closes 창 비교
+    "recovery_state": "day",        # daily_closes 저점→고점
+    "rolling_correlation": "day",   # daily_closes_indexed 2종
 }
 
 

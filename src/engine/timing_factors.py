@@ -31,7 +31,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SIGNAL_FAMILIES = ("momentum", "deviation", "breakout", "overnight", "regime")
+SIGNAL_FAMILIES = ("momentum", "deviation", "breakout", "overnight", "regime",
+                   "breadth", "volatility", "drawdown", "correlation")
 
 
 # ── 공통 스키마 ───────────────────────────────────────────────────────────────
@@ -191,6 +192,225 @@ def defense_first(_ticker: str | None = None, market: str = "kr",
 
 # ── 카탈로그 ─────────────────────────────────────────────────────────────────
 # (id, 라벨, 패밀리, 기본파라미터, 단위/설명, 통과방향 기본, provenance)
+# ── Phase 8 신규 팩터 ─────────────────────────────────────────────────────────
+#
+# ★수치 안전이 이 절의 1급 요구사항이다★ (CLAUDE.md)
+# 로그·제곱근·나눗셈에 0 이나 음수가 들어갈 수 있는 자리를 전부 가드한다. 그리고 그 조건은
+# **실데이터에서만 나온다** — mock 시계열은 항상 양수·우상향이라 평평한 구간도, 0 분산도,
+# 0 이하 가격도 만들어 주지 않는다. 가드가 없으면 CI 는 영원히 초록이고 적자 국면에서 처음 터진다.
+
+#: 브레드스 기본 바스켓 — `_DEFENSE_BASKET` 선례를 따른다(카탈로그 기본값, 사용자 변경 가능).
+_BREADTH_BASKET = ("SPY", "QQQ", "IWM", "EFA", "EEM")
+#: 연율화 계수 — 일간 표준편차 → 연 %.
+_TRADING_DAYS_PER_YEAR = 252
+
+
+def _pct_returns(closes: list[float]) -> list[float]:
+    """단순 수익률. ★0 이하 가격은 건너뛴다★ — 로그도 나눗셈도 성립하지 않는다."""
+    out = []
+    for prev, cur in zip(closes, closes[1:]):
+        if prev is None or cur is None or prev <= 0 or cur <= 0:
+            continue
+        out.append(cur / prev - 1.0)
+    return out
+
+
+def _stdev(xs: list[float]) -> float | None:
+    if len(xs) < 2:
+        return None
+    mu = sum(xs) / len(xs)
+    var = sum((x - mu) ** 2 for x in xs) / (len(xs) - 1)
+    return var ** 0.5 if var > 0 else 0.0     # var 는 정의상 음수가 아니지만 부동소수 방어
+
+
+def relative_momentum(ticker: str, market: str = "kr", months: int = 12,
+                      benchmark: str = "AGG") -> float | None:
+    """상대 모멘텀 — 자산 N개월 수익률 − 벤치마크 N개월 수익률 (%p).
+
+    듀얼 모멘텀의 '상대' 절반. 절대 모멘텀(`abs_mom`)이 "오르고 있는가" 를 묻는다면 이쪽은
+    "무엇보다 더 오르고 있는가" 를 묻는다.
+    ★벤치마크를 못 읽으면 None★ — 자산 단독 수익률로 대체하면 그건 다른 팩터다.
+    """
+    from src.data.etf_prices import monthly_closes
+    from src.engine.tactical_allocations import _ret
+    a = _ret(monthly_closes(ticker, market, months + 2), months)
+    b = _ret(monthly_closes(benchmark, market, months + 2), months)
+    if a is None or b is None:
+        return None
+    return (a - b) * 100.0
+
+
+def breadth_above_ma(_ticker: str | None = None, market: str = "kr", days: int = 200,
+                     basket: tuple[str, ...] | list[str] | None = None) -> float | None:
+    """브레드스 — 바스켓 중 N일 이동평균을 웃도는 종목 비율(0~100%).
+
+    참여 폭이 넓을수록 위험-온. ★읽지 못한 종목은 '이탈' 로 세지 않는다★ —
+    결측과 하락은 다른 사실이고, 결측을 하락으로 세면 데이터 장애가 약세 신호로 둔갑한다.
+    """
+    from src.data.etf_prices import daily_closes
+    names = tuple(basket) if basket else _BREADTH_BASKET
+    hits, seen = 0, 0
+    for t in names:
+        c = daily_closes(t, market, days + 5)
+        if len(c) < days:
+            continue                       # 읽지 못했다 — 분모에서도 뺀다
+        ma = sum(c[-days:]) / days
+        if ma <= 0:
+            continue
+        seen += 1
+        if c[-1] > ma:
+            hits += 1
+    if seen == 0:
+        return None
+    return hits / seen * 100.0
+
+
+def equal_vs_cap(_ticker: str | None = None, market: str = "kr", months: int = 6,
+                 equal: str = "RSP", cap: str = "SPY") -> float | None:
+    """동일가중 − 시총가중 수익률 (%p). 양수면 상승이 소수 대형주에 쏠리지 않았다는 뜻.
+
+    ★국내 시장에는 매핑된 동일가중 ETF 가 없다★ market="kr" 에서 기본값 RSP 는 해석되지
+    않아 None 이 된다 — 지어내지 않고 정직하게 결측으로 둔다. 티커는 파라미터이므로
+    국내 동일가중 상품이 있으면 사용자가 지정할 수 있다.
+    """
+    from src.data.etf_prices import monthly_closes
+    from src.engine.tactical_allocations import _ret
+    e = _ret(monthly_closes(equal, market, months + 2), months)
+    c = _ret(monthly_closes(cap, market, months + 2), months)
+    if e is None or c is None:
+        return None
+    return (e - c) * 100.0
+
+
+def realized_vol(ticker: str, market: str = "kr", days: int = 20) -> float | None:
+    """실현 변동성 — 일간 수익률 표준편차의 연율화(%). 낮을수록 위험-온."""
+    from src.data.etf_prices import daily_closes
+    c = daily_closes(ticker, market, days + 5)
+    r = _pct_returns(c[-(days + 1):])
+    s = _stdev(r)
+    if s is None:
+        return None
+    return s * (_TRADING_DAYS_PER_YEAR ** 0.5) * 100.0
+
+
+def vol_regime(ticker: str, market: str = "kr", days: int = 20,
+               ref_days: int = 250) -> float | None:
+    """단기 변동성 ÷ 장기 기준 변동성. 1 미만이면 평소보다 조용한 국면(위험-온).
+
+    ★기준 변동성이 0 이면 None★ — 나눌 수 없다. 완전히 평평한 구간은 실데이터(거래정지·
+    상장 직후)에 실제로 존재하고, mock 에는 존재하지 않는다.
+    """
+    from src.data.etf_prices import daily_closes
+    c = daily_closes(ticker, market, ref_days + 5)
+    short = _stdev(_pct_returns(c[-(days + 1):]))
+    long = _stdev(_pct_returns(c[-(ref_days + 1):]))
+    if short is None or long is None or long <= 0:
+        return None
+    return short / long
+
+
+def target_vol_size(ticker: str, market: str = "kr", days: int = 20,
+                    target_vol: float = 10.0) -> float | None:
+    """목표변동성 사이징 — 목표 ÷ 실현, 0~1 로 클립한 **비중**(이진 신호가 아니다).
+
+    `avg_abs_momentum` 과 같은 연속 비중 계열. 시장이 완전히 잠잠하면(실현 0) 비율은 무한대가
+    되므로 **예외가 아니라 상한 1.0** 으로 자른다 — 레버리지는 이 팩터의 역할이 아니다.
+    """
+    rv = realized_vol(ticker, market, days)
+    if rv is None:
+        return None
+    if rv <= 0:
+        return 1.0                          # 무변동 → 상한(레버리지 없음)
+    return max(0.0, min(1.0, float(target_vol) / rv))
+
+
+def _peak_and_last(closes: list[float]) -> tuple[float, float] | None:
+    xs = [x for x in closes if x is not None and x > 0]
+    if len(xs) < 2:
+        return None
+    peak = max(xs)
+    return (peak, xs[-1]) if peak > 0 else None
+
+
+def drawdown(ticker: str, market: str = "kr", days: int = 250) -> float | None:
+    """현재 낙폭 — 구간 고점 대비 (%). 0 이면 신고가, 음수면 고점 아래.
+
+    임계보다 **위**(덜 깊은 낙폭)면 위험-온이므로 default_direction="above".
+    """
+    from src.data.etf_prices import daily_closes
+    pl = _peak_and_last(daily_closes(ticker, market, days))
+    if pl is None:
+        return None
+    peak, last = pl
+    return max(-100.0, (last / peak - 1.0) * 100.0)
+
+
+def drawdown_speed(ticker: str, market: str = "kr", days: int = 250,
+                   window: int = 20) -> float | None:
+    """낙폭 변화 속도 — 최근 window 일 동안 낙폭이 얼마나 더 깊어졌나(%p).
+
+    음수면 빠르게 무너지는 중. 같은 −10% 라도 1년에 걸친 것과 2주 만의 것은 다른 이야기다.
+    """
+    from src.data.etf_prices import daily_closes
+    c = daily_closes(ticker, market, days)
+    if len(c) < window + 2:
+        return None
+    now = _peak_and_last(c)
+    then = _peak_and_last(c[:-window])
+    if now is None or then is None:
+        return None
+    dd_now = (now[1] / now[0] - 1.0) * 100.0
+    dd_then = (then[1] / then[0] - 1.0) * 100.0
+    return dd_now - dd_then
+
+
+def recovery_state(ticker: str, market: str = "kr", days: int = 250) -> float | None:
+    """회복 정도 — 구간 저점에서 고점까지의 거리 중 현재까지 되찾은 비율(0~1).
+
+    1 이면 신고가 회복, 0 이면 저점. 낙폭의 깊이가 아니라 **회복 국면인지**를 본다.
+    """
+    from src.data.etf_prices import daily_closes
+    xs = [x for x in daily_closes(ticker, market, days) if x is not None and x > 0]
+    if len(xs) < 2:
+        return None
+    peak, trough, last = max(xs), min(xs), xs[-1]
+    span = peak - trough
+    if span <= 0:
+        return 1.0                          # 완전 평평 — 되찾을 낙폭 자체가 없다
+    return max(0.0, min(1.0, (last - trough) / span))
+
+
+def rolling_correlation(ticker: str, market: str = "kr", days: int = 60,
+                        benchmark: str = "TLT") -> float | None:
+    """롤링 상관 — 자산과 벤치마크 일간 수익률의 피어슨 상관(−1~1).
+
+    ★두 종목을 날짜로 맞춘 뒤 계산한다★
+    `daily_closes` 는 값만 주므로 꼬리를 zip 하면 서로 다른 거래일끼리 짝지어진다(한·미 휴장일
+    차이, 상장일 차이). 그래서 `daily_closes_indexed` 로 날짜를 받아 **겹치는 날짜만** 쓴다.
+    겹치는 구간이 창보다 짧으면 None — 짧은 표본으로 계산한 상관을 같은 값처럼 내보내지 않는다.
+
+    주식-채권 상관이 음수면 분산이 살아 있다는 뜻이라 위험-온 쪽(default_direction="below").
+    """
+    from src.data.etf_prices import daily_closes_indexed
+    a = dict(daily_closes_indexed(ticker, market, days * 2))
+    b = dict(daily_closes_indexed(benchmark, market, days * 2))
+    common = sorted(set(a) & set(b))
+    if len(common) < max(5, days // 2):
+        return None
+    ra = _pct_returns([a[d] for d in common])
+    rb = _pct_returns([b[d] for d in common])
+    n = min(len(ra), len(rb))
+    if n < 2:
+        return None
+    ra, rb = ra[-n:], rb[-n:]
+    ma, mb = sum(ra) / n, sum(rb) / n
+    sa, sb = _stdev(ra), _stdev(rb)
+    if not sa or not sb:
+        return None                         # 한쪽이 무변동 → 상관은 정의되지 않는다
+    cov = sum((x - ma) * (y - mb) for x, y in zip(ra, rb)) / (n - 1)
+    return max(-1.0, min(1.0, cov / (sa * sb)))
+
+
 CATALOG: list[dict[str, Any]] = [
     # ── momentum ──
     {"id": "score_13612", "label": "13612W 가속모멘텀", "family": "momentum",
@@ -274,6 +494,85 @@ CATALOG: list[dict[str, Any]] = [
      # ★as_of 가 필요한 팩터★ — evaluate(factor_id, ticker, market, params) 로는 시점을
      # 전달할 수 없다. timing_rules_v2.read_curve_slope(as_of) 를 써야 한다.
      "requires_as_of": True},
+    # ── Phase 8: 상대 모멘텀 ──
+    {"id": "relative_momentum", "label": "상대 모멘텀 (vs 벤치마크)", "family": "momentum",
+     "evaluation_frequency": "month",
+     "params": {"months": 12, "benchmark": "AGG"},
+     "default_threshold": 0.0, "default_direction": "above",
+     "unit": "pp", "desc": "자산 N개월 수익률 − 벤치마크 N개월 수익률(%p). 듀얼 모멘텀의 '상대' "
+                           "절반 — 절대 모멘텀이 '오르고 있는가'라면 이쪽은 '무엇보다 더 "
+                           "오르고 있는가'를 묻는다. 벤치마크를 못 읽으면 자산 단독 수익률로 "
+                           "대체하지 않고 unavailable.",
+     "provenance": "Antonacci (Dual Momentum — relative half)", "existing": False},
+    # ── Phase 8: 브레드스 ──
+    {"id": "breadth_above_ma", "label": "브레드스 (N일 이평 상회 비율)", "family": "breadth",
+     "evaluation_frequency": "day",
+     "params": {"days": 200}, "default_threshold": 50.0, "default_direction": "above",
+     "unit": "pct_0_100", "desc": "바스켓 중 N일 이동평균을 웃도는 종목 비율(%). 참여 폭이 "
+                                  "넓을수록 위험-온. ★읽지 못한 종목은 '이탈'로 세지 않는다★ — "
+                                  "결측을 하락으로 세면 데이터 장애가 약세 신호로 둔갑한다.",
+     "provenance": "generic (market breadth)", "existing": False},
+    {"id": "equal_vs_cap", "label": "동일가중 vs 시총가중", "family": "breadth",
+     "evaluation_frequency": "month",
+     "params": {"months": 6, "equal": "RSP", "cap": "SPY"},
+     "default_threshold": 0.0, "default_direction": "above",
+     "unit": "pp", "desc": "동일가중 − 시총가중 수익률(%p). 양수면 상승이 소수 대형주에 "
+                           "쏠리지 않았다는 뜻. ★국내에는 매핑된 동일가중 ETF가 없어 "
+                           "market=kr 기본값으로는 unavailable★ — 티커는 직접 지정 가능.",
+     "provenance": "generic (breadth via equal-weight spread)", "existing": False},
+    # ── Phase 8: 변동성 ──
+    {"id": "realized_vol", "label": "실현 변동성 (연율 %)", "family": "volatility",
+     "evaluation_frequency": "day",
+     "params": {"days": 20}, "default_threshold": 20.0, "default_direction": "below",
+     "unit": "pct_annual", "desc": "일간 수익률 표준편차의 연율화(%). 낮을수록 위험-온이라 "
+                                   "임계 **아래**가 통과. 0 이하 가격은 수익률 계산에서 제외.",
+     "provenance": "generic (realized volatility)", "existing": False},
+    {"id": "vol_regime", "label": "변동성 국면 (단기÷장기)", "family": "volatility",
+     "evaluation_frequency": "day",
+     "params": {"days": 20, "ref_days": 250},
+     "default_threshold": 1.0, "default_direction": "below",
+     "unit": "ratio", "desc": "단기 변동성 ÷ 장기 기준 변동성. 1 미만이면 평소보다 조용한 국면. "
+                              "기준 변동성이 0이면(거래정지·상장직후) 나눌 수 없으므로 unavailable.",
+     "provenance": "generic (volatility regime)", "existing": False},
+    {"id": "target_vol_size", "label": "목표변동성 사이징 (비중)", "family": "volatility",
+     "evaluation_frequency": "day",
+     "params": {"days": 20, "target_vol": 10.0},
+     "default_threshold": 0.5, "default_direction": "above",
+     "unit": "weight_0_1", "desc": "목표변동성 ÷ 실현변동성을 0~1로 자른 **비중**(이진 신호가 "
+                                   "아니다). 평균절대모멘텀과 같은 연속 비중 계열. 무변동 구간은 "
+                                   "무한대가 아니라 상한 1.0 — 레버리지는 이 팩터의 역할이 아니다.",
+     "provenance": "generic (volatility targeting)", "existing": False},
+    # ── Phase 8: 낙폭 ──
+    {"id": "drawdown", "label": "현재 낙폭 (고점 대비 %)", "family": "drawdown",
+     "evaluation_frequency": "day",
+     "params": {"days": 250}, "default_threshold": -10.0, "default_direction": "above",
+     "unit": "pct", "desc": "구간 고점 대비 현재 위치(%). 0이면 신고가, 음수면 고점 아래. "
+                            "임계보다 **위**(덜 깊은 낙폭)면 위험-온.",
+     "provenance": "generic (drawdown filter)", "existing": False},
+    {"id": "drawdown_speed", "label": "낙폭 속도 (최근 N일 변화 %p)", "family": "drawdown",
+     "evaluation_frequency": "day",
+     "params": {"days": 250, "window": 20},
+     "default_threshold": -5.0, "default_direction": "above",
+     "unit": "pp", "desc": "최근 window일 동안 낙폭이 얼마나 더 깊어졌나(%p). 음수면 빠르게 "
+                           "무너지는 중 — 같은 −10%라도 1년에 걸친 것과 2주 만의 것은 다르다.",
+     "provenance": "generic (drawdown velocity)", "existing": False},
+    {"id": "recovery_state", "label": "회복 정도 (저점→고점 중 되찾은 비율)", "family": "drawdown",
+     "evaluation_frequency": "day",
+     "params": {"days": 250}, "default_threshold": 0.9, "default_direction": "above",
+     "unit": "weight_0_1", "desc": "구간 저점에서 고점까지 중 현재까지 되찾은 비율(0~1). "
+                                   "낙폭의 깊이가 아니라 **회복 국면인지**를 본다.",
+     "provenance": "generic (recovery state)", "existing": False},
+    # ── Phase 8: 상관 ──
+    {"id": "rolling_correlation", "label": "롤링 상관 (vs 벤치마크)", "family": "correlation",
+     "evaluation_frequency": "day",
+     "params": {"days": 60, "benchmark": "TLT"},
+     "default_threshold": 0.0, "default_direction": "below",
+     "unit": "corr", "desc": "자산과 벤치마크 일간 수익률의 상관(−1~1). 주식-채권 상관이 "
+                             "음수면 분산이 살아 있다는 뜻이라 위험-온 쪽. ★두 종목을 "
+                             "**날짜로 맞춘 뒤** 겹치는 날짜만 사용★ — 값만 zip 하면 한·미 "
+                             "휴장일 차이로 다른 날짜끼리 짝지어진다. 벤치마크를 바꾸면 "
+                             "주식-채권/크로스에셋 어느 쪽이든 같은 팩터로 볼 수 있다.",
+     "provenance": "generic (rolling correlation)", "existing": False},
 ]
 
 CATALOG_BY_ID: dict[str, dict] = {c["id"]: c for c in CATALOG}
@@ -284,6 +583,12 @@ FAMILY_LABELS = {
     "breakout": "돌파",
     "overnight": "오버나이트",
     "regime": "국면 · 매크로",
+    # Phase 8 — 기존 5개 패밀리에 들어맞지 않는 팩터군. regime 에 몰아넣으면 그 패밀리가
+    # 15개짜리 잡동사니가 되어 필터가 쓸모없어진다.
+    "breadth": "브레드스 · 참여도",
+    "volatility": "변동성",
+    "drawdown": "낙폭 · 회복",
+    "correlation": "상관",
 }
 
 
@@ -338,6 +643,34 @@ def evaluate(factor_id: str, ticker: str, market: str = "kr",
             return overnight_return(ticker, market, int(p.get("days", 20)))
         if factor_id == "defense_first":
             return defense_first(None, market)
+        # ── Phase 8 ──
+        if factor_id == "relative_momentum":
+            return relative_momentum(ticker, market, int(p.get("months", 12)),
+                                     str(p.get("benchmark", "AGG")))
+        if factor_id == "breadth_above_ma":
+            return breadth_above_ma(None, market, int(p.get("days", 200)),
+                                    p.get("basket"))
+        if factor_id == "equal_vs_cap":
+            return equal_vs_cap(None, market, int(p.get("months", 6)),
+                                str(p.get("equal", "RSP")), str(p.get("cap", "SPY")))
+        if factor_id == "realized_vol":
+            return realized_vol(ticker, market, int(p.get("days", 20)))
+        if factor_id == "vol_regime":
+            return vol_regime(ticker, market, int(p.get("days", 20)),
+                              int(p.get("ref_days", 250)))
+        if factor_id == "target_vol_size":
+            return target_vol_size(ticker, market, int(p.get("days", 20)),
+                                   float(p.get("target_vol", 10.0)))
+        if factor_id == "drawdown":
+            return drawdown(ticker, market, int(p.get("days", 250)))
+        if factor_id == "drawdown_speed":
+            return drawdown_speed(ticker, market, int(p.get("days", 250)),
+                                  int(p.get("window", 20)))
+        if factor_id == "recovery_state":
+            return recovery_state(ticker, market, int(p.get("days", 250)))
+        if factor_id == "rolling_correlation":
+            return rolling_correlation(ticker, market, int(p.get("days", 60)),
+                                       str(p.get("benchmark", "TLT")))
         # 기존 프리미티브 위임
         from src.engine.tactical_allocations import (
             _above_ma_d,

@@ -20,7 +20,9 @@ test("AAS Timing: unified factor window lists all families and adds a new factor
   await page.locator(".as-fb-apply", { hasText: "팩터 창에서 추가" }).first().click();
   await expect(page.locator(".tfm")).toBeVisible();
   const fams = await page.locator(".tfm-fams button").allInnerTexts();
-  expect(fams.length, "5 signal families in one window").toBe(5);
+  // Phase 8 에서 breadth·volatility·drawdown·correlation 4개가 늘어 9개가 됐다.
+  // ★이 숫자는 백엔드 SIGNAL_FAMILIES 와 같이 움직인다★ 패밀리를 더하면 여기도 고칠 것.
+  expect(fams.length, "9 signal families in one window").toBe(9);
 
   // 검색 → 신규 팩터(이격도) 선택 → 파라미터 노출 → 추가
   await page.locator(".tfm-search").fill("이격");

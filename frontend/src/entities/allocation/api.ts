@@ -232,12 +232,22 @@ export interface FactorPortfolioResult {
 
 // ─── 카나리·마켓타이밍 ────────────────────────────────────────────────────────
 // 기존 4종 + 신규 팩터 — 백엔드 timing_factors.CATALOG와 동일 id 체계(통합 팩터 창)
-export type CanarySignalType =
-  | "abs_mom" | "score_13612" | "ma_month" | "ma_day" | "threshold"
-  | "avg_abs_momentum" | "accel_momentum" | "disparity" | "vol_breakout"
-  | "channel_breakout" | "overnight_return" | "defense_first" | "indicator";
+/**
+ * 팩터 id. ★백엔드 `timing_factors.CATALOG` 가 단일 레지스트리다★
+ *
+ * 예전에는 여기에 id 를 나열했는데, 그 목록은 **이미 어긋나 있었다**(`curve_slope` 누락).
+ * 게다가 `TimingFactorModal` 이 `f.id as CanarySignalType` 로 캐스팅하고 있어서 경계에서
+ * 강제되지도 않았다 — 즉 두 번째 진실만 만들고 검사는 하지 않는 상태였다. CLAUDE.md 의
+ * "개수는 세지 말고 레지스트리를 읽으세요" 를 그대로 적용해 목록을 두지 않는다.
+ * 유효성은 백엔드가 판정한다(카탈로그에 없는 id 는 `read_factor` 가 unavailable + 사유).
+ */
+export type CanarySignalType = string;
 
-export type TimingFamily = "momentum" | "deviation" | "breakout" | "overnight" | "regime";
+export type TimingFamily =
+  | "momentum" | "deviation" | "breakout" | "overnight" | "regime"
+  // Phase 8 — 기존 5개에 들어맞지 않는 팩터군. regime 에 몰아넣으면 그 패밀리가
+  // 잡동사니가 되어 패밀리 필터가 쓸모없어진다.
+  | "breadth" | "volatility" | "drawdown" | "correlation";
 
 export interface TimingFactorMeta {
   id: string;
