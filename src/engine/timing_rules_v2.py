@@ -46,7 +46,8 @@ from src.engine.timing_factors import CATALOG_BY_ID, evaluate
 COMBINATION_METHODS: tuple[str, ...] = (
     "all", "any", "k_of_n", "weighted", "regime_conditioned", "continuous",
 )
-_IMPLEMENTED: frozenset[str] = frozenset({"all", "any", "k_of_n", "weighted", "continuous"})
+_IMPLEMENTED: frozenset[str] = frozenset(
+    {"all", "any", "k_of_n", "weighted", "continuous", "regime_conditioned"})
 
 
 class NotYetImplementedError(NotImplementedError):
@@ -152,6 +153,7 @@ def combine(
     method: str = "all",
     k: int = 1,
     weights: list[float] | None = None,
+    overlay: Any = None,
 ) -> CompositeSignal:
     """여러 팩터 상태 → 하나의 복합 신호.
 
@@ -163,10 +165,13 @@ def combine(
         raise ValueError(
             f"알 수 없는 조합 방식: {method!r}. 가능한 값: {', '.join(COMBINATION_METHODS)}"
         )
-    if method == "regime_conditioned":
-        raise NotYetImplementedError(
-            "regime_conditioned 는 매크로 오버레이 시맨틱이 필요합니다 — Phase 7b 에서 옵니다. "
-            "다른 방식으로 대치하지 않습니다(요청하지 않은 조합으로 판단이 내려지면 안 되므로)."
+    # regime_conditioned 는 Phase 7b 에서 구현됐다. 다만 **매크로 없이는 성립하지 않는다** —
+    # 오버레이가 없으면 조용히 다른 방식으로 대치하지 말고 거부한다.
+    if method == "regime_conditioned" and overlay is None:
+        raise ValueError(
+            "regime_conditioned 는 매크로 오버레이(overlay=)가 필요합니다. "
+            "오버레이 없이 다른 방식으로 대치하지 않습니다 — 요청하지 않은 조합으로 판단이 "
+            "내려지면 안 되기 때문입니다."
         )
     if method not in _IMPLEMENTED:      # 방어 — 위 두 검사를 지나쳤다면 목록이 어긋난 것
         raise NotYetImplementedError(f"{method} 는 아직 구현되지 않았습니다.")
@@ -208,7 +213,7 @@ def combine(
         frac = on_w / total
         state = SignalState.RISK_ON if frac > 0.5 else SignalState.RISK_OFF
         exposure = max(0.0, min(1.0, frac))
-    else:  # continuous
+    else:  # continuous · regime_conditioned (둘 다 비례 노출을 기반으로 한다)
         frac = on / n           # 결측은 분자에 들어가지 않는다 → 노출을 키우지 못한다
         exposure = max(0.0, min(1.0, frac))
         state = SignalState.RISK_ON if frac > 0.0 else SignalState.RISK_OFF
@@ -218,8 +223,28 @@ def combine(
         return CompositeSignal(SignalState.RISK_OFF, 0.0, method, on, off, unavailable,
                                _explain("위험-오프(전부 결측 — 보수적 폴백)"))
 
+    verdict = "위험-온" if state is SignalState.RISK_ON else "위험-오프"
+    note = ""
+
+    # ── 매크로 오버레이 (Phase 7b) ───────────────────────────────────────────
+    # ★조정이지 대체가 아니다★ 노출 상한을 곱해 **줄이기만** 한다. 상한이 1 을 넘지 않으므로
+    # 오버레이가 노출을 키우는 일은 산술적으로 불가능하다. 타이밍이 위험-오프면 그대로 오프다.
+    if overlay is not None and getattr(overlay, "active", False):
+        cap = float(overlay.exposure_cap())
+        if cap < exposure:
+            exposure = cap
+            note = (f" · 매크로 오버레이('{overlay.regime}' {overlay.recommended_mode}, "
+                    f"신뢰도 {overlay.confidence:.2f} · 스트레스 {overlay.stress_score:.2f})가 "
+                    f"노출을 {cap:.2f} 로 제한")
+        else:
+            note = (f" · 매크로 오버레이('{overlay.regime}')는 이 판단을 더 보수적으로 "
+                    f"만들지 않았다(상한 {cap:.2f})")
+        if exposure <= 0.0:
+            state = SignalState.RISK_OFF
+            verdict = "위험-오프"
+
     return CompositeSignal(state, exposure, method, on, folded_off - unavailable, unavailable,
-                           _explain("위험-온" if state is SignalState.RISK_ON else "위험-오프"))
+                           _explain(verdict) + note)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

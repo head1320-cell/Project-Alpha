@@ -136,14 +136,24 @@ def test_exposure_is_bounded_for_every_method():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 4. regime_conditioned — 조용히 대지하지 않고 **명시적으로 거부** (Drift D7-2)
+# 4. regime_conditioned — Phase 7b 에서 구현됐다. 가드는 걷혔고, 거부 조건이 바뀌었다.
+#    (Phase 7 에서는 "7b 에서 온다" 며 거부했다 — 그 테스트를 여기서 함께 갱신한다.
+#     능력이 생긴 커밋에서 가드와 그 테스트가 같이 사라져야 기록이 어긋나지 않는다.)
 # ═══════════════════════════════════════════════════════════════════════════════
-def test_regime_conditioned_is_declared_but_rejected():
+def test_regime_conditioned_is_declared_and_now_implemented():
     assert "regime_conditioned" in v2.COMBINATION_METHODS, "스펙에 있는 방식을 enum 에서 빼면 안 된다"
-    with pytest.raises(v2.NotYetImplementedError) as ei:
+    assert "regime_conditioned" in v2._IMPLEMENTED
+
+
+def test_regime_conditioned_still_refuses_without_a_macro_overlay():
+    """★매크로 없이 매크로 조건부 조합은 성립하지 않는다★ 다른 방식으로 대치하지 않는다.
+
+    거부 자체는 Phase 7 과 같은 정신이다 — 요청하지 않은 조합으로 판단이 내려지면 안 된다.
+    달라진 것은 사유뿐이다: "아직 구현 안 됨" → "오버레이가 없음".
+    """
+    with pytest.raises(ValueError) as ei:
         v2.combine([SignalState.RISK_ON], method="regime_conditioned")
-    msg = str(ei.value)
-    assert "7b" in msg, "어느 단계에서 오는지 알려 줘야 한다"
+    assert "오버레이" in str(ei.value)
 
 
 def test_unknown_method_is_rejected_not_defaulted():
