@@ -401,6 +401,23 @@ Built on shadcn `Dialog`/`Sheet`, `Command`, `Tabs`, `ScrollArea`, `Tooltip`, `B
 labels, responsive layout, KO/EN search, parameter validation, saved presets, draft-vs-active
 comparison, and a warning when factor sampling frequency conflicts with rebalance frequency.
 
+> **Ownership map (Phase 6, `features/catalogue-shell/CatalogueShell.tsx`).** The shell shipped with
+> the two AAS modals; the rest is re-homed in writing so nothing is silently dropped:
+>
+> | Requirement | Owner | Note |
+> |---|---|---|
+> | three-pane layout · search · families · badges · config · lineage/limitations · keyboard · focus trap · Escape · ARIA · responsive · KO/EN search · validation | **Phase 6** | `.tfm-*` classes preserved, so both existing specs pass with **zero selector edits** |
+> | historical preview (value / threshold / **signal state** / # state changes) | **Phase 6b** | needs `SignalState` from Phase 7; meaningless for scenario/alpha. Shell exposes `previewSlot`, left unfilled — placeholder states rejected on the honesty rule |
+> | frequency-conflict warning | **Phase 6b** | needs `evaluation_frequency` + rebalance alignment (Phase 7). Shell exposes `frequencyWarningSlot` |
+> | saved presets · draft-vs-active comparison | **Phase 6d** | net-new features, absent from all four modals — kept out so Phase 6's gate stayed "no capability lost" |
+> | `FactorPickerModal` migration | **Phase 6c** | 477 lines, 76 inline styles, **zero E2E**, two consumers (Backtester + Screener). E2E coverage lands first |
+>
+> **Primitives:** only `ToggleGroup` was added. `Tooltip` was **deliberately not** adopted — both
+> modals use `title=` zero times, putting unavailability reasons in the list row instead; that is an
+> existing honesty design, and a tooltip would hide what is currently visible.
+> `Select`/`Slider` stayed native (already accessible); `Command`/`Sheet`/`ScrollArea` are unused by
+> these two and are built when a phase needs them.
+
 ---
 
 ## 9. Acceptance criteria

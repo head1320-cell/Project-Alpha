@@ -18,7 +18,7 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 42 passed (was 33 at Phase 0) |
+| Playwright | 50 passed (was 33 at Phase 0) |
 | pytest | 1061 passed, 10 skipped (was 1003 at Phase 0) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
@@ -42,9 +42,11 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 3b | Macro→AAS bridge — client · action · preview | **frontend** | ✅ `813cec2` |
 | 4 | Research Context + ResearchRun round-trip | frontend | ✅ `3afe2d8` `ac04674` +4c |
 | 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ (this commit) |
-| 6 | Catalogue shell — 3 of 4 modals | **UI** | next |
-| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | |
-| 6b | `TimingFactorModal` → shell (deferred 4th) | UI | |
+| 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ (this commit) |
+| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | next |
+| 6b | `TimingFactorModal` → shell + §8.1 items 4·13 | UI | |
+| 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
+| 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
 | 7b | **Macro overlay semantics** (restored) | both | |
 | 8 | Factor catalogue breadth | backend | |
 | 8b | Data-source extension (NFCI · VXVCLS) | backend | |
@@ -145,16 +147,46 @@ additions; **42/42 E2E**; no legacy visual diff.
 `403 CONNECT` 로 거부한다(패키지 레지스트리만 허용). 프리미티브는 shadcn 공개 구조대로
 손으로 작성했고 `components.json` 은 유지했다(ADR 001 결정 3 각주 참조).
 
-### Phase 6 — Unified catalogue shell *(largest UI risk)*
-One shadcn three-pane shell replaces the duplicate modals.
+### Phase 6 — Unified catalogue shell *(largest UI risk)* — **done**
+`features/catalogue-shell/CatalogueShell.tsx` replaces the shared skeleton of the two AAS modals.
 
-**Migrate three now, defer one.** `StressScenarioModal`, `AlphaFactorModal`, and Backtester
-`FactorPickerModal` move to the shell in this phase. **`TimingFactorModal` does not** — Phase 7
-reshapes the timing model underneath it, and migrating first would mean rebuilding the same window
-twice. It follows immediately after Phase 7 as **6b**.
-**Gate:** `.tfm-*` / `.as-*` selector updates land **atomically** with the component change;
-`stage-windows.spec.ts` updated in the same commit; keyboard/focus/mobile tests added.
-Not combined with any backend phase.
+**Scope narrowed from three modals to two (drift D6-1).** `StressScenarioModal` (126→108) and
+`AlphaFactorModal` (140→127) migrated. **`FactorPickerModal` moved to 6c** — measurement showed it
+is the *riskiest*, not the safest: 477 lines, 76 inline styles, **zero E2E coverage**, and **two**
+consumers (`FormulaBuilder` **and** Screener's `TerminalScreener`, 694 lines), with a two-step
+wizard shape that the three-pane spec does not describe. `TimingFactorModal` stays deferred to 6b.
+
+**`.tfm-*` classes were preserved rather than renamed.** So `stage-windows.spec.ts` and
+`timing-factors.spec.ts` both pass **with zero selector edits** — that is the "no capability lost"
+proof, stronger than updating assertions to match new markup.
+
+**Primitives built: only `ToggleGroup`** (drift D6-3). Deliberately *not* added:
+`Tooltip` (both modals use `title=` **zero** times — reasons go in the list row on purpose, an
+existing honesty design), `Select`/`Slider` (native elements already accessible),
+`Command`/`Sheet`/`ScrollArea` (not needed by these two).
+
+**New capabilities:** Escape-to-close (previously backdrop-click only), arrow-key roving focus on
+the family filter, `role=dialog`/`aria-modal`/`listbox`/`option`/`aria-selected`, mobile viewport
+reachability. 5 new tests.
+
+**Bundle note (honest):** `/allocation/alphalab` +17 kB, `/allocation/stress` +16 kB — **above the
+ADR's 15 kB line, but with a clear and quantified cause**: these routes previously imported *zero*
+Radix and now pull 16 packages (Dialog's 10 shared + ToggleGroup's 6 unique: toggle-group,
+direction, roving-focus, collection, use-is-hydrated, toggle). Shared chunk unchanged at 87.3 kB.
+If that cost is judged too high, the alternative is a hand-rolled roving tabindex (~20 lines, 0 kB)
+— but that contradicts ADR §2.2's stated rationale for adopting shadcn ("behaviour and
+accessibility … keyboard navigation").
+
+### Phase 6c — `FactorPickerModal` → catalogue shell *(re-homed from Phase 6, drift D6-1)*
+**E2E coverage first**, then migrate. It has none today, and it is consumed by both Backtester
+(`FormulaBuilder.tsx:152`) and Screener (`TerminalScreener.tsx:691`) — a silent regression in
+nested functions or two-factor operands (`TWO_FACTOR_IDS = cmp/gt/lt/pctf`) is otherwise
+undetectable. Its two-step-wizard shape may warrant a shell variant rather than the three-pane form.
+
+### Phase 6d — catalogue shell: presets + draft-vs-active comparison *(re-homed, drift D6-4)*
+Spec §8.1 requirements **11** (saved presets) and **12** (draft-vs-active comparison) exist in **none**
+of the four modals — they are net-new features, not migrations. Kept out of Phase 6 so its gate
+could stay "no capability lost". This phase owns them.
 
 ### Phase 7 — `TimingRuleSetV2` + two PIT signals *(the deferred slice step)*
 Exactly **two** factors — one price-based (TSMOM, no revision problem) and one macro-based (curve
@@ -171,6 +203,12 @@ said so on screen.
 
 ### Phase 6b — `TimingFactorModal` → catalogue shell
 The deferred fourth modal, once its underlying model is stable.
+**Also owns spec §8.1 requirements 4 and 13** *(re-homed from Phase 6, drift D6-2)*: the right-pane
+historical preview (value / threshold / **signal state** / # state changes) and the **factor-sampling
+vs rebalance frequency conflict warning**. Both need `SignalState` and `evaluation_frequency` from
+Phase 7's `TimingRuleSetV2`, and "signal state" is meaningless for a scenario or alpha catalogue.
+`CatalogueShell` already exposes them as **optional slots** (`previewSlot`, `frequencyWarningSlot`)
+that Phase 6 leaves unfilled — filling them with placeholder states was rejected on the honesty rule.
 **Gate:** `timing-factors.spec.ts` updated atomically.
 
 ### Phase 7b — Macro overlay semantics *(restored — was missing from this plan)*
