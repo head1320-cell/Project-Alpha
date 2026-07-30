@@ -12,6 +12,10 @@ import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type TokenSupportMap } from "@/entities/backtest/bridgeModel";
 import { TONES, type Tone } from "@/shared/ui/kit";
+// clsx 만 쓴다 — 공용 `cn` 은 tailwind-merge 를 함께 끌어와 이 두 라우트에 +7 kB 를 더한다.
+// 여기서는 **충돌하는 유틸리티를 합칠 일이 없다**(모든 클래스 문자열이 이 파일 안에서 조건부로
+// 이어붙기만 한다). 그래서 머지 기능에 값을 지불하지 않는다.
+import { clsx } from "clsx";
 
 // 지원 맵 모듈 캐시 — 백엔드(/condition-tokens)가 단일 진실 공급원.
 // 로드 실패 시 null → 배지 없이 기존 동작 (오프라인 데모 호환).
@@ -39,8 +43,27 @@ export interface FactorPick {
 // 두 번째 피연산자를 팩터로 받을 수 있는 함수 (변화율_팩터는 팩터 필수)
 const TWO_FACTOR_IDS = new Set(["cmp", "gt", "lt", "pctf"]);
 
-const R = "var(--bs-border-radius)";
-const RL = "var(--bs-border-radius-lg)";
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tailwind 전환 (ADR 001 결정 5 — Backtester 공용 컴포넌트 차례)
+// 인라인 스타일 76개를 걷어낸다. ADR 이 금지한 CSS-in-JS 가 바로 이것이고, 토큰의 단일
+// 진실은 계속 CSS 변수다 — Tailwind 임의값으로 **참조**만 하고 병렬 팔레트를 만들지 않는다.
+//
+// ★tone 은 CSS 변수로 넘긴다★ Tailwind 는 빌드 타임에 클래스를 뽑으므로 런타임 값을
+// 클래스에 끼울 수 없다. 루트에 `--fp-*` 세 개를 **대입**하고(스타일링이 아니라 변수 선언 —
+// shadcn 방식) 하위는 `bg-[var(--fp-accent)]` 로 참조한다. 하위 컴포넌트는 tone prop 없이
+// 상속만으로 색을 얻으므로 시그니처도 단순해진다.
+// ═══════════════════════════════════════════════════════════════════════════════
+const RND = "rounded-[var(--bs-border-radius)]";
+/** 셀렉트·텍스트 입력 공통 — 같은 스타일 객체가 6회 반복되고 있었다 */
+const FIELD = `text-[13px] px-2 py-1.5 border border-[var(--border-strong)] ${RND} bg-[var(--bg-card)] text-[var(--text-primary)]`;
+/** 숫자 입력 — 고정폭 + 모노 */
+const NUMFIELD = `font-mono text-[13px] w-[90px] px-2.5 py-1.5 border border-[var(--border-strong)] ${RND} bg-[var(--bg-card)] text-[var(--text-primary)]`;
+const PLABEL = "text-[11px] text-[var(--text-secondary)]";
+const PANEL = `border border-[var(--border)] ${RND}`;
+const TWOCOL = "grid grid-cols-[200px_minmax(0,1fr)] gap-[13px] items-stretch";
+const PRIMARY = `flex items-center justify-center gap-[5px] text-[14px] text-white bg-[var(--fp-accent)] border-none ${RND} py-[11px] cursor-pointer`;
+const ROW = "w-full text-left border-none cursor-pointer text-[13px] px-3 py-[5px] rounded-md";
+const BADGE = "text-[9px] text-[var(--text-muted)] border border-[var(--border)] rounded px-1";
 
 const baseToken = (f: GpFactor) => (/^\{[^{}]+\}$/.test(f.expr) ? f.expr : `{${f.name}}`);
 // 팩터 → 백엔드 토큰(지원 판정·평가). Butler 표시명은 토큰과 다를 수 있으므로 토큰으로 판정.
@@ -176,6 +199,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
     <div
       onClick={onClose}
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-[18px]"
+      // ★유일하게 남는 style — 색 대입이 아니라 CSS 변수 선언이다★
+      style={{
+        "--fp-accent": accent.accent,
+        "--fp-bg": accent.bg,
+        "--fp-text": accent.text,
+      } as React.CSSProperties}
     >
       {/* ★대화상자 계약★ — CatalogueShell 이 세 창에 준 것과 같은 수준을 여기에도 맞춘다.
           이 창은 role 도 aria-modal 도 Escape 도 없었다(backdrop 클릭만 닫힘). 그러면
@@ -183,34 +212,34 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
           (`[role="dialog"][aria-modal="true"]`)도 적용되지 않아 화살표 키에 창이 날아간다. */}
       <div onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label="팩터 선택"
-        style={{ width: "100%", maxWidth: 600, maxHeight: "82vh", overflow: "auto", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: "18px 18px 16px", boxShadow: "var(--bs-box-shadow)" }}>
+        className="w-full max-w-[600px] max-h-[82vh] overflow-auto bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--bs-border-radius-lg)] px-[18px] pt-[18px] pb-4 shadow-[var(--bs-box-shadow)]">
 
         {/* breadcrumb */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center gap-[7px]">
             <Crumb active={step === "factor"} onClick={() => setStep("factor")}>STEP1 팩터 선택</Crumb>
-            <ChevronRight size={14} style={{ color: "var(--text-muted)" }} />
+            <ChevronRight size={14} className="text-[var(--text-muted)]" />
             <Crumb active={step === "function"} disabled={!factor} onClick={() => factor && setStep("function")}>STEP2 함수 선택</Crumb>
           </div>
-          <button type="button" onClick={onClose} aria-label="닫기" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="닫기" className="bg-none border-none cursor-pointer text-[var(--text-muted)] flex"><X size={16} /></button>
         </div>
 
         {step === "factor" ? (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border-strong)", borderRadius: R, padding: "8px 11px", marginBottom: 14 }}>
-              <Search size={15} style={{ color: "var(--text-muted)" }} />
+            <div className={clsx("flex items-center gap-2 border border-[var(--border-strong)] px-[11px] py-2 mb-3.5", RND)}>
+              <Search size={15} className="text-[var(--text-muted)]" />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="조건을 단어로 입력하세요"
                 autoFocus aria-label="조건을 단어로 입력하세요"
-                style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: "var(--text-primary)" }} />
+                className="flex-1 border-none outline-none bg-transparent text-[13px] text-[var(--text-primary)]" />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "200px minmax(0,1fr)", gap: 13, alignItems: "stretch" }}>
+            <div className={TWOCOL}>
               {/* left: category + factor list (or search results) */}
-              <div style={{ border: "1px solid var(--border)", borderRadius: R, padding: 7, maxHeight: 320, overflow: "auto", display: "flex", flexDirection: "column", gap: 1 }}>
+              <div className={clsx(PANEL, "p-[7px] max-h-[320px] overflow-auto flex flex-col gap-px")}>
                 {query ? (
                   results.length ? results.map(({ catLabel, f }, i) => (
-                    <FactorRow key={catLabel + f.name + i} f={f} active={factor?.name === f.name && factor?.expr === f.expr} tone={tone} sub={catLabel} info={supportInfo(tokenOf(f))} onClick={() => setFactor(f)} />
-                  )) : <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 9px" }}>검색 결과가 없습니다</div>
+                    <FactorRow key={catLabel + f.name + i} f={f} active={factor?.name === f.name && factor?.expr === f.expr} sub={catLabel} info={supportInfo(tokenOf(f))} onClick={() => setFactor(f)} />
+                  )) : <div className="text-xs text-[var(--text-muted)] px-[9px] py-2">검색 결과가 없습니다</div>
                 ) : (
                   BUTLER_CATEGORIES.map((c) => {
                     const flat = c.groups.flatMap((g) => g.factors);
@@ -218,19 +247,20 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                     return (
                       <div key={c.id}>
                         <button type="button" onClick={() => setOpenCat(openCat === c.id ? "" : c.id)}
-                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: openCat === c.id ? accent.text : "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "7px 9px", textAlign: "left" }}>
-                          {openCat === c.id && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent.accent }} />}
-                          <span style={{ flex: 1 }}>{c.label}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{support ? `${okN}/${flat.length}` : flat.length}</span>
+                          className={clsx("w-full flex items-center gap-1.5 text-[13px] bg-none border-none cursor-pointer px-[9px] py-[7px] text-left",
+                            openCat === c.id ? "text-[var(--fp-text)]" : "text-[var(--text-secondary)]")}>
+                          {openCat === c.id && <span className="w-[5px] h-[5px] rounded-full bg-[var(--fp-accent)]" />}
+                          <span className="flex-1">{c.label}</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">{support ? `${okN}/${flat.length}` : flat.length}</span>
                           {openCat === c.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                         </button>
                         {openCat === c.id && (
-                          <div style={{ paddingLeft: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 4 }}>
+                          <div className="pl-1.5 flex flex-col gap-px mb-1">
                             {c.groups.map((g) => (
                               <div key={g.label}>
-                                <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.02em", color: "var(--text-muted)", padding: "7px 9px 3px" }}>{g.label}</div>
+                                <div className="text-[10.5px] font-semibold tracking-[0.02em] text-[var(--text-muted)] pt-[7px] px-[9px] pb-[3px]">{g.label}</div>
                                 {g.factors.map((f, fi) => (
-                                  <FactorRow key={g.label + f.name + fi} f={f} active={factor?.name === f.name && factor?.expr === f.expr} tone={tone} info={supportInfo(tokenOf(f))} onClick={() => setFactor(f)} />
+                                  <FactorRow key={g.label + f.name + fi} f={f} active={factor?.name === f.name && factor?.expr === f.expr} info={supportInfo(tokenOf(f))} onClick={() => setFactor(f)} />
                                 ))}
                               </div>
                             ))}
@@ -243,26 +273,27 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
               </div>
 
               {/* right: selected factor detail */}
-              <div style={{ border: "1px solid var(--border)", borderRadius: R, padding: 14, display: "flex", flexDirection: "column" }}>
+              <div className={clsx(PANEL, "p-3.5 flex flex-col")}>
                 {factor ? (
                   <>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 7 }}>선택된 팩터</div>
-                    <div style={{ fontSize: 17, fontWeight: 500, color: selInfo && !selInfo.ok ? "var(--text-muted)" : accent.text, marginBottom: 9 }}>{factor.name}</div>
-                    <div style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, color: "var(--text-secondary)" }}>{factor.expr}</div>
+                    <div className="text-xs text-[var(--text-secondary)] mb-[7px]">선택된 팩터</div>
+                    <div className={clsx("text-[17px] font-medium mb-[9px]",
+                      selInfo && !selInfo.ok ? "text-[var(--text-muted)]" : "text-[var(--fp-text)]")}>{factor.name}</div>
+                    <div className="font-mono text-xs text-[var(--text-secondary)]">{factor.expr}</div>
                     {selInfo && !selInfo.ok && (
-                      <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--danger)", background: "var(--danger-light)", borderRadius: R, padding: "9px 11px" }}>
+                      <div className={clsx("mt-[11px] text-xs leading-relaxed text-[var(--danger)] bg-[var(--danger-light)] px-[11px] py-[9px]", RND)}>
                         미지원 — {selInfo.reason}
                       </div>
                     )}
                     {selInfo && !selInfo.ok && (support?.substitutes?.[factor.name]?.length ?? 0) > 0 && (
-                      <div style={{ marginTop: 9 }}>
-                        <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 5 }}>
+                      <div className="mt-[9px]">
+                        <div className="text-[11px] text-[var(--text-secondary)] mb-[5px]">
                           대체 제안 — 같은 의도의 자체 팩터 (클릭해 선택)
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        <div className="flex flex-wrap gap-1.5">
                           {support!.substitutes![factor.name].map((n) => (
                             <button key={n} type="button" onClick={() => selectByName(n)}
-                              style={{ fontSize: 12, color: accent.text, background: TONES[tone].bg, border: `1px solid ${accent.accent}`, borderRadius: R, padding: "4px 9px", cursor: "pointer" }}>
+                              className={clsx("text-xs text-[var(--fp-text)] bg-[var(--fp-bg)] border border-[var(--fp-accent)] px-[9px] py-1 cursor-pointer", RND)}>
                               {n}
                             </button>
                           ))}
@@ -270,7 +301,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                       </div>
                     )}
                     {selInfo?.ok && support && ["fundamental", "market", "macro", "flow", "score"].includes(selInfo.group ?? "") && (
-                      <div style={{ marginTop: 11, fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)", background: "var(--bg-section)", borderRadius: R, padding: "9px 11px" }}>
+                      <div className={clsx("mt-[11px] text-xs leading-relaxed text-[var(--text-secondary)] bg-[var(--bg-section)] px-[11px] py-[9px]", RND)}>
                         {selInfo.group === "fundamental" ? support.fundamental_note
                           : selInfo.group === "market" ? support.market_note
                           : selInfo.group === "macro" ? support.macro_note
@@ -278,58 +309,59 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                           : support.flow_note}
                       </div>
                     )}
-                    <div style={{ marginTop: "auto", paddingTop: 16, textAlign: "right" }}>
-                      <span style={{ fontSize: 12, color: accent.text, display: "inline-flex", alignItems: "center", gap: 3 }}>이 팩터 더 알아보기 <ExternalLink size={12} /></span>
+                    <div className="mt-auto pt-4 text-right">
+                      <span className="text-xs text-[var(--fp-text)] inline-flex items-center gap-[3px]">이 팩터 더 알아보기 <ExternalLink size={12} /></span>
                     </div>
                   </>
                 ) : (
-                  <div style={{ margin: "auto", fontSize: 13, color: "var(--text-muted)", textAlign: "center" }}>
+                  <div className="m-auto text-[13px] text-[var(--text-muted)] text-center">
                     왼쪽에서 팩터를 선택하세요
-                    {support && <div style={{ fontSize: 11, marginTop: 8 }}>회색 팩터는 미지원 — 평가 시 무시되므로 선택할 수 없습니다</div>}
+                    {support && <div className="text-[11px] mt-2">회색 팩터는 미지원 — 평가 시 무시되므로 선택할 수 없습니다</div>}
                   </div>
                 )}
               </div>
             </div>
 
             <button type="button" disabled={!factor || (selInfo ? !selInfo.ok : false)} onClick={() => setStep("function")}
-              style={{ marginTop: 16, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 14, color: "#fff", background: factor && (selInfo?.ok ?? true) ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "11px 0", cursor: factor && (selInfo?.ok ?? true) ? "pointer" : "not-allowed" }}>
+              className={clsx("mt-4 w-full flex items-center justify-center gap-[5px] text-[14px] text-white border-none py-[11px]", RND,
+                factor && (selInfo?.ok ?? true) ? "bg-[var(--fp-accent)] cursor-pointer" : "bg-[var(--border-strong)] cursor-not-allowed")}>
               다음 단계 <ArrowRight size={15} />
             </button>
           </>
         ) : (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "200px minmax(0,1fr)", gap: 13, alignItems: "stretch" }}>
+            <div className={TWOCOL}>
               {/* left: function list */}
-              <div style={{ border: "1px solid var(--border)", borderRadius: R, padding: 7, maxHeight: 320, overflow: "auto", display: "flex", flexDirection: "column", gap: 1 }}>
-                <GroupLabel tone={tone} dot>자주 쓰는 함수</GroupLabel>
+              <div className={clsx(PANEL, "p-[7px] max-h-[320px] overflow-auto flex flex-col gap-px")}>
+                <GroupLabel dot>자주 쓰는 함수</GroupLabel>
                 {FACTOR_FUNCTIONS.filter((f) => f.group === "common").map((f) => (
-                  <FnRow key={f.id} name={f.name} active={f.id === fnId} tone={tone} onClick={() => { setFnId(f.id); setParams({}); }} />
+                  <FnRow key={f.id} name={f.name} active={f.id === fnId} onClick={() => { setFnId(f.id); setParams({}); }} />
                 ))}
-                <GroupLabel tone={tone}>전체</GroupLabel>
+                <GroupLabel>전체</GroupLabel>
                 {FACTOR_FUNCTIONS.filter((f) => f.group === "all").map((f) => (
-                  <FnRow key={f.id} name={f.name} active={f.id === fnId} tone={tone} onClick={() => { setFnId(f.id); setParams({}); }} />
+                  <FnRow key={f.id} name={f.name} active={f.id === fnId} onClick={() => { setFnId(f.id); setParams({}); }} />
                 ))}
               </div>
 
               {/* right: function detail + preview */}
-              <div style={{ border: "1px solid var(--border)", borderRadius: R, padding: 14, display: "flex", flexDirection: "column" }}>
-                <div style={{ fontSize: 17, fontWeight: 500, color: "var(--text-primary)", marginBottom: 9 }}>{fn.name}</div>
-                <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 14 }}>{fn.desc}</div>
+              <div className={clsx(PANEL, "p-3.5 flex flex-col")}>
+                <div className="text-[17px] font-medium text-[var(--text-primary)] mb-[9px]">{fn.name}</div>
+                <div className="text-[13px] text-[var(--text-secondary)] leading-relaxed mb-3.5">{fn.desc}</div>
 
                 {!isTwoFactor && fn.params.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+                  <div className="flex flex-wrap gap-2.5 mb-3.5">
                     {fn.params.map((p, i) => (
-                      <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{p.label}</span>
+                      <div key={i} className="flex flex-col gap-1">
+                        <span className={PLABEL}>{p.label}</span>
                         {p.kind === "direction" ? (
                           <select value={params[paramKey(p.kind, i)] ?? p.default} onChange={(e) => setParam(p.kind, i, e.target.value)}
-                            style={{ fontSize: 13, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                            className={FIELD}>
                             <option value="DESC">내림차순</option>
                             <option value="ASC">오름차순</option>
                           </select>
                         ) : (
                           <input type="number" value={params[paramKey(p.kind, i)] ?? p.default} onChange={(e) => setParam(p.kind, i, e.target.value)}
-                            style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, width: 90, padding: "6px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+                            className={NUMFIELD} />
                         )}
                       </div>
                     ))}
@@ -338,16 +370,15 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
 
                 {/* 두 번째 피연산자 — 비교/큰값/작은값: 상수|팩터 선택, 변화율_팩터: 팩터 필수 */}
                 {TWO_FACTOR_IDS.has(fnId) && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>두 번째 피연산자</span>
+                  <div className="mb-3.5">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={PLABEL}>두 번째 피연산자</span>
                       {fnId !== "pctf" && (
-                        <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-strong)", borderRadius: R, overflow: "hidden" }}>
+                        <div className={clsx("flex gap-0 border border-[var(--border-strong)] overflow-hidden", RND)}>
                           {(["value", "factor"] as const).map((m) => (
                             <button key={m} type="button" onClick={() => setOperand2Mode(m)}
-                              style={{ fontSize: 11, padding: "3px 9px", border: "none", cursor: "pointer",
-                                background: operand2Mode === m ? accent.accent : "var(--bg-card)",
-                                color: operand2Mode === m ? "#fff" : "var(--text-secondary)" }}>
+                              className={clsx("text-[11px] px-[9px] py-[3px] border-none cursor-pointer",
+                                operand2Mode === m ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--bg-card)] text-[var(--text-secondary)]")}>
                               {m === "value" ? "상수" : "팩터"}
                             </button>
                           ))}
@@ -355,9 +386,9 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                       )}
                     </div>
                     {isTwoFactor && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                      <div className="flex flex-wrap gap-2.5 items-end">
                         <select value={factor2Name} onChange={(e) => setFactor2Name(e.target.value)}
-                          style={{ fontSize: 13, maxWidth: 220, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                          className={clsx(FIELD, "max-w-[220px]")}>
                           <option value="">팩터 선택…</option>
                           {factor2Options.map((g) => (
                             <optgroup key={g.label} label={g.label}>
@@ -366,22 +397,22 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                           ))}
                         </select>
                         <select value={inner2FnId} onChange={(e) => pickInner2Fn(e.target.value)}
-                          style={{ fontSize: 13, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                          className={FIELD}>
                           <option value="base">원값 (팩터 그대로)</option>
                           {INNER_FUNCTIONS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                         </select>
                         {inner2FnId !== "base" && inner2Fn.params.filter((p) => p.kind !== "direction").map((p, i) => (
-                          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{p.label}</span>
+                          <div key={i} className="flex flex-col gap-1">
+                            <span className={PLABEL}>{p.label}</span>
                             <input type="number" value={inner2Params[paramKey(p.kind, i)] ?? p.default}
                               onChange={(e) => setInner2Params((q) => ({ ...q, [paramKey(p.kind, i)]: e.target.value }))}
-                              style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, width: 90, padding: "6px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+                              className={NUMFIELD} />
                           </div>
                         ))}
                       </div>
                     )}
                     {fnId === "pctf" && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>
+                      <div className="text-[11px] text-[var(--text-muted)] mt-[5px]">
                         ((F1 − F2) / |F2|) × 100 — 예: 변화율_팩터({"{당기순이익}"}, 과거값({"{당기순이익}"}, 1년)) = 전년 대비 성장률
                       </div>
                     )}
@@ -390,39 +421,39 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
 
                 {/* 내부 지표(중첩) — 함수에 넣기 전 팩터에 먼저 적용 (예: 이동평균(과거값({종가},1),20)) */}
                 {allowInner && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                  <div className="mb-3.5">
+                    <div className="text-[11px] text-[var(--text-secondary)] mb-1">
                       {isCross ? "내부 지표 (랭킹 대상 · 선택)" : "내부 지표 (먼저 적용할 함수 · 선택)"}
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                    <div className="flex flex-wrap gap-2.5 items-end">
                       <select value={innerFnId} onChange={(e) => pickInnerFn(e.target.value)}
-                        style={{ fontSize: 13, padding: "6px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
+                        className={FIELD}>
                         <option value="base">원값 (팩터 그대로)</option>
                         {INNER_FUNCTIONS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                       </select>
                       {innerFnId !== "base" && innerFn.params.filter((p) => p.kind !== "direction").map((p, i) => (
-                        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{p.label}</span>
+                        <div key={i} className="flex flex-col gap-1">
+                          <span className={PLABEL}>{p.label}</span>
                           <input type="number" value={innerParams[paramKey(p.kind, i)] ?? p.default} onChange={(e) => setInnerParam(p.kind, i, e.target.value)}
-                            style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, width: 90, padding: "6px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+                            className={NUMFIELD} />
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>조건식 미리보기</div>
-                <div style={{ fontFamily: "var(--bs-font-mono)", fontSize: 15, color: "var(--text-primary)", background: "var(--bg-section)", borderRadius: R, padding: "11px 13px", wordBreak: "break-all" }}>{expr}</div>
+                <div className="text-xs text-[var(--text-secondary)] mb-1.5">조건식 미리보기</div>
+                <div className={clsx("font-mono text-[15px] text-[var(--text-primary)] bg-[var(--bg-section)] px-[13px] py-[11px] break-all", RND)}>{expr}</div>
               </div>
             </div>
 
-            <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+            <div className="mt-4 flex gap-2.5">
               <button type="button" onClick={() => setStep("factor")}
-                style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 4, fontSize: 14, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "11px 22px", cursor: "pointer" }}>
+                className={clsx("flex-none flex items-center gap-1 text-[14px] text-[var(--text-secondary)] bg-none border border-[var(--border-strong)] px-[22px] py-[11px] cursor-pointer", RND)}>
                 <ArrowLeft size={15} /> 이전 단계
               </button>
               <button type="button" onClick={submit}
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 14, color: "#fff", background: accent.accent, border: "none", borderRadius: R, padding: "11px 0", cursor: "pointer" }}>
+                className={clsx(PRIMARY, "flex-1")}>
                 <Check size={15} /> 입력
               </button>
             </div>
@@ -435,56 +466,60 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
 
 const paramKey = (kind: string, idx: number) => (kind === "period" ? "n" : kind === "value" ? (idx >= 1 ? "v" : "v") : "dir");
 
+// 아래 4개는 대화상자 서브트리 안에서만 쓰이므로 `--fp-*` 를 **상속**받는다.
+// 그래서 tone prop 이 필요 없다 — 색은 CSS 가 전달한다.
+
 function Crumb({ active, disabled, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      style={{ background: "none", border: "none", cursor: disabled ? "default" : "pointer", padding: 0,
-        fontSize: active ? 16 : 14, fontWeight: active ? 500 : 400,
-        color: active ? "var(--text-primary)" : disabled ? "var(--text-muted)" : "var(--text-secondary)" }}>
+      className={clsx("bg-none border-none p-0",
+        disabled ? "cursor-default" : "cursor-pointer",
+        active ? "text-[16px] font-medium text-[var(--text-primary)]" : "text-[14px] font-normal",
+        !active && (disabled ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]"))}>
       {children}
     </button>
   );
 }
 
-function FactorRow({ f, active, tone, sub, info, onClick }: {
-  f: GpFactor; active: boolean; tone: Tone; sub?: string; info?: SupportInfo; onClick: () => void;
+function FactorRow({ f, active, sub, info, onClick }: {
+  f: GpFactor; active: boolean; sub?: string; info?: SupportInfo; onClick: () => void;
 }) {
   const unsupported = info ? !info.ok : false;
   return (
     <button type="button" onClick={onClick} title={unsupported ? `미지원 — ${info?.reason}` : undefined}
-      style={{ display: "flex", alignItems: "baseline", gap: 6, width: "100%", textAlign: "left", border: "none", cursor: "pointer",
-        fontSize: 13, padding: "5px 12px", borderRadius: 6, opacity: unsupported ? 0.45 : 1,
-        background: active ? TONES[tone].bg : "transparent",
-        color: active ? TONES[tone].text : unsupported ? "var(--text-muted)" : "var(--text-secondary)" }}>
-      <span style={{ flex: 1, textDecoration: unsupported ? "line-through" : undefined }}>{f.name}</span>
+      className={clsx(ROW, "flex items-baseline gap-1.5",
+        unsupported && "opacity-45",
+        active ? "bg-[var(--fp-bg)] text-[var(--fp-text)]"
+          : unsupported ? "bg-transparent text-[var(--text-muted)]"
+          : "bg-transparent text-[var(--text-secondary)]")}>
+      <span className={clsx("flex-1", unsupported && "line-through")}>{f.name}</span>
       {info?.ok && info.group && info.group !== "base" && info.group !== "ohlcv" && (
-        <span style={{ fontSize: 9, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 4px" }}>
+        <span className={BADGE}>
           {info.group === "fundamental" ? "재무" : info.group === "market" ? "시장"
             : info.group === "macro" ? "매크로" : info.group === "score" ? "점수 근사" : "수급"}
         </span>
       )}
-      {unsupported && (
-        <span style={{ fontSize: 9, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 4px" }}>미지원</span>
-      )}
-      {sub && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{sub}</span>}
+      {unsupported && <span className={BADGE}>미지원</span>}
+      {sub && <span className="text-[10px] text-[var(--text-muted)]">{sub}</span>}
     </button>
   );
 }
 
-function FnRow({ name, active, tone, onClick }: { name: string; active: boolean; tone: Tone; onClick: () => void }) {
+function FnRow({ name, active, onClick }: { name: string; active: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      style={{ width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontSize: 13, padding: "5px 12px", borderRadius: 6,
-        background: active ? TONES[tone].bg : "transparent", color: active ? TONES[tone].text : "var(--text-secondary)" }}>
+      className={clsx(ROW, active ? "bg-[var(--fp-bg)] text-[var(--fp-text)]"
+        : "bg-transparent text-[var(--text-secondary)]")}>
       {name}
     </button>
   );
 }
 
-function GroupLabel({ tone, dot, children }: { tone: Tone; dot?: boolean; children: React.ReactNode }) {
+function GroupLabel({ dot, children }: { dot?: boolean; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: dot ? TONES[tone].text : "var(--text-secondary)", padding: "7px 9px", borderTop: dot ? undefined : "1px solid var(--border)", marginTop: dot ? undefined : 3 }}>
-      {dot && <span style={{ width: 5, height: 5, borderRadius: "50%", background: TONES[tone].accent }} />}
+    <div className={clsx("flex items-center gap-1.5 text-[13px] px-[9px] py-[7px]",
+      dot ? "text-[var(--fp-text)]" : "text-[var(--text-secondary)] border-t border-[var(--border)] mt-[3px]")}>
+      {dot && <span className="w-[5px] h-[5px] rounded-full bg-[var(--fp-accent)]" />}
       {children}
     </div>
   );
