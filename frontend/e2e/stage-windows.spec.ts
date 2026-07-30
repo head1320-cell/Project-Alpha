@@ -131,6 +131,42 @@ test("Catalogue shell: 패밀리 필터가 화살표 키로 이동한다 (Toggle
   await expect(fams.nth(1), "ArrowRight 로 다음 칩에 포커스가 옮겨져야 한다").toBeFocused();
 });
 
+// ★제품 회귀 방지★ — 위 테스트가 "간헐적으로" 실패한 진짜 원인이 이것이었다.
+// WizardTracker 가 window 에 keydown 을 걸고 ←/→ 로 스테이지를 이동하는데, 열린 모달을
+// 예외 처리하지 않아 팩터 창 안에서 누른 화살표가 페이지를 다음 스테이지로 넘겨 버렸다.
+// 창이 언마운트되면서 설정 중이던 내용이 사라진다(스펙 §8.1 포커스 트랩 요구 위반).
+test("Catalogue shell: 창이 열려 있으면 화살표가 스테이지를 넘기지 않는다", async ({ page }) => {
+  await page.goto("/allocation/stress", { waitUntil: "domcontentloaded" });
+  await page.locator(".as-fb-apply", { hasText: "시나리오 창에서 선택" }).click();
+  await expect(page.locator(".tfm")).toBeVisible();
+  const url = page.url();
+
+  // ★포커스를 input 이 아닌 곳에 둬야 의미가 있다★
+  // 창을 열면 검색 input 이 autoFocus 를 받고, 핸들러는 INPUT 을 이미 예외 처리한다.
+  // 그 상태로 화살표를 누르면 모달 예외가 없어도 이동하지 않으므로 테스트가 통과해 버린다
+  // (실제로 그랬다 — 뮤테이션 프로브가 통과해서 이 결함을 잡아냈다).
+  // 그래서 목록 행(button)으로 포커스를 옮긴 뒤 누른다.
+  await page.locator(".tfm-row").first().click();
+  await expect(page.locator(".tfm-row").first()).toBeFocused();
+
+  // ★음성 단정에는 정착 대기가 필요하다★
+  // "아무 일도 일어나지 않아야 한다" 는 즉시 단정하면 이긴다 — 키를 누른 직후엔 아직
+  // 라우팅·언마운트가 끝나지 않았으므로 toBeVisible 이 첫 폴에서 통과해 버린다.
+  // (실제로 그랬다: 키 2개를 연달아 누르고 바로 단정했더니 프로브가 통과했다.)
+  for (const key of ["ArrowRight", "ArrowLeft"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(1000);
+    await expect(page.locator(".tfm"), `${key} 에 창이 닫히면 안 된다`).toBeVisible();
+    expect(page.url(), `${key} 로 스테이지가 이동했다`).toBe(url);
+  }
+
+  // 창을 닫으면 스테이지 이동은 정상 동작해야 한다(기능을 죽인 것이 아님)
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tfm")).toHaveCount(0);
+  await page.keyboard.press("ArrowRight");
+  await expect(page).not.toHaveURL(url);
+});
+
 test("Catalogue shell: 다이얼로그·목록 ARIA 역할이 붙어 있다", async ({ page }) => {
   await page.goto("/allocation/stress", { waitUntil: "domcontentloaded" });
   await page.locator(".as-fb-apply", { hasText: "시나리오 창에서 선택" }).click();

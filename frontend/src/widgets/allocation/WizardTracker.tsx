@@ -44,11 +44,21 @@ export function WizardTracker() {
     "/allocation/journal":   stageComplete["/allocation/journal"] ? "저장됨" : "미기록",
   };
 
-  // ←/→ 로 이전/다음 스테이지 (입력 필드 포커스 시 제외)
+  // ←/→ 로 이전/다음 스테이지 (입력 필드·열린 모달에서는 제외)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (el?.isContentEditable) return;
+      // ★모달이 열려 있으면 스테이지를 이동하지 않는다★
+      // window 리스너라 모달 안에서 누른 화살표까지 잡아채고 있었다. 그러면 팩터 창에서
+      // 패밀리 칩을 화살표로 넘기려는 순간 페이지가 다음 스테이지로 넘어가고 창이
+      // 언마운트되어, 설정 중이던 내용이 사라진다. 스펙 §8.1 의 키보드 내비게이션·포커스
+      // 트랩 요구와도 정면으로 어긋난다.
+      // (E2E 가 이 결함을 간헐적으로 잡고 있었다 — 포커스 이동이 라우팅보다 빠르면 통과해서
+      //  "flaky 테스트" 처럼 보였다. 실제로는 제품 결함이 단정과 경쟁하고 있었다.)
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       if (e.key === "ArrowRight" && active < STAGES.length - 1) router.push(STAGES[active + 1].href);
       else if (e.key === "ArrowLeft" && active > 0) router.push(STAGES[active - 1].href);
     };
