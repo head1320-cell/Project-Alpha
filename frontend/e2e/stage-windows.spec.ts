@@ -114,13 +114,20 @@ test("Catalogue shell: 패밀리 필터가 화살표 키로 이동한다 (Toggle
   expect(n, "패밀리 칩이 2개 이상이어야 이동을 검증할 수 있다").toBeGreaterThan(1);
 
   // 통합 전에는 순수 <button> 이라 그룹 내 화살표 이동이 없었다.
-  await fams.first().focus();
+  // ★전제조건을 먼저 단정한다★
+  // 키보드 이동을 검증하려면 먼저 그룹 안에 포커스가 실제로 들어가 있어야 한다. 전제조건을
+  // 확인하지 않으면, 포커스가 애초에 안 들어간 경우에도 "roving focus 가 깨졌다" 고
+  // 잘못 보고한다 — 실제로 그렇게 실패했다(2번째 칩이 tabindex=-1 그대로였다 =
+  // ArrowRight 가 아무 일도 하지 않았다 = 눌릴 대상이 없었다).
+  // 단독 실행에서는 페이지가 활성이라 focus() 가 통했고, 56개 스위트 중간에서는 통하지 않았다.
+  await page.bringToFront();
+  await fams.first().click();          // click 은 실제 포커스를 준다(focus() 보다 견고)
+  await expect(fams.first(), "먼저 첫 칩에 포커스가 들어가야 한다").toBeFocused();
+
   await page.keyboard.press("ArrowRight");
-  // ★재시도하는 단정을 써야 한다★
-  // radiogroup 에서 ArrowRight 는 포커스 이동과 **선택**을 동시에 한다 → onFamilyChange →
-  // 리렌더. 그 사이 한 틱 동안 포커스가 흔들릴 수 있는데, `expect(boolean).toBe(true)` 는
-  // evaluate 1회 결과라 재시도하지 않아 그 순간을 잡으면 실패한다(실측 5회 중 4회 실패).
-  // toBeFocused 는 locator 단정이라 폴링한다 — 제품 동작은 정상이고 단정이 문제였다.
+  // 재시도하는 locator 단정을 쓴다 — radiogroup 의 ArrowRight 는 포커스 이동과 **선택**을
+  // 동시에 하고(onFamilyChange → 리렌더) 그 한 틱 동안 포커스가 흔들릴 수 있어서,
+  // evaluate 1회 결과(`expect(boolean).toBe(true)`)로는 그 순간을 잡아 실패한다.
   await expect(fams.nth(1), "ArrowRight 로 다음 칩에 포커스가 옮겨져야 한다").toBeFocused();
 });
 
