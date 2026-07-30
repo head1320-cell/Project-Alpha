@@ -18,8 +18,8 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 53 passed (was 33 at Phase 0; 50 before Phase 6b) |
-| pytest | 1171 passed, 10 skipped (was 1003 at Phase 0; 1142 before Phase 6b) |
+| Playwright | 57 passed (was 33 at Phase 0; 53 before Phase 6b-2) |
+| pytest | 1193 passed, 10 skipped (was 1003 at Phase 0; 1171 before Phase 6b-2) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -45,7 +45,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ `515cfb1` |
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
 | 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ `18a77ff` |
-| 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | ✅ `2ff6570` + this commit |
+| 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | ✅ `2ff6570` `16bdca3` `b54a1a4` |
 | 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
@@ -295,6 +295,25 @@ Backend-then-UI, TDD with a mutation probe, and honest `unavailable` where histo
 | the endpoint answers **200 + reason**, never 4xx, when a preview cannot be built | "no preview available" is a state, not a request error — a 4xx would make the UI show an error banner |
 | missing samples are drawn as **gaps**, never as 0 | a zero bar asserts a value we do not have; `unavailable` also gets its own colour, distinct from `risk_off` |
 | state changes are counted **skipping** missing points | treating a gap as a state makes one data hole read as two flips, i.e. "the signal was thrashing" |
+
+**A real product bug surfaced by this phase's gate (fixed in `b54a1a4`).** `WizardTracker` bound
+keydown on `window` and navigated stages on ←/→, exempting only `INPUT`/`TEXTAREA`/`SELECT` — **not
+open modals**. With any catalogue window open, an arrow key on a list row or family chip navigated the
+page and unmounted the dialog, discarding in-progress configuration. Measured:
+`/allocation/stress` → `/allocation/explain`, modal count 0. It breaks spec §8.1's keyboard-navigation
+and focus-trap requirements and predates 6b-2, affecting all four modals.
+
+It had been masquerading as a flaky test since Phase 6: the assertion passed whenever focus reached
+the next chip before React unmounted, so the suite reported "keyboard navigation works" on a race it
+won about 20% of the time. **One green run would never have found it** — only repeated runs did.
+
+Two process notes worth keeping, because both nearly shipped a false green:
+- **A pipeline ending in `tail` reports `tail`'s exit code.** `npx playwright test | tail` exited 0
+  while 4 tests failed. Capture the runner's own status, and read the summary line.
+- **The mutation probe caught the regression test guarding nothing.** With the fix reverted the new
+  test still passed, twice over: focus was aimed at a non-focusable `div` so it stayed on the
+  auto-focused search `input` (already exempt), and two keypresses were asserted immediately so
+  `toBeVisible()` won the race before unmount. **A negative assertion needs a settle period.**
 
 **Deliberately not done:** day-granular `as_of`. It would give exact flip counts, but `as_of` is a
 shared PIT primitive that live strategy backtests depend on, so widening it belongs in its own phase
