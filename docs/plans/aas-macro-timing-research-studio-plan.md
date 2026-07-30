@@ -19,7 +19,7 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 | Gate | Baseline |
 |---|---|
 | Playwright | 50 passed (was 33 at Phase 0) |
-| pytest | 1061 passed, 10 skipped (was 1003 at Phase 0) |
+| pytest | 1142 passed, 10 skipped (was 1003 at Phase 0; 1061 before Phase 7) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -43,11 +43,12 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 4 | Research Context + ResearchRun round-trip | frontend | ✅ `3afe2d8` `ac04674` +4c |
 | 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ (this commit) |
 | 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ (this commit) |
-| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | next |
+| 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ (this commit) |
 | 6b | `TimingFactorModal` → shell + §8.1 items 4·13 | UI | |
 | 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
-| 7b | **Macro overlay semantics** (restored) | both | |
+| 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
+| 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | |
 | 8 | Factor catalogue breadth | backend | |
 | 8b | Data-source extension (NFCI · VXVCLS) | backend | |
 | 9 | `ScenarioPackV2` | both | |
@@ -131,9 +132,9 @@ no rule-set version exists yet and building one here would breach the scope wall
 | Spec item | Phase 4 shows | Full form owned by |
 |---|---|---|
 | ③ market & universe | `market` + holdings count | a future sleeve/universe model |
-| ⑦ active rule set | timing **config summary** (frontend holds no saved `set_id`) | Phase 7 |
+| ⑦ active rule set | timing **config summary** (frontend holds no saved `set_id`) | Phase 7 backend ✅ · display 7c |
 | ⑦ scenario pack | selected scenario **label** | Phase 9 |
-| ⑨ rule version | omitted; snapshot/model/engine/code versions shown | Phase 7 |
+| ⑨ rule version | omitted; snapshot/model/engine/code versions shown | Phase **7c** (backend ✅ in 7) |
 
 ### Phase 5 — ADR acceptance + shadcn scaffold
 Amend the `CLAUDE.md` frontend clause to state what is true (Tailwind already present, 46
@@ -201,6 +202,41 @@ satisfy: reopening a run must restore the same **rule-set version**, and spec §
 "rule version" becomes displayable here. Phase 4 shipped the timing *config summary* instead and
 said so on screen.
 
+**Shipped.** `src/engine/timing_rules_v2.py` (three-state `SignalState`, five combination methods,
+hysteresis, cooldown, frequency conflicts, `TimingRuleV2`/`TimingRuleSetV2`), `curve_slope` in the
+`timing_factors` catalogue, `timing_rule_sets.version` + `timing_rule_set_versions`, rule-set version
+stamped into `ResearchRun`. **81 new tests**, 1142 pytest total. Four mutation probes, each caught.
+
+**This phase wires the first production callers of Phase 1's PIT foundation.** Until now
+`fetch_observations` and `assert_backtest_eligible` had **zero** callers outside tests — Phase 1's
+commit said so honestly. `read_curve_slope` consumes the former; `evaluate_rule_set(..., mode=
+"backtest")` calls the latter before any value is scored.
+
+**Re-homed out of this phase (decided drifts D7-2 / D7-4):**
+- `regime_conditioned` → **7b**. It means "weight rules by macro regime", which *is* the overlay
+  semantics 7b owns. `combine()` keeps the enum member and raises with "Phase 7b" in the message —
+  it never silently substitutes another method, because a user must not get a composite decision
+  from a combination they did not request.
+- Rule-version **display** in the Research Context strip → **7c**. Phase 7 is backend-only; the
+  backend half (version column, stamped into runs, restorable on reopen) ships here.
+
+**Two further drifts found during implementation and decided in-phase:**
+- **D7-5 — a version *counter* cannot satisfy "restore on reopen".** Spec §4 lists rule version among
+  **reproducibility IDs**. Bumping a number while overwriting content in place means a run recording
+  "v2" points at content that no longer exists, so reopening would restore the *current* rules under
+  an old version label — worse than showing nothing, because it looks correct. Shipped the
+  reproducible reading: `timing_rule_set_versions` holds each version's content immutably, and
+  `get_rule_set_version` returns `None` for an unknown version rather than falling back to the latest.
+- **D7-6 — cooldown direction was underspecified.** The spec names cooldown without defining whether
+  it is symmetric. Shipped: symmetric across signal flips (blocking only re-entry still burns the
+  exit leg of every whipsaw), but **never** applied to a transition into `unavailable` — losing data
+  is not a signal flip, and holding `risk_on` through it leaves the book exposed on a value we no
+  longer have.
+
+**Honest limitation:** without a `FRED_API_KEY` the curve-slope factor resolves to `unavailable` →
+`risk_off`. That is the designed conservative behaviour, not a failure; tests cover the vintage path
+and the unavailable path via a stubbed `_http_get`. Live values need a key.
+
 ### Phase 6b — `TimingFactorModal` → catalogue shell
 The deferred fourth modal, once its underlying model is stable.
 **Also owns spec §8.1 requirements 4 and 13** *(re-homed from Phase 6, drift D6-2)*: the right-pane
@@ -225,8 +261,23 @@ that Phase 6 leaves unfilled — filling them with placeholder states was reject
   Stress comparison reuses this machinery rather than reinventing it.
 - **Conflict explanation in plain language** — e.g. "추세는 risk-on이지만 매크로 신뢰도가 낮고
   금융환경이 긴축적입니다." Every risk-on/risk-off decision carries its reason.
+- **Also owns `regime_conditioned`** *(re-homed from Phase 7, drift D7-2)*: the sixth combination
+  method in spec §3.3. `timing_rules_v2.combine()` ships the other five and raises
+  `NotYetImplementedError` naming this phase; implementing it here means removing that guard and the
+  test that asserts it fires, in the same commit.
 - **Gate:** E2E asserting the three-way comparison is legible and that disabling the overlay
   visibly changes the composite state.
+
+### Phase 7c — rule-version display in the Research Context strip
+*(re-homed from Phase 7, drift D7-4 — Phase 7 was scoped backend-only.)*
+Spec §4 item ⑨ wants the **rule version** shown beside the snapshot/model/engine/code versions the
+strip already carries. The backend half is done: `timing_rule_sets.version`,
+`timing_rule_set_versions` for content, and `timing_rule_set_id`/`timing_rule_set_version` on
+`AnalyzeRequest`, stamped into the run's `snapshot` (not only `inputs`, since `list_runs` omits
+`inputs`). Remaining work is `ContextStrip` + the `.as-ctx*` E2E assertions.
+**Honesty requirement:** when the stored version no longer resolves, the strip must say so rather
+than showing the current version under the old label — `get_rule_set_version` already returns `None`
+instead of falling back.
 
 ### Phase 8 — Factor catalogue breadth
 The remaining Phase-1 factors: relative momentum, breadth (incl. equal- vs cap-weight), realized

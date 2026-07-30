@@ -251,6 +251,16 @@ CATALOG: list[dict[str, Any]] = [
      "params": {}, "default_threshold": 20.0, "default_direction": "below",
      "unit": "raw", "desc": "VIXCLS·DGS10·T10Y2Y 등 매크로 시리즈의 임계 통과(FRED/ECOS).",
      "provenance": "FRED/ECOS", "existing": True},
+    {"id": "curve_slope", "label": "장단기 금리차 (10Y−2Y)", "family": "regime",
+     "params": {"series_id": "T10Y2Y"}, "default_threshold": 0.0, "default_direction": "above",
+     "unit": "pp", "desc": "미 국채 10년−2년 스프레드(%p). 양수면 정상 커브(위험-온), "
+                           "음수면 역전(위험-오프). ★ALFRED 빈티지 기준으로 그 시점에 "
+                           "알 수 있었던 값만 사용★ — 개정 이력이 있어 오늘 값으로 과거를 "
+                           "채점하면 안 된다. FRED_API_KEY 가 없으면 unavailable.",
+     "provenance": "FRED/ALFRED (T10Y2Y)", "existing": False,
+     # ★as_of 가 필요한 팩터★ — evaluate(factor_id, ticker, market, params) 로는 시점을
+     # 전달할 수 없다. timing_rules_v2.read_curve_slope(as_of) 를 써야 한다.
+     "requires_as_of": True},
 ]
 
 CATALOG_BY_ID: dict[str, dict] = {c["id"]: c for c in CATALOG}

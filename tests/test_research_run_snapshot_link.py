@@ -21,6 +21,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import src.data.regime_snapshots as rs  # noqa: E402
 import src.data.research_runs as rr  # noqa: E402
+import src.data.timing_rules as tr  # noqa: E402
 from src.app_factory import create_app  # noqa: E402
 
 TICKERS = ["005930", "000660"]
@@ -31,10 +32,11 @@ def client(monkeypatch):
     """두 스토어를 같은 in-memory DB 로 격리."""
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
                         poolclass=StaticPool)
-    for mod in (rs, rr):
+    for mod in (rs, rr, tr):
         monkeypatch.setattr(mod, "_engine", lambda: eng)
         monkeypatch.setattr(mod, "_inited", False)
     monkeypatch.setattr(rs, "_has_regime_cols", False)
+    monkeypatch.setattr(tr, "_has_version", False)
     with TestClient(create_app()) as c:
         yield c
     eng.dispose()
@@ -100,3 +102,79 @@ def test_analyze_without_snapshot_still_works(client):
     rid = r.json()["run_id"]
     got = client.get(f"/api/v1/research-runs/{rid}").json()
     assert got["snapshot"].get("regime_snapshot_id") is None
+
+
+# ─── 4. Phase 7: 규칙 세트 **버전** 도 같은 재현성 ID 다 ──────────────────────
+def _make_rule_set(rules=None) -> str:
+    sid = tr.save_rule_set("타이밍 세트", "kr",
+                           rules or [{"factor_id": "curve_slope"}])
+    assert sid, "규칙 세트 저장 실패 — 이후 검증이 공허해진다"
+    return sid
+
+
+def test_run_records_the_rule_set_version(client):
+    sid = _make_rule_set()
+    r = _analyze(client, timing_rule_set_id=sid, timing_rule_set_version=1)
+    assert r.status_code == 200, r.text
+    rid = r.json()["run_id"]
+    got = client.get(f"/api/v1/research-runs/{rid}").json()
+    assert got["snapshot"].get("timing_rule_set_id") == sid
+    assert got["snapshot"].get("timing_rule_set_version") == 1
+
+
+def test_omitted_version_is_stamped_with_the_current_one(client):
+    """버전을 안 보내면 서버가 **그때의 현재 버전**을 각인한다 — 나중에 세트가 바뀌어도
+    이 런이 어느 내용으로 계산되었는지 남는다."""
+    sid = _make_rule_set([{"factor_id": "curve_slope"}])
+    tr.save_rule_set("타이밍 세트", "kr", [{"factor_id": "disparity"}], set_id=sid)  # v2
+
+    r = _analyze(client, timing_rule_set_id=sid)
+    assert r.status_code == 200, r.text
+    rid = r.json()["run_id"]
+    got = client.get(f"/api/v1/research-runs/{rid}").json()
+    assert got["snapshot"].get("timing_rule_set_version") == 2
+
+
+def test_the_stamped_version_still_resolves_after_the_set_changes(client):
+    """★재열기 = 복원★ — v1 로 만든 런은 세트가 v3 이 된 뒤에도 v1 규칙을 되찾는다."""
+    sid = _make_rule_set([{"factor_id": "curve_slope"}])
+    r = _analyze(client, timing_rule_set_id=sid, timing_rule_set_version=1)
+    rid = r.json()["run_id"]
+
+    tr.save_rule_set("타이밍 세트", "kr", [{"factor_id": "disparity"}], set_id=sid)
+    tr.save_rule_set("타이밍 세트", "kr", [{"factor_id": "vol_breakout"}], set_id=sid)
+
+    snap = client.get(f"/api/v1/research-runs/{rid}").json()["snapshot"]
+    restored = tr.get_rule_set_version(snap["timing_rule_set_id"],
+                                       snap["timing_rule_set_version"])
+    assert restored is not None
+    assert restored["rules"] == [{"factor_id": "curve_slope"}], (
+        "런이 가리키는 버전이 최신본으로 바뀌어 버리면 그 런은 재현 불가다"
+    )
+    assert tr.get_rule_set(sid)["version"] == 3, "현재 버전은 별도로 전진한다"
+
+
+def test_unknown_rule_set_version_is_rejected(client):
+    sid = _make_rule_set()
+    r = _analyze(client, timing_rule_set_id=sid, timing_rule_set_version=99)
+    assert r.status_code == 422, f"없는 버전을 그냥 기록하면 안 된다: {r.status_code}"
+    assert "99" in r.text
+
+
+def test_unknown_rule_set_id_is_rejected(client):
+    r = _analyze(client, timing_rule_set_id="tr_0_deadbeef")
+    assert r.status_code == 422
+    assert "tr_0_deadbeef" in r.text
+
+
+def test_rule_set_rejection_does_not_record_a_run(client):
+    _analyze(client, timing_rule_set_id="tr_0_deadbeef")
+    assert client.get("/api/v1/research-runs").json()["runs"] == []
+
+
+def test_analyze_without_a_rule_set_still_works(client):
+    r = _analyze(client)
+    assert r.status_code == 200, r.text
+    snap = client.get(f"/api/v1/research-runs/{r.json()['run_id']}").json()["snapshot"]
+    assert snap.get("timing_rule_set_id") is None
+    assert snap.get("timing_rule_set_version") is None

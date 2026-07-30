@@ -167,6 +167,22 @@ Combination methods: `all` · `any` · `k_of_n` · `weighted` · `regime_conditi
 `SignalState = risk_on | risk_off | unavailable`, and `unavailable` resolves to `risk_off` in
 composition. There is no boolean that a missing value can default to `true`.
 
+> **Shipped in Phase 7** — `src/engine/timing_rules_v2.py`. All nine added fields present on
+> `TimingRuleV2`, which wraps (not replaces) the existing `TimingRule`. Five of the six combination
+> methods implemented; **`regime_conditioned` is deferred to Phase 7b** because it means "weight
+> rules by macro regime" and therefore needs the macro overlay semantics 7b owns. `combine()` keeps
+> the enum member and **raises naming that phase** rather than silently substituting another method.
+>
+> The legacy `timing_factors.passes() -> bool` is **left untouched** — the live canary endpoint calls
+> it, its behaviour is already conservative (`None → False`), and what §3.3 objects to is the *type*.
+> It retires when its last caller migrates, not before. `timing_rules_v2` does not import it.
+>
+> Two semantics this section left open, decided in Phase 7 and recorded in the plan (D7-5, D7-6):
+> **rule-set versions preserve their content immutably** (a counter alone cannot satisfy "reopening
+> restores the same version" — the content would already be gone), and **cooldown is symmetric across
+> signal flips but never blocks a transition into `unavailable`** (losing data is not a signal flip;
+> holding `risk_on` through it leaves the book exposed on a value we no longer have).
+
 ### 3.4 Others
 `TimingEvaluation` (per-factor state, composite state, transitions, exposure, **explanation
 string**) · `ScenarioPackV2` (§5) · `DataLineage` · `ResearchContext` (§4) ·
@@ -197,6 +213,19 @@ ResearchUsage  = backtest_eligible | forward_only | unavailable
 
 **Enforcement is structural, not advisory.** The historical-simulation endpoint rejects any rule
 set containing a `forward_only` factor with an explicit error naming the factor and the reason.
+
+> **Phase 1 built this; Phase 7 gave it its first callers.** `fetch_observations` and
+> `assert_backtest_eligible` had **zero** production callers until Phase 7 (tests only), which
+> Phase 1's commit stated honestly — there was no historical simulation to gate yet.
+> `timing_rules_v2.read_curve_slope` derives `ResearchUsage` from the observations themselves
+> (vintage present · requested depth covered · `release_timestamp >= observation_period`), and
+> `evaluate_rule_set(..., mode="backtest")` calls the gate **before** any value is scored, so
+> ineligible data never reaches logs or caches.
+>
+> One consequence worth stating plainly: a price factor read while `mock_allowed()` is true is
+> **never** `backtest_eligible`. The value may be synthetic and we cannot prove it is not; certifying
+> the unprovable would make the gate a lie. `DataStatus.MOCK` here means "may be synthetic, not
+> certified real", not "is definitely fake".
 It does not warn and proceed.
 
 Worked consequence — KIS investor flows: `src/data/kis_flows.py` documents that the KIS TR

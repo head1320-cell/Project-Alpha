@@ -74,6 +74,11 @@ class AnalyzeRequest(BaseModel):
     # ── Phase 4a: 이 결정을 내릴 때 붙어 있던 매크로 국면 스냅샷 (선택) ──
     #    런을 나중에 다시 열었을 때 "어떤 국면 아래에서 내린 결정인지" 알 수 있게 한다.
     regime_snapshot_id: str | None = Field(None, max_length=40)
+    # ── Phase 7: 이 결정에 쓰인 타이밍 규칙 세트의 **버전** (선택) ──
+    #    스펙 §4 는 rule version 을 재현성 ID 로 분류한다(데이터 스냅샷·엔진 버전과 나란히).
+    #    버전 내용은 timing_rule_set_versions 에 불변으로 남아 있어 재열기 때 복원 가능하다.
+    timing_rule_set_id: str | None = Field(None, max_length=40)
+    timing_rule_set_version: int | None = Field(None, ge=1)
 
 
 class BacktestRequest(BaseModel):
@@ -306,6 +311,23 @@ def allocation_analyze(req: AnalyzeRequest):
                 422, f"국면 스냅샷을 찾을 수 없습니다: {req.regime_snapshot_id}. "
                      "삭제되었거나 다른 환경의 ID 일 수 있습니다."
             )
+    # 규칙 세트 버전도 같은 이유로 계산 전에 검증한다 — 복원할 수 없는 버전을 가리키는 런은
+    # "규칙 v2 로 계산했다" 고 적혀 있어도 그 v2 를 다시 만들어낼 수 없다.
+    if req.timing_rule_set_id:
+        from src.data.timing_rules import get_rule_set, get_rule_set_version
+        if req.timing_rule_set_version is None:
+            cur = get_rule_set(req.timing_rule_set_id)
+            if cur is None:
+                raise HTTPException(
+                    422, f"타이밍 규칙 세트를 찾을 수 없습니다: {req.timing_rule_set_id}.")
+            req.timing_rule_set_version = cur.get("version")
+        elif get_rule_set_version(
+                req.timing_rule_set_id, req.timing_rule_set_version) is None:
+            raise HTTPException(
+                422, f"타이밍 규칙 세트 버전을 찾을 수 없습니다: "
+                     f"{req.timing_rule_set_id} v{req.timing_rule_set_version}. "
+                     "삭제되었거나 다른 환경의 ID 일 수 있습니다."
+            )
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
             req.tickers, req.benchmark, req.lookback_days)
@@ -478,7 +500,9 @@ def allocation_analyze(req: AnalyzeRequest):
                 # 런 목록에서 스냅샷을 볼 수 없어 재열기 UI 가 성립하지 않는다.
                 snapshot={"coverage": coverage, "excluded": excluded,
                           "cap_missing": opt["cap_missing"],
-                          "regime_snapshot_id": req.regime_snapshot_id},
+                          "regime_snapshot_id": req.regime_snapshot_id,
+                          "timing_rule_set_id": req.timing_rule_set_id,
+                          "timing_rule_set_version": req.timing_rule_set_version},
                 name=req.run_name,
             )
             payload["run_id"] = rid              # None이면 DB 미가용 — 정직 보고
