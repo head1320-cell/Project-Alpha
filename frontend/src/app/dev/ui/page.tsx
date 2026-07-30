@@ -34,6 +34,13 @@ import {
   Field as KField, QuickStepper, Segmented,
 } from "@/shared/ui/kit";
 import { LoadingState, EmptyState, ErrorState } from "@/shared/ui/States";
+// shadcn 벤더링본 — .devui-item 계약을 건드리지 않도록 **별도 섹션**에서만 쓴다(아래 주석 참조).
+import { Button } from "@/shared/ui/shadcn/button";
+import { Badge as ShadBadge } from "@/shared/ui/shadcn/badge";
+import {
+  Dialog, DialogTrigger, DialogContent, DialogHeader,
+  DialogTitle, DialogDescription, DialogFooter, DialogClose,
+} from "@/shared/ui/shadcn/dialog";
 import {
   Skeleton, SkeletonText, SkeletonCard, SkeletonTable,
   TickValue, MetricCard, Sparkline,
@@ -336,6 +343,69 @@ export default function DevUiPage() {
           <Variant label="index 있음"><SectionHead label="유동성 게이트" index="01" /></Variant>
           <Variant label="index 없음"><SectionHead label="후처리" /></Variant>
         </Specimen>
+      </section>
+
+      {/* ── shadcn/ui 벤더링본 (Phase 5 스캐폴드) ─────────────────────────────
+          ★위 갤러리와 클래스를 공유하지 않는다★
+          e2e/dev-ui.spec.ts 는 .devui-item 개수 === SPECIMENS.length(32) 를 단언하고
+          이름 목록까지 대조한다. shadcn 표본을 같은 클래스로 넣으면 그 계약이 깨진다.
+          그래서 .devui-shadcn / .devui-sitem 이라는 **별개 클래스**를 쓴다 —
+          기존 단언은 그대로 유효하고, 새 섹션은 자체 단언으로 검증한다.
+
+          이 컴포넌트들은 shared/ui/index.ts 에 **재수출하지 않는다**. 갤러리가 지켜 온
+          "shared/ui 배럴 export ↔ 표본 1:1" 관례도 그대로 유지된다.
+
+          Dialog 가 여기 있는 이유: Radix 는 document.body 로 포털하므로 .devui 로 스코프한
+          단언이 내용을 놓친다. Phase 6 모달 통합 전에 그 사실을 지금 노출해 둔다. */}
+      <section className="devui-shadcn">
+        <h2 className="devui-group-title">shared/ui/shadcn — Tailwind + Radix (Phase 5)</h2>
+        <p className="devui-sub">
+          토큰은 globals.css §34 브릿지로 기존 <code>--t-*</code> 를 참조합니다(팔레트 복제 없음).
+          CLI 가 이 환경에서 차단되어 shadcn 공개 구조를 그대로 손으로 작성했습니다.
+        </p>
+
+        <div className="devui-sitem">
+          <code className="devui-sitem-name">Button</code>
+          <div className="devui-variants">
+            {(["default", "secondary", "outline", "ghost", "destructive", "link"] as const).map((v) => (
+              <Button key={v} variant={v}>{v}</Button>
+            ))}
+            <Button size="sm">sm</Button>
+            <Button size="lg">lg</Button>
+            <Button disabled>disabled</Button>
+          </div>
+        </div>
+
+        <div className="devui-sitem">
+          <code className="devui-sitem-name">Badge</code>
+          <div className="devui-variants">
+            {(["default", "secondary", "outline", "destructive"] as const).map((v) => (
+              <ShadBadge key={v} variant={v}>{v}</ShadBadge>
+            ))}
+          </div>
+        </div>
+
+        <div className="devui-sitem">
+          <code className="devui-sitem-name">Dialog</code>
+          <div className="devui-variants">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="devui-dialog-open">Dialog 열기</Button>
+              </DialogTrigger>
+              <DialogContent className="devui-dialog-content">
+                <DialogHeader>
+                  <DialogTitle>포털 확인용 다이얼로그</DialogTitle>
+                  <DialogDescription>
+                    이 내용은 document.body 로 포털됩니다 — .devui 로 스코프한 셀렉터에는 잡히지 않습니다.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild><Button variant="secondary">닫기</Button></DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
       </section>
     </div>
   );

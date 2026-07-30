@@ -1,6 +1,6 @@
 # ADR 001 — Adopt Tailwind CSS + shadcn/ui, starting with Allocation Studio
 
-Status: **Proposed** · Date: 2026-07-27 · Owner: platform
+Status: **Accepted** · Proposed 2026-07-27 · Accepted 2026-07-30 · Owner: platform
 Supersedes: the frontend styling clause in `CLAUDE.md` §4 (절대 불변식)
 Scope: `frontend/` — AAS first, other routes only by later deliberate decision
 
@@ -66,6 +66,13 @@ benefit, and would still leave the accessibility gap that motivated the brief.
    `frontend/src/shared/ui/shadcn/`. `components.json` aliases are configured so the CLI never
    creates a top-level `components/` island that bypasses FSD boundaries.
 3. **Radix dependencies are added per component, on demand** — not as one bulk install.
+   **Amended at acceptance (Phase 5):** the shadcn **CLI cannot run in this environment** — the
+   agent proxy answers `403 CONNECT` for `ui.shadcn.com` (only package registries are allowlisted),
+   so `shadcn add` cannot fetch component definitions. The primitives are therefore **hand-written
+   against Radix following shadcn's published structure** (cva variants + `asChild`/Slot +
+   `forwardRef` + `cn()`), and `components.json` is kept so a future `shadcn add` drops in cleanly
+   if the host is ever reachable. The decision's intent — vendored location, per-component Radix,
+   CLI never touching `globals.css`/`tailwind.config.js` — is unchanged; only the means differ.
 4. **Existing CSS custom properties remain the source of truth for design tokens.** The Tailwind
    theme and shadcn CSS variables are *mapped onto* them, never a parallel palette.
 5. **Migrate by surface, not globally.** Order: AAS shared primitives → AAS factor/scenario
@@ -208,10 +215,14 @@ predates this decision and 46 components depend on it.
 
 ## 5. Acceptance criteria
 
-- [ ] ADR reviewed and moved to **Accepted**
-- [ ] `CLAUDE.md` frontend clause amended to describe reality, in the same commit as the scaffold
-- [ ] `components.json` aliases resolve into `src/shared/ui/shadcn`; no top-level `components/`
-- [ ] Token bridge added at EOF of `globals.css`; the four `:root` blocks byte-unchanged
-- [ ] `/dev/ui` renders the shadcn primitives beside the existing ones
-- [ ] Baseline preserved: **33/33 Playwright · 1003 passed/10 skipped pytest · tsc 0 · eslint 0**
-- [ ] Per-route bundle table diffed; every delta ≥4 kB explained or reverted
+- [x] ADR reviewed and moved to **Accepted**
+- [x] `CLAUDE.md` frontend clause amended to describe reality, in the same commit as the scaffold
+- [x] `components.json` aliases resolve into `src/shared/ui/shadcn`; no top-level `components/`
+- [x] Token bridge added at EOF of `globals.css`; the four `:root` blocks byte-unchanged
+      (verified by SHA-256: `b63f4712473253dd · 1ea923a7464c4904 · df52007da8fac3fc · 9ae56319aa96c99c`
+      identical before and after; a 5th block appended at EOF)
+- [x] `/dev/ui` renders the shadcn primitives beside the existing ones
+      (separate `.devui-shadcn` / `.devui-sitem` classes so the `.devui-item` count contract is untouched)
+- [x] Baseline preserved: **42/42 Playwright · 1061 passed/10 skipped pytest · tsc 0 · eslint 0**
+      (the original text said 33/1003 — true at Phase 0, never refreshed; corrected here)
+- [x] Per-route bundle table diffed; every delta ≥4 kB explained or reverted

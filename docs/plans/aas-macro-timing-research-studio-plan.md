@@ -41,8 +41,8 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 3a | Macro→AAS bridge — builder + `from-current` | backend | ✅ `84d6180` |
 | 3b | Macro→AAS bridge — client · action · preview | **frontend** | ✅ `813cec2` |
 | 4 | Research Context + ResearchRun round-trip | frontend | ✅ `3afe2d8` `ac04674` +4c |
-| 5 | ADR acceptance + shadcn scaffold | **UI** | next |
-| 6 | Catalogue shell — 3 of 4 modals | **UI** | |
+| 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ (this commit) |
+| 6 | Catalogue shell — 3 of 4 modals | **UI** | next |
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | |
 | 6b | `TimingFactorModal` → shell (deferred 4th) | UI | |
 | 7b | **Macro overlay semantics** (restored) | both | |
@@ -138,9 +138,12 @@ Amend the `CLAUDE.md` frontend clause to state what is true (Tailwind already pr
 components, AAS migrating, legacy plain-CSS untouched). Add `components.json` aliased to
 `src/shared/ui/shadcn`, the token bridge appended at EOF of `globals.css`, and 2–3 primitives
 rendered on `/dev/ui` beside existing ones.
-**Gate:** four `:root` blocks byte-unchanged; rule-level emitted-CSS diff shows only additions;
-33/33 E2E; no legacy visual diff.
+**Gate:** four `:root` blocks byte-unchanged (SHA-verified); rule-level emitted-CSS diff shows only
+additions; **42/42 E2E**; no legacy visual diff.
 **Rollback:** revert one commit; Tailwind is untouched.
+**Note (Phase 5 실측):** shadcn CLI 는 이 환경에서 쓸 수 없다 — 프록시가 `ui.shadcn.com` 을
+`403 CONNECT` 로 거부한다(패키지 레지스트리만 허용). 프리미티브는 shadcn 공개 구조대로
+손으로 작성했고 `components.json` 은 유지했다(ADR 001 결정 3 각주 참조).
 
 ### Phase 6 — Unified catalogue shell *(largest UI risk)*
 One shadcn three-pane shell replaces the duplicate modals.

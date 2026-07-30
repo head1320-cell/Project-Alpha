@@ -208,4 +208,49 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     const seg = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^Segmented$/ }) });
     await expect(seg.locator("button")).toHaveCount(3);
   });
+
+  // ── shadcn 섹션 (Phase 5) ───────────────────────────────────────────────
+  // ★기존 .devui-item 단언을 건드리지 않는다★ — shadcn 표본은 .devui-sitem 이라는
+  // 별개 클래스를 쓰므로 위의 "표본 32개" 계약은 그대로 유효하다.
+  test("shadcn 섹션이 기존 갤러리 계약을 깨지 않고 함께 렌더된다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const g = page.locator(".devui");
+
+    // 기존 계약 불변
+    await expect(g.locator(".devui-item")).toHaveCount(SPECIMENS.length);
+
+    // 새 섹션은 별개 클래스로 3개
+    await expect(g.locator(".devui-shadcn")).toHaveCount(1);
+    const names = await g.locator(".devui-sitem .devui-sitem-name").allInnerTexts();
+    expect(names).toEqual(["Button", "Badge", "Dialog"]);
+  });
+
+  test("shadcn Button 의 variant 가 실제로 다른 클래스를 낸다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const row = page.locator(".devui-sitem", { hasText: "Button" }).locator(".devui-variants");
+    // cn()/twMerge 가 동작하면 variant 별로 배경 유틸리티가 달라진다
+    const cls = await row.locator("button").first().getAttribute("class");
+    expect(cls).toContain("var(--primary)");
+    await expect(row.locator("button:disabled")).toHaveCount(1);
+  });
+
+  // ★Radix 포털 위험을 명시적으로 고정한다★
+  // Dialog 내용은 document.body 로 포털된다 — .devui 로 스코프하면 **잡히지 않는다**.
+  // 이 테스트는 그 사실 자체를 계약으로 박아 둔다(Phase 6 에서 모달을 옮길 때의 근거).
+  test("shadcn Dialog 는 .devui 밖(document.body)으로 포털된다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await page.locator(".devui-dialog-open").click();
+
+    const content = page.locator(".devui-dialog-content");
+    await expect(content).toBeVisible();
+    await expect(content).toContainText("포털됩니다");
+
+    // 컨테이너로 스코프하면 0개 — 이것이 Phase 6 이 조심해야 하는 바로 그 함정이다
+    await expect(page.locator(".devui .devui-dialog-content")).toHaveCount(0);
+
+    // 접근성: Radix 가 role=dialog 와 포커스 트랩을 제공한다
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(content).toHaveCount(0);
+  });
 });

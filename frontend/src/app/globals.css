@@ -4020,3 +4020,56 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   cursor: pointer; border: 1px solid var(--t-border); background: var(--bg-card); color: var(--t-ink); }
 .as-rr-reopen:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
 .as-rr-reopen:disabled { opacity: .55; cursor: progress; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   34. shadcn/ui 토큰 브릿지 (ADR 001 §2.1 · Phase 5)
+   ───────────────────────────────────────────────────────────────────────────
+   shadcn 컴포넌트는 --background/--foreground/--border/--ring/--radius 같은 이름을
+   기대한다. 여기서는 그 이름들을 **이미 있는 --t-* 토큰에 매핑**한다 —
+   병렬 팔레트를 만들지 않는다(디자인 토큰의 단일 진실은 계속 --t-* 다).
+
+   ★위 :root 블록 4개(L51·618·663·696)는 수정하지 않는다.★ 파일 끝에만 추가한다.
+   Step 1e 사건(globals.css 분할이 빌드를 깨뜨렸고 검증이 낡은 산출물을 비교했다)의 교훈.
+
+   shadcn 기본값은 HSL 3요소를 기대하지만(hsl(var(--background))), 우리 토큰은 hex 다.
+   그래서 var() 를 직접 쓰는 형태로 노출하고, 벤더링한 컴포넌트에서 bg-[var(--background)]
+   식으로 참조한다 — 토큰 값을 hex→HSL 로 복제하면 진실이 두 곳이 된다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --background:            var(--t-bg);
+  --foreground:            var(--t-ink);
+  --card:                  var(--t-surface);
+  --card-foreground:       var(--t-ink);
+  --popover:               var(--t-bg);
+  --popover-foreground:    var(--t-ink);
+  --primary:               var(--t-accent);
+  --primary-foreground:    #ffffff;
+  --secondary:             var(--t-surface);
+  --secondary-foreground:  var(--t-ink);
+  --muted:                 var(--t-surface);
+  --muted-foreground:      var(--t-muted);
+  --accent:                var(--t-surface);
+  --accent-foreground:     var(--t-ink);
+  --destructive:           var(--danger, #dc2626);
+  --destructive-foreground: #ffffff;
+  --border:                var(--t-border);
+  --input:                 var(--t-border);
+  --ring:                  var(--t-accent);
+  /* 데이터 밀도 우선 — shadcn 기본 0.5rem 보다 조이고, 기존 카드 곡률과 맞춘다 */
+  --radius: 4px;
+}
+
+/* shadcn 오버레이/포털 — Radix 는 document.body 로 포털하므로 앱 컨테이너 밖에서 스타일된다.
+   z-index 는 기존 모달(.tfm-* 등)과 충돌하지 않도록 그 위로 올린다. */
+.shad-overlay { position: fixed; inset: 0; z-index: 1000; background: rgb(0 0 0 / 0.45); }
+.shad-content { position: fixed; z-index: 1001; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(92vw, 560px); max-height: 86vh; overflow: auto;
+  background: var(--card); color: var(--card-foreground);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18); padding: 18px; }
+
+/* 35. /dev/ui 의 shadcn 섹션 — 기존 .devui-item 계약과 분리된 클래스 (Phase 5). */
+.devui-shadcn { margin-top: 40px; padding-top: 24px; border-top: 2px solid var(--t-ink, #111); }
+.devui-sitem { padding: 14px 0; border-bottom: 1px solid var(--t-border, #e5e5e5); }
+.devui-sitem-name { font-size: 12px; font-weight: 700; }
+.devui-variants { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
