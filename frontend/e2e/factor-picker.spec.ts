@@ -128,6 +128,18 @@ test("Factor picker: 모달 계약 — role·aria-modal·Escape", async ({ page 
   await expect(page.getByPlaceholder(SEARCH)).toHaveCount(0);
 });
 
+// ★포커스 트랩 — Radix Dialog 로 옮기면서 처음 생긴 능력★
+// 이전에는 트랩이 아예 없어서 Tab 이 창 밖 페이지 컨트롤로 새어 나갔다(단정할 대상조차 없었다).
+test("Factor picker: Tab 포커스가 창 밖으로 새지 않는다", async ({ page }) => {
+  await openFromScreener(page);
+  const dlg = page.getByRole("dialog", { name: "팩터 선택" });
+
+  // 여러 번 Tab 해도 포커스는 대화상자 안에 머문다
+  for (let i = 0; i < 12; i++) await page.keyboard.press("Tab");
+  const inside = await dlg.evaluate((el) => el.contains(document.activeElement));
+  expect(inside, "Tab 이 창 밖으로 나가면 모달이 아니라 그냥 겹쳐진 패널이다").toBe(true);
+});
+
 // ─── 6. 두 번째 소비자 — 백테스터에서도 같은 창이 열린다 ─────────────────────
 test("Factor picker: 백테스터 수식 빌더에서도 같은 창이 열린다", async ({ page }) => {
   const sink = trackErrors(page);

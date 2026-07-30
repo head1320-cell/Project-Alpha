@@ -12,6 +12,7 @@ import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type TokenSupportMap } from "@/entities/backtest/bridgeModel";
 import { TONES, type Tone } from "@/shared/ui/kit";
+import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
 
 // 지원 맵 모듈 캐시 — 백엔드(/condition-tokens)가 단일 진실 공급원.
 // 로드 실패 시 null → 배지 없이 기존 동작 (오프라인 데모 호환).
@@ -40,7 +41,6 @@ export interface FactorPick {
 const TWO_FACTOR_IDS = new Set(["cmp", "gt", "lt", "pctf"]);
 
 const R = "var(--bs-border-radius)";
-const RL = "var(--bs-border-radius-lg)";
 
 const baseToken = (f: GpFactor) => (/^\{[^{}]+\}$/.test(f.expr) ? f.expr : `{${f.name}}`);
 // 팩터 → 백엔드 토큰(지원 판정·평가). Butler 표시명은 토큰과 다를 수 있으므로 토큰으로 판정.
@@ -77,13 +77,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       .catch(() => {});  // 실패 시 배지 없이 기존 동작
   }, [open, support]);
 
-  // Escape 로 닫기 — 기존에는 backdrop 클릭만 지원했다(CatalogueShell 과 동일한 계약).
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  // Escape·포커스 트랩·role/aria-modal 은 **Radix Dialog 가 담당한다** — 손으로 붙인
+  // window keydown 리스너를 두면 두 곳이 같은 일을 하게 되므로 두지 않는다.
 
   const supportInfo = (name: string): SupportInfo => {
     if (!support) return { ok: true };
@@ -173,17 +168,17 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   };
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}
-    >
-      {/* ★대화상자 계약★ — CatalogueShell 이 세 창에 준 것과 같은 수준을 여기에도 맞춘다.
-          이 창은 role 도 aria-modal 도 Escape 도 없었다(backdrop 클릭만 닫힘). 그러면
-          스크린리더가 모달임을 알 수 없고, AAS 안에 놓일 경우 WizardTracker 의 모달 예외
-          (`[role="dialog"][aria-modal="true"]`)도 적용되지 않아 화살표 키에 창이 날아간다. */}
-      <div onClick={(e) => e.stopPropagation()}
-        role="dialog" aria-modal="true" aria-label="팩터 선택"
-        style={{ width: "100%", maxWidth: 600, maxHeight: "82vh", overflow: "auto", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: "18px 18px 16px", boxShadow: "var(--bs-box-shadow)" }}>
+    // ★Radix Dialog 로 교체 (ADR 001 결정 5 — Backtester 공용 컴포넌트 차례)★
+    // 손으로 붙였던 role·aria-modal·Escape 를 Radix 가 대신하고, **포커스 트랩이 처음으로
+    // 생긴다**(이전에는 아예 없어서 단정할 대상조차 없었다). Radix 는 Overlay/Content 를
+    // document.body 로 포털하므로, 컨테이너로 스코프한 단정은 이 창을 놓친다 — e2e 는
+    // 페이지 수준 role/텍스트 선택자를 쓴다.
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent aria-label="팩터 선택"
+        className="w-full max-w-[600px] max-h-[82vh] overflow-auto p-[18px] pb-4">
+        {/* Radix 는 접근성 이름을 위해 Title 을 요구한다 — 크럼이 시각적 제목 역할을 하므로
+            제목은 스크린리더용으로만 둔다(화면에 중복 제목을 만들지 않는다). */}
+        <DialogTitle className="sr-only">팩터 선택</DialogTitle>
 
         {/* breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -428,8 +423,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
             </div>
           </>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
