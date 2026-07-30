@@ -46,7 +46,8 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
 | 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ `18a77ff` |
 | 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | ✅ `2ff6570` `16bdca3` `b54a1a4` |
-| 6c | `FactorPickerModal` — E2E first, then **Tailwind + Radix** in place | UI | ✅ `8c608a2` `55ed5c2` + 진행 중 |
+| 6c | `FactorPickerModal` — E2E net + dialog contract (**Tailwind 전환 미완**) | UI | ⚠️ `8c608a2` `55ed5c2` `9421a1f` |
+| 6c-2 | 인라인 스타일 76개 → Tailwind (배치 단위 재시도 필요) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
 | 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | |
@@ -270,6 +271,42 @@ put a timestamp — so adding it as a canary rule would have silently created a 
 always missing, i.e. permanently risk-off. It now renders **visible but not addable**, with the reason
 in the row. Hiding it was rejected: a catalogued factor that simply isn't there gives the user no way
 to learn why.
+
+### Phase 6c 후속 — Tailwind 전환은 미완으로 남는다 (정직한 기록)
+
+두 번 시도해 두 번 창을 깨뜨렸고, 둘 다 되돌렸다. 브랜치는 검증된 상태(`9421a1f`, 7/7)다.
+
+| 시도 | 결과 | 비용/증거 |
+|---|---|---|
+| Radix `Dialog` 교체 (`dc2551a`) | 창이 열리지 않음 → revert `9421a1f` | `[role=dialog]`·`.shad-content` 0개, JS 에러 0건. 라우트당 **+20 kB** (`/backtest` 134→154 · `/screener` 122→142) |
+| 인라인 스타일 76개 → Tailwind 일괄 | 7/7 실패 → revert | `style={{` 76→1 달성했으나 동작 불가 |
+| **배치 1만** (backdrop `style`→`className`) | **7/7 실패** | 동일 스크립트 대조군(되돌린 파일) **7/7 통과** |
+
+**한 줄까지 좁혔다.** 트리거는 backdrop 래퍼 한 곳이다:
+`style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",…}}`
+→ `className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-[18px]"`
+
+증상은 `getByPlaceholder(...)` **element(s) not found** — 즉 컴포넌트가 렌더되지 않는다.
+**원인은 규명하지 못했다.** 확인한 것만 적는다:
+- 해당 유틸리티는 빌드된 CSS 에 **실제로 생성되어 있다**(`z-\[1000\]`·`bg-black\/45` 확인) —
+  누락된 클래스 문제가 아니다.
+- tsc 0 · eslint 0 · `next build` 정상. 컴파일 단계에서는 드러나지 않는다.
+- 대조 실험으로 하네스 불안정성은 배제했다(동일 스크립트, 되돌린 파일 → 통과).
+- 별도 프로브에서 `Minified React error #423`(하이드레이션 실패 → 루트 전체 클라이언트
+  렌더 전환)이 관측된 바 있으나, 그 관측은 스테일 청크 상황에서 나온 것이라 이 실패와
+  같은 원인이라고 단정할 수 없다.
+
+**다음에 할 때의 교훈(내 실수):**
+1. 76개를 한 번에 바꾸고 마지막에 검증했다 — 4단계로 나눴다고 말했지만 배치마다 초록불을
+   확인하지 않았다. 배치 검증을 했더니 **첫 배치에서 즉시** 범위가 한 줄로 좁혀졌다.
+2. 디버깅 중 스테일 빌드에 두 번 오진했다. Playwright `reuseExistingServer` 가 남은
+   `next start` 를 잡는다 — **실행 전 포트 확인을 절차에 넣어야 한다**
+   (`scratchpad/vfp.sh` 가 그 절차: 포트 비우기 → 빌드 → 재확인 → 스펙).
+
+**6c 가 실제로 남긴 것:** E2E 안전망 6건(이전엔 0건)과 `role`/`aria-modal`/Escape/autoFocus.
+안전망이 두 번의 파손을 모두 잡아냈다 — 없었다면 모르고 푸시했을 것이다.
+**포커스 트랩은 여전히 없다** — FactorPicker 도, CatalogueShell 기반 AAS 창 3개도.
+스펙 §8.1 요구사항이므로 미충족으로 남는다.
 
 ### Phase 6b-2 — factor historical preview (§8.1 requirement 4) — **done**
 *(re-homed from 6b, drift D6b-1.)* Right-pane preview of value / threshold / **signal state** /
