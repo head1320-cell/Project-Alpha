@@ -18,8 +18,8 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 50 passed (was 33 at Phase 0) |
-| pytest | 1142 passed, 10 skipped (was 1003 at Phase 0; 1061 before Phase 7) |
+| Playwright | 53 passed (was 33 at Phase 0; 50 before Phase 6b) |
+| pytest | 1171 passed, 10 skipped (was 1003 at Phase 0; 1142 before Phase 6b) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -44,7 +44,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ `8df9c7b` |
 | 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ `515cfb1` |
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
-| 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ (this commit) |
+| 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ `18a77ff` |
 | 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | |
 | 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
