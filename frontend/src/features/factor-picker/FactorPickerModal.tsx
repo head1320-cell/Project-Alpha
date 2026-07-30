@@ -77,6 +77,14 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       .catch(() => {});  // 실패 시 배지 없이 기존 동작
   }, [open, support]);
 
+  // Escape 로 닫기 — 기존에는 backdrop 클릭만 지원했다(CatalogueShell 과 동일한 계약).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   const supportInfo = (name: string): SupportInfo => {
     if (!support) return { ok: true };
     const g = support.supported[name];
@@ -169,7 +177,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       onClick={onClose}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}
     >
+      {/* ★대화상자 계약★ — CatalogueShell 이 세 창에 준 것과 같은 수준을 여기에도 맞춘다.
+          이 창은 role 도 aria-modal 도 Escape 도 없었다(backdrop 클릭만 닫힘). 그러면
+          스크린리더가 모달임을 알 수 없고, AAS 안에 놓일 경우 WizardTracker 의 모달 예외
+          (`[role="dialog"][aria-modal="true"]`)도 적용되지 않아 화살표 키에 창이 날아간다. */}
       <div onClick={(e) => e.stopPropagation()}
+        role="dialog" aria-modal="true" aria-label="팩터 선택"
         style={{ width: "100%", maxWidth: 600, maxHeight: "82vh", overflow: "auto", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: "18px 18px 16px", boxShadow: "var(--bs-box-shadow)" }}>
 
         {/* breadcrumb */}
@@ -187,6 +200,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
             <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border-strong)", borderRadius: R, padding: "8px 11px", marginBottom: 14 }}>
               <Search size={15} style={{ color: "var(--text-muted)" }} />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="조건을 단어로 입력하세요"
+                autoFocus aria-label="조건을 단어로 입력하세요"
                 style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: "var(--text-primary)" }} />
             </div>
 

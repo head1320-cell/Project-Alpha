@@ -113,7 +113,22 @@ test("Factor picker: 미지원 팩터는 사유와 함께 보이고 선택되지
   await expect(page.getByText(/^\d+\/\d+$/).first()).toBeVisible();
 });
 
-// ─── 5. 두 번째 소비자 — 백테스터에서도 같은 창이 열린다 ─────────────────────
+// ─── 5. 대화상자 계약 (Phase 6c) — 셸이 세 창에 준 것과 같은 수준 ────────────
+// 이전에는 role·aria-modal·Escape 가 전부 없었고 backdrop 클릭만 닫혔다.
+test("Factor picker: 모달 계약 — role·aria-modal·Escape", async ({ page }) => {
+  await openFromScreener(page);
+
+  const dlg = page.getByRole("dialog", { name: "팩터 선택" });
+  await expect(dlg).toBeVisible();
+  await expect(dlg).toHaveAttribute("aria-modal", "true");
+  // 검색 입력이 자동 포커스 — 창을 열자마자 타이핑할 수 있어야 한다
+  await expect(page.getByPlaceholder(SEARCH)).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByPlaceholder(SEARCH)).toHaveCount(0);
+});
+
+// ─── 6. 두 번째 소비자 — 백테스터에서도 같은 창이 열린다 ─────────────────────
 test("Factor picker: 백테스터 수식 빌더에서도 같은 창이 열린다", async ({ page }) => {
   const sink = trackErrors(page);
   await page.goto("/backtest", { waitUntil: "networkidle" });
