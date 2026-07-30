@@ -177,6 +177,12 @@ interface AllocationCtx {
   saveStudyFull: (name: string, fields: Partial<Pick<AllocationStudy,
     "note" | "macro_view" | "changed" | "reason">>) => void;
   loadStudy: (s: AllocationStudy) => void;
+  /**
+   * 기록된 ResearchRun 을 위저드로 되돌린다 (Phase 4c).
+   * inputs 로 입력을 복원하고 런의 스냅샷을 다시 붙인다 — 그래야 "그때의 맥락"이 함께 온다.
+   * 성공 시 true. 런을 못 읽으면 false(조용히 성공한 척하지 않는다).
+   */
+  reopenRun: (runId: string) => Promise<boolean>;
   studiesVersion: number;
   bumpStudies: () => void;
   // ── 매크로 전략 로드 (매크로 탭 자산배분 전략 → AAS) ──
@@ -434,6 +440,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         model, delta, tau,
         constraints: constraints ?? undefined,
         record_run: true, run_name: name.trim() || undefined,
+        // ★런이 "어떤 국면 아래에서 내린 결정인지"를 서버에 함께 남긴다★
+        //   이게 없으면 나중에 런을 다시 열어도 맥락을 복원할 수 없다.
+        regime_snapshot_id: attachedSnapshotId ?? undefined,
       });
       if (data.error) return null;
       setResult(data);
@@ -481,6 +490,58 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setLoadedStrategy(null);
     setActiveStudy({ id: s.id, name: s.name });
     logEvent(`스터디 로드 — ${s.name}`);
+  };
+
+  // ── 런 되돌리기 ──────────────────────────────────────────────────────────────
+  // 지금까지 ResearchRunsPanel 은 기록·비교·삭제만 했고 **되돌리는 경로가 없었다**.
+  // 재현성은 "저장했다"가 아니라 "다시 열어서 같은 것을 본다"로 증명된다.
+  const reopenRun = async (runId: string): Promise<boolean> => {
+    let run: Awaited<ReturnType<typeof researchApi.get>> | null = null;
+    try {
+      run = await researchApi.get(runId);
+    } catch {
+      run = null;
+    }
+    if (!run) {
+      logEvent(`런 되돌리기 실패 — ${runId} 를 읽을 수 없습니다`);
+      return false;
+    }
+    const inp = (run.inputs ?? {}) as {
+      tickers?: string[]; weights?: Record<string, number>;
+      views?: AllocationViewInput[]; model?: AllocationModel;
+      delta?: number; tau?: number; constraints?: ConstraintsInput | null;
+      regime_snapshot_id?: string | null;
+    };
+
+    // 비중은 inputs.weights 우선, 없으면 균등(티커만 남은 옛 런) — 0 으로 채우지 않는다.
+    const labels = (run.outputs?.labels ?? {}) as Record<string, string>;
+    const codes = inp.tickers ?? Object.keys(inp.weights ?? {});
+    const even = codes.length ? 100 / codes.length : 0;
+    setHoldingsReset(codes.map((code) => ({
+      code, name: labels[code] || code,
+      weight: inp.weights?.[code] ?? even,
+    })));
+
+    setViews(inp.views ?? []);
+    if (inp.model) setModel(inp.model);
+    if (typeof inp.delta === "number") setDelta(inp.delta);
+    if (typeof inp.tau === "number") setTau(inp.tau);
+    setConstraints(inp.constraints ?? null);
+    setLoadedStrategy(null);
+
+    // 결과는 비운다 — 복원된 입력에 대해 아직 계산하지 않았으므로 stale 이 정직한 상태다.
+    setResult(null);
+    lastReqRef.current = "";
+
+    // ★런의 스냅샷을 다시 붙인다★ — 링크가 없으면 맥락 없이 입력만 돌아온 것이다.
+    const sid = inp.regime_snapshot_id
+      ?? ((run.snapshot as { regime_snapshot_id?: string | null })?.regime_snapshot_id ?? null);
+    if (sid) attachSnapshot(sid);
+    else detachSnapshot();
+
+    setActiveRunId(run.run_id);
+    logEvent(`런 되돌리기 — ${run.name || run.run_id}${sid ? ` (국면 ${sid})` : " (국면 링크 없음)"}`);
+    return true;
   };
 
   const saveStudyFull: AllocationCtx["saveStudyFull"] = (name, fields) => {
@@ -556,7 +617,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     canRun, pending: analyzeMut.isPending, lastRun,
     analyzeError: analyzeMut.data?.error ? (analyzeMut.data.message ?? "분석 실패") : null,
     runAnalyze, xrayQ, stressQ,
-    saveStudyFull, loadStudy, studiesVersion,
+    saveStudyFull, loadStudy, reopenRun, studiesVersion,
     bumpStudies: () => setStudiesVersion((v) => v + 1),
     loadedStrategy, loadStrategy, clearLoadedStrategy,
     activeStudy, attachedSnapshotId, attachSnapshot, detachSnapshot,

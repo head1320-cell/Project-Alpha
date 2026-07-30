@@ -80,7 +80,9 @@ function CompareTable({ a, b }: { a: ResearchRunFull; b: ResearchRunFull }) {
 }
 
 export function ResearchRunsPanel() {
-  const { canRun, result, recordRun, activeRunId, runsVersion } = useAllocation();
+  const { canRun, result, recordRun, activeRunId, runsVersion, reopenRun, holdings } = useAllocation();
+  const [reopening, setReopening] = useState<string | null>(null);
+  const [reopenErr, setReopenErr] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [sel, setSel] = useState<string[]>([]);   // 비교 선택 (최대 2)
@@ -109,6 +111,25 @@ export function ResearchRunsPanel() {
     try { await recordRun(name); setName(""); } finally { setSaving(false); }
   };
 
+  // 되돌리기는 위저드 상태를 **덮어쓴다** — 저장 안 한 작업이 있으면 먼저 확인한다.
+  const doReopen = async (rid: string, label: string) => {
+    if (holdings.length > 0 && rid !== activeRunId) {
+      const ok = window.confirm(
+        `현재 구성(${holdings.length}종목)을 "${label}" 런의 입력으로 덮어씁니다.\n` +
+        "저장하지 않은 변경은 사라집니다. 계속할까요?"
+      );
+      if (!ok) return;
+    }
+    setReopening(rid);
+    setReopenErr(null);
+    try {
+      const ok = await reopenRun(rid);
+      if (!ok) setReopenErr(`런을 되돌리지 못했습니다 — ${rid} 를 읽을 수 없습니다.`);
+    } finally {
+      setReopening(null);
+    }
+  };
+
   const dbUnavailable = useMemo(
     () => !listQ.isLoading && listQ.data === null, [listQ.isLoading, listQ.data]);
 
@@ -128,6 +149,7 @@ export function ResearchRunsPanel() {
       {!result && <div className="as-note">Re-optimize 실행 후 기록하면 결과 요약이 함께 저장됩니다.</div>}
 
       {dbUnavailable && <div className="as-err">런 목록을 불러오지 못했습니다 (백엔드/DB 미가용).</div>}
+      {reopenErr && <div className="as-err as-rr-reopen-err">{reopenErr}</div>}
       {!dbUnavailable && runs.length === 0 && !listQ.isLoading && (
         <div className="as-empty">기록된 런 없음 — 첫 런을 기록하면 재조회·비교가 가능해집니다.</div>
       )}
@@ -143,6 +165,11 @@ export function ResearchRunsPanel() {
           </span>
           <SourceBadge src={r.snapshot?.coverage?.source} />
           <span className="num as-note-inline">{fmtTs(r.created_at)}</span>
+          <button className="as-rr-reopen" title="이 런의 입력·국면 스냅샷으로 위저드를 되돌린다"
+            disabled={reopening === r.run_id}
+            onClick={(e) => { e.stopPropagation(); doReopen(r.run_id, r.name || r.run_id); }}>
+            {reopening === r.run_id ? "복원 중…" : "되돌리기"}
+          </button>
           <button className="as-x" title="삭제" onClick={(e) => {
             e.stopPropagation();
             researchApi.remove(r.run_id).then(() => listQ.refetch()).catch(() => {});

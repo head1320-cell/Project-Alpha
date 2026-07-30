@@ -220,6 +220,22 @@ rule version, engine version).
 `AllocationProvider.isResultStale` already computes the pending-changes signal; it is surfaced
 rather than reinvented.
 
+> **Implementation note (Phase 4, `ac04674`).** Three of these elements ship as honest proxies
+> because their underlying models do not exist yet. The strip labels each as such rather than
+> implying more than it knows:
+>
+> | Element | Shipped as | Full form owned by |
+> |---|---|---|
+> | market & **universe** | `market` + holdings count — AAS has no sleeve/universe entity; holdings are a flat list | a future sleeve model |
+> | active **rule set** | timing **config summary** — the frontend holds no saved `set_id`, only unsaved `timingCfg`, and `timing_rule_sets` has no `version` column | Phase 7 (`TimingRuleSetV2`) |
+> | **scenario pack** | selected scenario's **label** — no pack entity exists | Phase 9 (`ScenarioPackV2`) |
+>
+> Regime value precedence is centralised in `widgets/allocation/useResearchRegime.ts`:
+> **an attached snapshot wins; live is the fallback and the strip says which is showing**
+> (`PINNED` / `LIVE`). When a snapshot ID is attached but unreadable, it does **not** fall back to
+> live — showing today's numbers while the user believes the regime is pinned would be the exact
+> failure this spec exists to prevent.
+
 ---
 
 ## 5. Scenario research

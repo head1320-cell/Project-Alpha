@@ -18,8 +18,8 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 33 passed |
-| pytest | 1003 passed, 10 skipped |
+| Playwright | 42 passed (was 33 at Phase 0) |
+| pytest | 1061 passed, 10 skipped (was 1003 at Phase 0) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -39,9 +39,9 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 1 | PIT foundation (ALFRED vintages) | backend | ✅ `1dcfdbd` |
 | 2 | `RegimeSnapshot` persistence + API | backend | ✅ `d331e96` |
 | 3a | Macro→AAS bridge — builder + `from-current` | backend | ✅ `84d6180` |
-| 3b | Macro→AAS bridge — client · action · preview | **frontend** | next |
-| 4 | Research Context + ResearchRun round-trip | frontend | |
-| 5 | ADR acceptance + shadcn scaffold | **UI** | |
+| 3b | Macro→AAS bridge — client · action · preview | **frontend** | ✅ `813cec2` |
+| 4 | Research Context + ResearchRun round-trip | frontend | ✅ `3afe2d8` `ac04674` +4c |
+| 5 | ADR acceptance + shadcn scaffold | **UI** | next |
 | 6 | Catalogue shell — 3 of 4 modals | **UI** | |
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | |
 | 6b | `TimingFactorModal` → shell (deferred 4th) | UI | |
@@ -110,12 +110,28 @@ Model, `regime_snapshots` persistence (reuse the `research_runs` raw-SQL idiom),
   **Gate:** E2E must prove **durability across a browser reload**, not just navigation — a test
   that only checks the button routes would pass against the old ephemeral behaviour.
 
-### Phase 4 — Research Context + ResearchRun round-trip
-Consolidate the **three** live `["macro","regime"]` queries (`ContextStrip.tsx:37`,
-`GoalGate.tsx:112`, `journal/page.tsx:53`) onto the attached snapshot, and add ResearchRun
-save → refresh recovery.
-**Gate:** E2E — save a run, reload, reopen the identical run with the same snapshot ID and
-rule-set version. **This is the milestone that proves the architecture.**
+### Phase 4 — Research Context + ResearchRun round-trip — **done**
+
+- **4a `3afe2d8`** — `regime` / `recommended_mode` promoted to columns (they had lived only inside
+  the `explanation` string); analyze accepts `regime_snapshot_id` and stamps it into the run's
+  `snapshot` as well as `inputs`, because `list_runs` omits `inputs`.
+- **4b `ac04674`** — `useResearchRegime()` puts one precedence rule in one place: **attached
+  snapshot wins, live is the labelled fallback**. All three call sites consume it. Strip renders
+  spec §4 items ①–⑨. Added `activeStudy` (item ① had no state at all).
+- **4c** — `reopenRun` + reload round-trip E2E gate.
+
+**Gate met, with one clause re-homed:** reopening restores the same run ID, snapshot ID, and
+holdings across a browser reload. The "rule-set version" half moved to **Phase 7** (drift D2) —
+no rule-set version exists yet and building one here would breach the scope wall.
+
+**Spec §4 proxies shipped in Phase 4** (decided with the user, not silently):
+
+| Spec item | Phase 4 shows | Full form owned by |
+|---|---|---|
+| ③ market & universe | `market` + holdings count | a future sleeve/universe model |
+| ⑦ active rule set | timing **config summary** (frontend holds no saved `set_id`) | Phase 7 |
+| ⑦ scenario pack | selected scenario **label** | Phase 9 |
+| ⑨ rule version | omitted; snapshot/model/engine/code versions shown | Phase 7 |
 
 ### Phase 5 — ADR acceptance + shadcn scaffold
 Amend the `CLAUDE.md` frontend clause to state what is true (Tailwind already present, 46
@@ -143,6 +159,12 @@ slope, exercises the vintage path). Three-state `SignalState`, `unavailable → 
 `k_of_n` combination, hysteresis, cooldown, conflict policy.
 **Deliberately not** the full catalogue: the goal is to prove the contract end-to-end.
 **TDD:** direction (esp. Defense First inversion), frequency alignment, missing-data behaviour.
+**Gate (re-homed from Phase 4, drift D2):** `timing_rule_sets` has no `version` column today
+(`set_id · created_at · updated_at · name · market · rules · gate · notes`). Versioning belongs to
+`TimingRuleSetV2`, so **this phase owns** the reproducibility clause the Phase 4 gate could not
+satisfy: reopening a run must restore the same **rule-set version**, and spec §4 item 9's
+"rule version" becomes displayable here. Phase 4 shipped the timing *config summary* instead and
+said so on screen.
 
 ### Phase 6b — `TimingFactorModal` → catalogue shell
 The deferred fourth modal, once its underlying model is stable.
@@ -182,6 +204,9 @@ alignment test**, and rejection of `forward_only` factors by the historical-simu
 Extend the stress catalogue and `kr_scenario_pack.py`. Baseline vs timing-adjusted vs
 macro-conditioned comparison in Stress — **reusing the Phase 7b comparison machinery**, not a
 second implementation. Historical/hypothetical labelling enforced in the type.
+**Re-homed from Phase 4 (drift D3):** scenario **pack identity** for spec §4 item 7. Phase 4 shows
+the selected scenario's *label* only, because no pack entity exists yet; this phase gives packs an
+identity the Research Context strip can display.
 
 ### Phase 10 — Stage wiring
 Optimize (timing as explicit constraint/overlay, before/after + infeasibility reasons),

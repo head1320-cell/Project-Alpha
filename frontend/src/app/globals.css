@@ -4013,3 +4013,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   /* 좁은 화면에서는 재현 식별자·시나리오를 먼저 접는다 (국면·미반영 변경이 우선) */
   .as-ctx-scen, .as-ctx-rules { display: none; }
 }
+
+/* 33. 런 되돌리기 버튼 (Phase 4c) — 재현성은 "저장했다"가 아니라 "다시 열어서 같은 것을
+   본다"로 증명된다. 삭제(.as-x) 옆이라 파괴적 액션과 시각적으로 구분한다. */
+.as-rr-reopen { font-size: 10px; padding: 2px 7px; margin-left: auto; border-radius: 4px;
+  cursor: pointer; border: 1px solid var(--t-border); background: var(--bg-card); color: var(--t-ink); }
+.as-rr-reopen:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
+.as-rr-reopen:disabled { opacity: .55; cursor: progress; }

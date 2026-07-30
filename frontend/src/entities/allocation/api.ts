@@ -52,6 +52,8 @@ export interface AnalyzeRequest {
   // ResearchRun 기록 (opt-in — 명시 요청 시에만 서버가 run_id 스탬프)
   record_run?: boolean;
   run_name?: string;
+  /** 이 결정을 내릴 때 붙어 있던 매크로 국면 스냅샷 (Phase 4a — 서버가 런에 함께 스탬프) */
+  regime_snapshot_id?: string | null;
 }
 
 export interface FrontierPoint {
