@@ -137,7 +137,9 @@ test("AAS Timing: preview is re-scored when the threshold changes", async ({ pag
   await expect(page.locator(".tfm-hist-stats")).toContainText("임계");
 
   // 비율(0~1) 팩터에 임계 1.5 → 통과 불가 → 현재 상태가 위험-온일 수 없다
-  const thr = page.locator(".as-tm-num").last();
+  // ★.tfm 으로 스코프한다★ — 타이밍 페이지 자체도 .as-tm-num 을 쓰고(page.tsx:101·175),
+  // 그중 하나는 모달보다 뒤에 렌더되므로 문서 전체에서 .last() 를 잡으면 페이지 입력이 잡힌다.
+  const thr = page.locator(".tfm .as-tm-num").last();
   await thr.fill("1.5");
   await expect(page.locator(".tfm-hist-st")).not.toHaveClass(/s-risk_on/);
 });
