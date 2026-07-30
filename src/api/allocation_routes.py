@@ -1277,6 +1277,120 @@ def allocation_timing_rules_delete(set_id: str):
     return {"deleted": True}
 
 
+class TimingThreeWayRequest(BaseModel):
+    """3자 비교 요청 — V2 룰셋 스펙 + 붙일 국면 스냅샷.
+
+    ★`TimingRequest`(레거시 카나리)와 별개다★ 이름이 비슷하다는 이유로 합치면 `passes()`
+    기반 라이브 경로에 V2 3-상태 로직이 섞인다(Drift D7-1 이 피한 회귀).
+    """
+    market: str = Field("kr", pattern="^(us|kr)$")
+    combination: str = "all"
+    k: int = Field(1, ge=1, le=50)
+    weights: list[float] = Field(default_factory=list)
+    rules: list[dict] = Field(default_factory=list)
+    #: 오버레이의 출처. **라이브 매크로가 아니라 버전이 박힌 스냅샷**이다.
+    regime_snapshot_id: str | None = Field(None, max_length=40)
+    #: 룰과 독립적으로 끌 수 있어야 한다 (스펙 §8: "조용한 오버라이드가 아니다").
+    overlay_enabled: bool = True
+    as_of: str | None = Field(None, max_length=32)
+
+
+def _overlay_from_snapshot(snap: dict, *, enabled: bool):
+    """RegimeSnapshot → MacroOverlay. **없는 국면을 지어내지 않는다.**
+
+    `_has_regime_cols` 가 degraded 인 DB 에서는 `regime`/`recommended_mode` 가 None 으로
+    온다. 그때 '중립' 으로 채우면 사용자는 매크로가 판단에 관여한 줄 안다 — 대신
+    `data_status=UNAVAILABLE` 로 표시해 오버레이를 **쓸 수 없는 것으로** 둔다
+    (`exposure_cap()` 이 1.0 을 돌려주므로 노출을 깎지도, 키우지도 않는다).
+
+    `recommended_mode` 는 그대로 넘긴다 — 어휘 해석은 `MacroOverlay.mode_cap` 한 곳에서만
+    한다. 여기서 'unknown' 같은 값으로 바꿔치기하면 해석이 두 곳으로 갈라진다.
+    """
+    from src.data.pit_macro import DataStatus, ResearchUsage
+    from src.engine.macro_overlay import MacroOverlay
+
+    def _enum(cls, raw, fallback):
+        try:
+            return cls(raw)
+        except Exception:
+            return fallback
+
+    regime = snap.get("regime")
+    mode = snap.get("recommended_mode")
+    status = _enum(DataStatus, snap.get("data_status"), DataStatus.UNAVAILABLE)
+    if not regime or not mode:
+        status = DataStatus.UNAVAILABLE          # 국면을 읽지 못했다 — 채우지 않는다
+    return MacroOverlay(
+        regime=regime or "국면 미확인",
+        recommended_mode=mode or "",
+        confidence=float(snap.get("confidence") or 0.0),
+        stress_score=float(snap.get("stress_score") or 0.0),
+        data_status=status,
+        research_usage=_enum(ResearchUsage, snap.get("research_usage"),
+                             ResearchUsage.UNAVAILABLE),
+        enabled=enabled,
+    )
+
+
+@router.post("/timing/three-way")
+def allocation_timing_three_way(req: TimingThreeWayRequest):
+    """기준 vs 타이밍만 vs 타이밍+매크로 — 스펙 §8 3자 비교의 HTTP 표면.
+
+    `e6e05c1` 이 엔진(`MacroOverlay`·`three_way`·`conflict_explanation`)을 만들었지만 표면이
+    없어 UI 에서 닿을 수 없었다. 이 라우트가 그 배선이며, 타이밍 단독 평가
+    (`evaluate_rule_set`)와 **같은** `rule_set_states()` 파생을 쓴다 — 두 경로가 갈라지면
+    비교되는 두 다리가 서로 다른 신호가 되고, 그건 비교가 아니다.
+    """
+    from src.data.regime_snapshots import get_snapshot
+    from src.engine import timing_rules_v2 as v2
+    from src.engine.macro_overlay import conflict_explanation, three_way
+
+    if req.combination not in v2.COMBINATION_METHODS:
+        raise HTTPException(
+            422, f"알 수 없는 조합 방식: {req.combination}. "
+                 f"가능한 값: {', '.join(v2.COMBINATION_METHODS)}")
+    if not req.rules:
+        raise HTTPException(422, "비교할 타이밍 규칙이 최소 1개 필요합니다.")
+
+    overlay = None
+    if req.regime_snapshot_id:
+        snap = get_snapshot(req.regime_snapshot_id)
+        if snap is None:
+            raise HTTPException(
+                422, f"국면 스냅샷을 찾을 수 없습니다: {req.regime_snapshot_id}. "
+                     "스냅샷은 매크로 탭에서 먼저 저장해야 합니다.")
+        overlay = _overlay_from_snapshot(snap, enabled=req.overlay_enabled)
+
+    rule_set = v2.rule_set_from_specs(
+        req.rules, market=req.market, combination=req.combination,
+        k=req.k, weights=req.weights, set_id="three_way")
+
+    try:
+        states = v2.rule_set_states(rule_set, as_of=req.as_of, market=req.market)
+        legs = three_way(states, method=req.combination, overlay=overlay,
+                         k=req.k, weights=list(req.weights) or None)
+    except ValueError as e:
+        # 엔진의 거부(예: 매크로 없는 regime_conditioned)를 조용히 대치하지 않고 그대로 전달.
+        raise HTTPException(422, str(e)) from e
+
+    return {
+        "legs": {name: {
+            "state": sig.state.value, "exposure": sig.exposure, "method": sig.method,
+            "on_count": sig.on_count, "off_count": sig.off_count,
+            "unavailable_count": sig.unavailable_count, "explanation": sig.explanation,
+        } for name, sig in legs.items()},
+        "overlay": overlay.to_dict() if overlay is not None else None,
+        "conflict": conflict_explanation(legs["timing_only"], overlay),
+        "factor_states": [
+            {"factor_id": r.factor_id, "state": s.value}
+            for r, s in zip(rule_set.rules, states)
+        ],
+        "combination": req.combination,
+        "as_of": req.as_of,
+        "regime_snapshot_id": req.regime_snapshot_id,
+    }
+
+
 @router.post("/timing")
 def allocation_timing(req: TimingRequest):
     """카나리(자산·지표) 브레드스 게이트 → 위험-온/오프 자산군 스위치 + 추세 오버레이.

@@ -38,7 +38,7 @@ from src.data.pit_macro import (
 )
 
 # `passes()` 는 의도적으로 import 하지 않는다 (Drift D7-1) — 라이브 카나리 경로 불변.
-from src.engine.timing_factors import CATALOG_BY_ID, evaluate
+from src.engine.timing_factors import CATALOG_BY_ID, evaluate, rule_from_spec
 
 # 스펙 §3.3 이 나열한 6종. regime_conditioned 는 매크로 오버레이(Phase 7b) 가 필요해서
 # 여기서는 **명시적으로 거부**한다 — 다른 방식으로 조용히 대치하면 사용자는 자기가
@@ -508,20 +508,52 @@ def assert_readings_backtest_eligible(readings: list[FactorReading]) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 룰셋 평가 — 읽기 → (백테스트면 게이트) → 판정 → 조합
 # ═══════════════════════════════════════════════════════════════════════════════
-def evaluate_rule_set(
+def rule_set_from_specs(
+    specs: list[dict],
+    *,
+    market: str = "kr",
+    combination: str = "all",
+    k: int = 1,
+    weights: list[float] | None = None,
+    set_id: str = "ad_hoc",
+    name: str = "",
+) -> TimingRuleSetV2:
+    """UI/API 스펙 리스트 → `TimingRuleSetV2`.
+
+    각 룰의 `base` 는 `timing_factors.rule_from_spec()` 이 만든다 — 카탈로그 기본값 보강을
+    여기서 다시 구현하지 않는다. `hysteresis` 처럼 V2 에만 있는 필드는 스펙에서 직접 읽는다.
+    """
+    rules = [
+        TimingRuleV2(
+            factor_id=str(s.get("factor_id") or s.get("id") or ""),
+            base=rule_from_spec(s),
+            hysteresis=float(s.get("hysteresis", 0.0) or 0.0),
+            cooldown=int(s.get("cooldown", 0) or 0),
+        )
+        for s in (specs or [])
+    ]
+    return TimingRuleSetV2(
+        set_id=set_id, name=name, market=market, combination=combination,
+        k=k, weights=list(weights or []), rules=rules,
+    )
+
+
+def rule_set_states(
     rule_set: TimingRuleSetV2,
     *,
     as_of: str | None = None,
     mode: str = "forward",
     market: str | None = None,
     previous: SignalState | None = None,
-) -> CompositeSignal:
-    """룰셋 하나를 평가한다.
+) -> list[SignalState]:
+    """룰셋의 팩터별 3-상태 판정. 룰 하나당 정확히 하나.
 
-    mode="backtest" 면 **판정 전에** 게이트를 통과해야 한다 — 값을 계산한 뒤 거부해도
-    늦지 않지만, 부적격 데이터로 만든 숫자가 로그·캐시에 남는 것 자체가 오염이다.
-    mode="forward" 는 거부하지 않는다(실시간 판단은 결측을 안고 가야 한다) — 대신 결측은
-    보수적으로 위험-오프로 접힌다.
+    ★조합(`combine`) 이전까지의 파생을 여기 한 곳에 모아 둔다★
+    `evaluate_rule_set`(단독 평가)과 `macro_overlay.three_way`(3자 비교)가 **같은** 상태
+    배열을 써야 한다. Phase 7b 전까지 이 계산은 `evaluate_rule_set` 안에 인라인되어 있었고,
+    3자 비교는 `states` 를 인자로 받기만 했으므로 호출자가 그 파생을 각자 재현해야 했다 —
+    두 경로가 갈라지면 "타이밍 단독" 과 "타이밍+매크로" 가 서로 다른 신호를 비교하게 되는데,
+    그건 비교가 아니다.
     """
     if mode not in EVALUATION_MODES:
         raise ValueError(
@@ -541,11 +573,33 @@ def evaluate_rule_set(
         ))
 
     if mode == "backtest":
+        # 판정 전에 거부한다 — 부적격 데이터로 만든 숫자가 남는 것 자체가 오염이다.
         assert_readings_backtest_eligible(readings)
 
-    states = [
+    return [
         state_for_factor(r.factor_id, r.value, hysteresis=rule.hysteresis, previous=previous)
         for rule, r in zip(rule_set.rules, readings)
     ]
+
+
+def evaluate_rule_set(
+    rule_set: TimingRuleSetV2,
+    *,
+    as_of: str | None = None,
+    mode: str = "forward",
+    market: str | None = None,
+    previous: SignalState | None = None,
+) -> CompositeSignal:
+    """룰셋 하나를 평가한다.
+
+    mode="backtest" 면 **판정 전에** 게이트를 통과해야 한다 — 값을 계산한 뒤 거부해도
+    늦지 않지만, 부적격 데이터로 만든 숫자가 로그·캐시에 남는 것 자체가 오염이다.
+    mode="forward" 는 거부하지 않는다(실시간 판단은 결측을 안고 가야 한다) — 대신 결측은
+    보수적으로 위험-오프로 접힌다.
+
+    팩터별 판정은 `rule_set_states()` 가 담당한다 — 3자 비교와 같은 파생을 쓰기 위한 것이다.
+    """
+    states = rule_set_states(
+        rule_set, as_of=as_of, mode=mode, market=market, previous=previous)
     return combine(states, method=rule_set.combination, k=rule_set.k,
                    weights=list(rule_set.weights) or None)

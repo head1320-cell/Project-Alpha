@@ -20,12 +20,30 @@ from dataclasses import dataclass
 from src.data.pit_macro import DataStatus, ResearchUsage
 from src.engine.timing_rules_v2 import CompositeSignal, SignalState, combine
 
-#: 국면 엔진이 권고하는 모드. 노출 상한으로 번역된다(키우지 않고 자른다).
+#: 국면 엔진이 권고하는 모드 → 노출 상한(키우지 않고 자른다).
+#:
+#: ★어휘와 스케일은 코드가 진실이다★
+#: 이 표는 처음에 `risk_on`/`neutral`/`risk_off` 로 적혀 있었는데, 그 어휘는 이 코드베이스에
+#: **존재하지 않는다**. 실제 생산자는 `regime_analyzer.RegimeState.recommended_mode` 이고
+#: 값은 `NORMAL`/`CAUTIOUS`/`DEFENSIVE` 다(`regime_analyzer.py:65`). 단위 테스트가 20개
+#: 전부 통과했던 이유는 테스트가 내가 지어낸 어휘를 그대로 먹여 줬기 때문이고, 실제 스냅샷이
+#: 처음 흘러든 순간(3자 비교 HTTP 배선) `MODE_CAP.get("cautious", 0.0)` → 상한 0.0 이 되어
+#: 모든 포트폴리오가 조용히 전액 위험-오프로 떨어졌다.
 MODE_CAP: dict[str, float] = {
-    "risk_on": 1.0,      # 자르지 않음 — 올려 주지도 않음
+    "normal": 1.0,       # 자르지 않음 — 올려 주지도 않음
+    "cautious": 0.6,
+    "defensive": 0.0,
+    # 별칭 — 외부 호출자가 쓰던 표기를 같은 뜻으로 받는다(어휘를 둘로 유지하지 않기 위해).
+    "risk_on": 1.0,
     "neutral": 0.6,
     "risk_off": 0.0,
 }
+
+#: `stress_score` 의 단위. **0~100** 이다 — `regime_analyzer.py:56` 의 선언이고
+#: `regime_analyzer.py:148` 도 `stress_score / 100` 으로 쓴다. 0~1 분수로 오해하면
+#: 51.8 이 1.0 으로 클램프되어 상한이 0 이 된다(위 주석의 사고가 정확히 이것이었다).
+#: 스케일을 값에서 **추측하지 않는다** — 0.8 이 "80%" 인지 "0.8점" 인지 값만 보고는 알 수 없다.
+STRESS_SCALE_MAX: float = 100.0
 
 
 @dataclass(frozen=True)
@@ -36,8 +54,11 @@ class MacroOverlay:
     스펙 요구를 타입 수준에서 표현한다.
     """
     regime: str
+    #: `NORMAL` | `CAUTIOUS` | `DEFENSIVE` (대소문자 무관). 인식되지 않으면 **조정하지 않는다**.
     recommended_mode: str
+    #: 0.0~1.0
     confidence: float
+    #: **0~100** (`STRESS_SCALE_MAX`) — 0~1 분수가 아니다.
     stress_score: float
     data_status: DataStatus = DataStatus.REAL
     research_usage: ResearchUsage = ResearchUsage.UNAVAILABLE
@@ -48,14 +69,25 @@ class MacroOverlay:
         return bool(self.enabled)
 
     @property
+    def mode_cap(self) -> float | None:
+        """권고 모드의 상한. 어휘를 인식하지 못하면 `None` — **0.0 이 아니다.**
+
+        ★인식 못 한 라벨은 "전액 방어하라" 는 지식이 아니다★
+        원래 `MODE_CAP.get(mode, 0.0)` 이었는데, 그러면 모르는 라벨이 조용히 "노출 0" 이라는
+        가장 강한 판단으로 번역된다. mock 게이트 원칙(조회 실패를 합성값으로 가리지 말 것)과
+        같은 이유로, 모르면 모른다고 하고 조정하지 않는다.
+        """
+        return MODE_CAP.get(str(self.recommended_mode or "").strip().lower())
+
+    @property
     def usable(self) -> bool:
-        """값을 신뢰할 수 있는가. 결측이면 조정에 쓰지 않고 **보수적으로만** 취급한다."""
-        return self.data_status is not DataStatus.UNAVAILABLE
+        """값을 신뢰할 수 있는가 — 데이터가 있고, 모드 어휘도 인식된 경우에만."""
+        return self.data_status is not DataStatus.UNAVAILABLE and self.mode_cap is not None
 
     def exposure_cap(self) -> float:
         """이 국면이 허용하는 노출 상한 (0.0~1.0).
 
-        모드 상한 × 신뢰도 × (1 − 스트레스), 0~1 로 클램프.
+        모드 상한 × 신뢰도 × (1 − 스트레스/100), 0~1 로 클램프.
 
         ★one-way 불변식을 강제하는 곳은 여기가 아니다★
         실제 보장은 `timing_rules_v2.combine()` 의 `if cap < exposure` 비교다 — 상한이
@@ -64,12 +96,12 @@ class MacroOverlay:
         이 함수가 1.8 을 돌려주도록 바꿔도 테스트가 전부 통과했다(combine 이 막고 있었다).
         불변식의 소재를 잘못 적으면 다음 사람이 여기만 보고 안심하게 되므로 바로잡아 둔다.
         """
-        cap = MODE_CAP.get(self.recommended_mode.lower(), 0.0)
         if not self.usable:
             # 매크로를 못 읽었다 → 조정하지 않는다(노출을 키우지도, 임의로 깎지도 않는다).
             return 1.0
+        cap = self.mode_cap or 0.0
         conf = min(1.0, max(0.0, float(self.confidence)))
-        stress = min(1.0, max(0.0, float(self.stress_score)))
+        stress = min(1.0, max(0.0, float(self.stress_score) / STRESS_SCALE_MAX))
         return max(0.0, min(1.0, cap * conf * (1.0 - stress)))
 
     def to_dict(self) -> dict:
@@ -79,6 +111,10 @@ class MacroOverlay:
             "data_status": self.data_status.value,
             "research_usage": self.research_usage.value,
             "enabled": self.enabled, "exposure_cap": self.exposure_cap(),
+            # ★usable 을 내보내야 UI 가 "매크로를 못 읽었다" 를 "매크로가 중립이다" 와
+            # 구별할 수 있다★ 빼먹으면 소비자는 둘을 같게 취급한다(그리고 실제로 그랬다 —
+            # 이 필드가 없을 때 정직성 테스트가 조용히 통과했다).
+            "usable": self.usable,
         }
 
 
@@ -128,7 +164,11 @@ def conflict_explanation(timing: CompositeSignal, overlay: MacroOverlay | None) 
     """
     if overlay is None or not overlay.active:
         return None          # 꺼진 오버레이는 판단에 관여하지 않으므로 충돌도 없다
-    macro_off = overlay.recommended_mode.lower() != "risk_on"
+    # 충돌의 기준은 "라벨이 risk_on 이 아니다" 가 아니라 **실제로 상한을 걸었는가** 다.
+    # 전자로 적었을 때 `NORMAL`(제약 없음)이 충돌로 보고됐다 — 어휘를 하나 고쳐도
+    # 비교 기준이 라벨 문자열이면 다음 어휘에서 또 어긋난다.
+    cap = overlay.mode_cap
+    macro_off = cap is not None and cap < 1.0
     timing_on = timing.state is SignalState.RISK_ON
     if not (timing_on and macro_off):
         return None
