@@ -18,7 +18,7 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 70 passed 확인 (33 at Phase 0 · 64 before 7b) · 6d 로 77건으로 늘어남 |
+| Playwright | 77 passed (33 at Phase 0 · 64 before 7b · 70 before 6d) |
 | pytest | 1247 passed, 10 skipped (1003 at Phase 0 · 1214 before 7b) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
