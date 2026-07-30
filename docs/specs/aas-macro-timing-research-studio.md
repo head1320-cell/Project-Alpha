@@ -350,6 +350,17 @@ correlation · Korea set (KOSPI/KOSDAQ relative strength, sector dispersion, USD
 
 **Missing institutional data is never backfilled with fabricated values.**
 
+> **Phase 8 실행 기록 (재배치 1건).** 위 목록 중 **섹터 디스퍼전**은 Phase 8 에서 만들지
+> 않고 **Phase 8b(데이터 소스 확장)로 재배치**했다 — 이 코드베이스에 섹터 지수 시계열이
+> 없기 때문이다. `stock_master.get_stock_sector()` 는 종목→섹터 **이름**만 주고, 섹터별
+> 가격 이력은 어디에도 없다. 섹터 ETF 바스켓으로 근사할 수는 있으나 그건 새 데이터 매핑을
+> 들이는 일이라 8b 의 소관이다. 나머지 Phase-1 팩터 12종은 Phase 8 에서 구현했다.
+>
+> **KOSPI/KOSDAQ 상대강도와 원/달러 추세는 ETF 프록시로 구현했다.** KOSDAQ 은 수집
+> 시리즈가 없고 KOSPI·원달러는 ECOS 라 vintage 가 없다(위 표의 `forward_only`).
+> 지수가 아니라 상품을 재는 것이므로 추적오차·보수가 신호에 섞이며, 그 사실을 각 팩터
+> 설명에 적었다 — 위 §6 의 '데이터가 뒷받침하지 않는 주장 금지' 규칙을 그대로 적용한 것이다.
+
 ---
 
 ## 7. API direction

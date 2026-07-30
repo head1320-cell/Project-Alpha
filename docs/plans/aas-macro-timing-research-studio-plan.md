@@ -19,7 +19,7 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 | Gate | Baseline |
 |---|---|
 | Playwright | 77 passed (33 at Phase 0 · 64 before 7b · 70 before 6d) |
-| pytest | 1247 passed, 10 skipped (1003 at Phase 0 · 1214 before 7b) |
+| pytest | 1328 passed, 10 skipped (1003 at Phase 0 · 1247 before Phase 8) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -51,7 +51,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | ✅ (이번 커밋) |
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | ✅ `e6e05c1` `8ef491f` `e695ecc` |
 | 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | ✅ `8c8db18` |
-| 8 | Factor catalogue breadth | backend | |
+| 8 | Factor catalogue breadth | backend | ✅ (이번 커밋) |
 | 8b | Data-source extension (NFCI · VXVCLS) | backend | |
 | 9 | `ScenarioPackV2` | both | |
 | 10 | Stage wiring (Optimize · Attribution · Execution · Journal) | both | |
@@ -527,6 +527,38 @@ regime_snapshots 에서 겪은 것과 **같은 패턴**이다. 일반화하면: 
 The remaining Phase-1 factors: relative momentum, breadth (incl. equal- vs cap-weight), realized
 vol / vol regime / target-vol sizing, drawdown + speed + recovery, rolling correlation, Korea set.
 (TSMOM and curve slope ship in Phase 7.) **TDD per factor.**
+
+**Shipped — 12 팩터, 카탈로그 13 → 25.** 패밀리 4개(`breadth·volatility·drawdown·correlation`)를
+추가했다. `regime` 에 몰아넣으면 그 패밀리가 15개짜리 잡동사니가 되어 패밀리 필터가 쓸모없어진다.
+
+| 스펙 항목 | 구현 |
+|---|---|
+| 상대 모멘텀 | `relative_momentum` |
+| 브레드스 · 동일가중 vs 시총가중 | `breadth_above_ma` · `equal_vs_cap` |
+| 실현변동성 · 변동성국면 · 목표변동성 사이징 | `realized_vol` · `vol_regime` · `target_vol_size` |
+| 낙폭 · 속도 · 회복 | `drawdown` · `drawdown_speed` · `recovery_state` |
+| 롤링 상관(주식-채권·크로스에셋) | `rolling_correlation` (벤치마크가 파라미터라 한 팩터가 둘 다 커버) |
+| 한국: 코스닥/코스피 상대강도 · 원달러 추세 | `kospi_kosdaq_rs` · `usdkrw_trend` (**ETF 프록시**) |
+| 한국: 섹터 디스퍼전 | **8b 로 재배치** — 섹터 지수 시계열이 없다(Drift 8-1) |
+
+**Drift 8-5 — 날짜 없는 접근자.** `daily_closes()` 는 값만 준다. 두 종목의 꼬리를 zip 하면
+거래일이 같다고 가정하게 되는데 한·미 휴장일과 상장일이 달라 실제로는 다른 날짜끼리 짝지어진다.
+`daily_closes_indexed()` 를 추가(가법적, 캐시·as_of 관례 동일)해 **겹치는 날짜만** 쓴다.
+
+**뮤테이션 프로브 5건 전부 잡힘** — vol_regime 0 나눗셈 가드, 상관 0 표준편차 가드, 낙폭 부호,
+읽지 못한 바스켓 종목을 '이탈'로 세기, 상관의 날짜 조인을 naive zip 으로 바꾸기.
+
+**내 테스트에서 발견한 결함 2건.**
+- 날짜 정렬 테스트(이 접근자의 **존재 이유**)가 아무것도 검증하지 못했다. 어긋난 쪽을 정렬된
+  쪽의 **접미사**로 만들었더니 naive zip 도 우연히 맞아떨어져, 조인을 zip 으로 바꾸는 뮤테이션이
+  53개 테스트를 전부 통과했다. 실제 휴장일은 **가운데**에 생긴다 — 그렇게 다시 만들었더니
+  조인 1.0 vs naive zip 0.918 로 갈렸다.
+- 값을 대칭으로 만든 상관은 −1 이 아니라 −0.9996 이다(퍼센트 수익률은 기준이 서로 다르다).
+  거짓 전제 위의 단언을 참인 주장으로 바꿨다.
+
+**기존 결함 1건을 기록으로 남겼다.** `indicator` 는 카탈로그에 있는데 `evaluate()` 분기가 없어
+V2 경로에서 영원히 unavailable 이다(레거시 카나리 경로에서만 동작). 새 무결성 테스트가 잡았고,
+제대로 고치려면 시점 기반 매크로 리더가 필요해 **8b** 소관이다 — 면제 목록에 사유와 함께 남겼다.
 
 ### Phase 8b — Data-source extension
 Add FRED `NFCI` (weekly, **revised** — requires the Phase 1 vintage path) and `VXVCLS` to

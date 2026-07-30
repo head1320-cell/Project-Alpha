@@ -324,3 +324,61 @@ def test_every_catalogue_entry_declares_a_direction_and_a_reason():
         assert c["default_direction"] in ("above", "below"), c["id"]
         assert (c.get("desc") or "").strip(), f'{c["id"]} 에 설명이 없다'
         assert (c.get("provenance") or "").strip(), f'{c["id"]} 에 출처가 없다'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7. 한국 세트 (Drift 8-2 — ETF 프록시)
+#
+# ★프록시는 프록시라고 적는다★
+# KOSDAQ 은 수집 대상이 아니고 KOSPI 는 ECOS(forward_only) 라, 지수 시계열로는 만들 수 없다.
+# 대신 거래되는 ETF 로 근사한다 — 추적오차와 보수가 신호 안에 섞여 들어가므로, 그 사실이
+# 설명에 없으면 사용자는 지수를 본다고 오해한다.
+# ═══════════════════════════════════════════════════════════════════════════════
+def test_kospi_kosdaq_rs_positive_when_growth_leads(monkeypatch):
+    _patch_monthly(monkeypatch, {"229200": _rising(20), "069500": _flat(20)})
+    v = tf.kospi_kosdaq_rs(None, "kr", months=6)
+    assert v is not None and v > 0
+
+
+def test_kospi_kosdaq_rs_negative_when_core_leads(monkeypatch):
+    _patch_monthly(monkeypatch, {"229200": _flat(20), "069500": _rising(20)})
+    assert tf.kospi_kosdaq_rs(None, "kr", months=6) < 0
+
+
+def test_kospi_kosdaq_rs_none_when_one_leg_missing(monkeypatch):
+    _patch_monthly(monkeypatch, {"069500": _rising(20)})
+    assert tf.kospi_kosdaq_rs(None, "kr", months=6) is None
+
+
+def test_usdkrw_trend_positive_when_dollar_rises(monkeypatch):
+    _patch_monthly(monkeypatch, {"261240": _rising(20)})
+    v = tf.usdkrw_trend(None, "kr", months=6)
+    assert v is not None and v > 0
+
+
+def test_usdkrw_trend_none_when_unreadable(monkeypatch):
+    _patch_monthly(monkeypatch, {})
+    assert tf.usdkrw_trend(None, "kr", months=6) is None
+
+
+@pytest.mark.parametrize("fid", ["kospi_kosdaq_rs", "usdkrw_trend"])
+def test_korea_factors_disclose_that_they_are_etf_proxies(fid):
+    """★지수가 아니라 ETF 라는 사실을 설명에 적는다★
+
+    스펙 §6 은 데이터가 뒷받침하지 않는 주장을 금지한다. 이 팩터들은 지수가 아니라 상품을
+    측정하므로, 그 차이를 적지 않으면 "KOSPI 대비" 라고 읽힌다.
+    """
+    desc = tf.CATALOG_BY_ID[fid]["desc"]
+    assert "ETF" in desc, f"{fid}: ETF 프록시라는 사실이 설명에 없다"
+    assert "지수가 아" in desc or "프록시" in desc, f"{fid}: 지수와의 차이를 적지 않았다"
+
+
+@pytest.mark.parametrize("fid", ["kospi_kosdaq_rs", "usdkrw_trend"])
+def test_korea_factors_are_reachable_through_evaluate(fid, monkeypatch):
+    _patch_monthly(monkeypatch, {})
+    tf.evaluate(fid, "069500", "kr", dict(tf.CATALOG_BY_ID[fid].get("params") or {}))
+
+
+def test_usdkrw_trend_reads_dollar_strength_as_risk_off():
+    """원화 약세(달러 강세)는 국내 주식에 위험-오프 쪽 — 방향이 below 여야 한다."""
+    assert tf.CATALOG_BY_ID["usdkrw_trend"]["default_direction"] == "below"

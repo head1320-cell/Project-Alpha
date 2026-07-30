@@ -9,10 +9,12 @@ TimingRule 스키마(사용자 제안 그대로):
   transaction_cost_and_slippage · point_in_time_data_timestamp
 
 signal_family: momentum | deviation | breakout | overnight | regime
+               | breadth | volatility | drawdown | correlation  (Phase 8)
 
 재사용(신규 수학 최소화):
   · tactical_allocations._ret/_abs_mom/_score_13612/_accel/_above_ma_m/_above_ma_d
-  · etf_prices.monthly_closes/daily_closes/daily_ohlc (as_of 시점절단 관례 포함)
+  · etf_prices.monthly_closes/daily_closes/daily_ohlc/daily_closes_indexed
+    (as_of 시점절단 관례 포함. _indexed 는 두 종목을 날짜로 맞춰야 하는 계산용 — Phase 8)
 
 정직성(중요):
   · systrader79 계열(평균절대모멘텀·가속듀얼모멘텀·Defense First 등)은 공개 포스팅으로
@@ -411,6 +413,47 @@ def rolling_correlation(ticker: str, market: str = "kr", days: int = 60,
     return max(-1.0, min(1.0, cov / (sa * sb)))
 
 
+# ── Phase 8: 한국 세트 (Drift 8-2) ────────────────────────────────────────────
+#
+# ★지수가 아니라 ETF 를 잰다★
+# KOSDAQ 은 수집 대상이 아니고 KOSPI 는 ECOS 라 vintage 가 없다(§6.1 기준 forward_only).
+# 지수 시계열로는 만들 수 없어서 **거래되는 ETF 로 근사**한다. 추적오차·보수가 신호 안에
+# 들어오므로 그 사실을 설명에 적는다 — 안 적으면 사용자는 "KOSPI 대비" 라고 읽는다.
+# 지수 자체를 쓰려면 수집기에 시리즈를 추가해야 하고, 그건 Phase 8b(데이터 소스) 소관이다.
+_KOSDAQ_ETF = "229200"      # KODEX 코스닥150
+_KOSPI_ETF = "069500"       # KODEX 200
+_USD_ETF = "261240"         # KODEX 미국달러선물
+
+
+def kospi_kosdaq_rs(_ticker: str | None = None, market: str = "kr", months: int = 6,
+                    growth: str = _KOSDAQ_ETF, core: str = _KOSPI_ETF) -> float | None:
+    """코스닥 − 코스피 상대강도 (%p, ETF 프록시).
+
+    성장·중소형(코스닥)이 대형(코스피)을 앞서면 위험선호 국면으로 읽는다.
+    한쪽이라도 못 읽으면 None — 한쪽 수익률만으로 상대강도를 말할 수 없다.
+    """
+    from src.data.etf_prices import monthly_closes
+    from src.engine.tactical_allocations import _ret
+    g = _ret(monthly_closes(growth, market, months + 2), months)
+    c = _ret(monthly_closes(core, market, months + 2), months)
+    if g is None or c is None:
+        return None
+    return (g - c) * 100.0
+
+
+def usdkrw_trend(_ticker: str | None = None, market: str = "kr", months: int = 6,
+                 proxy: str = _USD_ETF) -> float | None:
+    """원/달러 추세 (%, 달러선물 ETF 프록시). 양수면 달러 강세 = 원화 약세.
+
+    원화 약세는 국내 주식에 위험-오프 쪽이라 카탈로그 방향이 `below` 다.
+    ECOS 의 731Y001(원/달러)은 vintage 가 없어 forward_only 이므로, 가격 경로를 쓴다.
+    """
+    from src.data.etf_prices import monthly_closes
+    from src.engine.tactical_allocations import _ret
+    r = _ret(monthly_closes(proxy, market, months + 2), months)
+    return None if r is None else r * 100.0
+
+
 CATALOG: list[dict[str, Any]] = [
     # ── momentum ──
     {"id": "score_13612", "label": "13612W 가속모멘텀", "family": "momentum",
@@ -573,6 +616,25 @@ CATALOG: list[dict[str, Any]] = [
                              "휴장일 차이로 다른 날짜끼리 짝지어진다. 벤치마크를 바꾸면 "
                              "주식-채권/크로스에셋 어느 쪽이든 같은 팩터로 볼 수 있다.",
      "provenance": "generic (rolling correlation)", "existing": False},
+    # ── Phase 8: 한국 세트 (ETF 프록시 — Drift 8-2) ──
+    {"id": "kospi_kosdaq_rs", "label": "코스닥−코스피 상대강도", "family": "regime",
+     "evaluation_frequency": "month",
+     "params": {"months": 6, "growth": "229200", "core": "069500"},
+     "default_threshold": 0.0, "default_direction": "above",
+     "unit": "pp", "desc": "코스닥150 − 코스피200 수익률(%p). 성장·중소형이 대형을 앞서면 "
+                           "위험선호 국면. ★지수가 아니라 ETF(KODEX 코스닥150·KODEX 200) "
+                           "프록시★ — KOSDAQ 은 수집 시리즈가 없고 KOSPI 는 vintage 가 없어 "
+                           "가격 경로로 근사한다. 추적오차·보수가 신호에 섞인다.",
+     "provenance": "ETF proxy (KODEX 229200 / 069500)", "existing": False},
+    {"id": "usdkrw_trend", "label": "원/달러 추세 (달러 ETF 프록시)", "family": "regime",
+     "evaluation_frequency": "month",
+     "params": {"months": 6, "proxy": "261240"},
+     "default_threshold": 0.0, "default_direction": "below",
+     "unit": "pct", "desc": "달러선물 ETF 의 N개월 수익률(%). 양수면 달러 강세=원화 약세로, "
+                            "국내 주식에는 위험-오프 쪽이라 임계 **아래**가 통과. "
+                            "★현물 환율 지수가 아니라 ETF 프록시★ — ECOS 원/달러(731Y001)는 "
+                            "vintage 가 없어 forward_only 라서 가격 경로를 쓴다.",
+     "provenance": "ETF proxy (KODEX 261240)", "existing": False},
 ]
 
 CATALOG_BY_ID: dict[str, dict] = {c["id"]: c for c in CATALOG}
@@ -671,6 +733,13 @@ def evaluate(factor_id: str, ticker: str, market: str = "kr",
         if factor_id == "rolling_correlation":
             return rolling_correlation(ticker, market, int(p.get("days", 60)),
                                        str(p.get("benchmark", "TLT")))
+        if factor_id == "kospi_kosdaq_rs":
+            return kospi_kosdaq_rs(None, market, int(p.get("months", 6)),
+                                   str(p.get("growth", _KOSDAQ_ETF)),
+                                   str(p.get("core", _KOSPI_ETF)))
+        if factor_id == "usdkrw_trend":
+            return usdkrw_trend(None, market, int(p.get("months", 6)),
+                                str(p.get("proxy", _USD_ETF)))
         # 기존 프리미티브 위임
         from src.engine.tactical_allocations import (
             _above_ma_d,

@@ -39,6 +39,8 @@ EXPECTED = {
     "drawdown_speed": "day",        # daily_closes 창 비교
     "recovery_state": "day",        # daily_closes 저점→고점
     "rolling_correlation": "day",   # daily_closes_indexed 2종
+    "kospi_kosdaq_rs": "month",     # monthly_closes 2종 (ETF 프록시)
+    "usdkrw_trend": "month",        # monthly_closes 1종 (ETF 프록시)
 }
 
 
