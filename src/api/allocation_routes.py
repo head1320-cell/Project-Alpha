@@ -1208,6 +1208,30 @@ def allocation_timing_factors():
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+@router.get("/timing-factors/{factor_id}/history")
+def allocation_timing_factor_history(
+    factor_id: str,
+    ticker: str = Query("SPY", max_length=20),
+    market: str = Query("kr", pattern="^(us|kr)$"),
+    months: int = Query(24, ge=1, le=240),
+    threshold: float | None = Query(None),
+    direction: str | None = Query(None, pattern="^(above|below)$"),
+):
+    """팩터 과거 미리보기 — 값/임계/3-상태/전환횟수 (스펙 §8.1 요구 4).
+
+    각 점은 `etf_prices.as_of(m)` 안에서 평가되어 그 시점 이후 시세를 보지 못한다.
+    값을 만들 수 없는 팩터는 빈 그래프가 아니라 `limitations` 에 사유를 담아 200 으로 답한다 —
+    미리보기 실패는 요청 오류가 아니고, 사용자는 왜 비었는지 알아야 한다.
+    """
+    try:
+        from src.engine.timing_factor_history import factor_history
+        return factor_history(factor_id, ticker.upper(), market, months=months,
+                              threshold=threshold, direction=direction).to_dict()
+    except Exception:
+        logger.exception("timing factor history 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 class TimingRuleSetRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     market: str = "kr"
