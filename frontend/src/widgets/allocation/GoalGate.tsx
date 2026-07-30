@@ -8,10 +8,10 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
-import { macroApi, type RegimeState } from "@/entities/macro/api";
 import type { AllocationModel, AllocationViewInput } from "@/entities/allocation/api";
 import { equalize, type Holding } from "./PortfolioBuilder";
 import { isKnownAllocationRoute, useAllocation } from "./AllocationProvider";
+import { useResearchRegime } from "./useResearchRegime";
 import { listStudies, type AllocationStudy } from "@/entities/allocation/storage";
 import { listWatchlists, type Watchlist } from "@/shared/lib/watchlistStorage";
 
@@ -99,9 +99,9 @@ const GOALS: GoalDef[] = [
   },
 ];
 
-function modelFor(g: GoalDef, regime: RegimeState | null): AllocationModel {
+function modelFor(g: GoalDef, recommendedMode: string | null): AllocationModel {
   if (g.model !== "auto") return g.model;
-  const m = regime?.recommended_mode ?? regime?.markets?.kr?.recommended_mode;
+  const m = recommendedMode;
   return m === "DEFENSIVE" ? "min_var" : m === "CAUTIOUS" ? "risk_parity" : "bl";
 }
 
@@ -109,19 +109,20 @@ export function GoalGate() {
   const router = useRouter();
   const { setGoal, setModel, setHoldingsReset, setViewsLogged, loadStudy, logEvent, lastPos, holdings } = useAllocation();
   const sectorsQ = useQuery({ queryKey: ["screener", "sectors"], queryFn: () => backtestBridgeApi.sectors().catch(() => null) });
-  const regimeQ = useQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
   const [studies, setStudies] = useState<AllocationStudy[]>([]);
   const [wls, setWls] = useState<Watchlist[]>([]);
   useEffect(() => { setStudies(listStudies()); setWls(listWatchlists()); }, []);
 
   const secs = (sectorsQ.data?.sectors ?? []) as Sector[];
-  const regime = (regimeQ.data ?? null) as RegimeState | null;
+  // 게이트는 스터디가 생기기 **전에** 열릴 수 있다 — 붙은 스냅샷이 없으면 라이브로 폴백하므로
+  // 첫 진입 동작은 그대로다. ☰ 목표로 되돌아온 경우에는 고정된 국면을 따른다.
+  const rg = useResearchRegime();
 
   const choose = (g: GoalDef) => {
     const seed = g.seed(secs);
     const hold = equalize(seed.length >= 2 ? seed.slice(0, 8) : CURATED.slice(0, 5));
     setGoal({ id: g.id, label: g.label });
-    setModel(modelFor(g, regime));
+    setModel(modelFor(g, rg.recommendedMode));
     setHoldingsReset(hold);
     if (g.view) { const v = g.view(hold); if (v.length) setViewsLogged(v); }
     logEvent(`목표 선택 — ${g.label}`);
@@ -138,7 +139,7 @@ export function GoalGate() {
   const startStrategy = () => { setGoal({ id: "strategy", label: "매크로 전략" }); setHoldingsReset([]); logEvent("매크로 전략 라이브러리에서 시작"); router.push("/allocation/construct"); };
 
   const canResume = !!lastPos && isKnownAllocationRoute(lastPos) && holdings.length >= 1;
-  const regimeReady = !!regime;
+  const regimeReady = !!rg.recommendedMode;
 
   return (
     <div className="aas-gate tpage-fade">
@@ -163,7 +164,7 @@ export function GoalGate() {
             <div className="aas-goal-head">{g.icon}<span className="aas-goal-t">{g.label}</span></div>
             <div className="aas-goal-d">{g.sub}</div>
             <div className="aas-goal-seed num">
-              <span>{g.id === "regime" ? (regimeReady ? `레짐: ${regime?.recommended_mode ?? "NORMAL"}` : "레짐 자동") : MODEL_LABEL[g.model as AllocationModel]}</span>
+              <span>{g.id === "regime" ? (regimeReady ? `레짐: ${rg.recommendedMode ?? "NORMAL"}` : "레짐 자동") : MODEL_LABEL[g.model as AllocationModel]}</span>
               <span>{g.id === "theme" ? "+ 강세 뷰" : g.id === "balanced" || g.id === "regime" ? "분산 시드" : "섹터 시드"}</span>
             </div>
           </button>

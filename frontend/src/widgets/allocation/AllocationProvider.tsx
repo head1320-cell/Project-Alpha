@@ -184,6 +184,9 @@ interface AllocationCtx {
   loadStrategy: (strat: TacticalStrategy, market: "kr" | "us") => void;
   clearLoadedStrategy: () => void;
   // ── ResearchRun (P1 재현성) ──
+  // 활성 스터디 신원 (스펙 §4 ① — 지금까지 loadStudy 는 이름을 타임라인에만 남겼다)
+  activeStudy: { id: string; name: string } | null;
+
   // ── Macro Phase 스냅샷 (Phase 3b) ──
   // ★ID 만 들고 있는다★ — 스냅샷 본문은 서버가 소유하고 react-query 가 캐시한다.
   // 브라우저 상태에 본문을 복사해 두면 새로고침·공유 시 재현이 깨진다(스펙 금지사항).
@@ -239,6 +242,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [attachedSnapshotId, setAttachedSnapshotId] = useState<string | null>(null);
+  const [activeStudy, setActiveStudy] = useState<{ id: string; name: string } | null>(null);
   const [runsVersion, setRunsVersion] = useState(0);
   const [alphaTouched, setAlphaTouched] = useState(false);
   const [executionTouched, setExecutionTouched] = useState(false);
@@ -475,6 +479,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setResult(null);
     lastReqRef.current = "";
     setLoadedStrategy(null);
+    setActiveStudy({ id: s.id, name: s.name });
     logEvent(`스터디 로드 — ${s.name}`);
   };
 
@@ -489,10 +494,12 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     const result_summary = pf
       ? `기대수익 ${pf.expected_return_pct}% · 변동성 ${pf.volatility_pct}% · Sharpe ${pf.sharpe}${topW ? ` | ${topW}` : ""}`
       : undefined;
-    saveStudy(name, {
+    const saved = saveStudy(name, {
       holdings: holdingsMap, names, views, model, delta, tau,
       result_summary, ...fields,
     });
+    // 저장 직후가 곧 "이 스터디 안에 있다" — saveStudy 가 돌려주는 신원을 쓴다(새로 만들지 않는다).
+    setActiveStudy({ id: saved.id, name: saved.name });
     logEvent(`스터디 저장 — ${name.trim() || "이름 없음"}`);
     setStudiesVersion((v) => v + 1);
   };
@@ -552,7 +559,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     saveStudyFull, loadStudy, studiesVersion,
     bumpStudies: () => setStudiesVersion((v) => v + 1),
     loadedStrategy, loadStrategy, clearLoadedStrategy,
-    attachedSnapshotId, attachSnapshot, detachSnapshot,
+    activeStudy, attachedSnapshotId, attachSnapshot, detachSnapshot,
     activeRunId, recordRun, runsVersion,
     alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
     executionTouched, markExecutionTouched: () => setExecutionTouched(true),

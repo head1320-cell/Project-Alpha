@@ -38,6 +38,13 @@ export interface RegimeSnapshot {
   stress_score: number;
   confidence: number;
   observations: MacroObservation[];
+  /**
+   * 국면 라벨과 권고 모드 — Phase 4a 에서 **필드로** 승격됐다.
+   * 이전에는 explanation 문자열 안에만 있어서 UI 가 표시 문구를 파싱해야 했다.
+   * 후행 추가 열이라 구 스냅샷·마이그레이션 실패 시 null 이다(있는 척하지 않는다).
+   */
+  regime: string | null;
+  recommended_mode: string | null;
   data_status: DataStatus;
   research_usage: ResearchUsage;
   model_version: string;

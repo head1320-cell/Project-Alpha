@@ -4,11 +4,11 @@
 //   → Review(사후 검증, 나중에 편집). 세션 타임라인은 보조 피드로 함께.
 import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { macroApi, type RegimeState } from "@/entities/macro/api";
 import {
   deleteStudy, listStudies, updateStudyReview, type AllocationStudy,
 } from "@/entities/allocation/storage";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { useResearchRegime } from "@/widgets/allocation/useResearchRegime";
 import { ResearchRunsPanel } from "@/widgets/allocation/ResearchRunsPanel";
 import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";
 import { DecisionJournal } from "@/widgets/allocation/DecisionJournal";
@@ -50,17 +50,21 @@ export default function JournalWorkspace() {
   const [reason, setReason] = useState("");
   const [macroView, setMacroView] = useState("");
 
-  const regimeQ = useQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
-  const st = (regimeQ.data ?? null) as RegimeState | null;
-  const kr = st?.markets?.kr ?? st;
+  // 붙은 스냅샷이 이기고 라이브는 폴백 — 저널은 "그때의 국면"을 기록해야 하므로
+  // 여기서 오늘 값을 쓰면 사후에 결정을 잘못된 맥락으로 채점하게 된다.
+  const rg = useResearchRegime();
 
   useEffect(() => { setStudies(listStudies()); }, [studiesVersion]);
   // Macro View 자동 스냅샷 (편집 가능 — 사용자가 자기 언어로 다듬을 수 있게)
   useEffect(() => {
-    if (kr && !macroView) {
-      setMacroView(`${kr.regime} (신뢰도 ${Math.round((kr.confidence ?? 0) * 100)}%) · ${st?.recommended_mode ?? ""} · Stress ${Math.round(st?.stress_score ?? 0)}`);
+    if (rg.regime && !macroView) {
+      const conf = rg.confidence != null ? ` (신뢰도 ${Math.round(rg.confidence * 100)}%)` : "";
+      const mode = rg.recommendedMode ? ` · ${rg.recommendedMode}` : "";
+      const stress = rg.stressScore != null ? ` · Stress ${Math.round(rg.stressScore)}` : "";
+      const pin = rg.source === "snapshot" && rg.asOf ? ` · as-of ${rg.asOf.slice(0, 10)}` : "";
+      setMacroView(`${rg.regime}${conf}${mode}${stress}${pin}`);
     }
-  }, [kr, st, macroView]);
+  }, [rg.regime, rg.confidence, rg.recommendedMode, rg.stressScore, rg.source, rg.asOf, macroView]);
 
   const pfSummary = result?.summary?.portfolio;
   const canJournal = canRun && !!result;
