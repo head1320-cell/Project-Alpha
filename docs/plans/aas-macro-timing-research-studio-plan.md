@@ -44,7 +44,8 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 5 | ADR acceptance + shadcn scaffold | **UI** | ✅ `8df9c7b` |
 | 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ `515cfb1` |
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
-| 6b | `TimingFactorModal` → shell + §8.1 items 4·13 | UI | |
+| 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ (this commit) |
+| 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | |
 | 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
@@ -246,6 +247,36 @@ Phase 7's `TimingRuleSetV2`, and "signal state" is meaningless for a scenario or
 `CatalogueShell` already exposes them as **optional slots** (`previewSlot`, `frequencyWarningSlot`)
 that Phase 6 leaves unfilled — filling them with placeholder states was rejected on the honesty rule.
 **Gate:** `timing-factors.spec.ts` updated atomically.
+
+**Shipped: the migration + requirement 13. Requirement 4 re-homed to 6b-2 (drift D6b-1, decided
+with the user.)** The plan marked this phase "UI", but **neither** re-homed requirement was
+buildable as UI-only — the assumption that Phase 7 would supply everything held only halfway:
+
+| Needed | Phase 7 gave | Gap found at `d7b86ba` |
+|---|---|---|
+| req 13 — factor sampling frequency | `frequency_conflicts()` (the judge) | the **metadata it reads** was absent: catalogue had no frequency field at all |
+| req 4 — historical preview | `SignalState` | no per-factor **time series** anywhere; `evaluate()` returns one current scalar |
+
+Req 13's gap was small and data-shaped, so it ships here: `evaluation_frequency` on all 13 catalogue
+entries, plus `frequency_ranks` and `rebalance_options` published **in the catalogue response** so the
+rank table stays single-sourced in Python instead of being duplicated in TypeScript. Req 4's gap needs
+a rolling historical evaluator — new engine work, and PIT-sensitive — so it becomes **6b-2** rather
+than being crammed into a UI commit (ground rule 2). `previewSlot` stays honestly unfilled, exactly
+as Phase 6 left it.
+
+**Also fixed here, found by the migration:** `curve_slope` (added to the catalogue in Phase 7) is an
+`as_of` factor, and the canary evaluation path `evaluate(id, ticker, market, params)` has nowhere to
+put a timestamp — so adding it as a canary rule would have silently created a rule whose value is
+always missing, i.e. permanently risk-off. It now renders **visible but not addable**, with the reason
+in the row. Hiding it was rejected: a catalogued factor that simply isn't there gives the user no way
+to learn why.
+
+### Phase 6b-2 — factor historical preview (§8.1 requirement 4)
+*(re-homed from 6b, drift D6b-1.)* Right-pane preview of value / threshold / **signal state** /
+number of state changes over a window. Needs a **new** rolling evaluator (`evaluate()` is
+current-value-only) plus an endpoint, and it is **look-ahead sensitive** — the preview must score each
+historical point with what was knowable then, which is exactly the trap Phase 1 exists to prevent.
+Backend-then-UI, TDD with a mutation probe, and honest `unavailable` where history is too short.
 
 ### Phase 7b — Macro overlay semantics *(restored — was missing from this plan)*
 

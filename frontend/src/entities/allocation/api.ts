@@ -244,6 +244,14 @@ export interface TimingFactorMeta {
   desc: string;
   provenance: string;
   existing: boolean;
+  /** 이 팩터가 소비하는 데이터의 주기 — 리밸런싱 주기와 어긋나면 경고 대상(스펙 §8.1 13). */
+  evaluation_frequency?: string;
+  /**
+   * ★as_of 시점이 필요한 팩터★ — 카나리 평가 경로(`evaluate(id, ticker, market, params)`)로는
+   * 시점을 전달할 수 없어 **이 창에서 규칙으로 추가할 수 없다**. 추가를 허용하면 항상
+   * 값이 없는(=위험-오프) 규칙이 조용히 만들어진다.
+   */
+  requires_as_of?: boolean;
 }
 
 export interface TimingFactorCatalog {
@@ -251,6 +259,9 @@ export interface TimingFactorCatalog {
   families: { id: TimingFamily; label: string }[];
   schema: string[];
   note: string;
+  /** 주기 등급표 — 백엔드가 내려준다. 프론트에 복제하면 두 진실이 생겨 조용히 어긋난다. */
+  frequency_ranks?: Record<string, number>;
+  rebalance_options?: { id: string; label: string }[];
 }
 
 /** TimingRule 공통 스키마 — 팩터 + 실행/리스크 컨텍스트 (백엔드 dataclass와 1:1) */

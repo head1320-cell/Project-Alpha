@@ -194,64 +194,77 @@ def defense_first(_ticker: str | None = None, market: str = "kr",
 CATALOG: list[dict[str, Any]] = [
     # ── momentum ──
     {"id": "score_13612", "label": "13612W 가속모멘텀", "family": "momentum",
+     "evaluation_frequency": "month",
      "params": {}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "score", "desc": "1·3·6·12개월 수익률 가중합(12/4/2/1). VAA·DAA 위험-온 판정 기준.",
      "provenance": "Keller & Keuning (VAA/DAA)", "existing": True},
     {"id": "abs_mom", "label": "절대모멘텀 (N개월)", "family": "momentum",
+     "evaluation_frequency": "month",
      "params": {"months": 12}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "ratio", "desc": "N개월 누적 수익률. 0 초과면 위험-온(듀얼모멘텀의 절대 필터).",
      "provenance": "Antonacci (Dual Momentum)", "existing": True},
     {"id": "avg_abs_momentum", "label": "평균 절대 모멘텀 (연속 비중)", "family": "momentum",
+     "evaluation_frequency": "month",
      "params": {"max_months": 12}, "default_threshold": 0.5, "default_direction": "above",
      "unit": "weight_0_1", "desc": "과거 1~N개월 중 수익률이 양(+)인 비율(0~1) — 이진 신호가 아니라 "
                                    "추세 강도에 비례하는 위험자산 비중으로 쓰는 것이 원 규칙.",
      "provenance": "systrader79 (절대 모멘텀 전략)", "existing": False},
     {"id": "accel_momentum", "label": "가속 모멘텀 (1·3·6 평균)", "family": "momentum",
+     "evaluation_frequency": "month",
      "params": {}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "ratio", "desc": "1·3·6개월 수익률 평균. 가속 듀얼모멘텀의 스코어 부분.",
      "provenance": "systrader79 (Accelerating dual momentum)", "existing": False},
     {"id": "ma_month", "label": "N개월 이동평균 상회", "family": "momentum",
+     "evaluation_frequency": "month",
      "params": {"months": 10}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "bool", "desc": "월봉 N개월 이동평균 상회 여부(GTAA형 추세 필터).",
      "provenance": "Faber (GTAA)", "existing": True},
     {"id": "ma_day", "label": "N일 이동평균 상회", "family": "momentum",
+     "evaluation_frequency": "day",
      "params": {"days": 200}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "bool", "desc": "일봉 N일 이동평균 상회 여부(200일선 추세 게이트).",
      "provenance": "classic trend filter", "existing": True},
     # ── deviation ──
     {"id": "disparity", "label": "이격도 (종가/이평 ×100)", "family": "deviation",
+     "evaluation_frequency": "day",
      "params": {"ma_days": 20}, "default_threshold": 105.0, "default_direction": "below",
      "unit": "pct_of_ma", "desc": "종가 ÷ N일 이동평균 × 100. 100=이평선. 과열 밴드 이탈 판정에 사용. "
                                   "일반 공개 지표 — 특정 유료 전략의 조건식 재현이 아님(밴드는 직접 지정).",
      "provenance": "generic", "existing": False},
     # ── breakout ──
     {"id": "vol_breakout", "label": "변동성 돌파 (k × 전일 레인지)", "family": "breakout",
+     "evaluation_frequency": "day",
      "params": {"k": 0.5}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "pct", "desc": "돌파선=당일시가+k×전일(고−저). (종가−돌파선)/돌파선×100. 양수면 돌파 성공. "
                             "일반 공개 기법의 파라미터화 구현.",
      "provenance": "generic (Larry Williams형)", "existing": False},
     {"id": "channel_breakout", "label": "채널 돌파 (N일 고가)", "family": "breakout",
+     "evaluation_frequency": "day",
      "params": {"days": 20}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "pct", "desc": "직전 N봉 고가 채널 대비 종가 위치(%). 양수면 상단 돌파(도너찬형). "
                             "당일 봉은 채널 산정에서 제외(자기참조 방지).",
      "provenance": "generic (Donchian형)", "existing": False},
     # ── overnight ──
     {"id": "overnight_return", "label": "오버나이트 수익률 (N일 평균)", "family": "overnight",
+     "evaluation_frequency": "overnight",
      "params": {"days": 20}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "pct", "desc": "최근 N일 (당일시가/전일종가−1) 평균(%). 종가진입→익일시가청산 기대값 프록시. "
                             "일간 OHLC 기반이라 장중 경로는 미반영(정직한 근사).",
      "provenance": "generic", "existing": False},
     # ── regime ──
     {"id": "defense_first", "label": "Defense First (역발상)", "family": "regime",
+     "evaluation_frequency": "month",
      "params": {}, "default_threshold": 0.0, "default_direction": "below",
      "unit": "score_diff", "desc": "방어자산(TLT·GLD·PDBC·UUP) 평균 13612 − 현금성(BIL). "
                                    "★음수일 때 위험-온★ — 방어자산이 약하면 위험선호로 해석(부호 반대).",
      "provenance": "systrader79 (Defense First)", "existing": False},
     {"id": "indicator", "label": "매크로 지표 임계", "family": "regime",
+     "evaluation_frequency": "day",
      "params": {}, "default_threshold": 20.0, "default_direction": "below",
      "unit": "raw", "desc": "VIXCLS·DGS10·T10Y2Y 등 매크로 시리즈의 임계 통과(FRED/ECOS).",
      "provenance": "FRED/ECOS", "existing": True},
     {"id": "curve_slope", "label": "장단기 금리차 (10Y−2Y)", "family": "regime",
+     "evaluation_frequency": "day",
      "params": {"series_id": "T10Y2Y"}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "pp", "desc": "미 국채 10년−2년 스프레드(%p). 양수면 정상 커브(위험-온), "
                            "음수면 역전(위험-오프). ★ALFRED 빈티지 기준으로 그 시점에 "
@@ -274,8 +287,21 @@ FAMILY_LABELS = {
 }
 
 
+# 리밸런싱 주기 선택지 — TimingRule.rebalance_or_holding_period 가 받는 값.
+# ★모두 frequency_ranks 에 등급이 있어야 한다★ 없는 값을 고르면 충돌 경고가 조용히 꺼진다.
+REBALANCE_OPTIONS: tuple[dict[str, str], ...] = (
+    {"id": "day", "label": "매일"},
+    {"id": "week", "label": "주간"},
+    {"id": "month_end", "label": "월말"},
+    {"id": "quarter", "label": "분기"},
+    {"id": "overnight", "label": "오버나이트(익일 시가 청산)"},
+)
+
+
 def catalog() -> dict:
     """UI(팩터 창)용 카탈로그 — 패밀리별 그룹 + 스키마 메타."""
+    # 함수 안에서 import — timing_rules_v2 가 이 모듈을 import 하므로 순환을 피한다.
+    from src.engine.timing_rules_v2 import FREQUENCY_RANKS
     groups = []
     for fam in SIGNAL_FAMILIES:
         items = [c for c in CATALOG if c["family"] == fam]
@@ -285,6 +311,9 @@ def catalog() -> dict:
         "groups": groups,
         "families": [{"id": f, "label": FAMILY_LABELS.get(f, f)} for f in SIGNAL_FAMILIES],
         "schema": [f.name for f in TimingRule.__dataclass_fields__.values()],
+        # 주기 등급표를 그대로 내려보낸다 — UI 가 같은 표를 복제하면 두 진실이 생긴다.
+        "frequency_ranks": dict(FREQUENCY_RANKS),
+        "rebalance_options": [dict(o) for o in REBALANCE_OPTIONS],
         "note": ("systrader79 계열은 공개 포스팅 기준 구현. 이격도·돌파·오버나이트는 공개된 일반 "
                  "기술 시그널의 파라미터화 구현으로, 특정 유료 컨텐츠의 조건식을 재현한 것이 아닙니다."),
     }

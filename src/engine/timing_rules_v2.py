@@ -257,7 +257,9 @@ def apply_cooldown(
 # ═══════════════════════════════════════════════════════════════════════════════
 # 빈도 정렬
 # ═══════════════════════════════════════════════════════════════════════════════
-_FREQ_RANK = {"day": 1, "overnight": 1, "week": 2, "month": 3, "month_end": 3, "quarter": 4}
+#: 주기 등급 — 같은 등급이면 충돌 아님. 카탈로그 응답으로 UI 에 그대로 내려간다
+#: (프론트에 복제하면 두 진실이 생기고 조용히 어긋난다).
+FREQUENCY_RANKS = {"day": 1, "overnight": 1, "week": 2, "month": 3, "month_end": 3, "quarter": 4}
 
 
 def frequency_conflicts(factor_freq: str, rebalance: str) -> bool:
@@ -267,8 +269,8 @@ def frequency_conflicts(factor_freq: str, rebalance: str) -> bool:
     · 리밸런싱이 더 잦으면 → 같은 값을 반복 적용한다(월간 신호를 일간 리밸런싱)
     둘 다 사용자가 알아야 하는 어긋남이다. 같은 등급이면 충돌 아님.
     """
-    a = _FREQ_RANK.get(factor_freq.lower())
-    b = _FREQ_RANK.get(rebalance.lower())
+    a = FREQUENCY_RANKS.get(factor_freq.lower())
+    b = FREQUENCY_RANKS.get(rebalance.lower())
     if a is None or b is None:
         return False        # 모르는 주기는 경고를 지어내지 않는다
     return a != b

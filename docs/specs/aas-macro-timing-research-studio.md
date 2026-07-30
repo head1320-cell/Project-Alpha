@@ -436,8 +436,8 @@ comparison, and a warning when factor sampling frequency conflicts with rebalanc
 > | Requirement | Owner | Note |
 > |---|---|---|
 > | three-pane layout · search · families · badges · config · lineage/limitations · keyboard · focus trap · Escape · ARIA · responsive · KO/EN search · validation | **Phase 6** | `.tfm-*` classes preserved, so both existing specs pass with **zero selector edits** |
-> | historical preview (value / threshold / **signal state** / # state changes) | **Phase 6b** | needs `SignalState` from Phase 7; meaningless for scenario/alpha. Shell exposes `previewSlot`, left unfilled — placeholder states rejected on the honesty rule |
-> | frequency-conflict warning | **Phase 6b** | needs `evaluation_frequency` + rebalance alignment (Phase 7). Shell exposes `frequencyWarningSlot` |
+> | historical preview (value / threshold / **signal state** / # state changes) | **Phase 6b-2** | re-homed out of 6b (drift D6b-1): needs a **rolling** evaluator that does not exist — `evaluate()` returns one current scalar — and scoring each past point is look-ahead sensitive. `previewSlot` stays unfilled; placeholder states rejected on the honesty rule |
+> | frequency-conflict warning | **Phase 6b** ✅ | shipped. `evaluation_frequency` on every catalogue entry, plus `frequency_ranks`/`rebalance_options` published **in the catalogue response** so the rank table stays single-sourced in Python instead of being duplicated in TypeScript |
 > | saved presets · draft-vs-active comparison | **Phase 6d** | net-new features, absent from all four modals — kept out so Phase 6's gate stayed "no capability lost" |
 > | `FactorPickerModal` migration | **Phase 6c** | 477 lines, 76 inline styles, **zero E2E**, two consumers (Backtester + Screener). E2E coverage lands first |
 >

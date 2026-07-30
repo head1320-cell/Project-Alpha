@@ -46,3 +46,59 @@ test("AAS Timing: factor window shows the provenance/honesty note", async ({ pag
   await expect(page.locator(".tfm-note")).toContainText("유료");
   await expect(page.locator(".tfm-note")).toContainText("재현한 것이 아닙니다");
 });
+
+// ── Phase 6b — 셸 이전으로 생긴 계약 + 스펙 §8.1 요구 13(주기 충돌 경고) ─────────
+async function openTimingWindow(page: import("@playwright/test").Page) {
+  await page.goto("/allocation/timing", { waitUntil: "networkidle" });
+  await page.locator(".as-fb-apply", { hasText: "팩터 창에서 추가" }).first().click();
+  await expect(page.locator(".tfm")).toBeVisible();
+}
+
+// 셸이 제공하는 Escape 닫기 — 이전에는 backdrop 클릭만 됐다.
+test("AAS Timing: shell contract — Escape closes, dialog is modal", async ({ page }) => {
+  await openTimingWindow(page);
+  await expect(page.locator(".tfm")).toHaveAttribute("aria-modal", "true");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tfm")).toHaveCount(0);
+});
+
+test("AAS Timing: frequency conflict is warned, and alignment is confirmed", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openTimingWindow(page);
+
+  // 일간 팩터(N일 이동평균) + 기본 리밸런싱(월말) → 신호가 버려진다는 경고
+  await page.locator(".tfm-search").fill("N일 이동평균");
+  await page.locator(".tfm-row").first().click();
+  await expect(page.locator(".tfm-freq-sel")).toHaveValue("month_end");
+  await expect(page.locator(".tfm-freq-warn")).toBeVisible();
+  await expect(page.locator(".tfm-freq-warn")).toContainText("버려집니다");
+
+  // 리밸런싱을 일간으로 맞추면 경고가 사라지고 정렬 확인이 뜬다
+  await page.locator(".tfm-freq-sel").selectOption("day");
+  await expect(page.locator(".tfm-freq-warn")).toHaveCount(0);
+  await expect(page.locator(".tfm-freq-ok")).toBeVisible();
+
+  // 반대 방향 — 월간 팩터를 일간 리밸런싱에 쓰면 같은 값이 반복된다
+  await page.locator(".tfm-search").fill("평균 절대 모멘텀");
+  await page.locator(".tfm-row").first().click();
+  await page.locator(".tfm-freq-sel").selectOption("day");
+  await expect(page.locator(".tfm-freq-warn")).toContainText("반복 적용");
+
+  expect(uniq(sink.pageErrors), "frequency warning page errors").toEqual([]);
+  expect(uniq(sink.api404), "frequency warning API 404s").toEqual([]);
+});
+
+// 정직성: as_of 팩터는 목록에 보이되 **추가할 수 없다**. 숨기면 왜 없는지 알 수 없고,
+// 추가를 허용하면 값이 영원히 없는(=늘 위험-오프) 규칙이 조용히 만들어진다.
+test("AAS Timing: an as-of factor is visible, explained, and not addable", async ({ page }) => {
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("장단기 금리차");
+
+  const row = page.locator(".tfm-row").first();
+  await expect(row).toBeVisible();
+  await expect(row.locator(".tfm-off")).toHaveText("미가용");
+  await expect(row).toContainText("추가할 수 없습니다");
+
+  await row.click();
+  await expect(page.locator(".as-fb-apply", { hasText: "이 팩터 추가" })).toBeDisabled();
+});
