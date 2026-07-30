@@ -45,7 +45,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 6 | Catalogue shell — **2 AAS modals** | **UI** | ✅ `515cfb1` |
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
 | 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ `18a77ff` |
-| 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | |
+| 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | ✅ `2ff6570` + this commit |
 | 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
@@ -271,12 +271,34 @@ always missing, i.e. permanently risk-off. It now renders **visible but not adda
 in the row. Hiding it was rejected: a catalogued factor that simply isn't there gives the user no way
 to learn why.
 
-### Phase 6b-2 — factor historical preview (§8.1 requirement 4)
+### Phase 6b-2 — factor historical preview (§8.1 requirement 4) — **done**
 *(re-homed from 6b, drift D6b-1.)* Right-pane preview of value / threshold / **signal state** /
 number of state changes over a window. Needs a **new** rolling evaluator (`evaluate()` is
 current-value-only) plus an endpoint, and it is **look-ahead sensitive** — the preview must score each
 historical point with what was knowable then, which is exactly the trap Phase 1 exists to prevent.
 Backend-then-UI, TDD with a mutation probe, and honest `unavailable` where history is too short.
+
+- **Backend `2ff6570`.** `src/engine/timing_factor_history.py` +
+  `GET /allocation/timing-factors/{factor_id}/history`. **No new truncation machinery was built** —
+  `etf_prices.as_of(months_back)` already provides thread-local point-in-time truncation, so each
+  point is evaluated inside it. State judgement reuses Phase 7's three-state rules rather than
+  reimplementing them.
+- **Frontend (this commit).** `TimingFactorPreview` fills `previewSlot`; changing threshold, direction
+  or ticker re-scores the preview because those values are in the query key.
+
+**Honest limitations, carried in the payload's `limitations[]` and rendered verbatim:**
+
+| Limitation | Why it is stated rather than hidden |
+|---|---|
+| sampling step is **monthly** (`as_of` is month-granular) | a daily factor's flip count is therefore **undersampled**; the note is attached only to day/overnight factors |
+| factors with no canary evaluator (`curve_slope`) return a **reason**, not an empty chart | an empty chart looks like a bug and tells the user nothing |
+| the endpoint answers **200 + reason**, never 4xx, when a preview cannot be built | "no preview available" is a state, not a request error — a 4xx would make the UI show an error banner |
+| missing samples are drawn as **gaps**, never as 0 | a zero bar asserts a value we do not have; `unavailable` also gets its own colour, distinct from `risk_off` |
+| state changes are counted **skipping** missing points | treating a gap as a state makes one data hole read as two flips, i.e. "the signal was thrashing" |
+
+**Deliberately not done:** day-granular `as_of`. It would give exact flip counts, but `as_of` is a
+shared PIT primitive that live strategy backtests depend on, so widening it belongs in its own phase
+with its own regression evidence — not inside a preview feature.
 
 ### Phase 7b — Macro overlay semantics *(restored — was missing from this plan)*
 

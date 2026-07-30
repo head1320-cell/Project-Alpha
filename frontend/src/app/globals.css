@@ -4086,3 +4086,35 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tfm-freq-warn { font-size: 10px; line-height: 1.5; padding: 6px 8px; border-radius: 3px;
   color: #92400e; background: rgba(217,119,6,.09); border: 1px solid rgba(217,119,6,.35); }
 .tfm-freq-ok { font-size: 9.5px; line-height: 1.5; color: var(--t-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   37. 타이밍 팩터 창 — 과거 미리보기 (스펙 §8.1 요구 4 · Phase 6b-2)
+   ───────────────────────────────────────────────────────────────────────────
+   막대 색이 곧 3-상태다. ★결측(unavailable)은 위험-오프와 다른 색★ — 같은 색으로 칠하면
+   "값이 없어서 오프" 와 "판정상 오프" 를 구분할 수 없고, 그 구분이 이 프로젝트의 전제다.
+   결측 막대는 높이를 주지 않아 바닥 줄만 남는다(0 으로 찍으면 데이터가 있는 것처럼 보인다).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.tfm-hist { display: flex; flex-direction: column; gap: 5px; margin-top: 6px;
+  padding-top: 8px; border-top: 1px dashed var(--t-border); }
+.tfm-hist-l { font-size: 9.5px; letter-spacing: .06em; color: var(--t-muted);
+  display: flex; align-items: baseline; gap: 6px; }
+.tfm-hist-bars { display: flex; align-items: flex-end; gap: 1px; height: 44px;
+  padding: 2px; border: 1px solid var(--t-border); border-radius: 2px;
+  background: var(--t-surface); }
+.tfm-hist-bar { flex: 1 1 0; min-width: 2px; min-height: 1px; border-radius: 1px 1px 0 0;
+  background: var(--t-border); }
+.tfm-hist-bar.s-risk_on { background: var(--t-accent); }
+.tfm-hist-bar.s-risk_off { background: #94a3b8; }
+/* 결측 — 색을 채우지 않고 바닥 점선만. "모른다" 를 "낮다" 로 보이게 하지 않는다. */
+.tfm-hist-bar.s-unavailable { background: transparent; height: 3px !important;
+  border-bottom: 2px dotted #d97706; border-radius: 0; }
+.tfm-hist-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10px;
+  color: var(--t-muted); }
+.tfm-hist-stats b { color: var(--t-ink); }
+.tfm-hist-st.s-risk_on { color: var(--t-accent); }
+.tfm-hist-st.s-risk_off { color: #64748b; }
+.tfm-hist-st.s-unavailable { color: #92400e; }
+.tfm-hist-miss { font-size: 9.5px; line-height: 1.5; color: #92400e; }
+.tfm-hist-lim { margin: 0; padding-left: 14px; font-size: 9.5px; line-height: 1.55;
+  color: var(--t-muted); }
+.tfm-hist-lim li { margin: 1px 0; }

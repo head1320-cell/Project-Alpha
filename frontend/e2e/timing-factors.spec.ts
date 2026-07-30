@@ -101,4 +101,51 @@ test("AAS Timing: an as-of factor is visible, explained, and not addable", async
 
   await row.click();
   await expect(page.locator(".as-fb-apply", { hasText: "이 팩터 추가" })).toBeDisabled();
+
+  // 값을 못 만드는 팩터에는 미리보기를 아예 요청하지 않는다(빈 차트를 그리지 않는다)
+  await expect(page.locator(".tfm-hist")).toHaveCount(0);
+});
+
+// ── Phase 6b-2 — 과거 미리보기 (§8.1 요구 4) ────────────────────────────────
+test("AAS Timing: historical preview shows value, threshold, state and flips", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openTimingWindow(page);
+
+  await page.locator(".tfm-search").fill("평균 절대 모멘텀");
+  await page.locator(".tfm-row").first().click();
+
+  const hist = page.locator(".tfm-hist");
+  await expect(hist).toBeVisible();
+  // 스펙이 요구한 네 가지가 모두 보인다
+  await expect(hist.locator(".tfm-hist-stats")).toContainText("현재");
+  await expect(hist.locator(".tfm-hist-stats")).toContainText("임계");
+  await expect(hist.locator(".tfm-hist-st")).toBeVisible();
+  await expect(hist.locator(".tfm-hist-stats")).toContainText("전환");
+
+  // 월 표본이라는 사실을 숨기지 않는다
+  await expect(hist.locator(".tfm-hist-lim")).toContainText("월");
+  await expect(hist.locator(".tfm-hist-bar").first()).toBeVisible();
+
+  expect(uniq(sink.pageErrors), "preview page errors").toEqual([]);
+  expect(uniq(sink.api404), "preview API 404s").toEqual([]);
+});
+
+test("AAS Timing: preview is re-scored when the threshold changes", async ({ page }) => {
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("평균 절대 모멘텀");
+  await page.locator(".tfm-row").first().click();
+  await expect(page.locator(".tfm-hist-stats")).toContainText("임계");
+
+  // 비율(0~1) 팩터에 임계 1.5 → 통과 불가 → 현재 상태가 위험-온일 수 없다
+  const thr = page.locator(".as-tm-num").last();
+  await thr.fill("1.5");
+  await expect(page.locator(".tfm-hist-st")).not.toHaveClass(/s-risk_on/);
+});
+
+// 일간 팩터는 월 표본이라 전환 횟수가 과소집계된다 — 그 한계를 화면에 적는다.
+test("AAS Timing: a daily factor discloses that its flip count is undersampled", async ({ page }) => {
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("N일 이동평균");
+  await page.locator(".tfm-row").first().click();
+  await expect(page.locator(".tfm-hist-lim")).toContainText("과소");
 });

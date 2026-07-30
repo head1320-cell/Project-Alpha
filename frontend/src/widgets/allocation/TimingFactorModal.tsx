@@ -11,9 +11,9 @@
 // defense_first 부호 경고, 그리고 **리밸런싱 주기 충돌 경고**(스펙 §8.1 요구 13).
 // .tfm-* 클래스 계약은 셸이 그대로 유지한다.
 //
-// previewSlot(과거 미리보기 — §8.1 요구 4)은 **의도적으로 비워 둔다**: 팩터의 과거 시계열을
-// 내려주는 엔진/엔드포인트가 아직 없다(`evaluate()` 는 현재값 스칼라 하나). 자리만 채워
-// 그럴듯한 상태를 보여주는 것은 정직성 규칙 위반이라 6b-2 로 넘겼다.
+// Phase 6b-2: previewSlot 도 채웠다 — 룩어헤드 안전 롤링 평가가 백엔드에 생겼기 때문이다
+// (`GET /timing-factors/{id}/history`, 각 점을 `as_of(m)` 안에서 평가). 임계·방향·티커를
+// 바꾸면 미리보기도 그 설정으로 다시 채점된다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -22,6 +22,10 @@ import {
   type CanaryInput, type CanarySignalType, type TimingFactorMeta,
 } from "@/entities/allocation";
 import { CatalogueShell, type CatalogueItem } from "@/features/catalogue-shell/CatalogueShell";
+import { TimingFactorPreview } from "./TimingFactorPreview";
+
+/** 미리보기 구간 — 24개월이면 전환을 몇 번 보기에 충분하고 호출도 24회로 끝난다. */
+const PREVIEW_MONTHS = 24;
 
 const PARAM_LABEL: Record<string, string> = {
   months: "개월", days: "일", max_months: "최대 개월", ma_days: "이평 일수", k: "k 계수",
@@ -96,6 +100,20 @@ export function TimingFactorModal({ open, onClose, onAdd }: {
   const updParam = (k: string, v: number) =>
     setDraft((d) => (d ? { ...d, params: { ...(d.params || {}), [k]: v }, lookback: v } : d));
 
+  // 미리보기 — 값을 못 만드는 팩터(as_of 계열)는 애초에 요청하지 않는다.
+  // 임계·방향·티커가 바뀌면 queryKey 가 바뀌어 그 설정으로 다시 채점된다.
+  const canPreview = !!sel && !sel.requires_as_of && !!draft;
+  const prevQ = useQuery({
+    queryKey: ["allocation", "timing-factor-history", sel?.id, draft?.id,
+      draft?.threshold, draft?.direction],
+    queryFn: () => allocationApi.timingFactorHistory(sel!.id, {
+      ticker: draft!.id, market: "kr", months: PREVIEW_MONTHS,
+      threshold: draft!.threshold, direction: draft!.direction,
+    }),
+    enabled: open && canPreview,
+    staleTime: 5 * 60_000,
+  });
+
   const rebalance = draft?.rebalance_or_holding_period || DEFAULT_REBALANCE;
   const verdict = frequencyVerdict(
     sel?.evaluation_frequency, rebalance, catQ.data?.frequency_ranks);
@@ -119,6 +137,10 @@ export function TimingFactorModal({ open, onClose, onAdd }: {
       applyLabel="이 팩터 추가 →"
       onApply={() => { if (draft && !sel?.requires_as_of) { onAdd(draft); onClose(); } }}
       applyDisabled={!draft || !!sel?.requires_as_of}
+      previewSlot={canPreview ? (
+        <TimingFactorPreview history={prevQ.data} loading={prevQ.isLoading}
+          error={prevQ.isError} unit={sel?.unit} />
+      ) : undefined}
       frequencyWarningSlot={sel && draft ? (
         <div className="tfm-freq">
           <label className="as-tm-set">

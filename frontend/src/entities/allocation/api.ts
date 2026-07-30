@@ -264,6 +264,30 @@ export interface TimingFactorCatalog {
   rebalance_options?: { id: string; label: string }[];
 }
 
+/** 3-상태 시그널 — 결측은 위험-오프와 **다른 사실**이다(백엔드 SignalState 와 1:1). */
+export type SignalStateValue = "risk_on" | "risk_off" | "unavailable";
+
+export interface TimingFactorHistoryPoint {
+  months_back: number;          // 0 = 현재
+  value: number | null;         // null = 그 시점 값을 얻지 못했다(0 이 아니다)
+  state: SignalStateValue;
+}
+
+export interface TimingFactorHistory {
+  factor_id: string;
+  ticker: string;
+  market: string;
+  threshold: number;
+  direction: "above" | "below";
+  step: string;                 // "month" — 표본 간격
+  points: TimingFactorHistoryPoint[];   // 오래된 → 최신
+  state_changes: number;
+  available_count: number;
+  unavailable_count: number;
+  /** 이 미리보기가 무엇을 보여주지 못하는지 — 반드시 화면에 그대로 노출한다. */
+  limitations: string[];
+}
+
 /** TimingRule 공통 스키마 — 팩터 + 실행/리스크 컨텍스트 (백엔드 dataclass와 1:1) */
 export interface TimingRuleSpec {
   factor_id: string;
@@ -503,6 +527,24 @@ export const allocationApi = {
       body: JSON.stringify(req),
     });
     if (!r.ok) throw new Error(`factor-portfolio failed: ${r.status}`);
+    return r.json();
+  },
+
+  /**
+   * 팩터 과거 미리보기 (스펙 §8.1 요구 4).
+   * 값을 만들 수 없어도 200 + limitations 로 온다 — 미리보기 불가는 요청 오류가 아니다.
+   */
+  timingFactorHistory: async (
+    factorId: string,
+    q: { ticker: string; market: string; months?: number; threshold?: number; direction?: string },
+  ): Promise<TimingFactorHistory> => {
+    const p = new URLSearchParams({ ticker: q.ticker, market: q.market });
+    if (q.months != null) p.set("months", String(q.months));
+    if (q.threshold != null) p.set("threshold", String(q.threshold));
+    if (q.direction) p.set("direction", q.direction);
+    const r = await fetch(
+      `${API_BASE}/api/v1/allocation/timing-factors/${encodeURIComponent(factorId)}/history?${p}`);
+    if (!r.ok) throw new Error(`timing-factor history failed: ${r.status}`);
     return r.json();
   },
 
