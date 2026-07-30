@@ -12,7 +12,17 @@ import { trackErrors, uniq } from "./helpers";
 // 흐름: 스냅샷 부착 → 자산 구성 → 런 기록 → 새로고침 → 되돌리기 → 동일성 단언
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const RUN_NAME = "왕복 검증 런";
+// ★런 이름은 실행마다 유일해야 한다★
+// runs 테이블은 Playwright 실행 사이에 살아남는 **실제 영속 DB** 다. 이름을 상수로 두면
+// 이 스펙을 두 번 돌린 순간 같은 이름의 행이 2개가 되고, Playwright strict mode 가
+// 모호한 로케이터를 거부한다("resolved to 2 elements").
+// 실제로 그렇게 깨졌다: 단독 실행 3/3 → 전수 실행에서 2건 실패. 단독 실행과 뮤테이션 프로브가
+// 각각 '왕복 검증 런' 을 하나씩 남긴 것이 원인이었다(제품은 정상, 테스트가 공족적이었다).
+//
+// .first() 로 때우지 않는다 — 그러면 **이전 실행이 남긴 런**을 집을 수 있고, 그건
+// 지속성 테스트가 절대 해선 안 되는 일이다. 유일한 이름으로 정확히 이번 런만 지목한다.
+const uniqueRunName = (base: string) =>
+  `${base} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /** Macro → AAS 로 스냅샷을 만들어 붙이고 그 ID 를 돌려준다. */
 async function attachSnapshot(page: import("@playwright/test").Page): Promise<string> {
@@ -36,6 +46,7 @@ async function seedHoldings(page: import("@playwright/test").Page) {
 
 test("런 왕복: 새로고침 후 되돌리면 같은 런·같은 스냅샷·같은 구성이 돌아온다", async ({ page }) => {
   const sink = trackErrors(page);
+  const RUN_NAME = uniqueRunName("왕복 검증 런");
 
   const sid = await attachSnapshot(page);
   await seedHoldings(page);
@@ -89,18 +100,19 @@ test("런 왕복: 새로고침 후 되돌리면 같은 런·같은 스냅샷·�
 });
 
 test("런 왕복: 되돌리기는 저장 안 한 구성을 덮어쓰기 전에 확인을 받는다", async ({ page }) => {
+  const NAME = uniqueRunName("확인 테스트 런");
   await attachSnapshot(page);
   await seedHoldings(page);
 
   await page.goto("/allocation/journal", { waitUntil: "domcontentloaded" });
   const rec = page.locator(".as-rr-record");
   await expect(rec).toBeVisible({ timeout: 20_000 });
-  await rec.locator("input.as-input").fill("확인 테스트 런");
+  await rec.locator("input.as-input").fill(NAME);
   const saveBtn = rec.locator("button.as-fb-apply");
   await expect(saveBtn).toBeEnabled({ timeout: 30_000 });
   await saveBtn.click();
 
-  const item = page.locator(".as-rr-item", { hasText: "확인 테스트 런" });
+  const item = page.locator(".as-rr-item", { hasText: NAME });
   await expect(item).toBeVisible({ timeout: 40_000 });
 
   // 활성 런이 아닌 상태로 만든 뒤 되돌리기 → 확인 대화상자가 떠야 한다
@@ -109,7 +121,7 @@ test("런 왕복: 되돌리기는 저장 안 한 구성을 덮어쓰기 전에 �
 
   let asked = false;
   page.once("dialog", (d) => { asked = true; d.dismiss(); });
-  const target = page.locator(".as-rr-item", { hasText: "확인 테스트 런" });
+  const target = page.locator(".as-rr-item", { hasText: NAME });
   await expect(target).toBeVisible({ timeout: 30_000 });
   await target.locator(".as-rr-reopen").click();
   await page.waitForTimeout(1_000);
@@ -119,17 +131,18 @@ test("런 왕복: 되돌리기는 저장 안 한 구성을 덮어쓰기 전에 �
 
 test("런 왕복: 되돌리기 버튼이 삭제와 혼동되지 않는다", async ({ page }) => {
   // 같은 행에 파괴적 액션(×)과 나란히 있으므로 별개 컨트롤이어야 한다
+  const NAME = uniqueRunName("구분 테스트 런");   // 지금은 통과하지만 같은 함정이라 함께 고친다
   await attachSnapshot(page);
   await seedHoldings(page);
   await page.goto("/allocation/journal", { waitUntil: "domcontentloaded" });
   const rec = page.locator(".as-rr-record");
   await expect(rec).toBeVisible({ timeout: 20_000 });
-  await rec.locator("input.as-input").fill("구분 테스트 런");
+  await rec.locator("input.as-input").fill(NAME);
   const saveBtn = rec.locator("button.as-fb-apply");
   await expect(saveBtn).toBeEnabled({ timeout: 30_000 });
   await saveBtn.click();
 
-  const item = page.locator(".as-rr-item", { hasText: "구분 테스트 런" });
+  const item = page.locator(".as-rr-item", { hasText: NAME });
   await expect(item).toBeVisible({ timeout: 40_000 });
   await expect(item.locator(".as-rr-reopen")).toHaveCount(1);
   await expect(item.locator(".as-x")).toHaveCount(1);
