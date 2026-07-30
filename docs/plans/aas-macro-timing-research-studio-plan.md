@@ -303,6 +303,25 @@ to learn why.
    `next start` 를 잡는다 — **실행 전 포트 확인을 절차에 넣어야 한다**
    (`scratchpad/vfp.sh` 가 그 절차: 포트 비우기 → 빌드 → 재확인 → 스펙).
 
+   **7b 에서 같은 함정에 세 번째로 빠졌다 — 이번엔 원인을 정확히 특정했다.**
+   `pkill -9 -x next-server` 는 **이 프로세스를 잡지 못한다.** 실제 프로세스명이
+   `next-server (v14.2.5)` 라서 `-x`(이름 전체 일치)가 맞지 않는다. 그래서 "포트를
+   비웠다" 고 믿은 채 옛 서버가 계속 떠 있었고, 새 빌드가 청크 해시를 바꾸자 옛 서버가
+   SSR 한 HTML 이 사라진 해시를 참조해 400 → `ChunkLoadError` → 하이드레이션 실패 →
+   모든 선택자 not found 가 됐다(증상이 "컴포넌트가 렌더되지 않는다" 와 구별되지 않는다).
+
+   탐지도 못 믿는다: 이 컨테이너에서 `lsof -t -i:3000` 과 `ss -ltnp` 는 서버가 멀쩡히
+   응답하는 동안에도 **빈 결과**를 돌려준다. `fuser -n tcp 3000` 만 실제 PID 를 찾았다.
+
+   → 절차를 **이름 기준에서 포트 기준으로** 바꿨다: `scratchpad/freeport.sh` 가
+   `fuser -k -9 -n tcp` 로 3000·8000 을 비우고 실제로 비었는지 재확인한다.
+   백엔드(8000)도 함께 비운다 — 라우트를 추가해도 옛 uvicorn 이 살아 있으면 404 가 난다.
+   실제로 이번 3자 비교 엔드포인트가 그 404 를 맞았다.
+
+   교훈의 일반형: **"고쳤다" 는 관측이 아니다.** 죽였다고 믿은 프로세스는 죽었는지
+   확인해야 하고, 적용했다고 믿은 뮤테이션은 적용됐는지 단언해야 한다(같은 세션에서
+   중첩 따옴표 때문에 적용되지 않은 뮤테이션을 "프로브 통과" 로 잘못 읽은 일이 있다).
+
 **6c 가 실제로 남긴 것:** E2E 안전망 6건(이전엔 0건)과 `role`/`aria-modal`/Escape/autoFocus.
 안전망이 두 번의 파손을 모두 잡아냈다 — 없었다면 모르고 푸시했을 것이다.
 **포커스 트랩은 여전히 없다** — FactorPicker 도, CatalogueShell 기반 AAS 창 3개도.
@@ -417,6 +436,36 @@ real and is not papered over.
   test that asserts it fires, in the same commit.
 - **Gate:** E2E asserting the three-way comparison is legible and that disabling the overlay
   visibly changes the composite state.
+
+#### 7b 실행 기록 — **done** (엔진 `e6e05c1` · 표면 `8ef491f` · UI 이번 커밋)
+
+엔진은 `e6e05c1` 에서 만들었지만 **HTTP 표면이 없어 UI 에서 닿을 수 없었다.**
+그 배선(`POST /allocation/timing/three-way`)을 하는 순간 엔진의 결함 세 개가 드러났다 —
+단위 테스트 20개는 전부 초록이었는데도.
+
+| 결함 | 실제 | `MacroOverlay` 가 기대하던 것 | 결과 |
+|---|---|---|---|
+| 모드 어휘 | `NORMAL`/`CAUTIOUS`/`DEFENSIVE` (`regime_analyzer.py:65`) | `risk_on`/`neutral`/`risk_off` (이 코드베이스에 없는 어휘) | 표를 빗나감 |
+| 스트레스 단위 | **0~100** (`regime_analyzer.py:56`) | 0~1 분수 | 51.8 → 1.0 클램프 |
+| 모르는 라벨 | — | `MODE_CAP.get(mode, 0.0)` | 조용히 "전액 방어" |
+
+앞의 두 개가 겹쳐 **첫 실호출이 모든 포트폴리오를 노출 0 으로 떨어뜨렸다.** 단위 테스트가
+통과한 이유는 테스트가 내가 지어낸 어휘와 단위를 그대로 먹여 줬기 때문이다 — 자기 일관적이고
+현실과 무관했다. CLAUDE.md 의 "수치는 문서가 아니라 코드가 진실입니다" 가 정확히 이 경우다.
+
+부수적으로 고친 것: 충돌 판정이 라벨 문자열(`!= "risk_on"`)을 보고 있어 무해한 `NORMAL` 을
+충돌로 보고했다 → **실제로 상한을 걸었는지**로 바꿨다. `to_dict()` 에 `usable` 을 실었다 —
+없으면 소비자가 "매크로를 못 읽었다" 와 "매크로가 중립이다" 를 구별할 수 없다.
+
+**사용자 임계 존중** — 3자 비교가 카탈로그 기본 임계로만 채점하고 있었다. 바로 옆의 과거
+미리보기(6b-2)는 사용자 임계로 채점하므로, 같은 노브가 두 패널에서 다른 뜻이 될 뻔했다.
+`TimingRuleV2.threshold` 로 배선했다. **방향(direction)은 카탈로그가 계속 소유한다** —
+`defense_first` 는 음수일 때 위험-온이고, 그건 사용자가 뒤집을 값이 아니다.
+
+**게이트는 한 번 헛돌았다.** 첫 통과 때 타이밍 단독이 0% 라 "끄면 같아진다" 가 0 == 0 으로
+참이 됐다 — 통과했지만 아무것도 증명하지 못했다. 스펙에 그 경우를 드러내는 분기를 남기고,
+E2E 가 임계를 낮춰 타이밍이 반드시 통과하도록 조건을 고정했다. 토글이 요청에 반영되지 않게
+하는 뮤테이션으로 게이트가 실제로 잡는지 확인했다.
 
 ### Phase 7c — rule-version display in the Research Context strip
 *(re-homed from Phase 7, drift D7-4 — Phase 7 was scoped backend-only.)*

@@ -288,6 +288,46 @@ export interface TimingFactorHistory {
   limitations: string[];
 }
 
+/** 3자 비교의 한 다리 — 백엔드 CompositeSignal 과 1:1. */
+export interface ThreeWayLeg {
+  state: SignalStateValue;
+  exposure: number;             // 0.0~1.0
+  method: string;
+  on_count: number;
+  off_count: number;
+  unavailable_count: number;
+  /** 왜 이 판정인지 — 스펙 §8 은 모든 위험-온/오프 판단에 이유를 요구한다. */
+  explanation: string;
+}
+
+/**
+ * 붙어 있는 국면 스냅샷에서 온 매크로 오버레이. **라이브 매크로가 아니다.**
+ *
+ * `usable=false` 는 "매크로가 중립" 이 아니라 **"매크로를 못 읽었다"** 다 — 둘을 같은
+ * 화면으로 그리면 사용자는 매크로가 판단에 관여한 줄 안다.
+ */
+export interface ThreeWayOverlay {
+  regime: string;
+  recommended_mode: string;     // NORMAL | CAUTIOUS | DEFENSIVE
+  confidence: number;           // 0.0~1.0
+  stress_score: number;         // ★0~100 스케일★ 분수가 아니다
+  data_status: string;
+  research_usage: string;
+  enabled: boolean;
+  exposure_cap: number;
+  usable: boolean;
+}
+
+export interface TimingThreeWay {
+  legs: { baseline: ThreeWayLeg; timing_only: ThreeWayLeg; timing_macro: ThreeWayLeg };
+  overlay: ThreeWayOverlay | null;   // null = 스냅샷이 안 붙었다(비교를 지어내지 않는다)
+  conflict: string | null;
+  factor_states: { factor_id: string; state: SignalStateValue }[];
+  combination: string;
+  as_of: string | null;
+  regime_snapshot_id: string | null;
+}
+
 /** TimingRule 공통 스키마 — 팩터 + 실행/리스크 컨텍스트 (백엔드 dataclass와 1:1) */
 export interface TimingRuleSpec {
   factor_id: string;
@@ -304,6 +344,13 @@ export interface TimingRuleSpec {
   point_in_time_data_timestamp?: string | null;
   params?: Record<string, number>;
   label?: string;
+  /**
+   * 사용자가 고른 임계. 생략하면 카탈로그 기본값.
+   *
+   * ★direction 은 일부러 없다★ 방향은 카탈로그만 아는 사실이다(`defense_first` 는 음수일 때
+   * 위험-온) — 보낼 수 있게 두면 언젠가 반대로 보내 신호가 뒤집힌다.
+   */
+  threshold?: number | null;
 }
 
 export interface TimingRuleSet {
@@ -545,6 +592,35 @@ export const allocationApi = {
     const r = await fetch(
       `${API_BASE}/api/v1/allocation/timing-factors/${encodeURIComponent(factorId)}/history?${p}`);
     if (!r.ok) throw new Error(`timing-factor history failed: ${r.status}`);
+    return r.json();
+  },
+
+  /**
+   * 기준 vs 타이밍만 vs 타이밍+매크로 (스펙 §8).
+   *
+   * `regime_snapshot_id` 를 주지 않으면 세 번째 다리는 `unavailable` + 사유로 온다 —
+   * 없는 비교를 그럴듯하게 채우지 않는다. `overlay_enabled=false` 면 오버레이는 판단에
+   * 관여하지 않고 타이밍 단독과 같아진다(끌 수 있어야 "조용한 오버라이드" 가 아니다).
+   */
+  timingThreeWay: async (req: {
+    market: string;
+    combination: string;
+    rules: TimingRuleSpec[];
+    k?: number;
+    weights?: number[];
+    regime_snapshot_id?: string | null;
+    overlay_enabled?: boolean;
+    as_of?: string | null;
+  }): Promise<TimingThreeWay> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/timing/three-way`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
+    });
+    if (!r.ok) {
+      // 422 는 백엔드가 정직하게 거부한 것이다 — 사유를 삼키면 사용자가 원인을 알 수 없다.
+      let why = `three-way failed: ${r.status}`;
+      try { why = (await r.json()).detail || why; } catch { /* 본문이 JSON 이 아니면 상태만 */ }
+      throw new Error(why);
+    }
     return r.json();
   },
 

@@ -319,6 +319,13 @@ class TimingRuleV2:
     conflict_policy: str = "conservative"   # conservative | latest | weighted
     use_mode: str = "gate"               # gate | ranking | sizing | tilt | risk_off_trigger
     data_status: str = "real"
+    #: 사용자가 고른 임계. None 이면 카탈로그 기본값.
+    #: ★방향(direction)은 여기 없다★ 그건 카탈로그만 아는 사실이다(defense_first 는 음수가
+    #: 위험-온). 호출자가 방향을 넘기게 두면 언젠가 누군가 반대로 넘겨 신호를 뒤집는다.
+    #: 임계는 반대로 사용자 손에 있는 값이고, 과거 미리보기
+    #: (`timing_factor_history`)도 사용자 임계로 채점한다 — 같은 노브가 두 화면에서 다른
+    #: 뜻이 되지 않도록 여기서도 존중한다.
+    threshold: float | None = None
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items() if k != "base"}
@@ -529,6 +536,7 @@ def rule_set_from_specs(
             base=rule_from_spec(s),
             hysteresis=float(s.get("hysteresis", 0.0) or 0.0),
             cooldown=int(s.get("cooldown", 0) or 0),
+            threshold=None if s.get("threshold") is None else float(s["threshold"]),
         )
         for s in (specs or [])
     ]
@@ -577,7 +585,8 @@ def rule_set_states(
         assert_readings_backtest_eligible(readings)
 
     return [
-        state_for_factor(r.factor_id, r.value, hysteresis=rule.hysteresis, previous=previous)
+        state_for_factor(r.factor_id, r.value, threshold=rule.threshold,
+                         hysteresis=rule.hysteresis, previous=previous)
         for rule, r in zip(rule_set.rules, readings)
     ]
 

@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type TimingConfig, useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { ConfidenceGauge } from "@/widgets/allocation/parts";
 import { TimingFactorModal } from "@/widgets/allocation/TimingFactorModal";
+import { ThreeWayPanel } from "@/widgets/allocation/ThreeWayPanel";
 import { allocationApi, type CanaryInput } from "@/entities/allocation/api";
 
 import {
@@ -16,7 +17,8 @@ import {
 const parseList = (s: string) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 
 export default function TimingWorkspace() {
-  const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings, loadedStrategy } = useAllocation();
+  const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings, loadedStrategy,
+    attachedSnapshotId } = useAllocation();
   const [onText, setOnText] = useState(timingCfg.riskOnAssets.join(", "));
   const [offText, setOffText] = useState(timingCfg.riskOffAssets.join(", "));
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -229,6 +231,10 @@ export default function TimingWorkspace() {
             </>
           )}
         </section>
+
+        {/* 3자 비교 — 카나리 판정과 별개의 V2 3-상태 경로다(레거시 `passes()` 를 건드리지 않는다) */}
+        <ThreeWayPanel canaries={timingCfg.canaries} market={timingCfg.market}
+          snapshotId={attachedSnapshotId} />
 
         {data && (
           <section className="as-card">

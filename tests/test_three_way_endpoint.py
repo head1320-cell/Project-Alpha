@@ -200,3 +200,39 @@ def test_a_real_snapshot_does_not_zero_out_exposure(client):
         assert macro["exposure"] > 0.0, (
             f"쓸 수 있는 매크로({ov['recommended_mode']} · 스트레스 {ov['stress_score']})가 "
             f"노출을 0 으로 만들었다 — 단위/어휘 불일치의 징후다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. 사용자 임계가 존중되는가 — 미리보기와 비교가 같은 노브를 같은 뜻으로 쓰는지
+# ═══════════════════════════════════════════════════════════════════════════════
+def test_a_user_threshold_is_honored_not_replaced_by_the_catalogue_default():
+    """★같은 노브가 두 화면에서 다른 뜻이면 안 된다★
+
+    과거 미리보기(`/timing-factors/{id}/history`)는 사용자 임계로 채점하는데, 3자 비교는
+    카탈로그 기본 임계로만 채점하고 있었다. 두 패널이 나란히 놓이는 화면에서 한쪽은
+    사용자가 고른 임계로, 다른 쪽은 다른 임계로 판정하면 비교를 신뢰할 수 없다.
+
+    방향(direction)은 반대로 카탈로그가 계속 소유한다 — defense_first 는 음수일 때 위험-온이고
+    그건 사용자가 뒤집을 값이 아니다.
+    """
+    lo = v2.rule_set_from_specs(
+        [{"factor_id": "avg_abs_momentum", "universe": ["SPY"], "threshold": -1e9}],
+        market="kr")
+    hi = v2.rule_set_from_specs(
+        [{"factor_id": "avg_abs_momentum", "universe": ["SPY"], "threshold": 1e9}],
+        market="kr")
+    assert lo.rules[0].threshold == -1e9 and hi.rules[0].threshold == 1e9
+    # 임계 아래로는 무엇이든 통과, 위로는 무엇도 통과 못 함 — 값이 읽혔다면 갈려야 한다.
+    s_lo = v2.rule_set_states(lo, as_of=None, market="kr")
+    s_hi = v2.rule_set_states(hi, as_of=None, market="kr")
+    if s_lo[0] is not v2.SignalState.UNAVAILABLE:
+        assert s_lo[0] is v2.SignalState.RISK_ON
+        assert s_hi[0] is v2.SignalState.RISK_OFF, "사용자 임계가 무시됐다"
+
+
+def test_omitting_the_threshold_falls_back_to_the_catalogue(client):
+    """임계를 안 주면 카탈로그 기본값 — 0 으로 지어내지 않는다."""
+    rset = v2.rule_set_from_specs([{"factor_id": "disparity", "universe": ["SPY"]}], market="kr")
+    assert rset.rules[0].threshold is None
+    r = client.post(URL, json=_body())
+    assert r.status_code == 200, r.text

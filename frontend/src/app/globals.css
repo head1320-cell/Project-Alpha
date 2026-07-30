@@ -4118,3 +4118,59 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tfm-hist-lim { margin: 0; padding-left: 14px; font-size: 9.5px; line-height: 1.55;
   color: var(--t-muted); }
 .tfm-hist-lim li { margin: 1px 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §35 3자 비교 (as-3w-*) — 기준 vs 타이밍만 vs 타이밍+매크로, 스펙 §8 / Phase 7b.
+   ★클래스명이 E2E 계약이다★ (data-testid 미사용) — 바꾸면 timing-three-way.spec.ts 도
+   함께 고쳐야 한다. 이 페이지는 순수 CSS 구역이므로 Tailwind 를 끌어들이지 않는다
+   (ADR 001 의 이전 순서는 Backtester 공용 컴포넌트가 다음이다 — 새치기하지 않는다).
+   ══════════════════════════════════════════════════════════════════════════ */
+.as-3w .as-card-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.as-3w-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; color: var(--t-text); cursor: pointer;
+  padding: 3px 8px; border: 1px solid var(--t-border); border-radius: 999px;
+  background: var(--t-panel); }
+.as-3w-toggle input { accent-color: var(--t-accent); cursor: pointer; }
+
+.as-3w-combo { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; }
+.as-3w-combo-k { font-size: 9.5px; font-weight: 700; letter-spacing: .04em;
+  color: var(--t-muted); text-transform: uppercase; }
+
+.as-3w-legs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .as-3w-legs { grid-template-columns: 1fr; } }
+
+.as-3w-leg { border: 1px solid var(--t-border); border-radius: 8px; padding: 9px 10px;
+  background: var(--t-panel); display: flex; flex-direction: column; gap: 6px; }
+/* 타이밍+매크로가 결론이므로 시선을 그쪽에 둔다 */
+.as-3w-leg.timing_macro { border-color: var(--t-accent); }
+.as-3w-leg-hd { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.as-3w-leg-nm { font-size: 10px; font-weight: 700; color: var(--t-text); }
+.as-3w-state { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
+  white-space: nowrap; }
+.as-3w-state.risk_on { color: var(--color-bull);
+  background: color-mix(in srgb, var(--color-bull) 14%, transparent); }
+.as-3w-state.risk_off { color: var(--color-bear);
+  background: color-mix(in srgb, var(--color-bear) 14%, transparent); }
+/* 결측은 위험-오프와 다른 사실이므로 색도 달라야 한다 — 같은 빨강이면 구별이 사라진다 */
+.as-3w-state.unavailable { color: var(--t-muted);
+  background: color-mix(in srgb, var(--t-muted) 14%, transparent); }
+
+.as-3w-exp { display: flex; align-items: baseline; gap: 5px; }
+.as-3w-exp b { font-size: 17px; line-height: 1; color: var(--t-text); }
+.as-3w-bar { height: 5px; border-radius: 3px; background: var(--t-border); overflow: hidden; }
+.as-3w-bar i { display: block; height: 100%; background: var(--t-accent); }
+.as-3w-counts { font-size: 9px; color: var(--t-muted); }
+.as-3w-why { margin: 0; font-size: 9.5px; line-height: 1.55; color: var(--t-muted); }
+
+.as-3w-conflict { margin-top: 9px; padding: 8px 10px; border-radius: 7px; font-size: 10px;
+  line-height: 1.6; color: var(--t-text);
+  border: 1px solid color-mix(in srgb, var(--color-bear) 40%, var(--t-border));
+  background: color-mix(in srgb, var(--color-bear) 8%, transparent); }
+
+.as-3w-ov { margin-top: 9px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 10px; color: var(--t-text); padding: 7px 9px; border-radius: 7px;
+  border: 1px dashed var(--t-border); }
+.as-3w-ov-k { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted);
+  text-transform: uppercase; }
+.as-3w-ov-none { color: var(--t-muted); line-height: 1.6; display: block; }
+.as-3w-ov-na, .as-3w-ov-off { font-size: 9.5px; color: var(--t-muted); flex-basis: 100%; }
