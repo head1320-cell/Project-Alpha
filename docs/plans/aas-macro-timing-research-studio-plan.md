@@ -46,7 +46,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 7 | `TimingRuleSetV2` + 2 PIT signals | backend | ✅ `ea59e8a` |
 | 6b | `TimingFactorModal` → shell + §8.1 item 13 | UI | ✅ `18a77ff` |
 | 6b-2 | §8.1 item 4 — factor historical preview | backend+UI | ✅ `2ff6570` `16bdca3` `b54a1a4` |
-| 6c | `FactorPickerModal` → shell (**E2E first**) | UI | |
+| 6c | `FactorPickerModal` — E2E first, then **Tailwind + Radix** in place | UI | ✅ `8c608a2` `55ed5c2` + 진행 중 |
 | 6d | Presets + draft-vs-active comparison (§8.1 11·12) | UI | |
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | |
 | 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | |
@@ -318,6 +318,47 @@ Two process notes worth keeping, because both nearly shipped a false green:
 **Deliberately not done:** day-granular `as_of`. It would give exact flip counts, but `as_of` is a
 shared PIT primitive that live strategy backtests depend on, so widening it belongs in its own phase
 with its own regression evidence — not inside a preview feature.
+
+### Phase 6c — `FactorPickerModal`: E2E first, then Tailwind + Radix in place
+
+**Drift D6c-1 (decided with the user): do not migrate to `CatalogueShell`.** The picker fits the
+shell on **1 of 6** requirements — two-step flow with a gated STEP2, nested categories with
+per-category support counts, recursive factor selection (`innerFunctionId` plus a second factor
+operand), a second browsable list pane for functions, `tone`, and `allowNesting` all have no home in
+a single-pane shell. Forcing it would cost capability (breaching Phase 6's "no capability lost" gate)
+or inflate a shared component with a mode the other three modals never use. Only the availability +
+reason surface maps.
+
+**Correction to a wrong claim I made mid-phase.** I asserted that styling this file with Tailwind
+would "breach the ADR", and proposed pure CSS. That was wrong on both counts:
+
+- **ADR 001 decision 5** sets the order as AAS shared primitives → AAS factor/scenario windows →
+  **Macro and Backtester shared components where reuse is justified**, and says legacy routes are
+  untouched *"until deliberately converted"* — a **sequencing rule, not a prohibition**.
+  `FactorPickerModal` is shared by Backtester **and** Screener, so it is exactly the next surface in
+  that order.
+- The `Tailwind·shadcn·CSS-in-JS 이전 금지` line I cited is the **old** `CLAUDE.md` rule that ADR 001
+  explicitly records as a *stale invariant the codebase already violates* (§1). I quoted a retired
+  rule as if it were live.
+- `CSS-in-JS 금지` does hold, but it only justifies **removing** the 76 inline style objects; it says
+  nothing about the replacement being pure CSS.
+
+`CLAUDE.md`'s `AAS만 이전, 레거시는 순수 CSS` is a **snapshot of what had migrated as of Phase 5**,
+and ADR decision 6 requires amending it whenever a new surface migrates — which this phase does.
+
+**Therefore:** Tailwind utilities over the mapped `--t-*` tokens, and the **vendored Radix
+`Dialog`** (`shared/ui/shadcn/dialog.tsx`) for the dialog chrome. Radix supplies a real focus trap,
+Escape, and `role`/`aria-modal`, replacing the hand-rolled versions committed in `55ed5c2` — focus
+trapping becomes assertable for the first time, where before it simply did not exist.
+
+**Steps.** ① E2E safety net first (`8c608a2`, 6 behavioural tests for a modal that had none, both
+consumers) → ② dialog contract (`55ed5c2`, superseded in part by Radix) → ③ Radix `Dialog` +
+Tailwind conversion, with the E2E suite as the no-capability-lost gate and `CLAUDE.md` amended per
+decision 6.
+
+**Stated honestly:** the E2E gate is behavioural. It proves nothing functional broke; it **cannot**
+prove the visuals are unchanged. No visual-regression tooling exists in this repo, so that limit is
+real and is not papered over.
 
 ### Phase 7b — Macro overlay semantics *(restored — was missing from this plan)*
 
