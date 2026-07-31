@@ -182,3 +182,134 @@ def test_legacy_canary_path_for_indicator_is_untouched():
     ok, val = _canary_eval(c, "kr")
     assert isinstance(ok, bool)          # 예외 없이 판정을 돌려준다
     assert val is None or isinstance(val, (int, float))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. VIX 텀 스트럭처 — 스펙 §6.2 의 **정의** (시리즈 추가가 아니라 팩터 정의)
+#
+# ★이 절이 Phase 8b 의 게이트다★
+# 룩어헤드는 틀렸을 때 **백테스트를 더 좋아 보이게** 만들고, 출력 어디에도 이유가 남지 않는다.
+# 그래서 픽스처를 "같은 날짜로 읽으면 다른 값이 나오도록" 구성한다 — 그러지 않으면 정렬
+# 테스트가 두 구현을 구별하지 못하고 조용히 통과한다(Phase 8 에서 실제로 그렇게 헛돌았다).
+# ═══════════════════════════════════════════════════════════════════════════════
+def _pair(vix_rows, vxv_rows):
+    """시리즈별로 다른 응답을 주는 페이로드."""
+    return {"VIXCLS": _rows(*vix_rows), "VXVCLS": _rows(*vxv_rows)}
+
+
+def test_vix_term_structure_is_the_ratio_not_the_spread(alfred):
+    """§6.2: 팩터는 **비율** VIXCLS/VXVCLS 다. 스프레드는 별도 팩터."""
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0)],
+        [("2026-01-05", "2026-01-06", 24.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06")
+    assert r.value == pytest.approx(18.0 / 24.0)
+
+
+def test_ratio_below_one_is_contango_and_reads_risk_on():
+    """비율 < 1 = 콘탱고(평온). 카탈로그 방향이 below 여야 위험-온이 된다."""
+    assert v2.direction_for("vix_term_structure") == "below"
+    assert v2.threshold_for("vix_term_structure") == pytest.approx(1.0)
+
+
+def test_the_spread_variant_exists_separately_and_says_what_it_is():
+    """§6.2 는 스프레드를 **별도로, 명시적으로 라벨링해서** 제공하라고 요구한다."""
+    meta = v2.CATALOG_BY_ID["vix_term_spread"]
+    assert "스프레드" in meta["desc"] or "차이" in meta["desc"]
+    # 같은 2포인트가 VIX 12 와 VIX 45 에서 다른 뜻이라는 한계를 적어야 한다.
+    assert "12" in meta["desc"] or "수준" in meta["desc"]
+
+
+def test_spread_variant_returns_the_difference(alfred):
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0)],
+        [("2026-01-05", "2026-01-06", 24.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06", form="spread")
+    assert r.value == pytest.approx(-6.0)
+
+
+# ── ★룩어헤드 게이트★ US 종가는 KR 세션 이후에 나온다 ──────────────────────────
+def test_a_kr_decision_uses_the_previous_us_close(alfred):
+    """★D 의 US 종가는 D 의 KRX 세션이 끝난 뒤에 나온다 — 쓰면 룩어헤드다★
+
+    픽스처는 D 와 D−1 의 값을 **다르게** 두어, 같은 날짜를 읽는 구현과 전날을 읽는 구현이
+    반드시 다른 답을 내도록 만든다. 같으면 이 테스트는 아무것도 증명하지 못한다.
+    """
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0),      # D−1 (쓸 수 있음)
+         ("2026-01-06", "2026-01-06", 30.0)],     # D   (응답에 **보이지만** KR 세션 뒤라 쓰면 안 됨)
+        [("2026-01-05", "2026-01-06", 24.0),
+         ("2026-01-06", "2026-01-06", 25.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06", market="kr")
+    assert r.value == pytest.approx(18.0 / 24.0), (
+        f"당일 US 종가를 썼다 — 룩어헤드 (당일이면 {30.0 / 25.0:.4f})")
+
+
+def test_the_alignment_is_recorded_on_the_observation(alfred):
+    """§6.2 는 이 정렬이 `market_cutoff`/`execution_timestamp` 에 **기록된다**고 말한다.
+
+    Phase 8b 전까지 두 필드는 선언만 되어 있고 어디서도 채워지지 않았다(Drift 8b-1).
+    """
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0)],
+        [("2026-01-05", "2026-01-06", 24.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06", market="kr")
+    assert r.observation is not None
+    assert r.observation.market_cutoff, "정렬 근거가 기록되지 않았다"
+    assert r.observation.execution_timestamp, "행동 가능 시각이 기록되지 않았다"
+    assert r.observation.market_cutoff < "2026-01-06", "컷오프가 결정일 이후다(룩어헤드)"
+
+
+def test_a_us_holiday_the_day_before_is_unavailable_not_back_filled(alfred):
+    """★전날이 미국 휴장이면 더 뒤로 거슬러 올라가지 않는다★
+
+    §6.2: 결측을 전진 채움하면 "낡았지만 자신만만한" 신호가 만들어진다. 없으면 없는 것이다.
+    """
+    alfred["payload"] = _pair(
+        [("2026-01-02", "2026-01-05", 18.0)],     # D−1(01-05)은 미국 휴장이라 값이 없다
+        [("2026-01-02", "2026-01-05", 24.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06", market="kr")
+    assert r.value is None
+    assert r.usage is ResearchUsage.UNAVAILABLE
+    assert "전진 채움" in r.detail or "채우지" in r.detail
+
+
+def test_a_kr_holiday_does_not_change_which_us_close_is_used(alfred):
+    """KR 휴장은 결정을 하지 않는 날일 뿐 — 미국 종가 선택 규칙은 그대로 D−1 이다."""
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0), ("2026-01-06", "2026-01-06", 30.0)],
+        [("2026-01-05", "2026-01-06", 24.0), ("2026-01-06", "2026-01-06", 25.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06", market="kr")
+    assert r.value == pytest.approx(18.0 / 24.0)
+
+
+def test_a_us_decision_may_use_the_same_day_close(alfred):
+    """미국 시장 결정에는 D−1 시프트가 필요 없다 — 시프트는 시차 때문이지 관례가 아니다."""
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0), ("2026-01-06", "2026-01-06", 30.0)],
+        [("2026-01-05", "2026-01-06", 24.0), ("2026-01-06", "2026-01-06", 25.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06", market="us")
+    assert r.value == pytest.approx(30.0 / 25.0)
+
+
+def test_a_non_positive_vxv_does_not_divide(alfred):
+    """0 으로 나누지 않는다 — 지수가 0 인 행은 실데이터에도 결측 표기로 들어온다."""
+    alfred["payload"] = _pair(
+        [("2026-01-05", "2026-01-06", 18.0)],
+        [("2026-01-05", "2026-01-06", 0.0)],
+    )
+    r = v2.read_vix_term_structure("2026-01-06")
+    assert r.value is None and r.usage is ResearchUsage.UNAVAILABLE
+
+
+def test_both_vix_factors_are_registered_and_declare_as_of():
+    for fid in ("vix_term_structure", "vix_term_spread"):
+        assert fid in v2.CATALOG_BY_ID
+        assert v2.requires_as_of(fid) is True, f"{fid} 는 시점이 필요하다"

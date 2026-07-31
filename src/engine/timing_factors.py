@@ -543,6 +543,25 @@ CATALOG: list[dict[str, Any]] = [
                               "없던 정보를 쓰는 것이 된다). 키가 없으면 unavailable.",
      "provenance": "FRED/ALFRED (NFCI)", "existing": False,
      "requires_as_of": True},
+    {"id": "vix_term_structure", "label": "VIX 텀 스트럭처 (30일÷3개월)", "family": "volatility",
+     "evaluation_frequency": "day",
+     "params": {}, "default_threshold": 1.0, "default_direction": "below",
+     "unit": "ratio", "desc": "VIXCLS ÷ VXVCLS. 1 미만이면 콘탱고(평온)라 위험-온, 초과면 "
+                              "백워데이션(스트레스). ★스프레드가 아니라 비율★ — 단위가 없어 "
+                              "변동성 수준이 달라도 비교된다. ★한국 결정은 전날(D−1) 미국 "
+                              "종가를 쓴다★ 당일 미국 종가는 KRX 장 마감 뒤에 나오므로 쓰면 "
+                              "룩어헤드다. 전날이 미국 휴장이면 전진 채움하지 않고 unavailable.",
+     "provenance": "FRED/ALFRED (VIXCLS·VXVCLS), 스펙 §6.2", "existing": False,
+     "requires_as_of": True},
+    {"id": "vix_term_spread", "label": "VIX 텀 스프레드 (30일−3개월)", "family": "volatility",
+     "evaluation_frequency": "day",
+     "params": {}, "default_threshold": 0.0, "default_direction": "below",
+     "unit": "pp", "desc": "VIXCLS − VXVCLS(포인트). 비율 팩터의 **스프레드 변형**으로, 원하는 "
+                           "사용자를 위해 따로 제공한다. ★같은 2포인트가 VIX 12 일 때와 45 일 "
+                           "때 다른 뜻이라는 한계가 있다★ — 그래서 기본 팩터는 비율 쪽이다. "
+                           "정렬·결측 규칙은 비율 팩터와 같다(D−1 미국 종가, 전진 채움 없음).",
+     "provenance": "FRED/ALFRED (VIXCLS·VXVCLS), 스펙 §6.2", "existing": False,
+     "requires_as_of": True},
     {"id": "curve_slope", "label": "장단기 금리차 (10Y−2Y)", "family": "regime",
      "evaluation_frequency": "day",
      "params": {"series_id": "T10Y2Y"}, "default_threshold": 0.0, "default_direction": "above",

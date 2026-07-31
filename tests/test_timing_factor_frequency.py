@@ -43,6 +43,8 @@ EXPECTED = {
     "usdkrw_trend": "month",        # monthly_closes 1종 (ETF 프록시)
     # ── Phase 8b ──
     "financial_conditions": "week", # NFCI 는 주간 공표(그리고 개정된다)
+    "vix_term_structure": "day",    # VIXCLS/VXVCLS 일간 종가
+    "vix_term_spread": "day",       # 같은 쌍의 스프레드 변형
 }
 
 
@@ -121,7 +123,8 @@ def test_as_of_requirement_reaches_the_catalogue_payload():
     assert seen["financial_conditions"] is True
     assert seen.get("indicator", False) is False, (
         "indicator 에 플래그가 붙으면 팩터 창에서 추가할 수 없게 된다(기존 기능 제거)")
-    assert sorted(k for k, v in seen.items() if v) == ["curve_slope", "financial_conditions"], (
+    assert sorted(k for k, v in seen.items() if v) == [
+        "curve_slope", "financial_conditions", "vix_term_spread", "vix_term_structure"], (
         "as_of 팩터가 늘어나면 UI 게이트도 함께 확인할 것"
     )
 

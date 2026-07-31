@@ -22,7 +22,7 @@ import 하지 않는다. 라이브 경로 회귀 위험 0이고, bool 은 마지
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any
 
@@ -491,6 +491,95 @@ def read_financial_conditions(
         api_key=api_key, start=start)
 
 
+#: VIX 텀 스트럭처 (스펙 §6.2). 30일 IV ÷ 3개월 IV.
+VIX_SHORT_SERIES = "VIXCLS"
+VIX_LONG_SERIES = "VXVCLS"
+VIX_TERM_FACTOR_ID = "vix_term_structure"
+VIX_SPREAD_FACTOR_ID = "vix_term_spread"
+
+
+def _prev_day(d: str) -> str:
+    from datetime import date, timedelta
+    y, m, dd = (int(x) for x in d[:10].split("-"))
+    return (date(y, m, dd) - timedelta(days=1)).isoformat()
+
+
+def read_vix_term_structure(
+    as_of: str,
+    *,
+    form: str = "ratio",
+    market: str = "kr",
+    api_key: str | None = None,
+) -> FactorReading:
+    """VIX 텀 스트럭처 — 스펙 §6.2 의 **정의**대로. 시리즈 추가가 아니라 팩터 정의다.
+
+    ★형태는 비율이다★ `VIXCLS / VXVCLS`. 단위가 없어 변동성 수준이 달라도 비교할 수 있다 —
+    2포인트 스프레드는 VIX 12 일 때와 45 일 때 뜻이 다르다. 비율 < 1 이면 콘탱고(평온)라
+    위험-온 쪽이고, 그래서 카탈로그 방향이 `below` 다. 스프레드를 원하는 사용자를 위해
+    `form="spread"` 를 **별도 팩터로 명시적으로 라벨링해** 제공한다(§6.2 요구).
+
+    ★시차가 룩어헤드 벡터다★
+    둘 다 **미국 종가**다. 한국에서 D 일에 내리는 결정은 D 의 미국 종가를 쓸 수 없다 —
+    그 값은 KRX 장이 끝난 뒤에 나온다. 그래서 KR 결정은 **D−1** 의 미국 종가를 쓴다.
+    미국 시장 결정에는 이 시프트가 필요 없다(시차 때문이지 관례가 아니다).
+    그 근거를 `market_cutoff`/`execution_timestamp` 에 **기록한다** — §6.2 가 그렇게 하라고
+    적어 두었는데 Phase 8b 전까지 두 필드는 어디서도 채워지지 않았다.
+
+    ★결측은 전진 채움하지 않는다★
+    한·미 휴장일이 다르므로 D−1 이 미국 휴장일 수 있다. 그때 더 뒤로 거슬러 올라가면
+    "낡았지만 자신만만한" 신호가 만들어진다 — 없으면 unavailable 이고, 그건 위험-오프로 접힌다.
+    """
+    fid = VIX_SPREAD_FACTOR_ID if form == "spread" else VIX_TERM_FACTOR_ID
+    # KR 결정은 전날 미국 종가까지만 볼 수 있다. US 결정은 당일 종가를 쓴다.
+    target = _prev_day(as_of) if market == "kr" else as_of[:10]
+
+    def _pick(series_id: str) -> MacroObservation | None:
+        obs = fetch_observations(series_id, as_of, api_key=api_key)
+        latest = latest_vintage_per_period(obs)
+        # ★정확히 그 날짜만★ 없으면 없는 것이다(가장 가까운 이전 값으로 대체하지 않는다).
+        for o in latest:
+            if o.observation_period[:10] == target:
+                return o
+        return None
+
+    short, long = _pick(VIX_SHORT_SERIES), _pick(VIX_LONG_SERIES)
+    if short is None or long is None:
+        missing = " · ".join(
+            s for s, o in ((VIX_SHORT_SERIES, short), (VIX_LONG_SERIES, long)) if o is None)
+        return _unavailable(
+            fid, f"{target} 의 {missing} 값이 없습니다(미국 휴장·키 미설정·구간 밖). "
+                 "가장 가까운 이전 값으로 **전진 채움하지 않습니다** — 낡은 값을 "
+                 "자신만만한 신호로 만들지 않기 위해서입니다.")
+
+    if form == "spread":
+        value = short.value - long.value
+    else:
+        if long.value <= 0:
+            return _unavailable(fid, f"{VIX_LONG_SERIES} 가 {long.value} 라 비율을 낼 수 없습니다.")
+        value = short.value / long.value
+
+    has_vintage = bool(short.vintage_id) and bool(long.vintage_id)
+    lag_known = all(
+        bool(o.release_timestamp) and o.release_timestamp >= o.observation_period
+        for o in (short, long))
+    usage = derive_usage(has_vintage=has_vintage, depth_ok=True, lag_known=lag_known)
+
+    # ★정렬 근거를 관측치에 기록한다★ (§6.2 · Drift 8b-1)
+    obs_out = replace(
+        short,
+        value=value,
+        market_cutoff=f"{target} US close",
+        execution_timestamp=f"{as_of[:10]} {'KRX' if market == 'kr' else 'US'} session",
+    )
+    detail = (f"{VIX_SHORT_SERIES}({short.value}) / {VIX_LONG_SERIES}({long.value}) "
+              if form != "spread" else
+              f"{VIX_SHORT_SERIES}({short.value}) − {VIX_LONG_SERIES}({long.value}) ")
+    detail += f"@ {target} 미국 종가 → {as_of[:10]} 결정에 사용"
+    if market == "kr":
+        detail += " (KR 결정이므로 D−1 종가)"
+    return FactorReading(fid, value, usage, short.data_status, obs_out, detail)
+
+
 def read_curve_slope(
     as_of: str,
     *,
@@ -567,6 +656,10 @@ def read_factor(
                                     series_id=p.get("series_id"))
         if factor_id == FINANCIAL_CONDITIONS_FACTOR_ID:
             return read_financial_conditions(as_of, start=p.get("start"))
+        if factor_id in (VIX_TERM_FACTOR_ID, VIX_SPREAD_FACTOR_ID):
+            return read_vix_term_structure(
+                as_of, form="spread" if factor_id == VIX_SPREAD_FACTOR_ID else "ratio",
+                market=market)
         return _unavailable(factor_id, f"{factor_id} 의 시점 기반 읽기가 아직 구현되지 않았습니다.")
     # ★`indicator` 는 as_of 가 있을 때만 시점 기반으로 읽는다★
     # `requires_as_of` 를 붙이면 팩터 창이 "추가 불가" 로 막아 기존 흐름이 사라지므로
