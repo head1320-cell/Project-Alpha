@@ -685,10 +685,57 @@ Phase 0–10 이 끝난 뒤 §§1–10 을 코드와 대조했다. **개수는 �
 §5 `model_type` + 12 패밀리 + 팩 CRUD · §7 지정 라우터 3개 전부 · §8 `/allocation/macro` ·
 §9 게이트(pytest 1487 · Playwright 98).
 
+### Phase 11b — `AllocationProvider` 슬라이스 분할 (Deferred 항목 소화)
+
+**측정된 동기.** 파일은 743줄 · 컨텍스트 필드 ~90개까지 자랐고(스펙 감사 시점 522/40+),
+`const value: AllocationCtx = { … }` 는 **평범한 객체 리터럴**이라 매 렌더 새 신원이 된다.
+소비자 26개가 전부 `useAllocation()` 하나로 구독한다.
+
+**계획했던 2단계 중 1단계는 버렸다 (실측 근거).** "먼저 `useMemo` 로 감싸면 이득의 싼 절반을
+얻는다" 는 전제가 **거짓**이었다 — 컨텍스트 값에 담기는 핸들러 20개가 전부 매 렌더 새로
+만들어지는 화살표 상수라, `useMemo` 를 씌워도 의존성이 매번 달라져 캐시가 한 번도 맞지 않는다.
+효과 없는 변경을 "최적화" 라고 커밋하지 않기 위해 이 단계는 실행하지 않았다.
+
+**"형제 5개" 도 거짓이었다.** `runAnalyze` · `recordRun` · 타이밍 쿼리가 제안된 모든 경계를
+가로질러 holdings · views · model · delta · tau · constraints 를 읽는다. 그래서 형제가 아니라
+**위계**로 나눴다 — 사용자 승인:
+
+| 계층 | 파일 | 소유 |
+|---|---|---|
+| 기반 | `slices/PortfolioContext.tsx` | holdings · views · model · delta · tau · constraints · `hydrated` |
+| ↳ | `slices/TimingContext.tsx` | timingCfg · timingOverlay · activeRuleSet · `timingQ` |
+| ↳ | `slices/ScenarioContext.tsx` | scenario · scenarioPackId · runPackHash · bump · severity · `stressQ` |
+| ↳ | `slices/RunContext.tsx` | result · lastRun · activeRun/Study 신원 · analyze 뮤테이션 · `xrayQ` |
+| ↳ | `AllocationProvider.tsx` (조립) | 타임라인 · 위저드 · 스냅샷 · **슬라이스를 가로지르는 핸들러 전부** |
+
+중첩 순서는 취향이 아니라 의존이다 — 아래 세 슬라이스의 쿼리가 전부 보유 종목을 읽는다.
+부수 효과로 하이드레이트 순서가 **구조적으로** 보장된다: React 는 자식 이펙트를 먼저 돌리므로
+가장 바깥이 올리는 `hydrated` 가 서는 시점엔 모든 슬라이스의 복원이 끝나 있고, 작업셋 저장이
+빈 상태를 덮어쓸 수 없다.
+
+**저장 규칙.** 공유 블롭 `alpha_alloc_wip` 은 **읽기는 각자, 쓰기는 조립 계층 한 곳**
+(슬라이스마다 같은 키에 쓰면 서로를 덮어쓴다). 전용 키(`alpha_alloc_ruleset`)는 소유 슬라이스가
+읽고 쓴다. 키 형식은 한 글자도 바꾸지 않았다 — 기존 세션과 E2E 시드가 그 형식에 걸려 있다.
+
+★**이 커밋은 구조만 바꾼다**★ 소비자가 `useAllocation()` 으로 전부 구독하는 동안에는 렌더
+절감이 **없다**. 그 이득은 소비자가 좁은 슬라이스 훅으로 옮길 때 오고, 그건 26개 호출부를
+고치는 별개의 변경이다(ground rule 2 — 한 커밋에 두 변경 금지). 얻은 것은 "상태의 소유자가
+하나" 라는 성질이고, 그것이 이후 이전을 가능하게 한다.
+
+**경계는 주석이 아니라 lint 로 강제한다.** `.eslintrc.js` 에 슬라이스 전용 override —
+슬라이스는 서로를 import 할 수 없고 기반 `PortfolioContext` 만 예외다. 없으면 "파일만 늘고
+결합은 그대로" 로 돌아간다.
+
+| 변이 | 결과 |
+|---|---|
+| `ScenarioContext` 가 `./RunContext` 를 import | eslint `no-restricted-imports` 1 error ✅ |
+| 합성된 `useAllocation()` 모양에서 `timingOverlay` 제거 | tsc TS2741 ✅ |
+
+**게이트:** pytest 1487/10 skipped(불변) · Playwright 98 exit 0 · tsc 0 · eslint 0 error(경고
+28 — 기준선과 동일) · `next build` exit 0 · **E2E 스펙 수정 0건**.
+
 ### Deferred
-`AllocationProvider` (522 lines, 40+ context fields) splits into slices — study context, timing,
-scenarios, run history — as its **own** phase. Folding it into Phase 4 would entangle a state
-refactor with a UI change.
+~~`AllocationProvider` splits into slices~~ — Phase 11b 에서 소화(위 참조).
 
 ---
 

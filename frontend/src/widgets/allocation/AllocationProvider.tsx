@@ -9,10 +9,10 @@
 //     sessionStorage(goal/pos/wip) 하이드레이트·persist → 중간 새로고침 비파괴.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 import {
   allocationApi, type AllocationModel, type AllocationViewInput, type AnalyzeResult,
-  type CanaryInput, type ConstraintsInput, type StressResult, type StressScenarioMeta,
+  type ConstraintsInput, type StressResult, type StressScenarioMeta,
   type TimingResult, type XrayResult,
 } from "@/entities/allocation/api";
 import { saveStudy, type AllocationStudy } from "@/entities/allocation/storage";
@@ -20,6 +20,16 @@ import { researchApi } from "@/entities/research/api";
 import type { TacticalStrategy } from "@/entities/macro/analysisModel";
 import type { Holding } from "./PortfolioBuilder";
 import type { TimelineEvent } from "./ResearchTimeline";
+import { PortfolioProvider, SS_WIP, usePortfolio } from "./slices/PortfolioContext";
+import { RunProvider, useRun } from "./slices/RunContext";
+import { ScenarioProvider, useScenario } from "./slices/ScenarioContext";
+import { DEFAULT_TIMING, TimingProvider, useTiming, type TimingConfig } from "./slices/TimingContext";
+
+// 타이밍 설정 타입·기본값의 소유는 타이밍 슬라이스다. 여기서 다시 내보내는 것은 **경로
+// 호환**을 위해서다 — 소비자(`app/allocation/timing/page.tsx`·`timingPresets.ts`)가 이미
+// 이 모듈에서 가져다 쓰고 있고, 슬라이스를 나눈 것이 그들의 import 를 깰 이유는 없다.
+export { DEFAULT_TIMING };
+export type { TimingConfig };
 
 export const MODELS: { id: AllocationModel; label: string }[] = [
   { id: "mvo", label: "MVO" },
@@ -75,33 +85,6 @@ export const PHASES: PhaseMeta[] = [
   { key: "validation", label: "VALIDATION", ko: "검증", steps: ["/allocation/stress", "/allocation/explain", "/allocation/execution"] },
 ];
 
-// ── 타이밍(카나리·마켓타이밍) 설정 — 위저드 공유 상태 ──
-export interface TimingConfig {
-  market: "kr" | "us";
-  canaries: CanaryInput[];
-  minBreadth: number;                 // 0 = 전부 통과, k = k-of-N
-  riskOnAssets: string[];             // 비면 현재 포트폴리오 유지
-  riskOffAssets: string[];
-  overlay: { type: "ma_day" | "abs_mom" | "none"; n: number; lookback: number };
-  regimeBlend: boolean;               // 국면확률 가중 연속 노출(휩쏘 억제)
-  targetVolPct: number | null;        // 목표 변동성(연 %) — 위험자산 노출 스케일
-}
-export const DEFAULT_TIMING: TimingConfig = {
-  market: "kr",
-  canaries: [
-    { kind: "asset", id: "SPY", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
-    { kind: "asset", id: "EFA", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
-    { kind: "asset", id: "EEM", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
-    { kind: "asset", id: "AGG", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" },
-  ],
-  minBreadth: 0,
-  riskOnAssets: [],
-  riskOffAssets: ["IEF", "SHY"],
-  overlay: { type: "none", n: 200, lookback: 12 },
-  regimeBlend: false,
-  targetVolPct: null,
-};
-
 // A pathname is a known Allocation Studio route iff it is the gate or exactly one of the
 // stage hrefs. Guards against stale sessionStorage `lastPos` (e.g. a renamed/removed route
 // like the old /allocation/optimizer) producing a dead URL → hard 404 on Resume.
@@ -133,12 +116,13 @@ export interface LoadedStrategy {
 
 // sessionStorage 키 (localStorage 스터디와 별개 — 세션 한정, 중간 새로고침 재개용)
 const SS_GOAL = "alpha_alloc_goal";
-const SS_WIP = "alpha_alloc_wip";
+// `SS_WIP` 는 `slices/PortfolioContext` 가 소유한다 — 같은 블롭을 두 곳이 읽으므로
+// 키 문자열이 두 벌 있으면 언젠가 갈라진다. 여기서는 import 해서 쓴다.
 const SS_POS = "alpha_alloc_pos";
 // 붙여 둔 스냅샷의 **ID 만** 세션에 남긴다. 본문은 서버가 진실이고 여기 복사하지 않는다 —
 // 새로고침 후에도 같은 ID 로 서버에서 다시 읽어 오므로 재현이 성립한다.
 const SS_SNAP = "alpha_alloc_snapshot";
-const SS_RULESET = "alpha_alloc_ruleset";
+// `alpha_alloc_ruleset` 은 타이밍 슬라이스가 소유한다(전용 키 — 공유 블롭이 아니다).
 
 interface AllocationCtx {
   holdings: Holding[];
@@ -265,61 +249,54 @@ export function useAllocation(): AllocationCtx {
   return v;
 }
 
-export function AllocationProvider({ children }: { children: React.ReactNode }) {
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [views, setViews] = useState<AllocationViewInput[]>([]);
-  const [model, setModel] = useState<AllocationModel>("bl");
-  const [delta, setDelta] = useState(2.5);
-  const [tau, setTau] = useState(0.05);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
-  const [scenario, setScenario] = useState<string>("rate_hike_200bp");
-  const [scenarioPackId, setScenarioPackId] = useState<string>("rate_hike_200bp");
-  const [runPackHash, setRunPackHash] = useState<string | null>(null);
-  const [timingOverlay, setTimingOverlay] =
-    useState<{ exposure: number; source: "canary" } | null>(null);
-  const [bump, setBump] = useState(2.0);
-  const [severity, setSeverity] = useState(1.0);
-  const [timingCfg, setTimingCfgState] = useState<TimingConfig>(DEFAULT_TIMING);
-  const [studiesVersion, setStudiesVersion] = useState(0);
+function AllocationComposition({ children }: { children: React.ReactNode }) {
+  // ★기반 슬라이스를 읽는다★ 이 슬라이스의 상태는 여기서 선언되지 않는다 — 조립 계층은
+  // 날것의 상태를 **합성**할 뿐이고, 소유는 `PortfolioProvider` 다.
+  const {
+    holdings, setHoldings, holdingsMap, holdingsKey,
+    views, setViews, model, setModel, delta, setDelta, tau, setTau,
+    constraints, setConstraints, hydrated,
+  } = usePortfolio();
+  const {
+    timingCfg, setTimingCfg, timingQ,
+    timingOverlay, setTimingOverlay,
+    activeRuleSet, persistActiveRuleSet,
+  } = useTiming();
+  const {
+    scenario, setScenario, scenarioPackId, setScenarioPackId, runPackHash, setRunPackHash,
+    bump, setBump, severity, setSeverity, scenarios, stressQ,
+  } = useScenario();
+  const {
+    result, setResult, lastRun, markRunNow, pending, analyzeError, mutateAnalyze,
+    lastReqRef, xrayQ, activeRunId, setActiveRunId, runsVersion, bumpRuns,
+    activeStudy, setActiveStudy, studiesVersion, bumpStudies,
+  } = useRun();
+
+  // ── 조립 계층이 직접 소유하는 상태 ──
+  // 어느 슬라이스에도 속하지 않거나(타임라인·위저드), 슬라이스 하나로 좁히면 오히려
+  // 서로를 참조하게 되는 것들이다. 나누는 것이 목적이 아니라 경계가 성립하는 것이 목적이다.
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
-  const [lastRun, setLastRun] = useState("—:—:—");
   const [goal, setGoalState] = useState<AllocationGoal | null>(null);
   const [loadedStrategy, setLoadedStrategy] = useState<LoadedStrategy | null>(null);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [attachedSnapshotId, setAttachedSnapshotId] = useState<string | null>(null);
-  const [activeRuleSet, setActiveRuleSetState] =
-    useState<{ id: string; version: number | null } | null>(null);
-  const [activeStudy, setActiveStudy] = useState<{ id: string; name: string } | null>(null);
-  const [runsVersion, setRunsVersion] = useState(0);
   const [alphaTouched, setAlphaTouched] = useState(false);
   const [executionTouched, setExecutionTouched] = useState(false);
-  const [constraints, setConstraints] = useState<ConstraintsInput | null>(null);
   const [lastPos, setLastPos] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);   // persist는 하이드레이트 후에만
-  const lastReqRef = useRef<string>("");
 
   const logEvent = (msg: string) =>
     setTimeline((l) => [{ t: new Date().toTimeString().slice(0, 5), msg }, ...l].slice(0, 40));
 
-  const holdingsMap = useMemo(() => {
-    const m: Record<string, number> = {};
-    holdings.forEach((h) => { m[h.code] = h.weight; });
-    return m;
-  }, [holdings]);
-  const holdingsKey = useMemo(() => JSON.stringify(holdingsMap), [holdingsMap]);
 
   // ── sessionStorage 하이드레이트 (마운트 1회, 클라이언트 전용 — SSR 불일치 회피) ──
   useEffect(() => {
-    if (typeof window === "undefined") { setHydrated(true); return; }
+    // `hydrated` 는 더 이상 여기서 세우지 않는다 — 기반 슬라이스가 자기 복원을 마치고 올린다.
+    if (typeof window === "undefined") return;
     try {
       const g = sessionStorage.getItem(SS_GOAL);
       if (g) setGoalState(JSON.parse(g));
       // 붙여 둔 스냅샷 ID 복원 — 본문이 아니라 ID 뿐이라 서버가 여전히 진실이다.
       const snap = sessionStorage.getItem(SS_SNAP);
       if (snap) setAttachedSnapshotId(snap);
-      // 룰셋도 ID+버전만 복원한다 — 본문은 서버의 timing_rule_set_versions 가 진실이다.
-      const rs = sessionStorage.getItem(SS_RULESET);
-      if (rs) { try { setActiveRuleSetState(JSON.parse(rs)); } catch { /* 손상된 값은 버린다 */ } }
       const p = sessionStorage.getItem(SS_POS);
       // Only restore a Resume target that is still a real route (stale/renamed → drop it,
       // never resurface a dead URL that would 404).
@@ -328,26 +305,18 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       const w = sessionStorage.getItem(SS_WIP);
       if (w) {
         const wip = JSON.parse(w);
-        if (Array.isArray(wip.holdings) && wip.holdings.length) setHoldings(wip.holdings);
-        if (Array.isArray(wip.views)) setViews(wip.views);
-        if (wip.model) setModel(wip.model);
-        if (typeof wip.delta === "number") setDelta(wip.delta);
-        if (typeof wip.tau === "number") setTau(wip.tau);
-        if (wip.timingCfg && typeof wip.timingCfg === "object") setTimingCfgState(wip.timingCfg);
+        // holdings·views·model·delta·tau·constraints 는 PortfolioProvider 가, timingCfg·
+        // timingOverlay 는 TimingProvider 가 같은 블롭에서 자기 몫으로 복원한다 — 여기서
+        // 또 세팅하면 같은 값을 두 번 쓰게 된다. 남는 건 어느 슬라이스도 갖지 않는 이것뿐.
         if (wip.loadedStrategy && typeof wip.loadedStrategy === "object") setLoadedStrategy(wip.loadedStrategy);
-        if (wip.constraints && typeof wip.constraints === "object") setConstraints(wip.constraints);
-        // 오버레이도 새로고침을 견뎌야 한다 — 제약과 같은 성격의 **결정 입력**이고, 사라지면
-        // 사용자는 노출을 줄여 둔 줄 알고 있는데 실제로는 전액 노출로 돌아가 있다.
-        if (wip.timingOverlay && typeof wip.timingOverlay === "object") {
-          const ex = Number((wip.timingOverlay as { exposure?: unknown }).exposure);
-          if (Number.isFinite(ex)) setTimingOverlay({ exposure: Math.max(0, Math.min(1, ex)), source: "canary" });
-        }
       }
     } catch { /* 파싱 실패는 무시 — 빈 상태로 시작 */ }
-    setHydrated(true);
   }, []);
 
   // ── 작업셋 persist (하이드레이트 이후에만 — 하이드레이트 전 빈 상태로 덮어쓰기 방지) ──
+  // ★쓰기는 여기 한 곳뿐이다★ 슬라이스마다 같은 키에 쓰면 서로를 덮어쓴다. `hydrated` 는
+  // **가장 바깥** 슬라이스가 올리는데, React 는 자식 이펙트를 먼저 돌리므로 이 플래그가
+  // 서는 시점에는 모든 슬라이스의 복원이 이미 끝나 있다 — 순서가 우연이 아니라 보장이다.
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
     try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints, timingOverlay })); }
@@ -375,12 +344,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         return changed ? next : prev;
       });
     }).catch(() => { /* 해소 실패는 코드 폴백 유지 */ });
-  }, [holdings]);
-
-  const analyzeMut = useMutation({
-    mutationFn: allocationApi.analyze,
-    onSuccess: (data) => { if (!data.error) { setResult(data); setLastRun(new Date().toTimeString().slice(0, 8)); } },
-  });
+    // `setHoldings` 는 컨텍스트를 건너온 `useState` 세터라 실제로는 불변이지만, lint 는
+    // 그걸 알 수 없다 — 넣어 두는 편이 정직하고 재실행도 늘지 않는다.
+  }, [holdings, setHoldings]);
 
   const canRun = holdings.length >= 2;
 
@@ -394,7 +360,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const isResultStale = !result || currentSig !== lastReqRef.current;
 
   const runAnalyze = (over?: { model?: AllocationModel; tau?: number; views?: AllocationViewInput[] }) => {
-    if (!canRun || analyzeMut.isPending) return;
+    if (!canRun || pending) return;
     const req = {
       tickers: holdings.map((h) => h.code),
       weights: holdingsMap,
@@ -407,49 +373,13 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     const key = JSON.stringify(req);
     if (key === lastReqRef.current) return; // 동일 요청 중복 방지
     lastReqRef.current = key;
-    analyzeMut.mutate(req);
+    mutateAnalyze(req);
     logEvent(`재최적화 — ${req.model.toUpperCase()} · λ ${delta.toFixed(1)} · τ ${req.tau} · 뷰 ${req.views.length}개`);
   };
 
   // 다음 단계 진입(특히 VALIDATION) 시 결과가 낡았으면 자동 재최적화 (dedupe라 무해)
-  const ensureFreshRun = () => { if (canRun && !analyzeMut.isPending && isResultStale) runAnalyze(); };
+  const ensureFreshRun = () => { if (canRun && !pending && isResultStale) runAnalyze(); };
 
-  const xrayQ = useQuery({
-    queryKey: ["allocation", "xray", holdingsKey],
-    queryFn: () => allocationApi.factorXray(holdingsMap).catch(() => null),
-    enabled: holdings.length >= 1,
-  });
-  const catalogQ = useQuery({
-    queryKey: ["allocation", "stress-catalog"],
-    queryFn: () => allocationApi.stressCatalog().catch(() => null),
-  });
-  const stressQ = useQuery({
-    queryKey: ["allocation", "stress", holdingsKey, scenario, severity],
-    queryFn: () => allocationApi.stress(holdingsMap, scenario, severity).catch(() => null),
-    enabled: holdings.length >= 1 && !!scenario,
-  });
-
-  // ── 타이밍(카나리·마켓타이밍) 쿼리 — 설정/보유 변경 시 자동 재계산 ──
-  const timingCfgKey = useMemo(() => JSON.stringify(timingCfg), [timingCfg]);
-  const timingQ = useQuery({
-    queryKey: ["allocation", "timing", timingCfgKey, holdingsKey],
-    queryFn: () => allocationApi.timing({
-      market: timingCfg.market,
-      canaries: timingCfg.canaries,
-      min_breadth: timingCfg.minBreadth,
-      risk_on_assets: timingCfg.riskOnAssets,
-      risk_off_assets: timingCfg.riskOffAssets,
-      holdings: holdings.length ? holdingsMap : null,
-      overlay: timingCfg.overlay,
-      regime_blend: timingCfg.regimeBlend,
-      target_vol_pct: timingCfg.targetVolPct,
-    }).catch(() => null),
-    enabled: timingCfg.canaries.length >= 1,
-  });
-
-  const setTimingCfg = (next: TimingConfig) => setTimingCfgState(next);
-
-  const scenarios = catalogQ.data?.scenarios || [];
   const pickScenario = (id: string) => {
     setScenario(id);
     // `/stress` 로 실행되는 팩을 골랐다면 활성 팩도 같은 것이다. 국내팩은 다른 엔진이라
@@ -504,11 +434,11 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       });
       if (data.error) return null;
       setResult(data);
-      setLastRun(new Date().toTimeString().slice(0, 8));
+      markRunNow();
       const rid = data.run_id ?? null;
       if (rid) {
         setActiveRunId(rid);
-        setRunsVersion((v) => v + 1);
+        bumpRuns();
         logEvent(`런 기록 — ${name.trim() || rid} (${model.toUpperCase()})`);
       } else {
         logEvent("런 기록 실패 — DB 미가용");
@@ -659,7 +589,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     // 저장 직후가 곧 "이 스터디 안에 있다" — saveStudy 가 돌려주는 신원을 쓴다(새로 만들지 않는다).
     setActiveStudy({ id: saved.id, name: saved.name });
     logEvent(`스터디 저장 — ${name.trim() || "이름 없음"}`);
-    setStudiesVersion((v) => v + 1);
+    bumpStudies();
   };
 
   // ── 위저드 상태 ──
@@ -677,13 +607,10 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     try { if (typeof window !== "undefined") sessionStorage.setItem(SS_SNAP, id); } catch { /* ignore */ }
     logEvent(`매크로 국면 스냅샷 연결 — ${id}`);
   };
+  // 상태+저장은 슬라이스가, 타임라인 기록은 여기가 — 로그가 슬라이스로 내려가면 슬라이스가
+  // 서로를 알게 된다.
   const setActiveRuleSet = (r: { id: string; version: number | null } | null) => {
-    setActiveRuleSetState(r);
-    try {
-      if (typeof window === "undefined") return;
-      if (r) sessionStorage.setItem(SS_RULESET, JSON.stringify(r));
-      else sessionStorage.removeItem(SS_RULESET);
-    } catch { /* ignore */ }
+    persistActiveRuleSet(r);
     logEvent(r
       ? `타이밍 룰셋 연결 — ${r.id}${r.version != null ? ` v${r.version}` : " (버전 미상)"}`
       : "타이밍 룰셋 해제");
@@ -724,11 +651,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     timingCfg, setTimingCfg, timingQ, applyTiming,
     timingOverlay, applyTimingOverlay, clearTimingOverlay,
     timeline, logEvent,
-    canRun, pending: analyzeMut.isPending, lastRun,
-    analyzeError: analyzeMut.data?.error ? (analyzeMut.data.message ?? "분석 실패") : null,
+    canRun, pending, lastRun, analyzeError,
     runAnalyze, xrayQ, stressQ,
-    saveStudyFull, loadStudy, reopenRun, studiesVersion,
-    bumpStudies: () => setStudiesVersion((v) => v + 1),
+    saveStudyFull, loadStudy, reopenRun, studiesVersion, bumpStudies,
     loadedStrategy, loadStrategy, clearLoadedStrategy,
     activeStudy, attachedSnapshotId, attachSnapshot, detachSnapshot,
     activeRuleSet, setActiveRuleSet,
@@ -740,4 +665,34 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/**
+ * 조립 — 기반 슬라이스를 바깥에 두고 그 안에서 나머지를 합성한다.
+ *
+ * ★중첩 순서는 취향이 아니라 의존이다★ 타이밍·시나리오·런 슬라이스가 전부 보유 종목을
+ * 읽으므로 `PortfolioProvider` 가 가장 바깥이어야 한다. 형제로 두면 보유를 prop 으로
+ * 흘려보내야 하고, 그건 컨텍스트를 쓰는 이유를 지운다.
+ *
+ * 부수 효과 하나가 공짜로 따라온다 — React 는 자식 이펙트를 먼저 돌리므로, 가장 바깥이
+ * 올리는 `hydrated` 가 서는 시점에는 모든 슬라이스의 sessionStorage 복원이 끝나 있다.
+ * 작업셋 저장이 빈 상태를 덮어쓸 수 없는 이유가 타이머가 아니라 트리 구조다.
+ *
+ * ★`children` 을 그대로 통과시킨다★ 그래야 기반 상태가 바뀌어도 React 가 자식 서브트리를
+ * 재조정하지 않는다(엘리먼트 동일성 유지). 소비자가 `useAllocation()` 으로 **전부** 구독하는
+ * 동안에는 렌더 절감이 체감되지 않는다 — 그건 소비자가 좁은 슬라이스로 옮길 때의 이득이고,
+ * 이 커밋의 범위가 아니다. 여기서 얻는 것은 구조다.
+ */
+export function AllocationProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <PortfolioProvider>
+      <TimingProvider>
+        <ScenarioProvider>
+          <RunProvider>
+            <AllocationComposition>{children}</AllocationComposition>
+          </RunProvider>
+        </ScenarioProvider>
+      </TimingProvider>
+    </PortfolioProvider>
+  );
 }
