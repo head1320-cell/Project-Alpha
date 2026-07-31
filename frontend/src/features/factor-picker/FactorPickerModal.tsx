@@ -4,7 +4,7 @@
 // 젠포트식 팩터 선택 창. STEP1(팩터 선택) → STEP2(함수 선택) → "입력" 시
 // onInsert 로 { factorName, expr, functionId, params } 를 부모(조건식 에디터)에 전달.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { type GpFactor } from "@/entities/backtest/factorCatalog";
 import { BUTLER_CATEGORIES, butlerToken } from "@/entities/backtest/butlerFactors";
@@ -16,6 +16,7 @@ import { TONES, type Tone } from "@/shared/ui/kit";
 // 여기서는 **충돌하는 유틸리티를 합칠 일이 없다**(모든 클래스 문자열이 이 파일 안에서 조건부로
 // 이어붙기만 한다). 그래서 머지 기능에 값을 지불하지 않는다.
 import { clsx } from "clsx";
+import { useFocusTrap } from "@/shared/lib/useFocusTrap";
 
 // 지원 맵 모듈 캐시 — 백엔드(/condition-tokens)가 단일 진실 공급원.
 // 로드 실패 시 null → 배지 없이 기존 동작 (오프라인 데모 호환).
@@ -152,6 +153,10 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [support]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // 스펙 §8.1 — Tab 이 창 밖으로 나가지 못하게(닫으면 열기 전 요소로 복귀).
+  useFocusTrap(dialogRef, open);
+
   if (!open) return null;
 
   const setParam = (kind: string, idx: number, v: string) =>
@@ -210,7 +215,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
           이 창은 role 도 aria-modal 도 Escape 도 없었다(backdrop 클릭만 닫힘). 그러면
           스크린리더가 모달임을 알 수 없고, AAS 안에 놓일 경우 WizardTracker 의 모달 예외
           (`[role="dialog"][aria-modal="true"]`)도 적용되지 않아 화살표 키에 창이 날아간다. */}
-      <div onClick={(e) => e.stopPropagation()}
+      <div ref={dialogRef} onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label="팩터 선택"
         className="w-full max-w-[600px] max-h-[82vh] overflow-auto bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--bs-border-radius-lg)] px-[18px] pt-[18px] pb-4 shadow-[var(--bs-box-shadow)]">
 

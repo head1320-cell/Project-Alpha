@@ -213,3 +213,73 @@ test("Catalogue shell: 알파 창도 같은 셸을 쓴다 (중복 제거 확인)
   await expect(page.locator(".tfm")).toHaveCount(0);
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 포커스 트랩 (스펙 §8.1) — 기술부채 정리.
+//
+// 이전까지 창들은 role·aria-modal·Escape·autoFocus 를 갖췄지만 **Tab 을 막는 것이 없었다.**
+// 마지막 요소에서 Tab 을 누르면 포커스가 뒤쪽 페이지로 걸어 나가고, 화면에는 모달이 떠 있는데
+// 키보드는 그 아래를 조작한다. 스크린리더 사용자에게는 그 사실조차 보이지 않는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function openStressWindow(page: import("@playwright/test").Page) {
+  await page.goto("/allocation/stress", { waitUntil: "networkidle" });
+  await page.locator(".as-fb-apply", { hasText: "시나리오 창에서 선택" }).first().click();
+  await expect(page.locator(".tfm")).toBeVisible({ timeout: 20_000 });
+}
+
+/** 지금 포커스가 다이얼로그 **안**에 있는가 — 밖으로 나갔는지가 이 테스트의 전부다. */
+async function focusIsInsideDialog(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const d = document.querySelector('[role="dialog"][aria-modal="true"]');
+    return !!(d && document.activeElement && d.contains(document.activeElement));
+  });
+}
+
+test("포커스 트랩: Tab 을 계속 눌러도 포커스가 창 밖으로 나가지 않는다", async ({ page }) => {
+  await openStressWindow(page);
+  // 창 안의 포커스 가능한 요소 수보다 넉넉히 많이 누른다 — 한 바퀴 이상 돌아야 경계를 지난다.
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press("Tab");
+    expect(await focusIsInsideDialog(page), `Tab ${i + 1}번째에서 포커스가 창을 벗어났다`)
+      .toBe(true);
+  }
+});
+
+test("포커스 트랩: Shift+Tab 으로 거꾸로 돌아도 벗어나지 않는다", async ({ page }) => {
+  await openStressWindow(page);
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await focusIsInsideDialog(page), `Shift+Tab ${i + 1}번째에서 벗어났다`).toBe(true);
+  }
+});
+
+test("포커스 트랩: 닫으면 포커스가 창을 연 버튼으로 돌아온다", async ({ page }) => {
+  // ★되돌리지 않으면 키보드 사용자는 방금 누른 버튼을 처음부터 다시 찾아가야 한다★
+  await page.goto("/allocation/stress", { waitUntil: "networkidle" });
+  const opener = page.locator(".as-fb-apply", { hasText: "시나리오 창에서 선택" }).first();
+  await opener.click();
+  await expect(page.locator(".tfm")).toBeVisible({ timeout: 20_000 });
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tfm")).toHaveCount(0);
+
+  const backOnOpener = await page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    return !!el && (el.textContent || "").includes("시나리오 창에서 선택");
+  });
+  expect(backOnOpener, "닫은 뒤 포커스가 열기 버튼으로 돌아오지 않았다").toBe(true);
+});
+
+test("포커스 트랩: 창이 닫혀 있을 때는 Tab 을 가로채지 않는다", async ({ page }) => {
+  // ★트랩이 상시 작동하면 그 아래 페이지가 키보드로 조작 불가능해진다★
+  await page.goto("/allocation/stress", { waitUntil: "networkidle" });
+  await expect(page.locator(".tfm")).toHaveCount(0);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const trapped = await page.evaluate(() =>
+    !!document.querySelector('[role="dialog"][aria-modal="true"]'));
+  expect(trapped, "닫힌 상태인데 다이얼로그가 존재한다").toBe(false);
+  const hasFocus = await page.evaluate(() =>
+    !!document.activeElement && document.activeElement !== document.body);
+  expect(hasFocus, "페이지에서 Tab 이 먹히지 않는다 — 트랩이 상시 작동 중일 수 있다").toBe(true);
+});

@@ -32,6 +32,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/shared/ui/shadcn/toggle-group";
 import { cn } from "@/shared/lib/cn";
+import { useFocusTrap } from "@/shared/lib/useFocusTrap";
 import {
   deletePreset, listPresets, savePreset,
   type CataloguePreset, type PresetNamespace,
@@ -157,6 +158,9 @@ export function CatalogueShell(props: CatalogueShellProps) {
     setPresetRows(ns ? listPresets(ns) : []);
   }, [ns]);
   useEffect(() => { if (open) refreshPresets(); }, [open, refreshPresets]);
+
+  // 스펙 §8.1 — 열려 있는 동안 Tab 이 창 밖으로 걸어 나가지 못하게 한다(닫으면 원위치 복귀).
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => { if (!open) { setQ(""); setPresetName(""); } }, [open]);
 
