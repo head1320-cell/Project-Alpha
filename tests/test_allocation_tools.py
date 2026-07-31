@@ -19,18 +19,21 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 import src.api.allocation_routes as ar  # noqa: E402
+import src.api.timing_routes as tmr  # noqa: E402
 from src.api.allocation_routes import (  # noqa: E402
-    CanarySpec,
     FactorPortfolioRequest,
     FactorSpec,
     ResolveNamesRequest,
     StressCorrRequest,
     StressRequest,
-    TimingRequest,
     allocation_factor_portfolio,
     allocation_resolve_names,
     allocation_stress,
     allocation_stress_correlation,
+)
+from src.api.timing_routes import (  # noqa: E402
+    CanarySpec,
+    TimingRequest,
     allocation_timing,
 )
 
@@ -104,7 +107,7 @@ def _patch_timing(monkeypatch, score=1.0, above=True):
     monkeypatch.setattr("src.engine.macro_analytics.timing_panel",
                         lambda mk: {"composite": {"score": 55, "label": "중립"},
                                     "components": [], "assets": []})
-    monkeypatch.setattr(ar, "_timing_holding", lambda t, mk: (t, f"NM:{t}"))
+    monkeypatch.setattr(tmr, "_timing_holding", lambda t, mk: (t, f"NM:{t}"))
 
 
 def test_timing_risk_on(monkeypatch):
@@ -136,7 +139,7 @@ def test_timing_regime_blend_continuous_exposure(monkeypatch):
     """국면-확률 블렌드: 이진 플립 대신 P(위험선호)로 온/오프 바스켓 연속 혼합."""
     _patch_timing(monkeypatch, score=1.0, above=True)
     # 국면확률 고정: 성장+ 국면(Goldilocks+Reflation)=0.3 → p_on 30%
-    monkeypatch.setattr(ar, "_timing_regime_probs",
+    monkeypatch.setattr(tmr, "_timing_regime_probs",
                         lambda mk: {"Goldilocks": 0.2, "Reflation": 0.1, "Stagflation": 0.5, "Disinflation": 0.2})
     req = TimingRequest(market="us", regime_blend=True,
                         canaries=[CanarySpec(kind="asset", id="SPY", signal="score_13612")],
@@ -153,7 +156,7 @@ def test_timing_regime_blend_continuous_exposure(monkeypatch):
 def test_timing_vol_target_scales_exposure(monkeypatch):
     """목표 변동성: 실현 변동성 초과 시 위험자산 노출 축소(잔여 현금)."""
     _patch_timing(monkeypatch, score=1.0, above=True)
-    monkeypatch.setattr(ar, "_timing_realized_vol_pct", lambda w, mk: 20.0)  # 실현 20%
+    monkeypatch.setattr(tmr, "_timing_realized_vol_pct", lambda w, mk: 20.0)  # 실현 20%
     req = TimingRequest(market="us", target_vol_pct=10.0,   # 목표 10% → scale 0.5
                         canaries=[CanarySpec(kind="asset", id="SPY", signal="score_13612")],
                         risk_on_assets=["QQQ", "EFA"])
@@ -172,7 +175,7 @@ def test_timing_k_of_n_breadth(monkeypatch):
     monkeypatch.setattr("src.engine.tactical_allocations._score_13612", _score)
     monkeypatch.setattr("src.engine.macro_analytics.timing_panel",
                         lambda mk: {"composite": None, "components": [], "assets": []})
-    monkeypatch.setattr(ar, "_timing_holding", lambda t, mk: (t, t))
+    monkeypatch.setattr(tmr, "_timing_holding", lambda t, mk: (t, t))
     req = TimingRequest(market="kr", min_breadth=1,
                         canaries=[CanarySpec(kind="asset", id="SPY", signal="score_13612"),
                                   CanarySpec(kind="asset", id="EEM", signal="score_13612")],

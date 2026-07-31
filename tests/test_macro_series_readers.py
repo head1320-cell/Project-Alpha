@@ -175,7 +175,7 @@ def test_legacy_canary_path_for_indicator_is_untouched():
     D7-1 이 `passes()` 를 건드리지 않기로 한 이유와 같다 — 라이브 카나리 경로에 회귀가 나면
     사용자가 쓰던 화면이 조용히 깨진다.
     """
-    from src.api.allocation_routes import CanarySpec, _canary_eval
+    from src.api.timing_routes import CanarySpec, _canary_eval
 
     c = CanarySpec(kind="indicator", id="VIXCLS", signal="indicator",
                    lookback=1, threshold=20.0, direction="below")

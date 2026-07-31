@@ -8,8 +8,9 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import src.api.allocation_routes as ar  # noqa: E402
+import src.api.timing_routes as tmr  # noqa: E402
 import src.data.timing_rules as tr  # noqa: E402
-from src.api.allocation_routes import (  # noqa: E402
+from src.api.timing_routes import (  # noqa: E402
     CanarySpec,
     TimingRequest,
     TimingRuleSetRequest,
@@ -33,7 +34,7 @@ def db(monkeypatch):
 def _patch_timing(monkeypatch):
     monkeypatch.setattr("src.engine.macro_analytics.timing_panel",
                         lambda mk: {"composite": None, "components": [], "assets": []})
-    monkeypatch.setattr(ar, "_timing_holding", lambda t, mk: (t, t))
+    monkeypatch.setattr(tmr, "_timing_holding", lambda t, mk: (t, t))
 
 
 # ── 카탈로그 ─────────────────────────────────────────────────────────────────

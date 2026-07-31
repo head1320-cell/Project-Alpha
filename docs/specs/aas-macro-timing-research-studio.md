@@ -372,11 +372,14 @@ New routers rather than growing the 70 KB `allocation_routes.py`; registered in
 - `src/api/regime_snapshot_routes.py` — create / get / list / compare snapshots
 - `src/api/timing_routes.py` — catalogue, preview, evaluate, compare, historical simulation,
   rule-set CRUD
-  > **미구현 (Phase 8b 에서 확인).** 타이밍 엔드포인트는 현재 전부
-  > `allocation_routes.py` 안에 있다. 8b 의 게이트 문구가 참조하는 "historical simulation
-  > 엔드포인트" 도 이 라우터의 일부라 아직 없다 — 8b 는 **엔진 수준**에서
-  > (`rule_set_states(mode="backtest")` → `assert_readings_backtest_eligible`)
-  > forward_only 거부를 검증하고, 라우터 신설은 이후 단계로 재배치했다.
+  > **✅ 분리 완료 (기술부채 정리).** 8개 라우트 + 스키마 4 + 헬퍼 5 를 옮겨
+  > `allocation_routes.py` 는 1601 → 1133줄이 됐다. ★URL 은 한 글자도 바뀌지 않았다★ —
+  > 프리픽스를 `/api/v1/allocation` 으로 유지했다(§7 의 문제 제기는 모듈 크기이지 URL 구조가
+  > 아니다). `tests/test_route_parity.py` 가 이동 **전에** 통과하도록 먼저 작성됐고, 이동
+  > 전후 {메서드, 경로} 집합이 289개로 동일함을 확인했다.
+  > **historical simulation 엔드포인트는 여전히 없다** — forward_only 거부는 엔진 수준
+  > (`rule_set_states(mode="backtest")` → `assert_readings_backtest_eligible`)에서 검증되며,
+  > 그 엔드포인트 자체는 이후 단계 소관으로 남는다.
 
 Extended in place: scenario pack save/run/compare (allocation), research-context attach/detach and
 run reproducibility export (research). Contracts are defined from the research workflow — **not**

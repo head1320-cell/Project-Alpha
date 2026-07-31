@@ -156,7 +156,7 @@ def test_degraded_regime_columns_do_not_fabricate_a_mode():
     참이 되지 않았다 — 가드를 지우는 뮤테이션 프로브가 통과한 이유가 이것이다.
     지금은 헬퍼를 직접 부른다. 가드가 있는 자리를 검증한다.
     """
-    from src.api.allocation_routes import _overlay_from_snapshot
+    from src.api.timing_routes import _overlay_from_snapshot
     ov = _overlay_from_snapshot(
         {"regime": None, "recommended_mode": None, "confidence": 0.9,
          "stress_score": 12.0, "data_status": "real", "research_usage": "forward_only"},
@@ -175,7 +175,7 @@ def test_a_mode_without_a_regime_label_is_not_acted_on():
     반쪽만 읽힌 경우에 조정하면 스펙 §8("모든 위험-온/오프 결정이 이유를 갖는다")을 어긴다 —
     국면을 이름 부를 수 없는데 그 국면 때문에 노출을 깎았다고 설명할 수는 없다.
     """
-    from src.api.allocation_routes import _overlay_from_snapshot
+    from src.api.timing_routes import _overlay_from_snapshot
     ov = _overlay_from_snapshot(
         {"regime": None, "recommended_mode": "CAUTIOUS", "confidence": 0.9,
          "stress_score": 12.0, "data_status": "real", "research_usage": "forward_only"},
