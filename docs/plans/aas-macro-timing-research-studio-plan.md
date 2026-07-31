@@ -648,6 +648,43 @@ Journal)는 이미 실동작 백엔드를 갖고 있었다 — Phase 10 은 **�
 **스테일 `.next` 빌드**에 대고 옛 버튼 라벨을 단언했고, `addInitScript` 가 네비게이션마다
 재실행되며 오버레이를 씨앗으로 되돌리고 있었다.
 
+### Phase 11a — 스펙 재감사 (읽기 전용, 근거 기반)
+
+Phase 0–10 이 끝난 뒤 §§1–10 을 코드와 대조했다. **개수는 근거가 아니다** — 각 항목마다
+파일:라인을 확인했다. 판정은 충족 / 미충족 / 데이터차단 셋뿐이다.
+
+감사 도중 **내 자신의 grep 이 한 번 틀렸다**: `grep -l CatalogueShell` 이 *주석 언급*을
+잡아 FactorPicker 가 셸을 쓴다고 보고했다. `^import` 로 다시 확인해 바로잡았다 — 이
+프로젝트가 문서화된 개수에 두 번 데인 것과 같은 종류의 오류다.
+
+#### 미충족 5건 (전부 **구현 가능** — 데이터 차단 아님)
+
+| # | 요구 | 실측 | 근거 |
+|---|---|---|---|
+| A1 | §3.2 `TimingFactorDefinition` 9개 필드 | **3개만 존재** — `provenance`·`evaluation_frequency`·`unit`(스펙은 `units`). `allowed_range`·`release_lag`·`revision_policy`·`availability`·`unavailable_reason` **부재**. `use_mode` 는 *룰*에는 있고(`timing_rules_v2.py:320`) *정의*에는 없다 | `CATALOG_BY_ID` 전 항목 키 합집합 = `default_direction, default_threshold, desc, evaluation_frequency, existing, family, id, label, params, provenance, requires_as_of, unit` |
+| A2 | §6 provenance 라벨 4종(`systrader_public` 등) | **자유 텍스트 인용문**이다 — "Antonacci (Dual Momentum)", "FRED/ALFRED (NFCI)". §6 이 막으려는 *위험*(유료 전략 복제 암시)은 오히려 실제 공개 출처를 적어 더 잘 막고 있으나, **분류로 필터·그룹할 수 없다** | `timing_factors.py` 카탈로그 |
+| A3 | §3.4 `DataLineage` | **코드 어디에도 없다** — 타입도 필드도 UI 도 0건 | `grep -rn lineage src/ frontend/src` → 0 |
+| A4 | §8.1 우측 패널 "impact preview" | 셸에 없다 | `CatalogueShell.tsx` |
+| A5 | §8.1 네 번째 창 | `FactorPickerModal` 이 셸을 쓰지 않는다 | `^import` 확인 — 나머지 셋은 ✓ |
+
+★A3·A4 는 §8.1 **소유권 표가 Phase 6 배달로 적어 둔 항목**이다.★ 포커스 트랩 행이 똑같이
+거짓이었고(그래서 세 페이즈를 살아남았다) 기술부채 정리에서 바로잡았다. 같은 표에 같은 종류의
+오류가 둘 더 있었다 — 표를 믿지 말고 코드를 읽으라는 CLAUDE.md 의 규칙이 여기에도 적용된다.
+
+#### 낡은 기록 2건 (바로잡음)
+
+- 6c 기록 *"포커스 트랩은 여전히 없다"* → **거짓**. Debt 2 가 배달했고
+  `FactorPickerModal.tsx:158`·`CatalogueShell.tsx:168` 이 `useFocusTrap` 을 호출한다.
+- 실행표 6c ⚠️ *"Tailwind 전환 미완"* → **거짓**. 6c-2(`dc8a286`)가 끝냈다(`style={{` 1개).
+  실제 미완은 **셸 이전**뿐이다.
+
+#### 확인된 충족 (표본)
+
+§1 실주문 없음(`execution_routes.py` 에 `place_order` 0건) · §3.1 ALFRED 빈티지 + **의무
+테스트** GDPC1 원공표값(`tests/test_pit_macro.py`) · §3.3 추가 9필드 **전부** ·
+§5 `model_type` + 12 패밀리 + 팩 CRUD · §7 지정 라우터 3개 전부 · §8 `/allocation/macro` ·
+§9 게이트(pytest 1487 · Playwright 98).
+
 ### Deferred
 `AllocationProvider` (522 lines, 40+ context fields) splits into slices — study context, timing,
 scenarios, run history — as its **own** phase. Folding it into Phase 4 would entangle a state

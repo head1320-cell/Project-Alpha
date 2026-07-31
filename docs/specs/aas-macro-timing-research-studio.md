@@ -552,12 +552,14 @@ comparison, and a warning when factor sampling frequency conflicts with rebalanc
 >
 > | Requirement | Owner | Note |
 > |---|---|---|
-> | three-pane layout · search · families · badges · config · lineage/limitations · keyboard · Escape · ARIA · responsive · KO/EN search · validation | **Phase 6** | `.tfm-*` classes preserved, so both existing specs pass with **zero selector edits** |
+> | three-pane layout · search · families · badges · config · **limitations** · keyboard · Escape · ARIA · responsive · KO/EN search · validation | **Phase 6** | `.tfm-*` classes preserved, so both existing specs pass with **zero selector edits** |
 > | historical preview (value / threshold / **signal state** / # state changes) | **Phase 6b-2** ✅ | shipped. `timing_factor_history.py` re-evaluates the factor inside `etf_prices.as_of(m)` so each point sees only what was knowable then — **no new truncation machinery**, and Phase 7's state rules are reused rather than reimplemented. Sampling is monthly (`as_of` is month-granular), so a daily factor's flip count is **undersampled**; that and every other limit ship in the payload's `limitations[]` and render verbatim |
 > | frequency-conflict warning | **Phase 6b** ✅ | shipped. `evaluation_frequency` on every catalogue entry, plus `frequency_ranks`/`rebalance_options` published **in the catalogue response** so the rank table stays single-sourced in Python instead of being duplicated in TypeScript |
 > | **focus trap** | **기술부채 정리** ✅ | `shared/lib/useFocusTrap.ts` — 위 Phase 6 행에 '전달됨' 으로 적혀 있었으나 **실제로는 없었다**(role·aria-modal·Escape·autoFocus 만 있었고 Tab 을 막는 코드가 0줄). 표를 바로잡고 별도로 구현했다. Radix Dialog 는 +20 kB/route 로 ADR 001 의 15 kB 중단선을 넘어 제외 |
 > | saved presets · draft-vs-active comparison | **Phase 6d** ✅ | shipped. Net-new — absent from all four modals, kept out so Phase 6's gate could stay "no capability lost". Presets live in one namespaced `localStorage` store shared by the three shell windows, and the UI **says they are browser-local and not reproduction coordinates** so they are not mistaken for the versioned rule sets of 7c. The comparison lists **only changed fields**, and distinguishes "nothing applied yet" from "no difference" — conflating those two would tell a user configuring their first factor that it matches the applied config |
-> | `FactorPickerModal` migration | **Phase 6c** | 477 lines, 76 inline styles, **zero E2E**, two consumers (Backtester + Screener). E2E coverage lands first |
+> | **lineage** (§3.4 `DataLineage`) | ❌ **미충족 (Phase 11a 감사)** | 위 행이 Phase 6 배달로 적고 있었으나 **코드에 없다** — 타입·필드·UI 0건. 포커스 트랩 행과 같은 종류의 거짓 기록이다 |
+> | **impact preview** | ❌ **미충족 (Phase 11a 감사)** | 셸에 없다 |
+> | `FactorPickerModal` migration | **Phase 6c → 11c** | 477 lines, 76 inline styles, **zero E2E**, two consumers (Backtester + Screener). E2E coverage lands first |
 >
 > **Primitives:** only `ToggleGroup` was added. `Tooltip` was **deliberately not** adopted — both
 > modals use `title=` zero times, putting unavailability reasons in the list row instead; that is an
