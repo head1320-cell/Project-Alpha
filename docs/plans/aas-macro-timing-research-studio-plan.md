@@ -18,8 +18,8 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 93 passed (33 at Phase 0 · 77 before Phase 9 · 85 after the debt phase) |
-| pytest | 1449 passed, 10 skipped (1003 at Phase 0 · 1371 before Phase 9) |
+| Playwright | 98 passed (33 at Phase 0 · 93 before Phase 10) |
+| pytest | 1487 passed, 10 skipped (1003 at Phase 0 · 1449 before Phase 10) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -54,7 +54,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 8 | Factor catalogue breadth | backend | ✅ (이번 커밋) |
 | 8b | Data-source extension (NFCI · VXVCLS) | backend | ✅ (이번 커밋) |
 | 9 | `ScenarioPackV2` | both | ✅ (이번 커밋) |
-| 10 | Stage wiring (Optimize · Attribution · Execution · Journal) **+ 팩 CRUD** | both | |
+| 10 | Stage wiring (Optimize · Attribution · Journal) **+ 팩 CRUD** | both | ✅ 10a–10d |
 
 ## Phases
 
@@ -617,6 +617,36 @@ Optimize (timing as explicit constraint/overlay, before/after + infeasibility re
 Attribution (allocation / timing / selection / factor / cost / residual; ex-ante vs ex-post),
 Execution (paper-only preview, costs, liquidity, borrow, approval states — **no live orders**),
 Journal (one ResearchRun holds snapshot + rule set + scenario pack + constraints + rationale).
+
+#### 10 실행 기록 — **done** (10a `7263211` · 10b `a3fd9ca` · 10c `5f5ca47` · 10d `f582f1d`)
+
+**먼저 측정한 것이 이 페이즈의 모양을 바꿨다.** 네 스테이지(Optimize·Attribution·Execution·
+Journal)는 이미 실동작 백엔드를 갖고 있었다 — Phase 10 은 **배선**이지 신축이 아니다.
+
+| 요구 | 실측 | 결과 |
+|---|---|---|
+| R1 팩 CRUD | 없음(인라인 전용) | **10a** |
+| R2 Optimize — 전략 비중을 조용히 덮어쓰지 않는다 | ◐ 제약·리포트는 있고 **타이밍이 입력이 아니었다** | **10c** |
+| R3 Attribution 6분해 | ◐ cost·residual ✅, Brinson 4종 `None` | **10d** (timing 만) |
+| R4 Execution | ✅ **이미 충족** — 비용·유동성·차입(정직 미상)·승인 전이·실주문 없음 | 작업 없음 |
+| R5 Journal — 런이 전부를 든다 | ◐ 스냅샷·룰셋·제약 ✅, **팩·근거 ❌** | **10b** |
+
+**R4 는 이미 충족돼 있어 아무것도 하지 않았다.** 페이즈 제목을 채우려고 일을 지어내지 않는다.
+
+**계획의 전제 하나가 코드와 접촉해 무너졌다(10c).** 초안은 `applyTiming` 을 오버레이로
+바꿔도 "노출 1.0 이면 같은 결과" 라 안전하다고 적었다. **위험-오프에서 거짓이다** —
+`timing_routes.py:455–528` 이 IEF/SHY + BIL 로 **교체**하므로 배율로는 재현할 수 없다.
+그대로 진행했다면 위험-오프 자산 로테이션이 조용히 사라졌을 것이다. 사용자에게 물어
+**"둘 다 남기고 파괴적인 쪽에 그렇게 이름 붙이기"** 로 결정했다.
+
+**뮤테이션 프로브 21개가 전부 잡혔고, 그중 셋은 방어가 두 겹이라 바깥 겹만 보고 있었다** —
+저장 팩의 `model_type`(스키마 + 하드코딩), 오버레이 노출 상한(프로바이더 + 패널). 안쪽 겹을
+직접 겨냥한 테스트를 따로 세웠다.
+
+**테스트가 스스로 헛돈 것을 두 번 잡았다.** (1) 저널 링크 테스트가 DB 부재 상태에서 돌아
+모든 조회가 None 이었다 — 같은 인메모리 엔진을 물려 실제 검증으로 바꿨다. (2) E2E 가
+**스테일 `.next` 빌드**에 대고 옛 버튼 라벨을 단언했고, `addInitScript` 가 네비게이션마다
+재실행되며 오버레이를 씨앗으로 되돌리고 있었다.
 
 ### Deferred
 `AllocationProvider` (522 lines, 40+ context fields) splits into slices — study context, timing,
