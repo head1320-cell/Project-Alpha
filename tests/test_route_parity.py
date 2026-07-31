@@ -20,6 +20,7 @@ TIMING_PATHS: tuple[tuple[str, str], ...] = (
     ("GET", "/api/v1/allocation/timing-rules/{set_id}/versions"),
     ("DELETE", "/api/v1/allocation/timing-rules/{set_id}"),
     ("POST", "/api/v1/allocation/timing/three-way"),
+    ("POST", "/api/v1/allocation/timing/simulate"),
     ("POST", "/api/v1/allocation/timing"),
 )
 

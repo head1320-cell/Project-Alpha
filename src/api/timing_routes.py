@@ -377,6 +377,89 @@ def allocation_timing_three_way(req: TimingThreeWayRequest):
     }
 
 
+class TimingSimulateRequest(BaseModel):
+    """과거 시뮬레이션 요청 — 인라인 룰 **또는** 저장된 룰셋 id.
+
+    ★`set_id` 가 외부 파이프라인의 손잡이다★ 저장된 룰셋은 버전이 박혀 있으므로, 파이프라인이
+    같은 좌표로 같은 결과를 다시 얻을 수 있다. 인라인 `rules` 는 저장 전 탐색용이다.
+    """
+    market: str = Field("kr", pattern="^(us|kr)$")
+    combination: str = "all"
+    k: int = Field(1, ge=1, le=50)
+    weights: list[float] = Field(default_factory=list)
+    rules: list[dict] = Field(default_factory=list)
+    set_id: str | None = Field(None, max_length=40)
+    months: int = Field(24, ge=1, le=240)
+    #: backtest = 부적격 팩터가 있으면 **걷기 전에 거부**. forward = 걷되 부적격을 밝힌다.
+    mode: str = Field("backtest", pattern="^(backtest|forward)$")
+    #: 기준 시각(테스트·재현용). 없으면 오늘.
+    anchor: str | None = Field(None, max_length=32)
+
+
+@router.post("/timing/simulate")
+def allocation_timing_simulate(req: TimingSimulateRequest):
+    """룰셋 과거 시뮬레이션 — 월 간격 시점별 합성 상태·노출 (스펙 §7 "historical simulation").
+
+    ★`mode="backtest"` 는 경고가 아니라 거부다★ 리스크 레지스터가 이 엔드포인트에 배정한
+    `forward_only` 차단 지점이며, 거부는 **팩터 이름과 사유**를 담아 422 로 나간다. 조용히
+    forward 로 강등하지 않는다 — 그러면 사용자는 백테스트를 받았다고 믿는다.
+    """
+    from src.engine import timing_rules_v2 as v2
+    from src.engine.timing_simulation import simulate_rule_set
+
+    if bool(req.rules) == bool(req.set_id):
+        # ★둘 다/둘 다 아님을 같은 말로 거절하지 않는다★ 어느 쪽을 고쳐야 하는지가 다르다.
+        raise HTTPException(
+            422, "인라인 rules 또는 저장된 set_id 중 **정확히 하나**가 필요합니다"
+                 + (" — 둘 다 주어졌습니다." if req.rules else " — 둘 다 비어 있습니다."))
+    if req.combination not in v2.COMBINATION_METHODS:
+        raise HTTPException(
+            422, f"알 수 없는 조합 방식: {req.combination}. "
+                 f"가능한 값: {', '.join(v2.COMBINATION_METHODS)}")
+
+    specs, sid, market, combination = req.rules, "ad_hoc", req.market, req.combination
+    k, weights, version = req.k, list(req.weights), None
+    if req.set_id:
+        from src.data.timing_rules import get_rule_set
+        stored = get_rule_set(req.set_id)
+        if stored is None:
+            raise HTTPException(
+                422, f"타이밍 룰셋을 찾을 수 없습니다: {req.set_id}. 삭제되었을 수 있습니다.")
+        specs = list(stored.get("rules") or [])
+        if not specs:
+            raise HTTPException(422, f"룰셋 {req.set_id} 에 규칙이 없습니다.")
+        sid, market = req.set_id, str(stored.get("market") or req.market)
+        version = stored.get("version")
+        gate = stored.get("gate") or {}
+        # 저장된 조합 방식이 있으면 그것을 쓴다 — 저장된 룰셋을 요청 기본값으로 덮으면
+        # "저장된 대로 재현" 이 아니게 된다.
+        combination = str(gate.get("combination") or combination)
+        k = int(gate.get("k") or k)
+        weights = list(gate.get("weights") or weights)
+        if combination not in v2.COMBINATION_METHODS:
+            raise HTTPException(
+                422, f"룰셋 {req.set_id} 의 조합 방식을 알 수 없습니다: {combination}.")
+
+    rule_set = v2.rule_set_from_specs(
+        specs, market=market, combination=combination, k=k, weights=weights, set_id=sid)
+
+    try:
+        sim = simulate_rule_set(rule_set, months=req.months, mode=req.mode,
+                                market=market, anchor=req.anchor)
+    except ValueError as e:
+        # `ForwardOnlyError` 도 ValueError 다 — 적격성 거부와 엔진 거부를 같은 422 로 옮긴다.
+        # 둘 다 "요청이 이대로는 성립하지 않는다" 이고, 사유 문장이 어느 쪽인지 말해 준다.
+        raise HTTPException(422, str(e)) from e
+
+    out = sim.to_dict()
+    out["months"] = req.months
+    out["anchor"] = req.anchor
+    # ★재현 좌표는 id 만으로 부족하다★ 룰셋은 갱신될 때 버전이 오르므로, 어떤 버전으로 돌린
+    # 시뮬레이션인지 함께 남기지 않으면 나중에 같은 숫자를 다시 만들 수 없다.
+    out["rule_set_version"] = version
+    return out
+
+
 @router.post("/timing")
 def allocation_timing(req: TimingRequest):
     """카나리(자산·지표) 브레드스 게이트 → 위험-온/오프 자산군 스위치 + 추세 오버레이.

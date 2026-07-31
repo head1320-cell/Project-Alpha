@@ -82,7 +82,7 @@ def _empty(factor_id: str, ticker: str, market: str, reason: str) -> FactorHisto
         threshold=0.0, direction="above", step=STEP, limitations=[reason])
 
 
-def _count_flips(states: list[str]) -> int:
+def count_state_flips(states: list[str]) -> int:
     """★결측을 건너뛰고 센다★
 
     결측을 하나의 상태로 취급하면 데이터 구멍 하나가 전환 2회로 집계되어, "신호가
@@ -153,7 +153,7 @@ def factor_history(
         factor_id=factor_id, ticker=ticker, market=market,
         threshold=float(thr), direction=dirn, step=STEP,
         points=points,
-        state_changes=_count_flips(states),
+        state_changes=count_state_flips(states),
         available_count=len(points) - unavailable,
         unavailable_count=unavailable,
         limitations=limitations,

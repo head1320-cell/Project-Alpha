@@ -377,9 +377,23 @@ New routers rather than growing the 70 KB `allocation_routes.py`; registered in
   > 프리픽스를 `/api/v1/allocation` 으로 유지했다(§7 의 문제 제기는 모듈 크기이지 URL 구조가
   > 아니다). `tests/test_route_parity.py` 가 이동 **전에** 통과하도록 먼저 작성됐고, 이동
   > 전후 {메서드, 경로} 집합이 289개로 동일함을 확인했다.
-  > **historical simulation 엔드포인트는 여전히 없다** — forward_only 거부는 엔진 수준
-  > (`rule_set_states(mode="backtest")` → `assert_readings_backtest_eligible`)에서 검증되며,
-  > 그 엔드포인트 자체는 이후 단계 소관으로 남는다.
+  > **✅ historical simulation 도착.** `POST /api/v1/allocation/timing/simulate` +
+  > `src/engine/timing_simulation.py`. 리스크 레지스터가 이 엔드포인트에 배정한 forward_only
+  > 차단이 여기서 실제로 걸린다 — `mode="backtest"`(기본값)는 **걷기 전에** 한 번 읽어
+  > `assert_readings_backtest_eligible` 로 거부하고, 부적격 팩터를 **이름으로 지목해** 422 를
+  > 낸다. 이 환경(`KIS_USE_MOCK=1`)에서는 가격 팩터가 전부 `forward_only` 라 기본 모드가 항상
+  > 거부하므로, 탐색용 `mode="forward"` 를 함께 둔다 — 걷되 `backtest_eligible=false` 와
+  > 부적격 팩터 목록을 실어 **백테스트로 오해될 수 없게** 한다.
+  >
+  > 절단이 **두 겹**이라는 점이 이 엔드포인트의 핵심이다. `timing_factor_history` 는
+  > `requires_as_of` 팩터를 건너뛰므로 `etf_prices.as_of(m)` 하나로 충분했지만, 룰셋은 가격
+  > 팩터와 매크로 팩터를 섞는다. 시점마다 시세 절단과 ALFRED 빈티지 고정(`as_of` 날짜)을
+  > 함께 걸지 않으면 카탈로그의 나머지 절반에서 룩어헤드가 조용히 되살아난다.
+  > 히스테리시스도 walk 를 타고 흐른다(시점마다 previous 를 비우면 히스테리시스가 **없는**
+  > 룰셋을 시뮬레이션하는 셈이고, 전환 횟수는 규칙에 유리한 방향으로 틀린다).
+  >
+  > `set_id` 로도 돌릴 수 있다 — 저장된 룰셋은 버전이 박혀 있으므로 외부 파이프라인이 같은
+  > 좌표로 같은 결과를 다시 얻는다(응답에 `rule_set_version` 을 함께 싣는다).
 
 Extended in place: scenario pack save/run/compare (allocation), research-context attach/detach and
 run reproducibility export (research). Contracts are defined from the research workflow — **not**
