@@ -442,7 +442,22 @@ New routers rather than growing the 70 KB `allocation_routes.py`; registered in
   > 옮겼다. `POST /stress` · `POST /kr-scenario` 는 **손대지 않았다**(라이브 경로 무변경).
   > `GET /stress-scenarios` 만 제자리에서 확장 — `model_type`/`pack_id`/`content_hash` 추가,
   > 패밀리는 §5 의 12종, `mode` 어휘는 불변.
-  > **팩 저장(save)은 아직 없다** — 인라인 실행만 가능하며 CRUD 는 Phase 10 소관이다.
+  > **✅ 팩 CRUD 도착 (Phase 10a).** `POST/GET /scenario-packs` ·
+  > `GET /scenario-packs/{pack_id}/versions` · `DELETE /scenario-packs/{pack_id}` +
+  > `src/data/scenario_packs_store.py`. `timing_rules.py` 의 idiom 을 그대로 따랐다 —
+  > 방어적 raw-SQL · `_TABLE`+`_VTABLE` · 후행 `version` 열이 없으면 버전 기능만 끄기.
+  > 갱신은 버전을 올리고 그 시점 내용을 이력에 남기며, 삭제는 이력까지 지운다(고아 이력이
+  > 남으면 같은 id 가 재발급될 때 남의 과거를 물려받는다).
+  >
+  > ★저장돼도 `model_type` 은 사용자가 정하지 못한다★ 오히려 저장 쪽이 더 위험하다 —
+  > 인라인 거짓말은 요청 한 건으로 끝나지만 **저장된 거짓말은 계속 남고**, 나중에 그 팩을 여는
+  > 사람은 누가 그 라벨을 정했는지 모른다. 저장 테이블에 `model_type` 열 자체가 없고
+  > `saved_pack()` 이 값을 하드코딩한다(두 겹).
+  >
+  > ★저장 팩은 등록 팩을 가리지 못한다★ 등록 id 를 먼저 찾는다 — 가릴 수 있으면 사용자가
+  > `semi_selloff` 라는 이름으로 저장하는 것만으로 내장 시나리오를 조용히 바꿔치기할 수 있다.
+  > 신원은 두 축이다: `version`(정수)은 개정 **순서**를, `content_hash` 는 충격 **정의**를
+  > 말한다. 버전만 있으면 v3 과 v4 가 실제로 다른지 알 수 없고, 해시만 있으면 순서를 모른다.
 
 Extended in place: scenario pack save/run/compare (allocation), research-context attach/detach and
 run reproducibility export (research). Contracts are defined from the research workflow — **not**

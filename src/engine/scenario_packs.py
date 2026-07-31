@@ -69,9 +69,9 @@ FAMILY_LABEL: dict[str, str] = dict(FAMILIES)
 
 #: 정적 팩이 하나도 없는 패밀리는 **사유와 함께** 비어 있다고 말한다.
 _EMPTY_FAMILY_REASON: dict[str, str] = {
-    "user_authored": "사용자가 직접 정의한 팩을 저장하는 기능은 아직 없습니다 — "
-                     "지금은 실행 요청에 팩 정의를 직접 실어 보낼 수 있고(저장되지 않음), "
-                     "저장·버전·삭제는 Phase 10 소관입니다.",
+    "user_authored": "내장 팩이 없는 패밀리입니다 — 사용자가 직접 정의해 저장한 팩이 "
+                     "여기에 들어갑니다(`/scenario-packs`). 저장된 팩도 언제나 가정 "
+                     "충격이며, 그 판정은 서버가 합니다.",
 }
 
 # ── 역사 리플레이 윈도우 ──────────────────────────────────────────────────────
@@ -250,6 +250,35 @@ def inline_pack(spec: dict) -> ScenarioPack:
         family="user_authored", model_type=ModelType.HYPOTHETICAL,
         source="사용자 정의 (저장되지 않음 — 이 요청 한 건에만 적용)",
         engine="inline", engine_key=f"user_{h}", content_hash=h)
+
+
+def saved_pack(row: dict) -> ScenarioPack:
+    """저장된 팩 행 → `ScenarioPack` (Phase 10a).
+
+    ★저장됐다고 해서 역사적 사실이 되지는 않는다★ `inline_pack` 과 **같은 이유로**
+    `model_type` 을 하드코딩한다. 오히려 저장 쪽이 더 위험하다 — 인라인 거짓말은 요청 한 건으로
+    끝나지만 저장된 거짓말은 계속 남고, 나중에 그 팩을 여는 사람은 누가 그 라벨을 정했는지 모른다.
+
+    `content_hash` 는 저장 시점에 계산된 것을 그대로 쓴다. 여기서 다시 계산하면 저장 이후
+    해싱 규칙이 바뀌었을 때 **같은 행이 두 신원을 갖게 된다.**
+    """
+    h = str(row.get("content_hash") or "")
+    ver = row.get("version")
+    return ScenarioPack(
+        pack_id=str(row.get("pack_id") or ""),
+        label=str(row.get("label") or "사용자 정의 시나리오"),
+        description=str(row.get("description") or ""),
+        family="user_authored", model_type=ModelType.HYPOTHETICAL,
+        source=("사용자 정의 (저장됨"
+                + (f" · v{ver}" if ver is not None else " · 버전 미기록") + ")"),
+        engine="saved", engine_key=str(row.get("pack_id") or ""), content_hash=h)
+
+
+def definition_of(row: dict) -> dict:
+    """저장 행 → `run_scenario(definition=...)` 가 먹는 정의. 계수는 한 벌뿐이다."""
+    return {"label": row.get("label"), "description": row.get("description"),
+            "market": row.get("market"), "factors": row.get("factors") or {},
+            "assumptions": row.get("assumptions") or {}}
 
 
 def compose_with_exposure(shock_pct: float, legs: dict[str, float]) -> dict[str, dict]:

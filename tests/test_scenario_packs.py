@@ -216,6 +216,39 @@ def test_an_inline_pack_cannot_claim_to_be_historical():
     assert "저장되지 않" in p.source
 
 
+def test_a_saved_pack_row_cannot_claim_to_be_historical():
+    """★방어가 두 겹이다★ (Phase 10a)
+
+    저장 테이블에는 `model_type` 열이 아예 없어서 바깥 겹은 스키마가 막는다. 이 테스트는
+    **안쪽 겹**을 잡는다 — 언젠가 열이 추가되거나 다른 경로로 행이 만들어져도 `saved_pack()`
+    이 값을 하드코딩하고 있어야 한다. 저장된 거짓말은 인라인과 달리 계속 남는다.
+    """
+    p = sp.saved_pack({"pack_id": "sp_x", "label": "가짜 역사",
+                       "model_type": "historical_replay",
+                       "market": -5.0, "factors": {"size": -3.0}, "assumptions": {},
+                       "content_hash": "abc123abc123", "version": 2})
+    assert p.model_type is sp.ModelType.HYPOTHETICAL
+    assert p.family == "user_authored"
+    assert p.engine == "saved"
+    assert "v2" in p.source, "저장 팩이 몇 번째 버전인지 밝히지 않습니다"
+
+
+def test_a_saved_pack_keeps_the_hash_it_was_stored_with():
+    """저장 시점 해시를 그대로 쓴다 — 여기서 다시 계산하면 해싱 규칙이 바뀌었을 때
+    **같은 행이 두 신원을 갖게 된다.**"""
+    p = sp.saved_pack({"pack_id": "sp_x", "market": -5.0, "factors": {"size": -3.0},
+                       "assumptions": {}, "content_hash": "storedhash01"})
+    assert p.content_hash == "storedhash01"
+    assert p.identity == "sp_x@storedhash01"
+
+
+def test_a_saved_pack_without_a_version_says_so():
+    """열이 degraded 면 None 이다 — 1 로 지어내면 재현 좌표가 거짓이 된다."""
+    p = sp.saved_pack({"pack_id": "sp_x", "market": -5.0, "factors": {"size": -3.0},
+                       "assumptions": {}, "content_hash": "h", "version": None})
+    assert "버전 미기록" in p.source
+
+
 def test_inline_packs_with_the_same_shock_get_the_same_identity():
     spec = {"market": -5.0, "factors": {"size": -3.0}, "assumptions": {"corr_rise": 0.1}}
     assert sp.inline_pack(spec).identity == sp.inline_pack(dict(spec)).identity

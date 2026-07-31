@@ -74,23 +74,37 @@ class ScenarioThreeWayRequest(ScenarioRunRequest):
     as_of: str | None = Field(None, max_length=32)
 
 
-def _resolve_pack(req: ScenarioRunRequest):
-    """`pack_id` 또는 인라인 정의 → `ScenarioPack`. 정확히 하나여야 한다."""
-    from src.engine.scenario_packs import get_pack, inline_pack
+def _resolve_pack(req: ScenarioRunRequest) -> tuple[object, dict | None]:
+    """`pack_id`(등록·저장) 또는 인라인 정의 → `(ScenarioPack, 정의|None)`. 정확히 하나여야 한다.
+
+    정의를 함께 돌려주는 이유: 등록 팩은 계수가 엔진 안에 있지만 인라인·저장 팩은 요청/DB 에
+    있다. `_run_pack` 이 출처마다 다시 찾아 나서면 "어디서 계수를 읽는가" 가 두 곳으로 갈라진다.
+
+    ★저장 팩은 등록 팩 **다음**에 찾는다★ 등록 id 를 저장 팩이 가릴 수 있으면, 사용자가
+    `semi_selloff` 라는 이름으로 저장하는 것만으로 내장 시나리오를 조용히 바꿔치기할 수 있다.
+    """
+    from src.engine.scenario_packs import definition_of, get_pack, inline_pack, saved_pack
 
     if bool(req.pack_id) == bool(req.pack):
         raise HTTPException(
             422, "pack_id 또는 인라인 pack 중 **정확히 하나**가 필요합니다"
                  + (" — 둘 다 주어졌습니다." if req.pack_id else " — 둘 다 비어 있습니다."))
     if req.pack is not None:
-        return inline_pack(req.pack.model_dump())
-    pack = get_pack(req.pack_id or "")
-    if pack is None:
+        return inline_pack(req.pack.model_dump()), req.pack.model_dump()
+
+    pid = req.pack_id or ""
+    pack = get_pack(pid)
+    if pack is not None:
+        return pack, None
+
+    from src.data.scenario_packs_store import get_pack as get_saved
+    row = get_saved(pid)
+    if row is None:
         raise HTTPException(422, f"알 수 없는 시나리오 팩: {req.pack_id}")
-    return pack
+    return saved_pack(row), definition_of(row)
 
 
-def _run_pack(pack, req: ScenarioRunRequest) -> dict:
+def _run_pack(pack, req: ScenarioRunRequest, definition: dict | None = None) -> dict:
     """팩 실행 → 원 결과 + `shock_pct`/`shock_basis`.
 
     ★두 종류의 손실을 같은 이름으로 부르지 않는다★ 가정 충격은 즉시 손실(%)을 내고, 역사
@@ -99,9 +113,10 @@ def _run_pack(pack, req: ScenarioRunRequest) -> dict:
     """
     holdings = {str(c): max(float(w), 0.0) for c, w in req.holdings.items()}
 
-    if pack.engine in ("kr_pack", "inline"):
+    if pack.engine in ("kr_pack", "inline", "saved"):
         from src.engine.kr_scenario_pack import run_scenario
-        definition = req.pack.model_dump() if pack.engine == "inline" else None
+        # 정의는 `_resolve_pack` 이 이미 골라 놓았다 — 등록 팩은 None(엔진이 계수를 갖는다),
+        # 인라인·저장 팩은 그 정의. 여기서 다시 출처를 판단하지 않는다.
         out = run_scenario(list(holdings), holdings, pack.engine_key,
                            severity=req.severity, sleeves=req.sleeves,
                            definition=definition)
@@ -128,6 +143,68 @@ def _run_pack(pack, req: ScenarioRunRequest) -> dict:
             "shock_basis": "즉시 충격 (펀더멘털·베타 민감도 추정)"}
 
 
+# ── 사용자 정의 팩 CRUD (Phase 10a — Phase 9 에서 재배치된 §5 `user-authored`) ────────
+class PackSaveRequest(BaseModel):
+    """저장 요청. ★`model_type` 필드는 여기에도 없다★ — 저장 경로가 §5 의 구멍이 되면 안 된다.
+
+    본문은 `InlinePack` 을 그대로 재사용한다(경계값 검증이 이미 붙어 있다). 실행과 저장이
+    서로 다른 스키마를 쓰면 인라인으로는 통과하는 값이 저장으로는 막히는 일이 생긴다.
+    """
+    pack: InlinePack
+    notes: str = Field("", max_length=2000)
+    #: 지정하면 갱신 — 버전이 오르고 그 시점 내용이 이력에 남는다.
+    pack_id: str | None = Field(None, max_length=40)
+
+
+@router.post("/scenario-packs")
+def scenario_pack_save(req: PackSaveRequest):
+    """사용자 정의 팩 저장/갱신. 저장돼도 `model_type` 은 언제나 `hypothetical` 이다."""
+    from src.data.scenario_packs_store import get_pack as get_saved
+    from src.data.scenario_packs_store import save_pack
+    from src.engine.scenario_packs import saved_pack
+
+    spec = {**req.pack.model_dump(), "notes": req.notes}
+    pid = save_pack(spec, req.pack_id)
+    if pid is None:
+        # ★두 실패를 같은 말로 보고하지 않는다★ 고쳐야 할 것이 서로 다르다
+        # (`timing-rules` 저장이 같은 이유로 갈라 두었다).
+        if req.pack_id:
+            raise HTTPException(
+                422, f"갱신할 시나리오 팩을 찾을 수 없습니다: {req.pack_id}. "
+                     "삭제되었을 수 있습니다 — 새 팩으로 저장하세요.")
+        raise HTTPException(503, "시나리오 팩 저장소(DB)를 사용할 수 없습니다.")
+    row = get_saved(pid) or {}
+    return {"pack_id": pid, "version": row.get("version"),
+            **saved_pack(row).to_dict()}
+
+
+@router.get("/scenario-packs")
+def scenario_packs_list(limit: int = 50):
+    from src.data.scenario_packs_store import list_packs
+    from src.engine.scenario_packs import saved_pack
+    return {"packs": [{**saved_pack(r).to_dict(), "version": r.get("version"),
+                       "updated_at": r.get("updated_at")} for r in list_packs(limit)]}
+
+
+@router.get("/scenario-packs/{pack_id}/versions")
+def scenario_pack_versions(pack_id: str):
+    """버전 이력 — 런에 박힌 팩 버전이 **아직 실재하는지** 확인하는 용도.
+
+    해시를 함께 싣는다. 버전 번호만으로는 "v3 과 v4 가 실제로 다른 충격인가" 를 알 수 없는데,
+    그걸 모르면 재현 가능 여부도 판단할 수 없다.
+    """
+    from src.data.scenario_packs_store import list_pack_versions
+    return {"pack_id": pack_id, "versions": list_pack_versions(pack_id)}
+
+
+@router.delete("/scenario-packs/{pack_id}")
+def scenario_pack_delete(pack_id: str):
+    from src.data.scenario_packs_store import delete_pack
+    if not delete_pack(pack_id):
+        raise HTTPException(404, "시나리오 팩을 찾을 수 없습니다.")
+    return {"deleted": True}
+
+
 @router.post("/scenario-run")
 def scenario_run(req: ScenarioRunRequest):
     """시나리오 팩 실행 — 등록된 팩 또는 요청에 실린 사용자 정의 팩.
@@ -135,8 +212,8 @@ def scenario_run(req: ScenarioRunRequest):
     결과에 `model_type` 과 팩 정체성이 **함께** 실린다. 라벨이 결과와 떨어져 다니면
     "이건 가정입니다" 가 카탈로그 화면에만 남고 결과 화면에서는 사라진다(§5).
     """
-    pack = _resolve_pack(req)
-    out = _run_pack(pack, req)
+    pack, definition = _resolve_pack(req)
+    out = _run_pack(pack, req, definition)
     return {**out, "pack": pack.to_dict(),
             "model_type": pack.model_type.value,
             "pack_id": pack.pack_id, "content_hash": pack.content_hash,
@@ -166,8 +243,8 @@ def scenario_three_way(req: ScenarioThreeWayRequest):
     if not req.rules:
         raise HTTPException(422, "비교할 타이밍 규칙이 최소 1개 필요합니다.")
 
-    pack = _resolve_pack(req)
-    scenario = _run_pack(pack, req)
+    pack, definition = _resolve_pack(req)
+    scenario = _run_pack(pack, req, definition)
 
     overlay = None
     if req.regime_snapshot_id:

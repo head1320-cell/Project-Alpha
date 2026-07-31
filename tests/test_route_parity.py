@@ -24,6 +24,16 @@ TIMING_PATHS: tuple[tuple[str, str], ...] = (
     ("POST", "/api/v1/allocation/timing"),
 )
 
+#: 시나리오 팩 경로 (Phase 9b 실행 · 10a CRUD). 프론트엔드 클라이언트가 직접 참조한다.
+SCENARIO_PATHS: tuple[tuple[str, str], ...] = (
+    ("POST", "/api/v1/allocation/scenario-run"),
+    ("POST", "/api/v1/allocation/scenario-three-way"),
+    ("POST", "/api/v1/allocation/scenario-packs"),
+    ("GET", "/api/v1/allocation/scenario-packs"),
+    ("GET", "/api/v1/allocation/scenario-packs/{pack_id}/versions"),
+    ("DELETE", "/api/v1/allocation/scenario-packs/{pack_id}"),
+)
+
 
 def _route_set(app) -> set[tuple[str, str]]:
     """{(메서드, 경로)} — HEAD/OPTIONS 같은 자동 생성 메서드는 뺀다."""
@@ -45,6 +55,13 @@ def test_every_timing_path_is_registered():
     routes = _route_set(create_app())
     missing = [p for p in TIMING_PATHS if p not in routes]
     assert missing == [], f"등록되지 않은 타이밍 경로: {missing}"
+
+
+def test_every_scenario_path_is_registered():
+    """팩 실행·CRUD 경로 — 하나라도 빠지면 저장된 팩을 다시 열 수 없다."""
+    routes = _route_set(create_app())
+    missing = [p for p in SCENARIO_PATHS if p not in routes]
+    assert missing == [], f"등록되지 않은 시나리오 경로: {missing}"
 
 
 def test_timing_paths_are_registered_exactly_once():
