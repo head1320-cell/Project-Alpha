@@ -575,6 +575,24 @@ missing-data conservative behaviour · rule combination, hysteresis, cooldown ·
 and historical/hypothetical labelling · ResearchRun reproducibility · infeasible optimisation and
 long-only safety.
 
+> **Attribution 6분해 — 실측 가능 범위 (Phase 10d, 측정된 사실).**
+> 스펙은 allocation · timing · selection · factor · cost · residual 을 요구한다.
+>
+> | 성분 | 상태 | 근거 |
+> |---|---|---|
+> | cost · residual (+ 슬리피지 · 모델알파 · 사전/사후 리스크 · 종목별 기여) | ✅ 실측 | 저장된 런 + 결정일 이후 실제 가격 |
+> | **timing** | ✅ **Phase 10d 에서 실측 가능해짐** | 기록된 룰셋을 `timing_simulation` 으로 재현해 시점별 노출 경로를 얻는다 — 벤치마크 구성종목이 필요 없다 |
+> | allocation · selection · factor (· hedge) | ❌ **데이터 미보유** | Brinson 분해는 **벤치마크 구성종목 가중 + 섹터수익**이 있어야 한다. 이 저장소에 없다 |
+>
+> ★프록시로 채우지 않는다★ 단일지수를 벤치마크로 두면 "섹터" 가 하나뿐이라 allocation 효과가
+> 항등적으로 0 이 되고 selection 이 전부를 흡수한다 — 완결돼 보이지만 뜻이 없는 분해다.
+> 세 성분은 `None` + 무엇이 없어서 못 하는지로 남는다.
+>
+> **timing 성분의 한계(결과에 함께 실린다)**: 노출 표본이 **월** 간격이고(`as_of` 절단 단위),
+> 일별 인덱스→날짜 매핑이 구간 선형 분할이다. **방향은 신뢰할 수 있고 크기는 근사**다.
+> 룰셋이 기록되지 않은 런은 `0.0` 이 아니라 `unavailable` 이다 — "타이밍을 했는데 효과가
+> 없었다" 와 "타이밍 기록이 없다" 는 다른 사실이고 0 은 전자를 뜻한다.
+
 **Frontend** — a Macro snapshot can be selected in Macro and reopened in AAS · factor picker
 supports search/filter/configure/preview/apply/save/reload · scenario picker matches that quality ·
 baseline vs timing vs timing+macro is understandable · **zero API 404s and zero unhandled console
