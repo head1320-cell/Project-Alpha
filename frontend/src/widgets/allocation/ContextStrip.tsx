@@ -48,7 +48,7 @@ export function ContextStrip() {
   const rg = useResearchRegime();
   const {
     activeStudy, activeRunId, attachedSnapshotId, holdings, timingCfg,
-    scenario, scenarios, scenarioPackId, isResultStale, result, activeRuleSet,
+    scenario, scenarios, scenarioPackId, runPackHash, isResultStale, result, activeRuleSet,
   } = useAllocation();
 
   // 통합 시나리오 카탈로그 — 스트레스 화면·선택 창과 **같은 쿼리 키**라 캐시를 공유한다
@@ -87,6 +87,10 @@ export function ContextStrip() {
   //    통합 카탈로그에서 찾지 못하면(레거시 id 등) 라벨로 물러서되 신원은 적지 않는다.
   const activePack = (scenCatQ.data?.groups ?? [])
     .flatMap((g) => g.items).find((i) => i.pack_id === scenarioPackId) ?? null;
+  // ★두 해시가 모두 있을 때만 비교한다★ 한쪽이 없으면 "다르다" 가 아니라 "모른다" 이고,
+  //   모르는 것을 경고로 표시하면 정상 상태가 계속 경고처럼 보인다.
+  const packChanged = !!runPackHash && !!activePack?.content_hash
+    && runPackHash !== activePack.content_hash;
   const scenLabel = activePack?.label
     ?? scenarios.find((s) => s.id === scenarioPackId)?.label
     ?? scenarios.find((s) => s.id === scenario)?.label ?? null;
@@ -193,6 +197,15 @@ export function ContextStrip() {
           )}
           {/* 신원을 못 찾으면 해시를 지어내지 않는다 — 라벨만 남는다. */}
           {activePack && <em className="as-ctx-scen-id num"> {activePack.content_hash}</em>}
+          {/* ★런이 쓴 해시와 지금 해시가 다르면 그 사실을 적는다★ (Phase 10b)
+              조용히 현재 팩을 보여주면 사용자는 그 런이 재현됐다고 믿는다 — 7c 가 룰셋
+              버전에 대해 세운 규칙과 같다. 판단 근거는 두 해시뿐이므로 지어낼 것이 없다. */}
+          {packChanged && (
+            <em className="as-ctx-scen-drift"
+              title={`이 런은 ${runPackHash} 로 계산됐지만 현재 팩은 ${activePack?.content_hash} 입니다 — 충격 정의가 바뀌었습니다`}>
+              팩 변경됨
+            </em>
+          )}
         </span>
       )}
 

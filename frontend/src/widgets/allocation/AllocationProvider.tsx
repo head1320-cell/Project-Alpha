@@ -169,6 +169,12 @@ interface AllocationCtx {
    */
   scenarioPackId: string;
   setScenarioPackId: (id: string) => void;
+  /**
+   * 되돌린 런이 **기록 당시** 쓴 팩 해시 (Phase 10b). 런을 열지 않았으면 null.
+   * 지금 팩의 해시와 다르면 그 사이 충격 정의가 바뀐 것이다 — 조용히 현재 값을 보여주면
+   * 사용자는 재현됐다고 믿는다(7c 가 룰셋 버전에 대해 세운 규칙과 같다).
+   */
+  runPackHash: string | null;
   // ── 타이밍(카나리·마켓타이밍) ──
   timingCfg: TimingConfig;
   setTimingCfg: (next: TimingConfig) => void;
@@ -255,6 +261,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [scenario, setScenario] = useState<string>("rate_hike_200bp");
   const [scenarioPackId, setScenarioPackId] = useState<string>("rate_hike_200bp");
+  const [runPackHash, setRunPackHash] = useState<string | null>(null);
   const [bump, setBump] = useState(2.0);
   const [severity, setSeverity] = useState(1.0);
   const [timingCfg, setTimingCfgState] = useState<TimingConfig>(DEFAULT_TIMING);
@@ -471,6 +478,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         // 스냅샷과 나란히 — 런의 snapshot 에 함께 박혀야 재열기 때 같은 룰로 돌아온다.
         timing_rule_set_id: activeRuleSet?.id ?? undefined,
         timing_rule_set_version: activeRuleSet?.version ?? undefined,
+        // 검증에 쓴 시나리오 팩 — 해시는 보내지 않는다(서버가 스탬프한다).
+        scenario_pack_id: scenarioPackId || undefined,
       });
       if (data.error) return null;
       setResult(data);
@@ -541,6 +550,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
       regime_snapshot_id?: string | null;
       timing_rule_set_id?: string | null;
       timing_rule_set_version?: number | null;
+      scenario_pack_id?: string | null;
     };
 
     // 비중은 inputs.weights 우선, 없으면 균등(티커만 남은 옛 런) — 0 으로 채우지 않는다.
@@ -571,10 +581,18 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
 
     // ★룰셋도 같은 방식으로 되돌린다★ inputs 우선, 없으면 snapshot 에 박힌 값.
     const snapObj = (run.snapshot ?? {}) as {
-      timing_rule_set_id?: string | null; timing_rule_set_version?: number | null };
+      timing_rule_set_id?: string | null; timing_rule_set_version?: number | null;
+      scenario_pack_id?: string | null; scenario_pack_hash?: string | null };
     const rsId = inp.timing_rule_set_id ?? snapObj.timing_rule_set_id ?? null;
     const rsVer = inp.timing_rule_set_version ?? snapObj.timing_rule_set_version ?? null;
     setActiveRuleSet(rsId ? { id: rsId, version: rsVer } : null);
+
+    // ★시나리오 팩은 id 와 **그때의 해시**를 함께 되돌린다★ (Phase 10b)
+    //   id 만 복원하면 계수가 바뀐 뒤에도 같은 팩으로 보인다 — 컨텍스트 스트립이 두 값을
+    //   대조해 "그때와 다른 팩" 이라고 말할 수 있어야 하고, 그 판단은 여기서 하지 않는다.
+    const spId = inp.scenario_pack_id ?? snapObj.scenario_pack_id ?? null;
+    setScenarioPackId(spId ?? "");
+    setRunPackHash(snapObj.scenario_pack_hash ?? null);
 
     setActiveRunId(run.run_id);
     logEvent(`런 되돌리기 — ${run.name || run.run_id}${sid ? ` (국면 ${sid})` : " (국면 링크 없음)"}`);
@@ -660,7 +678,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     views, setViewsLogged,
     model, setModel, delta, setDelta, tau, setTau,
     result, scenario, bump, setBump, severity, setSeverity, pickScenario, scenarios,
-    scenarioPackId, setScenarioPackId,
+    scenarioPackId, setScenarioPackId, runPackHash,
     timingCfg, setTimingCfg, timingQ, applyTiming,
     timeline, logEvent,
     canRun, pending: analyzeMut.isPending, lastRun,

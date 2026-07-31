@@ -4280,3 +4280,14 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 판정 불가는 숫자 자리에 숫자가 없다 — 0% 로 채우면 가장 안전해 보인다. */
 .as-s3w-na { font-size: 10px; color: var(--t-muted); line-height: 1.5; }
 .as-s3w-conflict { border-left: 2px solid var(--t-accent); padding-left: 8px; }
+
+/* ── 런 근거 · 팩 변경 표시 (Phase 10b) ─────────────────────────────────────── */
+/* ★"그때와 다른 팩" 은 경고이지 정보가 아니다★ 조용히 현재 팩을 보여주면 사용자는 그 런이
+   재현됐다고 믿는다 — 눈에 걸리는 색을 쓴다(as-ctx-rules-na 와 같은 규칙). */
+.as-ctx-scen-drift { color: var(--color-bear); font-size: 9px; font-weight: 700;
+  font-style: normal; margin-left: 4px; }
+.as-rr-rationale { border-top: 1px solid var(--t-border); margin-top: 8px; padding-top: 8px;
+  display: flex; flex-direction: column; gap: 4px; }
+.as-rr-rat-row { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: 11px; }
+.as-rr-rat-row em { color: var(--t-muted); font-style: normal; font-weight: 700; }
+.as-rr-rat-row span { color: var(--t-text); line-height: 1.5; }

@@ -79,6 +79,10 @@ class AnalyzeRequest(BaseModel):
     #    버전 내용은 timing_rule_set_versions 에 불변으로 남아 있어 재열기 때 복원 가능하다.
     timing_rule_set_id: str | None = Field(None, max_length=40)
     timing_rule_set_version: int | None = Field(None, ge=1)
+    # ── Phase 10b: 이 결정을 검증한 시나리오 팩 (선택) ──
+    #   ★해시는 요청에서 받지 않는다★ 서버가 지금 해석한 팩의 신원을 **스탬프**한다. 클라이언트가
+    #   해시를 주장할 수 있으면, 실제로 쓰지 않은 팩 버전을 썼다고 적은 런이 만들어진다.
+    scenario_pack_id: str | None = Field(None, max_length=80)
 
 
 class BacktestRequest(BaseModel):
@@ -296,6 +300,24 @@ def allocation_analyze(req: AnalyzeRequest):
                      f"{req.timing_rule_set_id} v{req.timing_rule_set_version}. "
                      "삭제되었거나 다른 환경의 ID 일 수 있습니다."
             )
+    # 시나리오 팩도 같은 이유로 계산 전에 검증하고, **현재 신원을 여기서 확정한다.**
+    # 등록 팩(코드) → 저장 팩(DB) 순서는 `_resolve_pack` 과 같다 — 저장 팩이 등록 id 를 가리면
+    # 런에 적힌 팩과 실제로 돌린 팩이 달라진다.
+    scenario_pack_hash: str | None = None
+    if req.scenario_pack_id:
+        from src.engine.scenario_packs import get_pack as get_registered
+        pk = get_registered(req.scenario_pack_id)
+        if pk is not None:
+            scenario_pack_hash = pk.content_hash
+        else:
+            from src.data.scenario_packs_store import get_pack as get_saved
+            row = get_saved(req.scenario_pack_id)
+            if row is None:
+                raise HTTPException(
+                    422, f"시나리오 팩을 찾을 수 없습니다: {req.scenario_pack_id}. "
+                         "삭제되었거나 다른 환경의 ID 일 수 있습니다.")
+            scenario_pack_hash = row.get("content_hash")
+
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
             req.tickers, req.benchmark, req.lookback_days)
@@ -470,7 +492,11 @@ def allocation_analyze(req: AnalyzeRequest):
                           "cap_missing": opt["cap_missing"],
                           "regime_snapshot_id": req.regime_snapshot_id,
                           "timing_rule_set_id": req.timing_rule_set_id,
-                          "timing_rule_set_version": req.timing_rule_set_version},
+                          "timing_rule_set_version": req.timing_rule_set_version,
+                          # ★id 만으로는 부족하다★ 계수가 바뀌면 같은 id 가 다른 충격을
+                          # 가리키므로, 재열기 때 "그때 그 팩인가" 를 물을 수 있어야 한다.
+                          "scenario_pack_id": req.scenario_pack_id,
+                          "scenario_pack_hash": scenario_pack_hash},
                 name=req.run_name,
             )
             payload["run_id"] = rid              # None이면 DB 미가용 — 정직 보고

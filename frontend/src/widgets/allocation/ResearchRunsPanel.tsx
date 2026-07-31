@@ -3,6 +3,7 @@
 // 두 run 나란히 비교(비중 Δ·요약지표 Δ). 저널(localStorage 초안)과 별개의 영속 기록.
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { attributionApi } from "@/entities/attribution/api";
 import { researchApi, type ResearchRunFull, type ResearchRunSummary } from "@/entities/research/api";
 import { useAllocation } from "./AllocationProvider";
 
@@ -178,9 +179,55 @@ export function ResearchRunsPanel() {
         </div>
       ))}
 
+      {sel.length === 1 && <RunRationale runId={sel[0]} />}
       {sel.length === 2 && cmpQ.data && <CompareTable a={cmpQ.data.a} b={cmpQ.data.b} />}
       {sel.length === 2 && cmpQ.isLoading && <div className="as-empty">비교 로드 중…</div>}
       {sel.length === 1 && <div className="as-note">하나 더 선택하면 나란히 비교합니다.</div>}
     </section>
+  );
+}
+
+/**
+ * 런의 **근거(rationale)** — 스펙 §5 Journal 요구 (Phase 10b).
+ *
+ * ★텍스트를 런에 복사하지 않는다★ 근거는 저널 항목이 단일 진실이고 런은 `run_id` 로 연결만
+ * 한다. 기록 시점에 복사해 두면 사용자가 나중에 저널을 고쳤을 때 두 곳이 조용히 어긋나고,
+ * 어느 쪽이 맞는지 화면만 봐서는 알 수 없다.
+ *
+ * ★"근거 없음" 과 "못 불러옴" 은 다른 사실이다★ 둘 다 빈 화면으로 두면 사용자는 자기가
+ * 기록하지 않았다고 오해한다.
+ */
+function RunRationale({ runId }: { runId: string }) {
+  const q = useQuery({
+    queryKey: ["allocation", "journal-by-run", runId],
+    queryFn: () => attributionApi.journalByRun(runId),
+    retry: false,
+  });
+  if (q.isLoading) return <div className="as-empty">근거 불러오는 중…</div>;
+  if (q.isError) {
+    return <div className="as-note as-rr-rationale">
+      근거를 <b>불러오지 못했습니다</b> — 기록이 없는 것과는 다릅니다(백엔드/DB 확인).
+    </div>;
+  }
+  const e = q.data?.entry ?? null;
+  if (!e) {
+    return <div className="as-note as-rr-rationale">
+      이 런에는 기록된 근거가 없습니다 — 09 JOURNAL 에서 남길 수 있습니다.
+    </div>;
+  }
+  // 저널의 실제 스키마를 따른다 — 근거는 `record` 안에 있고 리뷰만 최상위다.
+  const rows: [string, string | null | undefined][] = [
+    ["테제", e.record?.thesis], ["결정", e.record?.decision],
+    ["바뀐 이유", e.record?.reason_change], ["원인", e.record?.cause],
+    ["반대 논거", e.record?.counter_arguments], ["사후분석", e.record?.postmortem],
+    ["리뷰", e.review],
+  ];
+  return (
+    <div className="as-rr-rationale">
+      <div className="as-card-title">이 런의 근거 <span className="as-note-inline">저널 항목 연결 — 사본이 아닙니다</span></div>
+      {rows.filter(([, v]) => v).map(([k, v]) => (
+        <div key={k} className="as-rr-rat-row"><em>{k}</em><span>{v}</span></div>
+      ))}
+    </div>
   );
 }
