@@ -240,10 +240,30 @@ def _load_exposures(codes: list[str]) -> tuple[dict[str, np.ndarray], list[str],
     return exp, names, notes
 
 
+#: 인라인 정의에 반드시 있어야 하는 키 — 없으면 지어내지 않고 거절한다.
+_REQUIRED_DEFINITION_KEYS = ("market", "factors", "assumptions")
+
+
 def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
-                 severity: float = 1.0, sleeves: dict[str, str] | None = None) -> dict:
-    """시나리오 충격 → 종목별·팩터별·포트폴리오 P&L + 취약 귀속."""
-    if scenario not in SCENARIOS:
+                 severity: float = 1.0, sleeves: dict[str, str] | None = None,
+                 definition: dict | None = None) -> dict:
+    """시나리오 충격 → 종목별·팩터별·포트폴리오 P&L + 취약 귀속.
+
+    `definition` 을 주면 카탈로그를 찾지 않고 그 정의로 계산한다(사용자 정의 팩, Phase 9).
+    ★계산은 한 벌뿐이다★ 인라인 팩을 위해 별도 실행 경로를 만들면 등록된 팩과 사용자 팩이
+    서로 다른 수식으로 채점되고, 두 결과를 나란히 놓는 것 자체가 거짓이 된다.
+    """
+    if definition is not None:
+        missing = [k for k in _REQUIRED_DEFINITION_KEYS if k not in definition]
+        if missing:
+            return {"error": True,
+                    "message": f"시나리오 정의에 필수 항목이 없습니다: {', '.join(missing)}"}
+        unknown = set(definition["factors"]) - set(FACTORS)
+        if unknown:
+            return {"error": True,
+                    "message": f"알 수 없는 팩터: {', '.join(sorted(unknown))}. "
+                               f"가능한 값: {', '.join(FACTORS)}"}
+    elif scenario not in SCENARIOS:
         return {"error": True, "message": f"미지원 시나리오: {scenario}"}
     codes = [c for c in codes if weights.get(c, 0) > 0]
     if len(codes) < 1:
@@ -251,7 +271,7 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
     w = np.array([max(weights.get(c, 0.0), 0.0) for c in codes])
     w = w / w.sum() if w.sum() > 0 else np.full(len(codes), 1.0 / len(codes))
 
-    sc = SCENARIOS[scenario]
+    sc = definition if definition is not None else SCENARIOS[scenario]
     exp, names, notes = _load_exposures(codes)
     coeffs = sc["factors"]
     sev = float(severity)
@@ -293,7 +313,11 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
                              key=lambda x: x["contribution_pct"])
 
     # VaR/CVaR/MDD 프록시 — 충격을 변동성 상승과 결합한 파라메트릭 근사(정직 라벨)
-    a = sc["assumptions"]
+    # ★없는 가정은 0 이다 — 지어내지 않는다★ 등록된 7+4종은 세 항목을 모두 갖지만 인라인
+    # 정의는 일부만 줄 수 있다. 없는 항목에 기본 상승률을 넣으면 사용자가 요청하지 않은
+    # 스트레스가 결과에 섞인다.
+    a = {"corr_rise": 0.0, "vol_rise": 0.0, "liquidity_deteriorate": 0.0,
+         **(sc.get("assumptions") or {})}
     base_vol = 0.20
     stressed_vol = base_vol * (1.0 + a["vol_rise"] * sev)
     z95 = 1.645
@@ -302,8 +326,9 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
     mdd_proxy = round(min(port_shock * 1.4, port_shock), 2)
 
     return {
-        "error": False, "scenario": scenario, "label": sc["label"],
-        "description": sc["description"], "source": sc["source"],
+        # 인라인 정의는 정성 메타가 없을 수 있다 — 없으면 빈 문자열이지 지어낸 문장이 아니다.
+        "error": False, "scenario": scenario, "label": sc.get("label") or scenario,
+        "description": sc.get("description") or "", "source": sc.get("source") or "",
         "severity": sev,
         "portfolio_shock_pct": round(port_shock, 2),
         "market_shock_pct": round(market_shock, 2),
@@ -317,8 +342,8 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
             "stressed_vol_pct": round(stressed_vol * 100, 1),
         },
         "risk_proxy": {"var95_pct": var95, "cvar95_pct": cvar95, "mdd_proxy_pct": mdd_proxy},
-        "execution_feasibility": sc["execution"],
-        "hedge_note": sc["hedge_note"],
+        "execution_feasibility": sc.get("execution") or "",
+        "hedge_note": sc.get("hedge_note") or "",
         "notes": notes + ["팩터 노출 × 시나리오 계수의 선형 근사 — 실제 충격은 비선형일 수 있음(정직 한계).",
                           f"VaR/CVaR는 충격+변동성 상승 파라메트릭 프록시(배율 {sev:g}×)."],
     }

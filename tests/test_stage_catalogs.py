@@ -56,10 +56,17 @@ def test_alpha_catalog_marks_pit_limits_honestly():
 
 
 # ── Stress 통합 시나리오 카탈로그 ────────────────────────────────────────────
-def test_stress_scenarios_merges_three_families():
+def test_stress_scenarios_merges_the_three_sources_into_the_spec_families():
+    """Phase 9 이후 **분류는 §5 의 12 패밀리**, 실행 엔진은 여전히 셋이다.
+
+    이전에는 패밀리가 곧 소스(가상·역사·국내팩)였다. 그 셋은 이제 `mode` 축에 남고 —
+    프론트가 결과 렌더링을 그것으로 분기하므로 어휘가 바뀌면 안 된다 — 패밀리는 스펙 §5 의
+    12종이 된다. 이 테스트가 지키는 것은 **어느 소스의 항목도 사라지지 않는다**는 것이다.
+    """
     cat = allocation_stress_scenarios()
-    fams = {g["family"] for g in cat["groups"]}
-    assert fams == {"hypothetical", "historical", "kr_pack"}
+    assert len(cat["families"]) == 12
+    modes = {s["mode"] for g in cat["groups"] for s in g["items"]}
+    assert modes == {"hypothetical", "historical", "kr_pack"}
 
     items = [s for g in cat["groups"] for s in g["items"]]
     ids = {s["id"] for s in items}
