@@ -20,6 +20,8 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.engine.scenario_packs import HIST_WINDOWS
+
 logger = logging.getLogger("api.allocation")
 
 router = APIRouter(prefix="/api/v1/allocation", tags=["allocation-studio"])
@@ -27,13 +29,11 @@ router = APIRouter(prefix="/api/v1/allocation", tags=["allocation-studio"])
 _MIN_OBS = 30          # 자산별 최소 관측일 (kis_portfolio_analyzer 관례와 동일)
 _RF = 0.035            # 무위험수익률 (quant_metrics 기본과 동일)
 
-# 역사 리플레이 카탈로그 — DB 커버리지 밖 윈도우는 정직하게 unavailable
-_HIST_WINDOWS = {
-    "hist_2008_gfc": {"label": "2008 금융위기", "start": "2007-10-01", "end": "2009-03-31"},
-    "hist_2018_trade": {"label": "2018 미중 무역분쟁", "start": "2018-01-01", "end": "2019-01-31"},
-    "hist_2020_covid": {"label": "2020 코로나 급락", "start": "2020-01-20", "end": "2020-08-31"},
-    "hist_2022_rates": {"label": "2022 금리 충격", "start": "2022-01-01", "end": "2022-10-31"},
-}
+# 역사 리플레이 카탈로그 — DB 커버리지 밖 윈도우는 정직하게 unavailable.
+# ★정의는 `scenario_packs` 로 옮겼다★ 시나리오 세 출처 중 둘은 엔진에 있는데 이것만 라우터
+# 상수로 남으면 레지스트리가 라우터를 import 해야 한다. 윈도우 **가용성**은 DB 적재 범위에
+# 달린 런타임 사실이라 계속 이 파일이 판정한다(아래 stress-catalog).
+_HIST_WINDOWS = HIST_WINDOWS
 
 
 # ── 요청 모델 ─────────────────────────────────────────────────────────────────

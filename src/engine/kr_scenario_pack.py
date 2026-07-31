@@ -46,7 +46,11 @@ SCENARIOS: dict[str, dict] = {
     "shortsell_regulation": {
         "label": "공매도 규제·차입 급감",
         "description": "공매도 금지/재개 또는 대차 공급 급감 — 헤지 청산·숏스퀴즈로 고차입·고공매도잔고주 급변동.",
-        "source": "규제 발표 / 대차잔고·차입가능수량 급감 가정",
+        # ★스펙 §5 는 이 패밀리에 "데이터가 신뢰할 수 있는 경우에만" 이라는 단서를 단다★
+        # 이 저장소에는 대차잔고·차입가능수량 피드가 없다. 그래서 이 팩은 실측이 아니라
+        # **가정 기반 계수 모델**이고, 그 사실을 침묵으로 두지 않고 출처에 적는다.
+        "source": "규제 발표 / 대차잔고·차입가능수량 급감 가정 "
+                  "(대차 데이터 피드 없음 — 실측이 아닌 가정 모델)",
         "market": -2.0,
         "factors": {"leverage": -4.0, "illiquidity": -5.0, "momentum": 3.0, "size": -3.0},
         "assumptions": {"corr_rise": 0.15, "vol_rise": 0.40, "liquidity_deteriorate": 0.6},
@@ -112,6 +116,67 @@ SCENARIOS: dict[str, dict] = {
         "assumptions": {"corr_rise": 0.20, "vol_rise": 0.40, "liquidity_deteriorate": 0.8},
         "execution": "저유동주 체결 실패·슬리피지 최고. 참여율 제약으로 청산 수일 소요 가능.",
         "hedge_note": "유동성 버킷을 대형주로 이동하는 것이 유일한 실효 방어.",
+    },
+    # ── Phase 9 추가 4종 — 스펙 §5 의 빈 패밀리를 메운다 ────────────────────────
+    # 기존 7종과 **같은 7팩터 노출 행렬**을 쓴다. 새 노출 로더를 만들지 않는다 —
+    # 새 팩터를 도입하면 `_load_exposures` 가 두 갈래가 되고, 그때부터 시나리오마다
+    # 노출이 다른 뜻을 갖게 된다.
+    "vol_shock_liquidity_vacuum": {
+        "label": "변동성 급등·유동성 진공",
+        "description": "변동성 급등으로 마켓메이커가 호가를 거두고 호가창이 얇아짐 — "
+                       "고베타·저유동주가 같은 물량에 훨씬 크게 밀린다.",
+        "source": "VIX/VKOSPI 급등 + 호가 스프레드 확대 / 시장조성 축소 가정",
+        "market": -5.0,
+        "factors": {"mkt_beta": -5.0, "illiquidity": -7.0, "size": -4.0, "momentum": -2.0},
+        "assumptions": {"corr_rise": 0.35, "vol_rise": 0.90, "liquidity_deteriorate": 0.85},
+        "execution": "체결 자체가 어려워지는 구간 — 시장가 주문은 스프레드를 그대로 지불한다. "
+                     "분할 체결·참여율 제약으로 청산이 하루 안에 끝나지 않을 수 있다.",
+        "hedge_note": "변동성 급등 **뒤에** 사는 헤지는 이미 비싸다. 사전 보유한 지수 풋/"
+                      "현금 비중만 실효가 있다는 것이 이 시나리오의 요지다.",
+    },
+    "credit_conditions_tightening": {
+        "label": "신용·금융환경 긴축",
+        "description": "금융환경지수 악화와 크레딧 스프레드 확대 — 차환에 의존하는 "
+                       "고레버리지 기업이 먼저 무너진다.",
+        "source": "NFCI 상승·회사채 스프레드 확대 / 차환 리스크 가정",
+        "market": -3.5,
+        "factors": {"leverage": -7.0, "size": -4.0, "illiquidity": -3.0, "value": 1.5},
+        "assumptions": {"corr_rise": 0.25, "vol_rise": 0.50, "liquidity_deteriorate": 0.6},
+        "execution": "대형주 유동성은 유지되나 신용도 낮은 종목은 매도 압력이 집중된다.",
+        "hedge_note": "레버리지 노출 축소가 직접적인 방어. 지수 헤지는 종목별 신용 차이를 "
+                      "구분하지 못한다.",
+        # ★같은 이름의 팩터가 있지만 다른 물건이다★ 타이밍 카탈로그의 `financial_conditions`
+        # 는 NFCI 빈티지를 **읽는** 팩터이고(이 환경에는 FRED 키가 없어 unavailable),
+        # 이쪽은 그 긴축이 일어났다고 **가정한** 계수 모델이다. 하나가 되면 안 된다.
+        "data_note": "긴축을 실측하지 않고 가정한다 — NFCI 실측이 필요한 판단은 타이밍 팩터 "
+                     "`financial_conditions` 쪽이며 그건 FRED 키가 있어야 값이 나온다.",
+    },
+    "corr_convergence_hedge_failure": {
+        "label": "상관 수렴·주식채권 헤지 실패",
+        "description": "위기에 상관이 1로 수렴해 분산효과가 사라지고, 채권이 주식을 방어하지 "
+                       "못하는 국면 — 2022년형 동반 하락.",
+        "source": "위기 상관 수렴 / 주식·채권 동반 하락 가정",
+        "market": -4.0,
+        "factors": {"mkt_beta": -4.0, "size": -2.0, "value": -1.0},
+        "assumptions": {"corr_rise": 0.45, "vol_rise": 0.55, "liquidity_deteriorate": 0.4},
+        "execution": "지수 대형주 중심이라 체결 자체는 가능. 문제는 분산이 작동하지 않는 것.",
+        "hedge_note": "★이 팩에서 상관 수렴은 가정값이다★ 실제 보유 포트폴리오의 상관이 "
+                      "수렴하면 변동성·VaR 이 얼마나 변하는지는 `/stress-correlation` 이 "
+                      "공분산을 다시 구성해 **계산**한다 — 그쪽을 함께 보라. 여기서 그 계산을 "
+                      "다시 구현하지 않는다.",
+    },
+    "stagflation_regime": {
+        "label": "스태그플레이션 국면",
+        "description": "성장 둔화와 인플레 고착이 겹치는 국면 — 원가는 오르는데 수요는 "
+                       "줄어 마진이 양쪽에서 눌린다.",
+        "source": "성장률 하향 + 물가 상방 고착 / 실질금리 상승 가정",
+        "market": -3.0,
+        "factors": {"momentum": -3.0, "leverage": -4.0, "size": -3.0, "semi": -3.0,
+                    "value": 2.5},
+        "assumptions": {"corr_rise": 0.20, "vol_rise": 0.40, "liquidity_deteriorate": 0.45},
+        "execution": "충격이 서서히 반영되는 국면이라 체결 위험 자체는 낮다.",
+        "hedge_note": "가치·배당 쪽 상대 비중과 원자재 노출이 부분 방어. 지수 헤지는 국면 "
+                      "지속 기간이 길어 비용이 누적된다.",
     },
 }
 

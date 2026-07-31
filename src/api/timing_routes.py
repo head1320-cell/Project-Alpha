@@ -281,43 +281,6 @@ class TimingThreeWayRequest(BaseModel):
     as_of: str | None = Field(None, max_length=32)
 
 
-def _overlay_from_snapshot(snap: dict, *, enabled: bool):
-    """RegimeSnapshot → MacroOverlay. **없는 국면을 지어내지 않는다.**
-
-    `_has_regime_cols` 가 degraded 인 DB 에서는 `regime`/`recommended_mode` 가 None 으로
-    온다. 그때 '중립' 으로 채우면 사용자는 매크로가 판단에 관여한 줄 안다 — 대신
-    `data_status=UNAVAILABLE` 로 표시해 오버레이를 **쓸 수 없는 것으로** 둔다
-    (`exposure_cap()` 이 1.0 을 돌려주므로 노출을 깎지도, 키우지도 않는다).
-
-    `recommended_mode` 는 그대로 넘긴다 — 어휘 해석은 `MacroOverlay.mode_cap` 한 곳에서만
-    한다. 여기서 'unknown' 같은 값으로 바꿔치기하면 해석이 두 곳으로 갈라진다.
-    """
-    from src.data.pit_macro import DataStatus, ResearchUsage
-    from src.engine.macro_overlay import MacroOverlay
-
-    def _enum(cls, raw, fallback):
-        try:
-            return cls(raw)
-        except Exception:
-            return fallback
-
-    regime = snap.get("regime")
-    mode = snap.get("recommended_mode")
-    status = _enum(DataStatus, snap.get("data_status"), DataStatus.UNAVAILABLE)
-    if not regime or not mode:
-        status = DataStatus.UNAVAILABLE          # 국면을 읽지 못했다 — 채우지 않는다
-    return MacroOverlay(
-        regime=regime or "국면 미확인",
-        recommended_mode=mode or "",
-        confidence=float(snap.get("confidence") or 0.0),
-        stress_score=float(snap.get("stress_score") or 0.0),
-        data_status=status,
-        research_usage=_enum(ResearchUsage, snap.get("research_usage"),
-                             ResearchUsage.UNAVAILABLE),
-        enabled=enabled,
-    )
-
-
 @router.post("/timing/three-way")
 def allocation_timing_three_way(req: TimingThreeWayRequest):
     """기준 vs 타이밍만 vs 타이밍+매크로 — 스펙 §8 3자 비교의 HTTP 표면.
@@ -329,7 +292,11 @@ def allocation_timing_three_way(req: TimingThreeWayRequest):
     """
     from src.data.regime_snapshots import get_snapshot
     from src.engine import timing_rules_v2 as v2
-    from src.engine.macro_overlay import conflict_explanation, three_way
+    from src.engine.macro_overlay import (
+        conflict_explanation,
+        overlay_from_snapshot,
+        three_way,
+    )
 
     if req.combination not in v2.COMBINATION_METHODS:
         raise HTTPException(
@@ -345,7 +312,7 @@ def allocation_timing_three_way(req: TimingThreeWayRequest):
             raise HTTPException(
                 422, f"국면 스냅샷을 찾을 수 없습니다: {req.regime_snapshot_id}. "
                      "스냅샷은 매크로 탭에서 먼저 저장해야 합니다.")
-        overlay = _overlay_from_snapshot(snap, enabled=req.overlay_enabled)
+        overlay = overlay_from_snapshot(snap, enabled=req.overlay_enabled)
 
     rule_set = v2.rule_set_from_specs(
         req.rules, market=req.market, combination=req.combination,

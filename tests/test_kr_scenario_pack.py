@@ -21,14 +21,26 @@ CODES = ["005930", "000660", "035420", "051910", "105560", "005380"]
 W = {c: 100.0 / len(CODES) for c in CODES}
 
 
-def test_catalog_has_seven():
+#: 최초 지시서의 7종. Phase 9 가 4종을 더했지만 ★이 일곱은 하나도 사라지지 않는다★ —
+#: 그것이 이 테스트가 지키는 불변식이고, 개수는 그 부산물이다(CLAUDE.md: 개수를 세지 말 것).
+_ORIGINAL_SEVEN = {
+    "shortsell_regulation", "leverage_unwind", "krw_sharp_move", "semi_selloff",
+    "valueup_collapse", "earnings_dispersion", "retail_flow_reversal",
+}
+#: Phase 9 가 스펙 §5 의 빈 패밀리를 메우며 추가한 4종.
+_PHASE9_ADDED = {
+    "vol_shock_liquidity_vacuum", "credit_conditions_tightening",
+    "corr_convergence_hedge_failure", "stagflation_regime",
+}
+
+
+def test_catalog_keeps_the_original_seven_and_adds_the_phase9_four():
     cat = catalog()
-    assert len(cat) == 7
     assert all({"id", "label", "description", "source"} <= set(s) for s in cat)
-    # 지시서 7종 커버리지
     ids = {s["id"] for s in cat}
-    assert {"shortsell_regulation", "leverage_unwind", "krw_sharp_move", "semi_selloff",
-            "valueup_collapse", "earnings_dispersion", "retail_flow_reversal"} == ids
+    assert _ORIGINAL_SEVEN <= ids, f"원래 7종 중 사라진 것: {_ORIGINAL_SEVEN - ids}"
+    assert _PHASE9_ADDED <= ids, f"Phase 9 추가분 중 없는 것: {_PHASE9_ADDED - ids}"
+    assert ids == _ORIGINAL_SEVEN | _PHASE9_ADDED, f"예상 밖의 시나리오: {ids - _ORIGINAL_SEVEN - _PHASE9_ADDED}"
 
 
 def _fake_exposures(monkeypatch, semi_codes=("005930", "000660")):

@@ -179,3 +179,41 @@ def conflict_explanation(timing: CompositeSignal, overlay: MacroOverlay | None) 
         f"오버레이가 노출 상한을 {overlay.exposure_cap():.2f} 로 제한합니다. "
         f"오버레이를 끄면 타이밍 단독 판단이 그대로 적용됩니다."
     )
+
+
+def overlay_from_snapshot(snap: dict, *, enabled: bool) -> MacroOverlay:
+    """RegimeSnapshot → MacroOverlay. **없는 국면을 지어내지 않는다.**
+
+    `_has_regime_cols` 가 degraded 인 DB 에서는 `regime`/`recommended_mode` 가 None 으로
+    온다. 그때 '중립' 으로 채우면 사용자는 매크로가 판단에 관여한 줄 안다 — 대신
+    `data_status=UNAVAILABLE` 로 표시해 오버레이를 **쓸 수 없는 것으로** 둔다
+    (`exposure_cap()` 이 1.0 을 돌려주므로 노출을 깎지도, 키우지도 않는다).
+
+    `recommended_mode` 는 그대로 넘긴다 — 어휘 해석은 `MacroOverlay.mode_cap` 한 곳에서만
+    한다. 여기서 'unknown' 같은 값으로 바꿔치기하면 해석이 두 곳으로 갈라진다.
+
+    ★엔진에 있는 이유★ 원래 `timing_routes.py` 의 비공개 헬퍼였다. Phase 9 의 시나리오
+    라우터가 같은 변환을 필요로 하는데, 라우터가 라우터를 import 하면 등록 순서에 따라
+    깨지는 결합이 생긴다. FastAPI 를 전혀 건드리지 않는 순수 변환이므로 엔진이 맞다.
+    """
+    def _enum(cls, raw, fallback):
+        try:
+            return cls(raw)
+        except Exception:
+            return fallback
+
+    regime = snap.get("regime")
+    mode = snap.get("recommended_mode")
+    status = _enum(DataStatus, snap.get("data_status"), DataStatus.UNAVAILABLE)
+    if not regime or not mode:
+        status = DataStatus.UNAVAILABLE          # 국면을 읽지 못했다 — 채우지 않는다
+    return MacroOverlay(
+        regime=regime or "국면 미확인",
+        recommended_mode=mode or "",
+        confidence=float(snap.get("confidence") or 0.0),
+        stress_score=float(snap.get("stress_score") or 0.0),
+        data_status=status,
+        research_usage=_enum(ResearchUsage, snap.get("research_usage"),
+                             ResearchUsage.UNAVAILABLE),
+        enabled=enabled,
+    )
