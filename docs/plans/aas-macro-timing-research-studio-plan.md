@@ -731,8 +731,10 @@ Phase 0–10 이 끝난 뒤 §§1–10 을 코드와 대조했다. **개수는 �
 | `ScenarioContext` 가 `./RunContext` 를 import | eslint `no-restricted-imports` 1 error ✅ |
 | 합성된 `useAllocation()` 모양에서 `timingOverlay` 제거 | tsc TS2741 ✅ |
 
-**게이트:** pytest 1487/10 skipped(불변) · Playwright 98 exit 0 · tsc 0 · eslint 0 error(경고
-28 — 기준선과 동일) · `next build` exit 0 · **E2E 스펙 수정 0건**.
+**게이트(실측):** pytest **1487 passed / 10 skipped**(불변) · Playwright **98 passed, exit 0**
+(36.2m, 1 worker) · tsc 0 · eslint 0 error(경고 28 — 기준선과 동일) · `next build` exit 0 ·
+**E2E 스펙 수정 0건**. 마지막 항목이 이 단계의 진짜 게이트다 — 순수 리팩터링의 유일한 증거는
+"아무것도 움직이지 않았다" 이고, 선택자를 하나라도 고쳐야 통과한다면 동작이 바뀐 것이다.
 
 ### Deferred
 ~~`AllocationProvider` splits into slices~~ — Phase 11b 에서 소화(위 참조).
