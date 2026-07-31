@@ -257,7 +257,7 @@ rather than reinvented.
 > |---|---|---|
 > | market & **universe** | `market` + holdings count — AAS has no sleeve/universe entity; holdings are a flat list | a future sleeve model |
 > | active **rule set** | timing **config summary** — the frontend holds no saved `set_id`, only unsaved `timingCfg`, and `timing_rule_sets` has no `version` column | Phase 7 (`TimingRuleSetV2`) |
-> | **scenario pack** | selected scenario's **label** — no pack entity exists | Phase 9 (`ScenarioPackV2`) |
+> | **scenario pack** | ~~selected scenario's **label**~~ → **✅ 팩 신원 `pack_id@hash` + model_type 배지** | ~~Phase 9~~ **완료** |
 >
 > Regime value precedence is centralised in `widgets/allocation/useResearchRegime.ts`:
 > **an attached snapshot wins; live is the fallback and the strip says which is showing**
@@ -280,6 +280,46 @@ value-up unwind · earnings-season dispersion · retail deleveraging / leveraged
 short-selling and borrow-regime change (**only where data is reliable**) · user-authored.
 
 Hedge suggestions are **research notes**, never trade instructions.
+
+> **✅ Phase 9 실행 기록 — `src/engine/scenario_packs.py`.**
+>
+> 시나리오 15종이 서로 모르는 세 곳에 흩어져 있었고(`STRESS_SCENARIOS` · `_HIST_WINDOWS` ·
+> `kr_scenario_pack.SCENARIOS`) **`model_type` 은 어디에도 없었다.** `/stress-scenarios` 가
+> 실어 보내던 `mode: "kr_pack"` 은 *패밀리*이지 인식론적 주장이 아니라서, 국내팩 7종이
+> 가정이라는 사실이 화면 어디에도 없었다 — §5 가 막으려던 실패 그 자체다.
+>
+> 레지스트리는 세 출처를 **감싼다**(계수는 한 벌뿐). 두 축을 분리해 `family`(§5 의 12종,
+> 분류)와 `model_type`(Enum, 인식론)을 각각 싣고, 레거시 `mode` 는 **한 글자도 바꾸지 않았다**
+> — 프론트가 결과 렌더링을 그것으로 분기한다.
+>
+> **패밀리 커버리지 (실측).** 12종 중 8종은 기존 시나리오로 채워져 있었고, 3종은 비어
+> 있어 새 팩을 만들었다(`vol_shock_liquidity_vacuum` · `credit_conditions_tightening` ·
+> `corr_convergence_hedge_failure`), 성장·인플레는 `stagflation_regime` 으로 보강했다. 전부
+> 기존 7팩터 노출 행렬을 쓴다 — 새 노출 로더를 만들면 시나리오마다 노출이 다른 뜻을 갖는다.
+> 상관 수렴 팩은 `/stress-correlation` 을 **가리킨다**(그쪽이 공분산을 다시 구성해 실제로
+> 계산한다). 팩이 없는 패밀리도 목록에 남는다 — 숨기면 "없는 것" 과 "채운 것" 이 구별되지 않는다.
+>
+> **`user-authored` 는 인라인 전용이다.** 요청에 팩 정의를 실어 보내면 실행되지만 저장되지
+> 않으며, `model_type` 은 서버가 강제로 `hypothetical` 로 못박는다(클라이언트가 정할 수 있으면
+> §5 가 무의미해진다). **저장·버전·삭제(CRUD)는 Phase 10 으로 재배치했다.**
+>
+> **정체성은 `pack_id@content_hash`** — 충격 정의(계수·가정·윈도우)의 sha256 12자. 라벨만
+> 적힌 런은 계수가 바뀌는 순간 재현되지 않는다. 표현이 아니라 모델을 가리키므로 라벨을 고쳐도
+> 해시는 그대로다. M8 은 계수가 데이터가 아니라 `_stock_shock()` **코드**에 있어 함수 소스를
+> 해시에 포함한다 — 카탈로그만 해싱하면 충격 모델을 통째로 바꿔도 해시가 그대로다.
+>
+> **3자 비교와의 합성(§5 × Phase 7b).** `POST /allocation/scenario-three-way` 는 다리별 손실을
+> `충격 × 노출` 로 만든다(나머지는 현금이라 충격을 받지 않는다). 타이밍 파생은 재구현하지 않고
+> `rule_set_states` + `three_way` 를 그대로 부른다. 선형 근사라는 사실은 응답과 화면에 함께
+> 나간다. **판정하지 못한 다리에는 손실을 적지 않는다** — 스냅샷이 없으면 `timing_macro` 는
+> 노출 0 의 unavailable 인데, 거기에 0% 를 적으면 만들지 못한 비교가 셋 중 가장 안전해 보인다.
+> NaN 도 같은 이유로 클램프하지 않는다(`max(0, min(1, nan))` 은 **1.0** 이라, 값을 얻지 못한
+> 다리가 조용히 전액 노출로 채점된다).
+>
+> **한계.** 상관 수렴을 제외한 모든 팩은 계수 모델이며 실측이 아니다. `shortsell_regulation`
+> 은 대차 데이터 피드가 없어 §5 의 "데이터가 신뢰할 수 있는 경우에만" 단서를 **가정 모델임을
+> 출처에 명시하는 것**으로 답한다. `credit_conditions_tightening` 은 NFCI 를 읽는 타이밍 팩터
+> `financial_conditions` 와 **다른 물건**이다(그쪽은 이 환경에 FRED 키가 없어 unavailable).
 
 ---
 
@@ -394,6 +434,15 @@ New routers rather than growing the 70 KB `allocation_routes.py`; registered in
   >
   > `set_id` 로도 돌릴 수 있다 — 저장된 룰셋은 버전이 박혀 있으므로 외부 파이프라인이 같은
   > 좌표로 같은 결과를 다시 얻는다(응답에 `rule_set_version` 을 함께 싣는다).
+
+- `src/api/scenario_routes.py` — 팩 실행 · 시나리오×3자 비교
+  > **✅ Phase 9b.** `POST /scenario-run`(등록 팩 또는 인라인 사용자 정의 팩) ·
+  > `POST /scenario-three-way`. 프리픽스는 `/api/v1/allocation` 그대로이고, 다른 라우터를
+  > import 하지 않도록 `_overlay_from_snapshot` 을 `macro_overlay.overlay_from_snapshot` 으로
+  > 옮겼다. `POST /stress` · `POST /kr-scenario` 는 **손대지 않았다**(라이브 경로 무변경).
+  > `GET /stress-scenarios` 만 제자리에서 확장 — `model_type`/`pack_id`/`content_hash` 추가,
+  > 패밀리는 §5 의 12종, `mode` 어휘는 불변.
+  > **팩 저장(save)은 아직 없다** — 인라인 실행만 가능하며 CRUD 는 Phase 10 소관이다.
 
 Extended in place: scenario pack save/run/compare (allocation), research-context attach/detach and
 run reproducibility export (research). Contracts are defined from the research workflow — **not**

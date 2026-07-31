@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
@@ -45,6 +46,9 @@ from src.engine.timing_rules_v2 import (
 logger = logging.getLogger(__name__)
 
 MAX_MONTHS = 240
+#: walk 의 벽시계 예산(초). 개월 수 상한만으로는 부족하다 — 실데이터에서 한 점이 네트워크
+#: 왕복을 포함할 수 있어, 240개월 요청 하나가 워커 스레드를 오래 붙들 수 있다.
+DEADLINE_SECONDS = 25.0
 
 
 def _shift_months(anchor: date, months_back: int) -> str:
@@ -87,6 +91,10 @@ class RuleSetSimulation:
     mode: str
     step: str
     backtest_eligible: bool
+    #: ★목록 안이 아니라 최상위에★ 외부 파이프라인은 `limitations` 를 훑지 않는다. "이 숫자는
+    #: 백테스트가 아니다" 는 눈에 걸리는 자리에 있어야 하고, 없으면 `None` 이다(빈 문자열이
+    #: 아니라 — 경고가 없는 것과 빈 경고는 다르다).
+    warning: str | None = None
     points: list[SimulationPoint] = field(default_factory=list)
     state_changes: int = 0
     available_count: int = 0
@@ -99,7 +107,7 @@ class RuleSetSimulation:
         return {
             "set_id": self.set_id, "market": self.market,
             "combination": self.combination, "mode": self.mode, "step": self.step,
-            "backtest_eligible": self.backtest_eligible,
+            "backtest_eligible": self.backtest_eligible, "warning": self.warning,
             "points": [p.to_dict() for p in self.points],
             "state_changes": self.state_changes,
             "available_count": self.available_count,
@@ -145,12 +153,19 @@ def simulate_rule_set(
     mode: str = "backtest",
     market: str | None = None,
     anchor: str | None = None,
+    deadline_seconds: float = DEADLINE_SECONDS,
 ) -> RuleSetSimulation:
     """`months` 개월 전부터 현재까지 월 간격으로 룰셋을 재평가한다.
 
     mode="backtest" 면 걷기 전에 `rule_set_states(mode="backtest")` 가 게이트를 걸고,
     부적격 팩터가 있으면 `ForwardOnlyError` 가 그대로 올라간다(호출자가 422 로 옮긴다).
     mode="forward" 는 걷되 `backtest_eligible=False` 와 부적격 팩터 목록을 함께 낸다.
+
+    ★긴 구간은 시간으로도 제한한다★
+    `months=240` × 팩터 수만큼 시세·빈티지를 읽는다. 실데이터에서는 한 점이 네트워크 왕복을
+    포함할 수 있어, 상한이 개월 수뿐이면 요청 하나가 워커 스레드를 오래 붙든다. 그래서 예산을
+    넘기면 **거기서 멈추고 그 사실을 적는다** — 남은 구간을 0 이나 마지막 값으로 채우면 짧은
+    시뮬레이션이 긴 것처럼 보인다.
     """
     mkt = market or rule_set.market
     span = max(1, min(int(months), MAX_MONTHS))
@@ -171,14 +186,23 @@ def simulate_rule_set(
         "각 점은 시세 절단(etf_prices.as_of)과 매크로 빈티지 고정(as_of 날짜)을 **함께** "
         "적용해 그 시점 이후의 정보를 보지 않습니다.",
     ]
+    warning: str | None = None
     if mode != "backtest":
-        limitations.append(
-            "mode=forward 입니다 — 이 결과는 **백테스트가 아닙니다.** 부적격 팩터가 포함될 수 "
-            "있으므로 성과 주장에 쓰지 마십시오(ineligible_factors 참조).")
+        names = ", ".join(f["factor_id"] for f in ineligible) or "없음"
+        warning = ("mode=forward — 이 결과는 **백테스트가 아닙니다.** 과거 시뮬레이션 적격성"
+                   f"을 통과하지 않은 팩터: {names}. 성과 주장에 쓰지 마십시오.")
+        limitations.append(warning)
 
     points: list[SimulationPoint] = []
     previous: SignalState | None = None
+    started = time.monotonic()
+    truncated_at: int | None = None
     for m in range(span, -1, -1):          # 오래된 → 최신
+        # ★예산을 넘기면 남은 구간을 채우지 않고 멈춘다★ 마지막 값이나 0 으로 이어 붙이면
+        # 짧게 끝난 시뮬레이션이 요청한 길이만큼 돈 것처럼 보인다.
+        if deadline_seconds > 0 and time.monotonic() - started > deadline_seconds:
+            truncated_at = m
+            break
         stamp = _shift_months(anchor_date, m)
         try:
             with price_as_of(m):
@@ -206,6 +230,12 @@ def simulate_rule_set(
         if state is not SignalState.UNAVAILABLE:
             previous = state
 
+    if truncated_at is not None:
+        limitations.append(
+            f"시간 예산({deadline_seconds:g}초)을 넘겨 **{truncated_at}개월 전 지점에서 "
+            f"중단**했습니다 — 요청한 {span}개월 중 {len(points)}개 시점만 계산됐습니다. "
+            "남은 구간을 마지막 값이나 0 으로 채우지 않습니다.")
+
     states_seq = [p.state for p in points]
     unavailable = sum(1 for s in states_seq if s == SignalState.UNAVAILABLE.value)
     if unavailable == len(points):
@@ -216,6 +246,7 @@ def simulate_rule_set(
     return RuleSetSimulation(
         set_id=rule_set.set_id, market=mkt, combination=rule_set.combination,
         mode=mode, step=STEP, backtest_eligible=(mode == "backtest"),
+        warning=warning,
         points=points,
         state_changes=count_state_flips(states_seq),
         available_count=len(points) - unavailable,

@@ -5,26 +5,25 @@
 // /stress-scenarios(통합 카탈로그).
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { allocationApi, type StressFamily } from "@/entities/allocation/api";
+import { allocationApi, MODEL_TYPE_SHORT, type StressEngine } from "@/entities/allocation/api";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { SensitivityHeatmap, StressChart, fmtSign } from "@/widgets/allocation/parts";
 import { KrScenarioPack } from "@/widgets/allocation/KrScenarioPack";
+import { ScenarioThreeWay } from "@/widgets/allocation/ScenarioThreeWay";
 import { StressScenarioModal } from "@/widgets/allocation/StressScenarioModal";
-
-const FAMILY_LABEL: Record<StressFamily, string> = {
-  hypothetical: "가상 충격", historical: "역사 리플레이", kr_pack: "국내 시나리오팩",
-};
 
 export default function RobustnessWorkspace() {
   const {
     holdings, holdingsMap, views, delta, tau, scenario, pickScenario, scenarios,
-    stressQ, canRun, severity, setSeverity,
+    stressQ, canRun, severity, setSeverity, setScenarioPackId,
   } = useAllocation();
-  // 통합 시나리오 창 — 세 패밀리 중 무엇이 활성인지로 상세 카드 순서를 결정
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [family, setFamily] = useState<StressFamily>("hypothetical");
+  // ★어느 창에 결과를 그릴지는 **실행 엔진**이 정한다★ (Phase 9)
+  // 예전에는 패밀리로 갈랐는데, 패밀리는 이제 스펙 §5 의 분류(12종)이고 국내팩은 그 중
+  // 여러 패밀리에 흩어져 있다. "어느 엔진이 돌리는가" 가 원래 묻고 싶던 질문이다.
+  const [engine, setEngine] = useState<StressEngine>("m8");
   const [krScenario, setKrScenario] = useState("semi_selloff");
-  const activeId = family === "kr_pack" ? krScenario : scenario;
+  const activeId = engine === "kr_pack" ? krScenario : scenario;
   // 라벨·강도적용 여부는 통합 카탈로그에서 (모달과 동일 쿼리 키 → 캐시 공유, 추가 요청 0)
   const scenCatQ = useQuery({
     queryKey: ["allocation", "stress-scenarios"],
@@ -75,7 +74,14 @@ export default function RobustnessWorkspace() {
             <div className="tfc-chip">
               <div className="tfc-chip-main">
                 <span className="tfc-chip-t">{activeLabel}</span>
-                <span className="tfc-chip-tk">{FAMILY_LABEL[family]}</span>
+                <span className="tfc-chip-tk">{activeMeta?.family_label ?? ""}</span>
+                {/* ★결과 옆에도 model_type 이 있어야 한다★ 선택 창에만 있으면 "이건 가정입니다"
+                    가 정작 숫자를 보는 자리에서 사라진다(스펙 §5). */}
+                {activeMeta && (
+                  <span className={`as-model-type mt-${activeMeta.model_type}`}>
+                    {MODEL_TYPE_SHORT[activeMeta.model_type]}
+                  </span>
+                )}
                 <span className="tfc-chip-cond num">
                   {activeMeta?.severity_applies === false ? "강도 미적용" : `${severity.toFixed(2)}×`}
                 </span>
@@ -84,13 +90,16 @@ export default function RobustnessWorkspace() {
           </div>
           <button className="as-fb-apply" onClick={() => setPickerOpen(true)}>+ 시나리오 창에서 선택</button>
           <div className="as-note">
-            15종을 한 창에서 검색·비교합니다. 미가용 시나리오는 창에 사유가 함께 표시됩니다.
+            스펙 §5 의 12 패밀리로 분류된 시나리오를 한 창에서 검색·비교합니다. 분류와 별개로
+            각 항목은 <b>역사 리플레이인지 가정 충격인지</b>를 스스로 밝힙니다. 미가용 시나리오는
+            창에 사유가 함께 표시됩니다.
           </div>
           <StressScenarioModal open={pickerOpen} onClose={() => setPickerOpen(false)}
             selectedId={activeId} severity={severity} onSeverity={setSeverity}
             onPick={(s) => {
-              setFamily(s.family);
-              if (s.family === "kr_pack") setKrScenario(s.id); else pickScenario(s.id);
+              setEngine(s.engine);
+              setScenarioPackId(s.pack_id);   // 컨텍스트 스트립이 팩 신원을 그린다 (§4 ⑦)
+              if (s.engine === "kr_pack") setKrScenario(s.id); else pickScenario(s.id);
             }} />
         </section>
         <section className="as-card">
@@ -133,8 +142,9 @@ export default function RobustnessWorkspace() {
         </section>
       </aside>
       <main className="as-center">
-        {/* 선택한 패밀리의 결과를 위로 — 두 상세 카드는 항상 렌더(정보 손실 없음), 순서만 포커스 */}
-        {family === "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={setKrScenario} />}
+        {/* 선택한 엔진의 결과를 위로 — 두 상세 카드는 항상 렌더(정보 손실 없음), 순서만 포커스 */}
+        {engine === "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={setKrScenario} />}
+        <ScenarioThreeWay packId={activeId} holdings={holdingsMap} severity={severity} />
         <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`}>
           <div className="as-card-title">SENSITIVITY HEATMAP <span className="as-note-inline">기댓값 변동 → 최적 비중 반응 (Δ%p)</span></div>
           {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
@@ -218,7 +228,7 @@ export default function RobustnessWorkspace() {
             <div className="as-empty">{stressQ.data.reason || "해당 시나리오 데이터 미보유"}</div>
           )}
         </section>
-        {family !== "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={(id) => { setKrScenario(id); setFamily("kr_pack"); }} />}
+        {engine !== "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={(id) => { setKrScenario(id); setEngine("kr_pack"); }} />}
       </main>
     </div>
   );

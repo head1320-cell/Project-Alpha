@@ -206,3 +206,52 @@ def test_endpoint_rejects_a_missing_set_id_as_422_not_500(client):
                                "set_id": "does-not-exist"})
     assert r.status_code == 422, r.text
     assert "does-not-exist" in r.json()["detail"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. 최상위 경고 · 시간 예산
+# ═══════════════════════════════════════════════════════════════════════════════
+def test_forward_mode_puts_the_warning_at_the_top_level_not_only_in_a_list():
+    """★외부 파이프라인은 limitations 를 훑지 않는다★
+
+    "이 숫자는 백테스트가 아니다" 가 문자열 목록 안에만 있으면 소비자가 건너뛰기 쉽다.
+    최상위 `warning` 에 팩터 이름까지 담아 눈에 걸리게 둔다.
+    """
+    out = sim.simulate_rule_set(_rset(), months=2, mode="forward", anchor="2026-06-15")
+    assert out.warning and "백테스트가 아닙니다" in out.warning
+    assert "avg_abs_momentum" in out.warning, "어떤 팩터 때문인지 경고가 말하지 않습니다"
+
+
+def test_a_passing_backtest_carries_no_warning(monkeypatch):
+    """경고가 없는 것과 빈 경고는 다르다 — 게이트를 통과한 결과에는 `None` 이다.
+
+    이 환경은 mock 이라 가격 팩터가 전부 forward_only 다. 통과하는 경우를 실제로 만들려면
+    적격한 읽기를 주입해야 한다 — 주입하지 않으면 이 단언은 도달조차 못 한다.
+    """
+    monkeypatch.setattr(v2, "read_factor", lambda fid, **kw: v2.FactorReading(
+        fid, 1.0, ResearchUsage.BACKTEST_ELIGIBLE, DataStatus.REAL, None, "test"))
+    out = sim.simulate_rule_set(_rset(), months=2, mode="backtest", anchor="2026-06-15")
+    assert out.backtest_eligible is True
+    assert out.warning is None, f"통과한 백테스트에 경고가 붙었습니다: {out.warning}"
+    assert out.ineligible_factors == []
+
+
+def test_the_walk_stops_at_the_time_budget_and_says_so():
+    """★예산을 넘기면 남은 구간을 채우지 않는다★
+
+    마지막 값이나 0 으로 이어 붙이면 짧게 끝난 시뮬레이션이 요청한 길이만큼 돈 것처럼 보인다.
+    예산 0 이 아니라 아주 작은 값을 준다 — 0 은 "무제한" 이라는 다른 뜻이다.
+    """
+    out = sim.simulate_rule_set(_rset(), months=240, mode="forward",
+                                anchor="2026-06-15", deadline_seconds=1e-9)
+    assert len(out.points) < 241, "예산을 넘겼는데 전 구간을 걸었습니다"
+    assert any("중단" in x for x in out.limitations), (
+        f"중단 사실이 limitations 에 없습니다: {out.limitations}")
+
+
+def test_a_zero_budget_means_unlimited_not_instant_stop():
+    """0 은 "예산 없음" 이다 — 즉시 중단으로 읽으면 walk 가 조용히 비어 나간다."""
+    out = sim.simulate_rule_set(_rset(), months=2, mode="forward",
+                                anchor="2026-06-15", deadline_seconds=0)
+    assert len(out.points) == 3
+    assert not any("중단" in x for x in out.limitations)

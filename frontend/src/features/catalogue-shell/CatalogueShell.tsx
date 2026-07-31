@@ -49,6 +49,11 @@ export interface CatalogueItem {
   meta?: string;
   /** 종류 배지 (연산자 / 역사 리플레이 …) */
   kindBadge?: string;
+  /**
+   * `kindBadge` 에 함께 붙일 클래스. **등급을 눈으로 구별해야 할 때만** 쓴다 —
+   * `.tfm-kind` 하나로는 "선택됨" 배지와 같은 모양이라 등급 차이가 화면에서 사라진다.
+   */
+  kindBadgeClass?: string;
   /** false 면 선택은 되지만 적용은 막는다. 사유는 목록에 그대로 적는다. */
   available?: boolean;
   /** 미가용 사유 — 툴팁이 아니라 화면에 */
@@ -222,7 +227,9 @@ export function CatalogueShell(props: CatalogueShellProps) {
                     <span className="tfm-row-t">
                       {i.label}
                       {activeId === i.id && <em className="tfm-kind">선택됨</em>}
-                      {i.kindBadge && <em className="tfm-kind">{i.kindBadge}</em>}
+                      {i.kindBadge && (
+                        <em className={cn("tfm-kind", i.kindBadgeClass)}>{i.kindBadge}</em>
+                      )}
                       {off && <em className="tfm-off">미가용</em>}
                     </span>
                     <span className="tfm-row-d">{i.description}</span>

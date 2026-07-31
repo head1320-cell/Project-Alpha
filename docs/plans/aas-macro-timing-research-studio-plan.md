@@ -18,8 +18,8 @@ Branch: `claude/backtest-modern-ui-refactor-akxvbc`
 
 | Gate | Baseline |
 |---|---|
-| Playwright | 77 passed (33 at Phase 0 · 64 before 7b · 70 before 6d) |
-| pytest | 1328 passed, 10 skipped (1003 at Phase 0 · 1247 before Phase 8) |
+| Playwright | 93 passed (33 at Phase 0 · 77 before Phase 9 · 85 after the debt phase) |
+| pytest | 1449 passed, 10 skipped (1003 at Phase 0 · 1371 before Phase 9) |
 | `tsc --noEmit` | 0 errors |
 | `eslint src` | 0 errors (28 pre-existing warnings) |
 | `next build` | exit 0 |
@@ -53,8 +53,8 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | ✅ `8c8db18` |
 | 8 | Factor catalogue breadth | backend | ✅ (이번 커밋) |
 | 8b | Data-source extension (NFCI · VXVCLS) | backend | ✅ (이번 커밋) |
-| 9 | `ScenarioPackV2` | both | |
-| 10 | Stage wiring (Optimize · Attribution · Execution · Journal) | both | |
+| 9 | `ScenarioPackV2` | both | ✅ (이번 커밋) |
+| 10 | Stage wiring (Optimize · Attribution · Execution · Journal) **+ 팩 CRUD** | both | |
 
 ## Phases
 
@@ -576,7 +576,43 @@ second implementation. Historical/hypothetical labelling enforced in the type.
 the selected scenario's *label* only, because no pack entity exists yet; this phase gives packs an
 identity the Research Context strip can display.
 
+#### 9 실행 기록 — **done** (엔진 `b5aae9e` · API `0ace764` · UI 이번 커밋)
+
+앞선 커밋에서 **historical simulation 엔드포인트**(`c557403`)를 먼저 붙였다 — 스펙 §7 이
+`timing_routes.py` 에 배정한 7/8 이 있었고 이것만 없었다. 리스크 레지스터가 이 엔드포인트에
+할당한 `forward_only` 차단이 여기서 실제로 걸린다.
+
+**드리프트 4건은 사용자에게 물었다** (계획 가드레일 4번):
+
+| 드리프트 | 결정 |
+|---|---|
+| §5 의 12 패밀리 중 3종이 비어 있음 | 새 팩 3 + 국면 팩 1 추가, 12종 전부 선언 |
+| `user-authored` 는 저장을 함의 | 인라인 전용, **CRUD 는 Phase 10 으로 재배치** |
+| 3자 비교(노출) × 시나리오(손실) 합성 형태 | `충격 × 노출`, 나머지는 현금 |
+| mock 환경에서 백테스트 모드가 항상 거부 | 두 모드, 기본은 `backtest` |
+
+**뮤테이션 프로브가 이번에도 실제 결함을 잡았다 — 그중 둘은 내 코드의 것이다.**
+
+1. **판정하지 못한 다리에 0% 손실.** 스냅샷이 없으면 `timing_macro` 는 노출 0 의
+   `unavailable` 인데, 곱셈만 하면 -0.0% 로 나와 **만들지 못한 비교가 셋 중 가장 안전해
+   보였다.** 노출 0(현금)과 "알 수 없음" 은 다른 사실이다. 테스트가 아니라 실제 응답을 눈으로
+   보고 발견했다.
+2. **NaN 이 전액 노출로 둔갑.** `max(0, min(1, nan))` 은 **1.0** 이다(NaN 비교가 전부 False
+   라 `min` 이 첫 인자를 그대로 낸다). 값을 얻지 못한 다리가 조용히 최대 손실로 채점되고,
+   NaN 은 JSON 에도 그대로 실려 나가 엄격한 파서를 깨뜨린다.
+3. **합성 테스트가 헛돌고 있었다.** 판정된 다리가 전부 노출 1.0 이라 곱셈이 항등이었다 —
+   곱셈을 통째로 지워도 통과했다. 노출 0.5 를 만들어 다시 세웠다(7b 와 같은 함정).
+
+**정직하게 밝히는 두 가지.** (1) `tsc` 는 `22f3a61`(Debt 3) 시점에 **깨끗하지 않았다** —
+`admin-data.spec.ts` 에 암묵적 `any` 가 하나 있었는데 그 커밋에서 "clean" 이라고 보고했다.
+이번에 고쳤다. (2) 국내팩을 고르면 컨텍스트 스트립이 `scenario`(= `/stress` 실행 가능 id)를
+읽어 **활성 시나리오를 잘못 적고 있었다.** 팩 신원을 붙이면서 `scenarioPackId` 를 별도로 들게
+했다.
+
 ### Phase 10 — Stage wiring
+**시나리오 팩 CRUD** *(Phase 9 에서 재배치 — `user-authored` 는 인라인 실행만 도착했다)*:
+저장·목록·버전·삭제. `timing_rule_sets` 의 관례를 따르되, 저장된 팩도 `model_type` 은 서버가
+정한다(사용자가 역사적 사실을 주장할 수 있으면 §5 가 무의미해진다).
 Optimize (timing as explicit constraint/overlay, before/after + infeasibility reasons),
 Attribution (allocation / timing / selection / factor / cost / residual; ex-ante vs ex-post),
 Execution (paper-only preview, costs, liquidity, borrow, approval states — **no live orders**),

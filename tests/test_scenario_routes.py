@@ -266,3 +266,43 @@ def test_an_unavailable_scenario_composes_no_leg_losses(client, monkeypatch):
     assert body["scenario"]["shock_pct"] is None
     assert body["composed"] is False
     assert all("shock_pct" not in leg for leg in body["legs"].values())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. 입력 경계 — 스키마가 극단값을 입구에서 막는다
+# ═══════════════════════════════════════════════════════════════════════════════
+@pytest.mark.parametrize("factors", [
+    {"size": 1e308},          # 곱하면 inf → JSON 이 깨진다
+    {"size": -1e308},
+    {"size": 1000.0},         # 노출(±3σ)에 곱해 말이 안 되는 충격
+])
+def test_an_inline_pack_with_an_extreme_coefficient_is_refused(client, factors):
+    """★계산 중간이 아니라 입구에서 거절한다★ 사유가 분명하고, inf 가 응답에 실리지 않는다."""
+    r = client.post(RUN, json={"holdings": HOLDINGS,
+                               "pack": {"market": -6.0, "factors": factors,
+                                        "assumptions": {}}})
+    assert r.status_code == 422, r.text
+
+
+def test_an_inline_pack_with_an_extreme_assumption_is_refused(client):
+    r = client.post(RUN, json={"holdings": HOLDINGS,
+                               "pack": {"market": -6.0, "factors": {"size": -3.0},
+                                        "assumptions": {"vol_rise": 1e9}}})
+    assert r.status_code == 422, r.text
+
+
+def test_a_reasonable_inline_pack_still_passes(client):
+    """경계를 좁히다 정상 입력까지 막으면 안 된다 — 통과 경로를 함께 고정한다."""
+    r = client.post(RUN, json={"holdings": HOLDINGS,
+                               "pack": {"market": -6.0,
+                                        "factors": {"size": -4.0, "leverage": -3.0},
+                                        "assumptions": {"vol_rise": 0.4}}})
+    assert r.status_code == 200, r.text
+
+
+def test_every_number_in_a_run_response_is_json_finite(client):
+    """★NaN/inf 는 유효한 JSON 이 아니다★ 엄격한 파서를 쓰는 소비자가 통째로 실패한다."""
+    import json
+    r = client.post(RUN, json={"holdings": HOLDINGS, "pack_id": "semi_selloff"})
+    # `parse_constant` 는 NaN·Infinity 리터럴을 만나면 호출된다 — 만나면 실패시킨다.
+    json.loads(r.text, parse_constant=lambda c: pytest.fail(f"응답에 {c} 가 들어 있습니다"))

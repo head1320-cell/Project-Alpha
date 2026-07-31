@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { allocationApi, type StressScenarioItem } from "@/entities/allocation/api";
+import { allocationApi, MODEL_TYPE_SHORT, type StressScenarioItem } from "@/entities/allocation/api";
 import { CatalogueShell, type CatalogueItem } from "@/features/catalogue-shell/CatalogueShell";
 
 /** 도메인 항목 → 셸이 아는 최소 표면. 셸이 StressScenarioItem 을 알 필요가 없다. */
@@ -21,9 +21,14 @@ function toCatalogueItem(i: StressScenarioItem): CatalogueItem {
     label: i.label,
     description: i.description,
     meta: i.source,
+    // ★모든 행이 "역사인가 가정인가" 를 스스로 말한다★ (스펙 §5)
+    // 등급마다 다른 클래스를 준다 — 같은 모양이면 구별이 없는 것과 같고, 이 배지의
+    // 존재 이유가 바로 그 구별이다(정직성 라벨 `.t-honesty-use` 와 같은 규칙).
+    kindBadge: MODEL_TYPE_SHORT[i.model_type],
+    kindBadgeClass: `as-model-type mt-${i.model_type}`,
     available: i.available,
     unavailableReason: i.reason || undefined,
-    searchExtra: [i.source],
+    searchExtra: [i.source, i.model_type_label, i.family_label],
   };
 }
 
@@ -97,8 +102,14 @@ export function StressScenarioModal({ open, onClose, selectedId, severity, onSev
       {sel && (
         <>
           <div className="tfm-sel-t">{sel.label}</div>
+          {/* 상세에는 전문을 — 목록 배지는 짧아서 "가정" 이 무슨 뜻인지 말해 주지 못한다. */}
+          <div className={`as-model-type mt-${sel.model_type}`}>{sel.model_type_label}</div>
           <div className="tfm-sel-d">{sel.description}</div>
           <div className="tfm-row-p">출처 · {sel.source}</div>
+          {/* 재현 좌표 — 계수가 바뀌면 해시가 바뀐다. 라벨만으로는 같은 팩인지 알 수 없다. */}
+          <div className="tfm-row-p num" title="팩 정체성 — 충격 정의가 바뀌면 함께 바뀝니다">
+            {sel.identity}
+          </div>
 
           {sel.severity_applies ? (
             <label className="as-param">

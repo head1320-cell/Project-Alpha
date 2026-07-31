@@ -4252,3 +4252,31 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .t-honesty-use.u-unavailable { color: var(--color-bear);
   background: color-mix(in srgb, var(--color-bear) 14%, transparent); }
 .t-honesty-why { color: var(--t-muted); line-height: 1.5; }
+
+/* ── 시나리오 팩 model_type + 시나리오×3자 비교 (Phase 9, 스펙 §5) ──────────────
+   ★두 등급은 반드시 달라 보여야 한다★ 같은 스타일이면 구별이 없는 것과 같고,
+   이 배지의 존재 이유가 바로 "역사인가 가정인가" 의 구별이다(정직성 라벨과 같은 규칙). */
+.as-model-type { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
+  letter-spacing: .02em; white-space: nowrap; font-style: normal; align-self: flex-start; }
+.as-model-type.mt-historical_replay { color: var(--color-bull);
+  background: color-mix(in srgb, var(--color-bull) 14%, transparent); }
+.as-model-type.mt-hypothetical { color: var(--t-accent);
+  background: color-mix(in srgb, var(--t-accent) 14%, transparent); }
+.as-ctx-scen-id { color: var(--t-muted); font-size: 9px; font-style: normal; }
+
+.as-s3w-hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.as-s3w-pack { font-size: 11px; font-weight: 700; color: var(--t-text); }
+.as-s3w-basis { font-size: 10px; color: var(--t-muted); }
+.as-s3w-legs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 720px) { .as-s3w-legs { grid-template-columns: 1fr; } }
+.as-s3w-leg { border: 1px solid var(--t-border); border-radius: 8px; padding: 9px 10px;
+  display: flex; flex-direction: column; gap: 4px; }
+.as-s3w-leg.timing_macro { border-color: var(--t-accent); }
+.as-s3w-nm { font-size: 10px; font-weight: 700; color: var(--t-text); }
+.as-s3w-loss { font-size: 18px; line-height: 1.1; }
+.as-s3w-loss.neg { color: var(--color-bear); }
+.as-s3w-loss.pos { color: var(--color-bull); }
+.as-s3w-exp { font-size: 10px; color: var(--t-muted); }
+/* 판정 불가는 숫자 자리에 숫자가 없다 — 0% 로 채우면 가장 안전해 보인다. */
+.as-s3w-na { font-size: 10px; color: var(--t-muted); line-height: 1.5; }
+.as-s3w-conflict { border-left: 2px solid var(--t-accent); padding-left: 8px; }

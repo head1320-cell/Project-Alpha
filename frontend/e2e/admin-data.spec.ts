@@ -69,7 +69,8 @@ test("정직성 라벨: 등급마다 다른 클래스를 쓴다 (눈으로 구�
   await expect(page.locator(".t-honesty-row").first()).toBeVisible({ timeout: 20_000 });
 
   const classes = await page.locator(".t-honesty-use").evaluateAll(
-    (els) => els.map((e) => (e.className || "").split(/\s+/).find((c) => c.startsWith("u-"))));
+    (els: Element[]) => els.map(
+      (e) => (e.className || "").split(/\s+/).find((c: string) => c.startsWith("u-"))));
   const distinct = new Set(classes.filter(Boolean));
   expect(distinct.size, `등급 클래스가 ${distinct.size}종 — 서로 다른 등급이 같게 보인다`)
     .toBeGreaterThanOrEqual(2);

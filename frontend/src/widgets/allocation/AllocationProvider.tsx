@@ -161,6 +161,14 @@ interface AllocationCtx {
   setSeverity: (v: number) => void;
   pickScenario: (id: string) => void;
   scenarios: StressScenarioMeta[];
+  /**
+   * 선택된 **시나리오 팩 신원** (스펙 §4 ⑦, Phase 9).
+   * `scenario` 와 다른 것이다 — 저것은 `/stress` 가 실행할 수 있는 id 로 국내팩을 담지
+   * 못한다. 국내팩을 고르면 `scenario` 는 그대로인데 화면은 국내팩 결과를 보이므로,
+   * 컨텍스트 스트립이 `scenario` 를 읽으면 **활성 시나리오를 잘못 적는다**.
+   */
+  scenarioPackId: string;
+  setScenarioPackId: (id: string) => void;
   // ── 타이밍(카나리·마켓타이밍) ──
   timingCfg: TimingConfig;
   setTimingCfg: (next: TimingConfig) => void;
@@ -246,6 +254,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [tau, setTau] = useState(0.05);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [scenario, setScenario] = useState<string>("rate_hike_200bp");
+  const [scenarioPackId, setScenarioPackId] = useState<string>("rate_hike_200bp");
   const [bump, setBump] = useState(2.0);
   const [severity, setSeverity] = useState(1.0);
   const [timingCfg, setTimingCfgState] = useState<TimingConfig>(DEFAULT_TIMING);
@@ -415,6 +424,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const scenarios = catalogQ.data?.scenarios || [];
   const pickScenario = (id: string) => {
     setScenario(id);
+    // `/stress` 로 실행되는 팩을 골랐다면 활성 팩도 같은 것이다. 국내팩은 다른 엔진이라
+    // 스트레스 화면이 `setScenarioPackId` 를 직접 부른다(여기서 알 수 없다).
+    setScenarioPackId(id);
     const label = scenarios.find((x) => x.id === id)?.label || id;
     logEvent(`시나리오 전환 — ${label}`);
   };
@@ -648,6 +660,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     views, setViewsLogged,
     model, setModel, delta, setDelta, tau, setTau,
     result, scenario, bump, setBump, severity, setSeverity, pickScenario, scenarios,
+    scenarioPackId, setScenarioPackId,
     timingCfg, setTimingCfg, timingQ, applyTiming,
     timeline, logEvent,
     canRun, pending: analyzeMut.isPending, lastRun,

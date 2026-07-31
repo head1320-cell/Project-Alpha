@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { REGIME_COLORS, zScoreColor } from "@/entities/macro/api";
 import { analysisApi } from "@/entities/macro/analysisApi";
-import { allocationApi } from "@/entities/allocation/api";
+import { allocationApi, MODEL_TYPE_SHORT } from "@/entities/allocation/api";
 import { type MacroIndicator } from "@/entities/macro/analysisModel";
 import { STATUS_LABEL, USAGE_LABEL, USAGE_REASON } from "@/entities/regime-snapshot/model";
 import { useAllocation } from "./AllocationProvider";
@@ -48,8 +48,16 @@ export function ContextStrip() {
   const rg = useResearchRegime();
   const {
     activeStudy, activeRunId, attachedSnapshotId, holdings, timingCfg,
-    scenario, scenarios, isResultStale, result, activeRuleSet,
+    scenario, scenarios, scenarioPackId, isResultStale, result, activeRuleSet,
   } = useAllocation();
+
+  // 통합 시나리오 카탈로그 — 스트레스 화면·선택 창과 **같은 쿼리 키**라 캐시를 공유한다
+  // (추가 요청 0). 여기서 필요한 것은 선택된 팩의 신원과 model_type 뿐이다.
+  const scenCatQ = useQuery({
+    queryKey: ["allocation", "stress-scenarios"],
+    queryFn: () => allocationApi.stressScenarios(),
+    staleTime: Infinity,
+  });
 
   // ★박힌 버전이 아직 실재하는지 확인한다★
   // 확인하지 않으면 삭제된 버전 번호를 그대로 보여주게 되고, 사용자는 그 런이 재현됐다고 믿는다.
@@ -74,8 +82,14 @@ export function ContextStrip() {
   const confPct = rg.confidence != null ? Math.round(rg.confidence * 100) : null;
   const pinned = rg.source === "snapshot";
 
-  // ⑦ 시나리오 — 선택된 항목의 label. "팩(pack)" 신원은 Phase 9(ScenarioPackV2) 소관이다.
-  const scenLabel = scenarios.find((s) => s.id === scenario)?.label ?? null;
+  // ⑦ 시나리오 — **팩 신원**(Phase 9). 라벨만 적던 것을 `pack_id@hash` 까지 올린다.
+  //    라벨은 계수가 바뀌어도 그대로라 재현 좌표가 되지 못한다 — 해시는 충격 정의를 따라간다.
+  //    통합 카탈로그에서 찾지 못하면(레거시 id 등) 라벨로 물러서되 신원은 적지 않는다.
+  const activePack = (scenCatQ.data?.groups ?? [])
+    .flatMap((g) => g.items).find((i) => i.pack_id === scenarioPackId) ?? null;
+  const scenLabel = activePack?.label
+    ?? scenarios.find((s) => s.id === scenarioPackId)?.label
+    ?? scenarios.find((s) => s.id === scenario)?.label ?? null;
   // ⑦ 룰셋 — 저장된 룰셋이 붙어 있으면 **신원(id v버전)**을, 없으면 미저장 설정 요약을 적는다.
   //    둘은 다른 것이다: 전자는 서버에 불변으로 남아 재현되고, 후자는 이 브라우저의 임시 상태다.
   //    같은 칸에 같은 모양으로 적으면 사용자는 저장되지 않은 설정을 재현 가능한 것으로 오해한다.
@@ -166,7 +180,20 @@ export function ContextStrip() {
         </span>
       )}
       {scenLabel && (
-        <span className="as-ctx-scen" title="선택된 스트레스 시나리오">{scenLabel}</span>
+        <span className="as-ctx-scen"
+          title={activePack
+            ? `시나리오 팩 ${activePack.identity}\n${activePack.model_type_label}\n분류: ${activePack.family_label}`
+            : "선택된 스트레스 시나리오 — 통합 카탈로그에서 팩 신원을 찾지 못했습니다"}>
+          {scenLabel}
+          {/* ★역사인가 가정인가는 결과가 보이는 곳마다 적는다★ (스펙 §5) */}
+          {activePack && (
+            <em className={`as-model-type mt-${activePack.model_type}`}>
+              {MODEL_TYPE_SHORT[activePack.model_type]}
+            </em>
+          )}
+          {/* 신원을 못 찾으면 해시를 지어내지 않는다 — 라벨만 남는다. */}
+          {activePack && <em className="as-ctx-scen-id num"> {activePack.content_hash}</em>}
+        </span>
       )}
 
       {/* ⑧ 마지막 계산 대비 미반영 변경 — isResultStale 을 그대로 노출(재계산하지 않는다) */}

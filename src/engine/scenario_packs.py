@@ -33,6 +33,7 @@ import hashlib
 import inspect
 import json
 import logging
+import math
 from dataclasses import dataclass
 from enum import Enum
 
@@ -260,10 +261,27 @@ def compose_with_exposure(shock_pct: float, legs: dict[str, float]) -> dict[str,
     ★선형 근사라는 것을 숨기지 않는다★ 노출을 줄인 포트폴리오는 상관 구조도 달라지는데,
     이 곱셈은 그것을 반영하지 않는다. `run_scenario` 가 자기 선형 근사를 `notes` 에 적는 것과
     같은 이유로, 이 합성도 호출자가 그대로 표시할 문장을 함께 돌려준다.
+
+    ★NaN 은 클램프로 걸러지지 않는다★
+    `max(0.0, min(1.0, nan))` 는 **1.0** 을 돌려준다 — NaN 비교가 전부 False 라 `min` 이 첫
+    인자를 그대로 내보내기 때문이다. 그 결과 값을 얻지 못한 다리가 조용히 **전액 노출**로
+    채점되어 손실이 가장 크게 찍힌다. 게다가 NaN 은 JSON 에 그대로 실려 나가 엄격한 파서를
+    깨뜨린다. 그래서 유한하지 않은 값은 클램프하지 않고 **판정에서 빼낸다** — 곱해서 숫자를
+    만들지 않는다.
     """
     out: dict[str, dict] = {}
+    finite_shock = isinstance(shock_pct, (int, float)) and math.isfinite(shock_pct)
     for name, exposure in legs.items():
-        e = max(0.0, min(1.0, float(exposure)))
+        try:
+            raw = float(exposure)
+        except (TypeError, ValueError):
+            raw = float("nan")
+        if not math.isfinite(raw) or not finite_shock:
+            out[name] = {"exposure": None, "shock_pct": None, "cash_pct": None,
+                         "reason": "노출 또는 충격을 수치로 얻지 못했습니다 — "
+                                   "0 이나 전액 노출로 대체하지 않습니다."}
+            continue
+        e = max(0.0, min(1.0, raw))
         out[name] = {
             "exposure": round(e, 4),
             "shock_pct": round(float(shock_pct) * e, 2),

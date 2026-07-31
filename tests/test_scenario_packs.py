@@ -170,6 +170,35 @@ def test_compose_clamps_exposure_into_zero_one():
     assert out["a"]["exposure"] == 1.0 and out["b"]["exposure"] == 0.0
 
 
+def test_compose_reports_cash_as_the_unexposed_remainder():
+    """현금 비중은 노출의 여집합이다 — 이 관계가 깨지면 두 숫자가 서로를 부정한다."""
+    out = sp.compose_with_exposure(-10.0, {"full": 1.0, "half": 0.5, "none": 0.0})
+    assert out["full"]["cash_pct"] == 0.0
+    assert out["half"]["cash_pct"] == 50.0
+    assert out["none"]["cash_pct"] == 100.0
+    # 충격을 받지 않은 부분이 곧 현금이다: 손실은 노출분에만 걸린다.
+    assert out["none"]["shock_pct"] == 0.0
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), None, "x"])
+def test_a_non_finite_exposure_is_not_silently_clamped_to_full(bad):
+    """★NaN 은 클램프를 통과한다★
+
+    `max(0.0, min(1.0, nan))` 는 **1.0** 이다 — NaN 비교가 전부 False 라 `min` 이 첫 인자를
+    그대로 내보낸다. 그러면 값을 얻지 못한 다리가 조용히 **전액 노출**로 채점돼 손실이 가장
+    크게 찍힌다. 게다가 NaN/inf 는 JSON 에 그대로 나가 엄격한 파서를 깨뜨린다.
+    """
+    out = sp.compose_with_exposure(-10.0, {"broken": bad})["broken"]
+    assert out["exposure"] is None, f"{bad!r} 가 노출 {out['exposure']} 로 대체됐습니다"
+    assert out["shock_pct"] is None and out["cash_pct"] is None
+    assert out.get("reason"), "수치를 못 만든 사유가 없습니다"
+
+
+def test_a_non_finite_shock_composes_nothing():
+    out = sp.compose_with_exposure(float("nan"), {"a": 0.5})["a"]
+    assert out["shock_pct"] is None and out["exposure"] is None
+
+
 def test_the_linear_approximation_is_stated_not_hidden():
     assert "선형" in sp.COMPOSITION_NOTE and "근사" in sp.COMPOSITION_NOTE
 

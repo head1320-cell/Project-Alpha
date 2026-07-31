@@ -48,8 +48,12 @@ test("Alpha Registry: status filter chips narrow the list", async ({ page }) => 
 });
 
 // 06 STRESS — 시나리오가 좌측 레일(가상4+역사4)과 KrScenarioPack(국내7) 두 곳에 흩어져
-// 있던 것을 3패밀리 단일 창으로 통합. 미가용 사유가 툴팁이 아니라 목록에 보인다.
-test("Stress: unified scenario window merges all three families", async ({ page }) => {
+// 있던 것을 단일 창으로 통합. 미가용 사유가 툴팁이 아니라 목록에 보인다.
+//
+// ★Phase 9 에서 패밀리 어휘가 바뀌었다★ 예전 셋(가상·역사·국내팩)은 곧 *소스*였는데,
+// 이제 분류는 스펙 §5 의 12 패밀리다(국내팩은 그 중 여러 패밀리에 흩어진다). 이 테스트가
+// 지키는 불변식은 어휘가 아니라 **세 소스가 모두 한 창에서 닿는다**는 것이다.
+test("Stress: unified scenario window merges all three sources", async ({ page }) => {
   const sink = trackErrors(page);
   await page.goto("/allocation/stress", { waitUntil: "networkidle" });
 
@@ -57,7 +61,7 @@ test("Stress: unified scenario window merges all three families", async ({ page 
   await expect(page.locator(".tfm")).toBeVisible();
   const fams = await page.locator(".tfm .tfm-fams button").allInnerTexts();
   expect(fams.join("|")).toContain("역사 리플레이");
-  expect(fams.join("|")).toContain("국내");
+  expect(fams.length, "스펙 §5 는 12 패밀리를 요구한다").toBeGreaterThanOrEqual(12);
 
   // 국내팩 시나리오를 골라 적용 → 좌측 칩이 그 패밀리로 갱신
   await page.locator(".tfm .tfm-search").fill("반도체");
@@ -66,7 +70,7 @@ test("Stress: unified scenario window merges all three families", async ({ page 
   await page.locator(".as-fb-apply", { hasText: "이 시나리오로 검증" }).click();
 
   await expect(page.locator(".tfm")).toHaveCount(0);
-  await expect(page.locator(".tfc-chip-tk").first()).toContainText("국내");
+  await expect(page.locator(".tfc-chip-tk").first()).toContainText("반도체");
   // 창이 선택을 주도하므로 국내팩 카드 안의 중복 버튼 목록은 사라져야 한다
   // (hidden 속성은 display:flex에 밀렸던 이력 — 조건부 렌더를 회귀로 고정)
   expect(await page.locator(".as-krs-list").count(), "duplicate KR scenario list removed").toBe(0);

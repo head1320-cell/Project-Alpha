@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -34,13 +35,22 @@ logger = logging.getLogger("api.scenario")
 router = APIRouter(prefix="/api/v1/allocation", tags=["scenario"])
 
 
+#: 계수·가정의 허용 범위. ★경계를 스키마가 막는다★
+#: 이 값들은 `_z()` 로 표준화된 노출(±3σ 클립)에 곱해지고, 그 결과가 다시 변동성·VaR 프록시로
+#: 들어간다. 1e300 같은 값이 들어오면 곱셈이 inf 가 되고 inf 는 JSON 에 그대로 실려 나가 엄격한
+#: 파서를 깨뜨린다 — 계산 중간에 잡는 것보다 입구에서 거절하는 편이 사유가 분명하다.
+_Coefficient = Annotated[float, Field(ge=-100, le=100)]
+_Assumption = Annotated[float, Field(ge=-10, le=10)]
+
+
 class InlinePack(BaseModel):
     """사용자 정의 충격. `model_type` 필드는 **없다** — 서버가 정한다."""
     label: str = Field("사용자 정의 시나리오", max_length=200)
     description: str = Field("", max_length=1000)
     market: float = Field(..., ge=-90, le=90)              # 시장 기본충격 (%)
-    factors: dict[str, float] = Field(..., min_length=1)   # 팩터 → 계수 (%)
-    assumptions: dict[str, float] = Field(default_factory=dict)
+    #: 팩터 → 계수 (%). 팩터 수는 엔진의 노출 행렬(7종)이 상한이다.
+    factors: dict[str, _Coefficient] = Field(..., min_length=1, max_length=16)
+    assumptions: dict[str, _Assumption] = Field(default_factory=dict, max_length=16)
 
 
 class ScenarioRunRequest(BaseModel):

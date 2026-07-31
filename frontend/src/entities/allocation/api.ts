@@ -149,23 +149,86 @@ export interface StressScenarioMeta {
   reason?: string;
 }
 
-// ── 통합 시나리오 카탈로그 (가상 · 역사 리플레이 · 국내팩) ──
-export type StressFamily = "hypothetical" | "historical" | "kr_pack";
+// ── 통합 시나리오 카탈로그 (스펙 §5 의 12 패밀리 · ScenarioPackV2) ──
+//
+// ★두 축을 한 타입으로 묶지 않는다★
+// `family` 는 **분류**(§5 의 12종, 앞으로도 늘 수 있다)이고 `mode` 는 실행 엔진에서 온
+// **고정 어휘**다. Phase 9 전에는 둘이 같은 유니온을 쓰고 있어서, 패밀리를 늘리는 순간
+// 결과 렌더링 분기까지 함께 흔들렸다.
+// `(string & {})` 트릭: 알려진 12개는 자동완성에 뜨면서도 새 패밀리가 추가될 때 타입을
+// 고치지 않아도 된다. 그냥 `string` 이면 자동완성이 사라지고, 순수 유니온이면 백엔드가
+// 패밀리를 하나 늘릴 때마다 프론트가 컴파일 에러로 막힌다 — 분류는 늘어나는 축이다.
+export type KnownStressFamily =
+  | "historical_replay" | "growth_inflation" | "correlation_hedge_failure"
+  | "volatility_liquidity" | "credit_tightening" | "krw_foreign_flow"
+  | "semiconductor_chain" | "valueup_unwind" | "earnings_dispersion"
+  | "retail_deleveraging" | "shortsell_borrow" | "user_authored";
+export type StressFamily = KnownStressFamily | (string & {});
+export type StressMode = "hypothetical" | "historical" | "kr_pack";
+/** 이 결과가 무엇인지에 대한 주장 — 분류와 **다른 축**이다(§5). */
+export type StressModelType = "historical_replay" | "hypothetical";
+export type StressEngine = "m8" | "hist_replay" | "kr_pack" | "inline";
+
+/** 목록 배지용 짧은 라벨. 상세 패널에는 서버가 준 `model_type_label` 전문을 쓴다. */
+export const MODEL_TYPE_SHORT: Record<StressModelType, string> = {
+  historical_replay: "실제 시세",
+  hypothetical: "가정",
+};
+
 export interface StressScenarioItem {
   id: string;
+  pack_id: string;
   label: string;
   description: string;
   family: StressFamily;
-  mode: StressFamily;
+  family_label: string;
+  mode: StressMode;
+  model_type: StressModelType;
+  model_type_label: string;
+  engine: StressEngine;
+  content_hash: string;
+  /** 재현 좌표 `pack_id@hash` — 계수가 바뀌면 함께 바뀐다. */
+  identity: string;
   available: boolean;
   severity_applies: boolean;
   source: string;
   reason?: string;
 }
 export interface StressScenarioCatalog {
-  groups: { family: StressFamily; label: string; items: StressScenarioItem[] }[];
-  families: { id: StressFamily; label: string }[];
+  groups: { family: StressFamily; label: string; items: StressScenarioItem[]; reason?: string }[];
+  /** 팩이 없는 패밀리도 남는다 — `covered:false` + `reason`. */
+  families: { id: StressFamily; label: string; count: number; covered: boolean; reason?: string }[];
   note: string;
+}
+
+// ── 시나리오 × 3자 비교 (Phase 9) ──
+export interface ScenarioLeg {
+  state: string;
+  /** ★수치로 얻지 못하면 null★ NaN 을 0 이나 1 로 대체하지 않는다(백엔드와 같은 규칙). */
+  exposure: number | null;
+  method: string;
+  on_count: number;
+  off_count: number;
+  unavailable_count: number;
+  explanation: string;
+  /** ★판정하지 못한 다리에는 없다★ 0 이 아니라 부재다. */
+  shock_pct?: number | null;
+  cash_pct?: number | null;
+  /** 수치를 만들지 못한 사유 — 있으면 숫자 대신 이것을 보여준다. */
+  reason?: string;
+}
+export interface ScenarioThreeWayResult {
+  legs: Record<string, ScenarioLeg>;
+  scenario: { shock_pct: number | null; shock_basis: string; label: string;
+    available: boolean; reason?: string };
+  pack: StressScenarioItem;
+  model_type: StressModelType;
+  identity: string;
+  overlay: Record<string, unknown> | null;
+  conflict: string | null;
+  combination: string;
+  composition_note: string;
+  composed: boolean;
 }
 
 export interface StressResult {
@@ -557,6 +620,19 @@ export const allocationApi = {
   stressScenarios: async (): Promise<StressScenarioCatalog> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/stress-scenarios`);
     if (!r.ok) throw new Error(`stress-scenarios failed: ${r.status}`);
+    return r.json();
+  },
+
+  scenarioThreeWay: async (req: {
+    holdings: Record<string, number>; pack_id: string; severity?: number;
+    market?: string; combination?: string; k?: number; weights?: number[];
+    rules: Record<string, unknown>[]; regime_snapshot_id?: string | null;
+    overlay_enabled?: boolean;
+  }): Promise<ScenarioThreeWayResult> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/scenario-three-way`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
+    });
+    if (!r.ok) throw new Error(`scenario-three-way failed: ${r.status}`);
     return r.json();
   },
 
