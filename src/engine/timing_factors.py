@@ -523,9 +523,26 @@ CATALOG: list[dict[str, Any]] = [
      "provenance": "systrader79 (Defense First)", "existing": False},
     {"id": "indicator", "label": "매크로 지표 임계", "family": "regime",
      "evaluation_frequency": "day",
-     "params": {}, "default_threshold": 20.0, "default_direction": "below",
-     "unit": "raw", "desc": "VIXCLS·DGS10·T10Y2Y 등 매크로 시리즈의 임계 통과(FRED/ECOS).",
-     "provenance": "FRED/ECOS", "existing": True},
+     "params": {"series_id": "VIXCLS"}, "default_threshold": 20.0, "default_direction": "below",
+     "unit": "raw", "desc": "VIXCLS·DGS10·T10Y2Y 등 매크로 시리즈의 임계 통과(FRED/ECOS). "
+                            "★ALFRED 빈티지 기준★ — 그 시점에 알 수 있었던 값만 쓴다. "
+                            "FRED_API_KEY 가 없으면 unavailable(0 으로 대체하지 않는다).",
+     "provenance": "FRED/ECOS", "existing": True,
+     # ★requires_as_of 를 붙이지 않는다★ (Phase 8b)
+     # 붙이면 팩터 창이 "추가 불가" 로 표시해 **지금 되는 흐름이 사라진다** — 이 팩터는
+     # 레거시 카나리 경로(`macro_analytics`)로 평가되고 있고 그 경로는 as_of 가 필요 없다.
+     # 대신 `read_factor` 가 as_of 가 주어졌을 때만 시점 기반 리더로 보낸다: V2 는 올바른
+     # 빈티지를 읽고, 기존 UI 능력은 그대로 남는다.
+     },
+    {"id": "financial_conditions", "label": "금융환경지수 (NFCI)", "family": "regime",
+     "evaluation_frequency": "week",
+     "params": {}, "default_threshold": 0.0, "default_direction": "below",
+     "unit": "index", "desc": "시카고 연은 NFCI. 양수면 긴축, 음수면 완화 — 완화 쪽이 위험-온이라 "
+                              "임계 **아래**가 통과. ★주간이고 개정된다★ 그래서 ALFRED 빈티지 "
+                              "경로로만 읽는다(오늘 개정판으로 과거를 채점하면 그 시점에 알 수 "
+                              "없던 정보를 쓰는 것이 된다). 키가 없으면 unavailable.",
+     "provenance": "FRED/ALFRED (NFCI)", "existing": False,
+     "requires_as_of": True},
     {"id": "curve_slope", "label": "장단기 금리차 (10Y−2Y)", "family": "regime",
      "evaluation_frequency": "day",
      "params": {"series_id": "T10Y2Y"}, "default_threshold": 0.0, "default_direction": "above",

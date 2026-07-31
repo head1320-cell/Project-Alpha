@@ -290,26 +290,37 @@ def test_every_new_factor_is_reachable_through_evaluate(fid, monkeypatch):
     tf.evaluate(fid, TK, "us", dict(tf.CATALOG_BY_ID[fid].get("params") or {}))
 
 
-#: `evaluate()` 분기가 없어도 되는 항목 — **면제는 반드시 사유와 함께 적는다.**
+#: `evaluate()` 분기가 없어도 되는 항목. 지금은 비어 있다.
 #:
-#: `indicator` 는 이 테스트를 처음 돌렸을 때 드러난 **기존 결함**이다. 카탈로그에는 있는데
-#: `evaluate()` 분기가 없어서 V2 경로(`read_price_factor` → `evaluate`)에서는 언제나
-#: None → unavailable 이 된다. 사용자에겐 "데이터가 없다" 로 보이지만 실제로는 배선이 없는
-#: 것이다. 레거시 카나리 경로(`allocation_routes._canary_eval`)에서만 동작한다.
-#: 제대로 고치려면 매크로 시리즈를 시점 기반으로 읽어야 하고(= `curve_slope` 처럼
-#: `requires_as_of` + 전용 리더), 그건 **Phase 8b(데이터 소스 확장)** 소관이다.
-#: 조용히 통과시키지 않고 목록에 남겨 다음 사람이 보게 한다.
-_EVALUATE_EXEMPT = {"indicator"}
+#: Phase 8 에서는 `indicator` 가 여기 있었다 — 카탈로그에 있는데 분기도 리더도 없어서 V2
+#: 경로에서 영원히 unavailable 이었다(레거시 카나리 경로에서만 동작). **Phase 8b 가
+#: `read_macro_indicator` 로 배선하면서 그 사유가 사라졌으므로 목록에서 뺐다.**
+#: 면제는 사유가 살아 있는 동안만 유효하다 — 사유가 없어지면 항목도 없어져야 한다.
+_EVALUATE_EXEMPT: set[str] = set()
 
 
-def test_all_catalogue_ids_are_evaluable_or_declare_as_of():
-    """카탈로그 전체 불변식 — 분기도 없고 requires_as_of 도 아니면 도달 불가능한 항목이다."""
+def test_all_catalogue_ids_are_reachable_through_some_read_path():
+    """카탈로그 전체 불변식 — **어느 경로로든** 읽히지 않으면 도달 불가능한 항목이다.
+
+    도달 경로는 셋이다:
+      · `evaluate()` 분기 — 가격 기반 팩터
+      · `requires_as_of` — `read_factor` 가 시점 기반 리더로 보낸다
+      · `read_factor` 안의 전용 분기 — `indicator` 처럼 플래그는 안 붙이지만
+        시점이 주어지면 시점 기반으로 읽는 경우(Phase 8b)
+
+    ★셋 다 아니면 사용자에겐 "데이터가 없다" 로 보이지만 실제로는 배선이 없는 것이다★
+    Phase 8 에서 `indicator` 가 정확히 그 상태였고, 이 테스트가 그걸 찾아냈다.
+    """
     import inspect
     src = inspect.getsource(tf.evaluate)
+    from src.engine import timing_rules_v2 as v2
+    read_src = inspect.getsource(v2.read_factor)
     for c in tf.CATALOG:
-        if c.get("requires_as_of") or c["id"] in _EVALUATE_EXEMPT:
+        fid = c["id"]
+        if c.get("requires_as_of") or fid in _EVALUATE_EXEMPT:
             continue
-        assert f'"{c["id"]}"' in src, f'{c["id"]} 가 evaluate() 에서 도달 불가능하다'
+        reachable = f'"{fid}"' in src or f'"{fid}"' in read_src
+        assert reachable, f"{fid} 가 어떤 읽기 경로에서도 도달 불가능하다"
 
 
 def test_every_catalogue_frequency_has_a_rank():

@@ -163,16 +163,23 @@ def fetch_observations(
             value = float(o["value"])          # FRED 결측은 "." → ValueError → 건너뜀
         except (KeyError, TypeError, ValueError):
             continue
-        rs = o.get("realtime_start") or as_of
+        rs_raw = o.get("realtime_start")
+        rs = rs_raw or as_of
         re_ = o.get("realtime_end") or _FAR_FUTURE
         # 방어: 서버가 as_of 이후 공표분을 섞어 보내더라도 여기서 잘라낸다.
         if rs > as_of:
             continue
+        # ★빈티지가 없는 행에 빈티지를 지어내지 않는다★
+        # 예전에는 realtime_start 가 없으면 as_of 로 채워 `vintage_id` 를 만들었다. 그러면
+        # `has_vintage` 가 참이 되고 `lag_known` 도 (as_of >= 관측기간이라) 참이 되어,
+        # **빈티지 정보가 전혀 없는 응답이 backtest_eligible 로 인증된다.** 게이트가 거짓말을
+        # 하는 것이라 Phase 8b 에서 고쳤다. 값 자체는 버리지 않는다 — 전방 연구에는 쓸 수 있고,
+        # 빈 vintage_id/release_timestamp 가 `derive_usage` 를 통해 등급을 낮춘다.
         out.append(MacroObservation(
             series_id=series_id,
             observation_period=o.get("date", ""),
-            release_timestamp=rs,
-            vintage_id=f"{rs}..{re_}",
+            release_timestamp=rs_raw or "",
+            vintage_id=f"{rs}..{re_}" if rs_raw else "",
             retrieved_at=retrieved,
             value=value,
             data_status=DataStatus.REAL,

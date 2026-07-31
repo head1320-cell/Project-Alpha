@@ -391,40 +391,44 @@ def _unavailable(factor_id: str, detail: str) -> FactorReading:
                          DataStatus.UNAVAILABLE, None, detail)
 
 
-def read_curve_slope(
+def _read_macro_series(
+    factor_id: str,
+    series_id: str,
     as_of: str,
     *,
-    series_id: str | None = None,
     api_key: str | None = None,
     start: str | None = None,
 ) -> FactorReading:
-    """장단기 금리차 — **as_of 시점에 알 수 있었던 빈티지만** 본다.
+    """시점 기반 매크로 시리즈 1건 읽기 — 개정되는 시리즈의 **공용** 리더.
 
-    이 팩터가 Phase 1 의 `fetch_observations` 첫 생산 소비자다. 개정 이력이 있는 시리즈라서
-    `realtime_start=realtime_end=as_of` 로 고정하지 않으면 오늘 개정판이 새고, 그러면
-    과거 성과가 "그때는 알 수 없던 값" 으로 부풀려진다.
+    `curve_slope`(Phase 7) · `indicator` · `financial_conditions`(Phase 8b) 가 공유한다.
+    세 벌로 복제하면 그중 하나만 고쳐지는 날이 오고, 그 하나는 조용히 오늘 개정판을 읽는다.
 
-    usage 는 손으로 지정하지 않고 관측치에서 **파생**한다:
+    ★usage 는 손으로 지정하지 않고 관측치에서 파생한다★
       · has_vintage — 모든 관측치가 빈티지 식별자를 갖는가
       · depth_ok    — 요청한 start 를 이력이 덮는가
       · lag_known   — 공표시각이 관측기간 이후인가(=공표지연이 실제로 관측되었는가)
+    손으로 `backtest_eligible` 을 넣으면 게이트가 거짓말을 한다.
 
-    `FRED_API_KEY` 가 없으면 빈 결과 → unavailable. 이 환경의 기본 상태이며 **정상 동작**이다.
+    키가 없거나 호출이 실패하면 **unavailable**. 0 으로 대체하지 않는다 — 0 은 값이 없다는
+    뜻이 아니라 "지표가 0" 이라는 판단이 된다.
     """
-    sid = series_id or str(
-        (CATALOG_BY_ID.get(CURVE_SLOPE_FACTOR_ID, {}).get("params") or {}).get(
-            "series_id") or CURVE_SLOPE_SERIES)
-    obs = fetch_observations(sid, as_of, api_key=api_key, start=start)
+    try:
+        obs = fetch_observations(series_id, as_of, api_key=api_key, start=start)
+    except Exception as e:
+        # 레이트리밋·네트워크 오류가 예외로 새어나가면 팩터 하나 때문에 창 전체가 죽는다.
+        return _unavailable(factor_id, f"{series_id} 조회 실패({e.__class__.__name__}). "
+                                       f"as_of={as_of}. 0 으로 대체하지 않습니다.")
     if not obs:
         return _unavailable(
-            CURVE_SLOPE_FACTOR_ID,
-            f"{sid} 관측치를 얻지 못했습니다(키 미설정·구간 내 값 없음·호출 실패). "
-            f"as_of={as_of}. 0 으로 대체하지 않습니다 — 0 은 '기울기 0' 이라는 판단이 됩니다.",
+            factor_id,
+            f"{series_id} 관측치를 얻지 못했습니다(키 미설정·구간 내 값 없음·호출 실패). "
+            f"as_of={as_of}. 0 으로 대체하지 않습니다 — 0 은 '지표가 0' 이라는 판단이 됩니다.",
         )
 
     latest = latest_vintage_per_period(obs)
     if not latest:
-        return _unavailable(CURVE_SLOPE_FACTOR_ID, f"{sid} 빈티지 정리 후 남은 관측치가 없습니다.")
+        return _unavailable(factor_id, f"{series_id} 빈티지 정리 후 남은 관측치가 없습니다.")
     current = max(latest, key=lambda o: o.observation_period)
 
     has_vintage = all(bool(o.vintage_id) for o in obs)
@@ -435,15 +439,78 @@ def read_curve_slope(
     depth_ok = (earliest <= start) if start else True
 
     usage = derive_usage(has_vintage=has_vintage, depth_ok=depth_ok, lag_known=lag_known)
-    detail = (f"{sid} {current.observation_period} = {current.value} "
+    detail = (f"{series_id} {current.observation_period} = {current.value} "
               f"(빈티지 {current.vintage_id}, 공표 {current.release_timestamp})")
     if usage is not ResearchUsage.BACKTEST_ELIGIBLE:
         missing = [n for n, ok in (("빈티지", has_vintage), ("이력 길이", depth_ok),
                                    ("공표지연", lag_known)) if not ok]
         detail += f" · 과거 시뮬레이션 부적격: {', '.join(missing)} 미충족"
 
-    return FactorReading(CURVE_SLOPE_FACTOR_ID, current.value, usage,
-                         current.data_status, current, detail)
+    return FactorReading(factor_id, current.value, usage, current.data_status, current, detail)
+
+
+#: `indicator` 가 시리즈를 지정하지 않았을 때의 기본값. VIX 는 개정되지 않지만 경로는 같다.
+DEFAULT_INDICATOR_SERIES = "VIXCLS"
+#: 금융환경지수 — **주간이고 개정된다**(스펙 §6.1). 빈티지 경로가 아니면 쓸 수 없다.
+FINANCIAL_CONDITIONS_FACTOR_ID = "financial_conditions"
+FINANCIAL_CONDITIONS_SERIES = "NFCI"
+
+
+def read_macro_indicator(
+    as_of: str,
+    *,
+    series_id: str | None = None,
+    api_key: str | None = None,
+    start: str | None = None,
+) -> FactorReading:
+    """매크로 지표 임계 팩터(`indicator`) — 시리즈를 파라미터로 받는 범용 읽기.
+
+    ★이 리더가 없던 동안 `indicator` 는 V2 경로에서 영원히 unavailable 이었다★
+    카탈로그에는 있는데 `evaluate()` 분기도 리더도 없어서, 사용자에겐 "데이터가 없다" 로
+    보였지만 실제로는 배선이 없는 것이었다(Phase 8 의 무결성 테스트가 발견). 레거시 카나리
+    경로에서만 동작했고, 그 경로는 지금도 그대로다.
+    """
+    return _read_macro_series(
+        "indicator", series_id or DEFAULT_INDICATOR_SERIES, as_of,
+        api_key=api_key, start=start)
+
+
+def read_financial_conditions(
+    as_of: str,
+    *,
+    api_key: str | None = None,
+    start: str | None = None,
+) -> FactorReading:
+    """금융환경지수(NFCI) — 양수면 긴축, 음수면 완화. 완화 쪽이 위험-온.
+
+    ★주간이고 **개정된다**★ 스펙 §6.1 이 이 시리즈에 빈티지를 요구하는 이유이고,
+    오늘 개정판으로 과거를 채점하면 그 시점에 알 수 없던 정보를 쓰는 것이 된다.
+    """
+    return _read_macro_series(
+        FINANCIAL_CONDITIONS_FACTOR_ID, FINANCIAL_CONDITIONS_SERIES, as_of,
+        api_key=api_key, start=start)
+
+
+def read_curve_slope(
+    as_of: str,
+    *,
+    series_id: str | None = None,
+    api_key: str | None = None,
+    start: str | None = None,
+) -> FactorReading:
+    """장단기 금리차 — **as_of 시점에 알 수 있었던 빈티지만** 본다.
+
+    이 팩터가 Phase 1 의 `fetch_observations` 첫 생산 소비자였다. 개정 이력이 있는 시리즈라서
+    `realtime_start=realtime_end=as_of` 로 고정하지 않으면 오늘 개정판이 새고, 그러면
+    과거 성과가 "그때는 알 수 없던 값" 으로 부풀려진다.
+
+    Phase 8b 에서 읽기 본체를 `_read_macro_series` 로 올렸다 — `indicator`·NFCI 가 같은
+    의미론을 필요로 하는데, 세 벌로 복제하면 그중 하나만 고쳐지는 날이 온다.
+    """
+    sid = series_id or str(
+        (CATALOG_BY_ID.get(CURVE_SLOPE_FACTOR_ID, {}).get("params") or {}).get(
+            "series_id") or CURVE_SLOPE_SERIES)
+    return _read_macro_series(CURVE_SLOPE_FACTOR_ID, sid, as_of, api_key=api_key, start=start)
 
 
 def read_price_factor(
@@ -494,10 +561,26 @@ def read_factor(
     if requires_as_of(factor_id):
         if not as_of:
             return _unavailable(factor_id, f"{factor_id} 는 as_of 시점이 필요합니다.")
+        p = params or {}
         if factor_id == CURVE_SLOPE_FACTOR_ID:
-            return read_curve_slope(as_of, start=(params or {}).get("start"),
-                                    series_id=(params or {}).get("series_id"))
+            return read_curve_slope(as_of, start=p.get("start"),
+                                    series_id=p.get("series_id"))
+        if factor_id == FINANCIAL_CONDITIONS_FACTOR_ID:
+            return read_financial_conditions(as_of, start=p.get("start"))
         return _unavailable(factor_id, f"{factor_id} 의 시점 기반 읽기가 아직 구현되지 않았습니다.")
+    # ★`indicator` 는 as_of 가 있을 때만 시점 기반으로 읽는다★
+    # `requires_as_of` 를 붙이면 팩터 창이 "추가 불가" 로 막아 기존 흐름이 사라지므로
+    # 플래그 대신 여기서 분기한다. as_of 가 없으면 값을 지어내지 않고 사유와 함께 결측이다
+    # (레거시 카나리 경로는 이 함수를 지나지 않으므로 영향받지 않는다).
+    if factor_id == "indicator":
+        pp = params or {}
+        if as_of:
+            return read_macro_indicator(as_of, start=pp.get("start"),
+                                        series_id=pp.get("series_id"))
+        return _unavailable(
+            factor_id, "indicator 는 시점(as_of)이 있어야 빈티지 기준으로 읽을 수 있습니다. "
+                       "0 으로 대체하지 않습니다.")
+
     if not ticker:
         return _unavailable(factor_id, f"{factor_id} 는 평가 대상 티커가 필요합니다.")
     return read_price_factor(factor_id, ticker, market, params)

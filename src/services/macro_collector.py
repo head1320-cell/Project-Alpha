@@ -225,6 +225,9 @@ FRED_INDICATORS = {
     "DGS30":      {"name": "T30Y (30년물)",      "unit": "%"},
     "T10Y2Y":     {"name": "T10Y-T2Y Spread",   "unit": "%p"},
     "VIXCLS":     {"name": "VIX",                "unit": "지수"},
+    # Phase 8b — 스펙 §6.1/§6.2
+    "VXVCLS":     {"name": "VIX 3개월(VXV)",     "unit": "지수"},
+    "NFCI":       {"name": "금융환경지수(NFCI)", "unit": "지수"},
     "DTWEXBGS":   {"name": "DXY (광역지수)",     "unit": "지수"},
     "CPIAUCSL":   {"name": "US CPI",             "unit": "지수"},
     "BAMLH0A0HYM2": {"name": "HY Credit Spread", "unit": "%p"},

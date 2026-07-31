@@ -41,6 +41,8 @@ EXPECTED = {
     "rolling_correlation": "day",   # daily_closes_indexed 2종
     "kospi_kosdaq_rs": "month",     # monthly_closes 2종 (ETF 프록시)
     "usdkrw_trend": "month",        # monthly_closes 1종 (ETF 프록시)
+    # ── Phase 8b ──
+    "financial_conditions": "week", # NFCI 는 주간 공표(그리고 개정된다)
 }
 
 
@@ -112,7 +114,14 @@ def test_as_of_requirement_reaches_the_catalogue_payload():
     seen = {f["id"]: f.get("requires_as_of", False)
             for g in catalog()["groups"] for f in g["factors"]}
     assert seen["curve_slope"] is True
-    assert [k for k, v in seen.items() if v] == ["curve_slope"], (
+    # Phase 8b: NFCI 추가. **의도적으로 as_of 팩터다** — 레거시 경로가 없으므로 카나리로
+    # 담으면 값이 영원히 없는 규칙이 된다. 그래서 창에서 "추가 불가" 로 막는 것이 맞다.
+    # (반대로 `indicator` 는 레거시 카나리 경로가 살아 있어 플래그를 붙이지 않았다 —
+    #  붙였다면 지금 되는 흐름이 사라졌을 것이고, 이 트립와이어가 그걸 잡아냈다.)
+    assert seen["financial_conditions"] is True
+    assert seen.get("indicator", False) is False, (
+        "indicator 에 플래그가 붙으면 팩터 창에서 추가할 수 없게 된다(기존 기능 제거)")
+    assert sorted(k for k, v in seen.items() if v) == ["curve_slope", "financial_conditions"], (
         "as_of 팩터가 늘어나면 UI 게이트도 함께 확인할 것"
     )
 
@@ -121,6 +130,7 @@ def test_as_of_factors_are_not_reachable_through_the_canary_evaluator():
     """★플래그와 실제 동작이 일치하는가★ — 평가되면 플래그가 거짓말이고, 그 반대도 문제다."""
     from src.engine.timing_factors import evaluate
     assert evaluate("curve_slope", "SPY", "kr", {}) is None
+    assert evaluate("financial_conditions", "SPY", "kr", {}) is None
 
 
 def test_rebalance_field_is_part_of_the_declared_schema():
