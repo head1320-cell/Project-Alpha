@@ -21,7 +21,7 @@ import {
   allocationApi, frequencyLabel, frequencyVerdict, frequencyWarningText,
   type CanaryInput, type CanarySignalType, type TimingFactorMeta,
 } from "@/entities/allocation";
-import { CatalogueShell, type CatalogueItem } from "@/features/catalogue-shell/CatalogueShell";
+import { CatalogueShell, type CatalogueItem } from "@/shared/ui/CatalogueShell";
 import { TimingFactorPreview } from "./TimingFactorPreview";
 
 /** 미리보기 구간 — 24개월이면 전환을 몇 번 보기에 충분하고 호출도 24회로 끝난다. */

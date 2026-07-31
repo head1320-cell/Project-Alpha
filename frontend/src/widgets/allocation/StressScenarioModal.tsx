@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { allocationApi, MODEL_TYPE_SHORT, type StressScenarioItem } from "@/entities/allocation/api";
-import { CatalogueShell, type CatalogueItem } from "@/features/catalogue-shell/CatalogueShell";
+import { CatalogueShell, type CatalogueItem } from "@/shared/ui/CatalogueShell";
 
 /** 도메인 항목 → 셸이 아는 최소 표면. 셸이 StressScenarioItem 을 알 필요가 없다. */
 function toCatalogueItem(i: StressScenarioItem): CatalogueItem {

@@ -2,6 +2,13 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogueShell — 카탈로그 선택 창의 단일 셸 (Phase 6, 스펙 §8.1)
 //
+// ★왜 shared/ui 인가 (Phase 11c)★
+// 원래 `features/catalogue-shell` 에 있었다. 네 번째 창인 팩터 픽커가 `features/factor-picker`
+// 라서, 셸을 features 에 두면 **같은 계층 슬라이스끼리의 import** 가 되어 FSD 가드레일이
+// 막는다(실측: `import/no-restricted-paths` 에러 1건). 규칙이 안내하는 대로 shared 로 내렸다 —
+// 셸은 이미 도메인 타입을 하나도 모르므로 원래 이 자리가 맞았고, '네 창이 한 셸을 쓴다' 는
+// §8.1 의 주장이 구조로도 참이 된다.
+//
 // 무엇을 없애는가
 // ─────────────────────────────────────────────────────────────────────────────
 // StressScenarioModal(126줄)과 AlphaFactorModal(140줄)은 **구조가 사실상 동일**했다:
@@ -36,7 +43,7 @@ import { useFocusTrap } from "@/shared/lib/useFocusTrap";
 import {
   deletePreset, listPresets, savePreset,
   type CataloguePreset, type PresetNamespace,
-} from "./cataloguePresets";
+} from "@/shared/lib/cataloguePresets";
 
 /** 좌측 목록 한 줄. 도메인 타입을 셸이 알지 않도록 최소 표면만 받는다. */
 export interface CatalogueItem {

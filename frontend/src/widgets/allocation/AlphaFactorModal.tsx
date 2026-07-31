@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { alphaApi, type AlphaCatalogItem } from "@/entities/alpha/api";
-import { CatalogueShell, type CatalogueItem } from "@/features/catalogue-shell/CatalogueShell";
+import { CatalogueShell, type CatalogueItem } from "@/shared/ui/CatalogueShell";
 
 /** 도메인 항목 → 셸이 아는 최소 표면. */
 function toCatalogueItem(i: AlphaCatalogItem): CatalogueItem {

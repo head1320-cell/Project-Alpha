@@ -736,8 +736,62 @@ Phase 0–10 이 끝난 뒤 §§1–10 을 코드와 대조했다. **개수는 �
 **E2E 스펙 수정 0건**. 마지막 항목이 이 단계의 진짜 게이트다 — 순수 리팩터링의 유일한 증거는
 "아무것도 움직이지 않았다" 이고, 선택자를 하나라도 고쳐야 통과한다면 동작이 바뀐 것이다.
 
+### Phase 11c — `FactorPickerModal` → CatalogueShell (§8.1 의 마지막 창)
+
+**계획된 매핑은 대체로 맞았고, 세 군데가 틀렸다. 전부 실측으로 드러났다.**
+
+#### 드리프트 1 — 안전망이 이전을 넘기지 못했다 (사용자 판단: 단계 제거 + 재작성)
+
+6c 가 깐 `e2e/factor-picker.spec.ts` 는 "동작으로 단정하니 셸로 옮긴 뒤에도 그대로 게이트가
+된다" 고 적었지만, 6개 중 **4개가 2단계 모델 자체**를 단정하고 있었다(`STEP2 함수 선택`
+버튼의 disabled/enabled · `다음 단계` · `이전 단계` · `STEP1 팩터 선택`). 단계를 없애는
+변경 앞에서 그건 그물이 아니라 걸림돌이다. 단계를 제거하고 4개를 **단일 화면 기준의 동등한
+단언**으로 다시 썼으며, 그물은 6 → **10개**로 늘렸다(중첩 출력·포커스 트랩·개수 노출 추가).
+
+#### 드리프트 2 — 셸에 자리가 없는 능력 3가지 (사용자 판단: 셸을 확장해 전부 보존)
+
+카테고리 13 → 그룹 42 의 2단 위계 · 카테고리별 지원 개수 `n/m` · `tone`. 셸에 선택적
+`groupLabel` · `countLabel` · `styleVars` 를 먼저 더한 뒤 창을 옮겼다(커밋 `f3dbe1f`).
+기존 세 창은 아무것도 넘기지 않으므로 렌더가 동일하다. `countLabel` 이라는 이름은
+`StressScenarioModal` 이 이미 `count: number` 를 달고 있어서다(실측: tsc TS2322).
+
+#### 드리프트 3 — FSD 가 이전 자체를 막았다 (계획에 없던 항목)
+
+`features/factor-picker` 가 `features/catalogue-shell` 을 import 하는 것은 **같은 계층
+슬라이스 간 import** 라 Step 2b 의 가드레일이 막는다(실측: `import/no-restricted-paths`
+에러 1건). 규칙 메시지가 안내하는 대로 셸을 shared 로 내렸다 —
+`shared/ui/CatalogueShell.tsx` · `shared/lib/cataloguePresets.ts`. 셸은 이미 도메인 타입을
+하나도 모르므로 원래 이 자리가 맞았고, "네 창이 한 셸을 쓴다" 는 §8.1 의 주장이 구조로도
+참이 된다. 가드레일에 예외를 뚫는 선택지는 취하지 않았다 — 그러면 규칙이 규칙이 아니게 된다.
+(부수 발견: `cataloguePresets` 는 배럴에 못 넣는다. `screenerPresets` 가 `savePreset` 등
+같은 이름을 이미 내보낸다 — 실측 tsc TS2308 3건. 둘은 다른 저장소이고 합칠 물건이 아니다.)
+
+#### ADR 001 번들 게이트 — 걸렸고, 되돌리는 대신 고쳤다
+
+셸이 shadcn/Radix ToggleGroup 을 끌고 오면서 첫 로드가 `/backtest` 134 → **151 kB**,
+`/screener` 122 → **138 kB** 로 뛰었다. ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다
+(6c 의 Radix 시도가 +20 kB 로 되돌려진 전례가 이 계획에 적혀 있다). **기본이 '닫힘' 인 창은
+첫 로드에 있을 이유가 없다** — 두 소비자에서 `next/dynamic` 으로 바꿨다. 결과는 기준선보다
+**낮다**: `/backtest` **128 kB**(−6) · `/screener` **110 kB**(−12).
+
+#### 잃은 것 · 바뀐 것
+
+`FactorPick` 출력 계약은 한 필드도 바뀌지 않았다. 미지원 사유는 `title=` 툴팁에서 **목록 행**
+으로 옮겼다(나머지 세 창이 의도적으로 지키는 규칙). 대체 제안 칩 중 카탈로그에 없는 이름은
+이제 **비활성**이다 — 눌러도 아무 일이 없던 이전 동작은 사용자가 자기 조작을 의심하게 만든다.
+
+| 변이 | 결과 |
+|---|---|
+| 방출되는 `FactorPick` 에서 `innerFunctionId` 제거 | 중첩 E2E 실패 ✅ |
+| 미지원 토큰을 `available: true` 로 표시 | 미지원 정직성 E2E 실패 ✅ |
+| 슬라이스 간 import (11b 가드레일) | eslint 1 error ✅ |
+
+**게이트(실측):** pytest **1487 / 10 skipped**(불변) · tsc 0 · eslint 0 error(경고 28) ·
+`next build` exit 0 · 첫 로드 두 라우트 모두 기준선 이하 · factor-picker **10 passed**.
+
 ### Deferred
 ~~`AllocationProvider` splits into slices~~ — Phase 11b 에서 소화(위 참조).
+§8.1 의 네 창은 Phase 11c 로 **전부** 한 셸 위에 있다.
 
 ---
 

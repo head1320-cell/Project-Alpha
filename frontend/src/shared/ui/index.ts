@@ -5,6 +5,8 @@
 // (실측: /derivatives 가 5.99 → 8.38 kB). **발견은 이 배럴로, import 는 필요한 모듈에서** 하세요.
 //   예) import { PageHeader } from "@/shared/ui/primitives";
 // kit: 이름 충돌로 배럴 제외 — `@/shared/ui/kit` 로 직접 import
+// CatalogueShell: 배럴 제외 — 셸 하나로 무게가 있고(shadcn ToggleGroup 포함) 이걸 안 쓰는
+// 화면까지 끌려온다. `@/shared/ui/CatalogueShell` 로 직접 import 하세요.
 export * from "./MiniViz";
 export * from "./feedback";
 export * from "./primitives";

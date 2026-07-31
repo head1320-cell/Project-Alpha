@@ -9,7 +9,14 @@
 
 import { useState } from "react";
 import { Plus, X, Delete, Hash } from "lucide-react";
-import FactorPickerModal, { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
+import dynamic from "next/dynamic";
+import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
+// ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 팩터 창이 CatalogueShell 로 옮겨가며
+// shadcn/Radix ToggleGroup 을 끌고 오는데, 정적 import 로 두면 그 무게가 이 라우트의 첫
+// 로드에 그대로 실린다(실측: +17 kB). ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다 —
+// 되돌리는 대신 **필요할 때 가져온다**. 타입은 값이 아니므로 위 import 는 런타임에 남지 않는다.
+const FactorPickerModal = dynamic(
+  () => import("@/features/factor-picker/FactorPickerModal"), { ssr: false });
 import { renderTermExpr, termLabel } from "@/entities/backtest/factorFunctions";
 import { TONES, type Tone } from "@/shared/ui/kit";
 
@@ -84,7 +91,9 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
         {tokens.map((tk, i) => {
           if (tk.t === "factor") {
             return (
-              <span key={i} style={{
+              // `fb-chip` 은 스타일이 아니라 **E2E 계약**이다 — 팩터 창이 실제로 무엇을
+              // 넘겼는지(특히 눈에 잘 안 띄는 중첩) 확인할 수 있는 유일한 지점이 이 칩이다.
+              <span key={i} className="fb-chip" style={{
                 display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--bs-font-mono)",
                 fontSize: 13, color: accent.text, background: accent.bg, border: `1px solid ${accent.accent}`,
                 borderRadius: R, padding: "4px 7px", maxWidth: "100%",

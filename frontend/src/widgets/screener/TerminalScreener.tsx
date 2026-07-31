@@ -18,7 +18,14 @@ import { verdictColor } from "@/shared/lib/format";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";
 import { parseExpr, materialize, type ExprNode } from "@/shared/lib/exprParser";
-import FactorPickerModal, { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
+import dynamic from "next/dynamic";
+import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
+// ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 팩터 창이 CatalogueShell 로 옮겨가며
+// shadcn/Radix ToggleGroup 을 끌고 오는데, 정적 import 로 두면 그 무게가 이 라우트의 첫
+// 로드에 그대로 실린다(실측: +17 kB). ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다 —
+// 되돌리는 대신 **필요할 때 가져온다**. 타입은 값이 아니므로 위 import 는 런타임에 남지 않는다.
+const FactorPickerModal = dynamic(
+  () => import("@/features/factor-picker/FactorPickerModal"), { ssr: false });
 
 const OP_LABEL: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
 // 조건식 기본값 — 추가된 팩터 전부 AND ("팩터1 and 팩터2 and ...")
