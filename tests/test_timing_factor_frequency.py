@@ -45,6 +45,7 @@ EXPECTED = {
     "financial_conditions": "week", # NFCI 는 주간 공표(그리고 개정된다)
     "vix_term_structure": "day",    # VIXCLS/VXVCLS 일간 종가
     "vix_term_spread": "day",       # 같은 쌍의 스프레드 변형
+    "sector_dispersion": "day",     # 섹터 ETF 일간 종가 횡단면
 }
 
 

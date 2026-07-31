@@ -193,7 +193,13 @@ def load_flows_series(ticker: str, field: str, engine=None) -> pd.Series | None:
 def flows_status(engine=None) -> dict:
     """investor_flows 적재 현황 — 행수/종목수/날짜범위/세부주체 보유. 테이블 없으면 0(정직)."""
     out = {"rows": 0, "tickers": 0, "min_date": None, "max_date": None, "has_detail": False}
-    engine = _get_engine(engine)
+    try:
+        # ★엔진 생성 자체가 던질 수 있다★ (드라이버 미설치 등) — 그 경우도 "적재 0" 이라는
+        # 정직한 답이지 500 이 아니다. 이 줄이 try 밖에 있어서 상태 조회 엔드포인트가
+        # psycopg2 없는 환경에서 통째로 실패했다(Phase 8b 에서 발견).
+        engine = _get_engine(engine)
+    except Exception:
+        return out
     if engine is None:
         return out
     try:

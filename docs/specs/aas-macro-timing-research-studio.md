@@ -355,6 +355,7 @@ correlation · Korea set (KOSPI/KOSDAQ relative strength, sector dispersion, USD
 > 없기 때문이다. `stock_master.get_stock_sector()` 는 종목→섹터 **이름**만 주고, 섹터별
 > 가격 이력은 어디에도 없다. 섹터 ETF 바스켓으로 근사할 수는 있으나 그건 새 데이터 매핑을
 > 들이는 일이라 8b 의 소관이다. 나머지 Phase-1 팩터 12종은 Phase 8 에서 구현했다.
+> **→ Phase 8b 에서 `sector_dispersion` 으로 구현 완료** (섹터 ETF 바스켓, 프록시임을 명시).
 >
 > **KOSPI/KOSDAQ 상대강도와 원/달러 추세는 ETF 프록시로 구현했다.** KOSDAQ 은 수집
 > 시리즈가 없고 KOSPI·원달러는 ECOS 라 vintage 가 없다(위 표의 `forward_only`).
@@ -371,6 +372,11 @@ New routers rather than growing the 70 KB `allocation_routes.py`; registered in
 - `src/api/regime_snapshot_routes.py` — create / get / list / compare snapshots
 - `src/api/timing_routes.py` — catalogue, preview, evaluate, compare, historical simulation,
   rule-set CRUD
+  > **미구현 (Phase 8b 에서 확인).** 타이밍 엔드포인트는 현재 전부
+  > `allocation_routes.py` 안에 있다. 8b 의 게이트 문구가 참조하는 "historical simulation
+  > 엔드포인트" 도 이 라우터의 일부라 아직 없다 — 8b 는 **엔진 수준**에서
+  > (`rule_set_states(mode="backtest")` → `assert_readings_backtest_eligible`)
+  > forward_only 거부를 검증하고, 라우터 신설은 이후 단계로 재배치했다.
 
 Extended in place: scenario pack save/run/compare (allocation), research-context attach/detach and
 run reproducibility export (research). Contracts are defined from the research workflow — **not**

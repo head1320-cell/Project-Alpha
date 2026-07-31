@@ -313,3 +313,50 @@ def test_both_vix_factors_are_registered_and_declare_as_of():
     for fid in ("vix_term_structure", "vix_term_spread"):
         assert fid in v2.CATALOG_BY_ID
         assert v2.requires_as_of(fid) is True, f"{fid} 는 시점이 필요하다"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. 출처 정직성 표면 (요구 4) — "가져올 수 있다" ≠ "과거 검증에 쓸 수 있다"
+# ═══════════════════════════════════════════════════════════════════════════════
+def _api_client():
+    from fastapi.testclient import TestClient
+
+    from src.app_factory import create_app
+    return TestClient(create_app())
+
+
+def test_flows_status_declares_forward_only_as_a_first_class_field():
+    """★행수만 보여주면 '많으니 백테스트에 써도 되겠다' 로 읽힌다★"""
+    with _api_client() as c:
+        body = c.get("/api/v1/symbols/flows/status").json()
+    assert body["research_usage"] == "forward_only"
+    assert "빈티지" in body["research_usage_reason"]
+    assert "data_status" in body
+
+
+def test_source_honesty_lists_every_source_with_both_axes():
+    """등급 두 축(출처 상태 · 연구 용도)이 각각 있어야 한다 — 합치면 구별이 사라진다."""
+    with _api_client() as c:
+        body = c.get("/api/v1/data/source-honesty").json()
+    ids = {s["id"] for s in body["sources"]}
+    assert {"etf_prices", "investor_flows", "fred_macro", "ecos_macro"} <= ids
+    for s in body["sources"]:
+        assert s["data_status"] and s["research_usage"] and s["reason"], s["id"]
+
+
+def test_ecos_is_never_backtest_eligible():
+    """ECOS 는 공개 빈티지 API 가 없다 — 어떤 상태에서도 과거 검증 적격일 수 없다."""
+    with _api_client() as c:
+        body = c.get("/api/v1/data/source-honesty").json()
+    ecos = next(s for s in body["sources"] if s["id"] == "ecos_macro")
+    assert ecos["research_usage"] == "forward_only"
+
+
+def test_mock_mode_downgrades_prices_to_forward_only(monkeypatch):
+    """mock 이 허용되면 값이 합성일 수 있어 실데이터로 인증할 수 없다."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    with _api_client() as c:
+        body = c.get("/api/v1/data/source-honesty").json()
+    etf = next(s for s in body["sources"] if s["id"] == "etf_prices")
+    assert body["mock_mode"] is True
+    assert etf["research_usage"] == "forward_only"

@@ -393,3 +393,46 @@ def test_korea_factors_are_reachable_through_evaluate(fid, monkeypatch):
 def test_usdkrw_trend_reads_dollar_strength_as_risk_off():
     """원화 약세(달러 강세)는 국내 주식에 위험-오프 쪽 — 방향이 below 여야 한다."""
     assert tf.CATALOG_BY_ID["usdkrw_trend"]["default_direction"] == "below"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 8. 섹터 디스퍼전 (Phase 8b — Drift 8-1 로 Phase 8 에서 재배치되어 온 요구)
+#
+# ★섹터 지수 시계열이 없다★ `stock_master.get_stock_sector()` 는 종목→섹터 **이름**만 준다.
+# 그래서 섹터 ETF 바스켓으로 근사하고, 그 사실을 설명에 적는다 — 한국 세트와 같은 규칙이다.
+# ═══════════════════════════════════════════════════════════════════════════════
+def test_sector_dispersion_is_zero_when_every_sector_moves_together(monkeypatch):
+    _patch_daily(monkeypatch, {"A": _rising(300), "B": _rising(300)})
+    v = tf.sector_dispersion(None, "kr", days=20, basket=("A", "B"))
+    assert v == pytest.approx(0.0, abs=1e-9)
+
+
+def test_sector_dispersion_rises_when_sectors_diverge(monkeypatch):
+    _patch_daily(monkeypatch, {"A": _rising(300), "B": _falling(300)})
+    together = tf.sector_dispersion(None, "kr", days=20, basket=("A", "A"))
+    apart = tf.sector_dispersion(None, "kr", days=20, basket=("A", "B"))
+    assert apart > together
+
+
+def test_sector_dispersion_counts_only_sectors_it_could_read(monkeypatch):
+    """읽지 못한 섹터를 0% 수익률로 세면 없는 분산을 만들어낸다."""
+    _patch_daily(monkeypatch, {"A": _rising(300)})       # B 결측
+    assert tf.sector_dispersion(None, "kr", days=20, basket=("A", "B")) is None
+
+
+def test_sector_dispersion_needs_at_least_two_sectors(monkeypatch):
+    """한 섹터로는 분산이 정의되지 않는다 — 0 이 아니라 None."""
+    _patch_daily(monkeypatch, {"A": _rising(300)})
+    assert tf.sector_dispersion(None, "kr", days=20, basket=("A",)) is None
+
+
+def test_sector_dispersion_discloses_that_it_uses_etf_proxies():
+    meta = tf.CATALOG_BY_ID["sector_dispersion"]
+    assert "ETF" in meta["desc"]
+    assert "지수가 아" in meta["desc"] or "프록시" in meta["desc"]
+
+
+def test_sector_dispersion_is_reachable_through_evaluate(monkeypatch):
+    _patch_daily(monkeypatch, {})
+    tf.evaluate("sector_dispersion", "069500", "kr",
+                dict(tf.CATALOG_BY_ID["sector_dispersion"].get("params") or {}))

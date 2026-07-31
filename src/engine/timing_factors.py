@@ -424,6 +424,43 @@ _KOSDAQ_ETF = "229200"      # KODEX 코스닥150
 _KOSPI_ETF = "069500"       # KODEX 200
 _USD_ETF = "261240"         # KODEX 미국달러선물
 
+#: 섹터 디스퍼전용 국내 섹터 ETF 바스켓 (Phase 8b — Drift 8-1 로 Phase 8 에서 재배치).
+#: ★섹터 지수 시계열이 이 코드베이스에 없다★ `stock_master.get_stock_sector()` 는 종목→섹터
+#: **이름**만 주고 섹터별 가격 이력은 어디에도 없다. 그래서 거래되는 섹터 ETF 로 근사한다 —
+#: 추적오차·보수·유동성 차이가 신호에 섞이며, 그건 섹터 지수 간 분산과 같지 않다.
+_KR_SECTOR_ETFS = (
+    "091160",   # KODEX 반도체
+    "091180",   # KODEX 자동차
+    "091170",   # KODEX 은행
+    "266370",   # KODEX 2차전지산업
+    "227540",   # TIGER 200 헬스케어
+)
+
+
+def sector_dispersion(_ticker: str | None = None, market: str = "kr", days: int = 20,
+                      basket: tuple[str, ...] | list[str] | None = None) -> float | None:
+    """섹터 디스퍼전 — 섹터 ETF 들의 N일 수익률 **횡단면 표준편차**(%p).
+
+    값이 크면 섹터가 제각기 움직인다는 뜻(종목 선택이 통하는 국면), 작으면 다 같이 움직인다.
+
+    ★읽지 못한 섹터가 하나라도 있으면 None★ 브레드스와 달리 여기서는 부분 집합으로 계산하면
+    안 된다 — 분산은 **구성원 집합에 의존**하므로, 3개만 읽힌 분산과 5개 분산은 비교할 수 없는
+    다른 수치다. 결측을 0% 수익률로 채우면 있지도 않은 분산을 만들어낸다.
+    분산은 최소 2개 섹터가 필요하다(하나로는 정의되지 않는다 — 0 이 아니라 None).
+    """
+    from src.data.etf_prices import daily_closes
+    names = tuple(basket) if basket else _KR_SECTOR_ETFS
+    if len(names) < 2:
+        return None
+    rets = []
+    for t in names:
+        c = daily_closes(t, market, days + 5)
+        if len(c) < days + 1 or c[-days - 1] <= 0:
+            return None                     # 하나라도 못 읽으면 비교 불가능한 수치가 된다
+        rets.append(c[-1] / c[-days - 1] - 1.0)
+    sd = _stdev(rets)
+    return None if sd is None else sd * 100.0
+
 
 def kospi_kosdaq_rs(_ticker: str | None = None, market: str = "kr", months: int = 6,
                     growth: str = _KOSDAQ_ETF, core: str = _KOSPI_ETF) -> float | None:
@@ -671,6 +708,16 @@ CATALOG: list[dict[str, Any]] = [
                             "★현물 환율 지수가 아니라 ETF 프록시★ — ECOS 원/달러(731Y001)는 "
                             "vintage 가 없어 forward_only 라서 가격 경로를 쓴다.",
      "provenance": "ETF proxy (KODEX 261240)", "existing": False},
+    {"id": "sector_dispersion", "label": "섹터 디스퍼전 (횡단면 표준편차)", "family": "breadth",
+     "evaluation_frequency": "day",
+     "params": {"days": 20}, "default_threshold": 3.0, "default_direction": "above",
+     "unit": "pp", "desc": "국내 섹터 ETF 들의 N일 수익률 횡단면 표준편차(%p). 크면 섹터가 "
+                           "제각기 움직여 종목 선택이 통하는 국면, 작으면 다 같이 움직인다. "
+                           "★섹터 지수가 아니라 ETF 프록시★ — 이 코드베이스에 섹터 지수 "
+                           "시계열이 없어 거래되는 ETF 로 근사하며, 추적오차·보수·유동성이 "
+                           "신호에 섞인다. 한 섹터라도 못 읽으면 unavailable(부분 집합으로 낸 "
+                           "분산은 다른 수치라 비교할 수 없다).",
+     "provenance": "ETF proxy (KODEX/TIGER 섹터)", "existing": False},
 ]
 
 CATALOG_BY_ID: dict[str, dict] = {c["id"]: c for c in CATALOG}
@@ -776,6 +823,9 @@ def evaluate(factor_id: str, ticker: str, market: str = "kr",
         if factor_id == "usdkrw_trend":
             return usdkrw_trend(None, market, int(p.get("months", 6)),
                                 str(p.get("proxy", _USD_ETF)))
+        if factor_id == "sector_dispersion":
+            return sector_dispersion(None, market, int(p.get("days", 20)),
+                                     p.get("basket"))
         # 기존 프리미티브 위임
         from src.engine.tactical_allocations import (
             _above_ma_d,

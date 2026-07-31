@@ -52,7 +52,7 @@ uv-isolated tool without numpy → 71 spurious collection errors.
 | 7b | **Macro overlay semantics** (restored) + `regime_conditioned` | both | ✅ `e6e05c1` `8ef491f` `e695ecc` |
 | 7c | Rule-version display in `ContextStrip` (§4 item ⑨) | **frontend** | ✅ `8c8db18` |
 | 8 | Factor catalogue breadth | backend | ✅ (이번 커밋) |
-| 8b | Data-source extension (NFCI · VXVCLS) | backend | |
+| 8b | Data-source extension (NFCI · VXVCLS) | backend | ✅ (이번 커밋) |
 | 9 | `ScenarioPackV2` | both | |
 | 10 | Stage wiring (Optimize · Attribution · Execution · Journal) | both | |
 

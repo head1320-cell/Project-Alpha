@@ -430,11 +430,80 @@ def symbol_status():
 
 @router.get("/api/v1/symbols/flows/status")
 def symbols_flows_status():
-    """investor_flows 수급 적재 현황 — 행수/종목수/날짜범위/세부주체 + 실행중 여부."""
+    """investor_flows 수급 적재 현황 — 행수/종목수/날짜범위/세부주체 + 실행중 여부.
+
+    ★연구 등급을 1급 필드로 함께 내려보낸다★ (스펙 §6.1 · Phase 8b)
+    행수만 보면 "데이터가 많으니 백테스트에 써도 되겠다" 로 읽힌다. 실제로는 KIS TR 이
+    약 30영업일만 돌려주고 빈티지도 없어서 **과거 시뮬레이션에는 쓸 수 없다**(`forward_only`).
+    그 사실이 화면에 없으면 사용자는 알 수 없고, 알 수 없으면 쓴다.
+    """
     from src.data.kis_flows import flows_status
+    from src.data.mock_gate import mock_allowed
+    from src.data.pit_macro import DataStatus, ResearchUsage
     st = flows_status()
     st["krx_backfill_running"] = _FLOWS_BACKFILL_RUNNING["krx"]
+    st["research_usage"] = ResearchUsage.FORWARD_ONLY.value
+    st["research_usage_reason"] = (
+        "KIS TR 은 약 30영업일만 제공하고 개정 이력(빈티지)이 없습니다. "
+        "전방 리서치 맥락으로만 쓰이며 과거 시뮬레이션에서는 차단됩니다. "
+        "KRX 백필로 이력을 채워도 빈티지가 생기는 것은 아닙니다."
+    )
+    st["data_status"] = (DataStatus.MOCK if mock_allowed() else DataStatus.REAL).value
     return st
+
+
+@router.get("/api/v1/data/source-honesty")
+def data_source_honesty():
+    """데이터 출처별 연구 등급 한눈에 — 스펙 §6.1 표를 화면이 그대로 그릴 수 있게.
+
+    ★"가져올 수 있다" 와 "과거 검증에 쓸 수 있다" 는 다른 축이다★ (스펙 §3.5)
+    둘을 한 칸에 합치면 사용자는 조회되는 모든 것을 백테스트에 쓸 수 있다고 읽는다.
+    """
+    import os
+
+    from src.data.kis_flows import flows_status
+    from src.data.mock_gate import mock_allowed
+    from src.data.pit_macro import DataStatus, ResearchUsage
+
+    mock = mock_allowed()
+    fred_key = bool(os.getenv("FRED_API_KEY"))
+    fl = flows_status()
+    return {
+        "mock_mode": mock,
+        "sources": [
+            {
+                "id": "etf_prices", "label": "ETF·주가 (일봉)",
+                "data_status": (DataStatus.MOCK if mock else DataStatus.REAL).value,
+                "research_usage": (ResearchUsage.FORWARD_ONLY if mock
+                                   else ResearchUsage.BACKTEST_ELIGIBLE).value,
+                "reason": ("KIS_USE_MOCK=1 — 값이 합성일 수 있어 실데이터로 인증하지 않습니다."
+                           if mock else
+                           "일봉 OHLCV 는 매크로처럼 개정되지 않습니다."),
+            },
+            {
+                "id": "investor_flows", "label": "투자자 수급 (KIS)",
+                "data_status": (DataStatus.MOCK if mock else DataStatus.PARTIAL).value,
+                "research_usage": ResearchUsage.FORWARD_ONLY.value,
+                "reason": "KIS TR 은 약 30영업일만 제공하고 빈티지가 없습니다.",
+                "rows": fl.get("rows", 0), "max_date": fl.get("max_date"),
+            },
+            {
+                "id": "fred_macro", "label": "FRED 매크로 (ALFRED 빈티지)",
+                "data_status": (DataStatus.REAL if fred_key else DataStatus.UNAVAILABLE).value,
+                "research_usage": (ResearchUsage.BACKTEST_ELIGIBLE if fred_key
+                                   else ResearchUsage.UNAVAILABLE).value,
+                "reason": ("realtime_start/end 로 빈티지를 고정해 그 시점 값만 읽습니다."
+                           if fred_key else
+                           "FRED_API_KEY 가 없어 조회할 수 없습니다 — 0 으로 대체하지 않습니다."),
+            },
+            {
+                "id": "ecos_macro", "label": "한국은행 ECOS",
+                "data_status": (DataStatus.MOCK if mock else DataStatus.REAL).value,
+                "research_usage": ResearchUsage.FORWARD_ONLY.value,
+                "reason": "ECOS 는 공개 빈티지 API 가 없어 과거 시점 값을 재구성할 수 없습니다.",
+            },
+        ],
+    }
 
 @router.post("/api/v1/symbols/flows/backfill-krx")
 def symbols_flows_backfill_krx(start: str = "2018-01-01", all_listed: bool = True):

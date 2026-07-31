@@ -149,6 +149,21 @@ export const api = {
       } | null;
     }>("/api/v1/data/db-status"),
 
+  /**
+   * 출처별 연구 등급 (스펙 §6.1 · Phase 8b).
+   * ★"가져올 수 있다" 와 "과거 검증에 쓸 수 있다" 는 다른 축이다★ 두 축을 따로 받는다 —
+   * 합쳐서 보여주면 조회되는 모든 것을 백테스트에 써도 된다고 읽힌다.
+   */
+  sourceHonesty: () =>
+    get<{
+      mock_mode: boolean;
+      sources: {
+        id: string; label: string;
+        data_status: string; research_usage: string; reason: string;
+        rows?: number; max_date?: string | null;
+      }[];
+    }>("/api/v1/data/source-honesty"),
+
   // 적재 소스(DART/KRX/KIS) 실도달 진단 — 각 소스 경량 실호출 1건
   ingestDoctor: () =>
     get<{

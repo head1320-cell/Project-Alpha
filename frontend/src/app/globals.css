@@ -4224,3 +4224,31 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px solid transparent; background: transparent; color: var(--t-muted); cursor: pointer; }
 .tfm-preset-del:hover { color: var(--color-bear); border-color: var(--t-border); }
 .tfm-preset-note { margin-top: 6px; font-size: 9px; line-height: 1.5; color: var(--t-muted); }
+
+/* §37 데이터 출처 · 연구 등급 (Phase 8b) — "가져올 수 있다" ≠ "과거 검증에 쓸 수 있다" */
+.t-honesty { margin: 8px 0 12px; padding: 9px 10px; border-radius: 8px;
+  border: 1px solid var(--t-border); background: var(--t-panel); }
+.t-honesty-h { font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--t-muted); margin-bottom: 7px; }
+.t-honesty-list { list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 5px; }
+.t-honesty-row { display: grid; grid-template-columns: minmax(110px, auto) auto auto 1fr;
+  gap: 8px; align-items: baseline; font-size: 10px; }
+@media (max-width: 760px) { .t-honesty-row { grid-template-columns: 1fr auto auto; } }
+.t-honesty-nm { font-weight: 700; color: var(--t-text); }
+.t-honesty-st, .t-honesty-use { font-size: 9px; font-weight: 700; padding: 2px 6px;
+  border-radius: 999px; white-space: nowrap; }
+.t-honesty-st.s-real { color: var(--color-bull);
+  background: color-mix(in srgb, var(--color-bull) 14%, transparent); }
+.t-honesty-st.s-mock, .t-honesty-st.s-partial { color: var(--t-muted);
+  background: color-mix(in srgb, var(--t-muted) 14%, transparent); }
+.t-honesty-st.s-unavailable { color: var(--color-bear);
+  background: color-mix(in srgb, var(--color-bear) 14%, transparent); }
+/* 과거 검증 적격만 초록 — 전방 전용을 같은 색으로 두면 구별이 사라진다 */
+.t-honesty-use.u-backtest_eligible { color: var(--color-bull);
+  background: color-mix(in srgb, var(--color-bull) 14%, transparent); }
+.t-honesty-use.u-forward_only { color: var(--t-accent);
+  background: color-mix(in srgb, var(--t-accent) 14%, transparent); }
+.t-honesty-use.u-unavailable { color: var(--color-bear);
+  background: color-mix(in srgb, var(--color-bear) 14%, transparent); }
+.t-honesty-why { color: var(--t-muted); line-height: 1.5; }

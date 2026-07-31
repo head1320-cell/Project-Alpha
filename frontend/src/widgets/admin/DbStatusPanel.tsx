@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import SectionHead from "@/shared/ui/SectionHead";
 import { ErrorState, LoadingState } from "@/shared/ui/States";
 import { api } from "@/shared/api/legacyApi";
+import { STATUS_LABEL, USAGE_LABEL, USAGE_REASON } from "@/entities/regime-snapshot/model";
+import type { DataStatus, ResearchUsage } from "@/entities/regime-snapshot/model";
 
 type DbStatus = Awaited<ReturnType<typeof api.dbStatus>>;
 type Cell = number | string | null;
@@ -33,6 +35,8 @@ function period(t: Record<string, Cell>): string {
 
 export default function DbStatusPanel() {
   const [st, setSt] = useState<DbStatus | null>(null);
+  const [honesty, setHonesty] =
+    useState<Awaited<ReturnType<typeof api.sourceHonesty>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -55,6 +59,8 @@ export default function DbStatusPanel() {
     setErr(null);
     try {
       setSt(await api.dbStatus());
+      // 출처 정직성은 실패해도 패널 전체를 죽이지 않는다 — 부가 정보다.
+      try { setHonesty(await api.sourceHonesty()); } catch { setHonesty(null); }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -89,6 +95,31 @@ export default function DbStatusPanel() {
 
   return (
     <div className="tpage-fade">
+      {/* ── 출처별 연구 등급 (스펙 §6.1 · Phase 8b) ──
+          ★"가져올 수 있다" 와 "과거 검증에 쓸 수 있다" 는 다른 축이다★ (§3.5)
+          행수만 보여주면 "많으니 백테스트에 써도 되겠다" 로 읽힌다. 등급을 1급으로 적는다.
+          라벨은 regime-snapshot 모델의 것을 **재사용**한다 — 문구를 새로 지으면 같은 개념이
+          화면마다 다른 말로 불린다. */}
+      {honesty && (
+        <div className="t-honesty">
+          <div className="t-honesty-h">데이터 출처 · 연구 등급</div>
+          <ul className="t-honesty-list">
+            {honesty.sources.map((sc) => (
+              <li key={sc.id} className="t-honesty-row">
+                <span className="t-honesty-nm">{sc.label}</span>
+                <span className={`t-honesty-st s-${sc.data_status}`}>
+                  {STATUS_LABEL[sc.data_status as DataStatus] ?? sc.data_status}
+                </span>
+                <span className={`t-honesty-use u-${sc.research_usage}`}
+                  title={USAGE_REASON[sc.research_usage as ResearchUsage] ?? ""}>
+                  {USAGE_LABEL[sc.research_usage as ResearchUsage] ?? sc.research_usage}
+                </span>
+                <span className="t-honesty-why">{sc.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {/* 슬림 툴바 — 헤더 제거, MODE 배지(mock 거버넌스 정보)와 새로고침만 유지 */}
       <div className="t-toolbar">
         <span className="t-mode-badge" data-real={st?.config?.kis_real ? "1" : "0"}>
