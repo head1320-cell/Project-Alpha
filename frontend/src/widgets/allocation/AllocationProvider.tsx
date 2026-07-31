@@ -179,7 +179,20 @@ interface AllocationCtx {
   timingCfg: TimingConfig;
   setTimingCfg: (next: TimingConfig) => void;
   timingQ: UseQueryResult<TimingResult | null>;
-  applyTiming: () => void;             // 타이밍 결과 배분을 포트폴리오에 적용
+  /**
+   * 타이밍 **권고 배분으로 교체** — 파괴적이다(전략 비중이 사라진다).
+   * ★스펙 §8 이 금지하는 것은 *조용한* 덮어쓰기다★ 이 동작은 사용자가 명시적으로 누르고,
+   * 화면이 "무엇을 교체하는지" 를 먼저 보여준다. 그래서 남긴다 — 위험-오프일 때 권고 배분은
+   * 방어자산(IEF/SHY)으로 **교체**하는 것이라, 노출 배율로는 재현할 수 없는 능력이다.
+   */
+  applyTiming: () => void;
+  /**
+   * 비파괴 타이밍 오버레이 (스펙 §8, Phase 10c). 전략 비중은 **그대로 두고** 노출만 줄인다.
+   * Optimize 가 이것을 명시적 입력으로 받아 before/after 를 보여준다.
+   */
+  timingOverlay: { exposure: number; source: "canary" } | null;
+  applyTimingOverlay: () => void;
+  clearTimingOverlay: () => void;
   timeline: TimelineEvent[];
   logEvent: (msg: string) => void;
   canRun: boolean;
@@ -262,6 +275,8 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   const [scenario, setScenario] = useState<string>("rate_hike_200bp");
   const [scenarioPackId, setScenarioPackId] = useState<string>("rate_hike_200bp");
   const [runPackHash, setRunPackHash] = useState<string | null>(null);
+  const [timingOverlay, setTimingOverlay] =
+    useState<{ exposure: number; source: "canary" } | null>(null);
   const [bump, setBump] = useState(2.0);
   const [severity, setSeverity] = useState(1.0);
   const [timingCfg, setTimingCfgState] = useState<TimingConfig>(DEFAULT_TIMING);
@@ -321,6 +336,12 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
         if (wip.timingCfg && typeof wip.timingCfg === "object") setTimingCfgState(wip.timingCfg);
         if (wip.loadedStrategy && typeof wip.loadedStrategy === "object") setLoadedStrategy(wip.loadedStrategy);
         if (wip.constraints && typeof wip.constraints === "object") setConstraints(wip.constraints);
+        // 오버레이도 새로고침을 견뎌야 한다 — 제약과 같은 성격의 **결정 입력**이고, 사라지면
+        // 사용자는 노출을 줄여 둔 줄 알고 있는데 실제로는 전액 노출로 돌아가 있다.
+        if (wip.timingOverlay && typeof wip.timingOverlay === "object") {
+          const ex = Number((wip.timingOverlay as { exposure?: unknown }).exposure);
+          if (Number.isFinite(ex)) setTimingOverlay({ exposure: Math.max(0, Math.min(1, ex)), source: "canary" });
+        }
       }
     } catch { /* 파싱 실패는 무시 — 빈 상태로 시작 */ }
     setHydrated(true);
@@ -329,9 +350,9 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
   // ── 작업셋 persist (하이드레이트 이후에만 — 하이드레이트 전 빈 상태로 덮어쓰기 방지) ──
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
-    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints })); }
+    try { sessionStorage.setItem(SS_WIP, JSON.stringify({ holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints, timingOverlay })); }
     catch { /* 용량 초과 등 무시 */ }
-  }, [hydrated, holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints]);
+  }, [hydrated, holdings, views, model, delta, tau, timingCfg, loadedStrategy, constraints, timingOverlay]);
 
   // ── 종목명 해소 (초기 구성 시 코드 대신 이름 표시 — 게이트 시드/관심그룹/직접코드 공통) ──
   //   이름이 코드 그대로인 홀딩만 배치 해소 → 이름만 패치(비중·키 불변 → 재분석 없음).
@@ -505,7 +526,28 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     setHoldingsReset(data.holdings
       .filter((h) => h.weight > 0)
       .map((h) => ({ code: h.code, name: h.label || h.code, weight: h.weight })));
-    logEvent(`타이밍 배분 적용 — ${data.canary.signal === "risk_on" ? "위험-온" : "위험-오프"}`);
+    logEvent(`타이밍 권고 배분으로 **교체** — ${data.canary.signal === "risk_on" ? "위험-온" : "위험-오프"}`);
+  };
+
+  /**
+   * 타이밍 판정을 **노출 배율**로만 받아 둔다 — 보유 종목은 손대지 않는다.
+   *
+   * 노출 = 1 − 현금비중. 타이밍이 위험-오프면 권고 배분의 현금이 커지므로 노출이 내려간다.
+   * ★1 을 넘길 수 없다★ 오버레이가 노출을 **키울 수** 있으면 "리스크 관리" 가 조용히
+   * 레버리지가 된다 — `macro_overlay.combine()` 이 매크로 쪽에서 지키는 것과 같은 일방향 규칙.
+   */
+  const applyTimingOverlay = () => {
+    const data = timingQ.data;
+    if (!data || data.error) return;
+    const cash = Number(data.cash_pct ?? 0);
+    const exposure = Math.max(0, Math.min(1, 1 - (Number.isFinite(cash) ? cash : 0) / 100));
+    setTimingOverlay({ exposure, source: "canary" });
+    logEvent(`타이밍 오버레이 적용 — 노출 ${(exposure * 100).toFixed(0)}% (전략 비중 유지)`);
+  };
+
+  const clearTimingOverlay = () => {
+    setTimingOverlay(null);
+    logEvent("타이밍 오버레이 해제");
   };
 
   const setViewsLogged = (next: AllocationViewInput[]) => {
@@ -680,6 +722,7 @@ export function AllocationProvider({ children }: { children: React.ReactNode }) 
     result, scenario, bump, setBump, severity, setSeverity, pickScenario, scenarios,
     scenarioPackId, setScenarioPackId, runPackHash,
     timingCfg, setTimingCfg, timingQ, applyTiming,
+    timingOverlay, applyTimingOverlay, clearTimingOverlay,
     timeline, logEvent,
     canRun, pending: analyzeMut.isPending, lastRun,
     analyzeError: analyzeMut.data?.error ? (analyzeMut.data.message ?? "분석 실패") : null,

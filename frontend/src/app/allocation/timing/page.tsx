@@ -17,7 +17,7 @@ import {
 const parseList = (s: string) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 
 export default function TimingWorkspace() {
-  const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings, loadedStrategy,
+  const { timingCfg, setTimingCfg, timingQ, applyTiming, applyTimingOverlay, holdings, loadedStrategy,
     attachedSnapshotId } = useAllocation();
   const [onText, setOnText] = useState(timingCfg.riskOnAssets.join(", "));
   const [offText, setOffText] = useState(timingCfg.riskOffAssets.join(", "));
@@ -240,7 +240,20 @@ export default function TimingWorkspace() {
         {data && (
           <section className="as-card">
             <div className="as-card-title">권고 배분
-              <button className="as-fb-apply" disabled={!data.holdings.some((h) => h.weight > 0)} onClick={applyTiming}>이 배분 적용 →</button>
+              {/* ★두 동작을 구별해 이름 붙인다★ (스펙 §8, Phase 10c)
+                  오버레이는 전략 비중을 그대로 두고 노출만 줄인다. 교체는 권고 배분으로
+                  **갈아탄다** — 위험-오프면 방어자산(IEF/SHY)이 들어오므로 배율로는 재현할 수
+                  없는 별개의 능력이다. §8 이 금지하는 것은 조용한 덮어쓰기이지 명시적 교체가
+                  아니므로, 남기되 무엇을 하는지 버튼과 안내에 적는다. */}
+              <button className="as-fb-apply as-tm-overlay"
+                disabled={!data.holdings.some((h) => h.weight > 0)} onClick={applyTimingOverlay}>
+                오버레이로 적용 (전략 비중 유지)
+              </button>
+              <button className="as-chip as-tm-replace"
+                disabled={!data.holdings.some((h) => h.weight > 0)} onClick={applyTiming}
+                title="현재 보유 종목·비중을 권고 배분으로 교체합니다 — 되돌리려면 다시 구성해야 합니다">
+                권고 배분으로 교체 →
+              </button>
             </div>
             {data.holdings.filter((h) => h.weight > 0).map((h) => (
               <div key={h.ticker + h.code} className="as-wrow">

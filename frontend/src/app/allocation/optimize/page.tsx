@@ -8,6 +8,7 @@ import {
   AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
 } from "@/widgets/allocation/parts";
 import { NeutralizePanel } from "@/widgets/allocation/NeutralizePanel";
+import { TimingOverlayPanel } from "@/widgets/allocation/TimingOverlayPanel";
 
 function num(v: string): number | null {
   const f = parseFloat(v);
@@ -157,6 +158,7 @@ export default function OptimizerWorkspace() {
           <div className="as-card-title">RETURN DISTRIBUTION <span className="as-note-inline">MC 1년</span></div>
           {result ? <McHistogram mc={result.mc} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
         </section>
+        <TimingOverlayPanel />
         <NeutralizePanel />
       </aside>
       <main className="as-center">

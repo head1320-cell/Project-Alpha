@@ -512,6 +512,25 @@ Attribution, Execution, Journal) follow the brief. Two that drive the most chang
   **never silently overwrites strategic weights**; before/after weights, turnover, concentration,
   beta, factor exposures, and infeasibility reasons are all shown.
 
+  > **✅ Phase 10c.** 이 요구는 **위반되고 있었다** — `applyTiming()` 이 `setHoldingsReset()` 으로
+  > 보유를 통째로 갈아치웠고, 그 동작에는 E2E 가 **하나도 없었다**. 이제 두 동작을 이름과
+  > 클래스로 갈라 둔다:
+  >
+  > | 동작 | 성격 | 클래스 |
+  > |---|---|---|
+  > | 오버레이로 적용 | **비파괴** — 전략 비중 유지, 노출만 축소 | `.as-tm-overlay` |
+  > | 권고 배분으로 교체 | 파괴적 — 위험-오프면 방어자산으로 갈아탄다 | `.as-tm-replace` |
+  >
+  > ★교체를 없애지 않은 이유★ 계획 초안은 "노출 1.0 이면 교체와 같은 결과" 라고 적었으나
+  > **위험-오프에서 거짓**이다(`timing_routes.py` 가 IEF/SHY + BIL 로 **교체**한다 — 배율로는
+  > 재현할 수 없다). §8 이 금지하는 것은 *조용한* 덮어쓰기이고, 명시적 교체는 그것이 아니다.
+  >
+  > Optimize 의 `TimingOverlayPanel` 이 before/after 비중 · 회전율 · 집중도(HHI·유효종목) ·
+  > 제약 비가능 사유를 보인다. 베타·팩터 노출은 **계산한 척하지 않는다** — 균일 배율은
+  > 위험자산 상대 비중을 바꾸지 않으므로 팩터 틸트(z-score)는 불변이고 베타는 노출에 비례해
+  > 축소된다는 산술적 사실만 적는다. 오버레이는 **노출을 키울 수 없다**(일방향) —
+  > `macro_overlay.combine()` 과 같은 규칙이며, 키울 수 있으면 리스크 관리가 레버리지가 된다.
+
 Macro Phase Analysis is an **optional overlay**, not an opaque override. Conflicts are stated in
 plain language — e.g. "추세는 risk-on이지만 매크로 신뢰도가 낮고 금융환경이 긴축적입니다."
 

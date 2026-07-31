@@ -4291,3 +4291,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-rr-rat-row { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: 11px; }
 .as-rr-rat-row em { color: var(--t-muted); font-style: normal; font-weight: 700; }
 .as-rr-rat-row span { color: var(--t-text); line-height: 1.5; }
+
+/* ── 타이밍 오버레이 (Phase 10c, 스펙 §8) ──────────────────────────────────── */
+.as-tov-head { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+.as-tov-head > div { display: flex; flex-direction: column; gap: 2px; }
+.as-tov-head span { font-size: 10px; color: var(--t-muted); }
+.as-tov-head b { font-size: 15px; }
+.as-tov-exp { color: var(--t-accent); }
+.as-tov-table { margin-bottom: 8px; }
+/* 오버레이는 줄이기만 한다 — Δ 는 언제나 0 이하다. */
+.as-tov-d { color: var(--color-bear); }
+.as-tov-conc { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+.as-tov-conc > div { display: flex; flex-direction: column; gap: 2px; }
+.as-tov-conc span { font-size: 10px; color: var(--t-muted); }
+.as-tov-conc b { font-size: 11px; }
+.as-tov-viol { margin: 4px 0 0 14px; padding: 0; }
+.as-tov-off { margin-left: auto; }
+/* 파괴적 교체는 오버레이와 **다르게 보여야** 한다 — 같은 모양이면 같은 일로 읽힌다. */
+.as-tm-replace { border-color: var(--color-bear); color: var(--color-bear); }
