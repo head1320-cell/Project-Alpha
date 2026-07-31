@@ -60,9 +60,30 @@ export interface CatalogueItem {
   unavailableReason?: string;
   /** 검색 대상에 추가할 문자열들 */
   searchExtra?: string[];
+  /**
+   * 목록 안 소제목 (Phase 11c). 카탈로그가 **2단 위계**일 때 쓴다 —
+   * 팩터 창은 카테고리 13개 아래 그룹 42개를 갖고, 그룹 이름이 사라지면 "시가총액"이
+   * 어느 묶음의 것인지 화면에서 알 수 없다. 연속한 항목의 값이 바뀔 때만 한 줄 그린다.
+   * ★검색 중에는 그리지 않는다★ 검색 결과는 패밀리를 가로지르므로 소제목이 뒤섞여
+   * 오히려 위계를 왜곡한다(패밀리 필터를 검색 중에 숨기는 것과 같은 이유).
+   */
+  groupLabel?: string;
 }
 
-export interface CatalogueFamily { id: string; label: string }
+export interface CatalogueFamily {
+  id: string;
+  label: string;
+  /**
+   * 토글에 함께 적는 표시용 개수 — 예: `"13/20"` (지원/전체) 또는 `"20"`.
+   * ★셸은 도메인을 모른다★ 그래서 계산하지 않고 **완성된 문자열**을 받는다.
+   * 주지 않으면 개수 자체가 없다 — 0 이나 추정치로 채우지 않는다.
+   *
+   * 이름이 `count` 가 아닌 이유: `StressScenarioModal` 이 이미 자기 패밀리 객체에
+   * `count: number` 를 달고 있다(셸은 그걸 읽지 않는다). 같은 이름을 쓰면 그 창이
+   * 컴파일되지 않으므로, 표시용 문자열임을 이름으로 구분한다.
+   */
+  countLabel?: string;
+}
 
 export interface CatalogueShellProps {
   open: boolean;
@@ -125,6 +146,15 @@ export interface CatalogueShellProps {
     active: Record<string, string> | null;
     draft: Record<string, string>;
   };
+
+  /**
+   * ── Phase 11c: 창 단위 색조 ──
+   * 대화상자 루트에 얹는 **CSS 변수 선언**이다(스타일링이 아니라 변수 대입 — shadcn 방식).
+   * 팩터 창은 매수/매도 문맥에 따라 색이 달라야 했고, 그 능력을 셸로 옮기면서 잃지 않으려면
+   * 여기가 필요하다. `--t-accent` 를 얹으면 기존 `.tfm-*` 규칙이 그대로 다시 물든다 —
+   * 새 CSS 를 만들지 않고 토큰만 지역적으로 덮는다(`:root` 는 건드리지 않는다).
+   */
+  styleVars?: React.CSSProperties;
 }
 
 /** 초안과 적용본에서 **달라진 항목만** 뽑는다. 같은 값을 나열하면 무엇이 바뀌었는지 묻힌다. */
@@ -148,7 +178,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
     families, family, onFamilyChange, items, allItems,
     selectedId, onSelect, activeId, loading, error, errorText, note,
     children, applyLabel, onApply, applyDisabled,
-    previewSlot, frequencyWarningSlot, presets, comparison,
+    previewSlot, frequencyWarningSlot, presets, comparison, styleVars,
   } = props;
 
   const [q, setQ] = useState("");
@@ -187,7 +217,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
 
   return (
     // .tfm-* 클래스는 그대로 유지한다 — Playwright 계약이고, 이 단계는 중복 제거가 목적이다.
-    <div className="tfm-backdrop" onClick={onClose}>
+    <div className="tfm-backdrop" onClick={onClose} style={styleVars}>
       <div className="tfm" ref={dialogRef} onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label={ariaLabel}>
         <div className="tfm-head">
@@ -209,7 +239,12 @@ export function CatalogueShell(props: CatalogueShellProps) {
                 aria-label="패밀리 필터"
                 onValueChange={(v) => { if (v) onFamilyChange(v); }}>
                 {families.map((f) => (
-                  <ToggleGroupItem key={f.id} value={f.id}>{f.label}</ToggleGroupItem>
+                  <ToggleGroupItem key={f.id} value={f.id}>
+                    {f.label}
+                    {/* ★개수를 숨기지 않는다★ 0/7 처럼 전부 미가용인 묶음도 그대로 적는다 —
+                        비어 보이는 패밀리를 눌러 보고서야 알게 되는 것이 더 나쁘다. */}
+                    {f.countLabel && <span className="tfm-fam-n num">{f.countLabel}</span>}
+                  </ToggleGroupItem>
                 ))}
               </ToggleGroup>
             )}
@@ -218,10 +253,15 @@ export function CatalogueShell(props: CatalogueShellProps) {
               {loading && <div className="as-empty">불러오는 중…</div>}
               {error && <div className="as-err">{errorText || "불러오지 못했습니다."}</div>}
               {!loading && results.length === 0 && <div className="as-empty">검색 결과가 없습니다</div>}
-              {results.map((i) => {
+              {results.map((i, idx) => {
                 const off = i.available === false;
+                // 소제목은 **검색 중이 아닐 때만**, 그리고 값이 바뀌는 첫 항목에만.
+                const head = !q && i.groupLabel && i.groupLabel !== results[idx - 1]?.groupLabel
+                  ? i.groupLabel : null;
                 return (
-                  <button key={i.id} role="option" aria-selected={selectedId === i.id}
+                  <React.Fragment key={i.id}>
+                  {head && <div className="tfm-group" role="presentation">{head}</div>}
+                  <button role="option" aria-selected={selectedId === i.id}
                     className={cn("tfm-row", selectedId === i.id && "on", off && "off")}
                     onClick={() => onSelect(i)}>
                     <span className="tfm-row-t">
@@ -238,6 +278,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
                       {off ? (i.unavailableReason || "데이터 미보유") : (i.meta ?? "")}
                     </span>
                   </button>
+                  </React.Fragment>
                 );
               })}
             </div>

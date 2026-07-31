@@ -3414,6 +3414,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tfm-fams { display: flex; flex-wrap: wrap; gap: 4px; }
 .tfm-fams button { font-size: 10.5px; padding: 3px 8px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; color: var(--t-muted); cursor: pointer; }
 .tfm-fams button.on { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,.05); font-weight: 600; }
+/* 패밀리 토글의 지원 개수 (Phase 11c) — 0/7 처럼 전부 미가용인 묶음도 숨기지 않는다.
+   토글 자체 색을 따르되 살짝 옅게: 개수는 라벨을 읽는 것을 방해하지 않아야 한다. */
+.tfm-fam-n { margin-left: 4px; font-size: 9px; opacity: .7; }
+/* 2단 위계 카탈로그의 그룹 소제목 (Phase 11c) — 목록 안에서 행과 구별되어야 한다. */
+.tfm-group { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted);
+  padding: 6px 2px 2px; text-transform: none; }
 .tfm-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .tfm-row { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px;
   border: 1px solid var(--t-border); border-radius: 2px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
