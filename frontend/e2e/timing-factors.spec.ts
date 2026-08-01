@@ -199,3 +199,35 @@ test("AAS Timing: 소스가 없는 팩터도 목록에 보이고, 사유와 함�
   await row.click();
   await expect(page.locator(".as-fb-apply", { hasText: "이 팩터 추가" })).toBeDisabled();
 });
+
+// ── Phase 12c — 영향 미리보기 (§8.1 "impact preview") ────────────────────────
+// 11a 감사 A4 의 자리다. 셸에 이 능력이 아예 없었다.
+test("AAS Timing: 팩터를 고르면 노출에 미칠 영향을 실측으로 보여준다", async ({ page }) => {
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("이격도");
+  await page.locator(".tfm-row").first().click();
+
+  const imp = page.locator(".tfm-imp");
+  await expect(imp, "영향 미리보기가 없습니다").toBeVisible({ timeout: 30_000 });
+  await expect(imp).toContainText("이 팩터를 추가하면");
+
+  // before → after 가 **둘 다 숫자**여야 한다. 하나라도 없으면 0 으로 채우지 않고
+  // 못 한다고 말해야 하며, 그 경우 아래 퍼센트 단정이 뜨지 않는다.
+  const before = imp.locator(".tfm-imp-b");
+  const after = imp.locator(".tfm-imp-a");
+  await expect(before).toHaveText(/^\d+%$/);
+  await expect(after).toHaveText(/^\d+%$/);
+});
+
+test("AAS Timing: 영향을 계산할 수 없으면 0 이 아니라 그 사실을 적는다", async ({ page }) => {
+  // ★0%p 는 "영향이 없다" 를 뜻한다★ 계산 실패와 같은 화면이면 안 된다.
+  await page.route("**/api/v1/allocation/timing", (r) => r.abort());
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("이격도");
+  await page.locator(".tfm-row").first().click();
+
+  const imp = page.locator(".tfm-imp");
+  await expect(imp).toBeVisible({ timeout: 30_000 });
+  await expect(imp).toContainText("계산할 수 없습니다");
+  await expect(imp.locator(".tfm-imp-d")).toHaveCount(0);
+});

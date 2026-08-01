@@ -19,7 +19,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   allocationApi, frequencyLabel, frequencyVerdict, frequencyWarningText,
-  type CanaryInput, type CanarySignalType, type DataLineage, type TimingFactorMeta,
+  type CanaryInput, type CanarySignalType, type DataLineage, type TimingFactorMeta, type TimingInput,
 } from "@/entities/allocation";
 import { CatalogueShell, type CatalogueItem } from "@/shared/ui/CatalogueShell";
 import { TimingFactorPreview } from "./TimingFactorPreview";
@@ -90,12 +90,21 @@ function canaryFields(c: CanaryInput): Record<string, string> {
   return out;
 }
 
-export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
+export function TimingFactorModal({ open, onClose, onAdd, active = [],
+  baseline, baselineExposure }: {
   open: boolean;
   onClose: () => void;
   onAdd: (c: CanaryInput) => void;
   /** 이미 담겨 있는 카나리들 — 초안 vs 적용본 비교(§8.1 요구 12)의 '적용본' 쪽. */
   active?: CanaryInput[];
+  /**
+   * ── 영향 미리보기 (§8.1 "impact preview", Phase 12c) ──
+   * 현재 타이밍 설정. 여기에 **초안 팩터만 더해** 같은 엔드포인트를 다시 호출하면
+   * "이 팩터를 넣으면 노출이 어떻게 되는가" 가 실측으로 나온다 — 휴리스틱이 아니라.
+   */
+  baseline?: TimingInput;
+  /** 지금 노출(0~1). 페이지가 이미 갖고 있는 값을 받아 같은 계산을 두 번 하지 않는다. */
+  baselineExposure?: number | null;
 }) {
   const catQ = useQuery({
     queryKey: ["allocation", "timing-factors"],
@@ -141,6 +150,21 @@ export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
     staleTime: 5 * 60_000,
   });
 
+  // ── 영향 미리보기 (§8.1) ──────────────────────────────────────────────────
+  // ★같은 엔드포인트로 두 번 묻는다★ 초안이 들어간 설정으로 실제 판정을 받아야
+  // "영향" 이라고 부를 수 있다. 게이트 방식(k-of-N)에 따라 카나리를 더하는 것이 노출을
+  // 올릴 수도 내릴 수도 있으므로 일방향이라고 단정하지 않는다.
+  const impactQ = useQuery({
+    queryKey: ["allocation", "timing-impact", baseline?.market, baseline?.min_breadth,
+      JSON.stringify(baseline?.canaries ?? []), JSON.stringify(draft)],
+    queryFn: () => allocationApi.timing({
+      ...baseline!,
+      canaries: [...(baseline!.canaries ?? []), draft!],
+    }),
+    enabled: open && !!baseline && !!draft && !blocked,
+  });
+
+
   const rebalance = draft?.rebalance_or_holding_period || DEFAULT_REBALANCE;
   const verdict = frequencyVerdict(
     sel?.evaluation_frequency, rebalance, catQ.data?.frequency_ranks);
@@ -185,6 +209,9 @@ export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
           {/* ★계보는 값 **옆에** 붙는다★ (§3.4/§8.1) 숫자만 보여주고 출처를 말하지 않으면
               사용자는 그 숫자가 어느 시점 기준인지 물을 방법이 없다. */}
           <LineagePanel lineage={prevQ.data?.lineage ?? null} />
+          <ImpactPreview before={baselineExposure ?? null}
+            after={exposureOf(impactQ.data)}
+            loading={impactQ.isLoading} configured={!!baseline} />
         </>
       ) : undefined}
       frequencyWarningSlot={sel && draft ? (
@@ -319,6 +346,66 @@ export function LineagePanel({ lineage }: { lineage: DataLineage | null }) {
           {lineage.caveats.map((c) => <li key={c}>{c}</li>)}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 영향 미리보기 (스펙 §8.1 "impact preview", Phase 12c)
+//
+// 11a 감사 A4 의 자리다 — 셸에 이 능력이 없었다.
+//
+// ★"영향" 은 실측이어야 한다★ 같은 타이밍 엔드포인트에 **초안 팩터만 더한** 설정을 보내
+// 실제 판정을 받는다. 규칙을 흉내 낸 프런트 계산으로 갈음하면 두 개의 진실이 생기고,
+// 둘이 갈라지는 날 화면 쪽이 조용히 틀린다.
+// ═══════════════════════════════════════════════════════════════════════════════
+/** 타이밍 응답 → 위험자산 노출(0~1). 현금비중의 여집합이며, 못 읽으면 null(0 이 아니다). */
+function exposureOf(t: { cash_pct?: number | null; error?: unknown } | null | undefined): number | null {
+  if (!t || t.error) return null;
+  const cash = Number(t.cash_pct ?? NaN);
+  if (!Number.isFinite(cash)) return null;
+  return Math.max(0, Math.min(1, 1 - cash / 100));
+}
+
+export function ImpactPreview({ before, after, loading, configured }: {
+  before: number | null; after: number | null; loading: boolean; configured: boolean;
+}) {
+  // 설정이 없으면 계산할 수 없다 — "영향 없음"으로 보이면 안 되므로 그 사실을 적는다.
+  if (!configured) {
+    return (
+      <div className="tfm-imp tfm-imp-none">
+        영향 미리보기는 현재 타이밍 설정이 있어야 계산됩니다.
+      </div>
+    );
+  }
+  if (loading) return <div className="tfm-imp tfm-imp-none">영향 계산 중…</div>;
+
+  // ★한쪽이라도 없으면 차이를 만들지 않는다★ 0 으로 채우면 "영향이 없다" 로 읽힌다.
+  if (before === null || after === null) {
+    return (
+      <div className="tfm-imp tfm-imp-none">
+        영향을 계산할 수 없습니다 — {before === null ? "현재 노출" : "추가 후 노출"}을
+        얻지 못했습니다. 0 으로 대체하지 않습니다.
+      </div>
+    );
+  }
+  const d = after - before;
+  const dir = Math.abs(d) < 0.005 ? "same" : d > 0 ? "up" : "down";
+  return (
+    <div className="tfm-imp">
+      <div className="tfm-imp-h">이 팩터를 추가하면</div>
+      <div className="tfm-imp-row">
+        <span className="tfm-imp-b num">{(before * 100).toFixed(0)}%</span>
+        <span className="tfm-imp-arrow">→</span>
+        <span className="tfm-imp-a num">{(after * 100).toFixed(0)}%</span>
+        <em className={`tfm-imp-d tfm-imp-${dir}`}>
+          {dir === "same" ? "변화 없음" : `${d > 0 ? "+" : ""}${(d * 100).toFixed(0)}%p`}
+        </em>
+      </div>
+      <div className="tfm-imp-note">
+        위험자산 노출 기준(현금비중의 여집합). 브레드스 게이트가 k-of-N 이라 카나리를
+        더하는 것이 노출을 낮출 수도, 높일 수도 있습니다 — 한 방향으로 가정하지 않습니다.
+      </div>
     </div>
   );
 }

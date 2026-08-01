@@ -151,6 +151,25 @@ expected_failure_mode                             # what happens when data is mi
 `provenance` is a required enum precisely so the UI cannot render a factor without stating where
 it came from. See §6 for the labelling rules.
 
+> **Shipped in Phase 12a** — `src/engine/timing_factor_meta.py` 가 카탈로그 항목에 덧입힌다.
+> 11a 감사가 A1·A2 로 잡은 자리다(정의 9필드 중 3개만 존재 · `provenance` 가 자유 텍스트).
+>
+> **필드 이름은 `units` 가 아니라 `unit` 이다.** 코드가 `unit` 으로 배달됐고 프런트 타입
+> (`entities/allocation/api.ts`)이 그것을 계약으로 쓴다. 한 글자를 맞추려고 살아 있는 계약을
+> 깨는 대신 **이 문서를 고친다** — 감사가 지적한 것은 능력 부재가 아니라 이름 불일치였다.
+>
+> **분류는 인용문을 대체하지 않는다.** `provenance_class`(§6 열거형)가 `provenance`(자유
+> 텍스트 인용문) **옆에** 붙는다. 인용문이 분류보다 정보가 많고, §6 이 막으려는 위험도
+> 실제 출처를 적는 쪽이 더 잘 막는다. 매칭 규칙이 없는 인용문은 `None` 으로 분류되며
+> 테스트가 카탈로그 전체에 대해 그것을 금지한다 — 기본값 `user_defined` 로 때우면 팩터를
+> 추가할 때마다 출처가 조용히 틀려진다.
+>
+> **값은 유도한다.** 29개 항목 × 8개 필드를 손으로 채우면 대부분이 추측이 된다. 경계는
+> 단위에서, 공표지연·개정정책은 출처에서 유도하고, 유도할 수 없으면 `None` 으로 둔다
+> (`indicator` 는 임의 시리즈를 받으므로 `series_dependent` 라고 적는다 — 하나로 단정하면
+> 그 단정이 대부분 틀린다). `expected_failure_mode` 는 팩터마다 다른 문장을 지어내는 대신
+> 전 팩터가 실제로 따르는 §3.3 세 상태 규칙을 그대로 적는다.
+
 ### 3.3 `TimingRuleSetV2`
 
 Extends the existing `TimingRule` dataclass — which already carries `universe`,
@@ -358,7 +377,7 @@ Availability and *research usage* (§3.5) are separate columns, because they gen
 | VIX term structure | add series | `backtest_eligible`¹ | See §6.2 — needs a real definition, not just a series |
 | Foreign / institutional flows | partial | **`forward_only`** | `data/kis_flows.py` — KIS TR returns ~30 business days. Blocked from historical simulation |
 | ETF premium/discount, liquidity, capacity | partial | **`forward_only`** | `data/etf_prices.py` DB→KIS→mock; US ETFs mock in sandbox |
-| VIX skew, borrow / short interest, option-implied correlation, crowding, alt-data | no | `unavailable` | No source. Catalogue-visible, **non-enableable**, concrete reason shown |
+| VIX skew, borrow / short interest, option-implied correlation, crowding, alt-data | no | `unavailable` | No source. Catalogue-visible, **non-enableable**, concrete reason shown — **shipped Phase 12a** (`UNAVAILABLE_FACTORS`, 4 entries). 목록에서 빼면 사용자는 이 팩터를 검토한 적조차 없게 된다 — "안 하기로 했다" 와 "그런 게 있는 줄 몰랐다" 는 다른 상태고 후자가 더 나쁘다 |
 
 ¹ `backtest_eligible` **only after** the ALFRED vintage work in §3.1 lands. Until then every FRED
 series is `forward_only`. Marking them eligible on the strength of the current single-vintage
@@ -557,8 +576,8 @@ comparison, and a warning when factor sampling frequency conflicts with rebalanc
 > | frequency-conflict warning | **Phase 6b** ✅ | shipped. `evaluation_frequency` on every catalogue entry, plus `frequency_ranks`/`rebalance_options` published **in the catalogue response** so the rank table stays single-sourced in Python instead of being duplicated in TypeScript |
 > | **focus trap** | **기술부채 정리** ✅ | `shared/lib/useFocusTrap.ts` — 위 Phase 6 행에 '전달됨' 으로 적혀 있었으나 **실제로는 없었다**(role·aria-modal·Escape·autoFocus 만 있었고 Tab 을 막는 코드가 0줄). 표를 바로잡고 별도로 구현했다. Radix Dialog 는 +20 kB/route 로 ADR 001 의 15 kB 중단선을 넘어 제외 |
 > | saved presets · draft-vs-active comparison | **Phase 6d** ✅ | shipped. Net-new — absent from all four modals, kept out so Phase 6's gate could stay "no capability lost". Presets live in one namespaced `localStorage` store shared by the three shell windows, and the UI **says they are browser-local and not reproduction coordinates** so they are not mistaken for the versioned rule sets of 7c. The comparison lists **only changed fields**, and distinguishes "nothing applied yet" from "no difference" — conflating those two would tell a user configuring their first factor that it matches the applied config |
-> | **lineage** (§3.4 `DataLineage`) | ❌ **미충족 (Phase 11a 감사)** | 위 행이 Phase 6 배달로 적고 있었으나 **코드에 없다** — 타입·필드·UI 0건. 포커스 트랩 행과 같은 종류의 거짓 기록이다 |
-> | **impact preview** | ❌ **미충족 (Phase 11a 감사)** | 셸에 없다 |
+> | **lineage** (§3.4 `DataLineage`) | **Phase 12b** ✅ | shipped. `src/engine/data_lineage.py` + `.tfm-lin` 패널이 미리보기 **옆에** 붙는다. 계보는 "무엇을 계산했나" 가 아니라 **"무엇을 읽었나"** 를 적는다 — 소스·시리즈·빈티지 기준·mock 게이트. 변환 사슬을 33개 팩터에 손으로 적으면 대부분 추측이 되므로 넣지 않았다. `mock_fallback_allowed` 는 **"허용"** 이지 "사용" 이 아니다(어느 계층이 답했는지는 읽기마다 다르고 추적 계측이 필요하다) — 필드명·UI 문구·테스트가 모두 그 범위를 지킨다 |
+> | **impact preview** | **Phase 12c** ✅ | shipped. `.tfm-imp` — **같은 타이밍 엔드포인트에 초안 팩터만 더해** 다시 물어 before → after 노출을 실측으로 낸다. 규칙을 흉내 낸 프런트 계산이면 진실이 둘이 되고 갈라지는 날 화면이 조용히 틀린다. 한쪽이라도 못 읽으면 **0%p 로 채우지 않고** 계산 불가라고 적는다(0 은 "영향이 없다" 를 뜻한다). 브레드스 게이트가 k-of-N 이라 카나리 추가가 노출을 올릴 수도 내릴 수도 있어 **일방향으로 가정하지 않는다** |
 > | `FactorPickerModal` migration | **Phase 6c → 11c** | 477 lines, 76 inline styles, **zero E2E**, two consumers (Backtester + Screener). E2E coverage lands first |
 >
 > **Primitives:** only `ToggleGroup` was added. `Tooltip` was **deliberately not** adopted — both

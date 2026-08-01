@@ -117,6 +117,25 @@ export default function TimingWorkspace() {
 
         <TimingFactorModal open={pickerOpen} onClose={() => setPickerOpen(false)}
           active={timingCfg.canaries}
+          // ★영향 미리보기는 **지금 설정**을 알아야 계산된다★ (§8.1, Phase 12c)
+          // 창이 여기에 초안 팩터만 더해 같은 엔드포인트로 다시 물어, "넣으면 노출이
+          // 어떻게 되는가" 를 실측으로 보여준다. 현재 노출은 이미 있는 쿼리에서 넘겨
+          // 같은 계산을 두 번 하지 않는다.
+          baseline={{
+            market: timingCfg.market,
+            canaries: timingCfg.canaries,
+            min_breadth: timingCfg.minBreadth,
+            risk_on_assets: timingCfg.riskOnAssets,
+            risk_off_assets: timingCfg.riskOffAssets,
+            overlay: timingCfg.overlay,
+            regime_blend: timingCfg.regimeBlend,
+            target_vol_pct: timingCfg.targetVolPct,
+          }}
+          baselineExposure={
+            timingQ.data && !timingQ.data.error && Number.isFinite(Number(timingQ.data.cash_pct))
+              ? Math.max(0, Math.min(1, 1 - Number(timingQ.data.cash_pct) / 100))
+              : null
+          }
           onAdd={(c) => setCfg({ canaries: [...timingCfg.canaries, c] })} />
 
         <section className="as-card">

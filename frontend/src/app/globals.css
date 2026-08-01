@@ -3420,6 +3420,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 2단 위계 카탈로그의 그룹 소제목 (Phase 11c) — 목록 안에서 행과 구별되어야 한다. */
 .tfm-group { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted);
   padding: 6px 2px 2px; text-transform: none; }
+/* 영향 미리보기 (Phase 12c, §8.1) — "이 팩터를 넣으면" 을 실측으로 보여준다. */
+.tfm-imp { border: 1px solid var(--t-border); border-radius: 2px; padding: 8px 10px; margin-top: 8px; }
+.tfm-imp-h { font-size: 10px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted); margin-bottom: 6px; }
+.tfm-imp-row { display: flex; align-items: baseline; gap: 8px; }
+.tfm-imp-b, .tfm-imp-a { font-size: 15px; font-weight: 700; color: var(--t-ink); }
+.tfm-imp-arrow { color: var(--t-muted); }
+.tfm-imp-d { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 2px; }
+.tfm-imp-up { color: #0a7f3f; background: rgba(10,127,63,.08); }
+.tfm-imp-down { color: #b3261e; background: rgba(179,38,30,.08); }
+.tfm-imp-same { color: var(--t-muted); background: rgba(0,0,0,.04); }
+.tfm-imp-note { margin-top: 6px; font-size: 10.5px; color: var(--t-muted); line-height: 1.5; }
+.tfm-imp-none { font-size: 11px; color: var(--t-muted); }
 /* 데이터 계보 패널 (Phase 12b, §3.4 · §8.1) — 값 바로 아래에 붙는다. */
 .tfm-lin { border: 1px solid var(--t-border); border-radius: 2px; padding: 8px 10px; margin-top: 8px; }
 .tfm-lin-h { font-size: 10px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted); margin-bottom: 6px; }
