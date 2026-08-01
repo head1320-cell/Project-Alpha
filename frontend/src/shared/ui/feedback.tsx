@@ -17,6 +17,12 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
+/**
+ * ★남아 있는 `style` 은 전부 **동적**이다★ (Phase B)
+ * 폭이 리터럴인 5곳만 유틸리티로 옮겼다. `${85 - i * 8}%`(계단식 스켈레톤)·`borderLeft`
+ * 색·delta 부호색·Sparkline 치수는 값이 런타임에 정해지므로 클래스로 표현할 수 없다 —
+ * Tailwind 는 빌드 타임에 클래스를 뽑는다. 억지로 옮기면 병렬 팔레트를 만들게 된다.
+ */
 export function Skeleton({ className = "", style = {} }: { className?: string; style?: React.CSSProperties }) {
   return <div className={`skeleton ${className}`} style={style} />;
 }
@@ -34,9 +40,9 @@ export function SkeletonText({ lines = 3, className = "" }: { lines?: number; cl
 export function SkeletonCard({ className = "" }: { className?: string }) {
   return (
     <div className={`p-4 border border-default rounded-md ${className}`}>
-      <Skeleton className="h-3 mb-3" style={{ width: "40%" }} />
-      <Skeleton className="h-7 mb-2" style={{ width: "60%" }} />
-      <Skeleton className="h-2" style={{ width: "80%" }} />
+      <Skeleton className="h-3 mb-3 w-[40%]" />
+      <Skeleton className="h-7 mb-2 w-[60%]" />
+      <Skeleton className="h-2 w-[80%]" />
     </div>
   );
 }
@@ -47,8 +53,8 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-2">
           <Skeleton className="h-2 flex-grow" />
-          <Skeleton className="h-2" style={{ width: "60px" }} />
-          <Skeleton className="h-2" style={{ width: "40px" }} />
+          <Skeleton className="h-2 w-[60px]" />
+          <Skeleton className="h-2 w-[40px]" />
         </div>
       ))}
     </div>

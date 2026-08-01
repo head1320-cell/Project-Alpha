@@ -64,14 +64,18 @@ export function Toggle({ on, onChange, tone = "neutral", size = "md" }: {
 }
 
 // ── Section (collapsible card with on/off) ────────────────────
+// ★죽은 삼항 하나를 걷어냈다 (Phase B)★ 테두리 색이
+// `enabled ? "var(--border)" : "var(--border)"` 였다 — 두 가지가 같은 값이라 조건이
+// 아무 일도 하지 않았다. 비활성 상태를 구별하려던 흔적으로 보이지만, 지금 코드가 하는 일은
+// "항상 같은 테두리" 이므로 그대로 유지하고 조건만 없앴다(동작 변화 0).
 export function Section({ title, hint, tone = "neutral", enabled, onToggle, children }: {
   title: string; hint?: string; tone?: Tone; enabled: boolean;
   onToggle: (v: boolean) => void; children?: ReactNode;
 }) {
   return (
-    <div style={{ background: "var(--bg-card)", border: `1px solid ${enabled ? "var(--border)" : "var(--border)"}`, borderRadius: RL, padding: "15px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--bs-border-radius-lg)] px-4 py-[15px]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: enabled ? TONES[tone].accent : "var(--border-strong)" }} />
           <span style={{ fontSize: 15, fontWeight: 500, color: enabled ? "var(--text-primary)" : "var(--text-muted)", flexShrink: 0 }}>{title}</span>
           {hint && <span style={{ fontSize: 12, color: enabled ? "var(--text-secondary)" : "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hint}</span>}
@@ -79,7 +83,7 @@ export function Section({ title, hint, tone = "neutral", enabled, onToggle, chil
         <Toggle on={enabled} onChange={onToggle} tone={tone} />
       </div>
       {enabled && children && (
-        <div style={{ borderTop: "1px solid var(--border)", marginTop: 13, paddingTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="border-t border-[var(--border)] mt-[13px] pt-3.5 flex flex-col gap-3.5">
           {children}
         </div>
       )}
@@ -93,14 +97,14 @@ export function SubToggle({ label, hint, on, onChange, tone = "neutral", childre
 }) {
   return (
     <div style={{ background: on ? TONES[tone].bg : "var(--bg-section)", borderRadius: R, padding: "10px 12px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13, color: "var(--text-primary)" }}>{label}</span>
-          {hint && <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{hint}</span>}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] text-[var(--text-primary)]">{label}</span>
+          {hint && <span className="text-[11px] text-[var(--text-secondary)]">{hint}</span>}
         </div>
         <Toggle on={on} onChange={onChange} tone={tone} size="sm" />
       </div>
-      {on && children && <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>{children}</div>}
+      {on && children && <div className="mt-2.5 flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   );
 }
@@ -108,7 +112,7 @@ export function SubToggle({ label, hint, on, onChange, tone = "neutral", childre
 // ── Field (labeled row) ───────────────────────────────────────
 export function Field({ label, width = 84, children }: { label: string; width?: number; children: ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+    <div className="flex items-center gap-[9px] flex-wrap">
       <span style={{ fontSize: 12, color: "var(--text-secondary)", width, flexShrink: 0 }}>{label}</span>
       {children}
     </div>
@@ -130,11 +134,11 @@ export function QuickStepper({ value, onChange, chips = [], unit = "", min, max 
     <>
       <input type="number" className="bs-numbox" value={value}
         onChange={(e) => onChange(clamp(Number(e.target.value)))} style={numBox} />
-      {unit && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{unit}</span>}
-      <span style={{ display: "flex", gap: 5 }}>
+      {unit && <span className="text-[13px] text-[var(--text-secondary)]">{unit}</span>}
+      <span className="flex gap-[5px]">
         {chips.map((c) => (
           <button key={c} type="button" onClick={() => onChange(clamp(value + c))}
-            style={{ fontSize: 11, color: "var(--text-secondary)", background: "none", cursor: "pointer", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px" }}>
+            className="text-[11px] text-[var(--text-secondary)] bg-none cursor-pointer border border-[var(--border)] rounded-md px-2 py-1">
             {c > 0 ? `+${c}` : c}{unit}
           </button>
         ))}
@@ -148,7 +152,7 @@ export function Segmented<T extends string>({ options, value, onChange, tone = "
   options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; tone?: Tone;
 }) {
   return (
-    <span style={{ display: "flex", gap: 4, background: "var(--bg-section)", borderRadius: R, padding: 3 }}>
+    <span className="flex gap-1 bg-[var(--bg-section)] rounded-[var(--bs-border-radius)] p-[3px]">
       {options.map((o) => {
         const on = o.id === value;
         return (

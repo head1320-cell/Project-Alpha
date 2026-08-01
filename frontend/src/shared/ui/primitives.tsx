@@ -18,19 +18,19 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
         {breadcrumb && (
           <div className="pv-breadcrumb">
             {breadcrumb.map((b, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span key={i} className="inline-flex items-center gap-1">
                 {b.href ? <Link href={b.href}>{b.label}</Link> : <span>{b.label}</span>}
                 {i < breadcrumb.length - 1 && <ChevronRight size={11} />}
               </span>
             ))}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="pv-page-title">{title}</h1>
             {subtitle && <p className="pv-page-subtitle">{subtitle}</p>}
           </div>
-          {actions && <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>{actions}</div>}
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       </div>
     </div>
@@ -40,7 +40,7 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
 // ── PageContent ──────────────────────────────────────────────────────────────
 export function PageContent({ children }: { children: React.ReactNode }) {
   return (
-    <div className="container-pv" style={{ padding: "1.5rem 0.75rem" }}>
+    <div className="container-pv py-6 px-3">
       {children}
     </div>
   );
@@ -60,11 +60,11 @@ export function StatCard({
   const fontSize = size === "md" ? "1.25rem" : "1rem";
   return (
     <div className="card card-md">
-      <div className="label" style={{ marginBottom: "0.375rem" }}>{label}</div>
+      <div className="label mb-1.5">{label}</div>
       <div className="num" style={{ fontSize, fontWeight: 600, color, lineHeight: 1.2 }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: 11, color: "var(--bs-secondary-color)", marginTop: 2 }}>{sub}</div>}
+      {sub && <div className="text-[11px] text-[var(--bs-secondary-color)] mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -133,8 +133,8 @@ export function Section({
   action?: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
         <span className="label">{title}</span>
         {action}
       </div>
@@ -165,12 +165,12 @@ export function Field({
   hint?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--bs-secondary-color)" }}>
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-[var(--bs-secondary-color)]">
         {label}
       </label>
       {children}
-      {hint && <div style={{ fontSize: 11, color: "var(--bs-secondary-color)", opacity: 0.8 }}>{hint}</div>}
+      {hint && <div className="text-[11px] text-[var(--bs-secondary-color)] opacity-80">{hint}</div>}
     </div>
   );
 }
@@ -178,14 +178,7 @@ export function Field({
 // ── ErrorMsg ─────────────────────────────────────────────────────────────────
 export function ErrorMsg({ msg }: { msg: string }) {
   return (
-    <div style={{
-      padding: "0.625rem 0.875rem",
-      borderRadius: "var(--bs-border-radius)",
-      background: "var(--bs-danger-bg)",
-      color: "#58151c",
-      border: "1px solid rgba(220, 53, 69, 0.25)",
-      fontSize: 12,
-    }}>
+    <div className="py-2.5 px-3.5 rounded-[var(--bs-border-radius)] bg-[var(--bs-danger-bg)] text-[#58151c] border border-[rgba(220,53,69,0.25)] text-xs">
       {msg}
     </div>
   );
@@ -194,14 +187,7 @@ export function ErrorMsg({ msg }: { msg: string }) {
 // ── Empty ────────────────────────────────────────────────────────────────────
 export function Empty({ msg = "데이터 없음" }: { msg?: string }) {
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "2.5rem",
-      color: "var(--bs-secondary-color)",
-      fontSize: 13,
-    }}>
+    <div className="flex items-center justify-center p-10 text-[var(--bs-secondary-color)] text-[13px]">
       {msg}
     </div>
   );
