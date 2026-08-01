@@ -6,6 +6,13 @@
 //   전부 실데이터(키 있으면) — 백엔드 mock 폴백 시 출처 배지로 정직 표기.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
+// ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 두 창이 Radix Dialog 를 쓰면서
+// /macro 첫 로드가 243 → 263 kB 로 뛰었다(실측). ADR 001 은 설명되지 않는 4 kB 증가를
+// 되돌리라고 한다 — 되돌리는 대신 **필요할 때 가져온다**.
+const StrategyModal = dynamic(() => import("./StrategyModal"), { ssr: false });
+const DrillDownModal = dynamic(
+  () => import("./DrillDownModal").then((m) => m.DrillDownModal), { ssr: false });
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Activity, Target, Scale, Boxes, Sparkles,
@@ -19,10 +26,9 @@ import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
   loadCorrelations, loadTiming, loadTrajectory, loadStrategyDetail,
 } from "@/entities/macro/data";
-import StrategyModal from "./StrategyModal";
 import {
   RegimeScatter, CycleClock, ArcGauge, YieldCurveChart, IndicatorCard, ZHeatmap,
-  ValuationBars, HoldingsDonut, donutColor, SignalBadge, CompositeRow, DrillDownModal,
+  ValuationBars, HoldingsDonut, donutColor, SignalBadge, CompositeRow,
   fmtNum, fmtZ, fmtPct, sigColor,
   ProbBars, AxisBreakdown, CbGauge, AllocAttribution, AllocBands, CausalGraphView,
 } from "./cockpitParts";

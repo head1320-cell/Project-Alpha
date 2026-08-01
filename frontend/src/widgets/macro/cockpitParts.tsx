@@ -254,44 +254,6 @@ export function CompositeRow({ rank, name, composite, fit, perf, signal, onClick
   );
 }
 
-// ── DrillDownModal — 지표 36개월 시계열 + 통계 ──
-export function DrillDownModal({ series, loading, onClose }: { series: MacroSeries | null; loading: boolean; onClose: () => void }) {
-  const data = series ? series.timestamps.map((t, idx) => ({ t: t.length > 6 ? t.slice(2, 7) : t, v: series.values[idx] })) : [];
-  return (
-    <div className="mc-modal-bg" onClick={onClose}>
-      <div className="mc-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="mc-modal-x" onClick={onClose}><X size={16} /></button>
-        {loading && <div className="mc-modal-load">시계열 불러오는 중…</div>}
-        {!loading && !series && <div className="mc-modal-load">데이터를 불러올 수 없습니다.</div>}
-        {!loading && series && (
-          <>
-            <div className="mc-modal-h">
-              <div><b>{series.name}</b><span>{series.indicator} · {series.source}</span></div>
-              <div className="mc-modal-latest"><b style={{ color: zScoreColor(series.z_score) }}>{fmtNum(series.latest)}</b><em>{series.unit}</em></div>
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}>
-                <defs><linearGradient id="mcgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--t-accent)" stopOpacity={0.28} /><stop offset="100%" stopColor="var(--t-accent)" stopOpacity={0.02} /></linearGradient></defs>
-                <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" vertical={false} />
-                <XAxis dataKey="t" tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" minTickGap={24} />
-                <YAxis tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" domain={["auto", "auto"]} width={46} />
-                <Tooltip contentStyle={TIP_STYLE} />
-                {series.mean_5y != null && <ReferenceLine y={series.mean_5y} stroke="var(--t-muted)" strokeDasharray="3 3" />}
-                <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#mcgrad)" isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="mc-modal-stats">
-              {[["최근값", `${fmtNum(series.latest)} ${series.unit}`], ["5Y 평균", fmtNum(series.mean_5y)], ["5Y 표준편차", fmtNum(series.std_5y)], ["Z-Score", fmtZ(series.z_score)], ["백분위", series.percentile != null ? `${Math.round(series.percentile)}` : "—"], ["전년대비", fmtPct(series.yoy)]].map(([k, v]) => (
-                <div key={k} className="mc-modal-stat"><span>{k}</span><b>{v}</b></div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ═══ v2 (CIO 리팩토링) — 확률·분해·게이지·배분 시각화 ═══════════════════════════
 
 // ProbBars — 사분면 확률 분포 (정적 '신뢰도 %' 텍스트 대체, 합=1)

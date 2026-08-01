@@ -18,10 +18,9 @@ import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
   loadCorrelations, loadTiming, loadTrajectory, loadStrategyDetail,
 } from "@/entities/macro/data";
-import StrategyModal from "./StrategyModal";
 import {
   RegimeScatter, CycleClock, ArcGauge, YieldCurveChart, IndicatorCard, ZHeatmap,
-  ValuationBars, HoldingsDonut, donutColor, SignalBadge, CompositeRow, DrillDownModal,
+  ValuationBars, HoldingsDonut, donutColor, SignalBadge, CompositeRow,
   fmtNum, fmtZ, fmtPct, sigColor,
   ProbBars, AxisBreakdown, CbGauge, AllocAttribution, AllocBands, CausalGraphView,
 } from "./cockpitParts";

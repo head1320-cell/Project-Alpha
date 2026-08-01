@@ -4,6 +4,7 @@
 // → 종목 체크 → 저장(watchlistStorage). 데이터는 백엔드 /stock-browse.
 
 import { useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { X, Search } from "lucide-react";
 import { CAPS } from "./UniversePanel";
 
@@ -98,7 +99,8 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
     return [];
   }, [catalog, cls]);
 
-  if (!open) return null;
+  // ★`open` 은 이제 Radix 가 소유한다★ 조기 return 을 두면 Dialog 가 마운트되지 않아
+  // Escape·포커스 트랩·포커스 복귀가 전부 죽는다.
 
   const toggle = (it: BrowseItem) => {
     setSelected((m) => {
@@ -118,13 +120,20 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
     </label>
   );
 
+  // ★Radix Dialog 로 옮겼다 (Phase A)★
+  // 이전에는 backdrop 클릭만 닫혔다 — role·aria-modal·Escape·포커스 트랩이 **0개**였고,
+  // 인라인 스타일로 직접 그린 오버레이가 그 자리를 대신하고 있었다.
   return (
-    <div onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 680, maxHeight: "86vh", overflow: "auto", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 18, boxShadow: "var(--bs-box-shadow)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>{title ?? "관심종목 그룹 관리"}</span>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="wg-modal" aria-describedby={undefined}
+        // ★Radix 의 닫기-자동포커스를 막고 호출자가 직접 되돌린다★ 이 창은 `next/dynamic`
+        // 으로 떼어져 있어 클릭 시점에 Dialog 가 아직 없다 — Radix 가 기억하는 복귀 대상이
+        // 트리거가 아닐 수 있고, 그러면 닫은 뒤 포커스가 body 로 떨어진다.
+        onCloseAutoFocus={(e) => e.preventDefault()}>
+        <div className="flex items-center justify-between mb-3">
+          <DialogTitle className="text-[16px] font-semibold text-[var(--text-primary)]">
+            {title ?? "관심종목 그룹 관리"}
+          </DialogTitle>
           <button type="button" onClick={onClose} aria-label="닫기" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}><X size={17} /></button>
         </div>
 
@@ -209,7 +218,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
             저장하기
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

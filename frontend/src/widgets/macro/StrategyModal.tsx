@@ -4,6 +4,7 @@
 //   백엔드 build_detail 병합 결과 렌더. AI 심층분석은 버튼 클릭 시 온디맨드.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { X, Sparkles, Play } from "lucide-react";
 import type { StrategyAI, StrategyDetail, TacticalHolding } from "@/entities/macro/analysisModel";
@@ -35,10 +36,17 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
     loadStrategyAI(detail.id, market).then((r) => setAi(r)).finally(() => setAiLoading(false));
   };
 
+  // ★Radix Dialog 로 옮겼다 (Phase A)★
+  // 이전에는 role 도 aria-modal 도 Escape 도 포커스 트랩도 **하나도** 없었다 — 키보드·스크린리더
+  // 사용자는 이 창을 닫을 수도, 빠져나올 수도 없었다. 부모가 조건부로만 마운트하므로
+  // `open` 은 항상 true 이고, 닫힘은 Radix 가 Escape·바깥클릭·닫기버튼에서 모두 알려 준다.
   return (
-    <div className="mc-modal-bg" onClick={onClose}>
-      <div className="sm-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="mc-modal-x" onClick={onClose}><X size={16} /></button>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm-modal" aria-describedby={undefined}>
+        {/* 접근 가능한 이름 — Radix 는 Title 이 없으면 콘솔 경고를 낸다. 로딩/실패 상태에도
+            이름이 있어야 하므로 detail 유무와 무관하게 항상 렌더한다. */}
+        <DialogTitle className="sr-only">{detail?.name ?? "전략 상세"}</DialogTitle>
+        <button className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
         {loading && <div className="mc-modal-load">전략 상세 불러오는 중…</div>}
         {!loading && !detail && <div className="mc-modal-load">전략 상세를 불러올 수 없습니다.</div>}
         {!loading && detail && (
@@ -150,8 +158,8 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
             </Section>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

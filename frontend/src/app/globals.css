@@ -4094,6 +4094,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.18); padding: 18px; }
 
+/* Radix Dialog 로 옮긴 기존 모달의 치수·외형 (Phase A).
+   ★복합 선택자를 쓴다★ `.shad-content` 와 `.sm-modal` 은 둘 다 단일 클래스라 특정도가 같고,
+   그러면 globals.css 안의 **작성 순서**가 승자를 정한다 — 규칙을 옮기는 것만으로 레이아웃이
+   바뀌는 함정이다. `.shad-content.sm-modal` 은 특정도가 높아 순서와 무관하게 이긴다.
+   (같은 함정의 일반 해법은 레거시 블록의 @layer 화이고, 그건 Phase C 다.) */
+.shad-content.sm-modal { width: min(760px, 92vw); padding: 22px 26px; border-radius: 2px;
+  background: #fff; box-shadow: 0 16px 56px rgba(0,0,0,0.2); }
+.shad-content.mc-modal { width: min(620px, 92vw); padding: 20px 22px; border-radius: 2px;
+  background: #fff; box-shadow: 0 12px 48px rgba(0,0,0,0.18); }
+.shad-content.wg-modal { width: min(560px, 92vw); padding: 18px 20px; border-radius: 2px;
+  background: var(--bg-card, #fff); box-shadow: 0 12px 48px rgba(0,0,0,0.18); }
+
 /* 35. /dev/ui 의 shadcn 섹션 — 기존 .devui-item 계약과 분리된 클래스 (Phase 5). */
 .devui-shadcn { margin-top: 40px; padding-top: 24px; border-top: 2px solid var(--t-ink, #111); }
 .devui-sitem { padding: 14px 0; border-bottom: 1px solid var(--t-border, #e5e5e5); }

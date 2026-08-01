@@ -193,6 +193,35 @@ a rule-level CSS diff shows unintended removals or modifications that cannot be 
 the POC needs more than ~15 changed selectors to stay green; portal behaviour forces rewriting
 unrelated specs; or bundle growth exceeds 15 kB on any AAS route without a clear cause.
 
+### Amendment (Phase A) — the bundle threshold is measured on **first load**
+
+Radix `Dialog` was excluded because converting a modal in place cost **+20 kB/route**, over the
+15 kB rollback line. That measurement was re-run in Phase A and **reproduced exactly**:
+`/backtest` 128 → 148 kB, `/macro` 243 → 263 kB. The figure was right.
+
+What was missing is that the threshold was being applied to a cost that **does not have to land on
+first load**. A modal is closed by default; `next/dynamic` moves its chunk out of the initial
+payload entirely. After doing that, both routes came back **at or below** their pre-change
+baseline — `/backtest` **126 kB** (−2 vs baseline), `/macro` **243 kB** (level).
+
+So the rule is amended, not weakened:
+
+> The ≥4 kB / 15 kB limits are measured on **First Load JS per route**. A dependency that only
+> loads on user intent (a closed-by-default dialog, an editor opened from a button) is measured
+> where it actually lands. Adopting Radix for such a surface is permitted **only with** the
+> dynamic import in the same commit and the before/after route table in the commit message.
+
+This does not reopen bulk Radix adoption. `Tooltip` stays rejected on design grounds (§8.1 puts
+reasons in the visible row, not behind hover), and always-mounted surfaces are still bound by the
+original limits.
+
+**Second finding, recorded because it is a trap the next migration will hit.** With the dialog
+behind `next/dynamic`, Radix's own close-autofocus restores to the wrong element — at click time
+the dialog is not mounted, so the element it remembers is not the trigger. The fix is explicit:
+`onCloseAutoFocus={(e) => e.preventDefault()}` plus a trigger ref refocused in
+`requestAnimationFrame` (focusing in the same tick loses to Radix's focus guard). Covered by
+`e2e/radix-dialogs.spec.ts`.
+
 ### Rollback
 Each phase is one commit on a feature branch. Rolling back the ADR means reverting the shadcn
 scaffold commit and the `CLAUDE.md` amendment; Tailwind itself is **not** rolled back, because it

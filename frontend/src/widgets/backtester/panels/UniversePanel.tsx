@@ -4,13 +4,16 @@
 // 매매 대상(유니버스) 화면(중립). 포함 토글 + 시총군 + 업종(테마 그룹) + 관심그룹 + 실시간 종목 수.
 // matched/totalUniverse 는 mock — 실제로는 시총군/업종/그룹 변경 시 스크리너 count API 로 재계산.
 
+import React from "react";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { Segmented } from "@/shared/ui/kit";
 import { universeCount } from "@/entities/backtest/universeApi";
 import type { BacktestStrategy } from "@/entities/backtest/strategy";
 import { listWatchlists, createWatchlist, deleteWatchlist } from "@/shared/lib/watchlistStorage";
-import WatchGroupModal from "./WatchGroupModal";
+import dynamic from "next/dynamic";
+// 기본이 '닫힘' 인 창 — Radix Dialog 무게를 /backtest 첫 로드에서 뺀다(실측 +20 kB).
+const WatchGroupModal = dynamic(() => import("./WatchGroupModal"), { ssr: false });
 import ThemeTree from "./ThemeTree";
 
 export const CAPS = [
@@ -34,6 +37,10 @@ const toggle = (arr: string[], id: string) => (arr.includes(id) ? arr.filter((x)
 export default function UniversePanel({ s, set, live = true }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>; live?: boolean;
 }) {
+  // ★포커스 복귀를 명시적으로 되돌린다★ 창을 `next/dynamic` 으로 떼어내면 클릭 시점에는
+  // Dialog 가 아직 마운트되지 않아, Radix 가 기억하는 복귀 대상이 트리거가 아닐 수 있다.
+  // 닫은 뒤 포커스가 body 로 떨어지면 키보드 사용자는 목록의 어디에 있었는지 잃는다.
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const u = s.universe;
   const patch = (p: Partial<BacktestStrategy["universe"]>) => set((x) => ({ ...x, universe: { ...x.universe, ...p } }));
 
@@ -194,7 +201,7 @@ export default function UniversePanel({ s, set, live = true }: {
       {/* 관심그룹 (watchlistStorage 연동) */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
         <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>관심그룹 · 매수 대상/제외</span>
-        <button type="button" onClick={() => setGroupModalOpen(true)}
+        <button type="button" ref={triggerRef} onClick={() => setGroupModalOpen(true)}
           style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "4px 9px", cursor: "pointer" }}>
           <Plus size={12} /> 그룹 추가
         </button>
@@ -240,7 +247,9 @@ export default function UniversePanel({ s, set, live = true }: {
         </div>
       </div>
 
-      <WatchGroupModal open={groupModalOpen} onClose={() => setGroupModalOpen(false)} onSave={handleSaveGroup} />
+      <WatchGroupModal open={groupModalOpen} onClose={() => { setGroupModalOpen(false); // ★언마운트 뒤에 포커스를 준다★ 같은 틱에 주면 Radix 의 포커스 가드가 아직
+        // 살아 있어 도로 가져간다 — 한 프레임 뒤에야 트리거가 실제로 포커스를 받는다.
+        requestAnimationFrame(() => triggerRef.current?.focus()); }} onSave={handleSaveGroup} />
     </div>
   );
 }

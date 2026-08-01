@@ -3,11 +3,14 @@
 //   ETF % + 주식 % (잔여=현금) · 프리셋(중립/공격/안정/직접) · 리밸런싱 주기 ·
 //   ETF 매수 기준가±% · 바스켓 표(가중 편집) · 자산군 그룹 관리 모달(ETF 선택).
 
+import React from "react";
 import { useState } from "react";
 import { X, Plus } from "lucide-react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "@/shared/ui/kit";
 import OffsetInput from "./OffsetInput";
-import WatchGroupModal from "./WatchGroupModal";
+import dynamic from "next/dynamic";
+// 기본이 '닫힘' 인 창 — Radix Dialog 무게를 /backtest 첫 로드에서 뺀다(실측 +20 kB).
+const WatchGroupModal = dynamic(() => import("./WatchGroupModal"), { ssr: false });
 import { FILL_PRICE_GROUPS_NO_EXPR } from "@/entities/backtest/fillPrice";
 import { ASSET_PRESETS, presetBasket } from "@/entities/backtest/assetPresets";
 import type { BacktestStrategy, AssetAllocState, BasketLeg } from "@/entities/backtest/strategy";
@@ -21,6 +24,10 @@ const wbox: React.CSSProperties = {
 export default function AssetAllocPanel({ s, set }: {
   s: BacktestStrategy; set: React.Dispatch<React.SetStateAction<BacktestStrategy>>;
 }) {
+  // ★포커스 복귀를 명시적으로 되돌린다★ 창을 `next/dynamic` 으로 떼어내면 클릭 시점에는
+  // Dialog 가 아직 마운트되지 않아, Radix 가 기억하는 복귀 대상이 트리거가 아닐 수 있다.
+  // 닫은 뒤 포커스가 body 로 떨어지면 키보드 사용자는 목록의 어디에 있었는지 잃는다.
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const a = s.assetAlloc;
   const [modalOpen, setModalOpen] = useState(false);
   const patch = (p: Partial<AssetAllocState>) => set((x) => ({ ...x, assetAlloc: { ...x.assetAlloc, ...p } }));
@@ -100,7 +107,7 @@ export default function AssetAllocPanel({ s, set }: {
         ))}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 7 }}>
-        <button type="button" onClick={() => setModalOpen(true)}
+        <button type="button" ref={triggerRef} onClick={() => setModalOpen(true)}
           style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", padding: "5px 10px", cursor: "pointer" }}>
           <Plus size={13} /> 자산군 추가
         </button>
@@ -123,7 +130,9 @@ export default function AssetAllocPanel({ s, set }: {
       </div>
 
       <WatchGroupModal open={modalOpen} etfOnly title="자산군 그룹 관리"
-        onClose={() => setModalOpen(false)} onSave={addLegs} />
+        onClose={() => { setModalOpen(false); // ★언마운트 뒤에 포커스를 준다★ 같은 틱에 주면 Radix 의 포커스 가드가 아직
+        // 살아 있어 도로 가져간다 — 한 프레임 뒤에야 트리거가 실제로 포커스를 받는다.
+        requestAnimationFrame(() => triggerRef.current?.focus()); }} onSave={addLegs} />
     </Section>
   );
 }
