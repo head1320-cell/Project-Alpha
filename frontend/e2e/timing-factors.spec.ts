@@ -153,3 +153,49 @@ test("AAS Timing: a daily factor discloses that its flip count is undersampled",
   await page.locator(".tfm-row").first().click();
   await expect(page.locator(".tfm-hist-lim")).toContainText("과소");
 });
+
+// ── Phase 12b — 데이터 계보 (§3.4 · §8.1 "lineage") ──────────────────────────
+// 11a 감사가 A3 로 잡은 자리다: §8.1 표는 Phase 6 배달로 적고 있었으나 코드에 0건이었다.
+test("AAS Timing: 미리보기 옆에 데이터 계보가 함께 온다", async ({ page }) => {
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("이격도");
+  await page.locator(".tfm-row").first().click();
+
+  const lin = page.locator(".tfm-lin");
+  await expect(lin, "값만 보여주고 출처를 말하지 않습니다").toBeVisible({ timeout: 20_000 });
+  await expect(lin).toContainText("데이터 계보");
+  await expect(lin).toContainText("출처");
+  // ★시점 기준이 핵심이다★ 이게 없으면 그 숫자가 언제 기준인지 알 방법이 없다.
+  await expect(lin).toContainText("시점 기준");
+});
+
+test("AAS Timing: mock 표기는 '사용' 이 아니라 '허용' 이라고 말한다", async ({ page }) => {
+  // ★이 문구가 정직성 축이다★ 실제로 어느 계층(DB/KIS/mock)이 답했는지는 읽기마다
+  // 다르고 추적 계측이 필요하다. 쓰였다고 단정하면 모르는 것을 아는 척하는 것이다.
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("이격도");
+  await page.locator(".tfm-row").first().click();
+
+  const lin = page.locator(".tfm-lin");
+  await expect(lin).toBeVisible({ timeout: 20_000 });
+  await expect(lin).toContainText("mock 폴백");
+  const txt = await lin.innerText();
+  expect(txt, "mock 을 '사용했다' 고 단정하고 있습니다")
+    .not.toMatch(/mock\s*(을|를)?\s*사용(했|함)/);
+});
+
+// ── Phase 12a — §6.1 "소스 없음" 묶음은 보이되 켤 수 없다 ────────────────────
+test("AAS Timing: 소스가 없는 팩터도 목록에 보이고, 사유와 함께 막힌다", async ({ page }) => {
+  // ★목록에서 빼면 사용자는 검토한 적조차 없게 된다★ "안 하기로 했다" 와 다른 상태다.
+  await openTimingWindow(page);
+  await page.locator(".tfm-search").fill("대차잔고");
+
+  const row = page.locator(".tfm-row").first();
+  await expect(row, "§6.1 의 소스 없음 팩터가 목록에 없습니다").toBeVisible({ timeout: 20_000 });
+  await expect(row.locator(".tfm-off")).toHaveText("미가용");
+  // 사유는 툴팁이 아니라 행에 — 셸이 세 창에 준 것과 같은 규칙
+  await expect(row.locator(".tfm-row-p")).toContainText("피드");
+
+  await row.click();
+  await expect(page.locator(".as-fb-apply", { hasText: "이 팩터 추가" })).toBeDisabled();
+});

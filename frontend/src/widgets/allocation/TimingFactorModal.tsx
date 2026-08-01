@@ -19,7 +19,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   allocationApi, frequencyLabel, frequencyVerdict, frequencyWarningText,
-  type CanaryInput, type CanarySignalType, type TimingFactorMeta,
+  type CanaryInput, type CanarySignalType, type DataLineage, type TimingFactorMeta,
 } from "@/entities/allocation";
 import { CatalogueShell, type CatalogueItem } from "@/shared/ui/CatalogueShell";
 import { TimingFactorPreview } from "./TimingFactorPreview";
@@ -179,8 +179,13 @@ export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
       onApply={() => { if (draft && !blocked) { onAdd(draft); onClose(); } }}
       applyDisabled={!draft || blocked}
       previewSlot={canPreview ? (
-        <TimingFactorPreview history={prevQ.data} loading={prevQ.isLoading}
-          error={prevQ.isError} unit={sel?.unit} />
+        <>
+          <TimingFactorPreview history={prevQ.data} loading={prevQ.isLoading}
+            error={prevQ.isError} unit={sel?.unit} />
+          {/* ★계보는 값 **옆에** 붙는다★ (§3.4/§8.1) 숫자만 보여주고 출처를 말하지 않으면
+              사용자는 그 숫자가 어느 시점 기준인지 물을 방법이 없다. */}
+          <LineagePanel lineage={prevQ.data?.lineage ?? null} />
+        </>
       ) : undefined}
       frequencyWarningSlot={sel && draft ? (
         <div className="tfm-freq">
@@ -248,5 +253,72 @@ export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
         </>
       )}
     </CatalogueShell>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 계보 패널 (스펙 §3.4 · §8.1 "lineage", Phase 12b)
+//
+// §8.1 소유권 표는 이 행을 Phase 6 배달로 적고 있었지만 **코드에 없었다** — 11a 감사가
+// A3 로 잡았고(포커스 트랩 행과 같은 종류의 거짓 기록), 여기가 그 자리다.
+//
+// ★값과 같은 화면에 있어야 의미가 있다★ 별도 탭이나 툴팁으로 밀어내면, 숫자를 읽는
+// 사람은 출처를 보지 않은 채로 판단하게 된다. 미가용 사유를 행에 적는 것과 같은 규칙이다.
+// ═══════════════════════════════════════════════════════════════════════════════
+const VINTAGE_LABEL: Record<DataLineage["vintage_basis"], string> = {
+  alfred_realtime: "ALFRED 빈티지 — 그 시점 공표본",
+  latest_revision: "최신 개정본",
+  price_truncation: "시점 절단된 가격 시계열",
+  not_applicable: "해당 없음",
+};
+
+const SOURCE_LABEL: Record<DataLineage["source"], string> = {
+  fred_alfred: "FRED / ALFRED",
+  ecos: "한국은행 ECOS",
+  fred_or_ecos: "FRED 또는 ECOS (시리즈에 따라)",
+  price_series: "가격 시계열",
+  none: "소스 없음",
+};
+
+export function LineagePanel({ lineage }: { lineage: DataLineage | null }) {
+  // ★없을 때 빈 표를 그리지 않는다★ 빈 계보는 "출처가 없다" 처럼 읽히는데, 실제로는
+  // "이 팩터를 카탈로그에서 못 찾았다" 다. 다른 사실이므로 그렇게 적는다.
+  if (!lineage) {
+    return (
+      <div className="tfm-lin tfm-lin-none">
+        데이터 계보를 찾지 못했습니다 — 이 팩터가 카탈로그에 없습니다.
+      </div>
+    );
+  }
+  return (
+    <div className="tfm-lin">
+      <div className="tfm-lin-h">데이터 계보</div>
+      <dl className="tfm-lin-rows">
+        <dt>출처</dt><dd className="tfm-lin-src">{SOURCE_LABEL[lineage.source]}</dd>
+        <dt>시점 기준</dt><dd>{VINTAGE_LABEL[lineage.vintage_basis]}</dd>
+        {lineage.inputs.length > 0 && (
+          <>
+            <dt>입력</dt>
+            <dd className="num">{lineage.inputs.join(" · ")}</dd>
+          </>
+        )}
+        {lineage.release_lag && (<><dt>공표 지연</dt><dd>{lineage.release_lag}</dd></>)}
+        {lineage.revision_policy && (
+          <><dt>개정</dt><dd>{lineage.revision_policy === "revised" ? "개정됨"
+            : lineage.revision_policy === "not_revised" ? "개정 없음"
+            : "시리즈에 따라 다름"}</dd></>
+        )}
+        {/* ★문구가 주장의 범위를 말한다★ "mock 을 썼다" 가 아니라 "폴백이 열려 있다" 다 —
+            실제로 어느 계층이 답했는지는 읽기마다 다르고 추적 계측이 필요하다. */}
+        <dt>mock 폴백</dt>
+        <dd>{lineage.mock_fallback_allowed
+          ? "허용됨 (실제 사용 여부는 읽기마다 다름)" : "차단됨"}</dd>
+      </dl>
+      {lineage.caveats.length > 0 && (
+        <ul className="tfm-lin-caveats">
+          {lineage.caveats.map((c) => <li key={c}>{c}</li>)}
+        </ul>
+      )}
+    </div>
   );
 }

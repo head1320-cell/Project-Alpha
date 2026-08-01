@@ -3420,6 +3420,15 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 2단 위계 카탈로그의 그룹 소제목 (Phase 11c) — 목록 안에서 행과 구별되어야 한다. */
 .tfm-group { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted);
   padding: 6px 2px 2px; text-transform: none; }
+/* 데이터 계보 패널 (Phase 12b, §3.4 · §8.1) — 값 바로 아래에 붙는다. */
+.tfm-lin { border: 1px solid var(--t-border); border-radius: 2px; padding: 8px 10px; margin-top: 8px; }
+.tfm-lin-h { font-size: 10px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted); margin-bottom: 6px; }
+.tfm-lin-rows { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 0; font-size: 11px; }
+.tfm-lin-rows dt { color: var(--t-muted); }
+.tfm-lin-rows dd { margin: 0; color: var(--t-ink); }
+.tfm-lin-src { font-weight: 600; }
+.tfm-lin-caveats { margin: 7px 0 0; padding-left: 14px; font-size: 10.5px; color: var(--t-muted); line-height: 1.5; }
+.tfm-lin-none { font-size: 11px; color: var(--t-muted); }
 .tfm-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .tfm-row { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px;
   border: 1px solid var(--t-border); border-radius: 2px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }

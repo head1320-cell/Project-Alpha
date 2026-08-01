@@ -388,6 +388,26 @@ export interface TimingFactorHistory {
   unavailable_count: number;
   /** 이 미리보기가 무엇을 보여주지 못하는지 — 반드시 화면에 그대로 노출한다. */
   limitations: string[];
+  /** §3.4 계보 — 카탈로그에 없는 팩터면 null(빈 계보를 지어내지 않는다). */
+  lineage: DataLineage | null;
+}
+
+/**
+ * 값이 **어디서 어떤 빈티지 기준으로** 왔는지 (스펙 §3.4, Phase 12b).
+ *
+ * ★`mock_fallback_allowed` 는 "mock 을 썼다" 가 아니다★ 게이트가 열려 있다는 사실만
+ * 말한다 — 실제로 어느 계층이 답했는지는 읽기마다 다르고 추적 계측이 필요하다.
+ */
+export interface DataLineage {
+  factor_id: string;
+  source: "fred_alfred" | "ecos" | "fred_or_ecos" | "price_series" | "none";
+  inputs: string[];
+  vintage_basis: "alfred_realtime" | "latest_revision" | "price_truncation" | "not_applicable";
+  release_lag: string | null;
+  revision_policy: string | null;
+  mock_fallback_allowed: boolean;
+  caveats: string[];
+  resolved_at: string;
 }
 
 /** 3자 비교의 한 다리 — 백엔드 CompositeSignal 과 1:1. */

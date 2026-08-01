@@ -62,6 +62,8 @@ class FactorHistory:
     available_count: int = 0
     unavailable_count: int = 0
     limitations: list[str] = field(default_factory=list)
+    #: `DataLineage.to_dict()` — 카탈로그에 없는 팩터면 None(빈 계보를 지어내지 않는다).
+    lineage: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -72,14 +74,28 @@ class FactorHistory:
             "available_count": self.available_count,
             "unavailable_count": self.unavailable_count,
             "limitations": list(self.limitations),
+            # ★계보는 미리보기와 **함께** 간다★ (§3.4/§8.1, Phase 12b) 값을 보여주면서
+            # 그 값이 어디서 어떤 빈티지로 왔는지 말하지 않으면, 사용자는 숫자만 믿게 된다.
+            "lineage": self.lineage,
         }
+
+
+def _lineage(factor_id: str) -> dict | None:
+    """계보 조회 — 실패해도 미리보기를 깨뜨리지 않는다(계보는 부가 정보다)."""
+    try:
+        from src.engine.data_lineage import lineage_for_factor
+        lin = lineage_for_factor(factor_id)
+        return None if lin is None else lin.to_dict()
+    except Exception:  # pragma: no cover - 방어
+        return None
 
 
 def _empty(factor_id: str, ticker: str, market: str, reason: str) -> FactorHistory:
     """값을 만들 수 없을 때 — 빈 점 목록 + **사유**. 0 으로 채운 그래프를 그리지 않는다."""
     return FactorHistory(
         factor_id=factor_id, ticker=ticker, market=market,
-        threshold=0.0, direction="above", step=STEP, limitations=[reason])
+        threshold=0.0, direction="above", step=STEP, limitations=[reason],
+        lineage=_lineage(factor_id))
 
 
 def count_state_flips(states: list[str]) -> int:
@@ -157,4 +173,5 @@ def factor_history(
         available_count=len(points) - unavailable,
         unavailable_count=unavailable,
         limitations=limitations,
+        lineage=_lineage(factor_id),
     )
