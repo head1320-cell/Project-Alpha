@@ -830,7 +830,8 @@ Phase 0–10 이 끝난 뒤 §§1–10 을 코드와 대조했다. **개수는 �
 | 배선된 팩터에 `unavailable` 을 달아 도달성 검사를 우회 | 우회 방지 테스트 실패 ✅ |
 
 **게이트(실측):** ruff clean · pytest **1529 / 10 skipped**(11c 기준 1487 → +42) · tsc 0 ·
-eslint 0 error(경고 28) · `next build` exit 0 · timing-factors E2E **13 passed**(8 → +5).
+eslint 0 error(경고 28) · `next build` exit 0 · timing-factors E2E **13 passed**(8 → +5) ·
+전체 Playwright **106 passed, exit 0**(38.4m, 1 worker; 101 + 5).
 
 ### Deferred
 ~~`AllocationProvider` splits into slices~~ — Phase 11b 에서 소화(위 참조).
