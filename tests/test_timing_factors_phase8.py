@@ -317,10 +317,32 @@ def test_all_catalogue_ids_are_reachable_through_some_read_path():
     read_src = inspect.getsource(v2.read_factor)
     for c in tf.CATALOG:
         fid = c["id"]
+        # ★`availability: "unavailable"` 은 면제가 아니라 **주장**이다★ (Phase 12a)
+        # 소스가 없다고 카탈로그가 스스로 밝힌 항목에 읽기 경로가 없는 것은 배선 누락이
+        # 아니라 사실의 반영이다. 다만 이 분기를 면제 목록처럼 쓰면 실수로 unavailable 을
+        # 붙여 배선 누락을 숨길 수 있으므로, 아래 별도 테스트가 그 주장을 검증한다.
+        if c.get("availability") == "unavailable":
+            continue
         if c.get("requires_as_of") or fid in _EVALUATE_EXEMPT:
             continue
         reachable = f'"{fid}"' in src or f'"{fid}"' in read_src
         assert reachable, f"{fid} 가 어떤 읽기 경로에서도 도달 불가능하다"
+
+
+def test_unavailable_is_not_a_shortcut_around_the_reachability_guard():
+    """★위 테스트의 면제 분기가 악용되지 않는지 지킨다★ (Phase 12a)
+
+    `availability: "unavailable"` 을 붙이면 도달성 검사를 건너뛴다. 그러니 그 표시는
+    **사유가 있고 실제로 평가되지 않을 때만** 정당하다 — 배선을 깜빡한 팩터에 이 표시를
+    붙여 검사를 통과시키는 길을 막는다.
+    """
+    for c in tf.CATALOG:
+        if c.get("availability") != "unavailable":
+            continue
+        assert c.get("unavailable_reason"), f"{c['id']} 가 사유 없이 검사를 면제받고 있다"
+        # 정말로 값이 나오지 않아야 한다 — 나온다면 '소스 없음' 이 거짓이다.
+        assert tf.evaluate(c["id"], "SPY", "us") is None, (
+            f"{c['id']} 는 unavailable 이라면서 값을 돌려준다")
 
 
 def test_every_catalogue_frequency_has_a_rank():

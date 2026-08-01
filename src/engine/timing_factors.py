@@ -31,6 +31,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from src.engine import timing_factor_meta as _meta
+
 logger = logging.getLogger(__name__)
 
 SIGNAL_FAMILIES = ("momentum", "deviation", "breakout", "overnight", "regime",
@@ -719,6 +721,13 @@ CATALOG: list[dict[str, Any]] = [
                            "분산은 다른 수치라 비교할 수 없다).",
      "provenance": "ETF proxy (KODEX/TIGER 섹터)", "existing": False},
 ]
+
+# ── §3.2 구조화 메타를 덧입힌다 (Phase 12a) ────────────────────────────────────
+# 감사(11a·A1)가 잰 것은 `CATALOG_BY_ID` 항목의 **키 합집합**이었다. 그래서 `catalog()`
+# 응답에서만 붙이면 감사가 다시 같은 결론을 낸다 — 목록 자체를 채운다.
+#
+# 소스가 아예 없는 §6.1 묶음도 여기서 합류한다. 켤 수는 없지만 **보이기는 해야** 한다.
+CATALOG = [_meta.enrich(c) for c in CATALOG] + _meta.UNAVAILABLE_FACTORS
 
 CATALOG_BY_ID: dict[str, dict] = {c["id"]: c for c in CATALOG}
 

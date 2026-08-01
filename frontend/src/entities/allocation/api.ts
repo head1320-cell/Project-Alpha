@@ -337,6 +337,23 @@ export interface TimingFactorMeta {
    * 값이 없는(=위험-오프) 규칙이 조용히 만들어진다.
    */
   requires_as_of?: boolean;
+
+  // ── §3.2 구조화 정의 필드 (Phase 12a) ──
+  /** §6 분류. 자유 텍스트 `provenance` 를 **대체하지 않고** 필터·그룹용으로 함께 온다. */
+  provenance_class?: "systrader_public" | "generic_public_technical"
+                   | "institutional_public" | "user_defined";
+  use_mode?: "gate" | "ranking" | "sizing" | "tilt" | "risk_off_trigger" | "scenario_trigger";
+  /** 실제로 경계가 있는 단위에만 온다 — 없으면 null(추측한 상한을 넣지 않는다). */
+  allowed_range?: [number, number] | null;
+  release_lag?: string | null;
+  revision_policy?: string | null;
+  /**
+   * 데이터 소스 자체의 가용성. `requires_as_of` 와 **직교한다** — 전자는 "소스가 없다",
+   * 후자는 "이 창의 평가 경로로는 시점을 넘길 수 없다". 둘 다 추가를 막지만 사유가 다르다.
+   */
+  availability?: "available" | "partial" | "unavailable";
+  unavailable_reason?: string | null;
+  expected_failure_mode?: string;
 }
 
 export interface TimingFactorCatalog {

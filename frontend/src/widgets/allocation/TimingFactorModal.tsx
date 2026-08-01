@@ -64,10 +64,17 @@ function toCatalogueItem(f: TimingFactorMeta): CatalogueItem {
     // 방법이 없어, 추가를 허용하면 값이 영원히 없는(=늘 위험-오프) 규칙이 조용히 생긴다.
     // 목록에서 숨기지 않고 **사유를 적어 보여준다** — 카탈로그에 있는 것을 안 보이게 하면
     // 사용자는 왜 없는지 알 수 없다.
-    available: f.requires_as_of ? false : undefined,
-    unavailableReason: f.requires_as_of
-      ? "시점(as_of) 기준으로 평가하는 팩터라 카나리 규칙으로 추가할 수 없습니다 — 백테스트 경로에서 사용합니다."
-      : undefined,
+    // ★두 사유는 직교한다★ `availability: "unavailable"` 은 **소스가 없다**(§6.1),
+    // `requires_as_of` 는 **이 창의 평가 경로로 시점을 넘길 수 없다**. 둘 다 추가를 막지만
+    // 사용자에게 알려야 할 내용이 다르므로 하나로 뭉뚱그리지 않는다. 소스 부재가 더 근본적인
+    // 사실이라 먼저 말한다.
+    available: f.availability === "unavailable" || f.requires_as_of ? false : undefined,
+    unavailableReason:
+      f.availability === "unavailable"
+        ? (f.unavailable_reason ?? "데이터 소스를 보유하고 있지 않습니다.")
+        : f.requires_as_of
+          ? "시점(as_of) 기준으로 평가하는 팩터라 카나리 규칙으로 추가할 수 없습니다 — 백테스트 경로에서 사용합니다."
+          : undefined,
   };
 }
 
@@ -121,7 +128,8 @@ export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
 
   // 미리보기 — 값을 못 만드는 팩터(as_of 계열)는 애초에 요청하지 않는다.
   // 임계·방향·티커가 바뀌면 queryKey 가 바뀌어 그 설정으로 다시 채점된다.
-  const canPreview = !!sel && !sel.requires_as_of && !!draft;
+  const blocked = !!sel && (sel.availability === "unavailable" || !!sel.requires_as_of);
+  const canPreview = !!sel && !blocked && !!draft;
   const prevQ = useQuery({
     queryKey: ["allocation", "timing-factor-history", sel?.id, draft?.id,
       draft?.threshold, draft?.direction],
@@ -168,8 +176,8 @@ export function TimingFactorModal({ open, onClose, onAdd, active = [] }: {
         },
       } : undefined}
       applyLabel="이 팩터 추가 →"
-      onApply={() => { if (draft && !sel?.requires_as_of) { onAdd(draft); onClose(); } }}
-      applyDisabled={!draft || !!sel?.requires_as_of}
+      onApply={() => { if (draft && !blocked) { onAdd(draft); onClose(); } }}
+      applyDisabled={!draft || blocked}
       previewSlot={canPreview ? (
         <TimingFactorPreview history={prevQ.data} loading={prevQ.isLoading}
           error={prevQ.isError} unit={sel?.unit} />

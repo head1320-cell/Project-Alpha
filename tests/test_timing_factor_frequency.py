@@ -54,6 +54,17 @@ def test_every_factor_declares_an_evaluation_frequency():
     assert missing == [], f"주기 메타가 없는 팩터: {missing} — 그 팩터는 충돌 경고를 못 띄운다"
 
 
+# §6.1 "소스 없음" 묶음 (Phase 12a) — 켤 수 없지만 목록에는 보인다. 주기를 비워 두면
+# 빈도 충돌 판정이 모르는 값을 만나므로 `day` 로 선언한다(이 팩터들이 존재한다면 일간
+# 데이터일 것이라는 사실 기반 표기이며, 평가되지 않으므로 경고를 띄울 일도 없다).
+EXPECTED.update({
+    "vix_skew": "day",
+    "borrow_short_interest": "day",
+    "option_implied_correlation": "day",
+    "crowding": "day",
+})
+
+
 @pytest.mark.parametrize("fid,freq", sorted(EXPECTED.items()))
 def test_declared_frequency_matches_the_data_the_factor_consumes(fid, freq):
     assert CATALOG_BY_ID[fid]["evaluation_frequency"] == freq
