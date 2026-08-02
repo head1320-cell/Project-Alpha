@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { overallConfidence } from "@/widgets/allocation/ViewBuilder";
 import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";
+import { ResearchIndex } from "@/widgets/allocation/ResearchIndex";
 import {
   FactorXRayBars, FrontierChart, RiskContribDonut, fmtSign,
 } from "@/widgets/allocation/parts";
@@ -41,6 +42,12 @@ export default function OverviewStage() {
 
   return (
     <>
+      {/* ★신원이 수치보다 먼저다★ (P4)
+          대시보드는 숫자를 먼저 보여주지만 리서치 색인은 "무엇을 연구 중인가" 를 먼저
+          보여준다. 아래 KPI·분석 격자는 그대로 둔다 — 쓸모 있는 분석을 지우는 것은
+          색인화가 아니다. 순서만 바꿨다. */}
+      <ResearchIndex />
+
       <div className="aas-kpi">
         {kpis.map((k) => (
           <div key={k.l} className="aas-kpi-c">
