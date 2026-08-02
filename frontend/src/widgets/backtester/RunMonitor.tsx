@@ -115,6 +115,10 @@ export function RunMonitor({ runId }: { runId: string }) {
   const elapsed = Math.max(0, Math.floor((now - startMs) / 1000));
   const elapsedStr = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
   const curIdx = STAGE_ORDER.indexOf(st.status as RunStatus);
+  // 엔진이 보고한 진행률. 유한한 숫자일 때만 숫자로 다룬다 — null/NaN 을 0 으로
+  // 흘려보내면 "측정 안 됨" 이 "0% 진행" 으로 보인다.
+  const pct = Number.isFinite(st?.progress_percent as number) ? (st!.progress_percent as number) : null;
+
   const failed = st.status === "failed" || st.status === "cancelled";
   const mockBadge = st.is_mock_data === true ? "MOCK 데이터" : st.is_mock_data === false ? "실데이터" : "데이터 소스 확인 중";
 
@@ -155,9 +159,29 @@ export function RunMonitor({ runId }: { runId: string }) {
           <div className="brun-progress-wrap">
             <div className="brun-progress-top">
               <span className="brun-stage">{STAGE_LABELS[st.status] ?? st.status}</span>
-              <span className="num">{Math.round(st.progress_percent)}%</span>
+              {/* ★있는 퍼센트는 지우지 않고, 없는 퍼센트는 지어내지 않는다★ (P8)
+                  이 수치는 엔진이 **실제로 끝낸 일**에서 나온다 — 시뮬레이션 완료 일수
+                  (`30 + 55*done/total`, backtest_run_routes.py:55-84). 경과 시간이나 UI
+                  단계 수에서 만든 값이 아니므로 지울 이유가 없다. 출처를 화면에 밝힌다.
+
+                  ★그런데 없을 때 0 을 적고 있었다★ progress_percent 컬럼은 nullable 인데
+                  `Math.round(null)` 은 0 이다. 그래서 엔진이 아무것도 보고하지 않은 런이
+                  "0% 진행" 으로 보였다 — 측정하지 않은 것과 0 을 같은 글자로 적는,
+                  P5 에서 고친 것과 정확히 같은 결함이다. 이제 없으면 단계 목록만 보여준다. */}
+              {pct != null && <span className="num brun-pct">{Math.round(pct)}% <em>엔진 보고</em></span>}
             </div>
-            <div className="brun-progress"><i style={{ width: `${Math.max(2, Math.min(100, st.progress_percent))}%` }} /></div>
+            {pct != null
+              ? <div className="brun-progress"><i style={{ width: `${Math.max(2, Math.min(100, pct))}%` }} /></div>
+              : (
+                <ol className="brun-phases">
+                  {STAGE_ORDER.map((s) => (
+                    <li key={s} className={`brun-phase${s === st.status ? " on" : ""}${
+                      STAGE_ORDER.indexOf(s) < curIdx ? " past" : ""}`}>
+                      {STAGE_LABELS[s] ?? s}
+                    </li>
+                  ))}
+                </ol>
+              )}
             <div className="brun-msg">
               {st.status_message}
               {stalled && (

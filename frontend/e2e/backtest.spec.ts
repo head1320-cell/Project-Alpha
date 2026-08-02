@@ -96,6 +96,64 @@ test("Backtest: polling survives a hidden tab (no permanent retryer pause)", asy
   await expect(page.locator(".brun-stage")).toContainText("시뮬레이션");
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 진행률 — 있는 것은 보여 주고, 없는 것은 지어내지 않는다 (P8)
+// ─────────────────────────────────────────────────────────────────────────────
+// ★계획서 v2 는 "퍼센트를 없애라" 고 했는데 그건 틀린 지시였다★
+// 이 수치는 경과 시간이 아니라 엔진이 실제로 끝낸 일에서 나온다 —
+// `30 + 55*done/total`(시뮬레이션 완료 일수, backtest_run_routes.py:55-84).
+// 지웠다면 진실한 신호를 없애고 위의 `.brun-progress` 단언까지 깨뜨렸을 것이다.
+//
+// ★진짜 결함은 반대편에 있었다★ progress_percent 컬럼은 nullable 인데
+// `Math.round(null)` 은 0 이다. 그래서 엔진이 아무것도 보고하지 않은 런이 "0% 진행" 으로
+// 보였다 — 측정하지 않은 것과 0 을 같은 글자로 적는, P5 에서 고친 것과 같은 결함이다.
+// ═══════════════════════════════════════════════════════════════════════════════
+const PCT_ID = "bt_pct_e2e_1";
+function pctStatus(extra: Record<string, unknown>) {
+  return {
+    run_id: PCT_ID, status: "simulating", current_stage: "simulating",
+    status_message: "시뮬레이션 400/785일", strategy_name: "Condition",
+    created_at: 1_700_000_000, started_at: 1_700_000_001, completed_at: null,
+    error_code: null, error_message: null, correlation_id: PCT_ID,
+    is_mock_data: true, is_pit_verified: false, engine_version: "dev", ...extra,
+  };
+}
+async function stubPct(page: import("@playwright/test").Page, extra: Record<string, unknown>) {
+  await page.route(new RegExp(`/runs/${PCT_ID}/status`), (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pctStatus(extra)) }));
+  await page.route(new RegExp(`/runs/${PCT_ID}$`), (r) =>
+    r.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ ...pctStatus(extra), input_snapshot: { universe: "kospi200" }, parameter_snapshot: {}, result: null }) }));
+}
+
+test("Backtest: 엔진이 보고한 진행률은 출처와 함께 그대로 보여 준다", async ({ page }) => {
+  await stubPct(page, { progress_percent: 62 });
+  await page.goto(`/backtest/runs/${PCT_ID}/loading`, { waitUntil: "networkidle" });
+
+  await expect(page.locator(".brun-progress")).toBeVisible();
+  await expect(page.locator(".brun-pct")).toContainText("62%");
+  // 어디서 온 숫자인지 밝힌다 — 출처 없는 퍼센트는 신뢰도를 과장한다.
+  await expect(page.locator(".brun-pct em")).toContainText("엔진 보고");
+  // 원자료(완료 일수)도 함께 보인다.
+  await expect(page.locator(".brun-msg")).toContainText("400/785일");
+});
+
+test("Backtest: 진행률이 없으면 0% 가 아니라 단계 목록만 보여 준다", async ({ page }) => {
+  await stubPct(page, { progress_percent: null });
+  await page.goto(`/backtest/runs/${PCT_ID}/loading`, { waitUntil: "networkidle" });
+
+  // ★핵심 단언★ 없는 것을 0 으로 적지 않는다.
+  const body = await page.locator(".brun-progress-wrap").innerText();
+  expect(body, "측정하지 않은 진행률을 0% 로 적으면 안 된다").not.toMatch(/\b0\s*%/);
+  expect(await page.locator(".brun-pct").count(), "퍼센트 표기가 없어야 한다").toBe(0);
+  expect(await page.locator(".brun-progress").count(), "비례 막대도 없어야 한다").toBe(0);
+
+  // 대신 실제 실행 단계를 열거한다 — 현재 단계가 표시된다.
+  await expect(page.locator(".brun-phases")).toBeVisible();
+  expect(await page.locator(".brun-phase").count()).toBeGreaterThan(4);
+  await expect(page.locator(".brun-phase.on")).toContainText("시뮬레이션");
+});
+
 test("Backtest: a genuinely missing run shows the honest not-found (real 404)", async ({ page }) => {
   await page.goto("/backtest/runs/bt_missing_e2e_xyz/loading", { waitUntil: "domcontentloaded" });
   await expect(page.getByText("만료되었거나 잘못된 링크")).toBeVisible({ timeout: 15_000 });
