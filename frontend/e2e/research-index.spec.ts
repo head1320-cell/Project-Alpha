@@ -88,10 +88,15 @@ test("색인: 신원 → 맥락 → 할 일 하나 순서로 놓이고, 스터�
   await page.goto("/allocation/overview", { waitUntil: "networkidle" });
   const idx = page.locator(".as-ri");
 
-  // ① 신원 ② 맥락 ③ 할 일 — DOM 순서가 곧 위계다.
+  // ① 신원 ② 할 일 — DOM 순서가 곧 위계다.
+  // 맥락(유니버스·스냅샷·룰셋·팩)은 여기서 빠졌다: ContextStrip 이 layout 에서 바로 위에
+  // 이미 렌더한다. 중복은 12 kB 였고(233→245, ADR 001 한도 초과) 같은 사실을 두 번
+  // 적으면 어긋나는 순간 어느 쪽이 맞는지 알 수 없다.
   const order = await idx.evaluate((el) =>
     [...el.children].map((c) => c.className.split(" ")[0]));
-  expect(order.slice(0, 3)).toEqual(["as-ri-id", "as-ri-ctx", "as-ri-next"]);
+  expect(order.slice(0, 2)).toEqual(["as-ri-id", "as-ri-next"]);
+  // 맥락은 색인이 아니라 스트립이 책임진다 — 같은 페이지에 살아 있어야 한다.
+  await expect(page.locator(".as-ctx .as-ctx-rules")).toBeVisible();
 
   // 주 CTA 는 정확히 하나 — 셸의 정책과 같은 소스를 쓴다.
   await expect(idx.locator(".as-ri-next-b")).toHaveCount(1);
