@@ -183,23 +183,47 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
       </div>
       {aasError && <div className="mc-aas-err" role="alert">{aasError}</div>}
 
-      {/* ── 서브탭 ── */}
-      <div className="mc-tabs">
-        {TABS.map((t) => { const I = t.icon; return (
-          <button key={t.id} className={`mc-tab${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
+      {/* ── 서브탭 ──
+          ★Radix Tabs 를 썼다가 되돌렸다 — 실측 +11 kB★
+          /macro 는 243 → 254 kB 가 됐다. ADR 001 한도는 4 kB 이고, 탭 바는 늘 보이므로
+          `next/dynamic` 으로 뺄 수도 없다(EvidenceDrawer 와 다른 점이다).
+          Radix 가 주는 것은 roving tabindex 와 aria 연결인데, 방향 전환도 수동 활성화도
+          없는 단순 수평 탭 바에서는 아래 30줄로 같은 것을 얻는다 — 11 kB 를 낼 이유가 없다.
+          (계획서는 "손수 만들지 말라" 고 했지만 그 근거는 비용을 재기 전 판단이었다.)
+          동작은 스펙(macro-tabs.spec.ts)이 지킨다 — 구현이 무엇이든 계약은 같다. */}
+      <div className="mc-tabs" role="tablist" aria-label="매크로 콕핏 섹션"
+        onKeyDown={(e) => {
+          const i = TABS.findIndex((t) => t.id === tab);
+          const to = e.key === "ArrowRight" ? (i + 1) % TABS.length
+            : e.key === "ArrowLeft" ? (i - 1 + TABS.length) % TABS.length
+            : e.key === "Home" ? 0
+            : e.key === "End" ? TABS.length - 1 : -1;
+          if (to < 0) return;
+          e.preventDefault();
+          setTab(TABS[to].id);
+          // 포커스도 함께 옮긴다 — 선택만 바뀌고 포커스가 남으면 키보드 사용자는 길을 잃는다.
+          (e.currentTarget.children[to] as HTMLElement | undefined)?.focus();
+        }}>
+        {TABS.map((t) => { const I = t.icon; const on = tab === t.id; return (
+          <button key={t.id} className={`mc-tab${on ? " on" : ""}`} onClick={() => setTab(t.id)}
+            role="tab" id={`mc-tab-${t.id}`} aria-controls={`mc-panel-${t.id}`}
+            aria-selected={on} tabIndex={on ? 0 : -1}>
             <span className="mc-tab-n">{t.n}</span><I size={14} />{t.label}
           </button>
         ); })}
       </div>
 
-      {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} krus={krus} />}
-      {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} />}
-      {tab === "regime" && <RegimeTab regime={regime} traj={traj} strips={strips} axisHist={axisHist} />}
-      {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} />}
-      {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
-      {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
-      {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
-      {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} loading={tabLoading} />}
+      {/* 패널은 활성 탭만 마운트한다(기존 동작 그대로). */}
+      <div role="tabpanel" id={`mc-panel-${tab}`} aria-labelledby={`mc-tab-${tab}`}>
+        {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} krus={krus} />}
+        {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} />}
+        {tab === "regime" && <RegimeTab regime={regime} traj={traj} strips={strips} axisHist={axisHist} />}
+        {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} />}
+        {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
+        {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
+        {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
+        {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} loading={tabLoading} />}
+      </div>
 
       {drill && <DrillDownModal series={drill.series} loading={drill.loading} onClose={() => setDrill(null)} />}
       {stratModal && (
