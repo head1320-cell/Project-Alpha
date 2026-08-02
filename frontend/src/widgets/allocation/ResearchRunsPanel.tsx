@@ -1,7 +1,7 @@
 "use client";
 // ResearchRuns 패널 (P1 재현성) — 현재 결과를 run으로 기록(서버 스탬프) + DB 목록 +
 // 두 run 나란히 비교(비중 Δ·요약지표 Δ). 저널(localStorage 초안)과 별개의 영속 기록.
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { attributionApi } from "@/entities/attribution/api";
 import { researchApi, type ResearchRunFull, type ResearchRunSummary } from "@/entities/research/api";
@@ -80,8 +80,13 @@ function CompareTable({ a, b }: { a: ResearchRunFull; b: ResearchRunFull }) {
   );
 }
 
-export function ResearchRunsPanel() {
+export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string | null } = {}) {
   const { canRun, result, recordRun, activeRunId, runsVersion, reopenRun, holdings } = useAllocation();
+  // ★URL 로 지목된 런★ (D6) — `?run=` 이 있으면 그 행을 표시하고 화면 안으로 옮긴다.
+  // 목록은 최근 30건이므로 더 오래된 런은 여기 없을 수 있다. 그 경우 조용히 넘어가지
+  // 않고 아래에서 "목록에 없다" 고 적는다 — 링크를 눌렀는데 아무 일도 안 일어나면
+  // 사용자는 자기가 잘못 눌렀다고 생각한다.
+  const focusRef = useRef<HTMLDivElement | null>(null);
   const [reopening, setReopening] = useState<string | null>(null);
   const [reopenErr, setReopenErr] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -93,6 +98,15 @@ export function ResearchRunsPanel() {
     queryFn: () => researchApi.list("allocation_analyze", 30).catch(() => null),
   });
   const runs: ResearchRunSummary[] = listQ.data?.runs ?? [];
+
+  // 목록이 도착한 뒤 지목된 행을 화면 안으로 옮긴다.
+  useEffect(() => {
+    if (focusRunId && focusRef.current) {
+      focusRef.current.scrollIntoView({ block: "center", behavior: "auto" });
+    }
+  }, [focusRunId, listQ.data]);
+  const focusMissing = !!focusRunId && listQ.isSuccess
+    && !(listQ.data?.runs ?? []).some((r) => r.run_id === focusRunId);
 
   const [idA, idB] = sel;
   const cmpQ = useQuery({
@@ -151,13 +165,23 @@ export function ResearchRunsPanel() {
 
       {dbUnavailable && <div className="as-err">런 목록을 불러오지 못했습니다 (백엔드/DB 미가용).</div>}
       {reopenErr && <div className="as-err as-rr-reopen-err">{reopenErr}</div>}
+      {/* ★링크가 가리키는 런이 목록에 없으면 그 사실을 적는다★ (D6)
+          목록은 최근 30건이다. 아무 표시 없이 넘어가면 사용자는 링크가 고장났는지
+          자기가 잘못 눌렀는지 알 수 없다. */}
+      {focusMissing && (
+        <div className="as-rr-focus-missing">
+          링크가 가리키는 런 <b className="num">{focusRunId}</b> 이(가) 최근 30건 목록에
+          없습니다 — 더 오래된 런이거나 삭제되었을 수 있습니다.
+        </div>
+      )}
       {!dbUnavailable && runs.length === 0 && !listQ.isLoading && (
         <div className="as-empty">기록된 런 없음 — 첫 런을 기록하면 재조회·비교가 가능해집니다.</div>
       )}
 
       {runs.map((r) => (
         <div key={r.run_id}
-          className={`as-rr-item${sel.includes(r.run_id) ? " on" : ""}${activeRunId === r.run_id ? " active" : ""}`}
+          ref={r.run_id === focusRunId ? focusRef : undefined}
+          className={`as-rr-item${sel.includes(r.run_id) ? " on" : ""}${activeRunId === r.run_id ? " active" : ""}${r.run_id === focusRunId ? " focused" : ""}`}
           onClick={() => toggle(r.run_id)} role="button" tabIndex={0}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggle(r.run_id); }}>
           <span className="as-rr-name">

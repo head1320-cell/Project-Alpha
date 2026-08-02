@@ -2,7 +2,8 @@
 // Decision Journal Workspace — 단순 타임라인이 아닌 구조화 저널:
 //   Macro View → Changed(가설/변화) → Reason(이유) → Result(결과, 자동 스냅샷)
 //   → Review(사후 검증, 나중에 편집). 세션 타임라인은 보조 피드로 함께.
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   deleteStudy, listStudies, updateStudyReview, type AllocationStudy,
@@ -42,8 +43,26 @@ function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () 
   );
 }
 
+// ★D6 — 런을 여는 durable URL★
+// 지금까지 `?run=` 이 없어서 "이 런을 열어라" 를 URL 로 표현할 수 없었다. 서버는 이미
+// `GET /api/v1/research-runs/{id}` 로 단건을 주고 `reopenRun()` 도 있는데, **주소만**
+// 없었던 것이다. 그래서 색인의 런 행이 아무 데로도 링크할 수 없었다.
+//
+// useSearchParams() 는 정적 프리렌더를 CSR 로 바일아웃시키므로 Suspense 경계가 필요하다
+// (Next 14: missing-suspense-with-csr-bailout). tsc 는 못 잡고 next build 가 잡는다 —
+// app/allocation/macro/page.tsx:20 이 같은 함정을 이미 주석으로 남겨 두었다.
 export default function JournalWorkspace() {
+  return (
+    <Suspense fallback={<div className="as-empty">저널을 준비하는 중…</div>}>
+      <JournalInner />
+    </Suspense>
+  );
+}
+
+function JournalInner() {
   const { result, views, holdings, timeline, saveStudyFull, studiesVersion, bumpStudies, canRun } = useAllocation();
+  // 링크로 지목된 런 — 없으면 null 이고 기존 동작 그대로다.
+  const focusRunId = useSearchParams().get("run");
   const [studies, setStudies] = useState<AllocationStudy[]>([]);
   const [name, setName] = useState("");
   const [changed, setChanged] = useState("");
@@ -118,7 +137,7 @@ export default function JournalWorkspace() {
         <StrategyHealthPanel />
       </aside>
       <main className="as-center">
-        <ResearchRunsPanel />
+        <ResearchRunsPanel focusRunId={focusRunId} />
         <DecisionJournal />
         <section className="as-card">
           <div className="as-card-title">QUICK NOTES <span className="as-note-inline">{studies.length}건 · localStorage(세션 메모)</span></div>

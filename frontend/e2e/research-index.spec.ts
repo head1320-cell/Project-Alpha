@@ -107,3 +107,52 @@ test("색인: 신원 → 맥락 → 할 일 하나 순서로 놓이고, 스터�
   const badge = idx.locator(".tev-caution", { hasText: "브라우저 로컬" });
   await expect(badge.locator(".tev-r")).toContainText("이 브라우저에만");
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// D6 — 런을 여는 durable URL
+// ─────────────────────────────────────────────────────────────────────────────
+// 승인 전까지 색인의 런 행은 클릭 불가였다. 서버는 `GET /research-runs/{id}` 로 단건을
+// 주고 `reopenRun()` 도 있는데 **주소가 없어서** 링크할 데가 없었기 때문이다.
+// 없는 기능을 있는 것처럼 보이게 하지 않으려고 링크를 달지 않았고, 이제 주소가 생겼다.
+//
+// ★durable 의 뜻★ 새로고침해도, 주소를 복사해 다시 열어도 같은 런을 가리켜야 한다.
+// 그렇지 않으면 그냥 클릭 핸들러이지 URL 이 아니다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("D6: 색인의 런 행이 그 런을 여는 주소로 링크된다", async ({ page }) => {
+  await stubRuns(page, 3);
+  await page.goto("/allocation/overview", { waitUntil: "networkidle" });
+
+  const link = page.locator(".as-ri-run .as-ri-run-id").first();
+  const href = await link.getAttribute("href");
+  expect(href, "런 행은 주소를 가져야 한다").toMatch(/\/allocation\/journal\?run=rr_/);
+});
+
+test("D6: 지목된 런이 저널에서 표시되고 새로고침을 견딘다", async ({ page }) => {
+  await stubRuns(page, 3);
+  const target = mkRun(2);
+  await page.goto(`/allocation/journal?run=${target.run_id}`, { waitUntil: "networkidle" });
+
+  // 표시된 행이 **그 런** 인지 확인한다.
+  // 패널은 `r.name || r.run_id` 를 그리므로 이름이 있는 런은 raw id 를 보여 주지 않는다
+  // (처음엔 id 로 단언했다가 여기서 걸렸다 — 기능이 아니라 단언이 틀렸다).
+  const focused = page.locator(".as-rr-item.focused");
+  await expect(focused, "지목된 행은 정확히 하나").toHaveCount(1);
+  await expect(focused, "지목된 행이 대상 런이어야 한다").toContainText(target.name);
+
+  // ★durable★ 새로고침해도 주소가 같은 런을 가리킨다.
+  await page.reload({ waitUntil: "networkidle" });
+  expect(page.url(), "주소가 같은 런을 계속 가리킨다").toContain(`run=${target.run_id}`);
+});
+
+test("D6: 링크가 가리키는 런이 목록에 없으면 조용히 넘어가지 않는다", async ({ page }) => {
+  // 최근 목록에 없는 id — 사용자가 오래된 주소를 열었을 때다.
+  await page.route("**/api/v1/research-runs?**", (r) => r.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify({ runs: [] }),
+  }));
+  await page.goto("/allocation/journal?run=rr_1600000000_00000000", { waitUntil: "networkidle" });
+
+  // 아무 표시가 없으면 사용자는 링크가 고장났는지 자기가 잘못 눌렀는지 알 수 없다.
+  await expect(page.locator(".as-rr-focus-missing")).toBeVisible();
+  await expect(page.locator(".as-rr-focus-missing")).toContainText("최근 30건 목록에");
+});

@@ -50,7 +50,12 @@ export default function ResearchIndexLists({ activeRunId, studiesVersion }: {
           <ul className="as-ri-runs">
             {runs.map((r) => (
               <li key={r.run_id} className={`as-ri-run${r.run_id === activeRunId ? " on" : ""}`}>
-                <span className="as-ri-run-id num">{r.run_id}</span>
+                {/* ★이제 진짜로 그 런을 연다★ (D6)
+                    이전에는 행이 클릭 불가였다 — 서버는 단건 조회를 주는데 **주소가
+                    없어서** 링크할 데가 없었기 때문이다. `?run=` 이 생겨 이 링크는
+                    새로고침·공유에도 같은 런을 가리킨다. */}
+                <Link href={`/allocation/journal?run=${encodeURIComponent(r.run_id)}`}
+                  className="as-ri-run-id num">{r.run_id}</Link>
                 <span className="as-ri-run-nm">{r.name || r.kind}</span>
                 <span className="as-ri-run-t num">{ts(r.created_at)}</span>
                 {r.snapshot?.coverage?.source === "mock" && <em className="as-ri-run-mock">합성</em>}

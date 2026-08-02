@@ -4575,3 +4575,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   .as-dj-chain { gap: 5px; }
   .as-dj-more { margin-left: 0; flex-basis: 100%; }
 }
+/* D6 — 링크로 지목된 런 행. 활성 런(.active)과 다른 표시여야 한다: "지금 세션의 런" 과
+   "링크가 가리킨 런" 은 다른 사실이다. */
+.as-rr-item.focused { box-shadow: inset 3px 0 0 var(--t-accent); background: var(--t-surface); }
+.as-rr-focus-missing { font-size: 10.5px; color: #a16207; background: #fffbeb;
+  border: 1px dashed #f59e0b; border-radius: 2px; padding: 6px 9px; margin-bottom: 6px; line-height: 1.45; }
+.as-ri-run-id { color: var(--t-accent); text-decoration: none; }
+.as-ri-run-id:hover { text-decoration: underline; }
