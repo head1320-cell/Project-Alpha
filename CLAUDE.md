@@ -86,7 +86,7 @@ cd frontend && npx tsc --noEmit && npx next build && npx playwright test
 `uvicorn --workers 1` 유지 — 캐시·DART 쿼터 카운터·적재 상태가 전부 프로세스 로컬이라, 워커를
 늘리려면 그 상태를 먼저 Redis/DB로 옮겨야 합니다.
 
-**프론트엔드** — Tailwind는 **이미 쓰입니다**(tsx 131/46). shadcn/ui는 `shared/ui/shadcn` 벤더링 · 토큰은 `globals.css` §34가 기존 `--t-*`에 매핑(복제 금지) · **AAS만 이전, 레거시는 순수 CSS** · `:root` 4개 불변 · CSS-in-JS 금지 — [ADR 001](docs/decisions/adr-001-tailwind-shadcn-aas-migration.md).
+**프론트엔드** — Tailwind는 **이미 쓰입니다**(tsx 131/46). shadcn/ui는 `shared/ui/shadcn` 벤더링 · 토큰은 `globals.css` §34가 기존 `--t-*`에 매핑(복제 금지) · **AAS만 이전, 레거시는 순수 CSS** · 선행 `:root` 4블록 불변(EOF의 shadcn 브리지가 5번째 — ADR 지정, 세지도 지우지도 말 것) · CSS-in-JS 금지 — [ADR 001](docs/decisions/adr-001-tailwind-shadcn-aas-migration.md).
 API 주소를 빌드 타임에 박지 말 것(`NEXT_PUBLIC_*`·`rewrites` 금지) — 반드시 런타임 프록시 경유.
 **CSS 클래스명이 E2E 계약입니다**(`data-testid` 미사용, Playwright가 `.tfm-*`·`.brun-*`·`.as-*`
 등을 직접 선택) — 클래스명을 바꾸면 해당 스펙도 함께 고칠 것.
