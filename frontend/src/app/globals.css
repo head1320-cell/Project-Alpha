@@ -2390,6 +2390,11 @@ h6 { font-size: 1rem; }
 .tstate-empty .tstate-glyph { font-size: 20px; line-height: 1; color: var(--t-border); }
 .tstate-error { display: flex; flex-direction: column; gap: 4px; color: var(--color-bear);
   background: rgba(220,38,38,.03); border: 1px solid var(--color-bear); border-radius: 2px; padding: 14px 16px; }
+/* 측정 불가 — 빈 상태(중앙정렬 회색 여백)와도, 오류(빨강)와도 달라야 한다.
+   한계이지 고장이 아니므로 호박색 점선: "여기는 비어 있는 게 아니라 막혀 있다". */
+.tstate-unavail { display: flex; flex-direction: column; gap: 4px; color: #a16207;
+  background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 2px; padding: 14px 16px; }
+.tstate-unavail-l { font-weight: 600; }
 .tstate-sub { color: var(--t-muted); font-size: 11.5px; }
 
 /* 데이터 정렬 일관성 — 숫자 칸 tabular-nums */
@@ -4348,3 +4353,24 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-tov-off { margin-left: auto; }
 /* 파괴적 교체는 오버레이와 **다르게 보여야** 한다 — 같은 모양이면 같은 일로 읽힌다. */
 .as-tm-replace { border-color: var(--color-bear); color: var(--color-bear); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   38. 증거 배지 .tev-* (UI/UX 현대화 P2)
+   ───────────────────────────────────────────────────────────────────────────
+   새 색을 도입하지 않는다 — .as-attr-basis / .as-ctx-stale 이 이미 쓰는 팔레트를
+   그대로 쓴다(초록=실측 · 호박=주의 · 회색테두리=없음). 사용자가 이미 학습한 언어다.
+
+   사유(.tev-r)는 **보이는 텍스트**다. title= 로 숨기지 않는다 — 호버는 키보드·터치
+   사용자에게 존재하지 않는다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.tev { display: inline-flex; align-items: baseline; gap: 5px; flex-wrap: wrap;
+  font-size: 10px; letter-spacing: .02em; vertical-align: middle; }
+.tev-l { font-weight: 700; padding: 1px 5px; border-radius: 2px; white-space: nowrap; }
+.tev-r { font-size: 10.5px; color: var(--t-muted); line-height: 1.45; }
+
+.tev-measured    .tev-l { background: var(--color-bull-bg); color: #15803d; }
+.tev-estimated   .tev-l { background: #fef3c7; color: #b45309; }
+.tev-caution     .tev-l { background: #fef3c7; color: #a16207; border: 1px solid #f59e0b; }
+.tev-unavailable .tev-l { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
+/* 없음은 회색이지만 **연하게 죽이지 않는다** — 흐리게 그리면 "괜찮다" 로 읽힌다. */
+.tev-unavailable .tev-r { color: var(--t-text); }

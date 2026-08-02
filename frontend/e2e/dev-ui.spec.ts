@@ -9,7 +9,7 @@ import { trackErrors, uniq } from "./helpers";
 // 지금까지는 소비 화면의 스펙이 우연히 걸러 주기를 기대하는 구조였다.
 //
 // 이 스펙은 데이터 없이 렌더되는 갤러리에서 다음 세 가지를 본다:
-//   1) shared/ui 의 컴포넌트 export 32개가 전부 표본으로 마운트되었는가(제외 없음)
+//   1) shared/ui 의 컴포넌트 export 35개가 전부 표본으로 마운트되었는가(제외 없음)
 //   2) 각 프리미티브가 내보내는 **클래스 계약**이 그대로인가
 //   3) 순수 프레젠테이션 화면인데 uncaught error / 네트워크 호출이 없는가
 //
@@ -29,8 +29,10 @@ const SPECIMENS = [
   "Section", "FormRow", "Field", "ErrorMsg", "Empty",
   // kit (7) — Section·Field 는 primitives 와 이름이 겹치는 별개 구현
   "GroupedSelect", "Toggle", "Section", "SubToggle", "Field", "QuickStepper", "Segmented",
-  // States (3)
-  "LoadingState", "EmptyState", "ErrorState",
+  // States (5) — UnavailableState·AsyncState 는 P2 에서 추가됐다.
+  "LoadingState", "EmptyState", "ErrorState", "UnavailableState", "AsyncState",
+  // evidence (1)
+  "EvidenceBadge",
   // feedback (7)
   "Skeleton", "SkeletonText", "SkeletonCard", "SkeletonTable", "TickValue", "MetricCard", "Sparkline",
   // MiniViz (3) + SectionHead (1)
@@ -115,23 +117,59 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");   // 셸 마크업과 격리
 
-    // 각 상태 2 variant(기본 / label+sub) → .tstate 6개
-    await expect(g.locator(".tstate")).toHaveCount(6);
-    await expect(g.locator(".tstate.tstate-loading")).toHaveCount(2);
-    await expect(g.locator(".tstate.tstate-empty")).toHaveCount(2);
+    // 세 상태 × 2 variant = 6, + UnavailableState 2, + AsyncState 의 비-ready 3 = 11
+    await expect(g.locator(".tstate")).toHaveCount(11);
+    await expect(g.locator(".tstate.tstate-loading")).toHaveCount(3);
+    await expect(g.locator(".tstate.tstate-empty")).toHaveCount(3);
     await expect(g.locator(".tstate.tstate-error")).toHaveCount(2);
+    await expect(g.locator(".tstate.tstate-unavail")).toHaveCount(3);
 
     // 하위 요소 계약
-    await expect(g.locator(".tstate-loading .tstate-spinner")).toHaveCount(2);
-    await expect(g.locator(".tstate-empty .tstate-glyph")).toHaveCount(2);
-    await expect(g.locator(".tstate-sub")).toHaveCount(3); // sub 를 넘긴 variant 만
+    await expect(g.locator(".tstate-loading .tstate-spinner")).toHaveCount(3);
+    await expect(g.locator(".tstate-empty .tstate-glyph")).toHaveCount(3);
+    await expect(g.locator(".tstate-sub")).toHaveCount(6); // sub/reason 이 있는 것만
 
     // 로딩은 role=status, 오류는 role=alert — 스크린리더 계약
-    await expect(g.locator('.tstate-loading[role="status"]')).toHaveCount(2);
+    await expect(g.locator('.tstate-loading[role="status"]')).toHaveCount(3);
     await expect(g.locator('.tstate-error[role="alert"]')).toHaveCount(2);
 
     await expect(g.locator(".tstate-loading").first()).toContainText("[ LOADING ]");
     await expect(g.locator(".tstate-error").first()).toContainText("[ ERROR ]");
+
+    // ★unavailable 은 empty 와 반드시 다르게 보여야 한다★ 같은 모양이면 "없음" 이
+    // "문제 없음" 으로 읽힌다. 클래스가 다르다는 것만으로는 부족하므로 실제 계산된
+    // 배경색이 서로 다른지까지 본다.
+    await expect(g.locator(".tstate-unavail").first()).toContainText("[ N/A ]");
+    const bg = (l: string) => g.locator(l).first().evaluate((e) => getComputedStyle(e).backgroundColor);
+    expect(await bg(".tstate-unavail"), "unavailable 이 empty 와 같은 배경이면 안 된다")
+      .not.toBe(await bg(".tstate-empty"));
+
+    // unavailable 은 사유가 필수 prop — 화면에 실제로 사유 텍스트가 나와야 한다
+    for (const el of await g.locator(".tstate-unavail").all()) {
+      expect((await el.locator(".tstate-sub").innerText()).trim().length,
+        "사유 없는 unavailable 은 존재할 수 없다").toBeGreaterThan(0);
+    }
+  });
+
+  test("EvidenceBadge 의 .tev-* 계약 — 사유가 호버 뒤에 숨지 않는다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const g = page.locator(".devui");
+
+    await expect(g.locator(".tev")).toHaveCount(4);
+    for (const k of ["measured", "estimated", "caution", "unavailable"]) {
+      await expect(g.locator(`.tev.tev-${k}`), `${k} 처리 1개`).toHaveCount(1);
+      await expect(g.locator(`.tev-${k} .tev-l`)).toBeVisible();
+    }
+
+    // ★이 스펙의 핵심★ caution·unavailable 의 사유는 **보이는 텍스트**여야 한다.
+    // title= 로 옮기는 순간 키보드·터치 사용자에게서 사라진다 — 이번 현대화가
+    // ContextStrip 에서 고치려는 바로 그 결함이다.
+    for (const k of ["caution", "unavailable"]) {
+      const r = g.locator(`.tev-${k} .tev-r`);
+      await expect(r, `${k} 은 사유를 보여야 한다`).toBeVisible();
+      expect((await r.innerText()).trim().length).toBeGreaterThan(0);
+    }
+    expect(await g.locator(".tev[title]").count(), "배지는 title= 로 사유를 숨기지 않는다").toBe(0);
   });
 
   test("MiniViz / StatGrid / Stat / SectionHead 의 클래스 계약이 유지된다", async ({ page }) => {
@@ -211,7 +249,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
   // ── shadcn 섹션 (Phase 5) ───────────────────────────────────────────────
   // ★기존 .devui-item 단언을 건드리지 않는다★ — shadcn 표본은 .devui-sitem 이라는
-  // 별개 클래스를 쓰므로 위의 "표본 32개" 계약은 그대로 유효하다.
+  // 별개 클래스를 쓰므로 위의 "표본 35개" 계약은 그대로 유효하다.
   test("shadcn 섹션이 기존 갤러리 계약을 깨지 않고 함께 렌더된다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");

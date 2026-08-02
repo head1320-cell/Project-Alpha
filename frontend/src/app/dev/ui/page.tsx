@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // /dev/ui — shared/ui 프리미티브 격리 갤러리
 //
-// 목적: shared/ui 의 컴포넌트 export **32개 전부**를 데이터 없이 한 화면에서 렌더한다.
+// 목적: shared/ui 의 컴포넌트 export **35개 전부**를 데이터 없이 한 화면에서 렌더한다.
 //   · 에이전트가 "이 프리미티브가 어떻게 생겼나"를 알려고 소비 화면을 뒤지지 않아도 된다.
 //   · Playwright(e2e/dev-ui.spec.ts)가 여기서 **클래스 계약을 회귀 검사**한다.
 //     프리미티브가 내보내는 클래스명(.pv-* · .tstate-* · .tstat-* · .skeleton …)이
@@ -33,7 +33,8 @@ import {
   GroupedSelect, Toggle, Section as KSection, SubToggle,
   Field as KField, QuickStepper, Segmented,
 } from "@/shared/ui/kit";
-import { LoadingState, EmptyState, ErrorState } from "@/shared/ui/States";
+import { LoadingState, EmptyState, ErrorState, UnavailableState, AsyncState } from "@/shared/ui/States";
+import { EvidenceBadge } from "@/shared/ui/evidence";
 // shadcn 벤더링본 — .devui-item 계약을 건드리지 않도록 **별도 섹션**에서만 쓴다(아래 주석 참조).
 import { Button } from "@/shared/ui/shadcn/button";
 import { Badge as ShadBadge } from "@/shared/ui/shadcn/badge";
@@ -161,7 +162,7 @@ export default function DevUiPage() {
           <code>e2e/dev-ui.spec.ts</code> 가 여기서 클래스 계약을 회귀 검사합니다.
         </p>
         <p className="devui-sub devui-omit">
-          shared/ui 의 컴포넌트 export 32개를 빠짐없이 렌더합니다 — 스펙이 이 1:1 대응을 강제합니다.
+          shared/ui 의 컴포넌트 export 35개를 빠짐없이 렌더합니다 — 스펙이 이 1:1 대응을 강제합니다.
         </p>
       </header>
 
@@ -276,6 +277,36 @@ export default function DevUiPage() {
         <Specimen name="ErrorState" from="States">
           <Variant label="기본"><ErrorState /></Variant>
           <Variant label="label + sub"><ErrorState label="조회 실패" sub="HTTP 500 — 백엔드 로그를 확인하세요" /></Variant>
+        </Specimen>
+        <Specimen name="UnavailableState" from="States"
+          note="빈 상태(0건)와 다른 사실입니다 — 사유가 필수 prop 입니다.">
+          <Variant label="사유 필수"><UnavailableState reason="빈티지 이력이 없어 과거 시점의 값을 재구성할 수 없습니다." /></Variant>
+          <Variant label="label 지정"><UnavailableState label="Brinson 분해 불가" reason="벤치마크 구성종목 시계열이 없습니다." /></Variant>
+        </Specimen>
+        <Specimen name="AsyncState" from="States"
+          note="네 갈래를 한 곳에서. unavailable 만 reason 이 필수라 tsc 가 정직함을 강제합니다.">
+          <Variant label="loading"><AsyncState status={{ kind: "loading", label: "최적화 중" }} /></Variant>
+          <Variant label="empty"><AsyncState status={{ kind: "empty", label: "해당 종목 없음" }} /></Variant>
+          <Variant label="unavailable"><AsyncState status={{ kind: "unavailable", reason: "이 팩터는 데이터 소스가 없습니다." }} /></Variant>
+          <Variant label="ready"><AsyncState status={{ kind: "ready" }}><span className="num">12.3%</span></AsyncState></Variant>
+        </Specimen>
+      </section>
+
+      {/* ── shared/ui/evidence ─────────────────────────────────────────────── */}
+      <section className="devui-group">
+        <h2 className="devui-group-title">shared/ui/evidence</h2>
+        <p className="devui-group-note">
+          증거 상태의 <b>시각 처리</b> 단일 출처. 의미(DataStatus·ResearchUsage·Basis)는
+          정의하지 않습니다 — 그 매핑은 열거형을 아는 계층이 합니다(FSD 상 shared 는
+          entities 를 import 할 수 없습니다). <code>.tev-*</code> 가 클래스 계약입니다.
+        </p>
+
+        <Specimen name="EvidenceBadge" from="evidence"
+          note="caution·unavailable 은 reason 이 필수. 사유는 title= 이 아니라 보이는 텍스트로 나갑니다.">
+          <Variant label="measured"><EvidenceBadge kind="measured">실측</EvidenceBadge></Variant>
+          <Variant label="estimated"><EvidenceBadge kind="estimated" reason="합성(mock) 시세로 계산됨">추정</EvidenceBadge></Variant>
+          <Variant label="caution"><EvidenceBadge kind="caution" reason="입력이 바뀌었지만 아직 재계산되지 않았습니다.">주의</EvidenceBadge></Variant>
+          <Variant label="unavailable"><EvidenceBadge kind="unavailable" reason="데이터 출처가 없습니다.">없음</EvidenceBadge></Variant>
         </Specimen>
       </section>
 
