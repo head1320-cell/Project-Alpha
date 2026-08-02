@@ -4503,3 +4503,19 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 8px; }
 .brun-phase.past { color: var(--t-ink); border-color: var(--t-ink); opacity: .55; }
 .brun-phase.on { color: var(--t-accent); border-color: var(--t-accent); font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   44. 저널 재현 사슬 .as-dj-chain (UI/UX 현대화 P9)
+   ───────────────────────────────────────────────────────────────────────────
+   결정 → 런 → 데이터 출처 → 코드 버전. 사슬이 끊긴 항목(런 미연결)은 흐린 각주가 아니라
+   경고다 — "이 결정은 나중에 검증할 수 없다" 는 뜻이기 때문이다.
+   룰셋 버전·팩 해시는 런의 inputs 에 있고 목록 응답에는 없다. 채워 넣지 않고 어디서
+   볼 수 있는지만 적는다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-dj-chain { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  border-top: 1px dashed var(--t-border); margin-top: 6px; padding-top: 6px; }
+.as-dj-link { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
+.as-dj-link em { font-style: normal; font-size: 8.5px; letter-spacing: .06em; color: var(--t-muted); text-transform: uppercase; }
+.as-dj-link b { font-size: 10px; color: var(--t-ink); overflow-wrap: anywhere; }
+.as-dj-arrow { color: var(--t-border); font-size: 10px; }
+.as-dj-more { font-size: 9.5px; color: var(--t-muted); margin-left: auto; }
