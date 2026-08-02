@@ -43,6 +43,16 @@ const COMBOS: { id: string; label: string }[] = [
 ];
 
 function Leg({ name, leg }: { name: string; leg: ThreeWayLeg }) {
+  // ★판정하지 못한 다리에는 숫자를 적지 않는다★ (P5)
+  // 이전에는 unavailable 다리도 `0%` 와 폭 0 막대를 그렸다 — 진짜 0% 노출과 픽셀 단위로
+  // 같았다. 바로 위 헤더에는 "판정 불가" 라고 적혀 있는데 그 아래 숫자가 그것을 뒤집는
+  // 셈이었다. 같은 화면이 두 가지를 말하면 사용자는 숫자를 믿는다.
+  //
+  // 막대를 **늘리는** 방향으로 고치지 않았다(초기 계획은 그랬다). 노출 축에서 긴 막대는
+  // "더 투자됨" 으로 읽히므로, 판정하지 못한 것을 포지션처럼 보이게 만든다.
+  // 옆 화면 ScenarioThreeWay 가 이미 같은 규칙을 지키고 있다 — 그쪽을 따랐다.
+  const judged = leg.state !== "unavailable"
+    && typeof leg.exposure === "number" && Number.isFinite(leg.exposure);
   const pct = Math.round(Math.max(0, Math.min(1, leg.exposure)) * 100);
   return (
     <div className={`as-3w-leg ${name}`}>
@@ -50,11 +60,17 @@ function Leg({ name, leg }: { name: string; leg: ThreeWayLeg }) {
         <span className="as-3w-leg-nm">{LEG_LABEL[name] ?? name}</span>
         <span className={`as-3w-state ${leg.state}`}>{STATE_LABEL[leg.state]}</span>
       </div>
-      <div className="as-3w-exp">
-        <b className="num">{pct}%</b>
-        <span className="as-note-inline">위험자산 노출</span>
-      </div>
-      <div className="as-3w-bar"><i style={{ width: `${pct}%` }} /></div>
+      {judged ? (
+        <>
+          <div className="as-3w-exp">
+            <b className="num">{pct}%</b>
+            <span className="as-note-inline">위험자산 노출</span>
+          </div>
+          <div className="as-3w-bar"><i style={{ width: `${pct}%` }} /></div>
+        </>
+      ) : (
+        <div className="as-3w-na">판정 불가 — 노출을 계산하지 않습니다</div>
+      )}
       {/* 팩터 집계는 세 다리가 공유한다 — 기준선만 타이밍을 쓰지 않으므로 뺀다. */}
       {name !== "baseline" && (
         <div className="as-3w-counts num">

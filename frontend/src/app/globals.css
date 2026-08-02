@@ -4486,3 +4486,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-ri-run-t { color: var(--t-muted); font-size: 9.5px; white-space: nowrap; }
 .as-ri-run-mock { font-style: normal; font-size: 8.5px; font-weight: 700; color: #a16207;
   background: #fef3c7; border-radius: 2px; padding: 1px 4px; }
+/* 판정 불가 다리 — 숫자·막대 대신 사유(P5). 성과처럼 보이지 않아야 하므로 주의색 점선. */
+.as-3w-na { font-size: 10.5px; color: #a16207; background: #fffbeb; border: 1px dashed #f59e0b;
+  border-radius: 2px; padding: 6px 8px; line-height: 1.4; }

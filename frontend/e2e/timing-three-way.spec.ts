@@ -56,7 +56,22 @@ test("3자 비교: 세 다리가 각각 상태·노출·이유를 갖는다", as
   await expect(page.locator(LEGS)).toHaveCount(3);
   for (const leg of await page.locator(LEGS).all()) {
     await expect(leg.locator(".as-3w-state")).toBeVisible();
-    await expect(leg.locator(".as-3w-exp b")).toContainText("%");
+
+    // ★이 단언은 P5 에서 뒤집혔다 — 예전 버전이 결함을 계약으로 굳히고 있었다★
+    // 이전에는 세 다리 **전부** 에 `.as-3w-exp b` 가 "%" 를 담기를 요구했다. 그런데
+    // 판정 불가 다리의 노출은 0 이므로 화면에 `0%` 와 폭 0 막대가 그려졌고, 그것은 진짜
+    // 0% 노출과 구별되지 않았다. 헤더에 "판정 불가" 라고 적어 두고 아래에 숫자를 적으면
+    // 사용자는 숫자를 믿는다. 이제 판정한 다리에만 숫자를 요구하고, 판정하지 못한
+    // 다리에는 **숫자가 없을 것**을 요구한다.
+    const na = leg.locator(".as-3w-na");
+    if (await na.count()) {
+      await expect(na, "판정 불가 사유가 보여야 한다").toBeVisible();
+      expect(await leg.locator(".as-3w-exp").count(), "판정 불가에 노출 수치를 적지 않는다").toBe(0);
+      expect(await leg.locator(".as-3w-bar").count(), "판정 불가에 비례 막대를 그리지 않는다").toBe(0);
+    } else {
+      await expect(leg.locator(".as-3w-exp b")).toContainText("%");
+    }
+
     // 스펙 §8: 모든 위험-온/오프 판단이 이유를 갖는다 — 빈 문자열이면 이유가 없는 것이다.
     expect((await leg.locator(".as-3w-why").innerText()).trim().length).toBeGreaterThan(5);
   }
