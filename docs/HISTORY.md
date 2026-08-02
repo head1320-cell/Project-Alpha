@@ -2607,3 +2607,55 @@ ErrorBoundary 아님 — 원인 지점에서 직접 처리). `tests/test_macro_c
 - GCP 프론트 로그의 `Failed to find Server Action … older or newer deployment` /
   `Cannot read properties of null (reading 'digest')`는 브라우저가 구 번들을 들고 있는
   기존 staleness 이슈 — `docker compose build --no-cache frontend backend` + 하드 새로고침 권장.
+
+---
+
+## UI/UX 현대화 P0–P5 — "근거를 호버 뒤에서 꺼내기" (2026-08)
+
+승인된 계획: `UI/UX Modernization Plan v2` + `v2.1 Amendment (Research Portfolio)`.
+커밋 `2354b21` → `12a9279`.
+
+### 무엇을 했나
+| 단계 | 내용 | 커밋 |
+|---|---|---|
+| P0 | 아무 테스트도 열지 않던 5개 라우트에 건강도 기준선 · 완료 런 픽스처 공유 | `2354b21` |
+| P1(문서) | CLAUDE.md `:root` 문구 — "4개" 가 EOF 브리지 삭제를 유도했다 | `36ae156` |
+| P2a | 없던 네 번째 상태 `unavailable` + `AsyncState` + `EvidenceBadge` | `36ae156` |
+| P2b·P3 | EvidenceDrawer(Radix Popover) · ContextStrip title= 16 → 1 | `ad651c9` |
+| P3.5 | 리서치 워크스페이스 셸 — 단일 다음 할 일 정책 · 낡은 단계 표시 | `dac867c` |
+| P4 | 00 OVERVIEW 를 연구 색인으로(신원 → 맥락 → 할 일 → 런 → 스터디) | `6a668f7` |
+| P5 | 판정 불가 다리에서 `0%` 제거 | `12a9279` |
+
+### 계획을 그대로 따르지 않은 곳 (전부 소스 근거로)
+- **`Metric` 프리미티브를 만들지 않았다** — `MetricCard`(feedback.tsx:103)와
+  `StatCard`(primitives.tsx:50)가 이미 있다. 진짜 결함은 카드 부족이 아니라
+  **상태 어휘 부재**였다(`MetricCard:129` 가 null 을 `—` 하나로 뭉갠다).
+- **`ResearchSpine` 을 만들지 않았다** — `WizardTracker` 가 이미 척추다. 확장했다.
+- **P8 "퍼센트 금지" 를 뒤집었다** — `backtest_run_routes.py:55-84` 의 진행률은
+  시뮬레이션 **완료 일수**에서 나온다(`30 + 55*done/total`). 계획대로 지웠다면
+  진실한 신호를 없애고 `backtest.spec.ts:52` 를 깨뜨렸을 것이다.
+- **P5 기하 테스트를 버렸다** — "판정 불가 막대가 0 막대보다 길어야 한다" 는 규칙 자체가
+  오해를 부른다(긴 막대 = 더 투자됨). 실제 결함은 `ThreeWayPanel.tsx:54` 의 `{pct}%` 였다.
+- **P7 크기 정정** — 계획서의 "손수 만든 탭 3벌" 은 실측 **1벌**(`.mc-tabs`) +
+  같은 상태를 쓰는 바로가기 칩 줄(`.mc-brief-chip`)이다.
+
+### 프로브가 잡은 것 (테스트가 초록인데 아무것도 지키지 않던 자리)
+- **경고 테스트가 공회전했다** — "경고가 있으면 검사한다" 는 콜드 스타트에서 루프가 0회
+  돌아 경고 UI 를 통째로 지워도 통과했다. sessionStorage 에 버전 없는 룰셋을 심어 고정.
+- **포커스 복원 코드가 불필요했다** — Phase A 의 처치를 복사해 넣었다가 **빼고 돌려 보니
+  그대로 통과**했다. 구조가 다르다(트리거가 Popover 루트 안). 근거 없는 "이게 있어야
+  동작한다" 주석을 남기지 않으려고 지우고 그 사실을 주석에 적었다.
+- **북엔드가 반쪽 신호였다** — superseded 를 강제로 켜 보니 `00 OVERVIEW` 북엔드는
+  주의색만 입고 설명이 없었다(스텝과 달리 부제가 없다). `.aas-wiz-booksup` 추가.
+- **기존 스펙이 결함을 계약으로 굳히고 있었다** — `timing-three-way.spec.ts` 가 세 다리
+  **전부** 에 `%` 를 요구해서, 고치면 테스트가 빨개지는 구조였다. 함께 뒤집었다.
+
+### 정직한 한계
+- **P4·P5 는 tsc·eslint 만 통과했다** — 전체 스위트는 P3.5 게이트가 포트를 잡고 있어
+  이 기록 시점에 아직 돌리지 못했다.
+- **`.card-md` 중복(결정 1)은 손대지 않았다** — 지우면 `/screener`·`/macro`·`/company`
+  의 여백 8곳이 실제로 바뀐다. 어느 값이 옳은지는 화면을 보는 사람이 정할 일이다.
+- **런 딥링크(D6)는 만들지 않았다** — 서버는 단건 조회를 주지만 그 런을 여는 URL 이 없다.
+  없는 기능을 있는 것처럼 보이게 하지 않으려고 목록 링크 하나만 뒀다.
+- **globals.css 상단 탐색 인덱스가 낡았다** — 실측 3~30줄씩 어긋난다(사전 존재 결함).
+  이번에 4줄 더 밀렸다. 새 섹션(38~42)은 끝에 번호로 추가했다.
