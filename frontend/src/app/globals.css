@@ -4374,3 +4374,43 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tev-unavailable .tev-l { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
 /* 없음은 회색이지만 **연하게 죽이지 않는다** — 흐리게 그리면 "괜찮다" 로 읽힌다. */
 .tev-unavailable .tev-r { color: var(--t-text); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   39. 증거 서랍 .tev-drawer-* / .shad-popover (UI/UX 현대화 P2b)
+   ───────────────────────────────────────────────────────────────────────────
+   Radix Popover 는 document.body 로 포털되므로 앱 컨테이너 밖에서 스타일돼야 한다 —
+   §34 의 .shad-overlay/.shad-content 와 같은 이유로 클래스로 고정한다.
+
+   서랍에는 **정상 상태의 부연만** 들어간다. 경고는 닫힌 서랍 안에서 존재하지 않는 것과
+   같으므로 스트립에 그대로 남는다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.shad-popover { z-index: 60; max-width: 380px; background: var(--popover); color: var(--popover-foreground);
+  border: 1px solid var(--t-border); border-radius: 3px; box-shadow: 0 8px 24px rgba(0,0,0,.10); padding: 10px 12px; }
+.tev-drawer-t { font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .06em; cursor: pointer;
+  color: var(--t-muted); background: none; border: 1px solid var(--t-border); border-radius: 2px; padding: 2px 7px; }
+.tev-drawer-t:hover { border-color: var(--t-accent); color: var(--t-accent); }
+.tev-drawer-t:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 1px; }
+.tev-drawer-h { font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .08em; color: var(--t-muted);
+  text-transform: uppercase; border-bottom: 1px solid var(--t-border); padding-bottom: 5px; margin-bottom: 7px; }
+.tev-drawer-l { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.tev-drawer-r { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.tev-drawer-r dt { font-size: 10px; color: var(--t-muted); }
+.tev-drawer-r dd { margin: 0; font-size: 11px; color: var(--t-ink); min-width: 0; overflow-wrap: anywhere; }
+.tev-drawer-n { display: block; font-size: 10px; color: var(--t-muted); line-height: 1.45; margin-top: 2px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   40. 컨텍스트 스트립 경고 행 .as-ctx-warns (UI/UX 현대화 P3)
+   ───────────────────────────────────────────────────────────────────────────
+   예전에는 이 사유들이 전부 title= 안에 있었다. 호버는 키보드·터치 사용자에게 존재하지
+   않으므로, 비정상 상태만 골라 **항상 보이는 텍스트**로 꺼냈다. 정상 상태의 부연은
+   EvidenceDrawer(§39)로 내려갔다 — 그쪽은 닫혀 있어도 잃을 것이 없는 정보다.
+
+   스트립 본체(.as-ctx)는 건드리지 않는다. 기존 클래스는 전부 E2E 계약이다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-ctx-warns { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.as-ctx-warn { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  border: 1px solid #f59e0b; border-left-width: 3px; background: #fffbeb; border-radius: 2px; padding: 5px 9px; }
+.as-ctx-warn-l { font-family: var(--t-mono); font-size: 10px; letter-spacing: .03em; color: #a16207; white-space: nowrap; }
+.as-ctx-warn-r { font-size: 11px; color: var(--t-ink); line-height: 1.45; min-width: 0; }
+/* 서랍 트리거는 스트립 안에서 다른 칩과 같은 높이로 앉는다. */
+.as-ctx-ev { align-self: center; }

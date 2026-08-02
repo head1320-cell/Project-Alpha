@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // /dev/ui — shared/ui 프리미티브 격리 갤러리
 //
-// 목적: shared/ui 의 컴포넌트 export **35개 전부**를 데이터 없이 한 화면에서 렌더한다.
+// 목적: shared/ui 의 컴포넌트 export **36개 전부**를 데이터 없이 한 화면에서 렌더한다.
 //   · 에이전트가 "이 프리미티브가 어떻게 생겼나"를 알려고 소비 화면을 뒤지지 않아도 된다.
 //   · Playwright(e2e/dev-ui.spec.ts)가 여기서 **클래스 계약을 회귀 검사**한다.
 //     프리미티브가 내보내는 클래스명(.pv-* · .tstate-* · .tstat-* · .skeleton …)이
@@ -35,6 +35,7 @@ import {
 } from "@/shared/ui/kit";
 import { LoadingState, EmptyState, ErrorState, UnavailableState, AsyncState } from "@/shared/ui/States";
 import { EvidenceBadge } from "@/shared/ui/evidence";
+import { EvidenceDrawer } from "@/shared/ui/EvidenceDrawer";
 // shadcn 벤더링본 — .devui-item 계약을 건드리지 않도록 **별도 섹션**에서만 쓴다(아래 주석 참조).
 import { Button } from "@/shared/ui/shadcn/button";
 import { Badge as ShadBadge } from "@/shared/ui/shadcn/badge";
@@ -162,7 +163,7 @@ export default function DevUiPage() {
           <code>e2e/dev-ui.spec.ts</code> 가 여기서 클래스 계약을 회귀 검사합니다.
         </p>
         <p className="devui-sub devui-omit">
-          shared/ui 의 컴포넌트 export 35개를 빠짐없이 렌더합니다 — 스펙이 이 1:1 대응을 강제합니다.
+          shared/ui 의 컴포넌트 export 36개를 빠짐없이 렌더합니다 — 스펙이 이 1:1 대응을 강제합니다.
         </p>
       </header>
 
@@ -307,6 +308,15 @@ export default function DevUiPage() {
           <Variant label="estimated"><EvidenceBadge kind="estimated" reason="합성(mock) 시세로 계산됨">추정</EvidenceBadge></Variant>
           <Variant label="caution"><EvidenceBadge kind="caution" reason="입력이 바뀌었지만 아직 재계산되지 않았습니다.">주의</EvidenceBadge></Variant>
           <Variant label="unavailable"><EvidenceBadge kind="unavailable" reason="데이터 출처가 없습니다.">없음</EvidenceBadge></Variant>
+        </Specimen>
+
+        <Specimen name="EvidenceDrawer" from="EvidenceDrawer"
+          note="정상 상태의 부연만 담습니다. 경고는 닫힌 서랍 안에서 존재하지 않는 것과 같으므로 넣지 않습니다. Radix Popover — 내용은 document.body 로 포털됩니다.">
+          <EvidenceDrawer title="재현 좌표" rows={[
+            { label: "스냅샷", value: "rgs_20260601_a91f", mono: true, note: "이 국면 판정의 기준시점 — 값은 고정되어 있습니다." },
+            { label: "룰셋", value: "tr_momentum v4", mono: true },
+            { label: "엔진", value: "dev", mono: true, note: "서버가 스탬프한 코드 버전." },
+          ]} />
         </Specimen>
       </section>
 

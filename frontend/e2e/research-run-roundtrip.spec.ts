@@ -214,10 +214,14 @@ test("룰셋 왕복: 사라진 버전은 현재 버전으로 대체되지 않고
   // 재현됐다고 믿는다 — 실제로는 다른 규칙으로 계산된 결과를 보고 있다.
   await saveRuleSet(page);
 
-  // 전체 id 는 title 속성에 있다(화면 표기는 앞 10자로 잘린다).
-  const title = await page.locator(".as-ctx-rules").getAttribute("title") ?? "";
-  const setId = title.match(/tr_[0-9a-z_]+/)?.[0];
-  expect(setId, `룰셋 id 를 title 에서 찾지 못했다: ${title}`).toBeTruthy();
+  // 전체 id 는 **증거 서랍** 안에 있다(칩 표기는 앞 10자로 잘린다).
+  // P3 이전에는 .as-ctx-rules 의 title= 에서 읽었다. 그 title 은 근거를 호버 뒤에
+  // 숨기고 있었기 때문에 걷어냈고, 같은 정보가 이제 서랍의 "룰셋" 행에 있다.
+  await page.locator(".as-ctx .tev-drawer-t").click();
+  const drawerText = await page.locator(".tev-drawer").innerText();
+  const setId = drawerText.match(/tr_[0-9a-z_]+/)?.[0];
+  expect(setId, `룰셋 id 를 증거 서랍에서 찾지 못했다: ${drawerText}`).toBeTruthy();
+  await page.keyboard.press("Escape");
 
   // 서버에서 룰셋을 지운다 → 박힌 버전은 더 이상 해석되지 않는다.
   const del = await request.delete(`/api/backend/api/v1/allocation/timing-rules/${setId}`);

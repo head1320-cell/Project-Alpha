@@ -9,7 +9,7 @@ import { trackErrors, uniq } from "./helpers";
 // 지금까지는 소비 화면의 스펙이 우연히 걸러 주기를 기대하는 구조였다.
 //
 // 이 스펙은 데이터 없이 렌더되는 갤러리에서 다음 세 가지를 본다:
-//   1) shared/ui 의 컴포넌트 export 35개가 전부 표본으로 마운트되었는가(제외 없음)
+//   1) shared/ui 의 컴포넌트 export 36개가 전부 표본으로 마운트되었는가(제외 없음)
 //   2) 각 프리미티브가 내보내는 **클래스 계약**이 그대로인가
 //   3) 순수 프레젠테이션 화면인데 uncaught error / 네트워크 호출이 없는가
 //
@@ -31,8 +31,8 @@ const SPECIMENS = [
   "GroupedSelect", "Toggle", "Section", "SubToggle", "Field", "QuickStepper", "Segmented",
   // States (5) — UnavailableState·AsyncState 는 P2 에서 추가됐다.
   "LoadingState", "EmptyState", "ErrorState", "UnavailableState", "AsyncState",
-  // evidence (1)
-  "EvidenceBadge",
+  // evidence (2)
+  "EvidenceBadge", "EvidenceDrawer",
   // feedback (7)
   "Skeleton", "SkeletonText", "SkeletonCard", "SkeletonTable", "TickValue", "MetricCard", "Sparkline",
   // MiniViz (3) + SectionHead (1)
@@ -172,6 +172,32 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     expect(await g.locator(".tev[title]").count(), "배지는 title= 로 사유를 숨기지 않는다").toBe(0);
   });
 
+  test("EvidenceDrawer 는 포털되고, 키보드로 열리고 닫히고, 포커스가 돌아온다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const g = page.locator(".devui");
+    const trigger = g.locator(".tev-drawer-t");
+
+    await expect(trigger).toHaveCount(1);
+    // 닫혀 있을 때는 내용이 DOM 에 없다 — "닫힌 서랍은 존재하지 않는다" 를 그대로 확인한다.
+    await expect(page.locator(".tev-drawer")).toHaveCount(0);
+
+    await trigger.click();
+    // ★Radix 는 document.body 로 포털한다★ .devui 로 범위를 좁히면 못 찾는다.
+    // 그 사실 자체를 단언한다 — 나중에 누가 스코프를 좁히면 여기서 걸린다.
+    await expect(page.locator(".tev-drawer")).toBeVisible();
+    expect(await g.locator(".tev-drawer").count(), "포털이므로 갤러리 루트 안에는 없다").toBe(0);
+
+    // 행 계약: dt/dd 쌍 3개, 식별자 행은 등폭
+    await expect(page.locator(".tev-drawer-r")).toHaveCount(3);
+    await expect(page.locator(".tev-drawer-r dd.num").first()).toBeVisible();
+    await expect(page.locator(".tev-drawer-h")).toContainText("재현 좌표");
+
+    // Escape 로 닫히고, 포커스가 트리거로 돌아온다(next/dynamic 뒤 Radix 포커스 복원 함정).
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".tev-drawer")).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+
   test("MiniViz / StatGrid / Stat / SectionHead 의 클래스 계약이 유지된다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");   // 셸 마크업과 격리
@@ -249,7 +275,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
   // ── shadcn 섹션 (Phase 5) ───────────────────────────────────────────────
   // ★기존 .devui-item 단언을 건드리지 않는다★ — shadcn 표본은 .devui-sitem 이라는
-  // 별개 클래스를 쓰므로 위의 "표본 35개" 계약은 그대로 유효하다.
+  // 별개 클래스를 쓰므로 위의 "표본 36개" 계약은 그대로 유효하다.
   test("shadcn 섹션이 기존 갤러리 계약을 깨지 않고 함께 렌더된다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");
