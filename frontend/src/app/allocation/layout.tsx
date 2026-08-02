@@ -7,6 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { AllocationProvider, PHASES, STAGES, stageIndex, useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { ContextStrip } from "@/widgets/allocation/ContextStrip";
 import { WizardTracker } from "@/widgets/allocation/WizardTracker";
+import { nextAction } from "@/widgets/allocation/nextAction";
 
 function StageChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -14,20 +15,35 @@ function StageChrome({ children }: { children: React.ReactNode }) {
   const idx = stageIndex(pathname);
   const stage = STAGES[idx];
   const phase = stage.phase ? PHASES.find((p) => p.key === stage.phase) : null;
-  const { noteVisit, ensureFreshRun } = useAllocation();
+  const {
+    noteVisit, ensureFreshRun, activeStudy, holdings, attachedSnapshotId,
+    activeRuleSet, result, isResultStale, stressQ, stageComplete,
+  } = useAllocation();
 
   // 마지막 방문 스테이지 기록 (게이트의 Resume용)
   useEffect(() => { noteVisit(stage.href); }, [stage.href, noteVisit]);
 
-  const isLast = idx === STAGES.length - 1;                 // 09 journal
-  const nextStage = idx < STAGES.length - 1 ? STAGES[idx + 1] : null;
+  // ★단일 워크플로 다음 할 일★ (P3.5)
+  // 예전에는 언제나 "배열의 다음 칸" 이었다. 그래서 자산도 없는데 "다음 단계로 — 02 THESIS"
+  // 라고 말하곤 했다. 이제는 nextAction() 이 **UI 상태만 보고** 정한다. 방향이 아니라
+  // 할 일을 말하므로, 목적지가 뒤 스테이지여도(예: 근거 고정) 문구가 어긋나지 않는다.
+  // 선형 이동 수단은 그대로 남아 있다 — 왼쪽 이전 버튼과 위저드의 ←/→ 키.
+  const na = nextAction({
+    hasStudy: !!activeStudy,
+    holdingsCount: holdings.length,
+    hasSnapshot: !!attachedSnapshotId,
+    hasRuleSet: !!activeRuleSet,
+    hasResult: !!result,
+    isResultStale,
+    hasStressValidation: !!stressQ.data?.available,
+    hasJournalEntry: stageComplete["/allocation/journal"],
+  });
+  const naTarget = STAGES.find((s) => s.href === na.href) ?? null;
   const goNext = () => {
-    if (!nextStage) return;
-    if (nextStage.phase === "validation") ensureFreshRun();  // Validation 진입 시 stale이면 재최적화
-    router.push(nextStage.href);
+    // Validation 단계로 들어갈 때 stale 이면 재최적화 — 기존 동작을 그대로 지킨다.
+    if (naTarget?.phase === "validation") ensureFreshRun();
+    router.push(na.href);
   };
-  const nextLabel = nextStage?.label === "JOURNAL" ? "저널로 마무리"
-    : nextStage ? `다음 단계로 — ${nextStage.n} ${nextStage.label}` : "";
 
   return (
     <div className="aas-root tpage-fade">
@@ -43,16 +59,17 @@ function StageChrome({ children }: { children: React.ReactNode }) {
       {/* 콘텐츠 (라우트 전환 페이드) */}
       <div key={pathname} className="aas-content">{children}</div>
 
-      {/* 하단 가이드 nav — 단일 주 CTA "다음 단계로" */}
+      {/* 하단 가이드 nav — 단일 주 CTA. 이유는 버튼 옆에 **보이는 텍스트**로 적는다. */}
       <div className="aas-botnav">
         <button className="aas-botnav-prev" disabled={idx === 0}
           onClick={() => idx > 0 && router.push(STAGES[idx - 1].href)}>
           ← {idx > 0 ? `${STAGES[idx - 1].n} ${STAGES[idx - 1].label}` : "이전 단계"}
         </button>
         <span className="aas-botnav-mid num">RESEARCH PIPELINE · {phase ? `${phase.label} 단계` : stage.label}</span>
-        {isLast
-          ? <button className="aas-botnav-restart" onClick={() => router.push("/allocation")}>새 목표 (게이트로) →</button>
-          : <button className="aas-botnav-next primary" onClick={goNext}>{nextLabel} →</button>}
+        <span className="aas-botnav-why" data-next={na.key}>{na.why}</span>
+        <button className="aas-botnav-next primary" onClick={goNext}>
+          {na.label}{naTarget ? ` — ${naTarget.n} ${naTarget.label}` : ""} →
+        </button>
       </div>
     </div>
   );

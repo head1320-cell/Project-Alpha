@@ -19,7 +19,18 @@ export function WizardTracker() {
   const pathname = usePathname();
   const active = stageIndex(pathname);              // ←/→ 이동에만 — 여기선 순서가 진짜 의미다
   const activeHref = STAGES[active].href as StageHref;
-  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched, attachedSnapshotId } = useAllocation();
+  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched, attachedSnapshotId, isResultStale } = useAllocation();
+
+  // ★결과에 기대는 완료는 입력이 바뀌면 "완료" 가 아니다★ (P3.5)
+  // 트래커는 지금까지 stageComplete 만 보고 초록 점을 찍었다. 그런데 그 완료의 근거가
+  // `result` 인 스테이지들은, 사용자가 자산·뷰·제약을 건드린 순간 **이전 입력의 결과**를
+  // 근거로 완료 표시를 유지하고 있었다. 되돌아가 볼 수는 있어야 하지만(연구니까),
+  // 아직 유효하다고 말해서는 안 된다 — 그건 낡은 수치를 결론으로 만드는 길이다.
+  const RESULT_BACKED: StageHref[] = [
+    "/allocation/overview", "/allocation/optimize", "/allocation/stress", "/allocation/explain",
+  ];
+  const superseded = (href: StageHref) =>
+    isResultStale && RESULT_BACKED.includes(href) && stageComplete[href];
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
   const conf = Math.round(overallConfidence(views));
@@ -70,12 +81,14 @@ export function WizardTracker() {
     const s = BY_HREF.get(href)!;
     return (
       <button key={href} title={s.desc}
-        className={`aas-wiz-step${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}`}
+        className={`aas-wiz-step${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}${superseded(href) ? " superseded" : ""}`}
         onClick={() => router.push(href)}>
         <span className="aas-wiz-dot" />
         <span className="aas-wiz-meta">
           <span className="aas-wiz-lab"><b className="num">{s.n}</b> {s.label}</span>
-          <span className="aas-wiz-sub num">{sub[href]}</span>
+          {/* 낡았으면 파생 부제 대신 그 사실을 적는다 — 이전 입력의 수치를 그대로 두면
+              사용자는 그것이 지금 결과라고 읽는다. */}
+          <span className="aas-wiz-sub num">{superseded(href) ? "재계산 필요" : sub[href]}</span>
         </span>
       </button>
     );
@@ -85,11 +98,15 @@ export function WizardTracker() {
     const s = BY_HREF.get(href)!;
     return (
       <button title={s.desc}
-        className={`aas-wiz-book${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}`}
+        className={`aas-wiz-book${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}${superseded(href) ? " superseded" : ""}`}
         onClick={() => router.push(href)}>
         <span className="aas-wiz-dot" />
         <span className="num">{s.n}</span>
         <span className="aas-wiz-booklab">{s.label}</span>
+        {/* ★북엔드도 이유를 말한다★ 프로브에서 드러났다: 스텝과 달리 북엔드에는 부제가
+            없어서, superseded 일 때 주의색만 입고 아무 설명이 없었다. 색만 바뀌는 신호는
+            "뭔가 이상하다" 까지만 전달하고 무엇을 해야 하는지는 말하지 않는다. */}
+        {superseded(href) && <span className="aas-wiz-booksup">재계산 필요</span>}
       </button>
     );
   };
@@ -98,7 +115,7 @@ export function WizardTracker() {
     <div className="aas-wiz">
       {Bookend(BOOKENDS[0])}
       {PHASES.map((p, pi) => {
-        const done = p.steps.every((h) => stageComplete[h]);
+        const done = p.steps.every((h) => stageComplete[h]) && !p.steps.some(superseded);
         const here = p.steps.includes(activeHref);
         return (
           <React.Fragment key={p.key}>
