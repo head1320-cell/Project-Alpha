@@ -4519,3 +4519,51 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-dj-link b { font-size: 10px; color: var(--t-ink); overflow-wrap: anywhere; }
 .as-dj-arrow { color: var(--t-border); font-size: 10px; }
 .as-dj-more { font-size: 9.5px; color: var(--t-muted); margin-left: auto; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   45. 반응형 — 신원은 어느 폭에서도 사라지지 않는다 (UI/UX 현대화 P10)
+   ───────────────────────────────────────────────────────────────────────────
+   ★실측 근거★ 이 파일의 @media 블록 41개 중 `.as-ctx-*` 를 겨냥한 것은 **0개**였다.
+   PINNED/LIVE · as-of · stale · mock · 룰셋 버전 · 팩 신원 · 런 신원을 나르는 줄이
+   데스크톱 아래에서는 아예 규정돼 있지 않았다는 뜻이다. 그래서 이 구간은 회귀 위험이
+   아니라 **미개척지**다.
+
+   계약(계획서 §8):
+     데스크톱 ≥1280  편집 워크스테이션 — 조밀한 패널, 근거와 컨트롤이 함께 보인다.
+     태블릿 768~1279 단계적 편집 — 보조 패널은 접히되 주 작업 영역은 유지.
+     모바일 ≤390     읽기·검토 우선 — 신원과 경고는 **접지 않는다**.
+
+   ★모바일에서 접어도 되는 것과 안 되는 것★
+   접어도 됨: 카나리 스파크라인(보조 수치), 분석 격자의 다열 배치.
+   절대 안 됨: 위 신원 7종과 경고(.as-ctx-warns). 폭이 좁다는 이유로 정직함을 줄이지 않는다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* 색인은 한 줄에 하나씩 — 잘리는 것보다 길어지는 편이 낫다. */
+  .as-ri-id { flex-direction: column; gap: 6px; }
+  .as-ri-ctx { gap: 12px; }
+  .as-ri-next { flex-direction: column; align-items: stretch; }
+  .as-ri-next-why { text-align: left; }
+  .as-ri-run, .as-ri-study { flex-wrap: wrap; gap: 4px 8px; }
+
+  /* 하단 nav 의 사유는 버튼 위로 — 오른쪽 정렬을 유지하면 폭이 없다. */
+  .aas-botnav { flex-wrap: wrap; }
+  .aas-botnav-why { text-align: left; margin-left: 0; flex-basis: 100%; order: 3; }
+  .aas-botnav-next { order: 2; margin-left: auto; }
+
+  /* 경고는 좁은 폭에서도 라벨과 사유가 함께 읽혀야 한다. */
+  .as-ctx-warn { flex-direction: column; align-items: flex-start; gap: 3px; }
+}
+@media (max-width: 390px) {
+  /* 카나리의 스파크라인만 접는다 — 값과 라벨은 남는다(보조 시각화이지 신원이 아니다). */
+  .as-ctx-spark { display: none; }
+  /* 신원 칩은 줄바꿈으로 흘리되 숨기지 않는다. 가로 스크롤은 만들지 않는다. */
+  .as-ctx { gap: 6px; padding: 5px 7px; }
+  .as-ctx-regime, .as-ctx-asof, .as-ctx-status, .as-ctx-usage, .as-ctx-study,
+  .as-ctx-run, .as-ctx-univ, .as-ctx-rules, .as-ctx-scen, .as-ctx-stale, .as-ctx-snap {
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+  /* 채움 스페이서는 좁은 폭에서 줄만 낭비한다. */
+  .as-ctx-fill { display: none; }
+  .as-dj-chain { gap: 5px; }
+  .as-dj-more { margin-left: 0; flex-basis: 100%; }
+}
