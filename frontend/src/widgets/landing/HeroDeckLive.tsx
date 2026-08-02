@@ -8,6 +8,21 @@
 //   · 3D 덱이 커서 쪽으로 미세 틸트(pointer:fine·non-reduced 만)
 // 마크업은 SSR 동일 → 하이드레이션 미스매치 없음. reduced-motion 폴백은 globals.css.
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ★이 덱의 수치는 전부 하드코딩된 예시다 — 실적이 아니다★
+// eqY/bcY 곡선, +24.6%, Sharpe 2.14, MAX DD -9.1%, 312 트레이드… 전부 이 파일 안의
+// 리터럴이다. 어떤 백테스트도 실행하지 않는다.
+//
+// 그런데 예전에는 이것이 초록 점이 깜빡이는 **LIVE 배지** 아래 있었다. 퀀트 플랫폼의
+// 첫 화면에서 지어낸 성과를 LIVE 라고 적는 것은, 이 프로젝트가 제품 안에서 내내 지켜 온
+// 규칙("완료된 결과를 지어내지 않는다")을 입구에서 정면으로 깨는 일이다. 방문자는 그것을
+// 이 플랫폼의 트랙 레코드로 읽을 수 있다.
+//
+// 그래서 배지를 `예시 수치` 로 바꾸고, 덱 아래에 무엇인지 한 줄로 적는다.
+// 시각적 역할(백테스터 UI 가 어떻게 생겼는지 보여 주기)은 그대로 하되, 성과를 주장하지
+// 않는다. 실제 수치를 보여 주고 싶다면 런을 하나 실행해 그 run_id 를 읽어야 한다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import { useEffect, useRef } from "react";
 import CountUp from "./CountUp";
 
@@ -73,11 +88,12 @@ export default function HeroDeckLive() {
   const months = [3.2, 1.1, -2.4, 4.6, 0.8, 2.1, -1.3, 5.2, 1.9, -0.6, 3.4, 2.7, 1.5, -3.1, 4.0, 2.2, 0.5, 3.8];
 
   return (
+    <>
     <div className="lp-deck" ref={deckRef}>
       <div className="lp-deck-top">
         <span className="lp-deck-dots"><i /><i /><i /></span>
         <span className="lp-deck-title">BACKTESTER // MULTI-FACTOR VALUE</span>
-        <span className="lp-deck-live"><i />LIVE</span>
+        <span className="lp-deck-sample">예시 수치</span>
       </div>
       <div className="lp-deck-body">
         <div className="lp-deck-headrow">
@@ -126,5 +142,11 @@ export default function HeroDeckLive() {
         </div>
       </div>
     </div>
+    <p className="lp-deck-note">
+      백테스터 화면의 <b>레이아웃 예시</b>입니다. 위 수치는 이 파일에 적힌 고정값이며 실행된
+      백테스트가 아닙니다 — 실제 결과는 런을 돌려야 나오고, 그때 <code>run_id</code> 와
+      데이터 범위가 함께 붙습니다.
+    </p>
+    </>
   );
 }

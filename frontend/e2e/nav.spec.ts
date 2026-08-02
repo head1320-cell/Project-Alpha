@@ -7,13 +7,15 @@ import { trackErrors, uniq } from "./helpers";
 // renders on every tool tab. A regression (AAS dropped, breadcrumb missing) → CI red.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test("Landing: INTEGRATED TOOLSET shows 6 modules incl. Allocation Studio", async ({ page }) => {
+test("Landing: 모듈 갤러리에 6개 카드와 Allocation Studio 가 있다", async ({ page }) => {
   const sink = trackErrors(page);
   await page.goto("/", { waitUntil: "networkidle" });
 
-  expect(await page.locator(".lp-module").count(), "6 toolset columns").toBe(6);
+  expect(await page.locator(".lp-module").count(), "6 gallery cards").toBe(6);
   await expect(page.locator(".lp-module", { hasText: "Allocation Studio" })).toBeVisible();
-  await expect(page.locator(".lp-section-head").getByText("01 — 06")).toBeVisible();
+  // L1 에서 랜딩이 갤러리로 바뀌며 섹션 라벨이 "01 — 06" → "SIX SURFACES · ONE RECORD" 가 됐다.
+  // 카드 수·href 계약은 그대로다(그 둘이 이 스펙이 지키려던 것이다).
+  await expect(page.locator(".lp-section-head").getByText("RESEARCH MODULES")).toBeVisible();
   // the AAS column links to /allocation
   await expect(page.locator(".lp-module", { hasText: "Allocation Studio" })).toHaveAttribute("href", "/allocation");
 

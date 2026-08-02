@@ -1301,12 +1301,18 @@ h6 { font-size: 1rem; }
 .lp-nav a:hover { color: var(--bs-body-color); }
 
 /* ③ 히어로 (분할) */
-.lp-hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 56px; padding: 84px 44px 96px; max-width: 1480px; width: 100%; margin: 0 auto; box-sizing: border-box; align-items: stretch; }
-.lp-eyebrow { color: var(--bs-primary); margin-bottom: 22px; }
-.lp-hero h1 { font-size: clamp(46px, 6.4vw, 84px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 600; margin: 0 0 40px; }
-.lp-cta-row { display: flex; align-items: center; gap: 18px; }
-.lp-launch { display: inline-block; background: var(--bs-primary); color: #fff; font-size: 14px; font-weight: 500; padding: 13px 26px; border-radius: 2px; text-decoration: none; }
-.lp-launch:hover { background: var(--bs-primary-hover); color: #fff; }
+/* 진술 밴드 — 문장 하나 + 살아 있는 증거 하나. 스톡 이미지는 쓰지 않는다. */
+.lp-statement { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 56px;
+  padding: 96px 44px 88px; max-width: 1480px; width: 100%; margin: 0 auto; box-sizing: border-box; align-items: center; }
+.lp-eyebrow { color: var(--bs-primary); margin-bottom: 20px; }
+.lp-statement h1 { font-size: clamp(44px, 5.8vw, 76px); line-height: 1.04; letter-spacing: -0.035em;
+  font-weight: 600; margin: 0 0 28px; }
+.lp-lede { font-size: 15px; line-height: 1.75; color: var(--bs-secondary-color); max-width: 46ch; margin: 0; }
+.lp-lede b { color: var(--bs-body-color); font-weight: 600; }
+.lp-statement-live { min-width: 0; }
+.lp-nav-cta { background: var(--bs-primary); color: #fff !important; padding: 8px 15px; border-radius: 2px;
+  font-family: var(--bs-font-mono); font-size: 11px; letter-spacing: .04em; text-decoration: none; }
+.lp-nav-cta:hover { opacity: .88; }
 /* ── 히어로 제품 프리뷰 데크 ── */
 .lp-hero-visual { position: relative; align-self: center; display: flex; align-items: center; min-height: 440px; }
 .lp-hero-glow { position: absolute; inset: 4% -2% 4% 8%; z-index: 0; pointer-events: none;
@@ -1319,8 +1325,18 @@ h6 { font-size: 1rem; }
 .lp-deck-dots { display: inline-flex; gap: 5px; }
 .lp-deck-dots i { width: 8px; height: 8px; border-radius: 50%; background: #e0e0e6; }
 .lp-deck-title { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--bs-secondary-color); }
-.lp-deck-live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-family: var(--t-mono); font-size: 10px; letter-spacing: 0.09em; color: #16a34a; }
-.lp-deck-live i { width: 6px; height: 6px; border-radius: 50%; background: #16a34a; animation: lp-pulse 2s ease-out infinite; }
+/* ★여기 있던 것은 초록 점이 깜빡이는 `LIVE` 배지였다★
+   덱의 수치는 HeroDeckLive.tsx 안의 리터럴이다(+24.6%, Sharpe 2.14, 312 트레이드…).
+   지어낸 성과에 LIVE 를 붙이면 방문자는 그것을 이 플랫폼의 트랙 레코드로 읽는다 —
+   바로 옆 문장이 "수치가 어디서 왔는지 말할 수 있는 것을 우선합니다" 인데 말이다.
+   그래서 초록·맥동을 버리고, 주의 계열의 정적 배지로 바꿨다. 눈에 띄되 성과처럼 보이지 않게. */
+.lp-deck-sample { margin-left: auto; display: inline-flex; align-items: center; padding: 2px 7px;
+  border: 1px solid #e0c98a; border-radius: 3px; background: #fdf6e3;
+  font-family: var(--t-mono); font-size: 10px; letter-spacing: 0.06em; color: #8a6d1f; white-space: nowrap; }
+/* 덱 바깥의 한 줄 — 배지는 짧아서 오해가 남는다. 무엇인지·왜 진짜가 아닌지를 문장으로 적는다. */
+.lp-deck-note { margin: 14px 2px 0; font-size: 12.5px; line-height: 1.6; color: var(--bs-secondary-color); }
+.lp-deck-note b { color: var(--bs-body-color); font-weight: 600; }
+.lp-deck-note code { font-family: var(--t-mono); font-size: 11.5px; }
 @keyframes lp-pulse { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,0.45); } 70% { box-shadow: 0 0 0 6px rgba(22,163,74,0); } 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); } }
 .lp-deck-body { padding: 18px 18px 20px; }
 .lp-deck-headrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
@@ -1349,25 +1365,52 @@ h6 { font-size: 1rem; }
 
 /* ④ 5모듈 툴셋 */
 .lp-section-head { display: flex; justify-content: space-between; padding: 13px 44px; border-top: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color); color: var(--bs-secondary-color); }
-.lp-modules { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.lp-module { display: flex; flex-direction: column; padding: 30px 26px 26px; border-right: 1px solid var(--bs-border-color); text-decoration: none; color: inherit; min-height: 360px; transition: background 0.15s; }
-.lp-module:last-child { border-right: none; }
-.lp-module:hover { background: var(--bs-tertiary-bg); }
-.lp-module-code { color: var(--bs-secondary-color); margin-bottom: 26px; }
-.lp-module h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 12px; }
-.lp-module p { font-size: 12.5px; line-height: 1.7; color: var(--bs-secondary-color); margin: 0 0 auto; }
-.lp-module-metrics { margin: 22px 0 14px; border-top: 1px dashed var(--bs-border-color); padding-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+/* ── 갤러리: 큰 카드 그리드 ────────────────────────────────────────────────
+   쉴 때는 번호·이름·목적·서명 한 줄만. 나머지는 호버 **또는 포커스**에서 열린다 —
+   호버만으로 열면 키보드 사용자에게는 그 정보가 존재하지 않는 것과 같다(P3 와 같은 규칙). */
+.lp-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.lp-module { position: relative; display: flex; flex-direction: column; gap: 10px;
+  padding: 34px 30px 30px; text-decoration: none; color: inherit; min-height: 300px;
+  border-right: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color);
+  transition: background .18s ease; }
+.lp-module:nth-child(3n) { border-right: none; }
+.lp-module:hover, .lp-module:focus-visible { background: var(--bs-tertiary-bg); outline: none; }
+.lp-module:focus-visible { box-shadow: inset 0 0 0 2px var(--bs-primary); }
+.lp-module-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lp-module-code { color: var(--bs-secondary-color); }
+.lp-module h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 2px 0 0; }
+.lp-module-purpose { font-size: 13.5px; color: var(--bs-body-color); margin: 0; }
+.lp-module-sig { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-top: auto; padding-top: 14px; border-top: 1px dashed var(--bs-border-color);
+  color: var(--bs-secondary-color); }
+.lp-module-sig b { color: var(--bs-body-color); font-weight: 600; text-align: right; }
+/* 펼침 — 높이 전환은 grid-template-rows 로. max-height 어림값을 쓰면 내용이 길어질 때 잘린다. */
+.lp-module-more { display: grid; grid-template-rows: 0fr; opacity: 0;
+  transition: grid-template-rows .26s ease, opacity .22s ease; }
+.lp-module-more > * { overflow: hidden; }
+.lp-module:hover .lp-module-more, .lp-module:focus-visible .lp-module-more { grid-template-rows: 1fr; opacity: 1; }
+.lp-module-desc { font-size: 12.5px; line-height: 1.7; color: var(--bs-secondary-color); margin: 12px 0 0; }
+.lp-module-metrics { margin: 14px 0 10px; display: flex; flex-direction: column; gap: 7px; }
 .lp-metric-row { display: flex; justify-content: space-between; color: var(--bs-secondary-color); }
 .lp-metric-val { color: var(--bs-body-color); font-weight: 500; }
 .lp-visual { width: 100%; height: 38px; display: block; }
 
 /* ⑤ 플랫폼 지표 */
-.lp-stats-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.lp-stat { padding: 26px; border-right: 1px solid var(--bs-border-color); }
-.lp-stat:last-child { border-right: none; }
-.lp-stat-key { color: var(--bs-secondary-color); margin-bottom: 12px; }
-.lp-stat-val { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin-bottom: 9px; }
-.lp-stat-sub { font-size: 11.5px; color: var(--bs-tertiary-color); line-height: 1.5; }
+/* ── 증거 ───────────────────────────────────────────────────────────────────
+   모든 값에 재현 방법(.lp-ev-how)이 붙는다. 그것이 없으면 항목을 지운다 —
+   이전 통계 블록은 "MEASURED, NOT MARKETED" 를 달고 낡은 값을 싣고 있었다. */
+.lp-evidence { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.lp-ev { padding: 28px 26px; border-right: 1px solid var(--bs-border-color); }
+.lp-ev:last-child { border-right: none; }
+.lp-ev-k { color: var(--bs-secondary-color); margin-bottom: 12px; }
+.lp-ev-v { font-size: 32px; font-weight: 600; letter-spacing: -0.025em; line-height: 1; margin-bottom: 10px;
+  font-variant-numeric: tabular-nums; }
+.lp-ev-how { font-size: 11.5px; color: var(--bs-tertiary-color); line-height: 1.55; }
+.lp-evidence-note { max-width: 1480px; margin: 0 auto; padding: 16px 44px 0; width: 100%;
+  box-sizing: border-box; font-size: 12px; color: var(--bs-tertiary-color); }
+.lp-evidence-note b { color: var(--bs-body-color); font-weight: 600; }
 
 /* ⑥ 푸터 */
 .lp-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 20px 44px; border-top: 1px solid var(--bs-border-color); flex-wrap: wrap; }
@@ -1375,26 +1418,29 @@ h6 { font-size: 1rem; }
 .lp-footer-left { color: var(--bs-secondary-color); letter-spacing: 0.02em; font-size: 11px; }
 
 /* 반응형 */
-@media (max-width: 1440px) and (min-width: 1101px) {
-  .lp-modules { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .lp-module { border-bottom: 1px solid var(--bs-border-color); min-height: 0; }
-  .lp-module:nth-child(3n) { border-right: none; }
-}
 @media (max-width: 1100px) {
-  .lp-modules { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lp-module { border-bottom: 1px solid var(--bs-border-color); min-height: 0; }
-  .lp-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .lp-stat { border-bottom: 1px solid var(--bs-border-color); }
+  .lp-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-module { min-height: 0; }
+  .lp-module:nth-child(3n) { border-right: 1px solid var(--bs-border-color); }
+  .lp-module:nth-child(2n) { border-right: none; }
+  .lp-evidence { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-ev { border-bottom: 1px solid var(--bs-border-color); }
+  .lp-ev:nth-child(2n) { border-right: none; }
 }
 @media (max-width: 820px) {
-  .lp-hero { grid-template-columns: 1fr; padding: 56px 24px 64px; gap: 32px; }
+  .lp-statement { grid-template-columns: 1fr; padding: 56px 24px 64px; gap: 32px; }
   .lp-hero-visual { min-height: auto; }
   .lp-deck-v { font-size: 28px; }
   .lp-deck { transform: none; box-shadow: 0 16px 40px -22px rgba(17,19,26,0.32); }
   .lp-hero-glow { display: none; }
   .lp-header { padding: 14px 24px; gap: 14px; flex-wrap: wrap; }
   .lp-section-head, .lp-footer { padding-left: 24px; padding-right: 24px; }
-  .lp-modules, .lp-stats-grid { grid-template-columns: 1fr; }
+  .lp-gallery, .lp-evidence { grid-template-columns: 1fr; }
+  .lp-module, .lp-ev { border-right: none !important; }
+  .lp-evidence-note { padding-left: 24px; padding-right: 24px; }
+  /* ★좁은 폭에서는 펼침을 항상 연다★ 터치에는 호버가 없다 — 접어 두면 그 정보는
+     모바일 사용자에게 존재하지 않는 것과 같다. */
+  .lp-module-more { grid-template-rows: 1fr; opacity: 1; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4582,3 +4628,41 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px dashed #f59e0b; border-radius: 2px; padding: 6px 9px; margin-bottom: 6px; line-height: 1.45; }
 .as-ri-run-id { color: var(--t-accent); text-decoration: none; }
 .as-ri-run-id:hover { text-decoration: underline; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   46. 랜딩 스크롤 연동 모션 (L1)
+   ───────────────────────────────────────────────────────────────────────────
+   ★연동(scroll-linked)이지 가로채기(scroll-jacking)가 아니다★
+   이 파일에는 wheel/touch 를 가로채는 코드가 없고 scroll-snap 도 쓰지 않는다.
+   스크롤은 브라우저 것 그대로이고, 애니메이션은 스크롤 위치의 **함수**일 뿐이다.
+   콘텐츠는 첫 페인트에 이미 완결돼 있으며 모션은 도착 방식만 바꾼다.
+
+   구현은 CSS `animation-timeline: view()` — 메인 스레드 JS 없이 브라우저가 합성한다.
+   미지원 브라우저에서는 @supports 밖의 기존 IntersectionObserver(Reveal)가 그대로 맡는다.
+   스크롤 라이브러리를 넣지 않는다(의존성 0).
+
+   ★가장 중요한 안전장치★ prefers-reduced-motion 이면 전부 끄고 opacity:1 로 고정한다.
+   등장 애니메이션의 기본값이 opacity:0 이므로, 이 규칙이 없으면 모션을 끈 사용자에게
+   페이지가 **빈 화면**으로 보인다. e2e/landing.spec.ts 가 그 상태를 단언한다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes lp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+    .lp-gallery .lp-module {
+      animation: lp-rise linear both;
+      animation-timeline: view();
+      /* 카드가 뷰포트에 들어오는 구간에서만 진행 — 다 보이기 전에 끝난다. */
+      animation-range: entry 5% cover 26%;
+    }
+    .lp-ev {
+      animation: lp-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 30%;
+    }
+  }
+}
+/* 모션 OFF 는 최종 상태를 그대로 — 정적 레이아웃이 진짜 디자인이다. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-gallery .lp-module, .lp-ev { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .lp-module-more { grid-template-rows: 1fr; opacity: 1; }
+}
