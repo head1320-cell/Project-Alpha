@@ -3118,3 +3118,7 @@ A2 의 `/allocation` 과 같은 구조이고, 이번엔 공유 폭이 더 넓다
 가짜 커버리지 복원 / 슬라이더를 입력과 어긋나게 / `aria-label` 제거 — 셋 다 각자의 이유로
 빨개지는 것을 확인하고 원복했다. Playwright 가 빌드된 `.next` 를 서빙하므로 프로브마다
 재빌드가 필요하다(A2 에서 한 라운드를 통째로 날린 함정).
+
+게이트: Playwright **216 passed / 0 failed** (1.0시간) · pytest **1,543 passed / 10 skipped** ·
+tsc 0 · eslint 0 errors(28 warnings). Playwright 는 A2 의 208 에서 이번 스펙 8건이 늘었다.
+
