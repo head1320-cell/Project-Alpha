@@ -4168,6 +4168,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-kpi { border: 1px solid var(--t-border); border-radius: 3px; background: var(--t-surface); padding: 7px 9px; }
 .brun-kpi-l { font-size: 9px; letter-spacing: .04em; text-transform: uppercase; color: var(--t-muted); }
 .brun-kpi-v { font-size: 16px; font-weight: 700; color: var(--t-ink); }
+/* 설명을 카드 안으로 (S1b) — 전에는 .brun-kpi 의 title= 이었다. hover 전용이라 키보드·터치
+   사용자에게는 그 설명이 존재하지 않았다(ContextStrip 의 title= 16개를 걷어낸 P3 과 같은 결함). */
+.brun-kpi-tip { margin-top: 4px; font-size: 10px; line-height: 1.45; color: var(--t-muted); }
+/* ★산출 불가★ 숫자 자리에 숫자를 그리지 않는다 — 0 이나 — 을 적으면 측정값처럼 읽힌다.
+   배경을 죽여서 '성과가 나쁜 값'이 아니라 '값이 아님'으로 보이게 한다. */
+.brun-kpi-na { background: transparent; border-style: dashed; }
+.brun-kpi-na .brun-kpi-l { color: var(--t-muted); }
+/* ★shadcn Badge 를 쓰지 않았다 — 측정해서 그렇게 정했다★
+   `import { Badge }` 하나가 이 라우트를 212 → 220 kB 로 올렸다(+8 kB). Badge 자체가 아니라
+   그것이 끌고 오는 cn → tailwind-merge / cva 가 이 청크에 처음 들어오기 때문이다.
+   ADR 001 의 한도는 4 kB 이고, 어차피 모양은 여기 CSS 가 정하므로 이득이 0 이었다.
+   Badge 가 이미 있는 라우트에서는 그대로 쓰면 된다 — 비용은 라우트마다 다르다. */
+.brun-kpi-nabadge { display: inline-flex; align-items: center; margin-top: 3px; padding: 1px 6px;
+  border: 1px solid var(--t-border); border-radius: var(--radius, 3px); background: transparent;
+  font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .03em; color: var(--t-muted); }
 .brun-benchrow { font-size: 10.5px; color: var(--t-muted); margin-top: 6px; }
 .brun-tablewrap { overflow-x: auto; }
 .brun-table { width: 100%; border-collapse: collapse; font-size: 10.5px; white-space: nowrap; }
@@ -4866,4 +4881,75 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
     animation: none !important; opacity: 1 !important; transform: none !important;
   }
   .lp-module-more { grid-template-rows: 1fr; opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   47. 다크 토큰 계층 (S1f · 범위 한정)
+   ───────────────────────────────────────────────────────────────────────────
+   ★이 저장소에 다크모드는 지금까지 0개였다★ 실측: `dark:` 유틸리티 0회,
+   `prefers-color-scheme` 0회, tailwind.config.js 에 darkMode 키 없음.
+   그래서 이건 설정 토글이 아니라 새 표면이다.
+
+   ★범위를 좁힌 이유★
+   앱 전체를 다크로 만들려면 @layer 밖 규칙 2,448개와 인라인 style 약 1,100개,
+   Recharts stroke 하드코딩 hex, 랜딩의 #111/#fff 밴드까지 전부 감사해야 한다.
+   절반만 대응된 앱을 내보내면 사용자는 "다크모드가 깨졌다"고 읽는다 — 없는 것보다 나쁘다.
+   그래서 **토큰 계층만 깔고**, 이번에 손대는 표면(Card · Chart · 백테스트 결과)만
+   실제로 검증한다. 나머지 라우트는 라이트 고정이다.
+
+   ★위 :root 블록들은 건드리지 않는다★ §34 와 같은 규칙 — 파일 끝에만 추가한다.
+   (CLAUDE.md 의 ":root 4블록 불변" 문구는 "네 개가 전부"로 읽혀서 §34 브릿지를 지우고
+   싶게 만든다. 뜻은 "앞선 네 블록을 수정하지 않는다"이고, 이 블록도 그 규칙을 지킨다.)
+
+   토글은 `.dark` 클래스다(darkMode: 'class'). 매체 질의를 쓰지 않는 이유: OS 설정만으로
+   절반만 대응된 앱이 저절로 다크로 넘어가 버리면 위 위험이 그대로 현실이 된다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dark {
+  /* 회색 계단은 이미 zinc 다(--t-surface=zinc-50, --t-muted=zinc-500). 다크에서도
+     같은 계단을 뒤집어 쓴다: zinc-950 배경 · zinc-900 표면 · zinc-800 경계. */
+  --t-bg: #09090b;
+  --t-surface: #18181b;
+  --t-border: #27272a;
+  --t-ink: #fafafa;
+  --t-muted: #a1a1aa;
+  /* 액센트 — #1200ff 는 검은 배경에서 대비가 3:1 을 넘지 못한다(어두운 청색이라
+     배경과 명도가 붙는다). 같은 색상각을 유지하면서 명도만 올린 값을 쓴다. */
+  --t-accent: #7c74ff;
+
+  --background:            var(--t-bg);
+  --foreground:            var(--t-ink);
+  --card:                  var(--t-surface);
+  --card-foreground:       var(--t-ink);
+  --popover:               var(--t-surface);
+  --popover-foreground:    var(--t-ink);
+  --primary:               var(--t-accent);
+  --primary-foreground:    #09090b;
+  --secondary:             var(--t-surface);
+  --secondary-foreground:  var(--t-ink);
+  --muted:                 var(--t-surface);
+  --muted-foreground:      var(--t-muted);
+  --accent:                var(--t-surface);
+  --accent-foreground:     var(--t-ink);
+  --destructive:           #f87171;
+  --destructive-foreground: #09090b;
+  --border:                var(--t-border);
+  --input:                 var(--t-border);
+  --ring:                  var(--t-accent);
+
+  /* 차트 계열 — Recharts stroke 를 하드코딩 hex 로 두면 다크에서 그대로 어두워진다.
+     밝은 배경용 #16a34a/#dc2626 은 zinc-950 위에서 대비가 부족하다. */
+  --chart-up: #4ade80;
+  --chart-down: #f87171;
+  --chart-line: var(--t-accent);
+  --chart-grid: #27272a;
+  --chart-bench: #52525b;
+}
+
+/* 라이트 기본값 — 차트 색도 토큰으로 올린다(다크에서만 바꾸려면 양쪽에 이름이 있어야 한다). */
+:root {
+  --chart-up: #16a34a;
+  --chart-down: #dc2626;
+  --chart-line: var(--t-accent);
+  --chart-grid: #eef0f4;
+  --chart-bench: #c7c8d0;
 }

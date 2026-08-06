@@ -2,7 +2,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // BacktestResults — 전용 백테스트 결과 워크스페이스 (스펙 §5, 고정 URL·새로고침 가능)
 //   Header / Overview(지표) / Performance(자산곡선·낙폭·월간) / Trades / Symbols.
-//   엔진이 실제 반환한 데이터만 렌더(없는 지표는 생략) · real/mock/PIT 배지 정직 표기.
+//   엔진이 반환한 지표를 렌더한다. 없는 지표는 기본적으로 생략하되, **사유를 데이터로
+//   증명할 수 있는 결측**(벤치마크 미지정 · 체결 0건)은 '산출 불가' 로 보인다 — absentReason().
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -16,7 +17,7 @@ import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } fro
 
 type Stat = keyof BacktestStatistics;
 interface MetricDef { k: Stat; label: string; tip: string; suffix?: string; digits?: number; signed?: boolean }
-// 엔진이 실제 산출하는 지표만 그룹으로 배치 — 데이터 없는 항목은 렌더 시 생략(정직).
+// 엔진이 실제 산출하는 지표만 그룹으로 배치. 결측 처리 규칙은 absentReason() 참고.
 const METRIC_GROUPS: { title: string; metrics: MetricDef[] }[] = [
   { title: "수익", metrics: [
     { k: "total_return_pct", label: "총수익률", tip: "기간 전체 누적 수익률", suffix: "%", signed: true },
@@ -64,6 +65,38 @@ const METRIC_GROUPS: { title: string; metrics: MetricDef[] }[] = [
     { k: "total_slippage", label: "슬리피지", tip: "누적 슬리피지(원)", digits: 0 },
   ] },
 ];
+
+/** 거래가 한 건도 없으면 통째로 성립하지 않는 지표들 — 사유를 데이터로 증명할 수 있다. */
+const TRADE_QUALITY_KEYS = new Set([
+  "win_rate", "profit_factor", "payoff_ratio", "avg_trade_return",
+  "expectancy", "avg_win", "avg_loss", "kelly_pct",
+]);
+
+/**
+ * ★없는 지표를 어떻게 다룰 것인가★
+ *
+ * 지금까지는 값이 없으면 조용히 뺐다(아래 `avail` 필터). 그러면 화면에서는 그 지표가
+ * **원래 없는 것**처럼 보인다. 계산에 실패한 것과 애초에 정의되지 않는 것이 같은 모습이 된다.
+ *
+ * 그렇다고 없는 값 전부에 "없음"을 붙이면 이번엔 반대쪽으로 틀린다 — 이유를 모르면서
+ * 아는 척하게 된다. 사유를 못 대는 "없음"은 그 자체로 지어낸 정보다.
+ *
+ * 그래서 **사유를 데이터로 증명할 수 있는 것만** 노출한다. 아래 두 규칙은 둘 다 화면이
+ * 이미 들고 있는 값으로 판정된다(벤치마크 곡선의 유무, 체결 건수). 나머지는 지금처럼 생략한다.
+ */
+function absentReason(
+  k: string,
+  hasBenchmark: boolean,
+  tradeCount: number | null,
+): string | null {
+  if (k === "information_ratio" && !hasBenchmark) {
+    return "벤치마크를 지정하지 않아 추적오차를 계산할 수 없습니다.";
+  }
+  if (tradeCount === 0 && TRADE_QUALITY_KEYS.has(k)) {
+    return "이 기간에 체결이 한 건도 없어 거래 통계가 나오지 않습니다.";
+  }
+  return null;
+}
 
 const num = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? null : v);
 const fmtStat = (v: number | null | undefined, m: MetricDef) => {
@@ -116,6 +149,9 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
   const stats = bt.statistics as BacktestStatistics;
   const cfg = (run.input_snapshot ?? {}) as Record<string, unknown>;
   const isMock = run.is_mock_data === true || !res.data_source?.fully_real;
+  // 결측 사유 판정에 쓰는 두 사실 — 둘 다 이미 화면이 들고 있는 값이다.
+  const hasBenchmark = Boolean(bt.benchmark?.curve?.length);
+  const tradeCount = num(stats.num_trades as number);
 
   const equity = useMemo(() => (bt.equity_curve || []).map((v, i) => ({
     i, date: bt.equity_dates?.[i] ?? String(i), equity: v,
@@ -154,17 +190,33 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         <div className="brun-card-t">개요 · 진단 지표 <span className="brun-note">데이터 없는 지표는 표시하지 않음</span></div>
         {METRIC_GROUPS.map((g) => {
           const avail = g.metrics.filter((m) => num(stats[m.k] as number) != null);
-          if (avail.length === 0) return null;
+          // 사유를 댈 수 있는 결측만 함께 그린다 — 나머지는 지금까지처럼 생략한다.
+          const explained = g.metrics
+            .filter((m) => num(stats[m.k] as number) == null)
+            .map((m) => ({ m, reason: absentReason(m.k, hasBenchmark, tradeCount) }))
+            .filter((x): x is { m: MetricDef; reason: string } => x.reason != null);
+          if (avail.length === 0 && explained.length === 0) return null;
           return (
             <div key={g.title} className="brun-mgroup">
               <div className="brun-mgroup-t">{g.title}</div>
               <div className="brun-kpis">
                 {avail.map((m) => (
-                  <div key={m.k} className="brun-kpi" title={m.tip}>
+                  <div key={m.k} className="brun-kpi">
                     <div className="brun-kpi-l">{m.label}</div>
                     <div className="brun-kpi-v num" style={{ color: m.signed ? col(stats[m.k] as number) : undefined }}>
                       {fmtStat(stats[m.k] as number, m)}
                     </div>
+                    {/* 설명은 hover 전용이던 title= 을 대신한다 — 키보드·터치에도 도달해야 한다
+                        (ContextStrip 의 title= 16개를 걷어낸 P3 과 같은 규칙). */}
+                    <div className="brun-kpi-tip">{m.tip}</div>
+                  </div>
+                ))}
+                {explained.map(({ m, reason }) => (
+                  <div key={m.k} className="brun-kpi brun-kpi-na">
+                    <div className="brun-kpi-l">{m.label}</div>
+                    {/* ★숫자를 그리지 않는다★ 0 이나 — 을 적으면 측정된 값처럼 읽힌다. */}
+                    <span className="brun-kpi-nabadge">산출 불가</span>
+                    <div className="brun-kpi-tip">{reason}</div>
                   </div>
                 ))}
               </div>

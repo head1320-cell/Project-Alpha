@@ -269,3 +269,64 @@ test("Backtest: compare two completed runs → overlay + metric delta + config d
   expect(uniq(sink.api404), "compare API 404s").toEqual([]);
   expect(uniq(sink.pageErrors), "compare page errors").toEqual([]);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// S1b — 사유를 댈 수 있는 결측만 '산출 불가'로 드러낸다
+// ─────────────────────────────────────────────────────────────────────────────
+// 전에는 값이 없는 지표를 조용히 빼 버렸다(BacktestResults 의 `avail` 필터). 그러면 화면에서
+// 계산 실패와 '원래 없는 항목'이 같은 모습이 된다.
+//
+// ★그렇다고 없는 값 전부에 '없음'을 붙이지는 않는다★ 이유를 모르면서 아는 척하게 되고,
+// 사유 없는 '없음'은 그 자체로 지어낸 정보다. 그래서 두 규칙만 쓴다 —
+// 벤치마크 미지정(IR), 체결 0건(거래 품질). 둘 다 화면이 이미 들고 있는 값으로 판정된다.
+//
+// ★기본 픽스처로는 이 경로가 한 번도 안 밟힌다★ completedRun() 은 벤치마크가 있고
+// num_trades: 3 이라 '산출 불가'가 0개다. 그래서 아래 첫 테스트는 조건을 만들어서 검사하고,
+// 두 번째 테스트가 '조건이 아닐 때는 뜨지 않는다'를 지킨다. 둘이 같이 있어야 계약이 닫힌다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("S1b: 벤치마크가 없고 체결이 0건이면 그 지표들을 '산출 불가'로 사유와 함께 적는다", async ({ page }) => {
+  // 기존 픽스처를 깊은 복사해서 조건만 뒤집는다(compare 테스트가 쓰는 방식과 같다).
+  const base = completedRun();
+  const full = JSON.parse(JSON.stringify(base.full));
+  full.result.backtest.benchmark = null;                    // → 정보비율(IR) 산출 불가
+  full.result.backtest.statistics.num_trades = 0;           // → 거래 품질 산출 불가
+  full.result.backtest.round_trips = [];
+  full.result.backtest.trades = [];
+  await page.route(`**/api/v1/backtest/runs/${STUB_RUN_ID}`, (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(full) }));
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+
+  const na = page.locator(".brun-kpi-na");
+  expect(await na.count(), "산출 불가 카드").toBeGreaterThan(0);
+
+  // 사유가 화면에 있어야 한다 — 배지만으로는 왜 없는지 알 수 없다.
+  const naText = await na.allInnerTexts();
+  expect(naText.join(" ")).toMatch(/벤치마크|체결이 한 건도/);
+  for (const t of naText) expect(t, "'산출 불가' 표기").toContain("산출 불가");
+
+  // ★핵심★ 숫자를 그리지 않는다. 0 이나 — 을 적으면 측정된 값처럼 읽힌다.
+  for (const el of await na.all()) {
+    expect(await el.locator(".brun-kpi-v").count(), "산출 불가에는 값 노드가 없어야 한다").toBe(0);
+    const t = (await el.innerText()).replace("산출 불가", "");
+    expect(t, "산출 불가 카드에 수치가 들어가면 안 된다").not.toMatch(/-?\d+\.?\d*\s*%/);
+  }
+});
+
+test("S1b: 벤치마크와 체결이 있으면 '산출 불가'가 하나도 뜨지 않는다", async ({ page }) => {
+  // 반대 방향 — 조건이 아닌데도 뜨면 없는 결측을 지어내는 셈이다.
+  await stubCompletedRun(page);
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+  await expect(page.locator(".brun-kpi").first()).toBeVisible();
+  expect(await page.locator(".brun-kpi-na").count(), "조건이 아니면 0개").toBe(0);
+});
+
+test("S1b: 지표 설명이 hover 전용이 아니다 (title= 제거)", async ({ page }) => {
+  // ContextStrip 의 title= 16개를 걷어낸 P3 과 같은 규칙 — 키보드·터치에도 닿아야 한다.
+  await stubCompletedRun(page);
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+
+  const kpi = page.locator(".brun-kpi").first();
+  expect(await kpi.getAttribute("title"), "설명을 title= 로 숨기지 않는다").toBeNull();
+  await expect(kpi.locator(".brun-kpi-tip")).toContainText(/\S/);
+});
