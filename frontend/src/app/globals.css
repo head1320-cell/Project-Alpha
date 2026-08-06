@@ -4170,7 +4170,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-kpi-v { font-size: 16px; font-weight: 700; color: var(--t-ink); }
 /* 설명을 카드 안으로 (S1b) — 전에는 .brun-kpi 의 title= 이었다. hover 전용이라 키보드·터치
    사용자에게는 그 설명이 존재하지 않았다(ContextStrip 의 title= 16개를 걷어낸 P3 과 같은 결함). */
-.brun-kpi-tip { margin-top: 4px; font-size: 10px; line-height: 1.45; color: var(--t-muted); }
+/* 12px 아래로 내리지 말 것 — 이 줄은 hover 를 벗어나려고 만든 설명이다. 10px 로 적으면
+   툴팁에서 꺼낸 의미가 없다(읽으라고 꺼내 놓고 읽기 어렵게 만드는 셈). 주변 표·라벨이
+   9~10.5px 인 것은 이 라우트의 기존 밀도이고, 그건 값이지 산문이 아니다. */
+.brun-kpi-tip { margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--t-muted); }
 /* ★산출 불가★ 숫자 자리에 숫자를 그리지 않는다 — 0 이나 — 을 적으면 측정값처럼 읽힌다.
    배경을 죽여서 '성과가 나쁜 값'이 아니라 '값이 아님'으로 보이게 한다. */
 .brun-kpi-na { background: transparent; border-style: dashed; }
@@ -4182,7 +4185,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    Badge 가 이미 있는 라우트에서는 그대로 쓰면 된다 — 비용은 라우트마다 다르다. */
 .brun-kpi-nabadge { display: inline-flex; align-items: center; margin-top: 3px; padding: 1px 6px;
   border: 1px solid var(--t-border); border-radius: var(--radius, 3px); background: transparent;
-  font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .03em; color: var(--t-muted); }
+  font-family: var(--t-mono); font-size: 12px; letter-spacing: .03em; color: var(--t-muted); }
 .brun-benchrow { font-size: 10.5px; color: var(--t-muted); margin-top: 6px; }
 .brun-tablewrap { overflow-x: auto; }
 .brun-table { width: 100%; border-collapse: collapse; font-size: 10.5px; white-space: nowrap; }

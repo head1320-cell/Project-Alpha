@@ -348,3 +348,29 @@ test("S1b: 지표 설명이 hover 전용이 아니다 (title= 제거)", async ({
   expect(await kpi.getAttribute("title"), "설명을 title= 로 숨기지 않는다").toBeNull();
   await expect(kpi.locator(".brun-kpi-tip")).toContainText(/\S/);
 });
+
+test("S1b: hover 밖으로 꺼낸 산문이 읽을 수 있는 크기다 (12px 하한)", async ({ page }) => {
+  // ★위 테스트만으로는 절반이다★ 설명을 title= 에서 꺼내 놓고 10px 로 적으면 키보드·터치
+  // 사용자에게 '보이기는 한다'로 끝난다 — 꺼낸 이유가 가독성인데 가독성을 다시 깎는 셈이다.
+  // 실제로 처음 구현이 tip 10px / 배지 9.5px 이었고, 이 테스트가 그 회귀를 막는다.
+  // 주변 표·라벨의 9~10.5px 은 대상이 아니다: 저건 수치와 라벨이지 산문이 아니다.
+  const base = completedRun();
+  const full = JSON.parse(JSON.stringify(base.full));
+  full.result.backtest.benchmark = null;
+  full.result.backtest.statistics.num_trades = 0;
+  full.result.backtest.round_trips = [];
+  full.result.backtest.trades = [];
+  await page.route(`**/api/v1/backtest/runs/${STUB_RUN_ID}`, (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(full) }));
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+  await expect(page.locator(".brun-kpi").first()).toBeVisible();
+
+  // 셀렉터가 0개면 조용히 통과한다 — 이 세션에서 세 번 겪은 '아무것도 안 지키는 초록'이다.
+  for (const sel of [".brun-kpi-tip", ".brun-kpi-nabadge"]) {
+    const nodes = page.locator(sel);
+    expect(await nodes.count(), `${sel} 가 렌더돼야 검사가 성립한다`).toBeGreaterThan(0);
+    const sizes = await nodes.evaluateAll((els) =>
+      els.map((e) => parseFloat(getComputedStyle(e).fontSize)));
+    for (const px of sizes) expect(px, `${sel} 본문 하한 12px`).toBeGreaterThanOrEqual(12);
+  }
+});
