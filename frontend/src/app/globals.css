@@ -4955,3 +4955,15 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --chart-bench: #999999;
   --chart-down-fill: rgb(220 38 38 / 0.12);
 }
+
+/* ── /dev/ui 의 S1 표본 (Card + 다크 토글) ─────────────────────────────────── */
+.devui-s1grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
+.devui-s1row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 12.5px; }
+.devui-s1row span { color: var(--muted-foreground); }
+.devui-s1why { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted-foreground); }
+.devui-darktoggle { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--card); color: var(--foreground);
+  font-family: var(--t-mono); font-size: 11px; cursor: pointer; }
+.devui-darktoggle:hover { border-color: var(--primary); }
+/* 표본 섹션은 다크에서도 읽혀야 하므로 토큰만 쓴다 — 하드코딩 hex 금지. */
+.devui-s1 { background: var(--background); color: var(--foreground); }

@@ -39,6 +39,7 @@ import { EvidenceDrawer } from "@/shared/ui/EvidenceDrawer";
 // shadcn 벤더링본 — .devui-item 계약을 건드리지 않도록 **별도 섹션**에서만 쓴다(아래 주석 참조).
 import { Button } from "@/shared/ui/shadcn/button";
 import { Badge as ShadBadge } from "@/shared/ui/shadcn/badge";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/shared/ui/shadcn/card";
 import {
   Dialog, DialogTrigger, DialogContent, DialogHeader,
   DialogTitle, DialogDescription, DialogFooter, DialogClose,
@@ -384,6 +385,47 @@ export default function DevUiPage() {
           <Variant label="index 있음"><SectionHead label="유동성 게이트" index="01" /></Variant>
           <Variant label="index 없음"><SectionHead label="후처리" /></Variant>
         </Specimen>
+      </section>
+
+      {/* ── S1: Card 표본 + 다크 토큰 확인 ────────────────────────────────────
+          ★다크 토큰이 '정의만 되고 아무도 안 쓰는' 상태가 되지 않게 하는 자리다★
+          globals.css §47 은 .dark 에서 --card/--border/--foreground 를 덮는다. 그런데
+          그 값을 실제로 그리는 화면이 없으면 오타 하나로 죽어도 아무도 모른다.
+          여기 토글이 그 유일한 소비처다 — 다크는 아직 이 표면에서만 검증된다. */}
+      <section className="devui-group devui-s1">
+        <h2 className="devui-h">Card (S1a) · 다크 토큰 (S1f)</h2>
+        <p className="devui-note">
+          상류 기본값 p-6 대신 CardContent=p-3 · CardHeader=px-3 py-2 로 정의했다.
+          소비처마다 덮지 않는 이유는 CSS 특이도 충돌(KNOWN_COLLISIONS 22건)이 전부 그 유형이기 때문.
+        </p>
+        <button
+          className="devui-darktoggle"
+          onClick={() => document.documentElement.classList.toggle("dark")}
+        >
+          다크 토글 (.dark 클래스)
+        </button>
+        <div className="devui-s1grid">
+          <Card className="devui-s1card">
+            <CardHeader>
+              <CardTitle>백테스트 요약</CardTitle>
+              <CardDescription>고밀도 기본값 · 지표 화면용</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="devui-s1row"><span>CAGR</span><b className="num">+5.8%</b></div>
+              <div className="devui-s1row"><span>Sharpe</span><b className="num">0.72</b></div>
+              <div className="devui-s1row"><span>MDD</span><b className="num">-14.2%</b></div>
+            </CardContent>
+          </Card>
+          <Card className="devui-s1card">
+            <CardHeader><CardTitle>산출 불가 처리</CardTitle></CardHeader>
+            <CardContent>
+              {/* 값 노드를 만들지 않는다 — 0 이나 — 을 적으면 측정값처럼 읽힌다. */}
+              <div className="devui-s1row"><span>정보비율(IR)</span>
+                <span className="brun-kpi-nabadge">산출 불가</span></div>
+              <p className="devui-s1why">벤치마크를 지정하지 않아 추적오차를 계산할 수 없습니다.</p>
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       {/* ── shadcn/ui 벤더링본 (Phase 5 스캐폴드) ─────────────────────────────

@@ -318,3 +318,44 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     await expect(content).toHaveCount(0);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// S1 — Card 밀도 + 다크 토큰이 실제로 해석되는가
+// ─────────────────────────────────────────────────────────────────────────────
+// ★다크 토큰은 '정의만 되고 아무도 안 쓰는' 상태가 되기 쉽다★ globals.css §47 이
+// .dark 에서 --card/--foreground 를 덮지만, 그 값을 그리는 화면이 없으면 오타 하나로
+// 죽어도 아무도 모른다. 여기서 계산된 색을 직접 읽어 그 상태를 막는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("S1a: Card 가 상류 기본값(p-6)이 아니라 조인 패딩으로 렌더된다", async ({ page }) => {
+  await page.goto("/dev/ui", { waitUntil: "networkidle" });
+  const content = page.locator(".devui-s1card .p-3").first();
+  await expect(content).toBeVisible();
+  // ★12px 로 못 박았다가 실패했다 — 이 앱의 root font-size 는 16px 이 아니라 14px 이라
+  // p-3(0.75rem)이 10.5px 로 떨어진다. 매직 넘버 대신 계약 자체를 쓴다:
+  // "본문 패딩은 p-3(0.75rem)이고, 상류 기본값 p-6(1.5rem)이 아니다".
+  const { pad, root } = await content.evaluate((e) => ({
+    pad: parseFloat(getComputedStyle(e).paddingTop),
+    root: parseFloat(getComputedStyle(document.documentElement).fontSize),
+  }));
+  expect(pad, "Card 본문 패딩 = p-3(0.75rem)").toBeCloseTo(root * 0.75, 1);
+  expect(pad, "상류 기본값 p-6 이 되살아나면 안 된다").toBeLessThan(root * 1.5 - 0.5);
+});
+
+test("★S1f: .dark 를 켜면 토큰이 실제로 바뀐다★", async ({ page }) => {
+  await page.goto("/dev/ui", { waitUntil: "networkidle" });
+  const card = page.locator(".devui-s1card").first();
+
+  const light = await card.evaluate((e) => getComputedStyle(e).backgroundColor);
+  await page.locator(".devui-darktoggle").click();
+  await page.waitForTimeout(120);
+  const dark = await card.evaluate((e) => getComputedStyle(e).backgroundColor);
+
+  expect(dark, "다크에서 카드 배경이 그대로면 토큰이 안 먹은 것이다").not.toBe(light);
+  // zinc-900(#18181b) = rgb(24, 24, 27) — §47 이 지정한 값과 정확히 맞아야 한다.
+  expect(dark).toBe("rgb(24, 24, 27)");
+
+  // 글자도 함께 뒤집혀야 한다 — 배경만 어두워지면 읽을 수 없다.
+  const fg = await card.evaluate((e) => getComputedStyle(e).color);
+  expect(fg, "다크에서 글자색").toBe("rgb(250, 250, 250)");
+});
