@@ -4929,6 +4929,27 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    토글은 `.dark` 클래스다(darkMode: 'class'). 매체 질의를 쓰지 않는 이유: OS 설정만으로
    절반만 대응된 앱이 저절로 다크로 넘어가 버리면 위 위험이 그대로 현실이 된다.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* 라이트 기본값 — 차트 색도 토큰으로 올린다(다크에서만 바꾸려면 양쪽에 이름이 있어야 한다).
+   ★이 블록은 반드시 `.dark` 보다 **앞에** 있어야 한다★
+   `:root` 와 `.dark` 는 특이도가 같아서(0,1,0) 뒤에 오는 쪽이 이긴다. 처음에는 이 블록을
+   `.dark` 뒤에 두었고, 그래서 다크에서 --chart-* 가 하나도 바뀌지 않았다. 토큰은 정의돼
+   있었지만 한 번도 적용되지 않았다 — /dev/ui 의 다크 테스트는 --background 만 봤기 때문에
+   그대로 통과했다. 실제 결과 화면을 대비 감사해서야 드러났다(다크에서 여전히 #dc2626).
+
+   ★--chart-up 이 #16a34a 가 아닌 이유★
+   이 토큰은 차트 stroke 이자 **숫자의 글자색**이다(.brun-kpi-v, 표의 수익률 셀).
+   stroke 기준은 3:1 이지만 글자는 4.5:1 이라, 둘을 겸하면 엄격한 쪽을 만족해야 한다.
+   실측: #16a34a on zinc-50 = 3.16:1 (미달) → green-700 #15803d = 4.85:1 (통과).
+   빨강 #dc2626 은 같은 배경에서 4.69:1 이라 그대로 둔다. */
+:root {
+  --chart-up: #15803d;
+  --chart-down: #dc2626;
+  --chart-line: var(--t-accent);
+  --chart-grid: #eeeeee;
+  --chart-bench: #999999;
+  --chart-down-fill: rgb(220 38 38 / 0.12);
+}
+
 .dark {
   /* 회색 계단은 이미 zinc 다(--t-surface=zinc-50, --t-muted=zinc-500). 다크에서도
      같은 계단을 뒤집어 쓴다: zinc-950 배경 · zinc-900 표면 · zinc-800 경계. */
@@ -4971,16 +4992,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --chart-down-fill: rgb(248 113 113 / 0.16);
 }
 
-/* 라이트 기본값 — 차트 색도 토큰으로 올린다(다크에서만 바꾸려면 양쪽에 이름이 있어야 한다). */
-:root {
-  --chart-up: #16a34a;
-  --chart-down: #dc2626;
-  --chart-line: var(--t-accent);
-  --chart-grid: #eeeeee;
-  --chart-bench: #999999;
-  --chart-down-fill: rgb(220 38 38 / 0.12);
-}
-
 /* ── /dev/ui 의 S1 표본 (Card + 다크 토글) ─────────────────────────────────── */
 .devui-s1grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
 .devui-s1row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 12.5px; }
@@ -4992,3 +5003,43 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .devui-darktoggle:hover { border-color: var(--primary); }
 /* 표본 섹션은 다크에서도 읽혀야 하므로 토큰만 쓴다 — 하드코딩 hex 금지. */
 .devui-s1 { background: var(--background); color: var(--foreground); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   48. 백테스트 결과 표면 — Card 로 감싼 뒤의 정리 (S1b-2)
+   ───────────────────────────────────────────────────────────────────────────
+   ★왜 `.brun-card` 를 고치지 않고 `.brun-results` 로 스코프를 좁혔나★
+   `.brun-card` 는 결과 화면 전용이 아니다 — Compare(4곳)와 RunMonitor(2곳)도 같은 클래스를
+   쓴다. 전역에서 padding 을 0 으로 만들면 그 두 화면의 카드가 그대로 찌그러진다.
+   Card 를 쓰는 것은 이번에 결과 화면뿐이므로, 정리도 그 화면 안에서만 한다.
+
+   ★여백의 주인이 바뀐다★
+   before: `.brun-card` padding 12/14 + `.brun-card-t` margin-bottom 8
+   after : CardHeader(px-3 py-2 + border-b) + CardContent(p-3)
+   둘을 그대로 두면 12+10.5 = 22.5px 로 이중이 된다. 그래서 여기서 0 으로 만든다.
+   ★선택자 순서 주의★ `.brun-card`(4156줄)는 Tailwind 유틸리티 출력(@tailwind utilities,
+   4줄)보다 뒤에 있어서 같은 특이도면 `.brun-card` 가 이긴다. 그래서 Card 의
+   `bg-[var(--card)]` 는 `.brun-card` 의 `background:#fff` 에 진다 — 아래에서 되돌린다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.brun-results .brun-card {
+  padding: 0;                      /* CardHeader / CardContent 가 가진다 */
+  background: var(--card);         /* #fff 하드코딩을 토큰으로 — 다크가 이 한 줄에 달려 있다 */
+  border-color: var(--border);
+}
+.brun-results .brun-card-t { margin-bottom: 0; }  /* CardHeader 의 py-2 가 대신한다 */
+
+/* ── 다크에서의 결과 화면 ──────────────────────────────────────────────────
+   §47 이 --t-* 를 뒤집어 주므로 토큰을 쓰는 규칙은 저절로 따라온다. 남는 것은
+   이 블록이 하드코딩 hex 로 적어 둔 것들뿐이고, 아래가 그 전부다(실측으로 뽑았다).
+   경고색(amber/red)은 다크에서 명도를 올린다 — 어두운 배경 위에서 #b45309 는
+   본문 대비 4.5:1 을 넘지 못한다. */
+.dark .brun-results .brun-btn { background: var(--card); color: var(--foreground); }
+.dark .brun-results .brun-btn.primary { background: var(--primary); color: var(--primary-foreground); }
+.dark .brun-results .brun-mocknote { background: #2a2113; color: #fcd34d; }
+.dark .brun-results .brun-badge.mock { background: #2a2113; color: #fcd34d; }
+.dark .brun-results .brun-badge.real { color: #4ade80; }
+.dark .brun-results .brun-diag-list { color: #fcd34d; }
+.dark .brun-results .brun-diag-list li.brun-diag-omit { color: var(--t-muted); }
+.dark .brun-results .brun-tdetail td { background: rgb(124 116 255 / 0.10); }
+.dark .brun-results .brun-trow:hover { background: var(--t-surface); }
+/* 셸 자체 — 카드만 어둡고 지면이 희면 "반만 다크"가 된다. §47 이 경고한 그 상태다. */
+.dark .brun-results { background: var(--background); color: var(--foreground); }

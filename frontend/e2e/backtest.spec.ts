@@ -374,3 +374,120 @@ test("S1b: hover 밖으로 꺼낸 산문이 읽을 수 있는 크기다 (12px �
     for (const px of sizes) expect(px, `${sel} 본문 하한 12px`).toBeGreaterThanOrEqual(12);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// S1b-2 — Card 로 감싼 뒤의 구조 · 다크 · 대비
+// ─────────────────────────────────────────────────────────────────────────────
+// 이 세 가지는 눈으로 보면 "괜찮아 보이는" 종류라서 계산으로 잡는다.
+// 여백은 이중으로 쌓여도 그냥 넉넉해 보이고, 다크는 카드만 어두워도 다크처럼 보이며,
+// 대비는 3.16:1 과 4.5:1 이 육안으로 거의 구분되지 않는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** WCAG 상대휘도 → 대비비. 브라우저 안에서 도는 문자열이라 의존성이 없어야 한다. */
+interface AuditResult { checked: number; bright: string[]; low: string[] }
+const CONTRAST_AUDIT = `(() => {
+  const lum = (r, g, b) => {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const parse = (s) => { const m = s.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; };
+  // 반투명 배경은 뒤가 비치므로 불투명한 조상까지 올라가서 실제 배경을 찾는다.
+  const effBg = (el) => {
+    let n = el;
+    while (n) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0.5) return c; n = n.parentElement; }
+    return { r: 255, g: 255, b: 255, a: 1 };
+  };
+  const ratio = (a, b) => { const l1 = lum(a.r, a.g, a.b), l2 = lum(b.r, b.g, b.b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+  const root = document.querySelector(".brun-results");
+  if (!root) return { checked: 0, bright: ["NO .brun-results"], low: [] };
+  const bright = [], low = [];
+  let checked = 0;
+  for (const el of [root, ...root.querySelectorAll("*")]) {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") continue;
+    const own = parse(cs.backgroundColor);
+    const tag = el.tagName + "." + (el.getAttribute("class") || "").split(" ").slice(0, 2).join(".");
+    if (own && own.a > 0.5 && lum(own.r, own.g, own.b) > 0.6) bright.push(tag + " bg=" + cs.backgroundColor);
+    // 자기 자신이 직접 들고 있는 텍스트만 — 부모까지 세면 같은 글자를 여러 번 센다.
+    const hasOwnText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
+    if (!hasOwnText) continue;
+    const fg = parse(cs.color);
+    if (!fg) continue;
+    checked++;
+    const bg = effBg(el);
+    const r = ratio(fg, bg);
+    const px = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight, 10) >= 700;
+    const need = px >= 24 || (px >= 18.66 && bold) ? 3 : 4.5;   // WCAG 큰 글씨 예외
+    if (r < need) low.push(tag + " " + r.toFixed(2) + ":1 (need " + need + ") " + px + "px " + cs.color + " :: " + (el.textContent || "").trim().slice(0, 20));
+  }
+  return { checked, bright: [...new Set(bright)], low: [...new Set(low)] };
+})()`;
+
+test("S1b-2: Card 가 여백의 주인이다 — .brun-card 와 이중으로 쌓이지 않는다", async ({ page }) => {
+  // before: .brun-card padding 12/14 + .brun-card-t margin-bottom 8
+  // after : CardHeader(px-3 py-2) + CardContent(p-3) 만. 둘 다 살아 있으면 22.5px 이 된다.
+  await stubCompletedRun(page);
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+  const cards = page.locator(".brun-results .brun-card");
+  const n = await cards.count();
+  expect(n, "결과 화면의 카드 수").toBeGreaterThanOrEqual(5);
+
+  const seen = await cards.evaluateAll((els) => els.map((card) => {
+    const cs = getComputedStyle(card);
+    const title = card.querySelector(".brun-card-t");
+    return {
+      padTop: parseFloat(cs.paddingTop), padLeft: parseFloat(cs.paddingLeft),
+      titleMb: title ? parseFloat(getComputedStyle(title).marginBottom) : -1,
+      contentPad: card.children[1] ? parseFloat(getComputedStyle(card.children[1] as HTMLElement).paddingTop) : -1,
+      root: parseFloat(getComputedStyle(document.documentElement).fontSize),
+    };
+  }));
+  for (const s of seen) {
+    expect(s.padTop, ".brun-card 자체 패딩은 0 (Card 하위가 가진다)").toBe(0);
+    expect(s.padLeft, ".brun-card 자체 패딩은 0").toBe(0);
+    expect(s.titleMb, ".brun-card-t 의 margin-bottom 은 CardHeader 가 대신한다").toBe(0);
+    expect(s.contentPad, "CardContent = p-3 (root 기준 0.75rem)").toBeCloseTo(s.root * 0.75, 1);
+  }
+});
+
+test("S1b-2: 카드 제목이 h2 로 헤딩 목차를 만든다 (레벨 건너뛰기 없음)", async ({ page }) => {
+  // 전에는 전부 <div> 라 스크린리더에 목차가 없었다. CardTitle 기본값 h3 를 그대로 쓰면
+  // h1 다음이 h3 가 되어 레벨을 건너뛴다 — 그래서 as="h2" 를 넣었다.
+  await stubCompletedRun(page);
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+  const levels = await page.locator(".brun-results h1, .brun-results h2, .brun-results h3, .brun-results h4")
+    .evaluateAll((els) => els.map((e) => Number(e.tagName[1])));
+  expect(levels.length, "헤딩 수").toBeGreaterThanOrEqual(4);
+  expect(levels[0], "첫 헤딩은 h1").toBe(1);
+  for (let i = 1; i < levels.length; i++) {
+    expect(levels[i] - levels[i - 1], `헤딩 레벨 건너뜀 (${levels[i - 1]}→${levels[i]})`).toBeLessThanOrEqual(1);
+  }
+  // 카드 제목이 전부 헤딩이어야 한다 — 하나라도 div 로 남으면 목차에 구멍이 난다.
+  const titleTags = await page.locator(".brun-results .brun-card-t").evaluateAll((els) => els.map((e) => e.tagName));
+  expect(new Set(titleTags), "모든 .brun-card-t 가 H2").toEqual(new Set(["H2"]));
+});
+
+test("★S1b-2: 결과 화면 텍스트가 라이트·다크 양쪽에서 WCAG AA 를 넘는다★", async ({ page }) => {
+  // ★이 테스트가 실제로 잡은 것 두 가지★
+  //  ① .dark 의 --chart-* 가 죽어 있었다. :root 라이트 기본값을 .dark 뒤에 두는 바람에
+  //     특이도가 같아 뒤가 이겼고, 다크에서 빨강이 #dc2626(3.67:1) 그대로였다.
+  //     토큰은 "정의돼 있었지만 한 번도 적용되지 않은" 상태였고 기존 테스트는 전부 초록이었다.
+  //  ② 라이트의 --chart-up(#16a34a)이 3.16:1 로 미달이었다. stroke 로는 충분(3:1)하지만
+  //     같은 토큰이 수익률 숫자의 글자색이라 4.5:1 을 받아야 한다.
+  await stubCompletedRun(page);
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+  await expect(page.locator(".brun-kpi").first()).toBeVisible();
+
+  const light = await page.evaluate<AuditResult>(CONTRAST_AUDIT);
+  // 검사한 노드가 0 이면 조용히 통과한다 — 이 세션에서 반복해서 겪은 실패 모양이다.
+  expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThan(20);
+  expect(light.low, "라이트: AA 미달 텍스트").toEqual([]);
+
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await page.waitForTimeout(200);
+  const dark = await page.evaluate<AuditResult>(CONTRAST_AUDIT);
+  expect(dark.checked, "다크에서 검사한 텍스트 노드 수").toBeGreaterThan(20);
+  expect(dark.low, "다크: AA 미달 텍스트").toEqual([]);
+  // ★"반만 다크"를 막는다★ 카드만 어둡고 어딘가 흰 판이 남아 있으면 그게 더 나쁘다(§47).
+  expect(dark.bright, "다크인데 밝은 배경이 남아 있다").toEqual([]);
+});

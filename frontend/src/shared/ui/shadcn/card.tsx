@@ -43,9 +43,19 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = "CardHeader";
 
-const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h3
+/**
+ * 상류는 `<h3>` 로 고정돼 있다. 여기서는 `as` 로 레벨을 고를 수 있게 했다 — 상류와 다른
+ * 유일한 지점이고, 이유가 있다: 카드가 페이지의 최상위 구획이면 `<h1>` 다음은 `<h2>` 여야
+ * 하는데, 고정된 h3 는 레벨을 건너뛴다. 스크린리더의 헤딩 목록이 이 페이지의 목차라서
+ * 건너뛴 레벨은 "빠진 항목"으로 읽힌다. 기본값은 상류와 같은 h3 로 둔다.
+ */
+type CardTitleTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+  as?: CardTitleTag;
+}
+const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
+  ({ className, as: Tag = "h3", ...props }, ref) => (
+    <Tag
       ref={ref}
       className={cn("text-sm font-semibold leading-tight tracking-tight", className)}
       {...props}

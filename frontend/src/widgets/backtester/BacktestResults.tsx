@@ -14,6 +14,18 @@ import {
 } from "recharts";
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
 import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } from "@/entities/backtest/bridgeModel";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
+
+// ★Card 로 감싸면서 지킨 것과 바꾼 것★
+//  지킨다 — `.brun-card` / `.brun-card-t` 는 같은 노드에 그대로 둔다(E2E 계약이고,
+//    backtest.spec.ts 가 `.brun-card-t` 의 텍스트로 섹션을 찾는다).
+//  바꾼다 — 여백의 주인이 옮겨간다. 예전에는 `.brun-card` 가 padding 12/14 를, `.brun-card-t`
+//    가 margin-bottom 8 을 들고 있었다. 이제 CardHeader(px-3 py-2 + 아래 경계)와
+//    CardContent(p-3)가 그 역할을 하므로, 둘을 그대로 두면 여백이 이중으로 쌓인다.
+//    그래서 globals.css §48 에서 **`.brun-results` 스코프로만** 그 둘을 0 으로 만든다 —
+//    같은 `.brun-card` 를 쓰는 Compare · RunMonitor 는 손대지 않는다.
+//  바꾼다 — `<section>` → Card 의 `<div>`. 이름 없는 section 은 스크린리더에서 어차피
+//    generic 이라 잃는 것이 없고, 대신 제목이 `<div>` 에서 `<h2>` 가 되어 헤딩 목차가 생긴다.
 
 type Stat = keyof BacktestStatistics;
 interface MetricDef { k: Stat; label: string; tip: string; suffix?: string; digits?: number; signed?: boolean }
@@ -188,8 +200,11 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
       {isMock && <div className="brun-mocknote">합성(mock) 데이터 기준 결과입니다 — 수치는 참고용. 실데이터는 GCP 적재 후 자동 반영됩니다.</div>}
 
       {/* Overview — 엔진이 산출한 모든 지표를 그룹별로(데이터 없는 항목 생략) */}
-      <section className="brun-card">
-        <div className="brun-card-t">개요 · 진단 지표 <span className="brun-note">데이터 없는 지표는 표시하지 않음</span></div>
+      <Card className="brun-card">
+        <CardHeader>
+          <CardTitle as="h2" className="brun-card-t">개요 · 진단 지표 <span className="brun-note">데이터 없는 지표는 표시하지 않음</span></CardTitle>
+        </CardHeader>
+        <CardContent>
         {METRIC_GROUPS.map((g) => {
           const avail = g.metrics.filter((m) => num(stats[m.k] as number) != null);
           // 사유를 댈 수 있는 결측만 함께 그린다 — 나머지는 지금까지처럼 생략한다.
@@ -226,12 +241,16 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           );
         })}
         {stats.eod_liquidated ? <div className="brun-note">기간종료 청산 {stats.eod_liquidated}종목 — 마지막 거래일 종가로 실현.</div> : null}
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Performance */}
       {equity.length > 1 && (
-        <section className="brun-card">
-          <div className="brun-card-t">자산곡선 {bt.benchmark ? "vs 벤치마크" : ""}</div>
+        <Card className="brun-card">
+          <CardHeader>
+            <CardTitle as="h2" className="brun-card-t">자산곡선 {bt.benchmark ? "vs 벤치마크" : ""}</CardTitle>
+          </CardHeader>
+          <CardContent>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
@@ -248,12 +267,16 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
               · β {bt.benchmark.beta?.toFixed(2)} · α {bt.benchmark.alpha_pct?.toFixed(1)}%
             </div>
           )}
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {bt.drawdown_curve?.some((d) => d < 0) && (
-        <section className="brun-card">
-          <div className="brun-card-t">낙폭 (Underwater)</div>
+        <Card className="brun-card">
+          <CardHeader>
+            <CardTitle as="h2" className="brun-card-t">낙폭 (Underwater)</CardTitle>
+          </CardHeader>
+          <CardContent>
           <ResponsiveContainer width="100%" height={140}>
             <AreaChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
@@ -263,12 +286,16 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
               <Area type="monotone" dataKey="dd" stroke="var(--chart-down)" fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
             </AreaChart>
           </ResponsiveContainer>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {monthly.length > 0 && (
-        <section className="brun-card">
-          <div className="brun-card-t">월별 수익률</div>
+        <Card className="brun-card">
+          <CardHeader>
+            <CardTitle as="h2" className="brun-card-t">월별 수익률</CardTitle>
+          </CardHeader>
+          <CardContent>
           <ResponsiveContainer width="100%" height={130}>
             <BarChart data={monthly} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
@@ -280,7 +307,8 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {/* Attribution — 종목 기여도 (엔진 산출 contribution_pct) */}
@@ -295,15 +323,19 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
       {roundTrips.length > 0 && <TradesTable trades={roundTrips} />}
 
       {/* Diagnostics — 정직 표기: 엔진 미산출 지표는 만들지 않음 */}
-      <section className="brun-card brun-diag">
-        <div className="brun-card-t">진단 · 데이터 범위</div>
+      <Card className="brun-card brun-diag">
+        <CardHeader>
+          <CardTitle as="h2" className="brun-card-t">진단 · 데이터 범위</CardTitle>
+        </CardHeader>
+        <CardContent>
         <ul className="brun-diag-list">
           {!run.is_pit_verified && <li>PIT 미검증 — 시점(point-in-time) 재무 정합이 확인되지 않아 look-ahead 편향 가능성이 있습니다.</li>}
           {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요합니다.</li>}
           {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·유니버스·기간을 점검하세요.</li>}
           <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않습니다(추정치로 대체하지 않음).</li>
         </ul>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -321,8 +353,11 @@ function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
   if (data.length === 0) return null;
   const h = Math.max(140, data.length * 22 + 30);
   return (
-    <section className="brun-card">
-      <div className="brun-card-t">기여도 분해 (Attribution) <span className="brun-note">상위 기여·하위 기여 종목</span></div>
+    <Card className="brun-card">
+      <CardHeader>
+        <CardTitle as="h2" className="brun-card-t">기여도 분해 (Attribution) <span className="brun-note">상위 기여·하위 기여 종목</span></CardTitle>
+      </CardHeader>
+      <CardContent>
       <ResponsiveContainer width="100%" height={h}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
           <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" horizontal={false} />
@@ -334,15 +369,19 @@ function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
 function SymbolTable({ rows }: { rows: SymbolPerf[] }) {
   const sorted = [...rows].sort((a, b) => (b.contribution_pct ?? b.total_return_pct) - (a.contribution_pct ?? a.total_return_pct));
   return (
-    <section className="brun-card">
-      <div className="brun-card-t">종목별 성과 <span className="brun-note">{rows.length}종목 · 기여도순</span></div>
+    <Card className="brun-card">
+      <CardHeader>
+        <CardTitle as="h2" className="brun-card-t">종목별 성과 <span className="brun-note">{rows.length}종목 · 기여도순</span></CardTitle>
+      </CardHeader>
+      <CardContent>
       <div className="brun-tablewrap">
         <table className="brun-table">
           <thead><tr><th>종목</th><th>수익률</th><th>실현손익</th><th>거래</th><th>승률</th><th>보유일</th><th>기여도</th></tr></thead>
@@ -361,15 +400,19 @@ function SymbolTable({ rows }: { rows: SymbolPerf[] }) {
           </tbody>
         </table>
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
 function TradesTable({ trades }: { trades: BacktestTrade[] }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <section className="brun-card">
-      <div className="brun-card-t">거래 로그 <span className="brun-note">{trades.length}건 · 행 클릭 = 상세</span></div>
+    <Card className="brun-card">
+      <CardHeader>
+        <CardTitle as="h2" className="brun-card-t">거래 로그 <span className="brun-note">{trades.length}건 · 행 클릭 = 상세</span></CardTitle>
+      </CardHeader>
+      <CardContent>
       <div className="brun-tablewrap">
         <table className="brun-table">
           <thead><tr><th>종목</th><th>진입일</th><th>청산일</th><th>진입가</th><th>청산가</th><th>수익률</th><th>사유</th></tr></thead>
@@ -398,6 +441,7 @@ function TradesTable({ trades }: { trades: BacktestTrade[] }) {
           </tbody>
         </table>
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
