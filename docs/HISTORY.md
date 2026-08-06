@@ -3206,3 +3206,24 @@ overview(:104)와 timing(:278)이 `minmax(0,1fr) 80px 48px` 3열 구조로 쓰�
 
 `/allocation/overview` 243 kB (변동 없음) · `/allocation/alphalab` 140 → **141 kB (+1 kB)**.
 Table 프리미티브가 이미 공유 청크에 있어서 사실상 무료였다. ADR 001 4 kB 선 안.
+
+### 게이트 — 236 passed / 1 failed → 원인은 내 스펙의 상태 오염
+
+전체 게이트(237)에서 `research-run-roundtrip.spec.ts:47` 하나가 **90초 타임아웃**으로
+빨개졌다. 단언 실패가 아니고, 같은 파일의 나머지 4건은 통과했으며, 격리 실행에서는 5/5
+통과한다. 부하 탓으로 넘기기 쉬운 모양이지만 기전이 있었다.
+
+그 테스트는 대기 9개(20+20+30+40+30+20+30+20+20초)가 **90초 예산 하나를 공유**한다 —
+각 단계가 빠를 때만 통과한다. 그리고 저널 목록이 길어질수록 느려진다.
+새로 넣은 `allocation-alphalab.spec.ts` 의 DECAY 테스트는 `검증 실행` 을 진짜로 눌렀고,
+`alphaApi.validate` 는 `record_run: true` 로 호출되므로 **검증 한 번이 ResearchRun 한 건을
+영구 저장**한다. 게이트 로그의 리서치 색인에 `rr_… 알파 검증 — zscore(m…` 이 5건 찍혀
+있었다 — 전부 내가 남긴 것이다.
+
+테스트가 공유 상태를 오염시키면 그 대가는 **다른 테스트**가 치른다. DECAY 테스트도
+IC 테스트처럼 `page.route` 로 막았다(덤으로 결정적이 되고 60초→30초로 줄었다).
+이후 `allocation-alphalab` + `research-run-roundtrip` 10건 동시 실행 **10 passed**.
+
+게이트: Playwright **236 passed / 1 failed → 재실행 후 전건 통과** · pytest **1,543 passed /
+10 skipped** · tsc 0 · eslint 0 errors(28 warnings). Playwright 는 A3 의 216 에서 이번
+스펙 21건(다크 스윕 12 · Overview 4 · Alpha Lab 5)이 늘어 237.

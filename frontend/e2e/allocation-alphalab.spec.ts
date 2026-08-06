@@ -43,11 +43,32 @@ test("★미산출 IC 에 약세색을 칠하지 않는다★", async ({ page })
 });
 
 test("DECAY 와 IS/OOS 는 별개의 표이고, 모든 머리글에 scope 가 있다", async ({ page }) => {
+  // ★백엔드를 실제로 때리지 않는다★ `alphaApi.validate` 는 `record_run: true` 로
+  // 호출되므로 진짜 검증 한 번이 ResearchRun 한 건을 **영구 저장**한다. 그러면
+  // 이 스펙이 돌 때마다 저널 목록이 길어지고, 그 목록을 훑는
+  // `research-run-roundtrip.spec.ts:47`(대기 9개가 90초 예산을 공유한다)이 느려진다.
+  // 실제로 전체 게이트에서 그 테스트만 타임아웃했고 로그에 이 스펙이 남긴
+  // `rr_* 알파 검증 — zscore(m…` 런이 5건 찍혀 있었다. 테스트가 공유 상태를
+  // 오염시키면 그 대가는 **다른 테스트**가 치른다.
+  await page.route("**/alpha-lab/validate**", async (route) => {
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({
+        expr: "zscore(mom_6m)", universe: "kospi50", n_periods: 24,
+        universe_size: 50, avg_coverage: 0.9,
+        period_start: "2024-01-01", period_end: "2026-01-01",
+        ic: { mean: 0.031, icir: 0.42, t_stat: 2.1, hit_rate: 55 },
+        decay: { "1m": 0.031, "2m": 0.019, "3m": 0.008 },
+        is_oos: { split: "70/30", is_ic: 0.035, oos_ic: 0.021 },
+        notes: [],
+      }),
+    });
+  });
   await enter(page);
   await page.locator(".as-fb-apply", { hasText: "검증 실행" }).click();
 
   const tables = page.locator(".as-al-tables table");
-  await expect(tables, "두 축을 한 머리글 줄에 섞지 않는다").toHaveCount(2, { timeout: 60_000 });
+  await expect(tables, "두 축을 한 머리글 줄에 섞지 않는다").toHaveCount(2, { timeout: 30_000 });
   const heads = page.locator(".as-al-tables th");
   const n = await heads.count();
   expect(n, "머리글 수 (0 이면 조용히 통과한다)").toBeGreaterThan(5);
