@@ -2918,4 +2918,5 @@ Card 를 씌우면 CardHeader(px-3 py-2)와 CardContent(p-3)가 같은 일을 �
 확인한 뒤 원복했다(12 vs 0 · 1→3 건너뜀 · AA 미달 8건). 대비 테스트는 검사한 노드 수를
 먼저 단언한다 — 셀렉터가 0개면 조용히 통과하는 모양을 이 세션에서 여러 번 겪었다.
 
-게이트: pytest 1,539 passed / 10 skipped · tsc 0 · eslint 0 errors(28 warnings).
+게이트: Playwright 192 passed / 0 failed (58.3분) · pytest 1,539 passed / 10 skipped ·
+tsc 0 · eslint 0 errors(28 warnings) · CSS 특이도 가드 5 passed(KNOWN_COLLISIONS 22 유지).
