@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { trackErrors, uniq, STUB_RUN_ID, completedRun, stubCompletedRun } from "./helpers";
+import { trackErrors, uniq, STUB_RUN_ID, completedRun, stubCompletedRun,
+  contrastAudit, type AuditResult } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BacktestRun workflow regression (스펙 §5) — locks in the durable run flow so a
@@ -383,45 +384,9 @@ test("S1b: hover 밖으로 꺼낸 산문이 읽을 수 있는 크기다 (12px �
 // 대비는 3.16:1 과 4.5:1 이 육안으로 거의 구분되지 않는다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** WCAG 상대휘도 → 대비비. 브라우저 안에서 도는 문자열이라 의존성이 없어야 한다. */
-interface AuditResult { checked: number; bright: string[]; low: string[] }
-const CONTRAST_AUDIT = `(() => {
-  const lum = (r, g, b) => {
-    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-  };
-  const parse = (s) => { const m = s.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; };
-  // 반투명 배경은 뒤가 비치므로 불투명한 조상까지 올라가서 실제 배경을 찾는다.
-  const effBg = (el) => {
-    let n = el;
-    while (n) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0.5) return c; n = n.parentElement; }
-    return { r: 255, g: 255, b: 255, a: 1 };
-  };
-  const ratio = (a, b) => { const l1 = lum(a.r, a.g, a.b), l2 = lum(b.r, b.g, b.b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
-  const root = document.querySelector(".brun-results");
-  if (!root) return { checked: 0, bright: ["NO .brun-results"], low: [] };
-  const bright = [], low = [];
-  let checked = 0;
-  for (const el of [root, ...root.querySelectorAll("*")]) {
-    const cs = getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden") continue;
-    const own = parse(cs.backgroundColor);
-    const tag = el.tagName + "." + (el.getAttribute("class") || "").split(" ").slice(0, 2).join(".");
-    if (own && own.a > 0.5 && lum(own.r, own.g, own.b) > 0.6) bright.push(tag + " bg=" + cs.backgroundColor);
-    // 자기 자신이 직접 들고 있는 텍스트만 — 부모까지 세면 같은 글자를 여러 번 센다.
-    const hasOwnText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
-    if (!hasOwnText) continue;
-    const fg = parse(cs.color);
-    if (!fg) continue;
-    checked++;
-    const bg = effBg(el);
-    const r = ratio(fg, bg);
-    const px = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight, 10) >= 700;
-    const need = px >= 24 || (px >= 18.66 && bold) ? 3 : 4.5;   // WCAG 큰 글씨 예외
-    if (r < need) low.push(tag + " " + r.toFixed(2) + ":1 (need " + need + ") " + px + "px " + cs.color + " :: " + (el.textContent || "").trim().slice(0, 20));
-  }
-  return { checked, bright: [...new Set(bright)], low: [...new Set(low)] };
-})()`;
+// 대비 감사기는 e2e/helpers.ts 로 옮겼다 — A2 에서 목표 게이트도 같은 검사를 받는다.
+// 40줄짜리 평가기를 표면마다 복붙하면 구현이 갈라진다(루트 선택자만 다르다).
+const CONTRAST_AUDIT = contrastAudit(".brun-results");
 
 test("S1b-2: Card 가 여백의 주인이다 — .brun-card 와 이중으로 쌓이지 않는다", async ({ page }) => {
   // before: .brun-card padding 12/14 + .brun-card-t margin-bottom 8

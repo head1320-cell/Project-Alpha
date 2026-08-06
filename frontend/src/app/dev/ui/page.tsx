@@ -425,6 +425,16 @@ export default function DevUiPage() {
               <p className="devui-s1why">벤치마크를 지정하지 않아 추적오차를 계산할 수 없습니다.</p>
             </CardContent>
           </Card>
+          {/* asChild (A2a) — 카드 전체가 클릭 대상일 때. DOM 노드가 진짜 <button> 이라
+              탭으로 닿고 Enter/Space 가 그냥 동작한다(div+onClick 은 둘 다 안 된다). */}
+          <Card asChild className="devui-s1card devui-s1btn">
+            <button type="button" onClick={() => {}}>
+              <CardHeader><CardTitle as="h3">asChild — 카드 전체가 버튼</CardTitle></CardHeader>
+              <CardContent>
+                <p className="devui-s1why">Slot 으로 클래스를 자식에게 넘긴다. 탭 스톱 1개.</p>
+              </CardContent>
+            </button>
+          </Card>
         </div>
       </section>
 

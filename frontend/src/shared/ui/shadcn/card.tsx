@@ -15,19 +15,39 @@
 // 성립하지 않는다 — bg-[var(--card)] 형태로 직접 쓴다(§34 주석에 이유가 적혀 있다).
 
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/shared/lib/cn";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(
-        "rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]",
-        className,
-      )}
-      {...props}
-    />
-  ),
+/**
+ * ★asChild 를 둔 이유★ (A2a)
+ * 카드 전체가 클릭 대상인 화면이 있다(목표 게이트의 프리셋 카드). 그때 `<div>` 인 Card 를
+ * 그대로 쓰면 셋 중 하나를 골라야 한다:
+ *   ① div 에 onClick — 탭으로 닿지 않고 Enter/Space 도 안 먹는다(직접 구현해야 한다),
+ *   ② 카드 안에 버튼 — 클릭 영역이 카드가 아니라 버튼만큼으로 줄어든다,
+ *   ③ 버튼 안에 카드 — 버튼 안에 버튼이 생길 수 있고 시맨틱이 뒤집힌다.
+ * Slot 으로 자식에게 클래스를 넘기면 DOM 노드가 **진짜 `<button>`** 이 된다 —
+ * 탭 스톱 하나, Enter/Space 무료, `:disabled` 동작, 그리고 기존 `.aas-goal` 클래스 유지.
+ * Button 이 이미 같은 계약을 쓰고 있고(button.tsx), @radix-ui/react-slot 은 이미 의존성이다.
+ * 기본값은 false 라 기존 소비처는 한 글자도 바뀌지 않는다.
+ */
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  asChild?: boolean;
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "div";
+    return (
+      <Comp
+        ref={ref}
+        className={cn(
+          "rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 Card.displayName = "Card";
 

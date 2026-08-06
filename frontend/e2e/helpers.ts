@@ -110,3 +110,54 @@ export async function stubCompletedRun(page: Page, runId: string = STUB_RUN_ID) 
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(full) }));
   return { lite, full };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WCAG 대비 감사 (S1b-2 에서 만들고 A2 에서 공용화)
+// ─────────────────────────────────────────────────────────────────────────────
+// ★이걸 공용으로 뺀 이유★ 이 세션에서 스스로 만든 결함 두 건을 잡은 것이 전부 이 감사다
+// (`.dark` 의 --chart-* 가 죽어 있던 것, `.aas-wiz-lab` 이 1.04:1 이던 것). 둘 다 육안으로는
+// "좀 흐리네"로 지나가고 기존 테스트는 전부 초록이었다. 새 표면마다 40줄을 복붙하면
+// 구현이 갈라지므로 루트 선택자만 받는 팩토리로 만든다.
+// 반환값은 **브라우저 안에서 도는 문자열**이라 바깥 스코프에 의존할 수 없다 — 선택자만 심는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+export interface AuditResult { checked: number; bright: string[]; low: string[] }
+
+export function contrastAudit(rootSelector: string): string {
+  return `(() => {
+  const lum = (r, g, b) => {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const parse = (s) => { const m = s.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; };
+  // 반투명 배경은 뒤가 비치므로 불투명한 조상까지 올라가서 실제 배경을 찾는다.
+  const effBg = (el) => {
+    let n = el;
+    while (n) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0.5) return c; n = n.parentElement; }
+    return { r: 255, g: 255, b: 255, a: 1 };
+  };
+  const ratio = (a, b) => { const l1 = lum(a.r, a.g, a.b), l2 = lum(b.r, b.g, b.b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+  const root = document.querySelector(${JSON.stringify(rootSelector)});
+  if (!root) return { checked: 0, bright: ["NO " + ${JSON.stringify(rootSelector)}], low: [] };
+  const bright = [], low = [];
+  let checked = 0;
+  for (const el of [root, ...root.querySelectorAll("*")]) {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") continue;
+    const own = parse(cs.backgroundColor);
+    const tag = el.tagName + "." + (el.getAttribute("class") || "").split(" ").slice(0, 2).join(".");
+    if (own && own.a > 0.5 && lum(own.r, own.g, own.b) > 0.6) bright.push(tag + " bg=" + cs.backgroundColor);
+    // 자기 자신이 직접 들고 있는 텍스트만 — 부모까지 세면 같은 글자를 여러 번 센다.
+    const hasOwnText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
+    if (!hasOwnText) continue;
+    const fg = parse(cs.color);
+    if (!fg) continue;
+    checked++;
+    const bg = effBg(el);
+    const r = ratio(fg, bg);
+    const px = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight, 10) >= 700;
+    const need = px >= 24 || (px >= 18.66 && bold) ? 3 : 4.5;   // WCAG 큰 글씨 예외
+    if (r < need) low.push(tag + " " + r.toFixed(2) + ":1 (need " + need + ") " + px + "px " + cs.color + " :: " + (el.textContent || "").trim().slice(0, 20));
+  }
+  return { checked, bright: [...new Set(bright)], low: [...new Set(low)] };
+})()`;
+}

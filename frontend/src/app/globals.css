@@ -5131,3 +5131,147 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .dark .aas-wiz-book.on { background: rgb(124 116 255 / .14); border-color: var(--t-accent); }
 .dark .aas-wiz-phase.on { background: rgb(124 116 255 / .10); border-color: var(--t-accent); }
 .dark .aas-wiz-mock { color: #fcd34d; border-color: #fcd34d; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   50. 목표 게이트 — 온보딩 위저드 (A2)
+   ───────────────────────────────────────────────────────────────────────────
+   대상: `/allocation` (GoalGate). 3단계 스테퍼 + 6개 프리셋 카드 + 빈 프리셋 분리.
+
+   ★왜 여기에 리셋이 필요한가 — §48 과 똑같은 순서 문제★
+   `.aas-goal`(:3548) · `.aas-goal-seed span`(:3556) · `.aas-gate-skip`(:3562) 는 전부
+   `@tailwind utilities` 출력(4줄)보다 **뒤에** 있다. 같은 특이도면 뒤가 이기므로,
+   Card 의 `bg-[var(--card)]` 도 Badge 의 `bg-[var(--secondary)]` 도 Button 의
+   `bg-transparent` 도 전부 저 평문 규칙들에 진다. 그래서 이 절에서 되돌린다.
+   (겪지 않고 예측하기 어려운 종류라 명시해 둔다: 이걸 빼면 카드는 흰 배경 + 14px 패딩,
+   배지는 9px 회색, 건너뛰기 버튼은 그냥 모노 텍스트로 렌더된다.)
+
+   ★색은 토큰만 쓴다★ 브리프는 `blue-500` / `bg-blue-50 dark:bg-blue-950/50` 을 지정했지만
+   이 저장소의 액센트는 이미 vivid blue 다(`--t-accent` = #1200ff 라이트 / #7c74ff 다크).
+   리터럴을 쓰면 액센트가 두 벌이 되고, 다크 하드코딩은 오늘 `.aas-wiz-lab` 을 1.04:1 로
+   만든 결함 그 자체다(§49 주석). 액센트 틴트 값도 §49 가 쓰는 것과 같은 값을 재사용한다.
+
+   ★타입 하한★ 이 화면은 9px(시드 태그) · 10px(푸터 라벨) · 10.5px(칩) · 11px(설명)로
+   되어 있었다. §49 와 같은 기준을 적용한다 — 산문 12px, 크롬 라벨·배지 11px.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 3단계 스테퍼 ───────────────────────────────────────────────────────────
+   스크롤포트는 `.terminal-main`(:799)이라 JS 없이 sticky 가 된다. z-index 는 §49 의
+   `.aas-wiz` 와 같은 25 — 둘은 절대 같은 화면에 없으므로(게이트는 크롬 밖) 충돌하지 않는다. */
+.aas-gstep {
+  position: sticky; top: 0; z-index: 25;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 3px);
+  padding: 7px 9px;
+  box-shadow: 0 1px 0 var(--border);
+}
+.aas-gstep-list { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+.aas-gstep-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius, 3px);
+  color: var(--t-muted);
+}
+/* 진행 방향을 글자 없이 알리는 구분자. 장식이 아니라 순서 표시라 aria 에는 안 넣는다
+   (순서는 <ol> 이 이미 말한다). */
+.aas-gstep-item + .aas-gstep-item::before {
+  content: "→"; margin-left: -3px; margin-right: 4px; color: var(--t-muted); font-size: 11px;
+}
+.aas-gstep-item.on { border-color: var(--t-accent); color: var(--t-ink); background: rgb(18 0 255 / .06); }
+.aas-gstep-n { font-size: 11px; font-weight: 700; color: var(--t-muted); }
+.aas-gstep-item.on .aas-gstep-n { color: var(--t-accent); }
+.aas-gstep-lab { font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+.aas-gstep-ko { font-size: 11px; color: var(--t-muted); }
+.aas-gstep-item.on .aas-gstep-ko { color: var(--t-ink); }
+
+/* ── 프리셋 그리드 — 브리프의 grid-cols-1 md:grid-cols-3 ─────────────────── */
+.aas-gate-grid { grid-template-columns: 1fr; gap: 14px; margin-top: 4px; }
+@media (min-width: 768px) {
+  .aas-gate-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ── 프리셋 카드 ────────────────────────────────────────────────────────────
+   Card asChild 로 DOM 노드는 진짜 <button> 이다 — 탭 스톱 하나, Enter/Space 무료.
+   여백의 주인이 `.aas-goal`(padding 14) 에서 CardHeader/CardContent 로 넘어간다. */
+.aas-gate .aas-goal {
+  padding: 0; gap: 0;
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: var(--radius, 3px);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+/* ★호버 전용 어포던스를 만들지 않는다★ 이 카드는 이 화면의 주 동작이다.
+   호버만 반응하면 키보드 사용자에게는 아무 일도 안 일어난다(P3 가 ContextStrip 에서
+   고친 것과 같은 결함). 포커스에도 같은 처리를 준다 — 전역 포커스 링(:2690)은 그대로 살린다. */
+.aas-gate .aas-goal:hover:not(:disabled),
+.aas-gate .aas-goal:focus-visible {
+  border-color: var(--t-accent);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgb(0 0 0 / .07);
+}
+.aas-gate .aas-goal:disabled { opacity: .5; cursor: default; }
+
+/* CardHeader 는 flex-col 이 기본이다 — 아이콘과 제목은 한 줄에 놓는다. */
+.aas-gate .aas-goal-head {
+  flex-direction: row; align-items: center; gap: 10px;
+  padding: 10px 12px; width: 100%;
+}
+.aas-gate .aas-goal-body {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  flex: 1; width: 100%; padding: 11px 12px;
+}
+/* 아이콘 컨테이너 — 브리프의 `bg-blue-50 dark:bg-blue-950/50 p-2.5 rounded-lg` 를
+   토큰 틴트로. 값은 §49 의 `.aas-wiz-step.on` 과 같은 것을 쓴다(파일에 틴트는 하나만). */
+.aas-goal-icw {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  padding: 8px; border-radius: 8px;
+  background: rgb(18 0 255 / .06); color: var(--t-accent);
+}
+.aas-goal-ic { width: 18px; height: 18px; }
+.aas-gate .aas-goal-t { font-size: 13.5px; text-align: left; }
+.aas-gate .aas-goal-d { font-size: 12px; line-height: 1.55; text-align: left; flex: 1; }
+/* Badge(variant="secondary")가 이기게 하되, 이기는 특이도로 같은 토큰을 다시 적는다.
+   `.aas-goal-seed span`(:3556, 9px·--t-surface·radius 2px)이 유틸리티를 이기기 때문이다.
+   선택자는 JSX 가 실제로 붙이는 `.aas-goal-bdg` 를 쓴다 — 붙어만 있고 규칙이 없는 클래스를
+   또 만들지 않기 위해서다(이번에 `.aas-goal-strategy` 가 그 상태로 발견돼 지웠다). */
+.aas-gate .aas-goal-bdg {
+  font-size: 11px; padding: 2px 7px;
+  border-color: var(--border);
+  border-radius: var(--radius, 3px);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+/* ── 빈 프리셋 — 사전 구성된 템플릿과 시각적으로 분리 ───────────────────── */
+.aas-gate .aas-goal-custom { border-width: 2px; border-style: dashed; }
+.aas-gate .aas-goal-custom:hover, .aas-gate .aas-goal-custom:focus-visible { border-color: var(--t-accent); }
+
+/* ── 이어서 계속 · 푸터 · 건너뛰기 ─────────────────────────────────────────── */
+.aas-gate-resume { background: var(--card); font-size: 12px; }
+.aas-gate-resume:hover { background: rgb(18 0 255 / .06); }
+.aas-gate-footlab { font-size: 11px; }
+/* `.as-chip` 은 전역 클래스다(소비처 다수) — 게이트 안으로만 스코프해서 올린다. */
+.aas-gate .as-chip { font-size: 11px; background: var(--card); color: var(--foreground); border-color: var(--border); }
+.aas-gate-footskip { justify-content: flex-end; }
+.aas-gate .aas-gate-skip {
+  font-family: inherit; font-size: 12px; color: var(--foreground);
+  background: transparent; border: 0; padding: 0 10px;
+}
+.aas-gate .aas-gate-skip:hover { background: var(--muted); color: var(--foreground); }
+
+/* ── 좁은 폭 ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .aas-gate-q { font-size: 21px; }
+  .aas-gstep-item { padding: 3px 8px; }
+  .aas-gstep-ko { display: none; }   /* 라벨(SETUP)과 번호는 남는다 — 단계는 계속 읽힌다 */
+}
+
+/* ── 다크 ──────────────────────────────────────────────────────────────────
+   §47 이 --t-* 를 뒤집어 주므로 토큰 규칙은 저절로 따라온다. 남는 것은 위에서
+   하드코딩한 라이트 액센트 틴트와, 지면 자체뿐이다("카드만 어둡고 지면이 희면 반만 다크"). */
+.dark .aas-gate { background: var(--background); color: var(--foreground); }
+.dark .aas-gstep-item.on { background: rgb(124 116 255 / .14); }
+.dark .aas-goal-icw { background: rgb(124 116 255 / .14); }
+.dark .aas-gate-resume:hover { background: rgb(124 116 255 / .14); }
+.dark .aas-gate .aas-goal:hover:not(:disabled),
+.dark .aas-gate .aas-goal:focus-visible { box-shadow: 0 2px 8px rgb(0 0 0 / .45); }
