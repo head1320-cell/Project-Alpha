@@ -3046,3 +3046,6 @@ Construct 로 들어가 조용히 다른 것을 검증한다. 그래서 빈 프�
 
 40줄짜리 대비 감사기는 `backtest.spec.ts` 에서 `e2e/helpers.ts` 의 `contrastAudit(root)` 로
 꺼냈다. 표면마다 복붙하면 구현이 갈라진다 — 다른 건 루트 선택자뿐이다.
+
+게이트: Playwright **208 passed / 0 failed** (59.4분) · pytest **1,543 passed / 10 skipped** ·
+tsc 0 · eslint 0 errors(28 warnings). A1 과 A2 를 함께 검증한 결과다.
