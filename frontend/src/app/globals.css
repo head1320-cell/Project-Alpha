@@ -3253,7 +3253,13 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 카드 공통 */
 .as-card { border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .as-card-title { font-size: 10px; letter-spacing: .07em; font-weight: 600; color: var(--t-ink); display: flex; align-items: center; gap: 7px; }
-.as-loading { opacity: .55; pointer-events: none; }
+/* ★결과를 흐리지 않는다 (A4-X1)★ 여기엔 `opacity: .55` 가 있었고, 5개 스테이지의
+   결과 패널 9곳에 붙어 있었다. 흐린 숫자는 두 가지를 동시에 한다 — AA 아래로 떨어뜨리고
+   (`--t-muted` #71717a 4.83:1 → 약 2.4:1), 그러면서도 여전히 읽히기 때문에 사용자는
+   **낡은 값을 읽고 판단한다**. A1 이 stale 상태에서 내린 결론(흐리게 하지 말고 적어라)이
+   loading 상태에는 적용된 적이 없었다. 어떤 테스트도 이 값을 본 적이 없다.
+   상호작용은 실제로 막히므로 pointer-events 는 남긴다. 상태는 .as-busy 가 **글로** 말한다. */
+.as-loading { pointer-events: none; }
 .as-badge { font-size: 9px; color: var(--t-accent); border: 1px solid var(--t-accent); border-radius: 2px; padding: 1px 5px; letter-spacing: .04em; }
 .as-note { font-size: 10px; color: var(--t-muted); line-height: 1.5; }
 .as-note-inline { font-size: 9.5px; color: var(--t-muted); font-weight: 400; letter-spacing: 0; }
@@ -5304,7 +5310,15 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── 비중 편집 행 ────────────────────────────────────────────────────────────
    이름 · 입력 · % · 삭제 를 한 줄에, 슬라이더는 그 아래 전폭.
    좁은 레일(300px)에 슬라이더까지 한 줄로 넣으면 둘 다 못 쓸 만큼 좁아진다. */
-.as-wrow {
+/* ★A4 수정: 이 블록은 원래 `.as-wrow` 를 그대로 재정의했다 — 그것이 결함이었다★
+   `.as-wrow` 는 :3385 에서 `minmax(0,1fr) 80px 48px` 3열로 정의돼 있고,
+   **overview(:104) 와 timing(:278) 이 그 3열 구조로 쓰고 있다.** A3 가 여기서
+   같은 이름을 4열 2행 named-area 로 덮어쓰면서, 뒤에 오는 이 규칙이 세 소비자 모두를
+   이겼다. 두 스테이지의 자식들은 grid-area 가 없고 8칸이 전부 이름으로 차 있어서
+   암시적 행으로 밀려났다 — 한 줄이어야 할 것이 세로로 쌓였다.
+   어떤 스펙도 그 두 화면의 행 레이아웃을 보지 않아서 조용히 살아남았다.
+   레이아웃은 수식자 클래스로 옮기고 `.as-wrow` 는 E2E 계약으로만 남긴다. */
+.as-wrow-edit {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 62px 10px 26px;
   grid-template-areas: "nm in unit del" "sl sl sl sl";
@@ -5312,18 +5326,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   align-items: center;
   padding: 3px 0;
 }
-.as-wrow .as-holding-nm { grid-area: nm; font-size: 12px; }
-.as-wrow .as-w-input { grid-area: in; }
-.as-wrow .as-w-unit { grid-area: unit; font-size: 11px; color: var(--t-muted); }
-.as-wrow .as-wrow-del { grid-area: del; }
+.as-wrow-edit .as-holding-nm { grid-area: nm; font-size: 12px; }
+.as-wrow-edit .as-w-input { grid-area: in; }
+.as-wrow-edit .as-w-unit { grid-area: unit; font-size: 11px; color: var(--t-muted); }
+.as-wrow-edit .as-wrow-del { grid-area: del; }
 .as-wrow-slider { grid-area: sl; }
 /* `.as-w-input`(:3287, width 58px·11px·자체 border)이 Input 유틸리티를 이긴다 — 되돌린다. */
-.as-ws2 .as-wrow .as-w-input {
+.as-ws2 .as-wrow-edit .as-w-input {
   width: 100%; font-size: 12px; padding: 2px 6px; text-align: right;
   border-color: var(--input); background: var(--background); color: var(--foreground);
 }
-.as-ws2 .as-wrow-del { width: 26px; height: 26px; color: var(--t-muted); }
-.as-ws2 .as-wrow-del:hover { color: var(--destructive); background: var(--muted); }
+.as-ws2 .as-wrow-edit .as-wrow-del { width: 26px; height: 26px; color: var(--t-muted); }
+.as-ws2 .as-wrow-edit .as-wrow-del:hover { color: var(--destructive); background: var(--muted); }
 
 /* ── 배분 게이지 ─────────────────────────────────────────────────────────────
    ★색만으로 말하지 않는다★ 예전에는 합계 숫자의 색만 바뀌었다. 바 + 숫자 + 문장. */
@@ -5388,16 +5402,24 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── 다크 마감 ───────────────────────────────────────────────────────────────
    §47 이 토큰을 뒤집으므로 토큰 규칙은 따라온다. 남는 것은 이 화면의 평문 규칙들이
    하드코딩한 흰색뿐이다(:3272 .as-rail-sec, :3502 대 등). */
-.dark .as-ws2 { background: var(--background); color: var(--foreground); }
-.dark .as-ws2 .as-rail-sec { background: var(--card); border-color: var(--border); }
-.dark .as-ws2 .as-card { background: var(--card); border-color: var(--border); }
-.dark .as-ws2 .as-chip { background: var(--card); color: var(--foreground); border-color: var(--border); }
-.dark .as-ws2 .as-hit { background: var(--card); color: var(--foreground); }
+/* ★A4-X2: 스코프를 `.as-ws2` 에서 `.aas-root` 로 넓혔다★
+   `.as-ws2` 는 11개 스테이지 중 9개만 쓴다 — **overview 와 execution 은 안 쓴다**.
+   그래서 A3 가 고친 공용 클래스의 다크 처리가 그 두 스테이지에는 하나도 닿지 않았고,
+   `.as-card`(:3254)의 `background:#fff` 가 거기서는 그대로 남아 있었다.
+   `.aas-root`(StageChrome.tsx:103)는 모든 스테이지를 감싸고 `.as-ws2` 를 포함하므로
+   이 교체는 **순수한 상위집합**이다 — Construct 의 동작은 한 줄도 바뀌지 않는다.
+   (`.as-wrow` 관련 규칙은 넓히지 않는다 — overview 가 같은 클래스명을 다른 구조로
+    재사용하고 있어서, 넓히면 그쪽 레이아웃이 깨진다.) */
+.dark .aas-root { background: var(--background); color: var(--foreground); }
+.dark .aas-root .as-rail-sec { background: var(--card); border-color: var(--border); }
+.dark .aas-root .as-card { background: var(--card); border-color: var(--border); }
+.dark .aas-root .as-chip { background: var(--card); color: var(--foreground); border-color: var(--border); }
+.dark .aas-root .as-hit { background: var(--card); color: var(--foreground); }
 /* 검색 입력도 `background:#fff` 하드코딩(:3274). 대비 자체는 통과하지만 다크 화면에
    흰 판이 남는 것은 "반만 다크"라 §47 이 경고한 상태다 — 감사의 bright 검사가 잡았다. */
-.dark .as-ws2 .as-input { background: var(--background); color: var(--foreground); border-color: var(--input); }
-.dark .as-ws2 .as-input::placeholder { color: var(--muted-foreground); }
-.dark .as-ws2 .as-seg { background: var(--card); border-color: var(--border); }
+.dark .aas-root .as-input { background: var(--background); color: var(--foreground); border-color: var(--input); }
+.dark .aas-root .as-input::placeholder { color: var(--muted-foreground); }
+.dark .aas-root .as-seg { background: var(--card); border-color: var(--border); }
 /* ★비활성 탭에 --muted-foreground 를 쓰지 않는다 — 내가 심었다가 감사로 잡은 결함★
    첫 판은 `color: var(--muted-foreground)`(#a1a1aa) 였다. zinc-900 카드 위에서
    **2.56:1** 로 측정됐다(10.5px 본문 기준 4.5:1 필요). 비활성이라고 흐리게 하는 것은
@@ -5409,18 +5431,19 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    `.as-seg` 만 var(--card) 로 바꾼 첫 수정에서는 버튼이 흰색 그대로였고, 글자를
    --foreground(#fafafa)로 올린 탓에 **1.04:1** 이 됐다 — A1 의 `.aas-wiz-step` 과
    똑같은 모양이다. 배경도 같이 내린다. */
-.dark .as-ws2 .as-seg button { background: var(--card); color: var(--foreground); }
-.dark .as-ws2 .as-seg button.on { background: rgb(124 116 255 / .14); color: var(--foreground); font-weight: 600; }
+.dark .aas-root .as-seg button { background: var(--card); color: var(--foreground); }
+.dark .aas-root .as-seg button.on { background: rgb(124 116 255 / .14); color: var(--foreground); font-weight: 600; }
 
-/* ── 가독 하한 — 산문 12px · 크롬 라벨 11px (§49·§50 과 같은 기준) ───────────── */
-.as-ws2 .as-rail-title { font-size: 12px; }
-.as-ws2 .as-note, .as-ws2 .as-note-inline { font-size: 11px; }
-.as-ws2 .as-empty { font-size: 12px; }
-.as-ws2 .as-card-title { font-size: 12px; }
+/* ── 가독 하한 — 산문 12px · 크롬 라벨 11px (§49·§50 과 같은 기준) ─────────────
+   스코프는 위와 같은 이유로 `.aas-root` 다 — 그래야 overview·execution 도 받는다. */
+.aas-root .as-rail-title { font-size: 12px; }
+.aas-root .as-note, .aas-root .as-note-inline { font-size: 11px; }
+.aas-root .as-empty { font-size: 12px; }
+.aas-root .as-card-title { font-size: 12px; }
 /* 모드 전환 탭과 칩 — 둘 다 10.5px 이었다(:3281 .as-chip, .as-seg button). */
-.as-ws2 .as-seg button { font-size: 11px; }
-.as-ws2 .as-chip { font-size: 11px; }
-.as-ws2 .as-hit, .as-ws2 .as-study-nm, .as-ws2 .as-study-meta { font-size: 11px; }
+.aas-root .as-seg button { font-size: 11px; }
+.aas-root .as-chip { font-size: 11px; }
+.aas-root .as-hit, .aas-root .as-study-nm, .aas-root .as-study-meta { font-size: 11px; }
 
 /* ── 슬라이더 외형 (shadcn/shadcn/slider.tsx = 네이티브 range) ────────────────
    ::-webkit-slider-thumb 같은 의사요소는 Tailwind 유틸리티로 표현할 수 없어서
@@ -5440,3 +5463,307 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   background: var(--background);
 }
 .as-range:disabled { opacity: .5; cursor: default; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   52. A4-X — 횡단 결함 3건 (계산 중 디밍 · 다크 스코프 · 차트 툴팁)
+   ───────────────────────────────────────────────────────────────────────────
+   §51 까지는 스테이지를 하나씩 고쳐 왔다. 이 절은 **한 스테이지에 속하지 않는** 결함만
+   모은다 — 스테이지별로 고칠 수 없기 때문에 여기 있는 것이지, 편의상 모은 게 아니다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── X1: 계산 중임을 흐림이 아니라 글로 말한다 ───────────────────────────────
+   `.as-loading` 의 `opacity:.55` 는 :3256 에서 제거했다(사유는 그 자리에 기록).
+   그 자리를 대신하는 것이 이 줄이다. 스피너는 장식이고, 정보는 문장에 있다. */
+.as-busy {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; color: var(--foreground);
+  border: 1px solid var(--border); border-left: 3px solid var(--t-accent);
+  border-radius: var(--radius, 3px); background: var(--muted);
+  padding: 5px 9px;
+}
+.as-busy-spin {
+  flex: none; width: 10px; height: 10px; border-radius: 9999px;
+  border: 2px solid var(--t-accent); border-right-color: transparent;
+  animation: asBusySpin .7s linear infinite;
+}
+/* 회전은 순수 장식이라 reduced-motion 에서 그냥 멈춘다 — 멈춰도 정보 손실이 없다. */
+@media (prefers-reduced-motion: reduce) { .as-busy-spin { animation: none; } }
+@keyframes asBusySpin { to { transform: rotate(360deg); } }
+.as-busy-l { font-weight: 600; }
+/* ★이 줄이 X1 의 핵심이다★ 흐림이 하던 말("이건 지금 값이 아니다")을 글로 한다.
+   흐림과 달리 색각·흑백·스크린리더 어디서도 전달된다. */
+.as-busy-stale { color: var(--muted-foreground); }
+.dark .as-busy { background: var(--card); }
+
+/* ── X2: 다크 — §51 이 넓힌 `.aas-root` 스코프가 아직 닿지 않은 패밀리들 ──────
+   AAS CSS 에서 `background:#fff` 를 직접 든 규칙은 30개였고 §51 이 6개를 덮었다.
+   나머지 중 스테이지 본문에 실제로 렌더되는 것들을 여기서 마저 덮는다.
+   토큰 규칙(§47)은 자동으로 따라오므로 남는 것은 이 하드코딩 흰색뿐이다. */
+.dark .aas-root .aas-kpi-c,
+.dark .aas-root .as-al-kpi,
+.dark .aas-root .as-view,
+.dark .aas-root .as-scen-mini,
+.dark .aas-root .as-sl-card,
+.dark .aas-root .as-sl-search,
+.dark .aas-root .as-krs-hero > div,
+.dark .aas-root .as-tm-gate,
+.dark .aas-root .as-rr-item,
+.dark .aas-root .as-ri,
+.dark .aas-root .aas-pipe,
+.dark .aas-root .as-hub-bar,
+.dark .aas-root .as-scen,
+.dark .aas-root .as-fb-dir button,
+.dark .aas-root .as-tm-set input,
+.dark .aas-root .as-tm-set select,
+.dark .aas-root .as-save-btn,
+.dark .aas-root .as-stepper {
+  background: var(--card); color: var(--foreground); border-color: var(--border);
+}
+/* 텍스트 입력만은 카드색이 아니라 배경색이어야 "입력 가능"으로 읽힌다(§51 과 동일). */
+.dark .aas-root .as-sl-search,
+.dark .aas-root .as-tm-set input { background: var(--background); }
+
+/* ── X2-2: 다크 스윕이 실제로 찾아낸 것 (111건 → 근본원인 6개) ────────────────
+   스코프를 넓히자마자 11개 스테이지 전부가 빨개졌다. 목록을 색으로 묶으니 개별
+   결함이 아니라 **토큰이 다크를 모르는 것**이 대부분이었다:
+     32건  var(--color-bear) #dc2626  → zinc-950 위 3.67:1
+     24건  버튼 안 흰 글씨            → 다크 액센트 #7c74ff 위 3.62:1
+     23건  var(--t-ink) #fafafa       → 배경이 흰 채로 남아 1.04:1
+      8건  var(--t-muted) #a1a1aa     → 위와 같은 흰 배경 위 2.56:1
+     14건  호박/초록/보라 상태 틴트   → 라이트 전용 리터럴이 그대로 남음
+   ★01 CONSTRUCT 도 빨갰다★ A3 의 스펙은 `.as-ws2` 를 감사하는데, 셸 크롬
+   (ContextStrip · 하단 내비 · 스테퍼)은 `.as-ws2` **밖**에 있다. 그래서 A3 가 초록인
+   채로 이 크롬은 한 번도 다크에서 측정된 적이 없었다. 감사 루트를 넓힌 것이
+   찾아낸 것이 바로 이 사각지대다. */
+.dark {
+  /* 상승/하락/주의 — 채도 높은 라이트 전용 값이라 어두운 배경에서 4.5:1 을 못 넘는다.
+     §51 이 --cat-* 에 쓴 것과 같은 계열(400단계)로 명도만 올린 짝을 쓴다. */
+  --color-bull: #4ade80;
+  --color-bear: #f87171;
+  --color-caution: #fbbf24;
+  --color-bull-bg: rgb(74 222 128 / .14);
+  --color-bear-bg: rgb(248 113 113 / .14);
+  --color-caution-bg: rgb(251 191 36 / .14);
+}
+
+/* 액센트로 칠한 버튼 — 다크 액센트(#7c74ff)는 밝은 라벤더라 흰 글씨가 3.62:1 이다.
+   `--primary-foreground: #09090b` 이 이미 다크에 있는데 이 버튼들만 #fff 를 박고 있었다. */
+.dark .aas-root .as-fb-apply,
+.dark .aas-root .as-run,
+.dark .aas-root .as-ri-next-b,
+.dark .aas-root .aas-botnav-next.primary,
+.dark .aas-root .as-save-btn.primary { color: #09090b; }
+
+/* 남은 하드코딩 흰 배경 — 위 스윕이 이름을 대 준 것들만. 추측으로 넓히지 않는다. */
+/* ★`.aas-botnav-next` 는 여기 넣으면 안 된다★ 한 번 넣었다가 스윕이 잡았다.
+   그 버튼의 배경은 흰색이 아니라 `var(--t-accent)`(:3489)다. 카드색으로 덮으니
+   위에서 글자를 #09090b 로 내린 것과 겹쳐 **1.12:1** 이 됐다 — 고치려던 것보다 나빠졌다. */
+.dark .aas-root .as-ctx,
+.dark .aas-root .aas-botnav-prev,
+.dark .aas-root .tfm-fams button,
+.dark .aas-root .as-rr-reopen,
+.dark .aas-root .as-fb-add,
+.dark .aas-root .as-fb-params select,
+.dark .aas-root .as-tm-kind,
+.dark .aas-root .as-tm-sig,
+.dark .aas-root .as-tm-set select { background: var(--card); color: var(--foreground); }
+.dark .aas-root .tfm-search,
+.dark .aas-root .as-tm-num { background: var(--background); color: var(--foreground); }
+/* 벤치마크 기준선 — 2px 짜리 참조선이라 글자를 얹지 않는다. 그래도 --foreground(#fafafa)
+   를 쓰면 감사의 "밝은 배경" 검사에 걸린다(그 검사는 표면과 장식을 구분하지 못한다).
+   실제로도 순백 선은 다크에서 과하게 튄다 — 회색으로 충분히 보인다. */
+.dark .aas-root .as-xray-bench { background: var(--t-muted); }
+
+/* 상태 틴트 — 라이트 전용 호박/초록 리터럴. 토큰화된 것은 위 .dark 블록이 이미
+   처리했고, 여기 남은 것은 hex 를 직접 든 규칙들이다. */
+.dark .aas-root .as-ctx-stale,
+.dark .aas-root .as-health-pill.watch,
+.dark .aas-root .as-ri-run-mock,
+.dark .aas-root .as-attr-basis.mock,
+.dark .aas-root .tev-estimated .tev-l,
+.dark .aas-root .tev-caution .tev-l { background: rgb(251 191 36 / .16); color: #fcd34d; }
+.dark .aas-root .as-3w-na,
+.dark .aas-root .as-ctx-warn,
+.dark .aas-root .as-aa-bias,
+.dark .aas-root .as-neu-warn { background: rgb(251 191 36 / .10); color: #fcd34d; }
+.dark .aas-root .as-ctx-warn-l,
+.dark .aas-root .as-ctx-warn-r { color: #fcd34d; }
+.dark .aas-root .as-ctx-mock,
+.dark .aas-root .as-xray-cov,
+.dark .aas-root .aas-header-mock { color: #fcd34d; border-color: #fcd34d; }
+.dark .aas-root .as-ctx-regime,
+.dark .aas-root .as-usage-backtest_eligible,
+.dark .aas-root .as-aa-cat-badge.on { background: rgb(74 222 128 / .16); color: #4ade80; }
+.dark .aas-root .as-usage-forward_only { background: rgb(251 191 36 / .16); color: #fcd34d; }
+/* 거버넌스 보라 — #6d28d9 / #5b21b6 은 어두운 배경에서 2:1 아래다. */
+.dark .aas-root .as-aa-gov { background: rgb(167 139 250 / .12); color: #c4b5fd; }
+.dark .aas-root .as-aa-gov b { color: #ddd6fe; }
+/* 알파 레지스트리 상태 배지 — #92610a 는 다크에서 안 보인다. */
+.dark .aas-root .as-al-status.s-experimental,
+.dark .aas-root .as-al-lint-item.warn { color: #fcd34d; border-color: #fcd34d; }
+
+/* ── X2-3: 매크로 색 스케일 토큰화 (entities/macro/api.ts 가 참조) ────────────
+   `REGIME_COLORS` 와 `zScoreColor()` 는 인라인 style 로 들어가므로 CSS 규칙으로
+   덮을 수 없다 — 값 자체가 토큰이어야 다크가 따라온다.
+   ★라이트 값은 예전 hex 와 한 글자도 다르지 않다★ 그래야 이 변경이 다크만 건드린다. */
+:root {
+  --rg-gold-fg: #15803d; --rg-gold-bg: #dcfce7; --rg-gold-bd: #86efac;
+  --rg-refl-fg: #a16207; --rg-refl-bg: #fef3c7; --rg-refl-bd: #fcd34d;
+  --rg-stag-fg: #b91c1c; --rg-stag-bg: #fee2e2; --rg-stag-bd: #fca5a5;
+  --rg-disi-fg: #1e40af; --rg-disi-bg: #dbeafe; --rg-disi-bd: #93c5fd;
+  --z-vhigh: #b91c1c; --z-high: #ea580c; --z-up: #65a30d;
+  --z-down: #0891b2; --z-low: #1d4ed8; --z-vlow: #1e3a8a; --z-none: #737373;
+}
+/* 다크 — 위 값들은 어두운 배경에서 전부 4.5:1 아래다(측정: #1d4ed8 2.64:1 ·
+   #0891b2 3.68:1 · #65a30d 3.09:1). 같은 색상각의 400단계로 올린 짝. */
+.dark {
+  --rg-gold-fg: #4ade80; --rg-gold-bg: rgb(74 222 128 / .16); --rg-gold-bd: #15803d;
+  --rg-refl-fg: #fcd34d; --rg-refl-bg: rgb(251 191 36 / .16); --rg-refl-bd: #a16207;
+  --rg-stag-fg: #fca5a5; --rg-stag-bg: rgb(248 113 113 / .16); --rg-stag-bd: #b91c1c;
+  --rg-disi-fg: #93c5fd; --rg-disi-bg: rgb(147 197 253 / .16); --rg-disi-bd: #1e40af;
+  --z-vhigh: #fca5a5; --z-high: #fdba74; --z-up: #a3e635;
+  --z-down: #67e8f9; --z-low: #93c5fd; --z-vlow: #a5b4fc; --z-none: #a1a1aa;
+}
+
+/* 남은 호박 리터럴 두 곳 — 스윕이 이름을 대 준 것만. */
+.dark .aas-root .as-ri-none,
+.dark .aas-root .as-badge-mock { color: #fcd34d; }
+.as-badge-mock { color: #a16207; border-color: #a16207; align-self: flex-start; }
+.dark .aas-root .as-badge-mock { border-color: #fcd34d; }
+
+/* ── X2-4: 네이티브 폼 컨트롤 ────────────────────────────────────────────────
+   마지막 두 건은 클래스 없는 `<input>` 이었다. 어떤 규칙도 배경을 주지 않으니 UA
+   기본값(흰색)이 남은 것이고, 그래서 셀렉터를 아무리 늘려도 잡히지 않았다.
+   `color-scheme` 이 이 저장소 어디에도 선언된 적이 없다 — 한 줄로 input·select·
+   스크롤바·날짜 선택기까지 전부 다크 UA 팔레트로 바뀐다. 개별 셀렉터 추적보다
+   이쪽이 근본이다. */
+.dark { color-scheme: dark; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   53. A4-V — 00 OVERVIEW (연구 색인 + KPI + 12열 분석 격자)
+   ───────────────────────────────────────────────────────────────────────────
+   이 스테이지는 `.as-ws2` 를 쓰지 않는다. 그래서 §51 의 하한·다크가 하나도 닿지
+   않았고(§52 가 `.aas-root` 로 넓혀 이제 닿는다), 남은 것은 이 화면 고유 클래스다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 가독 하한 — 산문 12px · 크롬 11px (§49·§50·§51 과 같은 기준) ───────────── */
+.aas-kpi-l { font-size: 11px; }
+.aas-kpi-s { font-size: 11px; }
+.aas-xlink { font-size: 11px; }
+.aas-conc { font-size: 11px; }
+
+/* ── 견고성 행 ───────────────────────────────────────────────────────────────
+   예전에는 이 행 전체가 인라인 style 이었다 — 클래스가 없으니 E2E 훅도, 다크도,
+   타입 하한도 붙일 자리가 없었고 9px·10.5px 가 그대로 박혀 있었다. */
+.aas-ov-rob { display: flex; align-items: baseline; gap: 10px; font-size: 12px; min-width: 0; }
+.aas-ov-rob-l { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aas-ov-rob-m { font-style: normal; font-size: 11px; color: var(--t-muted); white-space: nowrap; }
+.aas-ov-rob-v.bull { color: var(--color-bull); }
+.aas-ov-rob-v.bear { color: var(--color-bear); }
+/* Δ 열 — 9.5px 인라인이었다. */
+.aas-ov-d { font-size: 11px; }
+.aas-ov-d.bull { color: var(--color-bull); }
+.aas-ov-d.bear { color: var(--color-bear); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   54. A4-L — 02 ALPHA LAB (표현식 · 레지스트리 · 검증 리포트) + .tfm-* 하한
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 가독 하한 — 이 스테이지가 스튜디오에서 가장 나빴다 (8~10px) ────────────── */
+.aas-root .as-al-name { font-size: 12px; }
+.aas-root .as-al-tpl { font-size: 11px; }        /* 8px 이었다 */
+.aas-root .as-al-ver { font-size: 11px; }
+.aas-root .as-al-status { font-size: 11px; }
+.aas-root .as-al-kpi em { font-size: 11px; }
+.aas-root .as-al-kpi b { font-size: 15px; }
+.aas-root .as-al-qcol .num { font-size: 11px; }
+.aas-root .as-al-lint-item { font-size: 12px; }
+.aas-root .as-al-lint-item b { font-size: 11px; }
+.aas-root .as-metrics { font-size: 12px; }
+.aas-root .as-metrics th { font-size: 11px; }
+.aas-root .as-fb-apply, .aas-root .as-fb-add { font-size: 11px; }
+.aas-root .as-sl-hold { font-size: 11px; }
+
+/* Rank IC — 값이 있을 때만 색이 붙는다(A4-L1). 미산출은 색 없이 `—`. */
+.as-al-kpi b.bull { color: var(--color-bull); }
+.as-al-kpi b.bear { color: var(--color-bear); }
+
+/* 레지스트리 행에 표현식을 드러낸다 — 좁으면 줄임표, 전문은 선택 시 에디터에 뜬다. */
+.as-al-expr-r {
+  font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 260px; flex: 1; text-align: left;
+}
+.as-al-pick { gap: 8px; }
+.as-al-tables { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+@media (max-width: 900px) { .as-al-tables { grid-template-columns: 1fr; } }
+.as-al-ls-t { margin-top: 10px; }
+.as-al-notes { margin-top: 4px; }
+
+/* ── CatalogueShell(.tfm-*) 하한 — 소비자 6개에 그대로 파급된다 ───────────────
+   알파·타이밍·스트레스·팩터피커·스크리너·수식빌더가 모두 이 셸을 쓴다.
+   `factor-picker.spec.ts` 가 `.tfm-off` 의 글자("미가용")와 `.tfm-fam-n` 의 형식
+   (`\d+/\d+`)을 단언한다 — 여기서는 font-size 만 바꾸므로 둘 다 그대로다. */
+.tfm-fams button { font-size: 11px; }
+.tfm-fam-n { font-size: 11px; }
+.tfm-group { font-size: 11px; }
+.tfm-row-d { font-size: 12px; }
+.tfm-row-p { font-size: 11px; }
+.tfm-sel-d { font-size: 12px; }
+.tfm-note { font-size: 11px; }
+.tfm-kind { font-size: 11px; }                   /* 8.5px 이었다 */
+.tfm-off { font-size: 11px; }                    /* 8.5px 이었다 */
+.tfm-prev-l { font-size: 11px; }
+.tfm-imp-h, .tfm-lin-h { font-size: 11px; }
+.tfm-imp-note, .tfm-lin-caveats { font-size: 11px; }
+.tfm-hist-l, .tfm-hist-miss, .tfm-hist-lim, .tfm-hist-stats { font-size: 11px; }
+.tfm-cmp-h, .tfm-preset-h { font-size: 11px; }
+.tfm-cmp-none, .tfm-cmp-same, .tfm-cmp-row { font-size: 11px; }
+.tfm-preset-item, .tfm-preset-note, .tfm-preset-empty,
+.tfm-preset-add, .tfm-preset-load, .tfm-preset-name { font-size: 11px; }
+
+/* ── A4: 셸 크롬 타입 하한 ────────────────────────────────────────────────────
+   `.aas-root` 를 감사 루트로 잡자마자 나온 것들이다. §49·§50·§51 은 스테퍼·게이트·
+   `.as-ws2` 본문만 봤고, 그 **사이**에 있는 크롬 — 컨텍스트 스트립의 증거 배지,
+   팩터 X-ray, 하단 내비 — 은 한 번도 하한이 적용된 적이 없다. 다크 스윕이 같은
+   사각지대를 찾아낸 것과 정확히 같은 이유다(감사 범위가 곧 발견 범위다). */
+.aas-root .tev-l, .aas-root .tev-r { font-size: 11px; }
+.aas-root .as-xray-label, .aas-root .as-xray-val { font-size: 11px; }
+.aas-root .as-xray-cov { font-size: 11px; }
+.aas-root .aas-botnav-mid { font-size: 11px; }
+.aas-root .aas-botnav-why { font-size: 11px; }
+.aas-root .as-ctx-src { font-size: 11px; }
+.aas-root .as-ctx-mode, .aas-root .as-ctx-stress, .aas-root .as-ctx-regime,
+.aas-root .as-ctx-canary, .aas-root .as-ctx-canary em,
+.aas-root .as-ctx-snap, .aas-root .as-ctx-snap em, .aas-root .as-ctx-usage,
+.aas-root .as-ctx-scen-id, .aas-root .as-ctx-scen-drift,
+.aas-root .as-ctx-study em, .aas-root .as-ctx-run em { font-size: 11px; }
+.aas-root .as-ctx-warn-l { font-size: 11px; }
+.aas-root .as-badge { font-size: 11px; }
+.aas-root .as-note { font-size: 11px; }
+.aas-root .aas-kpi-l, .aas-root .aas-kpi-s { font-size: 11px; }
+.aas-root .as-al-qcol .num, .aas-root .as-al-kpi em { font-size: 11px; }
+.aas-root .as-sl-hold, .aas-root .as-sl-sig, .aas-root .as-sl-desc,
+.aas-root .as-sl-more, .aas-root .as-sl-fam { font-size: 11px; }
+/* AutoAlphaLab(실험 샌드박스) · 인텐트 · 모델타입 배지 — 8~10.5px 이었다. */
+.aas-root .aas-intent b { font-size: 11px; }
+.aas-root .as-model-type { font-size: 11px; }
+.aas-root .tev-drawer-t { font-size: 11px; }
+.aas-root .as-aa-exp { font-size: 11px; }        /* 8px 이었다 */
+.aas-root .as-aa-gov, .aas-root .as-aa-gov b { font-size: 11px; }
+.aas-root .as-aa-ctrl label { font-size: 11px; }
+.aas-root .as-aa-cat-lab { font-size: 11px; }
+.aas-root .as-aa-cat-badge { font-size: 11px; }  /* 8px 이었다 */
+.aas-root .as-aa-cat-desc { font-size: 11px; }
+.aas-root .as-aa-meta, .aas-root .as-aa-bias, .aas-root .as-aa-warn,
+.aas-root .as-aa-seeds, .aas-root .as-aa-expr, .aas-root .as-aa-cat-row { font-size: 11px; }
+/* 리서치 색인(P4) — 8.5~10.5px. 런 ID·시각은 재현성의 핵심 정보인데 가장 작았다. */
+.aas-root .as-ri-k { font-size: 11px; }          /* 8.5px 이었다 */
+.aas-root .as-ri-c em { font-size: 11px; }
+.aas-root .as-ri-next-why { font-size: 11px; }
+.aas-root .as-ri-sec-h, .aas-root .as-ri-sec span { font-size: 11px; }
+.aas-root .as-ri-more { font-size: 11px; }
+.aas-root .as-ri-run, .aas-root .as-ri-study { font-size: 11px; }
+.aas-root .as-ri-run-id, .aas-root .as-ri-run-t { font-size: 11px; }
+.aas-root .as-ri-run-nm { font-size: 11px; }
+.aas-root .as-ri-run-mock { font-size: 11px; }   /* 8.5px 이었다 */

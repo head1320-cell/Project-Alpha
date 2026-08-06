@@ -32,7 +32,7 @@ export function KrScenarioPack({ scenario: controlled, onPick }: {
   const r = runQ.data && !runQ.data.error ? runQ.data : null;
 
   return (
-    <section className={`as-card${runQ.isLoading ? " as-loading" : ""}`}>
+    <section className={`as-card${runQ.isLoading ? " as-loading" : ""}`} aria-busy={runQ.isLoading}>
       <div className="as-card-title">국내 시나리오팩 <span className="as-note-inline">7종 · 팩터 기반 충격 · 강도 {severity.toFixed(2)}×</span></div>
       {/* 통합 시나리오 창이 선택을 주도하면 중복 목록은 렌더하지 않는다
           (hidden 속성은 .as-scenario-list의 display:flex에 밀리므로 조건부 렌더) */}

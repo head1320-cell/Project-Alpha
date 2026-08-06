@@ -204,7 +204,7 @@ export default function TimingWorkspace() {
 
       {/* ── 우: 판정 · 배분 · 시장 타이밍 ── */}
       <main className="as-center">
-        <section className={`as-card${timingQ.isLoading ? " as-loading" : ""}`}>
+        <section className={`as-card${timingQ.isLoading ? " as-loading" : ""}`} aria-busy={timingQ.isLoading}>
           <div className="as-card-title">위험 국면 판정</div>
           {timingQ.isLoading && <div className="as-empty">카나리 계산 중…</div>}
           {timingQ.data?.error && <div className="as-err">{timingQ.data.message}</div>}

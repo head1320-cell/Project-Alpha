@@ -16,7 +16,17 @@ import {
 } from "@/shared/ui/shadcn/table";
 import type { AnalyzeResult, StressResult, SummaryStats, XrayFactor } from "@/entities/allocation/api";
 
-const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
+// ★차트 툴팁이 다크에서 흰 상자였다 (A4-X3)★ `background: "#fff"` 가 박혀 있었고,
+// 다크에서 글자색은 --t-ink(#fafafa)로 뒤집히는데 배경은 흰색 그대로라 **약 1.04:1** 이었다.
+// A1 의 `.aas-wiz-lab`, A3 의 `.as-seg button` 과 같은 결함이 세 번째로 반복된 자리다.
+// Recharts 는 인라인 style 만 받으므로 클래스가 아니라 토큰을 직접 넣는다.
+const TIP_STYLE = {
+  background: "var(--card)", color: "var(--foreground)",
+  border: "1px solid var(--border)", borderRadius: 2,
+  fontSize: 11, fontFamily: "var(--t-mono, monospace)",
+};
+/** 마커 테두리 — 차트 배경색이어야 점이 배경에서 떠 보인다. 흰색을 박으면 다크에서 흰 링이 남는다. */
+const DOT_RING = "var(--card)";
 /**
  * 범주 팔레트 — 하드코딩 hex 에서 토큰으로 (A3 S3f).
  * 예전 배열에는 `#16a34a` 가 들어 있었는데, S1b-2 에서 그 값이 zinc-50 위 3.16:1 로
@@ -194,10 +204,10 @@ export function FrontierChart({ result, lam, height = 256 }: { result: AnalyzeRe
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${Number(val).toFixed(2)}%`, name === "y" ? "수익률" : "변동성"]} />
         <Scatter data={cloudData} isAnimationActive={false} shape={<CloudDot />} />
         <Scatter data={curveData} fill="var(--t-accent)" line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} isAnimationActive={false} shape={() => <g />} />
-        {pts?.market && <ReferenceDot x={pts.market.volatility_pct} y={pts.market.return_pct} r={5} fill="#64748b" stroke="#fff" label={{ value: "시장", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
-        {pts?.current && <ReferenceDot x={pts.current.volatility_pct} y={pts.current.return_pct} r={5} fill="#0891b2" stroke="#fff" label={{ value: "현재", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
-        {pts?.optimal && <ReferenceDot x={pts.optimal.volatility_pct} y={pts.optimal.return_pct} r={7} fill="#dc2626" stroke="#fff" strokeWidth={1.5} label={{ value: "★ 최적", fontSize: 10, position: "top", fill: "#dc2626" }} />}
-        {lamPt && <ReferenceDot x={lamPt.x} y={lamPt.y} r={5} fill="var(--t-accent)" stroke="#fff" label={{ value: `λ=${lam.toFixed(1)}`, fontSize: 9, position: "top", fill: "var(--t-accent)" }} />}
+        {pts?.market && <ReferenceDot x={pts.market.volatility_pct} y={pts.market.return_pct} r={5} fill="#64748b" stroke={DOT_RING} label={{ value: "시장", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
+        {pts?.current && <ReferenceDot x={pts.current.volatility_pct} y={pts.current.return_pct} r={5} fill="#0891b2" stroke={DOT_RING} label={{ value: "현재", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
+        {pts?.optimal && <ReferenceDot x={pts.optimal.volatility_pct} y={pts.optimal.return_pct} r={7} fill="#dc2626" stroke={DOT_RING} strokeWidth={1.5} label={{ value: "★ 최적", fontSize: 10, position: "top", fill: "#dc2626" }} />}
+        {lamPt && <ReferenceDot x={lamPt.x} y={lamPt.y} r={5} fill="var(--t-accent)" stroke={DOT_RING} label={{ value: `λ=${lam.toFixed(1)}`, fontSize: 9, position: "top", fill: "var(--t-accent)" }} />}
       </ScatterChart>
     </ResponsiveContainer>
   );
@@ -439,7 +449,11 @@ export function ConfidenceGauge({ value, height = 120 }: { value: number; height
 function heatColor(v: number, maxAbs: number): string {
   if (!Number.isFinite(v) || maxAbs <= 0) return "transparent";
   const t = Math.max(-1, Math.min(1, v / maxAbs));
-  const a = 0.06 + 0.6 * Math.abs(t);
+  // ★알파 상한을 0.48 로 낮췄다 (A4-X2)★ 예전 상한은 0.66 이라 셀 자체가 사실상
+  // 불투명한 초록/빨강 판이 됐고, 그 위에 `--t-ink` 로 글자를 얹었다. 다크에서
+  // --t-ink 는 #fafafa 로 뒤집히므로 진한 초록 위 흰 글씨(3.16:1)가 된다.
+  // 0.5 아래로 두면 셀 색이 카드 배경과 합성돼 라이트·다크 양쪽에서 글자가 이긴다.
+  const a = 0.06 + 0.42 * Math.abs(t);
   return t >= 0 ? `rgba(22,163,74,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
 }
 

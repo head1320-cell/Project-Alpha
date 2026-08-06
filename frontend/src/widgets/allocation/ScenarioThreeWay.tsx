@@ -24,6 +24,7 @@ import {
   type ScenarioLeg, type TimingRuleSpec,
 } from "@/entities/allocation/api";
 import { useAllocation } from "./AllocationProvider";
+import { StageBusy } from "./StageBusy";
 
 const LEG_LABEL: Record<string, string> = {
   baseline: "기준 (타이밍 없음)",
@@ -104,7 +105,7 @@ export function ScenarioThreeWay({ packId, holdings, severity }: {
   });
 
   return (
-    <section className={`as-card as-s3w${q.isLoading ? " as-loading" : ""}`}>
+    <section className={`as-card as-s3w${q.isLoading ? " as-loading" : ""}`} aria-busy={q.isLoading}>
       <div className="as-card-title">
         시나리오 × 3자 비교 <span className="as-note-inline">이 충격에서 타이밍이 무엇을 바꾸나</span>
       </div>
@@ -117,6 +118,7 @@ export function ScenarioThreeWay({ packId, holdings, severity }: {
       {rules.length > 0 && Object.keys(holdings).length === 0 && (
         <div className="as-empty">01 CONSTRUCT에서 포트폴리오를 구성하세요 →</div>
       )}
+      {q.isLoading && <StageBusy label="시나리오 × 3자 비교 계산 중…" />}
       {q.isError && <div className="as-err">비교를 불러오지 못했습니다.</div>}
 
       {q.data && (

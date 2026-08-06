@@ -8,6 +8,7 @@ import {
   AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
 } from "@/widgets/allocation/parts";
 import { NeutralizePanel } from "@/widgets/allocation/NeutralizePanel";
+import { StageBusy } from "@/widgets/allocation/StageBusy";
 import { TimingOverlayPanel } from "@/widgets/allocation/TimingOverlayPanel";
 
 function num(v: string): number | null {
@@ -162,10 +163,12 @@ export default function OptimizerWorkspace() {
         <NeutralizePanel />
       </aside>
       <main className="as-center">
-        <section className={`as-card${pending ? " as-loading" : ""}`}>
+        <section className={`as-card${pending ? " as-loading" : ""}`} aria-busy={pending}>
           <div className="as-card-title">EFFICIENT FRONTIER
             {result?.views_applied && <span className="as-badge">BL 뷰 적용</span>}
           </div>
+          {/* 재계산 중에도 이전 프론티어를 계속 그린다 — 그렇다면 그렇다고 적어야 한다(A4-X1). */}
+          {pending && <StageBusy label="최적화 재계산 중…" stale={!!result} />}
           {result ? <FrontierChart result={result} lam={delta} height={340} />
             : <div className="as-empty" style={{ height: 340, display: "flex", alignItems: "center", justifyContent: "center" }}>Re-optimize 실행 시 표시</div>}
           {lamWeights && (
@@ -177,8 +180,9 @@ export default function OptimizerWorkspace() {
             </div>
           )}
         </section>
-        <section className={`as-card${pending ? " as-loading" : ""}`}>
+        <section className={`as-card${pending ? " as-loading" : ""}`} aria-busy={pending}>
           <div className="as-card-title">ALLOCATION FLOW <span className="as-note-inline">시장 → 뷰 반영 → 최적화</span></div>
+          {pending && <StageBusy label="가중치 흐름 재계산 중…" stale={!!result} />}
           {result ? <AllocationSankey result={result} /> : <div className="as-empty">가중치 흐름</div>}
         </section>
       </main>

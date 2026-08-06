@@ -113,7 +113,7 @@ export default function RobustnessWorkspace() {
             <em className="as-note-inline">릴리스 시 N회 재최적화 실행 (자산 수만큼)</em>
           </label>
           {sensQ.data && (sensQ.data.coverage as { source?: string })?.source === "mock" && (
-            <span className="as-badge" style={{ color: "#a16207", borderColor: "#a16207", alignSelf: "flex-start" }}>MOCK 데이터</span>
+            <span className="as-badge as-badge-mock">MOCK 데이터</span>
           )}
         </section>
         <section className="as-card">
@@ -145,7 +145,7 @@ export default function RobustnessWorkspace() {
         {/* 선택한 엔진의 결과를 위로 — 두 상세 카드는 항상 렌더(정보 손실 없음), 순서만 포커스 */}
         {engine === "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={setKrScenario} />}
         <ScenarioThreeWay packId={activeId} holdings={holdingsMap} severity={severity} />
-        <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`}>
+        <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`} aria-busy={sensQ.isLoading}>
           <div className="as-card-title">SENSITIVITY HEATMAP <span className="as-note-inline">기댓값 변동 → 최적 비중 반응 (Δ%p)</span></div>
           {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
           {canRun && sensQ.isLoading && <div className="as-empty">민감도 계산 중… (자산별 재최적화)</div>}
@@ -157,7 +157,7 @@ export default function RobustnessWorkspace() {
           {sensQ.data?.error && <div className="as-err">{sensQ.data.message}</div>}
         </section>
 
-        <section className={`as-card${corrQ.isLoading ? " as-loading" : ""}`}>
+        <section className={`as-card${corrQ.isLoading ? " as-loading" : ""}`} aria-busy={corrQ.isLoading}>
           <div className="as-card-title">상관-국면 스트레스 결과 <span className="as-note-inline">base → 위기 상관</span></div>
           {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}
           {canRun && corrQ.isLoading && <div className="as-empty">위기 상관 재계산 중…</div>}
@@ -189,7 +189,7 @@ export default function RobustnessWorkspace() {
                 </tbody>
               </table>
               {(cr.coverage as { source?: string })?.source === "mock" && (
-                <span className="as-badge" style={{ color: "#a16207", borderColor: "#a16207", alignSelf: "flex-start" }}>MOCK 데이터</span>
+                <span className="as-badge as-badge-mock">MOCK 데이터</span>
               )}
             </>
           )}

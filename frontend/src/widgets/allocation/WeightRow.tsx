@@ -38,7 +38,9 @@ export function WeightRow({ code, name, weight, onWeight, onRemove }: WeightRowP
   const set = (v: number) => onWeight(code, clampWeight(v));
 
   return (
-    <div className="as-holding as-wrow">
+    // `.as-wrow` 는 E2E 계약이라 유지하고, 레이아웃 전용 수식자를 따로 붙인다 —
+    // 같은 이름을 overview·timing 이 **다른 구조**로 쓰고 있기 때문이다(A4).
+    <div className="as-holding as-wrow as-wrow-edit">
       <span className="as-holding-nm" title={code}>{name}</span>
 
       <Input

@@ -20,6 +20,7 @@ import {
   type ThreeWayLeg, type TimingRuleSpec,
 } from "@/entities/allocation/api";
 import { useAllocation } from "./AllocationProvider";
+import { StageBusy } from "./StageBusy";
 
 const STATE_LABEL: Record<SignalStateValue, string> = {
   risk_on: "위험-온",
@@ -173,7 +174,7 @@ export function ThreeWayPanel({
   };
 
   return (
-    <section className={`as-card as-3w${q.isFetching ? " as-loading" : ""}`}>
+    <section className={`as-card as-3w${q.isFetching ? " as-loading" : ""}`} aria-busy={q.isFetching}>
       <div className="as-card-title">
         3자 비교
         <span className="as-note-inline">기준 · 타이밍만 · 타이밍+매크로</span>
@@ -188,6 +189,9 @@ export function ThreeWayPanel({
           <span>매크로 오버레이</span>
         </label>
       </div>
+
+      {/* isFetching 은 재조회 중에도 참이라 이전 비교 결과가 화면에 남는다 — 그렇다고 적는다(A4-X1). */}
+      {q.isFetching && <StageBusy label="3자 비교 계산 중…" stale={!!q.data} />}
 
       <div className="as-3w-combo">
         <span className="as-3w-combo-k">조합</span>
