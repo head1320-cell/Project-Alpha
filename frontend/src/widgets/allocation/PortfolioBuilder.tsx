@@ -2,9 +2,13 @@
 // 좌측 레일 — 포트폴리오 빌더: 종목 검색(symbols/search) + 관심그룹 가져오기 +
 // 비중 입력(균등/초기화 퀵버튼) + 저장된 스터디 목록 (Decision Journal 1라운드)
 import React, { useEffect, useRef, useState } from "react";
+import { Scale, Eraser } from "lucide-react";
 import { allocationApi, type SymbolHit } from "@/entities/allocation/api";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Progress } from "@/shared/ui/shadcn/progress";
 import { listWatchlists, type Watchlist } from "@/shared/lib/watchlistStorage";
 import { deleteStudy, listStudies, type AllocationStudy } from "@/entities/allocation/storage";
+import { WeightRow } from "./WeightRow";
 
 export interface Holding { code: string; name: string; weight: number }
 
@@ -62,6 +66,8 @@ export function PortfolioBuilder({ holdings, onChange, onLoadStudy, studiesVersi
   };
 
   const totalW = holdings.reduce((a, h) => a + h.weight, 0);
+  // 0.5%p 허용 오차 — equalize() 가 소수 1자리로 반올림하므로 정확히 100 이 안 나올 수 있다.
+  const offTarget = holdings.length > 0 && Math.abs(totalW - 100) >= 0.5;
 
   return (
     <div className="as-rail">
@@ -100,23 +106,46 @@ export function PortfolioBuilder({ holdings, onChange, onLoadStudy, studiesVersi
 
       {/* 보유 자산 + 비중 */}
       <div className="as-rail-sec">
-        <div className="as-rail-title">
-          포트폴리오 <span className="num" style={{ color: Math.abs(totalW - 100) < 0.5 ? "var(--t-muted)" : "var(--color-bear)" }}>{totalW.toFixed(1)}%</span>
-        </div>
+        <div className="as-rail-title">포트폴리오</div>
+
+        {/* ★배분 게이지 — 색만으로 상태를 말하지 않는다★
+            예전에는 합계 숫자의 **색**만 바뀌었다(정상=회색 / 이탈=빨강). 색각 이상
+            사용자와 흑백 출력에서는 아무 신호도 아니다. 바 + 숫자 + 글자 세 겹으로 말한다. */}
+        {holdings.length > 0 && (
+          <div className="as-gauge">
+            <Progress
+              value={totalW}
+              label="포트폴리오 비중 합계"
+              tone={offTarget ? "warn" : "default"}
+            />
+            <div className="as-gauge-r">
+              <span className="as-gauge-v num">{totalW.toFixed(1)}%</span>
+              <span className={`as-gauge-s${offTarget ? " off" : ""}`}>
+                {offTarget ? `합계 100% 아님 (${totalW > 100 ? "초과" : "부족"} ${Math.abs(totalW - 100).toFixed(1)}%p)` : "합계 100%"}
+              </span>
+            </div>
+          </div>
+        )}
+
         {holdings.length === 0 && <div className="as-empty">위 검색으로 자산을 추가하세요 (2개 이상)</div>}
         {holdings.map((h) => (
-          <div key={h.code} className="as-holding">
-            <button className="as-x" title="제거" onClick={() => onChange(holdings.filter((x) => x.code !== h.code))}>×</button>
-            <span className="as-holding-nm" title={h.code}>{h.name}</span>
-            <input className="as-w-input num" type="number" min={0} max={100} step={0.5} value={h.weight}
-              onChange={(e) => setWeight(h.code, parseFloat(e.target.value) || 0)} />
-            <span className="as-w-unit">%</span>
-          </div>
+          <WeightRow
+            key={h.code}
+            code={h.code}
+            name={h.name}
+            weight={h.weight}
+            onWeight={setWeight}
+            onRemove={(code) => onChange(holdings.filter((x) => x.code !== code))}
+          />
         ))}
         {holdings.length > 0 && (
-          <div className="as-wl-row">
-            <button className="as-chip" onClick={() => onChange(equalize(holdings))}>균등 배분</button>
-            <button className="as-chip" onClick={() => onChange([])}>전체 비우기</button>
+          <div className="as-wl-row as-rail-acts">
+            <Button variant="outline" size="sm" onClick={() => onChange(equalize(holdings))}>
+              <Scale size={13} aria-hidden="true" /> 균등 배분
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onChange([])}>
+              <Eraser size={13} aria-hidden="true" /> 전체 비우기
+            </Button>
           </div>
         )}
       </div>

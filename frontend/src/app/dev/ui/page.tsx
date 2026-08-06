@@ -40,6 +40,12 @@ import { EvidenceDrawer } from "@/shared/ui/EvidenceDrawer";
 import { Button } from "@/shared/ui/shadcn/button";
 import { Badge as ShadBadge } from "@/shared/ui/shadcn/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/shared/ui/shadcn/card";
+import { Input } from "@/shared/ui/shadcn/input";
+import { Slider } from "@/shared/ui/shadcn/slider";
+import { Progress } from "@/shared/ui/shadcn/progress";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/shared/ui/shadcn/table";
 import {
   Dialog, DialogTrigger, DialogContent, DialogHeader,
   DialogTitle, DialogDescription, DialogFooter, DialogClose,
@@ -139,6 +145,19 @@ function LiveSelect() {
         { label: "퀄리티", options: [{ id: "roe", label: "ROE" }] },
       ]}
     />
+  );
+}
+
+/** A3 — 숫자 입력과 슬라이더가 한 값을 공유하는 표본. */
+function LiveWeight() {
+  const [w, setW] = useState(35);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Input type="number" min={0} max={100} step={0.5} value={w} aria-label="예시 비중 (%)"
+        onChange={(e) => setW(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} />
+      <Slider value={[w]} min={0} max={100} step={0.5} aria-label="예시 비중 슬라이더 (%)"
+        onValueChange={([v]) => setW(v)} />
+    </div>
   );
 }
 
@@ -434,6 +453,54 @@ export default function DevUiPage() {
                 <p className="devui-s1why">Slot 으로 클래스를 자식에게 넘긴다. 탭 스톱 1개.</p>
               </CardContent>
             </button>
+          </Card>
+        </div>
+
+        {/* A3 — Input · Slider · Progress · Table */}
+        <h2 className="devui-h">Input · Slider · Progress · Table (A3)</h2>
+        <div className="devui-s1grid">
+          <Card className="devui-s1card">
+            <CardHeader><CardTitle as="h3">Input + Slider</CardTitle></CardHeader>
+            <CardContent>
+              <LiveWeight />
+              <p className="devui-s1why">두 컨트롤이 한 값을 공유한다 — 로컬 state 가 없어서 어긋날 자리가 없다.</p>
+            </CardContent>
+          </Card>
+          <Card className="devui-s1card">
+            <CardHeader><CardTitle as="h3">Progress</CardTitle></CardHeader>
+            <CardContent>
+              <Progress value={72} label="예시 진행률" />
+              <div style={{ height: 8 }} />
+              <Progress value={118} label="목표 초과 예시" tone="warn" />
+              <div style={{ height: 8 }} />
+              {/* value=null 은 0 이 아니다 — 바를 그리지 않고 aria-valuenow 도 안 붙인다. */}
+              <Progress value={null} label="미계산 예시" />
+              <p className="devui-s1why">value=null 이면 바도 aria-valuenow 도 없다. 0% 라고 말하지 않는다.</p>
+            </CardContent>
+          </Card>
+          <Card className="devui-s1card">
+            <CardHeader><CardTitle as="h3">Table</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">자산</TableHead>
+                    <TableHead scope="col" className="text-right">비중</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableHead scope="row">삼성전자</TableHead>
+                    <TableCell className="text-right"><span className="num">32.5</span></TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableHead scope="row">SK하이닉스</TableHead>
+                    <TableCell className="text-right"><span className="num">18.0</span></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <p className="devui-s1why">TableHead 는 scope 를 타입으로 강제한다 — 상류와 다른 유일한 지점.</p>
+            </CardContent>
           </Card>
         </div>
       </section>

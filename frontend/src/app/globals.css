@@ -5275,3 +5275,168 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .dark .aas-gate-resume:hover { background: rgb(124 116 255 / .14); }
 .dark .aas-gate .aas-goal:hover:not(:disabled),
 .dark .aas-gate .aas-goal:focus-visible { box-shadow: 0 2px 8px rgb(0 0 0 / .45); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   51. 01 CONSTRUCT — 컨트롤 패널 + 결과 패널 (A3)
+   ───────────────────────────────────────────────────────────────────────────
+   ★레이아웃은 이미 2컬럼이었다★ `.as-ws2`(:3598)가 300px | 1fr 이고 11개 스테이지 중
+   9개가 이미 쓴다. 이 절이 하는 일은 그리드 재구조가 아니라 **컨트롤과 밀도**다.
+
+   ★§48 과 같은 순서 문제★ `.as-holding`(:3285) · `.as-w-input`(:3287) ·
+   `.aas-map-b`(:3503) 는 전부 `@tailwind utilities`(4줄)보다 뒤에 있어서, 새 프리미티브의
+   유틸리티 클래스를 이긴다. 그래서 여기서 되돌린다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 범주 팔레트 — 하드코딩 hex 를 토큰으로 (parts.tsx DONUT_COLORS) ─────────
+   예전 배열에는 #16a34a 가 있었는데 S1b-2 에서 3.16:1 로 측정돼 --chart-up 에서는
+   이미 퇴출된 색이다. 팔레트에만 남아 있었다. 차트 채움은 배경 대비 3:1 이 기준이고,
+   글자를 얹지 않으므로(범례로 내렸다) 그 기준만 만족하면 된다. */
+:root {
+  --cat-1: #1200ff; --cat-2: #15803d; --cat-3: #c2410c; --cat-4: #0e7490; --cat-5: #a16207;
+  --cat-6: #6d28d9; --cat-7: #be123c; --cat-8: #0f766e; --cat-9: #a21caf; --cat-10: #52525b;
+}
+/* 다크 — 위 값들은 zinc-950 위에서 3:1 을 못 넘는다(어두운 채도색). 명도를 올린 짝. */
+.dark {
+  --cat-1: #7c74ff; --cat-2: #4ade80; --cat-3: #fb923c; --cat-4: #22d3ee; --cat-5: #fbbf24;
+  --cat-6: #a78bfa; --cat-7: #fb7185; --cat-8: #2dd4bf; --cat-9: #e879f9; --cat-10: #a1a1aa;
+}
+
+/* ── 비중 편집 행 ────────────────────────────────────────────────────────────
+   이름 · 입력 · % · 삭제 를 한 줄에, 슬라이더는 그 아래 전폭.
+   좁은 레일(300px)에 슬라이더까지 한 줄로 넣으면 둘 다 못 쓸 만큼 좁아진다. */
+.as-wrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px 10px 26px;
+  grid-template-areas: "nm in unit del" "sl sl sl sl";
+  gap: 4px 6px;
+  align-items: center;
+  padding: 3px 0;
+}
+.as-wrow .as-holding-nm { grid-area: nm; font-size: 12px; }
+.as-wrow .as-w-input { grid-area: in; }
+.as-wrow .as-w-unit { grid-area: unit; font-size: 11px; color: var(--t-muted); }
+.as-wrow .as-wrow-del { grid-area: del; }
+.as-wrow-slider { grid-area: sl; }
+/* `.as-w-input`(:3287, width 58px·11px·자체 border)이 Input 유틸리티를 이긴다 — 되돌린다. */
+.as-ws2 .as-wrow .as-w-input {
+  width: 100%; font-size: 12px; padding: 2px 6px; text-align: right;
+  border-color: var(--input); background: var(--background); color: var(--foreground);
+}
+.as-ws2 .as-wrow-del { width: 26px; height: 26px; color: var(--t-muted); }
+.as-ws2 .as-wrow-del:hover { color: var(--destructive); background: var(--muted); }
+
+/* ── 배분 게이지 ─────────────────────────────────────────────────────────────
+   ★색만으로 말하지 않는다★ 예전에는 합계 숫자의 색만 바뀌었다. 바 + 숫자 + 문장. */
+.as-gauge { display: flex; flex-direction: column; gap: 5px; padding: 2px 0 6px; }
+.as-gauge-r { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.as-gauge-v { font-size: 12px; font-weight: 700; }
+.as-gauge-s { font-size: 11px; color: var(--t-muted); }
+.as-gauge-s.off { color: #b45309; font-weight: 600; }
+.dark .as-gauge-s.off { color: #fcd34d; }
+.as-rail-acts { gap: 6px; }
+
+/* ── 배분 맵: 스트립 + 범례 + 도넛 ──────────────────────────────────────────── */
+.as-alloc2 { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 12px; align-items: start; }
+@media (max-width: 900px) { .as-alloc2 { grid-template-columns: 1fr; } }
+.aas-mapwrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.aas-map { height: 26px; }             /* 글자를 뺐으므로 72px 이 필요 없다 */
+.aas-map-b { padding: 0; }
+.aas-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; }
+.aas-legend-i { display: flex; align-items: center; gap: 5px; font-size: 12px; min-width: 0; }
+.aas-legend-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.aas-legend-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 128px; }
+.aas-legend-i b { font-size: 12px; color: var(--foreground); }
+.aas-donut { min-width: 0; }
+
+/* ── 비중 비교 표 ────────────────────────────────────────────────────────────
+   `.aas-cmp-row`(:3505)의 3열 그리드는 더 이상 쓰지 않는다(진짜 <table> 로 갔다). */
+.aas-cmp-t { color: var(--foreground); }
+.aas-cmp-t .aas-cmp-nm {
+  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500;
+  color: var(--foreground); max-width: 180px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+/* 미계산 = 숫자가 아니다. 서체도 정렬도 숫자와 다르게 둬서 값으로 안 읽히게 한다. */
+.aas-cmp-na { font-size: 11px; color: var(--t-muted); font-style: normal; }
+
+/* ── 집중도 스탯 ─────────────────────────────────────────────────────────────── */
+.as-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.as-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--border); border-radius: var(--radius, 3px);
+  padding: 7px 9px; background: var(--card); min-width: 0;
+}
+.as-stat-k { font-size: 11px; color: var(--muted-foreground); }
+.as-stat-v { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--foreground); }
+@media (max-width: 640px) { .as-stats { grid-template-columns: 1fr; } }
+
+.as-cov { font-size: 12px; color: var(--foreground); }
+
+/* 재계산 필요 배지 — 결과를 흐리는 대신 낡았다고 **적는다**(A1 의 결론). */
+.as-stale-b { margin-left: 8px; font-size: 11px; }
+
+/* ── 고급 설정 접기 ──────────────────────────────────────────────────────────── */
+.as-adv { border: 1px solid var(--border); border-radius: var(--radius, 3px); background: var(--card); }
+.as-adv-s {
+  cursor: pointer; padding: 8px 10px; font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; color: var(--foreground);
+}
+.as-adv-s:hover { color: var(--t-accent); }
+.as-adv-s:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.as-adv-b { border-top: 1px solid var(--border); padding: 10px; }
+
+/* ── 다크 마감 ───────────────────────────────────────────────────────────────
+   §47 이 토큰을 뒤집으므로 토큰 규칙은 따라온다. 남는 것은 이 화면의 평문 규칙들이
+   하드코딩한 흰색뿐이다(:3272 .as-rail-sec, :3502 대 등). */
+.dark .as-ws2 { background: var(--background); color: var(--foreground); }
+.dark .as-ws2 .as-rail-sec { background: var(--card); border-color: var(--border); }
+.dark .as-ws2 .as-card { background: var(--card); border-color: var(--border); }
+.dark .as-ws2 .as-chip { background: var(--card); color: var(--foreground); border-color: var(--border); }
+.dark .as-ws2 .as-hit { background: var(--card); color: var(--foreground); }
+/* 검색 입력도 `background:#fff` 하드코딩(:3274). 대비 자체는 통과하지만 다크 화면에
+   흰 판이 남는 것은 "반만 다크"라 §47 이 경고한 상태다 — 감사의 bright 검사가 잡았다. */
+.dark .as-ws2 .as-input { background: var(--background); color: var(--foreground); border-color: var(--input); }
+.dark .as-ws2 .as-input::placeholder { color: var(--muted-foreground); }
+.dark .as-ws2 .as-seg { background: var(--card); border-color: var(--border); }
+/* ★비활성 탭에 --muted-foreground 를 쓰지 않는다 — 내가 심었다가 감사로 잡은 결함★
+   첫 판은 `color: var(--muted-foreground)`(#a1a1aa) 였다. zinc-900 카드 위에서
+   **2.56:1** 로 측정됐다(10.5px 본문 기준 4.5:1 필요). 비활성이라고 흐리게 하는 것은
+   흔한 반사행동이지만, 흐린 글자는 여전히 눌러야 하는 컨트롤이다.
+   활성/비활성 구분은 **배경과 굵기**로 하고 글자색은 양쪽 다 전각 대비로 둔다
+   (색만으로 상태를 말하지 않는다는 규칙과도 같은 방향이다). */
+/* ★두 번째 판에서도 같은 실수를 했다 — 컨테이너만 어둡게 하고 자식을 두었다★
+   `.as-seg button`(:3306)이 `background:#fff` 를 직접 들고 있다. 컨테이너
+   `.as-seg` 만 var(--card) 로 바꾼 첫 수정에서는 버튼이 흰색 그대로였고, 글자를
+   --foreground(#fafafa)로 올린 탓에 **1.04:1** 이 됐다 — A1 의 `.aas-wiz-step` 과
+   똑같은 모양이다. 배경도 같이 내린다. */
+.dark .as-ws2 .as-seg button { background: var(--card); color: var(--foreground); }
+.dark .as-ws2 .as-seg button.on { background: rgb(124 116 255 / .14); color: var(--foreground); font-weight: 600; }
+
+/* ── 가독 하한 — 산문 12px · 크롬 라벨 11px (§49·§50 과 같은 기준) ───────────── */
+.as-ws2 .as-rail-title { font-size: 12px; }
+.as-ws2 .as-note, .as-ws2 .as-note-inline { font-size: 11px; }
+.as-ws2 .as-empty { font-size: 12px; }
+.as-ws2 .as-card-title { font-size: 12px; }
+/* 모드 전환 탭과 칩 — 둘 다 10.5px 이었다(:3281 .as-chip, .as-seg button). */
+.as-ws2 .as-seg button { font-size: 11px; }
+.as-ws2 .as-chip { font-size: 11px; }
+.as-ws2 .as-hit, .as-ws2 .as-study-nm, .as-ws2 .as-study-meta { font-size: 11px; }
+
+/* ── 슬라이더 외형 (shadcn/shadcn/slider.tsx = 네이티브 range) ────────────────
+   ::-webkit-slider-thumb 같은 의사요소는 Tailwind 유틸리티로 표현할 수 없어서
+   컴포넌트가 아니라 여기서 칠한다. 손잡이는 시각적으로 14px 이지만 range 입력의
+   히트 영역은 트랙 전체라, 작은 아이콘 버튼과 달리 조준 문제가 없다. */
+.as-range { -webkit-appearance: none; appearance: none; width: 100%; height: 14px; background: transparent; cursor: pointer; }
+.as-range:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
+.as-range::-webkit-slider-runnable-track { height: 4px; border-radius: 9999px; background: var(--secondary); }
+.as-range::-moz-range-track { height: 4px; border-radius: 9999px; background: var(--secondary); }
+.as-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; margin-top: -5px;
+  width: 14px; height: 14px; border-radius: 9999px;
+  background: var(--background); border: 1px solid var(--primary);
+}
+.as-range::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 9999px; border: 1px solid var(--primary);
+  background: var(--background);
+}
+.as-range:disabled { opacity: .5; cursor: default; }

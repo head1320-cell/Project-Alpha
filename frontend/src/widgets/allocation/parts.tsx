@@ -11,10 +11,20 @@ import {
   Tooltip, ReferenceDot, PieChart, Pie, Cell, Sankey, Layer,
   RadialBarChart, RadialBar, PolarAngleAxis,
 } from "recharts";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/shared/ui/shadcn/table";
 import type { AnalyzeResult, StressResult, SummaryStats, XrayFactor } from "@/entities/allocation/api";
 
 const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
-const DONUT_COLORS = ["#1200ff", "#16a34a", "#ea580c", "#0891b2", "#a16207", "#7c3aed", "#dc2626", "#0d9488", "#c026d3", "#64748b"];
+/**
+ * 범주 팔레트 — 하드코딩 hex 에서 토큰으로 (A3 S3f).
+ * 예전 배열에는 `#16a34a` 가 들어 있었는데, S1b-2 에서 그 값이 zinc-50 위 3.16:1 로
+ * 측정돼 `--chart-up` 에서 이미 퇴출된 색이다. 같은 값이 팔레트에는 그대로 남아 있었다.
+ * §51 이 `--cat-1..10` 을 라이트/다크 양쪽으로 정의한다 — SVG fill 에 var() 를 넣는 것은
+ * 이 파일의 CloudDot 이 이미 쓰는 방식이라 새로운 기법이 아니다.
+ */
+const DONUT_COLORS = Array.from({ length: 10 }, (_, i) => `var(--cat-${i + 1})`);
 
 export const fmtSign = (v: number | null | undefined, d = 2): string =>
   v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}`;
@@ -24,43 +34,104 @@ export const paletteColor = (i: number): string => DONUT_COLORS[i % DONUT_COLORS
 // ─────────────────────────────────────────────────────────────────────────────
 // 01 CONSTRUCT 프리미티브 — AllocationMap · WeightComparison · Concentration
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * 비중 비례 스트립 + 범례.
+ *
+ * ★막대 안의 흰 글씨를 뺐다★ 예전에는 각 블록 위에 `color:#fff` 로 종목명과 비중을
+ * 얹었다. 팔레트 10색 중 어떤 색 위에 얹힐지는 자산 개수와 순서에 따라 달라지므로,
+ * 대비가 보장되는 조합이 하나도 없었다(밝은 색 위 흰 글씨). 게다가 블록이 좁아지면
+ * 글자가 잘려서 어차피 안 읽힌다. 텍스트는 아래 범례로 내리고 스트립은 비율만 그린다 —
+ * 색은 범례에서 이름과 짝지어지므로 "색만으로 의미를 전달"하지도 않는다.
+ */
 export function AllocationMap({ items }: { items: { code: string; name: string; weight: number }[] }) {
   const tot = items.reduce((a, x) => a + Math.max(x.weight, 0), 0) || 1;
   const shown = items.filter((x) => x.weight > 0);
   if (!shown.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
   return (
-    <div className="aas-map">
-      {shown.map((x, i) => (
-        <div key={x.code} className="aas-map-b" title={`${x.name} ${x.weight.toFixed(1)}%`}
-          style={{ flex: `${(x.weight / tot) * 100} 0 0`, background: paletteColor(i) }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "#fff" }}>{x.name}</span>
-          <span className="num" style={{ fontSize: 10, color: "rgba(255,255,255,.85)" }}>{x.weight.toFixed(1)}%</span>
-        </div>
-      ))}
+    <div className="aas-mapwrap">
+      <div className="aas-map">
+        {shown.map((x, i) => (
+          <div key={x.code} className="aas-map-b" title={`${x.name} ${x.weight.toFixed(1)}%`}
+            style={{ flex: `${(x.weight / tot) * 100} 0 0`, background: paletteColor(i) }} />
+        ))}
+      </div>
+      <ul className="aas-legend">
+        {shown.map((x, i) => (
+          <li key={x.code} className="aas-legend-i">
+            <span className="aas-legend-sw" style={{ background: paletteColor(i) }} aria-hidden="true" />
+            <span className="aas-legend-nm">{x.name}</span>
+            <b className="num">{x.weight.toFixed(1)}%</b>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-export function WeightComparison({ rows }: {
-  rows: { code: string; name: string; current: number; market: number; optimized: number }[];
-}) {
-  const mx = Math.max(1, ...rows.flatMap((r) => [r.current, r.market, r.optimized]));
-  const w = (v: number) => `${Math.min((v / mx) * 100, 100)}%`;
+/** 값 하나 — 숫자이거나, 아직 산출되지 않았거나. 0 은 세 번째가 아니라 첫 번째 경우다. */
+export type CmpValue = number | null;
+export interface CmpRow { code: string; name: string; current: number; market: CmpValue; optimized: CmpValue }
+
+/**
+ * 비중 비교 표 (A3 S3c).
+ *
+ * ★예전에는 `12.5 / 8.3 / 14.1%` 한 덩어리였다★ 9.5px 로. 세 값이 각각 무엇인지는
+ * 카드 제목 옆 범례에만 있었고, 열끼리 세로로 비교하는 것 — 이 표의 존재 이유 — 이
+ * 불가능했다. 진짜 <table> 로 바꾸면 스크린리더도 "삼성전자의 최적화 비중"이라고 읽는다.
+ *
+ * ★`null` 은 0 이 아니다★ 최적화를 돌리기 전의 캡가중/최적화 열은 **없는 값**이지
+ * 0% 가 아니다. 숫자를 그리지 않고 미계산이라고 쓴다.
+ */
+export function WeightComparison({ rows }: { rows: CmpRow[] }) {
+  const cell = (v: CmpValue) =>
+    v == null
+      ? <span className="aas-cmp-na">미계산</span>
+      : <span className="num">{v.toFixed(1)}</span>;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-      {rows.map((r) => (
-        <div key={r.code} className="aas-cmp-row">
-          <span style={{ fontSize: 10.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
-          <div className="aas-cmp-bars">
-            <div><i style={{ width: w(r.current), background: "var(--t-accent)", opacity: 0.85 }} /></div>
-            <div><i style={{ width: w(r.market), background: "#a1a1aa" }} /></div>
-            <div><i style={{ width: w(r.optimized), background: "#16a34a", opacity: 0.8 }} /></div>
-          </div>
-          <span className="num" style={{ fontSize: 9.5, textAlign: "right", color: "var(--t-muted)" }}>
-            {r.current.toFixed(1)} / {r.market.toFixed(1)} / {r.optimized.toFixed(1)}%
-          </span>
-        </div>
-      ))}
+    <Table className="aas-cmp-t">
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">자산</TableHead>
+          <TableHead scope="col" className="text-right">현재</TableHead>
+          <TableHead scope="col" className="text-right">캡가중</TableHead>
+          <TableHead scope="col" className="text-right">최적화</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.code}>
+            <TableHead scope="row" className="aas-cmp-nm">{r.name}</TableHead>
+            <TableCell className="text-right"><span className="num">{r.current.toFixed(1)}</span></TableCell>
+            <TableCell className="text-right">{cell(r.market)}</TableCell>
+            <TableCell className="text-right">{cell(r.optimized)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
+ * 비중 도넛 — 스트립과 같은 데이터를 원형으로. 스트립은 "누가 큰가"를, 도넛은
+ * "몇 조각으로 나뉘었나"를 먼저 보여 준다. 애니메이션은 끈다(이 파일의 다른 차트와 동일).
+ */
+export function AllocationDonut({ items, height = 172 }: {
+  items: { code: string; name: string; weight: number }[]; height?: number;
+}) {
+  const shown = items.filter((x) => x.weight > 0);
+  if (!shown.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
+  return (
+    <div className="aas-donut" style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie data={shown} dataKey="weight" nameKey="name" innerRadius="55%" outerRadius="82%"
+            paddingAngle={1} isAnimationActive={false} stroke="var(--card)">
+            {shown.map((x, i) => <Cell key={x.code} fill={paletteColor(i)} />)}
+          </Pie>
+          <Tooltip contentStyle={TIP_STYLE}
+            formatter={(v: number, n: string) => [`${v.toFixed(1)}%`, n]} />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
   );
 }
