@@ -1291,6 +1291,17 @@ h6 { font-size: 1rem; }
 /* ① 다크 티커 마퀴 */
 /* (랜딩 티커 마퀴 제거됨) */
 
+/* ── 고지 바 (L2) ───────────────────────────────────────────────────────────
+   레퍼런스(Aladdin)는 이 자리에 공지/프로모션을 둔다. 여기서는 **기본값의 한계**를 적는다.
+   리서치 도구의 첫 줄이 자랑이 아니라 고백인 편이 정확하다. */
+.lp-topbar { display: flex; align-items: baseline; gap: 14px; padding: 9px 44px;
+  background: #fdf6e3; border-bottom: 1px solid #f0e3bd; flex-wrap: wrap; }
+.lp-topbar-k { color: #8a6d1f; flex-shrink: 0; }
+.lp-topbar-t { margin: 0; font-size: 12.5px; line-height: 1.5; color: #6b5615; }
+.lp-topbar-t b { font-weight: 600; color: #57460f; }
+.lp-topbar-t code { font-family: var(--t-mono); font-size: 11.5px;
+  background: rgba(138,109,31,.1); padding: 1px 5px; border-radius: 2px; }
+
 /* ② 헤더 */
 .lp-header { display: flex; align-items: center; gap: 26px; padding: 17px 44px; border-bottom: 1px solid var(--bs-border-color); }
 .lp-brand { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
@@ -1309,10 +1320,25 @@ h6 { font-size: 1rem; }
   font-weight: 600; margin: 0 0 28px; }
 .lp-lede { font-size: 15px; line-height: 1.75; color: var(--bs-secondary-color); max-width: 46ch; margin: 0; }
 .lp-lede b { color: var(--bs-body-color); font-weight: 600; }
+.lp-statement-copy { min-width: 0; }
 .lp-statement-live { min-width: 0; }
 .lp-nav-cta { background: var(--bs-primary); color: #fff !important; padding: 8px 15px; border-radius: 2px;
   font-family: var(--bs-font-mono); font-size: 11px; letter-spacing: .04em; text-decoration: none; }
 .lp-nav-cta:hover { opacity: .88; }
+.lp-hero-cta { display: flex; gap: 10px; margin-top: 30px; flex-wrap: wrap; }
+
+/* ── 버튼 (L2) — 밝은 면과 액센트 면 양쪽에서 쓴다 ── */
+.lp-btn { display: inline-flex; align-items: center; padding: 11px 20px; border-radius: 2px;
+  font-size: 13px; font-weight: 500; text-decoration: none; border: 1px solid transparent;
+  transition: background .16s ease, border-color .16s ease, opacity .16s ease; white-space: nowrap; }
+.lp-btn-primary { background: var(--bs-primary); color: #fff; }
+.lp-btn-primary:hover { background: #0e00cc; }
+.lp-btn-ghost { border-color: var(--bs-border-color); color: var(--bs-body-color); }
+.lp-btn-ghost:hover { background: var(--bs-tertiary-bg); border-color: #d4d4d8; }
+.lp-btn-onaccent { background: #fff; color: var(--bs-primary); }
+.lp-btn-onaccent:hover { opacity: .9; }
+.lp-btn-onaccent-ghost { border-color: rgba(255,255,255,.45); color: #fff; }
+.lp-btn-onaccent-ghost:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.7); }
 /* ── 히어로 제품 프리뷰 데크 ── */
 .lp-hero-visual { position: relative; align-self: center; display: flex; align-items: center; min-height: 440px; }
 .lp-hero-glow { position: absolute; inset: 4% -2% 4% 8%; z-index: 0; pointer-events: none;
@@ -1365,6 +1391,42 @@ h6 { font-size: 1rem; }
 
 /* ④ 5모듈 툴셋 */
 .lp-section-head { display: flex; justify-content: space-between; padding: 13px 44px; border-top: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color); color: var(--bs-secondary-color); }
+
+/* ── 세 기둥 (L2) — Aladdin 의 Key Pillars 자리. 내용은 CLAUDE.md §4 불변식. ── */
+.lp-pillars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.lp-pillar { padding: 40px 34px 44px; border-right: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid var(--bs-border-color); }
+.lp-pillar:last-child { border-right: none; }
+.lp-pillar-n { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;
+  color: var(--bs-primary); margin-bottom: 16px; }
+.lp-pillar-code { color: var(--bs-tertiary-color); margin-bottom: 8px; }
+.lp-pillar-title { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; }
+.lp-pillar-lede { font-size: 14px; font-weight: 600; line-height: 1.6; color: var(--bs-body-color); margin: 0 0 12px; }
+.lp-pillar-body { font-size: 13px; line-height: 1.75; color: var(--bs-secondary-color); margin: 0; }
+
+/* ── 리서치 파이프라인 (L2) ─────────────────────────────────────────────────
+   Aladdin 의 chevron 흐름도 자리. 각 칸은 **다음 칸으로 넘기는 신원**을 적는다.
+   화살표는 ::after 로 그린다 — 마지막 칸에는 붙이지 않는다. */
+.lp-pipe { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box;
+  padding: 34px 44px 8px; gap: 10px; }
+.lp-pipe-step { position: relative; display: flex; flex-direction: column; gap: 7px;
+  padding: 16px 14px 16px 15px; border: 1px solid var(--bs-border-color); border-radius: 3px;
+  background: #fff; text-decoration: none; color: inherit; min-width: 0;
+  transition: border-color .16s ease, background .16s ease; }
+a.lp-pipe-step:hover { border-color: var(--bs-primary); background: var(--bs-tertiary-bg); }
+a.lp-pipe-step:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+.lp-pipe-step::after { content: "→"; position: absolute; right: -12px; top: 50%;
+  transform: translateY(-50%); color: var(--bs-tertiary-color); font-size: 12px; line-height: 1; }
+.lp-pipe-step:last-child::after { content: none; }
+.lp-pipe-n { color: var(--bs-tertiary-color); }
+.lp-pipe-label { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; }
+.lp-pipe-carries { color: var(--bs-primary); word-break: break-all; }
+.lp-pipe-note { max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box;
+  padding: 10px 44px 40px; font-size: 12.5px; line-height: 1.7; color: var(--bs-secondary-color); }
+.lp-pipe-note b { color: var(--bs-body-color); font-weight: 600; }
+.lp-pipe-note code { font-family: var(--t-mono); font-size: 11.5px; color: var(--bs-body-color); }
 /* ── 갤러리: 큰 카드 그리드 ────────────────────────────────────────────────
    쉴 때는 번호·이름·목적·서명 한 줄만. 나머지는 호버 **또는 포커스**에서 열린다 —
    호버만으로 열면 키보드 사용자에게는 그 정보가 존재하지 않는 것과 같다(P3 와 같은 규칙). */
@@ -1381,10 +1443,14 @@ h6 { font-size: 1rem; }
 .lp-module-code { color: var(--bs-secondary-color); }
 .lp-module h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 2px 0 0; }
 .lp-module-purpose { font-size: 13.5px; color: var(--bs-body-color); margin: 0; }
+/* ★쉼 상태 (L2)★ L1 에서는 서명이 한 줄이고 미니 비주얼이 펼침 안에 있어서, 쉬는 카드의
+   아래 40% 가 빈 채로 남았다(렌더 확인). 둘 다 밖으로 꺼내 카드가 스스로 완결되게 한다. */
+.lp-module-rest { margin-top: auto; padding-top: 14px; border-top: 1px dashed var(--bs-border-color);
+  display: flex; flex-direction: column; gap: 8px; }
 .lp-module-sig { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  margin-top: auto; padding-top: 14px; border-top: 1px dashed var(--bs-border-color);
   color: var(--bs-secondary-color); }
 .lp-module-sig b { color: var(--bs-body-color); font-weight: 600; text-align: right; }
+.lp-module-rest .lp-visual { margin-top: 6px; }
 /* 펼침 — 높이 전환은 grid-template-rows 로. max-height 어림값을 쓰면 내용이 길어질 때 잘린다. */
 .lp-module-more { display: grid; grid-template-rows: 0fr; opacity: 0;
   transition: grid-template-rows .26s ease, opacity .22s ease; }
@@ -1412,12 +1478,110 @@ h6 { font-size: 1rem; }
   box-sizing: border-box; font-size: 12px; color: var(--bs-tertiary-color); }
 .lp-evidence-note b { color: var(--bs-body-color); font-weight: 600; }
 
+/* ── 보장 (L2 · 유일한 다크 밴드) ────────────────────────────────────────────
+   Solovis 의 6-항목 혜택 그리드 자리인데, 혜택 대신 **깨지면 실패하는 테스트**를 적는다.
+   다크로 두는 이유는 장식이 아니라 리듬이다 — 밝은 밴드가 열 개 이어지면 위계가 사라진다.
+   ★여기 적힌 경로는 실재해야 한다★ tests/test_landing_claims.py 가 CI 에서 검사한다. */
+.lp-guard-wrap { background: #111111; color: #fafafa; padding: 72px 44px 76px; }
+.lp-guard-head { max-width: 1480px; margin: 0 auto 40px; width: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 44px; align-items: end; }
+.lp-guard-eyebrow { color: #7dd3a0; margin: 0 0 14px; }
+.lp-guard-h { font-size: clamp(26px, 3vw, 38px); font-weight: 600; letter-spacing: -0.028em;
+  line-height: 1.18; margin: 0; text-wrap: balance; }
+.lp-guard-sub { font-size: 13px; line-height: 1.75; color: #a1a1aa; margin: 0; }
+.lp-guards { max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: #27272a;
+  border: 1px solid #27272a; }
+.lp-guard-item { background: #111111; padding: 26px 24px 24px; display: flex; flex-direction: column; gap: 9px; }
+.lp-guard-claim { font-size: 14.5px; font-weight: 600; line-height: 1.55; margin: 0; color: #fafafa; }
+.lp-guard-why { font-size: 12.5px; line-height: 1.7; color: #a1a1aa; margin: 0; }
+.lp-guard-test { margin-top: auto; padding-top: 12px; font-family: var(--t-mono); font-size: 11px;
+  color: #7dd3a0; word-break: break-all; }
+
+/* ── 데이터 출처 (L2) — Aladdin 의 Platform Partners 자리.
+   ★한계를 함께 적는다★ 출처만 나열하면 데이터가 완전하다는 인상을 준다. */
+.lp-srcs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.lp-src { padding: 28px 30px 30px; border-right: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid var(--bs-border-color); }
+.lp-src:nth-child(2n) { border-right: none; }
+/* 출처가 5개라 2열 그리드의 마지막 칸이 테두리만 있는 빈 상자로 남는다 — 마지막 항목을
+   두 칸에 걸쳐 놓아 그 빈 칸을 없앤다. 출처가 짝수가 되면 이 규칙은 저절로 무해해진다. */
+.lp-src:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
+.lp-src-top { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.lp-src-k { font-size: 15px; font-weight: 600; letter-spacing: 0.03em; color: var(--bs-primary); }
+.lp-src-name { font-size: 13px; color: var(--bs-secondary-color); }
+.lp-src-gives { font-size: 14px; font-weight: 500; color: var(--bs-body-color); margin: 0 0 10px; }
+.lp-src-limit { font-size: 12.5px; line-height: 1.7; color: var(--bs-secondary-color); margin: 0; }
+.lp-src-limit-k { display: inline-block; margin-right: 8px; padding: 1px 6px; border-radius: 2px;
+  background: #fdf6e3; border: 1px solid #f0e3bd; color: #8a6d1f; vertical-align: 1px; }
+
+/* ── 인용 (L2) ──────────────────────────────────────────────────────────────
+   레퍼런스는 여기에 고객 후기를 둔다. 우리에겐 고객이 없다 — 지어내는 대신 저장소가
+   스스로에게 적어 둔 문장을 인용하고, 출처를 파일명으로 밝힌다. */
+.lp-quote-wrap { background: var(--bs-tertiary-bg); border-bottom: 1px solid var(--bs-border-color);
+  padding: 76px 44px 80px; }
+.lp-quote { max-width: 860px; margin: 0 auto; text-align: center; }
+.lp-quote-t { font-size: clamp(24px, 3.2vw, 40px); font-weight: 600; letter-spacing: -0.03em;
+  line-height: 1.3; margin: 0 0 20px; }
+.lp-quote-src { color: var(--bs-secondary-color); margin: 0 0 28px; }
+.lp-quote-body { font-size: 13.5px; line-height: 1.8; color: var(--bs-secondary-color);
+  margin: 0 auto; max-width: 62ch; }
+.lp-quote-body b { color: var(--bs-body-color); font-weight: 600; }
+
+/* ── FAQ (L2) — 네이티브 <details>. JS 0, 키보드·스크린리더는 브라우저가 처리. ── */
+.lp-faq { max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.lp-faq-item { border-bottom: 1px solid var(--bs-border-color); }
+.lp-faq-q { display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 22px 44px; font-size: 15.5px; font-weight: 600; letter-spacing: -0.012em;
+  cursor: pointer; list-style: none; }
+.lp-faq-q::-webkit-details-marker { display: none; }
+.lp-faq-q:hover { background: var(--bs-tertiary-bg); }
+.lp-faq-item:focus-within .lp-faq-q { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
+/* 마커는 +/− 를 CSS 로 — 아이콘 자산 0. */
+.lp-faq-mark { position: relative; width: 13px; height: 13px; flex-shrink: 0; }
+.lp-faq-mark::before, .lp-faq-mark::after { content: ""; position: absolute; background: var(--bs-secondary-color); }
+.lp-faq-mark::before { left: 0; top: 6px; width: 13px; height: 1.5px; }
+.lp-faq-mark::after { left: 6px; top: 0; width: 1.5px; height: 13px; transition: opacity .16s ease; }
+.lp-faq-item[open] .lp-faq-mark::after { opacity: 0; }
+.lp-faq-a { margin: 0; padding: 0 44px 26px; max-width: 88ch;
+  font-size: 13.5px; line-height: 1.85; color: var(--bs-secondary-color); }
+
+/* ── CTA (L2) ── */
+.lp-cta { background: var(--bs-primary); color: #fff; padding: 76px 44px 80px; }
+.lp-cta-in { max-width: 1480px; margin: 0 auto; }
+.lp-cta-h { font-size: clamp(26px, 3.4vw, 42px); font-weight: 600; letter-spacing: -0.03em;
+  line-height: 1.2; margin: 0 0 14px; }
+.lp-cta-p { font-size: 14px; line-height: 1.7; color: rgba(255,255,255,.8); margin: 0 0 30px; max-width: 60ch; }
+.lp-cta-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+
 /* ⑥ 푸터 */
-.lp-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 20px 44px; border-top: 1px solid var(--bs-border-color); flex-wrap: wrap; }
+.lp-footer { margin-top: auto; border-top: 1px solid var(--bs-border-color); }
+.lp-footer-cols { max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; padding: 48px 44px 40px; }
+.lp-footer-h { color: var(--bs-tertiary-color); margin-bottom: 16px; }
+.lp-footer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.lp-footer-list a { font-size: 13px; color: var(--bs-secondary-color); text-decoration: none; }
+.lp-footer-list a:hover { color: var(--bs-body-color); text-decoration: underline; }
+/* 마지막 열은 링크가 아니다 — 앱 라우트가 없는 저장소 경로라, 링크처럼 보이면 거짓말이 된다. */
+.lp-footer-path { color: var(--bs-tertiary-color); }
+.lp-footer-bar { max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box;
+  display: flex; justify-content: space-between; align-items: center; gap: 18px;
+  padding: 18px 44px; border-top: 1px solid var(--bs-border-color); flex-wrap: wrap; }
 .lp-footer-right { color: var(--bs-tertiary-color); }
 .lp-footer-left { color: var(--bs-secondary-color); letter-spacing: 0.02em; font-size: 11px; }
 
-/* 반응형 */
+/* 반응형 ─────────────────────────────────────────────────────────────────────
+   ★어느 폭에서도 사라지지 않는 것★ 고지 바, `예시 수치` 배지, 보장의 테스트 경로,
+   출처의 한계 문장, 증거의 재현 방법. 줄바꿈·재배치는 하되 토글 뒤로 숨기지 않는다
+   (P10 §8 의 계약과 같은 규칙 — 신원과 한계는 접근성이 아니라 정직성의 문제다). */
+@media (max-width: 1280px) {
+  /* 파이프라인 7칸이 좁아지면 두 줄로 접는다. 가로 스크롤로 밀어내지 않는다. */
+  .lp-pipe { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lp-pipe-step:nth-child(4n)::after { content: none; }
+  .lp-guards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-guard-head { grid-template-columns: 1fr; gap: 18px; align-items: start; }
+}
 @media (max-width: 1100px) {
   .lp-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-module { min-height: 0; }
@@ -1426,6 +1590,9 @@ h6 { font-size: 1rem; }
   .lp-evidence { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-ev { border-bottom: 1px solid var(--bs-border-color); }
   .lp-ev:nth-child(2n) { border-right: none; }
+  .lp-pillars { grid-template-columns: 1fr; }
+  .lp-pillar { border-right: none; }
+  .lp-footer-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
 }
 @media (max-width: 820px) {
   .lp-statement { grid-template-columns: 1fr; padding: 56px 24px 64px; gap: 32px; }
@@ -1434,13 +1601,36 @@ h6 { font-size: 1rem; }
   .lp-deck { transform: none; box-shadow: 0 16px 40px -22px rgba(17,19,26,0.32); }
   .lp-hero-glow { display: none; }
   .lp-header { padding: 14px 24px; gap: 14px; flex-wrap: wrap; }
-  .lp-section-head, .lp-footer { padding-left: 24px; padding-right: 24px; }
+  /* L2 에서 앵커가 2개 → 5개가 되면서 좁은 폭에서 한 줄에 담기지 않는다(실측: 390px 에서
+     57px 넘침). margin-left:auto 를 풀고 줄바꿈을 허용해야 가로 스크롤이 생기지 않는다. */
+  .lp-nav { margin-left: 0; gap: 14px 16px; flex-wrap: wrap; width: 100%; }
+  .lp-section-head { padding-left: 24px; padding-right: 24px; }
   .lp-gallery, .lp-evidence { grid-template-columns: 1fr; }
   .lp-module, .lp-ev { border-right: none !important; }
   .lp-evidence-note { padding-left: 24px; padding-right: 24px; }
   /* ★좁은 폭에서는 펼침을 항상 연다★ 터치에는 호버가 없다 — 접어 두면 그 정보는
      모바일 사용자에게 존재하지 않는 것과 같다. */
   .lp-module-more { grid-template-rows: 1fr; opacity: 1; }
+
+  /* L2 밴드 — 전부 1열. 좌우 패딩 44 → 24. */
+  .lp-topbar { padding: 9px 24px; }
+  .lp-pillar { padding: 30px 24px 34px; }
+  .lp-pipe { grid-template-columns: 1fr; padding: 24px 24px 6px; gap: 8px; }
+  /* 세로로 접히면 오른쪽 화살표는 뜻이 맞지 않는다 — 아래 방향으로 바꾼다. */
+  .lp-pipe-step::after { content: "↓"; right: auto; left: 20px; top: auto; bottom: -11px; transform: none; }
+  .lp-pipe-step:nth-child(4n)::after { content: "↓"; }
+  .lp-pipe-step:last-child::after { content: none; }
+  .lp-pipe-note { padding: 12px 24px 32px; }
+  .lp-guard-wrap { padding: 52px 24px 56px; }
+  .lp-guards { grid-template-columns: 1fr; }
+  .lp-srcs { grid-template-columns: 1fr; }
+  .lp-src { border-right: none; padding: 24px; }
+  .lp-quote-wrap { padding: 52px 24px 56px; }
+  .lp-faq-q { padding: 18px 24px; font-size: 14.5px; }
+  .lp-faq-a { padding: 0 24px 22px; }
+  .lp-cta { padding: 52px 24px 56px; }
+  .lp-footer-cols { grid-template-columns: 1fr; gap: 26px; padding: 34px 24px 28px; }
+  .lp-footer-bar { padding: 16px 24px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4659,10 +4849,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
       animation-timeline: view();
       animation-range: entry 10% cover 30%;
     }
+    /* L2 밴드도 같은 규칙으로 — 새 키프레임을 만들지 않는다. */
+    .lp-pillar, .lp-pipe-step, .lp-guard-item, .lp-src {
+      animation: lp-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 28%;
+    }
   }
 }
-/* 모션 OFF 는 최종 상태를 그대로 — 정적 레이아웃이 진짜 디자인이다. */
+/* 모션 OFF 는 최종 상태를 그대로 — 정적 레이아웃이 진짜 디자인이다.
+   ★이 목록에서 무엇 하나라도 빠지면 그 밴드는 모션을 끈 사용자에게 빈 칸으로 보인다★
+   등장 애니메이션의 기본값이 opacity:0 이기 때문이다. e2e 가 계산된 opacity 로 단언한다. */
 @media (prefers-reduced-motion: reduce) {
-  .lp-gallery .lp-module, .lp-ev { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .lp-gallery .lp-module, .lp-ev,
+  .lp-pillar, .lp-pipe-step, .lp-guard-item, .lp-src {
+    animation: none !important; opacity: 1 !important; transform: none !important;
+  }
   .lp-module-more { grid-template-rows: 1fr; opacity: 1; }
 }
