@@ -11,11 +11,23 @@ import { ResearchIndex } from "@/widgets/allocation/ResearchIndex";
 import {
   FactorXRayBars, FrontierChart, RiskContribDonut, fmtSign,
 } from "@/widgets/allocation/parts";
+import { EvidenceBadge } from "@/shared/ui/evidence";
 
+// 보이는 글자는 `05 ↗` 뿐이다 — 스크린리더에는 "05 버튼"으로만 읽혔다. 목적지는
+// title= 안에만 있었고, 호버는 키보드·터치에 존재하지 않는다(P3 가 ContextStrip 에서
+// 고친 것과 같은 결함). aria-label 로 접근 가능한 이름을 준다.
 function Xlink({ to, label }: { to: string; label: string }) {
   const router = useRouter();
-  return <button className="aas-xlink" title={`${label} 스테이지로 이동`} onClick={() => router.push(to)}>{label} ↗</button>;
+  return (
+    <button className="aas-xlink" aria-label={`${label} 스테이지로 이동`}
+      onClick={() => router.push(to)}>{label} ↗</button>
+  );
 }
+
+/** 견고성 한 줄 — 값이 없을 수 있고, 없으면 **사유**가 있어야 한다. */
+type RobustRow =
+  | { l: string; m: string; v: number; bear: boolean }
+  | { l: string; m: string; v: null; why: string };
 
 export default function OverviewStage() {
   const { holdings, result, xrayQ, stressQ, timeline, delta, views } = useAllocation();
@@ -32,13 +44,28 @@ export default function OverviewStage() {
   ];
 
   const optW = result ? Object.entries(result.weights.optimized).sort((a, b) => b[1] - a[1]) : [];
-  const robust = [
-    stressQ.data?.available && stressQ.data.mode === "hypothetical"
-      ? { l: stressQ.data.label, m: "추정 충격", v: `${fmtSign(stressQ.data.portfolio_shock_pct ?? 0, 1)}%`, c: (stressQ.data.portfolio_shock_pct ?? 0) >= 0 ? "var(--color-bull)" : "var(--color-bear)" }
-      : stressQ.data?.available && stressQ.data.mode === "historical"
-        ? { l: stressQ.data.label, m: "최대낙폭", v: `${stressQ.data.max_dd_pct?.toFixed(1)}%`, c: "var(--color-bear)" }
-        : null,
-  ].filter(Boolean) as { l: string; m: string; v: string; c: string }[];
+
+  // ★미측정을 초록 `+0.0%` 로 지어내지 않는다 (A4-V1)★
+  // 예전 코드는 `portfolio_shock_pct ?? 0` 을 **값에도 색에도** 썼다. 충격이 산출되지
+  // 않은 경우 `0 >= 0` 이 참이라 화면에는 `+0.0%` 가 **초록**으로 찍혔다 — 즉
+  // "재지 못했다"가 "포트폴리오가 무사하다"로 읽혔다. 대시보드 첫 화면에서, 가장
+  // 안심시키는 방향으로 틀린 값이다.
+  //   부수 발견 ①: `fmtSign()`(parts.tsx:39)은 이미 null 을 "—" 로 처리한다.
+  //                `?? 0` 이 그 정직함을 정확히 무력화하고 있었다.
+  //   부수 발견 ②: historical 갈래의 `max_dd_pct?.toFixed(1)` 은 값이 없으면
+  //                문자열 `"undefined%"` 를 렌더했다.
+  const sd = stressQ.data;
+  const robust: RobustRow[] = !sd
+    ? []
+    : !sd.available
+      ? [{ l: sd.label, m: "견고성", v: null, why: sd.reason || "이 시나리오는 현재 산출되지 않습니다" }]
+      : sd.mode === "hypothetical"
+        ? [sd.portfolio_shock_pct != null && Number.isFinite(sd.portfolio_shock_pct)
+            ? { l: sd.label, m: "추정 충격", v: sd.portfolio_shock_pct, bear: sd.portfolio_shock_pct < 0 }
+            : { l: sd.label, m: "추정 충격", v: null, why: sd.reason || "충격이 산출되지 않았습니다" }]
+        : [sd.max_dd_pct != null && Number.isFinite(sd.max_dd_pct)
+            ? { l: sd.label, m: "최대낙폭", v: sd.max_dd_pct, bear: true }
+            : { l: sd.label, m: "최대낙폭", v: null, why: sd.reason || "낙폭이 산출되지 않았습니다" }];
 
   return (
     <>
@@ -78,7 +105,7 @@ export default function OverviewStage() {
                 <span className="as-wrow-nm">{result?.labels[c] || c}</span>
                 <div className="as-wrow-bar"><i style={{ width: `${Math.min(w, 100)}%` }} /></div>
                 <span className="num">{w.toFixed(1)}%</span>
-                <span className="num" style={{ fontSize: 9.5, color: d >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{fmtSign(d, 1)}</span>
+                <span className={`num aas-ov-d${d >= 0 ? " bull" : " bear"}`}>{fmtSign(d, 1)}</span>
               </div>
             );
           }) : <div className="as-empty">Re-optimize 실행 시 표시</div>}
@@ -98,11 +125,15 @@ export default function OverviewStage() {
 
         <section className="as-card" style={{ gridColumn: "span 4" }}>
           <div className="as-card-title">ROBUSTNESS <span className="as-note-inline">최악 시나리오</span><Xlink to="/allocation/stress" label="06" /></div>
+          {/* 인라인 style 로 9px·10.5px 를 박아 두면 어떤 CSS 규칙도 하한을 적용할 수
+              없다. 클래스로 내려 §52 가 관리한다 (A4-V2). */}
           {robust.length ? robust.map((r, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 10.5 }}>
-              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.l}</span>
-              <em style={{ fontStyle: "normal", fontSize: 9, color: "var(--t-muted)" }}>{r.m}</em>
-              <b className="num" style={{ color: r.c }}>{r.v}</b>
+            <div key={i} className="aas-ov-rob">
+              <span className="aas-ov-rob-l">{r.l}</span>
+              <em className="aas-ov-rob-m">{r.m}</em>
+              {r.v == null
+                ? <EvidenceBadge kind="unavailable" reason={r.why}>산출 불가</EvidenceBadge>
+                : <b className={`num aas-ov-rob-v${r.bear ? " bear" : " bull"}`}>{fmtSign(r.v, 1)}%</b>}
             </div>
           )) : <div className="as-empty">{holdings.length ? "시나리오 계산 중…" : "자산 추가 후 표시"}</div>}
           <div className="as-note">기댓값 변동 → 비중 민감도 히트맵은 04 STRESS에서</div>
