@@ -321,6 +321,24 @@ test("S1b: 벤치마크와 체결이 있으면 '산출 불가'가 하나도 뜨�
   expect(await page.locator(".brun-kpi-na").count(), "조건이 아니면 0개").toBe(0);
 });
 
+test("S1c: 차트 색이 토큰으로 실제 해석된다 (var() 가 SVG 에서 죽지 않는다)", async ({ page }) => {
+  // ★이건 기능 테스트가 통과해도 안 잡히는 종류다★
+  // stroke 를 "#1200ff" → "var(--chart-line)" 로 바꿨는데 그 변수가 정의돼 있지 않거나
+  // SVG 속성에서 var() 가 해석되지 않으면 선은 검정/none 으로 그려진다. 결과 화면의
+  // 기존 단언은 전부 그대로 통과한다 — 차트가 "있는지"만 보기 때문이다.
+  await stubCompletedRun(page);
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+
+  const line = page.locator(".recharts-line-curve").first();
+  await expect(line).toBeVisible();
+  const stroke = await line.evaluate((e) => getComputedStyle(e).stroke);
+  // 해석 실패 시 브라우저는 none / rgb(0,0,0) 을 준다.
+  expect(stroke, "차트 선 색이 해석되지 않았다").not.toBe("none");
+  expect(stroke, "차트 선이 검정으로 떨어졌다 — var() 가 죽었다").not.toBe("rgb(0, 0, 0)");
+  // 토큰이 실제로 우리 액센트여야 한다(#1200ff = rgb(18, 0, 255)).
+  expect(stroke).toBe("rgb(18, 0, 255)");
+});
+
 test("S1b: 지표 설명이 hover 전용이 아니다 (title= 제거)", async ({ page }) => {
   // ContextStrip 의 title= 16개를 걷어낸 P3 과 같은 규칙 — 키보드·터치에도 닿아야 한다.
   await stubCompletedRun(page);

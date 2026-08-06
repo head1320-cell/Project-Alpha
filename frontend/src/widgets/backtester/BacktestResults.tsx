@@ -106,7 +106,9 @@ const fmtStat = (v: number | null | undefined, m: MetricDef) => {
   const sign = m.signed && n >= 0 ? "+" : "";
   return `${sign}${n.toLocaleString("ko-KR", { maximumFractionDigits: m.digits ?? 1 })}${s}`;
 };
-const col = (v: number | null | undefined) => (num(v) == null ? undefined : (v as number) >= 0 ? "#16a34a" : "#dc2626");
+// 색을 토큰으로 — 하드코딩 hex 는 다크에서 그대로 어두워진다(globals.css §47 이 .dark 에서 바꾼다).
+const col = (v: number | null | undefined) =>
+  (num(v) == null ? undefined : (v as number) >= 0 ? "var(--chart-up)" : "var(--chart-down)");
 
 export function BacktestResults({ runId }: { runId: string }) {
   const router = useRouter();
@@ -232,12 +234,12 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           <div className="brun-card-t">자산곡선 {bt.benchmark ? "vs 벤치마크" : ""}</div>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
+              <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
               <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={60} />
               <YAxis tick={{ fontSize: 9 }} width={48} />
               <Tooltip formatter={(v: number) => v?.toLocaleString("ko-KR")} labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="equity" stroke="#1200ff" dot={false} strokeWidth={1.6} name="전략" />
-              {bt.benchmark && <Line type="monotone" dataKey="bench" stroke="#999" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={bt.benchmark.label} />}
+              <Line type="monotone" dataKey="equity" stroke="var(--chart-line)" dot={false} strokeWidth={1.6} name="전략" />
+              {bt.benchmark && <Line type="monotone" dataKey="bench" stroke="var(--chart-bench)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={bt.benchmark.label} />}
             </LineChart>
           </ResponsiveContainer>
           {bt.benchmark && (
@@ -254,11 +256,11 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           <div className="brun-card-t">낙폭 (Underwater)</div>
           <ResponsiveContainer width="100%" height={140}>
             <AreaChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
+              <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
               <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={60} />
               <YAxis tick={{ fontSize: 9 }} width={48} />
               <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="dd" stroke="#dc2626" fill="rgba(220,38,38,.12)" strokeWidth={1} name="낙폭" />
+              <Area type="monotone" dataKey="dd" stroke="var(--chart-down)" fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
             </AreaChart>
           </ResponsiveContainer>
         </section>
@@ -269,12 +271,12 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           <div className="brun-card-t">월별 수익률</div>
           <ResponsiveContainer width="100%" height={130}>
             <BarChart data={monthly} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
+              <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
               <XAxis dataKey="month" tick={{ fontSize: 8 }} minTickGap={20} />
               <YAxis tick={{ fontSize: 9 }} width={40} />
               <Tooltip formatter={(v: number) => `${v?.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
               <Bar dataKey="return_pct">
-                {monthly.map((m, i) => <Cell key={i} fill={m.return_pct >= 0 ? "#16a34a" : "#dc2626"} />)}
+                {monthly.map((m, i) => <Cell key={i} fill={m.return_pct >= 0 ? "var(--chart-up)" : "var(--chart-down)"} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -323,12 +325,12 @@ function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
       <div className="brun-card-t">기여도 분해 (Attribution) <span className="brun-note">상위 기여·하위 기여 종목</span></div>
       <ResponsiveContainer width="100%" height={h}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-          <CartesianGrid strokeDasharray="2 3" stroke="#eee" horizontal={false} />
+          <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `${v}%`} />
           <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={92} />
           <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
           <Bar dataKey="contribution">
-            {data.map((d, i) => <Cell key={i} fill={d.contribution >= 0 ? "#16a34a" : "#dc2626"} />)}
+            {data.map((d, i) => <Cell key={i} fill={d.contribution >= 0 ? "var(--chart-up)" : "var(--chart-down)"} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>

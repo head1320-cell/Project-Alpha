@@ -4943,6 +4943,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --chart-line: var(--t-accent);
   --chart-grid: #27272a;
   --chart-bench: #52525b;
+  --chart-down-fill: rgb(248 113 113 / 0.16);
 }
 
 /* 라이트 기본값 — 차트 색도 토큰으로 올린다(다크에서만 바꾸려면 양쪽에 이름이 있어야 한다). */
@@ -4950,6 +4951,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --chart-up: #16a34a;
   --chart-down: #dc2626;
   --chart-line: var(--t-accent);
-  --chart-grid: #eef0f4;
-  --chart-bench: #c7c8d0;
+  --chart-grid: #eeeeee;
+  --chart-bench: #999999;
+  --chart-down-fill: rgb(220 38 38 / 0.12);
 }
