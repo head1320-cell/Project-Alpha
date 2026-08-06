@@ -2670,16 +2670,38 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 }
 
 /* 4) 키보드 포커스 링 — 일관된 접근성 큐(:focus-visible = 키보드 탐색에만 표시).
-   셸 콘텐츠 영역(.terminal-main) 한정 — 랜딩 미적용. 기존에 .btn-primary만 포커스링 보유. */
+   랜딩(.lp-*)은 자체 규칙을 쓰므로 미적용. 기존에 .btn-primary만 포커스링 보유했다.
+
+   ★S1d — 범위를 .terminal-main 에서 셸 크롬까지 넓혔다★
+   원래 이 규칙은 .terminal-main 한정이었다. 그런데 헤더와 사이드바는 .terminal-main 밖에
+   있어서, 앱 크롬의 인터랙티브 요소 11개가 전부 UA 기본 outline(1px auto)로 떨어져 있었다 —
+   브랜드 링크, 국면 배지, 레일 토글, 사이드바 네비 8개. 실측으로 확인한 값이다.
+   키보드 사용자에게는 탭 순서의 앞부분 전체가 "지금 어디에 있는지" 안 보이는 구간이었다.
+
+   ★shadcn Button 으로 바꾸지 않은 이유(측정함)★
+   Button 에는 focus-visible:ring-2 가 들어 있어서 .rail-toggle 을 Button 으로 감싸면
+   저 중 1개는 해결된다. 나머지 10개는 <a> 라서 그대로 남는다 — 고쳐진 것처럼 보이는
+   부분 수정이다. 게다가 .rail-toggle 은 h-44px/w-100% 좌측정렬이라 Button 의 size 변형
+   (h-7/8/9)과 inline-flex justify-center 를 전부 className 으로 덮어야 한다. 그건
+   card.tsx 헤더에 적어 둔 "상류 기본값을 덮는" 패턴 그 자체다.
+   비용도 재 봤다: layout 청크 31,108 → 32,755 B(+1.6 kB raw). ADR 한도 안이지만,
+   포커스 링을 여기서 고치고 나면 남는 이득이 0 이라 넣지 않았다. */
 .terminal-main button:focus-visible,
 .terminal-main a:focus-visible,
 .terminal-main input:focus-visible,
 .terminal-main select:focus-visible,
 .terminal-main textarea:focus-visible,
 .terminal-main [role="button"]:focus-visible,
-.terminal-main [tabindex]:focus-visible {
+.terminal-main [tabindex]:focus-visible,
+.terminal-header a:focus-visible,
+.terminal-header button:focus-visible,
+.terminal-sidebar a:focus-visible,
+.terminal-sidebar button:focus-visible {
   outline: 2px solid var(--t-accent); outline-offset: 2px;
 }
+/* 사이드바가 접힌 상태에서는 링이 레일 폭(56px) 밖으로 잘린다 — 안쪽으로 그린다. */
+.terminal-sidebar a:focus-visible,
+.terminal-sidebar button:focus-visible { outline-offset: -2px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Macro Allocation Cockpit (components/macro/*) — Institutional Terminal

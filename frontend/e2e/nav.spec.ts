@@ -103,3 +103,43 @@ test("AAS Timing gauge value does not overlap the composite label", async ({ pag
   // if the composite section rendered, the big number and the label must not intersect
   if (gaugeNum && label) expect(intersects(gaugeNum, label), "gauge value overlaps label").toBe(false);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// S1d — 셸 크롬의 키보드 포커스 링
+// ─────────────────────────────────────────────────────────────────────────────
+// globals.css 의 포커스 링 규칙은 원래 .terminal-main 한정이었다. 헤더와 사이드바는
+// 그 밖에 있어서 앱 크롬의 인터랙티브 요소가 전부 UA 기본 outline(1px auto)로 떨어졌다.
+// 탭 순서상 앞쪽 전체가 "지금 어디에 있는지" 안 보이는 구간이었다는 뜻이다.
+//
+// ★샘플이 아니라 전수로 센다★ .first() 하나만 보면 나머지 10개가 벗겨져도 초록이다.
+// 이 세션에서 세 번 겪은 '아무것도 안 지키는 초록'이 정확히 그 모양이었다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("S1d: 셸 크롬(헤더·사이드바)의 모든 포커스 대상이 앱 포커스 링을 받는다", async ({ page }) => {
+  await page.goto("/dashboard", { waitUntil: "networkidle" });
+  await expect(page.locator(".terminal-nav .nav-item").first()).toBeVisible();
+
+  const targets = page.locator(
+    ".terminal-header a, .terminal-header button, .terminal-sidebar a, .terminal-sidebar button",
+  );
+  const n = await targets.count();
+  // 크롬 자체가 사라지면 0개가 되고 아래 루프가 통째로 비어 통과한다 — 그래서 먼저 센다.
+  // 브랜드 1 + 레일 토글 1 + 네비 8 = 10 이 하한. 국면 배지는 API 응답에 달려 있어 뺐다.
+  expect(n, "셸 크롬의 포커스 대상 수").toBeGreaterThanOrEqual(10);
+
+  const bare: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const el = targets.nth(i);
+    await el.focus();
+    const seen = await el.evaluate((e) => {
+      const c = getComputedStyle(e);
+      return { w: c.outlineWidth, s: c.outlineStyle, c: c.outlineColor,
+               tag: e.tagName, cls: (e.getAttribute("class") || "").slice(0, 40) };
+    });
+    // UA 기본값은 "1px auto rgb(16,16,16)" 로 떨어진다 — 앱 링은 2px solid 액센트다.
+    if (seen.s !== "solid" || parseFloat(seen.w) < 2) {
+      bare.push(`${seen.tag}.${seen.cls} → ${seen.w} ${seen.s} ${seen.c}`);
+    }
+  }
+  expect(bare, "포커스 링이 없는 셸 크롬 요소").toEqual([]);
+});
