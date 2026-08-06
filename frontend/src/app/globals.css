@@ -3576,10 +3576,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .aas-wiz-phaselab em { font-style: normal; font-size: 9px; color: var(--t-muted); }
 .aas-wiz-phasenum { margin-left: auto; font-size: 8px; color: var(--t-muted); }
 .aas-wiz-steps { display: flex; gap: 4px; min-width: 0; }
-.aas-wiz-step { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 2px; background: #fff; cursor: pointer; padding: 3px 7px; text-align: left; }
+.aas-wiz-step { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 2px; background: var(--card); cursor: pointer; padding: 3px 7px; text-align: left; }
 .aas-wiz-step:hover { border-color: var(--t-border); }
 .aas-wiz-step.on { border-color: var(--t-accent); background: rgba(18,0,255,.06); }
-.aas-wiz-dot { flex: none; width: 6px; height: 6px; background: #fff; border: 1px solid var(--t-border); border-radius: 50%; }
+.aas-wiz-dot { flex: none; width: 6px; height: 6px; background: var(--card); border: 1px solid var(--t-border); border-radius: 50%; }
 .aas-wiz-step.done .aas-wiz-dot, .aas-wiz-book.done .aas-wiz-dot { background: var(--t-accent); border-color: var(--t-accent); }
 .aas-wiz-meta { min-width: 0; display: flex; flex-direction: column; }
 .aas-wiz-lab { font-size: 10px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3630,7 +3630,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 위저드 트래커 우측 유틸 (제거된 헤더의 MOCK·목표 재배치) */
 .aas-wiz-right { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .aas-wiz-mock { font-size: 8.5px; color: #a16207; border: 1px solid #a16207; border-radius: 2px; padding: 1px 4px; letter-spacing: .04em; }
-.aas-wiz-gate { font-size: 9.5px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 7px; background: #fff; cursor: pointer; white-space: nowrap; }
+.aas-wiz-gate { font-size: 11px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 7px; background: var(--card); cursor: pointer; white-space: nowrap; }
 .aas-wiz-gate:hover { border-color: var(--t-accent); color: var(--t-accent); }
 
 /* Factor Builder (01 Construct — 팩터 빌더 모드) */
@@ -5043,3 +5043,91 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .dark .brun-results .brun-trow:hover { background: var(--t-surface); }
 /* 셸 자체 — 카드만 어둡고 지면이 희면 "반만 다크"가 된다. §47 이 경고한 그 상태다. */
 .dark .brun-results { background: var(--background); color: var(--foreground); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   49. Allocation Studio — 스티키 파이프라인 스테퍼 + 신선도 배너 (A1b·A1f)
+   ───────────────────────────────────────────────────────────────────────────
+   ★스티키가 JS 없이 되는 이유★
+   스크롤 컨테이너는 window 가 아니라 `.terminal-main`(:799, overflow-y:auto)이다.
+   그래서 `.aas-wiz` 에 position:sticky 를 주면 그 스크롤포트 기준으로 붙는다.
+   같은 셸 안에 선례가 이미 둘 있다 — `.ca-lab-bar`(:2090, z-index 30)와
+   `.mc-banner`(:2714, z-index 20). z-index 는 그 사이(25)로 잡아 두 선례와 안 싸운다.
+   조상 중 overflow:hidden 이 있으면 sticky 가 죽는데, `.aas-root` 는 flex 컬럼뿐이라 안전하다.
+
+   ★타입 크기를 올렸다 — 밀도는 글자를 줄여서 얻는 것이 아니다★
+   기존 스테퍼는 부제 8.5px · 북엔드 라벨 8px · 페이즈 번호 8px 였다. 브리프는 고밀도를
+   요구하지만 8px 라벨은 조밀한 게 아니라 안 읽히는 것이고, 이 저장소는 오늘 산문 12px
+   하한을 채택했다. 밀도는 여백과 배치에서 얻고, 글자는 읽히는 선을 지킨다.
+   폭이 모자라면 `.aas-wiz` 의 기존 overflow-x:auto 가 스크롤한다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.aas-wiz {
+  position: sticky; top: 0; z-index: 25;
+  /* #fff 하드코딩을 토큰으로 — 스티키는 아래 콘텐츠를 가려야 하므로 불투명해야 한다. */
+  background: var(--card);
+  border-color: var(--border);
+  /* 붙었을 때 아래 내용과의 경계를 만든다(정적일 때도 무해한 정도로 약하게). */
+  box-shadow: 0 1px 0 var(--border);
+}
+/* 스테퍼가 붙어 있는 동안 인텐트·컨텍스트가 그 아래로 지나가도 겹쳐 보이지 않게. */
+.aas-root { position: relative; }
+
+/* 가독 하한 — 위 주석의 이유. 숫자는 계속 .num(tabular-nums)을 탄다. */
+.aas-wiz-lab { font-size: 11px; }
+.aas-wiz-sub { font-size: 11px; }
+.aas-wiz-booklab { font-size: 11px; }
+.aas-wiz-phaselab b, .aas-wiz-phaselab em { font-size: 11px; }
+.aas-wiz-phasenum { font-size: 11px; }
+.aas-wiz-kbd { font-size: 11px; }
+.aas-wiz-booksup { font-size: 11px; }
+
+/* ── 신선도 배너 ────────────────────────────────────────────────────────────
+   ★opacity-50 오버레이를 쓰지 않는다★ 흐린 숫자는 AA 아래로 떨어지고, 그래도 여전히
+   읽히는 틀린 숫자다. 숫자는 전각 대비로 두고 낡았다는 사실을 글자로 적는다. */
+.aas-fresh {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--border); border-left-width: 3px;
+  border-radius: var(--radius, 3px);
+  padding: 7px 10px; font-size: 12px; line-height: 1.5;
+  background: var(--card); color: var(--foreground);
+}
+/* superseded = 화면에 숫자가 **있고** 낡았다 → 주의색. missing = 숫자가 아예 없다 → 중립. */
+.aas-fresh-superseded { border-left-color: #b45309; background: #fffbeb; }
+.aas-fresh-missing { border-left-color: var(--t-muted); }
+.aas-fresh-k {
+  flex: none; font-family: var(--t-mono); font-size: 12px; font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase;
+}
+.aas-fresh-superseded .aas-fresh-k { color: #92400e; }
+.aas-fresh-missing .aas-fresh-k { color: var(--t-muted); }
+.aas-fresh-r { flex: 1 1 260px; min-width: 0; color: var(--foreground); }
+.aas-fresh-b {
+  flex: none; padding: 5px 11px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--t-accent); border-radius: var(--radius, 3px);
+  background: var(--t-accent); color: #fff;
+}
+.aas-fresh-b:hover:not(:disabled) { opacity: .9; }
+.aas-fresh-b:disabled { opacity: .5; cursor: default; }
+
+/* 좁은 폭 — 배너는 접히되 사라지지 않는다(사유가 사라지면 배지는 그냥 색이 된다). */
+@media (max-width: 820px) {
+  .aas-fresh { align-items: flex-start; }
+  .aas-fresh-b { width: 100%; }
+}
+
+/* 다크 — 경고색은 어두운 배경에서 명도를 올린다(#b45309 은 zinc-900 위에서 AA 미달). */
+.dark .aas-fresh-superseded { border-left-color: #fcd34d; background: #2a2113; }
+.dark .aas-fresh-superseded .aas-fresh-k { color: #fcd34d; }
+.dark .aas-fresh-b { color: #09090b; }
+
+/* ── §49 계속: 스테퍼의 다크 마감 ────────────────────────────────────────────
+   ★컨테이너만 토큰으로 바꾸면 반만 다크가 된다★
+   `.aas-wiz` 배경을 var(--card) 로 올린 첫 판에서, 자식 `.aas-wiz-step` 이 여전히
+   `background:#fff` 였다. 다크에서 글자색은 --t-ink(#fafafa)로 뒤집히는데 배경은 흰색
+   그대로라 `.aas-wiz-lab` 이 **1.04:1** 이 됐다 — 사실상 안 보인다.
+   대비 감사로 잡았고(육안으로는 "좀 흐리네" 로 지나간다), 자식들도 토큰으로 내렸다.
+   활성 표시의 accent 틴트는 라이트 기준 rgba(18,0,255) 라 다크에서 배경과 붙는다 —
+   다크 액센트(#7c74ff)로 갈아끼운다. */
+.dark .aas-wiz-step.on { background: rgb(124 116 255 / .14); border-color: var(--t-accent); }
+.dark .aas-wiz-book.on { background: rgb(124 116 255 / .14); border-color: var(--t-accent); }
+.dark .aas-wiz-phase.on { background: rgb(124 116 255 / .10); border-color: var(--t-accent); }
+.dark .aas-wiz-mock { color: #fcd34d; border-color: #fcd34d; }

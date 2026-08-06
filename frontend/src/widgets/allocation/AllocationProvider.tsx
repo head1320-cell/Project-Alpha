@@ -20,6 +20,7 @@ import { researchApi } from "@/entities/research/api";
 import type { TacticalStrategy } from "@/entities/macro/analysisModel";
 import type { Holding } from "./PortfolioBuilder";
 import type { TimelineEvent } from "./ResearchTimeline";
+import { buildAnalyzeRequest, freshnessOf, signatureOf, type ResultFreshness } from "./analyzeSignature";
 import { PortfolioProvider, SS_WIP, usePortfolio } from "./slices/PortfolioContext";
 import { RunProvider, useRun } from "./slices/RunContext";
 import { ScenarioProvider, useScenario } from "./slices/ScenarioContext";
@@ -237,7 +238,10 @@ interface AllocationCtx {
   lastPos: string | null;                 // 마지막 방문 스테이지 href (Resume용)
   noteVisit: (href: string) => void;      // layout이 pathname 변경 시 호출
   stageComplete: Record<StageHref, boolean>;  // href 별 완료 (단일 소스) — 인덱스 아님
-  isResultStale: boolean;                 // 현재 입력 대비 result가 낡았나
+  isResultStale: boolean;                 // freshness.kind !== "fresh" 의 파생 별칭(기존 소비자용)
+  /** ★결과 신선도 — missing(숫자 없음)과 superseded(숫자 있고 낡음)를 구분한다★ (A1e)
+   *  배너·스테퍼가 "뭔가 바뀜"이 아니라 무엇이 바뀌었는지 말할 수 있게 changed 를 싣는다. */
+  freshness: ResultFreshness;
   ensureFreshRun: () => void;             // 다음 단계 진입 시 stale이면 재최적화
 }
 
@@ -350,27 +354,32 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
 
   const canRun = holdings.length >= 2;
 
-  // 현재 입력 서명 — runAnalyze의 req와 동일 키 순서/값이어야 stale 판정이 정확
-  const currentSig = useMemo(() => JSON.stringify({
+  // ★서명은 요청에서 파생된다 — 손으로 두 번 적지 않는다★ (A1c)
+  // 예전에는 여기에 stale 판정용 리터럴과 runAnalyze 의 req 리터럴이 따로 있었고, 주석이
+  // "동일해야 한다"고 부탁하고 있었다. 부탁은 강제가 아니라서 이미 두 곳이 어긋나 있었다
+  // (constraints 의 null/undefined, over 오버라이드 미반영). 이제 요청을 만드는 함수가
+  // 하나뿐이고 서명은 그 결과에서 뽑으므로 어긋날 자리가 없다. λ 의 조건부 포함 규칙과
+  // 그 근거(엔진 실측)는 analyzeSignature.ts 에 있다.
+  const sigInputs = useMemo(() => ({
     tickers: holdings.map((h) => h.code),
     weights: holdingsMap,
-    views: views.filter((v) => v.assets.length > 0 && v.magnitude_pct > 0),
-    model, delta, tau, constraints,
+    views, model, delta, tau, constraints,
   }), [holdings, holdingsMap, views, model, delta, tau, constraints]);
-  const isResultStale = !result || currentSig !== lastReqRef.current;
+
+  const currentReq = useMemo(() => buildAnalyzeRequest(sigInputs), [sigInputs]);
+  // ★여기는 useMemo 를 쓰지 않는다★
+  // 비교 대상인 `lastReqRef` 는 ref 라서 반응형이 아니다. memo 로 감싸면 의존성 배열에
+  // 적을 수 있는 것이 없고, 억지로 `pending` 같은 값을 넣어 재계산을 유도하게 된다 —
+  // 그건 의존성이 아니라 렌더 트리거이고, lint 가 정확히 그렇게 지적한다.
+  // 매 렌더 계산하는 편이 정직하고 싸다(작은 객체 하나의 stringify + 문자열 비교).
+  const freshness: ResultFreshness = freshnessOf(!!result, lastReqRef.current, currentReq);
+  /** 기존 소비자 6곳이 계속 쓰는 파생 별칭 — 의미는 "fresh 가 아니다". */
+  const isResultStale = freshness.kind !== "fresh";
 
   const runAnalyze = (over?: { model?: AllocationModel; tau?: number; views?: AllocationViewInput[] }) => {
     if (!canRun || pending) return;
-    const req = {
-      tickers: holdings.map((h) => h.code),
-      weights: holdingsMap,
-      views: (over?.views ?? views).filter((v) => v.assets.length > 0 && v.magnitude_pct > 0),
-      model: over?.model ?? model,
-      delta,
-      tau: over?.tau ?? tau,
-      constraints: constraints ?? undefined,
-    };
-    const key = JSON.stringify(req);
+    const req = buildAnalyzeRequest(sigInputs, over);
+    const key = signatureOf(req);
     if (key === lastReqRef.current) return; // 동일 요청 중복 방지
     lastReqRef.current = key;
     mutateAnalyze(req);
@@ -661,7 +670,7 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
     alphaTouched, markAlphaTouched: () => setAlphaTouched(true),
     executionTouched, markExecutionTouched: () => setExecutionTouched(true),
     constraints, setConstraints,
-    goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, ensureFreshRun,
+    goal, setGoal, lastPos, noteVisit, stageComplete, isResultStale, freshness, ensureFreshRun,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
