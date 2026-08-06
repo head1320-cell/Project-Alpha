@@ -14,6 +14,9 @@ import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { AutoAlphaLab } from "@/widgets/allocation/AutoAlphaLab";
 import { AlphaFactorModal } from "@/widgets/allocation/AlphaFactorModal";
 import { LintBadges, LsCurve, QuantileBars } from "@/widgets/allocation/AlphaLabParts";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/shared/ui/shadcn/table";
 
 const STATUS_LABEL: Record<AlphaStatus, string> = {
   draft: "초안", experimental: "실험", validated: "검증됨", approved: "승인", retired: "폐기",
@@ -181,13 +184,20 @@ export default function AlphaLabStage() {
           )}
           {visibleAlphas.map((a) => (
             <React.Fragment key={a.alpha_id}>
+              {/* ★알파의 정체는 표현식이다 — 그게 title= 안에만 있었다 (A4-L3)★
+                  호버는 키보드·터치 사용자에게 존재하지 않는다. 목록에서 두 알파를
+                  구별하려면 이름 말고 식을 봐야 하는데, 그 식이 보이지 않았다.
+                  P3 가 ContextStrip 에서 고친 것과 같은 결함이다. */}
               <div className={`as-al-item${selAlpha === a.alpha_id ? " on" : ""}`}>
-                <button className="as-al-pick" onClick={() => pickAlpha(a)} title={a.description || a.expr}>
+                <button className="as-al-pick" onClick={() => pickAlpha(a)}>
                   <span className="as-al-name">
                     {a.name}
                     {a.is_template && <em className="as-al-tpl">TPL</em>}
                     <em className="num as-al-ver">v{a.version}</em>
                   </span>
+                  {(a.expr || a.description) && (
+                    <code className="as-al-expr-r">{a.expr || a.description}</code>
+                  )}
                   <span className={`as-al-status s-${a.status}`}>{STATUS_LABEL[a.status]}</span>
                 </button>
                 {STATUS_NEXT[a.status] && !a.is_template && (
@@ -196,8 +206,10 @@ export default function AlphaLabStage() {
                     ↑ {STATUS_LABEL[STATUS_NEXT[a.status]!]}
                   </button>
                 )}
+                {/* 글리프 하나짜리 버튼은 이름이 없으면 "× 버튼"으로만 읽힌다 —
+                    A3 가 `.as-wrow-del` 에서 고친 것과 같다. */}
                 {!a.is_template && (
-                  <button className="as-x" title="삭제"
+                  <button className="as-x" aria-label={`${a.name} 삭제`}
                     onClick={() => alphaApi.remove(a.alpha_id).then(() => regQ.refetch()).catch(() => {})}>×</button>
                 )}
               </div>
@@ -219,7 +231,7 @@ export default function AlphaLabStage() {
 
       {/* ── 우: 검증 리포트 ── */}
       <main className="as-center">
-        <section className={`as-card${valMut.isPending ? " as-loading" : ""}`}>
+        <section className={`as-card${valMut.isPending ? " as-loading" : ""}`} aria-busy={valMut.isPending}>
           <div className="as-card-title">VALIDATION REPORT
             {report?.run_id && <span className="as-note-inline num">run: {report.run_id}</span>}
           </div>
@@ -230,37 +242,87 @@ export default function AlphaLabStage() {
           {report?.error && <div className="as-err">{report.message}</div>}
           {report && !report.error && ic && (
             <>
+              {/* ★`?? 0` 이 미산출을 **음수처럼** 칠하고 있었다 (A4-L1)★
+                  `(ic.mean ?? 0) > 0 ? bull : bear` — ic.mean 이 null 이면 0 은 > 0 이
+                  아니므로 **약세색**이 붙고, 값 자체는 `{null}` 이라 빈칸으로 렌더됐다.
+                  즉 "아직 못 쟀다"가 "성과가 나빴다"로 보였다. 색은 값이 있을 때만. */}
               <div className="as-al-kpis">
-                <div className="as-al-kpi"><em>Rank IC</em><b className="num" style={{ color: (ic.mean ?? 0) > 0 ? "var(--color-bull)" : "var(--color-bear)" }}>{ic.mean}</b></div>
+                <div className="as-al-kpi">
+                  <em>Rank IC</em>
+                  <b className={`num${ic.mean == null ? "" : ic.mean > 0 ? " bull" : " bear"}`}>
+                    {ic.mean ?? "—"}
+                  </b>
+                </div>
                 <div className="as-al-kpi"><em>ICIR</em><b className="num">{ic.icir ?? "—"}</b></div>
                 <div className="as-al-kpi"><em>t-stat</em><b className="num">{ic.t_stat ?? "—"}</b></div>
-                <div className="as-al-kpi"><em>Hit</em><b className="num">{ic.hit_rate ?? "—"}%</b></div>
+                <div className="as-al-kpi"><em>Hit</em><b className="num">{ic.hit_rate == null ? "—" : `${ic.hit_rate}%`}</b></div>
                 <div className="as-al-kpi"><em>회전율</em><b className="num">{report.turnover_proxy ?? "—"}</b></div>
                 <div className="as-al-kpi"><em>기간</em><b className="num">{report.n_periods}M</b></div>
               </div>
-              <table className="as-metrics">
-                <thead><tr><th>Decay</th><th className="num">1M</th><th className="num">2M</th><th className="num">3M</th><th>IS/OOS ({report.is_oos?.split})</th><th className="num">IS</th><th className="num">OOS</th></tr></thead>
-                <tbody><tr>
-                  <td>IC</td>
-                  <td className="num">{report.decay?.["1m"] ?? "—"}</td>
-                  <td className="num">{report.decay?.["2m"] ?? "—"}</td>
-                  <td className="num">{report.decay?.["3m"] ?? "—"}</td>
-                  <td>IC</td>
-                  <td className="num">{report.is_oos?.is_ic ?? "—"}</td>
-                  <td className="num">{report.is_oos?.oos_ic ?? "—"}</td>
-                </tr></tbody>
-              </table>
+
+              {/* ★한 표에 두 표가 들어 있었다 (A4-L2)★ Decay(1M/2M/3M)와 IS/OOS 는
+                  서로 다른 축인데 머리글 한 줄에 7칸으로 붙어 있었고, `<th>` 에 scope 가
+                  없어 스크린리더가 어느 열의 값인지 말할 수 없었다. 두 표로 나눈다. */}
+              <div className="as-al-tables">
+                <Table className="as-metrics">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">IC DECAY</TableHead>
+                      <TableHead scope="col" className="text-right">1M</TableHead>
+                      <TableHead scope="col" className="text-right">2M</TableHead>
+                      <TableHead scope="col" className="text-right">3M</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableHead scope="row">IC</TableHead>
+                      <TableCell className="text-right"><span className="num">{report.decay?.["1m"] ?? "—"}</span></TableCell>
+                      <TableCell className="text-right"><span className="num">{report.decay?.["2m"] ?? "—"}</span></TableCell>
+                      <TableCell className="text-right"><span className="num">{report.decay?.["3m"] ?? "—"}</span></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+                <Table className="as-metrics">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">IS / OOS{report.is_oos?.split ? ` (${report.is_oos.split})` : ""}</TableHead>
+                      <TableHead scope="col" className="text-right">IS</TableHead>
+                      <TableHead scope="col" className="text-right">OOS</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableHead scope="row">IC</TableHead>
+                      <TableCell className="text-right"><span className="num">{report.is_oos?.is_ic ?? "—"}</span></TableCell>
+                      <TableCell className="text-right"><span className="num">{report.is_oos?.oos_ic ?? "—"}</span></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+
               {report.quantiles && <QuantileBars q={report.quantiles} />}
-              <div className="as-card-title" style={{ marginTop: 10 }}>LONG-SHORT (Q{report.quantiles?.n}−Q1)
+              <div className="as-card-title as-al-ls-t">LONG-SHORT (Q{report.quantiles?.n}−Q1)
                 <span className="as-note-inline num">
                   {report.long_short?.total_return_pct}% · Sharpe {report.long_short?.sharpe ?? "—"} · MDD {report.long_short?.mdd_pct}%
                 </span>
               </div>
               {report.long_short && <LsCurve curve={report.long_short.curve} />}
+              {/* 신원·커버리지는 접지 않는다 — 무엇을 근거로 잰 값인지는 결론과 같은 급이다. */}
               <div className="as-note num">
                 유니버스 {report.universe_size} · 평균 커버리지 {report.avg_coverage} · {report.period_start} ~ {report.period_end}
               </div>
-              {(report.notes ?? []).map((n, i) => <div key={i} className="as-note">• {n}</div>)}
+              {/* 정직 노트는 길고 항상 펼쳐져 있었다 — 접되, 개수는 요약에 드러낸다.
+                  (A3 가 SleeveStudio 에 쓴 것과 같은 네이티브 <details> — JS 0.) */}
+              {(report.notes ?? []).length > 0 && (
+                <details className="as-adv as-al-notes">
+                  <summary className="as-adv-s">
+                    정직 노트 <span className="as-note-inline">{(report.notes ?? []).length}건 — 커버리지·대체·한계</span>
+                  </summary>
+                  <div className="as-adv-b">
+                    {(report.notes ?? []).map((n, i) => <div key={i} className="as-note">• {n}</div>)}
+                  </div>
+                </details>
+              )}
             </>
           )}
         </section>
