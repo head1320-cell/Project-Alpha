@@ -38,7 +38,7 @@ class ReviewRequest(BaseModel):
     decision_quality: str | None = None
 
 
-def _attribution_for(run_id: str) -> dict:
+def _attribution_for(run_id: str, as_of: str | None = None) -> dict:
     from src.data.research_runs import get_run
     from src.engine.attribution import compute_attribution
     run = get_run(run_id)
@@ -61,7 +61,7 @@ def _attribution_for(run_id: str) -> dict:
                          for f in raw_fills]
     except Exception:
         logger.debug("execution 링크 조회 실패 — 체결/비용 미연결로 진행", exc_info=True)
-    report = compute_attribution(run, fills=fills, expected_cost_bp=expected_cost_bp)
+    report = compute_attribution(run, as_of=as_of, fills=fills, expected_cost_bp=expected_cost_bp)
     # 저널 연결 (같은 run_id)
     try:
         from src.data.journal_store import get_by_run
@@ -73,9 +73,16 @@ def _attribution_for(run_id: str) -> dict:
 
 
 @router.get("/attribution/{run_id}")
-def get_attribution(run_id: str):
+def get_attribution(run_id: str, as_of: str | None = None):
+    """사전 기대 vs 사후 실측.
+
+    ★`as_of` 는 엔진이 처음부터 받고 있었는데 라우트가 넘기지 않았다 (A7)★
+    그래서 프론트가 어떤 기준일을 골라도 항상 '오늘' 로 계산됐고, 오늘 만든 런
+    (경과 0일)에서는 실현수익이 **구조적으로 계산 불가**라 전부 미측정이었다.
+    기준일을 넘길 수 있으면 경과 일수가 있는 결정은 실제로 실측된다.
+    """
     try:
-        return _attribution_for(run_id)
+        return _attribution_for(run_id, as_of=as_of)
     except HTTPException:
         raise
     except Exception:

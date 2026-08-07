@@ -70,6 +70,25 @@ def macro_regime():
         raise HTTPException(500, str(e))
 
 
+@router.get("/regime-ensemble")
+def macro_regime_ensemble(market: str = "kr", months: int = 60):
+    """국면 확률을 **세 도구로 따로** — 축·상태전환(Markov)·군집(GMM).
+
+    합치지 않는다. 세 방법이 갈리면 그 사실이 정보이므로 `agreement` 로 일치 여부만
+    돌려주고, 어느 쪽을 믿을지는 사람이 정한다. 표본 부족·미수렴·라이브러리 부재는
+    도구별 `available: False` + 사유 — 균등분포로 채우지 않는다.
+    """
+    try:
+        from src.engine.regime_ensemble import regime_ensemble
+        analyzer = _get_analyzer()
+        snap = analyzer.collector.collect_all(use_cache=True)
+        series_map = getattr(snap, "series", None) or {}
+        return regime_ensemble(series_map, market=market, months=months)
+    except Exception as e:
+        logger.error(f"regime-ensemble 실패: {e}", exc_info=True)
+        raise HTTPException(500, str(e))
+
+
 @router.get("/yield-curve")
 def macro_yield_curve():
     """US Treasury Yield Curve (3M~30Y) + 역전 분석."""
