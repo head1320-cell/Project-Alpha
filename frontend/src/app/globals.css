@@ -6061,3 +6061,71 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-dq.good_outcome_bad_process, .as-dq.bad_outcome_good_process {
   background: var(--muted); color: var(--color-caution);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §57 — A7
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 하단 nav 의 보조 "권장" 링크 ──────────────────────────────────────────
+   주 CTA 가 선형(다음 스테이지)으로 돌아가면서, nextAction 정책이 가리키는 곳이
+   선형 다음과 다를 때 그리로 갈 수단이 필요해졌다. 주 CTA 와 경쟁하면 안 되므로
+   (한 화면에 primary 는 하나) 테두리만 있는 보조 버튼으로 둔다.
+   `margin-left: auto` 는 `.aas-botnav-next` 가 이미 갖고 있어서 여기엔 걸지 않는다 —
+   걸면 둘이 서로 밀어내며 가운데 메타가 찌그러진다. */
+.aas-botnav-rec {
+  font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em;
+  border: 1px solid var(--t-accent); border-radius: 2px;
+  background: transparent; color: var(--t-accent);
+  padding: 5px 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.aas-botnav-rec:hover { background: rgb(18 0 255 / .06); }
+.aas-botnav-rec:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.dark .aas-botnav-rec:hover { background: rgb(124 116 255 / .14); }
+
+/* ── 02 AlphaLab 레지스트리 행 — 세로로 쏟아지던 글자의 원인 ────────────────
+   스크린샷의 `↑ 검 증 됨` 세로 쌓임은 폰트가 아니라 **flex 축소** 문제였다.
+   `.as-al-pick` 은 `flex: 1`(= `1 1 0%`)이지만 flex 아이템의 기본
+   `min-width: auto` 때문에 **콘텐츠 폭 아래로는 안 줄어든다**. 그래서 300px 레일에서
+   이름+표현식이 자리를 먼저 먹으면 남은 폭이 승격 칩에게 몇 px 만 돌아가고,
+   그 폭에서 텍스트가 글자 단위로 줄바꿈됐다.
+   → 줄어들어야 하는 쪽에 `min-width: 0`, 줄어들면 안 되는 쪽에 `flex-shrink: 0`. */
+.as-al-item > * { min-width: 0; }
+.as-al-item > .as-chip, .as-al-item > .as-x { flex-shrink: 0; white-space: nowrap; }
+.as-al-pick { min-width: 0; }
+.as-al-pick > .as-al-expr-r { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── ArchiveDrawer — 측면 서랍 ──────────────────────────────────────────────
+   ★복합 선택자를 쓴다★ `.shad-content` 와 `.as-arch` 는 둘 다 단일 클래스라 특정도가
+   같고, 그러면 **파일 안 순서**가 승자를 정한다 — §34 가 `.sm-modal` 에서 겪고 주석으로
+   남긴 함정이다. `.shad-content.as-arch` 는 특정도가 높아 순서와 무관하게 이긴다. */
+.shad-content.as-arch {
+  left: auto; right: 0; top: 0; transform: none;
+  width: min(560px, 94vw); height: 100vh; max-height: 100vh;
+  border-radius: 0; padding: 0;
+  display: flex; flex-direction: column;
+  background: var(--card); color: var(--foreground);
+  border-left: 1px solid var(--border);
+}
+.as-arch-head {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.as-arch-title { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--foreground); }
+.as-arch-hint { font-size: 11px; color: var(--t-muted); }
+.as-arch-x {
+  margin-left: auto; flex-shrink: 0;
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; line-height: 1; color: var(--t-muted); padding: 2px 6px;
+}
+.as-arch-x:hover { color: var(--foreground); }
+.as-arch-x:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* 서랍 본문만 스크롤한다 — 헤더는 고정. 목록이 길어도 제목과 닫기가 항상 보인다. */
+.as-arch-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px; }
+/* 트리거 — 개수를 드러내는 보조 버튼. 주 동작과 경쟁하지 않게 테두리만. */
+.as-arch-t {
+  font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em;
+  border: 1px solid var(--t-border); border-radius: 2px; background: transparent;
+  color: var(--t-muted); padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
+.as-arch-t:hover { border-color: var(--t-accent); color: var(--t-accent); }
+.as-arch-t:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }

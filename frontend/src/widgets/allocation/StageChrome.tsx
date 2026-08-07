@@ -93,11 +93,31 @@ export function StageChrome({ children }: { children: React.ReactNode }) {
     hasJournalEntry: stageComplete["/allocation/journal"],
   });
   const naTarget = STAGES.find((s) => s.href === na.href) ?? null;
-  const goNext = () => {
-    // Validation 단계로 들어갈 때 stale 이면 재최적화 — 기존 동작을 그대로 지킨다.
-    if (naTarget?.phase === "validation") ensureFreshRun();
-    router.push(na.href);
+
+  // ★주 CTA 는 선형이다 — prev 와 대칭 (A7)★
+  // 지금까지 `.aas-botnav-prev` 는 STAGES[idx-1] 로 선형인데 `.aas-botnav-next` 만
+  // nextAction 정책을 따랐다. 그 비대칭이 화면에서 이렇게 보였다:
+  //   0M 에서  CTA = "0M MACRO PHASE →"  ← **자기 자신**(규칙 3: 스냅샷 없음)
+  //   02 에서  CTA = "0M MACRO PHASE →"  ← **뒤로**
+  // 목적지가 현재 위치인 버튼은 누를 이유가 없고, 파이프라인을 앞으로 미는 수단이
+  // 사라진다. 두 버튼이 같은 축(스테이지 순서)에서 움직이게 한다.
+  //
+  // ★정책은 버리지 않는다★ nextAction 은 P3.5 에서 승인된 결정이고 "지금 뭘 해야
+  // 하는가" 는 여전히 유효한 정보다. 다만 그것은 **이동 수단이 아니라 조언**이다 —
+  // `.aas-botnav-why` 에 권장으로 남고, 권장 목적지가 선형 다음과 다를 때만 보조
+  // 링크로 따라간다. 순수함수와 그 테스트는 손대지 않는다.
+  const nextStage = idx < STAGES.length - 1 ? STAGES[idx + 1] : null;
+  const recDiffers = !!naTarget && !!nextStage && naTarget.href !== nextStage.href;
+
+  const goTo = (href: string) => {
+    // 이동 전 현재 스테이지의 미저장 입력을 커밋한다. Provider 의 setter 들이 이미
+    // 커밋 경로를 갖고 있어서(뷰·제약은 onCommit 에서 runAnalyze) 여기서는 검증 단계
+    // 진입 시 stale 재계산만 보장하면 된다 — 기존 동작 그대로.
+    const target = STAGES.find((s) => s.href === href) ?? null;
+    if (target?.phase === "validation") ensureFreshRun();
+    router.push(href);
   };
+  const goNext = () => nextStage && goTo(nextStage.href);
 
   return (
     <div className="aas-root tpage-fade">
@@ -123,9 +143,16 @@ export function StageChrome({ children }: { children: React.ReactNode }) {
           ← {idx > 0 ? `${STAGES[idx - 1].n} ${STAGES[idx - 1].label}` : "이전 단계"}
         </button>
         <span className="aas-botnav-mid num">RESEARCH PIPELINE · {phase ? `${phase.label} 단계` : stage.label}</span>
-        <span className="aas-botnav-why" data-next={na.key}>{na.why}</span>
-        <button className="aas-botnav-next primary" onClick={goNext}>
-          {na.label}{naTarget ? ` — ${naTarget.n} ${naTarget.label}` : ""} →
+        {/* 권장은 보이는 텍스트로 남는다(P3 이 걷어낸 title= 로 되돌리지 않는다).
+            `data-next` 는 스펙이 잡는 안정 키라 그대로 유지. */}
+        <span className="aas-botnav-why" data-next={na.key}>권장: {na.why}</span>
+        {recDiffers && (
+          <button className="aas-botnav-rec" onClick={() => goTo(na.href)}>
+            {na.label} — {naTarget!.n} {naTarget!.label} ↗
+          </button>
+        )}
+        <button className="aas-botnav-next primary" disabled={!nextStage} onClick={goNext}>
+          {nextStage ? `다음 단계로 이동 — ${nextStage.n} ${nextStage.label}` : "마지막 단계"} →
         </button>
       </div>
     </div>
