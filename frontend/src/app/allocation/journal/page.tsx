@@ -15,6 +15,7 @@ import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";
 import { DecisionJournal } from "@/widgets/allocation/DecisionJournal";
 import { StrategyHealthPanel } from "@/widgets/allocation/StrategyHealthPanel";
 import { PolicyBacktest } from "@/widgets/allocation/PolicyBacktest";
+import { ArchiveDrawer } from "@/shared/ui/ArchiveDrawer";
 
 function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () => void }) {
   const [text, setText] = useState(study.review || "");
@@ -85,6 +86,11 @@ function JournalInner() {
     }
   }, [rg.regime, rg.confidence, rg.recommendedMode, rg.stressScore, rg.source, rg.asOf, macroView]);
 
+  // 본문에는 최근 3건만 — 나머지는 서랍. 목록이 길어지면 "지금 쓰는 것" 이 묻힌다.
+  const JR_MAIN_MAX = 3;
+  const shownStudies = studies.slice(0, JR_MAIN_MAX);
+  const archivedStudies = studies.slice(JR_MAIN_MAX);
+
   const pfSummary = result?.summary?.portfolio;
   const canJournal = canRun && !!result;
 
@@ -154,7 +160,7 @@ function JournalInner() {
         <section className="as-card">
           <div className="as-card-title">QUICK NOTES <span className="as-note-inline">{studies.length}건 · localStorage(세션 메모)</span></div>
           {studies.length === 0 && <div className="as-empty">저장된 저널 없음 — 좌측에서 첫 엔트리를 기록하세요.</div>}
-          {studies.map((s) => (
+          {shownStudies.map((s) => (
             <div key={s.id} className="as-jr-entry">
               <div className="as-jr-head">
                 <b>{s.name}</b>
@@ -173,6 +179,32 @@ function JournalInner() {
               <ReviewEditor study={s} onSaved={bumpStudies} />
             </div>
           ))}
+          {/* 과거 메모는 서랍으로 — 본문에는 최근 것만 (A7) */}
+          {archivedStudies.length > 0 && (
+            <ArchiveDrawer
+              className="as-jr-arch"
+              label={`이전 메모 ${archivedStudies.length}건 열기`}
+              title="QUICK NOTES — 전체"
+              hint={`${studies.length}건 중 최근 ${shownStudies.length}건만 본문에 있습니다`}>
+              {studies.map((s) => (
+                <div key={s.id} className="as-jr-entry">
+                  <div className="as-jr-head">
+                    <b>{s.name}</b>
+                    <span className="num as-note-inline">{s.savedAt.slice(0, 16).replace("T", " ")} · {Object.keys(s.holdings).length}종목 · {s.model.toUpperCase()}</span>
+                    <button className="as-x" aria-label={`${s.name} 저널 삭제`}
+                      onClick={() => { deleteStudy(s.id); bumpStudies(); }}>×</button>
+                  </div>
+                  <div className="as-jr-grid">
+                    <div><em>Macro View</em><p>{s.macro_view || "—"}</p></div>
+                    <div><em>Changed</em><p>{s.changed || "—"}</p></div>
+                    <div><em>Reason</em><p>{s.reason || "—"}</p></div>
+                    <div><em>Result</em><p className="num">{s.result_summary || s.note || "—"}</p></div>
+                  </div>
+                  <ReviewEditor study={s} onSaved={bumpStudies} />
+                </div>
+              ))}
+            </ArchiveDrawer>
+          )}
         </section>
       </main>
       </div>

@@ -17,6 +17,7 @@ import { LintBadges, LsCurve, QuantileBars } from "@/widgets/allocation/AlphaLab
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/shared/ui/shadcn/table";
+import { ArchiveDrawer } from "@/shared/ui/ArchiveDrawer";
 
 const STATUS_LABEL: Record<AlphaStatus, string> = {
   draft: "초안", experimental: "실험", validated: "검증됨", approved: "승인", retired: "폐기",
@@ -119,6 +120,58 @@ export default function AlphaLabStage() {
 
   const ic = report && !report.error ? report.ic : null;
 
+  // ★행 JSX 를 본문과 서랍이 **같이** 쓴다 (A7)★
+  // 두 벌로 복사하면 한쪽만 고쳐지는 날이 온다 — 승격 칩 하나가 서랍에서만 사라지는
+  // 식으로. 클로저 하나로 두고 목록 두 곳이 같은 것을 렌더한다.
+  const alphaRow = (a: AlphaDef) => (
+          <React.Fragment key={a.alpha_id}>
+            {/* ★알파의 정체는 표현식이다 — 그게 title= 안에만 있었다 (A4-L3)★
+                호버는 키보드·터치 사용자에게 존재하지 않는다. 목록에서 두 알파를
+                구별하려면 이름 말고 식을 봐야 하는데, 그 식이 보이지 않았다.
+                P3 가 ContextStrip 에서 고친 것과 같은 결함이다. */}
+            <div className={`as-al-item${selAlpha === a.alpha_id ? " on" : ""}`}>
+              <button className="as-al-pick" onClick={() => pickAlpha(a)}>
+                <span className="as-al-name">
+                  {a.name}
+                  {a.is_template && <em className="as-al-tpl">TPL</em>}
+                  <em className="num as-al-ver">v{a.version}</em>
+                </span>
+                {(a.expr || a.description) && (
+                  <code className="as-al-expr-r">{a.expr || a.description}</code>
+                )}
+                <span className={`as-al-status s-${a.status}`}>{STATUS_LABEL[a.status]}</span>
+              </button>
+              {STATUS_NEXT[a.status] && !a.is_template && (
+                <button className="as-chip sm" title={`→ ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 승격`}
+                  onClick={() => setPromoteFor(promoteFor === a.alpha_id ? null : a.alpha_id)}>
+                  ↑ {STATUS_LABEL[STATUS_NEXT[a.status]!]}
+                </button>
+              )}
+              {/* 글리프 하나짜리 버튼은 이름이 없으면 "× 버튼"으로만 읽힌다 —
+                  A3 가 `.as-wrow-del` 에서 고친 것과 같다. */}
+              {!a.is_template && (
+                <button className="as-x" aria-label={`${a.name} 삭제`}
+                  onClick={() => alphaApi.remove(a.alpha_id).then(() => regQ.refetch()).catch(() => {})}>×</button>
+              )}
+            </div>
+            {/* 승격 노트를 승격 대상 행 바로 아래에 — 어떤 알파에 붙는 노트인지 모호하지 않게 */}
+            {promoteFor === a.alpha_id && (
+              <div className="as-al-promote">
+                <input className="as-input" autoFocus value={promoteNote}
+                  placeholder={`${STATUS_LABEL[a.status]} → ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 사유 (approved는 필수)`}
+                  onChange={(e) => setPromoteNote(e.target.value)} />
+                <button className="as-fb-apply" onClick={() => doPromote(a)}>승격</button>
+                <button className="as-chip sm" onClick={() => { setPromoteFor(null); setPromoteNote(""); }}>취소</button>
+              </div>
+            )}
+          </React.Fragment>
+  );
+
+  // 본문에는 **지금 쓰는 것**만: 선택된 알파 + 초안/승인 + 최근 몇 개. 나머지는 서랍.
+  const MAIN_MAX = 4;
+  const shownAlphas = visibleAlphas.slice(0, MAIN_MAX);
+  const archivedAlphas = visibleAlphas.slice(MAIN_MAX);
+
   return (
     <div className="as-ws2">
       {/* ── 좌: 에디터 + 레지스트리 ── */}
@@ -182,49 +235,18 @@ export default function AlphaLabStage() {
           {visibleAlphas.length === 0 && (
             <div className="as-empty">{alphas.length ? "조건에 맞는 알파가 없습니다" : "레지스트리가 비어 있습니다"}</div>
           )}
-          {visibleAlphas.map((a) => (
-            <React.Fragment key={a.alpha_id}>
-              {/* ★알파의 정체는 표현식이다 — 그게 title= 안에만 있었다 (A4-L3)★
-                  호버는 키보드·터치 사용자에게 존재하지 않는다. 목록에서 두 알파를
-                  구별하려면 이름 말고 식을 봐야 하는데, 그 식이 보이지 않았다.
-                  P3 가 ContextStrip 에서 고친 것과 같은 결함이다. */}
-              <div className={`as-al-item${selAlpha === a.alpha_id ? " on" : ""}`}>
-                <button className="as-al-pick" onClick={() => pickAlpha(a)}>
-                  <span className="as-al-name">
-                    {a.name}
-                    {a.is_template && <em className="as-al-tpl">TPL</em>}
-                    <em className="num as-al-ver">v{a.version}</em>
-                  </span>
-                  {(a.expr || a.description) && (
-                    <code className="as-al-expr-r">{a.expr || a.description}</code>
-                  )}
-                  <span className={`as-al-status s-${a.status}`}>{STATUS_LABEL[a.status]}</span>
-                </button>
-                {STATUS_NEXT[a.status] && !a.is_template && (
-                  <button className="as-chip sm" title={`→ ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 승격`}
-                    onClick={() => setPromoteFor(promoteFor === a.alpha_id ? null : a.alpha_id)}>
-                    ↑ {STATUS_LABEL[STATUS_NEXT[a.status]!]}
-                  </button>
-                )}
-                {/* 글리프 하나짜리 버튼은 이름이 없으면 "× 버튼"으로만 읽힌다 —
-                    A3 가 `.as-wrow-del` 에서 고친 것과 같다. */}
-                {!a.is_template && (
-                  <button className="as-x" aria-label={`${a.name} 삭제`}
-                    onClick={() => alphaApi.remove(a.alpha_id).then(() => regQ.refetch()).catch(() => {})}>×</button>
-                )}
-              </div>
-              {/* 승격 노트를 승격 대상 행 바로 아래에 — 어떤 알파에 붙는 노트인지 모호하지 않게 */}
-              {promoteFor === a.alpha_id && (
-                <div className="as-al-promote">
-                  <input className="as-input" autoFocus value={promoteNote}
-                    placeholder={`${STATUS_LABEL[a.status]} → ${STATUS_LABEL[STATUS_NEXT[a.status]!]} 사유 (approved는 필수)`}
-                    onChange={(e) => setPromoteNote(e.target.value)} />
-                  <button className="as-fb-apply" onClick={() => doPromote(a)}>승격</button>
-                  <button className="as-chip sm" onClick={() => { setPromoteFor(null); setPromoteNote(""); }}>취소</button>
-                </div>
-              )}
-            </React.Fragment>
-          ))}
+          {shownAlphas.map((a) => alphaRow(a))}
+          {archivedAlphas.length > 0 && (
+            <div className="as-al-archrow">
+              <ArchiveDrawer
+                className="as-al-arch"
+                label={`보관된 알파 ${archivedAlphas.length}개 열기`}
+                title="ALPHA ARCHIVE"
+                hint={`${alphas.length}개 중 ${archivedAlphas.length}개 — 본문에는 활성 항목만 둡니다`}>
+                {archivedAlphas.map((a) => alphaRow(a))}
+              </ArchiveDrawer>
+            </div>
+          )}
           <div className="as-note">템플릿은 정직 라벨(데이터 미보유·프록시)을 설명에 명시. validated 승격은 검증 run 필수.</div>
         </section>
       </aside>
