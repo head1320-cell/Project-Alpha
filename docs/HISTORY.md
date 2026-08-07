@@ -3317,3 +3317,8 @@ A4 는 `.aas-root` 를 **다크에서만** 쟀다. 라이트를 재니 5개 라�
 
 게이트: pytest **1,543 passed / 10 skipped**(불변) · tsc 0 · eslint 0 errors(28 warnings) ·
 신규 스펙 `allocation-stages.spec.ts` **16 passed**.
+
+전체 게이트: Playwright **253 passed / 0 failed** (1.3시간, exit 0). A4 의 216 에서
+`allocation-stages.spec.ts` 16건 + A4 의 21건이 누적됐다. A4 에서 타임아웃했던
+`research-run-roundtrip.spec.ts:47` 도 통과 — 그때의 원인(내 스펙이 ResearchRun 을
+영구 저장해 저널 목록을 늘린 것)을 막은 것이 유효했다는 뜻이다.
