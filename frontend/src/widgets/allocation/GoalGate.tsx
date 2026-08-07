@@ -15,7 +15,6 @@ import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import type { AllocationModel, AllocationViewInput } from "@/entities/allocation/api";
 import { equalize, type Holding } from "./PortfolioBuilder";
 import { isKnownAllocationRoute, useAllocation } from "./AllocationProvider";
-import { GateStepper } from "./GateStepper";
 import { useResearchRegime } from "./useResearchRegime";
 import { listStudies, type AllocationStudy } from "@/entities/allocation/storage";
 import { listWatchlists, type Watchlist } from "@/shared/lib/watchlistStorage";
@@ -180,9 +179,14 @@ export function GoalGate() {
 
   return (
     <div className="aas-gate tpage-fade">
-      {/* 3단계 진행 표시 — 붙어 있다(§50). 라벨은 PHASES 레지스트리에서 온다. */}
-      <GateStepper />
-
+      {/* ★3단계 스테퍼는 제거됐다 (A6-G)★
+          A2b 가 여기에 `1 SETUP → 2 LOGIC → 3 VALIDATION` 을 붙였던 이유는 처음 오는
+          사용자에게 3단계 워크플로가 시작된다는 것을 알리기 위해서였다. 두 가지가 그
+          근거를 무너뜨렸다: (1) 목표를 고르는 즉시 StageChrome 의 WizardTracker 가 같은
+          3페이즈를 **11개 스테이지와 함께** 더 자세히 그린다 — 한 번의 클릭 거리에서
+          중복이다. (2) 스티키였지만 실제로는 붙은 적이 없다(A2 측정: 스크롤 여유 133px <
+          이동거리 145px). 붙지 않는 스티키 요소가 진입 화면 맨 위를 차지하고 있었다.
+          잃은 것: 목표 선택 **전에는** 페이즈 신호가 없다. 의도된 트레이드오프다. */}
       <h1 className="aas-gate-q">어떤 목표의 포트폴리오를 만드시겠습니까?</h1>
       <p className="aas-gate-lead">
         목표를 고르면 시작 유니버스와 최적화 엔진이 자동 세팅되고, 다음 단계에서 자유롭게

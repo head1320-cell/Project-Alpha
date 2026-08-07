@@ -55,45 +55,29 @@ test("게이트: 빈 프리셋만 파선 테두리로 구분된다", async ({ pa
   }
 });
 
-test("게이트: 3단계 스테퍼가 Setup 을 현재 단계로 알리고 상단에 붙는다", async ({ page }) => {
+// ★A2b 의 3단계 스테퍼 테스트를 이 테스트가 대체한다 (A6-G)★
+// 예전 테스트는 `.aas-gstep-item` 3개 · DOM 순서 · `aria-current` · sticky 를 단언했다.
+// 스테퍼가 제거됐으므로 그 단언들은 의미가 없다. 다만 **삭제만 하면** 다음 사람이
+// "게이트에 스테퍼가 있었나?" 를 알 방법이 없고, 되살아나도 아무도 모른다. 그래서
+// 부재를 단언한다 — 그리고 같은 테스트에서 진입 계약(카드 7장·성장 추구 우선)이
+// 제거로 인해 깨지지 않았음을 함께 확인한다. 제거의 유일한 리스크가 그것이기 때문이다.
+test("게이트: 3단계 스테퍼는 제거됐고, 진입 계약은 그대로다", async ({ page }) => {
   await page.goto(GATE, { waitUntil: "networkidle" });
+  await expect(page.locator(".aas-gate")).toBeVisible();
 
-  const steps = page.locator(".aas-gstep-item");
-  expect(await steps.count(), "SETUP / LOGIC / VALIDATION").toBe(3);
-  const labels = await page.locator(".aas-gstep-lab").allInnerTexts();
-  expect(labels, "DOM 순서").toEqual(["SETUP", "LOGIC", "VALIDATION"]);
-
-  // 현재 단계는 **하나뿐**이어야 한다. 셋 다 aria-current 면 아무 말도 안 하는 것과 같다.
-  const current = await steps.evaluateAll((els) => els.map((e) => e.getAttribute("aria-current")));
-  expect(current, "Setup 만 현재 단계").toEqual(["step", null, null]);
-
-  const sticky = await page.locator(".aas-gstep").evaluate((e) => {
-    const cs = getComputedStyle(e);
-    return { position: cs.position, top: cs.top, z: cs.zIndex };
-  });
-  expect(sticky.position).toBe("sticky");
-  expect(sticky.top).toBe("0px");
-
-  // ★핀을 단언하기 전에 스크롤 여유를 **측정**한다★
-  // A1 에서 /allocation/construct 의 총 스크롤 범위(121px)가 스티키 이동거리와 정확히
-  // 같아서, "붙었다"와 "스크롤 끝에 닿았다"가 구분되지 않았다. 그 함정을 반복하지 않는다.
-  const room = await page.locator(".terminal-main").evaluate((e) => e.scrollHeight - e.clientHeight);
-  const travel = await page.locator(".aas-gstep").evaluate((e) => e.getBoundingClientRect().top);
-  if (room > travel + 120) {
-    const at = async (y: number) => {
-      await page.locator(".terminal-main").evaluate((e, v) => { e.scrollTop = v; }, y);
-      await page.waitForTimeout(120);
-      return page.locator(".aas-gstep").evaluate((e) => Math.round(e.getBoundingClientRect().top));
-    };
-    const a = await at(Math.round(travel + 60));
-    const b = await at(Math.round(travel + 110));
-    expect(b, `핀이 유지돼야 한다 (여유 ${room}px, 이동 ${Math.round(travel)}px)`).toBe(a);
-  } else {
-    // 스크롤 여유가 없으면 핀 단언은 항진명제다 — 하지 않고, 왜 안 했는지 남긴다.
-    test.info().annotations.push({
-      type: "measured", description: `스크롤 여유 ${room}px ≤ 이동거리 ${Math.round(travel)}px+120 — 핀 단언 생략`,
-    });
+  expect(await page.locator(".aas-gstep, .aas-gstep-item, .aas-gstep-lab").count(),
+    "게이트 스테퍼 잔재").toBe(0);
+  // 페이즈 라벨 자체가 게이트에 남아 있지 않은지 — 클래스만 지우고 마크업을 남기는
+  // 어중간한 제거를 잡는다. (PHASES 레지스트리는 살아 있고 StageChrome 이 계속 쓴다.)
+  const gateText = await page.locator(".aas-gate").innerText();
+  for (const w of ["SETUP", "LOGIC", "VALIDATION"]) {
+    expect(gateText, `게이트 본문에 페이즈 라벨 ${w}`).not.toContain(w);
   }
+
+  // 제거가 깨뜨릴 수 있는 유일한 것: 게이트가 여전히 앱의 문인가.
+  const goals = page.locator(".aas-goal");
+  expect(await goals.count(), "프리셋 6 + 직접 구성 1").toBe(7);
+  await expect(goals.first(), "첫 카드 = 성장 추구").toContainText("성장 추구");
 });
 
 test("게이트: 12px 산문 하한 · 11px 크롬 하한", async ({ page }) => {

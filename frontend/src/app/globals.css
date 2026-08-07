@@ -5160,35 +5160,11 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    되어 있었다. §49 와 같은 기준을 적용한다 — 산문 12px, 크롬 라벨·배지 11px.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── 3단계 스테퍼 ───────────────────────────────────────────────────────────
-   스크롤포트는 `.terminal-main`(:799)이라 JS 없이 sticky 가 된다. z-index 는 §49 의
-   `.aas-wiz` 와 같은 25 — 둘은 절대 같은 화면에 없으므로(게이트는 크롬 밖) 충돌하지 않는다. */
-.aas-gstep {
-  position: sticky; top: 0; z-index: 25;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius, 3px);
-  padding: 7px 9px;
-  box-shadow: 0 1px 0 var(--border);
-}
-.aas-gstep-list { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
-.aas-gstep-item {
-  display: flex; align-items: center; gap: 7px;
-  padding: 4px 10px;
-  border: 1px solid var(--border); border-radius: var(--radius, 3px);
-  color: var(--t-muted);
-}
-/* 진행 방향을 글자 없이 알리는 구분자. 장식이 아니라 순서 표시라 aria 에는 안 넣는다
-   (순서는 <ol> 이 이미 말한다). */
-.aas-gstep-item + .aas-gstep-item::before {
-  content: "→"; margin-left: -3px; margin-right: 4px; color: var(--t-muted); font-size: 11px;
-}
-.aas-gstep-item.on { border-color: var(--t-accent); color: var(--t-ink); background: rgb(18 0 255 / .06); }
-.aas-gstep-n { font-size: 11px; font-weight: 700; color: var(--t-muted); }
-.aas-gstep-item.on .aas-gstep-n { color: var(--t-accent); }
-.aas-gstep-lab { font-size: 11px; font-weight: 600; letter-spacing: .06em; }
-.aas-gstep-ko { font-size: 11px; color: var(--t-muted); }
-.aas-gstep-item.on .aas-gstep-ko { color: var(--t-ink); }
+/* ── 3단계 스테퍼는 A6-G 에서 제거됐다 ──────────────────────────────────────
+   `.aas-gstep*` 규칙 11개가 여기 있었다. 소비자는 GateStepper 하나뿐이었고 컴포넌트가
+   삭제되면서 규칙도 같이 나갔다 — 소비자 0인 셀렉터를 남겨 두면 다음 사람이 "쓰이는 줄
+   알고" 유지보수한다. 아래 반응형(@media)·다크 블록의 대응 규칙도 함께 제거됐다.
+   제거 이유와 잃은 것은 GoalGate.tsx 의 주석에 기록돼 있다. */
 
 /* ── 프리셋 그리드 — 브리프의 grid-cols-1 md:grid-cols-3 ─────────────────── */
 .aas-gate-grid { grid-template-columns: 1fr; gap: 14px; margin-top: 4px; }
@@ -5268,15 +5244,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── 좁은 폭 ───────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .aas-gate-q { font-size: 21px; }
-  .aas-gstep-item { padding: 3px 8px; }
-  .aas-gstep-ko { display: none; }   /* 라벨(SETUP)과 번호는 남는다 — 단계는 계속 읽힌다 */
 }
 
 /* ── 다크 ──────────────────────────────────────────────────────────────────
    §47 이 --t-* 를 뒤집어 주므로 토큰 규칙은 저절로 따라온다. 남는 것은 위에서
    하드코딩한 라이트 액센트 틴트와, 지면 자체뿐이다("카드만 어둡고 지면이 희면 반만 다크"). */
 .dark .aas-gate { background: var(--background); color: var(--foreground); }
-.dark .aas-gstep-item.on { background: rgb(124 116 255 / .14); }
 .dark .aas-goal-icw { background: rgb(124 116 255 / .14); }
 .dark .aas-gate-resume:hover { background: rgb(124 116 255 / .14); }
 .dark .aas-gate .aas-goal:hover:not(:disabled),
