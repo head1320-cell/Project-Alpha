@@ -6031,6 +6031,33 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    셋 다 조건부 상태(계획 취소·반려 · 나쁜 결과/나쁜 과정 · 비중축소 알파)라서
    스윕이 렌더한 적이 없다. 스윕이 못 보는 상태를 스윕이 통과시킨 것이지
    안전한 것이 아니다 — §56 머리말에 적은 것과 정확히 같은 이유다. */
-.as-exec-status.cancelled, .as-exec-status.rejected { color: var(--color-bear); }
-.as-dq.bad_outcome_bad_process { color: var(--color-bear); }
-.as-health-pill.de_risk { color: var(--color-bear); }
+/* ★계산으로 고쳤다가 측정에 두 번 틀렸다 (A6)★
+   처음엔 `var(--color-bear)` 로 바꾸고 "라이트 7.4:1 → 5.4:1, AA 유지" 라고 커밋했다.
+   가드를 만들어 실제로 재 보니 **라이트가 3.95:1 로 떨어져** AA 를 깼다 —
+   원래 값 `#b91c1c` 은 통과하고 있었는데 내가 깬 것이다. 다크 쪽 계산(2.35:1)도
+   실측(3.07:1)과 달랐다. 방향만 맞고 크기는 둘 다 틀렸다.
+   `--color-bear`(#dc2626)는 **차트/데이터 색**으로 조정된 값이라 연한 틴트 위
+   글자색으로 쓰기엔 밝다. 용도가 다르면 토큰도 달라야 한다 —
+   "틴트 배경 위의 하락색" 을 위한 토큰을 따로 둔다. */
+:root { --color-bear-on-tint: #b91c1c; }
+.dark { --color-bear-on-tint: #fca5a5; }
+.as-exec-status.cancelled, .as-exec-status.rejected { color: var(--color-bear-on-tint); }
+.as-dq.bad_outcome_bad_process { color: var(--color-bear-on-tint); }
+.as-health-pill.de_risk { color: var(--color-bear-on-tint); }
+
+/* ── `.as-dq` — §56 의 prefix grep 이 놓친 09 의 패밀리 (A6, 프로브가 발견) ────
+   조건부 상태 가드를 만들면서 `.as-dq.bad_outcome_bad_process` 가 **9px** 로
+   찍히는 것이 드러났다. `DecisionJournal.tsx:31` 이 09 JOURNAL 에서 렌더하는
+   결정품질 배지인데, §56 을 만들 때 `.as-dj-*` 는 목록에 넣고 `.as-dq` 는 넣지
+   않았다 — 이름이 한 글자 다르다는 이유로 빠진 것이다. grep 목록은 내가 아는
+   이름만 본다는 것을 세 번째로 확인한 자리.
+
+   네 변형 전부 색이 하드코딩이고, 그중 둘은 **배경까지** 라이트 리터럴(`#fef3c7`)
+   이라 다크에서 밝은 판이 그대로 남는다(감사의 bright 검사 대상).
+   전부 토큰으로 옮기고 하한을 건다. */
+.aas-root .as-dq { font-size: 11px; }
+.as-dq.good_outcome_good_process { color: var(--chart-up); }
+.as-dq.bad_outcome_bad_process { color: var(--color-bear-on-tint); }
+.as-dq.good_outcome_bad_process, .as-dq.bad_outcome_good_process {
+  background: var(--muted); color: var(--color-caution);
+}

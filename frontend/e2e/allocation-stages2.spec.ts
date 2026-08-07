@@ -327,3 +327,60 @@ test("★09: 정책 백테스트를 실행한 상태에서 다크 대비★", as
   expect(dark.low, "정책 백테스트 다크 AA 미달").toEqual([]);
   expect(dark.bright, "정책 백테스트 다크에서 밝은 배경이 남았다").toEqual([]);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. ★스윕이 볼 수 없는 상태를 스윕이 볼 수 있게 만든다★
+// ─────────────────────────────────────────────────────────────────────────────
+test("★조건부 상태(취소·반려·나쁜 결과·비중축소)도 다크에서 AA★", async ({ page }) => {
+  // 이 세션에서 같은 결함을 네 번 만났다. 전부 모양이 같다: 배경은 테마 토큰이라
+  // 다크에서 뒤집히는데 **글자만 하드코딩**이라 어두운 색 위 어두운 색이 된다.
+  //   `.as-bt-badge.mock/.real`  ← 정책 백테스트를 **실행해야** 렌더된다
+  //   `.as-exec-status.cancelled/.rejected` · `.as-dq.bad_outcome_bad_process`
+  //   `.as-health-pill.de_risk`  ← 계획을 취소하거나 알파가 비중축소돼야 렌더된다
+  //
+  // 넷 다 A4 의 다크 스윕이 초록이었다 — 그 상태를 **한 번도 그린 적이 없기** 때문이다.
+  // 통과가 아니라 부재였다. 그래서 여기서는 상태를 직접 만들어 놓고 잰다:
+  // 실제 규칙이 걸리도록 `.aas-root` 안에 같은 클래스의 노드를 심고 감사한다.
+  // (계산으로는 약 2.35:1 이 나왔지만, 계산은 실제 캐스케이드를 모른다.)
+  await seed(page);
+  await page.goto("/allocation/execution", { waitUntil: "networkidle" });
+
+  const CASES = [
+    ["as-exec-status cancelled", "취소됨"],
+    ["as-exec-status rejected", "반려됨"],
+    ["as-dq good_outcome_good_process", "좋은 결과"],
+    ["as-dq bad_outcome_bad_process", "나쁜 결과"],
+    ["as-dq good_outcome_bad_process", "운이 좋았다"],
+    ["as-dq bad_outcome_good_process", "운이 나빴다"],
+    ["as-health-pill de_risk", "비중축소 3"],
+    ["as-bt-badge mock", "MOCK 데이터"],
+    ["as-bt-badge real", "실데이터"],
+  ] as const;
+
+  const planted = await page.evaluate((cases) => {
+    const root = document.querySelector(".aas-root");
+    if (!root) return 0;
+    const host = document.createElement("div");
+    host.id = "a6-conditional-probe";
+    for (const [cls, text] of cases) {
+      const el = document.createElement("span");
+      el.className = cls;
+      el.textContent = text;
+      host.appendChild(el);
+    }
+    root.appendChild(host);
+    return host.childElementCount;
+  }, CASES);
+  expect(planted, "상태 노드를 심지 못했다 — .aas-root 가 없다").toBe(CASES.length);
+
+  const AUDIT = contrastAudit("#a6-conditional-probe");
+  const light = await page.evaluate<AuditResult>(AUDIT);
+  expect(light.checked, "라이트에서 검사한 노드 수").toBeGreaterThanOrEqual(CASES.length);
+  expect(light.low, "조건부 상태 라이트 AA 미달").toEqual([]);
+
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await page.waitForTimeout(200);
+  const dark = await page.evaluate<AuditResult>(AUDIT);
+  expect(dark.checked, "다크에서 검사한 노드 수").toBeGreaterThanOrEqual(CASES.length);
+  expect(dark.low, "조건부 상태 다크 AA 미달").toEqual([]);
+});
