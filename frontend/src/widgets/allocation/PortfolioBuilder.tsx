@@ -110,9 +110,11 @@ export function PortfolioBuilder({ holdings, onChange, onLoadStudy, studiesVersi
 
         {/* ★배분 게이지 — 색만으로 상태를 말하지 않는다★
             예전에는 합계 숫자의 **색**만 바뀌었다(정상=회색 / 이탈=빨강). 색각 이상
-            사용자와 흑백 출력에서는 아무 신호도 아니다. 바 + 숫자 + 글자 세 겹으로 말한다. */}
+            사용자와 흑백 출력에서는 아무 신호도 아니다. 바 + 숫자 + 글자 세 겹으로 말한다.
+            `.as-gauge` 는 E2E 계약이라 유지하고 레이아웃은 `.as-gauge-w` 수식자로 — 같은
+            이름을 parts.tsx 의 ConfidenceGauge 가 **다른 구조**로 쓴다(A5, `.as-wrow` 와 동형). */}
         {holdings.length > 0 && (
-          <div className="as-gauge">
+          <div className="as-gauge as-gauge-w">
             <Progress
               value={totalW}
               label="포트폴리오 비중 합계"

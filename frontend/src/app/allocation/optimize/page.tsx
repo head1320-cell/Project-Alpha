@@ -144,21 +144,6 @@ export default function OptimizerWorkspace() {
             <div className="as-note">시총 미보유 {result.cap_missing.length}자산은 중앙값 대체(캡가중 prior)</div>
           )}
         </section>
-        <section className="as-card">
-          <div className="as-card-title">SUMMARY METRICS</div>
-          {result ? <MetricsTable summary={result.summary} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
-          {result?.enb && (
-            <div className="as-enb" title={result.enb.note}>
-              <span className="as-enb-k">실질 분산 (ENB)</span>
-              <b className="num">{result.enb.enb.toFixed(2)}</b>
-              <span className="as-note-inline">/ {result.enb.n_assets}자산 · Neff {result.enb.neff.toFixed(2)} (상관 반영 vs 비중만)</span>
-            </div>
-          )}
-        </section>
-        <section className="as-card">
-          <div className="as-card-title">RETURN DISTRIBUTION <span className="as-note-inline">MC 1년</span></div>
-          {result ? <McHistogram mc={result.mc} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
-        </section>
         <TimingOverlayPanel />
         <NeutralizePanel />
       </aside>
@@ -180,6 +165,28 @@ export default function OptimizerWorkspace() {
             </div>
           )}
         </section>
+        {/* ★레일과 메인의 역할이 뒤집혀 있었다 (A5-S2)★ 320px 레일이 엔진 + 4열 지표표 +
+            MC 히스토그램 + 7행 오버레이표 + 중립화를 이고 있는 동안, 1fr 메인은 카드 두 장
+            뒤로 빈 공간이었다. 규칙을 세운다: **레일 = 컨트롤, 메인 = 근거.**
+            지표표와 분포는 근거이므로 여기로 온다 — 넓은 칼럼에서 4열 표가 비로소 읽힌다. */}
+        <div className="as-opt-ev">
+          <section className="as-card">
+            <div className="as-card-title">SUMMARY METRICS</div>
+            {result ? <MetricsTable summary={result.summary} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
+            {result?.enb && (
+              <div className="as-enb" title={result.enb.note}>
+                <span className="as-enb-k">실질 분산 (ENB)</span>
+                <b className="num">{result.enb.enb.toFixed(2)}</b>
+                <span className="as-note-inline">/ {result.enb.n_assets}자산 · Neff {result.enb.neff.toFixed(2)} (상관 반영 vs 비중만)</span>
+              </div>
+            )}
+          </section>
+          <section className="as-card">
+            <div className="as-card-title">RETURN DISTRIBUTION <span className="as-note-inline">MC 1년</span></div>
+            {result ? <McHistogram mc={result.mc} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
+          </section>
+        </div>
+
         <section className={`as-card${pending ? " as-loading" : ""}`} aria-busy={pending}>
           <div className="as-card-title">ALLOCATION FLOW <span className="as-note-inline">시장 → 뷰 반영 → 최적화</span></div>
           {pending && <StageBusy label="가중치 흐름 재계산 중…" stale={!!result} />}

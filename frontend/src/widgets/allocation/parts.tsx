@@ -121,6 +121,54 @@ export function WeightComparison({ rows }: { rows: CmpRow[] }) {
   );
 }
 
+/** 03 THESIS — 뷰가 시장 사전분포를 얼마나 움직였는가. 값이 없으면 `null`(0 아님). */
+export interface ViewEffectRow {
+  code: string; name: string;
+  market: CmpValue; applied: CmpValue; delta: CmpValue;
+}
+
+/**
+ * 뷰 효과 표 (A5).
+ *
+ * 03 은 뷰를 **세우는** 화면인데 뷰가 무엇을 바꿨는지는 어디에도 없었다. 데이터는 이미
+ * 있다 — `result.flow.market` / `flow.view_applied` 는 05 의 산키가 쓰는 그 값이다.
+ * 새 엔드포인트 없이 같은 값을 자산별로 읽는다.
+ *
+ * ★실행 전에는 0 이 아니라 '미계산'이다★ 최적화를 돌리기 전에는 시장 사전분포도 뷰
+ * 사후분포도 존재하지 않는다. `0.0`으로 채우면 "뷰가 아무것도 안 바꿨다"로 읽힌다 —
+ * A3 가 캡가중 열에서, A4 가 Overview 의 충격에서 고친 것과 같은 부류의 거짓말이다.
+ */
+export function ViewEffect({ rows }: { rows: ViewEffectRow[] }) {
+  const cell = (v: CmpValue, sign = false) =>
+    v == null
+      ? <span className="aas-cmp-na">미계산</span>
+      : <span className={`num${sign ? ` as-ve-d ${v >= 0 ? "up" : "down"}` : ""}`}>
+          {sign ? fmtSign(v, 1) : v.toFixed(1)}
+        </span>;
+  return (
+    <Table className="aas-cmp-t as-ve-t">
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">자산</TableHead>
+          <TableHead scope="col" className="text-right">시장(캡가중)</TableHead>
+          <TableHead scope="col" className="text-right">뷰 반영</TableHead>
+          <TableHead scope="col" className="text-right">Δ</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.code}>
+            <TableHead scope="row" className="aas-cmp-nm">{r.name}</TableHead>
+            <TableCell className="text-right">{cell(r.market)}</TableCell>
+            <TableCell className="text-right">{cell(r.applied)}</TableCell>
+            <TableCell className="text-right">{cell(r.delta, true)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
 /**
  * 비중 도넛 — 스트립과 같은 데이터를 원형으로. 스트립은 "누가 큰가"를, 도넛은
  * "몇 조각으로 나뉘었나"를 먼저 보여 준다. 애니메이션은 끈다(이 파일의 다른 차트와 동일).
@@ -262,13 +310,41 @@ function sankeyData(result: AnalyzeResult) {
   return { nodes, links, stageLabels: stages.map((s) => stageLabels[s]) };
 }
 
-function SankeyNode(props: { x?: number; y?: number; width?: number; height?: number; index?: number; payload?: { name: string; value: number } }) {
-  const { x = 0, y = 0, width = 0, height = 0, payload } = props;
+/**
+ * 산키 노드 + 라벨.
+ *
+ * ★마지막 단 라벨이 잘려 나갔다 (A5)★ 예전에는 단과 무관하게 라벨을 **항상 노드 오른쪽**
+ * (`x + width + 5`)에 그렸다. 오른쪽 여백은 110px 인데 "KODEX 미국S&P500 89.5%" 같은
+ * 국내 ETF 이름은 그걸 훌쩍 넘는다 — 화면에서는 이름이 짧게 줄여진 것처럼 보여서
+ * (`KODEX 미국S&P500 89`) 결함이 아니라 디자인처럼 읽혔다. 마지막 단은 노드 **왼쪽**에
+ * 그린다(산키의 통상 규약). 그래서 `containerWidth` 가 필요하다.
+ *
+ * 폰트도 9.5px 하드코딩이었다. SVG 텍스트라 CSS 하한이 닿지 않으므로 여기서 올린다
+ * (Overview 의 인라인 fontSize 와 같은 부류 — A4-V2).
+ */
+function SankeyNode(props: {
+  x?: number; y?: number; width?: number; height?: number;
+  index?: number; lastFrom?: number; payload?: { name: string; value: number };
+}) {
+  const { x = 0, y = 0, width = 0, height = 0, index = 0, lastFrom = Infinity, payload } = props;
+  // ★첫 판은 `containerWidth` 로 마지막 단을 추정했다 — Recharts 가 그 prop 을 주지
+  // 않아서 항상 false 였고, 테스트가 라벨 6개 초과로 잡았다. 추정 대신 **데이터에서**
+  // 정한다: sankeyData 가 노드를 단 순서대로 밀어 넣으므로 마지막 단은 뒤쪽 한 덩어리다.
+  const isLast = index >= lastFrom;
+  const label = `${payload?.name ?? ""}${payload?.value ? ` ${payload.value.toFixed(1)}%` : ""}`;
   return (
     <Layer>
       <rect x={x} y={y} width={width} height={height} fill="var(--t-accent)" fillOpacity={0.85} rx={1} />
-      <text x={x + width + 5} y={y + height / 2} dy="0.35em" fontSize={9.5} fontFamily="var(--t-mono)" fill="var(--t-ink)">
-        {payload?.name} {payload?.value ? `${payload.value.toFixed(1)}%` : ""}
+      <text
+        x={isLast ? x - 5 : x + width + 5}
+        y={y + height / 2}
+        dy="0.35em"
+        textAnchor={isLast ? "end" : "start"}
+        fontSize={11}
+        fontFamily="var(--t-mono)"
+        fill="var(--t-ink)"
+      >
+        {label}
       </text>
     </Layer>
   );
@@ -277,14 +353,18 @@ function SankeyNode(props: { x?: number; y?: number; width?: number; height?: nu
 export function AllocationSankey({ result }: { result: AnalyzeResult }) {
   const { nodes, links, stageLabels } = sankeyData(result);
   if (!links.length) return <div className="as-empty">가중치 흐름 없음</div>;
+  // 마지막 단(최적화) 노드는 목록의 뒤쪽 한 덩어리다 — 그 구간부터 라벨을 안쪽으로 그린다.
+  const lastFrom = nodes.length - Object.keys(result.flow.optimized).length;
   return (
     <div>
       <div className="as-sankey-heads">
         {stageLabels.map((l) => <span key={l}>{l}</span>)}
       </div>
       <ResponsiveContainer width="100%" height={Math.max(220, nodes.length * 14)}>
-        <Sankey data={{ nodes, links }} node={<SankeyNode />} nodePadding={14} nodeWidth={8}
-          margin={{ top: 8, right: 110, bottom: 8, left: 4 }}
+        {/* 오른쪽 여백 110 → 12: 마지막 단 라벨을 안쪽으로 뒤집었으므로 바깥 여백이 필요 없다.
+            줄어든 만큼이 차트 폭으로 돌아간다. */}
+        <Sankey data={{ nodes, links }} node={<SankeyNode lastFrom={lastFrom} />} nodePadding={14} nodeWidth={8}
+          margin={{ top: 8, right: 12, bottom: 8, left: 4 }}
           link={{ stroke: "var(--t-accent)", strokeOpacity: 0.18 }}>
           <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string) => [`${Number(val).toFixed(1)}%`, "이동 비중"]} />
         </Sankey>

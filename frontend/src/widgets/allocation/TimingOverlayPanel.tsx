@@ -65,6 +65,8 @@ export function TimingOverlayPanel() {
   const riskBefore = hhiNeff(codes.map((c) => before[c] ?? 0));
   const withCash = hhiNeff([...codes.map((c) => after[c] ?? 0), cashAfter]);
   const rep = result?.constraints_report;
+  // 노출 100% = 항등 오버레이. 부동소수 여유를 둔다(e 는 백엔드에서 온 비율).
+  const noop = e >= 0.9995;
 
   return (
     <section className="as-card as-tov">
@@ -79,6 +81,19 @@ export function TimingOverlayPanel() {
         <div><span>현금</span><b className="num">{cashAfter.toFixed(1)}%</b></div>
         <div><span>회전율(편도)</span><b className="num">{turnover.toFixed(1)}%</b></div>
       </div>
+
+      {/* ★일곱 줄의 0.0%p 를 해독하게 두지 않는다 (A5)★ 노출이 100% 면 오버레이는 항등이라
+          모든 Δ 가 0 이 되는데, 화면에는 그냥 0 이 일곱 개 찍혔다 — 계산이 안 된 건지,
+          고장인지, 원래 그런 건지 구분할 수 없었다.
+          표를 접지는 않는다: `timing-overlay.spec.ts`(82·99행)가 `.as-tov-table` 의
+          **가시성**을 단언한다. 계약을 지키면서 노이즈를 없애는 방법은 위에 한 줄로
+          "이건 정상이고 이유는 이것"이라고 적는 것이다. */}
+      {noop && (
+        <div className="as-note as-tov-noop">
+          노출 <b>100%</b> — 이 오버레이는 비중을 <b>바꾸지 않습니다</b>.
+          아래 Δ 가 전부 0 인 것은 오류가 아니라 그 사실입니다.
+        </div>
+      )}
 
       <table className="as-metrics as-tov-table">
         <thead><tr><th>자산</th><th>before</th><th>after</th><th>Δ</th></tr></thead>
@@ -102,8 +117,16 @@ export function TimingOverlayPanel() {
         <div><span>집중도(위험자산 내)</span>
           <b className="num">HHI {riskBefore.hhi.toFixed(3)} · 유효 {riskBefore.neff.toFixed(1)}종목</b>
           <em className="as-note-inline">불변 — 균일 배율은 상대 비중을 바꾸지 않습니다</em></div>
-        <div><span>집중도(현금 포함)</span>
-          <b className="num">HHI {withCash.hhi.toFixed(3)} · 유효 {withCash.neff.toFixed(1)}종목</b></div>
+        {/* 현금이 0 이면 두 블록의 숫자가 **글자 그대로 같다** — 화면에는 같은 HHI 가 두 번
+            찍혀서 둘 중 하나가 틀린 것처럼 보였다. 값이 다를 때만 두 번째를 그리고,
+            같을 때는 왜 같은지 적는다. */}
+        {cashAfter >= 0.05 ? (
+          <div><span>집중도(현금 포함)</span>
+            <b className="num">HHI {withCash.hhi.toFixed(3)} · 유효 {withCash.neff.toFixed(1)}종목</b></div>
+        ) : (
+          <div><span>집중도(현금 포함)</span>
+            <em className="as-note-inline">현금이 0 이라 위험자산 내 집중도와 같습니다</em></div>
+        )}
       </div>
 
       {/* ★지어내지 않는다★ 베타·팩터 노출의 절대값은 이 화면이 갖고 있지 않다. 대신 균일

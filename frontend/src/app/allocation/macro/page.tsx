@@ -8,6 +8,8 @@
 // ★브라우저에 본문을 복사하지 않는다★ — Provider 는 ID 만 들고, 본문은 서버가 진실이고
 // react-query 가 캐시한다. 그래야 새로고침 후에도 같은 ID 로 다시 읽어 재현이 성립한다.
 import React, { Suspense } from "react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
@@ -53,10 +55,24 @@ function MacroPhaseStage() {
             <span className="as-note-inline">국면 판정을 ID 로 고정 — 이후 단계가 이 스냅샷을 참조합니다</span>
           </div>
 
+          {/* ★막다른 골목이었다 (A5)★ 예전 빈 상태는 "Macro 탭에서 열기를 누르세요"라고만
+              하고 **링크를 주지 않았다**. 이 스테이지에서 할 수 있는 일이 0이었다는 뜻이다.
+              그리고 이 단계는 선택이다(다음 할 일 정책 규칙 3) — 그 사실도 적은 적이 없어서,
+              스냅샷이 없는 사용자는 자기가 뭘 빠뜨린 줄 알았다. */}
           {!targetId && (
-            <div className="as-empty">
-              연결된 스냅샷이 없습니다. Macro 탭에서 <b>Allocation Studio에서 열기</b>를 누르면
-              현재 국면이 스냅샷으로 고정되어 여기로 넘어옵니다.
+            <div className="as-macro-none">
+              <div className="as-empty">
+                연결된 스냅샷이 없습니다. Macro 탭에서 현재 국면을 스냅샷으로 고정하면
+                여기로 넘어옵니다.
+              </div>
+              <div className="as-macro-none-acts">
+                <Link className="as-fb-apply as-macro-open" href="/macro">
+                  Macro 탭 열기 <ArrowRight size={13} aria-hidden="true" />
+                </Link>
+                <span className="as-note-inline">
+                  이 단계는 <b>선택</b>입니다 — 스냅샷 없이도 나머지 파이프라인은 진행됩니다.
+                </span>
+              </div>
             </div>
           )}
 
@@ -155,21 +171,28 @@ function MacroPhaseStage() {
       </main>
 
       <aside className="as-center">
-        <section className="as-card">
-          <div className="as-card-title">WHY A SNAPSHOT</div>
-          <div className="as-note">
-            국면을 라이브로 다시 조회하면 <b>항상 오늘의 국면</b>이 보입니다. 그러면 과거에 내린
-            결정을 오늘의 분류로 채점하게 됩니다. 스냅샷은 판정 시점·모델 버전·관측치 신원을
-            함께 굳혀 <b>그때의 판단</b>을 보존합니다.
+        {/* ★설명은 접고 경고는 접지 않는다 (A5)★ 이 두 장은 개념 교육이다 — 처음 한 번
+            읽으면 되고, 매번 세로 공간의 절반을 차지할 이유가 없다. 반대로 위쪽 본문의
+            `forward_only` 경고·미가용 사유·재현 식별자는 접지 않는다. 그 둘의 경계가
+            이번 단계에서 답으로 받은 규칙이다. */}
+        <details className="as-adv as-macro-learn">
+          <summary className="as-adv-s">
+            스냅샷을 쓰는 이유 <span className="as-note-inline">PIT 재현 · 오버레이 규약</span>
+          </summary>
+          <div className="as-adv-b">
+            <div className="as-card-title">WHY A SNAPSHOT</div>
+            <div className="as-note">
+              국면을 라이브로 다시 조회하면 <b>항상 오늘의 국면</b>이 보입니다. 그러면 과거에 내린
+              결정을 오늘의 분류로 채점하게 됩니다. 스냅샷은 판정 시점·모델 버전·관측치 신원을
+              함께 굳혀 <b>그때의 판단</b>을 보존합니다.
+            </div>
+            <div className="as-card-title">OVERLAY, NOT OVERRIDE</div>
+            <div className="as-note">
+              매크로 국면은 타이밍 규칙을 덮어쓰지 않습니다. 04 TIMING 에서 규칙만 / 매크로만 /
+              둘 다를 비교할 수 있습니다 — 매크로는 노출을 <b>줄이기만</b> 합니다(one-way).
+            </div>
           </div>
-        </section>
-        <section className="as-card">
-          <div className="as-card-title">OVERLAY, NOT OVERRIDE</div>
-          <div className="as-note">
-            매크로 국면은 타이밍 규칙을 덮어쓰지 않습니다. 04 TIMING 에서 규칙만 / 매크로만 /
-            둘 다를 비교할 수 있게 하는 것이 다음 단계 작업입니다.
-          </div>
-        </section>
+        </details>
       </aside>
     </div>
   );

@@ -298,14 +298,28 @@ export default function TimingWorkspace() {
                 <span className="num">{mt.composite.score}/100</span>
               </div>
             </div>
+            {/* ★다섯 점수가 글자로만 있었다 (A5)★ 전부 같은 0–100 척도인데 `label 100` 짝만
+                10.5px 로 나열돼, 어느 것이 높고 낮은지 읽으려면 숫자를 하나씩 비교해야 했다.
+                같은 척도 위의 값은 막대로 그리면 한눈에 순위가 보인다 — 새 어휘를 만들지 않고
+                팩터 X-ray 의 트랙(.as-xray-track)과 같은 모양을 쓴다.
+                색은 여전히 보조다: 점수 숫자가 항상 함께 있으므로 색만으로 말하지 않는다. */}
             {!!mt.components?.length && (
               <div className="as-tm-comps">
-                {mt.components.map((c) => (
-                  <div key={c.key} className="as-tm-comp">
-                    <span>{c.label}</span>
-                    <b className="num" style={{ color: c.score >= 60 ? "var(--color-bull)" : c.score <= 40 ? "var(--color-bear)" : "var(--t-muted)" }}>{c.score}</b>
-                  </div>
-                ))}
+                {mt.components.map((c) => {
+                  const tone = c.score >= 60 ? "up" : c.score <= 40 ? "down" : "mid";
+                  return (
+                    <div key={c.key} className="as-tm-comp">
+                      <span className="as-tm-comp-l">{c.label}</span>
+                      <div className="as-tm-comp-track"
+                        role="img"
+                        aria-label={`${c.label} ${c.score}점 (100점 만점)`}>
+                        <i className={`as-tm-comp-fill ${tone}`}
+                          style={{ width: `${Math.max(0, Math.min(100, c.score))}%` }} />
+                      </div>
+                      <b className={`num as-tm-comp-v ${tone}`}>{c.score}</b>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {!!mt.assets?.length && (

@@ -5341,7 +5341,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
 /* ── 배분 게이지 ─────────────────────────────────────────────────────────────
    ★색만으로 말하지 않는다★ 예전에는 합계 숫자의 색만 바뀌었다. 바 + 숫자 + 문장. */
-.as-gauge { display: flex; flex-direction: column; gap: 5px; padding: 2px 0 6px; }
+/* ★A5 수정: 원래 `.as-gauge` 를 그대로 재정의했다 — `.as-wrow` 와 같은 결함★
+   `.as-gauge`(:3332)는 `position: relative` 이고, ConfidenceGauge(parts.tsx:433)가 그 위에
+   `.as-gauge-c`(:3333, position:absolute)를 얹는다. 여기서 같은 이름에 flex 레이아웃과
+   패딩을 더하면서, 03 THESIS·04 TIMING 의 반원 게이지가 설계에 없던 세로 패딩 8px 을
+   얻었다(position 은 속성별 캐스케이드라 살아남아 좌표는 안 깨졌고, 그래서 조용했다). */
+.as-gauge-w { display: flex; flex-direction: column; gap: 5px; padding: 2px 0 6px; }
 .as-gauge-r { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .as-gauge-v { font-size: 12px; font-weight: 700; }
 .as-gauge-s { font-size: 11px; color: var(--t-muted); }
@@ -5767,3 +5772,134 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .aas-root .as-ri-run-id, .aas-root .as-ri-run-t { font-size: 11px; }
 .aas-root .as-ri-run-nm { font-size: 11px; }
 .aas-root .as-ri-run-mock { font-size: 11px; }   /* 8.5px 이었다 */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   55. A5 — 공통 구조: 레일 폭 스케일 · 라이트 대비 · 타입 하한
+   ───────────────────────────────────────────────────────────────────────────
+   다섯 스테이지(0M·01·03·04·05)가 서로 반대 방향으로 실패하고 있었다 — 0M·03 은
+   거의 비어 있고 04·05 는 레일이 넘친다. 원인은 하나다: **레일이 무엇을 담는 곳인지
+   아무도 말한 적이 없다.**
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── S1: `.as-ws-*` 폭 스케일 완성 ───────────────────────────────────────────
+   형제 수식자는 전부 레일을 넓힌다(opt 320 · jr 340). 그런데 `.as-ws-tm` 과
+   `.as-ws-rob` 은 **아무것도 정의하지 않아** `.as-ws2` 의 300px 로 떨어졌다.
+   측정: 04 TIMING 레일에는 게이트 카드 4장 · 팩터 행(⇄ + 임계값 입력 + ×) · 브레드스
+   슬라이더 · 자산군 스위치 입력 2개 · 추세 오버레이 세그먼트 · 리스크 제어가 들어간다 —
+   스튜디오에서 가장 빽빽한 레일이 가장 좁은 칼럼을 받고 있었다.
+   A1 은 이 둘을 "오늘은 무해"로 기록했다. 무해하지 않았다. */
+.as-ws-tm  { grid-template-columns: 340px minmax(0, 1fr); }
+.as-ws-rob { grid-template-columns: 320px minmax(0, 1fr); }
+@media (max-width: 1000px) { .as-ws-tm, .as-ws-rob { grid-template-columns: 1fr; } }
+
+/* ── S5: 라이트 모드 대비 — 감사가 이름을 대 준 것만 ──────────────────────────
+   A4 는 `.aas-root` 를 **다크에서만** 쟀다. 라이트를 재니 모든 라우트에서 같은 4건이
+   나왔고(컨텍스트 스트립), 04 에서 3건이 더 나왔다. 전부 **채우기용으로 고른 색을
+   글자색으로 쓴** 경우다 — 채우기는 3:1, 글자는 4.5:1 이 기준이다. */
+:root {
+  /* `#16a34a` 는 흰 배경에서 3.30:1 이다. S1b-2 가 `--chart-up` 에 이미 같은 판정을
+     내리고 green-700 으로 내렸는데, `--color-bull` 은 그때 손대지 않아 남아 있었다.
+     같은 값을 쓴다 — 새 색을 만들지 않는다(측정 4.85:1). */
+  --color-bull: #15803d;
+  /* z 스케일은 막대 채우기용으로 골랐지만 컨텍스트 스트립·매크로 지표에서 **글자**다.
+     같은 색상각에서 명도만 내린 700 단계로 교체(라이트 전용 — 다크 짝은 §52 그대로). */
+  --z-up: #4d7c0f;
+  --z-down: #0e7490;
+  /* `#d97706` 은 흰 배경에서 3.19:1 이다. 처음엔 `.as-ctx-mode { color }` 로 덮으려 했는데
+     실제 색은 `.as-ctx-mode[data-mode="CAUTIOUS"]`(:3405, 클래스+속성)에서 오고 그쪽
+     명시도가 더 높아 EOF 규칙이 졌다 — 감사가 그대로 남아 있는 것으로 알려 줬다.
+     토큰을 내리는 편이 옳다: 이 색을 글자로 쓰는 다른 소비자도 같이 고쳐진다. */
+  --color-caution: #b45309;
+}
+/* 낡음 배지 — 4.42:1 로 아슬하게 미달이었다(리터럴이라 토큰으로 못 잡는다). */
+.as-ctx-stale { color: #854d0e; }
+/* 04 — 매크로 오버레이 체크박스 라벨(클래스 없는 span). */
+.aas-root .as-3w-toggle span { font-size: 11px; }
+
+/* ── S4: 타입 하한 — 브라우저에서 잰 목록 그대로 ─────────────────────────────
+   0M 과 01 은 이미 0건이었다(§52·§53 이 덮었다). 아래는 03·04·05 에서 실제로
+   11px 미만으로 렌더된 것들이다. 추측으로 넓히지 않는다. */
+/* 03·04 — 반원 신뢰도 게이지 (parts.tsx ConfidenceGauge) */
+.aas-root .as-gauge-c span { font-size: 11px; }
+.aas-root .as-gauge-c em { font-size: 11px; }
+/* 04 — 마켓 게이트 · 팩터 칩 · 3자 비교 · 컴포짓 */
+.aas-root .as-tm-gate-s { font-size: 11px; }
+.aas-root .tfc-chip-tk, .aas-root .tfc-chip-cond { font-size: 11px; }
+.aas-root .as-fb-code { font-size: 11px; }
+.aas-root .as-3w-combo-k, .aas-root .as-3w-save { font-size: 11px; }
+.aas-root .as-3w-leg-nm, .aas-root .as-3w-state { font-size: 11px; }
+.aas-root .as-3w-counts, .aas-root .as-3w-why { font-size: 11px; }
+.aas-root .as-3w-na, .aas-root .as-3w-ov { font-size: 11px; }
+.aas-root .as-3w-ov-k, .aas-root .as-3w-ov-na, .aas-root .as-3w-ov-off { font-size: 11px; }
+.aas-root .as-tm-comp { font-size: 11px; }
+/* 04·05 — 라벨 달린 컨트롤. 클래스가 없는 span/em 이라 부모로 스코프한다. */
+.aas-root .as-param > span, .aas-root .as-param em { font-size: 11px; }
+.aas-root .as-tm-set > span, .aas-root .as-tm-set em { font-size: 11px; }
+.aas-root .as-conf > span { font-size: 11px; }
+/* 05 — 접기 요약 · 제약 조건 격자 · 중립화 */
+.aas-root .aas-adv > summary { font-size: 11px; }
+.aas-root .as-ct-grid label { font-size: 11px; }
+.aas-root .as-ct-grid label em { font-size: 11px; }   /* 8.5px 이었다 */
+.aas-root .as-neu-opt, .aas-root .as-neu-beta, .aas-root .as-neu-rep { font-size: 11px; }
+/* 산키 단 머리글 — 노드 라벨은 SVG 라 parts.tsx 에서 고쳤다(CSS 가 닿지 않는다). */
+.aas-root .as-sankey-heads { font-size: 11px; }
+
+/* ── 0M — 막다른 빈 상태를 행동 가능하게 ────────────────────────────────────── */
+.as-macro-none { display: flex; flex-direction: column; gap: 8px; }
+.as-macro-none-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.as-macro-open {
+  display: inline-flex; align-items: center; gap: 5px;
+  text-decoration: none; width: fit-content;
+}
+.as-macro-learn { margin-top: 0; }
+.as-macro-learn .as-card-title { margin-top: 8px; }
+.as-macro-learn .as-card-title:first-child { margin-top: 0; }
+
+/* ── 03 — 뷰 효과 표 ─────────────────────────────────────────────────────────
+   비중 비교 표(§51 .aas-cmp-t)와 같은 서체·정렬을 쓴다. Δ 만 방향색을 갖는데,
+   숫자에 부호가 항상 붙으므로 색은 보조다(색만으로 말하지 않는다). */
+.as-ve-d.up { color: var(--color-bull); }
+.as-ve-d.down { color: var(--color-bear); }
+.as-thesis-state { margin-left: 8px; }
+.as-thesis-state.s-off { color: var(--t-muted); border-color: var(--t-border); }
+
+/* ── 04 — 컴포짓 하위 점수 막대 ──────────────────────────────────────────────
+   전부 0–100 같은 척도다. 팩터 X-ray 트랙과 같은 모양을 재사용한다. */
+.as-tm-comps { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 5px 14px; }
+.as-tm-comp {
+  display: grid; grid-template-columns: minmax(0, 1fr) 72px 30px;
+  align-items: center; gap: 8px; color: var(--foreground);
+}
+.as-tm-comp-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-tm-comp-track {
+  height: 5px; border-radius: 9999px; background: var(--secondary); overflow: hidden;
+}
+.as-tm-comp-fill { display: block; height: 100%; border-radius: 9999px; background: var(--t-muted); }
+.as-tm-comp-fill.up { background: var(--color-bull); }
+.as-tm-comp-fill.down { background: var(--color-bear); }
+.as-tm-comp-v { text-align: right; }
+.as-tm-comp-v.up { color: var(--color-bull); }
+.as-tm-comp-v.down { color: var(--color-bear); }
+
+/* ── 05 — 근거 패널을 메인으로 (S2) ─────────────────────────────────────────
+   지표표와 분포는 나란히. 좁아지면 쌓인다. */
+.as-opt-ev { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+@media (max-width: 1180px) { .as-opt-ev { grid-template-columns: 1fr; } }
+.as-tov-noop { border-left: 3px solid var(--t-accent); padding-left: 8px; }
+
+/* ★같은 함정에 또 빠졌다 — 그리고 이 파일이 이미 경고하고 있었다 (A5)★
+   위 `:root` 에서 라이트 대비를 고쳤더니 **다크가 깨졌다**. `:root` 와 `.dark` 는
+   명시도가 같아서(둘 다 0,1,0) 뒤에 오는 쪽이 이긴다 — §55 의 `:root` 는 §52 의
+   `.dark` 보다 뒤에 있으므로 라이트 값이 다크를 덮었다.
+   S1b-2 가 `--chart-*` 에서 똑같은 것을 겪고 그 사유를 §47 주석에 남겨 뒀는데도
+   같은 순서 실수를 반복했다. 감사가 5개 라우트 전부에서 잡았다.
+   해법은 §52 를 고치는 게 아니라(추가만 한다는 규칙) 여기서 다시 선언하는 것이다. */
+.dark {
+  /* §55 의 `:root` 에서 바꾼 **네 개 전부**를 되돌려 놓아야 한다. 첫 판에서 셋만 적고
+     `--color-bull` 을 빠뜨렸더니 04 의 추세 열("상승")이 다크에서 3.53:1 로 남았다 —
+     같은 실수의 축소판이라 감사가 한 번 더 잡아 줬다. */
+  --color-bull: #4ade80;
+  --color-caution: #fbbf24;
+  --z-up: #a3e635;
+  --z-down: #67e8f9;
+}
