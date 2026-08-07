@@ -6022,3 +6022,15 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    하한만 건다. */
 .aas-root .as-tm-corr-head span { font-size: 11px; }
 .aas-root .as-tm-corr-head em { font-size: 11px; }
+
+/* ── 같은 함정의 나머지 세 곳 (A6, 커밋 후 발견) ────────────────────────────
+   `.as-bt-badge` 를 고치고 나서 같은 모양을 검색했더니 셋이 더 나왔다:
+   전부 `background: var(--color-bear-bg)`(다크에서 반투명 빨강으로 뒤집힌다) 위에
+   **글자만 `#b91c1c` 하드코딩**이다. 다크에서 어두운 빨강 위 어두운 빨강 —
+   계산상 약 2.35:1 로 AA(4.5:1) 미달이다.
+   셋 다 조건부 상태(계획 취소·반려 · 나쁜 결과/나쁜 과정 · 비중축소 알파)라서
+   스윕이 렌더한 적이 없다. 스윕이 못 보는 상태를 스윕이 통과시킨 것이지
+   안전한 것이 아니다 — §56 머리말에 적은 것과 정확히 같은 이유다. */
+.as-exec-status.cancelled, .as-exec-status.rejected { color: var(--color-bear); }
+.as-dq.bad_outcome_bad_process { color: var(--color-bear); }
+.as-health-pill.de_risk { color: var(--color-bear); }
