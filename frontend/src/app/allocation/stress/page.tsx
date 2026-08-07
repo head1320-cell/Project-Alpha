@@ -11,6 +11,7 @@ import { SensitivityHeatmap, StressChart, fmtSign } from "@/widgets/allocation/p
 import { KrScenarioPack } from "@/widgets/allocation/KrScenarioPack";
 import { ScenarioThreeWay } from "@/widgets/allocation/ScenarioThreeWay";
 import { StressScenarioModal } from "@/widgets/allocation/StressScenarioModal";
+import { EvidenceBadge } from "@/shared/ui/evidence";
 
 export default function RobustnessWorkspace() {
   const {
@@ -63,7 +64,13 @@ export default function RobustnessWorkspace() {
     enabled: canRun,
   });
   const cr = corrQ.data && !corrQ.data.error ? corrQ.data : null;
-  const varPct = (v: number) => (v / 1e8 * 100);
+  // ★`?? 0` 을 걷어냈다 (A6-Z)★ 예전 시그니처는 `(v: number)` 였고 호출부가
+  // `component_var[n] ?? 0` 으로 결측을 0 으로 만들어 넘겼다. 그러면 "이 자산의 기여
+  // VaR 를 계산하지 못했다" 와 "기여 VaR 가 정말 0 이다" 가 같은 `0.00%` 로 찍힌다.
+  // 이제 결측은 null 로 통과하고, 표가 미계산이라고 쓴다.
+  const varPct = (v: number | null | undefined): number | null =>
+    v == null || !Number.isFinite(v) ? null : (v / 1e8 * 100);
+  const na = <span className="aas-cmp-na">미계산</span>;
 
   return (
     <div className="as-ws2 as-ws-rob">
@@ -89,11 +96,20 @@ export default function RobustnessWorkspace() {
             </div>
           </div>
           <button className="as-fb-apply" onClick={() => setPickerOpen(true)}>+ 시나리오 창에서 선택</button>
-          <div className="as-note">
-            스펙 §5 의 12 패밀리로 분류된 시나리오를 한 창에서 검색·비교합니다. 분류와 별개로
-            각 항목은 <b>역사 리플레이인지 가정 충격인지</b>를 스스로 밝힙니다. 미가용 시나리오는
-            창에 사유가 함께 표시됩니다.
-          </div>
+          {/* ★설명은 접고 경고는 접지 않는다 (A5 에서 받은 규칙)★
+              이 문단은 시나리오 창이 무엇인지 한 번 읽으면 되는 개념 설명이다. 반면 위
+              칩의 model_type 배지(가정/리플레이)·강도 적용 여부와 아래 카드들의 MOCK
+              배지·미가용 사유·산출 불가는 **접지 않는다** — 그것들은 지금 보고 있는
+              숫자의 조건이지 교육이 아니다. */}
+          <details className="as-adv as-rob-learn">
+            <summary className="as-adv-s">시나리오 창은 무엇을 모아 두었나
+              <span className="as-note-inline">12 패밀리 · 역사 vs 가정</span></summary>
+            <div className="as-adv-b as-note">
+              스펙 §5 의 12 패밀리로 분류된 시나리오를 한 창에서 검색·비교합니다. 분류와 별개로
+              각 항목은 <b>역사 리플레이인지 가정 충격인지</b>를 스스로 밝힙니다. 미가용 시나리오는
+              창에 사유가 함께 표시됩니다.
+            </div>
+          </details>
           <StressScenarioModal open={pickerOpen} onClose={() => setPickerOpen(false)}
             selectedId={activeId} severity={severity} onSeverity={setSeverity}
             onPick={(s) => {
@@ -138,7 +154,10 @@ export default function RobustnessWorkspace() {
               <option value={0.99}>99%</option>
             </select>
           </label>
-          <div className="as-note">위기엔 상관이 1로 수렴 → 분산효과 소멸. ρ·강도로 위기 공분산을 구성해 VaR 변화를 검증.</div>
+          <details className="as-adv as-rob-learn">
+            <summary className="as-adv-s">상관 수렴이란 <span className="as-note-inline">왜 ρ 를 올리나</span></summary>
+            <div className="as-adv-b as-note">위기엔 상관이 1로 수렴 → 분산효과 소멸. ρ·강도로 위기 공분산을 구성해 VaR 변화를 검증.</div>
+          </details>
         </section>
       </aside>
       <main className="as-center">
@@ -165,24 +184,31 @@ export default function RobustnessWorkspace() {
           {cr && (
             <>
               <div className="as-tm-corr-head">
+                {/* Δ 가 null 이면 예전에는 빈 문자열을 그리면서 **색은 `?? 0` 으로 bear**
+                    를 입혔다. 보이는 숫자가 없어 눈에 띄진 않았지만, 없는 값에 방향을
+                    칠하는 것은 같은 실수의 잠복형이다. 색도 값도 조건을 따라간다. */}
                 <div><span>연 변동성</span><b className="num">{cr.base.port_vol_pct}% → {cr.stressed.port_vol_pct}%</b>
-                  <em className="num" style={{ color: (cr.delta_vol_pct ?? 0) >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{cr.delta_vol_pct != null ? `${fmtSign(cr.delta_vol_pct, 1)}%` : ""}</em></div>
-                <div><span>VaR({Math.round(cr.confidence_level * 100)}%)</span><b className="num">{varPct(cr.base.var_amount).toFixed(1)}% → {varPct(cr.stressed.var_amount).toFixed(1)}%</b>
-                  <em className="num" style={{ color: (cr.delta_var_pct ?? 0) >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{cr.delta_var_pct != null ? `${fmtSign(cr.delta_var_pct, 1)}%` : ""}</em></div>
+                  <em className="num" style={cr.delta_vol_pct == null ? undefined : { color: cr.delta_vol_pct >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{cr.delta_vol_pct != null ? `${fmtSign(cr.delta_vol_pct, 1)}%` : na}</em></div>
+                <div><span>VaR({Math.round(cr.confidence_level * 100)}%)</span><b className="num">{varPct(cr.base.var_amount)?.toFixed(1) ?? "—"}% → {varPct(cr.stressed.var_amount)?.toFixed(1) ?? "—"}%</b>
+                  <em className="num" style={cr.delta_var_pct == null ? undefined : { color: cr.delta_var_pct >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{cr.delta_var_pct != null ? `${fmtSign(cr.delta_var_pct, 1)}%` : na}</em></div>
                 <div><span>평균 상관</span><b className="num">{cr.corr_shift.from_avg_rho} → {cr.corr_shift.to_avg_rho}</b></div>
               </div>
               <table className="as-metrics">
                 <thead><tr><th>자산</th><th>기여VaR base</th><th>기여VaR 위기</th><th>Δ</th></tr></thead>
                 <tbody>
                   {cr.names.map((n) => {
-                    const b = varPct(cr.base.component_var[n] ?? 0);
-                    const s = varPct(cr.stressed.component_var[n] ?? 0);
+                    const b = varPct(cr.base.component_var[n]);
+                    const s = varPct(cr.stressed.component_var[n]);
+                    // Δ 는 양쪽이 다 있을 때만 존재한다. 한쪽이 없으면 차이도 없다 —
+                    // 0 으로 채우면 "위기에도 기여가 안 변했다" 는 결론이 지어진다.
+                    const d = b != null && s != null ? s - b : null;
                     return (
                       <tr key={n}>
                         <td>{cr.labels[n] || n}</td>
-                        <td className="num">{b.toFixed(2)}%</td>
-                        <td className="num">{s.toFixed(2)}%</td>
-                        <td className="num" style={{ color: s - b >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>{fmtSign(s - b, 2)}%p</td>
+                        <td className="num">{b != null ? `${b.toFixed(2)}%` : na}</td>
+                        <td className="num">{s != null ? `${s.toFixed(2)}%` : na}</td>
+                        <td className="num" style={d == null ? undefined : { color: d >= 0 ? "var(--color-bear)" : "var(--color-bull)" }}>
+                          {d != null ? `${fmtSign(d, 2)}%p` : na}</td>
                       </tr>
                     );
                   })}
@@ -201,9 +227,22 @@ export default function RobustnessWorkspace() {
           {holdings.length > 0 && stressQ.isLoading && <div className="as-empty">시나리오 계산 중…</div>}
           {stressQ.data && stressQ.data.mode === "hypothetical" && stressQ.data.available && (
             <div>
+              {/* ★초록 +0.0% 는 여기서도 살아 있었다 (A6-Z)★
+                  A4-V1 이 00 OVERVIEW 에서 고친 것과 **같은 결함**이다: 시나리오가
+                  `available: true` 인데 `portfolio_shock_pct` 가 null 이면 `?? 0` 이
+                  0 을 만들고, 그 0 이 `>= 0` 이라 bull 색을 입어 **초록 `+0.0%`** 로
+                  찍혔다. 스트레스 화면에서 초록 0% 는 "이 시나리오는 내 포트폴리오를
+                  건드리지 않는다" 로 읽힌다 — 실제로는 산출을 못 한 것이다.
+                  눈으로는 잡히지 않는다. 건강해 보이기 때문이다. */}
               <div className="as-shock-head">
-                포트폴리오 추정 충격 <b className="num" style={{ color: (stressQ.data.portfolio_shock_pct ?? 0) >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>
-                  {fmtSign(stressQ.data.portfolio_shock_pct ?? 0, 1)}%</b>
+                포트폴리오 추정 충격{" "}
+                {stressQ.data.portfolio_shock_pct != null && Number.isFinite(stressQ.data.portfolio_shock_pct)
+                  ? <b className="num" style={{ color: stressQ.data.portfolio_shock_pct >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>
+                      {fmtSign(stressQ.data.portfolio_shock_pct, 1)}%</b>
+                  : <EvidenceBadge kind="unavailable"
+                      reason={stressQ.data.reason || "이 시나리오의 포트폴리오 충격이 산출되지 않았습니다"}>
+                      산출 불가
+                    </EvidenceBadge>}
               </div>
               <table className="as-metrics">
                 <thead><tr><th>종목</th><th>비중</th><th>충격</th><th>기여</th></tr></thead>

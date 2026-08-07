@@ -12,11 +12,29 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
 } from "recharts";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { TIP_STYLE } from "@/shared/ui/chartStyle";
 import { allocationApi, type AllocationBacktestResult } from "@/entities/allocation/api";
 
 const fmt = (v: number | null | undefined, s = "", d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : `${v.toLocaleString("ko-KR", { maximumFractionDigits: d })}${s}`;
-const col = (v: number | null | undefined) => (v == null ? undefined : v >= 0 ? "#16a34a" : "#dc2626");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ★이 파일이 마지막 남은 하드코딩 차트였다 (A6-C)★
+// A4-X3 가 parts.tsx 의 툴팁·마커를 토큰으로 바꿨지만, 정책 백테스트는 parts.tsx 를
+// 거치지 않고 Recharts 를 직접 쓰기 때문에 그 스윕에 잡히지 않았다. 남아 있던 값들:
+//   #16a34a  — S1b-2 가 zinc-50 위 3.16:1 로 측정해 `--chart-up` 에서 이미 퇴출한 색.
+//              같은 값이 여기서는 KPI **글자색**이었다(글자는 4.5:1 이 필요하다).
+//   #dc2626 · #1200ff · #999 · #eee · #a5b4fc · rgba(220,38,38,.12)
+//              — 전부 라이트 전용. 다크에서 격자와 벤치마크선이 배경에 묻는다.
+//   Tooltip contentStyle={{fontSize:11}} — 배경 지정이 없어 Recharts 기본 흰 상자.
+//              다크에서 글자는 #fafafa 로 뒤집히므로 A4-X3 이 고친 1.04:1 이 그대로다.
+// 축 눈금 8~9px 은 SVG 속성이라 어떤 CSS 규칙도 닿지 않는다 — A5 가 SankeyNode 에서
+// 겪은 것과 같은 자리라서 소스에서 올린다.
+// ═══════════════════════════════════════════════════════════════════════════════
+const col = (v: number | null | undefined) =>
+  (v == null ? undefined : v >= 0 ? "var(--chart-up)" : "var(--chart-down)");
+const AXIS_TICK = { fontSize: 11 };
+const GRID = "var(--border)";
 
 export function PolicyBacktest() {
   const { holdings, model, views, constraints } = useAllocation();
@@ -118,13 +136,13 @@ export function PolicyBacktest() {
             <div className="as-bt-t">OOS 자산곡선 {res.benchmark_label ? `vs ${res.benchmark_label}` : ""} <span className="as-note">시작=100</span></div>
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={70} />
-                <YAxis tick={{ fontSize: 9 }} width={44} />
-                <Tooltip formatter={(v: number) => v?.toFixed(1)} contentStyle={{ fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Line type="monotone" dataKey="strat" stroke="#1200ff" dot={false} strokeWidth={1.6} name="정책" />
-                {res.bench_curve && <Line type="monotone" dataKey="bench" stroke="#999" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={res.benchmark_label ?? "벤치"} />}
+                <CartesianGrid strokeDasharray="2 3" stroke={GRID} />
+                <XAxis dataKey="date" tick={AXIS_TICK} minTickGap={70} />
+                <YAxis tick={AXIS_TICK} width={48} />
+                <Tooltip formatter={(v: number) => v?.toFixed(1)} contentStyle={TIP_STYLE} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="strat" stroke="var(--t-accent)" dot={false} strokeWidth={1.6} name="정책" />
+                {res.bench_curve && <Line type="monotone" dataKey="bench" stroke="var(--t-muted)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={res.benchmark_label ?? "벤치"} />}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -135,11 +153,12 @@ export function PolicyBacktest() {
               <div className="as-bt-t">낙폭 (Underwater)</div>
               <ResponsiveContainer width="100%" height={130}>
                 <AreaChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={70} />
-                  <YAxis tick={{ fontSize: 9 }} width={44} />
-                  <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={{ fontSize: 11 }} />
-                  <Area type="monotone" dataKey="dd" stroke="#dc2626" fill="rgba(220,38,38,.12)" strokeWidth={1} name="낙폭" />
+                  <CartesianGrid strokeDasharray="2 3" stroke={GRID} />
+                  <XAxis dataKey="date" tick={AXIS_TICK} minTickGap={70} />
+                  <YAxis tick={AXIS_TICK} width={48} />
+                  <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={TIP_STYLE} />
+                  <Area type="monotone" dataKey="dd" stroke="var(--chart-down)"
+                    fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -151,11 +170,11 @@ export function PolicyBacktest() {
               <div className="as-bt-t">리밸런싱 회전율 (편도)</div>
               <ResponsiveContainer width="100%" height={110}>
                 <BarChart data={turns} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
-                  <XAxis dataKey="date" tick={{ fontSize: 8 }} minTickGap={40} />
-                  <YAxis tick={{ fontSize: 9 }} width={40} />
-                  <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="turnover" fill="#a5b4fc" />
+                  <CartesianGrid strokeDasharray="2 3" stroke={GRID} />
+                  <XAxis dataKey="date" tick={AXIS_TICK} minTickGap={50} />
+                  <YAxis tick={AXIS_TICK} width={44} />
+                  <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={TIP_STYLE} />
+                  <Bar dataKey="turnover" fill="var(--cat-4)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

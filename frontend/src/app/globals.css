@@ -5876,3 +5876,149 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --z-up: #a3e635;
   --z-down: #67e8f9;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §56 — 06 STRESS · 07 ATTRIBUTION · 08 EXECUTION · 09 JOURNAL (A6)
+   ───────────────────────────────────────────────────────────────────────────
+   ★이 네 스테이지의 타입은 한 번도 측정된 적이 없다★
+   §49 는 스테퍼를, §50 은 게이트를, §51 은 Construct 를, §52 는 Overview·AlphaLab 을,
+   §55 는 0M·01·03·04·05 를 하한선에 올렸다. 그 사이 06~09 의 **자체 클래스 패밀리**
+   (`.as-bt-* · .as-exec-* · .as-attr-* · .as-health-* · .as-jr-* · .as-krs-* ·
+    .as-dj-* · .as-rr-*`)는 한 번도 포함된 적이 없다. 하한 스펙의 ROUTES 배열이
+   5개(0M·01·03·04·05)였기 때문이다 — 초록이었지만 이 네 라우트를 본 적이 없었다.
+
+   실측된 최소값들: `.as-exec-tick` **8px** · `.as-exec-costchips` **8px** ·
+   `.as-attr-basis` **8px** · `.as-bt-kpi-l` / `.as-exec-code` / `.as-exec-stage` /
+   `.as-exec-chk` / `.as-rr-src` / `.as-dj-link em` 8.5px. 8px 는 밀도가 아니라
+   판독 불가다. §49 이래의 같은 기준을 적용한다 — **산문 12px · 크롬/배지/표 11px.**
+
+   ★함께 고치는 것: 조건부로만 렌더되는 상태의 다크★
+   `.as-exec-dbwarn`(#b45309) · `.as-attr-warn`(#b45309) · `.as-health-derisk`(#b91c1c) ·
+   `.as-rr-focus-missing`(#a16207/#fffbeb) · `.as-scen-mini`(#fff) 는 전부 라이트 전용
+   리터럴인데, A4-X2 의 다크 스윕이 초록이었다. 이 요소들이 **평시에 렌더되지 않기**
+   때문이다(DB 미가용·사후 데이터 없음·비중축소 대상·런 미발견). 스윕이 못 보는 상태를
+   스윕이 통과시킨 것이지 안전한 것이 아니다 — 세 번 물린 "지키는 것이 없는 초록 테스트"
+   와 같은 모양이라, 여기서 토큰으로 옮긴다.
+
+   ★새 클래스는 하나뿐★ `.as-krs-na` — 국내 시나리오팩의 "산출 불가 / 미상". `.aas-cmp-na`
+   와 같은 처리를 쓰되 히어로 칸 안에서 `<b>` 로 앉기 때문에 굵기·색을 따로 눕힌다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 09 JOURNAL — 정책 백테스트 ────────────────────────────────────────────── */
+.aas-root .as-bt-badges { font-size: 11px; }
+.aas-root .as-bt-badge { font-size: 11px; }
+.aas-root .as-bt-kpi-l { font-size: 11px; }      /* 8.5 → 11 */
+.aas-root .as-bt-t { font-size: 12px; }
+.aas-root .as-bt-wtbl { font-size: 11px; }
+.aas-root .as-bt-wtbl th { font-size: 11px; }    /* 9 → 11 */
+
+/* ── 09 JOURNAL — 저널 엔트리 · 런 목록 · 결정 사슬 · 건강도 ──────────────── */
+.aas-root .as-jr-field { font-size: 11px; }
+.aas-root .as-jr-field em { font-size: 11px; }
+.aas-root .as-jr-grid em, .aas-root .as-jr-review em { font-size: 11px; }
+.aas-root .as-jr-grid p, .aas-root .as-jr-review p { font-size: 12px; }  /* 산문 */
+.aas-root .as-rr-src { font-size: 11px; }        /* 8.5 → 11 */
+.aas-root .as-rr-reopen { font-size: 11px; }
+.aas-root .as-rr-rat-row { font-size: 11px; }
+.aas-root .as-rr-focus-missing { font-size: 11px; }
+.aas-root .as-dj-runrow, .aas-root .as-dj-attr { font-size: 11px; }
+.aas-root .as-dj-link em, .aas-root .as-dj-link b { font-size: 11px; }
+.aas-root .as-dj-arrow, .aas-root .as-dj-more { font-size: 11px; }
+.aas-root .as-health-pill { font-size: 11px; }
+.aas-root .as-health-derisk { font-size: 11px; }
+.aas-root .as-health-item { font-size: 11px; }
+.aas-root .as-health-status, .aas-root .as-health-sig { font-size: 11px; }
+
+/* ── 08 EXECUTION — 스튜디오에서 가장 작은 타입이 모여 있던 자리 ──────────── */
+.aas-root .as-exec-cfg label { font-size: 11px; }
+.aas-root .as-exec-hint { font-size: 11px; }
+.aas-root .as-exec-kpi .k, .aas-root .as-exec-kpi em { font-size: 11px; }
+.aas-root .as-exec-table { font-size: 11px; }
+.aas-root .as-exec-code { font-size: 11px; }     /* 8.5 → 11 */
+.aas-root .as-exec-stage { font-size: 11px; }    /* 8.5 → 11 */
+.aas-root .as-exec-tick { font-size: 11px; }     /* 8   → 11 */
+.aas-root .as-exec-costchips { font-size: 11px; }/* 8   → 11 */
+.aas-root .as-exec-checks li { font-size: 11px; }
+.aas-root .as-exec-chk { font-size: 11px; }      /* 8.5 → 11 */
+.aas-root .as-exec-chk-detail { font-size: 11px; }
+.aas-root .as-exec-dbwarn { font-size: 11px; }
+.aas-root .as-exec-status { font-size: 11px; }
+.aas-root .as-exec-noapprove { font-size: 11px; }
+.aas-root .as-exec-auditlist li { font-size: 11px; }
+.aas-root .as-exec-audit-t { font-size: 11px; }
+.aas-root .as-exec-warnlist li { font-size: 12px; }  /* 경고는 산문이다 */
+
+/* ── 07 ATTRIBUTION ────────────────────────────────────────────────────────── */
+.aas-root .as-attr-head { font-size: 11px; }
+.aas-root .as-attr-warn { font-size: 11px; }
+.aas-root .as-attr-basis { font-size: 11px; }    /* 8 → 11 */
+.aas-root .as-attr-card .k { font-size: 11px; }
+.aas-root .as-attr-link { font-size: 12px; }     /* 산문 */
+/* 07 의 과의존 수치는 인라인 `style={{fontSize:13}}` 이었다 — 어떤 CSS 도 닿지 않는
+   자리라 A4-V2 와 같은 방식으로 클래스로 내렸다. */
+.aas-root .as-attr-dep { font-size: 13px; }
+
+/* ── 06 STRESS ─────────────────────────────────────────────────────────────── */
+.aas-root .as-scen em { font-size: 11px; }
+.aas-root .as-scen-mini { font-size: 11px; }
+.aas-root .as-krs-hero em { font-size: 11px; }
+.aas-root .as-krs-h { font-size: 11px; }
+.aas-root .as-krs-frow { font-size: 11px; }
+.aas-root .as-krs-assume { font-size: 11px; }
+.aas-root .as-krs-exec { font-size: 12px; }      /* 실행 가능성·헤지는 산문 */
+.as-krs-na { font-family: inherit; font-weight: 600; font-size: 12px; color: var(--t-muted); }
+
+/* ── 라이트 리터럴 → 토큰 (평시에 렌더되지 않아 다크 스윕이 못 본 상태들) ──── */
+.as-exec-dbwarn, .as-attr-warn { color: var(--color-caution); }
+.as-health-derisk { color: var(--color-bear); }
+.as-scen-mini { background: var(--card); color: var(--foreground); }
+.as-rr-focus-missing { color: var(--color-caution); background: var(--muted); }
+
+/* ── A6 신규 클래스 ────────────────────────────────────────────────────────── */
+/* 09 — 정책 백테스트가 2단 그리드 위 전폭 밴드로 올라왔다. */
+.as-jr-policy { margin-bottom: 8px; }
+
+/* 08 — 승인 차단 사유. `disabled` 버튼의 title 에서 내려온 문장이라 눈에 띄어야 하고,
+   `role="status"` 로 상태 변화 시 낭독된다. 색은 토큰(라이트/다크 양쪽 정의됨). */
+.as-exec-blockwhy {
+  font-size: 12px; line-height: 1.55;
+  color: var(--color-bear); background: var(--color-bear-bg);
+  border-left: 3px solid var(--color-bear);
+  border-radius: 2px; padding: 7px 10px; margin: 6px 0;
+}
+/* 08 — 비용칩이 한 글자에서 낱말로 바뀌면서 길어졌다. 줄바꿈을 허용하지 않으면
+   9열 표에서 마지막 열이 밀린다. */
+.aas-root .as-exec-costchips { flex-wrap: wrap; row-gap: 2px; }
+
+/* ── §56 보강 — 스펙이 잡아낸 두 패밀리 (측정 > grep) ──────────────────────────
+   §56 의 첫 판은 06~09 **자체** 패밀리를 prefix 로 grep 해서 만들었다. 브라우저에서
+   재니 06 에서만 47개가 더 나왔다 — 둘 다 06 에서만 렌더되는 **공유 위젯**이라
+   prefix 목록에 없었다:
+     `.as-s3w-*`  ScenarioThreeWay — basis/nm/exp/na 전부 10px
+     `.as-heat*`  SensitivityHeatmap — 표 자체가 10px 이라 모든 th/td 가 상속받고,
+                  코너 셀과 tbody th em 은 8.5px
+   grep 은 "내가 아는 이름" 만 본다. 이 두 건은 도구를 바꿔서가 아니라 **화면을 재서**
+   나왔다 — 이 스펙이 존재하는 이유 그대로다. */
+.aas-root .as-s3w-basis, .aas-root .as-s3w-nm,
+.aas-root .as-s3w-exp, .aas-root .as-s3w-na { font-size: 11px; }
+.aas-root .as-heat { font-size: 11px; }
+.aas-root .as-heat tbody th em { font-size: 11px; }
+.aas-root .as-heat .as-heat-corner { font-size: 11px; }
+
+/* ── 정책 백테스트 정직 배지 — 라이트 리터럴 2줄 ─────────────────────────────
+   `.as-bt-badge.mock` 은 `#fffbeb / #b45309 / #fde68a`, `.real` 은 `#dcfce7 / #16a34a`.
+   다크 스윕이 못 본 이유는 **정책 백테스트를 실행해야 렌더되기 때문**이다 — 스윕은
+   스테이지를 방문만 했다. 새 스펙이 백테스트를 돌린 상태에서 재면서 처음 잡혔다.
+   `#16a34a` 는 S1b-2 가 3.16:1 로 측정해 이미 퇴출한 값인데 여기 남아 있었다.
+   이 배지들은 MOCK/실데이터를 말하는 정직 표시라 다크에서 안 보이면 곤란하다. */
+/* 배경은 `--color-caution-bg`(:666, `#fef3c7`) 를 쓰지 않는다 — 라이트에서만 정의돼
+   있어서 다크에서 밝은 판이 그대로 남는다(감사의 bright 검사가 잡는 상태). 양쪽에
+   정의된 `--muted` 를 쓰고, 주의 신호는 글자색과 테두리로 낸다. */
+.as-bt-badge.mock { color: var(--color-caution); background: var(--muted); border-color: var(--color-caution); }
+.as-bt-badge.real { color: var(--chart-up); background: var(--muted); border-color: var(--chart-up); }
+/* 06 의 상관-국면 요약 헤더. `.as-tm-*` prefix 를 달고 있어서(04 TIMING 시절 이름)
+   §56 의 06~09 패밀리 grep 에도, §55 의 04 패밀리 규칙에도 들어가지 않았다 —
+   이름이 소속을 잘못 말하고 있던 경우다. 클래스명은 E2E 계약이라 바꾸지 않고,
+   하한만 건다. */
+.aas-root .as-tm-corr-head span { font-size: 11px; }
+.aas-root .as-tm-corr-head em { font-size: 11px; }

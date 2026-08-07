@@ -8,6 +8,34 @@ import { useAllocation } from "./AllocationProvider";
 
 const col = (v: number) => (v >= 0 ? "var(--color-bull)" : "var(--color-bear)");
 
+/** 히어로 한 칸. 값이 없으면 숫자도 색도 그리지 않고 **없다고 쓴다**. */
+function Hero({ label, v, color, big = false }: {
+  label: string; v: number | null | undefined; color?: string; big?: boolean;
+}) {
+  const has = v != null && Number.isFinite(v);
+  return (
+    <div>
+      <em>{label}</em>
+      {has
+        ? <b className="num" style={{ color, fontSize: big ? 20 : undefined }}>{v}%</b>
+        : <b className="as-krs-na">산출 불가</b>}
+    </div>
+  );
+}
+
+/** 가정 한 줄. 결측은 0 이 아니라 미상이다. */
+function Assume({ k, v, pre = "", suf = "", scale = 1 }: {
+  k: string; v: number | string | null | undefined; pre?: string; suf?: string; scale?: number;
+}) {
+  if (v == null || (typeof v === "number" && !Number.isFinite(v))) {
+    return <span>{k} <b className="as-krs-na">미상</b></span>;
+  }
+  // scale 이 걸린 칸(변동성 상승: 비율→%)만 반올림한다. 나머지는 원래 그대로 찍혔고,
+  // 무조건 round 하면 `+0.3` 이 `+0` 이 된다 — 지어낸 0 을 고치다 새로 만드는 셈이다.
+  const shown = typeof v === "number" ? (scale === 1 ? v : Math.round(v * scale)) : v;
+  return <span>{k} <b className="num">{pre}{shown}{suf}</b></span>;
+}
+
 export function KrScenarioPack({ scenario: controlled, onPick }: {
   /** 통합 시나리오 창이 선택을 주도할 때 — 미지정이면 기존처럼 자체 상태 사용(하위호환). */
   scenario?: string;
@@ -51,11 +79,17 @@ export function KrScenarioPack({ scenario: controlled, onPick }: {
       {runQ.data?.error && <div className="as-err">{runQ.data.message}</div>}
       {r && (
         <>
+          {/* ★히어로 4칸은 결측을 `%` 만 남기고 색은 칠하고 있었다 (A6-Z)★
+              `col(r.portfolio_shock_pct ?? 0)` 는 null 을 0 으로 만들어 **초록**을 입히고,
+              값 자리에는 `{null}%` → 외로운 `%` 만 찍혔다. 초록 배지 옆의 빈 퍼센트는
+              "충격 없음" 으로 읽힌다. 나머지 세 칸(VaR·CVaR·MDD)은 값이 없어도 무조건
+              bear 색이 박혀 있었다 — 없는 값에 방향을 칠하지 않는다. */}
           <div className="as-krs-hero">
-            <div><em>포트폴리오 충격</em><b className="num" style={{ color: col(r.portfolio_shock_pct ?? 0), fontSize: 20 }}>{r.portfolio_shock_pct}%</b></div>
-            <div><em>VaR 95%</em><b className="num" style={{ color: "var(--color-bear)" }}>{r.risk_proxy?.var95_pct}%</b></div>
-            <div><em>CVaR 95%</em><b className="num" style={{ color: "var(--color-bear)" }}>{r.risk_proxy?.cvar95_pct}%</b></div>
-            <div><em>MDD 프록시</em><b className="num" style={{ color: "var(--color-bear)" }}>{r.risk_proxy?.mdd_proxy_pct}%</b></div>
+            <Hero label="포트폴리오 충격" v={r.portfolio_shock_pct} big
+              color={r.portfolio_shock_pct == null ? undefined : col(r.portfolio_shock_pct)} />
+            <Hero label="VaR 95%" v={r.risk_proxy?.var95_pct} color="var(--color-bear)" />
+            <Hero label="CVaR 95%" v={r.risk_proxy?.cvar95_pct} color="var(--color-bear)" />
+            <Hero label="MDD 프록시" v={r.risk_proxy?.mdd_proxy_pct} color="var(--color-bear)" />
           </div>
           <div className="as-note">{r.description}</div>
 
@@ -80,11 +114,13 @@ export function KrScenarioPack({ scenario: controlled, onPick }: {
             </div>
           </div>
 
+          {/* 가정이 없으면 `?? 0` 이 "변동성 상승 +0%" 를 만들었다 — 가정을 못 읽은 것과
+              "변동성이 안 오른다고 가정했다" 는 정반대의 뜻이다. */}
           <div className="as-krs-assume">
-            <span>상관 상승 <b className="num">+{r.assumptions?.correlation_rise}</b></span>
-            <span>변동성 상승 <b className="num">+{Math.round((r.assumptions?.volatility_rise ?? 0) * 100)}%</b></span>
-            <span>유동성 악화 <b className="num">{r.assumptions?.liquidity_deterioration}</b></span>
-            <span>스트레스 변동성 <b className="num">{r.assumptions?.stressed_vol_pct}%</b></span>
+            <Assume k="상관 상승" v={r.assumptions?.correlation_rise} pre="+" />
+            <Assume k="변동성 상승" v={r.assumptions?.volatility_rise} pre="+" suf="%" scale={100} />
+            <Assume k="유동성 악화" v={r.assumptions?.liquidity_deterioration} />
+            <Assume k="스트레스 변동성" v={r.assumptions?.stressed_vol_pct} suf="%" />
           </div>
           <div className="as-krs-exec">
             <div><b>실행 가능성</b> {r.execution_feasibility}</div>

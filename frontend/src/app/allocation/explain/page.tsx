@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { attributionApi, type AttributionReport, type Basis } from "@/entities/attribution/api";
 import { CorrelationMini, RiskContribDonut, fmtSign } from "@/widgets/allocation/parts";
+import { EvidenceBadge } from "@/shared/ui/evidence";
 
 function BasisTag({ b }: { b: Basis }) {
   const ko = b === "real" ? "실측" : b === "mock" ? "합성" : "미측정";
@@ -104,7 +105,7 @@ function AttributionView({ rep }: { rep: AttributionReport }) {
           <div className="as-card-title">과의존 분석 <BasisTag b={rep.dependency.basis} /></div>
           {rep.dependency.basis === "real" ? (
             <>
-              <div className="num" style={{ fontSize: 13 }}>HHI {rep.dependency.hhi} · 유효종목수 {rep.dependency.effective_n}</div>
+              <div className="num as-attr-dep">HHI {rep.dependency.hhi} · 유효종목수 {rep.dependency.effective_n}</div>
               <div className="num">최대기여 {rep.dependency.top_name} {rep.dependency.top_name_share_pct}%
                 {rep.dependency.concentrated && <span className="as-attr-warn"> 과집중</span>}</div>
               <div className="as-note">{rep.dependency.note}</div>
@@ -126,9 +127,15 @@ function AttributionView({ rep }: { rep: AttributionReport }) {
         </section>
       </div>
 
+      {/* ★Brinson 은 정직했지만 어휘가 달랐다 (A6)★ 사유를 note 로만 적어서
+          "설명이 붙은 빈 카드" 로 읽혔다. 스튜디오의 나머지가 쓰는 unavailable 처리를
+          쓰면 **측정할 수 없다** 는 뜻이 형태로 전달된다. 문구는 백엔드의 note 그대로 —
+          여기서 사유를 새로 쓰면 서버가 아는 이유와 화면이 말하는 이유가 갈라진다. */}
       <section className="as-card">
         <div className="as-card-title">Brinson 효과 분해 (선택/배분/팩터/타이밍/헤지) <BasisTag b={rep.brinson_effects.basis} /></div>
-        <div className="as-note">{rep.brinson_effects.note}</div>
+        {rep.brinson_effects.basis === "real"
+          ? <div className="as-note">{rep.brinson_effects.note}</div>
+          : <EvidenceBadge kind="unavailable" reason={rep.brinson_effects.note}>산출 불가</EvidenceBadge>}
       </section>
 
       <div className="as-attr-link">
@@ -149,12 +156,20 @@ export default function AttributionWorkspace() {
     enabled: !!activeRunId,
   });
 
+  // ★세 분기가 서로 다른 모양이었다 (A6)★ 결과가 없을 때만 그리드 래퍼 없이
+  // 벌거벗은 `.as-card` 를 반환하고 있었다. 그러면 이 스테이지는 상태에 따라 레이아웃이
+  // 바뀌고, `.as-ws2` 에 걸린 스코프(§51·§55)도 이 분기에서만 적용되지 않는다.
+  // 세 분기 모두 같은 껍데기를 쓴다.
   if (!result) {
     return (
-      <section className="as-card">
-        <div className="as-card-title">ATTRIBUTION</div>
-        <div className="as-empty">먼저 <b>05 OPTIMIZE</b>에서 배분을 산출하세요. Attribution은 결정 시점(런)의 사전 기대와 사후 실측을 대조합니다.</div>
-      </section>
+      <div className="as-ws2 as-ws-exp">
+        <main className="as-center">
+          <section className="as-card">
+            <div className="as-card-title">ATTRIBUTION</div>
+            <div className="as-empty">먼저 <b>05 OPTIMIZE</b>에서 배분을 산출하세요. Attribution은 결정 시점(런)의 사전 기대와 사후 실측을 대조합니다.</div>
+          </section>
+        </main>
+      </div>
     );
   }
 
@@ -199,20 +214,29 @@ function ExanteDecomp() {
   return (
     <>
       <section className="as-card">
-        <details className="aas-adv">
-          <summary>사전 비중 분해 (Market Prior → User View(BL) → Optimizer)</summary>
+        <details className="as-adv">
+          <summary className="as-adv-s">사전 비중 분해 (Market Prior → User View(BL) → Optimizer)</summary>
           <table className="as-metrics">
             <thead><tr><th>자산</th><th>① Market</th><th>② View(BL)</th><th>③ Optimized</th><th>리스크 기여</th></tr></thead>
             <tbody>
+              {/* ★① Market / ② View(BL) 의 `?? 0` 을 걷어냈다 (A6-Z)★
+                  A5 가 03 THESIS 의 VIEW EFFECT 에서 고친 것과 같은 쌍이다. 시장 사전분포나
+                  BL 사후분포가 이 자산에 대해 없을 때 `0.0%` 를 찍으면, "시장이 이 자산을
+                  0% 로 본다" 로 읽힌다. 없는 것은 없다고 쓴다 — WeightComparison·ViewEffect
+                  가 쓰는 `.aas-cmp-na` 와 같은 처리다(세 번째 어휘를 만들지 않는다). */}
               {rows.map(([c, w]) => {
-                const mkt = result.flow.market[c] ?? 0;
-                const vw = result.flow.view_applied[c] ?? 0;
+                const mkt = result.flow.market[c];
+                const vw = result.flow.view_applied[c];
                 const rcv = result.risk_contributions[c];
+                const pctCell = (v: number | null | undefined) =>
+                  v == null || !Number.isFinite(v)
+                    ? <span className="aas-cmp-na">미계산</span>
+                    : `${v.toFixed(1)}%`;
                 return (
                   <tr key={c}><td>{result.labels[c] || c}</td>
-                    <td className="num">{mkt.toFixed(1)}%</td><td className="num">{vw.toFixed(1)}%</td>
+                    <td className="num">{pctCell(mkt)}</td><td className="num">{pctCell(vw)}</td>
                     <td className="num"><b>{w.toFixed(1)}%</b></td>
-                    <td className="num">{rcv != null ? `${rcv.toFixed(1)}%` : "—"}</td></tr>
+                    <td className="num">{rcv != null ? `${rcv.toFixed(1)}%` : <span className="aas-cmp-na">미계산</span>}</td></tr>
                 );
               })}
             </tbody>
@@ -222,8 +246,8 @@ function ExanteDecomp() {
       <section className="as-card">
         <div className="as-card-title">RISK CONTRIBUTION</div>
         <RiskContribDonut contributions={result.risk_contributions} labels={result.labels} />
-        <details className="aas-adv">
-          <summary>상관 구조 보기</summary>
+        <details className="as-adv">
+          <summary className="as-adv-s">상관 구조 보기</summary>
           <CorrelationMini correlation={result.correlation} names={result.names} labels={result.labels} />
         </details>
       </section>

@@ -98,13 +98,23 @@ function JournalInner() {
   };
 
   return (
-    <div className="as-ws2 as-ws-jr">
+    <>
+      {/* ★정책 백테스트가 340px 레일 안에 있었다 (A6)★
+          이 패널 하나에 컨트롤 5개 + KPI 10칸 + Recharts 3개(자산곡선·낙폭·회전율) +
+          `1 + N자산 + 1` 열짜리 시점별 비중표가 들어 있다. `.as-ws-jr` 의 레일은
+          340px 이고 비중표는 `white-space: nowrap` 이라, 자산이 몇 개든 **반드시**
+          가로 스크롤이 생겼다. A5-S2 가 05 에서 세운 규칙("레일=컨트롤, 메인=증거")을
+          여기 그대로 적용하면 메인이 감당 못 할 만큼 길어지므로, 이 패널만 2단 그리드
+          **위 전폭 밴드**로 올린다 — 폭이 실제로 필요한 유일한 증거 화면이다.
+          `.as-bt-*` 클래스는 그대로다(allocation-backtest.spec.ts 가 잡는 계약). */}
+      <section className="as-card as-jr-policy">
+        <div className="as-card-title">정책 백테스트 (Walk-Forward · OOS)
+          <span className="as-note-inline">현재 모델·뷰·제약을 시점 밖으로 재현 — 신뢰도 검증</span></div>
+        <PolicyBacktest />
+      </section>
+
+      <div className="as-ws2 as-ws-jr">
       <aside className="as-center">
-        <section className="as-card">
-          <div className="as-card-title">정책 백테스트 (Walk-Forward · OOS)
-            <span className="as-note-inline">현재 모델·뷰·제약을 시점 밖으로 재현 — 신뢰도 검증</span></div>
-          <PolicyBacktest />
-        </section>
         <section className="as-card">
           <div className="as-card-title">NEW JOURNAL ENTRY <span className="as-note-inline">Macro View → Changed → Reason → Result → Review</span></div>
           <label className="as-jr-field"><em>이름</em>
@@ -134,11 +144,13 @@ function JournalInner() {
           <div className="as-card-title">SESSION TIMELINE <span className="as-note-inline">이번 세션 실기록</span></div>
           <ResearchTimeline events={timeline} />
         </section>
-        <StrategyHealthPanel />
       </aside>
       <main className="as-center">
         <ResearchRunsPanel focusRunId={focusRunId} />
         <DecisionJournal />
+        {/* 건강도는 컨트롤이 아니라 판정 결과다 — 레일이 아니라 증거 칼럼에 속한다.
+            (알파 15줄이 340px 레일에서 두 줄씩 접히던 자리) */}
+        <StrategyHealthPanel />
         <section className="as-card">
           <div className="as-card-title">QUICK NOTES <span className="as-note-inline">{studies.length}건 · localStorage(세션 메모)</span></div>
           {studies.length === 0 && <div className="as-empty">저장된 저널 없음 — 좌측에서 첫 엔트리를 기록하세요.</div>}
@@ -147,7 +159,10 @@ function JournalInner() {
               <div className="as-jr-head">
                 <b>{s.name}</b>
                 <span className="num as-note-inline">{s.savedAt.slice(0, 16).replace("T", " ")} · {Object.keys(s.holdings).length}종목 · {s.model.toUpperCase()}</span>
-                <button className="as-x" title="삭제" onClick={() => { deleteStudy(s.id); bumpStudies(); }}>×</button>
+                {/* 아이콘 전용 버튼에는 접근 가능한 이름이 필요하다 — `title` 은
+                    키보드·스크린리더에서 신뢰할 수 없다 (A3 `.as-wrow-del`, A4-L3 과 동일). */}
+                <button className="as-x" aria-label={`${s.name} 저널 삭제`}
+                  onClick={() => { deleteStudy(s.id); bumpStudies(); }}>×</button>
               </div>
               <div className="as-jr-grid">
                 <div><em>Macro View</em><p>{s.macro_view || "—"}</p></div>
@@ -160,6 +175,7 @@ function JournalInner() {
           ))}
         </section>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

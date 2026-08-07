@@ -38,14 +38,27 @@ function StatusBadge({ status }: { status: CheckStatus }) {
   return <span className={`as-exec-chk ${status}`}>{status === "pass" ? "통과" : status === "warning" ? "주의" : "차단"}</span>;
 }
 
+// ★한 글자 + 툴팁은 근거를 숨기는 것이다 (A6)★
+// 예전에는 `수 / 세 / 스 / 충` 네 글자만 찍고 뜻은 전부 `title=` 에 있었다. 호버는
+// 키보드·터치 사용자에게 존재하지 않으므로, 이 화면에서 비용의 **구성**은 사실상
+// 읽을 수 없었다 — P3 가 ContextStrip 의 title 16개에서 고친 것과 같은 결함이고,
+// 여기 있는 것이 주문을 승인할지 판단하는 근거라는 점에서 더 나쁘다.
+// 8px 이던 글자는 §56 이 11px 로 올린다. 줄이 길어지므로 wrap 을 허용한다.
+const COST_PARTS: [key: keyof OrderRow["cost_breakdown"], label: string][] = [
+  ["commission", "수수료"], ["tax", "거래세"], ["spread", "스프레드"], ["impact", "시장충격"],
+];
+
 function CostChips({ o }: { o: OrderRow }) {
   const cb = o.cost_breakdown;
   return (
     <span className="as-exec-costchips num">
-      <span title="수수료">수 {won(cb.commission)}</span>
-      {cb.tax > 0 && <span title="증권거래세(매도)">세 {won(cb.tax)}</span>}
-      <span title="스프레드">스 {won(cb.spread)}</span>
-      {cb.impact > 0 && <span title="시장충격">충 {won(cb.impact)}</span>}
+      {COST_PARTS.map(([k, label]) => {
+        const v = cb[k];
+        // 수수료·스프레드는 0 이어도 보여 준다(항상 부과된다). 세금·충격은 조건부라
+        // 0 이면 "해당 없음" 이지 "0원을 냈다" 가 아니므로 줄 자체를 만들지 않는다.
+        if ((k === "tax" || k === "impact") && !(v > 0)) return null;
+        return <span key={k}>{label} {won(v)}</span>;
+      })}
     </span>
   );
 }
@@ -147,6 +160,7 @@ export function ExecutionRoom() {
   const plan = preview?.plan;
   const pretrade = preview?.pretrade;
   const saved: SavedPlan | undefined = planQ.data;
+  const approveBlocked = !!saved && !(saved.pretrade?.can_approve ?? true);
 
   return (
     <div className="as-exec">
@@ -162,8 +176,8 @@ export function ExecutionRoom() {
               value={pv} onChange={(e) => setPv(Math.max(1_000_000, Number(e.target.value) || 0))} />
             <span className="as-exec-hint num">{eok(pv)}</span>
           </label>
-          <details className="aas-adv as-exec-limits">
-            <summary>pre-trade 한도 (선택)</summary>
+          <details className="as-adv as-exec-limits">
+            <summary className="as-adv-s">pre-trade 한도 (선택)</summary>
             <div className="as-exec-cfg">
               <label>회전율 상한 %<input className="num" type="number" placeholder="미적용" value={turnoverCap} onChange={(e) => setTurnoverCap(e.target.value)} /></label>
               <label>비용 예산 bp<input className="num" type="number" placeholder="미적용" value={costBudget} onChange={(e) => setCostBudget(e.target.value)} /></label>
@@ -201,20 +215,28 @@ export function ExecutionRoom() {
               ) : (
                 <div className="as-exec-tablewrap">
                   <table className="as-metrics as-exec-table">
+                    {/* `<th>` 에 scope 가 없었다 — 스크린리더가 9열 표에서 어떤 헤더가
+                        어떤 셀에 붙는지 알 수 없다. A4-L2 가 alphalab 에서 한 것과 같다. */}
                     <thead>
                       <tr>
-                        <th>#</th><th>종목</th><th>구분</th><th>비중 변화</th><th>수량</th><th>추정가</th><th>금액</th><th>참여율</th><th>비용</th>
+                        <th scope="col">#</th><th scope="col">종목</th><th scope="col">구분</th>
+                        <th scope="col">비중 변화</th><th scope="col">수량</th><th scope="col">추정가</th>
+                        <th scope="col">금액</th><th scope="col">참여율</th><th scope="col">비용</th>
                       </tr>
                     </thead>
                     <tbody>
                       {plan.orders.map((o) => (
                         <tr key={o.stock_code} className={o.warnings.length ? "as-exec-warn-row" : ""}>
-                          <td className="num">{o.priority}<span className="as-exec-stage num" title={`단계 ${o.stage}`}>·{o.stage}</span></td>
+                          {/* `단계 N` · `호가 단위` 는 title= 안에 있었다. 뜻을 셀에 적는다. */}
+                          <td className="num">{o.priority}<span className="as-exec-stage num">단계 {o.stage}</span></td>
+                          {/* 종목 셀은 `<th scope="row">` 가 의미상 맞지만 `.as-metrics th`
+                              가 우측정렬·muted 라 이름 열이 헤더처럼 보이게 된다. 표시를
+                              위해 의미를 바꾸느니 `<td>` 로 두고 열 헤더만 정확히 한다. */}
                           <td>{o.corp_name}<span className="as-exec-code num">{o.stock_code}</span></td>
                           <td><span className={o.side === "buy" ? "as-exec-buy" : "as-exec-sell"}>{o.side === "buy" ? "매수" : "매도"}</span></td>
                           <td className="num">{o.cur_weight_pct}% → <b>{o.tgt_weight_pct}%</b></td>
                           <td className="num">{o.quantity.toLocaleString("ko-KR")}주</td>
-                          <td className="num">{won(o.price_est)}<span className="as-exec-tick num" title="호가 단위">틱{o.tick_size}</span></td>
+                          <td className="num">{won(o.price_est)}<span className="as-exec-tick num">호가단위 {o.tick_size}</span></td>
                           <td className="num">{won(o.notional)}</td>
                           <td className="num">{o.participation_pct != null ? `${o.participation_pct}%` : "—"}</td>
                           <td className="num">{o.cost_bp}bp<CostChips o={o} /></td>
@@ -266,8 +288,8 @@ export function ExecutionRoom() {
               </section>
 
               <section className="as-card">
-                <details className="aas-adv">
-                  <summary>시장 규칙 스냅샷 (설정 계층)</summary>
+                <details className="as-adv">
+                  <summary className="as-adv-s">시장 규칙 스냅샷 (설정 계층)</summary>
                   <div className="as-note">{plan.rules.source}</div>
                   <table className="as-metrics">
                     <tbody>
@@ -300,27 +322,33 @@ export function ExecutionRoom() {
                 <div className="as-exec-wf-head">
                   <span className={`as-exec-status ${saved.status}`}>{STATUS_KO[saved.status]}</span>
                   <span className="num">{saved.name}</span>
-                  {!(saved.pretrade?.can_approve ?? true) && <span className="as-exec-noapprove">pre-trade 차단 — 승인 불가</span>}
+                  {approveBlocked && <span className="as-exec-noapprove">pre-trade 차단 — 승인 불가</span>}
                 </div>
+                {/* ★비활성 버튼의 title 은 아무도 못 읽는다 (A6)★ 승인이 막힌 이유가
+                    `disabled` 버튼의 `title` 에 있었다 — 브라우저 대부분이 비활성 요소에
+                    호버 툴팁을 띄우지 않고, 키보드 포커스도 가지 않는다. 승인을 막는
+                    사유는 이 화면에서 가장 중요한 문장이므로 보이는 줄로 내린다. */}
+                {approveBlocked && (
+                  <div className="as-exec-blockwhy" role="status">
+                    pre-trade <b>block</b> 항목을 해소해야 승인할 수 있습니다 (§4) —
+                    위 PRE-TRADE 리스크에서 <b>차단</b> 표시된 항목을 확인하세요.
+                  </div>
+                )}
                 <div className="as-exec-wf-btns">
-                  {FORWARD[saved.status].map((to) => {
-                    const approveBlocked = to === "approved" && !(saved.pretrade?.can_approve ?? true);
-                    return (
-                      <button key={to} className={to === "approved" ? "primary" : ""}
-                        disabled={transitionMut.isPending || approveBlocked}
-                        title={approveBlocked ? "pre-trade block 항목을 해소해야 승인 가능 (§4)" : ""}
-                        onClick={() => transitionMut.mutate(to)}>
-                        {STATUS_KO[to]}로
-                      </button>
-                    );
-                  })}
+                  {FORWARD[saved.status].map((to) => (
+                    <button key={to} className={to === "approved" ? "primary" : ""}
+                      disabled={transitionMut.isPending || (to === "approved" && approveBlocked)}
+                      onClick={() => transitionMut.mutate(to)}>
+                      {STATUS_KO[to]}로
+                    </button>
+                  ))}
                   {(saved.status === "paper_submitted" || saved.status === "partially_filled") && (
                     <button disabled={fillsMut.isPending} onClick={() => fillsMut.mutate()}>수동 체결 입력 (전량)</button>
                   )}
                 </div>
                 <div className="as-note">모의 제출(paper_submitted) 이후 상태는 자동 진행되지 않습니다 — 체결은 수동 입력으로만 (브로커 미연결).</div>
-                <details className="aas-adv as-exec-audit">
-                  <summary>감사 로그 ({saved.audit.length})</summary>
+                <details className="as-adv as-exec-audit">
+                  <summary className="as-adv-s">감사 로그 ({saved.audit.length})</summary>
                   <ul className="as-exec-auditlist">
                     {saved.audit.slice().reverse().map((a, i) => (
                       <li key={i}>

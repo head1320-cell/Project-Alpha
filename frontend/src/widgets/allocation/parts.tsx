@@ -15,16 +15,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/shared/ui/shadcn/table";
 import type { AnalyzeResult, StressResult, SummaryStats, XrayFactor } from "@/entities/allocation/api";
+import { TIP_STYLE } from "@/shared/ui/chartStyle";
 
-// ★차트 툴팁이 다크에서 흰 상자였다 (A4-X3)★ `background: "#fff"` 가 박혀 있었고,
-// 다크에서 글자색은 --t-ink(#fafafa)로 뒤집히는데 배경은 흰색 그대로라 **약 1.04:1** 이었다.
-// A1 의 `.aas-wiz-lab`, A3 의 `.as-seg button` 과 같은 결함이 세 번째로 반복된 자리다.
-// Recharts 는 인라인 style 만 받으므로 클래스가 아니라 토큰을 직접 넣는다.
-const TIP_STYLE = {
-  background: "var(--card)", color: "var(--foreground)",
-  border: "1px solid var(--border)", borderRadius: 2,
-  fontSize: 11, fontFamily: "var(--t-mono, monospace)",
-};
+// 툴팁 스타일은 `shared/ui/chartStyle` 이 단일 출처다 (A4-X3 에서 토큰화, A6 에서
+// 이 파일 밖으로 이사). 여기 두었더니 상수 하나 때문에 09 저널이 parts.tsx 전체를
+// 끌어와 번들이 +30kB 였다 — 사유는 그 파일의 헤더에 있다.
 /** 마커 테두리 — 차트 배경색이어야 점이 배경에서 떠 보인다. 흰색을 박으면 다크에서 흰 링이 남는다. */
 const DOT_RING = "var(--card)";
 /**
