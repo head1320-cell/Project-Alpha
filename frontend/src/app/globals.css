@@ -6129,3 +6129,74 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 }
 .as-arch-t:hover { border-color: var(--t-accent); color: var(--t-accent); }
 .as-arch-t:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* ── 0M 다중 도구 국면 분석 (A7-3) ─────────────────────────────────────────
+   세 도구를 나란히. **가로 3열이 곧 "합치지 않았다" 는 표현**이다 — 한 칸으로
+   합치면 화면이 먼저 평균을 냈다고 말하게 된다. 좁아지면 세로로 쌓이되 여전히
+   셋이다(아코디언으로 접지 않는다). */
+.as-rge { display: flex; flex-direction: column; gap: 10px; }
+.as-rge-refresh {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em;
+  border: 1px solid var(--t-border); border-radius: 2px; background: transparent;
+  color: var(--t-muted); padding: 3px 9px; cursor: pointer; white-space: nowrap;
+}
+.as-rge-refresh:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
+.as-rge-refresh:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.as-rge-refresh:disabled { cursor: progress; opacity: .7; }
+
+.as-rge-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 1100px) { .as-rge-tools { grid-template-columns: 1fr; } }
+
+.as-rge-tool {
+  border: 1px solid var(--t-border); border-radius: 3px; padding: 9px 10px;
+  background: var(--card); display: flex; flex-direction: column; gap: 7px; min-width: 0;
+}
+/* 미가용 칸은 **비어 보여야** 한다 — 막대가 없는 것이 곧 신호다. 흐리게 만들지
+   않는다(디밍은 A4-X1 에서 접근성 문제로 걷어냈다). 점선 테두리로 "여기엔 값이
+   없다" 를 말한다. */
+.as-rge-tool.na { border-style: dashed; }
+.as-rge-tool-h { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.as-rge-tool-n { font-size: 11px; letter-spacing: .04em; color: var(--foreground); min-width: 0; }
+.as-rge-pick {
+  margin-left: auto; flex-shrink: 0; white-space: nowrap;
+  font-size: 11px; padding: 2px 7px; border-radius: 2px; border: 1px solid transparent;
+}
+
+.as-rge-bars { display: flex; flex-direction: column; gap: 4px; }
+.as-rge-bar { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.as-rge-bar-l { font-size: 11px; color: var(--t-muted); width: 84px; flex-shrink: 0; }
+.as-rge-track {
+  flex: 1 1 auto; min-width: 0; height: 8px; border-radius: 2px;
+  background: var(--t-border); overflow: hidden;
+}
+.as-rge-track > i { display: block; height: 100%; }
+.as-rge-bar-v { font-size: 11px; width: 34px; text-align: right; flex-shrink: 0; color: var(--foreground); }
+.as-rge-how { font-size: 12px; line-height: 1.5; color: var(--t-muted); }
+
+/* 일치/불일치 — 갈렸다는 사실이 결론이다. 경고색은 쓰지 않는다(결함이 아니다). */
+.as-rge-agree {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
+  font-size: 12px; padding: 7px 10px; border-radius: 3px;
+  border: 1px solid var(--t-border); background: var(--t-surface); color: var(--foreground);
+}
+.as-rge-agree.split { border-color: var(--t-accent); }
+.as-rge-agree-p {
+  font-size: 11px; font-family: var(--t-mono); color: var(--t-muted);
+  border: 1px solid var(--t-border); border-radius: 2px; padding: 1px 6px;
+}
+.as-rge-foot { font-size: 11px; color: var(--t-muted); }
+
+/* ── 전이 그래프 ────────────────────────────────────────────────────────────
+   SVG 안의 `font-size` 는 이 파일이 닿지 못한다 — 컴포넌트가 직접 11 이상으로
+   쓴다(A5 의 SankeyNode, A6 의 축 눈금에서 두 번 겪은 함정). 여기서는 컨테이너와
+   포커스 링만 맡는다. */
+.as-rgg { display: flex; flex-direction: column; gap: 7px; }
+.as-rgg-svg { width: 100%; height: auto; max-height: 300px; display: block; }
+.as-rgg-node { cursor: default; }
+.as-rgg-node:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
+.as-rgg-cap { font-size: 12px; line-height: 1.6; color: var(--t-muted); margin: 0; }
+.as-rgg-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  font-size: 11px; color: var(--t-muted);
+}

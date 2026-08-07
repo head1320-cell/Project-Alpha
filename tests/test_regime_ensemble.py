@@ -77,6 +77,28 @@ def test_transition_matrix_is_a_probability_matrix():
     assert 0.0 <= mk["detail"]["persistence"] <= 1.0
 
 
+def test_named_transitions_match_the_matrix_and_do_not_flip_direction():
+    """★방향이 헷갈릴 수 없는 이름이 실제로 그 방향인가★
+
+    `regime_transition` 은 **열이 출발**(P[j][i] = i→j)인데, 엔진 주석이 한때 반대로
+    적혀 있었고 그걸 읽은 프론트가 전이 그래프의 화살표를 뒤집어 그렸다. 대각(지속성)은
+    어느 규약에서든 같은 값이라 **화면으로는 티가 나지 않는다** — 그래서 테스트가
+    필요하다. 여기서 잡지 못하면 "확장에서 수축으로 갈 확률" 자리에 그 반대가 찍힌다.
+    """
+    d = regime_ensemble(_series(140), "kr", months=90)["tools"]["markov"]
+    assert d["available"] is True, d.get("reason")
+    det = d["detail"]
+    tm, e = det["transition"], det["expansion_state"]
+    c = 1 - e
+
+    # 이름 있는 값이 행렬의 **올바른 칸**에서 왔는가 (뒤집으면 여기서 깨진다).
+    assert det["p_exp_to_con"] == pytest.approx(tm[c][e], abs=1e-3)
+    assert det["p_con_to_exp"] == pytest.approx(tm[e][c], abs=1e-3)
+
+    # 2상태에서 출발 확률의 합은 1 — 지속성과 이탈확률은 서로의 여집합이다.
+    assert det["persistence"] + det["p_exp_to_con"] == pytest.approx(1.0, abs=1e-3)
+
+
 @pytest.mark.parametrize("months", [6, MIN_OBS - 1])
 def test_short_sample_is_unavailable_with_a_reason_not_a_uniform_prior(months):
     """★표본이 모자라면 균등분포를 지어내지 않는다★

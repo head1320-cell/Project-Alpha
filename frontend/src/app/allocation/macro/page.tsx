@@ -18,6 +18,7 @@ import {
   dominantPhase, STATUS_LABEL, USAGE_LABEL, USAGE_REASON,
 } from "@/entities/regime-snapshot/model";
 import { LoadingState } from "@/shared/ui/States";
+import { RegimeEnsemblePanel } from "@/widgets/allocation/RegimeEnsemblePanel";
 
 // useSearchParams() 는 정적 프리렌더를 CSR 로 바일아웃시키므로 Suspense 경계가 필요하다
 // (Next 14: missing-suspense-with-csr-bailout). tsc 는 못 잡고 next build 가 잡는다.
@@ -168,6 +169,13 @@ function MacroPhaseStage() {
             </>
           )}
         </section>
+
+        {/* ★국면 판정의 출처가 하나였다 (A7-3)★ 위 스냅샷 카드는 축-확률 하나로
+            판정된 국면을 보여 준다. 그 아래에 상태전환·군집을 나란히 붙인다 —
+            세 방법이 갈리면 그 사실이 "전환 초입" 이라는 정보이고, 평균을 내면
+            그 정보가 사라진다. 스냅샷 유무와 무관하게 항상 보인다: 라이브 국면을
+            읽는 것과 그것을 ID 로 고정하는 것은 별개 행위다. */}
+        <RegimeEnsemblePanel />
       </main>
 
       <aside className="as-center">

@@ -75,6 +75,60 @@ export interface RegimeState {
   markets?: { kr: RegimeState; us: RegimeState };           // KR/US 동시 (두 카드용)
 }
 
+// ─── 국면 앙상블 (A7) ────────────────────────────────────────────────────────
+// `GET /macro/regime-ensemble` — 축 · 상태전환(Markov) · 군집(GMM) 세 도구를
+// **나란히** 받는다. 평균내지 않는다: 어느 모형이 무슨 말을 했는지가 정보다.
+//
+// ★유니온으로 짜는 이유★ 미가용 도구에는 `probs` 자체가 없다(서버가 만들지 않는다).
+// 옵셔널 필드로 두면 `tool.probs?.Goldilocks ?? 0` 이 컴파일되고, 그 순간 "추정하지
+// 못했다" 가 "0%" 로 둔갑한다 — 이 저장소가 반복해서 고쳐 온 결함이다. `available`
+// 로 좁히지 않으면 확률을 읽을 수 없게 타입이 막는다.
+export interface RegimeToolUnavailable {
+  available: false;
+  reason: string;
+}
+export interface RegimeToolAvailable {
+  available: true;
+  method: "axis" | "markov" | "cluster";
+  probs: Record<string, number>;
+  argmax: Regime;
+  detail: Record<string, unknown>;
+  note: string;
+}
+export type RegimeTool = RegimeToolAvailable | RegimeToolUnavailable;
+
+/** markov 가용일 때의 `detail` — 전이 그래프가 그리는 값. */
+export interface MarkovDetail {
+  k_regimes: number;
+  n_obs: number;
+  p_expansion: number;
+  inflation_up: boolean;
+  /**
+   * ★열이 출발이다★ statsmodels 규약은 `P[j][i] = i → j` — 합이 1인 것은 행이 아니라
+   * **열**이다(`test_transition_matrix_is_a_probability_matrix` 가 못박고 있다).
+   * 방향이 필요하면 아래 `p_exp_to_con` / `p_con_to_exp` 를 쓰고 이 행렬을 직접
+   * 인덱싱하지 말 것 — 뒤집어도 대각(지속성)은 같은 값이라 화면으로 티가 나지 않는다.
+   */
+  transition: number[][];
+  expansion_state: number;
+  /** 확장 상태 유지 확률(대각). */
+  persistence: number;
+  /** 확장 → 수축. 행렬에서 파생되지만 방향이 헷갈릴 수 없게 서버가 이름을 붙여 준다. */
+  p_exp_to_con: number;
+  /** 수축 → 확장. */
+  p_con_to_exp: number;
+}
+
+export interface RegimeEnsemble {
+  market: string;
+  months: number;
+  n_obs: number;
+  regimes: Regime[];
+  tools: { axis: RegimeTool; markov: RegimeTool; cluster: RegimeTool };
+  agreement: { unanimous: boolean | null; picks: Record<string, Regime>; note: string };
+  note: string;
+}
+
 export interface HeatmapRow {
   indicator: string;
   name: string;
@@ -100,6 +154,12 @@ export const macroApi = {
   regime: async (): Promise<RegimeState> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/regime`);
     if (!r.ok) throw new Error(`Regime failed: ${r.status}`);
+    return r.json();
+  },
+
+  regimeEnsemble: async (market = "kr", months = 60): Promise<RegimeEnsemble> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime-ensemble?market=${market}&months=${months}`);
+    if (!r.ok) throw new Error(`Regime ensemble failed: ${r.status}`);
     return r.json();
   },
 

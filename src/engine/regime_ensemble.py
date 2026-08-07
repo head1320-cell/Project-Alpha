@@ -143,10 +143,19 @@ def _markov_probs(g_hist: list[float], i_hist: list[float]) -> dict:
                 "k_regimes": 2, "n_obs": n,
                 "p_expansion": round(p_expand, 4),
                 "inflation_up": bool(infl_up),
-                # 전이행렬 P[i][j] = 상태 i → j. 지속성 = 대각.
+                # ★방향에 주의★ statsmodels 의 `regime_transition` 은 **열이 출발**이다:
+                # `P[j][i] = 상태 i → j`. 그래서 합이 1인 것은 행이 아니라 **열**이고,
+                # `test_transition_matrix_is_a_probability_matrix` 가 그걸 못박고 있다.
+                # (이 주석은 한때 `P[i][j] = i → j` 라고 반대로 적혀 있었고, 그걸 읽은
+                #  프론트가 전이 방향을 뒤집어 그렸다 — 대각은 어느 쪽이든 같아서
+                #  화면으로는 티가 나지 않는 종류의 결함이다.)
                 "transition": [[round(float(tm[a][b]), 4) for b in range(2)] for a in range(2)],
                 "expansion_state": exp_s,
                 "persistence": round(float(tm[exp_s][exp_s]), 4),
+                # 방향이 헷갈릴 수 없는 이름으로 한 번 더 준다 — 소비자가 열/행 규약을
+                # 다시 추론하지 않아도 되도록. 위 행렬에서 파생되므로 진실은 하나다.
+                "p_exp_to_con": round(float(tm[1 - exp_s][exp_s]), 4),
+                "p_con_to_exp": round(float(tm[exp_s][1 - exp_s]), 4),
             },
             "note": "Hamilton 상태전환(2상태, 성장축) × 물가축 부호. 전이확률은 성장 상태 기준.",
         }
