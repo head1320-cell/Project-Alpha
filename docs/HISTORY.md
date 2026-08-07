@@ -3413,4 +3413,46 @@ stress 256 · explain 241 · execution 113 (전부 불변) · journal 228 → **
 `/allocation` 128. pytest **1,543 passed / 10 skipped**(불변, 프론트 전용 단계) ·
 tsc 0 · eslint 0 errors(28 warnings) · 신규 스펙 `allocation-stages2.spec.ts` **14 passed**.
 
+### 커밋 뒤에 이어진 자기수정 — 계산을 믿었다가 세 번 틀렸다
+
+`.as-bt-badge` 를 고친 뒤 같은 모양(배경은 테마 토큰, 글자만 하드코딩)을 검색해서 셋을 더
+찾았다: `.as-exec-status.cancelled/.rejected` · `.as-dq.bad_outcome_bad_process` ·
+`.as-health-pill.de_risk`. 전부 조건부 상태라 다크 스윕이 렌더한 적이 없다.
+
+여기서 **계산으로 고치고 계산으로 커밋했다** — 그리고 실측이 세 번 뒤집었다.
+
+1. 다크 실패를 2.35:1 로 계산했는데 실측은 **3.07:1**.
+2. 수정 후 라이트를 5.4:1 로 계산했는데 실측은 **3.95:1** — AA 미달이다. 원래 값
+   `#b91c1c` 은 통과하고 있었고 내가 깼다. 원인은 토큰 선택: `--color-bear`(#dc2626)는
+   **차트/데이터 색**으로 조정된 값이라 연한 틴트 위 글자로 쓰기엔 밝다. 용도가 다르면
+   토큰도 달라야 한다 → `--color-bear-on-tint`(#b91c1c 라이트 / #fca5a5 다크) 신설.
+3. 그 가드를 만들다 `.as-dq` 가 **9px** 인 것이 드러났다. `DecisionJournal` 이 09 에서
+   쓰는 결정품질 배지인데, §56 을 만들 때 `.as-dj-*` 는 목록에 넣고 `.as-dq` 는 넣지
+   않았다 — 이름이 한 글자 다르다는 이유로. 네 변형 중 둘은 배경까지 라이트 리터럴
+   (`#fef3c7`)이라 다크에서 밝은 판이 남았다. grep 이 놓친 세 번째 패밀리다.
+
+가드는 이제 `.aas-root` 안에 해당 클래스의 노드를 **직접 심어** 라이트·다크 양쪽에서 잰다.
+이 세션에서 같은 결함을 네 번 만났고 넷 다 스윕이 초록이었다 — 통과가 아니라 부재였다.
+
+### ★2.3초 만에 초록이던 가드 — 죽은 서버★
+
+그 가드는 처음에 **2.3초 만에** 통과했다(정상 소요 28.7초). 05:52 에 뜬 `next-server` 가
+살아남아 옛 매니페스트를 서빙했고, 그 CSS 파일은 재빌드로 사라져 **HTTP 400** 이었다.
+스타일이 하나도 안 걸린 페이지에서 검은 글자 / 흰 배경을 재고 통과한 것이다.
+`pkill -f "next-server"` 가 그 프로세스를 못 잡아 PID 로 죽여야 했다.
+**소요 시간이 평소의 1/12 이면 통과가 아니라 신호다.**
+
+같은 이유로 첫 전체 게이트도 버렸다: 게이트가 도는 중에 프로브 때문에 `next build` 를
+세 번 했다 — CLAUDE.md 가 명시적으로 경고하는 바로 그 행위다. 54개 초록은 무의미했고
+최종 번들에 대해 다시 돌렸다.
+
+### 최종 게이트
+
+Playwright **268 passed / 0 failed** (1.5시간, exit 0). A5 의 253 에서
+`allocation-stages2.spec.ts` 15건이 누적됐고, 게이트 스테퍼 테스트는 1:1 교체됐다.
+pytest **1,543 passed / 10 skipped**(불변) · tsc 0 · eslint 0 errors.
+
+번들 최종: construct 252 · execution 113 · explain 241 · journal 229 · macro 119 ·
+optimize 243 · overview 243 · stress 256 · thesis 240 · timing 261 · /allocation 128.
+
 이로써 00~09 와 0M, 11개 스테이지가 모두 리팩터를 마쳤다.
