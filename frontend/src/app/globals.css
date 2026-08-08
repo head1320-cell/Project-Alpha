@@ -6200,3 +6200,40 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   display: flex; flex-wrap: wrap; gap: 4px 12px;
   font-size: 11px; color: var(--t-muted);
 }
+
+/* ── 07 측정 대상 피커 — 런 · 기준일 (A7-4) ────────────────────────────────
+   네이티브 `<select>` 와 `<input type="date">` 를 쓴다. 저장소 관례이고(§S3a 가
+   Select 도입을 기각하며 기록한 이유: 네이티브 44개가 이미 접근성을 갖췄고 공짜다),
+   date 는 특히 브라우저의 달력·키보드 입력·로케일을 그대로 얻는다. */
+.as-attr-pick-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px 10px;
+}
+.as-attr-pick-l { font-size: 11px; letter-spacing: .04em; color: var(--t-muted); flex-shrink: 0; }
+.as-attr-pick-run {
+  flex: 1 1 260px; min-width: 0;                 /* 긴 런 라벨이 형제를 밀어내지 않게 */
+  font-size: 12px; font-family: var(--t-mono);
+  border: 1px solid var(--t-border); border-radius: 2px;
+  background: var(--card); color: var(--foreground); padding: 4px 7px;
+}
+.as-attr-pick-asof {
+  font-size: 12px; border: 1px solid var(--t-border); border-radius: 2px;
+  background: var(--card); color: var(--foreground); padding: 4px 7px; flex-shrink: 0;
+}
+.as-attr-pick-run:focus-visible, .as-attr-pick-asof:focus-visible {
+  outline: 2px solid var(--ring); outline-offset: 1px;
+}
+.as-attr-pick-reset {
+  font-size: 11px; font-family: var(--t-mono);
+  border: 1px solid var(--t-border); border-radius: 2px; background: transparent;
+  color: var(--t-muted); padding: 3px 9px; cursor: pointer; flex-shrink: 0;
+}
+.as-attr-pick-reset:hover { border-color: var(--t-accent); color: var(--t-accent); }
+.as-attr-pick-reset:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.as-attr-pick-sel { font-size: 11px; color: var(--t-muted); margin-top: 6px; }
+
+/* 경과 0일 사유 — 경고색은 쓰지 않는다. 결함이 아니라 **구간이 없다** 는 사실이고,
+   런을 바꾸면 풀린다. 접지도 않는다(A5 가 그은 경계: 설명은 접고 사유는 접지 않는다). */
+.as-attr-zero {
+  font-size: 12px; line-height: 1.6;
+  border-left: 2px solid var(--t-accent); padding-left: 9px;
+}

@@ -73,8 +73,18 @@ export interface HealthResult {
 }
 
 export const attributionApi = {
-  get: async (runId: string): Promise<AttributionReport> => {
-    const r = await fetch(`${API_BASE}/api/v1/allocation/attribution/${runId}`);
+  /**
+   * 귀인 리포트.
+   *
+   * `asOf` 는 **기준일** — 결정일부터 이 날짜까지를 사후 구간으로 본다. 비우면 오늘.
+   * 엔진(`compute_attribution`)은 처음부터 이 인자를 받았는데 라우트가 넘기지 않아
+   * 화면에서는 늘 "오늘 만든 런, 경과 0일" 만 볼 수 있었다 — 0일 구간의 실현수익은
+   * 계산할 수 없으므로 전부 미측정으로 보였다. 경과일이 있는 런을 고르면 그대로
+   * 실측이 된다.
+   */
+  get: async (runId: string, asOf?: string): Promise<AttributionReport> => {
+    const q = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+    const r = await fetch(`${API_BASE}/api/v1/allocation/attribution/${runId}${q}`);
     if (!r.ok) throw new Error(`attribution failed: ${r.status}`);
     return r.json();
   },

@@ -3,10 +3,11 @@
 //   "왜 좋아 보이나"가 아니라 결정 시점 사전 기대 vs 사후 실측 비교.
 //   런(ResearchRun) 기록이 있어야 결정 시점이 고정됨 → 없으면 기록 유도.
 //   기존 ex-ante 비중 분해(Market→BL→Optimizer)는 보조 섹션으로 보존.
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { attributionApi, type AttributionReport, type Basis } from "@/entities/attribution/api";
+import { researchApi, type ResearchRunSummary } from "@/entities/research/api";
 import { CorrelationMini, RiskContribDonut, fmtSign } from "@/widgets/allocation/parts";
 import { EvidenceBadge } from "@/shared/ui/evidence";
 
@@ -15,6 +16,86 @@ function BasisTag({ b }: { b: Basis }) {
   return <span className={`as-attr-basis ${b}`}>{ko}</span>;
 }
 const pct = (v: number | null | undefined, d = 2) => (v == null ? "—" : `${fmtSign(v, d)}%`);
+
+const DAY = 86_400;
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** 런의 결정일과, 선택된 기준일까지의 경과일. 경과 0일이면 잴 구간이 없다. */
+function runMeta(r: ResearchRunSummary, asOf: string) {
+  const decided = new Date(r.created_at * 1000);
+  const end = asOf ? new Date(`${asOf}T00:00:00Z`) : new Date();
+  const days = Math.max(0, Math.floor((end.getTime() / 1000 - r.created_at) / DAY));
+  return { date: iso(decided), days };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RunPicker — 무엇을, 어느 시점까지 재는가 (A7-4)
+// ─────────────────────────────────────────────────────────────────────────────
+// ★07 은 정직했지만 닿을 수 있는 것도 못 닿고 있었다★
+// `compute_attribution(run, as_of=...)` 은 처음부터 기준일을 받았다. 그런데 라우트가
+// 넘기지 않았고, 화면은 늘 `activeRunId` — **오늘 만든 런** — 만 봤다. 그래서
+// `2026-08-07 → 2026-08-07 · 0일` 이 되고, 0일 구간의 실현수익은 계산할 수 없으니
+// 모든 사후 항목이 미측정으로 보였다. 데이터가 없어서가 아니라 **고를 방법이
+// 없어서** 였다. 경과일이 있는 런을 고르면 수익·초과수익·사후 변동성·종목별 기여가
+// 그 자리에서 실측이 된다.
+//
+// 여전히 구조적으로 막힌 것은 그대로 미측정이다 — Brinson 은 벤치마크 구성종목
+// 가중이 저장소에 없고, 슬리피지·비용은 연결된 실체결이 없다. 프록시로 채우지 않는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+function RunPicker({
+  runs, runId, asOf, onRun, onAsOf,
+}: {
+  runs: ResearchRunSummary[];
+  runId: string | null;
+  asOf: string;
+  onRun: (id: string) => void;
+  onAsOf: (v: string) => void;
+}) {
+  const today = iso(new Date());
+  // 활성 런이 목록 밖일 수 있다(최근 30건만 받는다) — 그러면 select 가 빈 칸이 되어
+  // "아무것도 안 골랐다" 로 보인다. 없는 항목은 만들어서 채운다.
+  const known = runs.some((r) => r.run_id === runId);
+  const picked = runs.find((r) => r.run_id === runId);
+
+  return (
+    <section className="as-card as-attr-pick">
+      <div className="as-card-title">
+        측정 대상 — 결정(런)과 기준일
+        <span className="as-note-inline">
+          결정일부터 기준일까지가 사후 구간입니다 — 경과 0일이면 잴 구간이 없습니다
+        </span>
+      </div>
+      <div className="as-attr-pick-row">
+        <label className="as-attr-pick-l" htmlFor="as-attr-run">결정(런)</label>
+        <select id="as-attr-run" className="as-attr-pick-run" value={runId ?? ""}
+          onChange={(e) => onRun(e.target.value)}>
+          {!runId && <option value="">— 런을 고르세요 —</option>}
+          {!known && runId && <option value={runId}>{runId} (현재 세션)</option>}
+          {runs.map((r) => {
+            const m = runMeta(r, asOf);
+            return (
+              <option key={r.run_id} value={r.run_id}>
+                {m.date} · 경과 {m.days}일 · {r.kind}{r.name ? ` · ${r.name}` : ""}
+              </option>
+            );
+          })}
+        </select>
+
+        <label className="as-attr-pick-l" htmlFor="as-attr-asof">기준일 (as-of)</label>
+        <input id="as-attr-asof" type="date" className="as-attr-pick-asof num"
+          value={asOf} max={today} onChange={(e) => onAsOf(e.target.value)} />
+        {asOf
+          ? <button type="button" className="as-attr-pick-reset" onClick={() => onAsOf("")}>오늘로</button>
+          : <span className="as-note-inline">비우면 오늘</span>}
+      </div>
+
+      {/* 목록의 `경과 N일` 은 **고르기 위한 라벨**이지 측정값이 아니다. 실제 구간은
+          서버가 재고(`rep.elapsed_days`), 0일일 때의 설명도 거기서 나온다 — 같은 것을
+          두 곳에서 계산하면 언젠가 갈라진다. */}
+      {picked && <div className="as-attr-pick-sel num">{picked.run_id}</div>}
+    </section>
+  );
+}
 const col = (v: number | null | undefined) => (v == null ? undefined : v >= 0 ? "var(--color-bull)" : "var(--color-bear)");
 
 function AttributionView({ rep }: { rep: AttributionReport }) {
@@ -28,6 +109,18 @@ function AttributionView({ rep }: { rep: AttributionReport }) {
         {rep.coverage.source === "mock" && <span className="as-wiz-mock">MOCK</span>}
         {!rep.coverage.has_expost && <span className="as-attr-warn">사후 데이터 없음 — 경과 시간·시세 부족(정직)</span>}
       </div>
+
+      {/* ★0일이면 왜 미측정인지 그 자리에서 말한다 (A7-4)★
+          표를 미측정으로 채워 놓고 침묵하면 사용자는 데이터가 없는 줄 안다 — 사실은
+          잴 구간이 없는 것이다. 둘은 전혀 다른 상태이고, 뒤쪽은 런만 바꾸면 풀린다.
+          경과일은 **서버가 잰 값**(`elapsed_days`)을 그대로 쓴다. */}
+      {rep.elapsed_days === 0 && (
+        <div className="as-note as-attr-zero" role="status">
+          결정일과 기준일이 같습니다(<b className="num">경과 0일</b>). <b>실현수익을 계산할
+          구간이 없어</b> 사후 항목이 전부 미측정입니다 — 데이터가 없어서가 아닙니다.
+          위에서 경과일이 있는 런을 고르거나 기준일을 뒤로 옮기면 그대로 실측이 됩니다.
+        </div>
+      )}
 
       {/* 수익 / 초과수익 */}
       <div className="as-attr-cards">
@@ -149,12 +242,45 @@ function AttributionView({ rep }: { rep: AttributionReport }) {
 
 export default function AttributionWorkspace() {
   const { result, activeRunId, recordRun, pending } = useAllocation();
+  // 고른 런은 세션 상태다 — 이 화면에서 무엇을 보는지일 뿐, 리서치 컨텍스트의
+  // 활성 런(`activeRunId`)을 바꾸지 않는다. 과거 결정을 들여다본다고 해서 지금
+  // 작업 중인 런이 바뀌면 안 된다.
+  const [picked, setPicked] = useState<string | null>(null);
+  const [asOf, setAsOf] = useState("");
 
-  const attrQ = useQuery({
-    queryKey: ["allocation", "attribution", activeRunId],
-    queryFn: () => attributionApi.get(activeRunId!).catch(() => null),
-    enabled: !!activeRunId,
+  const runsQ = useQuery({
+    queryKey: ["research-runs", "attribution-picker"],
+    queryFn: () => researchApi.list(undefined, 30).catch(() => ({ runs: [] })),
   });
+  const runs = runsQ.data?.runs ?? [];
+
+  const runId = picked ?? activeRunId;
+  const attrQ = useQuery({
+    // 런이나 기준일이 바뀌면 리페치한다 — 페이지 리로드도 이동도 없다.
+    queryKey: ["allocation", "attribution", runId, asOf],
+    queryFn: () => attributionApi.get(runId!, asOf || undefined).catch(() => null),
+    enabled: !!runId,
+  });
+
+  const picker = (
+    <RunPicker runs={runs} runId={runId} asOf={asOf}
+      onRun={(id) => setPicked(id || null)} onAsOf={setAsOf} />
+  );
+
+  // ★귀인은 현재 세션의 산물이 아니다 (A7-4)★ 예전에는 세 분기 모두 `activeRunId`
+  // 하나만 봤다 — 즉 **이 세션에서 방금 기록한 런**만. 그래서 서버에 2주 전 런이
+  // 있어도 화면에서 고를 수 없었고, 늘 경과 0일이라 전부 미측정이었다. 피커는
+  // 결과 유무와 무관하게 런이 하나라도 있으면 나온다.
+  const attrBody = (
+    <>
+      {(runs.length > 0 || runId) && picker}
+      {runId && attrQ.isLoading && <div className="as-empty">Attribution 계산 중…</div>}
+      {runId && attrQ.data && <AttributionView rep={attrQ.data} />}
+      {runId && !attrQ.isLoading && !attrQ.data && (
+        <div className="as-empty">Attribution을 불러오지 못했습니다 (DB 미가용일 수 있음).</div>
+      )}
+    </>
+  );
 
   // ★세 분기가 서로 다른 모양이었다 (A6)★ 결과가 없을 때만 그리드 래퍼 없이
   // 벌거벗은 `.as-card` 를 반환하고 있었다. 그러면 이 스테이지는 상태에 따라 레이아웃이
@@ -167,7 +293,13 @@ export default function AttributionWorkspace() {
           <section className="as-card">
             <div className="as-card-title">ATTRIBUTION</div>
             <div className="as-empty">먼저 <b>05 OPTIMIZE</b>에서 배분을 산출하세요. Attribution은 결정 시점(런)의 사전 기대와 사후 실측을 대조합니다.</div>
+            {runs.length > 0 && (
+              <div className="as-note">
+                다만 <b>과거에 기록된 런</b>은 지금 바로 귀인할 수 있습니다 — 아래에서 고르세요.
+              </div>
+            )}
           </section>
+          {attrBody}
         </main>
       </div>
     );
@@ -186,6 +318,7 @@ export default function AttributionWorkspace() {
             </button>
             <div className="as-note">런 기록은 재현성 단위(run_id·데이터 스냅샷·코드 버전)를 서버에 영속합니다. DB 미가용 시 정직하게 실패 보고.</div>
           </section>
+          {attrBody}
           <ExanteDecomp />
         </main>
       </div>
@@ -194,11 +327,7 @@ export default function AttributionWorkspace() {
 
   return (
     <div className="as-ws2 as-ws-exp">
-      <main className="as-center">
-        {attrQ.isLoading && <div className="as-empty">Attribution 계산 중…</div>}
-        {attrQ.data && <AttributionView rep={attrQ.data} />}
-        {!attrQ.isLoading && !attrQ.data && <div className="as-empty">Attribution을 불러오지 못했습니다 (DB 미가용일 수 있음).</div>}
-      </main>
+      <main className="as-center">{attrBody}</main>
       <aside className="as-center">
         <ExanteDecomp />
       </aside>
