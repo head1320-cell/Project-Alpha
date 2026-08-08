@@ -89,6 +89,41 @@ def macro_regime_ensemble(market: str = "kr", months: int = 60):
         raise HTTPException(500, str(e))
 
 
+@router.get("/regime-explain")
+def macro_regime_explain(market: str = "kr", months: int = 60,
+                         regime: str | None = None, forecast_k: int = 3):
+    """국면 판정의 **설명·시간맥락·전환위험** (A8).
+
+    A7 의 `/regime-ensemble` 은 결론(확률)만 준다. 여기는 그 결론을 쓸 수 있게 만드는
+    세 가지를 준다:
+
+      · `transitions` — 행별 Dirichlet 사후 전이행렬(신용구간 포함) · k개월 사후예측 ·
+                        현재 국면 연속 개월 · 역사적 점유율 · 월별 국면 경로(리본용)
+      · `drivers`     — 대상 국면 확률의 **정확 Shapley** 분해(2^n 완전열거) +
+                        지표 → 축의 정확 가법 기여
+
+    ★`span` 을 반드시 함께 읽을 것★ 요청한 `months` 보다 실제 분류 가능한 달이 적으면
+    `span.truncated` 가 True 이고 `span.n_months` 가 진짜 개수다. 화면은 이 값으로
+    구간을 적어야 하며, 요청값을 기간인 것처럼 쓰면 안 된다.
+    """
+    try:
+        from src.engine.regime_drivers import regime_drivers
+        from src.engine.regime_transitions import regime_transitions
+        analyzer = _get_analyzer()
+        snap = analyzer.collector.collect_all(use_cache=True)
+        series_map = getattr(snap, "series", None) or {}
+        tr = regime_transitions(series_map, market=market, months=months,
+                                forecast_k=forecast_k)
+        # 대상 국면은 인자 > 현재 경로의 마지막 > 드라이버 자체의 argmax 순.
+        target = regime or (tr.get("current") if tr.get("available") else None)
+        dr = regime_drivers(series_map, market=market, regime=target)
+        return {"market": market, "transitions": tr, "drivers": dr,
+                "span": tr.get("span")}
+    except Exception as e:
+        logger.error(f"regime-explain 실패: {e}", exc_info=True)
+        raise HTTPException(500, str(e))
+
+
 @router.get("/yield-curve")
 def macro_yield_curve():
     """US Treasury Yield Curve (3M~30Y) + 역전 분석."""
