@@ -21,7 +21,7 @@
 // Playwright 단언은 이 안을 못 본다(`shadcn/dialog.tsx` 헤더가 같은 함정을 기록해 뒀다).
 // 드로어를 검사하는 스펙은 `.as-arch-*` 를 **페이지 루트에서** 잡아야 한다.
 // ═══════════════════════════════════════════════════════════════════════════════
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
 const ArchiveDrawerPanel = dynamic(() => import("./ArchiveDrawerPanel"), { ssr: false });
@@ -49,14 +49,27 @@ export interface ArchiveDrawerProps {
 export function ArchiveDrawer({ label, title, hint, children, className = "" }: ArchiveDrawerProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
   return (
     <>
-      <button type="button" className={`as-arch-t ${className}`.trim()}
+      <button ref={triggerRef} type="button" className={`as-arch-t ${className}`.trim()}
         onClick={() => { setMounted(true); setOpen(true); }}>
         {label}
       </button>
       {mounted && (
-        <ArchiveDrawerPanel open={open} onOpenChange={setOpen} title={title} hint={hint}>
+        <ArchiveDrawerPanel open={open} onOpenChange={setOpen} title={title} hint={hint}
+          // ★포커스를 손으로 되돌린다 — E2E 가 잡은 결함이다★
+          // 패널이 `next/dynamic` 이라 클릭 시점에 Dialog 가 없었고, 그래서 Radix 가
+          // 기억한 복귀 대상이 트리거가 아니었다. Escape 로 닫으면 포커스가 body 로
+          // 떨어져서, 키보드 사용자는 방금 있던 자리를 잃고 처음부터 Tab 해야 했다.
+          // 눈으로는 전혀 보이지 않는 종류의 결함이다.
+          // `requestAnimationFrame` 은 Radix 가 포커스를 정리한 **뒤에** 우리가 넣기
+          // 위한 것이다 — 같은 틱에 부르면 Radix 의 정리에 다시 덮인다.
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            requestAnimationFrame(() => triggerRef.current?.focus());
+          }}>
           {children}
         </ArchiveDrawerPanel>
       )}

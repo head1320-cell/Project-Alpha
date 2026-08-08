@@ -16,17 +16,26 @@ import {
 } from "@/shared/ui/shadcn/dialog";
 
 export default function ArchiveDrawerPanel({
-  open, onOpenChange, title, hint, children,
+  open, onOpenChange, title, hint, children, onCloseAutoFocus,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string;
   hint?: React.ReactNode;
   children: React.ReactNode;
+  /** 닫힌 뒤 포커스를 어디로 돌릴지 — 호출자가 정한다. 아래 주석 참고. */
+  onCloseAutoFocus?: (e: Event) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="as-arch">
+      {/* ★닫기-자동포커스를 Radix 에게 맡기면 포커스가 body 로 떨어진다★
+          이 패널은 `next/dynamic` 으로 떼어져 있어 **트리거를 누르는 시점에 Dialog 가
+          아직 존재하지 않는다**. 그래서 Radix 가 "열기 전에 포커스가 있던 곳" 으로
+          기억하는 대상이 트리거가 아니고, Escape 로 닫으면 포커스가 문서 처음으로
+          떨어진다 — 키보드 사용자는 목록을 처음부터 다시 Tab 해야 한다.
+          `WatchGroupModal.tsx:129` 가 같은 이유로 같은 처리를 하고 있고, 이쪽은
+          되돌릴 대상(트리거)까지 알고 있으므로 복귀까지 호출자가 맡는다. */}
+      <DialogContent className="as-arch" onCloseAutoFocus={onCloseAutoFocus}>
         <div className="as-arch-head">
           <DialogTitle className="as-arch-title">{title}</DialogTitle>
           {hint && <span className="as-arch-hint">{hint}</span>}
