@@ -6237,3 +6237,149 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   font-size: 12px; line-height: 1.6;
   border-left: 2px solid var(--t-accent); padding-left: 9px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §58 — A8 · 0M 국면 설명가능성 · 전환위험 · 시간맥락
+   ─────────────────────────────────────────────────────────────────────────
+   앞선 :root 4블록은 손대지 않는다. 여기는 EOF 추가분이다.
+   SVG 는 없다 — 세 컴포넌트 전부 div/table 이라 §56 하한이 CSS 로 닿는다.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 리본 ─────────────────────────────────────────────────────────────────── */
+.as-rgr { display: flex; flex-direction: column; gap: 5px; }
+.as-rgr-empty { font-size: 12px; color: var(--t-muted); padding: 8px 0; }
+/* 셀은 flex 로 균등 분할한다 — 개수가 몇이든 폭이 알아서 맞는다. */
+.as-rgr-band {
+  display: flex; gap: 1px; height: 26px; border-radius: 2px; overflow: hidden;
+  border: 1px solid var(--t-border); background: var(--t-border);
+}
+.as-rgr-cell { flex: 1 1 0; min-width: 2px; display: block; }
+.as-rgr-axis {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--t-muted);
+}
+.as-rgr-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  font-size: 12px; color: var(--foreground);
+}
+.as-rgr-span, .as-rgr-share { color: var(--t-muted); }
+.as-rgr-trunc { font-size: 12px; color: var(--t-muted); }
+.as-rgr-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--t-muted); }
+.as-rgr-lg { display: inline-flex; align-items: center; gap: 4px; }
+.as-rgr-lg > i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.as-rgr-lg > b { font-family: var(--t-mono); color: var(--foreground); }
+
+/* ── 세그먼트 탭 ──────────────────────────────────────────────────────────── */
+.as-rge-tabs {
+  display: flex; gap: 2px; padding: 2px;
+  border: 1px solid var(--t-border); border-radius: 3px;
+  background: var(--t-surface); width: fit-content; max-width: 100%;
+  overflow-x: auto;
+}
+.as-rge-tab {
+  font-size: 12px; letter-spacing: .02em; white-space: nowrap;
+  border: none; border-radius: 2px; background: transparent;
+  color: var(--t-muted); padding: 5px 12px; cursor: pointer;
+}
+.as-rge-tab:hover { color: var(--foreground); }
+.as-rge-tab.on { background: var(--card); color: var(--foreground); font-weight: 600; }
+.as-rge-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.as-rge-panel { display: flex; flex-direction: column; gap: 10px; }
+
+/* 미가용 요약 — 탭 바깥. 경고색이 아니라 사실 전달이다. */
+.as-rge-na {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 12px; line-height: 1.5; color: var(--foreground);
+  border-left: 2px solid var(--t-accent); padding: 6px 0 6px 9px;
+}
+
+/* ── 전이행렬 ─────────────────────────────────────────────────────────────── */
+.as-rgt { display: flex; flex-direction: column; gap: 9px; }
+.as-rgt-lead, .as-rgt-foot { font-size: 12px; line-height: 1.6; color: var(--t-muted); }
+/* 좁은 폭에서 표만 가로 스크롤한다 — 페이지 전체가 밀리지 않게. */
+.as-rgt-wrap { overflow-x: auto; }
+.as-rgt-tbl { width: 100%; border-collapse: collapse; min-width: 520px; }
+.as-rgt-tbl th, .as-rgt-tbl td {
+  border: 1px solid var(--t-border); padding: 5px 7px; text-align: center;
+}
+.as-rgt-tbl thead th { font-size: 11px; letter-spacing: .03em; background: var(--t-surface); }
+.as-rgt-corner { font-size: 11px; color: var(--t-muted); text-align: left; white-space: nowrap; }
+.as-rgt-tbl tbody th { font-size: 12px; text-align: left; white-space: nowrap; }
+.as-rgt-tbl tbody tr.on { outline: 2px solid var(--t-accent); outline-offset: -2px; }
+.as-rgt-now {
+  margin-left: 5px; font-size: 11px; font-family: var(--t-mono);
+  border: 1px solid var(--t-accent); color: var(--t-accent);
+  border-radius: 2px; padding: 0 4px;
+}
+.as-rgt-tbl td > b { display: block; font-size: 12px; font-family: var(--t-mono); color: var(--foreground); }
+.as-rgt-ci {
+  display: block; font-size: 11px;
+  /* ★muted 를 쓰지 않는다 — 대비 감사가 잡았다★ 이 칸은 틴트가 깔린 배경 위에
+     있어서 `--t-muted`(zinc-500/400)로는 라이트 1.76:1 · 다크 3.32:1 로 AA 를
+     통과하지 못한다. 계산해 보면 틴트를 0.20 까지 낮춰도 muted 는 ~3.2:1 이라
+     여전히 미달이다 — 즉 배경이 아니라 **토큰 선택**이 틀린 것이다.
+     신용구간은 장식이 아니라 읽어야 하는 숫자이므로 본문색을 쓰고, 주 값과는
+     크기(12px 볼드 vs 11px 보통)로 위계를 만든다. A6 이 `--color-bear-on-tint`
+     에서 배운 것과 같은 교훈: 용도가 다르면 토큰도 달라야 한다. */
+  color: var(--foreground);
+}
+.as-rgt-n, .as-rgt-dur { font-size: 12px; color: var(--t-muted); }
+/* 수축 사유 — 글자로 말한다(색만으로 의미 전달 금지). */
+.as-rgt-shrunk {
+  font-size: 12px; line-height: 1.5; color: var(--foreground);
+  border-left: 2px solid var(--t-accent); padding-left: 9px;
+}
+.as-rgt-fc { display: flex; flex-direction: column; gap: 5px; }
+.as-rgt-fc-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.as-rgt-fc-rows { display: flex; flex-direction: column; gap: 4px; }
+.as-rgt-fc-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.as-rgt-fc-l { font-size: 12px; color: var(--t-muted); width: 96px; flex-shrink: 0; }
+.as-rgt-fc-track {
+  flex: 1 1 auto; min-width: 0; height: 8px; border-radius: 2px;
+  background: var(--t-border); overflow: hidden;
+}
+.as-rgt-fc-track > i { display: block; height: 100%; }
+.as-rgt-fc-v { font-size: 12px; width: 38px; text-align: right; flex-shrink: 0; color: var(--foreground); }
+.as-rgt-fc-ci { font-size: 11px; width: 78px; text-align: right; flex-shrink: 0; color: var(--t-muted); }
+
+/* ── 드라이버 워터폴 ──────────────────────────────────────────────────────── */
+.as-rgd { display: flex; flex-direction: column; gap: 8px; }
+.as-rgd-lead, .as-rgd-note { font-size: 12px; line-height: 1.6; color: var(--t-muted); margin: 0; }
+.as-rgd-anchor {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-size: 12px; padding: 6px 9px; border-radius: 3px;
+  background: var(--t-surface); border: 1px solid var(--t-border);
+}
+.as-rgd-anchor-l { color: var(--t-muted); }
+.as-rgd-anchor > b { font-size: 13px; font-family: var(--t-mono); }
+.as-rgd-final { border-color: var(--t-accent); }
+.as-rgd-rows { display: flex; flex-direction: column; gap: 4px; }
+.as-rgd-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.as-rgd-name { font-size: 12px; color: var(--foreground); width: 132px; flex-shrink: 0; }
+.as-rgd-axis { display: block; font-size: 11px; color: var(--t-muted); font-style: normal; }
+/* 중앙 0 기준 좌우 발산 막대 — 부호가 위치로도 읽힌다(색만으로 전달하지 않는다). */
+.as-rgd-track {
+  position: relative; flex: 1 1 auto; min-width: 0; height: 14px;
+  background: var(--t-surface); border-radius: 2px;
+}
+.as-rgd-zero {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: var(--t-border);
+}
+.as-rgd-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 1px; }
+.as-rgd-bar.up { background: var(--chart-up); }
+.as-rgd-bar.dn { background: var(--chart-down); }
+.as-rgd-phi { font-size: 12px; width: 62px; text-align: right; flex-shrink: 0; }
+.as-rgd-phi.up { color: var(--chart-up); }
+.as-rgd-phi.dn { color: var(--chart-down); }
+.as-rgd-axc { font-size: 11px; width: 78px; text-align: right; flex-shrink: 0; color: var(--t-muted); }
+.as-rgd-check {
+  font-size: 12px; line-height: 1.6; color: var(--foreground);
+  border-left: 2px solid var(--t-accent); padding-left: 9px;
+}
+.as-rgd-check.bad { border-left-color: var(--color-bear-on-tint); color: var(--color-bear-on-tint); }
+
+@media (max-width: 900px) {
+  .as-rgd-name { width: 104px; }
+  .as-rgt-fc-l { width: 78px; }
+}

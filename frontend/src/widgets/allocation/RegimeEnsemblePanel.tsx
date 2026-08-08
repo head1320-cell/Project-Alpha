@@ -23,7 +23,7 @@
 // ★전체 리로드 없이 전파★ 새로고침은 react-query 무효화만 한다. `router.refresh()`
 // 도 이동도 없다 — 스냅샷 미리보기 상태(Provider)가 살아 있어야 한다.
 // ═══════════════════════════════════════════════════════════════════════════════
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import {
@@ -32,7 +32,10 @@ import {
 } from "@/entities/macro/api";
 import { EvidenceBadge } from "@/shared/ui/evidence";
 import { LoadingState } from "@/shared/ui/States";
+import { RegimeRibbon } from "@/shared/ui/RegimeRibbon";
 import { RegimeGraph } from "./RegimeGraph";
+import { RegimeTransitionMatrix } from "./RegimeTransitionMatrix";
+import { RegimeDriverWaterfall } from "./RegimeDriverWaterfall";
 
 const TOOL_LABEL: Record<string, { name: string; how: string }> = {
   axis:    { name: "축-확률",           how: "성장·물가 축 z + 불확실성(se) → 사분면 확률" },
@@ -87,16 +90,39 @@ function ToolCard({ id, tool, regimes }: { id: string; tool: RegimeTool; regimes
   );
 }
 
+type TabId = "probs" | "shift" | "why";
+const TABS: { id: TabId; label: string }[] = [
+  { id: "probs", label: "확률 비교" },
+  { id: "shift", label: "전환 위험" },
+  { id: "why", label: "왜 이 국면인가" },
+];
+
 export function RegimeEnsemblePanel({ market = "kr", months = 60 }: { market?: string; months?: number }) {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<TabId>("probs");
+
   const q = useQuery({
     queryKey: ["macro", "regime-ensemble", market, months],
     queryFn: () => macroApi.regimeEnsemble(market, months),
+  });
+  const exQ = useQuery({
+    queryKey: ["macro", "regime-explain", market, months],
+    queryFn: () => macroApi.regimeExplain(market, months, 3),
   });
 
   const data = q.data ?? null;
   const axis = data?.tools.axis;
   const markov = data?.tools.markov;
+  const ex = exQ.data ?? null;
+
+  // 미가용 사유를 한곳에 모은다 — 탭 바깥에 띄우기 위해서다.
+  const naTools = data
+    ? (ORDER.filter((k) => !data.tools[k].available)
+        .map((k) => [k, data.tools[k]] as const)
+        .filter((e): e is [typeof ORDER[number], { available: false; reason: string }] =>
+          !e[1].available))
+    : [];
+  const exNa = ex && !ex.transitions.available ? ex.transitions.reason : null;
 
   return (
     <section className="as-card as-rge">
@@ -121,40 +147,106 @@ export function RegimeEnsemblePanel({ market = "kr", months = 60 }: { market?: s
         </EvidenceBadge>
       )}
 
+      {/* ★리본은 상시★ 탭 뒤에 숨기지 않는다 — 시간 맥락은 어느 탭을 보고 있든
+          함께 읽혀야 하고, 한 줄이라 세로 공간도 거의 쓰지 않는다. */}
+      {ex && ex.transitions.available && (
+        <RegimeRibbon
+          points={ex.transitions.path}
+          span={ex.span}
+          runLength={ex.transitions.run_length_months}
+          occupancy={ex.transitions.occupancy}
+        />
+      )}
+
+      {/* ★미가용 사유는 탭 **바깥**에 요약한다★ A5 가 그은 경계(설명은 접고 사유는
+          접지 않는다)를 탭에도 적용한다 — 탭을 바꿔야만 보이는 경고는 없는 경고다. */}
+      {(naTools.length > 0 || exNa) && (
+        <div className="as-rge-na" role="status">
+          {naTools.map(([k, t]) => (
+            <span className="as-rge-na-i" key={k}>
+              <b>{TOOL_LABEL[k]?.name ?? k}</b> 미가용 — {t.reason}
+            </span>
+          ))}
+          {exNa && <span className="as-rge-na-i"><b>전환 위험·드라이버</b> 미가용 — {exNa}</span>}
+        </div>
+      )}
+
       {data && (
         <>
-          <div className="as-rge-tools">
-            {ORDER.map((k) => (
-              <ToolCard key={k} id={k} tool={data.tools[k]} regimes={data.regimes} />
+          <div className="as-rge-tabs" role="tablist" aria-label="국면 분석 보기">
+            {TABS.map((t) => (
+              <button key={t.id} type="button" role="tab" id={`as-rge-tab-${t.id}`}
+                aria-selected={tab === t.id} aria-controls={`as-rge-p-${t.id}`}
+                className={`as-rge-tab${tab === t.id ? " on" : ""}`}
+                onClick={() => setTab(t.id)}>
+                {t.label}
+              </button>
             ))}
           </div>
 
-          <div className={`as-rge-agree${data.agreement.unanimous === false ? " split" : ""}`}
-            role="status">
-            <b>{data.agreement.unanimous === true ? "세 방법 일치"
-              : data.agreement.unanimous === false ? "방법마다 다름"
-              : "판정한 도구 없음"}</b>
-            <span>{data.agreement.note}</span>
-            {Object.entries(data.agreement.picks).map(([k, v]) => (
-              <span className="as-rge-agree-p" key={k}>
-                {TOOL_LABEL[k]?.name ?? k}: {KO[v] ?? v}
-              </span>
-            ))}
-          </div>
+          {tab === "probs" && (
+            <div className="as-rge-panel" role="tabpanel" id="as-rge-p-probs"
+              aria-labelledby="as-rge-tab-probs">
+              <div className="as-rge-tools">
+                {ORDER.map((k) => (
+                  <ToolCard key={k} id={k} tool={data.tools[k]} regimes={data.regimes} />
+                ))}
+              </div>
 
-          {/* 전이 그래프 — Markov 가 가용할 때만. 빈 그래프를 그리지 않는다. */}
-          {markov?.available ? (
-            <RegimeGraph
-              probs={axis?.available ? axis.probs : markov.probs}
-              probsSource={axis?.available ? "축-확률" : "상태전환"}
-              markov={markov.detail as unknown as MarkovDetail}
-              regimes={data.regimes}
-            />
-          ) : (
-            <EvidenceBadge kind="unavailable"
-              reason={markov && !markov.available ? markov.reason : "상태전환 결과가 없습니다"}>
-              전이 그래프 미가용
-            </EvidenceBadge>
+              <div className={`as-rge-agree${data.agreement.unanimous === false ? " split" : ""}`}
+                role="status">
+                <b>{data.agreement.unanimous === true ? "세 방법 일치"
+                  : data.agreement.unanimous === false ? "방법마다 다름"
+                  : "판정한 도구 없음"}</b>
+                <span>{data.agreement.note}</span>
+                {Object.entries(data.agreement.picks).map(([k, v]) => (
+                  <span className="as-rge-agree-p" key={k}>
+                    {TOOL_LABEL[k]?.name ?? k}: {KO[v] ?? v}
+                  </span>
+                ))}
+              </div>
+
+              {/* 전이 그래프 — Markov 가 가용할 때만. 빈 그래프를 그리지 않는다. */}
+              {markov?.available ? (
+                <RegimeGraph
+                  probs={axis?.available ? axis.probs : markov.probs}
+                  probsSource={axis?.available ? "축-확률" : "상태전환"}
+                  markov={markov.detail as unknown as MarkovDetail}
+                  regimes={data.regimes}
+                />
+              ) : (
+                <EvidenceBadge kind="unavailable"
+                  reason={markov && !markov.available ? markov.reason : "상태전환 결과가 없습니다"}>
+                  전이 그래프 미가용
+                </EvidenceBadge>
+              )}
+            </div>
+          )}
+
+          {tab === "shift" && (
+            <div className="as-rge-panel" role="tabpanel" id="as-rge-p-shift"
+              aria-labelledby="as-rge-tab-shift">
+              {exQ.isLoading && <LoadingState label="전이 사후분포를 추정하는 중" />}
+              {ex && <RegimeTransitionMatrix tr={ex.transitions} />}
+              {!exQ.isLoading && !ex && (
+                <EvidenceBadge kind="unavailable" reason="전환 위험을 불러오지 못했습니다">
+                  전이행렬 미가용
+                </EvidenceBadge>
+              )}
+            </div>
+          )}
+
+          {tab === "why" && (
+            <div className="as-rge-panel" role="tabpanel" id="as-rge-p-why"
+              aria-labelledby="as-rge-tab-why">
+              {exQ.isLoading && <LoadingState label="Shapley 분해를 계산하는 중" />}
+              {ex && <RegimeDriverWaterfall dr={ex.drivers} />}
+              {!exQ.isLoading && !ex && (
+                <EvidenceBadge kind="unavailable" reason="드라이버 분해를 불러오지 못했습니다">
+                  분해 미가용
+                </EvidenceBadge>
+              )}
+            </div>
           )}
 
           <div className="as-rge-foot num">
