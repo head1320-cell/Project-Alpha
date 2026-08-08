@@ -3565,3 +3565,45 @@ statsmodels 의 `regime_transition` 은 **열이 출발**(`P[j][i] = i→j`)인�
 
 계획서의 macro 기준선 112 kB 는 A5 시점 값이었다. 실측 기준선은 **119 kB** 이고
 변경 후 **123 kB** — +4 kB 로 예산 안이다. **기준선은 인용하지 말고 다시 재야 한다.**
+
+### 최종 게이트 — 280 passed / 14 failed, 그리고 그 14건이 무엇인지
+
+Playwright **280 passed / 14 failed** (1.7시간). A6 기준선 268 + 새 스펙 26 = 294 =
+280 + 14 이므로 새 테스트는 전부 실행됐다.
+
+**14건은 이 컨테이너에 데이터베이스가 없어서다 — 추정이 아니라 대조로 확인했다.**
+
+먼저 서버가 스스로 그렇게 말한다:
+
+```
+init_db failed: No module named 'psycopg2'
+POST /research-runs → {"recorded":false,"message":"DB 미가용 — 런이 저장되지 않았습니다."}
+GET  /research-runs → {"runs":[]}
+```
+
+실패 목록도 그 모양이다 — `research-run-roundtrip` 5 · `macro-aas-bridge` 4 ·
+`backtest` 2 · `timing-three-way` 1 은 전부 **서버 영속성**을 요구하고, 나머지 둘
+(`aas-dark` 00 OVERVIEW · `allocation-alphalab` 레지스트리 행)도 DB 가 채우는 화면을 본다.
+
+그래도 설명이 그럴듯하다는 이유로 넘기지 않고 **두 번 대조했다**:
+
+1. 같은 6개 스펙을 **격리 실행** → 14 failed / 35 passed. 새 스펙과의 상호간섭이 아니다
+   (A4 에서 스펙 하나가 ResearchRun 을 남겨 다른 스펙을 죽인 전례가 있어 먼저 배제했다).
+2. **`1997b48`(A6 최종 커밋, 기록된 게이트가 268 passed / 0 failed)를 체크아웃**해
+   같은 6개를 돌렸다 → **실패 목록이 바이트 단위로 동일**, 14 failed / 35 passed.
+
+즉 A6 에서 초록이던 스펙들이 A7 코드 없이도 이 컨테이너에서 똑같이 빨갛다. 원인은
+저장소가 아니라 실행 환경이고, A7 의 회귀는 0건이다. **이 결론은 "아마 환경일 것" 이라는
+추론이 아니라 같은 명령을 두 커밋에서 돌려 얻은 측정이다** — 그 차이가 이 저장소가
+반복해서 지불해 온 비용이다.
+
+DB 가 있는 환경에서 게이트를 다시 돌리면 294 passed 가 기대값이다. 그 수치는 여기서
+**재지 않았으므로 적지 않는다.**
+
+### 최종 수치
+
+- 새 스펙 `allocation-stages3` **26 passed** (단독 실행)
+- pytest **1,555 passed / 10 skipped** (A6 의 1,543 + A7 백엔드 12건)
+- tsc 0 · eslint 0 errors / 28 warnings · CSS 특정도 가드 5 passed
+- 번들: macro 119 → **123** (+4) · explain 241 → **242** (+1) ·
+  alphalab **142** · journal **230** — 전부 ADR 001 의 라우트당 4 kB 안
