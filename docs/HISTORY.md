@@ -3706,3 +3706,20 @@ red 가 되는 것을 확인했다.
 - 번들 `/allocation/macro` 123 → **126 kB (+3)** — ADR 001 예산 안.
   Recharts 를 이 청크에 끌어오지 않으려고 세 컴포넌트 전부 손으로 그린 div/table 이다.
   SVG 가 없으므로 §56 하한이 CSS 로 닿는다. **새 dependency 0개.**
+
+### 최종 게이트 — 293 passed / 14 failed (환경)
+
+Playwright **293 passed / 14 failed** (1.7시간). 산술이 맞는다: A7 게이트의 294건
+(280+14) + 새 스펙 13건 = 307 = 293 + 14. 새 테스트는 전부 실행됐고 전부 통과했다.
+
+**14건은 A7 때와 같은 목록이고, 원인도 같다 — 이 컨테이너에 DB 가 없다.**
+`psycopg2` 미설치라 서버가 스스로 `{"recorded":false,"message":"DB 미가용 — 런이
+저장되지 않았습니다."}` 를 답한다. 실패한 것은 전부 서버 영속성을 요구하는 스펙이다
+(`research-run-roundtrip` 5 · `macro-aas-bridge` 4 · `backtest` 2 ·
+`timing-three-way` 1 · `aas-dark` 00 OVERVIEW · `allocation-alphalab` 레지스트리).
+
+A7 에서 이미 **A6 최종 커밋 `1997b48`(기록된 게이트 268 passed / 0 failed)을
+체크아웃해 같은 6개 스펙을 돌렸고, 실패 목록이 바이트 단위로 동일**한 것을 확인했다.
+즉 이 14건은 A7 코드도 A8 코드도 없이 이 환경에서 똑같이 빨갛다. **A8 회귀 0건.**
+
+DB 가 있는 환경의 기대값은 307 passed 이지만, 여기서 재지 않았으므로 적지 않는다.
