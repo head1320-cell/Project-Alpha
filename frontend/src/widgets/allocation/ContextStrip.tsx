@@ -33,8 +33,19 @@ import { analysisApi } from "@/entities/macro/analysisApi";
 import { allocationApi, MODEL_TYPE_SHORT } from "@/entities/allocation/api";
 import { type MacroIndicator } from "@/entities/macro/analysisModel";
 import { STATUS_LABEL, USAGE_LABEL, USAGE_REASON } from "@/entities/regime-snapshot/model";
+import { Badge } from "@/shared/ui/shadcn/badge";
 import { useAllocation } from "./AllocationProvider";
 import { useResearchRegime } from "./useResearchRegime";
+
+/** 상태 → Badge variant. 예전엔 이 매핑이 CSS 의 `[data-mode="…"]` 선택자와
+ *  `.as-usage-*` 리터럴에 흩어져 있었고, 전부 **라이트 전용 hex** 였다
+ *  (`#dcfce7`/`#fef3c7`/`#f4f4f5`). 매핑을 여기로 올리면 색은 토큰이 맡는다. */
+const MODE_TONE: Record<string, "bear" | "warn" | "bull"> = {
+  DEFENSIVE: "bear", CAUTIOUS: "warn", NORMAL: "bull",
+};
+const USAGE_TONE: Record<string, "bull" | "warn" | "neutral"> = {
+  backtest_eligible: "bull", forward_only: "warn", unavailable: "neutral",
+};
 
 const CANARY: { id: string; label: string }[] = [
   { id: "VIXCLS", label: "VIX" },
@@ -190,8 +201,14 @@ export function ContextStrip() {
 
       {rg.asOf && <span className="as-ctx-asof num">@{rg.asOf.slice(0, 10)}</span>}
 
+      {/* ★칩 기하를 Badge 하나로 모은다★ 예전엔 as-ctx-regime(3px 8px/r2/h26.4) ·
+          as-ctx-mode(2px 6px/r2/h20.4) · as-ctx-stale(2px 7px/r4/h20.4) 가 전부 손으로
+          다른 값을 들고 있었다(실측). 클래스명은 E2E 계약이라 노드에 그대로 남긴다. */}
       {rg.recommendedMode && (
-        <span className="as-ctx-mode num" data-mode={rg.recommendedMode}>{rg.recommendedMode}</span>
+        <Badge variant={MODE_TONE[rg.recommendedMode] ?? "neutral"}
+          className="as-ctx-mode num" data-mode={rg.recommendedMode}>
+          {rg.recommendedMode}
+        </Badge>
       )}
       {rg.stressScore != null && (
         <span className="as-ctx-stress num">
@@ -206,12 +223,13 @@ export function ContextStrip() {
         </span>
       )}
       {rg.researchUsage && (
-        <span className={`as-ctx-usage as-usage-${rg.researchUsage}`}>
+        <Badge variant={USAGE_TONE[rg.researchUsage] ?? "neutral"}
+          className={`as-ctx-usage as-usage-${rg.researchUsage}`}>
           {USAGE_LABEL[rg.researchUsage]}
-        </span>
+        </Badge>
       )}
       {!rg.dataStatus && resultMock && (
-        <span className="as-ctx-status as-ctx-mock">합성(mock)</span>
+        <Badge variant="warn" className="as-ctx-status as-ctx-mock">합성(mock)</Badge>
       )}
 
       {/* ① 활성 런 / 스터디 신원 */}
@@ -263,16 +281,14 @@ export function ContextStrip() {
               조용히 현재 팩을 보여주면 사용자는 그 런이 재현됐다고 믿는다 — 7c 가 룰셋
               버전에 대해 세운 규칙과 같다. 판단 근거는 두 해시뿐이므로 지어낼 것이 없다. */}
           {packChanged && (
-            <em className="as-ctx-scen-drift">팩 변경됨</em>
+            <Badge variant="warn" className="as-ctx-scen-drift">팩 변경됨</Badge>
           )}
         </span>
       )}
 
       {/* ⑧ 마지막 계산 대비 미반영 변경 — isResultStale 을 그대로 노출(재계산하지 않는다) */}
       {isResultStale && (
-        <span className="as-ctx-stale">
-          미반영 변경
-        </span>
+        <Badge variant="warn" className="as-ctx-stale">미반영 변경</Badge>
       )}
 
       {/* ⑨ 재현 식별자 */}

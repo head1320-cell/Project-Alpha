@@ -24,6 +24,9 @@ export interface WeightRowProps {
   code: string;
   name: string;
   weight: number;
+  /** 최적화 비중(%) — 아직 산출 전이면 `null`. `0` 과 구분되어야 하므로 옵셔널이 아니라
+   *  **명시적 null** 이다. `?? 0` 으로 메우면 "최적화가 0% 를 권했다"로 읽힌다. */
+  optimized?: number | null;
   onWeight: (code: string, w: number) => void;
   onRemove: (code: string) => void;
 }
@@ -34,8 +37,11 @@ export function clampWeight(v: number): number {
   return Math.round(Math.max(0, Math.min(100, v)) * 10) / 10;
 }
 
-export function WeightRow({ code, name, weight, onWeight, onRemove }: WeightRowProps) {
+export function WeightRow({ code, name, weight, optimized, onWeight, onRemove }: WeightRowProps) {
   const set = (v: number) => onWeight(code, clampWeight(v));
+  // Δ = 최적화 − 현재. 결과가 없으면 **칩 자체를 그리지 않는다** — 0.0%p 를 그리면
+  // "이미 최적"과 "아직 안 돌림"이 화면에서 같아진다(이 페이지가 A3 에서 세운 규칙).
+  const delta = optimized == null ? null : optimized - weight;
 
   return (
     // `.as-wrow` 는 E2E 계약이라 유지하고, 레이아웃 전용 수식자를 따로 붙인다 —
@@ -54,6 +60,13 @@ export function WeightRow({ code, name, weight, onWeight, onRemove }: WeightRowP
         onChange={(e) => set(parseFloat(e.target.value))}
       />
       <span className="as-w-unit">%</span>
+
+      {delta != null && (
+        <span className={`as-w-delta num${delta > 0.05 ? " up" : delta < -0.05 ? " dn" : " flat"}`}
+          title={`최적화 ${optimized!.toFixed(1)}% − 현재 ${weight.toFixed(1)}%`}>
+          {delta > 0 ? "+" : ""}{delta.toFixed(1)}%p
+        </span>
+      )}
 
       <Button
         variant="ghost"

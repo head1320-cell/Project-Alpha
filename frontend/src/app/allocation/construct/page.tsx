@@ -58,7 +58,8 @@ export default function ConstructStage() {
         </div>
         {mode === "direct"
           ? <PortfolioBuilder holdings={holdings} studiesVersion={studiesVersion}
-              onChange={setHoldingsReset} onLoadStudy={loadStudy} />
+              onChange={setHoldingsReset} onLoadStudy={loadStudy}
+              optimized={result ? result.weights.optimized : null} />
           : mode === "factor"
             ? <FactorBuilder holdings={holdings} onApply={setHoldingsReset} />
             : <StrategyLibrary />}
@@ -89,7 +90,9 @@ export default function ConstructStage() {
         <section className="as-card">
           <div className="as-card-title">
             WEIGHT COMPARISON
-            {stale && <Badge variant="secondary" className="as-stale-b">재계산 필요</Badge>}
+            {/* 낡음은 중립(secondary)이 아니라 경고다 — ContextStrip 의 `미반영 변경`
+                칩과 **같은 variant** 를 쓴다. 한 화면에 상태 배지 두 벌을 두지 않는다. */}
+            {stale && <Badge variant="warn" className="as-stale-b">재계산 필요</Badge>}
           </div>
           {cmpRows.length ? <WeightComparison rows={cmpRows} />
             : <div className="as-empty">자산 추가 후 표시</div>}
@@ -101,33 +104,47 @@ export default function ConstructStage() {
           )}
         </section>
 
-        <div className="as-mid2">
-          <section className="as-card">
-            <div className="as-card-title">CONCENTRATION</div>
-            <div className="as-stats">
-              <div className="as-stat">
-                <span className="as-stat-k">HHI</span>
-                <b className="as-stat-v num">{conc.hhi.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b>
-              </div>
-              <div className="as-stat">
-                <span className="as-stat-k">유효 종목수</span>
-                <b className="as-stat-v num">{conc.neff.toFixed(1)}</b>
-              </div>
-              <div className="as-stat">
-                <span className="as-stat-k">TOP3 비중</span>
-                <b className="as-stat-v num">{conc.top3.toFixed(1)}%</b>
-              </div>
+        {/* ★두 카드를 한 장으로★ 값 4개에 `.as-card` 헤더 두 개를 쓰던 자리다.
+            크롬이 데이터보다 많으면 밀도가 아니라 소음이다. */}
+        <section className="as-card">
+          <div className="as-card-title">CONCENTRATION &amp; COVERAGE</div>
+          <div className="as-stats">
+            <div className="as-stat">
+              <span className="as-stat-k">HHI</span>
+              <b className="as-stat-v num">{conc.hhi.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b>
+              <span className="as-stat-x">Σw² × 10,000 · 낮을수록 분산</span>
             </div>
-            <div className="as-note">HHI = Σw² × 10,000 — 낮을수록 분산. 유효 종목수 = 10,000 / HHI.</div>
-          </section>
-          <section className="as-card">
-            <div className="as-card-title">DATA COVERAGE</div>
+            {/* ★임의 임계값을 만들지 않는다★ HHI 에 "1,500 미만이면 양호" 같은 밴드를
+                붙이고 싶어지지만, 그건 반독점 심사 기준이지 포트폴리오 기준이 아니다.
+                대신 **이미 참인 것**을 나란히 둔다 — 유효 6.2 / 보유 10종목 은
+                설명이 필요 없고 지어낸 값이 하나도 없다. */}
+            <div className="as-stat">
+              <span className="as-stat-k">유효 종목수</span>
+              <b className="as-stat-v num">{conc.neff.toFixed(1)}</b>
+              <span className="as-stat-x num">
+                {holdings.length ? `보유 ${holdings.length}종목 중` : "보유 없음"}
+              </span>
+            </div>
+            <div className="as-stat">
+              <span className="as-stat-k">TOP3 비중</span>
+              <b className="as-stat-v num">{conc.top3.toFixed(1)}%</b>
+              {/* 비율은 막대로도 — 숫자만으로는 100% 대비 위치가 안 읽힌다. */}
+              <span className="as-conc-bar" aria-hidden="true">
+                <i style={{ width: `${Math.min(100, conc.top3).toFixed(1)}%` }} />
+              </span>
+            </div>
+          </div>
+          <div className="as-conc-cov">
+            <span className="as-stat-k">데이터 커버리지</span>
             {cov
-              ? <div className="num as-cov">{cov}</div>
-              : <div className="as-empty">최적화를 실행하기 전에는 커버리지가 측정되지 않습니다.</div>}
-            <div className="as-note">시총 미보유 자산은 중앙값 대체(캡가중 prior). 팩터 결측 자산은 재정규화.</div>
-          </section>
-        </div>
+              ? <span className="num as-cov">{cov}</span>
+              : <span className="as-empty">최적화 실행 전에는 측정되지 않습니다.</span>}
+          </div>
+          <div className="as-note">
+            유효 종목수 = 10,000 / HHI. 시총 미보유 자산은 중앙값 대체(캡가중 prior) ·
+            팩터 결측 자산은 재정규화.
+          </div>
+        </section>
 
         {/* ★고급 설정은 접어 둔다★ SleeveStudio 는 슬리브 저장·결합·리스크예산·상관·군집을
             한꺼번에 펼치는 141줄짜리 패널이다. 자산을 담는 것이 목적인 화면에서 이게 늘

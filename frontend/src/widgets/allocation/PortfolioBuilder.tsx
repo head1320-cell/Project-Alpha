@@ -18,11 +18,13 @@ export function equalize(holdings: Holding[]): Holding[] {
   return holdings.map((h, i) => ({ ...h, weight: i === 0 ? Math.round((100 - w * (holdings.length - 1)) * 10) / 10 : w }));
 }
 
-export function PortfolioBuilder({ holdings, onChange, onLoadStudy, studiesVersion }: {
+export function PortfolioBuilder({ holdings, onChange, onLoadStudy, studiesVersion, optimized }: {
   holdings: Holding[];
   onChange: (next: Holding[]) => void;
   onLoadStudy: (s: AllocationStudy) => void;
   studiesVersion: number;   // 저장 시 목록 갱신 트리거
+  /** 최적화 비중 맵 — 아직 산출 전이면 null. `0` 과 구분한다(A3 규칙). */
+  optimized?: Record<string, number> | null;
 }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<SymbolHit[]>([]);
@@ -130,12 +132,23 @@ export function PortfolioBuilder({ holdings, onChange, onLoadStudy, studiesVersi
         )}
 
         {holdings.length === 0 && <div className="as-empty">위 검색으로 자산을 추가하세요 (2개 이상)</div>}
+        {/* ★열 머리글★ 예전엔 이름·입력·%·삭제가 머리글 없이 바로 쌓였다. 10종목이면
+            20행이 레일에 들어차는데 각 열이 무엇인지 어디에도 없었다. Δ 열은 최적화
+            결과가 있을 때만 나타나므로 머리글도 그때만 적는다. */}
+        {holdings.length > 0 && (
+          <div className="as-wrow-head" aria-hidden="true">
+            <span>자산</span>
+            <span className="as-wrow-head-w">비중</span>
+            {optimized && <span className="as-wrow-head-d">Δ 최적화</span>}
+          </div>
+        )}
         {holdings.map((h) => (
           <WeightRow
             key={h.code}
             code={h.code}
             name={h.name}
             weight={h.weight}
+            optimized={optimized ? optimized[h.code] ?? null : null}
             onWeight={setWeight}
             onRemove={(code) => onChange(holdings.filter((x) => x.code !== code))}
           />

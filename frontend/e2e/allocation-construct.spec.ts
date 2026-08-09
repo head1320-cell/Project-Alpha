@@ -111,8 +111,10 @@ test("★미계산을 0 으로 지어내지 않는다 — 커버리지도, 캡�
   expect(await na.count(), "미계산 셀이 존재한다").toBeGreaterThan(0);
   await expect(na.first()).toHaveText("미계산");
 
-  // 커버리지 카드도 값을 지어내지 않고 사유를 적는다.
-  const cov = page.locator(".as-card", { hasText: "DATA COVERAGE" });
+  // 커버리지도 값을 지어내지 않고 사유를 적는다.
+  // (A9 에서 CONCENTRATION 카드와 한 장으로 합쳤다 — 값 4개에 카드 헤더 두 개를
+  //  쓰던 자리였다. 단정의 **의도**는 그대로고, 가리키는 카드 이름만 따라 옮긴다.)
+  const cov = page.locator(".as-card", { hasText: "CONCENTRATION & COVERAGE" });
   await expect(cov).toContainText("측정되지 않습니다");
 });
 

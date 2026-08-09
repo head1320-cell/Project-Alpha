@@ -3400,10 +3400,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-ctx { display: flex; align-items: center; gap: 8px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 4px 8px; flex-wrap: wrap; }
 .as-ctx-regime { display: inline-flex; align-items: center; gap: 7px; font-family: var(--t-mono); font-size: 10px; letter-spacing: .05em; border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 8px; text-decoration: none; color: var(--t-ink); }
 .as-ctx-regime:hover { filter: brightness(0.97); }
-.as-ctx-mode { font-family: var(--t-mono); font-size: 9.5px; border: 1px solid var(--t-border); border-radius: 2px; padding: 2px 6px; color: var(--t-muted); }
-.as-ctx-mode[data-mode="DEFENSIVE"] { color: var(--color-bear); border-color: var(--color-bear); }
-.as-ctx-mode[data-mode="CAUTIOUS"] { color: var(--color-caution); border-color: var(--color-caution); }
-.as-ctx-mode[data-mode="NORMAL"] { color: var(--color-bull); border-color: var(--color-bull); }
+/* A9: 기하·색은 Badge(variant) 로 옮겼다 — 이 규칙들은 `@tailwind utilities`(4줄)보다
+   뒤에 있어서 남겨 두면 Badge 의 유틸리티를 이긴다(§48 .brun-card · §50 .aas-gate-skip
+   과 같은 함정). 서체만 남기고 나머지는 뺀다. 클래스는 E2E 훅으로 계속 산다. */
+.as-ctx-mode { font-family: var(--t-mono); }
+/* [data-mode] 색 매핑은 ContextStrip 의 MODE_TONE → Badge variant 로 이동했다.
+   data-mode 속성 자체는 남는다(E2E 가 읽는다). */
 .as-ctx-stress { font-family: var(--t-mono); font-size: 9.5px; color: var(--t-muted); }
 .as-ctx-fill { flex: 1; }
 .as-ctx-canary { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
@@ -4270,12 +4272,11 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px solid var(--t-border); background: var(--t-surface); text-decoration: none; color: inherit; font-size: 11px; }
 .as-ctx-snap:hover { border-color: var(--t-accent); }
 .as-ctx-snap em { font-style: normal; font-size: 9px; letter-spacing: .08em; color: var(--t-muted); }
-.as-ctx-usage { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+/* .as-ctx-usage 기하 → Badge. */
 
-/* 사용 등급 색 — forward_only 는 경고색으로 눈에 띄게(과거 검증 불가라는 사실을 숨기지 않는다) */
-.as-usage-backtest_eligible { background: #dcfce7; color: #15803d; }
-.as-usage-forward_only      { background: #fef3c7; color: #a16207; }
-.as-usage-unavailable       { background: #f4f4f5; color: #71717a; }
+/* 사용 등급 색 — forward_only 는 경고색으로(과거 검증 불가를 숨기지 않는다).
+   ★라이트 전용 리터럴 3개(#dcfce7 · #fef3c7 · #f4f4f5)를 걷어냈다★ 다크에서 글자만
+   밝아지고 배경은 흰 채로 남는 결함 계열이었다. 이제 USAGE_TONE → Badge variant. */
 
 /* 0M 스테이지 */
 .as-macro-map { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
@@ -4319,8 +4320,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-ctx-run:hover, .as-ctx-snap:hover { border-color: var(--t-accent); }
 
 /* 미반영 변경 — 마지막 계산이 현재 입력을 반영하지 않는다는 경고 */
-.as-ctx-stale { border-color: #f59e0b; color: #a16207; background: #fef3c7; font-weight: 600; }
-.as-ctx-mock  { border-color: #f59e0b; color: #a16207; }
+/* .as-ctx-stale · .as-ctx-mock → Badge variant="warn". 라이트 전용 앰버 리터럴 제거. */
 
 @media (max-width: 1200px) {
   /* ★여기서 룰셋·시나리오 신원을 `display:none` 으로 접고 있었다 — 되돌렸다 (P10)★
@@ -4616,8 +4616,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── 런 근거 · 팩 변경 표시 (Phase 10b) ─────────────────────────────────────── */
 /* ★"그때와 다른 팩" 은 경고이지 정보가 아니다★ 조용히 현재 팩을 보여주면 사용자는 그 런이
    재현됐다고 믿는다 — 눈에 걸리는 색을 쓴다(as-ctx-rules-na 와 같은 규칙). */
-.as-ctx-scen-drift { color: var(--color-bear); font-size: 9px; font-weight: 700;
-  font-style: normal; margin-left: 4px; }
+.as-ctx-scen-drift { font-style: normal; margin-left: 4px; }
 .as-rr-rationale { border-top: 1px solid var(--t-border); margin-top: 8px; padding-top: 8px;
   display: flex; flex-direction: column; gap: 4px; }
 .as-rr-rat-row { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: 11px; }
@@ -5784,8 +5783,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
      토큰을 내리는 편이 옳다: 이 색을 글자로 쓰는 다른 소비자도 같이 고쳐진다. */
   --color-caution: #b45309;
 }
-/* 낡음 배지 — 4.42:1 로 아슬하게 미달이었다(리터럴이라 토큰으로 못 잡는다). */
-.as-ctx-stale { color: #854d0e; }
+/* 낡음 배지의 #854d0e 는 §59 의 --st-warn-fg 로 승격했다(한곳에서만 정의). */
 /* 04 — 매크로 오버레이 체크박스 라벨(클래스 없는 span). */
 .aas-root .as-3w-toggle span { font-size: 11px; }
 
@@ -6383,3 +6381,143 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   .as-rgd-name { width: 104px; }
   .as-rgt-fc-l { width: 78px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §59 — A9: 01 CONSTRUCT 컴포넌트 품질 (스테퍼 폭 · 배지 수렴 · 밀도)
+   ───────────────────────────────────────────────────────────────────────────
+   ★스테퍼가 잘린 진짜 이유는 폰트가 아니라 폭 배분이었다★
+   `.aas-wiz-phase`(:3578)가 세 페이즈 모두 `flex: 1` 이었다. 그런데 스텝 수는
+   2(SETUP) / 4(LOGIC) / 3(VALIDATION) 이다. 결과적으로 **스텝당 폭이 스텝 수에
+   반비례**했다. 1280px 실측:
+
+     SETUP       264.1px / 2스텝 → 스텝 123px   → 라벨 상자 95px
+     LOGIC       264.1px / 4스텝 → 스텝  59.5px → 라벨 상자 32px
+     VALIDATION  264.1px / 3스텝 → 스텝  80.7px → 라벨 상자 50px
+
+   `02 ALPHA LAB` 은 90px 이 필요한데 32px 을 받아 3분의 1만 보였고,
+   `.aas-wiz-lab` 의 `text-overflow: ellipsis` 가 그 사실을 조용히 감췄다.
+   §49 가 타입을 10→11px 로 올린 것은 적자를 키웠을 뿐 원인이 아니다.
+   (A7 에서 얻은 교훈 그대로 — ellipsis 는 결함을 **정상처럼 보이게** 만든다.)
+
+   고친 방식 셋:
+     W1 폭을 스텝 수에 **비례**시킨다 (`--wiz-steps`, WizardTracker 가 넘긴다).
+     W2 번호를 라벨에서 빼내 **마커**로 올린다 — 라벨이 스텝 폭을 통째로 쓴다.
+        `min-width` 로 가장 긴 라벨(ATTRIBUTION ≈ 85px)이 항상 들어가게 못박는다.
+        모자라면 `.aas-wiz` 의 기존 `overflow-x: auto` 가 스크롤한다 — §49 가 이미
+        선언한 정책이고, **보이는 스크롤은 조용한 잘림보다 낫다.**
+     W3 부제는 활성·낡음일 때만. (경고인 superseded 는 어느 상태에서도 안 접는다.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* W1 — 스텝 수 비례 배분 */
+.aas-wiz-phase { flex: var(--wiz-steps, 1) 1 0; }
+
+/* W2 — 세로 스텝: 마커 위 · 라벨 아래. 라벨이 가로폭을 통째로 쓴다. */
+.aas-wiz-step {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  /* ATTRIBUTION(11px/600) ≈ 85px + 좌우 패딩 12px. 이 값이 "절대 안 잘린다" 의 근거다. */
+  min-width: 97px;
+  padding: 4px 6px;
+}
+.aas-wiz-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 14px; padding: 0 3px;
+  font-size: 11px; line-height: 1;
+  color: var(--t-muted);
+  border: 1px solid var(--t-border); border-radius: 2px;
+  background: var(--card);
+}
+.aas-wiz-step.on .aas-wiz-mark { color: var(--t-accent); border-color: var(--t-accent); }
+/* 액센트 위 글자색은 `--primary-foreground` 를 쓴다 — 라이트 #fff / 다크 #09090b.
+   다크 액센트(#7c74ff)는 밝은 라벤더라 흰 글씨가 3.62:1 로 미달이고, §52 가 이미
+   그 이유로 이 토큰을 갈라 두었다. 여기서 #fff 를 박으면 그 교훈을 되돌리는 것이다. */
+.aas-wiz-step.done .aas-wiz-mark {
+  color: var(--primary-foreground); background: var(--t-accent); border-color: var(--t-accent);
+}
+/* ★nowrap 을 푼다★ `min-width: 97px` 은 **끊을 수 없는 가장 긴 낱말**(ATTRIBUTION)
+   기준이다. 두 낱말짜리 라벨(`MACRO PHASE` 94px, `ALPHA LAB`)은 그보다 넓을 수 있어서
+   실측에서 11px 넘쳤다. 한 낱말은 min-width 가 보장하고, 여러 낱말은 줄바꿈으로 받는다
+   — 어느 쪽도 잘리지 않는다. `.aas-wiz-steps` 가 flex 라 형제 높이는 함께 늘어난다. */
+.aas-wiz-lab {
+  font-size: 11px; max-width: 100%;
+  white-space: normal; text-overflow: clip;
+  line-height: 1.25; overflow-wrap: break-word;
+}
+
+/* W4 — 라이트 전용 앰버 리터럴을 토큰으로.
+   `--color-caution` 계열은 §52 에 다크 짝(#fbbf24)이 이미 있다. 새 토큰 0개로
+   라이트 전용 결함이 닫힌다. (Phase 1 의 --warn-fg/--warn-mark 분리가 승인되면
+   그쪽이 이것을 대체한다 — 지금 두 벌을 만들지 않는다.) */
+.aas-wiz-step.superseded, .aas-wiz-book.superseded {
+  border-color: var(--color-caution); background: var(--color-caution-bg);
+}
+.aas-wiz-step.superseded .aas-wiz-mark {
+  color: var(--color-caution); border-color: var(--color-caution); background: var(--card);
+}
+.aas-wiz-step.superseded .aas-wiz-sub,
+.aas-wiz-booksup { color: var(--color-caution); }
+.aas-wiz-mock { color: var(--color-caution); border-color: var(--color-caution); }
+
+/* ── B1: 상태 배지 토큰 — "칠하는 색"과 "읽는 색"을 나눈다 ────────────────────
+   Badge 의 warn/bull/bear variant 가 참조한다. 왜 `--color-*` 를 그대로 안 쓰는가:
+   그 토큰들은 **칠(3:1)** 기준으로 골라진 값이라 **글자(4.5:1)** 로는 미달한다.
+     측정: #d97706 on #fff = 3.18:1 (미달) · #854d0e on #fef3c7 = 6.15:1 (통과)
+   §56 이 `.as-ctx-stale` 에서 이미 같은 판단으로 #854d0e 를 썼다 — 그 값을 여기로
+   올려 한곳에서만 정의한다(리터럴이 여러 규칙에 흩어지지 않게).
+   `--chart-up` 이 3.16:1 때문에 green-700 으로 내려간 것과 같은 계열의 결정이다. */
+:root {
+  --st-warn-fg: #854d0e; --st-warn-bg: #fef3c7; --st-warn-bd: #fcd34d;
+  --st-bull-fg: #15803d; --st-bull-bg: #dcfce7; --st-bull-bd: #86efac;
+  --st-bear-fg: #b91c1c; --st-bear-bg: #fee2e2; --st-bear-bd: #fca5a5;
+}
+/* 다크 — 위 값들은 zinc-900 위에서 전부 4.5:1 아래다. 같은 색상각의 300/400 단계로. */
+.dark {
+  --st-warn-fg: #fcd34d; --st-warn-bg: rgb(251 191 36 / .16); --st-warn-bd: #a16207;
+  --st-bull-fg: #4ade80; --st-bull-bg: rgb(74 222 128 / .16); --st-bull-bd: #15803d;
+  --st-bear-fg: #fca5a5; --st-bear-bg: rgb(248 113 113 / .16); --st-bear-bd: #b91c1c;
+}
+
+/* `.as-ctx-regime` 은 동적 국면색을 inline style 로 받는 `<Link>` 라 Badge(span)로
+   바꾸지 않았다. 대신 **기하만** Badge 와 맞춘다 — 실측에서 이 칩만 padding 3px 8px /
+   height 26.4px 로 나머지(20.4px)보다 컸다. 색은 계속 REGIME_COLORS 토큰이 맡는다. */
+/* ★단위까지 맞춘다★ 첫 판에서 `padding: 2px 8px` 로 적었더니 Badge 쪽은 1.75px 7px 로
+   나왔다 — 루트 폰트가 14px 이라 Badge 의 rem 기반 `py-0.5`/`px-2` 가 그렇게 계산된다.
+   px 리터럴로는 영원히 안 맞으므로 같은 rem 값을 쓴다. */
+.as-ctx-regime { padding: 0.125rem 0.5rem; border-radius: var(--radius); }
+
+/* ── D: 밀도 — 지표에 맥락을 주고, 카드 크롬을 줄인다 ─────────────────────────
+   `.as-stat-x` 는 지표 밑의 한 줄 맥락이다. `HHI 1,842` 는 기준선이 없으면 아무
+   뜻도 아니었다. 다만 **임계값은 만들지 않는다** — 이미 참인 것(정의식, 보유 종목
+   수)만 적는다. 지어낸 밴드는 근거처럼 보여서 더 위험하다. */
+.as-stat-x { font-size: 11px; color: var(--muted-foreground); line-height: 1.35; }
+.as-conc-bar {
+  display: block; height: 4px; margin-top: 4px;
+  background: var(--secondary); border-radius: 2px; overflow: hidden;
+}
+.as-conc-bar i { display: block; height: 100%; background: var(--t-accent); }
+.as-conc-cov {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
+}
+
+/* ── D3: 비중 행 머리글 + Δ 칩 ─────────────────────────────────────────────
+   Δ 열은 `auto` 라 최적화 결과가 없을 때 **폭 0 으로 접힌다** — 빈 칸이 자리를
+   먹지 않는다. 결과가 없으면 칩 자체를 안 그리므로 `0.0%p` 가 찍힐 일도 없다. */
+.as-wrow-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px 10px auto 26px;
+  gap: 4px 6px; align-items: center; padding: 2px 0 4px;
+  font-size: 11px; color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+}
+.as-wrow-head-w { grid-column: 2 / 4; text-align: right; }
+.as-wrow-head-d { text-align: right; }
+.as-wrow-edit { grid-template-columns: minmax(0, 1fr) 62px 10px auto 26px; }
+.as-wrow-edit { grid-template-areas: "nm in unit dlt del" "sl sl sl sl sl"; }
+.as-w-delta { grid-area: dlt; font-size: 11px; text-align: right; white-space: nowrap; }
+/* 방향은 색만이 아니라 **부호**로도 말한다(+/−는 항상 렌더된다). */
+.as-w-delta.up   { color: var(--st-bull-fg); }
+.as-w-delta.dn   { color: var(--st-bear-fg); }
+.as-w-delta.flat { color: var(--muted-foreground); }

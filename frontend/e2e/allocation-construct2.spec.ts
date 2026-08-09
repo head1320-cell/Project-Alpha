@@ -1,0 +1,168 @@
+import { test, expect, type Page } from "@playwright/test";
+import { contrastAudit, type AuditResult } from "./helpers";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// A9 — 01 CONSTRUCT 컴포넌트 품질 (스테퍼 폭 · 배지 수렴 · 밀도)
+// ─────────────────────────────────────────────────────────────────────────────
+// ★이 파일에서 가장 값진 것은 1번(클리핑 가드)이다★
+// 스테퍼는 `text-overflow: ellipsis` 때문에 **잘려도 정상처럼 보였다**. 실측 전까지
+// 어떤 테스트도 이것을 잡지 못했고, 눈으로도 "라벨이 원래 짧은가 보다"로 읽혔다.
+// A7 에서 클리핑 가드가 §57 을 통째로 지워도 초록이었던 전례가 있으므로,
+// 이 가드는 **가로·세로 둘 다** 보고 **노드 수를 먼저 단언**한다.
+//
+// ★변이 프로브 결과 — 무엇이 실제로 지켜지는지 (전부 실행함)★
+//   · `flex: var(--wiz-steps)` → `flex: 1`      ⇒ 3번 red (1·2번은 초록: 폭 배분과
+//     클리핑은 **다른 것**을 지킨다. 이 사실 자체가 프로브로 드러났다)
+//   · `min-width: 97px` → `0`                    ⇒ 1·2번 **초록** — 줄바꿈이 막고 있어서다
+//   · `white-space: normal` → `nowrap+ellipsis`  ⇒ 1·2번 red (원래 결함 재현.
+//     1280 에서 MACRO PHASE +27 · ATTRIBUTION +20 등 5개를 이름과 함께 지목했다)
+//   · 배지 기하 갈라놓기                          ⇒ 5번 red
+//   · Δ 에 `?? 0` 복원                            ⇒ 6번 red
+//
+// ★알려진 구멍 — 정직하게 적는다★
+//   superseded 앰버 리터럴을 되돌리는 프로브에서 8번(대비)이 **초록으로 남았다**.
+//   씨드된 상태에서는 superseded 스텝이 렌더되지 않아 감사가 그 노드를 보지 못한다.
+//   즉 이 스펙은 superseded 표면의 다크 대비를 **지키지 못한다**. 고치려면 stale 상태를
+//   강제로 만들어 감사해야 한다 — 다음 단계로 넘긴다. 가드가 있는 척하지 않는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function enterWithHoldings(page: Page) {
+  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.locator(".aas-goal").first().click();
+  await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
+  await expect(page.locator(".as-wrow").first()).toBeVisible({ timeout: 15_000 });
+}
+
+for (const w of [1280, 1440]) {
+  test(`★스테퍼 라벨이 잘리지 않는다 @${w}★`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: 900 });
+    await enterWithHoldings(page);
+
+    const labs = page.locator(".aas-wiz-lab");
+    // 셀렉터가 0개면 조용히 통과한다 — 이 저장소가 반복해 겪은 실패 모양이다.
+    expect(await labs.count(), "라벨이 렌더돼야 검사가 성립한다").toBeGreaterThanOrEqual(9);
+
+    const over = await labs.evaluateAll((els) =>
+      els.map((e) => ({
+        t: (e as HTMLElement).innerText,
+        x: e.scrollWidth - e.clientWidth,
+        y: e.scrollHeight - e.clientHeight,
+      })).filter((r) => r.x > 1 || r.y > 1));
+    expect(over, `잘린 라벨: ${JSON.stringify(over)}`).toEqual([]);
+
+    // 부제도 같은 계약 (활성·superseded 스텝에만 렌더된다)
+    const subs = page.locator(".aas-wiz-sub");
+    expect(await subs.count(), "활성 스텝의 부제는 항상 있다").toBeGreaterThan(0);
+    const subOver = await subs.evaluateAll((els) =>
+      els.map((e) => ({ t: (e as HTMLElement).innerText, x: e.scrollWidth - e.clientWidth }))
+        .filter((r) => r.x > 1));
+    expect(subOver, `잘린 부제: ${JSON.stringify(subOver)}`).toEqual([]);
+  });
+}
+
+test("★페이즈 폭이 스텝 수에 비례한다★ (반비례 회귀 가드)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await enterWithHoldings(page);
+
+  const phases = await page.locator(".aas-wiz-phase").evaluateAll((els) =>
+    els.map((p) => ({
+      steps: p.querySelectorAll(".aas-wiz-step").length,
+      width: p.getBoundingClientRect().width,
+      stepW: (p.querySelector(".aas-wiz-step") as HTMLElement)?.getBoundingClientRect().width ?? 0,
+    })));
+  expect(phases.length, "3개 페이즈").toBe(3);
+
+  // 예전 결함: 세 페이즈가 전부 flex:1 이라 스텝이 많을수록 스텝당 폭이 **좁아졌다**.
+  // 이제 스텝 수가 많은 페이즈가 더 넓어야 한다.
+  const sorted = [...phases].sort((a, b) => a.steps - b.steps);
+  for (let i = 1; i < sorted.length; i++) {
+    expect(sorted[i].width, `스텝 ${sorted[i].steps}개 페이즈가 ${sorted[i - 1].steps}개보다 넓어야 한다`)
+      .toBeGreaterThan(sorted[i - 1].width);
+  }
+  // 그리고 스텝당 폭은 페이즈와 무관하게 고르다(±2px).
+  const stepWs = phases.map((p) => p.stepW);
+  expect(Math.max(...stepWs) - Math.min(...stepWs), "스텝 폭 편차").toBeLessThanOrEqual(2);
+});
+
+test("완료 스텝은 색만이 아니라 글리프·이름으로도 말한다", async ({ page }) => {
+  await enterWithHoldings(page);
+  const marks = page.locator(".aas-wiz-mark");
+  expect(await marks.count(), "번호 마커가 스텝마다 있다").toBeGreaterThanOrEqual(9);
+
+  const done = page.locator(".aas-wiz-step.done").first();
+  if (await done.count()) {
+    // 색각 이상 사용자에게도 완료가 전달되어야 한다 (WCAG: 색만으로 의미 전달 금지)
+    await expect(done.locator("svg, .sr-only")).toHaveCount(2);
+  }
+});
+
+test("★상태 배지 기하가 하나로 수렴한다★", async ({ page }) => {
+  await enterWithHoldings(page);
+  // 실측 전: regime(3px 8px/r2/h26.4) · mode(2px 6px/r2/h20.4) · stale(2px 7px/r4/h20.4)
+  const geo = await page.evaluate(() =>
+    [".as-ctx-regime", ".as-ctx-mode"]
+      .map((s) => {
+        const el = document.querySelector(s);
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { s, pad: `${cs.paddingTop}/${cs.paddingLeft}`, r: cs.borderRadius };
+      })
+      .filter(Boolean) as { s: string; pad: string; r: string }[]);
+
+  expect(geo.length, "비교할 칩이 2개 이상 렌더돼야 한다").toBeGreaterThanOrEqual(2);
+  const pads = new Set(geo.map((g) => g.pad));
+  const radii = new Set(geo.map((g) => g.r));
+  expect([...pads], `패딩이 갈린다: ${JSON.stringify(geo)}`).toHaveLength(1);
+  expect([...radii], `모서리가 갈린다: ${JSON.stringify(geo)}`).toHaveLength(1);
+});
+
+test("★Δ 칩은 미계산을 0.0 으로 위장하지 않는다★", async ({ page }) => {
+  await enterWithHoldings(page);
+  // 최적화 실행 전 상태 — 이 화면이 A3 에서 세운 규칙(0 ≠ 미계산)의 연장이다.
+  const rows = page.locator(".as-wrow");
+  expect(await rows.count(), "보유 행이 있어야 한다").toBeGreaterThan(0);
+
+  const hasResult = await page.locator(".as-cov").count();
+  if (!hasResult) {
+    expect(await page.locator(".as-w-delta").count(),
+      "결과가 없으면 Δ 칩 자체가 없어야 한다 (0.0%p 를 그리지 않는다)").toBe(0);
+    expect(await page.locator(".as-wrow-head-d").count(),
+      "Δ 열 머리글도 결과가 있을 때만").toBe(0);
+  }
+  // 열 머리글은 보유가 있으면 항상
+  await expect(page.locator(".as-wrow-head")).toBeVisible();
+});
+
+test("타입 하한 — 산문 12px · 크롬 11px", async ({ page }) => {
+  await enterWithHoldings(page);
+  for (const sel of [".aas-wiz-lab", ".aas-wiz-mark", ".as-stat-x", ".as-w-unit", ".as-stat-k"]) {
+    const nodes = page.locator(sel);
+    expect(await nodes.count(), `${sel} 가 렌더돼야 검사가 성립한다`).toBeGreaterThan(0);
+    const sizes = await nodes.evaluateAll((els) =>
+      els.map((e) => parseFloat(getComputedStyle(e).fontSize)));
+    for (const px of sizes) expect(px, `${sel} 하한 11px`).toBeGreaterThanOrEqual(11);
+  }
+});
+
+test("대비 — 라이트/다크 AA (스테퍼·배지·밀도 표면 전부)", async ({ page }) => {
+  const AUDIT = contrastAudit(".aas-root");
+  await enterWithHoldings(page);
+
+  const light = await page.evaluate<AuditResult>(AUDIT);
+  expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThan(20);
+  expect(light.low, `라이트 AA 미달: ${JSON.stringify(light.low.slice(0, 6))}`).toHaveLength(0);
+
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  // ★전이가 끝나기를 기다린다★ Badge·Button 은 `transition-colors` 를 갖고 있어서
+  // 클래스를 붙인 직후에 읽으면 **전이 중간값**이 잡힌다. 첫 실행에서 실제로 그랬다:
+  // CAUTIOUS 칩이 rgb(154,100,25)(라이트 #854d0e ↔ 다크 #fcd34d 의 중간), 버튼이
+  // rgb(58,58,58)(#111 ↔ #fafafa 의 중간)로 읽혀 AA 미달 5건이 났다. 제품 결함이
+  // 아니라 **측정 시점 결함**이었다 — allocation-construct.spec.ts:140 이 같은 이유로
+  // 이미 200ms 를 기다리고 있었다.
+  await page.waitForTimeout(200);
+  const dark = await page.evaluate<AuditResult>(AUDIT);
+  expect(dark.checked, "다크에서 검사한 텍스트 노드 수").toBeGreaterThan(20);
+  expect(dark.low, `다크 AA 미달: ${JSON.stringify(dark.low.slice(0, 6))}`).toHaveLength(0);
+  // 라이트 전용 리터럴이 남아 있으면 여기서 밝은 배경으로 새어 나온다.
+  expect(dark.bright, `다크 밝은 배경 누출: ${JSON.stringify(dark.bright.slice(0, 6))}`).toHaveLength(0);
+});

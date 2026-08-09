@@ -8,6 +8,7 @@
 // stageComplete[9] 가 하드코딩돼 있어서, 스테이지를 하나 끼우면 타입 에러 없이 전부
 // 한 칸씩 밀렸다. 순서가 실제로 필요한 곳(←/→ 이동)만 인덱스를 쓴다.
 import React, { useEffect } from "react";
+import { Check } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { BOOKENDS, PHASES, STAGES, stageIndex, useAllocation, type StageHref } from "./AllocationProvider";
 import { overallConfidence } from "./ViewBuilder";
@@ -79,17 +80,29 @@ export function WizardTracker() {
 
   const Step = (href: StageHref) => {
     const s = BY_HREF.get(href)!;
+    const isOn = href === activeHref;
+    const isSup = superseded(href);
+    const isDone = stageComplete[href];
+    // ★부제는 활성·낡음일 때만★ 비활성 스텝의 파생 부제는 폭·높이를 먹는 값에 비해
+    // 정보가 얇다. 다만 superseded 는 **경고**라 어느 상태에서도 접지 않는다(A5 경계).
+    const showSub = isOn || isSup;
     return (
       <button key={href} title={s.desc}
-        className={`aas-wiz-step${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}${superseded(href) ? " superseded" : ""}`}
+        className={`aas-wiz-step${isOn ? " on" : ""}${isDone ? " done" : ""}${isSup ? " superseded" : ""}`}
+        aria-current={isOn ? "step" : undefined}
         onClick={() => router.push(href)}>
-        <span className="aas-wiz-dot" />
-        <span className="aas-wiz-meta">
-          <span className="aas-wiz-lab"><b className="num">{s.n}</b> {s.label}</span>
-          {/* 낡았으면 파생 부제 대신 그 사실을 적는다 — 이전 입력의 수치를 그대로 두면
-              사용자는 그것이 지금 결과라고 읽는다. */}
-          <span className="aas-wiz-sub num">{superseded(href) ? "재계산 필요" : sub[href]}</span>
+        {/* ★번호를 라벨에서 빼내 마커로★ 예전엔 `<b>02</b> ALPHA LAB` 이 한 줄이라
+            번호가 라벨 폭을 20px 넘게 먹었고, 그만큼 라벨이 먼저 잘렸다.
+            완료는 색이 아니라 **체크 글리프**로도 말한다(색만으로 의미 전달 금지). */}
+        <span className="aas-wiz-mark num" aria-hidden="true">
+          {isDone && !isSup ? <Check size={11} strokeWidth={3} /> : s.n}
         </span>
+        <span className="aas-wiz-lab">{s.label}</span>
+        {showSub && (
+          <span className="aas-wiz-sub num">{isSup ? "재계산 필요" : sub[href]}</span>
+        )}
+        {/* 완료 사실을 스크린리더에도 — 마커는 aria-hidden 이다. */}
+        {isDone && !isSup && <span className="sr-only">완료</span>}
       </button>
     );
   };
@@ -120,10 +133,16 @@ export function WizardTracker() {
         return (
           <React.Fragment key={p.key}>
             <span className="aas-wiz-sep" />
-            <div className={`aas-wiz-phase${here ? " on" : ""}${done ? " done" : ""}`}>
+            {/* ★페이즈 폭을 스텝 수에 비례시킨다★ 예전엔 세 페이즈가 전부 `flex: 1` 이라
+                스텝 2개짜리 SETUP 과 4개짜리 LOGIC 이 **같은 폭**을 받았다. 실측(1280px):
+                세 페이즈 264.1px 동일 → LOGIC 스텝 59.5px → 라벨 상자 32px 인데
+                `02 ALPHA LAB` 은 90px 이 필요해 3분의 1만 보였다. 폭이 스텝 수에
+                반비례하던 것을 비례로 바로잡는다. */}
+            <div className={`aas-wiz-phase${here ? " on" : ""}${done ? " done" : ""}`}
+              style={{ "--wiz-steps": p.steps.length } as React.CSSProperties}>
               <div className="aas-wiz-phaselab">
                 <b>{p.label}</b><em>{p.ko}</em>
-                <span className="aas-wiz-phasenum num">{pi + 1}/3</span>
+                <span className="aas-wiz-phasenum num">{pi + 1}/{PHASES.length}</span>
               </div>
               <div className="aas-wiz-steps">{p.steps.map(Step)}</div>
             </div>
