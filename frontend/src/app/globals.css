@@ -6521,3 +6521,102 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-w-delta.up   { color: var(--st-bull-fg); }
 .as-w-delta.dn   { color: var(--st-bear-fg); }
 .as-w-delta.flat { color: var(--muted-foreground); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §60 — A10 그래픽 패스: 모듈러 스케일 · 4px 리듬 · 무게 위계 · 엘리베이션
+   ───────────────────────────────────────────────────────────────────────────
+   ★"엄격한 4px 그리드" 가 왜 선언만으로 성립하지 않는가★
+   이 앱의 루트 폰트는 **14px** 이다. Tailwind 의 rem 간격 유틸리티는 루트 기준이라
+   전부 4의 배수를 벗어난다 — 실측:
+
+     p-1 → 3.5px   p-2 → 7px   p-3 → 10.5px   p-4 → 14px   py-0.5 → 1.75px
+
+   (A9 에서 `.as-ctx-regime` 을 Badge 에 맞추려고 px 2/8 로 적었더니 1.75/7 로
+    갈렸던 것이 바로 이것이다. 그때는 Badge 쪽 rem 에 맞췄고, 이제 **반대로
+    Badge 를 그리드에 맞춘다** — 진짜 기준은 그리드지 rem 이 아니다.)
+
+   루트를 16px 로 올리면 앱 전체 rem 이 14.3% 커져 30개 라우트를 재검증해야 하므로,
+   **간격은 px 토큰으로 고정**한다. 손으로 쓴 값도 정리 대상이었다 —
+   실측: padding 36종(1·2·3·3.5·5·7·9·11·13·15·17…) · gap 24종.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 간격: 4px 그리드 ── */
+:root {
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+}
+
+/* ── 타입: 모듈러 스케일 (Phase 1 §3.2 구현) ──
+   실측 최빈값(11 · 12 · 13 · 14px)에서 도출했으므로 이관이 재디자인이 아니라 개명이다.
+   아래 두 단이 §56 하한이다 — 하한이지 상한이 아니다. */
+:root {
+  --fs-chrome: 11px;  --fs-sm: 12px;  --fs-base: 13px; --fs-md: 14px;
+  --fs-lg: 16px;      --fs-h3: 18px;  --fs-h2: 22px;   --fs-h1: 28px;
+  --lh-tight: 1.25;   --lh-normal: 1.5;  --lh-relaxed: 1.7;
+  --tr-label: .05em;  --tr-heading: -0.02em;
+}
+
+/* ── 엘리베이션: 2단만 ──
+   실측 78개 box-shadow 에 스케일이 없었다(`-14px 34px 74px -34px …` 같은 일회성 값).
+   다크에서는 그림자가 거의 보이지 않으므로 그림자 대신 경계를 한 단 세운다. */
+:root {
+  --elev-1: 0 1px 2px rgb(0 0 0 / .04);
+  --elev-2: 0 4px 12px rgb(0 0 0 / .08);
+}
+.dark { --elev-1: none; --elev-2: 0 4px 12px rgb(0 0 0 / .32); }
+
+/* ── 컨테이너: 리듬 · 곡률 · 라이트 리터럴 제거 ──
+   `.as-card` 는 padding 8px **10px**(off-grid) · gap 6px(off-grid) ·
+   border-radius 2px(--radius 4px 와 불일치) · background **#fff**(라이트 리터럴)였다. */
+.as-card {
+  padding: var(--sp-2) var(--sp-3);
+  gap: var(--sp-2);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--elev-1);
+}
+.as-stat {
+  padding: var(--sp-2) var(--sp-3);
+  gap: var(--sp-1);
+  border-radius: var(--radius);
+  box-shadow: var(--elev-1);
+}
+
+/* ── 위계는 크기가 아니라 무게·색으로 ──
+   예전에는 카드 제목이 10px 라 **작아서** 라벨처럼 읽혔다. 이제 제목과 부제가
+   **같은 11px** 이고 굵기(600 vs 400)와 색(foreground vs muted)만 다르다 —
+   요청 3번이 말하는 "크기 말고 무게·색" 이 이 한 쌍에 그대로 들어 있다. */
+.as-card-title {
+  font-size: var(--fs-chrome); font-weight: 600;
+  letter-spacing: var(--tr-label); color: var(--foreground);
+  gap: var(--sp-2);
+}
+.as-note-inline {
+  font-size: var(--fs-chrome); font-weight: 400;
+  letter-spacing: 0; color: var(--muted-foreground);
+}
+.as-note   { font-size: var(--fs-chrome); line-height: var(--lh-normal); color: var(--muted-foreground); }
+.as-empty  { font-size: var(--fs-chrome); color: var(--muted-foreground); padding: var(--sp-3) 0; }
+
+/* 라벨(대문자 크롬) vs 데이터(모노 tabular) vs 강조 수치 — 세 역할을 문법으로 가른다.
+   `.num` 은 427곳이 쓰는 tabular-nums 관례라 건드리지 않는다. */
+.as-stat-k { font-size: var(--fs-chrome); font-weight: 500; letter-spacing: var(--tr-label);
+             color: var(--muted-foreground); }
+.as-stat-v { font-size: var(--fs-h2); font-weight: 600; letter-spacing: var(--tr-heading); }
+
+/* ── 스테퍼도 같은 리듬으로 ── */
+.aas-wiz      { gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-radius: var(--radius); }
+.aas-wiz-step { padding: var(--sp-1); gap: var(--sp-1); }
+.aas-wiz-phase{ padding: var(--sp-1) var(--sp-2); gap: var(--sp-1); border-radius: var(--radius); }
+
+/* ── 구분선을 여백으로 ──
+   ★A9 에서 내가 넣은 선을 내가 지운다★ `.as-conc-cov` 는 카드 안에서 이미 여백으로
+   갈라져 있는데 `border-top` 으로 한 번 더 갈랐다. 선을 빼고 여백만 남긴다 —
+   요청 4번이 말하는 "불필요한 구분선을 여백으로" 의 가장 가까운 사례가 이것이었다. */
+.as-conc-cov { margin-top: var(--sp-3); padding-top: 0; border-top: none; gap: var(--sp-2); }
+
+/* Badge 가 px 토큰으로 옮겨졌으므로 regime 칩도 같은 px 로 되돌린다.
+   A9 은 rem(0.125/0.5)으로 맞췄는데, 그건 Badge 가 rem 이었기 때문이다 —
+   기준이 그리드로 바뀌었으니 둘 다 px 다. 기하 동일 가드는 계속 성립한다. */
+.as-ctx-regime { padding: 2px var(--sp-2); border-radius: var(--radius); }
+.as-ctx { gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-radius: var(--radius); }

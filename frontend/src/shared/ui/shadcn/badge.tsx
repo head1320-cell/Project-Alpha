@@ -5,7 +5,11 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/shared/lib/cn";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-[var(--radius)] border px-2 py-0.5 text-[10px] " +
+  // ★rem 유틸을 px 토큰으로 바꿨다(A10)★ 루트가 14px 이라 `px-2 py-0.5` 는 7px/1.75px 로
+  // 렌더돼 4px 그리드를 벗어난다. 크기도 스케일(--fs-chrome 11px)로 올린다 — §56 하한이
+  // 어차피 11px 로 끌어올리고 있었으므로 10px 리터럴은 실제로 적용된 적이 거의 없었다.
+  "inline-flex items-center rounded-[var(--radius)] border " +
+    "px-[var(--sp-2)] py-[2px] text-[var(--fs-chrome)] " +
     "font-medium leading-tight transition-colors",
   {
     variants: {

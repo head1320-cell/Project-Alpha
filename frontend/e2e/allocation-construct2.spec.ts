@@ -166,3 +166,66 @@ test("대비 — 라이트/다크 AA (스테퍼·배지·밀도 표면 전부)",
   // 라이트 전용 리터럴이 남아 있으면 여기서 밝은 배경으로 새어 나온다.
   expect(dark.bright, `다크 밝은 배경 누출: ${JSON.stringify(dark.bright.slice(0, 6))}`).toHaveLength(0);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// A10 — 그래픽 패스 가드 (모듈러 스케일 · 4px 리듬 · 엘리베이션)
+// ─────────────────────────────────────────────────────────────────────────────
+// ★가드를 대상 표면으로 한정한다★ 앱 전체는 padding 36종 · gap 24종이라 전역으로
+// 걸면 이 단계가 손대지 않은 곳에서 빨개진다. A10 이 재정렬한 클래스만 본다 —
+// 지키지도 않을 범위를 단언하는 것은 가드가 아니라 소음이다.
+const A10_SURFACE = [".as-card", ".as-stat", ".aas-wiz", ".aas-wiz-step", ".aas-wiz-phase", ".as-ctx"];
+
+test("★간격이 4px 그리드에 놓인다★", async ({ page }) => {
+  await enterWithHoldings(page);
+  const bad = await page.evaluate((sels) => {
+    const out: string[] = [];
+    let n = 0;
+    for (const s of sels) {
+      for (const el of document.querySelectorAll(s)) {
+        n++;
+        const cs = getComputedStyle(el);
+        for (const p of ["paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "rowGap", "columnGap"]) {
+          const v = parseFloat(cs[p as keyof CSSStyleDeclaration] as string);
+          if (Number.isFinite(v) && v > 0 && v % 4 !== 0) out.push(`${s} ${p}=${v}px`);
+        }
+      }
+    }
+    return { n, out: [...new Set(out)] };
+  }, A10_SURFACE);
+
+  expect(bad.n, "대상 노드가 렌더돼야 검사가 성립한다").toBeGreaterThan(5);
+  expect(bad.out, `4의 배수를 벗어난 간격: ${JSON.stringify(bad.out)}`).toEqual([]);
+});
+
+test("★글자 크기가 모듈러 스케일 안에 있다★", async ({ page }) => {
+  await enterWithHoldings(page);
+  const SCALE = [11, 12, 13, 14, 16, 18, 22, 28];
+  const bad = await page.evaluate((scale) => {
+    const sels = [".as-card-title", ".as-note-inline", ".as-note", ".as-stat-k", ".as-stat-v",
+                  ".as-empty", ".aas-wiz-lab", ".aas-wiz-sub", ".aas-wiz-mark"];
+    const out: string[] = [];
+    let n = 0;
+    for (const s of sels) {
+      for (const el of document.querySelectorAll(s)) {
+        n++;
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        if (!scale.includes(px)) out.push(`${s} ${px}px`);
+      }
+    }
+    return { n, out: [...new Set(out)] };
+  }, SCALE);
+
+  expect(bad.n, "대상 노드가 렌더돼야 한다").toBeGreaterThan(5);
+  expect(bad.out, `스케일 밖 크기: ${JSON.stringify(bad.out)}`).toEqual([]);
+});
+
+test("엘리베이션은 2단뿐 — 일회성 그림자 없음", async ({ page }) => {
+  await enterWithHoldings(page);
+  const shadows = await page.evaluate(() =>
+    [...document.querySelectorAll(".as-card, .as-stat")]
+      .map((e) => getComputedStyle(e).boxShadow)
+      .filter((v, i, a) => a.indexOf(v) === i));
+  expect(shadows.length, "그림자를 읽을 노드가 있어야 한다").toBeGreaterThan(0);
+  // --elev-1 만 쓰거나 none. 세 종류 이상이면 스케일이 다시 흩어진 것이다.
+  expect(shadows.length, `그림자 종류: ${JSON.stringify(shadows)}`).toBeLessThanOrEqual(2);
+});
