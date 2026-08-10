@@ -3723,3 +3723,88 @@ A7 에서 이미 **A6 최종 커밋 `1997b48`(기록된 게이트 268 passed / 0
 즉 이 14건은 A7 코드도 A8 코드도 없이 이 환경에서 똑같이 빨갛다. **A8 회귀 0건.**
 
 DB 가 있는 환경의 기대값은 307 passed 이지만, 여기서 재지 않았으므로 적지 않는다.
+
+---
+
+## A13 — 차트 모션 가드를 실제 애니메이션 속성으로 계측 (A12 결론의 정정)
+
+> A9~A12(스테퍼·배지·밀도 / 타입 스케일·4px 그리드 / Phase 1 색 토큰·Construct 모션 파일럿 /
+> 7개 모듈 모션 확장)는 **이 파일에 기록되지 않은 채 커밋됐다.** 부채로 남긴다.
+
+### ★A12 의 결론이 틀렸다 — 제품이 아니라 계측이 틀렸다★
+
+A12 는 Recharts `isAnimationActive` 를 런타임 훅(`useChartAnimation`, SSR·첫 렌더 `false` →
+마운트 후 `true`)으로 바꾼 뒤, "그 플립이 마운트 애니메이션을 죽인다"고 결론짓고
+`module-motion.spec.ts` 의 애니메이션 가드를 `test.fixme` 로 남겼다.
+
+근거는 `.recharts-area-area` 등의 **`d` 속성**을 30ms 간격으로 샘플링해 변화가 없었다는
+것이었다. recharts 소스를 읽으니 **마운트 애니메이션은 `d` 를 설계상 건드리지 않는다**:
+
+| 시리즈 | 마운트 애니메이션이 실제로 바꾸는 것 |
+|---|---|
+| `Line` (`Line.js:303-315`) | `strokeDasharray` 를 0→`totalLength` 로 보간. `d` 는 상수 |
+| `Area` (`Area.js:290-297`) | `animationClipPath-*` 사각형을 키운다. `d` 는 상수 |
+| `Bar` (`Bar.js:170`) | rect 의 `y`/`height` |
+| `Pie` | `.recharts-sector` 의 `d` — **여기만** `d` 가 변한다 |
+
+그 테스트가 고른 `/insights` 는 **Area + Bar 만** 렌더한다(`widgets/company/parts.tsx:56,78`).
+즉 애니메이션이 정상 동작해도 **어떤 경우에도 초록이 될 수 없는 테스트**였다.
+
+소스는 오히려 반대를 말한다. `Line.js:120` `componentDidUpdate` 는 프롭이 true 로 바뀔 때
+`totalLength` 를 다시 재고, `Area.js:308`·`Bar.js:170` 의 게이트는 `prevPoints`/`prevData` 가
+`undefined` 라 프롭이 true 인 첫 렌더에서 그대로 통과한다.
+
+### 재측정 — 플립만으로 이미 애니메이션된다
+
+지문을 "모든 `path` 의 `d` + `stroke-dasharray`, `clipPath` 사각형 기하"로 바꿔 재측정:
+**얼리면 1 프레임, 안 얼리면 37 프레임.**
+
+따라서 검토했던 두 접근(① 동적 `key` 로 강제 리마운트 ② 클라이언트 전용 지연 렌더)은
+**둘 다 필요 없다.** 19개 차트 소비자는 한 줄도 고치지 않았다. 필요 없는 변경은 하지 않는다.
+
+### 가드 하나를 더 잡았다 — 지문을 고쳐도 결정성 가드는 여전히 약했다
+
+지문 수정 후에도 결정성 가드가 **안정 상태만**(로드 3초 뒤 900ms) 보고 있어서, 훅을
+`return true` 로 고정하는 변이에 **초록으로 남았다** — 그때는 마운트 애니메이션이 이미
+끝나 있기 때문이다. 프로브가 그 사실을 드러냈고, **마운트 창 전체**(≤3 프레임)를 세는
+형태로 바꿨다.
+
+애니메이션 가드는 `fixme` 를 풀되 **차분**으로 잰다: 페이지 로드 중 데이터 도착만으로도
+프레임은 늘어나므로 "2개 이상"은 증명이 못 된다. 같은 라우트를 얼린 채로도 한 번 재고
+그 차이를 본다 — 데이터 도착은 양쪽에 똑같이 기여하므로 차이는 애니메이션에서만 나온다.
+
+**변이 프로브 3건 전부 각자의 이유로 red** (프로브마다 재빌드):
+
+| 되돌린 것 | 결과 |
+|---|---|
+| 훅 `return false` | 애니메이션 가드 red (`live=1, frozen=1`) |
+| 훅 `return true` | 결정성 red (`frozen=37`) · 애니메이션 red (`live=frozen`) |
+| `freezeCharts` 무력화 | 둘 다 red |
+
+### 수치
+
+- `module-motion.spec.ts` **24 passed** (A12: 23 passed + 1 fixme)
+- tsc 0 · eslint 0 errors / 28 warnings
+- 프로덕션 코드 변경 **0줄** — 커밋은 `frontend/e2e/module-motion.spec.ts` 한 파일뿐
+
+### 최종 게이트 — 338 passed / 8 failed, 그리고 그 8건은 A13 이전부터 빨갛다
+
+**A13 회귀 0건.** 증명: 실패한 5개 스펙만 **단독으로** 다시 돌렸고(`module-motion.spec.ts`
+는 아예 포함되지 않았다) **7건이 그대로 재현**됐다. 나머지 1건(`allocation-stages3`
+드로어 포커스 복귀)은 단독에서 통과 — flaky.
+
+재현되는 7건:
+
+| 스펙 | 사유 |
+|---|---|
+| `allocation-alphalab:80` | 저장한 알파가 목록에 없다 — A8 이 기록한 **DB 부재** 실패 목록에 이미 있던 항목 |
+| `allocation-overview:87` | `.as-wrow-edit` 가 4열이 아니다 (`1022px 62px 10px 0px 26px` = 5열) |
+| `scenario-packs:109` | 결과 자리 라벨 — `locator.click` 90s 타임아웃 |
+| `stage-windows` ×4 | 카탈로그 셸 상호작용 — 전부 `locator.click` 90s 타임아웃 |
+
+**이 목록은 A8 이 기록한 "환경 실패 14건"과 다르다.** 그때 빨갛던
+`research-run-roundtrip`·`macro-aas-bridge`·`backtest`·`timing-three-way` 는 지금 전부
+초록이고, 대신 위 6건이 새로 들어와 있다. A9~A12 가 전체 게이트 결과를 기록하지 않았으므로
+**어느 단계에서 들어왔는지 이 파일만으로는 알 수 없다** — 추정을 사실처럼 적지 않는다.
+`allocation-overview:87` 은 스펙 자신이 "A3 가 남긴 회귀"를 잡으려고 쓴 CSS 계약 가드이므로
+실제 결함일 공산이 크다. 셋 다 A13 범위 밖이라 **열어 둔 부채로 기록**한다.
