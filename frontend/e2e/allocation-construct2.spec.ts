@@ -229,3 +229,90 @@ test("엘리베이션은 2단뿐 — 일회성 그림자 없음", async ({ page 
   // --elev-1 만 쓰거나 none. 세 종류 이상이면 스케일이 다시 흩어진 것이다.
   expect(shadows.length, `그림자 종류: ${JSON.stringify(shadows)}`).toBeLessThanOrEqual(2);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// A11 — Phase 1 잔여 색 토큰 + Construct 모션 파일럿
+// ─────────────────────────────────────────────────────────────────────────────
+// ★1번이 이 블록에서 가장 값진 가드다★ `animation: … both` 는 reduced-motion 에서
+// 애니메이션만 끄면 **시작 프레임(opacity:0)에 붙들려 콘텐츠가 사라진다**. 눈으로는
+// "빈 화면" 이고 어떤 기능 테스트도 빨개지지 않는다 — 랜딩 §46 이 같은 함정을 기록해
+// 두었고, 여기서도 같은 방식으로 막았는지 기계로 확인한다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("★reduced-motion 에서 사라지는 요소가 없다★", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await enterWithHoldings(page);
+
+  const faded = await page.evaluate(() => {
+    const out: string[] = [];
+    let n = 0;
+    for (const el of document.querySelectorAll(".as-ws2 .as-card, .as-ws2 .aas-map, .as-ws2 .as-conc-bar > i")) {
+      n++;
+      const cs = getComputedStyle(el);
+      const op = parseFloat(cs.opacity);
+      if (op < 0.99) out.push(`${el.className} opacity=${op}`);
+      // scaleX(0) 에 붙들리면 폭이 0 이 된다 — opacity 만 보면 놓친다.
+      if (el.getBoundingClientRect().width < 1) out.push(`${el.className} width=0`);
+    }
+    return { n, out };
+  });
+  expect(faded.n, "모션 대상 노드가 렌더돼야 검사가 성립한다").toBeGreaterThan(2);
+  expect(faded.out, `reduced-motion 에서 숨겨진 요소: ${JSON.stringify(faded.out)}`).toEqual([]);
+});
+
+test("★숫자는 첫 페인트부터 최종값이다 (카운트업 금지)★", async ({ page }) => {
+  await enterWithHoldings(page);
+  // L2 전례: CountUp 이 1.1초 동안 틀린 숫자를 보여 줬고 스크린샷에 그게 남았다.
+  const read = () => page.locator(".as-stat-v").allTextContents();
+  const first = await read();
+  expect(first.length, "지표 값이 렌더돼야 한다").toBeGreaterThan(2);
+  await page.waitForTimeout(900);
+  expect(await read(), "숫자가 시간에 따라 변한다 — 카운트업이 들어왔다").toEqual(first);
+});
+
+test("전이 시간이 모션 토큰 범위 안이다", async ({ page }) => {
+  await enterWithHoldings(page);
+  const bad = await page.evaluate(() => {
+    const ALLOWED = [0, 0.12, 0.18, 0.26];
+    const out: string[] = [];
+    let n = 0;
+    for (const el of document.querySelectorAll(".as-ws2 .as-card, .as-ws2 .as-wrow, .as-ws2 .as-stat")) {
+      n++;
+      for (const d of getComputedStyle(el).transitionDuration.split(",")) {
+        const v = parseFloat(d);
+        if (Number.isFinite(v) && !ALLOWED.some((a) => Math.abs(a - v) < 0.001)) {
+          out.push(`${el.className} ${v}s`);
+        }
+      }
+    }
+    return { n, out: [...new Set(out)] };
+  });
+  expect(bad.n).toBeGreaterThan(2);
+  expect(bad.out, `토큰 밖 전이 시간: ${JSON.stringify(bad.out)}`).toEqual([]);
+});
+
+test("Phase 1 색 토큰이 적용됐다", async ({ page }) => {
+  await enterWithHoldings(page);
+  const t = await page.evaluate(() => {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (k: string) => cs.getPropertyValue(k).trim();
+    return {
+      destructive: g("--destructive"),
+      secondary: g("--secondary"),
+      card: g("--card"),
+      warnFg: g("--warn-fg"),
+      warnMark: g("--warn-mark"),
+      tint: g("--brand-tint"),
+    };
+  });
+  // ③ 빨강은 하나 — 예전엔 폴백이 안 먹어 #dc3545 가 나갔다.
+  expect(t.destructive.toLowerCase(), "destructive 통일").toBe("#dc2626");
+  // ② Secondary 가 Surface 와 달라야 분리된 것이다.
+  expect(t.secondary, "Secondary 가 카드 표면과 갈렸다").not.toBe(t.card);
+  // ④ 칠하는 앰버와 읽는 앰버가 서로 다른 값이어야 분리가 성립한다.
+  expect(t.warnFg, "warn-fg 정의됨").not.toBe("");
+  expect(t.warnMark, "warn-mark 정의됨").not.toBe("");
+  expect(t.warnFg, "읽는 앰버와 칠하는 앰버는 달라야 한다").not.toBe(t.warnMark);
+  // ① 램프
+  expect(t.tint, "액센트 램프 정의됨").toContain("rgb");
+});

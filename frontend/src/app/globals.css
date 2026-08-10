@@ -6681,3 +6681,75 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --warn-mark: var(--color-caution);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   §62 — 모션 파일럿 (01 CONSTRUCT 한정)
+   ───────────────────────────────────────────────────────────────────────────
+   ★이 저장소가 이미 세운 세 가지 제약을 모션에도 그대로 적용한다★
+   1) **읽기를 지연시키는 모션 금지.** 콘텐츠는 첫 페인트에 완성돼 있고, 모션은
+      그것이 *도착하는 방식*만 바꾼다(랜딩 §46 이 세운 계약과 같다).
+   2) **숫자에 카운트업을 걸지 않는다.** L2 에서 `CountUp` 을 증거 스트립에서 걷어낸
+      이유 그대로다 — 1.1초 동안 `1,467` 을 보여 주고 `1,534` 로 끝나면, 그 사이의
+      숫자는 **틀린 값**이고 스크린샷에는 그것이 남는다. 여기서도 HHI·유효종목수·
+      TOP3·비중은 처음부터 최종값이다.
+   3) **Recharts 는 계속 `isAnimationActive={false}`.** 도넛에 애니메이션을 켜면
+      스펙 v2 §7 의 스크린샷 결정성 계약이 깨진다. 그래서 인포그래픽 모션은
+      **손으로 그린 `.aas-map` 플렉스 바**에만 건다 — 거기는 CSS 로 결정적이다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --dur-1: 120ms;   /* 상태 전환 (호버·포커스) */
+  --dur-2: 180ms;   /* 진입·강조 */
+  --dur-3: 260ms;   /* 인포그래픽 그로우 */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in:  cubic-bezier(.4, 0, 1, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 카드 진입 — 스태거는 30~50ms 간격(MD 권고). 4장뿐이라 끝나도 120ms 다. */
+  .as-ws2 .as-center > .as-card {
+    animation: a11-rise var(--dur-2) var(--ease-out) both;
+  }
+  .as-ws2 .as-center > .as-card:nth-of-type(2) { animation-delay: 40ms; }
+  .as-ws2 .as-center > .as-card:nth-of-type(3) { animation-delay: 80ms; }
+
+  /* 인포그래픽 — 비중 바가 0 에서 자란다. 폭만 움직이므로 숫자는 처음부터 최종값이다. */
+  .as-ws2 .aas-map,
+  .as-ws2 .as-conc-bar > i { animation: a11-grow var(--dur-3) var(--ease-out) both; }
+
+  /* 상태 전환 — transform/opacity/색만. width·height 는 건드리지 않는다. */
+  .as-ws2 .as-card       { transition: box-shadow var(--dur-1) var(--ease-out); }
+  .as-ws2 .as-wrow       { transition: background-color var(--dur-1) var(--ease-out); }
+  .as-ws2 .as-w-delta    { transition: color var(--dur-1) var(--ease-out); }
+  .as-ws2 .as-stat       { transition: border-color var(--dur-1) var(--ease-out); }
+}
+
+/* 호버·포커스는 모션과 무관하게 항상 있다(reduced-motion 이어도 상태는 보여야 한다). */
+.as-ws2 .as-card:hover { box-shadow: var(--elev-2); }
+.as-ws2 .as-wrow:hover { background: var(--brand-tint); }
+.as-ws2 .as-stat:hover { border-color: var(--brand-edge); }
+
+@keyframes a11-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes a11-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.as-ws2 .aas-map, .as-ws2 .as-conc-bar > i { transform-origin: left center; }
+
+/* ★reduced-motion 이면 전부 끄고 opacity:1 로 고정한다.★
+   막으려는 함정은 랜딩 §46 이 기록한 것과 같다 — `both` 로 채운 애니메이션이 **멈춘 채**
+   시작 프레임(opacity:0)에 붙들리면 콘텐츠가 화면에서 사라지고, 어떤 기능 테스트도
+   빨개지지 않는다.
+   ★다만 변이 프로브가 이 주석을 한 번 바로잡았다★ 여기 적힌 세 줄 중 실제로 그 함정을
+   막고 있는 것은 `animation: none` 이다. 애니메이션 자체가 없어지면 fill-mode 가 붙들
+   프레임도 없기 때문에, `opacity`/`transform` 두 줄은 **보험이지 하중을 받는 줄이 아니다**
+   (그 둘만 지워도 가드는 초록이었다). 게다가 위 진입 애니메이션이 `no-preference` 안에
+   선언돼 있어 reduce 에서는 애초에 걸리지도 않는다 — 이 블록 전체가 이중 안전장치다.
+   가드가 실제로 빨개지는 조건은 "애니메이션을 무조건 걸고 reduce 에서 `paused` 로 세우는"
+   흔한 오작성이며, 그 형태로 프로브해 red 를 확인했다. 보험 두 줄은 비용이 0 이라 남긴다. */
+@media (prefers-reduced-motion: reduce) {
+  .as-ws2 .as-center > .as-card,
+  .as-ws2 .aas-map,
+  .as-ws2 .as-conc-bar > i {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .as-ws2 * { transition: none !important; }
+}
