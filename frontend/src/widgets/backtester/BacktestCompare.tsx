@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
 import type { BacktestStatistics } from "@/entities/backtest/bridgeModel";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 interface Row { k: keyof BacktestStatistics; label: string; suffix?: string; digits?: number; higherBetter: boolean }
 const CMP_METRICS: Row[] = [
@@ -106,6 +107,7 @@ export function BacktestCompare({ runId }: { runId: string }) {
 }
 
 function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
+  const anim = useChartAnimation();
   const bComparable = b.status === "completed" && !!b.result;
   const overlay = useMemo(() => {
     const ea = normalize(a.result?.backtest.equity_curve);
@@ -130,8 +132,8 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
             <YAxis tick={{ fontSize: 9 }} width={44} />
             <Tooltip formatter={(v: number) => v?.toFixed(1)} contentStyle={{ fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Line type="monotone" dataKey="A" stroke="#1200ff" dot={false} strokeWidth={1.6} name={`A · ${a.strategy_name}`} />
-            <Line type="monotone" dataKey="B" stroke="#e11d48" dot={false} strokeWidth={1.4} name={`B · ${b.strategy_name}`} />
+            <Line isAnimationActive={anim} type="monotone" dataKey="A" stroke="#1200ff" dot={false} strokeWidth={1.6} name={`A · ${a.strategy_name}`} />
+            <Line isAnimationActive={anim} type="monotone" dataKey="B" stroke="#e11d48" dot={false} strokeWidth={1.4} name={`B · ${b.strategy_name}`} />
           </LineChart>
         </ResponsiveContainer>
         {lenMismatch && <div className="brun-note">두 실행의 기간·길이가 달라 인덱스 기준으로 정렬했습니다 — 절대 비교는 주의.</div>}

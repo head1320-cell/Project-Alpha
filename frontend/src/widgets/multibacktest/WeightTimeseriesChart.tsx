@@ -4,6 +4,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 interface DailyRecord {
   date: string;
@@ -26,6 +27,7 @@ const COLORS = [
 export default function WeightTimeseriesChart({
   daily, strategyNames, maxPoints = 250,
 }: Props) {
+  const anim = useChartAnimation();
   if (!daily || daily.length === 0) {
     return (
       <div style={{
@@ -109,7 +111,7 @@ export default function WeightTimeseriesChart({
           />
 
           {strategyIds.map((sid, i) => (
-            <Area key={sid}
+            <Area isAnimationActive={anim} key={sid}
                   type="monotone"
                   dataKey={`s_${sid}`}
                   stackId="1"

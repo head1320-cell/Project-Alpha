@@ -19,10 +19,12 @@ import { X } from "lucide-react";
 import { zScoreColor, type MacroSeries } from "@/entities/macro/api";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { fmtNum, fmtPct, fmtZ } from "./cockpitParts";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
 export function DrillDownModal({ series, loading, onClose }: { series: MacroSeries | null; loading: boolean; onClose: () => void }) {
+  const anim = useChartAnimation();
   const data = series ? series.timestamps.map((t, idx) => ({ t: t.length > 6 ? t.slice(2, 7) : t, v: series.values[idx] })) : [];
   // ★Radix Dialog 로 옮겼다 (Phase A)★ 이전에는 대화상자 의미론이 하나도 없었다.
   // 이 창은 파일명이 `*Modal.tsx` 가 아니라 감사의 파일명 기반 목록에서 빠졌었다 —
@@ -48,7 +50,7 @@ export function DrillDownModal({ series, loading, onClose }: { series: MacroSeri
                 <YAxis tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" domain={["auto", "auto"]} width={46} />
                 <Tooltip contentStyle={TIP_STYLE} />
                 {series.mean_5y != null && <ReferenceLine y={series.mean_5y} stroke="var(--t-muted)" strokeDasharray="3 3" />}
-                <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#mcgrad)" isAnimationActive={false} />
+                <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#mcgrad)" isAnimationActive={anim} />
               </AreaChart>
             </ResponsiveContainer>
             <div className="mc-modal-stats">

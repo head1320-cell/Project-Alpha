@@ -7,6 +7,7 @@ import {
   ReferenceLine, ComposedChart,
 } from "recharts";
 import type { BacktestResult, TradeInfo } from "@/entities/backtest/chartModel";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ interface Props {
 }
 
 export function EquityChart({ result, height = 240 }: Props) {
+  const anim = useChartAnimation();
   const r = result.result;
   const eq = r.equity_curve;
   const dates = r.equity_dates;
@@ -120,7 +122,7 @@ export function EquityChart({ result, height = 240 }: Props) {
           <YAxis domain={[minVal, maxVal]} tickFormatter={fmtKRW}
             style={{ fontSize: 10 }} stroke="var(--text-muted)" width={52} />
           <Tooltip content={(p) => <ChartTooltip {...(p as Parameters<typeof ChartTooltip>[0])} />} />
-          <Area dataKey="value" stroke="var(--accent)" strokeWidth={1.5}
+          <Area isAnimationActive={anim} dataKey="value" stroke="var(--accent)" strokeWidth={1.5}
             fill="url(#eqGrad)" dot={<TradeDot />} activeDot={false} />
         </ComposedChart>
       </ResponsiveContainer>
@@ -140,7 +142,7 @@ export function EquityChart({ result, height = 240 }: Props) {
             style={{ fontSize: 10 }} stroke="var(--text-muted)" width={42} />
           <Tooltip content={(p) => <DrawdownTooltip {...(p as Parameters<typeof DrawdownTooltip>[0])} />} />
           <ReferenceLine y={0} stroke="var(--border)" />
-          <Area dataKey="drawdown" stroke="var(--red)" strokeWidth={1}
+          <Area isAnimationActive={anim} dataKey="drawdown" stroke="var(--red)" strokeWidth={1}
             fill="url(#ddGrad)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>

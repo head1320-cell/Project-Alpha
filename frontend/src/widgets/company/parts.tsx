@@ -6,6 +6,7 @@ import React from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
 import type { CompanyData, FactorVal, FactorGroup, ModelResult, Scenario, VerdictTone } from "@/entities/company/insightsModel";
 import { won, eok, pct, toneColor, pctColor } from "@/entities/company/insightsModel";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const ACCENT = "#1200ff", BULL = "#16a34a", BEAR = "#dc2626", MUTED = "#71717a", BORDER = "#e5e5e5";
 
@@ -48,6 +49,7 @@ export function ScoreRing({ score, size = 84 }: { score: number; size?: number }
 }
 
 export function PriceChart({ data, tone = "neutral", height = 220, intrinsic }: { data: CompanyData["price1y"]; tone?: VerdictTone; height?: number; intrinsic?: number }) {
+  const anim = useChartAnimation();
   const stroke = tone === "bull" ? BULL : tone === "bear" ? BEAR : ACCENT;
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -62,20 +64,21 @@ export function PriceChart({ data, tone = "neutral", height = 220, intrinsic }: 
         <YAxis domain={["dataMin", "dataMax"]} tick={{ fontSize: 10, fill: MUTED, fontFamily: "var(--t-mono)" }} tickFormatter={(v) => (v / 1000).toFixed(0) + "k"} width={34} tickLine={false} axisLine={false} />
         <Tooltip formatter={(v: number) => [won(v), "종가"]} labelStyle={{ fontFamily: "var(--t-mono)", fontSize: 11 }} contentStyle={{ fontFamily: "var(--t-mono)", fontSize: 11, borderRadius: 2, border: `1px solid ${BORDER}` }} />
         {intrinsic ? <ReferenceLine y={intrinsic} stroke={ACCENT} strokeDasharray="4 3" strokeWidth={1} label={{ value: `내재 ${won(intrinsic)}`, position: "insideTopRight", fontSize: 10, fill: ACCENT }} /> : null}
-        <Area type="monotone" dataKey="p" stroke={stroke} strokeWidth={1.6} fill={`url(#cg-${tone})`} />
+        <Area isAnimationActive={anim} type="monotone" dataKey="p" stroke={stroke} strokeWidth={1.6} fill={`url(#cg-${tone})`} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
 export function KpiBars({ data, dataKey, xKey = "year", color = ACCENT, height = 130, fmt = eok }: { data: ReadonlyArray<CompanyData["years"][number] | CompanyData["quarters"][number]>; dataKey: string; xKey?: string; color?: string; height?: number; fmt?: (n: number) => string }) {
+  const anim = useChartAnimation();
   const num = (d: CompanyData["years"][number] | CompanyData["quarters"][number]) => (d as unknown as Record<string, number>)[dataKey];
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data as unknown[]} margin={{ top: 14, right: 4, bottom: 0, left: 4 }}>
         <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: MUTED, fontFamily: "var(--t-mono)" }} tickLine={false} axisLine={{ stroke: BORDER }} />
         <Tooltip formatter={(v: number) => [fmt(v), ""]} contentStyle={{ fontFamily: "var(--t-mono)", fontSize: 11, borderRadius: 2, border: `1px solid ${BORDER}` }} cursor={{ fill: "rgba(18,0,255,0.04)" }} />
-        <Bar dataKey={dataKey} radius={[2, 2, 0, 0]}>
+        <Bar isAnimationActive={anim} dataKey={dataKey} radius={[2, 2, 0, 0]}>
           {data.map((d, i) => <Cell key={i} fill={num(d) < 0 ? BEAR : i === data.length - 1 ? color : "#c7c7cf"} />)}
         </Bar>
       </BarChart>

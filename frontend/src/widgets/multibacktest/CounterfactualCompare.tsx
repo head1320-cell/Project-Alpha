@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { TrendingUp, Loader2, Play } from "lucide-react";
 
 import { API_BASE } from "@/shared/api/apiBase";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 interface ScenarioResult {
   name: string;
@@ -71,6 +72,7 @@ const DEFAULT_SCENARIOS = ["baseline", "no_macro_overlay", "no_netting", "equal_
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function CounterfactualCompare({ baseConfig }: Props) {
+  const anim = useChartAnimation();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
@@ -258,7 +260,7 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
                 />
 
                 {result.scenarios.map((sc: ScenarioResult) => (
-                  <Line key={sc.name}
+                  <Line isAnimationActive={anim} key={sc.name}
                          type="monotone" dataKey={sc.name}
                          stroke={SCENARIO_COLORS[sc.name] || "#6b7fa3"}
                          strokeWidth={sc.name === "baseline" ? 2.5 : 1.5}

@@ -1,5 +1,24 @@
 import type { Page } from "@playwright/test";
 
+/**
+ * 차트 애니메이션을 끈다 — 스크린샷·DOM 단정을 결정적으로 만들기 위해 (A12).
+ *
+ * ★`page.emulateMedia({reducedMotion:'reduce'})` 를 쓰지 않는 이유★ 그건 §62/§63 의
+ * CSS 모션까지 전부 끈다. 그러면 A10·A11 이 세운 전이·엘리베이션·모션 가드가 측정할
+ * 대상이 사라져 **전부 0 으로 통과**한다 — 가드가 아니라 통과 도장이 된다.
+ * 이 헬퍼는 Recharts 만 겨냥한다.
+ *
+ * `addInitScript` 는 문서 생성 전에도 돌 수 있어 `documentElement` 접근이 불안정하므로
+ * window 전역에 표시한다. 읽는 쪽은 `shared/ui/chartStyle.ts` 의 `useChartAnimation`.
+ *
+ * 반드시 `page.goto` **전에** 부를 것.
+ */
+export async function freezeCharts(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    (window as unknown as { __MOTION_OFF__?: boolean }).__MOTION_OFF__ = true;
+  });
+}
+
 // External hosts blocked by the sandbox/CSP (fonts, analytics) are not app failures.
 const IGNORE_URL = /fonts\.googleapis\.com|fonts\.gstatic\.com|google-analytics|gtag/;
 const IGNORE_CONSOLE = /ERR_CONNECTION_RESET|Failed to load resource.*font|net::ERR_/;

@@ -121,8 +121,10 @@ function ChartTip({ active, payload }: { active?: boolean; payload?: Array<{ val
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { API_BASE } from "@/shared/api/apiBase";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 export default function StrategyCanvas() {
+  const anim = useChartAnimation();
   const {
     nodes, edges,
     onNodesChange, onEdgesChange, onConnect,
@@ -448,7 +450,7 @@ export default function StrategyCanvas() {
                           <XAxis dataKey="i" hide />
                           <YAxis hide />
                           <Tooltip content={<ChartTip />} />
-                          <Area dataKey="v" stroke="#1200ff" strokeWidth={1.5} fill="url(#eqG)" dot={false} />
+                          <Area isAnimationActive={anim} dataKey="v" stroke="#1200ff" strokeWidth={1.5} fill="url(#eqG)" dot={false} />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -473,7 +475,7 @@ export default function StrategyCanvas() {
                           <XAxis dataKey="i" hide />
                           <YAxis hide />
                           <ReferenceLine y={0} stroke="#1e2d4a" />
-                          <Area dataKey="dd" stroke="#ff5252" strokeWidth={1} fill="url(#ddG)" dot={false} />
+                          <Area isAnimationActive={anim} dataKey="dd" stroke="#ff5252" strokeWidth={1} fill="url(#ddG)" dot={false} />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>

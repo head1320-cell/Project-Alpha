@@ -1,7 +1,7 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
 // Allocation Studio 시각화 프리미티브 — cockpitParts 관례(recharts + 자체 SVG,
-// Institutional Terminal 토큰, isAnimationActive=false) 그대로 복제.
+// Institutional Terminal 토큰, 애니메이션은 `useChartAnimation()` 이 정한다) 그대로 복제.
 //   FrontierChart · AllocationSankey · FactorXRayBars · RiskContribDonut ·
 //   StressChart · McHistogram · ConfidenceGauge · MetricsTable
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -16,6 +16,7 @@ import {
 } from "@/shared/ui/shadcn/table";
 import type { AnalyzeResult, StressResult, SummaryStats, XrayFactor } from "@/entities/allocation/api";
 import { TIP_STYLE } from "@/shared/ui/chartStyle";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 // 툴팁 스타일은 `shared/ui/chartStyle` 이 단일 출처다 (A4-X3 에서 토큰화, A6 에서
 // 이 파일 밖으로 이사). 여기 두었더니 상수 하나 때문에 09 저널이 parts.tsx 전체를
@@ -166,11 +167,13 @@ export function ViewEffect({ rows }: { rows: ViewEffectRow[] }) {
 
 /**
  * 비중 도넛 — 스트립과 같은 데이터를 원형으로. 스트립은 "누가 큰가"를, 도넛은
- * "몇 조각으로 나뉘었나"를 먼저 보여 준다. 애니메이션은 끈다(이 파일의 다른 차트와 동일).
+ * "몇 조각으로 나뉘었나"를 먼저 보여 준다. 애니메이션은 런타임 판정을 따른다
+ * (`useChartAnimation` — reduced-motion 과 E2E 에서만 꺼진다).
  */
 export function AllocationDonut({ items, height = 172 }: {
   items: { code: string; name: string; weight: number }[]; height?: number;
 }) {
+  const anim = useChartAnimation();
   const shown = items.filter((x) => x.weight > 0);
   if (!shown.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
   return (
@@ -178,7 +181,7 @@ export function AllocationDonut({ items, height = 172 }: {
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie data={shown} dataKey="weight" nameKey="name" innerRadius="55%" outerRadius="82%"
-            paddingAngle={1} isAnimationActive={false} stroke="var(--card)">
+            paddingAngle={1} isAnimationActive={anim} stroke="var(--card)">
             {shown.map((x, i) => <Cell key={x.code} fill={paletteColor(i)} />)}
           </Pie>
           <Tooltip contentStyle={TIP_STYLE}
@@ -224,6 +227,7 @@ function CloudDot(props: { cx?: number; cy?: number; payload?: { q?: number } })
 }
 
 export function FrontierChart({ result, lam, height = 256 }: { result: AnalyzeResult; lam: number; height?: number }) {
+  const anim = useChartAnimation();
   const cloud = result.frontier.cloud;
   const sh = cloud.sharpes || [];
   const shMin = sh.length ? Math.min(...sh) : 0;
@@ -245,8 +249,8 @@ export function FrontierChart({ result, lam, height = 256 }: { result: AnalyzeRe
         <YAxis type="number" dataKey="y" name="수익률" unit="%" tick={{ fontSize: 9.5, fontFamily: "var(--t-mono)" }}
           label={{ value: "Return %", angle: -90, position: "insideLeft", fontSize: 9.5, fill: "var(--t-muted)" }} />
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${Number(val).toFixed(2)}%`, name === "y" ? "수익률" : "변동성"]} />
-        <Scatter data={cloudData} isAnimationActive={false} shape={<CloudDot />} />
-        <Scatter data={curveData} fill="var(--t-accent)" line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} isAnimationActive={false} shape={() => <g />} />
+        <Scatter data={cloudData} isAnimationActive={anim} shape={<CloudDot />} />
+        <Scatter data={curveData} fill="var(--t-accent)" line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} isAnimationActive={anim} shape={() => <g />} />
         {pts?.market && <ReferenceDot x={pts.market.volatility_pct} y={pts.market.return_pct} r={5} fill="#64748b" stroke={DOT_RING} label={{ value: "시장", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
         {pts?.current && <ReferenceDot x={pts.current.volatility_pct} y={pts.current.return_pct} r={5} fill="#0891b2" stroke={DOT_RING} label={{ value: "현재", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
         {pts?.optimal && <ReferenceDot x={pts.optimal.volatility_pct} y={pts.optimal.return_pct} r={7} fill="#dc2626" stroke={DOT_RING} strokeWidth={1.5} label={{ value: "★ 최적", fontSize: 10, position: "top", fill: "#dc2626" }} />}
@@ -358,6 +362,10 @@ export function AllocationSankey({ result }: { result: AnalyzeResult }) {
       <ResponsiveContainer width="100%" height={Math.max(220, nodes.length * 14)}>
         {/* 오른쪽 여백 110 → 12: 마지막 단 라벨을 안쪽으로 뒤집었으므로 바깥 여백이 필요 없다.
             줄어든 만큼이 차트 폭으로 돌아간다. */}
+        {/* ★Sankey 는 애니메이션 대상이 아니다 (A12, 측정으로 확인)★ 처음에는 라벨 위치를
+            재는 `allocation-stages.spec.ts` 가 흔들릴까 봐 여기도 배선하려 했는데,
+            `recharts/es6/chart/Sankey.js` 에는 Animate 사용이 **0건**이고 타입에도
+            `isAnimationActive` 가 없다. 프롭을 넣으면 컴파일이 깨진다. */}
         <Sankey data={{ nodes, links }} node={<SankeyNode lastFrom={lastFrom} />} nodePadding={14} nodeWidth={8}
           margin={{ top: 8, right: 12, bottom: 8, left: 4 }}
           link={{ stroke: "var(--t-accent)", strokeOpacity: 0.18 }}>
@@ -403,13 +411,14 @@ export function FactorXRayBars({ factors }: { factors: XrayFactor[] }) {
 export function RiskContribDonut({ contributions, labels, size = 128 }: {
   contributions: Record<string, number>; labels: Record<string, string>; size?: number;
 }) {
+  const anim = useChartAnimation();
   const entries = Object.entries(contributions).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const tot = entries.reduce((a, [, v]) => a + v, 0) || 1;
   const data = entries.map(([code, v]) => ({ name: labels[code] || code, value: Math.round((v / tot) * 1000) / 10 }));
   return (
     <div className="as-donut-wrap">
       <PieChart width={size} height={size}>
-        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={size * 0.3} outerRadius={size * 0.47} paddingAngle={1} stroke="none" isAnimationActive={false}>
+        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={size * 0.3} outerRadius={size * 0.47} paddingAngle={1} stroke="none" isAnimationActive={anim}>
           {data.map((_, idx) => <Cell key={idx} fill={DONUT_COLORS[idx % DONUT_COLORS.length]} />)}
         </Pie>
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${val}%`, name]} />
@@ -499,6 +508,7 @@ export function McHistogram({ mc }: { mc: AnalyzeResult["mc"] }) {
 // ConfidenceGauge — 종합 뷰 신뢰도 아크 (ArcGauge 템플릿)
 // ─────────────────────────────────────────────────────────────────────────────
 export function ConfidenceGauge({ value, height = 120 }: { value: number; height?: number }) {
+  const anim = useChartAnimation();
   const v = Math.max(0, Math.min(100, value || 0));
   const label = v >= 75 ? "High" : v >= 50 ? "Moderately High" : v >= 25 ? "Moderate" : "Low";
   // 반원(180°) 게이지는 폭 ≈ 2×반지름이 필요 — flex 컨텍스트(.as-tm-mkt)에서 폭이 0으로
@@ -509,7 +519,7 @@ export function ConfidenceGauge({ value, height = 120 }: { value: number; height
       <ResponsiveContainer width={w} height={height}>
         <RadialBarChart innerRadius="66%" outerRadius="100%" data={[{ name: "v", value: v }]} startAngle={180} endAngle={0} barSize={12}>
           <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-          <RadialBar background={{ fill: "var(--t-border)" }} dataKey="value" cornerRadius={6} fill="var(--t-accent)" isAnimationActive={false} />
+          <RadialBar background={{ fill: "var(--t-border)" }} dataKey="value" cornerRadius={6} fill="var(--t-accent)" isAnimationActive={anim} />
         </RadialBarChart>
       </ResponsiveContainer>
       <div className="as-gauge-c" style={{ top: height * 0.42 }}><b>{Math.round(v)}</b><span>Overall Confidence</span><em>{label}</em></div>

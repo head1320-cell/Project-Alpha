@@ -14,6 +14,7 @@ import {
 import { X } from "lucide-react";
 import { zScoreColor, type YieldCurvePoint, type MacroSeries } from "@/entities/macro/api";
 import type { MacroIndicator, MacroTheme, TacticalHolding } from "@/entities/macro/analysisModel";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 // ── 포맷·색 helpers ──
 export const fmtNum = (v: number | null | undefined, d = 2): string =>
@@ -40,6 +41,7 @@ const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", bor
 // RegimeScatter — 성장(x) × 물가(y) 2D 산점도 + 4국면 배경 + 현재위치 글로우 마커
 // ─────────────────────────────────────────────────────────────────────────────
 export function RegimeScatter({ g, i }: { g: number; i: number }) {
+  const anim = useChartAnimation();
   // ★동적 스케일(CIO §2): 축 한계를 데이터에 맞춰 확장 — 스코어 +2.06이 [-1,1] 고정축에
   //   클램프돼 마커가 안 보이던 버그 수정. 코너 라벨도 통일 명명(Reflation=성장↑·물가↑).
   const lim = Math.max(1, Math.ceil(Math.max(Math.abs(g), Math.abs(i))));
@@ -65,7 +67,7 @@ export function RegimeScatter({ g, i }: { g: number; i: number }) {
           <ReferenceDot x={x} y={y} r={18} fill="var(--t-accent)" fillOpacity={0.12} stroke="none" />
           <ReferenceDot x={x} y={y} r={9} fill="var(--t-accent)" fillOpacity={0.32} stroke="none" />
           <ReferenceDot x={x} y={y} r={4.5} fill="var(--t-accent)" stroke="#fff" strokeWidth={1.5} />
-          <Scatter data={pt} fill="var(--t-accent)" fillOpacity={0} isAnimationActive={false} />
+          <Scatter data={pt} fill="var(--t-accent)" fillOpacity={0} isAnimationActive={anim} />
         </ScatterChart>
       </ResponsiveContainer>
     </div>
@@ -110,6 +112,7 @@ export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: 
 
 // ── ArcGauge — 반원 게이지 (Stress·Fit 점수) ──
 export function ArcGauge({ value, max = 100, color, label, sub, height = 132 }: { value: number; max?: number; color: string; label: string; sub?: string; height?: number }) {
+  const anim = useChartAnimation();
   const v = Math.max(0, Math.min(max, value || 0));
   const data = [{ name: "v", value: v }];
   return (
@@ -117,7 +120,7 @@ export function ArcGauge({ value, max = 100, color, label, sub, height = 132 }: 
       <ResponsiveContainer width="100%" height={height}>
         <RadialBarChart innerRadius="66%" outerRadius="100%" data={data} startAngle={180} endAngle={0} barSize={13}>
           <PolarAngleAxis type="number" domain={[0, max]} tick={false} />
-          <RadialBar background={{ fill: "var(--t-border)" }} dataKey="value" cornerRadius={7} fill={color} isAnimationActive={false} />
+          <RadialBar background={{ fill: "var(--t-border)" }} dataKey="value" cornerRadius={7} fill={color} isAnimationActive={anim} />
         </RadialBarChart>
       </ResponsiveContainer>
       <div className="mc-gauge-c"><b style={{ color }}>{Math.round(v)}</b><span>{label}</span></div>
@@ -128,6 +131,7 @@ export function ArcGauge({ value, max = 100, color, label, sub, height = 132 }: 
 
 // ── YieldCurveChart — 미국 국채 수익률곡선 (3M~30Y) ──
 export function YieldCurveChart({ points, inversion }: { points: YieldCurvePoint[]; inversion: boolean }) {
+  const anim = useChartAnimation();
   const data = points.map((p) => ({ label: p.label, y: p.yield_pct }));
   const stroke = inversion ? "var(--color-bear)" : "var(--t-accent)";
   return (
@@ -137,7 +141,7 @@ export function YieldCurveChart({ points, inversion }: { points: YieldCurvePoint
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" />
         <YAxis tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" domain={["auto", "auto"]} unit="%" width={44} />
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string) => [`${val}%`, "수익률"]} />
-        <Line type="monotone" dataKey="y" stroke={stroke} strokeWidth={2} dot={{ r: 2.5, fill: stroke }} activeDot={{ r: 4 }} isAnimationActive={false} />
+        <Line type="monotone" dataKey="y" stroke={stroke} strokeWidth={2} dot={{ r: 2.5, fill: stroke }} activeDot={{ r: 4 }} isAnimationActive={anim} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -221,10 +225,11 @@ export function ValuationBars({ assets }: { assets: Array<{ key: string; label: 
 
 // ── HoldingsDonut — 전략 보유비중 도넛 ──
 export function HoldingsDonut({ holdings, size = 116 }: { holdings: TacticalHolding[]; size?: number }) {
+  const anim = useChartAnimation();
   const data = holdings.map((h) => ({ name: h.label, value: h.weight }));
   return (
     <PieChart width={size} height={size}>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={size * 0.29} outerRadius={size * 0.46} paddingAngle={1} stroke="none" isAnimationActive={false}>
+      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={size * 0.29} outerRadius={size * 0.46} paddingAngle={1} stroke="none" isAnimationActive={anim}>
         {data.map((_, idx) => <Cell key={idx} fill={DONUT_COLORS[idx % DONUT_COLORS.length]} />)}
       </Pie>
       <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${val}%`, name]} />

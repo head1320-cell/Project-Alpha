@@ -9,6 +9,7 @@ import {
 import { zFill } from "./cockpitParts";
 import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 import type { RegimeState } from "@/entities/macro/api";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11 } as const;
 
@@ -49,6 +50,7 @@ export function CycleStripGrid({ data }: { data: CycleStrips }) {
 
 // ── 하위요인 시계열 분해: 축 스코어 = 지표 기여 스택 (밸리 '하위요인 분석') ──
 export function AxisStackChart({ hist, axis }: { hist: AxisHistory; axis: "growth" | "inflation" }) {
+  const anim = useChartAnimation();
   const partsKey = axis === "growth" ? "growth_parts" : "inflation_parts";
   const keys = Array.from(new Set(hist.points.flatMap((p) => Object.keys(p[partsKey] ?? {}))));
   const COLORS = ["#1200ff", "#16a34a", "#ea580c", "#0891b2", "#a16207", "#7c3aed"];
@@ -64,9 +66,9 @@ export function AxisStackChart({ hist, axis }: { hist: AxisHistory; axis: "growt
         <ReferenceLine y={0} stroke="var(--t-border)" />
         <Tooltip contentStyle={TIP} formatter={(v: number | string, name: string) => [`${Number(v).toFixed(3)}`, IND_KR[name] ?? name]} />
         {keys.map((k, i) => (
-          <Bar key={k} dataKey={k} stackId="s" fill={COLORS[i % COLORS.length]} fillOpacity={0.75} isAnimationActive={false} />
+          <Bar key={k} dataKey={k} stackId="s" fill={COLORS[i % COLORS.length]} fillOpacity={0.75} isAnimationActive={anim} />
         ))}
-        <Line dataKey="score" stroke="#111" strokeWidth={1.6} dot={false} isAnimationActive={false} name={axis === "growth" ? "성장 축" : "물가 축"} />
+        <Line dataKey="score" stroke="#111" strokeWidth={1.6} dot={false} isAnimationActive={anim} name={axis === "growth" ? "성장 축" : "물가 축"} />
       </ComposedChart>
     </ResponsiveContainer>
   );

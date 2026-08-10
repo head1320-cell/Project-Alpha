@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { TrendingUp, Sparkles, Zap } from "lucide-react";
 import type { RealismBacktestResult } from "@/entities/realism/data";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const REGIME_BG: Record<string, string> = {
   GOLDILOCKS:  "rgba(222,255,154,0.04)",
@@ -32,6 +33,7 @@ interface Props {
 export default function ComparativeEquityChart({
   ideal, reality, mode, maxPoints = 250,
 }: Props) {
+  const anim = useChartAnimation();
   // Merged chart data
   const { chartData, regimeBands } = useMemo(() => {
     const n = ideal.daily_records.length;
@@ -174,7 +176,7 @@ export default function ComparativeEquityChart({
               fill="url(#realityFill)"
               fillOpacity={mode === "reality" ? 1 : 0.3}
               dot={false}
-              isAnimationActive
+              isAnimationActive={anim}
               animationDuration={800}
             />
 
@@ -187,7 +189,7 @@ export default function ComparativeEquityChart({
               strokeDasharray={mode === "ideal" ? "0" : "5 4"}
               strokeOpacity={mode === "ideal" ? 1 : 0.5}
               dot={false}
-              isAnimationActive
+              isAnimationActive={anim}
               animationDuration={800}
             />
           </ComposedChart>

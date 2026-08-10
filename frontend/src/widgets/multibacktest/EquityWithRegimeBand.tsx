@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, ReferenceArea,
 } from "recharts";
 import { useMemo } from "react";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 interface DailyRecord {
   date: string;
@@ -30,6 +31,7 @@ const REGIME_COLORS: Record<string, string> = {
 export default function EquityWithRegimeBand({
   daily, initialCapital, maxPoints = 300,
 }: Props) {
+  const anim = useChartAnimation();
   // 압축 + chartData
   const { chartData, regimeBands } = useMemo(() => {
     if (!daily || daily.length === 0) {
@@ -162,10 +164,10 @@ export default function EquityWithRegimeBand({
             }}
           />
 
-          <Area yAxisId="left" type="monotone" dataKey="equity"
+          <Area isAnimationActive={anim} yAxisId="left" type="monotone" dataKey="equity"
                  stroke="#00e5ff" strokeWidth={2}
                  fill="url(#equityGrad)" />
-          <Line yAxisId="right" type="monotone" dataKey="drawdown"
+          <Line isAnimationActive={anim} yAxisId="right" type="monotone" dataKey="drawdown"
                  stroke="#ff5252" strokeWidth={1} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>

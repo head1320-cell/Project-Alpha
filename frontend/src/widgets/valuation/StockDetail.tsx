@@ -10,6 +10,7 @@ import { TrendingDown, TrendingUp, Minus, Info, X } from "lucide-react";
 import { screenerApi } from "@/entities/screener/api/core";
 import type { ScreenerItem, ValuationDetail } from "@/shared/model/domain";
 import { formatKrw, formatPct, gapColor, verdictColor } from "@/shared/lib/format";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 /**
  * StockDetail — 종목 가치평가 상세 대시보드
@@ -148,6 +149,7 @@ export default function StockDetail({ item, onClose }: StockDetailProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function PriceValueBand({ item, detail }: { item: ScreenerItem; detail: ValuationDetail }) {
+  const anim = useChartAnimation();
   // 차트 데이터: 현재가 + 3-모델 적정가 + 통합 적정가
   const data = [
     { name: "현재가", value: item.current_price, color: "#111111" },
@@ -209,7 +211,7 @@ function PriceValueBand({ item, detail }: { item: ScreenerItem; detail: Valuatio
             strokeDasharray="4 2"
             label={{ value: "현재가", position: "right", fontSize: 9, fill: "#000" }}
           />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+          <Bar isAnimationActive={anim} dataKey="value" radius={[4, 4, 0, 0]}>
             {data.map((entry, idx) => (
               <Cell key={idx} fill={entry.color} />
             ))}
@@ -225,6 +227,7 @@ function PriceValueBand({ item, detail }: { item: ScreenerItem; detail: Valuatio
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function GapGauge({ gapPct }: { gapPct: number }) {
+  const anim = useChartAnimation();
   // -100 ~ +100 범위를 0~100으로 정규화 (저평가는 우측)
   const normalized = Math.max(0, Math.min(100, 50 - gapPct));
   const color = gapColor(gapPct);
@@ -248,7 +251,7 @@ function GapGauge({ gapPct }: { gapPct: number }) {
             endAngle={0}
             data={[{ value: normalized, fill: color }]}
           >
-            <RadialBar
+            <RadialBar isAnimationActive={anim}
               background={{ fill: "#f3f4f6" }}
               dataKey="value"
               cornerRadius={6}

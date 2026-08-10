@@ -14,6 +14,7 @@ import {
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { TIP_STYLE } from "@/shared/ui/chartStyle";
 import { allocationApi, type AllocationBacktestResult } from "@/entities/allocation/api";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const fmt = (v: number | null | undefined, s = "", d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : `${v.toLocaleString("ko-KR", { maximumFractionDigits: d })}${s}`;
@@ -37,6 +38,7 @@ const AXIS_TICK = { fontSize: 11 };
 const GRID = "var(--border)";
 
 export function PolicyBacktest() {
+  const anim = useChartAnimation();
   const { holdings, model, views, constraints } = useAllocation();
   const [rebalance, setRebalance] = useState<"M" | "Q">("M");
   const [windowMode, setWindowMode] = useState<"expanding" | "rolling">("expanding");
@@ -141,8 +143,8 @@ export function PolicyBacktest() {
                 <YAxis tick={AXIS_TICK} width={48} />
                 <Tooltip formatter={(v: number) => v?.toFixed(1)} contentStyle={TIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="strat" stroke="var(--t-accent)" dot={false} strokeWidth={1.6} name="정책" />
-                {res.bench_curve && <Line type="monotone" dataKey="bench" stroke="var(--t-muted)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={res.benchmark_label ?? "벤치"} />}
+                <Line isAnimationActive={anim} type="monotone" dataKey="strat" stroke="var(--t-accent)" dot={false} strokeWidth={1.6} name="정책" />
+                {res.bench_curve && <Line isAnimationActive={anim} type="monotone" dataKey="bench" stroke="var(--t-muted)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={res.benchmark_label ?? "벤치"} />}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -157,7 +159,7 @@ export function PolicyBacktest() {
                   <XAxis dataKey="date" tick={AXIS_TICK} minTickGap={70} />
                   <YAxis tick={AXIS_TICK} width={48} />
                   <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={TIP_STYLE} />
-                  <Area type="monotone" dataKey="dd" stroke="var(--chart-down)"
+                  <Area isAnimationActive={anim} type="monotone" dataKey="dd" stroke="var(--chart-down)"
                     fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -174,7 +176,7 @@ export function PolicyBacktest() {
                   <XAxis dataKey="date" tick={AXIS_TICK} minTickGap={50} />
                   <YAxis tick={AXIS_TICK} width={44} />
                   <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={TIP_STYLE} />
-                  <Bar dataKey="turnover" fill="var(--cat-4)" />
+                  <Bar isAnimationActive={anim} dataKey="turnover" fill="var(--cat-4)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

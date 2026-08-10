@@ -15,6 +15,7 @@ import {
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
 import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } from "@/entities/backtest/bridgeModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 // ★Card 로 감싸면서 지킨 것과 바꾼 것★
 //  지킨다 — `.brun-card` / `.brun-card-t` 는 같은 노드에 그대로 둔다(E2E 계약이고,
@@ -158,6 +159,7 @@ export function BacktestResults({ runId }: { runId: string }) {
 }
 
 function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; router: ReturnType<typeof useRouter> }) {
+  const anim = useChartAnimation();
   const res = run.result!;
   const bt = res.backtest;
   const stats = bt.statistics as BacktestStatistics;
@@ -257,8 +259,8 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
               <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={60} />
               <YAxis tick={{ fontSize: 9 }} width={48} />
               <Tooltip formatter={(v: number) => v?.toLocaleString("ko-KR")} labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="equity" stroke="var(--chart-line)" dot={false} strokeWidth={1.6} name="전략" />
-              {bt.benchmark && <Line type="monotone" dataKey="bench" stroke="var(--chart-bench)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={bt.benchmark.label} />}
+              <Line isAnimationActive={anim} type="monotone" dataKey="equity" stroke="var(--chart-line)" dot={false} strokeWidth={1.6} name="전략" />
+              {bt.benchmark && <Line isAnimationActive={anim} type="monotone" dataKey="bench" stroke="var(--chart-bench)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={bt.benchmark.label} />}
             </LineChart>
           </ResponsiveContainer>
           {bt.benchmark && (
@@ -283,7 +285,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
               <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={60} />
               <YAxis tick={{ fontSize: 9 }} width={48} />
               <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="dd" stroke="var(--chart-down)" fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
+              <Area isAnimationActive={anim} type="monotone" dataKey="dd" stroke="var(--chart-down)" fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
             </AreaChart>
           </ResponsiveContainer>
           </CardContent>
@@ -302,7 +304,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
               <XAxis dataKey="month" tick={{ fontSize: 8 }} minTickGap={20} />
               <YAxis tick={{ fontSize: 9 }} width={40} />
               <Tooltip formatter={(v: number) => `${v?.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
-              <Bar dataKey="return_pct">
+              <Bar isAnimationActive={anim} dataKey="return_pct">
                 {monthly.map((m, i) => <Cell key={i} fill={m.return_pct >= 0 ? "var(--chart-up)" : "var(--chart-down)"} />)}
               </Bar>
             </BarChart>
@@ -341,6 +343,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
 }
 
 function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
+  const anim = useChartAnimation();
   const data = useMemo(() => {
     const withC = rows.filter((r) => r.contribution_pct != null);
     const sorted = [...withC].sort((a, b) => (b.contribution_pct as number) - (a.contribution_pct as number));
@@ -364,7 +367,7 @@ function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
           <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `${v}%`} />
           <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={92} />
           <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
-          <Bar dataKey="contribution">
+          <Bar isAnimationActive={anim} dataKey="contribution">
             {data.map((d, i) => <Cell key={i} fill={d.contribution >= 0 ? "var(--chart-up)" : "var(--chart-down)"} />)}
           </Bar>
         </BarChart>

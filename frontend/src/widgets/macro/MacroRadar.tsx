@@ -14,6 +14,7 @@ import {
   macroApi, type RegimeState, type HeatmapRow, REGIME_COLORS,
   zScoreColor, trendIcon, trendColor, stressColor,
 } from "@/entities/macro/api";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 /**
  * MacroRadar — Phase 4 통합 매크로 대시보드
@@ -113,6 +114,7 @@ export default function MacroRadar() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function QuadrantBox({ state }: { state: RegimeState }) {
+  const anim = useChartAnimation();
   const c = REGIME_COLORS[state.regime];
 
   // 4 분면 데이터 — recharts scatter
@@ -171,7 +173,7 @@ function QuadrantBox({ state }: { state: RegimeState }) {
               contentStyle={{ background: "#fff", border: "1px solid #d4d4d8", borderRadius: 6, fontSize: 11 }}
               formatter={(_v: number, name: string) => [`${(_v as number).toFixed(2)}`, name]}
             />
-            <Scatter
+            <Scatter isAnimationActive={anim}
               data={[{ x, y }]}
               fill={c.fg}
             >
@@ -203,6 +205,7 @@ function QuadrantBox({ state }: { state: RegimeState }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function StressGauge({ state }: { state: RegimeState }) {
+  const anim = useChartAnimation();
   const score = state.stress_score;
   const color = stressColor(score);
   const components = Object.entries(state.stress_components || {});
@@ -230,7 +233,7 @@ function StressGauge({ state }: { state: RegimeState }) {
             endAngle={0}
             data={[{ value: score, fill: color }]}
           >
-            <RadialBar background={{ fill: "#f3f4f6" }} dataKey="value" cornerRadius={6} />
+            <RadialBar isAnimationActive={anim} background={{ fill: "#f3f4f6" }} dataKey="value" cornerRadius={6} />
           </RadialBarChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -342,6 +345,7 @@ function DynamicParamCard({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function YieldCurveChart({ state }: { state: RegimeState }) {
+  const anim = useChartAnimation();
   const points = state.yield_curve?.points || [];
   const inv = state.yield_inversion;
   const severity = state.inversion_severity;
@@ -382,7 +386,7 @@ function YieldCurveChart({ state }: { state: RegimeState }) {
             contentStyle={{ background: "#fff", border: "1px solid #d4d4d8", borderRadius: 6, fontSize: 11 }}
             formatter={(v: number) => [`${v.toFixed(2)}%`, "Yield"]}
           />
-          <Line
+          <Line isAnimationActive={anim}
             type="monotone"
             dataKey="yield_pct"
             stroke={inv ? "#dc2626" : "#0891b2"}

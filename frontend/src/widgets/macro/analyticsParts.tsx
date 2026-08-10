@@ -10,6 +10,7 @@ import {
   ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import type { MacroCorrelations, MacroTiming, TimingComponent, TrajectoryPoint, TrendRow } from "@/entities/macro/analysisModel";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 const PAIR_COLORS: Record<string, string> = {
@@ -58,6 +59,7 @@ export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
 
 // ── RollingCorrChart — 롤링 상관 추이 (주식-채권 강조) ──
 export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] }) {
+  const anim = useChartAnimation();
   if (!pairs.length) return <div className="mc-empty-sm">롤링 상관 데이터 없음</div>;
   const len = Math.max(...pairs.map((p) => p.series.length));
   const data = Array.from({ length: len }, (_, i) => {
@@ -77,7 +79,7 @@ export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] 
         {pairs.map((p) => (
           <Line key={p.key} type="monotone" dataKey={p.key} name={p.label}
             stroke={PAIR_COLORS[p.key] ?? "#64748b"} strokeWidth={p.key === "SPY-TLT" ? 2.4 : 1.2}
-            dot={false} isAnimationActive={false} />
+            dot={false} isAnimationActive={anim} />
         ))}
       </LineChart>
     </ResponsiveContainer>
@@ -86,6 +88,7 @@ export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] 
 
 // ── AvgCorrChart — 평균 페어상관(분산 국면) ──
 export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
+  const anim = useChartAnimation();
   if (!avg.length) return <div className="mc-empty-sm">평균 상관 데이터 없음</div>;
   const data = avg.map((p) => ({ t: p.t, corr: p.corr }));
   return (
@@ -98,7 +101,7 @@ export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
         <Tooltip contentStyle={TIP} />
         <ReferenceArea y1={0.6} y2={1} fill="rgba(220,38,38,0.06)" stroke="none" />
         <ReferenceLine y={0.6} stroke="var(--color-bear)" strokeDasharray="3 3" label={{ value: "상관 붕괴 위험", position: "insideTopRight", fontSize: 9, fill: "var(--color-bear)" }} />
-        <Area type="monotone" dataKey="corr" stroke="#dc2626" strokeWidth={1.6} fill="url(#mcaAvg)" isAnimationActive={false} />
+        <Area type="monotone" dataKey="corr" stroke="#dc2626" strokeWidth={1.6} fill="url(#mcaAvg)" isAnimationActive={anim} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -122,6 +125,7 @@ export function ComponentBars({ comps }: { comps: TimingComponent[] }) {
 
 // ── TimingHistory — 종합점수 추이 + 온/오프 임계 ──
 export function TimingHistory({ history }: { history: MacroTiming["history"] }) {
+  const anim = useChartAnimation();
   if (!history.length) return <div className="mc-empty-sm">타이밍 추이 데이터 없음</div>;
   return (
     <ResponsiveContainer width="100%" height={200}>
@@ -135,7 +139,7 @@ export function TimingHistory({ history }: { history: MacroTiming["history"] }) 
         <ReferenceArea y1={0} y2={40} fill="rgba(220,38,38,0.05)" stroke="none" />
         <ReferenceLine y={60} stroke="var(--color-bull)" strokeDasharray="3 3" />
         <ReferenceLine y={40} stroke="var(--color-bear)" strokeDasharray="3 3" />
-        <Area type="monotone" dataKey="score" stroke="var(--t-accent)" strokeWidth={1.8} fill="url(#mcaTim)" isAnimationActive={false} />
+        <Area type="monotone" dataKey="score" stroke="var(--t-accent)" strokeWidth={1.8} fill="url(#mcaTim)" isAnimationActive={anim} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -199,6 +203,7 @@ export function TrendTable({ assets }: { assets: TrendRow[] }) {
 
 // ── RegimeTrajectory — 국면 궤적(경로) 산점도 ──
 export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
+  const anim = useChartAnimation();
   if (!path.length) return <div className="mc-empty-sm">궤적 데이터 없음</div>;
   const data = path.map((p) => ({ x: p.growth, y: p.inflation, t: p.t }));
   const last = data[data.length - 1];
@@ -223,7 +228,7 @@ export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
           <ReferenceLine y={0} stroke="var(--t-border)" />
           <Tooltip contentStyle={TIP} cursor={{ strokeDasharray: "3 3" }} formatter={(v: number | string) => Number(v).toFixed(2)} />
           <Scatter data={data} line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} lineType="joint"
-            fill="var(--t-accent)" fillOpacity={0.45} isAnimationActive={false} />
+            fill="var(--t-accent)" fillOpacity={0.45} isAnimationActive={anim} />
           <ReferenceDot x={last.x} y={last.y} r={16} fill="var(--t-accent)" fillOpacity={0.14} stroke="none" />
           <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--t-accent)" stroke="#fff" strokeWidth={1.5} />
         </ScatterChart>

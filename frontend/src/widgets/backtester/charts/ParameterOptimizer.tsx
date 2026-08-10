@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Zap, Loader2 } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import type { OptimizeResult } from "@/entities/backtest/chartModel";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 interface ParamRange {
   name: string;
@@ -34,6 +35,7 @@ function colorForSharpe(sharpe: number, min: number, max: number): string {
 }
 
 export function ParameterOptimizer({ paramRanges, onOptimize, onApply }: Props) {
+  const anim = useChartAnimation();
   const [ranges, setRanges] = useState<Record<string, { min: number; max: number; step: number }>>(() =>
     Object.fromEntries(paramRanges.map((p) => [p.name, { min: p.min, max: p.max, step: p.step }]))
   );
@@ -177,7 +179,7 @@ export function ParameterOptimizer({ paramRanges, onOptimize, onApply }: Props) 
                       );
                     }}
                   />
-                  <Scatter
+                  <Scatter isAnimationActive={anim}
                     data={result.grid.map((g) => ({
                       x: g.params[xParam] ?? 0,
                       y: g.params[yParam] ?? 0,

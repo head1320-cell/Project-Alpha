@@ -11,6 +11,7 @@ import type { StrategyAI, StrategyDetail, TacticalHolding } from "@/entities/mac
 import type { Market } from "@/entities/macro/data";
 import { loadStrategyAI } from "@/entities/macro/data";
 import { HoldingsDonut, donutColor, SignalBadge, fmtPct } from "./cockpitParts";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
@@ -27,6 +28,7 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
   detail: StrategyDetail | null; loading: boolean; currentQuad: string; market: Market;
   onClose: () => void; onBacktest?: (d: StrategyDetail) => void;
 }) {
+  const anim = useChartAnimation();
   const [ai, setAi] = useState<StrategyAI | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -116,7 +118,7 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
                         <YAxis tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" domain={["auto", "auto"]} width={38} />
                         <Tooltip contentStyle={TIP} />
                         <ReferenceLine y={100} stroke="var(--t-muted)" strokeDasharray="3 3" />
-                        <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#smPerf)" isAnimationActive={false} />
+                        <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#smPerf)" isAnimationActive={anim} />
                       </AreaChart>
                     </ResponsiveContainer>
                     <div className="sm-perf-stats">
