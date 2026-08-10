@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
+
+// A12: Recharts 애니메이션만 끈다 — CSS 모션(§62/§63)은 그대로 둔다.
+// `reducedMotion:'reduce'` 를 쓰면 CSS 까지 꺼져 모션 가드가 공허해진다.
+test.beforeEach(async ({ page }) => { await freezeCharts(page); });
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // A9 — 01 CONSTRUCT 컴포넌트 품질 (스테퍼 폭 · 배지 수렴 · 밀도)

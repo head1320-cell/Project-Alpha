@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
+
+// A12: Recharts 애니메이션만 끈다 — CSS 모션(§62/§63)은 그대로 둔다.
+// `reducedMotion:'reduce'` 를 쓰면 CSS 까지 꺼져 모션 가드가 공허해진다.
+test.beforeEach(async ({ page }) => { await freezeCharts(page); });
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 01 CONSTRUCT — 컨트롤 패널 + 결과 패널 (A3)
