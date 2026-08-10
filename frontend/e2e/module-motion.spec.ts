@@ -2,13 +2,15 @@ import { test, expect, type Page } from "@playwright/test";
 import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// A12 — 7개 코어 모듈 모션 (§63) + Recharts 런타임 토글
+// A12 — 7개 코어 모듈 모션 (§63) + Recharts 런타임 토글  ·  A13 — 3·4번 계측 정상화
 // ─────────────────────────────────────────────────────────────────────────────
-// ★이 파일에서 가장 값진 것은 4번이다★ "차트 애니메이션을 프로덕션에서 켰다"는 주장은
+// ★이 파일에서 가장 값진 것은 3·4번 쌍이다★ "차트 애니메이션을 프로덕션에서 켰다"는 주장은
 // **켜졌는지 재지 않으면 검증되지 않는다**. 토글을 달아 놓고 실제로는 항상 꺼져 있어도
-// 3번(결정성)은 초록으로 남는다 — 그게 A12 가 기각한 `NEXT_PUBLIC_E2E` 방식이 만들었을
-// 상태와 정확히 같다(빌드 인라인이라 config 주입이 무시되고, 아무도 모른다).
-// 그래서 3번과 4번을 **쌍으로** 둔다: 얼리면 멈추고, 안 얼리면 실제로 움직인다.
+// 어설픈 결정성 가드는 초록으로 남는다 — 그게 A12 가 기각한 `NEXT_PUBLIC_E2E` 방식이
+// 만들었을 상태와 정확히 같다(빌드 인라인이라 config 주입이 무시되고, 아무도 모른다).
+// 그래서 3번과 4번을 **쌍으로** 둔다: 얼리면 멈추고(≤3 프레임), 안 얼리면 움직인다(37 프레임).
+// 변이 프로브 3건 전부 각자의 이유로 빨개지는 것을 확인했다(A13):
+//   훅 `return false` → 4번만 red · 훅 `return true` → 3·4번 red · freezeCharts 무력화 → 3·4번 red
 //
 // ★`reducedMotion:'reduce'` 를 전역으로 켜지 않는 이유★ 그러면 §62/§63 이 전부 꺼져
 // A10·A11 의 전이·엘리베이션 가드가 측정할 대상을 잃고 **0 으로 통과**한다. 이 스펙은
@@ -109,62 +111,110 @@ for (const m of MODULES) {
 }
 
 // ── 3·4. 차트 토글이 양방향으로 실제 동작한다 ────────────────────────────────
-// 03 Macro 를 대표로 쓴다 — Recharts 시리즈가 확실히 렌더되는 라우트다.
-// 04 Company 를 쓴다 — 실측에서 `.recharts-curve` 가 확실히 렌더되는 라우트다(/macro 는
-// 상단이 참조영역·사각형 위주라 첫 시리즈 path 를 잡기 어려웠다).
+// 04 Company 를 쓴다 — 실측에서 Recharts 시리즈가 확실히 렌더되는 라우트다.
 const CHART_ROUTE = "/insights";
-/** 첫 Recharts 시리즈 path 의 `d` 를 읽는다. 애니메이션 중이면 프레임마다 달라진다. */
-async function seriesPath(page: Page): Promise<string | null> {
+
+// ★A13: 여기서 재는 속성이 전부였다 — A12 는 틀린 속성을 쟀다★
+// A12 는 `.recharts-area-area` 등의 **`d` 속성**을 샘플링해 "변하지 않는다 →
+// 마운트 애니메이션이 죽었다"고 결론짓고 4번을 fixme 로 남겼다. 그런데 recharts 소스를
+// 읽어 보면 **마운트 애니메이션은 `d` 를 설계상 건드리지 않는다**:
+//
+//   Line  `Line.js:303-315` — `prevPoints` 가 없는 첫 애니메이션은 `strokeDasharray` 를
+//                             0→`totalLength` 로 보간한다. `d` 는 상수.
+//   Area  `Area.js:290-297` — `animationClipPath-*` 사각형을 키운다. `d` 는 상수.
+//   Bar   `Bar.js:170`      — rect 의 `y`/`height`(= `.recharts-rectangle` 의 `d`).
+//   Pie                     — `.recharts-sector` 의 `d`. **여기만** `d` 가 변한다.
+//
+// `/insights` 는 Area + Bar 만 렌더한다(`widgets/company/parts.tsx:56,78`, Pie 없음).
+// 즉 애니메이션이 정상 동작해도 A12 의 테스트는 **어떤 경우에도 초록이 될 수 없었다**.
+// 제품 결함이 아니라 계측 결함이었다.
+//
+// 그래서 지문은 시리즈 종류에 의존하지 않도록 **애니메이션이 실제로 움직이는 속성 전부**를
+// 모은다: 모든 path 의 `d` + `stroke-dasharray`, 그리고 clipPath 사각형의 기하.
+async function chartFrame(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const el = document.querySelector(
-      ".recharts-curve, .recharts-line-curve, .recharts-area-area, .recharts-sector",
-    );
-    return el ? el.getAttribute("d") : null;
+    const surfaces = document.querySelectorAll(".recharts-surface");
+    if (!surfaces.length) return null;
+    const parts: string[] = [];
+    surfaces.forEach((s) => {
+      s.querySelectorAll("path").forEach((p) => {
+        parts.push(p.getAttribute("d") ?? "", p.getAttribute("stroke-dasharray") ?? "");
+      });
+      s.querySelectorAll("clipPath rect").forEach((r) => {
+        parts.push(r.getAttribute("x") ?? "", r.getAttribute("y") ?? "",
+                   r.getAttribute("width") ?? "", r.getAttribute("height") ?? "");
+      });
+    });
+    return parts.join("|");
   });
 }
 
-// ★이 가드는 지금 공허하다 — 프로브가 그 사실을 드러냈다★ 훅이 `__MOTION_OFF__` 를
-// 무시하도록 망가뜨려도 이 테스트는 **초록으로 남았다**. 이유는 아래 fixme 와 같다:
-// 차트가 애초에 마운트 애니메이션을 하지 않으므로, "얼리면 멈춘다"가 참인 이유가
-// "얼려서"가 아니라 "원래 안 움직여서"다. 리마운트 key 로 애니메이션이 실제로 켜지면
-// 이 가드와 아래 fixme 가 **함께** 의미를 갖는다. 그때까지 통과를 근거로 쓰지 말 것.
-test("★freezeCharts 를 걸면 차트가 첫 프레임부터 최종 형태다★", async ({ page }) => {
-  await freezeCharts(page);
-  await goto(page, CHART_ROUTE);
-  await expect.poll(() => seriesPath(page), { timeout: 20_000 }).not.toBeNull();
-  const first = await seriesPath(page);
-  await page.waitForTimeout(900);
-  expect(await seriesPath(page), "얼렸는데 차트가 움직였다 — 결정성이 깨진다").toBe(first);
-});
-
-// ★측정이 내 설계의 한계를 드러냈다 — 초록으로 위장하지 않고 fixme 로 남긴다★
-// `useChartAnimation` 은 하이드레이션 불일치를 피하려고 **첫 렌더에 항상 `false`** 를 주고
-// 마운트 뒤 `true` 로 뒤집는다. 그런데 Recharts 는 **마운트 시점에** 애니메이션 여부를
-// 정하므로, 나중에 프롭이 true 가 돼도 이미 최종 상태로 그려진 차트에는 애니메이션할
-// 대상이 남아 있지 않다. 즉 "프로덕션에서 켜진다"는 주장이 **마운트 애니메이션에 한해서는
-// 아직 참이 아니다**(데이터가 나중에 도착하는 차트는 그 갱신에서 애니메이션된다).
-//
-// 고치려면 `anim` 이 true 가 될 때 차트를 리마운트시키는 key 가 필요하고 19개 소비자를
-// 전부 건드려야 한다 — A12 범위를 넘어 다음 단계로 넘긴다. 그때까지 통과 도장을 찍지 않고
-// 사유를 적어 둔다. 3번(결정성)은 계속 실측으로 지켜진다.
-test.fixme("★freezeCharts 없이는 차트가 실제로 애니메이션된다★", async ({ page }) => {
-  // 이 가드가 없으면 "프로덕션에서 애니메이션을 켰다"는 주장이 검증되지 않는다 —
-  // 토글이 항상 꺼져 있어도 위 3번은 초록으로 남기 때문이다.
-  //
-  // ★샘플링 시점이 전부다 (첫 시도의 실패 원인)★ 공용 `goto()` 는 위젯 마운트를 기다리며
-  // 3초를 쉬는데 Recharts 기본 애니메이션은 1.5초라 그때는 이미 끝나 있다. 그래서 여기서는
-  // 내비게이션 직후부터 30ms 간격으로 훑어 **마운트 순간을 포함**한다.
+/** 내비게이션 직후부터 30ms 간격으로 훑어 **마운트 순간을 포함**한 서로 다른 프레임 수.
+ *  ★첫 프레임을 기준으로 창을 잡는다★ 처음엔 고정 4.2초를 훑었는데 **0 프레임**이 나왔다 —
+ *  `/insights` 의 차트는 데이터가 도착한 뒤에야 마운트되므로 그 창이 마운트보다 빨랐다.
+ *  그래서 서피스가 나타날 때까지 기다리되, 나타난 뒤 2.1초를 더 훑는다(기본 애니메이션 1.5초). */
+async function countFrames(page: Page): Promise<number> {
   await page.goto(CHART_ROUTE, { waitUntil: "commit" });
   const frames = new Set<string>();
-  for (let i = 0; i < 160; i++) {
-    const d = await seriesPath(page);
-    if (d) frames.add(d);
-    if (frames.size > 1) break;
+  let sampled = 0;
+  for (let i = 0; i < 500 && sampled < 70; i++) {
+    const f = await chartFrame(page);
+    if (f) { frames.add(f); sampled++; }
     await page.waitForTimeout(30);
   }
-  expect(frames.size,
-    "차트가 한 프레임도 변하지 않았다 — 토글이 켜지지 않거나 샘플링이 늦었다").toBeGreaterThan(1);
+  return frames.size;
+}
+
+// 3. 얼리면 정지한다 — 스크린샷 결정성의 근거.
+// ★A12 시점에 이 가드는 공허했고, A13 의 첫 시도도 여전히 약했다★
+// A12 는 틀린 속성을 재서 "얼려서 안 움직인다"와 "원래 안 움직인다"를 구분하지 못했다.
+// A13 에서 지문을 고친 뒤에도 **안정 상태만** 보면(로드 3초 뒤 900ms) 마운트 애니메이션은
+// 이미 끝나 있어서, 훅을 `return true` 로 고정하는 변이에 여전히 초록이었다 —
+// 프로브가 그 사실을 드러냈다. 그래서 **마운트 창 전체**를 세는 형태로 바꾼다.
+// 실측: 얼리면 1 프레임, 안 얼리면 37 프레임.
+test("★freezeCharts 를 걸면 차트가 첫 프레임부터 최종 형태다★", async ({ page }) => {
+  test.setTimeout(120_000);
+  await freezeCharts(page);
+  const frozen = await countFrames(page);
+  test.info().annotations.push({ type: "frozen-frames", description: String(frozen) });
+  expect(frozen, "차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것").toBeGreaterThan(0);
+  // 데이터 도착으로 한두 프레임은 정당하게 늘 수 있다. 애니메이션이 켜지면 수십이 된다.
+  expect(frozen, `얼렸는데 ${frozen} 프레임이 잡혔다 — 결정성이 깨진다`).toBeLessThanOrEqual(3);
+
+  // 안정 상태에서도 움직이지 않는다(스크린샷은 이 시점에 찍힌다).
+  await goto(page, CHART_ROUTE);
+  const first = await chartFrame(page);
+  await page.waitForTimeout(900);
+  expect(await chartFrame(page), "정착 후에도 차트가 움직였다").toBe(first);
 });
+
+// 4. 얼리지 않으면 실제로 움직인다 — "프로덕션에서 애니메이션이 켜진다"의 유일한 증거.
+// ★차분으로 잰다★ 페이지 로드 중에는 데이터가 도착하며 차트가 정당하게 바뀌므로,
+// "프레임이 2개 이상"만으로는 애니메이션을 증명하지 못한다(데이터 도착만으로도 참이 된다).
+// 그래서 **같은 라우트를 얼린 채로도 한 번 재고 그 차이**를 본다 — 데이터 도착은 양쪽에
+// 똑같이 기여하므로, 차이는 오직 차트 애니메이션에서만 나온다.
+test("★freezeCharts 없이는 차트가 실제로 애니메이션된다 (얼린 것과의 차분)★",
+  async ({ browser }) => {
+    test.setTimeout(150_000);   // 두 번의 전체 로드 + 각 최대 15초 샘플링
+    const run = async (freeze: boolean) => {
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      if (freeze) await freezeCharts(page);
+      const n = await countFrames(page);
+      await ctx.close();
+      return n;
+    };
+    const frozen = await run(true);
+    const live = await run(false);
+    test.info().annotations.push({ type: "frames", description: `frozen=${frozen} live=${live}` });
+
+    expect(frozen, "얼린 쪽에서 차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것")
+      .toBeGreaterThan(0);
+    // 30ms 샘플링 × 1.5초 애니메이션이면 수십 프레임이 나온다. 데이터 도착이 만드는
+    // 몇 프레임과 확실히 구분되도록 여유 있게 +10 을 요구한다.
+    expect(live, `애니메이션이 켜지지 않았다 (live=${live}, frozen=${frozen})`)
+      .toBeGreaterThanOrEqual(frozen + 10);
+  });
 
 // ── 5. §63 이 쓰는 키프레임은 layout 속성을 건드리지 않는다 ──────────────────
 test("모션 키프레임이 GPU 속성만 애니메이션한다", async ({ page }) => {
