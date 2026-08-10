@@ -6753,3 +6753,82 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   }
   .as-ws2 * { transition: none !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §63 — 모션 확장: 7개 코어 모듈 (A12)
+   ───────────────────────────────────────────────────────────────────────────
+   §62 가 01 CONSTRUCT 에서 파일럿한 것을 나머지 모듈로 넓힌다. 넓히는 방법이 이 절의
+   핵심이다 — **모듈마다 블록을 쓰지 않는다.**
+
+   ★스코프는 `.terminal-main` 하나다★ `TerminalShell.tsx:113` 이 `/`(랜딩)에서는 셸 없이
+   children 만 반환하므로, 이 선택자 하나가 도구 라우트 전부를 덮고 랜딩은 건드리지 않는다.
+   모듈별로 7벌을 쓰면 그 7벌이 서로 어긋날 자리를 만든다 — A1 의 서명 두 벌, A9 의 배지
+   기하 세 벌이 그렇게 갈라졌다.
+
+   ★토큰과 키프레임을 다시 만들지 않는다★ `--dur-*` · `--ease-*` · `a11-rise` 는 §62 가
+   이미 정의했다. 여기서 다시 적으면 모션의 진실이 두 벌이 된다(§34 가 색에서 세운 규칙과
+   같다). 이 절은 **선택자만** 추가한다.
+
+   ★GPU 속성만★ 진입은 `opacity`/`transform` 뿐이다. 호버의 색·그림자 전이는 paint 이지
+   layout 이 아니라 리플로우를 만들지 않는다. 실측: 이 파일의 키프레임 30개 중 layout
+   속성을 건드리는 것은 `skeleton-shimmer`·`tshimmer` 의 `background-position` 둘뿐이고,
+   그 둘은 A12 대상이 아니다.
+
+   ★`.as-card` 는 목록에 없다★ Construct(§62)와 겹치지 않게 하려는 것이다. 다만
+   `.brun-card` 는 `/allocation/journal` 의 PolicyBacktest 도 쓰므로(A6 기록) 그 라우트도
+   같은 진입 모션을 받는다 — 일관성 쪽이 맞다고 보고 그대로 둔다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ★모듈별 패널 — 정적 grep 이 아니라 **브라우저 실측**으로 열거했다★
+   처음에는 위젯 소스를 grep 해서 목록을 만들었는데 4개 모듈에서 실제 렌더와 달랐다.
+   `/backtest` 는 목록에 있던 클래스가 **하나도 렌더되지 않았고**(그 라우트의 패널은
+   `.tbt-*` 다), `/insights` 는 `networkidle` 이 잦아들지 않아 비어 보였다. 새 스펙의
+   "노드 수 먼저 단언"이 그 0 을 잡아냈다 — 그 단언이 없었으면 조용히 통과했을 것이다.
+   00 `.dash-card`(9) · 01 `.bsc-workspace`/`-rail`/`-preset`/`-mcap` ·
+   02 `.tbt-chart`(6)/`-config-main`/`-right-col`/`-watch-panel`(+ results 의 `.brun-card`) ·
+   03 `.mc-card`(7)/`.mv-rcard`(3) · 04 `.ca-cp-card`(6)/`.ca-cp-panel` ·
+   05 `.tstat`(4)/`.trisk-table` · 07 `.t-honesty`/`.trisk-table` */
+@media (prefers-reduced-motion: no-preference) {
+  .terminal-main :is(.dash-card,
+    .bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap,
+    .tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel, .brun-card,
+    .mc-card, .mv-rcard,
+    .ca-cp-card, .ca-cp-panel,
+    .tstat, .trisk-table, .t-honesty) {
+    animation: a11-rise var(--dur-2) var(--ease-out) both;
+  }
+  /* 스태거는 30~50ms 간격(MD 권고). 형제 3장까지만 — 그 뒤는 지연이 읽기를 늦춘다. */
+  .terminal-main :is(.dash-card, .tbt-chart, .brun-card, .mc-card, .ca-cp-card, .tstat):nth-of-type(2) { animation-delay: 40ms; }
+  .terminal-main :is(.dash-card, .tbt-chart, .brun-card, .mc-card, .ca-cp-card, .tstat):nth-of-type(3) { animation-delay: 80ms; }
+
+  /* 상태 전이 — §62 와 같은 --dur-1. 색/그림자만 움직인다(paint 이지 layout 이 아니다). */
+  .terminal-main :is(.dash-card, .tbt-chart, .brun-card, .mc-card, .ca-cp-card, .tstat) {
+    transition: box-shadow var(--dur-1) var(--ease-out);
+  }
+  .terminal-main :is(.trisk-table, .bsc-workspace) tbody tr {
+    transition: background-color var(--dur-1) var(--ease-out);
+  }
+}
+
+/* 호버는 모션 설정과 무관하게 항상 있다 — reduced-motion 이어도 상태는 보여야 한다. */
+.terminal-main :is(.dash-card, .tbt-chart, .brun-card, .mc-card, .ca-cp-card, .tstat):hover {
+  box-shadow: var(--elev-2);
+}
+.terminal-main :is(.trisk-table, .bsc-workspace) tbody tr:hover { background: var(--brand-tint); }
+
+/* ★§62 에서 프로브로 확인한 것과 같은 안전장치★ 하중을 받는 줄은 `animation: none` 이다 —
+   그것만으로 `both` 가 붙들 시작 프레임이 사라진다. opacity/transform 두 줄은 보험이고,
+   실제로 가드가 빨개지는 형태는 "애니메이션을 무조건 걸고 reduce 에서 paused 로 세우는"
+   오작성이다. 비용이 0 이라 보험은 남긴다. */
+@media (prefers-reduced-motion: reduce) {
+  .terminal-main :is(.dash-card,
+    .bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap,
+    .tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel, .brun-card,
+    .mc-card, .mv-rcard,
+    .ca-cp-card, .ca-cp-panel,
+    .tstat, .trisk-table, .t-honesty) {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
