@@ -57,6 +57,26 @@ class ConstraintsInput(BaseModel):
     cash_max_pct: float = Field(0.0, ge=0, le=90)
 
 
+_AS_OF_PAT = r"^\d{4}-\d{2}-\d{2}$"
+
+
+def _check_as_of(as_of: str | None) -> None:
+    """`as_of` 는 **과거 고정**이다 — 미래 날짜는 고정이 아니라 고정한 척이다 (P1-A).
+
+    미래를 허용하면 `end = 2099-01-01` 이 그냥 오늘과 같은 데이터를 주면서 런에는
+    "2099 시점으로 고정했다" 고 적힌다. 조용히 오늘로 깎지 않고 거부한다.
+    """
+    if as_of is None:
+        return
+    try:
+        d = date.fromisoformat(as_of)
+    except ValueError:
+        raise HTTPException(422, f"as_of 형식이 올바르지 않습니다 (YYYY-MM-DD): {as_of}")
+    if d > date.today():
+        raise HTTPException(
+            422, f"as_of 가 미래입니다 ({as_of}) — 미래 시점으로는 데이터를 고정할 수 없습니다.")
+
+
 class AnalyzeRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=30)
     weights: dict[str, float] | None = None          # 없으면 균등
@@ -65,6 +85,11 @@ class AnalyzeRequest(BaseModel):
     delta: float = Field(2.5, ge=0.5, le=10)          # 위험회피 λ (π 스케일)
     tau: float = Field(0.05, ge=0.001, le=1.0)
     lookback_days: int = Field(756, ge=90, le=3650)   # 거래일 기준 ~3년
+    # ── P1: 데이터 절단일 고정 (선택) ──────────────────────────────────────
+    #   없으면 오늘. 어느 쪽이든 서버가 실제로 쓴 절단일을 coverage 에 스탬프하므로
+    #   런은 항상 재현 좌표를 갖는다. 이 필드를 실제로 채워 보내는 소비자는 재현
+    #   엔드포인트(`/research-runs/{id}/reproduce`)다.
+    as_of: str | None = Field(None, pattern=_AS_OF_PAT)
     benchmark: str = "KOSPI"
     mc_paths: int = Field(500, ge=100, le=2000)
     constraints: ConstraintsInput | None = None       # P3 — 없으면 기존 무제약 동작 불변
@@ -96,6 +121,7 @@ class BacktestRequest(BaseModel):
     window_days: int | None = Field(None, ge=63, le=1260)   # None=expanding, 값=rolling
     cost_bps: float = Field(10.0, ge=0, le=100)       # 편도 회전율 비용(bp)
     lookback_days: int = Field(1008, ge=252, le=3650)  # 기본 ~4년(리밸런싱 충분)
+    as_of: str | None = Field(None, pattern=_AS_OF_PAT)   # P1 — 데이터 절단일 고정(선택)
     delta: float = Field(2.5, ge=0.5, le=10)
     tau: float = Field(0.05, ge=0.001, le=1.0)
 
@@ -178,10 +204,22 @@ def _mock_returns_fallback(want: list[str], start: str, end: str):
     return pd.DataFrame(cols).dropna(how="all")
 
 
-def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days: int):
-    """load_returns → (returns_df[keep], bench_series|None, excluded, coverage)."""
+def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days: int,
+                        as_of: str | None = None):
+    """load_returns → (returns_df[keep], bench_series|None, excluded, coverage).
+
+    `as_of` — 데이터 절단일 (P1). 없으면 오늘.
+
+    ★왜 절단일을 coverage 에 반드시 남기는가 (P1-A)★
+    예전에는 `end = date.today()` 였고 그 사실이 **어디에도 기록되지 않았다**. 그래서
+    어제 만든 런을 오늘 다시 돌리면 다른 구간으로 계산되는데, 런만 보고는 그것이
+    "모델이 바뀐 것"인지 "데이터가 하루 늘어난 것"인지 구분할 수 없었다.
+    이제 요청이 `as_of` 를 주지 않아도 **서버가 실제로 쓴 절단일을 스탬프**한다
+    (`as_of_effective`). 그래서 UI 를 하나도 바꾸지 않고 이후의 모든 런이 재현 가능해진다.
+    `as_of_requested` 가 `None` 이라는 것은 "고정하지 않았다"는 별개의 사실이라 함께 남긴다.
+    """
     from src.kis_portfolio_analyzer import load_returns
-    end = date.today()
+    end = date.fromisoformat(as_of) if as_of else date.today()
     start = end - timedelta(days=int(lookback_days * 1.6) + 30)  # 캘린더 여유
     want = list(dict.fromkeys(tickers + ([benchmark] if benchmark else [])))
     df = load_returns(want, start.isoformat(), end.isoformat())
@@ -217,6 +255,12 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
         "n_obs": int(len(returns)),
         "benchmark_available": bench is not None and len(bench) >= _MIN_OBS,
         "source": "mock" if src_mock else "db",
+        # ── 재현 좌표 (P1-A) ─────────────────────────────────────────────
+        # `as_of_requested` 는 사용자가 고정했는지, `as_of_effective` 는 서버가 실제로
+        # 쓴 절단일. 둘은 다른 사실이다 — 후자는 항상 있고, 전자는 없을 수 있다.
+        # `end`(관측 마지막 날)와도 다르다: 휴장일이면 절단일보다 앞선다.
+        "as_of_requested": as_of,
+        "as_of_effective": end.isoformat(),
     }
     return returns, bench, excluded, coverage
 
@@ -274,6 +318,7 @@ def _enb_report(w, S, names: list[str]) -> dict:
 @router.post("/analyze")
 def allocation_analyze(req: AnalyzeRequest):
     """포트폴리오 종합 분석 — 하나의 수익률 행렬에서 전 패널 파생 (추가 DB 조회 0)."""
+    _check_as_of(req.as_of)
     # 스냅샷 링크 검증을 **계산 전에** 한다 — 없는 ID 를 조용히 기록하면 나중에 런을 열었을 때
     # 국면을 복원할 수 없고, 그때는 왜 비었는지 알 방법이 없다. 값비싼 계산 뒤가 아니라 앞에서 막는다.
     if req.regime_snapshot_id:
@@ -320,7 +365,7 @@ def allocation_analyze(req: AnalyzeRequest):
 
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
-            req.tickers, req.benchmark, req.lookback_days)
+            req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"error": True,
                     "message": "분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요.",
@@ -515,9 +560,10 @@ def allocation_analyze(req: AnalyzeRequest):
 def allocation_backtest(req: BacktestRequest):
     """정책(모델+뷰+제약+리밸런싱+비용)을 시점 밖으로 재현 — 각 리밸런싱 가중치는
     과거 데이터로만 산출(look-ahead 없음). OOS 자산곡선 + compute_metrics 지표 반환."""
+    _check_as_of(req.as_of)
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
-            req.tickers, req.benchmark, req.lookback_days)
+            req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"error": True, "excluded": excluded,
                     "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요."}
