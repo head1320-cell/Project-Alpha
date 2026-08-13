@@ -12,12 +12,23 @@ import { KrScenarioPack } from "@/widgets/allocation/KrScenarioPack";
 import { ScenarioThreeWay } from "@/widgets/allocation/ScenarioThreeWay";
 import { StressScenarioModal } from "@/widgets/allocation/StressScenarioModal";
 import { EvidenceBadge } from "@/shared/ui/evidence";
+import { StressBasisBand, useTargetBasis } from "@/widgets/allocation/StressBasisBand";
 
 export default function RobustnessWorkspace() {
   const {
     holdings, holdingsMap, views, delta, tau, scenario, pickScenario, scenarios,
-    stressQ, canRun, severity, setSeverity, setScenarioPackId,
+    stressQ, canRun, severity, setSeverity, setScenarioPackId, result, timingOverlay,
   } = useAllocation();
+
+  // ★목표 기준 — 없으면 요청하지 않고, 없다는 사실을 화면이 말한다 (R0-B)★
+  const optimized = result?.weights.optimized ?? null;
+  const tvQ = useTargetBasis(optimized, timingOverlay);
+  const tv = tvQ.data ?? null;
+  const tvReason = !optimized
+    ? "05 OPTIMIZE 에서 최적 비중을 산출해야 목표가 생깁니다."
+    : tvQ.isLoading ? "목표를 컴파일하는 중입니다." : "목표 컴파일에 실패했습니다.";
+  const nameOfCode = (c: string) =>
+    result?.labels[c] || holdings.find((h) => h.code === c)?.name || c;
   const [pickerOpen, setPickerOpen] = useState(false);
   // ★어느 창에 결과를 그릴지는 **실행 엔진**이 정한다★ (Phase 9)
   // 예전에는 패밀리로 갈랐는데, 패밀리는 이제 스펙 §5 의 분류(12종)이고 국내팩은 그 중
@@ -75,6 +86,9 @@ export default function RobustnessWorkspace() {
   return (
     <div className="as-ws2 as-ws-rob">
       <aside className="as-center">
+        {/* ★무엇을 스트레스하는지부터 밝힌다 (R0-B)★ 이 화면의 모든 숫자는 아래에서
+            고른 기준을 따른다 — 기준을 말하지 않으면 결과는 해석할 수 없다. */}
+        <StressBasisBand current={holdingsMap} tv={tv} nameOf={nameOfCode} reason={tvReason} />
         <section className="as-card">
           <div className="as-card-title">SCENARIO <span className="as-note-inline">가상 · 역사 리플레이 · 국내팩 통합</span></div>
           <div className="tfc-list">
@@ -163,7 +177,12 @@ export default function RobustnessWorkspace() {
       <main className="as-center">
         {/* 선택한 엔진의 결과를 위로 — 두 상세 카드는 항상 렌더(정보 손실 없음), 순서만 포커스 */}
         {engine === "kr_pack" && <KrScenarioPack scenario={krScenario} onPick={setKrScenario} />}
-        <ScenarioThreeWay packId={activeId} holdings={holdingsMap} severity={severity} />
+        <>
+                {/* 3다리 패널에 기준 축을 하나 더 얹으면 읽을 수 없다 — 확장 대신
+                    **어느 기준인지 명시**한다(R0-B 에서 의도적으로 그은 한계). */}
+                <div className="as-note as-3w-basis">이 비교는 <b>현재 보유</b> 기준입니다.</div>
+                <ScenarioThreeWay packId={activeId} holdings={holdingsMap} severity={severity} />
+              </>
         <section className={`as-card${sensQ.isLoading ? " as-loading" : ""}`} aria-busy={sensQ.isLoading}>
           <div className="as-card-title">SENSITIVITY HEATMAP <span className="as-note-inline">기댓값 변동 → 최적 비중 반응 (Δ%p)</span></div>
           {!canRun && <div className="as-empty">01 CONSTRUCT에서 자산 2개 이상 추가 →</div>}

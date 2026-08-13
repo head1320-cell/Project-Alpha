@@ -6832,3 +6832,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
     transform: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   57b. R0-B — 스트레스 기준 대조 밴드 (.as-rob-basis*)
+   ─────────────────────────────────────────────────────────────────────────
+   06 STRESS 의 모든 숫자가 어느 비중을 따르는지 밝히는 밴드. 목표가 없으면 숫자를
+   내지 않고 사유를 적으므로, 여기 색은 **상태를 구별**하는 용도이지 의미를 혼자
+   나르지 않는다(문구가 항상 함께 있다).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-rob-basis-table { width: 100%; }
+.as-rob-basis-table td.num, .as-rob-basis-table th { text-align: right; }
+.as-rob-basis-table td:first-child, .as-rob-basis-table th:first-child { text-align: left; }
+.as-rob-basis-d { color: var(--muted-foreground); }
+.as-rob-basis-cash td { border-top: 1px solid var(--border); }
+.as-rob-basis-na, .as-rob-basis-same, .as-rob-basis-meta { font-size: var(--fs-chrome); }
+.as-3w-basis { font-size: var(--fs-chrome); color: var(--muted-foreground); }
