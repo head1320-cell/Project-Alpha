@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { attributionApi } from "@/entities/attribution/api";
-import { researchApi, type ResearchRunFull, type ResearchRunSummary } from "@/entities/research/api";
+import { researchApi, type ReproduceResult, type ResearchRunFull, type ResearchRunSummary } from "@/entities/research/api";
 import { useAllocation } from "./AllocationProvider";
 
 const fmtTs = (sec: number) => {
@@ -15,10 +15,90 @@ const fmtTs = (sec: number) => {
 function SourceBadge({ src }: { src?: string }) {
   if (!src) return null;
   const mock = src !== "db";
+  // ★라이트 전용 리터럴이었다 (P1-D 에서 발견)★ 예전에는 인라인으로 `#16a34a`/`#15803d`
+  // 를 박았는데, `#15803d` 는 라이트 zinc-50 에서 4.85:1 이지만 **다크 zinc-900 에서
+  // 3.53:1** 이다. 기존 다크 감사(`aas-dark.spec.ts`)는 런이 하나도 없는 세션을 보므로
+  // 이 배지가 아예 렌더되지 않아 통과했다 — 런을 스텁한 P1 스펙이 처음 잡았다.
+  // `.as-bt-badge.real`(:6016)이 이미 쓰는 `--chart-up` 토큰으로 옮긴다(다크에서 뒤집힌다).
   return (
-    <span className="as-rr-src num" style={mock ? undefined : { borderColor: "#16a34a", color: "#15803d" }}>
-      {mock ? "MOCK" : "REAL"}
+    <span className={`as-rr-src num${mock ? "" : " real"}`}>{mock ? "MOCK" : "REAL"}</span>
+  );
+}
+
+/**
+ * 재현 결과 — 다섯 상태를 **서로 다른 문장**으로 그린다 (P1-D).
+ *
+ *   재현됨 / 달라짐 / 비교 불가 / 재현 불가 / 응답 없음
+ *
+ * ★"비교 불가" 를 초록으로 그리지 않는다★ 대조할 것이 없었다는 사실은 일치가 아니다.
+ * ★추정 재현이면 반드시 그렇게 적는다★ `basis: "coverage_end"` 는 요청 시점의 as_of 가
+ * 아니라 관측 마지막 날로 맞춘 것이라, 확정 재현과 같은 무게로 읽히면 안 된다.
+ */
+const BASIS_LABEL: Record<string, string> = {
+  recorded_as_of: "기록된 as_of",
+  server_stamped: "서버가 쓴 절단일",
+  coverage_end: "관측 마지막 날 (추정)",
+};
+
+function ReproduceOut({ res }: { res: ReproduceResult | { net: string } }) {
+  if ("net" in res) {
+    return (
+      <div className="as-err as-rr-repro-out as-rr-repro-net">
+        재현 요청에 <b>응답이 없습니다</b> (네트워크/서버) — 재현에 실패한 것과는 다릅니다.
+      </div>
+    );
+  }
+  if (!res.reproducible) {
+    return (
+      <div className="as-note as-rr-repro-out as-rr-repro-no">
+        <b>재현할 수 없습니다</b> — {res.reason}
+      </div>
+    );
+  }
+  const est = res.estimated ? (
+    <span className="as-rr-repro-est" title="요청 시점의 as_of 가 아니라 관측 마지막 날로 맞춘 추정 재현입니다">
+      추정 재현
     </span>
+  ) : null;
+  const coord = (
+    <span className="as-note-inline">
+      기준일 <b className="num">{res.as_of}</b> · {BASIS_LABEL[res.basis] ?? res.basis}
+    </span>
+  );
+
+  if (res.verdict === "incomparable") {
+    return (
+      <div className="as-note as-rr-repro-out as-rr-repro-incomp">
+        다시 돌렸지만 <b>대조할 수 없습니다</b> — {res.reason} {coord} {est}
+      </div>
+    );
+  }
+  const uc = res.universe_changed ?? { dropped: [], added: [] };
+  if (res.verdict === "identical") {
+    return (
+      <div className="as-rr-repro-out as-rr-repro-ok">
+        <b>재현됨</b> — 최대 Δ <span className="num">0.00%p</span> {coord} {est}
+      </div>
+    );
+  }
+  const worst = (res.deltas ?? [])[0];
+  return (
+    <div className="as-rr-repro-out as-rr-repro-drift">
+      <b>달라졌습니다</b> — 최대 Δ{" "}
+      <span className="num">{(res.max_delta_pp ?? 0).toFixed(2)}%p</span>
+      {worst && <> (<span className="num">{worst.code}</span>{" "}
+        <span className="num">{worst.recorded.toFixed(1)}%</span> →{" "}
+        <span className="num">{worst.fresh.toFixed(1)}%</span>)</>}
+      {" "}{coord} {est}
+      {(uc.dropped.length > 0 || uc.added.length > 0) && (
+        <div className="as-rr-repro-uni">
+          유니버스도 바뀌었습니다 —
+          {uc.dropped.length > 0 && <> 빠짐 <span className="num">{uc.dropped.join(", ")}</span></>}
+          {uc.added.length > 0 && <> 추가 <span className="num">{uc.added.join(", ")}</span></>}
+          {" "}(비중 이동과는 다른 사실이라 Δ 에 넣지 않습니다)
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -92,6 +172,11 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [sel, setSel] = useState<string[]>([]);   // 비교 선택 (최대 2)
+  // ── 재현 (P1-C) ────────────────────────────────────────────────────────────
+  // `"loading"` · 결과 · `{ net: 사유 }` 셋을 **다른 값**으로 들고 있는다. 네트워크
+  // 오류를 `null` 로 뭉개면 "재현 실패" 와 "응답 없음" 이 한 화면이 된다 —
+  // R0-S 가 목록에서 고친 결함과 같은 계열이라 여기서 반복하지 않는다.
+  const [repro, setRepro] = useState<Record<string, "loading" | ReproduceResult | { net: string }>>({});
 
   const listQ = useQuery({
     queryKey: ["research", "runs", runsVersion],
@@ -147,6 +232,25 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
       if (!ok) setReopenErr(`런을 되돌리지 못했습니다 — ${rid} 를 읽을 수 없습니다.`);
     } finally {
       setReopening(null);
+    }
+  };
+
+  /**
+   * 재현 — 서버가 **같은 코드로** 다시 돌려 결과를 대조한다 (P1-C).
+   *
+   * ★되돌리기와는 다른 동작이다★ 되돌리기는 이 런의 입력으로 위저드를 덮어쓰고
+   * `activeRunId` 를 바꾼다. 재현은 **아무것도 바꾸지 않는다** — 과거 결정이
+   * 지금도 같은 답을 내는지 묻기만 한다. 둘을 한 버튼으로 합치면 "확인하려다
+   * 작업 중인 런을 잃는" 일이 생긴다.
+   */
+  const doReproduce = async (rid: string) => {
+    setRepro((m) => ({ ...m, [rid]: "loading" }));
+    try {
+      const out = await researchApi.reproduce(rid);
+      setRepro((m) => ({ ...m, [rid]: out }));
+    } catch (e) {
+      // 응답을 못 받은 것은 "재현 실패" 와 다른 사실이다 — 다른 문장을 쓴다.
+      setRepro((m) => ({ ...m, [rid]: { net: e instanceof Error ? e.message : String(e) } }));
     }
   };
 
@@ -217,11 +321,22 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
             onClick={(e) => { e.stopPropagation(); doReopen(r.run_id, r.name || r.run_id); }}>
             {reopening === r.run_id ? "복원 중…" : "되돌리기"}
           </button>
+          {/* 재현은 위저드를 건드리지 않는다 — 되돌리기와 나란히 두되 다른 동작이다. */}
+          <button className="as-rr-repro"
+            title="이 런을 서버가 같은 코드로 다시 돌려 결과를 대조한다 (화면 상태는 바뀌지 않는다)"
+            disabled={repro[r.run_id] === "loading"}
+            onClick={(e) => { e.stopPropagation(); doReproduce(r.run_id); }}>
+            {repro[r.run_id] === "loading" ? "재현 중…" : "재현"}
+          </button>
           <button className="as-x" title="삭제" onClick={(e) => {
             e.stopPropagation();
             researchApi.remove(r.run_id).then(() => listQ.refetch()).catch(() => {});
             setSel((s) => s.filter((x) => x !== r.run_id));
+            setRepro((m) => { const n = { ...m }; delete n[r.run_id]; return n; });
           }}>×</button>
+          {repro[r.run_id] && repro[r.run_id] !== "loading" && (
+            <ReproduceOut res={repro[r.run_id] as ReproduceResult | { net: string }} />
+          )}
         </div>
       ))}
 

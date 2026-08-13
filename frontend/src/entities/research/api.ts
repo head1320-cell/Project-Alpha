@@ -44,6 +44,43 @@ export interface RecordRunInput {
   note?: string;
 }
 
+/**
+ * 재현 응답 (P1-C) — `reproducible` 로 좁혀야만 판정을 읽을 수 있게 짠 유니온.
+ * 이렇게 해야 "재현하지 못했는데 verdict 를 그린다" 가 타입 단계에서 불가능해진다.
+ */
+export interface ReproduceRefused {
+  reproducible: false;
+  run_id: string;
+  kind: string;
+  basis?: "none" | "recorded_as_of" | "server_stamped" | "coverage_end";
+  as_of?: string;
+  estimated?: boolean;
+  reason: string;
+}
+export interface ReproduceDelta {
+  code: string; recorded: number; fresh: number; delta_pp: number;
+}
+export interface ReproduceDone {
+  reproducible: true;
+  run_id: string;
+  kind: string;
+  /** 어느 좌표로 맞췄는가 — `coverage_end` 면 요청 시점의 as_of 가 아니라 관측 마지막 날이다. */
+  basis: "recorded_as_of" | "server_stamped" | "coverage_end";
+  as_of: string;
+  estimated: boolean;
+  coverage?: Record<string, unknown>;
+  weights: { recorded: Record<string, number> | null; fresh: Record<string, number> };
+  /** `incomparable` 은 "같다" 가 아니다 — 대조할 것이 없었다는 뜻이고 `reason` 이 붙는다. */
+  verdict: "identical" | "drifted" | "incomparable";
+  reason?: string;
+  max_delta_pp?: number;
+  deltas?: ReproduceDelta[];
+  universe_changed?: { dropped: string[]; added: string[] };
+  child_run_id?: string | null;
+  child_recorded?: boolean;
+}
+export type ReproduceResult = ReproduceDone | ReproduceRefused;
+
 /** 목록 응답 — `available:false` 면 저장소를 읽지 못한 것이고, 기록이 없는 것과 다르다. */
 export interface ResearchRunList {
   available: boolean;
@@ -73,6 +110,17 @@ export const researchApi = {
   get: async (runId: string): Promise<ResearchRunFull> => {
     const r = await fetch(`${API_BASE}/api/v1/research-runs/${encodeURIComponent(runId)}`);
     if (!r.ok) throw new Error(`get run failed: ${r.status}`);
+    return r.json();
+  },
+  /** 기록된 런을 서버가 같은 코드로 다시 돌려 대조한다 (P1-C).
+   *  ★네트워크 오류를 여기서 삼키지 않는다★ — 삼키면 "재현 실패"와 "응답 없음"이
+   *  다시 한 값이 된다(R0-S 가 목록에서 고친 것과 같은 결함 계열). */
+  reproduce: async (runId: string, record = false): Promise<ReproduceResult> => {
+    const r = await fetch(
+      `${API_BASE}/api/v1/research-runs/${encodeURIComponent(runId)}/reproduce`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ record }) });
+    if (!r.ok) throw new Error(`reproduce failed: ${r.status}`);
     return r.json();
   },
   remove: async (runId: string): Promise<{ deleted: boolean }> => {

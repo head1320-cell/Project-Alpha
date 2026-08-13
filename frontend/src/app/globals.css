@@ -6850,3 +6850,38 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-rob-kpi2 { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: baseline;
   margin-top: var(--sp-1); font-size: var(--fs-chrome); }
 .as-rob-kpi2 em { color: var(--muted-foreground); font-style: normal; margin-right: 4px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   64. P1 — 재현 결과 (.as-rr-repro*)
+   ─────────────────────────────────────────────────────────────────────────
+   런 행 안에서 다섯 상태를 서로 다른 문장으로 그린다: 재현됨 · 달라짐 · 비교 불가 ·
+   재현 불가 · 응답 없음. **색은 문장을 보조할 뿐 혼자 의미를 나르지 않는다** —
+   각 상태가 자기 문구를 갖고 있고, 스펙이 문구로 판정한다.
+
+   `.as-rr-item` 은 `display:flex`(:3896)이고 wrap 이 없다. 그 선언을 고치면 이 패널을
+   통과하는 세 스펙의 레이아웃 가정을 건드리게 되므로, 결과 블록이 **있을 때만**
+   `:has()` 로 wrap 을 켠다 — 선행 규칙 바이트 불변.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.as-rr-repro { font-size: var(--fs-chrome); padding: 2px 7px; border-radius: 4px;
+  cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
+.as-rr-repro:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
+.as-rr-repro:disabled { opacity: .55; cursor: progress; }
+
+.as-rr-item:has(.as-rr-repro-out) { flex-wrap: wrap; }
+.as-rr-repro-out { flex: 0 0 100%; margin-top: var(--sp-1); padding: var(--sp-1) var(--sp-2);
+  border-left: 3px solid var(--border); font-size: var(--fs-chrome);
+  line-height: var(--lh-normal); color: var(--foreground); }
+.as-rr-repro-ok { border-left-color: var(--chart-up); }
+.as-rr-repro-drift { border-left-color: var(--warn-mark, var(--st-warn-mark)); }
+/* 비교 불가·재현 불가는 **결과가 아니라 상태**다 — 성공/실패 어느 색도 쓰지 않는다. */
+.as-rr-repro-incomp, .as-rr-repro-no { color: var(--muted-foreground); }
+.as-rr-repro-net { border-left-color: var(--destructive); }
+.as-rr-repro-uni { margin-top: 2px; color: var(--muted-foreground); }
+/* 추정 재현 배지 — 확정 재현과 같은 무게로 읽히면 안 된다. */
+.as-rr-repro-est { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 3px;
+  border: 1px solid var(--warn-mark, var(--st-warn-mark));
+  color: var(--warn-fg, var(--st-warn-fg)); font-size: var(--fs-chrome); }
+
+/* REAL 배지 — 인라인 `#15803d` 를 걷어낸 자리 (다크 3.53:1 이었다).
+   `.as-bt-badge.real` 과 같은 토큰을 쓴다: 초록은 한 곳에서만 정의한다. */
+.as-rr-src.real { color: var(--chart-up); border-color: var(--chart-up); }
