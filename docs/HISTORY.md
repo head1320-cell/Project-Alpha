@@ -3808,3 +3808,86 @@ A12 는 Recharts `isAnimationActive` 를 런타임 훅(`useChartAnimation`, SSR�
 **어느 단계에서 들어왔는지 이 파일만으로는 알 수 없다** — 추정을 사실처럼 적지 않는다.
 `allocation-overview:87` 은 스펙 자신이 "A3 가 남긴 회귀"를 잡으려고 쓴 CSS 계약 가드이므로
 실제 결함일 공산이 크다. 셋 다 A13 범위 밖이라 **열어 둔 부채로 기록**한다.
+
+---
+
+## A14 — A13 이 남긴 8건 정리: 카탈로그 창이 창이 아니었다
+
+A13 게이트의 **338 passed / 8 failed** 를 원인별로 닫았다. 셋 다 **측정이 진단을 바로잡았고**,
+그중 하나는 A13 보고서에 내가 적은 진단이 틀렸음을 드러냈다.
+
+### ★1. 카탈로그 창이 창이 아니었다 (stage-windows 4건 + scenario-packs 1건)★
+
+증상은 "적용 버튼을 클릭할 수 없다"였다 — Playwright 가 `…intercepts pointer events` 로
+5번 실패했다. 브라우저 프로브로 `.tfm-backdrop` 의 조상 체인을 훑자 원인이 한 줄로 나왔다:
+
+```
+section.as-card
+  transform: matrix(1, 0, 0, 1, 0, 0)   ← "none" 이 아니다
+  animationName: a11-rise · animationFillMode: both
+```
+
+A11 §62 가 `.as-ws2 .as-center > .as-card` 에 건 `animation: a11-rise … both` 는 fill 이
+**영구히** 남는다. `a11-rise` 의 끝 프레임이 `transform: none` 이어도 채워진 애니메이션은
+그 값을 항등행렬로 해석하므로 computed transform 이 `none` 이 아니고, **transform 이 있는
+조상은 `position: fixed` 의 컨테이닝 블록이자 stacking context** 가 된다. 결과:
+
+- `.tfm-backdrop { position: fixed; inset: 0 }` 이 뷰포트가 아니라 **카드 상자**에 갇혔다
+  — 실측 `x:97 y:404 w:298 h:241`, 적용 버튼은 `y=2321` 로 화면 밖.
+- `z-index: 9998` 도 그 카드의 stacking context 안이라 **형제 카드가 위를 덮었다**.
+- `.tfm` 은 상자가 비어 있지 않으므로 `toBeVisible()` 은 통과한다 — 눈으로는 열려 보이는데
+  클릭이 안 된다. 어떤 기능 테스트도 이것을 "보이지 않음"으로 잡지 못한다.
+
+**부수 발견 — §62 는 "Construct 파일럿"이 아니었다.** A11 계획서는 01 Construct 전용이라
+적었지만 선택자는 `.as-ws2 .as-center > .as-card` 이고 `.as-ws2` 는 **9개 스테이지**가 쓴다.
+깨진 alphalab·stress 가 정확히 그 안에 있었다.
+
+**수정: `createPortal(…, document.body)`.** 원인이 무엇이든 구조적으로 이 계열을 닫고,
+저장소 선례(`.shad-overlay` z-1000 · Radix Dialog)와 일치한다. 소비자 6개
+(alpha · timing · stress · factor-picker · screener · formula-builder)가 함께 낫는다.
+`.tfm-*` 클래스명은 그대로이고, 스펙의 카탈로그 셀렉터는 전부 `page.locator(".tfm …")` 로
+**페이지 루트에서** 잡으므로(컨테이너를 가정한 것 0건) E2E 계약은 유지된다.
+§62 자체는 손대지 않았다 — 포털이 원인 계열을 덮으므로 모션을 되돌릴 이유가 없다.
+
+### ★2. "DB 부재 환경 실패"는 내 오진이었다 (allocation-alphalab)★
+
+A13 보고서에 이 실패를 "`psycopg2` 미설치로 서버가 저장하지 못한다"고 적었다. **틀렸다.**
+프로브로 재니 저장은 **200 `{"error":false, alpha:{…}}`** 로 성공한다 — 알파 레지스트리는
+DB 없이도 저장된다. 화면에서만 사라지고 있었다.
+
+진짜 원인은 A7-2 다. 레지스트리 본문을 4개로 제한하면서 코드가 `visibleAlphas.slice(0, 4)`
+였는데, 바로 위 주석은 "선택된 알파 + 초안/승인 + 최근 몇 개"라는 **우선순위를 약속**한다.
+그 우선순위가 구현되지 않아 시드 템플릿 4개가 자리를 전부 차지했고, 저장 직후 선택 상태가
+되는 알파조차 서랍으로 밀려났다. 사용자에게는 저장이 실패한 것으로 보인다.
+주석이 약속한 순서(선택 → 내 알파 → 템플릿)를 실제로 구현했다. 정렬은 stable 이라 같은
+등급 안에서는 서버가 준 순서가 유지된다.
+
+### 3. 가드 둘 — 제품이 아니라 단언이 낡았거나 성급했다
+
+**`.as-wrow-edit` 의 5번째 열은 회귀가 아니다.** §59(A9-D)가 **Δ 열(`dlt`)** 을 의도적으로
+넣었고(`minmax(0,1fr) 62px 10px auto 26px`, 영역 `"nm in unit dlt del"`), 결과가 없으면
+`auto` 가 폭 0 으로 접힌다 — 측정값 `1022px 62px 10px 0px 26px` 의 `0px` 이 그것이다.
+머리글 `.as-wrow-head` 도 같은 5트랙이라 화면은 어긋나지 않는다. **CSS 는 맞고 단언이
+낡았다**(A4/A5 시절 `.toBe(4)`). 숫자를 5로 올리면 같은 일이 반복되므로, 가드가 지키려던
+계약을 **영역 이름**으로 판정하도록 다시 썼다 — `dlt`·`del` 존재, plain 은 `areas: none`,
+열 개수는 하한만.
+
+**드로어 포커스 복귀는 flaky 였다.** Radix 는 닫힘 애니메이션이 끝난 뒤 `onCloseAutoFocus`
+로 포커스를 돌려주는데 단언이 한 번만 읽어서 게이트에서는 red, 단독에서는 green 이었다.
+계약은 그대로 두고 `expect.poll` 로 기다리게 했다 — 조건을 느슨하게 하지 않는다.
+
+### 변이 프로브 (프로브마다 재빌드)
+
+| 되돌린 것 | 결과 |
+|---|---|
+| 포털 제거(인라인 렌더 복귀) | stage-windows **4 failed** — A13 게이트와 동일한 목록 |
+| `.as-wrow-edit` 의 `dlt` 영역 제거 | overview 가드 red |
+
+드로어 포커스는 flaky 라 red 를 보장하는 변이가 없다 — **프로브 불가임을 그대로 적는다.**
+
+### 수치
+
+- 대상 8건이 속한 5개 스펙: **57 passed / 0 failed**
+  (stage-windows + scenario-packs 22 · alphalab + overview + stages3 35)
+- tsc 0 · eslint 0 errors / 28 warnings · `/allocation/alphalab` 142 kB(변동 없음)
+- 프로덕션 코드 변경 2파일(`CatalogueShell.tsx` 포털 · alphalab 정렬), CSS 변경 0줄
