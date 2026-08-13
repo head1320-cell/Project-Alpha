@@ -3891,3 +3891,100 @@ DB 없이도 저장된다. 화면에서만 사라지고 있었다.
   (stage-windows + scenario-packs 22 · alphalab + overview + stages3 35)
 - tsc 0 · eslint 0 errors / 28 warnings · `/allocation/alphalab` 142 kB(변동 없음)
 - 프로덕션 코드 변경 2파일(`CatalogueShell.tsx` 포털 · alphalab 정렬), CSS 변경 0줄
+
+---
+
+## R0 — 신뢰성 차단선: 화면이 보여 주는 목표와 실행이 주문하는 목표를 하나로
+
+A1~A14 는 **표현**을 고쳤다. R0 은 **연구 결과의 일관성**을 고친다. 인용된 지적 7건을
+전부 소스로 확인했고 **7건 모두 사실**이었다. 그중 하나는 이 플랫폼에서 가장 치명적인
+종류였다 — 화면이 보여 주는 목표와 실행이 주문하는 목표가 **달랐다**.
+
+| 지적 | 실측 확인 |
+|---|---|
+| 타이밍 오버레이가 실행에 반영 안 됨 | `TimingOverlayPanel.tsx:58-61` 이 `after = before × e` 를 **화면에서만** 계산. `ExecutionRoom.tsx:87` 은 `result.weights.optimized`(오버레이 이전)를 주문 목표로 보냈다 |
+| **내가 추가로 찾은 8번째** | `stress/page.tsx:61` 은 `holdings`(현재 보유)를 쓴다 — 최적화 결과도 오버레이도 아니다. "이 배분이 충격에 견디는가"를 묻는 화면이 **주문할 배분이 아닌 것**을 답하고 있었다 |
+| 중립화는 사후 변환 | `NeutralizePanel.tsx:87` UI 가 스스로 "재최적화하면 원 모델 배분으로 돌아갑니다(설계)"라고 적는다 |
+| 사실상 롱온리 | `allocation_routes.py:257-258` `_w_dict` 가 `w[i] > 0.0005` 만 직렬화 — 음수 비중이 **응답에서 조용히 사라진다** |
+| 재현 불완전 | `allocation_routes.py:183` `end = date.today()` — `as_of` 입력 없음 |
+| 슬리브가 브라우저에만 | `shared/lib/sleeveStorage.ts:16` `KEY = "alpha_sleeves"` |
+| DB 장애가 "런 없음"으로 보임 | `research_runs.py:154` `except: return []` — 저장소 장애와 빈 목록이 **같은 값** |
+
+### T — TargetPortfolioVersion: 목표를 한 곳에서 컴파일한다
+
+`src/data/target_versions.py`(신규, `research_runs.py` 의 테이블·id·직렬화 관례 그대로).
+`final_weights = base × exposure` · `cash = Σbase × (1−exposure)` 라는 **컴파일 규칙을
+서버 한 곳에만** 둔다 — 패널은 이제 계산하지 않고 버전을 표시한다. 같은 산수를 두 곳에
+두면 반드시 갈라진다(A1 이 `currentSig`/`req` 에서 이미 겪었다).
+
+`research_only` 판정 셋: 사후 중립화가 적용된 비중 · `long_only` 인데 음수 비중이 있음
+(**버리지 않고 거부한다** — `_w_dict` 는 조용히 버렸다) · 오버레이 출처 미가용.
+`POST /allocation/target-versions`(+`dry_run`) · `GET …/{id}` · `GET …` 3개.
+
+**실행 게이트** — `execution_routes.py` 의 `_resolve_target()` 이 모르는 `tpv_id`,
+`research_only` 상태, 그리고 **클라이언트가 보낸 비중이 버전과 다른 경우**를 거부한다.
+`/execution-plan` 과 `/execution-plan/save` 둘 다 같은 문을 지난다. 실행은 계속
+paper-only 이고 `TradingEngine` 6중 안전장치는 우회하지 않는다 — 문을 **추가**만 했다.
+
+### B — 06 STRESS: 목표로 갈아끼우지 않고, 둘을 나란히 놓는다
+
+갈아끼우면 같은 자리에서 답이 조용히 바뀌고 사용자는 어느 쪽을 보는지 알 수 없다.
+그래서 `StressBasisBand` 가 **현재 보유 / 목표 / Δ** 를 자산별로 대조하고, SCENARIO
+DETAIL 과 상관-국면 KPI 가 두 기준을 2열로 낸다. 목표 기준 질의는 **목표가 있을 때만**
+보낸다(없으면 요청 0, 화면은 `.aas-cmp-na` 미계산 + 사유 — 현재 값을 복사해 목표인 척
+하지 않는다). 두 기준이 같을 때는 화면이 **그 사실을 말한다**(같은 숫자가 두 번 찍혀
+하나가 틀린 것처럼 보이는 함정은 A5 가 이미 겪었다). `ScenarioThreeWay` 는 3다리라
+기준 축을 더 얹으면 읽을 수 없어 **범위를 라벨로 명시**했다 — 확장 대신 명시.
+
+### S — 상태를 뭉개는 층이 셋이었다
+
+지적은 저장소 한 곳이었지만 재 보니 세 겹이었다: `research_runs.py:154` `except: return []`
+· `research_routes.py:53` 가용성 정보 없음 · `ResearchRunsPanel.tsx:98` `.catch(() => null)`
+→ `:178` 이 그 결과를 **"기록된 런 없음"** 으로 렌더. **한 층만 고치면 아무것도 달라지지
+않는다** — 저장소가 정직하게 올려도 프론트의 `catch` 가 다시 뭉갠다. 셋을 함께 고쳤다.
+
+저장소는 예외를 삼키지 않고, `get_run` 은 **행이 없을 때만** `None` 이다. 라우트는
+`{available:true, runs:[…]}` 와 `{available:false, runs:[], reason:…}` 를 다른 응답으로
+답하고(둘 다 HTTP 200 — 화면이 사유를 그려야 한다), 단건은 **404(없음) vs 503(장애)** 로
+가른다. `runs` 키는 유지해 기존 소비자가 깨지지 않는다. 프론트는 네 상태를 각각 렌더한다
+— `.as-rr-loading` · `.as-rr-empty` · `.as-rr-storage-down` · `.as-rr-network-down`.
+★"장애를 빈 목록으로 말하지 않는다"와 "빈 목록은 여전히 빈 목록이다"가 **둘 다** 참이어야
+한다★ — 하나를 만족시키려고 다른 하나를 없애면 안 되므로 두 단언을 짝으로 썼다.
+
+### ★내가 세 번 틀렸고, 세 번 다 측정이 바로잡았다★
+
+1. **"SQLite 폴백이 있으니 서버 영속화가 이 컨테이너에서 검증된다"— 틀렸다.**
+   `create_engine` 은 드라이버가 없으면 `ModuleNotFoundError`(`NoSuchModuleError`)를 내는데
+   폴백은 `OperationalError` 만 잡고 있었다. 즉 폴백은 **한 번도 발동한 적이 없다**.
+   `src/database.py` 를 고쳐 드라이버 부재를 즉시 SQLite 로 보내도록 했다(재시도해도 모듈은
+   생기지 않으므로 `break`). 사용자에게 한 말도 정정했다.
+2. **R0-T2 의 첫 가드가 시장 상태를 재고 있었다.** "노출 60% 오버레이가 실행 목표에
+   도달한다"를 화면으로 재려 했는데 이 환경의 카나리 노출이 **1.0** 이라 오버레이가 곱해도
+   값이 그대로였다. 배선은 옳은데 가드가 빨갰다. **계약을 재도록 다시 썼다** — `tpv_id` 가
+   실려 가는가 · 계획의 목표가 `final_weights` 와 일치하는가 · 목표+현금 항등식이 성립하는가
+   — 그리고 0.6 노출은 API 레벨의 결정적 테스트로 따로 잠갔다.
+3. **R0-S 의 첫 저장소 프로브가 잘못된 자리에 있었다.** `except` 를 `_engine()` **뒤**에
+   놓았는데 테스트는 `_engine()` 자체를 죽인다 — 프로브가 초록이었고 그건 가드가 동작한다는
+   증거가 아니라 **프로브가 헛짚었다는 증거**였다. `_engine()` 부터 감싸도록 고치니 제대로
+   빨개졌다. **프로브를 돌리지 않은 가드는 가드가 아니고, 잘못 놓인 프로브는 거짓 초록이다.**
+
+### 수치
+
+- Playwright **359 passed / 0 failed (2.0h)** — 전체 게이트, 실패 0
+- pytest **1,601 passed / 10 skipped** (신규 24건: `test_target_versions` 11 ·
+  `test_execution_gate` 8 · `test_research_runs_states` 5)
+- 신규 E2E 13건: `allocation-tpv` 3 · `allocation-stress-basis` 6 · `research-run-states` 4
+- tsc 0 · eslint 0 errors / 28 warnings · ruff 0
+- `/allocation/stress` 256 → **258 kB** (+2, ADR 001 예산 안). 나머지 라우트 flat
+
+### 정직하게 열어 두는 것
+
+- **사후 중립화 차단은 API 레벨에서만 검증됐다.** UI 에서 중립화를 적용하면 결과가 지워져
+  화면 경로로는 `research_only` 목표를 만들 수 없다. 그 사실을 스펙 주석에 적었다.
+- `execution_plan.py:73` 은 아직 음수 목표를 0 으로 클램프한다 — 롱숏은 P3 이고, 지금
+  반쯤 지원하면 "시장중립인 척"하는 경로가 하나 더 생긴다.
+- `ScenarioThreeWay` 는 설계상 현재 보유 기준으로 남는다(라벨로 명시).
+- 스파인 마지막 단계 `08 EXECUTION` 은 `.aas-wiz-sep` 가 겹쳐 마우스로 클릭되지 않는다
+  (`elementFromPoint` 로 확인). E2E 는 `dispatchEvent("click")` 로 우회했고, **부채로 기록**한다.
+- 다음 단계: `as_of` 를 최적화 경로에(P1) · 유니버스 구성 종목 스냅샷 · 슬리브 서버
+  버전화 · 알파 팩토리(P2) · 롱숏 시장중립(P3) · UI 현대화(P4).
