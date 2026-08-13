@@ -128,8 +128,11 @@ def _fake_returns(n_days=300, seed=7):
 def test_analyze_records_run_only_when_requested(mem_rr, monkeypatch):
     import src.api.allocation_routes as ar
 
+    # P1-A 가 `as_of` 를 추가했다. 스텁이 시그니처를 따라가지 않으면 `TypeError` 가
+    # 라우트의 `except` 에 잡혀 **500 으로 뭉개진다** — 실패 사유가 "런 기록" 과 아무
+    # 상관없는 곳에서 나온다. `**_` 로 열어 두면 다음 인자 추가에도 견딘다.
     monkeypatch.setattr(ar, "_load_clean_returns",
-                        lambda tickers, bench, lb: _fake_returns())
+                        lambda tickers, bench, lb, **_: _fake_returns())
     monkeypatch.setattr(ar, "_labels", lambda names: {n: n for n in names})
 
     req = ar.AnalyzeRequest(tickers=["005930", "000660", "035420"], model="mvo")
