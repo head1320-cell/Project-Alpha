@@ -168,9 +168,21 @@ export default function AlphaLabStage() {
   );
 
   // 본문에는 **지금 쓰는 것**만: 선택된 알파 + 초안/승인 + 최근 몇 개. 나머지는 서랍.
+  //
+  // ★A14: 이 주석이 약속한 우선순위가 코드에 없었다 — 그냥 `slice(0, 4)` 였다★
+  // 시드 템플릿 4개가 본문 자리를 전부 차지해서 **방금 저장한 알파가 항상 서랍으로
+  // 밀려났다**. 저장 직후 그 알파가 선택 상태(`saveMut.onSuccess` 의 `setSelAlpha`)가
+  // 되는데도 화면에서 사라진다 — 사용자가 자기 작업을 잃어버린 것처럼 보인다.
+  // 실측(A14 프로브): 저장은 200 `{"error":false, alpha:{…}}` 로 성공하는데
+  // `.as-al-item` 4개가 전부 `TPL` 템플릿이었다.
+  // 정렬은 stable 이므로 같은 등급 안에서는 서버가 준 순서가 유지된다.
   const MAIN_MAX = 4;
-  const shownAlphas = visibleAlphas.slice(0, MAIN_MAX);
-  const archivedAlphas = visibleAlphas.slice(MAIN_MAX);
+  const orderedAlphas = useMemo(() => {
+    const rank = (a: AlphaDef) => (a.alpha_id === selAlpha ? 0 : a.is_template ? 2 : 1);
+    return [...visibleAlphas].sort((x, y) => rank(x) - rank(y));
+  }, [visibleAlphas, selAlpha]);
+  const shownAlphas = orderedAlphas.slice(0, MAIN_MAX);
+  const archivedAlphas = orderedAlphas.slice(MAIN_MAX);
 
   return (
     <div className="as-ws2">

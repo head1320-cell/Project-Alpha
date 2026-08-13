@@ -91,26 +91,42 @@ test("★as-wrow 회귀 가드 — 평범한 행에 Construct 그리드가 새�
   // 한 줄이어야 할 것이 세로로 쌓였다. 어떤 스펙도 그 두 화면의 행을 보지 않았다.
   //
   // ★처음 쓴 버전은 최적화 결과가 없으면 skip 됐다 — 즉 아무것도 지키지 않았다★
-  // 그래서 데이터에 기대지 않고 **CSS 계약 자체**를 잰다: 평범한 `.as-wrow` 는
-  // 기본 3열이어야 하고, Construct 전용 `.as-wrow-edit` 만 4열이어야 한다.
+  // 그래서 데이터에 기대지 않고 **CSS 계약 자체**를 잰다.
+  //
+  // ★A14 정정 — 열 **개수**로 판정하던 것이 이 가드를 스스로 깨뜨렸다★
+  // 이 단언은 원래 `edit === 4열` 이었는데, A9-D 가 §59 에서 **Δ(최적화 대비) 열**을
+  // 의도적으로 추가해 5열이 됐다(`minmax(0,1fr) 62px 10px auto 26px`, 영역
+  // `"nm in unit dlt del"`). 결과가 없으면 `auto` 가 폭 0 으로 접히므로 화면에는 아무
+  // 영향이 없고 머리글 `.as-wrow-head` 도 같은 5트랙을 쓴다 — **CSS 는 맞고 단언이 낡았다.**
+  // 숫자를 5로 올리면 다음에 열이 또 늘 때 같은 일이 반복되므로, 이 가드가 원래 지키려던
+  // 계약(Construct 그리드가 평범한 행에 새지 않는다)을 **영역 이름**으로 판정한다.
   await enter(page);
-  const cols = await page.evaluate(() => {
+  const g = await page.evaluate(() => {
     const probe = (cls: string) => {
       const el = document.createElement("div");
       el.className = cls;
       document.querySelector(".aas-root")!.appendChild(el);
-      const v = getComputedStyle(el).gridTemplateColumns;
+      const cs = getComputedStyle(el);
+      const v = { cols: cs.gridTemplateColumns, areas: cs.gridTemplateAreas };
       el.remove();
       return v;
     };
     return { plain: probe("as-wrow"), edit: probe("as-wrow as-wrow-edit") };
   });
 
-  // 기본 행은 3열(`minmax(0,1fr) 80px 48px`) — 열 개수로만 판정한다(px 는 폭에 따라 계산됨).
-  expect(cols.plain.split(/\s+/).length,
-    `평범한 .as-wrow 가 3열이 아니다: ${cols.plain}`).toBe(3);
-  // Construct 행은 4열 — 두 값이 같아지면 이름 충돌이 되돌아온 것이다.
-  expect(cols.edit.split(/\s+/).length,
-    `.as-wrow-edit 가 4열이 아니다: ${cols.edit}`).toBe(4);
-  expect(cols.plain, "두 행이 같은 그리드를 쓴다 — 이름 충돌 재발").not.toBe(cols.edit);
+  // 기본 행은 3열(`minmax(0,1fr) 80px 48px`)이고 **영역 이름을 쓰지 않는다**.
+  expect(g.plain.cols.split(/\s+/).length,
+    `평범한 .as-wrow 가 3열이 아니다: ${g.plain.cols}`).toBe(3);
+  expect(g.plain.areas, `평범한 .as-wrow 에 Construct 의 영역이 샜다: ${g.plain.areas}`)
+    .toBe("none");
+
+  // Construct 행은 자기 영역 이름을 갖는다 — 열이 몇 개든 이 이름들이 계약이다.
+  for (const area of ["nm", "in", "unit", "dlt", "del", "sl"]) {
+    expect(g.edit.areas, `.as-wrow-edit 에 '${area}' 영역이 없다: ${g.edit.areas}`)
+      .toContain(area);
+  }
+  // 열 개수는 하한만 둔다(실측 5: 이름·입력·단위·Δ·삭제).
+  expect(g.edit.cols.split(/\s+/).length,
+    `.as-wrow-edit 열이 줄었다: ${g.edit.cols}`).toBeGreaterThanOrEqual(4);
+  expect(g.plain.cols, "두 행이 같은 그리드를 쓴다 — 이름 충돌 재발").not.toBe(g.edit.cols);
 });

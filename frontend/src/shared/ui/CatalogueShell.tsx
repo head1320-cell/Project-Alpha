@@ -37,6 +37,7 @@
 // §8.1 이 Tooltip 을 나열하지만 여기서 도입하면 그 설계를 되돌리는 셈이라 넣지 않았다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/shared/ui/shadcn/toggle-group";
 import { cn } from "@/shared/lib/cn";
 import { useFocusTrap } from "@/shared/lib/useFocusTrap";
@@ -192,6 +193,21 @@ export function CatalogueShell(props: CatalogueShellProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // ★A14: 창은 `document.body` 로 포털한다 — 이것이 없으면 창이 창이 아니다★
+  // 예전에는 소비자가 놓인 자리에 **인라인으로** 렌더됐다. A11 §62 가
+  // `.as-ws2 .as-center > .as-card` 에 `animation: a11-rise … both` 를 걸면서 그 카드의
+  // computed transform 이 `matrix(1,0,0,1,0,0)`(= `none` 이 아니다)로 **영구히** 남았고,
+  // transform 이 있는 조상은 `position: fixed` 의 컨테이닝 블록이 된다. 그래서
+  // `.tfm-backdrop { position: fixed; inset: 0 }` 이 뷰포트가 아니라 **카드 상자**에
+  // 갇혔다 — 실측 298×241px, 적용 버튼은 y=2321 로 화면 밖. z-index 9998 도 그 카드의
+  // stacking context 안이라 형제 카드가 위를 덮었다.
+  // 증상: `.tfm` 은 상자가 비어 있지 않아 `toBeVisible()` 을 통과하는데 **클릭이 안 된다**
+  // (Playwright: "…intercepts pointer events"). 9개 `.as-ws2` 스테이지 전부가 그랬다.
+  // 포털은 원인이 무엇이든 구조적으로 이 계열을 닫는다. 선례: `.shad-overlay`(z-1000),
+  // Radix Dialog. `.tfm-*` 클래스명은 그대로라 E2E 계약은 유지된다.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);   // SSR 에는 document 가 없다
+
   // 프리셋 목록은 localStorage 라 렌더 중에 읽지 않는다(SSR 불일치). 창이 열릴 때 한 번.
   const [presetRows, setPresetRows] = useState<CataloguePreset[]>([]);
   const [presetName, setPresetName] = useState("");
@@ -220,9 +236,9 @@ export function CatalogueShell(props: CatalogueShellProps) {
     return allItems.filter((i) => matches(i, s));
   }, [q, items, allItems]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     // .tfm-* 클래스는 그대로 유지한다 — Playwright 계약이고, 이 단계는 중복 제거가 목적이다.
     <div className="tfm-backdrop" onClick={onClose} style={styleVars}>
       <div className="tfm" ref={dialogRef} onClick={(e) => e.stopPropagation()}
@@ -383,6 +399,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
 
         {note && <div className="tfm-note">{note}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

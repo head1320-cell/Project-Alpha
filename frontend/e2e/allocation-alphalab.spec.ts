@@ -88,8 +88,15 @@ test("레지스트리: 표현식이 보이는 글자이고, 삭제 버튼에 이
   await page.locator("input.as-input[placeholder*='알파 이름']").fill(name);
   await page.locator(".as-fb-apply", { hasText: "레지스트리에 저장" }).click();
 
+  // ★A14: 이 단언이 실제 제품 결함을 잡고 있었다 — 환경 탓이 아니었다★
+  // A7-2 가 레지스트리 본문을 4개로 제한하면서 `slice(0, 4)` 만 썼고, 시드 템플릿 4개가
+  // 자리를 전부 차지해 **방금 저장한 알파가 늘 서랍으로 밀려났다**. 저장 API 는 200 을
+  // 답하는데 화면에서만 사라지므로 사용자에게는 저장이 실패한 것처럼 보인다.
+  // (A13 게이트 보고서에는 이 실패를 "DB 부재 환경 실패"로 적었는데, 프로브로 재 보니
+  //  `psycopg2` 가 없어도 알파 저장은 성공했다 — 그 진단이 틀렸다.)
   const mine = page.locator(".as-al-item", { hasText: name });
-  await expect(mine, "저장한 알파가 목록에 없다").toHaveCount(1, { timeout: 20_000 });
+  await expect(mine, "저장한 알파가 본문 목록에 없다 — 서랍으로 밀려났는가?")
+    .toHaveCount(1, { timeout: 20_000 });
 
   // 표현식이 호버가 아니라 행에 있어야 한다.
   const exprs = page.locator(".as-al-expr-r");

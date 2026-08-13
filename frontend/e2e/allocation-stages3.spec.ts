@@ -215,9 +215,14 @@ test("★드로어가 열리고 Escape 로 닫히며 포커스가 트리거로 �
   await expect(panel, "Escape 로 닫히지 않았다").toBeHidden({ timeout: 10_000 });
 
   // 포커스가 허공에 남으면 키보드 사용자는 목록의 처음부터 다시 Tab 해야 한다.
-  const focusedIsTrigger = await page.evaluate(() =>
-    !!document.activeElement?.classList.contains("as-arch-t"));
-  expect(focusedIsTrigger, "닫은 뒤 포커스가 트리거로 돌아오지 않았다").toBe(true);
+  // ★A14: 즉시 읽던 것을 폴링으로 바꿨다★ Radix 는 닫힘 애니메이션이 끝난 뒤에
+  // `onCloseAutoFocus` 로 포커스를 돌려주는데, 이 단언은 그 전에 한 번만 읽어서
+  // 전체 게이트에서는 red, 단독 실행에서는 green 인 flaky 였다(A13 게이트에서 실측).
+  // 계약은 그대로 두고 **기다리기만** 한다 — 조건을 느슨하게 하지 않는다.
+  await expect.poll(
+    () => page.evaluate(() => !!document.activeElement?.classList.contains("as-arch-t")),
+    { timeout: 5_000, message: "닫은 뒤 포커스가 트리거로 돌아오지 않았다" },
+  ).toBe(true);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
