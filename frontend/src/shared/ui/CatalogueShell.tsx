@@ -218,7 +218,13 @@ export function CatalogueShell(props: CatalogueShellProps) {
   useEffect(() => { if (open) refreshPresets(); }, [open, refreshPresets]);
 
   // 스펙 §8.1 — 열려 있는 동안 Tab 이 창 밖으로 걸어 나가지 못하게 한다(닫으면 원위치 복귀).
-  useFocusTrap(dialogRef, open);
+  // ★`mounted` 를 함께 넘긴다 — A14 포털이 만든 회귀를 전체 게이트가 잡았다★
+  // `FactorPickerModal` 은 `next/dynamic` 이라 **첫 렌더가 이미 `open=true`** 인 상태로
+  // 일어난다. 그때 위의 `!mounted` 게이트가 `null` 을 반환하므로 이 훅은
+  // `dialogRef.current === null` 로 bail 하는데, 의존성이 `[ref, active]` 뿐이라
+  // `mounted` 가 뒤집혀 창이 실제로 그려져도 **effect 가 다시 돌지 않아 트랩이 없었다**.
+  // 증상은 조용하다: 창은 멀쩡히 뜨고 Tab 만 뒤쪽 페이지로 걸어 나간다.
+  useFocusTrap(dialogRef, open && mounted);
 
   useEffect(() => { if (!open) { setQ(""); setPresetName(""); } }, [open]);
 
