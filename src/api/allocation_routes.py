@@ -318,6 +318,18 @@ def _enb_report(w, S, names: list[str]) -> dict:
 @router.post("/analyze")
 def allocation_analyze(req: AnalyzeRequest):
     """포트폴리오 종합 분석 — 하나의 수익률 행렬에서 전 패널 파생 (추가 DB 조회 0)."""
+    return run_analyze(req)
+
+
+def run_analyze(req: AnalyzeRequest) -> dict:
+    """★분석 파이프라인의 단일 출처 (P1-C)★
+
+    재현 엔드포인트(`/research-runs/{id}/reproduce`)가 **이 함수를 그대로 부른다.**
+    사본을 만들지 않는 이유는 이 저장소가 두 번 값을 치렀기 때문이다 —
+    A1 의 `currentSig`/`req` 두 객체 리터럴, R0 의 오버레이 컴파일 산수가 화면과 서버에
+    나뉘어 있던 것. 같은 산수를 두 곳에 두면 반드시 갈라지고, 갈라져도 타입 에러가 나지
+    않는다. 재현이 원본과 **다른 코드로** 계산하면 그것은 재현이 아니다.
+    """
     _check_as_of(req.as_of)
     # 스냅샷 링크 검증을 **계산 전에** 한다 — 없는 ID 를 조용히 기록하면 나중에 런을 열었을 때
     # 국면을 복원할 수 없고, 그때는 왜 비었는지 알 방법이 없다. 값비싼 계산 뒤가 아니라 앞에서 막는다.
