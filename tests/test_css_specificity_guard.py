@@ -136,18 +136,24 @@ def test_the_detector_does_not_cry_wolf():
 #:
 #: 결론: 653행을 지우지 않는다. 올바른 정리는 도달 불가 컴포넌트 네 개를 지우는 쪽이고
 #: (그러면 이 목록은 옳은 이유로 0 이 된다) 그건 별개 작업이다.
+# ★이 기준선은 `파일:줄` 로 키를 잡아서 구조적으로 부서지기 쉽다 (R0 에서 확인)★
+# A12 가 `MacroRadar.tsx`·`StockDetail.tsx` 에 차트 애니메이션 훅(import 1줄 + 컴포넌트마다
+# 1줄)을 넣자 **충돌 16건의 줄 번호만 +1~+4 밀려** new/gone 양쪽이 동시에 빨개졌다.
+# 실제 충돌은 하나도 늘지 않았고 총계는 22로 그대로다. A12~A14 가 프론트 전용이라
+# pytest 를 돌리지 않아 세 단계 동안 조용히 빨간 채였다 — 아래 수치는 그때 밀린 값으로
+# 다시 잡은 것이다. **줄 번호가 아니라 선택자로 키를 잡는 개선은 부채로 남긴다.**
 KNOWN_COLLISIONS: frozenset[str] = frozenset({
-    "src/widgets/macro/MacroRadar.tsx:64", "src/widgets/macro/MacroRadar.tsx:73",
-    "src/widgets/macro/MacroRadar.tsx:123", "src/widgets/macro/MacroRadar.tsx:211",
-    "src/widgets/macro/MacroRadar.tsx:273", "src/widgets/macro/MacroRadar.tsx:350",
-    "src/widgets/macro/MacroRadar.tsx:434", "src/widgets/macro/MacroRadar.tsx:474",
+    "src/widgets/macro/MacroRadar.tsx:65", "src/widgets/macro/MacroRadar.tsx:74",
+    "src/widgets/macro/MacroRadar.tsx:125", "src/widgets/macro/MacroRadar.tsx:214",
+    "src/widgets/macro/MacroRadar.tsx:276", "src/widgets/macro/MacroRadar.tsx:354",
+    "src/widgets/macro/MacroRadar.tsx:438", "src/widgets/macro/MacroRadar.tsx:478",
     "src/widgets/narrative/index.tsx:431", "src/widgets/narrative/index.tsx:438",
     "src/widgets/valuation/ScreenerPanel.tsx:74", "src/widgets/valuation/ScreenerPanel.tsx:206",
     "src/widgets/valuation/ScreenerPanel.tsx:213", "src/widgets/valuation/ScreenerPanel.tsx:220",
-    "src/widgets/valuation/StockDetail.tsx:59", "src/widgets/valuation/StockDetail.tsx:119",
-    "src/widgets/valuation/StockDetail.tsx:124", "src/widgets/valuation/StockDetail.tsx:176",
-    "src/widgets/valuation/StockDetail.tsx:233", "src/widgets/valuation/StockDetail.tsx:301",
-    "src/widgets/valuation/StockDetail.tsx:368", "src/widgets/valuation/StockDetail.tsx:447",
+    "src/widgets/valuation/StockDetail.tsx:60", "src/widgets/valuation/StockDetail.tsx:120",
+    "src/widgets/valuation/StockDetail.tsx:125", "src/widgets/valuation/StockDetail.tsx:178",
+    "src/widgets/valuation/StockDetail.tsx:236", "src/widgets/valuation/StockDetail.tsx:304",
+    "src/widgets/valuation/StockDetail.tsx:371", "src/widgets/valuation/StockDetail.tsx:450",
 })
 
 

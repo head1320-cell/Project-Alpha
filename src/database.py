@@ -36,7 +36,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import NoSuchModuleError, OperationalError
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 load_dotenv()
@@ -80,7 +80,15 @@ _connected_url: str = ""
 
 
 def _create_engine_with_fallback(url: str, retries: int = 2):
-    """Try connecting to the requested URL with retries; fall back to SQLite."""
+    """Try connecting to the requested URL with retries; fall back to SQLite.
+
+    ★드라이버 부재도 "PostgreSQL unavailable" 이다 (R0, 실측으로 확인)★
+    예전에는 `OperationalError` 만 잡았다. 그런데 `psycopg2` 가 설치돼 있지 않으면
+    `create_engine()` 이 `ModuleNotFoundError` 를 던지므로 폴백이 **전혀 걸리지 않고**
+    호출자에게 그대로 터졌다 — 개발/CI 컨테이너에서 가장 흔한 형태의 "DB 없음"이
+    하필 폴백을 비껴가고 있었다. 드라이버 부재는 재시도해도 달라지지 않으므로
+    기다리지 않고 곧장 SQLite 로 내려간다.
+    """
     if url.startswith("postgresql"):
         for attempt in range(retries):
             try:
@@ -92,6 +100,9 @@ def _create_engine_with_fallback(url: str, retries: int = 2):
                     conn.execute(text("SELECT 1"))
                 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
                 return engine, SessionLocal, url
+            except (ModuleNotFoundError, ImportError, NoSuchModuleError) as e:
+                print(f"[DB] PostgreSQL driver unavailable ({e}) — SQLite 로 폴백합니다")
+                break                                    # 재시도해도 모듈은 생기지 않는다
             except OperationalError as e:
                 print(f"[DB] PostgreSQL connection attempt {attempt + 1} failed: {e}")
                 time.sleep(1)
