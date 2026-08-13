@@ -1178,6 +1178,9 @@ class TargetVersionRequest(BaseModel):
     ruleset_version: str | None = None
     pack_id: str | None = None
     note: str | None = None
+    # ★화면 표시용 컴파일은 저장하지 않는다★ 오버레이 슬라이더를 움직일 때마다 행이
+    # 쌓이면 감사 기록이 노이즈가 된다. 컴파일러는 하나로 두고 **저장 여부만** 가른다.
+    dry_run: bool = False
 
 
 @router.post("/target-versions")
@@ -1192,6 +1195,8 @@ def target_version_create(req: TargetVersionRequest):
         )
     except ValueError as e:
         raise HTTPException(422, str(e))
+    if req.dry_run:
+        return {"saved": False, "tpv_id": None, "dry_run": True, **tv}
     tpv_id = save_target(tv, note=req.note)
     if tpv_id is None:
         # ★저장 실패를 성공처럼 답하지 않는다★ 화면이 "저장됐다"고 말하면 안 된다.

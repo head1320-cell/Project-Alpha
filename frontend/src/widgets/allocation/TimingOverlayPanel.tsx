@@ -18,6 +18,9 @@
 // 위험자산 내 집중도는 **불변**이고, 그 사실을 적는다 — 그럴듯한 Δ 를 지어내는 대신.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import { targetVersionApi } from "@/entities/allocation/targetVersion";
 
 import { useAllocation } from "./AllocationProvider";
 
@@ -41,6 +44,25 @@ export function TimingOverlayPanel() {
   const nameOf = (c: string) =>
     labels[c] || holdings.find((h) => h.code === c)?.name || c;
 
+  // ★컴파일은 서버가 한다 (R0)★
+  // 예전에는 이 패널이 `after = before × exposure` 를 **자기 손으로** 계산했고,
+  // 실행 준비실은 그 사실을 몰라 오버레이 이전 비중으로 주문을 냈다. 같은 산수가 두 곳에
+  // 있으면 반드시 갈라진다. 이제 화면도 실행과 **같은 컴파일러**를 부른다 —
+  // 다만 표시용이므로 `dry_run` 으로 저장은 하지 않는다(슬라이더마다 감사 행이 쌓이면 안 된다).
+  // ★훅은 조기 반환 위에 둔다★ 아래 `if (!timingOverlay)` 보다 뒤에 두면 렌더마다
+  // 훅 개수가 달라진다 — `enabled` 로 끄는 것이 옳은 방법이다.
+  const e = Math.max(0, Math.min(1, timingOverlay?.exposure ?? 1));
+  const tvQ = useQuery({
+    queryKey: ["allocation", "target-version", "preview", before, e, timingOverlay?.source ?? null],
+    queryFn: () => targetVersionApi.create({
+      base_weights: before,
+      overlay: { exposure: e, source: timingOverlay!.source },
+      dry_run: true,
+    }),
+    enabled: !!timingOverlay,
+    staleTime: 60_000,
+  });
+
   if (!timingOverlay) {
     return (
       <section className="as-card as-tov">
@@ -55,10 +77,8 @@ export function TimingOverlayPanel() {
     );
   }
 
-  const e = Math.max(0, Math.min(1, timingOverlay.exposure));
-  const after: Record<string, number> = {};
-  codes.forEach((c) => { after[c] = (before[c] ?? 0) * e; });
-  const cashAfter = codes.reduce((a, c) => a + (before[c] ?? 0), 0) * (1 - e);
+  const after: Record<string, number> = tvQ.data?.final_weights ?? {};
+  const cashAfter = tvQ.data?.cash_weight ?? 0;
 
   // 회전율 = Σ|after − before| / 2 (편도). 현금으로 빠지는 만큼이 곧 매도다.
   const turnover = codes.reduce((a, c) => a + Math.abs((after[c] ?? 0) - (before[c] ?? 0)), 0) / 2;

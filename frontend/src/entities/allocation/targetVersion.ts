@@ -14,6 +14,7 @@ export type TargetStatus = "executable" | "research_only";
 export interface TargetVersion {
   tpv_id?: string | null;
   saved?: boolean;
+  dry_run?: boolean;
   message?: string;
   mode: string;
   base_weights: Record<string, number>;
@@ -35,6 +36,8 @@ export interface TargetVersionRequest {
   ruleset_version?: string | null;
   pack_id?: string | null;
   note?: string | null;
+  /** 화면 표시용 — 컴파일만 하고 저장하지 않는다. */
+  dry_run?: boolean;
 }
 
 export const targetVersionApi = {
