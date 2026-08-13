@@ -6847,3 +6847,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-rob-basis-cash td { border-top: 1px solid var(--border); }
 .as-rob-basis-na, .as-rob-basis-same, .as-rob-basis-meta { font-size: var(--fs-chrome); }
 .as-3w-basis { font-size: var(--fs-chrome); color: var(--muted-foreground); }
+.as-rob-kpi2 { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: baseline;
+  margin-top: var(--sp-1); font-size: var(--fs-chrome); }
+.as-rob-kpi2 em { color: var(--muted-foreground); font-style: normal; margin-right: 4px; }

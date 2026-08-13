@@ -119,3 +119,34 @@ export function StressBasisBand({
     </section>
   );
 }
+
+/** 같은 시나리오를 **두 기준**으로 돌린 결과를 나란히 놓는다 (R0-B2).
+ *
+ *  ★목표가 없으면 숫자를 만들지 않는다★ 현재 값을 복사하거나 0 을 넣지 않고
+ *  미계산으로 남긴다 — 이 화면이 A6-Z 에서 이미 초록 `+0.0%` 로 값을 치른 자리다. */
+export function BasisShock({ current, target, targetMissing }: {
+  current: number | null;
+  target: number | null;
+  /** 목표 기준 자체가 없다(최적화 결과 없음 등). 계산 실패와 구분한다. */
+  targetMissing: boolean;
+}) {
+  const num = (v: number | null) =>
+    v != null && Number.isFinite(v)
+      ? <b className="num" style={{ color: v >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>
+          {v >= 0 ? "+" : ""}{v.toFixed(1)}%</b>
+      : <span className="aas-cmp-na">미계산</span>;
+
+  const delta = (current != null && target != null
+    && Number.isFinite(current) && Number.isFinite(target))
+    ? target - current : null;
+
+  return (
+    <div className="as-rob-kpi2">
+      <span><em>현재 보유</em> {num(current)}</span>
+      <span><em>목표</em> {targetMissing ? <span className="aas-cmp-na">미계산</span> : num(target)}</span>
+      <span><em>Δ</em> {delta == null
+        ? <span className="aas-cmp-na">미계산</span>
+        : <b className="num">{delta >= 0 ? "+" : ""}{delta.toFixed(1)}%p</b>}</span>
+    </div>
+  );
+}

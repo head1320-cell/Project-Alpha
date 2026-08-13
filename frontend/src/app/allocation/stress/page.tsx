@@ -12,7 +12,7 @@ import { KrScenarioPack } from "@/widgets/allocation/KrScenarioPack";
 import { ScenarioThreeWay } from "@/widgets/allocation/ScenarioThreeWay";
 import { StressScenarioModal } from "@/widgets/allocation/StressScenarioModal";
 import { EvidenceBadge } from "@/shared/ui/evidence";
-import { StressBasisBand, useTargetBasis } from "@/widgets/allocation/StressBasisBand";
+import { BasisShock, StressBasisBand, useTargetBasis } from "@/widgets/allocation/StressBasisBand";
 
 export default function RobustnessWorkspace() {
   const {
@@ -66,6 +66,17 @@ export default function RobustnessWorkspace() {
     }).catch(() => null),
     enabled: canRun,
   });
+  // ★같은 시나리오를 목표 기준으로도 돌린다 (R0-B2)★
+  // provider 의 `stressQ`(slices/ScenarioContext.tsx:62)는 건드리지 않는다 — 여러
+  // 스테이지가 공유하므로, KPI 대조 하나 때문에 11개 스테이지에 파급시키지 않는다.
+  // 목표가 없으면 **요청하지 않는다**(비용 0, 화면은 미계산).
+  const tgtWeights = tv?.final_weights ?? null;
+  const stressTgtQ = useQuery({
+    queryKey: ["allocation", "stress-target", JSON.stringify(tgtWeights), scenario, severity],
+    queryFn: () => allocationApi.stress(tgtWeights!, scenario, severity).catch(() => null),
+    enabled: !!tgtWeights && Object.keys(tgtWeights).length > 0,
+  });
+
   const corrQ = useQuery({
     queryKey: ["allocation", "stress-corr", codesKey, rhoC, intensityC, conf],
     queryFn: () => allocationApi.stressCorrelation({
@@ -263,6 +274,13 @@ export default function RobustnessWorkspace() {
                       산출 불가
                     </EvidenceBadge>}
               </div>
+              {/* ★두 기준을 나란히 (R0-B2)★ 위 한 줄은 현재 보유 기준이다. 목표 기준으로
+                  같은 시나리오를 돌린 값을 옆에 놓아, 주문할 배분이 이 충격에 어떻게
+                  반응하는지 같은 자리에서 읽히게 한다. 목표가 없으면 미계산으로 남긴다. */}
+              <BasisShock
+                current={stressQ.data.portfolio_shock_pct ?? null}
+                target={stressTgtQ.data?.portfolio_shock_pct ?? null}
+                targetMissing={!tgtWeights} />
               <table className="as-metrics">
                 <thead><tr><th>종목</th><th>비중</th><th>충격</th><th>기여</th></tr></thead>
                 <tbody>

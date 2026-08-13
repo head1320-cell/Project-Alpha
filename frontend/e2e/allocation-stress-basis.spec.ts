@@ -128,3 +128,24 @@ test("§56 하한: 기준 밴드의 텍스트가 11px 이상이다", async ({ pa
   expect(r.n, "검사한 노드가 없다 — 빈 선택자는 조용히 통과한다").toBeGreaterThan(5);
   expect(r.out, `11px 미만: ${JSON.stringify(r.out)}`).toEqual([]);
 });
+
+// ── 6. SCENARIO DETAIL 이 두 기준을 나란히 낸다 (R0-B2) ─────────────────────
+test("★시나리오 충격을 현재 보유와 목표 두 기준으로 낸다★", async ({ page }) => {
+  test.setTimeout(120_000);
+  await seedPortfolio(page);
+  await page.goto("/allocation/stress", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".as-rob-basis")).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(4_000);
+
+  // 전제: 충격 한 줄이 렌더돼야 대조가 성립한다.
+  const head = page.locator(".as-shock-head");
+  await expect(head, "시나리오 충격 줄이 없다 — 아래 단언은 뜻이 없다")
+    .toBeVisible({ timeout: 20_000 });
+
+  const kpi = page.locator(".as-rob-kpi2").first();
+  await expect(kpi, "두 기준 대조 줄이 없다").toBeVisible();
+  await expect(kpi).toContainText("현재 보유");
+  await expect(kpi).toContainText("목표");
+  // 최적화를 돌리지 않았으므로 목표는 미계산이어야 한다 — 0 이나 현재 값 복사가 아니라.
+  await expect(kpi, "목표 기준이 없는데 숫자를 만들었다").toContainText("미계산");
+});
