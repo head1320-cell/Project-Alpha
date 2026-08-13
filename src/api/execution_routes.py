@@ -25,7 +25,11 @@ router = APIRouter(prefix="/api/v1/allocation", tags=["execution"])
 
 class ExecPlanRequest(BaseModel):
     current_weights: dict[str, float] = Field(default_factory=dict)   # % (없으면 전량 신규매수)
-    target_weights: dict[str, float] = Field(..., min_length=1)       # %
+    # ★R0: 목표는 `tpv_id` 로 지정하는 것이 정본이다★
+    # `target_weights` 직접 전달은 배선 전 화면을 위해 남겨 둔 호환 경로다. 둘 다 오면
+    # 서버가 대조해서 다르면 거부한다 — 감사 기록과 실제 주문이 갈라지면 안 된다.
+    tpv_id: str | None = None
+    target_weights: dict[str, float] = Field(default_factory=dict)    # %
     portfolio_value: float = Field(1e8, gt=0)
     restricted: list[str] = Field(default_factory=list)
     limits: dict = Field(default_factory=dict)                        # turnover_cap_pct 등
@@ -48,9 +52,42 @@ class FillsRequest(BaseModel):
     actor: str = Field("user", max_length=60)
 
 
-def _compute(req: ExecPlanRequest) -> tuple[dict, dict]:
+def _resolve_target(req: ExecPlanRequest) -> tuple[dict[str, float] | None, dict | None]:
+    """(목표 비중, 차단 응답). 차단이면 **계획을 만들지 않는다.**
+
+    ★이 함수가 R0 의 차단선이다★ 화면이 무엇을 보내든 주문 목표는 승인된
+    `TargetPortfolioVersion` 에서만 나온다. 막을 때는 반드시 사유를 함께 낸다.
+    """
+    if not req.tpv_id:
+        if req.target_weights:
+            return dict(req.target_weights), None          # 호환 경로 (배선 전 화면)
+        return None, {"blocked": True, "reason": "목표 포트폴리오가 없습니다 — "
+                      "tpv_id 또는 target_weights 중 하나가 필요합니다."}
+
+    from src.data.target_versions import STATUS_EXECUTABLE, get_target
+    tv = get_target(req.tpv_id)
+    if tv is None:
+        # ★조용히 요청 비중으로 진행하지 않는다★ 모르는 목표를 받았다는 사실이 결론이다.
+        return None, {"blocked": True,
+                      "reason": f"목표 버전을 찾을 수 없습니다: {req.tpv_id}"}
+    if tv["status"] != STATUS_EXECUTABLE:
+        return None, {"blocked": True, "tpv_id": req.tpv_id,
+                      "reason": tv.get("status_reason") or "실행할 수 없는 목표입니다."}
+
+    final = {c: float(v) for c, v in tv["final_weights"].items()}
+    if req.target_weights:
+        same = (set(req.target_weights) == set(final)
+                and all(abs(float(req.target_weights[c]) - final[c]) < 1e-6 for c in final))
+        if not same:
+            return None, {"blocked": True, "tpv_id": req.tpv_id,
+                          "reason": "요청한 비중이 목표 버전과 일치하지 않습니다 — "
+                                    "감사 기록과 실제 주문이 갈라집니다."}
+    return final, None
+
+
+def _compute(req: ExecPlanRequest, target: dict[str, float]) -> tuple[dict, dict]:
     from src.engine.execution_plan import build_plan, pre_trade_checks
-    plan = build_plan(req.current_weights, req.target_weights, req.portfolio_value,
+    plan = build_plan(req.current_weights, target, req.portfolio_value,
                       restricted=set(req.restricted))
     # 현금 잔량 힌트 (매수 총액 > PV면 음수 — pre-trade가 block)
     limits = dict(req.limits)
@@ -66,8 +103,12 @@ def _compute(req: ExecPlanRequest) -> tuple[dict, dict]:
 def execution_plan_preview(req: ExecPlanRequest):
     """미저장 미리보기 — 오더 diff·비용·pre-trade."""
     try:
-        plan, pretrade = _compute(req)
-        return {"error": False, "plan": plan, "pretrade": pretrade}
+        target, blocked = _resolve_target(req)
+        if blocked:
+            return {"error": False, **blocked}      # 차단은 오류가 아니라 정책 결과다
+        plan, pretrade = _compute(req, target or {})
+        return {"error": False, "blocked": False, "tpv_id": req.tpv_id,
+                "plan": plan, "pretrade": pretrade}
     except Exception:
         logger.exception("execution-plan 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -78,7 +119,11 @@ def execution_plan_save(req: SavePlanRequest):
     """계획 영속(draft) — 감사 로그 시작."""
     try:
         from src.data.execution_store import create_plan
-        plan, pretrade = _compute(req)
+        target, blocked = _resolve_target(req)
+        if blocked:
+            # ★미리보기만 막고 저장을 열어 두면 게이트가 아니다★
+            return {"saved": False, "plan_id": None, **blocked}
+        plan, pretrade = _compute(req, target or {})
         pid = create_plan(req.name, plan, pretrade, run_id=req.run_id)
         if pid is None:
             return {"saved": False, "plan_id": None, "message": "DB 미가용 — 저장되지 않음.",

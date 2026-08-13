@@ -17,7 +17,7 @@ import math
 from datetime import date, timedelta
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.engine.scenario_packs import HIST_WINDOWS
@@ -1159,3 +1159,64 @@ def allocation_stress_correlation(req: StressCorrRequest):
     except Exception:
         logger.exception("stress-correlation 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TargetPortfolioVersion — 실행·스트레스·귀인이 참조하는 불변 목표 (R0-T)
+# ─────────────────────────────────────────────────────────────────────────────
+# 왜 라우트가 필요한가: 컴파일 산수를 서버에 두는 것만으로는 부족하고, **같은 목표를
+# 여러 화면이 id 하나로 가리킬 수 있어야** 오버레이가 실행까지 관통한다.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TargetVersionRequest(BaseModel):
+    base_weights: dict[str, float] = Field(..., min_length=1)      # % (최적화 산출)
+    overlay: dict | None = None                                    # {exposure, source}
+    neutralized: bool = False                                      # 사후 중립화 적용 여부
+    mode: str = "long_only"
+    run_id: str | None = None
+    snapshot_id: str | None = None
+    ruleset_version: str | None = None
+    pack_id: str | None = None
+    note: str | None = None
+
+
+@router.post("/target-versions")
+def target_version_create(req: TargetVersionRequest):
+    """오버레이까지 반영한 **최종 목표**를 컴파일해 영속화한다."""
+    from src.data.target_versions import compile_target, save_target
+    try:
+        tv = compile_target(
+            req.base_weights, req.overlay, mode=req.mode, neutralized=req.neutralized,
+            run_id=req.run_id, snapshot_id=req.snapshot_id,
+            ruleset_version=req.ruleset_version, pack_id=req.pack_id,
+        )
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    tpv_id = save_target(tv, note=req.note)
+    if tpv_id is None:
+        # ★저장 실패를 성공처럼 답하지 않는다★ 화면이 "저장됐다"고 말하면 안 된다.
+        return {"saved": False, "tpv_id": None,
+                "message": "저장소 미가용 — 목표 버전이 기록되지 않았습니다.", **tv}
+    return {"saved": True, "tpv_id": tpv_id, **tv}
+
+
+@router.get("/target-versions/{tpv_id}")
+def target_version_get(tpv_id: str):
+    from src.data.target_versions import get_target
+    tv = get_target(tpv_id)
+    if tv is None:
+        raise HTTPException(404, "목표 버전을 찾을 수 없습니다.")
+    return tv
+
+
+@router.get("/target-versions")
+def target_versions_list(limit: int = Query(50, ge=1, le=200)):
+    """★빈 목록과 저장소 장애를 구분해 답한다 (R0-S)★
+    `list_targets` 는 예외를 삼키지 않으므로 여기서 두 사실이 갈린다."""
+    from src.data.target_versions import list_targets
+    try:
+        return {"available": True, "versions": list_targets(limit)}
+    except Exception as e:
+        logger.warning(f"target-versions 목록 실패: {e}")
+        return {"available": False, "versions": [],
+                "reason": "목표 버전 저장소를 읽을 수 없습니다 — 기록이 없는 것과 다릅니다."}
