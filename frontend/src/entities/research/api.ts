@@ -44,6 +44,13 @@ export interface RecordRunInput {
   note?: string;
 }
 
+/** 목록 응답 — `available:false` 면 저장소를 읽지 못한 것이고, 기록이 없는 것과 다르다. */
+export interface ResearchRunList {
+  available: boolean;
+  runs: ResearchRunSummary[];
+  reason?: string;
+}
+
 export const researchApi = {
   record: async (req: RecordRunInput): Promise<{ recorded: boolean; run_id: string | null; message?: string }> => {
     const r = await fetch(`${API_BASE}/api/v1/research-runs`, {
@@ -52,7 +59,10 @@ export const researchApi = {
     if (!r.ok) throw new Error(`record run failed: ${r.status}`);
     return r.json();
   },
-  list: async (kind?: string, limit = 50): Promise<{ runs: ResearchRunSummary[] }> => {
+  /** 목록. ★서버가 `available` 로 "기록 없음"과 "저장소 장애"를 가른다 (R0-S)★
+   *  네트워크 오류는 여기서 **던진다** — 호출부가 `catch` 로 뭉개면 세 상태가 다시
+   *  하나가 된다(예전 `ResearchRunsPanel.tsx:98` 이 그랬다). */
+  list: async (kind?: string, limit = 50): Promise<ResearchRunList> => {
     const q = new URLSearchParams();
     if (kind) q.set("kind", kind);
     q.set("limit", String(limit));

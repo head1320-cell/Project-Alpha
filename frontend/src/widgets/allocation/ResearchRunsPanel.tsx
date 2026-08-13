@@ -95,7 +95,12 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
 
   const listQ = useQuery({
     queryKey: ["research", "runs", runsVersion],
-    queryFn: () => researchApi.list("allocation_analyze", 30).catch(() => null),
+    // ★`catch` 로 뭉개지 않는다 (R0-S)★ 예전에는 `.catch(() => null)` 이라 **네트워크
+    // 오류가 null 이 되고**, 그 null 이 아래에서 "기록된 런 없음" 으로 그려졌다. 저장소
+    // 장애·네트워크 오류·기록 없음이 화면에서 같은 문장이 되면, 사용자는 연구 기록이
+    // 사라졌다고 읽는다. 실패는 그대로 두고 네 상태를 각각 그린다.
+    queryFn: () => researchApi.list("allocation_analyze", 30),
+    retry: 1,
   });
   const runs: ResearchRunSummary[] = listQ.data?.runs ?? [];
 
@@ -145,8 +150,12 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
     }
   };
 
-  const dbUnavailable = useMemo(
-    () => !listQ.isLoading && listQ.data === null, [listQ.isLoading, listQ.data]);
+  // ★네 상태를 각각 구분한다 (R0-S)★ 로딩 / 저장소 장애 / 네트워크 오류 / 기록 없음.
+  // `available:false` 는 서버가 "저장소를 못 읽었다" 고 답한 것이고, `isError` 는 그
+  // 답조차 못 받은 것이다 — 사용자에게 다른 사실이므로 다른 문장을 쓴다.
+  const storageDown = listQ.data?.available === false;
+  const networkDown = listQ.isError;
+  const dbUnavailable = storageDown || networkDown;   // 기존 소비 지점 호환
 
   return (
     <section className="as-card">
@@ -163,7 +172,17 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
       </div>
       {!result && <div className="as-note">Re-optimize 실행 후 기록하면 결과 요약이 함께 저장됩니다.</div>}
 
-      {dbUnavailable && <div className="as-err">런 목록을 불러오지 못했습니다 (백엔드/DB 미가용).</div>}
+      {storageDown && (
+        <div className="as-err as-rr-storage-down">
+          {listQ.data?.reason ?? "연구 기록 저장소를 읽을 수 없습니다"} —
+          <b> 기록이 없는 것이 아닙니다.</b>
+        </div>
+      )}
+      {networkDown && (
+        <div className="as-err as-rr-network-down">
+          런 목록 요청이 실패했습니다 (네트워크/서버 응답 없음) — <b>기록이 없는 것이 아닙니다.</b>
+        </div>
+      )}
       {reopenErr && <div className="as-err as-rr-reopen-err">{reopenErr}</div>}
       {/* ★링크가 가리키는 런이 목록에 없으면 그 사실을 적는다★ (D6)
           목록은 최근 30건이다. 아무 표시 없이 넘어가면 사용자는 링크가 고장났는지
@@ -174,8 +193,11 @@ export function ResearchRunsPanel({ focusRunId = null }: { focusRunId?: string |
           없습니다 — 더 오래된 런이거나 삭제되었을 수 있습니다.
         </div>
       )}
-      {!dbUnavailable && runs.length === 0 && !listQ.isLoading && (
-        <div className="as-empty">기록된 런 없음 — 첫 런을 기록하면 재조회·비교가 가능해집니다.</div>
+      {listQ.isLoading && <div className="as-empty as-rr-loading">런 목록을 불러오는 중…</div>}
+      {/* ★빈 상태는 여전히 빈 상태다★ 장애를 구분한다고 "기록 없음"을 없애면 안 된다 —
+          기록이 없다는 것도 사용자가 알아야 하는 사실이다. */}
+      {!dbUnavailable && !listQ.isLoading && runs.length === 0 && (
+        <div className="as-empty as-rr-empty">기록된 런 없음 — 첫 런을 기록하면 재조회·비교가 가능해집니다.</div>
       )}
 
       {runs.map((r) => (

@@ -250,7 +250,9 @@ export default function AttributionWorkspace() {
 
   const runsQ = useQuery({
     queryKey: ["research-runs", "attribution-picker"],
-    queryFn: () => researchApi.list(undefined, 30).catch(() => ({ runs: [] })),
+    // ★`catch` 로 빈 목록을 만들지 않는다 (R0-S)★ 저장소 장애를 "런 없음"으로 바꾸면
+    // 07 은 "귀인할 런이 없다" 고 말하게 된다 — 기록은 멀쩡한데.
+    queryFn: () => researchApi.list(undefined, 30),
   });
   const runs = runsQ.data?.runs ?? [];
 
