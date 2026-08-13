@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { targetVersionApi, type TargetVersion } from "@/entities/allocation/targetVersion";
 import { useAllocation } from "./AllocationProvider";
 import {
   executionApi, type CheckStatus, type ExecutionPlan, type OrderRow,
@@ -64,7 +65,7 @@ function CostChips({ o }: { o: OrderRow }) {
 }
 
 export function ExecutionRoom() {
-  const { result, logEvent, markExecutionTouched, activeRunId } = useAllocation();
+  const { result, logEvent, markExecutionTouched, activeRunId, timingOverlay } = useAllocation();
   const qc = useQueryClient();
 
   const [pv, setPv] = useState(100_000_000);              // 포트폴리오 평가액(원)
@@ -75,6 +76,7 @@ export function ExecutionRoom() {
   const [preview, setPreview] = useState<{ plan: ExecutionPlan; pretrade: PreTrade } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [planName, setPlanName] = useState("리밸런싱 실행 계획");
+  const [targetVersion, setTargetVersion] = useState<TargetVersion | null>(null);
 
   const hasTarget = !!result && Object.keys(result.weights.optimized).length > 0;
 
@@ -93,8 +95,33 @@ export function ExecutionRoom() {
     };
   }, [result, pv, turnoverCap, costBudget, partCap, restricted]);
 
+  // ★R0: 주문 목표는 서버가 컴파일한 TargetPortfolioVersion 에서 나온다★
+  // 예전에는 `result.weights.optimized` 를 그대로 보냈다. 그래서 04 TIMING 에서 노출을
+  // 줄여도 **주문은 완전투자 그대로**였다 — 화면과 주문이 다른 목표를 향했다.
+  // 이제 최적화 비중 + 오버레이를 서버에 보내 목표를 컴파일하고, 그 `tpv_id` 로 계획을
+  // 만든다. 저장소가 죽어 `saved:false` 여도 **컴파일 결과(final_weights)는 돌아오므로**
+  // 오버레이는 반영된다 — 목표가 옳은 것과 기록된 것은 다른 사실이다.
+  const compileTarget = async () => {
+    const tv = await targetVersionApi.create({
+      base_weights: result!.weights.optimized,
+      overlay: timingOverlay
+        ? { exposure: timingOverlay.exposure, source: timingOverlay.source }
+        : null,
+      run_id: activeRunId ?? null,
+    });
+    return tv;
+  };
+
   const previewMut = useMutation({
-    mutationFn: () => executionApi.preview(reqBody!),
+    mutationFn: async () => {
+      const tv = await compileTarget();
+      setTargetVersion(tv);
+      return executionApi.preview(
+        tv.tpv_id
+          ? { ...reqBody!, tpv_id: tv.tpv_id, target_weights: tv.final_weights }
+          : { ...reqBody!, target_weights: tv.final_weights },   // 미기록 — 목표는 그대로 옳다
+      );
+    },
     onSuccess: (d) => {
       setPreview({ plan: d.plan, pretrade: d.pretrade });
       markExecutionTouched();
@@ -103,7 +130,16 @@ export function ExecutionRoom() {
   });
 
   const saveMut = useMutation({
-    mutationFn: () => executionApi.save({ ...reqBody!, name: planName, run_id: activeRunId }),
+    // 저장도 같은 목표를 쓴다 — 미리보기만 버전을 쓰고 저장이 원래 비중을 쓰면
+    // 감사 기록과 실제 주문이 갈라진다(서버도 그 조합을 거부한다).
+    mutationFn: async () => {
+      const tv = targetVersion ?? (await compileTarget());
+      return executionApi.save({
+        ...reqBody!, target_weights: tv.final_weights,
+        ...(tv.tpv_id ? { tpv_id: tv.tpv_id } : {}),
+        name: planName, run_id: activeRunId,
+      });
+    },
     onSuccess: (d) => {
       if (d.saved && d.plan_id) {
         setSavedId(d.plan_id);
@@ -189,6 +225,17 @@ export function ExecutionRoom() {
             {previewMut.isPending ? "산출 중…" : "실행 계획 산출"}
           </button>
         </div>
+        {/* ★무엇을 향해 주문하는지 화면이 말한다★ 오버레이가 걸렸는데 화면이 그 사실을
+            말하지 않으면 사용자는 완전투자로 주문하는 줄 안다 — 그것이 R0 이 고친 결함이다. */}
+        {targetVersion && (
+          <div className="as-note as-exec-target">
+            목표 버전{targetVersion.tpv_id ? ` ${targetVersion.tpv_id}` : " (미기록 — 저장소 미가용)"}
+            {targetVersion.overlay
+              ? ` · 타이밍 오버레이 노출 ${(targetVersion.overlay.exposure * 100).toFixed(0)}%`
+              : " · 오버레이 없음"}
+            {targetVersion.cash_weight > 0.01 && ` · 현금 ${targetVersion.cash_weight.toFixed(1)}%`}
+          </div>
+        )}
         <div className="as-note">
           현재 보유({Object.keys(result!.weights.current).length}종목) → 목표 배분({Object.keys(result!.weights.optimized).length}종목)
           의 리밸런싱 주문. 가격은 <b>최근 종가 추정</b>, 비용은 <b>사전 추정치</b> — 실 정산은 브로커 확정값.

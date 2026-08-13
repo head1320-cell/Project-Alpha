@@ -82,7 +82,10 @@ export interface SavedPlan {
 
 export interface ExecPlanRequest {
   current_weights: Record<string, number>;   // %
-  target_weights: Record<string, number>;    // %
+  /** ★R0: 목표는 이것으로 지정하는 것이 정본이다★ 서버가 이 id 의 `final_weights` 를
+   *  주문 목표로 쓰고, 승인되지 않은 목표(`research_only`)면 사유와 함께 거부한다. */
+  tpv_id?: string | null;
+  target_weights: Record<string, number>;    // % (tpv_id 와 함께 보내면 서버가 대조한다)
   portfolio_value: number;
   restricted?: string[];
   limits?: Record<string, number>;            // turnover_cap_pct 등
