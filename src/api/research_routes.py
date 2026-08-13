@@ -48,12 +48,20 @@ def create_run(req: RecordRunRequest):
 
 @router.get("")
 def list_all(kind: str | None = Query(None), limit: int = Query(50, ge=1, le=200)):
+    """★빈 목록과 저장소 장애를 **다른 응답**으로 답한다 (R0-S)★
+
+    예전에는 저장소가 죽어도 `{"runs": []}` 였고, 화면은 "기록된 런 없음" 으로 그렸다 —
+    연구 기록이 사라진 것처럼 보이는 위험이 그대로 있었다. 이제 `available` 로 가른다.
+    `runs` 키는 유지한다 — 기존 소비자와 스펙이 깨지지 않는다.
+    HTTP 는 200 이다: 화면이 사유를 그려야 하므로(`recorded:false` 와 같은 관례).
+    """
+    from src.data.research_runs import list_runs
     try:
-        from src.data.research_runs import list_runs
-        return {"runs": list_runs(kind=kind, limit=limit)}
-    except Exception:
-        logger.exception("research run 목록 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+        return {"available": True, "runs": list_runs(kind=kind, limit=limit)}
+    except Exception as e:
+        logger.warning(f"research run 목록 실패: {e}")
+        return {"available": False, "runs": [],
+                "reason": "연구 기록 저장소를 읽을 수 없습니다 — 기록이 없는 것과 다릅니다."}
 
 
 @router.get("/{run_id}")
@@ -67,8 +75,9 @@ def get_one(run_id: str):
     except HTTPException:
         raise
     except Exception:
-        logger.exception("research run 조회 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+        # ★404 로 답하지 않는다 (R0-S)★ 그러면 화면이 "그 런은 삭제됐다" 고 말한다.
+        logger.warning(f"research run 조회 실패: {run_id}")
+        raise HTTPException(503, "연구 기록 저장소를 읽을 수 없습니다 — 런이 없는 것과 다릅니다.")
 
 
 @router.delete("/{run_id}")
@@ -81,5 +90,7 @@ def delete_one(run_id: str):
     except HTTPException:
         raise
     except Exception:
-        logger.exception("research run 삭제 실패")
+        # "지울 게 없었다"(404)와 "지우지 못했다"(503)는 다른 사실이다.
+        logger.warning(f"research run 삭제 실패: {run_id}")
+        raise HTTPException(503, "연구 기록 저장소에 접근할 수 없습니다.")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

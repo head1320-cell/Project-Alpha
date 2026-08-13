@@ -118,51 +118,52 @@ def _row_to_dict(row, full: bool) -> dict[str, Any]:
 
 
 def get_run(run_id: str) -> dict[str, Any] | None:
-    """단건 전체 조회 (inputs/outputs 포함)."""
-    try:
-        engine = _engine()
-        _ensure_table(engine)
-        from sqlalchemy import text
-        with engine.connect() as c:
-            row = c.execute(text(
-                f"SELECT run_id, created_at, kind, name, inputs, outputs, snapshot, "
-                f"code_version, parent_run_id, note FROM {_TABLE} WHERE run_id = :rid"
-            ), {"rid": run_id}).fetchone()
-        return _row_to_dict(row, full=True) if row else None
-    except Exception as e:
-        logger.warning(f"research run 조회 실패: {e}")
-        return None
+    """단건 전체 조회. **행이 없을 때만** `None` 이고, 저장소 장애는 올린다 (R0-S).
+
+    ★예전에는 둘을 뭉갰다★ `except: return None` 이라 저장소가 죽어도 라우트가 404 로
+    답했고, 화면은 "그 런은 삭제됐다" 고 말했다 — 기록은 멀쩡한데. 404 와 503 은
+    사용자에게 완전히 다른 사실이므로 여기서 가른다.
+    """
+    engine = _engine()
+    _ensure_table(engine)
+    from sqlalchemy import text
+    with engine.connect() as c:
+        row = c.execute(text(
+            f"SELECT run_id, created_at, kind, name, inputs, outputs, snapshot, "
+            f"code_version, parent_run_id, note FROM {_TABLE} WHERE run_id = :rid"
+        ), {"rid": run_id}).fetchone()
+    return _row_to_dict(row, full=True) if row else None
 
 
 def list_runs(kind: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-    """목록 (요약 — inputs/outputs 제외, snapshot 포함). 최신순."""
-    try:
-        engine = _engine()
-        _ensure_table(engine)
-        from sqlalchemy import text
-        q = (f"SELECT run_id, created_at, kind, name, inputs, outputs, snapshot, "
-             f"code_version, parent_run_id, note FROM {_TABLE} ")
-        params: dict[str, Any] = {"lim": max(1, min(int(limit), 200))}
-        if kind:
-            q += "WHERE kind = :kind "
-            params["kind"] = kind
-        q += "ORDER BY created_at DESC LIMIT :lim"
-        with engine.connect() as c:
-            rows = c.execute(text(q), params).fetchall()
-        return [_row_to_dict(r, full=False) for r in rows]
-    except Exception as e:
-        logger.warning(f"research run 목록 실패: {e}")
-        return []
+    """목록 (요약 — inputs/outputs 제외, snapshot 포함). 최신순.
+
+    ★예외를 삼키지 않는다 (R0-S)★ 예전에는 `except: return []` 이라 **저장소 장애와
+    빈 목록이 같은 값**이었고, 화면은 둘 다 "기록된 런 없음" 으로 그렸다. 연구 기록이
+    사라진 것처럼 보이는 것은 이 플랫폼에서 가장 겁나는 화면이다. 구분은 라우트가
+    응답으로 표현한다.
+    """
+    engine = _engine()
+    _ensure_table(engine)
+    from sqlalchemy import text
+    q = (f"SELECT run_id, created_at, kind, name, inputs, outputs, snapshot, "
+         f"code_version, parent_run_id, note FROM {_TABLE} ")
+    params: dict[str, Any] = {"lim": max(1, min(int(limit), 200))}
+    if kind:
+        q += "WHERE kind = :kind "
+        params["kind"] = kind
+    q += "ORDER BY created_at DESC LIMIT :lim"
+    with engine.connect() as c:
+        rows = c.execute(text(q), params).fetchall()
+    return [_row_to_dict(r, full=False) for r in rows]
 
 
 def delete_run(run_id: str) -> bool:
-    try:
-        engine = _engine()
-        _ensure_table(engine)
-        from sqlalchemy import text
-        with engine.begin() as c:
-            res = c.execute(text(f"DELETE FROM {_TABLE} WHERE run_id = :rid"), {"rid": run_id})
-        return bool(res.rowcount)
-    except Exception as e:
-        logger.warning(f"research run 삭제 실패: {e}")
-        return False
+    """지웠으면 True, 대상이 없으면 False. 저장소 장애는 올린다 (R0-S) —
+    "지울 게 없었다" 와 "지우지 못했다" 는 다른 사실이다."""
+    engine = _engine()
+    _ensure_table(engine)
+    from sqlalchemy import text
+    with engine.begin() as c:
+        res = c.execute(text(f"DELETE FROM {_TABLE} WHERE run_id = :rid"), {"rid": run_id})
+    return bool(res.rowcount)
