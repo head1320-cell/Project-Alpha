@@ -1138,6 +1138,18 @@ def allocation_factor_portfolio(req: FactorPortfolioRequest):
         holdings.sort(key=lambda h: h["weight"], reverse=True)
         return {"error": False, "holdings": holdings, "factors": factor_meta,
                 "weighting": req.weighting, "candidates": len(rows), "ranked": len(ranked),
+                # ★후보풀을 남긴다 (P1-B)★ 선정된 상위 K 는 `holdings` 에 있지만, **무엇 중에서
+                # 골랐는지**는 지금까지 개수(`candidates`)로만 남았다. 후보풀은
+                # `_factor_sample_rows` → `sample_factors`(snapshot_db.py:165)에서 오는데
+                # 그 SQL 에는 `ORDER BY` 가 없어 `list(merged.values())[:limit]` 가 안정적이지
+                # 않다. **비결정성을 고치지 않고 기록한다** — `ORDER BY` 를 넣으면 500행 초과
+                # 환경에서 어느 500개가 뽑히는지가 바뀌어 기업분석 퍼센타일 분포에 파급된다.
+                # 재현은 "그때 그 후보풀"을 알면 성립하므로 기록이 옳은 처리다.
+                "universe": {"resolved_n": len(rows),
+                             "codes": [r["stock_code"] for r in rows],
+                             "source": "tickers" if req.tickers else "sample",
+                             "note": "표본 순서는 안정적이지 않다 — 재현하려면 이 목록을 "
+                                     "tickers 로 그대로 넘겨야 한다."},
                 "note": "유니버스 표본 방향 인지 z-score 가중합 → 상위 K 선정. 커버리지 <100%는 일부 팩터 결측 재정규화."}
     except Exception:
         logger.exception("factor-portfolio 실패")

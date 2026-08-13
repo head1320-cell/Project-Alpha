@@ -174,7 +174,15 @@ def alpha_validate(req: ValidateRequest):
             from src.data.research_runs import record_run
             rid = record_run(
                 "alpha_validate",
+                # ★구성 종목을 남긴다 (P1-B)★ 예전에는 `tickers_n`(개수)만 적었다.
+                # 유니버스는 `_resolve_universe_capped` 가 **요청 시점의**
+                # `resolve_universe()` 로 푸는 것이라, 레지스트리가 바뀌면 같은
+                # `universe: "kospi50"` 이 다른 종목 집합을 가리킨다. 개수만으로는
+                # "그때 그 50종목" 을 되살릴 수 없으므로 목록 자체를 기록한다
+                # (`_MAX_UNIVERSE=200` 상한이 이미 걸려 있어 크기는 유계).
+                # `tickers_n` 은 유지한다 — 기존 소비자를 깨지 않는다.
                 inputs={"expr": req.expr, "universe": req.universe,
+                        "tickers": tickers,
                         "tickers_n": len(tickers), "months": req.months,
                         "quantiles": req.quantiles, "alpha_id": req.alpha_id},
                 outputs={k: report[k] for k in
