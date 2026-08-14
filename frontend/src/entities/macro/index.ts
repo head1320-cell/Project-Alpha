@@ -4,5 +4,6 @@ export * from "./api";
 export * from "./data";
 export * from "./analysisModel";
 export * from "./analysisApi";
+export * from "./studios";
 export * from "./handoff";
 export * from "./RegimeBadge";
