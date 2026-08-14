@@ -438,6 +438,145 @@ def _sector_groups(tickers: list[str]) -> list[str | None]:
 
 
 # ── 검증 ─────────────────────────────────────────────────────────────────────
+def _idx_at(ser: dict, d: np.datetime64) -> int | None:
+    """as-of 인덱스 — `d` 이하의 마지막 봉. 시차가 `STALE_LIMIT` 을 넘으면 None."""
+    i = int(np.searchsorted(ser["dates"], d, side="right")) - 1
+    if i < 0 or (d - ser["dates"][i]).astype(int) > STALE_LIMIT:
+        return None
+    return i
+
+
+def _panel_at(d, names, groups, series, fund, need_fund, *, require_forward: bool):
+    """시점 `d` 의 크로스섹션 패널을 만든다 (P2-S 로 `validate_alpha` 에서 분리).
+
+    ★`require_forward` 가 이 함수의 존재 이유다★
+    검증 루프는 forward 1개월 수익률이 없는 종목을 버린다 — IC 를 계산하려면 미래가
+    있어야 하므로 맞다. 그런데 **최신 시점에는 forward 가 원래 없다.** 그래서 그 필터를
+    그대로 물려받아 라이브 스코어링에 쓰면 **모든 종목이 탈락**하고, 빈 결과가
+    "알파가 아무것도 못 골랐다" 로 읽힌다. 실제로는 "미래를 아직 모른다" 일 뿐이다.
+
+    검증 경로는 `require_forward=True` 로 **한 글자도 다르지 않게** 동작한다.
+
+    Returns:
+        (row_names, row_groups, np_panel, fwd | None, n_fund)
+    """
+    panel: dict[str, list[float]] = {f: [] for f in FIELD_IDS}
+    fwd: dict[int, list[float]] = {1: [], 2: [], 3: []}
+    row_names: list[str] = []
+    row_groups: list[str | None] = []
+    n_fund = 0
+
+    for tname, g in zip(names, groups):
+        ser = series[tname]
+        i = _idx_at(ser, d)
+        if i is None or i < 252:
+            continue
+        pf = _price_features(ser, i)
+        fd, _fy = _fund_asof(fund.get(tname, {}), d) if need_fund else (None, None)
+        if need_fund:
+            eps = (fd or {}).get("eps")
+            bps = (fd or {}).get("bps")
+            dps = (fd or {}).get("dps")
+            px = ser["close"][i]
+            pf["roe"] = (fd or {}).get("roe", np.nan)
+            pf["net_margin"] = (fd or {}).get("net_margin", np.nan)
+            pf["debt_ratio"] = (fd or {}).get("debt_ratio", np.nan)
+            pf["earnings_yield"] = eps / px if eps is not None and px > 0 else np.nan
+            pf["book_yield"] = bps / px if bps is not None and px > 0 else np.nan
+            pf["dividend_yield_f"] = dps / px if dps is not None and px > 0 else np.nan
+            prev_fd, _ = _fund_asof(fund.get(tname, {}), d - np.timedelta64(365, "D"))
+            pe, pp = (fd or {}).get("eps"), (prev_fd or {}).get("eps")
+            pf["eps_yoy"] = ((pe - pp) / abs(pp)) if (pe is not None and pp not in (None, 0)) else np.nan
+            if fd:
+                n_fund += 1
+        else:
+            for f in FUND_FIELDS:
+                pf[f] = np.nan
+
+        if require_forward:
+            # forward 수익률 (t → t+21h) — 미래는 여기서만, 점수 입력엔 절대 미사용
+            fr: dict[int, float] = {}
+            for h in (1, 2, 3):
+                j = i + HORIZON_BARS * h
+                fr[h] = (ser["close"][j] / ser["close"][i] - 1.0
+                         if j < len(ser["close"]) and ser["close"][i] > 0 else np.nan)
+            if not np.isfinite(fr[1]):
+                continue
+            for h in (1, 2, 3):
+                fwd[h].append(fr[h])
+
+        row_names.append(tname)
+        row_groups.append(g)
+        for f in FIELD_IDS:
+            panel[f].append(pf.get(f, np.nan))
+
+    np_panel = {f: np.asarray(v, dtype=float) for f, v in panel.items()}
+    return row_names, row_groups, np_panel, (fwd if require_forward else None), n_fund
+
+
+def score_alpha(expr: str, tickers: list[str], as_of: str | None = None,
+                price_loader=None) -> dict:
+    """★라이브 크로스섹션 스코어 — 알파가 포트폴리오가 되는 첫 걸음 (P2-S)★
+
+    `validate_alpha` 는 IC 를 재느라 **데이터 끝에서 21거래일 전**까지만 본다
+    (`rebal_idx` 가 forward 확보분을 뺀다). 그래서 그 리포트의 `latest_scores_top` 은
+    한 달 낡은 점수이고, 그것을 현재 비중으로 쓰면 낡은 값을 현재로 쓰는 것이다.
+    이 함수는 **as-of 시점의 실제 점수**를 낸다.
+
+    ★as_of 를 안 줘도 서버가 쓴 날짜를 찍는다★ (P1-A 규칙) — 그것이 없으면 이 점수로
+    만든 포트폴리오는 재현 좌표를 갖지 못한다.
+    """
+    try:
+        node = parse_alpha(expr)
+    except AlphaParseError as e:
+        return {"available": False, "reason": f"표현식을 해석할 수 없습니다: {e}"}
+
+    need_fund = bool(node.fields() & FUND_FIELDS)
+    end = np.datetime64(as_of, "D") if as_of else np.datetime64("today", "D")
+    # 252봉 히스토리(_panel_at 의 최소 조건) + 여유. 검증과 같은 여유폭을 쓴다.
+    start = str(end - np.timedelta64(int(39 * 31), "D"))
+
+    series = (price_loader or _load_price_series)(tickers, start, str(end))
+    if len(series) < MIN_NAMES:
+        return {"available": False,
+                "reason": f"시세 가용 종목 {len(series)}개 (<{MIN_NAMES}) — 유니버스를 넓히세요.",
+                "as_of_requested": as_of, "as_of_effective": str(end)}
+
+    names = list(series.keys())
+    fund = _load_fundamentals(names) if need_fund else {}
+    groups = _sector_groups(names)
+
+    # 실제 사용한 절단일 = 가용 시세의 마지막 날 (요청일이 휴장·미래면 그보다 이르다).
+    ref = max(series.values(), key=lambda s: len(s["dates"]))
+    eff = min(ref["dates"][-1], end)
+
+    row_names, row_groups, np_panel, _fwd, n_fund = _panel_at(
+        eff, names, groups, series, fund, need_fund, require_forward=False)
+    if len(row_names) < MIN_NAMES:
+        return {"available": False,
+                "reason": (f"as-of {str(eff)} 시점에 유효 종목 {len(row_names)}개 "
+                           f"(<{MIN_NAMES}) — 252봉 이상 히스토리가 필요합니다."),
+                "as_of_requested": as_of, "as_of_effective": str(eff)}
+
+    try:
+        scores = eval_node(node, np_panel, row_groups)
+    except Exception as e:  # noqa: BLE001 — 평가 실패는 사유로 답한다
+        return {"available": False, "reason": f"평가 실패: {e}",
+                "as_of_requested": as_of, "as_of_effective": str(eff)}
+
+    out = {n: float(v) for n, v in zip(row_names, scores) if np.isfinite(v)}
+    if len(out) < MIN_NAMES:
+        return {"available": False,
+                "reason": (f"유한한 점수를 가진 종목이 {len(out)}개 (<{MIN_NAMES}) — "
+                           "필드 커버리지가 부족합니다."),
+                "as_of_requested": as_of, "as_of_effective": str(eff)}
+
+    return {"available": True, "expr": expr,
+            "as_of_requested": as_of, "as_of_effective": str(eff),
+            "scores": out, "n_universe": len(series), "coverage": len(out),
+            "fund_coverage": n_fund if need_fund else None}
+
+
 def validate_alpha(expr: str, tickers: list[str], months: int = 24,
                    quantiles: int = 5, price_loader=None) -> dict:
     """월간 리밸런스 크로스섹션 검증. price_loader는 테스트 주입용."""
@@ -466,12 +605,6 @@ def validate_alpha(expr: str, tickers: list[str], months: int = 24,
     if len(rebal_idx) < 6:
         return {"error": True, "message": "검증 가능한 기간이 6개월 미만 — 데이터가 부족합니다."}
 
-    def idx_at(ser: dict, d: np.datetime64) -> int | None:
-        i = int(np.searchsorted(ser["dates"], d, side="right")) - 1
-        if i < 0 or (d - ser["dates"][i]).astype(int) > STALE_LIMIT:
-            return None
-        return i
-
     ic_by_h: dict[int, list[float]] = {1: [], 2: [], 3: []}
     q_rets: list[list[float]] = [[] for _ in range(quantiles)]
     ls_curve: list[float] = [1.0]
@@ -483,55 +616,14 @@ def validate_alpha(expr: str, tickers: list[str], months: int = 24,
 
     for ri in rebal_idx:
         d = cal[ri]
-        panel: dict[str, list[float]] = {f: [] for f in FIELD_IDS}
-        fwd: dict[int, list[float]] = {1: [], 2: [], 3: []}
-        row_names: list[str] = []
-        row_groups: list[str | None] = []
-        n_fund = 0
-        for tname, g in zip(names, groups):
-            ser = series[tname]
-            i = idx_at(ser, d)
-            if i is None or i < 252:
-                continue
-            pf = _price_features(ser, i)
-            fd, _fy = _fund_asof(fund.get(tname, {}), d) if need_fund else (None, None)
-            if need_fund:
-                eps = (fd or {}).get("eps")
-                bps = (fd or {}).get("bps")
-                dps = (fd or {}).get("dps")
-                px = ser["close"][i]
-                pf["roe"] = (fd or {}).get("roe", np.nan)
-                pf["net_margin"] = (fd or {}).get("net_margin", np.nan)
-                pf["debt_ratio"] = (fd or {}).get("debt_ratio", np.nan)
-                pf["earnings_yield"] = eps / px if eps is not None and px > 0 else np.nan
-                pf["book_yield"] = bps / px if bps is not None and px > 0 else np.nan
-                pf["dividend_yield_f"] = dps / px if dps is not None and px > 0 else np.nan
-                prev_fd, _ = _fund_asof(fund.get(tname, {}), d - np.timedelta64(365, "D"))
-                pe, pp = (fd or {}).get("eps"), (prev_fd or {}).get("eps")
-                pf["eps_yoy"] = ((pe - pp) / abs(pp)) if (pe is not None and pp not in (None, 0)) else np.nan
-                if fd:
-                    n_fund += 1
-            else:
-                for f in FUND_FIELDS:
-                    pf[f] = np.nan
-            # forward 수익률 (t → t+21h) — 미래는 여기서만, 점수 입력엔 절대 미사용
-            fr: dict[int, float] = {}
-            for h in (1, 2, 3):
-                j = i + HORIZON_BARS * h
-                fr[h] = (ser["close"][j] / ser["close"][i] - 1.0
-                         if j < len(ser["close"]) and ser["close"][i] > 0 else np.nan)
-            if not np.isfinite(fr[1]):
-                continue
-            row_names.append(tname)
-            row_groups.append(g)
-            for f in FIELD_IDS:
-                panel[f].append(pf.get(f, np.nan))
-            for h in (1, 2, 3):
-                fwd[h].append(fr[h])
+        # ★패널 빌드는 `_panel_at` 하나다 (P2-S)★ 라이브 스코어링과 같은 코드를 쓰되
+        # forward 필터만 이 경로에서 켠다 — 그 필터가 검증에는 맞고 최신 시점에는
+        # 치명적이라는 것이 두 경로를 가른 이유다.
+        row_names, row_groups, np_panel, fwd, n_fund = _panel_at(
+            d, names, groups, series, fund, need_fund, require_forward=True)
 
         if len(row_names) < MIN_NAMES:
             continue
-        np_panel = {f: np.asarray(v, dtype=float) for f, v in panel.items()}
         try:
             scores = eval_node(node, np_panel, row_groups)
         except Exception as e:
