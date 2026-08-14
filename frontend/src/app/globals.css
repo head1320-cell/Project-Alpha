@@ -6910,6 +6910,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 연구 질문은 산문이다 — 크롬 하한이 아니라 산문 하한을 쓴다. */
 .as-case-q { font-size: var(--fs-sm); color: var(--foreground); flex: 1 1 240px; min-width: 0; }
 .as-case-none { font-size: var(--fs-sm); color: var(--muted-foreground); flex: 1 1 240px; }
+/* 포인터는 있는데 케이스를 못 읽은 상태 — '없음'과 같은 회색으로 그리지 않는다. */
+.as-case-unres { color: var(--st-warn-fg); }
 .as-case-fill { flex: 1 1 0; }
 
 .as-case-pick { display: inline-flex; align-items: center; gap: 4px; }
@@ -6949,8 +6951,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   padding: 3px 6px; border-left: 2px solid var(--border); background: var(--muted, transparent); }
 .as-case-warn-l { color: var(--foreground); white-space: nowrap; }
 .as-case-warn-r { color: var(--muted-foreground); flex: 1 1 240px; min-width: 0; }
-.as-case-warn-cap { border-left-color: var(--st-warn-mark); }
-.as-case-warn-div { border-left-color: var(--st-warn-mark); }
+.as-case-warn-cap { border-left-color: var(--warn-mark); }
+.as-case-warn-div { border-left-color: var(--warn-mark); }
+.as-case-warn-missing { border-left-color: var(--warn-mark); }
 .as-case-warn-store, .as-case-warn-net { border-left-color: var(--destructive); }
 
 /* ★포인터는 브라우저 로컬, 케이스는 서버★ — 라벨이 그 경계다. */
@@ -6962,3 +6965,116 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   .as-case-fi, .as-case-fi-q { min-width: 0; width: 100%; }
   .as-case-fl { flex: 1 1 100%; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   65b. M1-U — 매크로 서브스튜디오 (.ms-*)
+   ─────────────────────────────────────────────────────────────────────────
+   ★`.mc-*` 와 겹치는 이름을 쓰지 않는다★ `radix-dialogs.spec.ts` 는 `.mc-tab` 을
+   `.first()` 없이 선택한다 — 같은 이름의 노드가 하나 늘면 strict mode 로 죽는다.
+
+   타입은 §56 하한: 산문 12px(--fs-sm) · 크롬 11px(--fs-chrome). SVG 스파크라인은
+   텍스트가 없으므로 하한과 무관하다(A5·A6·A7 에서 세 번 겪은 함정을 애초에 피한다).
+   ───────────────────────────────────────────────────────────────────────── */
+.ms-root { display: flex; flex-direction: column; }
+
+/* 스튜디오 내비 — 링크 행. 활성 표시는 색 + 밑줄 + aria-current 셋이다. */
+.ms-nav { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border); }
+.ms-nav-item { display: inline-flex; align-items: baseline; gap: 4px;
+  padding: var(--sp-1) var(--sp-2); font-size: var(--fs-chrome);
+  color: var(--muted-foreground); text-decoration: none;
+  border-bottom: 2px solid transparent; }
+.ms-nav-item:hover { color: var(--foreground); }
+.ms-nav-item.on { color: var(--foreground); border-bottom-color: var(--t-accent); font-weight: 600; }
+.ms-nav-n { color: var(--muted-foreground); font-weight: 400; }
+.ms-nav-item.on .ms-nav-n { color: var(--t-accent); }
+.ms-nav-l { letter-spacing: var(--tr-label); }
+
+/* 헤더 — 스튜디오 라벨 + 이 스튜디오가 답하는 질문 */
+.ms-head { margin-bottom: var(--sp-3); }
+.ms-h1 { font-size: var(--fs-h3); font-weight: 600; letter-spacing: var(--tr-heading);
+  color: var(--foreground); }
+.ms-q { font-size: var(--fs-sm); color: var(--foreground); margin-top: 2px; }
+.ms-inputs { font-size: var(--fs-chrome); color: var(--muted-foreground); margin-top: 2px; }
+
+/* 엔진 카드 둘 — 프론티어(계약)와 대체(실행) */
+.ms-card { border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--card); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3); }
+.ms-card-t { font-size: var(--fs-chrome); font-weight: 600; letter-spacing: var(--tr-label);
+  color: var(--foreground); }
+.ms-card-s { font-size: var(--fs-sm); color: var(--muted-foreground); margin: 2px 0 var(--sp-2); }
+.ms-engine { font-size: var(--fs-chrome); color: var(--muted-foreground); }
+.ms-engine b { color: var(--foreground); }
+
+/* 구간·한계 — ★둘 다 접지 않는다★ (A5 경계 · A8 span 규칙) */
+.ms-span { font-size: var(--fs-chrome); color: var(--muted-foreground); margin-top: 2px; }
+.ms-span-trunc { color: var(--st-warn-fg); }
+.ms-note { font-size: var(--fs-sm); color: var(--foreground); margin: var(--sp-2) 0;
+  padding: var(--sp-1) var(--sp-2); border-left: 2px solid var(--warn-mark); }
+
+/* 산출 표 — 값의 모양으로 렌더가 갈린다(스칼라 · 짧은 배열 · 긴 수열 · 중첩) */
+.ms-outcome { margin-top: var(--sp-2); }
+.ms-out { width: 100%; border-collapse: collapse; }
+.ms-out-row { border-top: 1px solid var(--border); }
+.ms-out-k { text-align: left; font-family: var(--t-mono); font-size: var(--fs-chrome);
+  font-weight: 400; color: var(--muted-foreground); padding: 3px var(--sp-2) 3px 0;
+  white-space: nowrap; vertical-align: top; }
+.ms-out-v { font-size: var(--fs-sm); color: var(--foreground); padding: 3px 0; }
+.ms-out-na { color: var(--muted-foreground); }
+.ms-out-b { color: var(--foreground); }
+.ms-out-seq { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.ms-spark { width: 90px; height: 16px; }
+.ms-out-kv { display: inline-flex; flex-wrap: wrap; gap: var(--sp-2); }
+.ms-out-kvi em { font-style: normal; font-size: var(--fs-chrome); color: var(--muted-foreground); }
+.ms-out-more summary { font-size: var(--fs-chrome); color: var(--muted-foreground); cursor: pointer; }
+.ms-out-pre { font-size: var(--fs-chrome); font-family: var(--t-mono); overflow-x: auto;
+  max-height: 240px; color: var(--foreground); }
+
+/* 05 VIEWS 입력 */
+.ms-views { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.ms-vrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2); }
+.ms-vf { display: flex; flex-direction: column; gap: 2px;
+  font-size: var(--fs-chrome); color: var(--muted-foreground); }
+.ms-vi { font-size: var(--fs-sm); padding: 3px 6px; border: 1px solid var(--border);
+  border-radius: 3px; background: var(--card); color: var(--foreground); min-width: 110px; }
+.ms-vi-w { min-width: 320px; }
+.ms-vdel { font-size: var(--fs-sm); padding: 2px 8px; border: 1px solid var(--border);
+  border-radius: 3px; background: var(--card); color: var(--muted-foreground); cursor: pointer; }
+.ms-vdel:hover { color: var(--destructive); border-color: var(--destructive); }
+.ms-vacts { display: flex; gap: var(--sp-2); }
+.ms-vbtn { font-size: var(--fs-chrome); padding: 3px 10px; border: 1px solid var(--border);
+  border-radius: 3px; background: var(--card); color: var(--foreground); cursor: pointer; }
+.ms-vbtn:hover:not(:disabled) { border-color: var(--t-accent); }
+.ms-vbtn:disabled { cursor: not-allowed; color: var(--muted-foreground); }
+.ms-vbtn-run { border-color: var(--t-accent); color: var(--t-accent); }
+
+@media (max-width: 900px) {
+  .ms-vi, .ms-vi-w { min-width: 0; width: 100%; }
+  .ms-vf { flex: 1 1 100%; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   65c. UnavailableState 의 다크 결함 — 새 스윕이 처음으로 잡았다 (M1-U)
+   ─────────────────────────────────────────────────────────────────────────
+   ★실측★ `/macro/tsfm-latent` 다크에서 미가용 **사유** 줄이 **2.47:1** 로 나왔다.
+   원인은 `.tstate-unavail`(:2631)이 라이트 전용 리터럴을 쓰기 때문이다 —
+   `background: #fffbeb` · `color: #a16207` 에 다크 짝이 없고, 그 위에 얹힌
+   `.tstate-sub` 의 `--t-muted` 가 다크에서 zinc-400 으로 뒤집힌다. 밝은 앰버 위의
+   zinc-400 이 2.47:1 이다.
+
+   A4-X2 · A6-C 가 다른 곳에서 걷어낸 것과 **같은 계열**이고, 지금까지 잡히지 않은
+   이유는 단순하다 — 다크 스윕이 도는 표면 중 미가용 상태가 실제로 렌더되는 곳이
+   없었다. M1-U 의 스튜디오 화면은 미가용이 기본값이라(프론티어 5개 · TAIL 대체
+   엔진) 처음으로 그 조합이 감사 대상이 됐다.
+
+   ★고치는 값은 새로 만들지 않는다★ A9 가 측정으로 고른 `--st-warn-*` 트리오를 쓴다
+   (라이트 6.15:1 · 다크 짝 §52 에 이미 있음). 앰버는 한 곳에서만 정의한다.
+   사유 줄은 이 카드 안에서만 색을 바꾼다 — `.tstate-sub` 는 로딩·빈 상태도 쓰는
+   공용 클래스라 전역으로 건드리지 않는다.
+   ───────────────────────────────────────────────────────────────────────── */
+.tstate-unavail {
+  color: var(--st-warn-fg);
+  background: var(--st-warn-bg);
+  border: 1px dashed var(--st-warn-bd);
+}
+.tstate-unavail .tstate-sub { color: var(--st-warn-fg); }

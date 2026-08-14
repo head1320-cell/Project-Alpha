@@ -111,6 +111,12 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
   const cases: ResearchCase[] = listQ.data?.available ? listQ.data.cases : [];
   const active = chainQ.data?.case ?? cases.find((c) => c.case_id === caseId) ?? null;
 
+  // ★"고른 케이스를 못 읽었다" 와 "고른 케이스가 없다" 는 다른 사실이다★
+  // 첫 구현은 둘을 한 화면("케이스 없음")으로 그렸다 — 새 스펙이 그것을 잡았다.
+  // 포인터가 있으면 **식별자는 안다.** 아는 것은 그리고, 모르는 것(질문·포인터들)은
+  // 사유와 함께 비운다. 이 저장소가 반복해 적어 온 `없음 ≠ 못 읽음` 의 같은 사례다.
+  const unresolved = !!caseId && !active;
+
   // ★세션 스냅샷과 케이스 고정이 다르면 그 사실을 말한다★
   // 같은 칩을 두 번 그리는 대신, 두 값이 갈라졌을 때만 한 줄 낸다.
   const mesId = active?.active_mes_id ?? null;
@@ -130,6 +136,13 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
           <>
             <span className="as-case-id num" title={active.name}>{active.case_id}</span>
             <span className="as-case-q">{active.question}</span>
+          </>
+        ) : unresolved ? (
+          <>
+            <span className="as-case-id num">{caseId}</span>
+            <span className="as-case-q as-case-unres">
+              이 케이스의 내용을 불러오지 못했습니다 — 질문·고정 증거·목표를 여기서 읽을 수 없습니다.
+            </span>
           </>
         ) : (
           // ★지어낸 id 를 그리지 않는다★ 케이스가 없으면 없다고 적는다.
@@ -204,6 +217,18 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
             <b className="as-case-warn-l">증거 불일치</b>
             <span className="as-case-warn-r">
               이 세션이 붙인 스냅샷({sessionSnapshotId})과 케이스가 고정한 매크로 증거({mesId})가 다릅니다.
+            </span>
+          </div>
+        )}
+        {unresolved && (
+          <div className="as-case-warn as-case-warn-missing">
+            <b className="as-case-warn-l">케이스를 읽지 못했습니다</b>
+            <span className="as-case-warn-r">
+              {chainQ.isError
+                ? `선택한 케이스(${caseId})를 서버에서 가져오지 못했습니다 — 삭제되었거나 저장소를 읽을 수 없습니다.`
+                : chainQ.isLoading
+                  ? `선택한 케이스(${caseId})를 불러오는 중입니다.`
+                  : `선택한 케이스(${caseId})가 열린 케이스 목록에 없습니다.`}
             </span>
           </div>
         )}

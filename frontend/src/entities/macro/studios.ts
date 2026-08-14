@@ -83,12 +83,16 @@ export type StudioResult =
       span: StudioSpan | null;
     };
 
+/** 뷰 하나. ★서버 계약을 실제로 읽고 맞췄다★ — `agentic_views.compile_views` 는
+ *  `{asset, direction, value, label?}` 를 받는다(`+1` → `E[r] ≥ value`, `-1` → `≤`).
+ *  처음에는 `{kind, op}` 로 짐작해 썼는데, 그 모양은 서버가 조용히 무시하고
+ *  `direction` 기본값 `+1` 로 컴파일한다 — 화면이 "이하" 라고 적어도 서버는 "이상"
+ *  으로 계산했을 것이다. 소스를 읽고 고쳤다. */
 export interface ViewSpec {
-  kind: string;
-  asset?: string;
-  assets?: string[];
-  op: string;
+  asset: string;
+  direction: 1 | -1;
   value: number;
+  label?: string;
 }
 
 export const studiosApi = {
