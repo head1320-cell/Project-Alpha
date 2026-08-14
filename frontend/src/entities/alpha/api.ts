@@ -3,6 +3,7 @@
  * /api/v1/alpha-lab/* (fields·lint·validate) + /api/v1/alpha-registry (CRUD·promote)
  */
 import { API_BASE } from "@/shared/api/apiBase";
+import { getActiveCaseId } from "@/shared/lib/caseStorage";
 
 export interface AlphaFieldMeta { id: string; label: string; family: "price" | "fund"; desc: string }
 export interface AlphaFuncMeta { id: string; label: string; desc: string }
@@ -73,7 +74,72 @@ export interface AlphaDef {
   updated_at: number;
 }
 
+// ── 알파 포트폴리오 (P2-R) ──────────────────────────────────────────────────
+// ★`available` 로 좁혀야만 비중을 읽을 수 있다★ 막힌 응답에서 `base_weights` 를
+// 읽으려 하면 타입이 막는다 — 사다리에 걸린 알파로 포트폴리오를 그리는 것이 이
+// 화면에서 가장 위험한 거짓이기 때문이다.
+
+export interface AlphaPairwise {
+  a: string; b: string; rho: number | null; duplicate?: boolean; reason?: string;
+}
+
+export interface AlphaHolding {
+  code: string; name: string; weight: number; score: number;
+}
+
+export interface AlphaPortfolioBlocked {
+  available: false;
+  blocked?: { alpha_id: string; name: string | null; status: string | null; reason: string }[];
+  excluded?: { alpha_id: string; reason: string }[];
+  reason?: string;
+  as_of_effective?: string | null;
+}
+
+export interface AlphaPortfolioDone {
+  available: true;
+  as_of_requested: string | null;
+  as_of_effective: string | null;
+  base_weights: Record<string, number>;
+  holdings: AlphaHolding[];
+  used: { alpha_id: string; weight: number }[];
+  excluded: { alpha_id: string; reason: string }[];
+  pairwise: AlphaPairwise[];
+  effective_n: number | null;
+  warnings: string[];
+  weighting: string;
+  top_k: number;
+  universe_resolved_n: number;
+  note: string;
+  run_id?: string | null;
+  run_recorded?: boolean;
+}
+
+export type AlphaPortfolioResult = AlphaPortfolioDone | AlphaPortfolioBlocked;
+
+export interface AlphaPortfolioRequest {
+  alphas: { alpha_id: string; weight: number }[];
+  tickers?: string[];
+  universe?: string;
+  top_k?: number;
+  weighting?: string;
+  lookback_days?: number;
+  as_of?: string | null;
+  case_id?: string | null;
+  record_run?: boolean;
+}
+
 export const alphaApi = {
+  /** 승인된 알파 → 목표 비중. ★네트워크 오류를 삼키지 않는다★ (R0-S 어휘) */
+  portfolio: async (req: AlphaPortfolioRequest): Promise<AlphaPortfolioResult> => {
+    const body = { ...req, ...(req.case_id === undefined ? { case_id: getActiveCaseId() } : {}) };
+    const r = await fetch(`${API_BASE}/api/v1/alpha-lab/portfolio`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`alpha portfolio failed: ${r.status}`);
+    return r.json();
+  },
+
   fields: async (): Promise<AlphaCatalog> => {
     const r = await fetch(`${API_BASE}/api/v1/alpha-lab/fields`);
     if (!r.ok) throw new Error(`fields failed: ${r.status}`);

@@ -7078,3 +7078,83 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px dashed var(--st-warn-bd);
 }
 .tstate-unavail .tstate-sub { color: var(--st-warn-fg); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   66. P2 — 알파 포트폴리오 (.as-ap*)
+   ─────────────────────────────────────────────────────────────────────────
+   02 ALPHA LAB 에서 **승인된 알파가 목표 비중이 되는** 자리. 이 절이 지키는 것 셋:
+
+   1. 막힌 알파의 사유가 **보인다** — 비활성 체크박스만 두면 버그로 읽힌다.
+   2. 상관 경고·제외 사유를 **접지 않는다** (A5 경계: 설명은 접고 한계는 접지 않는다).
+   3. 낡은 점수의 시점을 **적는다** — `.as-ap-stale` 이 그 줄이다.
+
+   `.as-al-*` 는 개명 금지(`allocation-alphalab.spec.ts` 계약). 새 접두사만 쓴다.
+   타입은 §56 하한: 산문 12px(--fs-sm) · 크롬 11px(--fs-chrome).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 낡은 점수 고지 — 이 화면에서 가장 조용했던 거짓을 말로 바꾼 줄 */
+.as-ap-stale { font-size: var(--fs-sm); color: var(--st-warn-fg);
+  background: var(--st-warn-bg); border: 1px solid var(--st-warn-bd);
+  border-radius: var(--radius); padding: var(--sp-1) var(--sp-2); margin-top: var(--sp-1); }
+
+.as-ap-sub { margin-left: var(--sp-2); font-size: var(--fs-chrome);
+  font-weight: 400; color: var(--muted-foreground); }
+
+/* 알파 선택 — 승인되지 않은 행은 흐리지 않고 **사유를 붙인다**(디밍 금지 규칙) */
+.as-ap-picks { display: flex; flex-direction: column; gap: 2px; margin: var(--sp-2) 0; }
+.as-ap-none { font-size: var(--fs-sm); color: var(--muted-foreground); }
+.as-ap-pick { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  padding: 3px var(--sp-1); border-radius: 3px; font-size: var(--fs-sm); }
+.as-ap-pick:hover { background: var(--muted, transparent); }
+.as-ap-pname { color: var(--foreground); }
+.as-ap-why { font-size: var(--fs-chrome); color: var(--st-warn-fg); flex: 1 1 240px; }
+.as-ap-w { width: 62px; font-size: var(--fs-chrome); padding: 2px 4px;
+  border: 1px solid var(--border); border-radius: 3px;
+  background: var(--card); color: var(--foreground); }
+
+/* 컨트롤 */
+.as-ap-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.as-ap-f { display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-chrome); color: var(--muted-foreground); }
+.as-ap-n, .as-ap-s, .as-ap-d { font-size: var(--fs-chrome); padding: 2px 4px;
+  border: 1px solid var(--border); border-radius: 3px;
+  background: var(--card); color: var(--foreground); }
+.as-ap-n { width: 56px; }
+
+/* 상태 — 네트워크 오류와 서버 차단은 다른 사실이라 다른 줄이다 (R0-S 어휘) */
+.as-ap-net { margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm); color: var(--foreground);
+  border-left: 2px solid var(--destructive); }
+.as-ap-blocked { margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm); color: var(--foreground);
+  border-left: 2px solid var(--warn-mark); }
+.as-ap-r { color: var(--muted-foreground); margin-top: 2px; }
+
+.as-ap-out { margin-top: var(--sp-2); }
+.as-ap-meta { font-size: var(--fs-chrome); color: var(--muted-foreground); }
+.as-ap-nr { font-style: normal; color: var(--st-warn-fg); }
+/* ★경고는 접지 않는다★ */
+.as-ap-warn { margin-top: 3px; padding: 3px var(--sp-2); font-size: var(--fs-sm);
+  color: var(--foreground); border-left: 2px solid var(--warn-mark); }
+
+.as-ap-corr, .as-ap-hold { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); }
+.as-ap-corr th, .as-ap-hold th { text-align: left; font-size: var(--fs-chrome);
+  font-weight: 500; color: var(--muted-foreground); padding: 3px 0;
+  border-bottom: 1px solid var(--border); }
+.as-ap-corr td, .as-ap-hold td { font-size: var(--fs-sm); padding: 3px 0;
+  border-bottom: 1px solid var(--border); color: var(--foreground); }
+.as-ap-corr td.num, .as-ap-hold td.num,
+.as-ap-corr th:last-child, .as-ap-hold th:not(:first-child) { text-align: right; }
+/* 중복 쌍은 **색만으로 말하지 않는다** — 값이 옆에 있고 경고 문장이 위에 있다. */
+.as-ap-corr tr.dup td { color: var(--st-warn-fg); }
+.as-ap-code { font-style: normal; color: var(--muted-foreground); }
+
+.as-ap-acts { display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-2); margin-top: var(--sp-2); }
+
+@media (max-width: 900px) {
+  /* 좁은 폭에서도 사유는 사라지지 않는다 — 접히기만 한다 (P10 §8 계약) */
+  .as-ap-why { flex-basis: 100%; }
+  .as-ap-f { flex: 1 1 100%; }
+}

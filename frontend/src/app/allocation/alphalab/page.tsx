@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   alphaApi, type AlphaDef, type AlphaStatus, type AlphaValidationReport, type LintResult,
+  type AlphaPortfolioResult,
 } from "@/entities/alpha/api";
 import { equalize } from "@/widgets/allocation/PortfolioBuilder";
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
@@ -46,6 +47,14 @@ export default function AlphaLabStage() {
   const [regQuery, setRegQuery] = useState("");
   const [regStatus, setRegStatus] = useState<AlphaStatus | "all">("all");
   const [promoteFor, setPromoteFor] = useState<string | null>(null);
+  // ── 알파 포트폴리오 (P2-U) ──
+  const [pfPicked, setPfPicked] = useState<Record<string, number>>({});   // alpha_id → weight
+  const [pfTopK, setPfTopK] = useState(10);
+  const [pfWeighting, setPfWeighting] = useState("equal");
+  const [pfAsOf, setPfAsOf] = useState("");
+  const [pfOut, setPfOut] = useState<AlphaPortfolioResult | null>(null);
+  const [pfNet, setPfNet] = useState<string | null>(null);
+  const [pfBusy, setPfBusy] = useState(false);
 
   const regQ = useQuery({ queryKey: ["alpha", "registry"], queryFn: () => alphaApi.registry().catch(() => null) });
   const alphas: AlphaDef[] = regQ.data?.alphas ?? [];
@@ -110,11 +119,53 @@ export default function AlphaLabStage() {
     if (res.ok) { setPromoteNote(""); setPromoteFor(null); regQ.refetch(); }
   };
 
+  // ── 알파 포트폴리오 (P2-U) ──────────────────────────────────────────────
+  // ★사다리를 통과한 알파만 고를 수 있다★ 체크박스를 비활성으로 두고 **사유를 옆에
+  // 적는다** — 막고 이유를 말하지 않으면 사용자는 버그로 읽는다(죽은 버튼 금지).
+  const togglePick = (aid: string) =>
+    setPfPicked((p) => {
+      const next = { ...p };
+      if (aid in next) delete next[aid]; else next[aid] = 1;
+      return next;
+    });
+
+  const runPortfolio = async () => {
+    const alphasSel = Object.entries(pfPicked).map(([alpha_id, weight]) => ({ alpha_id, weight }));
+    if (!alphasSel.length) return;
+    setPfBusy(true); setPfNet(null); setPfOut(null);
+    try {
+      const res = await alphaApi.portfolio({
+        alphas: alphasSel, universe, top_k: pfTopK, weighting: pfWeighting,
+        as_of: pfAsOf || null,
+      });
+      setPfOut(res);
+    } catch (e) {
+      // ★네트워크 오류는 "막혔다" 가 아니다★ 서버가 사유를 준 것과 응답 자체를 못
+      // 받은 것은 다른 사실이다(R0-S 어휘).
+      setPfNet(e instanceof Error ? e.message : "포트폴리오 요청에 닿지 못했습니다.");
+    } finally {
+      setPfBusy(false);
+    }
+  };
+
+  const applyPortfolio = () => {
+    if (!pfOut?.available) return;
+    setHoldingsReset(pfOut.holdings.map((h) => ({ code: h.code, name: h.name, weight: h.weight })));
+    markAlphaTouched();
+    logEvent(`알파 포트폴리오 ${pfOut.holdings.length}종목 → 01 CONSTRUCT`);
+    router.push("/allocation/construct");
+  };
+
+  // ★이 버튼은 낡은 점수를 쓴다 (P2-U 가 밝힌 것)★
+  // `latest_scores_top` 은 검증 마지막 리밸런스 시점의 값이고, 그 시점은 forward 1개월
+  // 확보 때문에 **데이터 끝에서 21거래일 전**이다(실측: 오늘 2026-08-14 에 리포트의
+  // period_end 는 2026-07-16). 지우지 않고 남기되, 시점을 화면에 적고 현재 시점이
+  // 필요하면 아래 포트폴리오 도구를 쓰라고 말한다.
   const applyTop = () => {
     const top = (report?.latest_scores_top ?? []).slice(0, 10);
     if (top.length < 2) return;
     setHoldingsReset(equalize(top.map((t) => ({ code: t.ticker, name: t.name, weight: 0 }))));
-    logEvent(`알파 상위 ${top.length}종목 → 포트폴리오`);
+    logEvent(`알파 상위 ${top.length}종목 → 포트폴리오 (검증 시점 ${report?.period_end ?? "?"})`);
     router.push("/allocation/construct");
   };
 
@@ -363,8 +414,15 @@ export default function AlphaLabStage() {
 
         {report && !report.error && (report.latest_scores_top?.length ?? 0) > 0 && (
           <section className="as-card">
-            <div className="as-card-title">최신 시점 상위 종목
+            <div className="as-card-title">검증 시점 상위 종목
               <button className="as-fb-apply" onClick={applyTop}>상위 10종목 → 포트폴리오</button>
+            </div>
+            {/* ★낡음을 숨기지 않는다★ 이 점수는 검증 마지막 리밸런스 시점의 값이고,
+                forward 1개월 확보 때문에 데이터 끝보다 이르다. 예전에는 "최신 시점"
+                이라고만 적혀 있어 현재 점수로 읽혔다. */}
+            <div className="as-ap-stale" role="status">
+              이 점수는 <b className="num">{report.period_end}</b> (검증 마지막 리밸런스) 기준입니다 —
+              현재 시점 점수가 필요하면 아래 <b>알파 포트폴리오</b>를 쓰세요.
             </div>
             <div className="as-sl-holds">
               {(report.latest_scores_top ?? []).slice(0, 12).map((t) => (
@@ -376,6 +434,144 @@ export default function AlphaLabStage() {
             <div className="as-note">알파 점수 상위 종목을 균등가중으로 01 Construct에 적재 — 이후 최적화·스트레스는 동일 파이프라인.</div>
           </section>
         )}
+
+
+        {/* ── 알파 포트폴리오 (P2) ────────────────────────────────────────────
+            ★알파 팩토리의 산출물이 처음으로 포트폴리오가 되는 자리★
+            지금까지 레지스트리를 읽는 곳은 개수 세기와 중복 검사뿐이었고, 승인된
+            알파가 비중이 되는 경로는 없었다. 위의 "검증 시점 상위 종목" 은 있었지만
+            사다리를 무시했고 값이 한 달 낡았다. */}
+        <section className="as-card as-ap">
+          <div className="as-card-title">알파 포트폴리오
+            <span className="as-ap-sub">승인된 알파를 결합해 목표 비중을 만듭니다</span>
+          </div>
+
+          <div className="as-ap-picks">
+            {alphas.filter((a) => !a.is_template).length === 0 && (
+              <div className="as-ap-none">레지스트리에 알파가 없습니다 — 먼저 식을 저장하세요.</div>
+            )}
+            {alphas.filter((a) => !a.is_template).map((a) => {
+              const usable = a.status === "approved";
+              const picked = a.alpha_id in pfPicked;
+              return (
+                <label key={a.alpha_id} className={`as-ap-pick${usable ? "" : " off"}`}>
+                  <input type="checkbox" checked={picked} disabled={!usable}
+                    onChange={() => togglePick(a.alpha_id)} />
+                  <span className="as-ap-pname">{a.name}</span>
+                  <span className={`as-al-status s-${a.status}`}>{STATUS_LABEL[a.status]}</span>
+                  {usable ? (
+                    <input className="as-ap-w num" type="number" min={0} step={0.5}
+                      aria-label={`${a.name} 가중치`}
+                      value={picked ? pfPicked[a.alpha_id] : 1}
+                      disabled={!picked}
+                      onChange={(e) => setPfPicked((p) => ({ ...p, [a.alpha_id]: Number(e.target.value) }))} />
+                  ) : (
+                    // ★막고 이유를 적는다★ 비활성만 두면 사용자는 버그로 읽는다.
+                    <span className="as-ap-why">
+                      실전 사용은 승인 알파만 — 현재 {STATUS_LABEL[a.status]}
+                      {STATUS_NEXT[a.status] && `, 다음 단계 ${STATUS_LABEL[STATUS_NEXT[a.status]!]}`}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="as-ap-ctl">
+            <label className="as-ap-f">상위<input className="as-ap-n num" type="number" min={2} max={30}
+              value={pfTopK} onChange={(e) => setPfTopK(Number(e.target.value))} /></label>
+            <label className="as-ap-f">비중
+              <select className="as-ap-s" value={pfWeighting}
+                onChange={(e) => setPfWeighting(e.target.value)}>
+                <option value="equal">균등</option>
+                <option value="factor_tilt">점수 틸트</option>
+                <option value="inverse_vol">역변동성</option>
+                <option value="risk_parity">리스크 패리티</option>
+                <option value="min_var">최소분산</option>
+                <option value="hrp">HRP</option>
+              </select>
+            </label>
+            <label className="as-ap-f">기준일
+              <input className="as-ap-d" type="date" value={pfAsOf}
+                aria-label="포트폴리오 기준일"
+                onChange={(e) => setPfAsOf(e.target.value)} />
+            </label>
+            <button className="as-fb-apply as-ap-run" disabled={pfBusy || !Object.keys(pfPicked).length}
+              onClick={runPortfolio}>
+              {pfBusy ? "계산 중…" : "포트폴리오 만들기"}
+            </button>
+          </div>
+
+          {pfNet && (
+            <div className="as-ap-net" role="status">
+              네트워크 오류 — {pfNet} (서버가 사유를 준 것과 다릅니다: 응답 자체를 받지 못했습니다)
+            </div>
+          )}
+
+          {pfOut && !pfOut.available && (
+            <div className="as-ap-blocked" role="status">
+              <b>포트폴리오를 만들지 않았습니다</b>
+              {pfOut.reason && <div className="as-ap-r">{pfOut.reason}</div>}
+              {(pfOut.blocked ?? []).map((b) => (
+                <div key={b.alpha_id} className="as-ap-r">· {b.name ?? b.alpha_id} — {b.reason}</div>
+              ))}
+            </div>
+          )}
+
+          {pfOut?.available && (
+            <div className="as-ap-out">
+              <div className="as-ap-meta num">
+                기준일 {pfOut.as_of_effective} · 유니버스 {pfOut.universe_resolved_n}종목 ·
+                유효 알파 {pfOut.effective_n ?? "—"} / {pfOut.used.length}
+                {pfOut.run_recorded === false && <em className="as-ap-nr"> · 런 미기록</em>}
+              </div>
+
+              {/* ★경고와 제외 사유는 접지 않는다★ (A5 경계) */}
+              {pfOut.warnings.map((w, i) => (
+                <div key={i} className="as-ap-warn" role="status">{w}</div>
+              ))}
+              {pfOut.excluded.map((e) => (
+                <div key={e.alpha_id} className="as-ap-warn">{e.alpha_id} 제외 — {e.reason}</div>
+              ))}
+
+              {pfOut.pairwise.length > 0 && (
+                <table className="as-ap-corr">
+                  <thead><tr><th scope="col">알파 A</th><th scope="col">알파 B</th>
+                    <th scope="col">순위상관</th></tr></thead>
+                  <tbody>
+                    {pfOut.pairwise.map((p, i) => (
+                      <tr key={i} className={p.duplicate ? "dup" : ""}>
+                        <td>{p.a}</td><td>{p.b}</td>
+                        <td className="num">{p.rho === null ? (p.reason ?? "산출 불가") : p.rho.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <table className="as-ap-hold">
+                <thead><tr><th scope="col">종목</th><th scope="col">점수</th>
+                  <th scope="col">비중</th></tr></thead>
+                <tbody>
+                  {pfOut.holdings.map((h) => (
+                    <tr key={h.code}>
+                      <td>{h.name}<em className="num as-ap-code"> {h.code}</em></td>
+                      <td className="num">{h.score.toFixed(3)}</td>
+                      <td className="num">{h.weight.toFixed(2)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="as-ap-acts">
+                <button className="as-fb-apply as-ap-send" onClick={applyPortfolio}>
+                  01 CONSTRUCT 로 보내기
+                </button>
+                <span className="as-note">{pfOut.note}</span>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* P6 실험 — AutoAlpha 후보 생성 샌드박스 (자동 채택 금지) */}
         <AutoAlphaLab onUseExpr={(e) => { setExpr(e); setLint(null); markAlphaTouched(); }} />
