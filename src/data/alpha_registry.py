@@ -25,6 +25,35 @@ STATUSES = ("draft", "experimental", "validated", "approved", "retired")
 # 승격 규칙: (from, to) 허용 + 요건. retired는 어디서든 가능, draft로 강등도 허용.
 _PROMOTE_NEXT = {"draft": "experimental", "experimental": "validated", "validated": "approved"}
 
+# ★실전 사용의 문턱 (P2-G)★
+# `auto_alpha.py` 도크스트링이 "사다리를 그대로 통과해야 실전 사용" 이라고 적어 두었지만,
+# 지금까지 그 검사는 **승격할 때만** 있었다. "이 알파로 포트폴리오를 만들어도 되는가" 는
+# 아무 데서도 묻지 않아서, `alphalab/page.tsx` 의 "상위 10종목 → 포트폴리오" 는 draft
+# 표현식으로도 보유 종목을 만들 수 있었다. 이 상수와 아래 함수가 그 구멍을 닫는다.
+USABLE_STATUS = "approved"
+
+
+def usable_for_portfolio(alpha: dict[str, Any] | None) -> tuple[bool, str | None]:
+    """이 알파로 **포트폴리오를 만들어도 되는가**. (가능, 사유).
+
+    ★승급 때만 하던 검사를 사용 때도 한다★ R0 의 `_resolve_target` 이 실행에 대해 한
+    것과 같은 형태다 — 화면이 무엇을 보내든 서버가 마지막 방어선이고, 막을 때는 반드시
+    사유를 함께 낸다. 사유에는 **현재 상태와 다음 단계**가 들어간다: 막힌 사람이
+    무엇을 해야 하는지 알 수 없으면 그 거부는 절반만 정직하다.
+    """
+    if alpha is None:
+        return False, "알파를 찾을 수 없습니다."
+    status = alpha.get("status")
+    if status == USABLE_STATUS:
+        return True, None
+    if status == "retired":
+        return False, ("폐기된 알파입니다 — 포트폴리오를 만들 수 없습니다. "
+                       "다시 쓰려면 draft 로 되돌린 뒤 사다리를 다시 올라야 합니다.")
+    nxt = _PROMOTE_NEXT.get(str(status))
+    step = f" 다음 단계는 {nxt} 입니다." if nxt else ""
+    return False, (f"실전 사용은 {USABLE_STATUS} 알파만 가능합니다 — 현재 {status}."
+                   f"{step} (사다리: draft → experimental → validated → approved)")
+
 
 def _engine():
     from src.database import get_engine
