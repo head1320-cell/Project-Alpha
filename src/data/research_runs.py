@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "research_runs"
 _inited = False
+# Case 사슬 열(M1-S)이 실제로 붙었는지 — 못 붙으면 그 열 없이 동작한다.
+_has_case_col = False
 
 # run 종류 (자유 문자열이지만 표준 값을 상수로 — 프론트와 계약)
 KIND_ANALYZE = "allocation_analyze"
@@ -40,7 +42,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited
+    global _inited, _has_case_col
     if _inited:
         return
     from sqlalchemy import text
@@ -61,6 +63,13 @@ def _ensure_table(engine) -> None:
         c.execute(text(
             f"CREATE INDEX IF NOT EXISTS ix_rr_kind_created ON {_TABLE} (kind, created_at)"
         ))
+
+    # ── Case 사슬 (M1-S) ────────────────────────────────────────────────────
+    # 역방향 링크. Case 는 `active_run_id` 로 지금을 가리키고, 그 Case 의 런 전체는
+    # 여기서 되짚는다. `parent_run_id`(재현 사슬, P1)와는 다른 축이다 — 섞지 않는다.
+    from src.data.schema_add_columns import add_columns
+    _has_case_col = add_columns(engine, _TABLE, [("case_id", "VARCHAR(40)")],
+                                label="research_runs.case_id")
     _inited = True
 
 
@@ -74,19 +83,25 @@ def _new_run_id() -> str:
 
 def record_run(kind: str, inputs: dict[str, Any], outputs: dict[str, Any],
                snapshot: dict[str, Any] | None = None, name: str | None = None,
-               parent_run_id: str | None = None, note: str | None = None) -> str | None:
+               parent_run_id: str | None = None, note: str | None = None,
+               case_id: str | None = None) -> str | None:
     """연구 실행을 영속화. 성공 시 run_id, DB 미가용 시 None (호출자가 정직 보고)."""
     rid = _new_run_id()
     try:
         engine = _engine()
         _ensure_table(engine)
         from sqlalchemy import text
+        cols = ("run_id, created_at, kind, name, inputs, outputs, snapshot, "
+                "code_version, parent_run_id, note")
+        vals = ":rid, :ts, :kind, :name, :inp, :out, :snap, :ver, :parent, :note"
+        extra: dict[str, Any] = {}
+        if _has_case_col:
+            cols += ", case_id"
+            vals += ", :case"
+            extra = {"case": case_id}
         with engine.begin() as c:
-            c.execute(text(
-                f"INSERT INTO {_TABLE} (run_id, created_at, kind, name, inputs, outputs, "
-                "snapshot, code_version, parent_run_id, note) "
-                "VALUES (:rid, :ts, :kind, :name, :inp, :out, :snap, :ver, :parent, :note)"
-            ), {
+            c.execute(text(f"INSERT INTO {_TABLE} ({cols}) VALUES ({vals})"), {
+                **extra,
                 "rid": rid, "ts": time.time(), "kind": kind, "name": name,
                 "inp": json.dumps(inputs, ensure_ascii=False, default=str),
                 "out": json.dumps(outputs, ensure_ascii=False, default=str),
@@ -99,21 +114,37 @@ def record_run(kind: str, inputs: dict[str, Any], outputs: dict[str, Any],
         return None
 
 
+_BASE_COL_LIST = ["run_id", "created_at", "kind", "name", "inputs", "outputs",
+                  "snapshot", "code_version", "parent_run_id", "note"]
+
+
+def _col_list() -> list[str]:
+    """★위치 인덱스를 손으로 세지 않는다 (M1-S)★ `case_id` 가 붙었는지 여부로 인덱스가
+    밀리므로 이름 목록에서 파생시킨다."""
+    return _BASE_COL_LIST + (["case_id"] if _has_case_col else [])
+
+
 def _row_to_dict(row, full: bool) -> dict[str, Any]:
+    g = dict(zip(_col_list(), row, strict=False))
+
+    def _j(raw, default):
+        try:
+            return json.loads(raw) if raw else default
+        except Exception:
+            return default
+
     d = {
-        "run_id": row[0], "created_at": row[1], "kind": row[2], "name": row[3],
-        "code_version": row[7], "parent_run_id": row[8], "note": row[9],
+        "run_id": g.get("run_id"), "created_at": g.get("created_at"),
+        "kind": g.get("kind"), "name": g.get("name"),
+        "code_version": g.get("code_version"),
+        "parent_run_id": g.get("parent_run_id"), "note": g.get("note"),
+        # Case 사슬 — 열이 없으면 None(있는 척하지 않는다)
+        "case_id": g.get("case_id"),
     }
-    try:
-        d["snapshot"] = json.loads(row[6]) if row[6] else {}
-    except Exception:
-        d["snapshot"] = {}
+    d["snapshot"] = _j(g.get("snapshot"), {})
     if full:
-        for key, idx in (("inputs", 4), ("outputs", 5)):
-            try:
-                d[key] = json.loads(row[idx]) if row[idx] else {}
-            except Exception:
-                d[key] = {}
+        d["inputs"] = _j(g.get("inputs"), {})
+        d["outputs"] = _j(g.get("outputs"), {})
     return d
 
 
@@ -129,8 +160,7 @@ def get_run(run_id: str) -> dict[str, Any] | None:
     from sqlalchemy import text
     with engine.connect() as c:
         row = c.execute(text(
-            f"SELECT run_id, created_at, kind, name, inputs, outputs, snapshot, "
-            f"code_version, parent_run_id, note FROM {_TABLE} WHERE run_id = :rid"
+            f"SELECT {', '.join(_col_list())} FROM {_TABLE} WHERE run_id = :rid"
         ), {"rid": run_id}).fetchone()
     return _row_to_dict(row, full=True) if row else None
 
@@ -146,8 +176,7 @@ def list_runs(kind: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     engine = _engine()
     _ensure_table(engine)
     from sqlalchemy import text
-    q = (f"SELECT run_id, created_at, kind, name, inputs, outputs, snapshot, "
-         f"code_version, parent_run_id, note FROM {_TABLE} ")
+    q = f"SELECT {', '.join(_col_list())} FROM {_TABLE} "
     params: dict[str, Any] = {"lim": max(1, min(int(limit), 200))}
     if kind:
         q += "WHERE kind = :kind "

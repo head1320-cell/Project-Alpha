@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "target_portfolio_versions"
 _inited = False
+# Case 사슬 열(M1-S)이 실제로 붙었는지 — 못 붙으면 그 열 없이 동작한다.
+_has_case_cols = False
 
 STATUS_EXECUTABLE = "executable"
 STATUS_RESEARCH_ONLY = "research_only"
@@ -47,7 +49,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited
+    global _inited, _has_case_cols
     if _inited:
         return
     from sqlalchemy import text
@@ -73,6 +75,16 @@ def _ensure_table(engine) -> None:
         c.execute(text(
             f"CREATE INDEX IF NOT EXISTS ix_tpv_created ON {_TABLE} (created_at)"
         ))
+
+    # ── Case 사슬 (M1-S) ────────────────────────────────────────────────────
+    # `case_id` 는 역방향 링크다: Case 는 `active_tpv_id` 로 **지금**을 가리키고, 과거
+    # 전체는 여기서 되짚는다. `mes_id` 는 이 목표가 어떤 매크로 증거 아래 만들어졌는지 —
+    # `snapshot_id` 와 이름이 겹치지 않게 둔다(`snapshot_id` 는 R0 이 이미 쓰던 열이다).
+    from src.data.schema_add_columns import add_columns
+    _has_case_cols = add_columns(
+        engine, _TABLE, [("case_id", "VARCHAR(40)"), ("mes_id", "VARCHAR(60)")],
+        label="target_portfolio_versions.case_id/mes_id",
+    )
     _inited = True
 
 
@@ -90,6 +102,8 @@ def compile_target(
     snapshot_id: str | None = None,
     ruleset_version: str | None = None,
     pack_id: str | None = None,
+    case_id: str | None = None,
+    mes_id: str | None = None,
 ) -> dict[str, Any]:
     """최적화 비중 + 타이밍 오버레이 → **실행이 볼 최종 목표**.
 
@@ -134,6 +148,9 @@ def compile_target(
         "snapshot_id": snapshot_id,
         "ruleset_version": ruleset_version,
         "pack_id": pack_id,
+        # Case 사슬 (M1-S) — 목표가 **어떤 연구의, 어떤 매크로 증거 아래** 만들어졌는지.
+        "case_id": case_id,
+        "mes_id": mes_id,
     }
 
 
@@ -146,13 +163,18 @@ def save_target(tv: dict[str, Any], note: str | None = None) -> str | None:
         engine = _engine()
         _ensure_table(engine)
         from sqlalchemy import text
+        cols = ("tpv_id, created_at, mode, base_weights, overlay, final_weights, "
+                "cash_weight, status, status_reason, run_id, snapshot_id, "
+                "ruleset_version, pack_id, code_version, note")
+        vals = ":i, :t, :m, :b, :o, :f, :cw, :s, :sr, :r, :sn, :rv, :p, :cv, :n"
+        extra: dict[str, Any] = {}
+        if _has_case_cols:
+            cols += ", case_id, mes_id"
+            vals += ", :ci, :mi"
+            extra = {"ci": tv.get("case_id"), "mi": tv.get("mes_id")}
         with engine.begin() as c:
-            c.execute(text(
-                f"INSERT INTO {_TABLE} (tpv_id, created_at, mode, base_weights, overlay, "
-                "final_weights, cash_weight, status, status_reason, run_id, snapshot_id, "
-                "ruleset_version, pack_id, code_version, note) VALUES "
-                "(:i, :t, :m, :b, :o, :f, :cw, :s, :sr, :r, :sn, :rv, :p, :cv, :n)"
-            ), {
+            c.execute(text(f"INSERT INTO {_TABLE} ({cols}) VALUES ({vals})"), {
+                **extra,
                 "i": tpv_id, "t": time.time(), "m": tv["mode"],
                 "b": json.dumps(tv["base_weights"], ensure_ascii=False),
                 "o": json.dumps(tv["overlay"], ensure_ascii=False) if tv["overlay"] else None,
@@ -168,21 +190,33 @@ def save_target(tv: dict[str, Any], note: str | None = None) -> str | None:
         return None
 
 
+_BASE_COL_LIST = ["tpv_id", "created_at", "mode", "base_weights", "overlay",
+                  "final_weights", "cash_weight", "status", "status_reason", "run_id",
+                  "snapshot_id", "ruleset_version", "pack_id", "code_version", "note"]
+_CASE_COL_LIST = ["case_id", "mes_id"]
+
+
+def _col_list() -> list[str]:
+    """★위치 인덱스를 손으로 세지 않는다 (M1-S)★ 후행 열이 붙었는지 여부에 따라
+    인덱스가 밀리므로, 이름 목록에서 파생시켜 그 함정을 없앤다."""
+    return _BASE_COL_LIST + (_CASE_COL_LIST if _has_case_cols else [])
+
+
 def _row_to_dict(row) -> dict[str, Any]:
+    g = dict(zip(_col_list(), row, strict=False))
     return {
-        "tpv_id": row[0], "created_at": row[1], "mode": row[2],
-        "base_weights": json.loads(row[3]) if row[3] else {},
-        "overlay": json.loads(row[4]) if row[4] else None,
-        "final_weights": json.loads(row[5]) if row[5] else {},
-        "cash_weight": row[6], "status": row[7], "status_reason": row[8],
-        "run_id": row[9], "snapshot_id": row[10], "ruleset_version": row[11],
-        "pack_id": row[12], "code_version": row[13], "note": row[14],
+        "tpv_id": g.get("tpv_id"), "created_at": g.get("created_at"), "mode": g.get("mode"),
+        "base_weights": json.loads(g["base_weights"]) if g.get("base_weights") else {},
+        "overlay": json.loads(g["overlay"]) if g.get("overlay") else None,
+        "final_weights": json.loads(g["final_weights"]) if g.get("final_weights") else {},
+        "cash_weight": g.get("cash_weight"), "status": g.get("status"),
+        "status_reason": g.get("status_reason"),
+        "run_id": g.get("run_id"), "snapshot_id": g.get("snapshot_id"),
+        "ruleset_version": g.get("ruleset_version"), "pack_id": g.get("pack_id"),
+        "code_version": g.get("code_version"), "note": g.get("note"),
+        # Case 사슬 — 열이 없으면 None(있는 척하지 않는다)
+        "case_id": g.get("case_id"), "mes_id": g.get("mes_id"),
     }
-
-
-_COLS = ("tpv_id, created_at, mode, base_weights, overlay, final_weights, cash_weight, "
-         "status, status_reason, run_id, snapshot_id, ruleset_version, pack_id, "
-         "code_version, note")
 
 
 def get_target(tpv_id: str) -> dict[str, Any] | None:
@@ -194,7 +228,7 @@ def get_target(tpv_id: str) -> dict[str, Any] | None:
         from sqlalchemy import text
         with engine.connect() as c:
             row = c.execute(
-                text(f"SELECT {_COLS} FROM {_TABLE} WHERE tpv_id = :i"), {"i": tpv_id}
+                text(f"SELECT {', '.join(_col_list())} FROM {_TABLE} WHERE tpv_id = :i"), {"i": tpv_id}
             ).fetchone()
         return _row_to_dict(row) if row else None
     except Exception as e:
@@ -210,7 +244,7 @@ def list_targets(limit: int = 50) -> list[dict[str, Any]]:
     from sqlalchemy import text
     with engine.connect() as c:
         rows = c.execute(
-            text(f"SELECT {_COLS} FROM {_TABLE} ORDER BY created_at DESC LIMIT :l"),
+            text(f"SELECT {', '.join(_col_list())} FROM {_TABLE} ORDER BY created_at DESC LIMIT :l"),
             {"l": max(1, min(int(limit), 200))},
         ).fetchall()
     return [_row_to_dict(r) for r in rows]

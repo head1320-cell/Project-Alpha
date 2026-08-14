@@ -41,6 +41,12 @@ _inited = False
 # 그 열을 참조하면 스냅샷 조회가 통째로 깨진다(수정 전보다 나쁨).
 # backtest_runs.py:104~122 가 heartbeat_at 에 대해 같은 이유로 쓰는 패턴을 따른다.
 _has_regime_cols = False
+# MES 승격 열(M1-S)도 같은 이유로 성공 여부를 따로 들고 있는다 — regime 열과 **독립적으로**
+# 붙거나 안 붙으므로, 하나의 플래그로 뭉치면 조회 열 목록이 어긋난다.
+_has_mes_cols = False
+
+# MES 스키마 버전 — indicators/models 의 모양이 바뀌면 올린다.
+MES_VERSION = 1
 
 # 국면 판정 모델 버전 — 축·확률 산출 로직이 바뀌면 올린다(과거 스냅샷과 구분하기 위해).
 MODEL_VERSION = "regime-axes-v1"
@@ -57,7 +63,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited, _has_regime_cols
+    global _inited, _has_regime_cols, _has_mes_cols
     if _inited:
         return
     from sqlalchemy import text
@@ -87,23 +93,27 @@ def _ensure_table(engine) -> None:
         ))
 
     # 이미 운영 중인 DB에는 테이블이 있으므로 ALTER 로 붙인다.
-    # SQLite 는 ADD COLUMN 에 IF NOT EXISTS 를 지원하지 않아 "이미 있음"도 예외로 온다 → 삼킨다.
-    for col, ddl in (("regime", "VARCHAR(40)"), ("recommended_mode", "VARCHAR(20)")):
-        try:
-            with engine.begin() as c:
-                c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN {col} {ddl}"))
-        except Exception:
-            pass
+    # 두 단계(붙이기 + 실제로 쓸 수 있는지 SELECT 확인)는 `schema_add_columns` 로 모았다 —
+    # M1 에서 세 테이블에 같은 일을 하게 되므로 패턴을 복사하지 않는다.
+    from src.data.schema_add_columns import add_columns
 
-    # ★실제로 붙었는지 확인★ — 못 붙었으면 두 열만 포기하고 나머지는 그대로 동작시킨다.
-    # (무조건 SELECT 하면 조회 전체가 깨져서 수정 전보다 나빠진다.)
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SELECT regime, recommended_mode FROM {_TABLE} LIMIT 1"))
-        _has_regime_cols = True
-    except Exception as e:  # noqa: BLE001
-        _has_regime_cols = False
-        logger.warning("regime_snapshots.regime/recommended_mode 사용 불가 — 국면 라벨 없이 동작: %s", e)
+    _has_regime_cols = add_columns(
+        engine, _TABLE,
+        [("regime", "VARCHAR(40)"), ("recommended_mode", "VARCHAR(20)")],
+        label="regime_snapshots.regime/recommended_mode(국면 라벨)",
+    )
+
+    # ── MacroEvidenceSnapshot 승격 (M1-S) ────────────────────────────────────
+    # ★ID 공간을 늘리지 않는다★ `rgs_*` 가 계속 유일한 스냅샷 ID 다. 런·ContextStrip·
+    # `?snapshot=` 브리지·스펙이 전부 그 ID 를 참조하므로, 새 `mes_*` 테이블을 만들면
+    # "어느 ID 를 붙였는가" 를 모든 소비자가 다시 물어야 한다. 여기에 열만 붙인다.
+    _has_mes_cols = add_columns(
+        engine, _TABLE,
+        [("indicators", "TEXT"), ("models", "TEXT"),
+         ("capability_level", "VARCHAR(8)"), ("capability_reason", "TEXT"),
+         ("mes_version", "INTEGER")],
+        label="regime_snapshots.MES(지표·모델·능력 레벨)",
+    )
 
     _inited = True
 
@@ -200,14 +210,66 @@ def create_snapshot(
         return None
 
 
-_BASE_COLS = ("snapshot_id, created_at, as_of, growth_axis, inflation_axis, phase_probabilities, "
-              "stress_score, confidence, observations, data_status, research_usage, "
-              "model_version, engine_version, code_version, explanation")
+def attach_evidence(snapshot_id: str, *, indicators: dict[str, Any],
+                    models: dict[str, Any], capability_level: str,
+                    capability_reason: str | None) -> bool:
+    """스냅샷을 **MacroEvidenceSnapshot 으로 승격**한다 (M1-S).
+
+    스냅샷 자체는 계속 불변이다 — 이 함수는 **생성 직후 한 번** 증거를 채우는 경로이지
+    나중에 값을 바꾸는 경로가 아니다. 이미 채워진 스냅샷을 다시 채우려 하면 False 를
+    돌려 거부한다: 증거가 사후에 바뀌면 "그 결정을 내릴 때 무엇을 보고 있었는가" 라는
+    질문에 답할 수 없게 되고, 그게 스냅샷이 존재하는 유일한 이유다.
+
+    Returns:
+        True  — 채웠다.
+        False — 열이 없거나(구 DB), 대상이 없거나, **이미 채워져 있다**.
+    """
+    engine = _engine()
+    _ensure_table(engine)
+    if not _has_mes_cols:
+        logger.warning("MES 열이 없어 증거를 붙이지 못했습니다: %s", snapshot_id)
+        return False
+    from sqlalchemy import text
+    with engine.begin() as c:
+        # ★이미 채워졌으면 덮지 않는다★ — WHERE 절이 그 불변식을 DB 레벨에서 강제한다.
+        res = c.execute(text(
+            f"UPDATE {_TABLE} SET indicators = :ind, models = :mod, "
+            "capability_level = :lvl, capability_reason = :rsn, mes_version = :ver "
+            "WHERE snapshot_id = :sid AND (indicators IS NULL OR indicators = '')"
+        ), {"ind": json.dumps(indicators, ensure_ascii=False, default=str),
+            "mod": json.dumps(models, ensure_ascii=False, default=str),
+            "lvl": capability_level, "rsn": capability_reason,
+            "ver": MES_VERSION, "sid": snapshot_id})
+    return bool(res.rowcount)
+
+
+_BASE_COL_LIST = ["snapshot_id", "created_at", "as_of", "growth_axis", "inflation_axis",
+                  "phase_probabilities", "stress_score", "confidence", "observations",
+                  "data_status", "research_usage", "model_version", "engine_version",
+                  "code_version", "explanation"]
+_REGIME_COL_LIST = ["regime", "recommended_mode"]
+_MES_COL_LIST = ["indicators", "models", "capability_level", "capability_reason", "mes_version"]
+
+
+def _col_list() -> list[str]:
+    """실제로 SELECT 할 열 이름.
+
+    ★위치 인덱스를 손으로 세지 않는다 (M1-S)★ 예전에는 `row[15]`/`row[16]` 처럼 상수로
+    읽었고, "새 열은 끝에만 붙여라" 는 주석이 그 취약함을 지키고 있었다. 그런데 이제
+    후행 블록이 **둘**(regime · MES)이고 각각 독립적으로 붙거나 안 붙는다 —
+    regime 이 없고 MES 만 있으면 손으로 센 인덱스는 전부 두 칸 밀린다.
+    이름 목록에서 인덱스를 파생시키면 그 함정이 구조적으로 사라진다.
+    """
+    cols = list(_BASE_COL_LIST)
+    if _has_regime_cols:
+        cols += _REGIME_COL_LIST
+    if _has_mes_cols:
+        cols += _MES_COL_LIST
+    return cols
 
 
 def _cols() -> str:
-    """새 열은 **끝에만** 붙인다 — 앞에 넣으면 _row_to_dict 의 위치 인덱스가 전부 밀린다."""
-    return _BASE_COLS + (", regime, recommended_mode" if _has_regime_cols else "")
+    return ", ".join(_col_list())
 
 
 def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
@@ -217,23 +279,35 @@ def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
         except Exception:
             return default
 
+    names = _col_list()
+    g = dict(zip(names, row, strict=False))
+
     d: dict[str, Any] = {
-        "snapshot_id": row[0], "created_at": row[1], "as_of": row[2],
-        "growth_axis": row[3], "inflation_axis": row[4],
-        "phase_probabilities": _j(row[5], {}),
-        "stress_score": row[6], "confidence": row[7],
-        "data_status": row[9], "research_usage": row[10],
-        "model_version": row[11], "engine_version": row[12], "code_version": row[13],
-        "explanation": row[14],
+        "snapshot_id": g.get("snapshot_id"), "created_at": g.get("created_at"),
+        "as_of": g.get("as_of"),
+        "growth_axis": g.get("growth_axis"), "inflation_axis": g.get("inflation_axis"),
+        "phase_probabilities": _j(g.get("phase_probabilities"), {}),
+        "stress_score": g.get("stress_score"), "confidence": g.get("confidence"),
+        "data_status": g.get("data_status"), "research_usage": g.get("research_usage"),
+        "model_version": g.get("model_version"), "engine_version": g.get("engine_version"),
+        "code_version": g.get("code_version"), "explanation": g.get("explanation"),
         # 후행 추가 열 — 없으면 None(있는 척하지 않는다)
-        "regime": row[15] if _has_regime_cols and len(row) > 15 else None,
-        "recommended_mode": row[16] if _has_regime_cols and len(row) > 16 else None,
+        "regime": g.get("regime"), "recommended_mode": g.get("recommended_mode"),
+        # ── MES (M1-S) ──
+        # ★`indicators` 는 값이 없어도 키가 있는 것이 계약이다★ 여기서 `{}` 로 두는 것은
+        # "아직 MES 로 만들어지지 않은 스냅샷" 이라는 뜻이고, 지표별 미가용은 그 안에
+        # `{available:false, reason}` 로 들어간다. 둘은 다른 사실이다.
+        "indicators": _j(g.get("indicators"), {}),
+        "models": _j(g.get("models"), {}),
+        "capability_level": g.get("capability_level"),
+        "capability_reason": g.get("capability_reason"),
+        "mes_version": g.get("mes_version"),
     }
     # 목록에서는 관측치 배열을 빼고 개수만 (payload 비대 방지) — 단건은 전부 준다.
     if full:
-        d["observations"] = _j(row[8], [])
+        d["observations"] = _j(g.get("observations"), [])
     else:
-        d["observation_count"] = len(_j(row[8], []))
+        d["observation_count"] = len(_j(g.get("observations"), []))
     return d
 
 
