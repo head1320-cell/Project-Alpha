@@ -3,6 +3,7 @@
  * /api/v1/research-runs — 연구 실행의 재현성 단위 (run_id·inputs·outputs·snapshot·code_version)
  */
 import { API_BASE } from "@/shared/api/apiBase";
+import { getActiveCaseId } from "@/shared/lib/caseStorage";
 
 export interface ResearchRunSummary {
   run_id: string;
@@ -41,6 +42,8 @@ export interface RecordRunInput {
   outputs: Record<string, unknown>;
   snapshot?: Record<string, unknown>;
   parent_run_id?: string;
+  /** Case 사슬 (M1-V). 넣지 않으면 `record` 가 활성 케이스를 붙인다. */
+  case_id?: string;
   note?: string;
 }
 
@@ -90,8 +93,11 @@ export interface ResearchRunList {
 
 export const researchApi = {
   record: async (req: RecordRunInput): Promise<{ recorded: boolean; run_id: string | null; message?: string }> => {
+    // 활성 케이스를 여기서 한 번만 붙인다 (targetVersionApi.create 와 같은 이유).
+    const active = getActiveCaseId();
+    const body = (req.case_id === undefined && active) ? { ...req, case_id: active } : req;
     const r = await fetch(`${API_BASE}/api/v1/research-runs`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`record run failed: ${r.status}`);
     return r.json();

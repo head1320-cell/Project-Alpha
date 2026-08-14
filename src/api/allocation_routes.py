@@ -1247,6 +1247,14 @@ class TargetVersionRequest(BaseModel):
     snapshot_id: str | None = None
     ruleset_version: str | None = None
     pack_id: str | None = None
+    # ── Case 사슬 (M1-V 배선) ──
+    # M1-S 가 열과 `compile_target` 인자를 만들었지만 이 라우트가 넘기지 않아서, 사슬은
+    # 어떤 경로로도 채워질 수 없었다. 둘 다 선택 필드이고 없으면 동작은 이전과 같다.
+    # ★`mes_id` 를 `snapshot_id` 로 기본 채우지 않는다★ `snapshot_id` 는 **세션이 붙인**
+    # 스냅샷이고 `mes_id` 는 **케이스가 고정한** 증거다 — 하나로 다른 하나를 채우면
+    # "케이스가 고정했다" 는 없는 사실이 만들어진다.
+    case_id: str | None = None
+    mes_id: str | None = None
     note: str | None = None
     # ★화면 표시용 컴파일은 저장하지 않는다★ 오버레이 슬라이더를 움직일 때마다 행이
     # 쌓이면 감사 기록이 노이즈가 된다. 컴파일러는 하나로 두고 **저장 여부만** 가른다.
@@ -1262,6 +1270,7 @@ def target_version_create(req: TargetVersionRequest):
             req.base_weights, req.overlay, mode=req.mode, neutralized=req.neutralized,
             run_id=req.run_id, snapshot_id=req.snapshot_id,
             ruleset_version=req.ruleset_version, pack_id=req.pack_id,
+            case_id=req.case_id, mes_id=req.mes_id,
         )
     except ValueError as e:
         raise HTTPException(422, str(e))

@@ -123,12 +123,22 @@ def create_from_current(market: str = Query("kr", pattern="^(kr|us)$")):
 
     from src.data.regime_snapshots import get_snapshot
     saved = get_snapshot(sid) or {}
+    # ★MES 승격 여부를 저장된 값에서 읽는다 (M1-V)★ 빌더의 반환값을 믿지 않고 DB 를
+    # 다시 읽는 이유는, 화면이 "증거가 붙었다" 고 말하려면 **실제로 붙어 있어야** 하기
+    # 때문이다. 승격이 실패해도 스냅샷 생성은 성공이므로 여기서 두 사실이 갈린다.
+    level = saved.get("capability_level")
     return {
         "recorded": True,
         "snapshot_id": sid,
         "as_of": saved.get("as_of"),
         "research_usage": saved.get("research_usage"),
         "data_status": saved.get("data_status"),
+        "mes": ({"attached": True, "capability_level": level,
+                 "capability_reason": saved.get("capability_reason")}
+                if level else
+                {"attached": False, "capability_level": None,
+                 "reason": "매크로 증거를 붙이지 못했습니다 — 스냅샷은 저장됐지만 "
+                           "지표·모델 상태·능력 레벨이 비어 있습니다."}),
     }
 
 

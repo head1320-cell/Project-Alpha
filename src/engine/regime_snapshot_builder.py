@@ -93,7 +93,7 @@ def build_and_store(market: str = "kr") -> str | None:
 
     as_of = str(getattr(state, "timestamp", "") or "")
 
-    return create_snapshot(
+    sid = create_snapshot(
         as_of=as_of,
         observations=observations,
         growth_axis=float(getattr(state, "growth_axis", 0.0) or 0.0),
@@ -107,3 +107,76 @@ def build_and_store(market: str = "kr") -> str | None:
         regime=regime,
         recommended_mode=mode,
     )
+    if sid:
+        promote_to_mes(sid)
+    return sid
+
+
+def _model_contracts() -> dict[str, Any]:
+    """스튜디오별 **계약 상태** — 실행 결과가 아니다 (M1-V).
+
+    ★스냅샷마다 다섯 모델을 돌리지 않는다★ DFM 적합·Granger 검정은 초 단위이고,
+    스냅샷은 "결정 시점에 무엇을 보고 있었는가" 를 굳히는 것이지 그 자리에서 연구를
+    수행하는 것이 아니다. 그래서 여기 남는 것은 **어느 엔진이 가용했는가**이고,
+    각 항목이 `computed: False` 로 그 사실을 스스로 말한다.
+    """
+    from src.engine.macro_models import describe_all
+
+    out: dict[str, Any] = {}
+    for s in describe_all():
+        f = s["frontier"]
+        out[s["id"]] = {
+            "label": s["label"],
+            "frontier": {"name": f["name"], "available": f["available"],
+                         "reason": f.get("reason")},
+            "substitute": {"name": s["substitute"]["name"]},
+            # ★이 값은 실행 결과가 아니다★ 화면이 숫자로 읽지 않도록 명시한다.
+            "computed": False,
+            "note": "스냅샷 시점의 엔진 가용성입니다 — 모델을 실행한 결과가 아닙니다.",
+        }
+    return out
+
+
+def promote_to_mes(snapshot_id: str) -> dict[str, Any]:
+    """스냅샷을 **MacroEvidenceSnapshot 으로 승격**한다 (M1-V 배선).
+
+    M1-S 가 `attach_evidence` 를 만들었지만 **호출자가 없었다** — 그래서 어떤 스냅샷도
+    MES 가 된 적이 없고, Case 사슬의 `mes` 조각은 언제나 "고정된 증거가 없습니다" 였다.
+    이 함수가 그 빈 자리다.
+
+    ★붙이는 것과 붙이지 않는 것★
+      · `indicators` — `source_registry` 의 등록 소스 상태. **값이 없어도 키가 있고**
+        미검증 소스는 사유를 갖는다(M1-I 계약). 기존 BOK/FRED 관측치는 이미
+        `observations` 열에 있으므로 **복제하지 않는다** — 진실은 한 벌이다.
+      · `models`     — 계약 상태(위 `_model_contracts`), 실행 결과가 아니다.
+      · `capability` — 도달 레벨 + **바로 위가 막힌 사유**(M1-C).
+
+    ★실패해도 스냅샷을 죽이지 않는다★ 증거를 못 붙인 것과 붙인 것은 다른 사실이고,
+    반환값이 그 사실을 그대로 전한다. 스냅샷 자체는 이미 저장돼 있다.
+    """
+    from src.data.regime_snapshots import attach_evidence
+    from src.data.source_registry import indicator_block
+    from src.engine.capability import resolve
+
+    try:
+        cap = resolve()
+        level = str(cap.get("level") or "L3")
+        blocked = cap.get("blocked_level")
+        reason = (f"{blocked}: {cap.get('blocked_reason')}"
+                  if blocked and cap.get("blocked_reason") else None)
+        attached = attach_evidence(
+            snapshot_id,
+            indicators=indicator_block(),
+            models=_model_contracts(),
+            capability_level=level,
+            capability_reason=reason,
+        )
+        if not attached:
+            return {"attached": False, "capability_level": None,
+                    "reason": "증거를 붙이지 못했습니다 — 이미 채워졌거나 저장소가 "
+                              "MES 열을 갖고 있지 않습니다."}
+        return {"attached": True, "capability_level": level, "capability_reason": reason}
+    except Exception as e:  # noqa: BLE001 — 승격 실패가 스냅샷 생성을 되돌리지 않는다
+        logger.warning("MES 승격 실패 %s: %s", snapshot_id, e)
+        return {"attached": False, "capability_level": None,
+                "reason": f"증거 수집 중 오류가 발생했습니다: {type(e).__name__}"}

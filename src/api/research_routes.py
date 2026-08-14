@@ -32,6 +32,8 @@ class RecordRunRequest(BaseModel):
     outputs: dict[str, Any] = Field(default_factory=dict)
     snapshot: dict[str, Any] | None = None
     parent_run_id: str | None = None
+    # Case 사슬 (M1-V 배선) — `record_run` 은 이미 받는데 라우트가 넘기지 않았다.
+    case_id: str | None = Field(None, max_length=40)
     note: str | None = Field(None, max_length=2000)
 
 
@@ -40,7 +42,8 @@ def create_run(req: RecordRunRequest):
     try:
         from src.data.research_runs import record_run
         rid = record_run(req.kind, req.inputs, req.outputs, snapshot=req.snapshot,
-                         name=req.name, parent_run_id=req.parent_run_id, note=req.note)
+                         name=req.name, parent_run_id=req.parent_run_id,
+                         case_id=req.case_id, note=req.note)
         if rid is None:
             return {"recorded": False, "run_id": None,
                     "message": "DB 미가용 — 런이 저장되지 않았습니다."}
