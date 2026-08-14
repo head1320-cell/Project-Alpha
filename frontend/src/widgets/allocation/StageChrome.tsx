@@ -18,6 +18,7 @@ import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { PHASES, STAGES, stageIndex, useAllocation } from "./AllocationProvider";
 import { changedLabels } from "./analyzeSignature";
+import { CaseBar } from "@/features/case-bar/CaseBar";
 import { ContextStrip } from "./ContextStrip";
 import { WizardTracker } from "./WizardTracker";
 import { nextAction } from "./nextAction";
@@ -121,6 +122,11 @@ export function StageChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="aas-root tpage-fade">
+      {/* 연구 케이스 컨텍스트 (M1-U) — `/macro` 와 **같은 컴포넌트**.
+          ContextStrip 과 중복하지 않는다: 여기는 서버 케이스가 고정한 MES 를,
+          아래 스트립은 이 세션이 붙인 스냅샷을 낸다. 둘이 갈라지면 CaseBar 가 말한다. */}
+      <CaseBar sessionSnapshotId={attachedSnapshotId} />
+
       {/* 이 단계에서 할 일 (Contextual Isolation 인텐트) — 헤더 블록(제목/브레드크럼/커버리지)은 제거됨 */}
       <div className="aas-intent"><b>이 단계에서 할 일</b> — {stage.intent}</div>
 
