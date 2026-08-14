@@ -4216,6 +4216,10 @@ M1-S 가 저장소 열과 함수 인자를 만들었지만 라우트가 넘기�
 
 ### 수치
 
+- Playwright 전체 게이트 **385 passed / 0 failed (2.2h)** — P1 후 368 + M1-U 신규 17,
+  회귀 0. ★환경 실패 0★ 이 컨테이너는 A8·A9 에서 "293 passed / 14 환경 실패" 였는데,
+  R0 이 찾은 `database.py:99` SQLite 폴백 덕에 psycopg2 없이도 영속화가 도는 상태다 —
+  "DB 부재" 라고 적었던 그때의 진단이 틀렸다는 것이 이번 게이트로 확정됐다.
 - pytest **1,706 passed / 10 skipped** — 1,693 + `test_long_only_chain` 13
 - M1 전체 신규 pytest: 스키마·사다리·모델·소스·L2·사슬 (M1-S/C/M/I/T/V)
 - 새 E2E: `macro-case.spec.ts` 8 · `macro-studios.spec.ts` 9 = **17 passed**
