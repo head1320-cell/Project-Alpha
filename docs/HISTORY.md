@@ -4112,3 +4112,134 @@ as_of 로 두 번 → 같은 비중" 은 **초록인 채** 2·4·5 만 빨개졌
   결정이고, 이유는 위에 적었다.
 - 다음: 알파 팩토리(P2) · 롱숏 시장중립(P3, `execution_plan.py:73` 의 음수 클램프 포함) ·
   UI 현대화(P4).
+
+---
+
+## M1 — Regime & Macro Intelligence Brain: 없는 것을 없다고 말하는 구조
+
+요청은 다섯 갈래였다 — ① `ResearchCase` + 불변 MES 서버 영속, ② `/macro` 를 5개
+서브스튜디오로, ③ 두 화면이 같은 케이스를 유지, ④ 롱온리 파이프라인 검증,
+⑤ Tier 1~5 모델 스택(TSFM · Neural SDE · Causal DeePM · PINN · Agentic MCP · RL-GNN ·
+Gen-DFL · Conformal · Entropy Pooling).
+
+**계획 전에 재 봤더니 브리프의 전제 여럿이 이 저장소에서 성립하지 않았다.**
+
+| 브리프 전제 | 실측 |
+|---|---|
+| torch · cvxpy · cvxpylayers · jax · hmmlearn | **전부 미설치**, GPU 없음 |
+| "10년+ 매크로 역사" | 29계열 × **60개월**, 전부 mock (YoY 변환 후 실사용 48) |
+| ECOS M2·GDP·신용스프레드 · KRX VKOSPI·신용잔고·공매도·대차 · 트렌드 2종 | 수집기에 **없음** |
+| 라이브 검증 | 다섯 데이터 호스트 전부 프록시 **403 CONNECT** |
+
+60개 목 데이터 위에 Neural SDE·PINN·RL-GNN 을 올리면 **그럴듯한 숫자를 만드는 기계**가
+된다. A8 이 4상태 HMM 을 관측 48 / 모수 32 로 기각한 것과 같은 이유다. 그래서 M1 의
+산출물은 프론티어 모델 구현이 아니라, **그 모델이 들어올 자리와 지금 그 자리가 왜
+비어 있는지를 API 와 화면이 항상 말하는 구조**다.
+
+### 무엇을 지었나
+
+**M1-S 스키마 셋** — `research_cases` 신규 테이블(`rc_*`), `regime_snapshots` 를 MES 로
+승격(지표·모델·능력 레벨·`mes_version` 컬럼), `research_runs`·`target_portfolio_versions`
+에 `case_id`(+TPV `mes_id`). 전부 ADD COLUMN 이라 마이그레이션 스크립트도 새 ID 공간도
+없다. `attach_evidence` 는 write-once 를 **DB WHERE 절로** 강제한다 — 증거가 사후에
+바뀌면 "그 결정을 내릴 때 무엇을 보고 있었는가" 에 답할 수 없다.
+
+**M1-C 능력 사다리** — `capability.py`. L0 Full Frontier / L1 Quantitative Causal /
+L2 Robust Statistical / L3 Safe Baseline 을 **다이어그램이 아니라 프로브**로 판정한다.
+모듈 요건은 `find_spec` 이 아니라 **실제 import 후 심볼 확인** — `sys.modules` 에 가짜를
+꽂아도 열리지 않는다. `resolve()` 는 도달 레벨과 **바로 위가 막힌 사유**를 함께 낸다.
+실측 이 환경은 **L1**, 막힌 이유는 torch · cvxpylayers · trends_api · llm · 표본 60<240.
+
+**M1-M 5개 서브스튜디오** — 각 스튜디오가 프론티어(계약만)와 대체(실제로 도는 것) **두
+엔진**을 선언한다: TSFM↔동적요인모형(DFM) · Neural SDE↔Nelson-Siegel · DeePM↔Granger ·
+PINN↔POT/EVT · CLQT↔결정론적 뷰 컴파일러. 출력 계약은 하나이고 `span` 이 A8 규칙을
+잇는다 — **요청보다 짧으면 응답이 그 사실을 말한다**.
+
+**M1-I 수집 확장** — ECOS 3지표 + 파생 신용스프레드 · KRX 4엔드포인트 · Naver DataLab ·
+Google Trends(둘 다 공식 API). ★미검증을 일급 상태로★ `source_registry` 가
+`verified_live` 를 들고, **미검증 소스는 `KIS_USE_MOCK=1` 이어도 mock 으로 채우지
+않는다** — 틀린 코드가 만든 빈 값을 mock 이 덮으면 코드가 맞았는지 영원히 알 수 없다.
+10개 전부 `verified_live=False` 로 커밋됐고, 올리는 것은 키·egress 가 열린 환경의 사람이다.
+
+**M1-T L2 칸** — Entropy Pooling(KL 최소화 쌍대 뉴턴, cvxpy 불필요) + split conformal.
+커버리지는 주장하지 않고 **재서 적었다**.
+
+**M1-U 화면** — `/macro` 를 5개 서브라우트로 열고, `CaseBar` 를 `/macro` 와 AAS 스테이지
+**양쪽**에 붙였다. 미가용 스튜디오는 숫자를 하나도 내지 않고 사유만 낸다.
+
+**M1-V 사슬 배선 + 롱온리 가드** — 아래 별도 절.
+
+### 측정이 계획을 뒤집은 다섯 번
+
+**1. `CaseBar` 는 `shared/ui` 에 둘 수 없었다.** 청사진은 `CatalogueShell`·`ArchiveDrawer`
+전례를 들었는데, 그 셋은 전부 props 만 받는다. CaseBar 는 스스로 조회해야 하고
+`.eslintrc.js` 가 `shared → entities` 를 막는다. `entities/case → entities/macro` 도
+peer 금지다. `features/case-bar` 가 조립점으로 맞는 자리였다.
+
+**2. `/macro` 기준선 123 kB 는 낡았고 라우트도 틀렸다.** 실측 `/macro` **244 kB**,
+`/allocation/macro` **126 kB** — 청사진이 둘을 섞어 적었다. (A7 에서도 같은 실수를 했다.)
+
+**3. `UnavailableState` 가 다크에서 2.47:1 이었다.** `.tstate-unavail` 이 라이트 전용
+리터럴(`#fffbeb`/`#a16207`)이고 다크 짝이 없어, 그 위의 사유 줄이 AA 를 크게 밑돌았다.
+**지금까지 안 잡힌 이유는 다크 스윕이 도는 표면에 미가용 상태가 렌더되는 곳이 없었기
+때문**이다 — 스튜디오는 미가용이 기본값이라 처음으로 감사 대상이 됐다.
+
+**4. `--st-warn-mark` 는 한 번도 정의된 적이 없었다.** §65 가 그 이름을 그대로 썼고,
+배선된 것처럼 보이나 아무 일도 안 하는 상태였다. `--warn-mark` 가 실제 정의다.
+
+**5. `ViewSpec` 을 `{kind, op}` 로 짐작해 썼다.** 서버 계약은 `{asset, direction, value}`
+이고, 짐작한 모양은 서버가 조용히 무시하고 `direction:+1` 로 컴파일한다 — 화면이 "이하"
+라고 적어도 계산은 "이상" 이었을 것이다. 소스를 읽고 고쳤다.
+
+### M1-V — 사슬이 **채워질 수 없는 상태**였다
+
+M1-V 는 원래 "가드만" 이었다. 그런데 재 보니:
+
+| 실측 | 결과 |
+|---|---|
+| `attach_evidence()` — **호출자 0개** | 어떤 스냅샷도 MES 가 된 적이 없다 |
+| `POST /allocation/target-versions` | `case_id`·`mes_id` 를 아예 받지 않는다 |
+| `POST /research-runs` | `case_id` 를 받지 않는다 |
+
+M1-S 가 저장소 열과 함수 인자를 만들었지만 라우트가 넘기지 않아서, M1-U 의 CaseBar 가
+그리는 사슬은 **어떤 경로로도 채워질 수 없었다**. 그 상태에서 사슬 가드를 쓰면 아무것도
+지키지 않는 초록 테스트가 된다 — A4·A5·A7 에서 세 번 값을 치른 양식이다. 그래서 배선을
+먼저 했다(스냅샷 생성 시 자동 MES 승격 · 라우트 3필드 · 프론트가 활성 케이스 부착).
+
+가드 13건이 그 위에 선다. 그중 짝으로 읽어야 하는 둘:
+
+> **음수 클램프는 고정만 하고 바꾸지 않는다.** `execution_plan.py:72-73` 의
+> `max(..., 0.0)` 은 지금도 음수 목표를 0 으로 만든다 — 그 **현재 동작을 적어 둔다**.
+> 그리고 그 경로는 **게이트를 통해서는 도달 불가**다: `compile_target` 이 롱온리 음수를
+> 버리지 않고 `research_only` 로 거부하기 때문이다. 이 짝이 성립해야 "롱온리가
+> 안전하다" 고 말할 수 있고, P3 가 롱숏을 열 때 이 테스트가 대화 상대가 된다.
+
+### 수치
+
+- pytest **1,706 passed / 10 skipped** — 1,693 + `test_long_only_chain` 13
+- M1 전체 신규 pytest: 스키마·사다리·모델·소스·L2·사슬 (M1-S/C/M/I/T/V)
+- 새 E2E: `macro-case.spec.ts` 8 · `macro-studios.spec.ts` 9 = **17 passed**
+- 변이 프로브: M1-U **5건** · M1-V **4건(5표적)** — 전부 자기 이유로 red 확인 후 되돌림
+- ruff 0 · tsc 0 · eslint 0 errors / 28 warnings
+- ADR 001: `/macro` **244 kB flat** · 새 스튜디오 라우트 101~104 kB · 11개 AAS 라우트
+  flat(CaseBar 가 셸에 들어갔는데도) · 공유 청크 87.7 kB 불변
+
+★프로브를 한 번에 여러 개 거는 것의 대가★ M1-V 에서 프로브 두 개가 같은 가드를
+빨갛게 만들어 귀속이 모호해졌다. 하나만 남기고 다시 돌려 그 가드가 **자기 이유로**
+red 인 것을 따로 확인했다 — 배치 프로브는 빌드를 아끼지만 인과를 잃을 수 있다.
+
+### 정직하게 열어 두는 것
+
+- **프론티어 모델은 짓지 않았다.** Neural SDE · PINN · RL-GNN · Gen-DFL Diffusion ·
+  cvxpylayers SPO — 미설치 · GPU 없음 · 60개월 mock. 계약과 능력 사다리로 자리만 남는다.
+  torch 가 들어오면 같은 프로브가 자동으로 상위 레벨을 연다.
+- **"실 API 로 확인했다" 는 문장은 이 산출물에 없다.** 다섯 호스트 전부 403 CONNECT.
+  10개 신규 소스는 `verified_live=False` 로 커밋됐고, KRX 응답 필드명은 후보 목록으로
+  찾되 못 찾은 행은 **버린다**(0 으로 채우지 않는다).
+- **`04 TAIL` 은 이 환경에서 거부된다** — 임계 90% 초과 관측이 6개, GPD 최소 8개.
+  표본의 문제이지 코드의 문제가 아니고, 화면이 그 사유를 그대로 낸다.
+- **`agentic-mcp` 의 텍스트→뷰 단계는 미가용** — LLM 키도 트렌드 API 도 없다.
+  뷰 컴파일러와 실현가능성 검사만 돈다. `feasible: null` 을 `true` 로 그리지 않는다.
+- **케이스↔TPV 자동 연결은 없다** — `active_tpv_id` 갱신은 PATCH 가 유일한 경로다.
+- **`execution_plan.py:72-73` 음수 클램프**와 롱숏 시장중립 — **P3**.
+- Study(`as_*`, 브라우저 로컬)와 Case(`rc_*`, 서버)는 합치지 않았다. 그 경계는 라벨이 지킨다.
