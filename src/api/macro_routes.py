@@ -17,6 +17,7 @@ import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/macro", tags=["macro"])
@@ -599,4 +600,56 @@ def macro_capability():
         return resolve()
     except Exception:
         logger.exception("capability 판정 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ── 서브스튜디오 (M1-M) ───────────────────────────────────────────────────────
+@router.get("/studios")
+def macro_studios():
+    """5개 스튜디오 목록 + **두 엔진의 현재 상태**.
+
+    각 스튜디오는 프론티어 엔진(요청받은 아키텍처의 모델)과 대체 엔진(지금 설치된
+    것으로 정직하게 도는 모델)을 함께 선언한다. 프론티어의 가용성은 능력 사다리의
+    프로브를 **그대로** 쓴다 — 두 곳에서 따로 판정하면 "사다리는 L1 인데 스튜디오는
+    프론티어가 된다고 말하는" 상태가 생긴다.
+    """
+    try:
+        from src.engine.macro_models import describe_all
+        return {"studios": describe_all()}
+    except Exception:
+        logger.exception("studios 목록 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/studios/{studio_id}")
+def macro_studio_run(studio_id: str, months: int = Query(60, ge=12, le=240),
+                     target: str = Query("KOSPI")):
+    """대체 엔진 실행. 미가용이면 **숫자 대신 사유**를 돌려준다."""
+    try:
+        from src.engine.macro_models import run_studio
+        return run_studio(studio_id, months=months, target=target)
+    except Exception:
+        logger.exception("studio 실행 실패: %s", studio_id)
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class StudioViewsRequest(BaseModel):
+    assets: list[str] = Field(default_factory=list, max_length=60)
+    views: list[dict] = Field(default_factory=list, max_length=20)
+    scenarios: list[list[float]] | None = None
+
+
+@router.post("/studios/agentic-mcp")
+def macro_studio_views(req: StudioViewsRequest):
+    """뷰 컴파일 + 실현가능성 검사 (05 VIEWS).
+
+    ★시나리오가 없으면 `feasible` 은 `null` 이다★ `true` 로 두면 화면이
+    "모순 없음을 확인했다" 로 읽는다 — 검사하지 않은 것과 통과한 것은 다른 사실이다.
+    """
+    try:
+        from src.engine.macro_models import run_studio
+        return run_studio("agentic-mcp", assets=req.assets, views=req.views,
+                          scenarios=req.scenarios)
+    except Exception:
+        logger.exception("agentic-mcp 실행 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
