@@ -581,3 +581,22 @@ def macro_compare_krus():
     except Exception:
         logger.exception("compare-krus 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/capability")
+def macro_capability():
+    """능력 사다리 — 지금 이 시스템이 실제로 도달하는 레벨과 **그 위가 막힌 이유** (M1-C).
+
+    ★이 라우트가 있는 이유★ 요청받은 아키텍처는 Neural SDE·PINN·RL-GNN·Diffusion DRO·
+    cvxpylayers SPO 를 상위 티어에 놓는다. 그것들이 지금 왜 돌지 않는지를 화면이 말하지
+    못하면, 시스템은 조용히 아래 레벨로 내려가 놓고 위 레벨인 척하게 된다 — 이 저장소가
+    금지하는 실패 양식이다.
+
+    프로브는 캐시하지 않는다. 의존성이 설치되면 그 즉시 사다리가 열려야 한다.
+    """
+    try:
+        from src.engine.capability import resolve
+        return resolve()
+    except Exception:
+        logger.exception("capability 판정 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
