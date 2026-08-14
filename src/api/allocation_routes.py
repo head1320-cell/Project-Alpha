@@ -1069,8 +1069,14 @@ def _rows_for_tickers(tickers: list[str]) -> list[dict]:
 
 
 def _factor_weights(codes: list[str], score_map: dict[str, float],
-                    weighting: str, lookback: int) -> dict[str, float]:
-    """top-K 종목 → 비중(%). equal/factor_tilt는 시세 불필요, 나머지는 수익률 기반."""
+                    weighting: str, lookback: int,
+                    as_of: str | None = None) -> dict[str, float]:
+    """top-K 종목 → 비중(%). equal/factor_tilt는 시세 불필요, 나머지는 수익률 기반.
+
+    ★`as_of` 를 버리지 않는다 (P2-R)★ P1-A 가 `_load_clean_returns` 에 as_of 를 넣었는데
+    이 함수는 `None` 을 넘기고 있었다. 그러면 같은 as_of 로 만든 알파 점수 위에 **오늘
+    기준 공분산**으로 비중을 얹게 되어, 포트폴리오의 절반만 그 시점의 것이 된다.
+    """
     n = len(codes)
     if weighting == "equal" or n == 0:
         w = 1.0 / max(n, 1)
@@ -1081,7 +1087,7 @@ def _factor_weights(codes: list[str], score_map: dict[str, float],
         s = s / s.sum()
         return {codes[i]: round(float(s[i]) * 100, 2) for i in range(n)}
     # 수익률 기반 (inverse_vol|risk_parity|min_var|hrp) — 시세 없으면 균등 폴백
-    returns, _b, _ex, _cov = _load_clean_returns(codes, None, lookback)
+    returns, _b, _ex, _cov = _load_clean_returns(codes, None, lookback, as_of)
     if returns is None or len(returns.columns) < 2:
         w = 1.0 / n
         return {c: round(w * 100, 2) for c in codes}

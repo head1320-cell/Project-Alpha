@@ -52,6 +52,23 @@ class PromoteRequest(BaseModel):
     note: str = Field("", max_length=1000)
 
 
+class AlphaWeightSpec(BaseModel):
+    alpha_id: str = Field(..., min_length=1, max_length=40)
+    weight: float = Field(1.0, ge=-1e6, le=1e6)
+
+
+class AlphaPortfolioRequest(BaseModel):
+    alphas: list[AlphaWeightSpec] = Field(..., min_length=1, max_length=8)
+    tickers: list[str] | None = None
+    universe: str = "kospi200"
+    top_k: int = Field(10, ge=2, le=30)
+    weighting: str = "equal"                  # equal|factor_tilt|inverse_vol|risk_parity|min_var|hrp
+    lookback_days: int = Field(756, ge=90, le=3650)
+    as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    case_id: str | None = Field(None, max_length=40)
+    record_run: bool = True
+
+
 # ── 표현식 카탈로그 (통합 팩터 창용) ─────────────────────────────────────────
 # 함수는 파서가 실제로 허용하는 것만 노출 — 죽은 버튼 금지(test_stage_catalogs가 강제).
 #   insert: append = 식에 항 추가 · wrap = 현재 식을 감싸기 · wrap2 = 2항 함수
@@ -201,6 +218,106 @@ def alpha_validate(req: ValidateRequest):
         return report
     except Exception:
         logger.exception("alpha validate 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/alpha-lab/portfolio")
+def alpha_portfolio(req: AlphaPortfolioRequest):
+    """★승인된 알파 → 목표 비중 (P2-R)★
+
+    지금까지 알파 팩토리의 산출물은 어디로도 가지 않았다 — 레지스트리를 읽는 곳은
+    `strategy_health`(개수)와 `experimental_routes`(중복검사) 둘뿐이었고, 최적화 경로는
+    레지스트리를 한 번도 읽지 않았다. 이 라우트가 그 사슬을 잇는다.
+
+    ★TPV 를 여기서 만들지 않는다★ 컴파일러는 한 곳이다(R0) — `base_weights` 까지 내고
+    `/allocation/target-versions` 가 오버레이·현금·실행가능 판정을 한다. 여기서 또
+    컴파일하면 두 곳의 산수가 갈라진다(A1·R0 에서 두 번 겪었다).
+    """
+    try:
+        from src.data.alpha_registry import get_alpha, usable_for_portfolio
+        from src.engine.alpha_combine import combine_alphas
+
+        # ── 1. 사용 시점 사다리 게이트 — 하나라도 막히면 계획을 만들지 않는다 ──
+        specs, blocked = [], []
+        for a in req.alphas:
+            row = get_alpha(a.alpha_id)
+            ok, reason = usable_for_portfolio(row)
+            if not ok:
+                blocked.append({"alpha_id": a.alpha_id,
+                                "name": (row or {}).get("name"),
+                                "status": (row or {}).get("status"),
+                                "reason": reason})
+                continue
+            specs.append({"alpha_id": a.alpha_id, "expr": row["expr"], "weight": a.weight})
+        if blocked:
+            return {"available": False, "blocked": blocked,
+                    "reason": "실전 사용이 허용되지 않은 알파가 포함돼 있습니다 — "
+                              "포트폴리오를 만들지 않았습니다."}
+
+        tickers = _resolve_universe_capped(
+            ValidateRequest(expr="rank(mom_1m)", tickers=req.tickers, universe=req.universe))
+        if len(tickers) < 8:
+            return {"available": False,
+                    "reason": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers 를 직접 지정하세요."}
+
+        # ── 2. 결합 (+ 중복 진단) ──
+        combo = combine_alphas(specs, tickers, as_of=req.as_of)
+        if not combo.get("available"):
+            return {"available": False, "reason": combo.get("reason"),
+                    "excluded": combo.get("excluded", []),
+                    "as_of_effective": combo.get("as_of_effective")}
+
+        # ── 3. 상위 K → 비중 (기존 `_factor_weights` 재사용) ──
+        from src.api.allocation_routes import _factor_weights
+        ranked = sorted(combo["scores"].items(), key=lambda x: -x[1])
+        codes = [c for c, _ in ranked[:req.top_k]]
+        weights = _factor_weights(codes, combo["scores"], req.weighting,
+                                  req.lookback_days, req.as_of)
+
+        from src.data.stock_master import get_stock_name
+        holdings = [{"code": c, "name": get_stock_name(c) or c,
+                     "weight": weights.get(c, 0.0),
+                     "score": round(float(combo["scores"][c]), 4)} for c in codes]
+
+        out = {
+            "available": True,
+            "as_of_requested": req.as_of,
+            "as_of_effective": combo.get("as_of_effective"),
+            "base_weights": weights,
+            "holdings": holdings,
+            "used": combo["used"], "excluded": combo["excluded"],
+            "pairwise": combo["pairwise"], "effective_n": combo["effective_n"],
+            "warnings": combo["warnings"],
+            "weighting": req.weighting, "top_k": req.top_k,
+            "universe_resolved_n": len(tickers),
+            "note": ("거래비용·슬리피지 미반영 — 알파 검증과 같은 한계입니다. "
+                     "이 비중은 목표(base) 이며, 실행은 목표 버전 컴파일을 거칩니다."),
+        }
+
+        if req.record_run:
+            from src.data.research_runs import record_run
+            rid = record_run(
+                "alpha_portfolio",
+                # 구성 종목을 남긴다 (P1-B 규칙) — 유니버스는 요청 시점 해소라 개수만으론 재현 불가.
+                inputs={"alphas": [{"alpha_id": s["alpha_id"], "weight": s["weight"]}
+                                   for s in specs],
+                        "universe": req.universe, "tickers": tickers,
+                        "tickers_n": len(tickers), "top_k": req.top_k,
+                        "weighting": req.weighting, "as_of": req.as_of},
+                outputs={"base_weights": weights, "holdings": holdings,
+                         "pairwise": combo["pairwise"],
+                         "effective_n": combo["effective_n"],
+                         "excluded": combo["excluded"]},
+                snapshot={"as_of_effective": combo.get("as_of_effective"),
+                          "universe_size": len(tickers)},
+                name=f"알파 포트폴리오 — {len(specs)}개 결합",
+                case_id=req.case_id,
+            )
+            out["run_id"] = rid
+            out["run_recorded"] = rid is not None
+        return out
+    except Exception:
+        logger.exception("alpha portfolio 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 

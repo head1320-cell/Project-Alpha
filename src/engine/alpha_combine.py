@@ -99,6 +99,19 @@ def combine_alphas(specs: list[dict[str, Any]], tickers: list[str],
     if not specs:
         return {"available": False, "reason": "결합할 알파가 없습니다."}
 
+    # ★같은 알파를 두 번 받으면 거부한다 (실측으로 찾은 결함)★
+    # `scored` 는 alpha_id 로 키를 잡으므로 중복이 들어오면 **뒤엣것이 앞엣것을 덮어**
+    # 조용히 하나로 합쳐졌다. 가중치 1+1 을 지정했는데 실제로는 1 로 계산되고, 화면은
+    # 그 사실을 알 길이 없다 — 방금 가드를 세운 "조용한 재정규화" 와 같은 결함 계열이다.
+    # 의도를 추측해 합치지 않고, 무엇이 중복인지 적어 되돌려 준다.
+    ids_seen = [str(s.get("alpha_id") or s.get("expr", "")) for s in specs]
+    dup_ids = sorted({i for i in ids_seen if ids_seen.count(i) > 1})
+    if dup_ids:
+        return {"available": False,
+                "reason": (f"같은 알파가 여러 번 들어 있습니다: {', '.join(dup_ids)} — "
+                           "가중치를 합칠지 하나로 볼지는 추측하지 않습니다. "
+                           "한 항목으로 정리한 뒤 다시 시도하세요.")}
+
     scored: dict[str, dict] = {}
     excluded: list[dict[str, Any]] = []
     as_of_eff: str | None = None

@@ -148,3 +148,26 @@ def test_as_of_is_carried_through_the_combination():
     assert r["as_of_effective"]
     late = combine_alphas([_spec("A", "rank(mom_1m)")], TICKERS, price_loader=_loader())
     assert r["scores"] != late["scores"], "as_of 가 결합 결과를 바꾸지 않는다"
+
+
+# ── 6. ★같은 알파를 두 번 넣으면 조용히 합치지 않는다★ ─────────────────────
+
+def test_duplicate_alpha_ids_are_refused_not_silently_collapsed():
+    """실측으로 찾은 결함의 가드.
+
+    `scored` 는 alpha_id 로 키를 잡으므로 중복이 들어오면 뒤엣것이 앞엣것을 덮는다.
+    가중치 1+1 을 지정했는데 1 로 계산되고, 결과는 그럴듯해서 아무도 모른다.
+    """
+    r = combine_alphas([_spec("A", "rank(mom_1m)", 1.0), _spec("A", "rank(mom_1m)", 1.0)],
+                       TICKERS, price_loader=_loader())
+    assert r["available"] is False
+    assert "A" in r["reason"] and "여러 번" in r["reason"]
+
+
+def test_two_different_ids_with_the_same_expression_are_allowed_but_flagged():
+    """id 가 다르면 별개 알파다 — 다만 ρ=1 이므로 중복 베팅으로 경고한다."""
+    r = combine_alphas([_spec("A", "rank(mom_1m)"), _spec("B", "rank(mom_1m)")],
+                       TICKERS, price_loader=_loader())
+    assert r["available"] is True, r.get("reason")
+    assert r["effective_n"] == pytest.approx(1.0, abs=0.05)
+    assert any("같은 베팅" in w for w in r["warnings"])
