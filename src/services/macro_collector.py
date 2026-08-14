@@ -413,14 +413,33 @@ class MacroCollector:
             # 국면 성장축(실물) — ECOS 코드는 GCP 실호출로 검증, 실패 시 unavailable → 축에서 자동 제외
             ("KR_LEADING_CYCLE", "901Y067", "I16E", "경기선행지수 순환변동치", "지수"),
             ("KR_IP",            "901Y033", "A00",  "산업생산지수", "지수"),
+            # ── M1-I 신규 3종 ────────────────────────────────────────────────
+            # ★이 셋은 실호출로 검증된 적이 없다★ 통계표/항목 코드가 틀리면 시리즈가
+            # 예외 없이 조용히 빈다. `source_registry` 가 mock 폴백을 막으므로
+            # 빈 값이 그럴듯한 숫자로 덮이지 않는다 — 그래야 코드가 틀렸다는 것을
+            # 알 수 있다. 검증은 `verify_connection.py::check_ecos`.
+            ("KR_M2",      "101Y003", "BBHA00", "M2 통화량(평잔)", "십억원"),
+            ("KR_GDP",     "200Y002", "1400",   "실질 GDP", "십억원"),
+            ("KR_CORP3Y",  "817Y002", "010200000", "회사채 3년(AA-)", "%"),
         ]
         for key, stat, item, name, unit in bok_targets:
             series_map[key] = self._collect_one(
                 key=key, name=name, unit=unit,
-                fetcher=lambda: self.bok.fetch_series(stat, item),
+                # ★기본인자 바인딩★ 바로 아래 FRED 루프는 `lambda fid=fred_id:` 인데
+                # 여기만 `lambda: ...(stat, item)` 이라 **늦은 바인딩**이었다. 지금은
+                # `_collect_one` 이 같은 반복 안에서 동기로 부르므로 값이 맞아
+                # 살아 있는 버그는 아니었지만, 누군가 스레드풀·async 로 바꾸는 순간
+                # 11개 시리즈가 전부 마지막 stat 코드를 조회한다. 두 루프의 관례를 맞춘다.
+                fetcher=lambda s=stat, i=item: self.bok.fetch_series(s, i),
                 use_cache=use_cache,
                 source="BOK",
             )
+
+        # ── 파생: 신용스프레드 = 회사채3Y − 국고3Y (M1-I) ────────────────────
+        # ★원계열 둘이 다 있을 때만 계산한다★ 하나라도 없으면 사유를 남기고 값을 내지
+        # 않는다 — 한쪽만으로 스프레드를 만드는 것은 합성이다.
+        series_map["KR_CREDIT_SPREAD"] = self._derive_spread(
+            series_map.get("KR_CORP3Y"), series_map.get("KR_3Y"))
 
         # 미국 매크로 (10종)
         for fred_id, meta in FRED_INDICATORS.items():
@@ -436,11 +455,49 @@ class MacroCollector:
             series=series_map,
         )
 
+    def _derive_spread(self, corp: MacroSeries | None,
+                       govt: MacroSeries | None) -> MacroSeries:
+        """신용스프레드 = 회사채3Y − 국고3Y (M1-I).
+
+        ★한쪽만으로 만들지 않는다★ 둘 중 하나라도 없거나 겹치는 관측이 없으면 값 없이
+        `source="unavailable"` 로 돌려준다. 한쪽 값을 스프레드처럼 쓰면 그건 합성이고,
+        화면은 그것을 실측 스프레드로 읽는다.
+        """
+        key, name, unit = "KR_CREDIT_SPREAD", "신용스프레드(회사채3Y − 국고3Y)", "%p"
+        cv = list(corp.values) if corp and corp.values else []
+        gv = list(govt.values) if govt and govt.values else []
+        n = min(len(cv), len(gv))
+        if n == 0:
+            return MacroSeries(indicator=key, name=name, unit=unit,
+                               source="unavailable", timestamps=[], values=[])
+
+        vals = [round(float(c) - float(g), 4) for c, g in zip(cv[-n:], gv[-n:], strict=False)]
+        ts = list(corp.timestamps)[-n:] if corp and corp.timestamps else []
+        norm = _normalize(vals)
+        latest = vals[-1]
+        prev = vals[-2] if len(vals) >= 2 else None
+        yoy = (vals[-1] - vals[-13]) if len(vals) >= 13 else None   # %p 단위 → 차이
+        return MacroSeries(
+            indicator=key, name=name, unit=unit,
+            # 원계열이 mock 이면 파생도 mock 이다 — 출처를 승격시키지 않는다.
+            source=(corp.source if corp else "unavailable"),
+            timestamps=ts, values=vals,
+            latest=round(latest, 4), prev=(round(prev, 4) if prev is not None else None),
+            yoy=(round(yoy, 3) if yoy is not None else None),
+            mom_pct=None,
+            z_score=norm["z_score"], percentile=norm["percentile"],
+            mean_5y=norm["mean_5y"], std_5y=norm["std_5y"], trend=norm["trend"],
+        )
+
     def _collect_one(
         self, key: str, name: str, unit: str,
         fetcher, use_cache: bool, source: str,
     ) -> MacroSeries:
-        """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback."""
+        """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback.
+
+        ★신규 미검증 소스는 mock 으로 채우지 않는다 (M1-I)★
+        `source_registry.new_source_mock_allowed()` 가 판정한다. 기존 지표는 영향 없다.
+        """
         # 캐시 확인
         if use_cache:
             with self._lock:
@@ -462,7 +519,8 @@ class MacroCollector:
         # Fallback to Mock — mock 모드만. 운영(KIS_USE_MOCK=0)선 합성 금지 → 정직 unavailable.
         if not values:
             from src.data.mock_gate import mock_allowed
-            if mock_allowed():
+            from src.data.source_registry import new_source_mock_allowed
+            if mock_allowed() and new_source_mock_allowed(key):
                 profile = MOCK_PROFILES.get(key, {"base": 100, "vol": 5, "trend": 0})
                 timestamps, values = _generate_mock_series(
                     key, length=60, **profile,

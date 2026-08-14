@@ -115,6 +115,28 @@ def _repo_module(module: str, *symbols: str) -> Callable[[], ProbeResult]:
     return _module_probe(module, *symbols)
 
 
+def _either_trends_source() -> Callable[[], ProbeResult]:
+    """검색 트렌드 — **둘 중 하나만 있어도 열린다** (M1-I).
+
+    Naver DataLab 과 Google Trends 는 서로 대체 가능한 근거다(둘 다 구간 정규화된
+    상대 지수). 그래서 `and` 가 아니라 `or` 다. 다만 **어느 쪽이 열렸는지**를
+    detail 에 남긴다 — "트렌드가 있다" 와 "한국 트렌드가 있다" 는 다른 사실이고,
+    05 VIEWS 가 국내 공시를 다룰 때 그 구분이 필요해진다.
+    """
+    import os
+
+    def probe() -> ProbeResult:
+        naver = bool(os.getenv("NAVER_CLIENT_ID")) and bool(os.getenv("NAVER_CLIENT_SECRET"))
+        google = bool(os.getenv("GOOGLE_TRENDS_API_KEY"))
+        if naver or google:
+            return ProbeResult(True, detail={"naver": naver, "google": google})
+        return ProbeResult(
+            False,
+            "Naver DataLab(NAVER_CLIENT_ID/SECRET) 도 Google Trends"
+            "(GOOGLE_TRENDS_API_KEY) 도 설정되지 않았습니다 — 둘 중 하나면 됩니다.")
+    return probe
+
+
 def _external_service(env_keys: tuple[str, ...], label: str) -> Callable[[], ProbeResult]:
     """외부 서비스 — 키가 있는지만 본다. **호출해 보지 않는다.**
 
@@ -141,8 +163,7 @@ REQUIREMENTS: dict[str, tuple[str, Callable[[], ProbeResult]]] = {
     "cvxpylayers": ("SPO 종단 미분 최적화 레이어 (cvxpylayers + cvxpy)",
                     _module_probe("cvxpylayers.torch", "CvxpyLayer")),
     "trends_api": ("검색 트렌드 (Naver DataLab · Google Trends)",
-                   _external_service(("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"),
-                                     "Naver DataLab")),
+                   _either_trends_source()),
     "llm": ("공시문 → 뷰 변환 (Agentic MCP)",
             _external_service(("ANTHROPIC_API_KEY",), "LLM")),
     "frontier_sample": ("프론티어 모델 학습에 필요한 최소 표본",
