@@ -253,7 +253,12 @@ export function FrontierChart({ result, lam, height = 256 }: { result: AnalyzeRe
         <Scatter data={curveData} fill="var(--t-accent)" line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} isAnimationActive={anim} shape={() => <g />} />
         {pts?.market && <ReferenceDot x={pts.market.volatility_pct} y={pts.market.return_pct} r={5} fill="#64748b" stroke={DOT_RING} label={{ value: "시장", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
         {pts?.current && <ReferenceDot x={pts.current.volatility_pct} y={pts.current.return_pct} r={5} fill="#0891b2" stroke={DOT_RING} label={{ value: "현재", fontSize: 9, position: "bottom", fill: "var(--t-muted)" }} />}
-        {pts?.optimal && <ReferenceDot x={pts.optimal.volatility_pct} y={pts.optimal.return_pct} r={7} fill="#dc2626" stroke={DOT_RING} strokeWidth={1.5} label={{ value: "★ 최적", fontSize: 10, position: "top", fill: "#dc2626" }} />}
+        {/* ★라벨의 `fill` 은 대비 감사가 원리적으로 못 잰다★ `contrastAudit` 은
+            `getComputedStyle().color` 를 읽는데 SVG 텍스트의 색은 `fill` 속성에서
+            온다. 그래서 이 10px 라벨은 가드가 없다 — 다크에서 `#dc2626` 이
+            zinc-950 위 3.67:1 인 것을 알고 토큰으로 바꾸되, "측정으로 증명했다"고
+            적지 않는다. 점 자체(`fill` on the dot)는 그래픽이라 3:1 기준이다. */}
+        {pts?.optimal && <ReferenceDot x={pts.optimal.volatility_pct} y={pts.optimal.return_pct} r={7} fill="var(--chart-down)" stroke={DOT_RING} strokeWidth={1.5} label={{ value: "★ 최적", fontSize: 10, position: "top", fill: "var(--color-bear)" }} />}
         {lamPt && <ReferenceDot x={lamPt.x} y={lamPt.y} r={5} fill="var(--t-accent)" stroke={DOT_RING} label={{ value: `λ=${lam.toFixed(1)}`, fontSize: 9, position: "top", fill: "var(--t-accent)" }} />}
       </ScatterChart>
     </ResponsiveContainer>
@@ -455,12 +460,12 @@ export function StressChart({ result }: { result: StressResult }) {
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 150, display: "block" }} preserveAspectRatio="none">
-        <polygon points={`0,4 ${toPts(dd)} ${W},4`} fill="#dc2626" opacity={0.07} />
-        {bench && <polyline points={toPts(bench)} fill="none" stroke="#71717a" strokeWidth={1.4} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
-        <polyline points={toPts(dd)} fill="none" stroke="#dc2626" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <polygon points={`0,4 ${toPts(dd)} ${W},4`} fill="var(--chart-down)" opacity={0.07} />
+        {bench && <polyline points={toPts(bench)} fill="none" stroke="var(--t-muted)" strokeWidth={1.4} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
+        <polyline points={toPts(dd)} fill="none" stroke="var(--chart-down)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="as-stress-meta">
-        <span>최대 낙폭 <b className="num" style={{ color: "#dc2626" }}>{result.max_dd_pct?.toFixed(1)}%</b></span>
+        <span>최대 낙폭 <b className="num" style={{ color: "var(--color-bear)" }}>{result.max_dd_pct?.toFixed(1)}%</b></span>
         {result.benchmark_max_dd_pct != null && <span>벤치마크 <b className="num">{result.benchmark_max_dd_pct.toFixed(1)}%</b></span>}
         {result.total_return_pct != null && <span>기간 수익 <b className="num">{fmtSign(result.total_return_pct, 1)}%</b></span>}
       </div>
@@ -491,13 +496,13 @@ export function McHistogram({ mc }: { mc: AnalyzeResult["mc"] }) {
           return <rect key={i} x={i * bw + 0.5} y={H - 16 - h} width={Math.max(bw - 1, 1)} height={h}
             fill="var(--t-accent)" opacity={b.x1 <= -mc.var95_pct ? 0.75 : 0.28} />;
         })}
-        <line x1={xOf(-mc.var95_pct)} x2={xOf(-mc.var95_pct)} y1={4} y2={H - 16} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="4 3" />
-        <line x1={xOf(mc.expected_pct)} x2={xOf(mc.expected_pct)} y1={4} y2={H - 16} stroke="#16a34a" strokeWidth={1.5} />
+        <line x1={xOf(-mc.var95_pct)} x2={xOf(-mc.var95_pct)} y1={4} y2={H - 16} stroke="var(--chart-down)" strokeWidth={1.5} strokeDasharray="4 3" />
+        <line x1={xOf(mc.expected_pct)} x2={xOf(mc.expected_pct)} y1={4} y2={H - 16} stroke="var(--chart-up)" strokeWidth={1.5} />
       </svg>
       <div className="as-mc-meta">
-        <span>95% VaR <b className="num" style={{ color: "#dc2626" }}>-{mc.var95_pct.toFixed(1)}%</b></span>
-        <span>기대수익 <b className="num" style={{ color: "#16a34a" }}>{fmtSign(mc.expected_pct, 1)}%</b></span>
-        <span>95% CVaR <b className="num" style={{ color: "#dc2626" }}>-{mc.cvar95_pct.toFixed(1)}%</b></span>
+        <span>95% VaR <b className="num" style={{ color: "var(--color-bear)" }}>-{mc.var95_pct.toFixed(1)}%</b></span>
+        <span>기대수익 <b className="num" style={{ color: "var(--color-bull)" }}>{fmtSign(mc.expected_pct, 1)}%</b></span>
+        <span>95% CVaR <b className="num" style={{ color: "var(--color-bear)" }}>-{mc.cvar95_pct.toFixed(1)}%</b></span>
       </div>
       <div className="as-note">{mc.note}</div>
     </div>

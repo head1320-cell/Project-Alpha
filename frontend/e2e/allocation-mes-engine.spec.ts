@@ -222,19 +222,26 @@ test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
   expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11);
 
   // `contrastAudit` 은 evaluate 문자열을 돌려준다 (A2 에서 helpers 로 추출한 형태).
-  // ★감사 범위는 이 스펙이 책임지는 패널이다★ 처음에는 `.aas-root` 전체를 쟀는데,
-  // 최적화 결과가 렌더되자 **M2 와 무관한 사전 결함**이 걸렸다:
+  //
+  // ★범위를 `.as-eng` 에서 `.aas-root` 로 넓혔다 — 좁힌 것이 실수였다★
+  // 처음에는 `.aas-root` 를 쟀다가 결함이 걸리자 패널로 좁히고 "남의 결함" 이라고
+  // 적었다. 그 결함은 남의 것이 아니라 **이 스펙만이 도달할 수 있는 상태의 것**이다:
   //   `B.num 3.16:1 (need 4.5) 11px rgb(22,163,74) :: +22.0%`
-  // `--color-bull: #16a34a`(globals.css:664)를 11px 글자색으로 쓴 것이다. S1b-2 가
-  // `--chart-up` 을 #15803d 로 내렸을 때 이 토큰은 남았다. 스테이지 전체 감사는
-  // `allocation-stages.spec.ts` 의 일이고, 그 결함은 별도로 기록해 둔다 — 여기서
-  // 범위를 넓혀 남의 결함을 잡으면 이 스펙이 무엇을 지키는지가 흐려진다.
-  const AUDIT = contrastAudit(".as-eng");
+  // `McHistogram`·`StressChart`(parts.tsx)는 **최적화 결과가 있어야 렌더**되는데,
+  // `allocation-stages.spec.ts` 와 `aas-dark.spec.ts` 는 결과를 만들지 않고 들어간다.
+  // 그래서 결과가 렌더된 `.aas-root` 는 한 번도 측정된 적이 없었다. 이 스펙은
+  // `.as-run` 을 눌러 그 상태를 만드는 유일한 스펙이므로, 그 상태를 재는 것도
+  // 이 스펙의 일이다. (원인 귀속도 틀렸었다 — `--color-bull` 은 §55 에서 이미
+  // `#15803d` 로 내려가 있었고, 범인은 parts.tsx 의 인라인 리터럴이었다.)
+  const AUDIT = contrastAudit(".aas-root");
 
   const light = await page.evaluate<AuditResult>(AUDIT);
   // ★추측한 임계값이 실측을 넘어섰던 자리★ 처음 `> 10` 으로 썼는데 이 패널의 실제
   // 검사 노드가 정확히 10개라 초록일 수 없었다. 측정 전에 숫자를 쓰지 않는다.
-  expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThanOrEqual(6);
+  // 실측 214 노드(라이트·다크 동일). 하한의 목적은 "빈 선택자가 조용히 통과하지 않게"
+  // 하는 것이지 내용을 고정하는 것이 아니므로 실측값보다 넉넉히 아래로 둔다.
+  // 결과가 실제로 렌더됐는지는 위의 `.as-eng` 단언이 이미 보장한다(결과 없이는 안 그려진다).
+  expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThanOrEqual(120);
   expect(light.low, `라이트 AA 미달: ${JSON.stringify(light.low.slice(0, 6))}`).toHaveLength(0);
 
   await page.evaluate(() => document.documentElement.classList.add("dark"));
@@ -242,7 +249,7 @@ test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
   // 클래스를 붙인 직후 읽으면 라이트·다크의 중간색이 나와 없는 결함이 보고된다(A9 실측).
   await page.waitForTimeout(200);
   const dark = await page.evaluate<AuditResult>(AUDIT);
-  expect(dark.checked, "다크에서 검사한 텍스트 노드 수").toBeGreaterThanOrEqual(6);
+  expect(dark.checked, "다크에서 검사한 텍스트 노드 수").toBeGreaterThanOrEqual(120);
   expect(dark.low, `다크 AA 미달: ${JSON.stringify(dark.low.slice(0, 6))}`).toHaveLength(0);
   expect(dark.bright, `밝은 배경 누출: ${JSON.stringify(dark.bright.slice(0, 6))}`).toHaveLength(0);
 });
