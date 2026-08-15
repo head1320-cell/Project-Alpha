@@ -44,10 +44,13 @@ def create_run(req: RecordRunRequest):
         rid = record_run(req.kind, req.inputs, req.outputs, snapshot=req.snapshot,
                          name=req.name, parent_run_id=req.parent_run_id,
                          case_id=req.case_id, note=req.note)
+        # M2-D — 케이스의 활성 런 포인터를 서버가 전진시킨다. 기록에 성공했을 때만.
+        from src.data.research_cases import advance_pointer
+        bound = advance_pointer(req.case_id, "run", rid)
         if rid is None:
-            return {"recorded": False, "run_id": None,
+            return {"recorded": False, "run_id": None, "case_bound": bound,
                     "message": "DB 미가용 — 런이 저장되지 않았습니다."}
-        return {"recorded": True, "run_id": rid}
+        return {"recorded": True, "run_id": rid, "case_bound": bound}
     except Exception:
         logger.exception("research run 생성 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

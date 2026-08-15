@@ -36,6 +36,15 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "regime_snapshots"
 _inited = False
+# ★어느 DB 에 대해 초기화했는지 함께 기억한다★
+# 실측으로 드러난 결함: `_inited` 만 보면, 한 엔진에서 초기화된 뒤 **다른 DATABASE_URL**
+# 로 바뀌었을 때 `_ensure_table` 이 그대로 빠져나가 INSERT 가
+# "no such table: regime_snapshots" 로 죽는다(테스트 전체 실행에서 파일 순서가 바뀌자
+# 6건이 무너졌고, 원인은 새 테스트가 아니라 이 메모였다).
+# `_inited` 는 bool 로 남긴다 — 저장소 11개 모듈의 공통 관례이고, 다수의 테스트가
+# `monkeypatch.setattr(mod, "_inited", False)` 로 재초기화를 강제한다. 타입을 바꾸면
+# 그 탈출구가 통째로 깨진다(실제로 깨뜨려 보고 되돌렸다).
+_inited_for: str | None = None
 # regime / recommended_mode 는 후행 추가 열이다(Phase 4a).
 # ★ALTER 성공 여부를 반드시 확인한다★ — 권한 등으로 ALTER 가 실패했는데 이후 SELECT 가
 # 그 열을 참조하면 스냅샷 조회가 통째로 깨진다(수정 전보다 나쁨).
@@ -63,8 +72,9 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited, _has_regime_cols, _has_mes_cols
-    if _inited:
+    global _inited, _inited_for, _has_regime_cols, _has_mes_cols
+    url = str(getattr(engine, "url", ""))
+    if _inited and _inited_for == url:
         return
     from sqlalchemy import text
     with engine.begin() as c:
@@ -116,6 +126,7 @@ def _ensure_table(engine) -> None:
     )
 
     _inited = True
+    _inited_for = url
 
 
 def code_version() -> str:

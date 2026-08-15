@@ -170,3 +170,49 @@ def update_case(case_id: str, **fields: Any) -> bool:
             f"UPDATE {_TABLE} SET {sets}, updated_at = :ua WHERE case_id = :i"
         ), {**use, "ua": time.time(), "i": case_id})
     return bool(res.rowcount)
+
+
+# ── 포인터 전진 (M2-D) ────────────────────────────────────────────────────────
+# ★왜 서버가 하는가★
+# `caseApi.patch` 는 M1-U 에 정의됐지만 **호출자가 0건**이었다(실측). 그래서
+# `active_mes_id`/`active_tpv_id`/`active_run_id` 는 어떤 경로로도 채워지지 않았고,
+# `CaseBar` 가 읽는 값은 언제나 null, `/chain` 의 `mes` 는 언제나 "고정된 증거 없음"
+# 이었다. 사슬을 그리는 화면은 있는데 사슬을 잇는 손이 없는 상태였다.
+#
+# 클라이언트가 "만들고 → PATCH" 로 두 번 치는 방식은 **반쪽 실패**가 가능하다 —
+# 저장되지 않은 TPV 를 가리키는 케이스가 남는다. 그래서 아티팩트를 만든 **그 요청
+# 안에서** 전진시키고, 결과를 `case_bound` 로 되돌려 준다. 조용히 삼키지 않는다.
+
+_POINTER_FIELD = {"mes": "active_mes_id", "tpv": "active_tpv_id", "run": "active_run_id"}
+
+
+def advance_pointer(case_id: str | None, kind: str,
+                    artifact_id: str | None) -> dict[str, Any]:
+    """케이스의 활성 포인터를 방금 만든 아티팩트로 옮긴다.
+
+    Returns:
+        `{"ok": bool, "reason": str | None}` — 라우트가 응답에 `case_bound` 로 싣는다.
+
+    ★저장에 성공한 아티팩트만 가리킨다★ `artifact_id` 가 None 이면(=저장 실패) 포인터는
+    그대로 둔다. 없는 것을 가리키는 케이스는 사슬이 아니라 거짓 사슬이다.
+
+    ★`research_only` 목표도 전진시킨다★ 그것이 이 케이스의 **최신 목표**라는 사실은
+    참이고, 실행 가능 여부는 TPV 자신의 `status` 가 말한다(화면의 배지가 그것을 읽는다).
+    감추는 쪽이 더 거짓이다.
+    """
+    if not case_id:
+        return {"ok": False, "reason": None}          # 케이스 없이 돌았다 — 결함이 아니다
+    field = _POINTER_FIELD.get(kind)
+    if field is None:
+        return {"ok": False, "reason": f"알 수 없는 포인터 종류입니다: {kind}"}
+    if not artifact_id:
+        return {"ok": False,
+                "reason": "아티팩트가 저장되지 않아 케이스 포인터를 옮기지 않았습니다."}
+    try:
+        moved = update_case(case_id, **{field: artifact_id})
+    except Exception as e:  # noqa: BLE001 — 저장소 장애를 성공으로 답하지 않는다
+        logger.warning(f"case 포인터 전진 실패({case_id}/{kind}): {e}")
+        return {"ok": False, "reason": "연구 케이스 저장소를 쓸 수 없습니다."}
+    if not moved:
+        return {"ok": False, "reason": f"연구 케이스를 찾을 수 없습니다: {case_id}"}
+    return {"ok": True, "reason": None}

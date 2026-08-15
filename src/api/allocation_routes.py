@@ -1357,13 +1357,23 @@ def target_version_create(req: TargetVersionRequest):
     except ValueError as e:
         raise HTTPException(422, str(e))
     if req.dry_run:
-        return {"saved": False, "tpv_id": None, "dry_run": True, **tv}
+        # ★표시용 컴파일은 사슬을 바꾸지 않는다★ 그래도 `case_bound` 키는 낸다 —
+        # 소비자가 분기마다 키 유무를 따지게 하지 않는다.
+        return {"saved": False, "tpv_id": None, "dry_run": True,
+                "case_bound": {"ok": False,
+                               "reason": "표시용 컴파일이라 케이스 포인터를 옮기지 않았습니다."},
+                **tv}
     tpv_id = save_target(tv, note=req.note)
+    # ★케이스 포인터를 여기서 전진시킨다 (M2-D)★ 클라이언트가 만들고 나서 PATCH 를
+    # 한 번 더 치는 방식은 반쪽 실패가 가능해, 저장되지 않은 목표를 가리키는 케이스가
+    # 남는다. 저장에 성공했을 때만 옮기고, 결과를 `case_bound` 로 되돌려 준다.
+    from src.data.research_cases import advance_pointer
+    bound = advance_pointer(req.case_id, "tpv", tpv_id)
     if tpv_id is None:
         # ★저장 실패를 성공처럼 답하지 않는다★ 화면이 "저장됐다"고 말하면 안 된다.
-        return {"saved": False, "tpv_id": None,
+        return {"saved": False, "tpv_id": None, "case_bound": bound,
                 "message": "저장소 미가용 — 목표 버전이 기록되지 않았습니다.", **tv}
-    return {"saved": True, "tpv_id": tpv_id, **tv}
+    return {"saved": True, "tpv_id": tpv_id, "case_bound": bound, **tv}
 
 
 @router.get("/target-versions/{tpv_id}")

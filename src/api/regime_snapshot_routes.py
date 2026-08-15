@@ -98,7 +98,8 @@ def list_all(limit: int = Query(50, ge=1, le=200)):
 
 
 @router.post("/from-current")
-def create_from_current(market: str = Query("kr", pattern="^(kr|us)$")):
+def create_from_current(market: str = Query("kr", pattern="^(kr|us)$"),
+                        case_id: str | None = Query(None, max_length=40)):
     """지금 국면 판정을 그대로 스냅샷으로 굳힌다 — Macro 탭의 "Allocation Studio에서 열기".
 
     주의(정직): 대시보드 수집기는 아직 빈티지를 모르므로(ALFRED 경로는 Phase 7b) 이렇게 만든
@@ -117,8 +118,13 @@ def create_from_current(market: str = Query("kr", pattern="^(kr|us)$")):
         logger.exception("현재 국면 스냅샷 생성 실패")
         raise HTTPException(500, "국면 수집/판정에 실패했습니다.")
 
+    # M2-D — 케이스가 있으면 이 스냅샷을 그 케이스의 **고정된 매크로 증거**로 삼는다.
+    # 생성에 성공했을 때만 옮긴다(없는 것을 가리키는 케이스는 사슬이 아니라 거짓 사슬이다).
+    from src.data.research_cases import advance_pointer
+    bound = advance_pointer(case_id, "mes", sid)
+
     if sid is None:
-        return {"recorded": False, "snapshot_id": None,
+        return {"recorded": False, "snapshot_id": None, "case_bound": bound,
                 "message": "DB 미가용 — 스냅샷이 저장되지 않았습니다."}
 
     from src.data.regime_snapshots import get_snapshot
@@ -130,6 +136,7 @@ def create_from_current(market: str = Query("kr", pattern="^(kr|us)$")):
     return {
         "recorded": True,
         "snapshot_id": sid,
+        "case_bound": bound,
         "as_of": saved.get("as_of"),
         "research_usage": saved.get("research_usage"),
         "data_status": saved.get("data_status"),
