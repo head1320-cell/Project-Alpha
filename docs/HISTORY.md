@@ -4555,6 +4555,29 @@ TSX 24곳(`shared/ui/feedback.tsx:133,156` · `shared/lib/format.ts:12,26` ·
 ADR 001: `/allocation/optimize` **245 kB** · `/allocation/stress` **258 kB** — 둘 다
 변동 없음(색값만 바뀌었다).
 
+### 게이트
+
+| 실행 | 결과 |
+|---|---|
+| `allocation-mes-engine.spec.ts` | **12 passed** |
+| 이웃 5종(`aas-dark` · `allocation-stages` · `stages2` · `construct2` · `route-health`) | **63 passed / 0 failed** |
+| **전체 게이트** | **405 passed / 0 failed** (2.3h) |
+| pytest | 손대지 않음(프론트 전용 단계) |
+
+### 절차 실수 하나 — 게이트를 잘못된 디렉터리에서 돌렸다
+
+첫 전체 게이트가 2시간을 쓰고 `No tests found` 로 죽었다. 원인은 제품이 아니라
+**백그라운드 명령에 `cd` 를 넣지 않은 것**이다. 이 셸은 호출 사이에 cwd 가 리포
+루트로 리셋되는데, `npx playwright test` 를 루트에서 돌리면 `@playwright/test` 해소가
+갈려 모든 스펙이 `Playwright Test did not expect test() to be called here` 로 수집
+단계에서 터진다. **그 오류는 "두 버전이 설치됐다"처럼 보이지만 실제로는 디렉터리
+문제**라, 존재하지 않는 의존성 사고를 쫓기 쉽다.
+
+M2 가 기록한 "wrong-directory measurement"(`.next` 가 없는 곳에서 재고 없다고 단정)와
+같은 부류다. 두 번째라서 규칙으로 적는다 — **백그라운드로 보내는 명령은 반드시
+`cd <절대경로> && …` 로 시작한다.** 그리고 이번에도 종료코드는 쓸모가 없었다
+(수집 실패는 exit 1, 성공 실행은 exit 0) — 판정은 로그의 `N passed / N failed` 줄이다.
+
 ### ★이번 단계에서 값을 치른 것은 전부 검증 절차였다★
 
 제품 코드가 아니라 **재는 방식**에서 네 번 틀렸다. 다음이 같은 함정을 밟지 않도록 적는다.
