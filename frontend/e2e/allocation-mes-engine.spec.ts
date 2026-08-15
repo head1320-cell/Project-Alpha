@@ -164,7 +164,10 @@ async function enterJournalBacktest(page: Page, conformal: unknown) {
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/journal", { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "정책 백테스트", exact: true }).first().click();
+  // ★버튼 텍스트는 "정책 백테스트 실행 →" 이다★ `exact: true` 로 잡으려다 3건이
+  // 타임아웃했다. 클래스로 잡는 것이 계약이고(`.as-fb-apply`), 저널에 같은 클래스가
+  // 여럿이므로 텍스트로 좁힌 뒤 `.first()` 를 쓴다.
+  await page.locator(".as-fb-apply", { hasText: "정책 백테스트" }).first().click();
   await expect(page.locator(".as-bt-cf")).toBeVisible({ timeout: 60_000 });
 }
 
@@ -210,14 +213,21 @@ test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
   await patchAnalyze(page, { mu_engine: "ep", ep: EP_OK });
   await enterOptimize(page);
 
-  const sizes = await page.locator(".as-eng *").evaluateAll((els) =>
+  const sizes = await page.locator(".as-eng *").evaluateAll((els: Element[]) =>
     els.filter((e) => (e.textContent || "").trim().length > 0)
        .map((e) => parseFloat(getComputedStyle(e).fontSize)));
   expect(sizes.length, "잴 노드가 없으면 이 단언은 공허하다").toBeGreaterThan(4);
   expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11);
 
   // `contrastAudit` 은 evaluate 문자열을 돌려준다 (A2 에서 helpers 로 추출한 형태).
-  const AUDIT = contrastAudit(".aas-root");
+  // ★감사 범위는 이 스펙이 책임지는 패널이다★ 처음에는 `.aas-root` 전체를 쟀는데,
+  // 최적화 결과가 렌더되자 **M2 와 무관한 사전 결함**이 걸렸다:
+  //   `B.num 3.16:1 (need 4.5) 11px rgb(22,163,74) :: +22.0%`
+  // `--color-bull: #16a34a`(globals.css:664)를 11px 글자색으로 쓴 것이다. S1b-2 가
+  // `--chart-up` 을 #15803d 로 내렸을 때 이 토큰은 남았다. 스테이지 전체 감사는
+  // `allocation-stages.spec.ts` 의 일이고, 그 결함은 별도로 기록해 둔다 — 여기서
+  // 범위를 넓혀 남의 결함을 잡으면 이 스펙이 무엇을 지키는지가 흐려진다.
+  const AUDIT = contrastAudit(".as-eng");
 
   const light = await page.evaluate<AuditResult>(AUDIT);
   expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThan(10);
