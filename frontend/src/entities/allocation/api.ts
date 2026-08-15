@@ -640,6 +640,25 @@ export interface AllocationBacktestResult {
     active_return_pct: number | null; information_ratio: number | null;
   };
   config?: { model: string; rebalance: string; window: string; cost_bps: number; n_obs: number };
+  /**
+   * 분포 무가정 예측 구간 (M2-C). 보정 표본이 모자라면 `available:false` + 사유 —
+   * 숫자를 만들지 않는다. `measured_coverage` 는 **홀드아웃에서 센 값**이지 이론 `1-α` 가
+   * 아니다(그 구분이 이 블록의 요점이다).
+   */
+  conformal?: {
+    available: boolean;
+    alpha: number;
+    n_pairs: number;
+    n_required?: number;
+    reason?: string;
+    unit?: string;
+    next_period?: { point: number; lower: number; upper: number; half_width: number };
+    measured_coverage?: {
+      available: boolean; reason?: string;
+      coverage?: number; n?: number; hits?: number; mean_width?: number; n_calibration?: number;
+    };
+    note?: string;
+  } | null;
   labels?: Record<string, string>;
   coverage?: { source?: string; start?: string; end?: string; n_obs?: number };
   benchmark_label?: string | null;

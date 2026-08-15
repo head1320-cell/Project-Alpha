@@ -112,6 +112,45 @@ export function PolicyBacktest() {
             <span className="num">{res.n_rebalances}회 리밸런싱 · 평균 회전율 {fmt(res.turnover_avg_pct, "%", 1)}</span>
           </div>
 
+          {/* ★분포 무가정 예측 구간 (M2-C)★ 적중률은 이론 하한이 아니라 홀드아웃에서
+              센 값이다. 구간이 없으면 숫자 대신 사유를 적는다 — 이 화면의 요점이다. */}
+          {res.conformal && (
+            <div className="as-bt-cf">
+              <div className="as-bt-cf-t">다음 구간 예측 (분포 무가정)</div>
+              {res.conformal.available && res.conformal.next_period ? (
+                <>
+                  <div className="as-bt-cf-row">
+                    <span className="as-bt-cf-k">일평균 수익률 {Math.round((1 - res.conformal.alpha) * 100)}% 구간</span>
+                    <b className="num">
+                      {(res.conformal.next_period.lower * 100).toFixed(3)}% ~{" "}
+                      {(res.conformal.next_period.upper * 100).toFixed(3)}%
+                    </b>
+                    <span className="as-bt-cf-k">점추정</span>
+                    <b className="num">{(res.conformal.next_period.point * 100).toFixed(3)}%</b>
+                    <span className="as-bt-cf-k">보정 쌍</span>
+                    <b className="num">{res.conformal.n_pairs}</b>
+                  </div>
+                  <div className="as-bt-cf-row">
+                    <span className="as-bt-cf-k">실측 적중률</span>
+                    {res.conformal.measured_coverage?.available ? (
+                      <b className="num">
+                        {(res.conformal.measured_coverage.coverage! * 100).toFixed(1)}%
+                        {" "}({res.conformal.measured_coverage.hits}/{res.conformal.measured_coverage.n})
+                      </b>
+                    ) : (
+                      <span className="as-bt-cf-na">
+                        {res.conformal.measured_coverage?.reason || "적중률을 잴 표본이 없습니다."}
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="as-bt-cf-na">{res.conformal.reason || "구간을 계산할 수 없습니다."}</div>
+              )}
+              {res.conformal.note && <div className="as-bt-cf-note">{res.conformal.note}</div>}
+            </div>
+          )}
+
           {/* 요약 지표 */}
           <div className="as-bt-kpis">
             {([

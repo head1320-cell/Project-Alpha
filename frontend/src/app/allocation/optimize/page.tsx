@@ -4,6 +4,7 @@
 // (충족/근사+위반목록/infeasible+사유)으로 정직 표시.
 import React, { useMemo, useState } from "react";
 import { COV_ONLY, MODELS, useAllocation } from "@/widgets/allocation/AllocationProvider";
+import type { AnalyzeResult } from "@/entities/allocation/api";
 import {
   AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
 } from "@/widgets/allocation/parts";
@@ -85,6 +86,90 @@ function ConstraintsPanel() {
   );
 }
 
+/**
+ * 어느 μ 엔진이 이 배분을 냈는지, 그리고 EP 라면 그 계산이 무엇을 말하는지 (M2-V).
+ *
+ * ★라벨은 서버가 찍은 것을 그대로 쓴다★ 화면이 `model` 로 추측하면 서버가 실제로 탄
+ * 경로와 갈라진다 — 뷰가 없으면 BL 도 시장균형이고, 그때 μ 엔진은 BL 이 아니다.
+ * `mu_engine` 이 그 단일 출처다.
+ */
+function EngineEvidence({ result }: { result: AnalyzeResult }) {
+  const eng = result.mu_engine ?? null;
+  const ep = result.ep ?? null;
+  const mes = result.mes ?? null;
+  if (!eng && !ep && !mes) return null;
+  const label = eng === "ep" ? "Entropy Pooling"
+    : eng === "bl" ? "Black-Litterman"
+    : eng === "mvo" ? "트레일링 평균 (MVO)" : "미상";
+  // ENS 붕괴 = 뷰가 사전분포보다 강하다는 신호. 숫자가 멀쩡해도 표본 몇 개에 기댄 상태다.
+  const ensDrop = !!ep && ep.ens != null && ep.ens_prior != null && ep.ens < 0.1 * ep.ens_prior;
+  return (
+    <section className="as-card as-eng">
+      <div className="as-card-title">기대수익 엔진</div>
+      <div className="as-eng-row">
+        <span className="as-eng-k">이 배분의 μ</span>
+        <b className="as-eng-v">{label}</b>
+        {ep && (
+          <span className={`as-eng-badge${ep.feasible ? "" : " bad"}`}>
+            {ep.feasible ? "뷰 실현 가능" : "뷰 실현 불가"}
+          </span>
+        )}
+      </div>
+      {mes && (
+        <div className="as-eng-row">
+          <span className="as-eng-k">고정된 매크로 증거</span>
+          <b className="num">{mes.mes_id}</b>
+          {mes.capability_level && <span className="as-eng-badge">{mes.capability_level}</span>}
+        </div>
+      )}
+      {mes?.capability_diverged && (
+        <div className="as-eng-warn" role="status">{mes.capability_diverged}</div>
+      )}
+      {ep && (
+        <>
+          <div className="as-eng-row">
+            <span className="as-eng-k">반영된 뷰</span>
+            <b className="num">{ep.n_views}</b>
+            <span className="as-eng-k">유효 시나리오</span>
+            <b className="num">
+              {ep.ens_prior != null ? Math.round(ep.ens_prior) : "—"}
+              {" → "}
+              {ep.ens != null ? Math.round(ep.ens) : "—"}
+            </b>
+          </div>
+          {/* ★신뢰도가 반영됐다고 오해하지 않도록 서버가 준 사실을 그대로 적는다★
+              BL 은 confidence 로 Ω 를 잡지만 EP 의 부등식 뷰는 경성 제약이라 대응하는
+              손잡이가 없다. 그럴듯한 매핑을 지어내는 대신 안 쓴다고 말한다. */}
+          {ep.confidence_used === false && (
+            <div className="as-eng-note">
+              엔트로피 풀링은 뷰의 <b>신뢰도를 사용하지 않습니다</b> — 부등식 뷰는 경성
+              제약이라 대응하는 손잡이가 없습니다. 뷰가 과한지는 위의 유효 시나리오 수로
+              판단하세요.
+            </div>
+          )}
+          {ensDrop && (
+            <div className="as-eng-warn" role="status">
+              유효 시나리오 수가 크게 무너졌습니다 — 뷰가 사전분포보다 강합니다.
+              숫자는 멀쩡해도 통계적으로는 표본 몇 개에 기댄 상태입니다.
+            </div>
+          )}
+          {ep.violations.length > 0 && (
+            <ul className="as-eng-viol">
+              {ep.violations.map((v) => (
+                <li key={v.view_index}>
+                  <b>{v.assets}</b> 요청 <span className="num">{v.requested_pct.toFixed(2)}%</span>
+                  {" → "}실제 <span className="num">{v.achieved_pct.toFixed(2)}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {ep.note && <div className="as-eng-note">{ep.note}</div>}
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function OptimizerWorkspace() {
   const {
     result, model, setModel, delta, setDelta, tau, setTau,
@@ -148,6 +233,7 @@ export default function OptimizerWorkspace() {
         <NeutralizePanel />
       </aside>
       <main className="as-center">
+        {result && <EngineEvidence result={result} />}
         <section className={`as-card${pending ? " as-loading" : ""}`} aria-busy={pending}>
           <div className="as-card-title">EFFICIENT FRONTIER
             {result?.views_applied && <span className="as-badge">BL 뷰 적용</span>}

@@ -9,7 +9,7 @@
 //     sessionStorage(goal/pos/wip) 하이드레이트·persist → 중간 새로고침 비파괴.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { caseApi } from "@/entities/case/api";
 import { getActiveCaseId } from "@/shared/lib/caseStorage";
 import {
@@ -296,6 +296,7 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
   // 포인터(`rc_*`)는 브라우저 로컬이고 케이스 자체는 서버에 있다(M1-U 가 세운 경계).
   // 케이스가 없거나 조회에 실패하면 `null` — 그것이 "고정된 증거 없이 돈다" 는 사실이고,
   // 임의의 스냅샷으로 채우지 않는다.
+  const qc = useQueryClient();
   const activeCaseId = useMemo(() => getActiveCaseId(), []);
   const caseQ = useQuery({
     queryKey: ["case", activeCaseId],
@@ -468,6 +469,13 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
         mes_id: caseMesId ?? undefined,
       });
       if (data.error) return null;
+      // ★서버가 케이스 포인터를 옮겼으므로 사슬을 다시 읽는다 (M2-D)★
+      // 전체 리로드가 아니라 무효화다 — CaseBar 가 `["research-cases", ...]` 를
+      // 구독하고 있고, 그 키만 건드리면 나머지 화면 상태는 그대로 남는다.
+      if (activeCaseId) {
+        qc.invalidateQueries({ queryKey: ["research-cases"] });
+        qc.invalidateQueries({ queryKey: ["case", activeCaseId] });
+      }
       setResult(data);
       markRunNow();
       const rid = data.run_id ?? null;
