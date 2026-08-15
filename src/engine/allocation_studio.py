@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 DELTA_DEFAULT = 2.5   # 위험회피(균형 기대수익 스케일) — risk_allocations와 동일
 TAU_DEFAULT = 0.05    # prior 불확실성 — risk_allocations와 동일
 
-MODELS = ("mvo", "bl", "risk_parity", "hrp", "min_var", "max_div", "min_cvar")
+MODELS = ("mvo", "bl", "ep", "risk_parity", "hrp", "min_var", "max_div", "min_cvar")
 
 
 # ── 시가총액 prior ────────────────────────────────────────────────────────────
@@ -235,13 +235,28 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                 logger.warning(f"BL posterior 실패, prior 폴백: {e}")
                 mu_bl = None
 
+    ep_report: dict | None = None
+    mu_ep = None
+    if model == "ep":
+        # ★세 번째 μ 엔진 (M2-A)★ `mvo` 는 트레일링 평균, `bl` 은 BL 사후, `ep` 는
+        # KL 최소화 사후 기대수익. **새 최적화기가 아니라 μ 를 바꾸는 것**이므로 아래
+        # `weights_for_model` 의 max-sharpe 경로를 그대로 탄다.
+        # 실현 불가·산출 불가는 `EPUnavailable` 로 올라간다 — 조용히 다른 엔진으로
+        # 떨어지면 화면은 "뷰가 반영된 EP" 를 보여 주는데 실제로는 아니다.
+        from src.engine.entropy_views import ep_mu_or_raise
+        mu_ep, ep_report = ep_mu_or_raise(views, names, R)
+
     if model == "bl":
         # BL 모델: 뷰 있으면 posterior max-sharpe(=w_view), 뷰 없으면 시장균형
         # (레퍼런스 s_black_litterman과 동일 — 뷰 없는 BL은 캡가중 prior 그대로)
         w_final = w_view if mu_bl is not None else w_mkt
+    elif model == "ep":
+        w_final = weights_for_model("mvo", R, mu_override=mu_ep, S_annual=S)
     else:
         w_final = weights_for_model(model, R, mu_override=None, S_annual=S)
 
+    mu_used = (mu_ep if mu_ep is not None
+               else (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0))
     return {
         "names": names,
         "weights": w_final,
@@ -250,8 +265,13 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         "skipped_views": skipped_views,
         "cap_missing": cap_missing,
         "mu_annual": (R.mean(axis=0) * 252.0),
-        "mu_used": (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0),
+        "mu_used": mu_used,
         "sigma_annual": S,
+        # ★어느 엔진이 이 숫자를 냈는지 항상 밝힌다★ 화면이 라벨을 지어내지 않도록
+        # 서버가 답한다. `ep` 진단(feasible·ENS·위반·신뢰도 미사용)은 EP 일 때만.
+        "mu_engine": ("ep" if mu_ep is not None
+                      else ("bl" if mu_bl is not None else "mvo")),
+        "ep": ep_report,
     }
 
 
