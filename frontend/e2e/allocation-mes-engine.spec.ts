@@ -216,7 +216,9 @@ test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
   const sizes = await page.locator(".as-eng *").evaluateAll((els: Element[]) =>
     els.filter((e) => (e.textContent || "").trim().length > 0)
        .map((e) => parseFloat(getComputedStyle(e).fontSize)));
-  expect(sizes.length, "잴 노드가 없으면 이 단언은 공허하다").toBeGreaterThan(4);
+  // 실측 이 패널의 텍스트 노드는 10개다. 임계값의 목적은 "빈 선택자가 조용히 통과하지
+  // 않게" 하는 것이지 내용을 고정하는 것이 아니므로, 실측값보다 넉넉히 아래로 둔다.
+  expect(sizes.length, "잴 노드가 없으면 이 단언은 공허하다").toBeGreaterThanOrEqual(4);
   expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11);
 
   // `contrastAudit` 은 evaluate 문자열을 돌려준다 (A2 에서 helpers 로 추출한 형태).
@@ -230,7 +232,9 @@ test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
   const AUDIT = contrastAudit(".as-eng");
 
   const light = await page.evaluate<AuditResult>(AUDIT);
-  expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThan(10);
+  // ★추측한 임계값이 실측을 넘어섰던 자리★ 처음 `> 10` 으로 썼는데 이 패널의 실제
+  // 검사 노드가 정확히 10개라 초록일 수 없었다. 측정 전에 숫자를 쓰지 않는다.
+  expect(light.checked, "라이트에서 검사한 텍스트 노드 수").toBeGreaterThanOrEqual(6);
   expect(light.low, `라이트 AA 미달: ${JSON.stringify(light.low.slice(0, 6))}`).toHaveLength(0);
 
   await page.evaluate(() => document.documentElement.classList.add("dark"));
@@ -238,7 +242,7 @@ test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
   // 클래스를 붙인 직후 읽으면 라이트·다크의 중간색이 나와 없는 결함이 보고된다(A9 실측).
   await page.waitForTimeout(200);
   const dark = await page.evaluate<AuditResult>(AUDIT);
-  expect(dark.checked, "다크에서 검사한 텍스트 노드 수").toBeGreaterThan(10);
+  expect(dark.checked, "다크에서 검사한 텍스트 노드 수").toBeGreaterThanOrEqual(6);
   expect(dark.low, `다크 AA 미달: ${JSON.stringify(dark.low.slice(0, 6))}`).toHaveLength(0);
   expect(dark.bright, `밝은 배경 누출: ${JSON.stringify(dark.bright.slice(0, 6))}`).toHaveLength(0);
 });
