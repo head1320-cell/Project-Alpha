@@ -75,8 +75,11 @@ async function enterOptimize(page: Page) {
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/optimize", { waitUntil: "networkidle" });
-  // 엔진 버튼을 눌러 runAnalyze 를 태운다 — 스텁이 응답한다.
-  await page.locator(".as-engine-seg button").first().click();
+  // ★엔진 버튼은 닫힌 <details class="aas-adv"> 안에 있다★ (실측 — 첫 작성에서
+  // `.as-engine-seg button` 으로 잡으려다 두 테스트가 1.5분씩 타임아웃했다.)
+  // 먼저 고급 설정을 열고, 모델 버튼을 눌러 runAnalyze 를 태운다 — 스텁이 응답한다.
+  await page.locator("details.aas-adv summary").first().click();
+  await page.locator(".as-models button").first().click();
   await expect(page.locator(".as-eng")).toBeVisible({ timeout: 20_000 });
 }
 
