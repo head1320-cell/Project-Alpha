@@ -69,6 +69,92 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
     return (w / s) if s > 0 else np.ones(len(names)) / len(names)
 
 
+def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
+                     start: int, alpha: float = 0.1) -> dict[str, Any]:
+    """리밸런스 예측 vs 실현 → **다음 구간의 분포 무가정 예측 구간** (M2-C).
+
+    ★왜 최적화기가 아니라 백테스트에 붙는가★
+    `split_conformal` 은 (실측, 예측) **쌍의 순차 표본**을 요구한다. 최적화 한 번은
+    표본 1개라 구간을 낼 수 없다. 배분 경로에서 그런 표본을 만드는 곳은 walk-forward
+    리밸런스뿐이다.
+
+    ★단위를 **일평균**으로 맞추는 이유★
+    구간 총수익으로 비교하면 예측을 만들 때 "이 구간이 며칠짜리인지" 를 알아야 하는데,
+    그건 리밸런스 시점에 알 수 없는 값이다(look-ahead). 그래서 예측은 학습창의 일평균
+    기대수익, 실현은 자산곡선 비율의 기하평균 일수익으로 둔다. 둘 다 하루 단위라
+    비교가 성립하고 미래를 쓰지 않는다.
+
+    ★적중률은 주장하지 않고 잰다★
+    이론 하한 `1-α` 를 그대로 적으면 유한표본에서 거짓이 될 수 있다. 앞 70% 로 보정하고
+    뒤 30% 로 **실제 적중률을 세어** 함께 낸다. 잴 표본이 모자라면 숫자 대신 사유다.
+    """
+    from src.engine.conformal import (
+        conformal_quantile,
+        measure_coverage,
+        required_calibration_size,
+        split_conformal,
+    )
+
+    need = required_calibration_size(alpha)
+    # 마지막 리밸런스는 아직 실현 구간이 없다 — 그것이 **구간을 씌울 대상**이다.
+    pairs_n = max(0, len(at) - 1)
+    if pairs_n < need:
+        return {"available": False, "alpha": alpha, "n_pairs": pairs_n,
+                "n_required": need,
+                "reason": (f"완료된 리밸런스 구간이 {pairs_n}개로 보정 최소치 {need}개에 "
+                           f"미치지 못합니다 (α={alpha}) — 구간을 만들 수 없습니다.")}
+
+    actual: list[float] = []
+    for i in range(pairs_n):
+        j0, j1 = at[i] - start, at[i + 1] - start
+        span = j1 - j0
+        if span <= 0 or j0 < 0 or j1 >= eq.size or eq[j0] <= 0:
+            return {"available": False, "alpha": alpha, "n_pairs": pairs_n,
+                    "reason": "자산곡선에서 리밸런스 구간을 복원할 수 없습니다."}
+        # 구간 말일에 부과된 회전율 비용이 이 값에 포함된다 — 비용을 뺀 실현이 사용자가
+        # 실제로 얻는 것이므로 그대로 둔다. 다만 예측은 비용을 모르므로 구간은 그만큼
+        # 보수적(넓은) 쪽으로 잡힌다. 숨기지 않고 note 에 적는다.
+        actual.append(float((eq[j1] / eq[j0]) ** (1.0 / span) - 1.0))
+
+    cal_a = np.asarray(actual, dtype=float)
+    cal_p = np.asarray(preds[:pairs_n], dtype=float)
+
+    # 다음 구간의 구간 — 완료된 쌍 전부로 보정한다.
+    nxt = split_conformal(cal_a, cal_p, np.array([preds[-1]]), alpha=alpha)
+    if not nxt.get("available"):
+        return {"available": False, "alpha": alpha, "n_pairs": pairs_n,
+                "reason": nxt.get("reason") or "구간을 계산할 수 없습니다."}
+
+    # ★홀드아웃으로 적중률을 실측한다★ 보정에 쓴 표본으로 적중률을 세면 그건 측정이
+    # 아니라 자기 확인이다. 앞 70% 보정 · 뒤 30% 검사로 가른다.
+    cov: dict[str, Any] = {"available": False,
+                           "reason": "적중률을 잴 홀드아웃 표본이 없습니다."}
+    k = int(pairs_n * 0.7)
+    if k >= need and pairs_n - k >= 1:
+        q = conformal_quantile(np.abs(cal_a[:k] - cal_p[:k]), alpha)
+        if q.get("available"):
+            lo = cal_p[k:] - q["q"]
+            hi = cal_p[k:] + q["q"]
+            cov = measure_coverage(cal_a[k:], lo, hi)
+            if cov.get("available"):
+                cov["n_calibration"] = k
+
+    return {
+        "available": True,
+        "alpha": alpha,
+        "unit": "daily_mean_return",
+        "n_pairs": pairs_n,
+        "n_required": need,
+        "next_period": {"point": nxt["point"][0], "lower": nxt["lower"][0],
+                        "upper": nxt["upper"][0], "half_width": nxt["q"]},
+        # ★이론 하한이 아니라 실측 적중률★ 없으면 없다고 적는다.
+        "measured_coverage": cov,
+        "note": ("다음 리밸런스 구간의 **일평균** 포트폴리오 수익률 구간입니다. "
+                 "교환가능성만 가정하며 분포 가정은 없습니다. 실현값은 구간 말 회전율 "
+                 "비용을 반영한 값이라, 비용을 모르는 예측 대비 구간이 다소 넓게 잡힙니다."),
+    }
+
+
 def walk_forward(names: list[str], R: np.ndarray, dates: list,
                  model: str = "mvo", views: list[dict] | None = None,
                  constraints=None, rebalance: str = "M",
@@ -98,6 +184,11 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     port_daily: list[float] = []
     sim_dates: list = []
     rebalances: list[dict] = []
+    # Conformal 보정셋의 원재료 (M2-C) — 리밸런스 시점 t 와 **그 시점에 알 수 있는**
+    # 기대 일수익. 실현값은 루프가 끝난 뒤 자산곡선에서 구한다(구간 길이를 미리 쓰지
+    # 않기 위해 총수익이 아니라 **일평균**으로 맞춘다 — 아래 `_conformal_block` 참조).
+    rb_at: list[int] = []
+    rb_preds: list[float] = []
     w = np.zeros(n)                                # 현재 보유(표류) 비중
     w_prev_target: dict[str, float] | None = None
     rb_set = set(rb)
@@ -114,6 +205,9 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                 equity *= (1.0 - turnover * cost)
                 w = w_new
                 w_prev_target = {names[i]: float(w[i]) for i in range(n)}
+                # ★예측은 그 시점의 학습창만 쓴다★ 앞으로의 구간 길이도 수익도 모른다.
+                rb_at.append(t)
+                rb_preds.append(float(w_new @ R_win.mean(axis=0)))
                 rebalances.append({
                     "date": str(getattr(dates[t], "date", lambda: dates[t])()),
                     "weights": {names[i]: round(float(w[i]) * 100, 2) for i in range(n) if w[i] > 5e-4},
@@ -169,8 +263,11 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         info_ratio = (active_ret / te) if te > 0 else 0.0
 
     turnovers = [rb_["turnover_pct"] for rb_ in rebalances]
+    conformal = _conformal_block(rb_preds, rb_at, eq, start)
     return {
         "error": False,
+        # ★분포 무가정 예측 구간 (M2-C)★ 적중률은 **주장이 아니라 실측**으로 함께 낸다.
+        "conformal": conformal,
         "dates": [str(getattr(dates[i], "date", lambda i=i: dates[i])()) for i in sim_dates],
         "equity_curve": list(np.round(eq, 5)),
         "bench_curve": bench_curve,
