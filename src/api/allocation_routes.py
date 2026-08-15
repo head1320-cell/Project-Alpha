@@ -15,11 +15,13 @@ from __future__ import annotations
 import logging
 import math
 from datetime import date, timedelta
+from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.engine.entropy_views import EPUnavailable
 from src.engine.scenario_packs import HIST_WINDOWS
 
 logger = logging.getLogger("api.allocation")
@@ -90,6 +92,11 @@ class AnalyzeRequest(BaseModel):
     #   런은 항상 재현 좌표를 갖는다. 이 필드를 실제로 채워 보내는 소비자는 재현
     #   엔드포인트(`/research-runs/{id}/reproduce`)다.
     as_of: str | None = Field(None, pattern=_AS_OF_PAT)
+    # ── M2-B: 이 결정이 선 **매크로 증거(MES)** ─────────────────────────────
+    #   `regime_snapshot_id` 는 **세션이 붙인** 스냅샷, `mes_id` 는 **케이스가 고정한**
+    #   증거다. M1-S 가 TPV 에서 두 열을 일부러 나눈 것과 같은 구분이고, 여기서도
+    #   하나로 다른 하나를 채우지 않는다. 없으면 동작은 이전과 한 글자도 같다.
+    mes_id: str | None = Field(None, max_length=60)
     benchmark: str = "KOSPI"
     mc_paths: int = Field(500, ge=100, le=2000)
     constraints: ConstraintsInput | None = None       # P3 — 없으면 기존 무제약 동작 불변
@@ -360,6 +367,57 @@ def run_analyze(req: AnalyzeRequest) -> dict:
     # 시나리오 팩도 같은 이유로 계산 전에 검증하고, **현재 신원을 여기서 확정한다.**
     # 등록 팩(코드) → 저장 팩(DB) 순서는 `_resolve_pack` 과 같다 — 저장 팩이 등록 id 를 가리면
     # 런에 적힌 팩과 실제로 돌린 팩이 달라진다.
+    # ── M2-B: MES 조인 + 능력 요건 게이트 ──────────────────────────────────
+    #
+    # ★게이트는 레벨 서수가 아니라 요건 프로브다★ 처음에는 "capability_level 이 L2
+    # 미만이면 거부" 로 쓰려 했는데, 라이브로 재 보니 사다리는 **L0 이 최상단, L3 이
+    # 안전 기저**이고 `resolve()` 는 요건이 모두 통과하는 **가장 높은** 레벨을 돌려준다.
+    # 이 환경은 L1 — 즉 L1 은 L2 보다 **위**다.
+    #
+    # 더 중요한 것: `capability.py:243` 이 직접 적어 두었듯 **레벨 간 요건은 포함관계가
+    # 아니다**(L1 이 L2 의 요건을 필요로 하지 않는다). L1 에 도달했다는 것이
+    # `entropy_pooling` 이 있다는 뜻이 아니다. 그래서 서수가 아니라 **그 엔진이 필요로
+    # 하는 요건 하나**를 본다.
+    mes_block: dict[str, Any] | None = None
+    if req.mes_id:
+        from src.data.regime_snapshots import get_snapshot
+        snap = get_snapshot(req.mes_id)
+        if snap is None:
+            raise HTTPException(
+                422, f"매크로 증거(MES)를 찾을 수 없습니다: {req.mes_id}. "
+                     "삭제되었거나 다른 환경의 ID 일 수 있습니다.")
+        # ★복제하지 않고 조인해서 읽는다★ 능력 레벨의 단일 출처는 MES 행이다
+        # (M1-V 가 TPV 에 세운 규칙과 같다). 여기서는 **고정 시점의 해석**을 스탬프할 뿐,
+        # 지금 돌릴 수 있는지는 아래의 라이브 프로브가 답한다.
+        mes_block = {
+            "mes_id": req.mes_id,
+            "as_of": snap.get("as_of"),
+            "capability_level": snap.get("capability_level"),
+            "capability_reason": snap.get("capability_reason"),
+        }
+
+    if req.model == "ep":
+        from src.engine.capability import probe_all
+        probes = probe_all()
+        ep_probe = probes.get("entropy_pooling", {})
+        if not ep_probe.get("ok"):
+            raise HTTPException(
+                422, "엔트로피 풀링 엔진을 쓸 수 없습니다 — "
+                     f"{ep_probe.get('reason') or '요건 미가용'}")
+        if mes_block is not None:
+            # ★불일치는 정보다★ MES 가 고정된 시점의 레벨과 지금 레벨이 다르면
+            # 그 사실을 숨기지 않는다 — CaseBar 가 세션 스냅샷 vs 케이스 MES 에
+            # 쓰는 것과 같은 패턴이다. 막지는 않는다(고정 시점의 해석일 뿐이다).
+            from src.engine.capability import resolve
+            live = resolve(probes)
+            mes_block["live_capability_level"] = live["level"]
+            if mes_block.get("capability_level") and \
+                    mes_block["capability_level"] != live["level"]:
+                mes_block["capability_diverged"] = (
+                    f"이 증거가 고정될 때는 {mes_block['capability_level']} 였고 "
+                    f"지금은 {live['level']} 입니다 — 같은 증거라도 지금 쓸 수 있는 "
+                    "도구가 달라졌습니다.")
+
     scenario_pack_hash: str | None = None
     if req.scenario_pack_id:
         from src.engine.scenario_packs import get_pack as get_registered
@@ -530,6 +588,13 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                                   "information_ratio": extra.get("information_ratio")}},
             "mc": mc_dist,
             "constraints_report": constraints_report,
+            # ★어느 μ 엔진이 이 숫자를 냈는지 서버가 답한다 (M2)★ 화면이 라벨을
+            # 지어내지 않게 하려는 것이고, `ep` 진단(feasible·ENS·위반·신뢰도 미사용)은
+            # EP 일 때만 채워진다.
+            "mu_engine": opt.get("mu_engine"),
+            "ep": opt.get("ep"),
+            # 고정된 매크로 증거 — 없으면 `None` 이고, 그것이 "증거 없이 돌았다" 는 사실이다.
+            "mes": mes_block,
         }
 
         # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
@@ -553,7 +618,12 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                           # ★id 만으로는 부족하다★ 계수가 바뀌면 같은 id 가 다른 충격을
                           # 가리키므로, 재열기 때 "그때 그 팩인가" 를 물을 수 있어야 한다.
                           "scenario_pack_id": req.scenario_pack_id,
-                          "scenario_pack_hash": scenario_pack_hash},
+                          "scenario_pack_hash": scenario_pack_hash,
+                          # M2-B: 어떤 매크로 증거 아래에서, 어느 μ 엔진으로 계산했는지.
+                          # 능력 레벨은 **MES 행에서 조인해 읽은 값**이지 여기서 새로
+                          # 판정한 것이 아니다 — 단일 출처는 계속 MES 다.
+                          "mes": mes_block,
+                          "mu_engine": opt.get("mu_engine")},
                 name=req.run_name,
             )
             payload["run_id"] = rid              # None이면 DB 미가용 — 정직 보고
@@ -562,6 +632,12 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         return payload
     except HTTPException:
         raise
+    except EPUnavailable as e:
+        # ★사용자가 고른 엔진으로 계산할 수 없으면 그렇게 답한다 (M2-A)★
+        # 500 으로 뭉개면 "서버 오류" 로 읽혀 사용자가 뷰를 고칠 방법을 알 수 없고,
+        # 다른 엔진으로 조용히 떨어뜨리면 화면이 거짓말을 한다. 사유를 그대로 준다
+        # (`compile_target` 의 ValueError→422 선례와 같은 처리).
+        raise HTTPException(422, str(e))
     except Exception:
         logger.exception("allocation analyze 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

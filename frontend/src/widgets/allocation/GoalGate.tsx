@@ -32,8 +32,8 @@ const CURATED: Holding[] = [
 ];
 
 const MODEL_LABEL: Record<AllocationModel, string> = {
-  mvo: "최대 샤프 (MVO)", bl: "Black-Litterman", risk_parity: "리스크 패리티", hrp: "HRP", min_var: "최소 분산",
-  max_div: "최대 분산", min_cvar: "최소 CVaR",
+  mvo: "최대 샤프 (MVO)", bl: "Black-Litterman", ep: "엔트로피 풀링", risk_parity: "리스크 패리티",
+  hrp: "HRP", min_var: "최소 분산", max_div: "최대 분산", min_cvar: "최소 CVaR",
 };
 
 function fromSectors(secs: Sector[], prefer: string[], count: number): Holding[] {

@@ -9,7 +9,9 @@
 //     sessionStorage(goal/pos/wip) 하이드레이트·persist → 중간 새로고침 비파괴.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { UseQueryResult } from "@tanstack/react-query";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { caseApi } from "@/entities/case/api";
+import { getActiveCaseId } from "@/shared/lib/caseStorage";
 import {
   allocationApi, type AllocationModel, type AllocationViewInput, type AnalyzeResult,
   type ConstraintsInput, type StressResult, type StressScenarioMeta,
@@ -35,6 +37,9 @@ export type { TimingConfig };
 export const MODELS: { id: AllocationModel; label: string }[] = [
   { id: "mvo", label: "MVO" },
   { id: "bl", label: "Black-Litterman" },
+  // M2-A — BL 과 **같은 뷰**를 먹지만 KL 최소화로 사후를 만든다. 나란히 두는 것이
+  // 요점이라 목록에서도 BL 바로 옆이다.
+  { id: "ep", label: "Entropy Pooling" },
   { id: "risk_parity", label: "Risk Parity" },
   { id: "hrp", label: "HRP" },
   { id: "min_var", label: "Min Var" },
@@ -287,6 +292,19 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
   const [executionTouched, setExecutionTouched] = useState(false);
   const [lastPos, setLastPos] = useState<string | null>(null);
 
+  // ── M2-B: 활성 케이스가 고정한 매크로 증거(MES) ────────────────────────────
+  // 포인터(`rc_*`)는 브라우저 로컬이고 케이스 자체는 서버에 있다(M1-U 가 세운 경계).
+  // 케이스가 없거나 조회에 실패하면 `null` — 그것이 "고정된 증거 없이 돈다" 는 사실이고,
+  // 임의의 스냅샷으로 채우지 않는다.
+  const activeCaseId = useMemo(() => getActiveCaseId(), []);
+  const caseQ = useQuery({
+    queryKey: ["case", activeCaseId],
+    enabled: !!activeCaseId,
+    queryFn: () => caseApi.get(activeCaseId as string),
+    staleTime: 30_000,
+  });
+  const caseMesId = caseQ.data?.active_mes_id ?? null;
+
   const logEvent = (msg: string) =>
     setTimeline((l) => [{ t: new Date().toTimeString().slice(0, 5), msg }, ...l].slice(0, 40));
 
@@ -364,7 +382,12 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
     tickers: holdings.map((h) => h.code),
     weights: holdingsMap,
     views, model, delta, tau, constraints,
-  }), [holdings, holdingsMap, views, model, delta, tau, constraints]);
+    // ★케이스가 고정한 매크로 증거 (M2-B)★ 서명에 들어가야 MES 를 바꿨을 때 결과가
+    // superseded 로 표시된다. 빠뜨리면 다른 증거 아래에서 계산된 숫자를 최신이라고
+    // 말하게 된다. `attachedSnapshotId`(세션이 붙인 것)와는 다른 값이다 — 서버도
+    // 두 필드를 나눠 받는다.
+    mesId: caseMesId,
+  }), [holdings, holdingsMap, views, model, delta, tau, constraints, caseMesId]);
 
   const currentReq = useMemo(() => buildAnalyzeRequest(sigInputs), [sigInputs]);
   // ★여기는 useMemo 를 쓰지 않는다★
@@ -440,6 +463,9 @@ function AllocationComposition({ children }: { children: React.ReactNode }) {
         timing_rule_set_version: activeRuleSet?.version ?? undefined,
         // 검증에 쓴 시나리오 팩 — 해시는 보내지 않는다(서버가 스탬프한다).
         scenario_pack_id: scenarioPackId || undefined,
+        // 케이스가 고정한 매크로 증거 (M2-B) — `buildAnalyzeRequest` 가 보내는 것과
+        // 같은 값이어야 기록된 런과 화면의 결과가 같은 증거 아래에 있게 된다.
+        mes_id: caseMesId ?? undefined,
       });
       if (data.error) return null;
       setResult(data);

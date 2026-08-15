@@ -26,6 +26,12 @@ export interface SignatureInputs {
   delta: number;
   tau: number;
   constraints: ConstraintsInput | null;
+  /**
+   * 케이스가 고정한 매크로 증거 (M2-B). ★서명에 반드시 들어간다★
+   * 빠뜨리면 MES 를 바꿔도 결과가 "최신" 이라고 표시된다 — 다른 증거 아래에서 계산된
+   * 숫자를 최신이라고 말하는 것이 이 필드를 서명에 넣는 이유다.
+   */
+  mesId: string | null;
 }
 
 /** runAnalyze 가 호출 시점에 덮어쓰는 값들(엔진 전환·τ 확정·뷰 커밋). */
@@ -44,6 +50,7 @@ export interface AnalyzeRequestCore {
   delta: number;
   tau: number;
   constraints?: ConstraintsInput;
+  mes_id?: string;
 }
 
 /**
@@ -71,6 +78,7 @@ export function buildAnalyzeRequest(
     delta: s.delta,
     tau: over?.tau ?? s.tau,
     constraints: s.constraints ?? undefined,
+    mes_id: s.mesId ?? undefined,
   };
 }
 
@@ -95,7 +103,8 @@ export function signatureOf(req: AnalyzeRequestCore): string {
 }
 
 /** 무엇이 바뀌어서 결과가 낡았는지 — 배너가 "뭔가 바뀜"이 아니라 그것을 적기 위해. */
-export type ChangedGroup = "holdings" | "views" | "model" | "delta" | "tau" | "constraints";
+export type ChangedGroup =
+  | "holdings" | "views" | "model" | "delta" | "tau" | "constraints" | "mes";
 
 const GROUP_LABEL: Record<ChangedGroup, string> = {
   holdings: "자산·비중",
@@ -104,6 +113,7 @@ const GROUP_LABEL: Record<ChangedGroup, string> = {
   delta: "위험회피(λ)",
   tau: "불확실성(τ)",
   constraints: "제약",
+  mes: "매크로 증거",
 };
 
 export function changedLabels(groups: ChangedGroup[]): string {
@@ -138,6 +148,7 @@ export function diffAgainstSignature(
   if (prev.delta !== undefined && prev.delta !== cur.delta) out.push("delta");
   if (prev.tau !== cur.tau) out.push("tau");
   if (!eq(prev.constraints, cur.constraints)) out.push("constraints");
+  if (prev.mes_id !== cur.mes_id) out.push("mes");
   return out;
 }
 

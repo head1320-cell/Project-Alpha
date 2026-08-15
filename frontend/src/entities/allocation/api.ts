@@ -8,7 +8,12 @@ import { API_BASE } from "@/shared/api/apiBase";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type AllocationModel = "mvo" | "bl" | "risk_parity" | "hrp" | "min_var" | "max_div" | "min_cvar";
+export type AllocationModel =
+  | "mvo" | "bl"
+  /** Entropy Pooling — KL 최소화 사후 기대수익을 μ 로 쓴다 (M2-A). 새 최적화기가
+   *  아니라 세 번째 **μ 엔진**이라 max-sharpe 경로는 `mvo` 와 같다. */
+  | "ep"
+  | "risk_parity" | "hrp" | "min_var" | "max_div" | "min_cvar";
 
 export interface AllocationViewInput {
   assets: string[];
@@ -52,6 +57,12 @@ export interface AnalyzeRequest {
   // ResearchRun 기록 (opt-in — 명시 요청 시에만 서버가 run_id 스탬프)
   record_run?: boolean;
   run_name?: string;
+  /**
+   * 케이스가 고정한 매크로 증거 (M2-B). ★`regime_snapshot_id` 와 다른 필드다★ —
+   * 그쪽은 **세션이 붙인** 스냅샷이고 이쪽은 **케이스가 고정한** 증거다. 서버도 둘을
+   * 나눠 받으며, 하나로 다른 하나를 채우지 않는다.
+   */
+  mes_id?: string | null;
   /** 이 결정을 내릴 때 붙어 있던 매크로 국면 스냅샷 (Phase 4a — 서버가 런에 함께 스탬프) */
   regime_snapshot_id?: string | null;
   /**
@@ -106,6 +117,34 @@ export interface AnalyzeResult {
   risk_contributions: Record<string, number>;
   correlation: Record<string, Record<string, number>>;
   enb?: { enb: number; neff: number; n_assets: number; note: string };
+  /** 어느 μ 엔진이 이 숫자를 냈는지 — **서버가 찍는다** (M2). 화면이 라벨을 지어내지 않는다. */
+  mu_engine?: "mvo" | "bl" | "ep" | null;
+  /** EP 진단. EP 로 돌았을 때만 채워진다 — 그 외에는 `null`. */
+  ep?: {
+    available: boolean;
+    feasible: boolean;
+    n_views: number;
+    kl: number | null;
+    ens: number | null;
+    ens_prior: number | null;
+    /** ★EP 는 신뢰도를 쓰지 않는다★ 화면이 "반영됐다" 고 오해하지 않도록 서버가 밝힌다. */
+    confidence_used: boolean;
+    violations: {
+      view_index: number; assets: string; direction: number;
+      requested_pct: number; achieved_pct: number; gap_pct: number;
+    }[];
+    skipped: unknown[];
+    note: string | null;
+  } | null;
+  /** 케이스가 고정한 매크로 증거. `null` 이면 **증거 없이 돌았다** — 지어내지 않는다. */
+  mes?: {
+    mes_id: string;
+    as_of: string | null;
+    capability_level: string | null;
+    capability_reason: string | null;
+    live_capability_level?: string;
+    capability_diverged?: string;
+  } | null;
   summary: {
     portfolio: SummaryStats;
     benchmark: SummaryStats | null;

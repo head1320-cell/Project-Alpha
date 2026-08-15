@@ -14,6 +14,7 @@ import {
 const BASE: SignatureInputs = {
   tickers: ["005930", "000660"],
   weights: { "005930": 60, "000660": 40 },
+  mesId: null,
   views: [],
   model: "bl",
   delta: 2.5,
