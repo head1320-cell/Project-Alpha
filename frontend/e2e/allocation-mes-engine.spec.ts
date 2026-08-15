@@ -20,73 +20,51 @@ import { contrastAudit, freezeCharts, type AuditResult } from "./helpers";
 
 test.beforeEach(async ({ page }) => { await freezeCharts(page); });
 
-/** 최소 형태의 `/analyze` 응답 — 화면이 그리는 데 필요한 키만. */
-function analyzeBody(over: Record<string, unknown> = {}) {
-  const names = ["005930", "000660"];
-  return {
-    error: false,
-    names,
-    labels: { "005930": "삼성전자", "000660": "SK하이닉스" },
-    excluded: [],
-    coverage: { start: "2023-01-02", end: "2026-08-14", n_obs: 900,
-                benchmark_available: true, source: "db" },
-    model: "bl",
-    params: { delta: 2.5, tau: 0.05, lookback_days: 756 },
-    views_applied: false,
-    skipped_views: [],
-    cap_missing: [],
-    weights: { current: { "005930": 60, "000660": 40 },
-               optimized: { "005930": 55, "000660": 45 } },
-    flow: { market: { "005930": 50, "000660": 50 },
-            view_applied: { "005930": 50, "000660": 50 },
-            optimized: { "005930": 55, "000660": 45 } },
-    frontier: { curve: [], cloud: { returns: [], volatilities: [], sharpes: [] } },
-    points: { current: { r: 8, v: 15 }, market: { r: 7, v: 14 }, optimal: { r: 9, v: 15 } },
-    risk_contributions: { "005930": 55, "000660": 45 },
-    correlation: { "005930": { "005930": 1, "000660": 0.4 },
-                   "000660": { "005930": 0.4, "000660": 1 } },
-    summary: { portfolio: {}, benchmark: null, active: null, benchmark_label: null,
-               extra: {} },
-    mc: null,
-    constraints_report: null,
-    mu_engine: "mvo",
-    ep: null,
-    mes: null,
-    ...over,
-  };
-}
-
 const EP_OK = {
   available: true, feasible: true, n_views: 1, kl: 0.12,
   ens: 640, ens_prior: 756, confidence_used: false,
   violations: [], skipped: [], note: null,
 };
 
-async function stubAnalyze(page: Page, over: Record<string, unknown> = {}) {
+/**
+ * ★손으로 쓴 응답 본문을 만들지 않는다★
+ *
+ * 처음에는 `/analyze` 응답 전체를 스텁으로 지어냈다가 12건이 통째로 실패했다 —
+ * `.as-eng` 이 아예 렌더되지 않았다. 이 저장소는 그 함정을 이미 기록해 두었다
+ * (`allocation-stages2.spec.ts:65` — "스텁은 화면이 읽는 필드를 다 못 채워서
+ * 서브트리가 통째로 안 그려지는 실패를 이미 한 번 만들었다").
+ *
+ * 그래서 **실제 응답을 받아 M2 가 추가한 필드만 덮어쓴다.** 화면이 읽는 나머지
+ * 필드는 서버가 채우므로 서브트리가 정상적으로 그려지고, 이 스펙이 재려는 것
+ * (엔진 라벨·EP 진단·MES)만 결정적으로 고정된다. `/analyze` 는 순수 계산
+ * 엔드포인트라 서버에 아무것도 남기지 않는다.
+ */
+async function patchAnalyze(page: Page, over: Record<string, unknown>) {
   await page.route("**/api/v1/allocation/analyze", async (route) => {
-    await route.fulfill({ status: 200, contentType: "application/json",
-      body: JSON.stringify(analyzeBody(over)) });
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({ response: res, json: { ...body, ...over } });
   });
 }
 
-/** 게이트 → 05 OPTIMIZE. 재계산을 눌러 스텁 응답이 화면 상태가 되게 한다. */
+/** 게이트 → 05 OPTIMIZE → `.as-run` 으로 실제 최적화를 돌린다. */
 async function enterOptimize(page: Page) {
   await page.goto("/allocation", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/optimize", { waitUntil: "networkidle" });
-  // ★엔진 버튼은 닫힌 <details class="aas-adv"> 안에 있다★ (실측 — 첫 작성에서
-  // `.as-engine-seg button` 으로 잡으려다 두 테스트가 1.5분씩 타임아웃했다.)
-  // 먼저 고급 설정을 열고, 모델 버튼을 눌러 runAnalyze 를 태운다 — 스텁이 응답한다.
-  await page.locator("details.aas-adv summary").first().click();
-  await page.locator(".as-models button").first().click();
+  // ★`.as-run` 이 최적화 트리거다★ (optimize/page.tsx) — 모델 버튼은 닫힌
+  // `<details class="aas-adv">` 안에 있고, 그것으로 몰다가 두 번 헛짚었다.
+  await page.locator(".as-run").click();
+  await expect(page.locator(".as-card", { hasText: "SUMMARY METRICS" }).first())
+    .toBeVisible({ timeout: 45_000 });
   await expect(page.locator(".as-eng")).toBeVisible({ timeout: 20_000 });
 }
 
 // ── 1. ★미가용 엔진은 숫자를 내지 않는다★ ──────────────────────────────────
 
 test("★EP 가 실현 불가면 비중 숫자가 아니라 사유가 온다★", async ({ page }) => {
-  await stubAnalyze(page, {
+  await patchAnalyze(page, {
     mu_engine: "ep",
     ep: { ...EP_OK, feasible: false, note: null,
           violations: [{ view_index: 0, assets: "005930", direction: 1,
@@ -107,7 +85,7 @@ test("★EP 가 실현 불가면 비중 숫자가 아니라 사유가 온다★"
 
 test("★미가용 사유는 접히지 않는다★ (A5 경계 — 설명은 접고 사유는 접지 않는다)",
   async ({ page }) => {
-    await stubAnalyze(page, {
+    await patchAnalyze(page, {
       mu_engine: "ep",
       ep: { ...EP_OK, feasible: false,
             violations: [{ view_index: 0, assets: "000660", direction: -1,
@@ -123,7 +101,7 @@ test("★미가용 사유는 접히지 않는다★ (A5 경계 — 설명은 접
 // ── 2. ★라벨은 서버가 준 것이다★ (짝 단언) ─────────────────────────────────
 
 test("엔진 라벨이 서버의 mu_engine 을 그대로 쓴다 (ep)", async ({ page }) => {
-  await stubAnalyze(page, { mu_engine: "ep", ep: EP_OK });
+  await patchAnalyze(page, { mu_engine: "ep", ep: EP_OK });
   await enterOptimize(page);
   await expect(page.locator(".as-eng .as-eng-v")).toHaveText("Entropy Pooling");
 });
@@ -131,7 +109,7 @@ test("엔진 라벨이 서버의 mu_engine 을 그대로 쓴다 (ep)", async ({ 
 test("★model 이 bl 이어도 mu_engine 이 mvo 면 화면은 MVO 라고 말한다★", async ({ page }) => {
   // 이것이 짝 단언이다. 앞 테스트만 있으면 화면이 `model` 로 추측해도 통과할 수 있다.
   // 뷰 없는 BL 은 시장균형이고 그때 μ 엔진은 BL 이 아니다 — 서버가 그 사실을 안다.
-  await stubAnalyze(page, { model: "bl", views_applied: false, mu_engine: "mvo", ep: null });
+  await patchAnalyze(page, { model: "bl", views_applied: false, mu_engine: "mvo", ep: null });
   await enterOptimize(page);
   await expect(page.locator(".as-eng .as-eng-v")).toHaveText(/MVO/);
   await expect(page.locator(".as-eng .as-eng-v")).not.toHaveText(/Black-Litterman/);
@@ -140,7 +118,7 @@ test("★model 이 bl 이어도 mu_engine 이 mvo 면 화면은 MVO 라고 말�
 // ── 3. ★신뢰도를 쓰지 않는다는 사실이 화면에 있다★ ─────────────────────────
 
 test("★EP 가 신뢰도를 쓰지 않는다고 화면이 말한다★", async ({ page }) => {
-  await stubAnalyze(page, { mu_engine: "ep", ep: EP_OK });
+  await patchAnalyze(page, { mu_engine: "ep", ep: EP_OK });
   await enterOptimize(page);
   // 이 문구가 없으면 사용자는 BL 처럼 신뢰도가 반영됐다고 읽는다. 매핑을 지어내지
   // 않았다는 사실 자체가 화면에 있어야 그 오해가 막힌다.
@@ -148,7 +126,7 @@ test("★EP 가 신뢰도를 쓰지 않는다고 화면이 말한다★", async 
 });
 
 test("유효 시나리오 수가 사전 → 사후로 함께 온다", async ({ page }) => {
-  await stubAnalyze(page, { mu_engine: "ep", ep: { ...EP_OK, ens_prior: 756, ens: 640 } });
+  await patchAnalyze(page, { mu_engine: "ep", ep: { ...EP_OK, ens_prior: 756, ens: 640 } });
   await enterOptimize(page);
   const txt = await page.locator(".as-eng").textContent();
   expect(txt).toContain("756");
@@ -156,13 +134,13 @@ test("유효 시나리오 수가 사전 → 사후로 함께 온다", async ({ p
 });
 
 test("MES 가 없으면 증거 줄을 그리지 않는다 (지어내지 않는다)", async ({ page }) => {
-  await stubAnalyze(page, { mu_engine: "mvo", ep: null, mes: null });
+  await patchAnalyze(page, { mu_engine: "mvo", ep: null, mes: null });
   await enterOptimize(page);
   await expect(page.locator(".as-eng")).not.toContainText("고정된 매크로 증거");
 });
 
 test("MES 레벨 불일치는 경고로 보인다", async ({ page }) => {
-  await stubAnalyze(page, {
+  await patchAnalyze(page, {
     mu_engine: "ep", ep: EP_OK,
     mes: { mes_id: "rgs_e2e_0001", as_of: "2026-08-14", capability_level: "L3",
            capability_reason: null, live_capability_level: "L1",
@@ -175,42 +153,19 @@ test("MES 레벨 불일치는 경고로 보인다", async ({ page }) => {
 
 // ── 4. ★적중률은 실측이지 이론값이 아니다★ ─────────────────────────────────
 
-function backtestBody(conformal: unknown) {
-  return {
-    error: false,
-    dates: ["2025-01-02", "2025-01-03"],
-    equity_curve: [1.0, 1.01],
-    bench_curve: null,
-    drawdown_curve: [0, 0],
-    rebalances: [{ date: "2025-01-02", weights: { "005930": 100 }, turnover_pct: 0 }],
-    n_rebalances: 57,
-    turnover_avg_pct: 3.2,
-    metrics: {},
-    summary: {
-      total_return_pct: 12.3, cagr_pct: 6.1, volatility_pct: 11.0, sharpe_ratio: 0.55,
-      sortino_ratio: 0.7, calmar_ratio: 0.4, max_drawdown_pct: -15.0,
-      active_return_pct: null, information_ratio: null,
-    },
-    config: { model: "mvo", rebalance: "M", window: "expanding", cost_bps: 10, n_obs: 1300 },
-    conformal,
-    labels: { "005930": "삼성전자" },
-    coverage: { source: "db", start: "2019-01-02", end: "2026-08-14", n_obs: 1300 },
-    benchmark_label: null,
-    excluded: [],
-  };
-}
-
+/** 백테스트도 같은 이유로 **실제 응답에 `conformal` 만 덮어쓴다.** */
 async function enterJournalBacktest(page: Page, conformal: unknown) {
   await page.route("**/api/v1/allocation/backtest", async (route) => {
-    await route.fulfill({ status: 200, contentType: "application/json",
-      body: JSON.stringify(backtestBody(conformal)) });
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({ response: res, json: { ...body, conformal } });
   });
   await page.goto("/allocation", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/journal", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "정책 백테스트", exact: true }).first().click();
-  await expect(page.locator(".as-bt-cf")).toBeVisible({ timeout: 25_000 });
+  await expect(page.locator(".as-bt-cf")).toBeVisible({ timeout: 60_000 });
 }
 
 test("★적중률이 홀드아웃 실측값으로 온다 (1-α 가 아니다)★", async ({ page }) => {
@@ -252,7 +207,7 @@ test("적중률을 잴 수 없으면 그 사실만 적고 숫자를 만들지 �
 // ── 5. §56 하한 + 라이트/다크 AA ────────────────────────────────────────────
 
 test("§56 하한 + 대비: 엔진 근거 패널", async ({ page }) => {
-  await stubAnalyze(page, { mu_engine: "ep", ep: EP_OK });
+  await patchAnalyze(page, { mu_engine: "ep", ep: EP_OK });
   await enterOptimize(page);
 
   const sizes = await page.locator(".as-eng *").evaluateAll((els) =>
