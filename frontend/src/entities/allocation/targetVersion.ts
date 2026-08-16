@@ -21,7 +21,17 @@ export interface TargetVersion {
   base_weights: Record<string, number>;
   overlay: { exposure: number; source: string | null } | null;
   final_weights: Record<string, number>;
-  cash_weight: number;
+  /**
+   * ★롱숏에서는 `null` 이다 (P3)★ `cash = Σbase × (1−exposure)` 는 **넷** 기준이라
+   * 롱숏에서 뜻이 다르다 — 달러중립(넷≈0)이면 "현금 100%" 라는 무의미한 값이 된다.
+   * 서버가 넷으로 뭉갠 숫자를 내는 대신 `null` 을 주고 gross/net 을 따로 낸다.
+   * 소비자는 `?? 0` 으로 삼키지 말고 **없다는 것을 표시**할 것.
+   */
+  cash_weight: number | null;
+  /** 노출 두 축 — 롱숏은 넷 하나로 포지션 크기를 말할 수 없다. 롱온리면 셋이 같다. */
+  gross_before?: number;
+  gross_after?: number;
+  net_after?: number;
   status: TargetStatus;
   status_reason: string | null;
   run_id?: string | null;

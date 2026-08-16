@@ -78,7 +78,12 @@ export function StressBasisBand({
       ) : (
         <div className="as-note as-rob-basis-meta">
           목표 버전{tv.overlay ? ` · 노출 ${(tv.overlay.exposure * 100).toFixed(0)}%` : " · 오버레이 없음"}
-          {tv.cash_weight > 0.05 && ` · 현금 ${tv.cash_weight.toFixed(1)}%`}
+          {/* ★롱숏이면 현금 대신 gross/net 을 말한다 (P3)★ `?? 0` 으로 삼키면
+              달러중립 목표가 "현금 0%" 로 보이는데, 그건 넷이 0 이라는 뜻이지
+              현금이 없다는 뜻이 아니다. 두 축을 그대로 낸다. */}
+          {tv.cash_weight == null
+            ? ` · 롱숏 (gross ${(tv.gross_after ?? 0).toFixed(1)}% · net ${(tv.net_after ?? 0).toFixed(1)}%)`
+            : tv.cash_weight > 0.05 ? ` · 현금 ${tv.cash_weight.toFixed(1)}%` : ""}
         </div>
       )}
 
@@ -106,12 +111,22 @@ export function StressBasisBand({
               </tr>
             );
           })}
-          {tv && tv.cash_weight > 0.05 && (
+          {tv && tv.cash_weight != null && tv.cash_weight > 0.05 && (
             <tr className="as-rob-basis-cash">
               <td>현금</td>
               <td className="num">—</td>
               <td className="num">{tv.cash_weight.toFixed(1)}%</td>
               <td className="num">＋{tv.cash_weight.toFixed(1)}%p</td>
+            </tr>
+          )}
+          {tv && tv.cash_weight == null && (
+            <tr className="as-rob-basis-cash as-ls-exposure-row">
+              <td>노출 (gross / net)</td>
+              <td className="num">—</td>
+              <td className="num">
+                {(tv.gross_after ?? 0).toFixed(1)}% / {(tv.net_after ?? 0).toFixed(1)}%
+              </td>
+              <td className="num">—</td>
             </tr>
           )}
         </tbody>

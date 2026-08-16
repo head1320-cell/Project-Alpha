@@ -7204,3 +7204,56 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 미가용은 숫자 자리에 사유가 들어간다 — 0 이나 공백이 아니다. */
 .as-bt-cf-na { font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
 .as-bt-cf-note { font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §68 롱숏 (P3) — 숏을 조용히 버리지 않기 위해 필요한 최소한의 것만
+   ---------------------------------------------------------------------------
+   새 토큰을 만들지 않는다. 부호 색은 §52/§55 가 이미 정의한 --color-bear 를
+   쓰고, 나머지는 셸 토큰 그대로다. 클래스는 전부 `.as-ls-*` 접두사 — 기존
+   `.as-*` 이름은 E2E 계약이라 개명하지 않는다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 숏 다리 스트립 — 롱 스트립과 같은 gross 스케일이라 길이를 그대로 비교한다. */
+.as-ls-map-short { margin-top: 4px; opacity: .92; }
+.as-ls-legrow { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
+.as-ls-legtag {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  padding: 1px 5px; border-radius: 3px;
+  background: color-mix(in srgb, var(--color-bear) 16%, transparent);
+  color: var(--color-bear);
+}
+.as-ls-legnote { font-size: 11px; line-height: 1.5; color: var(--muted-foreground); }
+
+/* 음수 비중 — 부호를 색으로만 말하지 않는다(값에 이미 '-' 가 붙어 있다). */
+.as-ls-neg { color: var(--color-bear); }
+
+/* 도넛이 gross 기준임을 밝히는 줄. §56 하한(11px) 을 지킨다. */
+.as-ls-basis { margin-top: 6px; font-size: 11px; line-height: 1.55; }
+
+/* 노출 두 축을 넣은 표 행 — 현금 행과 같은 자리를 쓰되 이름이 다르다. */
+.as-ls-exposure-row td:first-child { white-space: nowrap; }
+
+/* 실행 차단 — 죽은 버튼 대신 막힌 이유. 경고가 아니라 사실이라 톤을 낮춘다. */
+.as-ls-blocked {
+  margin: 10px 0; padding: 10px 12px;
+  border: 1px solid var(--border); border-left: 3px solid var(--color-bear);
+  border-radius: 4px; background: var(--muted);
+}
+.as-ls-blocked-t { display: block; font-size: 12px; line-height: 1.5; color: var(--foreground); }
+.as-ls-blocked-l { margin: 6px 0 0; padding-left: 18px; }
+.as-ls-blocked-l li {
+  font-size: 11px; line-height: 1.65; color: var(--muted-foreground); list-style: disc;
+}
+.as-ls-blocked-l code { font-size: 10.5px; font-family: var(--t-mono); }
+
+/* 05 의 롱숏 컨트롤 — 기존 .as-cons-* 밀도를 따른다(새 스케일 도입 금지). */
+.as-ls-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+.as-ls-field { display: flex; flex-direction: column; gap: 3px; min-width: 92px; }
+.as-ls-field > span { font-size: 10px; letter-spacing: .05em; color: var(--muted-foreground); }
+.as-ls-field > input { font-size: 12px; font-family: var(--t-mono); }
+.as-ls-hint { font-size: 11px; line-height: 1.55; color: var(--muted-foreground); flex-basis: 100%; }
+
+/* 결과의 노출 요약 — 넷 하나로 말할 수 없으니 두 축을 나란히. */
+.as-ls-exposure { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.as-ls-exposure > span { font-size: 11px; color: var(--muted-foreground); }
+.as-ls-exposure b { font-size: 12px; color: var(--foreground); }

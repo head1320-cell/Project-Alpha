@@ -233,7 +233,22 @@ export function ExecutionRoom() {
             {targetVersion.overlay
               ? ` · 타이밍 오버레이 노출 ${(targetVersion.overlay.exposure * 100).toFixed(0)}%`
               : " · 오버레이 없음"}
-            {targetVersion.cash_weight > 0.01 && ` · 현금 ${targetVersion.cash_weight.toFixed(1)}%`}
+            {targetVersion.cash_weight == null
+              ? ` · 롱숏 (gross ${(targetVersion.gross_after ?? 0).toFixed(1)}% · net ${(targetVersion.net_after ?? 0).toFixed(1)}%)`
+              : targetVersion.cash_weight > 0.01 ? ` · 현금 ${targetVersion.cash_weight.toFixed(1)}%` : ""}
+          </div>
+        )}
+        {/* ★롱숏 목표는 실행할 수 없다 — 왜인지 세 줄로 말한다 (P3)★
+            죽은 버튼을 두지 않는다(A2 이후 관례). 막되 이유를 적고, 그 이유가
+            나중에 무엇이 풀렸는지 알 수 있도록 항목별로 나눠 둔다. */}
+        {targetVersion?.cash_weight == null && (
+          <div className="as-ls-blocked" role="note">
+            <b className="as-ls-blocked-t">이 목표는 실행할 수 없습니다 — 연구·백테스트 전용입니다.</b>
+            <ul className="as-ls-blocked-l">
+              <li>차입 가능여부가 연동돼 있지 않습니다 (<code>market_rules.shortable()</code> 이 항상 미상).</li>
+              <li>KIS 주문 유형에 공매도가 없습니다 — 매수/매도 TR 은 일반 현금 주문입니다.</li>
+              <li>실행기가 미보유 종목 매도를 생략합니다 — 숏 진입이 주문으로 나가지 않습니다.</li>
+            </ul>
           </div>
         )}
         <div className="as-note">

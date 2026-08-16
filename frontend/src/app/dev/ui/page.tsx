@@ -56,6 +56,9 @@ import {
 } from "@/shared/ui/feedback";
 import { MiniViz, StatGrid, Stat, type MiniVizKind } from "@/shared/ui/MiniViz";
 import SectionHead from "@/shared/ui/SectionHead";
+// §68 롱숏 표본 — 숏이 든 비중을 화면 경로로 만들 UI 가 없어 여기서만 잴 수 있다.
+import { AllocationMap } from "@/widgets/allocation/AllocationMap";
+import { concentration, exposureLegs } from "@/shared/lib/exposure";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
@@ -172,6 +175,17 @@ function LivePSection() {
 const SPARK_UP = [10, 12, 11, 14, 13, 17, 19, 18, 22];
 const SPARK_DOWN = [22, 20, 21, 17, 15, 16, 12, 11, 9];
 const MINIVIZ_KINDS: MiniVizKind[] = ["bars", "line", "heat", "rows", "gauge"];
+
+const LS_ITEMS = [
+  { code: "005930", name: "삼성전자", weight: 60 },
+  { code: "000660", name: "SK하이닉스", weight: 50 },
+  { code: "035420", name: "NAVER", weight: 30 },
+  { code: "051910", name: "LG화학", weight: -25 },
+  { code: "005380", name: "현대차", weight: -15 },
+];
+const LO_CONC = concentration([40, 30, 20, 10]);
+const LS_CONC = concentration(LS_ITEMS.map((x) => x.weight));
+const LS_LEGS = exposureLegs(LS_ITEMS.map((x) => x.weight));
 
 export default function DevUiPage() {
   return (
@@ -565,6 +579,43 @@ export default function DevUiPage() {
               </DialogContent>
             </Dialog>
           </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          §68 롱숏 표본 (P3) — 숏이 있는 비중을 화면 경로로 만들 UI 가 없어서,
+          `concentration()`·`exposureLegs()`·`AllocationMap` 이 숏을 어떻게 다루는지
+          잴 곳이 여기밖에 없다. 격리 라우트에 표본을 두고 E2E 가 그것을 읽는
+          방식은 이 저장소가 Step 3b 에서 세운 관례다.
+          ★값을 손으로 적지 않는다★ 아래 숫자는 전부 실제 함수의 반환값이다.
+          ═══════════════════════════════════════════════════════════════════ */}
+      <section className="devui-group devui-ls">
+        <h2 className="devui-h">§68 롱숏 — concentration / exposureLegs</h2>
+
+        <div className="devui-row">
+          <span className="devui-lbl">롱온리 [40, 30, 20, 10]</span>
+          <span className="devui-ls-basis" data-case="long-only">{LO_CONC.basis}</span>
+          <span className="devui-ls-hhi" data-case="long-only">{LO_CONC.hhi.toFixed(1)}</span>
+        </div>
+
+        <div className="devui-row">
+          <span className="devui-lbl">롱숏 [60, 50, 30, -25, -15]</span>
+          <span className="devui-ls-basis" data-case="long-short">{LS_CONC.basis}</span>
+          <span className="devui-ls-hhi" data-case="long-short">{LS_CONC.hhi.toFixed(1)}</span>
+        </div>
+
+        {/* ★이 줄이 F3 의 증거다★ 예전 `Math.max(w,0)` 식이면 분모가 140 이라
+            HHI 가 더 크게(=더 집중된 것처럼) 나온다. gross 180 으로 재야 옳다. */}
+        <div className="devui-row">
+          <span className="devui-lbl">롱숏 노출</span>
+          <span className="devui-ls-legs">
+            gross {LS_LEGS.gross.toFixed(1)} / net {LS_LEGS.net.toFixed(1)} /
+            long {LS_LEGS.long.toFixed(1)} / short {LS_LEGS.short.toFixed(1)}
+          </span>
+        </div>
+
+        <div className="devui-ls-map">
+          <AllocationMap items={LS_ITEMS} />
         </div>
       </section>
     </div>

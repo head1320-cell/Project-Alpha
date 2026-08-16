@@ -112,7 +112,13 @@ export default function ConstructStage() {
             <div className="as-stat">
               <span className="as-stat-k">HHI</span>
               <b className="as-stat-v num">{conc.hhi.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b>
-              <span className="as-stat-x">Σw² × 10,000 · 낮을수록 분산</span>
+              {/* ★어느 기준으로 잰 숫자인지 말한다 (P3)★ 롱숏에서는 gross(|w|)
+                  기준으로 재는데, 라벨이 없으면 같은 자리에 뜻이 다른 숫자가 앉는다. */}
+              <span className="as-stat-x">
+                {conc.basis === "gross"
+                  ? "Σ|w|² × 10,000 · gross 기준(숏 포함) · 낮을수록 분산"
+                  : "Σw² × 10,000 · 낮을수록 분산"}
+              </span>
             </div>
             {/* ★임의 임계값을 만들지 않는다★ HHI 에 "1,500 미만이면 양호" 같은 밴드를
                 붙이고 싶어지지만, 그건 반독점 심사 기준이지 포트폴리오 기준이 아니다.

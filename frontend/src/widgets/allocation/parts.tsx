@@ -23,56 +23,16 @@ import { useChartAnimation } from "@/shared/ui/chartStyle";
 // 끌어와 번들이 +30kB 였다 — 사유는 그 파일의 헤더에 있다.
 /** 마커 테두리 — 차트 배경색이어야 점이 배경에서 떠 보인다. 흰색을 박으면 다크에서 흰 링이 남는다. */
 const DOT_RING = "var(--card)";
-/**
- * 범주 팔레트 — 하드코딩 hex 에서 토큰으로 (A3 S3f).
- * 예전 배열에는 `#16a34a` 가 들어 있었는데, S1b-2 에서 그 값이 zinc-50 위 3.16:1 로
- * 측정돼 `--chart-up` 에서 이미 퇴출된 색이다. 같은 값이 팔레트에는 그대로 남아 있었다.
- * §51 이 `--cat-1..10` 을 라이트/다크 양쪽으로 정의한다 — SVG fill 에 var() 를 넣는 것은
- * 이 파일의 CloudDot 이 이미 쓰는 방식이라 새로운 기법이 아니다.
- */
-const DONUT_COLORS = Array.from({ length: 10 }, (_, i) => `var(--cat-${i + 1})`);
+// 팔레트·AllocationMap 은 recharts 를 쓰지 않아 별도 파일로 분리했다 (P3) —
+// 사유는 그 파일 헤더에. 기존 import 경로를 지키기 위해 여기서 re-export 한다.
+export { AllocationMap, paletteColor } from "./AllocationMap";
+// 순수 계산도 shared/lib 로 — parts.tsx 를 부르면 recharts 가 딸려온다.
+export { concentration, exposureLegs } from "@/shared/lib/exposure";
+import { paletteColor } from "./AllocationMap";
 
+/** 부호 있는 포맷 — 차트 라벨·요약 셀이 공유한다. `null`/비유한값은 —. */
 export const fmtSign = (v: number | null | undefined, d = 2): string =>
   v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}`;
-
-export const paletteColor = (i: number): string => DONUT_COLORS[i % DONUT_COLORS.length];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 01 CONSTRUCT 프리미티브 — AllocationMap · WeightComparison · Concentration
-// ─────────────────────────────────────────────────────────────────────────────
-/**
- * 비중 비례 스트립 + 범례.
- *
- * ★막대 안의 흰 글씨를 뺐다★ 예전에는 각 블록 위에 `color:#fff` 로 종목명과 비중을
- * 얹었다. 팔레트 10색 중 어떤 색 위에 얹힐지는 자산 개수와 순서에 따라 달라지므로,
- * 대비가 보장되는 조합이 하나도 없었다(밝은 색 위 흰 글씨). 게다가 블록이 좁아지면
- * 글자가 잘려서 어차피 안 읽힌다. 텍스트는 아래 범례로 내리고 스트립은 비율만 그린다 —
- * 색은 범례에서 이름과 짝지어지므로 "색만으로 의미를 전달"하지도 않는다.
- */
-export function AllocationMap({ items }: { items: { code: string; name: string; weight: number }[] }) {
-  const tot = items.reduce((a, x) => a + Math.max(x.weight, 0), 0) || 1;
-  const shown = items.filter((x) => x.weight > 0);
-  if (!shown.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
-  return (
-    <div className="aas-mapwrap">
-      <div className="aas-map">
-        {shown.map((x, i) => (
-          <div key={x.code} className="aas-map-b" title={`${x.name} ${x.weight.toFixed(1)}%`}
-            style={{ flex: `${(x.weight / tot) * 100} 0 0`, background: paletteColor(i) }} />
-        ))}
-      </div>
-      <ul className="aas-legend">
-        {shown.map((x, i) => (
-          <li key={x.code} className="aas-legend-i">
-            <span className="aas-legend-sw" style={{ background: paletteColor(i) }} aria-hidden="true" />
-            <span className="aas-legend-nm">{x.name}</span>
-            <b className="num">{x.weight.toFixed(1)}%</b>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 /** 값 하나 — 숫자이거나, 아직 산출되지 않았거나. 0 은 세 번째가 아니라 첫 번째 경우다. */
 export type CmpValue = number | null;
@@ -174,7 +134,14 @@ export function AllocationDonut({ items, height = 172 }: {
   items: { code: string; name: string; weight: number }[]; height?: number;
 }) {
   const anim = useChartAnimation();
-  const shown = items.filter((x) => x.weight > 0);
+  // ★도넛은 gross 기준으로 그리고 그 사실을 적는다 (P3)★ 파이 조각에 음수를 넣을
+  // 방법은 없다. 숏을 버리면 "이 책이 몇 조각으로 나뉘었나" 를 틀리게 말하므로,
+  // |w| 로 그리되 **기준을 라벨로 밝힌다** — 라벨 없이 기준만 바꾸면 같은 자리에
+  // 뜻이 다른 숫자가 앉는다.
+  const hasShort = items.some((x) => x.weight < 0);
+  const shown = hasShort
+    ? items.filter((x) => x.weight !== 0).map((x) => ({ ...x, weight: Math.abs(x.weight) }))
+    : items.filter((x) => x.weight > 0);
   if (!shown.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
   return (
     <div className="aas-donut" style={{ height }}>
@@ -188,17 +155,14 @@ export function AllocationDonut({ items, height = 172 }: {
             formatter={(v: number, n: string) => [`${v.toFixed(1)}%`, n]} />
         </PieChart>
       </ResponsiveContainer>
+      {hasShort && (
+        <div className="as-note as-ls-basis">
+          gross 기준 (|비중|) — 파이 조각은 방향을 표현하지 못하므로 크기만 그립니다.
+          롱·숏 구분은 위 비중 스트립과 범례에서 보세요.
+        </div>
+      )}
     </div>
   );
-}
-
-export function concentration(weightsPct: number[]): { hhi: number; top3: number; neff: number } {
-  const tot = weightsPct.reduce((a, w) => a + Math.max(w, 0), 0) || 1;
-  const frac = weightsPct.map((w) => Math.max(w, 0) / tot);        // 0~1
-  const hhi = frac.reduce((a, f) => a + f * f, 0) * 10000;          // Σw²×10⁴
-  const top3 = [...frac].sort((a, b) => b - a).slice(0, 3).reduce((a, f) => a + f, 0) * 100;
-  const neff = hhi > 0 ? 10000 / hhi : 0;
-  return { hhi, top3, neff };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -424,14 +388,14 @@ export function RiskContribDonut({ contributions, labels, size = 128 }: {
     <div className="as-donut-wrap">
       <PieChart width={size} height={size}>
         <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={size * 0.3} outerRadius={size * 0.47} paddingAngle={1} stroke="none" isAnimationActive={anim}>
-          {data.map((_, idx) => <Cell key={idx} fill={DONUT_COLORS[idx % DONUT_COLORS.length]} />)}
+          {data.map((_, idx) => <Cell key={idx} fill={paletteColor(idx)} />)}
         </Pie>
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${val}%`, name]} />
       </PieChart>
       <div className="as-donut-legend">
         {data.slice(0, 7).map((d, i) => (
           <div key={d.name} className="as-donut-li">
-            <i style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+            <i style={{ background: paletteColor(i) }} />
             <span className="as-donut-nm">{d.name}</span>
             <span className="num">{d.value.toFixed(1)}%</span>
           </div>

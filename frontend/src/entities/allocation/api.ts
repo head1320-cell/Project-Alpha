@@ -32,6 +32,13 @@ export interface ConstraintsInput {
   beta_max?: number | null;
   cash_min_pct?: number;
   cash_max_pct?: number;
+  // ── 롱숏 / 노출 제약 (P3) ────────────────────────────────────────────────
+  // `min_weight_pct` 를 음수로 주는 것이 롱숏 의사표시다 — 별도 플래그가 없다.
+  // 130/30 → gross_max_pct=160, net_min=net_max=100
+  // 달러중립 → net_min_pct=net_max_pct=0 (베타중립은 beta_min/max 로 함께)
+  gross_max_pct?: number | null;
+  net_min_pct?: number | null;
+  net_max_pct?: number | null;
 }
 
 export interface ConstraintsReport {

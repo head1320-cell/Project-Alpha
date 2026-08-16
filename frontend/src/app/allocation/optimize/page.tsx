@@ -6,7 +6,7 @@ import React, { useMemo, useState } from "react";
 import { COV_ONLY, MODELS, useAllocation } from "@/widgets/allocation/AllocationProvider";
 import type { AnalyzeResult } from "@/entities/allocation/api";
 import {
-  AllocationSankey, FrontierChart, McHistogram, MetricsTable, lambdaOptimalIdx,
+  AllocationSankey, FrontierChart, McHistogram, MetricsTable, exposureLegs, lambdaOptimalIdx,
 } from "@/widgets/allocation/parts";
 import { NeutralizePanel } from "@/widgets/allocation/NeutralizePanel";
 import { StageBusy } from "@/widgets/allocation/StageBusy";
@@ -42,8 +42,11 @@ function ConstraintsPanel() {
         <label><span>종목당 상한 %</span>
           <input className="as-input num" type="number" min={1} max={100} placeholder="없음"
             value={c.max_weight_pct ?? ""} onChange={(e) => set({ max_weight_pct: num(e.target.value) })} /></label>
-        <label><span>종목당 하한 %</span>
-          <input className="as-input num" type="number" min={0} max={50} placeholder="0"
+        {/* ★음수를 받는다 — 그것이 롱숏 의사표시다 (P3)★ 별도 토글을 만들지 않은
+            이유는 `allow_short=true, 하한=0` 같은 모순 상태를 애초에 만들지 않기
+            위해서다. 하한 하나가 단일 진실이다. */}
+        <label><span>종목당 하한 % <em title="음수로 주면 롱숏 — 그 목표는 실행 불가(연구·백테스트 전용)">음수=숏</em></span>
+          <input className="as-input num" type="number" min={-50} max={50} placeholder="0"
             value={c.min_weight_pct ?? ""} onChange={(e) => set({ min_weight_pct: num(e.target.value) ?? 0 })} /></label>
         <label><span>회전율 상한 % <em title="현재 보유 대비 편도 회전율">vs 보유</em></span>
           <input className="as-input num" type="number" min={0} max={200} placeholder="없음"
@@ -58,6 +61,28 @@ function ConstraintsPanel() {
           <input className="as-input num" type="number" min={0} max={90} placeholder="0 (완전투자)"
             value={c.cash_max_pct ?? ""} onChange={(e) => set({ cash_max_pct: num(e.target.value) ?? 0 })} /></label>
       </div>
+
+      {/* ── 롱숏 노출 제약 (P3) — 하한이 음수일 때만 뜻이 있으므로 그때만 보인다 ── */}
+      {(c.min_weight_pct ?? 0) < 0 && (
+        <div className="as-ls-controls" style={{ marginTop: 8 }}>
+          <label className="as-ls-field"><span>gross 상한 %</span>
+            <input className="as-input num" type="number" min={1} max={400} placeholder="없음"
+              value={c.gross_max_pct ?? ""} onChange={(e) => set({ gross_max_pct: num(e.target.value) })} /></label>
+          <label className="as-ls-field"><span>넷 최소 %</span>
+            <input className="as-input num" type="number" min={-200} max={200} placeholder="없음"
+              value={c.net_min_pct ?? ""} onChange={(e) => set({ net_min_pct: num(e.target.value) })} /></label>
+          <label className="as-ls-field"><span>넷 최대 %</span>
+            <input className="as-input num" type="number" min={-200} max={200} placeholder="없음"
+              value={c.net_max_pct ?? ""} onChange={(e) => set({ net_max_pct: num(e.target.value) })} /></label>
+          <p className="as-ls-hint">
+            130/30 은 <b>gross 160 · 넷 100</b>, 달러중립은 <b>넷 최소·최대 모두 0</b> 입니다.
+            베타중립은 위의 β 상한과 함께 거세요. <b>이 셋은 사후 변환이 아니라 최적화
+            제약이라 재최적화해도 유지됩니다.</b> 롱숏 목표는 실행할 수 없습니다 —
+            연구·백테스트 전용입니다.
+          </p>
+        </div>
+      )}
+
       <label className="as-tm-set"><span>섹터 그룹 상한 <em>예: 반도체·전자:30, 금융:20</em></span>
         <input value={groupText} placeholder="그룹명:상한%, 그룹명:상한%"
           onChange={(e) => setGroupText(e.target.value)} onBlur={parseGroups} /></label>
@@ -259,6 +284,19 @@ export default function OptimizerWorkspace() {
           <section className="as-card">
             <div className="as-card-title">SUMMARY METRICS</div>
             {result ? <MetricsTable summary={result.summary} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
+            {/* ★롱숏이면 노출 두 축을 낸다 (P3)★ 넷 하나로는 롱 100/숏 0 과
+                롱 150/숏 50 을 구분할 수 없다. 숏이 없으면 이 줄은 뜨지 않는다. */}
+            {result && (() => {
+              const legs = exposureLegs(Object.values(result.weights.optimized));
+              return legs.hasShort ? (
+                <div className="as-ls-exposure">
+                  <span>gross <b className="num">{legs.gross.toFixed(1)}%</b></span>
+                  <span>net <b className="num">{legs.net.toFixed(1)}%</b></span>
+                  <span>롱 <b className="num">{legs.long.toFixed(1)}%</b></span>
+                  <span>숏 <b className="num as-ls-neg">{legs.short.toFixed(1)}%</b></span>
+                </div>
+              ) : null;
+            })()}
             {result?.enb && (
               <div className="as-enb" title={result.enb.note}>
                 <span className="as-enb-k">실질 분산 (ENB)</span>
