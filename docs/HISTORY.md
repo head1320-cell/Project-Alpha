@@ -4917,6 +4917,30 @@ M3 에서도 같은 형태를 잡았다 — 동수 테스트가 `tie`·`consensu
 않고 스태시로 격리해 다시 쟀다. (첫 시도는 새 파일이 untracked 라 스태시가 안 먹혀
 "before" 가 사실은 after 였다 — 그대로 보고했으면 +0 이라는 거짓 수치가 남았다.)
 
+### 게이트 (P4-V)
+
+전체 Playwright 를 **4샤드 순차**로 돌렸다(P3-V 에서 단일 실행이 `[killed]` 로 2.5시간을
+날린 뒤 세운 관례). 착수 전에 `--list` 로 샤드 합계가 총계와 맞는지 먼저 셌다 —
+106 + 112 + 100 + 104 = **422** ✓.
+
+| 샤드 | 결과 | 소요 |
+|---|---|---|
+| 1/4 | **106 passed / 0 failed** | 39.0m |
+| 2/4 | **112 passed / 0 failed** | 44.5m |
+| 3/4 | **100 passed / 0 failed** | 31.6m |
+| 4/4 | **104 passed / 0 failed** | 31.0m |
+| **합계** | **422 passed / 0 failed** | ~2.4h |
+
+P3 기준선 413 + 새 스펙 9 = 422. 정확히 맞는다.
+
+pytest **1,952 passed / 10 skipped / 1 failed** · ruff 0 · tsc 0 ·
+eslint 0 errors / 28 warnings.
+
+그 1건은 `test_alpha_portfolio_gate::test_a_past_as_of_changes_the_portfolio` 이고
+**P4 이전부터 있던 환경 의존 실패**다(`git stash` 로 D3 착수 시점에 대조 확인).
+원인은 `daily_prices` 테이블 부재이고, 공교롭게 D2 가 그 테이블이 이 컨테이너에
+없다는 것을 독립적으로 다시 확인했다.
+
 ### 열린 부채
 
 - `.tev`(EvidenceBadge)가 **10px** 로 §56 하한 아래다. `.mx-panel` 스코프로만 올렸다 —
