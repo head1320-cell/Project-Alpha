@@ -128,3 +128,120 @@ export const studiosApi = {
     return r.json();
   },
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P4 매크로 지능 — 소스 커버리지 · 장기관계 · 예측 적중률 · 국면 합의
+// ═══════════════════════════════════════════════════════════════════════════
+// ★여기서도 판별 유니온을 쓴다★ `available` 로 좁히지 않으면 숫자를 읽을 수 없게
+// 짜서, 미가용 상태에 `?? 0` 을 붙이는 코드가 **타입 단계에서 불가능**해진다.
+
+export interface ProviderCoverage {
+  provider: string;
+  declared: number;
+  verified: number;
+  derived: number;
+  backtest_eligible: boolean;
+  /** 빈티지가 없는 소스만 사유를 갖는다 — 전부에 붙이면 경고가 의미를 잃는다. */
+  revision_bias_note: string | null;
+}
+
+export interface KeySlotStatus {
+  label: string;
+  env_vars: string[];
+  /** ★값이 아니라 존재 여부만★ 서버가 bool 로 접어서 보낸다. */
+  configured: boolean;
+  provider: string | null;
+  series_count: number;
+  capability_requirements: string[];
+  unlocks_levels: string[];
+  unlocks: string;
+}
+
+export interface SourceCoverage {
+  providers: ProviderCoverage[];
+  keys: KeySlotStatus[];
+  ladder: {
+    level: string | null;
+    note: string | null;
+    blocked_level: string | null;
+    blocked_reason: string | null;
+  } | null;
+}
+
+export type LongRun =
+  | { available: false; reason: string; requested?: string[]; used?: string[] }
+  | {
+      available: true;
+      /** 공적분이 있으면 `vecm`, 없으면 `diff_var`. 어느 쪽인지가 결론의 전제다. */
+      model: "vecm" | "diff_var";
+      coint_rank: number;
+      variables: string[];
+      reason: string;
+      evidence: { test: string; trace_stat: number[]; crit_95: number[] };
+      span: { n: number; k: number; requested: number };
+      requested: string[];
+      used: string[];
+      missing?: string[];
+      missing_note?: string;
+    };
+
+export type ForecastCoverage =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      /** ★목표와 실측은 다른 필드다★ 같은 자리에 넣으면 구분이 사라진다. */
+      target: number;
+      coverage: number;
+      hits: number;
+      misses: number;
+      n_eval: number;
+      /** 적중률만 보면 "다 담아서 맞혔다" 를 구분할 수 없다 — 항상 함께 읽는다. */
+      mean_set_size: number;
+      k: number;
+      walk_forward: boolean;
+      note: string;
+    };
+
+export interface RegimeConsensus {
+  /** 동수면 `null` — 임의로 한쪽을 고르면 지어낸 결론이다. */
+  verdict: string | null;
+  consensus: boolean;
+  tie: boolean;
+  n_available: number;
+  per_tool: Record<string, string>;
+  unavailable: string[];
+  reasons: Record<string, string>;
+  disagreement: { score: number; unique: number; counts: Record<string, number>; n: number };
+  note: string;
+}
+
+export const macroIntelApi = {
+  /** `includeLadder=false` 는 비싼 프로브를 건너뛴다(실측: 키 있으면 51초). */
+  sourceCoverage: async (includeLadder = true): Promise<SourceCoverage> => {
+    const q = new URLSearchParams({ include_ladder: String(includeLadder) });
+    const r = await fetch(`${API_BASE}/api/v1/macro/source-coverage?${q}`);
+    if (!r.ok) throw new Error(`source-coverage failed: ${r.status}`);
+    return r.json();
+  },
+
+  longRun: async (months = 240): Promise<LongRun> => {
+    const q = new URLSearchParams({ months: String(months) });
+    const r = await fetch(`${API_BASE}/api/v1/macro/long-run?${q}`);
+    if (!r.ok) throw new Error(`long-run failed: ${r.status}`);
+    return r.json();
+  },
+
+  forecastCoverage: async (k = 1, alpha = 0.1): Promise<ForecastCoverage> => {
+    const q = new URLSearchParams({ k: String(k), alpha: String(alpha) });
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime-forecast-coverage?${q}`);
+    if (!r.ok) throw new Error(`forecast-coverage failed: ${r.status}`);
+    return r.json();
+  },
+
+  regimeConsensus: async (market = "kr", months = 60): Promise<RegimeConsensus> => {
+    const q = new URLSearchParams({ market, months: String(months) });
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime-consensus?${q}`);
+    if (!r.ok) throw new Error(`regime-consensus failed: ${r.status}`);
+    return r.json();
+  },
+};

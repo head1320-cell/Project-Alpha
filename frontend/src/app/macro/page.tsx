@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { LoadingState, ErrorState } from "@/shared/ui/States";
 import MacroCockpit, { type TransplantPayload } from "@/widgets/macro/MacroCockpit";
+import MacroIntelPanel from "@/widgets/macro/MacroIntelPanel";
 import { loadStrategyBacktestConfig, type MacroCore } from "@/entities/macro/data";
 import { setMacroHandoff } from "@/entities/macro/handoff";
 import { analysisApi } from "@/entities/macro/analysisApi";
@@ -75,6 +76,8 @@ export default function MacroPage() {
         <MacroCockpit core={core} onTransplant={onTransplant}
           onOpenInAAS={onOpenInAAS} aasBusy={aasBusy} aasError={aasError} />
       )}
+      {/* P4 지능 패널 — 칵핏 아래. `.mc-*` 는 한 글자도 건드리지 않는다(15개 스펙 계약). */}
+      {!loading && <MacroIntelPanel />}
     </div>
   );
 }

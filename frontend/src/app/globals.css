@@ -7257,3 +7257,91 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-ls-exposure { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
 .as-ls-exposure > span { font-size: 11px; color: var(--muted-foreground); }
 .as-ls-exposure b { font-size: 12px; color: var(--foreground); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §69 — P4 매크로 지능 패널 (소스 커버리지 · 장기관계 · 예측 적중률 · 불일치)
+   ═══════════════════════════════════════════════════════════════════════════
+   ★§56 하한을 지킨다★ 산문 12px · 크롬 11px. 색은 토큰만 — 하드코딩 리터럴은
+   다크에서 그대로 새고(M2-B 에서 값을 치렀다), 여기 네 블록은 라이트/다크 모두
+   `contrastAudit` 가 훑는다.
+   ★애니메이션 없음★ reduced-motion 에서 사라지는 요소가 생기지 않게, 시작 프레임
+   불투명 함정을 아예 만들지 않는다(§62·§63 이 겪은 것). */
+
+.mx-panel { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
+
+.mx-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 4px);
+  padding: var(--sp-3, 12px);
+}
+.mx-card-t {
+  margin: 0 0 var(--sp-2, 8px);
+  font-size: 11px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--foreground);
+}
+.mx-sub {
+  margin: var(--sp-3, 12px) 0 var(--sp-2, 8px);
+  font-size: 11px; font-weight: 600; color: var(--foreground);
+}
+
+.mx-loading { font-size: 12px; color: var(--muted-foreground); padding: var(--sp-2, 8px); }
+
+/* 사유 — 미가용일 때 숫자 대신 오는 것. 접지 않는다. */
+.mx-reason {
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: 12px; color: var(--foreground);
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius, 4px); padding: var(--sp-2, 8px) var(--sp-3, 12px);
+}
+
+.mx-verdict { margin: 0 0 6px; font-size: 12px; color: var(--foreground); }
+/* 결론의 전제 — 왜 이 모형인지. 산문이라 12px. */
+.mx-why { margin: var(--sp-2, 8px) 0 0; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.mx-ladder { margin: 0 0 var(--sp-2, 8px); font-size: 12px; color: var(--muted-foreground); }
+
+/* 개정 편향 등 한계 — 경고는 접지 않고 색만으로 뜻을 전하지 않는다(문장이 있다). */
+.mx-bias {
+  margin: var(--sp-2, 8px) 0 0; font-size: 12px; line-height: 1.5;
+  color: var(--warn-fg, var(--st-warn-fg));
+  border-left: 2px solid var(--warn-mark, var(--st-warn-fg));
+  padding-left: var(--sp-2, 8px);
+}
+
+.mx-tblwrap { overflow-x: auto; }
+.mx-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mx-tbl th, .mx-tbl td {
+  padding: 4px 8px; text-align: left;
+  border-bottom: 1px solid var(--border); color: var(--foreground);
+}
+.mx-tbl thead th { font-size: 11px; font-weight: 600; color: var(--muted-foreground); }
+.mx-tbl td.num, .mx-tbl th.num { text-align: right; }
+
+.mx-ok { color: var(--color-bull); font-size: 11px; }
+.mx-off, .mx-fwd { color: var(--muted-foreground); font-size: 11px; }
+.mx-split { color: var(--warn-fg, var(--st-warn-fg)); font-size: 11px; }
+
+.mx-keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mx-keys li {
+  display: grid; grid-template-columns: 130px 1fr auto; gap: 8px;
+  align-items: baseline; font-size: 12px; color: var(--foreground);
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+}
+.mx-key-n { font-weight: 600; }
+.mx-key-v { font-family: var(--t-mono); font-size: 11px; color: var(--muted-foreground); }
+.mx-key-u { grid-column: 1 / -1; font-size: 12px; color: var(--muted-foreground); }
+
+.mx-stats { display: flex; flex-wrap: wrap; gap: var(--sp-4, 16px); }
+.mx-stat-k { display: block; font-size: 11px; color: var(--muted-foreground); }
+.mx-stat-v { font-size: 22px; font-weight: 600; color: var(--foreground); }
+.mx-stat-s { margin-left: 6px; font-size: 11px; color: var(--muted-foreground); }
+
+.mx-tools { list-style: none; margin: var(--sp-2, 8px) 0 0; padding: 0;
+            display: flex; flex-direction: column; gap: 4px; }
+.mx-tools li { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--foreground); }
+.mx-tool-n { min-width: 72px; font-size: 11px; color: var(--muted-foreground); }
+.mx-tool-r { font-size: 12px; color: var(--muted-foreground); }
+
+@media (max-width: 640px) {
+  .mx-keys li { grid-template-columns: 1fr; }
+}
