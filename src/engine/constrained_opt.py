@@ -32,7 +32,7 @@ _BIND_TOL = 0.005          # 바인딩 판정 허용 (0.5%p)
 class Constraints:
     """전부 선택 — 지정된 것만 적용. 퍼센트 단위(0~100)."""
     max_weight_pct: float | None = None          # 종목당 상한
-    min_weight_pct: float = 0.0                  # 종목당 하한 (롱온리 기본 0)
+    min_weight_pct: float = 0.0                  # 종목당 하한. **음수면 롱숏** (P3)
     group_caps_pct: dict[str, float] = field(default_factory=dict)   # 그룹명 → 상한%
     turnover_cap_pct: float | None = None        # 0.5·Σ|w−w_cur| ≤ cap%
     beta_min: float | None = None
@@ -41,10 +41,21 @@ class Constraints:
     cash_max_pct: float = 0.0                    # 0이면 완전투자 (기존 동작 보존)
 
     def any_active(self) -> bool:
-        return (self.max_weight_pct is not None or self.min_weight_pct > 0
+        # ★`!= 0` 이다 (P3)★ 예전에는 `min_weight_pct > 0` 이라, 음수 하한만 준 요청은
+        # "제약 없음" 으로 판정돼 `constrained_solve` 를 아예 타지 않았다 — 롱숏을
+        # 지시했는데 조용히 롱온리 무제약 해가 나가는 경로였다.
+        return (self.max_weight_pct is not None or self.min_weight_pct != 0
                 or bool(self.group_caps_pct) or self.turnover_cap_pct is not None
                 or self.beta_min is not None or self.beta_max is not None
                 or self.cash_min_pct > 0 or self.cash_max_pct > 0)
+
+    def allows_short(self) -> bool:
+        """음수 하한이 곧 롱숏 의사표시다 — 별도 플래그를 만들지 않는다.
+
+        플래그를 따로 두면 `allow_short=True, min_weight_pct=0` 같은 모순 상태가
+        생기고, 둘 중 무엇이 진실인지 물어야 한다. 하한 하나가 단일 진실이다.
+        """
+        return self.min_weight_pct < 0
 
 
 def asset_betas(R: np.ndarray, bench: np.ndarray | None) -> np.ndarray | None:
@@ -132,7 +143,9 @@ def _violations(w: np.ndarray, c: Constraints, groups: dict[str, list[int]],
                          "amount_pct": round(float((w[over] - ub).sum()) * 100, 2)})
         elif np.any(np.abs(w - ub) < _BIND_TOL):
             binding.append(f"종목 상한 {c.max_weight_pct}%")
-    if lb > 0 and np.any(w < lb - _BIND_TOL):
+    # ★부호를 가리지 않는다 (P3)★ 예전에는 `lb > 0` 일 때만 검사해서, 음수 하한을
+    # 준 롱숏 요청은 하한을 뚫어도 위반이 보고되지 않았다 — 가드가 없는 제약이었다.
+    if np.any(w < lb - _BIND_TOL):
         viol.append({"kind": "min_weight", "detail": f"종목 하한 {c.min_weight_pct}% 미달 존재"})
 
     for g, idxs in groups.items():
@@ -215,11 +228,22 @@ def constrained_solve(model: str, names: list[str], R: np.ndarray,
         if g:
             groups.setdefault(g, []).append(i)
 
+    short_ok = constraints.allows_short()
+
     w_cur = None
     if w_current:
-        w_cur = np.array([max(float(w_current.get(t, 0.0)), 0.0) for t in names])
-        tot = w_cur.sum()
-        w_cur = w_cur / tot if tot > 0 else None
+        # ★롱숏에서는 현재 비중의 숏을 지우지 않는다 (P3)★ 예전에는 항상
+        # `max(w, 0.0)` 이라, 숏을 들고 있는 상태에서 회전율 제약이 "그 숏은 원래
+        # 없었다" 고 보고 회전율을 과소 계산했다. 정규화도 넷 합으로 나누면
+        # 달러중립(Σw≈0)에서 폭발하므로 gross 로 나눈다.
+        raw = np.array([float(w_current.get(t, 0.0)) for t in names])
+        if short_ok:
+            gross = float(np.abs(raw).sum())
+            w_cur = raw / gross if gross > 0 else None
+        else:
+            raw = np.maximum(raw, 0.0)
+            tot = raw.sum()
+            w_cur = raw / tot if tot > 0 else None
 
     betas = asset_betas(R, bench_returns)
     beta_note = None
@@ -246,6 +270,18 @@ def constrained_solve(model: str, names: list[str], R: np.ndarray,
     cov_only = model in ("risk_parity", "hrp")
 
     if cov_only:
+        # ★롱숏을 요청받았는데 이 두 모델은 구조적으로 못 한다 — 조용히 롱온리를
+        # 돌려주지 않고 거부한다 (P3)★ ERC 는 각 자산의 위험기여가 양수여야 정의되고
+        # (음수 비중이면 기여 부호가 뒤집혀 "균등 기여" 가 뜻을 잃는다), HRP 는 트리를
+        # 따라 **양의 예산**을 쪼개 내려간다. 여기서 `_project_box_group` 이 어차피
+        # `clip(w, 0, None)` 을 하므로, 거부하지 않으면 사용자는 롱숏을 지시하고
+        # 롱온리 결과를 받으면서 그 사실을 모른다.
+        if short_ok:
+            return {"status": "infeasible", "weights": None, "violations": [], "binding": [],
+                    "relaxed": [], "notes": [n for n in [beta_note] if n],
+                    "reason": (f"{model} 는 공분산 전용 모델이라 롱숏(음수 하한)을 지원하지 않습니다 — "
+                               "ERC 는 위험기여가 양수여야 정의되고 HRP 는 양의 예산을 분할합니다. "
+                               "롱숏이 필요하면 mvo · bl · min_var · max_div · min_cvar 를 쓰세요.")}
         # 무제약 해 → 근사 투영 (정직 라벨)
         from src.engine.allocation_studio import weights_for_model
         w0 = weights_for_model(model, R, S_annual=S)
@@ -271,7 +307,15 @@ def constrained_solve(model: str, names: list[str], R: np.ndarray,
             logger.warning(f"SLSQP 예외: {e}")
             res = None
         if res is not None and res.success and np.all(np.isfinite(res.x)):
-            w = np.clip(res.x, 0.0, None)
+            # ★이 클램프가 P3 의 핵심 결함이었다★ `np.clip(res.x, 0.0, None)` 은
+            # 음수를 **거르는** 게 아니라 해를 **망가뜨린다**. SLSQP 는 하한이
+            # 음수일 때 Σw=1 을 정확히 지키는 롱숏 해를 내는데(실측: lb=-10% →
+            # w=[.6,-.1,-.1,.1,.6,-.1], Σw=1.0000), 음수를 0 으로 올리면 그 합이
+            # 1.3 으로 깨진다. 그러면 `_violations` 가 현금 위반을 잡아 `approx` 를
+            # 찍는다 — **클램프가 스스로 만든 위반을 클램프가 보고**하고 있었다.
+            # 롱온리(하한 ≥ 0)에서는 SLSQP 해가 이미 bounds 안이라 클립이 무의미한
+            # 방어였고, 지금도 수치 잔차만 정리하도록 그대로 둔다.
+            w = res.x if short_ok else np.clip(res.x, 0.0, None)
             viol, binding = _violations(w, constraints, groups, w_cur, betas)
             # 스킵한 제약의 위반은 relaxed로 정직 표시 (임의 완화 아님 — 보고되는 완화)
             relaxed = sorted(skip & {"turnover", "beta", "group"})

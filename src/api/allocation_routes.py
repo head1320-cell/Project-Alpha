@@ -50,7 +50,10 @@ class AllocationView(BaseModel):
 class ConstraintsInput(BaseModel):
     """전부 선택 — 지정된 것만 적용 (P3 제약 엔진). 퍼센트 단위."""
     max_weight_pct: float | None = Field(None, ge=1, le=100)
-    min_weight_pct: float = Field(0.0, ge=0, le=50)
+    # ★음수 하한이 롱숏 의사표시다 (P3)★ 예전에는 `ge=0` 이라 롱숏을 지시할 방법이
+    # 아예 없었다. 하한을 음수로 주면 `Constraints.allows_short()` 가 True 가 되고,
+    # 그 목표는 실행 게이트에서 `research_only` 로 막힌다(실행 경로에 공매도 없음).
+    min_weight_pct: float = Field(0.0, ge=-50, le=50)
     group_caps_pct: dict[str, float] = Field(default_factory=dict)
     turnover_cap_pct: float | None = Field(None, ge=0, le=200)
     beta_min: float | None = Field(None, ge=-2, le=3)
@@ -305,8 +308,16 @@ def _labels(codes: list[str]) -> dict[str, str]:
 
 
 def _w_dict(names: list[str], w: np.ndarray) -> dict[str, float]:
+    """비중 벡터 → 퍼센트 dict. **잡음만 거르고 부호는 가리지 않는다.**
+
+    ★`abs()` 다 (P3)★ 예전 술어는 `w[i] > 0.0005` 였다. 임계값의 목적은 0 에
+    가까운 수치 잔차를 지우는 것인데, 부호를 함께 걸러 **숏이 응답에서 통째로
+    사라졌다**. 최적화가 롱숏 해를 내도 API 를 통과하면 롱온리처럼 보였고,
+    R0 이 `compile_target` 주석에 남긴 "`_w_dict` 는 음수를 조용히 제외해서,
+    롱숏이 아닌데 롱온리처럼 보이게 만들었다" 가 바로 이 줄이다.
+    """
     return {names[i]: round(float(w[i]) * 100, 2) for i in range(len(names))
-            if w[i] > 0.0005}
+            if abs(w[i]) > 0.0005}
 
 
 def _enb_report(w, S, names: list[str]) -> dict:
