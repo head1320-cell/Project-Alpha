@@ -7345,3 +7345,14 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 @media (max-width: 640px) {
   .mx-keys li { grid-template-columns: 1fr; }
 }
+
+/* ★`EvidenceBadge` 가 §56 하한 아래다 — 여기서 스코프로 올린다★
+   `.tev` 는 10px, `.tev-r` 는 10.5px 다(P2a 에서 §56 이 생기기 전에 쓰였다).
+   전역으로 올리지 않는 이유는 소비자가 앱 전반에 흩어져 있어 레이아웃과 기존
+   타입-하한 스펙을 함께 재야 하기 때문이다 — 그건 이 단계의 범위가 아니다.
+   대신 이 패널 안에서만 하한을 지키고, 전역 결함은 부채로 남긴다. */
+.mx-panel .tev { font-size: 11px; }
+.mx-panel .tev-r { font-size: 11px; color: var(--muted-foreground); }
+.mx-panel .tev-unavailable .tev-l {
+  background: var(--card); color: var(--foreground); border: 1px solid var(--border);
+}
