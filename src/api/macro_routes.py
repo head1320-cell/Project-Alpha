@@ -653,3 +653,156 @@ def macro_studio_views(req: StudioViewsRequest):
     except Exception:
         logger.exception("agentic-mcp 실행 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# P4 매크로 지능 — 데이터 축(D5) · 모델 축(M1·M2·M3)
+# ═══════════════════════════════════════════════════════════════════════════════
+# ★라우트는 판정하지 않는다★ 엔진의 답을 그대로 싣기만 한다. 라우트가 다시 판정하면
+# 같은 판단이 두 곳에 생기고 반드시 갈라진다 — A1(`currentSig`/`req`)과 R0(오버레이
+# 컴파일)에서 이미 두 번 겪었다.
+
+@router.get("/source-coverage")
+def macro_source_coverage(include_ladder: bool = Query(True)):
+    """소스 커버리지 + "이 키를 넣으면 무엇이 열리는가" (P4-D5).
+
+    ★키 값은 어떤 형태로도 나가지 않는다★ `configured: bool` 뿐이다. 이 응답은
+    화면과 로그로 나가므로 접두사·마스킹 조각도 실리면 안 된다.
+
+    `include_ladder=false` 를 두는 이유는 **실측한 비용** 때문이다: 사다리의
+    `frontier_sample` 프로브가 관측 수를 실제로 세느라 매크로를 수집한다 —
+    키 없이 1.1초, 키가 있는데 호스트가 막혀 있으면 51.6초. 키·제공자 표만
+    필요한 화면이 그 값을 물지 않아도 되게 한다.
+    """
+    try:
+        from src.data.source_coverage import coverage_report
+        return coverage_report(include_ladder=include_ladder)
+    except Exception:
+        logger.exception("source-coverage 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/long-run")
+def macro_long_run(vars: str | None = Query(None),
+                   months: int = Query(240, ge=24, le=600)):
+    """공적분 → VECM / 차분 VAR 분기 + **선택 사유** (P4-M1).
+
+    `vars` 는 쉼표로 구분한 계열 키. 없으면 사전 지정된 코어 셋을 쓴다 —
+    통계로 고르면 그 선택이 표본을 쓰고 이후 검정의 p값이 p값이 아니게 된다.
+
+    ★코어 변수 상한 초과는 422 다★ 엔진이 `CoreVariableError` 를 던지는데
+    500 으로 흘리면 "왜 거부됐는지" 가 사라진다. 상한 초과는 서버 오류가 아니라
+    **요청이 잘못된 것**이므로 사유를 그대로 사용자에게 돌려준다.
+    """
+    try:
+        from src.engine.cointegration import (
+            MAX_CORE_VARS,
+            CoreVariableError,
+            analyze_long_run,
+            default_core_variables,
+        )
+        from src.engine.macro_models.base import load_series
+
+        requested = ([v.strip() for v in vars.split(",") if v.strip()]
+                     if vars else list(default_core_variables()))
+
+        # ★상한은 **요청** 개수로 잰다★ 적재 뒤에 재면 수집 안 된 계열이 조용히
+        # 빠져 8개 요청이 3개로 줄고, 그러면 상한을 넘겨도 통과한다. 사용자가 몇 개를
+        # 물었는지가 판단 대상이지 몇 개가 우연히 있었는지가 아니다.
+        if len(requested) > MAX_CORE_VARS:
+            raise HTTPException(422, (
+                f"코어 변수는 최대 {MAX_CORE_VARS}개입니다 — {len(requested)}개를 "
+                "요청했습니다. VECM 의 모수는 대략 K²p 라 관측 수를 넘으면 결과가 "
+                "노이즈가 됩니다. 차원 축소(PCA)로 줄이지 않는 이유는 요인이 해석을 "
+                "잃기 때문입니다 — 코어 변수를 골라 주세요."))
+
+        try:
+            series = load_series(tuple(requested), months)
+        except Exception:
+            logger.exception("long-run 시리즈 적재 실패")
+            series = {}
+
+        try:
+            out = analyze_long_run(series)
+        except CoreVariableError as e:
+            raise HTTPException(422, str(e)) from e
+
+        # ★요청한 것과 쓴 것이 다를 수 있다★ 수집되지 않은 계열은 조용히 빠지는데,
+        # 그 사실을 안 적으면 화면은 7개로 판정한 줄 안다.
+        out["requested"] = requested
+        out["used"] = sorted(series)
+        missing = sorted(set(requested) - set(series))
+        if missing:
+            out["missing"] = missing
+            out["missing_note"] = (
+                f"요청한 계열 중 {len(missing)}개가 수집되지 않아 빠졌습니다: "
+                f"{', '.join(missing)}. 남은 계열로 낸 판정입니다.")
+        return out
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("long-run 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/regime-forecast-coverage")
+def macro_regime_forecast_coverage(market: str = Query("kr"),
+                                   months: int = Query(240, ge=24, le=600),
+                                   k: int = Query(1, ge=1, le=12),
+                                   alpha: float = Query(0.1, gt=0.0, lt=1.0)):
+    """국면 예측집합의 **실측** 적중률 (P4-M2).
+
+    ★목표(1-α)와 실측을 다른 필드로 낸다★ 같은 자리에 넣으면 이론과 측정의 구분이
+    사라진다. 적중률은 평균 집합 크기와 함께 읽어야 한다 — 집합을 키우면 적중률은
+    언제든 올라가기 때문이다.
+    """
+    try:
+        from src.engine.regime_forecast import forecast_coverage
+        from src.engine.regime_transitions import regime_path
+        from src.services.macro_collector import MacroCollector
+
+        snap = MacroCollector().collect_all(use_cache=True)
+        path_out = regime_path(getattr(snap, "series", {}) or {},
+                               market=market, months=months)
+        points = path_out.get("points") or []
+        if not points:
+            return {"available": False,
+                    "reason": path_out.get("reason")
+                    or "국면 경로를 만들 수 없습니다 — 매크로 계열이 부족합니다."}
+        out = forecast_coverage([p["regime"] for p in points], k=k, alpha=alpha)
+        out["market"] = market
+        return out
+    except Exception:
+        logger.exception("regime-forecast-coverage 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/regime-consensus")
+def macro_regime_consensus(market: str = Query("kr"),
+                           months: int = Query(60, ge=12, le=600)):
+    """세 국면 도구의 합의/불일치 — **평균 내지 않는다** (P4-M3).
+
+    `regime_ensemble` 이 이미 축·Markov·GMM 을 나란히 낸다. 여기서는 그 결과를
+    `combine_studio_views` 에 그대로 태워 불일치를 일급으로 만든다 — 미가용 도구는
+    사유와 함께 이름이 남고, 하나만 답했으면 합의가 아니며, 동수는 결론이 아니다.
+    """
+    try:
+        from src.engine.macro_models.ensemble import combine_studio_views
+        from src.engine.regime_ensemble import regime_ensemble
+        from src.services.macro_collector import MacroCollector
+        snap = MacroCollector().collect_all(use_cache=True)
+        ens = regime_ensemble(getattr(snap, "series", {}) or {},
+                              market=market, months=months)
+        views = {}
+        for name, res in (ens.get("tools") or {}).items():
+            if res.get("available"):
+                views[name] = {"available": True, "verdict": res.get("argmax")}
+            else:
+                views[name] = {"available": False, "reason": res.get("reason")}
+        out = combine_studio_views(views)
+        out["market"] = market
+        out["months"] = months
+        return out
+    except Exception:
+        logger.exception("regime-consensus 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
