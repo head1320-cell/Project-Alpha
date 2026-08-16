@@ -22,15 +22,44 @@ from src.data import source_registry as sr
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_every_new_source_is_declared_unverified_with_a_reason():
+#: ★실호출로 확인된 적이 있는 계열 — 이 목록은 손으로만 늘어난다★
+#: M1-I 때는 레지스트리가 **신규 미검증 소스만** 담았으므로 "전부 verified_live=False"
+#: 가 성립했다. P4-D1 이 레지스트리를 **모든 매크로 소스의 단일 출처**로 승격시키면서
+#: 검증된 계열도 들어왔고, 그 단언은 더 이상 사실이 아니다.
+#:
+#: 그래서 단언을 **약화시키지 않고 좁혔다** — 검증된 키를 여기 못 박아, 새 소스를
+#: 조용히 `verified_live=True` 로 올리면 이 목록과 어긋나 빨개진다. 예전 단언보다
+#: 강하다: 예전엔 "전부 False" 라 하나만 True 로 바꿔도 걸렸지만 검증된 계열을
+#: 추가할 방법이 없었고, 지금은 **누가 언제 무엇을 검증했는지**가 목록으로 남는다.
+_VERIFIED_KEYS = {
+    # ECOS — 실호출로 확인된 8종 (M1-I 이전부터 돌던 계열)
+    "KR_BASE_RATE", "KR_3Y", "KR_10Y", "KR_CPI", "USD_KRW", "KOSPI",
+    "KR_LEADING_CYCLE", "KR_IP",
+    # FRED — 전부 실호출로 돌던 계열
+    "FEDFUNDS", "DGS3MO", "DGS2", "DGS10", "DGS30", "T10Y2Y", "VIXCLS",
+    "VXVCLS", "NFCI", "DTWEXBGS", "CPIAUCSL", "BAMLH0A0HYM2", "GDPC1",
+    "INDPRO", "UNRATE", "PAYEMS", "UMCSENT", "T10YIE", "DFII10", "M2SL",
+    "DCOILWTICO",
+}
+
+
+def test_every_unverified_source_is_declared_with_a_reason():
     """★사유 없는 미가용은 만들지 않는다★"""
-    specs = sr.all_specs()
-    assert len(specs) >= 10, "신규 소스가 예상보다 적다"
-    for s in specs:
+    unverified = [s for s in sr.all_specs() if not s.verified_live]
+    assert len(unverified) >= 10, "미검증 소스가 예상보다 적다 — 가드가 공허해진다"
+    for s in unverified:
         assert s.note, f"{s.key}: 왜 미검증인지 적혀 있지 않다"
-        assert s.verified_live is False, (
-            f"{s.key}: 실호출로 확인한 적이 없는데 verified_live=True 다 — "
-            "이 플래그는 verify_connection 결과를 본 사람이 올린다")
+
+
+def test_no_source_claims_verification_it_was_never_given():
+    """★짝 — `verified_live` 는 verify_connection 결과를 본 사람이 올린다★
+
+    코드가 스스로 올리거나, 새 계열을 추가하면서 슬쩍 True 로 두면 여기서 걸린다.
+    """
+    claimed = {s.key for s in sr.all_specs() if s.verified_live}
+    assert claimed == _VERIFIED_KEYS, (
+        f"검증 주장이 목록과 다르다 — 추가된 것: {sorted(claimed - _VERIFIED_KEYS)}, "
+        f"사라진 것: {sorted(_VERIFIED_KEYS - claimed)}")
 
 
 def test_an_unverified_source_reports_no_value_even_if_one_is_passed():
@@ -111,10 +140,15 @@ def test_the_credit_spread_is_computed_when_both_legs_exist():
                        timestamps=["202601", "202602"], values=[4.5, 4.8])
     govt = MacroSeries(indicator="KR_3Y", name="국고", unit="%", source="BOK",
                        timestamps=["202601", "202602"], values=[3.2, 3.3])
-    out = MacroCollector()._derive_spread(corp, govt)
+    out = MacroCollector()._derive_spread(
+        corp, govt, key="KR_CREDIT_SPREAD", name="신용스프레드", unit="%p")
     assert out.values == [1.3, 1.5]
     assert out.latest == pytest.approx(1.5)
     assert out.source == "BOK", "원계열 출처를 승격시키면 안 된다"
+    # ★P4-D1 에서 드러난 잠복 결함★ `last_update` 를 비우면 스냅샷 빌더가 공표시각을
+    # 관측기간("202602")으로 폴백하고, 그 문자열이 ISO `as_of` 보다 크게 비교되어
+    # (`'0' > '-'`) PIT 게이트가 이 계열을 룩어헤드로 거부한다.
+    assert out.last_update, "파생 계열이 공표시각을 비워 두면 PIT 게이트가 거부한다"
 
 
 def test_the_bok_loop_binds_each_stat_code_to_its_own_lambda():

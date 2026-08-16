@@ -34,6 +34,13 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
+from src.data.source_registry import (
+    ECOS,
+    ecos_collection_targets,
+    fred_collection_targets,
+    specs_by_provider,
+)
+
 try:
     import requests
 except ImportError:
@@ -185,15 +192,11 @@ def _normalize(values: list[float]) -> dict:
 # BOK ECOS Client (한국은행)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# BOK API: 통계코드 → 의미 매핑
-BOK_INDICATORS = {
-    "722Y001": {"name": "한국 기준금리",      "code": "0101000", "unit": "%"},
-    "817Y002": {"name": "국고채 3년",         "code": "010195000", "unit": "%"},
-    "817Y003": {"name": "국고채 10년",        "code": "010210000", "unit": "%"},
-    "901Y009": {"name": "소비자물가지수(CPI)", "code": "0", "unit": "지수"},
-    "731Y001": {"name": "원/달러 환율",       "code": "0000001", "unit": "원"},
-    "802Y001": {"name": "KOSPI 종합",         "code": "0001000", "unit": "포인트"},
-}
+# ★`BOK_INDICATORS` 는 P4-D1 에서 삭제됐다★
+# 통계표코드로 키를 잡은 6개짜리 사전이었고 **소비자가 0개**였다. 그러면서 실제 조회
+# 목록(`bok_targets`)과 다른 값을 들고 있었으므로, 남겨 두면 "문서가 코드와 다른"
+# 두 번째 레지스트리가 된다 — CLAUDE.md 가 개수 세지 말고 레지스트리를 읽으라고
+# 적어 둔 바로 그 실패다. 조회 좌표는 `source_registry.ecos_collection_targets()`.
 
 
 class BokClient:
@@ -259,31 +262,9 @@ class BokClient:
 # FRED Client (미 연준)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-FRED_INDICATORS = {
-    "FEDFUNDS":   {"name": "Fed Funds Rate",    "unit": "%"},
-    "DGS3MO":     {"name": "T3M (3개월물)",      "unit": "%"},
-    "DGS2":       {"name": "T2Y (2년물)",        "unit": "%"},
-    "DGS10":      {"name": "T10Y (10년물)",      "unit": "%"},
-    "DGS30":      {"name": "T30Y (30년물)",      "unit": "%"},
-    "T10Y2Y":     {"name": "T10Y-T2Y Spread",   "unit": "%p"},
-    "VIXCLS":     {"name": "VIX",                "unit": "지수"},
-    # Phase 8b — 스펙 §6.1/§6.2
-    "VXVCLS":     {"name": "VIX 3개월(VXV)",     "unit": "지수"},
-    "NFCI":       {"name": "금융환경지수(NFCI)", "unit": "지수"},
-    "DTWEXBGS":   {"name": "DXY (광역지수)",     "unit": "지수"},
-    "CPIAUCSL":   {"name": "US CPI",             "unit": "지수"},
-    "BAMLH0A0HYM2": {"name": "HY Credit Spread", "unit": "%p"},
-    # 성장·물가·유동성·심리 확장 (5 API 최대 활용 — 키 없으면 결정론적 mock)
-    "GDPC1":      {"name": "US 실질GDP",          "unit": "지수"},
-    "INDPRO":     {"name": "산업생산",            "unit": "지수"},
-    "UNRATE":     {"name": "실업률",              "unit": "%"},
-    "PAYEMS":     {"name": "비농업고용",          "unit": "천명"},
-    "UMCSENT":    {"name": "소비자심리",          "unit": "지수"},
-    "T10YIE":     {"name": "기대인플레(10Y)",     "unit": "%"},
-    "DFII10":     {"name": "실질금리(10Y)",       "unit": "%"},
-    "M2SL":       {"name": "M2 통화량",           "unit": "지수"},
-    "DCOILWTICO": {"name": "WTI 유가",            "unit": "$"},
-}
+#: FRED 지표 — ★`source_registry` 가 단일 출처다 (P4-D1)★ ECOS 와 같은 이유로,
+#: 레지스트리와 수집기가 계열 목록을 각자 들면 갈라진다.
+FRED_INDICATORS = fred_collection_targets()
 
 
 class FredClient:
@@ -445,25 +426,17 @@ class MacroCollector:
         series_map = {}
 
         # 한국 매크로 (6종)
-        bok_targets = [
-            ("KR_BASE_RATE", "722Y001", "0101000", "한국 기준금리", "%"),
-            ("KR_3Y",        "817Y002", "010195000", "국고채 3년", "%"),
-            ("KR_10Y",       "817Y003", "010210000", "국고채 10년", "%"),
-            ("KR_CPI",       "901Y009", "0",         "한국 CPI", "지수"),
-            ("USD_KRW",      "731Y001", "0000001",   "원/달러 환율", "원"),
-            ("KOSPI",        "802Y001", "0001000",   "KOSPI 종합", "포인트"),
-            # 국면 성장축(실물) — ECOS 코드는 GCP 실호출로 검증, 실패 시 unavailable → 축에서 자동 제외
-            ("KR_LEADING_CYCLE", "901Y067", "I16E", "경기선행지수 순환변동치", "지수"),
-            ("KR_IP",            "901Y033", "A00",  "산업생산지수", "지수"),
-            # ── M1-I 신규 3종 ────────────────────────────────────────────────
-            # ★이 셋은 실호출로 검증된 적이 없다★ 통계표/항목 코드가 틀리면 시리즈가
-            # 예외 없이 조용히 빈다. `source_registry` 가 mock 폴백을 막으므로
-            # 빈 값이 그럴듯한 숫자로 덮이지 않는다 — 그래야 코드가 틀렸다는 것을
-            # 알 수 있다. 검증은 `verify_connection.py::check_ecos`.
-            ("KR_M2",      "101Y003", "BBHA00", "M2 통화량(평잔)", "십억원"),
-            ("KR_GDP",     "200Y002", "1400",   "실질 GDP", "십억원"),
-            ("KR_CORP3Y",  "817Y002", "010200000", "회사채 3년(AA-)", "%"),
-        ]
+        # ★조회 좌표는 `source_registry` 가 단일 출처다 (P4-D1)★
+        # 예전에는 이 리스트와 레지스트리가 통계표/항목 코드를 **각자** 들고 있었다.
+        # 11계열일 땐 눈으로 맞출 수 있었지만 P4-D1 이 33계열로 늘리면서 반드시
+        # 갈라진다 — 한쪽에만 계열을 추가하면 "수집은 되는데 상태를 못 내거나"
+        # "상태는 있는데 값이 영원히 안 오는" 조합이 생기고 둘 다 조용하다.
+        #
+        # ★신규 계열은 실호출로 검증된 적이 없다★ 통계표/항목 코드가 틀리면 시리즈가
+        # 예외 없이 조용히 빈다. `source_registry` 가 mock 폴백을 막으므로 빈 값이
+        # 그럴듯한 숫자로 덮이지 않는다 — 그래야 코드가 틀렸다는 것을 알 수 있다.
+        # 검증은 `verify_connection.py::check_ecos`, verified_live 는 사람이 올린다.
+        bok_targets = ecos_collection_targets()
         for key, stat, item, name, unit in bok_targets:
             series_map[key] = self._collect_one(
                 key=key, name=name, unit=unit,
@@ -477,11 +450,19 @@ class MacroCollector:
                 source="BOK",
             )
 
-        # ── 파생: 신용스프레드 = 회사채3Y − 국고3Y (M1-I) ────────────────────
+        # ── 파생 스프레드 (레지스트리의 `derived_from` 이 정의한다) ──────────
         # ★원계열 둘이 다 있을 때만 계산한다★ 하나라도 없으면 사유를 남기고 값을 내지
         # 않는다 — 한쪽만으로 스프레드를 만드는 것은 합성이다.
-        series_map["KR_CREDIT_SPREAD"] = self._derive_spread(
-            series_map.get("KR_CORP3Y"), series_map.get("KR_3Y"))
+        # P4-D1 에서 하드코딩 1건 → 레지스트리 순회로 바꿨다. 파생 계열을 추가할 때
+        # 레지스트리에만 적으면 되고, 수집기를 고치는 걸 잊어 키만 있고 값이 영원히
+        # 안 오는 조합이 생기지 않는다.
+        for spec in specs_by_provider(ECOS):
+            if len(spec.derived_from) != 2:
+                continue
+            minuend, subtrahend = spec.derived_from
+            series_map[spec.key] = self._derive_spread(
+                series_map.get(minuend), series_map.get(subtrahend),
+                key=spec.key, name=spec.label, unit=spec.unit)
 
         # 미국 매크로 (10종)
         for fred_id, meta in FRED_INDICATORS.items():
@@ -497,15 +478,14 @@ class MacroCollector:
             series=series_map,
         )
 
-    def _derive_spread(self, corp: MacroSeries | None,
-                       govt: MacroSeries | None) -> MacroSeries:
-        """신용스프레드 = 회사채3Y − 국고3Y (M1-I).
+    def _derive_spread(self, corp: MacroSeries | None, govt: MacroSeries | None,
+                       *, key: str, name: str, unit: str) -> MacroSeries:
+        """두 계열의 차이로 만드는 파생 스프레드 (M1-I, P4-D1 에서 일반화).
 
         ★한쪽만으로 만들지 않는다★ 둘 중 하나라도 없거나 겹치는 관측이 없으면 값 없이
         `source="unavailable"` 로 돌려준다. 한쪽 값을 스프레드처럼 쓰면 그건 합성이고,
         화면은 그것을 실측 스프레드로 읽는다.
         """
-        key, name, unit = "KR_CREDIT_SPREAD", "신용스프레드(회사채3Y − 국고3Y)", "%p"
         cv = list(corp.values) if corp and corp.values else []
         gv = list(govt.values) if govt and govt.values else []
         n = min(len(cv), len(gv))
@@ -529,6 +509,25 @@ class MacroCollector:
             mom_pct=None,
             z_score=norm["z_score"], percentile=norm["percentile"],
             mean_5y=norm["mean_5y"], std_5y=norm["std_5y"], trend=norm["trend"],
+            # ★`last_update` 를 반드시 채운다 — 비우면 PIT 게이트가 이 계열을 거부한다★
+            #
+            # M1-I 이후 잠복해 있던 결함이다. `observations_from_series` 는
+            # `released = last_update or period` 로 공표시각을 정하는데, 여기서
+            # `last_update` 를 안 넣으면 `period`("202608")로 폴백한다. 그 문자열을
+            # ISO `as_of`("2026-08-16T…")와 비교하면 **다섯 번째 글자에서 '0' > '-'**
+            # 라 `"202608" > "2026-08-16T…"` 가 참이 되고, 스냅샷 생성이
+            # `LookAheadError` 로 422 를 낸다.
+            #
+            # 지금까지 안 터진 이유는 유일한 파생 계열(KR_CREDIT_SPREAD)의 원계열
+            # KR_CORP3Y 가 미검증이라 **항상 unavailable** 이었기 때문이다. 값이
+            # 나오는 파생 계열이 생기는 순간(P4-D1 의 KR_TERM_SPREAD) 드러났다.
+            #
+            # 스프레드는 두 다리가 **모두** 관측된 뒤에야 알 수 있으므로 늦은 쪽을 쓴다.
+            last_update=max(
+                (x for x in (getattr(corp, "last_update", None),
+                             getattr(govt, "last_update", None)) if x),
+                default=datetime.now().isoformat(),
+            ),
         )
 
     def _collect_one(
