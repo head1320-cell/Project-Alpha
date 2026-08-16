@@ -187,6 +187,37 @@ def test_store_cap_never_goes_below_the_z_sample_floor():
         assert _store_cap() == 72, "저장 하한이 무너졌다 — 5년 z-표본 가정이 깨진다"
 
 
+def test_the_collector_actually_uses_the_cap_not_a_hardcoded_72():
+    """★위 두 테스트는 순수함수만 봤다 — 호출부가 그걸 쓰는지는 증명하지 않았다★
+
+    변이 프로브가 이걸 잡았다: `timestamps[-_store_cap():]` 를 `[-72:]` 로 되돌려도
+    `test_store_cap_follows_depth…` 가 **초록으로 남았다.** `_store_cap()` 은 여전히
+    240을 돌려주니까. 지키려던 것(저장에서 안 잘린다)과 재던 것(함수 반환값)이
+    달랐던, 이 저장소가 반복해 값을 치른 "아무것도 지키지 않는 초록 테스트" 다.
+
+    그래서 실제 수집 경로에 300개월을 흘려보내고 저장된 길이를 잰다. mock 으로는
+    잴 수 없다 — mock 은 60개라 `[-72:]` 와 `[-240:]` 의 결과가 같기 때문이다.
+    """
+    from src.services.macro_collector import MacroCollector, _store_cap
+
+    n = 300
+    stamps = [f"{2001 + i // 12}-{i % 12 + 1:02d}" for i in range(n)]
+    vals = [100.0 + i * 0.1 for i in range(n)]
+
+    with _patch.dict(os.environ, {"MACRO_HISTORY_YEARS": "20"}):
+        series = MacroCollector()._collect_one(
+            "PROBE_DEPTH", "깊이 프로브", "pt",
+            fetcher=lambda: (stamps, vals), use_cache=False, source="FRED",
+        )
+        cap = _store_cap()
+
+    assert cap == 240
+    assert len(series.values) == cap, (
+        f"300개월을 넣었는데 {len(series.values)}개만 저장됐다 — 호출부가 상한을 "
+        f"하드코딩하고 있다(기대 {cap})")
+    assert len(series.timestamps) == cap, "timestamps 만 따로 잘렸다"
+
+
 def test_default_depth_meets_the_frontier_sample_requirement():
     """★기본값이 요건을 채운다★ — 설정을 따로 만져야만 열리는 천장은 닫힌 천장이다."""
     from src.services.macro_collector import _history_years
