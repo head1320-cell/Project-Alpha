@@ -64,6 +64,13 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
                 w = np.asarray(sol["weights"], dtype=float)
         except Exception as e:  # 제약 해 실패 — 무제약 해 유지(정직 폴백)
             logger.warning(f"walk-forward 제약 해 실패, 무제약 유지: {e}")
+    # ★롱숏이면 클램프도 넷 정규화도 하지 않는다 (P3)★
+    # 넷으로 나누면 달러중립(Σw≈0)에서 0 나눗셈이고, 클램프는 제약 해를 망가뜨린다
+    # (`constrained_opt` 의 같은 결함 — 그쪽 주석 참고). 제약이 이미 gross/net 을
+    # 규정하고 있으므로 여기서 다시 정규화할 이유가 없다 — 해를 그대로 쓴다.
+    if constraints is not None and getattr(constraints, "allows_short", lambda: False)():
+        gross = float(np.abs(w).sum())
+        return w if gross > 0 else np.zeros(len(names))
     w = np.maximum(w, 0.0)
     s = w.sum()
     return (w / s) if s > 0 else np.ones(len(names)) / len(names)
@@ -210,17 +217,27 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                 rb_preds.append(float(w_new @ R_win.mean(axis=0)))
                 rebalances.append({
                     "date": str(getattr(dates[t], "date", lambda: dates[t])()),
-                    "weights": {names[i]: round(float(w[i]) * 100, 2) for i in range(n) if w[i] > 5e-4},
+                    # `abs()` — 부호가 아니라 잡음만 거른다 (P3, `_w_dict` 와 같은 이유)
+                    "weights": {names[i]: round(float(w[i]) * 100, 2)
+                                for i in range(n) if abs(w[i]) > 5e-4},
                     "turnover_pct": round(turnover * 100, 2),
+                    # 롱숏에서는 넷 하나로 포지션 크기를 말할 수 없다
+                    "gross_pct": round(float(np.abs(w).sum()) * 100, 2),
+                    "net_pct": round(float(w.sum()) * 100, 2),
                 })
         r_t = R[t]
         pr = float(w @ r_t)                        # 당일 포트 수익(장초 비중 기준)
         equity *= (1.0 + pr)
-        # 비중 표류
-        growth = w * (1.0 + r_t)
-        gs = growth.sum()
-        if gs > 0:
-            w = growth / gs
+        # 비중 표류 — 포트폴리오 가치 대비로 나눈다: wᵢ(1+rᵢ) / (1+r_p)
+        #
+        # ★예전에는 Σ 로 나눴다 (P3 에서 고침)★ 롱온리 완전투자에서는 Σwᵢ(1+rᵢ)
+        # = 넷(=1) + r_p = 1+r_p 라 **두 식이 완전히 같다** — 그래서 롱온리 결과는
+        # 한 자리도 안 바뀐다. 하지만 넷이 1 이 아닌 롱숏에서는 Σ 로 나누는 순간
+        # 넷이 매일 강제로 1 로 되돌려진다(= 매일 공짜 리밸런싱). 달러중립(넷≈0)
+        # 에서는 0 나눗셈으로 폭발한다.
+        denom = 1.0 + pr
+        if denom > 0:
+            w = w * (1.0 + r_t) / denom
         port_daily.append(pr)
         eq_curve.append(equity)
         sim_dates.append(t)
@@ -264,8 +281,32 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
 
     turnovers = [rb_["turnover_pct"] for rb_ in rebalances]
     conformal = _conformal_block(rb_preds, rb_at, eq, start)
+
+    # ★롱숏 백테스트의 비용은 이 엔진이 모델하지 않는다 — 값으로 채우지 말고 적는다★
+    # `cost_bps` 는 거래비용(수수료·세금·스프레드)만 본다. 숏 포지션에는 그 밖에
+    # **차입수수료(대차/대주 이자) · 숏 배당지급 · 증거금 이자**가 붙는데 전부
+    # 미반영이다. 이걸 적지 않으면 롱숏이 롱온리보다 좋아 보이는 것이 **모델 때문인지
+    # 누락 때문인지 구분할 수 없다.** 데이터가 없으므로 추정치를 지어내지 않는다.
+    short_notes: list[str] = []
+    is_long_short = bool(constraints is not None
+                         and getattr(constraints, "allows_short", lambda: False)())
+    if is_long_short:
+        gross_hist = [rb_.get("gross_pct") for rb_ in rebalances if rb_.get("gross_pct")]
+        short_notes.append(
+            "숏 비용 미반영 — 차입수수료·숏 배당지급·증거금 이자가 이 곡선에 없습니다. "
+            "롱온리와의 비교는 그만큼 롱숏에 유리하게 기울어 있습니다.")
+        short_notes.append(
+            "실행 불가 — 이 목표는 연구·백테스트 전용입니다(차입 가능여부 미연동 · "
+            "KIS 주문 유형에 공매도 없음).")
+        if gross_hist:
+            short_notes.append(
+                f"평균 gross 노출 {round(float(np.mean(gross_hist)), 1)}% — "
+                f"거래비용 {cost_bps}bp 는 회전율에만 적용됐습니다.")
+
     return {
         "error": False,
+        "long_short": is_long_short,
+        "notes": short_notes,
         # ★분포 무가정 예측 구간 (M2-C)★ 적중률은 **주장이 아니라 실측**으로 함께 낸다.
         "conformal": conformal,
         "dates": [str(getattr(dates[i], "date", lambda i=i: dates[i])()) for i in sim_dates],

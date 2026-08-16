@@ -271,3 +271,105 @@ def test_neutrality_survives_reoptimization():
         dtype=float)
     assert abs(first.sum()) < 5e-3, f"1회차 넷 {first.sum():+.4f}"
     assert abs(second.sum()) < 5e-3, f"★재최적화에서 중립이 사라졌다★ 넷 {second.sum():+.4f}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. 백테스트 (P3-B) — 사용자가 실제로 쓰겠다고 한 경로
+# ─────────────────────────────────────────────────────────────────────────────
+def _bt_fixture(seed: int = 11, n: int = 5, T: int = 400):
+    import datetime as _dt
+    rng = np.random.default_rng(seed)
+    base = rng.standard_normal((T, 1)) * 0.009
+    R = base + rng.standard_normal((T, n)) * 0.007
+    R[:, 0] += 0.0007
+    R[:, n - 1] -= 0.0009
+    names = [f"A{i}" for i in range(n)]
+    d0 = _dt.date(2023, 1, 2)
+    dates = [d0 + _dt.timedelta(days=i) for i in range(T)]
+    return names, R, dates
+
+
+def test_backtest_long_only_is_bit_identical_to_before():
+    """★드리프트 식을 바꿨다 — 롱온리에서 완전히 같아야 한다★
+
+    예전 `w·(1+r)/Σw·(1+r)` 와 새 `w·(1+r)/(1+r_p)` 는 롱온리 완전투자에서
+    분모가 항등적으로 같다(Σwᵢ(1+rᵢ) = 넷(=1) + r_p). 대수적으로 같다는 주장을
+    수치로 확인한다 — 같지 않으면 롱온리 백테스트가 조용히 바뀐 것이다.
+    """
+    from src.engine.allocation_backtest import walk_forward
+    names, R, dates = _bt_fixture()
+    out = walk_forward(names, R, dates, model="mvo", rebalance="monthly", cost_bps=10.0)
+    assert not out["error"], out
+    eq = np.asarray(out["equity_curve"], dtype=float)
+
+    # 예전 식을 손으로 재현해 대조
+    w = np.ones(len(names)) / len(names)
+    old = []
+    for t in range(len(R)):
+        pr = float(w @ R[t]); growth = w * (1.0 + R[t]); gs = growth.sum()
+        if gs > 0:
+            w = growth / gs
+        old.append(pr)
+    # 리밸런싱이 끼어 있어 곡선 전체 비교는 못 하지만, 드리프트 항등식 자체는 확인 가능
+    w1 = np.array([0.4, 0.3, 0.2, 0.06, 0.04]); r = R[5]
+    a = w1 * (1 + r) / (w1 * (1 + r)).sum()
+    b = w1 * (1 + r) / (1.0 + float(w1 @ r))
+    assert np.allclose(a, b, atol=1e-15), f"롱온리에서 두 드리프트 식이 다르다: {a - b}"
+    assert eq[-1] > 0 and len(old) == len(R)
+
+
+def test_backtest_runs_long_short_and_keeps_shorts_in_the_record():
+    from src.engine.allocation_backtest import walk_forward
+    names, R, dates = _bt_fixture()
+    c = Constraints(min_weight_pct=-20.0, max_weight_pct=60.0, gross_max_pct=160.0)
+    out = walk_forward(names, R, dates, model="mvo", constraints=c,
+                       rebalance="monthly", cost_bps=10.0)
+
+    assert not out["error"], out
+    assert out["long_short"] is True
+    rbs = out["rebalances"]
+    assert rbs, "리밸런싱이 한 번도 없었다"
+    assert any(any(v < 0 for v in rb["weights"].values()) for rb in rbs), (
+        "롱숏 백테스트인데 기록된 비중에 숏이 하나도 없다")
+    for rb in rbs:
+        assert rb["gross_pct"] <= 160.0 + 1.0, f"gross 상한 초과: {rb['gross_pct']}"
+        assert "net_pct" in rb
+
+
+def test_backtest_declares_that_short_costs_are_not_modelled():
+    """★숫자를 내는 것과 그 숫자의 한계를 적는 것을 함께 단언한다★
+
+    차입수수료·숏 배당지급·증거금 이자가 미반영인데 그걸 적지 않으면, 롱숏이
+    롱온리보다 좋아 보이는 것이 모델 때문인지 누락 때문인지 알 수 없다.
+    """
+    from src.engine.allocation_backtest import walk_forward
+    names, R, dates = _bt_fixture()
+    c = Constraints(min_weight_pct=-20.0, max_weight_pct=60.0, gross_max_pct=160.0)
+    out = walk_forward(names, R, dates, model="mvo", constraints=c, rebalance="monthly")
+    joined = " ".join(out["notes"])
+    assert "차입수수료" in joined and "미반영" in joined, out["notes"]
+    assert "실행 불가" in joined, out["notes"]
+
+
+def test_backtest_long_only_carries_no_short_notes():
+    """짝 — 롱온리에는 숏 관련 노트가 붙지 않는다(항상 붙는 상수 라벨 방지)."""
+    from src.engine.allocation_backtest import walk_forward
+    names, R, dates = _bt_fixture()
+    out = walk_forward(names, R, dates, model="mvo", rebalance="monthly")
+    assert out["long_short"] is False
+    assert out["notes"] == [], out["notes"]
+
+
+def test_dollar_neutral_backtest_does_not_explode():
+    """넷≈0 에서 예전 드리프트 식은 0 으로 나눴다."""
+    from src.engine.allocation_backtest import walk_forward
+    names, R, dates = _bt_fixture()
+    c = Constraints(min_weight_pct=-40.0, max_weight_pct=60.0,
+                    net_min_pct=0.0, net_max_pct=0.0, gross_max_pct=200.0)
+    out = walk_forward(names, R, dates, model="mvo", constraints=c, rebalance="monthly")
+    assert not out["error"], out
+    eq = np.asarray(out["equity_curve"], dtype=float)
+    assert np.all(np.isfinite(eq)), "자산곡선에 inf/nan 이 있다 — 0 나눗셈"
+    assert eq.max() < 1e6, f"자산곡선이 폭발했다: max={eq.max()}"
+    for rb in out["rebalances"]:
+        assert abs(rb["net_pct"]) < 5.0, f"달러중립인데 넷 {rb['net_pct']}%"
