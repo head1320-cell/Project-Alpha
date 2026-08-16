@@ -40,7 +40,17 @@ _has_case_cols = False
 STATUS_EXECUTABLE = "executable"
 STATUS_RESEARCH_ONLY = "research_only"
 
-MODE_LONG_ONLY = "long_only"          # v1 은 이것만. `long_short` 는 P3.
+MODE_LONG_ONLY = "long_only"
+MODE_LONG_SHORT = "long_short"        # P3. **연구·백테스트 전용 — 실행 불가.**
+
+# ★롱숏이 실행될 수 없는 이유는 셋이고, 전부 실측된 것이다 (P3)★
+# 이걸 상수로 두는 것은 사유를 한 곳에서만 쓰기 위해서다 — 화면·API·테스트가
+# 같은 문장을 보고, 나중에 차입이 연결되면 여기 한 곳만 고치면 된다.
+LONG_SHORT_BLOCKERS = (
+    "차입 가능여부 미연동 — `market_rules.shortable()` 이 항상 None 을 돌려줍니다",
+    "KIS 주문 유형에 공매도가 없습니다 — TTTC0802U 매수 / TTTC0801U 매도는 일반 현금 주문입니다",
+    "실행기가 미보유 종목 매도를 생략합니다 — 숏 진입 자체가 주문으로 나가지 않습니다",
+)
 
 
 def _engine():
@@ -119,7 +129,20 @@ def compile_target(
             raise ValueError(f"exposure 는 0~1 이어야 합니다: {exposure}")
 
     final = {c: round(float(w) * exposure, 6) for c, w in base_weights.items()}
-    cash = round(sum(float(w) for w in base_weights.values()) * (1.0 - exposure), 6)
+
+    # ★롱숏에서 `cash` 한 숫자는 뜻이 다르다 (P3)★
+    # `cash = Σbase × (1−exposure)` 는 **넷** 기준이다. 롱온리 완전투자에서는
+    # Σbase = 100% 라 "현금 비중" 이 맞지만, 롱숏에서 노출 축소는 gross 를 줄이는
+    # 것이고 넷은 이미 100% 가 아니다(달러중립이면 0). 넷으로 계산한 현금을 그대로
+    # 내면 "현금 100%" 같은 무의미한 값이 나온다 — 뭉개지 말고 gross 를 따로 낸다.
+    gross_before = round(sum(abs(float(w)) for w in base_weights.values()), 6)
+    gross_after = round(gross_before * exposure, 6)
+    net_after = round(sum(float(w) for w in final.values()), 6)
+
+    if mode == MODE_LONG_SHORT:
+        cash = None
+    else:
+        cash = round(sum(float(w) for w in base_weights.values()) * (1.0 - exposure), 6)
 
     # ── status 판정 — 막을 때는 반드시 사유를 함께 낸다 ──
     reasons: list[str] = []
@@ -130,9 +153,15 @@ def compile_target(
         )
     if mode == MODE_LONG_ONLY and any(v < 0 for v in final.values()):
         # ★버리지 않고 거부한다★ `_w_dict` 는 음수를 조용히 제외해서, 롱숏이 아닌데
-        # 롱온리처럼 보이게 만들었다. 값은 남기고 상태로 막는다.
+        # 롱온리처럼 보이게 만들었다(P3 에서 `abs()` 로 고쳤다). 값은 남기고 상태로 막는다.
         neg = sorted(c for c, v in final.items() if v < 0)
         reasons.append(f"롱온리 모드인데 음수 비중이 있습니다: {', '.join(neg)}")
+    if mode == MODE_LONG_SHORT:
+        # ★입력과 무관하게 항상 막힌다 (P3)★ 숏이 실제로 있는지 없는지도 보지 않는다 —
+        # 롱숏 **모드로 만들어진 목표**는 실행 경로가 표현할 수 없는 종류의 것이다.
+        # 조건을 "숏이 있으면" 으로 두면, 우연히 숏이 0 인 롱숏 목표가 executable 로
+        # 새어 나가고 그 다음 리밸런싱에서 숏이 생긴다.
+        reasons.append("롱숏 목표는 연구·백테스트 전용입니다 — " + " / ".join(LONG_SHORT_BLOCKERS))
     if overlay is not None and not source:
         reasons.append("타이밍 오버레이의 출처가 없습니다 — 근거 없는 노출 축소입니다.")
 
@@ -142,6 +171,10 @@ def compile_target(
         "overlay": ({"exposure": exposure, "source": source} if overlay is not None else None),
         "final_weights": final,
         "cash_weight": cash,
+        # 롱숏에서 포지션 크기를 말하는 두 축 — 넷 하나로는 말할 수 없다.
+        "gross_before": gross_before,
+        "gross_after": gross_after,
+        "net_after": net_after,
         "status": STATUS_RESEARCH_ONLY if reasons else STATUS_EXECUTABLE,
         "status_reason": " / ".join(reasons) if reasons else None,
         "run_id": run_id,
@@ -204,11 +237,21 @@ def _col_list() -> list[str]:
 
 def _row_to_dict(row) -> dict[str, Any]:
     g = dict(zip(_col_list(), row, strict=False))
+    base = json.loads(g["base_weights"]) if g.get("base_weights") else {}
+    final = json.loads(g["final_weights"]) if g.get("final_weights") else {}
+    # ★gross/net 은 DB 열이 아니라 재계산이다 (P3)★ `base_weights`·`final_weights`
+    # 만의 순수 함수이므로 마이그레이션 없이 항상 일치한다. 저장하지 않는 이유는
+    # 저장한 값과 계산한 값이 갈라지는 순간 어느 쪽이 진실인지 물어야 하기 때문이다.
+    # 새로 만든 목표와 재적재한 목표의 **모양이 같아야** 프론트가 분기하지 않는다.
+    gross_before = round(sum(abs(float(w)) for w in base.values()), 6)
     return {
+        "gross_before": gross_before,
+        "gross_after": round(sum(abs(float(w)) for w in final.values()), 6),
+        "net_after": round(sum(float(w) for w in final.values()), 6),
         "tpv_id": g.get("tpv_id"), "created_at": g.get("created_at"), "mode": g.get("mode"),
-        "base_weights": json.loads(g["base_weights"]) if g.get("base_weights") else {},
+        "base_weights": base,
         "overlay": json.loads(g["overlay"]) if g.get("overlay") else None,
-        "final_weights": json.loads(g["final_weights"]) if g.get("final_weights") else {},
+        "final_weights": final,
         "cash_weight": g.get("cash_weight"), "status": g.get("status"),
         "status_reason": g.get("status_reason"),
         "run_id": g.get("run_id"), "snapshot_id": g.get("snapshot_id"),

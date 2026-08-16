@@ -373,3 +373,71 @@ def test_dollar_neutral_backtest_does_not_explode():
     assert eq.max() < 1e6, f"자산곡선이 폭발했다: max={eq.max()}"
     for rb in out["rebalances"]:
         assert abs(rb["net_pct"]) < 5.0, f"달러중립인데 넷 {rb['net_pct']}%"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. 실행 게이트 (P3-G) — 롱숏은 어떤 입력으로도 executable 이 아니다
+# ─────────────────────────────────────────────────────────────────────────────
+def test_long_short_target_is_never_executable():
+    """★입력을 가리지 않는다★ 숏이 실제로 있는지도 보지 않는다 — 롱숏 **모드로
+    만들어진 목표**는 실행 경로가 표현할 수 없는 종류의 것이다. 조건을 '숏이 있으면'
+    으로 두면 우연히 숏이 0 인 롱숏 목표가 새어 나가고 다음 리밸런싱에서 숏이 생긴다.
+    """
+    from src.data.target_versions import (
+        MODE_LONG_SHORT,
+        STATUS_RESEARCH_ONLY,
+        compile_target,
+    )
+    for base in ({"005930": 60.0, "000660": -20.0},   # 숏 있음
+                 {"005930": 60.0, "000660": 40.0},    # 숏 없음 (그래도 막힌다)
+                 {"005930": 0.0}):                    # 빈 것에 가까움
+        tv = compile_target(base, None, mode=MODE_LONG_SHORT)
+        assert tv["status"] == STATUS_RESEARCH_ONLY, f"{base} 가 executable 로 새어 나갔다"
+        assert "연구·백테스트 전용" in (tv["status_reason"] or "")
+
+
+def test_long_short_block_names_all_three_measured_reasons():
+    """사유가 뭉뚱그려지지 않는다 — 셋 다 이름이 있어야 나중에 무엇이 풀렸는지 안다."""
+    from src.data.target_versions import (
+        LONG_SHORT_BLOCKERS,
+        MODE_LONG_SHORT,
+        compile_target,
+    )
+    tv = compile_target({"005930": 60.0, "000660": -20.0}, None, mode=MODE_LONG_SHORT)
+    reason = tv["status_reason"] or ""
+    for blocker in LONG_SHORT_BLOCKERS:
+        assert blocker in reason, f"차단 사유가 빠졌다: {blocker}"
+
+
+def test_long_short_reports_gross_and_net_instead_of_a_single_cash_number():
+    """★현금 한 숫자로 뭉개지 않는다★
+
+    `cash = Σbase × (1−exposure)` 는 넷 기준이다. 롱숏에서 노출 축소는 gross 를 줄이는
+    것이고 넷은 이미 100% 가 아니다 — 달러중립이면 0 이라 "현금 100%" 가 나온다.
+    """
+    from src.data.target_versions import MODE_LONG_SHORT, compile_target
+    tv = compile_target({"A": 80.0, "B": -30.0, "C": 50.0}, {"exposure": 0.5, "source": "t"},
+                        mode=MODE_LONG_SHORT)
+    assert tv["cash_weight"] is None, "롱숏인데 넷 기준 현금을 냈다"
+    assert tv["gross_before"] == pytest.approx(160.0)     # 80+30+50
+    assert tv["gross_after"] == pytest.approx(80.0)       # × 0.5
+    assert tv["net_after"] == pytest.approx(50.0)         # (80-30+50) × 0.5
+
+
+def test_long_only_target_shape_is_unchanged():
+    """짝 — 롱온리는 예전 그대로 `cash_weight` 를 낸다."""
+    from src.data.target_versions import STATUS_EXECUTABLE, compile_target
+    tv = compile_target({"A": 60.0, "B": 40.0}, {"exposure": 0.8, "source": "t"})
+    assert tv["status"] == STATUS_EXECUTABLE
+    assert tv["cash_weight"] == pytest.approx(20.0)
+    assert tv["gross_after"] == pytest.approx(80.0) and tv["net_after"] == pytest.approx(80.0)
+
+
+def test_execution_plan_cannot_be_built_from_a_long_short_target():
+    """실행 라우트의 해석기가 `executable` 이 아닌 목표를 거부하는지 — 게이트가
+    실제로 닫혀 있는지는 `compile_target` 의 status 만으로는 증명되지 않는다."""
+    from src.data.target_versions import MODE_LONG_SHORT, STATUS_EXECUTABLE, compile_target
+    tv = compile_target({"005930": 60.0, "000660": -20.0}, None, mode=MODE_LONG_SHORT)
+    assert tv["status"] != STATUS_EXECUTABLE
+    # 실행 경로가 보는 유일한 관문이 status 다 — 값이 남아 있어도 통과하지 못한다.
+    assert tv["final_weights"]["000660"] == pytest.approx(-20.0), "값은 버리지 않는다"
