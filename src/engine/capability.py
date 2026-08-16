@@ -87,11 +87,35 @@ def _module_probe(module: str, *symbols: str) -> Callable[[], ProbeResult]:
     return probe
 
 
-def _min_observations(n_required: int) -> Callable[[], ProbeResult]:
+#: 합성이 아닌 것으로 인정하는 출처. `MacroSeries.source` 가 쓰는 값과 같아야 한다.
+_REAL_SOURCES = ("BOK", "FRED", "KRX", "DART", "KIS")
+
+#: 프론티어를 열려면 실측 계열이 이만큼은 돼야 한다. 절반 — 근거는 아래 주석.
+_MIN_REAL_SHARE = 0.5
+
+
+def _min_observations(n_required: int, *,
+                      require_real_source: bool = False) -> Callable[[], ProbeResult]:
     """표본이 실제로 충분한지 **센다**.
 
     모듈이 있어도 표본이 없으면 모델은 노이즈를 낸다. A8 이 4상태 HMM 을 기각한 것이
     정확히 이 판정이었고, 그때는 사람이 손으로 셌다 — 여기서는 코드가 센다.
+
+    ★`require_real_source` 는 P4 가 만든 안전장치다★
+    ------------------------------------------------------------------------------
+    P4 는 적재 깊이를 20년(240개월)으로 올리고 **mock 길이도 그 깊이에서 유도**하게
+    바꾼다. 파이프라인이 깊이를 감당하는지 mock 으로 검증하기 위해서다. 그런데 그
+    변경만 하면 위험이 하나 생긴다 — **관측 240개가 전부 합성인데 `frontier_sample`
+    이 통과해, 지어낸 데이터 위에서 L0(Full Frontier)이 열린다.** 그러면 이 사다리는
+    M1 이 막으려던 바로 그것("그럴듯한 숫자를 만드는 기계")이 된다.
+
+    그래서 관측 수와 **출처를 함께** 본다. 표본이 240개여도 실측 비중이 낮으면 열지
+    않고, 사유에 두 수치를 나란히 적는다 — 무엇이 모자란지 사람이 바로 알아야 한다.
+
+    ★L1 의 `causal_sample` 에는 이 조건을 걸지 않는다★ L1 대체 엔진들은 이미 자기
+    출처를 라벨로 밝히고(`span`·`note` 계약), mock 환경에서 도는 것이 이 저장소의
+    확립된 개발 동작이다. 여기까지 막으면 개발 환경에서 매크로가 통째로 죽는다.
+    막아야 하는 것은 **프론티어를 여는 주장**이지 개발용 계산이 아니다.
     """
     def probe() -> ProbeResult:
         try:
@@ -101,12 +125,30 @@ def _min_observations(n_required: int) -> Callable[[], ProbeResult]:
             n = max((len(s.values) for s in series.values()), default=0)
         except Exception as e:  # noqa: BLE001
             return ProbeResult(False, f"매크로 시계열을 읽지 못해 표본을 셀 수 없습니다: {e}")
+
+        real = sum(1 for s in series.values()
+                   if str(getattr(s, "source", "") or "").upper() in _REAL_SOURCES)
+        total = len(series)
+        share = (real / total) if total else 0.0
+        detail = {"observed": n, "required": n_required,
+                  "real_series": real, "total_series": total,
+                  "real_share": round(share, 3)}
+
         if n < n_required:
             return ProbeResult(
                 False,
                 f"표본이 부족합니다 — 관측 {n}개, 최소 {n_required}개 필요",
-                {"observed": n, "required": n_required})
-        return ProbeResult(True, detail={"observed": n, "required": n_required})
+                detail)
+        if require_real_source and share < _MIN_REAL_SHARE:
+            return ProbeResult(
+                False,
+                (f"관측 {n}개는 충족했지만 실측 데이터가 아닙니다 — "
+                 f"실측 계열 {real}/{total}({round(share * 100)}%), "
+                 f"최소 {round(_MIN_REAL_SHARE * 100)}% 필요. "
+                 f"합성 데이터로는 프론티어 모델을 열지 않습니다 "
+                 f"(BOK/FRED/KRX/DART/KIS 키를 넣으면 열립니다)."),
+                detail)
+        return ProbeResult(True, detail=detail)
     return probe
 
 
@@ -167,7 +209,9 @@ REQUIREMENTS: dict[str, tuple[str, Callable[[], ProbeResult]]] = {
     "llm": ("공시문 → 뷰 변환 (Agentic MCP)",
             _external_service(("ANTHROPIC_API_KEY",), "LLM")),
     "frontier_sample": ("프론티어 모델 학습에 필요한 최소 표본",
-                        _min_observations(240)),      # 20년 월간 — 60개월로는 못 연다
+                        # 20년 월간. ★출처 조건이 함께 걸린다 (P4-D4)★ — 깊이를 올려
+                        # mock 이 240개를 만들어도 합성으로는 열리지 않는다.
+                        _min_observations(240, require_real_source=True)),
 
     # L1 — 정량 인과
     "statsmodels": ("동적 요인모형 · Granger · Markov 전환",
