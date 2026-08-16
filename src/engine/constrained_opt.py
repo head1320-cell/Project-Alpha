@@ -39,6 +39,16 @@ class Constraints:
     beta_max: float | None = None
     cash_min_pct: float = 0.0
     cash_max_pct: float = 0.0                    # 0이면 완전투자 (기존 동작 보존)
+    # ── 노출 제약 (P3) ──────────────────────────────────────────────────────
+    # ★롱숏에서 `Σw` 하나로는 포지션 크기를 말할 수 없다★ 롱 100/숏 0 과
+    # 롱 150/숏 50 은 넷이 똑같이 100% 지만 전혀 다른 포트폴리오다.
+    #   · gross_max_pct — Σ|w| 상한. 130/30 을 표현하는 유일한 방법(=160).
+    #   · net_min/max_pct — Σw 범위. **음수 허용**. 달러중립은 0±tol.
+    # `cash_min/max_pct` 도 Σw 를 제약하지만 "현금" 이라는 롱온리 어휘이고
+    # 음수를 표현할 수 없다. 롱숏에서는 net 을 쓰고, 둘 다 주면 net 이 이긴다.
+    gross_max_pct: float | None = None
+    net_min_pct: float | None = None
+    net_max_pct: float | None = None
 
     def any_active(self) -> bool:
         # ★`!= 0` 이다 (P3)★ 예전에는 `min_weight_pct > 0` 이라, 음수 하한만 준 요청은
@@ -47,7 +57,9 @@ class Constraints:
         return (self.max_weight_pct is not None or self.min_weight_pct != 0
                 or bool(self.group_caps_pct) or self.turnover_cap_pct is not None
                 or self.beta_min is not None or self.beta_max is not None
-                or self.cash_min_pct > 0 or self.cash_max_pct > 0)
+                or self.cash_min_pct > 0 or self.cash_max_pct > 0
+                or self.gross_max_pct is not None
+                or self.net_min_pct is not None or self.net_max_pct is not None)
 
     def allows_short(self) -> bool:
         """음수 하한이 곧 롱숏 의사표시다 — 별도 플래그를 만들지 않는다.
@@ -69,10 +81,26 @@ def asset_betas(R: np.ndarray, bench: np.ndarray | None) -> np.ndarray | None:
 
 def _precheck(n: int, c: Constraints, groups: dict[str, list[int]]) -> str | None:
     """구조적 infeasible을 사람 언어로. None이면 통과."""
-    invest_min = 1.0 - c.cash_max_pct / 100.0
-    invest_max = 1.0 - c.cash_min_pct / 100.0
-    if invest_min > invest_max + _EPS:
-        return "현금 밴드가 뒤집혀 있습니다 (min > max)."
+    if c.net_min_pct is not None or c.net_max_pct is not None:
+        invest_min = (c.net_min_pct / 100.0) if c.net_min_pct is not None else -1e9
+        invest_max = (c.net_max_pct / 100.0) if c.net_max_pct is not None else 1e9
+        if invest_min > invest_max + _EPS:
+            return "넷 노출 밴드가 뒤집혀 있습니다 (min > max)."
+    else:
+        invest_min = 1.0 - c.cash_max_pct / 100.0
+        invest_max = 1.0 - c.cash_min_pct / 100.0
+        if invest_min > invest_max + _EPS:
+            return "현금 밴드가 뒤집혀 있습니다 (min > max)."
+
+    if c.gross_max_pct is not None:
+        gross_cap = c.gross_max_pct / 100.0
+        if gross_cap <= _EPS:
+            return "gross 노출 상한이 0 입니다 — 아무것도 보유할 수 없습니다."
+        # Σ|w| ≥ |Σw| 는 항등식이다. 넷 밴드가 통째로 gross 상한 밖이면 구조적 불능.
+        need = min(abs(invest_min), abs(invest_max)) if invest_min * invest_max > 0 else 0.0
+        if need > gross_cap + _EPS:
+            return (f"gross 상한 {c.gross_max_pct}% 로는 요구 넷 노출을 만들 수 없습니다 "
+                    f"(Σ|w| ≥ |Σw| 이므로 gross 는 넷의 절대값 이상이어야 합니다).")
     ub = (c.max_weight_pct / 100.0) if c.max_weight_pct is not None else 1.0
     lb = c.min_weight_pct / 100.0
     if lb > ub + _EPS:
@@ -105,10 +133,28 @@ def _build_slsqp(n: int, c: Constraints, groups: dict[str, list[int]],
     lb = c.min_weight_pct / 100.0
     bounds = [(lb, ub)] * n
     cons: list[dict] = []
-    invest_min = 1.0 - c.cash_max_pct / 100.0
-    invest_max = 1.0 - c.cash_min_pct / 100.0
-    cons.append({"type": "ineq", "fun": lambda w: np.sum(w) - invest_min})
-    cons.append({"type": "ineq", "fun": lambda w: invest_max - np.sum(w)})
+    # ── 넷 노출 (P3) ────────────────────────────────────────────────────────
+    # `net_min/max_pct` 가 주어지면 그것이 이긴다 — 현금 어휘는 롱온리 전용이고
+    # 음수 넷(숏 우위)을 표현할 수 없다. 안 주면 기존 현금 밴드 그대로(동작 불변).
+    if c.net_min_pct is not None or c.net_max_pct is not None:
+        invest_min = (c.net_min_pct / 100.0) if c.net_min_pct is not None else -np.inf
+        invest_max = (c.net_max_pct / 100.0) if c.net_max_pct is not None else np.inf
+    else:
+        invest_min = 1.0 - c.cash_max_pct / 100.0
+        invest_max = 1.0 - c.cash_min_pct / 100.0
+    if np.isfinite(invest_min):
+        cons.append({"type": "ineq", "fun": lambda w, lo=invest_min: np.sum(w) - lo})
+    if np.isfinite(invest_max):
+        cons.append({"type": "ineq", "fun": lambda w, hi=invest_max: hi - np.sum(w)})
+
+    # ── gross 노출 Σ|w| ≤ cap (P3) ─────────────────────────────────────────
+    # ★|·| 는 0 에서 미분 불가라 SLSQP 가 죽는다★ 회전율 제약이 이미 쓰는
+    # 평활화 √(x²+δ) 를 그대로 따른다(같은 파일 아래 turnover 항 참고) —
+    # 새 기법이 아니라 이 파일의 기존 관례다.
+    if c.gross_max_pct is not None:
+        cons.append({"type": "ineq",
+                     "fun": (lambda w, cap=c.gross_max_pct / 100.0:
+                             cap - float(np.sum(np.sqrt(w ** 2 + 1e-10))))})
     if "group" not in skip:
         for g, idxs in groups.items():
             cap = c.group_caps_pct.get(g)
@@ -176,9 +222,34 @@ def _violations(w: np.ndarray, c: Constraints, groups: dict[str, list[int]],
         if c.beta_min is not None and pb < c.beta_min - _BIND_TOL:
             viol.append({"kind": "beta", "detail": f"β {round(pb, 2)} < 하한 {c.beta_min}"})
 
-    cash = (1.0 - float(np.sum(w))) * 100
-    if cash > c.cash_max_pct + _BIND_TOL * 100 or cash < c.cash_min_pct - _BIND_TOL * 100:
-        viol.append({"kind": "cash", "detail": f"현금 {round(cash, 1)}% 가 밴드 밖"})
+    # ── 노출 제약 (P3) ──────────────────────────────────────────────────────
+    # ★보고되지 않는 제약은 제약이 아니다★ `_build_slsqp` 이 거는 것은 전부 여기서
+    # 위반이 잡혀야 한다. 완화 사다리가 제약을 스킵했을 때 그 사실이 드러나는 곳도 여기다.
+    net = float(np.sum(w)) * 100
+    gross = float(np.sum(np.abs(w))) * 100
+
+    if c.gross_max_pct is not None:
+        if gross > c.gross_max_pct + _BIND_TOL * 100:
+            viol.append({"kind": "gross", "detail": f"gross 노출 {round(gross, 1)}% > 상한 {c.gross_max_pct}%",
+                         "amount_pct": round(gross - c.gross_max_pct, 2)})
+        elif abs(gross - c.gross_max_pct) < _BIND_TOL * 100:
+            binding.append(f"gross 상한 {c.gross_max_pct}%")
+
+    if c.net_min_pct is not None or c.net_max_pct is not None:
+        # 넷 밴드를 쓰면 현금 어휘는 적용하지 않는다 — 같은 Σw 를 두 번 판정하면
+        # 롱숏에서 "현금이 밴드 밖" 이라는 뜻 없는 위반이 항상 붙는다.
+        if c.net_max_pct is not None and net > c.net_max_pct + _BIND_TOL * 100:
+            viol.append({"kind": "net", "detail": f"넷 노출 {round(net, 1)}% > 상한 {c.net_max_pct}%",
+                         "amount_pct": round(net - c.net_max_pct, 2)})
+        elif c.net_max_pct is not None and abs(net - c.net_max_pct) < _BIND_TOL * 100:
+            binding.append(f"넷 상한 {c.net_max_pct}%")
+        if c.net_min_pct is not None and net < c.net_min_pct - _BIND_TOL * 100:
+            viol.append({"kind": "net", "detail": f"넷 노출 {round(net, 1)}% < 하한 {c.net_min_pct}%",
+                         "amount_pct": round(c.net_min_pct - net, 2)})
+    else:
+        cash = 100.0 - net
+        if cash > c.cash_max_pct + _BIND_TOL * 100 or cash < c.cash_min_pct - _BIND_TOL * 100:
+            viol.append({"kind": "cash", "detail": f"현금 {round(cash, 1)}% 가 밴드 밖"})
     return viol, binding
 
 

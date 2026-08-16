@@ -60,6 +60,15 @@ class ConstraintsInput(BaseModel):
     beta_max: float | None = Field(None, ge=-2, le=3)
     cash_min_pct: float = Field(0.0, ge=0, le=90)
     cash_max_pct: float = Field(0.0, ge=0, le=90)
+    # ── 노출 제약 (P3) ──────────────────────────────────────────────────────
+    # 롱숏에서 `Σw` 하나로는 포지션 크기를 말할 수 없다 — 롱 100/숏 0 과
+    # 롱 150/숏 50 은 넷이 같아도 전혀 다른 포트폴리오다.
+    #   · 130/30 → gross_max_pct=160, net_min=net_max=100
+    #   · 달러중립 → net_min_pct=net_max_pct=0 (+ 베타중립은 beta_min/max 로)
+    # ★이 셋은 사후 변환이 아니라 최적화 제약이다 — 재최적화해도 유지된다.★
+    gross_max_pct: float | None = Field(None, ge=1, le=400)
+    net_min_pct: float | None = Field(None, ge=-200, le=200)
+    net_max_pct: float | None = Field(None, ge=-200, le=200)
 
 
 _AS_OF_PAT = r"^\d{4}-\d{2}-\d{2}$"

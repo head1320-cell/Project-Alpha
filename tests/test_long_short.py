@@ -185,3 +185,89 @@ def test_w_dict_keeps_shorts_but_still_drops_numerical_noise():
     assert out["A"] == pytest.approx(60.0)
     assert out["B"] == pytest.approx(-25.0), "숏이 응답에서 사라졌다"
     assert "C" not in out and "D" not in out, f"수치 잔차가 남았다: {out}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. gross / net 노출 제약 (P3-C) — 걸면 구속하고, 풀면 위반이 드러난다
+# ─────────────────────────────────────────────────────────────────────────────
+def test_gross_cap_actually_binds():
+    """★짝 단언★ 제약을 걸면 Σ|w| 가 상한 안, 풀면 상한을 넘는다.
+    '풀었을 때 넘는다' 가 없으면 상수처럼 항상 참인 가드를 못 잡는다."""
+    names, R, mu, S = _fixture()
+
+    loose = constrained_solve("mvo", names, R, mu, S,
+                              Constraints(min_weight_pct=-30.0, max_weight_pct=60.0))
+    g_loose = float(np.abs(np.asarray(loose["weights"], dtype=float)).sum())
+
+    tight = constrained_solve("mvo", names, R, mu, S,
+                              Constraints(min_weight_pct=-30.0, max_weight_pct=60.0,
+                                          gross_max_pct=130.0))
+    w = np.asarray(tight["weights"], dtype=float)
+    g_tight = float(np.abs(w).sum())
+
+    assert g_loose > 1.30 + 1e-3, f"제약 없이도 gross 가 130% 이하라 이 시험이 무의미하다: {g_loose}"
+    assert g_tight <= 1.30 + 5e-3, f"gross 상한 130% 를 지키지 못했다: Σ|w|={g_tight}"
+    assert not any(v["kind"] == "gross" for v in tight["violations"]), tight["violations"]
+
+
+def test_net_band_allows_dollar_neutral():
+    """달러중립은 넷 0 — 현금 어휘로는 표현할 수 없는 상태다."""
+    names, R, mu, S = _fixture()
+    sol = constrained_solve("mvo", names, R, mu, S,
+                            Constraints(min_weight_pct=-40.0, max_weight_pct=60.0,
+                                        net_min_pct=0.0, net_max_pct=0.0,
+                                        gross_max_pct=200.0))
+    w = np.asarray(sol["weights"], dtype=float)
+    assert sol["status"] != "infeasible", sol.get("reason")
+    assert abs(w.sum()) < 5e-3, f"달러중립인데 넷이 {w.sum():+.4f}"
+    assert np.abs(w).sum() > 0.5, "넷 0 을 전부 0 으로 만들어 달성했다 — 그건 중립이 아니라 빈 포트폴리오다"
+    assert (w < -1e-6).any() and (w > 1e-6).any(), "넷 0 이면 롱과 숏이 둘 다 있어야 한다"
+
+
+def test_net_band_does_not_also_report_cash_violation():
+    """넷 밴드를 쓰면 현금 어휘는 적용하지 않는다 — 같은 Σw 를 두 번 판정하면
+    롱숏에서 '현금이 밴드 밖' 이라는 뜻 없는 위반이 항상 붙는다."""
+    names, R, mu, S = _fixture()
+    sol = constrained_solve("mvo", names, R, mu, S,
+                            Constraints(min_weight_pct=-40.0, max_weight_pct=60.0,
+                                        net_min_pct=0.0, net_max_pct=0.0,
+                                        gross_max_pct=200.0))
+    assert not any(v["kind"] == "cash" for v in sol["violations"]), sol["violations"]
+
+
+def test_gross_below_net_is_refused_with_a_reason():
+    """Σ|w| ≥ |Σw| 는 항등식 — 구조적으로 불가능한 조합은 사람 언어로 거부한다."""
+    names, R, mu, S = _fixture()
+    sol = constrained_solve("mvo", names, R, mu, S,
+                            Constraints(min_weight_pct=-40.0, gross_max_pct=50.0,
+                                        net_min_pct=100.0, net_max_pct=100.0))
+    assert sol["status"] == "infeasible"
+    assert "gross" in (sol.get("reason") or ""), sol.get("reason")
+
+
+def test_exposure_constraints_are_inert_when_unset():
+    """★기본값에서는 존재하지 않는 것과 같아야 한다★ — 롱온리 회귀 방지."""
+    c = Constraints(min_weight_pct=0.0, max_weight_pct=60.0)
+    assert c.gross_max_pct is None and c.net_min_pct is None and c.net_max_pct is None
+    names, R, mu, S = _fixture()
+    sol = constrained_solve("mvo", names, R, mu, S, c)
+    w = np.asarray(sol["weights"], dtype=float)
+    assert sol["status"] == "ok" and w.sum() == pytest.approx(1.0, abs=1e-6)
+    assert not any(v["kind"] in ("gross", "net") for v in sol["violations"])
+
+
+def test_neutrality_survives_reoptimization():
+    """★사후 중립화와의 차이가 여기다 (R0 결함 종료)★
+
+    `NeutralizePanel` 의 사후 변환은 재최적화하면 사라진다("설계" 라고 적혀 있다).
+    제약으로 건 중립은 같은 제약으로 다시 풀면 다시 중립이다 — 두 번 돌려 확인한다.
+    """
+    names, R, mu, S = _fixture()
+    c = Constraints(min_weight_pct=-40.0, max_weight_pct=60.0,
+                    net_min_pct=0.0, net_max_pct=0.0, gross_max_pct=200.0)
+    first = np.asarray(constrained_solve("mvo", names, R, mu, S, c)["weights"], dtype=float)
+    second = np.asarray(
+        constrained_solve("mvo", names, R, mu, S, c, w_current=dict(zip(names, first)))["weights"],
+        dtype=float)
+    assert abs(first.sum()) < 5e-3, f"1회차 넷 {first.sum():+.4f}"
+    assert abs(second.sum()) < 5e-3, f"★재최적화에서 중립이 사라졌다★ 넷 {second.sum():+.4f}"
