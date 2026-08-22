@@ -681,8 +681,6 @@ class BacktestEngine:
           매 호출 dt.strftime/copy 제거 → 슬라이스에서 컬럼만 재구성.
         """
         import src.kis_data_fetcher as fetcher
-        original_fn = fetcher.get_daily_prices
-        original_cp = fetcher.get_current_price
 
         # 사전 생성된 _date_str 사용 (strftime 재호출 없음).
         # rename으로 date 컬럼 구성 — copy 없이 뷰 기반 경량 DataFrame.
@@ -708,16 +706,21 @@ class BacktestEngine:
             "w52_low": int(df_copy["low"].tail(252).min()),
         }
 
+        # ★전역을 덮어쓰지 않는다 (P0-1)★
+        # 예전에는 `fetcher.get_daily_prices = lambda …` 로 **모듈 전역**을 대입하고
+        # finally 에서 "진입 시점의 값" 으로 되돌렸다. 그 값이 이미 다른 스레드의
+        # 람다일 수 있어, 동시 실행이 서로의 데이터를 읽고 두 실행이 끝난 뒤에도
+        # 전역이 오염된 채 남았다(실측: `scripts/bench_backtest.py --race`).
+        # ContextVar 는 스레드마다 별개이고 토큰으로 정확히 복원된다.
+        # 람다가 하던 일(인자를 무시하고 이 봉을 돌려준다)은 그대로다 — 결과 불변.
+        token = fetcher.push_bar_context(df_copy, price_info)
         try:
-            fetcher.get_daily_prices = lambda *a, **kw: df_copy
-            fetcher.get_current_price = lambda *a, **kw: price_info
             return strategy.generate_signal(ticker, ticker)
         except Exception as e:
             logger.debug(f"Signal error {ticker}: {e}")
             return None
         finally:
-            fetcher.get_daily_prices = original_fn
-            fetcher.get_current_price = original_cp
+            fetcher.pop_bar_context(token)
 
     def _initial_alloc(self, factor_weight: float | None = None,
                        atr_pct: float | None = None) -> float:
