@@ -183,7 +183,7 @@ DB 상태를 확인하고 `_Cancelled` 를 던진다(`backtest_run_routes.py:60~
 2. 단일 실행 결과가 변경 전과 **바이트 동일**.
 3. 취소·재시도·고아 복구 테스트가 프로세스 워커에서 그대로 통과.
 4. 텔레메트리 12항목이 `backtest_runs` 에 기록된다.
-5. pytest 1,952 · Playwright 422 감소 없음.
+5. pytest 1,953 · Playwright 422 감소 없음.
 
 ## 7. 하지 않는 것
 

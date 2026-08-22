@@ -131,7 +131,7 @@ P0 정합성·격리·계측  →  P1 성능(측정 후)  →  P2 Company 언더
 ## 전 단계 공통 게이트
 
 ```bash
-KIS_USE_MOCK=1 python3 -m pytest tests/ -q          # 1,952 passed / 10 skipped (1 사전 실패)
+KIS_USE_MOCK=1 python3 -m pytest tests/ -q          # 1,953 passed / 10 skipped / 0 failed
 ruff check scripts/ src/ tests/ main_api.py         # 0
 cd frontend && npx tsc --noEmit && npm run lint && npx next build
 cd frontend && npx playwright test --shard=1/4      # 이후 2/4·3/4·4/4 (422 passed)
@@ -153,4 +153,4 @@ KIS_USE_MOCK=1 python3 scripts/bench_backtest.py --suite all --json out.json
 | CPU 사용률(동시 4) | **105%** | ≥300% |
 | `_generate_signal_as_of` 비중 | **75.7%** | ≤30% |
 | 백테스트 텔레메트리 | **0항목** | 12항목 |
-| pytest / Playwright | 1,952 / 422 | 감소 없음 |
+| pytest / Playwright | 1,953 / 422 | 감소 없음 |
