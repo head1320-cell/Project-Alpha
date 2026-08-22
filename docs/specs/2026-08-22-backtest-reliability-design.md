@@ -192,3 +192,61 @@ DB 상태를 확인하고 `_Cancelled` 를 던진다(`backtest_run_routes.py:60~
 uvicorn 워커 증설**. 그리고 이 단계에서 **NumPy/Numba 는 착수하지 않는다** —
 프롬프트의 성능 순서(1 프로파일 → 2 벌크 → 3 오버헤드 → 4 프로세스 → 5 수치)에서
 아직 4번이다.
+
+---
+
+# 부록 — `.md` §9·§11 보강 (2차 감사)
+
+## B.1 (§11) 장애분류 A~G 와 **사용자에게 보이는 상태**
+
+`.md` 는 "폴링만 실패했는데 UI 가 '백테스트가 멈췄다' 고 말하면 안 된다" 고 못박는다.
+지금 UI 는 서버 상태 하나만 보므로 A 와 C 를 구분하지 못한다.
+
+| 분류 | 실제로 일어난 일 | 지금 UI | **가야 할 상태** | 판정 근거 |
+|---|---|---|---|---|
+| **A** 폴링 실패 | 시뮬은 정상, `/status` 요청만 실패 | 마지막 스냅샷 고정(멈춘 것처럼 보임) | `RUNNING — STATUS CONNECTION DEGRADED` | **클라이언트가 안다** — 연속 실패 횟수. 서버는 멀쩡 |
+| **B** DB 경합 | 시뮬 정상, 진행/결과 영속이 막힘 | 진행률 정체 | `RUNNING — PROGRESS PERSIST DEGRADED` | `touch_progress` 가 `blocked` 를 반환 · 503 경로 |
+| **C** 워커 사망 | 스레드/프로세스가 죽음 | `running` 인 채 영원히 | `WORKER STALLED` | **하트비트 침묵** — 이미 있는 신호(`heartbeat_at`) |
+| **D** 컨테이너 재시작 | 백엔드 사망, DB 상태는 생존 | `running` 인 채 영원히 | `SERVER RESTARTED — RECOVERY CHECK` → 이후 `FAILED` | 프로세스 기동 시각 > 실행 시작 시각 + 하트비트 침묵 |
+| **E** OOM | 커널이 죽임 | C 와 동일 | `WORKER STALLED (OOM 의심)` | 하트비트 침묵 + 재시작 흔적. **단정하지 않는다** |
+| **F** CPU 기아 | 살아 있으나 포화 | 진행률이 매우 느림 | `RUNNING — SLOW (QUEUE N)` | 큐 대기 + 진행 속도. **실측: 동시 4가 순차보다 63% 느림** |
+| **G** 긴 요청/프록시 | API 경로가 실제로 분리되지 않음 | 요청 타임아웃 | 해당 없음 — **이미 분리돼 있다** | `create_run` 이 `run_id` 를 즉시 반환 |
+
+### 설계 원칙 셋
+
+1. **"멈춤" 을 클라이언트가 단정하지 않는다.** A 는 클라이언트만 아는 사실이고
+   C·D 는 서버만 아는 사실이다. 두 출처를 **각각** 표시하고 하나로 접지 않는다.
+2. **하트비트가 이미 답을 갖고 있다.** `heartbeat_at`(`backtest_runs.py`)과
+   `sweep_orphaned()` 가 C·D·E 를 이미 구분할 재료다 — 새 신호를 만들지 않고
+   **그 값을 화면에 낸다**(현재는 UI 로 나가지 않는다).
+3. **E 를 OOM 이라고 단정하지 않는다.** 커널이 죽인 것과 워커가 조용히 죽은 것을
+   프로세스 밖에서 확실히 구분할 수 없다. "OOM 의심" 까지가 정직한 한계다.
+
+★G 는 이미 해결돼 있다★ `.md` 가 의심한 "API 경로가 진짜로 분리되지 않음" 은
+현재 코드에서 성립하지 않는다. 감사에서 이것을 **반증으로** 기록한다.
+
+## B.2 (§9) 잡 제어 — 있는 것과 없는 것
+
+| §9 요구 | 현재 | 비고 |
+|---|:--:|---|
+| bounded concurrency | ✘ | **상한 없음** — P0-3 |
+| queueing | ✘ | 큐 없이 즉시 스레드 |
+| cancellation | ✔ | 협조적 `_Cancelled` |
+| retry | ✔ | 이력 불변 |
+| timeout | ✘ | 없음 |
+| progress | ✔ | 5/10 단계 |
+| heartbeat | ✔ | `heartbeat_at` |
+| orphan detection | ✔ | `sweep_orphaned()` |
+| restart recovery | ✔ | 사후 `failed` 확정 |
+| **checkpointing** | ✘ | large 가 19.2분 — 정당화될 길이다 |
+| deterministic run ID / engine version | ✔ | `bt_*` + `input_snapshot` |
+| immutable input snapshot | ✔ | `input_snapshot` |
+| **data snapshot ID** | ✘ | 데이터 버전이 실행에 고정되지 않는다 |
+| result version | 부분 | 스키마 버전 없음 |
+| **correlation ID** | 부분 | 요청 추적 ID 는 있으나(`observability/`) 실행에 안 남는다 |
+
+### 체크포인팅 판단
+
+large 실측 **19.2분**. 그 길이면 체크포인팅이 정당화된다. 다만 **P0 에서는 하지
+않는다** — 프로세스 격리(P0-2)가 들어가기 전에 체크포인트를 넣으면 스레드 모델의
+전역 오염(§3.1)이 체크포인트에까지 새어 들어간다. **정합성 → 격리 → 체크포인팅** 순서다.

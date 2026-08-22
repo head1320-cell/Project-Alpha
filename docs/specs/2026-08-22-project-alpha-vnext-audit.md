@@ -256,3 +256,120 @@ P4-V 는 pytest 를 **1,952 passed / 1 failed** 로 기록했고, 그 1건
 | `_generate_signal_as_of` 비중 | **75.7%** | ≤ 30% |
 | 백테스트 텔레메트리 항목 | **0** | 12 (프롬프트 목록 전부) |
 | pytest / Playwright | 1,953 / 422 | 감소 없음 |
+
+---
+
+# 부록 A — `.md` 마스터 프롬프트 요구사항 보강 (2차 감사)
+
+1차 감사는 짧은 `.txt` 판을 따랐다. 상세 `.md` 판이 추가로 요구한 절을 여기 채운다.
+
+## A.1 (§3.B) 역량 매트릭스 — 7열
+
+`Duplicate` 열이 이 표의 핵심이다. **없는 것을 짓기 전에 있는 것을 먼저 본다.**
+
+| 역량 | Exists | Partial | Missing | Duplicate | Risk | 재사용 후보 |
+|---|:--:|:--:|:--:|---|---|---|
+| 백테스트 잡 영속·폴링·취소·재시도 | ✔ | | | | 낮음 | `backtest_runs.py` 그대로 |
+| 고아 복구(하트비트+sweep) | ✔ | | | | 낮음 | `sweep_orphaned()` |
+| **프로세스 격리** | | | **✘** | | **높음** | — (P0-2) |
+| **백테스트 텔레메트리** | | **5/10** | | | 중간 | 하네스 계측을 워커로 이식 |
+| PIT 빈티지(매크로) | ✔ | | | | 낮음 | `pit_macro.derive_usage()` |
+| PIT 스토어(재무) | ✔ | | | | 낮음 | `pit_store.py` |
+| 생존편향 안전 유니버스 | ✔ | | | | 낮음 | `tickers_asof` · `top_mktcap_asof` |
+| **경제노출 ↔ 상품 분리** | | | **✘** | | **높음** | — (A.4) |
+| 국면 추정(축·Markov·GMM) | ✔ | | | | 낮음 | `regime_ensemble.py` |
+| 포워드 국면분포·전이 | ✔ | | | | 낮음 | `regime_transitions.k_step_forecast` |
+| 모델 불일치 | | ✔ 매크로 탭만 | | | 중간 | `ensemble.disagreement()` |
+| **조건부 μ/Σ/tail** | | | **✘** | | **높음** | `regime_adaptive_allocator` 의 EWMA Σ |
+| 자산배분 옵티마이저 | ✔ | | | **AAS ↔ 다전략 2계통** | **중간** | `allocation_studio.py` |
+| Entropy Pooling / BL | ✔ | | | | 낮음 | `entropy_views.ep_posterior_mu()` |
+| **Target range** | | | **✘** | | 중간 | `disagreement()` 로 유도 |
+| **리밸런싱 정책** | | | **✘** | | **높음** | `build_plan` 앞단에 얹기 |
+| 실행 게이트(TPV) | ✔ | | | | 낮음 | `_resolve_target` |
+| 반사실 귀인 | ✔ | | | | 낮음 | `counterfactual_analyzer.py` |
+| 밸류에이션 RIM/DCF/DDM | ✔ | | | | 낮음 | `valuation_models.py` |
+| 이익의 질 · ROIC−WACC | ✔ | | | | 낮음 | `financial_deep` |
+| **역DCF · 확률적 밸류에이션** | | | **✘** | | 중간 | `compute_dcf` 역산/감싸기 |
+| **CompanySnapshot** | | | **✘** | | **높음** | `regime_snapshots.py` 관례 |
+
+### ★Duplicate — 배분 계통이 둘이다★
+
+| 계통 | 구성 | 소비자 |
+|---|---|---|
+| **AAS** | `allocation_studio.py` — MVO/BL/EP/HRP/RP/MinVar/MaxDiv/MinCVaR | Allocation Studio 11스테이지 |
+| **다전략** | `MultiStrategyAllocator` + `regime_adaptive_allocator.py` — **EWMA 공분산 · 상관붕괴 감지 · 3모드** | `realism_engine` · `stage12_routes` |
+
+★후자에 이미 조건부 공분산이 있다★ 브리프가 원하는 regime-conditional Σ 의 절반이
+**다른 계통에 구현돼 있다.** 통합·재사용 판단을 새 설계 문서에서 다룬다.
+
+## A.2 (§3.D) Company 실행맵
+
+```
+/insights (frontend/src/app/insights/page.tsx)
+  └─ loadCompanyCore(code)                      entities/company/data.ts:152
+       wave1 (병렬 3)  byTicker → POST /screener/run-advanced (custom_tickers=[code])
+                      factorSample(600) → GET /screener/factor-sample
+                      fieldsCatalog
+       wave2 (병렬 7)  evaluate ×3 (base/bull/bear) → POST /valuation/evaluate
+                      financial(annual) · financial(quarter) → GET /valuation/financial/{code}
+                      prices(400) · peersBySector
+  └─ 별도 탭          financialDeep · riskDeep · valuationSandbox → /company/{code}/*
+
+POST /valuation/evaluate → ValuationEngine.evaluate()      valuation_models.py:421
+   → get_corp_code() → dart.get_financial_statement_full() → RIM + DCF + DDM
+   → DART 디스크 캐시 7일 TTL                              dart_client.py:75
+/company/{code}/financial-deep → company_analytics.financial_deep()
+   → _annual_rows() → dart_history.load_history()          company_analytics.py:228
+```
+
+**실측**(`scripts/bench_company.py`, 벤치 문서 §6.5):
+
+| 관측 | 값 |
+|---|---|
+| 콜드 페이지 로드 | 83 ms (엔드포인트 8개) · 웜 43 ms |
+| 페이지 로드 DB 쿼리 | 18 |
+| **`comps_table` 단독** | **DB 48 쿼리** |
+| **`risk_deep` 내부 중복** | 한 호출에서 `_annual_rows` **2회** · `load_history` **2회** |
+| 딥 탭 합계 | DB 52 쿼리 · 같은 재무이력 **3회** 읽기 |
+| DART 호출 | **0 (키 미설정)** → 캐시 적중률 **측정 불가** |
+
+**반복 계산**: `evaluate` 가 3번 도는데 셋은 `terminal_growth`·`market_premium` 만
+다르고 재무 데이터는 동일하다. ★이 환경에서는 그 비용이 0.2ms 로 보이지 않는다★ —
+DART 키가 없어 mock 재무로 계산하기 때문이다. 실 키에서 재측정해야 한다.
+
+**누락 캐시**: 재무이력을 읽는 층(`_annual_rows`/`load_history`)에 캐시가 없다.
+CompanySnapshot 이 그 자리다.
+
+## A.3 (§3.E) 병목 가설표 — 신뢰도 등급
+
+| # | 결론 | 신뢰도 | 근거 |
+|---|---|---|---|
+| 1 | **GIL/파이썬 CPU 루프가 백테스트의 천장** | **높음** | 4코어에서 동시 1/2/4 의 CPU 사용률 107/103/105% 고정. 동시 4가 순차 4보다 63% 느림 |
+| 2 | **동시 실행이 전역을 오염시킨다(정합성)** | **높음** | 샘플 95.9%가 패치 상태 · 두 실행 데이터가 같은 전역에 관측 · 정상 종료 후에도 오염 `true` |
+| 3 | 시뮬 루프가 지배적 비용 | **높음** | 단계 비중 88~97%, 3규모 일관 |
+| 4 | 직렬화는 병목이 아니다 | **높음** | 12.4 ms = 0.09% |
+| 5 | 폴링은 유의한 부하가 아니다 | **높음** | 1회 0.144 ms · 1쿼리 · 분당 60쿼리 |
+| 6 | 메모리 압박은 단일 실행에서 경미, **동시성과 곱해지면 문제** | **중간** | 실행당 RSS +90~247 MB. 상한이 없어 8개면 ~1.9 GB(외삽) |
+| 7 | **DB 풀 기아** | **낮음 — 미검증** | SQLite 폴백이라 `pool_size=5+overflow=10` 을 재현 못 함. 로딩 비중은 1.8~2.3% |
+| 8 | 컨테이너/프로세스 수명 실패 | **중간** | `daemon=True` 라 재시작 시 in-flight 유실. `sweep_orphaned` 가 사후 정리는 함 |
+| 9 | API 기아 | **중간** | 워커가 API 와 같은 GIL 점유. 별도 측정 필요 |
+| 10 | Company 콜드 지연 | **낮음 — 형상 다름** | mock 재무·DART 키 없음. 실 키에서 재측정 |
+
+## A.4 (§26 · Brief §7) 투자가능 유니버스 계층 감사
+
+| 계층 | 실재 |
+|---|---|
+| 상품 유형 식별 | ✔ `kis_master_parser.py:152` 가 그룹코드 `ST/EF/EN/RT`(주권·ETF·ETN·리츠) 파싱, `universe_select.py:101` 이 사용 |
+| 상장/정지/상폐 상태 | ✔ `_status_codes()` · `tickers_asof()` (상폐 포함 시점 유니버스) |
+| **경제노출 ↔ 상품 분리** | **✘ 0건** |
+| **상품 선택기**(유동성·스프레드·추적오차·보수) | **✘** |
+| 리스크팩터 노출 계층 | 부분 — 팩터는 종목 레벨(`FIELD_BY_ID`)에 있고 자산군 레벨에는 없다 |
+
+★증상★ `etf_prices.py:65` 가 `VNQ`(미국 리츠)와 `REM`(모기지 리츠)을 **같은 종목
+182480(TIGER 미국리츠)** 에 매핑한다. 서로 다른 경제노출이 한 상품으로 접힌다 —
+분리 계층이 없다는 사실이 데이터에 그대로 드러난 자리다.
+
+매크로 자산군은 미국 티커 프록시(`SPY`·`TIP`·`GLD`·`DBC`·`VNQ`·`BIL`)로 표현되고
+(`macro_visuals.py:95` · `risk_allocations.py:31`), 국내 상장 ETF 로의 매핑이
+`etf_prices.py` 에 **평면 딕셔너리**로 있다. optimizer 는 경제노출이 아니라 **상품**을
+직접 최적화한다.
