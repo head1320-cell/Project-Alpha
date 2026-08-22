@@ -110,3 +110,55 @@ test("컨텍스트 스트립: 스펙 §4 의 신원 요소가 사라지지 않�
   await expect(strip.locator(".as-ctx-rules")).toBeVisible();
   await expect(strip.locator(".as-ctx-canary").first()).toBeVisible();
 });
+
+/**
+ * ★열린 서랍의 타입 하한 — 감사 루트 밖이라 아무도 못 보던 자리★
+ *
+ * §56 은 `.aas-root` 를 루트로 하한을 걸었고, 다른 하한 스펙들도 `.terminal-main` ·
+ * `.mx-panel` 을 본다. 그런데 Radix Popover 는 `document.body` 로 포털하므로 서랍
+ * 본문은 그 셋 어디의 자손도 아니다 — 11개 스테이지 전부에서 9.5~10px 로 렌더되고
+ * 있었는데 어떤 가드도 빨개질 수 없었다. §70 이 CSS 를 고쳤고, 이 테스트가 그것을
+ * 지킨다.
+ *
+ * ★반드시 서랍을 열고 재야 한다★ 닫혀 있으면 노드가 DOM 에 아예 없고, 그 상태의
+ * 하한 검사는 0개를 재고 통과한다. 그래서 노드 수를 **먼저** 단언한다.
+ */
+test("컨텍스트 스트립: 열린 서랍 본문이 §56 하한(11px) 위에 있다", async ({ page }) => {
+  await page.goto(AAS, { waitUntil: "networkidle" });
+
+  const trigger = page.locator(".as-ctx .tev-drawer-t");
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(page.locator(".tev-drawer")).toBeVisible();
+
+  const measured = await page.evaluate(() => {
+    const roots = [
+      ...document.querySelectorAll<HTMLElement>(".tev-drawer"),
+      ...document.querySelectorAll<HTMLElement>(".tev-drawer-t"),
+    ];
+    const out: { sel: string; px: number; text: string }[] = [];
+    for (const root of roots) {
+      const nodes = [root, ...root.querySelectorAll<HTMLElement>("*")];
+      for (const el of nodes) {
+        const text = (el.textContent || "").trim();
+        if (!text) continue;
+        // 자식이 글자를 다 갖고 있으면 그 자식에서 잰다 — 컨테이너를 두 번 세지 않는다.
+        const own = Array.from(el.childNodes)
+          .some((n) => n.nodeType === Node.TEXT_NODE && (n.textContent || "").trim());
+        if (!own) continue;
+        out.push({
+          sel: el.className || el.tagName.toLowerCase(),
+          px: parseFloat(getComputedStyle(el).fontSize),
+          text: text.slice(0, 24),
+        });
+      }
+    }
+    return out;
+  });
+
+  // ★빈 선택자가 조용히 통과하는 것을 막는다★ 제목 + 행 라벨/값이 최소 이만큼 나온다.
+  expect(measured.length, "서랍에서 잰 텍스트 노드").toBeGreaterThanOrEqual(4);
+
+  const low = measured.filter((m) => m.px < 11);
+  expect(low.map((m) => `${m.sel} ${m.px}px :: ${m.text}`).join("\n"), "하한 미달").toBe("");
+});
