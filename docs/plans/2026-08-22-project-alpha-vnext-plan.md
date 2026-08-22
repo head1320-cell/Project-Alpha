@@ -154,3 +154,40 @@ KIS_USE_MOCK=1 python3 scripts/bench_backtest.py --suite all --json out.json
 | `_generate_signal_as_of` 비중 | **75.7%** | ≤30% |
 | 백테스트 텔레메트리 | **0항목** | 12항목 |
 | pytest / Playwright | 1,953 / 422 | 감소 없음 |
+
+---
+
+# 부록 — Dynamic Portfolio 축 편입 (2차 감사)
+
+`Project_Alpha_Dynamic_Portfolio_Design_Brief.md` 가 새 축을 추가했다. 위 P0~P5 를
+버리지 않고 **끼워 넣는다** — 두 문서의 우선순위가 충돌하지 않기 때문이다.
+
+| 이 계획 | Brief 우선순위 | 관계 |
+|---|---|---|
+| P0 백테스트 신뢰성 | — | Brief 는 다루지 않음. **먼저** 한다(정합성 결함이 열려 있다) |
+| — | Brief P0 ①아키텍처 감사 ②유니버스 감사 ③매크로→조건부 μ/Σ **설계** | **이번 세션에 완료** |
+| P1 백테스트 성능 | — | 측정 후 조건부 |
+| **P2.5 (신설)** | Brief P0③ 구현 · P1 ④~⑧ | **첫 수직 슬라이스** — 조건부 μ/Σ → optimizer → target range |
+| P2 Company 언더라이팅 | — | 병행 가능(다른 표면) |
+| P3 통합 | Brief P2 ⑨~⑫ | 리밸런싱 정책 · 노출↔상품 · 정책 OOS |
+| P4 포트폴리오 결정 | Brief P1 ⑦⑧ · P2 | robust · dispersion · 동적 밴드 |
+| P5 고급 컴퓨트 | Brief P3 ⑮ | 증거 있을 때만 |
+
+## P2.5 — 첫 수직 슬라이스 (Brief §20 지정)
+
+`Macro State/Regime → 조건부 μ/Σ → optimizer → target range`
+
+| 항목 | 내용 |
+|---|---|
+| 목표 | 감사가 찾은 **"파이프는 깔렸는데 안 흐른다"** 를 닫는다 |
+| 파일 | `src/engine/conditional_market.py`(신규) · `allocation_studio.py`(주입 지점) · `allocation_routes.py`(`mes_id` 를 스탬프 이상으로) · `PortfolioDecisionState` 저장소 |
+| 재사용 | `regime_transitions.k_step_forecast` · `ensemble.disagreement` · `entropy_views.ep_posterior_mu` · `regime_adaptive_allocator` 의 EWMA·상관진단 · `regime_snapshots`/`target_versions` 관례 |
+| 바꾸면 안 되는 것 | 기존 8개 모델의 **무조건부 결과 바이트 동일** · TPV 실행 게이트 · `macro_allocation.py` baseline · `build_plan` |
+| 수용 기준 | 설계 문서 §6 의 6항목(짝 단언 포함) |
+| 신규 테스트 | 국면 바꾸면 μ 가 바뀐다 / 국면 없으면 기존과 동일 / 표본 부족 시 사유 / 조용한 폴백 금지 / 모델 1개면 range 없음 |
+| 롤백 | 신규 파일 + 주입 지점 한 줄 — 단독 revert |
+
+★순서 주의★ P0(백테스트 정합성)을 P2.5 보다 **먼저** 한다. 이유는 우선순위가 아니라
+**증거**다 — 동시 실행이 전역을 오염시키는 상태에서 정책 백테스트를 돌리면 그 결과를
+믿을 수 없다. Brief §14 가 walk-forward 를 "핵심 validation engine" 으로 삼는데,
+그 엔진이 지금 동시 실행에서 오염된다.
