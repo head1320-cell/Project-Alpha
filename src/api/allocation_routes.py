@@ -127,6 +127,12 @@ class AnalyzeRequest(BaseModel):
     #   ★해시는 요청에서 받지 않는다★ 서버가 지금 해석한 팩의 신원을 **스탬프**한다. 클라이언트가
     #   해시를 주장할 수 있으면, 실제로 쓰지 않은 팩 버전을 썼다고 적은 런이 만들어진다.
     scenario_pack_id: str | None = Field(None, max_length=80)
+    # ── P2.5: 국면조건부 μ/Σ (opt-in) ───────────────────────────────────────
+    #   ★기본값이 False 인 것이 계약이다★ 켜지 않으면 이 파일의 동작은 한 글자도
+    #   같다 — 응답 키조차 늘지 않는다. 조건부 경로는 매크로 수집(경로 재계산)과
+    #   모델 5회 추가 최적화(목표 구간)를 부르므로 슬라이더를 드래그할 때마다
+    #   따라붙어서는 안 된다.
+    conditional: bool = False
 
 
 class BacktestRequest(BaseModel):
@@ -341,6 +347,150 @@ def _enb_report(w, S, names: list[str]) -> dict:
             "note": "ENB는 상관을 반영한 실질 분산 베팅 수(≤ Neff). Neff는 비중 집중만 반영."}
 
 
+# ── P2.5: 국면조건부 μ/Σ 배선 ────────────────────────────────────────────────
+#
+# 감사가 줄 번호로 증명한 것은 "파이프는 깔렸는데 아무것도 흐르지 않는다" 였다 —
+# `optimize()` 의 Σ 는 무조건부 트레일링이고 μ 는 전부 사용자 뷰에서 온다. 아래 세
+# 함수가 매크로를 그 숫자에 닿게 하는 배선이다.
+
+# 국면 경로를 굳혀 둔 스냅샷이 없을 때 재계산하는 길이 — 빌더와 같은 값.
+_PATH_MONTHS = 60
+
+# 조건부 뷰의 신뢰도 상한. ★매크로가 최종 비중을 정하지 않는다★(Brief §17)
+# 50 은 `build_user_views` 의 Idzorek 기본값(스케일 1.0)이므로, 조건부 뷰는 아무리
+# 표본이 두꺼워도 사용자 뷰보다 세질 수 없다. 표본이 얇으면(수축 λ→1) 신뢰도가
+# 0 으로 내려가 뷰가 사실상 무시되고 시장균형이 남는다 — λ 를 신뢰도로 번역하는
+# 것이지 새 하이퍼파라미터를 발명하는 것이 아니다.
+_CONDITIONAL_MAX_CONFIDENCE = 50.0
+
+# 조건부 μ 를 **뷰로** 받는 모델. 나머지는 공분산 전용이므로 Σ 만 바뀐다 —
+# 그것이 맞다(μ 를 안 받는 모델에 μ 를 몰래 태우면 모델이 다른 것이 된다).
+_VIEW_MODELS = ("bl", "ep")
+
+
+def _regime_path_for(req: AnalyzeRequest) -> dict:
+    """월별 국면 경로 — **저장된 것 우선, 없으면 재계산 + 라벨**.
+
+    ★Brief §16 이 금지하는 것이 "과거 결정을 현재 데이터로 다시 계산" 이다.★
+    스냅샷에 굳혀 둔 경로가 있으면 그것이 그 시점에 알 수 있었던 분류다. 없으면
+    재계산할 수밖에 없지만, 그때는 `path_source: "recomputed"` 와 함께 그 사실을
+    응답에 적는다 — 하되 숨기지 않는다.
+    """
+    from src.data.regime_snapshots import get_snapshot
+    for sid, label in ((req.mes_id, "mes"), (req.regime_snapshot_id, "regime_snapshot")):
+        if not sid:
+            continue
+        pts = (get_snapshot(sid) or {}).get("regime_path")
+        if pts:
+            return {"points": pts, "path_source": label, "path_note": None, "reason": None}
+
+    try:
+        from src.engine.regime_analyzer import RegimeAnalyzer
+        from src.engine.regime_transitions import regime_path
+        macro_snap = RegimeAnalyzer().collector.collect_all(use_cache=True)
+        pts = regime_path(getattr(macro_snap, "series", None) or {}, "kr",
+                          months=_PATH_MONTHS).get("points") or []
+    except Exception as e:  # noqa: BLE001
+        logger.warning("국면 경로 재계산 실패: %s", e)
+        return {"points": [], "path_source": None, "path_note": None,
+                "reason": f"국면 경로를 만들 수 없습니다 ({type(e).__name__}) — "
+                          "무조건부 추정으로 계산했습니다."}
+    if not pts:
+        return {"points": [], "path_source": None, "path_note": None,
+                "reason": "성장·물가 축이 둘 다 산출된 달이 없어 국면 경로가 비었습니다 — "
+                          "무조건부 추정으로 계산했습니다."}
+    return {
+        "points": pts, "path_source": "recomputed", "reason": None,
+        "path_note": ("이 경로는 **현재 데이터로** 다시 계산했습니다 — 결정 시점에 "
+                      "알 수 있었던 분류가 아닙니다. 고정된 국면 경로를 쓰려면 "
+                      "경로가 함께 굳혀진 스냅샷(mes_id)을 지정하십시오."),
+    }
+
+
+def _conditional_views(cond: dict, model: str) -> tuple[list[dict] | None, float | None]:
+    """조건부 μ → 자산별 **절대 뷰**. (뷰 목록, 적용 신뢰도).
+
+    ★μ 를 optimizer 에 직접 대입하지 않는 이유가 이 함수의 존재 이유다.★ 직접
+    대입하면 "매크로 신호 → 비중" 이라는 기존 구조를 이름만 바꿔 되풀이한다.
+    자산 하나짜리 절대 뷰로 표현하면 `P` 행이 `e_i` 가 되므로 **새 뷰 스키마를
+    만들지 않고** 기존 `build_user_views` 를 그대로 탄다.
+    """
+    if model not in _VIEW_MODELS:
+        return None, None
+    lam = cond.get("shrinkage_lambda")
+    conf = (_CONDITIONAL_MAX_CONFIDENCE * (1.0 - float(lam))) if lam is not None \
+        else _CONDITIONAL_MAX_CONFIDENCE
+    conf = round(max(0.0, min(conf, _CONDITIONAL_MAX_CONFIDENCE)), 2)
+    views = [
+        {"assets": [name], "direction": 1 if float(m) >= 0 else -1,
+         "magnitude_pct": abs(float(m)) * 100.0, "confidence": conf,
+         "source": "conditional", "regime": cond.get("regime")}
+        for name, m in zip(cond["names"], cond["mu"]) if float(m) != 0.0
+    ]
+    return (views or None), conf
+
+
+def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
+                       mu_as_views: int, view_confidence: float | None,
+                       model: str) -> dict:
+    """응답의 `conditional` 조각 — ★조용한 폴백 금지★.
+
+    조건부를 못 쓴 경우 계산은 무조건부로 떨어지되 **응답이 그 사실을 말한다**
+    (M2-A 의 `feasible:false` 처리와 같은 원칙). 숫자만 보고 "국면이 반영됐다" 고
+    믿을 수 있는 상태를 만들지 않는 것이 이 블록의 목적이다.
+    """
+    ok = bool(cond.get("available"))
+    if ok and model not in _VIEW_MODELS:
+        mu_note = (f"'{model}' 은 공분산 전용 모델이라 μ 를 받지 않습니다 — Σ 만 "
+                   "국면조건부로 바뀌었습니다. 조건부 μ 까지 반영하려면 bl 또는 ep 를 "
+                   "선택하십시오.")
+    elif ok and view_confidence == 0.0:
+        # ★뷰를 넘겼다는 것과 뷰가 힘을 가졌다는 것은 다른 사실이다★ 신뢰도 0 이면
+        # Ω 가 매우 커져 뷰가 사실상 무시되고 μ 는 시장균형으로 남는다. `mu_as_views`
+        # 만 보고 "매크로가 반영됐다" 고 읽지 못하게 여기서 못을 박는다.
+        mu_note = (f"조건부 μ 를 자산 {mu_as_views}개의 절대 뷰로 넘겼지만 **신뢰도가 "
+                   "0 이라 사실상 반영되지 않았습니다** — 수축 강도가 1.0 이어서 "
+                   "표본이 사전분포 이상을 말하지 못했다는 뜻이고, μ 는 시장균형으로 "
+                   "남았습니다.")
+    elif ok:
+        mu_note = (f"조건부 μ 를 자산 {mu_as_views}개의 절대 뷰로 태웠습니다 "
+                   f"(신뢰도 {view_confidence}). 최적화기에 직접 대입하지 않는 것은 "
+                   "불확실성을 Ω 에 남기기 위해서입니다.")
+    else:
+        mu_note = "국면조건부 추정을 쓰지 못해 **무조건부 트레일링 μ/Σ 로 계산했습니다.**"
+
+    return {
+        "requested": True,
+        "available": ok,
+        "method": cond.get("method"),
+        "regime": cond.get("regime"),
+        "n_obs": cond.get("n_obs"),
+        "n_months": cond.get("n_months"),
+        "n_obs_by_regime": cond.get("n_obs_by_regime"),
+        "n_months_by_regime": cond.get("n_months_by_regime"),
+        "min_obs_required": cond.get("min_obs_required"),
+        "unlabeled_obs": cond.get("unlabeled_obs"),
+        "shrinkage_lambda": cond.get("shrinkage_lambda"),
+        # ★λ=1.0 이면 Σ 가 스케일 단위행렬로 무너져 스케일 불변 모델의 비중이
+        # 국면과 무관하게 같아진다★ 그 화면을 "배선이 안 됐다" 로 읽지 못하게 한다.
+        "degenerate": bool(cond.get("degenerate")),
+        "diagnostics": cond.get("diagnostics"),
+        "path_source": path.get("path_source"),
+        "path_note": path.get("path_note"),
+        "applied_to": {"sigma": sigma_applied, "mu_as_views": mu_as_views},
+        "view_confidence": view_confidence,
+        # ★근본 원인을 먼저 적는다★ 경로를 못 만들면 엔진은 "월별 라벨이 없다" 고
+        # 답하는데, 그것은 결과이지 원인이 아니다. 경로 사유가 있으면 그것이 앞선다 —
+        # 순서를 반대로 뒀더니 "수집이 실패했다" 가 응답에서 사라졌다.
+        "reason": path.get("reason") or cond.get("reason"),
+        "note": mu_note,
+        # ★반쯤 조건부인 차트를 만들지 않는다★ 프론티어 곡선·MC 클라우드·1년 분포는
+        # 전체 표본에서 계산되므로 조건부가 아니다. 같은 화면에 조건부 비중과
+        # 무조건부 프론티어가 나란히 서 있다는 사실을 서버가 먼저 말한다.
+        "not_applied_to": ["frontier.curve", "frontier.cloud", "mc", "mu_annual"],
+    }
+
+
 # ── /analyze ─────────────────────────────────────────────────────────────────
 @router.post("/analyze")
 def allocation_analyze(req: AnalyzeRequest):
@@ -464,11 +614,33 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         names = list(returns.columns)
         R = returns.values
 
+        # 0) P2.5 — 국면조건부 μ/Σ (요청했을 때만). 실패해도 계산은 계속되고,
+        #    그 사실은 아래 `conditional` 블록이 응답에 적는다(조용한 폴백 금지).
+        cond_path: dict | None = None
+        cond: dict | None = None
+        s_override = None
+        extra_views: list[dict] | None = None
+        view_conf: float | None = None
+        if req.conditional:
+            from src.engine.conditional_market import (
+                conditional_moments,
+                regime_by_month_from_path,
+            )
+            cond_path = _regime_path_for(req)
+            by_month, _dropped = regime_by_month_from_path(cond_path["points"])
+            current = (cond_path["points"][-1].get("regime")
+                       if cond_path["points"] else None)
+            cond = conditional_moments(returns, by_month, current)
+            if cond["available"]:
+                s_override = cond["sigma"]
+                extra_views, view_conf = _conditional_views(cond, req.model)
+
         # 1) 뷰+모델 최적화 (allocation_studio 엔진)
         from src.engine.allocation_studio import optimize
         views = [v.model_dump() for v in (req.views or [])]
         opt = optimize(req.model, names, R, views=views or None,
-                       delta=req.delta, tau=req.tau)
+                       delta=req.delta, tau=req.tau,
+                       s_override=s_override, extra_views=extra_views)
 
         # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
         #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
@@ -493,6 +665,17 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 if sol["status"] != "infeasible" and sol.get("weights") is not None:
                     opt["weights"] = np.asarray(sol["weights"], dtype=float)
                     opt["flow"]["optimized"] = opt["weights"]
+
+        # 1c) P2.5 — 목표 비중 **구간**. 같은 Σ 를 여러 모델로 풀어 산포를 낸다.
+        #     ★제약 해는 넣지 않는다★ 제약이 걸린 가중치와 무제약 가중치를 한 구간에
+        #     섞으면 "모델들이 이만큼 갈린다" 가 "제약이 이만큼 눌렀다" 와 뒤섞인다.
+        target_range = None
+        if req.conditional:
+            from src.engine.allocation_studio import target_weight_range
+            target_range = target_weight_range(
+                names, R, s_annual=np.asarray(opt["sigma_annual"], dtype=float),
+                mu_bl=(np.asarray(opt["mu_used"], dtype=float)
+                       if opt.get("mu_engine") != "mvo" else None))
 
         # 2) 현재(사용자) 가중치 분석 — 리스크 기여·상관 (기존 PortfolioAnalyzer)
         from src.kis_portfolio_analyzer import PortfolioAnalyzer
@@ -616,6 +799,16 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             # 고정된 매크로 증거 — 없으면 `None` 이고, 그것이 "증거 없이 돌았다" 는 사실이다.
             "mes": mes_block,
         }
+
+        # ★요청했을 때만 키가 늘어난다★ `conditional=False` 면 위 페이로드가 끝이고
+        # 기존 소비자가 보는 응답은 바이트 단위로 같다.
+        if req.conditional:
+            payload["conditional"] = _conditional_block(
+                cond or {}, cond_path or {},
+                sigma_applied=s_override is not None,
+                mu_as_views=int(opt.get("extra_views_used") or 0),
+                view_confidence=view_conf, model=req.model)
+            payload["target_range"] = target_range
 
         # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
         #    outputs는 재계산 가능한 대형 산출물(프론티어 클라우드·MC bins) 제외 요약만.

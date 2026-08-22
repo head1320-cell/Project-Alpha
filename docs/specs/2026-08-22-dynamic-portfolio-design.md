@@ -41,7 +41,7 @@ TPV 는 계속 "실행이 보는 유일한 목표" 이고(R0 계약), PDS 는 **
 | `views` | 사용자 뷰 | `build_user_views` |
 | `optimizer` | 모델·제약·리스크버짓 | `allocation_studio` |
 | `target` | **점 비중 + range + confidence** | §3 신규 |
-| `dispersion` | 모델 간 불일치 | `ensemble.disagreement()` **재사용** |
+| `dispersion` | 모델 간 불일치 | `allocation_studio.target_weight_range()` — §3 정정 참조 |
 | `rebalance` | 거래 판정 + 사유 + 밴드 | §4 신규 |
 | `tpv_id` | 컴파일된 목표 버전 | `target_versions` |
 
@@ -112,8 +112,14 @@ Brief §9: 점 비중 하나가 아니라 `target · low/high · confidence · d
 
 1. 같은 입력을 **여러 모델**로 푼다(MVO/BL/EP/HRP/MinVar — 전부 존재).
 2. 자산별 비중 분포의 산포가 곧 `range`.
-3. `ensemble.disagreement()`(정규화 엔트로피)로 **합의도**를 낸다 — 매크로 탭에서
-   쓰던 것을 배분 레벨로 가져온다.
+3. ~~`ensemble.disagreement()`(정규화 엔트로피)로 **합의도**를 낸다~~
+   **★구현하며 정정(2026-08-22)★** 이 재사용은 **불가능하다.**
+   `macro_models/ensemble.disagreement(verdicts: list[str])` 는 **범주형 판정**의
+   정규화 엔트로피다. 가중치 산포는 수치이므로 그 함수로 잴 수 없다. 함수 이름이
+   맞아 보였을 뿐 계약이 다르다 — 재사용을 계획할 때 시그니처를 보지 않은 것이
+   원인이다. `disagreement()` 는 매크로 탭에서 하던 일을 계속한다.
+   → 대신 `allocation_studio.target_weight_range()` 가 자산별 `[min, max]` 와 산포
+   스칼라(자산별 폭의 평균·최대)를 직접 낸다. 20줄이고 새 의존성은 없다.
 4. `confidence` 가 낮으면 **range 를 넓히고 §4 의 이동폭을 줄인다**(Brief §9 마지막 줄).
 
 ★평균으로 접지 않는다★ Brief §13 · CLAUDE.md 의 일관된 원칙. 모델별 원값을 남긴다.
@@ -173,8 +179,9 @@ Macro State/Regime  →  조건부 μ/Σ  →  optimizer  →  target range
 **이 슬라이스만 한다.** 리밸런싱 정책(§4)과 노출↔상품 분리(§5)는 다음 슬라이스다.
 
 고른 이유: 감사가 찾은 **"파이프는 깔렸는데 안 흐른다"** 를 정확히 닫는 최소 조각이고,
-`mes_id` 배선(M2-B)·EP 경로(M2-A)·`disagreement()`가 이미 있어 **새로 짓는 것이
-조건부 추정기 하나**뿐이다.
+`mes_id` 배선(M2-B)·EP 경로(M2-A)·`build_user_views`/`bl_posterior` 가 이미 있어
+**새로 짓는 것이 조건부 추정기와 산포 계산 둘**뿐이다(당초 "하나" 로 적었으나,
+위 §3 정정에 따라 산포는 재사용이 아니라 신규다).
 
 ### 수용 기준
 

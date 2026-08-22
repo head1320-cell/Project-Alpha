@@ -53,6 +53,8 @@ _has_regime_cols = False
 # MES 승격 열(M1-S)도 같은 이유로 성공 여부를 따로 들고 있는다 — regime 열과 **독립적으로**
 # 붙거나 안 붙으므로, 하나의 플래그로 뭉치면 조회 열 목록이 어긋난다.
 _has_mes_cols = False
+# 국면 **경로** 열(P2.5)도 독립적으로 붙는다 — 같은 이유로 플래그를 따로 든다.
+_has_path_col = False
 
 # MES 스키마 버전 — indicators/models 의 모양이 바뀌면 올린다.
 MES_VERSION = 1
@@ -72,7 +74,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited, _inited_for, _has_regime_cols, _has_mes_cols
+    global _inited, _inited_for, _has_regime_cols, _has_mes_cols, _has_path_col
     url = str(getattr(engine, "url", ""))
     if _inited and _inited_for == url:
         return
@@ -123,6 +125,16 @@ def _ensure_table(engine) -> None:
          ("capability_level", "VARCHAR(8)"), ("capability_reason", "TEXT"),
          ("mes_version", "INTEGER")],
         label="regime_snapshots.MES(지표·모델·능력 레벨)",
+    )
+
+    # ── 국면 경로 (P2.5) ─────────────────────────────────────────────────────
+    # ★그 시점에 알 수 있었던 분류를 굳힌다★ 국면조건부 μ/Σ 는 월별 국면 라벨을
+    # 필요로 하는데, 그것을 매번 **오늘의 데이터로** 다시 계산하면 과거 결정을
+    # 현재 지식으로 재판하는 것이 된다(Brief §16 이 금지하는 바로 그것).
+    # 스냅샷을 만들 때 함께 굳혀 두면 재현이 성립한다.
+    _has_path_col = add_columns(
+        engine, _TABLE, [("regime_path", "TEXT")],
+        label="regime_snapshots.regime_path(월별 국면 경로)",
     )
 
     _inited = True
@@ -180,6 +192,7 @@ def create_snapshot(
     explanation: str = "",
     regime: str | None = None,
     recommended_mode: str | None = None,
+    regime_path: list[dict] | None = None,
 ) -> str | None:
     """불변 스냅샷을 만든다. 성공 시 snapshot_id, DB 미가용 시 None.
 
@@ -202,6 +215,13 @@ def create_snapshot(
         if _has_regime_cols:
             cols += ", regime, recommended_mode"
             vals += ", :regime, :mode"
+        # ★경로가 없으면 열을 아예 채우지 않는다★ `[]` 를 넣으면 "경로를 계산했는데
+        # 비었다" 와 "경로를 굳히지 않았다" 가 구분되지 않고, 조회 측이 전자로 읽어
+        # 재계산을 건너뛴다.
+        store_path = _has_path_col and regime_path is not None
+        if store_path:
+            cols += ", regime_path"
+            vals += ", :rpath"
         with engine.begin() as c:
             c.execute(text(f"INSERT INTO {_TABLE} ({cols}) VALUES ({vals})"), {
                 "sid": sid, "ts": time.time(), "asof": as_of,
@@ -214,6 +234,8 @@ def create_snapshot(
                 "mver": MODEL_VERSION, "ever": ENGINE_VERSION, "cver": code_version(),
                 "expl": explanation,
                 **({"regime": regime, "mode": recommended_mode} if _has_regime_cols else {}),
+                **({"rpath": json.dumps(regime_path, ensure_ascii=False, default=str)}
+                   if store_path else {}),
             })
         return sid
     except Exception as e:  # noqa: BLE001
@@ -260,6 +282,7 @@ _BASE_COL_LIST = ["snapshot_id", "created_at", "as_of", "growth_axis", "inflatio
                   "code_version", "explanation"]
 _REGIME_COL_LIST = ["regime", "recommended_mode"]
 _MES_COL_LIST = ["indicators", "models", "capability_level", "capability_reason", "mes_version"]
+_PATH_COL_LIST = ["regime_path"]
 
 
 def _col_list() -> list[str]:
@@ -276,6 +299,8 @@ def _col_list() -> list[str]:
         cols += _REGIME_COL_LIST
     if _has_mes_cols:
         cols += _MES_COL_LIST
+    if _has_path_col:
+        cols += _PATH_COL_LIST
     return cols
 
 
@@ -313,6 +338,11 @@ def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
         "capability_level": g.get("capability_level"),
         "capability_reason": g.get("capability_reason"),
         "mes_version": g.get("mes_version"),
+        # ── 국면 경로 (P2.5) ──
+        # ★`None` 과 `[]` 는 다른 사실이다★ `None` = 이 스냅샷에는 경로가 굳혀지지
+        # 않았다(호출부가 재계산하고 그 사실을 라벨한다) · `[]` = 경로를 계산했는데
+        # 분류 가능한 달이 하나도 없었다. 둘을 뭉치면 재계산이 조용히 일어난다.
+        "regime_path": _j(g.get("regime_path"), None),
     }
     # 목록에서는 관측치 배열을 빼고 개수만 (payload 비대 방지) — 단건은 전부 준다.
     if full:

@@ -164,7 +164,7 @@ def _unavailable(reason: str, **extra) -> dict:
         "n_obs": 0, "n_months": 0, "n_obs_by_regime": {},
         "names": [], "mu": None, "sigma": None,
         "shrinkage_lambda": None, "min_obs_required": None,
-        "unlabeled_obs": 0, "diagnostics": None,
+        "unlabeled_obs": 0, "diagnostics": None, "degenerate": False,
         "reason": reason,
     }
     out.update(extra)
@@ -254,16 +254,32 @@ def conditional_moments(returns_df, regime_by_month: dict[str, str] | None,
     # 대칭성 복원 — 수치 오차로 깨진 대칭은 이후 고유분해(ENB·HRP)를 흔든다.
     sigma = (sigma + sigma.T) / 2.0
 
+    # ★수축이 1.0 이면 Σ 는 스케일 단위행렬이다★ 실측에서 실제로 그렇게 나왔다
+    # (mock 시세가 종목별로 독립 생성되므로 Ledoit-Wolf 의 목표가 **정확히 맞고**
+    # λ→1 이 된다). 그러면 Σ 는 상수배 단위행렬이라 스케일 불변 모델
+    # (min_var·ERC·HRP·max_div·고정 μ 의 max-sharpe)의 비중이 **국면과 무관하게
+    # 같아진다.** 그 화면을 본 사람은 "조건부가 배선되지 않았다" 고 결론 내리는데,
+    # 사실은 표본이 국면별 공분산 구조를 하나도 담고 있지 않다는 뜻이다.
+    # 둘은 완전히 다른 사실이므로 값이 스스로 말하게 한다.
+    degenerate = lam is not None and lam >= 0.999
+    note = (f"'{current_regime}' 국면으로 분류된 {common['n_months']}개월"
+            f"({n_obs}영업일)의 표본만으로 추정했습니다. 독립적인 거시 관측은 "
+            f"영업일 수가 아니라 **개월 수**입니다.")
+    if degenerate:
+        note += (" ★수축 강도가 1.0 이라 Σ 가 스케일 단위행렬로 무너졌습니다★ — "
+                 "이 표본에는 국면별 공분산 구조가 없습니다. 스케일 불변 모델의 "
+                 "비중은 국면을 바꿔도 같게 나오며, 그것은 배선 문제가 아니라 "
+                 "데이터가 할 말이 없다는 뜻입니다.")
+
     return {
         "available": True,
         "method": method,
         "mu": mu,
         "sigma": sigma,
         "shrinkage_lambda": (round(lam, 4) if lam is not None else None),
+        "degenerate": bool(degenerate),
         "diagnostics": _correlation_health(R),
         "reason": None,
-        "note": (f"'{current_regime}' 국면으로 분류된 {common['n_months']}개월"
-                 f"({n_obs}영업일)의 표본만으로 추정했습니다. 독립적인 거시 관측은 "
-                 f"영업일 수가 아니라 **개월 수**입니다."),
+        "note": note,
         **common,
     }

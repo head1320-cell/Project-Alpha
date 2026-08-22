@@ -77,6 +77,29 @@ def observations_from_series(macro_snap: Any) -> list[MacroObservation]:
     return out
 
 
+# 굳혀 두는 경로의 길이 — `regime_transitions.regime_path` 의 기본값과 같다.
+# 매크로 시계열 자체가 mock 60개월이므로 더 길게 요청해도 늘지 않는다.
+_PATH_MONTHS = 60
+
+
+def _regime_path_points(macro_snap: Any, market: str) -> list[dict] | None:
+    """월별 국면 경로 — 실패하면 `None`(빈 리스트가 아니다).
+
+    ★스냅샷 생성을 죽이지 않는다★ 경로를 못 만든 것과 만든 것은 다른 사실이고,
+    `None` 이 그 사실을 전한다. 소비자는 `None` 을 보고 재계산하되 **재계산했다는
+    라벨을 붙인다**.
+    """
+    try:
+        from src.engine.regime_transitions import regime_path
+        series = getattr(macro_snap, "series", None) or {}
+        if not series:
+            return None
+        return regime_path(series, market, months=_PATH_MONTHS).get("points") or None
+    except Exception as e:  # noqa: BLE001
+        logger.warning("국면 경로 산출 실패(스냅샷은 계속 저장): %s", e)
+        return None
+
+
 def build_and_store(market: str = "kr") -> str | None:
     """현재 국면을 스냅샷으로 굳힌다. 성공 시 snapshot_id, DB 미가용 시 None.
 
@@ -84,6 +107,7 @@ def build_and_store(market: str = "kr") -> str | None:
     """
     state, macro_snap = _collect(market)
     observations = observations_from_series(macro_snap)
+    path_points = _regime_path_points(macro_snap, market)
 
     regime = getattr(state, "regime", "") or "UNKNOWN"
     mode = getattr(state, "recommended_mode", "") or "NORMAL"
@@ -106,6 +130,12 @@ def build_and_store(market: str = "kr") -> str | None:
         # 파싱하지 않아도 국면 배지를 그릴 수 있어야 한다.
         regime=regime,
         recommended_mode=mode,
+        # ★그 시점에 알 수 있었던 국면 경로를 함께 굳힌다 (P2.5)★
+        # 국면조건부 μ/Σ 는 월별 라벨을 필요로 한다. 스냅샷에 없으면 소비자가
+        # **오늘의 데이터로** 다시 계산할 수밖에 없고, 그러면 과거 결정을 현재
+        # 지식으로 재판하게 된다(Brief §16). 경로를 만들지 못했으면 `None` 을
+        # 넘겨 열을 비워 둔다 — 빈 리스트로 "계산했는데 비었다" 인 척하지 않는다.
+        regime_path=path_points,
     )
     if sid:
         promote_to_mes(sid)
