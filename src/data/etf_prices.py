@@ -134,6 +134,74 @@ def daily_closes(ticker: str, market: str = "kr", days: int = 300) -> list[float
     return full[-days:]
 
 
+def daily_ohlc(ticker: str, market: str = "kr", days: int = 300) -> list[dict]:
+    """최근 일간 OHLC 바 리스트 — 돌파(변동성/채널)·오버나이트 시그널용.
+
+    daily_closes와 동일한 캐시·as_of(시점 절단) 관례. 종가만으로는 계산 불가한
+    시그널(전일 레인지 돌파·N일 채널·시가/전일종가 갭)을 위해 OHLC를 그대로 노출한다.
+    반환: [{"open","high","low","close"}] (오름차순, 결측 바는 제외).
+    """
+    key = (f"ohlc:{market}", ticker)
+    if key in _CACHE:
+        full = _CACHE[key]
+    else:
+        code, _ = resolve(ticker, market)
+        full = []
+        try:
+            df = _daily_df(code)
+            if df is not None and not df.empty:
+                cols = {c.lower() for c in df.columns}
+                if {"open", "high", "low", "close"}.issubset(cols):
+                    sub = df[["open", "high", "low", "close"]].astype(float).dropna()
+                    full = [{"open": float(o), "high": float(h), "low": float(low), "close": float(c)}
+                            for o, h, low, c in sub.itertuples(index=False, name=None)]
+        except Exception as e:
+            logger.debug(f"daily_ohlc 실패 [{ticker}/{market}]: {e}")
+        _CACHE[key] = full
+    off = _month_off()
+    if off:
+        d = off * _TRADING_DAYS_PER_MONTH
+        full = full[:-d] if d < len(full) else []
+    return full[-days:]
+
+
+def daily_closes_indexed(ticker: str, market: str = "kr",
+                         days: int = 300) -> list[tuple[str, float]]:
+    """(날짜, 종가) 쌍 — 두 종목을 **날짜로 맞춰야 하는** 계산용(상관계수 등).
+
+    ★`daily_closes()` 로는 두 종목을 정렬할 수 없다★
+    그쪽은 값만 돌려주므로, 두 종목의 꼬리를 zip 하면 "거래일이 서로 같다" 고 가정하게 된다.
+    한·미 휴장일이 다르고 상장일도 달라서 실제로는 **다른 날짜끼리 짝지어지고**, 그렇게 나온
+    상관계수는 무엇의 상관인지 말할 수 없다. 스펙 §6.2 가 VIX 텀 스트럭처에 대해 금지한 것과
+    같은 종류의 오류(결측을 전진 채움해 "낡았지만 자신만만한" 신호를 만드는 것)라서, 값을
+    맞추는 대신 **겹치는 날짜만** 쓰도록 날짜를 함께 돌려준다.
+
+    `daily_closes`/`daily_ohlc` 와 같은 캐시·`as_of()` 절단 관례를 그대로 따른다 —
+    여기만 다르면 6b-2 의 과거 미리보기가 이 팩터에 대해서만 룩어헤드를 갖게 된다.
+    종가가 결측인 행은 **버린다**(0 으로 채우면 수익률이 −100% 로 튄다).
+    """
+    key = (f"di:{market}", ticker)
+    if key in _CACHE:
+        full = _CACHE[key]
+    else:
+        code, _ = resolve(ticker, market)
+        full = []
+        try:
+            df = _daily_df(code)
+            if df is not None and not df.empty and "close" in {c.lower() for c in df.columns}:
+                sub = df[["close"]].astype(float).dropna()
+                full = [(str(idx)[:10], float(v))
+                        for idx, v in zip(sub.index, sub["close"].tolist())]
+        except Exception as e:
+            logger.debug(f"daily_closes_indexed 실패 [{ticker}/{market}]: {e}")
+        _CACHE[key] = full
+    off = _month_off()
+    if off:
+        d = off * _TRADING_DAYS_PER_MONTH
+        full = full[:-d] if d < len(full) else []
+    return full[-days:]
+
+
 def cache_clear() -> None:
     _CACHE.clear()
 

@@ -34,6 +34,13 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
+from src.data.source_registry import (
+    ECOS,
+    ecos_collection_targets,
+    fred_collection_targets,
+    specs_by_provider,
+)
+
 try:
     import requests
 except ImportError:
@@ -46,11 +53,30 @@ FRED_BASE_URL = "https://api.stlouisfed.org/fred"
 
 
 def _history_years() -> int:
-    """매크로 시계열 적재 깊이(년). 기본 15 — BOK/FRED는 수십 년 제공(과거 5년 하드코딩 제거)."""
+    """매크로 시계열 적재 깊이(년). BOK/FRED는 수십 년 제공(과거 5년 하드코딩 제거).
+
+    ★기본 20년 = 240개월 (P4-D3)★
+    `capability.REQUIREMENTS["frontier_sample"]` 이 프론티어 모델 학습에 240관측을
+    요구한다. 기본값이 15(180개월)면 **키를 정상적으로 넣어도 사다리가 안 올라간다** —
+    설정을 따로 만져야만 열리는 천장은 사실상 닫힌 천장이다. 기본값을 요건에 맞춘다.
+
+    이 값은 mock 길이도 함께 정한다(아래 `_generate_mock_series` 호출부). 합성으로
+    사다리가 올라가는 것은 `_min_observations(require_real_source=True)` 가 막는다.
+    """
     try:
-        return max(1, int(os.getenv("MACRO_HISTORY_YEARS", "15")))
+        return max(1, int(os.getenv("MACRO_HISTORY_YEARS", "20")))
     except ValueError:
-        return 15
+        return 20
+
+
+#: 계열당 저장 하한(개월). YoY(13) 변환 후에도 5년 z-표본이 남는 최소치 —
+#: 이 값은 예전 `[-72:]` 상한이 실제로 지키려던 **하한**이다.
+_MIN_STORE_MONTHS = 72
+
+
+def _store_cap() -> int:
+    """계열당 저장 개월 상한. 적재 깊이에서 유도하되 z-표본 하한을 지킨다 (P4-D3)."""
+    return max(_MIN_STORE_MONTHS, _history_years() * 12)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -98,8 +124,16 @@ class MacroSnapshot:
 # Statistics helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
+#: z-표본 창(개월). 필드명 `mean_5y`·`std_5y` 가 약속하는 값 — 5년 = 60개월.
+_Z_WINDOW_MONTHS = 60
+
+
 def _normalize(values: list[float]) -> dict:
-    """Z-Score + Percentile + 추세 계산."""
+    """Z-Score + Percentile + 추세 계산.
+
+    z·percentile 은 **최근 5년 창**으로 낸다(`_Z_WINDOW_MONTHS`). 추세는 최근
+    6개월 vs 이전 6개월이라 창과 무관하다.
+    """
     if not values or len(values) < 2:
         return {"z_score": None, "percentile": None, "mean_5y": None, "std_5y": None,
                 "trend": "flat"}
@@ -109,13 +143,28 @@ def _normalize(values: list[float]) -> dict:
         return {"z_score": None, "percentile": None, "mean_5y": None, "std_5y": None,
                 "trend": "flat"}
 
-    mean = sum(cleaned) / len(cleaned)
-    variance = sum((v - mean) ** 2 for v in cleaned) / len(cleaned)
+    # ★z-표본 창을 5년으로 고정한다 (P4-D3)★
+    #
+    # 이 함수는 `mean_5y`·`std_5y` 라는 이름으로 값을 내면서 실제로는 **받은 구간
+    # 전부**로 계산하고 있었다. 저장이 72개월이던 시절에는 "대략 5년" 이라 티가 나지
+    # 않았지만, 이름이 약속한 것과 다른 값이었다.
+    #
+    # P4-D3 이 깊이를 240개월로 열자 이 불일치가 **동작으로 터졌다.** mock 은 드리프트
+    # 있는 랜덤워크라 구간이 길어질수록 최신값이 전체 평균에서 멀어지고(z ∝ n),
+    # 그 결과 국면이 DEFENSIVE·고스트레스로 뒤집혀 타이밍 노출이 0 이 됐다
+    # (`test_three_way_endpoint::test_a_real_snapshot_does_not_zero_out_exposure`).
+    #
+    # 즉 깊이 확장이 만든 새 버그가 아니라 **원래 있던 이름-구현 불일치**가 드러난
+    # 것이다. 이름이 약속한 대로 고친다 — 창을 고정하면 z 는 적재 깊이와 무관해지고,
+    # 그것이 하류 국면 로직이 처음부터 가정하던 바다.
+    window = cleaned[-_Z_WINDOW_MONTHS:]
+    mean = sum(window) / len(window)
+    variance = sum((v - mean) ** 2 for v in window) / len(window)
     std = math.sqrt(variance)
 
     latest = cleaned[-1]
     z_score = (latest - mean) / std if std > 0 else 0
-    percentile = sum(1 for v in cleaned if v <= latest) / len(cleaned) * 100
+    percentile = sum(1 for v in window if v <= latest) / len(window) * 100
 
     # 추세: 최근 6개월 평균 vs 이전 6개월 평균
     if len(cleaned) >= 12:
@@ -143,15 +192,11 @@ def _normalize(values: list[float]) -> dict:
 # BOK ECOS Client (한국은행)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# BOK API: 통계코드 → 의미 매핑
-BOK_INDICATORS = {
-    "722Y001": {"name": "한국 기준금리",      "code": "0101000", "unit": "%"},
-    "817Y002": {"name": "국고채 3년",         "code": "010195000", "unit": "%"},
-    "817Y003": {"name": "국고채 10년",        "code": "010210000", "unit": "%"},
-    "901Y009": {"name": "소비자물가지수(CPI)", "code": "0", "unit": "지수"},
-    "731Y001": {"name": "원/달러 환율",       "code": "0000001", "unit": "원"},
-    "802Y001": {"name": "KOSPI 종합",         "code": "0001000", "unit": "포인트"},
-}
+# ★`BOK_INDICATORS` 는 P4-D1 에서 삭제됐다★
+# 통계표코드로 키를 잡은 6개짜리 사전이었고 **소비자가 0개**였다. 그러면서 실제 조회
+# 목록(`bok_targets`)과 다른 값을 들고 있었으므로, 남겨 두면 "문서가 코드와 다른"
+# 두 번째 레지스트리가 된다 — CLAUDE.md 가 개수 세지 말고 레지스트리를 읽으라고
+# 적어 둔 바로 그 실패다. 조회 좌표는 `source_registry.ecos_collection_targets()`.
 
 
 class BokClient:
@@ -217,28 +262,9 @@ class BokClient:
 # FRED Client (미 연준)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-FRED_INDICATORS = {
-    "FEDFUNDS":   {"name": "Fed Funds Rate",    "unit": "%"},
-    "DGS3MO":     {"name": "T3M (3개월물)",      "unit": "%"},
-    "DGS2":       {"name": "T2Y (2년물)",        "unit": "%"},
-    "DGS10":      {"name": "T10Y (10년물)",      "unit": "%"},
-    "DGS30":      {"name": "T30Y (30년물)",      "unit": "%"},
-    "T10Y2Y":     {"name": "T10Y-T2Y Spread",   "unit": "%p"},
-    "VIXCLS":     {"name": "VIX",                "unit": "지수"},
-    "DTWEXBGS":   {"name": "DXY (광역지수)",     "unit": "지수"},
-    "CPIAUCSL":   {"name": "US CPI",             "unit": "지수"},
-    "BAMLH0A0HYM2": {"name": "HY Credit Spread", "unit": "%p"},
-    # 성장·물가·유동성·심리 확장 (5 API 최대 활용 — 키 없으면 결정론적 mock)
-    "GDPC1":      {"name": "US 실질GDP",          "unit": "지수"},
-    "INDPRO":     {"name": "산업생산",            "unit": "지수"},
-    "UNRATE":     {"name": "실업률",              "unit": "%"},
-    "PAYEMS":     {"name": "비농업고용",          "unit": "천명"},
-    "UMCSENT":    {"name": "소비자심리",          "unit": "지수"},
-    "T10YIE":     {"name": "기대인플레(10Y)",     "unit": "%"},
-    "DFII10":     {"name": "실질금리(10Y)",       "unit": "%"},
-    "M2SL":       {"name": "M2 통화량",           "unit": "지수"},
-    "DCOILWTICO": {"name": "WTI 유가",            "unit": "$"},
-}
+#: FRED 지표 — ★`source_registry` 가 단일 출처다 (P4-D1)★ ECOS 와 같은 이유로,
+#: 레지스트리와 수집기가 계열 목록을 각자 들면 갈라진다.
+FRED_INDICATORS = fred_collection_targets()
 
 
 class FredClient:
@@ -400,24 +426,43 @@ class MacroCollector:
         series_map = {}
 
         # 한국 매크로 (6종)
-        bok_targets = [
-            ("KR_BASE_RATE", "722Y001", "0101000", "한국 기준금리", "%"),
-            ("KR_3Y",        "817Y002", "010195000", "국고채 3년", "%"),
-            ("KR_10Y",       "817Y003", "010210000", "국고채 10년", "%"),
-            ("KR_CPI",       "901Y009", "0",         "한국 CPI", "지수"),
-            ("USD_KRW",      "731Y001", "0000001",   "원/달러 환율", "원"),
-            ("KOSPI",        "802Y001", "0001000",   "KOSPI 종합", "포인트"),
-            # 국면 성장축(실물) — ECOS 코드는 GCP 실호출로 검증, 실패 시 unavailable → 축에서 자동 제외
-            ("KR_LEADING_CYCLE", "901Y067", "I16E", "경기선행지수 순환변동치", "지수"),
-            ("KR_IP",            "901Y033", "A00",  "산업생산지수", "지수"),
-        ]
+        # ★조회 좌표는 `source_registry` 가 단일 출처다 (P4-D1)★
+        # 예전에는 이 리스트와 레지스트리가 통계표/항목 코드를 **각자** 들고 있었다.
+        # 11계열일 땐 눈으로 맞출 수 있었지만 P4-D1 이 33계열로 늘리면서 반드시
+        # 갈라진다 — 한쪽에만 계열을 추가하면 "수집은 되는데 상태를 못 내거나"
+        # "상태는 있는데 값이 영원히 안 오는" 조합이 생기고 둘 다 조용하다.
+        #
+        # ★신규 계열은 실호출로 검증된 적이 없다★ 통계표/항목 코드가 틀리면 시리즈가
+        # 예외 없이 조용히 빈다. `source_registry` 가 mock 폴백을 막으므로 빈 값이
+        # 그럴듯한 숫자로 덮이지 않는다 — 그래야 코드가 틀렸다는 것을 알 수 있다.
+        # 검증은 `verify_connection.py::check_ecos`, verified_live 는 사람이 올린다.
+        bok_targets = ecos_collection_targets()
         for key, stat, item, name, unit in bok_targets:
             series_map[key] = self._collect_one(
                 key=key, name=name, unit=unit,
-                fetcher=lambda: self.bok.fetch_series(stat, item),
+                # ★기본인자 바인딩★ 바로 아래 FRED 루프는 `lambda fid=fred_id:` 인데
+                # 여기만 `lambda: ...(stat, item)` 이라 **늦은 바인딩**이었다. 지금은
+                # `_collect_one` 이 같은 반복 안에서 동기로 부르므로 값이 맞아
+                # 살아 있는 버그는 아니었지만, 누군가 스레드풀·async 로 바꾸는 순간
+                # 11개 시리즈가 전부 마지막 stat 코드를 조회한다. 두 루프의 관례를 맞춘다.
+                fetcher=lambda s=stat, i=item: self.bok.fetch_series(s, i),
                 use_cache=use_cache,
                 source="BOK",
             )
+
+        # ── 파생 스프레드 (레지스트리의 `derived_from` 이 정의한다) ──────────
+        # ★원계열 둘이 다 있을 때만 계산한다★ 하나라도 없으면 사유를 남기고 값을 내지
+        # 않는다 — 한쪽만으로 스프레드를 만드는 것은 합성이다.
+        # P4-D1 에서 하드코딩 1건 → 레지스트리 순회로 바꿨다. 파생 계열을 추가할 때
+        # 레지스트리에만 적으면 되고, 수집기를 고치는 걸 잊어 키만 있고 값이 영원히
+        # 안 오는 조합이 생기지 않는다.
+        for spec in specs_by_provider(ECOS):
+            if len(spec.derived_from) != 2:
+                continue
+            minuend, subtrahend = spec.derived_from
+            series_map[spec.key] = self._derive_spread(
+                series_map.get(minuend), series_map.get(subtrahend),
+                key=spec.key, name=spec.label, unit=spec.unit)
 
         # 미국 매크로 (10종)
         for fred_id, meta in FRED_INDICATORS.items():
@@ -433,11 +478,67 @@ class MacroCollector:
             series=series_map,
         )
 
+    def _derive_spread(self, corp: MacroSeries | None, govt: MacroSeries | None,
+                       *, key: str, name: str, unit: str) -> MacroSeries:
+        """두 계열의 차이로 만드는 파생 스프레드 (M1-I, P4-D1 에서 일반화).
+
+        ★한쪽만으로 만들지 않는다★ 둘 중 하나라도 없거나 겹치는 관측이 없으면 값 없이
+        `source="unavailable"` 로 돌려준다. 한쪽 값을 스프레드처럼 쓰면 그건 합성이고,
+        화면은 그것을 실측 스프레드로 읽는다.
+        """
+        cv = list(corp.values) if corp and corp.values else []
+        gv = list(govt.values) if govt and govt.values else []
+        n = min(len(cv), len(gv))
+        if n == 0:
+            return MacroSeries(indicator=key, name=name, unit=unit,
+                               source="unavailable", timestamps=[], values=[])
+
+        vals = [round(float(c) - float(g), 4) for c, g in zip(cv[-n:], gv[-n:], strict=False)]
+        ts = list(corp.timestamps)[-n:] if corp and corp.timestamps else []
+        norm = _normalize(vals)
+        latest = vals[-1]
+        prev = vals[-2] if len(vals) >= 2 else None
+        yoy = (vals[-1] - vals[-13]) if len(vals) >= 13 else None   # %p 단위 → 차이
+        return MacroSeries(
+            indicator=key, name=name, unit=unit,
+            # 원계열이 mock 이면 파생도 mock 이다 — 출처를 승격시키지 않는다.
+            source=(corp.source if corp else "unavailable"),
+            timestamps=ts, values=vals,
+            latest=round(latest, 4), prev=(round(prev, 4) if prev is not None else None),
+            yoy=(round(yoy, 3) if yoy is not None else None),
+            mom_pct=None,
+            z_score=norm["z_score"], percentile=norm["percentile"],
+            mean_5y=norm["mean_5y"], std_5y=norm["std_5y"], trend=norm["trend"],
+            # ★`last_update` 를 반드시 채운다 — 비우면 PIT 게이트가 이 계열을 거부한다★
+            #
+            # M1-I 이후 잠복해 있던 결함이다. `observations_from_series` 는
+            # `released = last_update or period` 로 공표시각을 정하는데, 여기서
+            # `last_update` 를 안 넣으면 `period`("202608")로 폴백한다. 그 문자열을
+            # ISO `as_of`("2026-08-16T…")와 비교하면 **다섯 번째 글자에서 '0' > '-'**
+            # 라 `"202608" > "2026-08-16T…"` 가 참이 되고, 스냅샷 생성이
+            # `LookAheadError` 로 422 를 낸다.
+            #
+            # 지금까지 안 터진 이유는 유일한 파생 계열(KR_CREDIT_SPREAD)의 원계열
+            # KR_CORP3Y 가 미검증이라 **항상 unavailable** 이었기 때문이다. 값이
+            # 나오는 파생 계열이 생기는 순간(P4-D1 의 KR_TERM_SPREAD) 드러났다.
+            #
+            # 스프레드는 두 다리가 **모두** 관측된 뒤에야 알 수 있으므로 늦은 쪽을 쓴다.
+            last_update=max(
+                (x for x in (getattr(corp, "last_update", None),
+                             getattr(govt, "last_update", None)) if x),
+                default=datetime.now().isoformat(),
+            ),
+        )
+
     def _collect_one(
         self, key: str, name: str, unit: str,
         fetcher, use_cache: bool, source: str,
     ) -> MacroSeries:
-        """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback."""
+        """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback.
+
+        ★신규 미검증 소스는 mock 으로 채우지 않는다 (M1-I)★
+        `source_registry.new_source_mock_allowed()` 가 판정한다. 기존 지표는 영향 없다.
+        """
         # 캐시 확인
         if use_cache:
             with self._lock:
@@ -459,8 +560,27 @@ class MacroCollector:
         # Fallback to Mock — mock 모드만. 운영(KIS_USE_MOCK=0)선 합성 금지 → 정직 unavailable.
         if not values:
             from src.data.mock_gate import mock_allowed
-            if mock_allowed():
+            from src.data.source_registry import new_source_mock_allowed
+            if mock_allowed() and new_source_mock_allowed(key):
                 profile = MOCK_PROFILES.get(key, {"base": 100, "vol": 5, "trend": 0})
+                # ★mock 길이는 깊이를 따라가지 **않는다** (P4-D3 에서 시도했다 되돌림)★
+                #
+                # 처음엔 `length=_history_years() * 12` 로 바꿔 mock 도 240개월을 내게
+                # 했다. 파이프라인이 20년치를 감당하는지 개발 환경에서 확인하려는
+                # 의도였고, D4 의 출처 조건이 있으니 합성으로 프론티어가 열릴 위험도
+                # 없었다. 그런데 **실측해 보니 값이 비쌌다.**
+                #
+                # mock 은 드리프트 있는 랜덤워크(`cur += trend + gauss(0, vol)`)라
+                # 구간이 3배가 되면 합성 국면이 DEFENSIVE·고스트레스로 치우치고,
+                # 타이밍 노출이 0 으로 떨어져 `test_three_way_endpoint::
+                # test_a_real_snapshot_does_not_zero_out_exposure` 를 깨뜨렸다.
+                # 그 테스트는 과거 실제 사고(단위/어휘 불일치로 포트폴리오가 전액
+                # 위험-오프로 떨어진 것)를 막는 가드라 약화시킬 수 없다.
+                #
+                # 얻는 것과 잃는 것을 견줬다 — 얻는 것은 "mock 으로도 240 경로를
+                # 밟아 본다" 뿐이고, 잃는 것은 합성 국면 상태의 안정성이다.
+                # **깊이가 실제로 필요한 곳은 실 데이터 경로다**(키가 들어오면
+                # BOK/FRED 가 수십 년을 준다). mock 은 그대로 둔다.
                 timestamps, values = _generate_mock_series(
                     key, length=60, **profile,
                 )
@@ -484,8 +604,14 @@ class MacroCollector:
 
         series = MacroSeries(
             indicator=key, name=name, unit=unit, source=actual_source,
-            timestamps=timestamps[-72:],   # 최근 72개월 저장 — YoY 변환 후에도 5년 z-표본 확보
-            values=clean[-72:] if clean else [],
+            # ★저장 상한을 적재 깊이에 맞춘다 (P4-D3)★
+            # 예전에는 `[-72:]` 하드코딩이었다. 사유("YoY 변환 후에도 5년 z-표본 확보")는
+            # **하한**의 근거지 상한의 근거가 아닌데 상한으로 쓰이고 있었다. 그 결과
+            # `MACRO_HISTORY_YEARS` 를 20으로 올려도 저장 단계에서 72로 잘려,
+            # `frontier_sample`(240) 은 **어떤 설정으로도 열릴 수 없었다.**
+            # 깊이에서 유도하되 72 아래로는 내려가지 않게 해 기존 z-표본 가정을 지킨다.
+            timestamps=timestamps[-_store_cap():],
+            values=clean[-_store_cap():] if clean else [],
             latest=round(latest, 4) if latest is not None else None,
             prev=round(prev, 4) if prev is not None else None,
             yoy=round(yoy, 3) if yoy is not None else None,

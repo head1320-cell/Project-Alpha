@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import TerminalScreener from "@/components/screener/TerminalScreener";
+import TerminalScreener from "@/widgets/screener/TerminalScreener";
 
 export default function ScreenerPage() {
   const [universe, setUniverse] = useState("kospi200");

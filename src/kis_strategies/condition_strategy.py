@@ -380,6 +380,7 @@ class ConditionStrategy(BaseStrategy):
         self._expr_panels: dict = {}   # 산술식 내부 횡단면 패널 {canonical key: DataFrame}
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
         self._pit_base_cache: dict = {}  # 종목별 PIT 재무 패널 캐시 (financials_history 기반)
+        self._fund_cache: dict = {}      # per-bar 폴백용 종목별 펀더멘털 캐시(스냅샷은 날짜 무관 상수)
 
     @property
     def name(self) -> str:
@@ -414,13 +415,21 @@ class ConditionStrategy(BaseStrategy):
                     default=0)
         return max(base, tok + 10) + logic
 
+    def _cached_fundamentals(self, stock_code: str) -> dict:
+        """`_load_fundamentals`의 인스턴스 캐시 — 스냅샷은 날짜 무관 상수라 per-bar 폴백에서
+        같은 종목을 매 시뮬레이션일 재조회하지 않는다(벡터화 경로의 prepare_panel fund_cache와
+        동일 취지, 이쪽은 generate_signal 호출부용)."""
+        if stock_code not in self._fund_cache:
+            self._fund_cache[stock_code] = _load_fundamentals(stock_code)
+        return self._fund_cache[stock_code]
+
     def generate_signal(self, stock_code: str, stock_name: str) -> Signal:
         df = data_fetcher.get_daily_prices(stock_code, self.required_days)
         if df is None or df.empty or len(df) < 2:
             return Signal(stock_code=stock_code, stock_name=stock_name,
                           action=Action.HOLD, strength=0.0, reason="데이터 부족")
 
-        fund = _load_fundamentals(stock_code) if self.allow_snapshot_fundamentals else None
+        fund = self._cached_fundamentals(stock_code) if self.allow_snapshot_fundamentals else None
 
         # per-bar도 벡터화와 동일한 _signal_hits 단일 경로 — 조건 시계열 전체를 평가해
         # 마지막 봉 판정. (스칼라 별도 경로는 토큰 종류마다 비일관 위험: 횡단면 날짜 포맷,
@@ -584,16 +593,22 @@ class ConditionStrategy(BaseStrategy):
     # ═══════════════════════════════════════════════════════════════════════
 
     def precompute_signals(self, ohlcv_map: dict) -> None:
-        """종목별 매수/매도 조건을 전체 시계열에 1회 평가 → 봉별 액션 코드 캐시."""
+        """종목별 매수/매도 조건을 전체 시계열에 1회 평가 → 봉별 액션 코드 캐시.
+
+        ★격리 중요★: 종목별 try/except — 실데이터는 200종목 중 일부가 펀더멘털 결측·
+        상장초기 이력부족 등으로 평가 예외를 던질 수 있다(정상). 예외를 전체 루프
+        밖에서 잡으면 그 한 종목 때문에 전 종목의 _sig가 통째로 비워져 나머지 199종목까지
+        비싼 per-bar 폴백(_generate_signal_as_of, O(종목수×기간))으로 떨어져 백테스트가
+        수십 초에서 수십 분으로 느려진다 — 실측: 종목 1개 예외만으로 5배+ 슬로다운.
+        종목별로 격리하면 그 종목만 개별 폴백하고 나머지는 벡터화를 유지한다."""
         self._sig = {}
         if not (self.buy_conditions or self.sell_conditions) or not ohlcv_map:
             return
-        try:
-            for tk, df in ohlcv_map.items():
+        for tk, df in ohlcv_map.items():
+            try:
                 self._sig[str(tk)] = self._precompute_ticker(str(tk), df)
-        except Exception as e:
-            logger.debug(f"precompute_signals 실패 — per-bar 폴백: {e}")
-            self._sig = {}
+            except Exception as e:
+                logger.debug(f"precompute_signals({tk}) 실패 — 이 종목만 per-bar 폴백: {e}")
 
     def _precompute_ticker(self, tk: str, df: pd.DataFrame) -> pd.Series:
         import numpy as np

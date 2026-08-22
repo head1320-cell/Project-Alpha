@@ -2,10 +2,10 @@
 // Company Analysis — 실데이터 Cockpit. 코어 병렬 로드 + 탭별 lazy. 스크리너 핸드오프 지원.
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import CompanyCockpit, { type LazyLoaders } from "@/components/insights/CompanyCockpit";
-import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/lib/companyData";
-import { companyApi } from "@/lib/screenerApi";
-import { LoadingState, ErrorState } from "@/components/layout/States";
+import CompanyCockpit, { type LazyLoaders } from "@/widgets/company/CompanyCockpit";
+import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/entities/company/data";
+import { companyApi } from "@/entities/company/api";
+import { LoadingState, ErrorState } from "@/shared/ui/States";
 
 const QUICK = [
   { code: "005930", name: "삼성전자" },

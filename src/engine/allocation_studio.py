@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 DELTA_DEFAULT = 2.5   # 위험회피(균형 기대수익 스케일) — risk_allocations와 동일
 TAU_DEFAULT = 0.05    # prior 불확실성 — risk_allocations와 동일
 
-MODELS = ("mvo", "bl", "risk_parity", "hrp", "min_var")
+MODELS = ("mvo", "bl", "ep", "risk_parity", "hrp", "min_var", "max_div", "min_cvar")
 
 
 # ── 시가총액 prior ────────────────────────────────────────────────────────────
@@ -105,6 +105,28 @@ def bl_posterior(pi: np.ndarray, sigma: np.ndarray, P: np.ndarray,
 
 
 # ── 모델 스위치 ───────────────────────────────────────────────────────────────
+def effective_number_of_bets(w: np.ndarray, S: np.ndarray) -> float:
+    """Meucci ENB — 상관을 고려한 실질 분산도. Σ의 고유분해로 주성분 포트폴리오의
+    분산 기여 분포 엔트로피 = exp(-Σ pᵢ ln pᵢ). HHI/Neff와 달리 상관을 반영한다.
+    무상관·등리스크면 ENB=N, 완전집중이면 →1. (1 ≤ ENB ≤ N)"""
+    w = np.asarray(w, dtype=float)
+    n = w.size
+    try:
+        vals, vecs = np.linalg.eigh(S)          # Σ = V Λ Vᵀ (대칭)
+        vals = np.maximum(vals, 1e-16)
+        expo = vecs.T @ w                        # 주성분 노출
+        contrib = (expo ** 2) * vals            # 주성분별 분산 기여
+        tot = contrib.sum()
+        if not np.isfinite(tot) or tot <= 0:
+            return float(n)
+        p = contrib / tot
+        p = p[p > 1e-12]
+        ent = -float(np.sum(p * np.log(p)))
+        return float(np.exp(ent))
+    except Exception:
+        return float(n)
+
+
 def _inverse_vol_w(R: np.ndarray) -> np.ndarray:
     vol = R.std(axis=0)
     vol = np.where(vol > 1e-9, vol, 1e-9)
@@ -137,15 +159,33 @@ def _max_sharpe_w(mu: np.ndarray, S: np.ndarray, n: int) -> np.ndarray | None:
     return _opt(neg_sharpe, n)
 
 
-def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
-                      S_annual: np.ndarray | None = None) -> np.ndarray:
-    """모델 → long-only 합1 가중치 벡터. 최적화 실패/부재 시 inverse-vol 폴백.
+def model_availability() -> dict[str, dict]:
+    """모델 → `{available, reason}`. **폴백이 가리는 것을 먼저 본다.**
 
-    mvo: 트레일링 평균 max-sharpe · bl: mu_override(BL posterior) max-sharpe ·
-    risk_parity: ERC · hrp: 계층적 · min_var: 최소분산.
+    `weights_for_model` 은 최적화가 실패하거나 라이브러리가 없으면 조용히
+    inverse-vol 로 떨어진다. 단일 모델을 고른 사용자에게는 그것이 합리적인
+    안전장치지만, **여러 모델의 산포를 재는 자리에서는 거짓말이 된다** —
+    "min_var 는 이렇게 말한다" 는 라벨 아래 실은 inverse-vol 이 들어앉는다.
+    그래서 산포를 재기 전에 어느 모델이 실제로 돌 수 있는지 여기서 묻는다.
     """
+    from src.engine.risk_allocations import _HAS_HCLUST, _HAS_OPT
+    opt_ok = {"available": _HAS_OPT,
+              "reason": None if _HAS_OPT else "scipy.optimize 가 없어 최적화를 풀 수 없습니다"}
+    return {
+        "mvo": dict(opt_ok), "bl": dict(opt_ok), "ep": dict(opt_ok),
+        "min_var": dict(opt_ok), "max_div": dict(opt_ok), "min_cvar": dict(opt_ok),
+        # ERC 는 순수 numpy 반복이라 scipy 없이도 돈다.
+        "risk_parity": {"available": True, "reason": None},
+        "hrp": {"available": _HAS_HCLUST,
+                "reason": None if _HAS_HCLUST else
+                          "scipy.cluster 가 없어 계층적 군집을 만들 수 없습니다"},
+    }
+
+
+def _raw_weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None,
+                           S: np.ndarray) -> np.ndarray | None:
+    """모델의 **원 출력** — 실패하면 `None`. 폴백은 호출부가 결정한다."""
     n = R.shape[1]
-    S = S_annual if S_annual is not None else _cov(R) * 252.0
     if model == "min_var":
         w = _opt(lambda x: float(x @ S @ x), n)
     elif model == "risk_parity":
@@ -156,38 +196,82 @@ def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None 
             w = _hrp_weights(S) if _HAS_HCLUST else None
         except Exception:
             w = None
+    elif model == "max_div":
+        # 최대분산(TOBAM): maximize (wᵀσ)/√(wᵀΣw) — risk_allocations.s_max_div 로직 재사용
+        sig = np.sqrt(np.maximum(np.diag(S), 1e-12))
+        w = _opt(lambda x: -(x @ sig) / (np.sqrt(x @ S @ x) + 1e-12), n)
+    elif model == "min_cvar":
+        # 최소 CVaR (Rockafellar-Uryasev) — 히스토리컬 최악 α% 평균손실 최소화
+        alpha = 0.05
+        k = max(1, int(np.ceil(alpha * R.shape[0])))
+
+        def _cvar(x):
+            pl = R @ x                        # 포트 일별 수익
+            worst = np.sort(pl)[:k]           # 최악 α%
+            return -float(worst.mean())       # 손실(음수수익)의 크기 최소화
+        w = _opt(_cvar, n)
     else:  # "mvo" | "bl"
         mu = mu_override if mu_override is not None else R.mean(axis=0) * 252.0
         w = _max_sharpe_w(mu, S, n)
     if w is None or not np.all(np.isfinite(w)) or w.sum() <= 0:
-        return _inverse_vol_w(R)
+        return None
     w = np.maximum(np.asarray(w, dtype=float), 0.0)
     return w / w.sum()
+
+
+def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
+                      S_annual: np.ndarray | None = None) -> np.ndarray:
+    """모델 → long-only 합1 가중치 벡터. 최적화 실패/부재 시 inverse-vol 폴백.
+
+    mvo: 트레일링 평균 max-sharpe · bl: mu_override(BL posterior) max-sharpe ·
+    risk_parity: ERC · hrp: 계층적 · min_var: 최소분산.
+    """
+    S = S_annual if S_annual is not None else _cov(R) * 252.0
+    w = _raw_weights_for_model(model, R, mu_override, S)
+    return _inverse_vol_w(R) if w is None else w
 
 
 # ── 전체 파이프라인 (API가 호출하는 단일 진입점) ──────────────────────────────
 def optimize(model: str, names: list[str], R: np.ndarray,
              views: list[dict] | None = None,
-             delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT) -> dict:
+             delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
+             s_override: np.ndarray | None = None,
+             extra_views: list[dict] | None = None) -> dict:
     """모델+뷰 → 최종 가중치 + Sankey 3단계(시장→뷰반영→최적화) + 메타.
 
     flow 의미: market = 시가총액 캡가중 · view_applied = 뷰가 있으면 BL
     posterior max-sharpe(없으면 market과 동일) · optimized = 선택 모델 출력.
     뷰는 BL 경로에서만 기대수익에 반영 — 공분산 전용 모델(risk_parity/hrp/
     min_var)을 선택한 경우에도 view_applied 열은 참고용으로 계산해 보여준다.
+
+    P2.5 선택 인자 (**둘 다 기본 `None` 이라 기존 호출은 한 글자도 안 바뀐다**):
+      s_override:  Σ 를 통째로 대체한다 (국면조건부 공분산). 이미 **연율**이어야 한다.
+      extra_views: 사용자 뷰 뒤에 덧붙일 뷰. 국면조건부 μ 가 여기로 들어온다.
+
+    ★조건부 μ 를 여기에 직접 대입하지 않는 이유★
+    최적화기에 μ 를 그냥 넣으면 "매크로 신호 → 비중" 이라는 기존 구조를 이름만
+    바꿔 되풀이한다. 뷰로 태우면 불확실성이 Ω 에 명시되고, 뷰가 사전분포보다
+    강하면 그 사실이 드러난다. 그래서 인자 이름이 `mu_override` 가 아니라
+    `extra_views` 다 — 이름이 정책을 강제한다.
     """
     if model not in MODELS:
         model = "mvo"
     n = len(names)
-    S = _cov(R) * 252.0  # 연율화 — 뷰(연간 %)·μ와 단위 일치
+    # 연율화 — 뷰(연간 %)·μ와 단위 일치. 국면조건부 Σ 가 주어지면 그것으로 대체한다.
+    S = (np.asarray(s_override, dtype=float) if s_override is not None
+         else _cov(R) * 252.0)
     w_mkt, cap_missing = market_cap_weights(names)
+
+    # 사용자 뷰 + 조건부 뷰. 조건부 뷰는 `source` 태그를 달고 오므로 skipped 보고에서
+    # 어느 쪽이 버려졌는지 구분된다.
+    all_views = list(views or []) + list(extra_views or [])
 
     mu_bl = None
     skipped_views: list[dict] = []
     w_view = w_mkt
-    if views:
+    if all_views:
         pi = delta * S @ w_mkt
-        P, Q, omega, skipped_views = build_user_views(views, names, S, tau)
+        P, Q, omega, skipped_views = build_user_views(all_views, names, S, tau)
         if P is not None:
             try:
                 mu_bl = bl_posterior(pi, S, P, Q, omega, tau)
@@ -199,13 +283,28 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                 logger.warning(f"BL posterior 실패, prior 폴백: {e}")
                 mu_bl = None
 
+    ep_report: dict | None = None
+    mu_ep = None
+    if model == "ep":
+        # ★세 번째 μ 엔진 (M2-A)★ `mvo` 는 트레일링 평균, `bl` 은 BL 사후, `ep` 는
+        # KL 최소화 사후 기대수익. **새 최적화기가 아니라 μ 를 바꾸는 것**이므로 아래
+        # `weights_for_model` 의 max-sharpe 경로를 그대로 탄다.
+        # 실현 불가·산출 불가는 `EPUnavailable` 로 올라간다 — 조용히 다른 엔진으로
+        # 떨어지면 화면은 "뷰가 반영된 EP" 를 보여 주는데 실제로는 아니다.
+        from src.engine.entropy_views import ep_mu_or_raise
+        mu_ep, ep_report = ep_mu_or_raise(all_views, names, R)
+
     if model == "bl":
         # BL 모델: 뷰 있으면 posterior max-sharpe(=w_view), 뷰 없으면 시장균형
         # (레퍼런스 s_black_litterman과 동일 — 뷰 없는 BL은 캡가중 prior 그대로)
         w_final = w_view if mu_bl is not None else w_mkt
+    elif model == "ep":
+        w_final = weights_for_model("mvo", R, mu_override=mu_ep, S_annual=S)
     else:
         w_final = weights_for_model(model, R, mu_override=None, S_annual=S)
 
+    mu_used = (mu_ep if mu_ep is not None
+               else (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0))
     return {
         "names": names,
         "weights": w_final,
@@ -214,8 +313,99 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         "skipped_views": skipped_views,
         "cap_missing": cap_missing,
         "mu_annual": (R.mean(axis=0) * 252.0),
-        "mu_used": (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0),
+        "mu_used": mu_used,
         "sigma_annual": S,
+        # ★어느 엔진이 이 숫자를 냈는지 항상 밝힌다★ 화면이 라벨을 지어내지 않도록
+        # 서버가 답한다. `ep` 진단(feasible·ENS·위반·신뢰도 미사용)은 EP 일 때만.
+        "mu_engine": ("ep" if mu_ep is not None
+                      else ("bl" if mu_bl is not None else "mvo")),
+        "ep": ep_report,
+        # ★Σ 가 어디서 왔는지 서버가 답한다★ 화면이 "국면조건부" 라벨을 지어내지
+        # 못하게 하려는 것이고, `mu_engine` 과 같은 이유의 필드다.
+        "sigma_source": "conditional" if s_override is not None else "trailing",
+        "extra_views_used": (
+            len(extra_views or [])
+            - sum(1 for sk in skipped_views
+                  if (sk.get("view") or {}).get("source") == "conditional")),
+    }
+
+
+# ── Target Weight Range (모델 산포) ──────────────────────────────────────────
+# 같은 입력을 여러 모델로 풀었을 때 자산별 비중이 어디까지 벌어지는가.
+# 공분산 구동 모델들 — 전부 같은 Σ 를 받으므로 차이는 **목적함수에서만** 온다.
+RANGE_MODELS = ("mvo", "risk_parity", "hrp", "min_var", "max_div")
+
+
+def target_weight_range(names: list[str], R: np.ndarray, *,
+                        s_annual: np.ndarray | None = None,
+                        mu_bl: np.ndarray | None = None,
+                        models: tuple[str, ...] = RANGE_MODELS) -> dict:
+    """자산별 `[min, max]` 목표 비중 + 모델별 원값.
+
+    ★`disagreement()` 를 쓰지 않는다★ 설계 문서 §3 은 이 자리에서
+    `macro_models.ensemble.disagreement()` 를 재사용한다고 적었는데 **틀렸다** —
+    그 함수는 범주형 판정(`list[str]`)의 정규화 엔트로피다. 가중치 산포는 수치이므로
+    그 함수로 잴 수 없다. 여기서는 자산별 [min, max] 와 산포 스칼라를 직접 낸다.
+
+    ★평균으로 접지 않는다★ 모델별 원값을 `by_model` 로 함께 남긴다. 다섯 모델의
+    평균 비중은 어떤 모델도 추천하지 않은 포트폴리오이고, 그것을 단일 숫자로
+    내놓으면 산포를 재려던 목적 자체가 사라진다.
+
+    ★모델이 하나뿐이면 구간을 만들지 않는다★ 한 점에서 [min, max] 를 뽑으면
+    폭 0 의 "구간" 이 나오는데, 그것은 모델들이 합의했다는 뜻이 아니라 **비교할
+    상대가 없었다는 뜻**이다. 둘을 구분하지 못하는 숫자는 내지 않는다.
+    """
+    S = (np.asarray(s_annual, dtype=float) if s_annual is not None
+         else _cov(R) * 252.0)
+    avail = model_availability()
+    order = list(models) + (["bl"] if mu_bl is not None and "bl" not in models else [])
+
+    by_model: dict[str, np.ndarray] = {}
+    skipped: list[dict] = []
+    for m in order:
+        info = avail.get(m) or {"available": False, "reason": f"알 수 없는 모델: {m}"}
+        if not info["available"]:
+            skipped.append({"model": m, "reason": info["reason"]})
+            continue
+        # ★폴백을 쓰지 않는다★ `weights_for_model` 은 실패 시 inverse-vol 로 떨어지는데,
+        # 그 값이 "min_var 의 답" 으로 표에 앉으면 산포가 조작된다. 원 출력만 받는다.
+        w = _raw_weights_for_model(m, R, mu_bl if m == "bl" else None, S)
+        if w is None:
+            skipped.append({"model": m, "reason": "최적화가 수렴하지 않았습니다"})
+            continue
+        by_model[m] = w
+
+    if len(by_model) < 2:
+        return {
+            "available": False,
+            "names": names,
+            "by_model": {m: [round(float(x) * 100.0, 2) for x in w]
+                         for m, w in by_model.items()},
+            "range": [], "dispersion_pct": None, "max_spread_pct": None,
+            "models_used": list(by_model), "skipped": skipped,
+            "reason": (f"비교 가능한 모델이 {len(by_model)}개뿐이라 목표 구간을 "
+                       "만들지 않았습니다 — 한 점에서 뽑은 구간은 폭이 0 이 되어 "
+                       "'모델들이 합의했다' 로 잘못 읽힙니다."),
+        }
+
+    W = np.vstack([by_model[m] for m in by_model])       # [models, assets]
+    lo = W.min(axis=0) * 100.0
+    hi = W.max(axis=0) * 100.0
+    spread = hi - lo
+    return {
+        "available": True,
+        "names": names,
+        "by_model": {m: [round(float(x) * 100.0, 2) for x in w]
+                     for m, w in by_model.items()},
+        "range": [{"name": names[i],
+                   "min_pct": round(float(lo[i]), 2),
+                   "max_pct": round(float(hi[i]), 2),
+                   "spread_pct": round(float(spread[i]), 2)} for i in range(len(names))],
+        "dispersion_pct": round(float(spread.mean()), 2),
+        "max_spread_pct": round(float(spread.max()), 2),
+        "models_used": list(by_model), "skipped": skipped, "reason": None,
+        "note": ("같은 Σ 를 받은 모델들의 비중 산포입니다 — 차이는 목적함수에서만 "
+                 "옵니다. 평균은 내지 않습니다(어떤 모델도 추천하지 않은 값입니다)."),
     }
 
 

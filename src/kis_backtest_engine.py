@@ -35,6 +35,19 @@ logger = logging.getLogger(__name__)
 # 1. DB Data Provider (as-of 날짜 지원)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+PROGRESS_MAX_EVENTS = 100
+
+
+def progress_step(total: int, max_events: int = PROGRESS_MAX_EVENTS) -> int:
+    """진행 이벤트를 max_events 이하로 묶는 보고 간격.
+
+    `total // max_events`는 실제로 상한이 아니다 — total=199면 step=1이 되어 199건이
+    그대로 나간다. 각 이벤트가 워커에서 DB 쓰기로 이어지므로(진행률 영속) 올림으로
+    계산해 진짜 상한을 만든다.
+    """
+    return max(1, math.ceil(max(0, int(total)) / max(1, int(max_events))))
+
+
 def _get_sync_engine():
     """
     테스트 시 monkey-patch 가능하도록 모듈 레벨 변수 사용.
@@ -281,6 +294,10 @@ class BacktestEngine:
         self._eod_liquidated = 0                # 기간종료 청산 종목 수 (통계 표기용)
         self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
         self._etf_pos: dict[str, dict] = {}     # ETF 슬리브 보유 {ticker: {"qty","avg"}}
+        # 종목별 fetcher 프레임 캐시 (P1-3) — 봉마다 DataFrame 을 새로 만들지 않는다.
+        # 벡터화 경로(`signal_at`)를 쓰는 전략은 여기 들어오지 않으므로 비용을 안 낸다.
+        self._fetch_frames: dict[str, dict] = {}
+        self.ohlcv_all: dict[str, pd.DataFrame] = {}
 
     def _emit(self, phase: str, done: int | None = None, total: int | None = None):
         """진행률 콜백 발행(스트리밍용). 콜백 미설정/예외 시 무시 — 백테스트 결과엔 영향 없음."""
@@ -386,12 +403,17 @@ class BacktestEngine:
         workers = max(1, min(int(os.getenv("BACKTEST_OHLCV_WORKERS", "10") or 10), 32))
         self._emit("loading", done=0, total=total_syms)
         done = 0
+        # 시뮬레이션 루프(_sim_step)와 같은 throttle — 종목마다 emit하면 400종목 = 400 이벤트가
+        # 되고, 각 이벤트가 진행률을 DB에 쓰므로 로딩 구간이 커넥션 풀을 그만큼 두드린다.
+        # 마지막 종목은 항상 보고해 100%가 누락되지 않게 한다.
+        _load_step = progress_step(total_syms)
         if workers <= 1 or total_syms <= 1:
             for tk in symbols:
                 _t, _d = _load_one(tk)
                 _absorb(_t, _d)
                 done += 1
-                self._emit("loading", done=done, total=total_syms)
+                if done % _load_step == 0 or done == total_syms:
+                    self._emit("loading", done=done, total=total_syms)
         else:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -400,7 +422,10 @@ class BacktestEngine:
                     _t, _d = fut.result()
                     _absorb(_t, _d)
                     done += 1
-                    self._emit("loading", done=done, total=total_syms)
+                    if done % _load_step == 0 or done == total_syms:
+                        self._emit("loading", done=done, total=total_syms)
+
+        self.ohlcv_all = ohlcv_map   # per-bar 프레임 캐시가 원본으로 쓴다 (P1-3)
 
         if not ohlcv_map:
             return self._error_response("No OHLCV data found in DB for given tickers/range")
@@ -477,7 +502,7 @@ class BacktestEngine:
 
         # Day-by-day 시뮬레이션
         _sim_total = len(sim_dates)
-        _sim_step = max(1, _sim_total // 100)  # 진행 이벤트 최대 ~100개로 throttle
+        _sim_step = progress_step(_sim_total)  # 진행 이벤트 최대 100개로 throttle
         self._emit("simulating", done=0, total=_sim_total)
         for _sim_idx, sim_date in enumerate(sim_dates, start=1):
             date_str = sim_date.strftime("%Y-%m-%d")
@@ -662,43 +687,83 @@ class BacktestEngine:
           매 호출 dt.strftime/copy 제거 → 슬라이스에서 컬럼만 재구성.
         """
         import src.kis_data_fetcher as fetcher
-        original_fn = fetcher.get_daily_prices
-        original_cp = fetcher.get_current_price
 
-        # 사전 생성된 _date_str 사용 (strftime 재호출 없음).
-        # rename으로 date 컬럼 구성 — copy 없이 뷰 기반 경량 DataFrame.
-        df_copy = pd.DataFrame({
-            "date": df_slice["_date_str"].values,
-            "open": df_slice["open"].values,
-            "high": df_slice["high"].values,
-            "low": df_slice["low"].values,
-            "close": df_slice["close"].values,
-            "volume": df_slice["volume"].values,
-        })
-        # 수급 토큰의 종목 식별 — 벡터화 경로(ohlcv_map attrs)와 per-bar 경로 일관성
-        df_copy.attrs["ticker"] = df_slice.attrs.get("ticker", ticker)
+        # ★봉마다 DataFrame 을 새로 만들지 않는다 (P1-3)★
+        # 예전에는 호출마다 6열 DataFrame 을 생성했다 — 실측 3,642회 / 2.20초, 그리고
+        # 그 과정의 pandas `__getitem__` 이 38,666회였다. 래퍼 자체가 전략보다 두 배를
+        #쓰고 있었다(래퍼 12.39s 중 전략은 4.09s).
+        #
+        # 종목마다 **한 번** 만들어 두고 봉마다 앞부분을 잘라 넘긴다. `df_slice` 는
+        # `ohlcv_map[ticker].loc[:sim_date]` 이므로 항상 전체의 **접두사**이고,
+        # 따라서 `full.iloc[:k]` 는 예전 `df_copy` 와 같은 행을 같은 RangeIndex 로 준다.
+        cache = self._fetch_frames.get(ticker)
+        if cache is None:
+            base = self.ohlcv_all.get(ticker)
+            if base is None or base.empty:
+                return None
+            full = pd.DataFrame({
+                "date": base["_date_str"].values,
+                "open": base["open"].values,
+                "high": base["high"].values,
+                "low": base["low"].values,
+                "close": base["close"].values,
+                "volume": base["volume"].values,
+            })
+            full.attrs["ticker"] = base.attrs.get("ticker", ticker)
+            # 52주 고저도 봉마다 `tail(252).max()` 를 다시 돌던 것을 한 번에 만든다.
+            # `rolling(252)` 의 i 번째 창은 [i-251, i] 이고 `tail(252)` 는 [k-252, k-1] —
+            # i=k-1 에서 같은 구간이다(값 동일성은 바이트 대조로 확인했다).
+            cache = {
+                "full": full,
+                "close": full["close"].to_numpy(),
+                "high": full["high"].to_numpy(),
+                "low": full["low"].to_numpy(),
+                "volume": full["volume"].to_numpy(),
+                "w52h": full["high"].rolling(252, min_periods=1).max().to_numpy(),
+                "w52l": full["low"].rolling(252, min_periods=1).min().to_numpy(),
+                # 인과 지표 캐시 (P1-1) — `kis_indicators._causal` 이 이 표식을 본다.
+                "memo": {},
+            }
+            self._fetch_frames[ticker] = cache
 
-        # 마지막 종가 기반 현재가 정보
-        last = df_copy.iloc[-1]
+        k = len(df_slice)
+        if k == 0:
+            return None
+        i = k - 1
+        df_copy = cache["full"].iloc[:k]
+        # `.iloc` 이 attrs 를 전파하지 않는 pandas 버전이 있어 방어적으로 채운다
+        # (수급 토큰이 종목을 못 찾으면 조용히 다른 값이 나온다).
+        if not df_copy.attrs.get("ticker"):
+            df_copy.attrs["ticker"] = cache["full"].attrs.get("ticker", ticker)
+        # 인과 지표 캐시를 붙인다 (P1-1). 라이브 경로의 DataFrame 에는 이 표식이 없으므로
+        # 지표 함수들이 기존 경로를 그대로 탄다.
+        from src.kis_indicators import _BT_CACHE_ATTR
+        df_copy.attrs[_BT_CACHE_ATTR] = cache
+
         price_info = {
-            "price": int(last["close"]),
+            "price": int(cache["close"][i]),
             "change": 0, "change_rate": 0.0,
-            "high": int(last["high"]), "low": int(last["low"]),
-            "volume": int(last["volume"]),
-            "w52_high": int(df_copy["high"].tail(252).max()),
-            "w52_low": int(df_copy["low"].tail(252).min()),
+            "high": int(cache["high"][i]), "low": int(cache["low"][i]),
+            "volume": int(cache["volume"][i]),
+            "w52_high": int(cache["w52h"][i]),
+            "w52_low": int(cache["w52l"][i]),
         }
 
+        # ★전역을 덮어쓰지 않는다 (P0-1)★
+        # 예전에는 `fetcher.get_daily_prices = lambda …` 로 **모듈 전역**을 대입하고
+        # finally 에서 "진입 시점의 값" 으로 되돌렸다. 그 값이 이미 다른 스레드의
+        # 람다일 수 있어, 동시 실행이 서로의 데이터를 읽고 두 실행이 끝난 뒤에도
+        # 전역이 오염된 채 남았다(실측: `scripts/bench_backtest.py --race`).
+        # ContextVar 는 스레드마다 별개이고 토큰으로 정확히 복원된다.
+        # 람다가 하던 일(인자를 무시하고 이 봉을 돌려준다)은 그대로다 — 결과 불변.
+        token = fetcher.push_bar_context(df_copy, price_info)
         try:
-            fetcher.get_daily_prices = lambda *a, **kw: df_copy
-            fetcher.get_current_price = lambda *a, **kw: price_info
             return strategy.generate_signal(ticker, ticker)
         except Exception as e:
             logger.debug(f"Signal error {ticker}: {e}")
             return None
         finally:
-            fetcher.get_daily_prices = original_fn
-            fetcher.get_current_price = original_cp
+            fetcher.pop_bar_context(token)
 
     def _initial_alloc(self, factor_weight: float | None = None,
                        atr_pct: float | None = None) -> float:

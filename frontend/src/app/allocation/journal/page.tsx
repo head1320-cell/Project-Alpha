@@ -2,14 +2,20 @@
 // Decision Journal Workspace — 단순 타임라인이 아닌 구조화 저널:
 //   Macro View → Changed(가설/변화) → Reason(이유) → Result(결과, 자동 스냅샷)
 //   → Review(사후 검증, 나중에 편집). 세션 타임라인은 보조 피드로 함께.
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { macroApi, type RegimeState } from "@/lib/macroApi";
 import {
   deleteStudy, listStudies, updateStudyReview, type AllocationStudy,
-} from "@/lib/allocationStorage";
-import { useAllocation } from "@/components/allocation/AllocationProvider";
-import { ResearchTimeline } from "@/components/allocation/ResearchTimeline";
+} from "@/entities/allocation/storage";
+import { useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { useResearchRegime } from "@/widgets/allocation/useResearchRegime";
+import { ResearchRunsPanel } from "@/widgets/allocation/ResearchRunsPanel";
+import { ResearchTimeline } from "@/widgets/allocation/ResearchTimeline";
+import { DecisionJournal } from "@/widgets/allocation/DecisionJournal";
+import { StrategyHealthPanel } from "@/widgets/allocation/StrategyHealthPanel";
+import { PolicyBacktest } from "@/widgets/allocation/PolicyBacktest";
+import { ArchiveDrawer } from "@/shared/ui/ArchiveDrawer";
 
 function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () => void }) {
   const [text, setText] = useState(study.review || "");
@@ -38,25 +44,52 @@ function ReviewEditor({ study, onSaved }: { study: AllocationStudy; onSaved: () 
   );
 }
 
+// ★D6 — 런을 여는 durable URL★
+// 지금까지 `?run=` 이 없어서 "이 런을 열어라" 를 URL 로 표현할 수 없었다. 서버는 이미
+// `GET /api/v1/research-runs/{id}` 로 단건을 주고 `reopenRun()` 도 있는데, **주소만**
+// 없었던 것이다. 그래서 색인의 런 행이 아무 데로도 링크할 수 없었다.
+//
+// useSearchParams() 는 정적 프리렌더를 CSR 로 바일아웃시키므로 Suspense 경계가 필요하다
+// (Next 14: missing-suspense-with-csr-bailout). tsc 는 못 잡고 next build 가 잡는다 —
+// app/allocation/macro/page.tsx:20 이 같은 함정을 이미 주석으로 남겨 두었다.
 export default function JournalWorkspace() {
+  return (
+    <Suspense fallback={<div className="as-empty">저널을 준비하는 중…</div>}>
+      <JournalInner />
+    </Suspense>
+  );
+}
+
+function JournalInner() {
   const { result, views, holdings, timeline, saveStudyFull, studiesVersion, bumpStudies, canRun } = useAllocation();
+  // 링크로 지목된 런 — 없으면 null 이고 기존 동작 그대로다.
+  const focusRunId = useSearchParams().get("run");
   const [studies, setStudies] = useState<AllocationStudy[]>([]);
   const [name, setName] = useState("");
   const [changed, setChanged] = useState("");
   const [reason, setReason] = useState("");
   const [macroView, setMacroView] = useState("");
 
-  const regimeQ = useQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
-  const st = (regimeQ.data ?? null) as RegimeState | null;
-  const kr = st?.markets?.kr ?? st;
+  // 붙은 스냅샷이 이기고 라이브는 폴백 — 저널은 "그때의 국면"을 기록해야 하므로
+  // 여기서 오늘 값을 쓰면 사후에 결정을 잘못된 맥락으로 채점하게 된다.
+  const rg = useResearchRegime();
 
   useEffect(() => { setStudies(listStudies()); }, [studiesVersion]);
   // Macro View 자동 스냅샷 (편집 가능 — 사용자가 자기 언어로 다듬을 수 있게)
   useEffect(() => {
-    if (kr && !macroView) {
-      setMacroView(`${kr.regime} (신뢰도 ${Math.round((kr.confidence ?? 0) * 100)}%) · ${st?.recommended_mode ?? ""} · Stress ${Math.round(st?.stress_score ?? 0)}`);
+    if (rg.regime && !macroView) {
+      const conf = rg.confidence != null ? ` (신뢰도 ${Math.round(rg.confidence * 100)}%)` : "";
+      const mode = rg.recommendedMode ? ` · ${rg.recommendedMode}` : "";
+      const stress = rg.stressScore != null ? ` · Stress ${Math.round(rg.stressScore)}` : "";
+      const pin = rg.source === "snapshot" && rg.asOf ? ` · as-of ${rg.asOf.slice(0, 10)}` : "";
+      setMacroView(`${rg.regime}${conf}${mode}${stress}${pin}`);
     }
-  }, [kr, st, macroView]);
+  }, [rg.regime, rg.confidence, rg.recommendedMode, rg.stressScore, rg.source, rg.asOf, macroView]);
+
+  // 본문에는 최근 3건만 — 나머지는 서랍. 목록이 길어지면 "지금 쓰는 것" 이 묻힌다.
+  const JR_MAIN_MAX = 3;
+  const shownStudies = studies.slice(0, JR_MAIN_MAX);
+  const archivedStudies = studies.slice(JR_MAIN_MAX);
 
   const pfSummary = result?.summary?.portfolio;
   const canJournal = canRun && !!result;
@@ -71,7 +104,22 @@ export default function JournalWorkspace() {
   };
 
   return (
-    <div className="as-ws2 as-ws-jr">
+    <>
+      {/* ★정책 백테스트가 340px 레일 안에 있었다 (A6)★
+          이 패널 하나에 컨트롤 5개 + KPI 10칸 + Recharts 3개(자산곡선·낙폭·회전율) +
+          `1 + N자산 + 1` 열짜리 시점별 비중표가 들어 있다. `.as-ws-jr` 의 레일은
+          340px 이고 비중표는 `white-space: nowrap` 이라, 자산이 몇 개든 **반드시**
+          가로 스크롤이 생겼다. A5-S2 가 05 에서 세운 규칙("레일=컨트롤, 메인=증거")을
+          여기 그대로 적용하면 메인이 감당 못 할 만큼 길어지므로, 이 패널만 2단 그리드
+          **위 전폭 밴드**로 올린다 — 폭이 실제로 필요한 유일한 증거 화면이다.
+          `.as-bt-*` 클래스는 그대로다(allocation-backtest.spec.ts 가 잡는 계약). */}
+      <section className="as-card as-jr-policy">
+        <div className="as-card-title">정책 백테스트 (Walk-Forward · OOS)
+          <span className="as-note-inline">현재 모델·뷰·제약을 시점 밖으로 재현 — 신뢰도 검증</span></div>
+        <PolicyBacktest />
+      </section>
+
+      <div className="as-ws2 as-ws-jr">
       <aside className="as-center">
         <section className="as-card">
           <div className="as-card-title">NEW JOURNAL ENTRY <span className="as-note-inline">Macro View → Changed → Reason → Result → Review</span></div>
@@ -104,15 +152,23 @@ export default function JournalWorkspace() {
         </section>
       </aside>
       <main className="as-center">
+        <ResearchRunsPanel focusRunId={focusRunId} />
+        <DecisionJournal />
+        {/* 건강도는 컨트롤이 아니라 판정 결과다 — 레일이 아니라 증거 칼럼에 속한다.
+            (알파 15줄이 340px 레일에서 두 줄씩 접히던 자리) */}
+        <StrategyHealthPanel />
         <section className="as-card">
-          <div className="as-card-title">JOURNAL ENTRIES <span className="as-note-inline">{studies.length}건 · localStorage</span></div>
+          <div className="as-card-title">QUICK NOTES <span className="as-note-inline">{studies.length}건 · localStorage(세션 메모)</span></div>
           {studies.length === 0 && <div className="as-empty">저장된 저널 없음 — 좌측에서 첫 엔트리를 기록하세요.</div>}
-          {studies.map((s) => (
+          {shownStudies.map((s) => (
             <div key={s.id} className="as-jr-entry">
               <div className="as-jr-head">
                 <b>{s.name}</b>
                 <span className="num as-note-inline">{s.savedAt.slice(0, 16).replace("T", " ")} · {Object.keys(s.holdings).length}종목 · {s.model.toUpperCase()}</span>
-                <button className="as-x" title="삭제" onClick={() => { deleteStudy(s.id); bumpStudies(); }}>×</button>
+                {/* 아이콘 전용 버튼에는 접근 가능한 이름이 필요하다 — `title` 은
+                    키보드·스크린리더에서 신뢰할 수 없다 (A3 `.as-wrow-del`, A4-L3 과 동일). */}
+                <button className="as-x" aria-label={`${s.name} 저널 삭제`}
+                  onClick={() => { deleteStudy(s.id); bumpStudies(); }}>×</button>
               </div>
               <div className="as-jr-grid">
                 <div><em>Macro View</em><p>{s.macro_view || "—"}</p></div>
@@ -123,8 +179,35 @@ export default function JournalWorkspace() {
               <ReviewEditor study={s} onSaved={bumpStudies} />
             </div>
           ))}
+          {/* 과거 메모는 서랍으로 — 본문에는 최근 것만 (A7) */}
+          {archivedStudies.length > 0 && (
+            <ArchiveDrawer
+              className="as-jr-arch"
+              label={`이전 메모 ${archivedStudies.length}건 열기`}
+              title="QUICK NOTES — 전체"
+              hint={`${studies.length}건 중 최근 ${shownStudies.length}건만 본문에 있습니다`}>
+              {studies.map((s) => (
+                <div key={s.id} className="as-jr-entry">
+                  <div className="as-jr-head">
+                    <b>{s.name}</b>
+                    <span className="num as-note-inline">{s.savedAt.slice(0, 16).replace("T", " ")} · {Object.keys(s.holdings).length}종목 · {s.model.toUpperCase()}</span>
+                    <button className="as-x" aria-label={`${s.name} 저널 삭제`}
+                      onClick={() => { deleteStudy(s.id); bumpStudies(); }}>×</button>
+                  </div>
+                  <div className="as-jr-grid">
+                    <div><em>Macro View</em><p>{s.macro_view || "—"}</p></div>
+                    <div><em>Changed</em><p>{s.changed || "—"}</p></div>
+                    <div><em>Reason</em><p>{s.reason || "—"}</p></div>
+                    <div><em>Result</em><p className="num">{s.result_summary || s.note || "—"}</p></div>
+                  </div>
+                  <ReviewEditor study={s} onSaved={bumpStudies} />
+                </div>
+              ))}
+            </ArchiveDrawer>
+          )}
         </section>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

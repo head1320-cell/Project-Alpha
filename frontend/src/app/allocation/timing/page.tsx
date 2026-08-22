@@ -3,32 +3,47 @@
 // 게이트(k-of-N) + 위험-온/오프 자산군 + 추세 오버레이 / 우: 위험-온·오프 판정 + 결과 배분
 // (적용) + 시장 타이밍 컴포짓(timing_panel 재사용) + 자산 추세표. 백엔드 POST /allocation/timing.
 import React, { useState } from "react";
-import { type TimingConfig, useAllocation } from "@/components/allocation/AllocationProvider";
-import { ConfidenceGauge } from "@/components/allocation/parts";
-import type { CanaryInput, CanarySignalType } from "@/lib/allocationApi";
+import { useQuery } from "@tanstack/react-query";
+import { type TimingConfig, useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { ConfidenceGauge } from "@/widgets/allocation/parts";
+import { TimingFactorModal } from "@/widgets/allocation/TimingFactorModal";
+import { ThreeWayPanel } from "@/widgets/allocation/ThreeWayPanel";
+import { allocationApi, type CanaryInput } from "@/entities/allocation/api";
 
-const ASSET_SUGGEST = ["SPY", "QQQ", "IWM", "EFA", "EEM", "AGG", "TLT", "IEF", "SHY", "LQD", "HYG", "GLD", "VNQ", "BIL"];
-const IND_SUGGEST: [string, string][] = [
-  ["VIXCLS", "VIX 변동성"], ["DGS10", "미 10년물"], ["BAMLH0A0HYM2", "HY 스프레드"], ["T10Y2Y", "10Y-2Y"],
-];
-const ASSET_SIGNALS: { id: CanarySignalType; label: string }[] = [
-  { id: "score_13612", label: "13612W 가속모멘텀" },
-  { id: "abs_mom", label: "절대모멘텀(N개월)" },
-  { id: "ma_month", label: "N개월 이동평균 상회" },
-  { id: "ma_day", label: "N일 이동평균 상회" },
-];
+import {
+  ASSET_SUGGEST, IND_SUGGEST, MARKET_GATES, OFF_DEFENSIVE, type Gate,
+} from "@/widgets/allocation/timingPresets";
+
 const parseList = (s: string) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
 
 export default function TimingWorkspace() {
-  const { timingCfg, setTimingCfg, timingQ, applyTiming, holdings } = useAllocation();
+  const { timingCfg, setTimingCfg, timingQ, applyTiming, applyTimingOverlay, holdings, loadedStrategy,
+    attachedSnapshotId } = useAllocation();
   const [onText, setOnText] = useState(timingCfg.riskOnAssets.join(", "));
   const [offText, setOffText] = useState(timingCfg.riskOffAssets.join(", "));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // 팩터 라벨/메타 — 칩 표시에 사용(카탈로그 1회 로드, 모달과 캐시 공유)
+  const catQ = useQuery({
+    queryKey: ["allocation", "timing-factors"],
+    queryFn: () => allocationApi.timingFactors(),
+    staleTime: Infinity,
+  });
+  const factorMeta = React.useMemo(() => {
+    const m: Record<string, { label: string }> = {};
+    (catQ.data?.groups ?? []).forEach((g) => g.factors.forEach((f) => { m[f.id] = f; }));
+    return m;
+  }, [catQ.data]);
+
+  const applyGate = (g: Gate) => {
+    const cfg = g.build(timingCfg.market);
+    setTimingCfg(cfg);
+    setOnText(cfg.riskOnAssets.join(", "));
+    setOffText(cfg.riskOffAssets.join(", "));
+  };
 
   const setCfg = (patch: Partial<TimingConfig>) => setTimingCfg({ ...timingCfg, ...patch });
   const updCanary = (i: number, patch: Partial<CanaryInput>) =>
     setCfg({ canaries: timingCfg.canaries.map((c, ix) => (ix === i ? { ...c, ...patch } : c)) });
-  const addCanary = () =>
-    setCfg({ canaries: [...timingCfg.canaries, { kind: "asset", id: "SPY", signal: "score_13612", lookback: 12, threshold: 0, direction: "above" }] });
   const rmCanary = (i: number) => setCfg({ canaries: timingCfg.canaries.filter((_, ix) => ix !== i) });
 
   const data = timingQ.data && !timingQ.data.error ? timingQ.data : null;
@@ -36,46 +51,92 @@ export default function TimingWorkspace() {
 
   return (
     <div className="as-ws2 as-ws-tm">
-      {/* ── 좌: 카나리 · 게이트 · 오버레이 설정 ── */}
+      {/* ── 좌: 마켓 지수 게이트 프리셋 · 카나리 · 게이트 · 오버레이 설정 ── */}
       <aside className="as-center">
         <section className="as-card">
-          <div className="as-card-title">카나리 신호 <span className="as-note-inline">위험-온/오프를 결정하는 관문 지표</span></div>
-          {timingCfg.canaries.map((c, i) => (
-            <div key={i} className="as-tm-canary">
-              <button className="as-x" title="제거" onClick={() => rmCanary(i)}>×</button>
-              <select className="as-tm-kind" value={c.kind}
-                onChange={(e) => updCanary(i, { kind: e.target.value as "asset" | "indicator", id: e.target.value === "indicator" ? "VIXCLS" : "SPY", signal: e.target.value === "indicator" ? "threshold" : "score_13612" })}>
-                <option value="asset">자산</option>
-                <option value="indicator">지표</option>
-              </select>
-              <input className="as-tm-id" list={c.kind === "asset" ? "tm-assets" : "tm-inds"} value={c.id}
-                onChange={(e) => updCanary(i, { id: e.target.value.toUpperCase() })} />
-              {c.kind === "asset" ? (
-                <>
-                  <select className="as-tm-sig" value={c.signal} onChange={(e) => updCanary(i, { signal: e.target.value as CanarySignalType })}>
-                    {ASSET_SIGNALS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </select>
-                  {(c.signal === "abs_mom" || c.signal === "ma_month" || c.signal === "ma_day") && (
-                    <input className="as-tm-num num" type="number" min={1} max={252} value={c.lookback}
-                      title={c.signal === "ma_day" ? "일" : "개월"}
-                      onChange={(e) => updCanary(i, { lookback: parseInt(e.target.value) || 1 })} />
-                  )}
-                </>
-              ) : (
-                <>
-                  <select className="as-tm-sig" value={c.direction} onChange={(e) => updCanary(i, { direction: e.target.value as "above" | "below" })}>
-                    <option value="above">임계 초과 시 통과</option>
-                    <option value="below">임계 미만 시 통과</option>
-                  </select>
-                  <input className="as-tm-num num" type="number" step={0.1} value={c.threshold}
-                    title="임계값" onChange={(e) => updCanary(i, { threshold: parseFloat(e.target.value) || 0 })} />
-                </>
-              )}
-            </div>
-          ))}
-          <button className="as-chip sm" onClick={addCanary}>+ 카나리 추가</button>
-          <div className="as-note">모멘텀 관문(0 초과)은 VAA·DAA식 위험-온 판정과 동일. 지표는 임계 방향으로 통과.</div>
+          <div className="as-card-title">마켓 지수 게이트 <span className="as-note-inline">백테스터 마켓타이밍 → 자산배분 적용</span></div>
+          <div className="as-seg as-seg-2">
+            {(["kr", "us"] as const).map((m) => (
+              <button key={m} className={timingCfg.market === m ? "on" : ""}
+                onClick={() => setTimingCfg({ ...timingCfg, market: m })}>{m === "kr" ? "국내 ETF" : "미국 원본"}</button>
+            ))}
+          </div>
+          <div className="as-tm-gates">
+            {MARKET_GATES.map((g) => (
+              <button key={g.id} className="as-tm-gate" onClick={() => applyGate(g)}>
+                <span className="as-tm-gate-t">{g.label}</span>
+                <span className="as-tm-gate-s">{g.sub}</span>
+              </button>
+            ))}
+          </div>
+          <div className="as-note">
+            지수 추세·모멘텀이 <b>위험-온</b>이면 {loadedStrategy ? `불러온 전략(${loadedStrategy.name})` : "현재 포트폴리오"}를 유지,
+            <b> 위험-오프</b>면 방어자산(IEF·SHY)으로 전환합니다 — 백테스터의 지수 조건 게이트(전량 청산)를 정적 배분에 적용한 형태.
+            {timingCfg.market === "kr" && " 위험자산 프록시는 국내 대형주 ETF로 매핑됩니다."}
+          </div>
         </section>
+
+        <section className="as-card">
+          <div className="as-card-title">타이밍 팩터
+            <span className="as-note-inline">위험-온/오프를 결정하는 관문 — 팩터 창에서 통합 관리</span>
+          </div>
+          {timingCfg.canaries.length === 0 && (
+            <div className="as-empty">팩터가 없습니다 — 아래에서 추가하세요.</div>
+          )}
+          <div className="tfc-list">
+            {timingCfg.canaries.map((c, i) => {
+              const meta = factorMeta[c.signal];
+              const pv = Object.entries(c.params || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
+              return (
+                <div key={i} className="tfc-chip">
+                  <div className="tfc-chip-main">
+                    <span className="tfc-chip-t">{meta?.label ?? c.signal}</span>
+                    <span className="tfc-chip-tk num">{c.id}</span>
+                    <span className="tfc-chip-cond num">
+                      {c.direction === "above" ? ">" : "<"} {c.threshold}
+                      {pv ? ` · ${pv}` : ""}
+                    </span>
+                  </div>
+                  <div className="tfc-chip-acts">
+                    <button className="as-chip sm" title="임계 방향 전환"
+                      onClick={() => updCanary(i, { direction: c.direction === "above" ? "below" : "above" })}>⇄</button>
+                    <input className="as-tm-num num" type="number" step={0.1} value={c.threshold}
+                      title="임계값" onChange={(e) => updCanary(i, { threshold: parseFloat(e.target.value) || 0 })} />
+                    <button className="as-x" title="제거" onClick={() => rmCanary(i)}>×</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button className="as-fb-apply" onClick={() => setPickerOpen(true)}>+ 팩터 창에서 추가</button>
+          <div className="as-note">
+            모멘텀·이격도·돌파·오버나이트·국면 팩터를 한 창에서 검색·추가합니다. 각 팩터는
+            TimingRule 공통 스키마로 등록되어 규칙 세트로 저장·재사용할 수 있습니다.
+          </div>
+        </section>
+
+        <TimingFactorModal open={pickerOpen} onClose={() => setPickerOpen(false)}
+          active={timingCfg.canaries}
+          // ★영향 미리보기는 **지금 설정**을 알아야 계산된다★ (§8.1, Phase 12c)
+          // 창이 여기에 초안 팩터만 더해 같은 엔드포인트로 다시 물어, "넣으면 노출이
+          // 어떻게 되는가" 를 실측으로 보여준다. 현재 노출은 이미 있는 쿼리에서 넘겨
+          // 같은 계산을 두 번 하지 않는다.
+          baseline={{
+            market: timingCfg.market,
+            canaries: timingCfg.canaries,
+            min_breadth: timingCfg.minBreadth,
+            risk_on_assets: timingCfg.riskOnAssets,
+            risk_off_assets: timingCfg.riskOffAssets,
+            overlay: timingCfg.overlay,
+            regime_blend: timingCfg.regimeBlend,
+            target_vol_pct: timingCfg.targetVolPct,
+          }}
+          baselineExposure={
+            timingQ.data && !timingQ.data.error && Number.isFinite(Number(timingQ.data.cash_pct))
+              ? Math.max(0, Math.min(1, 1 - Number(timingQ.data.cash_pct) / 100))
+              : null
+          }
+          onAdd={(c) => setCfg({ canaries: [...timingCfg.canaries, c] })} />
 
         <section className="as-card">
           <div className="as-card-title">브레드스 게이트</div>
@@ -123,11 +184,27 @@ export default function TimingWorkspace() {
                 onChange={(e) => setCfg({ overlay: { ...timingCfg.overlay, lookback: parseInt(e.target.value) } })} /></label>
           )}
         </section>
+
+        <section className="as-card">
+          <div className="as-card-title">리스크 제어 <span className="as-note-inline">이진 게이트 → 연속 노출</span></div>
+          <label className="as-tm-set" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span>국면-확률 블렌드 <em className="as-note-inline">휩쏘 억제</em></span>
+            <input type="checkbox" checked={timingCfg.regimeBlend}
+              onChange={(e) => setCfg({ regimeBlend: e.target.checked })} />
+          </label>
+          <label className="as-tm-set" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span>목표 변동성(연 %) <em className="as-note-inline">위험자산 노출 스케일</em></span>
+            <input className="as-tm-num" type="number" min={0} max={40} step={1}
+              value={timingCfg.targetVolPct ?? ""} placeholder="off"
+              onChange={(e) => setCfg({ targetVolPct: e.target.value === "" ? null : Math.max(2, Math.min(40, +e.target.value)) })} />
+          </label>
+          <div className="as-note">블렌드: 국면확률로 온/오프 바스켓 연속 혼합. 목표변동성: 실현 변동성이 목표 초과 시 노출 축소(잔여 현금).</div>
+        </section>
       </aside>
 
       {/* ── 우: 판정 · 배분 · 시장 타이밍 ── */}
       <main className="as-center">
-        <section className={`as-card${timingQ.isLoading ? " as-loading" : ""}`}>
+        <section className={`as-card${timingQ.isLoading ? " as-loading" : ""}`} aria-busy={timingQ.isLoading}>
           <div className="as-card-title">위험 국면 판정</div>
           {timingQ.isLoading && <div className="as-empty">카나리 계산 중…</div>}
           {timingQ.data?.error && <div className="as-err">{timingQ.data.message}</div>}
@@ -140,6 +217,24 @@ export default function TimingWorkspace() {
                 <span className="num">통과 {data.canary.hits} / {data.canary.total} · 필요 {data.canary.need}</span>
                 <span className="as-note-inline">{data.signal_label}</span>
               </div>
+              {(data.regime_blend || data.vol_target) && (
+                <div className="as-tm-risk">
+                  {data.regime_blend && (
+                    <div className="as-tm-risk-row" title={data.regime_blend.note}>
+                      <span className="as-tm-risk-k">국면-확률 블렌드</span>
+                      <b className="num">P(위험선호) {data.regime_blend.p_risk_on}%</b>
+                      <span className="as-note-inline">{Object.entries(data.regime_blend.probs).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(" · ")}</span>
+                    </div>
+                  )}
+                  {data.vol_target && (
+                    <div className="as-tm-risk-row" title={data.vol_target.note}>
+                      <span className="as-tm-risk-k">목표 변동성</span>
+                      <b className="num">{data.vol_target.target_pct}% ← 실현 {data.vol_target.realized_pct}%</b>
+                      <span className="as-note-inline">노출 ×{data.vol_target.scale} · 현금 +{data.vol_target.cash_added_pct}%p</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <table className="as-metrics">
                 <thead><tr><th>카나리</th><th>신호</th><th>값</th><th>통과</th></tr></thead>
                 <tbody>
@@ -157,10 +252,27 @@ export default function TimingWorkspace() {
           )}
         </section>
 
+        {/* 3자 비교 — 카나리 판정과 별개의 V2 3-상태 경로다(레거시 `passes()` 를 건드리지 않는다) */}
+        <ThreeWayPanel canaries={timingCfg.canaries} market={timingCfg.market}
+          snapshotId={attachedSnapshotId} />
+
         {data && (
           <section className="as-card">
             <div className="as-card-title">권고 배분
-              <button className="as-fb-apply" disabled={!data.holdings.some((h) => h.weight > 0)} onClick={applyTiming}>이 배분 적용 →</button>
+              {/* ★두 동작을 구별해 이름 붙인다★ (스펙 §8, Phase 10c)
+                  오버레이는 전략 비중을 그대로 두고 노출만 줄인다. 교체는 권고 배분으로
+                  **갈아탄다** — 위험-오프면 방어자산(IEF/SHY)이 들어오므로 배율로는 재현할 수
+                  없는 별개의 능력이다. §8 이 금지하는 것은 조용한 덮어쓰기이지 명시적 교체가
+                  아니므로, 남기되 무엇을 하는지 버튼과 안내에 적는다. */}
+              <button className="as-fb-apply as-tm-overlay"
+                disabled={!data.holdings.some((h) => h.weight > 0)} onClick={applyTimingOverlay}>
+                오버레이로 적용 (전략 비중 유지)
+              </button>
+              <button className="as-chip as-tm-replace"
+                disabled={!data.holdings.some((h) => h.weight > 0)} onClick={applyTiming}
+                title="현재 보유 종목·비중을 권고 배분으로 교체합니다 — 되돌리려면 다시 구성해야 합니다">
+                권고 배분으로 교체 →
+              </button>
             </div>
             {data.holdings.filter((h) => h.weight > 0).map((h) => (
               <div key={h.ticker + h.code} className="as-wrow">
@@ -186,14 +298,28 @@ export default function TimingWorkspace() {
                 <span className="num">{mt.composite.score}/100</span>
               </div>
             </div>
+            {/* ★다섯 점수가 글자로만 있었다 (A5)★ 전부 같은 0–100 척도인데 `label 100` 짝만
+                10.5px 로 나열돼, 어느 것이 높고 낮은지 읽으려면 숫자를 하나씩 비교해야 했다.
+                같은 척도 위의 값은 막대로 그리면 한눈에 순위가 보인다 — 새 어휘를 만들지 않고
+                팩터 X-ray 의 트랙(.as-xray-track)과 같은 모양을 쓴다.
+                색은 여전히 보조다: 점수 숫자가 항상 함께 있으므로 색만으로 말하지 않는다. */}
             {!!mt.components?.length && (
               <div className="as-tm-comps">
-                {mt.components.map((c) => (
-                  <div key={c.key} className="as-tm-comp">
-                    <span>{c.label}</span>
-                    <b className="num" style={{ color: c.score >= 60 ? "var(--color-bull)" : c.score <= 40 ? "var(--color-bear)" : "var(--t-muted)" }}>{c.score}</b>
-                  </div>
-                ))}
+                {mt.components.map((c) => {
+                  const tone = c.score >= 60 ? "up" : c.score <= 40 ? "down" : "mid";
+                  return (
+                    <div key={c.key} className="as-tm-comp">
+                      <span className="as-tm-comp-l">{c.label}</span>
+                      <div className="as-tm-comp-track"
+                        role="img"
+                        aria-label={`${c.label} ${c.score}점 (100점 만점)`}>
+                        <i className={`as-tm-comp-fill ${tone}`}
+                          style={{ width: `${Math.max(0, Math.min(100, c.score))}%` }} />
+                      </div>
+                      <b className={`num as-tm-comp-v ${tone}`}>{c.score}</b>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {!!mt.assets?.length && (
@@ -222,3 +348,4 @@ export default function TimingWorkspace() {
     </div>
   );
 }
+

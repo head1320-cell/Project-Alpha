@@ -431,6 +431,73 @@ def check_ecos():
         fail(f"FRED 호출 오류: {e}")
 
 
+def check_new_sources():
+    """M1-I 신규 소스 — **여기가 verified_live 를 올릴 근거를 만드는 곳이다.**
+
+    ECOS 3지표 · KRX 4엔드포인트 · Naver DataLab · Google Trends 는 전부
+    `source_registry` 에 `verified_live=False` 로 선언돼 있다. 개발 컨테이너에서는
+    다섯 호스트가 프록시 403 이라 실호출을 할 수 없어서다.
+
+    ★플래그는 코드가 스스로 올리지 않는다★ 한 번 성공했다고 자동으로 바꾸면 그
+    플래그는 "검증됨" 이 아니라 "언젠가 한 번 됐음" 이 된다. 여기서 실수신을 확인한
+    사람이 `src/data/source_registry.py` 에서 손으로 올린다.
+    """
+    head("【10】 M1-I 신규 소스 — 실수신 확인 (verified_live 근거)")
+    from src.data.source_registry import all_specs
+
+    unverified = [s for s in all_specs() if not s.verified_live]
+    if unverified:
+        warn(f"미검증 소스 {len(unverified)}개 — 아래는 화면에서 'available:false + 사유' 로 나갑니다")
+        for s in unverified:
+            print(f"      · {s.key:20} {s.provider:7} {s.endpoint}")
+
+    # ECOS 신규 3지표
+    if not os.getenv("BOK_API_KEY"):
+        warn("BOK_API_KEY 미설정 → KR_M2·KR_GDP·KR_CORP3Y 실수신 확인 불가")
+    else:
+        from src.services.macro_collector import BokClient
+        bok = BokClient()
+        for key, stat, item in (("KR_M2", "101Y003", "BBHA00"),
+                                ("KR_GDP", "200Y002", "1400"),
+                                ("KR_CORP3Y", "817Y002", "010200000")):
+            ts, vals = bok.fetch_series(stat, item)
+            clean = [v for v in vals if v is not None]
+            if clean:
+                ok(f"{key}: {len(clean)}개 수신 (최신 {clean[-1]}) → verified_live 올려도 됩니다")
+            else:
+                fail(f"{key}: 빈 응답 — 통계표/항목 코드({stat}/{item})를 점검하세요")
+
+    # KRX 확장 4종
+    if not os.getenv("KRX_API_KEY"):
+        warn("KRX_API_KEY 미설정 → VKOSPI·신용잔고·공매도·대차 실수신 확인 불가")
+    else:
+        from datetime import datetime, timedelta
+
+        from src.data.krx_client import EXTRA_ENDPOINTS, KRXClient
+        cli = KRXClient()
+        d = (datetime.now() - timedelta(days=3)).strftime("%Y%m%d")
+        for kind in EXTRA_ENDPOINTS:
+            rows = cli.get_extra(kind, d)
+            if rows:
+                ok(f"{kind}: {len(rows)}행 파싱 ({EXTRA_ENDPOINTS[kind]}) → verified_live 후보")
+            else:
+                fail(f"{kind}: 0행 — 경로 또는 필드명({EXTRA_ENDPOINTS[kind]})을 점검하세요")
+
+    # 검색 트렌드 (둘 중 하나면 됨)
+    from src.data.google_trends import GoogleTrendsClient
+    from src.data.naver_datalab import NaverDataLabClient
+    n, g = NaverDataLabClient(), GoogleTrendsClient()
+    if not n.is_configured and not g.is_configured:
+        warn("NAVER_CLIENT_ID/SECRET · GOOGLE_TRENDS_API_KEY 모두 미설정 → 트렌드 확인 불가")
+    if n.is_configured:
+        r = n.fetch_trends([{"groupName": "반도체", "keywords": ["반도체"]}],
+                           start="2026-01-01", end="2026-06-30")
+        (ok if r["available"] else fail)(f"Naver DataLab: {r.get('reason') or '수신 성공'}")
+    if g.is_configured:
+        r = g.fetch_trends(["semiconductor"], start="2026-01-01", end="2026-06-30")
+        (ok if r["available"] else fail)(f"Google Trends: {r.get('reason') or '수신 성공'}")
+
+
 def check_flows():
     """KIS 투자자별 수급 적재 현황 — 수급 토큰(외국인순매수량 등)의 데이터원."""
     head("【7】 KIS 수급 적재 (투자자별 순매수)")
@@ -552,6 +619,7 @@ def main():
     check_krx()
     check_ecos()
     check_flows()
+    check_new_sources()
     check_fin_history()
     check_minute_bars(code, kis_mock)
 

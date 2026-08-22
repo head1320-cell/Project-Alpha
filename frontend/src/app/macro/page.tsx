@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { LoadingState, ErrorState } from "@/components/layout/States";
-import MacroCockpit, { type TransplantPayload } from "@/components/macro/MacroCockpit";
-import { loadStrategyBacktestConfig, type MacroCore } from "@/lib/macroData";
-import { setMacroHandoff } from "@/lib/macroHandoff";
-import { analysisApi } from "@/lib/screenerApi";
-import { macroApi } from "@/lib/macroApi";
+import { LoadingState, ErrorState } from "@/shared/ui/States";
+import MacroCockpit, { type TransplantPayload } from "@/widgets/macro/MacroCockpit";
+import MacroIntelPanel from "@/widgets/macro/MacroIntelPanel";
+import { loadStrategyBacktestConfig, type MacroCore } from "@/entities/macro/data";
+import { setMacroHandoff } from "@/entities/macro/handoff";
+import { analysisApi } from "@/entities/macro/analysisApi";
+import { macroApi } from "@/entities/macro/api";
+import { regimeSnapshotApi } from "@/entities/regime-snapshot/api";
 
 export default function MacroPage() {
   const router = useRouter();
@@ -42,12 +44,40 @@ export default function MacroPage() {
     }
   };
 
+  // 현재 국면 → 불변 스냅샷 → Allocation Studio.
+  // 백테스터 이식(setMacroHandoff/sessionStorage)과 달리 **URL 로 ID 를 넘긴다** —
+  // 스펙상 브라우저 저장소는 스냅샷의 진실 소스가 될 수 없고, URL 은 새로고침·공유에 견딘다.
+  const [aasBusy, setAasBusy] = useState(false);
+  const [aasError, setAasError] = useState<string | null>(null);
+  const onOpenInAAS = async () => {
+    setAasBusy(true);
+    setAasError(null);
+    try {
+      const res = await regimeSnapshotApi.createFromCurrent("kr");
+      if (!res.recorded || !res.snapshot_id) {
+        // 저장 실패를 성공으로 위장하지 않는다 — 이동하지 않고 사유를 보여 준다.
+        setAasError(res.message || "스냅샷이 저장되지 않아 이동하지 않았습니다.");
+        return;
+      }
+      router.push(`/allocation/macro?snapshot=${encodeURIComponent(res.snapshot_id)}`);
+    } catch (e) {
+      setAasError(e instanceof Error ? e.message : "스냅샷 생성에 실패했습니다.");
+    } finally {
+      setAasBusy(false);
+    }
+  };
+
   return (
     <div className="tpage-fade">
       {loading && <LoadingState label="매크로 데이터 수집 중" />}
       {bridging && <LoadingState label="전략을 백테스터로 구성하는 중" />}
       {err && !loading && <ErrorState sub={err} />}
-      {core && !loading && <MacroCockpit core={core} onTransplant={onTransplant} />}
+      {core && !loading && (
+        <MacroCockpit core={core} onTransplant={onTransplant}
+          onOpenInAAS={onOpenInAAS} aasBusy={aasBusy} aasError={aasError} />
+      )}
+      {/* P4 지능 패널 — 칵핏 아래. `.mc-*` 는 한 글자도 건드리지 않는다(15개 스펙 계약). */}
+      {!loading && <MacroIntelPanel />}
     </div>
   );
 }

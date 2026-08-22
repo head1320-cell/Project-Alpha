@@ -10,10 +10,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { EmptyState } from "@/components/layout/States";
-import { macroApi, type RegimeState, REGIME_COLORS } from "@/lib/macroApi";
-import { screenerApiAdvanced, companyApi, type ScreenerItem } from "@/lib/screenerApi";
-import { API_BASE } from "@/lib/apiBase";
+import { EmptyState } from "@/shared/ui/States";
+import { macroApi, type RegimeState, REGIME_COLORS } from "@/entities/macro/api";
+import { companyApi } from "@/entities/company/api";
+import { screenerApiAdvanced } from "@/entities/screener/api/ast";
+import type { ScreenerItem } from "@/shared/model/domain";
+import { API_BASE } from "@/shared/api/apiBase";
 
 const MODULES = [
   { n: "01", label: "Screener", href: "/screener", desc: "116팩터 멀티팩터 스크리닝 · 전종목/ETF" },
@@ -21,6 +23,7 @@ const MODULES = [
   { n: "03", label: "Macro", href: "/macro", desc: "4-국면도 · 동적 무위험수익률" },
   { n: "04", label: "Company", href: "/insights", desc: "DART+KIS 통합 · RIM·DCF·DDM 내재가치" },
   { n: "05", label: "Risk", href: "/risk-tools", desc: "VaR · 스트레스 시나리오 · 생존율" },
+  { n: "06", label: "Allocation", href: "/allocation", desc: "Black-Litterman · 팩터 포트폴리오 · 리스크 배분 스튜디오" },
 ];
 
 export default function Dashboard() {
@@ -149,12 +152,13 @@ function ModuleGrid() {
           <div className="dash-mod-desc">{m.desc}</div>
         </Link>
       ))}
-      <div className="dash-card dash-mod dash-mod-stat">
-        <div className="dash-mod-top"><span className="dash-mod-n">◆</span></div>
-        <div className="dash-mod-label">데이터 적재</div>
+      <Link href="/admin/data" className="dash-card dash-mod dash-mod-stat">
+        <div className="dash-mod-stat-l">
+          <div className="dash-mod-top"><span className="dash-mod-n">◆</span><span className="dash-mod-label">데이터 적재</span></div>
+          <div className="dash-mod-desc">factor_snapshot 행 (펀더멘털+가격) · 데이터 인프라 →</div>
+        </div>
         <div className="dash-mod-bignum">{rows == null ? "—" : rows.toLocaleString()}</div>
-        <div className="dash-mod-desc">factor_snapshot 행 (펀더멘털+가격)</div>
-      </div>
+      </Link>
     </div>
   );
 }
