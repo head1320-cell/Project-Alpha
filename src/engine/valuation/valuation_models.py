@@ -418,6 +418,77 @@ class ValuationEngine:
     def __init__(self, dart_client: DARTClient | None = None):
         self.dart = dart_client or DARTClient()
 
+    def load_statement(
+        self,
+        stock_code: str,
+        current_price: float,
+        *,
+        bsns_year: str | None = None,
+        market_cap: float | None = None,
+    ) -> dict:
+        """종목 코드 → **평가 준비가 끝난** FinancialStatement.
+
+        ★왜 따로 뽑았나 (P2-2)★
+        `evaluate` 안에만 있던 준비 구간이다 — corp_code 해석 · 회계연도 기본값 ·
+        DART 수집 · **mock 게이트** · 발행주식수/capex 보강 · `compute_ratios`.
+        역DCF 가 같은 `fs` 를 필요로 하는데, 자기가 다시 불러오면 이 손질을
+        **복제**하게 된다. 같은 산수를 두 곳에 두면 반드시 갈라지고 갈라져도 타입
+        에러가 나지 않는다 — 이 저장소가 A1(`currentSig`/`req`)과 R0(오버레이
+        컴파일)에서 두 번 값을 치른 실수다.
+
+        ★mock 게이트가 여기 함께 있는 것이 핵심이다★ 운영(`mock_allowed()=False`)에서
+        DART 가 실패해 합성 재무로 폴백하면 RIM/DCF/DDM 이 **조용히** 계산되던 버그가
+        있었고, 그 방어가 이 함수 안에 있다. 역DCF 가 이 함수를 타는 한 같은 방어를
+        공짜로 받는다 — 새 경로가 그 구멍을 다시 열지 않는다.
+
+        Returns:
+            `{available, fs, corp_name, is_mock, reason}`.
+            `available:false` 면 `fs` 는 `None` 이고 `reason` 이 이유를 말한다.
+        """
+        # 1. Corp code 변환
+        corp_code = get_corp_code(stock_code)
+        if not corp_code:
+            corp_code = stock_code  # Fallback: 직접 사용
+
+        # 2. 재무제표 수집 (전체항목 — 현금흐름·유동자산 포함 → DCF용 FCF 확보)
+        if bsns_year is None:
+            from datetime import datetime
+            bsns_year = str(datetime.now().year - 1)
+
+        fs = self.dart.get_financial_statement_full(corp_code, bsns_year)
+        if not fs:
+            return {"available": False, "fs": None, "corp_name": None,
+                    "is_mock": False,
+                    "reason": f"{bsns_year} 회계연도 재무제표를 가져오지 못했습니다"}
+
+        # DART가 실패해(키미설정/쿼터초과/네트워크 에러 등) 내부적으로 mock 재무제표로 폴백한
+        # 경우 — fundamentals_store.py는 이미 이 플래그를 방어하지만(is_mock 체크 후 8년 재탐색
+        # + mock_gate 게이트), 이 밸류에이션 엔진에는 동일 방어가 없어 운영(KIS_USE_MOCK=0)에서도
+        # DART 호출이 실패하면 합성 재무로 RIM/DCF/DDM이 조용히 계산되던 버그. mock이 허용되지
+        # 않는 환경(mock_gate.mock_allowed()=False)이면 "데이터 없음"과 동일한 형태로 정직하게
+        # 반환(계산 안 함) — mock이 허용되는 개발/CI 환경에서는 기존처럼 계산은 진행하되
+        # is_mock=True로 투명하게 표시한다.
+        from src.data.mock_gate import mock_allowed
+        fs_is_mock = bool(getattr(fs, "is_mock", False))
+        if fs_is_mock and not mock_allowed():
+            return {"available": False, "fs": None, "corp_name": None,
+                    "is_mock": True,
+                    "reason": ("DART 재무를 가져오지 못해 합성 재무로 폴백했고, "
+                               "이 환경은 mock 을 허용하지 않습니다 — 계산하지 않습니다")}
+
+        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
+        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
+            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
+        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
+        if fs.capex is None and fs.investing_cf is not None:
+            fs.capex = abs(fs.investing_cf) * 0.5
+
+        fs.compute_ratios(current_price)
+        corp_info = self.dart.get_corp_info(corp_code)
+        corp_name = corp_info.corp_name if corp_info else fs.corp_name
+        return {"available": True, "fs": fs, "corp_name": corp_name,
+                "is_mock": fs_is_mock, "reason": None}
+
     def evaluate(
         self,
         stock_code: str,
@@ -433,53 +504,19 @@ class ValuationEngine:
         """
         params = params or ValuationParams()
 
-        # 1. Corp code 변환
-        corp_code = get_corp_code(stock_code)
-        if not corp_code:
-            corp_code = stock_code  # Fallback: 직접 사용
-
-        # 2. 재무제표 수집 (전체항목 — 현금흐름·유동자산 포함 → DCF용 FCF 확보)
-        if bsns_year is None:
-            from datetime import datetime
-            bsns_year = str(datetime.now().year - 1)
-
-        fs = self.dart.get_financial_statement_full(corp_code, bsns_year)
-        if not fs:
+        loaded = self.load_statement(stock_code, current_price,
+                                     bsns_year=bsns_year, market_cap=market_cap)
+        if not loaded["available"]:
             from src.data.stock_master import get_stock_name
             return UnifiedValuation(
                 ticker=stock_code, corp_name=get_stock_name(stock_code) or stock_code,
                 current_price=current_price,
                 intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
-                models=[],
+                models=[], is_mock=loaded["is_mock"],
             )
-        # DART가 실패해(키미설정/쿼터초과/네트워크 에러 등) 내부적으로 mock 재무제표로 폴백한
-        # 경우 — fundamentals_store.py는 이미 이 플래그를 방어하지만(is_mock 체크 후 8년 재탐색
-        # + mock_gate 게이트), 이 밸류에이션 엔진에는 동일 방어가 없어 운영(KIS_USE_MOCK=0)에서도
-        # DART 호출이 실패하면 합성 재무로 RIM/DCF/DDM이 조용히 계산되던 버그. mock이 허용되지
-        # 않는 환경(mock_gate.mock_allowed()=False)이면 "데이터 없음"과 동일한 형태로 정직하게
-        # 반환(계산 안 함) — mock이 허용되는 개발/CI 환경에서는 기존처럼 계산은 진행하되
-        # is_mock=True로 투명하게 표시한다.
-        from src.data.mock_gate import mock_allowed
-        fs_is_mock = bool(getattr(fs, "is_mock", False))
-        if fs_is_mock and not mock_allowed():
-            from src.data.stock_master import get_stock_name
-            return UnifiedValuation(
-                ticker=stock_code, corp_name=get_stock_name(stock_code) or stock_code,
-                current_price=current_price,
-                intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
-                models=[], is_mock=True,
-            )
-
-        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
-        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
-            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
-        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
-        if fs.capex is None and fs.investing_cf is not None:
-            fs.capex = abs(fs.investing_cf) * 0.5
-
-        fs.compute_ratios(current_price)
-        corp_info = self.dart.get_corp_info(corp_code)
-        corp_name = corp_info.corp_name if corp_info else fs.corp_name
+        fs = loaded["fs"]
+        fs_is_mock = loaded["is_mock"]
+        corp_name = loaded["corp_name"]
 
         # 3. 3 모델 실행
         rim_result = compute_rim(fs, params)
