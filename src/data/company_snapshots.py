@@ -230,8 +230,25 @@ def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
         for s in _SECTIONS:
             d[s] = _j(g.get(s), None)
     else:
-        # 목록에서는 큰 섹션을 빼고 **담겼는지 여부**만 (MES 의 observation_count 와 같은 이유).
-        d["sections_present"] = sorted(s for s in _SECTIONS if g.get(s))
+        # 목록에서는 큰 섹션을 빼고 이름만 (MES 의 observation_count 와 같은 이유).
+        #
+        # ★"담겼다" 와 "값이 있다" 를 나눈다★ 처음에는 `sections_present` 하나로
+        # 저장된 블롭 이름을 줬는데, 라이브로 재 보니 재무 미적재 종목에서
+        # `financials` 가 present 로 나왔다 — 블롭은 있지만 내용은
+        # `{available:false, reason}` 이다. 목록만 보는 소비자에게 그것은 거짓말이다.
+        avail, unavail = [], []
+        for s in _SECTIONS:
+            raw = g.get(s)
+            if not raw:
+                continue
+            body = _j(raw, None)
+            # ★`available` 을 말하지 않는 섹션은 내용이 있는 것으로 본다★ 빌더는 항상
+            # dict 를 넣지만 저장소가 그것을 가정하면 목록 조회 전체가 죽는다(리스트를
+            # 넣은 테스트에서 실제로 그랬다). 형태를 강제하는 것은 저장소의 일이 아니다.
+            ok = body.get("available", True) if isinstance(body, dict) else body is not None
+            (avail if ok else unavail).append(s)
+        d["sections_available"] = avail
+        d["sections_unavailable"] = unavail
     return d
 
 

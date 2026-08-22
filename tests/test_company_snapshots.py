@@ -132,10 +132,25 @@ def test_list_is_newest_first_and_omits_the_bulky_sections(mem_cs):
 
     rows = cs.list_snapshots()
     assert [r["snapshot_id"] for r in rows] == [new, old]
-    # ★페이로드 비대 방지★ 목록은 섹션 본문을 주지 않고 **담겼는지**만 말한다.
+    # ★페이로드 비대 방지★ 목록은 섹션 본문을 주지 않고 이름만 말한다.
     assert "financials" not in rows[0]
-    assert rows[0]["sections_present"] == ["financials"]
-    assert rows[1]["sections_present"] == ["financials", "quality"]
+    assert rows[0]["sections_available"] == ["financials"]
+    assert rows[1]["sections_available"] == ["financials", "quality"]
+
+
+def test_the_list_separates_stored_from_actually_available(mem_cs):
+    """★"담겼다" 와 "값이 있다" 는 다른 사실이다★
+
+    라이브 프로브에서 재무 미적재 종목의 `financials` 가 present 로 나왔다 — 블롭은
+    저장됐지만 내용은 `{available:false, reason}` 이었다. 목록만 보는 소비자에게
+    그것은 거짓말이므로 둘을 나눈다.
+    """
+    sid = _create(financials={"available": False, "reason": "재무 시계열 미적재"},
+                  peers={"available": True, "rows": [1, 2]})
+    row = cs.list_snapshots()[0]
+    assert row["snapshot_id"] == sid
+    assert row["sections_available"] == ["peers"]
+    assert row["sections_unavailable"] == ["financials"]
 
 
 def test_list_can_be_scoped_to_one_code(mem_cs):
