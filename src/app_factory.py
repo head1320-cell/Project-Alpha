@@ -107,5 +107,15 @@ def create_app() -> FastAPI:
     from src.startup.lifecycle import run_startup
     app.add_event_handler("startup", run_startup)
 
+    # 백테스트 워커 풀 종료 (P0-2) — ★기다리지 않는다★
+    # 진행 중인 실행을 기다리면 uvicorn 종료가 최대 19분 막힌다(large 실측). 예전
+    # daemon 스레드는 즉시 죽었으므로 그 동작을 유지하고, 유실된 실행은 기존
+    # `sweep_orphaned()` 가 failed 로 확정한다.
+    try:
+        from src.api.backtest_run_routes import shutdown_pool
+        app.add_event_handler("shutdown", shutdown_pool)
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"워커 풀 종료 훅 등록 실패(계속 진행): {e}")
+
     register_routers(app)
     return app

@@ -47,6 +47,16 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(sr, "ScreenToBacktestRequest", _StubReq, raising=False)
     monkeypatch.setattr(sr, "_screen_to_backtest_core", lambda req, progress_cb=None: dict(CANNED), raising=False)
 
+    # ★운송 수단만 바꾼다 (P0-2)★ 프로덕션 워커는 spawn 프로세스에서 돌기 때문에 위
+    # monkeypatch 들이 자식에 닿지 않는다(자식은 진짜 DB 에 진짜 엔진을 돌린다).
+    # 이 파일이 검증하는 것은 **워커 오케스트레이션과 API 계약**이므로(모듈 도크스트링),
+    # 디스패치만 스레드로 바꿔 기존 의미를 그대로 유지한다 — 도는 로직은 같은 `_worker` 다.
+    # 프로세스 경로 자체는 `tests/test_backtest_worker_process.py` 가 따로 단언한다.
+    from src.api import backtest_run_routes as brr
+    monkeypatch.setattr(
+        brr, "_submit",
+        lambda fn, *a: threading.Thread(target=fn, args=a, daemon=True).start())
+
     app = FastAPI()
     app.include_router(router)
     yield TestClient(app)

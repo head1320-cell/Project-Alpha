@@ -28,6 +28,9 @@ _inited = False
 # heartbeat_at 컬럼 사용 가능 여부 (_ensure가 실측으로 확정) — 마이그레이션이 막힌 배포에서도
 # 진행률 기록이 깨지지 않도록, 이 플래그가 False면 하트비트 절만 빼고 동일하게 동작한다.
 _has_heartbeat = False
+# 텔레메트리(P0-2) — 워커가 남기는 실행 계측. 하트비트와 같은 이유로 후행 ALTER 이고,
+# 같은 이유로 `_COLS` 에 넣지 않는다(위치 인덱스가 밀린다). JSON 한 컬럼이다.
+_has_telemetry = False
 
 STATUSES = (
     "draft", "queued", "validating", "loading_data", "simulating",
@@ -120,6 +123,22 @@ def _ensure(engine) -> None:
     except Exception as e:
         _has_heartbeat = False
         logger.warning(f"backtest_runs.heartbeat_at 사용 불가 — 하트비트 없이 동작: {e}")
+
+    # 텔레메트리 컬럼 — 12개 컬럼 대신 JSON 하나다. 항목이 늘 때마다 ALTER 를 하지
+    # 않아도 되고, `_COLS` 를 건드리지 않아 `_row` 의 위치 인덱스가 안전하다.
+    global _has_telemetry
+    try:
+        with engine.begin() as c:
+            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN telemetry TEXT"))
+    except Exception:
+        pass
+    try:
+        with engine.connect() as c:
+            c.execute(text(f"SELECT telemetry FROM {_TABLE} LIMIT 1"))
+        _has_telemetry = True
+    except Exception as e:
+        _has_telemetry = False
+        logger.warning(f"backtest_runs.telemetry 사용 불가 — 계측 없이 동작: {e}")
     _inited = True
 
 
@@ -427,6 +446,45 @@ def set_result(run_id: str, result: dict, is_mock_data: bool | None = None,
     except Exception as e:
         logger.warning(f"backtest 결과 저장 실패: {e}")
         return {"ok": False, "reason": "DB 오류."}
+
+
+def set_telemetry(run_id: str, payload: dict) -> bool:
+    """워커 실행 계측을 남긴다(P0-2). 실패해도 실행을 죽이지 않는다.
+
+    ★계측이 본 작업을 방해하면 안 된다★ 컬럼이 없거나 쓰기가 실패하면 조용히 False 를
+    돌려주고 끝낸다 — 계측 때문에 완료된 백테스트가 failed 가 되는 것이 더 나쁘다.
+    """
+    if not _has_telemetry:
+        return False
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.begin() as c:
+            c.execute(text(f"UPDATE {_TABLE} SET telemetry = :t WHERE run_id = :id"),
+                      {"t": json.dumps(payload, ensure_ascii=False, default=str), "id": run_id})
+        return True
+    except Exception as e:
+        logger.warning(f"telemetry 기록 실패 {run_id}: {e}")
+        return False
+
+
+def get_telemetry(run_id: str) -> dict | None:
+    """계측 조회. 없으면 None — 지어내지 않는다."""
+    if not _has_telemetry:
+        return None
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            r = c.execute(text(f"SELECT telemetry FROM {_TABLE} WHERE run_id = :id"),
+                          {"id": run_id}).fetchone()
+        if not r or not r[0]:
+            return None
+        return json.loads(r[0])
+    except Exception:
+        return None
 
 
 def set_error(run_id: str, error_code: str, error_message: str) -> dict:
