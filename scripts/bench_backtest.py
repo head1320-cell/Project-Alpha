@@ -85,6 +85,7 @@ class Measure:
     max_threads: int = 0
     db_queries: int = 0
     payload_bytes: int = 0
+    serialize_s: float = 0.0
     phases: dict[str, float] = field(default_factory=dict)
     error: str | None = None
 
@@ -184,7 +185,10 @@ def run_one(label: str, n_symbols: int, start: str, end: str,
                 prof.disable()
             m.db_queries = qc.n
             m.max_threads = tw.max_threads
-        m.payload_bytes = len(json.dumps(result, default=str))
+        _t = time.perf_counter()
+        _blob = json.dumps(result, default=str)
+        m.serialize_s = time.perf_counter() - _t
+        m.payload_bytes = len(_blob)
         if isinstance(result, dict) and result.get("error"):
             m.error = str(result.get("message"))[:200]
     except Exception as e:  # 하네스는 실패도 정직하게 기록한다
@@ -317,6 +321,41 @@ def race_probe(n_symbols: int = 30, start: str = "2023-01-01",
     }
 
 
+def polling_cost(samples: int = 200) -> dict:
+    """★폴링 부하★ 프론트는 `refetchInterval: 1000` 으로 상태를 1초마다 친다
+    (`RunMonitor.tsx:49`). 실행이 길수록 요청 수가 그대로 늘어난다.
+
+    여기서는 `/status` 가 뒤에서 부르는 `get_status()` 한 번의 비용과 쿼리 수를 재고,
+    실측 소요시간에 곱해 **암시적 부하**를 낸다. 곱셈이므로 외삽이라고 적는다.
+    """
+    import src.data.backtest_runs as br
+    rid = br.create_run("bench-polling", {"_bench": True}, requested_by="bench")
+    if rid is None:
+        return {"available": False, "reason": "실행 저장소를 쓸 수 없어 폴링 비용을 못 잰다"}
+    try:
+        with _QueryCounter() as qc:
+            t0 = time.perf_counter()
+            for _ in range(samples):
+                br.get_status(rid)
+            wall = time.perf_counter() - t0
+            q = qc.n
+        per = wall / samples
+        return {
+            "available": True, "samples": samples,
+            "per_call_ms": round(per * 1000, 3),
+            "queries_per_call": round(q / samples, 2),
+            "poll_interval_ms": 1000,
+            "implied_per_minute": {"requests": 60, "queries": round(q / samples * 60, 1),
+                                   "db_seconds": round(per * 60, 4)},
+            "note": "1초 폴링 기준 외삽 — 실행이 N분이면 요청 60N, 쿼리 그 배수다.",
+        }
+    finally:
+        try:
+            br.delete_run(rid)
+        except Exception:
+            pass
+
+
 def stress(concurrency: list[int], n_symbols: int, start: str, end: str) -> list[dict]:
     """동시 실행 처리량 — 스레드가 늘수록 총 처리량이 어떻게 되는가."""
     from src.api.screener_routes import _screen_to_backtest_core
@@ -378,10 +417,12 @@ def main() -> int:
     ap.add_argument("--profile", action="store_true")
     ap.add_argument("--race", action="store_true", help="몽키패치 경쟁만 측정")
     ap.add_argument("--stress", default="", help="예: 1,2,4")
+    ap.add_argument("--polling", action="store_true", help="폴링 부하 계측")
     ap.add_argument("--json", default="", help="결과를 이 경로에 JSON 으로")
     a = ap.parse_args()
 
-    report: dict = {"env": _env_note(), "measures": [], "stress": [], "race": None}
+    report: dict = {"env": _env_note(), "measures": [], "stress": [],
+                    "race": None, "polling": None}
     print("═══ 환경 ═══")
     print(json.dumps(report["env"], ensure_ascii=False, indent=2))
 
@@ -389,6 +430,11 @@ def main() -> int:
         print("\n═══ 몽키패치 경쟁 프로브 ═══")
         report["race"] = race_probe()
         print(json.dumps(report["race"], ensure_ascii=False, indent=2))
+
+    if a.polling:
+        print("\n═══ 폴링 부하 ═══")
+        report["polling"] = polling_cost()
+        print(json.dumps(report["polling"], ensure_ascii=False, indent=2))
 
     names = list(SUITES) if a.suite == "all" else ([] if a.suite == "none" else [a.suite])
     for name in names:
