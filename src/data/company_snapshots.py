@@ -28,10 +28,15 @@ R0(오버레이 컴파일)에서 두 번 값을 치른 실수다.
   · `cs_` + 시각 + 난수 hex
 
 ★후행 열은 `schema_add_columns.add_columns` 로★
-`valuation_dist`(P2-3) · `implied`(P2-2) · `macro_sensitivity`(P2-4) · `thesis`(P2-5)
-는 **지금 만들지 않는다.** 빈 컬럼을 미리 깔면 스키마가 있는 척한다. 각 슬라이스가
-자기 컬럼을 `add_columns` + 가용성 플래그로 붙인다 — `regime_snapshots` 의
-`regime`·MES·`regime_path` 세 블록이 그렇게 붙었다.
+슬라이스가 자기 컬럼을 `add_columns` + **가용성 플래그**로 붙인다 —
+`regime_snapshots` 의 `regime`·MES·`regime_path` 세 블록이 그렇게 붙었다.
+빈 컬럼을 미리 깔지 않는 것이 규칙이다(스키마가 있는 척한다).
+
+  · `implied` (P2-2 역DCF) — **붙었다.** `_has_implied_col` 이 그 성공 여부다.
+  · `valuation_dist`(P2-3) · `macro_sensitivity`(P2-4) · `thesis`(P2-5) — 아직.
+
+플래그가 False 면 그 섹션은 **없는 것처럼** 동작해야 한다(`_sections()`). 있는 척하고
+SELECT 하면 조회 전체가 깨지고, 그것은 컬럼이 없는 것보다 나쁘다.
 
 불변식
 ──────────────────────────────────────────────────────────────────────────────
@@ -65,6 +70,11 @@ _inited = False
 # `_inited` 는 bool 로 남긴다 — 저장소 모듈의 공통 관례이고, 다수의 테스트가
 # `monkeypatch.setattr(mod, "_inited", False)` 로 재초기화를 강제한다.
 _inited_for: str | None = None
+# ★후행 컬럼은 슬라이스마다 자기 것을 붙인다★ P2-1 이 예고한 대로다 — 빈 컬럼을 미리
+# 깔면 스키마가 있는 척한다. `implied`(P2-2 역DCF)가 그 첫 사례이고, 성공 여부를
+# 반드시 따로 들고 있어야 한다: ALTER 가 권한 등으로 실패했는데 SELECT 가 그 컬럼을
+# 참조하면 스냅샷 조회가 통째로 깨진다(수정 전보다 나쁨).
+_has_implied_col = False
 
 # 스냅샷 스키마 버전 — 섹션의 모양이 바뀌면 올린다.
 SNAPSHOT_VERSION = 1
@@ -75,8 +85,19 @@ ENGINE_VERSION = "cs-pit-v1"
 
 # ★JSON 으로 굳히는 큰 섹션★ 목록 조회에서는 빼고 요약만 준다(payload 비대 방지 —
 # MES 가 `observations` 에 대해 하는 것과 같다).
-_SECTIONS = ("financials", "publication_dates", "valuation", "quality",
-             "factors", "peers", "risk", "provenance")
+_BASE_SECTIONS = ("financials", "publication_dates", "valuation", "quality",
+                  "factors", "peers", "risk", "provenance")
+# 후행 컬럼으로 붙는 섹션 — 컬럼이 실제로 붙었을 때만 목록에 들어간다.
+_LATE_SECTIONS = ("implied",)
+
+
+def _sections() -> tuple[str, ...]:
+    """이 DB 에서 **실제로 쓸 수 있는** 섹션 이름.
+
+    후행 컬럼이 안 붙었으면 그 섹션은 없는 것처럼 동작한다 — 있는 척하고 SELECT 하면
+    조회 전체가 깨지고, 그것은 컬럼이 없는 것보다 나쁘다(`add_columns` 계약).
+    """
+    return _BASE_SECTIONS + (_LATE_SECTIONS if _has_implied_col else ())
 
 
 def _engine():
@@ -85,7 +106,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited, _inited_for
+    global _inited, _inited_for, _has_implied_col
     url = str(getattr(engine, "url", ""))
     if _inited and _inited_for == url:
         return
@@ -117,9 +138,14 @@ def _ensure_table(engine) -> None:
         c.execute(text(
             f"CREATE INDEX IF NOT EXISTS ix_cs_code_created ON {_TABLE} (code, created_at)"
         ))
-    # ★이 슬라이스에는 후행 열이 없다★ 표를 지금 만들었으므로 전부 CREATE TABLE 안에
-    # 있다. `add_columns` 를 0개 컬럼으로 부르는 것은 관례를 흉내 내는 연극일 뿐이다.
-    # P2-2~P2-5 가 자기 컬럼을 붙일 때 그 헬퍼를 쓴다.
+    # ── 역DCF (P2-2) ────────────────────────────────────────────────────────
+    # 시장가를 정당화하는 가정. 값이 아니라 **가정**을 굳히는 것이 언더라이팅이다.
+    from src.data.schema_add_columns import add_columns
+    _has_implied_col = add_columns(
+        engine, _TABLE, [("implied", "TEXT")],
+        label="company_snapshots.implied(역DCF 시장내재 가정)",
+    )
+
     _inited = True
     _inited_for = url
 
@@ -148,6 +174,7 @@ def create_snapshot(
     peers: Any = None,
     risk: Any = None,
     provenance: Any = None,
+    implied: Any = None,
 ) -> str | None:
     """불변 스냅샷을 만든다. 성공 시 snapshot_id, DB 미가용 시 `None`.
 
@@ -159,16 +186,20 @@ def create_snapshot(
         "financials": financials, "publication_dates": publication_dates,
         "valuation": valuation, "quality": quality, "factors": factors,
         "peers": peers, "risk": risk, "provenance": provenance,
+        "implied": implied,
     }
     try:
         engine = _engine()
         _ensure_table(engine)
         from sqlalchemy import text
+        # ★열 목록과 `:name` 바인딩을 **같은 순회에서** 만든다★ 둘을 따로 적으면
+        # 한쪽만 고쳐졌을 때 값이 다른 컬럼에 들어간다(P2-1 의 프로브가 실제로 재현했다).
+        names = _sections()
         cols = ("snapshot_id, code, created_at, as_of, price, price_source, "
                 "data_status, research_usage, model_version, engine_version, "
-                "code_version, snapshot_version, " + ", ".join(_SECTIONS))
+                "code_version, snapshot_version, " + ", ".join(names))
         vals = (":sid, :code, :ts, :asof, :price, :psrc, :status, :usage, "
-                ":mver, :ever, :cver, :sver, " + ", ".join(f":{s}" for s in _SECTIONS))
+                ":mver, :ever, :cver, :sver, " + ", ".join(f":{n}" for n in names))
         params: dict[str, Any] = {
             "sid": sid, "code": str(code), "ts": time.time(), "asof": as_of,
             "price": (float(price) if price is not None else None),
@@ -176,7 +207,8 @@ def create_snapshot(
             "mver": MODEL_VERSION, "ever": ENGINE_VERSION, "cver": code_version(),
             "sver": SNAPSHOT_VERSION,
         }
-        for name, value in sections.items():
+        for name in names:
+            value = sections.get(name)
             params[name] = (None if value is None
                             else json.dumps(value, ensure_ascii=False, default=str))
         with engine.begin() as c:
@@ -187,9 +219,9 @@ def create_snapshot(
         return None
 
 
-_COL_LIST = ["snapshot_id", "code", "created_at", "as_of", "price", "price_source",
-             "data_status", "research_usage", "model_version", "engine_version",
-             "code_version", "snapshot_version", *_SECTIONS]
+_BASE_COL_LIST = ["snapshot_id", "code", "created_at", "as_of", "price", "price_source",
+                  "data_status", "research_usage", "model_version", "engine_version",
+                  "code_version", "snapshot_version"]
 
 
 def _col_list() -> list[str]:
@@ -199,7 +231,7 @@ def _col_list() -> list[str]:
     센 `row[15]` 는 통째로 밀린다. 이름 목록에서 인덱스를 파생시키면 그 함정이
     구조적으로 사라진다 — `regime_snapshots._col_list` 가 같은 이유로 그렇게 한다.
     """
-    return list(_COL_LIST)
+    return _BASE_COL_LIST + list(_sections())
 
 
 def _cols() -> str:
@@ -227,7 +259,7 @@ def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
         # ★키는 값이 없어도 존재한다★ `None` = 이 섹션을 담지 않았다(빌더가 굳히기
         # 전이거나 산출 불가). 섹션 **내부**의 미가용은 그 안의
         # `{available:false, reason}` 이 말한다 — 둘은 다른 사실이다.
-        for s in _SECTIONS:
+        for s in _sections():
             d[s] = _j(g.get(s), None)
     else:
         # 목록에서는 큰 섹션을 빼고 이름만 (MES 의 observation_count 와 같은 이유).
@@ -237,7 +269,7 @@ def _row_to_dict(row, *, full: bool) -> dict[str, Any]:
         # `financials` 가 present 로 나왔다 — 블롭은 있지만 내용은
         # `{available:false, reason}` 이다. 목록만 보는 소비자에게 그것은 거짓말이다.
         avail, unavail = [], []
-        for s in _SECTIONS:
+        for s in _sections():
             raw = g.get(s)
             if not raw:
                 continue

@@ -81,15 +81,19 @@ def test_every_section_reads_back_its_own_value(mem_cs):
     프로브는 `create_snapshot` 의 `cols` 만 뒤집는 것, 즉 열 목록과 `:name` 바인딩이
     갈라지는 경우다. 가드는 진짜였고 **가드에 붙인 설명이 틀렸다.**
     """
-    marked = {s: {"marker": s} for s in cs._SECTIONS}
+    sections = cs._sections()
+    marked = {s: {"marker": s} for s in sections}
     sid = _create(**marked)
     got = cs.get_snapshot(sid)
-    for s in cs._SECTIONS:
+    for s in sections:
         assert got[s] == {"marker": s}, f"{s} 가 다른 열을 읽었다: {got[s]}"
 
 
 def test_the_column_list_covers_every_stored_section(mem_cs):
-    assert set(cs._SECTIONS) <= set(cs._col_list())
+    assert set(cs._sections()) <= set(cs._col_list())
+    # ★후행 컬럼이 붙었으면 섹션 목록에 들어오고, 아니면 없는 것처럼 동작한다★
+    # (P2-2 의 `implied` 가 그 첫 사례 — `add_columns` 계약)
+    assert set(cs._BASE_SECTIONS) <= set(cs._sections())
     # SELECT 문과 이름 목록이 같은 출처에서 나온다.
     assert cs._cols() == ", ".join(cs._col_list())
 

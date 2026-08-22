@@ -146,7 +146,13 @@ def publication_dates(code: str) -> dict:
     }
 
 
-def _valuation(code: str, price: float) -> dict:
+def _valuation_inputs(code: str, price: float) -> tuple:
+    """(엔진, 가정, params, load_statement 결과) — ★재무를 한 번만 읽는다★
+
+    P2-1 이 실측한 것이 "딥 탭 재무이력 3회 읽기" 였다. 스냅샷 하나를 만들면서
+    밸류에이션과 역DCF 가 각자 재무를 불러오면 그 결함을 안에서 되풀이하는 것이다.
+    준비된 `fs` 를 한 번 얻어 둘이 나눠 쓴다.
+    """
     from src.data.dart_client import DARTClient
     from src.engine.company_analytics import resolve_default_params
     from src.engine.valuation.valuation_models import ValuationEngine, ValuationParams
@@ -155,7 +161,13 @@ def _valuation(code: str, price: float) -> dict:
     params = ValuationParams(risk_free_rate=d["rf"], market_premium=d["erp"],
                              beta=d["beta"], terminal_growth_rate=d["g"],
                              projection_years=int(d["years"]))
-    u = ValuationEngine(DARTClient()).evaluate(code, price, params=params)
+    engine = ValuationEngine(DARTClient())
+    return engine, d, params, engine.load_statement(code, price)
+
+
+def _valuation(code: str, price: float, prepared: tuple) -> dict:
+    engine, d, params, loaded = prepared
+    u = engine.evaluate(code, price, params=params, statement=loaded)
     return {
         "available": True,
         "ticker": u.ticker, "corp_name": u.corp_name,
@@ -172,6 +184,22 @@ def _valuation(code: str, price: float) -> dict:
         # 이 적정가가 나왔는가" 에 답할 수 있어야 한다 — 출처 라벨까지 그대로.
         "assumptions": d,
     }
+
+
+def _implied(prepared: tuple, price: float) -> dict:
+    """역DCF — ★값이 아니라 **가정**을 굳히는 것이 언더라이팅이다★ (P2-2)
+
+    "적정가 83,000원" 은 우리 가정의 결과일 뿐이지만 "시장은 연 11.4% 성장을 믿고
+    있다" 는 반증 가능한 명제다. 근이 없거나(적자·마이너스 FCF) 단조가 아니면
+    `reverse_dcf` 가 사유를 돌려주고, `_section` 이 그것을 그대로 굳힌다.
+    """
+    from src.engine.valuation.reverse_dcf import reverse_dcf
+
+    _engine_obj, _d, params, loaded = prepared
+    if not loaded["available"]:
+        return {"available": False,
+                "reason": loaded["reason"] or "재무제표를 가져오지 못했습니다"}
+    return reverse_dcf(loaded["fs"], params, price)
 
 
 def _provenance(code: str, price_source: str, sections: dict) -> dict:
@@ -223,10 +251,15 @@ def build_and_store(code: str, price: float | None = None,
     }
     if resolved_price is None:
         sections["valuation"] = dict(no_price)
+        sections["implied"] = dict(no_price)
         sections["risk"] = dict(no_price)
     else:
+        # 재무는 여기서 **한 번만** 읽고 밸류에이션·역DCF 가 나눠 쓴다.
+        prepared = _valuation_inputs(code, resolved_price)
         sections["valuation"] = _section(
-            "valuation", lambda: _valuation(code, resolved_price))
+            "valuation", lambda: _valuation(code, resolved_price, prepared))
+        sections["implied"] = _section(
+            "implied", lambda: _implied(prepared, resolved_price))
         sections["risk"] = _section("risk", lambda: _risk(code, resolved_price))
 
     any_available = any(v.get("available") for v in sections.values())

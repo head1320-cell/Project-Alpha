@@ -496,16 +496,23 @@ class ValuationEngine:
         params: ValuationParams | None = None,
         bsns_year: str | None = None,
         market_cap: float | None = None,
+        *,
+        statement: dict | None = None,
     ) -> UnifiedValuation:
         """종목 코드 → 재무 데이터 수집 → 3 모델 평가 → 통합 결과.
 
         market_cap(억원)을 받으면 DART가 발행주식수를 안 줘도 시총/주가로 도출해
         BPS·EPS를 채운다 → RIM·DCF가 활성화됨(이게 없으면 '재무 데이터 부족').
+
+        statement: `load_statement` 의 결과를 이미 갖고 있으면 넘긴다 (P2-2).
+            CompanySnapshot 이 밸류에이션과 역DCF 를 **한 번의 재무 읽기**로 만들기
+            위한 경로다 — P2-1 이 실측한 "딥 탭 재무이력 3회 읽기" 를 스냅샷 안에서
+            되풀이하지 않는다. 안 넘기면 동작은 이전과 한 글자도 같다.
         """
         params = params or ValuationParams()
 
-        loaded = self.load_statement(stock_code, current_price,
-                                     bsns_year=bsns_year, market_cap=market_cap)
+        loaded = statement or self.load_statement(
+            stock_code, current_price, bsns_year=bsns_year, market_cap=market_cap)
         if not loaded["available"]:
             from src.data.stock_master import get_stock_name
             return UnifiedValuation(
