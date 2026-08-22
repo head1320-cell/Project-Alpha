@@ -389,6 +389,77 @@ def stress(concurrency: list[int], n_symbols: int, start: str, end: str) -> list
     return out
 
 
+def pool_stress(concurrency: list[int], n_symbols: int, start: str, end: str) -> list[dict]:
+    """★프로세스 풀을 실제로 태운 처리량★ (P0-3)
+
+    기존 `stress()` 는 **스레드**로 `_screen_to_backtest_core` 를 직접 부른다 — 그건
+    수정 **전** 모델이고, 그대로 두어 비교 기준으로 쓴다. 이 함수는 프로덕션이 실제로
+    쓰는 경로(spawn 프로세스 풀)를 잰다.
+
+    ★자식 CPU 측정에서 한 번 틀렸다 — 기록해 둔다★
+    처음엔 `RUSAGE_CHILDREN` 을 썼는데 그건 **회수된(reaped) 자식만** 센다. 풀 워커는
+    살아 있으므로 동시성 1 에서 0.00 초가 나왔고, 동시성 3 의 값은 앞 반복에서 종료된
+    워커가 뒤늦게 귀속된 것이었다 — 자릿수가 아니라 **귀속이 틀린** 수치였다.
+    살아 있는 프로세스의 CPU 는 `/proc/<pid>/stat` 에서 직접 읽어야 한다.
+    """
+    from src.api import backtest_run_routes as brr
+
+    out = []
+    for c in concurrency:
+        reqs = [_make_request(n_symbols, start, end)[0] for _ in range(c)]
+        os.environ["BACKTEST_WORKERS"] = str(c)
+        brr.shutdown_pool()                       # 이 동시성으로 풀을 새로 띄운다
+        pool = brr._get_pool()
+        # 워커 기동 비용(spawn ~4.4초)을 측정에서 제외 — 풀은 실제로 재사용된다.
+        list(pool.map(int, [0] * c))
+
+        pids = [p.pid for p in pool._processes.values()]
+        cpu0 = _pids_cpu_seconds(pids)
+        t0 = time.perf_counter()
+        futs = [pool.submit(_run_core_for_bench, r.model_dump()) for r in reqs]
+        errs = [e for e in (f.result() for f in futs) if e]
+        wall = time.perf_counter() - t0
+        cpu = _pids_cpu_seconds(pids) - cpu0
+
+        out.append({
+            "concurrency": c, "wall_s": round(wall, 2), "child_cpu_s": round(cpu, 2),
+            "cpu_util_pct": round(cpu / wall * 100, 1) if wall > 0 else 0.0,
+            "sec_per_run": round(wall / c, 2),
+            "max_workers": brr._max_workers(), "errors": errs[:3],
+        })
+        brr.shutdown_pool()
+    os.environ.pop("BACKTEST_WORKERS", None)
+    return out
+
+
+def _pids_cpu_seconds(pids: list[int]) -> float:
+    """살아 있는 프로세스들의 누적 CPU 초 (`/proc/<pid>/stat` utime+stime).
+
+    Linux 전용이다. 읽을 수 없으면 그 pid 는 0 으로 치고 넘어간다 — 지어내지 않는다.
+    """
+    ticks = os.sysconf("SC_CLK_TCK")
+    total = 0.0
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                parts = f.read().rsplit(")", 1)[1].split()
+            # rsplit(")") 이후: 필드 3(state)부터. utime=필드14 → 인덱스 11, stime → 12
+            total += (int(parts[11]) + int(parts[12])) / ticks
+        except Exception:
+            pass
+    return total
+
+
+def _run_core_for_bench(payload: dict) -> str | None:
+    """자식에서 도는 벤치 작업 — 모듈 최상위여야 spawn 이 피클한다."""
+    try:
+        from src.api.screener_routes import ScreenToBacktestRequest, _screen_to_backtest_core
+        _screen_to_backtest_core(ScreenToBacktestRequest(**payload))
+        return None
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"[:120]
+
+
 def _env_note() -> dict:
     from src.database import get_engine
     e = get_engine()
@@ -418,11 +489,12 @@ def main() -> int:
     ap.add_argument("--race", action="store_true", help="몽키패치 경쟁만 측정")
     ap.add_argument("--stress", default="", help="예: 1,2,4")
     ap.add_argument("--polling", action="store_true", help="폴링 부하 계측")
+    ap.add_argument("--pool-stress", default="", help="풀 기반 동시성, 예: 1,3")
     ap.add_argument("--json", default="", help="결과를 이 경로에 JSON 으로")
     a = ap.parse_args()
 
     report: dict = {"env": _env_note(), "measures": [], "stress": [],
-                    "race": None, "polling": None}
+                    "race": None, "polling": None, "pool_stress": []}
     print("═══ 환경 ═══")
     print(json.dumps(report["env"], ensure_ascii=False, indent=2))
 
@@ -443,6 +515,12 @@ def main() -> int:
         m = run_one(name, cfg["n_symbols"], cfg["start"], cfg["end"], profile=a.profile)
         report["measures"].append(asdict(m))
         print(json.dumps(asdict(m), ensure_ascii=False, indent=2))
+
+    if a.pool_stress:
+        cs = [int(x) for x in a.pool_stress.split(",") if x.strip()]
+        print(f"\n═══ 풀 기반 동시 실행 {cs} ═══")
+        report["pool_stress"] = pool_stress(cs, 20, "2023-01-01", "2023-12-31")
+        print(json.dumps(report["pool_stress"], ensure_ascii=False, indent=2))
 
     if a.stress:
         cs = [int(x) for x in a.stress.split(",") if x.strip()]

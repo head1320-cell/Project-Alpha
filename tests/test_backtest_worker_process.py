@@ -64,14 +64,69 @@ def test_pool_uses_spawn_not_fork():
         brr.shutdown_pool()
 
 
-def test_max_workers_is_one_until_p0_3(monkeypatch):
-    """P0-2 는 동시성 1 이다 — 확장은 P0-3 에서 처리량 가드와 함께 온다."""
+def test_max_workers_leaves_a_core_for_the_api(monkeypatch):
+    """★코어를 전부 쓰지 않는다 (P0-3)★
+
+    `.md` §9 는 "폭주 백테스트가 API 요청을 굶기면 안 된다" 를 hard requirement 로
+    적었다. `uvicorn --workers 1` 인 API 가 같은 기계에서 도는데 마지막 코어까지
+    워커에게 주면 정확히 그 일이 일어난다.
+    """
     monkeypatch.delenv("BACKTEST_WORKERS", raising=False)
-    assert brr._max_workers() == 1
-    monkeypatch.setenv("BACKTEST_WORKERS", "4")
-    assert brr._max_workers() == 4, "환경변수로 덮을 수 있어야 한다"
+    n = brr._max_workers()
+    usable = brr._usable_cpus()
+    assert n == max(1, min(usable - 1, brr._MAX_WORKERS_CAP)), (n, usable)
+    if usable > 1:
+        assert n < usable, "코어를 전부 워커에게 줬다 — API 가 굶는다"
+
+
+def test_max_workers_is_capped_and_overridable(monkeypatch):
+    """상한과 덮어쓰기 — 실행당 RSS 가 90~247 MB 라(감사 §3.6) 무한정 늘리면
+    CPU 가 아니라 메모리에서 터진다."""
+    monkeypatch.setenv("BACKTEST_WORKERS", "7")
+    assert brr._max_workers() == 7, "명시적 지정은 존중한다(운영 기계가 다를 수 있다)"
+    monkeypatch.delenv("BACKTEST_WORKERS", raising=False)
+    assert brr._max_workers() <= brr._MAX_WORKERS_CAP, "기본값에는 하드 캡이 걸린다"
     monkeypatch.setenv("BACKTEST_WORKERS", "쓰레기")
-    assert brr._max_workers() == 1, "잘못된 값이 크래시를 내면 안 된다"
+    assert brr._max_workers() >= 1, "잘못된 값이 크래시를 내면 안 된다"
+
+
+def _spin(seconds: float) -> float:
+    """CPU 바운드 작업 — 자식에서 돌려면 모듈 최상위여야 한다."""
+    t0 = time.perf_counter()
+    x = 0
+    while time.perf_counter() - t0 < seconds:
+        x += 1
+    return time.perf_counter() - t0
+
+
+def test_pool_gives_real_parallelism_not_a_gil_queue(monkeypatch):
+    """★프로세스 풀이 실제로 병렬이다 (P0-3)★
+
+    수정 전(스레드) 실측: 4코어에서 동시 1/2/4 의 CPU 사용률이 107/103/105% 로 고정,
+    동시 4개가 순차 4회보다 **63% 느렸다.** 스레드는 처리량을 하나도 사지 못했다.
+
+    여기서는 **백테스트가 아니라 순수 CPU 작업**을 쓴다 — 병렬성이라는 성질만
+    보려는 것이고, 실데이터·시드에 흔들리지 않아야 가드로 쓸 수 있다.
+    (백테스트 실측치는 `docs/specs/2026-08-22-backtest-benchmark-results.md` 에 있다.)
+    """
+    monkeypatch.setenv("BACKTEST_WORKERS", "3")
+    brr.shutdown_pool()
+    pool = brr._get_pool()
+    try:
+        n = brr._max_workers()
+        list(pool.map(int, [0] * n))          # spawn 기동 비용을 측정에서 뺀다
+
+        unit = 0.6
+        t0 = time.perf_counter()
+        list(pool.map(_spin, [unit] * n))
+        wall = time.perf_counter() - t0
+    finally:
+        brr.shutdown_pool()
+
+    serial = unit * n
+    # 완전 병렬이면 `unit`, GIL 큐면 `serial`. 실측 여유를 두고 그 중간을 가른다.
+    assert wall < serial * 0.7, (
+        f"동시 {n}개가 {wall:.2f}초 — 순차 {serial:.2f}초 대비 이득이 없다(GIL 큐)")
 
 
 def test_shutdown_does_not_wait_for_running_jobs():

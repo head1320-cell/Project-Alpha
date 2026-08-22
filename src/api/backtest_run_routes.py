@@ -51,16 +51,41 @@ _POOL: ProcessPoolExecutor | None = None
 _POOL_LOCK = threading.Lock()
 
 
-def _max_workers() -> int:
-    """P0-2 는 1 로 고정한다 — 동시성 확장은 P0-3 이다.
+# 동시 실행 상한의 하드 캡. 이 이상은 코어가 많아도 올리지 않는다 — 실행당 메모리가
+# 실측 90~247 MB 라(감사 §3.6) 무한정 늘리면 CPU 가 아니라 메모리에서 터진다.
+_MAX_WORKERS_CAP = 4
 
-    회귀가 나면 원인이 하나여야 귀속이 된다. 격리와 동시성을 같이 넣으면 둘 중
-    무엇 때문인지 가릴 수 없다.
+
+def _usable_cpus() -> int:
+    """이 프로세스가 **실제로 쓸 수 있는** 코어 수.
+
+    컨테이너에서는 `os.cpu_count()` 가 호스트 전체를 보고하므로 affinity 를 먼저 본다.
+    (cgroup 쿼터는 둘 다 반영하지 않는다 — 그건 여기서 알 수 없고, 알 수 없다고 적는다.)
     """
     try:
-        return max(1, int(os.getenv("BACKTEST_WORKERS", "1")))
-    except ValueError:
-        return 1
+        return max(1, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        return max(1, os.cpu_count() or 1)
+
+
+def _max_workers() -> int:
+    """동시 실행 상한 (P0-3).
+
+    ★코어를 전부 쓰지 않는다★ `cpu_count - 1` 이다. `uvicorn --workers 1` 인 API
+    프로세스가 같은 기계에서 돌고, `.md` §9 는 "폭주 백테스트가 API 요청을 굶기면
+    안 된다" 를 **hard requirement** 로 못박았다. 마지막 코어를 워커에게 주면 정확히
+    그 일이 일어난다.
+
+    `BACKTEST_WORKERS` 로 덮을 수 있다(운영에서 기계가 다를 수 있으므로). 잘못된
+    값은 크래시가 아니라 기본값으로 떨어진다.
+    """
+    raw = os.getenv("BACKTEST_WORKERS")
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            logger.warning(f"BACKTEST_WORKERS 값이 잘못됨({raw!r}) — 기본값을 쓴다")
+    return max(1, min(_usable_cpus() - 1, _MAX_WORKERS_CAP))
 
 
 def _get_pool() -> ProcessPoolExecutor:
