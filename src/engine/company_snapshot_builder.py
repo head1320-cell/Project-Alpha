@@ -60,6 +60,10 @@ logger = logging.getLogger(__name__)
 # 스냅샷에 담는 연간 재무 최대 연수 — `financial_deep` 이 쓰는 창과 같다.
 _MAX_YEARS = 10
 
+# 가격을 해석할 때 거슬러 올라가는 창. 마지막 종가 하나만 필요하므로 넉넉히 1년이면
+# 충분하다(휴장·미적재 구간을 넘기기 위한 여유).
+_PRICE_LOOKBACK_DAYS = 365
+
 
 def _section(name: str, fn: Callable[[], Any]) -> dict:
     """섹션 하나를 계산한다. 실패는 **사유**가 되고 스냅샷을 죽이지 않는다."""
@@ -80,12 +84,24 @@ def _section(name: str, fn: Callable[[], Any]) -> dict:
 
 
 def _resolve_price(code: str, price: float | None) -> tuple[float | None, str]:
-    """(가격, 출처). 못 구하면 `(None, "unavailable")` — 지어내지 않는다."""
+    """(가격, 출처). 못 구하면 `(None, "unavailable")` — 지어내지 않는다.
+
+    ★창의 끝은 **오늘**이어야 한다★ 처음에는 "넉넉하게" `2099-12-31` 로 두었는데,
+    mock 로더는 요청한 범위를 **그대로 생성**하므로 74년치(19,829행)를 만들고 그
+    마지막(2099-12-31) 종가가 잡혔다. 실측: 409원(2099) vs 40,263원(2026-08-21).
+    가격을 명시하지 않고 만든 스냅샷은 밸류에이션·역DCF·확률분포가 **전부 그 숫자
+    위에서** 돌았다. 내 테스트가 전부 가격을 명시해서 아무도 못 잡았다.
+
+    실데이터 경로에서는 미래 구간이 비어 있어 차이가 없었지만, 미래를 요청하는 것
+    자체가 잘못이다 — 없는 날의 가격을 묻고 있었다.
+    """
     if price is not None and float(price) > 0:
         return float(price), "caller"
     try:
         from src.data.ohlcv_loader import load_ohlcv_unified
-        d = load_ohlcv_unified(code, "2024-01-01", "2099-12-31", prefer="auto")
+        today = datetime.now().date().isoformat()
+        start = (datetime.now().date() - timedelta(days=_PRICE_LOOKBACK_DAYS)).isoformat()
+        d = load_ohlcv_unified(code, start, today, prefer="auto")
         if d is not None and not d.empty:
             return float(d["close"].iloc[-1]), "ohlcv_loader"
     except Exception as e:  # noqa: BLE001

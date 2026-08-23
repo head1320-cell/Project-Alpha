@@ -75,8 +75,38 @@ def _month_key(ts) -> str:
         return str(ts)[:7]
 
 
+def _normalize_month(raw: str) -> str | None:
+    """월 라벨을 정규형 `"YYYY-MM"` 으로. 날짜가 아니면 `None`.
+
+    ★규약이 데이터에 의존한다 — 그래서 소비자에서 정규화한다★
+    `regime_transitions._month_labels` 는 `str(t)[:7]` 이다. 수집기의 timestamps 가
+    `"2021-09-01"` 이면 `"2021-09"` 가 나오지만, **이 저장소의 실제 수집기는
+    `202109`** 라서 `"202109"` 가 나온다. 즉 상류가 내보내는 형식이 데이터에 따라
+    달라진다.
+
+    ★이것을 모르고 `"YYYY-MM"` 만 받았다가 P2.5 조건부 μ/Σ 가 운영에서 통째로
+    죽어 있었다★ — `regime_path` 의 53개 점이 **전부** 버려져 `conditional_moments`
+    가 항상 "월별 국면 라벨이 없다" 로 무조건부 폴백했다. 테스트가 전부 합성
+    `"YYYY-MM"` 라벨을 써서 아무도 못 잡았다.
+
+    상류(`_month_labels`)를 고치지 않는 이유: `macro_visuals` 등이 같은 규약을
+    공유하므로 파급이 넓다. 두 형식을 다 받는 것이 이 함수의 계약이다.
+    """
+    t = str(raw or "").strip()
+    if len(t) == 7 and t[4] == "-" and t[:4].isdigit() and t[5:].isdigit():
+        month = int(t[5:])
+        return t if 1 <= month <= 12 else None
+    if len(t) == 6 and t.isdigit():
+        month = int(t[4:])
+        return f"{t[:4]}-{t[4:]}" if 1 <= month <= 12 else None
+    return None
+
+
 def regime_by_month_from_path(points: list[dict] | None) -> tuple[dict[str, str], int]:
     """`regime_transitions.regime_path()["points"]` → ({월: 국면}, 버린 개수).
+
+    월 키는 정규형 `"YYYY-MM"` 으로 통일된다 — `_month_key` 가 수익률 인덱스에서
+    만드는 것과 같은 형식이라 둘이 만난다.
 
     ★`T-k` 라벨은 버린다★ `_month_labels` 는 시계열이 요청보다 짧으면 앞을 `T-3`
     처럼 채운다. 그것은 **날짜가 아니라 자리표시자**이므로 수익률의 달과 맞출 수
@@ -85,12 +115,12 @@ def regime_by_month_from_path(points: list[dict] | None) -> tuple[dict[str, str]
     out: dict[str, str] = {}
     dropped = 0
     for p in points or []:
-        t = str(p.get("t") or "")
         regime = p.get("regime")
-        if not regime or len(t) != 7 or t[4] != "-" or not t[:4].isdigit():
+        month = _normalize_month(p.get("t"))
+        if not regime or month is None:
             dropped += 1
             continue
-        out[t] = str(regime)
+        out[month] = str(regime)
     return out, dropped
 
 
