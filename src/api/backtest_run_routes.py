@@ -425,3 +425,55 @@ def run_delete(run_id: str):
     if not br.delete_run(run_id):
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return {"deleted": True}
+
+
+@router.get("/runs/{run_id}/factor-attribution")
+def run_factor_attribution(run_id: str):
+    """★무엇이 이 수익을 만들었나★ 실현수익을 매크로 팩터와 α 로 쪼갠다 (P3-2).
+
+    결합 OLS `r_t = α + Σβᵢfᵢ,t` — 단변량이면 상관된 팩터의 공통 변동을 중복
+    흡수한다. 팩터별 VIF 를 함께 내며, 높은 팩터의 기여는 짝과 상쇄되므로
+    **개별 값으로 읽지 말라**는 라벨이 붙는다.
+
+    ★산술 합과 복리 총수익은 다른 숫자다★ 항등식은 월별 수익률의 산술 합에
+    대해 닫히고, 복리와의 차이는 `compounding_gap_pct` 로 나간다.
+
+    아직 끝나지 않았거나 옛 스키마라 월별 수익률이 없으면 **200 + 사유**다 —
+    실행이 존재하는데 500 을 내지 않는다.
+    """
+    try:
+        r = br.get_run(run_id, strict=True)
+    except br.BacktestStoreError:
+        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    if r is None:
+        raise HTTPException(404, "실행을 찾을 수 없습니다.")
+
+    from src.api.json_safe import finite_payload
+    from src.engine.backtest_attribution import (
+        factor_attribution,
+        monthly_returns_from_result,
+    )
+
+    monthly = monthly_returns_from_result(r.get("result"))
+    if not monthly["available"]:
+        return {"available": False, "reason": monthly["reason"],
+                "run_id": run_id, "status": r.get("status")}
+
+    try:
+        from src.engine.factor_exposure import resolve_proxies
+        prox = resolve_proxies()
+    except Exception:
+        logger.exception("팩터 계열 해소 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+    if not prox.get("available"):
+        return {"available": False, "reason": prox.get("reason"),
+                "run_id": run_id, "status": r.get("status")}
+
+    out = factor_attribution(monthly["returns"], prox["resolved"])
+    out.update(run_id=run_id, status=r.get("status"),
+               strategy_name=r.get("strategy_name"),
+               months_from_run=monthly["n_months"],
+               skipped_rows=monthly["skipped_rows"],
+               proxies={f: i["series"] for f, i in prox["resolved"].items()},
+               unresolved=prox.get("unresolved", {}))
+    return finite_payload(out)
