@@ -32,8 +32,11 @@ R0(오버레이 컴파일)에서 두 번 값을 치른 실수다.
 `regime_snapshots` 의 `regime`·MES·`regime_path` 세 블록이 그렇게 붙었다.
 빈 컬럼을 미리 깔지 않는 것이 규칙이다(스키마가 있는 척한다).
 
-  · `implied` (P2-2 역DCF) — **붙었다.** `_has_implied_col` 이 그 성공 여부다.
-  · `valuation_dist`(P2-3) · `macro_sensitivity`(P2-4) · `thesis`(P2-5) — 아직.
+  · `implied`(P2-2 역DCF) · `valuation_dist`(P2-3 확률 분포) — **붙었다.**
+  · `macro_sensitivity`(P2-4) · `thesis`(P2-5) — 아직.
+
+★플래그를 하나로 뭉치지 않는다★ `_late_ok` 는 **컬럼별** dict 다. 둘은 독립적으로
+붙거나 안 붙으므로 단일 bool 로 가리면 조회 열 목록이 어긋난다.
 
 플래그가 False 면 그 섹션은 **없는 것처럼** 동작해야 한다(`_sections()`). 있는 척하고
 SELECT 하면 조회 전체가 깨지고, 그것은 컬럼이 없는 것보다 나쁘다.
@@ -71,10 +74,19 @@ _inited = False
 # `monkeypatch.setattr(mod, "_inited", False)` 로 재초기화를 강제한다.
 _inited_for: str | None = None
 # ★후행 컬럼은 슬라이스마다 자기 것을 붙인다★ P2-1 이 예고한 대로다 — 빈 컬럼을 미리
-# 깔면 스키마가 있는 척한다. `implied`(P2-2 역DCF)가 그 첫 사례이고, 성공 여부를
-# 반드시 따로 들고 있어야 한다: ALTER 가 권한 등으로 실패했는데 SELECT 가 그 컬럼을
-# 참조하면 스냅샷 조회가 통째로 깨진다(수정 전보다 나쁨).
-_has_implied_col = False
+# 깔면 스키마가 있는 척한다. 성공 여부는 반드시 **컬럼마다 따로** 들고 있어야 한다:
+# ALTER 가 권한 등으로 실패했는데 SELECT 가 그 컬럼을 참조하면 스냅샷 조회가 통째로
+# 깨진다(수정 전보다 나쁨).
+#
+# ★플래그를 하나로 뭉치지 않는다★ P2-2 는 `_has_implied_col` 단일 bool 이었는데,
+# P2-3 이 둘째 컬럼을 붙이는 순간 그 모양이 무너진다 — 둘은 **독립적으로** 붙거나
+# 안 붙으므로 하나의 플래그로 가리면 조회 열 목록이 어긋난다. `regime_snapshots` 가
+# `regime`·MES·`regime_path` 를 세 개의 독립 플래그로 든 것과 같은 이유다.
+_LATE_COLUMNS: dict[str, str] = {
+    "implied": "TEXT",          # P2-2 역DCF — 시장내재 가정
+    "valuation_dist": "TEXT",   # P2-3 확률적 밸류에이션 P10~P90
+}
+_late_ok: dict[str, bool] = {}
 
 # 스냅샷 스키마 버전 — 섹션의 모양이 바뀌면 올린다.
 SNAPSHOT_VERSION = 1
@@ -87,8 +99,6 @@ ENGINE_VERSION = "cs-pit-v1"
 # MES 가 `observations` 에 대해 하는 것과 같다).
 _BASE_SECTIONS = ("financials", "publication_dates", "valuation", "quality",
                   "factors", "peers", "risk", "provenance")
-# 후행 컬럼으로 붙는 섹션 — 컬럼이 실제로 붙었을 때만 목록에 들어간다.
-_LATE_SECTIONS = ("implied",)
 
 
 def _sections() -> tuple[str, ...]:
@@ -97,7 +107,7 @@ def _sections() -> tuple[str, ...]:
     후행 컬럼이 안 붙었으면 그 섹션은 없는 것처럼 동작한다 — 있는 척하고 SELECT 하면
     조회 전체가 깨지고, 그것은 컬럼이 없는 것보다 나쁘다(`add_columns` 계약).
     """
-    return _BASE_SECTIONS + (_LATE_SECTIONS if _has_implied_col else ())
+    return _BASE_SECTIONS + tuple(n for n in _LATE_COLUMNS if _late_ok.get(n))
 
 
 def _engine():
@@ -106,7 +116,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited, _inited_for, _has_implied_col
+    global _inited, _inited_for, _late_ok
     url = str(getattr(engine, "url", ""))
     if _inited and _inited_for == url:
         return
@@ -138,13 +148,13 @@ def _ensure_table(engine) -> None:
         c.execute(text(
             f"CREATE INDEX IF NOT EXISTS ix_cs_code_created ON {_TABLE} (code, created_at)"
         ))
-    # ── 역DCF (P2-2) ────────────────────────────────────────────────────────
-    # 시장가를 정당화하는 가정. 값이 아니라 **가정**을 굳히는 것이 언더라이팅이다.
+    # ── 후행 컬럼 — **하나씩 따로** 붙이고 따로 확인한다 ─────────────────────
     from src.data.schema_add_columns import add_columns
-    _has_implied_col = add_columns(
-        engine, _TABLE, [("implied", "TEXT")],
-        label="company_snapshots.implied(역DCF 시장내재 가정)",
-    )
+    _late_ok = {
+        name: add_columns(engine, _TABLE, [(name, ddl)],
+                          label=f"company_snapshots.{name}")
+        for name, ddl in _LATE_COLUMNS.items()
+    }
 
     _inited = True
     _inited_for = url
@@ -175,6 +185,7 @@ def create_snapshot(
     risk: Any = None,
     provenance: Any = None,
     implied: Any = None,
+    valuation_dist: Any = None,
 ) -> str | None:
     """불변 스냅샷을 만든다. 성공 시 snapshot_id, DB 미가용 시 `None`.
 
@@ -186,7 +197,7 @@ def create_snapshot(
         "financials": financials, "publication_dates": publication_dates,
         "valuation": valuation, "quality": quality, "factors": factors,
         "peers": peers, "risk": risk, "provenance": provenance,
-        "implied": implied,
+        "implied": implied, "valuation_dist": valuation_dist,
     }
     try:
         engine = _engine()

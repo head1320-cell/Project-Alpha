@@ -138,7 +138,7 @@ def test_a_missing_column_makes_the_section_vanish_not_the_query(mem_cs, monkeyp
     sid = bld.build_and_store(CODE, price=PRICE)
     assert sid
 
-    monkeypatch.setattr(cs, "_has_implied_col", False)
+    monkeypatch.setattr(cs, "_late_ok", {**cs._late_ok, "implied": False})
     got = cs.get_snapshot(sid)
     assert got is not None, "컬럼이 없다고 조회가 죽으면 안 된다"
     assert "implied" not in got

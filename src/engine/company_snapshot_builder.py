@@ -202,6 +202,22 @@ def _implied(prepared: tuple, price: float) -> dict:
     return reverse_dcf(loaded["fs"], params, price)
 
 
+def _valuation_dist(prepared: tuple, price: float) -> dict:
+    """확률적 밸류에이션 P10~P90 — ★점 하나를 확률 진술로★ (P2-3)
+
+    준비된 `fs` 를 그대로 쓰므로 재무 읽기가 **늘지 않는다**. 표본이 얇거나 TV 발산
+    기각이 많으면 `valuation_distribution` 이 사유를 돌려주고 `_section` 이 그대로
+    굳힌다.
+    """
+    from src.engine.valuation.valuation_distribution import valuation_distribution
+
+    _engine_obj, _d, params, loaded = prepared
+    if not loaded["available"]:
+        return {"available": False,
+                "reason": loaded["reason"] or "재무제표를 가져오지 못했습니다"}
+    return valuation_distribution(loaded["fs"], params, price)
+
+
 def _provenance(code: str, price_source: str, sections: dict) -> dict:
     from src.data.mock_gate import mock_allowed
     unavailable = sorted(k for k, v in sections.items()
@@ -252,6 +268,7 @@ def build_and_store(code: str, price: float | None = None,
     if resolved_price is None:
         sections["valuation"] = dict(no_price)
         sections["implied"] = dict(no_price)
+        sections["valuation_dist"] = dict(no_price)
         sections["risk"] = dict(no_price)
     else:
         # 재무는 여기서 **한 번만** 읽고 밸류에이션·역DCF 가 나눠 쓴다.
@@ -260,6 +277,8 @@ def build_and_store(code: str, price: float | None = None,
             "valuation", lambda: _valuation(code, resolved_price, prepared))
         sections["implied"] = _section(
             "implied", lambda: _implied(prepared, resolved_price))
+        sections["valuation_dist"] = _section(
+            "valuation_dist", lambda: _valuation_dist(prepared, resolved_price))
         sections["risk"] = _section("risk", lambda: _risk(code, resolved_price))
 
     any_available = any(v.get("available") for v in sections.values())
