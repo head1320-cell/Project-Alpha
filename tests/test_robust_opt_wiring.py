@@ -228,3 +228,83 @@ def test_factor_concentration_is_separate_from_asset_enb(client):
     assert c is not None
     assert 1.0 <= c["effective_factors"] <= c["n_factors"]
     assert "자산 ENB" in c["note"]
+
+
+# ── 6. 팩터 리스크 분해(P3-4) · 역스트레스(§12) ───────────────────────────
+def test_factor_risk_and_reverse_stress_are_off_by_default(client):
+    """가산 필드 — 켜지 않으면 기본 동작이 이전과 같다."""
+    f = _post(client, factor_exposure=True)["factors"]
+    assert "risk" not in f and "reverse_stress" not in f
+    assert "covariance" not in f, "공분산도 필요할 때만 만든다"
+
+
+def test_they_are_ignored_when_factor_exposure_is_off(client):
+    """★노출 없이는 뜻이 없다★ 켜도 조용히 무시되고 factors 자체가 없다."""
+    b = _post(client, factor_exposure=False, factor_risk=True, reverse_stress=True)
+    assert b["factors"] is None
+
+
+def test_factor_risk_splits_variance_into_factor_and_idiosyncratic(client):
+    """P3-4 — Company 팩터 노출이 포트폴리오 리스크로 이어진다."""
+    r = _post(client, factor_exposure=True, factor_risk=True)["factors"]["risk"]
+    assert r["available"] is True, r["reason"]
+    assert r["factor_share_pct"] is not None
+    assert (r["factor_share_pct"] + r["idiosyncratic_share_pct"]
+            == pytest.approx(100.0, abs=0.05))
+    assert r["over_explained"] in (True, False)
+    # 기여 합 = 팩터 분산.
+    total = sum(row["variance_contribution"] for row in r["rows"])
+    assert total == pytest.approx(r["factor_variance"], rel=1e-5)
+
+
+def test_the_total_variance_source_is_disclosed(client):
+    """★총분산이 어디서 왔는지 밝힌다★ 커버리지가 낮으면 다른 숫자다."""
+    src = _post(client, factor_exposure=True,
+                factor_risk=True)["factors"]["risk"]["total_variance_source"]
+    assert src["available"] is True
+    assert src["n_months"] >= 24 and src["coverage_pct"] > 0
+
+
+def test_reverse_stress_returns_shocks_with_a_distance(client):
+    """★거리 없이 충격만 내지 않는다★"""
+    rs = _post(client, factor_exposure=True,
+               reverse_stress=True)["factors"]["reverse_stress"]
+    assert rs["available"] is True, rs["reason"]
+    assert rs["distance"] > 0 and rs["plausibility"]["label"]
+    assert rs["shocks"] and rs["shocks"][0]["factor"]
+    assert sum(s["contribution_pct"] for s in rs["shocks"]) == pytest.approx(
+        -15.0, abs=1e-2)
+
+
+def test_the_stress_target_is_configurable(client):
+    a = _post(client, factor_exposure=True, reverse_stress=True,
+              stress_loss_pct=-5.0)["factors"]["reverse_stress"]
+    b = _post(client, factor_exposure=True, reverse_stress=True,
+              stress_loss_pct=-30.0)["factors"]["reverse_stress"]
+    assert a["target_loss_pct"] == -5.0 and b["target_loss_pct"] == -30.0
+    assert b["distance"] > a["distance"], "큰 손실일수록 먼 사건이다"
+
+
+def test_reverse_stress_reports_beta_quality_beside_the_distance(client):
+    """★거리와 베타 품질은 다른 질문이다★ 하나만 보면 잡음을 흔한 일로 읽는다."""
+    rs = _post(client, factor_exposure=True,
+               reverse_stress=True)["factors"]["reverse_stress"]
+    q = rs["beta_quality"]
+    assert q["available"] is True
+    assert 0.0 <= q["mean_resolvable_pct"] <= 100.0
+    assert q["trustworthy"] in (True, False)
+
+
+def test_the_covariance_block_declares_its_normalisation(client):
+    """★단위를 섞지 않았다는 사실을 응답이 말한다★"""
+    c = _post(client, factor_exposure=True,
+              reverse_stress=True)["factors"]["covariance"]
+    assert c["available"] is True
+    assert c["scale_normalized"] is True
+    assert c["sd_raw"] and c["n_months"] >= 24
+    assert c["degenerate"] in (True, False)
+
+
+def test_a_bad_stress_target_is_rejected(client):
+    assert client.post(URL, json=_body(factor_exposure=True, reverse_stress=True,
+                                       stress_loss_pct=5.0)).status_code == 422

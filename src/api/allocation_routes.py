@@ -1629,6 +1629,11 @@ class RebalanceDecisionRequest(AnalyzeRequest):
     last_rebalance_date: str | None = Field(None, max_length=32)
     # 팩터 노출(Brief §8.4) — 매크로 회귀라 느려서 선택으로 둔다.
     factor_exposure: bool = False
+    # 팩터 리스크 분해(P3-4)와 역스트레스(Brief §12). 둘 다 팩터 노출이 있어야
+    # 뜻이 있으므로 `factor_exposure` 가 꺼져 있으면 무시된다.
+    factor_risk: bool = False
+    reverse_stress: bool = False
+    stress_loss_pct: float = Field(-15.0, ge=-90.0, le=-0.1)
 
 
 @router.post("/rebalance-decision")
@@ -1725,6 +1730,38 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                                          if expo.get("available") else None),
                        "sample": betas.get("sample"),
                        "unresolved": betas.get("unresolved", {})}
+
+            # 팩터 공분산은 리스크 분해와 역스트레스가 함께 쓴다 — 한 번만 만든다.
+            fcov = None
+            if req.factor_risk or req.reverse_stress:
+                from src.engine.factor_exposure import resolve_proxies
+                from src.engine.reverse_stress import factor_covariance
+                fcov = factor_covariance(resolve_proxies()["resolved"])
+                factors["covariance"] = {k: fcov.get(k) for k in
+                                         ("available", "reason", "n_months", "span",
+                                          "shrinkage_lambda", "degenerate",
+                                          "scale_normalized", "sd_raw", "excluded")}
+
+            if req.factor_risk and fcov is not None:
+                from src.engine.factor_risk import (
+                    portfolio_factor_risk,
+                    portfolio_monthly_returns,
+                )
+                series = portfolio_monthly_returns(target)
+                factors["risk"] = portfolio_factor_risk(
+                    expo, fcov,
+                    total_variance=(series["variance"] if series["available"]
+                                    else None))
+                factors["risk"]["total_variance_source"] = (
+                    {"available": series["available"],
+                     "reason": series.get("reason"),
+                     "coverage_pct": series.get("coverage_pct"),
+                     "n_months": len(series.get("months") or [])})
+
+            if req.reverse_stress and fcov is not None:
+                from src.engine.reverse_stress import reverse_stress as _rev
+                factors["reverse_stress"] = _rev(
+                    expo, fcov, loss_pct=req.stress_loss_pct)
 
         decision.update({
             "factors": factors,
