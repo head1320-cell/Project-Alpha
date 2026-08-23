@@ -32,8 +32,8 @@ R0(오버레이 컴파일)에서 두 번 값을 치른 실수다.
 `regime_snapshots` 의 `regime`·MES·`regime_path` 세 블록이 그렇게 붙었다.
 빈 컬럼을 미리 깔지 않는 것이 규칙이다(스키마가 있는 척한다).
 
-  · `implied`(P2-2 역DCF) · `valuation_dist`(P2-3 확률 분포) — **붙었다.**
-  · `macro_sensitivity`(P2-4) · `thesis`(P2-5) — 아직.
+  · `implied`(P2-2) · `valuation_dist`(P2-3) · `macro_sensitivity`(P2-4) — **붙었다.**
+  · `thesis`(P2-5) — 아직.
 
 ★플래그를 하나로 뭉치지 않는다★ `_late_ok` 는 **컬럼별** dict 다. 둘은 독립적으로
 붙거나 안 붙으므로 단일 bool 로 가리면 조회 열 목록이 어긋난다.
@@ -85,6 +85,7 @@ _inited_for: str | None = None
 _LATE_COLUMNS: dict[str, str] = {
     "implied": "TEXT",          # P2-2 역DCF — 시장내재 가정
     "valuation_dist": "TEXT",   # P2-3 확률적 밸류에이션 P10~P90
+    "macro_sensitivity": "TEXT",  # P2-4 매크로 민감도(구조적 + 통계)
 }
 _late_ok: dict[str, bool] = {}
 
@@ -186,6 +187,7 @@ def create_snapshot(
     provenance: Any = None,
     implied: Any = None,
     valuation_dist: Any = None,
+    macro_sensitivity: Any = None,
 ) -> str | None:
     """불변 스냅샷을 만든다. 성공 시 snapshot_id, DB 미가용 시 `None`.
 
@@ -198,6 +200,7 @@ def create_snapshot(
         "valuation": valuation, "quality": quality, "factors": factors,
         "peers": peers, "risk": risk, "provenance": provenance,
         "implied": implied, "valuation_dist": valuation_dist,
+        "macro_sensitivity": macro_sensitivity,
     }
     try:
         engine = _engine()

@@ -234,6 +234,34 @@ def _valuation_dist(prepared: tuple, price: float) -> dict:
     return valuation_distribution(loaded["fs"], params, price)
 
 
+def _macro_sensitivity(code: str, prepared: tuple) -> dict:
+    """매크로 민감도 — ★구조적과 통계를 **절대 섞지 않는다**★ (P2-4)
+
+    둘은 인식론적으로 다른 물건이다: 구조적 채널은 모델의 항등식(표본 0)이고
+    통계 채널은 60개월짜리 표본의 추정이다. 한 표에 나란히 놓으면 읽는 사람이
+    같은 종류의 숫자로 읽는다. 블록을 나누고 각자 `method` 를 달고 나간다.
+    """
+    from src.engine.valuation.macro_sensitivity import (
+        macro_sensitivity,
+        statistical_sensitivity,
+    )
+
+    _engine_obj, _d, params, loaded = prepared
+    if not loaded["available"]:
+        return {"available": False,
+                "reason": loaded["reason"] or "재무제표를 가져오지 못했습니다"}
+
+    structural = macro_sensitivity(loaded["fs"], params)
+    statistical = statistical_sensitivity(code)
+    return {
+        "available": bool(structural.get("available") or statistical.get("available")),
+        "structural": structural,
+        "statistical": statistical,
+        "note": ("두 블록은 다른 종류의 숫자입니다 — structural 은 모델의 항등식이라 "
+                 "표본이 없고, statistical 은 월별 표본의 추정이라 표준오차가 있습니다."),
+    }
+
+
 def _provenance(code: str, price_source: str, sections: dict) -> dict:
     from src.data.mock_gate import mock_allowed
     unavailable = sorted(k for k, v in sections.items()
@@ -285,6 +313,7 @@ def build_and_store(code: str, price: float | None = None,
         sections["valuation"] = dict(no_price)
         sections["implied"] = dict(no_price)
         sections["valuation_dist"] = dict(no_price)
+        sections["macro_sensitivity"] = dict(no_price)
         sections["risk"] = dict(no_price)
     else:
         # 재무는 여기서 **한 번만** 읽고 밸류에이션·역DCF 가 나눠 쓴다.
@@ -295,6 +324,8 @@ def build_and_store(code: str, price: float | None = None,
             "implied", lambda: _implied(prepared, resolved_price))
         sections["valuation_dist"] = _section(
             "valuation_dist", lambda: _valuation_dist(prepared, resolved_price))
+        sections["macro_sensitivity"] = _section(
+            "macro_sensitivity", lambda: _macro_sensitivity(code, prepared))
         sections["risk"] = _section("risk", lambda: _risk(code, resolved_price))
 
     any_available = any(v.get("available") for v in sections.values())

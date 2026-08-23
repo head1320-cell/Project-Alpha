@@ -5,6 +5,7 @@ GET /api/v1/company/{code}/financial-deep     — QoE·NWC·워터폴·듀폰
 GET /api/v1/company/{code}/risk-deep          — Altman·Beneish·커버리지·스트레스
 GET /api/v1/company/{code}/reverse-dcf       — 역DCF: 시장이 믿고 있는 가정 (P2-2)
 GET /api/v1/company/{code}/valuation-distribution — 적정가 P10~P90 (P2-3)
+GET /api/v1/company/{code}/macro-sensitivity — 금리 충격 → 적정가치 (P2-4)
 """
 
 from __future__ import annotations
@@ -114,4 +115,36 @@ def company_valuation_distribution(
         return valuation_distribution_for(code, price, n=n)
     except Exception:
         logger.exception("valuation-distribution 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/{code}/macro-sensitivity")
+def company_macro_sensitivity(
+    code: str,
+    price: float = Query(..., gt=0, description="현재가(원)"),
+    statistical: bool = Query(True, description="매크로 계열 회귀도 함께 낼지"),
+):
+    """★서술이 아니라 수치★ `+100bp 10Y → 적정가치 −9.5%` (P2-4).
+
+    ★두 블록은 섞이지 않는다★
+      · `structural` — rf → ke/kd 채널의 **항등식**. 표본도 표준오차도 없다.
+        양방향을 따로 내고(비대칭은 실측 1.22배) 모델별 반응을 함께 낸다.
+      · `statistical` — 코어 5계열과의 월별 회귀. **유의한 것만 고르지 않고**
+        전부 보고하며, 다중검정과 "상관은 인과가 아니다" 를 라벨로 단다.
+
+    설계 문서가 예로 든 GDP→EPS · USD→EPS · Oil→EBIT 는 `structural.unavailable`
+    에서 **사유와 함께** 나간다 — 채널이 없거나(EPS 는 모델의 입력이다) 계열 자체가
+    없다(유가). 빈칸이 아니라 왜 없는지가 언더라이팅의 정보다.
+    """
+    try:
+        from src.engine.valuation.macro_sensitivity import (
+            macro_sensitivity_for,
+            statistical_sensitivity,
+        )
+        out = macro_sensitivity_for(code, price)
+        if statistical:
+            out["statistical"] = statistical_sensitivity(code)
+        return out
+    except Exception:
+        logger.exception("macro-sensitivity 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

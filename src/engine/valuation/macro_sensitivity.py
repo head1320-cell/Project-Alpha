@@ -69,6 +69,15 @@ _NO_CHANNEL = (
 
 _MODEL_ORDER = ("RIM", "DCF", "DDM")
 
+# ★코어 계열을 코드에 고정한다★ 수집기에는 61계열이 있지만 61개를 훑어 유의한 것만
+# 보고하면 데이터 마이닝이다(Gemini 가 지적한 차원의 저주와 같은 계열). 다섯 개를
+# 미리 못박고 **전부** 보고한다 — 고르지 않는 것이 요점이다.
+CORE_SERIES = ("KR_10Y", "KR_BASE_RATE", "KR_CPI", "USD_KRW", "KOSPI")
+
+# 회귀에 요구하는 최소 관측 월. 매크로가 60개월이라 무조건부는 통과하지만
+# 국면조건부(국면당 ~13개월)는 대부분 여기서 막힌다 — **그 사유가 산출물이다.**
+MIN_MONTHS = 24
+
 
 def _unavailable(reason: str, **extra) -> dict:
     out = {"available": False, "method": None, "base_value": None,
@@ -190,3 +199,134 @@ def macro_sensitivity_for(code: str, current_price: float) -> dict:
     out["is_mock"] = loaded["is_mock"]
     out["base_assumptions"] = d
     return out
+
+
+# ── 통계 채널 — ★대부분 사유가 나오는 것이 정답이다★ ────────────────────────
+#
+# 종목 월별 수익률 ↔ 매크로 계열 변화의 베타. 구조적 채널과 **완전히 다른 것**이므로
+# 절대 섞지 않는다: 저쪽은 모델의 항등식이고 이쪽은 60개월짜리 표본의 추정이다.
+
+
+def _monthly_returns(code: str, months: int = 60):
+    """월말 종가 기준 월별 수익률. ★창의 끝은 오늘★ (결함 B 와 같은 함정)."""
+    from datetime import datetime, timedelta
+
+    from src.data.ohlcv_loader import load_ohlcv_unified
+    end = datetime.now().date()
+    start = end - timedelta(days=int(months * 31.5) + 60)
+    d = load_ohlcv_unified(code, start.isoformat(), end.isoformat(), prefer="auto")
+    if d is None or d.empty:
+        return None
+    return d["close"].resample("ME").last().pct_change().dropna()
+
+
+def _series_monthly_change(series) -> dict[str, float]:
+    """매크로 계열 → {월: 변화율}. 월 키는 `conditional_market` 과 같은 정규형."""
+    from src.engine.conditional_market import _normalize_month
+
+    ts = list(getattr(series, "timestamps", None) or [])
+    vals = list(getattr(series, "values", None) or [])
+    pairs = []
+    for t, v in zip(ts, vals):
+        m = _normalize_month(str(t)[:7])
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            continue
+        if m is not None:
+            pairs.append((m, fv))
+    pairs.sort()
+    out = {}
+    for (_, prev), (m, cur) in zip(pairs, pairs[1:]):
+        if prev not in (0, None):
+            out[m] = cur / prev - 1.0
+    return out
+
+
+def _ols_beta(x: list[float], y: list[float]) -> dict:
+    """단순회귀 y = a + b·x. 베타 · 표준오차 · t값. numpy 만 쓴다."""
+    import numpy as np
+
+    xa, ya = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+    n = xa.size
+    if n < 3:
+        return {"available": False, "reason": f"관측이 {n}개뿐입니다"}
+    vx = float(((xa - xa.mean()) ** 2).sum())
+    if vx <= 0:
+        return {"available": False, "reason": "설명변수가 상수라 기울기를 낼 수 없습니다"}
+    beta = float(((xa - xa.mean()) * (ya - ya.mean())).sum() / vx)
+    alpha = float(ya.mean() - beta * xa.mean())
+    resid = ya - (alpha + beta * xa)
+    dof = n - 2
+    se = float(np.sqrt((resid ** 2).sum() / dof / vx)) if dof > 0 else None
+    return {
+        "available": True, "n_obs": int(n),
+        "beta": round(beta, 4),
+        "std_error": round(se, 4) if se else None,
+        "t_stat": (round(beta / se, 2) if se and se > 0 else None),
+        "r_squared": round(float(1 - (resid ** 2).sum()
+                                 / max(((ya - ya.mean()) ** 2).sum(), 1e-30)), 4),
+    }
+
+
+def statistical_sensitivity(code: str, *, series_map: dict | None = None,
+                            core: tuple[str, ...] = CORE_SERIES,
+                            min_months: int = MIN_MONTHS) -> dict:
+    """종목 월별 수익률 ↔ 코어 매크로 계열의 베타.
+
+    ★유의한 것만 고르지 않는다★ 코어 다섯을 전부 보고한다. 61계열을 훑어 t값이 큰
+    것만 내면 그것이 데이터 마이닝이고, 다중검정 보정 없이 "유의하다" 고 말하는
+    것은 거짓이다. 그래서 `multiple_testing` 에 몇 개를 동시에 봤는지 적는다.
+
+    ★상관은 인과가 아니다★ 이 값은 60개월짜리 동시대 상관이다. 그레인저 검정이든
+    회귀든 인과를 말하지 않는다 — 라벨로 남긴다.
+    """
+    if series_map is None:
+        try:
+            from src.engine.regime_analyzer import RegimeAnalyzer
+            series_map = RegimeAnalyzer().collector.collect_all(use_cache=True).series
+        except Exception as e:  # noqa: BLE001
+            logger.warning("매크로 수집 실패 %s: %s", code, e)
+            return {"available": False,
+                    "reason": f"매크로 계열을 수집하지 못했습니다 ({type(e).__name__})"}
+
+    rets = _monthly_returns(code)
+    if rets is None or rets.empty:
+        return {"available": False, "reason": "월별 수익률을 만들 수 없습니다"}
+    from src.engine.conditional_market import _month_key
+    stock = {_month_key(ts): float(v) for ts, v in rets.items()}
+
+    rows = []
+    for name in core:
+        s = series_map.get(name)
+        if s is None:
+            rows.append({"series": name, "available": False,
+                         "reason": "이 계열이 수집기에 없습니다"})
+            continue
+        macro = _series_monthly_change(s)
+        months = sorted(set(macro) & set(stock))
+        if len(months) < min_months:
+            rows.append({"series": name, "available": False, "n_obs": len(months),
+                         "reason": (f"겹치는 달이 {len(months)}개뿐이라 "
+                                    f"기울기를 내지 않았습니다 (최소 {min_months}개). "
+                                    "얇은 표본의 베타는 부호조차 믿을 수 없습니다.")})
+            continue
+        fit = _ols_beta([macro[m] for m in months], [stock[m] for m in months])
+        rows.append({"series": name, "span": [months[0], months[-1]], **fit})
+
+    ok = [r for r in rows if r.get("available")]
+    return {
+        "available": bool(ok),
+        "method": "ols_contemporaneous_monthly",
+        "rows": rows,
+        "multiple_testing": {
+            "n_tested": len(core), "series": list(core),
+            "note": ("코어 계열을 **코드에 고정**하고 전부 보고합니다. 유의한 것만 "
+                     "골라 내면 다중검정 보정 없는 데이터 마이닝이 됩니다 — "
+                     f"{len(core)}개를 동시에 봤다는 사실을 t값과 함께 읽으십시오."),
+        },
+        # ★`causal_deep` 이 쓰는 문구 그대로★
+        "causality": ("상관·회귀는 인과가 아닙니다. 이 기울기는 동시대 월별 상관이며 "
+                      "방향·매개·공통요인을 구분하지 못합니다."),
+        "reason": None if ok else "코어 계열 중 어느 것도 최소 관측을 넘지 못했습니다",
+    }
