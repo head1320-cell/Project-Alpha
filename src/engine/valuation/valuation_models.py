@@ -95,6 +95,28 @@ class UnifiedValuation:
     is_mock:                bool = False   # True면 재무 원천이 합성(mock) 데이터 — 운영에선 발생 안 함
 
 
+def weighted_intrinsic(models: list, params: ValuationParams) -> float:
+    """모델별 적정가 → 가중 평균. 산출 불가·0 이하 모델은 가중치에서 빠진다.
+
+    ★왜 따로 뽑았나 (P2-3)★
+    `evaluate` 안에만 있던 열 줄이다. 확률적 밸류에이션은 파라미터 표본마다 이
+    가중평균을 다시 내야 하는데, 표본 루프에서 `evaluate` 를 통째로 부르면
+    `financial_summary`·판정 문자열까지 매번 다시 만든다. 그렇다고 가중 로직을
+    복사하면 **같은 산수가 두 곳**에 생긴다 — 이 저장소가 A1·R0 에서 두 번 값을
+    치른 실수다. 그래서 여기 한 벌만 둔다.
+    """
+    weights = {"RIM": params.weight_rim, "DCF": params.weight_dcf,
+               "DDM": params.weight_ddm}
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for m in models:
+        if m.available and m.intrinsic_value_per_share > 0:
+            w = weights[m.model]
+            weighted_sum += m.intrinsic_value_per_share * w
+            total_weight += w
+    return (weighted_sum / total_weight) if total_weight > 0 else 0
+
+
 def compute_gap_pct(current_price: float, intrinsic: float) -> float:
     """괴리율 = (현재가 - 적정가) / 적정가 × 100. 적정가 없으면 0(정의 불가)."""
     return ((current_price - intrinsic) / intrinsic * 100) if intrinsic > 0 else 0
@@ -533,24 +555,7 @@ class ValuationEngine:
         models = [rim_result, dcf_result, ddm_result]
 
         # 4. 가중 평균 적정가
-        total_weight = 0
-        weighted_sum = 0
-        weights = {
-            "RIM": params.weight_rim,
-            "DCF": params.weight_dcf,
-            "DDM": params.weight_ddm,
-        }
-
-        for m in models:
-            if m.available and m.intrinsic_value_per_share > 0:
-                w = weights[m.model]
-                weighted_sum += m.intrinsic_value_per_share * w
-                total_weight += w
-
-        if total_weight > 0:
-            intrinsic = weighted_sum / total_weight
-        else:
-            intrinsic = 0
+        intrinsic = weighted_intrinsic(models, params)
 
         # 5. 괴리율 + 판정
         gap_pct = compute_gap_pct(current_price, intrinsic)
