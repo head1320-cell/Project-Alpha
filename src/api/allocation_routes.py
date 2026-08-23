@@ -1633,6 +1633,8 @@ class RebalanceDecisionRequest(AnalyzeRequest):
     # 뜻이 있으므로 `factor_exposure` 가 꺼져 있으면 무시된다.
     factor_risk: bool = False
     reverse_stress: bool = False
+    # 팩터 리스크 모델(§13) — Σ_asset = BΣ_fB' + D 를 optimizer 에 넣는다.
+    factor_risk_model: bool = False
     stress_loss_pct: float = Field(-15.0, ge=-90.0, le=-0.1)
 
 
@@ -1678,6 +1680,31 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             if cond["available"]:
                 s_override = cond["sigma"]
                 extra_views, _conf = _conditional_views(cond, req.model)
+
+        # ★§13 팩터 리스크 모델★ 켜면 표본 공분산 대신 BΣ_fB'+D 를 쓴다.
+        # 실패하면 조용히 표본으로 떨어지지 않고 `applied: False` + 사유를 남긴다.
+        frm_block = None
+        if req.factor_risk_model:
+            from src.engine.factor_risk_model import (
+                asset_covariance,
+                build_factor_risk_model,
+            )
+            frm = build_factor_risk_model(names)
+            if frm["available"] and frm["codes"] == names:
+                s_override = asset_covariance(frm)
+                frm_block = {"applied": True, "reason": None,
+                             "diagnostics": frm["diagnostics"],
+                             "assets": frm["assets"],
+                             "excluded": frm["excluded"],
+                             "units": "annual", "method": frm["method"]}
+            else:
+                frm_block = {
+                    "applied": False,
+                    "reason": (frm.get("reason") or
+                               "일부 자산을 추정하지 못해 자산 순서가 어긋납니다 — "
+                               "표본 공분산을 그대로 씁니다"),
+                    "excluded": frm.get("excluded", {}),
+                    "note": "모델을 못 만들면 표본 공분산으로 계산하되 그 사실을 말합니다"}
 
         from src.engine.allocation_studio import optimize
         opt = optimize(req.model, names, R,
@@ -1764,6 +1791,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                     expo, fcov, loss_pct=req.stress_loss_pct)
 
         decision.update({
+            "risk_model": frm_block,
             "factors": factors,
             "target_weights": target, "target_source": target_source,
             "model": req.model, "coverage": coverage, "excluded": excluded,
