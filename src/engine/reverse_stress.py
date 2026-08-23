@@ -55,18 +55,43 @@ def factor_covariance(resolved: dict, *, shrinkage="lw") -> dict:
     if not np.all(np.isfinite(X)):
         return {"available": False, "reason": "팩터 변화에 유한하지 않은 값이 있습니다"}
 
-    S, lam, method = _shrunk_cov(X, shrinkage)
+    # ★단위를 섞은 채 수축하지 않는다★ `pct` 팩터는 분수(σ≈0.003)이고 `diff`
+    # 팩터는 지수 포인트(σ≈4.5)라 원자료 σ 가 **1750배** 벌어져 있다. Ledoit-Wolf
+    # 는 공통 분산 목표로 수축하는데 그 목표를 큰 팩터가 지배해, 작은 팩터의 σ 가
+    # 통째로 부풀려진다(실측: inflation 0.00257 → 0.43957, **171배**).
+    # 그래서 **표준화 → 상관에 수축 → 스케일 복원** 순서로 간다.
+    sd_raw = X.std(axis=0, ddof=1)
+    live = [i for i, v in enumerate(sd_raw) if np.isfinite(v) and v > 0]
+    excluded = {factors[i]: "이 팩터의 변화가 상수라 표준화할 수 없습니다"
+                for i in range(len(factors)) if i not in live}
+    if len(live) < 2:
+        return {"available": False,
+                "reason": "변동이 있는 팩터가 2개 미만입니다", "excluded": excluded}
+
+    factors = [factors[i] for i in live]
+    X = X[:, live]
+    sd_raw = sd_raw[live]
+
+    Z = (X - X.mean(axis=0)) / sd_raw          # 무차원 — 0 나눗셈은 위에서 배제
+    Sz, lam, method = _shrunk_cov(Z, shrinkage)
+    D = np.diag(sd_raw)
+    S = D @ Sz @ D                              # 상관만 수축하고 σ 는 보존
     sd = np.sqrt(np.maximum(np.diag(S), 0.0))
     return {
         "available": True, "reason": None,
         "factors": factors, "cov": S, "sd": sd,
+        # ★무엇을 했는지 숨기지 않는다★
+        "scale_normalized": True,
+        "sd_raw": {f: round(float(v), 8) for f, v in zip(factors, sd_raw, strict=True)},
+        "excluded": excluded,
         "n_months": len(shared), "span": [shared[0], shared[-1]],
         "shrinkage_lambda": (round(float(lam), 4) if lam is not None else None),
         "method": method,
         # ★λ 가 1 이면 상관구조가 지워진 것이다★ 숫자는 나오지만 뜻이 다르다.
         "degenerate": bool(lam is not None and lam >= 0.99),
         "note": ("공통 월만 사용합니다 — 계열마다 구간이 다른데 그냥 붙이면 "
-                 "서로 다른 달을 비교하게 됩니다"),
+                 "서로 다른 달을 비교하게 됩니다. 수축은 **상관**에만 걸고 각 "
+                 "팩터의 σ 는 원자료 그대로 보존합니다(단위가 섞여 있기 때문)"),
     }
 
 
