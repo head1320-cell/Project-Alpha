@@ -21,6 +21,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.api.json_safe import finite_payload as _finite_payload
 from src.engine.entropy_views import EPUnavailable
 from src.engine.scenario_packs import HIST_WINDOWS
 
@@ -1609,3 +1610,109 @@ def target_versions_list(limit: int = Query(50, ge=1, le=200)):
         logger.warning(f"target-versions 목록 실패: {e}")
         return {"available": False, "versions": [],
                 "reason": "목표 버전 저장소를 읽을 수 없습니다 — 기록이 없는 것과 다릅니다."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 리밸런싱 정책 — ★거래 여부를 판단한다★ (Brief §10 · 감사 §3.1)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class RebalanceDecisionRequest(AnalyzeRequest):
+    """`AnalyzeRequest` 를 그대로 물려받는다 — 유니버스·모델·절단일·조건부 스위치가
+    분석과 **같은 의미**여야 두 화면의 판단이 갈리지 않는다."""
+    holdings: dict[str, float] = Field(..., min_length=1)   # 현재 비중 %
+    portfolio_value: float = Field(..., gt=0)
+    # 없으면 optimize 결과를 목표로 쓴다.
+    target_weights: dict[str, float] | None = None
+    horizon_days: int = Field(63, ge=1, le=756)             # 보유기간 가정(명시)
+    hysteresis_mult: float = Field(0.5, ge=0.0, le=50.0)
+    confidence: float | None = Field(None, ge=0.0, le=1.0)  # 점진 이동 α
+    last_rebalance_date: str | None = Field(None, max_length=32)
+
+
+@router.post("/rebalance-decision")
+def rebalance_decision_route(req: RebalanceDecisionRequest):
+    """★거래할 가치가 있는가★ — Brief §21 이 시스템에 묻는 질문.
+
+        trade if 효용 개선 > 거래비용 × (1 + 히스테리시스)
+
+    ★트리거만으로 거래하지 않는다★ `portfolio_rebalancer` 의 달력·drift·국면·
+    변동성 트리거는 **검토 시점**을 알릴 뿐이다. 거래 근거는 편익 대 비용이고,
+    조건부 μ/Σ 가 없으면 `decision="undetermined"` 로 답한다 — 편익을 모르는 채
+    거래를 권하는 것이 감사가 지목한 결함이었다.
+
+    무거래 밴드는 **자산마다** 다르다(포지션 크기에 의존). 고정 ±5% 가 아니다.
+    """
+    try:
+        from src.engine.rebalance_policy import detect_triggers, rebalance_decision
+
+        returns, bench, excluded, coverage = _load_clean_returns(
+            req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
+        if returns is None or len(returns.columns) < 2:
+            return {"available": False, "decision": "undetermined",
+                    "reason": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded}
+
+        names = list(returns.columns)
+        R = returns.values
+
+        # 조건부 μ/Σ — `/analyze` 와 **같은 경로**를 탄다(두 화면이 갈리지 않게).
+        cond = cond_path = None
+        s_override = None
+        extra_views = None
+        if req.conditional:
+            from src.engine.conditional_market import (
+                conditional_moments,
+                regime_by_month_from_path,
+            )
+            cond_path = _regime_path_for(req)
+            by_month, _dropped = regime_by_month_from_path(cond_path["points"])
+            current = (cond_path["points"][-1].get("regime")
+                       if cond_path["points"] else None)
+            cond = conditional_moments(returns, by_month, current)
+            if cond["available"]:
+                s_override = cond["sigma"]
+                extra_views, _conf = _conditional_views(cond, req.model)
+
+        from src.engine.allocation_studio import optimize
+        opt = optimize(req.model, names, R,
+                       views=[v.model_dump() for v in (req.views or [])] or None,
+                       delta=req.delta, tau=req.tau,
+                       s_override=s_override, extra_views=extra_views)
+
+        if req.target_weights:
+            target = {k: float(v) for k, v in req.target_weights.items()}
+            target_source = "request"
+        else:
+            target = {n: round(float(w) * 100.0, 4)
+                      for n, w in zip(names, opt["weights"], strict=False)}
+            target_source = f"optimize:{req.model}"
+
+        triggers = detect_triggers(
+            req.holdings, target, as_of=req.as_of,
+            last_rebalance_date=req.last_rebalance_date)
+
+        decision = rebalance_decision(
+            req.holdings, target, portfolio_value=req.portfolio_value,
+            names=names,
+            mu=np.asarray(opt["mu_used"], dtype=float),
+            sigma=np.asarray(opt["sigma_annual"], dtype=float),
+            risk_aversion=req.delta,
+            horizon_days=req.horizon_days,
+            hysteresis_mult=req.hysteresis_mult,
+            confidence=req.confidence,
+            triggers=triggers)
+
+        decision.update({
+            "target_weights": target, "target_source": target_source,
+            "model": req.model, "coverage": coverage, "excluded": excluded,
+            # ★조건부를 못 썼으면 응답이 그 사실을 말한다★ (조용한 폴백 금지)
+            "conditional": (_conditional_block(
+                cond, cond_path, sigma_applied=s_override is not None,
+                mu_as_views=len(extra_views or []), view_confidence=None,
+                model=req.model) if req.conditional else None),
+        })
+        return _finite_payload(decision)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("rebalance-decision 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")

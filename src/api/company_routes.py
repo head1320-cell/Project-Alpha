@@ -11,7 +11,6 @@ GET /api/v1/company/{code}/macro-sensitivity — 금리 충격 → 적정가치 
 from __future__ import annotations
 
 import logging
-import math
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -205,30 +204,6 @@ _SUMMARY_KEYS = ("total_return_pct", "cagr", "max_drawdown_pct", "sharpe_ratio",
                  "win_rate", "num_trades", "volatility_pct", "sortino_ratio")
 
 
-def _finite(payload, _path=""):
-    """비유한 float → None, 그리고 ★어느 키가 그랬는지 이름을 남긴다★
-
-    백테스트 통계는 정당하게 무한할 수 있다(손실 거래가 0이면 `profit_factor`
-    가 `inf`). JSON 이 그것을 실을 수 없으므로 None 으로 바꾸되, 조용히 지우면
-    "값이 없다" 와 "무한이다" 가 같아 보인다 — 이 저장소의 관례대로 사유를 남긴다.
-    """
-    dropped: list[str] = []
-
-    def walk(o, path):
-        if isinstance(o, float):
-            if math.isfinite(o):
-                return o
-            dropped.append(f"{path.lstrip('.')}={o}")
-            return None
-        if isinstance(o, dict):
-            return {k: walk(v, f"{path}.{k}") for k, v in o.items()}
-        if isinstance(o, (list, tuple)):
-            return [walk(v, f"{path}[{i}]") for i, v in enumerate(o)]
-        return o
-
-    return walk(payload, _path), dropped
-
-
 @router.post("/{code}/thesis-backtest")
 def company_thesis_backtest(code: str, req: ThesisBacktestRequest):
     """★논지가 그대로 백테스트가 된다★ 있는 다리에 올린다 (P3-1).
@@ -292,10 +267,8 @@ def company_thesis_backtest(code: str, req: ThesisBacktestRequest):
         if req.case_id:
             from src.data.research_cases import advance_pointer
             out["case_bound"] = advance_pointer(req.case_id, "run", out["run_id"])
-        out, dropped = _finite(out)
-        if dropped:
-            out["non_finite"] = dropped
-        return out
+        from src.api.json_safe import finite_payload
+        return finite_payload(out)
     except HTTPException:
         raise
     except Exception:
