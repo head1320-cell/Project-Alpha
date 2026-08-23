@@ -48,6 +48,67 @@ FACTOR_PROXIES: dict[str, tuple[str, ...]] = {
     "liquidity": ("KR_M2", "NFCI", "M2SL"),
 }
 
+# ★계열마다 변화의 단위가 다르다★ 가격·지수는 **비율**이 맞지만 금리·스프레드·
+# 표준화지수는 **차분**이어야 한다. 0 을 지나거나 0 근처인 계열에 `cur/prev − 1` 을
+# 쓰면 값이 폭발한다 — 실측에서 `VIXCLS` 가 음수(최소 −5.09)를 지나며 한 달 변화가
+# **6730%** 로 튀었고, 그 이상치 하나가 Ledoit-Wolf 를 λ=1.0(항등행렬)로 밀어
+# 상관구조를 통째로 지웠다. CLAUDE.md 의 "음수가 들어갈 수 있는 파생식은 가드하라"
+# 와 같은 부류다.
+_CHANGE_KIND: dict[str, str] = {
+    # 가격·지수·물가 — 항상 양수인 수준값이라 비율이 뜻을 갖는다.
+    "KOSPI": "pct", "USD_KRW": "pct", "DTWEXBGS": "pct", "DCOILWTICO": "pct",
+    "KR_CPI": "pct", "KR_CORE_CPI": "pct", "KR_LEADING_CYCLE": "pct",
+    "KR_IP": "pct", "INDPRO": "pct", "KR_M2": "pct", "M2SL": "pct",
+    # 금리·스프레드·표준화지수 — 차분(%p·포인트)이 경제적 단위다.
+    "KR_10Y": "diff", "DGS10": "diff", "T10YIE": "diff",
+    "KR_TERM_SPREAD": "diff", "KR_CREDIT_SPREAD": "diff", "BAMLH0A0HYM2": "diff",
+    "VIXCLS": "diff", "NFCI": "diff",
+}
+_DEFAULT_KIND = "diff"      # 모르는 계열은 안전한 쪽(차분)으로
+_ZERO_GUARD = 1e-6          # |prev| 가 이보다 작으면 비율을 쓰지 않는다
+
+
+def series_changes(series, name: str = "") -> tuple[dict[str, float], str, str | None]:
+    """매크로 계열 → ({월: 변화}, 사용한 변환, 사유).
+
+    ★어느 변환을 썼는지 반드시 돌려준다★ 비율과 차분은 **단위가 다른 숫자**라,
+    무엇을 썼는지 모르면 베타를 해석할 수 없다.
+    """
+    from src.engine.conditional_market import _normalize_month
+
+    kind = _CHANGE_KIND.get(name, _DEFAULT_KIND)
+    ts = list(getattr(series, "timestamps", None) or [])
+    vals = list(getattr(series, "values", None) or [])
+    pairs = []
+    for t, v in zip(ts, vals, strict=False):
+        m = _normalize_month(str(t)[:7])
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            continue
+        if m is not None:
+            pairs.append((m, fv))
+    pairs.sort()
+
+    note = None
+    if kind == "pct":
+        # ★0 을 지나거나 0 근처면 비율을 쓰지 않는다★ 조용히 폭발시키지 않는다.
+        levels = [v for _, v in pairs]
+        if any(abs(v) < _ZERO_GUARD for v in levels) or (
+                any(v > 0 for v in levels) and any(v < 0 for v in levels)):
+            kind = "diff"
+            note = (f"'{name}' 은 비율 변환 대상이지만 0 을 지나거나 0 근처라 "
+                    "차분으로 바꿨습니다 — 비율이면 값이 폭발합니다")
+
+    out: dict[str, float] = {}
+    for (_, prev), (m, cur) in zip(pairs, pairs[1:], strict=False):
+        if kind == "diff":
+            out[m] = cur - prev
+        elif abs(prev) >= _ZERO_GUARD:
+            out[m] = cur / prev - 1.0
+    return out, kind, note
+
+
 FACTORS = tuple(FACTOR_PROXIES)
 MIN_MONTHS = 24          # P2-4 와 같은 하한 — 얇은 베타는 부호도 못 믿는다
 _RESOLVABLE_T = 2.0
@@ -65,8 +126,6 @@ def _macro_series_map() -> tuple[dict | None, str | None]:
 def resolve_proxies(series_map: dict | None = None,
                     min_months: int = MIN_MONTHS) -> dict:
     """팩터 → 실제로 쓸 대리계열. ★있는 것이 아니라 쓸 수 있는 것을 고른다★"""
-    from src.engine.valuation.macro_sensitivity import _series_monthly_change
-
     if series_map is None:
         series_map, err = _macro_series_map()
         if series_map is None:
@@ -81,12 +140,13 @@ def resolve_proxies(series_map: dict | None = None,
             if s is None:
                 tried.append(f"{name}(수집기에 없음)")
                 continue
-            changes = _series_monthly_change(s)
+            changes, kind, note = series_changes(s, name)
             if len(changes) < min_months:
                 tried.append(f"{name}(월 관측 {len(changes)}개)")
                 continue
             resolved[factor] = {"series": name, "n_months": len(changes),
-                                "changes": changes}
+                                "changes": changes, "transform": kind,
+                                "transform_note": note}
             break
         else:
             unresolved[factor] = (f"쓸 수 있는 대리계열이 없습니다 — 시도: "
@@ -137,6 +197,7 @@ def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
                 continue
             fit = _ols_beta([macro[m] for m in shared], [stock[m] for m in shared])
             fit["series"] = info["series"]
+            fit["transform"] = info["transform"]
             fit["span"] = [shared[0], shared[-1]]
             if fit.get("available") and fit.get("t_stat") is not None:
                 fit["resolvable"] = bool(abs(fit["t_stat"]) >= _RESOLVABLE_T)
@@ -150,6 +211,8 @@ def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
         "available": bool(ok), "assets": assets,
         "factors": list(prox["resolved"]),
         "proxies": {f: i["series"] for f, i in prox["resolved"].items()},
+        # ★비율과 차분은 단위가 다른 숫자다★ 무엇을 썼는지 밝혀야 베타를 읽을 수 있다.
+        "transforms": {f: i["transform"] for f, i in prox["resolved"].items()},
         "unresolved": prox["unresolved"],
         # ★차원의 저주를 숨기지 않는다★
         "sample": {"n_months": n_obs, "n_factors": n_factors,
@@ -200,6 +263,7 @@ def portfolio_factor_exposure(weights: dict[str, float], betas: dict) -> dict:
             "coverage_pct": round(covered * 100.0, 2),
             "missing": missing,
             "series": betas["proxies"].get(factor),
+            "transform": (betas.get("transforms") or {}).get(factor),
             "reason": None if covered > 0 else "이 팩터의 베타를 가진 자산이 없습니다",
         }
     return {"available": True, "reason": None, "by_factor": out,

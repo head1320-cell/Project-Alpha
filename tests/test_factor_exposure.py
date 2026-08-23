@@ -28,19 +28,25 @@ from src.engine.factor_exposure import (  # noqa: E402
 )
 
 
-def _series(n_months: int, start: float = 100.0, step: float = 1.0):
-    """`_series_monthly_change` 가 읽는 모양 — `timestamps` + `values`."""
+def _series(n_months: int, start: float = 100.0, step: float = 1.0,
+            wobble: float = 0.0):
+    """`series_changes` 가 읽는 모양 — `timestamps` + `values`.
+
+    ★`wobble` 이 필요한 이유★ 완전 선형이면 **차분이 상수**가 되어 회귀가
+    "설명변수가 상수" 로 정당하게 거절한다. 변환이 비율에서 차분으로 바뀌면서
+    이 픽스처가 그 함정에 걸렸다 — 코드가 아니라 픽스처의 문제였다.
+    """
     ts, vals = [], []
     for i in range(n_months):
         y, m = 2021 + (i // 12), (i % 12) + 1
         ts.append(f"{y}-{m:02d}")
-        vals.append(start + step * i)
+        vals.append(start + step * i + wobble * ((i * 7919) % 13 - 6))
     return SimpleNamespace(timestamps=ts, values=vals)
 
 
 def _map(**overrides) -> dict:
     """모든 팩터의 **첫** 후보를 넉넉한 계열로 채운 뒤 필요한 것만 덮는다."""
-    out = {cands[0]: _series(60) for cands in FACTOR_PROXIES.values()}
+    out = {cands[0]: _series(60, wobble=0.7) for cands in FACTOR_PROXIES.values()}
     out.update(overrides)
     return out
 
@@ -217,3 +223,65 @@ def test_the_real_collector_resolves_the_measured_proxies(live):
 def test_the_real_series_carry_enough_months(live):
     for factor, info in live["resolved"].items():
         assert info["n_months"] >= MIN_MONTHS, factor
+
+
+# ── 6. ★변화의 단위★ 비율과 차분은 다른 숫자다 ────────────────────────────
+def test_a_rate_series_uses_differences_not_ratios():
+    """★금리·스프레드는 %p 가 경제적 단위다★ 비율은 뜻이 다르다."""
+    from src.engine.factor_exposure import series_changes
+    ch, kind, note = series_changes(_series(12, start=3.0, step=0.1), "KR_10Y")
+    assert kind == "diff" and note is None
+    assert all(abs(v - 0.1) < 1e-9 for v in ch.values()), "차분이면 매달 +0.1"
+
+
+def test_a_price_series_uses_ratios():
+    """★짝★ 가격·지수는 비율이 맞다 — 전부 차분으로 바꾸면 안 된다."""
+    from src.engine.factor_exposure import series_changes
+    ch, kind, note = series_changes(_series(12, start=100.0, step=10.0), "KOSPI")
+    assert kind == "pct" and note is None
+    assert ch["2021-02"] == pytest.approx(0.10), "100 → 110 은 +10%"
+
+
+def test_a_series_crossing_zero_is_not_ratio_transformed():
+    """★실측★ `VIXCLS` 가 음수(최소 −5.09)를 지나며 한 달 변화가 6730% 로 튀었고,
+    그 이상치 하나가 Ledoit-Wolf 를 λ=1.0(항등행렬)로 밀어 상관구조를 지웠다.
+    """
+    from src.engine.factor_exposure import series_changes
+    crossing = SimpleNamespace(
+        timestamps=["2021-01", "2021-02", "2021-03", "2021-04"],
+        values=[2.0, 0.0001, -1.0, 3.0])
+    ch, kind, note = series_changes(crossing, "KOSPI")   # pct 대상인데 0 을 지난다
+    assert kind == "diff", "0 을 지나면 비율을 쓰지 않는다"
+    assert note and "폭발" in note
+    assert max(abs(v) for v in ch.values()) < 10.0, "폭발하지 않는다"
+
+
+def test_the_ratio_blowup_is_what_we_are_preventing():
+    """★짝의 대조★ 같은 계열을 비율로 강제하면 실제로 폭발한다 — 그래서 막는다."""
+    vals = [2.0, 0.0001, -1.0, 3.0]
+    ratios = [vals[i + 1] / vals[i] - 1.0 for i in range(len(vals) - 1)
+              if abs(vals[i]) > 0]
+    assert max(abs(r) for r in ratios) > 100.0, "비율이면 100배 넘게 튄다"
+
+
+def test_an_unknown_series_defaults_to_the_safe_transform():
+    from src.engine.factor_exposure import series_changes
+    _ch, kind, _n = series_changes(_series(12), "처음보는계열")
+    assert kind == "diff", "모르는 계열은 안전한 쪽으로"
+
+
+def test_the_transform_is_reported_so_betas_can_be_read():
+    """★무엇을 썼는지 모르면 베타를 해석할 수 없다★"""
+    b = asset_factor_betas(["005930"], series_map=_map())
+    assert set(b["transforms"]) == set(b["proxies"])
+    for factor, fit in b["assets"]["005930"]["betas"].items():
+        if fit.get("available"):
+            assert fit["transform"] in ("pct", "diff"), factor
+
+
+def test_the_real_series_transforms_match_the_measurement(live):
+    """★실측 검산★ 금리·스프레드·VIX 는 차분, 가격·물가는 비율."""
+    t = {f: i["transform"] for f, i in live["resolved"].items()}
+    assert t["duration"] == "diff" and t["credit"] == "diff"
+    assert t["volatility"] == "diff", "VIXCLS 는 0 을 지난다"
+    assert t["equity"] == "pct" and t["inflation"] == "pct"
