@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("api.company")
 
@@ -147,4 +148,41 @@ def company_macro_sensitivity(
         return out
     except Exception:
         logger.exception("macro-sensitivity 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class ThesisCheckRequest(BaseModel):
+    """논지 원문 — ★자유 텍스트가 아니라 구조★ 그래야 검증할 수 있다."""
+    claim: str = Field("", max_length=4000)
+    evidence: list[dict] = Field(default_factory=list)
+    catalysts: list[dict] = Field(default_factory=list)
+    kill_conditions: list[dict] = Field(default_factory=list)
+
+
+@router.post("/{code}/thesis-check")
+def company_thesis_check(code: str, req: ThesisCheckRequest):
+    """★굳히기 전에★ 논지를 검증하고 kill 조건을 3단으로 분류한다 (P2-5).
+
+    논지를 다듬는 반복이 스냅샷을 더럽히지 않게 하는 것이 이 엔드포인트의 목적이다
+    — 저장하지 않는다.
+
+    kill 조건은 `filter_ast` 의 `FIELD_BY_ID` 로 검증한다(**새 DSL 이 없다**).
+    분류 3단은 다리의 폭을 정직하게 말한다:
+      · `backtestable` — PIT 토큰 + 재무 시계열 적재 → 룩어헤드 없이 백테스트 가능
+      · `screen_only_backtest_lookahead` — 스냅샷 상수 폴백이라 **룩어헤드 근사**
+      · `screen_only` — 조건식 토큰이 없어 백테스트에 못 올린다
+
+    검증 실패는 500 이 아니라 200 + `{available:false, reason, errors}` 다.
+    """
+    try:
+        from src.engine.company_thesis import (
+            thesis_to_sell_conditions,
+            validate_thesis,
+        )
+        thesis = req.model_dump()
+        out = validate_thesis(thesis, code=code)
+        out["sell_conditions"] = thesis_to_sell_conditions(thesis, code=code)
+        return out
+    except Exception:
+        logger.exception("thesis-check 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

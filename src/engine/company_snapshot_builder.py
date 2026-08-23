@@ -294,8 +294,15 @@ def _data_status(valuation: dict, any_available: bool) -> DataStatus:
 
 
 def build_and_store(code: str, price: float | None = None,
-                    as_of: str | None = None) -> str | None:
-    """현재 기업 상태를 스냅샷으로 굳힌다. 성공 시 snapshot_id, DB 미가용 시 `None`."""
+                    as_of: str | None = None,
+                    thesis: dict | None = None) -> str | None:
+    """현재 기업 상태를 스냅샷으로 굳힌다. 성공 시 snapshot_id, DB 미가용 시 `None`.
+
+    ★`thesis` 만은 계산되지 않고 **작성된다**★ 다른 섹션은 빌더가 엔진을 호출해
+    산출하지만 논지는 사람이 쓴 입력이다. 여기서는 검증·분류만 해서 굳힌다.
+    스냅샷이 불변이므로 **논지를 고치면 새 스냅샷**이 된다 — "그때 무엇을
+    믿었는가" 가 그대로 남는다.
+    """
     resolved_price, price_source = _resolve_price(code, price)
     as_of = as_of or datetime.now().date().isoformat()
 
@@ -341,6 +348,9 @@ def build_and_store(code: str, price: float | None = None,
     if usage is ResearchUsage.BACKTEST_ELIGIBLE:  # pragma: no cover - 도달 불가
         raise AssertionError("빈티지가 없는데 backtest_eligible 이 나왔다 — derive_usage 계약 위반")
 
+    # 논지는 선택 — 없으면 섹션이 사유를 달고 비어 있는다(기본 동작 불변).
+    sections["thesis"] = _section("thesis", lambda: _thesis(code, thesis))
+
     sections["provenance"] = _provenance(code, price_source, sections)
 
     return create_snapshot(
@@ -382,3 +392,17 @@ def _factors(code: str) -> dict:
     if not f:
         return {"available": False, "reason": "팩터 스토어에 이 종목의 값이 없습니다"}
     return {"available": True, "factors": f}
+
+
+def _thesis(code: str, thesis: dict | None) -> dict:
+    """논지 검증·분류 — ★여기서 논지를 짓지 않는다★ 받은 것을 검산할 뿐이다."""
+    if thesis is None:
+        return {"available": False,
+                "reason": "논지가 작성되지 않았습니다 — 논지는 산출물이 아니라 입력입니다"}
+    from src.engine.company_thesis import thesis_to_sell_conditions, validate_thesis
+    out = validate_thesis(thesis, code=code)
+    # 검증에 실패해도 원문과 사유를 함께 굳힌다 — "그때 이 논지가 왜 검증되지
+    # 않았는가" 가 나중에 읽을 수 있는 기록이다.
+    out["authored"] = thesis
+    out["sell_conditions"] = thesis_to_sell_conditions(thesis, code=code)
+    return out

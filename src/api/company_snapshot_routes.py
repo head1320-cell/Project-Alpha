@@ -30,6 +30,9 @@ class CreateCompanySnapshotRequest(BaseModel):
     # 주장할 수 있으면, 쓰지 않은 가격 출처가 적힌 스냅샷이 만들어진다.
     price: float | None = Field(None, gt=0)
     as_of: str | None = Field(None, max_length=32)
+    # ★가산 필드★ 없으면 동작이 이전과 완전히 같다. 논지는 계산되지 않고
+    # 작성되므로 여기로만 들어온다 — 스냅샷이 불변이라 고치면 새 스냅샷이 된다.
+    thesis: dict | None = None
 
 
 @router.post("")
@@ -42,7 +45,8 @@ def create(req: CreateCompanySnapshotRequest):
     """
     from src.engine.company_snapshot_builder import build_and_store
     try:
-        sid = build_and_store(req.code, price=req.price, as_of=req.as_of)
+        sid = build_and_store(req.code, price=req.price, as_of=req.as_of,
+                              thesis=req.thesis)
     except Exception:
         logger.exception("company snapshot 생성 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

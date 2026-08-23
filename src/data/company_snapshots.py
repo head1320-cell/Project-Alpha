@@ -86,6 +86,7 @@ _LATE_COLUMNS: dict[str, str] = {
     "implied": "TEXT",          # P2-2 역DCF — 시장내재 가정
     "valuation_dist": "TEXT",   # P2-3 확률적 밸류에이션 P10~P90
     "macro_sensitivity": "TEXT",  # P2-4 매크로 민감도(구조적 + 통계)
+    "thesis": "TEXT",           # P2-5 논지 — 유일하게 **작성되는** 섹션
 }
 _late_ok: dict[str, bool] = {}
 
@@ -188,6 +189,7 @@ def create_snapshot(
     implied: Any = None,
     valuation_dist: Any = None,
     macro_sensitivity: Any = None,
+    thesis: Any = None,
 ) -> str | None:
     """불변 스냅샷을 만든다. 성공 시 snapshot_id, DB 미가용 시 `None`.
 
@@ -201,6 +203,7 @@ def create_snapshot(
         "peers": peers, "risk": risk, "provenance": provenance,
         "implied": implied, "valuation_dist": valuation_dist,
         "macro_sensitivity": macro_sensitivity,
+        "thesis": thesis,
     }
     try:
         engine = _engine()
