@@ -1,0 +1,248 @@
+"""
+Persistent Factor Snapshot (DB) — 한국 펀더멘털·가격 팩터 영속 캐시
+==========================================================================
+문제: DART/KIS를 요청마다 종목별로 호출 → 느리고(throttle) 첫 화면이 수십 초,
+      재시작하면 다시 처음부터. 디스크 캐시(dart_cache)는 원천 응답만 보관.
+
+해결: 계산된 팩터(종목당 ~92개)를 DB 테이블에 적재(JSON) → 스크리너·분석이
+      DB에서 한 번에 읽음(벌크). 야간 배치가 전 유니버스를 미리 채운다.
+      → 사용자는 항상 워밍된 데이터를 즉시 읽고, 재시작·다중 워커에도 유지.
+
+설계:
+  · 테이블 factor_snapshot(cache_key, value(JSON), updated_at) — PK=cache_key.
+  · 이식성: ON CONFLICT UPSERT (SQLite 3.24+/PostgreSQL 9.5+ 공통).
+  · 모든 DB 연산은 방어적(try/except) — DB가 없거나 실패해도 앱은 in-memory로 동작.
+  · enabled(): 실데이터 모드(DART 키 or KIS 실연동)에서만 켜짐 → mock/테스트는
+    in-memory만 사용(DB 미오염, 테스트 무영향).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from typing import Any
+
+from src.data.mock_gate import mock_allowed
+
+logger = logging.getLogger(__name__)
+
+_TABLE = "factor_snapshot"
+_inited = False
+
+
+def enabled() -> bool:
+    """영속 캐시 사용 여부. 명시 토글 > 실데이터 모드 자동감지."""
+    flag = os.getenv("SNAPSHOT_DB", "").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        return False
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    # auto: 실데이터 모드일 때만 (DART 키 또는 KIS 실연동)
+    return bool(os.getenv("DART_API_KEY")) or not mock_allowed()
+
+
+def _engine():
+    from src.database import get_engine
+    return get_engine()
+
+
+def _ensure_table(engine) -> None:
+    global _inited
+    if _inited:
+        return
+    from sqlalchemy import text
+    with engine.begin() as c:
+        c.execute(text(
+            f"CREATE TABLE IF NOT EXISTS {_TABLE} ("
+            "cache_key VARCHAR(80) PRIMARY KEY, "
+            "value TEXT, "
+            "updated_at DOUBLE PRECISION)"
+        ))
+    _inited = True
+
+
+def bulk_read(keys: list[str], max_age_sec: float) -> dict[str, Any]:
+    """여러 키를 한 번에 조회 (스크리너 벌크). 신선한 항목만 {key: value}."""
+    if not keys:
+        return {}
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        out: dict[str, Any] = {}
+        cutoff = time.time() - max_age_sec
+        with engine.connect() as c:
+            for i in range(0, len(keys), 400):  # IN 절 길이 제한 회피
+                chunk = keys[i:i + 400]
+                ph = ",".join(f":k{j}" for j in range(len(chunk)))
+                params: dict[str, Any] = {f"k{j}": k for j, k in enumerate(chunk)}
+                params["cut"] = cutoff
+                rows = c.execute(text(
+                    f"SELECT cache_key, value FROM {_TABLE} "
+                    f"WHERE updated_at >= :cut AND cache_key IN ({ph})"
+                ), params)
+                for k, v in rows:
+                    try:
+                        out[k] = json.loads(v)
+                    except Exception:
+                        pass
+        return out
+    except Exception as e:
+        logger.warning(f"snapshot bulk_read 실패: {e}")
+        return {}
+
+
+def write_many(items: dict[str, Any]) -> int:
+    """여러 (key→value)를 UPSERT (배치 적재용)."""
+    if not items:
+        return 0
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        now = time.time()
+        sql = text(
+            f"INSERT INTO {_TABLE} (cache_key, value, updated_at) VALUES (:k, :v, :t) "
+            "ON CONFLICT (cache_key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+        )
+        rows = [{"k": k, "v": json.dumps(v, ensure_ascii=False), "t": now} for k, v in items.items()]
+        with engine.begin() as c:
+            for i in range(0, len(rows), 200):
+                c.execute(sql, rows[i:i + 200])
+        return len(rows)
+    except Exception as e:
+        logger.warning(f"snapshot write_many 실패: {e}")
+        return 0
+
+
+def write(key: str, value: Any) -> None:
+    """단건 write-through."""
+    write_many({key: value})
+
+
+def count() -> int:
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            return int(c.execute(text(f"SELECT COUNT(*) FROM {_TABLE}")).scalar() or 0)
+    except Exception:
+        return 0
+
+
+def ingested_count() -> int:
+    """factor_snapshot에 ffl: 키로 적재된 종목 수 — 스크리너 유니버스 크기(=적재 진행률).
+    ingested_codes()보다 가벼움(COUNT). 적재 '실제 저장' 카운터의 정직화에 사용."""
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            return int(c.execute(text(
+                f"SELECT COUNT(*) FROM {_TABLE} WHERE cache_key LIKE 'ffl:%'")).scalar() or 0)
+    except Exception:
+        return 0
+
+
+def ingested_codes() -> list[str]:
+    """factor_snapshot에 적재된 종목코드 목록 (ffl: 키 기준). 스크리너 '전종목'을
+    적재 DB와 연동 — 적재가 늘면 유니버스도 자동으로 늘어남."""
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            rows = c.execute(text(f"SELECT cache_key FROM {_TABLE} WHERE cache_key LIKE 'ffl:%'"))
+            return [r[0].split(":", 1)[1] for r in rows]
+    except Exception as e:
+        logger.warning(f"ingested_codes 실패: {e}")
+        return []
+
+
+def sample_factors(limit: int = 500) -> list[dict]:
+    """factor_snapshot에서 종목별 팩터(펀더멘털+가격) 표본을 병합해 반환.
+    기업분석 퍼센타일 계산의 분포로 사용 — 라이브 130종목 재계산 대신 DB에서 즉시.
+    적재된 게 없으면 빈 리스트(호출측이 라이브 폴백)."""
+    try:
+        engine = _engine()
+        _ensure_table(engine)
+        from sqlalchemy import text
+        merged: dict[str, dict] = {}
+        with engine.connect() as c:
+            rows = c.execute(text(
+                f"SELECT cache_key, value FROM {_TABLE} "
+                "WHERE cache_key LIKE 'ffl:%' OR cache_key LIKE 'price_factors:%' "
+                "LIMIT :lim"
+            ), {"lim": limit * 2})
+            for k, v in rows:
+                try:
+                    code = k.split(":", 1)[1]
+                    d = merged.setdefault(code, {"stock_code": code})
+                    payload = json.loads(v)
+                    for fk, fv in payload.items():
+                        if not fk.startswith("_"):
+                            d[fk] = fv
+                except Exception:
+                    pass
+        return list(merged.values())[:limit]
+    except Exception as e:
+        logger.warning(f"sample_factors 실패: {e}")
+        return []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Batch ingestion — 전 유니버스 팩터를 DB에 적재
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def ingest_universe(universe: str = "kospi200", progress_cb=None) -> dict:
+    """유니버스 전 종목을 평가해 완성된 ScreenerItem(item:CODE)을 DB에 적재.
+    이후 스크리너가 평가 없이 즉시 서빙(로딩 없음). 청크(<상한)로 돌려 캡 미발동·전부 저장.
+    실데이터 모드면 DART/KIS 실호출(throttle·디스크캐시) → 1회성, 이후 즉시.
+
+    progress_cb(done, total, saved, failures): 청크마다 진행 보고 (UI 표면화).
+    DART 일일 한도(quota_exhausted) 감지 시 조기 중단 — 사유를 결과에 명시(내일 캐시로 이어짐)."""
+    from src.engine.screener import ValuationScreener, resolve_universe
+
+    codes = resolve_universe(universe)
+    sc = ValuationScreener()
+    CHUNK = 300  # 평가/보강 상한(400) 미만 → 청크 전부 평가·저장
+    ok = failures = 0
+    aborted: str | None = None
+    # '저장'을 실제 ffl: 영속 증가분으로 보고(정직). evaluated_actual(평가 아이템 수)을
+    # '저장'으로 쓰면 "저장 2,349인데 유니버스 불변"처럼 오해를 유발했음.
+    base_ffl = ingested_count()
+    last_ffl = base_ffl
+    for i in range(0, len(codes), CHUNK):
+        # DART 쿼터 확인 — 한도 도달이면 침묵 대신 명시적 중단(성공분은 캐시·DB에 이미 저장됨)
+        try:
+            from src.data.dart_client import dart_usage
+            if dart_usage().get("quota_exhausted"):
+                aborted = "DART 일일 한도 초과 — 중단됨 (성공분은 저장, 내일 재실행 시 이어짐)"
+                break
+        except Exception:
+            pass
+        chunk = codes[i:i + CHUNK]
+        try:
+            res = sc.run(universe=chunk, filter_ast=None, liquidity_floor="off",
+                         limit=len(chunk), no_cap=True, reattach_fundamentals=True)
+            ok += res.total_evaluated
+            failures += getattr(res, "failures", 0)
+            last_ffl = ingested_count()
+            logger.info(f"적재 진행: {min(i + CHUNK, len(codes))}/{len(codes)} ({universe})")
+        except Exception as e:
+            failures += len(chunk)
+            logger.warning(f"적재 청크 실패 [{i}]: {e}")
+        saved = max(0, last_ffl - base_ffl)   # 실제 새로 영속된 종목 수
+        if progress_cb is not None:
+            try:
+                progress_cb(min(i + CHUNK, len(codes)), len(codes), saved, failures)
+            except Exception:
+                pass
+    newly = max(0, last_ffl - base_ffl)
+    result = {"universe": universe, "ingested": ok, "evaluated": ok, "saved": newly,
+              "failures": failures, "total": len(codes), "db_rows": count(), "aborted": aborted}
+    logger.info(f"factor_snapshot 적재 완료: {result}")
+    return result

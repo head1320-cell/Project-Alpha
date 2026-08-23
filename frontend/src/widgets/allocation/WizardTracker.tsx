@@ -1,0 +1,161 @@
+"use client";
+// 위저드 진행 트래커 — 7 스테이지를 3 매크로 페이즈(SETUP/LOGIC/VALIDATION)로
+// 묶고, 00 Overview·06 Journal은 북엔드 칩으로. 각 스텝 칩: 상태점(완료 시 accent) +
+// 번호 + 라벨 + 파생 서브텍스트. 현재 페이즈 강조. 칩 클릭 점프 + ←/→ 키보드 이동
+// (입력 포커스 시 제외). 완료 파생은 Provider의 stageComplete 단일 소스.
+//
+// ★스테이지 참조는 전부 href★ — 예전엔 부제 배열·완료 배지·페이즈 소속이 배열 위치였고
+// stageComplete[9] 가 하드코딩돼 있어서, 스테이지를 하나 끼우면 타입 에러 없이 전부
+// 한 칸씩 밀렸다. 순서가 실제로 필요한 곳(←/→ 이동)만 인덱스를 쓴다.
+import React, { useEffect } from "react";
+import { Check } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { BOOKENDS, PHASES, STAGES, stageIndex, useAllocation, type StageHref } from "./AllocationProvider";
+import { overallConfidence } from "./ViewBuilder";
+
+const BY_HREF = new Map(STAGES.map((s) => [s.href as StageHref, s]));
+
+export function WizardTracker() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const active = stageIndex(pathname);              // ←/→ 이동에만 — 여기선 순서가 진짜 의미다
+  const activeHref = STAGES[active].href as StageHref;
+  const { holdings, views, result, model, delta, scenario, scenarios, stageComplete, timingQ, alphaTouched, executionTouched, attachedSnapshotId, isResultStale } = useAllocation();
+
+  // ★결과에 기대는 완료는 입력이 바뀌면 "완료" 가 아니다★ (P3.5)
+  // 트래커는 지금까지 stageComplete 만 보고 초록 점을 찍었다. 그런데 그 완료의 근거가
+  // `result` 인 스테이지들은, 사용자가 자산·뷰·제약을 건드린 순간 **이전 입력의 결과**를
+  // 근거로 완료 표시를 유지하고 있었다. 되돌아가 볼 수는 있어야 하지만(연구니까),
+  // 아직 유효하다고 말해서는 안 된다 — 그건 낡은 수치를 결론으로 만드는 길이다.
+  const RESULT_BACKED: StageHref[] = [
+    "/allocation/overview", "/allocation/optimize", "/allocation/stress", "/allocation/explain",
+  ];
+  const superseded = (href: StageHref) =>
+    isResultStale && RESULT_BACKED.includes(href) && stageComplete[href];
+
+  const totalW = holdings.reduce((a, h) => a + h.weight, 0);
+  const conf = Math.round(overallConfidence(views));
+  const scenLabel = scenarios.find((s) => s.id === scenario)?.label ?? "—";
+  const isMock = !!result && (result.coverage as { source?: string }).source === "mock";
+  const tm = timingQ.data && !timingQ.data.error ? timingQ.data : null;
+  const timingSub = tm
+    ? `${tm.canary.signal === "risk_on" ? "위험-온" : "위험-오프"} ${tm.canary.hits}/${tm.canary.total}`
+    : "미평가";
+
+  const sub: Record<StageHref, string> = {
+    "/allocation/overview":  result ? `${result.names.length} 자산` : "미실행",
+    "/allocation/macro":     attachedSnapshotId ? "스냅샷 연결됨" : "미연결",
+    "/allocation/construct": holdings.length ? `${holdings.length}종목 · ${totalW.toFixed(0)}%` : "자산 없음",
+    "/allocation/alphalab":  alphaTouched ? "검증됨" : "미검증",
+    "/allocation/thesis":    views.length ? `${views.length}뷰 · ${conf}%` : "뷰 없음",
+    "/allocation/timing":    timingSub,
+    "/allocation/optimize":  `${model.toUpperCase()} · λ${delta.toFixed(1)}`,
+    "/allocation/stress":    scenLabel,
+    "/allocation/explain":   result ? "귀인 준비" : "미실행",
+    "/allocation/execution": executionTouched ? "계획 검토" : "미준비",
+    "/allocation/journal":   stageComplete["/allocation/journal"] ? "저장됨" : "미기록",
+  };
+
+  // ←/→ 로 이전/다음 스테이지 (입력 필드·열린 모달에서는 제외)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (el?.isContentEditable) return;
+      // ★모달이 열려 있으면 스테이지를 이동하지 않는다★
+      // window 리스너라 모달 안에서 누른 화살표까지 잡아채고 있었다. 그러면 팩터 창에서
+      // 패밀리 칩을 화살표로 넘기려는 순간 페이지가 다음 스테이지로 넘어가고 창이
+      // 언마운트되어, 설정 중이던 내용이 사라진다. 스펙 §8.1 의 키보드 내비게이션·포커스
+      // 트랩 요구와도 정면으로 어긋난다.
+      // (E2E 가 이 결함을 간헐적으로 잡고 있었다 — 포커스 이동이 라우팅보다 빠르면 통과해서
+      //  "flaky 테스트" 처럼 보였다. 실제로는 제품 결함이 단정과 경쟁하고 있었다.)
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (e.key === "ArrowRight" && active < STAGES.length - 1) router.push(STAGES[active + 1].href);
+      else if (e.key === "ArrowLeft" && active > 0) router.push(STAGES[active - 1].href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, router]);
+
+  const Step = (href: StageHref) => {
+    const s = BY_HREF.get(href)!;
+    const isOn = href === activeHref;
+    const isSup = superseded(href);
+    const isDone = stageComplete[href];
+    // ★부제는 활성·낡음일 때만★ 비활성 스텝의 파생 부제는 폭·높이를 먹는 값에 비해
+    // 정보가 얇다. 다만 superseded 는 **경고**라 어느 상태에서도 접지 않는다(A5 경계).
+    const showSub = isOn || isSup;
+    return (
+      <button key={href} title={s.desc}
+        className={`aas-wiz-step${isOn ? " on" : ""}${isDone ? " done" : ""}${isSup ? " superseded" : ""}`}
+        aria-current={isOn ? "step" : undefined}
+        onClick={() => router.push(href)}>
+        {/* ★번호를 라벨에서 빼내 마커로★ 예전엔 `<b>02</b> ALPHA LAB` 이 한 줄이라
+            번호가 라벨 폭을 20px 넘게 먹었고, 그만큼 라벨이 먼저 잘렸다.
+            완료는 색이 아니라 **체크 글리프**로도 말한다(색만으로 의미 전달 금지). */}
+        <span className="aas-wiz-mark num" aria-hidden="true">
+          {isDone && !isSup ? <Check size={11} strokeWidth={3} /> : s.n}
+        </span>
+        <span className="aas-wiz-lab">{s.label}</span>
+        {showSub && (
+          <span className="aas-wiz-sub num">{isSup ? "재계산 필요" : sub[href]}</span>
+        )}
+        {/* 완료 사실을 스크린리더에도 — 마커는 aria-hidden 이다. */}
+        {isDone && !isSup && <span className="sr-only">완료</span>}
+      </button>
+    );
+  };
+
+  const Bookend = (href: StageHref) => {
+    const s = BY_HREF.get(href)!;
+    return (
+      <button title={s.desc}
+        className={`aas-wiz-book${href === activeHref ? " on" : ""}${stageComplete[href] ? " done" : ""}${superseded(href) ? " superseded" : ""}`}
+        onClick={() => router.push(href)}>
+        <span className="aas-wiz-dot" />
+        <span className="num">{s.n}</span>
+        <span className="aas-wiz-booklab">{s.label}</span>
+        {/* ★북엔드도 이유를 말한다★ 프로브에서 드러났다: 스텝과 달리 북엔드에는 부제가
+            없어서, superseded 일 때 주의색만 입고 아무 설명이 없었다. 색만 바뀌는 신호는
+            "뭔가 이상하다" 까지만 전달하고 무엇을 해야 하는지는 말하지 않는다. */}
+        {superseded(href) && <span className="aas-wiz-booksup">재계산 필요</span>}
+      </button>
+    );
+  };
+
+  return (
+    <div className="aas-wiz">
+      {Bookend(BOOKENDS[0])}
+      {PHASES.map((p, pi) => {
+        const done = p.steps.every((h) => stageComplete[h]) && !p.steps.some(superseded);
+        const here = p.steps.includes(activeHref);
+        return (
+          <React.Fragment key={p.key}>
+            <span className="aas-wiz-sep" />
+            {/* ★페이즈 폭을 스텝 수에 비례시킨다★ 예전엔 세 페이즈가 전부 `flex: 1` 이라
+                스텝 2개짜리 SETUP 과 4개짜리 LOGIC 이 **같은 폭**을 받았다. 실측(1280px):
+                세 페이즈 264.1px 동일 → LOGIC 스텝 59.5px → 라벨 상자 32px 인데
+                `02 ALPHA LAB` 은 90px 이 필요해 3분의 1만 보였다. 폭이 스텝 수에
+                반비례하던 것을 비례로 바로잡는다. */}
+            <div className={`aas-wiz-phase${here ? " on" : ""}${done ? " done" : ""}`}
+              style={{ "--wiz-steps": p.steps.length } as React.CSSProperties}>
+              <div className="aas-wiz-phaselab">
+                <b>{p.label}</b><em>{p.ko}</em>
+                <span className="aas-wiz-phasenum num">{pi + 1}/{PHASES.length}</span>
+              </div>
+              <div className="aas-wiz-steps">{p.steps.map(Step)}</div>
+            </div>
+          </React.Fragment>
+        );
+      })}
+      <span className="aas-wiz-sep" />
+      {Bookend(BOOKENDS[BOOKENDS.length - 1])}
+      <span className="aas-wiz-right">
+        {isMock && <span className="aas-wiz-mock" title="현재 결과는 합성(mock) 데이터 기준">MOCK</span>}
+        <button className="aas-wiz-gate" title="목표 선택으로 돌아가기" onClick={() => router.push("/allocation")}>☰ 목표</button>
+        <span className="aas-wiz-kbd num" title="키보드 ←/→ 로 단계 이동">◀ ▶</span>
+      </span>
+    </div>
+  );
+}

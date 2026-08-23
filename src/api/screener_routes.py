@@ -1,0 +1,1808 @@
+"""
+Valuation Screener API Routes
+==============================
+POST /api/v1/screener/run            — 전 종목 스캔 + 필터 + 정렬
+GET  /api/v1/screener/universes      — Universe 카탈로그
+GET  /api/v1/screener/cache/stats    — 캐시 통계
+POST /api/v1/screener/cache/clear    — 캐시 비우기
+"""
+
+from __future__ import annotations
+
+import hashlib
+import threading
+import time
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from src.observability.logging_config import get_logger
+
+logger = get_logger("api.screener")
+
+router = APIRouter(prefix="/api/v1/screener", tags=["screener"])
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 전체 응답 캐시(run-advanced/run-advanced-stream) — src.engine.screener._ValuationCache와
+# 동일한 TTL+LRU+lock 관례. 종목별 캐시는 이미 있지만 필터링·정렬·직렬화는 매 요청 재실행
+# 되던 부분을 커버(동일 요청 파라미터 반복 시 즉시 반환).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class _ResponseCache:
+    """요청 파라미터 해시 → 전체 응답 dict 캐시 (메모리, TTL + LRU)."""
+
+    def __init__(self, max_size: int = 200, ttl_seconds: int = 3600):
+        self.max_size = max_size
+        self.ttl = ttl_seconds
+        self._data: dict[str, tuple[float, Any]] = {}
+        self._lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> Any | None:
+        with self._lock:
+            entry = self._data.get(key)
+            if not entry:
+                self.misses += 1
+                return None
+            ts, value = entry
+            if time.time() - ts > self.ttl:
+                self._data.pop(key, None)
+                self.misses += 1
+                return None
+            self.hits += 1
+            return value
+
+    def set(self, key: str, value: Any):
+        with self._lock:
+            if len(self._data) >= self.max_size:
+                oldest_key = min(self._data, key=lambda k: self._data[k][0])
+                self._data.pop(oldest_key, None)
+            self._data[key] = (time.time(), value)
+
+    def stats(self) -> dict:
+        with self._lock:
+            total = self.hits + self.misses
+            return {
+                "size": len(self._data), "max_size": self.max_size,
+                "hits": self.hits, "misses": self.misses,
+                "hit_rate": self.hits / total if total > 0 else 0,
+                "ttl_seconds": self.ttl,
+            }
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+            self.hits = 0
+            self.misses = 0
+
+
+_RUN_ADVANCED_CACHE = _ResponseCache(max_size=200, ttl_seconds=3600)
+
+
+def _advanced_cache_key(req: AdvancedRunRequest) -> str:
+    """요청 필드 전체(필터·정렬·유니버스 등)를 결정적으로 해시 — 동일 요청이면 동일 키."""
+    payload = req.model_dump_json()
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _detect_data_source(items: list) -> dict:
+    """결과 종목의 데이터 출처 판별 (실데이터/mock 표시용)."""
+    import os
+
+    from src.data.mock_gate import mock_allowed
+    fund_real = False
+    try:
+        from src.data.fundamentals_store import FundamentalsStore
+        store = FundamentalsStore.get_default()
+        if items:
+            code = getattr(items[0], "stock_code", None)
+            if code:
+                f = store.get_factors(code)
+                fund_real = (f.get("_source") == "dart_real")
+    except Exception:
+        pass
+    kis_real = (not mock_allowed() and bool(os.getenv("KIS_APP_KEY")))
+    return {
+        "fundamentals": "dart_real" if fund_real else "mock",
+        "market_data":  "kis_real" if kis_real else "mock",
+        "fully_real":   fund_real and kis_real,
+    }
+
+
+# 싱글톤 (lazy)
+_SCREENER = None
+
+
+def get_screener():
+    global _SCREENER
+    if _SCREENER is None:
+        from src.data.dart_client import DARTClient
+        from src.engine.screener import ValuationScreener
+        from src.engine.valuation.valuation_models import ValuationEngine
+        client = DARTClient()
+        _SCREENER = ValuationScreener(
+            dart_client=client,
+            valuation_engine=ValuationEngine(client),
+        )
+    return _SCREENER
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Models
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FilterRequest(BaseModel):
+    min_market_cap_억:    float | None = None
+    max_market_cap_억:    float | None = None
+    min_roe_pct:          float | None = None
+    max_roe_pct:          float | None = None
+    min_gap_pct:          float | None = None
+    max_gap_pct:          float | None = None
+    min_per:              float | None = None
+    max_per:              float | None = None
+    min_pbr:              float | None = None
+    max_pbr:              float | None = None
+    min_dividend_yield:   float | None = None
+    max_debt_ratio:       float | None = None
+    sectors:              list[str] | None = None
+    require_positive_fcf: bool = False
+    verdicts:             list[str] | None = None
+
+
+class ScreenerRunRequest(BaseModel):
+    universe:        str = Field(default="kospi50",
+                                  description="kospi50 | kospi200 | kosdaq150 | mapped")
+    custom_tickers:  list[str] | None = None
+    filters:         FilterRequest = Field(default_factory=FilterRequest)
+    sort_by:         str = Field(default="composite_score",
+                                  description="composite_score | gap_pct | roe_pct | per | pbr")
+    ascending:       bool = False
+    limit:           int = Field(default=50, ge=1, le=200)
+    beta:            float = Field(default=1.0, ge=0.1, le=3.0)
+    projection_years: int = Field(default=10, ge=3, le=20)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/run")
+def screener_run(req: ScreenerRunRequest):
+    """전 종목 가치평가 스크리닝 실행."""
+    try:
+        from src.engine.screener import ScreenerFilters
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        screener = get_screener()
+
+        # 필터 변환
+        filters = ScreenerFilters(**req.filters.model_dump())
+
+        # Universe (custom 우선)
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+
+        # Params
+        params = ValuationParams(
+            beta=req.beta,
+            projection_years=req.projection_years,
+        )
+
+        result = screener.run(
+            universe=universe,
+            filters=filters,
+            sort_by=req.sort_by,
+            ascending=req.ascending,
+            limit=req.limit,
+            params=params,
+        )
+
+        return {
+            "universe":         result.universe,
+            "total_evaluated":  result.total_evaluated,
+            "total_passed":     result.total_passed,
+            "elapsed_seconds":  result.elapsed_seconds,
+            "cache_hits":       result.cache_hits,
+            "cache_misses":     result.cache_misses,
+            "failures":         result.failures,
+            "timestamp":        result.timestamp,
+            "items":            [it.to_dict() for it in result.items],
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/ingest")
+def screener_ingest(universe: str = "kospi200"):
+    """유니버스 팩터를 DB(factor_snapshot)에 적재 — 백그라운드 실행.
+    실데이터 모드에서 DART/KIS 실호출로 채우며, 이후 스크리너·분석은 DB에서 즉시 읽음."""
+    import threading
+
+    from src.data.snapshot_db import count, ingest_universe
+    threading.Thread(target=lambda: ingest_universe(universe), daemon=True).start()
+    return {"status": "started", "universe": universe, "current_db_rows": count()}
+
+
+@router.get("/snapshot-status")
+def screener_snapshot_status():
+    """factor_snapshot 적재 현황 (영속 캐시 활성 여부 + 행 수)."""
+    from src.data.snapshot_db import count, enabled
+    return {"persist_enabled": enabled(), "db_rows": count()}
+
+
+@router.get("/stock-search")
+def screener_stock_search(q: str, limit: int = 20):
+    """종목명/코드 부분일치 자동완성 ('삼' → 삼성전자·삼성SDI…). 전체 상장사 기준."""
+    from src.data.stock_master import search_stocks
+    return {"items": search_stocks(q, limit)}
+
+
+@router.get("/factor-sample")
+def screener_factor_sample(limit: int = 500):
+    """factor_snapshot 기반 팩터 표본 (기업분석 퍼센타일 분포용 — DB에서 즉시).
+    적재 전이면 빈 items → 프론트가 라이브 표본으로 폴백."""
+    from src.data.snapshot_db import sample_factors
+    return {"items": sample_factors(limit)}
+
+
+@router.get("/universes")
+def screener_universes():
+    """사용 가능한 universe 카탈로그 — 마스터 적재 시 실제 크기, 미적재 시 프리셋 폴백."""
+    try:
+        from src.engine.screener import UNIVERSE_PRESETS
+        sizes = {k: len(v) for k, v in UNIVERSE_PRESETS.items()}
+        samples = {k: v[:5] for k, v in UNIVERSE_PRESETS.items()}
+        try:
+            from src.data.stock_master import build_master_universe, load_master_flags
+            if load_master_flags():
+                for kind in ("kospi", "kosdaq", "kospi200", "kosdaq150", "etf", "all_listed"):
+                    u = build_master_universe(kind)
+                    if u:
+                        sizes[kind] = len(u)
+                        samples[kind] = u[:5]
+        except Exception:
+            pass
+        return {
+            "presets": [
+                {"id": k, "size": sizes[k], "sample": samples.get(k, [])}
+                for k in sizes
+            ],
+            "filter_dimensions": [
+                "min_market_cap_억", "max_market_cap_억",
+                "min_roe_pct", "max_roe_pct",
+                "min_gap_pct (음수=저평가)", "max_gap_pct",
+                "min_per", "max_per", "min_pbr", "max_pbr",
+                "min_dividend_yield", "max_debt_ratio",
+                "sectors[]", "require_positive_fcf", "verdicts[]",
+            ],
+            "sort_fields": [
+                "composite_score", "gap_pct", "roe_pct",
+                "per", "pbr", "dividend_yield_pct",
+            ],
+            "scoring_formula": {
+                "composite": "gap × 0.6 + roe × 0.2 + stability × 0.2",
+                "gap_score":     "clamp(50 - gap_pct, 0, 100)",
+                "roe_score":     "clamp(roe_pct × 3.33, 0, 100)",
+                "stability":     "(100 - debt_ratio/2 + (fcf>0 ? 80 : 30)) / 2",
+            },
+            "valuation_models": {
+                "RIM": "V = BPS + Σ (ROE - Ke) × BPS / (1 + Ke)^t",
+                "DCF": "V = Σ FCF / (1 + WACC)^t + TV / (1 + WACC)^n",
+                "DDM": "V = Σ D / (1 + Ke)^t + Pn / (1 + Ke)^n",
+            },
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/sectors")
+def screener_sectors():
+    """업종(테마) 카탈로그 — 종목 선택용. {id, label, size, sample}.
+
+    collect-master 적재 시: 마스터 지수업종 코드로 전 종목을 그룹화(평면 10 → 실데이터
+    세분). 미적재 시: curated STOCK_SECTOR(10) 폴백 — 기존 동작 불변."""
+    try:
+        # 마스터 프레임이 있으면 실데이터 업종(전 종목)으로 확장
+        try:
+            from src.data.stock_master import load_master_flags
+            from src.engine.universe_select import load_universe_frame
+            if load_master_flags():
+                df = load_universe_frame()
+                sub = df[df["sector"].notna() & ~df["is_etf"]]
+                groups = sub.groupby("sector")["ticker"].apply(list)
+                items = [{"id": f"sector:{name}", "label": str(name), "size": len(codes),
+                          "sample": [str(c) for c in codes[:5]]}
+                         for name, codes in groups.items()]
+                if items:
+                    items.sort(key=lambda x: -x["size"])
+                    return {"sectors": items, "source": "master"}
+        except Exception:
+            pass
+        from src.engine.screener import get_sector_universe
+        sectors = get_sector_universe()
+        return {
+            "sectors": [
+                {"id": f"sector:{name}", "label": name, "size": len(codes), "sample": codes[:5]}
+                for name, codes in sorted(sectors.items(), key=lambda x: -len(x[1]))
+            ],
+            "source": "curated",
+        }
+    except Exception:
+        logger.exception("업종 카탈로그 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/theme-tree")
+def screener_theme_tree():
+    """젠포트 고유 17그룹 → 88 세부업종 트리 + 세부별 종목 수.
+
+    구조는 젠포트 화면 전사(확정). 종목 매핑은 확신 대표주 best-effort 시드 + (마스터
+    적재 시) 미시드 세부업종은 0 — 사용자 오버라이드/캡처로 확장. 정직: 추론 분류."""
+    try:
+        from src.data.genport_themes import THEME_SEED, get_theme_tree
+        tree = get_theme_tree()
+        seeded = sum(1 for v in THEME_SEED.values() if v)
+        return {
+            **tree,
+            "seeded_subsectors": seeded,
+            "seeded_stocks": len({c for v in THEME_SEED.values() for c in v}),
+            "note": "구조는 젠포트 화면 그대로(88 확정). 종목 분류는 확신 대표주 추론 시드 — "
+                    "젠포트 실제 분류와 다를 수 있으며 미시드 세부업종은 비어 있음(확장 가능).",
+        }
+    except Exception:
+        logger.exception("테마 트리 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/stock-browse")
+def stock_browse(cls: str | None = None, id: str | None = None, q: str | None = None):
+    """관심종목 그룹 브라우저 (젠포트 관심종목 그룹 관리 모달의 데이터).
+
+    4단 카스케이드(젠포트 미러):
+      · tier  주식 유니버스 → 6티어 → 종목
+      · group 주식 업종     → 17 테마그룹 → 그룹 멤버 종목(시드)
+      · theme 주식 테마     → 88 세부업종 → 세부 멤버 종목(시드)
+      · etf   ETF 분류      → (하위분류 데이터 한계 — 전체 ETF) → 종목
+    무인자: 분류 카탈로그 / q: 이름·코드 검색. 마스터 적재 시 전 주권으로 확장."""
+    try:
+        from src.data.genport_themes import (
+            THEME_TREE,
+            group_members,
+            theme_members,
+        )
+        from src.data.stock_master import get_stock_name
+        from src.engine.universe_select import load_universe_frame
+        df = load_universe_frame()
+        listed = set(df["ticker"].astype(str))
+
+        def items_of_frame(sub) -> list[dict]:
+            return [{"code": str(c), "name": get_stock_name(str(c))}
+                    for c in sub["ticker"].astype(str).tolist()[:500]]
+
+        def items_of_codes(codes: list[str]) -> list[dict]:
+            # 시드 종목 — 상장 프레임에 있는 것 우선, 이름은 마스터/DART
+            out = []
+            for c in codes:
+                c = str(c)
+                out.append({"code": c, "name": get_stock_name(c) or c,
+                            "listed": c in listed})
+            return out
+
+        if q:
+            ql = str(q).strip()
+            rows = []
+            for code in df["ticker"].astype(str):
+                nm = get_stock_name(code) or ""
+                if ql in code or ql in nm:
+                    rows.append({"code": code, "name": nm})
+                if len(rows) >= 30:
+                    break
+            return {"items": rows}
+        if cls == "tier" and id:
+            return {"items": items_of_frame(df[df["tier"] == id])}
+        if cls == "group" and id:        # 주식 업종 — 17 테마그룹 (전 종목 커버)
+            if "genport_group" in df.columns:
+                return {"items": items_of_frame(df[df["genport_group"] == id])}
+            return {"items": items_of_codes(group_members(id))}
+        if cls == "theme" and id:        # 주식 테마 — 88 세부업종
+            return {"items": items_of_codes(theme_members(id))}
+        if cls == "sector" and id:       # (구) 실데이터 KRX 업종 — 호환 유지
+            return {"items": items_of_frame(df[df["sector"] == id])}
+        if cls == "etf":
+            return {"items": items_of_frame(df[df["is_etf"]])}
+
+        # 카탈로그
+        tier_order = ["kospi_l", "kospi_m", "kosdaq_l", "kosdaq_m", "kosdaq_s", "kosdaq_xs"]
+        tiers = [{"id": t, "size": int((df["tier"] == t).sum())}
+                 for t in tier_order if bool((df["tier"] == t).any())]
+        _gg = df["genport_group"].value_counts().to_dict() if "genport_group" in df.columns else {}
+        groups = [{"id": g, "size": int(_gg.get(g, len(group_members(g))))} for g in THEME_TREE]
+        themes = [{"id": sub, "group": g, "size": len(theme_members(sub))}
+                  for g, subs in THEME_TREE.items() for sub in subs]
+        sectors = [{"id": str(s_), "size": int(c)}
+                   for s_, c in df["sector"].dropna().value_counts().items()]
+        return {"tiers": tiers, "groups": groups, "themes": themes, "sectors": sectors,
+                "etf_size": int(df["is_etf"].sum()), "total": int(len(df))}
+    except Exception:
+        logger.exception("종목 브라우즈 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/cache/stats")
+def screener_cache_stats():
+    """캐시 통계 (hit rate 등) — 종목별 평가 캐시 + run-advanced 전체 응답 캐시."""
+    try:
+        return {
+            "valuation": get_screener().cache_stats(),
+            "run_advanced": _RUN_ADVANCED_CACHE.stats(),
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/cache/clear")
+def screener_cache_clear():
+    """캐시 비우기 (DART 데이터 갱신 후 등) — 두 캐시 레이어 전부."""
+    try:
+        get_screener().cache_clear()
+        _RUN_ADVANCED_CACHE.clear()
+        return {"status": "cleared"}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Milestone 1 — Advanced Filter AST Endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ConditionModel(BaseModel):
+    field: str
+    op: str = "lt"
+    value: float | None = None
+    value2: float | None = None
+    rank_mode: str | None = None
+    rank_value: float | None = None
+    # V2 확장
+    kind: str = "field"
+    formula: str | None = None
+    peer_scope: str | None = None
+    peer_stat: str | None = None
+    indicator: str | None = None
+    event_type: str | None = None
+    within_days: int | None = None
+    estimate_field: str | None = None
+    z_field: str | None = None
+    z_window: int | None = None
+    behavior_signal: str | None = None
+    graph_target: str | None = None
+    graph_relation: str | None = None
+    graph_depth: int | None = None
+    sentiment_source: str | None = None
+    vector_ticker: str | None = None
+    vector_threshold: float | None = None
+
+
+class FilterGroupModel(BaseModel):
+    logic: str = "AND"
+    conditions: list[ConditionModel] = []
+    groups: list[FilterGroupModel] = []
+
+
+FilterGroupModel.model_rebuild()
+
+
+class AdvancedRunRequest(BaseModel):
+    universe: str = "kospi50"
+    custom_tickers: list[str] | None = None
+    filter_ast: FilterGroupModel
+    sort_by: str = "composite_score"
+    ascending: bool = False
+    limit: int = Field(default=50, ge=1, le=4000)  # 전종목(all_listed ~2,900) 유니버스 전체 반환 대응
+    beta: float = Field(default=1.0, ge=0.1, le=3.0)
+    projection_years: int = Field(default=10, ge=3, le=20)
+    use_macro: bool = False    # M3: 현재 국면 기반 동적 Composite 가중치
+    analyzers: list[str] = []  # V3 M0: 후처리 analyzer (collinearity/stress_test)
+    analyzer_params: dict = {}  # V3-M8: analyzer별 파라미터 (예: {"stress_test": {"scenario": "rate_hike_200bp"}})
+    liquidity_floor: str = "standard"  # V3-P1.5: 유동성 게이트 (off|relaxed|standard|institutional)
+
+
+@router.get("/fields")
+def screener_fields():
+    """필터 가능 필드 카탈로그 (카테고리 + 연산자 + 랭킹 모드)."""
+    try:
+        from src.engine.filter_ast import fields_catalog
+        return fields_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
+    """run-advanced 본체 — /run-advanced 와 /run-advanced-stream 공용. progress_cb 로 진행 전달.
+
+    동일 요청 파라미터(필터·정렬·유니버스 등 전부)가 반복되면 _RUN_ADVANCED_CACHE에서 즉시
+    반환 — 필터링/정렬/직렬화까지 포함한 전체 응답 캐시(종목별 _ValuationCache와는 별개 레이어).
+    캐시 히트 시 progress_cb는 발화하지 않음(스트리밍 클라이언트는 progress 이벤트 없이 바로
+    result를 받게 되는데, 프론트가 이미 그 경우를 정상 처리하도록 구현돼 있음).
+    """
+    cache_key = _advanced_cache_key(req)
+    cached = _RUN_ADVANCED_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    from src.engine.filter_ast import parse_group
+    from src.engine.valuation.valuation_models import ValuationParams
+
+    screener = get_screener()
+    ast = parse_group(req.filter_ast.model_dump())
+
+    err = ast.validate()
+    if err:
+        raise HTTPException(400, f"필터 검증 실패: {err}")
+
+    universe = req.custom_tickers if req.custom_tickers else req.universe
+    params = ValuationParams(beta=req.beta, projection_years=req.projection_years)
+
+    result = screener.run(
+        universe=universe,
+        sort_by=req.sort_by,
+        ascending=req.ascending,
+        limit=req.limit,
+        params=params,
+        filter_ast=ast,
+        use_macro=req.use_macro,
+        liquidity_floor=req.liquidity_floor,
+        progress_cb=progress_cb,
+    )
+
+    # V3-P1.5: 유동성 게이트 통계
+    liq_stats = getattr(screener, "_liquidity_stats", {})
+
+    # V3 M0: 후처리 analyzer 실행 (요청 시)
+    analyzer_results = {}
+    if req.analyzers:
+        from src.engine.analyzers import run_analyzers
+        analyzer_results = run_analyzers(result.items, req.analyzers, req.analyzer_params)
+
+    payload = {
+        "universe":        result.universe,
+        "total_evaluated": result.total_evaluated,
+        "total_passed":    result.total_passed,
+        "elapsed_seconds": result.elapsed_seconds,
+        "cache_hits":      result.cache_hits,
+        "cache_misses":    result.cache_misses,
+        "failures":        result.failures,
+        "universe_size":    result.universe_size,
+        "ingested_count":   result.ingested_count,
+        "evaluated_actual": result.evaluated_actual,
+        "capped":           result.capped,
+        "timestamp":       result.timestamp,
+        "items":           [it.to_dict() for it in result.items],
+        "analyzers":       analyzer_results,
+        "liquidity_gate":  liq_stats,
+        "data_source":     _detect_data_source(result.items),
+    }
+    _RUN_ADVANCED_CACHE.set(cache_key, payload)
+    return payload
+
+
+@router.post("/run-advanced")
+def screener_run_advanced(req: AdvancedRunRequest):
+    """AST 기반 고급 스크리닝 (AND/OR 중첩 + 절대값 + 상대 랭킹)."""
+    try:
+        return _run_advanced_core(req)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/run-advanced-stream")
+def screener_run_advanced_stream(req: AdvancedRunRequest):
+    """run-advanced 의 SSE 스트리밍판 — 종목별 평가 진행(done/total/misses)을 실시간 전송 후 결과.
+
+    프론트가 "N/유니버스 종목 업데이트" 진행표시에 사용. 평가 완료마다 progress 이벤트를
+    흘려보낸다(최대 ~100개로 throttle), 마지막에 result(또는 error) 1건."""
+    import json
+    import queue
+    import threading
+
+    from fastapi.responses import StreamingResponse
+
+    q: queue.Queue = queue.Queue()
+
+    def cb(done, total, misses):
+        q.put({"type": "progress", "done": done, "total": total, "misses": misses})
+
+    def worker():
+        try:
+            payload = _run_advanced_core(req, progress_cb=cb)
+            q.put({"type": "result", "data": payload})
+        except HTTPException as he:
+            q.put({"type": "error", "message": str(he.detail), "status": he.status_code})
+        except Exception:
+            logger.exception("스트리밍 스크리너 실패")
+            q.put({"type": "error", "message": "처리 중 오류가 발생했습니다."})
+        finally:
+            q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def gen():
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/count")
+def screener_count(req: AdvancedRunRequest):
+    """통과 종목 수만 반환 (Visual Builder 디바운스용 경량 엔드포인트)."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        err = ast.validate()
+        if err:
+            raise HTTPException(400, f"필터 검증 실패: {err}")
+
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+        params = ValuationParams(beta=req.beta, projection_years=req.projection_years)
+
+        result = screener.run(
+            universe=universe, limit=1, params=params, filter_ast=ast,
+        )
+        return {
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Milestone 3 — Macro-Adaptive Guidance
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# 국면별 추천 팩터 + 가이드 텍스트
+_REGIME_GUIDANCE = {
+    "Goldilocks": {
+        "text": "골디락스 국면 (성장↑·물가↓) — 성장주에 유리합니다. 높은 ROE·수익성 팩터 가중을 높이세요.",
+        "filters": [
+            {"field": "roe_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "ROE 상위 30%"},
+            {"field": "composite_score", "op": "gte", "value": 60, "label": "종합 점수 ≥ 60"},
+        ],
+    },
+    "Reflation": {
+        "text": "리플레이션 국면 (성장↑·물가↑) — 경기민감·가치주에 유리합니다. 저PER·저PBR 팩터를 강화하세요.",
+        "filters": [
+            {"field": "per", "op": "lt", "value": 12, "label": "PER < 12"},
+            {"field": "pbr", "op": "lt", "value": 1.5, "label": "PBR < 1.5"},
+        ],
+    },
+    "Stagflation": {
+        "text": "스태그플레이션 국면 (성장↓·물가↑) — 방어주·배당주에 유리합니다. 고배당·저부채·FCF 흑자 팩터 가중을 높이세요.",
+        "filters": [
+            {"field": "dividend_yield_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "배당수익률 상위 30%"},
+            {"field": "debt_ratio_pct", "op": "lt", "value": 100, "label": "부채비율 < 100%"},
+        ],
+    },
+    "Disinflation": {
+        "text": "디스인플레이션 국면 (성장↓·물가↓ 둔화) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하세요.",
+        "filters": [
+            {"field": "debt_ratio_pct", "op": "lt", "value": 80, "label": "부채비율 < 80%"},
+            {"field": "market_cap_억", "rank_mode": "top_pct", "rank_value": 40, "label": "시가총액 상위 40%"},
+        ],
+    },
+}
+
+
+@router.get("/macro-guidance")
+def screener_macro_guidance():
+    """현재 매크로 국면 기반 스크리닝 가이드 + 추천 팩터 + 동적 가중치."""
+    try:
+        from src.engine.regime_analyzer import get_regime_state
+        from src.engine.screener import ValuationScreener
+
+        state = get_regime_state()
+        guidance = _REGIME_GUIDANCE.get(state.regime, {
+            "text": "현재 국면 정보를 분석 중입니다.",
+            "filters": [],
+        })
+        w_gap, w_roe, w_stab = ValuationScreener._regime_weights(state.regime)
+
+        return {
+            "regime":             state.regime,
+            "stress_score":       state.stress_score,
+            "recommended_mode":   state.recommended_mode,
+            "description":        state.description,
+            "guidance_text":      guidance["text"],
+            "recommended_filters": guidance["filters"],
+            "recommended_weights": {
+                "gap": w_gap, "roe": w_roe, "stability": w_stab,
+            },
+            "asset_tilts":        state.asset_tilts,
+            "dynamic_risk_free_rate": state.dynamic_risk_free_rate,
+            "timestamp":          state.timestamp,
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Milestone 4 — Master Presets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/presets")
+def screener_presets():
+    """거장 + 국면 + 테마 프리셋 카탈로그."""
+    try:
+        from src.engine.screener_presets import list_presets
+        return list_presets()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/presets/{preset_id}")
+def screener_preset_detail(preset_id: str):
+    """단일 프리셋 상세 (filter_ast 포함 — FilterBuilder 로드용)."""
+    try:
+        from src.engine.screener_presets import get_preset
+        p = get_preset(preset_id)
+        if not p:
+            raise HTTPException(404, f"Preset '{preset_id}' not found")
+        return {"id": preset_id, **p}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class PresetRunRequest(BaseModel):
+    universe: str = "kospi50"
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+@router.post("/presets/{preset_id}/run")
+def screener_preset_run(preset_id: str, req: PresetRunRequest):
+    """프리셋 원클릭 실행."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.screener_presets import get_preset
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        preset = get_preset(preset_id)
+        if not preset:
+            raise HTTPException(404, f"Preset '{preset_id}' not found")
+
+        screener = get_screener()
+        ast = parse_group(preset["filter_ast"])
+
+        result = screener.run(
+            universe=req.universe,
+            sort_by="composite_score",
+            limit=req.limit,
+            params=ValuationParams(),
+            filter_ast=ast,
+            use_macro=preset.get("use_macro", False),
+        )
+
+        return {
+            "preset_id":       preset_id,
+            "preset_name":     preset["name"],
+            "master":          preset["master"],
+            "universe":        result.universe,
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+            "timestamp":       result.timestamp,
+            "items":           [it.to_dict() for it in result.items],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 1: Formula + Peer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FormulaValidateRequest(BaseModel):
+    formula: str
+
+
+@router.post("/validate-formula")
+def screener_validate_formula(req: FormulaValidateRequest):
+    """수식 사전 검증 + 사용 필드 추출 (FormulaEditor 실시간 검증용)."""
+    try:
+        from src.engine.filter_ast import FIELD_BY_ID
+        from src.engine.formula_parser import validate_formula
+        ok, err, used = validate_formula(req.formula, set(FIELD_BY_ID.keys()))
+        return {
+            "valid": ok,
+            "error": err,
+            "used_fields": sorted(used),
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/peer-groups")
+def screener_peer_groups(universe: str = "kospi50"):
+    """가용 Peer 그룹(섹터) 목록 + 종목 수 (PeerConditionEditor용)."""
+    try:
+        screener = get_screener()
+        result = screener.run(universe=universe, limit=300)
+        sectors: dict = {}
+        for it in result.items:
+            sec = it.sector or "기타"
+            sectors[sec] = sectors.get(sec, 0) + 1
+        return {
+            "scopes": [
+                {"id": "sector", "label": "동일 섹터", "groups": [{"name": k, "count": v} for k, v in sorted(sectors.items(), key=lambda x: -x[1])]},
+                {"id": "market", "label": "전체 시장", "groups": [{"name": "전체", "count": result.total_evaluated}]},
+            ],
+            "stats": [
+                {"id": "mean", "label": "평균"},
+                {"id": "median", "label": "중앙값"},
+                {"id": "rank_pct", "label": "그룹 내 상위 %"},
+            ],
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 2: AI NL2AST Copilot
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class NL2ASTRequest(BaseModel):
+    query: str
+
+
+@router.post("/nl2ast")
+def screener_nl2ast(req: NL2ASTRequest):
+    """자연어 → FilterGroup AST 변환 (Claude + Mock fallback)."""
+    try:
+        from src.services.screener_copilot import nl_to_ast
+        result = nl_to_ast(req.query)
+        return result
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/nl2ast/examples")
+def screener_nl2ast_examples():
+    """추천 자연어 예시."""
+    try:
+        from src.services.screener_copilot import EXAMPLE_QUERIES
+        return {"examples": EXAMPLE_QUERIES}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 3: Technical/Event Catalogs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/indicators")
+def screener_indicators():
+    """기술지표 + 수급 카탈로그 (기술적 지표, 수급)."""
+    try:
+        from src.data.market_data import indicators_catalog
+        return indicators_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/fill-price-types")
+def screener_fill_price_types():
+    """체결가 유형 카탈로그 (백테스터 매수/매도 체결가 선택용)."""
+    try:
+        from src.engine.fill_price import FILL_PRICE_GROUPS, FILL_PRICE_LABELS
+        return {
+            "groups": [
+                {
+                    "id": g["id"], "label": g["label"],
+                    "types": [{"id": t, "label": FILL_PRICE_LABELS[t]} for t in g["types"]],
+                }
+                for g in FILL_PRICE_GROUPS
+            ]
+        }
+    except Exception:
+        logger.exception("체결가 유형 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/condition-tokens")
+def screener_condition_tokens():
+    """백테스터 조건식 팩터 토큰 지원 맵 — 픽커의 지원/미지원 배지용 (백엔드 단일 소스).
+
+    supported: {토큰: 그룹(base|ohlcv|fundamental)} / unsupported: {토큰: 사유}"""
+    try:
+        from src.kis_strategies.factor_tokens import token_support
+        return token_support()
+    except Exception:
+        logger.exception("조건식 토큰 지원 맵 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/factor-field-map")
+def screener_factor_field_map():
+    """젠포트 팩터 이름 → 스크리너 필드 id 매핑 (단면 스크리닝 가능 필드만).
+
+    백테스터 FactorPickerModal에서 고른 팩터를 스크리너 filter_ast 의 field id 로 해석할 때
+    프론트가 사용. fundamentals 별칭(FUNDAMENTAL_ALIASES) + 라벨 별칭을 병합하고,
+    실제 스크리너 필드(FIELD_BY_ID)에 존재하는 매핑만 노출한다."""
+    try:
+        from src.engine.filter_ast import FIELD_BY_ID
+        from src.kis_strategies.factor_tokens import FUNDAMENTAL_ALIASES, _label_aliases
+        merged: dict[str, str] = {}
+        merged.update(_label_aliases())     # 한글 라벨 → id (예: "ROE" → "roe")
+        merged.update(FUNDAMENTAL_ALIASES)  # 젠포트 이름 → id (예: "분기ROE" → "roe")
+        field_map = {name: fid for name, fid in merged.items() if fid in FIELD_BY_ID}
+        return {"map": field_map, "total": len(field_map)}
+    except Exception:
+        logger.exception("팩터-필드 매핑 조회 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class ExprValidateRequest(BaseModel):
+    expr: str = ""
+
+
+@router.post("/factor-expr/validate")
+def validate_factor_expr(req: ExprValidateRequest):
+    """자유 산술 팩터식 검증 — 파서가 단일 진실 공급원.
+
+    ok=True면 lookback·사용 토큰·미지원 토큰 경고(평가 시 건너뜀) 포함."""
+    from src.kis_strategies.factor_expr import expr_lookback, expr_tokens, parse_expr
+    from src.kis_strategies.factor_tokens import token_support
+    expr = (req.expr or "").strip()
+    if not expr:
+        return {"ok": True, "empty": True, "lookback": 0, "tokens": [], "unknown_tokens": []}
+    try:
+        ast = parse_expr(expr)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    tokens = sorted(expr_tokens(ast))
+    try:
+        supported = set(token_support()["supported"])
+    except Exception:
+        supported = set()
+    unknown = [t for t in tokens if supported and t not in supported]
+    return {"ok": True, "empty": False, "lookback": expr_lookback(ast),
+            "tokens": tokens, "unknown_tokens": unknown}
+
+
+class ConditionNLRequest(BaseModel):
+    query: str
+
+
+@router.post("/condition-nl")
+def condition_from_nl(req: ConditionNLRequest):
+    """자연어 → 백테스터 조건식 (젠포트 AI 버튼) — nl2ast 재사용 후 조건 매핑.
+
+    field 조건 → 펀더멘털 토큰 조건, rank_mode → 비율내림차순/순위내림차순 산술식.
+    매핑 불가 항목은 skipped에 사유와 함께 — 조용히 버리지 않음."""
+    try:
+        from src.services.screener_copilot import nl_to_ast
+        result = nl_to_ast(req.query)
+        ast = result.get("ast") or {}
+        # 필드 id → 한글 라벨 (조건식 토큰으로 해석 가능한 이름)
+        id_to_label: dict[str, str] = {}
+        try:
+            from src.kis_strategies.factor_tokens import _label_aliases
+            for label, fid in _label_aliases().items():
+                id_to_label.setdefault(fid, label)
+        except Exception:
+            pass
+        try:
+            from src.engine.filter_ast import FIELD_BY_ID
+            for fid, f in FIELD_BY_ID.items():
+                id_to_label.setdefault(fid, getattr(f, "label", fid))
+        except Exception:
+            pass
+        _OP = {"gt": "gte", "gte": "gte", "lt": "lte", "lte": "lte", "eq": "eq"}
+        conds, skipped = [], []
+        for c in (ast.get("conditions") or []):
+            if c.get("kind") != "field":
+                skipped.append({"field": str(c.get("kind")), "reason": "필드 조건만 변환 가능"})
+                continue
+            fid = str(c.get("field") or "")
+            label = id_to_label.get(fid)
+            if not label:
+                skipped.append({"field": fid, "reason": "백테스터 토큰 매핑 없음"})
+                continue
+            rank_mode = c.get("rank_mode")
+            if rank_mode:
+                rv = float(c.get("rank_value") or 30)
+                if rank_mode == "top_pct":
+                    conds.append({"expr": f"비율내림차순({{{label}}})", "op": "gte", "rhs": 100 - rv})
+                elif rank_mode == "bottom_pct":
+                    conds.append({"expr": f"비율내림차순({{{label}}})", "op": "lte", "rhs": rv})
+                elif rank_mode == "top_n":
+                    conds.append({"expr": f"순위내림차순({{{label}}})", "op": "lte", "rhs": rv})
+                else:
+                    skipped.append({"field": fid, "reason": f"rank_mode {rank_mode} 미지원"})
+                continue
+            op = _OP.get(str(c.get("op") or "").lower())
+            if op is None or c.get("value") is None:
+                skipped.append({"field": fid, "reason": "연산자/값 없음"})
+                continue
+            conds.append({"factor_token": f"{{{label}}}", "function_id": "base",
+                          "params": {}, "op": op, "rhs": float(c["value"])})
+        return {"conditions": conds, "skipped": skipped,
+                "explanation": result.get("explanation"), "source": result.get("source"),
+                "note": "펀더멘털 토큰은 '펀더멘털 조건 평가' 토글이 켜져 있어야 평가됩니다 (스냅샷 근사)"}
+    except Exception:
+        logger.exception("condition-nl 변환 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class LogicValidateRequest(BaseModel):
+    expr: str = ""
+    n_conditions: int = Field(default=0, ge=0, le=26)
+
+
+@router.post("/condition-logic/validate")
+def validate_condition_logic(req: LogicValidateRequest):
+    """논리 조건식 검증 (젠포트 '조건식 검증하기') — 파서가 단일 진실 공급원.
+
+    ok=True면 lookback(시간 한정사 추가 룩백 봉 수) 포함. 오류는 한국어 메시지."""
+    from src.kis_strategies.condition_logic import max_lookback, parse_logic
+    expr = (req.expr or "").strip()
+    if not expr:
+        return {"ok": True, "lookback": 0, "empty": True}
+    try:
+        ast = parse_logic(expr, req.n_conditions)
+        return {"ok": True, "lookback": max_lookback(ast), "empty": False}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@router.get("/events-catalog")
+def screener_events_catalog():
+    """이벤트 카탈로그 (실적 발표, 배당락)."""
+    try:
+        from src.data.event_calendar import events_catalog
+        return events_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V2 — Milestone 4: Point-in-Time Screening (타임머신)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class PITRunRequest(BaseModel):
+    universe: str = "kospi50"
+    custom_tickers: list[str] | None = None
+    filter_ast: FilterGroupModel
+    as_of_date: str
+    sort_by: str = "composite_score"
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+@router.get("/pit-dates")
+def screener_pit_dates():
+    """가용 PIT 스냅샷 일자 (분기말, look-ahead 차단)."""
+    try:
+        from src.engine.pit_store import DISCLOSURE_LAG_DAYS, available_snapshot_dates
+        return {
+            "dates": available_snapshot_dates(years_back=6),
+            "disclosure_lag_days": DISCLOSURE_LAG_DAYS,
+            "note": "분기말 기준. 공시 시차(45일) 경과분만 제공하여 look-ahead bias 차단.",
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/run-pit")
+def screener_run_pit(req: PITRunRequest):
+    """과거 시점 기준 스크리닝 (타임머신). Look-ahead bias 차단."""
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.engine.pit_store import PITStore
+        from src.engine.valuation.valuation_models import ValuationParams
+
+        # as_of_date 검증
+        err = PITStore.get_default().validate_asof(req.as_of_date)
+        if err:
+            raise HTTPException(400, f"기준일 오류: {err}")
+
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        verr = ast.validate()
+        if verr:
+            raise HTTPException(400, f"필터 검증 실패: {verr}")
+
+        universe = req.custom_tickers if req.custom_tickers else req.universe
+        result = screener.run(
+            universe=universe,
+            sort_by=req.sort_by,
+            limit=req.limit,
+            params=ValuationParams(),
+            filter_ast=ast,
+            as_of_date=req.as_of_date,
+        )
+
+        return {
+            "as_of_date":      req.as_of_date,
+            "universe":        result.universe,
+            "total_evaluated": result.total_evaluated,
+            "total_passed":    result.total_passed,
+            "elapsed_seconds": result.elapsed_seconds,
+            "timestamp":       result.timestamp,
+            "items":           [it.to_dict() for it in result.items],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 0: Analyzer Catalog
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/analyzers")
+def screener_analyzers():
+    """가용 후처리 analyzer 카탈로그 (M7/M8)."""
+    try:
+        from src.engine.analyzers import analyzer_catalog
+        return analyzer_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 1: Estimates Catalog (M1)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/estimates-catalog")
+def screener_estimates_catalog():
+    """Forward-looking 추정치 카탈로그 (M1)."""
+    try:
+        from src.data.consensus_store import estimates_catalog
+        return estimates_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 1.5: Liquidity Gate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/liquidity-profiles")
+def screener_liquidity_profiles():
+    """유동성 게이트 프로파일 카탈로그 (off/relaxed/standard/institutional)."""
+    try:
+        from src.engine.liquidity_gate import liquidity_profiles_catalog
+        return liquidity_profiles_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 2: Behavioral (M3) + Graph (M4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/behavior-signals")
+def screener_behavior_signals():
+    """행동재무 신호 카탈로그 (M3)."""
+    try:
+        from src.data.market_data import behavior_signals_catalog
+        return behavior_signals_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/graph-meta")
+def screener_graph_meta():
+    """지식 그래프 메타 — 관계 유형 + 노드 목록 (M4)."""
+    try:
+        from src.engine.graph_store import graph_meta_catalog
+        return graph_meta_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/graph-search")
+def screener_graph_search(q: str = ""):
+    """그래프 타겟 종목 검색 (M4)."""
+    try:
+        from src.engine.graph_store import GraphStore
+        return {"results": GraphStore.get_default().search_stocks(q)}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/graph-relations/{stock_code}")
+def screener_graph_relations(stock_code: str):
+    """종목의 직접 밸류체인 관계 (M4)."""
+    try:
+        from src.engine.graph_store import GraphStore
+        return GraphStore.get_default().get_relations(stock_code)
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 3: Sentiment (M5) + Vector (M6)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/sentiment-catalog")
+def screener_sentiment_catalog():
+    """NLP 센티먼트 소스 카탈로그 (M5)."""
+    try:
+        from src.services.sentiment_worker import sentiment_catalog
+        return sentiment_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.get("/vector-meta")
+def screener_vector_meta():
+    """벡터 유사도 메타 — 임베딩 차원 + 검색 가능 종목 (M6)."""
+    try:
+        from src.engine.vector_store import vector_meta_catalog
+        return vector_meta_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Phase 4: Stress-Test Scenarios (M8)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/stress-scenarios")
+def screener_stress_scenarios():
+    """매크로 스트레스 테스트 시나리오 카탈로그 (M8)."""
+    try:
+        from src.engine.stress_test_analyzer import stress_scenarios_catalog
+        return stress_scenarios_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener V3 — Fundamental Factor Library (FFL)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/fundamentals-catalog")
+def screener_fundamentals_catalog():
+    """학술 펀더멘털 팩터 카탈로그 (50+ 팩터, 카테고리별)."""
+    try:
+        from src.data.fundamentals_store import fundamentals_catalog
+        return fundamentals_catalog()
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Screener → Backtester Bridge (스크리너 통과 종목 원클릭 백테스트)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ScreenToBacktestRequest(BaseModel):
+    # 스크리닝 조건
+    universe: str = "kospi200"
+    custom_tickers: list[str] | None = None  # 관심그룹 종목 직접 지정 (있으면 universe 무시)
+    filter_ast: FilterGroupModel
+    liquidity_floor: str = "standard"
+    max_tickers: int = Field(default=10, ge=1, le=30)  # 백테스트할 상위 종목 수
+    sort_by: str = "composite_score"
+    sort_dir: str = "desc"                       # 매수 우선순위 1차 방향 (desc|asc)
+    sort_by_secondary: str | None = None         # 2차 정렬 키 (동점 타이브레이크)
+    sort_secondary_dir: str = "desc"
+    # 백테스트 설정
+    strategy_name: str = "GoldenCross"
+    strategy_params: dict = {}
+    start_date: str = "2023-01-01"
+    end_date: str = "2024-12-31"
+    initial_capital: float = 100_000_000
+    commission_rate: float = 0.0015
+    slippage_rate: float = 0.0005
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None  # 트레일링 스탑(드래깅 청산): 고점 대비 하락 %
+    liquidate_at_end: bool = True           # 기간종료 잔여 포지션 종가 청산(통계 실현화) — 기본 ON
+    max_positions: int = 5
+    # 체결가 유형 (Phase 1). 기본 close = 종가 체결
+    buy_fill_type: str = "close"
+    sell_fill_type: str = "close"
+    # 매도 정밀화 (Phase 2)
+    max_hold_days: int | None = None
+    min_hold_days: int = 0
+    day_trade: bool = False  # 당일 매매: 당일 진입을 같은 봉 종가에 전량 청산
+    sell_divide_pct: float = 100.0
+    max_sell_divisions: int | None = None
+    # 매수 정밀화 (Phase 3)
+    breakthrough_buy: bool = False  # 돌파매수: 당일 고가가 전일 고가 돌파 시에만 진입
+    buy_weight_mode: str = "equal"
+    buy_divide_pct: float = 100.0
+    max_buy_per_day: int | None = None
+    max_buy_count: int | None = None
+    # 조건식 기반 진입/청산 (Genport식). 있으면 strategy_name 무시하고 조건식 전략 사용.
+    # 각 조건 dict: {factor_token, function_id, params{n,v,dir}, op(gte|lte|eq|between), rhs, rhs2?,
+    #   inner_function_id?, inner_params?,                  ← 중첩(순위/비율 랭킹 대상)
+    #   factor_token2?, inner2_function_id?, inner2_params?} ← 두 팩터(비교/큰값/작은값/변화율_팩터)
+    buy_conditions: list[dict] | None = None
+    sell_conditions: list[dict] | None = None
+    # 논리 조건식 (젠포트 논리 레이어): 조건 라벨 A,B,C…를 and/or/not/before/any/every로
+    # 결합 — 예: "every(A,3) and (B or C)". 비우면 기존(매수=AND, 매도=OR).
+    buy_logic: str | None = None
+    sell_logic: str | None = None
+    # 정기 리밸런싱 + 마켓타이밍 (GENPORT_GAP ②)
+    rebalance_period: str | None = None  # None·"daily"=매일 | "weekly"|"monthly"|"quarterly"|
+    # "semiannual"|"annual"=주/월/분기/반기/연 첫 거래일에만 신규 매수(매도는 매일 평가).
+    # 동적 재편입(빈자리 즉시 보충)은 이 주기와 무관하게 항상 실행됨 — 이 필드는 "순위이탈
+    # 보유종목 정리"가 발생하는 주기만 결정한다.
+    market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
+    # 신호 기준일 (젠포트 Tip 3): 0=당일 봉(기존), 1=전일 봉 기준 신호→당일 체결(시가류 체결 look-ahead 제거)
+    signal_lag: int = Field(default=0, ge=0, le=5)
+    # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
+    rebuy_block_days: int = Field(default=0, ge=0, le=120)
+    # 체결 가격 기준 ± 오프셋% (지정가 모델 — 도달 검증, 미도달 시 그날 미체결)
+    buy_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    sell_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    # 종목당 최대 매수 금액(원, None=무제한) + 자산배분 현금 비중 %
+    max_buy_amount: float | None = Field(default=None, ge=0)
+    cash_reserve_pct: float = Field(default=0.0, ge=0.0, le=90.0)
+    # 자산배분 ETF 바스켓: {etf_pct, stock_pct, basket:[{ticker,weight_pct}], rebalance_months, fill_type, offset_pct}
+    asset_alloc: dict | None = None
+    # 매수 우선순위식 (일별) — 봉마다 후보들의 식 값으로 매수 순서 정렬
+    buy_sort_expr: str | None = None
+    buy_sort_desc: bool = True
+    # 하이브리드 체결: 적재된 분봉으로 매매 시간 윈도 내 정밀 체결 (없는 날은 일봉 폴백)
+    intraday_fill: bool = False
+    buy_time_start: str = "0900"
+    buy_time_end: str = "1530"
+    sell_time_start: str = "0900"
+    sell_time_end: str = "1530"
+    # 수식입력 기준가 (fill_type="expr") + 보유일 만기 매도 가격 기준
+    buy_fill_expr: str | None = None
+    sell_fill_expr: str | None = None
+    expiry_fill_type: str = "close"
+    expiry_fill_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    # 분할 래더 (가격변동%·비중% 단계, 신호 당일 유효) — [{"move_pct","weight_pct"}]
+    buy_ladder: list[dict] | None = None
+    sell_ladder: list[dict] | None = None
+    expiry_sell_method: str = "all"  # 만기: all=일괄 | ladder=분할(잔량 종가 청산)
+    # 돌파 매수 확장: 기준가 유형·±%·방향(상방|양방) + 매수 시점(장 시작 전|장중)
+    breakthrough_base_type: str = "prev_high"
+    breakthrough_offset_pct: float = Field(default=0.0, ge=-10.0, le=10.0)
+    breakthrough_direction: str = "up"
+    buy_timing: str = "pre_open"
+    # granular 유니버스 (시총군/업종/ETF/관심그룹) — 있으면 후보 종목을 직접 구성해 universe 대체
+    caps: list[str] | None = None
+    sectors: list[str] | None = None        # 실제 업종명 (/sectors)
+    etf: bool = False
+    managed: bool = False
+    supervised: bool = False
+    groups: list[dict] | None = None
+    # 평가 종목 상한(Genport식 전체 유니버스 일별 평가): 조건식 유무와 무관하게 항상 적용됨
+    # — 스크리닝 후보 풀 크기를 결정하는 단일 컨트롤. 상한 4000 = 코스피+코스닥 전 주권(~2,700)
+    # 커버 — 시그널 벡터화로 실용 시간 확보. (이전엔 buy/sell_conditions가 있을 때만 적용되는
+    # `full_universe_eval` 플래그로 게이팅됐음 — 조건식 없는 기본 상태에서 이 상한이 무시되고
+    # eval_cap이 max_tickers(≤30)로 쪼그라드는 회귀가 있었음. 게이팅 제거로 근본 수정.)
+    universe_eval_cap: int = Field(default=200, ge=1, le=4000)
+    # #4: 펀더멘털 토큰(스냅샷)을 봉별 조건 평가에 포함. 기본 False (look-ahead 근사라 옵트인)
+    allow_snapshot_fundamentals: bool = False
+    # 동적 재편입(젠포트화 Phase 6) 후보풀 크기 — max_tickers(초기 보유)보다 넓게 스크리너
+    # 결과를 슬라이스해, 매도로 빈 슬롯이 생기면 그 시점 모멘텀점수 상위 미보유 종목으로 채운다.
+    # universe_eval_cap(최대4000, 조건식 봉별평가용)과는 완전히 분리된 별도 상한 — 재편입
+    # 후보 확보를 위해 조건 추가만으로 대규모 평가를 유발하지 않는다. 0=비활성(레거시 동작,
+    # 내부/회귀테스트 전용 — 프론트 API에 끄는 스위치로 노출하지 않음).
+    replenishment_pool_cap: int = Field(default=100, ge=0, le=1000)
+
+
+def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
+    """screen-to-backtest 핵심 로직 (unary + 스트리밍 공용).
+
+    1) filter_ast로 스크리닝 → 2) 통과 종목 추출 → 3) 해당 종목 백테스트.
+    progress_cb(evt:dict) 가 있으면 단계별 진행률 발행: screening → screened →
+    loading(종목별 OHLCV done/total) → simulating → done. 콜백은 백테스트 결과에 영향 없음.
+    """
+    def _emit(evt):
+        if progress_cb:
+            try:
+                progress_cb(evt)
+            except Exception:
+                pass
+
+    try:
+        from src.engine.filter_ast import parse_group
+        from src.kis_backtest_engine import run_backtest
+
+        # 0) 택티컬/최적화 전략 충실 백테스트 — strategy_name="tactical:<sid>" → 동적 엔진 어댑터
+        if (req.strategy_name or "").startswith("tactical:"):
+            from src.engine.strategy_backtest_map import run_tactical_backtest
+            _emit({"phase": "simulating"})
+            out = run_tactical_backtest(req.strategy_name.split(":", 1)[1], "kr",
+                                        req.start_date, req.end_date, req.initial_capital)
+            _emit({"phase": "done"})
+            return out
+
+        # 1) 스크리닝 (custom_tickers 있으면 관심그룹 종목을 유니버스로)
+        _emit({"phase": "screening"})
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        # granular 유니버스: caps/sectors/etf/groups 제공 시 후보 종목을 직접 구성
+        gran_tickers = None
+        if any([req.caps, req.sectors, req.etf, req.managed, req.supervised, req.groups]):
+            try:
+                from src.engine.universe_select import select_universe
+                gran_tickers, _gran_total = select_universe(
+                    caps=req.caps or [], sectors=req.sectors or [], etf=bool(req.etf),
+                    managed=bool(req.managed), supervised=bool(req.supervised),
+                    groups=req.groups or [],
+                )
+            except Exception:
+                gran_tickers = None
+        # all_asof/top200_asof에서만 채움 — screener.run()에 시점을 전달해 이 시점 유니버스로
+        # 편입된(상장폐지 포함) 종목이 오늘자 라이브 재무로 평가돼 "데이터 없음"으로 다시
+        # 걸러지는 것을 방지(PIT 평가 경로, _evaluate_one_safe가 이 값으로 시점별 bsns_year를
+        # 역산). 다른 유니버스 값은 기존처럼 None 그대로 — 일반 경로 무영향.
+        _asof_date_for_screener = None
+        if req.custom_tickers:
+            _universe = req.custom_tickers
+        elif gran_tickers:
+            _universe = gran_tickers
+        elif req.universe == "all_asof":
+            # 시점 유니버스: 백테스트 시작일 당시 거래 종목 (KRX 백필 후 상폐 포함 — 생존편향 보정)
+            from src.engine.universe_select import tickers_asof
+            _asof = tickers_asof(req.start_date)
+            _universe = _asof if _asof else "all_listed"  # 데이터 없으면 전종목→프리셋 폴백
+            _asof_date_for_screener = req.start_date
+        elif req.universe == "top200_asof":
+            # 시작일 당시 시총 상위 200 — KOSPI200 편입의 근사 재구성 (mktcap 시계열 필요)
+            from src.engine.universe_select import top_mktcap_asof
+            _asof = top_mktcap_asof(req.start_date, 200)
+            _universe = _asof if _asof else "kospi200"
+            _asof_date_for_screener = req.start_date
+        else:
+            _universe = req.universe
+        # 후보 풀 크기: "평가 종목 상한"(universe_eval_cap)이 스크리닝 후보 풀 크기를 조건식
+        # 유무와 무관하게 항상 결정 (조건식 존재 여부로 게이팅하지 않음 — 근본 수정, 위 필드
+        # 주석 참고).
+        eval_cap = max(1, min(int(req.universe_eval_cap), 4000))  # 벡터화로 전 주권(~2,700) 실용화
+        # 동적 재편입(Phase 6) 후보풀 — eval_cap(초기 보유)보다 넓은 상위집합, 스크리너를
+        # 1회만 호출해 같은 결과에서 슬라이스(중복 호출 없음). replenishment_pool_cap은
+        # eval_cap이 이미 크면 max()에 의해 항상 eval_cap이 이겨 "약간의 top-up"으로만 작용.
+        pool_cap = max(eval_cap, min(int(req.replenishment_pool_cap), 4000))
+
+        def _screen_progress(done, total, misses):
+            _emit({"phase": "screening", "done": done, "total": total})
+
+        result = screener.run(
+            universe=_universe,
+            filter_ast=ast,
+            sort_by=req.sort_by,
+            ascending=(req.sort_dir == "asc"),
+            sort_by_secondary=req.sort_by_secondary,
+            sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
+            limit=pool_cap,
+            liquidity_floor=req.liquidity_floor,
+            as_of_date=_asof_date_for_screener,
+            progress_cb=_screen_progress,
+        )
+        # screened(≤eval_cap)는 조건식 신호 평가용 후보 풀 — "대상 종목 수"(max_tickers)와는
+        # 무관하게 넓게 유지한다(조건식이 넓은 풀에서 매치를 찾아야 하므로). 동시 보유 가능
+        # 종목 수는 별도로 max_positions(=req.max_positions, "대상 종목 수" 스테퍼 값)가
+        # 엔진 레벨에서 항상 강제 — tickers/symbols가 넓어도 실제 보유는 이 값을 넘지 않는다.
+        screened = result.items[:eval_cap]
+        tickers = [it.stock_code for it in screened if getattr(it, "stock_code", None)]
+        pool_tickers = ([it.stock_code for it in result.items[:pool_cap] if getattr(it, "stock_code", None)]
+                        if req.replenishment_pool_cap > 0 else [])
+
+        if not tickers:
+            return {
+                "error": True,
+                "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
+                "screened_count": 0,
+            }
+        _emit({"phase": "screened", "count": len(tickers)})
+
+        # 팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵 생성
+        factor_weights = None
+        if req.buy_weight_mode == "factor":
+            scores = {it.stock_code: float(getattr(it, "composite_score", 0) or 0)
+                      for it in screened if getattr(it, "stock_code", None)}
+            if scores:
+                lo, hi = min(scores.values()), max(scores.values())
+                rng = hi - lo
+                # 점수가 높을수록 가중치↑ (0~1). 전부 같으면 0.5(동일가중)
+                factor_weights = {
+                    t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()
+                }
+
+        # 조건식 전략 분기 (Genport식 진입/청산)
+        eff_strategy = req.strategy_name
+        eff_params = dict(req.strategy_params or {})
+        # strategy_name이 명시적으로 "Condition"이면 조건이 비어있어도(리스크룰만 설정) 이 분기를
+        # 태워 eff_params를 채운다 — 그래야 ConditionStrategy가 올바른 buy/sell_conditions로
+        # 생성되고, "GoldenCross" 같은 하드코딩 기본 전략(데드크로스 등 원치 않는 매도사유)으로
+        # 조용히 대체되지 않는다.
+        if req.buy_conditions or req.sell_conditions or req.strategy_name == "Condition":
+            from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
+            _ = condition_strategy
+            eff_strategy = "Condition"
+            eff_params = {
+                "buy_conditions": req.buy_conditions or [],
+                "sell_conditions": req.sell_conditions or [],
+                "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
+                "buy_logic": req.buy_logic,
+                "sell_logic": req.sell_logic,
+            }
+
+        # 2) 백테스트
+        bt = run_backtest(
+            symbols=tickers,
+            strategy_name=eff_strategy,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            strategy_params=eff_params,
+            initial_capital=req.initial_capital,
+            commission_rate=req.commission_rate,
+            slippage_rate=req.slippage_rate,
+            stop_loss_pct=req.stop_loss_pct,
+            take_profit_pct=req.take_profit_pct,
+            trailing_stop_pct=req.trailing_stop_pct,
+            max_positions=req.max_positions,
+            buy_fill_type=req.buy_fill_type,
+            sell_fill_type=req.sell_fill_type,
+            max_hold_days=req.max_hold_days,
+            min_hold_days=req.min_hold_days,
+            day_trade=req.day_trade,
+            sell_divide_pct=req.sell_divide_pct,
+            max_sell_divisions=req.max_sell_divisions,
+            buy_weight_mode=req.buy_weight_mode,
+            buy_divide_pct=req.buy_divide_pct,
+            max_buy_per_day=req.max_buy_per_day,
+            max_buy_count=req.max_buy_count,
+            factor_weights=factor_weights,
+            breakthrough_buy=req.breakthrough_buy,
+            rebalance_period=req.rebalance_period,
+            market_timing=req.market_timing,
+            signal_lag=req.signal_lag,
+            rebuy_block_days=req.rebuy_block_days,
+            liquidate_at_end=req.liquidate_at_end,
+            buy_fill_offset_pct=req.buy_fill_offset_pct,
+            sell_fill_offset_pct=req.sell_fill_offset_pct,
+            max_buy_amount=req.max_buy_amount,
+            cash_reserve_pct=req.cash_reserve_pct,
+            asset_alloc=req.asset_alloc,
+            buy_sort_expr=req.buy_sort_expr,
+            buy_sort_desc=req.buy_sort_desc,
+            intraday_fill=req.intraday_fill,
+            buy_time_start=req.buy_time_start,
+            buy_time_end=req.buy_time_end,
+            sell_time_start=req.sell_time_start,
+            sell_time_end=req.sell_time_end,
+            buy_fill_expr=req.buy_fill_expr,
+            sell_fill_expr=req.sell_fill_expr,
+            expiry_fill_type=req.expiry_fill_type,
+            expiry_fill_offset_pct=req.expiry_fill_offset_pct,
+            buy_ladder=req.buy_ladder,
+            sell_ladder=req.sell_ladder,
+            expiry_sell_method=req.expiry_sell_method,
+            breakthrough_base_type=req.breakthrough_base_type,
+            breakthrough_offset_pct=req.breakthrough_offset_pct,
+            breakthrough_direction=req.breakthrough_direction,
+            buy_timing=req.buy_timing,
+            progress_cb=progress_cb,
+            dynamic_replenishment=bool(pool_tickers),
+            replenishment_pool=pool_tickers or None,
+        )
+
+        # 3) 통합 응답
+        _emit({"phase": "done"})
+        return {
+            "error": bt.get("error", False),
+            "screened_tickers": [
+                {"stock_code": it.stock_code, "corp_name": getattr(it, "corp_name", ""),
+                 "composite_score": getattr(it, "composite_score", None)}
+                for it in screened
+            ],
+            "screened_count": len(tickers),
+            "backtest": bt.get("result", bt),
+            "intraday": bt.get("intraday"),  # 하이브리드 체결 적용/폴백 통계 (사용 시)
+            "asset_alloc": bt.get("asset_alloc"),  # ETF 슬리브 최종 구성 (사용 시)
+            "backtest_config": {
+                "strategy": eff_strategy,
+                "period": f"{req.start_date} ~ {req.end_date}",
+                "initial_capital": req.initial_capital,
+            },
+            "data_source": _detect_data_source(screened),
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # 논리 조건식 문법·라벨 오류 등 — 사용자가 고칠 수 있는 입력 오류
+        logger.warning(f"screen-to-backtest 입력 오류: {e}")
+        raise HTTPException(400, f"입력 오류: {e}")
+    except Exception:
+        logger.exception("screen-to-backtest 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/screen-to-backtest")
+def screen_to_backtest(req: ScreenToBacktestRequest):
+    """원클릭: 스크리닝 → 통과 종목 백테스트 (동기). 긴 실데이터 백테스트는
+    /screen-to-backtest-stream(진행률 스트리밍) 사용 권장."""
+    return _screen_to_backtest_core(req)
+
+
+@router.post("/screen-to-backtest-stream")
+def screen_to_backtest_stream(req: ScreenToBacktestRequest):
+    """screen-to-backtest 의 SSE 스트리밍판 — 진행률(screening→loading k/total→simulating→done)을
+    실시간 전송 후 최종 result 1건. 실데이터 대량 백테스트가 프록시 타임아웃 벽을 넘지 않게 함
+    (스트리밍 응답은 프론트 프록시의 하드 데드라인 면제 + 진행 표시로 빈 화면 제거)."""
+    import json
+    import queue
+    import threading
+
+    from fastapi.responses import StreamingResponse
+
+    q: queue.Queue = queue.Queue()
+
+    def cb(evt: dict):
+        q.put({"type": "progress", **evt})
+
+    def worker():
+        try:
+            payload = _screen_to_backtest_core(req, progress_cb=cb)
+            q.put({"type": "result", "data": payload})
+        except HTTPException as he:
+            q.put({"type": "error", "message": str(he.detail), "status": he.status_code})
+        except Exception:
+            logger.exception("스트리밍 screen-to-backtest 실패")
+            q.put({"type": "error", "message": "처리 중 오류가 발생했습니다."})
+        finally:
+            q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def gen():
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/backtest-strategies")
+def backtest_strategies():
+    """백테스트 가능 전략 목록 (스크리너 UI 드롭다운용)."""
+    try:
+        from src.kis_strategies.strategies import STRATEGY_REGISTRY
+        # 영문 키만 (한글 중복 제거)
+        seen, out = set(), []
+        labels = {
+            "GoldenCross": "골든크로스", "Momentum": "모멘텀", "Week52High": "52주 신고가",
+            "Consecutive": "연속 상승/하락", "Disparity": "이격도", "BreakoutFail": "돌파 실패",
+            "StrongClose": "강한 종가", "Volatility": "변동성 확장", "MeanReversion": "평균회귀",
+            "TrendFilter": "추세 필터",
+        }
+        for key in STRATEGY_REGISTRY:
+            if key in labels and key not in seen:
+                seen.add(key)
+                out.append({"id": key, "label": labels[key]})
+        return {"strategies": out}
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Data Quality QA (데이터 인프라 품질)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/data-quality")
+def data_quality_check(req: AdvancedRunRequest):
+    """
+    스크리닝 결과의 데이터 품질 리포트.
+    종목명 해소율, 이상치, 결측, 품질 점수 산출.
+    """
+    try:
+        from src.data.stock_master import validate_dataset
+        from src.engine.filter_ast import parse_group
+        screener = get_screener()
+        ast = parse_group(req.filter_ast.model_dump())
+        result = screener.run(
+            universe=req.universe, filter_ast=ast,
+            limit=req.limit, liquidity_floor=req.liquidity_floor,
+        )
+        report = validate_dataset(result.items)
+        report["data_source"] = _detect_data_source(result.items)
+        return report
+    except Exception as e:
+        raise HTTPException(500, f"데이터 품질 검사 실패: {e}")
+
+
+@router.get("/stock-master/stats")
+def stock_master_stats():
+    """종목 마스터 현황 (커버리지)."""
+    try:
+        import os
+
+        from src.data.stock_master import STOCK_MASTER, STOCK_SECTOR
+        # DART 캐시 여부
+        cache_path = os.path.join(os.path.dirname(__file__), "..", "data", "corp_name_cache.json")
+        dart_cached = os.path.exists(cache_path)
+        dart_count = 0
+        if dart_cached:
+            import json
+            try:
+                with open(cache_path) as f:
+                    dart_count = len(json.load(f))
+            except Exception:
+                pass
+        return {
+            "builtin_stocks": len(STOCK_MASTER),
+            "sector_mapped": len(STOCK_SECTOR),
+            "dart_cache_available": dart_cached,
+            "dart_cached_stocks": dart_count,
+            "total_resolvable": max(len(STOCK_MASTER), dart_count),
+        }
+    except Exception:
+        logger.exception("스크리너 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")

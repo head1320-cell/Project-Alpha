@@ -1,0 +1,450 @@
+"use client";
+// ═══════════════════════════════════════════════════════════════════════════════
+// BacktestResults — 전용 백테스트 결과 워크스페이스 (스펙 §5, 고정 URL·새로고침 가능)
+//   Header / Overview(지표) / Performance(자산곡선·낙폭·월간) / Trades / Symbols.
+//   엔진이 반환한 지표를 렌더한다. 없는 지표는 기본적으로 생략하되, **사유를 데이터로
+//   증명할 수 있는 결측**(벤치마크 미지정 · 체결 0건)은 '산출 불가' 로 보인다 — absentReason().
+// ═══════════════════════════════════════════════════════════════════════════════
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
+import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } from "@/entities/backtest/bridgeModel";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
+import { useChartAnimation } from "@/shared/ui/chartStyle";
+
+// ★Card 로 감싸면서 지킨 것과 바꾼 것★
+//  지킨다 — `.brun-card` / `.brun-card-t` 는 같은 노드에 그대로 둔다(E2E 계약이고,
+//    backtest.spec.ts 가 `.brun-card-t` 의 텍스트로 섹션을 찾는다).
+//  바꾼다 — 여백의 주인이 옮겨간다. 예전에는 `.brun-card` 가 padding 12/14 를, `.brun-card-t`
+//    가 margin-bottom 8 을 들고 있었다. 이제 CardHeader(px-3 py-2 + 아래 경계)와
+//    CardContent(p-3)가 그 역할을 하므로, 둘을 그대로 두면 여백이 이중으로 쌓인다.
+//    그래서 globals.css §48 에서 **`.brun-results` 스코프로만** 그 둘을 0 으로 만든다 —
+//    같은 `.brun-card` 를 쓰는 Compare · RunMonitor 는 손대지 않는다.
+//  바꾼다 — `<section>` → Card 의 `<div>`. 이름 없는 section 은 스크린리더에서 어차피
+//    generic 이라 잃는 것이 없고, 대신 제목이 `<div>` 에서 `<h2>` 가 되어 헤딩 목차가 생긴다.
+
+type Stat = keyof BacktestStatistics;
+interface MetricDef { k: Stat; label: string; tip: string; suffix?: string; digits?: number; signed?: boolean }
+// 엔진이 실제 산출하는 지표만 그룹으로 배치. 결측 처리 규칙은 absentReason() 참고.
+const METRIC_GROUPS: { title: string; metrics: MetricDef[] }[] = [
+  { title: "수익", metrics: [
+    { k: "total_return_pct", label: "총수익률", tip: "기간 전체 누적 수익률", suffix: "%", signed: true },
+    { k: "cagr", label: "CAGR", tip: "연평균 복리 성장률", suffix: "%", signed: true },
+    { k: "best_period_pct", label: "최고 구간", tip: "단일 구간 최대 수익률", suffix: "%", signed: true },
+    { k: "worst_period_pct", label: "최악 구간", tip: "단일 구간 최대 손실률", suffix: "%", signed: true },
+  ] },
+  { title: "리스크", metrics: [
+    { k: "max_drawdown_pct", label: "최대낙폭(MDD)", tip: "고점 대비 최대 하락폭", suffix: "%" },
+    { k: "avg_drawdown_pct", label: "평균 낙폭", tip: "낙폭 구간 평균 깊이", suffix: "%" },
+    { k: "max_drawdown_days", label: "최장 수중일", tip: "고점 회복까지 최장 경과일", suffix: "일", digits: 0 },
+    { k: "volatility_pct", label: "변동성(연)", tip: "연율화 표준편차", suffix: "%" },
+    { k: "downside_deviation_pct", label: "하방편차", tip: "손실만의 표준편차 (Sortino 분모)", suffix: "%" },
+    { k: "ulcer_index", label: "Ulcer", tip: "낙폭의 깊이·지속성 결합 지수 (낮을수록 좋음)", digits: 2 },
+    { k: "var_pct", label: "95% VaR", tip: "95% 신뢰수준 최대손실 추정", suffix: "%" },
+    { k: "cvar_pct", label: "95% CVaR", tip: "VaR 초과 시 평균손실(꼬리)", suffix: "%" },
+  ] },
+  { title: "위험조정", metrics: [
+    { k: "sharpe_ratio", label: "Sharpe", tip: "무위험 대비 위험조정수익 (초과수익/변동성)", digits: 2 },
+    { k: "sortino_ratio", label: "Sortino", tip: "하방위험 기준 위험조정수익", digits: 2 },
+    { k: "calmar_ratio", label: "Calmar", tip: "CAGR / |MDD|", digits: 2 },
+    { k: "omega", label: "Omega", tip: "이익/손실 확률가중 비율 (>1이면 우호적)", digits: 2 },
+    { k: "gain_to_pain", label: "Gain/Pain", tip: "총이익 / 총손실 절대합", digits: 2 },
+    { k: "tail_ratio", label: "Tail Ratio", tip: "우측꼬리 / 좌측꼬리 (95/5 분위 비율)", digits: 2 },
+    { k: "recovery_factor", label: "회복계수", tip: "총수익 / |MDD|", digits: 2 },
+    { k: "information_ratio", label: "정보비율(IR)", tip: "벤치 대비 초과수익 / 추적오차", digits: 2 },
+  ] },
+  { title: "분포", metrics: [
+    { k: "skew", label: "왜도", tip: "수익률 분포의 비대칭 (양수=우편향)", digits: 2 },
+    { k: "kurtosis", label: "첨도", tip: "꼬리 두께 (높을수록 극단값 빈발)", digits: 2 },
+  ] },
+  { title: "거래 품질", metrics: [
+    { k: "num_trades", label: "거래수", tip: "총 체결(라운드트립) 수", digits: 0 },
+    { k: "win_rate", label: "승률", tip: "이익 거래 비율", suffix: "%" },
+    { k: "profit_factor", label: "손익비(PF)", tip: "총이익 / 총손실", digits: 2 },
+    { k: "payoff_ratio", label: "손익배율", tip: "평균이익 / 평균손실", digits: 2 },
+    { k: "avg_trade_return", label: "평균 거래수익", tip: "거래당 평균 수익률", suffix: "%", signed: true },
+    { k: "expectancy", label: "기댓값", tip: "거래당 기대 손익(원)", digits: 0, signed: true },
+    { k: "avg_win", label: "평균 이익", tip: "이익 거래 평균 손익(원)", digits: 0 },
+    { k: "avg_loss", label: "평균 손실", tip: "손실 거래 평균 손익(원)", digits: 0 },
+    { k: "kelly_pct", label: "Kelly%", tip: "켈리 최적 베팅 비율", suffix: "%" },
+  ] },
+  { title: "비용", metrics: [
+    { k: "total_commission", label: "수수료", tip: "누적 수수료(원)", digits: 0 },
+    { k: "total_slippage", label: "슬리피지", tip: "누적 슬리피지(원)", digits: 0 },
+  ] },
+];
+
+/** 거래가 한 건도 없으면 통째로 성립하지 않는 지표들 — 사유를 데이터로 증명할 수 있다. */
+const TRADE_QUALITY_KEYS = new Set([
+  "win_rate", "profit_factor", "payoff_ratio", "avg_trade_return",
+  "expectancy", "avg_win", "avg_loss", "kelly_pct",
+]);
+
+/**
+ * ★없는 지표를 어떻게 다룰 것인가★
+ *
+ * 지금까지는 값이 없으면 조용히 뺐다(아래 `avail` 필터). 그러면 화면에서는 그 지표가
+ * **원래 없는 것**처럼 보인다. 계산에 실패한 것과 애초에 정의되지 않는 것이 같은 모습이 된다.
+ *
+ * 그렇다고 없는 값 전부에 "없음"을 붙이면 이번엔 반대쪽으로 틀린다 — 이유를 모르면서
+ * 아는 척하게 된다. 사유를 못 대는 "없음"은 그 자체로 지어낸 정보다.
+ *
+ * 그래서 **사유를 데이터로 증명할 수 있는 것만** 노출한다. 아래 두 규칙은 둘 다 화면이
+ * 이미 들고 있는 값으로 판정된다(벤치마크 곡선의 유무, 체결 건수). 나머지는 지금처럼 생략한다.
+ */
+function absentReason(
+  k: string,
+  hasBenchmark: boolean,
+  tradeCount: number | null,
+): string | null {
+  if (k === "information_ratio" && !hasBenchmark) {
+    return "벤치마크를 지정하지 않아 추적오차를 계산할 수 없습니다.";
+  }
+  if (tradeCount === 0 && TRADE_QUALITY_KEYS.has(k)) {
+    return "이 기간에 체결이 한 건도 없어 거래 통계가 나오지 않습니다.";
+  }
+  return null;
+}
+
+const num = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? null : v);
+const fmtStat = (v: number | null | undefined, m: MetricDef) => {
+  const n = num(v);
+  if (n == null) return "—";
+  const s = m.suffix ?? "";
+  const sign = m.signed && n >= 0 ? "+" : "";
+  return `${sign}${n.toLocaleString("ko-KR", { maximumFractionDigits: m.digits ?? 1 })}${s}`;
+};
+// 색을 토큰으로 — 하드코딩 hex 는 다크에서 그대로 어두워진다(globals.css §47 이 .dark 에서 바꾼다).
+const col = (v: number | null | undefined) =>
+  (num(v) == null ? undefined : (v as number) >= 0 ? "var(--chart-up)" : "var(--chart-down)");
+
+export function BacktestResults({ runId }: { runId: string }) {
+  const router = useRouter();
+  // 결과 페이지는 항상 DB의 현재 상태를 반영해야 한다 — 전역 기본 staleTime이 24h라
+  // 캐시된 스냅샷을 그대로 그리면 이미 끝난 실행이 "loading_data 상태입니다"로 보인다.
+  const q = useQuery({
+    queryKey: ["btrun", "full", runId], queryFn: () => backtestRunApi.get(runId),
+    retry: (count, e) => ((e as { httpStatus?: number })?.httpStatus === 404 ? false : count < 3),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
+  if (q.isLoading) return <div className="brun-shell"><div className="brun-loading">결과 불러오는 중…</div></div>;
+  if (q.isError || !q.data) {
+    // 404(진짜 없음)만 확정 실패, 그 외(5xx/네트워크)는 일시적 → 재시도 유도
+    const gone = (q.error as { httpStatus?: number } | null)?.httpStatus === 404;
+    return <div className="brun-shell"><div className="brun-err">
+      {gone ? "결과를 찾을 수 없습니다 — 만료되었거나 잘못된 링크일 수 있습니다."
+            : "결과를 일시적으로 불러오지 못했습니다 — 연결을 확인하고 재시도하세요."}
+      <div className="brun-err-actions" style={{ marginTop: 10 }}>
+        {!gone && <button className="brun-btn primary" onClick={() => q.refetch()}>재시도</button>}
+        <button className="brun-btn" onClick={() => router.push("/backtest")}>← 편집기로</button>
+      </div>
+    </div></div>;
+  }
+
+  const run = q.data;
+  if (run.status !== "completed" || !run.result) {
+    return <div className="brun-shell"><div className="brun-err">
+      이 실행은 {run.status} 상태입니다 — 완료된 결과가 없습니다.
+      <button className="brun-btn" onClick={() => router.push(`/backtest/runs/${runId}/loading`)}>진행 상황 보기</button>
+    </div></div>;
+  }
+  return <ResultsBody runId={runId} run={run} router={router} />;
+}
+
+function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; router: ReturnType<typeof useRouter> }) {
+  const anim = useChartAnimation();
+  const res = run.result!;
+  const bt = res.backtest;
+  const stats = bt.statistics as BacktestStatistics;
+  const cfg = (run.input_snapshot ?? {}) as Record<string, unknown>;
+  const isMock = run.is_mock_data === true || !res.data_source?.fully_real;
+  // 결측 사유 판정에 쓰는 두 사실 — 둘 다 이미 화면이 들고 있는 값이다.
+  const hasBenchmark = Boolean(bt.benchmark?.curve?.length);
+  const tradeCount = num(stats.num_trades as number);
+
+  const equity = useMemo(() => (bt.equity_curve || []).map((v, i) => ({
+    i, date: bt.equity_dates?.[i] ?? String(i), equity: v,
+    bench: bt.benchmark?.curve?.[i] ?? null, dd: bt.drawdown_curve?.[i] ?? null,
+  })), [bt]);
+  const monthly = useMemo(() => (bt.monthly_returns || []).map((m, i) =>
+    typeof m === "number" ? { month: String(i), return_pct: m } : (m as MonthlyReturn)), [bt.monthly_returns]);
+  const roundTrips = bt.round_trips && bt.round_trips.length ? bt.round_trips : bt.trades || [];
+
+  const retry = async () => { try { const r = await backtestRunApi.retry(runId); router.push(`/backtest/runs/${r.run_id}/loading`); } catch { /* ignore */ } };
+
+  return (
+    <div className="brun-shell brun-results">
+      {/* Header */}
+      <header className="brun-rhead">
+        <div>
+          <div className="brun-crumb num">BACKTEST RESULT · {runId}</div>
+          <h1 className="brun-title">{run.strategy_name}</h1>
+          <div className="brun-rmeta num">
+            {String(cfg.universe ?? "—")} · {String(cfg.start_date ?? "")}~{String(cfg.end_date ?? "")}
+            {bt.benchmark?.label ? ` · 벤치 ${bt.benchmark.label}` : ""} · 엔진 {run.engine_version ?? "—"}
+          </div>
+        </div>
+        <div className="brun-rhead-r">
+          <span className={`brun-badge ${isMock ? "mock" : "real"}`}>{isMock ? "MOCK 데이터" : "실데이터"}</span>
+          <span className={`brun-badge ${run.is_pit_verified ? "real" : "warn"}`}>{run.is_pit_verified ? "PIT 검증" : "PIT 미검증"}</span>
+          <button className="brun-btn" onClick={() => router.push(`/backtest/runs/${runId}/compare`)}>비교</button>
+          <button className="brun-btn" onClick={retry}>동일 설정 재실행</button>
+          <button className="brun-btn primary" onClick={() => router.push("/backtest")}>← 편집기로</button>
+        </div>
+      </header>
+      {isMock && <div className="brun-mocknote">합성(mock) 데이터 기준 결과입니다 — 수치는 참고용. 실데이터는 GCP 적재 후 자동 반영됩니다.</div>}
+
+      {/* Overview — 엔진이 산출한 모든 지표를 그룹별로(데이터 없는 항목 생략) */}
+      <Card className="brun-card">
+        <CardHeader>
+          <CardTitle as="h2" className="brun-card-t">개요 · 진단 지표 <span className="brun-note">데이터 없는 지표는 표시하지 않음</span></CardTitle>
+        </CardHeader>
+        <CardContent>
+        {METRIC_GROUPS.map((g) => {
+          const avail = g.metrics.filter((m) => num(stats[m.k] as number) != null);
+          // 사유를 댈 수 있는 결측만 함께 그린다 — 나머지는 지금까지처럼 생략한다.
+          const explained = g.metrics
+            .filter((m) => num(stats[m.k] as number) == null)
+            .map((m) => ({ m, reason: absentReason(m.k, hasBenchmark, tradeCount) }))
+            .filter((x): x is { m: MetricDef; reason: string } => x.reason != null);
+          if (avail.length === 0 && explained.length === 0) return null;
+          return (
+            <div key={g.title} className="brun-mgroup">
+              <div className="brun-mgroup-t">{g.title}</div>
+              <div className="brun-kpis">
+                {avail.map((m) => (
+                  <div key={m.k} className="brun-kpi">
+                    <div className="brun-kpi-l">{m.label}</div>
+                    <div className="brun-kpi-v num" style={{ color: m.signed ? col(stats[m.k] as number) : undefined }}>
+                      {fmtStat(stats[m.k] as number, m)}
+                    </div>
+                    {/* 설명은 hover 전용이던 title= 을 대신한다 — 키보드·터치에도 도달해야 한다
+                        (ContextStrip 의 title= 16개를 걷어낸 P3 과 같은 규칙). */}
+                    <div className="brun-kpi-tip">{m.tip}</div>
+                  </div>
+                ))}
+                {explained.map(({ m, reason }) => (
+                  <div key={m.k} className="brun-kpi brun-kpi-na">
+                    <div className="brun-kpi-l">{m.label}</div>
+                    {/* ★숫자를 그리지 않는다★ 0 이나 — 을 적으면 측정된 값처럼 읽힌다. */}
+                    <span className="brun-kpi-nabadge">산출 불가</span>
+                    <div className="brun-kpi-tip">{reason}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {stats.eod_liquidated ? <div className="brun-note">기간종료 청산 {stats.eod_liquidated}종목 — 마지막 거래일 종가로 실현.</div> : null}
+        </CardContent>
+      </Card>
+
+      {/* Performance */}
+      {equity.length > 1 && (
+        <Card className="brun-card">
+          <CardHeader>
+            <CardTitle as="h2" className="brun-card-t">자산곡선 {bt.benchmark ? "vs 벤치마크" : ""}</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={60} />
+              <YAxis tick={{ fontSize: 9 }} width={48} />
+              <Tooltip formatter={(v: number) => v?.toLocaleString("ko-KR")} labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 11 }} />
+              <Line isAnimationActive={anim} type="monotone" dataKey="equity" stroke="var(--chart-line)" dot={false} strokeWidth={1.6} name="전략" />
+              {bt.benchmark && <Line isAnimationActive={anim} type="monotone" dataKey="bench" stroke="var(--chart-bench)" dot={false} strokeDasharray="4 3" strokeWidth={1.2} name={bt.benchmark.label} />}
+            </LineChart>
+          </ResponsiveContainer>
+          {bt.benchmark && (
+            <div className="brun-benchrow num">
+              벤치 {bt.benchmark.total_return_pct?.toFixed(1)}% · 초과 <b style={{ color: col(bt.benchmark.excess_return_pct) }}>{bt.benchmark.excess_return_pct?.toFixed(1)}%</b>
+              · β {bt.benchmark.beta?.toFixed(2)} · α {bt.benchmark.alpha_pct?.toFixed(1)}%
+            </div>
+          )}
+          </CardContent>
+        </Card>
+      )}
+
+      {bt.drawdown_curve?.some((d) => d < 0) && (
+        <Card className="brun-card">
+          <CardHeader>
+            <CardTitle as="h2" className="brun-card-t">낙폭 (Underwater)</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <ResponsiveContainer width="100%" height={140}>
+            <AreaChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} minTickGap={60} />
+              <YAxis tick={{ fontSize: 9 }} width={48} />
+              <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={{ fontSize: 11 }} />
+              <Area isAnimationActive={anim} type="monotone" dataKey="dd" stroke="var(--chart-down)" fill="var(--chart-down-fill)" strokeWidth={1} name="낙폭" />
+            </AreaChart>
+          </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {monthly.length > 0 && (
+        <Card className="brun-card">
+          <CardHeader>
+            <CardTitle as="h2" className="brun-card-t">월별 수익률</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <ResponsiveContainer width="100%" height={130}>
+            <BarChart data={monthly} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" />
+              <XAxis dataKey="month" tick={{ fontSize: 8 }} minTickGap={20} />
+              <YAxis tick={{ fontSize: 9 }} width={40} />
+              <Tooltip formatter={(v: number) => `${v?.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
+              <Bar isAnimationActive={anim} dataKey="return_pct">
+                {monthly.map((m, i) => <Cell key={i} fill={m.return_pct >= 0 ? "var(--chart-up)" : "var(--chart-down)"} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Attribution — 종목 기여도 (엔진 산출 contribution_pct) */}
+      {bt.symbol_results && bt.symbol_results.some((s) => s.contribution_pct != null) && (
+        <AttributionChart rows={bt.symbol_results} />
+      )}
+
+      {/* Symbols */}
+      {bt.symbol_results && bt.symbol_results.length > 0 && <SymbolTable rows={bt.symbol_results} />}
+
+      {/* Trades */}
+      {roundTrips.length > 0 && <TradesTable trades={roundTrips} />}
+
+      {/* Diagnostics — 정직 표기: 엔진 미산출 지표는 만들지 않음 */}
+      <Card className="brun-card brun-diag">
+        <CardHeader>
+          <CardTitle as="h2" className="brun-card-t">진단 · 데이터 범위</CardTitle>
+        </CardHeader>
+        <CardContent>
+        <ul className="brun-diag-list">
+          {!run.is_pit_verified && <li>PIT 미검증 — 시점(point-in-time) 재무 정합이 확인되지 않아 look-ahead 편향 가능성이 있습니다.</li>}
+          {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요합니다.</li>}
+          {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·유니버스·기간을 점검하세요.</li>}
+          <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않습니다(추정치로 대체하지 않음).</li>
+        </ul>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
+  const anim = useChartAnimation();
+  const data = useMemo(() => {
+    const withC = rows.filter((r) => r.contribution_pct != null);
+    const sorted = [...withC].sort((a, b) => (b.contribution_pct as number) - (a.contribution_pct as number));
+    const top = sorted.slice(0, 8);
+    const bot = sorted.slice(-8).filter((r) => !top.includes(r));
+    return [...top, ...bot].map((r) => ({
+      name: r.corp_name || r.symbol, contribution: r.contribution_pct as number,
+    }));
+  }, [rows]);
+  if (data.length === 0) return null;
+  const h = Math.max(140, data.length * 22 + 30);
+  return (
+    <Card className="brun-card">
+      <CardHeader>
+        <CardTitle as="h2" className="brun-card-t">기여도 분해 (Attribution) <span className="brun-note">상위 기여·하위 기여 종목</span></CardTitle>
+      </CardHeader>
+      <CardContent>
+      <ResponsiveContainer width="100%" height={h}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+          <CartesianGrid strokeDasharray="2 3" stroke="var(--chart-grid)" horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `${v}%`} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={92} />
+          <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} contentStyle={{ fontSize: 11 }} />
+          <Bar isAnimationActive={anim} dataKey="contribution">
+            {data.map((d, i) => <Cell key={i} fill={d.contribution >= 0 ? "var(--chart-up)" : "var(--chart-down)"} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SymbolTable({ rows }: { rows: SymbolPerf[] }) {
+  const sorted = [...rows].sort((a, b) => (b.contribution_pct ?? b.total_return_pct) - (a.contribution_pct ?? a.total_return_pct));
+  return (
+    <Card className="brun-card">
+      <CardHeader>
+        <CardTitle as="h2" className="brun-card-t">종목별 성과 <span className="brun-note">{rows.length}종목 · 기여도순</span></CardTitle>
+      </CardHeader>
+      <CardContent>
+      <div className="brun-tablewrap">
+        <table className="brun-table">
+          <thead><tr><th>종목</th><th>수익률</th><th>실현손익</th><th>거래</th><th>승률</th><th>보유일</th><th>기여도</th></tr></thead>
+          <tbody>
+            {sorted.slice(0, 40).map((r) => (
+              <tr key={r.symbol}>
+                <td>{r.corp_name || r.symbol}<span className="brun-code num">{r.symbol}</span></td>
+                <td className="num" style={{ color: col(r.total_return_pct) }}>{r.total_return_pct?.toFixed(1)}%</td>
+                <td className="num">{r.realized_pnl != null ? Math.round(r.realized_pnl).toLocaleString("ko-KR") : "—"}</td>
+                <td className="num">{r.round_trips ?? r.num_trades}</td>
+                <td className="num">{r.win_rate?.toFixed(0)}%</td>
+                <td className="num">{r.avg_hold_days != null ? Math.round(r.avg_hold_days) : "—"}</td>
+                <td className="num" style={{ color: col(r.contribution_pct) }}>{r.contribution_pct != null ? `${r.contribution_pct.toFixed(1)}%` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TradesTable({ trades }: { trades: BacktestTrade[] }) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <Card className="brun-card">
+      <CardHeader>
+        <CardTitle as="h2" className="brun-card-t">거래 로그 <span className="brun-note">{trades.length}건 · 행 클릭 = 상세</span></CardTitle>
+      </CardHeader>
+      <CardContent>
+      <div className="brun-tablewrap">
+        <table className="brun-table">
+          <thead><tr><th>종목</th><th>진입일</th><th>청산일</th><th>진입가</th><th>청산가</th><th>수익률</th><th>사유</th></tr></thead>
+          <tbody>
+            {trades.slice(0, 200).map((t, i) => (
+              <React.Fragment key={i}>
+                <tr className="brun-trow" onClick={() => setOpen(open === i ? null : i)}>
+                  <td>{t.corp_name || t.stock_code}</td>
+                  <td className="num">{t.entry_date ?? "—"}</td>
+                  <td className="num">{t.exit_date ?? "—"}</td>
+                  <td className="num">{t.entry_price?.toLocaleString("ko-KR") ?? "—"}</td>
+                  <td className="num">{t.exit_price?.toLocaleString("ko-KR") ?? "—"}</td>
+                  <td className="num" style={{ color: col(t.return_pct) }}>{t.return_pct != null ? `${t.return_pct >= 0 ? "+" : ""}${t.return_pct.toFixed(1)}%` : "—"}</td>
+                  <td className="brun-reason">{t.reason ?? "—"}</td>
+                </tr>
+                {open === i && (
+                  <tr className="brun-tdetail"><td colSpan={7}>
+                    <span>수량 {t.quantity?.toLocaleString("ko-KR") ?? "—"}</span>
+                    <span>손익 {t.pnl != null ? Math.round(t.pnl).toLocaleString("ko-KR") : "—"}</span>
+                    <span>종목코드 {t.stock_code ?? "—"}</span>
+                    {t.reason && <span>청산사유 {t.reason}</span>}
+                  </td></tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      </CardContent>
+    </Card>
+  );
+}
