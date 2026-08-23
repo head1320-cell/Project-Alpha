@@ -1627,6 +1627,8 @@ class RebalanceDecisionRequest(AnalyzeRequest):
     hysteresis_mult: float = Field(0.5, ge=0.0, le=50.0)
     confidence: float | None = Field(None, ge=0.0, le=1.0)  # 점진 이동 α
     last_rebalance_date: str | None = Field(None, max_length=32)
+    # 팩터 노출(Brief §8.4) — 매크로 회귀라 느려서 선택으로 둔다.
+    factor_exposure: bool = False
 
 
 @router.post("/rebalance-decision")
@@ -1708,7 +1710,24 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             uncertainty=mu_uncertainty,
             triggers=triggers)
 
+        # ★자산 개수가 아니라 팩터 개수★ (Brief §8.4) — 선택.
+        factors = None
+        if req.factor_exposure:
+            from src.engine.factor_exposure import (
+                asset_factor_betas,
+                factor_concentration,
+                portfolio_factor_exposure,
+            )
+            betas = asset_factor_betas(names)
+            expo = portfolio_factor_exposure(target, betas)
+            factors = {"exposure": expo,
+                       "concentration": (factor_concentration(expo)
+                                         if expo.get("available") else None),
+                       "sample": betas.get("sample"),
+                       "unresolved": betas.get("unresolved", {})}
+
         decision.update({
+            "factors": factors,
             "target_weights": target, "target_source": target_source,
             "model": req.model, "coverage": coverage, "excluded": excluded,
             # ★기대수익을 0과 구분할 수 있는가★ 못 하면 밴드가 넓어진다.

@@ -189,6 +189,25 @@ P0 정합성·격리·계측  →  P1 성능(측정 후)  →  P2 Company 언더
   `MODELS` 에 `robust` 추가(가산) · `uncertainty` 스칼라가 **리밸런싱 밴드로 흘러간다**
   — 그 인자는 앞 슬라이스에서 매달려 있었다.
 
+- **팩터 인지 최적화** (Brief §8.4) — ✅ 완료
+
+  `effective_number_of_bets`(Meucci)는 이미 있었지만 Σ 의 주성분이라 **이름이 없다**
+  — "듀레이션에 얼마나 노출됐는가" 에 답하지 못한다. 이름 있는 경제 팩터 9종을
+  붙였다(각 59개월): equity=KOSPI · duration=KR_10Y · inflation=KR_CPI ·
+  growth=KR_LEADING_CYCLE · credit=KR_TERM_SPREAD · commodity=DCOILWTICO ·
+  usd=USD_KRW · volatility=VIXCLS · liquidity=NFCI.
+
+  ★있는 것이 아니라 **쓸 수 있는** 것★ `KR_CREDIT_SPREAD`·`KR_CORE_CPI`·`KR_M2`
+  는 수집기에 있지만 월 관측이 **0** 이라 못 쓴다 — 팩터마다 후보를 우선순위로
+  두고 폴백한다.
+
+  ★차원의 저주를 숨기지 않는다★ 월 59개 · 팩터 9개 → 관측/모수 **6.56**. 다변량
+  대신 단변량 베타를 쓰고 다중검정 사실을 함께 적는다. 베타를 못 낸 자산은 0 으로
+  채우지 않고 **커버리지**로 말한다.
+
+  실측: 3종목 포트폴리오의 **유효팩터수 9 중 3.77** — 자산이 분산돼도 팩터가
+  몰려 있으면 분산이 아니라는 것이 §8.4 의 요점이다.
+
 - P3-2 **백테스트 → 리스크 귀인**: `bt_*` → 팩터 귀인.
 - P3-3 **매크로 → 조건부 예측**: 국면별 μ/Σ.
 - P3-4 **Company 팩터 → 포트폴리오 팩터 리스크**.

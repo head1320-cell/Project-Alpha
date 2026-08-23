@@ -197,3 +197,34 @@ def test_robust_accepts_the_conditional_covariance(client):
     b = _post(client, model="robust", conditional=True)
     assert b["target_source"] == "optimize:robust"
     assert b["conditional"] is not None
+
+
+# ── 5. 팩터 노출 (Brief §8.4) ──────────────────────────────────────────────
+def test_factor_exposure_is_off_by_default(client):
+    """매크로 회귀는 느리다 — 기본 동작을 바꾸지 않는다(가산 필드)."""
+    assert _post(client)["factors"] is None
+
+
+def test_factor_exposure_reports_named_factors_when_asked(client):
+    """★자산 개수가 아니라 팩터 개수★ 이름 없는 주성분이 아니라 경제 팩터다."""
+    f = _post(client, factor_exposure=True)["factors"]
+    assert f is not None
+    by = f["exposure"]["by_factor"]
+    for named in ("equity", "duration", "inflation", "usd"):
+        assert named in by, named
+        assert by[named]["series"], "어느 계열에서 왔는지 밝힌다"
+
+
+def test_the_factor_block_reports_its_sample_shape(client):
+    """★차원의 저주를 숨기지 않는다★"""
+    s = _post(client, factor_exposure=True)["factors"]["sample"]
+    assert s["n_months"] >= 24 and s["n_factors"] >= 1
+    assert s["obs_per_factor"] == pytest.approx(s["n_months"] / s["n_factors"], abs=0.01)
+
+
+def test_factor_concentration_is_separate_from_asset_enb(client):
+    """★한 표에 섞지 않는다★ 팩터 집중도와 자산 ENB 는 다른 숫자다."""
+    c = _post(client, factor_exposure=True)["factors"]["concentration"]
+    assert c is not None
+    assert 1.0 <= c["effective_factors"] <= c["n_factors"]
+    assert "자산 ENB" in c["note"]
