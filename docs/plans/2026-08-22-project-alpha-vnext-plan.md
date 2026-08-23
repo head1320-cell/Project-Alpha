@@ -256,6 +256,27 @@ P3-3 조건부 μ/Σ(P2.5) · P3-4 팩터 리스크).
 - P3-3 **매크로 → 조건부 예측**: 국면별 μ/Σ.
 - P3-4 **Company 팩터 → 포트폴리오 팩터 리스크**.
 
+## Brief §7 — 경제노출 → 상품 구현 계층 ✅ 완료
+
+optimizer 가 **경제노출**을 정하고 구현 계층이 **상장 상품**을 고른다(Brief §7.1).
+노출 어휘는 `factor_exposure.FACTORS` 를 그대로 쓴다 — 팩터 모형이 노출을 **재고**
+이 계층이 그것을 **구현**하므로 이름이 같아야 이어진다.
+
+★KR 상장 우선, 해외는 대안★(사용자 결정) 미국 대형주도 TIGER 재간접으로 먼저
+구현하고 SPY/VTI 는 `alternatives` 로 낸다. 국내 후보가 없는 노출(duration·credit·
+commodity·real_estate·em)은 해외로 떨어지되 `market_fallback` 사유와 환노출·과세
+라벨을 단다 — 세율은 보유하지 않으므로 "고려해야 할 차이" 로만 알린다.
+
+★계산할 수 있는 것만 점수에 넣는다★ ETF 메타데이터 저장소가 **없어서**(실측: 관련
+심볼 0건) 운용보수·분배금은 사유와 함께 `unavailable`. 유동성·실행비용
+(`market_impact` 재사용)·이력·결측률만 쓴다.
+
+★mock 추적오차는 잡음이다★ 실측 SPY-VTI 상관 **0.037**(연 TE 39.95%) — mock 로더가
+티커마다 독립 난수walk 를 만든다. TE 는 계산하되 `source` 라벨을 달고 mock 이면
+순위에서 뺀다.
+
+`GET /api/v1/allocation/exposures` · `POST /api/v1/allocation/implement`.
+
 ## P4 — 포트폴리오 결정 엔진
 
 조건부 μ/Σ · 로버스트 최적화 · 동적 리밸런스 밴드 · **모델 불일치**(P4-MACRO 의

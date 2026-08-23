@@ -1786,3 +1786,84 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
     except Exception:
         logger.exception("rebalance-decision 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 경제노출 → 상장 상품 구현 계층 (Brief §7.1/7.2 · CTO §26)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ImplementExposuresRequest(BaseModel):
+    """경제노출 비중 → 상장 상품 비중."""
+    exposures: dict[str, float] = Field(..., min_length=1)   # 노출명 → 비중 %
+    market: str = Field("kr", max_length=8)                  # kr|us|any
+    portfolio_value: float = Field(100_000_000.0, gt=0)
+
+
+@router.get("/exposures")
+def list_exposures():
+    """★무엇을 구현할 수 있고 무엇을 모르는가★ 노출 카탈로그 (Brief §7.1).
+
+    후보는 **KR 상장 우선**이고 해외는 `alternatives` 로 함께 나간다. 국내 후보가
+    없는 노출은 `market_fallback` 사유가 붙는다 — 조용히 해외로 넘어가지 않는다.
+
+    ★계산할 수 없는 기준은 사유와 함께 나간다★ 이 저장소에는 ETF 메타데이터가
+    없어 운용보수·분배금을 낼 수 없다. 빈칸이 아니라 왜 없는지가 정보다.
+    """
+    try:
+        from src.engine.instrument_selector import (
+            EXPOSURES,
+            UNAVAILABLE_CRITERIA,
+            WEIGHTS,
+            candidates,
+        )
+        rows = []
+        for name in sorted(EXPOSURES):
+            c = candidates(name, market="kr")
+            rows.append({
+                "exposure": name, "label": EXPOSURES[name]["label"],
+                "kr": EXPOSURES[name]["kr"], "us": EXPOSURES[name]["us"],
+                "primary": c.get("primary"), "alternatives": c.get("alternatives"),
+                "market_fallback": c.get("market_fallback"),
+                "note": EXPOSURES[name]["note"],
+            })
+        return _finite_payload({
+            "available": True, "exposures": rows,
+            "score_weights": dict(WEIGHTS),
+            "unavailable_criteria": dict(UNAVAILABLE_CRITERIA),
+            "note": ("KR 상장을 기본 구현으로 삼고 해외는 대안으로 함께 냅니다 — "
+                     "환노출과 과세 체계가 다르기 때문입니다"),
+        })
+    except Exception:
+        logger.exception("exposures 목록 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/implement")
+def implement_exposures_route(req: ImplementExposuresRequest):
+    """노출 비중 → 상품 비중 + 근거 (Brief §7.1/7.2).
+
+    ★구현하지 못한 노출의 비중은 재분배하지 않는다★ 재분배하면 사용자가 요청하지
+    않은 노출이 커진다 — `unplaced_pct` 로 남긴다.
+
+    ★상품마다 어느 노출에서 왔는지 남긴다★ 합만 맞추면 노출이 바뀌었을 때 무엇을
+    갈아야 하는지 알 수 없다.
+
+    알 수 없는 노출은 500 이 아니라 `unresolved` 에 사유와 함께 담긴다.
+    """
+    try:
+        from src.engine.instrument_selector import implement_exposures
+        out = implement_exposures(req.exposures, market=req.market,
+                                  portfolio_value=req.portfolio_value)
+        out["market"] = req.market
+        out["price_source"] = _finite_source()
+        return _finite_payload(out)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("implement 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def _finite_source() -> str:
+    from src.engine.instrument_selector import _source_label
+    return _source_label()
