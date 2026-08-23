@@ -1690,6 +1690,12 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             req.holdings, target, as_of=req.as_of,
             last_rebalance_date=req.last_rebalance_date)
 
+        # ★μ 를 얼마나 모르는지가 밴드를 넓힌다★ (Brief §8.3 → §10)
+        # 예전에는 `uncertainty` 인자가 매달려 있었다 — 아무도 공급하지 않았다.
+        from src.engine.robust_opt import mu_standard_errors, uncertainty_scalar
+        est = mu_standard_errors(R)
+        mu_uncertainty = (uncertainty_scalar(est["t"]) if est["available"] else None)
+
         decision = rebalance_decision(
             req.holdings, target, portfolio_value=req.portfolio_value,
             names=names,
@@ -1699,11 +1705,19 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             horizon_days=req.horizon_days,
             hysteresis_mult=req.hysteresis_mult,
             confidence=req.confidence,
+            uncertainty=mu_uncertainty,
             triggers=triggers)
 
         decision.update({
             "target_weights": target, "target_source": target_source,
             "model": req.model, "coverage": coverage, "excluded": excluded,
+            # ★기대수익을 0과 구분할 수 있는가★ 못 하면 밴드가 넓어진다.
+            "mu_uncertainty": (None if not est["available"] else {
+                "scalar": round(mu_uncertainty, 4),
+                "n_resolvable": est["n_resolvable"], "n_assets": len(names),
+                "mu_over_se": {nm: round(float(v), 3)
+                               for nm, v in zip(names, est["t"], strict=False)},
+                "note": est["note"]}),
             # ★조건부를 못 썼으면 응답이 그 사실을 말한다★ (조용한 폴백 금지)
             "conditional": (_conditional_block(
                 cond, cond_path, sigma_applied=s_override is not None,

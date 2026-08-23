@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 DELTA_DEFAULT = 2.5   # 위험회피(균형 기대수익 스케일) — risk_allocations와 동일
 TAU_DEFAULT = 0.05    # prior 불확실성 — risk_allocations와 동일
 
-MODELS = ("mvo", "bl", "ep", "risk_parity", "hrp", "min_var", "max_div", "min_cvar")
+MODELS = ("mvo", "bl", "ep", "risk_parity", "hrp", "min_var", "max_div", "min_cvar",
+          "robust")
 
 
 # ── 시가총액 prior ────────────────────────────────────────────────────────────
@@ -174,6 +175,8 @@ def model_availability() -> dict[str, dict]:
     return {
         "mvo": dict(opt_ok), "bl": dict(opt_ok), "ep": dict(opt_ok),
         "min_var": dict(opt_ok), "max_div": dict(opt_ok), "min_cvar": dict(opt_ok),
+        # 로버스트도 SLSQP 를 쓴다 — scipy 가 없으면 못 푼다.
+        "robust": dict(opt_ok),
         # ERC 는 순수 numpy 반복이라 scipy 없이도 돈다.
         "risk_parity": {"available": True, "reason": None},
         "hrp": {"available": _HAS_HCLUST,
@@ -200,6 +203,12 @@ def _raw_weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | 
         # 최대분산(TOBAM): maximize (wᵀσ)/√(wᵀΣw) — risk_allocations.s_max_div 로직 재사용
         sig = np.sqrt(np.maximum(np.diag(S), 1e-12))
         w = _opt(lambda x: -(x @ sig) / (np.sqrt(x @ S @ x) + 1e-12), n)
+    elif model == "robust":
+        # 로버스트 평균-분산 (Brief §8.3) — μ 의 추정오차를 타원체 불확실성 집합으로
+        # 넣는다. ★μ 를 못 믿을수록 등가중으로 수렴한다★ 실측 HHI 0.616 → 0.264.
+        from src.engine.robust_opt import robust_weights
+        out = robust_weights([str(i) for i in range(n)], R, s_override=S)
+        w = out["weights"] if out["available"] else None
     elif model == "min_cvar":
         # 최소 CVaR (Rockafellar-Uryasev) — 히스토리컬 최악 α% 평균손실 최소화
         alpha = 0.05
