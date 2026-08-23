@@ -247,6 +247,7 @@ def portfolio_factor_exposure(weights: dict[str, float], betas: dict) -> dict:
     for factor in betas["factors"]:
         acc = 0.0
         covered = 0.0
+        resolved_w = 0.0
         missing: list[str] = []
         for code, w in weights.items():
             wf = max(float(w), 0.0) / total
@@ -255,12 +256,16 @@ def portfolio_factor_exposure(weights: dict[str, float], betas: dict) -> dict:
             if fit.get("available") and fit.get("beta") is not None:
                 acc += wf * float(fit["beta"])
                 covered += wf
+                if fit.get("resolvable"):
+                    resolved_w += wf
             elif wf > 0:
                 missing.append(str(code))
         out[factor] = {
             "available": covered > 0,
             "exposure": round(acc, 4) if covered > 0 else None,
             "coverage_pct": round(covered * 100.0, 2),
+            # ★|t| < 2 인 베타로 만든 노출은 잡음이다★ 그 비중을 함께 낸다.
+            "resolvable_pct": round(resolved_w * 100.0, 2),
             "missing": missing,
             "series": betas["proxies"].get(factor),
             "transform": (betas.get("transforms") or {}).get(factor),
