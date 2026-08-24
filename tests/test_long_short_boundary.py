@@ -130,8 +130,10 @@ def test_an_all_short_book_is_not_silently_replaced_by_equal_weights(client):
     equal = _rc(client)
     short_book = _rc(client, {"005930": -60.0, "000660": -40.0})
     assert short_book != equal, "전액 숏 북이 균등가중으로 바꿔치기됐다"
-    assert short_book["005930"] == pytest.approx(13.94, abs=0.05)
-    assert short_book["000660"] == pytest.approx(6.14, abs=0.05)
+    # ★비중 순서가 기여에 반영된다★ 균등가중이면 이 관계가 뒤집힌다
+    # (실측: 균등은 000660 이 더 크고, 60/40 북은 005930 이 더 크다).
+    assert short_book["005930"] > short_book["000660"], short_book
+    assert equal["005930"] < equal["000660"], equal
 
 
 def test_that_all_short_book_matches_its_long_mirror(client):
@@ -146,15 +148,26 @@ def test_a_neutral_book_keeps_its_short_leg_in_the_risk_split(client):
     (비중이 {1.0, 0.0} 으로 정규화되므로)."""
     rc = _rc(client, {"005930": 100.0, "000660": -100.0})
     assert rc["000660"] != pytest.approx(0.0, abs=1e-6), "숏 다리가 지워졌다"
-    assert rc["005930"] == pytest.approx(10.41, abs=0.05)
-    assert rc["000660"] == pytest.approx(11.00, abs=0.05)
+    # ★두 다리가 같은 크기면 기여도 비슷해야 한다★ 클램프가 남아 있으면
+    # 비중이 {1.0, 0.0} 이 되어 한쪽이 0 이고 다른 쪽이 전부를 갖는다.
+    assert rc["005930"] == pytest.approx(rc["000660"], rel=0.35), rc
+    assert min(rc.values()) > 1.0, rc
 
 
-def test_analyze_long_only_risk_split_is_unchanged(client):
-    """★짝★ 롱온리는 값까지 그대로."""
+def test_analyze_long_only_risk_split_tracks_its_weights(client):
+    """★짝 — 롱온리도 부호 보존 경로를 탄다★
+
+    처음에는 여기에 mock 실측값(13.94/6.14)을 박아 뒀다. 그런데 mock 생성기를
+    고치자(날짜 주소화) 이 상수가 깨졌다 — **가드가 지키려던 것과 무관한 이유로**.
+    ★값을 핀하되, 그 값이 유도 가능하거나 통제된 픽스처에서 나올 때만 핀한다.★
+    임의의 mock 산출물은 관계로 건다.
+
+    60/40 북은 더 큰 비중을 준 종목이 더 많이 기여해야 하고, 균등가중과 달라야
+    한다(균등가중으로 바꿔치기되면 순서가 뒤집힌다).
+    """
     rc = _rc(client, {"005930": 60.0, "000660": 40.0})
-    assert rc["005930"] == pytest.approx(13.94, abs=0.05)
-    assert rc["000660"] == pytest.approx(6.14, abs=0.05)
+    assert rc["005930"] > rc["000660"], rc
+    assert rc != _rc(client), "롱온리 지정 비중이 균등가중과 구분되지 않는다"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -203,7 +216,10 @@ def test_the_timing_realized_vol_stops_deleting_the_short_ticker():
     from src.api.timing_routes import _timing_realized_vol_pct
     v = _timing_realized_vol_pct({"SPY": 80.0, "EFA": -20.0}, "us")
     assert v is not None, "숏 종목이 지워져 실현변동성이 계산되지 않았다"
-    assert v == pytest.approx(23.349, abs=0.01)
+    assert 1.0 < v < 200.0, f"연율 변동성(%)의 범위를 벗어났다: {v}"
+    # ★1종목만 남으면 이 함수는 None 을 낸다★ — 값이 나왔다는 것 자체가
+    # 두 종목이 모두 계산에 들어갔다는 뜻이고, 그것이 이 가드의 전부다.
+    assert _timing_realized_vol_pct({"SPY": 80.0}, "us") is None
 
 
 def test_the_timing_basket_keeps_a_short(client):
@@ -268,9 +284,9 @@ def test_a_short_sleeve_still_carries_risk(client):
     클램프가 남아 있으면 숏 슬리브의 비중이 0 이 되어 리스크 기여가 **정확히 0**
     이 된다(비중이 {1.0, 0.0} 으로 정규화되므로).
 
-    ★못 재는 것은 적는다★ 대각에 가까운 mock 공분산에서는 `rc = w·(Σw)/σ` 가
-    `w²` 에 비례해 **부호가 값을 바꾸지 않는다** — 그래서 롱숏과 롱온리가 같은
-    값을 낸다. 여기서 가르는 것은 부호가 아니라 **숏이 계산에 들어갔는지**다.
+    ★앞서 여기에 "부호가 값을 바꾸지 않는다" 고 적었는데 틀렸다.★ 대각 공분산
+    이라면 `rc ∝ w²` 라 그렇지만 실제 공분산에는 교차항이 있어 숏과 롱 거울이
+    0.14%p 다르다(실측). 추론으로 적은 것을 실측이 뒤집었으므로 고친다.
     """
     body = {"sleeves": [{"name": "a", "weights": {"005930": 100.0}},
                         {"name": "b", "weights": {"000660": 100.0}}],
@@ -279,8 +295,15 @@ def test_a_short_sleeve_still_carries_risk(client):
     assert r.status_code == 200, r.text
     rc = r.json()["risk_contribution_pct"]
     assert rc["b"] != pytest.approx(0.0, abs=1e-9), "숏 슬리브가 지워졌다"
-    assert rc["b"] == pytest.approx(2.7, abs=0.05)
-    assert rc["a"] == pytest.approx(97.3, abs=0.05)
+    assert sum(rc.values()) == pytest.approx(100.0, abs=0.05)
+
+    # ★부호가 계산에 닿는다★ 숏 슬리브와 그 롱 거울이 **달라야** 한다 —
+    # 교차항 2·w_a·w_b·σ_ab 의 부호가 바뀌기 때문이다(실측 차이 0.14%p).
+    # 어디선가 `abs()` 를 씌우면 이 둘이 같아진다.
+    mirror = client.post("/api/v1/allocation/sleeve-analytics",
+                         json={**body, "weights": {"a": 120.0, "b": 20.0}}).json()
+    assert rc != mirror["risk_contribution_pct"], \
+        "숏과 롱 거울이 같다 — 부호가 계산에 닿지 않는다"
 
 
 def test_a_long_only_sleeve_combine_is_unchanged(client):
