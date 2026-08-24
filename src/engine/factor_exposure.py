@@ -239,9 +239,15 @@ def portfolio_factor_exposure(weights: dict[str, float], betas: dict) -> dict:
     if not betas.get("available"):
         return {"available": False, "reason": betas.get("reason") or "베타가 없습니다"}
 
-    total = sum(max(float(v), 0.0) for v in weights.values())
-    if total <= 0:
-        return {"available": False, "reason": "비중 합이 0 이하입니다"}
+    # ★부호를 잃지 않는다★ 예전에는 `max(w,0)/Σmax(w,0)` 이라 숏 다리가 통째로
+    # 사라졌다. 숏의 팩터 노출은 **부호가 반대**이므로 그것은 값이 부정확한 것이
+    # 아니라 결론이 뒤집히는 것이었다 — 시장중립 페어(A +100/B −100, 둘 다 β=1.0)가
+    # 참값 0.0 대신 1.0 을, 그것도 `coverage_pct: 100` 과 함께 보고했다.
+    # gross 로 나눈다(net 은 달러중립에서 0 이라 폭발한다). 롱온리는 값까지 동일.
+    from src.engine.portfolio_weights import exposure_basis, signed_fractions
+    fractions = signed_fractions(weights)
+    if not fractions:
+        return {"available": False, "reason": "비중이 없습니다 (gross = 0)"}
 
     out: dict[str, dict] = {}
     for factor in betas["factors"]:
@@ -249,16 +255,17 @@ def portfolio_factor_exposure(weights: dict[str, float], betas: dict) -> dict:
         covered = 0.0
         resolved_w = 0.0
         missing: list[str] = []
-        for code, w in weights.items():
-            wf = max(float(w), 0.0) / total
+        for code, wf in fractions.items():
             row = (betas["assets"].get(str(code)) or {})
             fit = ((row.get("betas") or {}).get(factor) or {}) if row.get("available") else {}
             if fit.get("available") and fit.get("beta") is not None:
                 acc += wf * float(fit["beta"])
-                covered += wf
+                # ★커버리지는 gross 기준★ 부호대로 더하면 중립 북에서 상쇄돼
+                # "아무것도 못 덮었다" 가 되고, 숏을 빼면 절반을 버리고도 100% 가 된다.
+                covered += abs(wf)
                 if fit.get("resolvable"):
-                    resolved_w += wf
-            elif wf > 0:
+                    resolved_w += abs(wf)
+            else:
                 missing.append(str(code))
         out[factor] = {
             "available": covered > 0,
@@ -272,6 +279,8 @@ def portfolio_factor_exposure(weights: dict[str, float], betas: dict) -> dict:
             "reason": None if covered > 0 else "이 팩터의 베타를 가진 자산이 없습니다",
         }
     return {"available": True, "reason": None, "by_factor": out,
+            # ★이 숫자가 어느 기준인지 말한다★ 130/30 은 gross 기준 0.625 다.
+            "basis": exposure_basis(weights),
             "unresolved": betas.get("unresolved", {}),
             "sample": betas.get("sample"),
             "note": ("노출은 커버된 비중에 대한 가중합입니다 — 베타를 못 낸 자산을 "

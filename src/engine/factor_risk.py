@@ -30,17 +30,19 @@ def portfolio_monthly_returns(weights: dict[str, float], *,
     것은 "지금 이 배분이 갖는 분산" 이다.
     """
     from src.engine.conditional_market import _month_key
+    from src.engine.portfolio_weights import signed_fractions
     from src.engine.valuation.macro_sensitivity import _monthly_returns
 
-    total = sum(max(float(v), 0.0) for v in weights.values())
-    if total <= 0:
-        return {"available": False, "reason": "비중 합이 0 이하입니다"}
+    # ★숏을 건너뛰지 않는다★ 예전에는 `if max(w,0) <= 0: continue` 라 숏 다리가
+    # 계열 수집에서부터 빠졌고, 커버리지는 남은 롱 북만으로 계산돼 높게 나왔다.
+    # 중립 북의 분산이 롱 북의 분산으로 보고되던 경로다. gross 로 나눈다.
+    fractions = signed_fractions(weights)
+    if not fractions:
+        return {"available": False, "reason": "비중이 없습니다 (gross = 0)"}
 
     series: dict[str, dict[str, float]] = {}
     missing: list[str] = []
-    for code, w in weights.items():
-        if max(float(w), 0.0) <= 0:
-            continue
+    for code in fractions:
         r = _monthly_returns(str(code), months=months)
         if r is None or r.empty:
             missing.append(str(code))
@@ -57,9 +59,10 @@ def portfolio_monthly_returns(weights: dict[str, float], *,
                 "reason": (f"자산들이 공통으로 갖는 달이 {len(shared)}개뿐입니다 "
                            f"(최소 {MIN_MONTHS}개)"), "missing": missing}
 
-    covered = sum(max(float(weights[c]), 0.0) for c in series) / total
-    port = np.array([sum(max(float(weights[c]), 0.0) / total * series[c][m]
-                         for c in series) for m in shared], dtype=float)
+    # ★커버리지도 gross 기준★ 부호대로 더하면 중립 북에서 상쇄된다.
+    covered = sum(abs(fractions[c]) for c in series)
+    port = np.array([sum(fractions[c] * series[c][m] for c in series)
+                     for m in shared], dtype=float)
     return {
         "available": True, "reason": None,
         "returns": port, "months": shared,

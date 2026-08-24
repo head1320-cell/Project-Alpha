@@ -28,13 +28,20 @@ logger = logging.getLogger(__name__)
 # 벤치마크 프록시 (지수 미보유 시 대형주 폴백 — analyze 벤치마크 관례와 동일)
 _BENCH_PROXY = "KOSPI"
 
+# gross 가 이보다 작으면 "비중 없음". `portfolio_weights` 와 같은 문턱을 쓴다.
+_GROSS_EPS = 1e-9
+
 
 def _to_frac(weights: dict[str, float]) -> dict[str, float]:
-    """% 또는 소수 가중을 소수(sum≈1)로 정규화. 빈/0합이면 그대로."""
-    tot = sum(v for v in weights.values() if isinstance(v, (int, float)) and v > 0)
-    if tot <= 0:
-        return {}
-    return {k: max(float(v), 0.0) / tot for k, v in weights.items() if v and v > 0}
+    """% 또는 소수 가중을 소수로 정규화(`Σ|w| ≈ 1`). 빈/0 이면 빈 dict.
+
+    ★부호를 잃지 않는다★ 예전에는 `if v > 0` 로 숏을 버리고 **양수 합**으로
+    재정규화했다 — 롱숏 리포트가 조용히 롱온리 리포트가 됐다(실측: 130/30 의
+    −30% 다리가 소멸). gross 로 나눈다: net 은 달러중립에서 0 이라 폭발한다.
+    롱온리에서는 `Σ|w| == Σmax(w,0)` 이므로 값까지 그대로다.
+    """
+    from src.engine.portfolio_weights import signed_fractions
+    return signed_fractions(weights)
 
 
 def _load_path(code: str, start_iso: str, end_iso: str) -> list[float] | None:
@@ -238,10 +245,12 @@ def compute_attribution(
             missing.append(c)
 
     have_expost = bool(paths) and elapsed_days >= 1
-    # 커버된 종목만으로 가중 재정규화
+    # 커버된 종목만으로 가중 재정규화 — ★여기도 gross 다★
+    # `sum(cov_w.values())` 는 넷이라 달러중립(Σw≈0)에서 폭발한다.
     cov_w = {c: w[c] for c in paths}
-    covw_tot = sum(cov_w.values())
-    cov_w = {c: v / covw_tot for c, v in cov_w.items()} if covw_tot > 0 else {}
+    covw_gross = sum(abs(v) for v in cov_w.values())
+    cov_w = ({c: v / covw_gross for c, v in cov_w.items()}
+             if covw_gross > _GROSS_EPS else {})
 
     # 종목별 실현수익 + 기여
     per_asset = []

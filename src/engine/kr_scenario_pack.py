@@ -265,11 +265,15 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
                                f"가능한 값: {', '.join(FACTORS)}"}
     elif scenario not in SCENARIOS:
         return {"error": True, "message": f"미지원 시나리오: {scenario}"}
-    codes = [c for c in codes if weights.get(c, 0) > 0]
-    if len(codes) < 1:
+    # ★숏도 채점한다★ 예전에는 `weights.get(c) > 0` 이 숏 종목을 **목록에서부터**
+    # 지웠고, 그래서 롱숏 북의 시나리오 손익이 롱 다리만의 것으로 나왔다. 충격은
+    # w 에 대해 선형(`w @ total`)이라 부호가 그대로 통한다 — 필터만 걷어낸다.
+    from src.engine.portfolio_weights import signed_fractions
+    fractions = signed_fractions({c: weights.get(c, 0.0) for c in codes})
+    if not fractions:
         return {"error": True, "message": "보유 종목이 없습니다."}
-    w = np.array([max(weights.get(c, 0.0), 0.0) for c in codes])
-    w = w / w.sum() if w.sum() > 0 else np.full(len(codes), 1.0 / len(codes))
+    codes = [c for c in codes if c in fractions]
+    w = np.array([fractions[c] for c in codes])
 
     sc = definition if definition is not None else SCENARIOS[scenario]
     exp, names, notes = _load_exposures(codes)
@@ -291,8 +295,13 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
     factor_attr = [{"factor": fid, "label": FACTORS[fid],
                     "contribution_pct": round(float(w @ factor_contrib_stock[fid]), 2)}
                    for fid in coeffs]
+    # ★시장 행도 비중을 태운다★ `port_shock = market·Σw + Σ_f (w@contrib_f)` 이므로
+    # 이 행이 스칼라 `market_shock` 이면 **Σw == 1 일 때만** 분해 항등이 성립한다.
+    # 롱온리는 항상 Σw == 1 이라 그동안 드러나지 않았다. 달러중립(Σw == 0)에서는
+    # 시장충격이 두 다리에서 상쇄되는데도 행에는 그대로 적혀 항등이 깨진다.
+    # 롱온리에서는 `Σw == 1.0` 이므로 값이 비트 동일하다.
     factor_attr.append({"factor": "market", "label": "시장 기본충격",
-                        "contribution_pct": round(market_shock, 2)})
+                        "contribution_pct": round(market_shock * float(w.sum()), 2)})
     factor_attr.sort(key=lambda x: x["contribution_pct"])
 
     rows = [{"stock_code": codes[i], "corp_name": names[i],
