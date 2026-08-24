@@ -52,6 +52,33 @@ LONG_SHORT_BLOCKERS = (
     "실행기가 미보유 종목 매도를 생략합니다 — 숏 진입 자체가 주문으로 나가지 않습니다",
 )
 
+#: ★실행 경로가 살 수 없는 상품★ 롱숏과 같은 관례 — 사유를 뭉뚱그리지 않고
+#: 이름을 붙인다. 나중에 무엇이 풀렸는지 알 수 있어야 하기 때문이다.
+UNTRADABLE_BLOCKERS = (
+    "KIS 주문 경로는 국내 상장 종목만 지원합니다 — 해외 상장 티커는 주문으로 나가지 않습니다",
+    "시세 원천(`load_ohlcv_unified`: DB→KIS→mock)이 전부 KR 이라 체결가를 낼 수 없습니다",
+    "`build_plan` 이 그 종목을 `missing_price` 로 빼고 **나머지만** 계획에 담습니다",
+)
+
+_KR_CODE_LEN = 6
+
+
+def untradable(codes) -> list[str]:
+    """국내 주문 경로가 살 수 없는 코드.
+
+    ★실측이 이 함수의 이유다★ `implement_exposures(..., market="us")` 가 내준
+    `SPY`·`GLD` 목표가 `executable` 이 됐고 `build_plan` 이 주문까지 만들었다.
+    게이트는 사후중립화·롱온리 음수·롱숏 모드·출처 없는 오버레이만 봤고,
+    **"이 상품을 우리가 살 수 있는가" 는 아무도 묻지 않았다.**
+
+    ★형식 판정이지 존재 판정이 아니다★ 6자리 숫자라고 **상장 중**이라는 뜻은
+    아니다 — 폐지·거래정지는 이 판정이 모른다. 여기서 잡는 것은 "우리 주문 경로의
+    어휘에 없는 것" 이고, 상장 상태는 `stock_master`/생존편향 축의 일이다.
+    그것까지 하는 척하지 않는다.
+    """
+    return sorted({str(c) for c in codes
+                   if not (len(str(c)) == _KR_CODE_LEN and str(c).isdigit())})
+
 
 def _engine():
     from src.database import get_engine
@@ -164,6 +191,14 @@ def compile_target(
         reasons.append("롱숏 목표는 연구·백테스트 전용입니다 — " + " / ".join(LONG_SHORT_BLOCKERS))
     if overlay is not None and not source:
         reasons.append("타이밍 오버레이의 출처가 없습니다 — 근거 없는 노출 축소입니다.")
+    # ★거래 가능성★ 구조적으로 살 수 없는 상품은 연구용이다. KR 종목의 **일시적**
+    # 시세 결측(오늘은 없지만 내일 있다)과 섞지 않는다 — 그쪽은 `pre_trade_checks`
+    # 의 커버리지 경고가 맡고, 그 동작이 옳다. 여기서 막는 것은 영원히 없는 쪽이다.
+    bad = untradable(final)
+    if bad:
+        reasons.append(
+            f"국내 주문 경로가 거래할 수 없는 종목이 있습니다: {', '.join(bad)} — "
+            + " / ".join(UNTRADABLE_BLOCKERS))
 
     return {
         "mode": mode,

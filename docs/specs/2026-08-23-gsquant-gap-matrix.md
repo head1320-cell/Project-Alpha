@@ -15,7 +15,7 @@
 |---|---|---|
 | **ResearchContext**(S1) | ✅ 최소 기반 | `src/engine/research_context.py` 가 단일 출처 — 세 벌 복사돼 있던 `code_version()` 이 위임으로 합쳐졌고, 갈라져 있던 `backtest_runs.engine_version` 의 `APP_VERSION` 폴백이 복구됐다. `as_of` 정책(`validate_as_of`)도 라우트에서 엔진으로 옮겼다. `rebalance-decision` 응답이 `research_context`(지문·출처·미선언 절단일)를 싣는다. **모든 엔진 주입은 범위 밖**(§34 Phase 1) |
 | **Dataset**(S2) | ⚠️ 부분 | `ohlcv_loader` · `fundamentals_store` · `dart_history` · `regime_analyzer.collector`(61계열) · `universe_select` — 도메인별 인터페이스는 있으나 **공통 context/provenance 규약이 없다** |
-| **Instrument**(S3) | ❌ 없음 | ticker 가 곧 정체성. `stock_master`·`ticker_universe` 는 이름·그룹만 갖는다. `instrument_id`·`valid_from/valid_to`·`listing_status`·`corporate_action_state` 없음 |
+| **Instrument**(S3) | ⚠️ 최소(거래가능성) | ticker 가 곧 정체성인 것은 그대로. ★그 부재가 실행 게이트에서 피해를 냈다★ — `implement_exposures(market="us")` 가 낸 `SPY`·`GLD` 목표가 `executable` 이 되어 `build_plan` 이 주문까지 만들었다. `target_versions.untradable()` 이 **주문 경로의 어휘**만 판정한다(형식). `instrument_id`·`valid_from/to`·`listing_status`·상장폐지·거래정지는 여전히 없음 |
 | **Position/PositionSet**(S4) | ⚠️ 부분(피해 봉인) | `holdings: dict[str, float]` 가 라우트마다 반복. ★그 반복의 대가는 실측됐다★ — 부호를 아는 곳이 없어 분석 7곳이 각자 `max(w,0)` 로 숏을 버렸고, 시장중립 북이 풀노출(1.0)로 보고됐다. `src/engine/portfolio_weights.py` 가 부호·gross/net 을 단일 출처로 담당한다. 남은 것은 **구조화**(Position 객체·수량·통화·체결가). 재발은 `tests/test_no_weight_sign_loss.py` 가 정적으로 막는다 — 라우트 경계에서 부호를 지우면 CI 가 실패한다 |
 | **Portfolio**(S5) | ❌ 없음 | weights 배열. `PortfolioDecisionState` 는 설계 문서상 개념으로만 존재 |
 | **Factor**(S6) | ✅ 있음 | `factor_exposure.FACTOR_PROXIES` 9팩터(각 59개월) · `allocation_studio.effective_number_of_bets` |
