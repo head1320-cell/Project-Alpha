@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from src.api.json_safe import finite_payload as _finite_payload
 from src.engine.entropy_views import EPUnavailable
+from src.engine.portfolio_weights import signed_fractions
 from src.engine.research_context import describe as _describe_context
 from src.engine.research_context import now as _research_now
 from src.engine.research_context import validate_as_of
@@ -954,11 +955,11 @@ def allocation_factor_xray(req: XrayRequest):
         from src.data.snapshot_db import sample_factors
         from src.data.stock_master import get_market_cap, load_master_flags
 
-        holdings = {c: max(float(w), 0.0) for c, w in req.holdings.items()}
-        tot = sum(holdings.values())
-        if tot <= 0:
-            return {"error": True, "message": "보유 비중 합이 0입니다."}
-        holdings = {c: w / tot for c, w in holdings.items()}
+        # ★부호를 잃지 않는다★ 예전에는 `max(w,0)/Σmax(w,0)` 이라 숏 다리가
+        # 사라졌고, 전액 숏 북에는 "보유 비중 합이 0입니다" 라는 거짓 사유가 나갔다.
+        holdings = signed_fractions(req.holdings)
+        if not holdings:
+            return {"error": True, "message": "보유 비중이 없습니다 (gross = 0)."}
 
         sample = sample_factors(500) or []
         if not sample:
@@ -1010,8 +1011,10 @@ def allocation_factor_xray(req: XrayRequest):
                 if v is None:
                     continue
                 acc += w * _z(v)
-                cov_w += w
-            pf_z = acc / cov_w if cov_w > 0 else None
+                # ★커버리지는 gross★ 부호대로 더하면 중립 북에서 0 에 붙어
+                # `pf_z` 가 조용히 None(= "잴 수 없다")이 된다 — 잴 수 있는데도.
+                cov_w += abs(w)
+            pf_z = acc / cov_w if cov_w > 1e-9 else None
 
             # 벤치마크: 표본 내 KOSPI200 캡가중 (플래그 없으면 유니버스 평균=0 근방)
             bz_acc, bz_w = 0.0, 0.0
@@ -1076,11 +1079,9 @@ def _shock_inputs(code: str):
 def allocation_stress(req: StressRequest):
     """가상 시나리오(M8 펀더멘털 충격 가중합) 또는 역사 윈도우 리플레이."""
     try:
-        holdings = {c: max(float(w), 0.0) for c, w in req.holdings.items()}
-        tot = sum(holdings.values())
-        if tot <= 0:
-            return {"error": True, "message": "보유 비중 합이 0입니다."}
-        holdings = {c: w / tot for c, w in holdings.items()}
+        holdings = signed_fractions(req.holdings)   # ★부호 보존 · gross 정규화★
+        if not holdings:
+            return {"error": True, "message": "보유 비중이 없습니다 (gross = 0)."}
 
         # ── 역사 리플레이 ──
         if req.scenario in _HIST_WINDOWS:
@@ -1101,7 +1102,8 @@ def allocation_stress(req: StressRequest):
             dropped = [c for c in holdings if c not in avail]
             sub = df[avail].dropna()
             w = np.array([holdings[c] for c in avail])
-            w = w / w.sum()
+            # ★gross 로 나눈다★ `w.sum()` 은 넷이라 달러중립에서 폭발한다.
+            w = w / np.abs(w).sum()
             port = sub.values @ w
             eq = np.cumprod(1.0 + port)
             dd = eq / np.maximum.accumulate(eq) - 1.0
@@ -1301,7 +1303,7 @@ def allocation_kr_scenario(req: KrScenarioRequest):
     """국내 시나리오 팩터 충격 — 종목·팩터·슬리브별 P&L + VaR/CVaR 프록시 + 실행 가능성."""
     try:
         from src.engine.kr_scenario_pack import run_scenario
-        holdings = {str(c): max(float(w), 0.0) for c, w in req.holdings.items()}
+        holdings = signed_fractions(req.holdings)   # ★부호 보존 · gross 정규화★
         return run_scenario(list(holdings), holdings, req.scenario,
                             severity=req.severity, sleeves=req.sleeves)
     except Exception:

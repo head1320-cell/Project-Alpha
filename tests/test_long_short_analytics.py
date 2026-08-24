@@ -333,3 +333,204 @@ def test_a_truly_empty_book_is_still_refused(monkeypatch):
     _fake_exposures(monkeypatch, {"A": 1.0})
     r = run_scenario(["A"], {"A": 0.0}, "semi_selloff")
     assert r["error"] is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. 라우트 3곳 — 같은 3줄이 세 번 복사돼 있던 곳
+# ═══════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture(scope="module")
+def client():
+    from fastapi.testclient import TestClient
+
+    from src.app_factory import create_app
+    return TestClient(create_app())
+
+
+_KR = ["005930", "000660", "035420"]
+_LONG_ONLY = {"005930": 50.0, "000660": 30.0, "035420": 20.0}
+_LONG_SHORT = {"005930": 80.0, "000660": 50.0, "035420": -30.0}
+
+
+def test_factor_xray_accepts_a_long_short_book(client):
+    r = client.post("/api/v1/allocation/factor-xray", json={"holdings": _LONG_SHORT})
+    assert r.status_code == 200, r.text
+    assert r.json().get("error") is not True, r.text
+
+
+def _xray_z(client, holdings: dict) -> list[float]:
+    b = client.post("/api/v1/allocation/factor-xray", json={"holdings": holdings}).json()
+    assert b.get("error") is not True, b
+    return [f["portfolio_z"] for f in (b.get("factors") or [])
+            if f.get("portfolio_z") is not None]
+
+
+def test_a_neutral_book_still_gets_factor_z_scores(client):
+    """★조용한 None★ `cov_w` 를 부호대로 더하면 중립 북에서 0 에 붙어
+    `pf_z = acc/cov_w if cov_w > 0` 이 **잴 수 있는데도** None 을 낸다 —
+    실측: 그 상태에서 팩터 목록이 통째로 빈다."""
+    z = _xray_z(client, {"005930": 100.0, "000660": -100.0})
+    assert z, "중립 북의 팩터 z 가 하나도 나오지 않았다"
+
+
+def test_a_near_neutral_book_does_not_get_absurd_z_scores(client):
+    """★짝★ 정확히 0 이 아니면 None 대신 **폭발**한다 — 실측 −347.57.
+    z 는 표준화 점수라 이런 크기가 나올 수 없다."""
+    z = _xray_z(client, {"005930": 100.0, "000660": -99.0})
+    assert z, "근사중립 북의 팩터 z 가 나오지 않았다"
+    assert max(abs(v) for v in z) < 10.0, f"z 가 표준화 점수의 범위를 벗어났다: {z}"
+
+
+def test_stress_accepts_a_long_short_book(client):
+    r = client.post("/api/v1/allocation/stress",
+                    json={"holdings": _LONG_SHORT, "scenario": "rate_hike_200bp"})
+    assert r.status_code == 200, r.text
+    assert r.json().get("error") is not True, r.text
+
+
+def test_a_near_neutral_book_does_not_report_a_ten_thousand_percent_drawdown(client):
+    """★역사 리플레이의 net 정규화★
+
+    처음 이 가드를 "200 이고 error 아님" 으로만 썼는데 변이 프로브(`w / w.sum()`)가
+    **green** 이었다 — 롱숏 픽스처의 net 이 100 이라 나눠도 폭발하지 않았기 때문이다.
+    실측으로 값을 골랐다: net 정규화에서 100/−99 북은 **−10,416.59%** 를 낸다.
+    """
+    r = client.post("/api/v1/allocation/stress",
+                    json={"holdings": {"005930": 100.0, "000660": -99.0},
+                          "scenario": "hist_2020_covid"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("available") is True, body
+    worst = min(body["portfolio_dd"])
+    assert worst > -100.0, f"손실이 원금을 넘었다 — net 으로 나눈 증상이다: {worst}"
+
+
+def test_an_exactly_neutral_book_gets_a_replay_instead_of_nothing(client):
+    """★짝★ 정확히 중립이면 net 정규화는 0 으로 나눠 아예 답을 못 냈다."""
+    r = client.post("/api/v1/allocation/stress",
+                    json={"holdings": {"005930": 100.0, "000660": -100.0},
+                          "scenario": "hist_2020_covid"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("available") is True, body
+    assert body["portfolio_dd"], "리플레이 경로가 아무것도 내지 못했다"
+    assert min(body["portfolio_dd"]) > -100.0
+
+
+def test_kr_scenario_keeps_the_short_in_its_rows(client):
+    """★숏이 결과 표에 남는다★ 예전에는 목록에서부터 지워졌다."""
+    r = client.post("/api/v1/allocation/kr-scenario",
+                    json={"holdings": _LONG_SHORT, "scenario": "semi_selloff"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("error") is not True, body
+    rows = {row["stock_code"]: row["weight_pct"] for row in body["rows"]}
+    assert set(rows) == set(_LONG_SHORT), "숏 종목이 표에서 빠졌다"
+    assert rows["035420"] < 0, "숏이 롱으로 뒤집혔다"
+
+
+def test_an_all_short_book_is_not_told_its_weights_sum_to_zero(client):
+    """★거짓 사유★ 예전 `sum(max(w,0)) <= 0` 이 "보유 비중 합이 0입니다" 를 냈다."""
+    r = client.post("/api/v1/allocation/kr-scenario",
+                    json={"holdings": {"005930": -60.0, "000660": -40.0},
+                          "scenario": "semi_selloff"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "0입니다" not in (body.get("message") or ""), body
+
+
+@pytest.mark.parametrize("path,extra", [
+    ("factor-xray", {}),
+    ("stress", {"scenario": "rate_hike_200bp"}),
+    ("kr-scenario", {"scenario": "semi_selloff"}),
+])
+def test_the_routes_are_unchanged_for_long_only(client, path, extra):
+    """★짝★ 롱온리 응답은 그대로여야 한다 — 두 번 불러 값까지 같은지 본다."""
+    body = {"holdings": _LONG_ONLY, **extra}
+    a = client.post(f"/api/v1/allocation/{path}", json=body)
+    b = client.post(f"/api/v1/allocation/{path}", json=body)
+    assert a.status_code == b.status_code == 200
+    assert a.json().get("error") is not True, a.text
+    assert a.json() == b.json()
+
+
+def test_long_only_kr_scenario_weights_still_sum_to_100(client):
+    """롱온리 정규화가 살아 있는지 값으로 확인한다."""
+    r = client.post("/api/v1/allocation/kr-scenario",
+                    json={"holdings": _LONG_ONLY, "scenario": "semi_selloff"})
+    rows = r.json()["rows"]
+    assert sum(row["weight_pct"] for row in rows) == pytest.approx(100.0, abs=0.05)
+    assert all(row["weight_pct"] > 0 for row in rows)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. neutralize — 출력은 음수를 내면서 입력의 음수는 지우던 곳
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_re_neutralizing_a_net_anchored_book_is_exactly_idempotent():
+    """★멱등★ 이미 중립인 북을 다시 중립화하면 **같은 값**이어야 한다.
+
+    예전에는 입력의 숏이 `max(w,0)` 로 먼저 지워져 2회차가 전혀 다른 북을
+    중립화했다. 사영은 아핀 집합 위로 떨어뜨리므로 출발점의 스케일이 도착점을
+    바꾼다 — 그래서 정규화는 **그 모드가 고정하는 양**(여기서는 net)으로 해야
+    한다. gross 로 나누면 `Σw` 가 1 이 아닌 점에서 출발해 결과가 달라진다.
+    """
+    from src.engine.neutralize import beta_neutralize
+    betas = {"A": 0.6, "B": 1.4, "C": 1.0}
+    first = beta_neutralize({"A": 50.0, "B": 30.0, "C": 20.0}, betas, target_beta=0.3)
+    assert first["error"] is False
+    assert any(v < 0 for v in first["weights"].values()), "픽스처가 롱숏이 아니다"
+
+    second = beta_neutralize(first["weights"], betas, target_beta=0.3)
+    assert second["error"] is False
+    for c, v in first["weights"].items():
+        assert second["weights"][c] == pytest.approx(v, abs=1e-4), c
+
+
+def test_re_neutralizing_a_dollar_neutral_book_keeps_its_direction():
+    """★달러중립에는 스케일을 고정하는 것이 없다★ 그래서 멱등성은 **방향까지**다.
+
+    `Σw = 0` 하나로는 크기를 말할 수 없다(P3 가 gross 를 도입한 이유와 같다).
+    처음 이 가드를 값 동일로 썼다가 실측에서 배율 3.75 가 나와 전제를 고쳤다 —
+    방향은 정확히 보존되고 크기만 입력의 gross 를 따른다. 그 사실은
+    `gross_exposure` 로 보고한다.
+    """
+    from src.engine.neutralize import beta_neutralize
+    betas = {"A": 0.6, "B": 1.4, "C": 1.0}
+    first = beta_neutralize({"A": 50.0, "B": 30.0, "C": 20.0}, betas, target_beta=0.0,
+                            dollar_neutral=True)
+    second = beta_neutralize(first["weights"], betas, target_beta=0.0,
+                             dollar_neutral=True)
+    assert first["error"] is False and second["error"] is False
+    assert any(v < 0 for v in first["weights"].values()), "픽스처가 롱숏이 아니다"
+
+    ratios = [second["weights"][c] / first["weights"][c] for c in first["weights"]]
+    assert max(ratios) == pytest.approx(min(ratios), rel=1e-4), \
+        f"방향이 바뀌었다 — 숏이 지워졌을 때 나타나는 증상이다: {ratios}"
+    assert second["gross_exposure"] == pytest.approx(1.0, abs=1e-4)
+    # ★짝★ 두 번 모두 제약을 실제로 만족한다(비율만 보면 놓친다).
+    for r in (first, second):
+        assert r["beta_hit"] is True
+        assert r["net"] == pytest.approx(0.0, abs=1e-4)
+
+
+def test_beta_neutralize_long_only_input_is_unchanged():
+    """★짝★ 롱온리 입력에서는 값까지 그대로다."""
+    from src.engine.neutralize import beta_neutralize
+    betas = {"A": 0.6, "B": 1.4}
+    out = beta_neutralize({"A": 60.0, "B": 40.0}, betas, target_beta=1.0)
+    assert out["error"] is False
+    assert out["beta_hit"] is True
+    assert sum(out["weights"].values()) == pytest.approx(100.0, abs=1e-3)
+
+
+def test_sector_neutralize_keeps_a_short_inside_its_sector():
+    """섹터 지분은 gross 로 잰다 — 롱숏이 섞인 섹터가 '비어 있다' 로 보이면 안 된다."""
+    from src.engine.neutralize import sector_neutralize
+    out = sector_neutralize({"A": 60.0, "B": -20.0, "C": 20.0},
+                            {"A": "반도체", "B": "반도체", "C": "인터넷"})
+    assert out["error"] is False
+    assert out["weights"]["B"] < 0, "숏이 롱으로 뒤집혔다"
+    # 반도체 섹터의 gross 지분이 목표(50%)에 맞춰졌다.
+    assert out["sector_after_pct"]["반도체"] == pytest.approx(50.0, abs=0.1)
+    assert out["sector_after_pct"]["인터넷"] == pytest.approx(50.0, abs=0.1)
