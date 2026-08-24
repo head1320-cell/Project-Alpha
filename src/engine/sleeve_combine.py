@@ -48,8 +48,32 @@ def _cov_local(S: np.ndarray) -> np.ndarray:
         return np.atleast_2d(c) + np.eye(S.shape[1]) * 1e-8
 
 
-def _risk_budget_weights(cov: np.ndarray, budget: np.ndarray, iters: int = 200) -> np.ndarray:
-    """리스크 예산 배분 — RC_i ∝ budget_i (등예산이면 리스크 패리티). 순환 반복."""
+#: 순환 반복의 감쇠 지수. ★1.0(전 스텝)은 발산한다★ — 아래 주석의 실측 참조.
+RISK_BUDGET_DAMPING = 0.5
+#: 비중 하한. `0` 으로 자르면 한 번 0 이 된 자산이 **영원히 돌아오지 못한다**.
+_W_FLOOR = 1e-12
+
+
+def _risk_budget_weights(cov: np.ndarray, budget: np.ndarray, iters: int = 200,
+                         damping: float = RISK_BUDGET_DAMPING) -> np.ndarray:
+    """리스크 예산 배분 — RC_i ∝ budget_i (등예산이면 리스크 패리티). 순환 반복.
+
+    ★감쇠가 없으면 발산한다 (실측)★ 예전에는 `w ← w·(b/rc_share)` 로 **전 스텝**을
+    밟았다. 2슬리브(연변동성 21.2%·29.0%, ρ=−0.06)에서 기여 비율이 진동하며 커졌다:
+
+        0.340 → 0.679 → 0.301 → 0.721 → 0.255 → 0.771 → …
+
+    결국 한쪽이 `np.clip(w, 0, None)` 으로 **정확히 0** 이 되고, 0 은 곱셈 갱신에서
+    영원히 0 이라 돌아오지 못한다. 결과가 리스크 **패리티**인데 `[0, 1]` 이었다.
+
+    ★감쇠 0.5 는 해석해와 일치한다★ 무상관이면 답이 `w ∝ 1/σ` 로 닫혀 있다:
+
+        2자산 → [0.577512, 0.422488]   (해석해와 소수 6자리까지 동일)
+        3자산 → [0.571429, 0.285714, 0.142857]
+
+    감쇠 1.0 은 같은 입력에서 [0.846, 0.154] 를 낸다 — 이 함수의 회귀 가드가
+    그 두 값을 가른다.
+    """
     b = budget / budget.sum()
     w = b.copy()
     for _ in range(iters):
@@ -59,9 +83,9 @@ def _risk_budget_weights(cov: np.ndarray, budget: np.ndarray, iters: int = 200) 
         mrc = cov @ w / sigma
         rc = w * mrc
         rc_sum = rc.sum() or 1.0
-        # 목표 예산 대비 기여 비율로 조정
-        w = w * (b / (rc / rc_sum + 1e-12))
-        w = np.clip(w, 0, None)
+        # 목표 예산 대비 기여 비율로 조정 — ★부분 스텝★
+        w = w * np.power(b / (rc / rc_sum + 1e-12), damping)
+        w = np.clip(w, _W_FLOOR, None)
         w = w / w.sum()
     return w
 
