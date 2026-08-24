@@ -23,6 +23,9 @@ from pydantic import BaseModel, Field
 
 from src.api.json_safe import finite_payload as _finite_payload
 from src.engine.entropy_views import EPUnavailable
+from src.engine.research_context import describe as _describe_context
+from src.engine.research_context import now as _research_now
+from src.engine.research_context import validate_as_of
 from src.engine.scenario_packs import HIST_WINDOWS
 
 logger = logging.getLogger("api.allocation")
@@ -80,16 +83,14 @@ def _check_as_of(as_of: str | None) -> None:
 
     미래를 허용하면 `end = 2099-01-01` 이 그냥 오늘과 같은 데이터를 주면서 런에는
     "2099 시점으로 고정했다" 고 적힌다. 조용히 오늘로 깎지 않고 거부한다.
+
+    ★정책은 엔진에 있다★ 이 규칙을 아는 곳이 라우트뿐이면 다른 호출자는 모른다.
+    `research_context.validate_as_of` 가 사유 문자열을 돌려주고, 여기서 그것을
+    422 로 바꾼다 — 정책은 하나이되 표현은 계층마다 다르다. **동작은 불변**이다.
     """
-    if as_of is None:
-        return
-    try:
-        d = date.fromisoformat(as_of)
-    except ValueError:
-        raise HTTPException(422, f"as_of 형식이 올바르지 않습니다 (YYYY-MM-DD): {as_of}")
-    if d > date.today():
-        raise HTTPException(
-            422, f"as_of 가 미래입니다 ({as_of}) — 미래 시점으로는 데이터를 고정할 수 없습니다.")
+    reason = validate_as_of(as_of)
+    if reason:
+        raise HTTPException(422, reason)
 
 
 class AnalyzeRequest(BaseModel):
@@ -1651,6 +1652,12 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
 
     무거래 밴드는 **자산마다** 다르다(포지션 크기에 의존). 고정 ±5% 가 아니다.
     """
+    _check_as_of(req.as_of)
+    # ★이 계산이 어떤 정보집합 위에 서 있는지 응답이 말한다★ (벤치마크 §4)
+    # 선언하지 않은 절단일은 **채우지 않는다** — 비어 있음은 "그 날짜로 잘랐다" 가
+    # 아니라 "자른 적이 없다" 는 뜻이고, 채우면 그것이 §4 의 hidden date 다.
+    ctx = _research_now(**({"as_of": req.as_of} if req.as_of else {}))
+    rc = _describe_context(ctx)
     try:
         from src.engine.rebalance_policy import detect_triggers, rebalance_decision
 
@@ -1658,7 +1665,8 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"available": False, "decision": "undetermined",
-                    "reason": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded}
+                    "reason": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded,
+                    "research_context": rc}
 
         names = list(returns.columns)
         R = returns.values
@@ -1807,6 +1815,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 cond, cond_path, sigma_applied=s_override is not None,
                 mu_as_views=len(extra_views or []), view_confidence=None,
                 model=req.model) if req.conditional else None),
+            "research_context": rc,
         })
         return _finite_payload(decision)
     except HTTPException:

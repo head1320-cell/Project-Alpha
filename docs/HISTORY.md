@@ -6419,3 +6419,62 @@ equivalent mutant 다. 억지로 잡히게 만들지 않고 그렇게 기록한�
 
 **2,546 passed / 10 skipped** · ruff 0. 변이 프로브 **13건**(엔진 7 · 배선 6).
 red 는 alpha-lab 1건뿐.
+
+---
+
+## 2026-08-24 — S1 `ResearchContext` (벤치마크 §4, Priority S) + 벤치마크 문서 편입
+
+갭 매트릭스가 S1 을 "⚠️ 분산·중복" 으로 판정한 근거를 실측으로 확인했다.
+
+### ★같은 함수가 네 벌 있었고, 그중 하나가 갈라져 있었다★
+
+| 위치 | 구현 |
+|---|---|
+| `regime_snapshots.py:144` | `GIT_SHA or APP_VERSION or "dev"` |
+| `company_snapshots.py:165` | **바이트 동일** |
+| `research_runs.py:76` | **바이트 동일** |
+| `backtest_runs.py:80` | `BACKTEST_ENGINE_VERSION or GIT_SHA or "dev"` — **`APP_VERSION` 폴백 없음** |
+
+네 번째가 다른 것이 문제의 증거다. 복사가 셋으로 늘어나는 동안 하나가 갈라졌고,
+그래서 `APP_VERSION` 만 설정한 환경에서는 **백테스트 기록만** `"dev"` 로 남았다.
+`target_versions.py:192` 는 이미 `research_runs.code_version` 을 빌려 쓰고 있었다 —
+실행 **저장소**가 컨텍스트 원시객체의 집이 되어 있었다는 뜻이다.
+
+세 벌을 **얇은 위임으로 재수출**했다(삭제가 아니다 — 빌려 쓰는 import 가 깨지면
+안 된다). `backtest_runs.engine_version()` 은 `BACKTEST_ENGINE_VERSION` 우선순위를
+유지한 채 그 뒤 폴백만 단일 출처에 넘겼다. ★이 커밋의 유일한 동작 변화가 그것이다.★
+
+### ★선언하지 않은 절단일을 채우지 않는다★
+
+이 모듈에서 가장 중요한 규칙. `market/fundamental/macro_data_as_of` 를 `as_of` 로
+기본값 채우면 "그 날짜로 잘랐다" 는 **주장**이 되는데 실제로 강제한 적이 없다 —
+문서 §4 가 막으려는 hidden date 가 정확히 그것이다. 비어 있으면 `unspecified` 로
+**말하고**, `declared` 와 구분한다.
+
+지문(`fingerprint`)에는 `data_source`(mock|db)도 넣었다. mock 결과와 실데이터
+결과가 **같은 지문**을 갖는 것이 가장 위험한 재현성 거짓말이다.
+
+### `as_of` 정책이 라우트에 갇혀 있었다
+
+`allocation_routes._check_as_of` 의 "미래 `as_of` 는 고정이 아니라 **고정한 척**"
+(P1-A)은 좋은 규칙인데 엔진이 알지 못했다. `validate_as_of` 로 옮기되 엔진은
+`HTTPException` 을 던지지 않는다 — 사유 문자열을 돌려주고 라우트가 422 로 바꾼다.
+**422 동작은 불변**이다.
+
+배선 중에 확인한 것: `rebalance-decision` 은 `_check_as_of` 를 **호출한 적이 없었다.**
+상속받은 `as_of` 필드의 `pattern` 이 형식만 보므로 잘 만들어진 미래 날짜가 그냥
+통과하고 있었다. 프로브 D(정책은 남기되 호출만 제거)가 그 사실을 붙잡는다.
+
+### 범위 — 문서가 정한 최소
+
+§34 Phase 1 *"Implement only the minimum required foundation. Do not rewrite every
+data source."* 컨텍스트는 **가산**이고 어떤 엔진도 강제로 통과시키지 않는다.
+Dataset(S2)·Instrument(S3)·Position/Portfolio(S4·S5)와 모든 엔진 인자 주입은 범위 밖.
+
+### 게이트
+
+**2,594 passed / 10 skipped** · ruff 0. 변이 프로브 **12건**(엔진 7 · 배선 5) 전부 red.
+red 는 alpha-lab 1건뿐(기존).
+
+벤치마크 원문을 `docs/Project_Alpha_GSQuant_Architectural_Benchmark.md` 로 편입했다 —
+기존 두 브리프와 같은 관례, 내용은 한 글자도 고치지 않았다(28,140 B 일치 확인).

@@ -13,7 +13,7 @@
 
 | 도메인 원시객체(§39) | 상태 | 근거 (파일·실측) |
 |---|---|---|
-| **ResearchContext**(S1) | ⚠️ 분산·중복 | `as_of` 인자·`pit_store`·`pit_macro.derive_usage` 는 있으나 `code_version()`/`MODEL_VERSION`/`ENGINE_VERSION` 이 **저장소마다 따로 정의**(`regime_snapshots.py:63,144` · `company_snapshots.py:97,165`) |
+| **ResearchContext**(S1) | ✅ 최소 기반 | `src/engine/research_context.py` 가 단일 출처 — 세 벌 복사돼 있던 `code_version()` 이 위임으로 합쳐졌고, 갈라져 있던 `backtest_runs.engine_version` 의 `APP_VERSION` 폴백이 복구됐다. `as_of` 정책(`validate_as_of`)도 라우트에서 엔진으로 옮겼다. `rebalance-decision` 응답이 `research_context`(지문·출처·미선언 절단일)를 싣는다. **모든 엔진 주입은 범위 밖**(§34 Phase 1) |
 | **Dataset**(S2) | ⚠️ 부분 | `ohlcv_loader` · `fundamentals_store` · `dart_history` · `regime_analyzer.collector`(61계열) · `universe_select` — 도메인별 인터페이스는 있으나 **공통 context/provenance 규약이 없다** |
 | **Instrument**(S3) | ❌ 없음 | ticker 가 곧 정체성. `stock_master`·`ticker_universe` 는 이름·그룹만 갖는다. `instrument_id`·`valid_from/valid_to`·`listing_status`·`corporate_action_state` 없음 |
 | **Position/PositionSet**(S4) | ❌ 없음 | `holdings: dict[str, float]` 가 라우트마다 반복 |
@@ -68,7 +68,7 @@
 
 | 순위 | 항목 | 비고 |
 |---|---|---|
-| 1 | **S1 ResearchContext** | 문서의 Priority S. 모든 엔진을 가로지르는 리팩터라 별도 승인 필요. 좁은 버전(중복된 `code_version` 통합)부터 가능 |
+| 1 | ~~**S1 ResearchContext**~~ | **완료(최소 기반)** — 컨텍스트 객체 + 중복 제거 + `rebalance-decision` 배선. 모든 엔진에 `context` 인자를 주입하는 전면 리팩터는 여전히 별도 승인 대상 |
 | 2 | **Position/PositionSet/Portfolio** | Phase 6. `holdings` dict 를 대체 |
 | 3 | **§14 팩터 복제 바스켓** | mock 에서 ETF 상관이 0(SPY-VTI 0.037)이라 품질 검증 불가 — 구조만 가능 |
 | 4 | **§15 ConstraintSet 구조화** | 현 `Constraints` 로 동작 중이라 급하지 않음 |

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import secrets
 import time
 from typing import Any
@@ -73,8 +72,11 @@ def _ensure_table(engine) -> None:
     _inited = True
 
 
-def code_version() -> str:
-    return os.getenv("GIT_SHA") or os.getenv("APP_VERSION") or "dev"
+# ★단일 출처★ 이 함수는 세 저장소에 **바이트 동일하게 복사**돼 있었다. 복사본이
+# 넷이면 언젠가 하나는 갈라진다 — 실제로 `backtest_runs` 가 `APP_VERSION` 폴백을
+# 잃은 채 갈라져 있었다. 여기서는 **재수출**한다(삭제하지 않는다) — 이 이름을
+# 빌려 쓰는 호출자가 있어 공개 표면을 유지해야 한다.
+from src.engine.research_context import code_version  # noqa: F401  (재수출)
 
 
 def _new_run_id() -> str:

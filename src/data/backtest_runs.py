@@ -78,7 +78,15 @@ ORPHAN_SILENCE_SEC = 900.0
 
 
 def engine_version() -> str:
-    return os.getenv("BACKTEST_ENGINE_VERSION") or os.getenv("GIT_SHA") or "dev"
+    """백테스트 엔진 식별자.
+
+    ★갈라졌던 폴백을 복구한다★ 이 함수는 `BACKTEST_ENGINE_VERSION or GIT_SHA or
+    "dev"` 였다 — 세 저장소의 `code_version` 을 복사하는 동안 `APP_VERSION` 폴백이
+    빠졌고, 그래서 `APP_VERSION` 만 설정한 환경에서는 **백테스트 기록만** "dev" 가
+    됐다. 명시적 오버라이드는 그대로 두고, 그 뒤 폴백을 단일 출처에 위임한다.
+    """
+    from src.engine.research_context import code_version
+    return os.getenv("BACKTEST_ENGINE_VERSION") or code_version()
 
 
 def _engine():
