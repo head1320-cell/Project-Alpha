@@ -684,8 +684,11 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         from src.kis_portfolio_analyzer import PortfolioAnalyzer
         user_w = None
         if req.weights:
-            user_w = {t: max(float(req.weights.get(t, 0.0)), 0.0) for t in names}
-            if sum(user_w.values()) <= 0:
+            # ★부호 보존★ 예전에는 숏을 지우고 `Σw <= 0` 이면 "비중 없음" 으로
+            # 떨어뜨렸다 — 전액 숏 북이 조용히 균등가중으로 분석되던 자리다.
+            # (`PortfolioAnalyzer` 의 net 정규화가 먼저 고쳐졌기에 걷을 수 있다.)
+            user_w = {t: float(req.weights.get(t, 0.0)) for t in names}
+            if sum(abs(v) for v in user_w.values()) <= 0:
                 user_w = None
         analyzer = PortfolioAnalyzer(returns=returns, weights=user_w)
         metrics = analyzer.analyze()
@@ -1482,12 +1485,15 @@ def allocation_stress_correlation(req: StressCorrRequest):
         names = list(returns.columns)
         n = len(names)
         if req.weights:
-            w = np.array([max(float(req.weights.get(t, 0.0)), 0.0) for t in names], dtype=float)
-            if w.sum() <= 0:
+            # ★조용한 대체 금지★ 예전에는 전액 숏 북에서 `w.sum() <= 0` 이 걸려
+            # **균등가중으로 바꿔치기**했다 — 사용자가 준 것과 다른 포트폴리오를
+            # 분석해 놓고 그렇게 말하지 않는 자리였다.
+            w = np.array([float(req.weights.get(t, 0.0)) for t in names], dtype=float)
+            if np.abs(w).sum() <= 0:
                 w = np.ones(n)
         else:
             w = np.ones(n)
-        w = w / w.sum()
+        w = w / np.abs(w).sum()          # ★gross★ net 은 달러중립에서 0 이다
 
         ann = math.sqrt(252.0)
         prm = PortfolioRiskModel(confidence_level=req.confidence_level)

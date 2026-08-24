@@ -124,12 +124,15 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
 
     # 2단계: 종목 레벨 집계 (슬리브 배분 × 슬리브 내 종목비중)
     combined: dict[str, float] = {}
+    # ★슬리브 안의 숏을 버리지 않는다★ 이 모듈에는 PairSpreadRequest(long/short)가
+    # 있다 — 페어 트레이딩용으로 설계돼 있으면서 결합 단계에서 숏을 지우고 있었다.
+    # 슬리브 내 상대비중도 집계도 gross 기준이다(net 은 페어 슬리브에서 0).
     for j, s in enumerate(sleeves):
         w = s.get("weights", {})
-        wsum = sum(max(v, 0.0) for v in w.values()) or 1.0
+        wsum = sum(abs(float(v)) for v in w.values()) or 1.0
         for c, v in w.items():
-            combined[c] = combined.get(c, 0.0) + alloc[j] * max(v, 0.0) / wsum
-    csum = sum(combined.values()) or 1.0
+            combined[c] = combined.get(c, 0.0) + alloc[j] * float(v) / wsum
+    csum = sum(abs(v) for v in combined.values()) or 1.0
     combined = {c: round(v / csum * 100, 4) for c, v in combined.items()}
 
     return {
@@ -162,9 +165,11 @@ def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | N
     # 꼬리 의존: 하위 10% 동시초과 빈도 / 0.1 (>1이면 꼬리 동반 하락 경향)
     tail = _tail_dependency(S)
     # 리스크 기여 (weights 주어지면 그 배분, 아니면 등가중)
-    w = np.array([max(weights.get(names[j], 0.0), 0.0) for j in range(n)]) if weights else np.ones(n) / n
-    if w.sum() > 0:
-        w = w / w.sum()
+    # 슬리브 배분도 같은 규칙 — 사용자가 준 값이므로 부호가 미지수다.
+    w = (np.array([float(weights.get(names[j], 0.0)) for j in range(n)])
+         if weights else np.ones(n) / n)
+    if np.abs(w).sum() > 0:
+        w = w / np.abs(w).sum()
     cov = _cov_local(S)
     rc = _risk_contributions(w, cov)
 

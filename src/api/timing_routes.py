@@ -135,7 +135,10 @@ def _timing_regime_probs(mk: str) -> dict | None:
 
 def _timing_realized_vol_pct(weights_pct: dict[str, float], mk: str) -> float | None:
     """위험자산 비중 바스켓의 실현 연율 변동성(%) — etf_prices 일별 수익 + Ledoit-Wolf 공분산."""
-    tickers = [t for t, w in weights_pct.items() if w > 0]
+    # ★목록 필터가 먼저다★ 비중을 0 으로 자르기 전에 **종목 자체**를 지우고 있었다.
+    from src.engine.portfolio_weights import signed_fractions
+    fractions = signed_fractions(weights_pct)
+    tickers = list(fractions)
     if len(tickers) < 1:
         return None
     try:
@@ -144,11 +147,11 @@ def _timing_realized_vol_pct(weights_pct: dict[str, float], mk: str) -> float | 
         names, R = _aligned_returns(_closes_map(tickers, mk, 400))
         if not names or R is None or R.shape[0] < 60:
             return None
-        w = np.array([max(weights_pct.get(t, 0.0), 0.0) for t in names], dtype=float)
-        s = w.sum()
-        if s <= 0:
+        w = np.array([fractions.get(t, 0.0) for t in names], dtype=float)
+        g = float(np.abs(w).sum())
+        if g <= 0:
             return None
-        w = w / s
+        w = w / g          # ★gross★ 이미 gross 정규화돼 있지만 자산 선별 후 다시 맞춘다
         var_d = float(w @ _cov(R) @ w)
         return float(np.sqrt(max(var_d, 0.0) * 252.0) * 100.0)
     except Exception as e:
@@ -448,13 +451,16 @@ def allocation_timing(req: TimingRequest):
         risk_on = hits >= need
 
         # 리스크-온/오프 자산군 구성
+        from src.engine.portfolio_weights import signed_fractions
+
         def _on_basket() -> dict[str, float]:
             if req.risk_on_assets:
                 w = 100.0 / len(req.risk_on_assets)
                 return {t: w for t in req.risk_on_assets}
             if req.holdings:
-                tot = sum(max(v, 0.0) for v in req.holdings.values()) or 1.0
-                return {t: max(v, 0.0) / tot * 100 for t, v in req.holdings.items()}
+                # ★부호 보존★ 숏을 포함한 바스켓도 그대로 싣는다.
+                return {t: v * 100.0
+                        for t, v in signed_fractions(req.holdings).items()}
             return {}
 
         def _off_basket() -> dict[str, float]:

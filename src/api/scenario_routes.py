@@ -111,7 +111,13 @@ def _run_pack(pack, req: ScenarioRunRequest, definition: dict | None = None) -> 
     리플레이는 그 구간의 **최대 낙폭**을 낸다. 둘 다 `shock_pct` 로 싣되 `shock_basis` 가
     무엇을 잰 숫자인지 밝힌다 — 밝히지 않으면 나란히 놓인 두 팩이 비교 가능해 보인다.
     """
-    holdings = {str(c): max(float(w), 0.0) for c, w in req.holdings.items()}
+    # ★부호를 잃지 않는다★ 아래 두 엔진(`run_scenario`·`allocation_stress`)은
+    # 이미 숏을 다루는데, 여기서 롱온리로 만들어 넘기고 있었다 — 같은 3줄이
+    # 네 곳에 복사돼 있던 것의 마지막 한 곳이다.
+    from src.engine.portfolio_weights import signed_fractions
+    holdings = signed_fractions(req.holdings)
+    if not holdings:
+        raise HTTPException(422, "보유 비중이 없습니다 (gross = 0).")
 
     if pack.engine in ("kr_pack", "inline", "saved"):
         from src.engine.kr_scenario_pack import run_scenario
