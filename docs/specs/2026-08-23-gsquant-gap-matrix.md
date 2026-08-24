@@ -16,7 +16,7 @@
 | **ResearchContext**(S1) | ✅ 최소 기반 | `src/engine/research_context.py` 가 단일 출처 — 세 벌 복사돼 있던 `code_version()` 이 위임으로 합쳐졌고, 갈라져 있던 `backtest_runs.engine_version` 의 `APP_VERSION` 폴백이 복구됐다. `as_of` 정책(`validate_as_of`)도 라우트에서 엔진으로 옮겼다. `rebalance-decision` 응답이 `research_context`(지문·출처·미선언 절단일)를 싣는다. **모든 엔진 주입은 범위 밖**(§34 Phase 1) |
 | **Dataset**(S2) | ⚠️ 부분 | `ohlcv_loader` · `fundamentals_store` · `dart_history` · `regime_analyzer.collector`(61계열) · `universe_select` — 도메인별 인터페이스는 있으나 **공통 context/provenance 규약이 없다** |
 | **Instrument**(S3) | ❌ 없음 | ticker 가 곧 정체성. `stock_master`·`ticker_universe` 는 이름·그룹만 갖는다. `instrument_id`·`valid_from/valid_to`·`listing_status`·`corporate_action_state` 없음 |
-| **Position/PositionSet**(S4) | ❌ 없음 | `holdings: dict[str, float]` 가 라우트마다 반복 |
+| **Position/PositionSet**(S4) | ⚠️ 부분 | `holdings: dict[str, float]` 가 라우트마다 반복. ★그 반복의 대가는 실측됐다★ — 부호를 아는 곳이 없어 분석 7곳이 각자 `max(w,0)` 로 숏을 버렸고, 시장중립 북이 풀노출(1.0)로 보고됐다. `src/engine/portfolio_weights.py` 가 부호·gross/net 을 단일 출처로 담당한다. 남은 것은 **구조화**(Position 객체·수량·통화·체결가) |
 | **Portfolio**(S5) | ❌ 없음 | weights 배열. `PortfolioDecisionState` 는 설계 문서상 개념으로만 존재 |
 | **Factor**(S6) | ✅ 있음 | `factor_exposure.FACTOR_PROXIES` 9팩터(각 59개월) · `allocation_studio.effective_number_of_bets` |
 | **RiskModel**(§13) | ❌ **조립 없음** | `factor_risk` 는 **분해**만 한다. Σ_asset 은 여전히 `_cov(R)*252` 표본 공분산(`allocation_studio.py:262`) |
@@ -69,7 +69,7 @@
 | 순위 | 항목 | 비고 |
 |---|---|---|
 | 1 | ~~**S1 ResearchContext**~~ | **완료(최소 기반)** — 컨텍스트 객체 + 중복 제거 + `rebalance-decision` 배선. 모든 엔진에 `context` 인자를 주입하는 전면 리팩터는 여전히 별도 승인 대상 |
-| 2 | **Position/PositionSet/Portfolio** | Phase 6. `holdings` dict 를 대체 |
+| 2 | **Position/PositionSet/Portfolio** | Phase 6. `holdings` dict 를 대체. ★부호·단위는 `portfolio_weights` 가 먼저 담당하게 됐다★ — 원시객체가 없어서 생긴 **측정된 피해**(분석 7곳이 각자 `max(w,0)` 로 숏을 버림)는 닫혔고, 남은 것은 구조화다 |
 | 3 | **§14 팩터 복제 바스켓** | mock 에서 ETF 상관이 0(SPY-VTI 0.037)이라 품질 검증 불가 — 구조만 가능 |
 | 4 | **§15 ConstraintSet 구조화** | 현 `Constraints` 로 동작 중이라 급하지 않음 |
 | 5 | **S3 Instrument** | 생존편향 정합성에 필요하나 `tickers_asof` 가 부분 대체 중 |
