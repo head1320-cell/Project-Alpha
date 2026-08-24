@@ -94,6 +94,18 @@ def _check_as_of(as_of: str | None) -> None:
         raise HTTPException(422, reason)
 
 
+def _check_weight_unit(weights: dict, declared: str | None) -> None:
+    """★돈을 세기 전에 단위를 확정한다★ (엔진 정책 → 422)
+
+    `unit_reason` 이 모호하다고 하면 추측하지 않고 되돌려 준다 — 조용히 고르면
+    같은 지시가 100배 다른 주문을 내고 아무도 그것을 말하지 않는다(실측).
+    """
+    from src.engine.portfolio_weights import unit_reason
+    reason = unit_reason(weights, declared)
+    if reason:
+        raise HTTPException(422, reason)
+
+
 class AnalyzeRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=30)
     weights: dict[str, float] | None = None          # 없으면 균등
@@ -1629,6 +1641,9 @@ class RebalanceDecisionRequest(AnalyzeRequest):
     """`AnalyzeRequest` 를 그대로 물려받는다 — 유니버스·모델·절단일·조건부 스위치가
     분석과 **같은 의미**여야 두 화면의 판단이 갈리지 않는다."""
     holdings: dict[str, float] = Field(..., min_length=1)   # 현재 비중 %
+    # ★단위를 말할 수 있게 한다★ 합이 1 근처면 "분수로 준 만액" 인지 "퍼센트로 준
+    # 소액" 인지 알 수 없고, 두 해석은 **주문 금액이 100배 다르다**(실측).
+    weight_unit: str | None = Field(None, max_length=16)     # percent|fraction
     portfolio_value: float = Field(..., gt=0)
     # 없으면 optimize 결과를 목표로 쓴다.
     target_weights: dict[str, float] | None = None
@@ -1661,6 +1676,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
     무거래 밴드는 **자산마다** 다르다(포지션 크기에 의존). 고정 ±5% 가 아니다.
     """
     _check_as_of(req.as_of)
+    _check_weight_unit(req.holdings, req.weight_unit)
     # ★이 계산이 어떤 정보집합 위에 서 있는지 응답이 말한다★ (벤치마크 §4)
     # 선언하지 않은 절단일은 **채우지 않는다** — 비어 있음은 "그 날짜로 잘랐다" 가
     # 아니라 "자른 적이 없다" 는 뜻이고, 채우면 그것이 §4 의 hidden date 다.

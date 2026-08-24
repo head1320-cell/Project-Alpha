@@ -109,3 +109,68 @@ def exposure_basis(weights: dict) -> dict:
                  "나누면 폭발하기 때문입니다. NAV 기준으로 환산하려면 gross_pct/100 "
                  "을 곱하십시오."),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 비중의 **단위** — ★`dict[str, float]` 는 자기 단위를 말하지 않는다★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# ★실측 — 같은 지시가 100배 다른 주문을 낸다★
+#
+#     build_plan(현재 0, 목표 {"005930": 60.0, "000660": 40.0}, PV=10억)
+#         → 매수 999,970,000원 · 회전율 100.0%
+#     build_plan(현재 0, 목표 {"005930":  0.60, "000660":  0.40}, PV=10억)
+#         → 매수   9,950,000원 · 회전율   1.0%      ← 경고 없음
+#
+# 저장소 안에 **서로 다른 두 관례**가 공존한다:
+#   · 돈을 세는 계층(`execution_plan`·`rebalance_policy`·`instrument_selector`)은
+#     `/100.0` 으로 **퍼센트를 가정**한다.
+#   · 비율을 세는 계층(`factor_exposure`·`factor_risk`·`attribution`…)은 gross 로
+#     정규화해 **단위와 무관**하다.
+# 그래서 한 응답 안에서 절반은 옳고 절반은 100배 틀릴 수 있고, 아무도 그것을 말하지
+# 않는다. 라우트의 선언된 관례는 **퍼센트**다(`# {code: weight_pct}`).
+#
+# ★추측하지 않는다★ 합이 1 근처면 "분수로 준 100%" 인지 "퍼센트로 준 1%(현금 99%)"
+# 인지 **알 수 없다.** 둘 다 정당한 포트폴리오다. 조용히 골라 주는 것이 바로 이
+# 결함을 만든 행동이므로, 모호하면 사유를 돌려주고 호출자가 선언하게 한다.
+
+PERCENT = "percent"
+FRACTION = "fraction"
+
+#: 이 구간의 gross 합은 두 가지로 읽힌다 — 분수로 준 만액, 또는 퍼센트로 준 소액.
+_AMBIGUOUS_LO, _AMBIGUOUS_HI = 0.5, 4.0
+
+
+def unit_reason(weights: dict, declared: str | None = None) -> str | None:
+    """단위가 모호하면 **사유 문자열**, 아니면 `None`.
+
+    ★엔진은 HTTP 를 모른다★ `validate_as_of` 와 같은 관례 — 라우트가 422 로 바꾼다.
+    """
+    if declared in (PERCENT, FRACTION):
+        return None
+    if declared is not None:
+        return (f"weight_unit 은 '{PERCENT}' 또는 '{FRACTION}' 이어야 합니다: {declared!r}")
+    g = gross(weights)
+    if _AMBIGUOUS_LO <= g <= _AMBIGUOUS_HI:
+        return (f"비중의 단위를 알 수 없습니다 (합 {g:g}). 분수로 주신 만액 포트폴리오"
+                f"(합 1.0)일 수도, 퍼센트로 주신 소액 포트폴리오(합 {g:g}%, 현금 "
+                f"{100 - g:g}%)일 수도 있습니다 — 둘은 주문 금액이 100배 다릅니다. "
+                f"weight_unit 에 '{PERCENT}' 또는 '{FRACTION}' 을 지정해 주십시오.")
+    return None
+
+
+def as_percent(weights: dict, declared: str | None = None) -> dict[str, float]:
+    """돈을 세는 계층이 쓰는 형태(퍼센트)로 통일한다.
+
+    선언이 있으면 그대로 따르고, 없으면 gross 합으로 판정한다. ★모호 구간은
+    `unit_reason` 이 먼저 막는 것을 전제로 한다★ — 여기까지 왔다면 판정이 가능한
+    입력이다(그래도 방어적으로 퍼센트로 본다: 라우트의 선언된 관례가 퍼센트다).
+    """
+    if declared == PERCENT:
+        return {str(k): float(v) for k, v in weights.items()}
+    if declared == FRACTION:
+        return {str(k): float(v) * 100.0 for k, v in weights.items()}
+    g = gross(weights)
+    if g < _AMBIGUOUS_LO:                      # 합이 0.5 미만 — 분수로 준 소액
+        return {str(k): float(v) * 100.0 for k, v in weights.items()}
+    return {str(k): float(v) for k, v in weights.items()}
