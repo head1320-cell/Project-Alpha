@@ -124,6 +124,20 @@ seg = [v for v in vals[max(0, idx - window + 1):idx + 1] if v is not None]
 # src/engine/allocation_backtest.py::walk_forward  — R_win 은 리밸런싱 시점 이전만
 ```
 
+★★`pit_verified` 같은 단일 불리언을 만들지 않는다★★ — 만드는 순간 revision bias 가
+그 안에 숨는다. 응답·스냅샷·문서 어디서도 셋을 합치지 않으며, 화면도 **세 칸으로**
+그린다. 셋은 서로 독립이고, 하나가 참이라고 나머지가 참이 되지 않는다:
+
+| | look_ahead_free | publication_lag | revision_bias |
+|---|---|---|---|
+| 국면 경로(오늘) | ✅ | unspecified | unmanaged |
+| 스튜디오(오늘) | ❌ (`as_of` 없음) | unspecified | unmanaged |
+| 목표 (MS1-b) | ✅ | **declared** | **unmanaged (영구)** |
+
+★마지막 칸이 영원히 `unmanaged` 라는 것이 핵심이다★ — ECOS 가 빈티지를 주지
+않으므로 정적 공표지연을 아무리 정확히 선언해도 **값 자체가 사후 수정본**이다.
+그래서 `publication_lag` 와 `revision_bias` 는 **다른 필드여야 한다.**
+
 ★결론: 국면 경로의 백테스트는 **완전한 빈티지 시스템 없이 look-ahead-free 로 만들 수
 있다.**★ 불가능한 것은 revision-free 이고 — ECOS 는 ALFRED 같은 빈티지를 주지 않으므로
 오늘 받은 2010-05 산업생산은 당시 속보치가 아니라 이후 확정치다 — 그것은 소프트웨어가
@@ -221,6 +235,25 @@ print(type(r.params).__name__, hasattr(r.params,'get'))"
 **부수 결함 — 이름과 계산이 다르다.** `explained_var = 1 − var(res.resid)/var(Z)` 인데
 `res.resid` 는 **1기 앞 예측오차**다. 분산분해가 아니라 **예측 R²** 다(합성 강요인
 데이터에서 0.387 — 요인은 강한데 값은 낮다). `one_step_r2` 로 개명해야 한다.
+
+#### k = 1 / 2 / 3 을 비교했다 — "요인을 늘려 고친다" 는 근거가 없다
+
+(T=59 · N=7 · ‖S‖=2.7851 · `factor_order=1` · `maxiter=500`)
+
+| k | loglik | AIC | BIC | 재구성/‖S‖ | min σ² | **Heywood 계열 수** | resid var |
+|---|---|---|---|---|---|---|---|
+| **1** | −575.55 | **1181.10** ★ | **1212.26** ★ | 0.2397 | 0.000000 | **1** (KR_3Y) | 0.9753 |
+| **2** | −567.79 | 1185.57 | 1237.51 | **0.1755** ★ | 0.000000 | **2** (KR_3Y · USD_KRW) | 0.9572 |
+| **3** | −556.68 | 1187.36 | 1264.23 | 0.1806 | 0.000016 | 0 (경계) | 0.9063 |
+
+- **AIC·BIC 둘 다 `k=1`** — 현행 기본값이 정보기준 최적이다.
+- ★**Heywood 는 k 를 늘려도 안 없어진다**★ — `k=2` 에서 **둘로 늘어난다.**
+  요인수 문제가 아니라는 강한 증거다.
+- 재구성은 `k=2` 최선이나 정보기준이 벌점 — 과적합(`k=3` 은 파라미터 31 / 관측 59).
+- ★잔여분산 0.91~0.98★ — **어느 k 에서도 공통요인이 분산의 10% 도 설명 못 한다.**
+
+즉 고칠 대상은 요인수가 아니라 **전처리 또는 데이터**다. 자세한 조사 순서는
+`docs/plans/2026-08-25-macro-vnext-plan.md` §3.3 (W-DFM 워크스트림).
 
 ★그리고 이 사실이 회귀 테스트 설계를 바꾼다★ — 적재와 상관이 k=1 에서 비례하므로,
 **k=1 로 세운 가드는 상관 폴백을 잡지 못한다**(등가 변이). 판별하려면 k=2 fixture 가
@@ -510,6 +543,74 @@ sed -n '/def zscore_at/,/return (x - mean)/p' src/engine/regime_axes.py
 
 # (11) 혼합 공분산의 지평 스케일 — 시뮬레이션으로 h·W+h²·D 를 확인
 #      (계획 §1.3 의 표. 2자산·2국면·12만 경로)
+```
+
+### 11.2 3차 패스(계약 확정)의 재현 명령
+
+```bash
+cd /home/user/Project-Alpha
+
+# (12) ★혼합 공분산 정확식★ — h²D 는 상한이지 답이 아니다 (계획 §1.3.2)
+python3 -c "
+import numpy as np
+rng=np.random.default_rng(11)
+P=np.array([[0.85,0.15],[0.25,0.75]]); pi0=np.array([0.6,0.4]); h=3
+M=np.array([[0.015,-0.002],[-0.008,0.006]])
+Sg=np.array([[[0.0025,0.0005],[0.0005,0.0009]],[[0.0049,-0.0010],[-0.0010,0.0016]]])
+pis=[pi0@np.linalg.matrix_power(P,j) for j in range(1,h+1)]; E=[p@M for p in pis]
+W=sum(np.einsum('s,sij->ij',p,Sg) for p in pis); A=np.zeros((2,2))
+for j in range(h):
+    for k in range(h):
+        T=np.linalg.matrix_power(P,abs(k-j))
+        J=np.einsum('s,st->st',pis[j],T) if k>=j else np.einsum('t,ts->st',pis[k],T)
+        A+=np.einsum('st,si,tj->ij',J,M,M)-np.outer(E[j],E[k])
+D=sum(pi0[i]*np.outer(M[i],M[i]) for i in range(2))-np.outer(pi0@M,pi0@M)
+Wm=np.einsum('s,sij->ij',pi0,Sg)
+out=np.empty((200000,2))
+for i in range(len(out)):
+    s=rng.choice(2,p=pi0); t=np.zeros(2)
+    for _ in range(h):
+        s=rng.choice(2,p=P[s]); t+=rng.multivariate_normal(M[s],Sg[s])
+    out[i]=t
+np.set_printoptions(precision=6,suppress=True)
+print('sim      ',np.cov(out,rowvar=False,ddof=1).ravel())
+print('W_h+A_h  ',(W+A).ravel())
+print('h W+h^2D ',(h*Wm+h*h*D).ravel())
+print('h(W+D)   ',(h*(Wm+D)).ravel())
+print('h^2D/A   ',np.round(np.diag(h*h*D)/np.diag(A),3))"
+# → sim 과 W_h+A_h 가 일치하고, h²D 가 A 를 1.489배 과대추정한다
+
+# (13) DFM k=1/2/3 비교 (§5.1) — AIC·BIC 는 k=1, Heywood 는 k=2 에서 둘로 는다
+KIS_USE_MOCK=1 python3 -c "
+import numpy as np, warnings; warnings.simplefilter('ignore')
+from src.engine.macro_models.base import load_series
+from statsmodels.tsa.statespace.dynamic_factor import DynamicFactor
+keys=('KR_LEADING_CYCLE','KR_IP','KOSPI','KR_CPI','KR_3Y','KR_10Y','USD_KRW')
+s=load_series(keys,60); names=sorted(s); n=min(len(v) for v in s.values())
+X=np.column_stack([np.asarray(s[k][-n:],float) for k in names])
+Dm=np.diff(X,axis=0); sd=Dm.std(0,ddof=1); keep=sd>1e-12
+Z=(Dm[:,keep]-Dm[:,keep].mean(0))/sd[keep]; N=Z.shape[1]
+S=np.cov(Z,rowvar=False,ddof=1); nS=np.sqrt((S**2).sum())
+for k in (1,2,3):
+    r=DynamicFactor(Z,k_factors=k,factor_order=1).fit(disp=False,maxiter=500)
+    pn=r.model.param_names; p=np.asarray(r.params)
+    L=np.array([[p[pn.index(f'loading.f{j+1}.y{i+1}')] for j in range(k)] for i in range(N)])
+    psi=np.array([p[pn.index(f'sigma2.y{i+1}')] for i in range(N)])
+    f=np.asarray(r.factors.filtered).T.reshape(Z.shape[0],-1)
+    Om=np.cov(f,rowvar=False,ddof=1).reshape(k,k)
+    rec=float(np.sqrt((((L@Om@L.T+np.diag(psi))-S)**2).sum()))
+    print(k, round(r.llf,2), round(r.aic,2), round(r.bic,2), round(rec/nS,4),
+          round(psi.min(),6), int((psi<1e-6).sum()), round(float(np.nanvar(r.resid)),4))"
+
+# (14) ★신뢰도 — 휴리스틱 vs Ω 분해★ (계획 §1.5.3)
+python3 -c "
+import numpy as np
+tau=0.05; Sii=np.array([0.16,0.04,0.07])**2; D=np.array([0.0047,0.0002,0.0008])
+for nm in (15,32,60):
+    om=D+Sii*(12.0/nm); sc=om/(tau*Sii)
+    print(nm, np.round(om,5), np.round(100/(1+sc),2))
+print('legacy 50*(1-0.2) =', 50*0.8)"
+# → 분해는 n_months 에 따라 4.84 → 11.53 으로 움직이고, legacy 는 항상 40.0
 ```
 
 ★이 감사에서 내가 **세 번** 틀렸고 세 번 다 본문에 정정을 남겼다★ (§5.1·§5.5) —
