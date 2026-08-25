@@ -219,7 +219,7 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
 
     audit = {"month": month, "applied": False, "reason": None,
              "path_len": 0, "last_path_month": "", "regime": None,
-             "h_hold": None}
+             "h_hold": None, "pi_bar": None, "a_contribution_pct": None}
     pts = _truncated_points(regime.get("points") or [], month)
     audit["path_len"] = len(pts)
     audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
@@ -264,6 +264,10 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
         return None, None, audit
 
     audit["applied"] = True
+    # ★예측 집중도를 재려면 π̄ 가 감사에 남아야 한다★ 남기지 않으면 소비자가
+    # 읽을 필드가 없어 지표가 조용히 None 이 된다(실제로 그렇게 한 번 헛돌았다).
+    audit["pi_bar"] = cond.get("pi_bar")
+    audit["a_contribution_pct"] = cond.get("A_contribution_pct")
     extra_views = None
     if model in ("bl", "ep"):
         # `/analyze` 의 `_conditional_views` 와 같은 규약 — μ 를 최적화기에 직접
@@ -303,6 +307,7 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         return {"error": True, "message": "백테스트에는 자산 2개 이상과 충분한 시계열이 필요합니다."}
 
     arm = "B0"
+    infeasible: list[dict] = []
     if regime is not None:
         weighting = regime.get("weighting", "hard")
         if weighting not in _REGIME_ARMS:
@@ -347,9 +352,25 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                         regime, _month_of(dates[t]), R_win, list(dates[lo:t]),
                         names, model)
                     regime_detail.append(aud)
-                w_new = _weights_at(model, names, R_win, views, constraints,
-                                    w_prev_target, bench_win, delta, tau,
-                                    s_override=s_override, extra_views=xviews)
+                w_new = None
+                try:
+                    w_new = _weights_at(model, names, R_win, views, constraints,
+                                        w_prev_target, bench_win, delta, tau,
+                                        s_override=s_override, extra_views=xviews)
+                except Exception as e:                        # noqa: BLE001
+                    # ★거부는 사고가 아니라 정보다★ 엔트로피 풀링은 뷰를 동시에
+                    # 만족시키는 분포가 없으면 배분을 거부한다(`EPUnavailable`).
+                    # 그때 무조건부로 몰래 떨어지면 그 팔이 오염되므로, **거래하지
+                    # 않고**(직전 비중 유지) 그 사실을 센다. 전체를 죽이지도 않는다.
+                    #
+                    # ★`continue` 로 넘기면 안 된다★ 그날의 수익 적용까지 건너뛰어
+                    # 곡선에서 하루가 사라진다 — 거래를 안 했을 뿐 포지션은 그대로
+                    # 들고 있다. 아래 `if w_new is not None:` 로 리밸런싱만 건너뛴다.
+                    infeasible.append({"month": _month_of(dates[t]),
+                                       "error": f"{type(e).__name__}: {e}"})
+                    logger.info("리밸런싱 %s 배분 거부: %s", dates[t], e)
+                if w_new is None:
+                    w_new = w                                  # 거래하지 않는다
                 turnover = 0.5 * float(np.abs(w_new - w).sum())   # 편도 회전율
                 equity *= (1.0 - turnover * cost)
                 w = w_new
@@ -466,6 +487,9 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             "n_rebalances": len(rebalances),
             "s_override_used": sum(1 for d in regime_detail if d["applied"]),
             "path_len_at_rebalance": [d["path_len"] for d in regime_detail],
+            # ★배분이 거부된 시점★ 무조건부로 몰래 떨어지지 않고 거래를 건너뛴 횟수.
+            "weights_infeasible": len(infeasible),
+            "infeasible_detail": infeasible[:20],
             "detail": regime_detail,
         },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
