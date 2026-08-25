@@ -6978,3 +6978,59 @@ mock 생성기가 **어떤 문자열에도** 262행의 가격 이력을 만들�
 ### 게이트
 
 **2,758 passed / 10 skipped** · ruff 0 · red 0. 변이 프로브 5건 전부 red.
+
+---
+
+## 2026-08-25 — 매크로 리서치 Phase 0 감사 (프로덕션 코드 변경 0)
+
+업로드된 `Project_Alpha_Macro_Research_Spec.md` 가 요구한 Phase 0 — **고치지 말고
+실측해서 문서로 남기고 승인을 기다릴 것.** 산출물 4종:
+
+| 문서 | 내용 |
+|---|---|
+| `docs/specs/2026-08-25-macro-research-audit.md` | 코드맵 · 수학맵 · 문헌맵 · PIT감사 · 구현vs논문 갭 · 모델 매트릭스 · **재현 명령** |
+| `docs/specs/2026-08-25-macro-model-reference-map.md` | 모델 ↔ 1차 문헌 ↔ 코드 경로 ↔ 갈라지는 지점 |
+| `docs/specs/2026-08-25-macro-validation-framework.md` | 4단 평가 · 벤치마크 사다리 · 워크포워드 · 밀도평가 · 실패상태 계약 |
+| `docs/plans/2026-08-25-macro-vnext-plan.md` | MS1~MS5 + **최소 수직 슬라이스** |
+
+### ★내가 감사 중 두 번 틀렸고 둘 다 문서에 정정을 남겼다★
+
+1. *"`smoothed_marginal_probabilities` 를 쓰므로 look-ahead"* — **틀렸다.**
+   마지막 시점에서는 `smoothed[-1] == filtered[-1]` 이다.
+2. *"예측 국면확률이 없다(`matrix_power` 사용처 0)"* — **틀렸다.**
+   `matrix_power` 를 안 쓸 뿐, `k_step_forecast` 가 Dirichlet 사후에서 행렬을
+   4000회 뽑아 거듭제곱해 k개월 뒤 분포 + 90% 신용구간을 이미 낸다. 심지어
+   `regime_forecast.forecast_coverage` 가 **워크포워드 실측 적중률**까지 잰다.
+
+★두 번째 오독이 계획 전체를 바꿨다★ — 1순위가 "예측을 만든다" 에서 **"이미 있는
+예측을 포트폴리오에 연결한다"** 로 바뀌었다. 이름과 grep 만으로 부재를 단정하면
+안 된다는 사례.
+
+### 실측 (전부 재현 명령과 함께 문서에 있다)
+
+```
+프론티어  torch 부재 AND frontier_sample observed 60 / required 240
+          → ★torch 를 깔아도 데이터가 4배 부족★. real_series 0 / total 61.
+국면      current=Goldilocks · n_transitions=52 · 53개월(7개월 결측 제외)
+예측 k=3  Goldilocks 0.601 [0.409, 0.788] …
+적중률    k=1 → 0.966 (집합 2.72/4)   k=3 → 0.889 (집합 **3.81/4**)
+PIT       grep as_of src/engine/macro_models/*.py → 0건
+스튜디오  pinn-tail 불가(초과관측 6 < 8) · agentic-mcp 불가(유니버스 없음)
+LATENT    상관 폴백이 100% 발동(`res.params` 가 ndarray) · explained_var 0.78%
+```
+
+### 핵심 결론
+
+★스튜디오는 포트폴리오에 연결돼 있지 않다.★ 조건부 μ/Σ 는 스튜디오를 지나지 않고
+`regime_path → conditional_moments` 로 간다. 그리고 그 경로조차 **오늘의 점 라벨
+하나**만 받는다 — 적중률 0.889 / 집합크기 3.81 이 "3개월 뒤 국면은 거의 모른다" 고
+말하는데, 최적화는 그것을 **확률 1** 로 쓴다.
+
+그래서 최소 수직 슬라이스는 **새 모델이 아니라 연결**이다:
+`Σ̄ = Σ π_r(Σ_r + μ_rμ_rᵀ) − μ̄μ̄ᵀ` — 국면을 모를수록 Σ 가 **커진다**.
+기본값 `h=0` 이면 비트 단위 현행 동작.
+
+### 게이트
+
+**2,758 passed / 10 skipped** (코드 변경 0이므로 불변) · ruff 0 ·
+스펙 원본 `cmp` 바이트 일치 16,913 B.
