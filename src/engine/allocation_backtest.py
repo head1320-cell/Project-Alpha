@@ -44,10 +44,16 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
                 views: list[dict] | None, constraints,
                 w_prev: dict[str, float] | None,
                 bench_win: np.ndarray | None,
-                delta: float, tau: float) -> np.ndarray:
-    """한 시점의 목표 가중치 — /analyze 와 동일 경로(뷰→BL, 제약이면 constrained_solve)."""
+                delta: float, tau: float,
+                s_override=None, extra_views: list[dict] | None = None) -> np.ndarray:
+    """한 시점의 목표 가중치 — /analyze 와 동일 경로(뷰→BL, 제약이면 constrained_solve).
+
+    `s_override`/`extra_views` 는 국면 조건부 훅이 넘긴다(MS1-b0). `None` 이면
+    현행과 완전히 같은 계산이다 — B0 팔이 그것이다.
+    """
     from src.engine.allocation_studio import optimize
-    opt = optimize(model, names, R_win, views=views or None, delta=delta, tau=tau)
+    opt = optimize(model, names, R_win, views=views or None, delta=delta, tau=tau,
+                   s_override=s_override, extra_views=extra_views)
     w = np.asarray(opt["weights"], dtype=float)
     if constraints is not None and getattr(constraints, "any_active", lambda: False)():
         try:
@@ -162,12 +168,130 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     }
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 국면 조건부 훅 (MS1-b0) — ★백테스트에서 국면을 쓰는 순간 look-ahead 가 생긴다★
+# ══════════════════════════════════════════════════════════════════════════════
+# `/analyze` 의 조건부 경로는 **오늘** 기준 국면 경로를 쓴다. 그것을 그대로 과거
+# 리밸런싱에 쓰면 2020년의 결정이 2026년의 라벨을 보는 것이다. 그래서 이 훅은
+# 매 리밸런싱마다 경로를 **그 시점까지 잘라서** 넘기고, 무엇을 봤는지
+# `regime_audit` 에 남긴다 — 절단은 주장이 아니라 기록으로 증명한다.
+#
+# 세 팔:
+#   B0  regime=None            국면 배선 없음(사다리의 바닥)
+#   B1  weighting="hard"       오늘 라벨 하나 = 확률 1 (현행 프로덕션)
+#   N   weighting="probabilistic"  π_1..π_h 혼합 (MS1-a)
+
+_REGIME_ARMS = ("hard", "probabilistic")
+
+
+def _month_of(d) -> str:
+    try:
+        return d.strftime("%Y-%m")
+    except Exception:                                    # noqa: BLE001
+        return str(d)[:7]
+
+
+def _truncated_points(points: list[dict], month: str) -> list[dict]:
+    """`month` **이하**의 달만 남긴다 — 미래를 잘라내는 단 한 곳."""
+    from src.engine.conditional_market import _normalize_month
+    out = []
+    for p in points or []:
+        m = _normalize_month(p.get("t"))
+        if m and m <= month:
+            out.append(p)
+    return out
+
+
+def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
+                        dates_win: list, names: list[str], model: str):
+    """한 리밸런싱 시점의 `(s_override, extra_views, audit)`.
+
+    실패는 조용히 넘기지 않는다 — 조건부를 못 만들면 무조건부로 계산하되
+    `applied: False` 와 사유가 `regime_audit` 에 남는다.
+    """
+    import pandas as pd
+
+    from src.engine.conditional_market import (
+        conditional_moments,
+        regime_by_month_from_path,
+        regime_mixture_moments,
+    )
+
+    audit = {"month": month, "applied": False, "reason": None,
+             "path_len": 0, "last_path_month": "", "regime": None,
+             "h_hold": None}
+    pts = _truncated_points(regime.get("points") or [], month)
+    audit["path_len"] = len(pts)
+    audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
+    if len(pts) < 2:
+        audit["reason"] = "그 시점까지의 국면 경로가 2개월 미만입니다."
+        return None, None, audit
+
+    by_month, _dropped = regime_by_month_from_path(pts)
+    current = pts[-1].get("regime")
+    audit["regime"] = current
+    df = pd.DataFrame(R_win, index=pd.DatetimeIndex(dates_win), columns=names)
+
+    weighting = regime.get("weighting", "hard")
+    if weighting == "hard":
+        cond = conditional_moments(df, by_month, current)
+    else:
+        from src.engine.regime_probability import (
+            from_posterior_mean_path,
+            require_portfolio_source,
+        )
+        from src.engine.regime_transitions import (
+            REGIMES,
+            count_transitions,
+            transition_posterior,
+        )
+        h_hold = int(regime.get("h_hold") or 1)
+        audit["h_hold"] = h_hold
+        try:
+            rows = transition_posterior(count_transitions(pts))
+            probs, P = from_posterior_mean_path(rows, current, h_hold,
+                                                list(REGIMES), mode="backtest")
+            for pr in probs:
+                require_portfolio_source(pr)
+            cond = regime_mixture_moments(df, by_month, [p.probs for p in probs],
+                                          P, list(REGIMES), h_hold=h_hold)
+        except Exception as e:                            # noqa: BLE001
+            audit["reason"] = f"{type(e).__name__}: {e}"
+            return None, None, audit
+
+    if not cond.get("available"):
+        audit["reason"] = cond.get("reason")
+        return None, None, audit
+
+    audit["applied"] = True
+    extra_views = None
+    if model in ("bl", "ep"):
+        # `/analyze` 의 `_conditional_views` 와 같은 규약 — μ 를 최적화기에 직접
+        # 대입하지 않고 자산별 절대 뷰로 태운다(불확실성을 Ω 에 남기기 위해서).
+        lam = cond.get("shrinkage_lambda")
+        lam = float(lam) if isinstance(lam, (int, float)) else 0.0
+        conf = round(max(0.0, min(50.0 * (1.0 - lam), 50.0)), 2)
+        extra_views = [
+            {"assets": [nm], "direction": 1 if float(m) >= 0 else -1,
+             "magnitude_pct": abs(float(m)) * 100.0, "confidence": conf,
+             "source": "conditional", "regime": cond.get("regime")}
+            for nm, m in zip(names, cond["mu"], strict=False) if float(m) != 0.0
+        ] or None
+    return cond["sigma"], extra_views, audit
+
+
+def _month_of_point(p: dict) -> str:
+    from src.engine.conditional_market import _normalize_month
+    return _normalize_month(p.get("t")) or ""
+
+
 def walk_forward(names: list[str], R: np.ndarray, dates: list,
                  model: str = "mvo", views: list[dict] | None = None,
                  constraints=None, rebalance: str = "M",
                  window_days: int | None = None, cost_bps: float = 10.0,
                  bench: np.ndarray | None = None,
-                 min_train: int = 63, delta: float = 2.5, tau: float = 0.05) -> dict:
+                 min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
+                 regime: dict | None = None) -> dict:
     """정책 walk-forward 백테스트.
 
     R: T×N 일별 수익률 · dates: 길이 T date-like · window_days: rolling(None=expanding).
@@ -177,6 +301,16 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     n = len(names)
     if n < 2 or R.ndim != 2 or R.shape[1] != n or R.shape[0] < min_train + 5:
         return {"error": True, "message": "백테스트에는 자산 2개 이상과 충분한 시계열이 필요합니다."}
+
+    arm = "B0"
+    if regime is not None:
+        weighting = regime.get("weighting", "hard")
+        if weighting not in _REGIME_ARMS:
+            return {"error": True,
+                    "message": (f"'{weighting}' 은 지원하는 국면 가중 방식이 아닙니다 — "
+                                f"{' 또는 '.join(_REGIME_ARMS)} 만 됩니다.")}
+        arm = "B1" if weighting == "hard" else "N"
+    regime_detail: list[dict] = []
 
     rb = _rebalance_indices(list(dates), rebalance, min_train)
     if len(rb) < 2:
@@ -206,8 +340,16 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             R_win = R[lo:t]
             bench_win = bench[lo:t] if bench is not None and len(bench) >= t else None
             if R_win.shape[0] >= min_train:
+                s_override = xviews = None
+                if regime is not None:
+                    # ★그 시점까지로 자른 경로만 넘긴다★ (모듈 상단 주석 참조)
+                    s_override, xviews, aud = _regime_override_at(
+                        regime, _month_of(dates[t]), R_win, list(dates[lo:t]),
+                        names, model)
+                    regime_detail.append(aud)
                 w_new = _weights_at(model, names, R_win, views, constraints,
-                                    w_prev_target, bench_win, delta, tau)
+                                    w_prev_target, bench_win, delta, tau,
+                                    s_override=s_override, extra_views=xviews)
                 turnover = 0.5 * float(np.abs(w_new - w).sum())   # 편도 회전율
                 equity *= (1.0 - turnover * cost)
                 w = w_new
@@ -315,6 +457,17 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         "drawdown_curve": list(np.round(dd * 100, 3)),
         "rebalances": rebalances,
         "n_rebalances": len(rebalances),
+        # ★절단을 주장이 아니라 기록으로 증명한다★ 각 리밸런싱이 **그 시점까지의**
+        # 경로 몇 개를 봤는지, 마지막으로 본 달이 언제인지, 조건부가 실제로
+        # 적용됐는지(안 됐으면 왜)를 남긴다. 이것이 없으면 "walk-forward 인 척하는
+        # in-sample" 을 나중에 구분할 방법이 없다.
+        "regime_audit": {
+            "arm": arm,
+            "n_rebalances": len(rebalances),
+            "s_override_used": sum(1 for d in regime_detail if d["applied"]),
+            "path_len_at_rebalance": [d["path_len"] for d in regime_detail],
+            "detail": regime_detail,
+        },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
         "metrics": metrics,
         "summary": {
