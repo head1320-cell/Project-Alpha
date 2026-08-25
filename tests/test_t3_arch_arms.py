@@ -22,6 +22,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import pathlib
+import sys
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
@@ -47,10 +48,17 @@ def _as_vec(weights, names) -> np.ndarray:
 
 
 def _load_t3():
-    """연구 스크립트를 모듈로 적재 — `scripts/` 는 패키지가 아니다."""
+    """연구 스크립트를 모듈로 적재 — `scripts/` 는 패키지가 아니다.
+
+    ★`sys.modules` 등록이 필수다★ `from __future__ import annotations` 아래의
+    `@dataclass` 는 타입을 문자열로 받아 `sys.modules[cls.__module__].__dict__` 를
+    되짚는다. 등록하지 않으면 `AttributeError: 'NoneType' object has no attribute
+    '__dict__'` 로 **적재 자체가 실패한다**(실제로 겪었다).
+    """
     spec = importlib.util.spec_from_file_location(
         "t3_transmission", _ROOT / "scripts" / "t3_transmission.py")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -397,6 +405,57 @@ def test_const_arm_freezes_the_budget(panel):
                           panel["points"], panel["beta"])
     assert len(set(round(b, 12) for b in rec2["budget_eq"])) > 1, \
         "국면 팔의 예산이 상수면 -const 와의 대조가 성립하지 않는다"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7) ★EP 의 회전율에서 "사전이 움직여서 생긴 것" 을 떼어낸다★ (Phase 4)
+# ══════════════════════════════════════════════════════════════════════════
+def test_prior_only_arm_has_no_views_and_never_moves_the_posterior(panel):
+    """뷰가 0개면 EP 사후 = 사전이다 — 이 팔의 **정의**이지 실패가 아니다."""
+    rec, rb = t3.run_arch(t3.ARCH_PRIOR_ONLY, panel["names"], panel["R"],
+                          panel["dates"], panel["points"], panel["beta"],
+                          engine="ep")
+    assert t3.views_none(panel["mu"], panel["names"], panel["beta"]) == []
+    assert rec["ep_inactive"] == len(rec["ep_kl"]) > 0
+    assert rec["ep_infeasible"] == 0
+    assert len(rec["w"]) == len(rb)
+
+
+def test_prior_only_arm_still_trades(panel):
+    """★Phase 4 의 핵심★ 뷰가 하나도 없는데 **회전율이 0 이 아니다**.
+
+    EP 에는 BL 의 `Π` 같은 정적 앵커가 없어 사전분포(트레일링 평균)가 매달 움직인다.
+    그 회전율이 곧 "뷰와 무관한 거래" 이고, 뷰 팔의 회전율에서 이것을 빼야 뷰가
+    실제로 유발한 거래가 나온다. 이 팔이 0 회전율이면 그 분해가 성립하지 않는다.
+    """
+    rec, rb = t3.run_arch(t3.ARCH_PRIOR_ONLY, panel["names"], panel["R"],
+                          panel["dates"], panel["points"], panel["beta"],
+                          engine="ep")
+    _d, _c, tos, _m = t3.simulate(rec, rb, panel["R"], panel["dates"], 0.0)
+    assert tos.size > 1
+    assert float(tos.mean()) > 1e-3, "사전만으로는 거래가 없다 — 분해가 성립하지 않는다"
+
+
+def test_a_view_arm_trades_strictly_more_than_the_prior_alone(panel):
+    """★짝★ 뷰가 회전율을 **더한다**는 것 — 아니면 위 테스트가 무의미하다."""
+    def turn(arch):
+        rec, rb = t3.run_arch(arch, panel["names"], panel["R"], panel["dates"],
+                              panel["points"], panel["beta"], conf_override=25.0,
+                              engine="ep")
+        _d, _c, tos, _m = t3.simulate(rec, rb, panel["R"], panel["dates"], 0.0)
+        return float(tos.mean())
+
+    base = turn(t3.ARCH_PRIOR_ONLY)
+    with_views = turn("T3-A")
+    assert with_views > base + 1e-3, (
+        f"뷰를 넣었는데 회전율이 늘지 않았다: {with_views:.4f} vs {base:.4f}")
+
+
+def test_prior_only_is_ep_only(panel):
+    """BL 은 사전이 균형 `Π` 라 '사전이 움직인다' 가 성립하지 않는다 — 팔을 섞지 않는다."""
+    assert t3.ARCH_PRIOR_ONLY in t3.ARCH_ALL
+    assert t3.ARCH_PRIOR_ONLY not in t3.ARCH_VIEW
+    assert t3.ARCH_PRIOR_ONLY not in t3.ARCH_BUDGET
 
 
 def test_arch_names_resolve(panel):

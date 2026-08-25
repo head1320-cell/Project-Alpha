@@ -20,7 +20,7 @@ D 계열에는 대조군이 **둘** 있다 — 하나로는 부족하기 때문�
 
 | 대조군 | 무엇을 뺐나 | 무엇을 가른다 |
 |---|---|---|
-| `-flat` / `-open` | 규칙 전체 | 이 규칙이 **뭐라도** 하는가 |
+| `-open` | 규칙 전체 | 이 규칙이 **뭐라도** 하는가 |
 | ★`-const`★ | **국면 변동만** (첫 리밸런싱 값으로 고정) | 이득이 **국면 타이밍**인가 아니면 그 규칙이 고른 **수준**인가 |
 
 ★`-const` 가 없으면 "국면이 기여했다" 를 잘못 말하게 된다★ 예컨대 노출 한도의
@@ -58,6 +58,8 @@ import json
 import math
 import os
 import sys
+from dataclasses import dataclass
+from typing import Any
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
@@ -97,10 +99,15 @@ from src.engine.view_rows import build_view_rows  # noqa: E402
 
 #: μ 뷰를 만드는 팔 — BL·EP 두 엔진 모두에서 돌릴 수 있다.
 ARCH_VIEW = ("T3-A", "T3-B", "T3-C", "T3-C-rel")
+#: ★뷰가 없는 팔★ — EP 의 **사전분포만**으로 배분한다. 뷰를 주지 않으면 사후=사전
+#: 이므로, 이 팔의 회전율은 곧 "트레일링 평균이 움직여서 생긴 거래" 다.
+#: BL 의 `Π` 같은 정적 앵커가 EP 에 없다는 것을 **수치로** 분해한다
+#: (0e655c7 의 미해결 관찰: 뷰가 37% 침묵인데 회전율은 26%).
+ARCH_PRIOR_ONLY = "EP-prior-only"
 #: ★μ 를 아예 읽지 않는 팔★ — 국면 → 리스크 예산 / 노출 한도. 엔진 개념이 없다.
-ARCH_BUDGET = ("T3-D1", "T3-D1-flat", "T3-D1-const",
+ARCH_BUDGET = ("T3-D1", "T3-D1-open", "T3-D1-const",
                "T3-D2", "T3-D2-open", "T3-D2-const")
-ARCH_ALL = ARCH_VIEW + ARCH_BUDGET
+ARCH_ALL = ARCH_VIEW + (ARCH_PRIOR_ONLY,) + ARCH_BUDGET
 DEFAULT_ARCH = ("T3-A", "T3-B", "T3-C")
 ENGINES = ("bl", "ep")
 COSTS = (0.0, 10.0, 30.0)
@@ -110,6 +117,25 @@ RF = 0.035
 EP_INACTIVE_KL = 1e-9
 #: 노출 한도의 하한 — 국면이 아무리 나빠도 한 자산군을 0 으로 만들지 않는다.
 CAP_FLOOR = 0.15
+
+# ── 증거 등급 ────────────────────────────────────────────────────────────────
+# ★등급을 올려 적지 않는다★ 이 스크립트가 내는 모든 수치는 합성 패널에서 나온다.
+# 구조적 사실(행합·계약 형태)만 `structural` 이고, Sharpe·CE·CVaR 는 전부
+# `synthetic_mechanism` 이다 — 경제적 가치의 증거가 아니다.
+EVIDENCE_STRUCTURAL = "structural"
+EVIDENCE_SYNTHETIC = "synthetic_mechanism"
+EVIDENCE_REAL_FORECAST = "real_forecast"
+EVIDENCE_REAL_ECONOMIC = "real_economic"
+
+#: 제약 종류 — 감사행이 "무엇을 건 것인지" 를 값으로 말한다.
+CONSTRAINT_RISK_BUDGET = "risk_budget"
+CONSTRAINT_GROUP_BOUNDS = "group_bounds"
+
+#: 국면 의존성 — `dynamic` 불리언 하나로는 `-open`(규칙 없음)과
+#: `-const`(규칙 있고 얼림)를 구분할 수 없다. 셋을 값으로 가른다.
+REGIME_PER_REBALANCE = "per_rebalance"
+REGIME_FROZEN = "frozen_at_first_rebalance"
+REGIME_NONE = "none"
 
 # ── 합성 패널 ────────────────────────────────────────────────────────────────
 # ★국면이 자산군을 가르도록 만든다★ 앞선 패널은 국면이 **공통인자 하나**만 바꿔서
@@ -237,8 +263,14 @@ def views_factor_relative(mu, names, beta) -> list[dict]:
     return _factor_views(_factor_row_relative(beta), mu, names)
 
 
+def views_none(mu, names, beta) -> list[dict]:
+    """★뷰 없음★ — EP 사전분포만. `ep_posterior_mu` 는 이때 사후=사전을 낸다."""
+    return []
+
+
 _VIEWS = {"T3-A": views_absolute, "T3-B": views_relative_class,
-          "T3-C": views_factor_level, "T3-C-rel": views_factor_relative}
+          "T3-C": views_factor_level, "T3-C-rel": views_factor_relative,
+          ARCH_PRIOR_ONLY: views_none}
 
 
 # ── 국면 → 리스크 예산 / 노출 한도 (T3-D, μ 를 읽지 않는다) ──────────────────
@@ -309,6 +341,124 @@ def regime_group_caps(sigma: np.ndarray, sigma_uncond: np.ndarray,
     return caps
 
 
+# ── ★제약 구성의 단일 출처★ — `-const` 는 제2 구현이 아니다 ──────────────────
+# 요구: "`-const` 는 동적 팔과 **정확히 같은 제약 구성**을 쓰되 국면 의존 상태만
+# 얼린다." 그러려면 제약을 만드는 곳이 **하나**여야 하고, 두 팔의 차이는 그 함수를
+# **언제 부르는가**뿐이어야 한다. 감사행의 `source` 가 그 사실을 값으로 증언한다.
+#
+# ★`-const` 가 얼리는 것의 정의★ 두 요구가 긴장한다 — "국면 의존 상태만 얼린다" 와
+# "모든 리밸런싱에서 진짜 상수". 상한 규칙이 `σ_uncond/σ_cond` 라 σ_cond 만 얼리면
+# 상한이 σ_uncond 를 따라 계속 움직여 두 번째를 깬다. 그래서:
+#
+#   **`-const` 는 제약 구성 입력 전체를 첫 적용 리밸런싱 시점에 얼린다.**
+#   **제약 *객체*가 상수다. 비중은 여전히 움직일 수 있다** — Σ 추정은 모든 팔의
+#   공통 입력이지 제약이 아니다(측정: D1-const EQ범위 0.047 · D2-const 0.000).
+#
+# 이것을 감사 필드에 적는 이유는 "상수 팔인데 비중이 움직인다" 를 결함으로 오독하지
+# 않게 하기 위해서다.
+@dataclass(frozen=True)
+class ConstraintSpec:
+    """한 리밸런싱에서 최적화기에 거는 제약 — frozen 이라 소비자가 못 고친다."""
+
+    kind: str                                   # risk_budget | group_bounds
+    source: str                                 # ★생성 함수 이름 — 두 팔이 같아야 한다★
+    regime_informed: bool                       # `-open` 이면 False
+    #: 자산 순 리스크 예산 (D1 전용). D2 는 None.
+    budget: tuple[float, ...] | None = None
+    #: ★그룹 → (하한%, 상한%)★ 하한은 지금 언제나 0 이고, 그 0 이 화면에 계속
+    #: 보이는 것이 `Constraints` 에 그룹 하한이 없다는 계약 공백의 상시 증거다.
+    bounds: tuple[tuple[str, float, float], ...] = ()
+
+    def key(self) -> tuple:
+        """distinct 를 셀 수 있는 해시 가능한 표현 — `-const` 상수성 판정용."""
+        b = tuple(round(x, 12) for x in (self.budget or ()))
+        return (self.kind, self.source, self.regime_informed, b,
+                tuple((g, round(lo, 12), round(hi, 12)) for g, lo, hi in self.bounds))
+
+    def bounds_dict(self) -> dict[str, tuple[float, float]]:
+        return {g: (lo, hi) for g, lo, hi in self.bounds}
+
+    def budget_by_group(self, names: list[str]) -> dict[str, float] | None:
+        """자산 순 예산 → 그룹 합. D2 는 None.
+
+        ★D1 의 감사행에 이것이 없으면 감사가 공허하다★ D1 은 그룹 경계가 언제나
+        `(0, 100)` 이라 `effective_bounds` 만으로는 세 팔이 구분되지 않는다 —
+        실제로 건 것은 **예산**이다.
+        """
+        if self.budget is None:
+            return None
+        cls = class_of(names)
+        out: dict[str, float] = {}
+        for w, nm in zip(self.budget, names, strict=True):
+            out[cls[nm]] = out.get(cls[nm], 0.0) + float(w)
+        return out
+
+    def caps_pct(self) -> dict[str, float]:
+        """`Constraints.group_caps_pct` 로 넘길 상한만 — 100% 는 걸지 않는다."""
+        return {g: hi for g, _lo, hi in self.bounds if hi < 100.0}
+
+
+def build_constraint(family: str, sigma: np.ndarray, sigma_uncond: np.ndarray,
+                     names: list[str], *, regime_informed: bool) -> ConstraintSpec:
+    """★D 계열 제약의 유일한 생성기★ 세 팔(-open/-const/-regime)이 전부 여기를 탄다.
+
+    Args:
+        family: `"D1"`(리스크 예산) 또는 `"D2"`(노출 한도).
+        regime_informed: `False` 면 국면 정보를 **빼고** 같은 계열의 규칙을 쓴다
+            (D1 → 등예산 = 리스크 패리티 · D2 → 한도 없음). 이것이 `-open` 이다.
+    """
+    groups = sorted(set(class_of(names).values()))
+    if family == "D1":
+        b = regime_risk_budget(sigma, names, flat=not regime_informed)
+        return ConstraintSpec(
+            kind=CONSTRAINT_RISK_BUDGET, source="regime_risk_budget",
+            regime_informed=regime_informed, budget=tuple(float(x) for x in b),
+            bounds=tuple((g, 0.0, 100.0) for g in groups))
+    caps = regime_group_caps(sigma, sigma_uncond, names,
+                             open_=not regime_informed)
+    return ConstraintSpec(
+        kind=CONSTRAINT_GROUP_BOUNDS, source="regime_group_caps",
+        regime_informed=regime_informed, budget=None,
+        bounds=tuple((g, 0.0, float(caps.get(g, 100.0))) for g in groups))
+
+
+def constraint_audit_row(spec: ConstraintSpec, *, month: str, const: bool,
+                         frozen_at: str | None, weights: np.ndarray | None,
+                         names: list[str]) -> dict[str, Any]:
+    """감사행 — ★제약의 출처·정적여부·국면의존성·유효경계를 값으로 낸다★
+
+    `dynamic` 불리언 **하나로는 부족하다** — `-open`(규칙 없음)과 `-const`(규칙
+    있고 얼림)가 둘 다 "정적" 이라 구분되지 않는다. `regime_dependency` 가 셋을 가른다.
+    """
+    cls = class_of(names)
+    binding: list[str] = []
+    if weights is not None:
+        for g, _lo, hi in spec.bounds:
+            share = 100.0 * float(sum(w for w, nm in zip(weights, names, strict=True)
+                                      if cls[nm] == g))
+            if hi < 100.0 and share >= hi - 0.5:
+                binding.append(g)
+    return {
+        "t": month,
+        "source": spec.source,
+        "kind": spec.kind,
+        "dynamic": not const,
+        "regime_dependency": (REGIME_FROZEN if const
+                              else REGIME_PER_REBALANCE if spec.regime_informed
+                              else REGIME_NONE),
+        "frozen_at": frozen_at,
+        "effective_bounds": spec.bounds_dict(),
+        "risk_budget_by_group": spec.budget_by_group(names),
+        # ★서명★ 제약 하나를 해시 가능한 한 값으로 — `-const` 의 상수성과
+        # `-open` 과의 차이를 **한 필드로** 셀 수 있게 한다(테스트가 두 종류의
+        # 비교 코드를 갖지 않도록).
+        "signature": repr(spec.key()),
+        "binding": binding,
+        # ★이 줄이 등급 승격을 막는다★ 감사행 하나하나가 자기 등급을 들고 다닌다.
+        "evidence_grade": EVIDENCE_SYNTHETIC,
+    }
+
+
 def _equilibrium(sigma: np.ndarray, w_mkt: np.ndarray, delta: float) -> np.ndarray:
     """역최적화 균형 기대수익 `Π = δ Σ w_mkt` — BL 의 사전분포."""
     return delta * sigma @ w_mkt
@@ -356,6 +506,9 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
            "months": [], "applied": 0, "timing_view": [], "fwd_factor": [],
            "ep_inactive": 0, "ep_infeasible": 0, "ep_kl": [],
            "caps": [], "budget_eq": [], "engine": engine, "arch": arch,
+           # ★리밸런싱마다 한 줄 — 제약이 어디서 왔고 얼려졌는지가 기록에 남는다★
+           "constraint_audit": [],
+           "evidence_grade": EVIDENCE_SYNTHETIC,
            "uses_mu": not is_budget}
     #: `-const` 팔이 첫 리밸런싱 값을 얼려 두는 곳.
     frozen: dict[str, object] = {}
@@ -387,27 +540,33 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
 
         # ── T3-D: μ 를 아예 만지지 않는 경로 ────────────────────────────────
         if is_budget:
-            # ★`-const` 는 규칙을 끄지 않는다 — **국면 변동만** 끈다★
-            # 첫 리밸런싱에서 정한 예산·한도를 그대로 들고 간다(PIT 안전: 그 시점의
-            # 훈련창만 본다). 이득이 국면 타이밍인지, 그 규칙이 고른 수준인지 가른다.
+            # ★세 팔이 **같은 생성기**를 탄다★ 차이는 그것을 *언제 부르는가* 뿐이다.
+            #   -open   : 국면 정보를 뺀 같은 계열 규칙 (regime_informed=False)
+            #   -const  : 같은 규칙, 첫 적용 리밸런싱에서 **입력 전체를 얼림**
+            #   (기본)  : 매 리밸런싱 재구성
             const = arch.endswith("-const")
-            if arch.startswith("T3-D1"):
-                if not (const and frozen.get("b") is not None):
-                    frozen["b"] = regime_risk_budget(
-                        sigma, names, flat=arch.endswith("-flat"))
-                b = frozen["b"]
+            family = "D1" if arch.startswith("T3-D1") else "D2"
+            month = _month_of(dates[t])
+            if const and frozen.get("spec") is not None:
+                spec = frozen["spec"]
+            else:
+                spec = build_constraint(
+                    family, sigma, np.cov(R_win.T) * 252.0, names,
+                    regime_informed=not arch.endswith("-open"))
+                if const:
+                    frozen["spec"], frozen["at"] = spec, month
+            frozen_at = frozen.get("at") if const else None
+
+            if spec.kind == CONSTRAINT_RISK_BUDGET:
+                b = np.asarray(spec.budget, float)
                 w = _risk_budget_weights(sigma, b)
                 rec["budget_eq"].append(float(sum(
                     b[i] for i, nm in enumerate(names) if nm.startswith("EQ"))))
             else:
-                if not (const and frozen.get("caps") is not None):
-                    frozen["caps"] = regime_group_caps(
-                        sigma, np.cov(R_win.T) * 252.0, names,
-                        open_=arch.endswith("-open"))
-                caps = frozen["caps"]
                 res = constrained_solve(
                     "min_var", names, R_win, np.zeros(n), sigma,
-                    Constraints(group_caps_pct=caps), groups_of=class_of(names))
+                    Constraints(group_caps_pct=spec.caps_pct()),
+                    groups_of=class_of(names))
                 wl = res.get("weights")
                 if wl is None:
                     _blank(t); continue
@@ -415,9 +574,12 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
                     if isinstance(wl, dict) else np.asarray(wl, float)
                 w = np.maximum(w, 0.0)
                 w = w / max(w.sum(), 1e-12)
-                rec["caps"].append(caps.get("EQ"))
+                rec["caps"].append(spec.bounds_dict().get("EQ", (0.0, 100.0))[1])
+            rec["constraint_audit"].append(constraint_audit_row(
+                spec, month=month, const=const, frozen_at=frozen_at,
+                weights=w, names=names))
             rec["w"].append(w)
-            rec["months"].append(_month_of(dates[t]))
+            rec["months"].append(month)
             rec["applied"] += 1
             continue
 
@@ -441,10 +603,19 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
 
         views = _VIEWS[arch](mu, names, beta)
         P, Q, Om, skipped = pq_from_views(views, names, sigma, conf, tau)
-        if P is None:
+        if P is None and arch != ARCH_PRIOR_ONLY:
             _blank(t); continue
 
-        if engine == "bl":
+        if arch == ARCH_PRIOR_ONLY:
+            # ★뷰가 0개인 것은 실패가 아니라 이 팔의 정의다★ EP 의 사전분포
+            # (시나리오 균등가중 = 트레일링 평균)를 그대로 μ 로 쓴다.
+            rep = ep_posterior_mu([], names, R_win)
+            if not rep.get("available"):
+                _blank(t); continue
+            rec["ep_kl"].append(0.0)
+            rec["ep_inactive"] += 1
+            mu_post = np.asarray(rep["prior_mu_annual"], float)
+        elif engine == "bl":
             mu_post = bl_posterior(_equilibrium(sigma, w_mkt, delta), sigma,
                                    P, Q, Om, tau=tau)
         else:
@@ -468,8 +639,9 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
         w = _min_var_long_only(sigma, mu_post, delta)
         rec["w"].append(w)
         rec["months"].append(_month_of(dates[t]))
-        rec["view_disp"].append(float(np.max(Q) - np.min(Q)) if len(Q) > 1
-                                else float(abs(Q[0])))
+        if Q is not None and len(Q):
+            rec["view_disp"].append(float(np.max(Q) - np.min(Q)) if len(Q) > 1
+                                    else float(abs(Q[0])))
         rec["post_disp"].append(float(mu_post.max() - mu_post.min()))
         rec["conf"].append(conf if engine == "bl" else float("nan"))
         rec["applied"] += 1
@@ -615,7 +787,9 @@ def main() -> int:
     order: list[tuple[str, str]] = []
     for arch in arches:
         # ★D 계열에는 엔진 개념이 없다★ 뷰를 만들지 않으므로 BL/EP 를 통과하지 않는다.
-        for eng in (("bl",) if arch in ARCH_BUDGET else engines):
+        # ★prior-only 는 EP 전용★ BL 은 균형 Π 라 "사전이 움직인다" 가 성립하지 않는다.
+        for eng in (("bl",) if arch in ARCH_BUDGET
+                    else ("ep",) if arch == ARCH_PRIOR_ONLY else engines):
             rec, rb = run_arch(arch, names, R, dates, points, beta,
                                conf_override=args.conf, engine=eng)
             mean_l1, med_l1 = w_l1(rec)
@@ -637,8 +811,9 @@ def main() -> int:
                 "w_l1_mean": mean_l1, "w_l1_median": med_l1,
                 "dispersion": w_dispersion(rec),
                 "applied": rec["applied"],
-                "n_views": len(_VIEWS[arch](np.zeros(len(names)) + 0.01, names, beta))
-                if arch in ARCH_VIEW else 0,
+                "n_views": (len(_VIEWS[arch](np.zeros(len(names)) + 0.01,
+                                             names, beta))
+                            if arch in _VIEWS else 0),
                 "ep_inactive": rec["ep_inactive"], "ep_infeasible": rec["ep_infeasible"],
                 "ep_inactive_pct": (round(100.0 * rec["ep_inactive"] / len(rec["ep_kl"]), 1)
                                     if rec["ep_kl"] else None),
@@ -713,18 +888,43 @@ def main() -> int:
             for c in COSTS:
                 d = out[key]["cells"][c]["ce"] - out[base]["cells"][c]["ce"]
                 print(f"  {key} vs {base} @{c:>4.0f}bp : {d:+.6f}")
-    dbase = next((k for k, _a in order if out[k]["arch"] in ARCH_BUDGET), None)
-    if dbase:
-        print("  (D 계열은 자기 대조군 대비로만 읽는다 — A/B/C 와 최적화기 계열이 다르다)")
+    # ── ★T3-D 귀속 — 뺄셈을 **둘**로 가른다★ ────────────────────────────────
+    # `D-regime − D-open` 은 셋을 뭉친다: 제약이 있다는 것의 값 · 그 수준의 값 ·
+    # 국면에 따라 변한다는 것의 값. 앞의 둘은 매크로가 아니라 **포트폴리오 정책**이다.
+    fams = [(f, f, f"{f}-const", f"{f}-open") for f in ("T3-D1", "T3-D2")]
+    if any(out.get(f[1]) for f in fams):
+        print()
+        print("★T3-D 귀속★ 정책 가치 = const − open · **동적 매크로 가치 = regime − const**")
+        for _f, dyn, const, open_ in fams:
+            if not all(k in out for k in (dyn, const, open_)):
+                continue
+            for c in COSTS:
+                ce = {k: out[k]["cells"][c]["ce"] for k in (dyn, const, open_)}
+                policy = ce[const] - ce[open_]
+                dynamic = ce[dyn] - ce[const]
+                verdict = ("★동적 국면 제약에 대한 반증(이 합성 기제 한정)★"
+                           if dynamic < 0 else "동적 항이 양수")
+                print(f"  {dyn} @{c:>4.0f}bp : 정책 {policy:+.6f} · "
+                      f"동적매크로 {dynamic:+.6f}  {verdict if c == 0 else ''}")
+        print("  ★`D-const > D-regime` 은 **동적 국면 의존 제약**에 대한 반증이지")
+        print("    **제약 일반**에 대한 반증이 아니다. 정책 항은 별도로 읽는다.★")
+        print("  (D 계열은 A/B/C 와 최적화기 계열이 달라 그쪽과는 비교하지 않는다)")
 
     from src.engine.capability import probe_all
     fs = probe_all().get("frontier_sample", {})
     print()
-    print("★증거 등급★", json.dumps(fs.get("detail") or fs.get("reason") or {},
-                                 ensure_ascii=False))
+    print(f"★증거 등급★ {EVIDENCE_SYNTHETIC} — 합성 패널이다. Sharpe·CE·CVaR 는 "
+          f"기제 확인 수치이지 **경제적 가치의 증거가 아니다**.")
+    print("  표본:", json.dumps(fs.get("detail") or fs.get("reason") or {},
+                               ensure_ascii=False))
     if args.report:
+        # ★등급이 보고서 최상단에 박힌다★ 나중에 이 JSON 만 보는 사람이 합성임을
+        # 모른 채 인용하는 것을 막는다.
+        payload = {"evidence_grade": EVIDENCE_SYNTHETIC, "real_share": 0.0,
+                   "frontier_sample": fs.get("detail") or fs.get("reason"),
+                   "arms": out}
         with open(args.report, "w", encoding="utf-8") as f:
-            f.write(json.dumps(out, ensure_ascii=False, indent=2, default=str))
+            f.write(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
         print(f"\nJSON → {args.report}")
     return 0
 
