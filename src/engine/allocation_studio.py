@@ -69,21 +69,18 @@ def build_user_views(views: list[dict] | None, names: list[str],
     P행은 대상 자산 균등가중 피킹(그룹 뷰 지원). 유니버스에 없는 자산만
     지정한 뷰·크기 0 뷰는 조용히 버리지 않고 스킵 목록으로 보고.
     """
-    idx = {t: i for i, t in enumerate(names)}
-    rows, q, scales, skipped = [], [], [], []
-    for v in views or []:
-        assets = [a for a in (v.get("assets") or []) if a in idx]
-        mag = abs(float(v.get("magnitude_pct") or 0.0)) / 100.0
-        if not assets or mag == 0.0:
-            skipped.append({"view": v, "reason": "대상 자산 없음 또는 크기 0"})
-            continue
-        direction = 1.0 if float(v.get("direction", 1)) >= 0 else -1.0
+    # ★행 생성은 `view_rows` 가 단일 출처다★ 예전에는 같은 규칙이 BL·EP·
+    # risk_allocations 세 곳에 손으로 구현돼 있었고, 그래서 부호 있는 가중치를
+    # 넣을 자리가 없었다(T3 §5).
+    from src.engine.view_rows import build_view_rows
+    built, skipped = build_view_rows(views, names)
+    rows, q, scales = [], [], []
+    for vr, v in zip(built, [v for v in (views or [])
+                             if not any(sk["view"] is v for sk in skipped)],
+                     strict=False):
         conf = min(max(float(v.get("confidence", 50)), 0.0), 100.0)
-        row = np.zeros(len(names))
-        for a in assets:
-            row[idx[a]] = 1.0 / len(assets)
-        rows.append(row)
-        q.append(direction * mag)
+        rows.append(vr.row)
+        q.append(vr.direction * vr.magnitude)
         # conf 50 → 1.0(Idzorek 기본) · conf→100 → ~0(뷰 강제) · conf→0 → 매우 큼(뷰 무시)
         scales.append((100.0 - conf) / max(conf, 1.0))
     if not rows:

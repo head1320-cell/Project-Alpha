@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.api.json_safe import finite_payload as _finite_payload
 from src.engine.entropy_views import EPUnavailable
@@ -45,11 +45,34 @@ _HIST_WINDOWS = HIST_WINDOWS
 
 # ── 요청 모델 ─────────────────────────────────────────────────────────────────
 class AllocationView(BaseModel):
-    assets: list[str] = Field(..., min_length=1)
+    """뷰 하나 — **절대**(`assets`) 또는 **부호 있는 조합**(`weights`).
+
+    ★`weights` 는 상대·팩터 뷰를 위한 확장이다(T3 §6.4).★ 예전에는 P 행이 언제나
+    양수 등가중이라 `(+EQ, −FI)` 같은 스프레드를 표현할 수 없었고, 그래서 T3-B/C 를
+    BL·EP 어느 쪽으로도 돌릴 수 없었다.
+
+    - `magnitude_pct` 는 **그 행의 단위**다 — 스프레드 뷰의 3% 는 "EQ−FI 스프레드가
+      연 3%" 이지 "각 자산이 3%" 가 아니다(행을 재정규화하지 않기 때문).
+    - `direction` 은 **Q 에만** 곱한다. 부호를 `weights` 에 이미 넣었다면
+      `direction=1` 로 둔다 — 양쪽에 넣으면 상쇄된다.
+    """
+
+    assets: list[str] | None = Field(None, min_length=1)
+    weights: dict[str, float] | None = None   # 부호 허용 (상대·팩터 뷰)
     direction: int = 1                      # +1 상회 / -1 하회
     magnitude_pct: float = Field(2.0, ge=0, le=50)   # 연간 기대수익 크기(%)
     confidence: float = Field(50, ge=0, le=100)
     label: str | None = None                # 테제 문장 (표시용, 계산 미사용)
+
+    @model_validator(mode="after")
+    def _exactly_one_target_form(self):
+        """★둘 중 정확히 하나★ — 어느 쪽이 P 행을 정하는지 추측하게 두지 않는다."""
+        if bool(self.assets) == bool(self.weights):
+            raise ValueError(
+                "뷰는 `assets`(절대) 또는 `weights`(부호 있는 조합) 중 **정확히 "
+                "하나**를 지정해야 합니다 — 둘 다이거나 둘 다 아니면 어느 쪽이 P 행을 "
+                "정하는지 모호합니다.")
+        return self
 
 
 class ConstraintsInput(BaseModel):

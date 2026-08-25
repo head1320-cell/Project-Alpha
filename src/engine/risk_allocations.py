@@ -294,7 +294,6 @@ def s_black_litterman(mk: str) -> dict:
         return {"BIL": 100.0}
     S = _cov(R) * 252.0  # 연율화 공분산 (뷰가 연율 수익 단위)
     n = len(names)
-    idx = {t: i for i, t in enumerate(names)}
     w_mkt = np.array([_MKT_PRIOR.get(t, 0.0) for t in names])
     if w_mkt.sum() <= 0:
         w_mkt = np.ones(n)
@@ -310,12 +309,14 @@ def s_black_litterman(mk: str) -> dict:
         view = _TILT_Q.get(str(sym), 0.0)
         if view == 0.0 or cat not in _TILT_TO_ASSETS:
             continue
-        assets = [a for a in _TILT_TO_ASSETS[cat] if a in idx]
-        if not assets:
+        # ★행 규칙은 `view_rows` 와 공유한다★ 여기는 사용자 뷰가 아니라 매크로
+        # 틸트 맵이라 계약(Q·신뢰도)이 다르지만, **행을 만드는 규칙**까지 따로 둘
+        # 이유는 없다 — 그렇게 뒀다가 세 번째 복사본이 됐다(T3 §5).
+        from src.engine.view_rows import row_from_spec
+        row, _kind, _dropped = row_from_spec(
+            assets=list(_TILT_TO_ASSETS[cat]), weights=None, names=names)
+        if row is None:
             continue
-        row = np.zeros(n)
-        for a in assets:
-            row[idx[a]] = 1.0 / len(assets)
         rows.append(row)
         q.append(view)
     if not rows:
