@@ -155,6 +155,26 @@ def get_stock_sector(stock_code: str) -> str | None:
     return STOCK_SECTOR.get(code)
 
 
+def unknown_codes(codes) -> list[str]:
+    """종목 마스터가 **모르는** 코드.
+
+    ★실측이 이 함수의 이유다★ `/analyze` 에 `["005930", "ZZZZZZ"]` 를 주면
+    `ZZZZZZ` 가 최적화에서 **89.18%** 를 가져가고 응답은 `excluded: []` 로
+    "아무것도 빠지지 않았다" 고 말한다. mock 생성기가 어떤 문자열에도 가격
+    이력을 만들어 주기 때문이다(262행). 그런데 판정 능력은 이미 여기 있었다 —
+    `get_stock_name("ZZZZZZ")` 는 `None` 을 돌려주고, **아무도 그것을 묻지
+    않았다**(라우트 전체에서 티커를 검증하는 곳이 0개였다).
+
+    ★`resolve_name` 을 쓰면 안 된다★ 그쪽은 표시용 폴백이라 모르는 코드에도
+    `'종목 ZZZZZZ'` 를 만들어 준다 — 판정에 쓰면 항상 "안다" 가 된다.
+
+    ★모른다 ≠ 잘못됐다★ `SPY` 도 여기서는 미지다. 해외 상장은 연구 대상으로
+    정당하고, 주문을 막는 것은 `target_versions.untradable()` 의 일이다.
+    이 함수는 **사실을 돌려줄 뿐 막지 않는다.**
+    """
+    return sorted({str(c) for c in codes if get_stock_name(str(c)) is None})
+
+
 def resolve_name(stock_code: str, fallback: bool = True) -> str:
     """종목명 해소 (항상 문자열 반환). Unknown Corp 박멸용."""
     name = get_stock_name(stock_code)

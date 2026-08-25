@@ -106,6 +106,34 @@ def _check_weight_unit(weights: dict, declared: str | None) -> None:
         raise HTTPException(422, reason)
 
 
+def _unknown_tickers(codes) -> dict:
+    """종목 마스터가 모르는 코드를 **사실로 싣는다** (막지 않는다).
+
+    ★`excluded` 와 다른 칸이다★ `excluded` 는 "데이터가 없어 분석에서 빠졌다"
+    이고, 이것은 "데이터는 있는데 그 종목이 실재하는지 모른다" 다. 실측에서
+    `ZZZZZZ` 는 262행의 **합성** 이력을 갖고 최적화에서 89.18% 를 가져가면서
+    `excluded: []` 였다 — 두 사실을 한 칸에 넣으면 그 구분이 사라진다.
+
+    ★막는 것은 여기가 아니다★ `SPY` 도 마스터에는 없지만 연구 대상으로 정당하다.
+    주문을 거부하는 것은 `target_versions.untradable()` 게이트의 일이다.
+    """
+    from src.data.mock_gate import mock_allowed
+    from src.data.stock_master import unknown_codes
+    bad = unknown_codes(codes)
+    if not bad:
+        return {"codes": [], "synthetic_data": False, "note": None}
+    synthetic = mock_allowed()
+    return {
+        "codes": bad,
+        # mock 게이트가 유일한 판정 기준 — 새 기준을 만들지 않는다.
+        "synthetic_data": synthetic,
+        "note": ("종목 마스터에 없는 코드입니다 — 해외 상장 등 연구용으로는 유효할 "
+                 "수 있으나 실행 게이트는 이들을 거부합니다."
+                 + (" mock 모드이므로 이 코드들의 가격 이력은 **합성**입니다."
+                    if synthetic else "")),
+    }
+
+
 class AnalyzeRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=30)
     weights: dict[str, float] | None = None          # 없으면 균등
@@ -809,6 +837,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                                   "information_ratio": extra.get("information_ratio")}},
             "mc": mc_dist,
             "constraints_report": constraints_report,
+            "unknown_tickers": _unknown_tickers(req.tickers),
             # ★어느 μ 엔진이 이 숫자를 냈는지 서버가 답한다 (M2)★ 화면이 라벨을
             # 지어내지 않게 하려는 것이고, `ep` 진단(feasible·ENS·위반·신뢰도 미사용)은
             # EP 일 때만 채워진다.
@@ -1863,6 +1892,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 mu_as_views=len(extra_views or []), view_confidence=None,
                 model=req.model) if req.conditional else None),
             "research_context": rc,
+            "unknown_tickers": _unknown_tickers(req.tickers),
         })
         return _finite_payload(decision)
     except HTTPException:
