@@ -176,6 +176,15 @@ class AnalyzeRequest(BaseModel):
     #   모델 5회 추가 최적화(목표 구간)를 부르므로 슬라이더를 드래그할 때마다
     #   따라붙어서는 안 된다.
     conditional: bool = False
+    # ★기본값이 "hard" 인 것이 계약이다★ 보내지 않으면 현행 경로·현행 신뢰도 그대로.
+    regime_weighting: str = Field("hard", pattern="^(hard|probabilistic)$")
+    # 라이브(오늘 스냅샷) vs 백테스트(as_of 절단). 백테스트는 아직 열려 있지 않다 —
+    # ECOS revision 정책 문서가 선행조건이다(계획 §1.6.2).
+    regime_mode: str = Field("live", pattern="^(live|backtest)$")
+    # ★홀딩 기간의 유일한 출처★ — `h_hold` 는 여기서 파생된다(M→1 · Q→3). 개월 수를
+    # 자유 입력으로 받지 않는 이유는, 국면 기대 지속기간(실측 2.5~5.0개월)처럼 뜻이
+    # 다른 값이 흘러들어오는 것을 막기 위해서다. `BacktestRequest.rebalance` 와 같은 규약.
+    rebalance: str = Field("M", pattern="^[MQ]$")
 
 
 class BacktestRequest(BaseModel):
@@ -473,9 +482,212 @@ def _conditional_views(cond: dict, model: str) -> tuple[list[dict] | None, float
     return (views or None), conf
 
 
+#: 리밸런싱 주기 → 홀딩 기간(개월). ★`h_hold` 는 여기서만 나온다★ — 자유 입력이
+#: 아니고, 국면 기대 지속기간(실측 2.5~5.0개월)을 흘려 넣는 자리도 아니다.
+_HOLD_MONTHS = {"M": 1, "Q": 3}
+
+#: ECOS 는 ALFRED 같은 빈티지를 주지 않는다. 오늘 받은 과거 관측은 당시 속보치가
+#: 아니라 이후 확정치이므로, 정적 공표지연을 아무리 정확히 선언해도 **값 자체가
+#: 미래를 안다**. 그래서 이 라벨은 영구적이고, `look_ahead_free` 와 **다른 필드**다.
+_REVISION_BIAS = "unmanaged"
+
+
+def _pit_block(mode: str) -> dict:
+    """★PIT 상태는 3차원이다 — 단일 `pit_verified` 를 만들지 않는다★ (계획 §1.6.1).
+
+    셋을 한 불리언으로 접는 순간 revision bias 가 그 안에 숨고 "PIT 통과" 라는
+    표시가 거짓말이 된다. 셋은 서로 독립이며 하나가 참이라고 나머지가 참이 되지 않는다.
+    """
+    return {
+        # 국면 라벨의 뿌리인 `regime_axes.zscore_at` 이 후행 윈도우만 본다.
+        "look_ahead_free": True,
+        # 계열별 공표지연은 아직 선언돼 있지 않다(MS2 · 정책문서에서 붙는다).
+        "publication_lag": "unspecified",
+        "revision_bias": _REVISION_BIAS,
+        "mode": mode,
+        "note": ("세 속성은 서로 독립입니다. `revision_bias` 는 ECOS 가 빈티지를 "
+                 "제공하지 않아 **영구히 unmanaged** 이며, 공표지연을 선언해도 "
+                 "해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다."),
+    }
+
+
+def _conditional_stack(req, returns) -> dict:
+    """★조건부 μ/Σ 의 단일 출처★ — `/analyze` 와 `/optimize` 가 같은 것을 쓴다.
+
+    두 라우트에 같은 코드가 복사돼 있었다. 한쪽만 고치면 화면에 따라 다르게 동작하고,
+    그 차이는 응답을 나란히 놓고 보기 전에는 드러나지 않는다.
+
+    Returns:
+        `{cond, path, s_override, extra_views, view_conf, meta}` — `meta` 는
+        응답의 `conditional` 블록이 그대로 실을 조각이다.
+    """
+    from src.engine.conditional_market import regime_by_month_from_path
+
+    path = _regime_path_for(req)
+    by_month, _dropped = regime_by_month_from_path(path["points"])
+    current = path["points"][-1].get("regime") if path["points"] else None
+    weighting = getattr(req, "regime_weighting", "hard")
+    mode = getattr(req, "regime_mode", "live")
+    h_hold = _HOLD_MONTHS.get(getattr(req, "rebalance", "M"), 1)
+    meta: dict = {"regime_weighting": "hard", "mode": mode,
+                  "h_hold": None, "pi_path": None, "pi_bar": None,
+                  "A_contribution_pct": None, "sharpness": None,
+                  "probability_source": None, "mixture_note": None,
+                  "dropped_regimes": None, "pit": _pit_block(mode)}
+
+    # ★백테스트 모드는 아직 열려 있지 않다★ 라이브 수치를 백테스트인 척 쓰지
+    # 못하게, 계산하지 않고 사유를 돌려준다(계획 §1.6.2 의 3단계 전).
+    if mode == "backtest":
+        blocked = _unavailable_conditional(
+            "백테스트 모드는 아직 열려 있지 않습니다 — ECOS revision 정책 문서와 "
+            "계열별 공표지연 선언이 선행조건입니다(계획 §1.6.2). 빈티지가 없는 채로 "
+            "과거를 재현하면 값 자체가 미래를 알기 때문에, 못 한다고 말합니다.")
+        return {"cond": blocked, "path": path, "s_override": None,
+                "extra_views": None, "view_conf": None, "meta": meta}
+
+    cond = _hard_conditional(returns, by_month, current)
+
+    if weighting == "probabilistic":
+        mixed, meta = _mixture_conditional(req, returns, by_month, current,
+                                           path, h_hold, mode, meta)
+        if mixed is not None:
+            cond = mixed
+
+    s_override = extra_views = view_conf = None
+    if cond.get("available"):
+        s_override = cond["sigma"]
+        extra_views, view_conf = _conditional_views(cond, req.model)
+        meta["confidence_model"] = cond.get("confidence_model") or {
+            "kind": "legacy_scalar",
+            "note": ("수축 강도만으로 정한 스칼라 신뢰도입니다 — Ω 를 분해해 계산한 "
+                     "값이 아니므로 승격 근거로 쓰지 마십시오(계획 §1.5.3)."),
+        }
+    return {"cond": cond, "path": path, "s_override": s_override,
+            "extra_views": extra_views, "view_conf": view_conf, "meta": meta}
+
+
+def _hard_conditional(returns, by_month, current) -> dict:
+    """현행 경로 — 오늘의 점 라벨 하나로 조건부를 만든다."""
+    from src.engine.conditional_market import conditional_moments
+    return conditional_moments(returns, by_month, current)
+
+
+def _unavailable_conditional(reason: str) -> dict:
+    from src.engine.conditional_market import _unavailable
+    return _unavailable(reason)
+
+
+def _mixture_conditional(req, returns, by_month, current, path,
+                         h_hold: int, mode: str, meta: dict):
+    """확률 혼합 경로. 실패하면 `(None, meta)` 로 돌려 하드로 떨어지되 **사유를 남긴다**."""
+    import numpy as _np
+
+    from src.engine.conditional_market import (
+        implied_confidence,
+        regime_mixture_moments,
+        view_omega_terms,
+    )
+    from src.engine.regime_probability import (
+        from_k_step_forecast,
+        from_posterior_mean_path,
+        require_portfolio_source,
+    )
+    from src.engine.regime_transitions import (
+        REGIMES,
+        count_transitions,
+        transition_posterior,
+    )
+
+    try:
+        rows = transition_posterior(count_transitions(path["points"]))
+        # ★π_1 … π_h — 종단 분포 하나가 아니다★ 홀딩 기간 동안 **매 달의** 국면이
+        # 수익에 관여하므로 경로 전체가 필요하다(계획 §1.3.3).
+        #
+        # ★그리고 π 와 P 는 같은 사슬에서 나와야 한다★ 국면 간 항은 결합분포를
+        # 쓰므로, `k_step_forecast` 의 표집 평균(E[P^j])을 사후평균 행렬((E[P])^j)과
+        # 섞으면 Jensen 격차 때문에 결과가 공분산이 아니게 된다(실측 j=3 에서
+        # 8.9e−3 어긋남 — 혼합 함수의 일관성 검사가 실제로 이것을 잡았다).
+        probs = [require_portfolio_source(p) for p in
+                 from_posterior_mean_path(rows, current, h_hold, list(REGIMES),
+                                          mode=mode)[0]]
+        P = from_posterior_mean_path(rows, current, h_hold, list(REGIMES),
+                                     mode=mode)[1]
+        # 표집 기반 예측은 **신용구간을 보고하기 위해** 따로 부른다 — Σ̄ 에는
+        # 전파되지 않으며, 그 몫은 잔여 모델리스크(Ξ)가 흡수한다.
+        sampled = from_k_step_forecast(rows, current, k=h_hold, mode=mode)
+        mix = regime_mixture_moments(returns, by_month,
+                                     [p.probs for p in probs], P, list(REGIMES),
+                                     h_hold=h_hold)
+    except Exception as e:  # noqa: BLE001
+        meta["mixture_note"] = (f"국면 예측을 만들지 못해 하드 라벨로 계산했습니다 "
+                                f"({type(e).__name__}: {e}).")
+        return None, meta
+
+    if not mix.get("available"):
+        meta["mixture_note"] = (f"국면 혼합을 하지 못해 하드 라벨로 계산했습니다 — "
+                                f"{mix.get('reason')}")
+        meta["dropped_regimes"] = mix.get("dropped_regimes")
+        return None, meta
+
+    # ★신뢰도는 Ω 를 분해해 계산한다★ 스칼라 휴리스틱을 표준으로 굳히지 않는다.
+    sig = _np.asarray(mix["sigma"], dtype=float)
+    W_ann = _np.asarray(mix["W_h"], dtype=float) * (12.0 / h_hold)
+    A_ann = _np.asarray(mix["A_h"], dtype=float) * (12.0 / h_hold)
+    n_months = max(1, min(mix.get("n_months_by_regime", {}).values(), default=1))
+    terms = view_omega_terms(regime_diag=_np.maximum(_np.diag(A_ann), 0.0),
+                             sigma_within_diag=_np.maximum(_np.diag(W_ann), 0.0),
+                             n_months=n_months)
+    conf = implied_confidence(terms["omega_diag"], _np.diag(sig))
+
+    mix["confidence_model"] = {
+        "kind": "decomposed_omega", "version": 1,
+        "terms": {k: [float(x) for x in v] for k, v in terms["terms"].items()},
+        "omega_diag": [float(x) for x in terms["omega_diag"]],
+        "implied_confidence": [round(float(x), 4) for x in conf],
+        "residual_risk": terms["residual_risk"],
+        "residual_policy": terms["residual_policy"],
+        "n_months": terms["n_months"],
+        "note": terms["note"],
+    }
+    # 자산별 신뢰도를 하나로 줄여 뷰에 넘긴다 — ★가장 약한 쪽을 따른다★.
+    mix["shrinkage_lambda"] = 1.0 - float(_np.min(conf)) / 100.0
+    mix["regime"] = current
+
+    from src.engine.regime_probability import RegimeProbabilities
+    sharp = RegimeProbabilities(source="k_step_forecast_mean", step_months=h_hold,
+                                probs=mix["pi_bar"], usage="portfolio",
+                                mode=mode).sharpness
+    prob0 = {
+        "source": probs[-1].source, "usage": probs[-1].usage,
+        "step_months": h_hold, "mode": mode,
+        "probs": mix["pi_path"][-1],
+        "sharpness": sharp,
+        # ★파라미터 불확실성은 Σ̄ 에 전파되지 않는다 — 여기서 따로 보고한다★
+        "sampled_forecast": {"probs": sampled.probs, "ci90": sampled.ci90,
+                             "note": sampled.note},
+        "uncertainty_note": ("Σ̄ 는 사후평균 전이행렬로 계산했습니다 — π 와 P 가 같은 "
+                             "사슬에서 나와야 국면 간 항이 공분산이 되기 때문입니다. "
+                             "전이행렬 **파라미터**의 불확실성(위 `sampled_forecast` 의 "
+                             "구간)은 Σ̄ 에 전파되지 않았고, 잔여 모델리스크로 남습니다."),
+    }
+
+    meta.update({
+        "regime_weighting": "probabilistic",
+        "h_hold": h_hold,
+        "pi_path": mix["pi_path"],
+        "pi_bar": mix["pi_bar"],
+        "A_contribution_pct": mix["A_contribution_pct"],
+        "sharpness": sharp,
+        "probability_source": prob0,
+        "dropped_regimes": mix.get("dropped_regimes"),
+        "mixture_note": mix.get("note"),
+    })
+    return mix, meta
+
+
 def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
                        mu_as_views: int, view_confidence: float | None,
-                       model: str) -> dict:
+                       model: str, meta: dict | None = None) -> dict:
     """응답의 `conditional` 조각 — ★조용한 폴백 금지★.
 
     조건부를 못 쓴 경우 계산은 무조건부로 떨어지되 **응답이 그 사실을 말한다**
@@ -531,6 +743,10 @@ def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
         # 전체 표본에서 계산되므로 조건부가 아니다. 같은 화면에 조건부 비중과
         # 무조건부 프론티어가 나란히 서 있다는 사실을 서버가 먼저 말한다.
         "not_applied_to": ["frontier.curve", "frontier.cloud", "mc", "mu_annual"],
+        # ★MS1-a 계약 필드★ — 가중 방식 · 지평 · π 경로 · 날카로움 · 신뢰도 모델 ·
+        # PIT 3필드. `meta` 가 없으면(구 호출부) 하드 경로의 기본값을 적는다.
+        **(meta or {"regime_weighting": "hard", "mode": "live",
+                    "pit": _pit_block("live")}),
     }
 
 
@@ -664,19 +880,12 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         s_override = None
         extra_views: list[dict] | None = None
         view_conf: float | None = None
+        cond_meta: dict | None = None
         if req.conditional:
-            from src.engine.conditional_market import (
-                conditional_moments,
-                regime_by_month_from_path,
-            )
-            cond_path = _regime_path_for(req)
-            by_month, _dropped = regime_by_month_from_path(cond_path["points"])
-            current = (cond_path["points"][-1].get("regime")
-                       if cond_path["points"] else None)
-            cond = conditional_moments(returns, by_month, current)
-            if cond["available"]:
-                s_override = cond["sigma"]
-                extra_views, view_conf = _conditional_views(cond, req.model)
+            stack = _conditional_stack(req, returns)
+            cond, cond_path = stack["cond"], stack["path"]
+            s_override, extra_views = stack["s_override"], stack["extra_views"]
+            view_conf, cond_meta = stack["view_conf"], stack["meta"]
 
         # 1) 뷰+모델 최적화 (allocation_studio 엔진)
         from src.engine.allocation_studio import optimize
@@ -854,7 +1063,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 cond or {}, cond_path or {},
                 sigma_applied=s_override is not None,
                 mu_as_views=int(opt.get("extra_views_used") or 0),
-                view_confidence=view_conf, model=req.model)
+                view_confidence=view_conf, model=req.model, meta=cond_meta)
             payload["target_range"] = target_range
 
         # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
@@ -1733,19 +1942,14 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
         cond = cond_path = None
         s_override = None
         extra_views = None
+        cond_meta = None
         if req.conditional:
-            from src.engine.conditional_market import (
-                conditional_moments,
-                regime_by_month_from_path,
-            )
-            cond_path = _regime_path_for(req)
-            by_month, _dropped = regime_by_month_from_path(cond_path["points"])
-            current = (cond_path["points"][-1].get("regime")
-                       if cond_path["points"] else None)
-            cond = conditional_moments(returns, by_month, current)
-            if cond["available"]:
-                s_override = cond["sigma"]
-                extra_views, _conf = _conditional_views(cond, req.model)
+            # ★`/analyze` 와 **같은 헬퍼**를 탄다★ 예전에는 같은 코드가 두 번
+            # 복사돼 있어, 한쪽만 고치면 화면에 따라 다르게 동작했다.
+            stack = _conditional_stack(req, returns)
+            cond, cond_path = stack["cond"], stack["path"]
+            s_override, extra_views = stack["s_override"], stack["extra_views"]
+            cond_meta = stack["meta"]
 
         # ★§13 팩터 리스크 모델★ 켜면 표본 공분산 대신 BΣ_fB'+D 를 쓴다.
         # 실패하면 조용히 표본으로 떨어지지 않고 `applied: False` + 사유를 남긴다.
@@ -1890,7 +2094,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             "conditional": (_conditional_block(
                 cond, cond_path, sigma_applied=s_override is not None,
                 mu_as_views=len(extra_views or []), view_confidence=None,
-                model=req.model) if req.conditional else None),
+                model=req.model, meta=cond_meta) if req.conditional else None),
             "research_context": rc,
             "unknown_tickers": _unknown_tickers(req.tickers),
         })

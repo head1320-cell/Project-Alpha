@@ -48,9 +48,20 @@ SOURCE_AXIS = "filtered_axis"
 SOURCE_MARKOV = "filtered_markov"
 SOURCE_SMOOTHED = "smoothed_markov"
 
+SOURCE_FORECAST_MEAN = "k_step_forecast_mean"
+
 #: ★배분이 받아들이는 출처의 화이트리스트★ 새 출처를 추가하면 여기에 넣을지
 #: **의식적으로** 결정하게 된다. 기본은 거부다.
-_PORTFOLIO_SOURCES = frozenset({SOURCE_FORECAST})
+#:
+#: 두 개인 이유 — 둘 다 **전방(forward) k단계**라는 점이 이 계약의 요건이고,
+#: 차이는 파라미터 불확실성을 어떻게 다루느냐다:
+#:   · `k_step_forecast`      Dirichlet 사후에서 행렬을 4000회 뽑아 거듭제곱(구간 O)
+#:   · `k_step_forecast_mean` 사후평균 행렬을 거듭제곱(구간 X, **전이행렬과 정합 O**)
+#: ★공분산 계산에는 후자가 필요하다★ — `Cov(μ_{S_j}, μ_{S_k})` 는 π 와 P 가 같은
+#: 사슬에서 나와야 공분산이 된다. 표집 평균은 `E[P^j] ≠ (E[P])^j` (Jensen)이라
+#: 사후평균 행렬과 어긋나고(실측 j=3 에서 8.9e−3), 어긋난 채로 이중합을 돌리면
+#: 결과가 공분산이 아니게 된다.
+_PORTFOLIO_SOURCES = frozenset({SOURCE_FORECAST, SOURCE_FORECAST_MEAN})
 
 
 def _sharpness(probs: dict[str, float]) -> float | None:
@@ -153,6 +164,60 @@ def from_k_step_forecast(rows: list[dict], current: str, k: int, *,
         note=fc.get("note"),
         detail={"from": fc.get("from"), "draws": fc.get("draws")},
     )
+
+
+def posterior_mean_transition(rows: list[dict], regimes: list[str]) -> list[list[float]]:
+    """행별 Dirichlet **사후평균** 전이행렬 (행 = 출발)."""
+    return [[float(rows[i]["mean"][regimes[j]]) for j in range(len(regimes))]
+            for i in range(len(regimes))]
+
+
+def from_posterior_mean_path(rows: list[dict], current: str, h_hold: int,
+                             regimes: list[str], *, mode: str = "live"
+                             ) -> tuple[list[RegimeProbabilities], list[list[float]]]:
+    """`π_1 … π_h` 를 사후평균 행렬로 전파한다 — ★전이행렬과 정합되는 경로★.
+
+    혼합 공분산의 국면 간 항은 **결합분포**를 쓰므로 π 와 P 가 같은 사슬에서 나와야
+    한다. `k_step_forecast` 의 표집 평균은 `E[P^j] ≠ (E[P])^j` 라 사후평균 행렬과
+    어긋나고(실측 j=1 5.5e−4 · j=2 4.5e−3 · j=3 8.9e−3), 그대로 넣으면
+    `regime_mixture_moments` 의 일관성 검사에 걸린다.
+
+    ★그래서 파라미터 불확실성은 Σ̄ 에 전파되지 않는다★ — 그 몫은
+    `k_step_forecast` 의 `ci90` 이 **따로 보고**하고, 잔여 모델리스크(Ξ)가 흡수한다.
+    숨기는 것이 아니라 어디에 있는지 적어 두는 것이다.
+    """
+    import numpy as np
+
+    if current not in regimes:
+        raise ValueError(f"현재 국면 '{current}' 를 알 수 없습니다.")
+    if int(h_hold) < 1:
+        raise ValueError("홀딩 기간은 1개월 이상이어야 합니다.")
+    P = np.asarray(posterior_mean_transition(rows, regimes), dtype=float)
+    # ★행 재정규화★ `transition_posterior` 는 표시용으로 6자리 반올림해 내보내므로
+    # 행 합이 1에서 최대 ~2e−6 벗어난다. 한 번은 무해하지만 h=3 이면 거듭제곱으로
+    # 누적돼 확률 합이 깨진다(실제로 그렇게 걸렸다). 확률벡터를 확률벡터로 되돌리는
+    # 것이지 검사를 무르게 하는 것이 아니다 — 검사는 그대로 엄격하다.
+    rowsum = P.sum(axis=1, keepdims=True)
+    if (rowsum <= 0).any():
+        raise ValueError("전이행렬에 합이 0인 행이 있습니다.")
+    P = P / rowsum
+    pi = np.zeros(len(regimes))
+    pi[regimes.index(current)] = 1.0
+
+    out = []
+    for j in range(1, int(h_hold) + 1):
+        probs = pi @ np.linalg.matrix_power(P, j)
+        probs = probs / probs.sum()
+        out.append(RegimeProbabilities(
+            source=SOURCE_FORECAST_MEAN, step_months=j,
+            probs={r: float(v) for r, v in zip(regimes, probs, strict=True)},
+            usage=USAGE_PORTFOLIO, mode=mode,
+            note=("사후평균 전이행렬을 j회 거듭제곱한 경로입니다 — 전이행렬과 정합되어 "
+                  "결합분포 계산에 쓸 수 있습니다. 파라미터 불확실성은 여기에 "
+                  "전파되지 않으며 `k_step_forecast` 의 신용구간이 따로 보고합니다."),
+            detail={"from": current},
+        ))
+    return out, P.tolist()
 
 
 def from_axis(block: dict, *, mode: str = "live") -> RegimeProbabilities:
