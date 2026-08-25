@@ -604,3 +604,116 @@ def regime_mixture_moments(returns_df, regime_by_month: dict[str, str] | None,
                      f"재정규화했습니다(최대 {dropped_mass:.1%}) — 축소된 사슬은 근사입니다.")
         out["note"] = note
     return out
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 뷰 신뢰도 — ★스칼라 휴리스틱 대신 Ω 를 분해해 계산한다★ (MS1-a)
+# ══════════════════════════════════════════════════════════════════════════════
+# 계획: `docs/plans/2026-08-25-macro-vnext-plan.md` §1.5.3 · §1.5.4
+#
+# 현행 프로덕션은 `conf = _CONDITIONAL_MAX_CONFIDENCE(50.0) × (1 − λ)` 다. 그런데
+# `conf` 는 임의의 노브가 **아니다** — `allocation_studio.build_user_views` 가
+#
+#     scale = (100 − conf) / max(conf, 1)
+#     Ω     = diag( diag(P (τΣ) Pᵀ) · scale )
+#
+# 로 쓰므로 **`conf = 50` 은 `scale = 1`, 즉 `Ω = diag(P τΣ Pᵀ)` — He–Litterman
+# 중립점**이다. 앵커는 원칙적이고, 검증된 적 없는 것은 `(1 − λ)` 곱이다.
+#
+# ★그래서 추측하지 않고 구성한다.★ Ω 는 **뷰 오차의 공분산**이라는 정해진 의미가
+# 있으므로 세 항으로 분해할 수 있다:
+#
+#     Ω = 국면 불확실성(D)  +  μ̂ 추정오차(Σ_within × 12/n_months)  +  잔여 모델리스크(Ξ)
+#
+# ★독립 관측은 영업일이 아니라 개월이다★ 한 달의 21영업일은 국면 라벨 하나를
+# 공유한다 — `conditional_moments` 가 `n_obs` 와 `n_months` 를 따로 내는 이유가
+# 그것이고, 여기서 쓰는 것은 `n_months` 다. 영업일로 나누면 추정오차가 21배 작아져
+# 신뢰도가 터무니없이 높아진다.
+#
+# ★★그리고 `Ξ` 를 0 으로 두면 안 된다★★
+# 앞선 설계에서 잔여 모델리스크의 초기값을 0 으로 두고 라벨만 붙이려 했는데,
+# `Ω` 가 작아지면 `conf` 는 **올라간다** — 즉 **모델리스크를 재지 않을수록 뷰가 더
+# 강해진다.** 정확히 거꾸로다. 미측정은 0이 아니라 **선언된 보수적 하한**으로
+# 표현한다: 모델리스크(국면 라벨 오류·분류체계 오설정·구조변화)가 우리가 실제로 잰
+# 항들 중 가장 큰 것보다 작을 이유가 없다. 추정이 아니라 **가정**이며, 응답이
+# `residual_policy` 로 그렇게 말한다.
+
+RESIDUAL_UNMEASURED = "unmeasured"
+RESIDUAL_MEASURED = "measured"
+RESIDUAL_POLICY_FLOOR = "conservative_floor"
+RESIDUAL_POLICY_MEASURED = "measured"
+
+#: `build_user_views` 가 받는 신뢰도 범위. 0 이면 0으로 나누므로 하한을 둔다.
+_CONF_MIN, _CONF_MAX = 1e-6, 100.0
+
+
+def view_omega_terms(*, regime_diag, sigma_within_diag, n_months: int,
+                     residual_diag=None) -> dict[str, Any]:
+    """뷰 오차분산 Ω 의 대각을 세 항으로 분해한다.
+
+    Args:
+        regime_diag: 국면 간 산포 `D` 의 대각 (연율). `mixture_from_moments` 의
+            `A_h` 와 같은 재료에서 온다.
+        sigma_within_diag: 국면 내 공분산의 대각 (연율).
+        n_months: ★독립 관측 개월 수★ — 영업일 수가 아니다.
+        residual_diag: 실측된 잔여 모델리스크. `None` 이면 **보수적 하한**을 쓴다.
+
+    Returns:
+        `{omega_diag, terms{regime, estimation, residual}, residual_risk,
+          residual_policy, n_months, note}`
+    """
+    D = np.asarray(regime_diag, dtype=float)
+    W = np.asarray(sigma_within_diag, dtype=float)
+    if D.shape != W.shape:
+        raise ValueError("국면 산포와 국면 내 분산의 길이가 다릅니다.")
+    if not (np.isfinite(D).all() and np.isfinite(W).all()):
+        raise ValueError("Ω 분해 입력에 결측/무한값이 있습니다.")
+    if (D < 0).any() or (W < 0).any():
+        # ★음수 분산을 절댓값으로 덮지 않는다★ 들어왔다면 상류가 깨진 것이고,
+        # 여기서 고치면 그 사실이 사라진다.
+        raise ValueError("분산 항에 음수가 있습니다 — 상류 추정이 깨졌습니다.")
+    if int(n_months) < 1:
+        raise ValueError("독립 관측 개월 수는 1 이상이어야 합니다.")
+
+    estimation = W * (MONTHS_PER_YEAR / float(int(n_months)))
+    if residual_diag is None:
+        # ★미측정 = 0 이 아니다★ (모듈 상단 주석 참조)
+        residual = np.maximum(D, estimation)
+        risk, policy = RESIDUAL_UNMEASURED, RESIDUAL_POLICY_FLOOR
+        note = ("잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 "
+                "확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 "
+                "씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 "
+                "오차를 재면 이 값을 대체합니다.")
+    else:
+        residual = np.asarray(residual_diag, dtype=float)
+        if residual.shape != D.shape:
+            raise ValueError("잔여 리스크의 길이가 다릅니다.")
+        if (residual < 0).any():
+            raise ValueError("잔여 리스크에 음수가 있습니다.")
+        risk, policy = RESIDUAL_MEASURED, RESIDUAL_POLICY_MEASURED
+        note = "잔여 모델리스크를 워크포워드 실현 뷰 오차로 측정했습니다."
+
+    return {
+        "omega_diag": D + estimation + residual,
+        "terms": {"regime": D, "estimation": estimation, "residual": residual},
+        "residual_risk": risk,
+        "residual_policy": policy,
+        "n_months": int(n_months),
+        "note": note,
+    }
+
+
+def implied_confidence(omega_diag, sigma_diag, *, tau: float = 0.05):
+    """Ω → `build_user_views` 가 받는 0~100 신뢰도.
+
+    `build_user_views` 의 `scale = (100 − conf)/conf` 를 뒤집은 것이다:
+
+        Ω = base · scale,  base = τ·Σ_ii   ⟹   conf = 100 / (1 + Ω/base)
+
+    ★`Ω = τΣ` 이면 정확히 50 이 나온다★ — 현행 `_CONDITIONAL_MAX_CONFIDENCE = 50.0`
+    이 임의의 상수가 아니라 He–Litterman 중립점이라는 사실이 여기 남는다.
+    """
+    om = np.asarray(omega_diag, dtype=float)
+    base = np.maximum(np.asarray(sigma_diag, dtype=float) * float(tau), 1e-18)
+    conf = 100.0 / (1.0 + om / base)
+    return np.clip(conf, _CONF_MIN, _CONF_MAX)
