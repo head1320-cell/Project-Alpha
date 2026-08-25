@@ -334,14 +334,43 @@ scale = (100.0 - conf) / max(conf, 1.0)
    "n_months": …, "implied_confidence": …}
   ```
   어느 항이 뷰를 죽이고 있는지 사람이 보게 한다.
-- `Ξ` 는 **초기값 0**이고 MS1-b 워크포워드에서 실현 뷰 오차 `realized_i − μ̄_i` 의
-  분산으로 채운다. ★0 인 동안 응답이 `residual_risk: "unmeasured"` 로 말한다★ —
-  "모델리스크가 0이다" 와 "아직 안 쟀다" 는 다른 사실이다.
+- ★**`Ξ` 의 초기값은 0 이 아니다**★ (정정 — 아래 §1.5.4). 미측정이면 **보수적 하한**
+  `Ξ_kk = max((P D Pᵀ)_kk, (P Σ̂_μ Pᵀ)_kk)` 을 쓰고, MS1-b 워크포워드에서 실현 뷰
+  오차 `realized_i − μ̄_i` 의 분산으로 **대체**한다. 응답은
+  `residual_risk: "unmeasured"` · `residual_policy: "conservative_floor"` ·
+  `residual_value` 를 함께 낸다 — "모델리스크가 0이다" 와 "아직 안 쟀다" 는 다른
+  사실이고, **후자를 전자로 쓰면 안 잰 것이 확신을 높인다.**
 - 기존 스칼라 경로는 `kind: "legacy_scalar"` 로 **남기되 기본값이 아니다.**
   `regime_weighting="hard"` 경로는 legacy 를 그대로 써서 **회귀 0**(T24).
 - ★이 분해도 최종형이 아니다★ — `Σ̂_μ` 는 국면 라벨을 참으로 놓고 잰 조건부
   추정오차이므로 라벨 오류를 포함하지 않는다. 그 부분이 `Ξ` 로 흡수되며, 그래서
-  `Ξ` 를 실측하기 전에는 **이 신뢰도 모델로 production 승격을 주장하지 않는다.**
+  `Ξ` 를 실측하기 전에는 **이 신뢰도 모델로 production 승격을 주장하지 않는다**
+  (§8 승격기준 7번).
+
+### 1.5.4 ★정정 — `Ξ = 0` 은 방향이 거꾸로였다★
+
+불변식 I7 을 쓰다가 앞 패스 설계의 결함이 드러났다. `Ω = D + Σ̂_μ + Ξ` 에서
+`Ξ = 0` 은 **Ω 를 작게** 만들고, `conf = 100/(1 + Ω/base)` 이므로 **신뢰도를 높인다.**
+
+★즉 모델리스크를 재지 않을수록 뷰가 더 강해진다 — 정확히 거꾸로다.★
+
+| `n_months` | Ω(Ξ=0) | conf(Ξ=0) | Ω(보수적 하한) | **conf(하한)** |
+|---|---|---|---|---|
+| 15 | 0.02518 | 4.84 | 0.04566 | **2.73** |
+| 32 | 0.01430 | 8.22 | 0.02390 | **5.08** |
+| 60 | 0.00982 | 11.53 | 0.01494 | **7.89** |
+| 120 | 0.00726 | 14.99 | 0.01196 | **9.67** |
+
+**하한의 근거를 가정으로 명시한다**: *모델리스크(국면 라벨 오류 · 분류체계 오설정 ·
+구조변화)가 우리가 실제로 잰 항들 중 가장 큰 것보다 작을 이유가 없다.*
+★추정이 아니라 **선언된 보수적 가정**★ 이며, `residual_policy` 필드가 그렇게 말한다.
+
+★n=120 에서 하한이 `Σ̂_μ`(0.00256) 대신 `D`(0.0047) 로 넘어간다★ — 표본이 아무리
+늘어도 잔여 리스크가 0으로 수렴하지 않는다는 뜻이고, 그것이 옳은 성질이다(T22b).
+
+앞의 §1.5.3 표(4.84 / 8.22 / 11.53)는 **`Ξ=0` 기준의 상한**이므로, 실제 적용되는
+값은 이 절의 오른쪽 열(2.73 / 5.08 / 7.89)이다. 두 표를 함께 남기는 이유는
+**T22 가 정확히 그 차이를 잡기 때문**이다.
 
 ### 1.6 ★PIT — 완전한 빈티지 시스템 없이 look-ahead-free 가 가능한가★
 
@@ -482,21 +511,180 @@ Goldilocks 에 더 몰리기 때문):
 ★구현 전에 각 프로브가 **의도한 이유로** red 임을 확인한다★ — red 라는 사실만으로는
 프로브가 통과가 아니다.
 
+#### 1.10.0 ★불변식 테스트 I1~I7 — 구현이 반드시 만족해야 하는 항등식★
+
+> 아래 일곱은 **성능 지표가 아니라 항등식**이다. 하나라도 깨지면 구현이 틀린 것이지
+> "데이터가 그렇다" 가 아니다. **전부 실행해서 성립을 확인했다** — 각 항목의 수치는
+> 재현 명령(감사 §11.3)에서 다시 나온다.
+
+##### I1 · 동일국면 불변식 — 모든 국면의 μ·Σ 가 같으면 혼합은 그것으로 **정확히** 환원
+
+```
+∀r: μ_r = μ₀,  Σ_r = Σ₀   ⟹   μ̄_h/h = μ₀ ,  W_h/h = Σ₀ ,  A_h = 0
+```
+
+실측 (4국면 · 임의 `P` · 임의 `π₀`):
+
+| h | μ̄/h | W/h | max\|A_h\| |
+|---|---|---|---|
+| 1 | `[0.01, −0.002]` ✅ | `[0.0025, 0.0005, 0.0005, 0.0009]` ✅ | `2.7e−20` |
+| 3 | 동일 | 동일 | `8.1e−20` |
+| 6 | 동일 | 동일 | `5.6e−19` |
+
+★이 테스트가 잡는 것★ π 나 `P` 가 **잘못 곱해진 경우**. 국면 간 차이가 없으면
+전이행렬이 무엇이든 결과가 흔들릴 수 없다 — 흔들리면 배선이 틀린 것이다.
+허용오차는 `1e−15`(기계 정밀도), **통계적 근사가 아니다.**
+
+##### I2 · 확정국면 불변식 — π_r = 1 이면 하드 라벨 결과와 **일치**
+
+★정밀하게 서술해야 한다★ — `π(S_t) = e_r` 만으로는 부족하다. 홀딩 기간 전체에서
+`π_j = e_r (j=1..h)` 여야 하고, 그것은 **`P[r][r] = 1`(흡수 국면)** 을 뜻한다.
+
+| 설정 | μ̄/h | W/h | max\|A_h\| | 하드 라벨과 |
+|---|---|---|---|---|
+| 흡수 `P[0][0]=1`, h=1 | `[0.015, −0.002]` | `[0.0025, …]` | `0.0` | ✅ **일치** |
+| 흡수 `P[0][0]=1`, h=3 | `[0.015, −0.002]` | `[0.0025, …]` | `0.0` | ✅ **일치** |
+| 비흡수 `P=[[.85,.15],[.25,.75]]`, h=3 | `[0.009756, −0.000176]` | — | `5.2e−4` | ❌ 불일치(정상) |
+
+★비흡수에서 불일치하는 것이 **버그가 아니라 요점**이다★ — 오늘 국면을 확실히 알아도
+3개월 뒤는 모른다. `π₁ = [0.85, 0.15]` 이 이미 원핫이 아니다.
+
+##### I2b · ★π_path 와 P 의 상호일관성 — 어기면 A_h 가 PSD 가 아니다★
+
+I2 를 쓰다가 나온 것이다. `π_{j+1} = π_j · P` 가 성립하지 않는 입력을 넣으면
+`A_h` 는 공분산이 아니게 되고 **음의 고유값**이 나온다:
+
+| 입력 | A_h 고유값 | PSD |
+|---|---|---|
+| 일관 (`π_j = π₀P^j`) | `[0.000000, 0.000582]` | ✅ |
+| 비일관 (원핫을 강제 유지) | ★`[−0.000394, 0.000004]`★ | ❌ |
+
+★그래서 구현은 `‖π_{j+1} − π_j·P‖_∞ > 1e−9` 이면 계산하지 않고 `available: false`
+로 보고한다★ — 조용히 음의 분산을 최적화기에 넘기지 않는다.
+
+##### I3 · 전이극한 불변식 — 두 극한을 **정확히** 되찾는다
+
+| 극한 | 조건 | A_h | 기대값 | 일치 |
+|---|---|---|---|---|
+| 완전지속 | `P = I` | `[0.001143, −0.000397, −0.000397, 0.000138]` | `h²·D` = 동일 | ✅ |
+| 무기억 | `P` 의 모든 행 = π | `[0.000381, −0.000132, −0.000132, 0.000046]` | `h·D` = 동일 | ✅ |
+
+★I3 이 I1 보다 강하다★ — I1 은 국면 간 차이가 0인 축퇴 사례라 상수를 넣어도 통과할
+수 있지만, I3 은 **두 극한 사이의 보간이 옳은지**를 잡는다. 실제 `P` 에서는
+`A_h = 0.000767` 로 두 값 사이에 있다(`h²D` 의 1/1.489, `hD` 의 2.01배).
+
+##### I4 · 연율화 일관성 — 일별·월별·연율 표현이 **같은 적률**을 낸다
+
+★단, "같은 스케일링" 의 정의가 핵심이다★ — 국면은 **월 단위로 인덱스된 상태**다.
+일별로 내려가도 **한 달의 21영업일은 같은 국면 라벨을 공유**한다.
+
+| 표현 | μ̄ | W_h | A_h |
+|---|---|---|---|
+| 월별 스텝 | `[0.018449, 0.003235]` | `[0.010271, −0.000232, −0.000232, 0.003508]` | `[0.000767, −0.000267, −0.000267, 0.000093]` |
+| 일별 스텝(월 블록) | 동일 | 동일 | 동일 |
+| **최대 절대차** | `1.0e−17` | — | `7.4e−18` |
+
+★그리고 함정을 같은 테스트에서 죽인다★ — 국면을 **매일 재추첨**하면:
+
+```
+일별-iid A_h = [0.000001, −0.000000, −0.000000, 0.000000]
+월별      A_h = [0.000767, −0.000267, −0.000267, 0.000093]
+                                             비율 ★888.6배★
+```
+
+즉 "일별 혼합" 자체가 틀린 것이 **아니라**, 일별로 내려가면서 **국면의 시간
+해상도까지 일별로 바꾼 것**이 틀린 것이다. 후자는 국면 간 항을 **888.6배 지워** MS1
+을 no-op 으로 만든다. 테스트는 **둘을 갈라야** 한다 — 앞의 것은 통과, 뒤의 것은 실패.
+
+##### I5 · 확률출처 가드 — 구조적으로 막는다
+
+★"규약" 이 아니라 **함수 시그니처와 검증**으로 막는다.★
+
+```
+regime_mixture_moments(..., prob: RegimeProbabilities)
+    prob.usage != "portfolio"  →  ValueError / available:false   (조용한 통과 금지)
+```
+
+- `quadrant_probs`(축 filtered) · `_markov_probs`(Markov filtered) ·
+  `smoothed_marginal_probabilities` 는 **`usage != "portfolio"`** 로만 만들어진다.
+- `k_step_forecast` 산출물만 `usage = "portfolio"` 를 받는다.
+- ★이름이 아니라 값으로 거른다★ — 이름 규약(`"forecast"` 가 들어가면 OK)은
+  리팩터 한 번에 조용히 깨진다.
+- 배분 응답 블록 전체를 문자열로 훑어 `"smoothed"` 가 없음을 확인한다(T13).
+
+##### I6 · PIT 상태 가드 — 3차원을 1차원으로 접지 않는다
+
+```
+응답에 pit_verified / pit_ok / is_pit 류 필드가 존재하면 실패
+반드시 셋이 각각 존재:  look_ahead_free · publication_lag · revision_bias
+```
+
+셋은 **서로 독립**이고 하나가 참이라고 나머지가 참이 되지 않는다. 특히
+`revision_bias` 는 ECOS 한계상 ★영구히 `"unmanaged"`★ 이므로, 합치는 순간
+"PIT 통과" 라는 표시가 거짓말이 된다.
+
+##### I7 · ★잔여 리스크 의미론 — "안 쟀다" 를 "0" 으로 쓰지 않는다★
+
+**이 항목이 계약 4의 결함을 드러냈다.** 앞 패스에서 `Ξ`(잔여 모델리스크)의 초기값을
+**0** 으로 두고 라벨만 붙이기로 했는데, `Ω = D + Σ̂_μ + Ξ` 에서 `Ξ = 0` 은
+**Ω 를 작게** 만들고 그것은 **신뢰도를 높인다.**
+
+★즉 모델리스크를 재지 않을수록 뷰가 더 강해진다 — 정확히 거꾸로다.★
+
+| `n_months` | Ω(Ξ=0) | conf(Ξ=0) | Ω(보수적 하한) | **conf(하한)** |
+|---|---|---|---|---|
+| 15 | 0.02518 | 4.84 | 0.04566 | **2.73** |
+| 32 | 0.01430 | 8.22 | 0.02390 | **5.08** |
+| 60 | 0.00982 | 11.53 | 0.01494 | **7.89** |
+| 120 | 0.00726 | 14.99 | 0.01196 | **9.67** |
+
+**규약** — `Ξ` 가 미측정이면 **0 이 아니라 보수적 하한**을 쓴다:
+
+```
+Ξ_kk = max( (P D Pᵀ)_kk , (P Σ̂_μ Pᵀ)_kk )        when residual_risk == "unmeasured"
+```
+
+근거를 **가정으로 명시**한다: *모델리스크(국면 라벨 오류 · 분류체계 오설정 ·
+구조변화)가 우리가 실제로 잰 항들 중 가장 큰 것보다 작을 이유가 없다.*
+추정이 아니라 **선언된 보수적 가정**이며, 응답이 그렇게 말한다:
+
+```
+"residual_risk": "unmeasured",
+"residual_policy": "conservative_floor",
+"residual_value": …,          ← 실제 쓰인 값(0 이 아님을 보이게)
+"residual_note": "모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 안 잰 것이
+                  확신을 높이므로, 측정된 항 중 최대값을 하한으로 씁니다."
+```
+
+★n=120 에서 하한이 `Σ̂_μ` 대신 `D` 로 넘어간다★(0.0047 > 0.00256) — 표본이 아무리
+늘어도 잔여 리스크가 0으로 수렴하지 않는다는 뜻이고, 그것이 옳은 성질이다.
+
+**테스트가 잡아야 하는 것**: `conf(unmeasured) < conf(Ξ=0)` 이 **엄격히** 성립.
+`Ξ = 0` 대입은 통과할 수 없다.
+
 #### `tests/test_mixture_moments.py` — 계약 1
 
 | # | 테스트 | 못 박는 것 |
 |---|---|---|
 | T1 | `test_hard_weighting_is_byte_identical` | `regime_weighting="hard"` → 현행 응답 그대로 |
-| T2 | `test_onehot_pi_equals_conditional_moments` | π 원핫 → `conditional_moments` 와 원소별 동일 |
+| **T2** | ★`test_identical_regimes_reduce_to_common_moments`★ (**I1**) | 모든 μ_r·Σ_r 동일 → `μ̄/h == μ₀`, `W_h/h == Σ₀`, `‖A_h‖ ≤ 1e−15`. h=1,3,6 · 임의 `P` |
+| **T2b** | ★`test_absorbing_regime_equals_hard_result`★ (**I2**) | `P[r][r] = 1` · `π₀ = e_r` → 하드 라벨 결과와 **원소별 동일**(h=1,3) |
+| **T2c** | ★`test_non_absorbing_onehot_must_differ`★ (**I2**) | 비흡수 `P` 에 `π₀ = e_r` → 하드와 **달라야 한다**. 같으면 `P` 를 안 쓰고 있다는 뜻 |
+| **T2d** | ★`test_pi_path_inconsistent_with_P_is_refused`★ (**I2b**) | `‖π_{j+1} − π_j·P‖_∞ > 1e−9` → `available: false`. 강제로 계산하면 A_h 고유값 `−3.94e−4` (PSD 아님) |
 | T3 | ★`test_accumulation_matches_markov_joint`★ | 통제된 `P`·μ·Σ 로 `W_h + A_h` 를 손계산 값에 고정. **`h²D`(1.489배)와 `hD`(0.497배)가 둘 다 죽는다** |
-| T4 | ★`test_identity_transition_reduces_to_h_squared_D`★ | `P = I` → `A_h == h²·D` (상한 극한) |
-| T5 | ★`test_iid_transition_reduces_to_hD`★ | `P` 의 모든 행이 동일 → `A_h == h·D` (하한 극한) |
+| **T4** | ★`test_identity_transition_recovers_persistent_limit`★ (**I3**) | `P = I` → `A_h == h²·D` (기계 정밀도) |
+| **T5** | ★`test_memoryless_transition_recovers_redraw_limit`★ (**I3**) | `P` 의 모든 행 = π → `A_h == h·D` (기계 정밀도) |
 | T6 | `test_mu_uses_time_average_not_terminal` | μ̄ 가 `π̄` 기반. `π_h` 만 쓰면 red (실측 9.2%p 차이) |
 | T7 | `test_between_regime_term_raises_risk` | μ 상이 → `trace(Σ̄_h) > trace(W_h)` |
-| T8 | `test_daily_mixing_is_rejected` | 일별 혼합 후 ×252 한 값과 **다르다**(252배 함정) |
+| **T8** | ★`test_daily_and_monthly_steps_agree`★ (**I4**) | 일별(**월 블록**) vs 월별 → 최대 절대차 `≤ 1e−15` (실측 `7.4e−18`) |
+| **T8b** | ★`test_daily_regime_redraw_is_rejected`★ (**I4**) | 국면을 **매일** 재추첨한 구현은 `A_h` 를 **888.6배 지운다** → red |
 | T9 | `test_psd_failure_is_reported_not_clipped` | 최소고유값 < 0 → `available: false`(클립 금지) |
 | T10 | `test_thin_regime_is_dropped_and_reported` | `dropped_regimes` 비어있지 않음 |
 | T10b | `test_horizon_names_are_not_interchangeable` | `h_hold` 를 `d_r`(기대 지속기간)로 대체하면 결과가 **달라진다** — 두 이름을 섞지 못하게 |
+
+★T2c 와 T8b 가 짝 테스트다★ — T2b·T8 은 "같아야 한다" 를 잡고, T2c·T8b 는
+"**달라야 한다**" 를 잡는다. 앞의 것만 있으면 `P` 를 무시하거나 국면 해상도를 뭉갠
+구현이 전부 통과한다.
 
 ★T4·T5 가 T3 의 짝이다★ — 정확식이 두 극한으로 수렴하는지 보면, T3 이 우연히 맞은
 것인지 구조가 맞은 것인지 갈린다. T3 만 있으면 상수를 맞춰 넣은 구현도 통과한다.
@@ -506,7 +694,8 @@ Goldilocks 에 더 몰리기 때문):
 | # | 테스트 | 못 박는 것 |
 |---|---|---|
 | T11 | `test_three_sources_have_declared_usage` | 세 객체가 계약대로 `usage` 를 낸다 |
-| T12 | ★`test_portfolio_path_rejects_non_portfolio_usage`★ | `usage != "portfolio"` 를 배분에 넣으면 **거부**. ★이름이 아니라 값으로★ |
+| T12 | ★`test_portfolio_path_rejects_non_portfolio_usage`★ (**I5**) | `usage != "portfolio"` 를 배분에 넣으면 `ValueError`/`available:false` — **조용한 통과 금지**. ★이름이 아니라 값으로★ |
+| T12b | ★`test_filtered_sources_cannot_be_marked_portfolio`★ (**I5**) | `quadrant_probs`·`_markov_probs`·`smoothed` 로 만든 객체는 `usage="portfolio"` 를 **가질 수 없다**(생성 지점에서 고정) |
 | T13 | ★`test_smoothed_never_appears_in_portfolio_block`★ | 응답의 배분 블록에 `"smoothed"` 문자열이 없다 |
 | T14 | `test_filtered_and_forecast_disagreement_is_surfaced` | 0.535 vs 0.601 처럼 갈리면 응답이 **둘 다** 싣는다 |
 
@@ -514,7 +703,7 @@ Goldilocks 에 더 몰리기 때문):
 
 | # | 테스트 | 못 박는 것 |
 |---|---|---|
-| T15 | ★`test_no_single_pit_boolean`★ | 응답에 `pit_verified` 류 **단일 필드가 없다** |
+| T15 | ★`test_no_single_pit_boolean`★ (**I6**) | 응답 전체에 `pit_verified`·`pit_ok`·`is_pit` 류 필드가 **없다**, 그리고 세 필드가 **각각 있다** |
 | T16 | `test_revision_bias_always_labeled` | ECOS 유래 산출물에 `revision_bias` 존재 |
 | T17 | `test_backtest_mode_unavailable_with_reason` | `mode="backtest"` → `available: false` + 사유 |
 | T18 | `test_look_ahead_free_is_measured_not_asserted` | `as_of` 를 뒤로 밀면 출력이 **따라 움직인다**(안 움직이면 절단 미작동) |
@@ -546,13 +735,16 @@ Goldilocks 에 더 몰리기 때문):
 
 ### 1.11 완료 조건 (MS1-a)
 
+- ★불변식 I1~I7 (T2·T2b·T2c·T2d·T4·T5·T8·T8b·T12·T12b·T15·T22·T22b) green★ —
+  **이것들은 성능이 아니라 항등식**이므로 하나라도 red 면 구현이 틀린 것이다.
 - 테스트 T1~T24 green, 기존 2,758건 유지, `ruff` clean.
 - `regime_weighting` 없이 호출하면 **응답 바이트 동일**.
 - 응답이 `coverage`(실측 적중률) · `sharpness` · `confidence_model.terms` 를
   **함께** 낸다 — 사용자가 예측의 날카로움과 뷰가 약한 이유를 보지 않고 비중을
   움직이지 못하게 한다.
 - ★`mode: "backtest"` 는 `available: false` + 사유★ (§1.6.2 3단계 전).
-- ★`residual_risk: "unmeasured"`★ — MS1-b 전에는 모델리스크를 잰 적이 없다.
+- ★`residual_risk: "unmeasured"` + `residual_policy: "conservative_floor"`★ —
+  MS1-b 전에는 모델리스크를 잰 적이 없고, **0 으로 두지 않는다**(I7).
 
 ### 1.12 ★MS1 을 "채택" 이라고 부를 수 있는 조건★
 
@@ -880,3 +1072,140 @@ MS1 을 "채택" 이라고 부르지 않는다.★
 조건부 뷰는 `50×(1−λ)` 스칼라다). MS1 을 포함해 이 계획의 어떤 단계도, 실계열이
 붙고 `Ξ` 를 실측하기 전에는 `production` 라벨을 붙이지 않는다 — 붙이면 그것이
 이 감사가 §0 에서 경계한 바로 그 오독이다.
+
+---
+
+## 9. ★최종 구현 계획 — MS1-a★ (승인 후 착수)
+
+> 이 절은 **승인 후 그대로 실행하는 순서**다. 커밋 단위까지 갈라 둔다.
+> ★불변식 I1~I7 이 red 인 것을 먼저 확인하고 시작한다★ — 구현 후에 쓰는 테스트는
+> 구현을 설명할 뿐 검증하지 않는다.
+
+### 9.1 커밋 1 — 순수 함수 `regime_mixture_moments` (라우트 무관)
+
+**파일** `src/engine/conditional_market.py` (추가만, 기존 함수 불변)
+
+```python
+GROSS_PI_EPS = 1e-9
+
+def regime_mixture_moments(
+    returns_df, regime_by_month: dict[str, str],
+    pi_path: list[dict[str, float]],          # π_1 … π_h  (usage 검증 통과분)
+    transition: list[list[float]],            # P (행=출발)
+    regimes: list[str],                       # 열 순서 고정
+    *, h_hold: int,
+    min_obs_per_asset: float = MIN_OBS_PER_ASSET,
+    shrinkage="auto", trading_days: float = TRADING_DAYS,
+) -> dict:
+    """국면혼합 μ̄/Σ̄ — 월간에서 W_h + A_h 로 누적하고 연율화."""
+```
+
+**절차**
+1. 국면별로 `conditional_moments(returns_df, regime_by_month, r, ...)` 를 호출해
+   `(μ_r, Σ_r)` 를 얻는다. ★새 추정기를 만들지 않는다★ — 기존 게이트·수축·진단이
+   그대로 적용되고, `available: False` 인 국면은 `dropped_regimes` 로 빠진다.
+2. 빠진 국면을 π 에서 제거하고 **재정규화**한다. 남은 질량이 `GROSS_PI_EPS` 미만이면
+   `available: False`.
+3. ★일관성 검사★ `‖π_{j+1} − π_j·P‖_∞ ≤ 1e−9` (**I2b**). 어기면 `available: False`.
+4. 월간으로 내린다 — `μ_r,m = μ_r/12`, `Σ_r,m = Σ_r/12`.
+5. `W_h`·`A_h` 를 §1.3.2 식으로 계산 (`P^m` 은 `np.linalg.matrix_power`, 이중합 h²항).
+6. 연율화 `×(12/h_hold)`, 대칭화 `(Σ̄+Σ̄ᵀ)/2`.
+7. ★최소고유값 < −1e−12 이면 클립하지 않고 `available: False`★ (**T9**).
+8. 반환: `mu` · `sigma` · `pi_path` · `pi_bar` · `W_h` · `A_h` ·
+   `A_contribution_pct` · `dropped_regimes` · `n_months_by_regime` · `h_hold` · `note`.
+
+**테스트** `tests/test_mixture_moments.py` — T1~T10b (I1·I2·I2b·I3·I4 포함).
+전부 **합성 fixture**. 실계열 mock 은 쓰지 않는다.
+
+### 9.2 커밋 2 — 확률출처 계약
+
+**파일** `src/engine/regime_probability.py` (**신규**, 작다)
+
+```python
+USAGE_PORTFOLIO   = "portfolio"
+USAGE_DIAGNOSTIC  = "diagnostic_only"
+USAGE_FORBIDDEN   = "forbidden_in_backtest"
+
+@dataclass(frozen=True)
+class RegimeProbabilities:
+    source: str; step_months: int; probs: dict[str, float]
+    usage: str; mode: str
+    ci90: dict | None = None; coverage: dict | None = None
+    sharpness: float | None = None
+
+def from_k_step_forecast(rows, current, k, *, mode) -> RegimeProbabilities   # usage=portfolio
+def from_axis(detail) -> RegimeProbabilities                                 # usage=diagnostic_only
+def from_markov(detail) -> RegimeProbabilities                               # usage=diagnostic_only
+```
+
+★`usage` 는 **생성 함수가 정한다**★ — 호출자가 지정할 수 없다(**I5**, T12b).
+`regime_mixture_moments` 는 `usage != USAGE_PORTFOLIO` 면 `ValueError`.
+
+**테스트** `tests/test_regime_probability_contract.py` — T11~T14.
+
+### 9.3 커밋 3 — 신뢰도 Ω 분해
+
+**파일** `src/engine/conditional_market.py` (추가)
+
+```python
+RESIDUAL_UNMEASURED = "unmeasured"
+RESIDUAL_POLICY_FLOOR = "conservative_floor"
+
+def view_omega_terms(D_diag, sigma_within_diag, n_months, *, residual=None) -> dict:
+    """Ω = 국면 + 추정오차 + 잔여.  잔여 미측정이면 ★0 이 아니라 보수적 하한★."""
+```
+
+- `estimation = sigma_within_diag * (12.0 / max(n_months, 1))` ★개월 기준★
+- `residual is None` → `residual = max(regime, estimation)` 원소별,
+  `residual_risk="unmeasured"`, `residual_policy="conservative_floor"` (**I7**)
+- 반환에 `terms` · `residual_value` · `implied_confidence` 포함.
+
+**파일** `src/api/allocation_routes.py` — `_conditional_views` 가 `confidence_model`
+을 받아 `conf = 100/(1 + Ω/base)` 로 계산. ★`regime_weighting="hard"` 경로는
+`legacy_scalar` 를 그대로 쓴다★ (T24 — 회귀 0).
+
+**테스트** `tests/test_view_confidence_decomposition.py` — T19~T24c.
+
+### 9.4 커밋 4 — 라우트 배선 + PIT 3필드
+
+**파일** `src/api/allocation_routes.py`
+
+- `req.regime_weighting: Literal["hard","probabilistic"] = "hard"`
+- `req.rebalance: str` 에서 `h_hold` 파생 (월간 1 · 분기 3). ★자유 입력 금지★
+- `"probabilistic"` → `regime_transitions(...)` 에서 `rows`·`current` 를 얻고
+  `j=1..h_hold` 로 `k_step_forecast` 를 호출해 `pi_path` 구성 → `regime_mixture_moments`
+- 응답 `conditional` 블록에 §1.9 의 필드 + **PIT 3필드**
+  (`look_ahead_free` · `publication_lag` · `revision_bias`).
+  ★`pit_verified` 류 단일 필드를 만들지 않는다★ (**I6**)
+- `mode: "backtest"` 요청 → `available: false` + 사유 (§1.6.2 3단계 전)
+- ★같은 배선을 `allocation_routes.py:1738` 부근의 **두 번째 호출부에도** 적용★ —
+  조건부 경로가 두 군데 있다(669·1738). 한 곳만 고치면 화면에 따라 다르게 동작한다.
+
+**테스트** `tests/test_pit_contract.py` — T15~T18b.
+
+### 9.5 커밋 5 — 문서 동기화
+
+`docs/HISTORY.md` 에 결과 기록. 응답 필드가 계획과 갈리면 **계획을 고친다**
+(코드가 진실이다 — CLAUDE.md 규약).
+
+---
+
+### 9.6 착수 전 체크리스트
+
+- [ ] 불변식 프로브 13종이 **red** 이고, **의도한 메시지로** red 인지 확인
+      (★red 라는 사실만으로는 프로브가 통과가 아니다★)
+- [ ] `git checkout -b` 없이 `claude/backtest-modern-ui-refactor-akxvbc` 에서 작업
+- [ ] 커밋마다 `KIS_USE_MOCK=1 pytest tests/ -q` + `ruff check`
+- [ ] 커밋 1~3 은 라우트를 건드리지 않으므로 **응답 바이트 동일**이 유지되어야 한다
+
+### 9.7 ★MS1-a 가 끝나도 하지 않는 것★
+
+| 항목 | 왜 |
+|---|---|
+| `mode: "backtest"` 개방 | §1.6.2 의 3단계(ECOS revision 정책 문서 → 공표지연 선언 → 라벨) 전 |
+| B0/B1/N 18회 평가 | MS1-b 소속 |
+| `Ξ` 실측 | MS1-b 워크포워드에서만 가능 |
+| "채택" 선언 | §1.12 — 평가 전에는 **배선이 됐다**는 뜻일 뿐 |
+| production 라벨 | §8 승격기준 6·7번 미충족(`real_share = 0`, `Ξ` 미측정) |
+| W-DFM 착수 | 별개 워크스트림 (§3) |
+

@@ -613,6 +613,63 @@ print('legacy 50*(1-0.2) =', 50*0.8)"
 # → 분해는 n_months 에 따라 4.84 → 11.53 으로 움직이고, legacy 는 항상 40.0
 ```
 
+### 11.3 불변식 I1~I7 재현 명령
+
+```bash
+cd /home/user/Project-Alpha
+
+# (15) ★불변식 I1·I2·I2b·I3·I4★ — 전부 항등식이므로 기계 정밀도로 성립해야 한다
+python3 -c "
+import numpy as np
+def parts(P,pis,M,Sg,h):
+    E=[p@M for p in pis]; n=M.shape[1]
+    W=sum(np.einsum('s,sij->ij',p,Sg) for p in pis); A=np.zeros((n,n))
+    for j in range(h):
+        for k in range(h):
+            T=np.linalg.matrix_power(P,abs(k-j))
+            J=np.einsum('s,st->st',pis[j],T) if k>=j else np.einsum('t,ts->st',pis[k],T)
+            A+=np.einsum('st,si,tj->ij',J,M,M)-np.outer(E[j],E[k])
+    return sum(E),W,A
+def run(P,pi0,M,Sg,h): 
+    pis=[pi0@np.linalg.matrix_power(P,j) for j in range(1,h+1)]; return parts(P,pis,M,Sg,h)
+np.set_printoptions(precision=8,suppress=True)
+# I1 동일국면
+mu0=np.array([0.01,-0.002]); S0=np.array([[0.0025,0.0005],[0.0005,0.0009]])
+P4=np.array([[.7,.1,.1,.1],[.2,.5,.2,.1],[.1,.3,.5,.1],[.25,.25,.25,.25]])
+for h in (1,3,6):
+    mu,W,A=run(P4,np.array([.4,.3,.2,.1]),np.tile(mu0,(4,1)),np.tile(S0,(4,1,1)),h)
+    print('I1 h=',h, mu/h, (W/h).ravel(), '|A|max=%.1e'%np.abs(A).max())
+M=np.array([[0.015,-0.002],[-0.008,0.006]])
+Sg=np.array([[[0.0025,0.0005],[0.0005,0.0009]],[[0.0049,-0.001],[-0.001,0.0016]]])
+# I2 흡수 vs 비흡수
+for tag,P in (('흡수',np.array([[1.,0.],[.3,.7]])),('비흡수',np.array([[.85,.15],[.25,.75]]))):
+    mu,W,A=run(P,np.array([1.,0.]),M,Sg,3)
+    print('I2',tag, mu/3, '|A|max=%.1e'%np.abs(A).max())
+# I2b 비일관 pi_path -> PSD 아님
+P=np.array([[.85,.15],[.25,.75]])
+for tag,pis in (('일관',[np.array([1.,0.])@np.linalg.matrix_power(P,j) for j in (1,2,3)]),
+                ('비일관',[np.array([1.,0.])]*3)):
+    _,_,A=parts(P,pis,M,Sg,3); print('I2b',tag,'eig=',np.linalg.eigvalsh((A+A.T)/2))
+# I3 두 극한
+pi0=np.array([.6,.4]); h=3
+D=sum(pi0[i]*np.outer(M[i],M[i]) for i in range(2))-np.outer(pi0@M,pi0@M)
+_,_,AI=run(np.eye(2),pi0,M,Sg,h);        print('I3 P=I    ',AI.ravel(),(h*h*D).ravel())
+_,_,Am=run(np.tile(pi0,(2,1)),pi0,M,Sg,h);print('I3 무기억  ',Am.ravel(),(h*D).ravel())"
+
+# (16) ★I4 일별(월블록) == 월별, 그러나 일별-iid 는 888.6배 지운다★
+#      위 스크립트의 parts() 를 일별 인덱스로 확장해 월차이로 P 를 거듭제곱한다.
+
+# (17) ★I7 잔여리스크 — 0 으로 두면 신뢰도가 올라간다★
+python3 -c "
+import numpy as np
+tau=0.05; Sii=np.array([0.16,0.04,0.07])**2; D=np.array([0.0047,0.0002,0.0008])
+for nm in (15,32,60,120):
+    est=Sii*(12.0/nm); xi=np.maximum(D,est)
+    c0=100/(1+(D+est)/(tau*Sii)); cf=100/(1+(D+est+xi)/(tau*Sii))
+    print(nm,'conf(Xi=0)=%.2f'%c0[0],' conf(floor)=%.2f'%cf[0])"
+# → 안 잰 것(Xi=0)이 항상 더 확신한다 = 방향이 거꾸로다
+```
+
 ★이 감사에서 내가 **세 번** 틀렸고 세 번 다 본문에 정정을 남겼다★ (§5.1·§5.5) —
 `smoothed` look-ahead 판단 · "예측 국면확률 부재" 판단 · "loadings 가 상관이라 결함"
 판단이다. 셋 다 **코드를 읽고 고쳤다.** 감사 문서에서 정정을 지우면 다음 사람이 같은
