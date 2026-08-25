@@ -150,7 +150,9 @@ def _stub_monthly(monkeypatch, series: dict[str, list[float]]):
     idx = pd.period_range("2024-01", periods=len(next(iter(series.values()))),
                           freq="M").to_timestamp()
 
-    def fake(code, months=60):
+    def fake(code, months=60, as_of=None):
+        # ★as_of 를 받는다★ 프로덕션 시그니처가 바뀌면 더블도 따라가야 한다 —
+        # 안 그러면 더블이 실제 호출 규약을 검증하지 않는 것이 된다.
         v = series.get(str(code))
         return None if v is None else pd.Series(v, index=idx)
 

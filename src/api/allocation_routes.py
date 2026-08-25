@@ -1680,7 +1680,12 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
     # ★이 계산이 어떤 정보집합 위에 서 있는지 응답이 말한다★ (벤치마크 §4)
     # 선언하지 않은 절단일은 **채우지 않는다** — 비어 있음은 "그 날짜로 잘랐다" 가
     # 아니라 "자른 적이 없다" 는 뜻이고, 채우면 그것이 §4 의 hidden date 다.
-    ctx = _research_now(**({"as_of": req.as_of} if req.as_of else {}))
+    # ★지킨 절단일만 선언한다★ 가격은 `_load_clean_returns(as_of=)` 가 실제로
+    # 자르므로 `market_data_as_of` 는 선언할 수 있다. 매크로는 팩터 계열을 자를 수
+    # 있었을 때만 아래에서 덧붙인다 — 예전에는 `information_cutoff` 만 적어 놓고
+    # 팩터 계층이 오늘 데이터로 계산했다(지키지 않는 절단일을 선언한 것).
+    ctx = _research_now(**({"as_of": req.as_of,
+                            "market_data_as_of": req.as_of} if req.as_of else {}))
     rc = _describe_context(ctx)
     try:
         from src.engine.rebalance_policy import detect_triggers, rebalance_decision
@@ -1721,7 +1726,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 asset_covariance,
                 build_factor_risk_model,
             )
-            frm = build_factor_risk_model(names)
+            frm = build_factor_risk_model(names, as_of=req.as_of)
             if frm["available"] and frm["codes"] == names:
                 s_override = asset_covariance(frm)
                 frm_block = {"applied": True, "reason": None,
@@ -1782,7 +1787,7 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 factor_concentration,
                 portfolio_factor_exposure,
             )
-            betas = asset_factor_betas(names)
+            betas = asset_factor_betas(names, as_of=req.as_of)
             expo = portfolio_factor_exposure(target, betas)
             factors = {"exposure": expo,
                        "concentration": (factor_concentration(expo)
@@ -1795,18 +1800,29 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             if req.factor_risk or req.reverse_stress:
                 from src.engine.factor_exposure import resolve_proxies
                 from src.engine.reverse_stress import factor_covariance
-                fcov = factor_covariance(resolve_proxies()["resolved"])
+                prox = resolve_proxies(as_of=req.as_of)
+                fcov = factor_covariance(prox["resolved"])
+                # ★지키지 않은 절단일을 선언하지 않는다★ 계열을 자르지 못했으면
+                # 그 사실을 사유로 남기고 research_context 의 declared 에서 뺀다.
+                # ★"지켰다" 는 두 가지를 모두 요구한다★ 요청한 절단일이 **실제로
+                # 내려갔고**(`prox["as_of"] == req.as_of`) 쓰인 계열이 전부 잘렸을 것.
+                # 앞의 조건이 없으면 as_of 를 안 넘겨도 `as_of_honored=True`(공허하게
+                # 참)가 나와 절단하지 않은 것을 선언하게 된다 — 변이 프로브가 잡았다.
+                fcov["as_of_honored"] = bool(
+                    prox.get("as_of") == req.as_of
+                    and prox.get("as_of_honored", False))
                 factors["covariance"] = {k: fcov.get(k) for k in
                                          ("available", "reason", "n_months", "span",
                                           "shrinkage_lambda", "degenerate",
-                                          "scale_normalized", "sd_raw", "excluded")}
+                                          "scale_normalized", "sd_raw", "excluded",
+                                          "as_of_honored")}
 
             if req.factor_risk and fcov is not None:
                 from src.engine.factor_risk import (
                     portfolio_factor_risk,
                     portfolio_monthly_returns,
                 )
-                series = portfolio_monthly_returns(target)
+                series = portfolio_monthly_returns(target, as_of=req.as_of)
                 factors["risk"] = portfolio_factor_risk(
                     expo, fcov,
                     total_variance=(series["variance"] if series["available"]
@@ -1821,6 +1837,13 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 from src.engine.reverse_stress import reverse_stress as _rev
                 factors["reverse_stress"] = _rev(
                     expo, fcov, loss_pct=req.stress_loss_pct)
+
+        # ★매크로 절단을 실제로 지켰을 때만 선언에 올린다★
+        if req.as_of and factors is not None:
+            honored = ((factors.get("covariance") or {}).get("as_of_honored")
+                       if factors.get("covariance") is not None else None)
+            if honored:
+                rc = _describe_context(ctx.with_(macro_data_as_of=req.as_of))
 
         decision.update({
             "risk_model": frm_block,

@@ -23,7 +23,7 @@ MIN_MONTHS = 24
 
 
 def portfolio_monthly_returns(weights: dict[str, float], *,
-                              months: int = 60) -> dict:
+                              months: int = 60, as_of: str | None = None) -> dict:
     """비중 고정 가정의 포트폴리오 월별 수익률.
 
     ★비중을 고정으로 본다는 것을 밝힌다★ 실제로는 드리프트하지만, 여기서 재려는
@@ -43,7 +43,7 @@ def portfolio_monthly_returns(weights: dict[str, float], *,
     series: dict[str, dict[str, float]] = {}
     missing: list[str] = []
     for code in fractions:
-        r = _monthly_returns(str(code), months=months)
+        r = _monthly_returns(str(code), months=months, as_of=as_of)
         if r is None or r.empty:
             missing.append(str(code))
             continue

@@ -123,13 +123,61 @@ def _macro_series_map() -> tuple[dict | None, str | None]:
         return None, f"매크로 계열을 수집하지 못했습니다 ({type(e).__name__})"
 
 
+def truncate_series(series, as_of: str | None):
+    """매크로 계열을 `as_of` 까지로 자른다. ★자를 수 없으면 원본을 그대로 돌려준다★
+
+    계열 객체는 `timestamps`/`values` 를 갖는다(`_series_monthly_change` 와 같은
+    가정). 그 모양이 아니면 **조용히 오늘 값을 쓰면서 과거를 주장하지 않도록**
+    호출자가 `truncated` 로 판별할 수 있게 원본을 그대로 돌려준다.
+    """
+    if not as_of:
+        return series, True
+    ts = list(getattr(series, "timestamps", None) or [])
+    vals = list(getattr(series, "values", None) or [])
+    if not ts:
+        # ★빈 계열은 자를 것이 없다★ 미래 관측이 없으므로 공허하게 지켜진 것이다.
+        # (실측: 61계열 중 31개가 빈 계열이었고, 이것을 실패로 세면 실제로는
+        #  전부 잘린 경우에도 "못 지켰다" 고 보고하게 된다.)
+        return series, True
+    if len(ts) != len(vals):
+        return series, False
+    keep = [i for i, t in enumerate(ts) if str(t)[:10] <= as_of]
+    if len(keep) == len(ts):
+        return series, True          # 이미 as_of 이전 — 자를 것이 없다
+    try:
+        import copy
+        cut = copy.copy(series)
+        cut.timestamps = [ts[i] for i in keep]
+        cut.values = [vals[i] for i in keep]
+        return cut, True
+    except Exception:  # noqa: BLE001
+        return series, False
+
+
 def resolve_proxies(series_map: dict | None = None,
-                    min_months: int = MIN_MONTHS) -> dict:
-    """팩터 → 실제로 쓸 대리계열. ★있는 것이 아니라 쓸 수 있는 것을 고른다★"""
+                    min_months: int = MIN_MONTHS,
+                    as_of: str | None = None) -> dict:
+    """팩터 → 실제로 쓸 대리계열. ★있는 것이 아니라 쓸 수 있는 것을 고른다★
+
+    ★`as_of` 를 지키거나, 못 지켰다고 말한다★ 계열을 그 시점까지 자른다. 자를 수
+    없는 계열이 있으면 `as_of_honored=False` 로 보고한다 — 조용히 오늘 값을 쓰면서
+    과거 시점을 주장하는 것이 이 슬라이스가 고치는 결함이다.
+    """
     if series_map is None:
         series_map, err = _macro_series_map()
         if series_map is None:
-            return {"available": False, "reason": err, "resolved": {}, "unresolved": {}}
+            return {"available": False, "reason": err, "resolved": {}, "unresolved": {},
+                    "as_of": as_of, "as_of_honored": not as_of}
+
+    # ★자른 결과와 성공 여부를 계열별로 들고 간다★ 최종 판정은 **실제로 쓰인**
+    # 계열만 본다 — 쓰지도 않은 계열 때문에 "못 지켰다" 고 말하면 그것도 거짓이다.
+    cut_ok: dict[str, bool] = {}
+    if as_of:
+        cut_map = {}
+        for k, v in series_map.items():
+            c, ok = truncate_series(v, as_of)
+            cut_map[k], cut_ok[k] = c, ok
+        series_map = cut_map
 
     resolved: dict[str, dict] = {}
     unresolved: dict[str, str] = {}
@@ -153,12 +201,21 @@ def resolve_proxies(series_map: dict | None = None,
                                   f"{', '.join(tried)}")
     return {"available": bool(resolved), "resolved": resolved,
             "unresolved": unresolved,
+            # ★지켰는지를 사실로 싣는다★ 못 지켰으면 상류가 declared 에 넣지 않는다.
+            "as_of": as_of,
+            # 쓰인 계열이 **있고** 그것들이 전부 잘렸을 때만 지켰다고 말한다.
+            # ★`all([])` 은 True 다★ resolved 가 비면 공허하게 "지켰다" 가 되는데,
+            # 아무것도 쓰지 않고 절단을 주장하는 것이 이 슬라이스가 고치는 결함
+            # 그 자체다. 비어 있음을 먼저 배제한다(변이 프로브가 잡았다).
+            "as_of_honored": (bool(resolved) and all(
+                cut_ok.get(d.get("series"), True) for d in resolved.values()))
+            if as_of else True,
             "reason": None if resolved else "어떤 팩터도 대리계열을 찾지 못했습니다"}
 
 
 def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
                        min_months: int = MIN_MONTHS,
-                       months: int = 60) -> dict:
+                       months: int = 60, as_of: str | None = None) -> dict:
     """자산별 · 팩터별 **단변량** 베타.
 
     ★다변량으로 한 번에 풀지 않는다★ 월 관측 59개에 팩터 9개면 자유도가 위태롭고
@@ -171,14 +228,14 @@ def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
         _ols_beta,
     )
 
-    prox = resolve_proxies(series_map, min_months)
+    prox = resolve_proxies(series_map, min_months, as_of=as_of)
     if not prox["available"]:
         return {"available": False, "reason": prox["reason"],
                 "unresolved": prox["unresolved"]}
 
     assets: dict[str, dict] = {}
     for code in codes:
-        rets = _monthly_returns(str(code), months=months)
+        rets = _monthly_returns(str(code), months=months, as_of=as_of)
         if rets is None or rets.empty:
             assets[str(code)] = {"available": False,
                                  "reason": "월별 수익률을 만들 수 없습니다"}

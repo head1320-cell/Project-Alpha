@@ -34,14 +34,15 @@ MONTHS_PER_YEAR = 12          # ★월별 데이터의 연율 계수★ 252 가 
 DEFAULT_LOOKBACK_MONTHS = 60
 
 
-def _asset_monthly_returns(codes: list[str], months: int) -> tuple[dict, list[str]]:
+def _asset_monthly_returns(codes: list[str], months: int,
+                           as_of: str | None = None) -> tuple[dict, list[str]]:
     from src.engine.conditional_market import _month_key
     from src.engine.valuation.macro_sensitivity import _monthly_returns
 
     series: dict[str, dict[str, float]] = {}
     failed: list[str] = []
     for c in codes:
-        r = _monthly_returns(str(c), months=months)
+        r = _monthly_returns(str(c), months=months, as_of=as_of)
         if r is None or r.empty:
             failed.append(str(c))
             continue
@@ -51,7 +52,8 @@ def _asset_monthly_returns(codes: list[str], months: int) -> tuple[dict, list[st
 
 def build_factor_risk_model(codes: list[str], *, series_map: dict | None = None,
                             min_months: int = MIN_MONTHS,
-                            months: int = DEFAULT_LOOKBACK_MONTHS) -> dict:
+                            months: int = DEFAULT_LOOKBACK_MONTHS,
+                            as_of: str | None = None) -> dict:
     """자산별 결합 회귀로 B·D 를 얻고 Σ_f 와 조립한다."""
     if not codes:
         return {"available": False, "reason": "자산이 비어 있습니다"}
@@ -59,7 +61,7 @@ def build_factor_risk_model(codes: list[str], *, series_map: dict | None = None,
     from src.engine.factor_exposure import resolve_proxies
     from src.engine.reverse_stress import factor_covariance
 
-    prox = resolve_proxies(series_map, min_months)
+    prox = resolve_proxies(series_map, min_months, as_of=as_of)
     if not prox["available"]:
         return {"available": False, "reason": prox["reason"]}
     cov = factor_covariance(prox["resolved"])
@@ -70,7 +72,7 @@ def build_factor_risk_model(codes: list[str], *, series_map: dict | None = None,
     Sf = np.asarray(cov["cov"], dtype=float)
     fac_months = {f: prox["resolved"][f]["changes"] for f in factors}
 
-    series, no_price = _asset_monthly_returns(list(codes), months)
+    series, no_price = _asset_monthly_returns(list(codes), months, as_of=as_of)
     excluded: dict[str, str] = {c: "월별 수익률을 만들 수 없습니다" for c in no_price}
     if not series:
         return {"available": False, "reason": "어떤 자산도 월별 수익률을 내지 못했습니다",

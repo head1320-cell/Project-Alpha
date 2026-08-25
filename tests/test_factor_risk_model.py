@@ -56,7 +56,7 @@ def _fake_assets(n_assets: int, n_months: int = 60, seed: int = 3):
 def _build(monkeypatch, n_assets: int, n_months: int = 60, **kw) -> dict:
     codes, series = _fake_assets(n_assets, n_months)
     monkeypatch.setattr("src.engine.factor_risk_model._asset_monthly_returns",
-                        lambda cs, months: ({c: series[c] for c in cs if c in series}, []))
+                        lambda cs, months, as_of=None: ({c: series[c] for c in cs if c in series}, []))
     return build_factor_risk_model(codes, series_map=_series_map(n_months), **kw)
 
 
@@ -118,7 +118,7 @@ def test_each_beta_row_matches_the_joint_solution(monkeypatch):
     codes, series = _fake_assets(3)
     sm = _series_map()
     monkeypatch.setattr("src.engine.factor_risk_model._asset_monthly_returns",
-                        lambda cs, months: ({c: series[c] for c in cs if c in series}, []))
+                        lambda cs, months, as_of=None: ({c: series[c] for c in cs if c in series}, []))
     m = build_factor_risk_model(codes, series_map=sm)
     assert m["available"] is True, m.get("reason")
 
@@ -140,7 +140,7 @@ def test_each_specific_variance_is_the_dof_adjusted_residual(monkeypatch):
     codes, series = _fake_assets(3)
     sm = _series_map()
     monkeypatch.setattr("src.engine.factor_risk_model._asset_monthly_returns",
-                        lambda cs, months: ({c: series[c] for c in cs if c in series}, []))
+                        lambda cs, months, as_of=None: ({c: series[c] for c in cs if c in series}, []))
     m = build_factor_risk_model(codes, series_map=sm)
     res = resolve_proxies(sm)["resolved"]
     factors = m["factors"]
@@ -171,7 +171,7 @@ def test_each_asset_reports_its_own_dof_and_factor_share(monkeypatch):
 def test_an_asset_without_prices_is_excluded_with_a_reason(monkeypatch):
     codes, series = _fake_assets(3)
     monkeypatch.setattr("src.engine.factor_risk_model._asset_monthly_returns",
-                        lambda cs, months: ({c: series[c] for c in cs[:2]}, [cs[2]]))
+                        lambda cs, months, as_of=None: ({c: series[c] for c in cs[:2]}, [cs[2]]))
     m = build_factor_risk_model(codes, series_map=_series_map())
     assert m["available"] is True
     assert m["codes"] == codes[:2]
@@ -185,7 +185,7 @@ def test_a_thin_asset_is_excluded_not_zero_filled(monkeypatch):
     thin = {k: v for k, v in list(series[codes[1]].items())[:5]}
     series[codes[1]] = thin
     monkeypatch.setattr("src.engine.factor_risk_model._asset_monthly_returns",
-                        lambda cs, months: ({c: series[c] for c in cs}, []))
+                        lambda cs, months, as_of=None: ({c: series[c] for c in cs}, []))
     m = build_factor_risk_model(codes, series_map=_series_map())
     assert m["codes"] == [codes[0]]
     assert "자유도" in m["excluded"][codes[1]]
@@ -193,7 +193,7 @@ def test_a_thin_asset_is_excluded_not_zero_filled(monkeypatch):
 
 def test_no_usable_asset_is_a_reason(monkeypatch):
     monkeypatch.setattr("src.engine.factor_risk_model._asset_monthly_returns",
-                        lambda cs, months: ({}, list(cs)))
+                        lambda cs, months, as_of=None: ({}, list(cs)))
     m = build_factor_risk_model(["X"], series_map=_series_map())
     assert m["available"] is False and m["reason"]
 

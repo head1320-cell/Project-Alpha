@@ -296,14 +296,44 @@ def test_a_short_sleeve_still_carries_risk(client):
     rc = r.json()["risk_contribution_pct"]
     assert rc["b"] != pytest.approx(0.0, abs=1e-9), "숏 슬리브가 지워졌다"
     assert sum(rc.values()) == pytest.approx(100.0, abs=0.05)
+    # ★부호가 계산에 닿는지는 여기서 재지 않는다★ 아래 단위 테스트가 잰다 —
+    # 이유는 그 주석에 있다(mock 상관이 날마다 달라 라우트에서는 불안정하다).
 
-    # ★부호가 계산에 닿는다★ 숏 슬리브와 그 롱 거울이 **달라야** 한다 —
-    # 교차항 2·w_a·w_b·σ_ab 의 부호가 바뀌기 때문이다(실측 차이 0.14%p).
-    # 어디선가 `abs()` 를 씌우면 이 둘이 같아진다.
-    mirror = client.post("/api/v1/allocation/sleeve-analytics",
-                         json={**body, "weights": {"a": 120.0, "b": 20.0}}).json()
-    assert rc != mirror["risk_contribution_pct"], \
-        "숏과 롱 거울이 같다 — 부호가 계산에 닿지 않는다"
+
+def test_the_sign_reaches_the_risk_contribution_when_assets_are_correlated():
+    """★공분산을 통제해서 잰다★
+
+    처음에는 라우트에서 "숏 슬리브와 롱 거울이 달라야 한다" 로 걸었다. 그것이
+    **날짜에 따라 깨졌다** — mock 상관이 그날 0.094 로 낮아져 교차항
+    `2·w_a·w_b·σ_ab` 이 반올림에 묻혔기 때문이다. 코드가 아니라 **가드가
+    데이터 의존적**이었다.
+
+    성질 자체는 참이고, 상관을 통제하면 결정적으로 보인다:
+
+        ρ=0.6 → 숏 [111.475, −11.475]   롱 [84.404, 15.596]   (부호가 결과를 바꾼다)
+        ρ=0.0 → 숏 [ 94.118,   5.882]   롱 [94.118,  5.882]   (rc ∝ w² 라 같다)
+
+    두 번째 줄이 짝이다 — 무상관에서 같은 것은 결함이 아니라 수학이다.
+    """
+    import numpy as np
+
+    from src.engine.sleeve_combine import _risk_contributions
+    sd = np.array([0.20, 0.30]) / np.sqrt(252.0)
+
+    def _share(rho, w):
+        cov = np.diag(sd ** 2)
+        cov[0, 1] = cov[1, 0] = rho * sd[0] * sd[1]
+        w = np.asarray(w, dtype=float)
+        w = w / np.abs(w).sum()
+        rc = _risk_contributions(w, cov)
+        return rc / rc.sum() * 100.0
+
+    short_c, long_c = _share(0.6, [120.0, -20.0]), _share(0.6, [120.0, 20.0])
+    assert short_c[1] == pytest.approx(-11.475, abs=1e-3), short_c
+    assert long_c[1] == pytest.approx(15.596, abs=1e-3), long_c
+
+    # ★짝★ 무상관이면 같다 — 위가 "언제나 다르다" 를 재는 것이 아님을 보인다.
+    assert _share(0.0, [120.0, -20.0]) == pytest.approx(_share(0.0, [120.0, 20.0]))
 
 
 def test_a_long_only_sleeve_combine_is_unchanged(client):
