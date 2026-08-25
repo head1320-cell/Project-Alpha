@@ -1,28 +1,54 @@
-"""T3 — 매크로 전달 아키텍처 3종 비교 (설계 + 합성 실험 전용)
+"""T3 — 매크로 전달 아키텍처 비교 (설계 + 합성 실험 전용)
 ==============================================================================
 전달계층 감사(`docs/specs/2026-08-25-transmission-layer-audit.md`)가 찾은 것:
 ★국면 신호는 **타이밍**(공통인자의 평균/분산을 바꾼다)인데, 전달은 **자산별 절대
 뷰**(단면 장치)다.★ 그 형태 불일치가 존재하지 않는 종목 간 차이를 매달 쫓게 만들고
 회전율 32%를 만든다.
 
-이 스크립트는 셋을 나란히 돌린다:
+## 팔
 
-  T3-A  국면 → **자산별 절대 μ 뷰** → BL/EP           ← ★현행(baseline)★
-  T3-B  국면 → **자산군 상대 뷰**   → BL/EP
-  T3-C  국면 → **팩터 뷰** → 팩터 노출 → 최적화기
+| 팔 | 국면이 말하는 것 | μ 사용 | 최적화기 계열 |
+|---|---|---|---|
+| **T3-A** | 자산별 **절대** μ 뷰 ← ★현행 baseline★ | 예 | 뷰 → BL/EP → MVO |
+| **T3-B** | 자산군 **상대** 뷰 | 예 | 〃 |
+| **T3-C** | **팩터 수준** 뷰 (`β` 정규화, 행합 ≈ 1) | 예 | 〃 |
+| **T3-C-rel** | **팩터 상대** 뷰 (`β−β̄` 정규화, 행합 ≈ 0) | 예 | 〃 |
+| **T3-D1** | 자산군 **리스크 예산** | ★아니오★ | 공분산 전용 |
+| **T3-D2** | 자산군 **노출 한도** | ★아니오★ | 공분산 전용 |
 
-★프로덕션 뷰 스키마를 바꾸지 않는다.★ `build_user_views` 와 `entropy_views._pickers`
-는 둘 다 `row[idx[a]] = 1/len(assets)` 로 **양수 등가중** 행만 만들고 방향은 스칼라라,
-**상대(롱숏) 뷰를 표현할 수 없다.** 어느 아키텍처가 이기는지 모르는 채로 스키마를
-넓히지 않기 위해, 여기서는 P/Q/Ω 를 직접 만들어 `bl_posterior` 를 부른다.
+D 계열에는 대조군이 **둘** 있다 — 하나로는 부족하기 때문이다:
 
-★그리고 그 제약 자체가 결과다★ — EP(`ep_posterior_mu`)는 뷰를 부등식 제약으로
-푸는데 그 입력도 같은 picker 를 쓴다. 즉 **T3-B/C 는 현재 EP 로 표현 불가**이고,
-이것은 실험의 한계가 아니라 **아키텍처 선택에 영향을 주는 사실**이다.
+| 대조군 | 무엇을 뺐나 | 무엇을 가른다 |
+|---|---|---|
+| `-flat` / `-open` | 규칙 전체 | 이 규칙이 **뭐라도** 하는가 |
+| ★`-const`★ | **국면 변동만** (첫 리밸런싱 값으로 고정) | 이득이 **국면 타이밍**인가 아니면 그 규칙이 고른 **수준**인가 |
+
+★`-const` 가 없으면 "국면이 기여했다" 를 잘못 말하게 된다★ 예컨대 노출 한도의
+이득이 사실은 "EQ 를 조금이라도 들고 있게 만든 하한" 일 수 있고, 그것은 국면과
+무관하게 상수로도 얻어진다. D 는 A/B/C 와 최적화기 계열이 달라 직접 비교가
+성립하지 않으므로, 판단은 **자기 대조군 대비**로만 한다.
+
+## 두 엔진
+
+- **BL** `bl_posterior` — 사전분포는 균형 `Π = δΣw_mkt`. 신뢰도(Ω)가 있다.
+- **EP** `ep_posterior_mu` — 사전분포는 시나리오 균등가중(=트레일링 평균).
+  ★신뢰도 축이 없다★(`confidence_used: False`) — 결측이 아니라 아키텍처 사실이다.
+  그리고 EP 는 **부등식**이라 뷰가 이미 만족되면 아무것도 하지 않는다.
+
+★그래서 BL 과 EP 의 **레벨을 비교하지 않는다**★ 사전분포가 다르다. 비교는 언제나
+*한 엔진 안에서* 팔끼리다.
+
+## 뷰 행은 프로덕션 빌더가 만든다
+
+`build_view_rows`(`src/engine/view_rows.py`)를 **두 엔진 모두** 통과시킨다 — 실험이
+프로덕션과 다른 P 행을 쓰는 일이 없게. `_omega` 는 `build_user_views` 와 같은
+`scale = (100−conf)/conf` 규약을 그대로 쓴다(규약을 바꿔 이기는 실험 금지).
 
 사용:
-    python3 scripts/t3_transmission.py
-    python3 scripts/t3_transmission.py --report FILE
+    python3 scripts/t3_transmission.py                       # BL · A/B/C
+    python3 scripts/t3_transmission.py --engine both --conf 25
+    python3 scripts/t3_transmission.py --arch T3-C,T3-C-rel --conf 25
+    python3 scripts/t3_transmission.py --arch D                # D 계열 + 대조군
 """
 
 from __future__ import annotations
@@ -58,16 +84,32 @@ from src.engine.conditional_market import (  # noqa: E402
     resolve_shrinkage_lambda,
     view_omega_terms,
 )
+from src.engine.constrained_opt import Constraints, constrained_solve  # noqa: E402
+from src.engine.entropy_views import ep_posterior_mu  # noqa: E402
 from src.engine.regime_probability import from_posterior_mean_path  # noqa: E402
 from src.engine.regime_transitions import (  # noqa: E402
     REGIMES,
     count_transitions,
     transition_posterior,
 )
+from src.engine.sleeve_combine import _risk_budget_weights  # noqa: E402
+from src.engine.view_rows import build_view_rows  # noqa: E402
 
-ARCHS = ("T3-A", "T3-B", "T3-C")
+#: μ 뷰를 만드는 팔 — BL·EP 두 엔진 모두에서 돌릴 수 있다.
+ARCH_VIEW = ("T3-A", "T3-B", "T3-C", "T3-C-rel")
+#: ★μ 를 아예 읽지 않는 팔★ — 국면 → 리스크 예산 / 노출 한도. 엔진 개념이 없다.
+ARCH_BUDGET = ("T3-D1", "T3-D1-flat", "T3-D1-const",
+               "T3-D2", "T3-D2-open", "T3-D2-const")
+ARCH_ALL = ARCH_VIEW + ARCH_BUDGET
+DEFAULT_ARCH = ("T3-A", "T3-B", "T3-C")
+ENGINES = ("bl", "ep")
 COSTS = (0.0, 10.0, 30.0)
 RF = 0.035
+
+#: `kl` 이 이보다 작으면 EP 사후 = 사전, 즉 **뷰가 아무 일도 하지 않았다**.
+EP_INACTIVE_KL = 1e-9
+#: 노출 한도의 하한 — 국면이 아무리 나빠도 한 자산군을 0 으로 만들지 않는다.
+CAP_FLOOR = 0.15
 
 # ── 합성 패널 ────────────────────────────────────────────────────────────────
 # ★국면이 자산군을 가르도록 만든다★ 앞선 패널은 국면이 **공통인자 하나**만 바꿔서
@@ -114,58 +156,169 @@ def build_panel(months: int = 84, seed: int = 20260825):
     return names, np.array(rows), list(idx), points, beta
 
 
-# ── 전달 아키텍처: 조건부 μ/Σ → (P, Q, Ω) ───────────────────────────────────
-def _omega(P: np.ndarray, tau_sigma: np.ndarray, conf: float) -> np.ndarray:
-    """`build_user_views` 와 **같은 규약** — 규약을 바꿔 이기는 실험이 되지 않게."""
-    scale = (100.0 - conf) / max(conf, 1.0)
-    base = np.maximum(np.diag(P @ tau_sigma @ P.T), 1e-10)
-    return np.diag(base * max(scale, 1e-4)) + np.eye(P.shape[0]) * 1e-10
+def class_of(names: list[str]) -> dict[str, str]:
+    """★합성 패널 전용 자산군 맵★
+
+    실제 유니버스에는 이런 맵이 **없다** — `constrained_opt.sector_groups_for` 는
+    genport **섹터**를 주고 실패하면 조용히 `{}` 를 돌린다. 정준 자산군 분류는
+    별개의 데이터 계약이다(결정 메모 §5). 여기서는 티커 접두사가 진실이다.
+    """
+    return {nm: ("EQ" if nm.startswith("EQ") else "FI") for nm in names}
 
 
-def views_absolute(mu, sigma, names, beta, conf, tau):
-    """★T3-A (현행)★ 자산마다 절대 뷰 — P 행이 `e_i`, 뷰 N개."""
-    n = len(names)
-    return np.eye(n), np.asarray(mu, float), _omega(np.eye(n), tau * sigma, conf)
+# ── 전달 아키텍처: 조건부 μ → **뷰 딕셔너리** ────────────────────────────────
+# ★행을 손으로 만들지 않는다★ 뷰를 프로덕션 스키마(`assets` | `weights` +
+# `direction` + `magnitude_pct`)로 표현하고, `build_view_rows` 가 P 행을 만든다.
+# 그래야 BL 과 EP 가 **같은 행**을 본다.
+def _signed_view(weights: dict[str, float], mu_row: float) -> dict:
+    """부호 있는 가중치 + 그 행이 주장하는 값 → 뷰 딕셔너리.
+
+    ★부호를 한 곳에만 넣는다★ 크기는 `|row·μ|`, 방향은 그 부호다. 가중치와
+    `direction` 양쪽에 부호를 넣으면 상쇄된다(`view_rows` 계약).
+    """
+    return {"weights": weights, "direction": 1 if mu_row >= 0 else -1,
+            "magnitude_pct": abs(mu_row) * 100.0}
 
 
-def views_relative_class(mu, sigma, names, beta, conf, tau):
-    """★T3-B★ 자산군 **상대** 뷰 — P 행이 `(+1/n_EQ … −1/n_FI)`, 뷰 1개.
+def views_absolute(mu, names, beta) -> list[dict]:
+    """★T3-A (현행 baseline)★ 자산마다 절대 뷰 — P 행이 `e_i`, 뷰 N개."""
+    return [{"assets": [nm], "direction": 1 if m >= 0 else -1,
+             "magnitude_pct": abs(float(m)) * 100.0}
+            for nm, m in zip(names, np.asarray(mu, float), strict=True)]
+
+
+def views_relative_class(mu, names, beta) -> list[dict]:
+    """★T3-B★ 자산군 **상대** 뷰 — `(+1/n_EQ … −1/n_FI)`, 뷰 1개.
 
     공통 수준(타이밍 성분)은 상대 뷰에서 **상쇄**되므로, 이 아키텍처는 국면이
     말하는 **자산군 간 차이만** 전달하고 수준 추정잡음은 흘려보내지 않는다.
     """
-    n = len(names)
-    idx = {nm: i for i, nm in enumerate(names)}
-    eq = [idx[nm] for nm in names if nm.startswith("EQ")]
-    fi = [idx[nm] for nm in names if nm.startswith("FI")]
-    row = np.zeros(n)
-    row[eq] = 1.0 / len(eq)
-    row[fi] = -1.0 / len(fi)
-    P = row.reshape(1, n)
-    return P, np.array([float(row @ np.asarray(mu, float))]), _omega(P, tau * sigma, conf)
+    cls = class_of(names)
+    eq = [nm for nm in names if cls[nm] == "EQ"]
+    fi = [nm for nm in names if cls[nm] == "FI"]
+    w = {nm: 1.0 / len(eq) for nm in eq}
+    w.update({nm: -1.0 / len(fi) for nm in fi})
+    row = np.array([w.get(nm, 0.0) for nm in names])
+    return [_signed_view(w, float(row @ np.asarray(mu, float)))]
 
 
-def views_factor(mu, sigma, names, beta, conf, tau):
-    """★T3-C★ **팩터 뷰** → 노출로 자산에 매핑 — P 행이 정규화된 `βᵀ`, 뷰 1개.
+def _factor_row_level(beta: np.ndarray) -> np.ndarray:
+    """★T3-C★ **팩터 수준** 행 — `β/Σ|β|`. β 가 전부 양수라 **행합 ≈ 1**.
 
-    국면 신호가 공통인자의 평균을 바꾸는 것이라면, 그 주장을 **그 인자 위에서**
-    해야 한다. P 행이 β 포트폴리오이므로 뷰는 "β 포트폴리오가 z% 낸다" 가 된다 —
-    타이밍 주장을 타이밍 형태로 전달한다.
+    행합이 1 이면 이 뷰는 "예산 전체가 z% 낸다" 는 **수준 주장**이다. 롱온리·
+    완전투자(Σw=1)에서 예산은 이미 고정이라 최적화기에 **레버가 없다**.
     """
-    n = len(names)
     b = np.asarray(beta, float)
-    row = b / max(float(np.abs(b).sum()), 1e-12)
-    P = row.reshape(1, n)
-    return P, np.array([float(row @ np.asarray(mu, float))]), _omega(P, tau * sigma, conf)
+    return b / max(float(np.abs(b).sum()), 1e-12)
 
 
-_BUILDERS = {"T3-A": views_absolute, "T3-B": views_relative_class,
-             "T3-C": views_factor}
+def _factor_row_relative(beta: np.ndarray) -> np.ndarray:
+    """★T3-C-rel★ **팩터 상대** 행 — `(β−β̄)/Σ|β−β̄|`. **행합 ≈ 0**.
+
+    ★항목 6 의 핵심★ 같은 팩터 신호를 **수준이 아니라 틸트**로 말한다. 고β 대 저β
+    스프레드는 예산을 늘리지 않고 **예산 안에서** 표현되므로, 그로스 레버 없이도
+    롱온리 완전투자 포트폴리오가 반응할 수 있다 — 그것이 사실인지가 이 팔의 질문이다.
+    """
+    b = np.asarray(beta, float)
+    d = b - b.mean()
+    return d / max(float(np.abs(d).sum()), 1e-12)
+
+
+def _factor_views(row: np.ndarray, mu, names) -> list[dict]:
+    w = {nm: float(v) for nm, v in zip(names, row, strict=True) if abs(v) > 0.0}
+    return [_signed_view(w, float(row @ np.asarray(mu, float)))]
+
+
+def views_factor_level(mu, names, beta) -> list[dict]:
+    return _factor_views(_factor_row_level(beta), mu, names)
+
+
+def views_factor_relative(mu, names, beta) -> list[dict]:
+    return _factor_views(_factor_row_relative(beta), mu, names)
+
+
+_VIEWS = {"T3-A": views_absolute, "T3-B": views_relative_class,
+          "T3-C": views_factor_level, "T3-C-rel": views_factor_relative}
+
+
+# ── 국면 → 리스크 예산 / 노출 한도 (T3-D, μ 를 읽지 않는다) ──────────────────
+def _class_vol(sigma: np.ndarray, names: list[str], cls: dict[str, str],
+               g: str) -> float:
+    """그 자산군의 **등가중 포트폴리오** 조건부 변동성 — 자산 하나가 아니라 군."""
+    ix = [i for i, nm in enumerate(names) if cls[nm] == g]
+    w = np.zeros(len(names))
+    w[ix] = 1.0 / max(len(ix), 1)
+    return math.sqrt(max(float(w @ sigma @ w), 1e-16))
+
+
+def regime_risk_budget(sigma: np.ndarray, names: list[str], *,
+                       flat: bool = False) -> np.ndarray:
+    """★T3-D1★ 국면 조건부 Σ → 자산군 리스크 예산 `b ∝ 1/σ_class`.
+
+    ★μ 를 읽지 않는다★ 국면은 "무엇이 오를까" 가 아니라 "어디에 리스크를 둘까" 를
+    말한다. 국면에서 변동성이 튀는 자산군의 예산이 줄어든다.
+
+    `flat=True` 는 **대조군** — 등예산(=리스크 패리티). 국면 정보가 0 이다.
+    """
+    cls = class_of(names)
+    groups: dict[str, list[int]] = {}
+    for i, nm in enumerate(names):
+        groups.setdefault(cls[nm], []).append(i)
+    b = np.zeros(len(names))
+    if flat:
+        for ix in groups.values():
+            for i in ix:
+                b[i] = 1.0
+    else:
+        inv = {g: 1.0 / _class_vol(sigma, names, cls, g) for g in groups}
+        tot = sum(inv.values()) or 1.0
+        for g, ix in groups.items():
+            for i in ix:
+                b[i] = (inv[g] / tot) / len(ix)
+    return b / max(b.sum(), 1e-12)
+
+
+def regime_group_caps(sigma: np.ndarray, sigma_uncond: np.ndarray,
+                      names: list[str], *, open_: bool = False
+                      ) -> dict[str, float]:
+    """★T3-D2★ 국면 조건부 Σ vs 무조건부 Σ → 자산군 **상한%**.
+
+    `cap_g = 100 · clip(σ_uncond,g / σ_cond,g, CAP_FLOOR, 1)` — 그 자산군의
+    변동성이 국면에서 평소보다 높으면 상한이 내려간다. ★μ 를 읽지 않는다★
+
+    ★계약 공백을 여기서 만난다★ `Constraints` 에는 그룹 **상한만 있고 하한이 없다.**
+    "Stagflation 이면 FI 최소 40%" 는 자산군이 **둘이고 완전투자일 때만** 상대편
+    상한으로 우회 가능하다(EQ ≤ 60%). 셋 이상이면 표현할 수 없다.
+
+    상한 합이 100 미만이면 완전투자가 불가능해지므로 비례 확대한다 — 그 확대 자체가
+    "하한이 없어서 생긴 우회" 라는 증거다.
+
+    `open_=True` 는 **대조군** — 한도 없음.
+    """
+    if open_:
+        return {}
+    cls = class_of(names)
+    caps: dict[str, float] = {}
+    for g in sorted(set(cls.values())):
+        sc = _class_vol(sigma, names, cls, g)
+        su = _class_vol(sigma_uncond, names, cls, g)
+        caps[g] = 100.0 * min(1.0, max(CAP_FLOOR, su / max(sc, 1e-12)))
+    tot = sum(caps.values())
+    if tot < 100.0:                       # ★완전투자를 지킬 만큼 비례 확대★
+        caps = {g: c * (100.0 / tot) for g, c in caps.items()}
+    return caps
 
 
 def _equilibrium(sigma: np.ndarray, w_mkt: np.ndarray, delta: float) -> np.ndarray:
     """역최적화 균형 기대수익 `Π = δ Σ w_mkt` — BL 의 사전분포."""
     return delta * sigma @ w_mkt
+
+
+def _omega(P: np.ndarray, tau_sigma: np.ndarray, conf: float) -> np.ndarray:
+    """`build_user_views` 와 **같은 규약** — 규약을 바꿔 이기는 실험이 되지 않게."""
+    scale = (100.0 - conf) / max(conf, 1.0)
+    base = np.maximum(np.diag(P @ tau_sigma @ P.T), 1e-10)
+    return np.diag(base * max(scale, 1e-4)) + np.eye(P.shape[0]) * 1e-10
 
 
 def _min_var_long_only(S: np.ndarray, mu: np.ndarray, delta: float) -> np.ndarray:
@@ -179,21 +332,44 @@ def _min_var_long_only(S: np.ndarray, mu: np.ndarray, delta: float) -> np.ndarra
     return w / max(w.sum(), 1e-12)
 
 
+def pq_from_views(views: list[dict], names: list[str], sigma: np.ndarray,
+                  conf: float, tau: float):
+    """뷰 딕셔너리 → `(P, Q, Ω)`. ★행은 프로덕션 빌더가 만든다★"""
+    rows, skipped = build_view_rows(views, names)
+    if not rows:
+        return None, None, None, skipped
+    P = np.vstack([r.row for r in rows])
+    Q = np.array([r.direction * r.magnitude for r in rows], dtype=float)
+    return P, Q, _omega(P, tau * sigma, conf), skipped
+
+
 # ── 실행 ────────────────────────────────────────────────────────────────────
 def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
-             delta=DELTA_DEFAULT, tau=TAU_DEFAULT, conf_override=None):
+             delta=DELTA_DEFAULT, tau=TAU_DEFAULT, conf_override=None,
+             engine: str = "bl"):
     """한 아키텍처의 walk-forward — 매 리밸런싱에서 절단 경로만 본다."""
+    is_budget = arch in ARCH_BUDGET
     rb = _rebalance_indices(list(dates), "M", min_train)
     n = len(names)
     w_mkt = np.ones(n) / n
     rec = {"w": [], "view_disp": [], "post_disp": [], "conf": [],
-           "months": [], "applied": 0, "timing_view": [], "fwd_factor": []}
-    for k, t in enumerate(rb):
+           "months": [], "applied": 0, "timing_view": [], "fwd_factor": [],
+           "ep_inactive": 0, "ep_infeasible": 0, "ep_kl": [],
+           "caps": [], "budget_eq": [], "engine": engine, "arch": arch,
+           "uses_mu": not is_budget}
+    #: `-const` 팔이 첫 리밸런싱 값을 얼려 두는 곳.
+    frozen: dict[str, object] = {}
+
+    def _blank(t):
+        rec["w"].append(None)
+        rec["months"].append(_month_of(dates[t]))
+
+    for t in rb:
         R_win = R[:t]
         df = pd.DataFrame(R_win, index=pd.DatetimeIndex(dates[:t]), columns=names)
         pts = _truncated_points(points, _month_of(dates[t]))
         if len(pts) < 2:
-            rec["w"].append(None); rec["months"].append(_month_of(dates[t])); continue
+            _blank(t); continue
         by_month, _ = regime_by_month_from_path(pts)
         cur = pts[-1]["regime"]
         rows = transition_posterior(count_transitions(pts))
@@ -204,11 +380,49 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
         if not cond.get("available"):
             cond = conditional_moments(df, by_month, cur)
         if not cond.get("available"):
-            rec["w"].append(None); rec["months"].append(_month_of(dates[t])); continue
+            _blank(t); continue
 
         mu = np.asarray(cond["mu"], float)
         sigma = np.asarray(cond["sigma"], float)
-        # ★신뢰도는 분해 Ω 로 — 세 아키텍처에 **같은 규칙**을 적용한다★
+
+        # ── T3-D: μ 를 아예 만지지 않는 경로 ────────────────────────────────
+        if is_budget:
+            # ★`-const` 는 규칙을 끄지 않는다 — **국면 변동만** 끈다★
+            # 첫 리밸런싱에서 정한 예산·한도를 그대로 들고 간다(PIT 안전: 그 시점의
+            # 훈련창만 본다). 이득이 국면 타이밍인지, 그 규칙이 고른 수준인지 가른다.
+            const = arch.endswith("-const")
+            if arch.startswith("T3-D1"):
+                if not (const and frozen.get("b") is not None):
+                    frozen["b"] = regime_risk_budget(
+                        sigma, names, flat=arch.endswith("-flat"))
+                b = frozen["b"]
+                w = _risk_budget_weights(sigma, b)
+                rec["budget_eq"].append(float(sum(
+                    b[i] for i, nm in enumerate(names) if nm.startswith("EQ"))))
+            else:
+                if not (const and frozen.get("caps") is not None):
+                    frozen["caps"] = regime_group_caps(
+                        sigma, np.cov(R_win.T) * 252.0, names,
+                        open_=arch.endswith("-open"))
+                caps = frozen["caps"]
+                res = constrained_solve(
+                    "min_var", names, R_win, np.zeros(n), sigma,
+                    Constraints(group_caps_pct=caps), groups_of=class_of(names))
+                wl = res.get("weights")
+                if wl is None:
+                    _blank(t); continue
+                w = np.array([float(wl.get(nm, 0.0)) for nm in names]) \
+                    if isinstance(wl, dict) else np.asarray(wl, float)
+                w = np.maximum(w, 0.0)
+                w = w / max(w.sum(), 1e-12)
+                rec["caps"].append(caps.get("EQ"))
+            rec["w"].append(w)
+            rec["months"].append(_month_of(dates[t]))
+            rec["applied"] += 1
+            continue
+
+        # ── T3-A/B/C: 국면 → μ 뷰 → BL 또는 EP ─────────────────────────────
+        # ★신뢰도는 분해 Ω 로 — 모든 팔에 **같은 규칙**을 적용한다★
         A, W, h = cond.get("A_h"), cond.get("W_h"), int(cond.get("h_hold") or 1)
         if A is not None and W is not None:
             ann = 12.0 / h
@@ -217,25 +431,47 @@ def run_arch(arch: str, names, R, dates, points, beta, *, min_train=252,
         else:
             rg, wi = np.zeros(n), np.maximum(np.diag(sigma), 0.0)
         months = cond.get("n_months_by_regime") or {}
-        nm = max(1, min(months.values(), default=int(cond.get("n_months") or 1)))
-        terms = view_omega_terms(regime_diag=rg, sigma_within_diag=wi, n_months=nm)
+        nm_ = max(1, min(months.values(), default=int(cond.get("n_months") or 1)))
+        terms = view_omega_terms(regime_diag=rg, sigma_within_diag=wi, n_months=nm_)
         conf = float(np.min(implied_confidence(terms["omega_diag"],
                                                np.maximum(np.diag(sigma), 1e-12))))
         if conf_override is not None:
             conf = float(conf_override)
         resolve_shrinkage_lambda(cond)              # 계약 확인(스칼라여야 한다)
 
-        P, Q, Om = _BUILDERS[arch](mu, sigma, names, beta, conf, tau)
-        pi_eq = _equilibrium(sigma, w_mkt, delta)
-        mu_post = bl_posterior(pi_eq, sigma, P, Q, Om, tau=tau)
-        w = _min_var_long_only(sigma, mu_post, delta)
+        views = _VIEWS[arch](mu, names, beta)
+        P, Q, Om, skipped = pq_from_views(views, names, sigma, conf, tau)
+        if P is None:
+            _blank(t); continue
 
+        if engine == "bl":
+            mu_post = bl_posterior(_equilibrium(sigma, w_mkt, delta), sigma,
+                                   P, Q, Om, tau=tau)
+        else:
+            rep = ep_posterior_mu(views, names, R_win)
+            if not rep.get("available"):
+                _blank(t); continue
+            kl = float(rep.get("kl") or 0.0)
+            rec["ep_kl"].append(kl)
+            if kl <= EP_INACTIVE_KL:
+                rec["ep_inactive"] += 1
+            if not rep.get("feasible"):
+                # ★실현 불가는 **무거래**다 — 그날을 건너뛰지 않는다★
+                # `continue` 로 스킵하면 그날 수익이 사라지는데, 포트폴리오는
+                # 거래를 안 했을 뿐 포지션을 그대로 들고 있다(walk_forward 규약).
+                rec["ep_infeasible"] += 1
+                rec["w"].append(rec["w"][-1] if rec["w"] else None)
+                rec["months"].append(_month_of(dates[t]))
+                continue
+            mu_post = np.asarray(rep["mu_annual"], float)
+
+        w = _min_var_long_only(sigma, mu_post, delta)
         rec["w"].append(w)
         rec["months"].append(_month_of(dates[t]))
         rec["view_disp"].append(float(np.max(Q) - np.min(Q)) if len(Q) > 1
                                 else float(abs(Q[0])))
         rec["post_disp"].append(float(mu_post.max() - mu_post.min()))
-        rec["conf"].append(conf)
+        rec["conf"].append(conf if engine == "bl" else float("nan"))
         rec["applied"] += 1
         # 타이밍 지표: β 포트폴리오에 대한 뷰(사후 기준) vs 실현 β 수익
         rec["timing_view"].append(float((beta / np.abs(beta).sum()) @ mu_post))
@@ -308,8 +544,26 @@ def w_l1(rec):
     return (round(float(np.mean(d)), 4), round(float(np.median(d)), 4)) if d else (None, None)
 
 
+def w_dispersion(rec):
+    """비중 산포 — 리밸런싱마다 `max(w) − min(w)` 의 평균, 그리고 EQ 비중의 범위."""
+    ws = [w for w in rec["w"] if w is not None]
+    if not ws:
+        return {"spread": None, "eq_mean": None, "eq_sd": None, "eq_range": None}
+    eq = np.array([float(w[:3].sum()) for w in ws])
+    return {"spread": round(float(np.mean([w.max() - w.min() for w in ws])), 4),
+            "eq_mean": round(float(eq.mean()), 4), "eq_sd": round(float(eq.std()), 4),
+            "eq_range": round(float(eq.max() - eq.min()), 4)}
+
+
 def timing_ic(rec):
-    """★타이밍 IC★ — 단면 IC 가 아니라 **β 포트폴리오 뷰 vs 실현 β 수익**."""
+    """★타이밍 IC★ — 단면 IC 가 아니라 **β 포트폴리오 뷰 vs 실현 β 수익**.
+
+    ★T3-D 에는 정의되지 않는다★ μ 뷰가 없으므로 예측을 한 적이 없다. 0 을 적으면
+    "예측했는데 못 맞췄다" 로 읽히므로 `undefined` 를 낸다.
+    """
+    if not rec.get("uses_mu", True):
+        return {"ic": None, "t": None, "hit": None, "n": 0, "undefined": True,
+                "reason": "이 아키텍처는 기대수익 뷰를 만들지 않는다"}
     v = np.array(rec["timing_view"], float)
     f = np.array(rec["fwd_factor"], float)
     ok = np.isfinite(v) & np.isfinite(f)
@@ -322,10 +576,29 @@ def timing_ic(rec):
             "hit": round(float(np.mean(np.sign(v[ok]) == np.sign(f[ok]))), 4), "n": n}
 
 
+def _resolve_arch(spec: str | None) -> list[str]:
+    if not spec:
+        return list(DEFAULT_ARCH)
+    if spec.strip().upper() == "ALL":
+        return list(ARCH_ALL)
+    if spec.strip().upper() == "D":
+        return list(ARCH_BUDGET)
+    out = []
+    for a in spec.split(","):
+        a = a.strip()
+        if a not in ARCH_ALL:
+            raise SystemExit(f"알 수 없는 아키텍처 '{a}' — 가능: {', '.join(ARCH_ALL)}")
+        out.append(a)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", default=None)
     ap.add_argument("--months", type=int, default=84)
+    ap.add_argument("--arch", default=None,
+                    help=f"쉼표 구분 · ALL · D. 기본 {','.join(DEFAULT_ARCH)}")
+    ap.add_argument("--engine", default="bl", choices=("bl", "ep", "both"))
     # ★신뢰도를 고정해 아키텍처만 비교할 수 있게 한다★ 분해 Ω 는 이 패널에서
     # conf≈1 까지 내려가 뷰가 거의 무시되는데, 그러면 "전달 형태가 중요한가" 를
     # 묻는 실험이 **뷰가 안 먹는 구간에서** 돌게 된다. 신뢰도를 올려가며 세 형태가
@@ -333,53 +606,117 @@ def main() -> int:
     ap.add_argument("--conf", type=float, default=None)
     args = ap.parse_args()
 
+    arches = _resolve_arch(args.arch)
+    engines = ENGINES if args.engine == "both" else (args.engine,)
     names, R, dates, points, beta = build_panel(months=args.months)
     by_month = {p["t"]: p["regime"] for p in points}
-    out: dict[str, dict] = {}
-    for arch in ARCHS:
-        rec, rb = run_arch(arch, names, R, dates, points, beta,
-                           conf_override=args.conf)
-        mean_l1, med_l1 = w_l1(rec)
-        cells = {}
-        for c in COSTS:
-            d, curve, tos, rbm = simulate(rec, rb, R, dates, c)
-            cells[c] = metrics(d, curve, tos, rbm, by_month)
-        out[arch] = {
-            "view_disp": round(float(np.mean(rec["view_disp"])), 4),
-            "post_disp": round(float(np.mean(rec["post_disp"])), 4),
-            "conf": round(float(np.mean(rec["conf"])), 3),
-            "w_l1_mean": mean_l1, "w_l1_median": med_l1,
-            "applied": rec["applied"], "n_views": {"T3-A": len(names)}.get(arch, 1),
-            "timing": timing_ic(rec), "cells": cells,
-        }
 
-    hdr = (f"{'arch':>5} {'뷰수':>4} {'뷰산포':>7} {'사후산포':>8} {'conf':>6} "
-           f"{'Δw L1':>7} {'중앙':>7} | {'bp':>3} {'ret%':>7} {'vol%':>6} "
-           f"{'sharpe':>6} {'sortino':>7} {'mdd%':>7} {'cvar%':>6} {'turn%':>6} "
+    out: dict[str, dict] = {}
+    order: list[tuple[str, str]] = []
+    for arch in arches:
+        # ★D 계열에는 엔진 개념이 없다★ 뷰를 만들지 않으므로 BL/EP 를 통과하지 않는다.
+        for eng in (("bl",) if arch in ARCH_BUDGET else engines):
+            rec, rb = run_arch(arch, names, R, dates, points, beta,
+                               conf_override=args.conf, engine=eng)
+            mean_l1, med_l1 = w_l1(rec)
+            cells = {}
+            for c in COSTS:
+                d, curve, tos, rbm = simulate(rec, rb, R, dates, c)
+                cells[c] = metrics(d, curve, tos, rbm, by_month)
+            key = arch if arch in ARCH_BUDGET else f"{arch}/{eng}"
+            order.append((key, arch))
+            out[key] = {
+                "arch": arch, "engine": None if arch in ARCH_BUDGET else eng,
+                "uses_mu": rec["uses_mu"],
+                "view_disp": round(float(np.mean(rec["view_disp"])), 4)
+                if rec["view_disp"] else None,
+                "post_disp": round(float(np.mean(rec["post_disp"])), 4)
+                if rec["post_disp"] else None,
+                "conf": round(float(np.mean(rec["conf"])), 3)
+                if (rec["conf"] and eng == "bl") else None,
+                "w_l1_mean": mean_l1, "w_l1_median": med_l1,
+                "dispersion": w_dispersion(rec),
+                "applied": rec["applied"],
+                "n_views": len(_VIEWS[arch](np.zeros(len(names)) + 0.01, names, beta))
+                if arch in ARCH_VIEW else 0,
+                "ep_inactive": rec["ep_inactive"], "ep_infeasible": rec["ep_infeasible"],
+                "ep_inactive_pct": (round(100.0 * rec["ep_inactive"] / len(rec["ep_kl"]), 1)
+                                    if rec["ep_kl"] else None),
+                "eq_cap_mean": (round(float(np.mean([c for c in rec["caps"]
+                                                     if c is not None])), 1)
+                                if any(c is not None for c in rec["caps"]) else None),
+                "eq_budget_mean": (round(float(np.mean(rec["budget_eq"])), 4)
+                                   if rec["budget_eq"] else None),
+                "timing": timing_ic(rec), "cells": cells,
+            }
+
+    hdr = (f"{'arch/engine':>16} {'뷰수':>4} {'뷰산포':>7} {'사후산포':>8} {'conf':>6} "
+           f"{'Δw L1':>7} {'중앙':>7} {'EQ범위':>7} | {'bp':>3} {'ret%':>7} {'vol%':>6} "
+           f"{'sharpe':>6} {'mdd%':>7} {'cvar%':>6} {'turn%':>6} "
            f"{'nrb':>4} {'CE':>8} {'FT':>6}")
     print(hdr)
     print("-" * len(hdr))
-    for a in ARCHS:
-        o = out[a]
+
+    def _f(v, w, p=4):
+        return f"{v:>{w}.{p}f}" if isinstance(v, (int, float)) else f"{'—':>{w}}"
+
+    for key, _arch in order:
+        o = out[key]
         for c in COSTS:
             m = o["cells"][c]
-            print(f"{a:>5} {o['n_views']:>4} {o['view_disp']:>7.4f} "
-                  f"{o['post_disp']:>8.4f} {o['conf']:>6.2f} {o['w_l1_mean']:>7.4f} "
-                  f"{o['w_l1_median']:>7.4f} | {c:>3.0f} {m['return_pct']:>7} "
-                  f"{m['vol_pct']:>6} {m['sharpe']:>6} {str(m['sortino']):>7} "
+            print(f"{key:>16} {o['n_views']:>4} {_f(o['view_disp'], 7)} "
+                  f"{_f(o['post_disp'], 8)} {_f(o['conf'], 6, 2)} "
+                  f"{_f(o['w_l1_mean'], 7)} {_f(o['w_l1_median'], 7)} "
+                  f"{_f(o['dispersion']['eq_range'], 7)} | {c:>3.0f} "
+                  f"{m['return_pct']:>7} {m['vol_pct']:>6} {str(m['sharpe']):>6} "
                   f"{m['mdd_pct']:>7} {m['cvar_pct']:>6} {m['turnover_pct']:>6} "
                   f"{m['n_rebalances']:>4} {m['ce']:>8.4f} {str(m['false_trigger']):>6}")
+
+    if any(out[k]["engine"] == "ep" for k, _ in order):
+        print()
+        print("EP 전달 안정성 (★부등식이라 이미 만족되면 아무 일도 하지 않는다★)")
+        for key, _a in order:
+            o = out[key]
+            if o["engine"] != "ep":
+                continue
+            print(f"  {key}: 사후=사전 {o['ep_inactive']}회 "
+                  f"({o['ep_inactive_pct']}%) · 실현불가(무거래) {o['ep_infeasible']}회")
+
+    if any(out[k]["arch"] in ARCH_BUDGET for k, _ in order):
+        print()
+        print("T3-D 국면 반응 (★μ 를 읽지 않는다 — 예산·한도만★)")
+        for key, _a in order:
+            o = out[key]
+            if o["arch"] not in ARCH_BUDGET:
+                continue
+            print(f"  {key}: EQ 리스크예산 평균 {o['eq_budget_mean']} · "
+                  f"EQ 상한 평균 {o['eq_cap_mean']}")
+
     print()
     print("타이밍 평가 (★단면 IC 가 아니다★ — β 포트폴리오 뷰 vs 실현 β 수익)")
-    for a in ARCHS:
-        t = out[a]["timing"]
-        print(f"  {a}: IC {t['ic']}  t={t['t']}  방향적중 {t['hit']}  n={t['n']}")
+    for key, _a in order:
+        t = out[key]["timing"]
+        if t.get("undefined"):
+            print(f"  {key}: ★정의되지 않음★ — {t['reason']}")
+        else:
+            print(f"  {key}: IC {t['ic']}  t={t['t']}  방향적중 {t['hit']}  n={t['n']}")
+
     print()
-    print("ΔCE (T3-A 대비, 비용별)")
-    for a in ("T3-B", "T3-C"):
-        for c in COSTS:
-            d = out[a]["cells"][c]["ce"] - out["T3-A"]["cells"][c]["ce"]
-            print(f"  {a} vs T3-A @{c:>4.0f}bp : {d:+.6f}")
+    print("ΔCE (★같은 엔진 안에서만★ 첫 팔 대비)")
+    for eng in engines:
+        base = next((k for k, _a in order if out[k]["engine"] == eng), None)
+        if base is None:
+            continue
+        for key, _a in order:
+            if out[key]["engine"] != eng or key == base:
+                continue
+            for c in COSTS:
+                d = out[key]["cells"][c]["ce"] - out[base]["cells"][c]["ce"]
+                print(f"  {key} vs {base} @{c:>4.0f}bp : {d:+.6f}")
+    dbase = next((k for k, _a in order if out[k]["arch"] in ARCH_BUDGET), None)
+    if dbase:
+        print("  (D 계열은 자기 대조군 대비로만 읽는다 — A/B/C 와 최적화기 계열이 다르다)")
+
     from src.engine.capability import probe_all
     fs = probe_all().get("frontier_sample", {})
     print()
