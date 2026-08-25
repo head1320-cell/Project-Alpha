@@ -203,3 +203,89 @@ def test_regime_audit_is_absent_when_hook_unused():
     out = _run(None)
     assert out["regime_audit"]["arm"] == "B0"
     assert out["regime_audit"]["detail"] == []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 신뢰도 배선 (전달계층 감사 §3) — ★분해 Ω 가 기본이다★
+# ══════════════════════════════════════════════════════════════════════════
+def test_decomposed_confidence_is_the_default():
+    out = _run({"weighting": "probabilistic"})
+    assert out["regime_audit"]["confidence_model"] == "decomposed_omega"
+
+
+def test_legacy_confidence_can_be_selected_explicitly():
+    out = _run({"weighting": "probabilistic", "confidence": "legacy"})
+    assert out["regime_audit"]["confidence_model"] == "legacy_scalar"
+
+
+def test_decomposed_confidence_is_lower_than_legacy():
+    """★방향★ 분해 Ω 는 legacy 보다 **덜 확신한다** — legacy 는 λ 가 작으면 50 에 붙는다."""
+    dec = _run({"weighting": "probabilistic"})["regime_audit"]["confidence_mean"]
+    leg = _run({"weighting": "probabilistic",
+                "confidence": "legacy"})["regime_audit"]["confidence_mean"]
+    assert dec is not None and leg is not None
+    assert dec < leg, f"분해({dec}) 가 legacy({leg}) 보다 낮아야 한다"
+
+
+def test_decomposed_confidence_lowers_turnover():
+    """★결정으로 이어진다★ 신뢰도가 낮아지면 회전율도 낮아져야 한다.
+
+    응답 필드만 바뀌고 거래가 그대로면 배선한 의미가 없다.
+    """
+    def turn(reg):
+        o = _run(reg)
+        return float(np.mean([r["turnover_pct"] for r in o["rebalances"]]))
+    assert turn({"weighting": "probabilistic"}) < \
+           turn({"weighting": "probabilistic", "confidence": "legacy"})
+
+
+def test_dict_shrinkage_lambda_no_longer_collapses_to_max_confidence():
+    """★결함 재발 방지★ 혼합의 λ 가 dict 였을 때 legacy 가 conf=50 으로 튀었다.
+
+    이제 혼합은 스칼라 집계를 내므로 legacy 경로도 50 미만이어야 한다 —
+    `resolve_shrinkage_lambda` 가 dict 를 만나면 올리기 때문에, 조용히 50 이
+    되는 경로 자체가 없다.
+    """
+    aud = _run({"weighting": "probabilistic", "confidence": "legacy"})["regime_audit"]
+    assert aud["confidence_mean"] is not None
+    assert aud["confidence_mean"] < 50.0
+
+
+def test_unknown_confidence_kind_is_refused():
+    out = _run({"weighting": "probabilistic", "confidence": "guess"})
+    assert out.get("error") is True
+    assert "신뢰도" in out["message"]
+
+
+def test_decomposed_confidence_follows_the_weakest_asset():
+    """★가장 약한 자산이 신뢰도를 정한다★ (min, max 아님).
+
+    `build_user_views` 는 **뷰 전체에 하나의 신뢰도 스칼라**를 쓴다. 자산마다
+    분해 Ω 가 다를 때 최대값을 고르면 **가장 확신하는 자산의 신뢰도가 나머지에도
+    적용**되고, 최적화기는 근거 없이 그쪽으로 쏠린다. 보수적인 쪽을 고른다.
+
+    ★변이가 이 규칙을 통과했었다★ — walk-forward 경유 테스트만으로는 min/max 를
+    구분하지 못해 `np.max` 로 바꾼 구현이 20건을 전부 통과했다. 그래서 여기서는
+    함수를 직접 부르고, 자산 간 Ω/σ 비를 **일부러 다르게** 만든다.
+    """
+    from src.engine.allocation_backtest import _view_confidence
+
+    # 3자산: 분산은 같고 국면 간 산포만 다르다 → 자산별 Ω 가 갈린다.
+    sig = np.diag([0.04, 0.04, 0.04])
+    h = 1
+    W = np.diag([0.04, 0.04, 0.04]) / 12.0
+    A = np.diag([0.0001, 0.0100, 0.0400]) / 12.0     # 산포가 400배 차이
+    cond = {"sigma": sig, "W_h": W, "A_h": A, "h_hold": h,
+            "n_months_by_regime": {"X": 30}, "n_months": 30}
+
+    conf, kind = _view_confidence(cond, "decomposed")
+    assert kind == "decomposed_omega"
+
+    from src.engine.conditional_market import implied_confidence, view_omega_terms
+    ann = 12.0 / h
+    terms = view_omega_terms(regime_diag=np.diag(A * ann),
+                             sigma_within_diag=np.diag(W * ann), n_months=30)
+    per_asset = implied_confidence(terms["omega_diag"], np.diag(sig))
+    assert per_asset.max() - per_asset.min() > 1.0, "fixture 가 자산을 못 가른다"
+    assert conf == pytest.approx(round(float(per_asset.min()), 2), abs=1e-9)
+    assert conf < round(float(per_asset.max()), 2)

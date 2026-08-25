@@ -202,6 +202,48 @@ def _truncated_points(points: list[dict], month: str) -> list[dict]:
     return out
 
 
+def _view_confidence(cond: dict, kind: str) -> tuple[float, str]:
+    """뷰 신뢰도 — ★분해 Ω 가 기본이고 legacy 스칼라는 명시적으로 골라야 한다★.
+
+    MS1-a 가 만든 분해 Ω(`view_omega_terms` + `implied_confidence`)가 라우트에만
+    배선돼 있어 **평가에서는 한 번도 시험되지 않았다**(전달계층 감사 §3). 여기서
+    잇는다 — 그리고 두 방식을 나란히 돌릴 수 있게 `kind` 로 고른다.
+
+    반사실 실측: 이 패널에서 legacy 는 `conf ≈ 50`(최대), 분해는 `≈ 8` 이고
+    회전율이 32.42% → 7.71% 로 갈린다. 즉 어느 쪽을 쓰느냐가 결과를 지배한다.
+    """
+    from src.engine.conditional_market import (
+        implied_confidence,
+        resolve_shrinkage_lambda,
+        view_omega_terms,
+    )
+
+    if kind == "legacy":
+        lam = resolve_shrinkage_lambda(cond)     # ★dict 면 올린다 — 0.0 금지★
+        return round(max(0.0, min(50.0 * (1.0 - lam), 50.0)), 2), "legacy_scalar"
+
+    sig = np.asarray(cond["sigma"], dtype=float)
+    # 국면 간 항이 있으면(혼합) 그것이 국면 불확실성이고, 없으면(하드) 0 이다 —
+    # 하드 라벨은 "국면을 확실히 안다" 고 주장하는 것이므로 그 항이 0인 것이 맞다.
+    A = cond.get("A_h")
+    W = cond.get("W_h")
+    h = int(cond.get("h_hold") or 1)
+    if A is not None and W is not None:
+        ann = 12.0 / h
+        regime_diag = np.maximum(np.diag(np.asarray(A, dtype=float) * ann), 0.0)
+        within_diag = np.maximum(np.diag(np.asarray(W, dtype=float) * ann), 0.0)
+    else:
+        regime_diag = np.zeros(sig.shape[0])
+        within_diag = np.maximum(np.diag(sig), 0.0)
+    months = cond.get("n_months_by_regime") or {}
+    n_months = max(1, min(months.values(), default=int(cond.get("n_months") or 1)))
+    terms = view_omega_terms(regime_diag=regime_diag,
+                             sigma_within_diag=within_diag, n_months=n_months)
+    conf = implied_confidence(terms["omega_diag"], np.maximum(np.diag(sig), 1e-12))
+    # ★가장 약한 자산을 따른다★ 한 자산의 뷰만 강해도 최적화기는 그쪽으로 쏠린다.
+    return round(float(np.min(conf)), 2), "decomposed_omega"
+
+
 def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
                         dates_win: list, names: list[str], model: str):
     """한 리밸런싱 시점의 `(s_override, extra_views, audit)`.
@@ -219,7 +261,8 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
 
     audit = {"month": month, "applied": False, "reason": None,
              "path_len": 0, "last_path_month": "", "regime": None,
-             "h_hold": None, "pi_bar": None, "a_contribution_pct": None}
+             "h_hold": None, "pi_bar": None, "a_contribution_pct": None,
+             "confidence": None, "confidence_model": None}
     pts = _truncated_points(regime.get("points") or [], month)
     audit["path_len"] = len(pts)
     audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
@@ -272,9 +315,9 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
     if model in ("bl", "ep"):
         # `/analyze` 의 `_conditional_views` 와 같은 규약 — μ 를 최적화기에 직접
         # 대입하지 않고 자산별 절대 뷰로 태운다(불확실성을 Ω 에 남기기 위해서).
-        lam = cond.get("shrinkage_lambda")
-        lam = float(lam) if isinstance(lam, (int, float)) else 0.0
-        conf = round(max(0.0, min(50.0 * (1.0 - lam), 50.0)), 2)
+        conf, cmodel = _view_confidence(cond, regime.get("confidence", "decomposed"))
+        audit["confidence"] = conf
+        audit["confidence_model"] = cmodel
         extra_views = [
             {"assets": [nm], "direction": 1 if float(m) >= 0 else -1,
              "magnitude_pct": abs(float(m)) * 100.0, "confidence": conf,
@@ -314,6 +357,11 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             return {"error": True,
                     "message": (f"'{weighting}' 은 지원하는 국면 가중 방식이 아닙니다 — "
                                 f"{' 또는 '.join(_REGIME_ARMS)} 만 됩니다.")}
+        ckind = regime.get("confidence", "decomposed")
+        if ckind not in ("decomposed", "legacy"):
+            return {"error": True,
+                    "message": (f"'{ckind}' 은 지원하는 신뢰도 방식이 아닙니다 — "
+                                "decomposed 또는 legacy 만 됩니다.")}
         arm = "B1" if weighting == "hard" else "N"
     regime_detail: list[dict] = []
 
@@ -488,6 +536,12 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             "s_override_used": sum(1 for d in regime_detail if d["applied"]),
             "path_len_at_rebalance": [d["path_len"] for d in regime_detail],
             # ★배분이 거부된 시점★ 무조건부로 몰래 떨어지지 않고 거래를 건너뛴 횟수.
+            "confidence_model": next((d["confidence_model"] for d in regime_detail
+                                      if d.get("confidence_model")), None),
+            "confidence_mean": (round(float(np.mean(
+                [d["confidence"] for d in regime_detail
+                 if d.get("confidence") is not None])), 3)
+                if any(d.get("confidence") is not None for d in regime_detail) else None),
             "weights_infeasible": len(infeasible),
             "infeasible_detail": infeasible[:20],
             "detail": regime_detail,

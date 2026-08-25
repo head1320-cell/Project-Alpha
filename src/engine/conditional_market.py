@@ -470,6 +470,37 @@ def _package_mixture(mu_cum, W, A, h_hold: int, names, pis, regimes,
     }
 
 
+#: 혼합의 λ 집계 의미. ★값으로 선언한다★ — 소비자가 "평균이겠거니" 하지 않게.
+LAMBDA_AGGREGATE_PI_WEIGHTED = "pi_weighted_mean"
+
+
+def resolve_shrinkage_lambda(cond: dict) -> float:
+    """조건부/혼합 응답에서 **스칼라** 수축강도를 읽는다. 못 읽으면 **올린다**.
+
+    ★"모르면 0" 을 금지하는 것이 이 함수의 존재 이유다.★
+    `λ = 0` 은 "수축이 전혀 필요 없다 = 표본이 완벽하다" 는 뜻이고, 뷰 신뢰도가
+    `50 × (1 − λ)` 이므로 **읽지 못한 것이 확신을 최대로 올린다.** 실제로 그렇게
+    됐다 — `regime_mixture_moments` 가 국면별 dict 를 내는데 소비자가
+    `isinstance(lam, (int, float)) else 0.0` 으로 걸러 매 리밸런싱에 `conf = 50`
+    (최대)을 박았고, 전달계층 감사가 그것을 찾았다.
+
+    잔여 모델리스크의 `Ξ = 0` 과 정확히 같은 계열의 오류다 — **안 잰 것이 확신을
+    키우는 방향으로 기본값을 두지 않는다.**
+    """
+    lam = cond.get("shrinkage_lambda")
+    if isinstance(lam, bool) or not isinstance(lam, (int, float)):
+        kind = type(lam).__name__
+        raise ValueError(
+            f"수축강도가 스칼라가 아닙니다 (받은 것: {kind}). 국면별 값을 낸다면 "
+            f"`shrinkage_lambda` 에 **집계 스칼라**를, 상세는 "
+            f"`shrinkage_lambda_by_regime` 에 두어야 합니다 — 0.0 으로 떨어뜨리면 "
+            f"읽지 못한 것이 뷰 신뢰도를 최대로 올립니다.")
+    v = float(lam)
+    if not math.isfinite(v):
+        raise ValueError("수축강도가 유한한 값이 아닙니다.")
+    return max(0.0, min(1.0, v))
+
+
 def mixture_from_moments(*, mu_by_regime: dict[str, Any],
                          sigma_by_regime: dict[str, Any],
                          pi_path: list[dict[str, float]],
@@ -514,6 +545,16 @@ def mixture_from_moments(*, mu_by_regime: dict[str, Any],
     return _package_mixture(mu_cum, W, A, h_hold,
                             names or [f"a{i}" for i in range(n)], pis, regimes,
                             dropped_regimes={})
+
+
+def _aggregate_lambda(per: dict, keep: list[str], pis: np.ndarray,
+                      *, regimes: list[str]) -> float:
+    """국면별 수축강도 → **π̄ 가중평균**. `LAMBDA_AGGREGATE_PI_WEIGHTED` 의 정의다."""
+    pi_bar = pis.mean(axis=0)
+    w = np.array([float(pi_bar[regimes.index(r)]) for r in keep], dtype=float)
+    lam = np.array([float(per[r]["shrinkage_lambda"] or 0.0) for r in keep], dtype=float)
+    tot = float(w.sum())
+    return float((w @ lam) / tot) if tot > 1e-12 else float(lam.mean())
 
 
 def regime_mixture_moments(returns_df, regime_by_month: dict[str, str] | None,
@@ -591,7 +632,13 @@ def regime_mixture_moments(returns_df, regime_by_month: dict[str, str] | None,
         dropped_mass_max=round(dropped_mass, 6),
         n_months_by_regime={r: per[r]["n_months"] for r in keep},
         n_obs_by_regime={r: per[r]["n_obs"] for r in keep},
-        shrinkage_lambda={r: per[r]["shrinkage_lambda"] for r in keep},
+        # ★소비자는 스칼라를 본다★ 국면별 상세는 버리지 않되, 기본 필드는 집계값이다.
+        # 집계는 π̄ 가중평균이다 — `W_h` 자체가 국면별 수축 공분산을 π 로 섞은 것이라
+        # 같은 가중을 쓰는 것이 유일하게 일관된 선택이다.
+        shrinkage_lambda=_aggregate_lambda(per, keep, pis, regimes=keep),
+        shrinkage_lambda_by_regime={r: float(per[r]["shrinkage_lambda"] or 0.0)
+                                    for r in keep},
+        shrinkage_lambda_aggregate=LAMBDA_AGGREGATE_PI_WEIGHTED,
         degenerate=any(bool(per[r]["degenerate"]) for r in keep),
     )
     if out.get("available"):
