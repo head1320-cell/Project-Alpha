@@ -656,8 +656,11 @@ D=sum(pi0[i]*np.outer(M[i],M[i]) for i in range(2))-np.outer(pi0@M,pi0@M)
 _,_,AI=run(np.eye(2),pi0,M,Sg,h);        print('I3 P=I    ',AI.ravel(),(h*h*D).ravel())
 _,_,Am=run(np.tile(pi0,(2,1)),pi0,M,Sg,h);print('I3 무기억  ',Am.ravel(),(h*D).ravel())"
 
-# (16) ★I4 일별(월블록) == 월별, 그러나 일별-iid 는 888.6배 지운다★
-#      위 스크립트의 parts() 를 일별 인덱스로 확장해 월차이로 P 를 거듭제곱한다.
+# (16) ★I4 일별(월블록) == 월별. 일별 해상도로 바꾸면 국면 간 항이 지워진다★
+#      → tests/test_mixture_moments.py::_daily_reference 가 참조 구현이다
+#        (resolution="month" | "day" | "day_iid" 세 가지를 만든다).
+#      ★축소 배수는 fixture 의존이다★ — 조사 fixture 889배, 구현 fixture 11.2/42.3배.
+#      불변식은 배수가 아니라 "월블록과 1e-14 로 일치" 쪽이다.
 
 # (17) ★I7 잔여리스크 — 0 으로 두면 신뢰도가 올라간다★
 python3 -c "

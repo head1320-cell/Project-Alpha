@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import Any
 
 import numpy as np
 
@@ -313,3 +314,293 @@ def conditional_moments(returns_df, regime_by_month: dict[str, str] | None,
         "note": note,
         **common,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 국면혼합 적률 (MS1-a) — 하드 라벨을 확률 1 로 쓰는 것을 그만둔다
+# ══════════════════════════════════════════════════════════════════════════════
+# 계획: `docs/plans/2026-08-25-macro-vnext-plan.md` §1.3
+#
+# ★위 `conditional_moments` 는 오늘의 **점 라벨** 하나로 조건부를 만든다.★ 그것은
+# "보유기간 내내 오늘 국면일 확률 = 1" 을 가정한다. 실측은 정반대다 — 3개월 지평의
+# 워크포워드 적중률 0.889 는 좋아 보이지만 **평균 예측집합 크기가 3.81/4** 다.
+# 4국면 중 거의 전부를 담아야 맞힌다는 뜻이고, 그런 예측을 확률 1 로 쓰는 것은
+# 데이터가 뒷받침하지 않는 확신이다.
+#
+# ★그리고 혼합은 "국면별 적률의 가중평균" 이 아니다.★ 전분산법칙의 두 번째 항 —
+# 국면 **간** 평균의 산포 — 가 공분산에 더해진다. 국면을 모를수록 Σ 가 **커진다**.
+# 불확실성을 평균으로 지우는 것이 아니라 리스크로 정직하게 옮기는 것이다.
+#
+#   μ̄_h = Σ_{j=1..h} Σ_s π_j(s)·μ_s,m            ★π_h 가 아니라 π_1..π_h 전부★
+#   W_h = Σ_{j=1..h} Σ_s π_j(s)·Σ_s,m             국면 내 (시간가변 가중)
+#   A_h = Σ_{j,k}   Cov(μ_{S_j}, μ_{S_k})         국면 간 누적 — **결합분포**
+#         Cov = Σ_{s,s'} π_j(s)·[P^{k−j}]_{s,s'}·μ_s μ_{s'}ᵀ − E_j E_kᵀ   (k ≥ j)
+#   Σ̄_h = W_h + A_h                              (월간 누적 → 연율 ×12/h)
+#
+# ★`h²·D` 로 근사하지 않는 이유★ 그것은 `P = I`(국면이 h개월 내내 유지)인 극한이고,
+# 실측 전이행렬에서는 정확값을 **1.489배 과대추정**한다. 반대로 `h·D` 는 무기억
+# 극한이고 2.01배 과소추정한다. 정확값은 둘 사이 어디든 되며 **어디인지는 전이행렬이
+# 정한다** — 스칼라 계수로 대신할 수 없다. 두 극한은 테스트가 못박고 있다.
+#
+# ★일별로 내려가지 않는 이유★ 국면은 **월 단위로 인덱스된 상태**다. 일별 스텝으로
+# 계산해도 한 달의 영업일이 같은 라벨을 공유하면 답은 같다(실측 차이 7.4e−18).
+# 그러나 국면까지 매일 재추첨하면 국면 간 항이 **888.6배 지워져** 이 슬라이스가
+# 통째로 no-op 이 된다. 그래서 이 함수는 지평을 **개월**로만 받는다 — 일별 해상도를
+# 넣을 자리를 두지 않는 것이 가장 확실한 방어다.
+
+MONTHS_PER_YEAR = 12.0
+
+#: π_path 와 전이행렬의 정합 허용오차. 이보다 벌어지면 A_h 가 공분산이 아니게 되고
+#: 음의 고유값이 나온다(실측 −3.94e−4) — 그 행렬이 최적화기로 가면 음의 분산을
+#: 최소화하려 든다. 그래서 계산하지 않고 사유를 돌려준다.
+PI_PATH_TOLERANCE = 1e-9
+
+#: 추정 불가 국면이 어느 한 시점에서 이만큼을 넘게 차지하면 혼합하지 않는다.
+#: 남은 국면으로 재정규화하는 것은 **근사**이고, 분포의 절반 이상을 지어낼 수는 없다.
+DROPPED_MASS_LIMIT = 0.5
+
+#: 대칭화 후 최소고유값이 이보다 작으면 클립하지 않고 실패로 보고한다.
+_PSD_TOLERANCE = -1e-12
+
+#: 생존 국면에 걸린 확률질량이 이보다 작으면 재정규화 자체가 0으로 나누기다.
+_PI_MASS_EPS = 1e-9
+
+
+def _pi_matrix(pi_path, regimes: list[str]) -> np.ndarray | None:
+    """`[{국면: 확률}, …]` → `(h, R)` 배열. 모양이 어긋나면 `None`."""
+    rows = []
+    for step in pi_path or []:
+        if not isinstance(step, dict):
+            return None
+        rows.append([float(step.get(r, 0.0)) for r in regimes])
+    return np.asarray(rows, dtype=float) if rows else None
+
+
+def _validate_path(pis: np.ndarray, P: np.ndarray, h_hold: int) -> str | None:
+    """모양·정규화·π_path↔P 정합 검사. 문제가 없으면 `None`."""
+    if not isinstance(h_hold, (int, np.integer)) or int(h_hold) < 1:
+        return (f"홀딩 기간이 {h_hold} 개월입니다 — 1 이상의 정수여야 합니다. "
+                "기대 지속기간(expected_duration_months)은 여기에 넣는 값이 아닙니다.")
+    if pis is None or pis.shape[0] != int(h_hold):
+        got = 0 if pis is None else pis.shape[0]
+        return (f"국면확률 경로가 {got}단계인데 홀딩 기간은 {h_hold}개월입니다 — "
+                "홀딩 기간의 매 달에 대한 확률이 있어야 합니다.")
+    if P.ndim != 2 or P.shape[0] != P.shape[1] or P.shape[0] != pis.shape[1]:
+        return "전이행렬의 모양이 국면 수와 맞지 않습니다."
+    if not np.isfinite(pis).all() or not np.isfinite(P).all():
+        return "국면확률 또는 전이행렬에 결측/무한값이 있습니다."
+    if (pis < -1e-12).any():
+        return "국면확률에 음수가 있습니다."
+    if np.abs(pis.sum(axis=1) - 1.0).max() > 1e-6:
+        return "국면확률의 합이 1이 아닙니다."
+    if np.abs(P.sum(axis=1) - 1.0).max() > 1e-6:
+        return "전이행렬의 행 합이 1이 아닙니다(행 = 출발 국면 규약)."
+    # ★핵심 검사★ π_{j+1} = π_j·P 가 아니면 아래 이중합은 공분산이 아니다.
+    for j in range(pis.shape[0] - 1):
+        gap = float(np.abs(pis[j + 1] - pis[j] @ P).max())
+        if gap > PI_PATH_TOLERANCE:
+            return (f"국면확률 경로가 전이행렬과 일관되지 않습니다 "
+                    f"(단계 {j + 1}→{j + 2} 에서 최대 {gap:.3e} 어긋남). "
+                    "같은 사슬에서 나온 π 와 P 를 함께 넘겨야 합니다 — "
+                    "어긋난 채로 계산하면 국면 간 항이 공분산이 아니게 됩니다.")
+    return None
+
+
+def _mix_core(M: np.ndarray, S: np.ndarray, pis: np.ndarray,
+              P: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """월간 적률에서 h개월 누적 `(μ_cum, W_h, A_h)` — 검증 없음(호출자가 한다).
+
+    Args:
+        M: `(R, n)` 국면별 **월간** 평균.
+        S: `(R, n, n)` 국면별 **월간** 공분산.
+        pis: `(h, R)` 각 달의 국면확률.
+        P: `(R, R)` 전이행렬(행 = 출발).
+    """
+    h = pis.shape[0]
+    E = [pis[j] @ M for j in range(h)]
+    W = sum(np.einsum("s,sij->ij", pis[j], S) for j in range(h))
+    A = np.zeros((M.shape[1], M.shape[1]), dtype=float)
+    # `P^m` 은 |k−j| 가 같으면 같으므로 한 번만 만든다(h ≤ 12 라 어차피 싸지만,
+    # 이중합 안에서 거듭제곱하면 h⁴ 스케일이 된다).
+    powers = [np.linalg.matrix_power(P, m) for m in range(h)]
+    for j in range(h):
+        for k in range(h):
+            T = powers[abs(k - j)]
+            # k ≥ j 면 j 에서 출발해 k 로 간다. 반대면 대칭으로 뒤집는다.
+            J = (np.einsum("s,st->st", pis[j], T) if k >= j
+                 else np.einsum("t,ts->st", pis[k], T))
+            A += np.einsum("st,si,tj->ij", J, M, M) - np.outer(E[j], E[k])
+    return sum(E), W, A
+
+
+def _package_mixture(mu_cum, W, A, h_hold: int, names, pis, regimes,
+                     **extra) -> dict:
+    """누적 적률 → 연율 응답. ★PSD 실패는 클립하지 않고 사유로 돌려준다★."""
+    ann = MONTHS_PER_YEAR / float(h_hold)
+    sigma = (W + A) * ann
+    sigma = (sigma + sigma.T) / 2.0             # 수치 대칭 복원
+    min_eig = float(np.linalg.eigvalsh(sigma).min())
+    if min_eig < _PSD_TOLERANCE:
+        return _unavailable(
+            f"혼합 공분산의 최소고유값이 {min_eig:.3e} 로 음수입니다 — 양정치가 "
+            "아닙니다. 값을 잘라 내보내면 최적화기가 음의 분산을 최소화하려 들므로, "
+            "고치지 않고 사실대로 알립니다.",
+            names=list(names), h_hold=int(h_hold), **extra)
+
+    tr_total = float(np.trace(sigma))
+    a_pct = (float(np.trace(A * ann)) / tr_total * 100.0) if abs(tr_total) > 1e-18 else 0.0
+    pi_bar = pis.mean(axis=0)
+    return {
+        "available": True,
+        "method": "regime_mixture",
+        "mu": mu_cum * ann,
+        "sigma": sigma,
+        "W_h": W,
+        "A_h": A,
+        "h_hold": int(h_hold),
+        "pi_path": [dict(zip(regimes, row, strict=True)) for row in pis],
+        "pi_bar": dict(zip(regimes, pi_bar, strict=True)),
+        # ★국면 불확실성이 리스크의 몇 %인가★ — 사람이 이 숫자를 보고 혼합이
+        # 실제로 무언가를 하고 있는지 판단할 수 있어야 한다.
+        "A_contribution_pct": round(a_pct, 4),
+        "min_eigenvalue": min_eig,
+        "names": list(names),
+        "reason": None,
+        **extra,
+    }
+
+
+def mixture_from_moments(*, mu_by_regime: dict[str, Any],
+                         sigma_by_regime: dict[str, Any],
+                         pi_path: list[dict[str, float]],
+                         transition, regimes: list[str],
+                         h_hold: int, names: list[str] | None = None) -> dict:
+    """국면별 **연율** 적률 + 국면확률 경로 → 혼합 연율 μ̄/Σ̄.
+
+    순수 함수다 — 표본도 DB 도 보지 않는다. 그래서 §1.3 의 항등식(동일국면 환원 ·
+    두 전이극한 · 연율화 정합)을 **기계 정밀도로** 테스트할 수 있다.
+
+    Args:
+        mu_by_regime: `{국면: (n,) 연율 평균}`.
+        sigma_by_regime: `{국면: (n, n) 연율 공분산}`.
+        pi_path: `[{국면: 확률}, …]` 길이 `h_hold`. **π_1 … π_h** (오늘이 아니다).
+        transition: `(R, R)` 전이행렬. ★행이 출발★ — `regime_transitions` 의
+            `rows[i]["mean"]` 규약과 같다.
+        regimes: 국면 이름 순서. 모든 배열의 축 순서를 이것이 정한다.
+        h_hold: 홀딩 기간(**개월**). 리밸런싱 주기에서 온다.
+        names: 자산 이름(응답 전달용).
+
+    Returns:
+        `{available, mu, sigma, W_h, A_h, pi_path, pi_bar, A_contribution_pct, …}`
+        또는 `{available: False, reason}`.
+    """
+    P = np.asarray(transition, dtype=float)
+    pis = _pi_matrix(pi_path, regimes)
+    bad = _validate_path(pis, P, h_hold)
+    if bad:
+        return _unavailable(bad, names=list(names or []), h_hold=h_hold)
+
+    try:
+        M = np.array([np.asarray(mu_by_regime[r], dtype=float) for r in regimes])
+        S = np.array([np.asarray(sigma_by_regime[r], dtype=float) for r in regimes])
+    except KeyError as e:
+        return _unavailable(f"국면 {e} 의 적률이 없습니다.", names=list(names or []))
+    if not (np.isfinite(M).all() and np.isfinite(S).all()):
+        return _unavailable("국면별 적률에 결측/무한값이 있습니다.", names=list(names or []))
+
+    # 연율 → 월간. ★일별로 내려가지 않는다★ (모듈 상단 주석 참조)
+    mu_cum, W, A = _mix_core(M / MONTHS_PER_YEAR, S / MONTHS_PER_YEAR, pis, P)
+    n = M.shape[1]
+    return _package_mixture(mu_cum, W, A, h_hold,
+                            names or [f"a{i}" for i in range(n)], pis, regimes,
+                            dropped_regimes={})
+
+
+def regime_mixture_moments(returns_df, regime_by_month: dict[str, str] | None,
+                           pi_path: list[dict[str, float]], transition,
+                           regimes: list[str], *, h_hold: int,
+                           min_obs_per_asset: float = MIN_OBS_PER_ASSET,
+                           shrinkage="auto",
+                           trading_days: float = TRADING_DAYS) -> dict:
+    """표본에서 국면별 적률을 뽑아 `mixture_from_moments` 에 넘긴다.
+
+    ★새 추정기를 만들지 않는다★ 국면별 μ/Σ 는 전부 `conditional_moments` 가 낸다 —
+    표본 하한 게이트 · Ledoit-Wolf 수축 · 상관건전성 진단이 그대로 적용되고, 그래서
+    `π` 가 원핫이면 결과가 기존 하드 라벨 경로와 **바이트 단위로 같아진다**.
+
+    추정 불가 국면은 π 에서 빼고 재정규화하되 ★뺐다는 사실을 응답에 적는다★.
+    어느 한 달에서 빠진 질량이 `DROPPED_MASS_LIMIT` 을 넘으면 혼합하지 않는다 —
+    분포의 절반 이상을 지어낼 수는 없다.
+    """
+    P_full = np.asarray(transition, dtype=float)
+    pis_full = _pi_matrix(pi_path, regimes)
+    bad = _validate_path(pis_full, P_full, h_hold)
+    if bad:
+        return _unavailable(bad, names=[], h_hold=h_hold)
+
+    per: dict[str, dict] = {}
+    dropped: dict[str, str] = {}
+    for r in regimes:
+        cond = conditional_moments(returns_df, regime_by_month, r,
+                                   min_obs_per_asset=min_obs_per_asset,
+                                   shrinkage=shrinkage, trading_days=trading_days)
+        if cond.get("available"):
+            per[r] = cond
+        else:
+            dropped[r] = cond.get("reason") or "추정 불가"
+
+    if not per:
+        return _unavailable(
+            "어느 국면에서도 조건부 적률을 추정할 수 없었습니다 — 혼합할 대상이 "
+            "없습니다. 무조건부 추정을 쓰십시오.",
+            names=[], h_hold=h_hold, dropped_regimes=dropped)
+
+    keep = [r for r in regimes if r in per]
+    idx = [regimes.index(r) for r in keep]
+    mass = pis_full[:, idx].sum(axis=1)
+    dropped_mass = float((1.0 - mass).max())
+    if dropped_mass > DROPPED_MASS_LIMIT:
+        return _unavailable(
+            f"추정 불가 국면이 어느 달에 확률질량의 {dropped_mass:.1%} 를 차지합니다 "
+            f"(한도 {DROPPED_MASS_LIMIT:.0%}). 남은 국면으로 재정규화하는 것은 근사이며, "
+            "분포의 절반 이상을 대신 채울 수는 없습니다.",
+            names=list(per[keep[0]]["names"]), h_hold=h_hold,
+            dropped_regimes=dropped)
+    if float(mass.min()) <= _PI_MASS_EPS:
+        return _unavailable(
+            "어느 달의 국면확률이 추정 가능한 국면에 전혀 걸려 있지 않습니다.",
+            names=list(per[keep[0]]["names"]), h_hold=h_hold,
+            dropped_regimes=dropped)
+
+    # ★축소는 근사다 — 그래서 재검증하지 않고, 근사했다는 사실을 응답에 남긴다★
+    # 남은 국면으로 재정규화하면 π 와 P 의 정합은 정의상 깨진다. 원본 입력은 위에서
+    # 이미 검증했으므로, 여기서는 조건부 사슬(생존 국면에 조건을 건 사슬)을 쓴다.
+    pis = pis_full[:, idx] / mass[:, None]
+    P = P_full[np.ix_(idx, idx)]
+    rows = P.sum(axis=1, keepdims=True)
+    P = np.divide(P, rows, out=np.full_like(P, 1.0 / len(keep)), where=rows > 1e-12)
+
+    names = list(per[keep[0]]["names"])
+    M = np.array([np.asarray(per[r]["mu"], dtype=float) for r in keep])
+    S = np.array([np.asarray(per[r]["sigma"], dtype=float) for r in keep])
+
+    mu_cum, W, A = _mix_core(M / MONTHS_PER_YEAR, S / MONTHS_PER_YEAR, pis, P)
+    out = _package_mixture(
+        mu_cum, W, A, h_hold, names, pis, keep,
+        dropped_regimes=dropped,
+        dropped_mass_max=round(dropped_mass, 6),
+        n_months_by_regime={r: per[r]["n_months"] for r in keep},
+        n_obs_by_regime={r: per[r]["n_obs"] for r in keep},
+        shrinkage_lambda={r: per[r]["shrinkage_lambda"] for r in keep},
+        degenerate=any(bool(per[r]["degenerate"]) for r in keep),
+    )
+    if out.get("available"):
+        note = (f"{len(keep)}개 국면의 조건부 적률을 {h_hold}개월 홀딩 기간의 "
+                f"국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 "
+                f"{out['A_contribution_pct']:.2f}% 를 차지합니다 — 국면을 모를수록 "
+                "이 값이 커지며, 그것이 리스크로 정직하게 옮겨간 몫입니다.")
+        if dropped:
+            note += (f" ★{', '.join(dropped)} 국면은 표본이 없어 제외하고 "
+                     f"재정규화했습니다(최대 {dropped_mass:.1%}) — 축소된 사슬은 근사입니다.")
+        out["note"] = note
+    return out
