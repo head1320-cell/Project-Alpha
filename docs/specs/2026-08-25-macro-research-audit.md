@@ -102,6 +102,36 @@ mock 을 **날짜 주소화**했기 때문에 이제 이 결함을 **테스트�
 
 ---
 
+## 4.4 ★PIT 는 하나가 아니라 세 속성이다 (2차 패스)★
+
+감사 §4 는 *"모델이 `as_of` 를 안 받는다"* 까지만 적었다. 2차 패스에서 코드를 더 읽고
+**셋을 분리해야 한다**는 것이 드러났다 — 한 불리언으로 합치면 "PIT 통과" 가 거짓말이 된다.
+
+| 속성 | 뜻 | 지금 | 빈티지 시스템 필요? |
+|---|---|---|---|
+| `look_ahead_free` | t 이후 관측이 계산에 안 들어감 | ✅ **이미 참** | ❌ |
+| `publication_lag_honored` | t 시점에 실제로 공표돼 있었는가 | ❌ 미모델 | ❌ 정적 시프트로 근사 |
+| `revision_free` | t 시점에 공표된 **값**인가 | ❌ 불가능 | ✅ — **ECOS 미제공** |
+
+증거:
+
+```python
+# src/engine/regime_axes.py::zscore_at  ← 국면 라벨의 뿌리
+seg = [v for v in vals[max(0, idx - window + 1):idx + 1] if v is not None]
+#                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 후행 윈도우만 — look-ahead 없음
+
+# src/engine/regime_forecast.py::_posterior_forecast(path[:t], k)  — 절단 경로만
+# src/engine/allocation_backtest.py::walk_forward  — R_win 은 리밸런싱 시점 이전만
+```
+
+★결론: 국면 경로의 백테스트는 **완전한 빈티지 시스템 없이 look-ahead-free 로 만들 수
+있다.**★ 불가능한 것은 revision-free 이고 — ECOS 는 ALFRED 같은 빈티지를 주지 않으므로
+오늘 받은 2010-05 산업생산은 당시 속보치가 아니라 이후 확정치다 — 그것은 소프트웨어가
+아니라 **데이터 벤더의 한계**다. `revision_bias: "unmanaged"` 를 **영구 라벨**로 붙이고
+`look_ahead_free` 와 **같은 필드로 뭉개지 않는다.**
+
+---
+
 ## 4.5 ★이 개발환경에서는 실계열이 0개다★
 
 `probe_all()` 의 `frontier_sample` 이 그 사실을 이미 적고 있다:
@@ -160,6 +190,42 @@ print(type(r.params).__name__, hasattr(r.params,'get'))"
 **결론**: 지금의 LATENT 은 "여러 지표가 공유하는 잠재 상태" 가 아니라
 **단기금리의 재표현**이다. 화면 질문(`"여러 매크로 지표가 공유하는 잠재 상태는
 무엇인가?"`)에 답하지 못한다.
+
+#### ★감사 중 세 번째 정정 (2026-08-25 2차 패스)★
+
+위의 *"loadings 에 상관이 들어간다"* 는 **문자 그대로는 맞지만 결론이 과했다.**
+파라미터를 직접 덤프해 확인했다:
+
+```
+정확한 적재 (res.model.param_names 로 읽음):
+  loading.f1.y1 KOSPI            -0.072191     sigma2.y1  0.977557
+  loading.f1.y2 KR_10Y            0.101825     sigma2.y2  0.972129
+  loading.f1.y3 KR_3Y            -0.966294     sigma2.y3  0.000000   ← ★
+  loading.f1.y4 KR_CPI           -0.255677     sigma2.y4  0.914223
+  loading.f1.y5 KR_IP            -0.173839     sigma2.y5  0.951220
+  loading.f1.y6 KR_LEADING_CYCLE -0.216045     sigma2.y6  0.933916
+  loading.f1.y7 USD_KRW           0.101880     sigma2.y7  0.972120
+
+상관 폴백:  [-0.0747, 0.1054, -1.0, -0.2646, -0.1799, -0.2236, 0.1054]
+비율 corr/load ≈ 1.035 = 1/√var(f̂),  var(f̂) = 1.071  →  ★전 계열 동일 비율★
+```
+
+★표준화 입력 + 단위분산 요인 정규화 아래서 상관은 적재의 **상수배**다★ — 모양은
+보존되고 스케일만 틀린다. 그래서 화면의 **순위와 부호는 옳았고**, 아무도 못 잡았다.
+
+**진짜 결함은 `sigma2.y3 = 0.000000` — Heywood 케이스다.** KR_3Y 의 고유분산이 0으로
+추정됐다는 것은 "공통 요인" 이 사실 **KR_3Y 한 계열 그 자체**라는 뜻이고, 그래서
+상관이 정확히 1.0 이 나온 것이다. `explained_var = 0.0078` 이 그 자백이다.
+★출력 어디에도 이 사실이 없다.★
+
+**부수 결함 — 이름과 계산이 다르다.** `explained_var = 1 − var(res.resid)/var(Z)` 인데
+`res.resid` 는 **1기 앞 예측오차**다. 분산분해가 아니라 **예측 R²** 다(합성 강요인
+데이터에서 0.387 — 요인은 강한데 값은 낮다). `one_step_r2` 로 개명해야 한다.
+
+★그리고 이 사실이 회귀 테스트 설계를 바꾼다★ — 적재와 상관이 k=1 에서 비례하므로,
+**k=1 로 세운 가드는 상관 폴백을 잡지 못한다**(등가 변이). 판별하려면 k=2 fixture 가
+필요하다. 실측 판별비: k=1 에서 1.01(실패) · k=2 에서 42.4(성공).
+→ `docs/plans/2026-08-25-macro-vnext-plan.md` §3.3
 
 ### 5.2 LATENT — Stock–Watson / Doz 대비 빠진 것
 
@@ -233,6 +299,24 @@ current=Goldilocks  n_transitions=52  span=202204~202608 (53개월, 7개월 결�
 k=3 예측  Goldilocks 0.601 [0.409, 0.788] · Disinflation 0.169 · Reflation 0.133 · Stagflation 0.097
 워크포워드 적중률  k=1 → 0.966 (집합크기 2.72/4, n=29)   k=3 → 0.889 (집합크기 3.81/4, n=27)
 ```
+
+#### ★네 개의 "지금 국면 확률" 이 공존한다 (2차 패스 실측)★
+
+같은 4국면 분류체계 위에 확률 객체가 **셋** 있고, 포트폴리오는 **넷째**를 쓴다:
+
+| # | 이름 | 코드 | 오늘 Goldilocks | 성격 |
+|---|---|---|---|---|
+| 1 | 축 확률 | `regime_axes.quadrant_probs(g, i, se_g, se_i)` | **0.535** | 오늘 축 z 와 **그 표준오차** → 사분면 확률 |
+| 2 | Markov filtered | `regime_ensemble._markov_probs` | **0.964** (2국면 정확히 0.0) | 성장축 2상태 × 물가 하드 부호 |
+| 3 | k단계 예측 | `regime_transitions.k_step_forecast` | **0.601** [0.409, 0.788] | 사분면 경로 Dirichlet 사후예측 |
+| 4 | **하드 라벨 ← 포트폴리오** | `regime_path(...)["points"][-1]["regime"]` | **1.000** | 결정적. 불확실성 0 |
+
+★한 문장: 저장소는 "지금 Goldilocks 일 확률" 에 0.535 · 0.964 · 0.601 세 답을 갖고
+있는데, 최적화기에는 **1.000** 을 보낸다.★
+
+`smoothed_marginal_probabilities` 는 다섯 번째 후보가 아니라 **금지 대상**이다 —
+마지막 시점에서만 filtered 와 같으므로(위 정정), 과거 경로를 `smoothed[t]` 로 만들면
+look-ahead 다. 계약은 `docs/plans/2026-08-25-macro-vnext-plan.md` §1.5 에 있다.
 
 **그래서 실제 결함은 다른 세 가지다**
 - ★예측이 조건부 μ/Σ 에 **닿지 않는다**★ `allocation_routes.py:673-676` 은
@@ -386,6 +470,50 @@ grep -n "as_of" src/engine/macro_models/*.py | wc -l   # → 0
 sed -n '669,677p' src/api/allocation_routes.py
 ```
 
-★이 감사에서 내가 두 번 틀렸고 두 번 다 본문에 정정을 남겼다★ (§5.5) —
-`smoothed` look-ahead 판단과 "예측 국면확률 부재" 판단이다. 둘 다 **코드를 읽고
-고쳤다.** 감사 문서에서 정정을 지우면 다음 사람이 같은 오독을 반복한다.
+### 11.1 2차 설계 패스(MS1 심층)의 재현 명령
+
+```bash
+cd /home/user/Project-Alpha
+
+# (7) DFM 이 Heywood 케이스라는 사실 — sigma2.y3 = 0.000000 (§5.1 정정 3)
+KIS_USE_MOCK=1 python3 -c "
+import numpy as np
+from src.engine.macro_models.base import load_series
+from statsmodels.tsa.statespace.dynamic_factor import DynamicFactor
+keys=('KR_LEADING_CYCLE','KR_IP','KOSPI','KR_CPI','KR_3Y','KR_10Y','USD_KRW')
+s=load_series(keys,60); names=sorted(s); n=min(len(v) for v in s.values())
+X=np.column_stack([np.asarray(s[k][-n:],float) for k in names])
+D=np.diff(X,axis=0); sd=D.std(0,ddof=1); keep=sd>1e-12
+Z=(D[:,keep]-D[:,keep].mean(0))/sd[keep]
+r=DynamicFactor(Z,k_factors=1,factor_order=1).fit(disp=False,maxiter=200)
+for nm,v in zip(r.model.param_names, np.asarray(r.params)):
+    if nm.startswith(('loading','sigma2')): print(f'{nm:22s}{v: .6f}')"
+
+# (8) 재구성 검정이 k=1 에서는 판별하지 못한다는 사실 (§5.1 → 계획 §3.3)
+#     k=1 실데이터 → 0.6677 vs 0.6763 (비 1.01)  ·  k=2 합성 → 0.116 vs 4.916 (비 42.4)
+
+# (9) 네 확률 객체 (§5.5)
+KIS_USE_MOCK=1 python3 -c "
+import json
+from src.services.macro_collector import MacroCollector
+from src.engine.regime_ensemble import regime_ensemble
+from src.engine.regime_transitions import regime_transitions
+sm=getattr(MacroCollector.get_default().collect_all(use_cache=True),'series',{})
+e=regime_ensemble(sm,'kr',60); t=regime_transitions(sm,'kr',60)
+print('axis    ', e['tools']['axis']['probs'])
+print('markov  ', e['tools']['markov']['probs'])
+print('forecast', t['forecast']['mean'])
+print('hard    ', t['current'], '-> 1.000')"
+
+# (10) 국면 라벨이 후행 윈도우만 본다는 증거 (§4.4)
+sed -n '/def zscore_at/,/return (x - mean)/p' src/engine/regime_axes.py
+
+# (11) 혼합 공분산의 지평 스케일 — 시뮬레이션으로 h·W+h²·D 를 확인
+#      (계획 §1.3 의 표. 2자산·2국면·12만 경로)
+```
+
+★이 감사에서 내가 **세 번** 틀렸고 세 번 다 본문에 정정을 남겼다★ (§5.1·§5.5) —
+`smoothed` look-ahead 판단 · "예측 국면확률 부재" 판단 · "loadings 가 상관이라 결함"
+판단이다. 셋 다 **코드를 읽고 고쳤다.** 감사 문서에서 정정을 지우면 다음 사람이 같은
+오독을 반복한다 — 특히 세 번째는 **회귀 테스트를 k=1 에 세우게 만드는** 오독이라
+비용이 크다.
