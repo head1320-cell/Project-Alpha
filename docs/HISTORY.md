@@ -7753,3 +7753,66 @@ EXPOSURES에만(4) em · equity_small · equity_us · real_estate
 ### 게이트
 
 **2,989 passed / 10 skipped** (2,958 → +31) · ruff 0.
+
+---
+
+## 2026-08-26 · 데이터 추출 API 전수 감사 (KRX·KIS·FRED·ECOS·DART)
+
+> 문서: [`데이터 추출 감사`](specs/2026-08-26-data-extraction-audit.md)
+> ★구현 없음 — 감사와 우선순위·최소 계획까지. `src/` 무변경.★
+
+정준 분류가 게이트 조건 5의 병목을 "분류가 아니라 가격 데이터" 로 좁혀서,
+제공자 5종의 **실제 소스코드**로 "줄 수 있는 것 vs 가져오는 것" 을 쟀다.
+
+### 교차 결함 셋
+
+**★① `daily_prices` 에 writer 가 둘이고 수정주가 체인이 한쪽에만 있다★**
+
+```
+krx_ingest.bulk_upsert       → OHLCV + return_1d + trading_value + mktcap
+ohlcv_loader.ingest_df_to_db → OHLCV                        ← return_1d 없음
+```
+
+`rebuild_adj_close()` 는 `return_1d` 체인(`adj[t-1] = adj[t]/(1+r[t]/100)`)으로
+분할·증자 점프를 지운다. KIS 경로 행은 `return_1d` 가 NULL 이라 함수가 스스로 적은
+*"원주가 비율로 폴백"* 을 타는데, ★그 폴백이 지우려던 점프를 다시 집어넣는다.★
+같은 PK 를 공유하면서 **어느 경로로 들어왔는지 행에 기록이 없다.**
+`VIXCLS` 6730% 가 Ledoit-Wolf 를 λ=1.0 으로 밀었던 것과 같은 계열의 사고다.
+
+**★② 빈티지 경로가 소비자별로 갈라져 있다★**
+
+| 경로 | 빈티지 | 소비자 |
+|---|---|---|
+| `macro_collector.fetch_series` (`frequency="m"`) | 없음 | 대시보드 · **국면 축**(→배분) |
+| `pit_macro.fetch_observations` (`realtime_*`) | ✔ | `timing_rules_v2` **만** |
+
+★어제 §15 를 다듬는다★ "수집 경로가 빈티지를 안 가져온다" 는 **국면 축 기준으로는
+정확**하지만, 저장소 전체로는 **"경로가 둘인데 소비자별로 갈라져 있다"** 가 맞다.
+빈티지 능력은 이미 살아서 쓰이고 있다 — 배분 경로만 그것을 안 탄다.
+
+**★③ 식별자 브리지가 휘발성 캐시에만 있다★** `master_flags_cache.json` 하나가
+없어서 세 기능이 멈춘다 — krx_mdc 투자자 플로우(ISIN 이 조회 키) · `sector_groups_for` ·
+`exposure_taxonomy` 규칙 배정.
+
+### 미사용 능력
+
+- ★KRX `get_extra` 4종(VKOSPI·신용잔고·공매도·대차) — 호출부 **0**★.
+  그런데 `source_registry` 는 "키 없음" 과 "수집 코드 없음" 을 **같은 `available:false`**
+  로 낸다. 전자는 사용자가, 후자는 우리가 고칠 일인데 구분되지 않는다.
+- ECOS: `StatisticSearch` 만 사용(메타 3종 미사용).
+- DART: 공시검색·원문·지분공시·분할 공시 없음 → **corporate action 을 공시에서 읽는
+  경로가 없다**(KRX 등락률 체인이 대신하고 있다).
+
+### 고칠 것이 없는 것
+
+★mock 폴백은 설계가 옳다★ — `load_ohlcv_unified` 는 DB→KIS→mock 이고 **mock 을 DB 에
+적재하지 않는다**. 17개 파일이 mock 경로를 갖지만 전부 `mock_allowed()` 를 통과한다.
+DART 는 5개 제공자 중 **가장 성숙**하다(호출부·캐시·쿼터·mock 게이트 전부 존재).
+
+### 우선순위
+
+P0 가격 출처 일원화 · P1 마스터/식별자 DB · P2 국면 축 빈티지(★배분 경로 — 별도 승인★) ·
+P3 KRX 4종 배선 · P4 ETF 메타데이터 · P5 DART 공시 CA.
+
+★P4 가 낮은 이유★ 게이트 어디에도 필요 없고, `instrument_selector` 가 이미 그 부재를
+`unavailable` 로 정직하게 내고 있어 **조용한 결함이 아니다**.
