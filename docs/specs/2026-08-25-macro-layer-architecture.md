@@ -304,7 +304,7 @@ IC 를 0 으로 적으면 "예측했는데 못 맞췄다" 로 읽히므로 `unde
 | # | 조건 | 현재 | 상태 |
 |---|---|---|---|
 | 1 | 정준 자산군/경제노출 분류 | 없음 (섹터·유동성 티어만) | ★차단★ (§4 에 계약만 정의) |
-| 2 | 계열별 `revision_bias` 라벨 | ★**부분 충족**★ — `source_registry.PROVIDER_HAS_VINTAGE`(FRED True · ECOS/KRX/NAVER/GOOGLE False)와 `revision_bias_note(key)` 가 **이미 있다**. 결함은 `allocation_routes._pit_block()` 이 전역 상수 `_REVISION_BIAS` 를 박고 레지스트리를 **안 타는 것** | 배선 1건 |
+| 2 | 계열별 `revision_bias` 라벨 | ★**판정은 배선됐다 · 차단은 남았다**★ (2026-08-26) `_pit_block()` 이 `regime_axes.axis_revision_status()` 를 타고 **계열별** 근거를 낸다. ★그러나 라벨은 여전히 `unmanaged` 다★ — §15 | ★차단★ (수집 경로 작업) |
 | 3 | 매크로 240개월+ 이력 | `observed = 60` | ★차단★ |
 | 4 | 투자가능 자산 6~10개 | 합성 6개 | ★차단★ (실계열 0) |
 | 5 | 국면 전이 30회+ | 합성만 | ★차단★ |
@@ -419,7 +419,8 @@ BL 의 `Π` 같은 정적 앵커가 EP 에 없기 때문이다. 그러므로 **E
 ## 11. 다음에 할 수 있는 것 (우선순위)
 
 1. **자산군 분류 구현** — §4 계약. 조건 1 을 푸는 유일한 길이고, B·D 양쪽의 선행조건.
-2. **계열별 `revision_bias` 라벨** — 조건 2.
+2. ~~`_pit_block()` 배선~~ ✔ **완료**(2026-08-26). 다음은 **수집기가 FRED 빈티지를
+   실제로 가져오게** 하는 것 — §15. ★"배선 1건" 이 아니었다.★
 3. `Constraints.group_floors_pct` — D 를 진지하게 추진할 때만.
 4. 그로스 레버 배선 — ★지금은 필요하지 않다★(§3.2). C-수준을 되살릴 때만.
 
@@ -434,6 +435,8 @@ BL 의 `Π` 같은 정적 앵커가 EP 에 없기 때문이다. 그러므로 **E
 | `Ω = diag(P τΣ Pᵀ)` 는 행 기하와 확신을 묶는다 | ★`structural`★ | 규약 정의. `PᵣΣPᵣᵀ/PₐΣPₐᵀ = 0.2578` |
 | EP 에 신뢰도 축이 없다 | ★`structural`★ | `confidence_used: False` |
 | `Constraints` 는 그룹 하한을 표현할 수 없다 | ★`structural`★ | 자료구조 |
+| 국면 축 수집 경로가 빈티지를 가져오지 않는다 | ★`structural`★ | `macro_collector` 에 `pit_macro` 참조 **0건** |
+| `us` 축의 차단은 소스가 아니라 **경로**다 | ★`structural`★ | 6계열 전부 FRED |
 | 자산군 3개 이상에서 "FI ≥ 40%" 표현 불가 | ★`structural`★ | 상한만으로는 배분처를 정할 수 없다 |
 | `-const` 가 동적 팔과 구조적으로 동일 | ★`structural`★ | `test_identical_paths_when_the_conditional_state_never_moves` |
 | 상대 뷰가 전달 효율을 산다(거래 38~63%) | `synthetic_mechanism` | Ω 매칭 후에도 남음 |
@@ -463,10 +466,49 @@ BL 의 `Π` 같은 정적 앵커가 EP 에 없기 때문이다. 그러므로 **E
 | **C** | D 는 Policy 에 사나 | ★**그렇다**★ — 정적 floor/cap = Portfolio Policy, 국면 의존 수정 = Macro→Policy 브리지. 정책 항이 동적 항의 4.5배(D2)이고 완화 순서가 다르다 |
 | **D** | AssetClass / EconomicExposure 의 의미 | 3층 분리(Instrument ≠ AssetClass ≠ EconomicExposure), 일대다 노출, `as_of`·버전·명시적 미배정 — [계약](2026-08-26-exposure-taxonomy-contract.md) |
 | **E** | 매크로의 예측 대상 | **전방 자산군 스프레드**(B). 종목 단면 IC 를 주지표로 쓰지 않는다 — [프로토콜](2026-08-26-macro-target-validation.md). ★스킬 자체는 unknown★ |
-| **F** | 채택 전 필요한 증거 | §6 게이트 11항. 조건 2 는 **배선 1건**으로 축소됐고, 나머지는 데이터 문제다 |
+| **F** | 채택 전 필요한 증거 | §6 게이트. ★조건 2 를 "배선 1건" 이라 적었던 것은 **과대주장**이었다★ — 판정은 배선했으나 수집 경로가 빈티지를 안 가져와 여전히 차단이다(§15). 나머지는 데이터 문제 |
 
 ★한국 유니버스에 경제적으로 구분되는 자산군이 4개 있는지 — **unknown**.★
 그것은 설계가 아니라 데이터 조사이고, 이 패스에서 답하지 않았다.
+
+## 15. ★게이트 조건 2 를 다시 재봤다 — "배선 1건" 은 내 과대주장이었다★ (2026-08-26)
+
+Phase 0 은 조건 2 를 "배선 1건" 으로 축소했다. ★그 판단이 틀렸다.★
+배선하려고 데이터 경로를 따라가 보니 **두 번째 사실**이 있었다:
+
+| 차원 | 묻는 것 | 출처 |
+|---|---|---|
+| ① `source_has_vintage` | 제공자가 개정 이력을 **줄 수 있나** | `source_registry.PROVIDER_HAS_VINTAGE` |
+| ★② `path_uses_vintage`★ | 우리 코드가 그것을 **가져오나** | 수집 경로 |
+
+★`has_vintage=True` 는 API 의 능력이지 우리의 행동이 아니다.★ 국면 축은
+`regime_analyzer.collector.collect_all()` 을 읽는데, `src/services/macro_collector.py`
+에는 `pit_macro`·`observations_as_of`·`vintage` 참조가 **하나도 없다**(실측).
+ALFRED 빈티지 조회는 `pit_macro` 에 구현돼 있으나 **별개 경로**이고 이 경로에서
+호출되지 않는다.
+
+★레지스트리만 보고 배선했다면 미국 축을 `managed` 로 올렸을 것이다★ — 현재
+개정본으로 과거를 채점하면서 "PIT 통과" 라고 표시하는 상태. `pit_macro` 자신이
+같은 계열의 오류를 이미 겪었다(빈 `realtime_start` 를 `as_of` 로 채워 `has_vintage`
+를 참으로 만든 버그).
+
+### 배선의 실제 산출 — ★두 종류의 차단이 갈라졌다★
+
+| 축 | 라벨 | 영구 차단 (소스) | 경로 차단 (고칠 수 있음) |
+|---|---|---|---|
+| **kr** | `unmanaged` | KOSPI · KR_CPI · KR_IP · KR_LEADING_CYCLE (**4/5**) | T10YIE |
+| **us** | `unmanaged` | ★**없음**★ | CPIAUCSL · GDPC1 · INDPRO · PAYEMS · T10YIE · UNRATE (**6/6**) |
+
+★전역 상수가 지운 것이 이것이다★ — `us` 축은 **수집기만 고치면** 백테스트 적격이
+되고, `kr` 축은 제공자가 바뀌지 않는 한 **영구히** 막혀 있다. 둘이 같은 라벨을
+달고 있었지만 하나는 데이터 제공자의 한계이고 다른 하나는 **우리 코드의 선택**이다.
+
+### 남은 작업 (조건 2 의 실제 잔여분)
+
+`macro_collector` 가 FRED 계열을 `pit_macro.observations_as_of` 로 가져오게 하는 것.
+그것이 되면 `AXIS_PATH_USES_VINTAGE = True` 가 되고 `us` 축이 자동으로 `managed` 로
+바뀐다 — `test_managed_requires_the_path_too` 가 그 동작을 **이미 고정해 두었다**.
+★배선 1건이 아니라 수집 경로 작업이다.★
 
 ## 재현
 

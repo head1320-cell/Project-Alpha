@@ -40,6 +40,94 @@ SE_FLOOR = 0.25             # 축 불확실성 하한 (지표 1~2개일 때 과�
 QUADRANTS = ("Goldilocks", "Reflation", "Stagflation", "Disinflation")
 
 
+# ── 개정 상태 — ★"빈티지가 있다" 와 "빈티지를 쓴다" 는 다르다★ ────────────────
+# 예전에는 `allocation_routes._pit_block()` 이 전역 상수 `_REVISION_BIAS =
+# "unmanaged"` 를 박았다. 값 자체는 맞았지만 **어느 계열 때문에 그런지**를 말하지
+# 못했고, 그래서 두 가지가 보이지 않았다:
+#
+#   · `kr` 축은 5계열 중 4개가 ECOS 라 **영구히** 막혀 있다(빈티지 엔드포인트가 없다).
+#   · `us` 축은 6계열 전부 FRED 라 **소스는 빈티지를 준다** — 막고 있는 것은
+#     수집 경로뿐이고, 그것은 **고칠 수 있는 것**이다.
+#
+# 전역 상수는 그 차이를 지웠다. 하나는 데이터 제공자의 한계이고 다른 하나는
+# 우리 코드의 선택인데, 같은 라벨을 달고 있었다.
+#
+# ★그리고 레지스트리만 보고 판정하면 반대로 과대주장한다★ `has_vintage=True` 는
+# **API 가 줄 수 있다**는 뜻이지 **우리가 가져온다**는 뜻이 아니다. 국면 축은
+# `regime_analyzer.collector.collect_all()` 을 읽고, 그 경로는 현재값만 가져온다
+# (`pit_macro` 의 ALFRED 조회는 **별개 경로**이며 여기서 호출되지 않는다).
+# `pit_macro` 자신이 같은 계열의 오류를 이미 한 번 겪었다 — 빈 `realtime_start` 를
+# `as_of` 로 채워 `has_vintage` 를 참으로 만들었던 버그.
+
+#: 국면 축이 읽는 경로가 실제로 빈티지를 가져오는가.
+#: ★선언이지 추론이 아니다★ — `tests/test_axis_revision_status.py` 가 이 선언과
+#: 실제 코드(수집기가 `pit_macro` 를 부르는가)를 대조한다. 빈티지를 배선하면 그
+#: 테스트가 red 가 되어 이 상수를 함께 고치도록 강제한다.
+AXIS_PATH_USES_VINTAGE = False
+
+#: 왜 막혔는가 — 하나는 제공자의 한계, 다른 하나는 우리 코드의 선택이다.
+BLOCKED_BY_SOURCE = "source"      # 제공자가 빈티지를 주지 않는다 (영구)
+BLOCKED_BY_PATH = "path"          # 제공자는 주는데 수집 경로가 안 쓴다 (고칠 수 있다)
+
+REVISION_MANAGED = "managed"
+REVISION_UNMANAGED = "unmanaged"
+
+
+def axis_revision_status(market: str = "kr") -> dict:
+    """국면 축을 이루는 **계열별** 개정 상태.
+
+    ★두 사실이 모두 참일 때만 `managed` 다★
+      1. `source_has_vintage` — 제공자가 개정 이력을 주는가 (`source_registry`)
+      2. `AXIS_PATH_USES_VINTAGE` — 지금 코드가 그것을 **가져오는가**
+
+    Returns:
+        `{market, revision_bias, path_uses_vintage, series[],
+          blocked_permanently[], blocked_by_path[], note}`
+    """
+    from src.data.source_registry import _BY_KEY
+
+    g_def, i_def = AXES.get(market, AXES["kr"])
+    rows: list[dict] = []
+    for axis_name, group in (("growth", g_def), ("inflation", i_def)):
+        for key, _transform, _sign, weight in group:
+            spec = _BY_KEY.get(key)
+            has_v = bool(spec.has_vintage) if spec is not None else False
+            # ★미등록 계열은 '빈티지 없음' 으로 떨어뜨리되 그 사실을 남긴다★
+            # 조용히 True 로 두면 등록을 빠뜨린 계열이 백테스트 적격이 된다.
+            blocked = (BLOCKED_BY_SOURCE if not has_v
+                       else None if AXIS_PATH_USES_VINTAGE else BLOCKED_BY_PATH)
+            rows.append({
+                "key": key, "axis": axis_name, "weight": weight,
+                "provider": spec.provider if spec is not None else None,
+                "registered": spec is not None,
+                "source_has_vintage": has_v,
+                "blocked_by": blocked,
+            })
+
+    perm = [r["key"] for r in rows if r["blocked_by"] == BLOCKED_BY_SOURCE]
+    path = [r["key"] for r in rows if r["blocked_by"] == BLOCKED_BY_PATH]
+    managed = not perm and not path
+    if managed:
+        note = "모든 축 계열이 빈티지 기반으로 조회된다."
+    elif perm:
+        note = (f"{len(perm)}개 계열({', '.join(sorted(set(perm)))})은 제공자가 개정 "
+                f"이력을 주지 않아 **영구히** 개정 편향이 남습니다"
+                + (f"; 나머지 {len(path)}개는 소스에 빈티지가 있으나 수집 경로가 "
+                   f"현재값을 가져옵니다(고칠 수 있음)." if path else "."))
+    else:
+        note = (f"{len(path)}개 계열 전부 소스에 빈티지가 있습니다 — 막고 있는 것은 "
+                f"수집 경로뿐이며 **고칠 수 있는 차단**입니다.")
+    return {
+        "market": market,
+        "revision_bias": REVISION_MANAGED if managed else REVISION_UNMANAGED,
+        "path_uses_vintage": AXIS_PATH_USES_VINTAGE,
+        "series": rows,
+        "blocked_permanently": sorted(set(perm)),
+        "blocked_by_path": sorted(set(path)),
+        "note": note,
+    }
+
+
 def yoy_pct(values, lag: int = 12) -> list:
     """지수 레벨 시계열 → 전년동기比 % 시계열 (선두 lag개는 None)."""
     out = []

@@ -7615,3 +7615,65 @@ T3-D2 : 정책 +0.014126 · 동적매크로 −0.003086
 
 **2,943 passed / 10 skipped** (2,905 → +38) · ruff 0 · ★`src/` diff 비어 있음★ ·
 변이 12종(제약 8 + 기하 4) 전부 사망.
+
+---
+
+## 2026-08-26 · 게이트 조건 2 배선 — ★"빈티지가 있다" 와 "빈티지를 쓴다" 는 다르다★
+
+> `src/engine/regime_axes.py::axis_revision_status` (신규) ·
+> `src/api/allocation_routes.py::_pit_block` (전역 상수 제거) ·
+> `tests/test_axis_revision_status.py` (15) · 문서 §15
+
+### ★같은 날 내가 한 판단을 스스로 뒤집었다★
+
+아침의 Phase 0 감사는 조건 2 를 **"배선 1건"** 으로 축소했다. 레지스트리에
+`PROVIDER_HAS_VINTAGE` 가 이미 있으니 `_pit_block()` 이 그것을 타기만 하면 된다고
+적었다. ★배선하려고 데이터 경로를 따라가 보니 두 번째 사실이 있었다.★
+
+`has_vintage=True` 는 **API 가 줄 수 있다**는 뜻이지 **우리가 가져온다**는 뜻이
+아니다. 국면 축은 `regime_analyzer.collector.collect_all()` 을 읽는데,
+`src/services/macro_collector.py` 에 `pit_macro`·`observations_as_of`·`vintage`
+참조가 **하나도 없다**(실측). ALFRED 조회는 `pit_macro` 에 구현돼 있지만 **별개
+경로**이고 이 경로에서 호출되지 않는다.
+
+★레지스트리만 보고 배선했다면 미국 축을 `managed` 로 올렸을 것이다★ — 현재
+개정본으로 과거를 채점하면서 "PIT 통과" 라고 표시하는 상태. `pit_macro` 자신이
+같은 계열의 오류를 이미 겪었다(빈 `realtime_start` 를 `as_of` 로 채워
+`has_vintage` 를 참으로 만든 버그).
+
+### 그래서 판정을 2차원으로
+
+`managed` 는 **둘이 모두 참일 때만**: ① 제공자가 빈티지를 준다(레지스트리)
+② 경로가 그것을 가져온다(`AXIS_PATH_USES_VINTAGE`).
+
+| 축 | 라벨 | 영구 차단(소스) | 경로 차단(고칠 수 있음) |
+|---|---|---|---|
+| **kr** | `unmanaged` | KOSPI · KR_CPI · KR_IP · KR_LEADING_CYCLE (4/5) | T10YIE |
+| **us** | `unmanaged` | ★없음★ | 6계열 **전부** |
+
+★전역 상수가 지운 것이 이것이다★ — `us` 축은 **수집기만 고치면** 적격이 되고,
+`kr` 축은 제공자가 바뀌지 않는 한 **영구히** 막혀 있다. 하나는 데이터 제공자의
+한계이고 다른 하나는 **우리 코드의 선택**인데 같은 라벨을 달고 있었다.
+
+### 선언을 현실과 대조한다
+
+`AXIS_PATH_USES_VINTAGE` 는 사람이 적은 값이라 조용히 거짓이 될 수 있다.
+`test_declared_path_fact_matches_the_actual_collector` 가 수집기 소스에서
+`pit_macro` 참조 여부를 읽어 선언과 맞춘다 — 빈티지를 배선하면 red 가 되어
+상수를 함께 고치도록 강제한다.
+
+### ★변이 하나가 살아남았다★
+
+라우트에 `"revision_bias": "unmanaged"` 를 상수로 박는 변이가 **통과했다** —
+지금 참값이 `unmanaged` 라서 "축 모듈과 일치하는가" 테스트가 **공허**했다.
+`test_pit_block_does_not_re_decide_the_verdict` 로 판정을 `managed` 로 뒤집어
+놓고 라우트가 따라오는지 보게 고쳤다. 6종 전부 사망.
+
+### 그리고 문서 정정
+
+메모 §6 조건 2 와 §14-F 의 "배선 1건" 을 **과대주장으로 표시**하고 §15 에 실제
+잔여분(수집 경로 작업)을 적었다.
+
+### 게이트
+
+**2,958 passed / 10 skipped** (2,943 → +15) · ruff 0.

@@ -509,28 +509,48 @@ def _conditional_views(cond: dict, model: str) -> tuple[list[dict] | None, float
 #: 아니고, 국면 기대 지속기간(실측 2.5~5.0개월)을 흘려 넣는 자리도 아니다.
 _HOLD_MONTHS = {"M": 1, "Q": 3}
 
-#: ECOS 는 ALFRED 같은 빈티지를 주지 않는다. 오늘 받은 과거 관측은 당시 속보치가
-#: 아니라 이후 확정치이므로, 정적 공표지연을 아무리 정확히 선언해도 **값 자체가
-#: 미래를 안다**. 그래서 이 라벨은 영구적이고, `look_ahead_free` 와 **다른 필드**다.
-_REVISION_BIAS = "unmanaged"
+#: 국면 축이 실제로 읽는 시장. `regime_path(..., "kr", ...)` 와 맞춰 둔다 —
+#: 두 곳이 갈라지면 PIT 블록이 **다른 축의 계열**을 보고 판정하게 된다.
+_PIT_MARKET = "kr"
 
 
-def _pit_block(mode: str) -> dict:
+def _pit_block(mode: str, market: str = _PIT_MARKET) -> dict:
     """★PIT 상태는 3차원이다 — 단일 `pit_verified` 를 만들지 않는다★ (계획 §1.6.1).
 
     셋을 한 불리언으로 접는 순간 revision bias 가 그 안에 숨고 "PIT 통과" 라는
     표시가 거짓말이 된다. 셋은 서로 독립이며 하나가 참이라고 나머지가 참이 되지 않는다.
+
+    ★`revision_bias` 를 전역 상수로 박지 않는다★ 예전에는 `_REVISION_BIAS =
+    "unmanaged"` 였다. 값은 맞았지만 **어느 계열 때문인지**를 말하지 못했고, 그래서
+    두 종류의 차단이 같은 라벨을 달고 있었다:
+
+      · ECOS·KRX 계열 — 제공자가 빈티지 엔드포인트를 주지 않는다. ★영구★
+      · FRED 계열 — 소스에는 빈티지가 있고 수집 경로만 현재값을 쓴다. ★고칠 수 있다★
+
+    판정은 `regime_axes.axis_revision_status()` 하나가 한다(제공자 사실은
+    `source_registry`, 경로 사실은 `AXIS_PATH_USES_VINTAGE`). 여기서 다시 판정하면
+    같은 판단이 두 곳에 생기고 반드시 갈라진다.
     """
+    from src.engine.regime_axes import axis_revision_status
+    rev = axis_revision_status(market)
     return {
         # 국면 라벨의 뿌리인 `regime_axes.zscore_at` 이 후행 윈도우만 본다.
         "look_ahead_free": True,
         # 계열별 공표지연은 아직 선언돼 있지 않다(MS2 · 정책문서에서 붙는다).
         "publication_lag": "unspecified",
-        "revision_bias": _REVISION_BIAS,
+        "revision_bias": rev["revision_bias"],
+        # ★계열별 근거를 함께 낸다★ 라벨만 내면 무엇을 고쳐야 하는지 알 수 없다.
+        "revision_detail": {
+            "market": rev["market"],
+            "path_uses_vintage": rev["path_uses_vintage"],
+            "blocked_permanently": rev["blocked_permanently"],
+            "blocked_by_path": rev["blocked_by_path"],
+            "series": rev["series"],
+        },
         "mode": mode,
-        "note": ("세 속성은 서로 독립입니다. `revision_bias` 는 ECOS 가 빈티지를 "
-                 "제공하지 않아 **영구히 unmanaged** 이며, 공표지연을 선언해도 "
-                 "해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다."),
+        "note": ("세 속성은 서로 독립입니다. " + rev["note"] +
+                 " 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 "
+                 "사후 수정본이기 때문입니다."),
     }
 
 
