@@ -7677,3 +7677,79 @@ T3-D2 : 정책 +0.014126 · 동적매크로 −0.003086
 ### 게이트
 
 **2,958 passed / 10 skipped** (2,943 → +15) · ruff 0.
+
+---
+
+## 2026-08-26 · 정준 분류 인프라 — ★감사 결론 하나를 스스로 뒤집었다★
+
+> `src/data/exposure_taxonomy.py` (신규 · 레지스트리 55종) ·
+> `tests/test_exposure_taxonomy.py` (31) ·
+> `src/engine/instrument_selector.py` (독스트링 정정) · 계약 문서 §4·§5 갱신
+> ★소비 지점 배선은 하지 않았다★ — 그것이 곧 Macro→Allocation 정책이다.
+
+### 감사 — 노출 어휘가 이미 둘이고 갈라져 있었다
+
+`instrument_selector` 독스트링은 *"`factor_exposure.FACTORS` 와 이름이 같아야
+둘이 이어진다"* 고 선언했다. ★실측 일치율 4/13.★
+
+```
+공통(4)          equity · duration · credit · commodity
+팩터에만(5)      growth · inflation · liquidity · usd · volatility  ← 상품 0개
+EXPOSURES에만(4) em · equity_small · equity_us · real_estate
+```
+
+그리고 뒤의 넷은 경제노출이 아니라 **자산군 × 지역 슬라이스**다 — 계약이 예측한
+혼동이 이미 코드에 있었다. 독스트링에 사실을 적어 두었다(어휘 정리는 별건).
+
+### ★내가 보고한 "국내는 주식뿐" 이 틀렸다★
+
+`ticker_universe` 의 "Korea ETF" **8종**만 보고 국내 자산군이 하나라고 보고했다.
+`stock_master.ETF_NAMES` **40종**(체크인)을 놓쳤고, 거기에 채권 3종·원자재 2종이 있다.
+
+| 자산군 | 국내 상장 |
+|---|---|
+| EQUITY | 34종 |
+| RATES | 273130 종합채권액티브 · 153130 단기채권 · 214980 단기채권PLUS |
+| COMMODITY | 132030 골드선물(H) · 130680 원유선물Enhanced(H) |
+
+국내만으로 **3개 자산군**이다. 4번째(CREDIT·REAL_ASSET)는 미국 상장으로만 채워지고
+`etf_prices.py` 가 US 실시세를 mock 폴백이라 적고 있다 →
+★게이트 조건 5 의 병목은 **분류가 아니라 가격 데이터**다.★
+
+### 계약에서 두 가지를 되돌렸다
+
+1. ★**부하 계수를 담지 않는다**★ 초안은 `credit 0.8 · duration 0.4 · equity 0.35`
+   같은 부하를 두자고 적었다. 그대로 하면 **숫자를 지어내게 된다.** 구현은 **상품
+   정의에서 따라 나오는 노출 이름만** 선언한다 — 하이일드의 주식베타는 실증적으로
+   알려져 있지만 **추정치**이고, 그것은 `factor_exposure` 가 데이터에서 잴 일이다.
+2. ★**통화 노출도 담지 않는다**★ 통화 노출은 상품의 성질이 아니라 **투자자의
+   기준통화 + 헤지 여부**의 함수다. `listing` 만 기록한다.
+
+### 규칙 배정은 적극적 증거를 요구한다
+
+"상장 개별주는 주식" 은 참이지만 **그것이 개별주라는 확인**이 필요하다.
+`master_flags_cache.json` 이 이 환경에 **없어서**(감사 확인) `sector_groups_for` 가
+언제나 `{}` 를 돌려주는 것이 정상 상태다. 그 상태에서 개별주로 추정하면 지수형·
+레버리지 상품이 조용히 EQUITY 가 된다 → **확인할 수 없으면 배정하지 않는다**
+(`no_master_flags`). 체크인된 `ETF_NAMES` 가 캐시보다 **먼저** 증거로 쓰인다.
+
+### ★레버리지·인버스는 자산군에 넣지 않는다★
+
+`Σw=1` 에서 그룹 상한은 "한 클래스 안 비중 합 = 그 클래스 노출" 을 전제한다.
+인버스를 EQUITY 로 세면 **주식 노출을 줄이는 상품이 주식 노출로 계산된다.**
+5종(122630·252670·114800·251340·233740)을 사유와 함께 미배정으로 둔다.
+
+### 테스트가 두 번 공허할 뻔했다
+
+1. `test_rule_refuses_an_unregistered_etf` 가 `StopIteration` — 레지스트리가
+   `ETF_NAMES` 를 **전부** 덮어 후보가 없었다. 합성 종목으로 분기를 강제하고,
+   그 사실 자체를 `test_every_checked_in_etf_is_registered_or_excluded` 로 승격했다.
+2. 초기 규칙이 `102110` 을 `no_mapping` 으로 떨어뜨렸다 — `STOCK_MASTER` 에 없어서.
+   `ETF_NAMES` 를 1순위 증거로 바꿔 `etf_not_registered` 가 나오게 했다.
+
+변이 7종 전부 사망 — 미배정→EQUITY · 누락 미보고 · `require_complete` 무예외 ·
+인버스 배정 · 플래그 없이 추정 · 어휘 임의 확장 · `exposures_of` 가 빈 튜플.
+
+### 게이트
+
+**2,989 passed / 10 skipped** (2,958 → +31) · ruff 0.

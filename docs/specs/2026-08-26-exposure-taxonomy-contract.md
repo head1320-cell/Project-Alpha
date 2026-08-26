@@ -1,6 +1,15 @@
 # 정준 자산군 / 경제노출 분류 계약 — 설계 (Phase 7)
 
 > ★계약과 매핑 규약만 정의한다. 대규모 매핑을 만들지 않는다.★
+>
+> ### ★2026-08-26 구현됨 — 두 곳을 되돌렸다★
+> `src/data/exposure_taxonomy.py` (레지스트리 **55종** · 국내 35 + 미국 20) · `tests/test_exposure_taxonomy.py` (31)
+> 1. ★**부하 계수를 담지 않는다**★ — 아래 §1 은 노출마다 부하를 두자고 적었으나,
+>    그대로 하면 `credit 0.8 · duration 0.4` 같은 **숫자를 지어내게** 된다.
+>    구현은 **상품 정의에서 따라 나오는 노출 이름만** 선언한다. 부하는
+>    `factor_exposure` 가 데이터에서 재는 것이다.
+> 2. ★**통화 노출도 담지 않는다**★ — 통화 노출은 상품의 성질이 아니라 투자자의
+>    기준통화 + 헤지 여부의 함수다. `listing` 만 기록한다.
 > 선행: [`GroupConstraint`](2026-08-26-group-constraint-contract.md) ·
 > [`RelativeView`](2026-08-26-relative-view-contract.md) — 둘 다 이것을 기다린다.
 
@@ -39,12 +48,14 @@ except Exception:
 ```
 Instrument   ─(1:1)→   AssetClass
      │
-     └───────(1:N)→   EconomicExposure   (부하 계수 포함)
+     └───────(1:N)→   EconomicExposure   (~~부하 계수 포함~~ → ★이름만★, 위 정정 1)
 ```
 
 **셋은 서로 다른 것이다.** 하나의 상품이 여러 경제노출을 갖는다:
 
-| 예 | AssetClass | EconomicExposure (부하) |
+★아래 표의 부하 숫자는 **구현하지 않았다**★ — 개념 설명으로만 읽을 것.
+
+| 예 | AssetClass | EconomicExposure (~~부하~~ · 구현은 이름만) |
 |---|---|---|
 | 하이일드 채권 ETF | `CREDIT` | 신용스프레드 0.8 · 듀레이션 0.4 · 주식베타 0.35 · 유동성 0.3 |
 | 국고채 10년 | `RATES` | 듀레이션 1.0 |
@@ -83,7 +94,7 @@ USD · LIQUIDITY · VOLATILITY
 class Classification:
     instrument_id: str          # 안정 ID (티커가 아니다 — 티커는 바뀐다)
     asset_class: AssetClass | None      # None = 명시적 미배정
-    exposures: tuple[tuple[str, float], ...]  # (노출 ID, 부하)
+    exposures: tuple[str, ...]  # ★이름만★ (초안의 (ID, 부하) 를 되돌렸다)
     as_of: str                  # ★이 분류가 유효해진 날★
     source: str                 # 어디서 왔나
     version: str
@@ -134,15 +145,37 @@ class Classification:
 |---|---|
 | 투자가능 상품 | 6~10 |
 | 경제적으로 구분되는 `AssetClass` | ★4개 이상★ |
-| 각 상품의 `EconomicExposure` 부하 | 전수 |
+| 각 상품의 `EconomicExposure` **이름** | 전수 ✔ (부하는 별건) |
 | 분류 버전·`as_of` | 존재 |
 
-★한국 유니버스에서 4개 자산군을 만들 수 있는지가 실제 병목이다.★ `EQUITY`·`RATES`
-는 쉽고, `CREDIT`·`COMMODITY`·`FX` 는 국내 상장 ETF 커버리지 확인이 필요하다.
-그 확인은 **데이터 조사**이지 설계가 아니므로 여기서 답하지 않는다 — **unknown**.
+### ★"unknown" 이었던 것의 답 (2026-08-26 실측)★
 
-## 5. 하지 않은 것
+국내 상장만으로 **3개 자산군**이 나온다 — `stock_master.ETF_NAMES`(40종, 체크인):
 
-분류 모듈 구현 · 실제 매핑 작성 · `sector_groups_for` 수정 · 노출 행렬 추정.
-합성 실험은 `t3_transmission.class_of`(티커 접두사)로 **우회했고**, 그 함수는
-자신이 합성 전용임을 독스트링에 적고 있다.
+| 자산군 | 국내 상장 |
+|---|---|
+| `EQUITY` | 34종 (지수·섹터·테마·해외추종) |
+| `RATES` | 3종 — 273130 종합채권액티브 · 153130 단기채권 · 214980 단기채권PLUS |
+| `COMMODITY` | 2종 — 132030 골드선물(H) · 130680 원유선물Enhanced(H) |
+| `CREDIT`·`FX`·`REAL_ASSET` | ★없음★ |
+
+★처음에 "국내는 주식뿐" 이라고 보고했던 것은 틀렸다★ — `ticker_universe` 의
+"Korea ETF" 8종만 보고 `ETF_NAMES` 40종을 놓쳤다.
+
+**4번째 자산군은 미국 상장으로만 채워진다**(`CREDIT` = LQD·HYG, `REAL_ASSET` = VNQ).
+그런데 `etf_prices.py` 가 US 실시세를 **mock 폴백**이라고 적고 있다.
+→ 게이트 조건 5(자산군 4개+)는 **분류가 아니라 가격 데이터가 병목**이다.
+레버리지·인버스 5종은 배정하지 않는다(사유: `directional_or_leveraged`).
+
+## 5. 하지 않은 것 (2026-08-26 기준)
+
+★분류 모듈과 레지스트리는 **구현했다**.★ 아직 안 한 것:
+
+- ★`sector_groups_for` 교체★ · `constrained_solve(groups_of=)` 호출부 2곳
+  (`allocation_backtest.py:66` · `allocation_routes.py:953`) — **둘 다 배분 결정이라
+  Macro→Allocation 정책 로직**이고, 이번 승인 범위 밖이다.
+- `view_rows.group_spread_row` 배선 · 노출 **부하** 추정 · US 실시세.
+- `instrument_selector.EXPOSURES` 의 어휘 정리 — 독스트링에 4/13 사실만 적어 두었다.
+
+합성 실험은 계속 `t3_transmission.class_of`(티커 접두사)를 쓴다 — 그 함수는 자신이
+합성 전용임을 독스트링에 적고 있고, 정준 분류로 갈아끼우는 것도 별건이다.

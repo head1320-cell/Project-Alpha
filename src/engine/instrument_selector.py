@@ -13,6 +13,21 @@ Brief §7.1 이 요구하는 분리:
 갖고 있다(`equity`·`duration`·`credit`·`commodity`·`usd`…). 팩터 모형이 노출을
 **재고**, 이 모듈이 그 노출을 **구현**한다 — 이름이 같아야 둘이 이어진다.
 
+★2026-08-26 정정 — 위 문장은 의도이지 사실이 아니었다★ 실측 결과 `EXPOSURES` 와
+`FACTORS` 의 **일치는 4/13** 이다:
+
+    공통(4)          equity · duration · credit · commodity
+    팩터에만(5)      growth · inflation · liquidity · usd · volatility  ← 상품 없음
+    EXPOSURES에만(4) em · equity_small · equity_us · real_estate
+
+그리고 뒤의 넷은 경제노출이 아니라 **자산군 × 지역 슬라이스**다 — 두 개념이 한
+딕셔너리에 섞여 있다. 정준 분류는 `src/data/exposure_taxonomy.py` 가 갖는다
+(`AssetClass` 는 배타적 버킷, `exposures` 는 중첩 가능한 노출, 어휘는 `FACTORS`
+부분집합임을 테스트가 강제).
+
+이 모듈은 **구현 후보 선택**이라는 원래 역할을 그대로 유지한다 — 위 어휘 문제는
+알려진 상태로 두고, 정리는 정준 분류를 소비 지점에 배선할 때 함께 한다(별건).
+
 ★없는 것을 지어내지 않는다★ 이 저장소에는 ETF 메타데이터 저장소가 **없다**
 (실측: `expense_ratio`·ETF `tracking_error` 심볼 0건). §7.2 가 요구한 기준 중
 계산 가능한 것만 점수에 넣고 나머지는 **사유와 함께** `unavailable` 로 낸다.
