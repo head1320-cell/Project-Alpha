@@ -509,12 +509,21 @@ def data_macro_vintages(series: str | None = None, period: str | None = None):
         series: 계열 id. 주면 그 계열만 센다.
         period: `series` 와 함께 주면 그 기간의 **모든 빈티지**를 낸다 —
             둘 이상이면 그 기간이 개정됐다는 뜻이고, 값 차이가 편향의 크기다.
+
+    `series` 만 주면 `revision` 블록이 함께 나온다 — 기간별 최초/최신 빈티지 값과
+    그 차이, 그리고 ★개정을 **관측하지 못한** 기간 수★.
     """
     from src.data.macro_observation_store import coverage, vintages_of
+    from src.data.macro_vintage_backfill import revision_report
 
     body = {"coverage": coverage([series] if series else None)}
     if series and period:
         body["vintages"] = [o.to_dict() for o in vintages_of(series, period)]
+    if series:
+        # ★개정 리포트 — 사슬의 목적지★ 빈티지가 하나뿐인 기간은 "개정 없음" 이
+        # 아니라 "개정 관측 안 됨" 으로 나온다. 둘을 접으면 표본 부족이
+        # "안정적인 계열" 로 둔갑한다.
+        body["revision"] = revision_report(series)
     return body
 
 

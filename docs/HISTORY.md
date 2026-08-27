@@ -8475,3 +8475,100 @@ V10 `derive_usage` 우회 · V11 `load` 예외 · V12 배선 제거 · V13 배�
 이번 구현 후에도 증거등급은 **E0** 다 — 기계만 검증했다. 개정 편향을 실제로
 재려면 `FRED_API_KEY` 가 필요하고(ALFRED 가 서로 다른 빈티지를 줘야 한다),
 국면 축이 이 스토어를 읽게 하는 것은 **배분 정책 배선**이라 별도 승인이다.
+
+---
+
+## 2026-08-27 — ALFRED 빈티지 백필: 스토어가 실제로 개정을 담게 했다
+
+### ★내가 남긴 미완성을 먼저 적는다★
+
+`0ffe083` 이 매크로 관측 스토어를 넣었지만 **쓰는 경로가 하나뿐이었다** — 실측:
+
+```
+스토어에 쓰는 경로 : macro_collector._collect_one  (빈티지 없는 경로) ★하나뿐★
+ALFRED 호출부      : src/engine/timing_rules_v2.py ★범위 밖★
+```
+
+그래서 `SOURCE_ALFRED` 상수가 **죽어 있었고**, 스토어는 `vintage_id=""` 행만 담아
+`coverage()` 가 영원히 `forward_only` 였으며, ★스토어의 존재 이유인 "개정 편향
+측정" 이 여전히 불가능했다★. 이번 작업이 그 경로를 만든다.
+
+### 대상 계열을 하드코딩하지 않았다
+
+`source_registry.PROVIDER_HAS_VINTAGE` 가 권위다. `SourceSpec.has_vintage` 독스트링이
+이미 원칙을 못 박아 뒀다 — *"계열별로 손으로 적지 않는다. 빈티지는 API 가 주느냐
+마느냐의 문제이지 계열의 성질이 아니다."* 백필도 `s.has_vintage` 로 파생한다
+(실측 21계열). 플래그를 뒤집으면 대상이 따라 바뀌는지 테스트가 확인한다.
+
+### ★건너뛰기 규칙 — 이 작업에서 가장 미묘한 곳★
+
+`vintage_id` 는 `"{realtime_start}..{realtime_end}"` 다.
+
+| `realtime_end` | 뜻 | 재수집? |
+|---|---|---|
+| `9999-12-31`(열림) | "우리가 아는 한 현재본" | ★반드시 재수집★ |
+| 그 외(닫힘) | 이미 후속본으로 대체됨 | 건너뛴다 |
+
+닫힌 구간은 다시 받아도 **반드시 같은 빈티지**라 건너뛰어도 정보를 잃지 않는다.
+그러나 ★열린 구간을 건너뛰면 개정을 영영 못 본다★ — 개정이 일어나야 그 구간이
+닫히는데, 재수집하지 않으면 닫히는 순간을 관측할 수 없다. **찾으려는 바로 그것이
+조용히 사라진다.** 변이 W2 가 정확히 그것이고, 통과해도 아무 소리가 나지 않는다.
+
+새 진행 테이블을 만들지 않았다 — 저장된 빈티지에서 파생한다
+(`krx_ingest.loaded_dates` 와 같은 방식).
+
+### 센티넬을 복제하지 않았다
+
+`_FAR_FUTURE` 를 `pit_macro` 에서 **import** 한다. `"9999-12-31"` 을 다시 적으면
+한쪽이 바뀌는 날 조용히 갈라지고, 그때 열린 구간이 닫힌 것으로 오인되어 개정이
+사라진다. 변이 W9(센티넬 오타)가 그것을 확인한다.
+
+### 키가 없으면 성공처럼 보이지 않는다
+
+`fetch_observations` 는 키가 없으면 빈 리스트를 준다. 그것을 "0행 적재 성공" 으로
+보고하면 거짓이므로 호출 **전에** 걸러 `{"skipped": 사유}` 를 낸다
+(`krx_ingest.auto_backfill` 과 같은 모양). 실측:
+
+```
+$ python3 -m src.data.macro_vintage_backfill --start 2024-01-01 --max-calls 3
+빈티지 백필 결과: {'skipped': 'FRED_API_KEY 미설정 — ALFRED 빈티지를 받을 수 없습니다.'}
+```
+
+### 개정 리포트 — 사슬의 목적지
+
+`revision_report(series_id)` 가 기간별 최초/최신 빈티지 값과 차이를 낸다.
+★빈티지가 하나뿐인 기간은 "개정 없음" 이 아니라 "개정 **관측** 안 됨" 이다★ —
+접으면 표본 부족이 "안정적인 계열" 로 둔갑한다. `delta` 를 `None` 으로 두고
+`periods_revision_unobserved` 로 따로 센다.
+
+### 변경 파일
+
+| 파일 | 변경 |
+|---|---|
+| `src/data/macro_vintage_backfill.py` | ★신규★ `vintage_targets`·`as_of_schedule`·`closed_vintage_ranges`·`backfill`·`revision_report`·`main()` |
+| `src/api/data_routes.py` | `/macro-vintages` 에 `revision` 블록 |
+| `tests/test_macro_vintage_backfill.py` | 신규 22건 |
+
+### 변이 9종 전부 사망
+
+W1 대상 하드코딩 · ★W2 열린 구간도 건너뜀★ · W3 건너뛰기 제거 · W4 `max_calls`
+무시 · W5 키 없을 때 성공 반환 · W6 `source=None` 저장 · W7 단일 빈티지를 "개정 0" ·
+W8 fetch 예외 전파 · W9 센티넬 복제 오타.
+
+★W2/W3 가 짝이다★ — 한쪽만 있으면 "무조건 건너뛰기" 나 "무조건 재수집" 으로도
+통과한다.
+
+### 불변 4중
+
+| # | 방법 | 결과 |
+|---|---|---|
+| 1 | `git diff --stat HEAD -- src/engine/ src/api/allocation_routes.py` | ★비어 있음★ |
+| 2 | 골든 스냅샷 3종 | ★바이트 동일★ (변이 실험 후 재확인) |
+| 3 | 전체 스위트 | ★3,111 passed / 10 skipped★ (3,089 → **+22**) · ruff 0 |
+| 4 | ★`src/engine/` 이 스토어·백필을 읽지 않음★ | `tokenize` 가드 2건 |
+
+### 남는 것
+
+증거등급은 여전히 **E0** 다 — 기계만 검증했다. 실제로 개정 편향을 재려면
+`FRED_API_KEY` 가 필요하고(그때 E3~E4), 국면 축이 스토어를 읽게 하는 것은
+**배분 정책 배선**이라 별도 승인이다.
