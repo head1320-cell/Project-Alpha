@@ -785,45 +785,71 @@ FRED_TOKENS: dict[str, str] = {f"US국채({n}년)": f"DGS{n}" for n in (1, 2, 3,
 _fred_cache: dict[str, pd.Series | None] = {}
 
 
+#: 일별 시계열 시작일 — 기존 동작을 그대로 옮긴다.
+FRED_DAILY_START = "2005-01-01"
+
+
+def fred_rows_to_series(dates, values) -> pd.Series | None:
+    """`(date, value)` 쌍 → 날짜 인덱스 시리즈. ★결측·날짜 규칙의 단일 출처★
+
+    FRED 는 결측을 `"."` 으로 준다 — 숫자로 읽으면 `ValueError` 지만 명시적으로
+    거른다. `parse_fred_rows`(원시 payload)와 `_fred_series`(클라이언트 경로)가
+    **같은 규칙**을 쓰게 한다. 각자 파싱하면 언젠가 갈라진다.
+    """
+    out_d, out_v = [], []
+    for d, v in zip(dates or [], values or [], strict=False):
+        if v in (None, "", "."):
+            continue
+        try:
+            out_v.append(float(v))
+            out_d.append(pd.Timestamp(d))
+        except (ValueError, TypeError):
+            continue
+    if not out_d:
+        return None
+    return pd.Series(out_v, index=pd.DatetimeIndex(out_d)).sort_index()
+
+
 def parse_fred_rows(payload: dict) -> pd.Series | None:
     """FRED observations 응답 → 날짜 인덱스 시리즈 (결측 '.' 제외)."""
     try:
         rows = (payload or {}).get("observations", []) or []
-        dates, vals = [], []
-        for r in rows:
-            v = r.get("value")
-            if v in (None, "", "."):
-                continue
-            try:
-                vals.append(float(v))
-                dates.append(pd.Timestamp(r.get("date")))
-            except (ValueError, TypeError):
-                continue
-        if not dates:
-            return None
-        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+        # ★규칙은 `fred_rows_to_series` 하나에 있다★ 여기서 다시 쓰면 갈라진다.
+        return fred_rows_to_series([r.get("date") for r in rows],
+                                   [r.get("value") for r in rows])
     except Exception:
         return None
 
 
 def _fred_series(token: str) -> pd.Series | None:
-    """FRED 일별 시계열 (캐시). 키 없음·실패 시 None."""
-    import os
+    """FRED 일별 시계열 (캐시). 키 없음·실패 시 None.
+
+    ★수집기의 `FredClient` 를 통과한다★ 예전에는 이 함수가 URL 을 직접 만들고
+    `httpx` 로 불렀다. 그러면 셋이 갈라진다 — 스로틀(수집기는 0.5초/회, 여기는
+    **없었다**)·키 검증(`len>10` vs `if key`)·HTTP 라이브러리. 분당 한도가 있는
+    API 에 스로틀 없이 붙는 경로가 하나 더 있던 상태였다.
+
+    ★`frequency=None` 이 필수다★ 클라이언트 기본값은 `"m"`(대시보드용 월별)인데,
+    이 토큰은 **일별 종목 봉**에 정렬된다. 월별로 받으면 ffill 되어 그럴듯해
+    보이지만 해상도가 사라진다.
+    """
+    from src.services.macro_collector import FredClient
+
     if token in _fred_cache:
         return _fred_cache[token]
-    key = os.getenv("FRED_API_KEY", "")
     series_id = FRED_TOKENS.get(token)
     s = None
-    if key and series_id:
-        try:
-            import httpx
-            r = httpx.get(FRED_BASE_URL, params={
-                "series_id": series_id, "api_key": key, "file_type": "json",
-                "observation_start": "2005-01-01",
-            }, timeout=15)
-            s = parse_fred_rows(r.json())
-        except Exception:
-            s = None
+    if series_id:
+        client = FredClient()
+        if client.is_configured:
+            try:
+                dates, values = client.fetch_series(
+                    series_id, start=FRED_DAILY_START,
+                    # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
+                    frequency=None)
+                s = fred_rows_to_series(dates, values)
+            except Exception:
+                s = None
     _fred_cache[token] = s
     return s
 

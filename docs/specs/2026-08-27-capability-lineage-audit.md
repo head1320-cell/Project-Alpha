@@ -293,6 +293,55 @@ FRED·ECOS 시계열은 **프로세스 dict 캐시**에만 산다. 영구 아티
 | **1** | ★매크로 관측 스토어★ | 높 | 높 | ★최고★ | ★개정 편향 측정★ | 중 | ✔ |
 | **2** | DART 배당 영속 + 총수익 계열 | ★높★ | 중 | 중 | 총수익 백테스트 | 큼 | ✔ |
 | **3** | ECOS 클라이언트 **일원화** | 중 | 높 | 중 | (정합성) | 작 | ✔ |
-| **4** | `mktcap` 을 KIS 경로에도 기록 | 중 | 중 | ✗ | KIS 전용 티커 유니버스 편입 | 작 | ✔ |
+| ~~4~~ | ~~`mktcap` 을 KIS 경로에도 기록~~ | — | — | — | — | — | ★회수(아래 §부록 4)★ |
 | **5** | ECOS 메타 3종 | 낮 | 중 | — | 손으로 적은 메타 검증 | 중 | ✔ |
 | — | KRX `get_extra` | ★낮★ | 낮 | ✗ 영구 | ★연구 질문 없음★ | 작 | ✔ |
+
+
+---
+
+## 부록 4. ★회수된 항목★ — `mktcap` 을 KIS 경로에 기록 (구 4순위)
+
+**회수 사유: 올바르게 구현할 수 없다.** (`1fa4fbd` 이후 실측)
+
+KIS 가 주는 시가총액 필드는 **하나뿐**이고 그것은 과거값이 아니다:
+
+    kis_client.py:547  "market_cap_억": float(output.get("hts_avls") or 0)
+                       ← get_current_price() — ★현재 스냅샷★
+
+일봉(`get_daily_ohlcv`)에는 시총이 없다. 즉 KIS 경로로 `daily_prices.mktcap` 을
+채우려면 **오늘의 시총을 과거 행에 적어야** 하고, 그것은 룩어헤드 날조다.
+
+★그 컬럼의 소비자가 정확히 그것을 못 견딘다★:
+
+    universe_select.mktcap_asof(ticker, date)
+        "SELECT mktcap ... WHERE trade_date <= :d ORDER BY trade_date DESC LIMIT 1"
+      → engine/pit_store.py:214      역사 PER/PBR 구성
+      → universe_select.top_mktcap_asof → api/screener_routes.py:1513
+                                          백테스트 시점 유니버스
+
+시점 조회로 설계된 필드에 현재값을 넣으면 역사 밸류에이션과 백테스트 유니버스가
+**동시에** 오염된다.
+
+**남는 사실** — KIS 전용 티커는 `mktcap` 이 `NULL` 이라 시점 유니버스에서 조용히
+빠진다. 그것은 여전히 참이지만, ★고치는 방법은 KRX 백필뿐이다★
+(`krx_ingest.bulk_upsert` 가 `mktcap`·`list_shares` 를 쓰는 유일한 writer).
+
+## 부록 5. FRED 레지스트리 미등록 (감사 항목 — 조치하지 않음)
+
+`factor_tokens.FRED_TOKENS` 8종 중 `DGS1·3·5·7·20` 이 레지스트리에 없다.
+★그러나 등록하지 않기로 했다★ — 셋 다 실측이다:
+
+1. **등록은 무해하지 않다.** `fred_collection_targets()` 가 `macro_collector` 의
+   수집 목록(`FRED_INDICATORS`)이라 5종을 넣으면 `collect_all()` 이 61→66계열이
+   되고, `capability.py:132` 의 `total = len(series)` 가 바뀌며, 그 값이 골든
+   스냅샷 `frontier_sample.total_series` 에 들어 있다.
+2. **소비자가 없다.** 조밀한 커브를 요구하는 곳을 찾지 못했다 — L1 요건
+   `term_structure` 는 `scipy.optimize.least_squares` **라이브러리 프로브**이지
+   데이터 밀도가 아니다.
+3. **빈티지 연구에도 보탬이 안 된다.** `DGS` 는 일별 **시장 관측치**라 GDP·고용
+   처럼 개정되지 않는다.
+
+★ECOS 처럼 미지원 선언도 하지 않는다★ — FRED 에는 매핑 결함이 없다. `DGS{n}` 은
+자기서술적·자기일관적이고 레지스트리의 `DGS2`·`DGS10`·`DGS30`·`DGS3MO` 와 같은
+패턴이다. 같은 처방을 기계적으로 적용하면 **정상 작동하는 계열을 지우게 된다.**

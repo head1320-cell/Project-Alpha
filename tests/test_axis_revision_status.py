@@ -130,18 +130,55 @@ def test_managed_requires_the_path_too(monkeypatch):
     assert kr["blocked_permanently"]
 
 
+def _calls_vintage(src: str) -> bool:
+    """소스가 빈티지 경로를 **실제로 부르는가**. ★코드 토큰만 본다★
+
+    주석·문자열(독스트링 포함)은 걷어낸다 — 설명은 배선이 아니다.
+    """
+    import io as _io
+    import tokenize
+
+    try:
+        toks = list(tokenize.generate_tokens(_io.StringIO(src).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return False
+    for tok in toks:
+        if tok.type in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        if tok.string in ("pit_macro", "observations_as_of"):
+            return True
+    return False
+
+
 def test_declared_path_fact_matches_the_actual_collector():
     """★선언과 현실의 대조★
 
     `AXIS_PATH_USES_VINTAGE` 는 사람이 적은 값이라 코드가 바뀌면 조용히 거짓이 된다.
     국면 축이 읽는 수집기가 빈티지 조회(`pit_macro`)를 부르는지 **소스에서** 확인해
     선언과 맞춘다. 빈티지를 배선하면 이 테스트가 red 가 되어 상수를 함께 고치게 한다.
+
+    ★산문이 아니라 코드 토큰만 본다★ 예전에는 파일 전체를 `in` 으로 훑었다. 그러다
+    수집기 독스트링이 *"`pit_macro` 가 같은 이유로 frequency 를 보내지 않는다"* 라고
+    **설명**하자 거짓 양성이 났다 — 배선이 없는데 있다고 보고했다. 설명은 얼마든지
+    할 수 있어야 하므로, 주석·문자열을 걷어내고 식별자에서만 찾는다.
     """
     src = (_ROOT / "src" / "services" / "macro_collector.py").read_text(encoding="utf-8")
-    calls_vintage = ("pit_macro" in src) or ("observations_as_of" in src)
-    assert calls_vintage == AXIS_PATH_USES_VINTAGE, (
-        f"수집기의 빈티지 사용({calls_vintage})과 선언({AXIS_PATH_USES_VINTAGE})이 "
-        f"어긋난다 — `regime_axes.AXIS_PATH_USES_VINTAGE` 를 고칠 것")
+    assert _calls_vintage(src) == AXIS_PATH_USES_VINTAGE, (
+        f"수집기의 빈티지 사용({_calls_vintage(src)})과 "
+        f"선언({AXIS_PATH_USES_VINTAGE})이 어긋난다 — "
+        f"`regime_axes.AXIS_PATH_USES_VINTAGE` 를 고칠 것")
+
+
+def test_prose_about_the_vintage_path_is_not_mistaken_for_wiring():
+    """★짝★ 독스트링이 `pit_macro` 를 언급해도 배선으로 세지 않는다."""
+    assert not _calls_vintage('"""`pit_macro` 를 설명하는 독스트링."""\nx = 1\n')
+    assert not _calls_vintage("# pit_macro 를 언급하는 주석\nx = 1\n")
+
+
+def test_real_vintage_wiring_is_still_detected():
+    """★짝의 짝★ 실제 import 는 반드시 잡는다 — 아니면 가드가 공허해진다."""
+    assert _calls_vintage("from src.data.pit_macro import fetch_observations\n")
+    assert _calls_vintage("obs = observations_as_of(sid, day)\n")
 
 
 def test_unregistered_series_is_treated_as_no_vintage(monkeypatch):

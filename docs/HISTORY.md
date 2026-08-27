@@ -8664,3 +8664,107 @@ X7 키 검증 완화 · X8 클라이언트 우회 · X9 날짜 규칙 갈라짐.
 `factor_tokens` 에는 **FRED 클라이언트도 중복**으로 있다(`FRED_BASE_URL`·
 `FRED_TOKENS`·`_fred_cache`). 토큰이 `DGS{n}` 이라 이름과 코드가 기계적으로 일치해
 매핑 오류 가능성은 낮지만, 스로틀·키 검증 갈라짐은 그대로다 — 별도 항목으로 남긴다.
+
+---
+
+## 2026-08-27 — FRED 토큰 경로 일원화 + 감사 항목 #4 회수
+
+ECOS 일원화(`1fa4fbd`)에서 남긴 FRED 중복을 실측했다. ★결론이 ECOS 와 다르다.★
+
+### FRED 에는 매핑 결함이 없다
+
+`{f"US국채({n}년)": f"DGS{n}"}` 는 자기서술적·자기일관적이고, 레지스트리의
+`DGS2`·`DGS10`·`DGS30`·`DGS3MO` 와 라벨까지 맞는다. ECOS 처럼 "불투명한 숫자 코드가
+다른 계열을 가리키는" 위험이 없다. ★같은 처방(미지원 선언)을 기계적으로 적용하면
+정상 작동하는 계열을 지우는 일이 된다★ — 처방이 달라야 하는 이유가 있다.
+
+### 실제 결함 — `frequency` 가 가장 위험하다
+
+| | `factor_tokens._fred_series` | `FredClient` |
+|---|---|---|
+| **frequency** | 보내지 않음(**일별** 원본) | ★`"m"` 하드코딩★ |
+| 스로틀 | ★없음★ | 0.5초/회 |
+| 키 검증 | `if key` | `len > 10` |
+| HTTP | `httpx` | `requests` |
+
+그대로 합쳤으면 **일별 국채금리가 월별로 조용히 뭉개진다** — 일별 봉에 정렬한 뒤
+ffill 되어 그럴듯해 보인다. 저장소는 이미 그 해악을 안다(`pit_macro` 독스트링 3번:
+*"frequency=\"m\" 서버측 집계가 월중 공표 타이밍을 뭉갠다"*).
+
+`fetch_series(..., frequency="m")` 로 파라미터화했다 — ★기본값이 기존 동작★이라
+대시보드 수집은 한 글자도 안 바뀌고, 토큰 경로만 `None` 을 넘겨 원본 주기를 받는다.
+ECOS 의 `limit` 과 같은 방식이다.
+
+### ★레지스트리 등록은 하지 않았다 — 측정이 판단을 뒤집었다★
+
+토큰 8개 중 5개(`DGS1·3·5·7·20`)가 미등록이다. 처음엔 미검증으로 등록하려 했으나:
+
+1. **무해하지 않다.** `fred_collection_targets()` 가 수집 목록이라 5종을 넣으면
+   `collect_all()` 이 61→66계열, `capability.py:132` 의 `total_series` 가 바뀌고
+   그 값이 골든 스냅샷에 있다 → 바이트 동일성이 깨진다. 호출도 5건 늘어난다.
+2. **소비자가 없다.** L1 요건 `term_structure` 는 `scipy.optimize.least_squares`
+   **라이브러리 프로브**이지 데이터 밀도가 아니다.
+3. **빈티지 연구에도 무용.** `DGS` 는 일별 **시장 관측치**라 개정되지 않는다.
+
+성능 관점에서도 미등록이 옳다 — 얻는 것은 소비자 없는 입력 5개, 잃는 것은 불변
+기준점과 호출 예산. 반면 위 셋은 **해상도와 수집 성공률**을 직접 지킨다.
+
+### ★감사 항목 #4 회수 — 올바르게 구현할 수 없다★
+
+`mktcap` 을 KIS 경로에 기록하는 항목을 우선순위에서 내렸다. KIS 의 유일한 시총
+필드는 `get_current_price` 의 `hts_avls`(`kis_client.py:547`) — **현재 스냅샷**이고
+일봉에는 없다. 오늘의 시총을 과거 행에 적으면 **룩어헤드 날조**다.
+
+그 컬럼의 소비자가 정확히 그것을 못 견딘다 — `mktcap_asof` 는 `trade_date <= :d`
+**시점 조회**이고 `pit_store`(역사 PER/PBR)와 `top_mktcap_asof`(백테스트 유니버스)로
+간다. 올바른 경로는 KRX 백필뿐이다. 사유를 감사 문서 §부록 4 에 적었다 — 나중에
+누가 "쉬워 보이는데" 하고 룩어헤드를 넣지 않도록.
+
+### ★전체 스위트가 내 가드 하나를 깨뜨렸다 — 좋은 일이다★
+
+`test_declared_path_fact_matches_the_actual_collector` 가 red 가 됐다. 그 가드는
+`macro_collector.py` 전체를 `"pit_macro" in src` 로 훑는데, 내가 새로 쓴 독스트링이
+*"`pit_macro` 가 같은 이유로 frequency 를 보내지 않는다"* 라고 **설명**하자
+거짓 양성이 났다 — 배선이 없는데 있다고 보고했다.
+
+★같은 종류의 취약성을 이번 세션에서 세 번째로 만났다★(`get_extra` 주석, `adj_close`
+산문). 독스트링을 고쳐 회피하지 않고 **가드를 고쳤다** — `tokenize` 로 주석·문자열을
+걷어내고 식별자에서만 찾는다(`test_price_basis`·`test_adj_close_anchor` 와 같은 방식).
+짝 테스트 둘을 더해 양방향 변이(항상 True / 항상 False)를 모두 죽인다.
+
+### 변경 파일
+
+| 파일 | 변경 |
+|---|---|
+| `src/services/macro_collector.py` | `FredClient.fetch_series(..., frequency="m")` |
+| `src/kis_strategies/factor_tokens.py` | `_fred_series` 가 `FredClient` 사용 · `fred_rows_to_series` |
+| `tests/test_axis_revision_status.py` | 산문/코드 구분 가드로 강화 (+2건) |
+| `docs/specs/…lineage-audit.md` | #4 회수 · FRED 미등록 사유 |
+| `tests/test_fred_coordinates.py` | 신규 15건 |
+
+### 변이 8종 전부 사망
+
+Y1 기본값 변경 · ★Y2 토큰 경로가 월별 요청★ · Y3 None 인데 파라미터 삽입 ·
+Y4 클라이언트 우회 · Y5 키 검증 완화 · Y6 파서 규칙 갈라짐 · Y7 만기↔series_id
+어긋남 · Y8 레지스트리 등록. 가드 변이 2종(항상 True/False)도 추가로 사망.
+
+★F1/F2 가 짝★ — 한쪽만 있으면 "전부 월별"·"전부 원본" 으로도 통과한다.
+
+### 불변 4중
+
+| # | 방법 | 결과 |
+|---|---|---|
+| 1 | `git diff --stat HEAD -- src/engine/ src/api/allocation_routes.py` | ★비어 있음★ |
+| 2 | 골든 스냅샷 3종 | ★바이트 동일★ (레지스트리 미등록 결정이 이것을 지켰다) |
+| 3 | 전체 스위트 | ★3,144 passed / 10 skipped★ (3,127 → **+17**) · ruff 0 |
+| 4 | `FredClient.fetch_series` 기존 호출부가 `frequency` 미전달 | 대시보드 수집 URL 불변 |
+
+★2번이 이번에는 실질적이다★ — 다른 단계에서는 "하네스가 이 코드를 안 지나 증명이
+못 된다" 고 적었지만, 여기서는 **등록하지 않기로 한 결정**이 바로 그 스냅샷을 지키는
+결정이었다. `fred_collection_targets()` 는 21 그대로다.
+
+### 남는 것
+
+감사 우선순위에 남은 것은 **#2 DART 배당**(정확성 영향 최대·비용 큼·`DART_API_KEY`
+필요)과 **#5 ECOS 메타 3종**이다. `factor_tokens` 의 제공자 경로는 이제 둘 다
+수집기 클라이언트를 통과한다.

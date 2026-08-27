@@ -300,8 +300,20 @@ class FredClient:
     def fetch_series(
         self, series_id: str,
         start: str | None = None, end: str | None = None,
+        frequency: str | None = "m",
     ) -> tuple[list[str], list[float]]:
-        """FRED 시계열 조회."""
+        """FRED 시계열 조회.
+
+        Args:
+            frequency: 서버측 집계 주기. ★기본값 `"m"` 은 기존 동작이다 —
+                대시보드 수집은 월별로 충분하다. `None` 이면 파라미터를
+                **보내지 않아** 제공자 원본 주기(국채금리는 일별)를 받는다.
+
+                ★일별이 필요한 호출자는 반드시 `None` 을 넘길 것★ — `"m"` 으로
+                받으면 일별 금리가 월별로 뭉개지고, 일별 봉에 정렬한 뒤 ffill 되어
+                **그럴듯해 보인다**. `pit_macro` 가 같은 이유로 빈티지 조회에서
+                frequency 를 보내지 않는다(§모듈 독스트링 3번).
+        """
         if not self.is_configured or requests is None:
             return [], []
 
@@ -316,8 +328,10 @@ class FredClient:
             "file_type": "json",
             "observation_start": start,
             "observation_end": end,
-            "frequency": "m",  # monthly
         }
+        # ★`None` 이면 키 자체를 넣지 않는다★ 빈 문자열을 보내면 FRED 가 거부한다.
+        if frequency:
+            params["frequency"] = frequency
         self._throttle()
 
         try:
