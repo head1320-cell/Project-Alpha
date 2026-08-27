@@ -224,8 +224,17 @@ class BokClient:
         self, stat_code: str, item_code: str = "0",
         start: str | None = None, end: str | None = None,
         period: str = "M",     # M=월, D=일, A=년
+        limit: int = 1000,
     ) -> tuple[list[str], list[float]]:
-        """BOK 시계열 조회 → (timestamps, values)."""
+        """BOK 시계열 조회 → (timestamps, values).
+
+        Args:
+            limit: 응답 행 상한. ★기본값 1000 은 기존 동작이다 — 바꾸지 말 것★
+                월별 20년이 240행이라 월 단위 수집에는 충분하다. 그러나
+                **일별**은 다르다 — 2005년부터면 5,000행이 넘어서 1000 에
+                걸리면 **20년 커브가 4년으로 조용히 잘린다**. 일별을 받는
+                호출자(`factor_tokens._ecos_series`)가 큰 값을 넘긴다.
+        """
         if not self.is_configured or requests is None:
             return [], []
 
@@ -236,7 +245,8 @@ class BokClient:
             yr = int(end[:4]) - _history_years()
             start = f"{yr}{end[4:6]}" if period == "M" else str(yr)
 
-        url = f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/1000/{stat_code}/{period}/{start}/{end}/{item_code}"
+        url = (f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/{int(limit)}"
+               f"/{stat_code}/{period}/{start}/{end}/{item_code}")
         self._throttle()
 
         try:

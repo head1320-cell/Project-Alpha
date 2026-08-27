@@ -390,6 +390,11 @@ REASON_DIVDETAIL = "배당·자사주 상세 — DART 배당공시(alotMatter) �
 REASON_OWNERSHIP = "지분율(외국인/대주주/소액주주) — 미연동(다음 단계)"
 REASON_IR = "IR·공시 일정(실적발표·설명회) — DART 공시 미연동(다음 단계)"
 REASON_DERIVE = "원천 데이터는 있으나 파생 미구현 — 대체 팩터 권장"
+#: ★추측한 좌표로 값을 내지 않는다★ `source_registry` 가 이 계열의 통계표·항목코드를
+#: 보증하지 않는다. 예전에는 코드를 적어 넣고 조용히 값을 냈다 — 그중 하나는
+#: 회사채를 국고채라고 불렀다.
+REASON_UNVERIFIED_CODE = ("ECOS 항목코드 미확인 — 레지스트리가 좌표를 보증하지 "
+                          "않습니다. 추측한 코드로 값을 내지 않습니다")
 
 UNSUPPORTED_REASONS: dict[str, str] = {
     "후행스팬": REASON_LOOKAHEAD,
@@ -635,18 +640,66 @@ def market_tokens() -> list[str]:
 
 ECOS_BASE_URL = "https://ecos.bok.or.kr/api"
 
-# 토큰 → (통계표코드, 항목코드) — 731Y001 환율(매매기준율), 817Y002 시장금리(일별)
-ECOS_TOKENS: dict[str, tuple[str, str]] = {
-    "US달러환율": ("731Y001", "0000001"),
-    "엔환율": ("731Y001", "0000002"),      # 원/100엔
-    "국고채(1년)": ("817Y002", "010190000"),
-    "국고채(2년)": ("817Y002", "010195000"),
-    "국고채(3년)": ("817Y002", "010200000"),
-    "국고채(5년)": ("817Y002", "010210000"),
-    "국고채(10년)": ("817Y002", "010210001"),
-    "국고채(20년)": ("817Y002", "010220000"),
-    "국고채(30년)": ("817Y002", "010230000"),
+#: DSL 토큰명 → `source_registry` 의 key. ★여기에 통계표·항목코드를 적지 않는다★
+#:
+#: 예전에는 이 파일이 코드를 직접 들고 있었고, `source_registry` 와 대조해 보니
+#: **갈라져 있었다**(실측):
+#:
+#:     "국고채(3년)" → 817Y002/010200000  = 레지스트리의 ★회사채 3년(AA-)★
+#:     "국고채(2년)" → 817Y002/010195000  = 레지스트리의 ★국고채 3년★(verified_live)
+#:     "국고채(10년)"→ 817Y002/010210001  = 레지스트리에 없음(검증본은 817Y003/010210000)
+#:
+#: ★`국고채(3년)` 을 쓰는 전략이 AA- 회사채 수익률을 받고 있었다★ — 국채와 회사채는
+#: 신용스프레드만큼 다르고 그 차이는 조용하다. 레지스트리는 `verified_live` /
+#: 미검증 표시로 **검증 상태를 기록**하는데 이 파일에는 그런 표시가 하나도 없었다.
+#: 그래서 "레지스트리가 옳다" 가 아니라 **좌표는 검증 상태를 가진 곳에서 온다**.
+_ECOS_TOKEN_KEYS: dict[str, str] = {
+    "US달러환율": "USD_KRW",
+    "국고채(1년)": "KR_1Y",
+    "국고채(3년)": "KR_3Y",
+    "국고채(10년)": "KR_10Y",
 }
+
+
+def _ecos_token_coordinates() -> dict[str, tuple[str, str]]:
+    """토큰 → (통계표코드, 항목코드). ★레지스트리에서 파생한다★
+
+    레지스트리에서 spec 이 사라지면 토큰도 함께 사라진다 — 갈라질 수 없다.
+    """
+    from src.data.source_registry import get_spec
+    out: dict[str, tuple[str, str]] = {}
+    for name, key in _ECOS_TOKEN_KEYS.items():
+        spec = get_spec(key)
+        if spec is None:
+            continue
+        stat, _, item = spec.endpoint.partition("/")
+        if stat and item:
+            out[name] = (stat, item)
+    return out
+
+
+# 토큰 → (통계표코드, 항목코드) — 레지스트리 파생(위 `_ecos_token_coordinates`)
+ECOS_TOKENS: dict[str, tuple[str, str]] = _ecos_token_coordinates()
+
+#: ★레지스트리가 좌표를 보증하지 않는 토큰★ — 목록에는 남기되 값을 내지 않는다.
+#:
+#: 레지스트리는 국고 5년·20년 코드를 **일부러 비워 두고** 이유를 적어 뒀다 —
+#: *"817Y002 안에서 그 둘을 가리키는 항목코드를 자신 있게 적을 수 없었고, 코드를
+#: 지어내서 계열을 하나 더 세는 것은 확장이 아니라 그럴듯한 빈칸을 만드는 일이다."*
+#: 이 파일은 정확히 그 일을 하고 있었다.
+#:
+#: ★`국고채(2년)` 이 왜 여기 있나★ 그것이 쓰던 `010195000` 은 레지스트리의
+#: **검증된 3년물**이다. 2년물 좌표는 레지스트리에 없다.
+ECOS_UNVERIFIED_TOKENS: tuple[str, ...] = (
+    "엔환율", "국고채(2년)", "국고채(5년)", "국고채(20년)", "국고채(30년)",
+)
+
+# ★기존 정직성 관례에 태운다★ 새 장치를 만들지 않는다 — 이 모듈은 이미
+# `UNSUPPORTED_REASONS` 를 "평가 불가 토큰의 사유(UI 배지·정직성)" 로 쓰고 있다.
+# 토큰 어휘는 남으므로 저장된 전략이 깨지지 않고, `ECOS_TOKENS` 에 없으니
+# `resolve_macro_token` 이 자연히 `None` 을 낸다.
+UNSUPPORTED_REASONS.update(
+    {t: REASON_UNVERIFIED_CODE for t in ECOS_UNVERIFIED_TOKENS})
 
 _ecos_cache: dict[str, pd.Series | None] = {}
 
@@ -655,44 +708,71 @@ def parse_ecos_rows(payload: dict) -> pd.Series | None:
     """ECOS StatisticSearch 응답 → 날짜 인덱스 시리즈 (테스트 가능한 순수 파서)."""
     try:
         rows = (payload or {}).get("StatisticSearch", {}).get("row", []) or []
-        dates, vals = [], []
-        for r in rows:
-            t, v = str(r.get("TIME", "")).strip(), r.get("DATA_VALUE")
-            if len(t) != 8 or v in (None, ""):
-                continue
-            try:
-                vals.append(float(v))
-                dates.append(pd.Timestamp(f"{t[:4]}-{t[4:6]}-{t[6:]}"))
-            except (ValueError, TypeError):
-                continue
-        if not dates:
-            return None
-        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+        # ★날짜·값 규칙은 `ecos_rows_to_series` 하나에 있다★ 여기서 다시 쓰면 갈라진다.
+        return ecos_rows_to_series([r.get("TIME") for r in rows],
+                                   [r.get("DATA_VALUE") for r in rows])
     except Exception:
         return None
 
 
+#: 일별 조회 상한. ★1000(수집기 기본값)이면 20년 커브가 4년으로 잘린다★
+#: 일별 2005~현재 ≈ 5,300행이라 넉넉히 잡는다.
+ECOS_DAILY_LIMIT = 50000
+
+#: 일별 시계열 시작일 — ECOS 가 제공하는 구간에 맞춘 관례값.
+ECOS_DAILY_START = "20050101"
+
+
+def ecos_rows_to_series(timestamps, values) -> pd.Series | None:
+    """`(TIME, DATA_VALUE)` 쌍 → 날짜 인덱스 시리즈. ★날짜 규칙의 단일 출처★
+
+    `parse_ecos_rows`(원시 payload 파서)와 `_ecos_series`(클라이언트 경로)가
+    **같은 규칙**을 쓰게 한다. 둘이 각자 날짜를 파싱하면 언젠가 갈라진다.
+    """
+    dates, vals = [], []
+    for t, v in zip(timestamps or [], values or [], strict=False):
+        t = str(t or "").strip()
+        if len(t) != 8 or v in (None, ""):
+            continue
+        try:
+            vals.append(float(v))
+            dates.append(pd.Timestamp(f"{t[:4]}-{t[4:6]}-{t[6:]}"))
+        except (ValueError, TypeError):
+            continue
+    if not dates:
+        return None
+    return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+
+
 def _ecos_series(token: str) -> pd.Series | None:
-    """ECOS 일별 시계열 (캐시). 키 없음·실패 시 None."""
-    import os
+    """ECOS 일별 시계열 (캐시). 키 없음·실패 시 None.
+
+    ★수집기의 `BokClient` 를 통과한다★ 예전에는 이 함수가 URL 을 직접 만들고
+    `httpx` 로 불렀다. 그러면 셋이 갈라진다 — 스로틀(수집기는 0.7초/회, 여기는
+    없었다)·키 검증(`len>10` vs `if key`)·HTTP 라이브러리. 분당 한도가 있는 API 에
+    스로틀 없이 붙는 경로가 하나 더 있는 상태였다.
+    """
+    from datetime import datetime
+
+    from src.services.macro_collector import BokClient
+
     if token in _ecos_cache:
         return _ecos_cache[token]
-    key = os.getenv("BOK_API_KEY", "")
     spec = ECOS_TOKENS.get(token)
     s = None
-    if key and spec:
-        try:
-            from datetime import datetime
-
-            import httpx
-            stat, item = spec
-            end = datetime.now().strftime("%Y%m%d")
-            url = (f"{ECOS_BASE_URL}/StatisticSearch/{key}/json/kr/1/50000/"
-                   f"{stat}/D/20050101/{end}/{item}")
-            r = httpx.get(url, timeout=15)
-            s = parse_ecos_rows(r.json())
-        except Exception:
-            s = None
+    if spec:
+        client = BokClient()
+        if client.is_configured:
+            try:
+                stat, item = spec
+                ts, vals = client.fetch_series(
+                    stat, item, start=ECOS_DAILY_START,
+                    end=datetime.now().strftime("%Y%m%d"), period="D",
+                    # ★수집기 기본값 1000 을 쓰면 조용히 잘린다★
+                    limit=ECOS_DAILY_LIMIT)
+                s = ecos_rows_to_series(ts, vals)
+            except Exception:
+                s = None
     _ecos_cache[token] = s
     return s
 
