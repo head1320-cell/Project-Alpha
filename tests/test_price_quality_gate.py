@@ -74,9 +74,11 @@ def test_ticker_states_are_exclusive_and_sum_to_requested(eng):
     bulk_upsert(eng, _series("ADJ"))                       # 전부 조정 가능
     bulk_upsert(eng, _series("BRK", fluc=(0.5, 1.0, -0.2, 1.0, None)))
     bulk_upsert(eng, _series("RAWT"))
-    # ★`RAWT` 만 재구성에서 뺀다★ 재구성이 돌면 앵커(최신 봉)는 **언제나**
-    # `adj=close` 로 채워지므로, 돌린 티커는 최소 `chain_broken` 이다.
-    # 즉 `raw` 는 "그 티커에 재구성이 돈 적이 없다" 를 뜻한다.
+    # ★`RAWT` 만 재구성에서 뺀다★ `RAWT` 에는 등락률이 있으므로, 재구성을 돌리면
+    # 앵커가 서고 `adjusted` 가 된다. 빼야 `raw`(재구성 미실행)로 남는다.
+    #
+    # 등락률이 **아예 없는** 티커라면 재구성을 돌려도 앵커를 세울 근거가 없어
+    # `raw` 로 남는다 — `test_price_basis` / `test_adj_close_anchor` 참조.
     rebuild_adj_close(eng, tickers=["ADJ", "BRK"])
 
     req = ["ADJ", "BRK", "RAWT", "GONE"]

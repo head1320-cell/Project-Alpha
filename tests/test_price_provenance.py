@@ -134,20 +134,31 @@ def test_full_return_chain_removes_a_split_jump(eng):
 
 
 def test_missing_return_1d_breaks_the_chain_instead_of_guessing(eng):
-    """★핵심★ 마지막 봉의 등락률이 없으면 그 아래가 **전부 NULL** 이다.
+    """★핵심★ 등락률이 없는 지점 아래는 **전부 NULL** 이다.
 
     예전 폴백(`adj[i] = adj[i+1] × close_i/close_next`)이면 값이 채워지고,
     분할일에서 반토막 난 값이 들어간다.
+
+    ★주의 — 이것은 KIS 행이 붙은 상황이 **아니다**★ (예전 주석이 그렇게 적었다).
+    여기 픽스처는 `bulk_upsert` 로 넣은 **KRX 행의 등락률을 지운 것**이다. 둘은
+    다른 상황이고 결과도 다르다:
+
+        KRX 행의 등락률 결측 → 그 행은 앵커가 될 수 없다(체인을 못 잇는다)
+        KIS 행 append        → `return_1d` 자체가 없다 → 마찬가지로 앵커가 아니다
+
+    어느 쪽이든 앵커는 **등락률을 쓸 수 있는 가장 최신 행**으로 내려간다.
+    여기서는 그런 행이 없으므로(마지막만 지웠고 그 아래는 살아 있다) 앵커가
+    `rows[-2]` 로 내려가고, 지운 행만 NULL 이 된다.
     """
     rows = _split_series()
-    rows[-1]["fluc_rt"] = None                 # KIS 경로가 append 한 상황
+    rows[-1]["fluc_rt"] = None                 # ★KRX 행의 등락률을 지운다★
     bulk_upsert(eng, rows)
     rebuild_adj_close(eng)
 
     got = [v for _d, v in _adj(eng)]
-    assert got[-1] is not None, "앵커(최신 봉)는 close 로 채워진다"
-    assert all(v is None for v in got[:-1]), \
-        f"끊긴 아래가 추정됐다: {got}"
+    assert got[-1] is None, "등락률 없는 행이 앵커가 됐다"
+    assert all(v is not None for v in got[:-1]), \
+        f"앵커가 쓸 수 있는 행으로 내려가지 않았다: {got}"
 
 
 def test_chain_break_nulls_only_below_the_gap(eng):
@@ -191,9 +202,15 @@ def test_coverage_counts_add_up_and_names_the_unadjusted(eng):
     assert cov["available"] is True
     assert sum(cov["row_states"].values()) == cov["rows"]
     assert "A" in cov["unadjusted_tickers"], "미조정 티커를 이름으로 내지 않는다"
-    # A 는 앵커 1행만 조정되고 그 아래 4행에서 체인이 끊긴다. B 는 1행 전부 조정.
-    assert cov["row_states"][STATE_CHAIN_BROKEN] == 4
-    assert cov["row_states"][STATE_ADJUSTED] == 2
+    # ★이 숫자는 앵커 수정(Phase 3)으로 바뀌었다 — 개선의 결과다★
+    #   예전: 앵커가 최신 봉 고정 → 등락률 없는 그 행만 조정되고 아래 4행이 끊김
+    #         (adjusted 2 / chain_broken 4)
+    #   지금: 앵커가 "등락률을 쓸 수 있는 가장 최신 행"(2026-01-07)으로 내려가
+    #         아래 4행이 되살아나고, 등락률 없는 최신 행 1개만 NULL 이다.
+    # ★정확한 수를 유지한다★ 합만 보면 raw 와 chain_broken 사이에서 잘못 나눠도
+    # 통과한다(변이 ⑦⑧ 이 그것이다).
+    assert cov["row_states"][STATE_CHAIN_BROKEN] == 1
+    assert cov["row_states"][STATE_ADJUSTED] == 5      # A 4행 + B 1행
     assert cov["state_notes"][STATE_CHAIN_BROKEN]
 
 
