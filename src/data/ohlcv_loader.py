@@ -172,7 +172,13 @@ def _tag_adj_status(df, code: str) -> None:
     **직접 호출**할 것. 이 태그는 `attrs["source"]` 와 같은 성격의 힌트다.
 
     ★그리고 이 함수는 숫자를 바꾸지 않는다★ 컬럼을 더하지도 빼지도 않는다 —
-    `close` 는 그대로 원주가이고, 전환(`close → adj_close`)은 별개 결정이다.
+    전환(`close → adj_close`)은 별개 결정이다.
+
+    ★이전 판의 이 독스트링은 *"`close` 는 그대로 원주가"* 라고 적었다 — 틀렸다.★
+    `close` 가 원주가인 것은 **KRX 가 적재한 행**뿐이고, KIS 경로는 수정주가로
+    요청해 받은 값을 같은 컬럼에 넣는다(`kis_client.DAILY_ADJ_PRC_FLAG`). 즉
+    `close` 는 하나의 값이 아니다 — 행별 정의는 `daily_prices.price_basis` 에 있고
+    `price_quality.adj_close_coverage()` 의 `basis_consistency` 가 혼합을 보고한다.
     """
     try:
         from src.data.price_quality import adj_status_of
@@ -270,17 +276,27 @@ def ingest_df_to_db(ticker: str, df) -> int:
     # ★출처를 남긴다★ 이 경로는 `return_1d`(KRX 등락률)를 쓰지 않으므로
     # `rebuild_adj_close` 의 체인이 여기서 끊긴다. 어느 행이 그런지 알 수 있어야
     # `price_quality.adj_close_coverage()` 가 그 사실을 보고할 수 있다.
+    # ★가격 정의를 함께 적는다★ 이 경로가 넣는 `close` 는 KRX 가 넣는 `close` 와
+    # **다른 값**이다(KIS 는 수정주가로 요청, KRX 는 원주가). 컬럼 하나에 두 정의가
+    # 섞이면 소스 경계에서 계열이 점프하는데, 행에 정의가 없으면 그 사실을 잴 수 없다.
+    #
+    # ★`DAILY_PRICE_BASIS` 는 `kis_client` 에서 읽는다★ 여기에 `"adjusted"` 를 베껴
+    # 적으면, 누가 `FID_ORG_ADJ_PRC` 를 뒤집었을 때 DB 는 조용히 거짓을 적게 된다.
     from src.data.krx_ingest import SOURCE_KIS
+    from src.execution.kis_client import DAILY_PRICE_BASIS
     upsert = text("""
         INSERT INTO daily_prices (ticker, trade_date, "open", high, low, close, volume,
-                                  source)
-        VALUES (:ticker, :trade_date, :open, :high, :low, :close, :volume, :source)
+                                  source, price_basis)
+        VALUES (:ticker, :trade_date, :open, :high, :low, :close, :volume, :source,
+                :price_basis)
         ON CONFLICT (ticker, trade_date) DO UPDATE
           SET "open"=EXCLUDED."open", high=EXCLUDED.high, low=EXCLUDED.low,
-              close=EXCLUDED.close, volume=EXCLUDED.volume, source=EXCLUDED.source
+              close=EXCLUDED.close, volume=EXCLUDED.volume, source=EXCLUDED.source,
+              price_basis=EXCLUDED.price_basis
     """)
     for r in rows:
         r["source"] = SOURCE_KIS
+        r["price_basis"] = DAILY_PRICE_BASIS
     try:
         with engine.begin() as conn:
             conn.execute(upsert, rows)

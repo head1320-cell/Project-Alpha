@@ -54,21 +54,36 @@ CREATE TABLE IF NOT EXISTS daily_prices (
 SOURCE_KRX = "krx"
 SOURCE_KIS = "kis"
 
-_MIGRATE_COLUMNS = ("mktcap FLOAT", "list_shares FLOAT", "source VARCHAR(8)")
+# ── ★가격 정의(basis)★ `close` 가 무엇인지는 행마다 다르다 ──────────────────
+#: `close` 컬럼에 **두 정의**가 섞여 있다:
+#:
+#:     source='krx' → 원주가   (`krx_client` 독스트링: "시세는 원주가(수정주가 아님)")
+#:     source='kis' → 수정주가 (`kis_client.DAILY_ADJ_PRC_FLAG="0"` 로 요청)
+#:
+#: 소스 경계를 넘는 티커의 `close` 계열에는 **정의 점프**가 생긴다 — 기업행위
+#: 점프가 아니라 **누적 수정계수 전체**여서, 분할 이력이 있으면 수십 배가 된다.
+#: 그런데 정본 로더가 고르는 것이 바로 이 `close` 다.
+#:
+#: ★기존 행은 NULL 로 남긴다★ — `source` 와 같은 원칙. NULL = "모른다" 는 사실이다.
+BASIS_RAW = "raw"
+BASIS_ADJUSTED = "adjusted"
+
+_MIGRATE_COLUMNS = ("mktcap FLOAT", "list_shares FLOAT", "source VARCHAR(8)",
+                    "price_basis VARCHAR(8)")
 
 _UPSERT = """
 INSERT INTO daily_prices
     (ticker, trade_date, "open", high, low, close, volume, trading_value, return_1d,
-     mktcap, list_shares, source)
+     mktcap, list_shares, source, price_basis)
 VALUES
     (:ticker, :trade_date, :open, :high, :low, :close, :volume, :trading_value, :fluc_rt,
-     :mktcap, :list_shares, :source)
+     :mktcap, :list_shares, :source, :price_basis)
 ON CONFLICT (ticker, trade_date) DO UPDATE SET
     "open"=EXCLUDED."open", high=EXCLUDED.high, low=EXCLUDED.low,
     close=EXCLUDED.close, volume=EXCLUDED.volume,
     trading_value=EXCLUDED.trading_value, return_1d=EXCLUDED.return_1d,
     mktcap=EXCLUDED.mktcap, list_shares=EXCLUDED.list_shares,
-    source=EXCLUDED.source
+    source=EXCLUDED.source, price_basis=EXCLUDED.price_basis
 """
 
 
@@ -106,6 +121,8 @@ def bulk_upsert(engine, rows: list[dict]) -> int:
         "mktcap": r.get("mktcap"),
         "list_shares": r.get("shares"),
         "source": SOURCE_KRX,
+        # ★KRX 시세는 원주가다★ 수정종가는 `return_1d` 체인으로 역산한다.
+        "price_basis": BASIS_RAW,
     } for r in rows]
     stmt = text(_UPSERT)
     with engine.begin() as conn:

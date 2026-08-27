@@ -81,6 +81,24 @@ TR_ID = {
     "INVESTOR":           "FHKST01010900",   # 주식현재가 투자자 (개인/외국인/기관 일별, 최근 ~30일)
 }
 
+# ── 일봉 가격 정의(basis) ────────────────────────────────────────────────────
+#: `get_daily_ohlcv` 가 KIS 에 **요청하는** 수정주가 플래그.
+#: KIS 기간별시세의 `FID_ORG_ADJ_PRC` — 0=수정주가, 1=원주가.
+DAILY_ADJ_PRC_FLAG = "0"
+
+#: 위 플래그가 뜻하는 가격 정의. ★적재 경로가 이 상수를 읽어 행에 기록한다★
+#: (`ohlcv_loader.ingest_df_to_db` → `daily_prices.price_basis`).
+#:
+#: ★이 상수가 주장하는 것은 좁다★ — "우리가 무엇을 **요청했는가**" 이지
+#: "KIS 가 준 값이 실제로 수정주가다" 가 아니다. 후자는 실데이터에서
+#: `price_quality.basis_overlap_check()` 가 연속 종가의 수익률과 KRX 등락률
+#: (`return_1d`)이 맞는지 보고 나서야 말할 수 있다.
+#:
+#: ★플래그와 같은 자리에 둔 이유★ 누가 `DAILY_ADJ_PRC_FLAG` 를 뒤집으면
+#: 기록되는 basis 도 **함께** 바뀌어야 한다. 적재 경로가 문자열을 따로
+#: 들고 있으면 언젠가 둘이 갈라지고, 그때 DB 는 조용히 거짓을 적는다.
+DAILY_PRICE_BASIS = "adjusted" if DAILY_ADJ_PRC_FLAG == "0" else "raw"
+
 
 def normalize_investor_rows(rows: list) -> list[dict]:
     """KIS 투자자별 응답(output) → 정규화 행.
@@ -562,7 +580,9 @@ class KISClient:
                 "FID_INPUT_DATE_1":        start_cursor.strftime("%Y%m%d"),
                 "FID_INPUT_DATE_2":        end_cursor.strftime("%Y%m%d"),
                 "FID_PERIOD_DIV_CODE":     period,
-                "FID_ORG_ADJ_PRC":         "0",   # 0=수정주가, 1=원주가
+                # ★`DAILY_PRICE_BASIS` 와 한 몸이다★ 여기를 바꾸면 적재되는
+                # `daily_prices.price_basis` 도 따라 바뀐다.
+                "FID_ORG_ADJ_PRC":         DAILY_ADJ_PRC_FLAG,
             }
             headers = self._headers(TR_ID["DAILY_CHART"])
             try:

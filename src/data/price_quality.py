@@ -52,6 +52,28 @@ KRX 적재가 필요하다)는 **고치는 사람이 다르다**.
 **모든 행이 `adjusted` 일 때만** `BACKTEST_ELIGIBLE` 이다. "커버리지 95%" 같은
 숫자를 새로 만들면 그 숫자의 근거를 아무도 대지 못한다.
 
+## ★다섯째 사실 — 가격 **정의**(basis) 는 조정 커버리지와 다른 축이다★
+
+위 네 상태는 *"`adj_close` 가 채워졌는가"* 를 묻는다. 그런데 그보다 **앞서는**
+질문이 있다 — *"`close` 가 무엇인가."* 같은 컬럼에 두 정의가 섞여 있다:
+
+    source='krx' → 원주가   (KRX 시세는 수정주가가 아니다)
+    source='kis' → 수정주가 (`kis_client.DAILY_ADJ_PRC_FLAG="0"` 로 요청)
+
+소스 경계를 넘는 티커의 `close` 계열에는 **정의 점프**가 생긴다 — 기업행위 점프가
+아니라 **누적 수정계수 전체**다. 그리고 정본 로더가 고르는 것이 바로 그 `close` 다.
+
+★그래서 상태를 다섯 개로 늘리지 않고 축을 하나 더한다★ 두 사실은 서로를 대체하지
+않는다(Phase 1 에서 `not_ingested` 가 '미검증' 을 덮어써 가드가 죽은 적이 있다).
+
+## ★단정하지 않는 것★
+
+*"KIS 가 준 값이 실제로 수정주가다"* 는 **여기에 적지 않는다.** 근거가 코드 주석
+하나뿐이고 이 환경은 외부 호출이 막혀 있다. `price_basis` 가 적는 것은 좁다 —
+**우리가 무엇을 요청했는가**. 그 요청이 실제로 수정주가를 돌려주는지는
+`basis_overlap_check()` 가 연속 종가의 수익률과 KRX 등락률이 맞는지 보고 나서 말한다.
+그때까지 KIS 행의 `adj_close` 는 **채우지 않는다**.
+
 ## ★두 번째 등급 체계를 만들지 않는다★
 
 등급은 `pit_macro.derive_usage()` 를 **호출해서** 받는다. 매크로 팩터가 이미
@@ -97,12 +119,33 @@ _RAW_REASON_TEXT = {
         "등락률(return_1d)은 있으나 `rebuild_adj_close()` 를 아직 실행하지 "
         "않았습니다"),
     RAW_NO_RETURN_DATA: (
-        "등락률이 아예 없습니다 — KIS 경로로만 적재된 티커입니다. KRX 적재가 "
-        "있어야 수정주가를 만들 수 있습니다"),
+        "등락률이 아예 없습니다 — KIS 경로로만 적재된 티커입니다. 이 티커의 "
+        "`adj_close` 를 **역산**하려면 KRX 등락률이 필요합니다. 다만 KIS 는 "
+        "수정주가로 요청해 받으므로(`kis_client.DAILY_ADJ_PRC_FLAG`) `close` "
+        "자체가 이미 조정된 값일 수 있습니다 — 그 여부는 확인되지 않았고, "
+        "`basis_overlap_check()` 가 실데이터에서 판정합니다"),
 }
 
 #: 출처 미상 라벨. ★`NULL` 을 `krx` 로 추정하지 않는다★ — 통계가 거짓말을 한다.
 SOURCE_UNKNOWN = "unknown"
+
+# ── 다섯째 축: 가격 정의 일관성 (★네 상태와 직교★) ─────────────────────────
+BASIS_UNIFORM_RAW = "uniform_raw"            # 그 티커 행이 전부 원주가
+BASIS_UNIFORM_ADJUSTED = "uniform_adjusted"  # 전부 수정주가
+BASIS_MIXED = "mixed"                        # ★두 정의가 섞였다★
+BASIS_UNKNOWN = "unknown"                    # 전부 NULL — 레거시 행
+BASIS_CONSISTENCY = (BASIS_UNIFORM_RAW, BASIS_UNIFORM_ADJUSTED,
+                     BASIS_MIXED, BASIS_UNKNOWN)
+
+_BASIS_TEXT = {
+    BASIS_UNIFORM_RAW: "모든 행이 원주가입니다",
+    BASIS_UNIFORM_ADJUSTED: "모든 행이 수정주가로 요청되어 적재됐습니다",
+    BASIS_MIXED: (
+        "★한 티커의 `close` 에 원주가와 수정주가가 섞여 있습니다★ 소스 경계에서 "
+        "계열이 점프합니다 — 기업행위 점프가 아니라 누적 수정계수 전체입니다"),
+    BASIS_UNKNOWN: (
+        "가격 정의가 기록되지 않은 레거시 행뿐입니다 — 소급 추정하지 않습니다"),
+}
 
 
 def _engine(engine=None):
@@ -141,10 +184,32 @@ def _fetch(tickers, start, end, eng) -> list[tuple] | str:
     try:
         with eng.connect() as conn:
             return conn.execute(text(
-                "SELECT ticker, source, adj_close, return_1d, trade_date "
+                "SELECT ticker, source, adj_close, return_1d, trade_date, "
+                "price_basis "
                 f"FROM daily_prices{clause}"), params).fetchall()
     except Exception as e:  # noqa: BLE001
         return f"daily_prices 조회 실패({type(e).__name__}) — {e}"
+
+
+def _basis_of(bases: set) -> str:
+    """티커 하나의 가격 정의 일관성. ★NULL 을 추정하지 않는다★
+
+    - 알려진 정의가 **둘 이상**이면 `mixed`.
+    - 알려진 정의가 하나뿐이면 `uniform_*` — NULL 이 섞여 있어도 그렇게 부른다.
+      NULL 은 "다른 정의" 가 아니라 "모른다" 이므로 혼합의 **증거가 아니다**.
+      대신 그 사실은 `basis_unknown_rows` 로 **따로** 보고한다(사실을 대체하지
+      않고 더한다).
+    - 알려진 정의가 하나도 없으면 `unknown`.
+    """
+    known = {b for b in bases if b}
+    if len(known) > 1:
+        return BASIS_MIXED
+    if not known:
+        return BASIS_UNKNOWN
+    only = next(iter(known))
+    return (BASIS_UNIFORM_ADJUSTED if only == "adjusted"
+            else BASIS_UNIFORM_RAW if only == "raw"
+            else BASIS_UNKNOWN)
 
 
 def adj_close_coverage(tickers: list[str] | None = None, *,
@@ -173,10 +238,13 @@ def adj_close_coverage(tickers: list[str] | None = None, *,
     seen: dict[str, dict[str, Any]] = {}
     by_source: dict[str, dict[str, int]] = {}
     earliest: str | None = None
-    for ticker, source, adj, ret, trade_date in rows:
+    for ticker, source, adj, ret, trade_date, basis in rows:
         tk = str(ticker)
-        f = seen.setdefault(tk, {"rows": 0, "adjusted": 0, "has_return": False})
+        f = seen.setdefault(tk, {"rows": 0, "adjusted": 0, "has_return": False,
+                                 "bases": set()})
         f["rows"] += 1
+        # ★`None` 을 그대로 담는다★ NULL 은 "모른다" 이지 "원주가" 가 아니다.
+        f["bases"].add(basis if basis is None else str(basis))
         if adj is not None:
             f["adjusted"] += 1
         if ret is not None:
@@ -205,7 +273,16 @@ def adj_close_coverage(tickers: list[str] | None = None, *,
             missing.append(tk)
             bad.append(tk)
 
+    basis_states = dict.fromkeys(BASIS_CONSISTENCY, 0)
+    basis_by_ticker: dict[str, str] = {}
+    mixed: list[str] = []
+
     for tk, f in seen.items():
+        b = _basis_of(f["bases"])
+        basis_states[b] += 1
+        basis_by_ticker[tk] = b
+        if b is BASIS_MIXED:
+            mixed.append(tk)
         if f["adjusted"] == f["rows"]:
             state = STATE_ADJUSTED
         elif f["adjusted"] > 0:
@@ -239,6 +316,15 @@ def adj_close_coverage(tickers: list[str] | None = None, *,
         "state_notes": dict(_STATE_TEXT),
         "by_source": by_source,
         "by_ticker": by_ticker,
+        # ★네 상태와 직교하는 축★ 조정 여부를 따지기 전에 `close` 가 무엇인가.
+        "basis_states": basis_states,
+        "basis_by_ticker": basis_by_ticker,
+        "basis_notes": dict(_BASIS_TEXT),
+        # ★이름으로 낸다★ 어느 종목의 계열이 점프하는지 알아야 고칠 수 있다.
+        "mixed_basis_tickers": sorted(mixed),
+        # NULL basis 행 수 — `mixed` 를 대체하지 않고 **더한다**.
+        "basis_unknown_rows": sum(
+            1 for r in rows if r[5] is None),
         # ★이름으로 낸다★ 개수만 내면 어느 종목을 고쳐야 하는지 알 수 없다.
         "missing_tickers": sorted(missing),
         "unadjusted_tickers": sorted(set(bad)),
@@ -257,12 +343,20 @@ def price_usage(tickers: list[str], *, start: str | None = None,
     등급 규칙을 다시 쓰지 않는다. 매크로 팩터가 쓰는 어휘를 그대로 쓴다.
 
     매핑:
-        `has_vintage` ↔ **모든 티커가 `adjusted`** — 기업행위가 제거된 계열인가
+        `has_vintage` ↔ **모든 티커가 `adjusted`** **그리고** 가격 정의가 균일한가
         `depth_ok`    ↔ `start` 를 이력이 덮는가
         `lag_known`   ↔ ★가격은 언제나 True★ — 장 마감으로 확정되고 공표지연이
                         없다. 매크로 계열의 "공표 시각이 관측기간 이후인가" 에
                         해당하는 문제가 가격에는 존재하지 않는다.
         `has_source`  ↔ 요청한 티커에 행이 있는가
+
+    ★왜 정의 균일성이 `has_vintage` 에 들어가나★ 두 조건은 같은 질문의 두 면이다 —
+    *"이 계열이 기업행위에 일관된 하나의 값인가."* 원주가와 수정주가가 섞인 계열은
+    모든 행에 `adj_close` 가 있어도 그 조건을 만족하지 않는다. 새 등급도 새 임계값도
+    만들지 않고 기존 전부-아니면-전무 계약을 그대로 쓴다.
+
+    ★단, `reason` 은 어느 조건이 깨졌는지 이름으로 구분한다★ 둘을 한 문장으로
+    뭉치면 고치는 사람이 어디를 봐야 할지 알 수 없다.
 
     Returns:
         `{usage, reason, coverage}` — `usage` 는 `ResearchUsage` 값 문자열.
@@ -277,11 +371,14 @@ def price_usage(tickers: list[str], *, start: str | None = None,
     has_source = requested > 0 and st[STATE_MISSING] == 0 and cov["rows"] > 0
     # ★전부-아니면-전무★ 하나라도 adjusted 가 아니면 백테스트 부적격이다.
     all_adjusted = has_source and st[STATE_ADJUSTED] == requested
+    # ★정의가 섞인 티커가 하나라도 있으면 부적격★ 같은 전부-아니면-전무 계약.
+    basis_uniform = has_source and not cov["mixed_basis_tickers"]
     depth_ok = (not start) or (cov["earliest"] is not None
                                and cov["earliest"] <= str(start))
 
-    usage = derive_usage(has_vintage=all_adjusted, depth_ok=depth_ok,
-                         lag_known=True, has_source=has_source)
+    usage = derive_usage(has_vintage=all_adjusted and basis_uniform,
+                         depth_ok=depth_ok, lag_known=True,
+                         has_source=has_source)
 
     if usage is ResearchUsage.BACKTEST_ELIGIBLE:
         reason = None
@@ -290,10 +387,17 @@ def price_usage(tickers: list[str], *, start: str | None = None,
                   + (f" (없음: {', '.join(cov['missing_tickers'][:5])})"
                      if cov["missing_tickers"] else ""))
     else:
-        missing_bits = [n for n, ok in (("수정주가 전량", all_adjusted),
-                                        ("이력 길이", depth_ok)) if not ok]
-        reason = (f"{' · '.join(missing_bits)} 이(가) 충족되지 않았습니다 — "
-                  f"미조정 티커: {', '.join(cov['unadjusted_tickers'][:5])}")
+        # ★사유를 뭉치지 않는다★ 각 조건에 그것을 고칠 단서를 붙인다.
+        bits: list[str] = []
+        if not all_adjusted:
+            bits.append("수정주가 전량 — 미조정 티커: "
+                        + ", ".join(cov["unadjusted_tickers"][:5]))
+        if not basis_uniform:
+            bits.append("가격 정의 균일 — 원주가·수정주가 혼합 티커: "
+                        + ", ".join(cov["mixed_basis_tickers"][:5]))
+        if not depth_ok:
+            bits.append(f"이력 길이 — 최초 관측 {cov['earliest']} > 요청 {start}")
+        reason = "충족되지 않은 조건: " + " · ".join(bits)
     return {"usage": usage.value, "reason": reason, "coverage": cov}
 
 
@@ -327,3 +431,115 @@ def adj_status_of(ticker: str, *, engine=None) -> str:
     if not cov.get("available"):
         return STATE_MISSING
     return cov["by_ticker"].get(str(ticker), STATE_MISSING)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 겹침 검증 — ★가정을 데이터가 판정하게 한다★
+# ══════════════════════════════════════════════════════════════════════════
+#: 구현 중 **실측**으로 확인한 사실 — `daily_prices` 의 PK 는 `(ticker, trade_date)`
+#: 라서 한 티커가 같은 날짜에 원주가 행과 수정주가 행을 **함께 가질 수 없다**.
+#: KIS 적재는 기존 KRX 행을 UPSERT 로 **덮는다**. 그때 남는 것이 이렇다:
+#:
+#:     close       ← KIS (수정주가로 요청한 값)
+#:     return_1d   ← KRX (기업행위가 제거된 등락률) ★UPSERT 가 건드리지 않는다★
+#:
+#: ★즉 겹침은 행과 행 사이가 아니라 **한 행 안에** 있다.★ 그래서 검증은
+#: "연속한 `close` 가 만드는 수익률이 기록된 `return_1d` 와 맞는가" 가 된다.
+#: KIS 종가가 정말 수정주가라면 둘은 같아야 하고, 원주가라면 기업행위가 있던
+#: 날에 **정확히 그 배수만큼** 어긋난다.
+BASIS_RETURN_TOL = 5e-3   # 상대 허용오차(반올림·단위 차이 흡수). ★적격성 임계값이 아니다★
+
+BASIS_MATCH = "consistent"        # 수익률 일치 — "KIS=수정주가" 가 뒷받침된다
+BASIS_MISMATCH = "inconsistent"   # ★가정 중 하나가 틀렸다★
+
+
+def basis_overlap_check(tickers: list[str] | None = None, *,
+                        engine=None) -> dict[str, Any]:
+    """`close` 가 정말 그 정의인지 **데이터에게** 묻는다.
+
+    대상은 `price_basis='adjusted'` 이면서 `return_1d` 가 있는 행뿐이다 — 그 행이
+    KIS 종가와 KRX 등락률을 **함께** 들고 있는 유일한 자리다(위 상수 주석 참조).
+
+    ★`raw` 행에는 판정을 내리지 않는다★ 원주가 수익률이 등락률과 어긋나는 것은
+    **기업행위가 있었다는 뜻**이지 정의가 틀렸다는 뜻이 아니다. 그 구분을 접으면
+    분할이 있는 모든 티커가 거짓 양성으로 뜬다.
+
+    ★이 함수는 아무것도 고치지 않는다★ 판정에 따라 KIS 행의 `adj_close` 를
+    채울지는 **별개 결정**이고, 그 결정 전까지는 채우지 않는다.
+
+    Returns:
+        `{available, checked, verdict_by_ticker, consistent, inconsistent,
+          tolerance, note, version}` — 비교할 행이 없으면 `{available: False, reason}`.
+        ★재지 못한 것을 "일치" 로 적지 않는다.★
+    """
+    from sqlalchemy import text
+
+    eng = _engine(engine)
+    if eng is None:
+        return _unavailable("DB 엔진이 없습니다 — 정의를 검증할 수 없습니다.")
+
+    where = ""
+    params: dict[str, Any] = {}
+    if tickers:
+        keys = [f"t{i}" for i in range(len(tickers))]
+        where = " AND ticker IN (" + ", ".join(f":{k}" for k in keys) + ")"
+        params.update(dict(zip(keys, [str(t) for t in tickers], strict=True)))
+    try:
+        with eng.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT ticker, trade_date, close, return_1d, price_basis "
+                "FROM daily_prices WHERE close IS NOT NULL" + where +
+                " ORDER BY ticker, trade_date"), params).fetchall()
+    except Exception as e:  # noqa: BLE001
+        return _unavailable(f"daily_prices 조회 실패({type(e).__name__}) — {e}")
+
+    per: dict[str, list[tuple]] = {}
+    for ticker, trade_date, close, ret, basis in rows:
+        per.setdefault(str(ticker), []).append(
+            (str(trade_date)[:10], float(close), ret, basis))
+
+    verdict: dict[str, dict[str, Any]] = {}
+    for tk, series in per.items():
+        checked = 0
+        worst = 0.0
+        worst_date = None
+        for i in range(1, len(series)):
+            _, prev_close, _, _ = series[i - 1]
+            d, close, ret, basis = series[i]
+            # ★수정주가로 **선언된** 행만 판정한다★ raw 행의 불일치는 기업행위다.
+            if basis != "adjusted" or ret is None or not prev_close:
+                continue
+            implied = (close / prev_close - 1.0) * 100.0
+            gap = abs(implied - float(ret)) / max(1.0, abs(float(ret)))
+            checked += 1
+            if gap > worst:
+                worst, worst_date = gap, d
+        if checked:
+            verdict[tk] = {
+                "verdict": BASIS_MATCH if worst <= BASIS_RETURN_TOL else BASIS_MISMATCH,
+                "points": checked,
+                "worst_gap": round(worst, 6),
+                "worst_date": worst_date,
+            }
+
+    if not verdict:
+        return _unavailable(
+            "수정주가로 선언된 행 중 KRX 등락률(`return_1d`)을 함께 가진 행이 "
+            "없습니다 — 두 정의가 한 행에서 만나야 비교할 수 있습니다. "
+            "(KIS 적재가 기존 KRX 행을 덮은 적이 없으면 이 상태가 정상입니다.)")
+
+    good = sorted(t for t, v in verdict.items() if v["verdict"] == BASIS_MATCH)
+    bad = sorted(t for t, v in verdict.items() if v["verdict"] == BASIS_MISMATCH)
+    return {
+        "available": True,
+        "checked": len(verdict),
+        "verdict_by_ticker": verdict,
+        "consistent": good,
+        "inconsistent": bad,
+        "tolerance": BASIS_RETURN_TOL,
+        "note": ("연속 종가가 만드는 수익률이 KRX 등락률과 맞으면 KIS 종가가 "
+                 "수정주가라는 것이 데이터로 뒷받침됩니다. 어긋나면 가정 중 "
+                 "하나가 틀린 것이며, 그 경우 KIS 행의 `adj_close` 를 채워서는 "
+                 "안 됩니다."),
+        "version": QUALITY_VERSION,
+    }

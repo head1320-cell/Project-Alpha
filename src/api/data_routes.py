@@ -465,21 +465,34 @@ def data_price_quality(tickers: str | None = None, start: str | None = None,
     ★`ingest-doctor`·`source-honesty` 와 같은 데이터 품질 계열이다★ — 배분 결정에
     관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**(`ResearchUsage`)를 쓴다.
 
+    ★`basis_overlap` 은 다른 축이다★ 커버리지가 *"`adj_close` 가 채워졌는가"* 를
+    묻는 반면, 이쪽은 *"`close` 가 무엇인가"* 를 묻는다 — KRX 는 원주가를, KIS 는
+    수정주가를 같은 컬럼에 넣는다. 연속 종가의 수익률이 KRX 등락률과 맞는지 보고,
+    재지 못하면 "일치" 가 아니라 `available: false` 를 낸다.
+
     Args:
         tickers: 쉼표 구분. 주면 `missing`(행이 없는 티커)까지 센다.
             안 주면 `missing` 은 잴 수 없고 `missing_measurable: false` 로 나간다.
     """
-    from src.data.price_quality import adj_close_coverage, price_usage
+    from src.data.price_quality import (
+        adj_close_coverage,
+        basis_overlap_check,
+        price_usage,
+    )
 
     wanted = [t.strip() for t in (tickers or "").split(",") if t.strip()]
+    # ★가격 정의 검증은 등급과 별개 축이다★ 조정 여부를 따지기 전에 `close` 가
+    # 무엇인지를 묻는다. 등급을 못 매기는 경우에도 이 진단은 낼 수 있다.
+    overlap = basis_overlap_check(wanted or None)
     if wanted:
         got = price_usage(wanted, start=start, end=end)
         return {"coverage": got["coverage"], "research_usage": got["usage"],
-                "reason": got["reason"]}
+                "reason": got["reason"], "basis_overlap": overlap}
     # 티커를 안 주면 등급을 매기지 않는다 — 무엇에 대한 등급인지 정의되지 않는다.
     return {"coverage": adj_close_coverage(start=start, end=end),
             "research_usage": None,
-            "reason": "티커를 지정해야 연구 등급을 판정할 수 있습니다."}
+            "reason": "티커를 지정해야 연구 등급을 판정할 수 있습니다.",
+            "basis_overlap": overlap}
 
 
 @router.get("/api/v1/data/source-honesty")
