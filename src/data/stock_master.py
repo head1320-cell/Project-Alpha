@@ -436,11 +436,25 @@ def save_master_flags(symbols: list[dict]) -> int:
     with open(_master_flags_path(), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False)
     logger.info(f"master flags cached: {len(stocks)} symbols")
+
+    # ★DB 사본은 여기서 만들지 않는다★ 이 함수는 **캐시 writer** 이고, DB 미러링은
+    # **적재 정책**이다. 처음에는 여기에 넣었는데 그러면 테스트가 픽스처를 깔려고
+    # 이 함수를 부를 때마다 프로세스 공용 DB 에 행이 쌓이고, "마스터가 없으면
+    # 비어 있다" 를 검사하는 기존 테스트 3개가 깨졌다(실측). 저장 원시함수에
+    # 부작용을 넣은 것이 잘못이었다 — 미러링은 `kis_master_parser` 의 적재
+    # 파이프라인이 한다.
     return len(stocks)
 
 
 def load_master_flags() -> dict:
-    """캐시 파일 → {코드: 플래그 dict}. 없으면 {} (현행 동작 불변)."""
+    """마스터 플래그 → `{코드: 플래그 dict}`. 없으면 `{}`.
+
+    ★읽기 순서는 **파일 → DB** 다★ 반대로 하면 스테일 DB 가 방금 받은 새 파일을
+    덮는다. 파일이 있으면 **동작이 이전과 완전히 같다** — DB 는 쳐다보지도 않는다.
+
+    DB 는 파일이 없을 때만 쓰이는 사본이다(감사 §3.3: 파일 하나가 세 기능의 단일
+    장애점이었다).
+    """
     global _MASTER_FLAGS
     if _MASTER_FLAGS is None:
         import json
@@ -453,6 +467,14 @@ def load_master_flags() -> dict:
                     _MASTER_FLAGS = json.load(f).get("stocks", {}) or {}
         except Exception as e:
             logger.warning(f"master flags cache load failed: {e}")
+        if not _MASTER_FLAGS:
+            try:
+                from src.data.instrument_master_store import load as _db_load
+                _MASTER_FLAGS = _db_load() or {}
+                if _MASTER_FLAGS:
+                    logger.info(f"master flags ← DB: {len(_MASTER_FLAGS)} symbols")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"master flags DB 조회 실패: {e}")
     return _MASTER_FLAGS
 
 

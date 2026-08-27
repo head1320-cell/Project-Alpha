@@ -224,6 +224,16 @@ def ingest_df_to_db(ticker: str, df) -> int:
     if engine is None or df is None or df.empty:
         return 0
 
+    # ★스키마를 먼저 맞춘다★ 이 경로는 예전에 `ensure_table` 을 부르지 않았다.
+    # `source` 컬럼이 생기면서, 기존 테이블에 그 컬럼이 없는 배포에서는 INSERT 가
+    # 조용히 실패했을 것이다(아래 except 가 경고만 남긴다). `ensure_table` 이
+    # ALTER 를 시도하고 "이미 있음" 은 무시하므로 반복 호출이 안전하다.
+    try:
+        from src.data.krx_ingest import ensure_table
+        ensure_table(engine)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"daily_prices 스키마 확인 실패: {e}")
+
     code = ticker.replace(".KS", "").replace(".KQ", "")
     rows = []
     for dt, r in df.iterrows():
@@ -237,13 +247,20 @@ def ingest_df_to_db(ticker: str, df) -> int:
     if not rows:
         return 0
 
+    # ★출처를 남긴다★ 이 경로는 `return_1d`(KRX 등락률)를 쓰지 않으므로
+    # `rebuild_adj_close` 의 체인이 여기서 끊긴다. 어느 행이 그런지 알 수 있어야
+    # `price_quality.adj_close_coverage()` 가 그 사실을 보고할 수 있다.
+    from src.data.krx_ingest import SOURCE_KIS
     upsert = text("""
-        INSERT INTO daily_prices (ticker, trade_date, "open", high, low, close, volume)
-        VALUES (:ticker, :trade_date, :open, :high, :low, :close, :volume)
+        INSERT INTO daily_prices (ticker, trade_date, "open", high, low, close, volume,
+                                  source)
+        VALUES (:ticker, :trade_date, :open, :high, :low, :close, :volume, :source)
         ON CONFLICT (ticker, trade_date) DO UPDATE
           SET "open"=EXCLUDED."open", high=EXCLUDED.high, low=EXCLUDED.low,
-              close=EXCLUDED.close, volume=EXCLUDED.volume
+              close=EXCLUDED.close, volume=EXCLUDED.volume, source=EXCLUDED.source
     """)
+    for r in rows:
+        r["source"] = SOURCE_KIS
     try:
         with engine.begin() as conn:
             conn.execute(upsert, rows)

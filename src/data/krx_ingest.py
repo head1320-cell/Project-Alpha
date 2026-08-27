@@ -47,20 +47,28 @@ CREATE TABLE IF NOT EXISTS daily_prices (
 
 # 기존 테이블 마이그레이션용 — CREATE IF NOT EXISTS는 기존 테이블을 안 바꾸므로
 # ALTER를 시도하고 "이미 있음" 류 에러는 무시 (PG/SQLite 공통 안전)
-_MIGRATE_COLUMNS = ("mktcap FLOAT", "list_shares FLOAT")
+#: ★출처 컬럼★ 같은 테이블에 writer 가 둘이라(KRX 전종목 백필 · KIS 온디맨드)
+#: 어느 경로로 들어온 행인지 알 수 없었다. `rebuild_adj_close` 가 두 경로를
+#: 다르게 다뤄야 하므로(KIS 행에는 `return_1d` 가 없다) 행에 기록이 필요하다.
+#: ★기존 행은 NULL 로 남긴다★ — 소급 추정하지 않는다. NULL = "모른다" 는 사실이다.
+SOURCE_KRX = "krx"
+SOURCE_KIS = "kis"
+
+_MIGRATE_COLUMNS = ("mktcap FLOAT", "list_shares FLOAT", "source VARCHAR(8)")
 
 _UPSERT = """
 INSERT INTO daily_prices
     (ticker, trade_date, "open", high, low, close, volume, trading_value, return_1d,
-     mktcap, list_shares)
+     mktcap, list_shares, source)
 VALUES
     (:ticker, :trade_date, :open, :high, :low, :close, :volume, :trading_value, :fluc_rt,
-     :mktcap, :list_shares)
+     :mktcap, :list_shares, :source)
 ON CONFLICT (ticker, trade_date) DO UPDATE SET
     "open"=EXCLUDED."open", high=EXCLUDED.high, low=EXCLUDED.low,
     close=EXCLUDED.close, volume=EXCLUDED.volume,
     trading_value=EXCLUDED.trading_value, return_1d=EXCLUDED.return_1d,
-    mktcap=EXCLUDED.mktcap, list_shares=EXCLUDED.list_shares
+    mktcap=EXCLUDED.mktcap, list_shares=EXCLUDED.list_shares,
+    source=EXCLUDED.source
 """
 
 
@@ -97,6 +105,7 @@ def bulk_upsert(engine, rows: list[dict]) -> int:
         "fluc_rt": r.get("fluc_rt"),
         "mktcap": r.get("mktcap"),
         "list_shares": r.get("shares"),
+        "source": SOURCE_KRX,
     } for r in rows]
     stmt = text(_UPSERT)
     with engine.begin() as conn:
@@ -241,7 +250,26 @@ def rebuild_adj_close(engine=None, tickers: list[str] | None = None) -> int:
 
     최신일 adj=close 기준으로 과거로: adj[t-1] = adj[t] / (1 + r[t]/100).
     등락률은 (분할·증자 조정된) 기준가 대비라 corporate action 점프가 제거된다.
-    등락률 결측 봉은 원주가 비율로 폴백."""
+
+    ★등락률 결측 봉에서 체인이 **끊긴다** — 추정하지 않는다★
+
+    예전에는 `adj[i] = adj[i+1] × (close_i/close_next)` 로 폴백했다. 그런데
+    `return_1d` 가 없다는 것은 **그날 기업행위가 있었는지 모른다**는 뜻이고,
+    없었다면 원주가 비율이 맞지만 있었다면 틀린다 — 구분할 방법이 없다.
+    그 폴백은 **이 함수가 제거하려던 바로 그 점프를 다시 집어넣었다.**
+
+    지금은 처음 비는 지점에서 체인을 끊고 **그 아래를 전부 `NULL`** 로 둔다.
+    ★커버리지가 떨어지는 것이 요점이다★ — 조용히 틀린 값이 정직한 빈칸이 된다.
+    얼마나 떨어졌는지는 `price_quality.adj_close_coverage()` 가 이름으로 낸다.
+
+    ★KIS 경로가 최신 봉이면 티커 전체가 NULL 이 된다★ `ohlcv_loader` 는
+    `return_1d` 를 쓰지 않으므로 체인이 첫 걸음에서 끊긴다. 버그가 아니라
+    정직한 결과다 — 그 티커의 조정 상태를 우리는 실제로 모른다.
+
+    Returns:
+        갱신 행 수(`adj_close` 를 실제로 채운 행). 끊겨서 NULL 로 만든 행은
+        세지 않는다.
+    """
     from sqlalchemy import text
     engine = _get_engine(engine)
     if engine is None:
@@ -261,19 +289,21 @@ def rebuild_adj_close(engine=None, tickers: list[str] | None = None) -> int:
             if not rows:
                 continue
             n = len(rows)
-            adj = [0.0] * n
-            adj[n - 1] = float(rows[n - 1][1])
+            adj: list[float | None] = [None] * n
+            adj[n - 1] = float(rows[n - 1][1])       # 앵커: 최신 봉의 adj = close
             for i in range(n - 2, -1, -1):
-                close_i, close_next = float(rows[i][1]), float(rows[i + 1][1])
                 r_next = rows[i + 1][2]
-                if r_next is not None and float(r_next) > -99.0:
-                    adj[i] = adj[i + 1] / (1.0 + float(r_next) / 100.0)
-                else:
-                    adj[i] = adj[i + 1] * (close_i / close_next) if close_next else adj[i + 1]
-            payload = [{"adj": round(adj[i], 4), "t": tk, "d": str(rows[i][0])[:10]} for i in range(n)]
+                if r_next is None or float(r_next) <= -99.0:
+                    break                             # ★체인이 끊긴다 — 아래는 NULL★
+                prev = adj[i + 1]
+                if prev is None:
+                    break
+                adj[i] = prev / (1.0 + float(r_next) / 100.0)
+            payload = [{"adj": None if adj[i] is None else round(adj[i], 4),
+                        "t": tk, "d": str(rows[i][0])[:10]} for i in range(n)]
             for j in range(0, n, _CHUNK):
                 conn.execute(upd, payload[j:j + _CHUNK])
-            updated += n
+            updated += sum(1 for v in adj if v is not None)
     return updated
 
 
