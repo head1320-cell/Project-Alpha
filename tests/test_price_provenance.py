@@ -40,8 +40,10 @@ from src.data.krx_ingest import (  # noqa: E402
     rebuild_adj_close,
 )
 from src.data.price_quality import (  # noqa: E402
-    UNADJUSTED_CHAIN_BROKEN,
-    UNADJUSTED_NOT_REBUILT,
+    RAW_NOT_REBUILT,
+    STATE_ADJUSTED,
+    STATE_CHAIN_BROKEN,
+    STATE_RAW,
     adj_close_coverage,
 )
 
@@ -172,6 +174,13 @@ def test_rebuild_counts_only_the_rows_it_filled(eng):
 # 3) 커버리지가 빠진 것을 이름으로 낸다
 # ══════════════════════════════════════════════════════════════════════════
 def test_coverage_counts_add_up_and_names_the_unadjusted(eng):
+    """★적재 → 재구성 → 보고까지 실제 파이프라인으로 센다★
+
+    `test_price_quality_gate.py` 는 상태 **규칙**을 못 박고, 여기는 그 규칙이
+    `bulk_upsert` + `rebuild_adj_close` 의 실제 산출 위에서 같은 답을 내는지 본다.
+    끊긴 행 수 4 를 **정확히** 적는다 — 합만 보면 raw 와 chain_broken 사이에서
+    잘못 나눠도 통과한다.
+    """
     rows = _split_series()
     rows[-1]["fluc_rt"] = None
     bulk_upsert(eng, rows)
@@ -180,19 +189,27 @@ def test_coverage_counts_add_up_and_names_the_unadjusted(eng):
 
     cov = adj_close_coverage(engine=eng)
     assert cov["available"] is True
-    assert cov["adjusted"] + cov["unadjusted"] == cov["rows"]
+    assert sum(cov["row_states"].values()) == cov["rows"]
     assert "A" in cov["unadjusted_tickers"], "미조정 티커를 이름으로 내지 않는다"
-    assert cov["reasons"][UNADJUSTED_CHAIN_BROKEN]["rows"] == 4
-    assert cov["reasons"][UNADJUSTED_CHAIN_BROKEN]["note"]
+    # A 는 앵커 1행만 조정되고 그 아래 4행에서 체인이 끊긴다. B 는 1행 전부 조정.
+    assert cov["row_states"][STATE_CHAIN_BROKEN] == 4
+    assert cov["row_states"][STATE_ADJUSTED] == 2
+    assert cov["state_notes"][STATE_CHAIN_BROKEN]
 
 
 def test_coverage_separates_not_rebuilt_from_chain_broken(eng):
-    """★'계산 안 함' 과 '데이터 없음' 은 다른 사실이다★"""
+    """★'계산 안 함' 과 '중간에서 끊김' 은 다른 사실이다★
+
+    재구성을 한 번도 돌리지 않은 티커는 `chain_broken` 이 아니라 `raw` 다 —
+    체인이 끊긴 게 아니라 **시작한 적이 없다**. 고치는 방법도 다르다
+    (`rebuild_adj_close()` 실행 vs 그 구간 KRX 재적재).
+    """
     bulk_upsert(eng, _split_series())          # 재료는 있으나 rebuild 를 안 돌린다
-    cov = adj_close_coverage(engine=eng)
-    assert cov["unadjusted"] == 5
-    assert UNADJUSTED_NOT_REBUILT in cov["reasons"]
-    assert UNADJUSTED_CHAIN_BROKEN not in cov["reasons"]
+    cov = adj_close_coverage(["A"], engine=eng)
+    assert cov["row_states"][STATE_RAW] == 5
+    assert cov["ticker_states"][STATE_RAW] == 1
+    assert cov["ticker_states"][STATE_CHAIN_BROKEN] == 0, "미실행을 끊김으로 셌다"
+    assert cov["raw_reasons"][RAW_NOT_REBUILT]["tickers"] == 1
 
 
 def test_coverage_does_not_guess_the_source_of_legacy_rows(eng):

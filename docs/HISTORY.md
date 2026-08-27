@@ -7956,3 +7956,113 @@ if late: raise LookAheadError(...)
 
 ★전환(`close → adj_close`)은 배분 경로라 별도 승인 사항으로 남긴다★ —
 그것이 이 작업의 목적지이지만 하드 경계 안쪽이다.
+
+---
+
+## 2026-08-27 — Phase 1 구현: 가격 품질 강제 (`price_quality` 4상태 + 적격성 게이트)
+
+계획: [`happy-percolating-falcon`](../docs/specs/2026-08-27-capability-states-matrix.md) Phase 1.
+P0/P1(`1e3226a`)이 만든 `adj_close_coverage()` 를 **아무도 부르지 않던** 상태에서,
+조정 상태를 **관측 가능·강제 가능**하게 만들었다. ★소비자 전환은 하지 않았다★
+
+### 네 상태 — 티커 단위 배타
+
+| 상태 | 판정 | 고치는 사람 |
+|---|---|---|
+| `adjusted` | 그 티커의 **모든** 행에 `adj_close` | — |
+| `chain_broken` | 일부만 — 체인이 중간에서 끊겼다 | 그 구간 KRX 재적재 |
+| `raw` | **하나도** 없다 (하위 사유 2종 유지) | `rebuild_adj_close()` 또는 KRX 적재 |
+| `missing` | 행이 **하나도 없다** | 적재 |
+
+★`missing` 이 새 상태다★ 이전 구현은 **존재하는 행만** 봤다 — 요청한 티커가 DB 에
+없으면 커버리지 100% 로 보였다(공허한 참). 티커 목록을 주지 않으면 `missing` 을
+**잴 수 없으므로** `missing_measurable: False` 로 **선언**한다 — 0 을 "없다" 로
+읽지 않게.
+
+### ★구현 중 배운 구조적 사실 — `raw` 는 "재구성이 돈 적 없음" 이다★
+
+`rebuild_adj_close` 는 앵커(최신 봉)를 **언제나** `adj = close` 로 채운다 — 체인의
+기준점이기 때문이다. 따라서 **재구성이 한 번이라도 돈 티커는 최소 한 행이 조정돼
+있고**, 등락률이 전혀 없어도 `raw` 가 아니라 `chain_broken` 이 된다(첫 걸음에서
+끊긴 것). 처음에는 "KIS 전용 티커니 `raw` 겠지" 로 픽스처를 짰다가 `adjusted` 가
+나와서 알았다. ★계약을 코드가 아니라 짐작으로 적으면 이렇게 어긋난다.★
+
+### ★임계값을 지어내지 않았다★
+
+기존 계약이 전부-아니면-전무다 — `pit_macro.derive_usage` 는 비율을 모르고
+`timing_rules_v2` 는 `all(bool(o.vintage_id) for o in obs)` 다. 그래서 여기도
+**모든 티커가 `adjusted` 일 때만** `BACKTEST_ELIGIBLE`. "커버리지 95%" 를 새로
+만들면 그 숫자의 근거를 아무도 대지 못한다. 소스에 백분율 상수가 없음을 테스트가
+직접 검사한다.
+
+### ★두 번째 등급 체계를 만들지 않았다★
+
+`price_usage()` 는 등급 규칙을 **다시 쓰지 않고** `pit_macro.derive_usage()` 를
+**호출**한다(몽키패치로 실제 통과를 확인). `assert_prices_backtest_eligible()` 은
+기존 `ForwardOnlyError` 를 던진다 — 라우트가 이미 422 로 옮긴다.
+
+매핑: `has_vintage` ↔ 전량 조정 · `depth_ok` ↔ `start` 를 덮음 ·
+`lag_known` ↔ ★가격은 언제나 True★(장 마감으로 확정, 공표지연 없음) ·
+`has_source` ↔ 행이 있음.
+
+### 변경 파일
+
+| 파일 | 변경 |
+|---|---|
+| `src/data/price_quality.py` | 4상태 · `missing_measurable` · `price_usage()` · `assert_prices_backtest_eligible()` · `adj_status_of()` |
+| `src/data/ohlcv_loader.py` | `df.attrs["adj_status"]` — ★독스트링이 attrs 비보장을 명시★ |
+| `src/api/data_routes.py` | `GET /api/v1/data/price-quality` |
+| `tests/test_price_quality_gate.py` | 신규 17건 |
+| `tests/test_price_provenance.py` | P0/P1 계약을 4상태 어휘로 이관(사실 보존) |
+
+★`src/engine/` 무변경 · `allocation_routes.py` 무변경 · 백테스트 엔진에 게이트
+미배선★ — 게이트는 **호출 가능한 상태로** 두었다. 어디에 걸지는 별도 승인이다.
+
+### `df.attrs` 는 편의이지 권위가 아니다
+
+pandas 연산에서 `attrs` 보존은 보장되지 않는다. 그래서 독스트링에 그렇게 적고,
+권위 있는 경로는 `price_usage()` **함수 호출**이라고 가리킨다. 이 문장이 실제로
+코드에 있는지 테스트가 검사한다 — 없으면 소비자가 `attrs` 만 믿고 게이트를 세운다.
+
+### 변이 8종 전부 사망
+
+① `missing` 미집계 ② 한 티커만 깨져도 `BACKTEST_ELIGIBLE` ③ `raw` 하위 사유 병합
+④ `NULL` 출처를 `krx` 로 추정 ⑤ `derive_usage` 우회하고 자체 판정
+⑥ 백분율 임계값 도입 ⑦ `raw` 행을 `chain_broken` 에 합산(합은 여전히 맞는다)
+⑧ 끊긴 티커의 **전체** 행을 `chain_broken` 으로 집계.
+
+★⑦⑧ 은 이관한 테스트가 잡았다★ — "합이 맞는가" 만 보면 raw 와 chain_broken
+사이에서 잘못 나눠도 통과한다. 그래서 끊긴 행 수 **4** 를 정확히 못 박았다.
+이관이 계약을 약화시키지 않았다는 증거다.
+
+### 겪은 실패 둘
+
+**① 이관하지 않고 이름만 바꿨다** `price_quality` 를 4상태로 다시 쓰면서
+`UNADJUSTED_CHAIN_BROKEN`·`UNADJUSTED_NOT_REBUILT` 를 지웠는데,
+`test_price_provenance.py` 가 그것을 import 한다 → **수집 단계에서 스위트 전체가
+중단**됐다. 프로덕션 소비자는 0건이라 이관은 테스트 한정이었지만, ★새 모듈을
+쓰기 전에 기존 import 를 세지 않은 것이 원인★이다.
+
+**② 인메모리 sqlite + TestClient** 라우트 테스트가 `unavailable` 을 냈다.
+인메모리 sqlite 의 기본 풀은 **스레드마다 별도 DB** 이고 TestClient 는 라우트를
+스레드풀에서 돈다. `poolclass=StaticPool` 로 고쳤다(`test_reverse_dcf_wiring.py`
+가 쓰던 방식).
+
+### ★불변 증명 3중★
+
+| # | 방법 | 결과 |
+|---|---|---|
+| 1 | `git diff --stat HEAD -- src/engine/ src/api/allocation_routes.py` | ★비어 있음★ |
+| 2 | 골든 스냅샷 3종 재실행 후 `diff` | ★**바이트 동일**★ (`t3_bl_ep` · `t3_d` · `geom`) |
+| 3 | 전체 스위트 | ★3,031 passed / 10 skipped★ (3,014 → **+17**) · ruff 0 |
+
+★2번은 변이 실험 **이후에 한 번 더** 떴다★ — 변이를 프로덕션 코드에 넣었다가
+되돌렸으므로, 되돌림이 완전했다는 것을 파일 diff 가 아니라 **수치**로 확인했다.
+
+### 남는 것 — ★목적지는 아직 하드 경계 안쪽★
+
+`close → adj_close` 소비자 전환이 이 작업의 목적지다. 정본 로더
+`kis_backtest_engine.load_ohlcv` 가 여전히 `close`(원주가)를 고르고 26개 파일이
+그 위에 있다 — ★저장소의 모든 수익률이 미조정 가격 위에서 돈다★. 그 전환은
+배분 결정 경로를 건드리므로 **별도 승인 사항**으로 남긴다. Phase 1 은 그 전환의
+선행 조건(상태·등급·관측·거부)을 정책 밖에서 만들었을 뿐이다.

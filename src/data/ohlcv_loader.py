@@ -163,6 +163,24 @@ def _db_ohlcv_df(ticker: str, start_date: str, end_date: str):
         return pd.DataFrame()
 
 
+def _tag_adj_status(df, code: str) -> None:
+    """`df.attrs["adj_status"]` — 이 가격이 수정주가인지 원주가인지.
+
+    ★`attrs` 는 **편의**이지 권위가 아니다★ pandas 연산에서 `attrs` 보존은
+    보장되지 않는다(슬라이스·merge·groupby 에서 사라질 수 있다). 게이트를 세울
+    때는 `price_quality.price_usage()` / `assert_prices_backtest_eligible()` 을
+    **직접 호출**할 것. 이 태그는 `attrs["source"]` 와 같은 성격의 힌트다.
+
+    ★그리고 이 함수는 숫자를 바꾸지 않는다★ 컬럼을 더하지도 빼지도 않는다 —
+    `close` 는 그대로 원주가이고, 전환(`close → adj_close`)은 별개 결정이다.
+    """
+    try:
+        from src.data.price_quality import adj_status_of
+        df.attrs["adj_status"] = adj_status_of(code)
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"adj_status 태깅 실패({code}): {e}")
+
+
 def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
                        prefer: str = "auto"):
     """
@@ -191,6 +209,7 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
     df = _db_ohlcv_df(code, start_date, end_date)
     if df is not None and not df.empty and len(df) >= 20:
         df.attrs["source"] = "db"   # 실데이터(적재 DB)
+        _tag_adj_status(df, code)
         return df
 
     df = _kis_ohlcv_df(code, start_date, end_date)
@@ -201,6 +220,7 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
         except Exception:
             pass
         df.attrs["source"] = "kis"  # 실데이터(KIS 실시간)
+        _tag_adj_status(df, code)
         return df
 
     # 최종 fallback: mock 모드만 합성, 운영선 빈 df(정직 — 실데이터 없음)

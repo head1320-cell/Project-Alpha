@@ -452,6 +452,36 @@ def symbols_flows_status():
     return st
 
 
+@router.get("/api/v1/data/price-quality")
+def data_price_quality(tickers: str | None = None, start: str | None = None,
+                       end: str | None = None):
+    """수정주가 커버리지 — ★몇 %가 조정되지 않았는지가 보이지 않으면 아무도 모른다★
+
+    `daily_prices` 에 writer 가 둘이라(KRX 전종목 백필 · KIS 온디맨드) KIS 경로 행에는
+    등락률이 없고, 그 지점에서 수정주가 체인이 끊긴다. 예전에는 원주가 비율로
+    폴백해 **지우려던 분할 점프를 다시 집어넣었다** — 지금은 정직하게 비운다.
+    그 빈칸이 얼마나 되는지를 여기서 낸다.
+
+    ★`ingest-doctor`·`source-honesty` 와 같은 데이터 품질 계열이다★ — 배분 결정에
+    관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**(`ResearchUsage`)를 쓴다.
+
+    Args:
+        tickers: 쉼표 구분. 주면 `missing`(행이 없는 티커)까지 센다.
+            안 주면 `missing` 은 잴 수 없고 `missing_measurable: false` 로 나간다.
+    """
+    from src.data.price_quality import adj_close_coverage, price_usage
+
+    wanted = [t.strip() for t in (tickers or "").split(",") if t.strip()]
+    if wanted:
+        got = price_usage(wanted, start=start, end=end)
+        return {"coverage": got["coverage"], "research_usage": got["usage"],
+                "reason": got["reason"]}
+    # 티커를 안 주면 등급을 매기지 않는다 — 무엇에 대한 등급인지 정의되지 않는다.
+    return {"coverage": adj_close_coverage(start=start, end=end),
+            "research_usage": None,
+            "reason": "티커를 지정해야 연구 등급을 판정할 수 있습니다."}
+
+
 @router.get("/api/v1/data/source-honesty")
 def data_source_honesty():
     """데이터 출처별 연구 등급 한눈에 — 스펙 §6.1 표를 화면이 그대로 그릴 수 있게.
