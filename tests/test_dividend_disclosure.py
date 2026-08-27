@@ -187,20 +187,24 @@ def test_no_supported_shareholder_token_carries_an_unsupported_reason():
 
 
 def test_the_dead_reason_problem_is_wider_than_this_phase():
-    """★이 테스트는 결함을 고치는 것이 아니라 **기록**한다★
+    """★상한이 아니라 **0** 이다★ — 기록하던 것을 실제로 고쳤다.
 
-    D7 을 저장소 전체로 돌려 보니 주주환원 밖에서 **17개**가 더 나왔다(실측):
-    `POR`·`매출원가율`·`직원급여총액` 등 — 전부 `_derive` 로 실파생이 붙어
-    `REAL_CAPABLE_IDS` 에 들어갔는데 `UNSUPPORTED_REASONS` 항목만 남은 경우다.
+    이 테스트는 원래 결함을 고치지 않고 **기록**했다. D7 을 저장소 전체로 돌려
+    보니 주주환원 밖에서 17개가 더 나왔고(`POR`·`매출원가율`·`직원급여총액` 등),
+    당시 범위가 주주환원 11종뿐이라 상한 `<= 17` 로 증가만 막아 뒀다.
 
-    이번 단계는 주주환원 11종만 정리했으므로 나머지를 **고치지 않았다**. 대신
-    그 사실을 남겨, 나중에 전체를 정리할 때 이 테스트가 0 이 되도록 한다.
-    ★수를 늘리지는 못하게 상한을 건다★ — 새 죽은 항목이 생기면 red 가 된다.
+    그 17개를 실측해 보니 **두 종류**였다 — 15개는 `_derive` 가 실파생을 붙였는데
+    사유만 남은 죽은 항목이었고(제거), 둘(`남자직원수`·`여자직원수`)은 반대로
+    ★능력 선언이 과장된 경우★라 `REAL_CAPABLE_IDS` 에서 내려 진짜 미지원이 됐다.
+    그래서 이제 죽은 항목은 **하나도 없어야 한다**.
+
+    ★짝은 `test_unsupported_tokens_still_carry_reasons`★ — 이 단언만 있으면
+    "사유를 전부 지운다" 는 구현으로도 통과한다.
     """
     supported = ft.token_support()["supported"]
     dead = sorted(k for k in ft.UNSUPPORTED_REASONS
                   if k in supported and k not in _SHAREHOLDER_TOKENS)
-    assert len(dead) <= 17, f"죽은 사유 항목이 늘었다({len(dead)}): {dead}"
+    assert dead == [], f"이미 지원되는데 사유가 남아 있다: {dead}"
 
 
 def test_treasury_reason_names_the_actual_source():

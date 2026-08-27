@@ -96,8 +96,14 @@ def test_the_bridge_width_matches_the_measurement():
     # 92 → 93: `div_at_record`(배당시점배당수익률) 하나가 늘었다. `alotMatter` 가
     # 이미 주던 `yield_pct` 를 이어 `REAL_CAPABLE_IDS` 에 넣은 결과이고, 델타가
     # **그 한 개뿐**임을 확인한 뒤 갱신했다(이 테스트의 독스트링이 지시하는 절차).
-    assert len(reach) == 93, f"도달 가능 필드가 93 에서 바뀌었다: {len(reach)}"
+    # 93 → 91: `female_emp`·`male_emp` 둘이 빠졌다. ★다리가 좁아진 것이 아니라
+    # 애초에 건널 자격이 없던 둘을 내린 것이다★ — 계산식이 `직원수 × 성별비율`
+    # 인데 비율이 합성이라 결과가 실데이터가 아니었다. 같은 절차로 델타가
+    # **정확히 그 둘뿐**임을 재현으로 확인한 뒤 갱신했다.
+    assert len(reach) == 91, f"도달 가능 필드가 91 에서 바뀌었다: {len(reach)}"
     assert "div_at_record" in reach, "배당시점배당수익률이 다리에서 사라졌다"
+    for _gone in ("female_emp", "male_emp"):
+        assert _gone not in reach, f"{_gone} 이 다리에 돌아왔다 — 합성값이 조건식에 샌다"
     assert set(pit) == {"per", "pbr", "psr", "pcr", "roe"}, pit
 
 
