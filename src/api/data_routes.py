@@ -495,6 +495,29 @@ def data_price_quality(tickers: str | None = None, start: str | None = None,
             "basis_overlap": overlap}
 
 
+@router.get("/api/v1/data/macro-vintages")
+def data_macro_vintages(series: str | None = None, period: str | None = None):
+    """매크로 관측 스토어 — ★빈티지가 저장되고 있는가★
+
+    계보 감사 §B1 이 찾은 병목: FRED·ECOS 시계열이 **프로세스 메모리**에만 살아
+    재시작하면 사라졌다. `macro_observation_store` 가 그것을 영속화한다.
+
+    ★`ingest-doctor`·`source-honesty`·`price-quality` 와 같은 데이터 품질 계열이다★
+    — 배분 결정에 관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**를 쓴다.
+
+    Args:
+        series: 계열 id. 주면 그 계열만 센다.
+        period: `series` 와 함께 주면 그 기간의 **모든 빈티지**를 낸다 —
+            둘 이상이면 그 기간이 개정됐다는 뜻이고, 값 차이가 편향의 크기다.
+    """
+    from src.data.macro_observation_store import coverage, vintages_of
+
+    body = {"coverage": coverage([series] if series else None)}
+    if series and period:
+        body["vintages"] = [o.to_dict() for o in vintages_of(series, period)]
+    return body
+
+
 @router.get("/api/v1/data/source-honesty")
 def data_source_honesty():
     """데이터 출처별 연구 등급 한눈에 — 스펙 §6.1 표를 화면이 그대로 그릴 수 있게.

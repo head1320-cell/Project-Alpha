@@ -626,6 +626,21 @@ class MacroCollector:
 
         with self._lock:
             self._cache[key] = (time.time(), series)
+
+        # ★영속 기록★ 이 캐시는 **프로세스 메모리**다 — 재시작하면 사라지고,
+        # 그래서 과거 매크로 실험을 재현할 수 없었다(계보 감사 §B1).
+        # `macro_observation_store` 가 실 관측치를 남긴다. ★기록만 한다★ —
+        # 읽는 소비자는 없고, 국면 축 배선은 배분 정책이라 별도 승인 사항이다.
+        #
+        # ★저장 원시함수가 아니라 수집 파이프라인에 둔다★ Phase 1 에서
+        # `save_master_flags` 안에 DB 미러링을 넣었다가 그 함수를 픽스처로 쓰던
+        # 테스트 3개를 깨뜨렸다. 부작용은 파이프라인의 일이다.
+        # 비-REAL(`MOCK`·`unavailable`)은 스토어가 스스로 거른다.
+        try:
+            from src.data.macro_observation_store import record_series
+            record_series(series)
+        except Exception as e:  # noqa: BLE001 — 기록 실패가 수집을 실패로 만들지 않는다
+            logger.debug(f"매크로 관측 기록 실패 ({key}): {e}")
         return series
 
     def cache_clear(self):
