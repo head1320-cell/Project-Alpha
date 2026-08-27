@@ -81,11 +81,17 @@
 |---|---|---|---|---|---|
 | `StatisticSearch` (`macro_collector.BOKClient`) | ✔ | ✔ | ★✗ 프로세스 캐시★ | ✗ (개정 없음·영구) | 영속 없음 |
 | `StatisticSearch` ★두 번째 클라이언트★ | ✔ `kis_strategies/factor_tokens.py:636,690` | ✔ | ✗ 모듈 `_ecos_cache` | ✗ | ★중복 수집 경로★ |
-| `StatisticTableList`·`ItemList`·`KeyStatisticList` | ★✗ 미구현★ | — | — | — | 구현 자체 없음 |
+| `StatisticTableList`·`ItemList` | ✔ (`BokClient._fetch_meta`) | 스크립트에서만 | — | — | ★응답 필드명 미검증★ |
+| `KeyStatisticList` | ★✗ 미구현★ | — | — | — | 소비자 없음 |
 
-★새 발견★ ECOS 클라이언트가 **둘**이다. `macro_collector.BOKClient` 와
-`factor_tokens._ecos_series` 가 각자 URL 을 만들고 각자 캐시한다. 쿼터·정규화·
-공표지연 처리가 두 벌이고 서로 모른다.
+★해소됨★ ECOS 클라이언트가 **둘**이었다(`macro_collector.BOKClient` 와
+`factor_tokens._ecos_series` 가 각자 URL·캐시). `1fa4fbd` 에서 일원화했다 —
+지금 `BokClient` 하나뿐이다.
+
+★새 발견 (부록 10)★ 비파생 **37계열 전부가 월별(`period="M"`)로 조회된다.**
+`ecos_collection_targets()` 가 주기를 돌려주지 않고 수집기가 `period` 를 넘기지
+않기 때문이다. 그 안에 일별(기준금리·국고채·환율·KOSPI)과 분기로 보이는 것
+(GDP·경상수지)이 섞여 있다.
 
 ### A.5 DART
 
@@ -294,7 +300,7 @@ FRED·ECOS 시계열은 **프로세스 dict 캐시**에만 산다. 영구 아티
 | **2** | ~~DART 배당 영속 + 총수익 계열~~ → ★배당기준일★ | 중 | 중 | 중 | 일별 총수익 계열 | 큼 | ✔ (부록 6 정정) |
 | **3** | ECOS 클라이언트 **일원화** | 중 | 높 | 중 | (정합성) | 작 | ✔ |
 | ~~4~~ | ~~`mktcap` 을 KIS 경로에도 기록~~ | — | — | — | — | — | ★회수(아래 §부록 4)★ |
-| **5** | ECOS 메타 3종 | 낮 | 중 | — | 손으로 적은 메타 검증 | 중 | ✔ |
+| ~~5~~ | ~~ECOS 메타 3종~~ → ★주기 축★ | 중 | 높 | — | ★"왜 비었나" 에 답한다★ | 중 | ✔ (부록 10 정정) |
 | — | KRX `get_extra` | ★낮★ | 낮 | ✗ 영구 | ★연구 질문 없음★ | 작 | ✔ |
 
 
@@ -443,3 +449,63 @@ d["male_emp"]   = round(emp * (1 - fr / 100))
 | 성공 시 | `female_ratio` → 실데이터 경로 확보 → `female_emp`·`male_emp` 재승격 |
 | 증거등급 | 현재 **E0**. 실응답을 보면 E2 |
 | 하지 말 것 | 필드명 추측. 응답을 보기 전에는 코드를 쓰지 않는다 |
+
+---
+
+## 부록 9. ★새 감사 항목★ — ECOS 분기 TIME 표기
+
+`BokClient.fetch_series` 는 이제 `D`·`M`·`A` 의 기본 조회 범위를 만든다.
+**`Q` 는 거절한다** — ECOS 분기 TIME 표기가 `2024Q1` 인지 `20241` 인지
+오프라인에서 확인할 수 없다.
+
+★추측한 좌표로 회사채를 국고채라고 불렀던 것(`1fa4fbd`)과 정확히 같은 종류의
+오류★ 이므로 포맷을 만드는 대신 빈 결과 + 사유를 돌려준다. `start`/`end` 를
+명시로 넘기면 그대로 쓰므로, 표기를 아는 사람은 지금도 쓸 수 있다.
+
+| 항목 | 내용 |
+|---|---|
+| 필요한 것 | `BOK_API_KEY` — 분기 통계표(예: 200Y002) 실응답 1건 |
+| 확인할 것 | 응답 `TIME` 값의 표기 · 요청 start/end 가 받는 표기 |
+| 성공 시 | `_FMT` 에 `Q` 를 추가 → 분기 계열의 기본 조회가 열린다 |
+| 하지 말 것 | 표기 추측. `test_quarterly_is_refused_rather_than_invented` 가 막는다 |
+
+---
+
+## 부록 10. ★#5 정정★ — 메타는 수단이고, 결함은 주기 축의 부재였다
+
+감사 §C·부록 3 은 #5 의 근거를 *"계열의 단위·주기·공표지연이 `timing_factor_meta`
+에 **손으로** 적혀 있다"* 고 적었다. ★그 전제는 틀렸다★(실측).
+
+`timing_factor_meta._SOURCE_TIMING` 은 **타이밍 팩터** 5개(`financial_conditions`·
+`curve_slope`·`vix_term_structure`·`vix_term_spread`·`indicator`)의 공표지연이고
+전부 FRED 계열이다 — ECOS 는 한 줄도 없다. 감사 #2·#4 에 이은 세 번째 정정이다.
+
+### 실제 결함 셋 (실측)
+
+| # | 결함 | 근거 |
+|---|---|---|
+| 1 | ★주기를 담을 자리가 없다★ | `SourceSpec` 8필드에 `frequency` 부재. `macro_collector.py` 의 `fetch_series(s, i)` 가 `period` 를 안 넘겨 **37계열 전부 월별** |
+| 2 | ★네 원인이 한 문자열로 뭉개진다★ | 빈 응답이면 `source="unavailable"` 이 전부. `MacroSeries` 에 `reason` 부재 |
+| 3 | 날짜 포맷이 M·A 만 만든다 (★잠재★) | `"%Y%m" if period == "M" else "%Y"` — `D` 로 부르며 start/end 를 생략하면 무효 범위. 유일한 일별 호출자가 명시로 넘겨 살아 있는 버그는 아니었다 |
+
+### 이번에 한 것
+
+- `SourceSpec.frequency` 신설 — ★37계열 전부 `None`(미검증)★. 하나도 채우지 않았다.
+- `unavailable_reason_for()` — **키 없음** · **좌표 미검증** · **검증됐는데 빈 응답** ·
+  **파생 원계열 부재** 를 가른다. 주기 불일치 의심은 기존 사유를 **덮어쓰지 않고 덧붙는다**.
+- `D` 날짜 포맷 · `Q` 거절(부록 9) · `M` 은 ★URL 문자 단위로 동일★.
+- `BokClient.fetch_table_list`/`fetch_item_list` + `scripts/verify_ecos_meta.py`.
+  ★발견한 주기를 레지스트리에 자동으로 쓰지 않는다★ — `verified_live` 와 같은 규율.
+
+### 하지 않은 것 — ★수집 주기는 그대로다★
+
+주기를 알게 됐다고 수집기가 그것으로 조회하면, 키가 들어오는 순간 사람 확인 없이
+`collect_all()` 출력이 달라진다. `frequency` 는 **기록·대조 전용**이고,
+`test_the_collector_still_does_not_pass_a_period` 가 트립와이어로 지킨다 —
+배선하려면 그 테스트를 의식적으로 고쳐야 한다.
+
+### 부수 발견 — 레지스트리에 읽기 경로가 둘이다
+
+`specs_by_provider()` 는 `_SPECS`(튜플), `get_spec()` 은 `_BY_KEY`(딕트)를 읽는다.
+첫 판의 C17 이 `_SPECS` 만 검사해서 `_BY_KEY` 에 쓰는 변이(V10)가 **살아남았다**.
+`test_the_two_registry_read_paths_agree` 가 두 경로의 일치를 못 박는다.

@@ -104,6 +104,11 @@ class MacroSeries:
     std_5y:       float | None = None
     trend:        str = "flat"                 # "up" | "down" | "flat"
     last_update:  str | None = None
+    #: ★`source="unavailable"` 일 때 **왜** 인지★ 값이 왔으면 None 이다.
+    #: 예전에는 `source="unavailable"` 한 문자열이 전부라 **키 없음**·**좌표 미검증**·
+    #: **검증됐는데 빈 응답**·**파생 원계열 부재** 가 구분되지 않았다. 넷의 처방이
+    #: 전부 다른데, 사용자도 우리도 어디를 고쳐야 할지 알 수 없었다.
+    reason:       str | None = None
 
 
 @dataclass
@@ -238,12 +243,29 @@ class BokClient:
         if not self.is_configured or requests is None:
             return [], []
 
-        # 기간 기본값: 최근 5년
+        # ── 기간 기본값 — ★아는 포맷만 만들고 모르는 것은 거절한다★ ──────
+        #
+        # 예전 코드는 `"%Y%m" if period == "M" else "%Y"` 였다. 즉 **M 과 A 만**
+        # 만들 수 있었고, `period="D"` 로 start/end 를 생략하면 `2006`~`2026` 이라는
+        # 일별로는 무효한 범위가 조용히 만들어졌다. 살아 있는 버그는 아니었다 —
+        # 유일한 일별 호출자(`factor_tokens._ecos_series`)가 YYYYMMDD 를 명시로
+        # 넘긴다. 주기를 일급으로 만들면 그 구멍이 살아나므로 여기서 메운다.
+        #
+        # ★분기(Q)는 지어내지 않는다★ ECOS 의 분기 TIME 표기(`2024Q1`? `20241`?)를
+        # 오프라인에서 확인할 수 없다. 추측한 좌표로 회사채를 국고채라고 불렀던
+        # 것과 정확히 같은 종류의 오류이므로, 포맷을 만드는 대신 **거절**한다.
+        if period == "Q" and not (start and end):
+            logger.warning(
+                "BOK 분기 조회 거절 (%s): 분기 TIME 표기가 검증되지 않았습니다 — "
+                "지어낸 포맷으로 호출하지 않습니다. start/end 를 명시하면 그대로 씁니다.",
+                stat_code)
+            return [], []
+        _FMT = {"D": "%Y%m%d", "M": "%Y%m", "A": "%Y"}
         if not end:
-            end = datetime.now().strftime("%Y%m" if period == "M" else "%Y")
+            end = datetime.now().strftime(_FMT.get(period, "%Y"))
         if not start:
             yr = int(end[:4]) - _history_years()
-            start = f"{yr}{end[4:6]}" if period == "M" else str(yr)
+            start = f"{yr}{end[4:]}"          # M→YYYYMM · D→YYYYMMDD · A→YYYY
 
         url = (f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/{int(limit)}"
                f"/{stat_code}/{period}/{start}/{end}/{item_code}")
@@ -266,6 +288,75 @@ class BokClient:
         except Exception as e:
             logger.warning(f"BOK 호출 실패 ({stat_code}): {e}")
             return [], []
+
+    # ── 메타 API — ★응답 모양을 모른다는 사실을 설계에 반영한다★ ────────────
+    #
+    # 서비스명 `StatisticTableList`·`StatisticItemList` 는 이 저장소의 선행 감사
+    # 문서 3건에 이미 기록돼 있다(2026-08-26 두 건 · 08-27 §A.4) — 추측이 아니다.
+    # ★그러나 응답 **필드명**은 검증된 적이 없다.★ 그래서 파서를 두지 않고 원시
+    # dict 를 그대로 돌려준다. 주기 추출은 별도 함수가 하고, 못 찾으면 사유를 낸다.
+
+    def _fetch_meta(self, service: str, path: str = "") -> tuple[list[dict], str | None]:
+        """(행, 사유). ★`fetch_series` 와 같은 스로틀·키 판정을 쓴다★
+
+        메타 호출이 따로 스로틀을 갖지 않는 것이 중요하다 — 분당 한도는 서비스별이
+        아니라 키별이고, 경로가 둘이면 한도를 넘긴 쪽이 조용히 실패한다.
+        """
+        if not self.is_configured:
+            from src.data.source_registry import REASON_NO_KEY
+            return [], REASON_NO_KEY
+        if requests is None:
+            return [], "requests 를 사용할 수 없습니다."
+        url = f"{BOK_BASE_URL}/{service}/{self.api_key}/json/kr/1/{META_PAGE_SIZE}{path}"
+        self._throttle()
+        try:
+            data = requests.get(url, timeout=self.timeout).json()
+        except Exception as e:
+            return [], f"{service} 호출 실패: {e}"
+        rows = (data.get(service) or {}).get("row") or []
+        if not rows:
+            # ECOS 는 오류를 200 + RESULT 블록으로 돌려주기도 한다. 그 문구를
+            # 지어내지 않고 **있으면 그대로** 전달한다.
+            res = (data.get("RESULT") or {})
+            detail = res.get("MESSAGE") or res.get("CODE")
+            return [], f"{service} 응답이 비었습니다." + (f" ({detail})" if detail else "")
+        return list(rows), None
+
+    def fetch_table_list(self) -> tuple[list[dict], str | None]:
+        """통계표 목록 (`StatisticTableList`)."""
+        return self._fetch_meta("StatisticTableList")
+
+    def fetch_item_list(self, stat_code: str) -> tuple[list[dict], str | None]:
+        """한 통계표의 항목 목록 (`StatisticItemList`)."""
+        return self._fetch_meta("StatisticItemList", f"/{stat_code}")
+
+
+#: 메타 응답에서 주기를 담을 **가능성이 있는** 키들. ★어느 것인지 모른다★ —
+#: 실응답을 본 적이 없으므로 후보를 순회하고, 못 찾으면 `None` + 사유다.
+#: 하나로 단정해 적으면 그 키가 아닐 때 파서가 조용히 실패한다.
+META_CYCLE_KEYS = ("CYCLE", "P_CYCLE", "CYCLE_NAME", "PERIOD")
+META_PAGE_SIZE = 1000
+
+
+def cycle_from_meta_row(row: dict) -> tuple[str | None, str | None]:
+    """메타 행에서 공표 주기를 뽑는다 → (주기, 사유).
+
+    ★못 찾으면 조용히 성공한 척하지 않는다★ 기본값 `"M"` 을 돌려주면 그 값은
+    "확인된 월별" 과 구분되지 않는다. 그것이 정확히 이 축을 만든 이유다.
+    """
+    from src.data.source_registry import ECOS_CYCLES
+
+    for k in META_CYCLE_KEYS:
+        raw = row.get(k)
+        if raw is None:
+            continue
+        v = str(raw).strip().upper()[:1]
+        if v in ECOS_CYCLES:
+            return v, None
+        return None, (f"주기 필드 {k!r} 의 값 {raw!r} 을 해석할 수 없습니다 — "
+                      f"알려진 주기는 {'·'.join(ECOS_CYCLES)} 입니다.")
+    return None, (f"응답에 주기 필드가 없습니다 — 후보 {'·'.join(META_CYCLE_KEYS)} 중 "
+                  f"어느 것도 없습니다. 실제 키: {sorted(row)[:8]}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -514,8 +605,16 @@ class MacroCollector:
         gv = list(govt.values) if govt and govt.values else []
         n = min(len(cv), len(gv))
         if n == 0:
-            return MacroSeries(indicator=key, name=name, unit=unit,
-                               source="unavailable", timestamps=[], values=[])
+            # ★파생의 실패 원인은 넷째다★ 키도 좌표도 주기도 아니라 **원계열이
+            # 없다**. 어느 다리가 빠졌는지 말해 주지 않으면 사용자는 스프레드
+            # 자체가 고장난 줄 안다 — 고쳐야 할 곳은 원계열 쪽이다.
+            missing = [n_ for n_, s_ in (("피감수", cv), ("감수", gv)) if not s_]
+            return MacroSeries(
+                indicator=key, name=name, unit=unit,
+                source="unavailable", timestamps=[], values=[],
+                reason=(f"원계열이 없어 스프레드를 만들 수 없습니다({'·'.join(missing)} "
+                        f"쪽). ★한쪽만으로 만들지 않습니다★ — 한쪽 값을 스프레드처럼 "
+                        f"쓰면 그것은 합성이고, 화면은 실측 스프레드로 읽습니다."))
 
         vals = [round(float(c) - float(g), 4) for c, g in zip(cv[-n:], gv[-n:], strict=False)]
         ts = list(corp.timestamps)[-n:] if corp and corp.timestamps else []
@@ -554,6 +653,19 @@ class MacroCollector:
             ),
         )
 
+    def _unavailable_reason(self, key: str, source: str) -> str:
+        """수집 실패의 원인 — ★판정 로직은 레지스트리가 갖는다★
+
+        여기서 새로 판정하지 않고 `source_registry.unavailable_reason_for()` 에
+        태운다. 사유 문구가 두 곳에 있으면 갈라지고, 갈라진 사유는 틀린 사유다.
+        이 함수가 더하는 것은 **어느 클라이언트가 키를 갖고 있었는가** 하나뿐이다.
+        """
+        from src.data.source_registry import unavailable_reason_for
+
+        client = self.bok if source == "BOK" else self.fred
+        return unavailable_reason_for(
+            key, configured=bool(getattr(client, "is_configured", False)))
+
     def _collect_one(
         self, key: str, name: str, unit: str,
         fetcher, use_cache: bool, source: str,
@@ -574,6 +686,7 @@ class MacroCollector:
 
         timestamps, values = [], []
         actual_source = source
+        unavailable_reason: str | None = None
 
         # 외부 API 호출
         try:
@@ -611,6 +724,10 @@ class MacroCollector:
                 actual_source = "MOCK"
             else:
                 actual_source = "unavailable"   # 운영 — 실 BOK/FRED 미수신(키 미설정/실패) → "—"
+                # ★"unavailable" 만으로는 어디를 고쳐야 할지 알 수 없다★
+                # 키가 없는 것과 좌표가 틀린 것과 주기가 안 맞는 것은 처방이 전부
+                # 다른데, 예전에는 이 한 문자열로 전부 뭉개졌다.
+                unavailable_reason = self._unavailable_reason(key, source)
 
         # 정규화 + 메트릭
         clean = [v for v in values if v is not None and not math.isnan(v)]
@@ -646,6 +763,9 @@ class MacroCollector:
             std_5y=norm["std_5y"],
             trend=norm["trend"],
             last_update=datetime.now().isoformat(),
+            # ★값이 왔으면 None 이다★ 항상 사유를 채우면 "왜 비었나" 라는 질문에
+            # 답하는 필드가 아니라 그냥 또 하나의 설명문이 된다.
+            reason=unavailable_reason,
         )
 
         with self._lock:

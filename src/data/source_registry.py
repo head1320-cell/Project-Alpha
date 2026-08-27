@@ -88,6 +88,32 @@ _UNVERIFIED_NOTE = (
     "`verify_connection.py` 로 실호출을 확인한 뒤 사람이 verified_live 를 올립니다."
 )
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 공표 주기(cycle) — ★계열 속성이라 제공자에서 유도할 수 없다★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# `has_vintage` 는 제공자에서 유도한다(빈티지는 API 가 주느냐 마느냐의 문제다).
+# ★주기는 다르다★ — 같은 ECOS 안에서도 기준금리는 일별이고 GDP 는 분기다.
+# 그래서 계열마다 적어야 하는데, 그것이 정확히 **추측이 새어 들어오는 자리**다.
+#
+# 그래서 기본값을 `None`(미검증)으로 둔다. `verified_live` 와 같은 규율이다 —
+# 메타 API(`StatisticTableList`/`StatisticItemList`)가 말해 주기 전까지는 모른다고
+# 적는다. 이 저장소는 ECOS **항목코드**를 추측했다가 회사채를 국고채라고 부른
+# 전례가 있다(`1fa4fbd`). 주기를 "아마 월별" 로 채우면 같은 종류의 사고가 난다.
+ECOS_CYCLES = ("D", "M", "Q", "A")
+
+#: 수집 실패의 세 원인 — 예전에는 전부 `source="unavailable"` 한 문자열로 뭉개졌다.
+#: 처방이 서로 다른데 구분이 안 되면 사용자도 우리도 어디를 고쳐야 할지 모른다.
+REASON_NO_KEY = ("API 키가 설정되지 않았습니다 — 이 계열은 조회를 시도조차 "
+                 "하지 않았습니다(코드가 틀렸다는 뜻이 아닙니다).")
+REASON_EMPTY_RESPONSE = ("검증된 좌표인데 응답이 비었습니다 — 쿼터 소진·일시 "
+                         "장애·해당 구간 미공표 중 하나입니다.")
+#: ★덧붙이는 문장이다★ 위 사유를 **대체하지 않는다**. Phase 1 에서 `not_ingested`
+#: 가 "미검증" 을 지워 원인을 잃었던 실수를 반복하지 않는다.
+REASON_CYCLE_SUSPECT = ("★주기 불일치 의심★ 이 계열의 공표 주기는 {freq} 로 "
+                        "확인됐는데 수집기는 월별(M)로 조회합니다 — 통계표가 "
+                        "월별을 공표하지 않으면 응답은 항상 빕니다.")
+
 
 @dataclass(frozen=True)
 class SourceSpec:
@@ -100,6 +126,11 @@ class SourceSpec:
     verified_live: bool = False
     note: str = ""
     derived_from: tuple[str, ...] = ()   # 파생 지표면 원계열 키들
+    #: 공표 주기 (`ECOS_CYCLES`). ★None = 미검증★ — 추측해 채우지 않는다.
+    #: `has_vintage` 처럼 제공자에서 유도할 수 없다(계열마다 다르다). 메타 API 가
+    #: 유일한 권위이고, `verified_live` 와 같이 **사람이 확인한 뒤** 올린다.
+    #: ★이 값은 수집 주기를 바꾸지 않는다★ — 기록·대조 전용이다(트립와이어가 지킨다).
+    frequency: str | None = None
 
     @property
     def has_vintage(self) -> bool:
@@ -489,6 +520,27 @@ def indicator_block(values: dict[str, Any] | None = None,
     as_of = as_of or {}
     return {s.key: status(s.key, value=values.get(s.key), as_of=as_of.get(s.key))
             for s in _SPECS}
+
+
+def unavailable_reason_for(key: str, *, configured: bool) -> str:
+    """수집 실패의 **원인**을 말한다 — 세 가지가 뭉개지지 않게.
+
+    ★사유를 덧붙이지 덮어쓰지 않는다★ 주기 불일치 의심은 기존 사유를 **대체하지
+    않고** 뒤에 붙는다. 원인이 둘 다일 수 있고, 하나를 지우면 그 정보가 사라진다.
+
+    Args:
+        configured: 클라이언트가 키를 갖고 있었는가. 없으면 조회를 시도조차 하지
+            않았으므로 좌표가 맞는지 틀린지에 대해 말할 수 있는 것이 없다.
+    """
+    if not configured:
+        return REASON_NO_KEY
+    spec = _BY_KEY.get(key)
+    if spec is None:
+        return REASON_EMPTY_RESPONSE     # 레지스트리 밖 = 기존 지표
+    base = _UNVERIFIED_NOTE if not spec.verified_live else REASON_EMPTY_RESPONSE
+    if spec.frequency and spec.frequency != "M":
+        return base + " " + REASON_CYCLE_SUSPECT.format(freq=spec.frequency)
+    return base
 
 
 def new_source_mock_allowed(key: str) -> bool:
