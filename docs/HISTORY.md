@@ -7889,3 +7889,70 @@ VKOSPI 는 미검증 **이면서** 미수집이다 → 사유를 **더한다**.
 (프로덕션 참조 2건이 둘 다 주석). 관측 장치를 만들고 화면에 연결하지 않았으므로
 KRX `get_extra` 와 **같은 종류의 미사용**으로 셌다. P0 가 커버리지를 의도적으로
 떨어뜨렸는데 그 수치가 안 보이면 좋아졌는지 나빠졌는지 알 수 없다 — 다음 후보 1순위.
+
+---
+
+## 2026-08-27 · 능력 6상태 감사 + 가격 품질 강제 설계 (구현 없음)
+
+> 문서: [`능력 6상태 행렬`](specs/2026-08-27-capability-states-matrix.md)
+> ★읽기 전용 감사 + 설계다. `src/` 무변경.★
+
+### ★가장 큰 발견 — `adj_close` 를 읽는 코드가 하나도 없다★
+
+```
+adj_close 쓰는 곳    : krx_ingest(재구성) · kis_models(스키마) · price_quality(보고)
+adj_close 읽는 곳    : ★없음★
+daily_prices 읽는 곳 : 26개 파일
+```
+
+정본 로더가 증거다 — `kis_backtest_engine.load_ohlcv` 가
+`SELECT trade_date, "open", high, low, close, volume` 로 **원주가**를 고르고,
+`ohlcv_loader`·`etf_prices`·팩터·백테스트가 전부 그 위에 있다.
+
+★저장소의 모든 수익률이 **미조정 가격** 위에서 돈다.★ P0 는 "조정 계산이 조용히
+틀렸던 것" 을 고쳤고, 이 감사는 "**그 결과를 아무도 쓰지 않는다**" 를 찾았다.
+커버리지를 강제해도 소비자가 없으면 아무것도 바뀌지 않는다.
+
+### ★내 계획이 틀렸던 곳 — FRED 빈티지는 영속된다★
+
+계획 단계에서 ALFRED 빈티지를 *"조회 시점에만 존재"*(수집되나 미영속)로 적었다.
+**틀렸다.** `regime_snapshots` 테이블에 **`observations TEXT`** 컬럼이 있어
+`vintage_id`·`release_timestamp` 가 그대로 저장되고, 저장 **전에** 룩어헤드 가드가 있다:
+
+```python
+late = [o for o in observations if o.release_timestamp and o.release_timestamp > as_of]
+if late: raise LookAheadError(...)
+```
+
+`_derive_usage` 도 *"가장 약한 고리를 따른다"* 로 등급을 판다.
+★즉 완전한 PIT 파이프라인이 **이미 하나 있다**★ — 없어서가 아니라 **국면 축이 그
+경로를 안 타서** 문제다. 그래서 FRED 빈티지 배선의 비용 평가를 **중 → 작음**으로
+내렸다(단, 배분 결정 경로라 여전히 별도 승인).
+
+"수집되나 미영속" 의 실제 사례는 따로 찾았다 — **DART `elestock`·`alotMatter`**
+(`insider_flows`·`fundamentals_store` 에 `CREATE TABLE`/`INSERT` **0건**, 온디맨드).
+
+### 다섯 구분 실례
+
+| 구분 | 실례 |
+|---|---|
+| 능력 있으나 미구현 | ECOS 메타 3종 · DART 공시/원문/지분/분할 |
+| 구현됐으나 미수집 | KRX `get_extra` 4종 (호출부 0) |
+| 수집되나 미영속 | DART `elestock` · `alotMatter` |
+| 영속되나 미사용 | ★`adj_close`★ · `daily_prices.source` |
+| ★소비되나 PIT 부적격★ | 국면 축의 FRED 계열 · DART 재무 |
+
+★마지막 칸이 가장 위험하다★ 나머지 넷은 **없는 것**이고 이것은 **틀린 것**이다.
+
+### 권고 — 가격 품질 강제
+
+4상태(`adjusted`·`chain_broken`·`raw`·`missing`) + `price_usage()` 가
+**기존 `pit_macro.derive_usage` 를 호출**해 같은 등급을 낸다(두 번째 등급 체계 금지).
+★임계값을 지어내지 않는다★ — 기존 계약이 전부-아니면-전무(`all(vintage_id)`)이므로
+**모든 행이 adjusted 일 때만 BACKTEST_ELIGIBLE**.
+
+`src/engine/`·`allocation_routes.py` 무변경, 백테스트 엔진에 게이트 미배선.
+불변은 골든 스냅샷 3종 바이트 동일로 증명한다.
+
+★전환(`close → adj_close`)은 배분 경로라 별도 승인 사항으로 남긴다★ —
+그것이 이 작업의 목적지이지만 하드 경계 안쪽이다.
