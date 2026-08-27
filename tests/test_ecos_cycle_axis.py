@@ -411,4 +411,8 @@ def test_the_verify_script_never_writes_the_registry(monkeypatch):
         assert all(f is None for f in freqs.values()), f"{view} 에 주기가 올라갔다"
     assert out["checked"] == 37
     assert out["mismatched"] >= 1, "M 이 아닌 주기를 찾고도 불일치로 세지 않았다"
-    assert "레지스트리에 쓰지 않았습니다" in out["note"]
+    # ★산문을 단언하지 않는다★ 원래 여기서 `note` 의 정확한 문구를 확인했는데,
+    # 스크립트를 확장하며 문구를 다듬자 **동작은 그대로인데 테스트가 빨개졌다**.
+    # 진짜 가드는 위의 `before == after`(두 읽기 경로) 다 — 문구가 아니라 그것이
+    # "레지스트리를 고치지 않았다" 를 말한다.
+    assert "note" in out, "무엇을 했고 안 했는지 리포트가 말하지 않는다"

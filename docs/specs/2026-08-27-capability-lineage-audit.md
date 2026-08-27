@@ -469,6 +469,12 @@ d["male_emp"]   = round(emp * (1 - fr / 100))
 | 성공 시 | `_FMT` 에 `Q` 를 추가 → 분기 계열의 기본 조회가 열린다 |
 | 하지 말 것 | 표기 추측. `test_quarterly_is_refused_rather_than_invented` 가 막는다 |
 
+★후속 (데이터 계약 감사)★ — `scripts/verify_ecos_meta.py` 의 프로브 창
+`_PROBE_WINDOWS` 에도 **`Q` 를 넣지 않았다**. 분기 표기가 바로 알아내려는 것이므로
+요청에 적으면 순환이 된다. `D`·`M`·`A` 로 걸어 응답 `TIME` 에서 **역으로** 알아낸다.
+`test_the_quarterly_request_notation_is_still_not_invented` 가 지킨다.
+자세한 것은 [`2026-08-27-ecos-data-contract-audit.md`](2026-08-27-ecos-data-contract-audit.md).
+
 ---
 
 ## 부록 10. ★#5 정정★ — 메타는 수단이고, 결함은 주기 축의 부재였다

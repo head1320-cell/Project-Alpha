@@ -31,7 +31,10 @@ mock 이 덮으면, 그 mock 은 "데이터가 이렇게 생겼다" 가 아니�
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+import os
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from src.data.pit_macro import ResearchUsage, derive_usage
@@ -146,7 +149,7 @@ class SourceSpec:
 # ─────────────────────────────────────────────────────────────────────────────
 # 신규 소스 — 전부 verified_live=False 로 커밋된다.
 # ─────────────────────────────────────────────────────────────────────────────
-_SPECS: tuple[SourceSpec, ...] = (
+_RAW_SPECS: tuple[SourceSpec, ...] = (
     # ═══════════════════════════════════════════════════════════════════════
     # ECOS (한국은행) — P4-D1 에서 11 → 35 계열로 확장
     # ═══════════════════════════════════════════════════════════════════════
@@ -374,7 +377,75 @@ _SPECS: tuple[SourceSpec, ...] = (
         endpoint="/v1beta/trends:fetchTimeseries", unit="지수", note=_UNVERIFIED_NOTE),
 )
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 주기 증거 — ★사실과 출처를 붙여 다니게 한다★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# `frequency` 를 위 리터럴에 직접 적지 **않는다**. 그러면 `verified_live` 와 같은
+# 상태가 된다 — 플래그는 코드에 있는데 그것을 뒷받침하는 관측은 어디에도 없는 상태.
+# (실제로 그렇다: `verified_live=True` 인 ECOS 8계열의 근거를 추적하면 커밋 메시지
+#  주장 하나뿐이고, 검증 경로인 `verify_connection.py::check_ecos` 는 값의 범위만
+#  볼 뿐 주기도 TIME 문자열도 기록하지 않는다.)
+#
+# 대신 관측을 파일에 남기고 레지스트리가 그것을 **읽는다**. 항목마다 어떤 응답에서
+# 나왔는지(`evidence_source`)·언제 봤는지(`probed_at`)·확신도(`grade`)가 붙어 다니고,
+# diff 가 증거의 변화를 그대로 보여 준다. 채우는 것은 `scripts/verify_ecos_meta.py`
+# 이고 사람이 검토해 커밋한다.
+#: 환경변수로 덮어쓸 수 있다 — 다른 증거 파일(예: 로컬에서 갓 프로브한 것)을
+#: 운영 파일을 건드리지 않고 시험해 보기 위한 것이다. 없으면 체크인된 파일을 쓴다.
+FREQ_EVIDENCE_PATH = Path(
+    os.getenv("ECOS_FREQ_EVIDENCE_PATH")
+    or Path(__file__).resolve().parents[2] / "docs" / "specs" / "ecos-frequency-evidence.json")
+
+#: 등급 순서 — 낮은 확신이 조용히 사실이 되는 경로를 막는다.
+EVIDENCE_GRADES = ("E0", "E1", "E2", "E3")
+
+
+def _load_frequency_evidence() -> tuple[dict[str, dict], str]:
+    """(계열별 증거, 최소 적용 등급). ★없거나 깨져도 예외를 내지 않는다★
+
+    증거가 없는 것은 오류가 아니라 **정상 상태**다(지금이 그렇다). 여기서 터지면
+    레지스트리를 임포트하는 모든 경로가 함께 죽고, 그것은 "주기를 모른다" 보다
+    훨씬 나쁜 결과다.
+    """
+    try:
+        doc = json.loads(FREQ_EVIDENCE_PATH.read_text(encoding="utf-8"))
+        series = doc.get("series")
+        if not isinstance(series, dict):
+            return {}, "E2"
+        floor = doc.get("min_grade_to_apply")
+        return series, (floor if floor in EVIDENCE_GRADES else "E2")
+    except Exception:
+        return {}, "E2"
+
+
+def _apply_frequency_evidence(spec: SourceSpec) -> SourceSpec:
+    """증거가 **충분할 때만** 주기를 입힌다. 그 외에는 `None`(미검증) 그대로."""
+    ev = _FREQ_EVIDENCE.get(spec.key)
+    if not isinstance(ev, dict):
+        return spec
+    freq, grade = ev.get("frequency"), ev.get("grade")
+    if freq not in ECOS_CYCLES:
+        return spec                     # 어휘 밖의 값은 사실이 아니다
+    if grade not in EVIDENCE_GRADES:
+        return spec
+    if EVIDENCE_GRADES.index(grade) < EVIDENCE_GRADES.index(_FREQ_EVIDENCE_FLOOR):
+        return spec                     # ★확신이 모자라면 적용하지 않는다★
+    return replace(spec, frequency=freq)
+
+
+_FREQ_EVIDENCE, _FREQ_EVIDENCE_FLOOR = _load_frequency_evidence()
+#: ★`_BY_KEY` 는 반드시 `_SPECS` 에서 파생한다★ 따로 만들면 두 읽기 경로가
+#: 갈라진다 — `432f554` 에서 `_BY_KEY` 에만 쓰는 변이가 실제로 살아남았다.
+_SPECS: tuple[SourceSpec, ...] = tuple(_apply_frequency_evidence(s) for s in _RAW_SPECS)
 _BY_KEY = {s.key: s for s in _SPECS}
+
+
+def frequency_evidence_for(key: str) -> dict | None:
+    """계열의 주기 증거 원본(있으면). ★사실만이 아니라 출처도 조회할 수 있어야 한다★"""
+    ev = _FREQ_EVIDENCE.get(key)
+    return dict(ev) if isinstance(ev, dict) else None
 
 
 def all_specs() -> tuple[SourceSpec, ...]:

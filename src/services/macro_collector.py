@@ -322,6 +322,49 @@ class BokClient:
             return [], f"{service} 응답이 비었습니다." + (f" ({detail})" if detail else "")
         return list(rows), None
 
+    def probe_series(self, stat_code: str, item_code: str, period: str,
+                     start: str, end: str, limit: int = 5) -> dict:
+        """★프로브 전용★ 원시 응답을 **삼키지 않고** 돌려준다.
+
+        `fetch_series` 는 실패를 `([], [])` 로 삼킨다 — 운영에서는 그것이 옳다
+        (호출자는 값이 필요하지 흔적이 필요하지 않다). 그러나 **왜** 비었는지를
+        알아내는 것이 목적일 때는 정확히 그 삼킨 것이 필요하다.
+
+        ★운영 경로를 고치지 않고 경로를 하나 더 둔다★ — 대신 같은 `_throttle` 과
+        `is_configured` 를 쓴다. 분당 한도는 서비스별이 아니라 **키별**이고, 스로틀
+        없는 경로가 하나라도 생기면 한도를 넘긴 쪽이 조용히 실패한다.
+
+        `limit` 이 작다(기본 5) — 이것은 대량 적재가 아니라 **메타 검증**이다.
+        """
+        out: dict = {"stat_code": stat_code, "item_code": item_code, "period": period,
+                     "start": start, "end": end}
+        if not self.is_configured:
+            from src.data.source_registry import REASON_NO_KEY
+            return {**out, "status": "no_key", "reason": REASON_NO_KEY}
+        if requests is None:
+            return {**out, "status": "no_client", "reason": "requests 를 사용할 수 없습니다."}
+        url = (f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/{int(limit)}"
+               f"/{stat_code}/{period}/{start}/{end}/{item_code}")
+        self._throttle()
+        try:
+            r = requests.get(url, timeout=self.timeout)
+            out["http_status"] = getattr(r, "status_code", None)
+            data = r.json()
+        except Exception as e:
+            return {**out, "status": "call_failed", "reason": f"{type(e).__name__}: {e}"}
+        rows = (data.get("StatisticSearch") or {}).get("row") or []
+        if not rows:
+            # ECOS 는 오류를 200 + RESULT 블록으로 돌려주기도 한다. 그 문구를
+            # 지어내지 않고 **있으면 그대로** 전달한다.
+            res = data.get("RESULT") or {}
+            return {**out, "status": "empty", "ecos_code": res.get("CODE"),
+                    "ecos_message": res.get("MESSAGE")}
+        # ★TIME 은 해석하지 않고 **그대로** 남긴다★ 포맷이 무엇인지가 질문이므로,
+        # 파싱해서 정규화하면 답을 지워 버리게 된다.
+        return {**out, "status": "ok", "row_count": len(rows),
+                "time_sample": [str(r_.get("TIME")) for r_ in rows[:3]],
+                "row_keys": sorted(rows[0])}
+
     def fetch_table_list(self) -> tuple[list[dict], str | None]:
         """통계표 목록 (`StatisticTableList`)."""
         return self._fetch_meta("StatisticTableList")
