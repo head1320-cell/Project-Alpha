@@ -93,7 +93,11 @@ def test_the_bridge_width_matches_the_measurement():
     """★실측 검산★ 숫자가 달라지면 상류 레지스트리가 바뀐 것이다 — 먼저 그것을 본다."""
     pit, reach = token_maps()
     assert len(FIELD_BY_ID) == 157
-    assert len(reach) == 92, f"도달 가능 필드가 92 에서 바뀌었다: {len(reach)}"
+    # 92 → 93: `div_at_record`(배당시점배당수익률) 하나가 늘었다. `alotMatter` 가
+    # 이미 주던 `yield_pct` 를 이어 `REAL_CAPABLE_IDS` 에 넣은 결과이고, 델타가
+    # **그 한 개뿐**임을 확인한 뒤 갱신했다(이 테스트의 독스트링이 지시하는 절차).
+    assert len(reach) == 93, f"도달 가능 필드가 93 에서 바뀌었다: {len(reach)}"
+    assert "div_at_record" in reach, "배당시점배당수익률이 다리에서 사라졌다"
     assert set(pit) == {"per", "pbr", "psr", "pcr", "roe"}, pit
 
 

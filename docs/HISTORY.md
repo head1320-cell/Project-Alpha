@@ -8768,3 +8768,115 @@ Y4 클라이언트 우회 · Y5 키 검증 완화 · Y6 파서 규칙 갈라짐 
 감사 우선순위에 남은 것은 **#2 DART 배당**(정확성 영향 최대·비용 큼·`DART_API_KEY`
 필요)과 **#5 ECOS 메타 3종**이다. `factor_tokens` 의 제공자 경로는 이제 둘 다
 수집기 클라이언트를 통과한다.
+
+---
+
+## 2026-08-27 — 공시 시가배당률 연결 + ★거짓 미지원 사유 제거★ (감사 #2 정정)
+
+감사 #2("DART 배당 영속 + 총수익 계열")를 착수하려고 실측했더니 **항목 자체가
+상당 부분 틀려 있었다.**
+
+### 감사 #2 의 전제가 틀렸다
+
+```
+alotMatter → {dps, payout_pct, yield_pct}
+  dps        → dart_client.py:470  fs.dps 주입     ✔ 배선됨
+  payout_pct → fundamentals_store._real_dividend   ✔ 배선됨
+  yield_pct  → ★아무도 읽지 않았다★
+```
+
+그리고 **총수익 팩터도 이미 있었다** — `extended_factors_store.py:242`
+`total_return = r12 + dividend_yield`. ★"총수익 계열이 없다" 는 틀렸다.★
+참인 것은 좁다 — `daily_prices` 의 **일별 수익률 사슬**에 배당이 없다.
+감사 부록 2(가격 의미 계약)에는 정확히 적혀 있었는데 §C 가 과잉 일반화했다.
+
+### 남은 진짜 공백은 배당기준일 하나다
+
+`alotMatter` 는 사업연도 집계라 **배당락일을 주지 않는다**(`_parse_dividend_rows`
+실측). ★감사 #4(`mktcap`)와 같은 구조★ — 원천이 그 필드를 안 주므로 정직하게는
+만들 수 없다. 지어내면 룩어헤드다.
+
+### 받아 놓고 버리던 필드를 이었다
+
+`yield_pct`(공시 현금배당수익률, **배당 시점 기준**)를
+`FinancialStatement.disclosed_dividend_yield` 로 싣고 토큰 "배당시점배당수익률" 을
+열었다. 팩터 `div_at_record` 는 **이미 있었고** `REAL_CAPABLE_IDS` 에만 없었다.
+
+★`dividend_yield` 를 덮지 않는다★ — 그쪽은 `dps / 오늘 주가`다. 과거를 분석하며
+현재가 기준을 쓰면 오늘 가격이 과거로 샌다. 두 값은 기준 시점이 다르다.
+
+### 거짓 사유를 사실로 쪼갰다
+
+```
+REASON_DIVDETAIL = "배당·자사주 상세 — DART 배당공시(alotMatter) 미연동(다음 단계)"
+```
+
+★`alotMatter` 는 배선돼 있다.★ 이 한 문장이 11개 토큰을 덮었는데 실제 원인은
+**다섯 가지로 서로 달랐다**(실측):
+
+| 토큰 | 실제 |
+|---|---|
+| 주당배당금·FCF배당성향·투자자주가수익률·총수익률 | ★이미 supported — 항목이 죽어 있었다★ |
+| 배당시점배당수익률 | `yield_pct` 를 버려서 닫힘 → **열었다** |
+| 주당배당금증가율 | 이미 supported 인 "배당성장률"과 같은 양 → `REASON_DERIVE` |
+| 배당횟수 | 분기 보고서 다중 조회 → `REASON_DIVPERIOD` |
+| 배당금총액증가율 | 배당기준일 필요 → `REASON_DIVDATE` |
+| 자사주 3종 | `alotMatter` 에 아예 없음 → `REASON_TREASURY` |
+
+### ★내가 쓴 테스트가 공허했다 — 가장 위험한 변이를 놓쳤다★
+
+Z2(공시값으로 `dividend_yield` 를 덮음)가 **살아남았다**. 원인은 내 테스트였다:
+
+```python
+fs = get_financial_statement_full(...)
+fs.compute_ratios(current_price=100_000.0)   # ← 검사하려는 필드를 스스로 덮는다
+assert fs.dividend_yield == pytest.approx(1.444)
+```
+
+★검사 대상 필드를 테스트가 먼저 재계산해 버렸다.★ 이 세션 내내 경계해 온 바로 그
+공허한 테스트를 내가 썼다. **반환된 그대로**를 먼저 보도록 고쳤다 — 가격을 안 줬으므로
+`dividend_yield` 는 `None` 이어야 하고, 공시값이 새어 들어왔으면 그 자리에서 잡힌다.
+
+### ★상류 트립와이어가 제대로 작동했다★
+
+`test_company_thesis.py::test_the_bridge_width_matches_the_measurement` 가 red 가
+됐다(92 → 93). 그 독스트링이 지시하는 절차 그대로 — **먼저 델타를 확인**했고
+`div_at_record` **하나뿐**임을 재현으로 검산한 뒤 숫자를 갱신했다.
+
+### 새 감사 항목 — 죽은 사유 17개
+
+D7 을 저장소 전체로 돌리니 주주환원 밖에서 **17개**가 더 나왔다(`POR`·`매출원가율`·
+`직원급여총액` 등). 이번 범위가 아니라 **고치지 않았고**, 대신 상한을 거는 테스트로
+**늘어나지 못하게** 막고 감사 문서 §부록 7 에 적었다.
+
+### 변경 파일
+
+| 파일 | 변경 |
+|---|---|
+| `src/data/dart_client.py` | `disclosed_dividend_yield` 필드 + 주입 |
+| `src/data/extended_factors_store.py` | `div_at_record` → `REAL_CAPABLE_IDS` · `_real_dividend` 훅 |
+| `src/kis_strategies/factor_tokens.py` | 사유 3종 신설 · 죽은 항목 5개 제거 |
+| `tests/test_company_thesis.py` | 트립와이어 92→93 (델타 검산 후) |
+| `docs/specs/…lineage-audit.md` | #2 정정(부록 6) · 죽은 사유(부록 7) |
+| `tests/test_dividend_disclosure.py` | 신규 19건 |
+
+### 변이 8종 전부 사망
+
+Z1 `yield_pct` 주입 제거 · ★Z2 `dividend_yield` 덮어쓰기(1차에 살아남음 → 테스트 수정)★ ·
+Z3 자사주까지 개방 · Z4 낡은 거짓 사유 복귀 · Z5 죽은 항목 복귀 · Z6 사유 재뭉침 ·
+Z7 `dps` 주입 제거 · Z8 키 없이 합성값 주입.
+
+### 불변 4중
+
+| # | 방법 | 결과 |
+|---|---|---|
+| 1 | `git diff --stat HEAD -- src/engine/ src/api/allocation_routes.py` | ★비어 있음★ |
+| 2 | 골든 스냅샷 3종 | ★바이트 동일★ (변이 실험 후 재확인) |
+| 3 | 전체 스위트 | ★3,162 passed / 10 skipped★ (3,144 → **+18**) · ruff 0 |
+| 4 | 기존 supported 토큰 불변 · 거짓 사유 0 | 정리가 기능을 지우지 않았다 |
+
+### 남는 것
+
+일별 총수익 계열은 **배당 결정 공시**(배당기준일)가 있어야 한다 — `alotMatter`
+로는 불가능하다. 자사주 3종은 자기주식 취득·처분 공시 미구현. 감사에 남은 것은
+**#5 ECOS 메타 3종**과 새로 적은 **죽은 사유 17개**다.

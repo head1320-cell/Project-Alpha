@@ -115,7 +115,9 @@ REAL_CAPABLE_IDS = {
     "recv_growth", "salary_total", "rev_per_emp", "op_per_emp", "female_emp", "male_emp",
     "return_1y", "investor_return", "total_return", "amount_growth",
     # _real_* 훅 (DART/KIS)
-    "dps", "foreign_ownership", "employees", "avg_salary", "executives",
+    # ★`div_at_record` 는 새로 받아 오는 값이 아니다★ `alotMatter` 가 이미 주는
+    # `yield_pct`(공시 현금배당수익률)를 그동안 파싱해 놓고 **버리고 있었다**.
+    "dps", "div_at_record", "foreign_ownership", "employees", "avg_salary", "executives",
 }
 MOCK_ONLY_IDS = {f.id for f in EXTENDED_FACTORS if f.id not in REAL_CAPABLE_IDS}
 MOCK_ONLY_LABELS = {f.label for f in EXTENDED_FACTORS if f.id in MOCK_ONLY_IDS}
@@ -261,16 +263,36 @@ class ExtendedFactorsStore(DeterministicMockStore):
             return {}
 
     def _real_dividend(self, code: str) -> dict:
+        """DART 배당(alotMatter) — 주당배당금 + ★공시 시가배당률★.
+
+        `div_at_record` 는 `alotMatter` 의 `yield_pct` 다. 그동안 파싱해 놓고
+        아무도 읽지 않았다. `dividend_yield`(= `dps / 현재가`)와 **다른 값**이라
+        덮지 않고 따로 낸다 — 과거 분석에 현재가 기준을 쓰면 오늘 가격이 과거로
+        새어 든다.
+        """
         if not os.getenv("DART_API_KEY"):
             return {}
+        out: dict = {}
         try:
             from src.data.fundamentals_store import FundamentalsStore
             raw = FundamentalsStore.get_default().get_raw_financials(code) or {}
             dps = raw.get("dps")
-            return {"dps": round(float(dps), 1)} if dps not in (None, "") else {}
+            if dps not in (None, ""):
+                out["dps"] = round(float(dps), 1)
         except Exception as e:
             logger.debug(f"주당배당금 조회 실패 [{code}]: {e}")
-            return {}
+        try:
+            from src.data.dart_client import get_corp_code, get_dart_client
+            corp = get_corp_code(code)
+            if corp:
+                year = str(_dt.date.today().year - 1)
+                div = get_dart_client().get_dividend_info(corp, year) or {}
+                y = div.get("yield_pct")
+                if y not in (None, ""):
+                    out["div_at_record"] = round(float(y), 2)
+        except Exception as e:
+            logger.debug(f"공시 시가배당률 조회 실패 [{code}]: {e}")
+        return out
 
     def _real_business(self, code: str) -> dict:
         """DART 사업보고서(직원·임원) best-effort. 실패 시 {} (mock/파생 유지)."""

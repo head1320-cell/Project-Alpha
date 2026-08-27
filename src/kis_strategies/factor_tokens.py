@@ -386,7 +386,18 @@ REASON_CONSENSUS = "컨센서스/유료 데이터 — 미지원"
 REASON_SHORT = "공매도·신용 데이터 미연동"
 # ── Butler 택소노미 이식: 5개 무료 API로 당장 불가/미연동 사유 ──
 REASON_BIZREPORT = "DART 사업보고서 항목(직원·임원·수주·수출) — 미연동(다음 단계)"
-REASON_DIVDETAIL = "배당·자사주 상세 — DART 배당공시(alotMatter) 미연동(다음 단계)"
+#: ★예전 `REASON_DIVDETAIL` 을 사실로 쪼갠 것들★
+#:
+#: 하나의 문장이 11개 토큰을 덮고 있었고, 그 문장은 **거짓이었다** —
+#: *"DART 배당공시(alotMatter) 미연동"*. `alotMatter` 는 배선돼 있다
+#: (`dart_client.get_dividend_info` → `fs.dps` · `fundamentals_store._real_dividend`).
+#: 그리고 그 11개의 실제 원인은 **다섯 가지로 서로 달랐다**(실측).
+REASON_DIVDATE = ("배당 기준일 미제공 — alotMatter 는 사업연도 집계라 배당락일이 "
+                  "없습니다. 일별 총수익 계열에는 배당 결정 공시가 필요합니다")
+REASON_TREASURY = ("자기주식 취득·처분 공시 미연동 — alotMatter 에는 자사주 항목이 "
+                   "없습니다")
+REASON_DIVPERIOD = ("분기 보고서 다중 조회 필요 — alotMatter 를 reprt_code "
+                    "11012·11013·11014 로 각각 받아야 횟수를 셀 수 있습니다")
 REASON_OWNERSHIP = "지분율(외국인/대주주/소액주주) — 미연동(다음 단계)"
 REASON_IR = "IR·공시 일정(실적발표·설명회) — DART 공시 미연동(다음 단계)"
 REASON_DERIVE = "원천 데이터는 있으나 파생 미구현 — 대체 팩터 권장"
@@ -415,11 +426,17 @@ UNSUPPORTED_REASONS: dict[str, str] = {
         "평균급여증가율", "남자평균급여증가율", "여자평균급여증가율",
         "1인당매출액", "1인당영업이익", "임원수", "임원평균급여", "임원급여총액증가율",
         "대주주지분율", "소액주주수", "소액주주지분율", "우선주발행", "장내매수", "장내매도")},
-    # ── Butler 주주환원 상세 (DART 배당공시 — 다음 단계) ──
-    **{t: REASON_DIVDETAIL for t in (
-        "주당배당금", "배당횟수", "배당시점배당수익률", "FCF배당성향",
-        "배당금총액증가율", "주당배당금증가율", "자사주보유비율", "자사주소각횟수", "자사주소각비율",
-        "투자자주가수익률", "총수익률")},
+    # ── Butler 주주환원 상세 — ★사유를 실제 원인별로 쪼갠다★
+    # 제거된 것: 주당배당금·FCF배당성향·투자자주가수익률·총수익률 — 넷 다 **이미
+    # supported** 라 항목이 죽어 있었다(`token_support` 가 걸러서 안 보였을 뿐).
+    # 그 팩터가 언젠가 mock 으로 내려가면 사용자에게 거짓 사유가 뜬다.
+    # 제거된 것: 배당시점배당수익률 — `alotMatter.yield_pct` 를 이어서 열었다.
+    **{t: REASON_TREASURY for t in (
+        "자사주보유비율", "자사주소각횟수", "자사주소각비율")},
+    "배당횟수": REASON_DIVPERIOD,
+    "배당금총액증가율": REASON_DIVDATE,
+    # 이미 supported 인 "배당성장률"(`dps_growth_yoy`)과 같은 양의 다른 이름이다.
+    "주당배당금증가율": REASON_DERIVE,
     # ── Butler 지분율 (외국인 누적 지분 — 다음 단계) ──
     "외국인지분율": REASON_OWNERSHIP,
     # ── Butler 컨센서스 (FnGuide/DataGuide 유료 — 영구 미지원) ──
