@@ -296,3 +296,52 @@ B1(hard) vs N(probabilistic) 를 비교하지만 그것은 실험이지 경로�
 **하지 않을 것** — HSMM · sticky HMM · TVTP · MS-VAR · DFM · 베이지안 HMM ·
 regime-switching GARCH · 입자필터 · 신경 상태공간. 지금 붙이면 ⑴ **하중을 받지 않는
 팔**을 고도화하거나 ⑵ 관측(중앙값 0)보다 모수가 많은 모형을 붙이는 것이다.
+
+
+---
+
+## 부록 B — Track B 실측과 B4(별도 승인) 집행 (2026-08-28)
+
+### B.1 Track B 는 대부분 실행 불가다
+
+| | 단계 | 실측 | 실행? |
+|---|---|---|---|
+| B1 | FRED 키 → 21계열 + ALFRED 빈티지 | 키 **미설정** · `api.stlouisfed.org` **도달 불가** | ✗ |
+| B2 | 깊이 240개월 | 관측 중앙값 0 | ✗ B1 종속 |
+| B3 | 조건4·5 재실측 | 실계열 0 | ✗ B1 종속 |
+| **B4** | **축 빈티지 개방 — 별도 승인** | ★승인·집행 완료★ | ✓ |
+| B5 | 표본 240이면 4상태 HMM 재검토 | 표본 중앙값 0 | ✗ B1 종속 |
+
+★범위 선택이 아니라 환경 차단이다★ — 키는 사용자 로컬에서 넣어야 한다.
+`BOK`·`KRX`·`DART` 도 같은 상태다.
+
+### B.2 B4 집행 — ★상수를 뒤집지 않았다★
+
+`COLLECTOR_READS_VINTAGE` 는 사실 진술이다. 코드가 하지 않는 일을 참이라 적으면
+거짓 선언이고 `tokenize` 대조가 잡는다. 그래서 **경로를 실제로 PIT 로 만들었다**:
+
+- `collect_all(as_of=None)` — 라이브는 빈티지 우선 + `vintage_used` 라벨,
+  `as_of` 는 PIT 요청이고 빈티지가 없으면 ★값을 내지 않는다★.
+- `_from_vintage_store` — `macro_observation_store.load(as_of=)` +
+  `pit_macro.latest_vintage_per_period` **재사용**.
+- ★`vintage_id` 가 빈 행은 버린다★ — `record_series` write-through 행을 빈티지로
+  되읽으면 자기가 써 넣은 현재값으로 PIT 를 주장하는 **순환 거짓**이 된다.
+  빈티지에서 읽은 계열은 스토어에 되쓰지도 않는다.
+- PIT 조회는 프로세스 캐시를 **쓰지도 남기지도** 않는다(라이브 오염 방지).
+
+### B.3 승인의 정확한 범위 — ★축은 오늘 그대로다★
+
+판정은 `⑵ ∧ ⑶` 이고 ⑶ 은 관측이다. 빈티지 0건인 오늘:
+
+    kr unmanaged path_uses_vintage=False {ECOS/source:4, FRED/path:1}
+    us unmanaged path_uses_vintage=False {FRED/path:6}
+
+키가 오면 빈티지가 쌓인 **계열만** 열린다. ★ECOS 는 행을 넣어도 `source` 로
+남는다★ — 제공자에 빈티지 엔드포인트가 없어 영구 차단이다.
+
+### B.4 남는 것 — ★검증되지 않은 채로 준비됐다★
+
+증거등급 **E1**. 축이 실제로 `managed` 가 되는지, 개정 편향의 **크기**가 얼마인지는
+FRED 키와 ALFRED 적재 없이 알 수 없다. 키가 들어오면 순서는 —
+`macro_vintage_backfill` 로 적재(A2 의 startup 데몬이 자동) → `revision_report` 로
+**개정 크기를 먼저 재고** → 그 다음에 축 판정을 신뢰한다.

@@ -151,11 +151,30 @@ def test_the_hardcoded_constant_is_gone():
 
 
 def test_path_flag_is_read_from_the_collector():
-    """V6 짝 — 그 사실이 수집기에 있고, 오늘은 거짓이다."""
+    """V6 짝 — 그 사실은 수집기에 하나만 있다.
+
+    ★이 테스트는 뒤집혔다★ 예전에는 `is False` 를 못 박고 *"수집기가 빈티지를
+    읽는다고 선언됐다 — 실제로 배선됐는가?"* 라고 물었다. **배선됐다** —
+    `collect_all()` 이 `_from_vintage_store` 로 관측 스토어를 as-of 조회한다
+    (Track B4, 별도 승인). 그래서 이제 얼어붙은 값이 아니라 **선언과 코드가
+    일치하는가**를 본다. 그 대조는 `test_axis_revision_status.py` 가 `tokenize`
+    로 수행하므로, 여기서는 ★막는 것이 이제 ⑶ 이라는 사실★ 을 못 박는다.
+    """
     from src.services.macro_collector import COLLECTOR_READS_VINTAGE
 
-    assert COLLECTOR_READS_VINTAGE is False, \
-        "수집기가 빈티지를 읽는다고 선언됐다 — 실제로 배선됐는가?"
+    assert COLLECTOR_READS_VINTAGE is True, "배선이 사라졌다면 선언도 내려야 한다"
+
+
+def test_the_remaining_block_is_the_observed_one(no_vintage):
+    """★승인의 범위★ ⑵ 가 열려도 ⑶ 이 관측으로 막는다.
+
+    빈티지 행이 0건인 오늘, 축은 여전히 `unmanaged` 여야 한다 — 승인은 "데이터
+    없이도 PIT 라고 하자" 가 아니라 "빈티지가 실제로 쌓이면 인정한다" 였다.
+    """
+    st = ra.axis_revision_status("us")
+    assert st["revision_bias"] == "unmanaged"
+    assert st["path_uses_vintage"] is False
+    assert all(r["blocked_by"] == "path" for r in st["series"])
 
 
 def test_status_still_reports_the_path_fact(no_vintage):

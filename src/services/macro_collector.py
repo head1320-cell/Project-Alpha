@@ -51,13 +51,18 @@ logger = logging.getLogger(__name__)
 #: ★수집 경로가 빈티지를 가져오는가★ — 사실이 **있는 곳**에 둔다.
 #:
 #: 국면 축(`regime_axes.axis_revision_status`)이 이 값을 읽어 "PIT 관리됨" 을
-#: 판정한다. 예전에는 그 선언이 `regime_axes` 쪽에 있었는데, 사실은 여기에 있다 —
-#: `collect_all()` 이 `pit_macro`/관측 스토어를 as-of 로 조회하는가.
+#: 판정한다. ★이것은 사실 진술이지 스위치가 아니다★ — 코드가 하지 않는 일을
+#: 참이라 적으면 그것은 승인 집행이 아니라 거짓 선언이고,
+#: `tests/test_axis_revision_status.py` 가 `tokenize` 로 소스와 대조해 잡는다.
 #:
-#: ★오늘은 거짓이다★ 이 모듈에 `pit_macro`·`vintage` 참조가 하나도 없다.
-#: 배선하는 사람이 이 값을 함께 올려야 하고, `tests/test_axis_revision_status.py`
-#: 가 선언과 실제 코드를 `tokenize` 로 대조해 갈라짐을 막는다.
-COLLECTOR_READS_VINTAGE = False
+#: ★오늘 참인 이유★ `collect_all()` 이 계열마다 `macro_observation_store` 를
+#: **as-of 로 조회**하고(`_from_vintage_store`), 빈티지가 있으면 그것으로 시계열을
+#: 만든다. 없으면 기존 경로를 쓰되 `MacroSeries.vintage_used=False` 로 라벨한다.
+#:
+#: ★그래도 축이 열리지는 않는다★ 판정은 이 값과 **⑶ 그 계열에 실제 빈티지 행이
+#: 있는가**(`regime_axes._series_has_vintage`, 관측)의 **논리곱**이다. 빈티지 0건인
+#: 오늘은 축 출력이 이전과 완전히 같고, 키가 들어와 빈티지가 쌓인 **계열만** 열린다.
+COLLECTOR_READS_VINTAGE = True
 
 BOK_BASE_URL = "https://ecos.bok.or.kr/api"
 FRED_BASE_URL = "https://api.stlouisfed.org/fred"
@@ -115,6 +120,12 @@ class MacroSeries:
     std_5y:       float | None = None
     trend:        str = "flat"                 # "up" | "down" | "flat"
     last_update:  str | None = None
+    #: ★이 값이 빈티지에서 왔는가★ 어디서 왔는지 **행마다** 말한다 — 라벨이
+    #: 없으면 PIT 값과 현재값이 화면에서 구분되지 않는다.
+    vintage_used: bool = False
+    #: PIT 조회 시점(`collect_all(as_of=...)`). 라이브면 `None`.
+    as_of:        str | None = None
+
     #: ★`source="unavailable"` 일 때 **왜** 인지★ 값이 왔으면 None 이다.
     #: 예전에는 `source="unavailable"` 한 문자열이 전부라 **키 없음**·**좌표 미검증**·
     #: **검증됐는데 빈 응답**·**파생 원계열 부재** 가 구분되지 않았다. 넷의 처방이
@@ -555,6 +566,45 @@ MOCK_PROFILES = {
 # Unified Collector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+#: `as_of` PIT 요청인데 그 계열에 빈티지가 없을 때. ★현재값을 주지 않는다★
+REASON_NO_VINTAGE_FOR_ASOF = (
+    "빈티지가 없어 시점 고정 조회에 답할 수 없습니다 — 현재 개정본으로 과거를 "
+    "채점하면 그것은 시점 정합이 아니라 개정 편향입니다(`ac938c4`). "
+    "ALFRED 빈티지를 적재하면(`macro_vintage_backfill`) 이 계열이 열립니다."
+)
+
+
+def _from_vintage_store(key: str, as_of: str | None):
+    """관측 스토어에서 **빈티지 있는** 관측만 골라 `(timestamps, values)`.
+
+    없으면 `None` — 호출자가 모드에 따라 처리한다.
+
+    ★`vintage_id` 가 빈 행은 버린다★ 가장 미묘한 곳이다. `record_series` 의
+    write-through 행은 `vintage_id=""` 이고, `load(as_of=)` 의 필터는
+    `release_timestamp` 가 빈 행을 **통과시킨다**(그 함수가 스스로 적어 둔 규칙).
+    거르지 않으면 **자기가 써 넣은 현재값**을 빈티지로 되읽어 PIT 를 주장하게 된다.
+    """
+    try:
+        from src.data.macro_observation_store import load as _load
+        from src.data.pit_macro import latest_vintage_per_period
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        obs = _load(key, as_of=as_of) or []
+    except Exception as e:  # noqa: BLE001 — 조회 실패는 "빈티지 없음" 이지 오류가 아니다
+        logger.debug("빈티지 조회 실패 (%s): %s", key, e)
+        return None
+
+    obs = [o for o in obs if getattr(o, "vintage_id", "")]
+    if not obs:
+        return None
+    picked = latest_vintage_per_period(obs)
+    if not picked:
+        return None
+    return ([o.observation_period for o in picked],
+            [float(o.value) for o in picked])
+
+
 class MacroCollector:
     """
     BOK + FRED 통합 수집 + 정규화 + 캐시.
@@ -590,8 +640,20 @@ class MacroCollector:
     # 핵심 수집
     # ─────────────────────────────────────────────────────────────────────
 
-    def collect_all(self, use_cache: bool = True) -> MacroSnapshot:
-        """모든 지표 통합 수집."""
+    def collect_all(self, use_cache: bool = True,
+                    as_of: str | None = None) -> MacroSnapshot:
+        """모든 지표 통합 수집.
+
+        ★두 모드를 라벨한다 — 조용히 섞지 않는다★
+
+            as_of=None   라이브. 빈티지가 있으면 그것을, 없으면 기존 경로를 쓰고
+                         `vintage_used=False` 로 남긴다.
+            as_of=날짜   PIT 요청. 그 계열에 빈티지가 없으면 ★값을 내지 않는다★ —
+                         현재 개정본으로 과거를 채점하는 것이 `ac938c4` 가 막은
+                         결함이다.
+
+        기존 호출부 11곳은 전부 `as_of` 없이 부르므로 **동작이 이전과 같다**.
+        """
         series_map = {}
 
         # 한국 매크로 (6종)
@@ -615,7 +677,7 @@ class MacroCollector:
                 # 살아 있는 버그는 아니었지만, 누군가 스레드풀·async 로 바꾸는 순간
                 # 11개 시리즈가 전부 마지막 stat 코드를 조회한다. 두 루프의 관례를 맞춘다.
                 fetcher=lambda s=stat, i=item: self.bok.fetch_series(s, i),
-                use_cache=use_cache,
+                use_cache=use_cache, as_of=as_of,
                 source="BOK",
             )
 
@@ -638,7 +700,7 @@ class MacroCollector:
             series_map[fred_id] = self._collect_one(
                 key=fred_id, name=meta["name"], unit=meta["unit"],
                 fetcher=lambda fid=fred_id: self.fred.fetch_series(fid),
-                use_cache=use_cache,
+                use_cache=use_cache, as_of=as_of,
                 source="FRED",
             )
 
@@ -722,15 +784,16 @@ class MacroCollector:
 
     def _collect_one(
         self, key: str, name: str, unit: str,
-        fetcher, use_cache: bool, source: str,
+        fetcher, use_cache: bool, source: str, as_of: str | None = None,
     ) -> MacroSeries:
         """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback.
 
         ★신규 미검증 소스는 mock 으로 채우지 않는다 (M1-I)★
         `source_registry.new_source_mock_allowed()` 가 판정한다. 기존 지표는 영향 없다.
         """
-        # 캐시 확인
-        if use_cache:
+        # ★PIT 조회는 캐시를 쓰지도 남기지도 않는다★ as_of 산출이 캐시에 남으면
+        # 다음 라이브 조회가 과거 값을 받는다 — 화면이 조용히 과거를 본다.
+        if use_cache and as_of is None:
             with self._lock:
                 entry = self._cache.get(key)
                 if entry:
@@ -741,15 +804,29 @@ class MacroCollector:
         timestamps, values = [], []
         actual_source = source
         unavailable_reason: str | None = None
+        vintage_used = False
 
-        # 외부 API 호출
-        try:
-            timestamps, values = fetcher()
-        except Exception as e:
-            logger.warning(f"{source} fetcher 실패 ({key}): {e}")
+        # ★빈티지가 있으면 그것이 우선이다★ 개정 이력이 있는데 현재 개정본을 쓰는
+        # 것은 가진 정보를 버리는 것이다.
+        vintage = _from_vintage_store(key, as_of)
+        if vintage is not None:
+            timestamps, values = vintage
+            vintage_used = True
+        elif as_of is not None:
+            # ★PIT 요청에는 현재값을 주지 않는다★ 답할 수 없으면 답하지 않는다.
+            actual_source = "unavailable"
+            unavailable_reason = REASON_NO_VINTAGE_FOR_ASOF
+        else:
+            # 외부 API 호출
+            try:
+                timestamps, values = fetcher()
+            except Exception as e:
+                logger.warning(f"{source} fetcher 실패 ({key}): {e}")
 
         # Fallback to Mock — mock 모드만. 운영(KIS_USE_MOCK=0)선 합성 금지 → 정직 unavailable.
-        if not values:
+        # ★PIT 요청은 mock 으로 채우지 않는다★ 합성값으로 과거를 채점하면 그것은
+        # 시점 정합이 아니라 날조다.
+        if not values and as_of is None:
             from src.data.mock_gate import mock_allowed
             from src.data.source_registry import new_source_mock_allowed
             if mock_allowed() and new_source_mock_allowed(key):
@@ -817,13 +894,16 @@ class MacroCollector:
             std_5y=norm["std_5y"],
             trend=norm["trend"],
             last_update=datetime.now().isoformat(),
+            vintage_used=vintage_used,
+            as_of=as_of,
             # ★값이 왔으면 None 이다★ 항상 사유를 채우면 "왜 비었나" 라는 질문에
             # 답하는 필드가 아니라 그냥 또 하나의 설명문이 된다.
             reason=unavailable_reason,
         )
 
-        with self._lock:
-            self._cache[key] = (time.time(), series)
+        if as_of is None:
+            with self._lock:
+                self._cache[key] = (time.time(), series)
 
         # ★영속 기록★ 이 캐시는 **프로세스 메모리**다 — 재시작하면 사라지고,
         # 그래서 과거 매크로 실험을 재현할 수 없었다(계보 감사 §B1).
@@ -836,7 +916,10 @@ class MacroCollector:
         # 비-REAL(`MOCK`·`unavailable`)은 스토어가 스스로 거른다.
         try:
             from src.data.macro_observation_store import record_series
-            record_series(series)
+            # ★스토어에서 읽은 것을 스토어에 되쓰지 않는다★ 순환이고, 빈티지 행을
+            # `vintage_id=""` 사본으로 오염시킨다.
+            if not vintage_used:
+                record_series(series)
         except Exception as e:  # noqa: BLE001 — 기록 실패가 수집을 실패로 만들지 않는다
             logger.debug(f"매크로 관측 기록 실패 ({key}): {e}")
         return series

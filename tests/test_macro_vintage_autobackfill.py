@@ -144,17 +144,27 @@ def test_loaded_vintages_do_not_open_the_axis_by_themselves(eng, monkeypatch):
     assert cov["by_series"]["DGS10"]["with_vintage"] > 0, "빈티지가 안 쌓였다"
 
     after = {m: axis_revision_status(m) for m in ("kr", "us")}
-    assert after == before, "빈티지 적재만으로 축 판정이 움직였다"
+    # ★DGS10 은 축 계열이 아니다★ 그래서 빈티지가 쌓여도 축은 그것을 보지 않는다.
+    # 축 계열에 쌓였을 때의 거동은 `test_collector_vintage_path.py` 가 다룬다.
+    assert after == before, "축 밖 계열의 빈티지 적재가 축 판정을 움직였다"
     for m in ("kr", "us"):
         assert after[m]["revision_bias"] == "unmanaged"
 
 
-def test_the_collector_flag_stays_a_human_gate():
-    """⑵ 는 이 작업이 올리지 않는다 — 별도 승인 사항이다."""
+def test_the_collector_flag_was_opened_by_explicit_approval():
+    """★이 테스트는 뒤집혔다★
+
+    A2 때는 `is False` 를 못 박고 *"축 개방은 별도 승인 사항"* 이라고 적었다.
+    그 승인이 내려왔고(Track B4), 상수를 뒤집는 대신 **경로를 실제로 PIT 로
+    만들어** 선언을 참으로 만들었다(`macro_collector._from_vintage_store`).
+
+    ★그래도 A2 의 안전 계약은 그대로다★ — 아래 `test_loaded_vintages_do_not_open
+    _the_axis_by_themselves` 가 여전히 green 이어야 한다. 이제 막는 것은 ⑵ 가
+    아니라 ⑶(그 계열에 **실제** 빈티지 행이 있는가)이고, 그것은 관측이다.
+    """
     from src.services.macro_collector import COLLECTOR_READS_VINTAGE
 
-    assert COLLECTOR_READS_VINTAGE is False, (
-        "수집 경로 플래그가 올라갔다 — 축 개방은 별도 승인 사항이다")
+    assert COLLECTOR_READS_VINTAGE is True
 
 
 # ══════════════════════════════════════════════════════════════════════════

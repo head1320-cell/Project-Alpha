@@ -9928,3 +9928,83 @@ history 가 정확히 `path[:t]`** 임을 확인한다. `walk_forward: True` 는
 
 ⑵ `COLLECTOR_READS_VINTAGE` 개방은 여전히 **별도 승인**이고, 그전에 실제 빈티지가
 쌓여야 한다(FRED 키 필요). Track B 는 그대로다.
+
+---
+
+## 2026-08-28 — Track B4(별도 승인): ★선언을 뒤집는 게 아니라 참으로 만든다★
+
+### Track B 의 대부분은 실행할 수 없다
+
+재시작 후 재측정: `FRED_API_KEY`·`BOK`·`KRX`·`DART` **전부 미설정**,
+`api.stlouisfed.org`·`ecos.bok.or.kr` **도달 불가**(curl 000). B1(키→빈티지 적재)이
+막히면 B2(깊이 240)·B3(조건4·5)·B5(HMM 재검토)가 전부 종속으로 막힌다.
+★범위 선택이 아니라 환경 차단이다★ — 키는 사용자 로컬에서 넣어야 한다.
+
+즉 승인이 실제로 여는 것은 **B4 하나**이고, 그것은 데이터가 아니라 **코드**다.
+
+### ★승인 집행 방식 — 상수를 뒤집지 않았다★
+
+`COLLECTOR_READS_VINTAGE = True` 는 "수집 경로가 빈티지를 가져온다" 는 **사실
+진술**이다. 코드가 그러지 않는데 값만 올리면 승인 집행이 아니라 **거짓 선언**이고,
+`test_declared_path_fact_matches_the_actual_collector` 의 `tokenize` 대조가 정확히
+그것을 잡는다. `regime_axes.py` 도 이미 경고를 적어 뒀다 — *"`has_vintage=True` 는
+API 가 줄 수 있다는 뜻이지 우리가 가져온다는 뜻이 아니다."*
+
+그래서 **경로를 실제로 PIT 로 만들었다**:
+
+- `collect_all(as_of=None)` — 두 모드를 라벨한다. 라이브는 빈티지가 있으면 그것을,
+  없으면 기존 경로 + `vintage_used=False`. `as_of` 를 주면 **PIT 요청**이고, 그
+  계열에 빈티지가 없으면 ★값을 내지 않는다★(현재 개정본으로 과거를 채점하는 것이
+  `ac938c4` 가 막은 결함이다). PIT 요청은 mock 으로도 채우지 않는다.
+- `_from_vintage_store(key, as_of)` — `macro_observation_store.load(as_of=)` 와
+  `pit_macro.latest_vintage_per_period` 를 **재사용**한다.
+- `MacroSeries.vintage_used` / `as_of` — 값이 어디서 왔는지 **행마다** 말한다.
+
+### ★가장 미묘한 곳 두 개★
+
+**⑴ 순환 거짓.** `record_series` 의 write-through 행은 `vintage_id=""` 이고,
+`load(as_of=)` 의 필터는 `release_timestamp` 가 빈 행을 **통과시킨다**(그 함수가
+스스로 적어 둔 규칙). 거르지 않으면 **자기가 써 넣은 현재값**을 빈티지로 되읽어
+PIT 를 주장한다. `vintage_id` 가 빈 행을 명시적으로 버린다. 그리고 빈티지에서 읽은
+계열은 스토어에 **되쓰지 않는다** — 순환이고 빈티지 행을 사본으로 오염시킨다.
+
+**⑵ 캐시 오염.** `as_of` 산출이 프로세스 캐시에 남으면 다음 라이브 조회가 과거
+값을 받는다 — 화면이 조용히 과거를 본다. PIT 조회는 캐시를 **쓰지도 남기지도**
+않는다.
+
+### ★승인의 정확한 범위 — 축은 오늘 그대로다★
+
+판정은 `⑵ ∧ ⑶` 이고 ⑶(그 계열에 실제 빈티지 행)은 **관측**이라 그대로다.
+빈티지 0건인 오늘 축 출력은 **완전히 동일**하다:
+
+    kr unmanaged path_uses_vintage=False {ECOS/source:4, FRED/path:1}
+    us unmanaged path_uses_vintage=False {FRED/path:6}
+
+키가 들어와 빈티지가 쌓이면 **그 계열만** 열린다(테스트로 확인: `INDPRO` 에 빈티지를
+넣으면 그 행만 `blocked_by=None`, 나머지는 `path` 유지). ★ECOS 는 행을 넣어도
+`source` 로 남는다★ — 제공자에 빈티지 엔드포인트가 없어 영구 차단이다.
+
+### 트립와이어 반전
+
+`test_path_flag_is_read_from_the_collector` 는 `is False` 를 얼려 두고 *"수집기가
+빈티지를 읽는다고 선언됐다 — 실제로 배선됐는가?"* 라고 물었다. **배선됐다.**
+얼어붙은 값 대신 선언·코드 일치를 보게 바꾸고(대조 자체는 `tokenize` 가드가 한다),
+★막는 것이 이제 ⑶ 이라는 사실★ 을 새 짝 테스트로 못 박았다.
+
+### 검증
+
+신규 12개 + 반전 2개. 변이 **Q1~Q9 전부 사망** —
+★Q1(빈 `vintage_id` 도 빈티지로 인정 = 순환 거짓)★ 과
+★Q3(`as_of` 인데 현재값을 조용히 반환 = 침묵 폴백)★ 이 핵심이고,
+Q7(ECOS 영구 차단 해제)·Q9(PIT 캐시 오염)도 죽는다.
+
+불변: 축 출력 **완전 동일** · `collect_all()` 의 다른 계열 값 불변 ·
+`src/api/`·`allocation_backtest`·`constrained_opt` 무편집 · 골든 3종 `identical` ·
+전체 스위트 · ruff 통과.
+
+### 남는 것 — ★검증되지 않은 채로 열려 있다★
+
+이 배선은 **E1(픽스처)** 이다. 축이 **실제로** `managed` 가 되는지, 개정 편향의
+**크기**가 얼마인지는 FRED 키와 ALFRED 적재 없이는 알 수 없다. 승인된 게이트가
+데이터가 오는 순간 열리도록 준비됐을 뿐이고, 그때 `revision_report` 로 개정 크기를
+먼저 재는 것이 다음 순서다.

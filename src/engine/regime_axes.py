@@ -53,11 +53,14 @@ QUADRANTS = ("Goldilocks", "Reflation", "Stagflation", "Disinflation")
 # 우리 코드의 선택인데, 같은 라벨을 달고 있었다.
 #
 # ★그리고 레지스트리만 보고 판정하면 반대로 과대주장한다★ `has_vintage=True` 는
-# **API 가 줄 수 있다**는 뜻이지 **우리가 가져온다**는 뜻이 아니다. 국면 축은
-# `regime_analyzer.collector.collect_all()` 을 읽고, 그 경로는 현재값만 가져온다
-# (`pit_macro` 의 ALFRED 조회는 **별개 경로**이며 여기서 호출되지 않는다).
+# **API 가 줄 수 있다**는 뜻이지 **우리가 가져온다**는 뜻이 아니다.
 # `pit_macro` 자신이 같은 계열의 오류를 이미 한 번 겪었다 — 빈 `realtime_start` 를
 # `as_of` 로 채워 `has_vintage` 를 참으로 만들었던 버그.
+#
+# ★2026-08-28 갱신 (Track B4, 별도 승인)★ 이제 `collect_all()` 이 관측 스토어를
+# as-of 로 조회한다(`macro_collector._from_vintage_store`). 그래서 ⑵ 는 참이다.
+# ★그래도 여기 논리곱은 그대로다★ — 막는 것이 ⑵ 에서 ⑶(그 계열에 **실제** 빈티지
+# 행이 있는가)으로 옮겨졌을 뿐이고, ⑶ 은 선언이 아니라 관측이다.
 
 #: 국면 축이 읽는 경로가 실제로 빈티지를 가져오는가.
 #: ★선언이지 추론이 아니다★ — `tests/test_axis_revision_status.py` 가 이 선언과
