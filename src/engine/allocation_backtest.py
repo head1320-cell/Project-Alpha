@@ -258,11 +258,27 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
         regime_by_month_from_path,
         regime_mixture_moments,
     )
+    from src.engine.regime_probability import (
+        ASSUMPTION_NOTE,
+        SOURCE_FORECAST_MEAN,
+        SOURCE_HARD_LABEL,
+        USAGE_ASSUMPTION,
+        USAGE_PORTFOLIO,
+    )
 
+    # ★`prob_*` 는 **모든 분기가 낸다**★ 어떤 응답에만 있으면 소비자가 `.get()` 으로
+    # 읽다가 `None` 을 거짓으로 취급한다(`source_registry.not_ingested` 와 같은 규율).
+    #
+    # ★무엇을 신고하는가★ `regime_probability` 의 계약은 "배분에 닿을 수 있는 것은
+    # `k_step_forecast` 하나뿐" 인데, `weighting` 기본값 `"hard"` 는 확률 객체를
+    # 거치지 않으므로 `require_portfolio_source` 를 통과하지 않는다. 그 사실이
+    # 어디에도 남지 않아, 기본 경로가 계약을 통과한 것처럼 읽혔다.
+    # ★신고만 한다 — 막지 않는다★ 막는 것은 배분 정책 변경이라 별도 승인 사항이다.
     audit = {"month": month, "applied": False, "reason": None,
              "path_len": 0, "last_path_month": "", "regime": None,
              "h_hold": None, "pi_bar": None, "a_contribution_pct": None,
-             "confidence": None, "confidence_model": None}
+             "confidence": None, "confidence_model": None,
+             "prob_source": None, "prob_usage": None, "prob_note": None}
     pts = _truncated_points(regime.get("points") or [], month)
     audit["path_len"] = len(pts)
     audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
@@ -277,6 +293,11 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
 
     weighting = regime.get("weighting", "hard")
     if weighting == "hard":
+        # ★계약을 통과하지 않는 경로다★ 하드 라벨은 확률 1.000 이고, 그것은
+        # 예측이 아니라 "오늘 국면이 보유기간 동안 지속된다" 는 가정이다.
+        audit["prob_source"] = SOURCE_HARD_LABEL
+        audit["prob_usage"] = USAGE_ASSUMPTION
+        audit["prob_note"] = ASSUMPTION_NOTE
         cond = conditional_moments(df, by_month, current)
     else:
         from src.engine.regime_probability import (
@@ -296,6 +317,9 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
                                                 list(REGIMES), mode="backtest")
             for pr in probs:
                 require_portfolio_source(pr)
+            # ★검사를 통과한 뒤에 적는다★ 먼저 적으면 통과 여부와 무관한 선언이 된다.
+            audit["prob_source"] = SOURCE_FORECAST_MEAN
+            audit["prob_usage"] = USAGE_PORTFOLIO
             cond = regime_mixture_moments(df, by_month, [p.probs for p in probs],
                                           P, list(REGIMES), h_hold=h_hold)
         except Exception as e:                            # noqa: BLE001

@@ -177,3 +177,115 @@ KR 국면 축은 구조적으로 forward-only 이고, 그 사실은 결함이 �
   증거도 아니다.
 - 기존 아키텍처 스펙 §6 표 수정 — 원본은 그날의 기록이다. 재실측은 이 문서 §4 다.
 - 어떤 아키텍처의 **채택 선언** — 여섯 조건 중 넷이 열려 있다.
+
+---
+
+## 부록 A — 재검토 (2026-08-28, P0~P3 이후) ★하중을 받는 노드가 다르다★
+
+본문 §4 의 수치는 P0~P3 이전 것이다. 아래는 재실측이고, 본문에 없던 **두 가지
+구조적 사실**을 추가한다.
+
+### A.1 스택 서술의 정정 — ★"HMM 계열" 이 하중을 받고 있지 않다★
+
+본문 §0 이 "4상태 HMM 은 없고, 없는 것이 의도다" 를 확정했다. 재검토에서 **그보다
+한 걸음 더 중요한 사실**이 나왔다: 실재하는 상태전환 성분(`MarkovRegression`,
+성장축 2상태)조차 **배분에 흘러들지 않는다.**
+
+```
+[진단 전용]  regime_ensemble{axis, markov, cluster}
+             → 소비자: API 라우트 2곳뿐(`macro_routes.py:75, 785`)
+             → `regime_probability.from_axis`/`from_markov` = USAGE_DIAGNOSTIC
+
+[하중 경로]  regime_axes.quadrant  (★규칙 기반 사분면★)
+             → regime_transitions.regime_path()
+             → conditional_market.regime_by_month_from_path
+             → conditional_moments (μ/Σ) → Ledoit-Wolf → BL/EP → optimizer
+             (`allocation_backtest.py:257-280` · `allocation_routes.py:567-615`)
+```
+
+★이것이 왜 중요한가★ 스택을 "Regime Inference (HMM 계열)" 로 그리면 다음 작업이
+**포트폴리오에 닿지 않는 팔**을 고도화하게 된다. 하중을 받는 자리에 있는 것은
+규칙 기반 사분면이다.
+
+### A.2 ★계약에 기본값 우회로가 있다★
+
+`regime_probability.py` 는 *"배분에 닿을 수 있는 것은 `k_step_forecast` 하나뿐"*
+이라는 계약과 `USAGE_*`/`SOURCE_*`/`require_portfolio_source()` 를 갖췄고, 자기
+독스트링에 이미 적어 뒀다 — *"그런데 포트폴리오에는 **넷째** — `regime_path` 의
+하드 라벨, 즉 1.000 — 이 간다."*
+
+실측(`allocation_backtest.py`):
+
+```python
+weighting = regime.get("weighting", "hard")     # ★기본값이 "hard"★
+if weighting == "hard":
+    cond = conditional_moments(df, by_month, current)   # ← usage 검사 없음
+else:
+    for pr in probs: require_portfolio_source(pr)       # ← 검사 있음
+```
+
+★계약이 **비기본 분기에서만** 강제된다.★ 기본 경로는 "오늘 국면이 보유기간 동안
+지속된다" 는 **가정**을 쓰는데 그 가정이 라벨되지 않았다. `ms1b_eval.py` 가
+B1(hard) vs N(probabilistic) 를 비교하지만 그것은 실험이지 경로의 자기 신고가 아니다.
+
+**조치(이번)**: `regime_audit` 에 `prob_source`/`prob_usage`/`prob_note` 를 남기고
+(`USAGE_ASSUMPTION`·`SOURCE_HARD_LABEL`·`ASSUMPTION_NOTE` 신설),
+`regime_ensemble()` 페이로드에 `usage`/`usage_note` 를 실었다.
+★기록만 추가했고 결정은 바뀌지 않았다★ — 계약을 강제로 거는 것은 Macro → Allocation
+정책 변경이라 **별도 승인**이다(CLAUDE.md §3).
+
+### A.3 재실측 — 채택 조건과 증거
+
+| 항목 | 값 (2026-08-28) |
+|---|---|
+| 제공자 키 | **8개 전부 미설정** (FRED·BOK·KRX·DART·KIS·ANTHROPIC·NAVER·GOOGLE) |
+| `real_share` | **0.0** — 61계열 중 실데이터 0 |
+| 관측 스토어 | 240행 · 계열 **1개**(깊이 프로브 산물) · 빈티지 **0건** · `forward_only` |
+| capability | **L1** · `L0` 차단(`frontier_sample` 60 < 240 · torch · cvxpylayers · LLM · trends) |
+| 조건2 KR | `unmanaged` — ECOS 4 = `source` ★영구★ · FRED 1 = `path` |
+| 조건2 US | `unmanaged` — FRED 6 **전부** `path` ★고칠 수 있다★ |
+
+★본문 §4.1 의 "봉합선은 `AXIS_PATH_USES_VINTAGE` 하나다" 는 낡았다★ — P0/P2
+커밋(`4983f71`)이 그 상수를 **두 사실의 논리곱 측정**으로 대체했다(⑵ 수집 경로가
+빈티지를 읽는가 ∧ ⑶ 그 계열에 실제 빈티지 행이 있는가). 그래서 빈티지가 적재되고
+경로가 배선되는 순간 **자동으로** 판정이 열린다.
+
+### A.4 성숙도는 ★세 열로★ 갈라야 한다
+
+한 별점에 구현 품질과 증거를 담으면 "Macro data ingestion ★★★★☆" 같은 표현이
+나온다 — **코드**에 대해서는 맞고 **데이터**에 대해서는 0 이다.
+
+| 계층 | 구현 | 배선 | 증거 |
+|---|---|---|---|
+| 매크로 수집(FRED·ECOS) | 있음 | 있음 | **E0** — 키 없음, `real_share=0.0` |
+| PIT/빈티지 | 있음(ALFRED·스토어·백필) | ★부분★ 수집기가 빈티지를 읽지 않음 | **E0** — 빈티지 0건 |
+| 매크로 팩터 | 있음 | 있음 | E0 |
+| 국면 추론 | 규칙 사분면 + Dirichlet 사후 | 있음(하중) | E0 |
+| 상태전환(MarkovRegression 2상태) | 있음 | ★진단 전용★ | E0 |
+| 국면조건부 μ/Σ | 있음 | 있음 | E0 |
+| Ledoit–Wolf | 있음 | 있음 | 구조적 |
+| BL / EP / optimizer | 있음 | 있음 | 구조적 |
+| RegimeAdaptiveAllocator(EWMA λ=0.85 · 3모드 · 상관붕괴) | 있음 | `realism_engine` + 라우트 1곳 | E0 |
+| walk-forward · 예측 적중률 하네스 | 있음 | 있음 | 하네스는 준비됨, 입력이 합성 |
+
+### A.5 다음 워크플로우 — ★남은 관문이 전부 키로 막혀 있다★
+
+**Track A (키 없이 · 배분 동작 불변)**
+
+| | 항목 | 상태 |
+|---|---|---|
+| A1 | 계약 우회로·진단/하중 구분 신고 | ✔ 이번 |
+| A2 | 수집기 빈티지 경로 배선(`COLLECTOR_READS_VINTAGE`) | 다음 — 오늘은 빈티지 0건이라 논리곱 때문에 축 판정 **불변**, 키가 오면 자동 개방 |
+| A3 | 질문③ 하네스의 **음성 통제** — 합성 패널에서 적중률이 우연과 구분되는가 | 다음 — 하네스가 무력하지 않음을 먼저 보여야 한다 |
+
+**Track B (키가 오면 — 순서가 곧 게이트)**
+
+`FRED_API_KEY` → 21계열 + ALFRED 빈티지 적재 → 조건2(US) `path` 해제 → 깊이
+240개월 → 조건3 + capability `L0` → 조건4·5 재실측 → ★그때 비로소★ 축 빈티지
+개방을 **별도 승인**으로 → 표본 240이면 4상태 HMM 재검토(§0 의 조건).
+
+★조건2(KR)는 이 목록에 없다★ — ECOS 에 빈티지 엔드포인트가 없어 **영구 불가**.
+
+**하지 않을 것** — HSMM · sticky HMM · TVTP · MS-VAR · DFM · 베이지안 HMM ·
+regime-switching GARCH · 입자필터 · 신경 상태공간. 지금 붙이면 ⑴ **하중을 받지 않는
+팔**을 고도화하거나 ⑵ 관측(중앙값 0)보다 모수가 많은 모형을 붙이는 것이다.

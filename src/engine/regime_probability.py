@@ -43,7 +43,27 @@ USAGE_DIAGNOSTIC = "diagnostic_only"
 #: 백테스트에서 쓰면 look-ahead. 어디서도 배분에 쓰지 않는다.
 USAGE_FORBIDDEN = "forbidden_in_backtest"
 
+#: ★계약을 통과하지 않는 **넷째**★ — 이 모듈 상단이 적어 둔 그것이다.
+#: `regime_path` 의 하드 라벨(확률 1.000)은 예측이 아니라 **가정**이다:
+#: "오늘의 국면이 보유기간 동안 지속된다". `allocation_backtest` 의 `weighting`
+#: 기본값이 `"hard"` 라 **기본 경로가 이 가정을 쓴다**.
+#:
+#: ★이 상수는 계약을 강제하지 않는다 — 신고하게 한다★ 강제로 거는 것은
+#: Macro → Allocation 정책 변경이라 별도 승인 사항이다(CLAUDE.md §3). 여기서
+#: 하는 것은 그 결정을 할 수 있게 **사실을 드러내는 것**이다.
+USAGE_ASSUMPTION = "persistence_assumption"
+
+#: 그 가정이 무엇인지 사람이 읽을 문장. ★"경고" 가 아니라 **무엇을 가정했는가**★
+#: 를 말한다 — 사유 없는 라벨은 블랙박스다.
+ASSUMPTION_NOTE = (
+    "오늘의 국면이 보유기간 동안 지속된다는 **가정**입니다 — `k_step_forecast` 와 "
+    "달리 이 가정의 적중률은 실측돼 있지 않습니다"
+    "(`regime_forecast.forecast_coverage` 가 재는 것은 예측 쪽입니다)."
+)
+
 SOURCE_FORECAST = "k_step_forecast"
+#: `regime_path` 의 하드 라벨 — 확률 객체를 거치지 않는 유일한 배분 입력이다.
+SOURCE_HARD_LABEL = "regime_path_hard_label"
 SOURCE_AXIS = "filtered_axis"
 SOURCE_MARKOV = "filtered_markov"
 SOURCE_SMOOTHED = "smoothed_markov"
