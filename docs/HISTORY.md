@@ -9308,3 +9308,68 @@ kind** 이고 셋 다 실데이터 원천이 아예 없다 — 게이트를 붙�
 
 `verified_live` 8종 강등, `graph_store`·`vector_store`·`sentiment_worker` 의 mock
 게이트 위반은 **정책 판단**이라 이 문서 개정의 범위가 아니다 — 각 감사문에 기록돼 있다.
+
+---
+
+## 2026-08-28 — 매크로 모델 스택 감사: ★설명된 모델과 구현된 모델이 다르다★
+
+매크로 모델을 이어가려면 먼저 지금 무엇이 구현돼 있는지 확정해야 했다. 읽기 전용
+실측이 두 가지를 드러냈다.
+
+### ① HMM 전제가 코드와 다르다 — 그리고 없는 것이 의도다
+
+작업 설명은 *"Hidden Markov regime inference"* 라고 하지만
+`regime_transitions.py:14` 가 정반대를 적고 있다 — ★"왜 4상태 HMM(hmmlearn)이
+아닌가 — 재서 기각했다"★. 4상태 Gaussian HMM 은 모수 ≈32개인데 실사용 관측이
+48개라 과적합이고, *"수렴한 것처럼 보이는 4×4 행렬이 이 화면에서 가장 위험한 종류의
+거짓"* 이라고 적혀 있다. `hmmlearn` 은 실제로 미설치다(실측 확인).
+
+실제 국면 추론은 **규칙 기반 사분면**(`regime_axes.quadrant`) + **Dirichlet-
+multinomial 전이 사후**(`transition_posterior`, 주변 Beta 로 `beta.ppf` 신용구간) +
+앙상블 3구성원(`axis`·**2상태** `MarkovRegression`·`GaussianMixture`)이다.
+★셋을 평균내지 않는다★ — *"평균을 내면 어느 모형이 무슨 말을 했는가가 사라진다.
+세 방법이 갈릴 때 그 불일치 자체가 정보다."*
+
+### ② 여섯 채택 조건이 전부 닫혀 있다
+
+| # | 실측 | 성격 |
+|---|---|---|
+| 1·6 | 정준 분류 · BL+EP | ✔ (6은 합성 한정) |
+| 2 | `unmanaged` · KR 4계열 `source` · **US 6계열 `path`** | KR ★영구 불가★ · US 정책 게이트 |
+| 3 | 최장 60 · **중앙값 0** | 키 차단 |
+| 4·5 | 실계열 0 · 합성만 | 키 차단 |
+
+★`source` 와 `path` 의 구분이 핵심이다★ — `regime_axes.py:69-70` 이 상수로 갈라
+놓았다. KR 축은 ECOS 라 제공자가 빈티지를 안 준다(영구). **US 축 6계열은 FRED 라
+제공자는 주는데 우리 경로가 안 쓴다** — 봉합선은 `AXIS_PATH_USES_VINTAGE = False`
+하나이고 고칠 수 있다. 그러나 국면 출력이 바뀌면 배분이 바뀌므로 별도 승인이고,
+게다가 `macro_observations` 가 계열 1개(`PROBE_DEPTH`)·빈티지 **0건**이라 지금
+열어도 검증할 데이터가 없다.
+
+### 부수 실측 — 국면·배분 경로는 깨끗하다
+
+11개 모듈(`regime_*` 7 · `conditional_market` · `risk_allocations` ·
+`entropy_pooling` · `allocation_backtest`) 전부 **합성값 제조 0건**.
+`regime_transitions` 의 난수 1건은 Dirichlet 사후 표본이지 날조가 아니다.
+★같은 검사가 `liquidity_gate` 에서는 실제 결함을 찾았으므로★(`2aff832`),
+여기가 깨끗한 것은 검사가 무력해서가 아니다.
+
+### 다섯 구성요소 중 넷은 문제가 없다
+
+Ledoit–Wolf(`risk_allocations._cov` · `conditional_market._shrunk_cov` 가 λ 를 함께
+반환) · BL(공식 2곳이 주석으로 상호 참조) · EP(`entropy_pooling` 228줄) ·
+walk-forward(`allocation_backtest.walk_forward`, `min_train`·M/Q·전부 OOS).
+★잘 구현돼 있다는 사실은 ①정보 표현력·②전달 안정성에 대한 답이지 ③예측 스킬·
+④경제적 가치에 대한 답이 아니다★ — `real_share = 0.0`.
+
+### 한 것
+
+`docs/specs/2026-08-28-macro-model-stack-audit.md`(179줄) — 전제 정정 · 다섯 구성요소
+매핑 · 국면 추론 세부 · 증거등급(전부 **E0**) · 여섯 조건 재실측 · 획득 계획 ·
+하지 않을 것. ★코드 무변경★(`src/`·`tests/`·`frontend/`·`scripts/` 무편집).
+
+### 남는 것
+
+전부 키 차단이다. 표본이 240개월에 이르면 **4상태 HMM 재검토**(모수 32 vs 관측 240)를
+획득 계획 G 단계로 남겼다 — 지금은 관측 중앙값이 0이라 §0 이 경고한 "그럴듯한 거짓"이
+된다. 조건 2(KR)는 획득 계획에 없다 — ECOS 에 빈티지 엔드포인트가 없어 영구 불가다.
