@@ -69,6 +69,23 @@ def _krx_backfill_bg():
     except Exception as e:
         log.warning(f"KRX 자동 백필 실패(폴백 유지): {e}")
 
+def _macro_vintage_backfill_bg():
+    """백그라운드(데몬): ALFRED 빈티지 → `macro_observations` 자동 백필 + 주기 증분.
+
+    ★이 데몬은 국면 축을 열지 않는다★ 축의 PIT 판정은 "수집 경로가 빈티지를
+    읽는가" ∧ "실제 빈티지 행이 있는가" 의 논리곱이고, 여기서 채우는 것은 뒤쪽
+    하나뿐이다. 앞쪽은 별도 승인으로 사람이 올린다.
+
+    키 없거나 MACRO_VINTAGE_AUTOBACKFILL=0 이면 즉시 no-op."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.macro_vintage_backfill import auto_vintage_backfill
+        auto_vintage_backfill(loop=True)
+    except Exception as e:
+        log.warning(f"매크로 빈티지 자동 백필 실패(폴백 유지): {e}")
+
+
 def _prewarm_ohlcv_bg():
     """백그라운드(데몬): KIS 일봉을 daily_prices에 전종목 사전 적재 → 백테스터(조건식 포함) DB 즉시 가속.
 
@@ -268,6 +285,22 @@ async def run_startup() -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"KRX 자동 백필 시작 실패: {e}")
+
+    # ALFRED 빈티지 자동 백필 (FRED_API_KEY 있을 때만, 데몬 스레드):
+    #   ★KRX 게이트와 섞지 않는다★ 키도 다르고(FRED) 쿼터도 다르다. 처음에 KRX
+    #   블록 안에 넣었더니 KRX 키가 없는 환경에서는 영원히 안 도는 상태가 됐다 —
+    #   "만들어 놓고 부르지 않는다" 를 고치려던 작업이 같은 결함을 다시 만들었다.
+    #   ★이 데몬은 국면 축을 열지 않는다★ 축 판정은 "수집 경로가 빈티지를 읽는가"
+    #   ∧ "실제 빈티지 행이 있는가" 이고 여기서 채우는 것은 뒤쪽 하나뿐이다.
+    #   MACRO_VINTAGE_AUTOBACKFILL=0 으로 비활성.
+    try:
+        import os
+        if os.getenv("FRED_API_KEY"):
+            import threading
+            threading.Thread(target=_macro_vintage_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"매크로 빈티지 자동 백필 시작 실패: {e}")
 
     # KIS 일봉 전종목 사전 적재 (KIS 실데이터 키 있고 + KRX 백필 비활성일 때만, 데몬 스레드):
     #   KRX 키 없이도 daily_prices를 전종목 OHLCV로 미리 채워 백테스터(조건식 포함)를 즉시 DB-가속

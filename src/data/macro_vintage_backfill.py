@@ -179,6 +179,73 @@ def backfill(series_ids: list[str] | None = None, *, start: str = "2015-01-01",
     return stats
 
 
+#: ★기본 호출 상한★ 21계열 × 월별 `as_of` 는 수천 콜이고, 0.5초 스로틀이면
+#: 몇 시간이다. 데몬이 처음 도는 날 쿼터를 통째로 태우지 않도록 기본을 둔다 —
+#: `skip_covered` 가 이미 받은 구간을 건너뛰므로 여러 번 돌면 결국 다 채워진다.
+#: `MACRO_VINTAGE_MAX_CALLS=0` 이면 상한 없음.
+DEFAULT_AUTO_MAX_CALLS = 400
+
+#: 증분 주기(초). 빈티지는 월 단위로 갱신되므로 자주 돌 이유가 없다.
+DEFAULT_REFRESH_SEC = 24 * 3600
+
+
+def auto_vintage_backfill(loop: bool = False) -> dict[str, Any]:
+    """startup 용 자동 빈티지 백필 — ★env·키 게이트, 키 없으면 즉시 no-op★
+
+    ## 왜 이 함수가 생겼나
+
+    `backfill()` 은 스토어에 **빈티지 있는 행**을 넣는 유일한 경로인데 호출부가
+    CLI `main()` 하나였다. 즉 키를 넣어도 아무도 부르지 않아 빈티지는 영원히 0건,
+    관측 스토어는 영원히 `forward_only` 였다. `krx_ingest.auto_backfill` 이 같은
+    문제를 이미 푼 모양을 그대로 쓴다.
+
+    ## ★이 함수는 국면 축을 열지 않는다★
+
+    축의 PIT 판정은 ⑵`COLLECTOR_READS_VINTAGE` ∧ ⑶`실제 빈티지 행` 이다.
+    여기서 채우는 것은 ⑶ 뿐이다. ⑵ 를 함께 올리면 키가 들어오는 순간 축이
+    저절로 `managed` 로 뒤집히고, 그것은 **사람의 결정 없이 일어나는 배분 정책
+    변경**이다(CLAUDE.md §3). ⑵ 는 별도 승인으로 사람이 올린다.
+
+    env:
+        MACRO_VINTAGE_AUTOBACKFILL   기본 "1", "0" 이면 비활성
+        MACRO_VINTAGE_BACKFILL_START 기본 "2015-01-01"
+        MACRO_VINTAGE_MAX_CALLS      기본 400, "0" 이면 무제한
+        MACRO_VINTAGE_REFRESH_SEC    `loop=True` 증분 주기, 기본 24h
+    """
+    import os
+    import time as _time
+
+    if os.getenv("MACRO_VINTAGE_AUTOBACKFILL", "1") == "0":
+        return {"skipped": "MACRO_VINTAGE_AUTOBACKFILL=0 — 자동 빈티지 백필 비활성"}
+    if _key_missing():
+        return {"skipped": "FRED_API_KEY 미설정 — ALFRED 빈티지를 받을 수 없습니다."}
+
+    start = os.getenv("MACRO_VINTAGE_BACKFILL_START", "2015-01-01")
+    try:
+        raw = int(os.getenv("MACRO_VINTAGE_MAX_CALLS", str(DEFAULT_AUTO_MAX_CALLS)))
+    except ValueError:
+        raw = DEFAULT_AUTO_MAX_CALLS
+    max_calls = raw if raw > 0 else None
+
+    def _run_once() -> dict[str, Any]:
+        try:
+            stats = backfill(start=start, max_calls=max_calls, skip_covered=True)
+        except Exception as e:  # noqa: BLE001 — 데몬에서 돈다. 예외가 startup 을 죽인다.
+            logger.warning("빈티지 자동 백필 실패: %s: %s", type(e).__name__, e)
+            return {"error": f"{type(e).__name__}: {e}"}
+        logger.info("빈티지 자동 백필: %s", stats)
+        return stats
+
+    stats = _run_once()
+    if loop:
+        period = max(3600, int(os.getenv("MACRO_VINTAGE_REFRESH_SEC",
+                                         str(DEFAULT_REFRESH_SEC)) or 0))
+        while True:
+            _time.sleep(period)
+            _run_once()
+    return stats
+
+
 #: 빈티지가 하나뿐인 기간의 판정. ★"개정 없음" 이 아니다★
 REVISION_UNOBSERVED = "unobserved"
 REVISION_OBSERVED = "observed"
