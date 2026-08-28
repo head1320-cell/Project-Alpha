@@ -1,100 +1,99 @@
-# Project Alpha — 한국 주식 퀀트 플랫폼 (AI 에이전트용 요약)
+# Project Alpha — 투자 리서치·포트폴리오 의사결정 플랫폼 (AI 에이전트용)
 
-> 이 파일은 매 세션 자동 로드됩니다. **100줄 미만으로 유지하세요.**
-> 세션 요약·작업 기록은 여기가 아니라 **[`docs/HISTORY.md`](docs/HISTORY.md)** 맨 아래에 추가.
-> 스펙·계획은 [`docs/specs`](docs/specs) · [`docs/plans`](docs/plans).
-> **수치는 문서가 아니라 코드가 진실입니다** — 과거 CLAUDE.md의 "필터 13종 / FIELD_BY_ID 49개 /
-> 라우트 223개"는 실측(11 / 157 / 268)과 전부 달랐습니다. 개수는 세지 말고 레지스트리를 읽으세요.
+> 매 세션 자동 로드됩니다. **100줄 미만으로 유지하세요** — 길면 읽히지 않습니다.
+> 기록 [`docs/HISTORY.md`](docs/HISTORY.md) · 스펙 [`docs/specs`](docs/specs) · 계획
+> [`docs/plans`](docs/plans) · 아키텍처·스택 [`docs/specs/architecture.md`](docs/specs/architecture.md) ·
+> 실행 `Makefile` · 환경변수 `.env.example`(**개발 기본값 `KIS_USE_MOCK=1`** — 외부 호출 0).
+> **수치는 문서가 아니라 코드가 진실입니다** — 개수를 적으면 반드시 낡습니다(과거
+> "라우트 223 → 268" 이 실측 332였습니다). 세지 말고 레지스트리를 읽으세요.
 
-## 1. 아키텍처
+## 1. 무엇을 만드는가
 
-FastAPI + Next.js 14 App Router + PostgreSQL. docker-compose 3컨테이너
-(`ficc_backend:8000` · `ficc_frontend:3000` · `ficc_db:5432`).
-브라우저는 백엔드 주소를 모릅니다 — 모든 API가 동일출처 `/api/backend/...` **런타임 프록시**
-(`frontend/src/app/api/backend/[...path]/route.ts`, 요청 시점에 `BACKEND_URL`을 읽음)를 거칩니다.
+**실제 투자 리서치와 포트폴리오 의사결정을 지원하는 퀀트 연구 플랫폼**입니다. 교육용 데모도
+학술 예제도 범용 백테스트 프레임워크도 아닙니다. 목표는 "모델을 만들 수 있음" 이 아니라
+★프로세스가 갈수록 엄격해지는 증거 관문을 통과하는지 **판정**★ 하는 것입니다: 데이터 무결성
+→ 시점 정합(PIT) → 신호 타당성 → 포트폴리오 전달 → 거래비용 → 표본외 강건성 → 경제적 가치
+→ 모의/실계좌. **건너뛴 관문은 통과한 관문이 아닙니다.**
 
-| 위치 | 역할 |
-|---|---|
-| `main_api.py` | **얇은 진입점(23줄)** — `create_app()` 호출만. `uvicorn main_api:app` 계약 유지 |
-| `src/app_factory.py` | 앱 조립 — CORS · 관측성 · 기동 훅 · `ROUTER_MODULES` 목록으로 라우터 30개 등록 |
-| `src/api/` | 도메인 라우터 (앱 전체 268 경로). 라우터 추가는 `ROUTER_MODULES`에 한 줄 |
-| `src/api/legacy_schemas.py` | 레거시 엔드포인트의 요청/응답 Pydantic 모델 모음 |
-| `src/startup/lifecycle.py` | 기동 시퀀스 + 백그라운드 사전적재 데몬 |
-| `src/state/` | 프로세스 로컬 공유 상태 (`ingest_state` · `trading_state`) |
-| `src/engine/` | 핵심 로직 — 스크리너·백테스트·매크로·자산배분·리스크 |
-| `src/data/` | 데이터 계층 — DART/KIS/KRX 클라이언트, 팩터 스토어, 스냅샷 DB, `mock_gate` |
-| `src/execution/` | 실거래 — KIS 클라이언트, 킬스위치, 리스크 게이트웨이 |
-| `src/models/` | 계량 모델 (VaR·GARCH·CVA·파생) |
-| `src/observability/` | 구조화 로깅 + 요청 추적 ID 미들웨어 |
+## 2. 증거와 주장 — ★결론은 증거보다 강할 수 없다★
 
-**프론트엔드는 FSD** — 의존 방향은 위에서 아래로만. 슬라이스의 `index.ts`가 Public API이니
-**구현을 뒤지지 말고 배럴만 읽으세요.** 단 **배럴은 "발견"용, `import`는 실제 모듈에서** —
-배럴 import는 슬라이스 전체를 번들에 끌어옵니다(실측 +9KB).
+두 축을 함께 씁니다(**저장소가 이미 쓰는 어휘이니 새로 만들지 마세요**). **데이터 출처**
+`E0` 합성 · `E1` 픽스처 · `E2` 제공자 파생 · `E3` 실 과거 · `E4` 시점 고정(빈티지 재현) ·
+`E5` 경제적 검증 — 정의는 능력-계보 감사 스펙 §0. **주장의 종류** `structural` ·
+`synthetic_mechanism` · `real_forecast` · `real_economic`(`scripts/t3_transmission.py`).
+★`capability.py` 의 `L0~L3` 은 **모델 역량**이고 `L0` 이 **최상**이라 방향이 정반대입니다
+— DB에 값이 있으니 절대 섞지 마세요.★
 
-| 계층 | 내용 |
-|---|---|
-| `app/` | Next.js 라우트 (파일시스템 라우팅 — FSD의 app 계층이 아니라 Next 전용) |
-| `widgets/` | 라우트에 붙는 완성 패널 (screener · backtester · macro · company · allocation · layout …) |
-| `features/` | 재사용 기능 단위 (strategy-builder · factor-picker) |
-| `entities/` | 도메인 모델 + API 클라이언트 (allocation · macro · company · backtest-run …) |
-| `shared/` | `api/`(apiBase·queryClient) · `model/`(엔티티 공통 타입) · `ui/` · `lib/`(스토리지·포맷) |
+**테스트 통과는 투자 타당성이 아니고** 합성 백테스트는 예측력·경제적 가치의 증거가
+아닙니다. 결과에 등급을 적고 `관측·측정·추론·가정·미상·미검증·합성·실데이터·시점고정·
+표본외` 로 라벨하세요. **"검증됨·입증됨·견고함·프로덕션 레디·투자 우위·더 나은 전략"**
+은 뒷받침할 증거가 저장소에 있을 때만 씁니다.
 
-UI 모듈: 01 Screener · 02 Backtester · 03 Macro · 04 Company · 05 Risk · 06 Allocation Studio · 07 Data Infra.
+**네 질문을 섞지 마세요** — ① 정보 표현력 ② 전달 안정성 ③ 예측 스킬 ④ 경제적 가치.
+회전율 감소 ≠ 예측력 · 합성 Sharpe ≠ 투자 우위 · 전달 효율 ≠ 경제적 가치 · 통계적으로
+타당 ≠ 배포 가능. **어떤 질문에 답한 것인지 밝히세요.**
 
-## 2. 기술 스택
+## 3. 계층과 경계
 
-- **백엔드** Python 3.11 · FastAPI **0.111.0(고정)** · SQLAlchemy 2.0.30 · pandas · numpy · scipy ·
-  scikit-learn · statsmodels · QuantLib · pytest · ruff
-- **프론트** Node 20 · Next 14.2.5 · React 18 · TypeScript 5(strict) · @tanstack/react-query 5 ·
-  zustand 4 · recharts · reactflow · **순수 CSS**(`app/globals.css`) · Playwright
-- **데이터 소스** DART(재무) · KIS(시세·주문) · KRX(장기 일봉). 키가 없으면 mock으로 자동 폴백.
+수집 → 출처·시점 정합 → 품질 검증 → 피처 → 매크로/국면 → 뷰 표현 → 배분(BL·EP·
+최적화기) → 백테스트 → 리스크·성과 → 의사결정 지원. 각 계층은 책임이 다릅니다.
+★한 계층의 변경이 다른 계층의 **정책** 변경이 되어서는 안 됩니다.★ 정준 자산군 분류·
+기기 메타데이터·출처/버전/as-of·노출 어휘·완전성 검증은 **인프라**이고 자유롭게
+개선합니다. 그러나 분류 ≠ 포트폴리오 선호 · 노출 메타 ≠ 투자 신호 · 배관 ≠ 전략 설계.
+**Macro → Allocation 동작·최적화기 의미·국면-배분 정책 변경은 별도 승인 사항**
+(`constrained_solve`·배분 결정 경로·`adj_close` 소비자 포함). 관측·검증·기록은 자유.
 
-## 3. 실행 & 검증
+## 4. 데이터 규율
 
-```bash
-make all          # 전체 게이트 = lint + test + typecheck + build (CI와 동일)
-make lint         # ruff check src/ tests/ main_api.py
-make test         # KIS_USE_MOCK=1 pytest tests/ -q
-cd frontend && npx tsc --noEmit && npx next build && npx playwright test
-```
+출처·소스 신원·시점 정합·개정(빈티지) 특성은 **투자 시스템의 의존성**입니다.
+미상 ≠ 0 · 미검증 ≠ 검증 · 미적재 ≠ 제공자 미지원 · 원주가 ≠ 수정주가. 주기·노출 로딩·
+자산 분류·빈티지 속성·경제 가정을 **파이프라인을 돌리려고 지어내지 마세요** — 모르면
+`None` 과 **사유**를 반환합니다. 가격 출처는 행 단위로 관측 가능해야 하고 기업행위는 증거
+없이 추론하지 않습니다. 종목 식별은 결정론적·감사 가능해야 하며 `stock_master.py` 의
+`get_stock_name()`/`resolve_name()` 이 단일 진실 공급원입니다 — `"Unknown Corp"`·가짜
+종목코드 재도입 금지.
 
-개발 서버 — `uvicorn main_api:app --reload --port 8000` + `cd frontend && npm run dev`
-전체 스택 — `docker compose up --build -d` · 실데이터 점검 — `python verify_connection.py`
-환경변수는 `.env.example` 참고. `KIS_USE_MOCK=1`이 개발 기본값(외부 호출 0).
+★침묵 폴백 금지★ — **명시적으로 실패하거나 명시적으로 열화하되, 타당성을 조용히
+제조하지 마십시오.** 폴백은 ⑴ 의미가 알려져 있고 ⑵ 라벨이 붙고 ⑶ 동등 품질로 위장할 수
+없고 ⑷ 관측·테스트 가능할 때만 허용됩니다. `{}` 나 사유 없는 `"unavailable"` 은 금지.
 
-## 4. 절대 불변식 (깨뜨리지 말 것)
+## 5. 작업·테스트 규율
+
+아키텍처·정책을 건드리기 전 **읽기 전용 감사** → 설계 → **범위 경계 명시** → 계획 → 승인 →
+TDD 구현 → **전체 게이트**(`make all` = lint+test+typecheck+build, CI와 동일) → 검증 후 커밋.
+작은 커밋마다 HISTORY 에 무엇을·왜·**무엇을 하지 않았는지** 남기고, 모르면 모른다고 적으세요.
+★정교함을 위한 정교함 금지★ — 측정 가능한 투자 가치 없이 복잡도를 올리지 말고, 데이터
+무결성을 고치기 전에 모델을 키우지 말고, 누출·개정·비용·회전율·표본외를 통제하지 않은
+Sharpe 를 최적화하지 마세요. **금지가 아니라 순서입니다.**
+
+★삭제하거나 상수로 박아도 통과하는 테스트는 증거가 아닙니다.★ 구현 사소함이 아니라
+**계약**을 테스트하고 소스 텍스트보다 **동작**을 봅니다. 안전·정직성 계약에는 **변이
+테스트**로 각 가드가 특정 변이를 죽이는지 확인하고, "X 여야 한다" 에는 **짝**("X 가
+아니어야 한다")을 붙여 항상-통과·항상-거부 구현을 배제하세요. 미상·미검증·실패 상태를
+반드시 테스트하고, 동작 불변이 요구되면 **골든 스냅샷**으로 못 박습니다. 검사 대상이
+예외를 삼키면 예외는 신호가 될 수 없으니 관측 가능한 흔적을 보세요.
+
+## 6. 절대 불변식
+
+**mock 게이트** — `src/data/mock_gate.py::mock_allowed()` 가 유일한 판정 기준이며
+`KIS_USE_MOCK` 이 **정확히 `"1"` 일 때만** mock. ★운영에서는 합성값을 만들지 않습니다★ —
+실패하면 `None`/빈값 + 사유. 새 스토어는 반드시 이 게이트를 통과시킬 것.
+
+**실거래 안전 (최우선)** — 기본값 `dry_run=True`. `TradingEngine` 6중 안전장치 우회 금지.
+`OrderExecutor` 를 `trading_engine.py` 밖에서 직접 생성 금지(CI 정적 강제). KIS 연동은
+`get_kis_client()` 단일 경로. 실계좌 전 모의투자(`KIS_IS_PAPER=1`) 검증.
 
 **스크리너 3-레이어** — `유동성 게이트 → 필터 kind → 후처리 analyzer`. 이 구조와
-`ValuationScreener`·백테스트 엔진의 동작 방식은 리팩터링 대상이 아닙니다.
-`src/engine/filter_ast.py`의 `FIELD_BY_ID`가 필드 단일 레지스트리 —
-**새 필터 kind를 추가하면 `validate()`의 field-check bypass 튜플에 반드시 등록**할 것.
+`ValuationScreener`·백테스트 엔진은 리팩터링 대상이 아닙니다. `filter_ast.py` 의
+`FIELD_BY_ID` 가 단일 레지스트리 — 새 kind 는 `validate()` bypass 튜플에 등록.
 
-**종목명** — `src/data/stock_master.py`의 `get_stock_name()` / `resolve_name()`이 단일 진실
-공급원. `"Unknown Corp"`, 가짜 종목코드(100000~) 재도입 금지.
+**버전·프로세스 고정** — `fastapi==0.111.0`(상위에서 `include_router` 가 깨짐) ·
+`uvicorn --workers 1`(캐시·쿼터·적재 상태가 프로세스 로컬).
 
-**mock 게이트** — `src/data/mock_gate.py::mock_allowed()`가 유일한 판정 기준이며
-`KIS_USE_MOCK`이 **정확히 `"1"`일 때만** mock. 운영에서 조회가 실패하면 합성값으로 가리지 말고
-정직하게 `None`/빈값을 반환할 것. `KIS_MODE`·`KIS_REAL_APP_KEY` 등 구 변수 재도입 금지.
+**수치 안전** — 분수승·로그·제곱근에 음수가 들어갈 수 있는 파생식은 반드시 가드
+(적자기업 실데이터에서만 터집니다 — mock 은 항상 흑자라 테스트를 통과합니다).
 
-**실거래 안전 (최우선)** — 자동매매 기본값은 `dry_run=True`. `TradingEngine`의 6중 안전장치를
-우회하는 코드 금지. **`src.kis_order_executor.OrderExecutor`를 `trading_engine.py` 밖에서 직접
-생성 금지**(자체 안전장치가 없어 곧장 `place_order()` 호출) — `tests/test_no_order_executor_bypass.py`
-가 CI에서 정적으로 강제. KIS 연동은 `src/execution/kis_client.py::get_kis_client()` 단일 경로만
-사용. 실계좌 전 반드시 모의투자(`KIS_IS_PAPER=1`)에서 검증.
-
-**버전·프로세스 고정** — `fastapi==0.111.0` 유지(0.139에서 `include_router`가 깨져 라우터 미등록).
-`uvicorn --workers 1` 유지 — 캐시·DART 쿼터 카운터·적재 상태가 전부 프로세스 로컬이라, 워커를
-늘리려면 그 상태를 먼저 Redis/DB로 옮겨야 합니다.
-
-**프론트엔드** — Tailwind는 **이미 쓰입니다**(tsx 131/46). shadcn/ui는 `shared/ui/shadcn` 벤더링 · 토큰은 `globals.css` §34가 기존 `--t-*`에 매핑(복제 금지) · **AAS만 이전, 레거시는 순수 CSS** · 선행 `:root` 4블록 불변(EOF의 shadcn 브리지가 5번째 — ADR 지정, 세지도 지우지도 말 것) · CSS-in-JS 금지 — [ADR 001](docs/decisions/adr-001-tailwind-shadcn-aas-migration.md).
-API 주소를 빌드 타임에 박지 말 것(`NEXT_PUBLIC_*`·`rewrites` 금지) — 반드시 런타임 프록시 경유.
-**CSS 클래스명이 E2E 계약입니다**(`data-testid` 미사용, Playwright가 `.tfm-*`·`.brun-*`·`.as-*`
-등을 직접 선택) — 클래스명을 바꾸면 해당 스펙도 함께 고칠 것.
-`next build` 후에는 기존 `next` 프로세스를 모두 종료하고 재기동(스테일 청크 → `ChunkLoadError`).
-
-**수치 안전** — 분수승·로그·제곱근에 음수가 들어갈 수 있는 파생식은 반드시 가드할 것
-(적자기업 실데이터에서만 터집니다. mock은 항상 흑자라 테스트를 통과합니다).
-
-**보안** — `.env`는 절대 커밋 금지(`.env.example`만). API 키를 채팅·이슈·로그에 노출 금지.
-**작업 방식** — 조사 → 스펙(`docs/specs`) → 계획(`docs/plans`) → TDD 구현, 기능 단위 작은 커밋.
-추정치를 사실처럼 쓰지 말고, 모르면 모른다고 적을 것.
+**프론트엔드** — API 주소를 빌드 타임에 박지 말 것(`NEXT_PUBLIC_*`·`rewrites` 금지),
+런타임 프록시 경유. **CSS 클래스명이 E2E 계약**이니 바꾸면 스펙도 함께 —
+[ADR 001](docs/decisions/adr-001-tailwind-shadcn-aas-migration.md). **보안** — `.env`
+커밋 금지(`.env.example` 만). API 키를 채팅·이슈·로그에 노출 금지.
