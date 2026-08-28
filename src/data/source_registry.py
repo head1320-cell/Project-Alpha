@@ -521,17 +521,25 @@ def revision_bias_note(key: str) -> str | None:
     return _REVISION_BIAS_NOTE.get(spec.provider)
 
 
-#: ★엔드포인트는 있는데 **부르는 코드가 없는** 계열★ (감사 §1.1)
-#: `krx_client.EXTRA_ENDPOINTS` 에 경로가 있고 `get_extra()` 도 구현돼 있지만
-#: 그 함수를 부르는 파이프라인이 **하나도 없다**. 그래서 이 계열들은 키를 넣어도
-#: 값이 오지 않는다 — "키 미설정" 과 원인이 다르고 **고치는 사람이 다르다**.
-#:
-#: ★선언이지 추론이 아니다★ `tests/test_price_provenance.py` 가 이 집합과
-#: `EXTRA_ENDPOINTS` 를 대조하므로, `get_extra` 를 배선하면 red 가 되어 여기서
-#: 빼도록 강제한다(`regime_axes.AXIS_PATH_USES_VINTAGE` 와 같은 패턴).
-NOT_INGESTED_KEYS: frozenset[str] = frozenset({
-    "VKOSPI", "KR_MARGIN_BALANCE", "KR_SHORT_VOLUME", "KR_LENDING_BALANCE",
-})
+def not_ingested_keys() -> frozenset[str]:
+    """★엔드포인트는 있는데 **부르는 코드가 없는** 계열★ (감사 §1.1)
+
+    이 계열들은 키를 넣어도 값이 오지 않는다 — "키 미설정" 과 원인이 다르고
+    **고치는 사람이 다르다**(전자는 배선, 후자는 설정).
+
+    ★손으로 적지 않는다 — 수집 경로에서 **유도**한다★
+
+    예전에는 네 키를 적은 `frozenset` 이었다. 그 모양은 **비우는 것만으로 가드가
+    해제된다**(직전 커밋의 Z2 변이가 정확히 그렇게 살아남았다). 이제는
+    `krx_client.EXTRA_SERIES` 가 유일한 진실 공급원이라, 수집 경로를 지우면 이
+    선언이 **스스로 되돌아온다**.
+
+    ★호출 시점에 읽는다★ 모듈 적재 시점에 스냅샷을 뜨면 그 스냅샷이 두 번째
+    선언이 되어 다시 갈라진다.
+    """
+    from src.data.krx_client import EXTRA_SERIES
+    return frozenset(s.key for s in _SPECS
+                     if s.provider == KRX and s.key not in EXTRA_SERIES)
 
 _NOT_INGESTED_NOTE = (
     "**수집 코드가 없습니다** — API 키를 설정해도 값이 오지 않습니다"
@@ -559,20 +567,21 @@ def status(key: str, *, value: Any = None, as_of: str | None = None) -> dict[str
 
     # ★`not_ingested` 를 모든 분기가 낸다★ 어떤 응답에는 있고 어떤 응답에는 없으면
     # 소비자가 `.get()` 으로 읽다가 `None` 을 거짓으로 취급하게 된다.
+    uningested = key in not_ingested_keys()
     base = {"source": spec.provider, "label": spec.label,
             "endpoint": spec.endpoint, "verified_live": spec.verified_live,
-            "not_ingested": key in NOT_INGESTED_KEYS}
+            "not_ingested": uningested}
 
     # ★두 사유를 **더한다** — 대체하지 않는다★ "미검증" 과 "수집 코드 없음" 은
     # 둘 다 참일 수 있고 고치는 사람이 다르다(전자는 검증, 후자는 배선).
     # 처음에는 not_ingested 를 먼저 보고 reason 을 **갈아치웠는데**, 그러면
     # "미검증인데 값을 냈다" 를 지키던 기존 가드에서 '미검증' 이라는 말이
     # 사라진다(실측: `test_an_unverified_source_reports_no_value_even_if_one_is_passed`).
-    extra = _NOT_INGESTED_SUFFIX if key in NOT_INGESTED_KEYS else ""
+    extra = _NOT_INGESTED_SUFFIX if uningested else ""
     if not spec.verified_live:
         return {**base, "value": None, "as_of": None, "available": False,
                 "reason": f"엔드포인트 미검증 — {spec.note}{extra}"}
-    if key in NOT_INGESTED_KEYS:
+    if uningested:
         return {**base, "value": None, "as_of": None, "available": False,
                 "reason": _NOT_INGESTED_NOTE}
     if value is None:

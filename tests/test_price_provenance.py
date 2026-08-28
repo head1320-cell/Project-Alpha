@@ -248,48 +248,86 @@ def test_coverage_without_a_database_is_unavailable_not_zero():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 4) ★미사용 엔드포인트를 값으로 선언한다★
+# 4) ★미수집 선언은 **수집 경로에서 유도**된다★
+# ──────────────────────────────────────────────────────────────────────────
+# 이 섹션은 방향이 **뒤집혔다**. 예전에는 "`get_extra` 호출부가 0 이다" 를 못 박고
+# *"배선하면 red 가 되어 `NOT_INGESTED_KEYS` 를 비우도록 강제한다"* 고 적어 뒀다.
+# 배선이 들어왔고(`src/data/krx_extras.py`), 그 지시대로 두 테스트를 뒤집는다.
+#
+# ★호출부를 grep 으로 세는 방식은 버렸다★ — 소스에 문자열 하나만 넣어도 만족하는
+# 공허한 검사다. 대신 **동작**을 본다: 수집 경로를 지우면 선언이 스스로 돌아오는가.
 # ══════════════════════════════════════════════════════════════════════════
-def test_not_ingested_reason_differs_from_an_unverified_endpoint():
-    """키를 넣으면 풀리는 문제와 코드를 써야 풀리는 문제를 구분한다."""
-    from src.data.source_registry import status
-    ni = status("VKOSPI")
-    assert ni["available"] is False and ni["not_ingested"] is True
-    assert "수집 코드가 없습니다" in ni["reason"]
+def test_the_two_causes_are_still_told_apart():
+    """★키를 넣으면 풀리는 문제와 코드를 써야 풀리는 문제는 다르다★
 
-    other = status("KR_CPI")            # ECOS — 미검증이지만 수집 코드는 있다
-    assert other.get("not_ingested") is False
-    assert ni["reason"] != other["reason"]
-
-
-def test_not_ingested_keys_match_the_unused_krx_endpoints():
-    """★선언 ↔ 현실 대조★
-
-    `get_extra()` 를 배선하면 이 테스트가 red 가 되어 `NOT_INGESTED_KEYS` 에서
-    빼도록 강제한다(`regime_axes.AXIS_PATH_USES_VINTAGE` 와 같은 패턴).
+    지금은 네 계열 모두 배선돼 있어 후자가 없다. 그래도 **구분이 표현 가능해야**
+    한다 — 표현할 수 없게 되면 다음 미수집 계열이 조용히 뭉개진다.
     """
-    import pathlib
+    import src.data.krx_client as kc
+    from src.data.source_registry import status
 
-    from src.data.krx_client import EXTRA_ENDPOINTS
-    from src.data.source_registry import _BY_KEY, NOT_INGESTED_KEYS
+    before = status("VKOSPI")
+    assert before["not_ingested"] is False
+    assert "수집 코드가 없습니다" not in before["reason"]
 
-    declared = {_BY_KEY[k].endpoint for k in NOT_INGESTED_KEYS if k in _BY_KEY}
-    assert declared == set(EXTRA_ENDPOINTS.values()), (
-        "선언한 미수집 계열과 `EXTRA_ENDPOINTS` 가 어긋난다")
+    kept = {k: v for k, v in kc.EXTRA_SERIES.items() if k != "VKOSPI"}
+    original = kc.EXTRA_SERIES
+    try:
+        kc.EXTRA_SERIES = kept
+        after = status("VKOSPI")
+    finally:
+        kc.EXTRA_SERIES = original
 
-    root = pathlib.Path(__file__).resolve().parents[1]
-    callers = []
-    for sub in ("src", "scripts"):
-        for f in (root / sub).rglob("*.py"):
-            if f.name == "krx_client.py":
-                continue
-            # ★설명 문구는 호출이 아니다★ 이 규칙을 설명하는 **문자열 상수**가
-            # 스스로를 호출부로 오탐해 red 가 됐다(실제로 겪었다 — 주석만 걸렀더니
-            # 통과하지 못했다). 그래서 설명 쪽에서 호출 문법을 지웠고, 여기서는
-            # 호출 문법만 본다.
-            for line in f.read_text(encoding="utf-8").splitlines():
-                if ".get_extra(" in line and not line.lstrip().startswith("#"):
-                    callers.append(f"{f}: {line.strip()}")
-                    break
-    assert not callers, (
-        f"`get_extra` 호출부가 생겼다 — `NOT_INGESTED_KEYS` 를 비울 것: {callers}")
+    assert after["not_ingested"] is True
+    assert "수집 코드가 없습니다" in after["reason"]
+    assert after["reason"] != status("KR_CPI")["reason"], (
+        "미수집과 미검증이 같은 문구가 됐다 — 고치는 사람이 다르다")
+
+
+def test_every_endpoint_has_a_collection_path():
+    """★선언 ↔ 현실 대조★ (방향 반전)
+
+    `EXTRA_ENDPOINTS` 에 경로만 있고 `EXTRA_SERIES` 에 접기 규칙이 없으면, 키를
+    넣어도 값이 오지 않으면서 레지스트리는 조용하다. 둘이 갈라지지 않게 못 박는다.
+    """
+    from src.data.krx_client import (
+        COLLAPSE_SINGLE,
+        COLLAPSE_UNKNOWN,
+        EXTRA_ENDPOINTS,
+        EXTRA_SERIES,
+    )
+    from src.data.source_registry import _BY_KEY, KRX, not_ingested_keys
+
+    kinds = {kind for kind, _rule, _name in EXTRA_SERIES.values()}
+    assert kinds == set(EXTRA_ENDPOINTS), "접기 규칙과 엔드포인트가 어긋난다"
+    for _kind, rule, _name in EXTRA_SERIES.values():
+        assert rule in (COLLAPSE_SINGLE, COLLAPSE_UNKNOWN)
+
+    # 등록 키는 전부 레지스트리에 있어야 한다 — 없으면 상태를 낼 수 없다.
+    for key in EXTRA_SERIES:
+        assert key in _BY_KEY and _BY_KEY[key].provider == KRX, key
+
+    assert not_ingested_keys() == frozenset(), (
+        "수집 경로가 있는데 미수집으로 선언돼 있다")
+
+
+def test_emptying_the_pipeline_restores_the_declaration():
+    """★유도 검증 — 가드를 손으로 무장해제할 수 없다★
+
+    예전 `NOT_INGESTED_KEYS` 는 손으로 적은 frozenset 이라 **비우는 것만으로**
+    가드가 풀렸다(직전 커밋의 Z2 변이가 그렇게 살아남았다). 이제 진실은 수집
+    경로 쪽에 있다.
+    """
+    import src.data.krx_client as kc
+    from src.data.source_registry import not_ingested_keys
+
+    original = kc.EXTRA_SERIES
+    try:
+        kc.EXTRA_SERIES = {}
+        restored = not_ingested_keys()
+    finally:
+        kc.EXTRA_SERIES = original
+
+    assert restored == {"VKOSPI", "KR_MARGIN_BALANCE", "KR_SHORT_VOLUME",
+                        "KR_LENDING_BALANCE"}
+    assert not_ingested_keys() == frozenset(), "복원이 안 됐다"

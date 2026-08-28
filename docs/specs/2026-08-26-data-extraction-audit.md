@@ -277,3 +277,73 @@ grep -n "realtime_start" src/data/pit_macro.py src/services/macro_collector.py
 grep -n "INSERT INTO daily_prices" -A3 src/data/krx_ingest.py src/data/ohlcv_loader.py
 KIS_USE_MOCK=1 python3 -c "from src.data.stock_master import load_master_flags; print(len(load_master_flags()))"
 ```
+
+---
+
+## 부록 A — P1·P3 해소 (2026-08-28)
+
+### A.1 §3.3 식별자 브리지 — ★고아는 스토어가 아니라 **판정**이었다★
+
+§3.3 이 지적한 "파일 하나가 세 기능의 단일 장애점" 은 `1e3226a` 에서 이미 해소됐다
+(파일 → DB 이중화). 이번에 재 보니 남은 구멍은 다른 것이었다:
+
+★`isin_of()` 는 소비자가 0★ 이고, 유일한 실소비자 `krx_mdc.backfill_flows_krx` 는
+같은 조회를 **인라인으로 다시** 썼다. 그래서 "이 ISIN 이 쓸 수 있는 값인가" 를
+세 곳이 **두 가지 규칙**으로 판정했다:
+
+| 위치 | 규칙 |
+|---|---|
+| `kis_master_parser:147` (쓰기) | `len == 12` 이면 저장, 아니면 `""` |
+| `instrument_master_store.isin_of` | ★비어 있지 않으면 유효★ — 혼자 다르다 |
+| `krx_mdc:164` (유일한 소비자) | `len == 12` |
+
+**해소**: `isin_status()` 하나가 판정하고 `isin_of()` 는 그 래퍼다. 동작 변경은
+"덜 받아들인다" 하나(11자 → `None`). 건너뛴 사유는 `no_master`/`no_isin`/
+`malformed` 셋으로 갈라졌다 — ★셋째가 둘째로 뭉개지면 파서 버그가 영원히 안
+보인다★. `master_flags_origin()` 이 파일/DB/없음을 관측하고(순서는 불변),
+`isin_coverage()` 가 기존 상태 응답에 실린다.
+
+### A.2 §5.4 미사용 엔드포인트 — ★배선했고, 모르는 집계는 거부한다★
+
+배선하면서 계획에 없던 사실 둘을 만났다.
+
+**⑴ 접기 규칙이 필요하다.** `get_extra` 는 `basDd` **하루치**이고
+`parse_extra_rows` 결과에 **종목 식별자가 없다**. `/sto/*_bydd_trd` 셋은 전종목
+일별 규약이라 하루에 여러 행이 온다 — 시장 한 값으로 접는 정의가 필요한데
+★엔드포인트가 미검증★ 이라 그 정의를 지어내는 것이 된다. 그래서
+`COLLAPSE_SINGLE`(이름으로 한 행) / `COLLAPSE_UNKNOWN`(여러 행이면 거부)을
+`krx_client.EXTRA_SERIES` 에 선언했다. 거부 사유는 **두 갈래**다 — 이름이 유일하지
+않은 것과 집계 정의가 없는 것은 고치는 사람이 다르다.
+
+**⑵ 선언이 손 목록이었다.** `NOT_INGESTED_KEYS` 는 비우기만 하면 가드가 풀리는
+모양이었다. `not_ingested_keys()` 로 바꿔 **수집 경로에서 유도**한다 —
+`EXTRA_SERIES` 에서 계열을 지우면 선언이 스스로 돌아온다.
+
+**★늘어나지 않는 것★** `PROVIDER_HAS_VINTAGE[KRX] = False` 다. 이 계열들은 영구
+forward-only 이고 **백테스트 적격 데이터를 한 줄도 늘리지 않는다**. 증거등급은
+**E1(픽스처)** — `KRX_API_KEY` 가 없고 호스트가 프록시 403 이라 실호출로 확인한
+것이 하나도 없다. 바뀐 것은 "아니오" 의 정확도다:
+
+    이전: "수집 코드가 없습니다 — 키를 설정해도 값이 오지 않습니다"
+    이후: "API 키가 설정되지 않았습니다" (수집 경로) ·
+          "엔드포인트 미검증 — 호스트 프록시 차단" (레지스트리) ·
+          "집계 정의가 미확정입니다" (다중 행)
+
+`MARGIN`·`SHORT`·`LENDING` 의 시장 집계 정의는 ★실응답 1건이면 확정된다★.
+
+### A.3 재현 (갱신)
+
+```bash
+cd /home/user/Project-Alpha
+KIS_USE_MOCK=1 python3 -c "
+from src.data.source_registry import not_ingested_keys, status
+print(sorted(not_ingested_keys()))                      # []
+print(status('VKOSPI')['reason'][:40])"
+KIS_USE_MOCK=1 python3 -c "
+from src.data.krx_extras import collect_all_extras
+for k, s in collect_all_extras('2026-08-01','2026-08-07').items():
+    print(k, s.source, (s.reason or '')[:40])"
+KIS_USE_MOCK=1 python3 -c "
+from src.data.instrument_master_store import isin_status, isin_coverage
+print(isin_status('005930')); print(isin_coverage())"
+```

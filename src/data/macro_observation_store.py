@@ -66,6 +66,7 @@ STORE_SCHEMA_VERSION = "2026.1"
 SOURCE_ALFRED = "alfred"      # pit_macro.fetch_observations — 빈티지 있음
 SOURCE_FRED = "FRED"          # macro_collector 의 최신개정본 경로 — 빈티지 없음
 SOURCE_BOK = "BOK"            # ECOS — 개정 자체가 없는 계열
+SOURCE_KRX = "KRX"            # krx_extras 확장 지표 — 빈티지 없음(영구 forward-only)
 
 #: 빈티지가 없는 행의 `obs_key` 접두사. ★빈티지를 지어낸 것이 아니다★
 UNKNOWN_VINTAGE_PREFIX = "unknown:"
@@ -351,12 +352,14 @@ def record_series(series, *, engine=None) -> int:
     `vintage_id`·`release_timestamp` 를 **빈 채로** 둔다 — 지어내면
     `derive_usage` 가 거짓으로 backtest_eligible 을 낸다(Phase 8b 의 교훈).
 
-    `source` 가 `BOK`/`FRED` 가 아니면(=`MOCK`·`unavailable`) 아무것도 하지 않는다.
+    `source` 가 `BOK`/`FRED`/`KRX` 가 아니면(=`MOCK`·`unavailable`) 아무것도 하지
+    않는다. KRX(`krx_extras`)도 빈티지가 없어 같은 취급이다 — 행은 남지만
+    `derive_usage` 는 여전히 등급을 낮춘다.
     """
     from datetime import datetime, timezone
 
     src = getattr(series, "source", None)
-    if src not in (SOURCE_BOK, SOURCE_FRED):
+    if src not in (SOURCE_BOK, SOURCE_FRED, SOURCE_KRX):
         return 0
     stamps = list(getattr(series, "timestamps", None) or [])
     values = list(getattr(series, "values", None) or [])
