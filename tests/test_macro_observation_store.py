@@ -308,15 +308,28 @@ def test_route_reports_coverage_and_vintages(monkeypatch, eng):
 # ══════════════════════════════════════════════════════════════════════════
 # 10) ★분리를 코드가 강제한다★
 # ══════════════════════════════════════════════════════════════════════════
-def test_the_engine_layer_does_not_read_this_store():
-    """★불변 논증 그 자체★
+#: 메타데이터만 묻는 함수 — "행이 있는가" 이지 "값이 무엇인가" 가 아니다.
+#: ★예외는 여기 명시된 것뿐이고, 나머지는 전부 값 취급이다★
+_METADATA_READERS = ("coverage",)
 
-    "빈티지를 **저장**한다"(데이터 인프라)와 "국면 축이 그것을 **읽는다**"(배분
-    정책 배선)는 다른 일이고, 후자는 별도 승인 사항이다. 골든 스냅샷은 이 테이블을
-    읽지 않으므로 바이트 동일이 그 분리를 증명하지 못한다 — 이 테스트가 증명한다.
 
-    ★소비자가 생기면 red 가 된다★ 그때 그 논증을 다시 해야 한다.
+def _value_readers() -> tuple:
+    """스토어의 공개 API 에서 **유도한다** — 손으로 유지하지 않는다.
+
+    ★목록을 손으로 적으면 비우는 것만으로 가드가 무장해제된다★(변이 실험에서
+    실제로 살아남았다). 그리고 스토어에 새 값 함수가 생겨도 자동으로 잡힌다.
     """
+    import src.data.macro_observation_store as mos
+
+    return tuple(sorted(
+        n for n in dir(mos)
+        if not n.startswith("_") and callable(getattr(mos, n, None))
+        and getattr(getattr(mos, n), "__module__", "") == mos.__name__
+        and n not in _METADATA_READERS))
+
+
+def _engine_hits(names: tuple) -> list[str]:
+    """`src/engine/` 에서 스토어의 해당 심볼을 **코드 토큰으로** 찾는다."""
     import io as _io
     import pathlib
     import tokenize
@@ -327,15 +340,52 @@ def test_the_engine_layer_does_not_read_this_store():
         if "macro_observation_store" not in src:
             continue
         for tok in tokenize.generate_tokens(_io.StringIO(src).readline):
-            if tok.type == tokenize.COMMENT:
-                continue
-            if tok.type == tokenize.STRING:
+            if tok.type in (tokenize.COMMENT, tokenize.STRING):
                 continue          # 산문은 설명해도 된다
-            if "macro_observation_store" in tok.string:
+            if tok.string in names:
                 hits.append(f"{path.as_posix()}:{tok.start[0]}")
+    return hits
+
+
+def test_the_engine_layer_does_not_read_observation_values():
+    """★불변 논증 — 재실시 (2026-08-28)★
+
+    원래 이 테스트는 `src/engine/` 에서 `macro_observation_store` **식별자 전체**를
+    금지했다. 독스트링이 *"소비자가 생기면 red 가 된다 — 그때 그 논증을 다시 해야
+    한다"* 고 적어 뒀고, P2 작업에서 실제로 red 가 되어 여기서 다시 한다.
+
+    ★구분이 실재한다★ — 막으려던 것은 스토어의 **관측값**이 국면 계산으로 흘러드는
+    것이다(배분 정책 배선). P2 가 추가한 `regime_axes._series_has_vintage` 는
+    `coverage()` 만 부른다 — *"이 계열에 빈티지 행이 **있는가**"* 라는 개수 조회이고,
+    값이 아니라 **정직성 라벨**(`blocked_by`)에만 쓰이며, 축 출력은 바이트 동일이다.
+    빈티지가 0건인 지금 그 판정은 "못 쓴다" 이므로 오히려 **더 보수적**이다.
+
+    ★그래서 가드를 좁히되 느슨하게 하지 않는다★ — 값 읽기(`load`·`vintages_of`·
+    `save`·`record_series`)는 **여전히 금지**다. 그것이 생기면 국면 계산이 스토어의
+    숫자를 먹는다는 뜻이고, 그때 논증을 또 해야 한다.
+    """
+    hits = _engine_hits(_value_readers())
     assert hits == [], (
-        "`src/engine/` 이 매크로 관측 스토어를 읽는다 — 배분 정책 배선은 별도 "
+        "`src/engine/` 이 매크로 관측 **값**을 읽는다 — 배분 정책 배선은 별도 "
         "승인 사항이다. 불변 논증을 다시 할 것:\n" + "\n".join(hits))
+
+
+def test_metadata_only_reads_are_the_narrow_exception():
+    """★짝★ — 예외가 **좁다**는 것을 못 박는다.
+
+    이 테스트가 없으면 위 가드를 "아무것도 금지하지 않음" 으로 약화시켜도 통과한다.
+    메타데이터 조회는 **한 곳**(`regime_axes`)뿐이어야 하고, 늘어나면 그때 다시 본다.
+    """
+    hits = _engine_hits(_METADATA_READERS)
+    files = {h.rsplit(":", 1)[0] for h in hits}
+    assert files <= {"src/engine/regime_axes.py"}, (
+        f"메타데이터 조회가 예상 밖 모듈로 번졌다: {sorted(files)}")
+    assert hits, "메타데이터 조회가 사라졌다 — P2 판정이 관측을 안 쓴다는 뜻이다"
+
+    # ★가드가 실제로 무언가를 금지하는지★ — 목록이 비면 위 테스트가 공허해진다.
+    readers = _value_readers()
+    assert {"load", "vintages_of", "save"} <= set(readers), (
+        f"값 읽기 함수가 가드 목록에서 빠졌다: {readers}")
 
 
 # ══════════════════════════════════════════════════════════════════════════

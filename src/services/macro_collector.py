@@ -48,6 +48,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+#: ★수집 경로가 빈티지를 가져오는가★ — 사실이 **있는 곳**에 둔다.
+#:
+#: 국면 축(`regime_axes.axis_revision_status`)이 이 값을 읽어 "PIT 관리됨" 을
+#: 판정한다. 예전에는 그 선언이 `regime_axes` 쪽에 있었는데, 사실은 여기에 있다 —
+#: `collect_all()` 이 `pit_macro`/관측 스토어를 as-of 로 조회하는가.
+#:
+#: ★오늘은 거짓이다★ 이 모듈에 `pit_macro`·`vintage` 참조가 하나도 없다.
+#: 배선하는 사람이 이 값을 함께 올려야 하고, `tests/test_axis_revision_status.py`
+#: 가 선언과 실제 코드를 `tokenize` 로 대조해 갈라짐을 막는다.
+COLLECTOR_READS_VINTAGE = False
+
 BOK_BASE_URL = "https://ecos.bok.or.kr/api"
 FRED_BASE_URL = "https://api.stlouisfed.org/fred"
 

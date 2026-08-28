@@ -63,7 +63,43 @@ QUADRANTS = ("Goldilocks", "Reflation", "Stagflation", "Disinflation")
 #: ★선언이지 추론이 아니다★ — `tests/test_axis_revision_status.py` 가 이 선언과
 #: 실제 코드(수집기가 `pit_macro` 를 부르는가)를 대조한다. 빈티지를 배선하면 그
 #: 테스트가 red 가 되어 이 상수를 함께 고치도록 강제한다.
-AXIS_PATH_USES_VINTAGE = False
+def _collector_reads_vintage() -> bool:
+    """⑵ 수집 경로가 빈티지를 가져오는가. ★사실이 있는 곳에서 읽는다★
+
+    예전에는 이 모듈에 `AXIS_PATH_USES_VINTAGE` 라는 손 선언이 있었다. 사실은
+    수집기 쪽에 있으므로 거기 하나만 둔다 — 두 곳에 두면 갈라지고, 갈라진 선언은
+    틀린 선언이다.
+    """
+    try:
+        from src.services.macro_collector import COLLECTOR_READS_VINTAGE
+        return bool(COLLECTOR_READS_VINTAGE)
+    except Exception:
+        return False
+
+
+def _series_has_vintage(key: str) -> bool:
+    """⑶ 그 계열에 **실제로** 빈티지가 있는가 — ★선언이 아니라 관측★
+
+    `macro_observation_store` 에 물어본다. 없으면(스토어 미생성·조회 실패) 거짓 —
+    ★모르면 막는 쪽이 안전하다★. 여기서 관대해지면 없는 빈티지를 있다고 말한다.
+    """
+    try:
+        from src.data.macro_observation_store import coverage
+        cov = coverage([key]) or {}
+        row = (cov.get("by_series") or {}).get(key) or {}
+        return int(row.get("with_vintage") or 0) > 0
+    except Exception:
+        return False
+
+
+def _path_uses_vintage(key: str) -> bool:
+    """★두 사실이 모두 참일 때만 참★
+
+    ⑵만 보면 데이터 없이 "PIT 통과" 가 되고, ⑶만 보면 **현재 개정본으로 과거를
+    채점하면서** "PIT 통과" 가 된다. 후자가 정확히 `ac938c4` 가 막은 상태다 —
+    스토어에 빈티지가 쌓여도 수집기가 안 읽으면 축은 현재값을 본다.
+    """
+    return _collector_reads_vintage() and _series_has_vintage(key)
 
 #: 왜 막혔는가 — 하나는 제공자의 한계, 다른 하나는 우리 코드의 선택이다.
 BLOCKED_BY_SOURCE = "source"      # 제공자가 빈티지를 주지 않는다 (영구)
@@ -95,7 +131,7 @@ def axis_revision_status(market: str = "kr") -> dict:
             # ★미등록 계열은 '빈티지 없음' 으로 떨어뜨리되 그 사실을 남긴다★
             # 조용히 True 로 두면 등록을 빠뜨린 계열이 백테스트 적격이 된다.
             blocked = (BLOCKED_BY_SOURCE if not has_v
-                       else None if AXIS_PATH_USES_VINTAGE else BLOCKED_BY_PATH)
+                       else None if _path_uses_vintage(key) else BLOCKED_BY_PATH)
             rows.append({
                 "key": key, "axis": axis_name, "weight": weight,
                 "provider": spec.provider if spec is not None else None,
@@ -120,7 +156,10 @@ def axis_revision_status(market: str = "kr") -> dict:
     return {
         "market": market,
         "revision_bias": REVISION_MANAGED if managed else REVISION_UNMANAGED,
-        "path_uses_vintage": AXIS_PATH_USES_VINTAGE,
+        # ★축 전체가 빈티지로 조회될 때만 참★ 하나라도 아니면 그 축은 PIT 가 아니다.
+        "path_uses_vintage": bool(rows) and all(
+            _path_uses_vintage(r["key"]) for r in rows if r["source_has_vintage"]
+        ) and _collector_reads_vintage(),
         "series": rows,
         "blocked_permanently": sorted(set(perm)),
         "blocked_by_path": sorted(set(path)),

@@ -290,6 +290,29 @@ FRED·ECOS 시계열은 **프로세스 dict 캐시**에만 산다. 영구 아티
 
 ★문서로만 제안한다★ — 소비자 전환은 배분 경로이므로 별도 승인이다.
 
+### 후속 (2026-08-28, 우선순위 P0) — ★정직화까지 했고 전환은 안 했다★
+
+계약을 배선하지 않은 대신 **로더가 무엇을 주는지 말하게** 했다. `_tag()` 가 네 반환
+경로(`mock`·`db`·`kis`·`auto`) **전부**에서 `attrs` 셋을 붙인다:
+
+| 태그 | 뜻 |
+|---|---|
+| `source` | 어디서 왔나 (`mock`/`db`/`kis`) |
+| `adj_status` | 이 티커 행이 수정주가인가 (`price_quality.adj_status_of`) |
+| **`price_basis`** | ★원주가·수정주가가 **섞였는가**★ (`basis_consistency`) |
+
+★예전에는 `auto` 만, 그것도 DB/KIS 가 성공했을 때만 태깅했다★ — 이 환경은
+`daily_prices` 가 없어 auto 가 mock 으로 떨어지므로 **`adj_status` 가 붙는 관측
+가능한 경로가 하나도 없었다**. `prefer="db"` 를 쓰는 소비자가 생기면 basis 라벨
+없이 혼합된 `close` 를 받는 구조였다.
+
+`price_basis` 를 새로 실은 이유: `adj_status` 하나로는 **혼합**을 말할 수 없다.
+
+★여전히 전환하지 않았다★ — `close → adj_close` 는 배분·백테스트 동작 변경이다.
+반환 컬럼은 한 글자도 바뀌지 않았고(호출 19곳), `attrs` 는 **힌트이지 권위가
+아니다**(pandas 슬라이스·merge 에서 사라진다). 게이트를 세울 때는
+`price_quality.price_usage()`/`assert_prices_backtest_eligible()` 을 직접 부를 것.
+
 ---
 
 ## 부록 3. 다음 다섯 개 우선순위

@@ -163,8 +163,8 @@ def _db_ohlcv_df(ticker: str, start_date: str, end_date: str):
         return pd.DataFrame()
 
 
-def _tag_adj_status(df, code: str) -> None:
-    """`df.attrs["adj_status"]` — 이 가격이 수정주가인지 원주가인지.
+def _tag(df, code: str, source: str | None = None) -> None:
+    """`df.attrs` 에 **이 가격이 무엇인지** 를 붙인다 — `source`·`adj_status`·`price_basis`.
 
     ★`attrs` 는 **편의**이지 권위가 아니다★ pandas 연산에서 `attrs` 보존은
     보장되지 않는다(슬라이스·merge·groupby 에서 사라질 수 있다). 게이트를 세울
@@ -179,12 +179,29 @@ def _tag_adj_status(df, code: str) -> None:
     요청해 받은 값을 같은 컬럼에 넣는다(`kis_client.DAILY_ADJ_PRC_FLAG`). 즉
     `close` 는 하나의 값이 아니다 — 행별 정의는 `daily_prices.price_basis` 에 있고
     `price_quality.adj_close_coverage()` 의 `basis_consistency` 가 혼합을 보고한다.
+
+    ★그래서 `price_basis` 를 함께 싣는다★ `adj_status` 하나로는 **혼합**을 말할 수
+    없다. `close` 가 원주가 행과 수정주가 행을 함께 담고 있으면 그 계열로 계산한
+    수익률은 정의가 섞인 수익률이고, 조용히 넘기면 아무도 모른다.
+
+    ★판정이 터져도 가격은 돌려준다★ 태그는 편의이지 게이트가 아니므로 실패를
+    df 를 죽이는 데 쓰지 않는다 — 아는 것만 남기고 나머지는 비운다.
     """
+    if df is None:
+        return
+    if source is not None:
+        df.attrs["source"] = source
     try:
         from src.data.price_quality import adj_status_of
         df.attrs["adj_status"] = adj_status_of(code)
     except Exception as e:  # noqa: BLE001
         logger.debug(f"adj_status 태깅 실패({code}): {e}")
+    try:
+        from src.data.price_quality import adj_close_coverage
+        df.attrs["price_basis"] = (adj_close_coverage(tickers=[code])
+                                   or {}).get("basis_consistency")
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"price_basis 태깅 실패({code}): {e}")
 
 
 def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
@@ -203,19 +220,31 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
     import pandas as pd
     code = ticker.replace(".KS", "").replace(".KQ", "")
 
+    # ★명시 prefer 도 태깅한다★ 예전에는 `auto` 만, 그것도 DB/KIS 가 성공했을
+    # 때만 했다. 경로마다 태깅이 다르면 그 비대칭 자체가 함정이다 — `prefer="db"`
+    # 를 쓰는 소비자가 basis 라벨 없이 혼합된 `close` 를 받는다.
     if prefer == "mock":
-        return _mock_ohlcv_df(code, start_date, end_date)
+        df = _mock_ohlcv_df(code, start_date, end_date)
+        _tag(df, code, "mock")
+        return df
     if prefer == "db":
-        return _db_ohlcv_df(code, start_date, end_date)
-    if prefer == "kis":
-        df = _kis_ohlcv_df(code, start_date, end_date)
+        df = _db_ohlcv_df(code, start_date, end_date)
+        _tag(df, code, "db")
         return df if df is not None else pd.DataFrame()
+    if prefer == "kis":
+        # ★빈 결과에도 출처는 말한다★ `_kis_ohlcv_df` 는 실패 시 `None` 이라
+        # 여기서 빈 df 로 바꾼 **뒤에** 태깅해야 호출자가 "kis 에서 왔고 없었다"
+        # 를 알 수 있다. 안 그러면 이 경로만 태그가 비어 비대칭이 남는다.
+        df = _kis_ohlcv_df(code, start_date, end_date)
+        if df is None:
+            df = pd.DataFrame()
+        _tag(df, code, "kis")
+        return df
 
     # auto: DB → KIS → mock
     df = _db_ohlcv_df(code, start_date, end_date)
     if df is not None and not df.empty and len(df) >= 20:
-        df.attrs["source"] = "db"   # 실데이터(적재 DB)
-        _tag_adj_status(df, code)
+        _tag(df, code, "db")        # 실데이터(적재 DB)
         return df
 
     df = _kis_ohlcv_df(code, start_date, end_date)
@@ -225,15 +254,16 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
             ingest_df_to_db(code, df)
         except Exception:
             pass
-        df.attrs["source"] = "kis"  # 실데이터(KIS 실시간)
-        _tag_adj_status(df, code)
+        _tag(df, code, "kis")       # 실데이터(KIS 실시간)
         return df
 
     # 최종 fallback: mock 모드만 합성, 운영선 빈 df(정직 — 실데이터 없음)
     from src.data.mock_gate import mock_allowed
     if mock_allowed():
         logger.info(f"OHLCV mock fallback: {code} (DB/KIS 모두 미가용)")
-        return _mock_ohlcv_df(code, start_date, end_date)
+        df = _mock_ohlcv_df(code, start_date, end_date)
+        _tag(df, code, "mock")
+        return df
     logger.info(f"OHLCV 미가용(실데이터 없음, 합성 금지): {code}")
     return pd.DataFrame()
 

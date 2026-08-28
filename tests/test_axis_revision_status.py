@@ -28,9 +28,13 @@
 
 ## ★선언과 현실을 대조한다★
 
-`AXIS_PATH_USES_VINTAGE` 는 **선언**이다. 아래
-`test_declared_path_fact_matches_the_actual_collector` 가 그 선언을 실제 코드와
-대조하므로, 빈티지를 배선하면 red 가 되어 상수를 함께 고치도록 강제한다.
+`macro_collector.COLLECTOR_READS_VINTAGE` 는 **선언**이다. 아래
+`test_declared_path_fact_matches_the_actual_collector` 가 그 선언을 **같은 파일의**
+실제 코드와 대조하므로, 빈티지를 배선하면 red 가 되어 선언을 함께 고치게 한다.
+
+★예전에는 그 선언이 `regime_axes.AXIS_PATH_USES_VINTAGE` 였다★ — 사실이 있는 곳
+(수집기)과 선언이 있는 곳이 달라 갈라지기 쉬웠다. 지금은 수집기 쪽에 하나만 두고
+`regime_axes._path_uses_vintage()` 가 그것과 **관측된 빈티지 유무**를 함께 본다.
 """
 
 from __future__ import annotations
@@ -44,7 +48,6 @@ import pytest  # noqa: E402
 
 from src.engine.regime_axes import (  # noqa: E402
     AXES,
-    AXIS_PATH_USES_VINTAGE,
     BLOCKED_BY_PATH,
     BLOCKED_BY_SOURCE,
     REVISION_MANAGED,
@@ -78,7 +81,8 @@ def test_each_series_declares_provider_and_vintage_and_why_blocked(market):
         assert r["blocked_by"] in (None, BLOCKED_BY_SOURCE, BLOCKED_BY_PATH)
         # ★막혔는데 이유가 없거나, 안 막혔는데 이유가 있으면 안 된다★
         if r["blocked_by"] is None:
-            assert r["source_has_vintage"] and AXIS_PATH_USES_VINTAGE
+            from src.engine.regime_axes import _path_uses_vintage
+            assert r["source_has_vintage"] and _path_uses_vintage(r["key"])
         if r["blocked_by"] == BLOCKED_BY_SOURCE:
             assert r["source_has_vintage"] is False
 
@@ -120,7 +124,9 @@ def test_managed_requires_the_path_too(monkeypatch):
     이것이 없으면 "언제나 unmanaged 를 반환" 하는 구현도 위 테스트를 통과한다.
     """
     import src.engine.regime_axes as ra
-    monkeypatch.setattr(ra, "AXIS_PATH_USES_VINTAGE", True)
+    # ★두 사실을 다 켜야 managed 다★ — 하나만으로는 거짓 "PIT 통과" 가 된다.
+    monkeypatch.setattr("src.services.macro_collector.COLLECTOR_READS_VINTAGE", True)
+    monkeypatch.setattr(ra, "_series_has_vintage", lambda k: True)
     us = ra.axis_revision_status("us")
     assert us["revision_bias"] == REVISION_MANAGED
     assert us["blocked_by_path"] == []
@@ -153,20 +159,25 @@ def _calls_vintage(src: str) -> bool:
 def test_declared_path_fact_matches_the_actual_collector():
     """★선언과 현실의 대조★
 
-    `AXIS_PATH_USES_VINTAGE` 는 사람이 적은 값이라 코드가 바뀌면 조용히 거짓이 된다.
-    국면 축이 읽는 수집기가 빈티지 조회(`pit_macro`)를 부르는지 **소스에서** 확인해
-    선언과 맞춘다. 빈티지를 배선하면 이 테스트가 red 가 되어 상수를 함께 고치게 한다.
+    `COLLECTOR_READS_VINTAGE` 는 사람이 적은 값이라 코드가 바뀌면 조용히 거짓이 된다.
+    수집기가 빈티지 조회(`pit_macro`)를 부르는지 **같은 파일의 소스에서** 확인해
+    선언과 맞춘다. 빈티지를 배선하면 이 테스트가 red 가 되어 선언을 함께 고치게 한다.
+
+    ★선언과 사실이 같은 파일에 있다★ — 예전에는 선언이 `regime_axes` 에, 사실이
+    `macro_collector` 에 있어 둘이 갈라지기 쉬웠다.
 
     ★산문이 아니라 코드 토큰만 본다★ 예전에는 파일 전체를 `in` 으로 훑었다. 그러다
     수집기 독스트링이 *"`pit_macro` 가 같은 이유로 frequency 를 보내지 않는다"* 라고
     **설명**하자 거짓 양성이 났다 — 배선이 없는데 있다고 보고했다. 설명은 얼마든지
     할 수 있어야 하므로, 주석·문자열을 걷어내고 식별자에서만 찾는다.
     """
+    from src.services.macro_collector import COLLECTOR_READS_VINTAGE
+
     src = (_ROOT / "src" / "services" / "macro_collector.py").read_text(encoding="utf-8")
-    assert _calls_vintage(src) == AXIS_PATH_USES_VINTAGE, (
+    assert _calls_vintage(src) == COLLECTOR_READS_VINTAGE, (
         f"수집기의 빈티지 사용({_calls_vintage(src)})과 "
-        f"선언({AXIS_PATH_USES_VINTAGE})이 어긋난다 — "
-        f"`regime_axes.AXIS_PATH_USES_VINTAGE` 를 고칠 것")
+        f"선언({COLLECTOR_READS_VINTAGE})이 어긋난다 — "
+        f"`macro_collector.COLLECTOR_READS_VINTAGE` 를 고칠 것")
 
 
 def test_prose_about_the_vintage_path_is_not_mistaken_for_wiring():
