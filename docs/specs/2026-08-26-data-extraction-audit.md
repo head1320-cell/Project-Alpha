@@ -347,3 +347,67 @@ KIS_USE_MOCK=1 python3 -c "
 from src.data.instrument_master_store import isin_status, isin_coverage
 print(isin_status('005930')); print(isin_coverage())"
 ```
+
+---
+
+## 부록 B — 골든 스냅샷의 흔들림 ★원인 규명·항목 종결★ (2026-08-28)
+
+HISTORY 2026-08-28 이 남긴 미해결 항목: *"`t3_geometry` 산출이 소스 변경 없이도
+환경에 따라 한 필드가 흔들린다. ★원인 미상★ — 골든 스냅샷을 불변 증거로 쓰려면 이
+흔들림의 출처를 먼저 알아야 한다."*
+
+### B.1 측정
+
+| # | 측정 | 결과 |
+|---|---|---|
+| 1 | 기준선(08-27) 이후 **계산 사슬**을 건드린 커밋 | ★0건★ — 21커밋 전부 무편집 |
+| 2 | 기준선 시점 커밋 `da7e191` 을 워크트리에서 오늘 실행 | ★오늘 HEAD 와 바이트 동일★ |
+| 3 | 같은 설정 4연속 실행 | md5 동일 — 완전 결정론 |
+| 4 | `OPENBLAS_CORETYPE` 만 교체 | ★그 한 필드가 뒤집힌다★ |
+
+```
+CORETYPE=NEHALEM·SANDYBRIDGE·SKYLAKEX → 08-27 기준선과 차이 0  (mdd_pct -23.16)
+CORETYPE=HASWELL · 이 호스트 기본값    → 오늘 산출과 차이 0    (mdd_pct -23.17)
+```
+
+**원인**: numpy 1.26.4 가 싣는 OpenBLAS 는 `DYNAMIC_ARCH=1` 빌드라 **호스트 CPU 를
+보고 런타임에 마이크로커널을 고른다**. 컨테이너가 다른 기계에 스케줄되면 부동소수
+합산 순서가 바뀌고, 그 차이가 `mdd_pct` 의 넷째 유효숫자까지 올라온다.
+
+★결론: "골든 바이트 동일" 은 **코드의 성질이 아니다**★ — 호스트의 성질이 섞여 있다.
+
+### B.2 두 번째 함정 — ★기준선이 어떤 명령으로 뽑혔는지 기록이 없다★
+
+도구를 만들자마자 걸렸다. 저장된 `t3_bl_ep` 기준선은 `--conf 25` 로 뽑혔는데
+재생성은 기본값(분해 Ω, conf≈1.111)이었고 **40개 필드가 전부 크게** 달랐다.
+`--conf 25` 로 다시 뽑으니 `identical` 이다. 즉 **회귀가 아니라 다른 실험**이었다.
+
+BLAS 쪽과 달리 이쪽은 차이가 **크게** 나므로 회귀로 오독되기 쉽다.
+
+### B.3 ★골든 사용 규칙★
+
+1. **같은 호스트에서 기준선과 대상을 연달아 생성**해 비교할 때만 바이트 동등을
+   주장할 수 있다. (직전 P0·P2·P1·P3 커밋이 그 방식이었으므로 그 결론들은 유효하다.)
+2. **저장된 기준선**과의 비교는 `scripts/golden_compare.py` 로 한다. `diff` 는
+   "달랐다" 만 말하고 원인을 가르지 못한다.
+3. `last_place` 는 ★불변의 증거가 아니라 **지문 대조 요구**★ 다. 종료코드 2 로
+   성공(0)과 분리돼 있다.
+4. `설정이 다릅니다` 가 먼저 뜨면 **다른 실험을 비교한 것**이다 — 코드를 의심하기 전에
+   명령을 맞춘다.
+
+### B.4 기준선 재생성 명령 (★이것을 적어 두지 않아 B.2 가 생겼다★)
+
+```bash
+KIS_USE_MOCK=1 python3 scripts/t3_transmission.py --engine both --conf 25 --report t3_bl_ep.json
+KIS_USE_MOCK=1 python3 scripts/t3_transmission.py --arch D             --report t3_d.json
+KIS_USE_MOCK=1 python3 scripts/t3_geometry.py                          --report geom.json
+python3 scripts/golden_compare.py --fingerprint > fingerprint.json
+```
+
+### B.5 남는 미상
+
+이 컨테이너 하나로는 **CPU 한 종류**만 봤다. "모든 골든 차이가 BLAS 때문" 이라는
+뜻이 아니다 — 그래서 `last_place` 가 "무해" 가 아니라 "지문을 대조하라" 인 것이다.
+`OPENBLAS_CORETYPE` 을 저장소에 고정하지 않은 이유: 문제는 **비교 방법**이지
+계산이 아니고, 연구 스크립트 하나 때문에 전 프로세스의 BLAS 커널을 묶는 것은
+대가가 크다.
