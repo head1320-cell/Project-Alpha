@@ -155,7 +155,8 @@ def test_adv_comes_from_the_price_factor_store_cache(prod, monkeypatch):
                         lambda self, code, item=None: calls.append(code) or {})
 
     pf = PriceFactorsStore.get_default()
-    pf._cache[lg.LiquidityStore._PF_CACHE_KEY.format(code="005930")] = (
+    # ★스코프된 키로 데운다★ — 캐시는 `mock`/`real` 로 갈린다(`2aff832` 후속).
+    pf._cache[pf._scoped(lg.LiquidityStore._PF_CACHE_KEY.format(code="005930"))] = (
         time.time(), {"amount_20d_avg": 42.0})
 
     d = lg.LiquidityStore.get_default().get_liquidity("005930", 3000)
@@ -192,8 +193,35 @@ def test_the_price_factor_cache_key_format_has_not_drifted():
     pf = PriceFactorsStore.get_default()
     pf._cache.clear()
     pf.get_factors("005930")
-    assert lg.LiquidityStore._PF_CACHE_KEY.format(code="005930") in pf._cache, \
+    assert pf._scoped(lg.LiquidityStore._PF_CACHE_KEY.format(code="005930")) in pf._cache, \
         "PriceFactorsStore 의 캐시 키 형식이 바뀌었다 — 게이트가 조용히 미상이 된다"
+    pf._cache.clear()
+
+
+def test_real_adv_reads_the_current_mode_not_a_hardcoded_one(monkeypatch):
+    """L4 보강 — ★게이트가 네임스페이스를 **복제**하지 않는다★
+
+    변이 실험이 이 자리를 찾아냈다: `_real_adv` 안의 `store._scoped(...)` 를
+    `'real:' + ...` 로 바꿔도 기존 테스트가 전부 통과했다. ★그 변이는 오늘은
+    의미상 동등하다★ — `_real_adv` 는 `mock_allowed()` 가 거짓일 때만 도달하므로
+    `'real:'` 이 언제나 맞다.
+
+    그러나 **그래서 안전하다는 사실 자체를 테스트가 붙들고 있지 않았다.** 누군가
+    mock 경로에서 이 함수를 부르는 순간 하드코딩은 다른 네임스페이스를 읽고
+    조용히 `None` 을 낸다. 여기서는 함수를 **직접** 불러 그 속성을 못 박는다 —
+    현재 모드의 캐시를 읽는다.
+    """
+    import time
+
+    from src.data.price_factors_store import PriceFactorsStore
+
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    pf = PriceFactorsStore.get_default()
+    pf._cache.clear()
+    pf._cache[pf._scoped(lg.LiquidityStore._PF_CACHE_KEY.format(code="005930"))] = (
+        time.time(), {"amount_20d_avg": 7.7})
+    assert lg.LiquidityStore._real_adv("005930") == 7.7, \
+        "게이트가 현재 모드가 아닌 고정 네임스페이스를 읽는다"
     pf._cache.clear()
 
 
@@ -366,28 +394,26 @@ def test_the_store_now_consults_the_mock_gate():
     assert out["1"] != out["0"], "KIS_USE_MOCK 이 게이트 동작을 바꾸지 않는다"
 
 
-def test_a_mock_era_cache_entry_leaks_into_the_real_path(monkeypatch):
-    """★이 테스트는 결함을 고치는 것이 아니라 **기록**한다★
+def test_a_mock_era_cache_entry_no_longer_leaks(monkeypatch):
+    """★뒤집힌 트립와이어★ — 결함이 고쳐졌다.
 
-    `mock_base.cached()` 의 키에 mock 모드가 들어가지 않는다. 그래서
-    `KIS_USE_MOCK=1` 에서 만들어진 값이 `=0` 으로 바뀐 뒤에도 그대로 서빙된다 —
-    운영 경로가 합성값을 받는다는 뜻이고, 이번 커밋이 고친 것과 **같은 종류의
-    결함**이다.
+    이 테스트는 원래 누수를 **기록**했다(`2aff832`): `mock_base.cached()` 의 키에
+    모드가 없어 `KIS_USE_MOCK=1` 에서 만든 값이 `=0` 에서 그대로 서빙됐다.
+    독스트링에 *"이 테스트가 빨개지면 결함이 고쳐진 것 — 그때 뒤집어라"* 라고
+    적어 뒀고, 실제로 빨개져서 뒤집었다.
 
-    ★운영에서의 위험은 낮다★ — 프로세스는 한 모드로 시작해 끝난다. 그러나
-    `mock_allowed()` 는 호출 시점마다 환경을 읽으므로 런타임에 바뀌면 새어 든다.
+    ★그때 적은 위험 평가는 틀렸었다★ — *"운영에서의 위험은 낮다, 프로세스는 한
+    모드로 시작해 끝난다"* 고 했는데, `snapshot_db.enabled()` 가
+    `bool(DART_API_KEY) or not mock_allowed()` 라 `KIS_USE_MOCK=1` + 실 DART 키에서
+    합성값이 **영속 DB 에 기록**됐다. 재시작을 넘는 누수였다.
 
-    고치려면 `mock_base.cached()` 의 키에 모드를 넣어야 하는데, 그 키는
-    `PERSIST` 스토어의 **DB 영속 키**이기도 해서 여러 스토어의 캐시가 한 번에
-    무효화된다. 파급이 커 별도 승인 사항이다 — 감사문 §7.
-
-    ★이 테스트가 빨개지면 결함이 고쳐진 것이다★ — 그때 감사문 §7 을 닫고 이
-    테스트를 뒤집으면 된다.
+    상세는 `tests/test_cache_mode_isolation.py`.
     """
     from src.data.price_factors_store import PriceFactorsStore
 
     _clear_caches()
     monkeypatch.setenv("KIS_USE_MOCK", "1")
+    monkeypatch.setenv("SNAPSHOT_DB", "0")
     warmed = PriceFactorsStore.get_default().get_factors("005930").get("amount_20d_avg")
     assert warmed is not None, "mock 모드에서 값이 나와야 이 시나리오가 성립한다"
 
@@ -395,7 +421,5 @@ def test_a_mock_era_cache_entry_leaks_into_the_real_path(monkeypatch):
     lg.LiquidityStore.get_default()._cache.clear()      # ★상류는 일부러 안 비운다★
     leaked = lg.LiquidityStore.get_default().get_liquidity("005930", 3000)["adv_value_억"]
 
-    assert leaked == warmed, (
-        "상류 캐시 누수가 사라졌다 — mock_base 캐시 키가 고쳐졌다면 "
-        "감사문 §7 을 닫고 이 테스트를 뒤집어라")
+    assert leaked is None, f"mock 값 {warmed} 가 아직 운영 경로로 샌다 ({leaked})"
     _clear_caches()

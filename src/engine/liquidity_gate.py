@@ -152,7 +152,11 @@ class LiquidityStore(DeterministicMockStore):
         try:
             from src.data.price_factors_store import PriceFactorsStore
             store = PriceFactorsStore.get_default()
-            entry = store._cache.get(cls._PF_CACHE_KEY.format(code=stock_code))
+            # ★네임스페이스 규칙을 복제하지 않는다★ — `_scoped()` 가 단일 출처다.
+            # 캐시 키는 `mock`/`real` 로 갈린다(`2aff832` 후속). 여기서 형식을
+            # 다시 조립하면 상류가 규칙을 바꿀 때 조용히 어긋난다.
+            entry = store._cache.get(
+                store._scoped(cls._PF_CACHE_KEY.format(code=stock_code)))
             if not entry or not entry[1]:
                 return None
             return entry[1].get("amount_20d_avg")
