@@ -88,6 +88,21 @@ _FIELDS = ("isin", "name", "market", "group_code", "is_etf", "is_kospi200",
            "is_kosdaq150", "cap_size", "sector_code", "sector_mid", "sector_sub",
            "is_managed", "alert_code", "is_halted")
 
+#: ★ISIN 길이는 파서와 같은 규칙이다★ `kis_master_parser` 가 12자가 아니면 `""` 로
+#: 저장하고, 소비자(`krx_mdc`)도 12자를 요구했다. 이 모듈만 "비어 있지 않으면 유효"
+#: 라는 **다른 규칙**을 갖고 있었다 — 규칙이 셋인 것보다 하나인 것이 낫다.
+ISIN_LENGTH = 12
+
+KIND_OK = "ok"
+KIND_NO_MASTER = "no_master"
+KIND_NO_ISIN = "no_isin"
+KIND_MALFORMED = "malformed"
+
+REASON_NO_MASTER = "마스터에 이 티커가 없습니다 — 마스터를 먼저 받아야 합니다."
+REASON_NO_ISIN = "마스터에 있으나 ISIN 이 비어 있습니다 — 지어내지 않습니다."
+REASON_MALFORMED = ("ISIN 길이가 {n}자입니다({need}자여야 합니다) — "
+                    "출처·파서 결함이며 조회 키로 쓰면 조용히 빈 결과가 됩니다.")
+
 _CHUNK = 500
 
 
@@ -180,15 +195,64 @@ def load(engine=None) -> dict[str, dict]:
     return out
 
 
-def isin_of(ticker: str, engine=None) -> str | None:
-    """티커 → ISIN. ★없으면 `None` — 합성하지 않는다★
+def isin_status(ticker: str, engine=None, flags: dict | None = None) -> dict:
+    """티커 → `{"isin", "kind", "reason"}`. ★"모른다" 의 종류를 구분한다★
 
-    `krx_mdc` 의 조회 키다. 가짜 ISIN 을 만들면 조회가 조용히 빈 결과를 낸다.
+    예전에는 소비자(`krx_mdc`)가 이 조회를 **인라인으로 다시** 썼고, 그쪽 규칙
+    (`len == 12`)과 여기 규칙("비어 있지 않으면")이 **달랐다**. 파서가 이미 걸러
+    주므로 사고는 없었지만, 다른 출처의 마스터가 들어오면 11자 쓰레기가 유효한
+    조회 키가 된다.
+
+    ★세 실패를 뭉개지 않는다★ 고치는 사람이 다르기 때문이다:
+
+        no_master  마스터에 티커가 없다        → 마스터를 받아야 한다
+        no_isin    ISIN 이 비어 있다           → 그 종목은 원래 없다(정직한 공백)
+        malformed  길이가 12자가 아니다        → ★파서·출처 결함★
+
+    `flags` 를 넘기면 그것을 쓴다 — 종목 루프가 매번 마스터를 다시 읽지 않도록.
     """
     from src.data.stock_master import load_master_flags
-    f = (load_master_flags() or {}).get(str(ticker))
-    isin = (f or {}).get("isin")
-    return isin if isin else None
+    src_flags = load_master_flags() if flags is None else flags
+    rec = (src_flags or {}).get(str(ticker))
+    if not rec:
+        return {"isin": None, "kind": KIND_NO_MASTER, "reason": REASON_NO_MASTER}
+    raw = str(rec.get("isin") or "").strip()
+    if not raw:
+        return {"isin": None, "kind": KIND_NO_ISIN, "reason": REASON_NO_ISIN}
+    if len(raw) != ISIN_LENGTH:
+        return {"isin": None, "kind": KIND_MALFORMED,
+                "reason": REASON_MALFORMED.format(n=len(raw), need=ISIN_LENGTH)}
+    return {"isin": raw, "kind": KIND_OK, "reason": None}
+
+
+def isin_of(ticker: str, engine=None) -> str | None:
+    """티커 → ISIN. ★없거나 형식이 틀리면 `None` — 합성하지 않는다★
+
+    `krx_mdc` 의 조회 키다. 가짜·잘린 ISIN 을 넘기면 조회가 조용히 빈 결과를 낸다.
+    판정은 `isin_status()` 하나뿐이다 — 두 함수가 각자 규칙을 가지면 다시 갈라진다.
+    """
+    return isin_status(ticker, engine)["isin"]
+
+
+def isin_coverage(engine=None, flags: dict | None = None) -> dict:
+    """식별자 커버리지 — ★관측·리포트 전용★
+
+    `origin` 은 **어느 경로가 답했는가**(`file`/`db`/`none`)다. 그것을 모르면
+    "마스터가 스테일한가" 를 물을 수 없다. ★읽기 순서를 바꾸지 않는다★ — 본다.
+    """
+    from src.data.stock_master import load_master_flags, master_flags_origin
+    src_flags = load_master_flags() if flags is None else flags
+    counts = {KIND_OK: 0, KIND_NO_ISIN: 0, KIND_MALFORMED: 0}
+    for ticker in (src_flags or {}):
+        kind = isin_status(ticker, flags=src_flags)["kind"]
+        counts[kind] = counts.get(kind, 0) + 1
+    return {
+        "total": len(src_flags or {}),
+        "with_isin": counts[KIND_OK],
+        "no_isin": counts[KIND_NO_ISIN],
+        "malformed": counts[KIND_MALFORMED],
+        "origin": master_flags_origin(),
+    }
 
 
 def _today() -> str:

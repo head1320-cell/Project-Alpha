@@ -87,9 +87,14 @@ def db_status():
                 m = build_master_universe(k)
                 if m:
                     prog[k] = {"master": len(m), "ingested": sum(1 for c in m if c in ing)}
-            return {"progress": prog, "composition": master_composition()}
+            # ★식별자 커버리지★ 마스터가 **어디서 왔는지**(파일/DB)와 ISIN 이
+            # 몇 개나 조회 키로 쓸 수 있는지를 함께 낸다. `malformed` 는 "없다" 가
+            # 아니라 **파서·출처 결함**이라 따로 세지 않으면 영원히 안 보인다.
+            from src.data.instrument_master_store import isin_coverage
+            return {"progress": prog, "composition": master_composition(),
+                    "isin_coverage": isin_coverage()}
         except Exception:
-            return {"progress": {}, "composition": {}}
+            return {"progress": {}, "composition": {}, "isin_coverage": {}}
 
     out["universe_progress"] = _universe_progress()
 

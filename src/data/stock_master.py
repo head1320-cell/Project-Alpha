@@ -390,6 +390,13 @@ def _master_flags_path() -> str:
 
 _MASTER_FLAGS: dict | None = None  # {"005930": {...}} (지연 로드)
 
+#: ★어느 경로가 답했는가★ 파일인지 DB 인지 밖에서 볼 방법이 없었다 — 그러면
+#: "마스터가 스테일한가" 를 물을 수 없다. ★관측만 추가하고 순서는 그대로다.★
+ORIGIN_FILE = "file"
+ORIGIN_DB = "db"
+ORIGIN_NONE = "none"
+_MASTER_FLAGS_ORIGIN: str = ORIGIN_NONE
+
 # KRX 공식 상장 수 대응 유니버스 포함 그룹 (파생·펀드형 제외 — EF/EN/EW/SW/SR 등)
 #   ST 주권(보통·우선) · RT 리츠 · FS 외국주권 · MF 투자회사 · IF 인프라투융자 · SC 선박투자 · DR 예탁증서
 UNIVERSE_GROUP_CODES: tuple[str, ...] = ("ST", "RT", "FS", "MF", "IF", "SC", "DR")
@@ -455,11 +462,12 @@ def load_master_flags() -> dict:
     DB 는 파일이 없을 때만 쓰이는 사본이다(감사 §3.3: 파일 하나가 세 기능의 단일
     장애점이었다).
     """
-    global _MASTER_FLAGS
+    global _MASTER_FLAGS, _MASTER_FLAGS_ORIGIN
     if _MASTER_FLAGS is None:
         import json
         import os
         _MASTER_FLAGS = {}
+        _MASTER_FLAGS_ORIGIN = ORIGIN_NONE
         path = _master_flags_path()
         try:
             if os.path.exists(path):
@@ -467,15 +475,27 @@ def load_master_flags() -> dict:
                     _MASTER_FLAGS = json.load(f).get("stocks", {}) or {}
         except Exception as e:
             logger.warning(f"master flags cache load failed: {e}")
+        if _MASTER_FLAGS:
+            _MASTER_FLAGS_ORIGIN = ORIGIN_FILE
         if not _MASTER_FLAGS:
             try:
                 from src.data.instrument_master_store import load as _db_load
                 _MASTER_FLAGS = _db_load() or {}
                 if _MASTER_FLAGS:
+                    _MASTER_FLAGS_ORIGIN = ORIGIN_DB
                     logger.info(f"master flags ← DB: {len(_MASTER_FLAGS)} symbols")
             except Exception as e:  # noqa: BLE001
                 logger.warning(f"master flags DB 조회 실패: {e}")
     return _MASTER_FLAGS
+
+
+def master_flags_origin() -> str:
+    """마스터가 **어디서** 왔는가 — `file` / `db` / `none`.
+
+    ★이것은 관측이지 정책이 아니다★ 읽기 순서는 그대로 파일 → DB 다.
+    """
+    load_master_flags()
+    return _MASTER_FLAGS_ORIGIN
 
 
 def get_market_cap(stock_code: str) -> float | None:

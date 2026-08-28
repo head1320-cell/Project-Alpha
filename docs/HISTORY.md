@@ -9533,3 +9533,65 @@ X1~X7 은 바로 죽었다. X8(게이트가 `'real:'` 하드코딩)은 살아남
 
 `adj_close` 소비자 전환 · `assert_prices_backtest_eligible` 을 백테스트 진입에
 거는 것 · P1·P3·P4·P5 — 전부 이번 범위 밖이다.
+
+---
+
+## 2026-08-28 — P1 식별자 해소 단일화: ★"모른다" 에도 종류가 있다★
+
+### 무엇을 발견했나
+
+우선순위 표의 P1 은 "마스터·식별자를 DB 로" 였는데, **플래그의 파일→DB 이중화는
+이미 `1e3226a` 에서 끝나 있었다**(쓰기 `kis_master_parser:325`, 읽기
+`stock_master:449`). 계획을 세우기 전에 재 보고 전제가 바뀐 사례가 또 하나 늘었다.
+
+남은 구멍은 다른 곳이었다. ★`isin_of()` 는 소비자가 0 이었다★ 그리고 유일한 실
+소비자인 `krx_mdc.backfill_flows_krx` 는 **같은 조회를 인라인으로 다시** 썼다.
+그래서 "이 ISIN 이 쓸 수 있는 값인가" 를 세 곳이 **두 가지 규칙**으로 판정했다:
+
+    kis_master_parser:147   len == 12 이면 저장, 아니면 ""
+    instrument_master_store ★비어 있지 않으면 유효★   ← 혼자 다르다
+    krx_mdc:164             len == 12
+
+파서가 이미 걸러 주므로 살아 있는 사고는 아니었다. 그러나 다른 출처의 마스터가
+들어오는 순간 `isin_of` 는 11자 쓰레기를 유효한 조회 키로 돌려주고, KRX MDC 조회는
+**조용히 빈 결과**를 낸다. 이름 쪽은 `resolve_name`/`get_stock_name` 이 단일 진실
+공급원인데 식별자 쪽에는 그런 단일 경로가 없었다.
+
+그리고 `stats["no_isin"]` 이 **세 가지 다른 사실**을 한 숫자로 뭉갰다 — 티커가
+마스터에 없음 · ISIN 이 빔 · **길이가 틀림(=파서·출처 결함)**. 셋째가 둘째로
+뭉개지면 파서 버그가 영원히 보이지 않는다.
+
+`load_master_flags()` 가 **파일로 답했는지 DB 로 답했는지도 밖에서 볼 수 없었다** —
+운영에서 "마스터가 스테일한가" 를 물을 방법이 없었다는 뜻이다.
+
+### 무엇을 했나
+
+`isin_status()` 하나가 판정한다 — `{"isin", "kind", "reason"}` 이고 `kind` 는
+`ok`/`no_master`/`no_isin`/`malformed`. `isin_of()` 는 그 결과를 얇게 감싼다.
+★유일한 동작 변경은 "덜 받아들인다" 다★ — 11자를 이제 `None` 으로 거부한다.
+
+`krx_mdc` 는 인라인 조회를 버리고 그 경로를 쓴다. 합계 `no_isin` 은 **의미가
+그대로**이고(기존 소비자가 읽는다) 사유별 내역 `no_isin_by_reason` 이 **덧붙는다**.
+
+`stock_master.master_flags_origin()` 이 `file`/`db`/`none` 을 낸다.
+★관측만 추가했고 읽기 순서는 한 글자도 바꾸지 않았다★ — 뒤집으면 스테일 DB 가
+방금 받은 새 파일을 덮는다(코드가 이미 그 이유를 적어 뒀다).
+
+`instrument_master_store.isin_coverage()` 가 `total/with_isin/no_isin/malformed/
+origin` 을 내고, 기존 상태 응답(`data_routes` 유니버스 진행률)에 실린다.
+새 라우트는 만들지 않았다.
+
+### 검증
+
+신규 11개. 변이 **I1~I6 전부 사망** — 특히 I3(인라인 조회로 회귀)은 ★기록
+스파이★ 로 잡았다. `backfill_flows_krx` 의 종목 루프가 `except Exception` 으로
+감싸여 있어 assert 를 삼키고 `errors` 로 집계하기 때문이다(직전 커밋 M10 이
+정확히 그 방식으로 살아남았다).
+
+불변: `src/engine/` 무편집 · 기존 `test_krx_mdc` 9개와
+`test_instrument_master_store` 13개 **수정 없이 통과** · 전체 3,306 passed.
+
+### 하지 않은 것
+
+읽기 순서 뒤집기 · `resolve_name`/`get_stock_name` 대체 · ISIN 을 다른 출처에서
+보강하기 · `krx_mdc` 가 무엇을 받아 무엇을 적재하는지 변경 — 전부 범위 밖이다.
