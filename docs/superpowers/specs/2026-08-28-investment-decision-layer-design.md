@@ -29,8 +29,9 @@
 investment_decisions              (부모 · 포트폴리오 1건)
 ├─ dec_id · as_of · case_id · scope · created_at
 ├─ decision_status  : trade | hold | undetermined
-├─ benefit_bps · cost_bps · hysteresis_bps · net_bps
-├─ turnover_pct · portfolio_value
+├─ gain_pct · cost_pct · hysteresis_mult · threshold_pct · net_pct   ★D1 정정★
+├─ max_gap_pct · turnover_pct · portfolio_value
+├─ gradual · triggers                                               ★D3 추가★
 ├─ belief     : {mu_source, prob_source, prob_usage, uncertainty_source, measured}
 ├─ evidence   : {mes_id, run_id, tpv_id, thesis_ids[], view_sources[]}
 ├─ provenance : {code_version, ruleset_version, decision_version, as_of}
@@ -39,7 +40,7 @@ investment_decisions              (부모 · 포트폴리오 1건)
 investment_decision_legs          (자식 · 자산별 N건)
 ├─ dec_id · ticker
 ├─ current_w · target_w · delta_w
-├─ band_lo · band_hi · outside_band
+├─ half_width_pct · low_pct · high_pct · outside_band                ★D2 정정★
 ├─ constraint_binding[]           (constrained_solve flow 에서 유도)
 ├─ view_refs[]                    (이 종목에 걸린 뷰의 출처: macro | company | user)
 └─ contribution : {macro, company, risk_model, constraint}  ← ★대부분 null★
@@ -50,6 +51,33 @@ investment_decision_legs          (자식 · 자산별 N건)
 
 ★두 층인 이유★ `rebalance_decision` 은 포트폴리오 단위 판단(총 효용개선 vs 총비용)
 이고 `dynamic_band` 는 자산별이다. 한 층에 담으면 둘 중 하나의 입도가 왜곡된다.
+
+---
+
+## 1.1 ★S1 구현 중 발견한 스펙 결함 5건 (정정 완료)★
+
+스펙 초안을 코드에 대고 다시 읽어 찾았다. ★필드명을 실측하지 않고 지어낸 것이
+원인이다.★
+
+| # | 초안 | 실측 | 위험 |
+|---|---|---|---|
+| **D1** | `benefit_bps·cost_bps·hysteresis_bps·net_bps` | `benefit.gain_pct` · `cost.cost_pct` · **`hysteresis_mult`(배수)** · `threshold_pct` · `net_pct` | ★단위가 percent 다 — 그대로 만들었으면 **100배 오류**★ |
+| **D2** | `band_lo`/`band_hi` | `half_width_pct`·`low_pct`·`high_pct` | 이름만 틀림 |
+| **D3** | (없음) | `triggers`·**`gradual`**·`max_gap_pct` | `gradual`("얼마나 움직일까")은 결정의 일부인데 빠졌다 |
+| **D4** | 2테이블을 당연시 | 저장소에 2테이블 선례 **0**(`execution_store` 는 단일+JSON) | 사유 없이 패턴을 늘릴 뻔했다 |
+| **D5** | `decision_version` 열거만 | 정의 없음 | 무엇이 값을 정하는지 불명 |
+
+**D4 결론** — 그래도 둘로 간다. `execution_plans.plan` 은 **통째로 읽히지** 계획
+**간** 질의 대상이 아닌 반면, 이 계층의 존재 이유는 결정 귀속이고 *"어느 종목이
+가장 자주 밴드 밖이었나"* 는 결정 **간** 집계라 JSON 으로는 SQL 로 답할 수 없다.
+`test_legs_can_be_aggregated_across_decisions` 가 그 이유를 못 박는다 —
+★그 테스트가 사라지면 두 테이블일 이유도 사라진다.★
+
+**D5 결론** — `DECISION_LOGIC_VERSION` 은 **결정 로직의 판본**이고 빌드 식별자
+`code_version`(`research_context` 단일 출처 재사용)과 **다른 축**이다. 같은 값으로
+두면 로직이 바뀌어도 기록이 그대로라 재현이 거짓말이 된다.
+
+★교훈★ 상류 이름을 그대로 쓴다. 갈아 끼우면 상류가 바뀔 때 조용히 어긋난다.
 
 ---
 
