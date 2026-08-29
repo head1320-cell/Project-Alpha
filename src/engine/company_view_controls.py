@@ -194,9 +194,11 @@ def percentile_of(value: float, null: list[float] | Any) -> float | None:
     """진짜 팔이 널 분포의 **몇 분위**인가 (0~100). 널이 비면 `None`.
 
     ★"얼마나 큰가" 가 아니라 "널 안에서 어디인가" 를 묻는다★ — 그것이 음성 통제의
-    질문이다. 값이 널의 절반보다 크면 분위가 크다(단조 증가).
+    질문이다.
+
+    ★산수는 `null_stats` 가 단일 출처다★ 매크로 통제(M1~M5)가 같은 분위를 세 번째로
+    구현하면 반드시 갈라지고, 갈라져도 타입 에러가 나지 않는다. 이 이름은 S6 의
+    호출부(테스트 포함)를 위해 남는 얇은 위임이다.
     """
-    xs = [float(x) for x in (null or []) if x is not None]
-    if not xs:
-        return None
-    return round(sum(1 for x in xs if x <= float(value)) / len(xs) * 100.0, 4)
+    from src.engine.null_stats import percentile_of as _impl
+    return _impl(value, null)

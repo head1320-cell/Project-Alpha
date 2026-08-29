@@ -170,11 +170,8 @@ def _side(pct: float, lo: float, hi: float) -> str:
     비교에서 둘 다 파생시켜 어긋날 수 없게 한다. 값 기준의 독립적인 진술은
     `beyond_null_range` 가 따로 맡는다.
     """
-    if pct < lo:
-        return "below"
-    if pct > hi:
-        return "above"
-    return "inside"
+    from src.engine.null_stats import side_of
+    return side_of(pct, lo, hi)
 
 
 # ── 하네스 ──────────────────────────────────────────────────────────────────
