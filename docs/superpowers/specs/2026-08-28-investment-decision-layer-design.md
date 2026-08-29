@@ -134,6 +134,40 @@ confidence, source, ...}`) → 기존 `build_view_rows` → 기존 Ω → BL/EP.
 ★기본 거짓★ 이므로 기존 호출부·백테스트·골든이 **바이트 동일**하게 유지된다.
 음성 통제는 이 플래그를 그대로 팔로 쓴다.
 
+### ★S3 구현 중 확정된 사실 — 기록도 opt-in, 그리고 모든 분기가 같은 키를 낸다★
+
+**⑴ 결정 기록은 기본 꺼짐이다.** `/rebalance-decision` 은 UI 상호작용마다 불릴 수
+있다. 저장소가 같은 우려를 이미 풀어 뒀다 — `AnalyzeRequest.record_run` 의 주석:
+*"슬라이더 드래그마다 DB에 쓰지 않도록 명시 요청 시에만"*. 결정 계층도 **같은
+모양**을 쓴다: `record_decision: bool = False`. ★변이 V1(항상 저장)이 `record_run`
+이 막으려 한 바로 그것을 결정 계층에서 되살리는 변이이고, W1 이 그것을 죽인다.★
+
+**⑵ `case_id` 를 요청 모델에 더했다.** `RebalanceDecisionRequest` 는
+`AnalyzeRequest` 를 물려받아 `as_of`·`mes_id`·`regime_snapshot_id`·
+`timing_rule_set_id`/`_version` 을 **이미** 갖고 있었다. 없던 것은 `case_id` 하나
+(그 필드는 `TargetVersionRequest` 에만 있었다) — 결정을 Case 사슬에 걸려면 필요하다.
+
+**⑶ `evidence.constraints_binding` 은 여기서 담지 않는다.** 이 라우트는
+`optimize(...)` 만 부르고 `constrained_solve` 를 부르지 않는다(그것은 `/analyze`).
+★없는 것을 담지 않는다.★
+
+**⑷ `legs` 는 응답에 싣지 않는다.** 저장 관심사다. 화면에는 `band.by_asset` 이 이미
+같은 정보를 준다 — 두 벌을 실으면 화면이 어느 쪽을 믿을지 갈린다.
+
+**⑸ ★조기 반환 분기도 같은 키를 낸다.★** 자산이 2개 미만이면 라우트는 결정 계층에
+**닿기 전에** 반환한다. 그 응답이 `dec_id`/`persisted`/`persist_reason` 을 빼먹으면
+소비자가 `.get()` 으로 읽다가 `None` 을 거짓으로 취급한다(레지스트리
+`not_ingested` 가 같은 이유로 모든 분기에서 나온다). 그 분기는 **기록되지 않는 것이
+맞다** — 문제를 세울 수조차 없었으므로 기록할 판단이 없고, `persist_reason` 이 그
+사실을 말한다.
+
+**⑹ ★`None` 을 돌려주는 실패와 예외를 던지는 실패는 다르다.★** 처음 쓴 저장-실패
+테스트는 `_engine` 이 `None` 인 경로만 지났고, 그때 스토어는 방어적으로 `None` 을
+돌려주므로 `decide()` 의 `try/except` 는 **한 번도 실행되지 않았다** — 그 `except`
+를 지워도 테스트는 통과했다(변이 V6 **생존**). 그런데 라우트의 바깥 `except` 는
+예외를 **500** 으로 바꾼다: 이미 난 판단까지 잃는다. 예외를 던지는 스토어에 대한
+짝 테스트를 더해 그 경로를 실제로 지나게 했다.
+
 ---
 
 ## 3. 데이터 흐름

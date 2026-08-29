@@ -1941,6 +1941,13 @@ class RebalanceDecisionRequest(AnalyzeRequest):
     # 팩터 리스크 모델(§13) — Σ_asset = BΣ_fB' + D 를 optimizer 에 넣는다.
     factor_risk_model: bool = False
     stress_loss_pct: float = Field(-15.0, ge=-90.0, le=-0.1)
+    # ── 결정 기록 (opt-in) — ★`record_run` 과 **같은 이유**★ ─────────────────
+    #   그 필드의 주석이 이미 답을 적어 뒀다: "슬라이더 드래그마다 DB에 쓰지 않도록
+    #   명시 요청 시에만". 리밸런스 판단도 UI 상호작용마다 불릴 수 있으므로 같은
+    #   규율을 쓴다 — 기본값에서는 DB 에 한 줄도 쓰지 않는다.
+    record_decision: bool = False
+    #   결정을 Case 증거 사슬(rc_* → rgs_/tpv_/rr_)에 건다. 없으면 사슬 밖에 남는다.
+    case_id: str | None = Field(None, max_length=40)
 
 
 @router.post("/rebalance-decision")
@@ -1969,14 +1976,22 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                             "market_data_as_of": req.as_of} if req.as_of else {}))
     rc = _describe_context(ctx)
     try:
-        from src.engine.rebalance_policy import detect_triggers, rebalance_decision
+        from src.engine.investment_decision import decide
+        from src.engine.rebalance_policy import detect_triggers
 
         returns, bench, excluded, coverage = _load_clean_returns(
             req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
+            # ★모든 분기가 같은 키를 낸다★ 어떤 응답에만 `dec_id` 가 있으면 소비자가
+            # `.get()` 으로 읽다가 `None` 을 거짓으로 취급한다(레지스트리
+            # `not_ingested` 와 같은 규율). ★그리고 이 분기는 결정 계층에 닿지
+            # 않는다★ — 문제를 세울 수조차 없었으므로 기록할 판단이 없다.
             return {"available": False, "decision": "undetermined",
                     "reason": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded,
-                    "research_context": rc}
+                    "research_context": rc,
+                    "dec_id": None, "persisted": False,
+                    "persist_reason": ("유니버스를 세우지 못해 결정 계층에 닿지 "
+                                       "않았습니다 — 기록할 판단이 없습니다.")}
 
         names = list(returns.columns)
         R = returns.values
@@ -2043,7 +2058,11 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
         est = mu_standard_errors(R)
         mu_uncertainty = (uncertainty_scalar(est["t"]) if est["available"] else None)
 
-        decision = rebalance_decision(
+        # ★판단을 여기서 다시 구현하지 않는다★ `decide` 가 상류 원시함수를 부르고,
+        # 상류→스토어 매핑과 leg 유도와 영속을 한 곳에서 한다. 예전에는 이 판단이
+        # 응답과 함께 사라져 "왜 그때 거래하지 않았나" 를 물을 수 없었다(감사 M2).
+        # ★넘기는 인자는 이전과 한 글자도 같다★ — 결정 메타만 더한다.
+        decision = decide(
             req.holdings, target, portfolio_value=req.portfolio_value,
             names=names,
             mu=np.asarray(opt["mu_used"], dtype=float),
@@ -2053,7 +2072,31 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             hysteresis_mult=req.hysteresis_mult,
             confidence=req.confidence,
             uncertainty=mu_uncertainty,
-            triggers=triggers)
+            triggers=triggers,
+            as_of=req.as_of, case_id=req.case_id, scope="portfolio",
+            belief={
+                "mu_source": f"optimize:{req.model}",
+                "conditional": bool(req.conditional),
+                # ★불확실성이 어디서 왔는지 말한다★ 없으면 없다고 적는다.
+                "uncertainty_source": ("mu_standard_errors" if mu_uncertainty is not None
+                                       else None),
+                "measured": mu_uncertainty is not None,
+            },
+            evidence={
+                "target_source": target_source,
+                "mes_id": req.mes_id,
+                "regime_snapshot_id": req.regime_snapshot_id,
+                "timing_rule_set_id": req.timing_rule_set_id,
+                "timing_rule_set_version": req.timing_rule_set_version,
+                # ★`constraints_binding` 은 담지 않는다★ 이 라우트는 제약을 적용하지
+                # 않는다(그것은 `/analyze` 다). 없는 것을 담지 않는다.
+            },
+            persist=req.record_decision,
+        )
+        # ★leg 는 저장 관심사다★ 화면에는 `band.by_asset` 이 이미 같은 정보를 준다 —
+        # 두 벌을 실으면 화면이 어느 쪽을 믿을지 갈린다(목표 포트폴리오에서 이미
+        # 치른 값이다). 저장된 leg 는 스토어에서 조회한다.
+        decision.pop("legs", None)
 
         # ★자산 개수가 아니라 팩터 개수★ (Brief §8.4) — 선택.
         factors = None
