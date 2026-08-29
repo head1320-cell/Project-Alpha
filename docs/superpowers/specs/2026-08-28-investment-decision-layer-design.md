@@ -128,6 +128,48 @@ def company_views(codes, prices, *, as_of=None) -> tuple[list[dict], dict]:
 confidence, source, ...}`) → 기존 `build_view_rows` → 기존 Ω → BL/EP.
 **새 뷰 스키마·새 P 빌더·새 Ω 를 만들지 않는다.**
 
+#### ★S4 구현 중 실측이 이 절을 세 번 뒤집었다★
+
+mock 3종(`005930`/`000660`/`035420`)에 `valuation_distribution_for` 를 돌려 봤다:
+
+| 종목 | 가격 | p50 | 총 갭 | 상대폭 | `price_percentile` |
+|---|---|---|---|---|---|
+| 005930 | 70,000 | 35,534 | −49.2% | 32.7% | **100.0** |
+| 000660 | 130,000 | 404,322 | +211.0% | 56.3% | **0.0** |
+| 035420 | 200,000 | 108,792 | −45.6% | 45.7% | **100.0** |
+
+**⑴ ★위 의사코드의 `magnitude_pct` 는 단위가 틀렸다.★** 밸류에이션 갭은 호라이즌이
+없는 **총 갭**인데 뷰의 `magnitude_pct` 는 **연간**이다(`build_user_views` 주석 ·
+μ 는 `R.mean×252`). `+211` 을 그대로 넘기면 "연 211% 기대수익" 으로 읽혀 BL 사후를
+지배한다 — S2 가 `benefit_bps` 로 치를 뻔한 100배 오류의 **같은 계열**이다.
+→ 밸류에이션 자신의 `projection_years`(현재 10)로 **기하 연율화**하고 그 기간을
+`horizon_years` 로 뷰에 함께 싣는다. ★새 하이퍼파라미터를 발명하지 않는다★ —
+저장소가 이미 고른 값이다. 실측 셋이 −6.6% / +12.0% / −5.9% 로 정상 범위에 든다.
+
+**⑵ ★`confidence = f(P10~P90 폭)` 도 절반만 맞다.★** 폭만으로는 **방향 확신**을 못
+잰다 — 가격이 p50 에 딱 붙은 좁은 분포는 폭이 작아도 확신이 0 이다. 그리고
+`price_percentile` 은 셋 다 정확히 0.0/100.0 으로 **포화**했다(가격이 분포 밖).
+→ 갭과 폭을 **함께** 쓰는 표준화 갭 `z = (p50 − price) / 반폭` 을 쓰고,
+`conf = MAX × min(|z|, 1)`. `|z|=1` 은 "가격이 90% 구간 가장자리" 라는 뜻이라
+앵커를 새로 고르지 않는다. 포화는 숨기지 않고 `confidence_saturated` 로 남긴다
+(mock 셋은 |z|=5.9/2.4/3.7 로 **전부** 포화 — ★E0 산물이라는 사실 자체가 보고
+대상★).
+
+**⑶ ★`as_of` 는 흉내낼 수 없다.★** `company_snapshot_builder.publication_dates()`
+가 이미 `has_vintage: False` 와 *"이 스냅샷은 backtest_eligible 이 될 수 없습니다"*
+를 적어 뒀고, `valuation_distribution_for` 에는 `as_of` 인자 자체가 없다. 오늘
+재무로 과거 뷰를 만들면 그것이 룩어헤드다. → `as_of` 가 오면 **뷰를 하나도 내지
+않고** 사유를 돌려준다. 등급은 `pit_macro.derive_usage(has_vintage=False, ...)` 로
+**파생**한다 — 손으로 `"forward_only"` 를 적으면 게이트가 거짓말을 할 수 있다.
+
+**⑷ 상한 초과는 클램프하지 않는다.** 연율화 후에도 `AllocationView` 자신의 상한
+(`le=50`)을 넘으면 **뷰를 내지 않고** 사유(`magnitude_out_of_range`)를 남긴다.
+잘라 내면 50%/yr 짜리 뷰가 '정상 뷰' 로 위장한다.
+
+**⑸ 불확실성 전달은 BL 전용이다.** `entropy_views` 가 `confidence_used: False` 를
+이미 선언한다 — EP 의 부등식 뷰는 경성 제약이라 신뢰도를 쓰지 않는다. 즉 여기서
+만든 신뢰도는 EP 경로에서 **아무 일도 하지 않는다**. 뷰의 `note` 가 그렇게 말한다.
+
 ### 2.3 활성화 — opt-in
 
 `AnalyzeRequest.use_company_views: bool = False`.
