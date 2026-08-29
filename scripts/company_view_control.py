@@ -61,6 +61,12 @@ DEFAULT_THRESHOLD = (5.0, 95.0)
 #: 널에서 분위를 매기는 통계들.
 NULL_STATS = ("w_l1_vs_off", "max_weight", "enb", "corr_q_dw", "turnover_pct")
 
+_BENEFIT_NOTE = (
+    "★편익은 자기 사후분포 아래서 측정된다★ `utility(w_target, μ) − "
+    "utility(w_current, μ)` 의 μ 가 바로 그 목표를 고른 μ 이므로 이득이 구조적으로 "
+    "보장된다. 그래서 셔플한 팔도 거의 언제나 `trade` 를 낸다 — 판단이 갈리지 "
+    "않는다는 사실을 신호 부재의 증거로 읽기 전에 이 구조를 먼저 보십시오.")
+
 _CLAIM_REASON = ("표본외 수익이 없습니다 — 기업 뷰는 research_usage:forward_only"
                  "(빈티지 재무 없음)라 과거 시뮬레이션에 넣을 수 없고, 이 하네스는 "
                  "전달 안정성(②)만 잽니다.")
@@ -110,7 +116,7 @@ def weight_stats(w: np.ndarray, w_off: np.ndarray, S: np.ndarray,
 
 def decision_stats(names: list[str], w_cur: np.ndarray, w_arm: np.ndarray,
                    mu: np.ndarray, sigma: np.ndarray,
-                   portfolio_value: float) -> dict:
+                   portfolio_value: float, model: str = "bl") -> dict:
     """★판단 층★ — 가중치가 아니라 **결정**이 팔에 따라 달라지는가.
 
     셔플해도 `trade`/`hold` 가 같다면 결정 계층이 신호에 무등감하다는 뜻이고,
@@ -121,14 +127,20 @@ def decision_stats(names: list[str], w_cur: np.ndarray, w_arm: np.ndarray,
 
     cur = {n: round(float(x) * 100.0, 6) for n, x in zip(names, w_cur, strict=True)}
     tgt = {n: round(float(x) * 100.0, 6) for n, x in zip(names, w_arm, strict=True)}
+    # ★목표 출처를 선언한다★ 이 하네스의 목표는 `optimize` 가 고른 해이고, 편익은
+    # **그 해를 고른 바로 그 μ** 로 잰다. 선언하지 않으면 결정 계층이 판정할 수
+    # 없어 `None`(미상)이 되고, "모든 팔이 trade" 의 이유가 리포트에서 사라진다.
     d = decide(cur, tgt, portfolio_value=portfolio_value, names=names,
                mu=np.asarray(mu, float), sigma=np.asarray(sigma, float),
-               persist=False)
+               evidence={"target_source": f"optimize:{model}"}, persist=False)
     band = d.get("band") or {}
     cost = d.get("cost") or {}
+    prov = (d.get("benefit") or {}).get("provenance") or {}
     return {
         "decision": d.get("decision"),
         "reason": d.get("reason"),
+        # ★셔플 팔이 전부 trade 인 이유★ — 편익이 자기 사후분포 아래서 측정된다.
+        "self_referential": prov.get("self_referential"),
         "turnover_pct": cost.get("turnover_pct"),
         "net_pct": d.get("net_pct"),
         "max_gap_pct": d.get("max_gap_pct"),
@@ -193,7 +205,8 @@ def run(names: list[str], R: np.ndarray, views: list[dict], *,
         arms[arm] = {
             "n_views": len(av or []),
             "weights": weight_stats(w, w_off, S, av),
-            "decision": decision_stats(names, w_cur, w, mu, S, portfolio_value),
+            "decision": decision_stats(names, w_cur, w, mu, S, portfolio_value,
+                                       model),
         }
 
     # ── 널: 셔플 팔 ────────────────────────────────────────────────────────
@@ -283,6 +296,10 @@ def run(names: list[str], R: np.ndarray, views: list[dict], *,
         "percentile_of_real": pct,
         "null_decisions": null_decisions,
         "real_decision": (arms[cvc.ARM_ON]["decision"] or {}).get("decision"),
+        # ★"모든 팔이 trade" 를 리포트가 스스로 설명한다★
+        "benefit_self_referential": (arms[cvc.ARM_ON]["decision"] or {}).get(
+            "self_referential"),
+        "benefit_note": _BENEFIT_NOTE,
         "verdict": {"threshold_pct": [lo, hi], "convention": True,
                     "by_stat": by_stat,
                     "note": ("임계치는 **관례**이지 측정치가 아닙니다. 분위가 "

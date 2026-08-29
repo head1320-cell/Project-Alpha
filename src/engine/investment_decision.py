@@ -83,6 +83,50 @@ def _legs_from(current: dict[str, float], target: dict[str, float],
     return out
 
 
+#: 목표 가중치가 **최적화기에서** 나왔다는 선언의 접두사(`target_source`).
+#: 라우트가 이미 `f"optimize:{req.model}"` 로 적어 넘긴다 — 새 어휘를 만들지 않는다.
+_SELF_REF_PREFIX = "optimize:"
+
+_PROV_SELF = "posterior_that_chose_target"
+_PROV_INDEP = "posterior_independent_of_target"
+
+
+def _benefit_provenance(evidence: dict | None) -> dict[str, Any]:
+    """★그 편익을 **어느 믿음 아래서** 쟀는가★
+
+    편익은 `utility(w_target, μ) − utility(w_current, μ)` 인데, 라우트가 넘기는 μ 는
+    `opt["mu_used"]` — **바로 그 `w_target` 을 고른 BL 사후분포**다. `w_target` 은 그
+    μ 아래 효용을 최대화한 해이므로 같은 μ 로 재면 ★이득이 구조적으로 보장된다★.
+    S6 음성 통제에서 셔플한 팔 200개가 **전부 `trade`** 를 낸 것이 그 결과다 —
+    어떤 뷰든 자기 신념 아래서는 크게 이득이다.
+
+    ★규칙을 바꾸지 않는다★ 자기 사후분포 아래 기대효용으로 판단하는 것은 의사결정
+    이론의 정석이다. 틀린 것은 응답이 그 숫자를 **독립적 증거처럼** 적는다는 점이고,
+    이 필드가 그것을 막는다.
+
+    ★미상 ≠ 아니오★ 출처를 선언하지 않았다는 것과 "자기참조가 아니다" 는 다른
+    진술이다. `False` 로 적으면 순환인 판단이 순환이 아닌 것처럼 기록된다.
+    """
+    src = (evidence or {}).get("target_source")
+    if not src:
+        return {
+            "self_referential": None, "target_source": None,
+            "evaluated_under": None,
+            "reason": ("목표 가중치의 출처가 선언되지 않아 판정할 수 없습니다 — "
+                       "미상은 '자기참조가 아니다' 와 다른 진술입니다."),
+        }
+    self_ref = str(src).startswith(_SELF_REF_PREFIX)
+    return {
+        "self_referential": self_ref,
+        "target_source": str(src),
+        "evaluated_under": _PROV_SELF if self_ref else _PROV_INDEP,
+        "reason": ("편익을 잰 μ 가 **그 목표를 고른 바로 그 사후분포**입니다 — 이득은 "
+                   "구조적으로 보장되며 뷰가 정보를 담았다는 증거가 아닙니다."
+                   if self_ref else
+                   "목표가 최적화기 밖에서 왔으므로 편익 평가가 순환하지 않습니다."),
+    }
+
+
 def decide(current_weights: dict[str, float], target_weights: dict[str, float], *,
            portfolio_value: float,
            names: list[str] | None = None, mu=None, sigma=None,
@@ -133,6 +177,13 @@ def decide(current_weights: dict[str, float], target_weights: dict[str, float], 
         kwargs["hysteresis_mult"] = hysteresis_mult
 
     result = dict(rp.rebalance_decision(current_weights, target_weights, **kwargs))
+
+    # ★어느 믿음 아래서 잰 편익인지 두 곳에 남긴다★ 응답을 읽는 자리와 감사 자리.
+    #   상류가 돌려준 `benefit` 을 **제자리에서 고치지 않는다** — 같은 객체를 들고
+    #   있는 다른 소비자가 결정 계층의 파생 필드를 자기 산출로 착각한다.
+    prov = _benefit_provenance(evidence)
+    result["benefit"] = {**(result.get("benefit") or {}), "provenance": prov}
+    belief = {**(belief or {}), "benefit_provenance": prov}
 
     legs = _legs_from(current_weights, target_weights, result.get("band"))
     result["legs"] = legs

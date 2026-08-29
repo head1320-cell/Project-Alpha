@@ -560,6 +560,34 @@ def _pit_block(mode: str, market: str = _PIT_MARKET) -> dict:
     }
 
 
+def _freshness(coverage: dict | None) -> dict:
+    """★이 결정이 얼마나 낡은 데이터 위에 섰는가★ — `coverage` 에서 **파생**한다.
+
+    라우트는 이미 `end`(마지막 관측일)와 `as_of_effective`(서버가 실제로 쓴 절단일)를
+    갖고 있는데 결정 기록에는 담기지 않았다. 지어내지 않고 있는 것을 옮긴다.
+
+    ★못 구하면 `None` + 사유★ 0 으로 채우면 "오늘 데이터다" 로 읽히는데, 그것은
+    **모른다**와 다른 진술이다(이 저장소의 `미상 ≠ 0` 규율).
+    """
+    cov = coverage or {}
+    end, eff = cov.get("end"), cov.get("as_of_effective")
+    out = {"last_observation": end, "as_of_effective": eff,
+           "source": cov.get("source"), "n_obs": cov.get("n_obs"),
+           "stale_days": None, "reason": None,
+           "note": ("절단일과 마지막 관측일의 차이입니다 — 휴장일이면 자연히 0 보다 "
+                    "큽니다. 이 값 하나로 '낡았다' 를 판정하지 마십시오.")}
+    if not end or not eff:
+        out["reason"] = ("마지막 관측일 또는 절단일을 알 수 없어 신선도를 잴 수 "
+                         "없습니다 — 미상은 0 이 아닙니다.")
+        return out
+    try:
+        out["stale_days"] = (date.fromisoformat(str(eff))
+                             - date.fromisoformat(str(end))).days
+    except ValueError as e:
+        out["reason"] = f"날짜를 해석할 수 없습니다: {e}"
+    return out
+
+
 def _company_view_stack(req, names: list[str]) -> dict | None:
     """기업 밸류에이션 뷰 — ★두 화면이 갈리지 않게 한 곳에서★
 
@@ -2154,6 +2182,10 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 "regime_snapshot_id": req.regime_snapshot_id,
                 "timing_rule_set_id": req.timing_rule_set_id,
                 "timing_rule_set_version": req.timing_rule_set_version,
+                # ★이 판단이 어떤 신선도의 데이터 위에 섰는가★ 라우트가 이미 갖고
+                # 있는 `coverage` 에서 파생한다 — 나중에 "그때 데이터가 낡았나" 를
+                # 물을 수 있어야 한다.
+                "data_freshness": _freshness(coverage),
                 # ★`constraints_binding` 은 담지 않는다★ 이 라우트는 제약을 적용하지
                 # 않는다(그것은 `/analyze` 다). 없는 것을 담지 않는다.
             },
@@ -2243,9 +2275,13 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                                for nm, v in zip(names, est["t"], strict=False)},
                 "note": est["note"]}),
             # ★조건부를 못 썼으면 응답이 그 사실을 말한다★ (조용한 폴백 금지)
+            # ★`/analyze` 와 **같은 수**를 쓴다★ 예전에는 여기만 `len(extra_views)`
+            # 였고, 조건부 뷰가 스킵되면(유니버스 밖 자산) 쓰이지 않은 뷰를 쓰인
+            # 것으로 셌다 — 과대 진술이다. `optimize` 가 출처로 센 수를 쓴다.
             "conditional": (_conditional_block(
                 cond, cond_path, sigma_applied=s_override is not None,
-                mu_as_views=len(extra_views or []), view_confidence=None,
+                mu_as_views=int(opt.get("extra_views_used") or 0),
+                view_confidence=None,
                 model=req.model, meta=cond_meta) if req.conditional else None),
             "research_context": rc,
             "unknown_tickers": _unknown_tickers(req.tickers),
