@@ -46,6 +46,16 @@ investment_decision_legs          (자식 · 자산별 N건)
 └─ contribution : {macro, company, risk_model, constraint}  ← ★대부분 null★
 ```
 
+### ★S2 구현 중 확정된 사실 — leg별 제약 구속은 채울 수 없다★
+
+`constrained_solve` 의 구속 목록은 `"종목 상한 40%"`·`"그룹 상한 IT 30%"` 같은
+**포트폴리오 수준 문자열**이다. 어느 **종목**이 그 구속을 유발했는지는 재유도해야
+알 수 있고 그것은 지어내기다.
+
+→ 호출자가 준 목록은 부모의 `evidence.constraints_binding` 에 그대로 담고,
+leg 의 `constraint_binding` 은 **빈 채로 둔다**. §5 귀속 표의 *"제약 기여 —
+partially identifiable, 동시 구속은 분해 불가"* 와 같은 사실이다.
+
 ★`contribution` 이 대부분 `null` 인 이유★ — §5 의 식별 가능성 표가 근거다. 칸을
 비워 두는 것이 없는 분해를 지어내는 것보다 낫다. `null` 옆에는 항상 사유를 둔다.
 
