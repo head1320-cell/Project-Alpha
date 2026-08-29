@@ -238,11 +238,26 @@ def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None 
 
 
 # ── 전체 파이프라인 (API가 호출하는 단일 진입점) ──────────────────────────────
+def _company_source() -> str:
+    """회사 뷰 출처 라벨의 **단일 출처** — 문자열을 두 곳에 두지 않는다."""
+    from src.engine.company_views import SOURCE
+    return SOURCE
+
+
+def _used_by_source(pool: list[dict] | None, source: str,
+                    skipped: list[dict]) -> int:
+    """그 출처의 뷰 중 **실제로 P 행이 된** 수."""
+    n = sum(1 for v in (pool or []) if (v or {}).get("source") == source)
+    return n - sum(1 for sk in skipped
+                   if (sk.get("view") or {}).get("source") == source)
+
+
 def optimize(model: str, names: list[str], R: np.ndarray,
              views: list[dict] | None = None,
              delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
              s_override: np.ndarray | None = None,
-             extra_views: list[dict] | None = None) -> dict:
+             extra_views: list[dict] | None = None,
+             company_views: list[dict] | None = None) -> dict:
     """모델+뷰 → 최종 가중치 + Sankey 3단계(시장→뷰반영→최적화) + 메타.
 
     flow 의미: market = 시가총액 캡가중 · view_applied = 뷰가 있으면 BL
@@ -253,6 +268,12 @@ def optimize(model: str, names: list[str], R: np.ndarray,
     P2.5 선택 인자 (**둘 다 기본 `None` 이라 기존 호출은 한 글자도 안 바뀐다**):
       s_override:  Σ 를 통째로 대체한다 (국면조건부 공분산). 이미 **연율**이어야 한다.
       extra_views: 사용자 뷰 뒤에 덧붙일 뷰. 국면조건부 μ 가 여기로 들어온다.
+
+    S5 선택 인자 (**기본 `None` 이라 기존 호출은 한 글자도 안 바뀐다**):
+      company_views: 기업 밸류에이션 뷰(`engine.company_views`). ★`extra_views` 와
+        같은 목록에 섞지 않고 **따로 받는다**★ — 호출자의 의도가 코드에 드러나고,
+        조건부 공시(`extra_views_used`)가 회사 뷰를 세는 사고를 구조로 막는다.
+        계산 경로는 완전히 같다(둘 다 `all_views` 로 합쳐져 같은 Ω 를 탄다).
 
     ★조건부 μ 를 여기에 직접 대입하지 않는 이유★
     최적화기에 μ 를 그냥 넣으면 "매크로 신호 → 비중" 이라는 기존 구조를 이름만
@@ -270,7 +291,8 @@ def optimize(model: str, names: list[str], R: np.ndarray,
 
     # 사용자 뷰 + 조건부 뷰. 조건부 뷰는 `source` 태그를 달고 오므로 skipped 보고에서
     # 어느 쪽이 버려졌는지 구분된다.
-    all_views = list(views or []) + list(extra_views or [])
+    all_views = (list(views or []) + list(extra_views or [])
+                 + list(company_views or []))
 
     mu_bl = None
     skipped_views: list[dict] = []
@@ -329,10 +351,19 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         # ★Σ 가 어디서 왔는지 서버가 답한다★ 화면이 "국면조건부" 라벨을 지어내지
         # 못하게 하려는 것이고, `mu_engine` 과 같은 이유의 필드다.
         "sigma_source": "conditional" if s_override is not None else "trailing",
-        "extra_views_used": (
-            len(extra_views or [])
-            - sum(1 for sk in skipped_views
-                  if (sk.get("view") or {}).get("source") == "conditional")),
+        # ★출처로 센다 — 길이로 세지 않는다★ 예전에는 `len(extra_views)` 였고,
+        # 회사 뷰(S5)가 같은 목록에 실리는 순간 이 수가 회사 뷰까지 세게 된다.
+        # 그런데 이 숫자를 받는 문장이 "조건부 μ 를 자산 N개의 절대 뷰로
+        # 태웠습니다" 다 — 매크로가 하지 않은 일을 했다고 적는 조용한 거짓말이다.
+        # 회사 뷰를 별도 인자로 받는 것(위)이 1차 방어이고, 이것이 2차 방어다:
+        # 누가 나중에 다시 섞어 넣어도 공시가 오염되지 않는다.
+        # ★`all_views` 를 센다 — 인자별로 세지 않는다★ 그래야 누가 회사 뷰를
+        # `extra_views` 에 섞어 넣어도 각 공시가 제 몫만 센다. 사용자 뷰는
+        # `source` 칸 자체가 없으므로(`AllocationView` 에 그 필드가 없다) 어느
+        # 쪽에도 잡히지 않는다.
+        "extra_views_used": _used_by_source(all_views, "conditional", skipped_views),
+        "company_views_used": _used_by_source(
+            all_views, _company_source(), skipped_views),
     }
 
 

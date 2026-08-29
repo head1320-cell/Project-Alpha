@@ -208,6 +208,12 @@ class AnalyzeRequest(BaseModel):
     # 자유 입력으로 받지 않는 이유는, 국면 기대 지속기간(실측 2.5~5.0개월)처럼 뜻이
     # 다른 값이 흘러들어오는 것을 막기 위해서다. `BacktestRequest.rebalance` 와 같은 규약.
     rebalance: str = Field("M", pattern="^[MQ]$")
+    # ── S5: 기업 밸류에이션 뷰 (opt-in) — ★`conditional` 과 같은 이유·같은 모양★
+    #   기본 거짓이면 동작도 **응답 키도** 한 글자도 같다. 종목마다 DART 재무를
+    #   읽고 몬테카를로를 돌리므로 슬라이더를 드래그할 때마다 따라붙어서는 안 된다.
+    #   ★`BacktestRequest` 에는 이 필드가 없다★ — 회사 뷰는 forward_only 라
+    #   과거 시뮬레이션에 들어가면 그 자체가 룩어헤드다.
+    use_company_views: bool = False
 
 
 class BacktestRequest(BaseModel):
@@ -552,6 +558,51 @@ def _pit_block(mode: str, market: str = _PIT_MARKET) -> dict:
                  " 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 "
                  "사후 수정본이기 때문입니다."),
     }
+
+
+def _company_view_stack(req, names: list[str]) -> dict | None:
+    """기업 밸류에이션 뷰 — ★두 화면이 갈리지 않게 한 곳에서★
+
+    `/analyze` 와 `/rebalance-decision` 이 **같은 헬퍼**를 탄다(`_conditional_stack`
+    이 이미 같은 이유로 존재한다: *"예전에는 같은 코드가 두 번 복사돼 있어, 한쪽만
+    고치면 화면에 따라 다르게 동작했다"*).
+
+    Returns:
+        요청하지 않았으면 `None` — 그때 라우트는 **응답 키를 만들지 않는다**.
+        요청했으면 `{"views", "block"}`.
+    """
+    if not getattr(req, "use_company_views", False):
+        return None
+
+    from src.engine.company_views import company_views, prices_for
+
+    prices, price_source = prices_for(names)
+    views, reasons = company_views(names, prices, as_of=req.as_of)
+    return {
+        "views": views or None,
+        "block": {
+            "requested": True,
+            "applied": len(views),
+            "views": views,
+            "reasons": reasons,
+            "price_source": price_source,
+            # ★등급을 적는다★ 이 뷰는 빈티지 재무가 없어 과거로 못 간다.
+            "research_usage": (views[0]["research_usage"] if views else
+                               _forward_only()),
+            "any_mock": any(v.get("is_mock") for v in views),
+            "saturated": sum(1 for v in views if v.get("confidence_saturated")),
+            "note": ("밸류에이션 분포의 p50 갭을 수렴 기간으로 편 연간 뷰입니다. "
+                     "폭 중 측정된 것은 하나도 없고 신뢰도는 BL 의 Ω 에만 닿습니다"
+                     "(EP 는 confidence_used:false). as_of 를 고정하면 빈티지 재무가 "
+                     "없어 뷰를 내지 않습니다 — 그 사유가 reasons 에 있습니다."),
+        },
+    }
+
+
+def _forward_only() -> str:
+    """뷰가 하나도 없을 때도 등급은 **파생**해서 답한다 — 손으로 적지 않는다."""
+    from src.data.pit_macro import derive_usage
+    return derive_usage(has_vintage=False, depth_ok=True, lag_known=True).value
 
 
 def _conditional_stack(req, returns) -> dict:
@@ -930,12 +981,16 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             s_override, extra_views = stack["s_override"], stack["extra_views"]
             view_conf, cond_meta = stack["view_conf"], stack["meta"]
 
+        # 0b) S5 — 기업 밸류에이션 뷰 (요청했을 때만). `None` 이면 응답 키도 없다.
+        co_stack = _company_view_stack(req, names)
+
         # 1) 뷰+모델 최적화 (allocation_studio 엔진)
         from src.engine.allocation_studio import optimize
         views = [v.model_dump() for v in (req.views or [])]
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau,
-                       s_override=s_override, extra_views=extra_views)
+                       s_override=s_override, extra_views=extra_views,
+                       company_views=(co_stack or {}).get("views"))
 
         # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
         #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
@@ -1108,6 +1163,10 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 mu_as_views=int(opt.get("extra_views_used") or 0),
                 view_confidence=view_conf, model=req.model, meta=cond_meta)
             payload["target_range"] = target_range
+
+        # ★같은 규율 — 요청했을 때만 키가 늘어난다★ (S5)
+        if co_stack is not None:
+            payload["company_views"] = co_stack["block"]
 
         # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
         #    outputs는 재계산 가능한 대형 산출물(프론티어 클라우드·MC bins) 제외 요약만.
@@ -2034,11 +2093,15 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                     "excluded": frm.get("excluded", {}),
                     "note": "모델을 못 만들면 표본 공분산으로 계산하되 그 사실을 말합니다"}
 
+        # ★`/analyze` 와 **같은 헬퍼**를 탄다★ — 두 화면이 갈리지 않게.
+        co_stack = _company_view_stack(req, names)
+
         from src.engine.allocation_studio import optimize
         opt = optimize(req.model, names, R,
                        views=[v.model_dump() for v in (req.views or [])] or None,
                        delta=req.delta, tau=req.tau,
-                       s_override=s_override, extra_views=extra_views)
+                       s_override=s_override, extra_views=extra_views,
+                       company_views=(co_stack or {}).get("views"))
 
         if req.target_weights:
             target = {k: float(v) for k, v in req.target_weights.items()}
@@ -2081,6 +2144,9 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 "uncertainty_source": ("mu_standard_errors" if mu_uncertainty is not None
                                        else None),
                 "measured": mu_uncertainty is not None,
+                # ★μ 가 무엇으로 세워졌는지 기록이 말한다★ (S5) — 나중에 "왜 그때
+                # 그렇게 판단했나" 를 물을 때 회사 뷰가 섞였는지가 답의 일부다.
+                "company_views_used": int(opt.get("company_views_used") or 0),
             },
             evidence={
                 "target_source": target_source,
@@ -2184,6 +2250,9 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             "research_context": rc,
             "unknown_tickers": _unknown_tickers(req.tickers),
         })
+        # ★같은 규율 — 요청했을 때만 키가 늘어난다★ (S5)
+        if co_stack is not None:
+            decision["company_views"] = co_stack["block"]
         return _finite_payload(decision)
     except HTTPException:
         raise

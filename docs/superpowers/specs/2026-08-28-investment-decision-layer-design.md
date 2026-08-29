@@ -176,6 +176,48 @@ mock 3종(`005930`/`000660`/`035420`)에 `valuation_distribution_for` 를 돌려
 ★기본 거짓★ 이므로 기존 호출부·백테스트·골든이 **바이트 동일**하게 유지된다.
 음성 통제는 이 플래그를 그대로 팔로 쓴다.
 
+#### ★S5 구현 중 확정된 사실 — 공시가 거짓말을 할 참이었다★
+
+**⑴ `optimize` 의 `extra_views_used` 는 길이로 세고 있었다.**
+
+```python
+"extra_views_used": len(extra_views or []) - (conditional 스킵)
+```
+
+이 수를 `/analyze` 가 `_mu_disclosure(mu_as_views=…)` 로 넘기고 그 문장이
+*"조건부 μ 를 자산 **N개**의 절대 뷰로 태웠습니다"* 다. 회사 뷰가 같은 목록에
+실리는 순간 **N 이 회사 뷰까지 센다** — 매크로가 하지 않은 일을 했다고 적는
+조용한 거짓말이다. ★두 겹으로 막았다★:
+
+1. **별도 인자** `optimize(company_views=…)` — 호출자의 의도가 코드에 드러나고
+   회사 뷰 전용 카운트를 정직하게 낼 수 있다(계산 경로는 완전히 같다: 둘 다
+   `all_views` 로 합쳐져 같은 Ω 를 탄다).
+2. **출처로 세기** — 두 카운트를 **`all_views` 전체**에 대해 `source` 로 센다.
+   그래서 누가 1번을 우회해 회사 뷰를 `extra_views` 에 섞어 넣어도 각 공시가 제
+   몫만 센다. 사용자 뷰는 `source` 칸 자체가 없어 어느 쪽에도 잡히지 않는다.
+
+기본값에서는 숫자가 바뀌지 않는다(`extra_views` 에는 조건부 뷰만 들어가고 전부
+`source: "conditional"` 이다) — 짝 테스트가 그 불변을 못 박는다.
+
+**⑵ 가격 해석을 세 번째로 만들지 않았다.** 저장소에 이미 두 벌이 있다
+(`execution_plan._last_close` · `company_snapshot_builder._resolve_price`).
+기업 도메인의 것을 쓴다 — ★"창의 끝은 **오늘**이어야 한다"★ 는 실측 교훈(2099년
+종가 409원을 잡던 버그)을 담고 있고 출처 라벨까지 준다. `prices_for()` 는
+**S4 의 `company_views()` 를 한 글자도 바꾸지 않는다** — 가격 자동 해석을 그 안에
+넣으면 S4 가 못 박은 `KIND_NO_PRICE` 계약이 무너진다.
+
+**⑶ 백테스트에는 새지 않는다.** `BacktestRequest` 는 `AnalyzeRequest` 를 상속하지
+않고 `allocation_backtest._weights_at` 의 `optimize` 호출도 건드리지 않았다. 회사
+뷰는 `forward_only` 라 과거 시뮬레이션에 들어가면 그 자체가 룩어헤드다.
+★선언만 두지 않는다★ — `walk_forward` 를 실제로 돌려 `optimize` 가 받은 인자를
+스파이로 검사하는 테스트가 있다.
+
+**⑷ 남은 비대칭(고치지 않음).** `/rebalance-decision` 의 조건부 공시는
+`opt["extra_views_used"]` 가 아니라 `len(extra_views or [])` 를 직접 쓴다. 회사
+뷰가 그 목록에 들어가지 않으므로 지금은 오염되지 않지만, `/analyze` 와 세는
+방식이 다르다. ★관측했고 이번 범위에서는 고치지 않았다★ — 기존 공시 숫자를
+바꾸는 일이라 별개 판단이 필요하다.
+
 ### ★S3 구현 중 확정된 사실 — 기록도 opt-in, 그리고 모든 분기가 같은 키를 낸다★
 
 **⑴ 결정 기록은 기본 꺼짐이다.** `/rebalance-decision` 은 UI 상호작용마다 불릴 수

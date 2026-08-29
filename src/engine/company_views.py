@@ -246,3 +246,33 @@ def company_views(codes: list[str], prices: dict[str, float], *,
         })
 
     return views, reasons
+
+
+def prices_for(codes: list[str]) -> tuple[dict[str, float], dict[str, str]]:
+    """코드 → `(가격 맵, 출처 맵)`. ★가격 해석을 재구현하지 않는다★
+
+    저장소에 이미 두 벌이 있다(`execution_plan._last_close` ·
+    `company_snapshot_builder._resolve_price`). 세 번째를 만들면 반드시 갈라지고
+    갈라져도 타입 에러가 나지 않는다. 기업 도메인의 것을 쓴다 — 그 함수가
+    ★"창의 끝은 **오늘**이어야 한다"★ 는 실측 교훈(2099년 종가 409원을 잡던
+    버그)을 이미 담고 있고 **출처 라벨**까지 함께 준다.
+
+    ★가격을 못 구한 코드는 맵에 넣지 않는다★ — 지어내지 않고, `company_views()`
+    가 `KIND_NO_PRICE` 사유로 보고하게 둔다. 그래서 이 함수는 S4 가 못 박은
+    계약을 바꾸지 않는다.
+    """
+    from src.engine import company_snapshot_builder as csb
+
+    prices: dict[str, float] = {}
+    source: dict[str, str] = {}
+    for raw in codes:
+        code = str(raw)
+        try:
+            px, src = csb._resolve_price(code, None)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("가격 해석 실패 %s: %s: %s", code, type(e).__name__, e)
+            px, src = None, "unavailable"
+        source[code] = src
+        if px is not None and float(px) > 0:
+            prices[code] = float(px)
+    return prices, source
