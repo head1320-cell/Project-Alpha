@@ -305,7 +305,8 @@ class RegimeAdaptiveAllocator:
         Returns:
             (mode, diagnostics)
         """
-        diagnostics = self._analyze_correlation_health(returns_matrix)
+        # ★설정 임계를 실제로 쓴다★ 예전에는 인라인 상수라 설정이 죽어 있었다.
+        diagnostics = self.correlation_health(returns_matrix)
 
         # systemic_risk_score 우선
         if systemic_risk_score is not None:
@@ -323,10 +324,35 @@ class RegimeAdaptiveAllocator:
 
         return "normal", diagnostics
 
+    def correlation_health(self, returns_matrix: pd.DataFrame) -> dict:
+        """이 인스턴스의 **설정 임계**로 상관 건강도를 판정한다.
+
+        ★선언된 손잡이가 죽어 있었다★ `AdaptiveConfig` 는
+        `breakdown_avg_corr_threshold`(0.70)와 `breakdown_max_eigenvalue_ratio`
+        (0.60)를 선언하는데, 판정은 `0.7`·`0.6` 을 **인라인 상수**로 썼다. 설정을
+        바꿔도 아무 일이 일어나지 않았다 — 선언과 동작이 다른 결함이다.
+
+        ★기본값에서는 동작이 한 자리도 바뀌지 않는다★ 두 값이 인라인 상수와
+        같기 때문이고, 짝 테스트가 그것을 증명한다. 관측치(`avg_correlation` ·
+        `max_eigenvalue_ratio`)는 임계와 무관하게 같다 — 임계는 **관례**이지
+        측정이 아니다.
+        """
+        return self._analyze_correlation_health(
+            returns_matrix,
+            avg_corr_threshold=self.config.breakdown_avg_corr_threshold,
+            max_eig_ratio_threshold=self.config.breakdown_max_eigenvalue_ratio,
+        )
+
     @staticmethod
-    def _analyze_correlation_health(returns_matrix: pd.DataFrame) -> dict:
+    def _analyze_correlation_health(
+        returns_matrix: pd.DataFrame,
+        avg_corr_threshold: float = 0.7,
+        max_eig_ratio_threshold: float = 0.6,
+    ) -> dict:
         """
         상관관계 매트릭스 건강도 분석.
+
+        임계 기본값은 예전 인라인 상수와 같다 — ★기존 호출부가 깨지지 않는다★.
 
         Returns:
             {
@@ -372,8 +398,8 @@ class RegimeAdaptiveAllocator:
             eigenvalues = np.linalg.eigvalsh(corr)
             max_eig_ratio = float(eigenvalues[-1] / eigenvalues.sum()) if eigenvalues.sum() > 0 else 0
 
-            single_factor = max_eig_ratio > 0.6
-            breakdown = (avg_corr > 0.7) or single_factor
+            single_factor = max_eig_ratio > float(max_eig_ratio_threshold)
+            breakdown = (avg_corr > float(avg_corr_threshold)) or single_factor
 
             return {
                 "avg_correlation":          round(avg_corr, 3),
