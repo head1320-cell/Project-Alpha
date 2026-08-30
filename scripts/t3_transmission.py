@@ -155,7 +155,49 @@ _P_TRUE = np.array([[0.75, 0.10, 0.05, 0.10],
                     [0.15, 0.05, 0.10, 0.70]])
 
 
-def build_panel(months: int = 84, seed: int = 20260825):
+#: `_PROF` 에서 **척도를 곱할** 파라미터 인덱스 — 공통 드리프트 · EQ 틸트 · FI 틸트.
+#: ★1차 모멘트만 늘린다★ 공통 변동성(1)과 특이 변동성(4)은 고정한다. 국면의 2차
+#: 모멘트까지 함께 늘리면 "예측 스킬"과 "리스크 국면 인식"이 섞여 ③ 을 단독으로
+#: 잴 수 없다. ★선언된 관례이고 리포트에 싣는다.★
+SCALED_PARAMS = (0, 2, 3)
+
+
+def scaled_profiles(scale: float) -> dict:
+    """국면 프로파일의 **국면 간 차이**를 `scale` 배 한다 (A3-a).
+
+    `p_scaled = p̄ + scale·(p − p̄)` — ★평균 둘레로 늘린다★. 전체 수준까지
+    움직이면 척도를 올릴 때 모든 국면의 수익이 함께 좋아져서, 관문이 국면
+    **정보**가 아니라 드리프트를 보고 통과한다.
+
+    ★순수 함수다★ 모듈 상수 `_PROF` 를 건드리지 않는다. `scale=1.0` 은 `_PROF`
+    와 동일한 딕셔너리를 낸다.
+    """
+    keys = list(_PROF)
+    arr = np.array([_PROF[k] for k in keys], dtype=float)
+    out = arr.copy()
+    for j in SCALED_PARAMS:
+        m = float(arr[:, j].mean())
+        out[:, j] = m + float(scale) * (arr[:, j] - m)
+    return {k: tuple(out[i]) for i, k in enumerate(keys)}
+
+
+def build_panel(months: int = 84, seed: int = 20260825, scale: float = 1.0):
+    """합성 패널. `scale` 은 심은 국면 효과의 크기 — ★검정력의 손잡이★ (A3-a).
+
+    ★`scale == 1.0` 단축은 장식이 아니다★ `m + 1.0·(p − m)` 는 부동소수에서
+    `p` 로 정확히 돌아오지 않는다 — 실측으로 `Goldilocks[3]` 과
+    `Stagflation[0]` 이 1 ulp 어긋난다. 그 어긋남이 `rng.normal(mu, sd)` 를 통과해
+    패널 전체를 바꾼다. 그래서 기본 경로는 `_PROF` 를 **그대로** 쓴다.
+    (처음에는 이 분기가 아무 테스트도 지키지 않는 것처럼 보였는데, 골든 테스트가
+    `build_panel(36)` 과 `build_panel(36, scale=1.0)` 을 비교하고 있었다 — 둘 다
+    `scale=1.0` 이라 **자기 자신과 비교하는 공허한 테스트**였다. 지금은 동결된
+    해시와 비교한다.)
+
+    `rng.normal(mu, sd)` 는 mu·sd 와 무관하게 같은 수의 난수를 소비하므로
+    **잡음 실현이 척도에 대해 고정**된다 — 두 척도의 차이는 심은 효과의 차이
+    그대로다. 검정력 곡선을 읽으려면 이것이 성립해야 한다.
+    """
+    prof = _PROF if float(scale) == 1.0 else scaled_profiles(scale)
     rng = np.random.default_rng(seed)
     idx = pd.bdate_range("2018-01-02", periods=months * 21, freq="C")
     names = [f"EQ{i}" for i in range(3)] + [f"FI{i}" for i in range(3)]
@@ -173,7 +215,7 @@ def build_panel(months: int = 84, seed: int = 20260825):
 
     rows = []
     for ts in idx:
-        mu_f, sd_f, eq_t, fi_t, iv = _PROF[by_month[ts.strftime("%Y-%m")]]
+        mu_f, sd_f, eq_t, fi_t, iv = prof[by_month[ts.strftime("%Y-%m")]]
         f = rng.normal(mu_f, sd_f)
         tilt = np.array([eq_t] * 3 + [fi_t] * 3)
         rows.append(f * beta + tilt + rng.normal(0.0, iv, 6))
