@@ -30,6 +30,16 @@ from scripts.regime_control import (  # noqa: E402
 )
 
 import src.engine.regime_surrogates as rs  # noqa: E402
+from src.engine.research_power import power_report  # noqa: E402
+from src.engine.research_verdict import (  # noqa: E402
+    ALL_VERDICTS,
+    VERDICT_EVIDENCE_OF_NO_EFFECT,
+    VERDICT_INCONCLUSIVE,
+    VERDICT_NO_EVIDENCE,
+    VERDICT_POSITIVE,
+    VERDICT_UNDERPOWERED,
+    require_power_fields,
+)
 
 LABELS = (["G"] * 4 + ["R"] * 3 + ["S"] * 2 + ["D"] * 5 + ["G"] * 2
           + ["R"] * 4 + ["S"] * 3 + ["G"] * 1 + ["D"] * 2)
@@ -111,6 +121,62 @@ def test_a_missing_percentile_cannot_pass():
     m = _cost_map([0.0, 0.0, 0.0])
     m[str(COST_LEVELS[1])] = {"percentile": None}
     assert decide_verdict(m, spa_p=0.01)["passed"] is False
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★A2 — 판정에 어휘와 검정력을 싣는다★
+# ══════════════════════════════════════════════════════════════════════════
+def test_the_verdict_carries_the_five_class_label_and_the_power_block():
+    """★`passed` 불리언 하나로는 M1~M5 를 설명할 수 없었다★"""
+    v = decide_verdict(_cost_map([0.0, 0.0, 0.0]), spa_p=0.01)
+    assert v["verdict"] in ALL_VERDICTS
+    assert require_power_fields(v) == []      # mde·power·n_eff 가 사유와 함께 실린다
+
+
+def test_passed_still_means_exactly_what_it_meant_before():
+    """★기존 22개 테스트와의 다리★ — 어휘를 더해도 규칙은 그대로다."""
+    for pcts, spa in (([0.0, 0.0, 0.0], 0.01), ([0.0, 50.0, 50.0], 0.01),
+                      ([100.0, 100.0, 100.0], 0.20), ([0.0, 0.0, 0.0], None)):
+        v = decide_verdict(_cost_map(pcts), spa_p=spa)
+        assert v["passed"] is (v["null_outside"] and v["spa_ok"])
+        assert v["passed"] is (v["verdict"] == VERDICT_POSITIVE)
+
+
+def test_a_failed_gate_without_a_measured_power_is_no_evidence_not_no_effect():
+    """★만다트 §4★ M1~M5 의 실제 형태다 — 널 밖인데 SPA 미달.
+
+    검정력을 재지 않은 채로는 `evidence_of_no_effect` 를 주장할 수 없다.
+    """
+    v = decide_verdict(_cost_map([100.0, 100.0, 100.0]), spa_p=0.20)
+    assert v["verdict"] == VERDICT_INCONCLUSIVE
+    both_failed = decide_verdict(_cost_map([50.0, 50.0, 50.0]), spa_p=0.20)
+    assert both_failed["verdict"] == VERDICT_NO_EVIDENCE
+    assert both_failed["power"] is None
+    assert v["reasons"]["power"]
+
+
+def test_a_supplied_power_block_changes_the_label_not_the_pass_flag():
+    """★검정력은 **못 넘은 것**의 뜻을 바꾼다 — 통과 여부를 바꾸지 않는다★"""
+    m = _cost_map([50.0, 50.0, 50.0])
+    weak = decide_verdict(m, spa_p=0.20, power_block=_power_block(0.40))
+    strong = decide_verdict(m, spa_p=0.20, power_block=_power_block(0.95))
+    assert weak["verdict"] == VERDICT_UNDERPOWERED
+    assert strong["verdict"] == VERDICT_EVIDENCE_OF_NO_EFFECT
+    assert weak["passed"] is False and strong["passed"] is False
+    assert weak["power"] == pytest.approx(0.40)
+    assert weak["n_eff"] == pytest.approx(129.23, abs=0.01)
+    assert require_power_fields(weak) == [] and require_power_fields(strong) == []
+
+
+def _power_block(power: float) -> dict:
+    """검정력 격자를 실제로 돌리지 않고 블록만 만든다 — 판정 규칙만 검사한다."""
+    return power_report(
+        curve=[{"scale": 1.0, "rate": power, "n": 5, "n_resolved": 5,
+                "n_unknown": 0, "n_detected": int(round(power * 5)),
+                "ci": (0.0, 1.0), "reason": None},
+               {"scale": 2.0, "rate": 1.0, "n": 5, "n_resolved": 5,
+                "n_unknown": 0, "n_detected": 5, "ci": (0.0, 1.0), "reason": None}],
+        observed_scale=1.0, n_obs=84, n_assets=6, rho_bar=0.58)
 
 
 def test_the_threshold_is_a_parameter_and_labelled_a_convention():

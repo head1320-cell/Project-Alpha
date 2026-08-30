@@ -52,6 +52,10 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine import null_stats as ns  # noqa: E402
 from src.engine import regime_surrogates as rs  # noqa: E402
+from src.engine.research_verdict import (  # noqa: E402
+    REQUIRED_FIELDS,
+    classify,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +173,21 @@ def _stats(arm: dict, off: dict) -> dict:
 
 # ── ★판정 — 규칙이지 데이터가 아니다★ ─────────────────────────────────────
 def decide_verdict(per_cost: dict[str, dict], spa_p: float | None, *,
-                   threshold_pct: tuple[float, float] = THRESHOLD_PCT) -> dict:
+                   threshold_pct: tuple[float, float] = THRESHOLD_PCT,
+                   power_block: dict | None = None) -> dict:
     """비용 수준별 `{percentile, side}` + SPA p → 통과 여부.
 
     ★순수 함수다★ 판정은 규칙이지 데이터가 아니다. 데이터를 만들어 규칙을
     확인하려 하면 픽스처의 우연을 계약으로 착각한다(S6 에서 치른 값).
 
     ★미상은 통과가 아니다★ 분위가 없거나 SPA 를 못 돌렸으면 통과시키지 않는다.
+
+    ★A2 — `passed` 옆에 어휘와 검정력을 싣는다★ `passed` 의 규칙은 한 자도
+    바뀌지 않았다(`널 밖 and SPA 유의`). 다만 그 불리언 하나로는 M1~M5 를 설명할
+    수 없었다 — "SPA p=0.094 로 못 넘었다" 와 "효과가 없다" 가 구별되지 않았다.
+    `research_verdict.classify` 가 다섯 분류를 붙이고, `power_block`
+    (`research_power.power_report` 의 산출)이 있으면 `mde`·`power`·`n_eff` 를
+    함께 싣는다. 없으면 **사유와 함께 미상**으로 싣는다 — 빈칸으로 두지 않는다.
     """
     lo, hi = float(threshold_pct[0]), float(threshold_pct[1])
     why: list[str] = []
@@ -196,11 +208,28 @@ def decide_verdict(per_cost: dict[str, dict], spa_p: float | None, *,
     elif not spa_ok:
         why.append(f"SPA p={float(spa_p):.4f} 가 {SPA_ALPHA} 이상입니다")
 
+    block = dict(power_block or {})
+    reasons = dict(block.get("reasons") or {})
+    for f in REQUIRED_FIELDS:
+        block.setdefault(f, None)
+        if block[f] is None and not (reasons.get(f) or "").strip():
+            reasons[f] = ("검정력을 산출하지 않았습니다 — 이 판정은 검출력에 대해 "
+                          "아무 주장도 하지 않습니다")
+
+    label = classify(null_outside=null_outside, spa_ok=spa_ok,
+                     power=block.get("power"))
+
     return {"passed": bool(null_outside and spa_ok),
             "null_outside": null_outside, "spa_ok": spa_ok,
             "outside_by_cost": outside_by_cost,
             "threshold_pct": [lo, hi], "convention": True,
             "spa_p": (None if spa_p is None else round(float(spa_p), 6)),
+            "verdict": label["verdict"],
+            "verdict_why": label["why"],
+            "target_power": label["target_power"],
+            "mde": block.get("mde"), "power": block.get("power"),
+            "n_eff": block.get("n_eff"), "reasons": reasons,
+            "power_block": (power_block or None),
             "why": why or ["널 밖이고 SPA 도 유의합니다"]}
 
 
