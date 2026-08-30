@@ -186,30 +186,139 @@ def test_the_cap_does_not_bind_when_the_allocation_is_already_spread(alloc):
     assert max(out["weights"].values()) < 0.30 - 1e-3
 
 
-def test_the_hard_cap_is_undone_by_the_final_renormalisation(alloc):
-    """★결함을 특성화한다 — 고치지 않는다★
+def test_the_hard_cap_is_not_undone_by_renormalisation(alloc):
+    """★B2 — 이전에는 결함이었다★
 
-    `_defensive_mode` 는 상한을 적용한 뒤 `scale = available_weight / total` 로
-    **다시 정규화**한다. 모든 전략이 상한에 걸리면 total 이 상한×N 이라 그 스케일이
-    상한을 정확히 **되돌린다**:
+    B1(`0d2eac3`)이 특성화한 동작: 상한을 적용한 뒤 `scale = available_weight /
+    total` 로 **다시 정규화**해서 전략 1개 → 0.70, 2개 → 0.35 씩이 나왔다.
+    선언 상한이 0.30 인데 위기 모드가 **가장 집중된 경우에 정확히** 상한을 잃었고
+    그러면서 `hard_cap_applied: True` 를 보고했다.
 
-        전략 1개 → 0.70 (선언 상한 0.30)
-        전략 2개 → 0.35 씩
-
-    그런데 `hard_cap_applied: True` 를 보고한다 — ★거짓 보고★. 위기 모드가 정확히
-    집중된 경우에 상한을 잃는다.
-
-    ★고치는 것은 배분 정책 변경이라 별도 승인 사항이다.★ 여기서는 현행을 못 박아
-    누가 조용히 바꾸지 못하게 하고, 감사에 결함으로 올린다.
+    ★지금은 재정규화하지 않는다★ — 상한이 전부를 묶으면 투자하지 못한 몫은
+    **현금**이 된다. 현금 버퍼는 목표가 아니라 **하한**이다. 전략 1개로 30% 상한을
+    지키면서 70% 를 투자할 방법은 없다.
     """
     a, _ = alloc
     one = a.compute(returns_matrix=_returns(n_cols=1), systemic_risk_score=85.0)
     two = a.compute(returns_matrix=_returns(n_cols=2), systemic_risk_score=85.0)
-    assert max(one["weights"].values()) == pytest.approx(0.70)
-    assert max(two["weights"].values()) == pytest.approx(0.35)
-    # ★거짓 보고까지 못 박는다★ — 상한이 안 걸렸는데 걸렸다고 적는다.
-    assert one["hard_cap_applied"] is True
-    assert one["hard_cap_value"] == 0.30
+    assert max(one["weights"].values()) == pytest.approx(0.30)
+    assert sum(one["weights"].values()) == pytest.approx(0.30)   # 이전 0.70
+    assert max(two["weights"].values()) == pytest.approx(0.30)
+    assert sum(two["weights"].values()) == pytest.approx(0.60)   # 이전 0.70
+
+
+def test_the_full_available_weight_is_invested_when_the_cap_does_not_bind(alloc):
+    """★짝★ — "언제나 덜 투자한다" 구현을 배제한다.
+
+    상한이 물지 않으면 가용 비중(1 − 현금하한)이 **전액** 투자되어야 한다.
+    이 짝이 없으면 재분배를 아예 지우고 남는 몫을 현금으로 버리는 구현이 산다.
+    """
+    a, _ = alloc
+    out = a.compute(returns_matrix=_returns(n_cols=6), systemic_risk_score=85.0)
+    assert max(out["weights"].values()) < 0.30
+    assert sum(out["weights"].values()) == pytest.approx(0.70, abs=1e-6)
+
+
+def test_hard_cap_applied_reports_whether_the_cap_actually_bound(alloc):
+    """★거짓 보고를 끝낸다★ — 현행은 방어 모드면 무조건 `True` 였다."""
+    a, _ = alloc
+    bound = a.compute(returns_matrix=_uneven_vol(), systemic_risk_score=85.0)
+    free = a.compute(returns_matrix=_returns(n_cols=6), systemic_risk_score=85.0)
+    assert bound["hard_cap_applied"] is True
+    assert bound["hard_cap_binding_count"] >= 1
+    assert free["hard_cap_applied"] is False
+    assert free["hard_cap_binding_count"] == 0
+    assert bound["hard_cap_value"] == 0.30
+    assert free["hard_cap_value"] == 0.30
+
+
+def test_cash_buffer_pct_reports_actual_cash_and_the_floor_separately(alloc):
+    """★설정값을 관측값인 척 보고하지 않는다★
+
+    `cash_buffer_pct` 는 **실제로 남은 현금**이고, 설정 하한은
+    `cash_buffer_floor_pct` 로 따로 신고한다. 전략 1개에서는 상한이 묶어
+    현금이 0.70 까지 올라간다 — 그것을 0.30 이라고 적으면 거짓이다.
+    """
+    a, _ = alloc
+    one = a.compute(returns_matrix=_returns(n_cols=1), systemic_risk_score=85.0)
+    six = a.compute(returns_matrix=_returns(n_cols=6), systemic_risk_score=85.0)
+    assert one["cash_buffer_pct"] == pytest.approx(0.70)
+    assert six["cash_buffer_pct"] == pytest.approx(0.30)
+    assert one["cash_buffer_floor_pct"] == 0.30
+    assert six["cash_buffer_floor_pct"] == 0.30
+    assert one["diagnostics"]["capacity_shortfall"] == pytest.approx(0.40)
+    assert six["diagnostics"]["capacity_shortfall"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_the_uneven_vol_defensive_vector_is_pinned(alloc):
+    """★골든 벡터★ — 재분배 규칙의 침묵 교체를 잡는다.
+
+    B2 는 **재정규화만** 제거했고 재분배 규칙(상한 미달 전략에 **현재 비중 비례**)은
+    손대지 않았다. "잔여 여유 비례" 같은 다른 규칙으로 갈아타면 최대(0.30)와
+    합(0.70)은 그대로인데 비상한 전략들의 비중만 0.1731/0.1130/0.1138 →
+    0.1454/0.1272/0.1274 로 바뀐다. 최대·합만 보는 테스트는 그것을 놓친다.
+    """
+    a, _ = alloc
+    w = a.compute(returns_matrix=_uneven_vol(), systemic_risk_score=85.0)["weights"]
+    assert [round(float(v), 4) for v in w.values()] == [0.3000, 0.1731, 0.1130, 0.1138]
+
+
+# ── ★재분배는 순수 함수로 떼어 정확한 수로 검사한다★ ──────────────────────
+def test_cap_and_redistribute_leaves_nothing_above_the_cap():
+    w, _, _ = RegimeAdaptiveAllocator._cap_and_redistribute(
+        {"a": 0.40, "b": 0.28, "c": 0.01, "d": 0.01}, 0.30)
+    assert max(w.values()) <= 0.30 + 1e-12
+
+
+def test_cap_and_redistribute_iterates_until_the_headroom_is_used():
+    """★1패스는 여유를 남긴 채 현금으로 버린다★
+
+    a 의 초과 0.10 이 b 로 흘러 b 를 상한 위(0.3733)로 밀어 올린다. 1패스 구현은
+    거기서 0.0733 을 잘라 **버리고**(현행에서는 재정규화가 그것을 몰래 되살렸다),
+    c·d 에 남아 있는 여유를 쓰지 않는다. 반복하면 전액이 재분배된다.
+    """
+    w, excess, binding = RegimeAdaptiveAllocator._cap_and_redistribute(
+        {"a": 0.40, "b": 0.28, "c": 0.01, "d": 0.01}, 0.30)
+    assert w["a"] == pytest.approx(0.30)
+    assert w["b"] == pytest.approx(0.30)
+    assert w["c"] == pytest.approx(0.05)
+    assert w["d"] == pytest.approx(0.05)
+    assert sum(w.values()) == pytest.approx(0.70)
+    assert excess == pytest.approx(0.10 + 0.0733333, abs=1e-5)
+    assert binding == 2
+
+
+def test_cap_and_redistribute_is_a_no_op_below_the_cap():
+    """★짝★ — 상한 아래는 건드리지 않는다(항상 재분배하는 구현 배제)."""
+    raw = {"a": 0.20, "b": 0.10, "c": 0.05}
+    w, excess, binding = RegimeAdaptiveAllocator._cap_and_redistribute(raw, 0.30)
+    assert w == raw
+    assert excess == 0.0
+    assert binding == 0
+
+
+def test_cap_and_redistribute_stops_when_every_weight_is_capped():
+    """★여유가 없으면 남는 몫은 현금이다 — 무한 루프도, 상한 위반도 아니다.★"""
+    w, excess, binding = RegimeAdaptiveAllocator._cap_and_redistribute(
+        {"a": 0.40, "b": 0.30}, 0.30)
+    assert w == {"a": pytest.approx(0.30), "b": pytest.approx(0.30)}
+    assert sum(w.values()) == pytest.approx(0.60)
+    assert binding == 2
+
+
+def test_the_declared_defensive_max_weight_clip_is_not_the_effective_cap(alloc):
+    """★관측: 선언됐지만 죽은 계수★
+
+    `AdaptiveConfig.defensive_max_weight_clip = 0.25` 는 `_defensive_mode` 에
+    인자로 **전달되지만 본문에서 쓰이지 않는다**. 실효 상한은
+    `defensive_hard_cap = 0.30` 이다. B2 는 이 사실을 못 박기만 하고 바꾸지
+    않는다 — 0.25 를 실효화하는 것은 배분 정책 변경이라 이번 범위 밖이다.
+    """
+    a, _ = alloc
+    assert a.config.defensive_max_weight_clip == 0.25
+    out = a.compute(returns_matrix=_uneven_vol(), systemic_risk_score=85.0)
+    assert out["hard_cap_value"] == 0.30
+    assert max(out["weights"].values()) == pytest.approx(0.30)   # 0.25 가 아니다
 
 
 def test_defensive_mode_does_not_call_the_base_allocator(alloc):
