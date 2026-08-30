@@ -227,14 +227,27 @@ def test_a_single_row_with_a_return_is_still_anchored(eng):
 # ══════════════════════════════════════════════════════════════════════════
 # 5) ★불변 논증을 테스트로 못 박는다★
 # ══════════════════════════════════════════════════════════════════════════
-def test_adj_close_still_has_no_production_consumer():
-    """★이 변경이 배분에 무해하다는 근거 그 자체★
+def test_adj_close_has_no_consumer_outside_the_research_panel():
+    """★이 변경이 배분에 무해하다는 근거 — ★M9 에서 다시 한 논증★
 
-    골든 스냅샷은 합성 매크로·배분 데이터로 돌고 `daily_prices` 를 읽지 않는다.
-    따라서 바이트 동일은 이 변경의 무해함을 **증명하지 못한다**. 실제 근거는
-    "`adj_close` 를 읽는 프로덕션 코드가 0건" 이라는 사실이다.
+    원래 근거는 "`adj_close` 를 읽는 코드가 0건" 이었다. M9(`research_panel`)이
+    **소비자를 하나 만들었으므로** 이 테스트가 red 가 됐고, 설계대로 논증을
+    다시 했다. 통과시키려고 테스트를 고친 것이 아니다.
 
-    ★소비자가 생기면 이 테스트가 red 가 된다★ — 그때 그 논증을 다시 해야 한다.
+    ## 새 논증
+
+    소비자는 `src/engine/research_panel.py::_default_price_loader` 하나이고,
+    도달 경로는 `real_panel()` → `panel_for(real=True)` → **연구 CLI 두 개**
+    (`scripts/regime_control.py --real` · `scripts/regime_signal_gate.py --real`)
+    뿐이다. 라우트·엔진·배분 경로는 이 함수를 부르지 않는다 — 그 사실을
+    **산문이 아니라 아래 짝 테스트가 정적으로 강제**한다.
+
+    따라서 앵커 규칙이 틀리면 **연구 패널이 틀린다**(그리고 그 리포트는 E0/E3
+    등급과 `coverage` 를 달고 나온다). 배분 비중·주문·실계좌 경로는 여전히
+    `adj_close` 를 읽지 않으므로 원래 무해성 논증은 **그 범위에서 그대로 유효**하다.
+
+    ★허용 목록은 침묵 면제가 아니다★ 여기 이름을 더하려면 위와 같은 논증을
+    적어야 하고, 짝 테스트가 그 주장을 검사한다.
 
     산문은 `adj_close` 를 얼마든지 **설명**할 수 있어야 하므로 grep 하지 않는다.
     `tokenize` 로 주석·독스트링을 걷어내고 **코드 토큰과 SQL 문자열**에서만 찾는다
@@ -248,12 +261,14 @@ def test_adj_close_still_has_no_production_consumer():
     OWNERS = {"src/data/krx_ingest.py", "src/data/price_quality.py"}
     #: 스키마 선언은 소비가 아니다.
     SCHEMA = "src/kis_models.py"
+    #: ★연구 전용 소비자 (M9)★ — 위 독스트링의 논증과 아래 짝 테스트가 근거다.
+    RESEARCH = {"src/engine/research_panel.py"}
 
     hits = []
     for path in sorted(list(pathlib.Path("src").rglob("*.py"))
                        + list(pathlib.Path("scripts").rglob("*.py"))):
         rel = path.as_posix()
-        if rel in OWNERS or rel == SCHEMA:
+        if rel in OWNERS or rel == SCHEMA or rel in RESEARCH:
             continue
         src = path.read_text(encoding="utf-8")
         if "adj_close" not in src:
@@ -279,3 +294,47 @@ def test_adj_close_still_has_no_production_consumer():
                     hits.append(f"{rel}:{tok.start[0]}: SQL {tok.string[:50]}")
     assert hits == [], (
         "`adj_close` 소비자가 생겼다 — 불변 논증을 다시 할 것:\n" + "\n".join(hits))
+
+
+def test_the_research_panel_price_path_is_unreachable_from_allocation():
+    """★짝 — 위 논증이 주장이 아니라 계약이 되게 한다★
+
+    "연구 전용이라 배분에 무해하다" 는 문장은 코드가 지키지 않으면 언제든 거짓이
+    된다. 라우트·배분 경로가 `real_panel`/`panel_for(real=True)` 를 부르기
+    시작하면 앵커 규칙이 실제 비중을 움직이게 되고, 그때 허용 목록의 근거가
+    사라진다.
+
+    정적 임포트와 동적 임포트를 **둘 다** 본다(K11 이 가르쳐 준 사각지대).
+    """
+    import io as _io
+    import pathlib
+    import re
+    import tokenize
+
+    #: 배분·주문·라우트 경로 — 여기서 실 패널을 부르면 안 된다.
+    WATCH = ("src/api", "src/engine/allocation", "src/engine/regime_adaptive",
+             "src/engine/realism_engine.py", "src/engine/multi_strategy",
+             "src/engine/trading_engine.py", "src/engine/order")
+    dyn = re.compile(r"import_module\s*\(\s*[\"'][^\"']*research_panel"
+                     r"|__import__\s*\(\s*[\"'][^\"']*research_panel")
+
+    offenders = []
+    for path in sorted(pathlib.Path("src").rglob("*.py")):
+        rel = path.as_posix()
+        if not any(rel.startswith(w) for w in WATCH):
+            continue
+        src = path.read_text(encoding="utf-8")
+        if dyn.search(src):
+            offenders.append(f"{rel}: 동적 임포트")
+        if "research_panel" not in src:
+            continue
+        try:
+            toks = list(tokenize.generate_tokens(_io.StringIO(src).readline))
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            continue
+        for tok in toks:
+            if tok.type == tokenize.NAME and tok.string in ("real_panel", "panel_for"):
+                offenders.append(f"{rel}:{tok.start[0]}: {tok.string}")
+    assert offenders == [], (
+        "배분·라우트 경로가 연구 패널을 부른다 — `adj_close` 무해성 논증이 "
+        "깨졌다:\n" + "\n".join(offenders))

@@ -192,6 +192,8 @@ def test_both_horizons_are_reported_but_only_forward_decides(report):
 
 def test_the_report_is_labelled_synthetic_and_claims_nothing(report):
     assert report["evidence_grade"] == "E0"
+    assert report["evidence_grade_reason"]
+    assert report["provenance"]["price_source"] == "synthetic"
     assert report["answers_question"] == "③ 예측 스킬"
     assert report["does_not_answer"] == ["① 정보 표현력", "② 전달 안정성",
                                          "④ 경제적 가치"]
@@ -283,11 +285,67 @@ def test_the_gate_is_research_only_and_no_engine_module_imports_it():
     사각지대).
     """
     import pathlib
+    import re
+
+    # ★**임포트 모양**만 본다★ 순수 문자열 스캔은 산문 언급에도 걸린다 —
+    # `research_panel` 의 독스트링이 이 하네스를 설명하다가 실제로 걸렸다.
+    # 그렇다고 AST 임포트만 보면 동적 임포트가 빠져나간다(K11 이 찾아낸 사각지대).
+    # 그래서 정적 임포트 **와** importlib/__import__ 문자열 인자를 함께 본다.
+    pat = re.compile(
+        r"(?:^\s*(?:from|import)\s+[\w.]*regime_signal_gate"
+        r"|import_module\s*\(\s*[\"'][^\"']*regime_signal_gate"
+        r"|__import__\s*\(\s*[\"'][^\"']*regime_signal_gate)",
+        re.MULTILINE)
     root = pathlib.Path(__file__).resolve().parents[1] / "src"
-    offenders = [str(p.relative_to(root.parent))
-                 for p in root.rglob("*.py")
-                 if "regime_signal_gate" in p.read_text(encoding="utf-8")]
-    assert offenders == [], f"연구 전용 하네스를 프로덕션이 참조한다: {offenders}"
+    offenders = [str(f.relative_to(root.parent)) for f in root.rglob("*.py")
+                 if pat.search(f.read_text(encoding="utf-8"))]
+    assert offenders == [], f"연구 전용 하네스를 프로덕션이 임포트한다: {offenders}"
+
+
+def test_the_research_only_guard_would_catch_a_dynamic_import(tmp_path):
+    """★짝 — 가드가 실제로 무언가를 잡는지 확인한다★ (K11 이 가르쳐 준 것)
+
+    가드가 항상 빈 목록을 내는 구현이면 계약이 아니다. 동적 임포트와 정적
+    임포트를 **둘 다** 잡아야 하고, 산문 언급은 잡지 않아야 한다.
+    """
+    import re
+    pat = re.compile(
+        r"(?:^\s*(?:from|import)\s+[\w.]*regime_signal_gate"
+        r"|import_module\s*\(\s*[\"'][^\"']*regime_signal_gate"
+        r"|__import__\s*\(\s*[\"'][^\"']*regime_signal_gate)",
+        re.MULTILINE)
+    assert pat.search("from scripts.regime_signal_gate import run")
+    assert pat.search("import scripts.regime_signal_gate")
+    assert pat.search('importlib.import_module("scripts.regime_signal_gate")')
+    assert pat.search("__import__('scripts.regime_signal_gate')")
+    assert not pat.search('"""`regime_signal_gate` 는 E0 하드코딩이었다."""')
+    assert not pat.search("# regime_signal_gate 참고")
+
+
+def test_the_grade_is_derived_from_the_panel_not_hardcoded():
+    """★짝 — M9★ 예전에는 `"E0"` 하드코딩이라 실데이터가 와도 E0 라고 말했다.
+
+    합성 픽스처만 보면 하드코딩과 파생을 구별할 수 없다(변이 Q14 가 그렇게
+    살아남았다). 실 출처를 단 패널을 넣어 **E0 가 아닌 값**이 나오는지 본다.
+    """
+    from src.engine.research_panel import (
+        BASIS_ADJ,
+        PRICE_SOURCE_KRX,
+        REGIME_SOURCE_AXES,
+        Panel,
+        synthetic_panel,
+    )
+    syn = synthetic_panel(months=36)
+    real_like = Panel(names=syn.names, returns=syn.returns, dates=syn.dates,
+                      points=syn.points,
+                      provenance={"price_source": PRICE_SOURCE_KRX,
+                                  "regime_source": REGIME_SOURCE_AXES,
+                                  "price_basis": BASIS_ADJ,
+                                  "injected_scale": None})
+    rep = run(months=36, seed=20260825, power_scales=(1.0,), power_seeds=(0,),
+              n_markov=5, panel=real_like)
+    assert rep["evidence_grade"] == "E3"
+    assert rep["evidence_grade"] != "E0"
 
 
 def test_the_null_draws_are_enumerated_for_the_shift(report):

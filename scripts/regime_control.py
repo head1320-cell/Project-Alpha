@@ -53,6 +53,11 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 from src.engine import null_stats as ns  # noqa: E402
 from src.engine import regime_surrogates as rs  # noqa: E402
 from src.engine import research_power as rp  # noqa: E402
+from src.engine.research_panel import (  # noqa: E402
+    evidence_grade,
+    inject_regime_drift,
+    panel_for,
+)
 from src.engine.research_verdict import (  # noqa: E402
     REQUIRED_FIELDS,
     classify,
@@ -290,11 +295,17 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
         min_train: int = 252, cost_levels=COST_LEVELS,
         n_shift: int | None = None, n_markov: int = 50, n_block: int = 50,
         seed: int = 7, threshold_pct=THRESHOLD_PCT, run_spa: bool = True,
-        spa_reps: int = 1000, panel_is_synthetic: bool = True) -> dict:
+        spa_reps: int = 1000, provenance: dict | None = None) -> dict:
     """팔과 널을 전부 돌리고 사전등록된 규칙으로 판정한다.
 
     `n_shift=None` 이면 순환이동을 **전수** 돈다(주 널). 보조 널(마르코프·블록)은
     견고성 확인용이고 판정에 쓰지 않는다.
+
+    ★증거 등급은 `provenance` 에서 **파생**한다 (M9)★ 예전에는
+    `panel_is_synthetic` 이라는 **검증되지 않은 불리언**을 호출자가 줬고, 합성
+    패널에 `False` 를 넘기면 그대로 `E3` 가 찍혔다 — 하지 않은 검증을 주장하는
+    경로였다. `provenance` 를 안 주면 출처를 모르는 것이므로 ★등급을 찍지
+    않는다★(`None` + 사유). 미상은 E3 가 아니다.
     """
     rng = np.random.default_rng(int(seed))
     kw = {"model": model, "rebalance": rebalance, "min_train": min_train}
@@ -380,6 +391,8 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
         mcs = {"decisive": False, "included": None, "excluded": None,
                "reason": "요청하지 않았습니다", "alpha": SPA_ALPHA}
 
+    _grade, _grade_why = evidence_grade(provenance)
+
     verdict = decide_verdict(
         {c: {"percentile": b["percentile"][PRIMARY], "side": b["side"]}
          for c, b in by_cost.items()},
@@ -401,7 +414,8 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
         "statistics": {PRIMARY: {"decisive": True},
                        **{s: {"decisive": False} for s in SECONDARY}},
         # ★등급은 파생한다★ 손으로 적지 않는다.
-        "evidence_grade": "E0" if panel_is_synthetic else "E3",
+        "evidence_grade": _grade, "evidence_grade_reason": _grade_why,
+        "provenance": provenance,
         "revision_bias": dict(_REVISION_BIAS),
         "panel": {"n_assets": len(names), "n_obs": int(np.asarray(R).shape[0]),
                   "n_months": len(points), "n_runs": rs.n_runs(points),
@@ -451,38 +465,40 @@ def power_curves(runner, scales, seeds) -> dict[str, list[dict]]:
 def gate_runner(*, months: int, base_seed: int, model: str = "bl",
                 rebalance: str = "M", min_train: int = 252,
                 cost_levels=COST_LEVELS, spa_reps: int = 1000,
-                threshold_pct=THRESHOLD_PCT):
+                threshold_pct=THRESHOLD_PCT, base_panel=None):
     """실제 관문을 한 번 돌려 두 성분을 낸다 — `power_curves` 에 주입한다.
 
     ★보조 널을 뺀다★ 마르코프·블록은 `decisive: false` 라 **판정에 들어가지
     않는다**. 검정력 시행에서 빼면 564 → 264 백테스트로 줄어 1시행 ≈ 172초다.
     판정에 쓰이는 순환이동 전수와 SPA 는 그대로 둔다.
     """
-    from scripts.t3_transmission import build_panel
-
     def runner(scale: float, seed: int) -> dict:
         sd = int(base_seed) + int(seed)
-        names, R, dates, points, _b = build_panel(months=months, seed=sd,
-                                                  scale=float(scale))
+        if base_panel is None:
+            p, why = panel_for(real=False, months=months, seed=sd,
+                               scale=float(scale))
+            if p is None:
+                raise RuntimeError(f"합성 패널을 만들 수 없습니다: {why}")
+        else:
+            # ★실 패널은 반합성 주입으로 척도를 만든다★ 실 공분산·꼬리·자기상관을
+            # 그대로 두고 국면 드리프트만 배율한다 — 합성에서 `scaled_profiles`
+            # 가 하는 일과 같은 계약이라 `research_power` 가 양쪽에서 돈다.
+            p = inject_regime_drift(base_panel, float(scale))
+        names, R, dates, points = p.names, p.returns, p.dates, p.points
         rep = run(names, R, dates, points, model=model, rebalance=rebalance,
                   min_train=min_train, cost_levels=cost_levels,
                   n_markov=0, n_block=0, seed=sd, threshold_pct=threshold_pct,
-                  spa_reps=spa_reps)
+                  spa_reps=spa_reps, provenance=p.provenance)
         v = rep["verdict"]
         return {"null_outside": v["null_outside"], "spa_ok": v["spa_ok"]}
     return runner
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────
-def _panel(months: int):
-    from scripts.t3_transmission import build_panel
-    names, R, dates, points, _beta = build_panel(months=months)
-    return names, R, dates, points
-
-
 def measure_power(*, months: int, base_seed: int, scales=POWER_SCALES,
                   seeds=POWER_SEEDS, spa_reps: int = 1000,
-                  threshold_pct=THRESHOLD_PCT, **kw) -> dict[str, Any]:
+                  threshold_pct=THRESHOLD_PCT, base_panel=None,
+                  **kw) -> dict[str, Any]:
     """사전등록된 격자로 세 성분의 검정력을 재고 `power_report` 블록을 만든다.
 
     `n_eff` 는 **패널에서 측정한** 자산간 상관으로 낸다 — 순진한 자산×개월이
@@ -490,11 +506,15 @@ def measure_power(*, months: int, base_seed: int, scales=POWER_SCALES,
     """
     from scripts.t3_transmission import build_panel
 
-    runner = gate_runner(months=months, base_seed=base_seed,
+    runner = gate_runner(months=months, base_seed=base_seed, base_panel=base_panel,
                          spa_reps=spa_reps, threshold_pct=threshold_pct, **kw)
     curves = power_curves(runner, scales, seeds)
 
-    names, R, dates, points, _b = build_panel(months=months, seed=base_seed)
+    if base_panel is None:
+        names, R, dates, points, _b = build_panel(months=months, seed=base_seed)
+    else:
+        names, R, dates, points = (base_panel.names, base_panel.returns,
+                                   base_panel.dates, base_panel.points)
     monthly = _monthly(R, dates)
     rho = rp.mean_pairwise_correlation(monthly)
 
@@ -529,16 +549,31 @@ def main() -> int:
     ap.add_argument("--report", default=None)
     ap.add_argument("--power", action="store_true",
                     help="사전등록된 격자로 세 성분의 검정력을 잰다 (A3, 오래 걸린다)")
+    ap.add_argument("--real", action="store_true",
+                    help="실 패널로 돌린다 (M9). 실데이터가 없으면 ★거부★한다")
+    ap.add_argument("--codes", default="", help="--real 일 때 쓸 종목코드(쉼표 구분)")
+    ap.add_argument("--as-of", default=None)
     args = ap.parse_args()
 
-    names, R, dates, points = _panel(args.months)
+    base, why = panel_for(real=args.real, months=args.months,
+                          codes=[c for c in args.codes.split(",") if c],
+                          as_of=args.as_of)
+    if base is None:
+        # ★합성으로 대체하지 않는다★ 빈 결과보다 나쁜 것은 지어낸 결과다.
+        print("패널을 만들 수 없어 중단합니다 — 합성으로 대체하지 않습니다:")
+        for r in why:
+            print(f"  · {r}")
+        return 2
+    names, R, dates, points = base.names, base.returns, base.dates, base.points
     rep = run(names, R, dates, points, model=args.model, rebalance=args.rebalance,
               min_train=args.min_train, n_shift=args.n_shift,
               n_markov=args.n_markov, n_block=args.n_block, seed=args.seed,
-              run_spa=not args.no_spa, spa_reps=args.spa_reps)
+              run_spa=not args.no_spa, spa_reps=args.spa_reps,
+              provenance=base.provenance)
 
     if args.power:
         block = measure_power(months=args.months, base_seed=20260825,
+                              base_panel=(base if args.real else None),
                               model=args.model, rebalance=args.rebalance,
                               min_train=args.min_train, spa_reps=args.spa_reps)
         rep["power"] = block
@@ -554,7 +589,7 @@ def main() -> int:
         print(f"리포트: {args.report}")
 
     p = rep["panel"]
-    print(f"등급 {rep['evidence_grade']} · 패널 {p['n_assets']}자산 {p['n_months']}개월 "
+    print(f"등급 {rep['evidence_grade']} ({rep['evidence_grade_reason']}) · 패널 {p['n_assets']}자산 {p['n_months']}개월 "
           f"· 런 {p['n_runs']}개(평균 {p['mean_run_length']})")
     print(f"★주 통계★ {PRIMARY} · 주 널 {rep['preregistered']['primary_null']} "
           f"· 임계 {rep['preregistered']['threshold_pct']}(관례)")

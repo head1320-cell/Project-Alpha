@@ -80,7 +80,7 @@ def test_a_scale_away_from_one_changes_the_panel():
 
 
 def test_the_default_signature_still_works_positionally():
-    """기존 호출부(`regime_control._panel` · t3 테스트 3종)를 깨지 않는다."""
+    """기존 호출부(`research_panel.synthetic_panel` · t3 테스트 3종)를 깨지 않는다."""
     names, R, dates, points, beta = build_panel(36)
     assert len(names) == 6 and R.shape[1] == 6
     assert len(R) == 36 * 21                 # 영업일 수는 정확하다

@@ -41,6 +41,11 @@ from src.engine.regime_signal import (  # noqa: E402
     eta_squared,
     monthly_matrix,
 )
+from src.engine.research_panel import (  # noqa: E402
+    evidence_grade,
+    inject_regime_drift,
+    panel_for,
+)
 from src.engine.research_verdict import (  # noqa: E402
     DEFAULT_TARGET_POWER,
     REQUIRED_FIELDS,
@@ -185,19 +190,27 @@ def gate_once(points: list[dict], monthly: Any, *, horizon: int, seed: int,
 
 
 # ── 검정력 (양성 통제) ─────────────────────────────────────────────────────
-def _panel(months: int, seed: int, scale: float):
-    from scripts.t3_transmission import build_panel
-    names, R, dates, points, _beta = build_panel(months=months, seed=seed,
-                                                 scale=scale)
-    return names, R, dates, points
+def _panel(months: int, seed: int, scale: float, base_panel=None):
+    """척도를 **주입기로 라우팅**한다 — 합성이면 프로파일 배율, 실이면 반합성.
+
+    양쪽이 같은 계약을 지키므로 `research_power.power_curve` 가 그대로 돈다.
+    """
+    if base_panel is not None:
+        return inject_regime_drift(base_panel, float(scale))
+    p, why = panel_for(real=False, months=months, seed=seed, scale=scale)
+    if p is None:
+        raise RuntimeError(f"합성 패널을 만들 수 없습니다: {why}")
+    return p
 
 
 def power_trial(months: int, base_seed: int, n_markov: int,
-                threshold_pct=THRESHOLD_PCT, horizon: int = DECISIVE_HORIZON):
+                threshold_pct=THRESHOLD_PCT, horizon: int = DECISIVE_HORIZON,
+                base_panel=None):
     """`research_power.power_curve` 에 주입할 시행 — ★예외를 삼키지 않는다★."""
     def trial(scale: float, seed: int) -> bool | None:
-        _n, R, dates, points = _panel(months, int(base_seed) + int(seed), scale)
-        monthly = monthly_matrix(R, dates)
+        p = _panel(months, int(base_seed) + int(seed), scale, base_panel)
+        monthly = monthly_matrix(p.returns, p.dates)
+        points = p.points
         blk = gate_once(points, monthly, horizon=int(horizon),
                         seed=int(base_seed) + int(seed), n_markov=n_markov,
                         threshold_pct=threshold_pct)
@@ -213,9 +226,15 @@ def power_trial(months: int, base_seed: int, n_markov: int,
 def run(*, months: int = 84, seed: int = BASE_SEED,
         power_scales=POWER_SCALES, power_seeds=POWER_SEEDS,
         n_markov: int = N_MARKOV, threshold_pct=THRESHOLD_PCT,
-        target_power: float = DEFAULT_TARGET_POWER) -> dict[str, Any]:
-    """두 지평을 **둘 다** 돌리고 사전등록된 규칙으로 **선행만** 판정한다."""
-    names, R, dates, points = _panel(months, seed, 1.0)
+        target_power: float = DEFAULT_TARGET_POWER,
+        panel=None) -> dict[str, Any]:
+    """두 지평을 **둘 다** 돌리고 사전등록된 규칙으로 **선행만** 판정한다.
+
+    ★증거 등급은 패널의 출처에서 파생한다 (M9)★ 예전에는 `"E0"` 하드코딩이라
+    실데이터가 들어와도 계속 E0 라고 말했을 것이다.
+    """
+    base = panel if panel is not None else _panel(months, seed, 1.0)
+    names, R, dates, points = base.names, base.returns, base.dates, base.points
     monthly = monthly_matrix(R, dates)
 
     horizons = {str(h): gate_once(points, monthly, horizon=h, seed=seed,
@@ -229,13 +248,16 @@ def run(*, months: int = 84, seed: int = BASE_SEED,
     power_by_horizon: dict[str, Any] = {}
     for h in HORIZONS:
         curve = rp.power_curve(
-            power_trial(months, seed, n_markov, threshold_pct, horizon=h),
+            power_trial(months, seed, n_markov, threshold_pct, horizon=h,
+                        base_panel=(panel if panel is not None else None)),
             scales=power_scales, seeds=power_seeds)
         power_by_horizon[str(h)] = rp.power_report(
             curve=curve, observed_scale=1.0, n_obs=len(points),
             n_assets=len(names), rho_bar=rho, target_power=target_power)
         horizons[str(h)]["power"] = power_by_horizon[str(h)]
     block = power_by_horizon[str(DECISIVE_HORIZON)]
+
+    _grade, _grade_why = evidence_grade(base.provenance)
 
     decisive = horizons[str(DECISIVE_HORIZON)]
     verdict = decide_signal_verdict(decisive["pct_by_null"],
@@ -263,7 +285,8 @@ def run(*, months: int = 84, seed: int = BASE_SEED,
         # ★어떤 질문에 답했는지 리포트가 밝힌다★
         "answers_question": "③ 예측 스킬",
         "does_not_answer": ["① 정보 표현력", "② 전달 안정성", "④ 경제적 가치"],
-        "evidence_grade": "E0",
+        "evidence_grade": _grade, "evidence_grade_reason": _grade_why,
+        "provenance": base.provenance,
         "panel": {"n_assets": len(names), "n_months": len(points),
                   "n_runs": rs.n_runs(points), "marginal": rs.marginal(points),
                   "mean_pairwise_correlation": rho},
@@ -278,14 +301,33 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=BASE_SEED)
     ap.add_argument("--n-markov", type=int, default=N_MARKOV)
     ap.add_argument("--report", default=None)
+    ap.add_argument("--real", action="store_true",
+                    help="실 패널로 돌린다 (M9). 실데이터가 없으면 ★거부★한다")
+    ap.add_argument("--codes", default="",
+                    help="--real 일 때 쓸 종목코드(쉼표 구분)")
+    ap.add_argument("--as-of", default=None)
     args = ap.parse_args()
 
-    rep = run(months=args.months, seed=args.seed, n_markov=args.n_markov)
+    panel = None
+    if args.real:
+        panel, why = panel_for(real=True,
+                               codes=[c for c in args.codes.split(",") if c],
+                               months=args.months, as_of=args.as_of)
+        if panel is None:
+            # ★합성으로 대체하지 않는다★ 빈 결과보다 나쁜 것은 지어낸 결과다.
+            print("실 패널을 만들 수 없어 중단합니다 — 합성으로 대체하지 않습니다:")
+            for r in why:
+                print(f"  · {r}")
+            return 2
+
+    rep = run(months=args.months, seed=args.seed, n_markov=args.n_markov,
+              panel=panel)
     if args.report:
         with open(args.report, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=2, default=str)
 
     v = rep["verdict"]
+    print(f"등급 {rep['evidence_grade']} — {rep['evidence_grade_reason']}")
     print(f"판정: {v['verdict']} (passed={v['passed']}) · 지평={v['horizon']}(선행)")
     for h in ("0", "1"):
         b = rep["horizons"][h]

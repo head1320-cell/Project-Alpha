@@ -283,13 +283,51 @@ def _tiny():
     return ["a", "b", "c"], R, dates, POINTS
 
 
-def test_the_evidence_grade_is_derived_from_the_panel_source():
-    """★손으로 적지 않는다★ mock/합성 패널이면 E0."""
+def test_an_unknown_panel_source_gets_no_grade(kw=None):
+    """★M9 — 예전에는 결함이었다★
+
+    예전 계약은 `run(..., panel_is_synthetic=False)` 였다. 호출자가 주는 **검증되지
+    않은 불리언**이라 합성 패널에 `False` 를 넘기면 그대로 `E3` 가 찍혔다 —
+    하지 않은 검증을 주장하는 경로였다. 지금은 출처(`provenance`)에서 파생하고,
+    출처를 모르면 ★등급을 찍지 않는다★.
+    """
     rep = run(*_tiny(), n_shift=2, n_markov=0, n_block=0, run_spa=False)
-    assert rep["evidence_grade"] == "E0"
+    assert rep["evidence_grade"] is None
+    assert rep["evidence_grade_reason"]
+    assert rep["provenance"] is None
+
+
+def test_the_evidence_grade_is_derived_from_the_panel_provenance():
+    """★손으로 적지 않는다★ — 합성이면 E0, 실 과거면 E3."""
+    from src.engine.research_panel import (
+        BASIS_ADJ,
+        PRICE_SOURCE_KRX,
+        REGIME_SOURCE_AXES,
+        SOURCE_SYNTHETIC,
+    )
+    syn = run(*_tiny(), n_shift=2, n_markov=0, n_block=0, run_spa=False,
+              provenance={"price_source": SOURCE_SYNTHETIC,
+                          "regime_source": SOURCE_SYNTHETIC})
+    assert syn["evidence_grade"] == "E0"
     real = run(*_tiny(), n_shift=2, n_markov=0, n_block=0, run_spa=False,
-               panel_is_synthetic=False)
+               provenance={"price_source": PRICE_SOURCE_KRX,
+                           "regime_source": REGIME_SOURCE_AXES,
+                           "price_basis": BASIS_ADJ})
     assert real["evidence_grade"] == "E3"
+
+
+def test_a_synthetic_panel_cannot_be_declared_real_by_the_caller():
+    """★짝 — M9 가 막은 바로 그 경로★
+
+    합성 출처를 실어 놓고 실데이터라고 주장할 방법이 없어야 한다. 예전에는
+    불리언 하나로 가능했다.
+    """
+    from src.engine.research_panel import SOURCE_SYNTHETIC
+    rep = run(*_tiny(), n_shift=2, n_markov=0, n_block=0, run_spa=False,
+              provenance={"price_source": SOURCE_SYNTHETIC,
+                          "regime_source": SOURCE_SYNTHETIC,
+                          "price_basis": "adj_close"})
+    assert rep["evidence_grade"] == "E0"
 
 
 def test_the_report_carries_the_revision_bias_and_why_the_null_still_works():
