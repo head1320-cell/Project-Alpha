@@ -192,6 +192,33 @@ def test_a_non_monotone_curve_is_declared_not_smoothed():
     assert m["crossings"] == 3
 
 
+def test_the_curve_key_can_be_something_other_than_scale():
+    """★같은 규칙을 개월 축에 그대로 쓴다★ (M7-개월)
+
+    "목표 검정력에 처음 도달하는 지점" 은 척도든 개월이든 같은 규칙이다. 새
+    규칙을 만들면 두 벌이 갈라지고, 갈라져도 타입 에러가 나지 않는다 —
+    `null_stats` 를 단일 출처로 만든 것과 같은 이유다.
+    """
+    curve = [{"months": 120, "rate": 0.4}, {"months": 180, "rate": 0.8},
+             {"months": 240, "rate": 1.0}]
+    m = mde_from_curve(curve, key="months")
+    assert m["mde"] == 180
+    assert m["bracket"] == [120, 180]
+    assert m["monotone"] is True
+
+
+def test_the_default_key_is_still_scale():
+    """★짝★ — 기존 호출부가 한 자도 바뀌지 않는다."""
+    curve = [{"scale": 1.0, "rate": 0.4}, {"scale": 2.0, "rate": 0.9}]
+    assert mde_from_curve(curve)["mde"] == pytest.approx(2.0)
+
+
+def test_a_missing_key_is_refused_rather_than_silently_zero():
+    """★없는 키를 0 으로 읽지 않는다★ — 정렬이 무너지면 MDE 가 거짓이 된다."""
+    with pytest.raises(KeyError):
+        mde_from_curve([{"scale": 1.0, "rate": 0.9}], key="months")
+
+
 def test_a_curve_with_no_resolved_rate_gives_no_mde():
     m = mde_from_curve([{"scale": 1.0, "rate": None}])
     assert m["mde"] is None and m["reason"]

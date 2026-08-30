@@ -28,6 +28,7 @@ from scripts.regime_control import (  # noqa: E402
     decide_verdict,
     power_curves,
     run,
+    summarize_months,
 )
 
 import src.engine.regime_surrogates as rs  # noqa: E402
@@ -219,6 +220,128 @@ def test_a_runner_that_raises_is_not_silently_counted_as_a_miss():
         raise RuntimeError("패널 실패")
     with pytest.raises(RuntimeError):
         power_curves(boom, scales=[1.0], seeds=[0])
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★M7-개월 — 표본 길이가 관문을 구제하는가★
+# ══════════════════════════════════════════════════════════════════════════
+def _blk(power: float, n_eff: float) -> dict:
+    """개월 하나의 검정력 블록 — 실제 백테스트를 돌리지 않고 규칙만 검사한다."""
+    return {"power": power, "mde": None, "n_eff": n_eff,
+            "reasons": {"mde": "탐색 범위에서 도달하지 못했습니다"},
+            "by_component": {
+                "conjunction": {"power": power, "mde": None,
+                                "reasons": {"mde": "미도달"}, "n_eff": n_eff},
+                "null_only": {"power": 1.0, "mde": None,
+                              "reasons": {"mde": "미도달"}, "n_eff": n_eff},
+                "spa_only": {"power": power, "mde": None,
+                             "reasons": {"mde": "미도달"}, "n_eff": n_eff}}}
+
+
+def test_the_shift_cap_reaches_the_gate():
+    """★이 측정의 중심 기제★ — 널을 개월과 무관하게 고정하는 것이 설계의 핵심인데,
+    `n_shift` 가 `run` 까지 흘러가지 않으면 조용히 전수로 돈다(변이 T1).
+
+    비용만 늘어나는 게 아니라 **개월 효과와 널 해상도 효과가 섞여** 측정이
+    답하려던 질문을 잃는다.
+    """
+    rep = run(*_tiny(), n_shift=3, n_markov=0, n_block=0, run_spa=False)
+    assert rep["by_cost"]["5.0"]["null"][rs.NULL_SHIFT]["n_draws"] == 3
+    full = run(*_tiny(), n_markov=0, n_block=0, run_spa=False)
+    assert full["by_cost"]["5.0"]["null"][rs.NULL_SHIFT]["n_draws"] > 3
+
+
+def test_gate_runner_propagates_the_shift_cap(monkeypatch):
+    """★짝★ — `run` 이 받는지와 `gate_runner` 가 넘기는지는 다른 진술이다."""
+    import scripts.regime_control as rc
+    seen = {}
+
+    def fake_run(*a, **kw):
+        seen.update(kw)
+        return {"verdict": {"null_outside": True, "spa_ok": False}}
+
+    monkeypatch.setattr(rc, "run", fake_run)
+    rc.gate_runner(months=12, base_seed=1, n_shift=7)(1.0, 0)
+    assert seen.get("n_shift") == 7, "gate_runner 가 널 상한을 삼켰다"
+
+
+def test_the_months_summary_finds_the_first_level_reaching_the_target():
+    """★이 측정의 답 그 자체★ — 어느 개월에서 관문이 심은 1× 를 잡기 시작하는가."""
+    out = summarize_months({120: _blk(0.4, 208.5), 180: _blk(0.8, 344.9),
+                            240: _blk(1.0, 419.3)})
+    m = out["minimum_detectable_months"]
+    assert m["mde"] == 180
+    assert m["bracket"] == [120, 180]
+    assert m["monotone"] is True
+
+
+def test_an_unreached_target_reports_no_minimum_duration_not_the_longest_tried():
+    """★§42 fallback→success★ 탐색 범위를 답이라고 적으면 거짓 주장이 된다."""
+    out = summarize_months({120: _blk(0.2, 208.5), 240: _blk(0.4, 419.3)})
+    m = out["minimum_detectable_months"]
+    assert m["mde"] is None
+    assert m["reason"] and "도달" in m["reason"]
+    assert m["searched_max"] == 240
+
+
+def test_the_summary_keeps_the_three_components_apart():
+    """★어느 성분이 개월에 반응하는지가 요점이다★ — A3 이 SPA 를 병목으로 지목했다."""
+    out = summarize_months({120: _blk(0.4, 208.5), 180: _blk(0.8, 344.9)})
+    by = out["by_months"]
+    assert by["180"]["null_only"]["power"] == pytest.approx(1.0)
+    assert by["180"]["spa_only"]["power"] == pytest.approx(0.8)
+    assert set(out["minimum_detectable_months_by_component"]) == {
+        "conjunction", "null_only", "spa_only"}
+    # 널 성분은 이미 첫 개월에서 목표를 넘으므로 탐색 하한이다.
+    assert out["minimum_detectable_months_by_component"]["null_only"][
+        "at_search_floor"] is True
+
+
+def test_each_month_level_says_what_a_failure_would_have_meant():
+    """★관문 결과를 지어내지 않는다★
+
+    이것은 검정력 측정이지 판정이 아니다. 실제로 돌지 않은 관문의 `null_outside`
+    ·`spa_ok` 를 지어내 `classify` 에 넣으면 **하지 않은 관측을 주장**하는 것이다
+    (처음에 그렇게 짰다가 `inconclusive` 가 나와서 알아챘다).
+
+    대신 묻는 것은 조건문이다: "이 표본 길이에서 관문이 **못 넘었다면** 그 실패가
+    무엇을 뜻했겠는가." 그 답은 오직 검정력에 달려 있고, 이름의 `if_failed` 가
+    실제 판정으로 오독되는 것을 막는다.
+    """
+    out = summarize_months({120: _blk(0.4, 208.5), 240: _blk(0.95, 419.3)})
+    assert out["by_months"]["120"]["if_failed_verdict"] == VERDICT_UNDERPOWERED
+    assert out["by_months"]["240"]["if_failed_verdict"] == VERDICT_EVIDENCE_OF_NO_EFFECT
+    assert "verdict" not in out["by_months"]["120"], "판정으로 오독될 이름을 쓴다"
+
+
+def test_each_month_level_keeps_its_own_effective_sample():
+    """★84개월 값을 재사용하지 않는다★ — 패널이 다르면 ρ̄ 도 n_eff 도 다르다."""
+    out = summarize_months({120: _blk(0.4, 208.5), 360: _blk(1.0, 589.7)})
+    got = [out["by_months"][k]["n_eff"] for k in ("120", "360")]
+    assert got == [pytest.approx(208.5), pytest.approx(589.7)]
+    assert got[0] != got[1]
+
+
+def test_the_summary_satisfies_the_power_field_requirement():
+    out = summarize_months({120: _blk(0.4, 208.5)})
+    assert require_power_fields(out["by_months"]["120"]) == []
+
+
+def test_an_unknown_field_without_a_reason_gets_one():
+    """★사유 없는 미상은 침묵 폴백이다★ 블록이 사유를 안 주면 요약이 채운다."""
+    bare = {"power": None, "mde": None, "n_eff": None, "by_component": {}}
+    row = summarize_months({120: bare})["by_months"]["120"]
+    assert require_power_fields(row) == []
+    assert all(row["reasons"].get(f, "").strip() for f in ("mde", "power", "n_eff"))
+
+
+def test_the_month_levels_are_ordered_numerically_not_by_insertion():
+    """★90 < 120 이지 "120" < "90" 이 아니다★ 정렬이 무너지면 bracket 이 거짓이 된다."""
+    out = summarize_months({240: _blk(1.0, 419.3), 90: _blk(0.2, 150.0),
+                            120: _blk(0.9, 208.5)})
+    assert out["months_tested"] == [90, 120, 240]
+    m = out["minimum_detectable_months"]
+    assert m["mde"] == 120 and m["bracket"] == [90, 120]
 
 
 def _power_block(power: float) -> dict:

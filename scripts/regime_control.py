@@ -58,7 +58,9 @@ from src.engine.research_panel import (  # noqa: E402
     inject_regime_drift,
     panel_for,
 )
+from src.engine.research_power import mde_from_curve  # noqa: E402
 from src.engine.research_verdict import (  # noqa: E402
+    DEFAULT_TARGET_POWER,
     REQUIRED_FIELDS,
     classify,
 )
@@ -465,7 +467,8 @@ def power_curves(runner, scales, seeds) -> dict[str, list[dict]]:
 def gate_runner(*, months: int, base_seed: int, model: str = "bl",
                 rebalance: str = "M", min_train: int = 252,
                 cost_levels=COST_LEVELS, spa_reps: int = 1000,
-                threshold_pct=THRESHOLD_PCT, base_panel=None):
+                threshold_pct=THRESHOLD_PCT, base_panel=None,
+                n_shift: int | None = None):
     """실제 관문을 한 번 돌려 두 성분을 낸다 — `power_curves` 에 주입한다.
 
     ★보조 널을 뺀다★ 마르코프·블록은 `decisive: false` 라 **판정에 들어가지
@@ -488,17 +491,110 @@ def gate_runner(*, months: int, base_seed: int, model: str = "bl",
         rep = run(names, R, dates, points, model=model, rebalance=rebalance,
                   min_train=min_train, cost_levels=cost_levels,
                   n_markov=0, n_block=0, seed=sd, threshold_pct=threshold_pct,
-                  spa_reps=spa_reps, provenance=p.provenance)
+                  spa_reps=spa_reps, provenance=p.provenance, n_shift=n_shift)
         v = rep["verdict"]
         return {"null_outside": v["null_outside"], "spa_ok": v["spa_ok"]}
     return runner
+
+
+# ── ★개월 축 — 표본 길이가 관문을 구제하는가★ (M7-개월) ────────────────────
+#: 사전등록된 개월 격자. 84 는 A3(`4279f1e`)에서 이미 쟀고, 전수=81 ≤ 83 이라
+#: 널 상한 83 과 **비트 동일**하므로 그 셀을 그대로 재사용한다.
+POWER_MONTHS = (120, 180, 240, 360)
+#: ★널을 개월과 무관하게 고정한다★ 전수면 개월이 늘 때 널 해상도(1/(n+1))도 함께
+#: 좋아져서 "개월 효과" 와 "널이 정밀해진 효과" 가 섞인다. 83 은 84개월의 전수(81)
+#: 를 담을 수 있는 가장 작은 관례값이라 그 셀이 A3 와 같아진다.
+POWER_N_SHIFT = 83
+
+
+def summarize_months(by_months: dict[int, dict], *,
+                     target_power: float = DEFAULT_TARGET_POWER) -> dict[str, Any]:
+    """개월별 검정력 블록 → **개월 축 요약**. ★순수 함수다★.
+
+    "목표 검정력에 처음 도달하는 지점" 규칙은 척도든 개월이든 같으므로
+    `research_power.mde_from_curve` 를 `key="months"` 로 그대로 쓴다 — 새 판정
+    규칙을 만들지 않는다.
+
+    ★성분을 갈라 둔다★ A3 이 ④ 관문의 병목을 SPA 로 특정했으므로, 개월이 **어느
+    성분을 움직이는지**가 이 측정의 요점이다. 셋을 뭉치면 그 답이 사라진다.
+
+    ★개월마다 `n_eff` 가 다르다★ 패널이 달라지면 자산간 상관도 달라진다 —
+    84개월 값을 재사용하면 유효 표본을 지어내는 것이다.
+    """
+    levels = sorted(int(m) for m in by_months)
+    out_months: dict[str, Any] = {}
+    for m in levels:
+        blk = by_months[m] or {}
+        comps = blk.get("by_component") or {}
+        row: dict[str, Any] = {
+            "months": m,
+            "mde": blk.get("mde"), "power": blk.get("power"),
+            "n_eff": blk.get("n_eff"),
+            "reasons": dict(blk.get("reasons") or {}),
+            **{c: {"power": (comps.get(c) or {}).get("power"),
+                   "mde": (comps.get(c) or {}).get("mde")}
+               for c in COMPONENTS},
+        }
+        # ★관문 결과를 지어내지 않는다★ 이것은 검정력 측정이지 판정이 아니다.
+        # 그래서 묻는 것은 "이 표본 길이에서 관문이 **못 넘었다면** 그 실패가
+        # 무엇을 뜻했겠는가" 다 — 그 답은 오직 검정력에만 달려 있다
+        # (`underpowered` 인가 `evidence_of_no_effect` 인가). 이름에 `if_failed`
+        # 를 박아 실제 판정으로 오독되지 않게 한다.
+        p = (comps.get("conjunction") or {}).get("power", blk.get("power"))
+        row["if_failed_verdict"] = classify(
+            null_outside=False, spa_ok=False, power=p,
+            target_power=target_power)["verdict"]
+        for f in REQUIRED_FIELDS:
+            row.setdefault(f, None)
+            if row[f] is None and not (row["reasons"].get(f) or "").strip():
+                row["reasons"][f] = ("이 개월 수준에서 산출하지 않았습니다")
+        out_months[str(m)] = row
+
+    def _curve(comp: str | None) -> list[dict]:
+        return [{"months": m,
+                 "rate": ((by_months[m].get("by_component") or {}).get(comp) or {}
+                          ).get("power") if comp else by_months[m].get("power")}
+                for m in levels]
+
+    return {
+        "target_power": float(target_power), "convention": True,
+        "months_tested": levels,
+        "minimum_detectable_months": mde_from_curve(
+            _curve("conjunction"), target_power=target_power, key="months"),
+        "minimum_detectable_months_by_component": {
+            c: mde_from_curve(_curve(c), target_power=target_power, key="months")
+            for c in COMPONENTS},
+        "by_months": out_months,
+    }
+
+
+def measure_power_by_months(*, months_list=POWER_MONTHS, base_seed: int,
+                            scales=(1.0,), seeds=POWER_SEEDS,
+                            n_shift: int | None = POWER_N_SHIFT,
+                            **kw) -> dict[str, Any]:
+    """개월마다 `measure_power` 를 돌리고 개월 축 요약을 얹는다 (M7-개월)."""
+    by: dict[int, dict] = {}
+    for m in sorted(int(x) for x in months_list):
+        by[m] = measure_power(months=m, base_seed=base_seed, scales=scales,
+                              seeds=seeds, n_shift=n_shift, **kw)
+        logger.info("개월 %d 완료: 검정력 %s", m, by[m].get("power"))
+    out = summarize_months(by)
+    out["blocks"] = {str(m): b for m, b in by.items()}
+    out["preregistered"] = {
+        "scales": [float(s) for s in scales], "seeds": list(seeds),
+        "months": sorted(int(x) for x in months_list), "n_shift": n_shift,
+        "note": ("널을 개월과 무관하게 고정한다 — 전수면 '개월 효과' 와 '널이 "
+                 "정밀해진 효과' 가 섞인다. 84개월은 전수=81 ≤ 83 이라 A3 와 "
+                 "비트 동일이다."),
+    }
+    return out
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────
 def measure_power(*, months: int, base_seed: int, scales=POWER_SCALES,
                   seeds=POWER_SEEDS, spa_reps: int = 1000,
                   threshold_pct=THRESHOLD_PCT, base_panel=None,
-                  **kw) -> dict[str, Any]:
+                  n_shift: int | None = None, **kw) -> dict[str, Any]:
     """사전등록된 격자로 세 성분의 검정력을 재고 `power_report` 블록을 만든다.
 
     `n_eff` 는 **패널에서 측정한** 자산간 상관으로 낸다 — 순진한 자산×개월이
@@ -507,7 +603,8 @@ def measure_power(*, months: int, base_seed: int, scales=POWER_SCALES,
     from scripts.t3_transmission import build_panel
 
     runner = gate_runner(months=months, base_seed=base_seed, base_panel=base_panel,
-                         spa_reps=spa_reps, threshold_pct=threshold_pct, **kw)
+                         spa_reps=spa_reps, threshold_pct=threshold_pct,
+                         n_shift=n_shift, **kw)
     curves = power_curves(runner, scales, seeds)
 
     if base_panel is None:
@@ -549,6 +646,8 @@ def main() -> int:
     ap.add_argument("--report", default=None)
     ap.add_argument("--power", action="store_true",
                     help="사전등록된 격자로 세 성분의 검정력을 잰다 (A3, 오래 걸린다)")
+    ap.add_argument("--power-months", default=None,
+                    help="개월 축 검정력 (M7). 예: 120,180,240,360 (오래 걸린다)")
     ap.add_argument("--real", action="store_true",
                     help="실 패널로 돌린다 (M9). 실데이터가 없으면 ★거부★한다")
     ap.add_argument("--codes", default="", help="--real 일 때 쓸 종목코드(쉼표 구분)")
@@ -570,6 +669,13 @@ def main() -> int:
               n_markov=args.n_markov, n_block=args.n_block, seed=args.seed,
               run_spa=not args.no_spa, spa_reps=args.spa_reps,
               provenance=base.provenance)
+
+    if args.power_months:
+        months_list = [int(x) for x in args.power_months.split(",") if x.strip()]
+        rep["power_by_months"] = measure_power_by_months(
+            months_list=months_list, base_seed=20260825, model=args.model,
+            rebalance=args.rebalance, min_train=args.min_train,
+            spa_reps=args.spa_reps)
 
     if args.power:
         block = measure_power(months=args.months, base_seed=20260825,
@@ -616,6 +722,25 @@ def main() -> int:
     print(f"★판정★ 통과={v['passed']} · 널밖={v['null_outside']} · SPA={v['spa_ok']}")
     for w in v["why"]:
         print("   ·", w)
+
+    pbm = rep.get("power_by_months")
+    if pbm:
+        print(f"\n★개월 축★ 목표 검정력 {pbm['target_power']} (관례) · "
+              f"널 {pbm['preregistered']['n_shift']}개 고정")
+        print(f"{'개월':>5} {'conj':>6} {'null':>6} {'spa':>6} {'n_eff':>8}  실패했다면")
+        for k in sorted(pbm["by_months"], key=int):
+            r = pbm["by_months"][k]
+            print(f"{k:>5} {str(r['conjunction']['power']):>6} "
+                  f"{str(r['null_only']['power']):>6} "
+                  f"{str(r['spa_only']['power']):>6} "
+                  f"{str(r['n_eff']):>8}  {r['if_failed_verdict']}")
+        m = pbm["minimum_detectable_months"]
+        print(f"  ★최소 검출 기간★ = {m['mde']} 개월 · bracket={m['bracket']} "
+              f"· 단조={m['monotone']}")
+        if m["mde"] is None:
+            print(f"  사유: {m['reason']}")
+        for c, mm in pbm["minimum_detectable_months_by_component"].items():
+            print(f"    {c:>12}: {mm['mde']} (bracket={mm['bracket']})")
     return 0
 
 

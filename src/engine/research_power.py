@@ -133,8 +133,14 @@ def power_curve(trial: Callable[[float, int], bool | None],
 
 
 def mde_from_curve(curve: list[dict[str, Any]], *,
-                   target_power: float = DEFAULT_TARGET_POWER) -> dict[str, Any]:
-    """목표 검정력에 처음 도달하는 척도 = MDE.
+                   target_power: float = DEFAULT_TARGET_POWER,
+                   key: str = "scale") -> dict[str, Any]:
+    """목표 검정력에 처음 도달하는 지점 = MDE.
+
+    ★`key` 로 축을 바꾼다★ "목표 검정력에 처음 도달하는 지점" 은 척도든 개월이든
+    **같은 규칙**이다. 개월 축에 새 규칙을 쓰면 두 벌이 갈라지고, 갈라져도 타입
+    에러가 나지 않는다 — `null_stats` 를 단일 출처로 만든 것과 같은 이유다.
+    기본값이 `"scale"` 이라 기존 호출부는 한 자도 바뀌지 않는다.
 
     ★도달하지 못하면 "MDE = 탐색 최대 척도" 가 아니라 미상이다★ 탐색 범위를
     MDE 라고 적으면 "이 정도면 찾을 수 있다" 는 하지 않은 주장이 된다
@@ -151,7 +157,8 @@ def mde_from_curve(curve: list[dict[str, Any]], *,
     이미 도달했으면 `at_search_floor` — 참 MDE 는 더 작을 수 있다는 뜻이다.
     """
     tp = float(target_power)
-    pts = [(float(c["scale"]), c.get("rate")) for c in curve]
+    # ★없는 키를 0 으로 읽지 않는다★ 정렬이 무너지면 MDE 가 조용히 거짓이 된다.
+    pts = [(c[key], c.get("rate")) for c in curve]
     pts.sort(key=lambda t: t[0])
     known = [(s, float(r)) for s, r in pts if r is not None]
     base: dict[str, Any] = {
