@@ -10993,3 +10993,30 @@ G5(결정적 지평을 동시대로) · G7(시행이 항상 통과) · G10(널�
 신규 27개(하네스) + 16개(코어, `cd077e0`). 변이 **S1~S6 · G1~G10 전부 사망** —
 ★S1(§42 future observation — 선행에서 라벨을 안 자름) · G1(단측 → 양측) ·
 G2(연언 → 선언) · G7(§42 probabilities hard-coded)★ 포함.
+
+---
+
+## A5 — `ResearchRun` 검정력 일급 필드 (2026-08-30)
+
+감사 §4 의 포트폴리오 부채: `mde`·`power`·`seed`·비용가정이 **일급 필드가 아니라**
+JSON 안에 묻혀 있었다. 그러면 "검정력 0.8 을 넘긴 런만 보여줘" 같은 질문에
+**테이블이 답할 수 없고** 모든 행을 읽어 파싱해야 한다.
+
+- `research_runs` 에 `mde` · `power` · `n_eff` · `target_power` · `seed` ·
+  `cost_bps` 를 **가산 마이그레이션**으로 붙였다(`schema_add_columns.add_columns`
+  재사용 — `case_id` 가 세운 패턴).
+- `record_run(..., power_block=, seed=, cost_bps=)` — `power_block` 은
+  `research_power.power_report` 산출을 그대로 받는다.
+- ★열은 요약이고 원본은 남는다★ 곡선·`bracket`·사유는 열로 만들 수 없으므로
+  `outputs.power_block` 에 그대로 둔다. 기존 `outputs` 를 **덮지 않는다**.
+- ★안 잰 검정력은 `None` 이다★ 0 으로 채우면 "검정력이 0 이었다" 는 하지 않은
+  진술이 된다. 미상 ≠ 0 은 이 저장소가 반복해서 지키는 규율이다.
+- ★못 붙으면 그 열 없이 동작한다★ `add_columns` 는 붙였다고 믿지 않고 SELECT 로
+  확인한다. 붙은 척하면 조회가 통째로 깨져 수정 전보다 나빠진다.
+- `_col_list()` 가 이름 목록에서 파생되므로 위치 인덱스를 손으로 세지 않는다(M1-S).
+
+### 검증
+
+신규 9개. 변이 **R1~R7 전부 사망** — ★R1(안 잰 검정력을 0 으로) ·
+R2(못 붙었는데 붙은 척) · R3(열 목록 손계산으로 인덱스 밀림) ·
+R5(원본 블록이 기존 outputs 를 덮음)★ 포함. 기존 research_runs 테스트 23개 통과.

@@ -52,6 +52,7 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine import null_stats as ns  # noqa: E402
 from src.engine import regime_surrogates as rs  # noqa: E402
+from src.engine import research_power as rp  # noqa: E402
 from src.engine.research_verdict import (  # noqa: E402
     REQUIRED_FIELDS,
     classify,
@@ -411,11 +412,106 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
     }
 
 
+# ── ★검정력 — 세 성분을 한 번의 격자에서★ (A3) ────────────────────────────
+#: 사전등록된 격자. 결과를 보고 바꾸지 않는다.
+POWER_SCALES = (1.0, 2.0, 3.0, 4.0)
+POWER_SEEDS = (0, 1, 2, 3, 4)
+COMPONENTS = ("conjunction", "null_only", "spa_only")
+
+
+def power_curves(runner, scales, seeds) -> dict[str, list[dict]]:
+    """척도×시드 격자를 **한 번** 돌려 세 성분의 검정력 곡선을 만든다.
+
+    `runner(scale, seed)` 는 `{"null_outside": bool|None, "spa_ok": bool|None}`
+    을 낸다. 세 곡선을 따로 돌리면 3배 비용인데다 시드가 갈라져 **같은 실행의
+    성분 비교**가 아니게 된다 — 어느 성분이 병목인지가 이 측정의 목적이므로
+    그것이 깨지면 답을 못 얻는다.
+
+    ★미상 ≠ 실패★ 어느 성분이 `None` 이면 연언도 `None` 이다. 못 돌린 것을
+    "못 찾았다" 로 세면 검정력이 실제보다 낮아 보인다.
+
+    ★예외를 삼키지 않는다★ 시행이 터지면 전파한다 — 하네스 고장이 음성 결과로
+    위장되면 안 된다.
+    """
+    seed_list = list(seeds)
+    out: dict[str, list[dict]] = {c: [] for c in COMPONENTS}
+    for sc in sorted(float(x) for x in scales):
+        got = [runner(sc, sd) for sd in seed_list]
+        n = [r.get("null_outside") for r in got]
+        p = [r.get("spa_ok") for r in got]
+        conj = [None if (a is None or b is None) else bool(a and b)
+                for a, b in zip(n, p, strict=True)]
+        for name, outcomes in (("conjunction", conj), ("null_only", n),
+                               ("spa_only", p)):
+            out[name].append({"scale": sc, "seeds": len(seed_list),
+                              **rp.detection_rate(outcomes)})
+    return out
+
+
+def gate_runner(*, months: int, base_seed: int, model: str = "bl",
+                rebalance: str = "M", min_train: int = 252,
+                cost_levels=COST_LEVELS, spa_reps: int = 1000,
+                threshold_pct=THRESHOLD_PCT):
+    """실제 관문을 한 번 돌려 두 성분을 낸다 — `power_curves` 에 주입한다.
+
+    ★보조 널을 뺀다★ 마르코프·블록은 `decisive: false` 라 **판정에 들어가지
+    않는다**. 검정력 시행에서 빼면 564 → 264 백테스트로 줄어 1시행 ≈ 172초다.
+    판정에 쓰이는 순환이동 전수와 SPA 는 그대로 둔다.
+    """
+    from scripts.t3_transmission import build_panel
+
+    def runner(scale: float, seed: int) -> dict:
+        sd = int(base_seed) + int(seed)
+        names, R, dates, points, _b = build_panel(months=months, seed=sd,
+                                                  scale=float(scale))
+        rep = run(names, R, dates, points, model=model, rebalance=rebalance,
+                  min_train=min_train, cost_levels=cost_levels,
+                  n_markov=0, n_block=0, seed=sd, threshold_pct=threshold_pct,
+                  spa_reps=spa_reps)
+        v = rep["verdict"]
+        return {"null_outside": v["null_outside"], "spa_ok": v["spa_ok"]}
+    return runner
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────
 def _panel(months: int):
     from scripts.t3_transmission import build_panel
     names, R, dates, points, _beta = build_panel(months=months)
     return names, R, dates, points
+
+
+def measure_power(*, months: int, base_seed: int, scales=POWER_SCALES,
+                  seeds=POWER_SEEDS, spa_reps: int = 1000,
+                  threshold_pct=THRESHOLD_PCT, **kw) -> dict[str, Any]:
+    """사전등록된 격자로 세 성분의 검정력을 재고 `power_report` 블록을 만든다.
+
+    `n_eff` 는 **패널에서 측정한** 자산간 상관으로 낸다 — 순진한 자산×개월이
+    독립 표본이 아니라는 사실을 수치로 만든다.
+    """
+    from scripts.t3_transmission import build_panel
+
+    runner = gate_runner(months=months, base_seed=base_seed,
+                         spa_reps=spa_reps, threshold_pct=threshold_pct, **kw)
+    curves = power_curves(runner, scales, seeds)
+
+    names, R, dates, points, _b = build_panel(months=months, seed=base_seed)
+    monthly = _monthly(R, dates)
+    rho = rp.mean_pairwise_correlation(monthly)
+
+    blocks = {c: rp.power_report(curve=curves[c], observed_scale=1.0,
+                                 n_obs=len(points), n_assets=len(names),
+                                 rho_bar=rho)
+              for c in COMPONENTS}
+    out = dict(blocks["conjunction"])
+    out["by_component"] = blocks
+    out["decisive_component"] = "conjunction"
+    return out
+
+
+def _monthly(R, dates):
+    """월 합계 — `regime_signal.monthly_matrix` 를 재사용한다(단일 출처)."""
+    from src.engine.regime_signal import monthly_matrix
+    return monthly_matrix(R, dates)
 
 
 def main() -> int:
@@ -431,6 +527,8 @@ def main() -> int:
     ap.add_argument("--no-spa", action="store_true")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--report", default=None)
+    ap.add_argument("--power", action="store_true",
+                    help="사전등록된 격자로 세 성분의 검정력을 잰다 (A3, 오래 걸린다)")
     args = ap.parse_args()
 
     names, R, dates, points = _panel(args.months)
@@ -438,6 +536,16 @@ def main() -> int:
               min_train=args.min_train, n_shift=args.n_shift,
               n_markov=args.n_markov, n_block=args.n_block, seed=args.seed,
               run_spa=not args.no_spa, spa_reps=args.spa_reps)
+
+    if args.power:
+        block = measure_power(months=args.months, base_seed=20260825,
+                              model=args.model, rebalance=args.rebalance,
+                              min_train=args.min_train, spa_reps=args.spa_reps)
+        rep["power"] = block
+        rep["verdict"] = decide_verdict(
+            {c: {"percentile": b["percentile"][PRIMARY], "side": b["side"]}
+             for c, b in rep["by_cost"].items()},
+            rep["spa"]["p_max"], power_block=block)
 
     if args.report:
         with open(args.report, "w", encoding="utf-8") as f:

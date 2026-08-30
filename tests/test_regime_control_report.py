@@ -26,6 +26,7 @@ from scripts.regime_control import (  # noqa: E402
     SPA_ALPHA,
     arm_regime,
     decide_verdict,
+    power_curves,
     run,
 )
 
@@ -166,6 +167,58 @@ def test_a_supplied_power_block_changes_the_label_not_the_pass_flag():
     assert weak["power"] == pytest.approx(0.40)
     assert weak["n_eff"] == pytest.approx(129.23, abs=0.01)
     assert require_power_fields(weak) == [] and require_power_fields(strong) == []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★A3 — 세 성분의 검정력을 한 번의 격자에서★
+# ══════════════════════════════════════════════════════════════════════════
+def _runner(table):
+    """주입된 시행 — 실제 백테스트를 돌리지 않고 규칙만 검사한다."""
+    return lambda scale, seed: table[(scale, seed)]
+
+
+def test_the_three_curves_come_from_one_sweep():
+    """★같은 실행에서 공짜로 나온다★ — 세 번 돌리면 3배 비용이고 시드도 갈라진다."""
+    calls = []
+
+    def runner(scale, seed):
+        calls.append((scale, seed))
+        return {"null_outside": scale >= 1.0, "spa_ok": scale >= 3.0}
+
+    out = power_curves(runner, scales=[1.0, 2.0, 3.0], seeds=[0, 1])
+    assert len(calls) == 6                       # 3척도 × 2시드, 한 번씩
+    assert set(out) == {"conjunction", "null_only", "spa_only"}
+    assert [c["rate"] for c in out["null_only"]] == [1.0, 1.0, 1.0]
+    assert [c["rate"] for c in out["spa_only"]] == [0.0, 0.0, 1.0]
+    assert [c["rate"] for c in out["conjunction"]] == [0.0, 0.0, 1.0]
+
+
+def test_the_conjunction_is_the_and_of_the_two_components():
+    """★짝★ — 연언을 선언으로 바꾸는 구현을 배제한다."""
+    tbl = {(1.0, 0): {"null_outside": True, "spa_ok": False},
+           (1.0, 1): {"null_outside": False, "spa_ok": True}}
+    out = power_curves(_runner(tbl), scales=[1.0], seeds=[0, 1])
+    assert out["null_only"][0]["rate"] == pytest.approx(0.5)
+    assert out["spa_only"][0]["rate"] == pytest.approx(0.5)
+    assert out["conjunction"][0]["rate"] == pytest.approx(0.0)
+
+
+def test_an_unknown_component_makes_the_conjunction_unknown_not_false():
+    """★미상 ≠ 실패★ 관문을 못 돌린 것을 "못 찾았다" 로 세면 검정력이 낮아 보인다."""
+    tbl = {(1.0, 0): {"null_outside": True, "spa_ok": None}}
+    out = power_curves(_runner(tbl), scales=[1.0], seeds=[0])
+    assert out["conjunction"][0]["n_unknown"] == 1
+    assert out["conjunction"][0]["rate"] is None
+    assert out["spa_only"][0]["rate"] is None
+    assert out["null_only"][0]["rate"] == pytest.approx(1.0)
+
+
+def test_a_runner_that_raises_is_not_silently_counted_as_a_miss():
+    """★침묵 폴백 금지★ 하네스 고장이 음성 결과로 위장되면 안 된다."""
+    def boom(scale, seed):
+        raise RuntimeError("패널 실패")
+    with pytest.raises(RuntimeError):
+        power_curves(boom, scales=[1.0], seeds=[0])
 
 
 def _power_block(power: float) -> dict:
