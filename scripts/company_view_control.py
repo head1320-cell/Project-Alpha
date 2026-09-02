@@ -101,14 +101,16 @@ def baseline_block(w_off: np.ndarray) -> dict:
 def weight_stats(w: np.ndarray, w_off: np.ndarray, S: np.ndarray,
                  views: list[dict] | None) -> dict:
     """가중치 기하 — 팔이 포트폴리오를 **어디로** 옮겼는가."""
-    from src.engine.allocation_studio import effective_number_of_bets
+    from src.engine.allocation_studio import enb_report
 
     d = np.asarray(w, float) - np.asarray(w_off, float)
+    _enb = enb_report(np.asarray(w, float), S)["enb"]
     return {
         "w_l1_vs_off": round(float(np.abs(d).sum()), 6),
         "max_weight": round(float(np.max(w)), 6),
         "n_nonzero": int((np.asarray(w, float) > 1e-6).sum()),
-        "enb": round(float(effective_number_of_bets(np.asarray(w, float), S)), 6),
+        # ★미상이면 숫자를 만들지 않는다 (P4-b)★
+        "enb": (None if _enb is None else round(float(_enb), 6)),
         # ★전달 식별성★ 뷰의 부호 있는 크기가 실제로 그 자산의 비중을 움직였는가.
         "corr_q_dw": _corr(cvc.signed_q(views), [float(x) for x in d]),
     }

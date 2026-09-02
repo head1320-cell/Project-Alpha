@@ -111,26 +111,114 @@ def bl_posterior(pi: np.ndarray, sigma: np.ndarray, P: np.ndarray,
 
 
 # ── 모델 스위치 ───────────────────────────────────────────────────────────────
-def effective_number_of_bets(w: np.ndarray, S: np.ndarray) -> float:
-    """Meucci ENB — 상관을 고려한 실질 분산도. Σ의 고유분해로 주성분 포트폴리오의
-    분산 기여 분포 엔트로피 = exp(-Σ pᵢ ln pᵢ). HHI/Neff와 달리 상관을 반영한다.
-    무상관·등리스크면 ENB=N, 완전집중이면 →1. (1 ≤ ENB ≤ N)"""
+def _portfolio_variance(w: np.ndarray, S: np.ndarray) -> float:
+    """wᵀΣw — ★미세 음수를 클램프한다 (CLAUDE.md §6)★
+
+    PSD 행렬이어도 부동소수 상쇄로 `wᵀΣw` 가 −1e-18 처럼 나올 수 있고, 그대로
+    `sqrt` 하면 NaN 이 되어 조용히 퍼진다. 음수는 0 으로 접되 **0 을 측정값으로
+    쓰지는 않는다** — 호출부가 미상으로 처리한다.
+    """
+    var = float(np.asarray(w, dtype=float) @ np.asarray(S, dtype=float)
+                @ np.asarray(w, dtype=float))
+    return var if (np.isfinite(var) and var > 0) else 0.0
+
+
+def _variance_floor(S: np.ndarray) -> float:
+    """의미 있는 분산의 하한 — ★데이터 규모에 상대적으로★ 잡는다.
+
+    절대 상수는 단위가 바뀌면(일간 vs 연율, % vs 소수) 무의미해진다.
+    """
+    S = np.asarray(S, dtype=float)
+    if S.size == 0:
+        return 1e-24
+    scale = float(np.max(np.abs(np.diag(S))))
+    return max(1e-24, scale * 1e-18)
+
+
+def risk_contributions(w, S) -> dict:
+    """오일러 리스크 분해 — ★누가 이 포트폴리오의 위험을 지고 있는가★ (P4-b).
+
+        marginal[i]     = (Σw)ᵢ / σ_p        = ∂σ_p/∂wᵢ
+        contribution[i] = wᵢ · marginal[i]
+        pct[i]          = contribution[i] / σ_p
+
+    ★Σ contribution = σ_p 가 **정확히** 성립한다★ σ_p 가 w 에 대해 1차 동차
+    이므로(오일러 정리) 이 항등식이 이 함수의 계약이다 — 공식이 조금이라도
+    어긋나면 깨진다.
+
+    ★σ_p 를 못 구하면 기여는 0 이 아니라 미상이다★ 예전
+    `kis_portfolio_analyzer` 는 `σ_p <= 0` 에서 `pd.Series(0.0)` 을 냈다 —
+    "아무도 위험을 지지 않는다" 는 관측된 적 없는 주장이다.
+    """
     w = np.asarray(w, dtype=float)
-    n = w.size
+    S = np.asarray(S, dtype=float)
+    unknown = {"portfolio_volatility": None, "marginal": None,
+               "contribution": None, "pct": None, "hhi": None, "max_pct": None}
+    var = _portfolio_variance(w, S)
+    if var <= _variance_floor(S):
+        return {**unknown,
+                "reason": ("포트폴리오 분산이 산출되지 않습니다(wᵀΣw ≤ 0) — "
+                           "특이 공분산이거나 상쇄 포지션입니다. "
+                           "기여는 0 이 아니라 ★미상★ 입니다")}
+    sigma = float(np.sqrt(var))
+    marginal = (S @ w) / sigma
+    contribution = w * marginal
+    pct = contribution / sigma
+    return {
+        "portfolio_volatility": sigma,
+        "marginal": marginal,
+        "contribution": contribution,
+        "pct": pct,
+        "hhi": float(np.sum(pct ** 2)),
+        "max_pct": float(np.max(pct)),
+        "reason": None,
+    }
+
+
+def enb_report(w, S) -> dict:
+    """Meucci ENB + ★산출 못 했으면 사유★ (P4-b).
+
+    Σ의 고유분해로 주성분 포트폴리오의 분산 기여 분포 엔트로피
+    = exp(-Σ pᵢ ln pᵢ). HHI/Neff와 달리 상관을 반영한다. 무상관·등리스크면
+    ENB=N, 완전집중이면 →1. (1 ≤ ENB ≤ N)
+
+    ★예전에는 실패하면 `float(n)` 을 돌려줬다★ — 계산이 안 됐는데 **완전히
+    분산됐다**고 주장하는 값이고, 오류 방향으로는 가장 위험한 쪽이다(집중
+    위험을 못 보게 만든다). 이제 미상은 `None` + 사유다.
+    """
+    w = np.asarray(w, dtype=float)
+    S = np.asarray(S, dtype=float)
+    # ★고유값 바닥이 스스로 답을 지어내지 못하게 막는다★ 아래 `maximum(vals,
+    # 1e-16)` 은 특이 행렬에서도 **양수** 기여를 만들어 내므로, 영행렬을 주면
+    # "완벽히 분산됨(ENB=N)" 이 나온다 — `float(n)` 폴백과 똑같은 거짓말이
+    # 다른 문으로 들어오는 것이다. ENB 는 **분산의 분해**이므로 분해할 분산이
+    # 없으면 답이 없다.
     try:
-        vals, vecs = np.linalg.eigh(S)          # Σ = V Λ Vᵀ (대칭)
+        if _portfolio_variance(w, S) <= _variance_floor(S):
+            return {"enb": None,
+                    "reason": ("포트폴리오 분산이 산출되지 않아 ENB 를 정의할 수 "
+                               "없습니다 — 분산이 최대라는 뜻이 아니라 미상입니다")}
+        vals, vecs = np.linalg.eigh(S)
         vals = np.maximum(vals, 1e-16)
         expo = vecs.T @ w                        # 주성분 노출
         contrib = (expo ** 2) * vals            # 주성분별 분산 기여
         tot = contrib.sum()
         if not np.isfinite(tot) or tot <= 0:
-            return float(n)
+            return {"enb": None,
+                    "reason": ("주성분 분산 기여의 합이 0 이하라 ENB 를 정의할 수 "
+                               "없습니다 — 분산이 최대라는 뜻이 아니라 미상입니다")}
         p = contrib / tot
         p = p[p > 1e-12]
         ent = -float(np.sum(p * np.log(p)))
-        return float(np.exp(ent))
-    except Exception:
-        return float(n)
+        return {"enb": float(np.exp(ent)), "reason": None}
+    except Exception as e:                       # noqa: BLE001
+        return {"enb": None,
+                "reason": f"ENB 산출에 실패했습니다 — {type(e).__name__}: {e}"}
+
+
+def effective_number_of_bets(w: np.ndarray, S: np.ndarray) -> float | None:
+    """`enb_report` 의 얇은 위임 — ★미상이면 `None`★ (예전에는 `N` 이었다)."""
+    return enb_report(w, S)["enb"]
 
 
 def _inverse_vol_w(R: np.ndarray) -> np.ndarray:

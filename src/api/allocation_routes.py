@@ -418,13 +418,20 @@ def _w_dict(names: list[str], w: np.ndarray) -> dict[str, float]:
 
 def _enb_report(w, S, names: list[str]) -> dict:
     """실질 분산도 — Meucci ENB(상관 반영) vs Neff(비중 집중만). Explain 패널용."""
-    from src.engine.allocation_studio import effective_number_of_bets
+    from src.engine.allocation_studio import enb_report
     wa = np.asarray(w, dtype=float)
     n = len(names)
     hhi = float(np.sum(wa ** 2))
-    neff = (1.0 / hhi) if hhi > 0 else float(n)
-    enb = effective_number_of_bets(wa, np.asarray(S, dtype=float))
-    return {"enb": round(enb, 2), "neff": round(neff, 2), "n_assets": n,
+    # ★비중 집중은 Σ 없이도 잴 수 있다★ hhi 가 0 이면 비중이 전부 0 이라는 뜻이라
+    # "완전 분산" 이 아니라 미상이다.
+    neff = (1.0 / hhi) if hhi > 0 else None
+    rep = enb_report(wa, np.asarray(S, dtype=float))
+    return {"enb": (None if rep["enb"] is None else round(rep["enb"], 2)),
+            "enb_reason": rep["reason"],
+            "neff": (None if neff is None else round(neff, 2)),
+            "neff_reason": (None if neff is not None
+                            else "비중이 전부 0 이라 유효 종목수를 정의할 수 없습니다"),
+            "n_assets": n,
             "note": "ENB는 상관을 반영한 실질 분산 베팅 수(≤ Neff). Neff는 비중 집중만 반영."}
 
 

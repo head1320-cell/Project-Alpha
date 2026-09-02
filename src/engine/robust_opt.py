@@ -143,7 +143,7 @@ def robust_weights(names: list[str], R: np.ndarray, *,
     if not est["available"]:
         return {"available": False, "reason": est["reason"]}
 
-    from src.engine.allocation_studio import _cov, effective_number_of_bets
+    from src.engine.allocation_studio import _cov, enb_report
     S = (np.asarray(s_override, dtype=float) if s_override is not None
          else _cov(R) * TRADING_DAYS)
     if S.shape != (n, n) or not np.all(np.isfinite(S)):
@@ -163,6 +163,8 @@ def robust_weights(names: list[str], R: np.ndarray, *,
     # ★κ 가 지배하면 μ 가 무시된 것이다★ 그 사실을 말한다 — 숫자만 보면 "최적화했다"
     # 로 읽히지만 실제로는 "기대수익을 쓰지 않기로 했다" 이다.
     collapsed = bool(abs(hhi - equal_hhi) < 0.02 and kappa > 0)
+    _enb_rep = enb_report(w, S)
+    _enb = _enb_rep["enb"]
 
     return {
         "available": True, "reason": None,
@@ -183,7 +185,10 @@ def robust_weights(names: list[str], R: np.ndarray, *,
             "hhi": round(hhi, 4),
             "hhi_naive": round(float((w0 ** 2).sum()), 4) if w0 is not None else None,
             "hhi_equal_weight": round(equal_hhi, 4),
-            "enb": round(float(effective_number_of_bets(w, S)), 4),
+            # ★미상이면 숫자를 만들지 않는다 (P4-b)★ 예전 ENB 는 실패해도
+            # `N` 을 냈다 — 집중 위험을 못 보게 만드는 방향의 거짓말이다.
+            "enb": (None if _enb is None else round(float(_enb), 4)),
+            "enb_reason": _enb_rep["reason"],
         },
         "collapsed_to_equal_weight": collapsed,
         "note": ("불확실성 집합은 타원체입니다 — 집중된 배분일수록 최악조건 페널티가 "
