@@ -80,23 +80,51 @@ def test_the_regime_breakdown_already_reports_unknown_systemic_risk_as_none():
     assert AttributionDecomposer._regime_breakdown(df)[0]["avg_systemic_risk"] is None
 
 
-# ── ★결함★ 현행 동작 — 다음 커밋에서 뒤집힌다 ────────────────────────────
-def test_a_missing_macro_row_is_currently_counted_as_zero():
-    """★결함★ 미상이 0 으로 둔갑한다 — "매크로 기여 미상" 이 "기여 0" 이 된다."""
+# ── ★미상 ≠ 0★ 고쳐진 계약 ────────────────────────────────────────────────
+def test_a_missing_macro_row_is_not_counted_as_zero():
+    """합은 **알려진 행만의 합**이고, 몇 행을 봤는지가 함께 실린다."""
     cum = AttributionDecomposer._cumulative_attribution(daily([
         {"macro_effect": 0.02, "portfolio_return": 0.02, "cumulative_return": 4.0},
         {"macro_effect": np.nan, "portfolio_return": 0.02},
     ]))
-    assert cum["macro_effect_pct"] == 2.0          # 관측된 한 행만의 합인데
-    assert "macro_effect_coverage" not in cum      # 몇 행을 봤는지는 안 적힌다
+    assert cum["macro_effect_pct"] == 2.0
+    cov = cum["coverage"]["macro_effect"]
+    assert cov["n_known"] == 1 and cov["n_total"] == 2
+    assert cov["coverage"] == 0.5
 
 
-def test_the_residual_currently_absorbs_the_missing_amount():
-    """★가장 깊은 결함★ 잔차가 미상을 세탁한다.
+def test_a_fully_observed_effect_reports_full_coverage():
+    """★짝★ 항상 부분 커버리지를 주장하는 구현을 배제한다."""
+    cum = AttributionDecomposer._cumulative_attribution(daily([
+        {"macro_effect": 0.02, "portfolio_return": 0.02, "cumulative_return": 4.0},
+    ]))
+    assert cum["coverage"]["macro_effect"]["coverage"] == 1.0
+    assert cum["coverage"]["macro_effect"]["reason"] is None
 
-    `interaction = actual − sum_factors` 이므로 NaN→0 으로 줄어든 만큼을 잔차가
-    **정확히** 흡수한다. 워터폴은 여전히 완벽하게 닫힌다 — ★리포트는 틀렸을 때
-    오히려 자기일관적이다.★ 그래서 값만 `None` 으로 바꾸면 안 고쳐진다.
+
+def test_an_effect_observed_nowhere_is_unknown_not_zero():
+    """★미상 ≠ 0★ 한 행도 못 본 효과는 0 이 아니라 미상이다."""
+    cum = AttributionDecomposer._cumulative_attribution(daily([
+        {"macro_effect": np.nan, "portfolio_return": 0.02, "cumulative_return": 4.0},
+    ]))
+    assert cum["macro_effect_pct"] is None
+    assert cum["coverage"]["macro_effect"]["reason"].strip()
+
+
+def test_an_effect_that_really_is_zero_stays_zero():
+    """★짝★ 진짜 0 은 미상이 아니다. 둘을 뭉치면 반대 방향으로 거짓말한다."""
+    cum = AttributionDecomposer._cumulative_attribution(daily([
+        {"macro_effect": 0.0, "portfolio_return": 0.02, "cumulative_return": 4.0},
+    ]))
+    assert cum["macro_effect_pct"] == 0.0
+    assert cum["coverage"]["macro_effect"]["coverage"] == 1.0
+
+
+def test_the_residual_no_longer_absorbs_the_missing_amount():
+    """★이 작업의 핵심★ 세탁 경로를 끊는다.
+
+    구멍이 있는 패널과 없는 패널이 더 이상 같은 리포트를 내지 않는다 — 커버리지가
+    다르고, 잔차를 **복리 효과라고 부르기를 거부한다**.
     """
     known = daily([{"macro_effect": 0.02, "portfolio_return": 0.02,
                     "cumulative_return": 5.0}])
@@ -107,41 +135,144 @@ def test_the_residual_currently_absorbs_the_missing_amount():
     a = AttributionDecomposer._cumulative_attribution(known)
     b = AttributionDecomposer._cumulative_attribution(holed)
 
-    # ★두 리포트가 완전히 같다★ — 관측되지 않은 하루가 있었다는 사실이 리포트
-    # 어디에도 남지 않는다. "그날은 데이터가 없었다" 와 "그날 기여가 정확히 0
-    # 이었다" 를 소비자가 구분할 방법이 없다.
-    assert a["macro_effect_pct"] == b["macro_effect_pct"]
-    assert a["interaction_pct"] == b["interaction_pct"]
-    # 그리고 워터폴은 구멍이 있든 없든 똑같이 완벽하게 닫힌다 — 이것이 세탁이다
-    for cum in (a, b):
-        wf = AttributionDecomposer._build_waterfall(cum)
-        assert wf[-1]["running_total"] == pytest.approx(
-            cum["actual_return_pct"], abs=1e-9)
-    assert "unexplained_pct" not in b
+    assert a["coverage_complete"] is True
+    assert b["coverage_complete"] is False
+    assert a["interaction_pct"] is not None and a["unexplained_pct"] is None
+    # 구멍이 있으면 잔차는 복리가 아니라 **복리와 흡수된 미상의 혼합**이다
+    assert b["interaction_pct"] is None
+    assert b["unexplained_pct"] == pytest.approx(a["interaction_pct"], abs=1e-9)
+    assert b["unexplained_reason"].strip()
 
 
-def test_nan_is_currently_turned_into_zero_not_null():
-    """★결함★ 미상을 제조한다. NaN 은 0 이 아니라 미상이다."""
-    assert _sanitize_for_json({"x": float("nan")}) == {"x": 0.0}
-    assert _sanitize_for_json({"x": float("inf")}) == {"x": 0.0}
-    assert _sanitize_for_json([float("nan")]) == [0.0]
+def test_an_incomplete_waterfall_does_not_call_the_residual_compounding():
+    """라벨이 바뀌지만 `kind` 는 기존 유니온 값을 유지한다 — 프론트 무변경."""
+    holed = daily([{"macro_effect": 0.02, "portfolio_return": 0.02,
+                    "cumulative_return": 5.0},
+                   {"macro_effect": np.nan, "portfolio_return": 0.0,
+                    "cumulative_return": 5.0}])
+    wf = AttributionDecomposer._build_waterfall(
+        AttributionDecomposer._cumulative_attribution(holed))
+    resid = [w for w in wf if w["kind"] == "interaction"]
+    assert resid and "복리" not in resid[0]["label"]
+    assert resid[0]["step"] == "Unexplained"
 
 
-def test_zero_volatility_currently_reports_sharpe_zero():
-    """★결함★ 변동성이 0 이면 샤프는 0 이 아니라 미상이다."""
+def test_a_complete_waterfall_still_calls_it_compounding():
+    """★짝★ 항상 미설명이라고 부르는 구현을 배제한다."""
+    known = daily([{"macro_effect": 0.02, "portfolio_return": 0.02,
+                    "cumulative_return": 5.0}])
+    wf = AttributionDecomposer._build_waterfall(
+        AttributionDecomposer._cumulative_attribution(known))
+    resid = [w for w in wf if w["kind"] == "interaction"]
+    assert resid and resid[0]["label"] == "복리 효과"
+
+
+def test_no_waterfall_step_ever_carries_a_null_value():
+    """★불변식★ 프론트가 `step.value.toFixed(2)` 를 부른다 — `null` 이면 크래시.
+
+    커버리지 0 인 효과는 스텝을 **생략**하고 생략 사실을 남긴다.
+    """
+    cum = AttributionDecomposer._cumulative_attribution(daily([
+        {"macro_effect": np.nan, "allocation_effect": 0.01,
+         "portfolio_return": 0.02, "cumulative_return": 5.0},
+    ]))
+    wf = AttributionDecomposer._build_waterfall(cum)
+    assert wf, "워터폴이 비면 이 테스트는 공허하다"
+    assert all(isinstance(w["value"], (int, float)) for w in wf)
+    assert all(isinstance(w["running_total"], (int, float)) for w in wf)
+    assert "macro_effect" in cum["waterfall_omitted"]
+    assert not any(w["step"] == "Macro Overlay" for w in wf)
+
+
+def test_every_waterfall_step_accumulates_exactly():
+    """★잔차를 두 번 세지 않는다★
+
+    예전 `baseline` 은 `actual − Σ효과` 였고 `interaction` 도 **똑같은 식**이라
+    같은 미설명분이 두 번 더해졌다 — running_total 이 5.0 → 8.0 으로 실제값을
+    넘어섰다가 마지막 "Actual Total" 스텝이 조용히 5.0 으로 되돌려 놓았다
+    (실측). 도달이 아니라 **되돌리기**였다.
+    """
+    wf = AttributionDecomposer._build_waterfall(
+        AttributionDecomposer._cumulative_attribution(daily([
+            {"macro_effect": 0.02, "portfolio_return": 0.02,
+             "cumulative_return": 5.0}])))
+    for prev, cur in zip(wf, wf[1:]):
+        if cur["kind"] == "total":
+            continue
+        assert cur["running_total"] == pytest.approx(
+            prev["running_total"] + cur["value"], abs=1e-6), cur["step"]
+    # 마지막 직전에 **이미** 실제 수익률에 도달해 있어야 한다
+    assert wf[-2]["running_total"] == pytest.approx(
+        wf[-1]["running_total"], abs=1e-6)
+
+
+def test_the_waterfall_kinds_stay_inside_the_frontend_union():
+    """★프론트 계약★ `COLORS[step.kind]` 라 새 `kind` 는 `undefined` 가 된다."""
+    allowed = {"baseline", "positive", "negative", "interaction", "total"}
+    for panel in (daily([{"macro_effect": 0.02, "portfolio_return": 0.02,
+                          "cumulative_return": 5.0}]),
+                  daily([{"macro_effect": np.nan, "allocation_effect": 0.01,
+                          "portfolio_return": 0.02, "cumulative_return": 5.0}])):
+        wf = AttributionDecomposer._build_waterfall(
+            AttributionDecomposer._cumulative_attribution(panel))
+        assert {w["kind"] for w in wf} <= allowed
+
+
+def test_nan_becomes_null_not_zero():
+    """★미상을 제조하지 않는다★ NaN 은 0 이 아니라 미상이다. `null` 은 유효 JSON."""
+    assert _sanitize_for_json({"x": float("nan")}) == {"x": None}
+    assert _sanitize_for_json({"x": float("inf")}) == {"x": None}
+    assert _sanitize_for_json([float("nan")]) == [None]
+
+
+def test_real_numbers_survive_sanitising():
+    """★짝★ 전부 `None` 으로 만드는 구현을 배제한다."""
+    assert _sanitize_for_json({"x": 1.5, "y": 0.0, "z": "a"}) == {"x": 1.5, "y": 0.0, "z": "a"}
+
+
+def test_the_result_is_strict_json_with_no_nan():
+    """FastAPI 로 나가는 값이 엄격 JSON 이어야 한다 — 이것이 0.0 의 원래 이유였다."""
+    import json
+    out = AttributionDecomposer(_sqlite_engine()).decompose(1)
+    json.dumps(out, allow_nan=False)      # 던지면 실패
+
+
+def test_zero_volatility_reports_sharpe_as_unknown():
+    """변동성이 0 이면 샤프는 0 이 아니라 미상이다(`avg_systemic_risk` 선례)."""
     df = daily([{"portfolio_return": 0.01}, {"portfolio_return": 0.01}])
-    assert AttributionDecomposer._regime_breakdown(df)[0]["sharpe"] == 0
+    row = AttributionDecomposer._regime_breakdown(df)[0]
+    assert row["sharpe"] is None
+    assert row["sharpe_reason"].strip()
 
 
-def test_a_zero_contribution_currently_triggers_a_silent_recompute():
-    """★결함★ "기여가 0" 과 "기여가 미상" 을 값으로 구분하고 있다."""
+def test_a_real_volatility_still_reports_a_number():
+    """★짝★ 항상 미상이라고 답하는 구현을 배제한다."""
+    df = daily([{"portfolio_return": 0.01}, {"portfolio_return": -0.02},
+                {"portfolio_return": 0.03}])
+    row = AttributionDecomposer._regime_breakdown(df)[0]
+    assert isinstance(row["sharpe"], float)
+    assert row["sharpe_reason"] is None
+
+
+def test_a_zero_contribution_is_not_treated_as_missing():
+    """★값이 0 인 것과 미상인 것을 값으로 구분하지 않는다★ — 커버리지로 가른다."""
     sdf = pd.DataFrame([
         {"strategy_id": 1, "weight": 0.5, "macro_adjustment": 0.0,
          "contribution": 0.0, "strategy_return": 0.04},
     ])
     out = AttributionDecomposer(None)._strategy_contribution(sdf, {1: "A"})
-    # 기여가 진짜 0 인데도 strategy_return 으로 재계산해 2.0 을 만들어 낸다
+    assert out[0]["cumulative_contribution_pct"] == 0.0
+
+
+def test_a_missing_contribution_falls_back_and_says_so():
+    """★짝★ 진짜 미상이면 대체 계산을 쓰되 **그 사실을 적는다**."""
+    sdf = pd.DataFrame([
+        {"strategy_id": 1, "weight": 0.5, "macro_adjustment": 0.0,
+         "contribution": np.nan, "strategy_return": 0.04},
+    ])
+    out = AttributionDecomposer(None)._strategy_contribution(sdf, {1: "A"})
     assert out[0]["cumulative_contribution_pct"] == 2.0
+    assert out[0]["contribution_source"] == "weight_times_return"
 
 
 # ── 적재 경로 — sqlite 로 진짜 SQL 을 태운다 ──────────────────────────────
@@ -193,24 +324,37 @@ def test_a_run_with_rows_decomposes():
     assert out["strategy_contribution"][0]["strategy_name"] == "실제 전략명"
 
 
-def test_a_load_failure_is_currently_indistinguishable_from_no_rows():
-    """★결함★ 적재가 **실패**했는데 리포트는 "데이터 없음" 이라고 말한다.
-
-    원인이 다르면 다르게 말해야 한다 — 없는 것과 못 읽은 것은 다른 사실이다.
-    """
+def test_a_load_failure_is_not_reported_as_no_data():
+    """★없는 것과 못 읽은 것은 다른 사실이다★ 원인이 다르면 다르게 말해야 한다."""
     broke = AttributionDecomposer(_ExplodingEngine()).decompose(1)
     empty = AttributionDecomposer(_sqlite_engine(with_rows=False)).decompose(1)
     assert broke["available"] is False and empty["available"] is False
-    assert broke["message"] == empty["message"]     # 구분이 안 된다
-    assert "없음" in broke["message"]                # 실패인데 "없음" 이라 한다
+    assert broke["message"] != empty["message"]
+    assert broke["failure"] == "load_failed"
+    assert empty["failure"] == "no_rows"
+    assert "connection refused" in broke["message"]
 
 
-def test_a_name_lookup_failure_currently_fabricates_a_name():
-    """★결함★ 이름 조회가 실패했는데 이름을 지어낸다.
+def test_both_failure_modes_still_say_something():
+    """★짝★ 사유가 비어 있으면 구분해 봐야 소용이 없다."""
+    for eng in (_ExplodingEngine(), _sqlite_engine(with_rows=False)):
+        out = AttributionDecomposer(eng).decompose(1)
+        assert out["message"] and out["message"].strip()
 
-    `stock_master` 에서 `"Unknown Corp"` 를 금지한 것과 같은 형태다 — 미상인
-    이름은 이름이 아니다.
-    """
+
+def test_a_name_lookup_failure_does_not_fabricate_a_name():
+    """★미상인 이름은 이름이 아니다★ (`stock_master` 의 `"Unknown Corp"` 금지와
+    같은 형태). 조회에 실패했으면 실패했다고 말한다."""
     eng = _sqlite_engine(with_strategy_table=False)     # strategies 테이블 없음
     out = AttributionDecomposer(eng).decompose(1)
-    assert out["strategy_contribution"][0]["strategy_name"] == "Strategy #7"
+    row = out["strategy_contribution"][0]
+    assert row["strategy_name"] is None
+    assert row["strategy_name_reason"].strip()
+    assert row["strategy_id"] == 7          # 식별자는 여전히 안다
+
+
+def test_a_successful_lookup_still_returns_the_real_name():
+    """★짝★ 항상 `None` 을 내는 구현을 배제한다."""
+    row = AttributionDecomposer(_sqlite_engine()).decompose(1)["strategy_contribution"][0]
+    assert row["strategy_name"] == "실제 전략명"
+    assert row["strategy_name_reason"] is None
