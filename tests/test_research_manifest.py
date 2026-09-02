@@ -308,3 +308,67 @@ def test_no_mismatch_is_reported_when_every_dimension_agrees(tmp_path):
                              panel="synthetic")
     assert lab["scope"]["mismatches"] == []
     assert lab["this_request_verified"] is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★라벨이 생산 응답에 닿는다★ (P5 ②)
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_the_conditional_block_always_carries_verification():
+    """★모든 분기가 낸다★ — `available` 여부와 무관하다.
+
+    어떤 응답에만 있으면 소비자가 `.get()` 으로 읽다가 `None` 을 거짓으로
+    취급한다(이 모듈의 `prob_*` 규율과 같은 이유). 그리고 조건부를 **쓴** 응답에만
+    검증을 실으면, 쓰지 못한 응답은 검증 상태를 물어볼 수조차 없게 된다.
+    """
+    from src.api.allocation_routes import _conditional_block
+    for cond in ({"available": False, "reason": "표본 부족"},
+                 {"available": True, "method": "hard", "regime": "GOLDILOCKS",
+                  "sigma": None}):
+        blk = _conditional_block(cond, {"path_source": "test"},
+                                 sigma_applied=bool(cond.get("available")),
+                                 mu_as_views=0, view_confidence=None,
+                                 model="bl", universe=["005930"], months=60)
+        v = blk["verification"]
+        assert v is not None
+        assert "mechanism_verdict" in v and "this_request_verified" in v
+        assert v["this_request_verified"] is False
+
+
+def test_the_conditional_block_reports_the_real_committed_verdict():
+    """실물 메니페스트가 응답에 그대로 닿는지 — 배선을 값으로 건다."""
+    from src.api.allocation_routes import _conditional_block
+    from src.engine.research_manifest import MANIFEST_PATH
+    if not MANIFEST_PATH.exists():
+        pytest.skip("판정 메니페스트가 아직 생성되지 않았습니다")
+    blk = _conditional_block({"available": True}, {}, sigma_applied=True,
+                             mu_as_views=6, view_confidence=0.5, model="bl",
+                             universe=["005930", "000660"], months=60)
+    v = blk["verification"]
+    assert v["mechanism_verdict"] == VERDICT_INCONCLUSIVE
+    assert v["passed"] is False
+    assert v["this_request_verified"] is False
+    # ★"목록이 비어 있지 않다" 는 너무 약하다★ — 유니버스·기간을 아예 안 넘겨도
+    # "패널 미선언" 항목 하나 때문에 통과한다(변이 W3 가 그렇게 살아남았다).
+    # 요청의 값이 **실제로 라벨까지 갔는지**를 차원별로 건다.
+    joined = " ".join(v["scope"]["mismatches"])
+    assert "자산 수 2" in joined, f"유니버스가 라벨에 안 갔다: {joined}"
+    assert "기간 60개월" in joined, f"기간이 라벨에 안 갔다: {joined}"
+
+
+def test_the_months_span_is_unknown_rather_than_zero():
+    """★미상 ≠ 0★ 기간을 모르면 0개월이 아니라 미상이다 — 0 이면 범위 비교가
+    조용히 거짓이 된다(84 ≠ 0 이 '기간 불일치' 로 보고된다)."""
+    from src.api.allocation_routes import _months_span
+    assert _months_span(None) is None
+    assert _months_span([]) is None
+    assert _months_span(object()) is None
+
+
+def test_the_months_span_reads_a_real_index():
+    """★짝★ 항상 `None` 을 내면 위 테스트가 공허하다."""
+    import pandas as pd
+
+    from src.api.allocation_routes import _months_span
+    idx = pd.date_range("2020-01-31", periods=25, freq="ME")
+    assert _months_span(pd.DataFrame(index=idx)) == 24

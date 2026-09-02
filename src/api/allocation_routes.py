@@ -866,9 +866,48 @@ def _mixture_conditional(req, returns, by_month, current, path,
     return mix, meta
 
 
+def _months_span(returns) -> int | None:
+    """표본 기간의 개월 수 — 판정 패널과 비교하기 위한 값.
+
+    ★모르면 `None` 이다★ 0 으로 채우면 "0개월짜리 표본" 이라는 하지 않은 진술이
+    되고, 범위 비교가 조용히 거짓이 된다.
+    """
+    try:
+        idx = getattr(returns, "index", returns)
+        if idx is None or len(idx) < 2:
+            return None
+        a, b = idx[0], idx[-1]
+        return int((b.year - a.year) * 12 + (b.month - a.month))
+    except Exception:                              # noqa: BLE001
+        return None
+
+
+def _macro_verification(*, universe, months, model) -> dict:
+    """이 매크로 조건부 경로의 ★검증 상태★ — 단일 출처 (P5 ②).
+
+    ★"계산할 수 있었는가" 와 "스킬을 보인 적 있는가" 는 다른 질문이다★
+    `_conditional_block` 은 전자에 정직했지만 후자에는 침묵했다. A4 가
+    `underpowered`, A3 이 `inconclusive` 로 판정한 신호를 그 판정을 한 번도 읽지
+    않고 최적화기에 태우고 있었다.
+
+    ★메커니즘 판정을 요청 판정으로 옮기지 않는다★ — `research_manifest` 의
+    `this_request_verified` 가 그 선을 긋는다.
+    """
+    from src.engine.research_context import code_version
+    from src.engine.research_manifest import load_manifest, verification_label
+
+    manifest, why = load_manifest()
+    lab = verification_label(manifest, universe=universe, months=months,
+                             model=model, code_version=code_version())
+    if manifest is None:
+        lab = {**lab, "manifest_reason": why}
+    return lab
+
+
 def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
                        mu_as_views: int, view_confidence: float | None,
-                       model: str, meta: dict | None = None) -> dict:
+                       model: str, meta: dict | None = None,
+                       universe=None, months=None) -> dict:
     """응답의 `conditional` 조각 — ★조용한 폴백 금지★.
 
     조건부를 못 쓴 경우 계산은 무조건부로 떨어지되 **응답이 그 사실을 말한다**
@@ -924,6 +963,12 @@ def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
         # 전체 표본에서 계산되므로 조건부가 아니다. 같은 화면에 조건부 비중과
         # 무조건부 프론티어가 나란히 서 있다는 사실을 서버가 먼저 말한다.
         "not_applied_to": ["frontier.curve", "frontier.cloud", "mc", "mu_annual"],
+        # ★모든 분기가 낸다 (P5)★ `available` 여부와 무관하다 — 어떤 응답에만
+        # 있으면 소비자가 `.get()` 으로 읽다가 `None` 을 거짓으로 취급한다(이
+        # 모듈의 `prob_*` 규율과 같은 이유). 그리고 조건부를 **쓴** 응답에만
+        # 검증을 실으면, 쓰지 못한 응답은 검증 상태를 물어볼 수도 없게 된다.
+        "verification": _macro_verification(universe=universe, months=months,
+                                            model=model),
         # ★MS1-a 계약 필드★ — 가중 방식 · 지평 · π 경로 · 날카로움 · 신뢰도 모델 ·
         # PIT 3필드. `meta` 가 없으면(구 호출부) 하드 경로의 기본값을 적는다.
         **(meta or {"regime_weighting": "hard", "mode": "live",
@@ -1259,7 +1304,8 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 cond or {}, cond_path or {},
                 sigma_applied=s_override is not None,
                 mu_as_views=int(opt.get("extra_views_used") or 0),
-                view_confidence=view_conf, model=req.model, meta=cond_meta)
+                view_confidence=view_conf, model=req.model, meta=cond_meta,
+                universe=names, months=_months_span(returns))
             payload["target_range"] = target_range
 
         # ★같은 규율 — 요청했을 때만 키가 늘어난다★ (S5)
@@ -2351,8 +2397,9 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             "conditional": (_conditional_block(
                 cond, cond_path, sigma_applied=s_override is not None,
                 mu_as_views=int(opt.get("extra_views_used") or 0),
-                view_confidence=None,
-                model=req.model, meta=cond_meta) if req.conditional else None),
+                view_confidence=None, model=req.model, meta=cond_meta,
+                universe=names, months=_months_span(returns))
+                if req.conditional else None),
             "research_context": rc,
             "unknown_tickers": _unknown_tickers(req.tickers),
         })
