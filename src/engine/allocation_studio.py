@@ -6,7 +6,8 @@ Two Sigma Venn 벤치마킹 "Allocation Studio" 탭의 순수 함수 엔진.
   - risk_allocations의 _cov(Ledoit-Wolf)/_opt(SLSQP)/_hrp_weights/_pct 헬퍼를
     커스텀 수익률 행렬 R로 호출 — 8-ETF 하드와이어는 s_* 래퍼에만 있고
     헬퍼 자체는 행렬 인자를 받는다.
-  - BL posterior 공식은 risk_allocations.s_black_litterman(331-333행)과 동일:
+  - BL 은 `black_litterman` 단일 출처에 위임한다 (P2′). 예전에는 이 모듈과
+    risk_allocations 가 각자 구현했고 Ω 가 달라 9%p 갈라졌다:
     μ_bl = ((τΣ)⁻¹ + PᵀΩ⁻¹P)⁻¹ ((τΣ)⁻¹π + PᵀΩ⁻¹Q), π = δ·Σ·w_mkt
   - 시가총액 prior: stock_master.get_market_cap (KIS master, 억원)
 
@@ -74,32 +75,39 @@ def build_user_views(views: list[dict] | None, names: list[str],
     # 넣을 자리가 없었다(T3 §5).
     from src.engine.view_rows import build_view_rows
     built, skipped = build_view_rows(views, names)
-    rows, q, scales = [], [], []
+    rows, q, confs = [], [], []
     for vr, v in zip(built, [v for v in (views or [])
                              if not any(sk["view"] is v for sk in skipped)],
                      strict=False):
         conf = min(max(float(v.get("confidence", 50)), 0.0), 100.0)
         rows.append(vr.row)
         q.append(vr.direction * vr.magnitude)
-        # conf 50 → 1.0(Idzorek 기본) · conf→100 → ~0(뷰 강제) · conf→0 → 매우 큼(뷰 무시)
-        scales.append((100.0 - conf) / max(conf, 1.0))
+        # conf 50 → 배율 1.0(Idzorek 기본) · conf→100 → ~0(뷰 강제) ·
+        # conf→0 → 매우 큼(뷰 무시). ★배율 계산은 `bl_omega` 가 한다★ —
+        # 여기서 배율로 바꿔 넘기면 conf<1 에서 되돌릴 수 없어 값이 어긋난다.
+        confs.append(conf)
     if not rows:
         return None, None, None, skipped
     P = np.array(rows)
     Q = np.array(q)
-    base = np.maximum(np.diag(P @ (tau * sigma) @ P.T).copy(), 1e-10)
-    omega = np.diag(base * np.maximum(np.array(scales), 1e-4)) + np.eye(len(q)) * 1e-10
+    # ★Ω 는 단일 출처가 만든다 (P2′)★ 예전에는 여기와 `risk_allocations` 가
+    # 각자 Ω 를 만들었고, 신뢰도 스케일링 유무 때문에 같은 뷰에서 9%p 다른
+    # 비중이 나왔다 — 독스트링은 "동일 공식" 이라고 적고 있었다.
+    from src.engine.black_litterman import bl_omega
+    omega = bl_omega(P, sigma, tau=tau, confidences=confs)
     return P, Q, omega, skipped
 
 
 def bl_posterior(pi: np.ndarray, sigma: np.ndarray, P: np.ndarray,
                  Q: np.ndarray, omega: np.ndarray, tau: float = TAU_DEFAULT) -> np.ndarray:
-    """BL posterior 기대수익 — risk_allocations.s_black_litterman과 동일 공식."""
-    tauS = tau * sigma
-    inv_tauS = np.linalg.inv(tauS)
-    inv_om = np.linalg.inv(omega)
-    return np.linalg.solve(inv_tauS + P.T @ inv_om @ P,
-                           inv_tauS @ pi + P.T @ inv_om @ Q)
+    """BL posterior 기대수익 — ★단일 출처에 위임한다 (P2′)★.
+
+    이 독스트링은 예전에 "risk_allocations.s_black_litterman 과 동일 공식" 이라고
+    적혀 있었는데 **틀렸다** — Ω 구성이 달라 같은 뷰에서 9%p 다른 비중이 나왔다.
+    이제 공식도 Ω 도 `black_litterman` 이 단일 출처로 만든다.
+    """
+    from src.engine.black_litterman import bl_posterior_mean
+    return bl_posterior_mean(pi, sigma, P, Q, omega, tau=tau)
 
 
 # ── 모델 스위치 ───────────────────────────────────────────────────────────────

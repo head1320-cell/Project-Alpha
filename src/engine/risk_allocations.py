@@ -325,13 +325,14 @@ def s_black_litterman(mk: str) -> dict:
     P = np.array(rows)
     Q = np.array(q)
     tau = 0.05
+    # ★BL 은 단일 출처가 계산한다 (P2′)★ 여기와 `allocation_studio` 가 각자
+    # 구현하고 있었고, Ω 의 신뢰도 스케일링 유무 때문에 같은 뷰에서 9%p 다른
+    # 비중이 나왔다. 이 경로는 매크로 틸트 맵이라 **뷰별 신뢰도가 없으므로**
+    # `confidences=None`(스케일링 없음) — 현행 동작 그대로다.
+    from src.engine.black_litterman import bl_omega, bl_posterior_mean
     try:
-        tauS = tau * S
-        omega = np.diag(np.diag(P @ tauS @ P.T)) + np.eye(len(Q)) * 1e-8
-        inv_tauS = np.linalg.inv(tauS)
-        inv_om = np.linalg.inv(omega)
-        mu_bl = np.linalg.solve(inv_tauS + P.T @ inv_om @ P,
-                                inv_tauS @ pi + P.T @ inv_om @ Q)
+        omega = bl_omega(P, S, tau=tau, confidences=None)
+        mu_bl = bl_posterior_mean(pi, S, P, Q, omega, tau=tau)
     except Exception:  # pragma: no cover
         return _pct(w_mkt, names)
 
