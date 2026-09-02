@@ -55,6 +55,7 @@ from src.engine import null_stats as ns  # noqa: E402
 from src.engine import regime_surrogates as rs  # noqa: E402
 from src.engine import research_manifest as rm  # noqa: E402
 from src.engine import research_power as rp  # noqa: E402
+from src.engine import research_preregistration as rpre  # noqa: E402
 from src.engine.research_panel import (  # noqa: E402
     evidence_grade,
     inject_regime_drift,
@@ -89,6 +90,51 @@ _REVISION_BIAS = {
                              "수준은 못 믿어도 팔 간 비교는 답을 줍니다 — 이 실험이 "
                              "묻는 것이 수준이 아니라 위치이기 때문입니다."),
 }
+
+
+def effective_decision_rule(*, cost_levels=COST_LEVELS,
+                           threshold_pct=THRESHOLD_PCT) -> dict:
+    """이번 실행이 **실제로 쓴** 결정규칙 (P6).
+
+    ★기본값이 선언된 규칙이고, `run()` 은 자기가 받은 파라미터를 넘긴다★ — 그래야
+    다른 격자로 돌린 것이 드리프트로 잡힌다. 예전 `preregistered` 블록은 쓴 값을
+    그대로 "사전등록됨" 이라고 적었다: 자기 서술이지 자기 구속이 아니었다.
+    """
+    return rpre.decision_rule(
+        primary=PRIMARY, secondary=SECONDARY, cost_levels=cost_levels,
+        threshold_pct=threshold_pct, spa_alpha=SPA_ALPHA,
+        decision_rule_text=DECISION_RULE, candidate_arms=CANDIDATE_ARMS,
+        primary_null=rs.NULL_SHIFT)
+
+
+def write_preregistration(path: str) -> dict:
+    """현재 결정규칙과 널 행동을 ★등록★ 으로 고정한다 (P6 ①).
+
+    ★재생성이 자유롭다는 것이 약점이 아니다★ — 규칙을 바꾸려면 이 파일을 다시
+    만들어 **커밋**해야 하고 그 커밋이 diff 로 검토된다. 그리고 "커밋된 등록 ==
+    현재 상수" 를 테스트가 걸어 **조용한** 재생성을 막는다.
+    """
+    from datetime import datetime, timezone
+
+    from src.engine.research_context import code_version
+
+    rule = effective_decision_rule()
+    nfp = rpre.null_behaviour_fingerprint()
+    reg = {
+        "schema": rpre.SCHEMA,
+        "rule": rule,
+        "rule_fingerprint": rpre.rule_fingerprint(rule),
+        "null_fingerprint": nfp["fingerprint"],
+        "null_probe": nfp["probe"],
+        "code_version": code_version(),
+        "registered_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": ("결정규칙과 널 **행동**을 고정한다. 격자·시드 같은 실행 파라미터는 "
+                 "여기 없다 — 실행마다 다를 수 있고, 바뀌면 안 되는 것은 판정 규칙이다."),
+    }
+    pathlib.Path(path).write_text(
+        json.dumps(reg, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+    return reg
 
 
 # ── 한 번의 백테스트 ───────────────────────────────────────────────────────
@@ -960,11 +1006,20 @@ def main() -> int:
                     help="실 패널로 돌린다 (M9). 실데이터가 없으면 ★거부★한다")
     ap.add_argument("--codes", default="", help="--real 일 때 쓸 종목코드(쉼표 구분)")
     ap.add_argument("--as-of", default=None)
+    ap.add_argument("--write-preregistration", default=None,
+                    help="현재 결정규칙·널 행동을 등록으로 고정한다 (P6)")
     ap.add_argument("--write-verdict", default=None,
                     help="판정 메니페스트를 생성한다 (P5). 예: docs/specs/macro_gate_verdict.json")
     ap.add_argument("--capacity", default=None,
                     help="전략 용량 곡선 (P3). 예: 1e9,1e10,1e11,1e12 (규모당 ≈3분)")
     args = ap.parse_args()
+
+    if args.write_preregistration:
+        reg = write_preregistration(args.write_preregistration)
+        print(f"사전등록: {args.write_preregistration}")
+        print(f"  규칙 지문 {reg['rule_fingerprint'][:16]}… · "
+              f"널 행동 지문 {reg['null_fingerprint'][:16]}…")
+        return 0
 
     base, why = panel_for(real=args.real, months=args.months,
                           codes=[c for c in args.codes.split(",") if c],
