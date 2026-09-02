@@ -260,3 +260,81 @@ def test_existing_compute_metrics_keys_are_unchanged():
     for k in ("volatility_pct", "var_pct", "cvar_pct", "ulcer_index",
               "skew", "kurtosis", "best_period_pct", "worst_period_pct"):
         assert k in m, k
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★연율화 관례도 인자다★ — 기하 CAGR (P1 확장)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# P1 은 무위험·ddof 를 인자로 받아 관례를 산출에 실었지만 연율화는 **산술 고정**
+# 이었다. 그래서 기하 CAGR 을 쓰는 모듈(`multi_strategy_backtest`)은 calmar 를
+# 단일 출처로 옮길 수 없었다 — 옮기면 값이 바뀌기 때문이다. 그것이 이 divergence
+# 가 P1 이후에도 살아남은 이유다.
+
+def _geo_fixture():
+    rng = np.random.default_rng(7)
+    rets = rng.normal(0.0004, 0.011, 600)
+    cap0 = 1_000_000.0
+    return rets, cap0 * np.cumprod(1 + rets), cap0
+
+
+def test_geometric_annualization_is_cagr_from_the_starting_equity():
+    rets, eq, cap0 = _geo_fixture()
+    out = risk_adjusted_ratios(rets, eq, annualization="geometric",
+                               starting_equity=cap0)
+    expected = (eq[-1] / cap0) ** (252 / len(rets)) - 1
+    assert out["annualized_return"] == pytest.approx(expected, rel=1e-15)
+    assert out["convention"]["annualization"] == "geometric"
+    assert out["convention"]["starting_equity"] == cap0
+
+
+def test_arithmetic_stays_the_default_and_is_unchanged():
+    """★짝★ 기존 호출부는 한 자도 바뀌지 않아야 한다."""
+    rets, eq, _ = _geo_fixture()
+    out = risk_adjusted_ratios(rets, eq)
+    assert out["convention"]["annualization"] == "arithmetic"
+    assert out["annualized_return"] == pytest.approx(float(np.mean(rets)) * 252,
+                                                     rel=1e-15)
+    assert out["convention"]["starting_equity"] is None
+
+
+def test_the_two_annualizations_really_differ():
+    """둘이 같은 수를 내면 이 확장은 의미가 없다 — 실측 −26.99% vs −24.65%."""
+    rets, eq, cap0 = _geo_fixture()
+    a = risk_adjusted_ratios(rets, eq)["annualized_return"]
+    g = risk_adjusted_ratios(rets, eq, annualization="geometric",
+                             starting_equity=cap0)["annualized_return"]
+    assert abs(a - g) > 0.02
+
+
+def test_calmar_follows_the_declared_annualization():
+    """calmar 는 연율수익/|낙폭| 이므로 관례가 바뀌면 함께 바뀐다."""
+    rets, eq, cap0 = _geo_fixture()
+    out = risk_adjusted_ratios(rets, eq, annualization="geometric",
+                               starting_equity=cap0)
+    assert out["calmar_ratio"] == pytest.approx(
+        out["annualized_return"] / abs(out["max_drawdown"]), rel=1e-15)
+
+
+def test_geometric_without_a_starting_equity_is_refused():
+    """★규모를 모르면 CAGR 을 지어내지 않는다★ — 미상 + 사유."""
+    rets, eq, _ = _geo_fixture()
+    out = risk_adjusted_ratios(rets, eq, annualization="geometric")
+    assert out["annualized_return"] is None
+    assert out["reasons"]["annualized_return"].strip()
+
+
+def test_an_unknown_annualization_is_refused_loudly():
+    """짝 — 오타가 조용히 산술로 떨어지면 리포트가 거짓 관례를 신고한다."""
+    rets, eq, cap0 = _geo_fixture()
+    with pytest.raises(ValueError):
+        risk_adjusted_ratios(rets, eq, annualization="compound",
+                             starting_equity=cap0)
+
+
+def test_a_nonpositive_starting_equity_is_refused():
+    rets, eq, _ = _geo_fixture()
+    out = risk_adjusted_ratios(rets, eq, annualization="geometric",
+                               starting_equity=0.0)
+    assert out["annualized_return"] is None
+    assert out["reasons"]["annualized_return"].strip()

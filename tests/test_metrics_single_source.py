@@ -76,21 +76,39 @@ def test_the_backtest_no_longer_computes_ratios_inline():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ★레거시는 건드리지 않는다 — 그러나 갈라져 있다는 사실은 못 박는다★
+# ★다른 엔진도 이전됐다 — 관례는 여전히 다르지만 이제 **신고된다**★
 # ══════════════════════════════════════════════════════════════════════════
-def test_the_legacy_engine_still_uses_a_different_risk_free():
-    """★범위 결정을 테스트로 남긴다★ (사용자 결정: 매크로→포트폴리오 경로만)
+def test_the_other_engine_no_longer_defines_its_own_risk_free():
+    """★P1 이 남긴 트립와이어가 제 일을 했다★
 
-    `multi_strategy_backtest` 는 `rf=0.025` 를 하드코딩한다 — 저장소 지배 관례
-    `0.035` 와 다르다. 이번 범위 밖이라 **고치지 않았고**, 고치지 않았다는 사실을
-    여기 남긴다. 누군가 나중에 이 파일을 손대면 이 테스트가 알려 준다.
+    이 테스트는 원래 "`rf_daily = 0.025 / 252` 가 아직 있다" 를 못 박아 두고
+    "누군가 이 파일을 손대면 알려 준다" 고 적혀 있었다. P4 잔여 작업에서 그
+    이전을 실제로 했으므로, 이제 **이전됐다는 사실**을 못 박는다.
+
+    ★관례가 통일된 것이 아니다★ — 이 엔진은 여전히 `rf=0.025`·`ddof=0`·기하
+    연율화를 쓴다(그래서 값이 안 바뀌었다). 달라진 것은 그 관례가 코드에 숨어
+    있지 않고 산출과 함께 **신고된다**는 점이다.
     """
     import pathlib
     src = pathlib.Path("src/engine/multi_strategy_backtest.py").read_text(
         encoding="utf-8")
-    assert "rf_daily = 0.025 / 252" in src, (
-        "레거시 엔진의 무위험이 바뀌었다 — 단일 출처로 이전할 기회이거나, "
-        "이 테스트를 갱신해야 한다")
+    assert "rf_daily = 0.025 / 252" not in src
+    assert "risk_adjusted_ratios" in src
+
+
+def test_the_two_engines_declare_different_conventions_on_purpose():
+    """★짝★ 이전이 관례를 조용히 통일해 버렸다면 값이 바뀌었을 것이다."""
+    import numpy as _np
+
+    from src.engine.quant_metrics import risk_adjusted_ratios
+    r = _np.array([0.01, -0.02, 0.03, 0.005, -0.001])
+    eq = 100.0 * _np.cumprod(1 + r)
+    alloc = risk_adjusted_ratios(r, eq, risk_free=0.035, ddof=1)
+    multi = risk_adjusted_ratios(r, eq, risk_free=0.025, ddof=0,
+                                 annualization="geometric", starting_equity=100.0)
+    assert alloc["convention"]["risk_free"] != multi["convention"]["risk_free"]
+    assert alloc["convention"]["annualization"] != multi["convention"]["annualization"]
+    assert alloc["sharpe_ratio"] != multi["sharpe_ratio"]
 
 
 def test_the_dominant_convention_is_what_the_migrated_path_uses():

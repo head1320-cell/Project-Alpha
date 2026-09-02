@@ -29,6 +29,9 @@ DEFAULT_RISK_FREE = 0.035
 #: 표본 표준편차. 추정량이므로 자유도를 보정한다.
 DEFAULT_DDOF = 1
 DEFAULT_PERIODS_PER_YEAR = 252
+#: 연율화 관례. ★산술이 기본★ — 기존 호출부가 한 자도 바뀌지 않는다.
+DEFAULT_ANNUALIZATION = "arithmetic"
+ANNUALIZATIONS = ("arithmetic", "geometric")
 
 
 def _arr(xs) -> np.ndarray:
@@ -63,6 +66,8 @@ def risk_adjusted_ratios(
     periods_per_year: int = DEFAULT_PERIODS_PER_YEAR,
     risk_free: float = DEFAULT_RISK_FREE,
     ddof: int = DEFAULT_DDOF,
+    annualization: str = DEFAULT_ANNUALIZATION,
+    starting_equity: float | None = None,
 ) -> dict[str, Any]:
     """Sharpe·Sortino·Calmar·연율수익·연율변동성 — ★단일 출처★ (P1).
 
@@ -82,11 +87,23 @@ def risk_adjusted_ratios(
     ★미상은 0 이 아니다★ 표본이 모자라거나 분모가 0 이면 `None` + 사유다.
     `0.0` 을 내면 "위험조정 수익이 없다" 는 **하지 않은 진술**이 된다.
 
-    연율화는 **산술**(`mean × ppy`)이다 — 기하가 아니라는 사실도 신고한다.
+    ★연율화도 인자다 (P1 확장)★ 기본은 **산술**(`mean × ppy`)이고 그 사실을
+    신고한다. `annualization="geometric"` 이면 자본곡선의 CAGR
+    (`(eq[-1]/starting_equity)^(ppy/n) − 1`)을 쓴다 — `multi_strategy_backtest`
+    가 쓰던 관례다. 그 선택지가 없어서 그 모듈의 calmar 는 단일 출처로 옮길 수
+    없었고(옮기면 값이 바뀐다) 그것이 divergence 가 P1 이후에도 살아남은 이유다.
+
+    ★기하인데 시작자본을 모르면 CAGR 을 지어내지 않는다★ — `None` + 사유.
     """
     r = _arr(returns)
     eq = _arr(equity)
     ppy = max(int(periods_per_year), 1)
+    if annualization not in ANNUALIZATIONS:
+        # ★조용히 산술로 떨어지지 않는다★ 그러면 리포트가 하지 않은 관례를
+        # 신고하게 된다 — 관례를 싣는 목적 자체가 무너진다.
+        raise ValueError(
+            f"annualization 은 {ANNUALIZATIONS} 중 하나여야 합니다 — 받은 값 "
+            f"{annualization!r}")
     rf_per = float(risk_free) / ppy
     root = math.sqrt(ppy)
 
@@ -95,7 +112,9 @@ def risk_adjusted_ratios(
         "annualized_return": None, "annualized_volatility": None,
         "max_drawdown": None,
         "convention": {"risk_free": float(risk_free), "ddof": int(ddof),
-                       "periods_per_year": ppy, "annualization": "arithmetic",
+                       "periods_per_year": ppy, "annualization": annualization,
+                       "starting_equity": (None if starting_equity is None
+                                           else float(starting_equity)),
                        "declared": True},
         "reasons": {},
     }
@@ -108,7 +127,18 @@ def risk_adjusted_ratios(
         return out
 
     mean = float(r.mean())
-    out["annualized_return"] = mean * ppy
+    if annualization == "geometric":
+        # ★규모를 모르면 CAGR 이 정의되지 않는다★ 자본곡선의 첫 값은 이미 첫
+        # 기간 수익이 반영된 뒤라 시작자본의 대용이 될 수 없다.
+        if starting_equity is None or float(starting_equity) <= 0 or not eq.size:
+            why["annualized_return"] = (
+                "기하 연율화에는 양수 `starting_equity` 가 필요합니다 — "
+                "시작자본을 모르면 CAGR 을 지어내지 않습니다")
+        else:
+            out["annualized_return"] = (
+                float(eq[-1]) / float(starting_equity)) ** (ppy / r.size) - 1.0
+    else:
+        out["annualized_return"] = mean * ppy
     sd = float(r.std(ddof=int(ddof)))
     excess = mean - rf_per
 
@@ -136,8 +166,10 @@ def risk_adjusted_ratios(
     if eq.size:
         mdd = float((eq / np.maximum.accumulate(eq) - 1.0).min())
         out["max_drawdown"] = mdd
-        if mdd < 0:
+        if mdd < 0 and out["annualized_return"] is not None:
             out["calmar_ratio"] = out["annualized_return"] / abs(mdd)
+        elif mdd < 0:
+            why["calmar_ratio"] = "연율수익이 미상이라 산출되지 않습니다"
         else:
             why["calmar_ratio"] = "낙폭이 없습니다 — 분모가 0 이라 산출되지 않습니다"
     else:

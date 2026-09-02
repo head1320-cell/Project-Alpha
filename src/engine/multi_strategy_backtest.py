@@ -383,13 +383,26 @@ class MultiStrategyBacktester:
         n_days = len(rets)
         n_years = n_days / 252
         annualized = ((equities[-1]/config.initial_capital) ** (1/n_years) - 1) * 100 if n_years > 0 else 0
-        rf_daily = 0.025 / 252
-        excess = rets - rf_daily
-        sharpe = (excess.mean()/excess.std() * np.sqrt(252)) if excess.std() > 0 else 0
+        # ★위험조정 지표를 여기서 다시 정의하지 않는다 (P1 잔여)★
+        # 예전에는 `rf_daily = 0.025/252` 와 `excess.std()`(ddof=0)를 이 자리에서
+        # 직접 썼다 — `allocation_backtest` 는 0.035·ddof=1 이라 같은 이름의
+        # Sharpe 가 두 벌이었고, 어느 관례로 만든 수인지 리포트가 말하지 않았다.
+        #
+        # ★관례는 이 모듈이 쓰던 그대로 넘긴다 — 값이 바뀌지 않는다★
+        # 무위험 0.025 · ddof 0 · **기하** 연율화(CAGR). 단일 출처가 기하
+        # 연율화를 인자로 받게 된 뒤에야 이 이전이 가능해졌다(그 전에는 calmar 가
+        # −0.470 → −0.515 로 바뀌었다).
+        from src.engine.quant_metrics import risk_adjusted_ratios
+        rar = risk_adjusted_ratios(
+            rets, equities, periods_per_year=252, risk_free=0.025, ddof=0,
+            annualization="geometric", starting_equity=config.initial_capital)
+        # 미상은 `None` 인데 이 요약의 기존 계약은 `0` 이었으므로 그 자리에서만
+        # 보존한다(스키마 호환) — 사유는 `rar["reasons"]` 에 남는다.
+        sharpe = rar["sharpe_ratio"] or 0
         max_eq = np.maximum.accumulate(equities)
         dd = (equities/max_eq - 1) * 100
         mdd = float(dd.min())
-        calmar = annualized / abs(mdd) if abs(mdd) > 0 else 0
+        calmar = rar["calmar_ratio"] or 0
         total_savings = sum(r.netting_savings for r in records)
 
         cum_alloc = sum(r.allocation_effect for r in records) * 100
@@ -416,6 +429,11 @@ class MultiStrategyBacktester:
             "sharpe_ratio":           float(round(sharpe, 3)),
             "max_drawdown_pct":       float(round(mdd, 2)),
             "calmar_ratio":           float(round(calmar, 2)),
+            # ★그 수를 만든 관례를 함께 싣는다 (P1)★ 무위험·ddof·연율화가
+            # 모듈마다 갈라져 있었고, 관례를 안 적으면 두 리포트의 Sharpe 를
+            # 비교할 수 없다. 표시 반올림과 달리 이 블록은 전정밀도다.
+            "convention":             rar["convention"],
+            "sharpe_ratio_full":      rar["sharpe_ratio"],
             "final_equity":           float(round(equities[-1], 2)),
             "total_trades":           int(sum(r.num_trades for r in records)),
             "total_turnover_pct":     float(round(sum(r.turnover_pct for r in records), 2)),

@@ -206,8 +206,12 @@ class RealisticBacktester:
         current_macro_adj = {int(sid): 0.0 for sid in sids}
         current_regime = None
         current_systemic_risk = None
-        current_cash_buffer = 0.0    # Stage 12: 적응형 모드에서 cash buffer
-
+        # ★현금 버퍼는 변수가 아니라 **비중**으로 표현된다★ (P4 잔여)
+        # 예전에는 `current_cash_buffer` 를 네 곳에서 대입하고 **한 번도 읽지
+        # 않았다**. 경제적 효과는 이미 비중에 있다 — 아래 `invested_ratio =
+        # sum(current_weights.values())` 가 현금 이자와 미투자분을 함께 결정한다.
+        # 죽은 누산기를 남겨 두면 누군가 "배선이 빠졌네" 하고 연결하는데, 그러면
+        # 현금이 **두 번** 세어진다(비중으로 한 번, 버퍼로 또 한 번).
         daily_records = []
 
         # Stage 12 누적 통계
@@ -258,7 +262,6 @@ class RealisticBacktester:
                                 stats["hard_cap_active_days"] += 1
                             if alloc_result.get("breakdown_detected"):
                                 stats["breakdown_detected_days"] += 1
-                            current_cash_buffer = alloc_result.get("cash_buffer_pct", 0)
                         else:
                             alloc_result = self.base.allocator.compute(
                                 returns_matrix=past_returns,
@@ -269,7 +272,6 @@ class RealisticBacktester:
                                 max_weight=config.max_weight,
                                 min_weight=config.min_weight,
                             )
-                            current_cash_buffer = 0.0
 
                         if alloc_result.get("available"):
                             current_weights = {int(k): float(v) for k, v in alloc_result["weights"].items()}
@@ -289,7 +291,6 @@ class RealisticBacktester:
                                 )
                                 current_weights = cap_adjusted["adjusted_weights"]
                                 stats["total_capacity_reallocations"] += len(cap_adjusted["capped_strategies"])
-                                current_cash_buffer = max(current_cash_buffer, cap_adjusted["cash_buffer_pct"])
 
                             # 누락된 sid 채우기
                             for sid in sids:
