@@ -35,7 +35,9 @@ from src.engine.research_verdict import (  # noqa: E402
 
 #: A3 이 실제로 낸 판정(`4279f1e`) — 널은 넘었고 SPA 는 못 넘었다.
 A3 = {
-    "schema": 1,
+    "schema": 2,
+    "preregistration": {"rule_fingerprint": "a" * 64,
+                        "null_fingerprint": "b" * 64, "matches": True},
     "verdict": VERDICT_INCONCLUSIVE,
     "passed": False,
     "evidence": {"null_outside": True, "spa_ok": False,
@@ -502,3 +504,69 @@ def test_the_response_does_not_claim_a_block_that_did_not_happen():
                            universe=["005930"], months=60)["verification"]
     assert v["blocked"] is False
     assert v["blocked_reason"] is None
+
+
+# ── ★사전등록 출처가 없는 판정은 증거가 아니다★ (P6 합성) ────────────────
+def test_a_schema_one_manifest_is_no_longer_evidence(tmp_path):
+    """P6 이전 메니페스트는 어느 결정규칙 아래 나왔는지 말할 수 없다."""
+    old = {k: v for k, v in A3.items() if k != "preregistration"}
+    m, why = load_manifest(_write(tmp_path, {**old, "schema": 1}))
+    assert m is None
+    assert why and "schema" in why
+
+
+def test_a_manifest_without_preregistration_is_refused(tmp_path):
+    m, why = load_manifest(_write(tmp_path, {k: v for k, v in A3.items()
+                                             if k != "preregistration"}))
+    assert m is None and why and why.strip()
+
+
+def test_a_manifest_from_a_drifted_run_is_refused(tmp_path):
+    """★어긋난 실행의 판정은 증거가 아니다★"""
+    drifted = {**A3, "preregistration": {**A3["preregistration"],
+                                         "matches": False}}
+    m, why = load_manifest(_write(tmp_path, drifted))
+    assert m is None and why and why.strip()
+
+
+def test_a_matching_run_is_accepted(tmp_path):
+    """★짝★ 항상 거부하면 그것은 관문이 아니라 차단기다."""
+    m, why = load_manifest(_write(tmp_path, A3))
+    assert m is not None and why is None
+    assert m["preregistration"]["matches"] is True
+
+
+def test_the_manifest_records_the_actual_fingerprints_not_just_a_claim():
+    """★속 빈 주장을 막는다★
+
+    처음 구현에서 `write_verdict_manifest` 의 지역변수 `pre` 가 리포트의 서술용
+    `preregistered` 블록을 읽는 **기존 같은 이름 변수**에 가려져, 메니페스트가
+    지문 없이 `matches: true` 만 적었다. `matches` 를 하드코딩했기 때문에 그
+    모순이 드러나지 않았다 — 지문이 비어 있는데 "일치" 라고 적힌 것이다.
+    """
+    from src.engine.research_manifest import MANIFEST_PATH
+    if not MANIFEST_PATH.exists():
+        pytest.skip("판정 메니페스트가 아직 생성되지 않았습니다")
+    m, why = load_manifest(MANIFEST_PATH)
+    assert m is not None, f"거부됨: {why}"
+    pre = m["preregistration"]
+    assert pre["matches"] is True
+    for k in ("rule_fingerprint", "null_fingerprint"):
+        assert pre.get(k), f"{k} 가 비어 있다 — 일치를 주장할 근거가 없다"
+        assert len(pre[k]) == 64
+
+
+def test_the_manifest_fingerprints_match_the_committed_registration():
+    """★판정이 **어느 등록** 아래 나왔는지 실제로 대조된다★"""
+    from src.engine.research_manifest import MANIFEST_PATH
+    from src.engine.research_preregistration import (
+        REGISTRATION_PATH,
+        load_registration,
+    )
+    if not (MANIFEST_PATH.exists() and REGISTRATION_PATH.exists()):
+        pytest.skip("메니페스트 또는 등록이 없습니다")
+    m, _ = load_manifest(MANIFEST_PATH)
+    reg, why = load_registration(REGISTRATION_PATH)
+    assert reg is not None, why
+    assert m["preregistration"]["rule_fingerprint"] == reg["rule_fingerprint"]
+    assert m["preregistration"]["null_fingerprint"] == reg["null_fingerprint"]

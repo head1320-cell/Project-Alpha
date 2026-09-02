@@ -279,3 +279,131 @@ def test_a_run_with_a_narrowed_cost_grid_is_detected_as_drift(tmp_path):
                   null_fp=null_behaviour_fingerprint()["fingerprint"])
     assert out["matches"] is False
     assert any("결정규칙" in d for d in out["drift"])
+
+
+# ── ★어긋난 실행의 판정은 기록되지 않는다★ (P6 ②, 관문 배선) ──────────────
+def _report(prereg: dict) -> dict:
+    """`write_verdict_manifest` 가 읽는 최소 리포트.
+
+    관문을 5분 돌리지 않고도 **쓰기 결정**만 떼어 시험한다 — 그 결정이 이
+    커밋의 계약이기 때문이다.
+    """
+    return {
+        "verdict": {"verdict": "inconclusive", "passed": False,
+                    "why": ["시험용"], "null_outside": True, "spa_ok": False,
+                    "power": None, "target_power": 0.8},
+        "provenance": {"price_source": "synthetic"},
+        "panel": {"n_assets": 5},
+        "preregistered": {"cost_levels_bps": [5.0, 10.0, 20.0], "spa_alpha": 0.05},
+        "evidence_grade": "E0", "evidence_grade_reason": "합성",
+        "by_cost": {}, "preregistration": prereg,
+    }
+
+
+_MATCHED = {"matches": True, "drift": [], "reason": None,
+            "registered": {"rule_fingerprint": "a" * 64,
+                           "null_fingerprint": "b" * 64},
+            "effective": {"rule_fingerprint": "a" * 64,
+                          "null_fingerprint": "b" * 64}}
+
+
+def test_a_drifted_run_does_not_get_to_write_a_verdict(tmp_path):
+    """★규칙을 바꿔 돌린 판정이 저장소에 남으면 사전등록은 장식이다★"""
+    import scripts.regime_control as rc
+    out = tmp_path / "verdict.json"
+    drifted = {**_MATCHED, "matches": False,
+               "drift": ["결정규칙이 등록과 다릅니다"], "reason": "결정규칙이 다름"}
+    with pytest.raises(rc.PreregistrationDrift) as e:
+        rc.write_verdict_manifest(_report(drifted), str(out))
+    assert "결정규칙" in str(e.value)
+    assert not out.exists(), "거부했다면서 파일은 썼다"
+
+
+def test_an_unknown_registration_does_not_get_to_write_a_verdict(tmp_path):
+    """★미상은 일치가 아니다★ 등록을 못 읽었으면 따랐는지 알 수 없다."""
+    import scripts.regime_control as rc
+    out = tmp_path / "verdict.json"
+    unknown = {**_MATCHED, "matches": None, "drift": None,
+               "reason": "사전등록을 읽지 못했습니다"}
+    with pytest.raises(rc.PreregistrationDrift):
+        rc.write_verdict_manifest(_report(unknown), str(out))
+    assert not out.exists()
+
+
+def test_a_matching_run_does_write_the_verdict(tmp_path):
+    """★짝★ 항상 거부하면 그것은 관문이 아니라 차단기다."""
+    import scripts.regime_control as rc
+    out = tmp_path / "verdict.json"
+    m = rc.write_verdict_manifest(_report(_MATCHED), str(out))
+    assert out.exists()
+    assert m["verdict"] == "inconclusive"
+
+
+def test_the_written_manifest_carries_the_fingerprints_it_actually_compared(tmp_path):
+    """★속 빈 주장을 막는다★
+
+    처음 구현은 지문을 리포트의 **서술용** `preregistered` 블록에서 읽으려다
+    같은 이름 지역변수에 가려져 `null` 을 적었고, `matches` 를 하드코딩한 탓에
+    그 모순이 드러나지 않았다 — 지문이 비어 있는데 "일치" 라고 적힌 것이다.
+    """
+    import scripts.regime_control as rc
+    out = tmp_path / "verdict.json"
+    m = rc.write_verdict_manifest(_report(_MATCHED), str(out))
+    written = json.loads(out.read_text(encoding="utf-8"))["preregistration"]
+    assert written == m["preregistration"]
+    assert written["rule_fingerprint"] == "a" * 64
+    assert written["null_fingerprint"] == "b" * 64
+    assert written["matches"] is True
+
+
+def test_the_fingerprints_come_from_the_effective_run_not_the_registration(tmp_path):
+    """등록의 지문을 적으면 **무엇을 검사했는지**가 아니라 기대값을 적는 것이다.
+
+    (이 실행에서 둘은 같아야 하지만, 같음을 **확인한 결과**를 적어야 한다.)
+    """
+    import scripts.regime_control as rc
+    out = tmp_path / "verdict.json"
+    skewed = {**_MATCHED,
+              "registered": {"rule_fingerprint": "c" * 64,
+                             "null_fingerprint": "d" * 64}}
+    rc.write_verdict_manifest(_report(skewed), str(out))
+    written = json.loads(out.read_text(encoding="utf-8"))["preregistration"]
+    assert written["rule_fingerprint"] == "a" * 64
+    assert written["null_fingerprint"] == "b" * 64
+
+
+# ── ★규칙과 배선은 다른 일이다★ 관문이 **자기가 쓴 값**으로 대조하는가 ──────
+def _small_run(**kw):
+    """작은 합성 패널로 관문을 실제로 한 번 돌린다 (≈4초).
+
+    ★순수 함수만 시험하면 배선은 시험되지 않는다★ — 변이 Y16(유효 규칙 대신
+    모듈 상수로 대조)·Y17(등록을 읽지 않고 항상 일치)은 `compare()` 를 아무리
+    시험해도 살아남았다. 그 둘은 `run()` 안에서만 죽는다.
+    """
+    import scripts.regime_control as rc
+    base, why = rc.panel_for(real=False, months=18, codes=[], as_of=None)
+    assert base is not None, why
+    return rc.run(base.names, base.returns, base.dates, base.points, model="bl",
+                  min_train=126, n_shift=1, n_markov=1, n_block=1, seed=7,
+                  run_spa=False, provenance=base.provenance, **kw)
+
+
+def test_the_gate_compares_the_grid_it_actually_ran_with():
+    """★자기 서술이 아니라 자기 구속★ — 다른 격자로 돌리면 관문이 그것을 안다."""
+    import scripts.regime_control as rc
+    rep = _small_run(cost_levels=(5.0,))
+    pre = rep["preregistration"]
+    assert pre["matches"] is False, "좁힌 격자로 돌렸는데 일치라고 한다"
+    assert any("결정규칙" in d for d in pre["drift"])
+    # 보고된 지문은 **이번 실행이 쓴 규칙**의 지문이어야 한다.
+    assert pre["effective"]["rule_fingerprint"] == rule_fingerprint(
+        rc.effective_decision_rule(cost_levels=(5.0,)))
+    assert pre["registered"] is not None, "등록을 읽지 않았다면 대조가 아니다"
+
+
+def test_the_gate_run_with_the_registered_grid_matches():
+    """★짝★ 항상 어긋난다고 하면 그 대조는 아무것도 말하지 않는다."""
+    rep = _small_run()
+    pre = rep["preregistration"]
+    assert pre["matches"] is True, f"등록된 격자인데 드리프트: {pre['drift']}"
+    assert pre["drift"] == []

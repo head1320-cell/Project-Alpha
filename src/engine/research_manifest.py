@@ -32,7 +32,9 @@ logger = logging.getLogger(__name__)
 #: 저장소 산물 — 관문이 생성하고 커밋한다. DB 없이도 읽힌다.
 MANIFEST_PATH = Path("docs/specs/macro_gate_verdict.json")
 
-SCHEMA = 1
+#: ★schema 2 부터 사전등록 출처를 요구한다 (P6)★ 등록이 없는 판정은 "어느 규칙
+#: 아래 나왔는지" 를 말할 수 없어 재현이 불가능하다 — 증거로 치지 않는다.
+SCHEMA = 2
 
 #: 판정을 재계산하는 데 필요한 증거. 하나라도 없으면 메니페스트를 받지 않는다.
 EVIDENCE_FIELDS = ("null_outside", "spa_ok", "power", "target_power")
@@ -59,6 +61,19 @@ def load_manifest(path: str | Path | None = None) -> tuple[dict | None, str | No
         return None, f"판정 메니페스트가 JSON 이 아닙니다({p}) — {e}"
     if not isinstance(m, dict):
         return None, f"판정 메니페스트가 객체가 아닙니다({p})"
+
+    if int(m.get("schema") or 0) < SCHEMA:
+        return None, (
+            f"판정 메니페스트 schema {m.get('schema')} 는 더 이상 증거가 아닙니다 "
+            f"(현재 {SCHEMA}) — ★사전등록 출처가 없는 판정★ 이라 어느 결정규칙 "
+            "아래 나왔는지 말할 수 없습니다(P6). 관문을 다시 돌려 재생성하십시오.")
+
+    pre = m.get("preregistration")
+    if not isinstance(pre, dict) or pre.get("matches") is not True:
+        return None, (
+            "판정이 사전등록과 일치한 실행에서 나왔다는 기록이 없습니다 — "
+            f"preregistration={pre!r}. 등록과 어긋난 실행의 판정은 증거가 "
+            "아닙니다(P6).")
 
     ev = m.get("evidence")
     if not isinstance(ev, dict) or any(f not in ev for f in EVIDENCE_FIELDS):

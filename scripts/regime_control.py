@@ -92,6 +92,10 @@ _REVISION_BIAS = {
 }
 
 
+class PreregistrationDrift(RuntimeError):
+    """등록과 어긋난 실행 — ★판정을 기록하지 않는다★ (P6)."""
+
+
 def effective_decision_rule(*, cost_levels=COST_LEVELS,
                            threshold_pct=THRESHOLD_PCT) -> dict:
     """이번 실행이 **실제로 쓴** 결정규칙 (P6).
@@ -535,6 +539,17 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
         mcs = {"decisive": False, "included": None, "excluded": None,
                "reason": "요청하지 않았습니다", "alpha": SPA_ALPHA}
 
+    # ★사전등록 대조 (P6 ②)★ 유효 규칙은 **이번 실행이 쓴 값**으로 만든다 —
+    # 모듈 상수로 만들면 다른 격자로 돌려도 드리프트가 안 잡힌다.
+    _reg, _reg_why = rpre.load_registration()
+    _prereg = rpre.compare(
+        _reg,
+        rule=effective_decision_rule(cost_levels=cost_levels,
+                                     threshold_pct=threshold_pct),
+        null_fp=rpre.null_behaviour_fingerprint()["fingerprint"])
+    if _reg is None and _reg_why:
+        _prereg = {**_prereg, "load_reason": _reg_why}
+
     _grade, _grade_why = evidence_grade(provenance)
 
     verdict = decide_verdict(
@@ -574,6 +589,8 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
                     "reason": None}),
         # ★재사용을 세어서 싣는다 (P7)★ 세지 않으면 "비용마다 다시 계산하지
         # 않는다" 는 검증 불가능한 주장이다.
+        # ★이 실행이 등록된 규칙을 따랐는가 (P6)★ 미상이면 `matches: null` 이다.
+        "preregistration": _prereg,
         "plan_reuse": counter.as_dict(),
         "by_cost": by_cost, "spa": spa, "mcs": mcs, "verdict": verdict,
     }
@@ -933,6 +950,22 @@ def write_verdict_manifest(rep: dict, path: str, *, report_path: str | None = No
 
     from src.engine.research_context import code_version
 
+    # ★등록과 어긋난 실행의 판정은 기록하지 않는다 (P6 ②)★
+    # 생산 동작은 전혀 안 바뀐다(메니페스트는 연구 산물이다). 대신 P5 와
+    # 합성되어 보수적으로 실패한다: 메니페스트 없음 → `no_evidence` → 플래그가
+    # 켜져 있으면 차단.
+    # ★이름 충돌 주의★ 아래 `pre` 는 리포트의 **서술용** `preregistered` 블록이다
+    # (spa_alpha 등). 처음에 둘 다 `pre` 로 써서 조용히 가려졌고, 메니페스트가
+    # 지문 없이 `matches: true` 만 적는 **속 빈 주장**이 나왔다.
+    prereg = rep.get("preregistration") or {}
+    if prereg.get("matches") is not True:
+        raise PreregistrationDrift(
+            "사전등록과 어긋난 실행이라 판정을 기록하지 않습니다 — "
+            + (prereg.get("reason") or prereg.get("load_reason")
+               or "등록 대조 결과가 없습니다")
+            + ". 규칙을 바꾸려면 --write-preregistration 으로 등록을 다시 만들고 "
+              "커밋하십시오(그 커밋이 diff 로 검토됩니다).")
+
     v = rep["verdict"]
     prov = rep.get("provenance") or {}
     panel = rep.get("panel") or {}
@@ -968,6 +1001,15 @@ def write_verdict_manifest(rep: dict, path: str, *, report_path: str | None = No
                 rs.NULL_SHIFT, {}).get("n_draws"),
             "spa_alpha": pre.get("spa_alpha"),
             "provenance": prov,
+        },
+        # ★판정의 출처에 등록을 함께 적는다 (P6)★ 어느 규칙 아래 나온 판정인지
+        # 모르면 그 판정은 재현할 수 없다.
+        "preregistration": {
+            "rule_fingerprint": (prereg.get("effective") or {}).get("rule_fingerprint"),
+            "null_fingerprint": (prereg.get("effective") or {}).get("null_fingerprint"),
+            # ★위 가드가 보장하지만 **읽어서** 적는다★ 하드코딩하면 그 필드는
+            # 검사 결과가 아니라 선언이 된다(그래서 지문이 비어도 안 걸렸다).
+            "matches": prereg.get("matches"),
         },
         "code_version": code_version(),
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
