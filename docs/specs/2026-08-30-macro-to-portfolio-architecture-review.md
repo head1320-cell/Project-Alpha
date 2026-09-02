@@ -35,23 +35,42 @@ A3(`4279f1e`)·M7(`9122497`)이 ④ 경제가치 관문에 대해 **측정으로
 
 ## 2. 가장 중요한 아키텍처 약점 (전부 실측)
 
-### W1 ★성과지표가 갈라져 있고, 이미 한 번 물렸다★ — 최우선
+### W1 ★성과지표 관례가 갈라져 있고, 이미 한 번 물렸다★ — 최우선
 
-같은 수익 계열에 대해 코드베이스가 내는 Sharpe:
+> ★정정(2026-08-30, 최초 커밋 `48a58f7` 이후)★ 이 절의 최초 서술은 "정의가 서로
+> 다르다" 였고 근거 수치도 틀렸다. 실측해 보니 **공식은 같다** — `allocation_backtest`
+> 와 `multi_strategy_backtest` 의 Sharpe 는 대수적으로 동일하다(rf·ddof 를 맞추면
+> 차이 `1.4e-16`). 갈라지는 것은 **공식이 아니라 관례**다. 아래는 정정된 실측이다.
 
-| 정의 | 위치 | 값 |
-|---|---|---|
-| `(연율수익 − rf) / 연율변동성` | `allocation_backtest.py:503` (`_RF=0.035`) | **−0.2395** |
-| `일별초과.mean()/일별초과.std() × √252` | `multi_strategy_backtest.py:388` | **−0.1617** |
-| 무위험 없음 `× √252` | 여러 요약 경로 | ★**+0.0632**★ |
+**⑴ 같은 공식, 다른 관례** — 같은 수익 계열에서:
 
-★A 와 B 가 **48% 어긋나고**, C 는 **부호가 뒤집힌다**.★ 반올림도 `round(_,2)` ·
-`round(_,3)` 로 제각각이다.
+| 위치 | 무위험 | `ddof` | 값 |
+|---|---|---|---|
+| `allocation_backtest.py:503` | `_RF = 0.035` | 1 | **−0.1616** |
+| `multi_strategy_backtest.py:388` | `0.025` (하드코딩) | 0 | **−0.0974** |
+| `scripts/regime_control.py::_sharpe` | ★없음★ | 1 | ★**+0.0632**★ |
+
+A 와 B 가 **66% 어긋나고**, C 는 무위험을 빼지 않아 ★부호가 뒤집힌다★.
+반올림도 `round(_,2)`·`round(_,3)`·`round(_,8)` 로 제각각이다.
+
+**⑵ 무위험 수익률이 두 값으로 갈라져 있다** — 저장소 지배 관례는 `0.035`
+(`regime_analyzer` · `cash_management.DEFAULT_RF_ANNUAL` · `realism_engine.
+default_rf_annual` · `company_analytics` · `quant_metrics` · `allocation_backtest`)
+인데 `multi_strategy_backtest:388` 만 `0.025` 다. 게다가 `regime_analyzer:143` 은
+국고채 10년에서 **동적 rf** 를 뽑아 `0.035` 로 폴백한다 — ★살아 있는 출처가
+있는데 백테스트가 상수를 쓴다.★
+
+**⑶ `compute_metrics(risk_free=...)` 는 죽은 인자다** — `src/engine/quant_metrics.py`
+는 이미 empyrical/QuantStats 기반 **보조 지표 단일 출처**(VaR·CVaR·Ulcer·Omega·
+왜도·첨도·정보비율·변동성)인데, `risk_free` 를 **선언만 하고 한 번도 쓰지 않는다**.
+`allocation_backtest:495` 는 `risk_free=_RF` 를 넘기며 뭔가 한다고 믿는다.
+그리고 ★`compute_metrics` 에는 sharpe·sortino·calmar 가 아예 없어서★ 모든 호출부가
+바로 다음 줄에서 **인라인으로 다시 계산**한다 — 같은 함수 안에 지표가 두 벌이다.
 
 **이것은 스타일 문제가 아니다.** A3 에서 실제로 물렸다 — 사전등록의 주 통계로 쓴
 `summary.sharpe_ratio` 가 `round(_,2)` 라 비용 5→100bps 에서 **0.42 로 고정**이었고,
 "비용 3수준 전부" 라는 사전등록 절이 **무의미**해졌다. 전정밀도 일별 Sharpe 로
-바꾸고 그 사실을 공개해야 했다. ★관문의 주 통계가 정의에 따라 부호까지 바뀌면
+바꾸고 그 사실을 공개해야 했다. ★관문의 주 통계가 관례에 따라 부호까지 바뀌면
 어떤 판정도 방어할 수 없다.★
 
 ### W2 BL 불확실성이 전파되지 않는다
@@ -151,17 +170,22 @@ constrained_solve → rebalance_policy → walk_forward → 귀속`
 
 ### P1 — 지표 단일 출처 (최우선 · 범위: 매크로→포트폴리오 경로만)
 
-`src/engine/perf_metrics.py` 신설. empyrical 의 **정의**를 채택하되 의존성은 넣지
-않는다. 계약: 무위험·연율화 관례를 **인자로 받아 리포트에 싣고**, 전정밀도를 내며
-반올림은 표시 계층에서만 한다.
+★새 모듈을 만들지 않는다★ — `src/engine/quant_metrics.py` 가 이미 empyrical/
+QuantStats 기반 보조 지표 단일 출처다. 거기에 **빠진 것**(sharpe·sortino·calmar·
+연율수익·연율변동성)을 더해 단일 출처를 완성하고, 죽은 `risk_free` 인자를 **실제로
+쓰이게** 한다.
 
-이전 대상 — `allocation_backtest` · `regime_control` · `regime_signal_gate` ·
-`attribution_decomposer`. ★`kis_backtest_engine` 등 레거시 엔진은 건드리지 않고,
-"다른 정의를 쓴다" 는 사실을 **테스트로 못 박는다**★ (사용자 결정: 경로 한정).
+계약: 무위험·`ddof`·연율화 계수를 인자로 받고 ★그 관례를 산출에 함께 싣는다★ —
+어떤 리포트든 그 수를 만든 관례를 달고 다니게 한다. 전정밀도를 내고 반올림은
+표시 계층에서만.
 
-- 골든: 이전 전 수치를 동결 해시로 고정 → 어떤 수가 왜 바뀌는지 관측 가능하게
-- 변이: 무위험 제거 · 연율화 제거 · 반올림 부활 · 정의 A↔B 교체 → 전부 죽어야 함
-- ★짝★: 세 정의가 **다른 수**를 낸다는 사실 자체를 테스트로 남긴다(위 §2 W1 값)
+이전 대상 — `allocation_backtest`(인라인 두 벌 제거) · `scripts/regime_control`.
+★`multi_strategy_backtest`·`kis_backtest_engine` 등 레거시는 건드리지 않고,
+"다른 관례를 쓴다" 는 사실을 **테스트로 못 박는다**★ (사용자 결정: 경로 한정).
+
+- 골든: 이전 전 수치를 동결값으로 고정 → 어떤 수가 왜 바뀌는지 관측 가능하게
+- 변이: 무위험 제거 · 연율화 제거 · 반올림 부활 · `ddof` 교체 · 관례 미신고
+- ★짝★: 세 관례가 **다른 수**를 낸다는 사실 자체를 테스트로 남긴다(§2 W1 값)
 
 ### P2 — BL 사후 공분산 전파
 
