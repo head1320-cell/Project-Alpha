@@ -340,3 +340,84 @@ class MarketImpactModel:
             "weighted_avg_impact_bps": 0,
             "by_order": [],
         }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ImpactAssumptions — ★백테스트에 규모를 들여오는 유일한 문★ (P3)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass(frozen=True)
+class ImpactAssumptions:
+    """참여율 충격을 쓰기 위해 **선언해야 하는** 가정.
+
+    ★`portfolio_krw` 에 기본값을 두지 않는 것이 계약이다★ `walk_forward` 의
+    `equity` 는 1.0 에서 시작하는 단위 정규화라 KRW notional 이 없다. 참여율에는
+    규모가 필요한데, 임의의 기본값을 하나 고르면 **그 하나의 가정이 주 통계를
+    5~17% 움직인다** — 정당화할 근거가 없다. 그래서 규모는 묻지 않고 정하지
+    않는다. 쓰려면 말해야 한다.
+
+    ★생성자 검증이 침묵 폴백 가드다★ `turnover_based_impact` 는 `avg_adv_krw
+    <= 0` 이면 조용히 `{"impact_bps": 0}` 을 돌려준다 — **공짜 거래를
+    제조한다**. 그 함수는 `realism_engine`·`instrument_selector` 가 쓰고 있으므로
+    건드리지 않고, 이 경계에서 막아 그 경로에 도달할 수 없게 한다.
+    """
+
+    portfolio_krw: float
+    adv_krw: float = 50_000_000_000.0     # KOSPI 평균 약 500억 (realism_engine 관례)
+    volatility: float = 0.018
+    alpha: float = 0.7                    # 포트폴리오 가중 α (대형주 위주)
+
+    def __post_init__(self) -> None:
+        if not (float(self.portfolio_krw) > 0):
+            raise ValueError(
+                f"포트폴리오 규모는 양수여야 합니다 — 받은 값 {self.portfolio_krw}. "
+                "규모를 모르면 참여율을 모르므로 충격을 지어내지 않습니다.")
+        if not (float(self.adv_krw) > 0):
+            raise ValueError(
+                f"ADV 는 양수여야 합니다 — 받은 값 {self.adv_krw}. "
+                "ADV 가 미상이면 충격은 0 이 아니라 ★미상★ 입니다.")
+        if float(self.volatility) < 0:
+            raise ValueError(f"변동성은 음수일 수 없습니다 — 받은 값 {self.volatility}")
+        if float(self.alpha) < 0:
+            raise ValueError(f"α 는 음수일 수 없습니다 — 받은 값 {self.alpha}")
+
+    def as_convention(self) -> dict:
+        """★가정이 산출과 함께 다닌다★ (P1 `risk_adjusted_ratios`·P2′ `bl_solve` 패턴).
+
+        `impact_bps_resolution` 을 신고하는 이유: `turnover_based_impact` 는
+        `round(impact_bps, 2)` 로 0.01bp 해상도를 갖는다. P1 에서 `round(sharpe,
+        2)` 가 비용 5~100bps 를 통째로 눈멀게 한 전례가 있으므로, 해상도가 효과
+        (규모 간 차이 8.5bp)의 1/850 이라 여기서는 문제가 아니라는 논증이
+        **리포트 안에서** 확인 가능해야 한다.
+        """
+        return {
+            "portfolio_krw": float(self.portfolio_krw),
+            "adv_krw": float(self.adv_krw),
+            "volatility": float(self.volatility),
+            "alpha": float(self.alpha),
+            "law": "almgren_chriss_sqrt",
+            "adv_basis": "portfolio_average",   # ★종목별 ADV 가 아니다★
+            "impact_bps_resolution": 0.01,
+        }
+
+    def impact_bps(self, turnover: float, notional_krw: float) -> dict:
+        """편도 회전율(분수)과 KRW notional → 충격 추정.
+
+        ★√법칙을 여기서 다시 계산하지 않는다★ 저장소가 이미 가진 모델을 부른다 —
+        베끼면 두 벌이 갈라지고, 갈라져도 타입 에러가 나지 않는다(P1·P2′ 에서
+        두 번 물린 형태). `turnover_pct` 단위(%)는 `realism_engine` 호출부와
+        같게 맞춘다.
+        """
+        d = MarketImpactModel.turnover_based_impact(
+            turnover_pct=float(turnover) * 100.0,
+            portfolio_equity=float(notional_krw),
+            avg_adv_krw=float(self.adv_krw),
+            avg_volatility=float(self.volatility),
+            weighted_alpha=float(self.alpha),
+        )
+        return {
+            "impact_bps": float(d.get("impact_bps") or 0.0),
+            "participation": float(d.get("participation") or 0.0),
+            "cost_pct": float(d.get("cost_pct") or 0.0),
+            "order_value_krw": float(d.get("order_value") or 0.0),
+        }

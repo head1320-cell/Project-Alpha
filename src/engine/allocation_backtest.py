@@ -18,6 +18,8 @@ from typing import Any
 
 import numpy as np
 
+from src.engine.market_impact import ImpactAssumptions
+
 logger = logging.getLogger(__name__)
 
 _RF = 0.035
@@ -363,7 +365,8 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                  window_days: int | None = None, cost_bps: float = 10.0,
                  bench: np.ndarray | None = None,
                  min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
-                 regime: dict | None = None) -> dict:
+                 regime: dict | None = None,
+                 impact: ImpactAssumptions | None = None) -> dict:
     """정책 walk-forward 백테스트.
 
     R: T×N 일별 수익률 · dates: 길이 T date-like · window_days: rolling(None=expanding).
@@ -409,6 +412,10 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     rb_at: list[int] = []
     rb_preds: list[float] = []
     w = np.zeros(n)                                # 현재 보유(표류) 비중
+    # ★참여율 충격 (P3)★ 기본 `None` 이면 아래 재귀는 한 자도 바뀌지 않는다.
+    imp_bps_hist: list[float] = []
+    imp_parts: list[float] = []
+    imp_cost_mult = 1.0
     w_prev_target: dict[str, float] | None = None
     rb_set = set(rb)
 
@@ -445,7 +452,21 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                 if w_new is None:
                     w_new = w                                  # 거래하지 않는다
                 turnover = 0.5 * float(np.abs(w_new - w).sum())   # 편도 회전율
-                equity *= (1.0 - turnover * cost)
+                # ★분기다 — 기본 경로에 부동소수 연산을 한 개도 늘리지 않는다 (P3)★
+                # `bps = cost_bps + 0.0` 로 합쳐 쓰면 대수적으로는 같지만 기본
+                # 경로가 1 ulp 흔들릴 수 있고, 그러면 A3·M7 의 기록이 깨진다
+                # (`build_panel` 의 `scale == 1.0` 단축과 같은 이유).
+                imp_bps = 0.0
+                if impact is not None:
+                    est = impact.impact_bps(
+                        turnover, float(impact.portfolio_krw) * equity)
+                    imp_bps = est["impact_bps"]
+                    imp_parts.append(est["participation"])
+                    imp_cost_mult *= (1.0 - turnover * imp_bps / 1e4)
+                    equity *= (1.0 - turnover * (cost + imp_bps / 1e4))
+                else:
+                    equity *= (1.0 - turnover * cost)
+                imp_bps_hist.append(imp_bps)
                 w = w_new
                 w_prev_target = {names[i]: float(w[i]) for i in range(n)}
                 # ★예측은 그 시점의 학습창만 쓴다★ 앞으로의 구간 길이도 수익도 모른다.
@@ -457,6 +478,9 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                     "weights": {names[i]: round(float(w[i]) * 100, 2)
                                 for i in range(n) if abs(w[i]) > 5e-4},
                     "turnover_pct": round(turnover * 100, 2),
+                    # ★재귀에 쓴 바로 그 값을 싣는다★ 리포트와 재귀가 갈라지면
+                    # 어느 쪽도 검증할 수 없다. `impact=None` 이면 정확히 0.0.
+                    "impact_bps": imp_bps,
                     # 롱숏에서는 넷 하나로 포지션 크기를 말할 수 없다
                     "gross_pct": round(float(np.abs(w).sum()) * 100, 2),
                     "net_pct": round(float(w.sum()) * 100, 2),
@@ -520,6 +544,45 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         info_ratio = (active_ret / te) if te > 0 else 0.0
 
     turnovers = [rb_["turnover_pct"] for rb_ in rebalances]
+
+    # ── ★참여율 충격 — 무엇을 가정했고 무엇을 물렸는가 (P3)★ ────────────────
+    # 정액 비용은 얼마나 많이 거래하든 **같은 요율**을 매긴다. 충격은 회전율에
+    # 비례하므로, 회전율이 4.3배인 팔을 정액으로 재면 그 팔이 체계적으로 유리하게
+    # 평가된다 — ④ 경제적 가치 관문이 재려는 것이 바로 그 우위이므로 이는 관문
+    # 자신의 편향이다. 적용 여부와 무관하게 **무엇을 했는지 적는다**.
+    if impact is None:
+        impact_block: dict[str, Any] = {
+            "applied": False, "convention": None,
+            "mean_bps": None, "max_bps": None, "max_participation": None,
+            "beyond_model_range": None, "total_cost_pct": None,
+            "reason": ("규모 가정(ImpactAssumptions)을 주지 않아 참여율 충격을 "
+                       "적용하지 않았습니다 — 정액 cost_bps 만 물렸습니다. "
+                       "회전율이 큰 팔이 그만큼 유리하게 평가됩니다."),
+        }
+    else:
+        max_part = max(imp_parts) if imp_parts else 0.0
+        beyond = max_part > 1.0
+        notes: list[str] = []
+        if beyond:
+            # ★검량 범위 밖을 침묵하며 외삽하지 않는다★ 하루치 ADV 를 넘는 주문에
+            # √법칙을 그대로 밀면 그 수는 측정이 아니라 제조다.
+            notes.append(
+                f"최대 참여율 {round(max_part, 3)} — 하루치 ADV 를 넘는 주문입니다. "
+                "√법칙은 이 영역에서 검량되지 않았으므로 이 규모의 충격 추정은 "
+                "★모델 적용 범위 밖★ 입니다.")
+        if not imp_bps_hist:
+            notes.append("리밸런싱이 없어 충격을 잰 적이 없습니다.")
+        impact_block = {
+            "applied": True,
+            "convention": impact.as_convention(),
+            "mean_bps": (round(float(np.mean(imp_bps_hist)), 4)
+                         if imp_bps_hist else None),
+            "max_bps": round(max(imp_bps_hist), 4) if imp_bps_hist else None,
+            "max_participation": round(max_part, 6) if imp_parts else None,
+            "beyond_model_range": beyond,
+            "total_cost_pct": round((1.0 - imp_cost_mult) * 100.0, 6),
+            "reason": (" ".join(notes) if notes else None),
+        }
     conformal = _conformal_block(rb_preds, rb_at, eq, start)
 
     # ★롱숏 백테스트의 비용은 이 엔진이 모델하지 않는다 — 값으로 채우지 말고 적는다★
@@ -576,6 +639,7 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             "detail": regime_detail,
         },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
+        "impact": impact_block,
         "metrics": metrics,
         "summary": {
             "total_return_pct": round(total_ret * 100, 2),
