@@ -35,6 +35,33 @@ SCENARIO_PATHS: tuple[tuple[str, str], ...] = (
 )
 
 
+#: `allocation_routes.py` 에 **남아 있는** 18개 경로 (P8). 이 목록은 서비스 추출·
+#: 라우터 분리 **전에** 뜬 것이다 — 옮긴 뒤에 뜨면 그 사이에 사라진 경로는 영원히
+#: 안 보인다(이 파일 첫머리가 `timing_routes` 때 적어 둔 그대로다).
+#: ★어느 모듈이 등록하든 상관없다★ 이 테스트가 거는 것은 **URL 표면**이지 파일이
+#: 아니다. P8 ③ 이 여덟 개를 새 모듈로 옮겨도 이 목록은 한 줄도 바뀌지 않는다.
+ALLOCATION_PATHS: tuple[tuple[str, str], ...] = (
+    ("POST", "/api/v1/allocation/analyze"),
+    ("POST", "/api/v1/allocation/backtest"),
+    ("POST", "/api/v1/allocation/factor-xray"),
+    ("POST", "/api/v1/allocation/stress"),
+    ("POST", "/api/v1/allocation/sensitivity"),
+    ("GET", "/api/v1/allocation/stress-catalog"),
+    ("GET", "/api/v1/allocation/stress-scenarios"),
+    ("GET", "/api/v1/allocation/kr-scenario-catalog"),
+    ("POST", "/api/v1/allocation/kr-scenario"),
+    ("POST", "/api/v1/allocation/resolve-names"),
+    ("POST", "/api/v1/allocation/factor-portfolio"),
+    ("POST", "/api/v1/allocation/stress-correlation"),
+    ("POST", "/api/v1/allocation/target-versions"),
+    ("GET", "/api/v1/allocation/target-versions/{tpv_id}"),
+    ("GET", "/api/v1/allocation/target-versions"),
+    ("POST", "/api/v1/allocation/rebalance-decision"),
+    ("GET", "/api/v1/allocation/exposures"),
+    ("POST", "/api/v1/allocation/implement"),
+)
+
+
 def _route_set(app) -> set[tuple[str, str]]:
     """{(메서드, 경로)} — HEAD/OPTIONS 같은 자동 생성 메서드는 뺀다."""
     out: set[tuple[str, str]] = set()
@@ -97,3 +124,32 @@ def test_the_whole_route_surface_is_large_and_healthy():
     `app_factory` 는 로그만 남기고 계속 진행하므로, 조용히 수십 개가 없어질 수 있다."""
     routes = _route_set(create_app())
     assert len(routes) > 200, f"라우트가 {len(routes)}개뿐 — 라우터 등록이 실패했을 수 있다"
+
+
+# ── ★P8 — 서비스 추출·라우터 분리 전에 못 박는다★ ────────────────────────
+def test_every_allocation_path_is_registered():
+    """18개 경로 전부. 하나라도 빠지면 프론트가 404 를 받는다.
+
+    ★`app_factory.register_routers` 는 한 모듈이 import 에러여도 로그만 남기고
+    넘어간다★ — 새 라우터를 `ROUTER_MODULES` 에 안 넣거나 그 모듈이 터지면
+    경로 여덟 개가 **조용히** 사라진다. 이 테스트가 그 침묵을 깬다.
+    """
+    routes = _route_set(create_app())
+    missing = [p for p in ALLOCATION_PATHS if p not in routes]
+    assert missing == [], f"등록되지 않은 배분 경로: {missing}"
+
+
+def test_allocation_paths_are_registered_exactly_once():
+    """★원본에서 지우지 않고 새 모듈에 추가하면 그림자 라우트가 된다★ — 조용히."""
+    app = create_app()
+    for method, path in ALLOCATION_PATHS:
+        n = sum(1 for r in app.routes
+                if getattr(r, "path", None) == path
+                and method in (getattr(r, "methods", None) or set()))
+        assert n == 1, f"{method} {path} 가 {n}번 등록됐다(중복 등록은 그림자 라우트를 만든다)"
+
+
+def test_the_allocation_prefix_holds_for_every_path():
+    """URL 은 파일 위치와 무관해야 한다 — 프리픽스가 바뀌면 파괴적 변경이다."""
+    for _m, p in ALLOCATION_PATHS:
+        assert p.startswith("/api/v1/allocation/"), p
