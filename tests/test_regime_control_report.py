@@ -650,21 +650,27 @@ def test_the_nulls_pay_the_same_impact_as_the_arms():
 
     import scripts.regime_control as rc
     tree = ast.parse(textwrap.dedent(inspect.getsource(rc.run)))
-    calls = [n for n in ast.walk(tree)
+
+    # ★P7 이후 비용은 `evaluate` 가 문다★ 계획(`plan_for`)은 비용을 모르므로
+    # 팔·널이 갈릴 수 있는 지점은 시뮬레이션 호출뿐이다.
+    evals = [n for n in ast.walk(tree)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-             and n.func.id == "backtest"]
-    assert len(calls) >= 3, "backtest 호출을 못 찾았다 — 이 테스트가 공허하다"
-    for c in calls:
-        assert any(k.arg is None and isinstance(k.value, ast.Name)
-                   and k.value.id == "kw" for k in c.keywords), \
-            "어떤 backtest 호출이 공용 kw 를 우회한다 — 널과 팔의 비용이 갈릴 수 있다"
-    # 그리고 그 `kw` 가 실제로 impact 를 싣는다
-    assigns = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
-               and any(isinstance(t, ast.Name) and t.id == "kw" for t in n.targets)]
-    assert assigns, "kw 대입을 못 찾았다"
-    keys = {k.value for a in assigns if isinstance(a.value, ast.Dict)
-            for k in a.value.keys if isinstance(k, ast.Constant)}
-    assert "impact" in keys
+             and n.func.id == "evaluate"]
+    assert len(evals) >= 3, "evaluate 호출을 못 찾았다 — 이 테스트가 공허하다"
+    for c in evals:
+        kw = {k.arg: k.value for k in c.keywords if k.arg}
+        assert "impact" in kw, "어떤 evaluate 가 impact 를 안 넘긴다"
+        assert isinstance(kw["impact"], ast.Name) and kw["impact"].id == "impact", \
+            "impact 가 상수다 — 널과 팔의 비용 체제가 갈릴 수 있다"
+
+    # ★계획에는 비용이 들어가면 안 된다★ (P7 경계)
+    plans = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+             and n.func.id == "plan_for"]
+    assert plans, "plan_for 호출을 못 찾았다"
+    for c in plans:
+        named = {k.arg for k in c.keywords if k.arg}
+        assert "impact" not in named and "cost_bps" not in named
 
 
 def test_the_edge_is_read_across_cost_levels_as_a_conjunction():

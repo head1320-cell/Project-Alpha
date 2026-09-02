@@ -138,19 +138,57 @@ def _sharpe(daily: np.ndarray) -> float | None:
     return None if v is None else round(float(v), 8)
 
 
-def backtest(names, R, dates, regime, *, model: str, cost_bps: float,
-             rebalance: str, min_train: int, impact=None) -> dict:
-    """`walk_forward` 한 번 — 요약 지표 + 일수익 + 국면 계약 신고.
+class PlanCounter:
+    """계획을 몇 번 만들고 몇 번 태웠는가 — ★세지 않으면 재사용은 주장이다★ (P7).
+
+    "비용마다 다시 계산하지 않는다" 는 값으로 확인할 수 없다(빠른지 느린지는
+    타이밍이고, 타이밍은 테스트가 아니다). 그래서 구조를 센다.
+    """
+
+    __slots__ = ("plans_built", "simulations_run")
+
+    def __init__(self) -> None:
+        self.plans_built = 0
+        self.simulations_run = 0
+
+    def as_dict(self) -> dict:
+        reuse = (self.simulations_run / self.plans_built) if self.plans_built else None
+        return {"plans_built": self.plans_built,
+                "simulations_run": self.simulations_run,
+                "reuse_factor": (None if reuse is None else round(reuse, 4))}
+
+
+def plan_for(names, R, dates, regime, *, model: str, rebalance: str,
+             min_train: int, counter: PlanCounter | None = None):
+    """비용을 모르는 계획을 만든다 (P7 ②).
+
+    ★관문이 비용 수준마다 이것을 다시 만들고 있었다★ — P3 이 비중 경로의 비용
+    불변성을 증명해 뒀는데도. 이제 팔·널마다 **한 번** 만들고 비용은 그 위에서 돈다.
+    """
+    from src.engine.allocation_backtest import plan_walk_forward
+
+    plan = plan_walk_forward(names, R, dates, model=model, rebalance=rebalance,
+                             min_train=min_train, regime=regime)
+    if counter is not None:
+        counter.plans_built += 1
+    return plan
+
+
+def evaluate(plan, *, cost_bps: float, impact=None,
+             counter: PlanCounter | None = None) -> dict:
+    """계획 하나에 비용을 물려 요약 지표 + 일수익 + 국면 계약을 낸다.
 
     ★`impact` 는 팔에도 널에도 **똑같이** 넘어가야 한다 (P3)★ 널이 정액이고
     팔만 충격을 물면 분위수가 서로 다른 비용 체제를 비교하게 되어 무의미해진다.
     서로게이트마다 회전율이 다르니 널도 각자 다른 충격을 문다 — 그게 옳다.
     """
-    from src.engine.allocation_backtest import walk_forward
+    from src.engine.allocation_backtest import simulate_walk_forward
 
-    out = walk_forward(names, R, dates, model=model, rebalance=rebalance,
-                       min_train=min_train, cost_bps=cost_bps, regime=regime,
-                       impact=impact)
+    if isinstance(plan, dict):                     # 계획 단계의 명시적 거부
+        return {"available": False, "reason": plan.get("message")}
+    out = simulate_walk_forward(plan, cost_bps=cost_bps, impact=impact)
+    if counter is not None:
+        counter.simulations_run += 1
     if out.get("error"):
         return {"available": False, "reason": out.get("message")}
     s = out["summary"]
@@ -185,6 +223,14 @@ def backtest(names, R, dates, regime, *, model: str, cost_bps: float,
         "prob_usage": last.get("prob_usage"),
         "daily": daily,
     }
+
+
+def backtest(names, R, dates, regime, *, model: str, cost_bps: float,
+             rebalance: str, min_train: int, impact=None) -> dict:
+    """`plan_for` → `evaluate` 의 얇은 합성 — 비용 하나짜리 호출부용."""
+    return evaluate(plan_for(names, R, dates, regime, model=model,
+                             rebalance=rebalance, min_train=min_train),
+                    cost_bps=cost_bps, impact=impact)
 
 
 def _stats(arm: dict, off: dict) -> dict:
@@ -344,13 +390,38 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
     by_cost: dict[str, dict] = {}
     spa_inputs: dict[str, dict] = {}
 
+    # ★계획을 먼저 전부 만든다 — 비용은 그 위에서 돈다 (P7 ②)★
+    # 예전에는 `for cost: for arm/null: backtest(...)` 라 같은 비중 경로를 비용
+    # 수준마다 처음부터 다시 계산했다(3비용 × 185런 = 555 계획). P3 이 비중 경로의
+    # 비용 불변성을 증명해 뒀으므로 계획은 185번이면 충분하다.
+    counter = PlanCounter()
+    pkw = {k: v for k, v in kw.items() if k != "impact"}
+    off_plan = plan_for(names, R, dates, None, counter=counter, **pkw)
+    arm_plans = {arm: (off_plan if arm == rs.ARM_OFF
+                       else plan_for(names, R, dates, arm_regime(points, arm),
+                                     counter=counter, **pkw))
+                 for arm in rs.ARMS}
+    null_plans: dict[str, list] = {}
+    for method, ks in ((rs.NULL_SHIFT, shift_ks),
+                       (rs.NULL_MARKOV, list(range(int(n_markov)))),
+                       (rs.NULL_BLOCK, list(range(int(n_block))))):
+        seq = []
+        for i, k in enumerate(ks):
+            sur = rs.surrogate_path(points, method, np.random.default_rng(
+                int(seed) + 1000 * (i + 1)), k=(k if method == rs.NULL_SHIFT else None))
+            seq.append(plan_for(names, R, dates,
+                                {"points": sur, "weighting": "hard"},
+                                counter=counter, **pkw))
+        null_plans[method] = seq
+
     for cost in cost_levels:
-        off = backtest(names, R, dates, None, cost_bps=float(cost), **kw)
+        off = evaluate(off_plan, cost_bps=float(cost), impact=impact,
+                       counter=counter)
         arms: dict[str, dict] = {}
         for arm in rs.ARMS:
             bt = (off if arm == rs.ARM_OFF
-                  else backtest(names, R, dates, arm_regime(points, arm),
-                                cost_bps=float(cost), **kw))
+                  else evaluate(arm_plans[arm], cost_bps=float(cost),
+                                impact=impact, counter=counter))
             arms[arm] = {**{k: v for k, v in bt.items() if k != "daily"},
                          **_stats(bt, off)}
             spa_inputs.setdefault(str(cost), {})[arm] = bt.get("daily")
@@ -362,12 +433,9 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
                            (rs.NULL_MARKOV, list(range(int(n_markov)))),
                            (rs.NULL_BLOCK, list(range(int(n_block))))):
             vals: list[float] = []
-            for i, k in enumerate(ks):
-                sur = rs.surrogate_path(points, method, np.random.default_rng(
-                    int(seed) + 1000 * (i + 1)), k=(k if method == rs.NULL_SHIFT else None))
-                bt = backtest(names, R, dates,
-                              {"points": sur, "weighting": "hard"},
-                              cost_bps=float(cost), **kw)
+            for i, _k in enumerate(ks):
+                bt = evaluate(null_plans[method][i], cost_bps=float(cost),
+                              impact=impact, counter=counter)
                 st = _stats(bt, off)
                 if st[PRIMARY] is not None:
                     vals.append(st[PRIMARY])
@@ -456,6 +524,9 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
                    if impact is None else
                    {"applied": True, "convention": impact.as_convention(),
                     "reason": None}),
+        # ★재사용을 세어서 싣는다 (P7)★ 세지 않으면 "비용마다 다시 계산하지
+        # 않는다" 는 검증 불가능한 주장이다.
+        "plan_reuse": counter.as_dict(),
         "by_cost": by_cost, "spa": spa, "mcs": mcs, "verdict": verdict,
     }
 
