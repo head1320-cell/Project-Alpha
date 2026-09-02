@@ -102,7 +102,10 @@ def test_an_unavailable_replay_reports_no_shock_rather_than_zero(client, monkeyp
     이 환경에서는 mock 합성 리플레이가 가용하므로, 미가용 경로를 **강제로** 태운다 —
     환경에 따라 분기가 안 돌면 통과해도 아무것도 증명하지 못한다(7b 의 헛돈 게이트).
     """
-    import src.api.allocation_routes as ar
+    # ★패치는 `allocation_stress_routes` 를 겨눈다 (P8 ③)★ 라우트가 그리로
+    # 옮겨 갔고 `scenario_routes` 도 거기서 import 한다 — 옛 경로를 겨누면
+    # 예외도 없이 **조용히** 빗나가서, 이 테스트가 아무것도 재지 않게 된다.
+    import src.api.allocation_stress_routes as ar
     monkeypatch.setattr(ar, "allocation_stress", lambda req: {
         "error": False, "mode": "historical", "available": False,
         "scenario": req.scenario, "reason": "해당 기간 시세 데이터 미보유"})
@@ -255,7 +258,10 @@ def test_a_leg_that_could_not_be_judged_gets_no_loss_figure(client):
 
 def test_an_unavailable_scenario_composes_no_leg_losses(client, monkeypatch):
     """충격 자체를 못 구했으면 다리별 손실도 없다."""
-    import src.api.allocation_routes as ar
+    # ★패치는 `allocation_stress_routes` 를 겨눈다 (P8 ③)★ 라우트가 그리로
+    # 옮겨 갔고 `scenario_routes` 도 거기서 import 한다 — 옛 경로를 겨누면
+    # 예외도 없이 **조용히** 빗나가서, 이 테스트가 아무것도 재지 않게 된다.
+    import src.api.allocation_stress_routes as ar
     monkeypatch.setattr(ar, "allocation_stress", lambda req: {
         "error": False, "mode": "historical", "available": False,
         "scenario": req.scenario, "reason": "해당 기간 시세 데이터 미보유"})

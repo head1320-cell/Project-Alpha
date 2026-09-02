@@ -44,6 +44,7 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.macro_routes",
     "src.api.trading_routes",
     "src.api.allocation_routes",
+    "src.api.allocation_stress_routes",
     "src.api.timing_routes",
     "src.api.scenario_routes",
     "src.api.research_routes",

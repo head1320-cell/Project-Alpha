@@ -258,7 +258,7 @@ def test_inline_packs_with_the_same_shock_get_the_same_identity():
 # 7. 이동 — 역사 윈도우 정의가 사라지지 않았다
 # ═══════════════════════════════════════════════════════════════════════════════
 def test_hist_windows_moved_without_losing_a_window():
-    from src.api.allocation_routes import _HIST_WINDOWS
+    from src.api.allocation_stress_routes import _HIST_WINDOWS
     assert _HIST_WINDOWS is sp.HIST_WINDOWS
     assert set(sp.HIST_WINDOWS) == {"hist_2008_gfc", "hist_2018_trade",
                                     "hist_2020_covid", "hist_2022_rates"}

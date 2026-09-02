@@ -7,7 +7,7 @@ import os
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
-from src.api.allocation_routes import allocation_stress_scenarios  # noqa: E402
+from src.api.allocation_stress_routes import allocation_stress_scenarios  # noqa: E402
 from src.api.alpha_routes import alpha_fields  # noqa: E402
 
 
@@ -95,7 +95,7 @@ def test_stress_scenarios_severity_only_for_shock_models():
 
 def test_stress_scenarios_ids_unique_and_match_legacy_catalogs():
     """통합 카탈로그가 기존 두 엔드포인트의 상위집합 — 항목 유실 금지."""
-    from src.api.allocation_routes import allocation_kr_scenario_catalog, allocation_stress_catalog
+    from src.api.allocation_stress_routes import allocation_kr_scenario_catalog, allocation_stress_catalog
 
     cat = allocation_stress_scenarios()
     ids = [s["id"] for g in cat["groups"] for s in g["items"]]

@@ -19,15 +19,18 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 import src.api.allocation_routes as ar  # noqa: E402
+import src.api.allocation_stress_routes as sr  # noqa: E402
 import src.api.timing_routes as tmr  # noqa: E402
 from src.api.allocation_routes import (  # noqa: E402
     FactorPortfolioRequest,
     FactorSpec,
     ResolveNamesRequest,
-    StressCorrRequest,
-    StressRequest,
     allocation_factor_portfolio,
     allocation_resolve_names,
+)
+from src.api.allocation_stress_routes import (  # noqa: E402
+    StressCorrRequest,
+    StressRequest,
     allocation_stress,
     allocation_stress_correlation,
 )
@@ -200,7 +203,9 @@ def test_timing_overlay_moves_to_cash(monkeypatch):
 
 # ── stress severity ───────────────────────────────────────────────────────────
 def _patch_shock(monkeypatch):
-    monkeypatch.setattr(ar, "_shock_inputs", lambda code: SimpleNamespace(
+    # ★패치는 호출부가 있는 모듈을 겨눈다 (P8 ③)★ 옛 경로를 겨누면
+    # 예외 없이 조용히 빗나간다.
+    monkeypatch.setattr(sr, "_shock_inputs", lambda code: SimpleNamespace(
         stock_code=code, corp_name=code, debt_ratio_pct=120.0, per=20.0,
         dividend_yield_pct=1.0, roe_pct=10.0, beta_1y=1.2, composite_score=50))
 

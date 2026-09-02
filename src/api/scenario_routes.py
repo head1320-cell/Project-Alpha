@@ -132,7 +132,7 @@ def _run_pack(pack, req: ScenarioRunRequest, definition: dict | None = None) -> 
                 "shock_basis": "즉시 충격 (팩터 민감도 선형 추정)"}
 
     # m8 · 역사 리플레이 — 기존 라이브 경로에 그대로 위임한다(본문 무변경).
-    from src.api.allocation_routes import StressRequest, allocation_stress
+    from src.api.allocation_stress_routes import StressRequest, allocation_stress
     out = allocation_stress(StressRequest(
         holdings=holdings, scenario=pack.engine_key,
         severity=req.severity, benchmark=req.benchmark))
