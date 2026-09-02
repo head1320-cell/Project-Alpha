@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -359,18 +360,71 @@ def _month_of_point(p: dict) -> str:
     return _normalize_month(p.get("t")) or ""
 
 
-def walk_forward(names: list[str], R: np.ndarray, dates: list,
-                 model: str = "mvo", views: list[dict] | None = None,
-                 constraints=None, rebalance: str = "M",
-                 window_days: int | None = None, cost_bps: float = 10.0,
-                 bench: np.ndarray | None = None,
-                 min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
-                 regime: dict | None = None,
-                 impact: ImpactAssumptions | None = None) -> dict:
-    """정책 walk-forward 백테스트.
 
-    R: T×N 일별 수익률 · dates: 길이 T date-like · window_days: rolling(None=expanding).
-    반환: equity_curve/bench_curve/drawdown_curve/rebalances/metrics/summary (전부 OOS).
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ★계획과 시뮬레이션을 가른다★ (P7)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# P3 이 대수적 항등식으로 증명한 사실: **비중 경로는 비용에 불변**이다. 그런데
+# 관문은 같은 비중 경로를 비용 수준마다 처음부터 다시 계산했다(3비용 × 185런 =
+# 555 백테스트, 관문 1회 ≈ 12.4분 실측).
+#
+# ★경계는 주장이 아니라 열거로 증명된다★ 예전 단일 루프에서 `equity` 를 읽는
+# 지점은 **네 곳뿐**이었다: 충격 notional · 비용 적용 두 줄 · 수익 복리. 어느
+# 것도 비중·회전율·일수익으로 되돌아가지 않는다. 따라서 그 셋은 전부 비용 무관
+# 이고, 비용은 자본곡선에서만 산다.
+#
+# 그래서 캐시를 두지 않는다 — ★캐시는 키가 불완전하면 다른 백테스트의 수를
+# 조용히 쓴다.★ 대신 계획 단계에서 비용을 **인자에서 제거**했다. 불변성이
+# 키 관리가 아니라 **구조**가 되므로, 앞으로 비용 의존성을 넣는 것 자체가
+# 타입 수준에서 불가능하다.
+
+
+@dataclass(frozen=True)
+class WalkForwardPlan:
+    """비용을 모르는 walk-forward 계획 — PIT 비중 경로와 그 부산물.
+
+    ★이 객체를 만드는 데 `cost_bps` 도 `impact` 도 쓰이지 않는다.★
+    `simulate_walk_forward` 가 이것 하나만 받아 자본곡선을 만든다.
+    """
+
+    names: list[str]
+    start: int
+    n_obs: int
+    model: str
+    rebalance: str
+    window_days: int | None
+    arm: str
+    long_short: bool
+    #: 시뮬 구간 — 날짜 문자열과 일 포트수익(비중 표류는 수익만으로 결정된다)
+    sim_dates: list[int]
+    sim_date_strs: list[str]
+    port_daily: list[float]
+    #: 리밸런싱 — 인덱스·예측·회전율·비용 무관 메타 (전부 1:1 정렬)
+    rb_at: list[int]
+    rb_preds: list[float]
+    turnover: list[float]
+    rebalance_meta: list[dict]
+    #: 감사
+    regime_detail: list[dict]
+    infeasible: list[dict]
+    #: 벤치마크 정렬(비용 무관)
+    bench_aligned: Any = None
+    bench_curve: Any = None
+
+
+def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
+                      model: str = "mvo", views: list[dict] | None = None,
+                      constraints=None, rebalance: str = "M",
+                      window_days: int | None = None,
+                      min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
+                      bench: np.ndarray | None = None,
+                      regime: dict | None = None) -> WalkForwardPlan | dict:
+    """PIT 비중 경로를 만든다 — ★비용을 인자로 받지 않는다★ (P7).
+
+    각 리밸런싱 시점 k 의 가중치는 **오직 k 이전 데이터**로만 계산된다(look-ahead
+    없음). 실패하면 기존과 같은 `{"error": True, "message": …}` 를 돌려준다.
     """
     R = np.asarray(R, dtype=float)
     n = len(names)
@@ -399,23 +453,16 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
 
     start = rb[0]                                  # 시뮬레이션 시작(첫 리밸런싱)
     T = R.shape[0]
-    cost = float(cost_bps) / 1e4
 
-    equity = 1.0
-    eq_curve: list[float] = []
     port_daily: list[float] = []
     sim_dates: list = []
-    rebalances: list[dict] = []
+    rebalance_meta: list[dict] = []
+    turnover_hist: list[float] = []
     # Conformal 보정셋의 원재료 (M2-C) — 리밸런스 시점 t 와 **그 시점에 알 수 있는**
-    # 기대 일수익. 실현값은 루프가 끝난 뒤 자산곡선에서 구한다(구간 길이를 미리 쓰지
-    # 않기 위해 총수익이 아니라 **일평균**으로 맞춘다 — 아래 `_conformal_block` 참조).
+    # 기대 일수익. 실현값은 자본곡선에서 구하므로 시뮬레이션 단계로 넘어간다.
     rb_at: list[int] = []
     rb_preds: list[float] = []
     w = np.zeros(n)                                # 현재 보유(표류) 비중
-    # ★참여율 충격 (P3)★ 기본 `None` 이면 아래 재귀는 한 자도 바뀌지 않는다.
-    imp_bps_hist: list[float] = []
-    imp_parts: list[float] = []
-    imp_cost_mult = 1.0
     w_prev_target: dict[str, float] | None = None
     rb_set = set(rb)
 
@@ -452,42 +499,26 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                 if w_new is None:
                     w_new = w                                  # 거래하지 않는다
                 turnover = 0.5 * float(np.abs(w_new - w).sum())   # 편도 회전율
-                # ★분기다 — 기본 경로에 부동소수 연산을 한 개도 늘리지 않는다 (P3)★
-                # `bps = cost_bps + 0.0` 로 합쳐 쓰면 대수적으로는 같지만 기본
-                # 경로가 1 ulp 흔들릴 수 있고, 그러면 A3·M7 의 기록이 깨진다
-                # (`build_panel` 의 `scale == 1.0` 단축과 같은 이유).
-                imp_bps = 0.0
-                if impact is not None:
-                    est = impact.impact_bps(
-                        turnover, float(impact.portfolio_krw) * equity)
-                    imp_bps = est["impact_bps"]
-                    imp_parts.append(est["participation"])
-                    imp_cost_mult *= (1.0 - turnover * imp_bps / 1e4)
-                    equity *= (1.0 - turnover * (cost + imp_bps / 1e4))
-                else:
-                    equity *= (1.0 - turnover * cost)
-                imp_bps_hist.append(imp_bps)
+                # ★비용은 여기서 물리지 않는다 (P7)★ 회전율까지가 계획이고
+                # 그것에 요율을 곱하는 일은 시뮬레이션의 몫이다.
+                turnover_hist.append(turnover)
                 w = w_new
                 w_prev_target = {names[i]: float(w[i]) for i in range(n)}
                 # ★예측은 그 시점의 학습창만 쓴다★ 앞으로의 구간 길이도 수익도 모른다.
                 rb_at.append(t)
                 rb_preds.append(float(w_new @ R_win.mean(axis=0)))
-                rebalances.append({
+                rebalance_meta.append({
                     "date": str(getattr(dates[t], "date", lambda: dates[t])()),
                     # `abs()` — 부호가 아니라 잡음만 거른다 (P3, `_w_dict` 와 같은 이유)
                     "weights": {names[i]: round(float(w[i]) * 100, 2)
                                 for i in range(n) if abs(w[i]) > 5e-4},
                     "turnover_pct": round(turnover * 100, 2),
-                    # ★재귀에 쓴 바로 그 값을 싣는다★ 리포트와 재귀가 갈라지면
-                    # 어느 쪽도 검증할 수 없다. `impact=None` 이면 정확히 0.0.
-                    "impact_bps": imp_bps,
                     # 롱숏에서는 넷 하나로 포지션 크기를 말할 수 없다
                     "gross_pct": round(float(np.abs(w).sum()) * 100, 2),
                     "net_pct": round(float(w.sum()) * 100, 2),
                 })
         r_t = R[t]
         pr = float(w @ r_t)                        # 당일 포트 수익(장초 비중 기준)
-        equity *= (1.0 + pr)
         # 비중 표류 — 포트폴리오 가치 대비로 나눈다: wᵢ(1+rᵢ) / (1+r_p)
         #
         # ★예전에는 Σ 로 나눴다 (P3 에서 고침)★ 롱온리 완전투자에서는 Σwᵢ(1+rᵢ)
@@ -499,15 +530,10 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         if denom > 0:
             w = w * (1.0 + r_t) / denom
         port_daily.append(pr)
-        eq_curve.append(equity)
         sim_dates.append(t)
 
     port = np.asarray(port_daily, dtype=float)
-    eq = np.asarray(eq_curve, dtype=float)
-    peak = np.maximum.accumulate(eq)
-    dd = (eq / peak - 1.0)
-
-    # 벤치마크(매수보유) 정렬 — 시뮬 구간
+    # 벤치마크(매수보유) 정렬 — 시뮬 구간. ★비용 무관이므로 계획이 만든다.★
     bench_curve = None
     bench_aligned = None
     if bench is not None and len(bench) >= T:
@@ -515,6 +541,78 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         if b.shape[0] == port.shape[0]:
             bench_aligned = b
             bench_curve = list(np.round(np.cumprod(1.0 + b), 5))
+
+    return WalkForwardPlan(
+        names=list(names), start=start, n_obs=int(T), model=model,
+        rebalance=rebalance, window_days=window_days, arm=arm,
+        long_short=bool(constraints is not None
+                        and getattr(constraints, "allows_short", lambda: False)()),
+        sim_dates=list(sim_dates),
+        sim_date_strs=[str(getattr(dates[i], "date", lambda i=i: dates[i])())
+                       for i in sim_dates],
+        port_daily=port_daily, rb_at=rb_at, rb_preds=rb_preds,
+        turnover=turnover_hist, rebalance_meta=rebalance_meta,
+        regime_detail=regime_detail, infeasible=infeasible,
+        bench_aligned=bench_aligned, bench_curve=bench_curve,
+    )
+
+
+def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
+                          impact: ImpactAssumptions | None = None) -> dict:
+    """계획에 비용을 물려 자본곡선과 지표를 낸다 — ★O(T) 스칼라 루프★ (P7).
+
+    행렬 연산이 없다. 계획 하나를 비용 수준마다 다시 태우는 것이 관문의 정상
+    경로이고, 그것이 이 분리가 사는 이유다.
+
+    ★곱셈 순서를 예전 단일 루프 그대로 유지한다★ — 리밸런싱일에는 **비용을 먼저**
+    물리고 그다음 그날 수익을 복리한다. 순서가 바뀌면 비트가 바뀐다.
+    """
+    cost = float(cost_bps) / 1e4
+
+    equity = 1.0
+    eq_curve: list[float] = []
+    imp_bps_hist: list[float] = []
+    imp_parts: list[float] = []
+    imp_cost_mult = 1.0
+    rb_pos = {t: k for k, t in enumerate(plan.rb_at)}
+    rebalances: list[dict] = []
+
+    for i, t in enumerate(plan.sim_dates):
+        k = rb_pos.get(t)
+        if k is not None:
+            turnover = plan.turnover[k]
+            # ★분기다 — 기본 경로에 부동소수 연산을 한 개도 늘리지 않는다 (P3)★
+            imp_bps = 0.0
+            if impact is not None:
+                est = impact.impact_bps(
+                    turnover, float(impact.portfolio_krw) * equity)
+                imp_bps = est["impact_bps"]
+                imp_parts.append(est["participation"])
+                imp_cost_mult *= (1.0 - turnover * imp_bps / 1e4)
+                equity *= (1.0 - turnover * (cost + imp_bps / 1e4))
+            else:
+                equity *= (1.0 - turnover * cost)
+            imp_bps_hist.append(imp_bps)
+            m = plan.rebalance_meta[k]
+            rebalances.append({
+                "date": m["date"], "weights": m["weights"],
+                "turnover_pct": m["turnover_pct"],
+                # ★재귀에 쓴 바로 그 값을 싣는다★ 리포트와 재귀가 갈라지면
+                # 어느 쪽도 검증할 수 없다. `impact=None` 이면 정확히 0.0.
+                "impact_bps": imp_bps,
+                "gross_pct": m["gross_pct"], "net_pct": m["net_pct"],
+            })
+        equity *= (1.0 + plan.port_daily[i])
+        eq_curve.append(equity)
+
+    port = np.asarray(plan.port_daily, dtype=float)
+    eq = np.asarray(eq_curve, dtype=float)
+    peak = np.maximum.accumulate(eq)
+    dd = (eq / peak - 1.0)
+    T = plan.n_obs
+    start = plan.start
+    bench_aligned = plan.bench_aligned
+    bench_curve = plan.bench_curve
 
     from src.engine.quant_metrics import compute_metrics
     metrics = compute_metrics(port, eq, periods_per_year=252,
@@ -524,12 +622,9 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     years = max(port.shape[0] / 252.0, 1e-9)
     cagr = float(eq[-1] ** (1.0 / years) - 1.0) if eq[-1] > 0 else -1.0
 
-    # ★위험조정 지표는 인라인으로 다시 계산하지 않는다 (P1)★ 바로 위에서
-    # `compute_metrics` 를 부르고 여기서 sharpe·sortino·calmar 를 **또** 계산하고
-    # 있었다 — 같은 함수 안에 지표가 두 벌이었고, 그것이 관례가 갈라진 지점이다.
-    # `_RF` 와 `ddof=1` 은 이 모듈이 쓰던 관례 그대로라 **값이 바뀌지 않는다**.
-    # 미상은 `None` 인데 이 요약의 기존 계약은 `0.0` 이었으므로 그 자리에서만
-    # 보존한다(스키마 호환) — 사유는 `metrics["reasons"]` 에 남는다.
+    # ★위험조정 지표는 인라인으로 다시 계산하지 않는다 (P1)★ `_RF` 와 `ddof=1` 은
+    # 이 모듈이 쓰던 관례 그대로라 **값이 바뀌지 않는다**. 미상은 `None` 인데 이
+    # 요약의 기존 계약은 `0.0` 이었으므로 그 자리에서만 보존한다(스키마 호환).
     vol = metrics["annualized_volatility"] or 0.0
     mdd = float(dd.min()) if dd.size else 0.0
     sharpe = metrics["sharpe_ratio"] or 0.0
@@ -546,10 +641,6 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     turnovers = [rb_["turnover_pct"] for rb_ in rebalances]
 
     # ── ★참여율 충격 — 무엇을 가정했고 무엇을 물렸는가 (P3)★ ────────────────
-    # 정액 비용은 얼마나 많이 거래하든 **같은 요율**을 매긴다. 충격은 회전율에
-    # 비례하므로, 회전율이 4.3배인 팔을 정액으로 재면 그 팔이 체계적으로 유리하게
-    # 평가된다 — ④ 경제적 가치 관문이 재려는 것이 바로 그 우위이므로 이는 관문
-    # 자신의 편향이다. 적용 여부와 무관하게 **무엇을 했는지 적는다**.
     if impact is None:
         impact_block: dict[str, Any] = {
             "applied": False, "convention": None,
@@ -564,8 +655,6 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         beyond = max_part > 1.0
         notes: list[str] = []
         if beyond:
-            # ★검량 범위 밖을 침묵하며 외삽하지 않는다★ 하루치 ADV 를 넘는 주문에
-            # √법칙을 그대로 밀면 그 수는 측정이 아니라 제조다.
             notes.append(
                 f"최대 참여율 {round(max_part, 3)} — 하루치 ADV 를 넘는 주문입니다. "
                 "√법칙은 이 영역에서 검량되지 않았으므로 이 규모의 충격 추정은 "
@@ -583,16 +672,12 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             "total_cost_pct": round((1.0 - imp_cost_mult) * 100.0, 6),
             "reason": (" ".join(notes) if notes else None),
         }
-    conformal = _conformal_block(rb_preds, rb_at, eq, start)
+
+    conformal = _conformal_block(plan.rb_preds, plan.rb_at, eq, start)
 
     # ★롱숏 백테스트의 비용은 이 엔진이 모델하지 않는다 — 값으로 채우지 말고 적는다★
-    # `cost_bps` 는 거래비용(수수료·세금·스프레드)만 본다. 숏 포지션에는 그 밖에
-    # **차입수수료(대차/대주 이자) · 숏 배당지급 · 증거금 이자**가 붙는데 전부
-    # 미반영이다. 이걸 적지 않으면 롱숏이 롱온리보다 좋아 보이는 것이 **모델 때문인지
-    # 누락 때문인지 구분할 수 없다.** 데이터가 없으므로 추정치를 지어내지 않는다.
     short_notes: list[str] = []
-    is_long_short = bool(constraints is not None
-                         and getattr(constraints, "allows_short", lambda: False)())
+    is_long_short = plan.long_short
     if is_long_short:
         gross_hist = [rb_.get("gross_pct") for rb_ in rebalances if rb_.get("gross_pct")]
         short_notes.append(
@@ -612,31 +697,28 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
         "notes": short_notes,
         # ★분포 무가정 예측 구간 (M2-C)★ 적중률은 **주장이 아니라 실측**으로 함께 낸다.
         "conformal": conformal,
-        "dates": [str(getattr(dates[i], "date", lambda i=i: dates[i])()) for i in sim_dates],
+        "dates": list(plan.sim_date_strs),
         "equity_curve": list(np.round(eq, 5)),
         "bench_curve": bench_curve,
         "drawdown_curve": list(np.round(dd * 100, 3)),
         "rebalances": rebalances,
         "n_rebalances": len(rebalances),
-        # ★절단을 주장이 아니라 기록으로 증명한다★ 각 리밸런싱이 **그 시점까지의**
-        # 경로 몇 개를 봤는지, 마지막으로 본 달이 언제인지, 조건부가 실제로
-        # 적용됐는지(안 됐으면 왜)를 남긴다. 이것이 없으면 "walk-forward 인 척하는
-        # in-sample" 을 나중에 구분할 방법이 없다.
+        # ★절단을 주장이 아니라 기록으로 증명한다★
         "regime_audit": {
-            "arm": arm,
+            "arm": plan.arm,
             "n_rebalances": len(rebalances),
-            "s_override_used": sum(1 for d in regime_detail if d["applied"]),
-            "path_len_at_rebalance": [d["path_len"] for d in regime_detail],
+            "s_override_used": sum(1 for d in plan.regime_detail if d["applied"]),
+            "path_len_at_rebalance": [d["path_len"] for d in plan.regime_detail],
             # ★배분이 거부된 시점★ 무조건부로 몰래 떨어지지 않고 거래를 건너뛴 횟수.
-            "confidence_model": next((d["confidence_model"] for d in regime_detail
+            "confidence_model": next((d["confidence_model"] for d in plan.regime_detail
                                       if d.get("confidence_model")), None),
             "confidence_mean": (round(float(np.mean(
-                [d["confidence"] for d in regime_detail
+                [d["confidence"] for d in plan.regime_detail
                  if d.get("confidence") is not None])), 3)
-                if any(d.get("confidence") is not None for d in regime_detail) else None),
-            "weights_infeasible": len(infeasible),
-            "infeasible_detail": infeasible[:20],
-            "detail": regime_detail,
+                if any(d.get("confidence") is not None for d in plan.regime_detail) else None),
+            "weights_infeasible": len(plan.infeasible),
+            "infeasible_detail": plan.infeasible[:20],
+            "detail": plan.regime_detail,
         },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
         "impact": impact_block,
@@ -649,17 +731,41 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             "sortino_ratio": round(sortino, 2),
             "calmar_ratio": round(calmar, 2),
             "max_drawdown_pct": round(mdd * 100, 2),
-            # ★그 수를 만든 관례를 함께 싣는다 (P1)★ 무위험·ddof·연율화가
-            # 모듈마다 갈라져 있었고, 관례를 안 적으면 두 리포트의 Sharpe 를
-            # 비교할 수 없다. 표시 반올림과 달리 이 블록은 전정밀도다.
+            # ★그 수를 만든 관례를 함께 싣는다 (P1)★
             "convention": metrics.get("convention"),
             "sharpe_ratio_full": metrics.get("sharpe_ratio"),
             "active_return_pct": round(active_ret * 100, 2) if active_ret is not None else None,
             "information_ratio": round(info_ratio, 2) if info_ratio is not None else None,
         },
         "config": {
-            "model": model, "rebalance": rebalance,
-            "window": (f"rolling {window_days}d" if window_days else "expanding"),
+            "model": plan.model, "rebalance": plan.rebalance,
+            "window": (f"rolling {plan.window_days}d" if plan.window_days else "expanding"),
             "cost_bps": cost_bps, "n_obs": int(T),
         },
     }
+
+
+def walk_forward(names: list[str], R: np.ndarray, dates: list,
+                 model: str = "mvo", views: list[dict] | None = None,
+                 constraints=None, rebalance: str = "M",
+                 window_days: int | None = None, cost_bps: float = 10.0,
+                 bench: np.ndarray | None = None,
+                 min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
+                 regime: dict | None = None,
+                 impact: ImpactAssumptions | None = None) -> dict:
+    """정책 walk-forward 백테스트 — ★계획 → 시뮬레이션의 얇은 합성★ (P7).
+
+    R: T×N 일별 수익률 · dates: 길이 T date-like · window_days: rolling(None=expanding).
+    반환: equity_curve/bench_curve/drawdown_curve/rebalances/metrics/summary (전부 OOS).
+
+    ★공개 서명과 반환은 한 자도 바뀌지 않는다★ — 소비자(라우트·스크립트·테스트)가
+    영향을 받지 않는 것이 이 분리의 전제다. 비용 수준을 여럿 도는 호출자만
+    `plan_walk_forward` / `simulate_walk_forward` 를 직접 쓰면 이득을 얻는다.
+    """
+    plan = plan_walk_forward(names, R, dates, model=model, views=views,
+                             constraints=constraints, rebalance=rebalance,
+                             window_days=window_days, min_train=min_train,
+                             delta=delta, tau=tau, bench=bench, regime=regime)
+    if isinstance(plan, dict):                     # 계획 단계의 명시적 거부
+        return plan
+    return simulate_walk_forward(plan, cost_bps=cost_bps, impact=impact)

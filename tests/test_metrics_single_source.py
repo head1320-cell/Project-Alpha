@@ -68,11 +68,21 @@ def test_the_backtest_no_longer_computes_ratios_inline():
     """
     import inspect
 
-    from src.engine.allocation_backtest import walk_forward
-    src = inspect.getsource(walk_forward)
+    from src.engine.allocation_backtest import (
+        plan_walk_forward,
+        simulate_walk_forward,
+        walk_forward,
+    )
+    # ★P7 이후 지표는 시뮬레이션 단계에 산다★ `walk_forward` 는 계획→시뮬 합성이라
+    # 얇다. 이 가드가 지켜야 할 것은 "어느 함수에 있는가" 가 아니라 "인라인 공식이
+    # 되살아나지 않았는가" 이므로 **세 함수 전부**를 본다.
+    src = "".join(inspect.getsource(f) for f in
+                  (walk_forward, plan_walk_forward, simulate_walk_forward))
     assert "(ann - _RF) / vol" not in src
     assert "(ann - _RF) / dvol" not in src
     assert "metrics[\"sharpe_ratio\"]" in src
+    # ★그리고 계획 단계에는 지표가 아예 없어야 한다★ (P7 경계)
+    assert "compute_metrics" not in inspect.getsource(plan_walk_forward)
 
 
 # ══════════════════════════════════════════════════════════════════════════
