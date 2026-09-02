@@ -540,3 +540,151 @@ def test_the_primary_percentile_exists_for_every_cost_level():
         blk = rep["by_cost"][str(c)]
         assert PRIMARY in blk["percentile"]
         assert blk["cost_bps"] == c
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★전략 용량 — 얼마까지 태울 수 있는가★ (P3)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 규모는 가정하지 않고 쓸어서 잰다. 판정 규칙은 **새로 만들지 않는다** —
+# "어떤 축에서 처음 기준을 넘는 지점" 은 척도(A3)·개월(M7)과 같은 문제이므로
+# `mde_from_curve` 를 `key="portfolio_krw"` 로 그대로 쓴다. 아래는 그 재사용이
+# 실제로 같은 계약(미도달 → `None` + 사유 · bracket · monotone · at_search_floor)
+# 을 내는지 **순수 함수로** 확인한다 — 데이터를 만들어 규칙을 확인하려 하면
+# 픽스처의 우연을 계약으로 착각한다(이 파일 상단 참조).
+
+def _size_row(diff, **kw):
+    return {"sharpe_diff": diff, "passed": (diff is not None and diff > 0),
+            "spa_p": 0.5, "percentile": 90.0, "impact_bps_on": 20.0,
+            "impact_bps_off": 5.0, "max_participation": 0.5,
+            "beyond_model_range": False, "reason": None, **kw}
+
+
+def test_the_capacity_limit_is_the_smallest_size_where_the_edge_is_gone():
+    from scripts.regime_control import summarize_capacity
+    out = summarize_capacity({1e9: _size_row(0.20), 1e10: _size_row(0.12),
+                              1e11: _size_row(-0.03), 1e12: _size_row(-0.40)})
+    lim = out["capacity_limit"]
+    assert lim["portfolio_krw"] == 1e11
+    assert lim["bracket"] == [1e10, 1e11]
+    assert lim["monotone"] is True
+    assert lim["at_search_floor"] is False
+    assert lim["rule"] == "sharpe_diff <= 0"
+
+
+def test_an_edge_that_survives_every_size_has_no_capacity_limit():
+    """★탐색 범위를 답으로 쓰지 않는다★ (A1 `mde_from_curve` 와 같은 계약)."""
+    from scripts.regime_control import summarize_capacity
+    lim = summarize_capacity({1e9: _size_row(0.20), 1e10: _size_row(0.18),
+                              1e11: _size_row(0.15), 1e12: _size_row(0.11),
+                              })["capacity_limit"]
+    assert lim["portfolio_krw"] is None
+    assert lim["portfolio_krw"] is None
+    assert lim["searched_max"] == 1e12
+    # ★어휘를 빌려오지 않는다★ 이 축에서 검정력을 잰 적이 없다.
+    assert "검정력" not in lim["reason"]
+    assert lim["rule"] in lim["reason"]
+
+
+def test_an_edge_already_gone_at_the_smallest_size_is_flagged_not_pinned():
+    """짝 — 참 한계는 **더 작을 수** 있다. 최저 규모를 답이라고 적지 않는다."""
+    from scripts.regime_control import summarize_capacity
+    lim = summarize_capacity({1e9: _size_row(-0.01), 1e10: _size_row(-0.20),
+                              })["capacity_limit"]
+    assert lim["portfolio_krw"] == 1e9
+    assert lim["at_search_floor"] is True
+    assert lim["bracket"] == [None, 1e9]
+
+
+def test_a_curve_that_recovers_is_reported_as_non_monotone():
+    """★매끈한 척하지 않는다★ 되살아나면 그 사실을 적고 **첫 교차**를 쓴다."""
+    from scripts.regime_control import summarize_capacity
+    lim = summarize_capacity({1e9: _size_row(0.20), 1e10: _size_row(-0.05),
+                              1e11: _size_row(0.03), 1e12: _size_row(-0.30),
+                              })["capacity_limit"]
+    assert lim["portfolio_krw"] == 1e10
+    assert lim["monotone"] is False
+    assert lim["crossings"] >= 2
+
+
+def test_an_unresolved_size_is_unknown_not_zero():
+    """★미상 ≠ 0★ 팔이 해결되지 않은 규모를 0 으로 읽으면 없는 한계가 생기고
+    (0 <= 0), 우위가 살아 있다고 읽으면 하지 않은 관측이 된다."""
+    from scripts.regime_control import summarize_capacity
+    out = summarize_capacity({1e9: _size_row(0.20), 1e10: _size_row(None),
+                              1e11: _size_row(0.15)})
+    assert out["by_size"][repr(1e10)]["sharpe_diff"] is None
+    assert out["capacity_limit"]["portfolio_krw"] is None, \
+        "미상을 0 으로 읽어 한계를 만들어냈다"
+
+
+def test_sizes_outside_the_calibrated_range_are_named_with_a_reason():
+    """★검량 범위 밖을 침묵하며 외삽하지 않는다★ 1조는 최대 참여율 10.0 이다."""
+    from scripts.regime_control import summarize_capacity
+    out = summarize_capacity({
+        1e11: _size_row(0.12, max_participation=1.0),
+        1e12: _size_row(-0.05, max_participation=10.0, beyond_model_range=True)})
+    assert out["beyond_model_range_sizes"] == [1e12]
+    assert out["beyond_model_range_note"]
+
+
+def test_a_curve_entirely_inside_the_range_says_so_without_inventing_a_note():
+    """짝 — 항상-경고 구현을 배제한다."""
+    from scripts.regime_control import summarize_capacity
+    out = summarize_capacity({1e9: _size_row(0.20), 1e10: _size_row(0.10)})
+    assert out["beyond_model_range_sizes"] == []
+    assert out["beyond_model_range_note"] is None
+
+
+def test_the_nulls_pay_the_same_impact_as_the_arms():
+    """★한쪽만 충격을 무는 경로가 구조적으로 생길 수 없어야 한다 (P3)★
+
+    널이 정액이고 팔만 충격을 물면 분위수가 **서로 다른 비용 체제**를 비교하게
+    되어 무의미해진다. 값으로 재려면 전체 관문을 돌려야 하므로(규모당 ≈3분)
+    구조로 건다: `run()` 안의 모든 `backtest(...)` 호출이 `impact` 를 담은 같은
+    `**kw` 로 나가는지 본다.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    import scripts.regime_control as rc
+    tree = ast.parse(textwrap.dedent(inspect.getsource(rc.run)))
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+             and n.func.id == "backtest"]
+    assert len(calls) >= 3, "backtest 호출을 못 찾았다 — 이 테스트가 공허하다"
+    for c in calls:
+        assert any(k.arg is None and isinstance(k.value, ast.Name)
+                   and k.value.id == "kw" for k in c.keywords), \
+            "어떤 backtest 호출이 공용 kw 를 우회한다 — 널과 팔의 비용이 갈릴 수 있다"
+    # 그리고 그 `kw` 가 실제로 impact 를 싣는다
+    assigns = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+               and any(isinstance(t, ast.Name) and t.id == "kw" for t in n.targets)]
+    assert assigns, "kw 대입을 못 찾았다"
+    keys = {k.value for a in assigns if isinstance(a.value, ast.Dict)
+            for k in a.value.keys if isinstance(k, ast.Constant)}
+    assert "impact" in keys
+
+
+def test_the_edge_is_read_across_cost_levels_as_a_conjunction():
+    """★규칙이지 데이터가 아니다★ 이 관문은 비용 수준을 연언으로 다루므로
+    우위 소멸도 **최솟값**으로 읽는다. 하나를 골라 쓰면 그 선택이 용량을
+    좌우한다."""
+    from scripts.regime_control import decisive_diff
+    assert decisive_diff({"5.0": 0.20, "10.0": 0.04, "25.0": -0.02}) == -0.02
+
+
+def test_it_is_not_the_cheapest_cost_level_and_not_the_best():
+    """짝 — 가장 낮은 비용만 보면 용량이 과대평가된다."""
+    from scripts.regime_control import decisive_diff
+    d = {"5.0": 0.20, "10.0": 0.04, "25.0": -0.02}
+    assert decisive_diff(d) != d["5.0"]
+    assert decisive_diff(d) != max(d.values())
+
+
+def test_one_unknown_cost_level_makes_the_edge_unknown_not_the_minimum():
+    """★미상은 0 도 최솟값도 아니다★ 미상이 실은 더 작았을 수 있다."""
+    from scripts.regime_control import decisive_diff
+    assert decisive_diff({"5.0": 0.20, "10.0": None, "25.0": -0.02}) is None
+    assert decisive_diff({}) is None

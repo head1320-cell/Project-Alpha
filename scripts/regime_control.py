@@ -139,12 +139,18 @@ def _sharpe(daily: np.ndarray) -> float | None:
 
 
 def backtest(names, R, dates, regime, *, model: str, cost_bps: float,
-             rebalance: str, min_train: int) -> dict:
-    """`walk_forward` 한 번 — 요약 지표 + 일수익 + 국면 계약 신고."""
+             rebalance: str, min_train: int, impact=None) -> dict:
+    """`walk_forward` 한 번 — 요약 지표 + 일수익 + 국면 계약 신고.
+
+    ★`impact` 는 팔에도 널에도 **똑같이** 넘어가야 한다 (P3)★ 널이 정액이고
+    팔만 충격을 물면 분위수가 서로 다른 비용 체제를 비교하게 되어 무의미해진다.
+    서로게이트마다 회전율이 다르니 널도 각자 다른 충격을 문다 — 그게 옳다.
+    """
     from src.engine.allocation_backtest import walk_forward
 
     out = walk_forward(names, R, dates, model=model, rebalance=rebalance,
-                       min_train=min_train, cost_bps=cost_bps, regime=regime)
+                       min_train=min_train, cost_bps=cost_bps, regime=regime,
+                       impact=impact)
     if out.get("error"):
         return {"available": False, "reason": out.get("message")}
     s = out["summary"]
@@ -169,6 +175,11 @@ def backtest(names, R, dates, regime, *, model: str, cost_bps: float,
         "avg_turnover_pct": round(float(np.mean(tos)), 4) if tos else 0.0,
         "n_rebalances": out.get("n_rebalances"),
         "arm_label": aud.get("arm"),
+        # ★충격을 실제로 얼마나 물었는가★ 가정만 적고 실현값을 안 적으면
+        # 규모를 바꿨을 때 무엇이 달라졌는지 리포트에서 확인할 수 없다.
+        "impact_bps_mean": (out.get("impact") or {}).get("mean_bps"),
+        "max_participation": (out.get("impact") or {}).get("max_participation"),
+        "beyond_model_range": (out.get("impact") or {}).get("beyond_model_range"),
         # ★계약 신고를 결과 옆에 붙인다★ 하드 팔은 확률 계약을 통과하지 않는다.
         "prob_source": last.get("prob_source"),
         "prob_usage": last.get("prob_usage"),
@@ -308,7 +319,8 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
         min_train: int = 252, cost_levels=COST_LEVELS,
         n_shift: int | None = None, n_markov: int = 50, n_block: int = 50,
         seed: int = 7, threshold_pct=THRESHOLD_PCT, run_spa: bool = True,
-        spa_reps: int = 1000, provenance: dict | None = None) -> dict:
+        spa_reps: int = 1000, provenance: dict | None = None,
+        impact=None) -> dict:
     """팔과 널을 전부 돌리고 사전등록된 규칙으로 판정한다.
 
     `n_shift=None` 이면 순환이동을 **전수** 돈다(주 널). 보조 널(마르코프·블록)은
@@ -321,7 +333,10 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
     않는다★(`None` + 사유). 미상은 E3 가 아니다.
     """
     rng = np.random.default_rng(int(seed))
-    kw = {"model": model, "rebalance": rebalance, "min_train": min_train}
+    # ★`impact` 를 `kw` 에 넣는 것이 계약이다★ 팔·널이 같은 통로로 나가므로
+    # 한쪽만 충격을 무는 경로가 구조적으로 생길 수 없다.
+    kw = {"model": model, "rebalance": rebalance, "min_train": min_train,
+          "impact": impact}
 
     shift_ks, enumerated = rs.shifts_for(len(points),
                                          10**9 if n_shift is None else int(n_shift),
@@ -435,6 +450,12 @@ def run(names, R, dates, points, *, model: str = "bl", rebalance: str = "M",
                   "mean_run_length": round(float(np.mean(rs.run_lengths(points))), 4)
                   if points else None,
                   "marginal": rs.marginal(points)},
+        "impact": ({"applied": False, "convention": None,
+                    "reason": ("규모 가정을 주지 않아 정액 비용만 물렸습니다 "
+                               "— 회전율이 큰 팔이 그만큼 유리합니다.")}
+                   if impact is None else
+                   {"applied": True, "convention": impact.as_convention(),
+                    "reason": None}),
         "by_cost": by_cost, "spa": spa, "mcs": mcs, "verdict": verdict,
     }
 
@@ -636,6 +657,149 @@ def measure_power(*, months: int, base_seed: int, scales=POWER_SCALES,
     return out
 
 
+# ── ★전략 용량 — 얼마까지 태울 수 있는가★ (P3) ────────────────────────────
+#: 사전등록된 규모 격자(KRW). ★결과를 보고 바꾸지 않는다★ 위로 더 늘리면 √법칙의
+#: 검량 범위 밖(참여율 > 1)을 답으로 적게 된다 — 1조에서 이미 최대 참여율 10.0 이다.
+CAPACITY_SIZES = (1e9, 1e10, 1e11, 1e12)
+
+#: 우위가 사라졌다고 부르는 기준. 주 통계가 0 이하 = 국면 팔이 정액 팔을 못 이긴다.
+CAPACITY_RULE = "sharpe_diff <= 0"
+
+
+def decisive_diff(diffs: dict[str, float | None]) -> float | None:
+    """비용 수준별 주 통계 → ★우위를 대표하는 하나★. ★순수 함수다★.
+
+    이 관문은 비용 수준을 **연언**으로 다룬다(팔이 통과하려면 셋 **모두**에서
+    널을 넘어야 한다). 그 부정은 "어느 하나에서 무너진다" 이므로 우위가
+    사라졌다고 부르는 기준도 **최솟값**이다. 하나를 골라 쓰면 그 선택이 용량을
+    좌우한다 — 가장 낮은 비용만 보면 용량이 과대평가된다.
+
+    ★미상은 0 도 최솟값도 아니다★ 한 수준이라도 미상이면 최솟값을 주장할 수
+    없다(미상이 실은 그보다 작았을 수 있다). `None` 을 돌려준다.
+    """
+    if not diffs:
+        return None
+    vals = list(diffs.values())
+    if any(v is None for v in vals):
+        return None
+    return min(float(v) for v in vals)
+
+
+def summarize_capacity(by_size: dict[float, dict]) -> dict[str, Any]:
+    """규모별 관문 결과 → ★용량 요약★. ★순수 함수다★.
+
+    ★새 판정 규칙을 만들지 않는다★ "어떤 축에서 처음 기준을 넘는 지점" 은 척도
+    (A3)·개월(M7)과 같은 문제이므로 `research_power.mde_from_curve` 를
+    `key="portfolio_krw"` 로 그대로 쓴다. 우위 소멸을 도달로 부호화하면
+    (`rate = 1.0 if sharpe_diff <= 0 else 0.0`, 목표 1.0) 미도달 시 `None` + 사유 ·
+    `bracket` · `monotone` · `at_search_floor` 계약을 공짜로 얻는다.
+
+    ★미상은 0 이 아니다★ 어느 규모에서 팔이 해결되지 않아 `sharpe_diff` 가
+    `None` 이면 `rate` 도 `None` 이다 — 0 으로 읽으면 "우위가 살아 있다" 는
+    하지 않은 관측이 되고, 1 로 읽으면 없는 한계를 만든다.
+    """
+    levels = sorted(float(k) for k in by_size)
+    rows: dict[str, Any] = {}
+    curve: list[dict[str, Any]] = []
+    for size in levels:
+        blk = by_size[size] or {}
+        diff = blk.get("sharpe_diff")
+        rows[repr(size)] = {
+            "portfolio_krw": size,
+            "sharpe_diff": diff,
+            "sharpe_diff_by_cost": blk.get("sharpe_diff_by_cost"),
+            "passed": blk.get("passed"),
+            "verdict": blk.get("verdict"),
+            "spa_p": blk.get("spa_p"),
+            "percentile": blk.get("percentile"),
+            "impact_bps_on": blk.get("impact_bps_on"),
+            "impact_bps_off": blk.get("impact_bps_off"),
+            "max_participation": blk.get("max_participation"),
+            "beyond_model_range": blk.get("beyond_model_range"),
+            "reason": blk.get("reason"),
+        }
+        curve.append({"portfolio_krw": size,
+                      "rate": (None if diff is None else
+                               (1.0 if float(diff) <= 0.0 else 0.0))})
+
+    raw = mde_from_curve(curve, target_power=1.0, key="portfolio_krw")
+    # `mde` 라는 이름은 이 축에서 오해를 부른다 — 뜻은 그대로 두고 이름만 바꾼다.
+    limit = {k: v for k, v in raw.items() if k not in ("mde", "target_power")}
+    limit["portfolio_krw"] = raw["mde"]
+    limit["rule"] = CAPACITY_RULE
+    # ★규칙은 빌려오되 어휘까지 빌려오지는 않는다★ `mde_from_curve` 의 미도달
+    # 사유는 "목표 검정력에 도달하지 못했다" 라고 말한다 — 이 축에서는 검정력을
+    # 잰 적이 없으므로 그대로 실으면 하지 않은 측정을 주장하는 문장이 된다.
+    if limit["portfolio_krw"] is None and limit.get("searched_min") is not None:
+        limit["reason"] = (
+            f"탐색 범위({limit['searched_min']:.3g}~{limit['searched_max']:.3g} KRW)"
+            f"에서 {CAPACITY_RULE} 이 되는 규모가 없습니다 — 이 범위 안에서는 "
+            "우위가 사라지지 않습니다. ★탐색 범위를 답으로 쓰지 않습니다.★")
+
+    # ★범위 밖을 결과 옆에 붙인다★ 참여율 > 1 인 규모의 충격 추정은 외삽이다.
+    outside = [s for s in levels if rows[repr(s)]["beyond_model_range"]]
+    return {
+        "convention": True, "rule": CAPACITY_RULE,
+        "sizes_tested": levels,
+        "capacity_limit": limit,
+        "beyond_model_range_sizes": outside,
+        "beyond_model_range_note": (
+            "이 규모들은 최대 참여율이 하루치 ADV 를 넘습니다 — √법칙이 검량되지 "
+            "않은 영역이라 충격 추정이 외삽입니다." if outside else None),
+        "by_size": rows,
+    }
+
+
+def measure_capacity(names, R, dates, points, *, sizes=CAPACITY_SIZES,
+                     **kw) -> dict[str, Any]:
+    """규모마다 **전체 관문**을 돌린다 — 규모당 ≈3분 (P3).
+
+    ★규모를 가정하지 않고 쓸어서 측정값으로 바꾼다★ 임의의 기본값 하나가 주
+    통계를 5~17% 움직이므로, 답해야 할 질문은 "얼마로 놓을까" 가 아니라
+    "얼마까지 태울 수 있는가" 다(M7 이 개월 축에 한 것과 같은 규율).
+    """
+    from src.engine.market_impact import ImpactAssumptions
+
+    by: dict[float, dict] = {}
+    for size in sorted(float(x) for x in sizes):
+        rep = run(names, R, dates, points,
+                  impact=ImpactAssumptions(portfolio_krw=size), **kw)
+        # ★규칙은 순수 함수에 있다★ (`decisive_diff`)
+        diffs = {c: b["arms"][rs.ARM_ON].get(PRIMARY)
+                 for c, b in rep["by_cost"].items()}
+        decisive = decisive_diff(diffs)
+        first = next(iter(rep["by_cost"].values()))
+        on = first["arms"][rs.ARM_ON]
+        off = first["arms"][rs.ARM_OFF]
+        by[size] = {
+            "sharpe_diff": decisive,
+            "sharpe_diff_by_cost": diffs,
+            "passed": rep["verdict"]["passed"],
+            "verdict": rep["verdict"].get("verdict"),
+            "spa_p": rep["spa"]["p_max"],
+            "percentile": first["percentile"][PRIMARY],
+            "impact_bps_on": on.get("impact_bps_mean"),
+            "impact_bps_off": off.get("impact_bps_mean"),
+            "max_participation": on.get("max_participation"),
+            "beyond_model_range": on.get("beyond_model_range"),
+            "reason": (None if decisive is not None else
+                       "일부 비용 수준에서 주 통계가 미상입니다"),
+        }
+        logger.info("규모 %.0e 완료: %s=%s 통과=%s", size, PRIMARY,
+                    by[size]["sharpe_diff"], by[size]["passed"])
+    out = summarize_capacity(by)
+    out["preregistered"] = {
+        "sizes": [float(x) for x in sorted(sizes)], "rule": CAPACITY_RULE,
+        "note": ("규모는 가정하지 않고 쓸어서 잰다 — 임의의 기본값 하나가 주 "
+                 "통계를 5~17% 움직인다. 우위 소멸은 비용 수준을 가로지르는 "
+                 "주 통계의 **최솟값**으로 읽는다(이 관문이 비용 수준을 연언으로 "
+                 "다루므로 그 부정은 '어느 하나에서 무너진다' 이다). ★관문 통과 "
+                 "여부로 한계를 정의하지 않는다★ — A3 에서 84개월 관문은 규모와 "
+                 "무관하게 이미 통과하지 못하므로(병목은 SPA) 그 기준은 공허하다."),
+    }
+    return out
+
+
 def _monthly(R, dates):
     """월 합계 — `regime_signal.monthly_matrix` 를 재사용한다(단일 출처)."""
     from src.engine.regime_signal import monthly_matrix
@@ -663,6 +827,8 @@ def main() -> int:
                     help="실 패널로 돌린다 (M9). 실데이터가 없으면 ★거부★한다")
     ap.add_argument("--codes", default="", help="--real 일 때 쓸 종목코드(쉼표 구분)")
     ap.add_argument("--as-of", default=None)
+    ap.add_argument("--capacity", default=None,
+                    help="전략 용량 곡선 (P3). 예: 1e9,1e10,1e11,1e12 (규모당 ≈3분)")
     args = ap.parse_args()
 
     base, why = panel_for(real=args.real, months=args.months,
@@ -680,6 +846,15 @@ def main() -> int:
               n_markov=args.n_markov, n_block=args.n_block, seed=args.seed,
               run_spa=not args.no_spa, spa_reps=args.spa_reps,
               provenance=base.provenance)
+
+    if args.capacity:
+        rep["capacity"] = measure_capacity(
+            names, R, dates, points, model=args.model, rebalance=args.rebalance,
+            min_train=args.min_train, n_shift=args.n_shift,
+            n_markov=args.n_markov, n_block=args.n_block, seed=args.seed,
+            run_spa=not args.no_spa, spa_reps=args.spa_reps,
+            provenance=base.provenance,
+            sizes=[float(x) for x in args.capacity.split(",") if x.strip()])
 
     if args.power_months:
         months_list = [int(x) for x in args.power_months.split(",") if x.strip()]
@@ -733,6 +908,26 @@ def main() -> int:
     print(f"★판정★ 통과={v['passed']} · 널밖={v['null_outside']} · SPA={v['spa_ok']}")
     for w in v["why"]:
         print("   ·", w)
+
+    cap = rep.get("capacity")
+    if cap:
+        print(f"\n★전략 용량★ 규칙 {cap['rule']} · 규모 {len(cap['sizes_tested'])}개")
+        print(f"{'규모(KRW)':>12} {'sharpe_diff':>12} {'통과':>5} {'충격on':>8} "
+              f"{'충격off':>8} {'최대참여율':>9}  범위밖")
+        for s_ in cap["sizes_tested"]:
+            r = cap["by_size"][repr(s_)]
+            print(f"{s_:>12.0e} {str(r['sharpe_diff']):>12} "
+                  f"{str(r['passed']):>5} {str(r['impact_bps_on']):>8} "
+                  f"{str(r['impact_bps_off']):>8} "
+                  f"{str(r['max_participation']):>9}  {r['beyond_model_range']}")
+        lim = cap["capacity_limit"]
+        print(f"  ★용량 한계★ = {lim['portfolio_krw']} · bracket={lim['bracket']} "
+              f"· 단조={lim['monotone']}")
+        if lim["portfolio_krw"] is None:
+            print(f"  사유: {lim['reason']}")
+        if cap["beyond_model_range_sizes"]:
+            print(f"  ★범위 밖★ {cap['beyond_model_range_sizes']} — "
+                  f"{cap['beyond_model_range_note']}")
 
     pbm = rep.get("power_by_months")
     if pbm:
