@@ -12513,3 +12513,65 @@ P5 의 두 AST 가드는 두 라우트 **본문 안에** 관문 호출과 `if ma
   대상을 새 경로로 옮기고 여전히 변이를 죽이는지 확인했다(이번엔 크게 실패해서
   드러났지만, 조용히 공허해질 수도 있는 자리다).
 - 스트레스·시나리오 라우터 분리는 ③ 이다. 정책·수치·URL 은 이번에 하나도 안 바꿨다.
+
+## 2026-09-02 스트레스·시나리오 라우터 분리 (P8 ③, URL 불변)
+
+`src/api/allocation_stress_routes.py` 신설(556줄) · `allocation_routes.py`
+**2,038 → 1,532줄**. P8 전체로는 **2,546 → 1,532줄**이다.
+
+*(이 기록은 ③ 커밋 `8c1e838` 에 함께 들어가지 못했다 — 셸 작업 디렉터리가
+`frontend/` 에 남아 있어 append 가 실패했고, 커밋은 그대로 나갔다. 되돌려
+다시 쓰는 대신 사실을 적고 뒤이어 커밋한다.)*
+
+### 무엇을 했나
+
+`timing_routes.py` · `scenario_routes.py` 가 두 번 검증한 절차 그대로 —
+`/factor-xray` · `/stress` · `/sensitivity` · `/stress-catalog` ·
+`/stress-scenarios` · `/kr-scenario-catalog` · `/kr-scenario` ·
+`/stress-correlation` 여덟 개와 그 요청 모델·상수를 옮겼다. ★프리픽스는
+`/api/v1/allocation` 그대로이고 본문은 한 줄도 안 바꿨다.★ `ROUTER_MODULES` 에
+한 줄이 늘었다.
+
+`_xf`(팩터 값 변환)는 **남는 쪽에도 소비자가 있어** 옮기지 않았다 —
+`/factor-portfolio` 의 `_factor_weights` 가 같은 변환을 쓴다. 두 벌을 만들면
+정확히 이 리팩터가 없애려던 것(같은 산수 두 곳)이 다시 생긴다.
+
+★②와 달리 재수출하지 않았다★ ②는 호출부가 라우트에 남아 재수출이 필요했지만,
+여기서는 **라우트 자체가 옮겨 오므로** 소비자가 새 모듈을 직접 import 한다 —
+의존이 숨지 않고 보인다. `scenario_routes` 와 테스트 다섯 파일의 경로를 고쳤다.
+
+### ★조용히 깨지는 두 방식을 다뤘다★
+
+**⑴ monkeypatch 가 빗나가는 것.** `monkeypatch.setattr(ar, "_shock_inputs", …)` 는
+호출부가 새 모듈로 가면 아무 일도 하지 않는다. 이번에는 `_shock_inputs` 가
+라우트에서 아예 사라져 `AttributeError` 로 크게 실패했지만, ★이름이 남아 있었다면
+조용히 통과했을 것이다★ — `_mock_returns_fallback` 이 정확히 그 경우다(라우트에
+남아 있고, 호출부는 **둘로 갈렸다**: `_load_clean_returns`(라우트) 와
+`allocation_stress`(새 모듈)). 세 패치 지점을 호출부별로 갈라 겨눴다.
+
+그리고 ★재조준이 맞았는지 변이로 확인했다★ — 패치를 옛 모듈로 되돌리는 변이
+세 개(Z7a·Z7b·Z7c)가 모두 테스트를 죽였다. 죽지 않았다면 그 테스트는 이미
+아무것도 재지 않고 있었다는 뜻이다.
+
+**⑵ import 이름이 조용히 사라지는 것.** import 블록을 기계적으로 가르다가
+`# noqa: E402` 주석이 괄호 안 첫 줄에 있는 파일에서 **첫 이름을 삼켰다**
+(`AnalyzeRequest` · `FactorPortfolioRequest`). 수집은 통과했고 ruff 만 잡았다.
+그래서 다섯 파일 전부에 대해 커밋 전 이름 집합을 **AST 로 대조**했다 — 눈으로
+읽어 넘길 일이 아니다.
+
+### 검증
+
+변이 **7개 전부 사망**: 새 라우터 미등록(여덟 경로가 조용히 사라진다) · 두 번
+등록(그림자 라우트) · 프리픽스 변경 · 응답 키 삭제 · 패치를 옛 모듈로 되돌리기 3종.
+전체 **4,086 passed / 10 skipped** — ★분리 전후 같은 수★. ①의 골든과 파리티가
+그대로 통과했고 `tsc --noEmit` 도 통과했다(프론트 무변경).
+
+### 하지 않은 것
+
+- `/factor-portfolio` · `/resolve-names` · `/target-versions` · `/exposures` ·
+  `/implement` 는 스트레스 도메인이 아니라 남겼다. `alpha_routes` 가 쓰는
+  `_factor_weights` 도 그대로다.
+- 표현 헬퍼(`_series_stats` · `_labels` · `_w_dict` · `_risk_contribution_report`
+  등 203줄)의 3번째 분할은 **하지 않았다** — 중복도 없고 측정된 문제도 없어
+  ★정교함을 위한 정교함★ 이 된다(사용자 결정).
+- 정책·수치·URL 은 P8 세 커밋 어디서도 바뀌지 않았다.
