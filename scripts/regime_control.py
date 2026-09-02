@@ -41,6 +41,7 @@ import argparse
 import json
 import logging
 import os
+import pathlib
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -52,6 +53,7 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine import null_stats as ns  # noqa: E402
 from src.engine import regime_surrogates as rs  # noqa: E402
+from src.engine import research_manifest as rm  # noqa: E402
 from src.engine import research_power as rp  # noqa: E402
 from src.engine.research_panel import (  # noqa: E402
     evidence_grade,
@@ -871,6 +873,66 @@ def measure_capacity(names, R, dates, points, *, sizes=CAPACITY_SIZES,
     return out
 
 
+def write_verdict_manifest(rep: dict, path: str, *, report_path: str | None = None,
+                           months: int | None = None,
+                           model: str | None = None) -> dict:
+    """관문 산출 → ★판정 메니페스트★ (P5 ①).
+
+    ★관문을 돌리지 않고는 만들 수 없다★ — 판정과 **그 판정을 만든 증거**를 함께
+    적으므로, 손으로 판정만 고치면 `research_manifest.load_manifest` 의 재계산
+    대조에서 거부된다. 메니페스트가 저장소 산물이면서도 안전한 이유다.
+    """
+    import hashlib
+    from datetime import datetime, timezone
+
+    from src.engine.research_context import code_version
+
+    v = rep["verdict"]
+    prov = rep.get("provenance") or {}
+    panel = rep.get("panel") or {}
+    pre = rep.get("preregistered") or {}
+
+    sha = None
+    if report_path:
+        try:
+            sha = hashlib.sha256(
+                pathlib.Path(report_path).read_bytes()).hexdigest()
+        except OSError:
+            sha = None                      # ★없으면 지어내지 않는다★
+
+    manifest = {
+        "schema": rm.SCHEMA,
+        "verdict": v["verdict"], "passed": bool(v["passed"]),
+        "why": list(v.get("why") or []),
+        # ★판정을 재계산할 수 있는 증거★ — 이것이 위조를 막는다.
+        "evidence": {
+            "null_outside": v.get("null_outside"), "spa_ok": v.get("spa_ok"),
+            "power": v.get("power"), "target_power": v.get("target_power"),
+        },
+        "evidence_grade": rep.get("evidence_grade"),
+        "evidence_grade_reason": rep.get("evidence_grade_reason"),
+        "adjudicated": {
+            "panel": ("synthetic" if (prov.get("price_source") == "synthetic")
+                      else prov.get("price_source")),
+            "n_assets": panel.get("n_assets"), "months": months,
+            "model": model, "arms": list(CANDIDATE_ARMS),
+            "cost_levels_bps": list(pre.get("cost_levels_bps") or []),
+            "n_shift": (rep.get("by_cost") or {}).get(
+                str(float(COST_LEVELS[0])), {}).get("null", {}).get(
+                rs.NULL_SHIFT, {}).get("n_draws"),
+            "spa_alpha": pre.get("spa_alpha"),
+            "provenance": prov,
+        },
+        "code_version": code_version(),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "report_sha256": sha,
+    }
+    pathlib.Path(path).write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+    return manifest
+
+
 def _monthly(R, dates):
     """월 합계 — `regime_signal.monthly_matrix` 를 재사용한다(단일 출처)."""
     from src.engine.regime_signal import monthly_matrix
@@ -898,6 +960,8 @@ def main() -> int:
                     help="실 패널로 돌린다 (M9). 실데이터가 없으면 ★거부★한다")
     ap.add_argument("--codes", default="", help="--real 일 때 쓸 종목코드(쉼표 구분)")
     ap.add_argument("--as-of", default=None)
+    ap.add_argument("--write-verdict", default=None,
+                    help="판정 메니페스트를 생성한다 (P5). 예: docs/specs/macro_gate_verdict.json")
     ap.add_argument("--capacity", default=None,
                     help="전략 용량 곡선 (P3). 예: 1e9,1e10,1e11,1e12 (규모당 ≈3분)")
     args = ap.parse_args()
@@ -950,6 +1014,13 @@ def main() -> int:
             json.dump(rep, f, ensure_ascii=False, indent=2, sort_keys=True,
                       default=str)
         print(f"리포트: {args.report}")
+
+    if args.write_verdict:
+        mf = write_verdict_manifest(rep, args.write_verdict,
+                                    report_path=args.report, months=args.months,
+                                    model=args.model)
+        print(f"판정 메니페스트: {args.write_verdict} "
+              f"({mf['verdict']} · passed={mf['passed']} · 등급 {mf['evidence_grade']})")
 
     p = rep["panel"]
     print(f"등급 {rep['evidence_grade']} ({rep['evidence_grade_reason']}) · 패널 {p['n_assets']}자산 {p['n_months']}개월 "

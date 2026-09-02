@@ -1,0 +1,50 @@
+{
+  "adjudicated": {
+    "arms": [
+      "regime-on",
+      "regime-on-prob",
+      "regime-const"
+    ],
+    "cost_levels_bps": [
+      5.0,
+      10.0,
+      25.0
+    ],
+    "model": "bl",
+    "months": 84,
+    "n_assets": 6,
+    "n_shift": 81,
+    "panel": "synthetic",
+    "provenance": {
+      "coverage": {
+        "requested": 6,
+        "used": 6
+      },
+      "injected_scale": null,
+      "price_basis": null,
+      "price_source": "synthetic",
+      "regime_source": "synthetic",
+      "seed": 20260825,
+      "synthetic_scale": 1.0,
+      "vintage": null
+    },
+    "spa_alpha": 0.05
+  },
+  "code_version": "dev",
+  "evidence": {
+    "null_outside": true,
+    "power": null,
+    "spa_ok": false,
+    "target_power": 0.8
+  },
+  "evidence_grade": "E0",
+  "evidence_grade_reason": "합성 패널입니다",
+  "generated_at": "2026-09-02T12:50:33+00:00",
+  "passed": false,
+  "report_sha256": "1989bf7e6b7d019921a225b07a86990c2be5555f12a84350d5970d7cb50c3106",
+  "schema": 1,
+  "verdict": "inconclusive",
+  "why": [
+    "SPA p=0.1050 가 0.05 이상입니다"
+  ]
+}
