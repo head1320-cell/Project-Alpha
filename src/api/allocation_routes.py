@@ -416,6 +416,58 @@ def _w_dict(names: list[str], w: np.ndarray) -> dict[str, float]:
             if abs(w[i]) > 0.0005}
 
 
+def _risk_contribution_report(w, S, names: list[str], *,
+                              weights_source: str, sigma_source: str) -> dict:
+    """오일러 리스크 기여 + ★어느 포트폴리오·어느 Σ 인지 항상 밝힌다★ (P4-b).
+
+    이 모듈은 이미 `mu_engine`·`sigma_source` 로 "화면이 라벨을 지어내지 않도록
+    서버가 답한다" 를 쓰고 있다. 리스크 기여에도 같은 규율을 적용한다 — 응답
+    안에 서로 다른 포트폴리오를 설명하는 진단이 나란히 놓이기 때문이다.
+    """
+    from src.engine.allocation_studio import risk_contributions
+    rc = risk_contributions(np.asarray(w, dtype=float),
+                            np.asarray(S, dtype=float))
+    label = {"weights_source": weights_source, "sigma_source": sigma_source}
+    if rc["pct"] is None:
+        # ★미상이어도 무엇을 재려 했는지는 남는다★
+        return {**label, "portfolio_volatility_pct": None, "pct": None,
+                "contribution_pct": None, "hhi": None, "max_pct": None,
+                "reason": rc["reason"]}
+    return {
+        **label,
+        "portfolio_volatility_pct": round(rc["portfolio_volatility"] * 100, 4),
+        # %기여 — 합이 100 이다(오일러). 표시 반올림은 여기서만.
+        "pct": {names[i]: round(float(rc["pct"][i]) * 100, 4)
+                for i in range(len(names))},
+        "contribution_pct": {names[i]: round(float(rc["contribution"][i]) * 100, 4)
+                             for i in range(len(names))},
+        "hhi": round(rc["hhi"], 6),
+        "max_pct": round(rc["max_pct"] * 100, 4),
+        "reason": None,
+    }
+
+
+def _risk_contributions_basis(user_weights) -> dict:
+    """기존 `risk_contributions` 키가 **무엇을** 설명하는지 (P4-b).
+
+    ★값은 바꾸지 않는다★ 프론트 3곳이 `Record<string, number>` 로 읽는다
+    (`RiskContribDonut` 포함). 대신 그 수의 정체를 옆에 적는다 — 사용자가 비중을
+    주지 않으면 `PortfolioAnalyzer` 가 **등가중**으로 떨어지므로, 도넛이
+    사용자가 고른 적 없는 포트폴리오를 보여 주고 있다는 사실이 응답 어디에도
+    없었다.
+    """
+    fallback = not user_weights
+    return {
+        "weights_source": "equal_weight_fallback" if fallback else "user_current",
+        "sigma_source": "sample_252",
+        "reason": (("요청에 비중이 없어 등가중으로 분석했습니다 — 이 값은 "
+                    "사용자 포트폴리오도 추천 포트폴리오도 아닙니다")
+                   if fallback else None),
+        "note": ("추천 포트폴리오의 리스크 기여는 risk_contribution_optimized 에 "
+                 "있습니다. 두 블록은 비중도 Σ 도 다릅니다."),
+    }
+
+
 def _enb_report(w, S, names: list[str]) -> dict:
     """실질 분산도 — Meucci ENB(상관 반영) vs Neff(비중 집중만). Explain 패널용."""
     from src.engine.allocation_studio import enb_report
@@ -1169,7 +1221,18 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             "points": points,
             "risk_contributions": {k: round(float(v) * 100, 2)
                                    for k, v in metrics.risk_contributions.items()},
-            "enb": _enb_report(opt["weights"], opt["sigma_annual"], names),
+            # ★기존 키는 그대로 두고 정체만 옆에 적는다★ (프론트 3곳이 읽는다)
+            "risk_contributions_basis": _risk_contributions_basis(user_w),
+            # ★추천한 포트폴리오의 리스크를 말한다★ — 위 블록은 사용자(또는
+            # 등가중) 비중을 표본 Σ 로 잰 것이라 이 엔드포인트가 내놓은 배분과
+            # 다른 대상이다.
+            "risk_contribution_optimized": _risk_contribution_report(
+                opt["weights"], opt["sigma_annual"], names,
+                weights_source="optimized",
+                sigma_source=opt.get("sigma_source", "trailing")),
+            "enb": {**_enb_report(opt["weights"], opt["sigma_annual"], names),
+                    "weights_source": "optimized",
+                    "sigma_source": opt.get("sigma_source", "trailing")},
             "correlation": metrics.correlation_matrix.round(3).to_dict(),
             "summary": {"portfolio": pf_stats, "benchmark": bench_stats or None,
                         "active": active or None,
