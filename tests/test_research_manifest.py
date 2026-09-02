@@ -372,3 +372,133 @@ def test_the_months_span_reads_a_real_index():
     from src.api.allocation_routes import _months_span
     idx = pd.date_range("2020-01-31", periods=25, freq="ME")
     assert _months_span(pd.DataFrame(index=idx)) == 24
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★미검증 차단 플래그 — 기본 OFF★ (P5 ③)
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_the_gate_does_not_block_by_default():
+    """★기본은 라벨링이다★ (사용자 결정) — 동작이 바뀌지 않는다."""
+    from src.api.allocation_routes import macro_gate_decision
+    v = {"this_request_verified": False, "mechanism_verdict": "inconclusive",
+         "reason": "통과한 적이 없습니다"}
+    blocked, why = macro_gate_decision(v, require_verified=False)
+    assert blocked is False and why is None
+
+
+def test_the_gate_blocks_an_unverified_path_when_asked():
+    from src.api.allocation_routes import macro_gate_decision
+    v = {"this_request_verified": False, "mechanism_verdict": "inconclusive",
+         "reason": "통과한 적이 없습니다"}
+    blocked, why = macro_gate_decision(v, require_verified=True)
+    assert blocked is True
+    assert why and "inconclusive" in why
+
+
+def test_the_gate_lets_a_verified_path_through():
+    """★짝★ 항상 막는 구현을 배제한다 — 그러면 플래그가 스위치가 아니라 차단기다."""
+    from src.api.allocation_routes import macro_gate_decision
+    v = {"this_request_verified": True, "mechanism_verdict": "positive",
+         "reason": None}
+    blocked, why = macro_gate_decision(v, require_verified=True)
+    assert blocked is False and why is None
+
+
+def test_an_unknown_verification_is_blocked_not_passed():
+    """★미상은 통과가 아니다★ — 라벨이 없거나 망가져도 통과시키지 않는다."""
+    from src.api.allocation_routes import macro_gate_decision
+    for v in ({}, {"this_request_verified": None}, None):
+        blocked, why = macro_gate_decision(v, require_verified=True)
+        assert blocked is True, v
+        assert why and why.strip()
+
+
+def test_the_block_reason_names_the_verdict_not_just_that_it_failed():
+    """사유가 '검증 안 됨' 뿐이면 쓸모가 없다 — 무엇이 문제인지 말해야 한다."""
+    from src.api.allocation_routes import macro_gate_decision
+    v = {"this_request_verified": False, "mechanism_verdict": "underpowered",
+         "reason": "검정력이 목표에 못 미칩니다"}
+    _, why = macro_gate_decision(v, require_verified=True)
+    assert "underpowered" in why
+    assert "검정력이 목표에 못 미칩니다" in why
+
+
+def test_both_conditional_routes_apply_the_gate():
+    """★규칙과 배선은 다른 일이다★ (N6·R5·S1·W3 에서 네 번 겪었다)
+
+    순수 규칙을 아무리 정확히 테스트해도 라우트가 부르지 않으면 아무것도 막지
+    않는다. 값으로 재려면 TestClient 로 전체 라우트를 태워야 하므로 구조로 건다.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    import src.api.allocation_routes as ar
+    # ★본문이 있는 함수를 본다★ `allocation_analyze` 는 `run_analyze` 로
+    # 위임하는 얇은 껍데기라, 껍데기를 검사하면 이 테스트가 공허해진다
+    # (실제로 처음에 그렇게 썼고 이 테스트가 잡았다).
+    for fn in (ar.run_analyze, ar.rebalance_decision_route):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+        called = {n.func.id for n in ast.walk(tree)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+        assert "macro_gate_decision" in called, f"{fn.__name__} 이 관문을 안 부른다"
+
+
+def test_both_request_models_expose_the_flag_defaulting_off():
+    from src.api.allocation_routes import AnalyzeRequest, RebalanceDecisionRequest
+    # `RebalanceDecisionRequest` 는 `AnalyzeRequest` 를 상속하므로 둘 다 갖는다.
+    for model in (AnalyzeRequest, RebalanceDecisionRequest):
+        f = model.model_fields.get("require_verified_macro")
+        assert f is not None, f"{model.__name__} 에 플래그가 없다"
+        assert f.default is False, "기본값이 OFF 가 아니다 — 동작이 바뀐다"
+
+
+def test_blocking_actually_drops_the_conditional_inputs():
+    """★차단했다고 **말만** 하고 그대로 쓰면 리포트가 거짓말을 한다★
+
+    변이 X7 이 그것이다: 관문은 차단을 결정했는데 `s_override`·`extra_views` 를
+    비우지 않으면 응답은 "막았다" 고 적으면서 숫자는 조건부 μ/Σ 로 계산된다.
+    순수 규칙 테스트로는 절대 잡히지 않는다 — 규칙은 옳게 답했기 때문이다.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    import src.api.allocation_routes as ar
+    for fn in (ar.run_analyze, ar.rebalance_decision_route):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+        branches = [n for n in ast.walk(tree) if isinstance(n, ast.If)
+                    and isinstance(n.test, ast.Name)
+                    and n.test.id == "macro_blocked"]
+        assert branches, f"{fn.__name__} 에 차단 분기가 없다"
+        for node in branches:
+            assigns = [st for st in node.body if isinstance(st, ast.Assign)]
+            assert assigns, f"{fn.__name__} 차단 분기가 아무것도 안 한다"
+            names = {t.id for st in assigns for t in ast.walk(st)
+                     if isinstance(t, ast.Name)}
+            assert {"s_override", "extra_views"} <= names, \
+                f"{fn.__name__} 이 조건부 입력을 안 버린다: {names}"
+            assert any(isinstance(st.value, ast.Constant) and st.value.value is None
+                       for st in assigns), "None 으로 비우지 않는다"
+
+
+def test_the_response_declares_that_it_was_blocked():
+    from src.api.allocation_routes import _conditional_block
+    blk = _conditional_block({"available": True}, {}, sigma_applied=False,
+                             mu_as_views=0, view_confidence=None, model="bl",
+                             universe=["005930"], months=60,
+                             blocked_reason="판정이 inconclusive 입니다")
+    v = blk["verification"]
+    assert v["blocked"] is True
+    assert v["blocked_reason"] == "판정이 inconclusive 입니다"
+
+
+def test_the_response_does_not_claim_a_block_that_did_not_happen():
+    """★짝★ 항상 `blocked: True` 면 그 필드는 정보가 없다."""
+    from src.api.allocation_routes import _conditional_block
+    v = _conditional_block({"available": True}, {}, sigma_applied=True,
+                           mu_as_views=6, view_confidence=0.5, model="bl",
+                           universe=["005930"], months=60)["verification"]
+    assert v["blocked"] is False
+    assert v["blocked_reason"] is None

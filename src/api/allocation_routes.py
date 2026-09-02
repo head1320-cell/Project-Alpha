@@ -199,6 +199,10 @@ class AnalyzeRequest(BaseModel):
     #   모델 5회 추가 최적화(목표 구간)를 부르므로 슬라이더를 드래그할 때마다
     #   따라붙어서는 안 된다.
     conditional: bool = False
+    # ★미검증 매크로 차단 (P5 ③) — 기본 OFF 라 동작이 바뀌지 않는다★
+    #   켜면 판정이 `positive` 가 **아니거나** 이 요청이 판정된 대상이 아닐 때
+    #   조건부 μ/Σ 를 적용하지 않는다. 조용히 떨어지지 않고 사유를 남긴다.
+    require_verified_macro: bool = False
     # ★기본값이 "hard" 인 것이 계약이다★ 보내지 않으면 현행 경로·현행 신뢰도 그대로.
     regime_weighting: str = Field("hard", pattern="^(hard|probabilistic)$")
     # 라이브(오늘 스냅샷) vs 백테스트(as_of 절단). 백테스트는 아직 열려 있지 않다 —
@@ -904,10 +908,36 @@ def _macro_verification(*, universe, months, model) -> dict:
     return lab
 
 
+def macro_gate_decision(verification: dict | None, *,
+                        require_verified: bool) -> tuple[bool, str | None]:
+    """검증 라벨 + 플래그 → `(차단할 것인가, 사유)`. ★순수 함수다.★
+
+    판정은 규칙이지 데이터가 아니므로 라우트 밖에서 데이터 없이 걸 수 있어야
+    한다(`decide_verdict`·`summarize_capacity`·`decisive_diff` 와 같은 형태).
+
+    ★미상은 통과가 아니다★ 라벨이 없거나 망가져도 통과시키지 않는다 — 켜 둔
+    플래그가 조용히 무력해지는 것이 가장 나쁜 결과다.
+    """
+    if not require_verified:
+        return False, None
+    v = verification or {}
+    if v.get("this_request_verified") is True:
+        return False, None
+    verdict = v.get("mechanism_verdict")
+    why = v.get("reason")
+    return True, (
+        "require_verified_macro=true 인데 이 경로는 검증되지 않았습니다 — "
+        f"메커니즘 판정 {verdict!r}"
+        + (f": {why}" if why else
+           " (검증 라벨을 읽지 못했습니다 — 미상은 통과가 아닙니다)")
+        + ". 조건부 μ/Σ 를 적용하지 않고 무조건부로 계산했습니다.")
+
+
 def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
                        mu_as_views: int, view_confidence: float | None,
                        model: str, meta: dict | None = None,
-                       universe=None, months=None) -> dict:
+                       universe=None, months=None,
+                       blocked_reason: str | None = None) -> dict:
     """응답의 `conditional` 조각 — ★조용한 폴백 금지★.
 
     조건부를 못 쓴 경우 계산은 무조건부로 떨어지되 **응답이 그 사실을 말한다**
@@ -967,8 +997,10 @@ def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
         # 있으면 소비자가 `.get()` 으로 읽다가 `None` 을 거짓으로 취급한다(이
         # 모듈의 `prob_*` 규율과 같은 이유). 그리고 조건부를 **쓴** 응답에만
         # 검증을 실으면, 쓰지 못한 응답은 검증 상태를 물어볼 수도 없게 된다.
-        "verification": _macro_verification(universe=universe, months=months,
-                                            model=model),
+        "verification": {**_macro_verification(universe=universe, months=months,
+                                               model=model),
+                         "blocked": blocked_reason is not None,
+                         "blocked_reason": blocked_reason},
         # ★MS1-a 계약 필드★ — 가중 방식 · 지평 · π 경로 · 날카로움 · 신뢰도 모델 ·
         # PIT 3필드. `meta` 가 없으면(구 호출부) 하드 경로의 기본값을 적는다.
         **(meta or {"regime_weighting": "hard", "mode": "live",
@@ -1112,6 +1144,14 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             cond, cond_path = stack["cond"], stack["path"]
             s_override, extra_views = stack["s_override"], stack["extra_views"]
             view_conf, cond_meta = stack["view_conf"], stack["meta"]
+            # ★미검증이면 적용하지 않는다 (P5 ③)★ 기본 OFF 라 동작 불변이다.
+            macro_blocked, macro_block_why = macro_gate_decision(
+                _macro_verification(universe=names,
+                                    months=_months_span(returns),
+                                    model=req.model),
+                require_verified=req.require_verified_macro)
+            if macro_blocked:
+                s_override = extra_views = view_conf = None
 
         # 0b) S5 — 기업 밸류에이션 뷰 (요청했을 때만). `None` 이면 응답 키도 없다.
         co_stack = _company_view_stack(req, names)
@@ -1305,7 +1345,8 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 sigma_applied=s_override is not None,
                 mu_as_views=int(opt.get("extra_views_used") or 0),
                 view_confidence=view_conf, model=req.model, meta=cond_meta,
-                universe=names, months=_months_span(returns))
+                universe=names, months=_months_span(returns),
+                blocked_reason=macro_block_why)
             payload["target_range"] = target_range
 
         # ★같은 규율 — 요청했을 때만 키가 늘어난다★ (S5)
@@ -2211,6 +2252,15 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
             cond, cond_path = stack["cond"], stack["path"]
             s_override, extra_views = stack["s_override"], stack["extra_views"]
             cond_meta = stack["meta"]
+            # ★미검증이면 적용하지 않는다 (P5 ③)★ 조건부가 없으면 이 라우트는
+            # 이미 `decision="undetermined"` 로 답한다 — 새 상태를 만들지 않는다.
+            macro_blocked, macro_block_why = macro_gate_decision(
+                _macro_verification(universe=names,
+                                    months=_months_span(returns),
+                                    model=req.model),
+                require_verified=req.require_verified_macro)
+            if macro_blocked:
+                s_override = extra_views = None
 
         # ★§13 팩터 리스크 모델★ 켜면 표본 공분산 대신 BΣ_fB'+D 를 쓴다.
         # 실패하면 조용히 표본으로 떨어지지 않고 `applied: False` + 사유를 남긴다.
@@ -2398,7 +2448,8 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                 cond, cond_path, sigma_applied=s_override is not None,
                 mu_as_views=int(opt.get("extra_views_used") or 0),
                 view_confidence=None, model=req.model, meta=cond_meta,
-                universe=names, months=_months_span(returns))
+                universe=names, months=_months_span(returns),
+                blocked_reason=macro_block_why)
                 if req.conditional else None),
             "research_context": rc,
             "unknown_tickers": _unknown_tickers(req.tickers),
