@@ -221,3 +221,47 @@ def test_the_flag_is_off_by_default_on_both_routes(client):
         v = body["conditional"]["verification"]
         assert v["blocked"] is False
         assert v["blocked_reason"] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★추출이 바꾸기 쉬운 두 가지★ — 키가 아니라 **값**이라 키 골든이 못 잡는다
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_only_analyze_reports_a_view_confidence(client):
+    """★두 라우트가 같은 블록을 쓰지만 같은 값을 싣지는 않는다★
+
+    `/rebalance-decision` 은 예전부터 `view_confidence=None` 을 넘겨 왔다. 벨리프를
+    한 곳에서 만들면 그 값이 **들려 오므로**, 무심코 실어 보내기 쉽다 — 그러면
+    화면에 없던 수가 생긴다. 키 집합은 그대로라 키 골든으로는 안 잡힌다(변이 Z9).
+    """
+    a = _analyze(client, model="bl", conditional=True)["conditional"]
+    d = _decide(client, model="bl", conditional=True)["conditional"]
+    assert d["view_confidence"] is None, "결정 라우트가 신뢰도를 새로 싣는다"
+    assert isinstance(a["view_confidence"], (int, float)), \
+        f"분석 라우트가 신뢰도를 잃었다: {a['view_confidence']}"
+
+
+def test_the_factor_risk_sigma_survives_the_macro_block(client, monkeypatch):
+    """★순서가 뜻이다★ — 매크로 관문이 팩터 리스크 모델 Σ 까지 지우면 안 된다.
+
+    `/rebalance-decision` 은 관문이 조건부 Σ 를 비운 **뒤** `factor_risk_model` 이
+    `s_override` 를 다시 채운다. 팩터 Σ 는 매크로 조건부 Σ 가 아니므로 관문의
+    대상이 아니다. 추출하면서 두 줄의 순서가 뒤집히면 `risk_model.applied` 는
+    참인데 그 Σ 는 최적화기에 닿지 않는다 — ★응답이 거짓말을 한다★ (변이 Z10).
+    """
+    from src.engine import allocation_studio as als
+    seen = {}
+    real = als.optimize
+
+    def _spy(model, names, R, **kw):
+        seen["s_override"] = kw.get("s_override")
+        return real(model, names, R, **kw)
+    monkeypatch.setattr(als, "optimize", _spy)
+
+    b = _decide(client, model="bl", conditional=True, factor_risk_model=True,
+                require_verified_macro=True)
+    assert b["conditional"]["verification"]["blocked"] is True, \
+        "관문이 막지 않으면 이 테스트는 순서를 재지 않는다"
+    assert b["risk_model"]["applied"] is True, b["risk_model"].get("reason")
+    assert seen["s_override"] is not None, \
+        "risk_model.applied 는 참인데 팩터 Σ 가 최적화기에 닿지 않았다"

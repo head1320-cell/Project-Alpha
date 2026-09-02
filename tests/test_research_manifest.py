@@ -426,11 +426,14 @@ def test_the_block_reason_names_the_verdict_not_just_that_it_failed():
     assert "검정력이 목표에 못 미칩니다" in why
 
 
-def test_both_conditional_routes_apply_the_gate():
-    """★규칙과 배선은 다른 일이다★ (N6·R5·S1·W3 에서 네 번 겪었다)
+def test_both_conditional_routes_get_their_belief_from_the_one_door():
+    """★규칙과 배선은 다른 일이다★ (N6·R5·S1·W3·X7·Y16 에서 여섯 번 겪었다)
 
-    순수 규칙을 아무리 정확히 테스트해도 라우트가 부르지 않으면 아무것도 막지
-    않는다. 값으로 재려면 TestClient 로 전체 라우트를 태워야 하므로 구조로 건다.
+    P8 ② 이전에는 두 라우트가 각자 `macro_gate_decision` 을 부르는지 소스로 봤다.
+    이제 관문은 `build_belief` **안에 한 번만** 있으므로, 여기서 볼 것은 두 가지다:
+    두 라우트가 그 문을 지나는가, 그리고 ★그 문을 우회하지 않는가★.
+
+    검토서가 P8 에 지정한 변이가 정확히 "추출한 서비스를 우회" 다.
     """
     import ast
     import inspect
@@ -444,7 +447,79 @@ def test_both_conditional_routes_apply_the_gate():
         tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
         called = {n.func.id for n in ast.walk(tree)
                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
-        assert "macro_gate_decision" in called, f"{fn.__name__} 이 관문을 안 부른다"
+        assert "build_belief" in called, f"{fn.__name__} 이 벨리프 문을 안 지난다"
+        # ★짝 — 우회 금지★ 조립을 직접 하면 관문이 다시 두 곳(또는 0곳)이 된다.
+        for bypass in ("_conditional_stack", "macro_gate_decision",
+                       "_macro_verification"):
+            assert bypass not in called, (
+                f"{fn.__name__} 이 {bypass} 를 직접 부른다 — 서비스를 우회하면 "
+                "관문이 다시 갈라진다")
+
+
+def _stub_stack(sigma="Σ", views=(1, 2, 3), conf=42.0) -> dict:
+    return {"cond": {"available": True}, "path": {"path_source": "stub"},
+            "meta": {"mode": "live"}, "s_override": sigma,
+            "extra_views": list(views), "view_conf": conf}
+
+
+class _StubReq:
+    conditional = True
+    model = "bl"
+    require_verified_macro = True
+
+
+def _returns_frame():
+    import pandas as pd
+    idx = pd.date_range("2020-01-01", periods=200, freq="D")
+    return pd.DataFrame({"a": range(200), "b": range(200)}, index=idx)
+
+
+def test_the_one_door_drops_the_conditional_inputs_when_it_blocks(monkeypatch):
+    """★차단했다고 **말만** 하고 그대로 쓰면 리포트가 거짓말을 한다★ (변이 X7)
+
+    P8 ② 이전에는 두 라우트의 소스에서 `if macro_blocked:` 분기를 찾아 확인했다.
+    이제는 **값으로** 잰다 — 문을 직접 불러 돌려받은 것을 본다. 소스가 어떻게
+    생겼든 상관없고, 파일을 어디로 옮기든 살아남는다.
+    """
+    import src.api.allocation_pipeline as ap
+    monkeypatch.setattr(ap, "_conditional_stack", lambda req, r: _stub_stack())
+    monkeypatch.setattr(ap, "_macro_verification",
+                        lambda **kw: {"this_request_verified": False,
+                                      "mechanism_verdict": "inconclusive",
+                                      "reason": "시험용"})
+    b = ap.build_belief(_StubReq(), _returns_frame(), ["005930", "000660"])
+    assert b.blocked is True and b.blocked_reason
+    assert b.s_override is None and b.extra_views is None
+    assert b.view_confidence is None
+    # ★진단은 남는다★ 응답이 "무엇을 계산할 수 있었는데 왜 안 썼는지" 를 말해야 한다.
+    assert b.cond == {"available": True} and b.path == {"path_source": "stub"}
+
+
+def test_the_one_door_passes_the_inputs_through_when_it_does_not_block(monkeypatch):
+    """★짝★ 항상 비우면 그것은 관문이 아니라 차단기다."""
+    import src.api.allocation_pipeline as ap
+    monkeypatch.setattr(ap, "_conditional_stack", lambda req, r: _stub_stack())
+    monkeypatch.setattr(ap, "_macro_verification",
+                        lambda **kw: {"this_request_verified": True})
+    b = ap.build_belief(_StubReq(), _returns_frame(), ["005930", "000660"])
+    assert b.blocked is False and b.blocked_reason is None
+    assert b.s_override == "Σ" and b.extra_views == [1, 2, 3]
+    assert b.view_confidence == 42.0
+
+
+def test_asking_no_question_is_not_a_block(monkeypatch):
+    """조건부를 요청하지 않은 것과 차단된 것은 ★다른 상태★ 다."""
+    import src.api.allocation_pipeline as ap
+
+    def _boom(*a, **k):                       # noqa: ANN002, ANN003
+        raise AssertionError("조건부를 요청하지 않았는데 스택을 만들었다")
+    monkeypatch.setattr(ap, "_conditional_stack", _boom)
+
+    class _Off(_StubReq):
+        conditional = False
+    b = ap.build_belief(_Off(), _returns_frame(), ["005930"])
+    assert b.blocked is False and b.blocked_reason is None
+    assert b.cond is None and b.s_override is None
 
 
 def test_both_request_models_expose_the_flag_defaulting_off():
@@ -456,33 +531,25 @@ def test_both_request_models_expose_the_flag_defaulting_off():
         assert f.default is False, "기본값이 OFF 가 아니다 — 동작이 바뀐다"
 
 
-def test_blocking_actually_drops_the_conditional_inputs():
-    """★차단했다고 **말만** 하고 그대로 쓰면 리포트가 거짓말을 한다★
+def test_the_gate_lives_in_exactly_one_place():
+    """★관문이 두 곳이면 언젠가 한 곳만 고쳐진다★ — 그것이 이 추출의 이유다.
 
-    변이 X7 이 그것이다: 관문은 차단을 결정했는데 `s_override`·`extra_views` 를
-    비우지 않으면 응답은 "막았다" 고 적으면서 숫자는 조건부 μ/Σ 로 계산된다.
-    순수 규칙 테스트로는 절대 잡히지 않는다 — 규칙은 옳게 답했기 때문이다.
+    P5 는 관문을 두 라우트에 각각 배선해야 했고, 소비자가 하나 더 생기면 세 곳이
+    된다. 배선 지점이 하나임을 구조로 못 박는다.
     """
     import ast
-    import inspect
-    import textwrap
+    import pathlib
 
-    import src.api.allocation_routes as ar
-    for fn in (ar.run_analyze, ar.rebalance_decision_route):
-        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-        branches = [n for n in ast.walk(tree) if isinstance(n, ast.If)
-                    and isinstance(n.test, ast.Name)
-                    and n.test.id == "macro_blocked"]
-        assert branches, f"{fn.__name__} 에 차단 분기가 없다"
-        for node in branches:
-            assigns = [st for st in node.body if isinstance(st, ast.Assign)]
-            assert assigns, f"{fn.__name__} 차단 분기가 아무것도 안 한다"
-            names = {t.id for st in assigns for t in ast.walk(st)
-                     if isinstance(t, ast.Name)}
-            assert {"s_override", "extra_views"} <= names, \
-                f"{fn.__name__} 이 조건부 입력을 안 버린다: {names}"
-            assert any(isinstance(st.value, ast.Constant) and st.value.value is None
-                       for st in assigns), "None 으로 비우지 않는다"
+    root = pathlib.Path(__file__).resolve().parents[1] / "src"
+    sites = []
+    for f in sorted(root.rglob("*.py")):
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) \
+                    and n.func.id == "macro_gate_decision":
+                sites.append(f"{f.relative_to(root)}:{n.lineno}")
+    assert len(sites) == 1, f"관문 호출 지점이 {len(sites)}곳이다: {sites}"
+    assert sites[0].startswith("api/allocation_pipeline.py"), sites
 
 
 def test_the_response_declares_that_it_was_blocked():

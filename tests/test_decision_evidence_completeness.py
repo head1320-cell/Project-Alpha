@@ -230,9 +230,15 @@ def _view(asset):
 
 
 def test_a_skipped_conditional_view_is_not_counted_as_carried(client, monkeypatch):
-    """유니버스 밖 자산을 겨눈 뷰는 P 행이 되지 못한다 — 그런데 공시가 셌다."""
+    """유니버스 밖 자산을 겨눈 뷰는 P 행이 되지 못한다 — 그런데 공시가 셌다.
+
+    ★패치는 `allocation_pipeline` 을 겨눈다 (P8 ②)★ `allocation_routes` 가 이
+    이름을 재수출하지만 **호출부가 파이프라인에 있다** — 라우트 쪽 이름을 바꿔야
+    아무 일도 일어나지 않는다. 재수출 경로로 되돌리면 이 테스트는 조용히
+    아무것도 재지 않게 된다.
+    """
     monkeypatch.setattr(
-        "src.api.allocation_routes._conditional_stack",
+        "src.api.allocation_pipeline._conditional_stack",
         lambda req, returns: _cond_stack([_view(TICKERS[0]), _view("없는종목")]))
     body = _post(client, conditional=True)
     assert body["conditional"]["applied_to"]["mu_as_views"] == 1
@@ -241,7 +247,7 @@ def test_a_skipped_conditional_view_is_not_counted_as_carried(client, monkeypatc
 def test_all_carried_views_are_counted(client, monkeypatch):
     """★짝★ 항상 줄여 세는 구현을 배제한다."""
     monkeypatch.setattr(
-        "src.api.allocation_routes._conditional_stack",
+        "src.api.allocation_pipeline._conditional_stack",
         lambda req, returns: _cond_stack([_view(TICKERS[0]), _view(TICKERS[1])]))
     body = _post(client, conditional=True)
     assert body["conditional"]["applied_to"]["mu_as_views"] == 2
