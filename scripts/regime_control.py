@@ -117,14 +117,25 @@ def _daily_returns(equity: list[float]) -> np.ndarray:
     return e[1:] / e[:-1] - 1.0
 
 
+#: ★이 관문의 무위험 관례★ 0 이다 — 팔 사이의 **차이**(`sharpe_diff`)를 주 통계로
+#: 쓰므로 공통 무위험은 상쇄된다. 값이 아니라 **차이**를 보는 관문이라 이 선택이
+#: 판정을 바꾸지 않는다. 그래도 관례이므로 선언하고 리포트에 싣는다.
+GATE_RISK_FREE = 0.0
+
+
 def _sharpe(daily: np.ndarray) -> float | None:
-    """일수익 → 연율 Sharpe, ★전정밀도★. 표본이 없거나 분산이 0 이면 `None`."""
-    if daily.size < 2:
-        return None
-    sd = float(daily.std(ddof=1))
-    if not np.isfinite(sd) or sd <= 0:
-        return None
-    return round(float(daily.mean() / sd * np.sqrt(252.0)), 8)
+    """일수익 → 연율 Sharpe, ★전정밀도★. 표본이 없거나 분산이 0 이면 `None`.
+
+    ★단일 출처에 위임한다 (P1)★ 이 함수는 예전에 공식을 직접 들고 있었고, 그것이
+    `allocation_backtest`(rf=0.035)·`multi_strategy_backtest`(rf=0.025)와 갈라진
+    세 번째 관례였다. 이제 `quant_metrics.risk_adjusted_ratios` 가 계산하고
+    여기서는 이 관문의 관례(`GATE_RISK_FREE=0`)만 고른다.
+    """
+    from src.engine.quant_metrics import risk_adjusted_ratios
+
+    v = risk_adjusted_ratios(daily, [], risk_free=GATE_RISK_FREE,
+                             ddof=1, periods_per_year=252)["sharpe_ratio"]
+    return None if v is None else round(float(v), 8)
 
 
 def backtest(names, R, dates, regime, *, model: str, cost_bps: float,

@@ -6,7 +6,8 @@
 
 재사용:
   · optimize()/constrained_solve() — /analyze 와 동일 경로(실제 정책을 검증)
-  · compute_metrics() — OOS Sharpe/Sortino/Calmar/MDD/VaR/CVaR/IR
+  · compute_metrics() — 위험조정 지표(Sharpe/Sortino/Calmar)와 VaR/CVaR/IR 의
+    ★단일 출처★. 관례(무위험·ddof·연율화)를 `convention` 블록으로 함께 낸다.
 정직: 뷰는 사용자의 지속 테제로 매 시점 적용(미래 데이터 아님). 비용은 편도 회전율 기준.
 """
 
@@ -498,14 +499,18 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     total_ret = float(eq[-1] - 1.0)
     years = max(port.shape[0] / 252.0, 1e-9)
     cagr = float(eq[-1] ** (1.0 / years) - 1.0) if eq[-1] > 0 else -1.0
-    ann = float(port.mean() * 252)
-    vol = float(port.std(ddof=1) * np.sqrt(252)) if port.size > 1 else 0.0
-    sharpe = (ann - _RF) / vol if vol > 0 else 0.0
+
+    # ★위험조정 지표는 인라인으로 다시 계산하지 않는다 (P1)★ 바로 위에서
+    # `compute_metrics` 를 부르고 여기서 sharpe·sortino·calmar 를 **또** 계산하고
+    # 있었다 — 같은 함수 안에 지표가 두 벌이었고, 그것이 관례가 갈라진 지점이다.
+    # `_RF` 와 `ddof=1` 은 이 모듈이 쓰던 관례 그대로라 **값이 바뀌지 않는다**.
+    # 미상은 `None` 인데 이 요약의 기존 계약은 `0.0` 이었으므로 그 자리에서만
+    # 보존한다(스키마 호환) — 사유는 `metrics["reasons"]` 에 남는다.
+    vol = metrics["annualized_volatility"] or 0.0
     mdd = float(dd.min()) if dd.size else 0.0
-    downside = port[port < 0]
-    dvol = float(downside.std(ddof=1) * np.sqrt(252)) if downside.size > 1 else 0.0
-    sortino = (ann - _RF) / dvol if dvol > 0 else 0.0
-    calmar = ann / abs(mdd) if mdd < 0 else 0.0
+    sharpe = metrics["sharpe_ratio"] or 0.0
+    sortino = metrics["sortino_ratio"] or 0.0
+    calmar = metrics["calmar_ratio"] or 0.0
     active_ret = None
     info_ratio = None
     if bench_aligned is not None and bench_aligned.size > 1:
@@ -580,6 +585,11 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
             "sortino_ratio": round(sortino, 2),
             "calmar_ratio": round(calmar, 2),
             "max_drawdown_pct": round(mdd * 100, 2),
+            # ★그 수를 만든 관례를 함께 싣는다 (P1)★ 무위험·ddof·연율화가
+            # 모듈마다 갈라져 있었고, 관례를 안 적으면 두 리포트의 Sharpe 를
+            # 비교할 수 없다. 표시 반올림과 달리 이 블록은 전정밀도다.
+            "convention": metrics.get("convention"),
+            "sharpe_ratio_full": metrics.get("sharpe_ratio"),
             "active_return_pct": round(active_ret * 100, 2) if active_ret is not None else None,
             "information_ratio": round(info_ratio, 2) if info_ratio is not None else None,
         },
