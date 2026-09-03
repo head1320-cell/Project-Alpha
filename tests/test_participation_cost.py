@@ -314,3 +314,102 @@ def test_the_arm_that_trades_more_pays_more(panel):
     on = _wf(panel, impact=a, regime={"points": points, "weighting": "hard"})
     assert on["turnover_avg_pct"] > off["turnover_avg_pct"]
     assert on["impact"]["mean_bps"] > off["impact"]["mean_bps"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★교정치가 출처를 달고 다닌다★ (P9 ②)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# `ASSET_CLASS_TIERS` 의 α(0.35~3.20)와 시총 임계값은 하드코딩이고 어디서 왔는지
+# 아무 데도 없었다. 시장충격이 쓰는 수다. CLAUDE.md §4: "경제 가정을 파이프라인을
+# 돌리려고 지어내지 마세요." ★수치는 한 글자도 안 바꾼다 — 출처만 적는다.★
+
+def test_every_tier_declares_where_its_alpha_came_from():
+    from src.engine.market_impact import ASSET_CLASS_TIERS, TIER_PROVENANCE
+    assert set(TIER_PROVENANCE) == set(ASSET_CLASS_TIERS), \
+        "티어와 출처 표가 어긋난다 — 하나가 빠지면 그 α 는 출처 없이 쓰인다"
+    for tier, prov in TIER_PROVENANCE.items():
+        assert prov["alpha"] in ("measured", "literature", "unmeasured"), (tier, prov)
+        assert prov["reason"], f"{tier} 가 사유 없이 등급만 적었다"
+
+
+def test_no_tier_claims_to_be_measured_without_evidence():
+    """★거짓 승격을 막는다★ (변이 W6)
+
+    `"measured"` 는 저장소에 근거가 있을 때만 쓴다. 지금은 어느 티어에도 그
+    근거가 없으므로 하나도 `measured` 여서는 안 된다 — 언젠가 재면 그때
+    올리면서 이 테스트도 함께 고치는 것이 맞다.
+    """
+    from src.engine.market_impact import TIER_PROVENANCE
+    claimed = [t for t, p in TIER_PROVENANCE.items() if p["alpha"] == "measured"]
+    assert claimed == [], (
+        f"근거 없이 measured 라고 적힌 티어: {claimed} — 저장소에 그 측정이 없다")
+
+
+def test_the_thresholds_declare_that_they_are_nominal_krw():
+    """★명목 KRW 는 과거에 소급하면 티어가 밀린다★ 그 사실을 표가 말해야 한다."""
+    from src.engine.market_impact import TIER_PROVENANCE
+    for tier, prov in TIER_PROVENANCE.items():
+        assert prov["threshold_basis"] == "nominal_krw", (tier, prov)
+
+
+def test_a_known_class_says_its_alpha_came_from_the_tier_table():
+    from src.engine.market_impact import MarketImpactModel
+    est = MarketImpactModel().estimate_impact(
+        order_value_krw=5e8, adv_krw=1e11, daily_volatility=0.018,
+        asset_class="kospi_mid")
+    assert est.alpha_source == "tier_table"
+    assert est.alpha == 0.90
+
+
+def test_an_unknown_class_does_not_pass_its_fallback_off_as_calibration():
+    """★침묵 폴백 제거★ (변이 W7)
+
+    모르는 자산군이면 `alpha_map.get(asset_class, (0, 1.0))[1]` 이 조용히 α=1.0
+    을 준다 — 표에 없는 수인데 교정치처럼 보인다. ★수치 동작은 유지하되★
+    그것이 측정이 아니라 폴백임을 산출이 말해야 한다.
+    """
+    from src.engine.market_impact import MarketImpactModel
+    est = MarketImpactModel().estimate_impact(
+        order_value_krw=5e8, adv_krw=1e11, daily_volatility=0.018,
+        asset_class="존재하지않는군")
+    assert est.alpha == 1.0, "수치 동작이 바뀌었다 — 이 슬라이스는 라벨만 늘린다"
+    assert est.alpha_source == "fallback_unknown_class"
+
+
+def test_an_uncomputable_estimate_does_not_call_its_zero_a_calibration():
+    """`adv<=0` 이면 α=0 으로 돌아온다 — 그것은 '충격 없음' 이 아니라 **미상**이다."""
+    from src.engine.market_impact import MarketImpactModel
+    est = MarketImpactModel().estimate_impact(
+        order_value_krw=5e8, adv_krw=0, daily_volatility=0.018,
+        asset_class="kospi_mid")
+    assert est.alpha == 0
+    assert est.alpha_source == "unavailable"
+
+
+def test_a_custom_alpha_for_an_unknown_tier_is_not_silently_dropped():
+    """★조용히 무시하지 않는다★ 오타 하나가 아무 말 없이 사라지면 안 된다."""
+    from src.engine.market_impact import MarketImpactModel
+    m = MarketImpactModel(custom_alpha={"kospi_mid": 0.5, "오타티어": 9.9})
+    assert m.alpha_map["kospi_mid"][1] == 0.5
+    assert m.ignored_custom_alpha == ("오타티어",)
+
+
+def test_the_assumptions_carry_the_alpha_provenance():
+    """★가정이 산출과 함께 다닌다★ (P3 의 `as_convention` 관용구 재사용).
+
+    ★등급을 **집합 안에 있다**로만 걸면 너무 약하다★ — 변이 W15 가 그것으로
+    살아남았다(`"measured"` 도 집합 안에 있다). 이 α 는 티어 표의 포트폴리오
+    가중 대표값이므로 **표보다 높은 등급을 주장할 수 없다**: 모든 티어가
+    미측정인데 대표값만 측정일 수는 없다.
+    """
+    from src.engine.market_impact import TIER_PROVENANCE, ImpactAssumptions
+    conv = ImpactAssumptions(portfolio_krw=1e10).as_convention()
+    assert conv["alpha_provenance"] in ("measured", "literature", "unmeasured")
+    assert conv["alpha_provenance_reason"]
+
+    rank = {"unmeasured": 0, "literature": 1, "measured": 2}
+    best_tier = max(rank[p["alpha"]] for p in TIER_PROVENANCE.values())
+    assert rank[conv["alpha_provenance"]] <= best_tier, (
+        f"대표 α 가 {conv['alpha_provenance']} 라는데 표의 최고 등급은 "
+        f"{best_tier} 다 — 근거 없는 승격이다")

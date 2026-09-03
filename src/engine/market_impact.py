@@ -58,6 +58,30 @@ ASSET_CLASS_TIERS = {
     "etf":           (0,                  0.45),   # ETF (높은 유동성)
 }
 
+#: ★교정치의 출처 (P9 ②)★ α 와 임계값이 **어디서 왔는가**.
+#:
+#: 위 표의 수는 하드코딩이고 이 저장소 어디에도 그것을 잰 기록이 없다. 그런데
+#: `ImpactEstimate.alpha` 로 나가면 교정된 수처럼 보인다 — CLAUDE.md §4 가
+#: 금지하는 "경제 가정을 지어내기" 의 조용한 판본이다. ★수치는 그대로 두고
+#: 출처만 적는다★: 등급은 `measured`(저장소에 측정이 있다) · `literature`
+#: (문헌 관례) · `unmeasured`(미상) 셋이고, ★근거 없이 `measured` 를 쓰지
+#: 않는다★(테스트가 건다). 언젠가 실제로 재면 그때 올린다.
+#:
+#: `threshold_basis` 가 `nominal_krw` 인 이유: 시총 임계값이 **명목 원화**라
+#: 과거에 소급하면 같은 종목이 다른 티어로 밀린다(물가·지수 수준이 다르다).
+_UNMEASURED = ("이 저장소에 이 α 를 잰 기록이 없습니다 — Almgren-Chriss √법칙의 "
+               "관례적 크기 순서를 따른 값이고, 대형→소형으로 커지는 **순서**는 "
+               "유동성 논리와 맞지만 각 수준은 측정치가 아닙니다.")
+TIER_PROVENANCE: dict[str, dict] = {
+    tier: {"alpha": "unmeasured", "reason": _UNMEASURED,
+           "threshold_basis": "nominal_krw"}
+    for tier in ASSET_CLASS_TIERS
+}
+
+#: 표에 없는 자산군이 왔을 때 쓰는 α. ★표의 값이 아니다★ — 그래서 산출이
+#: `alpha_source` 로 그 사실을 말한다(예전에는 조용히 교정치처럼 나갔다).
+UNKNOWN_CLASS_ALPHA = 1.0
+
 # 영구/일시 임팩트 비율
 PERMANENT_IMPACT_RATIO = 0.5
 TEMPORARY_IMPACT_RATIO = 0.5
@@ -83,6 +107,11 @@ class ImpactEstimate:
     total_impact_pct:       float    # = bps / 10000
 
     estimated_cost_krw:     float
+
+    #: ★이 α 가 어디서 왔는가★ `tier_table`(표) · `fallback_unknown_class`
+    #: (표에 없는 자산군) · `unavailable`(계산 불가라 0 — "충격 없음" 이 아니라
+    #: **미상**이다). 기본값을 둬 기존 위치 생성 호출을 깨지 않는다.
+    alpha_source:           str = "tier_table"
 
 
 class MarketImpactModel:
@@ -110,11 +139,21 @@ class MarketImpactModel:
 
     def __init__(self, custom_alpha: dict | None = None):
         self.alpha_map = ASSET_CLASS_TIERS.copy()
+        # ★조용히 버리지 않는다 (P9 ②)★ 오타 하나가 아무 말 없이 사라지면
+        # 호출자는 자기가 준 교정치로 계산됐다고 믿는다.
+        ignored: list[str] = []
         if custom_alpha:
             for k, v in custom_alpha.items():
                 if k in self.alpha_map:
                     threshold, _ = self.alpha_map[k]
                     self.alpha_map[k] = (threshold, v)
+                else:
+                    ignored.append(k)
+        self.ignored_custom_alpha: tuple[str, ...] = tuple(ignored)
+        if ignored:
+            logger.warning(
+                "custom_alpha 에 표에 없는 티어가 있어 무시했습니다: %s "
+                "(쓸 수 있는 티어: %s)", ignored, sorted(self.alpha_map))
 
     # ═════════════════════════════════════════════════════════════════════
     # 핵심 계산
@@ -143,7 +182,12 @@ class MarketImpactModel:
         if adv_krw <= 0 or order_value_krw <= 0:
             return self._empty_estimate(order_value_krw, adv_krw, asset_class)
 
-        alpha = self.alpha_map.get(asset_class, (0, 1.0))[1]
+        # ★폴백을 교정치로 위장하지 않는다 (P9 ②)★ 수치 동작은 그대로
+        # (표에 없으면 α=1.0)이되, 그것이 표의 값이 아님을 산출이 말한다.
+        if asset_class in self.alpha_map:
+            alpha, alpha_source = self.alpha_map[asset_class][1], "tier_table"
+        else:
+            alpha, alpha_source = UNKNOWN_CLASS_ALPHA, "fallback_unknown_class"
 
         # Participation rate (Q/ADV)
         participation = order_value_krw / adv_krw
@@ -172,6 +216,7 @@ class MarketImpactModel:
             total_impact_bps=round(total_bps, 2),
             total_impact_pct=round(total_pct, 6),
             estimated_cost_krw=round(order_value_krw * total_pct, 0),
+            alpha_source=alpha_source,
         )
 
     def estimate_with_auto_classify(
@@ -329,6 +374,9 @@ class MarketImpactModel:
             permanent_impact_bps=0, temporary_impact_bps=0,
             total_impact_bps=0, total_impact_pct=0,
             estimated_cost_krw=0,
+            # ★0 은 측정이 아니라 미상이다★ 거래대금이나 주문이 0 이면 참여율을
+            # 세울 수 없다. "충격이 없다" 로 읽히면 공짜 거래를 제조하게 된다.
+            alpha_source="unavailable",
         )
 
     @staticmethod
@@ -395,6 +443,11 @@ class ImpactAssumptions:
             "adv_krw": float(self.adv_krw),
             "volatility": float(self.volatility),
             "alpha": float(self.alpha),
+            # ★가정이 산출과 함께 다닌다 (P9 ②)★ 이 α 는 포트폴리오 가중
+            # 대표값이고 티어 표와 같은 출처를 갖는다 — 재 본 적이 없다.
+            # 값이 아니라 **등급**을 실어야 소비자가 승격 근거로 오해하지 않는다.
+            "alpha_provenance": "unmeasured",
+            "alpha_provenance_reason": _UNMEASURED,
             "law": "almgren_chriss_sqrt",
             "adv_basis": "portfolio_average",   # ★종목별 ADV 가 아니다★
             "impact_bps_resolution": 0.01,
