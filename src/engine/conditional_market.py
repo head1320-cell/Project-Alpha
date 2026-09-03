@@ -259,7 +259,9 @@ def conditional_moments(returns_df, regime_by_month: dict[str, str] | None,
     if n_assets < 1:
         return _unavailable("자산이 없습니다.")
 
-    months = np.array([_month_key(ts) for ts in returns_df.index])
+    # ★행마다 다시 만들지 않는다★ 워크포워드가 같은 인덱스의 확장창을
+    # 70번 훑어 `_month_key` 를 68,355회 부르고 있었다(실측, plan 의 10%).
+    months = _month_keys(returns_df.index)
     labels = np.array([regime_by_month.get(m, "") for m in months])
 
     # ★라벨 없는 달은 버리고 그 수를 보고한다★ 조용히 섞으면 다른 국면의 수익률이

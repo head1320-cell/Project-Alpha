@@ -329,3 +329,42 @@ def test_the_fallback_still_uses_the_singular():
         cm._month_key = orig
     assert list(out) == ["202109", "202110", "202111"]
     assert calls["n"] == 3, f"폴백이 단수형을 안 썼다 (호출 {calls['n']}회)"
+
+
+def test_conditional_moments_uses_the_plural_not_the_singular():
+    """★규칙과 배선은 다른 일이다★ (이 세션에서 일곱 번째)
+
+    앞의 카운터 테스트는 `_month_keys` **자체**가 벡터화됐는지만 본다. 헬퍼가
+    아무리 빨라도 `conditional_moments` 가 안 쓰면 아무것도 빨라지지 않는다 —
+    그리고 값은 같으므로 어떤 값 테스트도 그것을 잡지 못한다.
+    """
+    import src.engine.conditional_market as cm
+    df = _frame(n_months=12)
+    reg = {m: "A" for m in sorted({str(t)[:7] for t in df.index})}
+    calls = {"n": 0}
+    real = cm._month_key
+
+    def _counting(ts):
+        calls["n"] += 1
+        return real(ts)
+
+    orig, cm._month_key = cm._month_key, _counting
+    try:
+        out = cm.conditional_moments(df, reg, "A")
+    finally:
+        cm._month_key = orig
+    assert out["available"] is True, out.get("reason")
+    assert calls["n"] == 0, (
+        f"conditional_moments 가 DatetimeIndex 에서 단수형을 {calls['n']}번 불렀다 "
+        "— 벡터화 헬퍼를 지나지 않는다")
+
+
+def test_conditional_moments_still_answers_on_a_non_datetime_index():
+    """★짝★ 폴백 경로가 살아 있어야 벡터화가 기능 축소가 아니다."""
+    import src.engine.conditional_market as cm
+    df = _frame(n_months=12)
+    df.index = pd.Index([str(t)[:7].replace("-", "") for t in df.index])  # 202201 형식
+    reg = {m: "A" for m in sorted(set(df.index))}
+    out = cm.conditional_moments(df, reg, "A")
+    assert out["available"] is True, out.get("reason")
+    assert out["n_months"] == 12
