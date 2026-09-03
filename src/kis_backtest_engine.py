@@ -532,6 +532,15 @@ class BacktestEngine:
         # 신호 기준일 시차 (젠포트식 전일 종가 기준). 0=당일 봉(기존)
         lag = max(0, int(self.cfg.signal_lag or 0))
 
+        # 워밍업 요구 봉수는 루프 동안 **상수**다 — `set_priority_expr` 는 위에서
+        # 이미 끝났고 조건 목록도 확정이다. 그런데 `required_days` 는 매 호출마다
+        # 처음부터 다시 계산하는 `@property` 라, 하루 × 종목 루프 안에서 읽으면
+        # 종목수 × 봉수 만큼 재계산된다. ★실측: 200종목 × 653일 = 130,601회,
+        # cProfile cumtime 27% — 시뮬레이션 전체의 15~25%★. 여기서 한 번 읽는다.
+        # (전략 클래스에 캐시를 넣지 않는다 — `_prio_ast` 를 나중에 세팅하는 다른
+        #  호출부의 의미가 조용히 달라진다. 소비 지점만 고치는 쪽이 경계를 안 넘는다.)
+        _required_days = strategy.required_days
+
         # Day-by-day 시뮬레이션
         _sim_total = len(sim_dates)
         _sim_step = progress_step(_sim_total)  # 진행 이벤트 최대 100개로 throttle
@@ -612,7 +621,7 @@ class BacktestEngine:
 
                 # as-of 슬라이스 (미래 데이터 차단 — look-ahead bias 방지)
                 df_slice = ohlcv_map[ticker].loc[:sim_date]
-                if len(df_slice) < strategy.required_days + lag:
+                if len(df_slice) < _required_days + lag:
                     continue
 
                 # 신호 기준 봉: signal_lag>0이면 lag봉 이전 (체결은 당일 가격 그대로)
