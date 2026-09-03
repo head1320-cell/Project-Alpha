@@ -61,12 +61,16 @@ export function RunMonitor({ runId }: { runId: string }) {
   });
 
   const st = statusQ.data;                                   // 마지막으로 성공한 상태(에러 중에도 유지)
-  const err = statusQ.error as { httpStatus?: number } | null;
+  const err = statusQ.error as { httpStatus?: number; storeCause?: string; message?: string } | null;
   // 백엔드는 진짜 없는 실행만 404, DB 일시 오류는 503 → 404만 "만료/잘못된 링크"로 확정 처리.
   const trulyGone = statusQ.isLoadingError && err?.httpStatus === 404;
   // 1초 폴링 + retry:false라 한 번의 blip으로도 isError가 되므로, 연속 실패가 몇 번 쌓였을
   // 때만 표시(깜빡임 방지). failureCount는 성공하면 0으로 리셋된다.
   const reconnecting = statusQ.failureCount >= 3 && !!st && !TERMINAL.includes(st.status as RunStatus);
+  // ★"연결이 불안정" 만으로는 다음에 어디를 팔지 알 수 없다★ 백엔드가 503 에 실어 준
+  // 분류(커넥션 풀 고갈 / 저장소 잠김 / 접속 불가)를 그대로 한 줄 덧붙인다. 분류가
+  // 없으면(네트워크 단절 등 서버에 닿지도 못한 경우) 아무 말도 지어내지 않는다.
+  const storeCauseText = err?.httpStatus === 503 && err?.message ? err.message : null;
 
   // "재연결 중"(폴링 자체가 실패)과 "정상 응답이지만 진행이 오래 안 움직임"(느린 연산)은 원인이
   // 다르다. ★두 상태를 독립적으로 판정★ — 예전엔 stalled를 !reconnecting으로 억제해, 폴링이
@@ -192,6 +196,7 @@ export function RunMonitor({ runId }: { runId: string }) {
                   <span className="brun-reconnect">
                     · 상태를 불러오지 못하고 있습니다 — 아래 숫자는 마지막으로 받은 값입니다.
                     서버에서는 계속 실행 중일 수 있습니다.
+                    {storeCauseText && ` (${storeCauseText})`}
                   </span>
                   <button className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
                 </>

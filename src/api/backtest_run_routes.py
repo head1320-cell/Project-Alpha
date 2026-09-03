@@ -265,6 +265,47 @@ def _peak_rss_mb() -> float | None:
         return None
 
 
+#: 저장소 실패의 후보 원인 — ★가설을 가를 수 있어야 관측이다★
+#: 사용자 화면의 "연결이 불안정합니다"(status 폴링 3회 연속 실패)가 어느 쪽인지
+#: 다음 번에 말할 수 있게 하는 것이 목적이다. 재현하지 못한 상태라 **고치지 않고
+#: 관측만** 한다.
+_STORE_FAILURE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # SQLAlchemy QueuePool 고갈 — pool_size=5 + overflow=10, pool_timeout 기본 30초.
+    # 30초는 1초 폴링 주기보다 길어 요청이 쌓인다.
+    ("pool_exhausted", ("queuepool", "connection pool", "pool limit")),
+    # SQLite 폴백 시 워커의 진행 UPDATE 와 API 의 SELECT 가 쓰기 락에서 만난다.
+    ("store_locked", ("database is locked", "database table is locked", "deadlock")),
+    ("store_unreachable", ("could not translate host name", "could not connect",
+                           "connection refused", "server closed the connection")),
+)
+
+#: 사용자에게 보일 문구 — ★원문은 절대 싣지 않는다★ DB 예외 문자열에는 접속
+#: URL(자격증명 포함)이 섞일 수 있다. 분류만 내보내고 원문은 로그에 남긴다.
+_STORE_FAILURE_MESSAGE = {
+    "pool_exhausted": "실행 저장소 커넥션이 모두 사용 중입니다 — 잠시 후 재시도하세요.",
+    "store_locked": "실행 저장소가 잠겨 있습니다(동시 쓰기) — 잠시 후 재시도하세요.",
+    "store_unreachable": "실행 저장소에 연결할 수 없습니다 — 잠시 후 재시도하세요.",
+    "unknown": "실행 저장소를 일시적으로 사용할 수 없습니다 — 원인을 확인 중입니다. 잠시 후 재시도하세요.",
+}
+
+
+def classify_store_failure(message: str) -> str:
+    """저장소 실패 문자열을 후보 원인으로 분류한다. ★미상은 분류가 아니다★ —
+    짚이는 것이 없으면 그럴듯한 라벨을 붙이지 않고 `"unknown"` 이라고 적는다."""
+    low = (message or "").lower()
+    for cause, needles in _STORE_FAILURE_HINTS:
+        if any(n in low for n in needles):
+            return cause
+    return "unknown"
+
+
+def _store_unavailable(exc: Exception, where: str) -> HTTPException:
+    """503 + 분류된 사유. 원문은 로그에만 남긴다(자격증명 유출 방지)."""
+    cause = classify_store_failure(str(exc))
+    logger.warning(f"실행 저장소 실패({where}) cause={cause}: {exc}")
+    return HTTPException(503, {"cause": cause, "message": _STORE_FAILURE_MESSAGE[cause]})
+
+
 def _record_phase_seconds(tele: dict, marks: dict) -> None:
     """단계별 소요를 계측에 싣는다 — ★잰 것만 싣는다★.
 
@@ -492,8 +533,8 @@ def run_status(run_id: str):
     # strict=True → DB 오류는 503(일시적, 프론트가 재시도), 진짜 없음만 404
     try:
         st = br.get_status(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "status") from e
     if st is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return st
@@ -516,14 +557,14 @@ def run_telemetry(run_id: str):
     """
     try:
         st = br.get_status(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "telemetry.status") from e
     if st is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     try:
         tele = br.get_telemetry(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "계측을 일시적으로 읽을 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "telemetry") from e
     if tele is None:
         reason = ("실행이 아직 끝나지 않아 계측이 기록되기 전입니다."
                   if st.get("status") not in br.TERMINAL
@@ -538,8 +579,8 @@ def run_telemetry(run_id: str):
 def run_full(run_id: str):
     try:
         r = br.get_run(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "full") from e
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return r
@@ -643,8 +684,8 @@ def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     """
     try:
         r = br.get_run(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "full") from e
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
 

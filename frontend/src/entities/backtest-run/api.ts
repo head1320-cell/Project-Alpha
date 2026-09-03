@@ -54,17 +54,28 @@ export interface RunFull extends RunStatusLite {
 // 구분해 폴링을 이어갈 수 있게 한다.
 export class ApiError extends Error {
   httpStatus: number;
-  constructor(message: string, httpStatus: number) {
+  /** 저장소 실패의 분류(백엔드가 붙인다): pool_exhausted | store_locked |
+   *  store_unreachable | unknown. 없으면 undefined — ★미상을 지어내지 않는다★. */
+  storeCause?: string;
+  constructor(message: string, httpStatus: number, storeCause?: string) {
     super(message);
     this.name = "ApiError";
     this.httpStatus = httpStatus;
+    this.storeCause = storeCause;
   }
 }
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
-    let detail = `${r.status}`;
+    let detail: unknown = `${r.status}`;
     try { detail = (await r.json())?.detail ?? detail; } catch { /* keep status */ }
+    // 503(저장소 실패)은 detail 이 {cause, message} 객체다 — 백엔드가 원인을
+    // 분류해 싣는다(원문은 자격증명이 섞일 수 있어 서버 로그에만 남는다).
+    // 그냥 String() 하면 "[object Object]" 가 되어 사용자가 아무것도 못 읽는다.
+    if (detail && typeof detail === "object") {
+      const d = detail as { cause?: string; message?: string };
+      throw new ApiError(d.message ?? `${r.status}`, r.status, d.cause);
+    }
     throw new ApiError(String(detail), r.status);
   }
   return r.json();
