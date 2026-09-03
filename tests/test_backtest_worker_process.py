@@ -34,9 +34,21 @@ def test_production_submit_uses_the_process_pool_not_a_thread():
     # 구현이 실제로 풀을 쓰는지 — 호출을 가로채 확인한다(풀을 실제로 띄우지 않는다).
     called = {}
 
+    class _FakeFuture:
+        """★진짜 `submit()` 은 Future 를 돌려준다★
+
+        예전 더블은 `None` 을 돌려줬다. 그때는 `_submit` 이 반환값을 버렸으니
+        통과했지만, **버리는 것이 바로 그 사고였다**(`test_backtest_worker_death`).
+        더블이 실제 계약을 모사하지 않으면 그 계약을 시험할 수 없다.
+        """
+
+        def add_done_callback(self, cb):
+            called["callback"] = cb
+
     class _FakePool:
         def submit(self, fn, *a):
             called["fn"], called["args"] = fn, a
+            return _FakeFuture()
 
     orig = brr._get_pool
     brr._get_pool = lambda: _FakePool()
@@ -45,6 +57,9 @@ def test_production_submit_uses_the_process_pool_not_a_thread():
     finally:
         brr._get_pool = orig
     assert called["fn"] is len and called["args"] == ("abc",)
+    # ★Future 를 버리지 않는다★ 버리면 자식의 죽음이 어디에도 나타나지 않는다.
+    assert callable(called.get("callback")), (
+        "submit 의 Future 에 콜백을 달지 않았다 — 워커가 죽어도 아무도 모른다")
 
 
 def test_pool_uses_spawn_not_fork():

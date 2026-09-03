@@ -19,7 +19,8 @@ import multiprocessing as mp
 import os
 import threading
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import CancelledError, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -118,6 +119,56 @@ def shutdown_pool() -> None:
     except Exception:
         logger.exception("워커 풀 종료 중 오류(무시)")
 
+def _reset_pool() -> None:
+    """★broken 된 풀을 버리고 다음 제출에서 새로 만든다★
+
+    자식이 비정상 종료하면 `ProcessPoolExecutor` 는 **풀 전체**를 broken 으로
+    표시하고 이후 모든 `submit()` 이 즉시 실패한다. 예전에는 `_POOL` 을 앱 종료
+    외에 재설정하지 않아서, 한 번 죽으면 **API 를 재시작할 때까지 모든 백테스트가
+    실패했다** — 사용자가 말한 "계속 일어난다" 가 그것이다.
+    """
+    global _POOL
+    with _POOL_LOCK:
+        pool, _POOL = _POOL, None
+    if pool is not None:
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:                       # noqa: BLE001
+            logger.debug("broken 풀 정리 중 오류(무시)", exc_info=True)
+
+
+def _on_worker_done(run_id: str | None, fut) -> None:
+    """★죽은 자식을 관측한다★
+
+    `_worker` 는 자기 예외를 잡아 failed 로 기록한다. 그러나 자식이 **SIGKILL**
+    되면(OOM killer 가 대표적이다 — 실행당 RSS 90~247MB × 워커 4개) 그 `except` 는
+    돌지 못한다. 예전에는 `submit()` 의 Future 를 버려서 그 죽음을 아무도 관측하지
+    못했고, 행은 비종료로 남아 `RunMonitor` 가 1초마다 영원히 폴링했다.
+    """
+    try:
+        exc = fut.exception()
+    except CancelledError:
+        return
+    except Exception:                           # noqa: BLE001
+        return
+    if exc is None:
+        return                                  # 정상 완료 — `_worker` 가 이미 기록했다
+
+    if isinstance(exc, BrokenProcessPool):
+        _reset_pool()
+    logger.error(f"백테스트 워커가 비정상 종료했다 (run={run_id}): {type(exc).__name__}")
+    if not run_id:
+        return
+    try:
+        br.set_error(
+            run_id, "worker_died",
+            "실행 워커가 비정상 종료했습니다("
+            f"{type(exc).__name__}). 메모리 부족이나 프로세스 종료일 수 있습니다 — "
+            "유니버스 범위를 줄여 다시 실행해 보세요.")
+    except Exception:                           # noqa: BLE001
+        logger.exception(f"워커 사망을 기록하지 못했다 (run={run_id})")
+
+
 def _submit(fn, *args) -> None:
     """워커 디스패치 — **프로덕션은 항상 프로세스 풀이다.**
 
@@ -130,8 +181,20 @@ def _submit(fn, *args) -> None:
     ★이걸로 프로덕션 경로가 검증되지 않는 것은 아니다★ 풀을 실제로 타는
     `tests/test_backtest_worker_process.py` 가 별도 프로세스에서 완주하는 것과
     텔레메트리가 남는 것을 함께 단언한다.
+
+    ★Future 를 버리지 않는다★ 버리면 자식의 죽음이 어디에도 나타나지 않는다
+    (`tests/test_backtest_worker_death.py` 가 그 사고를 재현한다). 첫 인자가
+    run_id 라는 것은 두 호출부의 규약이고, 아니면 그냥 로그만 남긴다.
     """
-    _get_pool().submit(fn, *args)
+    run_id = args[0] if args and isinstance(args[0], str) else None
+    try:
+        fut = _get_pool().submit(fn, *args)
+    except BrokenProcessPool:
+        # 이전 실행의 자식이 죽어 풀이 broken 이다 — 버리고 **한 번만** 다시 세운다.
+        logger.warning("워커 풀이 broken 상태라 새로 세운다")
+        _reset_pool()
+        fut = _get_pool().submit(fn, *args)
+    fut.add_done_callback(lambda f: _on_worker_done(run_id, f))
 
 
 router = APIRouter(prefix="/api/v1/backtest", tags=["backtest-run"])
@@ -350,7 +413,21 @@ def create_run(req: CreateRunRequest):
         run_id = br.create_run(req.strategy_name, req.config, requested_by=req.requested_by)
         if run_id is None:
             raise HTTPException(503, "실행 저장소(DB)를 사용할 수 없어 백테스트를 생성할 수 없습니다.")
-        _submit(_worker, run_id, req.config, time.time())
+        try:
+            _submit(_worker, run_id, req.config, time.time())
+        except Exception as e:
+            # ★행을 만들어 놓고 닫지 않으면 고아가 된다★ 아무 워커도 집어 가지
+            # 않는 `queued` 행이 남고, 프런트는 그것을 영원히 폴링한다.
+            logger.exception("워커 디스패치 실패")
+            try:
+                br.set_error(run_id, "dispatch_failed",
+                             f"백테스트 워커를 시작하지 못했습니다: {type(e).__name__}")
+            except Exception:                   # noqa: BLE001
+                logger.exception("디스패치 실패를 기록하지 못했다")
+            # ★사유를 지우지 않는다★ "처리 중 오류" 로 뭉개면 원인을 못 찾는다.
+            raise HTTPException(
+                503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+                     f"({type(e).__name__}).") from e
         return {"run_id": run_id, "status": "queued"}
     except HTTPException:
         raise
@@ -416,7 +493,20 @@ def run_retry(run_id: str):
                            requested_by=src.get("requested_by") or "user")
     if new_id is None:
         raise HTTPException(503, "실행 저장소(DB)를 사용할 수 없습니다.")
-    _submit(_worker, new_id, config, time.time())
+    # ★재시도도 같은 규율★ 제출이 실패하면 방금 만든 행을 닫는다 — 고아 `queued`
+    # 를 남기지 않는다(`create_run` 과 같은 이유).
+    try:
+        _submit(_worker, new_id, config, time.time())
+    except Exception as e:
+        logger.exception("재시도 워커 디스패치 실패")
+        try:
+            br.set_error(new_id, "dispatch_failed",
+                         f"백테스트 워커를 시작하지 못했습니다: {type(e).__name__}")
+        except Exception:                       # noqa: BLE001
+            logger.exception("디스패치 실패를 기록하지 못했다")
+        raise HTTPException(
+            503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+                 f"({type(e).__name__}).") from e
     return {"run_id": new_id, "status": "queued", "retried_from": run_id}
 
 
