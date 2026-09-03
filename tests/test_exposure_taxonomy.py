@@ -329,3 +329,48 @@ def test_classification_is_deterministic():
 
 def test_registered_tickers_is_sorted_and_matches_the_registry():
     assert list(registered_tickers()) == sorted(s.ticker for s in _SPECS)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★상수가 상수와 같다는 단언을 계약으로★ (P9 ③)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 이 파일에는 `s.as_of == TAXONOMY_AS_OF` 같은 단언이 셋 있다. 스탬프가 **전파**
+# 되는지는 확인하지만 그 값이 **무엇이어야 하는지**는 아무것도 말하지 않는다 —
+# `TAXONOMY_AS_OF = "9999-99-99"` 여도 전부 통과한다. 전파 검사는 그대로 두고
+# (그것도 나름의 계약이다) 값 자체의 계약을 여기 얹는다.
+
+def test_the_taxonomy_as_of_is_a_real_past_date():
+    """★지어낸 날짜를 막는다★ 형식이 맞고 미래가 아니어야 한다.
+
+    미래 as-of 는 `research_context.validate_as_of` 가 요청에 대해 이미 거부하는
+    것과 같은 부류다 — *"고정이 아니라 고정한 척"*.
+    """
+    from datetime import date
+    d = date.fromisoformat(TAXONOMY_AS_OF)      # 형식이 틀리면 여기서 터진다
+    assert d <= date.today(), (
+        f"분류 체계의 as-of 가 미래다({TAXONOMY_AS_OF}) — 아직 오지 않은 시점의 "
+        "분류를 주장하는 것이다")
+
+
+def test_the_taxonomy_version_is_a_year_dot_serial():
+    """판본이 정렬 가능해야 소비자가 **어느 판본으로 계산했는지** 비교할 수 있다."""
+    import re
+    assert re.fullmatch(r"\d{4}\.\d+", TAXONOMY_VERSION), TAXONOMY_VERSION
+    assert TAXONOMY_VERSION.split(".")[0] == TAXONOMY_AS_OF[:4], (
+        f"버전의 연도({TAXONOMY_VERSION})와 as-of 의 연도({TAXONOMY_AS_OF})가 "
+        "어긋난다 — 둘 중 하나만 올린 것이다")
+
+
+def test_the_stamp_is_propagated_not_hardcoded_in_the_reader(monkeypatch):
+    """★전파를 실제로 확인한다★ 상수를 바꾸면 산출도 바뀌어야 한다.
+
+    기존 단언들은 `s.as_of == TAXONOMY_AS_OF` 라 **양쪽이 같이 움직이면** 통과한다.
+    읽는 쪽이 값을 하드코딩했어도 잡지 못한다. 주입해서 흘러나오는지 본다.
+    """
+    import src.data.exposure_taxonomy as tx
+    monkeypatch.setattr(tx, "TAXONOMY_AS_OF", "2020-01-01")
+    monkeypatch.setattr(tx, "TAXONOMY_VERSION", "2020.9")
+    cov = tx.coverage(["069500"])
+    assert cov["as_of"] == "2020-01-01" and cov["version"] == "2020.9", (
+        f"주입한 스탬프가 흘러나오지 않았다 — 읽는 쪽이 하드코딩했다: {cov}")
