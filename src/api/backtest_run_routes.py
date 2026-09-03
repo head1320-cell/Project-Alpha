@@ -427,8 +427,41 @@ def run_delete(run_id: str):
     return {"deleted": True}
 
 
+def _window_as_of(months: dict) -> str | None:
+    """백테스트 창의 **마지막 달 말일**. ★없으면 지어내지 않는다★ (P9 ①)."""
+    import calendar
+    if not months:
+        return None
+    try:
+        y, m = (int(x) for x in max(months).split("-"))
+        return f"{y:04d}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+    except (ValueError, TypeError, calendar.IllegalMonthError):
+        return None
+
+
+def _proxy_selection(window_as_of: str | None, truncated: bool, prox: dict) -> dict:
+    """대리계열 선택의 ★시점 표기★ — 두 분기가 같은 라벨을 쓰게 한 곳에서 만든다."""
+    from src.engine.factor_exposure import proxy_table_block
+    return {
+        "window_as_of": window_as_of,
+        "truncated_to_window": bool(truncated),
+        # ★자르지 않았으면 지킨 것이 아니다★ `resolve_proxies()` 는 as_of 를 안
+        # 주면 `as_of_honored: True` 를 돌려준다 — 계열 축에서는 참이지만(자를
+        # 것이 없었다) 그대로 실으면 "창 시점을 지켰다" 로 읽힌다. 공허한 참이다.
+        "as_of_honored": bool(truncated and prox.get("as_of_honored")),
+        "reason": (None if truncated else
+                   "대리계열을 창 시점으로 자르지 않았습니다 — 계열은 오늘까지이고 "
+                   "회귀는 공통 달 교집합으로 돌았습니다(계수에 룩어헤드는 "
+                   "없습니다). 다만 어느 후보를 쓸지는 오늘까지의 관측 수로 "
+                   "골랐습니다. truncate_to_window=true 로 자를 수 있고, 그러면 "
+                   "수치가 달라지거나 쓸 계열이 없어 거절될 수 있습니다."),
+        # 표가 그 창에 유효했는가 — 절단 여부와 **무관한** 질문이다.
+        "proxy_table": proxy_table_block(window_as_of),
+    }
+
+
 @router.get("/runs/{run_id}/factor-attribution")
-def run_factor_attribution(run_id: str):
+def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     """★무엇이 이 수익을 만들었나★ 실현수익을 매크로 팩터와 α 로 쪼갠다 (P3-2).
 
     결합 OLS `r_t = α + Σβᵢfᵢ,t` — 단변량이면 상관된 팩터의 공통 변동을 중복
@@ -459,17 +492,31 @@ def run_factor_attribution(run_id: str):
         return {"available": False, "reason": monthly["reason"],
                 "run_id": run_id, "status": r.get("status")}
 
+    # ★귀인한 창을 응답이 말한다 (P9 ①)★ 대리계열 **선택**은 오늘까지의 관측
+    # 수로 이뤄지는데, 그 사실이 응답 어디에도 없었다. 계수에는 수치적
+    # 룩어헤드가 없다(`factor_attribution` 이 공통 달로 교집합을 잡는다) —
+    # 고치는 것은 **선택의 시점 표기**다.
+    # ★라벨 기본 · 절단은 플래그★ 절단을 기본으로 켜면 계열이 짧아져 귀인
+    # 수치가 움직인다. 그것은 이 슬라이스의 범위가 아니다(P5 ③ 과 같은 규율).
+    window_as_of = _window_as_of(monthly["returns"])
     try:
         from src.engine.factor_exposure import resolve_proxies
-        prox = resolve_proxies()
+        prox = resolve_proxies(as_of=window_as_of if truncate_to_window else None)
     except Exception:
         logger.exception("팩터 계열 해소 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+    # ★모든 분기가 같은 라벨을 낸다★ 절단을 켜면 계열이 짧아져 아무 팩터도
+    # 안 남을 수 있다(정직한 거절이다). 그때 라벨이 빠지면 소비자는 **왜**
+    # 거절됐는지 — 자른 탓인지 수집기가 빈 탓인지 — 구별할 수 없다.
     if not prox.get("available"):
         return {"available": False, "reason": prox.get("reason"),
-                "run_id": run_id, "status": r.get("status")}
+                "run_id": run_id, "status": r.get("status"),
+                "proxy_selection": _proxy_selection(
+                    window_as_of, truncate_to_window, prox)}
 
     out = factor_attribution(monthly["returns"], prox["resolved"])
+    out.update(proxy_selection=_proxy_selection(
+        window_as_of, truncate_to_window, prox))
     out.update(run_id=run_id, status=r.get("status"),
                strategy_name=r.get("strategy_name"),
                months_from_run=monthly["n_months"],

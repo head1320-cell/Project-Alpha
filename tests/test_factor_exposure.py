@@ -285,3 +285,81 @@ def test_the_real_series_transforms_match_the_measurement(live):
     assert t["duration"] == "diff" and t["credit"] == "diff"
     assert t["volatility"] == "diff", "VIXCLS 는 0 을 지난다"
     assert t["equity"] == "pct" and t["inflation"] == "pct"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★표가 자기 판본을 달고 다닌다★ (P9 ①)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# `as_of_honored` 는 **계열 절단**만 말한다. 자르는 것은 데이터이고, 어느 후보를
+# 어떤 우선순위로 고르는가는 **표**다. 그 표는 2026년의 판단이라 과거 시점에
+# 소급하면 그때 없던 지식을 쓴 것이 된다 — 그 사실을 응답이 말해야 한다.
+
+def test_the_proxy_table_reports_its_own_version_and_as_of():
+    from src.engine.factor_exposure import PROXY_TABLE_AS_OF, PROXY_TABLE_VERSION
+    t = resolve_proxies(_map())["proxy_table"]
+    assert t["version"] == PROXY_TABLE_VERSION
+    assert t["as_of"] == PROXY_TABLE_AS_OF
+
+
+def test_a_request_without_an_as_of_cannot_claim_the_table_covered_it():
+    """★미상은 통과가 아니다★ 시점을 안 물었으면 표가 유효했는지 알 수 없다.
+
+    `as_of_honored` 는 `as_of` 가 없으면 무조건 `True` 다 — 계열을 자를 일이
+    없으니 그 축에서는 참이다. 그런데 그 참이 **표까지 덮는 것으로 읽히면**
+    공허한 통과가 된다. 두 축을 가른다.
+    """
+    out = resolve_proxies(_map())
+    assert out["as_of_honored"] is True            # 계열 축 — 자를 것이 없었다
+    assert out["proxy_table"]["covers_as_of"] is None   # 표 축 — 미상
+    assert out["proxy_table"]["reason"]
+
+
+def test_an_as_of_before_the_table_existed_is_not_covered():
+    """★그 표는 그때 없었다★ 2026년 판 대리계열 선택을 2019년에 소급할 수 없다."""
+    from src.engine.factor_exposure import PROXY_TABLE_AS_OF
+    out = resolve_proxies(_map(), as_of="2019-06-30")
+    t = out["proxy_table"]
+    assert t["covers_as_of"] is False
+    assert PROXY_TABLE_AS_OF in t["reason"] and "2019-06-30" in t["reason"]
+
+
+def test_an_as_of_after_the_table_was_fixed_is_covered():
+    """★짝★ 항상 `False` 면 그 필드는 정보가 없다."""
+    out = resolve_proxies(_map(), as_of="2026-08-31")
+    t = out["proxy_table"]
+    assert t["covers_as_of"] is True
+    assert t["reason"] is None
+
+
+def test_the_table_boundary_day_counts_as_covered():
+    """경계 하루가 어느 쪽인지 못 박는다 — 표가 유효해진 **그 날**은 포함이다."""
+    from src.engine.factor_exposure import PROXY_TABLE_AS_OF
+    assert resolve_proxies(_map(), as_of=PROXY_TABLE_AS_OF)[
+        "proxy_table"]["covers_as_of"] is True
+
+
+def test_the_table_block_survives_an_unavailable_collector(monkeypatch):
+    """★모든 분기가 같은 키를 낸다★ 실패 응답에도 판본이 있어야 한다.
+
+    없으면 소비자가 `.get()` 으로 읽다가 `None` 을 "덮였다" 로 오해한다.
+    """
+    monkeypatch.setattr("src.engine.factor_exposure._macro_series_map",
+                        lambda: (None, "수집기가 죽었습니다"))
+    out = resolve_proxies()
+    assert out["available"] is False
+    assert out["proxy_table"]["covers_as_of"] is None
+    assert out["proxy_table"]["version"] and out["proxy_table"]["as_of"]
+
+
+def test_the_table_as_of_is_a_real_past_date():
+    """★지어낸 날짜를 막는다★ 형식이 맞고 미래가 아니어야 한다.
+
+    `PROXY_TABLE_AS_OF` 는 표가 마지막으로 바뀐 커밋(`b4b6042`, 2026-08-23)에서
+    왔다 — 손으로 유지하지만 **근거를 적어 두었으므로 감사 가능**하다.
+    """
+    from datetime import date
+
+    from src.engine.factor_exposure import PROXY_TABLE_AS_OF
+    d = date.fromisoformat(PROXY_TABLE_AS_OF)      # 형식이 틀리면 여기서 터진다
+    assert d <= date.today(), "표의 as-of 가 미래다 — 고정이 아니라 고정한 척이다"

@@ -34,6 +34,37 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+#: 대리계열 **표**의 판본. ★어휘를 새로 만들지 않는다★ —
+#: `exposure_taxonomy.TAXONOMY_VERSION`/`TAXONOMY_AS_OF` 와 같은 모양이다.
+PROXY_TABLE_VERSION = "2026.1"
+#: 이 표가 마지막으로 바뀐 날. ★손으로 유지하되 근거를 적는다★ —
+#: `git log -L` 로 잰 `FACTOR_PROXIES` 의 마지막 변경은 `b4b6042`(2026-08-23)다.
+#: 후보 목록이나 우선순위를 바꾸면 **여기도 올린다**(테스트가 미래 날짜를 막는다).
+PROXY_TABLE_AS_OF = "2026-08-23"
+
+
+def proxy_table_block(as_of: str | None) -> dict:
+    """이 표가 요청 시점에 유효했는가. ★미상이면 `None` 이지 `True` 가 아니다★
+
+    ★`as_of_honored` 와 다른 질문이다★ 그 필드는 **계열**을 그 시점까지 잘랐는지를
+    말한다. 자르는 것은 데이터이고, 어느 후보를 어떤 우선순위로 고르는가는 **표**다.
+    표는 2026년의 판단이라 그전 시점에 소급하면 그때 없던 지식을 쓴 것이 된다 —
+    수치를 바꾸지는 않지만, 응답이 그 사실을 말하지 않으면 그것이 침묵 폴백이다.
+    """
+    base = {"version": PROXY_TABLE_VERSION, "as_of": PROXY_TABLE_AS_OF}
+    if not as_of:
+        return {**base, "covers_as_of": None,
+                "reason": ("요청에 as_of 가 없어 이 표가 그 시점에 유효했는지 "
+                           "알 수 없습니다 — ★미상은 통과가 아닙니다★.")}
+    if str(as_of) < PROXY_TABLE_AS_OF:
+        return {**base, "covers_as_of": False,
+                "reason": (f"대리계열 표는 {PROXY_TABLE_AS_OF} 판인데 요청 시점은 "
+                           f"{as_of} 입니다 — 그때는 이 표가 없었으므로 후보와 "
+                           "우선순위는 사후 지식입니다. 계열은 잘렸어도 **선택**은 "
+                           "그렇지 않습니다.")}
+    return {**base, "covers_as_of": True, "reason": None}
+
+
 # 팩터 → 대리계열 후보(우선순위). 앞의 것이 쓸 수 있으면 그것을 쓴다.
 # ★후보를 여럿 두는 이유★ 수집기에 있어도 월별 관측이 0인 계열이 있다(실측).
 FACTOR_PROXIES: dict[str, tuple[str, ...]] = {
@@ -167,7 +198,10 @@ def resolve_proxies(series_map: dict | None = None,
         series_map, err = _macro_series_map()
         if series_map is None:
             return {"available": False, "reason": err, "resolved": {}, "unresolved": {},
-                    "as_of": as_of, "as_of_honored": not as_of}
+                    "as_of": as_of, "as_of_honored": not as_of,
+                    # ★모든 분기가 같은 키를 낸다★ 실패 응답에도 판본이 있어야
+                    # 소비자가 `.get()` 으로 읽다가 `None` 을 "덮였다" 로 읽지 않는다.
+                    "proxy_table": proxy_table_block(as_of)}
 
     # ★자른 결과와 성공 여부를 계열별로 들고 간다★ 최종 판정은 **실제로 쓰인**
     # 계열만 본다 — 쓰지도 않은 계열 때문에 "못 지켰다" 고 말하면 그것도 거짓이다.
@@ -210,6 +244,9 @@ def resolve_proxies(series_map: dict | None = None,
             "as_of_honored": (bool(resolved) and all(
                 cut_ok.get(d.get("series"), True) for d in resolved.values()))
             if as_of else True,
+            # ★두 축을 가른다★ 위 `as_of_honored` 는 **계열 절단**만 말한다.
+            # 표가 그 시점에 유효했는지는 다른 질문이고, 다른 필드가 답한다.
+            "proxy_table": proxy_table_block(as_of),
             "reason": None if resolved else "어떤 팩터도 대리계열을 찾지 못했습니다"}
 
 
