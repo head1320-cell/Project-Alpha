@@ -265,6 +265,27 @@ def _peak_rss_mb() -> float | None:
         return None
 
 
+def _record_phase_seconds(tele: dict, marks: dict) -> None:
+    """단계별 소요를 계측에 싣는다 — ★잰 것만 싣는다★.
+
+    `marks` 는 `cb` 가 각 단계에 **처음 진입한** 시각과, 코어가 끝난 시각이다.
+      load_s = 로딩 시작 → 시뮬레이션 시작 (시뮬레이션에 도달했을 때만)
+      sim_s  = 시뮬레이션 시작 → 코어 종료
+
+    ★미측정 ≠ 0★ 경계가 없으면 키를 만들지 않는다. `sim_s: 0` 을 넣으면
+    "시뮬레이션이 0초였다"로 읽히는데, 사실은 거기까지 가지도 않은 것이다.
+    (`.md` §30 의 cache hit rate 를 뺀 규율과 같다.)
+    """
+    ld, sim, end = marks.get("loading_data_t0"), marks.get("simulating_t0"), marks.get("core_end")
+    if ld is not None and sim is not None:
+        tele["load_s"] = round(sim - ld, 3)
+    elif ld is not None and end is not None:
+        # 시뮬레이션에 도달하지 못한 채 코어가 끝났다 — 로딩만 잰다.
+        tele["load_s"] = round(end - ld, 3)
+    if sim is not None and end is not None:
+        tele["sim_s"] = round(end - sim, 3)
+
+
 def _finish_telemetry(run_id: str, tele: dict, meter: _QueryMeter,
                       t_start: float, cpu0: float) -> None:
     """실행 계측을 마무리해 DB 에 남긴다. 성공·실패·취소 모든 경로에서 부른다."""
@@ -316,6 +337,11 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
             return
 
         seen = {"stage": "validating"}
+        # 단계별 시각 — ★`duration_s` 총합만으로는 병목을 못 가른다★
+        # "5분 중 몇 분이 로딩이고 몇 분이 시뮬레이션인가" 를 답하려면 단계 경계가
+        # 있어야 한다. `cb` 는 이미 단계를 보고 있으므로 계측 지점을 새로 만들지
+        # 않고 여기에 시각만 찍는다. ★돌지 않은 단계는 키를 만들지 않는다★
+        marks: dict[str, float] = {}
 
         def cb(evt: dict) -> None:
             """진행 보고 + 협조적 취소 감지.
@@ -348,6 +374,8 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
             else:
                 return
 
+            marks.setdefault(f"{stage}_t0", time.perf_counter())
+
             if seen["stage"] == stage:
                 if br.touch_progress(run_id, pct, msg) == "blocked":
                     st = br.get_status(run_id)
@@ -363,15 +391,23 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         try:
             with meter:
                 result = _screen_to_backtest_core(req, progress_cb=cb)
+            marks["core_end"] = time.perf_counter()
+            _record_phase_seconds(tele, marks)
         except _Cancelled:
             logger.info(f"backtest run {run_id} 취소 감지 — 워커 정지")
             tele["cancelled"] = True
+            # ★실패·취소야말로 단계 분해가 필요하다★ 어디까지 갔다 멈췄는지가
+            # 진단의 전부다. 도달하지 못한 단계는 여전히 키를 만들지 않는다.
+            marks["core_end"] = time.perf_counter()
+            _record_phase_seconds(tele, marks)
             _finish_telemetry(run_id, tele, meter, t_start, cpu0)
             return
         except Exception:
             logger.exception(f"backtest run {run_id} 엔진 실패")
             br.set_error(run_id, "engine_error", "백테스트 실행 중 오류가 발생했습니다.")
             tele["failure_code"] = "engine_error"
+            marks["core_end"] = time.perf_counter()
+            _record_phase_seconds(tele, marks)
             _finish_telemetry(run_id, tele, meter, t_start, cpu0)
             return
 
@@ -461,6 +497,41 @@ def run_status(run_id: str):
     if st is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return st
+
+
+@router.get("/runs/{run_id}/telemetry")
+def run_telemetry(run_id: str):
+    """실행 계측 조회 — ★쓰기 전용이던 계측을 읽을 수 있게 한다★.
+
+    `_worker` 는 실행마다 `duration_s`·`cpu_s`·`cpu_util_pct`·`peak_rss_mb`·
+    `db_queries`·`queue_wait_s`·`symbols_by_source`·`load_s`·`sim_s` 를 남기는데,
+    그것을 돌려주는 경로가 없었다. 그래서 "왜 5분 걸렸나" 를 물어도 로딩과
+    시뮬레이션 중 어느 쪽인지 분해할 수 없었다.
+
+    404/503 매핑은 `run_status` 와 **같은 규약**이다 — 진짜 없는 실행만 404,
+    저장소 오류는 503(프런트가 '만료된 링크'로 오인하지 않게).
+
+    ★미상은 0 이 아니다★ 계측이 아직 없으면 `{}` 도 0 도 아니고
+    `available: false` + 사유다.
+    """
+    try:
+        st = br.get_status(run_id, strict=True)
+    except br.BacktestStoreError:
+        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    if st is None:
+        raise HTTPException(404, "실행을 찾을 수 없습니다.")
+    try:
+        tele = br.get_telemetry(run_id, strict=True)
+    except br.BacktestStoreError:
+        raise HTTPException(503, "계측을 일시적으로 읽을 수 없습니다 — 잠시 후 재시도하세요.")
+    if tele is None:
+        reason = ("실행이 아직 끝나지 않아 계측이 기록되기 전입니다."
+                  if st.get("status") not in br.TERMINAL
+                  else "이 실행에는 계측 기록이 없습니다(계측 도입 이전이거나 계측 컬럼 미사용).")
+        return {"run_id": run_id, "status": st.get("status"),
+                "available": False, "telemetry": None, "reason": reason}
+    return {"run_id": run_id, "status": st.get("status"),
+            "available": True, "telemetry": tele, "reason": None}
 
 
 @router.get("/runs/{run_id}")

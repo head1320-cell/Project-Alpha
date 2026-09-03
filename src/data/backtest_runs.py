@@ -477,8 +477,20 @@ def set_telemetry(run_id: str, payload: dict) -> bool:
         return False
 
 
-def get_telemetry(run_id: str) -> dict | None:
-    """계측 조회. 없으면 None — 지어내지 않는다."""
+def get_telemetry(run_id: str, strict: bool = False) -> dict | None:
+    """계측 조회. 없으면 None — 지어내지 않는다.
+
+    ★없음과 못 읽음은 다르다★ 이 함수는 예외를 **전부** 삼켜 `None` 을 돌려줬다.
+    그러면 "아직 기록 전"과 "DB 를 못 읽었다"가 같은 답이 되어, 사용자에게
+    "계측이 없습니다" 라고 단언하는 순간 그것이 거짓일 수 있다.
+
+    `get_status` 가 이미 쓰는 어휘를 그대로 쓴다 — 새 규약을 만들지 않는다:
+      strict=False(기본): 기존 호출부 보호(관대). DB 오류를 None 으로 삼킴.
+      strict=True(API 엔드포인트용): `BacktestStoreError` 로 올려 '없음'과 구분.
+
+    ★컬럼 부재는 오류가 아니다★ `_has_telemetry` 가 False 인 것은 이 배포에 계측
+    컬럼이 없다는 **알려진** 상태이므로 strict 여부와 무관하게 None 이다.
+    """
     if not _has_telemetry:
         return None
     try:
@@ -491,7 +503,10 @@ def get_telemetry(run_id: str) -> dict | None:
         if not r or not r[0]:
             return None
         return json.loads(r[0])
-    except Exception:
+    except Exception as e:
+        logger.warning(f"telemetry 조회 실패 {run_id}: {e}")
+        if strict:
+            raise BacktestStoreError(str(e)) from e
         return None
 
 
