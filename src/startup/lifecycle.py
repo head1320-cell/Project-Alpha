@@ -22,6 +22,41 @@ async def _collect_master_bg(engine):
     except Exception as e:
         log.warning(f"KIS 마스터 수집 실패(폴백 유지): {e}")
 
+#: 고아 백테스트 스윕 주기(초). `ORPHAN_SILENCE_SEC`(900) 보다 훨씬 짧아야
+#: 하트비트가 끊긴 실행이 **한 주기 안에** 거둬진다.
+_ORPHAN_SWEEP_SEC = 60.0
+
+
+def _orphan_sweep_bg():
+    """백그라운드(데몬): 워커가 죽어 비종료로 남은 백테스트 실행을 ★주기적으로★ 거둔다.
+
+    ★왜 기동 1회로는 부족한가★
+    예전에는 `run_startup()` 에서 한 번만 훑었다. 그래서 실행 워커가 죽으면 그 행은
+    **서버를 재시작할 때까지** 비종료로 남았고, 프런트(`RunMonitor`)는 1초마다
+    영원히 폴링했다 — 사용자에게는 "로딩이 끝나지 않는다" 로 보인다.
+
+    `backtest_run_routes._on_worker_done` 이 대부분의 사망을 즉시 잡지만 그것도
+    만능은 아니다: API 프로세스 자체가 죽거나 배포로 교체되면 그 콜백도 함께
+    사라진다. 이 루프가 마지막 그물이다.
+
+    ★죽지 않는다★ 한 번의 예외로 데몬이 끝나면 그 뒤로는 아무도 거두지 않는다.
+    """
+    import logging
+    import time as _t
+    log = logging.getLogger("api.main")
+    while True:
+        try:
+            from src.data.backtest_runs import sweep_orphaned
+            n = sweep_orphaned()
+            if n:
+                log.warning(f"고아 백테스트 {n}건 정리(주기 스윕)")
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:                  # noqa: BLE001
+            log.warning(f"고아 스윕 실패(다음 주기에 재시도): {e}")
+        _t.sleep(_ORPHAN_SWEEP_SEC)
+
+
 def _prewarm_real_data():
     """백그라운드(데몬 스레드): corp_code 맵 준비 + 기본 유니버스 팩터를 DB에 적재.
     이미 DB(factor_snapshot)에 적재돼 있으면 디스크/DB 캐시 히트로 빠르게 끝남."""
@@ -217,14 +252,21 @@ async def run_startup() -> None:
         import logging
         logging.getLogger(__name__).error(f"init_db failed (DB 준비 전일 수 있음): {e}")
 
-    # 고아 백테스트 실행 정리 — 실행 워커는 daemon 스레드라 재시작 시 정리 없이 사라진다.
-    # 훑지 않으면 그 행이 영원히 비종료로 남아 결과 페이지가 끝나지 않는 실행을 보여준다.
+    # 고아 백테스트 실행 정리 — 워커가 죽으면(OOM·배포·크래시) 그 행이 비종료로
+    # 남고 결과 페이지가 끝나지 않는 실행을 보여준다. ★기동 1회 + 주기 데몬★ 이다:
+    # 기동 훑기는 재시작 직후를 즉시 정리하고, 데몬은 그 뒤를 계속 지킨다.
     try:
         from src.data.backtest_runs import sweep_orphaned
         sweep_orphaned()
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
+    try:
+        import threading
+        threading.Thread(target=_orphan_sweep_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"고아 스윕 데몬 기동 실패: {e}")
 
     # Initialize screener tables (legacy sync path)
     try:
