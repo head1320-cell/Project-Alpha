@@ -76,6 +76,28 @@ def _month_key(ts) -> str:
         return str(ts)[:7]
 
 
+def _month_keys(index) -> np.ndarray:
+    """인덱스 **전체**의 `YYYY-MM`. ★`_month_key` 를 행마다 부르는 것과 같은 답★
+
+    ★낭비는 per-element 비용이 아니라 재계산이었다★ 워크포워드는 같은
+    DatetimeIndex 의 확장창을 70번 훑는다 — 실측으로 고유 타임스탬프 1,764개인데
+    `_month_key` 호출은 68,355회다(관문 plan 의 10%).
+
+    ★`.strftime()` 벡터화는 더 느리다★(실측 0.4582s vs listcomp 0.4330s) —
+    pandas 의 `strftime` 도 결국 Timestamp 를 도는 파이썬 루프다. `to_period` 는
+    정수 월 서수로 내려가므로 **5.27배** 빠르고 값은 같다.
+
+    ★단수형은 손대지 않는다★ 다른 다섯 모듈이 쓰고 `test_month_key_contract` 가
+    계약을 건다. 이 함수는 그 위에 얹히고, 둘이 같은 답을 내는지는 테스트가 건다.
+    """
+    try:
+        return index.to_period("M").astype(str).to_numpy()
+    except (AttributeError, TypeError, ValueError):
+        # ★폴백은 지름길이 아니라 같은 답이어야 한다★ 상류가 내보내는 형식이
+        # 데이터에 따라 달라진다(아래 `_normalize_month` 가 적어 둔 사건).
+        return np.array([_month_key(ts) for ts in index])
+
+
 def _normalize_month(raw: str) -> str | None:
     """월 라벨을 정규형 `"YYYY-MM"` 으로. 날짜가 아니면 `None`.
 

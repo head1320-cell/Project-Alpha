@@ -240,3 +240,92 @@ def test_missing_inputs_answer_with_a_reason(kwargs):
     assert out["available"] is False
     assert out["mu"] is None
     assert out["reason"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★단수와 복수가 같은 답을 낸다★ (월 키 벡터화 ①)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 워크포워드는 같은 DatetimeIndex 의 확장창을 70번 훑고, 매번 이미 계산한 행의
+# 월 키를 처음부터 다시 만든다 — 고유 타임스탬프 1,764개인데 호출 68,355회다
+# (실측). 낭비는 per-element 비용이 아니라 **재계산**이다.
+#
+# ★`_month_key`(단수)는 손대지 않는다★ 다섯 모듈이 쓰고 `test_month_key_contract`
+# 가 계약을 건다. 복수형을 그 **위에** 얹고, 둘이 같은 답을 내는지 여기서 건다.
+
+def _pairwise(index):
+    from src.engine.conditional_market import _month_key, _month_keys
+    return np.array([_month_key(t) for t in index]), _month_keys(index)
+
+
+@pytest.mark.parametrize("index", [
+    pd.bdate_range("2019-01-01", periods=1764),          # 실제 관문 크기
+    pd.bdate_range("2021-01-01", periods=1),             # 한 행
+    pd.date_range("2020-12-28", periods=10, freq="D"),   # ★연말 경계★
+    pd.date_range("2024-02-27", periods=4, freq="D"),    # ★윤년 2월★
+    pd.DatetimeIndex([]),                                # 빈 인덱스
+])
+def test_the_plural_agrees_with_the_singular_on_datetimes(index):
+    one, many = _pairwise(index)
+    assert np.array_equal(one, many), f"{one[:5]} != {many[:5]}"
+
+
+@pytest.mark.parametrize("index", [
+    pd.Index(["202109", "202110"]),      # ★이 저장소의 실제 수집기 형식★
+    pd.Index(["2021-09-01", "2021-10-01"]),
+    pd.Index([1, 2, 3]),
+    pd.Index([]),
+])
+def test_the_plural_falls_back_exactly_like_the_singular(index):
+    """★비-datetime 인덱스에서도 같은 답★ — 폴백이 지름길이 되면 안 된다.
+
+    모듈 독스트링이 적어 둔 사건이 그것이다: 상류가 내보내는 형식이 데이터에
+    따라 달라져서 조건부 μ/Σ 가 운영에서 통째로 죽어 있었다.
+    """
+    one, many = _pairwise(index)
+    assert np.array_equal(one, many), f"{list(one)} != {list(many)}"
+
+
+def test_the_plural_is_not_secretly_the_singular_in_a_loop():
+    """★그것이 이 헬퍼의 존재 이유다★ (변이 V5)
+
+    값만 걸면 listcomp 로 되돌려도 통과한다 — 값이 같으니까. P7 이 캐시 재사용을
+    **세어서** 실었듯, 여기서는 단수형이 행마다 불리지 **않음**을 센다. 이것이
+    없으면 다음 사람이 "읽기 쉽게" 되돌려도 아무도 모른다.
+    """
+    import src.engine.conditional_market as cm
+    idx = pd.bdate_range("2019-01-01", periods=500)
+    calls = {"n": 0}
+    real = cm._month_key
+
+    def _counting(ts):
+        calls["n"] += 1
+        return real(ts)
+
+    orig, cm._month_key = cm._month_key, _counting
+    try:
+        out = cm._month_keys(idx)
+    finally:
+        cm._month_key = orig
+    assert len(out) == 500
+    assert calls["n"] == 0, (
+        f"DatetimeIndex 인데 단수형을 {calls['n']}번 불렀다 — 벡터화가 아니다")
+
+
+def test_the_fallback_still_uses_the_singular():
+    """★짝★ 폴백에서는 단수형을 써야 답이 갈리지 않는다."""
+    import src.engine.conditional_market as cm
+    calls = {"n": 0}
+    real = cm._month_key
+
+    def _counting(ts):
+        calls["n"] += 1
+        return real(ts)
+
+    orig, cm._month_key = cm._month_key, _counting
+    try:
+        out = cm._month_keys(pd.Index(["202109", "202110", "202111"]))
+    finally:
+        cm._month_key = orig
+    assert list(out) == ["202109", "202110", "202111"]
+    assert calls["n"] == 3, f"폴백이 단수형을 안 썼다 (호출 {calls['n']}회)"
