@@ -90,6 +90,26 @@ def set_engine(engine):
     _engine_override = engine
 
 
+def _count_source(counts: dict, df) -> None:
+    """이 프레임이 **어디서 왔는가** 를 센다 (진단용).
+
+    ★계측 지점이 있어서 셀 수 있다★ `ohlcv_loader._tag` 가 `df.attrs["source"]` 로
+    `db`/`kis`/`mock` 을 붙인다. 그 태그를 **손대기 전에** 읽는다(pandas 연산에서
+    `attrs` 는 보존이 보장되지 않는다 — 로더 자신이 그렇게 적어 뒀다).
+
+    ★미상은 0 이 아니다★ 태그가 없으면 `"unknown"` 으로 센다. `db: 0` 으로 적으면
+    "DB 에서 하나도 안 왔다" 는 **하지 않은 진술**이 된다.
+
+    왜 이것이 필요한가: DB 적재가 얇으면(`len(df) >= 20` 미달) 종목마다 KIS 로
+    떨어지고, KIS 일봉은 1콜 ~100봉 + 초당 20콜 전역 레이트리밋이라 200종목이면
+    **최소 12분**이다. 그런데 응답 어디에도 그 사실이 없어서 사용자는 왜 느린지
+    알 수 없었다.
+    """
+    src = df.attrs.get("source") if getattr(df, "attrs", None) else None
+    key = str(src) if src else "unknown"
+    counts[key] = counts.get(key, 0) + 1
+
+
 def load_ohlcv(
     ticker: str,
     start_date: str,
@@ -299,7 +319,8 @@ class BacktestEngine:
         self._fetch_frames: dict[str, dict] = {}
         self.ohlcv_all: dict[str, pd.DataFrame] = {}
 
-    def _emit(self, phase: str, done: int | None = None, total: int | None = None):
+    def _emit(self, phase: str, done: int | None = None, total: int | None = None,
+              extra: dict | None = None):
         """진행률 콜백 발행(스트리밍용). 콜백 미설정/예외 시 무시 — 백테스트 결과엔 영향 없음."""
         cb = self.progress_cb
         if cb is None:
@@ -309,6 +330,8 @@ class BacktestEngine:
             evt["done"] = done
         if total is not None:
             evt["total"] = total
+        if extra:
+            evt.update(extra)
         try:
             cb(evt)
         except Exception:
@@ -379,9 +402,13 @@ class BacktestEngine:
                     d = pd.DataFrame()
             return tk, d
 
+        _src_counts: dict[str, int] = {}
+
         def _absorb(tk: str, d):
             """메인 스레드에서만 호출 — ohlcv_map 갱신(딕셔너리 경쟁 없음)."""
             if d is not None and not d.empty:
+                # ★출처를 손대기 전에 센다★ 아래 `copy()`·컬럼 추가 전에 읽는다.
+                _count_source(_src_counts, d)
                 # ★ 날짜 문자열 1회 생성 (매 거래일 strftime 제거 — O(N²) 병목 방지)
                 d = d.copy()
                 d["_date_str"] = d.index.strftime("%Y%m%d")
@@ -424,6 +451,11 @@ class BacktestEngine:
                     done += 1
                     if done % _load_step == 0 or done == total_syms:
                         self._emit("loading", done=done, total=total_syms)
+
+        # ★로딩이 끝나면 출처 구성을 한 번 보고한다★ 상류(`_worker`)가 이것을
+        # 텔레메트리에 실어, "왜 느렸는가" 를 나중에 물을 수 있게 한다.
+        self._emit("loading", done=total_syms, total=total_syms,
+                   extra={"sources": dict(_src_counts)})
 
         self.ohlcv_all = ohlcv_map   # per-bar 프레임 캐시가 원본으로 쓴다 (P1-3)
 

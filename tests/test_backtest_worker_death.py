@@ -286,3 +286,74 @@ def test_submit_retries_once_when_the_pool_is_broken(monkeypatch):
     brr._submit(_fine, "rid")          # 예외가 새어 나오면 실패
     assert calls["reset"] == 1, "broken 풀을 버리지 않았다"
     assert calls["submit"] == 2, f"재시도하지 않았다 (submit {calls['submit']}회)"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★콜드 로딩의 비용을 보이게 한다★ (커밋 ③)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 진단의 두 번째 축은 **데이터 부족**이다. DB 적재가 얇으면(`len(df) >= 20` 미달)
+# 종목마다 KIS 로 떨어지고, KIS 일봉은 1콜 ~100봉 + 초당 20콜 전역 레이트리밋이라
+# 200종목이면 **최소 12분**이다. 그런데 응답 어디에도 "몇 종목이 KIS 로 갔는가" 가
+# 없어서, 사용자는 느린 이유를 알 수 없었다.
+#
+# ★수치는 지어내지 않는다★ 로더가 `df.attrs["source"]` 로 실제 출처를 붙인다 —
+# 그 계측 지점이 **있으므로** 셀 수 있다. 없으면 `"unknown"` 이지 0 이 아니다.
+
+def test_the_engine_counts_where_each_symbol_came_from():
+    """★출처별 종목 수를 센다★ 없으면 왜 느린지 말할 수 없다."""
+    import pandas as pd
+
+    from src.kis_backtest_engine import _count_source
+    counts: dict = {}
+    db = pd.DataFrame({"close": [1.0]}); db.attrs["source"] = "db"
+    kis = pd.DataFrame({"close": [1.0]}); kis.attrs["source"] = "kis"
+    bare = pd.DataFrame({"close": [1.0]})          # 태그가 없다
+    _count_source(counts, db)
+    _count_source(counts, kis)
+    _count_source(counts, kis)
+    _count_source(counts, bare)
+    assert counts == {"db": 1, "kis": 2, "unknown": 1}, counts
+
+
+def test_an_untagged_frame_is_unknown_not_zero():
+    """★미상 ≠ 0★ 태그가 없으면 'db 0건' 이 아니라 '모른다' 다."""
+    import pandas as pd
+
+    from src.kis_backtest_engine import _count_source
+    counts: dict = {}
+    _count_source(counts, pd.DataFrame({"close": [1.0]}))
+    assert counts == {"unknown": 1}
+    assert "db" not in counts and "kis" not in counts
+
+
+def test_the_worker_records_the_source_mix_in_telemetry():
+    """★배선 ①★ 세기만 하고 텔레메트리에 안 실으면 사용자는 여전히 못 본다."""
+    import inspect
+    src = inspect.getsource(brr._worker)
+    assert "symbols_by_source" in src, (
+        "출처 구성을 텔레메트리에 싣지 않는다 — 느린 이유를 여전히 알 수 없다")
+
+
+def test_the_engine_actually_emits_the_source_mix():
+    """★배선 ② — 규칙과 배선은 다른 일이다(여덟 번째)★
+
+    `_count_source` 를 아무리 정확히 시험해도, 엔진이 그 결과를 **보고하지 않으면**
+    워커에 아무것도 도달하지 않는다. 변이 C4(엔진이 emit 을 생략)가 소스 검사만
+    하는 테스트를 그대로 통과했다 — 워커 쪽 텍스트는 그대로였기 때문이다.
+
+    그래서 엔진을 **실제로 돌려** 이벤트를 받는다.
+    """
+    from src.kis_backtest_engine import run_backtest
+    events: list[dict] = []
+    run_backtest(
+        symbols=["005930", "000660"], strategy_name="GoldenCross",
+        start_date="2024-01-02", end_date="2024-03-29",
+        progress_cb=events.append)
+    loading = [e for e in events if e.get("phase") == "loading" and "sources" in e]
+    assert loading, (
+        "엔진이 로딩 출처 구성을 한 번도 보고하지 않았다 — "
+        f"받은 phase: {sorted({e.get('phase') for e in events})}")
+    sources = loading[-1]["sources"]
+    assert isinstance(sources, dict) and sources, sources
+    assert all(isinstance(v, int) and v > 0 for v in sources.values()), sources

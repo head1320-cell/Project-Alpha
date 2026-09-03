@@ -333,6 +333,12 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
                 msg = f"데이터 로딩 {done}/{total}" if total else None
                 if phase == "loading" and total:
                     tele["symbols_loaded"] = total
+                # ★왜 느렸는지 나중에 물을 수 있게 한다★ 엔진이 로딩을 마치며
+                # 출처 구성(db/kis/mock/unknown)을 한 번 보고한다. DB 적재가 얇아
+                # KIS 로 떨어지면 종목당 ~74콜 × 초당 20콜 전역 한도라 200종목이면
+                # 최소 12분이다 — 그 사실이 응답 어디에도 없었다.
+                if evt.get("sources"):
+                    tele["symbols_by_source"] = dict(evt["sources"])
             elif phase == "simulating":
                 stage = "simulating"
                 pct = 30 + (55 * done / total if done and total else 0)
