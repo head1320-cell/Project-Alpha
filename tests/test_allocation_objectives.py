@@ -45,6 +45,7 @@ def test_enb_bounds_and_extremes():
     S = np.eye(n)
     w_eq = np.ones(n) / n
     enb_eq = effective_number_of_bets(w_eq, S)
+    assert enb_eq is not None
     assert enb_eq > n - 0.5   # ≈ n
     assert enb_eq <= n + 1e-6
     # 완전 집중 → ENB ≈ 1
@@ -54,4 +55,11 @@ def test_enb_bounds_and_extremes():
     C = np.full((n, n), 0.9)
     np.fill_diagonal(C, 1.0)
     enb_corr = effective_number_of_bets(w_eq, C)
+    assert enb_corr is not None
     assert enb_corr < n   # 상관으로 실질 베팅 수 감소
+
+
+def test_enb_is_unknown_rather_than_maximal_when_it_cannot_be_computed():
+    """★실패를 최대 분산투자라고 부르지 않는다 (P4-b)★ 예전에는 `float(n)` 이었다."""
+    import numpy as _np
+    assert effective_number_of_bets(_np.ones(3) / 3, _np.zeros((3, 3))) is None

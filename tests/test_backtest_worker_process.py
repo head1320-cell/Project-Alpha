@@ -90,13 +90,52 @@ def test_max_workers_is_capped_and_overridable(monkeypatch):
     assert brr._max_workers() >= 1, "잘못된 값이 크래시를 내면 안 된다"
 
 
-def _spin(seconds: float) -> float:
-    """CPU 바운드 작업 — 자식에서 돌려면 모듈 최상위여야 한다."""
+def _spin(seconds: float) -> int:
+    """CPU 바운드 작업 — 자식에서 돌려면 모듈 최상위여야 한다.
+
+    ★PID 를 돌려준다★ "GIL 큐가 아니다" 는 시간이 아니라 **어느 프로세스가 돌았는가**
+    로 직접 잴 수 있다. 스레드였다면 전부 같은 PID 다.
+    """
     t0 = time.perf_counter()
     x = 0
     while time.perf_counter() - t0 < seconds:
         x += 1
-    return time.perf_counter() - t0
+    return os.getpid()
+
+
+def _who(hold: float) -> int:
+    """워밍업용 — 잠깐 자고 자기 PID 를 보고한다."""
+    time.sleep(hold)
+    return os.getpid()
+
+
+def _warm_until_all_workers_are_up(pool, n: int, timeout: float = 30.0) -> set[int]:
+    """★워커 n 개가 **전부** 살아날 때까지 기다린다★
+
+    예전 워밍업은 `list(pool.map(int, [0] * n))` 이었는데, `int` 가 즉시 끝나서
+    **먼저 준비된 워커 하나가 n 개를 다 처리했다.** 실측: 워밍업 뒤 살아 있는 워커가
+    1/3 이었고 나머지 2개는 **측정 구간 안에서** 스폰됐다 — `spawn` 이라 자식이
+    파이썬을 새로 띄우고 모듈 트리를 전부 다시 import 한다. 0.6초짜리 작업 위에
+    0.7초가 얹혀 임계 1.26초를 0.04초 차이로 넘겼다(부하 걸면 3/3 재현).
+
+    각 작업이 잠깐 자므로 한 워커가 전부 삼킬 수 없다. 서로 다른 PID 를 n 개 볼
+    때까지 반복한다.
+
+    ★풀이 아예 별개 프로세스가 아니면 즉시 포기한다★ 스레드 풀이면 워커의 PID 가
+    **테스트 자신의 PID** 와 같아서 서로 다른 PID 가 영영 n 개가 되지 않는다. 그때
+    타임아웃까지 버티면 31초를 쓰고 "워밍업이 1/3 만 깨웠다" 는 **엉뚱한 사유**로
+    실패한다 — 진짜 사유는 "GIL 큐" 이고 그 단언은 도달조차 못 한다. (실제로 변이
+    프로브를 돌려 이 순서 문제를 발견했다.) 그래서 여기서 빠져나와 아래 단언들이
+    말하게 한다.
+    """
+    seen: set[int] = set()
+    t0 = time.perf_counter()
+    while len(seen) < n and time.perf_counter() - t0 < timeout:
+        futs = [pool.submit(_who, 0.25) for _ in range(n)]
+        seen.update(f.result() for f in futs)
+        if os.getpid() in seen:
+            break            # 별개 프로세스가 아니다 — 기다려도 달라지지 않는다
+    return seen
 
 
 def test_pool_gives_real_parallelism_not_a_gil_queue(monkeypatch):
@@ -108,20 +147,45 @@ def test_pool_gives_real_parallelism_not_a_gil_queue(monkeypatch):
     여기서는 **백테스트가 아니라 순수 CPU 작업**을 쓴다 — 병렬성이라는 성질만
     보려는 것이고, 실데이터·시드에 흔들리지 않아야 가드로 쓸 수 있다.
     (백테스트 실측치는 `docs/specs/2026-08-22-backtest-benchmark-results.md` 에 있다.)
+
+    ★성질과 시간을 나눠 건다★ 이 테스트는 오래 플레이크였는데, 원인은 병렬성이
+    아니라 워밍업이 워커를 하나만 깨운 것이었다(`_warm_until_all_workers_are_up`
+    주석 참조). 그래서 두 단언을 분리한다:
+
+      · **PID 개수** — 부하와 무관한 결정적 단언. "별개 프로세스" 를 사실로 말한다.
+        스레드 풀로 되돌리면 PID 가 1개가 되어 곧바로 빨개진다.
+      · **시간** — "동시에 돌았다". ★원리상 부하에 민감하다★ 배리어가 여유를 2배로
+        넓혔을 뿐 없애지는 못한다. 둘 중 하나만으로는 성질이 닫히지 않는다
+        (PID 만이면 순차 실행도 통과하고, 시간만이면 지금의 플레이크로 돌아간다).
     """
     monkeypatch.setenv("BACKTEST_WORKERS", "3")
     brr.shutdown_pool()
     pool = brr._get_pool()
     try:
         n = brr._max_workers()
-        list(pool.map(int, [0] * n))          # spawn 기동 비용을 측정에서 뺀다
+        # ★스폰 비용을 측정에서 뺀다★ 워커가 전부 살아난 뒤에 재기 시작한다.
+        warmed = _warm_until_all_workers_are_up(pool, n)
 
         unit = 0.6
         t0 = time.perf_counter()
-        list(pool.map(_spin, [unit] * n))
+        pids = list(pool.map(_spin, [unit] * n))
         wall = time.perf_counter() - t0
     finally:
         brr.shutdown_pool()
+
+    # ★가장 먼저 가른다★ 워커가 테스트와 **같은 프로세스**면 그것이 곧 GIL 큐다.
+    # 이 단언이 워밍업 단언보다 앞서야 스레드 회귀가 올바른 사유로 보고된다.
+    assert os.getpid() not in warmed, (
+        "워커가 테스트와 같은 프로세스에서 돌았다 — 프로세스 풀이 아니라 GIL 큐다")
+
+    assert len(warmed) == n, (
+        f"워밍업이 워커를 {len(warmed)}/{n} 개만 깨웠다 — 나머지는 측정 구간 안에서 "
+        f"스폰되고, 그러면 이 테스트는 병렬성이 아니라 스폰 지연을 잰다")
+
+    # ★GIL 큐면 PID 가 1개다★ 시간과 무관하게 성질을 직접 가른다.
+    assert len(set(pids)) == n, (
+        f"{n}개 작업이 서로 다른 프로세스 {len(set(pids))}개에서 돌았다 — "
+        f"프로세스 풀이 아니라 GIL 큐다")
 
     serial = unit * n
     # 완전 병렬이면 `unit`, GIL 큐면 `serial`. 실측 여유를 두고 그 중간을 가른다.

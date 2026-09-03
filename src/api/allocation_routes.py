@@ -19,10 +19,13 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from src.api.json_safe import finite_payload as _finite_payload
 from src.engine.entropy_views import EPUnavailable
-from src.engine.scenario_packs import HIST_WINDOWS
+from src.engine.research_context import describe as _describe_context
+from src.engine.research_context import now as _research_now
+from src.engine.research_context import validate_as_of
 
 logger = logging.getLogger("api.allocation")
 
@@ -31,20 +34,36 @@ router = APIRouter(prefix="/api/v1/allocation", tags=["allocation-studio"])
 _MIN_OBS = 30          # 자산별 최소 관측일 (kis_portfolio_analyzer 관례와 동일)
 _RF = 0.035            # 무위험수익률 (quant_metrics 기본과 동일)
 
-# 역사 리플레이 카탈로그 — DB 커버리지 밖 윈도우는 정직하게 unavailable.
-# ★정의는 `scenario_packs` 로 옮겼다★ 시나리오 세 출처 중 둘은 엔진에 있는데 이것만 라우터
-# 상수로 남으면 레지스트리가 라우터를 import 해야 한다. 윈도우 **가용성**은 DB 적재 범위에
-# 달린 런타임 사실이라 계속 이 파일이 판정한다(아래 stress-catalog).
-_HIST_WINDOWS = HIST_WINDOWS
-
-
 # ── 요청 모델 ─────────────────────────────────────────────────────────────────
 class AllocationView(BaseModel):
-    assets: list[str] = Field(..., min_length=1)
+    """뷰 하나 — **절대**(`assets`) 또는 **부호 있는 조합**(`weights`).
+
+    ★`weights` 는 상대·팩터 뷰를 위한 확장이다(T3 §6.4).★ 예전에는 P 행이 언제나
+    양수 등가중이라 `(+EQ, −FI)` 같은 스프레드를 표현할 수 없었고, 그래서 T3-B/C 를
+    BL·EP 어느 쪽으로도 돌릴 수 없었다.
+
+    - `magnitude_pct` 는 **그 행의 단위**다 — 스프레드 뷰의 3% 는 "EQ−FI 스프레드가
+      연 3%" 이지 "각 자산이 3%" 가 아니다(행을 재정규화하지 않기 때문).
+    - `direction` 은 **Q 에만** 곱한다. 부호를 `weights` 에 이미 넣었다면
+      `direction=1` 로 둔다 — 양쪽에 넣으면 상쇄된다.
+    """
+
+    assets: list[str] | None = Field(None, min_length=1)
+    weights: dict[str, float] | None = None   # 부호 허용 (상대·팩터 뷰)
     direction: int = 1                      # +1 상회 / -1 하회
     magnitude_pct: float = Field(2.0, ge=0, le=50)   # 연간 기대수익 크기(%)
     confidence: float = Field(50, ge=0, le=100)
     label: str | None = None                # 테제 문장 (표시용, 계산 미사용)
+
+    @model_validator(mode="after")
+    def _exactly_one_target_form(self):
+        """★둘 중 정확히 하나★ — 어느 쪽이 P 행을 정하는지 추측하게 두지 않는다."""
+        if bool(self.assets) == bool(self.weights):
+            raise ValueError(
+                "뷰는 `assets`(절대) 또는 `weights`(부호 있는 조합) 중 **정확히 "
+                "하나**를 지정해야 합니다 — 둘 다이거나 둘 다 아니면 어느 쪽이 P 행을 "
+                "정하는지 모호합니다.")
+        return self
 
 
 class ConstraintsInput(BaseModel):
@@ -79,16 +98,54 @@ def _check_as_of(as_of: str | None) -> None:
 
     미래를 허용하면 `end = 2099-01-01` 이 그냥 오늘과 같은 데이터를 주면서 런에는
     "2099 시점으로 고정했다" 고 적힌다. 조용히 오늘로 깎지 않고 거부한다.
+
+    ★정책은 엔진에 있다★ 이 규칙을 아는 곳이 라우트뿐이면 다른 호출자는 모른다.
+    `research_context.validate_as_of` 가 사유 문자열을 돌려주고, 여기서 그것을
+    422 로 바꾼다 — 정책은 하나이되 표현은 계층마다 다르다. **동작은 불변**이다.
     """
-    if as_of is None:
-        return
-    try:
-        d = date.fromisoformat(as_of)
-    except ValueError:
-        raise HTTPException(422, f"as_of 형식이 올바르지 않습니다 (YYYY-MM-DD): {as_of}")
-    if d > date.today():
-        raise HTTPException(
-            422, f"as_of 가 미래입니다 ({as_of}) — 미래 시점으로는 데이터를 고정할 수 없습니다.")
+    reason = validate_as_of(as_of)
+    if reason:
+        raise HTTPException(422, reason)
+
+
+def _check_weight_unit(weights: dict, declared: str | None) -> None:
+    """★돈을 세기 전에 단위를 확정한다★ (엔진 정책 → 422)
+
+    `unit_reason` 이 모호하다고 하면 추측하지 않고 되돌려 준다 — 조용히 고르면
+    같은 지시가 100배 다른 주문을 내고 아무도 그것을 말하지 않는다(실측).
+    """
+    from src.engine.portfolio_weights import unit_reason
+    reason = unit_reason(weights, declared)
+    if reason:
+        raise HTTPException(422, reason)
+
+
+def _unknown_tickers(codes) -> dict:
+    """종목 마스터가 모르는 코드를 **사실로 싣는다** (막지 않는다).
+
+    ★`excluded` 와 다른 칸이다★ `excluded` 는 "데이터가 없어 분석에서 빠졌다"
+    이고, 이것은 "데이터는 있는데 그 종목이 실재하는지 모른다" 다. 실측에서
+    `ZZZZZZ` 는 262행의 **합성** 이력을 갖고 최적화에서 89.18% 를 가져가면서
+    `excluded: []` 였다 — 두 사실을 한 칸에 넣으면 그 구분이 사라진다.
+
+    ★막는 것은 여기가 아니다★ `SPY` 도 마스터에는 없지만 연구 대상으로 정당하다.
+    주문을 거부하는 것은 `target_versions.untradable()` 게이트의 일이다.
+    """
+    from src.data.mock_gate import mock_allowed
+    from src.data.stock_master import unknown_codes
+    bad = unknown_codes(codes)
+    if not bad:
+        return {"codes": [], "synthetic_data": False, "note": None}
+    synthetic = mock_allowed()
+    return {
+        "codes": bad,
+        # mock 게이트가 유일한 판정 기준 — 새 기준을 만들지 않는다.
+        "synthetic_data": synthetic,
+        "note": ("종목 마스터에 없는 코드입니다 — 해외 상장 등 연구용으로는 유효할 "
+                 "수 있으나 실행 게이트는 이들을 거부합니다."
+                 + (" mock 모드이므로 이 코드들의 가격 이력은 **합성**입니다."
+                    if synthetic else "")),
+    }
 
 
 class AnalyzeRequest(BaseModel):
@@ -133,6 +190,25 @@ class AnalyzeRequest(BaseModel):
     #   모델 5회 추가 최적화(목표 구간)를 부르므로 슬라이더를 드래그할 때마다
     #   따라붙어서는 안 된다.
     conditional: bool = False
+    # ★미검증 매크로 차단 (P5 ③) — 기본 OFF 라 동작이 바뀌지 않는다★
+    #   켜면 판정이 `positive` 가 **아니거나** 이 요청이 판정된 대상이 아닐 때
+    #   조건부 μ/Σ 를 적용하지 않는다. 조용히 떨어지지 않고 사유를 남긴다.
+    require_verified_macro: bool = False
+    # ★기본값이 "hard" 인 것이 계약이다★ 보내지 않으면 현행 경로·현행 신뢰도 그대로.
+    regime_weighting: str = Field("hard", pattern="^(hard|probabilistic)$")
+    # 라이브(오늘 스냅샷) vs 백테스트(as_of 절단). 백테스트는 아직 열려 있지 않다 —
+    # ECOS revision 정책 문서가 선행조건이다(계획 §1.6.2).
+    regime_mode: str = Field("live", pattern="^(live|backtest)$")
+    # ★홀딩 기간의 유일한 출처★ — `h_hold` 는 여기서 파생된다(M→1 · Q→3). 개월 수를
+    # 자유 입력으로 받지 않는 이유는, 국면 기대 지속기간(실측 2.5~5.0개월)처럼 뜻이
+    # 다른 값이 흘러들어오는 것을 막기 위해서다. `BacktestRequest.rebalance` 와 같은 규약.
+    rebalance: str = Field("M", pattern="^[MQ]$")
+    # ── S5: 기업 밸류에이션 뷰 (opt-in) — ★`conditional` 과 같은 이유·같은 모양★
+    #   기본 거짓이면 동작도 **응답 키도** 한 글자도 같다. 종목마다 DART 재무를
+    #   읽고 몬테카를로를 돌리므로 슬라이더를 드래그할 때마다 따라붙어서는 안 된다.
+    #   ★`BacktestRequest` 에는 이 필드가 없다★ — 회사 뷰는 forward_only 라
+    #   과거 시뮬레이션에 들어가면 그 자체가 룩어헤드다.
+    use_company_views: bool = False
 
 
 class BacktestRequest(BaseModel):
@@ -149,26 +225,6 @@ class BacktestRequest(BaseModel):
     as_of: str | None = Field(None, pattern=_AS_OF_PAT)   # P1 — 데이터 절단일 고정(선택)
     delta: float = Field(2.5, ge=0.5, le=10)
     tau: float = Field(0.05, ge=0.001, le=1.0)
-
-
-class XrayRequest(BaseModel):
-    holdings: dict[str, float] = Field(..., min_length=1)   # {code: weight_pct}
-
-
-class SensitivityRequest(BaseModel):
-    tickers: list[str] = Field(..., min_length=2, max_length=30)
-    views: list[AllocationView] | None = None
-    delta: float = Field(2.5, ge=0.5, le=10)
-    tau: float = Field(0.05, ge=0.001, le=1.0)
-    bump_pct: float = Field(2.0, ge=0.5, le=10)   # μ 충격 크기 (연 %p)
-    lookback_days: int = Field(756, ge=90, le=3650)
-
-
-class StressRequest(BaseModel):
-    holdings: dict[str, float] = Field(..., min_length=1)
-    scenario: str = "rate_hike_200bp"
-    benchmark: str = "KOSPI"
-    severity: float = Field(1.0, ge=0.25, le=3.0)   # 가상 시나리오 충격 배율(0.25~3×)
 
 
 # ── 팩터 기반 포트폴리오 ──────────────────────────────────────────────────────
@@ -188,17 +244,6 @@ class FactorPortfolioRequest(BaseModel):
 
 
 # ── 카나리·마켓타이밍 ────────────────────────────────────────────────────────
-# ── 상관-국면 스트레스 ───────────────────────────────────────────────────────
-class StressCorrRequest(BaseModel):
-    tickers: list[str] = Field(..., min_length=2, max_length=30)
-    weights: dict[str, float] | None = None
-    lookback_days: int = Field(756, ge=90, le=3650)
-    target_rho: float = Field(0.9, ge=0.0, le=0.99)     # 위기 시 수렴 상관
-    intensity: float = Field(1.0, ge=0.0, le=1.0)        # 충격 강도(0=무·1=완전)
-    confidence_level: float = Field(0.95, ge=0.8, le=0.999)
-    portfolio_value: float = Field(1e8, gt=0)
-
-
 class ResolveNamesRequest(BaseModel):
     codes: list[str] = Field(..., min_length=1, max_length=300)
 
@@ -335,160 +380,109 @@ def _w_dict(names: list[str], w: np.ndarray) -> dict[str, float]:
             if abs(w[i]) > 0.0005}
 
 
+def _risk_contribution_report(w, S, names: list[str], *,
+                              weights_source: str, sigma_source: str) -> dict:
+    """오일러 리스크 기여 + ★어느 포트폴리오·어느 Σ 인지 항상 밝힌다★ (P4-b).
+
+    이 모듈은 이미 `mu_engine`·`sigma_source` 로 "화면이 라벨을 지어내지 않도록
+    서버가 답한다" 를 쓰고 있다. 리스크 기여에도 같은 규율을 적용한다 — 응답
+    안에 서로 다른 포트폴리오를 설명하는 진단이 나란히 놓이기 때문이다.
+    """
+    from src.engine.allocation_studio import risk_contributions
+    rc = risk_contributions(np.asarray(w, dtype=float),
+                            np.asarray(S, dtype=float))
+    label = {"weights_source": weights_source, "sigma_source": sigma_source}
+    if rc["pct"] is None:
+        # ★미상이어도 무엇을 재려 했는지는 남는다★
+        return {**label, "portfolio_volatility_pct": None, "pct": None,
+                "contribution_pct": None, "hhi": None, "max_pct": None,
+                "reason": rc["reason"]}
+    return {
+        **label,
+        "portfolio_volatility_pct": round(rc["portfolio_volatility"] * 100, 4),
+        # %기여 — 합이 100 이다(오일러). 표시 반올림은 여기서만.
+        "pct": {names[i]: round(float(rc["pct"][i]) * 100, 4)
+                for i in range(len(names))},
+        "contribution_pct": {names[i]: round(float(rc["contribution"][i]) * 100, 4)
+                             for i in range(len(names))},
+        "hhi": round(rc["hhi"], 6),
+        "max_pct": round(rc["max_pct"] * 100, 4),
+        "reason": None,
+    }
+
+
+def _risk_contributions_basis(user_weights) -> dict:
+    """기존 `risk_contributions` 키가 **무엇을** 설명하는지 (P4-b).
+
+    ★값은 바꾸지 않는다★ 프론트 3곳이 `Record<string, number>` 로 읽는다
+    (`RiskContribDonut` 포함). 대신 그 수의 정체를 옆에 적는다 — 사용자가 비중을
+    주지 않으면 `PortfolioAnalyzer` 가 **등가중**으로 떨어지므로, 도넛이
+    사용자가 고른 적 없는 포트폴리오를 보여 주고 있다는 사실이 응답 어디에도
+    없었다.
+    """
+    fallback = not user_weights
+    return {
+        "weights_source": "equal_weight_fallback" if fallback else "user_current",
+        "sigma_source": "sample_252",
+        "reason": (("요청에 비중이 없어 등가중으로 분석했습니다 — 이 값은 "
+                    "사용자 포트폴리오도 추천 포트폴리오도 아닙니다")
+                   if fallback else None),
+        "note": ("추천 포트폴리오의 리스크 기여는 risk_contribution_optimized 에 "
+                 "있습니다. 두 블록은 비중도 Σ 도 다릅니다."),
+    }
+
+
 def _enb_report(w, S, names: list[str]) -> dict:
     """실질 분산도 — Meucci ENB(상관 반영) vs Neff(비중 집중만). Explain 패널용."""
-    from src.engine.allocation_studio import effective_number_of_bets
+    from src.engine.allocation_studio import enb_report
     wa = np.asarray(w, dtype=float)
     n = len(names)
     hhi = float(np.sum(wa ** 2))
-    neff = (1.0 / hhi) if hhi > 0 else float(n)
-    enb = effective_number_of_bets(wa, np.asarray(S, dtype=float))
-    return {"enb": round(enb, 2), "neff": round(neff, 2), "n_assets": n,
+    # ★비중 집중은 Σ 없이도 잴 수 있다★ hhi 가 0 이면 비중이 전부 0 이라는 뜻이라
+    # "완전 분산" 이 아니라 미상이다.
+    neff = (1.0 / hhi) if hhi > 0 else None
+    rep = enb_report(wa, np.asarray(S, dtype=float))
+    return {"enb": (None if rep["enb"] is None else round(rep["enb"], 2)),
+            "enb_reason": rep["reason"],
+            "neff": (None if neff is None else round(neff, 2)),
+            "neff_reason": (None if neff is not None
+                            else "비중이 전부 0 이라 유효 종목수를 정의할 수 없습니다"),
+            "n_assets": n,
             "note": "ENB는 상관을 반영한 실질 분산 베팅 수(≤ Neff). Neff는 비중 집중만 반영."}
 
 
-# ── P2.5: 국면조건부 μ/Σ 배선 ────────────────────────────────────────────────
+# ── P2.5 조건부 μ/Σ + 검증 관문 → `allocation_pipeline` (P8 ②) ───────────────
 #
-# 감사가 줄 번호로 증명한 것은 "파이프는 깔렸는데 아무것도 흐르지 않는다" 였다 —
-# `optimize()` 의 Σ 는 무조건부 트레일링이고 μ 는 전부 사용자 뷰에서 온다. 아래 세
-# 함수가 매크로를 그 숫자에 닿게 하는 배선이다.
-
-# 국면 경로를 굳혀 둔 스냅샷이 없을 때 재계산하는 길이 — 빌더와 같은 값.
-_PATH_MONTHS = 60
-
-# 조건부 뷰의 신뢰도 상한. ★매크로가 최종 비중을 정하지 않는다★(Brief §17)
-# 50 은 `build_user_views` 의 Idzorek 기본값(스케일 1.0)이므로, 조건부 뷰는 아무리
-# 표본이 두꺼워도 사용자 뷰보다 세질 수 없다. 표본이 얇으면(수축 λ→1) 신뢰도가
-# 0 으로 내려가 뷰가 사실상 무시되고 시장균형이 남는다 — λ 를 신뢰도로 번역하는
-# 것이지 새 하이퍼파라미터를 발명하는 것이 아니다.
-_CONDITIONAL_MAX_CONFIDENCE = 50.0
-
-# 조건부 μ 를 **뷰로** 받는 모델. 나머지는 공분산 전용이므로 Σ 만 바뀐다 —
-# 그것이 맞다(μ 를 안 받는 모델에 μ 를 몰래 태우면 모델이 다른 것이 된다).
-_VIEW_MODELS = ("bl", "ep")
-
-
-def _regime_path_for(req: AnalyzeRequest) -> dict:
-    """월별 국면 경로 — **저장된 것 우선, 없으면 재계산 + 라벨**.
-
-    ★Brief §16 이 금지하는 것이 "과거 결정을 현재 데이터로 다시 계산" 이다.★
-    스냅샷에 굳혀 둔 경로가 있으면 그것이 그 시점에 알 수 있었던 분류다. 없으면
-    재계산할 수밖에 없지만, 그때는 `path_source: "recomputed"` 와 함께 그 사실을
-    응답에 적는다 — 하되 숨기지 않는다.
-    """
-    from src.data.regime_snapshots import get_snapshot
-    for sid, label in ((req.mes_id, "mes"), (req.regime_snapshot_id, "regime_snapshot")):
-        if not sid:
-            continue
-        pts = (get_snapshot(sid) or {}).get("regime_path")
-        if pts:
-            return {"points": pts, "path_source": label, "path_note": None, "reason": None}
-
-    try:
-        from src.engine.regime_analyzer import RegimeAnalyzer
-        from src.engine.regime_transitions import regime_path
-        macro_snap = RegimeAnalyzer().collector.collect_all(use_cache=True)
-        pts = regime_path(getattr(macro_snap, "series", None) or {}, "kr",
-                          months=_PATH_MONTHS).get("points") or []
-    except Exception as e:  # noqa: BLE001
-        logger.warning("국면 경로 재계산 실패: %s", e)
-        return {"points": [], "path_source": None, "path_note": None,
-                "reason": f"국면 경로를 만들 수 없습니다 ({type(e).__name__}) — "
-                          "무조건부 추정으로 계산했습니다."}
-    if not pts:
-        return {"points": [], "path_source": None, "path_note": None,
-                "reason": "성장·물가 축이 둘 다 산출된 달이 없어 국면 경로가 비었습니다 — "
-                          "무조건부 추정으로 계산했습니다."}
-    return {
-        "points": pts, "path_source": "recomputed", "reason": None,
-        "path_note": ("이 경로는 **현재 데이터로** 다시 계산했습니다 — 결정 시점에 "
-                      "알 수 있었던 분류가 아닙니다. 고정된 국면 경로를 쓰려면 "
-                      "경로가 함께 굳혀진 스냅샷(mes_id)을 지정하십시오."),
-    }
-
-
-def _conditional_views(cond: dict, model: str) -> tuple[list[dict] | None, float | None]:
-    """조건부 μ → 자산별 **절대 뷰**. (뷰 목록, 적용 신뢰도).
-
-    ★μ 를 optimizer 에 직접 대입하지 않는 이유가 이 함수의 존재 이유다.★ 직접
-    대입하면 "매크로 신호 → 비중" 이라는 기존 구조를 이름만 바꿔 되풀이한다.
-    자산 하나짜리 절대 뷰로 표현하면 `P` 행이 `e_i` 가 되므로 **새 뷰 스키마를
-    만들지 않고** 기존 `build_user_views` 를 그대로 탄다.
-    """
-    if model not in _VIEW_MODELS:
-        return None, None
-    lam = cond.get("shrinkage_lambda")
-    conf = (_CONDITIONAL_MAX_CONFIDENCE * (1.0 - float(lam))) if lam is not None \
-        else _CONDITIONAL_MAX_CONFIDENCE
-    conf = round(max(0.0, min(conf, _CONDITIONAL_MAX_CONFIDENCE)), 2)
-    views = [
-        {"assets": [name], "direction": 1 if float(m) >= 0 else -1,
-         "magnitude_pct": abs(float(m)) * 100.0, "confidence": conf,
-         "source": "conditional", "regime": cond.get("regime")}
-        for name, m in zip(cond["names"], cond["mu"]) if float(m) != 0.0
-    ]
-    return (views or None), conf
-
-
-def _conditional_block(cond: dict, path: dict, *, sigma_applied: bool,
-                       mu_as_views: int, view_confidence: float | None,
-                       model: str) -> dict:
-    """응답의 `conditional` 조각 — ★조용한 폴백 금지★.
-
-    조건부를 못 쓴 경우 계산은 무조건부로 떨어지되 **응답이 그 사실을 말한다**
-    (M2-A 의 `feasible:false` 처리와 같은 원칙). 숫자만 보고 "국면이 반영됐다" 고
-    믿을 수 있는 상태를 만들지 않는 것이 이 블록의 목적이다.
-    """
-    ok = bool(cond.get("available"))
-    if ok and model not in _VIEW_MODELS:
-        mu_note = (f"'{model}' 은 공분산 전용 모델이라 μ 를 받지 않습니다 — Σ 만 "
-                   "국면조건부로 바뀌었습니다. 조건부 μ 까지 반영하려면 bl 또는 ep 를 "
-                   "선택하십시오.")
-    elif ok and view_confidence == 0.0:
-        # ★뷰를 넘겼다는 것과 뷰가 힘을 가졌다는 것은 다른 사실이다★ 신뢰도 0 이면
-        # Ω 가 매우 커져 뷰가 사실상 무시되고 μ 는 시장균형으로 남는다. `mu_as_views`
-        # 만 보고 "매크로가 반영됐다" 고 읽지 못하게 여기서 못을 박는다.
-        mu_note = (f"조건부 μ 를 자산 {mu_as_views}개의 절대 뷰로 넘겼지만 **신뢰도가 "
-                   "0 이라 사실상 반영되지 않았습니다** — 수축 강도가 1.0 이어서 "
-                   "표본이 사전분포 이상을 말하지 못했다는 뜻이고, μ 는 시장균형으로 "
-                   "남았습니다.")
-    elif ok:
-        mu_note = (f"조건부 μ 를 자산 {mu_as_views}개의 절대 뷰로 태웠습니다 "
-                   f"(신뢰도 {view_confidence}). 최적화기에 직접 대입하지 않는 것은 "
-                   "불확실성을 Ω 에 남기기 위해서입니다.")
-    else:
-        mu_note = "국면조건부 추정을 쓰지 못해 **무조건부 트레일링 μ/Σ 로 계산했습니다.**"
-
-    return {
-        "requested": True,
-        "available": ok,
-        "method": cond.get("method"),
-        "regime": cond.get("regime"),
-        "n_obs": cond.get("n_obs"),
-        "n_months": cond.get("n_months"),
-        "n_obs_by_regime": cond.get("n_obs_by_regime"),
-        "n_months_by_regime": cond.get("n_months_by_regime"),
-        "min_obs_required": cond.get("min_obs_required"),
-        "unlabeled_obs": cond.get("unlabeled_obs"),
-        "shrinkage_lambda": cond.get("shrinkage_lambda"),
-        # ★λ=1.0 이면 Σ 가 스케일 단위행렬로 무너져 스케일 불변 모델의 비중이
-        # 국면과 무관하게 같아진다★ 그 화면을 "배선이 안 됐다" 로 읽지 못하게 한다.
-        "degenerate": bool(cond.get("degenerate")),
-        "diagnostics": cond.get("diagnostics"),
-        "path_source": path.get("path_source"),
-        "path_note": path.get("path_note"),
-        "applied_to": {"sigma": sigma_applied, "mu_as_views": mu_as_views},
-        "view_confidence": view_confidence,
-        # ★근본 원인을 먼저 적는다★ 경로를 못 만들면 엔진은 "월별 라벨이 없다" 고
-        # 답하는데, 그것은 결과이지 원인이 아니다. 경로 사유가 있으면 그것이 앞선다 —
-        # 순서를 반대로 뒀더니 "수집이 실패했다" 가 응답에서 사라졌다.
-        "reason": path.get("reason") or cond.get("reason"),
-        "note": mu_note,
-        # ★반쯤 조건부인 차트를 만들지 않는다★ 프론티어 곡선·MC 클라우드·1년 분포는
-        # 전체 표본에서 계산되므로 조건부가 아니다. 같은 화면에 조건부 비중과
-        # 무조건부 프론티어가 나란히 서 있다는 사실을 서버가 먼저 말한다.
-        "not_applied_to": ["frontier.curve", "frontier.cloud", "mc", "mu_annual"],
-    }
+# ★본문은 옮겼고 이름은 여기 남는다★ `scripts/company_view_control.py` 와 테스트
+# 여러 곳이 `src.api.allocation_routes` 경로로 이 이름들을 import 하거나
+# monkeypatch 한다. 재수출하지 않으면 그 계약이 조용히 끊긴다.
+#
+# ★다만 재수출이 패치를 대신하지는 못한다★ 호출부가 `allocation_pipeline` 에
+# 있으므로 `allocation_routes` 쪽 이름을 바꿔 봐야 아무 일도 일어나지 않는다 —
+# 예외도 없이. 패치는 `src.api.allocation_pipeline` 을 겨눠야 한다.
+from src.api.allocation_pipeline import (  # noqa: F401
+    _CONDITIONAL_MAX_CONFIDENCE,
+    _HOLD_MONTHS,
+    _PATH_MONTHS,
+    _PIT_MARKET,
+    _VIEW_MODELS,
+    Belief,
+    _company_view_stack,
+    _conditional_block,
+    _conditional_stack,
+    _conditional_views,
+    _forward_only,
+    _freshness,
+    _hard_conditional,
+    _macro_verification,
+    _mixture_conditional,
+    _months_span,
+    _pit_block,
+    _regime_path_for,
+    _unavailable_conditional,
+    build_belief,
+    macro_gate_decision,
+)
 
 
 # ── /analyze ─────────────────────────────────────────────────────────────────
@@ -616,31 +610,24 @@ def run_analyze(req: AnalyzeRequest) -> dict:
 
         # 0) P2.5 — 국면조건부 μ/Σ (요청했을 때만). 실패해도 계산은 계속되고,
         #    그 사실은 아래 `conditional` 블록이 응답에 적는다(조용한 폴백 금지).
-        cond_path: dict | None = None
-        cond: dict | None = None
-        s_override = None
-        extra_views: list[dict] | None = None
-        view_conf: float | None = None
-        if req.conditional:
-            from src.engine.conditional_market import (
-                conditional_moments,
-                regime_by_month_from_path,
-            )
-            cond_path = _regime_path_for(req)
-            by_month, _dropped = regime_by_month_from_path(cond_path["points"])
-            current = (cond_path["points"][-1].get("regime")
-                       if cond_path["points"] else None)
-            cond = conditional_moments(returns, by_month, current)
-            if cond["available"]:
-                s_override = cond["sigma"]
-                extra_views, view_conf = _conditional_views(cond, req.model)
+        #    ★`/rebalance-decision` 과 **같은 문**을 지난다 (P8 ②)★ 관문도
+        #    그 안에 한 번만 있다 — 예전에는 이 순서가 두 라우트에 복사돼
+        #    있었고, P5 는 관문을 두 곳에 배선해야 했다.
+        belief = build_belief(req, returns, names)
+        cond, cond_path, cond_meta = belief.cond, belief.path, belief.meta
+        s_override, extra_views = belief.s_override, belief.extra_views
+        view_conf = belief.view_confidence
+
+        # 0b) S5 — 기업 밸류에이션 뷰 (요청했을 때만). `None` 이면 응답 키도 없다.
+        co_stack = _company_view_stack(req, names)
 
         # 1) 뷰+모델 최적화 (allocation_studio 엔진)
         from src.engine.allocation_studio import optimize
         views = [v.model_dump() for v in (req.views or [])]
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau,
-                       s_override=s_override, extra_views=extra_views)
+                       s_override=s_override, extra_views=extra_views,
+                       company_views=(co_stack or {}).get("views"))
 
         # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
         #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
@@ -681,8 +668,11 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         from src.kis_portfolio_analyzer import PortfolioAnalyzer
         user_w = None
         if req.weights:
-            user_w = {t: max(float(req.weights.get(t, 0.0)), 0.0) for t in names}
-            if sum(user_w.values()) <= 0:
+            # ★부호 보존★ 예전에는 숏을 지우고 `Σw <= 0` 이면 "비중 없음" 으로
+            # 떨어뜨렸다 — 전액 숏 북이 조용히 균등가중으로 분석되던 자리다.
+            # (`PortfolioAnalyzer` 의 net 정규화가 먼저 고쳐졌기에 걷을 수 있다.)
+            user_w = {t: float(req.weights.get(t, 0.0)) for t in names}
+            if sum(abs(v) for v in user_w.values()) <= 0:
                 user_w = None
         analyzer = PortfolioAnalyzer(returns=returns, weights=user_w)
         metrics = analyzer.analyze()
@@ -781,7 +771,18 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             "points": points,
             "risk_contributions": {k: round(float(v) * 100, 2)
                                    for k, v in metrics.risk_contributions.items()},
-            "enb": _enb_report(opt["weights"], opt["sigma_annual"], names),
+            # ★기존 키는 그대로 두고 정체만 옆에 적는다★ (프론트 3곳이 읽는다)
+            "risk_contributions_basis": _risk_contributions_basis(user_w),
+            # ★추천한 포트폴리오의 리스크를 말한다★ — 위 블록은 사용자(또는
+            # 등가중) 비중을 표본 Σ 로 잰 것이라 이 엔드포인트가 내놓은 배분과
+            # 다른 대상이다.
+            "risk_contribution_optimized": _risk_contribution_report(
+                opt["weights"], opt["sigma_annual"], names,
+                weights_source="optimized",
+                sigma_source=opt.get("sigma_source", "trailing")),
+            "enb": {**_enb_report(opt["weights"], opt["sigma_annual"], names),
+                    "weights_source": "optimized",
+                    "sigma_source": opt.get("sigma_source", "trailing")},
             "correlation": metrics.correlation_matrix.round(3).to_dict(),
             "summary": {"portfolio": pf_stats, "benchmark": bench_stats or None,
                         "active": active or None,
@@ -791,6 +792,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                                   "information_ratio": extra.get("information_ratio")}},
             "mc": mc_dist,
             "constraints_report": constraints_report,
+            "unknown_tickers": _unknown_tickers(req.tickers),
             # ★어느 μ 엔진이 이 숫자를 냈는지 서버가 답한다 (M2)★ 화면이 라벨을
             # 지어내지 않게 하려는 것이고, `ep` 진단(feasible·ENS·위반·신뢰도 미사용)은
             # EP 일 때만 채워진다.
@@ -807,8 +809,14 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 cond or {}, cond_path or {},
                 sigma_applied=s_override is not None,
                 mu_as_views=int(opt.get("extra_views_used") or 0),
-                view_confidence=view_conf, model=req.model)
+                view_confidence=view_conf, model=req.model, meta=cond_meta,
+                universe=names, months=_months_span(returns),
+                blocked_reason=belief.blocked_reason)
             payload["target_range"] = target_range
+
+        # ★같은 규율 — 요청했을 때만 키가 늘어난다★ (S5)
+        if co_stack is not None:
+            payload["company_views"] = co_stack["block"]
 
         # ── ResearchRun 기록 (opt-in) — 서버가 계산한 결과를 서버가 스탬프.
         #    outputs는 재계산 가능한 대형 산출물(프론티어 클라우드·MC bins) 제외 요약만.
@@ -896,417 +904,6 @@ def allocation_backtest(req: BacktestRequest):
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
-# ── /factor-xray ─────────────────────────────────────────────────────────────
-# (표시라벨, 팩터 id, 소스, 변환, 부호반전) — 커버 불가 팩터는 응답에서 정직 생략
-_XRAY_SPEC = [
-    ("equity_beta", "시장 베타", "beta_1y", "price", None, False),
-    ("momentum", "모멘텀", "momentum_12_1", "price", None, False),
-    ("low_vol", "저변동성", "volatility_60d", "price", None, True),
-    ("value", "가치", "book_to_market", "fund", None, False),
-    ("quality", "퀄리티", "gp_to_assets", "fund", None, False),
-    ("growth", "성장", "revenue_growth_yoy", "fund", None, False),
-    ("dividend", "배당", "dividend_yield", "fund", None, False),
-    ("size", "규모", "__market_cap__", "master", "log", False),
-    ("liquidity", "유동성", "amount_20d_avg", "price", "log", False),
-]
-
-
-def _xf(v, transform):
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(f):
-        return None
-    if transform == "log":
-        return math.log10(f) if f > 0 else None
-    return f
-
-
-def _factor_value(code: str, fid: str, source: str, fund_cache: dict, price_cache: dict):
-    if source == "master":
-        from src.data.stock_master import get_market_cap
-        return get_market_cap(code)
-    cache = fund_cache if source == "fund" else price_cache
-    if code not in cache:
-        try:
-            if source == "fund":
-                from src.data.fundamentals_store import FundamentalsStore
-                cache[code] = FundamentalsStore.get_default().get_factors(code, None) or {}
-            else:
-                from src.data.price_factors_store import PriceFactorsStore
-                cache[code] = PriceFactorsStore.get_default().get_factors(code, None) or {}
-        except Exception:
-            cache[code] = {}
-    return cache[code].get(fid)
-
-
-@router.post("/factor-xray")
-def allocation_factor_xray(req: XrayRequest):
-    """포트폴리오 가중 팩터 노출(z-score) vs 유니버스 분포·KOSPI200 벤치마크.
-
-    커버리지 정직 규칙: 팩터 값이 없는 자산(예: ETF의 펀더멘털)은 그 팩터에서
-    가중 재정규화하고 커버리지 %로 표기 — 조용한 0 처리 금지.
-    """
-    try:
-        from src.data.snapshot_db import sample_factors
-        from src.data.stock_master import get_market_cap, load_master_flags
-
-        holdings = {c: max(float(w), 0.0) for c, w in req.holdings.items()}
-        tot = sum(holdings.values())
-        if tot <= 0:
-            return {"error": True, "message": "보유 비중 합이 0입니다."}
-        holdings = {c: w / tot for c, w in holdings.items()}
-
-        sample = sample_factors(500) or []
-        if not sample:
-            # DB 무 → mock 모드 한정 합성 유니버스 표본 (mock 스토어는 종목별 결정론)
-            from src.data.mock_gate import mock_allowed
-            if mock_allowed():
-                from src.data.fundamentals_store import FundamentalsStore
-                from src.data.price_factors_store import PriceFactorsStore
-                fs = FundamentalsStore.get_default()
-                ps = PriceFactorsStore.get_default()
-                for i in range(60):
-                    code = f"{100 + i * 137 % 900:03d}{i * 41 % 1000:03d}"
-                    row = {"stock_code": code}
-                    try:
-                        row.update(fs.get_factors(code, None) or {})
-                        row.update(ps.get_factors(code, None) or {})
-                    except Exception:
-                        continue
-                    sample.append(row)
-        flags = load_master_flags() or {}
-        k200 = {c for c, f in flags.items() if f.get("is_kospi200")}
-
-        fund_cache: dict = {}
-        price_cache: dict = {}
-        out_factors = []
-        for key, label, fid, source, transform, invert in _XRAY_SPEC:
-            # 유니버스 분포 (표본 + master 시총)
-            if source == "master":
-                uni_pairs = [(r.get("stock_code"), get_market_cap(r.get("stock_code")))
-                             for r in sample]
-            else:
-                uni_pairs = [(r.get("stock_code"), r.get(fid)) for r in sample]
-            uni = [( c, _xf(v, transform)) for c, v in uni_pairs]
-            uni_vals = np.array([v for _, v in uni if v is not None], dtype=float)
-            if uni_vals.size < 20:
-                continue  # 분포 부족 — 팩터 자체를 정직 생략
-            mean, std = float(uni_vals.mean()), float(uni_vals.std(ddof=1))
-            if std <= 1e-12:
-                continue
-
-            def _z(v):
-                z = (v - mean) / std
-                return float(np.clip(-z if invert else z, -3.0, 3.0))
-
-            # 포트폴리오 가중 z (커버 자산만 재정규화)
-            acc, cov_w = 0.0, 0.0
-            for code, w in holdings.items():
-                v = _xf(_factor_value(code, fid, source, fund_cache, price_cache), transform)
-                if v is None:
-                    continue
-                acc += w * _z(v)
-                cov_w += w
-            pf_z = acc / cov_w if cov_w > 0 else None
-
-            # 벤치마크: 표본 내 KOSPI200 캡가중 (플래그 없으면 유니버스 평균=0 근방)
-            bz_acc, bz_w = 0.0, 0.0
-            for code, v in uni:
-                if v is None or (k200 and code not in k200):
-                    continue
-                cap = get_market_cap(code) or 1.0
-                bz_acc += cap * _z(v)
-                bz_w += cap
-            bench_z = bz_acc / bz_w if bz_w > 0 else 0.0
-
-            if pf_z is None:
-                continue  # 포트폴리오 전체가 미커버 — 표기 불가, 정직 생략
-            out_factors.append({
-                "id": key, "label": label,
-                "portfolio_z": round(pf_z, 2),
-                "benchmark_z": round(bench_z, 2),
-                "coverage_pct": round(cov_w * 100, 1),
-                "n_universe": int(uni_vals.size),
-            })
-
-        return {"error": False, "factors": out_factors,
-                "benchmark_label": "KOSPI200(표본 캡가중)" if k200 else "유니버스 평균",
-                "note": "유니버스 표본 z-score 기준. 커버리지 <100%는 해당 팩터 데이터가 없는 자산(예: ETF 펀더멘털)을 재정규화한 것."}
-    except Exception:
-        logger.exception("factor-xray 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
-# ── /stress ──────────────────────────────────────────────────────────────────
-def _shock_inputs(code: str):
-    """M8 _stock_shock 입력 — item: 스냅샷 우선, 없으면 팩터 스토어 폴백(정직 매핑)."""
-    from types import SimpleNamespace
-
-    from src.data.snapshot_db import bulk_read
-    snap = bulk_read([f"item:{code}"], max_age_sec=86400 * 30) or {}
-    d = snap.get(f"item:{code}")
-    if isinstance(d, dict) and d.get("stock_code"):
-        return SimpleNamespace(
-            stock_code=code, corp_name=d.get("corp_name") or code,
-            debt_ratio_pct=d.get("debt_ratio_pct"), per=d.get("per"),
-            dividend_yield_pct=d.get("dividend_yield_pct"), roe_pct=d.get("roe_pct"),
-            beta_1y=d.get("beta_1y"), composite_score=d.get("composite_score") or 50)
-    try:
-        from src.data.fundamentals_store import FundamentalsStore
-        from src.data.price_factors_store import PriceFactorsStore
-        f = FundamentalsStore.get_default().get_factors(code, None) or {}
-        p = PriceFactorsStore.get_default().get_factors(code, None) or {}
-        d2e = f.get("debt_to_equity")
-        return SimpleNamespace(
-            stock_code=code, corp_name=code,
-            debt_ratio_pct=(float(d2e) * 100 if d2e is not None else None),
-            per=f.get("per"), dividend_yield_pct=f.get("dividend_yield"),
-            roe_pct=f.get("roe"), beta_1y=p.get("beta_1y"), composite_score=50)
-    except Exception:
-        return SimpleNamespace(stock_code=code, corp_name=code, debt_ratio_pct=None,
-                               per=None, dividend_yield_pct=None, roe_pct=None,
-                               beta_1y=None, composite_score=50)
-
-
-@router.post("/stress")
-def allocation_stress(req: StressRequest):
-    """가상 시나리오(M8 펀더멘털 충격 가중합) 또는 역사 윈도우 리플레이."""
-    try:
-        holdings = {c: max(float(w), 0.0) for c, w in req.holdings.items()}
-        tot = sum(holdings.values())
-        if tot <= 0:
-            return {"error": True, "message": "보유 비중 합이 0입니다."}
-        holdings = {c: w / tot for c, w in holdings.items()}
-
-        # ── 역사 리플레이 ──
-        if req.scenario in _HIST_WINDOWS:
-            win = _HIST_WINDOWS[req.scenario]
-            from src.kis_portfolio_analyzer import load_returns
-            df = load_returns(list(holdings) + [req.benchmark], win["start"], win["end"])
-            if df is None or df.empty:
-                mock_df = _mock_returns_fallback(list(holdings) + [req.benchmark],
-                                                 win["start"], win["end"])
-                if mock_df is not None:
-                    df = mock_df
-            avail = [c for c in holdings if not df.empty and c in df.columns
-                     and int(df[c].dropna().shape[0]) >= _MIN_OBS]
-            if not avail:
-                return {"error": False, "mode": "historical", "available": False,
-                        "scenario": req.scenario, "label": win["label"],
-                        "reason": "해당 기간 시세 데이터 미보유 (KRX 백필 범위 밖)"}
-            dropped = [c for c in holdings if c not in avail]
-            sub = df[avail].dropna()
-            w = np.array([holdings[c] for c in avail])
-            w = w / w.sum()
-            port = sub.values @ w
-            eq = np.cumprod(1.0 + port)
-            dd = eq / np.maximum.accumulate(eq) - 1.0
-            out = {
-                "error": False, "mode": "historical", "available": True,
-                "scenario": req.scenario, "label": win["label"],
-                "dates": [str(d.date()) for d in sub.index],
-                "portfolio_dd": [round(float(x) * 100, 2) for x in dd],
-                "max_dd_pct": round(float(dd.min()) * 100, 2),
-                "total_return_pct": round(float(eq[-1] - 1.0) * 100, 2),
-                "dropped": dropped,
-            }
-            if req.benchmark in df.columns:
-                b = df[req.benchmark].reindex(sub.index).ffill().dropna()
-                if len(b) >= _MIN_OBS:
-                    beq = np.cumprod(1.0 + b.values)
-                    bdd = beq / np.maximum.accumulate(beq) - 1.0
-                    out["benchmark_dd"] = [round(float(x) * 100, 2) for x in bdd]
-                    out["benchmark_max_dd_pct"] = round(float(bdd.min()) * 100, 2)
-                    out["benchmark_label"] = req.benchmark
-            return out
-
-        # ── 가상 시나리오 (M8) ──
-        from src.engine.stress_test_analyzer import STRESS_SCENARIOS, _stock_shock
-        if req.scenario not in STRESS_SCENARIOS:
-            return {"error": True, "message": f"미지원 시나리오: {req.scenario}"}
-        sev = float(req.severity)
-        rows = []
-        port_shock = 0.0
-        for code, w in holdings.items():
-            item = _shock_inputs(code)
-            shock = round(_stock_shock(item, req.scenario) * sev, 2)
-            port_shock += w * shock
-            rows.append({"stock_code": code, "corp_name": item.corp_name,
-                         "weight_pct": round(w * 100, 2), "shock_pct": shock,
-                         "contribution_pct": round(w * shock, 2)})
-        rows.sort(key=lambda x: x["shock_pct"])
-        return {
-            "error": False, "mode": "hypothetical", "available": True,
-            "scenario": req.scenario, "severity": sev,
-            "label": STRESS_SCENARIOS[req.scenario]["label"],
-            "portfolio_shock_pct": round(port_shock, 2),
-            "rows": rows,
-            "note": f"종목 펀더멘털(부채·PER·배당·ROE·베타) 기반 M8 충격 추정의 가중합 (배율 {sev:g}×).",
-        }
-    except Exception:
-        logger.exception("stress 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
-@router.post("/sensitivity")
-def allocation_sensitivity(req: SensitivityRequest):
-    """Sensitivity Heatmap — 자산별 기대수익 +bump 충격 → 최적 비중 변화 N×N.
-
-    Robustness 재정의(Research OS): 결과 산점이 아니라 "입력(μ) 변동에 대한
-    가중치 안정성"을 검증. base μ는 /analyze와 동일(뷰 있으면 BL posterior).
-    """
-    try:
-        returns, _bench, excluded, coverage = _load_clean_returns(
-            req.tickers, None, req.lookback_days)
-        if returns is None or len(returns.columns) < 2:
-            return {"error": True,
-                    "message": "분석 가능한 자산이 2개 미만입니다.",
-                    "excluded": excluded}
-        names = list(returns.columns)
-        from src.engine.allocation_studio import sensitivity_matrix
-        views = [v.model_dump() for v in (req.views or [])]
-        out = sensitivity_matrix(names, returns.values, views=views or None,
-                                 delta=req.delta, tau=req.tau,
-                                 bump_pct=req.bump_pct)
-        out.update({"error": False, "labels": _labels(names),
-                    "excluded": excluded, "coverage": coverage})
-        return out
-    except Exception:
-        logger.exception("sensitivity 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
-@router.get("/stress-catalog")
-def allocation_stress_catalog():
-    """시나리오 카탈로그 — 가상 4종(M8) + 역사 윈도우(가용성 1쿼리 판정)."""
-    try:
-        from src.engine.stress_test_analyzer import STRESS_SCENARIOS
-        hypo = [{"id": k, "label": v["label"], "description": v["description"],
-                 "mode": "hypothetical", "available": True}
-                for k, v in STRESS_SCENARIOS.items()]
-
-        # DB 최소일자 1회 조회 → 그보다 전부 이른 윈도우는 미보유 처리
-        min_date = None
-        try:
-            from sqlalchemy import text
-
-            from src.database import get_engine
-            with get_engine().connect() as c:
-                row = c.execute(text(
-                    "SELECT MIN(trade_date) FROM daily_prices")).fetchone()
-                if row and row[0]:
-                    min_date = str(row[0])
-        except Exception:
-            pass
-        from src.data.mock_gate import mock_allowed
-        hist = []
-        for k, v in _HIST_WINDOWS.items():
-            available = True
-            reason = None
-            if min_date is None:
-                # mock 모드는 합성 리플레이 가능(개발), 운영은 정직 unavailable
-                available = mock_allowed()
-                reason = "mock 합성 리플레이" if available else "시세 DB 미적재"
-            elif v["end"] < min_date:
-                available = False
-                reason = f"데이터 미보유 (DB 시작 {min_date})"
-            hist.append({"id": k, "label": v["label"],
-                         "description": f"{v['start']} ~ {v['end']} 실제 시세 리플레이",
-                         "mode": "historical", "available": available,
-                         **({"reason": reason} if reason else {})})
-        return {"scenarios": hypo + hist}
-    except Exception:
-        logger.exception("stress-catalog 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
-# ── 국내 시나리오팩 (P3-b) ────────────────────────────────────────────────────
-class KrScenarioRequest(BaseModel):
-    holdings: dict[str, float] = Field(..., min_length=1)
-    scenario: str = "semi_selloff"
-    severity: float = Field(1.0, ge=0.25, le=3.0)
-    sleeves: dict[str, str] | None = None    # code → 슬리브명 (있으면 취약 슬리브 귀속)
-
-
-_STRESS_NOTE = (
-    "가상·국내팩은 팩터 민감도로 추정한 충격이라 severity 배율이 적용됩니다. "
-    "역사 리플레이는 실제 시세를 그대로 재생하므로 배율이 적용되지 않으며, "
-    "적재된 시세 범위를 벗어난 구간은 합성하지 않고 미가용으로 표시합니다. "
-    "★분류(패밀리)와 모형 종류(model_type)는 다른 축입니다★ — 국내 시나리오팩도 "
-    "역사가 아니라 **가정 충격**입니다."
-)
-
-#: 실행 엔진 → 레거시 `mode` 값. ★한 글자도 바뀌지 않는다★ 프론트엔드가 결과 렌더링을
-#: 이 값으로 분기하므로, 패밀리를 12종으로 늘리는 것과 `mode` 는 별개 축이다.
-_ENGINE_MODE = {"m8": "hypothetical", "hist_replay": "historical", "kr_pack": "kr_pack"}
-
-
-@router.get("/stress-scenarios")
-def allocation_stress_scenarios():
-    """통합 시나리오 카탈로그 — 스펙 §5 의 12 패밀리 + **두 축**(패밀리 · model_type).
-
-    Phase 9 이전에는 패밀리가 셋(가상·역사·국내팩)이었고 `mode: "kr_pack"` 이 인식론적
-    주장인 것처럼 실려 나갔다. 이제 분류는 §5 의 12 패밀리가, "이것이 역사인가 가정인가" 는
-    `model_type` 이 맡는다. 팩이 없는 패밀리도 **사유와 함께** 목록에 남는다.
-
-    기존 /stress-catalog(가상+역사)와 /kr-scenario-catalog(국내)는 그대로 유지.
-    """
-    try:
-        from src.engine.scenario_packs import PACKS, families
-
-        # 가용성은 런타임 사실(적재 범위)이라 레거시 카탈로그가 계속 판정한다.
-        legacy = {s["id"]: s for s in allocation_stress_catalog()["scenarios"]}
-
-        by_family: dict[str, list[dict]] = {}
-        for pack in PACKS.values():
-            leg = legacy.get(pack.pack_id, {})
-            item = pack.to_dict()
-            item["mode"] = _ENGINE_MODE[pack.engine]
-            item["available"] = bool(leg.get("available", True))
-            if leg.get("reason"):
-                item["reason"] = leg["reason"]
-            by_family.setdefault(pack.family, []).append(item)
-
-        fams = families()
-        groups = [{"family": f["id"], "label": f["label"],
-                   "items": sorted(by_family.get(f["id"], []), key=lambda i: i["label"]),
-                   **({"reason": f["reason"]} if f.get("reason") else {})}
-                  for f in fams]
-
-        return {"groups": groups, "families": fams, "note": _STRESS_NOTE}
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("stress-scenarios 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
-@router.get("/kr-scenario-catalog")
-def allocation_kr_scenario_catalog():
-    """국내 7종 시나리오 목록 — 라벨·설명·충격 출처."""
-    try:
-        from src.engine.kr_scenario_pack import catalog
-        return {"scenarios": catalog()}
-    except Exception:
-        logger.exception("kr-scenario-catalog 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
-@router.post("/kr-scenario")
-def allocation_kr_scenario(req: KrScenarioRequest):
-    """국내 시나리오 팩터 충격 — 종목·팩터·슬리브별 P&L + VaR/CVaR 프록시 + 실행 가능성."""
-    try:
-        from src.engine.kr_scenario_pack import run_scenario
-        holdings = {str(c): max(float(w), 0.0) for c, w in req.holdings.items()}
-        return run_scenario(list(holdings), holdings, req.scenario,
-                            severity=req.severity, sleeves=req.sleeves)
-    except Exception:
-        logger.exception("kr-scenario 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
 # ── /resolve-names ───────────────────────────────────────────────────────────
 @router.post("/resolve-names")
 def allocation_resolve_names(req: ResolveNamesRequest):
@@ -1355,6 +952,18 @@ def _rows_for_tickers(tickers: list[str]) -> list[dict]:
             pass
         rows.append(row)
     return rows
+
+
+def _xf(v, transform):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(f):
+        return None
+    if transform == "log":
+        return math.log10(f) if f > 0 else None
+    return f
 
 
 def _factor_weights(codes: list[str], score_map: dict[str, float],
@@ -1463,69 +1072,6 @@ def allocation_factor_portfolio(req: FactorPortfolioRequest):
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
-@router.post("/stress-correlation")
-def allocation_stress_correlation(req: StressCorrRequest):
-    """상관-국면 스트레스 — 위기 시 상관이 target_rho로 수렴한다고 가정하고 공분산을 재구성,
-    포트폴리오 변동성·VaR·자산별 기여 VaR의 base 대비 변화를 산출 (PortfolioRiskModel 재사용)."""
-    try:
-        from scipy.stats import norm
-
-        from src.models.portfolio_risk import PortfolioRiskModel
-
-        returns, _b, excluded, coverage = _load_clean_returns(req.tickers, None, req.lookback_days)
-        if returns is None or len(returns.columns) < 2:
-            return {"error": True, "message": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded}
-        names = list(returns.columns)
-        n = len(names)
-        if req.weights:
-            w = np.array([max(float(req.weights.get(t, 0.0)), 0.0) for t in names], dtype=float)
-            if w.sum() <= 0:
-                w = np.ones(n)
-        else:
-            w = np.ones(n)
-        w = w / w.sum()
-
-        ann = math.sqrt(252.0)
-        prm = PortfolioRiskModel(confidence_level=req.confidence_level)
-        base_var, base_vol_d = prm.calculate_portfolio_var(returns, w, req.portfolio_value)
-        base_comp = prm.component_var(returns, w, req.portfolio_value)
-
-        sig = returns.std().values
-        corr = returns.corr().values
-        off = ~np.eye(n, dtype=bool)
-        stressed = corr.copy()
-        stressed[off] = corr[off] + (req.target_rho - corr[off]) * req.intensity
-        np.fill_diagonal(stressed, 1.0)
-        cov_s = np.outer(sig, sig) * stressed
-        var_d = float(w @ cov_s @ w)
-        s_vol_d = float(np.sqrt(max(var_d, 0.0)))
-        z = float(norm.ppf(req.confidence_level))
-        s_var = z * s_vol_d * req.portfolio_value
-        s_marg = (cov_s @ w) / (s_vol_d + 1e-12) * z * req.portfolio_value
-        s_comp = w * s_marg
-
-        labels = _labels(names)
-        return {
-            "error": False, "names": names, "labels": labels,
-            "confidence_level": req.confidence_level, "target_rho": req.target_rho,
-            "intensity": req.intensity,
-            "base": {"port_vol_pct": round(base_vol_d * ann * 100, 2),
-                     "var_amount": round(base_var, 0),
-                     "component_var": {names[i]: round(float(base_comp[i]), 0) for i in range(n)}},
-            "stressed": {"port_vol_pct": round(s_vol_d * ann * 100, 2),
-                         "var_amount": round(s_var, 0),
-                         "component_var": {names[i]: round(float(s_comp[i]), 0) for i in range(n)}},
-            "delta_vol_pct": round((s_vol_d / base_vol_d - 1) * 100, 1) if base_vol_d > 0 else None,
-            "delta_var_pct": round((s_var / base_var - 1) * 100, 1) if base_var > 0 else None,
-            "corr_shift": {"from_avg_rho": round(float(corr[off].mean()), 3),
-                           "to_avg_rho": round(float(stressed[off].mean()), 3)},
-            "excluded": excluded, "coverage": coverage,
-        }
-    except Exception:
-        logger.exception("stress-correlation 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # TargetPortfolioVersion — 실행·스트레스·귀인이 참조하는 불변 목표 (R0-T)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1609,3 +1155,378 @@ def target_versions_list(limit: int = Query(50, ge=1, le=200)):
         logger.warning(f"target-versions 목록 실패: {e}")
         return {"available": False, "versions": [],
                 "reason": "목표 버전 저장소를 읽을 수 없습니다 — 기록이 없는 것과 다릅니다."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 리밸런싱 정책 — ★거래 여부를 판단한다★ (Brief §10 · 감사 §3.1)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class RebalanceDecisionRequest(AnalyzeRequest):
+    """`AnalyzeRequest` 를 그대로 물려받는다 — 유니버스·모델·절단일·조건부 스위치가
+    분석과 **같은 의미**여야 두 화면의 판단이 갈리지 않는다."""
+    holdings: dict[str, float] = Field(..., min_length=1)   # 현재 비중 %
+    # ★단위를 말할 수 있게 한다★ 합이 1 근처면 "분수로 준 만액" 인지 "퍼센트로 준
+    # 소액" 인지 알 수 없고, 두 해석은 **주문 금액이 100배 다르다**(실측).
+    weight_unit: str | None = Field(None, max_length=16)     # percent|fraction
+    portfolio_value: float = Field(..., gt=0)
+    # 없으면 optimize 결과를 목표로 쓴다.
+    target_weights: dict[str, float] | None = None
+    horizon_days: int = Field(63, ge=1, le=756)             # 보유기간 가정(명시)
+    hysteresis_mult: float = Field(0.5, ge=0.0, le=50.0)
+    confidence: float | None = Field(None, ge=0.0, le=1.0)  # 점진 이동 α
+    last_rebalance_date: str | None = Field(None, max_length=32)
+    # 팩터 노출(Brief §8.4) — 매크로 회귀라 느려서 선택으로 둔다.
+    factor_exposure: bool = False
+    # 팩터 리스크 분해(P3-4)와 역스트레스(Brief §12). 둘 다 팩터 노출이 있어야
+    # 뜻이 있으므로 `factor_exposure` 가 꺼져 있으면 무시된다.
+    factor_risk: bool = False
+    reverse_stress: bool = False
+    # 팩터 리스크 모델(§13) — Σ_asset = BΣ_fB' + D 를 optimizer 에 넣는다.
+    factor_risk_model: bool = False
+    stress_loss_pct: float = Field(-15.0, ge=-90.0, le=-0.1)
+    # ── 결정 기록 (opt-in) — ★`record_run` 과 **같은 이유**★ ─────────────────
+    #   그 필드의 주석이 이미 답을 적어 뒀다: "슬라이더 드래그마다 DB에 쓰지 않도록
+    #   명시 요청 시에만". 리밸런스 판단도 UI 상호작용마다 불릴 수 있으므로 같은
+    #   규율을 쓴다 — 기본값에서는 DB 에 한 줄도 쓰지 않는다.
+    record_decision: bool = False
+    #   결정을 Case 증거 사슬(rc_* → rgs_/tpv_/rr_)에 건다. 없으면 사슬 밖에 남는다.
+    case_id: str | None = Field(None, max_length=40)
+
+
+@router.post("/rebalance-decision")
+def rebalance_decision_route(req: RebalanceDecisionRequest):
+    """★거래할 가치가 있는가★ — Brief §21 이 시스템에 묻는 질문.
+
+        trade if 효용 개선 > 거래비용 × (1 + 히스테리시스)
+
+    ★트리거만으로 거래하지 않는다★ `portfolio_rebalancer` 의 달력·drift·국면·
+    변동성 트리거는 **검토 시점**을 알릴 뿐이다. 거래 근거는 편익 대 비용이고,
+    조건부 μ/Σ 가 없으면 `decision="undetermined"` 로 답한다 — 편익을 모르는 채
+    거래를 권하는 것이 감사가 지목한 결함이었다.
+
+    무거래 밴드는 **자산마다** 다르다(포지션 크기에 의존). 고정 ±5% 가 아니다.
+    """
+    _check_as_of(req.as_of)
+    _check_weight_unit(req.holdings, req.weight_unit)
+    # ★이 계산이 어떤 정보집합 위에 서 있는지 응답이 말한다★ (벤치마크 §4)
+    # 선언하지 않은 절단일은 **채우지 않는다** — 비어 있음은 "그 날짜로 잘랐다" 가
+    # 아니라 "자른 적이 없다" 는 뜻이고, 채우면 그것이 §4 의 hidden date 다.
+    # ★지킨 절단일만 선언한다★ 가격은 `_load_clean_returns(as_of=)` 가 실제로
+    # 자르므로 `market_data_as_of` 는 선언할 수 있다. 매크로는 팩터 계열을 자를 수
+    # 있었을 때만 아래에서 덧붙인다 — 예전에는 `information_cutoff` 만 적어 놓고
+    # 팩터 계층이 오늘 데이터로 계산했다(지키지 않는 절단일을 선언한 것).
+    ctx = _research_now(**({"as_of": req.as_of,
+                            "market_data_as_of": req.as_of} if req.as_of else {}))
+    rc = _describe_context(ctx)
+    try:
+        from src.engine.investment_decision import decide
+        from src.engine.rebalance_policy import detect_triggers
+
+        returns, bench, excluded, coverage = _load_clean_returns(
+            req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
+        if returns is None or len(returns.columns) < 2:
+            # ★모든 분기가 같은 키를 낸다★ 어떤 응답에만 `dec_id` 가 있으면 소비자가
+            # `.get()` 으로 읽다가 `None` 을 거짓으로 취급한다(레지스트리
+            # `not_ingested` 와 같은 규율). ★그리고 이 분기는 결정 계층에 닿지
+            # 않는다★ — 문제를 세울 수조차 없었으므로 기록할 판단이 없다.
+            return {"available": False, "decision": "undetermined",
+                    "reason": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded,
+                    "research_context": rc,
+                    "dec_id": None, "persisted": False,
+                    "persist_reason": ("유니버스를 세우지 못해 결정 계층에 닿지 "
+                                       "않았습니다 — 기록할 판단이 없습니다.")}
+
+        names = list(returns.columns)
+        R = returns.values
+
+        # 조건부 μ/Σ — ★`/analyze` 와 **같은 문**을 지난다 (P8 ②)★ 예전에는
+        # 같은 순서가 두 번 복사돼 있어, 한쪽만 고치면 화면에 따라 다르게
+        # 동작했다. 관문(P5 ③)도 그 문 안에 한 번만 있다.
+        # ★`view_confidence` 는 쓰지 않는다★ 이 라우트는 예전부터 `None` 을
+        # 넘겨 왔고, 벨리프가 들고 와도 그대로 안 쓴다(행동 불변).
+        belief = build_belief(req, returns, names)
+        cond, cond_path, cond_meta = belief.cond, belief.path, belief.meta
+        s_override, extra_views = belief.s_override, belief.extra_views
+
+        # ★§13 팩터 리스크 모델★ 켜면 표본 공분산 대신 BΣ_fB'+D 를 쓴다.
+        # 실패하면 조용히 표본으로 떨어지지 않고 `applied: False` + 사유를 남긴다.
+        frm_block = None
+        if req.factor_risk_model:
+            from src.engine.factor_risk_model import (
+                asset_covariance,
+                build_factor_risk_model,
+            )
+            frm = build_factor_risk_model(names, as_of=req.as_of)
+            if frm["available"] and frm["codes"] == names:
+                s_override = asset_covariance(frm)
+                frm_block = {"applied": True, "reason": None,
+                             "diagnostics": frm["diagnostics"],
+                             "assets": frm["assets"],
+                             "excluded": frm["excluded"],
+                             "units": "annual", "method": frm["method"]}
+            else:
+                frm_block = {
+                    "applied": False,
+                    "reason": (frm.get("reason") or
+                               "일부 자산을 추정하지 못해 자산 순서가 어긋납니다 — "
+                               "표본 공분산을 그대로 씁니다"),
+                    "excluded": frm.get("excluded", {}),
+                    "note": "모델을 못 만들면 표본 공분산으로 계산하되 그 사실을 말합니다"}
+
+        # ★`/analyze` 와 **같은 헬퍼**를 탄다★ — 두 화면이 갈리지 않게.
+        co_stack = _company_view_stack(req, names)
+
+        from src.engine.allocation_studio import optimize
+        opt = optimize(req.model, names, R,
+                       views=[v.model_dump() for v in (req.views or [])] or None,
+                       delta=req.delta, tau=req.tau,
+                       s_override=s_override, extra_views=extra_views,
+                       company_views=(co_stack or {}).get("views"))
+
+        if req.target_weights:
+            target = {k: float(v) for k, v in req.target_weights.items()}
+            target_source = "request"
+        else:
+            target = {n: round(float(w) * 100.0, 4)
+                      for n, w in zip(names, opt["weights"], strict=False)}
+            target_source = f"optimize:{req.model}"
+
+        triggers = detect_triggers(
+            req.holdings, target, as_of=req.as_of,
+            last_rebalance_date=req.last_rebalance_date)
+
+        # ★μ 를 얼마나 모르는지가 밴드를 넓힌다★ (Brief §8.3 → §10)
+        # 예전에는 `uncertainty` 인자가 매달려 있었다 — 아무도 공급하지 않았다.
+        from src.engine.robust_opt import mu_standard_errors, uncertainty_scalar
+        est = mu_standard_errors(R)
+        mu_uncertainty = (uncertainty_scalar(est["t"]) if est["available"] else None)
+
+        # ★판단을 여기서 다시 구현하지 않는다★ `decide` 가 상류 원시함수를 부르고,
+        # 상류→스토어 매핑과 leg 유도와 영속을 한 곳에서 한다. 예전에는 이 판단이
+        # 응답과 함께 사라져 "왜 그때 거래하지 않았나" 를 물을 수 없었다(감사 M2).
+        # ★넘기는 인자는 이전과 한 글자도 같다★ — 결정 메타만 더한다.
+        decision = decide(
+            req.holdings, target, portfolio_value=req.portfolio_value,
+            names=names,
+            mu=np.asarray(opt["mu_used"], dtype=float),
+            sigma=np.asarray(opt["sigma_annual"], dtype=float),
+            risk_aversion=req.delta,
+            horizon_days=req.horizon_days,
+            hysteresis_mult=req.hysteresis_mult,
+            confidence=req.confidence,
+            uncertainty=mu_uncertainty,
+            triggers=triggers,
+            as_of=req.as_of, case_id=req.case_id, scope="portfolio",
+            belief={
+                "mu_source": f"optimize:{req.model}",
+                "conditional": bool(req.conditional),
+                # ★불확실성이 어디서 왔는지 말한다★ 없으면 없다고 적는다.
+                "uncertainty_source": ("mu_standard_errors" if mu_uncertainty is not None
+                                       else None),
+                "measured": mu_uncertainty is not None,
+                # ★μ 가 무엇으로 세워졌는지 기록이 말한다★ (S5) — 나중에 "왜 그때
+                # 그렇게 판단했나" 를 물을 때 회사 뷰가 섞였는지가 답의 일부다.
+                "company_views_used": int(opt.get("company_views_used") or 0),
+            },
+            evidence={
+                "target_source": target_source,
+                "mes_id": req.mes_id,
+                "regime_snapshot_id": req.regime_snapshot_id,
+                "timing_rule_set_id": req.timing_rule_set_id,
+                "timing_rule_set_version": req.timing_rule_set_version,
+                # ★이 판단이 어떤 신선도의 데이터 위에 섰는가★ 라우트가 이미 갖고
+                # 있는 `coverage` 에서 파생한다 — 나중에 "그때 데이터가 낡았나" 를
+                # 물을 수 있어야 한다.
+                "data_freshness": _freshness(coverage),
+                # ★`constraints_binding` 은 담지 않는다★ 이 라우트는 제약을 적용하지
+                # 않는다(그것은 `/analyze` 다). 없는 것을 담지 않는다.
+            },
+            persist=req.record_decision,
+        )
+        # ★leg 는 저장 관심사다★ 화면에는 `band.by_asset` 이 이미 같은 정보를 준다 —
+        # 두 벌을 실으면 화면이 어느 쪽을 믿을지 갈린다(목표 포트폴리오에서 이미
+        # 치른 값이다). 저장된 leg 는 스토어에서 조회한다.
+        decision.pop("legs", None)
+
+        # ★자산 개수가 아니라 팩터 개수★ (Brief §8.4) — 선택.
+        factors = None
+        if req.factor_exposure:
+            from src.engine.factor_exposure import (
+                asset_factor_betas,
+                factor_concentration,
+                portfolio_factor_exposure,
+            )
+            betas = asset_factor_betas(names, as_of=req.as_of)
+            expo = portfolio_factor_exposure(target, betas)
+            factors = {"exposure": expo,
+                       "concentration": (factor_concentration(expo)
+                                         if expo.get("available") else None),
+                       "sample": betas.get("sample"),
+                       "unresolved": betas.get("unresolved", {})}
+
+            # 팩터 공분산은 리스크 분해와 역스트레스가 함께 쓴다 — 한 번만 만든다.
+            fcov = None
+            if req.factor_risk or req.reverse_stress:
+                from src.engine.factor_exposure import resolve_proxies
+                from src.engine.reverse_stress import factor_covariance
+                prox = resolve_proxies(as_of=req.as_of)
+                fcov = factor_covariance(prox["resolved"])
+                # ★지키지 않은 절단일을 선언하지 않는다★ 계열을 자르지 못했으면
+                # 그 사실을 사유로 남기고 research_context 의 declared 에서 뺀다.
+                # ★"지켰다" 는 두 가지를 모두 요구한다★ 요청한 절단일이 **실제로
+                # 내려갔고**(`prox["as_of"] == req.as_of`) 쓰인 계열이 전부 잘렸을 것.
+                # 앞의 조건이 없으면 as_of 를 안 넘겨도 `as_of_honored=True`(공허하게
+                # 참)가 나와 절단하지 않은 것을 선언하게 된다 — 변이 프로브가 잡았다.
+                fcov["as_of_honored"] = bool(
+                    prox.get("as_of") == req.as_of
+                    and prox.get("as_of_honored", False))
+                factors["covariance"] = {k: fcov.get(k) for k in
+                                         ("available", "reason", "n_months", "span",
+                                          "shrinkage_lambda", "degenerate",
+                                          "scale_normalized", "sd_raw", "excluded",
+                                          "as_of_honored")}
+
+            if req.factor_risk and fcov is not None:
+                from src.engine.factor_risk import (
+                    portfolio_factor_risk,
+                    portfolio_monthly_returns,
+                )
+                series = portfolio_monthly_returns(target, as_of=req.as_of)
+                factors["risk"] = portfolio_factor_risk(
+                    expo, fcov,
+                    total_variance=(series["variance"] if series["available"]
+                                    else None))
+                factors["risk"]["total_variance_source"] = (
+                    {"available": series["available"],
+                     "reason": series.get("reason"),
+                     "coverage_pct": series.get("coverage_pct"),
+                     "n_months": len(series.get("months") or [])})
+
+            if req.reverse_stress and fcov is not None:
+                from src.engine.reverse_stress import reverse_stress as _rev
+                factors["reverse_stress"] = _rev(
+                    expo, fcov, loss_pct=req.stress_loss_pct)
+
+        # ★매크로 절단을 실제로 지켰을 때만 선언에 올린다★
+        if req.as_of and factors is not None:
+            honored = ((factors.get("covariance") or {}).get("as_of_honored")
+                       if factors.get("covariance") is not None else None)
+            if honored:
+                rc = _describe_context(ctx.with_(macro_data_as_of=req.as_of))
+
+        decision.update({
+            "risk_model": frm_block,
+            "factors": factors,
+            "target_weights": target, "target_source": target_source,
+            "model": req.model, "coverage": coverage, "excluded": excluded,
+            # ★기대수익을 0과 구분할 수 있는가★ 못 하면 밴드가 넓어진다.
+            "mu_uncertainty": (None if not est["available"] else {
+                "scalar": round(mu_uncertainty, 4),
+                "n_resolvable": est["n_resolvable"], "n_assets": len(names),
+                "mu_over_se": {nm: round(float(v), 3)
+                               for nm, v in zip(names, est["t"], strict=False)},
+                "note": est["note"]}),
+            # ★조건부를 못 썼으면 응답이 그 사실을 말한다★ (조용한 폴백 금지)
+            # ★`/analyze` 와 **같은 수**를 쓴다★ 예전에는 여기만 `len(extra_views)`
+            # 였고, 조건부 뷰가 스킵되면(유니버스 밖 자산) 쓰이지 않은 뷰를 쓰인
+            # 것으로 셌다 — 과대 진술이다. `optimize` 가 출처로 센 수를 쓴다.
+            "conditional": (_conditional_block(
+                cond, cond_path, sigma_applied=s_override is not None,
+                mu_as_views=int(opt.get("extra_views_used") or 0),
+                view_confidence=None, model=req.model, meta=cond_meta,
+                universe=names, months=_months_span(returns),
+                blocked_reason=belief.blocked_reason)
+                if req.conditional else None),
+            "research_context": rc,
+            "unknown_tickers": _unknown_tickers(req.tickers),
+        })
+        # ★같은 규율 — 요청했을 때만 키가 늘어난다★ (S5)
+        if co_stack is not None:
+            decision["company_views"] = co_stack["block"]
+        return _finite_payload(decision)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("rebalance-decision 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 경제노출 → 상장 상품 구현 계층 (Brief §7.1/7.2 · CTO §26)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ImplementExposuresRequest(BaseModel):
+    """경제노출 비중 → 상장 상품 비중."""
+    exposures: dict[str, float] = Field(..., min_length=1)   # 노출명 → 비중 %
+    market: str = Field("kr", max_length=8)                  # kr|us|any
+    portfolio_value: float = Field(100_000_000.0, gt=0)
+
+
+@router.get("/exposures")
+def list_exposures():
+    """★무엇을 구현할 수 있고 무엇을 모르는가★ 노출 카탈로그 (Brief §7.1).
+
+    후보는 **KR 상장 우선**이고 해외는 `alternatives` 로 함께 나간다. 국내 후보가
+    없는 노출은 `market_fallback` 사유가 붙는다 — 조용히 해외로 넘어가지 않는다.
+
+    ★계산할 수 없는 기준은 사유와 함께 나간다★ 이 저장소에는 ETF 메타데이터가
+    없어 운용보수·분배금을 낼 수 없다. 빈칸이 아니라 왜 없는지가 정보다.
+    """
+    try:
+        from src.engine.instrument_selector import (
+            EXPOSURES,
+            UNAVAILABLE_CRITERIA,
+            WEIGHTS,
+            candidates,
+        )
+        rows = []
+        for name in sorted(EXPOSURES):
+            c = candidates(name, market="kr")
+            rows.append({
+                "exposure": name, "label": EXPOSURES[name]["label"],
+                "kr": EXPOSURES[name]["kr"], "us": EXPOSURES[name]["us"],
+                "primary": c.get("primary"), "alternatives": c.get("alternatives"),
+                "market_fallback": c.get("market_fallback"),
+                "note": EXPOSURES[name]["note"],
+            })
+        return _finite_payload({
+            "available": True, "exposures": rows,
+            "score_weights": dict(WEIGHTS),
+            "unavailable_criteria": dict(UNAVAILABLE_CRITERIA),
+            "note": ("KR 상장을 기본 구현으로 삼고 해외는 대안으로 함께 냅니다 — "
+                     "환노출과 과세 체계가 다르기 때문입니다"),
+        })
+    except Exception:
+        logger.exception("exposures 목록 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+@router.post("/implement")
+def implement_exposures_route(req: ImplementExposuresRequest):
+    """노출 비중 → 상품 비중 + 근거 (Brief §7.1/7.2).
+
+    ★구현하지 못한 노출의 비중은 재분배하지 않는다★ 재분배하면 사용자가 요청하지
+    않은 노출이 커진다 — `unplaced_pct` 로 남긴다.
+
+    ★상품마다 어느 노출에서 왔는지 남긴다★ 합만 맞추면 노출이 바뀌었을 때 무엇을
+    갈아야 하는지 알 수 없다.
+
+    알 수 없는 노출은 500 이 아니라 `unresolved` 에 사유와 함께 담긴다.
+    """
+    try:
+        from src.engine.instrument_selector import implement_exposures
+        out = implement_exposures(req.exposures, market=req.market,
+                                  portfolio_value=req.portfolio_value)
+        out["market"] = req.market
+        out["price_source"] = _finite_source()
+        return _finite_payload(out)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("implement 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def _finite_source() -> str:
+    from src.engine.instrument_selector import _source_label
+    return _source_label()

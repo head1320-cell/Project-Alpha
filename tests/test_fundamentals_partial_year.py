@@ -163,7 +163,8 @@ def test_attach_fundamentals_isolates_bad_code(monkeypatch):
             self.stock_code = code
     store = fsmod.FundamentalsStore.get_default()
     monkeypatch.setattr(store, "prime", lambda keys: None)
-    store._cache["ffl:AAA"] = (0, {})  # in-cache로 표시해 live-cap 무관하게 진입
+    # ★스코프된 키로 넣는다★ — 캐시는 mock/real 로 갈린다(`mock_base._scoped`).
+    store._cache[store._scoped("ffl:AAA")] = (0, {})  # in-cache 표시 → live-cap 무관
 
     def _gf(code, it=None):
         if code == "BBB":

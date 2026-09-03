@@ -31,7 +31,10 @@ mock 이 덮으면, 그 mock 은 "데이터가 이렇게 생겼다" 가 아니�
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+import os
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from src.data.pit_macro import ResearchUsage, derive_usage
@@ -88,6 +91,32 @@ _UNVERIFIED_NOTE = (
     "`verify_connection.py` 로 실호출을 확인한 뒤 사람이 verified_live 를 올립니다."
 )
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 공표 주기(cycle) — ★계열 속성이라 제공자에서 유도할 수 없다★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# `has_vintage` 는 제공자에서 유도한다(빈티지는 API 가 주느냐 마느냐의 문제다).
+# ★주기는 다르다★ — 같은 ECOS 안에서도 기준금리는 일별이고 GDP 는 분기다.
+# 그래서 계열마다 적어야 하는데, 그것이 정확히 **추측이 새어 들어오는 자리**다.
+#
+# 그래서 기본값을 `None`(미검증)으로 둔다. `verified_live` 와 같은 규율이다 —
+# 메타 API(`StatisticTableList`/`StatisticItemList`)가 말해 주기 전까지는 모른다고
+# 적는다. 이 저장소는 ECOS **항목코드**를 추측했다가 회사채를 국고채라고 부른
+# 전례가 있다(`1fa4fbd`). 주기를 "아마 월별" 로 채우면 같은 종류의 사고가 난다.
+ECOS_CYCLES = ("D", "M", "Q", "A")
+
+#: 수집 실패의 세 원인 — 예전에는 전부 `source="unavailable"` 한 문자열로 뭉개졌다.
+#: 처방이 서로 다른데 구분이 안 되면 사용자도 우리도 어디를 고쳐야 할지 모른다.
+REASON_NO_KEY = ("API 키가 설정되지 않았습니다 — 이 계열은 조회를 시도조차 "
+                 "하지 않았습니다(코드가 틀렸다는 뜻이 아닙니다).")
+REASON_EMPTY_RESPONSE = ("검증된 좌표인데 응답이 비었습니다 — 쿼터 소진·일시 "
+                         "장애·해당 구간 미공표 중 하나입니다.")
+#: ★덧붙이는 문장이다★ 위 사유를 **대체하지 않는다**. Phase 1 에서 `not_ingested`
+#: 가 "미검증" 을 지워 원인을 잃었던 실수를 반복하지 않는다.
+REASON_CYCLE_SUSPECT = ("★주기 불일치 의심★ 이 계열의 공표 주기는 {freq} 로 "
+                        "확인됐는데 수집기는 월별(M)로 조회합니다 — 통계표가 "
+                        "월별을 공표하지 않으면 응답은 항상 빕니다.")
+
 
 @dataclass(frozen=True)
 class SourceSpec:
@@ -100,6 +129,11 @@ class SourceSpec:
     verified_live: bool = False
     note: str = ""
     derived_from: tuple[str, ...] = ()   # 파생 지표면 원계열 키들
+    #: 공표 주기 (`ECOS_CYCLES`). ★None = 미검증★ — 추측해 채우지 않는다.
+    #: `has_vintage` 처럼 제공자에서 유도할 수 없다(계열마다 다르다). 메타 API 가
+    #: 유일한 권위이고, `verified_live` 와 같이 **사람이 확인한 뒤** 올린다.
+    #: ★이 값은 수집 주기를 바꾸지 않는다★ — 기록·대조 전용이다(트립와이어가 지킨다).
+    frequency: str | None = None
 
     @property
     def has_vintage(self) -> bool:
@@ -115,7 +149,7 @@ class SourceSpec:
 # ─────────────────────────────────────────────────────────────────────────────
 # 신규 소스 — 전부 verified_live=False 로 커밋된다.
 # ─────────────────────────────────────────────────────────────────────────────
-_SPECS: tuple[SourceSpec, ...] = (
+_RAW_SPECS: tuple[SourceSpec, ...] = (
     # ═══════════════════════════════════════════════════════════════════════
     # ECOS (한국은행) — P4-D1 에서 11 → 35 계열로 확장
     # ═══════════════════════════════════════════════════════════════════════
@@ -343,7 +377,75 @@ _SPECS: tuple[SourceSpec, ...] = (
         endpoint="/v1beta/trends:fetchTimeseries", unit="지수", note=_UNVERIFIED_NOTE),
 )
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 주기 증거 — ★사실과 출처를 붙여 다니게 한다★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# `frequency` 를 위 리터럴에 직접 적지 **않는다**. 그러면 `verified_live` 와 같은
+# 상태가 된다 — 플래그는 코드에 있는데 그것을 뒷받침하는 관측은 어디에도 없는 상태.
+# (실제로 그렇다: `verified_live=True` 인 ECOS 8계열의 근거를 추적하면 커밋 메시지
+#  주장 하나뿐이고, 검증 경로인 `verify_connection.py::check_ecos` 는 값의 범위만
+#  볼 뿐 주기도 TIME 문자열도 기록하지 않는다.)
+#
+# 대신 관측을 파일에 남기고 레지스트리가 그것을 **읽는다**. 항목마다 어떤 응답에서
+# 나왔는지(`evidence_source`)·언제 봤는지(`probed_at`)·확신도(`grade`)가 붙어 다니고,
+# diff 가 증거의 변화를 그대로 보여 준다. 채우는 것은 `scripts/verify_ecos_meta.py`
+# 이고 사람이 검토해 커밋한다.
+#: 환경변수로 덮어쓸 수 있다 — 다른 증거 파일(예: 로컬에서 갓 프로브한 것)을
+#: 운영 파일을 건드리지 않고 시험해 보기 위한 것이다. 없으면 체크인된 파일을 쓴다.
+FREQ_EVIDENCE_PATH = Path(
+    os.getenv("ECOS_FREQ_EVIDENCE_PATH")
+    or Path(__file__).resolve().parents[2] / "docs" / "specs" / "ecos-frequency-evidence.json")
+
+#: 등급 순서 — 낮은 확신이 조용히 사실이 되는 경로를 막는다.
+EVIDENCE_GRADES = ("E0", "E1", "E2", "E3")
+
+
+def _load_frequency_evidence() -> tuple[dict[str, dict], str]:
+    """(계열별 증거, 최소 적용 등급). ★없거나 깨져도 예외를 내지 않는다★
+
+    증거가 없는 것은 오류가 아니라 **정상 상태**다(지금이 그렇다). 여기서 터지면
+    레지스트리를 임포트하는 모든 경로가 함께 죽고, 그것은 "주기를 모른다" 보다
+    훨씬 나쁜 결과다.
+    """
+    try:
+        doc = json.loads(FREQ_EVIDENCE_PATH.read_text(encoding="utf-8"))
+        series = doc.get("series")
+        if not isinstance(series, dict):
+            return {}, "E2"
+        floor = doc.get("min_grade_to_apply")
+        return series, (floor if floor in EVIDENCE_GRADES else "E2")
+    except Exception:
+        return {}, "E2"
+
+
+def _apply_frequency_evidence(spec: SourceSpec) -> SourceSpec:
+    """증거가 **충분할 때만** 주기를 입힌다. 그 외에는 `None`(미검증) 그대로."""
+    ev = _FREQ_EVIDENCE.get(spec.key)
+    if not isinstance(ev, dict):
+        return spec
+    freq, grade = ev.get("frequency"), ev.get("grade")
+    if freq not in ECOS_CYCLES:
+        return spec                     # 어휘 밖의 값은 사실이 아니다
+    if grade not in EVIDENCE_GRADES:
+        return spec
+    if EVIDENCE_GRADES.index(grade) < EVIDENCE_GRADES.index(_FREQ_EVIDENCE_FLOOR):
+        return spec                     # ★확신이 모자라면 적용하지 않는다★
+    return replace(spec, frequency=freq)
+
+
+_FREQ_EVIDENCE, _FREQ_EVIDENCE_FLOOR = _load_frequency_evidence()
+#: ★`_BY_KEY` 는 반드시 `_SPECS` 에서 파생한다★ 따로 만들면 두 읽기 경로가
+#: 갈라진다 — `432f554` 에서 `_BY_KEY` 에만 쓰는 변이가 실제로 살아남았다.
+_SPECS: tuple[SourceSpec, ...] = tuple(_apply_frequency_evidence(s) for s in _RAW_SPECS)
 _BY_KEY = {s.key: s for s in _SPECS}
+
+
+def frequency_evidence_for(key: str) -> dict | None:
+    """계열의 주기 증거 원본(있으면). ★사실만이 아니라 출처도 조회할 수 있어야 한다★"""
+    ev = _FREQ_EVIDENCE.get(key)
+    return dict(ev) if isinstance(ev, dict) else None
 
 
 def all_specs() -> tuple[SourceSpec, ...]:
@@ -419,6 +521,35 @@ def revision_bias_note(key: str) -> str | None:
     return _REVISION_BIAS_NOTE.get(spec.provider)
 
 
+def not_ingested_keys() -> frozenset[str]:
+    """★엔드포인트는 있는데 **부르는 코드가 없는** 계열★ (감사 §1.1)
+
+    이 계열들은 키를 넣어도 값이 오지 않는다 — "키 미설정" 과 원인이 다르고
+    **고치는 사람이 다르다**(전자는 배선, 후자는 설정).
+
+    ★손으로 적지 않는다 — 수집 경로에서 **유도**한다★
+
+    예전에는 네 키를 적은 `frozenset` 이었다. 그 모양은 **비우는 것만으로 가드가
+    해제된다**(직전 커밋의 Z2 변이가 정확히 그렇게 살아남았다). 이제는
+    `krx_client.EXTRA_SERIES` 가 유일한 진실 공급원이라, 수집 경로를 지우면 이
+    선언이 **스스로 되돌아온다**.
+
+    ★호출 시점에 읽는다★ 모듈 적재 시점에 스냅샷을 뜨면 그 스냅샷이 두 번째
+    선언이 되어 다시 갈라진다.
+    """
+    from src.data.krx_client import EXTRA_SERIES
+    return frozenset(s.key for s in _SPECS
+                     if s.provider == KRX and s.key not in EXTRA_SERIES)
+
+_NOT_INGESTED_NOTE = (
+    "**수집 코드가 없습니다** — API 키를 설정해도 값이 오지 않습니다"
+    "(`krx_client` 의 확장 지표 조회를 부르는 파이프라인이 아직 없습니다)."
+)
+#: 미검증 사유 뒤에 덧붙일 때 쓰는 형태. ★`lstrip` 으로 접두사를 떼지 않는다★ —
+#: `str.lstrip` 은 **문자 집합**을 지우므로 접두사 제거로 쓰면 조용히 더 지운다.
+_NOT_INGESTED_SUFFIX = f" 그리고 {_NOT_INGESTED_NOTE}"
+
+
 def status(key: str, *, value: Any = None, as_of: str | None = None) -> dict[str, Any]:
     """MES `indicators[key]` 에 그대로 들어갈 상태 블록.
 
@@ -431,15 +562,28 @@ def status(key: str, *, value: Any = None, as_of: str | None = None) -> dict[str
     spec = _BY_KEY.get(key)
     if spec is None:
         return {"value": None, "available": False, "source": None,
-                "verified_live": False,
+                "verified_live": False, "not_ingested": False,
                 "reason": f"레지스트리에 없는 소스입니다: {key}"}
 
+    # ★`not_ingested` 를 모든 분기가 낸다★ 어떤 응답에는 있고 어떤 응답에는 없으면
+    # 소비자가 `.get()` 으로 읽다가 `None` 을 거짓으로 취급하게 된다.
+    uningested = key in not_ingested_keys()
     base = {"source": spec.provider, "label": spec.label,
-            "endpoint": spec.endpoint, "verified_live": spec.verified_live}
+            "endpoint": spec.endpoint, "verified_live": spec.verified_live,
+            "not_ingested": uningested}
 
+    # ★두 사유를 **더한다** — 대체하지 않는다★ "미검증" 과 "수집 코드 없음" 은
+    # 둘 다 참일 수 있고 고치는 사람이 다르다(전자는 검증, 후자는 배선).
+    # 처음에는 not_ingested 를 먼저 보고 reason 을 **갈아치웠는데**, 그러면
+    # "미검증인데 값을 냈다" 를 지키던 기존 가드에서 '미검증' 이라는 말이
+    # 사라진다(실측: `test_an_unverified_source_reports_no_value_even_if_one_is_passed`).
+    extra = _NOT_INGESTED_SUFFIX if uningested else ""
     if not spec.verified_live:
         return {**base, "value": None, "as_of": None, "available": False,
-                "reason": f"엔드포인트 미검증 — {spec.note}"}
+                "reason": f"엔드포인트 미검증 — {spec.note}{extra}"}
+    if uningested:
+        return {**base, "value": None, "as_of": None, "available": False,
+                "reason": _NOT_INGESTED_NOTE}
     if value is None:
         return {**base, "value": None, "as_of": None, "available": False,
                 "reason": "실호출에서 값을 받지 못했습니다."}
@@ -456,6 +600,27 @@ def indicator_block(values: dict[str, Any] | None = None,
     as_of = as_of or {}
     return {s.key: status(s.key, value=values.get(s.key), as_of=as_of.get(s.key))
             for s in _SPECS}
+
+
+def unavailable_reason_for(key: str, *, configured: bool) -> str:
+    """수집 실패의 **원인**을 말한다 — 세 가지가 뭉개지지 않게.
+
+    ★사유를 덧붙이지 덮어쓰지 않는다★ 주기 불일치 의심은 기존 사유를 **대체하지
+    않고** 뒤에 붙는다. 원인이 둘 다일 수 있고, 하나를 지우면 그 정보가 사라진다.
+
+    Args:
+        configured: 클라이언트가 키를 갖고 있었는가. 없으면 조회를 시도조차 하지
+            않았으므로 좌표가 맞는지 틀린지에 대해 말할 수 있는 것이 없다.
+    """
+    if not configured:
+        return REASON_NO_KEY
+    spec = _BY_KEY.get(key)
+    if spec is None:
+        return REASON_EMPTY_RESPONSE     # 레지스트리 밖 = 기존 지표
+    base = _UNVERIFIED_NOTE if not spec.verified_live else REASON_EMPTY_RESPONSE
+    if spec.frequency and spec.frequency != "M":
+        return base + " " + REASON_CYCLE_SUSPECT.format(freq=spec.frequency)
+    return base
 
 
 def new_source_mock_allowed(key: str) -> bool:

@@ -169,8 +169,18 @@ class FinancialStatement:
     roe:                 float | None = None
     roa:                 float | None = None
     debt_ratio:          float | None = None
-    dividend_yield:      float | None = None
+    dividend_yield:      float | None = None   # dps / **현재가** (compute_ratios 산출)
     payout_ratio:        float | None = None
+
+    # ── 공시값 (계산이 아니라 alotMatter 가 그대로 준 것) ──────────────
+    #: 그 사업연도에 **공시된** 현금배당수익률 — ★배당 시점의 주가 기준★
+    #:
+    #: `dividend_yield` 와 **다른 값이다**. 저쪽은 `dps / 오늘 주가` 라, 과거를
+    #: 분석하면 오늘 가격이 과거로 새어 든다. 이쪽은 공시 시점 기준이라 그 오염이
+    #: 없다 — 시점 분석에는 이 값이 맞다.
+    #:
+    #: ★그래서 덮지 않고 더한다★ 기존 소비자는 계속 `dividend_yield` 를 본다.
+    disclosed_dividend_yield: float | None = None
 
     # mock 폴백으로 만들어진 값인지 (실데이터 판별용). 실 DART 파싱 시 False 유지.
     is_mock:             bool = False
@@ -469,6 +479,11 @@ class DARTClient:
         _div = self.get_dividend_info(corp_code, bsns_year, reprt_code)
         if _div.get("dps") is not None:
             fs.dps = _div["dps"]
+        # ★공시 수익률은 받아 놓고 버리고 있었다★ `_parse_dividend_rows` 가 이미
+        # 파싱하는데 아무도 읽지 않았다. `dividend_yield`(dps/현재가)를 **덮지 않고**
+        # 별도 필드로 싣는다 — 둘은 기준 시점이 다른 값이다.
+        if _div.get("yield_pct") is not None:
+            fs.disclosed_dividend_yield = _div["yield_pct"]
 
         fs.compute_ratios()
         self._cache[cache_key] = fs

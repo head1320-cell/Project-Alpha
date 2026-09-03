@@ -137,6 +137,32 @@ EXTRA_ENDPOINTS: dict[str, str] = {
     "LENDING": "/sto/lend_bydd_trd",
 }
 
+# ── ★하루치 응답을 한 값으로 접는 규칙★ ──────────────────────────────────────
+# `get_extra` 는 `basDd` **하루치**이고 `parse_extra_rows` 의 결과에는 **종목
+# 식별자가 없다**. 그래서 하루에 온 행들을 한 값으로 접어야 하는데, 접는 방법이
+# 계열마다 다르고 **일부는 알 수 없다**:
+#
+#   · VKOSPI 는 지수 응답이라 **이름으로 한 행**을 고른다 — 의미가 알려져 있다.
+#   · 나머지 셋은 `/sto/*_bydd_trd` — **전종목 일별** 명명 규약이다. 하루에 여러
+#     행이 오면 시장 한 값으로 접는 정의(합계·평균·잔고)가 필요한데, ★엔드포인트
+#     자체가 미검증★ 이라 그것을 우리가 지어내는 것이 된다. 그래서 **거부**한다.
+#
+# ★이 표가 `source_registry.not_ingested_keys()` 의 유일한 진실 공급원이다★ —
+# 여기서 계열을 지우면 레지스트리가 "수집 코드가 없습니다" 로 스스로 되돌아간다.
+# 손으로 적은 목록이었다면 비우는 것만으로 그 가드가 해제됐다.
+COLLAPSE_SINGLE = "single"      # 이름으로 고른 한 행 — 정의가 알려져 있다
+COLLAPSE_UNKNOWN = "unknown"    # 여러 행이면 ★거부★ — 집계 정의 미확정
+
+#: 레지스트리 키 → (엔드포인트 종류, 접기 규칙, 이름 필터 `(필드, 값)` | None)
+#: ★이름 문자열도 미검증이다★ 틀리면 0행이 오고, 그것은 "값이 없다" 가 아니라
+#: "이름이 틀렸다" 는 뜻이다 — `verify_connection.py::check_krx` 가 확정한다.
+EXTRA_SERIES: dict[str, tuple[str, str, tuple[str, str] | None]] = {
+    "VKOSPI": ("VKOSPI", COLLAPSE_SINGLE, ("IDX_NM", "코스피 200 변동성지수")),
+    "KR_MARGIN_BALANCE": ("MARGIN", COLLAPSE_UNKNOWN, None),
+    "KR_SHORT_VOLUME": ("SHORT", COLLAPSE_UNKNOWN, None),
+    "KR_LENDING_BALANCE": ("LENDING", COLLAPSE_UNKNOWN, None),
+}
+
 # 지표별 값 필드 후보 (앞에서부터 먼저 잡히는 것을 쓴다)
 _VALUE_FIELDS: dict[str, tuple[str, ...]] = {
     "VKOSPI": ("CLSPRC_IDX", "CLSPRC", "IDX_CLSPRC"),

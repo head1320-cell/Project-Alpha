@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import secrets
 import time
 from typing import Any
@@ -28,6 +27,16 @@ _TABLE = "research_runs"
 _inited = False
 # Case 사슬 열(M1-S)이 실제로 붙었는지 — 못 붙으면 그 열 없이 동작한다.
 _has_case_col = False
+# 검정력 열(A5)이 실제로 붙었는지 — 같은 규율이다.
+_has_power_cols = False
+
+#: ★연구 실행의 검정력을 **질의 가능한 열**로 승격한다 (A5)★
+#: JSON 안에만 있으면 "검정력 0.8 을 넘긴 런만" 같은 질문에 테이블이 답하지
+#: 못하고 모든 행을 읽어 파싱해야 한다. 열은 **요약**이고 곡선·bracket·사유 같은
+#: 원본은 `outputs.power_block` 에 그대로 남는다.
+_POWER_COLS = [("mde", "DOUBLE PRECISION"), ("power", "DOUBLE PRECISION"),
+               ("n_eff", "DOUBLE PRECISION"), ("target_power", "DOUBLE PRECISION"),
+               ("seed", "BIGINT"), ("cost_bps", "DOUBLE PRECISION")]
 
 # run 종류 (자유 문자열이지만 표준 값을 상수로 — 프론트와 계약)
 KIND_ANALYZE = "allocation_analyze"
@@ -42,7 +51,7 @@ def _engine():
 
 
 def _ensure_table(engine) -> None:
-    global _inited, _has_case_col
+    global _inited, _has_case_col, _has_power_cols
     if _inited:
         return
     from sqlalchemy import text
@@ -70,11 +79,20 @@ def _ensure_table(engine) -> None:
     from src.data.schema_add_columns import add_columns
     _has_case_col = add_columns(engine, _TABLE, [("case_id", "VARCHAR(40)")],
                                 label="research_runs.case_id")
+
+    # ── 검정력 일급 필드 (A5) ───────────────────────────────────────────────
+    # ★붙었다고 믿지 않는다★ `add_columns` 가 SELECT 로 확인해서 돌려준다.
+    # 못 붙으면 그 열 없이 동작한다 — 있는 척하면 조회가 통째로 깨진다.
+    _has_power_cols = add_columns(engine, _TABLE, _POWER_COLS,
+                                  label="research_runs.power")
     _inited = True
 
 
-def code_version() -> str:
-    return os.getenv("GIT_SHA") or os.getenv("APP_VERSION") or "dev"
+# ★단일 출처★ 이 함수는 세 저장소에 **바이트 동일하게 복사**돼 있었다. 복사본이
+# 넷이면 언젠가 하나는 갈라진다 — 실제로 `backtest_runs` 가 `APP_VERSION` 폴백을
+# 잃은 채 갈라져 있었다. 여기서는 **재수출**한다(삭제하지 않는다) — 이 이름을
+# 빌려 쓰는 호출자가 있어 공개 표면을 유지해야 한다.
+from src.engine.research_context import code_version  # noqa: F401  (재수출)
 
 
 def _new_run_id() -> str:
@@ -84,9 +102,19 @@ def _new_run_id() -> str:
 def record_run(kind: str, inputs: dict[str, Any], outputs: dict[str, Any],
                snapshot: dict[str, Any] | None = None, name: str | None = None,
                parent_run_id: str | None = None, note: str | None = None,
-               case_id: str | None = None) -> str | None:
-    """연구 실행을 영속화. 성공 시 run_id, DB 미가용 시 None (호출자가 정직 보고)."""
+               case_id: str | None = None, power_block: dict[str, Any] | None = None,
+               seed: int | None = None, cost_bps: float | None = None) -> str | None:
+    """연구 실행을 영속화. 성공 시 run_id, DB 미가용 시 None (호출자가 정직 보고).
+
+    `power_block` 은 `research_power.power_report` 의 산출을 그대로 받는다 (A5).
+    ★열은 요약이고 원본은 남는다★ — `mde`·`power`·`n_eff`·`target_power` 는
+    질의 가능한 열로 올리고, 곡선·bracket·사유는 `outputs.power_block` 에 둔다.
+    ★안 잰 검정력은 `None` 이다★ 0 으로 채우면 "검정력이 0 이었다" 는 하지 않은
+    진술이 된다.
+    """
     rid = _new_run_id()
+    if power_block is not None:
+        outputs = {**(outputs or {}), "power_block": power_block}
     try:
         engine = _engine()
         _ensure_table(engine)
@@ -99,6 +127,17 @@ def record_run(kind: str, inputs: dict[str, Any], outputs: dict[str, Any],
             cols += ", case_id"
             vals += ", :case"
             extra = {"case": case_id}
+        if _has_power_cols:
+            blk = power_block or {}
+            cols += ", " + ", ".join(c for c, _ in _POWER_COLS)
+            vals += ", " + ", ".join(f":{c}" for c, _ in _POWER_COLS)
+            extra.update({
+                "mde": blk.get("mde"), "power": blk.get("power"),
+                "n_eff": blk.get("n_eff"),
+                "target_power": blk.get("target_power"),
+                "seed": (None if seed is None else int(seed)),
+                "cost_bps": (None if cost_bps is None else float(cost_bps)),
+            })
         with engine.begin() as c:
             c.execute(text(f"INSERT INTO {_TABLE} ({cols}) VALUES ({vals})"), {
                 **extra,
@@ -119,9 +158,11 @@ _BASE_COL_LIST = ["run_id", "created_at", "kind", "name", "inputs", "outputs",
 
 
 def _col_list() -> list[str]:
-    """★위치 인덱스를 손으로 세지 않는다 (M1-S)★ `case_id` 가 붙었는지 여부로 인덱스가
-    밀리므로 이름 목록에서 파생시킨다."""
-    return _BASE_COL_LIST + (["case_id"] if _has_case_col else [])
+    """★위치 인덱스를 손으로 세지 않는다 (M1-S)★ `case_id`·검정력 열이 붙었는지
+    여부로 인덱스가 밀리므로 이름 목록에서 파생시킨다."""
+    return (_BASE_COL_LIST
+            + (["case_id"] if _has_case_col else [])
+            + ([c for c, _ in _POWER_COLS] if _has_power_cols else []))
 
 
 def _row_to_dict(row, full: bool) -> dict[str, Any]:
@@ -140,6 +181,9 @@ def _row_to_dict(row, full: bool) -> dict[str, Any]:
         "parent_run_id": g.get("parent_run_id"), "note": g.get("note"),
         # Case 사슬 — 열이 없으면 None(있는 척하지 않는다)
         "case_id": g.get("case_id"),
+        # ★검정력 — 열이 없거나 안 쟀으면 None. 0 이 아니다★
+        # "검정력을 안 쟀다" 와 "검정력이 0 이었다" 는 완전히 다른 진술이다.
+        **{c: g.get(c) for c, _ in _POWER_COLS},
     }
     d["snapshot"] = _j(g.get("snapshot"), {})
     if full:

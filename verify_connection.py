@@ -473,15 +473,28 @@ def check_new_sources():
     else:
         from datetime import datetime, timedelta
 
-        from src.data.krx_client import EXTRA_ENDPOINTS, KRXClient
+        from src.data.krx_client import (
+            COLLAPSE_UNKNOWN,
+            EXTRA_ENDPOINTS,
+            EXTRA_SERIES,
+            KRXClient,
+        )
         cli = KRXClient()
         d = (datetime.now() - timedelta(days=3)).strftime("%Y%m%d")
+        # ★여기서 확정되는 것이 하나 더 있다★ `krx_extras` 는 하루에 여러 행이 오는
+        # 계열의 **집계 정의를 모른다**고 판정하고 값을 내지 않는다. 실응답의 행 수를
+        # 보면 그 정의를 확정할 수 있으므로, 행 수와 함께 무엇을 결정해야 하는지 낸다.
+        rule_by_kind = {kind: rule for kind, rule, _n in EXTRA_SERIES.values()}
         for kind in EXTRA_ENDPOINTS:
             rows = cli.get_extra(kind, d)
-            if rows:
-                ok(f"{kind}: {len(rows)}행 파싱 ({EXTRA_ENDPOINTS[kind]}) → verified_live 후보")
-            else:
+            if not rows:
                 fail(f"{kind}: 0행 — 경로 또는 필드명({EXTRA_ENDPOINTS[kind]})을 점검하세요")
+                continue
+            ok(f"{kind}: {len(rows)}행 파싱 ({EXTRA_ENDPOINTS[kind]}) → verified_live 후보")
+            if rule_by_kind.get(kind) == COLLAPSE_UNKNOWN and len(rows) > 1:
+                warn(f"{kind}: 하루 {len(rows)}행 — 시장 한 값으로 접는 집계 정의"
+                     f"(합계·평균·잔고)를 정해 `EXTRA_SERIES` 에 반영하세요. "
+                     f"정하기 전까지 `krx_extras` 는 값을 내지 않습니다.")
 
     # 검색 트렌드 (둘 중 하나면 됨)
     from src.data.google_trends import GoogleTrendsClient

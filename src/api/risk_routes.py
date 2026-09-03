@@ -78,8 +78,10 @@ def calculate_portfolio_var(req: PortfolioVaRRequest):
     try:
         loader  = MarketDataLoader(req.tickers[0], req.start_date, req.end_date)
         df      = loader.fetch_multi_returns(req.tickers)
-        weights = np.array(req.weights)
-        weights = weights / weights.sum()
+        weights = np.array(req.weights, dtype=float)
+        # ★gross 로 나눈다★ net 은 달러중립(Σw≈0)에서 0 이라 VaR 이 nan/inf 가 된다.
+        # 롱온리에서는 `Σ|w| ≡ Σw` 이므로 값까지 그대로다.
+        weights = weights / (np.abs(weights).sum() or 1.0)
 
         model = PortfolioRiskModel(req.confidence_level, req.use_ewma)
         var_amount, port_vol = model.calculate_portfolio_var(df, weights, req.portfolio_value)
@@ -141,8 +143,10 @@ def mc_portfolio_var(req: MCPortfolioVaRRequest):
     try:
         loader  = MarketDataLoader(req.tickers[0], req.start_date, req.end_date)
         df      = loader.fetch_multi_returns(req.tickers)
-        weights = np.array(req.weights)
-        weights = weights / weights.sum()
+        weights = np.array(req.weights, dtype=float)
+        # ★gross 로 나눈다★ net 은 달러중립(Σw≈0)에서 0 이라 VaR 이 nan/inf 가 된다.
+        # 롱온리에서는 `Σ|w| ≡ Σw` 이므로 값까지 그대로다.
+        weights = weights / (np.abs(weights).sum() or 1.0)
 
         engine = MonteCarloVaR(
             n_simulations=req.n_simulations,

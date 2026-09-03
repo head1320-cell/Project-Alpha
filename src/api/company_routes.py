@@ -186,3 +186,136 @@ def company_thesis_check(code: str, req: ThesisCheckRequest):
     except Exception:
         logger.exception("thesis-check 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+class ThesisBacktestRequest(ThesisCheckRequest):
+    """논지 + 백테스트 설정. ★유니버스 인자는 없다★ 논지는 기업 하나에 대한 것이다."""
+    start_date: str = Field("2023-01-01", max_length=32)
+    end_date: str = Field("2024-12-31", max_length=32)
+    initial_capital: float = Field(100_000_000, gt=0)
+    snapshot_id: str | None = Field(None, max_length=40)
+    case_id: str | None = Field(None, max_length=40)
+    record_run: bool = True
+
+
+_THESIS_RUN_KIND = "thesis_backtest"
+
+_SUMMARY_KEYS = ("total_return_pct", "cagr", "max_drawdown_pct", "sharpe_ratio",
+                 "win_rate", "num_trades", "volatility_pct", "sortino_ratio")
+
+
+@router.post("/{code}/thesis-backtest")
+def company_thesis_backtest(code: str, req: ThesisBacktestRequest):
+    """★논지가 그대로 백테스트가 된다★ 있는 다리에 올린다 (P3-1).
+
+    kill 조건 → `sell_conditions` → `_screen_to_backtest_core` → `rr_*` 기록.
+    실행 경로를 새로 짓지 않으므로 리스크 룰·체결 모델이 우회되지 않는다.
+
+    ★두 가지를 숨기지 않는다★
+      · **룩어헤드** — tier 2 kill 조건이 있으면 `allow_snapshot_fundamentals` 를
+        자동으로 켠다. 끄면 그 조건이 조용히 무시되어(실측 0/130) 사용자가 논지를
+        검증했다고 믿게 되는데, 그것이 가장 나쁜 결과다.
+      · **퇴화** — 스냅샷 상수 조건은 창 전체에서 항상 참이거나 항상 거짓이라
+        거래 0건 또는 순수 바이앤홀드로 떨어진다. `diagnostics.degenerate` 가
+        그것을 말한다. **거래 0건은 "손실 없음" 이 아니라 "검증되지 않음" 이다.**
+
+    검증 실패·리프트 불가는 500 이 아니라 200 + `{available:false, reason}` 이고,
+    그 경우 **백테스트도 기록도 하지 않는다.**
+    """
+    try:
+        from src.engine.company_thesis import validate_thesis
+        from src.engine.thesis_backtest import build_backtest_request, diagnose_signals
+
+        thesis = {k: getattr(req, k) for k in
+                  ("claim", "evidence", "catalysts", "kill_conditions")}
+        checked = validate_thesis(thesis, code=code)
+        built = build_backtest_request(thesis, code=code,
+                                       start_date=req.start_date,
+                                       end_date=req.end_date,
+                                       initial_capital=req.initial_capital)
+        if not built["available"]:
+            # 돌릴 것이 없다 — 빈 실행을 성공으로 보고하지 않고 기록도 남기지 않는다.
+            return {"available": False, "reason": built["reason"],
+                    "thesis": checked, "lift": built["lift"], "run_id": None}
+
+        from src.api.screener_routes import ScreenToBacktestRequest, _screen_to_backtest_core
+        result = _screen_to_backtest_core(
+            ScreenToBacktestRequest(**built["request"]))
+
+        diagnostics = diagnose_signals(
+            built["request"]["sell_conditions"], code=code,
+            start_date=req.start_date, end_date=req.end_date,
+            allow_snapshot=built["lookahead"])
+
+        out = {
+            "available": not result.get("error"),
+            "reason": result.get("message") if result.get("error") else None,
+            "code": str(code),
+            "thesis": checked,
+            "lift": built["lift"],
+            "entry": built["entry"],
+            "lookahead": built["lookahead"],
+            "auto_enabled_opt_in": built["auto_enabled_opt_in"],
+            "lookahead_reason": built["lookahead_reason"],
+            "diagnostics": diagnostics,
+            "backtest": result.get("backtest"),
+            "screened_count": result.get("screened_count"),
+        }
+        out["run_id"] = _record_thesis_run(req, code, thesis, built,
+                                           diagnostics, out)
+        out["recorded"] = out["run_id"] is not None
+        if req.case_id:
+            from src.data.research_cases import advance_pointer
+            out["case_bound"] = advance_pointer(req.case_id, "run", out["run_id"])
+        from src.api.json_safe import finite_payload
+        return finite_payload(out)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("thesis-backtest 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def _record_thesis_run(req, code: str, thesis: dict, built: dict,
+                       diagnostics: dict, out: dict) -> str | None:
+    """`rr_*` 사슬에 남긴다 — ★입력을 되살릴 수 있게 적는다★ (alpha_routes 관례).
+
+    논지 원문·tier 분류·리프트된 조건·자동 opt-in 여부까지 남겨야 "그때 무엇을
+    믿었고 무엇으로 검증했는가" 를 나중에 되짚을 수 있다.
+    """
+    if not req.record_run:
+        return None
+    stats = ((out.get("backtest") or {}).get("statistics") or {})
+    try:
+        from src.data.research_runs import record_run
+        return record_run(
+            _THESIS_RUN_KIND,
+            inputs={
+                "code": str(code), "thesis": thesis,
+                "kill_conditions": built["lift"]["counts"],
+                "lifted_conditions": built["request"]["sell_conditions"],
+                "excluded_conditions": built["lift"]["excluded"],
+                "entry_condition": built["entry"]["condition"],
+                "start_date": req.start_date, "end_date": req.end_date,
+                "initial_capital": req.initial_capital,
+                "snapshot_id": req.snapshot_id,
+                # ★자동으로 켰다는 사실 자체가 입력의 일부다★
+                "allow_snapshot_fundamentals": built["lookahead"],
+                "auto_enabled_opt_in": built["auto_enabled_opt_in"],
+            },
+            outputs={
+                "statistics": {k: stats[k] for k in _SUMMARY_KEYS if k in stats},
+                "backtest_id": (out.get("backtest") or {}).get("id"),
+                "diagnostics": {k: diagnostics.get(k) for k in
+                                ("degenerate", "reason", "buy_bars", "sell_bars",
+                                 "total_bars")},
+                "lookahead": built["lookahead"],
+            },
+            snapshot={"screened_count": out.get("screened_count"),
+                      "lookahead_reason": built["lookahead_reason"]},
+            name=f"논지 백테스트 — {code}",
+            case_id=req.case_id,
+        )
+    except Exception as e:  # noqa: BLE001 — 기록 실패가 실행을 무효화하지 않는다
+        logger.warning(f"논지 백테스트 기록 실패: {e}")
+        return None

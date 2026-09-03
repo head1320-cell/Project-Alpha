@@ -13,6 +13,7 @@ import os
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
 import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
 from src.engine.neutralize import (  # noqa: E402
     beta_neutralize,
@@ -128,3 +129,102 @@ def test_sleeve_analytics_corr_cluster_tail():
     assert r["clusters"]["S_A"] == r["clusters"]["S_B"]  # 같은 군집
     assert r["tail_dependency"]["basis"] == "real"
     assert set(r["risk_contribution_pct"]) == {"S_A", "S_B", "S_C"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 리스크 예산 순환 반복 — ★감쇠가 없으면 발산한다★
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _uncorrelated_cov(vols_annual):
+    """무상관 공분산 — ★이 경우 답이 닫혀 있다★ `w ∝ 1/σ`."""
+    import numpy as np
+    sd = np.asarray(vols_annual, dtype=float) / np.sqrt(252.0)
+    return np.diag(sd ** 2)
+
+
+def test_risk_parity_matches_the_closed_form_for_uncorrelated_sleeves():
+    """★해석해와 맞춘다★ 동어반복이 아니다 — 무상관이면 리스크 패리티가
+    `w ∝ 1/σ` 로 닫혀 있어서, 구현과 무관한 정답이 존재한다."""
+    import numpy as np
+
+    from src.engine.sleeve_combine import _risk_budget_weights
+    vols = [0.10, 0.20, 0.40]
+    w = _risk_budget_weights(_uncorrelated_cov(vols), np.ones(3))
+    inv = 1.0 / np.asarray(vols)
+    assert np.allclose(w, inv / inv.sum(), atol=1e-6), w
+
+
+def test_the_undamped_step_collapses_risk_parity_into_equal_weight():
+    """★짝 — 감쇠가 실제로 필요하다는 것을 값으로 보인다★
+
+    감쇠 1.0(예전 동작)은 같은 입력에서 해석해로 가지 못한다. 이 짝이 없으면
+    위 테스트는 "감쇠와 무관하게 통과" 일 수도 있다.
+
+    ★어떻게 틀리는지가 더 말해 준다★ 무상관 2슬리브(연변동성 21.2%·29.0%)에서
+    감쇠 없는 반복은 정확히 **[0.5, 0.5]** 로 간다 — 한쪽이 37% 더 변동성이 큰데
+    그것을 무시한 **균등가중**이다. 리스크 패리티가 존재 이유를 잃는 지점이다.
+    (상관을 넣으면 [0.846, 0.154] 로 반대편으로 튄다 — 진동의 착지점이 입력에
+    따라 달라질 뿐, 어느 쪽도 해석해가 아니다.)
+    """
+    import numpy as np
+
+    from src.engine.sleeve_combine import _risk_budget_weights
+    cov = _uncorrelated_cov([0.2123, 0.2902])
+    damped = _risk_budget_weights(cov, np.ones(2))
+    undamped = _risk_budget_weights(cov, np.ones(2), damping=1.0)
+    assert damped[0] == pytest.approx(0.577512, abs=1e-5)
+    assert undamped[0] == pytest.approx(0.5, abs=1e-6), \
+        "감쇠 없는 반복이 균등가중으로 붕괴하지 않았다 — 짝이 성립하지 않는다"
+    assert damped[0] != pytest.approx(undamped[0], abs=1e-3)
+
+
+def _correlated_cov(vols_annual, rho):
+    import numpy as np
+    sd = np.asarray(vols_annual, dtype=float) / np.sqrt(252.0)
+    c = np.diag(sd ** 2)
+    c[0, 1] = c[1, 0] = rho * sd[0] * sd[1]
+    return c
+
+
+def test_the_weight_floor_prevents_an_absorbing_zero():
+    """★0 은 곱셈 갱신의 흡수 상태다★ 하한이 없으면 돌아올 수 없다.
+
+    감쇠가 켜진 기본 경로에서는 반복이 수렴해서 하한에 닿지 않는다 — 그래서
+    하한만 되돌리는 변이는 기본 경로에서 **green** 이었다(equivalent mutant).
+    하지만 `damping` 은 인자이고, 감쇠를 끄면 하한이 결과를 가른다:
+
+        하한 1e-12 → [0.846378, 0.153622]
+        하한 0.0   → [1.0, 0.0]          ← 한쪽이 사라지고 못 돌아온다
+
+    그래서 하한이 실제로 무엇을 막는지 **감쇠를 끈 상태에서** 잰다.
+    """
+    import numpy as np
+
+    from src.engine.sleeve_combine import _risk_budget_weights
+    w = _risk_budget_weights(_correlated_cov([0.2123, 0.2902], -0.0582),
+                             np.ones(2), damping=1.0)
+    assert all(v > 0.0 for v in w), f"슬리브가 흡수 상태 0 으로 사라졌다: {w}"
+    assert w[0] == pytest.approx(0.846378, abs=1e-5)
+
+
+def test_no_sleeve_is_driven_to_exactly_zero():
+    """★0 은 곱셈 갱신에서 흡수 상태다★ 한 번 0 이면 영원히 0 이다 —
+    그래서 리스크 **패리티**가 `[0, 1]` 을 내고 있었다."""
+    import numpy as np
+
+    from src.engine.sleeve_combine import _risk_budget_weights
+    w = _risk_budget_weights(_uncorrelated_cov([0.2123, 0.2902]), np.ones(2))
+    assert all(v > 1e-6 for v in w), f"슬리브가 0 으로 붕괴했다: {w}"
+
+
+def test_risk_budget_respects_an_unequal_budget():
+    """★짝★ 등예산만 맞추면 `1/σ` 를 하드코딩해도 통과한다.
+    예산을 2:1 로 주면 기여도 2:1 이어야 한다."""
+    import numpy as np
+
+    from src.engine.sleeve_combine import _risk_budget_weights, _risk_contributions
+    cov = _uncorrelated_cov([0.15, 0.30])
+    w = _risk_budget_weights(cov, np.array([2.0, 1.0]))
+    rc = _risk_contributions(w, cov)
+    share = rc / rc.sum()
+    assert share[0] == pytest.approx(2 / 3, abs=1e-4), share

@@ -48,8 +48,32 @@ def _cov_local(S: np.ndarray) -> np.ndarray:
         return np.atleast_2d(c) + np.eye(S.shape[1]) * 1e-8
 
 
-def _risk_budget_weights(cov: np.ndarray, budget: np.ndarray, iters: int = 200) -> np.ndarray:
-    """리스크 예산 배분 — RC_i ∝ budget_i (등예산이면 리스크 패리티). 순환 반복."""
+#: 순환 반복의 감쇠 지수. ★1.0(전 스텝)은 발산한다★ — 아래 주석의 실측 참조.
+RISK_BUDGET_DAMPING = 0.5
+#: 비중 하한. `0` 으로 자르면 한 번 0 이 된 자산이 **영원히 돌아오지 못한다**.
+_W_FLOOR = 1e-12
+
+
+def _risk_budget_weights(cov: np.ndarray, budget: np.ndarray, iters: int = 200,
+                         damping: float = RISK_BUDGET_DAMPING) -> np.ndarray:
+    """리스크 예산 배분 — RC_i ∝ budget_i (등예산이면 리스크 패리티). 순환 반복.
+
+    ★감쇠가 없으면 발산한다 (실측)★ 예전에는 `w ← w·(b/rc_share)` 로 **전 스텝**을
+    밟았다. 2슬리브(연변동성 21.2%·29.0%, ρ=−0.06)에서 기여 비율이 진동하며 커졌다:
+
+        0.340 → 0.679 → 0.301 → 0.721 → 0.255 → 0.771 → …
+
+    결국 한쪽이 `np.clip(w, 0, None)` 으로 **정확히 0** 이 되고, 0 은 곱셈 갱신에서
+    영원히 0 이라 돌아오지 못한다. 결과가 리스크 **패리티**인데 `[0, 1]` 이었다.
+
+    ★감쇠 0.5 는 해석해와 일치한다★ 무상관이면 답이 `w ∝ 1/σ` 로 닫혀 있다:
+
+        2자산 → [0.577512, 0.422488]   (해석해와 소수 6자리까지 동일)
+        3자산 → [0.571429, 0.285714, 0.142857]
+
+    감쇠 1.0 은 같은 입력에서 [0.846, 0.154] 를 낸다 — 이 함수의 회귀 가드가
+    그 두 값을 가른다.
+    """
     b = budget / budget.sum()
     w = b.copy()
     for _ in range(iters):
@@ -59,9 +83,9 @@ def _risk_budget_weights(cov: np.ndarray, budget: np.ndarray, iters: int = 200) 
         mrc = cov @ w / sigma
         rc = w * mrc
         rc_sum = rc.sum() or 1.0
-        # 목표 예산 대비 기여 비율로 조정
-        w = w * (b / (rc / rc_sum + 1e-12))
-        w = np.clip(w, 0, None)
+        # 목표 예산 대비 기여 비율로 조정 — ★부분 스텝★
+        w = w * np.power(b / (rc / rc_sum + 1e-12), damping)
+        w = np.clip(w, _W_FLOOR, None)
         w = w / w.sum()
     return w
 
@@ -124,12 +148,15 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
 
     # 2단계: 종목 레벨 집계 (슬리브 배분 × 슬리브 내 종목비중)
     combined: dict[str, float] = {}
+    # ★슬리브 안의 숏을 버리지 않는다★ 이 모듈에는 PairSpreadRequest(long/short)가
+    # 있다 — 페어 트레이딩용으로 설계돼 있으면서 결합 단계에서 숏을 지우고 있었다.
+    # 슬리브 내 상대비중도 집계도 gross 기준이다(net 은 페어 슬리브에서 0).
     for j, s in enumerate(sleeves):
         w = s.get("weights", {})
-        wsum = sum(max(v, 0.0) for v in w.values()) or 1.0
+        wsum = sum(abs(float(v)) for v in w.values()) or 1.0
         for c, v in w.items():
-            combined[c] = combined.get(c, 0.0) + alloc[j] * max(v, 0.0) / wsum
-    csum = sum(combined.values()) or 1.0
+            combined[c] = combined.get(c, 0.0) + alloc[j] * float(v) / wsum
+    csum = sum(abs(v) for v in combined.values()) or 1.0
     combined = {c: round(v / csum * 100, 4) for c, v in combined.items()}
 
     return {
@@ -162,9 +189,11 @@ def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | N
     # 꼬리 의존: 하위 10% 동시초과 빈도 / 0.1 (>1이면 꼬리 동반 하락 경향)
     tail = _tail_dependency(S)
     # 리스크 기여 (weights 주어지면 그 배분, 아니면 등가중)
-    w = np.array([max(weights.get(names[j], 0.0), 0.0) for j in range(n)]) if weights else np.ones(n) / n
-    if w.sum() > 0:
-        w = w / w.sum()
+    # 슬리브 배분도 같은 규칙 — 사용자가 준 값이므로 부호가 미지수다.
+    w = (np.array([float(weights.get(names[j], 0.0)) for j in range(n)])
+         if weights else np.ones(n) / n)
+    if np.abs(w).sum() > 0:
+        w = w / np.abs(w).sum()
     cov = _cov_local(S)
     rc = _risk_contributions(w, cov)
 

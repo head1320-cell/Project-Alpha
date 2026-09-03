@@ -82,21 +82,12 @@ def _pickers(views: list[dict] | None, names: list[str]):
     자산은 버리고, 남은 자산에 균등가중을 주고, 대상이 없거나 크기가 0 이면 조용히
     버리지 않고 스킵 목록으로 보고한다.
     """
-    idx = {t: i for i, t in enumerate(names)}
-    out: list[tuple[np.ndarray, float, float, str]] = []
-    skipped: list[dict[str, Any]] = []
-    for v in views or []:
-        assets = [a for a in (v.get("assets") or []) if a in idx]
-        mag = abs(float(v.get("magnitude_pct") or 0.0)) / 100.0
-        if not assets or mag == 0.0:
-            skipped.append({"view": v, "reason": "대상 자산 없음 또는 크기 0"})
-            continue
-        d = 1.0 if float(v.get("direction", 1)) >= 0 else -1.0
-        row = np.zeros(len(names))
-        for a in assets:
-            row[idx[a]] = 1.0 / len(assets)
-        out.append((row, d, mag, " · ".join(assets)))
-    return out, skipped
+    # ★`build_user_views` 와 **같은 함수**를 쓴다★ 예전에는 "같은 규칙" 이라고
+    # 주석으로 선언하고 손으로 두 번 구현돼 있었다 — 그래서 한쪽만 고치면 같은 뷰가
+    # BL 과 EP 에서 다른 P 행이 되는 상태였다(T3 §5).
+    from src.engine.view_rows import build_view_rows
+    built, skipped = build_view_rows(views, names)
+    return [vr.as_tuple() for vr in built], skipped
 
 
 def ep_posterior_mu(views: list[dict] | None, names: list[str],

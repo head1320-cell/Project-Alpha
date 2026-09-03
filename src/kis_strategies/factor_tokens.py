@@ -386,10 +386,32 @@ REASON_CONSENSUS = "컨센서스/유료 데이터 — 미지원"
 REASON_SHORT = "공매도·신용 데이터 미연동"
 # ── Butler 택소노미 이식: 5개 무료 API로 당장 불가/미연동 사유 ──
 REASON_BIZREPORT = "DART 사업보고서 항목(직원·임원·수주·수출) — 미연동(다음 단계)"
-REASON_DIVDETAIL = "배당·자사주 상세 — DART 배당공시(alotMatter) 미연동(다음 단계)"
+#: ★예전 `REASON_DIVDETAIL` 을 사실로 쪼갠 것들★
+#:
+#: 하나의 문장이 11개 토큰을 덮고 있었고, 그 문장은 **거짓이었다** —
+#: *"DART 배당공시(alotMatter) 미연동"*. `alotMatter` 는 배선돼 있다
+#: (`dart_client.get_dividend_info` → `fs.dps` · `fundamentals_store._real_dividend`).
+#: 그리고 그 11개의 실제 원인은 **다섯 가지로 서로 달랐다**(실측).
+REASON_DIVDATE = ("배당 기준일 미제공 — alotMatter 는 사업연도 집계라 배당락일이 "
+                  "없습니다. 일별 총수익 계열에는 배당 결정 공시가 필요합니다")
+REASON_TREASURY = ("자기주식 취득·처분 공시 미연동 — alotMatter 에는 자사주 항목이 "
+                   "없습니다")
+REASON_DIVPERIOD = ("분기 보고서 다중 조회 필요 — alotMatter 를 reprt_code "
+                    "11012·11013·11014 로 각각 받아야 횟수를 셀 수 있습니다")
 REASON_OWNERSHIP = "지분율(외국인/대주주/소액주주) — 미연동(다음 단계)"
 REASON_IR = "IR·공시 일정(실적발표·설명회) — DART 공시 미연동(다음 단계)"
 REASON_DERIVE = "원천 데이터는 있으나 파생 미구현 — 대체 팩터 권장"
+#: ★실값 × 합성비율 = 합성★ 직원수는 DART 에서 실제로 받지만(`_real_business`),
+#: 성별 비율은 실데이터 경로가 없어 합성이다. 곱하면 결과도 합성이므로 조건식이
+#: 날조된 숫자로 종목을 거른다. 원인이 "미연동" 이 아니라 **오염된 의존**이라
+#: `REASON_BIZREPORT` 로는 사용자에게 거짓을 말하게 된다.
+REASON_SYNTHETIC_INPUT = ("합성 입력에 의존 — 직원수는 실값이지만 성별 비율이 "
+                          "합성이라 결과가 실데이터가 아닙니다")
+#: ★추측한 좌표로 값을 내지 않는다★ `source_registry` 가 이 계열의 통계표·항목코드를
+#: 보증하지 않는다. 예전에는 코드를 적어 넣고 조용히 값을 냈다 — 그중 하나는
+#: 회사채를 국고채라고 불렀다.
+REASON_UNVERIFIED_CODE = ("ECOS 항목코드 미확인 — 레지스트리가 좌표를 보증하지 "
+                          "않습니다. 추측한 코드로 값을 내지 않습니다")
 
 UNSUPPORTED_REASONS: dict[str, str] = {
     "후행스팬": REASON_LOOKAHEAD,
@@ -405,16 +427,24 @@ UNSUPPORTED_REASONS: dict[str, str] = {
     # ── Butler 사업정보 (DART 사업보고서 — 다음 단계) ──
     **{t: REASON_BIZREPORT for t in (
         "수주잔고", "수주잔고증가율", "수출품목", "수출비중",
-        "직원수", "남자직원수", "여자직원수", "여자직원비율", "직원수증가율",
-        "직원급여총액", "직원급여총액증가율", "평균급여", "남자평균급여", "여자평균급여",
+        "직원수", "여자직원비율", "직원수증가율",
+        "직원급여총액증가율", "평균급여", "남자평균급여", "여자평균급여",
         "평균급여증가율", "남자평균급여증가율", "여자평균급여증가율",
         "1인당매출액", "1인당영업이익", "임원수", "임원평균급여", "임원급여총액증가율",
         "대주주지분율", "소액주주수", "소액주주지분율", "우선주발행", "장내매수", "장내매도")},
-    # ── Butler 주주환원 상세 (DART 배당공시 — 다음 단계) ──
-    **{t: REASON_DIVDETAIL for t in (
-        "주당배당금", "배당횟수", "배당시점배당수익률", "FCF배당성향",
-        "배당금총액증가율", "주당배당금증가율", "자사주보유비율", "자사주소각횟수", "자사주소각비율",
-        "투자자주가수익률", "총수익률")},
+    # ── 합성 입력에 의존 — `extended_factors_store` 가 `REAL_CAPABLE` 에서 내렸다 ──
+    **{t: REASON_SYNTHETIC_INPUT for t in ("남자직원수", "여자직원수")},
+    # ── Butler 주주환원 상세 — ★사유를 실제 원인별로 쪼갠다★
+    # 제거된 것: 주당배당금·FCF배당성향·투자자주가수익률·총수익률 — 넷 다 **이미
+    # supported** 라 항목이 죽어 있었다(`token_support` 가 걸러서 안 보였을 뿐).
+    # 그 팩터가 언젠가 mock 으로 내려가면 사용자에게 거짓 사유가 뜬다.
+    # 제거된 것: 배당시점배당수익률 — `alotMatter.yield_pct` 를 이어서 열었다.
+    **{t: REASON_TREASURY for t in (
+        "자사주보유비율", "자사주소각횟수", "자사주소각비율")},
+    "배당횟수": REASON_DIVPERIOD,
+    "배당금총액증가율": REASON_DIVDATE,
+    # 이미 supported 인 "배당성장률"(`dps_growth_yoy`)과 같은 양의 다른 이름이다.
+    "주당배당금증가율": REASON_DERIVE,
     # ── Butler 지분율 (외국인 누적 지분 — 다음 단계) ──
     "외국인지분율": REASON_OWNERSHIP,
     # ── Butler 컨센서스 (FnGuide/DataGuide 유료 — 영구 미지원) ──
@@ -424,11 +454,11 @@ UNSUPPORTED_REASONS: dict[str, str] = {
     # ── Butler IR (DART 공시 일정 — 다음 단계) ──
     **{t: REASON_IR for t in ("실적발표일", "기업설명회횟수")},
     # ── Butler 재무/펀더멘탈 파생 미구현 (원천은 DART 보유 — 다음 단계) ──
-    **{t: REASON_DERIVE for t in (
-        "유형자산비중", "무형자산비중", "시총대비순금융자산비율", "자본지출(CAPEX)",
-        "매출원가율", "매출총이익성장율", "재고자산증가율", "매출채권증가율", "매입채무증가율",
-        "매출채권회전율", "재고자산회전율", "현금회전일수", "POR", "주당순자산증가율",
-        "거래대금증가율", "주가변동률1년")},
+    # ★여기 있던 14개는 `_derive` 가 실파생을 붙여 이미 supported 였다★ —
+    # `token_support()` 가 `k not in supported` 로 걸러 UI 에는 안 보였지만, 그
+    # 팩터가 mock 으로 내려가는 순간 "파생 미구현" 이라는 거짓 사유가 뜬다.
+    # 남은 둘은 진짜 미구현이다(`_derive` 에 식이 없다).
+    **{t: REASON_DERIVE for t in ("무형자산비중", "매입채무증가율")},
 }
 # Tier1/2 실연동된 팩터만 미지원 목록에서 제거 — 지원으로 승격. (자사주보유비율은 DART 자기주식
 # 공시 미연동=합성값이라 제외 → 미지원 유지. 실데이터 원칙: 합성 팩터는 픽커에서 비활성.)
@@ -635,18 +665,66 @@ def market_tokens() -> list[str]:
 
 ECOS_BASE_URL = "https://ecos.bok.or.kr/api"
 
-# 토큰 → (통계표코드, 항목코드) — 731Y001 환율(매매기준율), 817Y002 시장금리(일별)
-ECOS_TOKENS: dict[str, tuple[str, str]] = {
-    "US달러환율": ("731Y001", "0000001"),
-    "엔환율": ("731Y001", "0000002"),      # 원/100엔
-    "국고채(1년)": ("817Y002", "010190000"),
-    "국고채(2년)": ("817Y002", "010195000"),
-    "국고채(3년)": ("817Y002", "010200000"),
-    "국고채(5년)": ("817Y002", "010210000"),
-    "국고채(10년)": ("817Y002", "010210001"),
-    "국고채(20년)": ("817Y002", "010220000"),
-    "국고채(30년)": ("817Y002", "010230000"),
+#: DSL 토큰명 → `source_registry` 의 key. ★여기에 통계표·항목코드를 적지 않는다★
+#:
+#: 예전에는 이 파일이 코드를 직접 들고 있었고, `source_registry` 와 대조해 보니
+#: **갈라져 있었다**(실측):
+#:
+#:     "국고채(3년)" → 817Y002/010200000  = 레지스트리의 ★회사채 3년(AA-)★
+#:     "국고채(2년)" → 817Y002/010195000  = 레지스트리의 ★국고채 3년★(verified_live)
+#:     "국고채(10년)"→ 817Y002/010210001  = 레지스트리에 없음(검증본은 817Y003/010210000)
+#:
+#: ★`국고채(3년)` 을 쓰는 전략이 AA- 회사채 수익률을 받고 있었다★ — 국채와 회사채는
+#: 신용스프레드만큼 다르고 그 차이는 조용하다. 레지스트리는 `verified_live` /
+#: 미검증 표시로 **검증 상태를 기록**하는데 이 파일에는 그런 표시가 하나도 없었다.
+#: 그래서 "레지스트리가 옳다" 가 아니라 **좌표는 검증 상태를 가진 곳에서 온다**.
+_ECOS_TOKEN_KEYS: dict[str, str] = {
+    "US달러환율": "USD_KRW",
+    "국고채(1년)": "KR_1Y",
+    "국고채(3년)": "KR_3Y",
+    "국고채(10년)": "KR_10Y",
 }
+
+
+def _ecos_token_coordinates() -> dict[str, tuple[str, str]]:
+    """토큰 → (통계표코드, 항목코드). ★레지스트리에서 파생한다★
+
+    레지스트리에서 spec 이 사라지면 토큰도 함께 사라진다 — 갈라질 수 없다.
+    """
+    from src.data.source_registry import get_spec
+    out: dict[str, tuple[str, str]] = {}
+    for name, key in _ECOS_TOKEN_KEYS.items():
+        spec = get_spec(key)
+        if spec is None:
+            continue
+        stat, _, item = spec.endpoint.partition("/")
+        if stat and item:
+            out[name] = (stat, item)
+    return out
+
+
+# 토큰 → (통계표코드, 항목코드) — 레지스트리 파생(위 `_ecos_token_coordinates`)
+ECOS_TOKENS: dict[str, tuple[str, str]] = _ecos_token_coordinates()
+
+#: ★레지스트리가 좌표를 보증하지 않는 토큰★ — 목록에는 남기되 값을 내지 않는다.
+#:
+#: 레지스트리는 국고 5년·20년 코드를 **일부러 비워 두고** 이유를 적어 뒀다 —
+#: *"817Y002 안에서 그 둘을 가리키는 항목코드를 자신 있게 적을 수 없었고, 코드를
+#: 지어내서 계열을 하나 더 세는 것은 확장이 아니라 그럴듯한 빈칸을 만드는 일이다."*
+#: 이 파일은 정확히 그 일을 하고 있었다.
+#:
+#: ★`국고채(2년)` 이 왜 여기 있나★ 그것이 쓰던 `010195000` 은 레지스트리의
+#: **검증된 3년물**이다. 2년물 좌표는 레지스트리에 없다.
+ECOS_UNVERIFIED_TOKENS: tuple[str, ...] = (
+    "엔환율", "국고채(2년)", "국고채(5년)", "국고채(20년)", "국고채(30년)",
+)
+
+# ★기존 정직성 관례에 태운다★ 새 장치를 만들지 않는다 — 이 모듈은 이미
+# `UNSUPPORTED_REASONS` 를 "평가 불가 토큰의 사유(UI 배지·정직성)" 로 쓰고 있다.
+# 토큰 어휘는 남으므로 저장된 전략이 깨지지 않고, `ECOS_TOKENS` 에 없으니
+# `resolve_macro_token` 이 자연히 `None` 을 낸다.
+UNSUPPORTED_REASONS.update(
+    {t: REASON_UNVERIFIED_CODE for t in ECOS_UNVERIFIED_TOKENS})
 
 _ecos_cache: dict[str, pd.Series | None] = {}
 
@@ -655,44 +733,71 @@ def parse_ecos_rows(payload: dict) -> pd.Series | None:
     """ECOS StatisticSearch 응답 → 날짜 인덱스 시리즈 (테스트 가능한 순수 파서)."""
     try:
         rows = (payload or {}).get("StatisticSearch", {}).get("row", []) or []
-        dates, vals = [], []
-        for r in rows:
-            t, v = str(r.get("TIME", "")).strip(), r.get("DATA_VALUE")
-            if len(t) != 8 or v in (None, ""):
-                continue
-            try:
-                vals.append(float(v))
-                dates.append(pd.Timestamp(f"{t[:4]}-{t[4:6]}-{t[6:]}"))
-            except (ValueError, TypeError):
-                continue
-        if not dates:
-            return None
-        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+        # ★날짜·값 규칙은 `ecos_rows_to_series` 하나에 있다★ 여기서 다시 쓰면 갈라진다.
+        return ecos_rows_to_series([r.get("TIME") for r in rows],
+                                   [r.get("DATA_VALUE") for r in rows])
     except Exception:
         return None
 
 
+#: 일별 조회 상한. ★1000(수집기 기본값)이면 20년 커브가 4년으로 잘린다★
+#: 일별 2005~현재 ≈ 5,300행이라 넉넉히 잡는다.
+ECOS_DAILY_LIMIT = 50000
+
+#: 일별 시계열 시작일 — ECOS 가 제공하는 구간에 맞춘 관례값.
+ECOS_DAILY_START = "20050101"
+
+
+def ecos_rows_to_series(timestamps, values) -> pd.Series | None:
+    """`(TIME, DATA_VALUE)` 쌍 → 날짜 인덱스 시리즈. ★날짜 규칙의 단일 출처★
+
+    `parse_ecos_rows`(원시 payload 파서)와 `_ecos_series`(클라이언트 경로)가
+    **같은 규칙**을 쓰게 한다. 둘이 각자 날짜를 파싱하면 언젠가 갈라진다.
+    """
+    dates, vals = [], []
+    for t, v in zip(timestamps or [], values or [], strict=False):
+        t = str(t or "").strip()
+        if len(t) != 8 or v in (None, ""):
+            continue
+        try:
+            vals.append(float(v))
+            dates.append(pd.Timestamp(f"{t[:4]}-{t[4:6]}-{t[6:]}"))
+        except (ValueError, TypeError):
+            continue
+    if not dates:
+        return None
+    return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+
+
 def _ecos_series(token: str) -> pd.Series | None:
-    """ECOS 일별 시계열 (캐시). 키 없음·실패 시 None."""
-    import os
+    """ECOS 일별 시계열 (캐시). 키 없음·실패 시 None.
+
+    ★수집기의 `BokClient` 를 통과한다★ 예전에는 이 함수가 URL 을 직접 만들고
+    `httpx` 로 불렀다. 그러면 셋이 갈라진다 — 스로틀(수집기는 0.7초/회, 여기는
+    없었다)·키 검증(`len>10` vs `if key`)·HTTP 라이브러리. 분당 한도가 있는 API 에
+    스로틀 없이 붙는 경로가 하나 더 있는 상태였다.
+    """
+    from datetime import datetime
+
+    from src.services.macro_collector import BokClient
+
     if token in _ecos_cache:
         return _ecos_cache[token]
-    key = os.getenv("BOK_API_KEY", "")
     spec = ECOS_TOKENS.get(token)
     s = None
-    if key and spec:
-        try:
-            from datetime import datetime
-
-            import httpx
-            stat, item = spec
-            end = datetime.now().strftime("%Y%m%d")
-            url = (f"{ECOS_BASE_URL}/StatisticSearch/{key}/json/kr/1/50000/"
-                   f"{stat}/D/20050101/{end}/{item}")
-            r = httpx.get(url, timeout=15)
-            s = parse_ecos_rows(r.json())
-        except Exception:
-            s = None
+    if spec:
+        client = BokClient()
+        if client.is_configured:
+            try:
+                stat, item = spec
+                ts, vals = client.fetch_series(
+                    stat, item, start=ECOS_DAILY_START,
+                    end=datetime.now().strftime("%Y%m%d"), period="D",
+                    # ★수집기 기본값 1000 을 쓰면 조용히 잘린다★
+                    limit=ECOS_DAILY_LIMIT)
+                s = ecos_rows_to_series(ts, vals)
+            except Exception:
+                s = None
     _ecos_cache[token] = s
     return s
 
@@ -705,45 +810,71 @@ FRED_TOKENS: dict[str, str] = {f"US국채({n}년)": f"DGS{n}" for n in (1, 2, 3,
 _fred_cache: dict[str, pd.Series | None] = {}
 
 
+#: 일별 시계열 시작일 — 기존 동작을 그대로 옮긴다.
+FRED_DAILY_START = "2005-01-01"
+
+
+def fred_rows_to_series(dates, values) -> pd.Series | None:
+    """`(date, value)` 쌍 → 날짜 인덱스 시리즈. ★결측·날짜 규칙의 단일 출처★
+
+    FRED 는 결측을 `"."` 으로 준다 — 숫자로 읽으면 `ValueError` 지만 명시적으로
+    거른다. `parse_fred_rows`(원시 payload)와 `_fred_series`(클라이언트 경로)가
+    **같은 규칙**을 쓰게 한다. 각자 파싱하면 언젠가 갈라진다.
+    """
+    out_d, out_v = [], []
+    for d, v in zip(dates or [], values or [], strict=False):
+        if v in (None, "", "."):
+            continue
+        try:
+            out_v.append(float(v))
+            out_d.append(pd.Timestamp(d))
+        except (ValueError, TypeError):
+            continue
+    if not out_d:
+        return None
+    return pd.Series(out_v, index=pd.DatetimeIndex(out_d)).sort_index()
+
+
 def parse_fred_rows(payload: dict) -> pd.Series | None:
     """FRED observations 응답 → 날짜 인덱스 시리즈 (결측 '.' 제외)."""
     try:
         rows = (payload or {}).get("observations", []) or []
-        dates, vals = [], []
-        for r in rows:
-            v = r.get("value")
-            if v in (None, "", "."):
-                continue
-            try:
-                vals.append(float(v))
-                dates.append(pd.Timestamp(r.get("date")))
-            except (ValueError, TypeError):
-                continue
-        if not dates:
-            return None
-        return pd.Series(vals, index=pd.DatetimeIndex(dates)).sort_index()
+        # ★규칙은 `fred_rows_to_series` 하나에 있다★ 여기서 다시 쓰면 갈라진다.
+        return fred_rows_to_series([r.get("date") for r in rows],
+                                   [r.get("value") for r in rows])
     except Exception:
         return None
 
 
 def _fred_series(token: str) -> pd.Series | None:
-    """FRED 일별 시계열 (캐시). 키 없음·실패 시 None."""
-    import os
+    """FRED 일별 시계열 (캐시). 키 없음·실패 시 None.
+
+    ★수집기의 `FredClient` 를 통과한다★ 예전에는 이 함수가 URL 을 직접 만들고
+    `httpx` 로 불렀다. 그러면 셋이 갈라진다 — 스로틀(수집기는 0.5초/회, 여기는
+    **없었다**)·키 검증(`len>10` vs `if key`)·HTTP 라이브러리. 분당 한도가 있는
+    API 에 스로틀 없이 붙는 경로가 하나 더 있던 상태였다.
+
+    ★`frequency=None` 이 필수다★ 클라이언트 기본값은 `"m"`(대시보드용 월별)인데,
+    이 토큰은 **일별 종목 봉**에 정렬된다. 월별로 받으면 ffill 되어 그럴듯해
+    보이지만 해상도가 사라진다.
+    """
+    from src.services.macro_collector import FredClient
+
     if token in _fred_cache:
         return _fred_cache[token]
-    key = os.getenv("FRED_API_KEY", "")
     series_id = FRED_TOKENS.get(token)
     s = None
-    if key and series_id:
-        try:
-            import httpx
-            r = httpx.get(FRED_BASE_URL, params={
-                "series_id": series_id, "api_key": key, "file_type": "json",
-                "observation_start": "2005-01-01",
-            }, timeout=15)
-            s = parse_fred_rows(r.json())
-        except Exception:
-            s = None
+    if series_id:
+        client = FredClient()
+        if client.is_configured:
+            try:
+                dates, values = client.fetch_series(
+                    series_id, start=FRED_DAILY_START,
+                    # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
+                    frequency=None)
+                s = fred_rows_to_series(dates, values)
+            except Exception:
+                s = None
     _fred_cache[token] = s
     return s
 

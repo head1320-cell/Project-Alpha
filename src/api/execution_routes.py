@@ -30,6 +30,7 @@ class ExecPlanRequest(BaseModel):
     # 서버가 대조해서 다르면 거부한다 — 감사 기록과 실제 주문이 갈라지면 안 된다.
     tpv_id: str | None = None
     target_weights: dict[str, float] = Field(default_factory=dict)    # %
+    weight_unit: str | None = Field(None, max_length=16)   # percent|fraction
     portfolio_value: float = Field(1e8, gt=0)
     restricted: list[str] = Field(default_factory=list)
     limits: dict = Field(default_factory=dict)                        # turnover_cap_pct 등
@@ -86,6 +87,13 @@ def _resolve_target(req: ExecPlanRequest) -> tuple[dict[str, float] | None, dict
 
 
 def _compute(req: ExecPlanRequest, target: dict[str, float]) -> tuple[dict, dict]:
+    # ★주문을 만들기 전에 단위를 확정한다★ 여기가 돈이 되는 경계다 —
+    # 분수를 퍼센트로 읽으면 체결 금액이 100배 작아지고 경고가 없다(실측).
+    from src.engine.portfolio_weights import unit_reason
+    for w in (req.current_weights, target):
+        reason = unit_reason(w, req.weight_unit)
+        if reason:
+            raise HTTPException(422, reason)
     from src.engine.execution_plan import build_plan, pre_trade_checks
     plan = build_plan(req.current_weights, target, req.portfolio_value,
                       restricted=set(req.restricted))
@@ -109,6 +117,8 @@ def execution_plan_preview(req: ExecPlanRequest):
         plan, pretrade = _compute(req, target or {})
         return {"error": False, "blocked": False, "tpv_id": req.tpv_id,
                 "plan": plan, "pretrade": pretrade}
+    except HTTPException:
+        raise                      # 422(단위 미확정 등)를 500 으로 삼키지 않는다
     except Exception:
         logger.exception("execution-plan 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -129,6 +139,8 @@ def execution_plan_save(req: SavePlanRequest):
             return {"saved": False, "plan_id": None, "message": "DB 미가용 — 저장되지 않음.",
                     "plan": plan, "pretrade": pretrade}
         return {"saved": True, "plan_id": pid, "plan": plan, "pretrade": pretrade}
+    except HTTPException:
+        raise                      # ★미리보기만 막고 저장을 열어 두면 게이트가 아니다★
     except Exception:
         logger.exception("execution-plan/save 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

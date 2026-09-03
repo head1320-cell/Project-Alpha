@@ -168,7 +168,9 @@ def test_the_bok_loop_binds_each_stat_code_to_its_own_lambda():
     col.bok.fetch_series = lambda s, i: captured.append((s, i)) or ([], [])  # type: ignore[assignment]
 
     # `_collect_one` 을 가로채 fetcher 를 **모아 두었다가 나중에** 부른다.
-    def defer(key, name, unit, fetcher, use_cache, source):
+    # ★무관한 시그니처 추가에 깨지지 않게 `**_kw` 를 받는다★ 이 대역의 이빨은
+    # 지연 호출 검사이지 인자 목록이 아니다(`as_of` 추가 때 실제로 깨졌다).
+    def defer(key, name, unit, fetcher, use_cache, source, **_kw):
         from src.services.macro_collector import MacroSeries
         deferred.append(fetcher)
         return MacroSeries(indicator=key, name=name, unit=unit,

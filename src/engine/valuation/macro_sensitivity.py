@@ -63,7 +63,11 @@ _NO_CHANNEL = (
      "reason": ("같은 이유 — 환율에서 EPS 로 가는 채널이 없습니다. 수출입 비중별 "
                 "민감도를 쓰려면 매출 구성 데이터가 필요하고 이 저장소에 없습니다.")},
     {"shock": "Oil +30%", "target": "EBIT",
-     "reason": "유가 계열이 매크로 수집기에 없습니다(61계열 확인). 관측 자체가 없습니다.",
+     "reason": ("같은 이유 — 유가에서 EBIT 로 가는 채널이 없습니다. 원가 구조(유가 "
+                "투입 비중) 데이터가 있어야 하고 이 저장소에 없습니다."),
+     # ★앞 판본은 '유가 계열이 수집기에 없습니다' 라고 적었는데 **사실이 아니었다**★
+     # `DCOILWTICO` 가 수집기에 있고 월별 59개 관측을 낸다(실측). 데이터가 없는 것이
+     # 아니라 **모델에 채널이 없는 것**이다 — 사유가 틀리면 없는 사유보다 나쁘다.
      },
 )
 
@@ -207,12 +211,22 @@ def macro_sensitivity_for(code: str, current_price: float) -> dict:
 # 절대 섞지 않는다: 저쪽은 모델의 항등식이고 이쪽은 60개월짜리 표본의 추정이다.
 
 
-def _monthly_returns(code: str, months: int = 60):
-    """월말 종가 기준 월별 수익률. ★창의 끝은 오늘★ (결함 B 와 같은 함정)."""
-    from datetime import datetime, timedelta
+def _monthly_returns(code: str, months: int = 60, as_of: str | None = None):
+    """월말 종가 기준 월별 수익률.
+
+    ★창의 끝은 `as_of`, 없으면 오늘★ 예전에는 **항상 오늘**이었고 독스트링이
+    그것을 "결함 B 와 같은 함정" 이라고 적어 두고 있었다. 그 함정이 실제로
+    작동하고 있었다 — `rebalance-decision` 이 `as_of=2024-06-30` 을 받아 가격은
+    잘라 놓고 팩터 계층은 오늘까지의 데이터로 계산한 뒤, 응답의
+    `research_context` 에는 `information_cutoff: 2024-06-30` 이라고 적었다.
+    **지키지 않는 절단일을 선언한 것**이다(벤치마크 §5 의 hidden date).
+
+    `as_of=None` 은 예전과 같이 오늘이다 — 기존 호출자의 동작은 바뀌지 않는다.
+    """
+    from datetime import date, datetime, timedelta
 
     from src.data.ohlcv_loader import load_ohlcv_unified
-    end = datetime.now().date()
+    end = date.fromisoformat(as_of) if as_of else datetime.now().date()
     start = end - timedelta(days=int(months * 31.5) + 60)
     d = load_ohlcv_unified(code, start.isoformat(), end.isoformat(), prefer="auto")
     if d is None or d.empty:

@@ -18,12 +18,62 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
 
+#: mock 시계열의 고정 기점. ★모든 창이 같은 지점에서 출발한다★ — 이것이
+#: "같은 날짜 = 같은 값" 을 만든다. 역사 시나리오(hist_2008_gfc)보다 앞이어야 한다.
+_MOCK_EPOCH = datetime(2000, 1, 3)
+
+
+@lru_cache(maxsize=4096)
+def _mock_walk(ticker: str, through_ordinal: int) -> tuple:
+    """기점부터 `through` 까지의 전체 경로 — ★창과 무관하게 한 벌만 존재한다★
+
+    ★이 함수가 있는 이유 (실측)★ 예전 구현은 요청 **창의 시작점**에서 난수 보행을
+    시작했다. 시드는 종목명에만 의존했으므로 같은 난수열이 다른 날짜에 붙었다:
+
+        2024-06-03 종가 = 40,311.88   (2022 시작 창에서 조회)
+        2024-06-03 종가 = 33,623.99   (2023 시작 창에서 조회)   ← 같은 날, 20% 차이
+
+    가격이 **날짜가 아니라 창 안의 위치**에 붙어 있었다는 뜻이다. 그래서 `as_of`
+    를 과거로 옮겨도 마지막 종가가 똑같이 나왔고 — mock 이 기본값인 개발·테스트
+    환경에서 **모든 PIT/as_of 단언이 무의미**했다(alpha-lab 의 as_of 짝 단언이
+    이것을 잡고 있었다).
+
+    기점부터 만들고 잘라 쓰면 앞부분이 항상 같으므로 창이 달라도 값이 같다.
+    `through` 를 연 단위로 올려 캐시가 맞도록 한다 — 하루 차이로 재생성하지 않는다.
+    """
+    import random
+    seed = sum(ord(c) for c in ticker)
+    rng = random.Random(seed)
+    _code = ticker.replace(".KS", "").replace(".KQ", "").upper()
+    is_index = _code in ("KOSPI", "KOSDAQ", "^KS11", "^KQ11", "KS11", "KQ11", "KS200")
+    if is_index:
+        base, drift, vol = 2500, rng.uniform(0.0001, 0.0004), 0.008
+    else:
+        base, drift, vol = 10000 + (seed % 90) * 1000, rng.uniform(-0.0005, 0.0012), 0.018
+
+    through = datetime.fromordinal(through_ordinal)
+    dates, closes = [], []
+    px, cur = base, _MOCK_EPOCH
+    while cur <= through:
+        if cur.weekday() < 5:
+            px = max(100, px * (1 + drift + rng.gauss(0, vol)))
+            dates.append(cur)
+            closes.append(px)
+        cur += timedelta(days=1)
+    return tuple(dates), tuple(closes), seed
+
+
 def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
-    """deterministic mock OHLCV DataFrame (date index)."""
+    """deterministic mock OHLCV DataFrame (date index).
+
+    ★같은 날짜는 어느 창에서 조회해도 같은 값이다★ — 이것이 없으면 `as_of` 가
+    결과를 바꾸는지 잴 수 없고, PIT 단언이 전부 통과하면서 아무것도 지키지 않는다.
+    """
     import random
 
     import pandas as pd
@@ -33,41 +83,31 @@ def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
     except Exception:
         end = datetime.now()
         start = end - timedelta(days=365)
-    max(30, (end - start).days)
+    if end < _MOCK_EPOCH:
+        return pd.DataFrame({"open": [], "high": [], "low": [], "close": [], "volume": []},
+                            index=pd.DatetimeIndex([], name="date"))
 
-    seed = sum(ord(c) for c in ticker)
-    rng = random.Random(seed)
-    # 지수(KOSPI 등)는 시장 전체 — 개별주보다 변동성 낮고 완만한 우상향
-    _code = ticker.replace(".KS", "").replace(".KQ", "").upper()
-    is_index = _code in ("KOSPI", "KOSDAQ", "^KS11", "^KQ11", "KS11", "KQ11", "KS200")
-    if is_index:
-        base = 2500  # 코스피 지수 수준
-        drift = rng.uniform(0.0001, 0.0004)   # 완만한 상승
-        vol = 0.008                            # 일변동성 ~0.8% (개별주의 절반)
-    else:
-        base = 10000 + (seed % 90) * 1000
-        drift = rng.uniform(-0.0005, 0.0012)
-        vol = 0.018
+    # 연말까지 만들어 두고 잘라 쓴다 — 접두부가 같으므로 어떤 창에서든 값이 같다.
+    horizon = datetime(end.year, 12, 31)
+    all_dates, all_closes, seed = _mock_walk(ticker, horizon.toordinal())
+    keep = [i for i, d in enumerate(all_dates) if start <= d <= end]
+    dates = [all_dates[i] for i in keep]
+    closes = [all_closes[i] for i in keep]
 
-    dates, closes = [], []
-    px = base
-    cur = start
-    while cur <= end:
-        if cur.weekday() < 5:  # 평일만
-            px = max(100, px * (1 + drift + rng.gauss(0, vol)))
-            dates.append(cur)
-            closes.append(px)
-        cur += timedelta(days=1)
-
-    rows = {"open": [], "high": [], "low": [], "close": closes, "volume": []}
+    # OHLC·거래량의 잡음은 **날짜에서** 뽑는다 — 위치에서 뽑으면 종가와 같은
+    # 결함이 되살아난다(창이 달라지면 같은 날의 시가·거래량이 달라진다).
+    def _noise(d: datetime) -> random.Random:
+        return random.Random((seed << 20) ^ d.toordinal())
+    rows = {"open": [], "high": [], "low": [], "close": list(closes), "volume": []}
     base_vol = 100000 + (seed % 50) * 50000
-    prev = closes[0] if closes else base
-    for px in closes:
-        spread = px * rng.uniform(0.005, 0.02)
-        rows["open"].append(px - spread * rng.uniform(-0.3, 0.3))
-        rows["high"].append(px + spread * rng.uniform(0.3, 1.0))
-        rows["low"].append(px - spread * rng.uniform(0.3, 1.0))
-        rows["volume"].append(base_vol * (1 + abs(px / prev - 1) * 8) * rng.uniform(0.6, 1.5))
+    prev = closes[0] if closes else 10000.0
+    for d, px in zip(dates, closes):
+        r = _noise(d)
+        spread = px * r.uniform(0.005, 0.02)
+        rows["open"].append(px - spread * r.uniform(-0.3, 0.3))
+        rows["high"].append(px + spread * r.uniform(0.3, 1.0))
+        rows["low"].append(px - spread * r.uniform(0.3, 1.0))
+        rows["volume"].append(base_vol * (1 + abs(px / prev - 1) * 8) * r.uniform(0.6, 1.5))
         prev = px
 
     df = pd.DataFrame(rows, index=pd.DatetimeIndex(dates, name="date"))
@@ -123,6 +163,47 @@ def _db_ohlcv_df(ticker: str, start_date: str, end_date: str):
         return pd.DataFrame()
 
 
+def _tag(df, code: str, source: str | None = None) -> None:
+    """`df.attrs` 에 **이 가격이 무엇인지** 를 붙인다 — `source`·`adj_status`·`price_basis`.
+
+    ★`attrs` 는 **편의**이지 권위가 아니다★ pandas 연산에서 `attrs` 보존은
+    보장되지 않는다(슬라이스·merge·groupby 에서 사라질 수 있다). 게이트를 세울
+    때는 `price_quality.price_usage()` / `assert_prices_backtest_eligible()` 을
+    **직접 호출**할 것. 이 태그는 `attrs["source"]` 와 같은 성격의 힌트다.
+
+    ★그리고 이 함수는 숫자를 바꾸지 않는다★ 컬럼을 더하지도 빼지도 않는다 —
+    전환(`close → adj_close`)은 별개 결정이다.
+
+    ★이전 판의 이 독스트링은 *"`close` 는 그대로 원주가"* 라고 적었다 — 틀렸다.★
+    `close` 가 원주가인 것은 **KRX 가 적재한 행**뿐이고, KIS 경로는 수정주가로
+    요청해 받은 값을 같은 컬럼에 넣는다(`kis_client.DAILY_ADJ_PRC_FLAG`). 즉
+    `close` 는 하나의 값이 아니다 — 행별 정의는 `daily_prices.price_basis` 에 있고
+    `price_quality.adj_close_coverage()` 의 `basis_consistency` 가 혼합을 보고한다.
+
+    ★그래서 `price_basis` 를 함께 싣는다★ `adj_status` 하나로는 **혼합**을 말할 수
+    없다. `close` 가 원주가 행과 수정주가 행을 함께 담고 있으면 그 계열로 계산한
+    수익률은 정의가 섞인 수익률이고, 조용히 넘기면 아무도 모른다.
+
+    ★판정이 터져도 가격은 돌려준다★ 태그는 편의이지 게이트가 아니므로 실패를
+    df 를 죽이는 데 쓰지 않는다 — 아는 것만 남기고 나머지는 비운다.
+    """
+    if df is None:
+        return
+    if source is not None:
+        df.attrs["source"] = source
+    try:
+        from src.data.price_quality import adj_status_of
+        df.attrs["adj_status"] = adj_status_of(code)
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"adj_status 태깅 실패({code}): {e}")
+    try:
+        from src.data.price_quality import adj_close_coverage
+        df.attrs["price_basis"] = (adj_close_coverage(tickers=[code])
+                                   or {}).get("basis_consistency")
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"price_basis 태깅 실패({code}): {e}")
+
+
 def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
                        prefer: str = "auto"):
     """
@@ -139,18 +220,31 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
     import pandas as pd
     code = ticker.replace(".KS", "").replace(".KQ", "")
 
+    # ★명시 prefer 도 태깅한다★ 예전에는 `auto` 만, 그것도 DB/KIS 가 성공했을
+    # 때만 했다. 경로마다 태깅이 다르면 그 비대칭 자체가 함정이다 — `prefer="db"`
+    # 를 쓰는 소비자가 basis 라벨 없이 혼합된 `close` 를 받는다.
     if prefer == "mock":
-        return _mock_ohlcv_df(code, start_date, end_date)
+        df = _mock_ohlcv_df(code, start_date, end_date)
+        _tag(df, code, "mock")
+        return df
     if prefer == "db":
-        return _db_ohlcv_df(code, start_date, end_date)
-    if prefer == "kis":
-        df = _kis_ohlcv_df(code, start_date, end_date)
+        df = _db_ohlcv_df(code, start_date, end_date)
+        _tag(df, code, "db")
         return df if df is not None else pd.DataFrame()
+    if prefer == "kis":
+        # ★빈 결과에도 출처는 말한다★ `_kis_ohlcv_df` 는 실패 시 `None` 이라
+        # 여기서 빈 df 로 바꾼 **뒤에** 태깅해야 호출자가 "kis 에서 왔고 없었다"
+        # 를 알 수 있다. 안 그러면 이 경로만 태그가 비어 비대칭이 남는다.
+        df = _kis_ohlcv_df(code, start_date, end_date)
+        if df is None:
+            df = pd.DataFrame()
+        _tag(df, code, "kis")
+        return df
 
     # auto: DB → KIS → mock
     df = _db_ohlcv_df(code, start_date, end_date)
     if df is not None and not df.empty and len(df) >= 20:
-        df.attrs["source"] = "db"   # 실데이터(적재 DB)
+        _tag(df, code, "db")        # 실데이터(적재 DB)
         return df
 
     df = _kis_ohlcv_df(code, start_date, end_date)
@@ -160,14 +254,16 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
             ingest_df_to_db(code, df)
         except Exception:
             pass
-        df.attrs["source"] = "kis"  # 실데이터(KIS 실시간)
+        _tag(df, code, "kis")       # 실데이터(KIS 실시간)
         return df
 
     # 최종 fallback: mock 모드만 합성, 운영선 빈 df(정직 — 실데이터 없음)
     from src.data.mock_gate import mock_allowed
     if mock_allowed():
         logger.info(f"OHLCV mock fallback: {code} (DB/KIS 모두 미가용)")
-        return _mock_ohlcv_df(code, start_date, end_date)
+        df = _mock_ohlcv_df(code, start_date, end_date)
+        _tag(df, code, "mock")
+        return df
     logger.info(f"OHLCV 미가용(실데이터 없음, 합성 금지): {code}")
     return pd.DataFrame()
 
@@ -184,6 +280,16 @@ def ingest_df_to_db(ticker: str, df) -> int:
     if engine is None or df is None or df.empty:
         return 0
 
+    # ★스키마를 먼저 맞춘다★ 이 경로는 예전에 `ensure_table` 을 부르지 않았다.
+    # `source` 컬럼이 생기면서, 기존 테이블에 그 컬럼이 없는 배포에서는 INSERT 가
+    # 조용히 실패했을 것이다(아래 except 가 경고만 남긴다). `ensure_table` 이
+    # ALTER 를 시도하고 "이미 있음" 은 무시하므로 반복 호출이 안전하다.
+    try:
+        from src.data.krx_ingest import ensure_table
+        ensure_table(engine)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"daily_prices 스키마 확인 실패: {e}")
+
     code = ticker.replace(".KS", "").replace(".KQ", "")
     rows = []
     for dt, r in df.iterrows():
@@ -197,13 +303,30 @@ def ingest_df_to_db(ticker: str, df) -> int:
     if not rows:
         return 0
 
+    # ★출처를 남긴다★ 이 경로는 `return_1d`(KRX 등락률)를 쓰지 않으므로
+    # `rebuild_adj_close` 의 체인이 여기서 끊긴다. 어느 행이 그런지 알 수 있어야
+    # `price_quality.adj_close_coverage()` 가 그 사실을 보고할 수 있다.
+    # ★가격 정의를 함께 적는다★ 이 경로가 넣는 `close` 는 KRX 가 넣는 `close` 와
+    # **다른 값**이다(KIS 는 수정주가로 요청, KRX 는 원주가). 컬럼 하나에 두 정의가
+    # 섞이면 소스 경계에서 계열이 점프하는데, 행에 정의가 없으면 그 사실을 잴 수 없다.
+    #
+    # ★`DAILY_PRICE_BASIS` 는 `kis_client` 에서 읽는다★ 여기에 `"adjusted"` 를 베껴
+    # 적으면, 누가 `FID_ORG_ADJ_PRC` 를 뒤집었을 때 DB 는 조용히 거짓을 적게 된다.
+    from src.data.krx_ingest import SOURCE_KIS
+    from src.execution.kis_client import DAILY_PRICE_BASIS
     upsert = text("""
-        INSERT INTO daily_prices (ticker, trade_date, "open", high, low, close, volume)
-        VALUES (:ticker, :trade_date, :open, :high, :low, :close, :volume)
+        INSERT INTO daily_prices (ticker, trade_date, "open", high, low, close, volume,
+                                  source, price_basis)
+        VALUES (:ticker, :trade_date, :open, :high, :low, :close, :volume, :source,
+                :price_basis)
         ON CONFLICT (ticker, trade_date) DO UPDATE
           SET "open"=EXCLUDED."open", high=EXCLUDED.high, low=EXCLUDED.low,
-              close=EXCLUDED.close, volume=EXCLUDED.volume
+              close=EXCLUDED.close, volume=EXCLUDED.volume, source=EXCLUDED.source,
+              price_basis=EXCLUDED.price_basis
     """)
+    for r in rows:
+        r["source"] = SOURCE_KIS
+        r["price_basis"] = DAILY_PRICE_BASIS
     try:
         with engine.begin() as conn:
             conn.execute(upsert, rows)

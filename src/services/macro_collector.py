@@ -48,6 +48,22 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+#: ★수집 경로가 빈티지를 가져오는가★ — 사실이 **있는 곳**에 둔다.
+#:
+#: 국면 축(`regime_axes.axis_revision_status`)이 이 값을 읽어 "PIT 관리됨" 을
+#: 판정한다. ★이것은 사실 진술이지 스위치가 아니다★ — 코드가 하지 않는 일을
+#: 참이라 적으면 그것은 승인 집행이 아니라 거짓 선언이고,
+#: `tests/test_axis_revision_status.py` 가 `tokenize` 로 소스와 대조해 잡는다.
+#:
+#: ★오늘 참인 이유★ `collect_all()` 이 계열마다 `macro_observation_store` 를
+#: **as-of 로 조회**하고(`_from_vintage_store`), 빈티지가 있으면 그것으로 시계열을
+#: 만든다. 없으면 기존 경로를 쓰되 `MacroSeries.vintage_used=False` 로 라벨한다.
+#:
+#: ★그래도 축이 열리지는 않는다★ 판정은 이 값과 **⑶ 그 계열에 실제 빈티지 행이
+#: 있는가**(`regime_axes._series_has_vintage`, 관측)의 **논리곱**이다. 빈티지 0건인
+#: 오늘은 축 출력이 이전과 완전히 같고, 키가 들어와 빈티지가 쌓인 **계열만** 열린다.
+COLLECTOR_READS_VINTAGE = True
+
 BOK_BASE_URL = "https://ecos.bok.or.kr/api"
 FRED_BASE_URL = "https://api.stlouisfed.org/fred"
 
@@ -104,6 +120,17 @@ class MacroSeries:
     std_5y:       float | None = None
     trend:        str = "flat"                 # "up" | "down" | "flat"
     last_update:  str | None = None
+    #: ★이 값이 빈티지에서 왔는가★ 어디서 왔는지 **행마다** 말한다 — 라벨이
+    #: 없으면 PIT 값과 현재값이 화면에서 구분되지 않는다.
+    vintage_used: bool = False
+    #: PIT 조회 시점(`collect_all(as_of=...)`). 라이브면 `None`.
+    as_of:        str | None = None
+
+    #: ★`source="unavailable"` 일 때 **왜** 인지★ 값이 왔으면 None 이다.
+    #: 예전에는 `source="unavailable"` 한 문자열이 전부라 **키 없음**·**좌표 미검증**·
+    #: **검증됐는데 빈 응답**·**파생 원계열 부재** 가 구분되지 않았다. 넷의 처방이
+    #: 전부 다른데, 사용자도 우리도 어디를 고쳐야 할지 알 수 없었다.
+    reason:       str | None = None
 
 
 @dataclass
@@ -224,19 +251,46 @@ class BokClient:
         self, stat_code: str, item_code: str = "0",
         start: str | None = None, end: str | None = None,
         period: str = "M",     # M=월, D=일, A=년
+        limit: int = 1000,
     ) -> tuple[list[str], list[float]]:
-        """BOK 시계열 조회 → (timestamps, values)."""
+        """BOK 시계열 조회 → (timestamps, values).
+
+        Args:
+            limit: 응답 행 상한. ★기본값 1000 은 기존 동작이다 — 바꾸지 말 것★
+                월별 20년이 240행이라 월 단위 수집에는 충분하다. 그러나
+                **일별**은 다르다 — 2005년부터면 5,000행이 넘어서 1000 에
+                걸리면 **20년 커브가 4년으로 조용히 잘린다**. 일별을 받는
+                호출자(`factor_tokens._ecos_series`)가 큰 값을 넘긴다.
+        """
         if not self.is_configured or requests is None:
             return [], []
 
-        # 기간 기본값: 최근 5년
+        # ── 기간 기본값 — ★아는 포맷만 만들고 모르는 것은 거절한다★ ──────
+        #
+        # 예전 코드는 `"%Y%m" if period == "M" else "%Y"` 였다. 즉 **M 과 A 만**
+        # 만들 수 있었고, `period="D"` 로 start/end 를 생략하면 `2006`~`2026` 이라는
+        # 일별로는 무효한 범위가 조용히 만들어졌다. 살아 있는 버그는 아니었다 —
+        # 유일한 일별 호출자(`factor_tokens._ecos_series`)가 YYYYMMDD 를 명시로
+        # 넘긴다. 주기를 일급으로 만들면 그 구멍이 살아나므로 여기서 메운다.
+        #
+        # ★분기(Q)는 지어내지 않는다★ ECOS 의 분기 TIME 표기(`2024Q1`? `20241`?)를
+        # 오프라인에서 확인할 수 없다. 추측한 좌표로 회사채를 국고채라고 불렀던
+        # 것과 정확히 같은 종류의 오류이므로, 포맷을 만드는 대신 **거절**한다.
+        if period == "Q" and not (start and end):
+            logger.warning(
+                "BOK 분기 조회 거절 (%s): 분기 TIME 표기가 검증되지 않았습니다 — "
+                "지어낸 포맷으로 호출하지 않습니다. start/end 를 명시하면 그대로 씁니다.",
+                stat_code)
+            return [], []
+        _FMT = {"D": "%Y%m%d", "M": "%Y%m", "A": "%Y"}
         if not end:
-            end = datetime.now().strftime("%Y%m" if period == "M" else "%Y")
+            end = datetime.now().strftime(_FMT.get(period, "%Y"))
         if not start:
             yr = int(end[:4]) - _history_years()
-            start = f"{yr}{end[4:6]}" if period == "M" else str(yr)
+            start = f"{yr}{end[4:]}"          # M→YYYYMM · D→YYYYMMDD · A→YYYY
 
-        url = f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/1000/{stat_code}/{period}/{start}/{end}/{item_code}"
+        url = (f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/{int(limit)}"
+               f"/{stat_code}/{period}/{start}/{end}/{item_code}")
         self._throttle()
 
         try:
@@ -256,6 +310,118 @@ class BokClient:
         except Exception as e:
             logger.warning(f"BOK 호출 실패 ({stat_code}): {e}")
             return [], []
+
+    # ── 메타 API — ★응답 모양을 모른다는 사실을 설계에 반영한다★ ────────────
+    #
+    # 서비스명 `StatisticTableList`·`StatisticItemList` 는 이 저장소의 선행 감사
+    # 문서 3건에 이미 기록돼 있다(2026-08-26 두 건 · 08-27 §A.4) — 추측이 아니다.
+    # ★그러나 응답 **필드명**은 검증된 적이 없다.★ 그래서 파서를 두지 않고 원시
+    # dict 를 그대로 돌려준다. 주기 추출은 별도 함수가 하고, 못 찾으면 사유를 낸다.
+
+    def _fetch_meta(self, service: str, path: str = "") -> tuple[list[dict], str | None]:
+        """(행, 사유). ★`fetch_series` 와 같은 스로틀·키 판정을 쓴다★
+
+        메타 호출이 따로 스로틀을 갖지 않는 것이 중요하다 — 분당 한도는 서비스별이
+        아니라 키별이고, 경로가 둘이면 한도를 넘긴 쪽이 조용히 실패한다.
+        """
+        if not self.is_configured:
+            from src.data.source_registry import REASON_NO_KEY
+            return [], REASON_NO_KEY
+        if requests is None:
+            return [], "requests 를 사용할 수 없습니다."
+        url = f"{BOK_BASE_URL}/{service}/{self.api_key}/json/kr/1/{META_PAGE_SIZE}{path}"
+        self._throttle()
+        try:
+            data = requests.get(url, timeout=self.timeout).json()
+        except Exception as e:
+            return [], f"{service} 호출 실패: {e}"
+        rows = (data.get(service) or {}).get("row") or []
+        if not rows:
+            # ECOS 는 오류를 200 + RESULT 블록으로 돌려주기도 한다. 그 문구를
+            # 지어내지 않고 **있으면 그대로** 전달한다.
+            res = (data.get("RESULT") or {})
+            detail = res.get("MESSAGE") or res.get("CODE")
+            return [], f"{service} 응답이 비었습니다." + (f" ({detail})" if detail else "")
+        return list(rows), None
+
+    def probe_series(self, stat_code: str, item_code: str, period: str,
+                     start: str, end: str, limit: int = 5) -> dict:
+        """★프로브 전용★ 원시 응답을 **삼키지 않고** 돌려준다.
+
+        `fetch_series` 는 실패를 `([], [])` 로 삼킨다 — 운영에서는 그것이 옳다
+        (호출자는 값이 필요하지 흔적이 필요하지 않다). 그러나 **왜** 비었는지를
+        알아내는 것이 목적일 때는 정확히 그 삼킨 것이 필요하다.
+
+        ★운영 경로를 고치지 않고 경로를 하나 더 둔다★ — 대신 같은 `_throttle` 과
+        `is_configured` 를 쓴다. 분당 한도는 서비스별이 아니라 **키별**이고, 스로틀
+        없는 경로가 하나라도 생기면 한도를 넘긴 쪽이 조용히 실패한다.
+
+        `limit` 이 작다(기본 5) — 이것은 대량 적재가 아니라 **메타 검증**이다.
+        """
+        out: dict = {"stat_code": stat_code, "item_code": item_code, "period": period,
+                     "start": start, "end": end}
+        if not self.is_configured:
+            from src.data.source_registry import REASON_NO_KEY
+            return {**out, "status": "no_key", "reason": REASON_NO_KEY}
+        if requests is None:
+            return {**out, "status": "no_client", "reason": "requests 를 사용할 수 없습니다."}
+        url = (f"{BOK_BASE_URL}/StatisticSearch/{self.api_key}/json/kr/1/{int(limit)}"
+               f"/{stat_code}/{period}/{start}/{end}/{item_code}")
+        self._throttle()
+        try:
+            r = requests.get(url, timeout=self.timeout)
+            out["http_status"] = getattr(r, "status_code", None)
+            data = r.json()
+        except Exception as e:
+            return {**out, "status": "call_failed", "reason": f"{type(e).__name__}: {e}"}
+        rows = (data.get("StatisticSearch") or {}).get("row") or []
+        if not rows:
+            # ECOS 는 오류를 200 + RESULT 블록으로 돌려주기도 한다. 그 문구를
+            # 지어내지 않고 **있으면 그대로** 전달한다.
+            res = data.get("RESULT") or {}
+            return {**out, "status": "empty", "ecos_code": res.get("CODE"),
+                    "ecos_message": res.get("MESSAGE")}
+        # ★TIME 은 해석하지 않고 **그대로** 남긴다★ 포맷이 무엇인지가 질문이므로,
+        # 파싱해서 정규화하면 답을 지워 버리게 된다.
+        return {**out, "status": "ok", "row_count": len(rows),
+                "time_sample": [str(r_.get("TIME")) for r_ in rows[:3]],
+                "row_keys": sorted(rows[0])}
+
+    def fetch_table_list(self) -> tuple[list[dict], str | None]:
+        """통계표 목록 (`StatisticTableList`)."""
+        return self._fetch_meta("StatisticTableList")
+
+    def fetch_item_list(self, stat_code: str) -> tuple[list[dict], str | None]:
+        """한 통계표의 항목 목록 (`StatisticItemList`)."""
+        return self._fetch_meta("StatisticItemList", f"/{stat_code}")
+
+
+#: 메타 응답에서 주기를 담을 **가능성이 있는** 키들. ★어느 것인지 모른다★ —
+#: 실응답을 본 적이 없으므로 후보를 순회하고, 못 찾으면 `None` + 사유다.
+#: 하나로 단정해 적으면 그 키가 아닐 때 파서가 조용히 실패한다.
+META_CYCLE_KEYS = ("CYCLE", "P_CYCLE", "CYCLE_NAME", "PERIOD")
+META_PAGE_SIZE = 1000
+
+
+def cycle_from_meta_row(row: dict) -> tuple[str | None, str | None]:
+    """메타 행에서 공표 주기를 뽑는다 → (주기, 사유).
+
+    ★못 찾으면 조용히 성공한 척하지 않는다★ 기본값 `"M"` 을 돌려주면 그 값은
+    "확인된 월별" 과 구분되지 않는다. 그것이 정확히 이 축을 만든 이유다.
+    """
+    from src.data.source_registry import ECOS_CYCLES
+
+    for k in META_CYCLE_KEYS:
+        raw = row.get(k)
+        if raw is None:
+            continue
+        v = str(raw).strip().upper()[:1]
+        if v in ECOS_CYCLES:
+            return v, None
+        return None, (f"주기 필드 {k!r} 의 값 {raw!r} 을 해석할 수 없습니다 — "
+                      f"알려진 주기는 {'·'.join(ECOS_CYCLES)} 입니다.")
+    return None, (f"응답에 주기 필드가 없습니다 — 후보 {'·'.join(META_CYCLE_KEYS)} 중 "
+                  f"어느 것도 없습니다. 실제 키: {sorted(row)[:8]}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -290,8 +456,20 @@ class FredClient:
     def fetch_series(
         self, series_id: str,
         start: str | None = None, end: str | None = None,
+        frequency: str | None = "m",
     ) -> tuple[list[str], list[float]]:
-        """FRED 시계열 조회."""
+        """FRED 시계열 조회.
+
+        Args:
+            frequency: 서버측 집계 주기. ★기본값 `"m"` 은 기존 동작이다 —
+                대시보드 수집은 월별로 충분하다. `None` 이면 파라미터를
+                **보내지 않아** 제공자 원본 주기(국채금리는 일별)를 받는다.
+
+                ★일별이 필요한 호출자는 반드시 `None` 을 넘길 것★ — `"m"` 으로
+                받으면 일별 금리가 월별로 뭉개지고, 일별 봉에 정렬한 뒤 ffill 되어
+                **그럴듯해 보인다**. `pit_macro` 가 같은 이유로 빈티지 조회에서
+                frequency 를 보내지 않는다(§모듈 독스트링 3번).
+        """
         if not self.is_configured or requests is None:
             return [], []
 
@@ -306,8 +484,10 @@ class FredClient:
             "file_type": "json",
             "observation_start": start,
             "observation_end": end,
-            "frequency": "m",  # monthly
         }
+        # ★`None` 이면 키 자체를 넣지 않는다★ 빈 문자열을 보내면 FRED 가 거부한다.
+        if frequency:
+            params["frequency"] = frequency
         self._throttle()
 
         try:
@@ -386,6 +566,45 @@ MOCK_PROFILES = {
 # Unified Collector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+#: `as_of` PIT 요청인데 그 계열에 빈티지가 없을 때. ★현재값을 주지 않는다★
+REASON_NO_VINTAGE_FOR_ASOF = (
+    "빈티지가 없어 시점 고정 조회에 답할 수 없습니다 — 현재 개정본으로 과거를 "
+    "채점하면 그것은 시점 정합이 아니라 개정 편향입니다(`ac938c4`). "
+    "ALFRED 빈티지를 적재하면(`macro_vintage_backfill`) 이 계열이 열립니다."
+)
+
+
+def _from_vintage_store(key: str, as_of: str | None):
+    """관측 스토어에서 **빈티지 있는** 관측만 골라 `(timestamps, values)`.
+
+    없으면 `None` — 호출자가 모드에 따라 처리한다.
+
+    ★`vintage_id` 가 빈 행은 버린다★ 가장 미묘한 곳이다. `record_series` 의
+    write-through 행은 `vintage_id=""` 이고, `load(as_of=)` 의 필터는
+    `release_timestamp` 가 빈 행을 **통과시킨다**(그 함수가 스스로 적어 둔 규칙).
+    거르지 않으면 **자기가 써 넣은 현재값**을 빈티지로 되읽어 PIT 를 주장하게 된다.
+    """
+    try:
+        from src.data.macro_observation_store import load as _load
+        from src.data.pit_macro import latest_vintage_per_period
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        obs = _load(key, as_of=as_of) or []
+    except Exception as e:  # noqa: BLE001 — 조회 실패는 "빈티지 없음" 이지 오류가 아니다
+        logger.debug("빈티지 조회 실패 (%s): %s", key, e)
+        return None
+
+    obs = [o for o in obs if getattr(o, "vintage_id", "")]
+    if not obs:
+        return None
+    picked = latest_vintage_per_period(obs)
+    if not picked:
+        return None
+    return ([o.observation_period for o in picked],
+            [float(o.value) for o in picked])
+
+
 class MacroCollector:
     """
     BOK + FRED 통합 수집 + 정규화 + 캐시.
@@ -421,8 +640,20 @@ class MacroCollector:
     # 핵심 수집
     # ─────────────────────────────────────────────────────────────────────
 
-    def collect_all(self, use_cache: bool = True) -> MacroSnapshot:
-        """모든 지표 통합 수집."""
+    def collect_all(self, use_cache: bool = True,
+                    as_of: str | None = None) -> MacroSnapshot:
+        """모든 지표 통합 수집.
+
+        ★두 모드를 라벨한다 — 조용히 섞지 않는다★
+
+            as_of=None   라이브. 빈티지가 있으면 그것을, 없으면 기존 경로를 쓰고
+                         `vintage_used=False` 로 남긴다.
+            as_of=날짜   PIT 요청. 그 계열에 빈티지가 없으면 ★값을 내지 않는다★ —
+                         현재 개정본으로 과거를 채점하는 것이 `ac938c4` 가 막은
+                         결함이다.
+
+        기존 호출부 11곳은 전부 `as_of` 없이 부르므로 **동작이 이전과 같다**.
+        """
         series_map = {}
 
         # 한국 매크로 (6종)
@@ -446,7 +677,7 @@ class MacroCollector:
                 # 살아 있는 버그는 아니었지만, 누군가 스레드풀·async 로 바꾸는 순간
                 # 11개 시리즈가 전부 마지막 stat 코드를 조회한다. 두 루프의 관례를 맞춘다.
                 fetcher=lambda s=stat, i=item: self.bok.fetch_series(s, i),
-                use_cache=use_cache,
+                use_cache=use_cache, as_of=as_of,
                 source="BOK",
             )
 
@@ -469,7 +700,7 @@ class MacroCollector:
             series_map[fred_id] = self._collect_one(
                 key=fred_id, name=meta["name"], unit=meta["unit"],
                 fetcher=lambda fid=fred_id: self.fred.fetch_series(fid),
-                use_cache=use_cache,
+                use_cache=use_cache, as_of=as_of,
                 source="FRED",
             )
 
@@ -490,8 +721,16 @@ class MacroCollector:
         gv = list(govt.values) if govt and govt.values else []
         n = min(len(cv), len(gv))
         if n == 0:
-            return MacroSeries(indicator=key, name=name, unit=unit,
-                               source="unavailable", timestamps=[], values=[])
+            # ★파생의 실패 원인은 넷째다★ 키도 좌표도 주기도 아니라 **원계열이
+            # 없다**. 어느 다리가 빠졌는지 말해 주지 않으면 사용자는 스프레드
+            # 자체가 고장난 줄 안다 — 고쳐야 할 곳은 원계열 쪽이다.
+            missing = [n_ for n_, s_ in (("피감수", cv), ("감수", gv)) if not s_]
+            return MacroSeries(
+                indicator=key, name=name, unit=unit,
+                source="unavailable", timestamps=[], values=[],
+                reason=(f"원계열이 없어 스프레드를 만들 수 없습니다({'·'.join(missing)} "
+                        f"쪽). ★한쪽만으로 만들지 않습니다★ — 한쪽 값을 스프레드처럼 "
+                        f"쓰면 그것은 합성이고, 화면은 실측 스프레드로 읽습니다."))
 
         vals = [round(float(c) - float(g), 4) for c, g in zip(cv[-n:], gv[-n:], strict=False)]
         ts = list(corp.timestamps)[-n:] if corp and corp.timestamps else []
@@ -530,17 +769,31 @@ class MacroCollector:
             ),
         )
 
+    def _unavailable_reason(self, key: str, source: str) -> str:
+        """수집 실패의 원인 — ★판정 로직은 레지스트리가 갖는다★
+
+        여기서 새로 판정하지 않고 `source_registry.unavailable_reason_for()` 에
+        태운다. 사유 문구가 두 곳에 있으면 갈라지고, 갈라진 사유는 틀린 사유다.
+        이 함수가 더하는 것은 **어느 클라이언트가 키를 갖고 있었는가** 하나뿐이다.
+        """
+        from src.data.source_registry import unavailable_reason_for
+
+        client = self.bok if source == "BOK" else self.fred
+        return unavailable_reason_for(
+            key, configured=bool(getattr(client, "is_configured", False)))
+
     def _collect_one(
         self, key: str, name: str, unit: str,
-        fetcher, use_cache: bool, source: str,
+        fetcher, use_cache: bool, source: str, as_of: str | None = None,
     ) -> MacroSeries:
         """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback.
 
         ★신규 미검증 소스는 mock 으로 채우지 않는다 (M1-I)★
         `source_registry.new_source_mock_allowed()` 가 판정한다. 기존 지표는 영향 없다.
         """
-        # 캐시 확인
-        if use_cache:
+        # ★PIT 조회는 캐시를 쓰지도 남기지도 않는다★ as_of 산출이 캐시에 남으면
+        # 다음 라이브 조회가 과거 값을 받는다 — 화면이 조용히 과거를 본다.
+        if use_cache and as_of is None:
             with self._lock:
                 entry = self._cache.get(key)
                 if entry:
@@ -550,15 +803,30 @@ class MacroCollector:
 
         timestamps, values = [], []
         actual_source = source
+        unavailable_reason: str | None = None
+        vintage_used = False
 
-        # 외부 API 호출
-        try:
-            timestamps, values = fetcher()
-        except Exception as e:
-            logger.warning(f"{source} fetcher 실패 ({key}): {e}")
+        # ★빈티지가 있으면 그것이 우선이다★ 개정 이력이 있는데 현재 개정본을 쓰는
+        # 것은 가진 정보를 버리는 것이다.
+        vintage = _from_vintage_store(key, as_of)
+        if vintage is not None:
+            timestamps, values = vintage
+            vintage_used = True
+        elif as_of is not None:
+            # ★PIT 요청에는 현재값을 주지 않는다★ 답할 수 없으면 답하지 않는다.
+            actual_source = "unavailable"
+            unavailable_reason = REASON_NO_VINTAGE_FOR_ASOF
+        else:
+            # 외부 API 호출
+            try:
+                timestamps, values = fetcher()
+            except Exception as e:
+                logger.warning(f"{source} fetcher 실패 ({key}): {e}")
 
         # Fallback to Mock — mock 모드만. 운영(KIS_USE_MOCK=0)선 합성 금지 → 정직 unavailable.
-        if not values:
+        # ★PIT 요청은 mock 으로 채우지 않는다★ 합성값으로 과거를 채점하면 그것은
+        # 시점 정합이 아니라 날조다.
+        if not values and as_of is None:
             from src.data.mock_gate import mock_allowed
             from src.data.source_registry import new_source_mock_allowed
             if mock_allowed() and new_source_mock_allowed(key):
@@ -587,6 +855,10 @@ class MacroCollector:
                 actual_source = "MOCK"
             else:
                 actual_source = "unavailable"   # 운영 — 실 BOK/FRED 미수신(키 미설정/실패) → "—"
+                # ★"unavailable" 만으로는 어디를 고쳐야 할지 알 수 없다★
+                # 키가 없는 것과 좌표가 틀린 것과 주기가 안 맞는 것은 처방이 전부
+                # 다른데, 예전에는 이 한 문자열로 전부 뭉개졌다.
+                unavailable_reason = self._unavailable_reason(key, source)
 
         # 정규화 + 메트릭
         clean = [v for v in values if v is not None and not math.isnan(v)]
@@ -622,10 +894,34 @@ class MacroCollector:
             std_5y=norm["std_5y"],
             trend=norm["trend"],
             last_update=datetime.now().isoformat(),
+            vintage_used=vintage_used,
+            as_of=as_of,
+            # ★값이 왔으면 None 이다★ 항상 사유를 채우면 "왜 비었나" 라는 질문에
+            # 답하는 필드가 아니라 그냥 또 하나의 설명문이 된다.
+            reason=unavailable_reason,
         )
 
-        with self._lock:
-            self._cache[key] = (time.time(), series)
+        if as_of is None:
+            with self._lock:
+                self._cache[key] = (time.time(), series)
+
+        # ★영속 기록★ 이 캐시는 **프로세스 메모리**다 — 재시작하면 사라지고,
+        # 그래서 과거 매크로 실험을 재현할 수 없었다(계보 감사 §B1).
+        # `macro_observation_store` 가 실 관측치를 남긴다. ★기록만 한다★ —
+        # 읽는 소비자는 없고, 국면 축 배선은 배분 정책이라 별도 승인 사항이다.
+        #
+        # ★저장 원시함수가 아니라 수집 파이프라인에 둔다★ Phase 1 에서
+        # `save_master_flags` 안에 DB 미러링을 넣었다가 그 함수를 픽스처로 쓰던
+        # 테스트 3개를 깨뜨렸다. 부작용은 파이프라인의 일이다.
+        # 비-REAL(`MOCK`·`unavailable`)은 스토어가 스스로 거른다.
+        try:
+            from src.data.macro_observation_store import record_series
+            # ★스토어에서 읽은 것을 스토어에 되쓰지 않는다★ 순환이고, 빈티지 행을
+            # `vintage_id=""` 사본으로 오염시킨다.
+            if not vintage_used:
+                record_series(series)
+        except Exception as e:  # noqa: BLE001 — 기록 실패가 수집을 실패로 만들지 않는다
+            logger.debug(f"매크로 관측 기록 실패 ({key}): {e}")
         return series
 
     def cache_clear(self):

@@ -142,8 +142,13 @@ def test_the_channels_that_do_not_exist_say_why():
         assert "value_pct" not in u
 
     assert "입력" in un["GDP −2σ"]["reason"]
-    assert "유가 계열" in un["Oil +30%"]["reason"]
     assert un["Oil +30%"]["target"] == "EBIT"
+
+    # ★사유가 사실이어야 한다★ 앞 판본은 "유가 계열이 수집기에 없습니다" 였는데
+    # `DCOILWTICO` 는 수집기에 있고 59개월 관측을 낸다. 없는 것은 데이터가 아니라
+    # **모델의 채널**이다. 틀린 사유는 없는 사유보다 나쁘다.
+    assert "채널이 없습니다" in un["Oil +30%"]["reason"]
+    assert "계열이 매크로 수집기에 없습니다" not in un["Oil +30%"]["reason"]
 
 
 # ── 5. 산출 불가는 사유 ─────────────────────────────────────────────────────

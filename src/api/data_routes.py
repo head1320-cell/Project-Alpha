@@ -87,9 +87,14 @@ def db_status():
                 m = build_master_universe(k)
                 if m:
                     prog[k] = {"master": len(m), "ingested": sum(1 for c in m if c in ing)}
-            return {"progress": prog, "composition": master_composition()}
+            # ★식별자 커버리지★ 마스터가 **어디서 왔는지**(파일/DB)와 ISIN 이
+            # 몇 개나 조회 키로 쓸 수 있는지를 함께 낸다. `malformed` 는 "없다" 가
+            # 아니라 **파서·출처 결함**이라 따로 세지 않으면 영원히 안 보인다.
+            from src.data.instrument_master_store import isin_coverage
+            return {"progress": prog, "composition": master_composition(),
+                    "isin_coverage": isin_coverage()}
         except Exception:
-            return {"progress": {}, "composition": {}}
+            return {"progress": {}, "composition": {}, "isin_coverage": {}}
 
     out["universe_progress"] = _universe_progress()
 
@@ -450,6 +455,81 @@ def symbols_flows_status():
     )
     st["data_status"] = (DataStatus.MOCK if mock_allowed() else DataStatus.REAL).value
     return st
+
+
+@router.get("/api/v1/data/price-quality")
+def data_price_quality(tickers: str | None = None, start: str | None = None,
+                       end: str | None = None):
+    """수정주가 커버리지 — ★몇 %가 조정되지 않았는지가 보이지 않으면 아무도 모른다★
+
+    `daily_prices` 에 writer 가 둘이라(KRX 전종목 백필 · KIS 온디맨드) KIS 경로 행에는
+    등락률이 없고, 그 지점에서 수정주가 체인이 끊긴다. 예전에는 원주가 비율로
+    폴백해 **지우려던 분할 점프를 다시 집어넣었다** — 지금은 정직하게 비운다.
+    그 빈칸이 얼마나 되는지를 여기서 낸다.
+
+    ★`ingest-doctor`·`source-honesty` 와 같은 데이터 품질 계열이다★ — 배분 결정에
+    관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**(`ResearchUsage`)를 쓴다.
+
+    ★`basis_overlap` 은 다른 축이다★ 커버리지가 *"`adj_close` 가 채워졌는가"* 를
+    묻는 반면, 이쪽은 *"`close` 가 무엇인가"* 를 묻는다 — KRX 는 원주가를, KIS 는
+    수정주가를 같은 컬럼에 넣는다. 연속 종가의 수익률이 KRX 등락률과 맞는지 보고,
+    재지 못하면 "일치" 가 아니라 `available: false` 를 낸다.
+
+    Args:
+        tickers: 쉼표 구분. 주면 `missing`(행이 없는 티커)까지 센다.
+            안 주면 `missing` 은 잴 수 없고 `missing_measurable: false` 로 나간다.
+    """
+    from src.data.price_quality import (
+        adj_close_coverage,
+        basis_overlap_check,
+        price_usage,
+    )
+
+    wanted = [t.strip() for t in (tickers or "").split(",") if t.strip()]
+    # ★가격 정의 검증은 등급과 별개 축이다★ 조정 여부를 따지기 전에 `close` 가
+    # 무엇인지를 묻는다. 등급을 못 매기는 경우에도 이 진단은 낼 수 있다.
+    overlap = basis_overlap_check(wanted or None)
+    if wanted:
+        got = price_usage(wanted, start=start, end=end)
+        return {"coverage": got["coverage"], "research_usage": got["usage"],
+                "reason": got["reason"], "basis_overlap": overlap}
+    # 티커를 안 주면 등급을 매기지 않는다 — 무엇에 대한 등급인지 정의되지 않는다.
+    return {"coverage": adj_close_coverage(start=start, end=end),
+            "research_usage": None,
+            "reason": "티커를 지정해야 연구 등급을 판정할 수 있습니다.",
+            "basis_overlap": overlap}
+
+
+@router.get("/api/v1/data/macro-vintages")
+def data_macro_vintages(series: str | None = None, period: str | None = None):
+    """매크로 관측 스토어 — ★빈티지가 저장되고 있는가★
+
+    계보 감사 §B1 이 찾은 병목: FRED·ECOS 시계열이 **프로세스 메모리**에만 살아
+    재시작하면 사라졌다. `macro_observation_store` 가 그것을 영속화한다.
+
+    ★`ingest-doctor`·`source-honesty`·`price-quality` 와 같은 데이터 품질 계열이다★
+    — 배분 결정에 관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**를 쓴다.
+
+    Args:
+        series: 계열 id. 주면 그 계열만 센다.
+        period: `series` 와 함께 주면 그 기간의 **모든 빈티지**를 낸다 —
+            둘 이상이면 그 기간이 개정됐다는 뜻이고, 값 차이가 편향의 크기다.
+
+    `series` 만 주면 `revision` 블록이 함께 나온다 — 기간별 최초/최신 빈티지 값과
+    그 차이, 그리고 ★개정을 **관측하지 못한** 기간 수★.
+    """
+    from src.data.macro_observation_store import coverage, vintages_of
+    from src.data.macro_vintage_backfill import revision_report
+
+    body = {"coverage": coverage([series] if series else None)}
+    if series and period:
+        body["vintages"] = [o.to_dict() for o in vintages_of(series, period)]
+    if series:
+        # ★개정 리포트 — 사슬의 목적지★ 빈티지가 하나뿐인 기간은 "개정 없음" 이
+        # 아니라 "개정 관측 안 됨" 으로 나온다. 둘을 접으면 표본 부족이
+        # "안정적인 계열" 로 둔갑한다.
+        body["revision"] = revision_report(series)
+    return body
 
 
 @router.get("/api/v1/data/source-honesty")

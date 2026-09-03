@@ -54,15 +54,31 @@ def beta_neutralize(weights: dict[str, float], betas: dict[str, float],
     codes = [c for c in weights if c in betas and betas[c] is not None]
     if len(codes) < 2:
         return {"error": True, "message": "베타 가용 종목 2개 미만 — 중립화 불가."}
-    w0 = np.array([max(weights[c], 0.0) for c in codes], dtype=float)
-    s = w0.sum()
-    w0 = w0 / s if s > 0 else np.ones(len(codes)) / len(codes)
+    # ★입력의 숏을 지우지 않는다★ 이 함수는 **출력**으로 음수를 내는데 입력의
+    # 음수는 잘라 내고 있었다 — 이미 롱숏인 북을 다시 중립화하면 숏 다리가 먼저
+    # 사라져 재중립화가 전혀 다른 북을 중립화했다.
+    w0 = np.array([float(weights[c]) for c in codes], dtype=float)
     beta = np.array([betas[c] for c in codes], dtype=float)
 
-    gross_target = 0.0 if dollar_neutral else 1.0
+    # ★이름을 사실과 맞춘다★ `A` 의 첫 행이 `Σw` 이므로 이 값이 제약하는 것은
+    # gross(Σ|w|)가 아니라 **net(Σw)** 이다. 동작은 그대로다.
+    net_target = 0.0 if dollar_neutral else 1.0
+
+    # ★그 모드가 고정하는 양으로 정규화한다★ 사영은 아핀 집합 위로 떨어뜨리므로
+    # **출발점의 스케일이 도착점을 바꾼다.** 그래서 정규화가 출력에 대해 항등이어야
+    # 재중립화가 멱등이다.
+    #   · net 고정 모드 — 출력이 `Σw = 1` 이므로 net 으로 나눈다. 롱온리에서는
+    #     `Σw == Σmax(w,0)` 이라 예전 값과 **비트 동일**하다.
+    #   · 달러중립 — net 이 0 이라 나눌 수 없다. gross 로 나누며, 이때 멱등성은
+    #     **방향까지**다(달러중립에는 스케일을 고정하는 것이 아무것도 없다 —
+    #     그 사실은 `gross_exposure` 로 보고한다).
+    anchor = float(w0.sum()) if not dollar_neutral else 0.0
+    if abs(anchor) < TOL:
+        anchor = float(np.abs(w0).sum())
+    w0 = w0 / anchor if abs(anchor) > TOL else np.ones(len(codes)) / len(codes)
     # 제약 A^T w = b : [1; beta]
     A = np.vstack([np.ones(len(codes)), beta]).T          # n×2
-    b = np.array([gross_target, target_beta])
+    b = np.array([net_target, target_beta])
     # 사영: w = w0 - A (AᵀA)^-1 (Aᵀw0 - b)
     try:
         M = np.linalg.solve(A.T @ A, A.T @ w0 - b)
@@ -71,7 +87,7 @@ def beta_neutralize(weights: dict[str, float], betas: dict[str, float],
         return {"error": True, "message": "제약 특이 — 베타 분산 부족."}
 
     achieved_beta = float(beta @ w)
-    achieved_gross = float(w.sum())
+    achieved_net = float(w.sum())
     min_w = float(w.min())
     long_only_ok = min_w >= -TOL
     return {
@@ -80,7 +96,10 @@ def beta_neutralize(weights: dict[str, float], betas: dict[str, float],
         "target_beta": target_beta,
         "achieved_beta": round(achieved_beta, 6),
         "beta_hit": abs(achieved_beta - target_beta) < 1e-4,
-        "gross": round(achieved_gross, 4),
+        # 키 이름은 E2E·프론트 계약이라 유지하되, 값의 뜻을 함께 낸다.
+        "gross": round(achieved_net, 4),
+        "net": round(achieved_net, 4),
+        "gross_exposure": round(float(np.abs(w).sum()), 4),
         "dollar_neutral": dollar_neutral,
         "long_only_feasible": long_only_ok,
         "note": ("롱온리로 목표 베타 달성(음수 없음)." if long_only_ok else
@@ -95,8 +114,10 @@ def sector_neutralize(weights: dict[str, float], sectors: dict[str, str],
     codes = [c for c in weights if c in sectors and sectors[c]]
     if len(codes) < 2:
         return {"error": True, "message": "섹터 가용 종목 2개 미만."}
-    w = {c: max(weights[c], 0.0) for c in codes}
-    tot = sum(w.values()) or 1.0
+    # ★부호 보존 · gross 정규화★ 롱숏 북에서 "섹터 총비중" 은 gross 지분을
+    # 뜻한다 — net 으로 재면 롱숏이 섞인 섹터가 "비어 있다" 로 보인다.
+    w = {c: float(weights[c]) for c in codes}
+    tot = sum(abs(v) for v in w.values()) or 1.0
     w = {c: v / tot for c, v in w.items()}
 
     by_sector: dict[str, list[str]] = {}
@@ -106,16 +127,18 @@ def sector_neutralize(weights: dict[str, float], sectors: dict[str, str],
     tgt = target or {s: 1.0 / len(secs) for s in secs}
     tsum = sum(tgt.get(s, 0) for s in secs) or 1.0
 
-    before = {s: round(sum(w[c] for c in by_sector[s]) * 100, 2) for s in secs}
+    # 섹터 지분은 gross 로 잰다 — 롱온리에서는 Σ|w| == Σw 라 값이 그대로다.
+    before = {s: round(sum(abs(w[c]) for c in by_sector[s]) * 100, 2) for s in secs}
     out: dict[str, float] = {}
     for s in secs:
         members = by_sector[s]
-        cur = sum(w[c] for c in members)
+        cur = sum(abs(w[c]) for c in members)
         share = tgt.get(s, 0) / tsum
         for c in members:
+            # 섹터 내 상대비중을 gross 로 나눈다 — net 이면 롱숏 섹터에서 폭발한다.
             rel = (w[c] / cur) if cur > 0 else 1.0 / len(members)
             out[c] = share * rel
-    after = {s: round(sum(out[c] for c in by_sector[s]) * 100, 2) for s in secs}
+    after = {s: round(sum(abs(out[c]) for c in by_sector[s]) * 100, 2) for s in secs}
     max_dev = max(abs(after[s] - tgt.get(s, 0) / tsum * 100) for s in secs)
     return {
         "error": False,

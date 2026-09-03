@@ -34,6 +34,19 @@ import logging
 import warnings
 
 from src.engine.regime_axes import AXES, compute_axis_detail, quadrant, quadrant_probs
+from src.engine.regime_probability import USAGE_DIAGNOSTIC
+
+#: ★이 앙상블은 배분에 흘러들지 않는다 — 그 사실을 페이로드가 직접 말한다★
+#:
+#: 그 사실은 `regime_probability.from_axis`/`from_markov` 의 독스트링에만 있었고,
+#: 라우트 응답만 보는 사람에게는 보이지 않았다. 그래서 "Markov 팔이 포트폴리오를
+#: 움직인다" 는 오해가 실제로 생겼다 — 하중을 받는 것은 `regime_path` 다.
+USAGE_NOTE = (
+    "★배분에 쓰이지 않습니다 — 진단 전용입니다★ 포트폴리오로 가는 국면은 "
+    "`regime_transitions.regime_path()` 이고, 그 산출이 "
+    "`conditional_market.conditional_moments` 로 들어갑니다. 여기 세 팔(축·Markov·"
+    "GMM)은 '지금 어디인가' 에 답하지 '보유기간 동안 어디일까' 에 답하지 않습니다."
+)
 
 logger = logging.getLogger(__name__)
 
@@ -240,4 +253,7 @@ def regime_ensemble(series_map: dict, market: str = "kr", months: int = 60) -> d
                      if picks else "사용 가능한 도구가 없습니다"),
         },
         "note": "세 방법을 평균내지 않습니다. 불일치 자체가 정보이며, 하나로 합치면 어느 모형이 무엇을 말했는지 사라집니다.",
+        # ★어휘를 두 벌 만들지 않는다★ `regime_probability` 의 상수를 그대로 쓴다.
+        "usage": USAGE_DIAGNOSTIC,
+        "usage_note": USAGE_NOTE,
     }

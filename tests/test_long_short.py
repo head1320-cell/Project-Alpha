@@ -425,9 +425,17 @@ def test_long_short_reports_gross_and_net_instead_of_a_single_cash_number():
 
 
 def test_long_only_target_shape_is_unchanged():
-    """짝 — 롱온리는 예전 그대로 `cash_weight` 를 낸다."""
+    """짝 — 롱온리는 예전 그대로 `cash_weight` 를 낸다.
+
+    ★플레이스홀더 코드를 실제 KR 코드로 바꿨다★ 예전에는 `A`/`B` 였는데, 실행
+    게이트에 **거래 가능성** 검사가 생기면서(`untradable`) 이름뿐인 코드는
+    `research_only` 가 된다 — 그게 옳다. 이 테스트가 재는 것은 `cash/gross/net`
+    의 **모양**이지 플레이스홀더가 executable 인지가 아니므로, 단언의 뜻은
+    그대로 두고 픽스처만 실물로 바꾼다(값은 20.0/80.0/80.0 그대로).
+    """
     from src.data.target_versions import STATUS_EXECUTABLE, compile_target
-    tv = compile_target({"A": 60.0, "B": 40.0}, {"exposure": 0.8, "source": "t"})
+    tv = compile_target({"005930": 60.0, "000660": 40.0},
+                        {"exposure": 0.8, "source": "t"})
     assert tv["status"] == STATUS_EXECUTABLE
     assert tv["cash_weight"] == pytest.approx(20.0)
     assert tv["gross_after"] == pytest.approx(80.0) and tv["net_after"] == pytest.approx(80.0)

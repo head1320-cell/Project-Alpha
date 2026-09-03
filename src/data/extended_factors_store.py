@@ -43,6 +43,15 @@ def _M(id, label, cat, unit, hb, lo, hi, src="", desc=""):
     return ExtFactorMeta(id, label, cat, unit, hb, lo, hi, src, desc)
 
 
+#: 매입채무 추정 비율 — DART 요약 재무제표에 매입채무 단독 항목이 없어 유동부채의
+#: 일부로 근사한다. ★관측이 아니라 가정이다★ — `ccc` 의 DPO 항에 쓰인다.
+DPO_PAYABLES_RATIO = 0.35
+
+#: 금융부채 추정 비율 — 총부채 중 이자부부채 비중 가정. ★관측이 아니다★
+#: `net_fin_asset`(순금융자산)의 부채 항에 쓰인다.
+FINANCIAL_DEBT_RATIO = 0.5
+
+
 EXTENDED_FACTORS: list[ExtFactorMeta] = [
     # ── Tier1: 배당·자사주·지분율 ──
     _M("dps", "주당배당금", "dividend", "원", True, 0, 5000, "DART", "주당 현금배당금"),
@@ -80,7 +89,8 @@ EXTENDED_FACTORS: list[ExtFactorMeta] = [
     # ── 재무정보(자산구성·CAPEX) ──
     _M("tangible_ratio", "유형자산비중", "financials", "%", True, 10, 80, "DART 파생", "비유동자산/총자산 근사"),
     _M("intangible_ratio", "무형자산비중", "financials", "%", True, 0, 30, "DART", "무형자산/총자산"),
-    _M("net_fin_asset", "시총대비순금융자산비율", "financials", "%", True, -50, 60, "DART 파생", "(현금-부채)/시총"),
+    _M("net_fin_asset", "시총대비순금융자산비율", "financials", "%", True, -50, 60, "DART 파생",
+       "(현금-금융부채)/시총 (금융부채≈총부채×0.5 가정)"),
     _M("capex_amt", "자본지출(CAPEX)", "financials", "억", False, 0, 100000, "DART", "자본적지출"),
     # ── 펀더멘탈(원가·회전율·증가율) ──
     _M("cogs_ratio", "매출원가율", "fundamental", "%", False, 30, 95, "DART 파생", "매출원가/매출액"),
@@ -90,7 +100,8 @@ EXTENDED_FACTORS: list[ExtFactorMeta] = [
     _M("payable_growth", "매입채무증가율", "fundamental", "%", True, -30, 50, "DART", "매입채무 YoY"),
     _M("recv_turnover", "매출채권회전율", "fundamental", "회", True, 2, 20, "DART 파생", "매출/매출채권"),
     _M("inv_turnover", "재고자산회전율", "fundamental", "회", True, 2, 30, "DART 파생", "매출/재고자산"),
-    _M("ccc", "현금회전일수", "fundamental", "일", False, -30, 200, "DART 파생", "DSO+DIO-DPO"),
+    _M("ccc", "현금회전일수", "fundamental", "일", False, -30, 200, "DART 파생",
+       "DSO+DIO-DPO (매입채무≈유동부채×0.35 가정)"),
     # ── 밸류에이션 ──
     _M("por", "POR", "valuation", "배", False, 1, 50, "KIS+DART 파생", "시총/영업이익"),
     _M("bps_growth", "주당순자산증가율", "valuation", "%", True, -20, 40, "DART 파생", "자본(BPS) YoY"),
@@ -112,10 +123,16 @@ REAL_CAPABLE_IDS = {
     # _derive (기존 raw·가격에서 실파생)
     "cogs_ratio", "inv_turnover", "recv_turnover", "ccc", "net_fin_asset", "capex_amt",
     "por", "fcf_payout", "bps_growth", "tangible_ratio", "gp_growth", "inv_growth",
-    "recv_growth", "salary_total", "rev_per_emp", "op_per_emp", "female_emp", "male_emp",
+    "recv_growth", "salary_total", "rev_per_emp", "op_per_emp",
+    # ★`female_emp`·`male_emp` 는 여기 없다★ 계산식이 `employees × female_ratio` 인데
+    # `female_ratio` 가 MOCK_ONLY 라, DART 키가 있어도 결과는 **실값 × 합성비율 =
+    # 합성**이다. 실데이터 팩터로 내놓으면 스크리너 조건이 날조된 값으로 걸러진다.
+    # (`_real_business` 는 employees·avg_salary·executives 만 준다 — 성별은 없다.)
     "return_1y", "investor_return", "total_return", "amount_growth",
     # _real_* 훅 (DART/KIS)
-    "dps", "foreign_ownership", "employees", "avg_salary", "executives",
+    # ★`div_at_record` 는 새로 받아 오는 값이 아니다★ `alotMatter` 가 이미 주는
+    # `yield_pct`(공시 현금배당수익률)를 그동안 파싱해 놓고 **버리고 있었다**.
+    "dps", "div_at_record", "foreign_ownership", "employees", "avg_salary", "executives",
 }
 MOCK_ONLY_IDS = {f.id for f in EXTENDED_FACTORS if f.id not in REAL_CAPABLE_IDS}
 MOCK_ONLY_LABELS = {f.label for f in EXTENDED_FACTORS if f.id in MOCK_ONLY_IDS}
@@ -198,10 +215,12 @@ class ExtendedFactorsStore(DeterministicMockStore):
         if recv > 0:
             d["recv_turnover"] = round(rev / recv, 2)
         if rev > 0 and cogs > 0:
-            dso = recv / rev * 365; dio = inv / cogs * 365; dpo = (cl * 0.35) / cogs * 365
+            dso = recv / rev * 365; dio = inv / cogs * 365
+            dpo = (cl * DPO_PAYABLES_RATIO) / cogs * 365
             d["ccc"] = round(dso + dio - dpo, 1)
         if mcap > 0:
-            d["net_fin_asset"] = round((cash - tl * 0.5) / mcap * 100, 2)
+            d["net_fin_asset"] = round(
+                (cash - tl * FINANCIAL_DEBT_RATIO) / mcap * 100, 2)
         d["capex_amt"] = round(capex, 1)
         if op > 0:
             d["por"] = round(mcap / op, 2)
@@ -261,16 +280,36 @@ class ExtendedFactorsStore(DeterministicMockStore):
             return {}
 
     def _real_dividend(self, code: str) -> dict:
+        """DART 배당(alotMatter) — 주당배당금 + ★공시 시가배당률★.
+
+        `div_at_record` 는 `alotMatter` 의 `yield_pct` 다. 그동안 파싱해 놓고
+        아무도 읽지 않았다. `dividend_yield`(= `dps / 현재가`)와 **다른 값**이라
+        덮지 않고 따로 낸다 — 과거 분석에 현재가 기준을 쓰면 오늘 가격이 과거로
+        새어 든다.
+        """
         if not os.getenv("DART_API_KEY"):
             return {}
+        out: dict = {}
         try:
             from src.data.fundamentals_store import FundamentalsStore
             raw = FundamentalsStore.get_default().get_raw_financials(code) or {}
             dps = raw.get("dps")
-            return {"dps": round(float(dps), 1)} if dps not in (None, "") else {}
+            if dps not in (None, ""):
+                out["dps"] = round(float(dps), 1)
         except Exception as e:
             logger.debug(f"주당배당금 조회 실패 [{code}]: {e}")
-            return {}
+        try:
+            from src.data.dart_client import get_corp_code, get_dart_client
+            corp = get_corp_code(code)
+            if corp:
+                year = str(_dt.date.today().year - 1)
+                div = get_dart_client().get_dividend_info(corp, year) or {}
+                y = div.get("yield_pct")
+                if y not in (None, ""):
+                    out["div_at_record"] = round(float(y), 2)
+        except Exception as e:
+            logger.debug(f"공시 시가배당률 조회 실패 [{code}]: {e}")
+        return out
 
     def _real_business(self, code: str) -> dict:
         """DART 사업보고서(직원·임원) best-effort. 실패 시 {} (mock/파생 유지)."""
