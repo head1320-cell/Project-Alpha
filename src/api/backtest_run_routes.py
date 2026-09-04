@@ -458,6 +458,11 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         # 엔진이 지표까지 계산해 반환 → 마무리 단계 전이 후 결과 저장
         br.advance(run_id, "calculating_metrics", message="성과·리스크 지표 정리", progress=88)
         br.advance(run_id, "persisting_results", message="재현 가능한 결과 저장", progress=96)
+        # ★왜 느렸는지 나중에 물을 수 있게 한다★ 벡터화/per-bar 폴백 비율은
+        # 실행 시간을 5배까지 가르는데 지금까지 응답 어디에도 없었다.
+        sp = (result or {}).get("signal_path")
+        if isinstance(sp, dict):
+            tele["signal_path"] = dict(sp)
         ds = (result or {}).get("data_source") or {}
         is_mock = None
         if isinstance(ds, dict):

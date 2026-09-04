@@ -90,6 +90,22 @@ def set_engine(engine):
     _engine_override = engine
 
 
+def _signal_path_meta(counts: dict) -> dict:
+    """신호가 **어느 경로로** 났는지 보고한다.
+
+    ★미측정 ≠ 0%★ 신호 조회가 한 번도 없었으면 `vectorized_pct` 는 `0.0` 이 아니라
+    `None` 이다. `0.0` 을 적으면 "벡터화가 한 번도 안 먹혔다" 는 **하지 않은 진술**이
+    된다(같은 파일의 `intraday.applied_pct` 는 `0.0` 을 쓰는데, 그쪽은 분모가
+    체결 건수라 0 이 '체결이 없었다' 로 정확히 읽힌다 — 여기는 다르다).
+    """
+    tot = counts.get("vectorized", 0) + counts.get("per_bar", 0) + counts.get("failed", 0)
+    return {"vectorized": counts.get("vectorized", 0),
+            "per_bar": counts.get("per_bar", 0),
+            "failed": counts.get("failed", 0),
+            "vectorized_pct": (round(counts.get("vectorized", 0) / tot * 100, 1)
+                               if tot else None)}
+
+
 def _count_coverage(counts: dict, df) -> None:
     """이 프레임이 **요청 구간을 덮었는가** 를 센다 (진단용).
 
@@ -337,6 +353,11 @@ class BacktestEngine:
         self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
         self._eod_liquidated = 0                # 기간종료 청산 종목 수 (통계 표기용)
         self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
+        # 신호가 어느 경로로 났는가 — ★조용한 폴백을 센다★
+        # 폴백은 O(종목×봉)이라 저장소 실측이 "종목 1개 예외만으로 5배+ 슬로다운"
+        # 이라고 적어 뒀다. 그런데 어느 쪽이 얼마나 돌았는지 아무도 세지 않아,
+        # "백테스트가 왜 느리지" 를 물어볼 방법이 없었다. `_intraday` 와 같은 모양.
+        self._signal_path = {"vectorized": 0, "per_bar": 0, "failed": 0}
         self._etf_pos: dict[str, dict] = {}     # ETF 슬리브 보유 {ticker: {"qty","avg"}}
         # 종목별 fetcher 프레임 캐시 (P1-3) — 봉마다 DataFrame 을 새로 만들지 않는다.
         # 벡터화 경로(`signal_at`)를 쓰는 전략은 여기 들어오지 않으므로 비용을 안 낸다.
@@ -664,9 +685,13 @@ class BacktestEngine:
                 signal = None
                 if self.cfg.vectorize_signals and hasattr(strategy, "signal_at"):
                     signal = strategy.signal_at(ticker, sig_date)
-                if signal is None:
+                if signal is not None:
+                    self._signal_path["vectorized"] += 1
+                else:
                     sig_slice = df_slice.iloc[: len(df_slice) - lag] if lag else df_slice
                     signal = self._generate_signal_as_of(strategy, ticker, sig_slice)
+                    # ★"두 경로 모두 실패" 를 "조건 미충족" 과 섞지 않는다★
+                    self._signal_path["per_bar" if signal is not None else "failed"] += 1
                 if signal is None:
                     continue
 
@@ -1783,6 +1808,7 @@ class BacktestEngine:
         return {
             "currency": "KRW",
             "intraday": intraday_meta,
+            "signal_path": _signal_path_meta(self._signal_path),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
