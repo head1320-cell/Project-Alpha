@@ -789,7 +789,20 @@ class ConditionStrategy(BaseStrategy):
         cols: dict = {f: [] for f in fields}
         cur = dict.fromkeys(fields)
         ri = 0
-        for d in df.index:
+        # ★두 경로가 같은 날짜를 봐야 한다★
+        # 예전에는 `df.index` 를 직접 돌며 `d.date()` 를 불렀다. 그런데 per-bar 폴백
+        # 경로가 넘기는 프레임은 `RangeIndex` + `date` 컬럼이라(엔진의
+        # `_generate_signal_as_of` 가 그렇게 만든다) 정수 라벨에 `.date` 가 없고,
+        # `bd` 가 항상 None → `cur` 가 끝까지 비어 **패널이 통째로 NaN** 이 됐다.
+        # `if not panel` 가드는 NaN Series 의 dict 가 truthy 라 잡지 못한다.
+        # 즉 PIT 재무 조건이 폴백 경로에서 **조용히 전부 건너뛰어졌다.**
+        #
+        # ★이 저장소는 이 부류를 이미 한 번 고쳤다 — 그 헬퍼를 쓴다★
+        # `factor_tokens._df_dates` 가 시장·매크로·수급 토큰에서 똑같은 사고를
+        # 겪고 만들어졌다(그 독스트링에 사고가 적혀 있다). 새로 만들지 않는다.
+        from src.kis_strategies.factor_tokens import _df_dates
+        _dates = _df_dates(df)
+        for d in _dates:
             bd = d.date() if hasattr(d, "date") else None
             if bd is not None:
                 while ri < len(recs) and recs[ri]["avail"] <= bd:
@@ -810,13 +823,18 @@ class ConditionStrategy(BaseStrategy):
         """PIT 펀더멘털 토큰 → 봉별 시계열 (financials_history 적재 시). 미적재/미지원이면 None."""
         if os.getenv("BACKTEST_PIT_FUNDAMENTALS", "1") == "0" or name not in _PIT_FUND_TOKENS:
             return None
-        panel = self._pit_base_cache.get(tk, _PIT_UNBUILT)
+        # ★패널은 `df.index` 에 묶여 있다★ 종목 키만으로 캐시하면, 봉마다 길이가
+        # 다른 슬라이스를 넘기는 폴백 경로가 **길이가 안 맞는 패널**을 돌려받는다
+        # (그러면 `_signal_hits` 의 마스크 길이가 어긋나 예외가 나고, 그 종목이
+        # 통째로 per-bar 폴백으로 떨어진다 — 5배+ 슬로다운의 원인 중 하나).
+        key = (tk, len(df))
+        panel = self._pit_base_cache.get(key, _PIT_UNBUILT)
         if panel is _PIT_UNBUILT:
             try:
                 panel = self._build_pit_base(tk, df)
             except Exception:
                 panel = None
-            self._pit_base_cache[tk] = panel
+            self._pit_base_cache[key] = panel
         if not panel:
             return None
         ni, te, rev = panel["net_income"], panel["total_equity"], panel["revenue"]
