@@ -435,9 +435,15 @@ class BacktestEngine:
                 # ★출처를 손대기 전에 센다★ 아래 `copy()`·컬럼 추가 전에 읽는다.
                 _count_source(_src_counts, d)
                 _count_coverage(_cov_counts, d)
-                # ★ 날짜 문자열 1회 생성 (매 거래일 strftime 제거 — O(N²) 병목 방지)
+                # ★안 쓰는 것에 42% 를 내지 않는다★
+                # 예전에는 여기서 모든 종목에 `_date_str` 을 즉시 붙였다. 그것은
+                # per-bar 폴백의 봉마다 `strftime` 을 없앤 정당한 최적화였지만,
+                # 소비처가 `_generate_signal_as_of` **하나뿐**(폴백 경로)인데
+                # 프레임 메모리의 **42%** 를 차지했다(실측 200종목: 24.7MB 중
+                # 10.4MB). 벡터화만 타는 실행은 한 번도 읽지 않고 그 값을 냈다.
+                # `_fetch_frames` 가 이미 종목별 1회 캐시이므로 거기서 만든다 —
+                # O(N²) 는 돌아오지 않는다.
                 d = d.copy()
-                d["_date_str"] = d.index.strftime("%Y%m%d")
                 d.attrs["ticker"] = tk  # 수급 토큰 해석용 (pandas attrs는 슬라이스에도 보존)
                 ohlcv_map[tk] = d
 
@@ -769,8 +775,11 @@ class BacktestEngine:
             base = self.ohlcv_all.get(ticker)
             if base is None or base.empty:
                 return None
+            # ★여기서 처음 만든다★ 종목당 1회 — 이 캐시 자체가 종목별 1회다.
+            _ds = base["_date_str"].values if "_date_str" in base.columns \
+                else base.index.strftime("%Y%m%d").values
             full = pd.DataFrame({
-                "date": base["_date_str"].values,
+                "date": _ds,
                 "open": base["open"].values,
                 "high": base["high"].values,
                 "low": base["low"].values,
