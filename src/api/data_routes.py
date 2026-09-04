@@ -301,6 +301,23 @@ def _ingest_run(target: str):
         return auto_vintage_backfill(loop=False)
     return {"error": f"unknown target: {target}"}
 
+@router.get("/api/v1/data/coverage")
+def data_coverage(target: str, start: str, end: str):
+    """★종목별 커버리지★ — "내 유니버스의 몇 %가 이 기간을 덮는가".
+
+    `db-status` 의 전체 행 수로는 `1종목 × 40행` 과 `2,700종목 × 40행` 이 구별되지
+    않는다. 그 구별이 "백테스트가 왜 빈약한가" 에 답한다.
+
+    ★온디맨드다★ `daily_prices` 는 수백만 행이라 탭을 여는 것만으로 돌면 안 된다 —
+    호출해야 집계하고 결과는 TTL 캐시된다.
+    """
+    from src.data.coverage import ticker_coverage
+    try:
+        return ticker_coverage(target, start=start, end=end)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @router.post("/api/v1/data/ingest/{target}")
 def ingest_trigger(target: str):
     """테이블별/전체 적재 백그라운드 트리거. target ∈ {index,etf,stocks,factors,financials,flows,all}.

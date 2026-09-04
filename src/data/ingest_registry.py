@@ -23,6 +23,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+def _cross_asset_slice_sql() -> str:
+    """크로스에셋 ETF 화이트리스트 술어 — ★코드는 레지스트리가 정한다★.
+
+    `data_routes` 가 `US_TO_KR` 로 만들던 것과 같은 목록이다. 사용자 입력이
+    섞이지 않으므로 리터럴로 넣어도 안전하다(그 라우터도 같은 이유로 그렇게 한다).
+    실패하면 `None` — 슬라이스를 못 만들면 **전체를 세지 않는다**.
+    """
+    try:
+        from src.data.etf_prices import US_TO_KR
+        codes = sorted({c for c, _ in US_TO_KR.values()})
+    except Exception:                                   # noqa: BLE001
+        return None
+    if not codes:
+        return None
+    inner = ",".join(f"'{c}'" for c in codes if c.isalnum())
+    return f"ticker IN ({inner})" if inner else None
+
+
 @dataclass(frozen=True)
 class Dataset:
     """적재 대상 하나.
@@ -44,7 +62,12 @@ class Dataset:
     table: str
     tools: tuple[str, ...]
     required_env: tuple[str, ...] = ()
-    slice_of: str | None = None      # 공유 테이블의 부분집합이면 그 조건
+    slice_of: str | None = None      # 공유 테이블의 부분집합이면 그 조건(사람이 읽는 설명)
+    #: 위 조건의 **실행 가능한** 형태. `slice_of` 는 UI 설명용 산문이고 이것은
+    #: 커버리지 집계가 실제로 붙이는 술어다 — 둘을 하나로 쓰면 산문이 SQL 로
+    #: 새거나 SQL 이 UI 에 노출된다. 값은 ★레지스트리가 정하는 화이트리스트★ 이고
+    #: 사용자 입력이 섞이지 않는다.
+    slice_sql: str | None = None
     #: 이 대상을 **버튼으로 돌릴 수 있는가**. 실행 방법 자체는 라우터의
     #: `_ingest_run` 이 갖는다 — ★여기서 다시 구현하지 않는다★. 그 함수는 대상마다
     #: 간단하지 않다(factors 는 유니버스 dedup, financials 는 2단계 + 쿼터 중단
@@ -57,16 +80,21 @@ class Dataset:
 DATASETS: tuple[Dataset, ...] = (
     Dataset(
         key="stocks", label="주식 일봉", source="KRX", table="daily_prices",
+        # ★지수는 주식이 아니다★ 같은 테이블에 섞여 있으므로 커버리지 집계에서
+        # 빼지 않으면 "주식 종목 수" 에 KOSPI/KOSDAQ 이 포함된다.
+        slice_sql="ticker NOT IN ('KOSPI','KOSDAQ')",
         tools=("백테스터", "스크리너", "리스크"), required_env=("KRX_API_KEY",),
     ),
     Dataset(
         key="index", label="지수 (KOSPI/KOSDAQ)", source="KRX", table="daily_prices",
         slice_of="ticker IN ('KOSPI','KOSDAQ')",
+        slice_sql="ticker IN ('KOSPI','KOSDAQ')",
         tools=("벤치마크", "국면"), required_env=("KRX_API_KEY",),
     ),
     Dataset(
         key="etf", label="크로스에셋 ETF", source="KIS", table="daily_prices",
         slice_of="ticker IN (크로스에셋 화이트리스트)",
+        slice_sql=_cross_asset_slice_sql(),
         tools=("자산배분", "백테스터(매크로·ETF)"),
         required_env=("KIS_APP_KEY", "KIS_APP_SECRET"),
     ),
