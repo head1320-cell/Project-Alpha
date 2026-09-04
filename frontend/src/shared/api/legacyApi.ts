@@ -147,7 +147,32 @@ export const api = {
         last_error: { endpoint?: string; status?: string; message?: string } | null;
         quota_exhausted: boolean;
       } | null;
+      // ★적재 레지스트리 — UI 가 테이블 목록을 하드코딩하지 않는다★
+      // 예전엔 DbStatusPanel 이 라벨 6개와 버튼 6개를 직접 들고 있었고, 그래서
+      // 백엔드에 macro 를 더해도 화면에는 안 나왔다. 이제 백엔드가 열거한다.
+      // null = 레지스트리를 못 읽음(빈 목록 아님 — datasets_error 에 사유).
+      datasets?: Array<{
+        key: string; label: string; source: string; table: string;
+        slice_of: string | null; tools: string[]; required_env: string[];
+        env_ready: boolean | null; triggerable: boolean; note: string | null;
+      }> | null;
+      datasets_error?: string;
+      // 매크로 가용성 — 적재 테이블이 아니라 **조회 시점 라이브 호출**의 상태다.
+      macro?: {
+        ok: string[];
+        unavailable: Record<string, { reason: string; at: number }>;
+        note: string; fail_ttl_sec?: number;
+      } | null;
     }>("/api/v1/data/db-status"),
+
+  /** 종목별 커버리지 — ★온디맨드★ (daily_prices 는 수백만 행이라 자동 실행 금지) */
+  dataCoverage: (target: string, start: string, end: string) =>
+    get<{
+      key: string; label: string; table: string; start: string; end: string;
+      tickers_total: number | null; tickers_covering: number | null;
+      covering_pct?: number | null; measured: boolean; reason: string | null;
+    }>(`/api/v1/data/coverage?target=${encodeURIComponent(target)}`
+       + `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
 
   /**
    * 출처별 연구 등급 (스펙 §6.1 · Phase 8b).
