@@ -137,7 +137,15 @@ def _kis_ohlcv_df(ticker: str, start_date: str, end_date: str):
         # 요청 기간이 길수록 콜이 늘지만(콜드시), 적재 후엔 DB 히트라 무관.
         _max = int(os.getenv("KIS_OHLCV_MAX_DAYS", "5000") or 5000)
         days = max(60, min(days + 10, _max))
-        rows = client.get_daily_ohlcv(ticker, days=days)
+        # ★구간을 알려준다★ 예전에는 `days`(달력일)만 넘겨서, 클라이언트가 그것을
+        # 영업일 행 목표로 오해해 필요량의 1.52배를 받고 오늘부터 거슬러 긁었다.
+        # 상한(`KIS_OHLCV_MAX_DAYS`)에 걸려 `days` 가 줄었으면 구간을 그대로
+        # 넘기면 안 된다 — 상한을 무력화하게 된다. 그때만 예전 경로를 쓴다.
+        _capped = days >= _max
+        rows = client.get_daily_ohlcv(
+            ticker, days=days,
+            start_date=None if _capped else start_date,
+            end_date=None if _capped else end_date)
         if not rows or len(rows) < 20:
             return None
         df = pd.DataFrame(rows)
@@ -268,6 +276,30 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
     return pd.DataFrame()
 
 
+#: ★스키마 확인은 프로세스당 1회면 된다★
+#: `ensure_table` 은 `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN` × 4 를
+#: **각각 별도 트랜잭션**으로 실행한다(`krx_ingest._MIGRATE_COLUMNS`). 그것을 종목마다
+#: 부르면 콜드 200종목에 **1,000 트랜잭션**이 순수 낭비다(Postgres 는 실패한 ALTER 가
+#: 트랜잭션을 어보트시켜 롤백까지 돈다).
+#: 관용구는 새로 만들지 않는다 — `backtest_runs._inited`·`execution_store._inited` 등
+#: 이 저장소의 스토어 6곳이 이미 쓰는 모양 그대로다.
+_schema_inited = False
+
+
+def _ensure_daily_prices_schema(engine) -> None:
+    global _schema_inited
+    if _schema_inited:
+        return
+    try:
+        from src.data.krx_ingest import ensure_table
+        ensure_table(engine)
+        _schema_inited = True
+    except Exception as e:  # noqa: BLE001
+        # ★성공했을 때만 플래그를 세운다★ 실패를 기억하면 이후 write-back 이 전부
+        # 스키마 없이 돌아 조용히 실패한다.
+        logger.warning(f"daily_prices 스키마 확인 실패: {e}")
+
+
 def ingest_df_to_db(ticker: str, df) -> int:
     """DataFrame을 daily_prices에 UPSERT. Returns 적재 행 수."""
     try:
@@ -284,11 +316,7 @@ def ingest_df_to_db(ticker: str, df) -> int:
     # `source` 컬럼이 생기면서, 기존 테이블에 그 컬럼이 없는 배포에서는 INSERT 가
     # 조용히 실패했을 것이다(아래 except 가 경고만 남긴다). `ensure_table` 이
     # ALTER 를 시도하고 "이미 있음" 은 무시하므로 반복 호출이 안전하다.
-    try:
-        from src.data.krx_ingest import ensure_table
-        ensure_table(engine)
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"daily_prices 스키마 확인 실패: {e}")
+    _ensure_daily_prices_schema(engine)
 
     code = ticker.replace(".KS", "").replace(".KQ", "")
     rows = []

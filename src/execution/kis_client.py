@@ -173,14 +173,21 @@ class RateLimiter:
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def acquire(self):
+        # ★락을 쥔 채 자지 않는다★ 예전에는 `time.sleep()` 이 `with self._lock:`
+        # 안에 있어, 스로틀된 스레드 하나가 자는 동안 다른 로더 스레드 10개의
+        # `acquire()` 가 전부 막혔다 — 페이싱이 아니라 직렬화였다.
+        # 슬롯 **예약**은 락 안에서(합산 한도 유지), **대기**는 락 밖에서 한다.
+        sleep_for = 0.0
         with self._lock:
             now = time.time()
             # 1초 이전 호출 제거
             self._last_calls = [t for t in self._last_calls if now - t < 1.0]
             if len(self._last_calls) >= self.calls_per_second:
-                sleep_for = 1.0 - (now - self._last_calls[0]) + 0.01
-                time.sleep(max(0, sleep_for))
-            self._last_calls.append(time.time())
+                sleep_for = max(0.0, 1.0 - (now - self._last_calls[0]) + 0.01)
+            # 예약 시각을 미리 기록 — 대기 중에 다른 스레드가 이 슬롯을 겹쳐 쓰지 못한다.
+            self._last_calls.append(now + sleep_for)
+        if sleep_for > 0:
+            time.sleep(sleep_for)
 
 
 @dataclass
@@ -553,7 +560,8 @@ class KISClient:
         }
 
     def get_daily_ohlcv(self, ticker: str, days: int = 150,
-                         period: str = "D") -> list:
+                         period: str = "D", start_date: str | None = None,
+                         end_date: str | None = None) -> list:
         """
         국내주식 기간별 OHLCV (백테스트·기술지표용).
 
@@ -561,17 +569,44 @@ class KISClient:
             ticker: 6자리 종목코드
             days:   조회 일수 (KIS는 1회 최대 100건 → 자동 페이지네이션)
             period: D(일)|W(주)|M(월)|Y(년)
+            start_date: "YYYY-MM-DD" — 주면 **여기 도달 시 중단**(과다 페치 방지)
+            end_date:   "YYYY-MM-DD" — 주면 여기서부터 거슬러 수집(기본 오늘)
         Returns:
             [{date, open, high, low, close, volume}, ...] 과거→현재 순
+
+        ★왜 `start_date` 가 생겼나 — 단위가 어긋나 있었다★
+        종료조건은 `len(collected) >= days` 였는데 `collected` 는 **영업일 행**이고
+        호출자(`ohlcv_loader`)가 넘기는 `days` 는 **달력일**이다(≈1.45배 크다).
+        목표에 도달하지 못해 `max_pages` 까지 돌았고, 3년 요청에 필요한 756봉 대신
+        ~1,148봉(**1.52배**)을 받았다.
+
+        환산 계수를 정교하게 맞추는 것은 답이 아니다 — 우리는 요청 구간을 알고
+        있으므로 **"가장 오래된 수집 봉이 start_date 이하"** 를 조건으로 쓰면
+        추정이 아예 필요 없다. `days` 는 인자를 안 준 호출부를 위한 **폴백**으로만 남는다.
         """
         from datetime import datetime, timedelta
 
+        def _parse(v):
+            try:
+                return datetime.strptime(v, "%Y-%m-%d") if v else None
+            except (TypeError, ValueError):
+                return None    # ★지어내지 않는다★ — 못 읽으면 예전 동작으로
+
+        want_from = _parse(start_date)
+        stop_at = want_from.strftime("%Y%m%d") if want_from else None
+
         # KIS inquire-daily-itemchartprice 는 1콜 최대 ~100봉만 반환한다. 장기 역사를 얻으려면
         # 날짜 윈도를 과거로 옮기며 페이지네이션해야 한다. 윈도는 ~120일(영업일 ~80<100)로 잡아
-        # 잘림 없이 수집하고, days 만큼 모이거나 더 과거 데이터가 없을 때(상장 시작 도달)까지 반복.
+        # 잘림 없이 수집하고, 요청 시작일에 닿거나(또는 days 만큼 모이거나) 더 과거
+        # 데이터가 없을 때(상장 시작 도달)까지 반복.
         collected: dict[str, dict] = {}
-        end_cursor = datetime.now()
-        max_pages = max(1, min(int(days / 70) + 3, 500))   # 무한루프 방지 상한
+        end_cursor = _parse(end_date) or datetime.now()
+        if want_from:
+            # 필요한 달력일 + 여유 1페이지. 영업일/달력일 환산을 추정하지 않는다.
+            span = max(1, (end_cursor - want_from).days)
+            max_pages = max(1, min(int(span / 110) + 2, 500))
+        else:
+            max_pages = max(1, min(int(days / 70) + 3, 500))   # 무한루프 방지 상한
         for _ in range(max_pages):
             start_cursor = end_cursor - timedelta(days=120)
             params = {
@@ -614,10 +649,17 @@ class KISClient:
                     oldest = d
             if not rows or new == 0 or oldest is None:
                 break  # 더 이상 과거 데이터 없음(상장 시작 도달)
-            if len(collected) >= days:
-                break
+            if stop_at is not None:
+                if oldest <= stop_at:
+                    break          # ★요청 시작일에 닿았다 — 더 받을 이유가 없다★
+            elif len(collected) >= days:
+                break              # 예전 동작(인자 미지정 호출부)
             end_cursor = datetime.strptime(oldest, "%Y%m%d") - timedelta(days=1)
         result = [collected[d] for d in sorted(collected)]  # 과거→현재
+        if stop_at is not None:
+            # 구간이 명시됐으면 그 구간이 진실이다 — 달력일 `days` 로 자르면
+            # 영업일 행이 그보다 적어 **요청 구간을 다시 잘라먹는다**.
+            return [r for r in result if r["date"] >= stop_at]
         return result[-days:] if len(result) > days else result
 
     def _parse_minute_rows(self, rows: list) -> list[dict]:
