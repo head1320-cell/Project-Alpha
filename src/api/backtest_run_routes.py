@@ -406,6 +406,9 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
                 # 최소 12분이다 — 그 사실이 응답 어디에도 없었다.
                 if evt.get("sources"):
                     tele["symbols_by_source"] = dict(evt["sources"])
+                # ★"적재는 됐는데 구간을 덮지 못했다" 를 사용자가 볼 수 있게★
+                if evt.get("coverage"):
+                    tele["symbols_by_coverage"] = dict(evt["coverage"])
             elif phase == "simulating":
                 stage = "simulating"
                 pct = 30 + (55 * done / total if done and total else 0)

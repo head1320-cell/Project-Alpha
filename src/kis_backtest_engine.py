@@ -90,6 +90,24 @@ def set_engine(engine):
     _engine_override = engine
 
 
+def _count_coverage(counts: dict, df) -> None:
+    """이 프레임이 **요청 구간을 덮었는가** 를 센다 (진단용).
+
+    `ohlcv_loader` 가 `attrs["coverage_ok"]` 를 붙인다. 예전에는 DB 채택 조건이
+    행 개수(`len >= 20`)뿐이라, 요청은 2023–2026 인데 2023–2024 만 적재된 종목이
+    **조용히 잘린 채** 백테스트로 흘러갔다.
+
+    ★미상은 통과가 아니다★ 라벨이 없으면 `"unknown"` 이다. `"ok"` 로 세면 로더를
+    거치지 않은 경로가 전부 "덮었다" 로 둔갑해 보고가 거짓이 된다.
+    """
+    try:
+        flag = df.attrs.get("coverage_ok")
+    except AttributeError:
+        flag = None
+    key = "ok" if flag is True else ("partial" if flag is False else "unknown")
+    counts[key] = counts.get(key, 0) + 1
+
+
 def _count_source(counts: dict, df) -> None:
     """이 프레임이 **어디서 왔는가** 를 센다 (진단용).
 
@@ -100,10 +118,16 @@ def _count_source(counts: dict, df) -> None:
     ★미상은 0 이 아니다★ 태그가 없으면 `"unknown"` 으로 센다. `db: 0` 으로 적으면
     "DB 에서 하나도 안 왔다" 는 **하지 않은 진술**이 된다.
 
-    왜 이것이 필요한가: DB 적재가 얇으면(`len(df) >= 20` 미달) 종목마다 KIS 로
-    떨어지고, KIS 일봉은 1콜 ~100봉 + 초당 20콜 전역 레이트리밋이라 200종목이면
-    **최소 12분**이다. 그런데 응답 어디에도 그 사실이 없어서 사용자는 왜 느린지
-    알 수 없었다.
+    왜 이것이 필요한가: DB 적재가 얇으면 종목마다 KIS 로 떨어지고, KIS 일봉은
+    1콜 ~100봉이라 페이지네이션이 붙는다. 그런데 응답 어디에도 그 사실이 없어서
+    사용자는 왜 느린지 알 수 없었다.
+
+    ★이 독스트링의 앞 판은 수치가 틀렸다 — 고쳐 적는다★
+    "초당 **20**콜 **전역** 레이트리밋 → 200종목 최소 **12분**" 이라고 적었는데,
+    셋 다 틀렸다: 한도는 **18**콜(`kis_client.RateLimiter.calls_per_second`)이고,
+    리미터는 모듈 싱글턴의 **인스턴스** 속성이라 **프로세스마다 별개**이며(워커
+    4개면 합산 최대 72콜/초가 나간다 — 제공자 한도 초과), "12분" 은 **20년**
+    백테스트 값이다. 3년 구간은 종목당 ~14콜이라 200종목에 ≈2.6분이다.
     """
     src = df.attrs.get("source") if getattr(df, "attrs", None) else None
     key = str(src) if src else "unknown"
@@ -403,12 +427,14 @@ class BacktestEngine:
             return tk, d
 
         _src_counts: dict[str, int] = {}
+        _cov_counts: dict[str, int] = {}
 
         def _absorb(tk: str, d):
             """메인 스레드에서만 호출 — ohlcv_map 갱신(딕셔너리 경쟁 없음)."""
             if d is not None and not d.empty:
                 # ★출처를 손대기 전에 센다★ 아래 `copy()`·컬럼 추가 전에 읽는다.
                 _count_source(_src_counts, d)
+                _count_coverage(_cov_counts, d)
                 # ★ 날짜 문자열 1회 생성 (매 거래일 strftime 제거 — O(N²) 병목 방지)
                 d = d.copy()
                 d["_date_str"] = d.index.strftime("%Y%m%d")
@@ -455,7 +481,8 @@ class BacktestEngine:
         # ★로딩이 끝나면 출처 구성을 한 번 보고한다★ 상류(`_worker`)가 이것을
         # 텔레메트리에 실어, "왜 느렸는가" 를 나중에 물을 수 있게 한다.
         self._emit("loading", done=total_syms, total=total_syms,
-                   extra={"sources": dict(_src_counts)})
+                   extra={"sources": dict(_src_counts),
+                          "coverage": dict(_cov_counts)})
 
         self.ohlcv_all = ohlcv_map   # per-bar 프레임 캐시가 원본으로 쓴다 (P1-3)
 

@@ -161,14 +161,67 @@ def _kis_ohlcv_df(ticker: str, start_date: str, end_date: str):
         return None
 
 
-def _db_ohlcv_df(ticker: str, start_date: str, end_date: str):
-    """PostgreSQL daily_prices → DataFrame. 비어있으면 빈 df."""
+class OhlcvStoreError(Exception):
+    """가격 저장소(DB) 접근 실패 — '적재된 적 없음'과 구분해야 하는 일시적 오류.
+
+    ★없음과 못 읽음은 다르다★ 이 경로는 예외를 전부 삼켜 **빈 프레임**을 돌려줬고,
+    그래서 DB 장애와 "이 종목은 적재된 적이 없다" 가 같은 답이 됐다. 상류가
+    "실데이터 없음" 이라고 단언하는 순간 그것이 거짓일 수 있었다.
+
+    `backtest_runs.BacktestStoreError` 와 같은 어휘다 — 새 규약을 만들지 않는다.
+    """
+
+
+def _db_ohlcv_df(ticker: str, start_date: str, end_date: str, strict: bool = False):
+    """PostgreSQL daily_prices → DataFrame. 비어있으면 빈 df.
+
+    strict=False(기본, 기존 호출부 보호): DB 오류를 빈 프레임으로 삼킴.
+    strict=True: `OhlcvStoreError` 로 올려 '적재 없음'과 구분.
+    """
     try:
         from src.kis_backtest_engine import load_ohlcv
         return load_ohlcv(ticker, start_date, end_date)
-    except Exception:
+    except Exception as e:
+        if strict:
+            raise OhlcvStoreError(str(e)) from e
         import pandas as pd
         return pd.DataFrame()
+
+
+#: 요청 구간의 양 끝에서 이만큼(달력일)까지는 "덮은 것" 으로 본다.
+#: 거래일이 아닌 날(주말·공휴일·상장 전)로 시작·종료하는 요청이 흔하고, 종목마다
+#: 상장일이 다르다 — 하루 어긋났다고 KIS 를 다시 부르면 콜만 태운다.
+_COVERAGE_SLACK_DAYS = 10
+
+
+def _coverage(df, start_date: str, end_date: str) -> tuple[bool, str | None]:
+    """적재분이 요청 구간을 덮는가 — (ok, 사유).
+
+    ★예전에는 이 판정이 아예 없었다★ 채택 조건이 `len(df) >= 20` **행 개수뿐**
+    이라, 2023–2026 을 요청했는데 DB 에 2023–2024 만 있으면 ~250행으로 통과해
+    **잘린 시계열이 조용히 백테스트로 흘러갔다.**
+
+    ★미상은 '덮었다' 가 아니다★ 판정에 필요한 것을 못 읽으면 `False` + 사유다.
+    """
+    import pandas as pd
+    if df is None or len(df) == 0:
+        return False, "적재분이 없습니다."
+    try:
+        lo, hi = pd.Timestamp(df.index.min()), pd.Timestamp(df.index.max())
+        # 슬랙은 **안쪽으로** 준다 — 적재분이 요청 시작보다 조금 늦게 시작하거나
+        # 조금 일찍 끝나는 것은 허용한다(주말·공휴일·상장일 차이).
+        want_lo = pd.Timestamp(start_date) + pd.Timedelta(days=_COVERAGE_SLACK_DAYS)
+        want_hi = pd.Timestamp(end_date) - pd.Timedelta(days=_COVERAGE_SLACK_DAYS)
+    except (TypeError, ValueError) as e:
+        return False, f"커버리지를 판정할 수 없습니다(날짜 해석 실패: {e})."
+    gaps = []
+    if lo > want_lo:
+        gaps.append(f"시작 {lo.date()} > 요청 {start_date}")
+    if hi < want_hi:
+        gaps.append(f"끝 {hi.date()} < 요청 {end_date}")
+    if gaps:
+        return False, "적재 구간이 요청을 덮지 못합니다 — " + " · ".join(gaps)
+    return True, None
 
 
 def _tag(df, code: str, source: str | None = None) -> None:
@@ -250,12 +303,38 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
         return df
 
     # auto: DB → KIS → mock
-    df = _db_ohlcv_df(code, start_date, end_date)
-    if df is not None and not df.empty and len(df) >= 20:
-        _tag(df, code, "db")        # 실데이터(적재 DB)
+    db_error = None
+    try:
+        df = _db_ohlcv_df(code, start_date, end_date, strict=True)
+    except OhlcvStoreError as e:
+        # ★없음과 못 읽음을 구분한다★ 장애면 아래 KIS 폴백은 그대로 타되,
+        # 그 사실을 라벨로 남겨 "실데이터 없음" 으로 오독되지 않게 한다.
+        logger.warning(f"가격 저장소 조회 실패 ({code}): {e}")
+        db_error, df = str(e), None
+
+    db_ok = df is not None and not df.empty and len(df) >= 20
+    cov_ok, cov_why = _coverage(df, start_date, end_date) if db_ok else (False, None)
+
+    if db_ok and cov_ok:
+        _tag(df, code, "db")        # 실데이터(적재 DB) — 구간을 덮는다
+        df.attrs["coverage_ok"] = True
+        df.attrs["coverage_reason"] = None
+        if db_error:
+            df.attrs["db_error"] = db_error
         return df
 
-    df = _kis_ohlcv_df(code, start_date, end_date)
+    # ★부분 커버면 KIS 로 보강을 시도한다★ 예전에는 묻지도 않고 잘린 채 넘겼다.
+    df_kis = _kis_ohlcv_df(code, start_date, end_date)
+    if db_ok and (df_kis is None or df_kis.empty):
+        # 보강 실패 — 정책은 그대로(있는 데이터로 돈다) 다만 **사실을 싣는다**.
+        _tag(df, code, "db")
+        df.attrs["coverage_ok"] = False
+        df.attrs["coverage_reason"] = cov_why
+        if db_error:
+            df.attrs["db_error"] = db_error
+        return df
+
+    df = df_kis
     if df is not None and not df.empty:
         # KIS 성공 시 DB 적재 (다음 백테스트 가속)
         try:
@@ -263,6 +342,13 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
         except Exception:
             pass
         _tag(df, code, "kis")       # 실데이터(KIS 실시간)
+        # ★모든 분기가 같은 키를 낸다★ 소비자가 분기마다 다른 모양을 만나면
+        # "라벨이 없다" 와 "덮었다" 를 구별할 수 없다.
+        _ok, _why = _coverage(df, start_date, end_date)
+        df.attrs["coverage_ok"] = _ok
+        df.attrs["coverage_reason"] = _why
+        if db_error:
+            df.attrs["db_error"] = db_error
         return df
 
     # 최종 fallback: mock 모드만 합성, 운영선 빈 df(정직 — 실데이터 없음)
@@ -271,9 +357,18 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
         logger.info(f"OHLCV mock fallback: {code} (DB/KIS 모두 미가용)")
         df = _mock_ohlcv_df(code, start_date, end_date)
         _tag(df, code, "mock")
+        df.attrs["coverage_ok"] = False
+        df.attrs["coverage_reason"] = "합성 데이터입니다(실데이터 아님)."
+        if db_error:
+            df.attrs["db_error"] = db_error
         return df
     logger.info(f"OHLCV 미가용(실데이터 없음, 합성 금지): {code}")
-    return pd.DataFrame()
+    empty = pd.DataFrame()
+    empty.attrs["coverage_ok"] = False
+    empty.attrs["coverage_reason"] = "실데이터가 없습니다(합성 금지)."
+    if db_error:
+        empty.attrs["db_error"] = db_error
+    return empty
 
 
 #: ★스키마 확인은 프로세스당 1회면 된다★
