@@ -537,14 +537,60 @@ _MARKET_DERIVED = ("볼린저밴드_상단값", "볼린저밴드_하단값", "�
 
 _market_cache: dict[str, pd.DataFrame | None] = {}
 
+#: 실패를 기억해 두는 시간(초). ★성공은 오래 캐시해도 되지만 실패는 아니다★
+#: 이 캐시들은 실패한 `None` 을 **영구히** 들고 있었다. `uvicorn --workers 1` 이라
+#: 캐시가 프로세스 로컬이고 프로세스는 오래 산다 — 기동 직후 네트워크가 한 번
+#: 흔들리면 그 매크로/지수 토큰은 **서버를 재시작할 때까지** 계속 평가 불가였다.
+#: 그리고 조건식은 평가 불가를 조용히 건너뛴다 — 사용자는 매크로 조건이 걸린 줄
+#: 알지만 실제로는 무시된 백테스트를 본다.
+_MACRO_FAIL_TTL_SEC = 900.0
 
-def _market_df(prefix: str) -> pd.DataFrame | None:
-    """지수 OHLCV 로드(캐시). 실패 시 None 캐시(반복 시도 방지)."""
-    if prefix in _market_cache:
-        return _market_cache[prefix]
+#: {키: (실패 시각, 사유)} — ★사유 없는 실패는 금지★ 어떤 토큰이 왜 못 쓰이는지
+#: 말할 수 있어야 `macro_availability()` 가 보고할 수 있다.
+_macro_failures: dict[str, tuple[float, str]] = {}
+
+
+def _fail_fresh(key: str) -> bool:
+    """이 키의 실패가 아직 시효 안인가(= 재시도하지 않는다)."""
+    import time as _t
+    rec = _macro_failures.get(key)
+    return rec is not None and (_t.time() - rec[0]) < _MACRO_FAIL_TTL_SEC
+
+
+def _note_failure(key: str, reason: str) -> None:
+    import time as _t
+    _macro_failures[key] = (_t.time(), reason)
+
+
+def _note_success(key: str) -> None:
+    _macro_failures.pop(key, None)
+
+
+def macro_availability() -> dict:
+    """지금 이 프로세스에서 매크로·지수 토큰이 **쓸 수 있는 상태인가**.
+
+    ★미상은 실패가 아니다★ 아무도 물어본 적 없는 토큰은 어느 쪽에도 넣지 않는다
+    — '사용 불가' 로 보고하면 사용자가 없는 문제를 쫓는다.
+    """
+    ok = sorted([k for k, v in _ecos_cache.items() if v is not None]
+                + [k for k, v in _fred_cache.items() if v is not None]
+                + [k for k, v in _market_cache.items() if v is not None])
+    bad = {k: {"reason": r, "at": t} for k, (t, r) in _macro_failures.items()}
+    return {
+        "ok": ok,
+        "unavailable": bad,
+        "note": ("이 프로세스가 **실제로 조회해 본** 토큰만 보고합니다 — 목록에 없는 "
+                 "토큰은 '사용 불가' 가 아니라 '아직 조회한 적 없음' 입니다. "
+                 "매크로 토큰은 적재 대상이 아니라 조회 시점의 라이브 호출입니다."),
+        "fail_ttl_sec": _MACRO_FAIL_TTL_SEC,
+    }
+
+
+def _market_fetch(prefix: str) -> pd.DataFrame | None:
+    """지수 OHLCV 를 실제로 받아온다 (네트워크). 캐시·시효는 호출자 몫."""
     loader_sym, yf_sym = MARKET_SYMBOLS.get(prefix, (None, None))
     df = None
-    try:
+    if True:
         if loader_sym:
             from datetime import datetime
 
@@ -560,10 +606,29 @@ def _market_df(prefix: str) -> pd.DataFrame | None:
                 df = raw.rename(columns={"Open": "open", "High": "high", "Low": "low",
                                           "Close": "close", "Volume": "volume"})
                 df = df[["open", "high", "low", "close", "volume"]]
-    except Exception:
+    return None if (df is None or df.empty) else df
+
+
+def _market_df(prefix: str) -> pd.DataFrame | None:
+    """지수 OHLCV 로드(캐시). ★실패는 시효를 두고 다시 시도한다★
+
+    예전 독스트링은 "실패 시 None 캐시(반복 시도 방지)" 였다. 반복 시도를 막는
+    의도는 옳지만 **영구히** 막으면 기동 시 한 번의 네트워크 흔들림이 그 토큰을
+    프로세스 수명 내내 죽인다.
+    """
+    if prefix in _market_cache and not (_market_cache[prefix] is None
+                                        and not _fail_fresh(f"market:{prefix}")):
+        return _market_cache[prefix]
+    try:
+        df = _market_fetch(prefix)
+    except Exception as e:  # noqa: BLE001
         df = None
-    if df is not None and df.empty:
-        df = None
+        _note_failure(f"market:{prefix}", f"{type(e).__name__}: {e}")
+    else:
+        if df is None:
+            _note_failure(f"market:{prefix}", "지수 데이터가 비었습니다(적재·수집 미가용).")
+        else:
+            _note_success(f"market:{prefix}")
     _market_cache[prefix] = df
     return df
 
@@ -777,29 +842,43 @@ def _ecos_series(token: str) -> pd.Series | None:
     없었다)·키 검증(`len>10` vs `if key`)·HTTP 라이브러리. 분당 한도가 있는 API 에
     스로틀 없이 붙는 경로가 하나 더 있는 상태였다.
     """
+
+
+    if token in _ecos_cache and not (_ecos_cache[token] is None and not _fail_fresh(token)):
+        return _ecos_cache[token]
+    s = None
+    try:
+        s = _ecos_fetch(token)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(token, f"{type(e).__name__}: {e}")
+    else:
+        if s is None:
+            _note_failure(token, "ECOS 키가 없거나 미지원 토큰입니다.")
+        else:
+            _note_success(token)
+    _ecos_cache[token] = s
+    return s
+
+
+def _ecos_fetch(token: str) -> pd.Series | None:
+    """ECOS 를 실제로 조회한다 (네트워크). 캐시·시효는 호출자 몫."""
     from datetime import datetime
 
     from src.services.macro_collector import BokClient
 
-    if token in _ecos_cache:
-        return _ecos_cache[token]
     spec = ECOS_TOKENS.get(token)
-    s = None
-    if spec:
-        client = BokClient()
-        if client.is_configured:
-            try:
-                stat, item = spec
-                ts, vals = client.fetch_series(
-                    stat, item, start=ECOS_DAILY_START,
-                    end=datetime.now().strftime("%Y%m%d"), period="D",
-                    # ★수집기 기본값 1000 을 쓰면 조용히 잘린다★
-                    limit=ECOS_DAILY_LIMIT)
-                s = ecos_rows_to_series(ts, vals)
-            except Exception:
-                s = None
-    _ecos_cache[token] = s
-    return s
+    if not spec:
+        return None
+    client = BokClient()
+    if not client.is_configured:
+        return None
+    stat, item = spec
+    ts, vals = client.fetch_series(
+        stat, item, start=ECOS_DAILY_START,
+        end=datetime.now().strftime("%Y%m%d"), period="D",
+        # ★수집기 기본값 1000 을 쓰면 조용히 잘린다★
+        limit=ECOS_DAILY_LIMIT)
+    return ecos_rows_to_series(ts, vals)
 
 
 # ── FRED (미국 국채금리) — FRED_API_KEY 필요(무료, fred.stlouisfed.org) ──────
@@ -858,25 +937,38 @@ def _fred_series(token: str) -> pd.Series | None:
     이 토큰은 **일별 종목 봉**에 정렬된다. 월별로 받으면 ffill 되어 그럴듯해
     보이지만 해상도가 사라진다.
     """
-    from src.services.macro_collector import FredClient
 
-    if token in _fred_cache:
+    if token in _fred_cache and not (_fred_cache[token] is None and not _fail_fresh(token)):
         return _fred_cache[token]
-    series_id = FRED_TOKENS.get(token)
     s = None
-    if series_id:
-        client = FredClient()
-        if client.is_configured:
-            try:
-                dates, values = client.fetch_series(
-                    series_id, start=FRED_DAILY_START,
-                    # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
-                    frequency=None)
-                s = fred_rows_to_series(dates, values)
-            except Exception:
-                s = None
+    try:
+        s = _fred_fetch(token)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(token, f"{type(e).__name__}: {e}")
+    else:
+        if s is None:
+            _note_failure(token, "FRED 키가 없거나 미지원 토큰입니다.")
+        else:
+            _note_success(token)
     _fred_cache[token] = s
     return s
+
+
+def _fred_fetch(token: str) -> pd.Series | None:
+    """FRED 를 실제로 조회한다 (네트워크). 캐시·시효는 호출자 몫."""
+    from src.services.macro_collector import FredClient
+
+    series_id = FRED_TOKENS.get(token)
+    if not series_id:
+        return None
+    client = FredClient()
+    if not client.is_configured:
+        return None
+    dates, values = client.fetch_series(
+        series_id, start=FRED_DAILY_START,
+        # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
+        frequency=None)
+    return fred_rows_to_series(dates, values)
 
 
 def resolve_macro_token(df: pd.DataFrame, token: str) -> pd.Series | None:

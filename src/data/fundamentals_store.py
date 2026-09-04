@@ -154,6 +154,27 @@ def _real_dividend(dart, corp_code: str, year, net_income: float | None) -> floa
     return 0.0
 
 
+def assumed_fields(raw: dict, assumed: set | None) -> list | None:
+    """어떤 필드가 **관측이 아니라 가정**인지 정렬된 목록으로 돌려준다.
+
+    ★값은 바꾸지 않는다★ 이 저장소의 실데이터 경로는 DART 값이 없을 때 가정값을
+    만든다 — `revenue_prev = revenue * 0.95` · `mcap = total_equity * 1.2` ·
+    `shares = 10000` 등. 조건식이 그 위에서 '매출액증가율' 을 스크리닝하면
+    **어떤 종목이든 정확히 +5.26%** 로 나온다. 스크리닝 결과가 데이터가 아니라
+    상수에서 나오는 것이다.
+
+    그것을 `None` 으로 돌리면 조건식이 건너뛰어 **백테스트 결과가 바뀐다**(정책
+    변경). 그래서 지금은 **값을 두고 표시만** 한다 — 그래야 "이 성장률은 실측인가
+    상수인가" 를 물을 수 있다.
+
+    ★미상 ≠ 가정 없음★ 계산해 보지 않았으면 빈 리스트가 아니라 `None` 이다.
+    빈 리스트는 "확인했더니 가정값이 없다" 는 하지 않은 진술이 된다.
+    """
+    if assumed is None:
+        return None
+    return sorted(assumed)
+
+
 class FundamentalsStore(DeterministicMockStore):
     """DART 원천 → 50+ 학술 팩터 도출 (Mock + 실데이터 연결 여지)."""
 
@@ -316,11 +337,18 @@ class FundamentalsStore(DeterministicMockStore):
         def to_억(v):
             return (v / E8) if v is not None else None
 
+        # ★어떤 필드가 관측이 아니라 가정인지 모은다★ 값은 바꾸지 않는다 —
+        # `None` 으로 돌리면 조건식이 건너뛰어 백테스트 결과가 바뀐다(정책 변경).
+        # 표시만 해서 "이 성장률은 실측인가 상수인가" 를 물을 수 있게 한다.
+        _assumed: set = set()
+
         # 시총 (item 우선, KIS에서 주입됐을 수 있음)
         mcap = getattr(item, "market_cap_억", None) if item else None
 
         revenue = to_억(fs.revenue)
         gross_profit = to_억(fs.gross_profit) if fs.gross_profit is not None else (revenue * 0.3 if revenue else None)
+        if fs.gross_profit is None and revenue:
+            _assumed.add("gross_profit")
         operating_profit = to_억(fs.operating_profit)
         net_income = to_억(fs.net_income)
         total_assets = to_억(fs.total_assets)
@@ -339,14 +367,21 @@ class FundamentalsStore(DeterministicMockStore):
         if not mcap or mcap <= 0:
             # 시총 미주입 시 PBR≈1.2 가정으로 근사 (실데이터 결합 전까지)
             mcap = total_equity * 1.2
+            _assumed.add("mcap")
 
         interest_expense = total_liabilities * 0.03 if total_liabilities else 0
         buyback = 0
 
         # 전년/3년전
         revenue_prev = to_억(fs_prev.revenue) if (fs_prev and fs_prev.revenue) else (revenue * 0.95)
+        if not (fs_prev and fs_prev.revenue):
+            _assumed.add("revenue_prev")
         op_prev = to_억(fs_prev.operating_profit) if (fs_prev and fs_prev.operating_profit) else (operating_profit * 0.93)
+        if not (fs_prev and fs_prev.operating_profit):
+            _assumed.add("op_prev")
         ni_prev = to_억(fs_prev.net_income) if (fs_prev and fs_prev.net_income) else (net_income * 0.94)
+        if not (fs_prev and fs_prev.net_income):
+            _assumed.add("ni_prev")
         revenue_3y_ago = to_억(fs_3y.revenue) if (fs_3y and fs_3y.revenue) else (revenue * 0.8)
         ni_3y_ago = to_억(fs_3y.net_income) if (fs_3y and fs_3y.net_income) else (net_income * 0.78)
 
@@ -369,6 +404,7 @@ class FundamentalsStore(DeterministicMockStore):
                 shares = derived
         if not shares or shares <= 0:
             shares = 10000  # 최후 근사 (마스터·주가 모두 미적재)
+            _assumed.add("shares")
         # 시총도 실측 우선: item(KIS 주입) > master 실측 > PBR≈1.2 근사(기존)
         if (not getattr(item, "market_cap_억", None) if item else True) and snap["mcap_억"]:
             mcap = snap["mcap_억"]
@@ -422,6 +458,8 @@ class FundamentalsStore(DeterministicMockStore):
             rev_q=rev_q, rev_q_prev=rev_q_prev, share_price=share_price,
             shares=shares,
             _source="dart_real",
+            # ★어떤 필드가 관측이 아니라 가정인지★ — 값은 그대로다.
+            _assumed=assumed_fields(raw, _assumed),
         ))
         return raw
 

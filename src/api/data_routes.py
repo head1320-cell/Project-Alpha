@@ -190,6 +190,18 @@ def db_status():
         }
     except Exception:
         logger.exception("db-status 조회 실패")
+    # ★적재 대상에 없는 데이터도 상태를 말한다★
+    # 조건식의 ECOS/FRED·해외지수 토큰은 `INGEST_TARGETS` 에 없고 조회 시점의
+    # 라이브 호출이라, 위 테이블 블록에 잡히지 않는다. `config` 의 `bok_key`·
+    # `fred_key` 는 **키가 있다**는 뜻일 뿐 **시계열이 온다**는 뜻이 아니다 —
+    # 그 간극이 사용자에게 보이지 않았다.
+    try:
+        from src.kis_strategies.factor_tokens import macro_availability
+        out["macro"] = macro_availability()
+    except Exception as e:  # noqa: BLE001
+        # ★지어내지 않는다★ 못 읽으면 그렇게 적는다(빈 dict 은 '문제 없음'으로 읽힌다).
+        out["macro"] = {"ok": [], "unavailable": {},
+                        "note": f"매크로 가용성을 확인할 수 없습니다: {e}"}
     out["ingest_running"] = dict(INGEST_RUNNING)
     return out
 
