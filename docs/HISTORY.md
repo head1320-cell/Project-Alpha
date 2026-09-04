@@ -13467,3 +13467,55 @@ E9 `shares=10000` 부활 · E10 `mcap = 자본×1.2` 부활 → **10개 전부 �
 틀린 데다 애초에 취약한 방식이라 동작 기반으로 다시 썼다.
 
 **게이트** — ruff 통과 · typecheck 통과 · 전체 스위트 **4,241 passed / 10 skipped**.
+
+## ★mock 게이트 우회로를 막는다★ — 운영에서 mock 클라이언트를 돌려주지 않는다 (①)
+
+**무엇을** — `get_kis_client()` 가 운영 모드에서 자격증명이 없을 때 `MockKISClient`
+대신 **`KISCredentialsMissing`(사유 포함)** 을 올린다. 열화가 맞는 호출부를 위해
+`try_kis_client() -> (client, reason)` 을 함께 뒀다.
+
+**왜 — 가드가 잘못된 계층에 있었다**
+
+```python
+    use_mock = mock_allowed()
+    if use_mock:
+        return MockKISClient()          # ← 여기까진 옳다
+
+    if not app_key or not app_secret:
+        logger.warning("... → MockKISClient fallback")
+        _kis_singleton = MockKISClient()   # ← ★운영인데 mock 을 돌려준다★
+```
+
+게이트를 올바르게 보고 **난 뒤 두 번째 분기**에서 조용히 mock 을 냈다. 그래서
+호출부가 `if mock_allowed(): return` 으로 성실히 막아도, **그 직후 이 함수를 부르면
+mock 을 받았다.** 호출부 17곳 중 `MockKISClient` 를 직접 확인하는 곳은 6곳뿐이었다.
+
+실제 노출: `data/market_data.py:215` 가 그렇게 받은 client 로 `get_daily_ohlcv()` 를
+불러 `rng.gauss` 난수 일봉(`date:"MOCK"`)을 **운영에서** 받았다.
+`data_sync`·`ohlcv_loader` 의 적재 경로도 같은 통로로 **합성값을 DB 에 쓸** 수 있었다.
+
+★`extended_factors_store:280` 이 "우연히 무해" 했던 것이 이 구조를 그대로 보여준다★
+— mock 이 그 필드(`hts_frgn_ehrt`)를 안 내놓아서 안전했던 것이지, 막아서가 아니다.
+
+**개발 환경은 조이지 않는다** — `.env.example` 기본값이 `KIS_USE_MOCK=1` 이라 첫
+분기에서 mock 이 나간다. 조여지는 것은 **키 없이 운영 모드로 도는 경우**뿐이고,
+그때 합성값이 나가는 것이 바로 사고다.
+
+**호출부 감사(17곳)** — 5곳은 이미 `try/except` 라 그대로 두면 정직하게 열화한다
+(`data_sync`·`ohlcv_loader`·`kis_backtest_engine` 프리워밍·`extended_factors_store`).
+`minute_bars._fetch_minute_bars` 는 감싸지 않았지만 **단 하나뿐인 호출부**가 잡아
+`failed` 를 센다 — 예외가 관측 가능한 흔적으로 남는다(계획서에 "확인하지 못한 것"
+으로 적어 뒀던 항목이고, 여기서 해소했다). `probe_history` 만 `try_kis_client()` 로
+바꿨다 — 그 함수는 mock 모드에서도 예외 대신 `note` 행을 내므로, 키가 없을 때도
+같은 모양이어야 호출자가 분기하지 않는다.
+
+**실거래 안전은 강화된다** — `get_kis_client()` 단일 경로 불변식과 `TradingEngine`
+6중 안전장치는 그대로이고, 이제 **키 없이 주문 경로가 mock 으로 흘러가지 않는다.**
+
+**변이 배터리** — F1 운영에 mock 복원 · F6★짝★ 개발 모드도 예외 · F7 거절하면서
+싱글턴에 mock 심기 · F8 사유 없는 None · F9 `try_` 가 항상 None · F10 진단이 봉 수를
+0 으로 → **6개 전부 죽음**. ★F6 이 짝이다★ — F1 만 걸면 "항상 예외" 구현도 통과한다.
+`KIS_USE_MOCK` 이 `""`·`"0"`·`"true"`·`"2"`·`" 1"` 일 때 전부 거절하는지도 건다
+(정확히 `"1"` 일 때만 mock — CLAUDE.md 불변식).
+
+**게이트** — ruff 통과 · 전체 스위트 **4,257 passed / 10 skipped**(신규 16건).

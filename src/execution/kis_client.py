@@ -873,7 +873,32 @@ class MockKISClient:
 # 통합 팩토리 — .env 기반 자동 분기 (실데이터 연동 진입점)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class KISCredentialsMissing(RuntimeError):
+    """운영 모드인데 KIS 자격증명이 없다 — ★합성으로 대체하지 않는다★.
+
+    `mock_allowed()` 는 `KIS_USE_MOCK == "1"` 일 때만 참이다. 그것이 아닌데 키도
+    없으면 이 시스템은 **실데이터를 낼 수 없다**. 예전에는 그 상황에서 조용히
+    `MockKISClient` 를 돌려줬고, 그래서 난수가 운영 경로로 흘렀다.
+    """
+
+
 _kis_singleton = None
+
+
+def try_kis_client(force_reload: bool = False):
+    """`(client, reason)` — 열화가 **맞는** 호출부를 위한 통로.
+
+    적재 보강 훅처럼 "KIS 가 없으면 그냥 그 부분을 건너뛴다" 가 옳은 자리가 있다.
+    그런 곳이 `get_kis_client()` 의 예외를 잡느라 `except Exception` 을 넓게 두면
+    진짜 오류까지 삼키게 되므로, 의도를 이름으로 드러낸 통로를 따로 준다.
+
+    ★사유 없는 None 은 금지★ — 실패하면 왜인지 함께 돌려준다.
+    """
+    try:
+        return get_kis_client(force_reload=force_reload), None
+    except KISCredentialsMissing as e:
+        return None, str(e)
+
 
 def get_kis_client(force_reload: bool = False):
     """
@@ -900,9 +925,20 @@ def get_kis_client(force_reload: bool = False):
     app_key = os.getenv("KIS_APP_KEY", "")
     app_secret = os.getenv("KIS_APP_SECRET", "")
     if not app_key or not app_secret:
-        logger.warning("KIS_APP_KEY/SECRET 미설정 → MockKISClient fallback")
-        _kis_singleton = MockKISClient()
-        return _kis_singleton
+        # ★운영에서는 mock 을 돌려주지 않는다★
+        # 예전에는 여기서 경고 한 줄을 남기고 `MockKISClient` 를 반환했다. 그것이
+        # **mock 게이트 우회로**였다 — 호출부가 `if mock_allowed(): return` 으로
+        # 성실히 막아도, 그 직후 이 함수를 부르면 mock 을 받았다(호출부 17곳 중
+        # 6곳만 `MockKISClient` 를 직접 확인했다).
+        #
+        # 실제 사고: `data/market_data.py` 가 그렇게 받은 client 로
+        # `get_daily_ohlcv()` 를 불러 `rng.gauss` 난수 일봉을 **운영에서** 받았다.
+        #
+        # CLAUDE.md §6 — mock 은 `KIS_USE_MOCK` 이 정확히 "1" 일 때만이고,
+        # 운영에서 실패하면 합성이 아니라 **사유**를 낸다.
+        raise KISCredentialsMissing(
+            "KIS_APP_KEY/KIS_APP_SECRET 미설정 — 운영 모드에서는 합성 데이터로 "
+            "대체하지 않습니다. 키를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰세요.")
 
     is_paper = os.getenv("KIS_IS_PAPER", "1") == "1"
     creds = KISCredentials(
