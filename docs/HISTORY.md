@@ -13519,3 +13519,58 @@ mock 을 받았다.** 호출부 17곳 중 `MockKISClient` 를 직접 확인하�
 (정확히 `"1"` 일 때만 mock — CLAUDE.md 불변식).
 
 **게이트** — ruff 통과 · 전체 스위트 **4,257 passed / 10 skipped**(신규 16건).
+
+## 적재 레지스트리 — ★백엔드가 스스로 열거한다★ (②)
+
+**무엇을** — `src/data/ingest_registry.py` 를 만들어 "어떤 데이터가 어디서 와서
+어디에 쌓이는가" 의 단일 출처로 삼았다. `INGEST_TARGETS` 는 여기서 **파생**되고,
+`db-status` 가 `datasets` 로 실어 보내 UI 가 하드코딩할 필요가 없어졌다.
+`macro` 를 적재 대상으로 등록하고 라우터에 디스패치를 붙였다.
+
+**왜 — 목록이 세 벌로 갈라져 있었다**
+
+  · `state/ingest_state.py::INGEST_TARGETS` (6개)
+  · `api/data_routes.py::_ingest_run` 의 if 분기 (6개)
+  · `frontend/widgets/admin/DbStatusPanel.tsx` 의 `TABLE_LABELS`·`INGEST_TARGETS`
+    **하드코딩** (6+6)
+
+대상을 추가하려면 세 곳을 고쳐야 했고, 그래서 ★`macro` 가 빠져 있었다★ —
+`macro_observations` 테이블과 백필(`auto_vintage_backfill`)은 **이미 있었는데**
+연결만 안 됐다. `lifecycle.py` 는 이미 그것을 주기 실행하고 있었다.
+
+**★감사 중 발견 — 단위는 '테이블' 이 아니라 '데이터셋' 이다★**
+
+`db-status` 가 테이블처럼 보여주던 `index_kospi_kosdaq`·`etf_cross_asset` 은
+**실제 테이블이 아니다.** 둘 다 `daily_prices` 의 슬라이스다:
+
+    index : WHERE ticker IN ('KOSPI','KOSDAQ')
+    etf   : WHERE ticker IN (크로스에셋 화이트리스트)
+
+키를 테이블명으로 잡으면 모델이 틀리고 UI 가 "테이블 3개" 로 그려 저장소 구조를
+오해하게 만든다. 그래서 `Dataset.slice_of` 로 그 사실을 선언한다.
+
+**★실행 방법은 레지스트리가 갖지 않는다★** — 초안에서 레지스트리에 적재 함수를
+복제했다가 **함수 이름을 두 번 틀렸다**(`backfill_history` 는 없다 —
+`backfill_financials` 다; `refresh_instrument_master` 도 없다). `_ingest_run` 은
+대상마다 간단하지 않으므로(factors 는 유니버스 dedup, financials 는 2단계 + 쿼터
+중단 처리) 복제하면 두 벌이 갈라진다. **레지스트리는 "무엇이 있는가", 라우터는
+"어떻게 돌리는가"** 로 나눴다.
+
+★그 오타를 잡은 것이 테스트다★ — 처음엔 `callable(d.ingest)` 만 걸었는데, 래퍼가
+지연 import 를 하므로 **이름이 틀려도 통과했다**(버튼을 눌러야만 드러나는 오타).
+`inspect.getsource` 로 import 문을 실제 해석하게 바꾼 뒤 즉시 두 건이 드러났다.
+★공허한 단언은 증거가 아니다.★
+
+**`instrument_master` 에는 버튼을 만들지 않았다** — 그것은 심볼 마스터 갱신의
+**부수 효과**로 쓰이는 파일의 DB 사본이고("파일이 진실이고 이것은 복사본이다"),
+별도 적재 경로가 없다. 없는 버튼은 눌러도 아무 일이 없어 더 나쁘다.
+`triggerable=False` + 사유로 선언한다.
+
+**변이 배터리** — F3 레지스트리에서 `macro` 제거 · F11 `INGEST_TARGETS` 재하드코딩 ·
+F12 죽은 버튼 광고 · F13 수동 버튼이 무한 루프 · F14 레지스트리 실패를 빈 목록으로 ·
+F15 `db-status` 가 레지스트리 미탑재 → **6개 전부 죽음**.
+★F15 는 첫 시도가 헛방이었다★ — `None or [...]` 로 썼는데 리스트로 평가돼 **아무것도
+바꾸지 않았다**. 키 자체를 없애는 변이로 재조준한 뒤 죽었다(적용됐다고 겨냥이 맞은
+것은 아니다).
+
+**게이트** — ruff 통과 · 전체 스위트 **4,269 passed / 10 skipped**(신규 12건).

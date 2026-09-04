@@ -202,6 +202,28 @@ def db_status():
         # ★지어내지 않는다★ 못 읽으면 그렇게 적는다(빈 dict 은 '문제 없음'으로 읽힌다).
         out["macro"] = {"ok": [], "unavailable": {},
                         "note": f"매크로 가용성을 확인할 수 없습니다: {e}"}
+    # ★UI 가 테이블 목록을 알 필요가 없다★
+    # 예전에는 프런트가 `TABLE_LABELS` 6개와 버튼 6개를 **하드코딩**했다. 그래서
+    # 적재 대상을 추가하려면 백엔드와 프런트를 따로 고쳐야 했고, 실제로 `macro`
+    # 가 빠져 있었다. 이제 백엔드가 스스로 열거하고 UI 는 그것을 그린다.
+    try:
+        from src.data.ingest_registry import DATASETS
+        out["datasets"] = [
+            {"key": d.key, "label": d.label, "source": d.source, "table": d.table,
+             "slice_of": d.slice_of, "tools": list(d.tools),
+             "required_env": list(d.required_env),
+             # ★키가 있다 ≠ 데이터가 온다★ 그래도 "키가 없어서 못 받는다" 와
+             # "받았는데 비었다" 를 가르려면 이것이 필요하다.
+             "env_ready": all(bool(os.getenv(e)) for e in d.required_env)
+                          if d.required_env else None,
+             "triggerable": d.triggerable, "note": d.note}
+            for d in DATASETS
+        ]
+    except Exception as e:  # noqa: BLE001
+        # ★지어내지 않는다★ 못 읽으면 빈 목록이 아니라 사유를 낸다 — 빈 목록은
+        # "적재 대상이 없다" 로 읽힌다.
+        out["datasets"] = None
+        out["datasets_error"] = f"적재 레지스트리를 읽을 수 없습니다: {e}"
     out["ingest_running"] = dict(INGEST_RUNNING)
     return out
 
@@ -271,6 +293,12 @@ def _ingest_run(target: str):
     if target == "flows":
         from src.data.kis_flows import sync_investor_flows
         return sync_investor_flows(all_listed=True)
+    if target == "macro":
+        # ★기존 백필을 연결만 한다★ `lifecycle.py` 가 이미 이 함수를 주기 실행한다
+        # (`auto_vintage_backfill(loop=True)`). 여기서는 1회만 돌린다 — 수동 버튼이
+        # 영원히 안 끝나던 financials 버그와 같은 실수를 반복하지 않는다.
+        from src.data.macro_vintage_backfill import auto_vintage_backfill
+        return auto_vintage_backfill(loop=False)
     return {"error": f"unknown target: {target}"}
 
 @router.post("/api/v1/data/ingest/{target}")
