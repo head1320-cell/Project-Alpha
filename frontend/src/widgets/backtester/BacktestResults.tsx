@@ -13,7 +13,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
-import type { BacktestStatistics, BacktestTrade, MonthlyReturn, SymbolPerf } from "@/entities/backtest/bridgeModel";
+import type { BacktestStatistics, BacktestTrade, MonthlyReturn, ScreenToBacktestResult, SymbolPerf } from "@/entities/backtest/bridgeModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
@@ -112,6 +112,55 @@ function absentReason(
 }
 
 const num = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? null : v);
+
+/**
+ * 매크로 룩어헤드를 진단 문장으로. ★안 쓴 실행은 아무 말도 하지 않는다★
+ *
+ * 매크로 토큰을 쓰지 않은 백테스트에 "매크로 룩어헤드 없음" 이라고 적으면,
+ * 확인해서 없는 것과 애초에 해당 없는 것이 같아 보인다.
+ *
+ * 반대로 **썼는데 라이브로 평가된** 토큰은 반드시 말한다 — 그것이 룩어헤드이고,
+ * 그 사실이 화면에 없으면 사용자는 결과를 시점 정합된 것으로 읽는다.
+ */
+function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
+  if (!ml || (ml.pit + ml.live + ml.blocked) === 0) return [];
+  const out: string[] = [];
+  const names = (p: string) =>
+    Object.entries(ml.tokens).filter(([, v]) => v.path === p).map(([k]) => k);
+
+  const live = names("live");
+  if (live.length > 0) {
+    out.push(
+      `매크로 룩어헤드 — ${live.join(" · ")} 은(는) 빈티지가 없어 현재 개정본으로 ` +
+      `평가됐습니다. 이 토큰이 쓰인 조건은 그 시점에 알 수 없던 값을 봅니다.`,
+    );
+  }
+  const blocked = names("blocked");
+  if (blocked.length > 0) {
+    out.push(
+      `매크로 미평가 — ${blocked.join(" · ")} 은(는) 값을 얻지 못해 해당 조건이 ` +
+      `평가되지 않았습니다(${ml.tokens[blocked[0]].reason}).`,
+    );
+  }
+  // 개정이 판정을 실제로 뒤집었는가 — ★레그 기준이라는 말을 함께 싣는다★
+  for (const [tok, v] of Object.entries(ml.tokens)) {
+    const r = v.revision;
+    if (!r) continue;
+    if (r.flip_pct == null) {
+      out.push(`${tok} — 개정 영향은 측정하지 못했습니다(${r.reason}).`);
+    } else if (r.flip > 0) {
+      out.push(
+        `${tok} — 데이터 개정이 이 토큰 조건의 판정을 ${r.bars}봉 중 ${r.flip}봉` +
+        `(${r.flip_pct}%)에서 뒤집었습니다. 매크로 레그 기준이며 최종 신호가 ` +
+        `갈린 비율은 아닙니다.`,
+      );
+    }
+  }
+  if (live.length === 0 && blocked.length === 0 && ml.pit > 0) {
+    out.push(`매크로 ${ml.pit}개 토큰은 모두 그 시점의 빈티지로 평가됐습니다.`);
+  }
+  return out;
+}
 const fmtStat = (v: number | null | undefined, m: MetricDef) => {
   const n = num(v);
   if (n == null) return "—";
@@ -165,6 +214,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
   const stats = bt.statistics as BacktestStatistics;
   const cfg = (run.input_snapshot ?? {}) as Record<string, unknown>;
   const isMock = run.is_mock_data === true || !res.data_source?.fully_real;
+  const macroLines = macroHonesty(res.macro_lookahead);
   // 결측 사유 판정에 쓰는 두 사실 — 둘 다 이미 화면이 들고 있는 값이다.
   const hasBenchmark = Boolean(bt.benchmark?.curve?.length);
   const tradeCount = num(stats.num_trades as number);
@@ -334,6 +384,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           {!run.is_pit_verified && <li>PIT 미검증 — 시점(point-in-time) 재무 정합이 확인되지 않아 look-ahead 편향 가능성이 있습니다.</li>}
           {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요합니다.</li>}
           {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·유니버스·기간을 점검하세요.</li>}
+          {macroLines.map((t, i) => <li key={`ml${i}`}>{t}</li>)}
           <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않습니다(추정치로 대체하지 않음).</li>
         </ul>
         </CardContent>

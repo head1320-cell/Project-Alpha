@@ -98,6 +98,29 @@ export interface ScreenToBacktestResult {
   };
   backtest_config: { strategy: string; period: string; initial_capital: number };
   data_source: { fundamentals: string; market_data: string; fully_real: boolean };
+  /**
+   * 매크로 토큰이 **어느 시점의 값으로** 평가됐는가.
+   *
+   * ★매크로 토큰을 안 쓴 실행은 `null`/부재다★ — `{pit:0, live:0, ...}` 이 아니다.
+   * 0 으로 채우면 "재봤더니 전부 0" 으로 읽히는데, 그것은 하지 않은 진술이다.
+   * 반대로 **썼는데 전부 라이브**면 `pit_pct: 0` 이다 — 그건 측정된 사실이다.
+   *
+   * `live` = 그 토큰이 현재 개정본으로 평가됐다(= 룩어헤드).
+   * `revision.flip_pct` = 개정이 그 **레그**의 판정을 뒤집은 봉 비율.
+   * ★최종 신호가 갈린 비율이 아니다★ — 논리 결합이 흡수·증폭한다.
+   */
+  macro_lookahead?: {
+    pit: number;
+    live: number;
+    blocked: number;
+    pit_pct: number | null;
+    tokens: Record<string, {
+      path: "pit" | "live" | "blocked";
+      reason: string;
+      revision?: { bars: number; flip: number; flip_pct: number | null; reason: string; note: string };
+    }>;
+    note: string;
+  } | null;
 }
 
 // 백테스트 고급 옵션 (수수료/슬리피지/손절/익절)
