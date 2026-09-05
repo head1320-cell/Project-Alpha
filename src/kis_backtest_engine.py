@@ -106,6 +106,43 @@ def _signal_path_meta(counts: dict) -> dict:
                                if tot else None)}
 
 
+def _macro_lookahead_meta(ctx) -> dict | None:
+    """매크로 토큰이 **어느 시점의 값으로** 평가됐는지 보고한다.
+
+    ★안 쓴 것과 재본 것을 구별한다★ 매크로 토큰이 없는 전략에는 `None` 을 낸다 —
+    `{"pit": 0, "live": 0, ...}` 은 "재봤더니 전부 0" 으로 읽힌다. 같은 파일의
+    `intraday_meta` 가 이미 그 규약이다.
+
+    ★그러나 "썼는데 전부 라이브" 는 `0.0%` 다★ 그것은 측정된 사실이고, 여기서
+    `None` 을 내면 룩어헤드가 "안 썼다" 와 같은 모양으로 은폐된다.
+
+    ★`blocked` 도 분모에 있다★ 평가되지 못한 토큰도 PIT 가 아니다 — 분모에서
+    빼면 비율이 부풀려진다.
+
+    ★`live`·`blocked` 에는 반드시 사유가 붙는다★ 빈티지를 더 쌓아야 하는지,
+    제공자가 영영 못 주는지, DB 가 죽은 건지 처방이 셋 다 다르다.
+    """
+    if ctx is None or not getattr(ctx, "path", None):
+        return None
+    counts = ctx.counts()
+    tot = counts["pit"] + counts["live"] + counts["blocked"]
+    tokens = {}
+    for tok, rec in ctx.path.items():
+        reason = rec.get("reason") or ""
+        if rec["path"] != "pit" and not reason:
+            reason = "사유가 기록되지 않았습니다 — 이 라벨은 신뢰할 수 없습니다."
+        tokens[tok] = {"path": rec["path"], "reason": reason}
+    return {
+        "pit": counts["pit"],
+        "live": counts["live"],
+        "blocked": counts["blocked"],
+        "pit_pct": round(counts["pit"] / tot * 100, 1) if tot else None,
+        "tokens": tokens,
+        "note": ("`live` 는 그 토큰이 **현재 개정본**으로 평가됐다는 뜻입니다 — "
+                 "그 토큰이 쓰인 조건에는 룩어헤드가 있습니다."),
+    }
+
+
 def _count_coverage(counts: dict, df) -> None:
     """이 프레임이 **요청 구간을 덮었는가** 를 센다 (진단용).
 
@@ -1826,6 +1863,8 @@ class BacktestEngine:
             "currency": "KRW",
             "intraday": intraday_meta,
             "signal_path": _signal_path_meta(self._signal_path),
+            # ★룩어헤드가 있었다는 사실이 결과에 남는다★ 매크로를 안 쓴 실행은 None.
+            "macro_lookahead": _macro_lookahead_meta(getattr(self, "_macro_ctx", None)),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",

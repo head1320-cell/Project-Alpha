@@ -463,6 +463,12 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         sp = (result or {}).get("signal_path")
         if isinstance(sp, dict):
             tele["signal_path"] = dict(sp)
+        # ★매크로 룩어헤드도 같은 통로로★ 텔레메트리에만 남기고 화면은 결과에서 읽는다.
+        # 토큰별 사유는 길어서 텔레메트리에는 집계만 싣는다(원본은 결과에 그대로 있다).
+        ml = (result or {}).get("macro_lookahead")
+        if isinstance(ml, dict):
+            tele["macro_lookahead"] = {k: ml.get(k)
+                                       for k in ("pit", "live", "blocked", "pit_pct")}
         ds = (result or {}).get("data_source") or {}
         is_mock = None
         if isinstance(ds, dict):
