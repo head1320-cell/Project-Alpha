@@ -189,6 +189,92 @@ def fetch_observations(
     return out
 
 
+def series_as_of(series_id: str, as_of: str | None):
+    """`as_of` 시점에 **알 수 있었던** 계열 → `(관측기간들, 값들)`. 없으면 `None`.
+
+    ★이 함수가 공용인 이유★ 예전에는 같은 로직이 `macro_collector._from_vintage_store`
+    안에 private 으로만 있었다. 조건식(백테스트)도 같은 판정이 필요해지면서, 복제하면
+    두 벌이 갈라진다 — 특히 아래 가드는 한쪽만 빠져도 조용히 거짓 PIT 를 만든다.
+
+    ★가장 미묘한 곳 — `vintage_id` 가 빈 행은 버린다★
+    `macro_observation_store.record_series` 의 write-through 행은 `vintage_id=""` 이고,
+    `load(as_of=)` 의 필터는 `release_timestamp` 가 빈 행을 **통과시킨다**(그 함수가
+    스스로 적어 둔 규칙). 거르지 않으면 **자기가 써 넣은 현재값**을 빈티지로 되읽어
+    PIT 를 주장하게 된다 — 순환 거짓이다.
+
+    ★빈티지에서 읽은 계열은 스토어에 되쓰지 않는다★ 순환이고 빈티지 행을 사본으로
+    오염시킨다. 이 함수는 읽기 전용이다.
+    """
+    try:
+        from src.data.macro_observation_store import load as _load
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        obs = _load(series_id, as_of=as_of) or []
+    except Exception as e:  # noqa: BLE001 — 조회 실패는 "빈티지 없음" 이지 오류가 아니다
+        logger.debug("빈티지 조회 실패 (%s): %s", series_id, e)
+        return None
+
+    obs = [o for o in obs if getattr(o, "vintage_id", "")]
+    if not obs:
+        return None
+    picked = latest_vintage_per_period(obs)
+    if not picked:
+        return None
+    return ([o.observation_period for o in picked], [float(o.value) for o in picked])
+
+
+def pit_series_for_bars(series_id: str, bar_dates):
+    """봉마다 ★그 봉 시점에 알 수 있었던★ 값 → `pandas.Series`(bar_dates 인덱스).
+
+    ★왜 단일 `as_of` 로는 안 되는가★
+    벡터화 경로는 전 구간을 한 번에 평가한다. 창 전체에 하나의 `as_of` 를 쓰면 창
+    마지막 봉의 빈티지가 창 첫 봉에도 적용돼 **창 안에서 여전히 룩어헤드**다.
+    봉마다 다른 빈티지가 필요하다.
+
+    ★그렇다고 봉마다 스토어를 읽지 않는다★ `macro_observation_store.load()` 는 전체
+    스캔 + 파이썬 필터이고 인덱스도 없다. 봉마다 부르면 O(봉수 × 계열 전체)다.
+    **한 번 읽어** 관측을 `(공표시각, 관측기간)` 으로 정렬한 뒤 봉을 훑으며 누적한다.
+
+    공표 전 봉은 `NaN` 이다 — ★그때는 알 수 없었다★. 첫 값으로 채우면 룩어헤드다.
+    """
+    import pandas as _pd
+
+    try:
+        from src.data.macro_observation_store import load as _load
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        obs = _load(series_id) or []
+    except Exception as e:  # noqa: BLE001
+        logger.debug("빈티지 조회 실패 (%s): %s", series_id, e)
+        return None
+
+    # ★빈 `vintage_id` 는 빈티지가 아니다★ (`series_as_of` 와 같은 가드 — 순환 거짓)
+    obs = [o for o in obs if getattr(o, "vintage_id", "") and o.release_timestamp]
+    if not obs:
+        return None
+
+    idx = _pd.DatetimeIndex(bar_dates)
+    # 공표 시각 순으로 훑으며 "그 시점까지 알려진 관측기간별 최신값" 을 누적한다.
+    obs.sort(key=lambda o: (o.release_timestamp, o.observation_period))
+    known: dict[str, float] = {}          # 관측기간 → 그때까지 알려진 최신값
+    out: list[float | None] = []
+    i = 0
+    for bar in idx:
+        bar_s = bar.strftime("%Y-%m-%d")
+        while i < len(obs) and obs[i].release_timestamp[:10] <= bar_s:
+            known[obs[i].observation_period] = float(obs[i].value)
+            i += 1
+        if not known:
+            out.append(None)              # ★공표 전 — 알 수 없었다★
+            continue
+        # 그 봉 이하의 관측기간 중 가장 최근 것(관측기간 자체가 미래면 못 쓴다)
+        usable = [p for p in known if p[:10] <= bar_s]
+        out.append(known[max(usable)] if usable else None)
+    return _pd.Series(out, index=idx, dtype="float64")
+
+
 def latest_vintage_per_period(obs: list[MacroObservation]) -> list[MacroObservation]:
     """관측기간별로 **as_of 시점 기준 최신 빈티지** 하나만 남긴다.
 

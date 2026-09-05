@@ -971,9 +971,91 @@ def _fred_fetch(token: str) -> pd.Series | None:
     return fred_rows_to_series(dates, values)
 
 
-def resolve_macro_token(df: pd.DataFrame, token: str) -> pd.Series | None:
-    """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀)."""
+#: ECOS 는 ★제공자 구조상 PIT 가 불가능하다★ — 빈티지 엔드포인트가 없어
+#: `pit_macro.fetch_observations` 가 ALFRED(FRED) 전용이다. 스토어에 그 계열 행이
+#: 있어도 그것은 `record_series` 의 **현재값 write-through**(`vintage_id=""`, 월별)
+#: 이지 빈티지가 아니다. 그것을 as-of 로 읽으면 순환 거짓 + 월별→일별 ffill 이다.
+REASON_PROVIDER_HAS_NO_VINTAGE = (
+    "이 제공자(한국은행 ECOS)는 빈티지를 주지 않습니다 — 시점 고정 조회가 "
+    "구조적으로 불가능합니다(영구). 라이브 조회는 개정 이력이 반영되지 않은 "
+    "현재값이므로 과거 시점 평가에서는 룩어헤드입니다."
+)
+
+
+def _pit_macro_series(name: str, as_of: str) -> pd.Series | None:
+    """`as_of` 시점 빈티지 → 시리즈. 없으면 `None` + 사유 기록.
+
+    ★라이브 폴백이 없다★ 폴백하면 PIT 인 값과 아닌 값이 한 시계열에 섞여, 라벨을
+    붙여도 소비자가 구별하지 못한다. 없으면 그 조건은 평가되지 않는다.
+
+    ★캐시를 쓰지도 남기지도 않는다★ `_fred_cache` 는 **라이브 전용**이다. PIT 산출이
+    거기 남으면 다음 라이브 조회가 과거 값을 받아 화면이 조용히 과거를 본다.
+    """
+    if name in ECOS_TOKENS:
+        _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
+        return None
+    series_id = FRED_TOKENS.get(name)
+    if not series_id:
+        return None
+    try:
+        from src.data.pit_macro import series_as_of
+        got = series_as_of(series_id, as_of)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(name, f"빈티지 조회 실패: {e}")
+        return None
+    if not got:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(name, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    periods, values = got
+    idx = pd.to_datetime(pd.Index(periods), errors="coerce")
+    out = pd.Series(values, index=idx).dropna()
+    _note_success(name)
+    return out if len(out) else None
+
+
+def _pit_macro_by_bar(name: str, df: pd.DataFrame) -> pd.Series | None:
+    """봉마다 ★그 봉 시점의 빈티지★ — 벡터화 경로용.
+
+    단일 `as_of` 를 창 전체에 쓰면 창 마지막 봉의 빈티지가 첫 봉에도 적용돼 **창
+    안에서 여전히 룩어헤드**다. `pit_series_for_bars` 가 봉마다 다른 값을 준다.
+    """
+    if name in ECOS_TOKENS:
+        _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
+        return None
+    series_id = FRED_TOKENS.get(name)
+    if not series_id:
+        return None
+    try:
+        from src.data.pit_macro import pit_series_for_bars
+        out = pit_series_for_bars(series_id, _df_dates(df))
+    except Exception as e:  # noqa: BLE001
+        _note_failure(name, f"빈티지 조회 실패: {e}")
+        return None
+    if out is None or out.dropna().empty:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(name, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    _note_success(name)
+    out.index = df.index          # 봉 인덱스로 되돌린다(`_align` 과 같은 규약)
+    return out
+
+
+def resolve_macro_token(df: pd.DataFrame, token: str,
+                        as_of: str | None = None) -> pd.Series | None:
+    """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀).
+
+    `as_of` 가 없으면 **라이브**(오늘 최신값) — 기존 동작 그대로다.
+    `as_of` 를 주면 **PIT 요청**이고 그 시점 빈티지만 쓴다. 빈티지가 없으면 값을
+    내지 않는다(현재 개정본으로 과거를 채점하지 않는다).
+    """
     name = (token or "").strip()
+    if as_of == "per_bar":
+        # ★봉마다 그 시점의 빈티지★ — 벡터화 경로(전 구간 일괄 평가)에서 쓴다.
+        return _pit_macro_by_bar(name, df)
+    if as_of:
+        s = _pit_macro_series(name, str(as_of))
+        return _align(s, df) if s is not None else None
     if name in ECOS_TOKENS:
         s = _ecos_series(name)
         return _align(s, df) if s is not None else None

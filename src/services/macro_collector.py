@@ -577,32 +577,12 @@ REASON_NO_VINTAGE_FOR_ASOF = (
 def _from_vintage_store(key: str, as_of: str | None):
     """관측 스토어에서 **빈티지 있는** 관측만 골라 `(timestamps, values)`.
 
-    없으면 `None` — 호출자가 모드에 따라 처리한다.
-
-    ★`vintage_id` 가 빈 행은 버린다★ 가장 미묘한 곳이다. `record_series` 의
-    write-through 행은 `vintage_id=""` 이고, `load(as_of=)` 의 필터는
-    `release_timestamp` 가 빈 행을 **통과시킨다**(그 함수가 스스로 적어 둔 규칙).
-    거르지 않으면 **자기가 써 넣은 현재값**을 빈티지로 되읽어 PIT 를 주장하게 된다.
+    ★로직은 `pit_macro.series_as_of` 로 옮겼다★ — 조건식(백테스트)도 같은 판정이
+    필요해졌고, 복제하면 두 벌이 갈라진다. 특히 "빈 `vintage_id` 행을 버린다" 가
+    한쪽만 빠지면 조용히 거짓 PIT 가 된다. 이 함수는 기존 호출부를 위한 얇은 별칭이다.
     """
-    try:
-        from src.data.macro_observation_store import load as _load
-        from src.data.pit_macro import latest_vintage_per_period
-    except Exception:  # noqa: BLE001
-        return None
-    try:
-        obs = _load(key, as_of=as_of) or []
-    except Exception as e:  # noqa: BLE001 — 조회 실패는 "빈티지 없음" 이지 오류가 아니다
-        logger.debug("빈티지 조회 실패 (%s): %s", key, e)
-        return None
-
-    obs = [o for o in obs if getattr(o, "vintage_id", "")]
-    if not obs:
-        return None
-    picked = latest_vintage_per_period(obs)
-    if not picked:
-        return None
-    return ([o.observation_period for o in picked],
-            [float(o.value) for o in picked])
+    from src.data.pit_macro import series_as_of
+    return series_as_of(key, as_of)
 
 
 class MacroCollector:
