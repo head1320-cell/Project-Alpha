@@ -131,7 +131,12 @@ def _macro_lookahead_meta(ctx) -> dict | None:
         reason = rec.get("reason") or ""
         if rec["path"] != "pit" and not reason:
             reason = "사유가 기록되지 않았습니다 — 이 라벨은 신뢰할 수 없습니다."
-        tokens[tok] = {"path": rec["path"], "reason": reason}
+        entry = {"path": rec["path"], "reason": reason}
+        # 개정이 **레그 판정**을 뒤집었는지 — PIT 인 토큰에만 붙는다.
+        rev = getattr(ctx, "revision", {}).get(tok)
+        if rev is not None:
+            entry["revision"] = rev
+        tokens[tok] = entry
     return {
         "pit": counts["pit"],
         "live": counts["live"],

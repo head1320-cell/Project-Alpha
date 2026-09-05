@@ -85,6 +85,81 @@ class MacroPitContext:
         self.path: dict[str, dict] = {}
         #: `(토큰, 프레임 모양)` → 시리즈. 종목마다 다시 누적하지 않는다.
         self._series: dict[tuple, pd.Series | None] = {}
+        #: 토큰 → 개정이 **레그 판정**을 뒤집은 정도. PIT 인 토큰만 들어간다.
+        self.revision: dict[str, dict] = {}
+
+    #: ★주장의 크기를 이름이 정한다★ 이 수치는 최종 신호 차이가 아니다.
+    REVISION_NOTE = (
+        "매크로 **레그**(그 토큰 하나의 조건)의 참/거짓이 PIT 와 라이브에서 갈린 "
+        "봉의 비율입니다. 논리 결합(and/or/every)이 이를 흡수하거나 증폭하므로 "
+        "**최종 신호**가 갈린 비율은 아닙니다."
+    )
+
+    def measure_revision(self, name: str, df: pd.DataFrame, conds: list) -> None:
+        """개정이 이 토큰의 레그 판정을 얼마나 뒤집었는지 잰다.
+
+        Croushore & Stark (2001) 의 요지가 이것이다 — 개정이 **있었다**보다
+        개정이 **결론을 바꾸었는가**가 답이다. 라벨(P4)에서 한 걸음 더 간다.
+
+        ★PIT 인 토큰만 잰다★ 라이브로 떨어진 토큰에는 비교할 PIT 값이 없다.
+        ★못 재면 `None` + 사유★ 라이브를 못 받거나 겹치는 유효 봉이 없으면
+        "안 갈렸다(0%)" 가 아니라 **재지 못했다**.
+        ★새 비교 의미를 만들지 않는다★ 조건식의 연산자 의미(`_vector_compare`)를
+        그대로 쓴다 — 따로 구현하면 언젠가 갈라진다.
+        """
+        from src.kis_strategies.condition_strategy import (
+            _apply_function,
+            _apply_inner,
+            _vector_compare,
+        )
+        from src.kis_strategies.factor_tokens import resolve_macro_token
+
+        if name in self.revision or self.verdict(name) != PIT:
+            return
+        pit_s = self.resolve(df, name)
+        if pit_s is None:
+            return
+
+        live_raw = resolve_macro_token(df, name)
+        if live_raw is None:
+            self.revision[name] = {
+                "bars": 0, "flip": 0, "flip_pct": None,
+                "reason": self._live_reason(name),
+                "note": self.REVISION_NOTE,
+            }
+            return
+
+        flip = both = 0
+        for cond in conds:
+            pair = [self._leg(s, cond, _apply_inner, _apply_function, _vector_compare)
+                    for s in (pit_s, live_raw)]
+            if any(p is None for p in pair):
+                continue
+            (v_pit, ok_pit), (v_live, ok_live) = pair
+            usable = v_pit & v_live
+            both += int(usable.sum())
+            flip += int((usable & (ok_pit != ok_live)).sum())
+
+        self.revision[name] = {
+            "bars": both,
+            "flip": flip,
+            # ★분모 0 에 0.0 을 적지 않는다★ 겹치는 봉이 없으면 미상이다.
+            "flip_pct": round(flip / both * 100, 1) if both else None,
+            "reason": "" if both else "PIT 와 라이브가 모두 유효한 봉이 없습니다.",
+            "note": self.REVISION_NOTE,
+        }
+
+    @staticmethod
+    def _leg(base, cond, apply_inner, apply_function, vector_compare):
+        """조건 하나의 (평가가능, 충족) 불리언 — 조건식과 **같은 함수 체인**."""
+        s = apply_inner(base, cond)
+        if s is None or len(s) == 0:
+            return None
+        s = apply_function(s, cond.get("function_id", "base"), cond.get("params") or {})
+        if s is None or len(s) == 0:
+            return None
+        return vector_compare(s, cond.get("op", "gte"), cond.get("rhs"),
+                              cond.get("rhs2"))
 
     # ── 판정 ────────────────────────────────────────────────────────────────
     def verdict(self, name: str) -> str:

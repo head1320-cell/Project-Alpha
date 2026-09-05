@@ -516,11 +516,34 @@ class ConditionStrategy(BaseStrategy):
                     return True
         return any(a is not None and expr_tokens(a) & SCORE_TOKENS for a in asts)
 
+    def _measure_macro_revision(self, ohlcv_map: dict) -> None:
+        """개정이 매크로 레그 판정을 뒤집었는지 잰다 — ★실행당 토큰 1회★.
+
+        매크로 계열은 종목과 무관하므로 프레임 하나만 있으면 된다. 종목마다 재면
+        같은 답을 종목 수만큼 계산한다.
+        """
+        ctx = getattr(self, "_macro_ctx", None)
+        if ctx is None or not ohlcv_map:
+            return
+        from src.kis_strategies.macro_pit_context import is_macro_token
+        df = next(iter(ohlcv_map.values()))
+        by_token: dict[str, list] = {}
+        for c in (self.buy_conditions + self.sell_conditions):
+            name = (c.get("factor_token") or "").strip().strip("{}").strip()
+            if name and is_macro_token(name):
+                by_token.setdefault(name, []).append(c)
+        for name, conds in by_token.items():
+            try:
+                ctx.measure_revision(name, df, conds)
+            except Exception as e:  # noqa: BLE001 — 측정 실패가 백테스트를 막지 않는다
+                logger.debug(f"macro revision measurement skipped ({name}): {e}")
+
     def prepare_panel(self, ohlcv_map: dict) -> None:
         """순위/비율·점수·산술식 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
         self._panels = {}
         self._score_panels = {}
         self._expr_panels = {}
+        self._measure_macro_revision(ohlcv_map)
         # 점수 근사 패널 — 조건이 점수 토큰을 참조할 때만 (성장·가치 레그는 펀더멘털 토글 시)
         if ohlcv_map and self._references_score():
             try:
