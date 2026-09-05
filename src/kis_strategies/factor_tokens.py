@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pandas as pd
 
 from src import kis_indicators as ind
@@ -918,6 +920,44 @@ FRED_INDICATOR_TOKENS: dict[str, tuple[str, str]] = {
 #: 표현별로 몇 개월 전 값이 필요한가. ★`level` 은 0 — lag 을 찾지 않는다★
 INDICATOR_LAG_MONTHS: dict[str, int] = {"level": 0, "mom_diff": 1, "yoy": 12}
 
+
+# ── 매크로 토큰의 표시 그룹 — ★목록의 단일 출처★ ─────────────────────────────
+#
+# ★왜 만들었나 — 목록이 두 벌이었다★
+# 프런트 픽커(`butlerFactors.ts`)가 매크로 토큰을 손으로 들고 있었다. 그래서 여기에
+# 토큰을 더해도 **아무 테스트도 실패하지 않고** 화면에만 안 나왔다. 실측하니 백엔드
+# 20개 중 8개(US국채 1·2·3·5·7·20·30년, 국고채 1년)에 사용자가 닿을 수 없었다.
+#
+# 저장소는 같은 병을 이미 앓았다 — `ingest_registry` 이전의 `DbStatusPanel` 에서
+# `macro` 적재 대상이 화면에서만 빠져 있었다. 처방도 같다: **백엔드가 목록을 갖고
+# UI 는 그것을 그린다.**
+#
+# ★어휘를 다시 나열하지 않는다★ 그룹마다 출처 딕셔너리가 **정확히 하나**다. 손으로
+# 다시 적으면 두 벌이 갈라지고, 그게 지금 고치려는 병이다.
+@dataclass(frozen=True)
+class MacroTokenGroup:
+    """픽커에 한 덩어리로 보일 매크로 토큰들."""
+    label: str
+    tokens: tuple[str, ...]
+
+
+def macro_token_groups() -> tuple[MacroTokenGroup, ...]:
+    """조건식 매크로 어휘를 표시 그룹으로 — ★기존 딕셔너리에서 파생★.
+
+    ★미검증 토큰도 넣는다★ `ECOS_UNVERIFIED_TOKENS`(엔환율·국고채 2/5/20/30년)는
+    좌표가 확인되지 않아 `supported` 가 아니지만 **어휘로는 살아 있다** — 저장된
+    전략이 그것을 쓰고 있고, 목록에서 지우면 "그런 토큰은 없다" 로 읽힌다. 픽커가
+    사유와 함께 회색으로 그린다.
+
+    ★순서가 곧 화면 순서다★ 흔들리면 픽커가 실행마다 달라 보인다.
+    """
+    return (
+        MacroTokenGroup("국내 금리·환율",
+                        tuple(ECOS_TOKENS) + tuple(ECOS_UNVERIFIED_TOKENS)),
+        MacroTokenGroup("미국 국채", tuple(FRED_TOKENS)),
+        MacroTokenGroup("미국 지표", tuple(FRED_INDICATOR_TOKENS)),
+    )
+
 _fred_cache: dict[str, pd.Series | None] = {}
 
 
@@ -1306,5 +1346,9 @@ def token_support() -> dict:
                       "가격·수급·모멘텀 점수는 가격·거래량만으로 항상 계산, "
                       "성장·가치(→펀더멘탈·종합)는 '펀더멘털 조건 평가' 토글 필요(스냅샷 근사), "
                       "수급 레그는 투자자별 수급 적재 시 자동 반영",
+        # ★목록의 단일 출처★ — 픽커가 매크로 그룹을 이걸로 그린다. 프런트에
+        # 손으로 든 목록이 있으면 백엔드에 토큰을 더해도 화면에 안 나온다.
+        "macro_groups": [{"label": g.label, "tokens": list(g.tokens)}
+                         for g in macro_token_groups()],
         "substitutes": dict(SUBSTITUTES),
     }
