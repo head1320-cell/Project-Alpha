@@ -886,7 +886,73 @@ FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 FRED_TOKENS: dict[str, str] = {f"US국채({n}년)": f"DGS{n}" for n in (1, 2, 3, 5, 7, 10, 20, 30)}
 
+# ── FRED 지표 계열 — ★개정되는 것들★ ─────────────────────────────────────────
+#
+# ★왜 `FRED_TOKENS` 에 넣지 않는가★
+# 그 딕셔너리는 국채 커브 컴프리헨션이고, `test_fred_coordinates` 의
+# `test_token_maturity_matches_the_series_id` 가 *"손 예외가 들어오면 잡는다"* 로
+# 모든 키가 `US국채(N년)` 인지 검사한다. 그 가드는 정확히 이런 추가를 막으려고 있다.
+#
+# ★왜 이 계열들인가★ 위 커브 8개(DGS)와 ECOS 4개는 **개정되지 않거나 빈티지가
+# 구조적으로 불가**해서, PIT 배관이 제거할 룩어헤드가 애초에 없다. 아래 계열은
+# 개정된다 — 여기서부터 빈티지가 값을 한다.
+#
+# ★왜 레벨을 그대로 열지 않는가★ `CPIAUCSL` 은 지수라 310.3, `PAYEMS` 는 천명이라
+# 159,000 이다. 임계값을 쓸 수 없다. 계열마다 **의미 있는 표현 하나씩**만 연다 —
+# 기계적인 (계열 × 표현) 교차곱은 쓰이지 않는 토큰만 늘린다.
+#
+# 공표 주기는 여기 적지 않는다 — `SourceSpec.frequency` 의 규율이
+# *"메타 API 가 말해 주기 전까지 `None`"* 이고, 내가 아는 것은 확인이 아니다.
+# ★그리고 배선은 주기를 몰라도 정확하다★ — 누적기는 공표 시각 순으로 훑을 뿐이다.
+FRED_INDICATOR_TOKENS: dict[str, tuple[str, str]] = {
+    "US물가(전년비)":     ("CPIAUCSL", "yoy"),
+    "US고용(전월차)":     ("PAYEMS", "mom_diff"),
+    "US실업률":           ("UNRATE", "level"),
+    "US산업생산(전년비)": ("INDPRO", "yoy"),
+    "US통화량(전년비)":   ("M2SL", "yoy"),
+    "US소비자심리":       ("UMCSENT", "level"),
+    "US실질GDP(전년비)":  ("GDPC1", "yoy"),
+    "US금융환경지수":     ("NFCI", "level"),
+}
+
+#: 표현별로 몇 개월 전 값이 필요한가. ★`level` 은 0 — lag 을 찾지 않는다★
+INDICATOR_LAG_MONTHS: dict[str, int] = {"level": 0, "mom_diff": 1, "yoy": 12}
+
 _fred_cache: dict[str, pd.Series | None] = {}
+
+
+def _apply_indicator(cur: pd.Series, lag: pd.Series, kind: str) -> pd.Series | None:
+    """`(현재값, lag 값)` → 표현. ★공식은 이 함수 하나에만 있다★
+
+    PIT 경로와 라이브 경로가 **같은 함수**를 쓴다. 각자 계산하면 언젠가 갈라지는데,
+    갈라진 두 값은 둘 다 그럴듯해서 어느 쪽이 틀렸는지 알 수 없다.
+
+    ★0 으로 나누지 않는다★ 전년비 분모가 0 이면 `inf` 인데, 조건식에서 `inf` 는
+    "무한히 큰 상승률" 로 읽혀 **어떤 임계값도 통과**시킨다. 미상이 맞다.
+    """
+    if kind == "level":
+        return cur
+    if kind == "mom_diff":
+        return cur - lag
+    if kind == "yoy":
+        denom = lag.where(lag != 0)      # 0 → NaN (★inf 금지★)
+        return (cur / denom - 1.0) * 100.0
+    return None
+
+
+def _lag_on_observation_axis(raw: pd.Series, months: int) -> pd.Series:
+    """관측 축에서 `months` 개월 전 값. ★위치가 아니라 달력이다★
+
+    `shift(months)` 는 **위치 이동**이라 관측에 결측이 하나만 있어도 다른 기간을
+    집는다(PIT 경로의 `_shift_period_months` 와 같은 함정). 달력으로 민 인덱스로
+    되찾고, 정확히 일치하는 관측이 없으면 NaN 이다 — 가장 가까운 값으로 대신하면
+    지어내기다.
+    """
+    if months <= 0:
+        return raw
+    out = raw.reindex(raw.index - pd.DateOffset(months=months))
+    out.index = raw.index
+    return out
 
 
 #: 일별 시계열 시작일 — 기존 동작을 그대로 옮긴다.
@@ -958,7 +1024,7 @@ def _fred_fetch(token: str) -> pd.Series | None:
     """FRED 를 실제로 조회한다 (네트워크). 캐시·시효는 호출자 몫."""
     from src.services.macro_collector import FredClient
 
-    series_id = FRED_TOKENS.get(token)
+    series_id = FRED_TOKENS.get(token) or _indicator_series_id(token)
     if not series_id:
         return None
     client = FredClient()
@@ -967,8 +1033,65 @@ def _fred_fetch(token: str) -> pd.Series | None:
     dates, values = client.fetch_series(
         series_id, start=FRED_DAILY_START,
         # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
+        # 지표 계열(월·분기)에도 `None` 이 맞다 — 계열의 **원래 주기**로 온다.
+        # `"m"` 을 주면 분기 계열이 월별로 보간돼 없는 해상도가 생긴다.
         frequency=None)
     return fred_rows_to_series(dates, values)
+
+
+def _indicator_series_id(token: str) -> str | None:
+    spec = FRED_INDICATOR_TOKENS.get(token)
+    return spec[0] if spec else None
+
+
+def _indicator_live(token: str) -> pd.Series | None:
+    """지표 토큰의 **라이브** 표현 — 관측 축에서 계산한 뒤 봉에 정렬한다.
+
+    ★봉에 정렬한 다음 계산하지 않는다★ 일별 봉으로 ffill 한 뒤 12개월을 밀면
+    "12개월" 이 아니라 "약 250 영업일" 이 되어 관측기간이 어긋난다.
+    """
+    spec = FRED_INDICATOR_TOKENS.get(token)
+    if not spec:
+        return None
+    _sid, kind = spec
+    raw = _fred_series(token)          # 캐시·사유 기록은 여기가 담당
+    if raw is None or raw.empty:
+        return None
+    lag = _lag_on_observation_axis(raw, INDICATOR_LAG_MONTHS.get(kind, 0))
+    out = _apply_indicator(raw, lag, kind)
+    return None if out is None else out.dropna()
+
+
+def _indicator_pit_by_bar(token: str, df: pd.DataFrame) -> pd.Series | None:
+    """지표 토큰의 **PIT** 표현 — 봉마다 그 시점의 빈티지로.
+
+    ★분자와 분모가 같은 빈티지에서 나온다★ `pit_pair_for_bars` 가 한 번 읽어 두
+    시리즈를 준다. 분모만 라이브에서 가져오면 룩어헤드를 분모로 되들인다.
+    """
+    spec = FRED_INDICATOR_TOKENS.get(token)
+    if not spec:
+        return None
+    series_id, kind = spec
+    try:
+        from src.data.pit_macro import pit_pair_for_bars
+        got = pit_pair_for_bars(series_id, _df_dates(df),
+                                lag_months=INDICATOR_LAG_MONTHS.get(kind, 0))
+    except Exception as e:  # noqa: BLE001
+        _note_failure(token, f"빈티지 조회 실패: {e}")
+        return None
+    if got is None:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(token, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    cur, lag = got
+    out = _apply_indicator(cur, lag, kind)
+    if out is None or out.dropna().empty:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(token, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    _note_success(token)
+    out.index = df.index               # 봉 인덱스로 되돌린다(`_align` 과 같은 규약)
+    return out
 
 
 #: ECOS 는 ★제공자 구조상 PIT 가 불가능하다★ — 빈티지 엔드포인트가 없어
@@ -994,7 +1117,7 @@ def _pit_macro_series(name: str, as_of: str) -> pd.Series | None:
     if name in ECOS_TOKENS:
         _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
         return None
-    series_id = FRED_TOKENS.get(name)
+    series_id = FRED_TOKENS.get(name) or _indicator_series_id(name)
     if not series_id:
         return None
     try:
@@ -1010,6 +1133,17 @@ def _pit_macro_series(name: str, as_of: str) -> pd.Series | None:
     periods, values = got
     idx = pd.to_datetime(pd.Index(periods), errors="coerce")
     out = pd.Series(values, index=idx).dropna()
+    spec = FRED_INDICATOR_TOKENS.get(name)
+    if spec:
+        # ★같은 스냅샷 안에서 민다★ `series_as_of` 가 준 것은 그 시점 하나의
+        # transaction-time 슬라이스다. 분모를 따로 조회하면 다른 슬라이스가 섞인다.
+        lag = _lag_on_observation_axis(out, INDICATOR_LAG_MONTHS.get(spec[1], 0))
+        out = _apply_indicator(out, lag, spec[1])
+        out = out.dropna() if out is not None else None
+        if out is None or out.empty:
+            from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+            _note_failure(name, REASON_NO_VINTAGE_FOR_ASOF)
+            return None
     _note_success(name)
     return out if len(out) else None
 
@@ -1023,6 +1157,8 @@ def _pit_macro_by_bar(name: str, df: pd.DataFrame) -> pd.Series | None:
     if name in ECOS_TOKENS:
         _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
         return None
+    if name in FRED_INDICATOR_TOKENS:
+        return _indicator_pit_by_bar(name, df)
     series_id = FRED_TOKENS.get(name)
     if not series_id:
         return None
@@ -1061,6 +1197,9 @@ def resolve_macro_token(df: pd.DataFrame, token: str,
         return _align(s, df) if s is not None else None
     if name in FRED_TOKENS:
         s = _fred_series(name)
+        return _align(s, df) if s is not None else None
+    if name in FRED_INDICATOR_TOKENS:
+        s = _indicator_live(name)
         return _align(s, df) if s is not None else None
     return None
 
@@ -1133,6 +1272,8 @@ def token_support() -> dict:
     for t in ECOS_TOKENS:
         supported[t] = "macro"
     for t in FRED_TOKENS:
+        supported[t] = "macro"
+    for t in FRED_INDICATOR_TOKENS:
         supported[t] = "macro"
     for t in FLOW_TOKENS:
         supported[t] = "flow"

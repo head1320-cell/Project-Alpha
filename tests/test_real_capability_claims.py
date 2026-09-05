@@ -230,9 +230,18 @@ def test_the_thesis_bridge_narrowed_by_exactly_the_two():
 def test_supported_token_count_dropped_by_exactly_the_two():
     """E11 — 316 → 314. 두 경로(`FUNDAMENTAL_ALIASES`·`_label_aliases`) 모두에서
     빠졌는지 확인한다 — 한쪽만 막으면 다른 쪽으로 여전히 노출된다.
+
+    ★2026-09 · 314 → 322★ `FRED_INDICATOR_TOKENS` 8개(개정되는 매크로 계열 —
+    CPI·고용·실업률·산업생산·통화량·소비자심리·실질GDP·금융환경지수)를 조건식
+    어휘에 열었다. E11 의 강등(합성 팩터 2개 제거)은 그대로이고, 아래 단언들이
+    그것을 계속 지킨다.
+
+    ★수를 파생식으로 바꾸지 않는다★ — `314 + len(FRED_INDICATOR_TOKENS)` 로 적으면
+    토큰을 더할 때마다 자동으로 통과해 이 가드가 죽는다. 정확한 수를 적고, 바뀔
+    때마다 **왜** 바뀌었는지 여기에 남긴다.
     """
     supported = ft.token_support()["supported"]
-    assert len(supported) == 314, f"지원 토큰 수가 314 에서 바뀌었다: {len(supported)}"
+    assert len(supported) == 322, f"지원 토큰 수가 322 에서 바뀌었다: {len(supported)}"
     for tok in SYNTHETIC_TOKENS:
         assert tok not in supported
     for tok in ("직원수", "평균급여", "임원수", "1인당매출액", "1인당영업이익"):
