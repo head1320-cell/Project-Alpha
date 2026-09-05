@@ -282,8 +282,15 @@ def test_a_bar_before_the_first_release_has_no_value(store):
 
 
 def test_the_panel_is_read_once_not_per_bar(store, monkeypatch):
-    """★실행당 1회 조회★ `load()` 는 전체 스캔 + 파이썬 필터라 봉마다 부르면
-    O(봉수 × 계열 전체) 다."""
+    """★실행당 1회 조회★
+
+    ★2026-09 정정★ 예전에 여기 "`load()` 는 전체 스캔" 이라고 적혀 있었는데
+    **틀렸다.** `load(series_id=)` 는 PK(`series_id, observation_period, obs_key`)
+    선두 컬럼 조건이라 **범위 스캔**이다. 비싼 것은 다른 데 있다 — `as_of` 필터가
+    그 계열의 **전 빈티지·전 기간 행을 다 가져온 뒤 파이썬에서** 걸린다(계열당
+    수만 행). 그래서 봉마다 부르면 O(봉수 × 그 계열 전체) 이고, 결론(1회만 읽는다)
+    은 그대로다.
+    """
     import src.data.macro_observation_store as mos
     calls = {"n": 0}
     real = mos.load

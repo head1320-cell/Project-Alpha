@@ -1,6 +1,7 @@
 # 조건식 매크로를 빈티지(PIT)에 실제로 배선하고, 개정 계열을 토큰으로 연다
 
-> 상태: 설계 승인됨 · 구현 전
+> 상태: **구현 완료** (`67e2e45`·`8180878`·`96a260d`·`ff9bf64`·`07b0bff`·`a53194c`)
+> ★아래 정정 표시(2026-09)는 구현 중 실측이 스펙을 뒤집은 자리다★
 > 선행: `aa3c4ba`(PIT 기계 도입) · 계획 `happy-percolating-falcon`
 > 다음 작업(별도 스펙): **B — 매크로 토큰 카탈로그를 백엔드 단일 출처로**
 
@@ -134,8 +135,13 @@ _base_series(df, token, *, macro_ctx=None)
 
 호출부를 세면 `_token_series`(`condition_strategy.py:882`)와
 `prepare_panel`(`:564`)은 **종목마다**, 엔진의 `_check_market_timing`
-(`kis_backtest_engine.py:1730`)은 **봉마다** 부른다. `macro_observation_store.load()`
-는 전체 스캔 + 파이썬 필터이고 인덱스가 없다. 캐시가 없으면 200종목 × 3조건, 혹은
+(`kis_backtest_engine.py:1730` — ★실제 이름은 `_market_timing_on` 이다. 초안의
+`_check_market_timing` 은 존재하지 않는 함수였고, 트립와이어의 "못 찾으면 실패"
+단언이 그것을 잡았다★)은 **봉마다** 부른다. `macro_observation_store.load()`
+는 PK 선두 컬럼 조건이라 **범위 스캔**이다(★스펙 초안의 "전체 스캔" 은 틀렸고
+2026-09 구현 중 실측으로 정정했다★). 비싼 것은 `as_of` 필터가 그 계열의 전 빈티지·
+전 기간 행을 다 가져온 뒤 **파이썬에서** 걸리는 부분이다(계열당 수만 행).
+캐시가 없으면 200종목 × 3조건, 혹은
 2,500봉만큼 그 스캔이 돈다.
 
 그래서 `pit_macro` 를 **로더 + 순수 누적기**로 가른다.
@@ -186,11 +192,15 @@ YoY 토큰은 lag 값까지 필요해 레벨 토큰보다 NaN 접두가 길다 �
 없애려다 분모로 다시 들여온다.
 
 ```
-pit_series_for_bars(series_id, bar_dates, *, lag_months=0)
-    lag_months=0  → 현행 동작 그대로 (★비트 동일 계약★)
-    lag_months=k  → 그 봉의 최신 관측기간 p 에서 p−k개월 값을
-                    ★같은 known 집합★ 에서 찾는다
+pit_series_for_bars(series_id, bar_dates)                     ← ★시그니처 불변★
+pit_pair_for_bars(series_id, bar_dates, *, lag_months=k)      → (현재값, lag 값)
 ```
+
+★2026-09 정정 — kwarg 를 붙이려던 초안이 틀렸다★ 기존
+`test_macro_pit_wiring.py::test_the_panel_is_read_once_not_per_bar` 가 `load()`
+**정확히 1회**를 못 박고 있어, `pit_series_for_bars` 를 두 번 부르는 설계는 그
+계약을 깬다. 그래서 **한 번 읽어 두 시리즈를 주는 함수를 새로** 두었다. 부수
+효과로 분자와 분모가 **같은 스냅샷**에서 나오는 것이 구조로 보장된다.
 
 기간 이동은 **달력 연산**이다: `YYYY-MM-DD` 파싱 → k개월 차감 → **정확히 일치하는
 기간** 조회. "known 목록에서 12칸 뒤" 로 세지 않는다 — 결측이 하나만 있어도 조용히
@@ -201,11 +211,13 @@ pit_series_for_bars(series_id, bar_dates, *, lag_months=0)
 
 | | PIT | 라이브 |
 |---|---|---|
-| 쌍 만들기 | `lag_months=0` 과 `=k` (계열당 조회는 여전히 1회 — ctx 캐시) | 관측 축에서 `shift(k)` 후 봉 정렬 |
+| 쌍 만들기 | `pit_pair_for_bars`(읽기 1회) | 관측 축에서 **달력** k개월 이동 후 봉 정렬 |
 | 공식 | `(v0/vk − 1)×100` · `v0 − vk` · `v0` | **동일 함수** |
 
 ★계약 테스트★ — 개정이 **없는** 픽스처(빈티지 = 라이브)에서 두 경로는 **같은 숫자**를
-내야 한다. 공식이 갈라지면 여기서 죽는다.
+내야 한다. 공식이 갈라지면 여기서 죽는다. ★공표 지연을 0 으로 둔 픽스처를 쓴다★ —
+두 경로는 값이 **보이기 시작하는 시점**이 다르고(그것이 PIT 의 요점이다), 지연을
+남겨 두면 타이밍 차이가 공식 차이로 오인된다.
 
 ★수치 안전★ — YoY 는 나눗셈이라 `vk == 0` 이면 `inf` 가 아니라 `None` 이다
 (CLAUDE.md 파생식 가드 규칙).
@@ -216,9 +228,16 @@ pit_series_for_bars(series_id, bar_dates, *, lag_months=0)
 
 ```python
 {"pit": n, "live": n, "blocked": n,
- "pit_pct": float | None,               # ★미측정 ≠ 0%★ 매크로 토큰이 없으면 None
- "tokens": {"US물가(전년비)": "live", ...}}
+ "pit_pct": float | None,               # ★미측정 ≠ 0%★
+ "tokens": {"US물가(전년비)": {"path": "live", "reason": "...",
+                              "revision": {"bars": .., "flip": ..,
+                                           "flip_pct": .. | None}}},
+ "note": "..."}
 ```
+
+★매크로 토큰을 **안 쓴** 실행은 이 키 자체가 `None` 이다★ (`intraday_meta` 선례).
+★그러나 **썼는데 전부 라이브**면 `pit_pct: 0.0` 이다★ — 그건 측정된 사실이고,
+거기서 `None` 을 내면 룩어헤드가 "안 썼다" 와 같은 모양으로 은폐된다.
 
 세는 단위는 **실행당 토큰 1개**다(전부-아니면-전혀이므로 봉 단위가 아니다).
 
