@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -36,6 +37,10 @@ logger = logging.getLogger(__name__)
 
 ALFRED_URL = "https://api.stlouisfed.org/fred/series/observations"
 _FAR_FUTURE = "9999-12-31"
+
+#: 관측기간이 `YYYY-MM-DD` 인가. ★스토어에 `YYYYMM` 이 섞여 있어 필요하다★
+#: — 읽을 수 없는 형식은 몇 개월 전인지 모르므로 값을 만들지 않는다.
+_PERIOD_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -224,22 +229,18 @@ def series_as_of(series_id: str, as_of: str | None):
     return ([o.observation_period for o in picked], [float(o.value) for o in picked])
 
 
-def pit_series_for_bars(series_id: str, bar_dates):
-    """봉마다 ★그 봉 시점에 알 수 있었던★ 값 → `pandas.Series`(bar_dates 인덱스).
+def _load_vintage_obs(series_id: str):
+    """계열의 빈티지 관측을 ★스토어에서 한 번만★ 읽는다. 없거나 못 읽으면 `None`.
 
-    ★왜 단일 `as_of` 로는 안 되는가★
-    벡터화 경로는 전 구간을 한 번에 평가한다. 창 전체에 하나의 `as_of` 를 쓰면 창
-    마지막 봉의 빈티지가 창 첫 봉에도 적용돼 **창 안에서 여전히 룩어헤드**다.
-    봉마다 다른 빈티지가 필요하다.
+    ★빈 `vintage_id` 는 빈티지가 아니다★ (`series_as_of` 와 같은 가드 — 순환 거짓)
+    bitemporal 로 말하면 그 행에는 **transaction time 이 없다**. 언제부터 알려진
+    값인지 없는 행은 as-of 질의에 답할 수 없다 — 통과시키면 자기가 써 넣은 현재값을
+    빈티지라 주장하게 된다.
 
-    ★그렇다고 봉마다 스토어를 읽지 않는다★ `macro_observation_store.load()` 는 전체
-    스캔 + 파이썬 필터이고 인덱스도 없다. 봉마다 부르면 O(봉수 × 계열 전체)다.
-    **한 번 읽어** 관측을 `(공표시각, 관측기간)` 으로 정렬한 뒤 봉을 훑으며 누적한다.
-
-    공표 전 봉은 `NaN` 이다 — ★그때는 알 수 없었다★. 첫 값으로 채우면 룩어헤드다.
+    ★읽기를 여기 하나로 모은 이유★ — 현재값과 lag 값처럼 **같은 계열을 두 번**
+    필요로 하는 소비자가 생겼다. 각자 읽으면 조회가 배로 늘고, 그때부터 "실행당
+    1회" 계약이 조용히 깨진다.
     """
-    import pandas as _pd
-
     try:
         from src.data.macro_observation_store import load as _load
     except Exception:  # noqa: BLE001
@@ -249,30 +250,114 @@ def pit_series_for_bars(series_id: str, bar_dates):
     except Exception as e:  # noqa: BLE001
         logger.debug("빈티지 조회 실패 (%s): %s", series_id, e)
         return None
-
-    # ★빈 `vintage_id` 는 빈티지가 아니다★ (`series_as_of` 와 같은 가드 — 순환 거짓)
     obs = [o for o in obs if getattr(o, "vintage_id", "") and o.release_timestamp]
+    return obs or None
+
+
+def _shift_period_months(period: str, months: int) -> str | None:
+    """관측기간을 `months` 개월 **앞으로**. 형식을 모르면 `None` — ★추측하지 않는다★.
+
+    ★위치가 아니라 달력이다★ 목록에서 k칸 뒤로 세면 결측이 하나만 있어도 다른
+    기간을 집는다. 그리고 그 값도 그럴듯해서 눈으로는 못 잡는다.
+
+    ★날짜를 만들지 않고 문자열로 민다★ `date(y, m, d)` 를 세우면 말일 처리에서
+    존재하지 않는 날을 **보정**하게 되는데, 보정된 기간은 스토어에 없는 기간이다.
+    여기서는 이동한 키로 **정확히 일치하는 기간만** 찾는다 — 없으면 없는 것이다.
+
+    스토어에는 `YYYYMM` 과 `YYYY-MM-DD` 가 섞여 있다(쓰는 곳이 셋). 읽을 수 없는
+    형식이면 몇 개월 전인지 **모르므로** 값을 만들지 않는다.
+    """
+    m = _PERIOD_RE.match(str(period))
+    if not m:
+        return None
+    total = int(m.group(1)) * 12 + (int(m.group(2)) - 1) - int(months)
+    y, mo = divmod(total, 12)
+    return f"{y:04d}-{mo + 1:02d}-{m.group(3)}"
+
+
+def accumulate_for_bars(obs, bar_dates, *, lag_months: int = 0):
+    """★순수 함수★ 관측 리스트 → 봉마다 그 시점에 알 수 있었던 값.
+
+    ★왜 단일 `as_of` 로는 안 되는가★
+    벡터화 경로는 전 구간을 한 번에 평가한다. 창 전체에 하나의 `as_of` 를 쓰면 창
+    마지막 봉의 빈티지가 창 첫 봉에도 적용돼 **창 안에서 여전히 룩어헤드**다.
+
+    `lag_months` 를 주면 그 봉의 최신 관측기간에서 **그만큼 앞선 기간**의 값을
+    ★같은 known 집합에서★ 찾는다. 전년비의 분모가 그것이다 — 분자만 그 시점 값이고
+    분모가 오늘의 최신 개정본이면 룩어헤드를 분모로 되들인다.
+
+    공표 전 봉은 `NaN` 이다 — ★그때는 알 수 없었다★. 첫 값으로 채우면 룩어헤드다.
+
+    ★스토어를 모른다★ 그래서 DB 픽스처 없이 위 규칙들을 테스트로 못 박을 수 있다.
+    """
+    import pandas as _pd
+
     if not obs:
         return None
-
     idx = _pd.DatetimeIndex(bar_dates)
+    if len(idx) > 1 and not idx.is_monotonic_increasing:
+        # ★조용히 정렬하지 않는다★ 한 방향으로 훑으며 흡수하므로 오름차순이 전제다.
+        # 몰래 정렬하면 호출자가 넘긴 순서와 반환 인덱스가 어긋나 값이 엉뚱한
+        # 날짜에 붙는다 — 결과는 그럴듯하고 틀렸다.
+        raise ValueError("봉 날짜는 오름차순이어야 합니다 (누적기 전제)")
+
     # 공표 시각 순으로 훑으며 "그 시점까지 알려진 관측기간별 최신값" 을 누적한다.
-    obs.sort(key=lambda o: (o.release_timestamp, o.observation_period))
+    rows = sorted(obs, key=lambda o: (o.release_timestamp, o.observation_period))
     known: dict[str, float] = {}          # 관측기간 → 그때까지 알려진 최신값
     out: list[float | None] = []
     i = 0
     for bar in idx:
         bar_s = bar.strftime("%Y-%m-%d")
-        while i < len(obs) and obs[i].release_timestamp[:10] <= bar_s:
-            known[obs[i].observation_period] = float(obs[i].value)
+        while i < len(rows) and rows[i].release_timestamp[:10] <= bar_s:
+            known[rows[i].observation_period] = float(rows[i].value)
             i += 1
         if not known:
             out.append(None)              # ★공표 전 — 알 수 없었다★
             continue
         # 그 봉 이하의 관측기간 중 가장 최근 것(관측기간 자체가 미래면 못 쓴다)
         usable = [p for p in known if p[:10] <= bar_s]
-        out.append(known[max(usable)] if usable else None)
+        if not usable:
+            out.append(None)
+            continue
+        p0 = max(usable)
+        if not lag_months:
+            out.append(known[p0])
+            continue
+        target = _shift_period_months(p0, lag_months)
+        out.append(known.get(target) if target else None)
     return _pd.Series(out, index=idx, dtype="float64")
+
+
+def pit_series_for_bars(series_id: str, bar_dates):
+    """봉마다 ★그 봉 시점에 알 수 있었던★ 값 → `pandas.Series`(bar_dates 인덱스).
+
+    ★봉마다 스토어를 읽지 않는다★ `macro_observation_store.load(series_id=)` 자체는
+    PK 선두 컬럼 조건이라 범위 스캔이지만, `as_of` 필터가 **그 계열의 전 빈티지·전
+    기간 행을 다 가져온 뒤 파이썬에서** 걸린다(계열당 수만 행). 봉마다 부르면
+    O(봉수 × 그 계열 전체)다. **한 번 읽어** 누적한다.
+    """
+    obs = _load_vintage_obs(series_id)
+    if obs is None:
+        return None
+    return accumulate_for_bars(obs, bar_dates)
+
+
+def pit_pair_for_bars(series_id: str, bar_dates, *, lag_months: int):
+    """전년비·전월차용 ★쌍★ — `(현재값, lag 값)`. 스토어는 **1회만** 읽는다.
+
+    ★왜 두 시리즈를 한 함수가 주는가★ `pit_series_for_bars` 를 두 번 부르면 조회가
+    2회가 되어 "실행당 1회" 계약이 깨진다. 그리고 두 번 읽는 사이에 스토어가 바뀌면
+    분자와 분모가 **다른 스냅샷**에서 나온다 — 파생값은 단일 transaction-time
+    슬라이스 안에서 계산해야 한다.
+    """
+    obs = _load_vintage_obs(series_id)
+    if obs is None:
+        return None
+    cur = accumulate_for_bars(obs, bar_dates)
+    lag = accumulate_for_bars(obs, bar_dates, lag_months=lag_months)
+    if cur is None or lag is None:
+        return None
+    return cur, lag
 
 
 def latest_vintage_per_period(obs: list[MacroObservation]) -> list[MacroObservation]:
