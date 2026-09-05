@@ -539,6 +539,21 @@ class BacktestEngine:
         all_dates = ohlcv_map[ref_ticker].index
         sim_dates = all_dates[all_dates >= pd.Timestamp(self.cfg.start_date)]
 
+        # ★매크로 시점(PIT) 컨텍스트★ — 실행 달력이 정해진 직후, 패널 사전계산 전에
+        # 심는다. 판정 기준이 **실행 달력**이어야 상장일이 다른 종목 사이에서 같은
+        # 토큰이 다른 의미를 갖지 않는다. `all_dates` 는 워밍업을 포함한다.
+        self._macro_ctx = None
+        if hasattr(strategy, "set_macro_ctx"):
+            try:
+                from src.kis_strategies.macro_pit_context import MacroPitContext
+                self._macro_ctx = MacroPitContext(all_dates)
+                strategy.set_macro_ctx(self._macro_ctx)
+            except Exception as e:  # noqa: BLE001
+                # ★조용히 넘어가지 않는다★ 실패하면 매크로는 라이브(룩어헤드)이고,
+                # 그 사실이 로그에 남아야 한다.
+                logger.warning(f"매크로 PIT 컨텍스트를 만들지 못했습니다 — "
+                               f"매크로 토큰은 라이브(룩어헤드)로 평가됩니다: {e}")
+
         # 횡단면(순위/비율) 전략용 패널 사전계산 — 전 종목 동일시점 값이 필요한 함수 지원
         if hasattr(strategy, "prepare_panel"):
             try:
@@ -1196,7 +1211,8 @@ class BacktestEngine:
             from src.kis_strategies.factor_expr import eval_expr
 
             def tok(name: str):
-                s = _base_series(df_slice, "{" + name + "}")
+                s = _base_series(df_slice, "{" + name + "}",
+                                 macro_ctx=getattr(self, "_macro_ctx", None))
                 return None if s is None or len(s) == 0 else s.astype(float)
 
             out = eval_expr(ast, {"token": tok, "cross": lambda k: None,
@@ -1727,7 +1743,8 @@ class BacktestEngine:
         if sl.empty:
             return True
         from src.kis_strategies.condition_strategy import _eval_condition
-        evals = [r for r in (_eval_condition(sl, c) for c in conds) if r is not None]
+        evals = [r for r in (_eval_condition(sl, c, macro_ctx=getattr(self, "_macro_ctx", None))
+                             for c in conds) if r is not None]
         if not evals:
             return True
         return all(evals)

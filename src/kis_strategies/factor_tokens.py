@@ -1062,7 +1062,8 @@ def _indicator_live(token: str) -> pd.Series | None:
     return None if out is None else out.dropna()
 
 
-def _indicator_pit_by_bar(token: str, df: pd.DataFrame) -> pd.Series | None:
+def _indicator_pit_by_bar(token: str, df: pd.DataFrame, *,
+                          obs_cache: dict | None = None) -> pd.Series | None:
     """지표 토큰의 **PIT** 표현 — 봉마다 그 시점의 빈티지로.
 
     ★분자와 분모가 같은 빈티지에서 나온다★ `pit_pair_for_bars` 가 한 번 읽어 두
@@ -1075,7 +1076,8 @@ def _indicator_pit_by_bar(token: str, df: pd.DataFrame) -> pd.Series | None:
     try:
         from src.data.pit_macro import pit_pair_for_bars
         got = pit_pair_for_bars(series_id, _df_dates(df),
-                                lag_months=INDICATOR_LAG_MONTHS.get(kind, 0))
+                                lag_months=INDICATOR_LAG_MONTHS.get(kind, 0),
+                                obs_cache=obs_cache)
     except Exception as e:  # noqa: BLE001
         _note_failure(token, f"빈티지 조회 실패: {e}")
         return None
@@ -1148,7 +1150,8 @@ def _pit_macro_series(name: str, as_of: str) -> pd.Series | None:
     return out if len(out) else None
 
 
-def _pit_macro_by_bar(name: str, df: pd.DataFrame) -> pd.Series | None:
+def _pit_macro_by_bar(name: str, df: pd.DataFrame, *,
+                      obs_cache: dict | None = None) -> pd.Series | None:
     """봉마다 ★그 봉 시점의 빈티지★ — 벡터화 경로용.
 
     단일 `as_of` 를 창 전체에 쓰면 창 마지막 봉의 빈티지가 첫 봉에도 적용돼 **창
@@ -1158,13 +1161,13 @@ def _pit_macro_by_bar(name: str, df: pd.DataFrame) -> pd.Series | None:
         _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
         return None
     if name in FRED_INDICATOR_TOKENS:
-        return _indicator_pit_by_bar(name, df)
+        return _indicator_pit_by_bar(name, df, obs_cache=obs_cache)
     series_id = FRED_TOKENS.get(name)
     if not series_id:
         return None
     try:
         from src.data.pit_macro import pit_series_for_bars
-        out = pit_series_for_bars(series_id, _df_dates(df))
+        out = pit_series_for_bars(series_id, _df_dates(df), obs_cache=obs_cache)
     except Exception as e:  # noqa: BLE001
         _note_failure(name, f"빈티지 조회 실패: {e}")
         return None
@@ -1178,7 +1181,8 @@ def _pit_macro_by_bar(name: str, df: pd.DataFrame) -> pd.Series | None:
 
 
 def resolve_macro_token(df: pd.DataFrame, token: str,
-                        as_of: str | None = None) -> pd.Series | None:
+                        as_of: str | None = None, *,
+                        obs_cache: dict | None = None) -> pd.Series | None:
     """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀).
 
     `as_of` 가 없으면 **라이브**(오늘 최신값) — 기존 동작 그대로다.
@@ -1188,7 +1192,7 @@ def resolve_macro_token(df: pd.DataFrame, token: str,
     name = (token or "").strip()
     if as_of == "per_bar":
         # ★봉마다 그 시점의 빈티지★ — 벡터화 경로(전 구간 일괄 평가)에서 쓴다.
-        return _pit_macro_by_bar(name, df)
+        return _pit_macro_by_bar(name, df, obs_cache=obs_cache)
     if as_of:
         s = _pit_macro_series(name, str(as_of))
         return _align(s, df) if s is not None else None

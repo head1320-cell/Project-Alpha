@@ -42,7 +42,19 @@ _PRICE_COL = {
 }
 
 
-def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
+def _base_series(df: pd.DataFrame, token: str, *, macro_ctx=None) -> pd.Series | None:
+    """토큰 → 시리즈.
+
+    ★`macro_ctx` 가 매크로의 시점을 정한다★
+      · 없음 → 매크로는 **라이브**(오늘 최신값). 스크리너·실시간 경로가 그렇고,
+        거기서는 그것이 맞다.
+      · 있음 → 백테스트다. 매크로는 그 봉 시점의 빈티지로 평가되고, 그러지 못한
+        토큰은 ctx 에 **룩어헤드로 라벨**된다.
+
+    ★백테스트 경로에서 `macro_ctx` 를 빠뜨리면 조용히 룩어헤드가 된다★ — 결과만
+    보고는 알 수 없으므로 `tests/test_macro_pit_context.py` 의 정적 트립와이어가
+    호출부를 검사한다.
+    """
     name = (token or "").strip().strip("{}").strip()
     col = _PRICE_COL.get(name)
     if col is not None:
@@ -57,7 +69,15 @@ def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
         resolve_market_token,
         resolve_ohlcv_token,
     )
-    for resolver in (resolve_ohlcv_token, resolve_market_token, resolve_macro_token,
+
+    def _macro(frame, tok):
+        if macro_ctx is not None:
+            from src.kis_strategies.macro_pit_context import is_macro_token
+            if is_macro_token(tok):
+                return macro_ctx.resolve(frame, tok)
+        return resolve_macro_token(frame, tok)
+
+    for resolver in (resolve_ohlcv_token, resolve_market_token, _macro,
                      resolve_flow_token):
         s = resolver(df, name)
         if s is not None:
@@ -243,8 +263,9 @@ def _apply_two_factor(s1: pd.Series, s2: pd.Series, fn: str) -> pd.Series | None
 
 
 # ── 단일 조건 평가 → True / False / None(평가 불가) ───────────
-def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = None) -> bool | None:
-    s = _base_series(df, cond.get("factor_token", ""))
+def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = None,
+                    *, macro_ctx=None) -> bool | None:
+    s = _base_series(df, cond.get("factor_token", ""), macro_ctx=macro_ctx)
     if (s is None or len(s) == 0) and fundamentals is not None:
         fv = _fundamental_value(cond.get("factor_token", ""), fundamentals)
         if fv is not None:
@@ -381,6 +402,18 @@ class ConditionStrategy(BaseStrategy):
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
         self._pit_base_cache: dict = {}  # 종목별 PIT 재무 패널 캐시 (financials_history 기반)
         self._fund_cache: dict = {}      # per-bar 폴백용 종목별 펀더멘털 캐시(스냅샷은 날짜 무관 상수)
+        # 실행 스코프 매크로 시점(PIT) 컨텍스트. ★None 이면 매크로는 라이브★
+        # (스크리너·실시간 경로). 백테스트 엔진이 실행 달력을 확정한 뒤 심는다.
+        self._macro_ctx = None
+
+    def set_macro_ctx(self, ctx) -> None:
+        """매크로 시점 컨텍스트를 심는다 — ★`prepare_panel` 보다 먼저★.
+
+        ★생성자 kwarg 로 받지 않는 이유★ `__init__` 이 `**_ignore` 라 이름을 한 글자
+        틀리면 조용히 삼켜지고, 그러면 백테스트가 아무 표시 없이 라이브(룩어헤드)로
+        돈다. 전용 setter 는 오타가 `AttributeError` 로 드러난다.
+        """
+        self._macro_ctx = ctx
 
     @property
     def name(self) -> str:
@@ -561,7 +594,7 @@ class ConditionStrategy(BaseStrategy):
             cols: dict = {}
             for tk, odf in ohlcv_map.items():
                 try:
-                    s = _base_series(odf, token)
+                    s = _base_series(odf, token, macro_ctx=self._macro_ctx)
                     if s is None or len(s) == 0:
                         continue
                     # 내부 지표(중첩): 순위(변화율_기간(종가,20)) — 파생 시리즈를 랭킹 대상으로
@@ -879,7 +912,7 @@ class ConditionStrategy(BaseStrategy):
             if panel is None or str(tk) not in panel.columns:
                 return None
             return pd.Series(panel[str(tk)].reindex(_date_keys(df)).values, index=df.index)
-        s = _base_series(df, cond.get("factor_token", ""))
+        s = _base_series(df, cond.get("factor_token", ""), macro_ctx=self._macro_ctx)
         if s is None or len(s) == 0:
             # ① PIT 우선 — 봉별 시점 재무(financials_history). look-ahead 없음·allow_snapshot 무관.
             pit = self._pit_fund_series(tk, name, df)

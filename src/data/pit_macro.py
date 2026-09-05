@@ -229,7 +229,44 @@ def series_as_of(series_id: str, as_of: str | None):
     return ([o.observation_period for o in picked], [float(o.value) for o in picked])
 
 
-def _load_vintage_obs(series_id: str):
+def load_vintage_obs(series_id: str, *, cache: dict | None = None):
+    """`(관측, 실패사유)` — ★"없다" 와 "못 읽었다" 를 가른다★
+
+    `_load_vintage_obs` 는 둘 다 `None` 으로 뭉갠다. 그런데 처방이 다르다:
+
+      · 관측 `None`, 사유 `None` → **확인했더니 빈티지가 없다** (적재가 얕다)
+      · 관측 `None`, 사유 있음   → **확인하지 못했다** (DB 장애 등) — ★미상★
+
+    이걸 구별하지 않으면 DB 가 잠깐 죽었을 때 소비자가 "빈티지가 없구나" 로 읽고
+    조용히 라이브(룩어헤드)로 넘어간다. **하지 않은 진술**이다.
+
+    `cache` 를 주면 계열당 한 번만 읽는다 — 실행 스코프 컨텍스트가 그것을 소유한다.
+    ★실패도 캐시한다★ 한 실행 안에서 DB 가 살아났다 죽었다 하면 같은 토큰이 봉마다
+    다른 판정을 받아 "전부-아니면-전혀" 가 깨진다.
+    """
+    if cache is not None and series_id in cache:
+        return cache[series_id]
+    got = _read_vintage_obs(series_id)
+    if cache is not None:
+        cache[series_id] = got
+    return got
+
+
+def _read_vintage_obs(series_id: str):
+    try:
+        from src.data.macro_observation_store import load as _load
+    except Exception as e:  # noqa: BLE001
+        return None, f"스토어를 불러오지 못했습니다: {e}"
+    try:
+        obs = _load(series_id) or []
+    except Exception as e:  # noqa: BLE001
+        logger.debug("빈티지 조회 실패 (%s): %s", series_id, e)
+        return None, f"빈티지 조회에 실패했습니다: {type(e).__name__}: {e}"
+    obs = [o for o in obs if getattr(o, "vintage_id", "") and o.release_timestamp]
+    return (obs or None), None
+
+
+def _load_vintage_obs(series_id: str, *, cache: dict | None = None):
     """계열의 빈티지 관측을 ★스토어에서 한 번만★ 읽는다. 없거나 못 읽으면 `None`.
 
     ★빈 `vintage_id` 는 빈티지가 아니다★ (`series_as_of` 와 같은 가드 — 순환 거짓)
@@ -240,18 +277,10 @@ def _load_vintage_obs(series_id: str):
     ★읽기를 여기 하나로 모은 이유★ — 현재값과 lag 값처럼 **같은 계열을 두 번**
     필요로 하는 소비자가 생겼다. 각자 읽으면 조회가 배로 늘고, 그때부터 "실행당
     1회" 계약이 조용히 깨진다.
+
+    실패 사유까지 필요하면 `load_vintage_obs` 를 쓴다(미상 ≠ 없음).
     """
-    try:
-        from src.data.macro_observation_store import load as _load
-    except Exception:  # noqa: BLE001
-        return None
-    try:
-        obs = _load(series_id) or []
-    except Exception as e:  # noqa: BLE001
-        logger.debug("빈티지 조회 실패 (%s): %s", series_id, e)
-        return None
-    obs = [o for o in obs if getattr(o, "vintage_id", "") and o.release_timestamp]
-    return obs or None
+    return load_vintage_obs(series_id, cache=cache)[0]
 
 
 def _shift_period_months(period: str, months: int) -> str | None:
@@ -328,7 +357,7 @@ def accumulate_for_bars(obs, bar_dates, *, lag_months: int = 0):
     return _pd.Series(out, index=idx, dtype="float64")
 
 
-def pit_series_for_bars(series_id: str, bar_dates):
+def pit_series_for_bars(series_id: str, bar_dates, *, obs_cache: dict | None = None):
     """봉마다 ★그 봉 시점에 알 수 있었던★ 값 → `pandas.Series`(bar_dates 인덱스).
 
     ★봉마다 스토어를 읽지 않는다★ `macro_observation_store.load(series_id=)` 자체는
@@ -336,13 +365,14 @@ def pit_series_for_bars(series_id: str, bar_dates):
     기간 행을 다 가져온 뒤 파이썬에서** 걸린다(계열당 수만 행). 봉마다 부르면
     O(봉수 × 그 계열 전체)다. **한 번 읽어** 누적한다.
     """
-    obs = _load_vintage_obs(series_id)
+    obs = _load_vintage_obs(series_id, cache=obs_cache)
     if obs is None:
         return None
     return accumulate_for_bars(obs, bar_dates)
 
 
-def pit_pair_for_bars(series_id: str, bar_dates, *, lag_months: int):
+def pit_pair_for_bars(series_id: str, bar_dates, *, lag_months: int,
+                      obs_cache: dict | None = None):
     """전년비·전월차용 ★쌍★ — `(현재값, lag 값)`. 스토어는 **1회만** 읽는다.
 
     ★왜 두 시리즈를 한 함수가 주는가★ `pit_series_for_bars` 를 두 번 부르면 조회가
@@ -350,7 +380,7 @@ def pit_pair_for_bars(series_id: str, bar_dates, *, lag_months: int):
     분자와 분모가 **다른 스냅샷**에서 나온다 — 파생값은 단일 transaction-time
     슬라이스 안에서 계산해야 한다.
     """
-    obs = _load_vintage_obs(series_id)
+    obs = _load_vintage_obs(series_id, cache=obs_cache)
     if obs is None:
         return None
     cur = accumulate_for_bars(obs, bar_dates)
