@@ -220,3 +220,57 @@ test("Factor picker: 중첩(내부 지표)이 삽입된 수식에 그대로 나�
   ).toContainText("과거값");
   await expect(chip).toContainText("이동평균");
 });
+
+// ─── 11. ★목록의 근거가 백엔드인가★ ─────────────────────────────────────────
+//
+// 이 테스트가 없으면 "언제나 프런트 폴백을 쓴다" 는 구현도 전부 통과한다. 그리고
+// 그 구현은 화면상 멀쩡해 보이므로 눈으로는 절대 못 잡는다.
+//
+// 실측한 사고: 백엔드 매크로 토큰 20개 중 8개(US국채 1·2·3·5·7·20·30년, 국고채 1년)가
+// 프런트 하드코딩에 없어 **사용자가 닿을 수 없었다.** 아무 테스트도 실패하지 않았다.
+//
+// 아래 토큰은 `MACRO_FALLBACK_GROUPS` 에 **일부러 넣지 않았다** — 백엔드
+// `/condition-tokens` 의 `macro_groups` 를 실제로 그려야만 화면에 나온다.
+test("Factor picker: 매크로 목록은 백엔드가 준다 (폴백에 없는 토큰이 보인다)", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openFromScreener(page);
+
+  // 검색은 카테고리를 가로지른다 — 카테고리 칩을 누르지 않아도 잡힌다.
+  await page.getByPlaceholder(SEARCH).fill("US국채(7년)");
+  await expect(
+    page.locator('.tfm-row-d:text-is("{US국채(7년)}")'),
+    "백엔드에만 있는 매크로 토큰이 픽커에 없다 — 프런트 폴백을 쓰고 있다",
+  ).toBeVisible({ timeout: 20_000 });
+
+  expect(uniq(sink.pageErrors), "macro catalog page errors").toEqual([]);
+  expect(uniq(sink.api404), "macro catalog API 404s").toEqual([]);
+});
+
+// ─── 12. ★폴백을 조용히 쓰지 않는다★ ────────────────────────────────────────
+//
+// 조회가 실패하면 두 가지가 동시에 참이어야 한다:
+//   ① 목록이 **비지 않는다** — 빈 목록은 "매크로 팩터가 없다" 로 읽힌다.
+//   ② 화면이 **그렇다고 말한다** — 구버전 목록이 진짜 목록으로 위장하면 안 된다.
+//
+// ★이 테스트만이 폴백 경로를 지나간다★ 위 11번은 백엔드가 정상 응답하므로 폴백
+// 분기를 타지 않는다. 그것만 있으면 "폴백이 빈 배열" 인 구현도 통과한다(실측: 통과했다).
+test("Factor picker: 목록 조회가 실패하면 폴백을 쓰되 그 사실을 말한다", async ({ page }) => {
+  await page.route("**/screener/condition-tokens", (route) => route.abort("failed"));
+  await page.goto("/screener", { waitUntil: "networkidle" });
+  await page.locator(".bsc-add-btn").first().click();
+  await expect(page.getByPlaceholder(SEARCH)).toBeVisible();
+
+  // ① 폴백 목록이 비어 있지 않다
+  await page.getByPlaceholder(SEARCH).fill("국고채(10년)");
+  await expect(
+    page.locator('.tfm-row-d:text-is("{국고채(10년)}")'),
+    "조회 실패 시 매크로 목록이 통째로 비었다 — 빈 목록은 '팩터가 없다' 로 읽힌다",
+  ).toBeVisible({ timeout: 20_000 });
+
+  // ② 화면이 폴백임을 말한다
+  await page.getByPlaceholder(SEARCH).fill("");
+  await expect(
+    page.locator(".as-err"),
+    "폴백을 조용히 썼다 — 구버전 목록이 진짜 목록으로 위장한다",
+  ).toContainText("기본값");
+});

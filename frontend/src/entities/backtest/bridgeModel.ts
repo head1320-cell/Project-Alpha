@@ -142,6 +142,14 @@ export interface TokenSupportMap {
   flow_note?: string;
   score_note?: string;                  // 점수 근사(뉴지랭크 공개 레시피) 설명
   substitutes?: Record<string, string[]>;  // 뉴지 점수류 → 대체 제안 토큰(선택 가능)
+  /**
+   * 매크로 토큰의 **표시 그룹** — ★목록의 단일 출처★.
+   *
+   * 픽커의 매크로 그룹은 이걸로 그린다. 프런트에 손으로 든 목록이 있으면 백엔드에
+   * 토큰을 더해도 화면에 안 나온다(실측: 20개 중 8개가 그랬다).
+   * 없거나 비면 프런트 폴백을 쓰되, 그때는 화면이 "기본값을 보이는 중" 이라 말한다.
+   */
+  macro_groups?: { label: string; tokens: string[] }[];
 }
 
 // 조건식 페이로드 (Genport식) — inner_*는 중첩: 순위(변화율_기간(종가,20)) 등
