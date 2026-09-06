@@ -121,6 +121,33 @@ export interface ScreenToBacktestResult {
     }>;
     note: string;
   } | null;
+  /**
+   * 재무 공시일이 **실측 접수일이었나 정적 시차 추정이었나**.
+   *
+   * ★PIT 재무 토큰을 안 쓴 실행은 `null`/부재다★ — `{measured:0, …}` 이 아니다.
+   * 반대로 **썼는데 전부 추정**이면 `measured_pct: 0` 이다(측정된 사실).
+   * `unknown` 은 빈티지 유무를 **확인하지 못한** 수이고 분모에 남는다 —
+   * 추정과 같은 칸에 세면 DB 가 죽었을 때 비율이 정상으로 보인다.
+   *
+   * ★세는 단위는 `(종목, 기간)`★ 이지 봉도 신호도 아니다(`unit` 이 밝힌다).
+   * 종목별 맵은 싣지 않는다 — 종목 수백 × 기간 수십이라 페이로드가 터진다.
+   * 대신 `reasons` 가 사유 히스토그램(예시 종목 ≤3)을 든다.
+   */
+  fundamentals_pit?: {
+    unit: string;
+    measured: number;
+    estimated: number;
+    unknown: number;
+    measured_pct: number | null;
+    tickers: { measured_any: number; all_estimated: number; unknown: number; no_financials: number };
+    reasons: Record<string, {
+      periods: number; tickers: number; sample_tickers: string[]; reason: string;
+    }>;
+    lag_days: { annual: number; quarterly: number };
+    same_day_guard_days: number;
+    note: string;
+    value_note: string;
+  } | null;
 }
 
 // 백테스트 고급 옵션 (수수료/슬리피지/손절/익절)

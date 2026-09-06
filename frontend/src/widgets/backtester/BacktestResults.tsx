@@ -161,6 +161,57 @@ function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
   }
   return out;
 }
+/**
+ * 재무 공시일의 출처를 진단 문장으로. ★안 쓴 실행은 아무 말도 하지 않는다★
+ *
+ * `macroHonesty` 와 같은 규율이다. 다만 세는 단위가 **(종목, 기간)** 이라
+ * 종목 이름을 나열하지 않는다 — 수백 개가 될 수 있다. 대신 사유별 건수와
+ * 예시 종목 몇 개를 말한다.
+ *
+ * ★"실측 100%" 라도 값 축은 남는다는 말을 함께 싣는다★ 비율 하나만 보이면
+ * "PIT 완료" 로 읽힌다.
+ */
+function fundamentalsHonesty(fp: ScreenToBacktestResult["fundamentals_pit"]): string[] {
+  if (!fp) return [];
+  const total = fp.measured + fp.estimated + fp.unknown;
+  if (total === 0 && !fp.tickers?.no_financials) return [];
+  const out: string[] = [];
+
+  if (fp.unknown > 0) {
+    const r = fp.reasons?.vintage_table_unreadable;
+    out.push(
+      `재무 공시일 미상 — ${fp.unknown}개 (종목, 기간)에서 빈티지 유무를 확인하지 ` +
+      `못해 정적 시차로 추정했습니다${r?.reason ? ` (${r.reason})` : ""}.`,
+    );
+  }
+  if (fp.estimated > 0) {
+    const r = fp.reasons?.ticker_has_no_vintages ?? fp.reasons?.no_vintage_for_period;
+    const eg = r?.sample_tickers?.length ? ` 예: ${r.sample_tickers.join(" · ")}` : "";
+    out.push(
+      `재무 공시일 추정 — ${fp.estimated}개 (종목, 기간)이 실제 접수일 대신 정적 ` +
+      `시차(연간 ${fp.lag_days.annual}일 · 분기 ${fp.lag_days.quarterly}일)로 ` +
+      `평가됐습니다. 늦게 공시된 보고서라면 그만큼 아직 공표되지 않은 재무를 ` +
+      `본 것입니다.${eg}`,
+    );
+  }
+  if (fp.measured > 0) {
+    out.push(
+      `재무 공시일 실측 — ${fp.measured}개 (종목, 기간)은 DART 접수일` +
+      `${fp.same_day_guard_days > 0 ? ` + ${fp.same_day_guard_days}일` : ""} 기준으로 ` +
+      `평가됐습니다${fp.measured_pct == null ? "" : ` (${fp.measured_pct}%)`}.`,
+    );
+  }
+  if (fp.tickers?.no_financials > 0) {
+    out.push(
+      `재무 미적재 — ${fp.tickers.no_financials}개 종목은 적재된 재무가 없어 PIT ` +
+      `재무 조건이 **평가되지 않았습니다**(조건이 거짓이었다는 뜻이 아닙니다).`,
+    );
+  }
+  // ★날짜만 실측이라는 사실★ — 추정 기간이 하나라도 있으면 값 축이 남는다.
+  if (fp.estimated + fp.unknown > 0 && fp.value_note) out.push(fp.value_note);
+  return out;
+}
+
 const fmtStat = (v: number | null | undefined, m: MetricDef) => {
   const n = num(v);
   if (n == null) return "—";
@@ -215,6 +266,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
   const cfg = (run.input_snapshot ?? {}) as Record<string, unknown>;
   const isMock = run.is_mock_data === true || !res.data_source?.fully_real;
   const macroLines = macroHonesty(res.macro_lookahead);
+  const fundLines = fundamentalsHonesty(res.fundamentals_pit);
   // 결측 사유 판정에 쓰는 두 사실 — 둘 다 이미 화면이 들고 있는 값이다.
   const hasBenchmark = Boolean(bt.benchmark?.curve?.length);
   const tradeCount = num(stats.num_trades as number);
@@ -385,6 +437,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요합니다.</li>}
           {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·유니버스·기간을 점검하세요.</li>}
           {macroLines.map((t, i) => <li key={`ml${i}`}>{t}</li>)}
+          {fundLines.map((t, i) => <li key={`fp${i}`}>{t}</li>)}
           <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않습니다(추정치로 대체하지 않음).</li>
         </ul>
         </CardContent>

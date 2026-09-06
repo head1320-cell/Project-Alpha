@@ -309,3 +309,61 @@ def test_the_tripwire_would_catch_a_late_installation():
     assert not _order(prose, "set_fund_ctx", "prepare_panel"), (
         "단어로 찾는 검사가 오탐하지 않는다 — 이 테스트의 전제가 사라졌다")
     assert _order(prose, CALL_FUND, CALL_PANEL), "호출부로 찾는데도 주석에 걸렸다"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⑦ ★프런트가 읽는 키가 실제로 오는가★
+#
+# B2 에서 배운 것: 프런트는 백엔드가 준 것만 그린다. 화면이 `fp.measured_pct` 를
+#읽는데 백엔드가 그 키를 안 보내면 **조용히 `undefined`** 가 되고, 진단 줄이
+# 사라지거나 "undefined%" 가 뜬다. 타입스크립트는 런타임 응답을 검사하지 않는다.
+#
+# 프런트에 유닛 테스트 러너가 없고(Playwright 뿐) 이 줄을 E2E 로 띄우려면 빈티지가
+# 있는 실제 백테스트가 필요하다. 그래서 **소스를 읽어** 키를 맞춘다 —
+# `test_macro_pit_context.py` 의 정적 트립와이어와 같은 기법이다.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TSX = "frontend/src/widgets/backtester/BacktestResults.tsx"
+
+
+def _ui_reads() -> tuple[set[str], set[str]]:
+    """화면이 실제로 참조하는 `fp.<키>` 와 `fp.reasons?.<코드>`."""
+    import pathlib
+    import re
+    src = pathlib.Path(_TSX).read_text(encoding="utf-8")
+    body = src[src.index("function fundamentalsHonesty"):]
+    body = body[:body.index("\n}\n")]
+    keys = set(re.findall(r"\bfp\.(\w+)", body))
+    codes = set(re.findall(r"\bfp\.reasons\?\.(\w+)", body))
+    return keys - {"reasons"}, codes
+
+
+def test_the_screen_reads_only_keys_the_backend_sends():
+    """★화면이 읽는 키가 전부 실제로 온다★"""
+    keys, _ = _ui_reads()
+    assert keys, f"{_TSX} 에서 `fp.` 참조를 찾지 못했다 — 이 검사가 공허하다"
+    meta = _fundamentals_pit_meta(_ctx({"005930": (1, 1, 0)}))
+    missing = keys - set(meta)
+    assert not missing, f"화면이 읽는데 백엔드가 안 보내는 키: {sorted(missing)}"
+
+
+def test_the_reason_codes_the_screen_names_are_real():
+    """★사유 코드도 계약이다★ 이름이 틀리면 조용히 사유 없는 문장이 나간다."""
+    _, codes = _ui_reads()
+    assert codes, "사유 코드 참조를 찾지 못했다 — 이 검사가 공허하다"
+    produced = set()
+    produced |= set(_fundamentals_pit_meta(_ctx({"a": (0, 1, 0)}))["reasons"])
+    produced |= set(_fundamentals_pit_meta(
+        _ctx({"a": (0, 0, 1)}, reason="못 읽었습니다"))["reasons"])
+    ctx = _ctx({"a": (1, 0, 0)})
+    ctx.record("a", measured=1, estimated=1, unknown=0)      # 같은 종목 · 일부만 실측
+    produced |= set(_fundamentals_pit_meta(ctx)["reasons"])
+    produced |= set(_fundamentals_pit_meta(_ctx({}, no_financials=("b",)))["reasons"])
+    unknown = codes - produced
+    assert not unknown, f"화면이 부르는데 백엔드가 내지 않는 사유 코드: {sorted(unknown)}"
+
+
+def test_the_tripwire_notices_a_key_the_backend_does_not_send():
+    """★테스트의 테스트★ 항상 통과하는 검사를 배제한다."""
+    meta = _fundamentals_pit_meta(_ctx({"005930": (1, 0, 0)}))
+    assert {"measured", "made_up_key"} - set(meta) == {"made_up_key"}
