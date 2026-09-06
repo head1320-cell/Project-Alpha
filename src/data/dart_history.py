@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -244,6 +245,167 @@ def vintage_stats(engine=None) -> dict:
         out["rows"] = out["restated_periods"] = None
         out["reason"] = f"빈티지 테이블을 읽지 못했습니다: {type(e).__name__}: {e}"
     return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# as-of 리더 — ★그때 알 수 있던 재무★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# 지금 재무 PIT 은 **고정 시차 추정**이다(연간 90일 · 분기 45일, `pit_store.py:33-35`).
+# 저장소가 그 한계를 스스로 적어 뒀다 — `company_snapshot_builder.py:158`:
+#   "이 날짜는 실제 공표일이 아니라 정적 시차 규칙으로 추정한 가용일입니다."
+# 여기에 **실측 접수일** 기반 조회를 놓는다.
+#
+# ★구조는 P1 의 매크로 경로 그대로다★ — 백테스트는 봉마다 as-of 를 묻는다.
+# 봉마다 DB 를 때리면 종목 × 봉 만큼 쿼리가 나가므로 **읽기 1회 + 순수 필터**로
+# 가른다:
+#     load_vintages(ticker)          한 번 읽는다        → (행, 사유)
+#     vintages_as_of(행, as_of)      봉마다 순수 필터    → 행
+#     history_as_of(ticker, as_of)   둘의 편의 조합      → (행, 사유)
+
+
+#: as_of 는 반드시 `YYYY-MM-DD` — ★문자열 비교라 형식이 틀리면 조용히 전부/전무★.
+#: `"2025"` 는 모든 `"2025-03-14"` 보다 작아 아무것도 안 나오고, `"2025-13-01"` 은
+#: 모든 것보다 커 전부 나온다. 둘 다 그럴듯해서 아무도 눈치채지 못한다.
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _valid_date(value) -> str | None:
+    """`YYYY-MM-DD` 이고 **실재하는 날짜**면 그 문자열, 아니면 `None`."""
+    s = str(value or "").strip()
+    if not _DATE_RE.match(s):
+        return None
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return s
+
+
+def _vintage_period(row: dict) -> tuple:
+    """valid time 축 — 이 수치가 **설명하는 기간**."""
+    return (row["year"], row["reprt"])
+
+
+def _vintage_stamp(row: dict) -> tuple:
+    """transaction time 축 — **언제부터 알 수 있었나**.
+
+    ★접수일만으로는 같은 날 정정의 순서가 갈리지 않는다★ — `rcept_dt` 는 일 단위라
+    같은 날 원본과 정정이 동점이 되고, 그러면 답이 **행 순서(=미정)** 에 달린다.
+    `rcept_no` 는 `YYYYMMDD` + 그날의 접수순번이므로(V1 의 `filing_date_of` 가 이미
+    앞 8자리에 기대고 있다) 그날 안의 순서를 준다. PK 라 유일함도 보장된다.
+
+    ★확인하지 못한 것★ — DART 가 정정공시에 실제로 더 큰 순번을 주는지 실호출로
+    보지 못했다(이 컨테이너에 `DART_API_KEY` 없음). 접수번호가 접수 순으로
+    부여된다는 것은 공시체계상의 성질이지 우리가 관측한 사실이 아니다.
+    """
+    return (row["rcept_dt"], row["rcept_no"])
+
+
+def load_vintages(ticker: str, *, engine=None) -> tuple[list[dict] | None, str | None]:
+    """종목의 **모든** 재무 빈티지 행. `(행, 사유)` — ★"없다" 와 "못 읽었다" 를 가른다★
+
+      · `([], None)`      확인했더니 빈티지가 없다 (적재가 얕다)
+      · `([...], None)`   읽었다
+      · `(None, 사유)`    ★읽지 못했다★ — 테이블 없음·DB 장애 등
+
+    이 구별이 없으면 DB 가 잠깐 죽었을 때 소비자가 "빈티지가 없구나" 로 읽고
+    조용히 추정 시차(룩어헤드 근사)로 넘어간다. **하지 않은 진술**이다.
+    `pit_macro.load_vintage_obs` 가 매크로에서 같은 이유로 같은 모양을 쓴다.
+
+    행 모양은 `load_history` 의 **상위집합**이다 — 값 컬럼 + `year`/`reprt`/`month`/
+    `seq` 에 출처(`rcept_no`·`rcept_dt`)가 붙는다. 그래서 기존 파생 팩터
+    (`_compute_history_factors`)가 그대로 돈다.
+
+    ★버리는 행 둘★ — 둘 다 조용히 버리지 않고 로그를 남긴다:
+      ① 접수일이 `YYYY-MM-DD` 가 아닌 행 — transaction time 이 없으면 as-of 질문에
+         답할 수 없다(`pit_macro` 가 `vintage_id` 빈 행을 버리는 것과 같은 판단).
+      ② 월 축에 놓을 수 없는 보고서 코드 — `load_history` 와 같은 처리.
+    """
+    from sqlalchemy import text
+    try:
+        engine = _get_engine(engine)
+        if engine is None:
+            return None, f"DB 엔진이 없어 {VINTAGE_TABLE} 를 읽지 못했습니다."
+        cols = ", ".join(_FIELDS)
+        with engine.connect() as conn:
+            raw = conn.execute(text(
+                f"SELECT bsns_year, reprt_code, rcept_no, rcept_dt, {cols} "  # noqa: S608
+                f"FROM {VINTAGE_TABLE} WHERE ticker=:t"), {"t": str(ticker)}).fetchall()
+    except Exception as e:  # noqa: BLE001
+        return None, f"{VINTAGE_TABLE} 를 읽지 못했습니다: {type(e).__name__}: {e}"
+
+    out: list[dict] = []
+    dropped = {"no_filing_date": 0, "unplaceable_report": 0}
+    for r in raw:
+        year, reprt, rcept_no, rcept_dt = str(r[0]), str(r[1]), str(r[2]), _valid_date(r[3])
+        if rcept_dt is None:
+            dropped["no_filing_date"] += 1
+            continue
+        month = _REPRT_MONTH.get(reprt)
+        if month is None:
+            dropped["unplaceable_report"] += 1
+            continue
+        d = {f: (float(v) if v is not None else None) for f, v in zip(_FIELDS, r[4:])}
+        d.update({"year": int(year), "reprt": reprt, "month": month,
+                  "seq": int(year) * 12 + month,
+                  "rcept_no": rcept_no, "rcept_dt": rcept_dt})
+        out.append(d)
+
+    if any(dropped.values()):
+        logger.warning("%s %s 빈티지 %d행을 버렸습니다 — 접수일 없음 %d · 미상 보고서코드 %d",
+                       VINTAGE_TABLE, ticker, sum(dropped.values()),
+                       dropped["no_filing_date"], dropped["unplaceable_report"])
+
+    # ★정렬은 여기서 확정한다★ `financials_history` 리더 8곳이 조용히 깨진 원인이
+    # 정렬 부재였다(DB 가 주는 순서는 미정이고 SQLite 와 Postgres 가 다르다).
+    out.sort(key=lambda d: (d["seq"], d["rcept_dt"], d["rcept_no"]))
+    return out, None
+
+
+def vintages_as_of(rows: list[dict], as_of: str) -> list[dict]:
+    """★순수 함수★ — `as_of` 시점에 알 수 있던 재무만, 기간별 최신 빈티지 하나.
+
+    DB 를 건드리지 않는다. `load_vintages` 로 한 번 읽고 봉마다 이걸 부른다.
+
+    `as_of` 가 `YYYY-MM-DD` 가 아니면 **예외**다 — `pit_macro.accumulate_for_bars`
+    가 정렬되지 않은 입력에 `ValueError` 를 내는 것과 같은 규율이다. 조용히 빈
+    목록을 돌려주면 "그때는 아무것도 몰랐다" 라는 **하지 않은 진술**이 된다.
+
+    ★경계는 접수일 당일 포함(`<=`)★ 이고, 이 함수는 접수 **시각**을 모른다.
+    DART 는 18시까지 접수를 받으므로 장마감 후 접수분이 같은 날에 섞일 수 있다.
+    그 안전 여유는 호출자가 **보이는 자리에서** 준다(예: 직전 거래일을 넘긴다) —
+    여기서 몰래 하루를 빼면 반대로 "왜 하루 늦나" 를 아무도 찾지 못한다.
+    """
+    from src.data import pit_macro
+
+    day = _valid_date(as_of)
+    if day is None:
+        raise ValueError(f"as_of 가 YYYY-MM-DD 형식의 실재 날짜가 아닙니다: {as_of!r}")
+
+    known = [r for r in rows if r.get("rcept_dt") and r["rcept_dt"] <= day]
+    picked = pit_macro.latest_vintage_per_period(
+        known, period_of=_vintage_period, stamp_of=_vintage_stamp)
+    # 사본을 돌려준다 — 봉마다 부르는 자리라, 소비자가 만지면 캐시된 원본이 상한다.
+    return sorted((dict(r) for r in picked), key=lambda d: d["seq"])
+
+
+def history_as_of(ticker: str, as_of: str,
+                  *, engine=None) -> tuple[list[dict] | None, str | None]:
+    """`load_vintages` + `vintages_as_of` — 한 시점만 물을 때의 편의 조합.
+
+    ★`financials_history` 로 폴백하지 않는다★ 그 테이블은 "지금 값"(정정이 원본을
+    덮어쓴 결과)이라 as-of 를 답할 수 없다. 빈티지가 없을 때 그쪽을 읽으면
+    **현재 개정본**이 과거 봉에 들어간다 — 막으려던 룩어헤드가 PIT 라벨을 달고
+    되돌아온다. 추정 시차로의 **라벨 붙은** 열화는 소비자 층(V4)의 판단이다.
+    """
+    day = _valid_date(as_of)
+    if day is None:
+        return None, f"as_of 가 YYYY-MM-DD 형식의 실재 날짜가 아닙니다: {as_of!r}"
+    rows, reason = load_vintages(ticker, engine=engine)
+    if rows is None:
+        return None, reason
+    return vintages_as_of(rows, day), None
 
 
 def ensure_history_table(engine) -> None:

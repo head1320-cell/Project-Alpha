@@ -390,15 +390,44 @@ def pit_pair_for_bars(series_id: str, bar_dates, *, lag_months: int,
     return cur, lag
 
 
-def latest_vintage_per_period(obs: list[MacroObservation]) -> list[MacroObservation]:
+def _macro_period(o) -> str:
+    return o.observation_period
+
+
+def _macro_stamp(o) -> str:
+    return o.release_timestamp
+
+
+def latest_vintage_per_period(obs: list, *, period_of=None, stamp_of=None) -> list:
     """관측기간별로 **as_of 시점 기준 최신 빈티지** 하나만 남긴다.
 
     fetch_observations 가 이미 as_of 로 잘라 두었으므로, 여기서는 같은 기간에 남은
     빈티지 중 공표시각이 가장 늦은 것을 고르면 그것이 "그때 알던 최신값"이다.
+
+    ★재무 빈티지도 **이 함수**를 쓴다★ — `dart_history.vintages_as_of` 가 부른다.
+    판정은 같고 축 이름만 다르다:
+
+        매크로   valid = 관측기간         transaction = 공표시각
+        재무     valid = (연도, 보고서)   transaction = (접수일, 접수번호)
+
+    그래서 축 접근자를 인자로 받는다(기본값은 매크로 모양). ★복제하지 않는 이유★는
+    이 함수를 애초에 공용으로 끌어올린 이유와 같다 — 두 벌이 되면 한쪽만 갈라져도
+    **조용히** 거짓 PIT 가 된다. 재무 쪽 테스트
+    (`test_financials_as_of.py::test_it_uses_the_shared_latest_vintage_rule`)가
+    이 함수를 바꿔치기해 실제로 쓰이는지 관측한다.
+
+    ★동점은 먼저 온 것이 이긴다★ — `>` 이지 `>=` 가 아니다. 그러므로 답이
+    결정론적이려면 호출자가 **기간 안에서 유일한** 스탬프를 줘야 한다. 재무는
+    `rcept_no` 가 PK 라 유일하다. 매크로는 같은 공표시각이 겹칠 수 있고 그때
+    답은 입력 순서에 달린다 — 이 함수가 만든 문제가 아니라 **관측에 순서가 없다**
+    는 사실이고, 여기서 임의로 하나를 고르면 그 사실이 가려진다.
     """
-    best: dict[str, MacroObservation] = {}
+    period_of = period_of or _macro_period
+    stamp_of = stamp_of or _macro_stamp
+    best: dict = {}
     for o in obs:
-        cur = best.get(o.observation_period)
-        if cur is None or o.release_timestamp > cur.release_timestamp:
-            best[o.observation_period] = o
+        key = period_of(o)
+        cur = best.get(key)
+        if cur is None or stamp_of(o) > stamp_of(cur):
+            best[key] = o
     return [best[k] for k in sorted(best)]
