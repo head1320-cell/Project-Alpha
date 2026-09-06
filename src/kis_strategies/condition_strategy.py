@@ -405,6 +405,22 @@ class ConditionStrategy(BaseStrategy):
         # 실행 스코프 매크로 시점(PIT) 컨텍스트. ★None 이면 매크로는 라이브★
         # (스크리너·실시간 경로). 백테스트 엔진이 실행 달력을 확정한 뒤 심는다.
         self._macro_ctx = None
+        # 실행 스코프 재무 공시일(PIT) 컨텍스트. ★None 이면 정적 시차 추정★
+        # (스크리너·실시간 경로 — 거기서는 그것이 맞다). 백테스트 엔진이 심는다.
+        self._fund_ctx = None
+
+    def set_fund_ctx(self, ctx) -> None:
+        """재무 공시일 컨텍스트를 심는다 — ★`prepare_panel` 보다 먼저★.
+
+        ★생성자 kwarg 로 받지 않는 이유는 `set_macro_ctx` 와 같다★ — `__init__`
+        이 `**_ignore` 라 이름을 한 글자 틀리면 조용히 삼켜지고, 그러면 백테스트가
+        아무 표시 없이 추정 시차로 돈다.
+
+        ★캐시를 비운다★ 늦게 심으면 라벨 없이 만들어진 패널이 `_pit_base_cache`
+        에 남아 조용히 이긴다.
+        """
+        self._fund_ctx = ctx
+        self._pit_base_cache = {}
 
     def set_macro_ctx(self, ctx) -> None:
         """매크로 시점 컨텍스트를 심는다 — ★`prepare_panel` 보다 먼저★.
@@ -809,42 +825,133 @@ class ConditionStrategy(BaseStrategy):
             rows = load_history(tk)
         except Exception:
             return None
-        if not rows:
-            return None
+        # ★공시 시차 상수는 한 곳에만 있다★ 여기 리터럴 90/45 가 한 벌 더 있었다.
+        # 두 값이 우연히 같아 아무도 몰랐지만, 갈라지면 **조용히** 갈라진다 —
+        # 스크리너는 바뀌고 백테스트는 안 바뀌는데 둘 다 "공시 시차" 라 부른다.
+        # `company_snapshot_builder.publication_dates` 가 같은 자리에서 같은
+        # 방식으로 가져온다(함수 안 import 라 몽키패치가 실제로 반영된다 —
+        # `test_fundamentals_pit_wiring.py` 가 그것을 건다).
+        from src.engine.pit_store import ANNUAL_LAG_DAYS, DISCLOSURE_LAG_DAYS, REPRT_ANNUAL
         _PEND = {"11013": (3, 31), "11012": (6, 30), "11014": (9, 30), "11011": (12, 31)}
-        recs = []
-        for r in rows:
-            pe = _PEND.get(r.get("reprt"))
-            if not pe:
-                continue
+
+        # ★재무 공시일의 출처 — 기간 단위 병합이지 전환이 아니다★
+        #
+        # `financials_vintages`(V2)에 그 기간의 빈티지가 있으면 **실측 접수일**과
+        # **그 빈티지의 값**을 쓴다. 없으면 지금까지처럼 정적 시차로 추정하되
+        # 라벨을 단다. ★통째로 갈아타면 안 된다★ — 빈티지는 V2 이후로만 쌓이고
+        # `existing_keys` 가 3-튜플이라 이미 적재된 기간은 재조회되지 않는다.
+        # 지금 DB 는 비어 있으므로 전환하면 PIT 재무 조건이 전부 NaN 이 된다.
+        #
+        # ★값도 빈티지의 것을 쓴다★ `financials_history` 는 정정이 원본을 덮은
+        # **뒤**의 값이라, 날짜만 실측으로 바꾸고 값을 거기서 가져오면 개정본이
+        # 과거 봉에 들어간다 — 막으려던 룩어헤드가 다른 문으로 돌아온다.
+        ctx = getattr(self, "_fund_ctx", None)
+        vmap: dict = {}
+        v_unknown = False
+        if ctx is not None:
             try:
-                end = _dt.date(int(r["year"]), pe[0], pe[1])
-            except Exception:
-                continue
-            lag = 90 if r["reprt"] == "11011" else 45
-            af = ANNUALIZE_FACTOR.get(r["reprt"], 1.0)
+                vmap, _v_reason = ctx.vintages_by_period(tk)
+                v_unknown = bool(_v_reason)
+            except Exception as e:  # noqa: BLE001
+                # ★여기서 예외가 새면 조용히 무력화된다★ `_pit_fund_series` 가
+                # 예외를 통째로 삼켜 패널을 None 으로 만들고, 그러면 PIT 재무
+                # 조건이 화면에 아무 표시 없이 건너뛰어진다. 추정으로 내려간다.
+                logger.warning("재무 빈티지 판정 실패 (%s) — 정적 시차 추정으로 "
+                               "내려갑니다: %s", tk, e)
+                vmap, v_unknown = {}, False
+
+        by_hist = {}
+        for r in rows or []:
+            if str(r.get("reprt")) in _PEND:
+                try:
+                    by_hist[(int(r["year"]), str(r["reprt"]))] = r
+                except Exception:  # noqa: BLE001 — 연도를 못 읽는 행은 축에 못 놓는다
+                    continue
+        vmap = {k: v for k, v in vmap.items() if str(k[1]) in _PEND}
+
+        if not by_hist and not vmap:
+            if ctx is not None:
+                try:
+                    ctx.note_no_financials(tk)
+                except Exception:  # noqa: BLE001
+                    pass
+            return None
+
+        def _mk(row, reprt: str, avail, year: int) -> dict:
+            af = ANNUALIZE_FACTOR.get(reprt, 1.0)
 
             def _v(val, annualize=False, _af=af):
                 # 원 → 억. 손익(annualize=True)은 분기 누적 → 연환산.
                 return (val * (_af if annualize else 1.0) / 1e8) if val is not None else None
-            recs.append({
-                "avail": end + _dt.timedelta(days=lag),
-                "net_income": _v(r.get("net_income"), True),
-                "revenue": _v(r.get("revenue"), True),
-                "operating_profit": _v(r.get("operating_profit"), True),
-                "operating_cf": _v(r.get("operating_cf"), True),
-                "total_equity": _v(r.get("total_equity")),
-                "total_liabilities": _v(r.get("total_liabilities")),
-                "shares": r.get("shares_outstanding"),
-            })
+            return {
+                "avail": avail,
+                # ★기간 순서★ — 아래 step-forward 가 역전을 막는 데 쓴다.
+                "seq": year * 12 + _PEND[reprt][0],
+                "net_income": _v(row.get("net_income"), True),
+                "revenue": _v(row.get("revenue"), True),
+                "operating_profit": _v(row.get("operating_profit"), True),
+                "operating_cf": _v(row.get("operating_cf"), True),
+                "total_equity": _v(row.get("total_equity")),
+                "total_liabilities": _v(row.get("total_liabilities")),
+                "shares": row.get("shares_outstanding"),
+            }
+
+        from src.kis_strategies.fundamentals_pit_context import FILING_SAME_DAY_GUARD_DAYS
+        recs = []
+        n_meas = n_est = n_unk = 0
+        for key in sorted(set(by_hist) | set(vmap)):
+            year, reprt = int(key[0]), str(key[1])
+            vints = vmap.get(key)
+            if vints:
+                # ★기간당 하나로 줄이지 않는다★ 최초 공시만 쓰면 정정을 영원히 못
+                # 보고, 최종 정정만 쓰면 정정 전 봉이 **미래의 값**을 본다. 각
+                # 빈티지가 각자의 접수일부터 값을 주는 것이 실제로 일어난 일이다.
+                used = 0
+                for v in vints:
+                    try:
+                        filed = _dt.date.fromisoformat(str(v["rcept_dt"]))
+                    except Exception:  # noqa: BLE001 — 접수일을 못 읽으면 빈티지가 아니다
+                        continue
+                    recs.append(_mk(v, reprt,
+                                    filed + _dt.timedelta(days=FILING_SAME_DAY_GUARD_DAYS),
+                                    year))
+                    used += 1
+                if used:
+                    n_meas += 1
+                    continue
+            r = by_hist.get(key)
+            if r is None:
+                continue
+            try:
+                end = _dt.date(year, _PEND[reprt][0], _PEND[reprt][1])
+            except Exception:
+                continue
+            lag = ANNUAL_LAG_DAYS if reprt == REPRT_ANNUAL else DISCLOSURE_LAG_DAYS
+            recs.append(_mk(r, reprt, end + _dt.timedelta(days=lag), year))
+            if v_unknown:
+                n_unk += 1          # ★미상 ≠ 추정★ — 확인 못 한 것을 추정이라 하지 않는다
+            else:
+                n_est += 1
+        if ctx is not None:
+            try:
+                ctx.record(tk, measured=n_meas, estimated=n_est, unknown=n_unk)
+            except Exception:  # noqa: BLE001
+                pass
         if not recs:
             return None
-        recs.sort(key=lambda x: x["avail"])
+        # ★같은 날 접수★ 회사가 밀린 사업보고서와 분기보고서를 같은 날 낼 수 있고,
+        # 그러면 `avail` 이 겹쳐 답이 정렬에 달린다. `seq` 를 2차 키로 둬 삽입
+        # 순서와 무관하게 만든다. ★정직하게 적어 둔다 — 오늘은 동치다★ 위에서
+        # 키 합집합을 `sorted()` 로 돌아 삽입 순서가 이미 기간 순서라, `seq` 를
+        # 빼도 안정 정렬이 같은 답을 낸다(변이 테스트가 그걸 확인했다). 삽입
+        # 순서가 바뀌는 날을 대비한 명시일 뿐, 지금 무언가를 고치고 있지는 않다.
+        recs.sort(key=lambda x: (x["avail"], x["seq"]))
         fields = ("net_income", "revenue", "operating_profit", "operating_cf",
                   "total_equity", "total_liabilities", "shares")
         cols: dict = {f: [] for f in fields}
         cur = dict.fromkeys(fields)
         ri = 0
+        cur_seq = -1
         # ★두 경로가 같은 날짜를 봐야 한다★
         # 예전에는 `df.index` 를 직접 돌며 `d.date()` 를 불렀다. 그런데 per-bar 폴백
         # 경로가 넘기는 프레임은 `RangeIndex` + `date` 컬럼이라(엔진의
@@ -862,10 +969,20 @@ class ConditionStrategy(BaseStrategy):
             bd = d.date() if hasattr(d, "date") else None
             if bd is not None:
                 while ri < len(recs) and recs[ri]["avail"] <= bd:
-                    for f in fields:
-                        if recs[ri][f] is not None:
-                            cur[f] = recs[ri][f]
+                    rec = recs[ri]
                     ri += 1
+                    # ★늦게 접수된 과거 기간이 최신 기간을 덮지 않는다★
+                    # 추정 시차에서는 `avail` 순서가 곧 기간 순서라(12/31+90 <
+                    # 3/31+45 < …) 이 루프가 **우연히** 안전했다. 실측 접수일에서는
+                    # 아니다 — 1년 늦게 낸 사업보고서가 그 사이 분기 값을 덮는다.
+                    # 그러면 패널이 조용히 낡고, 영원히 데이터 버그처럼 보인다.
+                    # ★추정만 쓸 때 이 가드는 아무 일도 하지 않는다★
+                    if rec["seq"] < cur_seq:
+                        continue
+                    cur_seq = rec["seq"]
+                    for f in fields:
+                        if rec[f] is not None:
+                            cur[f] = rec[f]
             for f in fields:
                 cols[f].append(cur[f])
         panel = {f: pd.Series(cols[f], index=df.index, dtype="float64") for f in fields}
