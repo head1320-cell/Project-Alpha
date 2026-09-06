@@ -469,6 +469,14 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         if isinstance(ml, dict):
             tele["macro_lookahead"] = {k: ml.get(k)
                                        for k in ("pit", "live", "blocked", "pit_pct")}
+        # ★재무 공시일 출처도 같은 통로로★ 사유 히스토그램은 결과에 그대로 있고,
+        # 여기에는 집계만 싣는다. 단위는 **(종목, 기간)** 이다.
+        fp = (result or {}).get("fundamentals_pit")
+        if isinstance(fp, dict):
+            tele["fundamentals_pit"] = {
+                k: fp.get(k)
+                for k in ("measured", "estimated", "unknown", "measured_pct")
+            }
         ds = (result or {}).get("data_source") or {}
         is_mock = None
         if isinstance(ds, dict):

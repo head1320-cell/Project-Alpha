@@ -148,6 +148,55 @@ def _macro_lookahead_meta(ctx) -> dict | None:
     }
 
 
+def _fundamentals_pit_meta(ctx) -> dict | None:
+    """재무 공시일이 **실측 접수일이었나 정적 시차 추정이었나** 를 보고한다.
+
+    `_macro_lookahead_meta` 와 같은 규율을 쓴다. 다만 ★세는 단위가 다르다★ —
+    매크로는 **토큰**(실행당 ~20개)이고 여기는 **(종목, 기간)**(종목 수백 ×
+    기간 수십)이다. 그래서 종목별 맵을 싣지 않는다(아래 `reasons`).
+
+    ★안 쓴 것과 재본 것을 구별한다★ PIT 재무 토큰이 없는 실행에는 `None`.
+    ★그러나 "썼는데 전부 추정" 은 `0.0%` 다★ 그것은 측정된 사실이다.
+    ★`unknown` 도 분모에 있다★ 못 읽은 것은 실측이 아니다 — 빼면 비율이 좋아 보인다.
+    """
+    if ctx is None:
+        return None
+    try:
+        counts = ctx.counts()
+        tickers = ctx.ticker_counts()
+        reasons = ctx.reasons()
+    except Exception:  # noqa: BLE001 — 라벨을 만들다 백테스트를 죽이지 않는다
+        return None
+    tot = counts["measured"] + counts["estimated"] + counts["unknown"]
+    if tot == 0 and not tickers.get("no_financials"):
+        return None          # 아무것도 보지 않았다 — 하지 않은 진술을 만들지 않는다
+
+    from src.engine.pit_store import ANNUAL_LAG_DAYS, DISCLOSURE_LAG_DAYS
+    from src.kis_strategies.fundamentals_pit_context import FILING_SAME_DAY_GUARD_DAYS
+    return {
+        # ★세는 단위를 밝힌다★ 봉도 신호도 아니다.
+        "unit": "ticker_period",
+        "measured": counts["measured"],
+        "estimated": counts["estimated"],
+        "unknown": counts["unknown"],
+        "measured_pct": (round(counts["measured"] / tot * 100, 1) if tot else None),
+        "tickers": tickers,
+        "reasons": reasons,
+        # 추정에 쓴 규칙을 함께 싣는다 — ★여기서 상수를 새로 적지 않는다★
+        "lag_days": {"annual": ANNUAL_LAG_DAYS, "quarterly": DISCLOSURE_LAG_DAYS},
+        "same_day_guard_days": FILING_SAME_DAY_GUARD_DAYS,
+        "note": ("`estimated` 는 공시일을 **정적 시차 규칙**(연간 90일 · 분기 45일)으로 "
+                 "추정했다는 뜻입니다 — 실제 접수일과 다를 수 있고, 늦게 공시된 "
+                 "보고서라면 그만큼 아직 공표되지 않은 재무를 본 것입니다."),
+        # ★날짜만 실측이라는 사실을 숨기지 않는다★
+        "value_note": ("실측한 것은 **공시일**입니다. 빈티지가 있는 기간은 값도 그 "
+                       "빈티지의 값을 쓰지만, `estimated` 기간의 값은 여전히 "
+                       "`financials_history`(정정공시가 원본을 덮어쓴 표)에서 옵니다 — "
+                       "그 기간에는 개정된 값이 과거 봉에 들어가는 **값 룩어헤드**가 "
+                       "남아 있습니다."),
+    }
+
+
 def _count_coverage(counts: dict, df) -> None:
     """이 프레임이 **요청 구간을 덮었는가** 를 센다 (진단용).
 
@@ -595,6 +644,29 @@ class BacktestEngine:
                 # 그 사실이 로그에 남아야 한다.
                 logger.warning(f"매크로 PIT 컨텍스트를 만들지 못했습니다 — "
                                f"매크로 토큰은 라이브(룩어헤드)로 평가됩니다: {e}")
+
+        # ★재무 공시일(PIT) 컨텍스트★ — 매크로와 같은 자리, 같은 이유로 **패널
+        # 사전계산 전에** 심는다. `prepare_panel` 이 이미 PIT 재무 패널을 만들고
+        # 그것이 `(종목, len(df))` 로 캐시되므로, 늦게 심으면 라벨 없이 만들어진
+        # 패널이 조용히 이긴다.
+        #
+        # ★달력을 넘기지 않는다★ 매크로는 판정 단위가 토큰이라 실행 달력이
+        # 필요했지만(상장일이 다른 종목 사이에서 한 토큰이 두 의미를 갖지 않게),
+        # 재무는 (종목, 기간) 단위이고 데이터 유무로만 갈린다. 없는 인자를
+        # 흉내 내지 않는다.
+        self._fund_ctx = None
+        if hasattr(strategy, "set_fund_ctx"):
+            try:
+                from src.kis_strategies.fundamentals_pit_context import (
+                    FundamentalsPitContext,
+                )
+                self._fund_ctx = FundamentalsPitContext()
+                strategy.set_fund_ctx(self._fund_ctx)
+            except Exception as e:  # noqa: BLE001
+                # ★조용히 넘어가지 않는다★ 실패하면 재무는 정적 시차 추정으로
+                # 평가되고, 그 사실이 로그에 남아야 한다.
+                logger.warning(f"재무 PIT 컨텍스트를 만들지 못했습니다 — 재무 "
+                               f"공시일은 정적 시차 추정으로 평가됩니다: {e}")
 
         # 횡단면(순위/비율) 전략용 패널 사전계산 — 전 종목 동일시점 값이 필요한 함수 지원
         if hasattr(strategy, "prepare_panel"):
@@ -1870,6 +1942,8 @@ class BacktestEngine:
             "signal_path": _signal_path_meta(self._signal_path),
             # ★룩어헤드가 있었다는 사실이 결과에 남는다★ 매크로를 안 쓴 실행은 None.
             "macro_lookahead": _macro_lookahead_meta(getattr(self, "_macro_ctx", None)),
+            # ★재무 공시일이 실측이었나 추정이었나★ PIT 재무 토큰을 안 쓴 실행은 None.
+            "fundamentals_pit": _fundamentals_pit_meta(getattr(self, "_fund_ctx", None)),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
