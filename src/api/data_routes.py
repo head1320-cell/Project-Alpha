@@ -59,6 +59,16 @@ def krx_status():
         out.update({"available": False})
     return out
 
+def _vintage_stats() -> dict:
+    """재무 빈티지 적재 현황 — ★못 읽으면 `None` + 사유이지 0 이 아니다★."""
+    try:
+        from src.data.dart_history import vintage_stats
+        return vintage_stats()
+    except Exception as e:  # noqa: BLE001
+        return {"rows": None, "restated_periods": None, "skipped_no_rcept": 0,
+                "reason": f"빈티지 현황을 읽지 못했습니다: {type(e).__name__}: {e}"}
+
+
 @router.get("/api/v1/data/db-status")
 def db_status():
     """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요).
@@ -160,6 +170,7 @@ def db_status():
             fh = q("SELECT COUNT(*), MIN(bsns_year), MAX(bsns_year) FROM financials_history")
         fl = flows_status(engine)
 
+
         out["available"] = True
         out["tables"] = {
             "daily_prices": {"rows": dp_rows,
@@ -178,6 +189,10 @@ def db_status():
             "financials_history": {"rows": int(fh[0] or 0) if fh else 0,
                                    "start": str(fh[1]) if (fh and fh[1]) else None,
                                    "end": str(fh[2]) if (fh and fh[2]) else None},
+            # ★행 수가 아니라 `restated_periods` 가 답이다★ — "정정공시를 실제로
+            # 봤는가". 0 이면 "아직 본 적 없다" 이지 "정정공시가 없다" 가 아니다.
+            # ★못 읽으면 None + 사유★ — 여기서 0 으로 만들면 미상이 사라진다.
+            "financials_vintages": _vintage_stats(),
         }
         t = out["tables"]
         out["tools"] = {

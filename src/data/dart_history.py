@@ -65,6 +65,57 @@ ON CONFLICT (ticker, bsns_year, reprt_code) DO UPDATE SET
     dps=EXCLUDED.dps, fetched_at=EXCLUDED.fetched_at
 """
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 빈티지 테이블 — ★정정공시가 원본을 파괴하지 않게★
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# `financials_history` 는 PK `(ticker, bsns_year, reprt_code)` 라 **정정공시가 원본
+# 보고값을 덮어쓴다.** 되돌릴 수 없다 — 지나간 빈티지는 다시 받을 수 없다.
+#
+# ★그런데 그 테이블의 PK 를 바꾸지 않는다★ 실측된 이유 셋:
+#   ① 이 테이블 리더 8곳에 `ORDER BY`·`DISTINCT` 가 **하나도 없다.** 행이 늘면
+#      조용히 깨진다 — QOQ 팩터 4개가 통째로 None 이 되고(`:429` 가드), 적신호
+#      R2·R3 은 안전해 보이는 방향으로 억제되고, PIT 패널은 두 공시를 필드
+#      단위로 섞어 실재한 적 없는 재무를 만든다.
+#   ② CI 가 SQLite 로만 돈다 — PK 재구축 DDL 이 프로덕션에서 처음 실행된다.
+#   ③ `test_financial_revenue.py:87` 의 컬럼 명시 INSERT 가 즉시 깨진다.
+#
+# 그래서 **역할로 가른다** — 이 저장소가 매크로에서 이미 쓰는 모델이다
+# (`pit_macro`: "지금 최신 값(대시보드)" vs "그때 알 수 있던 값(리서치·백테스트)").
+#
+#   financials_history   지금 값   (덮어쓰기 — 기존 리더 8곳이 그대로 읽는다)
+#   financials_vintages  그때 값   (누적 — 접수번호가 빈티지 축이다)
+#
+# valid time = `(bsns_year, reprt_code)`, transaction time = `rcept_dt`.
+# `macro_observations` 가 PK 에 `obs_key` 를 넣어 개정이 행을 더하게 한 것과 같다.
+VINTAGE_TABLE = "financials_vintages"
+
+_VINTAGE_DDL = f"""
+CREATE TABLE IF NOT EXISTS {VINTAGE_TABLE} (
+    ticker              VARCHAR(12) NOT NULL,
+    bsns_year           VARCHAR(4)  NOT NULL,
+    reprt_code          VARCHAR(5)  NOT NULL,
+    rcept_no            VARCHAR(20) NOT NULL,
+    rcept_dt            VARCHAR(10) NOT NULL,
+    revenue             FLOAT,
+    operating_profit    FLOAT,
+    net_income          FLOAT,
+    gross_profit        FLOAT,
+    total_assets        FLOAT,
+    total_liabilities   FLOAT,
+    total_equity        FLOAT,
+    current_assets      FLOAT,
+    current_liabilities FLOAT,
+    operating_cf        FLOAT,
+    capex               FLOAT,
+    shares_outstanding  FLOAT,
+    dps                 FLOAT,
+    retrieved_at        VARCHAR(32),
+    PRIMARY KEY (ticker, bsns_year, reprt_code, rcept_no)
+)
+"""
+
+
 _FIELDS = ("revenue", "operating_profit", "net_income", "gross_profit",
            "total_assets", "total_liabilities", "total_equity",
            "current_assets", "current_liabilities", "operating_cf", "capex",
@@ -79,6 +130,120 @@ def _get_engine(engine=None):
         return engine
     from src.database import get_engine
     return get_engine()
+
+
+#: 빈티지 UPSERT — ★`retrieved_at` 은 DO UPDATE 에 넣지 않는다★
+#: `macro_observation_store.py:110` 이 적어 둔 규칙 그대로: "최초 관측 시각을
+#: 보존한다 … 덮으면 '언제부터 알았나' 가 사라진다." 값은 갱신한다(같은 접수번호
+#: 재조회는 멱등이어야 하고, 파서가 좋아지면 값이 채워질 수 있다).
+_VINTAGE_UPSERT = f"""
+INSERT INTO {VINTAGE_TABLE}
+    (ticker, bsns_year, reprt_code, rcept_no, rcept_dt, revenue, operating_profit,
+     net_income, gross_profit, total_assets, total_liabilities, total_equity,
+     current_assets, current_liabilities, operating_cf, capex, shares_outstanding,
+     dps, retrieved_at)
+VALUES
+    (:ticker, :bsns_year, :reprt_code, :rcept_no, :rcept_dt, :revenue, :operating_profit,
+     :net_income, :gross_profit, :total_assets, :total_liabilities, :total_equity,
+     :current_assets, :current_liabilities, :operating_cf, :capex, :shares_outstanding,
+     :dps, :retrieved_at)
+ON CONFLICT (ticker, bsns_year, reprt_code, rcept_no) DO UPDATE SET
+    rcept_dt=EXCLUDED.rcept_dt,
+    revenue=EXCLUDED.revenue, operating_profit=EXCLUDED.operating_profit,
+    net_income=EXCLUDED.net_income, gross_profit=EXCLUDED.gross_profit,
+    total_assets=EXCLUDED.total_assets, total_liabilities=EXCLUDED.total_liabilities,
+    total_equity=EXCLUDED.total_equity, current_assets=EXCLUDED.current_assets,
+    current_liabilities=EXCLUDED.current_liabilities, operating_cf=EXCLUDED.operating_cf,
+    capex=EXCLUDED.capex, shares_outstanding=EXCLUDED.shares_outstanding,
+    dps=EXCLUDED.dps
+"""
+
+#: 빈티지 없이 지나간 건수 (프로세스 수명). ★미상을 0 으로 만들지 않기 위한 카운터★
+#: — 접수번호 없는 응답이 몇 건인지 모르면 "정정공시가 없다" 와 "못 봤다" 를
+#: 구별할 수 없다.
+_VINTAGE_SKIPPED = {"no_rcept": 0}
+
+
+def ensure_vintage_table(engine) -> bool:
+    """빈티지 테이블을 만들고 ★실제로 쓸 수 있는지 확인한다★.
+
+    `ensure_history_table` 은 `ALTER` 를 `except: pass` 로 삼키고 검증을 하지
+    않는다 — `schema_add_columns.py:11-13` 이 정확히 그것을 함정으로 적어 뒀다
+    ("1번만 하면 못 붙은 컬럼을 붙었다고 믿고 이후 조회가 통째로 깨진다").
+    여기서는 그 규율을 따라 만든 뒤 **읽어 본다**.
+
+    못 쓰면 `False` — 호출자는 빈티지 없이 계속 동작한다(빈티지는 추가이지
+    전제가 아니다).
+    """
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(_VINTAGE_DDL))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("%s 생성 실패 — 빈티지 없이 동작합니다: %s", VINTAGE_TABLE, e)
+        return False
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f"SELECT rcept_no, rcept_dt FROM {VINTAGE_TABLE} LIMIT 1"))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("%s 사용 불가 — 빈티지 없이 동작합니다: %s", VINTAGE_TABLE, e)
+        return False
+    return True
+
+
+def _upsert_vintage(engine, ticker: str, fs) -> bool:
+    """빈티지 1건 저장. 접수번호가 없으면 저장하지 않는다(`False`).
+
+    ★접수번호 없는 행은 빈티지가 아니다★ `macro_observation_store.record_series`
+    가 같은 판단을 적어 뒀다 — "이 경로에는 빈티지가 없다 … 지어내면
+    derive_usage 가 거짓으로 backtest_eligible 을 낸다."
+    """
+    from sqlalchemy import text
+    rcept_no = getattr(fs, "rcept_no", None)
+    rcept_dt = getattr(fs, "rcept_dt", None)
+    if not rcept_no or not rcept_dt:
+        _VINTAGE_SKIPPED["no_rcept"] += 1
+        return False
+    if not ensure_vintage_table(engine):
+        return False
+    row = {f: getattr(fs, f, None) for f in _FIELDS}
+    row.update({
+        "ticker": str(ticker), "bsns_year": str(fs.bsns_year),
+        "reprt_code": str(fs.reprt_code), "rcept_no": str(rcept_no),
+        "rcept_dt": str(rcept_dt),
+        "retrieved_at": datetime.now().isoformat(timespec="seconds"),
+    })
+    with engine.begin() as conn:
+        conn.execute(text(_VINTAGE_UPSERT), row)
+    return True
+
+
+def vintage_stats(engine=None) -> dict:
+    """빈티지 적재 현황. ★못 읽으면 `None` + 사유 — 0 이 아니다★
+
+    `restated_periods` 가 답이다 — 행 수가 아니라 **빈티지가 2건 이상인 기간 수**가
+    "정정공시를 실제로 봤는가" 를 말한다. 0 이면 "아직 본 적 없다" 이지
+    "정정공시가 없다" 가 아니다.
+    """
+    from sqlalchemy import text
+    out = {"rows": None, "restated_periods": None,
+           "skipped_no_rcept": _VINTAGE_SKIPPED["no_rcept"], "reason": ""}
+    try:
+        engine = _get_engine(engine)
+        if engine is None:
+            out["reason"] = "DB 엔진이 없습니다."
+            return out
+        with engine.connect() as conn:
+            out["rows"] = int(conn.execute(text(
+                f"SELECT COUNT(*) FROM {VINTAGE_TABLE}")).scalar() or 0)
+            out["restated_periods"] = int(conn.execute(text(
+                f"SELECT COUNT(*) FROM (SELECT 1 FROM {VINTAGE_TABLE} "  # noqa: S608
+                "GROUP BY ticker, bsns_year, reprt_code HAVING COUNT(*) > 1) x"
+            )).scalar() or 0)
+    except Exception as e:  # noqa: BLE001
+        out["rows"] = out["restated_periods"] = None
+        out["reason"] = f"빈티지 테이블을 읽지 못했습니다: {type(e).__name__}: {e}"
+    return out
 
 
 def ensure_history_table(engine) -> None:
@@ -105,6 +270,13 @@ def upsert_statement(engine, ticker: str, fs) -> bool:
     })
     with engine.begin() as conn:
         conn.execute(text(_UPSERT), row)
+    # ★빈티지는 추가이지 전제가 아니다★ 실패해도 위 적재는 이미 성공했다 —
+    # 새 테이블이 기존 적재를 막으면 V2 가 적재를 망가뜨린 것이다.
+    try:
+        _upsert_vintage(engine, ticker, fs)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("빈티지 저장 실패 (%s %s/%s) — 기존 적재는 유지됩니다: %s",
+                       ticker, fs.bsns_year, fs.reprt_code, e)
     return True
 
 
