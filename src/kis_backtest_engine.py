@@ -171,8 +171,11 @@ def _fundamentals_pit_meta(ctx) -> dict | None:
     if tot == 0 and not tickers.get("no_financials"):
         return None          # 아무것도 보지 않았다 — 하지 않은 진술을 만들지 않는다
 
-    from src.engine.pit_store import ANNUAL_LAG_DAYS, DISCLOSURE_LAG_DAYS
-    from src.kis_strategies.fundamentals_pit_context import FILING_SAME_DAY_GUARD_DAYS
+    from src.engine.pit_store import (
+        ANNUAL_LAG_DAYS,
+        DISCLOSURE_LAG_DAYS,
+        FILING_SAME_DAY_GUARD_DAYS,
+    )
     return {
         # ★세는 단위를 밝힌다★ 봉도 신호도 아니다.
         "unit": "ticker_period",

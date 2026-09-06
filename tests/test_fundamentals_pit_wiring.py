@@ -146,8 +146,8 @@ def test_the_two_lags_are_still_distinct(monkeypatch):
 # 개정본이 과거 봉에 그대로 들어간다 — 막으려던 룩어헤드가 다른 문으로 돌아온다.
 # ═══════════════════════════════════════════════════════════════════════════════
 
+from src.engine.pit_store import FILING_SAME_DAY_GUARD_DAYS  # noqa: E402
 from src.kis_strategies.fundamentals_pit_context import (  # noqa: E402
-    FILING_SAME_DAY_GUARD_DAYS,
     FundamentalsPitContext,
 )
 

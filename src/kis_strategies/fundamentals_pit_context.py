@@ -48,17 +48,6 @@ MEASURED = "measured"
 ESTIMATED = "estimated"
 UNKNOWN = "unknown"
 
-#: 접수 **당일** 봉에는 쓰지 않는다.
-#:
-#: DART 는 18시까지 접수를 받고 한국 장은 15:30 에 닫는다. 우리는 접수 **시각**을
-#: 모른다(★미상★) — 그러니 장마감 뒤 접수분이 같은 날 봉에 섞일 수 있다.
-#: V3 의 `dart_history.vintages_as_of` 가 *"그 안전 여유는 호출자가 **보이는
-#: 자리에서** 준다"* 라고 적어 뒀고, 여기가 그 호출자다.
-#:
-#: ★상수에 이름이 있고 결과 메타에도 실린다★ — 몰래 하루를 빼면 반대로
-#: "왜 하루 늦나" 를 아무도 찾지 못한다.
-FILING_SAME_DAY_GUARD_DAYS = 1
-
 REASON_MEASURED = ""          # ★측정된 것에는 사유를 달지 않는다★ (매크로의 pit 와 같다)
 REASON_TICKER_HAS_NO_VINTAGES = (
     "이 종목에는 적재된 재무 빈티지가 없어 공시일을 정적 시차(연간 90일 · 분기 45일)로 "

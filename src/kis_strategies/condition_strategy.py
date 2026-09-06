@@ -831,7 +831,12 @@ class ConditionStrategy(BaseStrategy):
         # `company_snapshot_builder.publication_dates` 가 같은 자리에서 같은
         # 방식으로 가져온다(함수 안 import 라 몽키패치가 실제로 반영된다 —
         # `test_fundamentals_pit_wiring.py` 가 그것을 건다).
-        from src.engine.pit_store import ANNUAL_LAG_DAYS, DISCLOSURE_LAG_DAYS, REPRT_ANNUAL
+        from src.engine.pit_store import (
+            ANNUAL_LAG_DAYS,
+            DISCLOSURE_LAG_DAYS,
+            FILING_SAME_DAY_GUARD_DAYS,
+            REPRT_ANNUAL,
+        )
         _PEND = {"11013": (3, 31), "11012": (6, 30), "11014": (9, 30), "11011": (12, 31)}
 
         # ★재무 공시일의 출처 — 기간 단위 병합이지 전환이 아니다★
@@ -896,7 +901,6 @@ class ConditionStrategy(BaseStrategy):
                 "shares": row.get("shares_outstanding"),
             }
 
-        from src.kis_strategies.fundamentals_pit_context import FILING_SAME_DAY_GUARD_DAYS
         recs = []
         n_meas = n_est = n_unk = 0
         for key in sorted(set(by_hist) | set(vmap)):

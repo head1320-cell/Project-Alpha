@@ -181,7 +181,7 @@ def test_the_label_carries_the_rule_it_used(monkeypatch):
     따라오는지 본다 — 값 비교만으로는 리터럴 90/45 를 박은 구현도 통과한다
     (변이 테스트가 그걸 잡았다).
     """
-    from src.kis_strategies.fundamentals_pit_context import FILING_SAME_DAY_GUARD_DAYS
+    from src.engine.pit_store import FILING_SAME_DAY_GUARD_DAYS
     monkeypatch.setattr("src.engine.pit_store.ANNUAL_LAG_DAYS", 123)
     monkeypatch.setattr("src.engine.pit_store.DISCLOSURE_LAG_DAYS", 77)
     meta = _fundamentals_pit_meta(_ctx({"005930": (0, 1, 0)}))
