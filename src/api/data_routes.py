@@ -201,7 +201,17 @@ def db_status():
             "백테스터(매크로·ETF)": t["etf_cross_asset"]["loaded"] >= max(1, int(t["etf_cross_asset"]["total"] * 0.6)),
             "벤치마크·국면": (t["index_kospi_kosdaq"]["rows"] or 0) > 0,
             "수급 시그널": (t["investor_flows"]["rows"] or 0) > 0,
-            "PIT 펀더멘털": (t["financials_history"]["rows"] or 0) > 0,
+            # ★추정과 실측을 한 칸에 넣지 않는다★ 예전 `"PIT 펀더멘털"` 은
+            # **추정 시차 표**(financials_history)를 근거로 *PIT* 능력을
+            # 주장했다. V4 이후 실측 접수일 경로가 따로 있으므로 가른다 —
+            # 사용자가 `measured_pct` 가 0 인 이유를 찾으러 오는 자리다.
+            "PIT 펀더멘털(추정 시차)": (t["financials_history"]["rows"] or 0) > 0,
+            # ★미상 ≠ 미준비★ 못 읽었으면 항목을 만들지 않는다. `False` 로 적으면
+            # "확인했더니 없다" 로 읽힌다. 사유는 tables.financials_vintages 가
+            # 이미 들고 있고, 값은 반드시 불리언이어야 한다 — 프런트가
+            # `Object.values(tools).filter(Boolean)` 로 센다(DbStatusPanel.tsx:114).
+            **({"PIT 펀더멘털(실측 접수일)": t["financials_vintages"]["rows"] > 0}
+               if t["financials_vintages"]["rows"] is not None else {}),
         }
     except Exception:
         logger.exception("db-status 조회 실패")

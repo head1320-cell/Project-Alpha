@@ -5,9 +5,15 @@
 R0 오버레이 컴파일에서 두 번 치른 값). 그래서 첫 두 테스트는 짝이다 —
 "스냅샷 값이 라이브 계산과 같다" 와 "원본을 갈아끼우면 스냅샷도 바뀐다".
 
-그리고 PIT: ★우리는 DART 재무의 실제 공표일을 모른다.★ `pit_store` 는 정적 시차
-규칙으로 가용성을 판정하고, `load_history` 행에는 접수일이 없으며, 정정공시 이력도
-없다. 그러므로 이 스냅샷은 `backtest_eligible` 을 주장할 수 없다.
+그리고 PIT: 예전에는 *"우리는 DART 재무의 실제 공표일을 모른다"* 였다. V1~V3 이
+접수일(`rcept_dt`)을 받아 `financials_vintages` 에 쌓고 읽을 수 있게 하면서 그
+문장은 **더 이상 사실이 아니다** — 이제 이 블록은 기간마다 실측/추정을 **재서**
+적는다.
+
+★그래도 `backtest_eligible` 은 아직 아니다★ 그건 게이트를 열어 주는 판정인데
+(`derive_usage`), 그 조건인 `depth_ok` 는 **재무 이력의 깊이**를 보지 재무
+**빈티지의 깊이**를 보지 않는다. 빈티지 한 건으로 eligible 을 내면 없는 근거를
+지어내는 것이다. 아래 트립와이어가 그 선을 지킨다.
 """
 import os
 
@@ -106,6 +112,10 @@ def test_publication_dates_admit_they_are_a_rule_not_a_filing_date(mem_cs, monke
         {"year": 2024, "reprt": REPRT_ANNUAL, "month": 12, "seq": 2024 * 12 + 12},
         {"year": 2025, "reprt": REPRT_ANNUAL, "month": 12, "seq": 2025 * 12 + 12},
     ])
+    # ★빈티지 조회를 명시적으로 비워 둔다★ 스텁하지 않으면 주변 DB 를 타서
+    # "빈티지 없음" 과 "못 읽음" 중 무엇인지 실행 환경이 정하게 된다.
+    monkeypatch.setattr("src.data.dart_history.load_vintages",
+                        lambda t, engine=None: ([], None))
     pub = _build()["publication_dates"]
 
     assert pub["available"] is True
@@ -127,6 +137,8 @@ def test_the_lag_constants_come_from_pit_store(mem_cs, monkeypatch):
     monkeypatch.setattr("src.data.dart_history.load_history", lambda t, engine=None: [
         {"year": 2024, "reprt": REPRT_ANNUAL, "month": 12, "seq": 2024 * 12 + 12},
     ])
+    monkeypatch.setattr("src.data.dart_history.load_vintages",
+                        lambda t, engine=None: ([], None))
     monkeypatch.setattr("src.engine.pit_store.ANNUAL_LAG_DAYS", 120)
     pub = _build()["publication_dates"]
     assert pub["lag_days"]["annual"] == 120
@@ -198,3 +210,121 @@ def test_the_valuation_freezes_its_assumptions_with_the_number(mem_cs):
 def test_a_caller_supplied_price_is_labelled_as_such(mem_cs):
     assert _build()["price_source"] == "caller"
     assert _build()["price"] == PRICE
+
+
+# ── 5. ★빈티지가 생긴 뒤에도 참인 문장만 남긴다★ (V4) ──────────────────────
+#
+# `publication_dates` 는 `"method": "static_lag_rule"` · `"has_vintage": False` 를
+# **손으로 박아** 뒀고, 경고문은 *"DART 접수일과 정정공시 이력은 이 저장소에
+# 없으므로"* 라고 단정했다. V2/V3 이후로 그 문장들은 사실이 아니다.
+# ★지운다가 아니라 잰다★ — 지금 DB 는 비어 있어 측정 결과가 여전히 False 다.
+
+from src.data.dart_history import REPRT_ANNUAL as _RA  # noqa: E402
+
+_HIST_2024 = [{"year": 2024, "reprt": _RA, "month": 12, "seq": 2024 * 12 + 12}]
+
+
+def _vint_row(year=2024, rcept_dt="2025-03-14", rcept_no="20250314000777") -> dict:
+    return {"year": year, "reprt": _RA, "month": 12, "seq": year * 12 + 12,
+            "rcept_no": rcept_no, "rcept_dt": rcept_dt, "net_income": 1e10}
+
+
+def _pub(monkeypatch, *, history, vintages, reason=None) -> dict:
+    monkeypatch.setattr("src.data.dart_history.load_history",
+                        lambda t, engine=None: list(history))
+    monkeypatch.setattr("src.data.dart_history.load_vintages",
+                        lambda t, engine=None: (vintages, reason))
+    return _build()["publication_dates"]
+
+
+def test_a_measured_filing_date_is_labelled_measured_not_a_rule(mem_cs, monkeypatch):
+    """★알맹이★ 접수일을 실제로 아는 기간은 규칙이 아니라 관측이라고 적는다."""
+    pub = _pub(monkeypatch, history=_HIST_2024, vintages=[_vint_row()])
+    assert pub["method"] == "measured_filing_date", pub
+    assert pub["has_vintage"] is True, pub
+    row = pub["rows"][0]
+    assert row["basis"] == "measured", row
+    assert row["filed_at"] == "2025-03-14", row
+    assert row["available_from"] == "2025-03-14", row
+
+
+def test_the_estimate_is_kept_beside_the_measured_date(mem_cs, monkeypatch):
+    """★강등이지 삭제가 아니다★ 추정값과 그 규칙은 실측 옆에 그대로 남는다.
+
+    지우면 "규칙으로는 언제였나" 를 다시 물을 수 없고, 실측이 규칙보다 이른지
+    늦은지를 비교할 근거가 사라진다.
+    """
+    row = _pub(monkeypatch, history=_HIST_2024, vintages=[_vint_row()])["rows"][0]
+    assert row["estimated_available_from"] == "2025-03-31", row
+    assert row["lag_days"] == 90, row
+
+
+def test_a_mix_is_called_a_mix(mem_cs, monkeypatch):
+    """일부만 실측이면 `mixed` — ★전부-아니면-전무로 뭉개지 않는다★"""
+    hist = _HIST_2024 + [{"year": 2023, "reprt": _RA, "month": 12, "seq": 2023 * 12 + 12}]
+    pub = _pub(monkeypatch, history=hist, vintages=[_vint_row(2024)])
+    assert pub["method"] == "mixed", pub
+    assert pub["vintage"]["measured_rows"] == 1 and pub["vintage"]["total_rows"] == 2, pub
+    # 게이트 입력은 여전히 False — 일부 빈티지로는 개정 이력을 재구성할 수 없다.
+    assert pub["has_vintage"] is False, pub
+    assert {r["basis"] for r in pub["rows"]} == {"measured", "estimated"}, pub["rows"]
+
+
+def test_an_unreadable_vintage_table_is_not_reported_as_no_vintage(mem_cs, monkeypatch):
+    """★미상 ≠ 없음★ 못 읽었으면 `False` 가 아니라 `None` 이고 사유가 붙는다.
+
+    `False` 로 적으면 "확인했더니 없다" 로 읽힌다 — 하지 않은 진술이다.
+    """
+    pub = _pub(monkeypatch, history=_HIST_2024, vintages=None,
+               reason="financials_vintages 를 읽지 못했습니다: X")
+    assert pub["has_vintage"] is None, pub
+    assert pub["vintage"]["state"] == "unreadable", pub["vintage"]
+    assert "읽지 못했" in pub["vintage"]["reason"], pub["vintage"]
+    assert pub["rows"][0]["basis"] == "estimated", pub["rows"]
+
+
+def test_a_measured_row_does_not_claim_the_repo_has_no_filing_dates(mem_cs, monkeypatch):
+    """전부 실측이면 *"접수일이 저장소에 없다"* 는 경고를 **하지 않는다** — 거짓이다."""
+    pub = _pub(monkeypatch, history=_HIST_2024, vintages=[_vint_row()])
+    assert "접수일" not in pub["warning"] or "없" not in pub["warning"], pub["warning"]
+    assert "정적 시차" not in pub["warning"], pub["warning"]
+
+
+def test_the_estimated_warning_survives_when_any_row_is_estimated(mem_cs, monkeypatch):
+    """★짝★ 추정이 한 줄이라도 있으면 그 경고는 남는다 — 조건부이지 삭제가 아니다."""
+    pub = _pub(monkeypatch, history=_HIST_2024, vintages=[], reason=None)
+    assert "실제 공표일이 아니라" in pub["warning"], pub["warning"]
+    assert "backtest_eligible" in pub["warning"], pub["warning"]
+
+
+def test_measured_publication_dates_do_not_silently_flip_research_usage(mem_cs, monkeypatch):
+    """★정책 트립와이어★ 라벨이 정확해졌다고 **게이트가 열리면 안 된다**.
+
+    `derive_usage(has_vintage=…)` 는 `backtest_eligible` 을 내주는 판정이고,
+    그 다른 조건인 `depth_ok` 는 **재무 이력의 깊이**를 보지 재무 **빈티지의
+    깊이**를 보지 않는다. 빈티지 한 건으로 eligible 을 내면 없는 근거를 지어낸다.
+    그 판단을 바꾸는 것은 별도 승인 사항이다(CLAUDE.md §3).
+    """
+    monkeypatch.setattr("src.data.dart_history.load_history",
+                        lambda t, engine=None: list(_HIST_2024))
+    monkeypatch.setattr("src.data.dart_history.load_vintages",
+                        lambda t, engine=None: ([_vint_row()], None))
+    snap = _build()
+    assert snap["publication_dates"]["has_vintage"] is True, "전제가 깨졌다"
+    assert snap["research_usage"] == "forward_only", (
+        f"빈티지가 보인다고 게이트가 열렸다: {snap['research_usage']}")
+
+
+def test_the_first_disclosure_dates_the_period_not_the_restatement(mem_cs, monkeypatch):
+    """★"이 기간이 언제부터 알려졌나" 는 최초 공시가 답이다★
+
+    정정본은 **값**을 바꿀 뿐 그 기간이 공개된 시점을 뒤로 미루지 않는다. 최종
+    정정일을 적으면 이미 알려져 있던 기간이 몇 달 뒤에야 알려진 것처럼 보인다.
+    """
+    pub = _pub(monkeypatch, history=_HIST_2024, vintages=[
+        _vint_row(rcept_dt="2025-06-20", rcept_no="20250620000999"),
+        _vint_row(rcept_dt="2025-03-14", rcept_no="20250314000777"),
+    ])
+    assert pub["rows"][0]["filed_at"] == "2025-03-14", (
+        f"정정일을 공개 시점으로 적었다: {pub['rows'][0]}")
+    assert pub["rows"][0]["available_from"] == "2025-03-14", pub["rows"][0]

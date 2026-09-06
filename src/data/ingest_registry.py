@@ -104,7 +104,9 @@ DATASETS: tuple[Dataset, ...] = (
     ),
     Dataset(
         key="financials", label="재무 시계열 (PIT)", source="DART",
-        table="financials_history", tools=("PIT 펀더멘털", "백테스터"),
+        # ★로스터와 같은 이름을 쓴다★ 이 문자열은 `data_routes` 의 tools 키와
+        # 짝이고 `DbStatusPanel.tsx:289` 가 그대로 그린다 — 한쪽만 바꾸면 갈라진다.
+        table="financials_history", tools=("PIT 펀더멘털(추정 시차)", "백테스터"),
         required_env=("DART_API_KEY",),
     ),
     Dataset(

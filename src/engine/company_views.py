@@ -108,8 +108,11 @@ def _usage() -> str:
     """★손으로 적지 않고 파생한다★ 손으로 넣으면 게이트가 거짓말을 할 수 있다
     (`timing_rules_v2:411` 이 같은 말을 한다).
 
-    `has_vintage=False` 는 `publication_dates()` 가 이미 보고하는 사실이다 —
-    실제 DART 접수일과 정정공시 이력이 저장소에 없다.
+    ★`has_vintage=False` 를 **일부러** 고정한다★ V4 이후 `publication_dates()` 는
+    빈티지 유무를 실제로 재서 보고하지만, 그 값을 여기 넣으면 `depth_ok`(재무
+    이력의 깊이)만 통과한 종목이 `backtest_eligible` 로 넘어간다 — `depth_ok` 는
+    **빈티지의 깊이**를 재지 않는다. 게이트를 여는 것은 라벨을 고치는 것과 다른
+    작업이고 별도 승인 사항이다.
     """
     from src.data.pit_macro import derive_usage
     return derive_usage(has_vintage=False, depth_ok=True, lag_known=True).value
@@ -147,9 +150,10 @@ def company_views(codes: list[str], prices: dict[str, float], *,
         for c in codes:
             reasons[str(c)] = _reason(
                 KIND_NO_VINTAGE,
-                f"as_of={as_of} 시점의 **빈티지 재무**가 없습니다 — DART 접수일과 "
-                f"정정공시 이력이 저장소에 없어(has_vintage=false) 오늘 재무로 과거 "
-                f"뷰를 만들면 룩어헤드가 됩니다.",
+                f"as_of={as_of} 시점의 **빈티지 재무**를 이 경로가 아직 쓰지 "
+                f"않습니다(has_vintage=false) — 오늘 재무로 과거 뷰를 만들면 "
+                f"룩어헤드가 되므로 거부합니다. 접수일·정정공시 적재 여부는 "
+                f"`publication_dates()` 가 종목별로 보고합니다.",
                 as_of=str(as_of), research_usage=_usage())
         return views, reasons
 
