@@ -56,17 +56,32 @@ class GraphStore(DeterministicMockStore):
 
     @classmethod
     def get_default(cls) -> GraphStore:
+        # ★여기서 그래프를 만들지 않는다★ 예전에는 싱글톤 생성 시 1회 만들었다.
+        # 그러면 프로세스가 뜬 뒤 모드가 바뀌어도 **그때의 모드로 만든 관계망**을
+        # 계속 들고 있고, 운영에서도 가짜 밸류체인이 메모리에 남는다.
+        # 지연 생성(`_ensure_graph`)이 호출 시점에 모드를 읽는다.
         if cls._singleton is None:
             cls._singleton = cls()
-            cls._singleton._build_graph()
         return cls._singleton
 
     def __init__(self, cache_ttl: int = 3600 * 24):
         super().__init__(cache_ttl)
         self._edges: dict = {}  # stock → {relation → [stocks]}
 
+    def _ensure_graph(self) -> bool:
+        """읽기 직전 1회 구축. 운영이면 **만들지도 않는다** → `False`.
+
+        ★차단은 "값을 숨긴다" 가 아니라 "만들지 않는다" 여야 한다★ — 만들어 두면
+        나중에 리더가 하나 더 생겼을 때 조용히 새어 나간다.
+        """
+        if self._synthetic_blocked():
+            return False
+        if not self._edges:
+            self._build_graph()
+        return True
+
     def _build_graph(self):
-        """결정론적 mock 밸류체인 구축."""
+        """결정론적 mock 밸류체인 구축 — 개발/샌드박스/CI 전용."""
         for stock in _KNOWN_STOCKS:
             self._edges[stock] = {"supplier": [], "customer": [], "competitor": []}
 
@@ -92,12 +107,30 @@ class GraphStore(DeterministicMockStore):
                 if stock not in self._edges[comp]["competitor"]:
                     self._edges[comp]["competitor"].append(stock)
 
+    @staticmethod
+    def _synthetic_blocked() -> bool:
+        """운영이면 관계망을 내주지 않는다.
+
+        ★빌더가 아니라 읽기 경로에 거는 이유★ `_build_graph()` 는 **싱글톤 생성
+        시 1회**만 돈다. 빌더에 걸면 프로세스가 뜬 뒤 모드가 바뀌었을 때 그 사실을
+        놓친다 — `mock_base._mode()` 가 적어 둔 규율("호출 시점마다 환경을 읽는다")
+        을 그대로 따른다.
+        """
+        from src.data.mock_gate import mock_allowed
+        return not mock_allowed()
+
     def neighbors(self, target: str, relation: str, depth: int = 1) -> set[str]:
         """
         BFS로 target의 relation 관계망을 depth-hop까지 탐색.
 
         Returns: 관계망 내 종목 코드 집합 (target 제외)
+
+        ★운영에서는 항상 빈 집합★ — 이 관계망은 `_KNOWN_STOCKS` 를 셔플해 만든
+        **지어낸 밸류체인**이다. 공급망 데이터 제공자가 붙기 전까지 운영에서
+        내주지 않는다. `eval_graph` 가 빈 집합을 매칭하지 않으므로("—") 안전하다.
         """
+        if not self._ensure_graph():
+            return set()
         if target not in self._edges:
             return set()
 
@@ -118,8 +151,8 @@ class GraphStore(DeterministicMockStore):
         return result
 
     def get_relations(self, stock: str) -> dict:
-        """종목의 직접 관계 (1-hop) — UI 표시용."""
-        edges = self._edges.get(stock, {})
+        """종목의 직접 관계 (1-hop) — UI 표시용. 운영에서는 전부 빈 목록."""
+        edges = self._edges.get(stock, {}) if self._ensure_graph() else {}
         return {
             "supplier":   [{"code": s, "name": _STOCK_NAMES.get(s, s)} for s in edges.get("supplier", [])],
             "customer":   [{"code": s, "name": _STOCK_NAMES.get(s, s)} for s in edges.get("customer", [])],
