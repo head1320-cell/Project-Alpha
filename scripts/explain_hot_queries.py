@@ -5,18 +5,22 @@
 
 ## 왜 이 스크립트가 있나
 
-`daily_prices` 를 비롯한 핵심 데이터 테이블에는 **PK 외 보조 인덱스가 없다.**
-소스를 읽어 쿼리 형태를 분류한 결과는 이렇다:
+`daily_prices` 를 읽는 SQL 은 두 부류다:
 
-  · 지배적 경로(`WHERE ticker=…`)는 PK `(ticker, trade_date)` 의 **prefix** 라
-    인덱스가 필요 없다. `mktcap_asof` 는 종목마다 불리지만 이 형태다.
+  · 지배적 경로(`WHERE ticker=…`)는 PK `(ticker, trade_date)` 의 **prefix** 다.
+    `mktcap_asof` 는 종목마다 불리지만 이 형태라 빠르다.
   · `universe_select.tickers_asof` / `top_mktcap_asof` 의 넷은 **ticker 술어가
-    없다** → PK 선두 컬럼이 안 걸린다 → 풀스캔. 다만 **요청당 1회**다
-    (봉당·종목당이 아니다).
+    없어** PK 선두 컬럼이 안 걸린다. `ix_daily_date`(trade_date) 가 있어야
+    탐색이 되고, 없으면 풀스캔이다. 호출은 **요청당 1회**다(봉당·종목당이 아니다).
 
-★거기서 멈췄다★ — 분류는 소스로 할 수 있지만 **실제 비용은 DB 앞에서만** 알 수
-있고, 개발 컨테이너에는 DB 가 없다. 그래서 결론(인덱스를 만들지 말지)을 내리는
-대신, **한 명령으로 재게** 만들어 둔다.
+★그 인덱스는 DB 의 생성 이력에 달려 있었다★ — 모델(`create_all`)은 만들고 raw
+DDL(`ensure_table`)은 안 만들었는데, `create_all(checkfirst=True)` 가 **이미 있는
+테이블을 통째로 건너뛰기** 때문이다. `52c3415`(H1)가 `ensure_table` 도 만들게 해
+순서와 무관하게 일치시켰다. 그래도 **기존 DB 가 어느 쪽인지는 물어봐야 안다** —
+이 스크립트가 먼저 인덱스를 조회해 찍는 이유다.
+
+★실제 비용은 DB 앞에서만 알 수 있다★ 개발 컨테이너에는 DB 가 없다. 그래서
+판정하는 대신 **한 명령으로 재게** 만들어 둔다.
 
 ## 무엇을 보고 무엇을 보지 않나
 
@@ -47,17 +51,17 @@ TABLE = "daily_prices"
 PROBES = [
     ("tickers_asof ①  기준일 찾기",
      f"SELECT MAX(trade_date) FROM {TABLE} WHERE trade_date <= :d",
-     {"d": "2024-06-28"}, "universe_select.tickers_asof", "ticker 술어 없음 → 스캔"),
+     {"d": "2024-06-28"}, "universe_select.tickers_asof", "ticker 술어 없음 → ix_daily_date 필요"),
     ("tickers_asof ②  그날 거래 종목",
      f"SELECT ticker FROM {TABLE} WHERE trade_date = :d",
-     {"d": "2024-06-28"}, "universe_select.tickers_asof", "ticker 술어 없음 → 스캔"),
+     {"d": "2024-06-28"}, "universe_select.tickers_asof", "ticker 술어 없음 → ix_daily_date 필요"),
     ("top_mktcap_asof ①  기준일",
      f"SELECT MAX(trade_date) FROM {TABLE} WHERE trade_date <= :d AND mktcap IS NOT NULL",
-     {"d": "2024-06-28"}, "universe_select.top_mktcap_asof", "ticker 술어 없음 → 스캔"),
+     {"d": "2024-06-28"}, "universe_select.top_mktcap_asof", "ticker 술어 없음 → ix_daily_date 필요"),
     ("top_mktcap_asof ②  시총 상위",
      f"SELECT ticker FROM {TABLE} WHERE trade_date = :d AND mktcap IS NOT NULL "
      "ORDER BY mktcap DESC LIMIT 200",
-     {"d": "2024-06-28"}, "universe_select.top_mktcap_asof", "ticker 술어 없음 → 스캔"),
+     {"d": "2024-06-28"}, "universe_select.top_mktcap_asof", "ticker 술어 없음 → ix_daily_date 필요"),
     # ── 대조군 — ★PK 로 덮이는 지배적 경로★ 둘을 나란히 재야 비교가 된다 ──
     ("mktcap_asof  (대조군)",
      f"SELECT mktcap FROM {TABLE} WHERE ticker=:t AND trade_date <= :d "
@@ -95,6 +99,25 @@ def run(engine) -> int:
     print(f"엔진: {dialect}   ({engine.url.render_as_string(hide_password=True)})")
     if prefix is None:
         print(f"★{dialect} 의 EXPLAIN 문법을 모릅니다 — 계획 없이 시간만 잽니다.★")
+
+    # ★이 스크립트에서 가장 결정적인 관측★
+    # `daily_prices` 인덱스는 **DB 의 생성 이력**에 달려 있었다(H1 이전). 코드만
+    # 봐서는 알 수 없으므로 실제 DB 에 물어본다. `ix_daily_date` 가 없으면 아래
+    # 횡단면 쿼리는 풀스캔이다.
+    try:
+        from sqlalchemy import inspect as _inspect
+        idx = _inspect(engine).get_indexes(TABLE)
+        if idx:
+            for i in idx:
+                print(f"인덱스: {i['name']}  {list(i['column_names'])}")
+        else:
+            print("인덱스: (PK 외 없음)")
+        if not any(list(i["column_names"]) == ["trade_date"] for i in idx):
+            print("  ★`trade_date` 단독 인덱스가 없습니다★ — 아래 횡단면 넷은 "
+                  "풀스캔입니다. `krx_ingest.ensure_table` 을 한 번 부르면 생깁니다.")
+    except Exception as e:  # noqa: BLE001
+        print(f"인덱스를 조회하지 못했습니다: {type(e).__name__}: {e}")
+    print()
 
     with engine.connect() as conn:
         n = _row_count(conn, text)

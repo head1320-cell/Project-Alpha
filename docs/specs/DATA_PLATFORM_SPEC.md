@@ -65,11 +65,29 @@
 맡는다. `data/schema_add_columns.py` 가 그 규율을 적어 뒀다 — ★한 번만 시도하고
 검증하지 않으면 못 붙은 컬럼을 붙었다고 믿는다★.
 
-**인덱스** — 리서치·의사결정·실거래·멀티백테스트 테이블 대부분에는 조회 축마다
-`CREATE INDEX` 가 있다. 반면 ★**핵심 데이터 테이블 전부**에는 PK 외 보조 인덱스가
-하나도 없다★ — `daily_prices` · `financials_history` · `financials_vintages` ·
-`investor_flows` · `macro_observations` · `factor_snapshot` · `instrument_master`
-(§7-1).
+**인덱스 — ★이 문서가 한 번 틀리게 적었던 자리다★**
+
+처음엔 "핵심 데이터 테이블 전부에 PK 외 인덱스가 없다" 라고 단정했다. **거짓이었다.**
+`grep "CREATE INDEX"` 가 **raw SQL 만** 보고 **SQLAlchemy `Index()` 선언을 통째로
+놓쳤다.** 표기가 둘인데 한쪽만 센 것이다 — 인벤토리를 만들 때 되풀이하기 쉬운
+실수라 지우지 않고 남긴다.
+
+실제로는:
+
+| 표기 | 어디 |
+|---|---|
+| raw SQL `CREATE INDEX` | 리서치·의사결정·실거래·멀티백테스트 모듈 |
+| ORM `Index()` | `kis_models.py`(`stocks` · `daily_prices`) · `screener_models.py` |
+
+그리고 ORM 선언은 **`create_all` 이 그 테이블을 실제로 만들 때만** 반영된다 —
+`checkfirst=True` 가 이미 있는 테이블을 통째로 건너뛰므로, **DB 의 생성 이력에
+따라 같은 제품의 인덱스가 달랐다**(§7-4). `52c3415` 가 `daily_prices` 를 순서와
+무관하게 일치시켰다. 나머지 데이터 테이블(`financials_*` · `investor_flows` ·
+`macro_observations` · `factor_snapshot` · `instrument_master`)은 **어느 표기로도
+보조 인덱스가 없다** — 그건 다시 확인했다.
+
+★자기 DB 가 어느 쪽인지는 물어봐야 안다★ — `python -m scripts.explain_hot_queries`
+가 실제 인덱스를 조회해 찍는다.
 
 ---
 
@@ -157,17 +175,20 @@
 
 | | 상태 |
 |---|---|
-| 7-1 인덱스 없음 | **쟀다 → 지금은 변경 불필요.** 하네스를 남겼다 |
+| 7-1 인덱스 | ★내가 **틀리게 적었다**★ — 있었고, DB 이력에 달려 있었다. **고쳤다** (`52c3415`) |
 | 7-2 합성값 누수 | ★불변식 위반이었고 **고쳤다**★ (`c93f33c`) |
-| 7-3 기업행위 이벤트 없음 | 기록만. 수집 설계가 필요한 별개 작업 |
-| 7-4 `daily_prices` 두 선언 | 기록만. **지금 동작은 맞다**(ALTER 가 되붙인다) |
+| 7-3 기업행위 이벤트 없음 | 기록만. 수집 설계가 필요 — **로드맵 2단계** |
+| 7-4 `daily_prices` 두 선언 | 컬럼·인덱스·`updated_at` 셋 다 갈렸다. **고쳤다** (`52c3415`) |
 
-### 7-1. 핵심 데이터 테이블에 보조 인덱스가 하나도 없다
+### 7-1. `daily_prices` 인덱스가 ★DB 생성 이력에 달려 있었다★ — 고쳤다 (`52c3415`)
 
-`CREATE INDEX` 는 리서치·의사결정·실거래·멀티백테스트 모듈에만 있다.
-**시세·재무·수급·매크로·팩터·마스터 테이블은 전부 PK 뿐이다.**
+처음 이 절은 "인덱스가 없다 → 만들 근거가 약하다" 로 끝났다. **둘 다 손봐야 했다.**
+"없다" 는 위 §2 의 이유로 거짓이었고, 그래서 결론도 다시 써야 했다.
 
-### 쟀다 — 결과는 "지금은 인덱스가 필요 없다"
+★쿼리 형태 분류는 그대로 유효하다★ — 그건 재서 얻은 사실이고 인덱스 유무와
+무관하다. 바뀐 것은 **그 위에 내린 판단**이다.
+
+### 쿼리 형태 — 재서 얻은 것 (변함없음)
 
 `daily_prices` 를 읽는 SQL 을 **전수 분류**했다(`grep -rn "FROM daily_prices"`).
 
@@ -178,28 +199,27 @@
 | `universe_select.tickers_asof` ①② | `WHERE trade_date <= …` / `= …` | ❌ **ticker 술어 없음** | **요청당 1회** |
 | `universe_select.top_mktcap_asof` ①② | 위 + `mktcap IS NOT NULL ORDER BY mktcap` | ❌ | **요청당 1회** |
 
-★핵심은 빈도다★ — 풀스캔 넷은 **봉당도 종목당도 아니고 요청당 1회**다. 그리고
-종목마다 불리는 `mktcap_asof` 는 PK 로 덮인다. ⇒ **인덱스를 만들 근거가 약하다.**
-안 만든 인덱스는 최대 테이블의 쓰기 비용을 안 낸다 — 이것도 성과다.
+★핵심은 빈도다★ — ticker 술어가 없는 넷은 **봉당도 종목당도 아니고 요청당 1회**다.
+종목마다 불리는 `mktcap_asof` 는 PK 로 덮인다.
 
-`scripts/explain_hot_queries.py --selftest` 이 그 분류를 실행계획으로 확인한다
-(합성 SQLite). 거기서 한 가지가 더 드러났다 — 넷이 다 같지 않다:
+### 그런데 그 넷을 덮는 인덱스가 ★있기도 하고 없기도 했다★
 
-- `tickers_asof` ①② → `SCAN … USING COVERING INDEX` — PK 인덱스만 훑는다
-  (필요한 컬럼이 PK 안에 다 있다). 풀스캔이지만 **테이블은 안 읽는다.**
-- `top_mktcap_asof` ①② → `SCAN daily_prices` — **테이블 스캔**이다. `mktcap` 이
-  PK 에 없어서 커버링이 안 된다. ⇒ ★넷 중 이 둘이 더 비싸다★
+`kis_models.DailyPrice` 가 `Index("ix_daily_date", "trade_date")` 를 선언한다 —
+정확히 그 축이다. 하지만 `create_all(checkfirst=True)` 는 이미 있는 테이블을
+건너뛰므로, `ensure_table`(raw DDL)이 먼저 돌았던 DB 에는 **그 인덱스가 없다.**
+메모리 SQLite 로 두 순서를 재서 확인했다(§7-4의 표).
 
-★그래도 여기서 멈춘다★ — 실 DB 의 **행 수와 지연**은 못 쟀다(개발 컨테이너에 DB
-없음). 판정이 필요해지면 실 DB 에서 한 명령으로 재면 된다:
+`52c3415` 가 `ensure_table` 도 `ix_daily_date` 를 멱등 생성하게 해 **순서와
+무관하게** 일치시켰다. 하네스가 그 효과를 실행계획으로 보여 준다 — 넷 전부
+`SCAN`(풀스캔) → `SEARCH … USING INDEX ix_daily_date`(탐색)로 바뀐다.
+
+★그래도 실 DB 의 행 수와 지연은 못 쟀다★(개발 컨테이너에 DB 없음). 그리고
+**기존 DB 는 여전히 어느 쪽인지 모른다** — `ensure_table` 이 한 번 돌면 생긴다.
+확인은 한 명령이다:
 
 ```bash
-python -m scripts.explain_hot_queries
+python -m scripts.explain_hot_queries      # 실제 인덱스 + 실행계획 + 1회 실측
 ```
-
-그때 인덱스가 정당화되면, 후보는 `daily_prices(trade_date)` 가 아니라
-**`(trade_date, mktcap)`** 다 — 위 둘을 커버링으로 만들어야 값이 나온다.
-그리고 그때도 첫 수는 TSDB 이관이 아니라 **인덱스 하나**다(§8).
 
 ### 7-2. 합성값이 운영 경로로 새고 있었다 — ★고쳤다★ (`c93f33c`)
 
@@ -241,18 +261,42 @@ python -m scripts.explain_hot_queries
 `price_quality` 가 이 상태를 `not_rebuilt` / `no_return_data` 등으로 **보고는
 한다.** 없는 것은 **왜 그런지** 였고, 지금 여기 적혔다.
 
-### 7-4. `daily_prices` 를 선언하는 곳이 둘이다
+### 7-4. `daily_prices` 를 선언하는 곳이 둘이다 — ★셋이 갈렸다★ (고침 `52c3415`)
 
-- `data/krx_ingest.py` 의 raw DDL — `mktcap` · `list_shares` · `source` · `price_basis` 포함
-- `kis_models.py` 의 SQLAlchemy 모델 — **그 넷이 없다**
+- `data/krx_ingest.py` 의 raw DDL — `mktcap`·`list_shares`·`source`·`price_basis`
+  **포함**, 인덱스·`updated_at` **없음**
+- `kis_models.py::DailyPrice` — 그 넷 **없음**, 인덱스 둘·`updated_at` **있음**
 
-그리고 `startup/lifecycle.py` 가 기동 시 `init_async_db()` → `metadata.create_all`
-을 부른다. 빈 DB 라면 **모델 쪽 정의로 테이블이 먼저 만들어지고**, 이후
-`krx_ingest` 의 `CREATE TABLE IF NOT EXISTS` 는 no-op 이 된다.
+기동은 `init_async_db()`(→`create_all`)를 먼저 부르지만(`lifecycle:287` → `:326`),
+CLI 백필로 DB 를 먼저 만드는 것도 문서가 안내하는 정상 경로다.
+그리고 ★`create_all(checkfirst=True)` 는 이미 있는 테이블을 **통째로** 건너뛴다★ —
+그 테이블의 인덱스도 만들지 않는다.
 
-★그래서 넷이 사라지느냐 — 아니다.★ `krx_ingest._MIGRATE_COLUMNS` 의 `ALTER` 가
-그 넷을 되붙인다. **결과는 맞다.** 다만 그 정합이 **기동 순서와 ALTER 헬퍼에
-의존**하고 있고, 그 사실이 두 파일 어디에도 함께 적혀 있지 않았다.
+메모리 SQLite 로 두 순서를 재봤다:
+
+| 생성 순서 | 컬럼 넷 | 인덱스 | `updated_at` |
+|---|---|---|---|
+| `create_all` 먼저 (기동 경로) | ✅ (ALTER 가 채움) | ✅ 둘 | ✅ |
+| `ensure_table` 먼저 (CLI 경로) | ✅ (ALTER 가 채움) | ❌ **없음** | ❌ **없음** |
+
+⇒ **컬럼만 `ALTER` 가 치유하고 있었다.** 인덱스와 `updated_at` 은 아니었고,
+그래서 **같은 제품의 두 DB 가 성능 특성이 달랐다.**
+
+★고친 방향이 셋 다 다르다★ — 무엇이 옳은지가 항목마다 달랐기 때문이다:
+
+- `ix_daily_date`(trade_date) → **위로**. `ensure_table` 도 멱등 생성한다.
+  이 축이 PK 로 답할 수 없는 유일한 축이다(§7-1).
+- `ix_daily_ticker_date` → **아래로**. PK 와 완전히 중복이라 최대 테이블의
+  쓰기 비용만 냈다.
+- `updated_at` → **아래로**. 읽는 곳이 없고, 지배적 writer 가 ORM 이 아니라
+  `bulk_upsert`(raw SQL)라 갱신되지 않는다 ⇒ 두면 ★"갱신되지 않는 `updated_at`"
+  이라는 그럴듯한 거짓 필드★가 된다.
+
+★기존 DB 의 것을 DROP 하지 않는다★ — 저장소에 삭제 마이그레이션 선례가 없다.
+새 DB 에 더 만들지 않을 뿐이다.
+
+★처음 측정에서 `updated_at` 을 놓쳤다★ — 넷만 확인했고, **순서 무관 테스트를
+쓰고 나서야** 드러났다. 목록을 손으로 정해 비교하면 목록 밖은 안 보인다.
 
 ---
 
