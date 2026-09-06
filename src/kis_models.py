@@ -81,11 +81,22 @@ class DailyPrice(AsyncBase):
     sma_60 = Column(Float)
     return_1d = Column(Float)
 
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    # ★`updated_at` 을 뺐다★ 읽는 곳이 없고, 이 테이블의 **지배적 writer** 는
+    # ORM 이 아니라 `krx_ingest.bulk_upsert`(raw SQL)다. 그쪽은 이 컬럼을
+    # 갱신하지 않으므로, 두면 "갱신되지 않는 `updated_at`" 이라는 **그럴듯한
+    # 거짓 필드**가 된다. 그리고 raw DDL 에는 애초에 없어서, 어느 쪽이 테이블을
+    # 먼저 만들었느냐에 따라 컬럼이 있다 없다 했다(실측).
+    # ★기존 DB 의 컬럼을 DROP 하지는 않는다★ — 비어 있을 뿐 해가 없다.
 
     __table_args__ = (
         PrimaryKeyConstraint("ticker", "trade_date", name="pk_daily_prices"),
-        Index("ix_daily_ticker_date", "ticker", "trade_date"),
+        # ★`ix_daily_ticker_date` 를 뺐다★ PK 와 컬럼·순서가 완전히 같아 조회에
+        # 아무것도 더해 주지 않고 **쓰기 비용만** 냈다(최대 테이블이다).
+        # ★기존 DB 의 것을 DROP 하지는 않는다★ — 저장소에 인덱스 삭제
+        # 마이그레이션 선례가 없다. 새 DB 에 더 만들지 않을 뿐이다.
+        #
+        # `ix_daily_date` 는 `krx_ingest._ENSURE_INDEXES` 도 만든다 — 생성
+        # 순서와 무관하게 같은 스키마가 되도록 **양쪽에** 둔다.
         Index("ix_daily_date", "trade_date"),
     )
 

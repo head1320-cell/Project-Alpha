@@ -94,8 +94,32 @@ def _get_engine(engine=None):
     return get_engine()
 
 
+#: ★생성 순서와 무관하게 같은 인덱스가 되게 한다★
+#:
+#: 이 테이블을 선언하는 곳이 둘이다 — 여기의 raw DDL 과 `kis_models.DailyPrice`.
+#: 기동은 `create_all` 을 먼저 부르지만(`startup/lifecycle.py`), CLI 백필로 DB 를
+#: 먼저 만드는 것도 정상 경로다. `create_all(checkfirst=True)` 는 **이미 있는
+#: 테이블을 통째로 건너뛰므로 그 인덱스도 만들지 않는다** — 컬럼은 아래 `ALTER`
+#: 가 치유했지만 인덱스는 치유되지 않아, 같은 제품의 두 DB 가 성능 특성이
+#: 달랐다(실측).
+#:
+#: `trade_date` 단독 인덱스가 필요한 이유 — `universe_select.tickers_asof` /
+#: `top_mktcap_asof` 는 ticker 술어가 없어 PK `(ticker, trade_date)` 의 선두
+#: 컬럼이 안 걸린다. 그 둘이 이 테이블에서 **PK 로 답할 수 없는 유일한 축**이다.
+_ENSURE_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS ix_daily_date ON daily_prices (trade_date)",
+)
+
+
+def _run_index_ddl(engine, sql: str) -> None:
+    """인덱스 DDL 1건. ★분리해 둔 이유는 실패를 테스트에서 주입하기 위해서다★"""
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text(sql))
+
+
 def ensure_table(engine) -> None:
-    """daily_prices 없으면 생성 + 신규 컬럼(mktcap 등) 마이그레이션."""
+    """daily_prices 없으면 생성 + 신규 컬럼(mktcap 등)·인덱스 마이그레이션."""
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
@@ -105,6 +129,16 @@ def ensure_table(engine) -> None:
                 conn.execute(text(f"ALTER TABLE daily_prices ADD COLUMN {col}"))
         except Exception:
             pass  # 이미 존재 — 정상
+    for sql in _ENSURE_INDEXES:
+        # ★컬럼 ALTER 와 달리 삼키지 않는다★ `IF NOT EXISTS` 라 "이미 있음" 은
+        # 예외가 아니다 — 여기서 예외가 나면 **진짜 실패**이고, 조용히 넘기면
+        # 횡단면 조회가 풀스캔으로 남은 것을 아무도 모른다
+        # (`schema_add_columns` 가 적어 둔 함정과 같은 부류).
+        try:
+            _run_index_ddl(engine, sql)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("daily_prices 인덱스 생성 실패 — 횡단면 조회가 풀스캔으로 "
+                           "남습니다: %s: %s (%s)", type(e).__name__, e, sql)
 
 
 def bulk_upsert(engine, rows: list[dict]) -> int:
