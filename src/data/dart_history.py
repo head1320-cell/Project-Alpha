@@ -45,7 +45,15 @@ CREATE TABLE IF NOT EXISTS financials_history (
 """
 
 # 기존 테이블 마이그레이션 (ALTER 멱등 — 이미 있음 무시)
-_MIGRATE_COLUMNS = ("dps FLOAT",)
+#: ★`vintage_probe_at` 은 "시도했다" 이지 "빈티지가 없다" 가 아니다★
+#: 3단계(소급 백필)가 접수번호를 못 받은 기간을 다시 묻지 않으려고 남기는 흔적이다.
+#: 미상 ≠ 없음이므로 `--retry-probed` 로 언제든 다시 연다.
+#: ★아래 `ALTER` 는 예외를 삼킨다★ — 그래서 이 컬럼에 **의존하는** 경로는
+#: `_has_probe_column()` 으로 실제로 붙었는지 확인한다(`ensure_vintage_table` 과 같은 규율).
+_MIGRATE_COLUMNS = ("dps FLOAT", "vintage_probe_at VARCHAR(32)")
+
+#: 갭 질의가 의존하는 컬럼 이름 — 사유 문장이 이 이름을 그대로 말한다.
+PROBE_COLUMN = "vintage_probe_at"
 
 _UPSERT = """
 INSERT INTO financials_history
@@ -219,6 +227,156 @@ def _upsert_vintage(engine, ticker: str, fs) -> bool:
     return True
 
 
+def _has_probe_column(engine) -> bool:
+    """`vintage_probe_at` 이 **실제로 쓸 수 있는지** 확인한다.
+
+    ★붙은 줄 알고 진행하면 최악이다★ — 갭 질의가 이 컬럼을 `WHERE` 에서 쓰므로,
+    없는데 있다고 믿으면 질의가 깨지거나(조용히 빈 목록 = 아무것도 안 채움)
+    조건이 빠져 **매 실행 전량 재조회**가 된다. 둘 다 조용하다.
+    `ensure_vintage_table()` 이 이미 같은 함정을 적어 두고 같은 방식으로 막는다.
+    """
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                f"SELECT {PROBE_COLUMN} FROM financials_history LIMIT 1"))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def mark_vintage_probed(engine, ticker: str, bsns_year: str,
+                        reprt_code: str) -> bool:
+    """이 기간을 **빈티지 목적으로 조회했다**고 기록한다.
+
+    ★"빈티지가 없다" 고 적는 것이 아니다★ — 적는 것은 *우리가 물어봤다* 이고,
+    제공자가 나중에 채울 수 있으므로 `retry_probed` 로 다시 연다.
+    ★빈 빈티지 행을 만들지 않는다★ — 그것은 없는 사실을 지어내는 것이다.
+    """
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                f"UPDATE financials_history SET {PROBE_COLUMN} = :at "
+                "WHERE ticker=:t AND bsns_year=:y AND reprt_code=:r"),
+                {"at": datetime.now().isoformat(timespec="seconds"),
+                 "t": str(ticker), "y": str(bsns_year), "r": str(reprt_code)})
+        return True
+    except Exception as e:  # noqa: BLE001
+        logger.warning("빈티지 시도 기록 실패 (%s %s/%s): %s",
+                       ticker, bsns_year, reprt_code, e)
+        return False
+
+
+def vintage_gap(engine, *, limit: int | None = None,
+                retry_probed: bool = False) -> list[tuple]:
+    """빈티지가 **없는** (종목, 연도, 보고서) — 소급 백필의 후보.
+
+    ★기존 `existing_keys()` 를 건드리지 않는다★ 그 키를 4-튜플로 바꾸면 정규
+    백필이 매 실행 전량 재조회가 되어 DART 일 20,000건 쿼터를 태운다. 대신
+    `refetch_revenue_null()` 과 같은 방식으로 **갭만** 고른다 — 채워지면 후보에서
+    빠지므로 재실행이 저렴하고 **수렴한다**.
+
+    ★최신 연도부터★ 백테스트가 최근 기간을 더 자주 보고, 쿼터가 중간에 끊겨도
+    가치 있는 쪽이 먼저 채워진다.
+    """
+    from sqlalchemy import text
+    sql = (
+        "SELECT h.ticker, h.bsns_year, h.reprt_code "
+        "FROM financials_history h "
+        f"LEFT JOIN {VINTAGE_TABLE} v "
+        "  ON v.ticker = h.ticker AND v.bsns_year = h.bsns_year "
+        " AND v.reprt_code = h.reprt_code "
+        "WHERE v.ticker IS NULL "
+        f"  AND ({PROBE_COLUMN} IS NULL OR :retry = 1) "
+        "ORDER BY h.bsns_year DESC, h.ticker"
+    )
+    if limit is not None:
+        sql += f" LIMIT {int(limit)}"
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), {"retry": 1 if retry_probed else 0}).fetchall()
+    return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+
+def backfill_vintages(engine=None, client=None, max_calls: int | None = None,
+                      retry_probed: bool = False, progress_cb=None) -> dict:
+    """빈티지 소급 백필 — ★갭만 재조회한다★ (로드맵 3단계)
+
+    `refetch_revenue_null()` 의 형제다. 후보는 `vintage_gap()` 이 고르고, 각
+    후보에 재무제표 호출 한 번을 쓴다 — ★접수번호는 그 응답에 딸려 온다★
+    (`dart_client.py` 가 `fnlttSinglAcnt.json` 의 `rcept_no` 를 그대로 꺼내고
+    `rcept_dt` 는 `filing_date_of()` 로 로컬 파생한다). 별도 엔드포인트가 없다.
+
+    ★세 결과를 뭉치지 않는다★ — 처방이 전부 다르다:
+
+        성공                  빈티지가 생긴다 → 다음부터 갭이 아니다(수렴)
+        접수번호 없음          **시도 흔적**을 남긴다 → 다시 묻지 않는다
+        조회 실패(None·예외)   ★흔적을 남기지 않는다★ → 다음에 다시 시도한다
+
+    마지막이 핵심이다: 일시적 실패를 항구적으로 표시하면 **되찾을 수 있는
+    데이터를 영영 잃는다.** 대신 `failed` 로 세어 사용자가 본다.
+
+    ★본문(`upsert_statement`)을 다시 쓰지 않는다★ 대상은 접수일이고 본문은 이미
+    있다. 다시 쓰면 다른 경로(`refetch_revenue_null` 등)의 갱신을 덮을 수 있다.
+    """
+    from src.data.dart_client import DARTClient, get_corp_code
+    client = client or DARTClient()
+    if not getattr(client, "is_configured", False):
+        return {"error": True, "message": "DART_API_KEY 미설정 — .env에 키를 넣고 실행하세요"}
+    engine = _get_engine(engine)
+    if engine is None:
+        return {"error": True, "message": "DB engine 없음"}
+    ensure_history_table(engine)
+    if not ensure_vintage_table(engine):
+        return {"error": True, "message": f"{VINTAGE_TABLE} 를 쓸 수 없습니다"}
+    # ★조용히 전량 재조회하지 않는다★ 컬럼이 없으면 흔적을 남길 수 없고,
+    # 그러면 접수번호 없는 기간을 매 실행 다시 묻게 된다.
+    if not _has_probe_column(engine):
+        return {"error": True,
+                "message": (f"`financials_history.{PROBE_COLUMN}` 컬럼이 없습니다 — "
+                            "시도 흔적을 남길 수 없어 중단합니다(그대로 진행하면 "
+                            "접수번호 없는 기간을 매 실행 다시 조회합니다).")}
+
+    targets = vintage_gap(engine, retry_probed=retry_probed)
+    stats = {"candidates": len(targets), "calls": 0, "saved": 0,
+             "no_rcept": 0, "failed": 0, "no_corp": 0,
+             "tickers": len({t[0] for t in targets})}
+    corp_cache: dict[str, str | None] = {}
+    for tk, year, reprt in targets:
+        if max_calls is not None and stats["calls"] >= max_calls:
+            stats["stopped_at_quota"] = True
+            break
+        if tk not in corp_cache:
+            corp_cache[tk] = get_corp_code(tk)
+        corp = corp_cache[tk]
+        if not corp:
+            stats["no_corp"] += 1
+            continue
+        try:
+            fs = client.get_financial_statement_full(corp, year, reprt_code=reprt)
+            stats["calls"] += 1
+        except Exception as e:  # noqa: BLE001
+            stats["calls"] += 1
+            stats["failed"] += 1          # ★흔적을 남기지 않는다 — 일시적일 수 있다★
+            logger.debug(f"빈티지 재조회 실패 [{tk} {year}/{reprt}]: {e}")
+            continue
+        if fs is None:
+            stats["failed"] += 1          # 같은 이유로 흔적 없음
+            continue
+        if _upsert_vintage(engine, tk, fs):
+            stats["saved"] += 1
+        else:
+            # ★제공자가 접수번호를 주지 않았다★ — 항구적 부재로 보고 흔적을 남긴다.
+            stats["no_rcept"] += 1
+            mark_vintage_probed(engine, tk, year, reprt)
+        if progress_cb is not None:
+            try:
+                progress_cb(stats["calls"], len(targets), stats["saved"], stats["calls"])
+            except Exception:
+                pass
+    return stats
+
+
 def vintage_stats(engine=None) -> dict:
     """빈티지 적재 현황. ★못 읽으면 `None` + 사유 — 0 이 아니다★
 
@@ -227,7 +385,7 @@ def vintage_stats(engine=None) -> dict:
     "정정공시가 없다" 가 아니다.
     """
     from sqlalchemy import text
-    out = {"rows": None, "restated_periods": None,
+    out = {"rows": None, "restated_periods": None, "gap_periods": None,
            "skipped_no_rcept": _VINTAGE_SKIPPED["no_rcept"], "reason": ""}
     try:
         engine = _get_engine(engine)
@@ -244,6 +402,17 @@ def vintage_stats(engine=None) -> dict:
     except Exception as e:  # noqa: BLE001
         out["rows"] = out["restated_periods"] = None
         out["reason"] = f"빈티지 테이블을 읽지 못했습니다: {type(e).__name__}: {e}"
+    # ★진척도는 별도로 잰다★ 빈티지 테이블은 읽었는데 본문 표를 못 읽는 경우가
+    # 있으므로 사유를 따로 붙인다 — ★미상 ≠ 0★ 이라 실패하면 `None` 으로 남긴다
+    # (0 으로 적으면 "갭이 없다" = "다 채웠다" 로 읽힌다).
+    try:
+        engine = _get_engine(engine)
+        if engine is not None:
+            out["gap_periods"] = len(vintage_gap(engine))
+    except Exception as e:  # noqa: BLE001
+        out["gap_periods"] = None
+        out["reason"] = (out["reason"] + " · " if out["reason"] else "") + (
+            f"빈티지 갭을 세지 못했습니다: {type(e).__name__}: {e}")
     return out
 
 
@@ -815,7 +984,32 @@ def main() -> None:
     ap.add_argument("--all-listed", action="store_true", help="마스터 전 주권 대상")
     ap.add_argument("--max-calls", type=int, default=18000,
                     help="이번 실행 최대 호출 수 (DART 일쿼터 20,000 보호)")
+    ap.add_argument("--vintages", action="store_true",
+                    help="★소급 백필★ 이미 적재된 기간 중 빈티지가 없는 것만 다시 "
+                         "받아 접수일을 채운다(정규 백필은 건드리지 않는다)")
+    ap.add_argument("--retry-probed", action="store_true",
+                    help="접수번호를 못 받아 표시해 둔 기간도 다시 시도한다")
     args = ap.parse_args()
+
+    if args.vintages:
+        stats = backfill_vintages(max_calls=args.max_calls,
+                                  retry_probed=args.retry_probed)
+        print(f"빈티지 소급 백필 결과: {stats}")
+        if stats.get("error"):
+            return
+        # ★셋을 나눠서 읽는다★ 처방이 전부 다르다.
+        print(f"→ 채움 {stats['saved']} · 접수번호 없음 {stats['no_rcept']}"
+              f"(다시 묻지 않음 — `--retry-probed` 로 재개) · "
+              f"조회 실패 {stats['failed']}(★흔적을 남기지 않았으므로 다음 실행에서 "
+              f"다시 시도합니다★)")
+        if stats.get("stopped_at_quota"):
+            print("→ 쿼터 도달로 중단 — 같은 명령으로 재실행하면 이어서 채웁니다"
+                  "(갭이 줄어들므로 수렴합니다)")
+        remaining = vintage_stats()
+        print(f"→ 남은 갭: {remaining.get('gap_periods')} 기간"
+              + (f"  ({remaining['reason']})" if remaining.get("reason") else ""))
+        return
+
     tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else None
     stats = backfill_financials(tickers=tickers, all_listed=args.all_listed,
                                 years=args.years, include_quarters=args.quarters,
