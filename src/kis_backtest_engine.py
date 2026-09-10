@@ -90,6 +90,20 @@ def set_engine(engine):
     _engine_override = engine
 
 
+#: 결과에 실리는 **진단 키** — ★라우트가 손으로 세지 않게 한다★
+#:
+#: 이 목록이 생긴 이유: `_screen_to_backtest_core` 가 반환 dict 를 키로 손수
+#: 나열하면서 `signal_path`·`macro_lookahead`·`fundamentals_pit` 을 빠뜨렸고,
+#: 그래서 **엔진 안에서만 참인 라벨**이 됐다(화면도 텔레메트리도 비어 있었다).
+#: 키 하나를 되살리는 대신 목록을 여기 두고 라우트가 전개하게 한다 —
+#: 여기에 추가하면 라우트·텔레메트리·프런트 계약 테스트가 함께 걸린다.
+#:
+#: ★진단만 담는다★ `result`·`intraday`·`asset_alloc` 처럼 화면 본문이 직접
+#: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
+DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
+                   "price_basis")
+
+
 def _signal_path_meta(counts: dict) -> dict:
     """신호가 **어느 경로로** 났는지 보고한다.
 
@@ -242,6 +256,50 @@ def _count_source(counts: dict, df) -> None:
     src = df.attrs.get("source") if getattr(df, "attrs", None) else None
     key = str(src) if src else "unknown"
     counts[key] = counts.get(key, 0) + 1
+
+
+def _count_price_labels(basis_map: dict, adj_map: dict, tk: str, df) -> None:
+    """이 프레임의 **가격 정의 라벨**을 티커별로 담는다 (진단용).
+
+    ★값은 이미 지불됐다★ `ohlcv_loader._tag` 가 티커마다 `adj_status_of()` ·
+    `adj_close_coverage()` 를 이미 부르고 그 답을 `attrs` 에 붙여 둔다. 여기서는
+    **세기만** 하므로 DB 왕복이 늘지 않는다.
+
+    ★`copy()` 전에 읽는다★ 옆의 `_count_source`·`_count_coverage` 와 같은 자리다.
+    다만 **재보고 정확히 적는다**: 이 저장소의 pandas(2.2.2)에서는 `copy`·`iloc`·
+    `loc`·`reset_index`·`assign`·`concat`·`merge`·`groupby`·`astype`·`rename`
+    **어느 것도 `attrs` 를 떨어뜨리지 않았다**(실측). 즉 지금 순서를 뒤집어도
+    관측되는 결함은 없다 — 이 순서는 **버전 편차에 대한 예방**이고, 그 편차는
+    이 파일 자신이 겪은 적이 있다(`.iloc` 이 `attrs` 를 전파하지 않는 판본 때문에
+    `_fetch_frames` 가 방어적으로 다시 채운다). ★없는 결함을 막았다고 적지 않는다.★
+
+    ★미상을 지어내지 않는다★ 태그가 없으면 `None` 을 담고, 판정은
+    `price_quality.basis_rollup` 이 `unlabeled` 로 센다 — `missing`("행이 없다" 는
+    판단)과 다른 칸이다.
+    """
+    attrs = getattr(df, "attrs", None) or {}
+    basis_map[tk] = attrs.get("price_basis")
+    adj_map[tk] = attrs.get("adj_status")
+
+
+def _price_basis_meta(labels: dict | None) -> dict | None:
+    """가격 정의 상태를 결과에 실을 모양으로. ★판정은 `price_quality` 가 한다★
+
+    `_macro_lookahead_meta`·`_fundamentals_pit_meta` 와 같은 규율이다 —
+    ★안 쓴 것과 재본 것을 구별한다★(프레임이 없으면 `None`). 다만 여기는
+    "해당 없음" 이 사실상 없다: 가격은 모든 백테스트가 쓴다.
+
+    ★등급 어휘를 엔진이 다시 쓰지 않는다★ 계산은 `basis_rollup` 하나에만 있고,
+    엔진은 라벨을 모아 넘길 뿐이다. 라벨을 만들다 백테스트를 죽이지 않는다.
+    """
+    if not labels:
+        return None
+    try:
+        from src.data.price_quality import basis_rollup
+        return basis_rollup(labels.get("basis") or {}, labels.get("adj") or {})
+    except Exception:  # noqa: BLE001 — 라벨을 만들다 백테스트를 죽이지 않는다
+        logger.exception("price_basis 롤업 실패")
+        return None
 
 
 def load_ohlcv(
@@ -543,6 +601,10 @@ class BacktestEngine:
 
         _src_counts: dict[str, int] = {}
         _cov_counts: dict[str, int] = {}
+        # 가격 정의 라벨(티커별) — 결과의 `price_basis` 가 이것을 롤업한다.
+        _basis_labels: dict[str, str | None] = {}
+        _adj_labels: dict[str, str | None] = {}
+        self._price_labels = {"basis": _basis_labels, "adj": _adj_labels}
 
         def _absorb(tk: str, d):
             """메인 스레드에서만 호출 — ohlcv_map 갱신(딕셔너리 경쟁 없음)."""
@@ -550,6 +612,7 @@ class BacktestEngine:
                 # ★출처를 손대기 전에 센다★ 아래 `copy()`·컬럼 추가 전에 읽는다.
                 _count_source(_src_counts, d)
                 _count_coverage(_cov_counts, d)
+                _count_price_labels(_basis_labels, _adj_labels, tk, d)
                 # ★안 쓰는 것에 42% 를 내지 않는다★
                 # 예전에는 여기서 모든 종목에 `_date_str` 을 즉시 붙였다. 그것은
                 # per-bar 폴백의 봉마다 `strftime` 을 없앤 정당한 최적화였지만,
@@ -1947,6 +2010,9 @@ class BacktestEngine:
             "macro_lookahead": _macro_lookahead_meta(getattr(self, "_macro_ctx", None)),
             # ★재무 공시일이 실측이었나 추정이었나★ PIT 재무 토큰을 안 쓴 실행은 None.
             "fundamentals_pit": _fundamentals_pit_meta(getattr(self, "_fund_ctx", None)),
+            # ★이 백테스트가 무슨 가격을 봤는가★ 원주가와 수정주가가 섞인 계열로
+            # 계산한 수익률은 정의가 섞인 수익률이다 — 조용히 넘기면 아무도 모른다.
+            "price_basis": _price_basis_meta(getattr(self, "_price_labels", None)),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",

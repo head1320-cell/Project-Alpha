@@ -1465,7 +1465,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
 
     try:
         from src.engine.filter_ast import parse_group
-        from src.kis_backtest_engine import run_backtest
+        from src.kis_backtest_engine import DIAGNOSTIC_KEYS, run_backtest
 
         # 0) 택티컬/최적화 전략 충실 백테스트 — strategy_name="tactical:<sid>" → 동적 엔진 어댑터
         if (req.strategy_name or "").startswith("tactical:"):
@@ -1661,6 +1661,13 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             "backtest": bt.get("result", bt),
             "intraday": bt.get("intraday"),  # 하이브리드 체결 적용/폴백 통계 (사용 시)
             "asset_alloc": bt.get("asset_alloc"),  # ETF 슬리브 최종 구성 (사용 시)
+            # ★진단 라벨은 손으로 세지 않는다★ 엔진이 `DIAGNOSTIC_KEYS` 로 선언하고
+            # 여기서 전개한다. 예전에는 이 자리에서 키를 하나씩 적었고, 그래서
+            # `macro_lookahead`·`fundamentals_pit`·`signal_path` 가 **통째로 빠진 채**
+            # 화면과 텔레메트리가 눈이 멀어 있었다(양쪽 코드는 멀쩡했는데 가운데가
+            # 끊겨 있었다). 엔진이 안 낸 키는 `None` 으로 **명시**한다 — 프런트가
+            # "키가 없다" 와 "값이 없다" 를 구별할 수 있어야 다음 단선도 보인다.
+            **{k: bt.get(k) for k in DIAGNOSTIC_KEYS},
             "backtest_config": {
                 "strategy": eff_strategy,
                 "period": f"{req.start_date} ~ {req.end_date}",
