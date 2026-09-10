@@ -4151,6 +4151,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-badge.mock { background: #fef3c7; color: #b45309; }
 .brun-badge.real { background: var(--color-bull-bg); color: #15803d; }
 .brun-badge.warn { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
+/* PIT 판정이 넷이라 상태 클래스도 하나 는다 — ★기존 셋은 건드리지 않는다★
+   (ADR 001: 클래스명이 E2E 계약). `partial` = 일부 축만 시점 정합됨. */
+.brun-badge.partial { background: #fef3c7; color: #b45309; }
 .brun-mocknote { font-size: 10.5px; color: #b45309; background: #fffbeb; border-radius: 3px; padding: 6px 10px; }
 
 .brun-progress-wrap { display: flex; flex-direction: column; gap: 6px; }
@@ -5048,6 +5051,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .dark .brun-results .brun-mocknote { background: #2a2113; color: #fcd34d; }
 .dark .brun-results .brun-badge.mock { background: #2a2113; color: #fcd34d; }
 .dark .brun-results .brun-badge.real { color: #4ade80; }
+.dark .brun-results .brun-badge.partial { background: #2a2113; color: #fcd34d; }
 .dark .brun-results .brun-diag-list { color: #fcd34d; }
 .dark .brun-results .brun-diag-list li.brun-diag-omit { color: var(--t-muted); }
 .dark .brun-results .brun-tdetail td { background: rgb(124 116 255 / 0.10); }

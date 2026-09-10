@@ -148,6 +148,88 @@ export interface ScreenToBacktestResult {
     note: string;
     value_note: string;
   } | null;
+  /**
+   * 신호가 **어느 경로로** 났는가 — 벡터화인가 per-bar 폴백인가.
+   * 실행 시간을 5배까지 가르는 값이고, 분모가 0이면 `vectorized_pct` 는 `null` 이다.
+   */
+  signal_path?: {
+    vectorized: number; per_bar: number; failed: number;
+    vectorized_pct: number | null;
+  } | null;
+  /**
+   * 이 백테스트가 **무슨 가격을 봤는가** (`price_quality.basis_rollup`).
+   *
+   * ★프레임을 하나도 못 읽은 실행은 `null`★ — `{tickers: 0, …}` 이 아니다.
+   * `state` 는 셋이고 **미상은 통과가 아니다**:
+   *   `ok`        전부 수정주가이고 정의가 섞이지 않았다
+   *   `degraded`  ★관측된★ 결함이 있다(`mixed`·`raw`·`chain_broken`·`missing`)
+   *   `unknown`   결함은 안 보이지만 **못 잰 것**이 있다(라벨 없음·정의 미기록)
+   *
+   * ★`unlabeled` 는 `missing` 이 아니다★ — `missing` 은 "행이 없다" 는 판단이고
+   * `unlabeled` 는 판단 자체가 없다(DB 를 못 읽었거나 로더를 안 거쳤다).
+   * `*_tickers` 는 **표본**(최대 5)이고 정확한 개수는 `basis`/`adj_status` 에 있다.
+   */
+  price_basis?: {
+    unit: string;
+    tickers: number;
+    basis: Record<string, number>;
+    adj_status: Record<string, number>;
+    uniform_adjusted_pct: number | null;
+    adjusted_pct: number | null;
+    mixed_tickers: string[];
+    unadjusted_tickers: string[];
+    unlabeled_tickers: string[];
+    state: "ok" | "degraded" | "unknown";
+    reason: string | null;
+    source: string;
+    version: string;
+    note: string;
+  } | null;
+  /**
+   * 유니버스가 **생존편향을 보정했는가**.
+   *
+   * ★`effective !== requested` 그 자체가 폴백의 증거다★ — 시점 유니버스를
+   * 만들지 못하면 오늘자 프리셋으로 떨어지는데, 그러면 상장폐지 종목이 빠진다.
+   *
+   * 네 값이고 **셋으로 줄이지 않는다**: `corrected`(실제로 세웠다) ·
+   * `approximated`(시총 상위 재구성 — 지수 편입의 근사) · `not_corrected`
+   * (오늘자 멤버십) · `unknown`(사용자 목록이라 **알 수 없다**).
+   * ★`unknown` 은 "보정 안 됨" 이 아니다★ — 우리가 모른다는 뜻이다.
+   */
+  universe?: {
+    requested: string;
+    effective: string;
+    fell_back: boolean;
+    survivorship: "corrected" | "approximated" | "not_corrected" | "unknown";
+    asof_date: string | null;
+    reason: string | null;
+    tickers_screened: number;
+    note: string;
+  } | null;
+  /**
+   * 네 축을 모은 **실행 판정** (`src/engine/run_evidence.py`).
+   *
+   * ★boolean 이 아니다★ — `verified`/`partial`/`unverified`/`unknown`.
+   * 못 잰 것(`unknown`)과 재봤더니 나쁜 것(`degraded`)은 처방이 달라 끝까지
+   * 따로 센다: `broken_axes` 와 `unknown_axes` 가 그것이다.
+   *
+   * `axes.macro` / `axes.fundamentals` 가 `null` 이면 **해당 없음**이다(그 토큰을
+   * 안 쓴 실행). 반면 `axes.price` / `axes.universe` 는 절대 `null` 이 아니다 —
+   * 못 재면 `state: "unknown"` 으로 남는다.
+   */
+  pit_evidence?: {
+    status: "verified" | "partial" | "unverified" | "unknown";
+    axes: Record<string, {
+      state: "ok" | "degraded" | "unknown";
+      reason: string | null;
+    } | null>;
+    applicable: string[];
+    ok_axes: string[];
+    broken_axes: string[];
+    unknown_axes: string[];
+    summary: string;
+    note: string;
+  } | null;
 }
 
 // 백테스트 고급 옵션 (수수료/슬리피지/손절/익절)

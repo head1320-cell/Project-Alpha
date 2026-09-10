@@ -254,7 +254,12 @@ def _tag(df, code: str, source: str | None = None) -> None:
         df.attrs["source"] = source
     try:
         from src.data.price_quality import adj_status_of
-        df.attrs["adj_status"] = adj_status_of(code)
+        # ★판정 불가는 라벨을 달지 않는다★ `adj_status_of` 가 `None` 을 내면
+        # 커버리지 리포트를 얻지 못한 것이고(DB 없음 등), 그때 `missing` 을 적으면
+        # "이 종목은 행이 없다" 는 하지 않은 진술이 소비자에게 흘러간다.
+        _st = adj_status_of(code)
+        if _st is not None:
+            df.attrs["adj_status"] = _st
     except Exception as e:  # noqa: BLE001
         logger.debug(f"adj_status 태깅 실패({code}): {e}")
     try:

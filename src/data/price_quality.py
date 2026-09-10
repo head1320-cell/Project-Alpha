@@ -425,14 +425,28 @@ def assert_prices_backtest_eligible(tickers: list[str], *,
             f"{got['reason']}")
 
 
-def adj_status_of(ticker: str, *, engine=None) -> str:
-    """티커 하나의 네 상태 중 하나. ★조회 실패도 상태로 낸다★
+def adj_status_of(ticker: str, *, engine=None) -> str | None:
+    """티커 하나의 네 상태 중 하나, **또는 판정 불가면 `None`**.
 
-    `ohlcv_loader` 가 `df.attrs` 에 실을 값이다.
+    `ohlcv_loader` 가 `df.attrs["adj_status"]` 에 실을 값이다.
+
+    ★이전 판은 조회 실패도 `missing` 으로 냈다 — 그것을 고친다.★
+    `missing` 은 "`daily_prices` 에 행이 하나도 없습니다" 라는 **판단**이다.
+    커버리지 리포트 자체를 얻지 못한 경우(DB 없음·쿼리 실패)에 그 값을 내면
+    하지 않은 진술이 보고서에 실린다.
+
+    ★실제로 그렇게 나갔다★ — 0단계에서 목업 백테스트를 눈으로 확인하니 DB 없는
+    실행의 진단이 "수정주가 아님(91종목) — 000100, 000270, …" 이었다. 그 91종목에
+    대해 이 시스템은 아무것도 읽지 못했는데, 화면에는 확정된 결함으로 나갔다.
+    미상 ≠ 0 · 미검증 ≠ 검증 · 미적재 ≠ 제공자 미지원 과 같은 부류다.
+
+    Returns:
+        `STATES` 중 하나, 또는 리포트를 얻지 못했으면 `None`.
+        ★리포트를 얻었는데 그 티커가 없으면 그것은 진짜 `missing` 이다.★
     """
     cov = adj_close_coverage([ticker], engine=engine)
     if not cov.get("available"):
-        return STATE_MISSING
+        return None
     return cov["by_ticker"].get(str(ticker), STATE_MISSING)
 
 

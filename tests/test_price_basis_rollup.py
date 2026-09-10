@@ -232,3 +232,44 @@ def test_it_never_touches_the_database(monkeypatch):
     monkeypatch.setattr(PQ, "_fetch", _boom)
     b, a = _clean(3)
     assert basis_rollup(b, a)["state"] == "ok"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ★실행해 보고 발견한 것★ — 조회 실패가 "행이 없다" 로 둔갑하고 있었다
+#
+# 목업 백테스트를 실제로 돌려 응답을 눈으로 보니 진단이 이렇게 나왔다:
+#
+#     수정주가 아님(91종목) — 000100, 000270, … · 라벨 없음(91종목) — …
+#
+# **같은 91종목이 양쪽에 있었다.** `adj_status_of()` 가 커버리지 리포트를 얻지
+# 못했을 때 `missing`("`daily_prices` 에 행이 하나도 없습니다" 라는 **판단**)을
+# 돌려줬기 때문이다. DB 가 없는 실행에서 그것은 하지 않은 진술이고, 화면에는
+# "이 91종목은 수정주가가 아닙니다" 라는 **거짓 주장**으로 나갔다.
+#
+# ★미상 ≠ 0 · 미검증 ≠ 검증 · 미적재 ≠ 제공자 미지원★ 과 같은 부류다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_an_unavailable_report_is_not_a_missing_row_claim(monkeypatch):
+    """`adj_status_of` 는 조회 실패를 `missing` 으로 적지 않는다."""
+    import src.data.price_quality as PQ
+    monkeypatch.setattr(PQ, "adj_close_coverage",
+                        lambda *a, **k: {"available": False, "reason": "DB 없음"})
+    assert PQ.adj_status_of("005930") is None
+
+
+def test_a_real_absence_is_still_missing(monkeypatch):
+    """★짝★ 리포트를 얻었는데 그 티커가 없으면 그것은 진짜 `missing` 이다."""
+    import src.data.price_quality as PQ
+    monkeypatch.setattr(PQ, "adj_close_coverage",
+                        lambda *a, **k: {"available": True, "by_ticker": {}})
+    assert PQ.adj_status_of("005930") == STATE_MISSING
+
+
+def test_an_unreadable_run_is_unknown_not_degraded():
+    """DB 를 못 읽은 실행 전체는 `unknown` 이다 — ★결함을 관측한 것이 아니다.★"""
+    ts = [f"{i:06d}" for i in range(3)]
+    out = basis_rollup(dict.fromkeys(ts, None), dict.fromkeys(ts, None))
+    assert out["state"] == "unknown", out
+    assert out["adj_status"][STATE_MISSING] == 0, "조회 실패가 '행 없음' 으로 세어졌다"
+    assert out["adj_status"][ROLLUP_UNLABELED] == 3, out
+    assert out["unadjusted_tickers"] == [], "미상이 '수정주가 아님' 으로 주장됐다"
