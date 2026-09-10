@@ -242,22 +242,49 @@ def test_the_usage_is_derived_rather_than_written_by_hand(inject, monkeypatch):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# C10 ★as_of 는 흉내낼 수 없다★
+# C10 ★as_of 는 흉내낼 수 없다★ — U 에서 **거부의 대상이 바뀌었다**
+#
+# 예전 이 자리의 검사는 *"as_of 를 주면 뷰가 하나도 안 나온다"* 였고, 그때는
+# 그것이 옳았다 — 밑단에 빈티지 재무를 쓰는 길이 없었으므로 오늘 재무로 과거
+# 뷰를 만드는 것 말고는 방법이 없었고 그건 룩어헤드다.
+#
+# U 가 `dart_history.statement_as_of()`(V3 리더 위)를 배선하면서 그 전제가
+# 사라졌다. ★거부가 없어진 것이 아니라 **종목 단위**가 됐다★ — 빈티지가 없는
+# 종목은 여전히 `KIND_NO_VINTAGE` 이고, 오늘 재무로 조용히 대체되지 않는다.
+# 그 계약은 `tests/test_company_views_asof.py` 가 진짜 체인으로 건다.
+#
+# 여기서는 **이 파일의 관심사**만 남긴다: `as_of` 가 밑단으로 그대로 내려가는가
+# (내려가지 않으면 밑단이 오늘 재무를 쓰고, 그것이 정확히 예전의 룩어헤드다).
 # ══════════════════════════════════════════════════════════════════════════
-def test_asking_for_a_past_date_produces_no_views_at_all(inject):
-    """밑단에 빈티지 재무가 없다 — 오늘 재무로 과거 뷰를 만들면 룩어헤드다."""
-    inject({CODE: _dist(90_000, 100_000, 110_000)})
+def test_the_asof_is_handed_to_the_valuation_layer(monkeypatch):
+    """★as_of 가 밑단에 닿지 않으면 오늘 재무로 과거 뷰가 만들어진다★"""
+    seen: list = []
+    monkeypatch.setattr(
+        "src.engine.valuation.valuation_distribution.valuation_distribution_for",
+        lambda code, price, **kw: seen.append(kw.get("as_of"))
+        or _dist(90_000, 100_000, 110_000))
+    cv.company_views([CODE], {CODE: PRICE}, as_of="2024-01-02")
+    assert seen == ["2024-01-02"], seen
+
+
+def test_a_ticker_without_vintages_is_still_refused(monkeypatch):
+    """빈티지가 없으면 **그 종목만** 거부된다 — 오늘 재무로 대체하지 않는다."""
+    monkeypatch.setattr(
+        "src.engine.valuation.valuation_distribution.valuation_distribution_for",
+        lambda code, price, **kw: {"available": False,
+                                   "reason": "쓸 수 있는 재무 빈티지가 없습니다"})
     views, reasons = cv.company_views([CODE], {CODE: PRICE}, as_of="2024-01-02")
     assert views == []
     assert reasons[CODE]["kind"] == cv.KIND_NO_VINTAGE
     assert "빈티지" in reasons[CODE]["reason"]
 
 
-def test_without_as_of_the_same_input_does_produce_a_view(inject):
-    """★짝★ 항상 거부하는 구현을 배제한다."""
+def test_without_as_of_no_asof_is_handed_down(inject):
+    """★짝★ 오늘 경로가 as-of 로 새지 않는다."""
     inject({CODE: _dist(90_000, 100_000, 110_000)})
     views, reasons = cv.company_views([CODE], {CODE: PRICE})
     assert len(views) == 1 and reasons == {}
+    assert views[0]["as_of"] is None, views[0]
 
 
 # ══════════════════════════════════════════════════════════════════════════

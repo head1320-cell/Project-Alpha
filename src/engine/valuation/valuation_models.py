@@ -440,6 +440,31 @@ class ValuationEngine:
     def __init__(self, dart_client: DARTClient | None = None):
         self.dart = dart_client or DARTClient()
 
+    @staticmethod
+    def prepare_statement(fs, current_price: float, *,
+                          market_cap: float | None = None):
+        """수집된 `FinancialStatement` 를 **평가 입력으로** 손질한다.
+
+        ★이 구간을 복제하면 조용히 갈라진다★ — `load_statement` 의 독스트링이
+        이미 그 실수를 이름까지 적어 뒀고(*"같은 산수를 두 곳에 두면 반드시
+        갈라지고 갈라져도 타입 에러가 나지 않는다"*), U 에서 **실제로 겪었다**:
+        as-of 경로가 이 손질 없이 `fs` 를 넘겼더니 `eps`·`bps` 가 비어 정정 전/후
+        재무가 달라도 적정가가 **한 자리도 안 바뀌었다**(p50 이 양쪽 169.0).
+        단위 테스트는 분포 함수를 가짜로 바꿔 놓아 그 사실을 보지 못했고,
+        목업으로 **눈으로 돌려 본 뒤에야** 드러났다.
+
+        Args:
+            market_cap: 억원. DART 가 발행주식수를 안 줄 때 시총/주가로 도출한다.
+        """
+        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
+        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
+            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
+        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
+        if fs.capex is None and fs.investing_cf is not None:
+            fs.capex = abs(fs.investing_cf) * 0.5
+        fs.compute_ratios(current_price)
+        return fs
+
     def load_statement(
         self,
         stock_code: str,
@@ -498,14 +523,7 @@ class ValuationEngine:
                     "reason": ("DART 재무를 가져오지 못해 합성 재무로 폴백했고, "
                                "이 환경은 mock 을 허용하지 않습니다 — 계산하지 않습니다")}
 
-        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
-        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
-            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
-        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
-        if fs.capex is None and fs.investing_cf is not None:
-            fs.capex = abs(fs.investing_cf) * 0.5
-
-        fs.compute_ratios(current_price)
+        self.prepare_statement(fs, current_price, market_cap=market_cap)
         corp_info = self.dart.get_corp_info(corp_code)
         corp_name = corp_info.corp_name if corp_info else fs.corp_name
         return {"available": True, "fs": fs, "corp_name": corp_name,

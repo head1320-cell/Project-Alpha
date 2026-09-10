@@ -577,6 +577,83 @@ def history_as_of(ticker: str, as_of: str,
     return vintages_as_of(rows, day), None
 
 
+#: 행에서 `FinancialStatement` 로 옮기는 값 컬럼. ★`_FIELDS` 를 그대로 쓰지 않는다★
+#: — 저장 컬럼과 평가 입력이 같아야 할 이유가 없고, 늘어난 컬럼이 조용히 평가에
+#: 흘러드는 것을 막는다.
+_STATEMENT_FIELDS = ("revenue", "operating_profit", "net_income", "gross_profit",
+                     "total_assets", "total_liabilities", "total_equity",
+                     "current_assets", "current_liabilities", "operating_cf",
+                     "capex", "shares_outstanding", "dps")
+
+
+def statement_from_row(row: dict, *, bsns_year: str, reprt_code: str):
+    """적재된 재무 행 → `FinancialStatement`. ★변환기는 한 벌만 둔다★
+
+    `fundamentals_store._fs_from_history()` 안에만 있던 매핑을 올린 것이다.
+    as-of 경로가 같은 산수를 다시 쓰면 **두 벌이 갈라지고, 갈라져도 타입 에러가
+    나지 않는다** — `load_statement` 의 독스트링이 이름까지 적어 둔 실수다.
+
+    ★회계 항등식 보완은 날조가 아니다★ 자본=자산-부채(역방향도). DART 일부 공시가
+    자본총계 라인을 빠뜨려 팩터 전체가 탈락하던 것을 막는다. **추정이 아니라
+    정의**라 여기서 채워도 값이 지어지지 않는다.
+
+    Returns:
+        핵심값(매출·자산)이 **둘 다** 없으면 `None` — 빈 껍데기를 만들지 않는다
+        (상장 전 연도 등). `is_mock` 은 건드리지 않으므로 실데이터 판별을 통과한다.
+    """
+    from src.data.dart_client import FinancialStatement
+    if not row or (row.get("revenue") is None and row.get("total_assets") is None):
+        return None
+    fs = FinancialStatement(corp_code="", corp_name="",
+                            bsns_year=str(bsns_year), reprt_code=str(reprt_code))
+    for f in _STATEMENT_FIELDS:
+        v = row.get(f)
+        if v is not None:
+            setattr(fs, f, v)
+    if fs.total_equity is None and fs.total_assets is not None and fs.total_liabilities is not None:
+        fs.total_equity = fs.total_assets - fs.total_liabilities
+    if fs.total_liabilities is None and fs.total_assets is not None and fs.total_equity is not None:
+        fs.total_liabilities = fs.total_assets - fs.total_equity
+    return fs
+
+
+def statement_as_of(ticker: str, as_of: str, *, engine=None):
+    """그 시점 알 수 있던 **연간** 재무 하나 → `(fs, 사유)`.
+
+    `history_as_of()`(V3) 위에 얇게 얹는다 — 기간별 그 시점 최신 빈티지 중
+    **가장 최근 사업연도**의 연간 보고서를 고른다.
+
+    ★셋을 구별한다★ 처방이 전부 다르기 때문이다:
+
+        읽지 못했다      → DB·테이블을 고쳐라
+        빈티지가 없다    → 적재하라(`--vintages`) 또는 그 시점엔 아직 공시 전이다
+        연간이 없다      → 분기만 있다. ★분기를 연간인 척 쓰지 않는다★
+
+    ★`financials_history` 로 폴백하지 않는다★ 그 표는 정정이 원본을 덮은 "지금
+    값" 이라 as-of 를 답할 수 없다. 폴백하면 막으려던 룩어헤드가 PIT 라벨을 달고
+    되돌아온다 — `history_as_of` 가 세운 계약 그대로다.
+    """
+    rows, reason = history_as_of(ticker, as_of, engine=engine)
+    if rows is None:
+        return None, reason
+    if not rows:
+        return None, (f"{as_of} 시점에 쓸 수 있는 재무 **빈티지**가 없습니다 — "
+                      "그 시점엔 아직 공시 전이거나 빈티지가 적재되지 않았습니다"
+                      "(`dart_history --vintages`).")
+    annual = [r for r in rows if str(r.get("reprt")) == REPRT_ANNUAL]
+    if not annual:
+        return None, (f"{as_of} 시점에 **연간 보고서**(reprt_code={REPRT_ANNUAL}) "
+                      "빈티지가 없습니다 — 분기만 있습니다. 분기를 연간으로 "
+                      "환산해 쓰지 않습니다(누적 기준이라 왜곡됩니다).")
+    latest = max(annual, key=lambda r: (int(r["year"]), r["rcept_dt"], r["rcept_no"]))
+    fs = statement_from_row(latest, bsns_year=str(latest["year"]),
+                            reprt_code=str(latest["reprt"]))
+    if fs is None:
+        return None, (f"{as_of} 시점 최신 빈티지({latest['year']}년, "
+                      f"접수 {latest['rcept_dt']})에 매출·자산이 모두 없습니다.")
+    return fs, None
+
+
 def ensure_history_table(engine) -> None:
     from sqlalchemy import text
     with engine.begin() as conn:

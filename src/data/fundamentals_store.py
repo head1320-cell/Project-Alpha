@@ -203,34 +203,20 @@ class FundamentalsStore(DeterministicMockStore):
 
         재무시계열 적재분을 스크리너 펀더멘털 원천으로 재사용 → DART 쿼터 무소모로
         전종목 팩터 확보. 핵심값(매출·자산) 없으면 None(상장 전 연도 등)."""
+        # ★매핑은 `dart_history.statement_from_row` 한 벌만 있다★ 예전에는 이
+        # 함수 안에 필드 복사와 회계 항등식 보완이 직접 들어 있었고, as-of 경로가
+        # 같은 산수를 다시 쓰면 두 벌이 갈라졌을 것이다(U1 에서 올렸다).
+        # 그 매핑이 고친 결함도 함께 옮겨 갔다 — `capex` 가 `financials_history`
+        # 에 **있는데도** 복사되지 않아 `_real_raw_financials` 가 `revenue * 0.05`
+        # 로 지어내던 것.
         try:
-            from src.data.dart_client import FinancialStatement
-            from src.data.dart_history import history_snapshot
-            snap = history_snapshot(str(stock_code), str(year), "11011")
+            from src.data import dart_history as dh
+            snap = dh.history_snapshot(str(stock_code), str(year), "11011")
         except Exception:
             return None
-        if not snap or (snap.get("revenue") is None and snap.get("total_assets") is None):
-            return None
-        fs = FinancialStatement(corp_code="", corp_name="", bsns_year=str(year), reprt_code="11011")
-        # ★적재된 실측을 버리지 않는다★ `capex` 는 `financials_history` 에 컬럼이
-        # **있는데도** 여기서 복사되지 않아, DB 경로에서는 늘 미적재로 보였다.
-        # 그래서 `_real_raw_financials` 가 `investing_cf`(DB 경로에서 절대 안 채워짐)
-        # 를 보고 실패한 뒤 `revenue * 0.05` 로 지어냈다 — 실측이 있는데 조작을 쓴 것이다.
-        for f in ("revenue", "operating_profit", "net_income", "gross_profit",
-                  "total_assets", "total_liabilities", "total_equity",
-                  "current_assets", "current_liabilities", "operating_cf",
-                  "capex", "shares_outstanding", "dps"):
-            v = snap.get(f)
-            if v is not None:
-                setattr(fs, f, v)
-        # 회계 항등식으로 결측 보완(정확 — 날조 아님): 자본총계=자산총계-부채총계.
-        # DART 일부 공시가 자본총계 라인을 누락(자산·부채만) → 자본 결측만으로 팩터 전체가
-        # 탈락하던 것을 방지. 역방향(부채=자산-자본)도 동일.
-        if fs.total_equity is None and fs.total_assets is not None and fs.total_liabilities is not None:
-            fs.total_equity = fs.total_assets - fs.total_liabilities
-        if fs.total_liabilities is None and fs.total_assets is not None and fs.total_equity is not None:
-            fs.total_liabilities = fs.total_assets - fs.total_equity
-        return fs  # is_mock=False 유지 → 실데이터 판별 통과
+        # is_mock 은 건드리지 않는다 → 실데이터 판별 통과.
+        return dh.statement_from_row(snap or {}, bsns_year=str(year),
+                                     reprt_code="11011")
 
     def _market_snapshot(self, stock_code: str) -> dict:
         """실측 시총(억, KIS master)+최근 종가(원, daily_prices) — 주식수 파생·시총 단일화용.
