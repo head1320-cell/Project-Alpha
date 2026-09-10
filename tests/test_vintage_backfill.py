@@ -236,32 +236,37 @@ def test_the_newest_years_come_first(eng):
 def test_a_missing_probe_column_fails_loudly(eng, monkeypatch):
     """붙은 줄 알고 진행하면 최악의 경우 **매 실행 전량 재조회**가 된다.
 
-    ★처음 쓴 판은 통과하지 못했다 — 그리고 그것이 좋은 소식이었다★
-    컬럼을 지웠더니 `backfill_vintages` 가 부르는 `ensure_history_table()` 의
-    `ALTER` 가 **다시 붙여 놓았다**. 즉 정상 경로에서는 스스로 치유된다.
+    ★이 테스트는 두 번 겨냥을 고쳤다★
+    ① 처음엔 컬럼을 지우기만 했는데 `ensure_history_table()` 의 `ALTER` 가
+       **다시 붙여 놓아** 통과하지 못했다 — 정상 경로는 스스로 치유된다.
+    ② 그래서 마이그레이션을 no-op 으로 만들어 "삼켜져서 못 붙은" 상황을 흉내냈다.
+       W 가 그 `ALTER` 를 `schema_add_columns.add_columns()` 로 옮기면서 확인이
+       **그 안으로** 들어갔으므로, 이제는 그 헬퍼가 `False` 를 내는 상황
+       (권한·방언 문제로 진짜 못 붙는 경우)을 직접 만든다.
 
-    그러면 이 가드는 무엇을 막나 — `ensure_history_table` 의 `ALTER` 는
-    `except: pass` 로 **삼킨다**(`schema_add_columns.py:11-13` 이 적어 둔 함정).
-    권한·방언 문제로 붙지 **못했는데도** 조용히 지나간 경우가 이 가드의 대상이다.
-    그래서 그 상황을 직접 만든다: 마이그레이션이 아무 일도 하지 않게 한다.
+    ★가드가 막는 것은 여전히 같다★ — 컬럼 없이 진행해 흔적을 못 남기는 것.
     """
-    monkeypatch.setattr(dh, "ensure_history_table", lambda e: None)
-    with eng.begin() as conn:
-        conn.execute(text("ALTER TABLE financials_history "
-                          "RENAME COLUMN vintage_probe_at TO gone"))
+    monkeypatch.setattr("src.data.schema_add_columns.add_columns",
+                        lambda *a, **k: False)
     out = dh.backfill_vintages(engine=eng, client=_Client(default=_fs()))
     assert out.get("error"), out
     assert "vintage_probe_at" in (out.get("message") or ""), out
 
 
 def test_the_migration_heals_the_column_on_the_normal_path(eng):
-    """★위 가드가 정상 경로를 막지 않는다★ — 지워도 `ALTER` 가 다시 붙인다."""
+    """★위 가드가 정상 경로를 막지 않는다★ — 지워도 마이그레이션이 다시 붙인다."""
     with eng.begin() as conn:
         conn.execute(text("ALTER TABLE financials_history "
                           "RENAME COLUMN vintage_probe_at TO gone"))
-    assert not dh._has_probe_column(eng), "픽스처가 컬럼을 못 지웠다"
-    dh.ensure_history_table(eng)
-    assert dh._has_probe_column(eng), "마이그레이션이 컬럼을 되살리지 못했다"
+    ok = dh.ensure_history_table(eng)
+    assert ok[dh.PROBE_COLUMN] is True, "마이그레이션이 컬럼을 되살리지 못했다"
+
+
+def test_ensure_reports_each_column_by_name(eng):
+    """★어느 컬럼이 없는지 이름으로 안다★ — 통짜 bool 이면 고칠 곳을 모른다."""
+    ok = dh.ensure_history_table(eng)
+    assert set(ok) == {c for c, _ in dh._MIGRATE_COLUMNS}, ok
+    assert all(ok.values()), ok
 
 
 def test_the_column_check_is_not_vacuous(eng):

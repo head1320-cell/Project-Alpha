@@ -48,9 +48,10 @@ CREATE TABLE IF NOT EXISTS financials_history (
 #: ★`vintage_probe_at` 은 "시도했다" 이지 "빈티지가 없다" 가 아니다★
 #: 3단계(소급 백필)가 접수번호를 못 받은 기간을 다시 묻지 않으려고 남기는 흔적이다.
 #: 미상 ≠ 없음이므로 `--retry-probed` 로 언제든 다시 연다.
-#: ★아래 `ALTER` 는 예외를 삼킨다★ — 그래서 이 컬럼에 **의존하는** 경로는
-#: `_has_probe_column()` 으로 실제로 붙었는지 확인한다(`ensure_vintage_table` 과 같은 규율).
-_MIGRATE_COLUMNS = ("dps FLOAT", "vintage_probe_at VARCHAR(32)")
+#: ★붙었는지는 `schema_add_columns.add_columns` 가 확인해 준다★ — 예전에는 이
+#: 파일이 `ALTER` 를 직접 하고 삼켰기에 `_has_probe_column()` 이라는 **별도 가드**를
+#: 따로 둬야 했다(W 에서 그 워크어라운드를 없앴다).
+_MIGRATE_COLUMNS = (("dps", "FLOAT"), ("vintage_probe_at", "VARCHAR(32)"))
 
 #: 갭 질의가 의존하는 컬럼 이름 — 사유 문장이 이 이름을 그대로 말한다.
 PROBE_COLUMN = "vintage_probe_at"
@@ -227,24 +228,6 @@ def _upsert_vintage(engine, ticker: str, fs) -> bool:
     return True
 
 
-def _has_probe_column(engine) -> bool:
-    """`vintage_probe_at` 이 **실제로 쓸 수 있는지** 확인한다.
-
-    ★붙은 줄 알고 진행하면 최악이다★ — 갭 질의가 이 컬럼을 `WHERE` 에서 쓰므로,
-    없는데 있다고 믿으면 질의가 깨지거나(조용히 빈 목록 = 아무것도 안 채움)
-    조건이 빠져 **매 실행 전량 재조회**가 된다. 둘 다 조용하다.
-    `ensure_vintage_table()` 이 이미 같은 함정을 적어 두고 같은 방식으로 막는다.
-    """
-    from sqlalchemy import text
-    try:
-        with engine.connect() as conn:
-            conn.execute(text(
-                f"SELECT {PROBE_COLUMN} FROM financials_history LIMIT 1"))
-        return True
-    except Exception:  # noqa: BLE001
-        return False
-
-
 def mark_vintage_probed(engine, ticker: str, bsns_year: str,
                         reprt_code: str) -> bool:
     """이 기간을 **빈티지 목적으로 조회했다**고 기록한다.
@@ -326,12 +309,13 @@ def backfill_vintages(engine=None, client=None, max_calls: int | None = None,
     engine = _get_engine(engine)
     if engine is None:
         return {"error": True, "message": "DB engine 없음"}
-    ensure_history_table(engine)
+    cols_ok = ensure_history_table(engine)
     if not ensure_vintage_table(engine):
         return {"error": True, "message": f"{VINTAGE_TABLE} 를 쓸 수 없습니다"}
     # ★조용히 전량 재조회하지 않는다★ 컬럼이 없으면 흔적을 남길 수 없고,
-    # 그러면 접수번호 없는 기간을 매 실행 다시 묻게 된다.
-    if not _has_probe_column(engine):
+    # 그러면 접수번호 없는 기간을 매 실행 다시 묻게 된다. 붙었는지는
+    # `ensure_history_table` 이 **이미 확인해서** 돌려준다 — 여기서 다시 재지 않는다.
+    if not cols_ok.get(PROBE_COLUMN):
         return {"error": True,
                 "message": (f"`financials_history.{PROBE_COLUMN}` 컬럼이 없습니다 — "
                             "시도 흔적을 남길 수 없어 중단합니다(그대로 진행하면 "
@@ -654,16 +638,28 @@ def statement_as_of(ticker: str, as_of: str, *, engine=None):
     return fs, None
 
 
-def ensure_history_table(engine) -> None:
+def ensure_history_table(engine) -> dict[str, bool]:
+    """테이블 + 후행 컬럼. ★컬럼별로 **실제로 쓸 수 있는지** 돌려준다★
+
+    예전에는 `ALTER` 를 직접 하고 예외를 삼킨 뒤 `None` 을 냈다 — 호출자는 붙었는지
+    알 방법이 없었고, `vintage_probe_at` 에 의존하는 `vintage_gap()` 때문에
+    `_has_probe_column()` 이라는 **별도 가드**를 따로 둬야 했다. 이제 확인은
+    `schema_add_columns.add_columns()` 한 곳에서 하고 그 결과를 그대로 넘긴다.
+
+    ★반환값을 무시해도 예전과 똑같이 동작한다★ — 기존 호출부는 그대로다.
+    """
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
-    for col in _MIGRATE_COLUMNS:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE financials_history ADD COLUMN {col}"))
-        except Exception:
-            pass  # 이미 존재 — 정상
+    from src.data.schema_add_columns import add_columns
+    ok = {c: add_columns(engine, "financials_history", [(c, ddl)],
+                         label="financials_history")
+          for c, ddl in _MIGRATE_COLUMNS}
+    missing = [c for c, good in ok.items() if not good]
+    if missing:
+        logger.warning("financials_history 컬럼을 쓸 수 없습니다: %s",
+                       ", ".join(missing))
+    return ok
 
 
 def upsert_statement(engine, ticker: str, fs) -> bool:

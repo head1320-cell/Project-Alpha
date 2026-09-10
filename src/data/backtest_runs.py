@@ -115,38 +115,22 @@ def _ensure(engine) -> None:
     # 하트비트 컬럼(후행 추가) — 이미 운영 중인 DB에는 테이블이 존재하므로 ALTER로 붙인다.
     # SQLite는 ADD COLUMN에 IF NOT EXISTS를 지원하지 않아 "이미 있음"도 예외로 오므로 삼킨다.
     # _COLS에는 넣지 않는다 — 넣으면 _row의 위치 인덱스가 전부 밀린다.
-    global _has_heartbeat
-    try:
-        with engine.begin() as c:
-            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN heartbeat_at DOUBLE PRECISION"))
-    except Exception:
-        pass
     # ★실제로 붙었는지 확인★ — 권한 등으로 ALTER가 실패했는데 이후 쿼리가 이 컬럼을
     # 참조하면 진행률 기록이 통째로 깨진다(수정 전보다 나쁨). 없으면 하트비트 기능만
     # 끄고 나머지는 그대로 동작시킨다(고아 정리는 created_at 폴백으로 계속 가능).
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SELECT heartbeat_at FROM {_TABLE} LIMIT 1"))
-        _has_heartbeat = True
-    except Exception as e:
-        _has_heartbeat = False
-        logger.warning(f"backtest_runs.heartbeat_at 사용 불가 — 하트비트 없이 동작: {e}")
+    # 붙이기+확인 두 단계는 `schema_add_columns.add_columns()` 가 한다 — 이 파일이
+    # 그 10줄을 **두 벌** 들고 있었고, 같은 산수를 복사하면 반드시 갈라진다.
+    from src.data.schema_add_columns import add_columns
+    global _has_heartbeat
+    _has_heartbeat = add_columns(engine, _TABLE,
+                                 [("heartbeat_at", "DOUBLE PRECISION")],
+                                 label="backtest_runs.heartbeat_at")
 
     # 텔레메트리 컬럼 — 12개 컬럼 대신 JSON 하나다. 항목이 늘 때마다 ALTER 를 하지
     # 않아도 되고, `_COLS` 를 건드리지 않아 `_row` 의 위치 인덱스가 안전하다.
     global _has_telemetry
-    try:
-        with engine.begin() as c:
-            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN telemetry TEXT"))
-    except Exception:
-        pass
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SELECT telemetry FROM {_TABLE} LIMIT 1"))
-        _has_telemetry = True
-    except Exception as e:
-        _has_telemetry = False
-        logger.warning(f"backtest_runs.telemetry 사용 불가 — 계측 없이 동작: {e}")
+    _has_telemetry = add_columns(engine, _TABLE, [("telemetry", "TEXT")],
+                                 label="backtest_runs.telemetry")
     _inited = True
 
 

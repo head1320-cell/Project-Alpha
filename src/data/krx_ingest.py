@@ -68,8 +68,12 @@ SOURCE_KIS = "kis"
 BASIS_RAW = "raw"
 BASIS_ADJUSTED = "adjusted"
 
-_MIGRATE_COLUMNS = ("mktcap FLOAT", "list_shares FLOAT", "source VARCHAR(8)",
-                    "price_basis VARCHAR(8)")
+#: 후행 추가 컬럼 `(이름, DDL)`. ★넷 다 `_UPSERT` 가 쓴다★ — 하나라도 못 붙으면
+#: 적재가 **전량** 실패하고, `source`·`price_basis` 는 `price_quality._fetch` 도
+#: 읽으므로 가격 품질 보고가 통째로 `unavailable` 이 된다(사유는 "daily_prices
+#: 조회 실패" 라는 엉뚱한 곳을 가리킨다). 그래서 **컬럼별로** 확인한다.
+_MIGRATE_COLUMNS = (("mktcap", "FLOAT"), ("list_shares", "FLOAT"),
+                    ("source", "VARCHAR(8)"), ("price_basis", "VARCHAR(8)"))
 
 _UPSERT = """
 INSERT INTO daily_prices
@@ -123,12 +127,17 @@ def ensure_table(engine) -> None:
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
-    for col in _MIGRATE_COLUMNS:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE daily_prices ADD COLUMN {col}"))
-        except Exception:
-            pass  # 이미 존재 — 정상
+    # ★붙였다고 믿지 않는다★ `add_columns` 가 붙이고 **실제로 쓸 수 있는지**
+    # 확인해 준다. 컬럼별로 부르는 것은 `company_snapshots` 의 선례다 — 통짜로
+    # 부르면 "넷 중 하나가 없다" 만 알고 **어느 것인지** 모른다.
+    from src.data.schema_add_columns import add_columns
+    missing = [c for c, ddl in _MIGRATE_COLUMNS
+               if not add_columns(engine, "daily_prices", [(c, ddl)],
+                                  label="daily_prices")]
+    if missing:
+        logger.warning("daily_prices 컬럼을 쓸 수 없습니다: %s — 적재(UPSERT)가 "
+                       "전량 실패하고 가격 품질 보고도 불가합니다. DB 권한·스키마를 "
+                       "확인하세요.", ", ".join(missing))
     for sql in _ENSURE_INDEXES:
         # ★컬럼 ALTER 와 달리 삼키지 않는다★ `IF NOT EXISTS` 라 "이미 있음" 은
         # 예외가 아니다 — 여기서 예외가 나면 **진짜 실패**이고, 조용히 넘기면
