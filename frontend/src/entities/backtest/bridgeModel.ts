@@ -184,6 +184,16 @@ export interface ScreenToBacktestResult {
     source: string;
     version: string;
     note: string;
+    /**
+     * 정의가 섞인 종목을 어떻게 다뤘나 (로드맵 4단계).
+     *
+     * ★`excluded.count > 0` 이어도 `state` 는 `ok` 가 되지 않는다★ — 위 개수는
+     * **제외 전에** 센 것이라 `mixed` 가 그대로 남아 있고, 그래야 한다.
+     * 30종목을 버린 실행에 "검증됨" 을 다는 것이 *동등 품질로 위장*이다.
+     * `tickers` 는 표본(최대 5), 정확한 개수는 `count` 다.
+     */
+    policy: "exclude" | "pass_labeled";
+    excluded: { count: number; tickers: string[]; reason: string | null };
   } | null;
   /**
    * 유니버스가 **생존편향을 보정했는가**.
@@ -285,6 +295,12 @@ export interface ScreenToBacktestBody {
   custom_tickers?: string[] | null;
   filter_ast: FilterGroupNode;
   liquidity_floor: string;
+  /**
+   * 가격 정의가 섞인 종목 처리 — 생략하면 백엔드 기본값 `exclude` 다.
+   * ★기본이 제외인 이유★ 정의가 섞인 계열의 수익률은 정의가 섞인 수익률이고,
+   * 소스 경계의 점프 하나(누적 수정계수 전체)가 공분산·팩터 추정을 흔든다.
+   */
+  price_basis_policy?: "exclude" | "pass_labeled";
   max_tickers: number;
   sort_by?: string;
   sort_dir?: string;

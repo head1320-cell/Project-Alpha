@@ -123,7 +123,7 @@
 | `signal_path` | 엔진 | 신호가 벡터화였나 per-bar 폴백이었나 |
 | `macro_lookahead` | 엔진 (P4) | 매크로가 빈티지였나 현재 개정본이었나 |
 | `fundamentals_pit` | 엔진 (V4) | 재무 공시일이 실측 접수일이었나 정적 시차 추정이었나 |
-| `price_basis` | 엔진 (R2) | 가격 정의가 균일한가 — `price_quality.basis_rollup` |
+| `price_basis` | 엔진 (R2·S) | 가격 정의가 균일한가(`price_quality.basis_rollup`) + **섞였을 때 무엇을 했나**(`policy`·`excluded`) |
 | `universe` | 라우트 (R3) | 유니버스가 생존편향을 보정했나 |
 | `pit_evidence` | 라우트 (R4) | 위 넷을 모은 판정 — `src/engine/run_evidence.py` |
 
@@ -134,6 +134,17 @@
 `unknown`. 축마다 `ok`/`degraded`/`unknown` 을 남기고, ★못 잰 축은 절대 `ok` 로
 세지 않는다★. `price`·`universe` 는 **필수 축**이라 측정이 없어도 `unknown` 으로
 남는다 — 빠지면 "가격을 못 쟀다" 가 "가격은 문제없다" 로 둔갑한다.
+
+**정의가 섞인 종목의 처리** — 요청 필드 `price_basis_policy` (`exclude` 기본 ·
+`pass_labeled`). 제외는 `_absorb` 한 곳에서 일어나고(하류는 이미 전부
+`if ticker not in ohlcv_map: continue` 로 방어하므로 **로드 실패와 같은 경로**를
+탄다), 라벨은 ★제외 전에★ 센다 — 제외한 뒤에 세면 `mixed: 0` 이 되어 문제가
+없었던 것처럼 보인다. ★제외해도 가격 축은 `ok` 가 되지 않는다★: 두 정책 다
+`degraded` 이고 **사유가 다르다**(제외했다 vs 섞인 채 돌았다).
+
+★`price_quality.assert_prices_backtest_eligible()` 은 운영 호출부가 0개다★ —
+그 함수는 실행 **전체**를 `ForwardOnlyError`(→422)로 죽이는 계약이고, 위 정책은
+**티커 단위**라 다른 계약이다. 그래서 그대로 두었다.
 
 저장 컬럼 `backtest_runs.is_pit_verified` 는 이 판정에서 온다
 (`verified`→`True` · `partial`/`unverified`→`False` · `unknown`→`NULL`).
@@ -207,7 +218,7 @@
 |---|---|
 | 7-1 인덱스 | ★내가 **틀리게 적었다**★ — 있었고, DB 이력에 달려 있었다. **고쳤다** (`52c3415`) |
 | 7-2 합성값 누수 | ★불변식 위반이었고 **고쳤다**★ (`c93f33c`) |
-| 7-3 기업행위 이벤트 없음 | 기록만. 수집 설계가 필요 — **로드맵 2단계** |
+| 7-3 기업행위 이벤트 없음 | ★수집원 확인이 이 컨테이너에서 **차단**됐다★(두 호스트 403). 하네스만 남겼다 — **로드맵 2단계** |
 | 7-4 `daily_prices` 두 선언 | 컬럼·인덱스·`updated_at` 셋 다 갈렸다. **고쳤다** (`52c3415`) |
 | 7-5 진단이 화면에 못 갔다 | ★라우트가 키를 빠뜨려 **한 번도 실린 적이 없었다**★. **고쳤다** (`8c4e716`) |
 | 7-6 조회 실패 = "행 없음" | ★하지 않은 진술이 화면에 나갔다★. **고쳤다** |
@@ -292,6 +303,19 @@ python -m scripts.explain_hot_queries      # 실제 인덱스 + 실행계획 + 1
 
 `price_quality` 가 이 상태를 `not_rebuilt` / `no_return_data` 등으로 **보고는
 한다.** 없는 것은 **왜 그런지** 였고, 지금 여기 적혔다.
+
+#### ★재는 자리는 만들었다 — 답은 여전히 미상이다★ (2026-09-10)
+
+수집원 확인이 개발 컨테이너에서 **차단**됐다: `opendart.fss.or.kr` 과
+`data.krx.co.kr` 이 **둘 다** 이그레스 프록시 403(CONNECT tunnel failed)이고,
+공식 가이드 페이지도 `EGRESS_BLOCKED` 이며 `DART_API_KEY` 도 없다.
+★"못 받는다" 가 아니라 "여기서는 확인할 수 없다" 다★ — 둘을 섞으면 로드맵
+1단계의 A/B 설계를 근거 없이 고르게 된다.
+
+`scripts/probe_corp_actions.py` 가 그 확인을 **한 명령**으로 만든다. 성공 응답은
+`docs/evidence/dart/<endpoint>-<날짜>.json` 에 원본 그대로 저장되고, 그 파일이
+로드맵 2단계의 완료 판정("실호출 응답 한 건")을 만족시킨다. ★후보 엔드포인트
+이름은 스크립트에 없다★ — 가이드를 못 읽었으므로 적으면 추측이 사실처럼 남는다.
 
 ### 7-4. `daily_prices` 를 선언하는 곳이 둘이다 — ★셋이 갈렸다★ (고침 `52c3415`)
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -1359,6 +1359,13 @@ class ScreenToBacktestRequest(BaseModel):
     custom_tickers: list[str] | None = None  # 관심그룹 종목 직접 지정 (있으면 universe 무시)
     filter_ast: FilterGroupModel
     liquidity_floor: str = "standard"
+    # 가격 정의가 섞인(`price_basis == "mixed"`) 종목을 어떻게 다루나 (로드맵 4단계).
+    # ★기본은 제외★ — 정의가 섞인 계열의 수익률은 정의가 섞인 수익률이고, 소스
+    # 경계의 점프 하나(누적 수정계수 전체)가 공분산·팩터 추정을 흔든다.
+    # `pass_labeled` 는 예전 동작(그냥 통과)이지만 **그 선택이 결과에 남는다**.
+    # ★`Literal` 이라 오타는 422 로 거절된다★ — 조용히 관대한 기본값으로 떨어지면
+    # 사용자는 제외됐다고 믿은 채 섞인 계열로 채점한다.
+    price_basis_policy: Literal["exclude", "pass_labeled"] = "exclude"
     max_tickers: int = Field(default=10, ge=1, le=30)  # 백테스트할 상위 종목 수
     sort_by: str = "composite_score"
     sort_dir: str = "desc"                       # 매수 우선순위 1차 방향 (desc|asc)
@@ -1681,6 +1688,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             signal_lag=req.signal_lag,
             rebuy_block_days=req.rebuy_block_days,
             liquidate_at_end=req.liquidate_at_end,
+            price_basis_policy=req.price_basis_policy,
             buy_fill_offset_pct=req.buy_fill_offset_pct,
             sell_fill_offset_pct=req.sell_fill_offset_pct,
             max_buy_amount=req.max_buy_amount,

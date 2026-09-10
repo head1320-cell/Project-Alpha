@@ -55,9 +55,22 @@ def _refs(body: str, var: str) -> set[str]:
 # 가격 정의
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _price_meta() -> dict:
-    return basis_rollup({"000660": BASIS_UNIFORM_ADJUSTED},
-                        {"000660": STATE_ADJUSTED})
+def _price_meta(policy: str = "exclude", excluded: dict | None = None) -> dict:
+    """★실제 생산자를 부른다★ — 순수 함수가 아니라 엔진 래퍼다.
+
+    ★트립와이어가 실제로 잡은 것★ 처음에는 `basis_rollup()`(순수 함수)을 직접
+    불렀다. 그런데 백엔드가 응답에 싣는 `price_basis` 는 그 위에 정책·제외를
+    더하는 `_price_basis_meta()` 가 만든다. 화면이 `pb.policy`·`pb.excluded` 를
+    읽기 시작하자 이 검사가 **"백엔드가 안 보내는 키" 라고 실패했다** — 실제로는
+    보내는데 **검사가 다른 함수를 보고 있었다.**
+
+    ★계약 테스트가 실제로 나가는 payload 를 보지 않으면 그 자체가 거짓말이다.★
+    """
+    from src.kis_backtest_engine import _price_basis_meta
+    return _price_basis_meta(
+        {"basis": {"000660": BASIS_UNIFORM_ADJUSTED},
+         "adj": {"000660": STATE_ADJUSTED}},
+        policy, excluded or {})
 
 
 def test_the_price_lines_read_only_keys_the_backend_sends():
@@ -158,6 +171,20 @@ def test_the_result_body_reads_only_evidence_keys_the_backend_sends():
 
 def test_the_tripwire_notices_a_key_the_backend_does_not_send():
     assert {"state", "지어낸키"} - set(_price_meta()) == {"지어낸키"}
+
+
+def test_the_helper_uses_the_real_producer_not_the_pure_rollup():
+    """★이 검사가 다른 함수를 보고 있으면 계약이 거짓이 된다★
+
+    `basis_rollup()` 은 정책·제외를 모른다. 헬퍼가 그쪽으로 되돌아가면
+    `pb.policy`·`pb.excluded` 를 읽는 화면이 **검증되지 않은 채 초록**이 된다.
+    """
+    pure = set(basis_rollup({"000660": BASIS_UNIFORM_ADJUSTED},
+                            {"000660": STATE_ADJUSTED}))
+    real = set(_price_meta())
+    assert {"policy", "excluded"} <= real, real
+    assert {"policy", "excluded"}.isdisjoint(pure), (
+        "순수 롤업이 정책 키를 들기 시작했다 — 이 검사의 전제가 사라졌다")
 
 
 def test_the_body_slicer_does_not_swallow_the_next_function():

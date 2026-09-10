@@ -253,6 +253,21 @@ function priceHonesty(pb: ScreenToBacktestResult["price_basis"]): string[] {
   if (pb.state === "ok") {
     out.push(`가격 정의 — ${pb.tickers}종목 전부가 수정주가이고 정의가 균일합니다.`);
   }
+  // ★제외는 완화이지 해결이 아니다★ 그 사실을 함께 말한다.
+  // 0건이면 아무 말도 하지 않는다 — 안 뺀 것과 뺄 것이 없었던 것은 같다.
+  if (pb.excluded?.count > 0) {
+    out.push(
+      `가격 정의 정책 — ${pb.excluded.count}종목을 백테스트에서 **제외**했습니다` +
+      `${pb.excluded.tickers.length ? ` (예: ${pb.excluded.tickers.join(" · ")})` : ""}. ` +
+      `데이터가 고쳐진 것이 아니라 유니버스가 줄었습니다 — 위 혼합 개수는 ` +
+      `제외 전 기준이고, 그래서 이 실행은 "검증됨" 이 되지 않습니다.`,
+    );
+  } else if (pb.policy === "pass_labeled" && (pb.basis?.mixed ?? 0) > 0) {
+    out.push(
+      `가격 정의 정책 — 혼합 종목을 **그대로 쓰도록** 선택했습니다` +
+      `(price_basis_policy=pass_labeled). 위 점프가 수익률에 그대로 들어갑니다.`,
+    );
+  }
   return out;
 }
 

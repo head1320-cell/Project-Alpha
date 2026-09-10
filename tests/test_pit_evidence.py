@@ -231,3 +231,66 @@ def test_the_stored_flag_is_none_when_unknown():
     """★미상은 거짓이 아니다★ 컬럼이 3-값(NULL 포함)이라 그대로 쓸 수 있다."""
     assert is_pit_verified_flag(STATUS_UNKNOWN) is None
     assert is_pit_verified_flag(None) is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4단계 — ★제외했다고 검증된 것이 아니다★
+#
+# `price_basis_policy="exclude"` 는 정의가 섞인 티커를 백테스트에서 뺀다.
+# 그러면 **남은** 계열은 깨끗하다. 그래도 가격 축을 `ok` 로 올리지 않는다:
+#
+#   · 데이터가 고쳐진 것이 아니라 **유니버스가 줄었다**
+#   · 30종목을 조용히 버린 실행에 "검증됨" 배지를 다는 것이 CLAUDE.md 가
+#     금지한 *"동등 품질로 위장"* 이다
+#
+# 그래서 두 정책 다 `degraded` 이되 **사유가 다르다** — 고치는 사람이 무엇을
+# 해야 하는지가 다르기 때문이다(정책을 바꾼다 vs 데이터를 적재한다).
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _rollup(policy: str):
+    """엔진이 실제로 내는 모양 그대로 만든다 — 손으로 지어내지 않는다."""
+    from src.data.price_quality import (
+        BASIS_MIXED,
+        BASIS_UNIFORM_ADJUSTED,
+        STATE_ADJUSTED,
+    )
+    from src.kis_backtest_engine import _price_basis_meta
+    labels = {"basis": {"a": BASIS_UNIFORM_ADJUSTED, "b": BASIS_MIXED},
+              "adj": {"a": STATE_ADJUSTED, "b": STATE_ADJUSTED}}
+    excluded = {"b": "price_basis=mixed"} if policy == "exclude" else {}
+    return _price_basis_meta(labels, policy, excluded)
+
+
+def test_excluding_does_not_promote_the_price_axis_to_ok():
+    out = pit_evidence(price_basis=_rollup("exclude"), universe=CORRECTED,
+                       macro_lookahead=None, fundamentals_pit=None)
+    assert out["axes"]["price"]["state"] == AXIS_DEGRADED, out["axes"]["price"]
+    assert out["status"] != STATUS_VERIFIED, out["status"]
+
+
+def test_the_two_policies_give_different_reasons():
+    """★사유가 같으면 무엇을 고쳐야 할지 알 수 없다★"""
+    excluded = pit_evidence(price_basis=_rollup("exclude"), universe=CORRECTED,
+                            macro_lookahead=None, fundamentals_pit=None)
+    passed = pit_evidence(price_basis=_rollup("pass_labeled"), universe=CORRECTED,
+                          macro_lookahead=None, fundamentals_pit=None)
+    a = excluded["axes"]["price"]["reason"]
+    b = passed["axes"]["price"]["reason"]
+    assert a and b, (a, b)
+    assert a != b, "제외한 실행과 섞인 채 돈 실행의 사유가 같다"
+    assert "제외" in a, a
+    assert "제외" not in b, b
+
+
+def test_a_run_with_no_mixed_tickers_is_ok_under_either_policy():
+    """★짝★ 정책이 항상 강등시키는 구현을 배제한다."""
+    from src.data.price_quality import BASIS_UNIFORM_ADJUSTED, STATE_ADJUSTED
+    from src.kis_backtest_engine import _price_basis_meta
+    labels = {"basis": {"a": BASIS_UNIFORM_ADJUSTED},
+              "adj": {"a": STATE_ADJUSTED}}
+    for policy in ("exclude", "pass_labeled"):
+        meta = _price_basis_meta(labels, policy, {})
+        out = pit_evidence(price_basis=meta, universe=CORRECTED,
+                           macro_lookahead=None, fundamentals_pit=None)
+        assert out["axes"]["price"]["state"] == AXIS_OK, (policy, out["axes"]["price"])
+        assert out["status"] == STATUS_VERIFIED, (policy, out["status"])

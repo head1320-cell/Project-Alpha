@@ -103,6 +103,27 @@ def set_engine(engine):
 DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
                    "price_basis")
 
+# ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
+#: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
+#: 그 계열로 계산한 수익률은 정의가 섞인 수익률이다 — 소스 경계에서 계열이
+#: 점프하는데 그 점프는 기업행위가 아니라 **누적 수정계수 전체**라, 하루짜리
+#: 수십 % 이상치가 공분산·팩터 추정을 흔든다.
+#:
+#: ★예전에는 '그냥 통과' 가 사실상의 정책이었고 그것이 선택된 적이 없었다★ —
+#: `price_quality.assert_prices_backtest_eligible()` 은 운영 호출부가 0개였다.
+POLICY_EXCLUDE = "exclude"            # 그 티커를 백테스트에서 뺀다 (기본)
+POLICY_PASS_LABELED = "pass_labeled"  # 그대로 쓰되 결과에 라벨을 남긴다
+PRICE_BASIS_POLICIES = (POLICY_EXCLUDE, POLICY_PASS_LABELED)
+
+#: ★제외는 완화이지 해결이 아니다★ 사유가 그 말을 해야 한다 —
+#: 데이터가 고쳐진 것이 아니라 **유니버스가 줄었다**. 고치는 길은
+#: `krx_ingest.rebuild_adj_close()` 와 KRX 적재다.
+EXCLUDED_REASON = (
+    "가격 정의가 섞인 종목을 **제외하고** 돌았습니다 — 데이터가 고쳐진 것이 "
+    "아니라 유니버스가 줄었습니다. 원인(같은 `close` 에 두 정의가 들어간 것)은 "
+    "그대로이고, 고치려면 KRX 적재 후 `rebuild_adj_close()` 가 필요합니다."
+)
+
 
 def _signal_path_meta(counts: dict) -> dict:
     """신호가 **어느 경로로** 났는지 보고한다.
@@ -282,7 +303,8 @@ def _count_price_labels(basis_map: dict, adj_map: dict, tk: str, df) -> None:
     adj_map[tk] = attrs.get("adj_status")
 
 
-def _price_basis_meta(labels: dict | None) -> dict | None:
+def _price_basis_meta(labels: dict | None, policy: str = POLICY_EXCLUDE,
+                      excluded: dict | None = None) -> dict | None:
     """가격 정의 상태를 결과에 실을 모양으로. ★판정은 `price_quality` 가 한다★
 
     `_macro_lookahead_meta`·`_fundamentals_pit_meta` 와 같은 규율이다 —
@@ -296,10 +318,30 @@ def _price_basis_meta(labels: dict | None) -> dict | None:
         return None
     try:
         from src.data.price_quality import basis_rollup
-        return basis_rollup(labels.get("basis") or {}, labels.get("adj") or {})
+        out = basis_rollup(labels.get("basis") or {}, labels.get("adj") or {})
     except Exception:  # noqa: BLE001 — 라벨을 만들다 백테스트를 죽이지 않는다
         logger.exception("price_basis 롤업 실패")
         return None
+    if out is None:
+        return None
+
+    # ★제외했어도 위 롤업은 줄지 않는다★ 라벨은 제외 **전에** 세므로
+    # `mixed` 개수와 분모가 그대로다. 제외한 뒤에 세면 `mixed: 0` 이 되어
+    # **문제가 없었던 것처럼** 보인다.
+    names = sorted((excluded or {}).keys())
+    out["policy"] = policy
+    out["excluded"] = {
+        "count": len(names),
+        # 이름은 표본(위 `mixed_tickers` 와 같은 상한), 개수는 정확하다.
+        "tickers": names[:5],
+        "reason": EXCLUDED_REASON if names else None,
+    }
+    if names:
+        # ★사유가 정책마다 달라야 한다★ — `pit_evidence` 의 가격 축이 이 문장을
+        # 그대로 읽는다. 제외해도 축은 `degraded` 다(위 롤업이 mixed 를 세므로):
+        # 30종목을 조용히 버린 실행에 "검증됨" 을 다는 것이 **동등 품질로 위장**이다.
+        out["reason"] = " · ".join(x for x in (out.get("reason"), EXCLUDED_REASON) if x)
+    return out
 
 
 def load_ohlcv(
@@ -412,6 +454,11 @@ class BacktestConfig:
     expiry_fill_offset_pct: float = 0.0
     # 종목당 최대 매수 금액 (원). None=무제한
     max_buy_amount: float | None = None
+    # 가격 정의가 섞인(`price_basis == "mixed"`) 티커를 어떻게 다루나 (로드맵 4단계).
+    # 기본 `exclude` — 정의가 섞인 계열의 수익률은 정의가 섞인 수익률이고, 소스
+    # 경계의 점프 하나가 공분산·팩터 추정을 흔든다. `pass_labeled` 로 바꾸면
+    # 예전 동작(그냥 통과)이지만 **그 선택이 결과에 남는다**.
+    price_basis_policy: str = POLICY_EXCLUDE
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
     cash_reserve_pct: float = 0.0
     # 자산배분 ETF 바스켓 (젠포트 자산배분 옵션). None=미사용.
@@ -553,6 +600,14 @@ class BacktestEngine:
         if self.cfg.buy_sort_expr and hasattr(strategy, "set_priority_expr"):
             strategy.set_priority_expr(self.cfg.buy_sort_expr)
 
+        # ★모르는 정책을 관대하게 넘기지 않는다★ 오타 하나가 "그냥 통과" 로
+        # 조용히 떨어지면, 사용자는 제외됐다고 믿은 채 섞인 계열로 채점한다.
+        # 래더 검증과 같은 자리·같은 예외(ValueError → 라우트가 400).
+        if self.cfg.price_basis_policy not in PRICE_BASIS_POLICIES:
+            raise ValueError(
+                f"price_basis_policy: {self.cfg.price_basis_policy!r} 는 알 수 없는 "
+                f"값입니다 (가능: {', '.join(PRICE_BASIS_POLICIES)})")
+
         # 래더 검증 (비중 합 ≤100, 단계 ≤10)
         for name, ladder in (("buy_ladder", self.cfg.buy_ladder),
                              ("sell_ladder", self.cfg.sell_ladder)):
@@ -605,6 +660,9 @@ class BacktestEngine:
         _basis_labels: dict[str, str | None] = {}
         _adj_labels: dict[str, str | None] = {}
         self._price_labels = {"basis": _basis_labels, "adj": _adj_labels}
+        # 정책으로 뺀 티커 — ★이름으로 남긴다★ 개수만으로는 무엇이 빠졌는지 모른다.
+        _excluded: dict[str, str] = {}
+        self._price_excluded = _excluded
 
         def _absorb(tk: str, d):
             """메인 스레드에서만 호출 — ohlcv_map 갱신(딕셔너리 경쟁 없음)."""
@@ -613,6 +671,17 @@ class BacktestEngine:
                 _count_source(_src_counts, d)
                 _count_coverage(_cov_counts, d)
                 _count_price_labels(_basis_labels, _adj_labels, tk, d)
+                # ★센 다음에 뺀다★ 순서가 뒤집히면 보고에서 `mixed` 가 0 이 되어
+                # **문제가 없었던 것처럼** 보인다(제외 자체가 증거를 지운다).
+                #
+                # ★제외 지점이 여기 하나인 이유★ 하류는 이미 전부
+                # `if ticker not in ohlcv_map: continue` 로 방어한다 — 제외된
+                # 티커는 **로드에 실패한 티커와 같은 경로**를 타므로 새 분기가
+                # 늘지 않고, `replenishment_pool` 도 같은 `_absorb` 를 지난다.
+                if (self.cfg.price_basis_policy == POLICY_EXCLUDE
+                        and _basis_labels.get(tk) == "mixed"):
+                    _excluded[tk] = "price_basis=mixed"
+                    return
                 # ★안 쓰는 것에 42% 를 내지 않는다★
                 # 예전에는 여기서 모든 종목에 `_date_str` 을 즉시 붙였다. 그것은
                 # per-bar 폴백의 봉마다 `strftime` 을 없앤 정당한 최적화였지만,
@@ -671,6 +740,13 @@ class BacktestEngine:
         self.ohlcv_all = ohlcv_map   # per-bar 프레임 캐시가 원본으로 쓴다 (P1-3)
 
         if not ohlcv_map:
+            # ★조용히 죽지 않는다★ 데이터가 없어서인지 **정책이 다 뺐기 때문**인지
+            # 처방이 정반대다(적재하라 vs 정책을 바꾸거나 데이터를 고쳐라).
+            if _excluded:
+                return self._error_response(
+                    f"가격 정의가 섞여 {len(_excluded)}종목이 모두 제외됐습니다"
+                    f"(price_basis_policy={self.cfg.price_basis_policy}). "
+                    f"{EXCLUDED_REASON}")
             return self._error_response("No OHLCV data found in DB for given tickers/range")
 
         # 자산배분 ETF 바스켓 OHLCV 로드 (주식 슬리브와 분리)
@@ -2012,7 +2088,10 @@ class BacktestEngine:
             "fundamentals_pit": _fundamentals_pit_meta(getattr(self, "_fund_ctx", None)),
             # ★이 백테스트가 무슨 가격을 봤는가★ 원주가와 수정주가가 섞인 계열로
             # 계산한 수익률은 정의가 섞인 수익률이다 — 조용히 넘기면 아무도 모른다.
-            "price_basis": _price_basis_meta(getattr(self, "_price_labels", None)),
+            "price_basis": _price_basis_meta(
+                getattr(self, "_price_labels", None),
+                self.cfg.price_basis_policy,
+                getattr(self, "_price_excluded", None)),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -2333,6 +2412,7 @@ def run_backtest(
     buy_fill_offset_pct: float = 0.0,
     sell_fill_offset_pct: float = 0.0,
     max_buy_amount: float | None = None,
+    price_basis_policy: str = POLICY_EXCLUDE,
     cash_reserve_pct: float = 0.0,
     asset_alloc: dict | None = None,
     buy_sort_expr: str | None = None,
@@ -2411,6 +2491,7 @@ def run_backtest(
         buy_fill_offset_pct=buy_fill_offset_pct,
         sell_fill_offset_pct=sell_fill_offset_pct,
         max_buy_amount=max_buy_amount,
+        price_basis_policy=price_basis_policy,
         cash_reserve_pct=cash_reserve_pct,
         asset_alloc=asset_alloc,
         buy_sort_expr=buy_sort_expr,
