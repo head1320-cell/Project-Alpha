@@ -327,6 +327,44 @@ def _record_phase_seconds(tele: dict, marks: dict) -> None:
         tele["sim_s"] = round(end - sim, 3)
 
 
+#: 결과의 진단 키 → 텔레메트리에 실을 **필드**. ★손으로 세지 않는다★
+#:
+#: 사유 원본(토큰별 사유·종목 목록·사유 히스토그램)은 결과에 그대로 있고,
+#: 여기에는 **수치만** 싣는다 — 텔레메트리 행을 부풀리지 않기 위해서다.
+_TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
+    "signal_path": ("vectorized", "per_bar", "failed", "vectorized_pct"),
+    "macro_lookahead": ("pit", "live", "blocked", "pit_pct"),
+    "fundamentals_pit": ("measured", "estimated", "unknown", "measured_pct"),
+    "price_basis": ("state", "uniform_adjusted_pct"),
+    "universe": ("survivorship", "effective", "fell_back"),
+}
+
+
+def _diagnostic_telemetry(result: dict | None) -> dict:
+    """결과의 진단을 텔레메트리 필드로 접는다. ★순수 함수★
+
+    ★없는 것에 키를 만들지 않는다★ 결과에 그 진단이 없거나 `None` 이면 여기에도
+    키가 생기지 않는다. `None` 을 넣으면 나중에 이 행을 읽는 사람이 "재봤더니
+    없더라" 로 읽는데, 그것은 하지 않은 진술이다 — `symbols_by_source` 가 이미
+    같은 규율이다(`.md` §30 의 cache hit rate 를 넣지 않은 이유와 같다).
+
+    ★모양이 다르면 추측하지 않는다★ dict 가 아니면 그냥 건너뛴다.
+    """
+    out: dict = {}
+    for key, fields in _TELEMETRY_FIELDS.items():
+        got = (result or {}).get(key)
+        if isinstance(got, dict):
+            out[key] = {f: got.get(f) for f in fields}
+    ev = (result or {}).get("pit_evidence")
+    if isinstance(ev, dict) and ev.get("status"):
+        # ★한 줄로 답하는 값★ — 축별 사유는 결과에 그대로 있다.
+        out["pit_status"] = ev["status"]
+        for name in ("broken_axes", "unknown_axes"):
+            if ev.get(name):
+                out[name] = list(ev[name])
+    return out
+
+
 def _finish_telemetry(run_id: str, tele: dict, meter: _QueryMeter,
                       t_start: float, cpu0: float) -> None:
     """실행 계측을 마무리해 DB 에 남긴다. 성공·실패·취소 모든 경로에서 부른다."""
@@ -460,23 +498,10 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         br.advance(run_id, "persisting_results", message="재현 가능한 결과 저장", progress=96)
         # ★왜 느렸는지 나중에 물을 수 있게 한다★ 벡터화/per-bar 폴백 비율은
         # 실행 시간을 5배까지 가르는데 지금까지 응답 어디에도 없었다.
-        sp = (result or {}).get("signal_path")
-        if isinstance(sp, dict):
-            tele["signal_path"] = dict(sp)
-        # ★매크로 룩어헤드도 같은 통로로★ 텔레메트리에만 남기고 화면은 결과에서 읽는다.
-        # 토큰별 사유는 길어서 텔레메트리에는 집계만 싣는다(원본은 결과에 그대로 있다).
-        ml = (result or {}).get("macro_lookahead")
-        if isinstance(ml, dict):
-            tele["macro_lookahead"] = {k: ml.get(k)
-                                       for k in ("pit", "live", "blocked", "pit_pct")}
-        # ★재무 공시일 출처도 같은 통로로★ 사유 히스토그램은 결과에 그대로 있고,
-        # 여기에는 집계만 싣는다. 단위는 **(종목, 기간)** 이다.
-        fp = (result or {}).get("fundamentals_pit")
-        if isinstance(fp, dict):
-            tele["fundamentals_pit"] = {
-                k: fp.get(k)
-                for k in ("measured", "estimated", "unknown", "measured_pct")
-            }
+        # ★진단 집계는 한 곳에서★ 예전에는 여기서 키를 하나씩 꺼냈는데, 정작
+        # 라우트가 그 키들을 응답에 넣지 않아 **한 번도 실린 적이 없었다**(R1).
+        # 손으로 세는 자리를 없애 같은 단선이 다시 생기지 않게 한다.
+        tele.update(_diagnostic_telemetry(result))
         ds = (result or {}).get("data_source") or {}
         is_mock = None
         if isinstance(ds, dict):
@@ -487,7 +512,14 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         if st and st["status"] == "cancelled":
             return
         _t = time.perf_counter()
-        r = br.set_result(run_id, result, is_mock_data=is_mock)
+        # ★`is_pit_verified` 컬럼이 드디어 쓰인다★ 지금까지 아무도 넘기지 않아
+        # 화면 배지가 모든 실행에서 "PIT 미검증" 이었다. ★미상은 거짓이 아니다★ —
+        # 컬럼이 NULL 을 받으므로 3-값을 그대로 보낸다.
+        from src.engine.run_evidence import is_pit_verified_flag
+        _ev = (result or {}).get("pit_evidence") or {}
+        r = br.set_result(run_id, result, is_mock_data=is_mock,
+                          is_pit_verified=is_pit_verified_flag(
+                              _ev.get("status") if isinstance(_ev, dict) else None))
         tele["persist_s"] = round(time.perf_counter() - _t, 3)
         if not r["ok"]:
             br.set_error(run_id, "persist_error", "결과 저장에 실패했습니다.")

@@ -112,6 +112,23 @@ def _detect_data_source(items: list) -> dict:
     }
 
 
+def _tactical_universe_meta(holdings: list) -> dict:
+    """택티컬 경로의 유니버스 라벨. ★없는 것을 지어내지 않는다★
+
+    이 경로는 스크리닝을 거치지 않고 전략이 든 ETF 슬리브를 그대로 돌린다 —
+    종목 유니버스라는 개념이 달라 생존편향 보정 여부를 **판정하지 않는다.**
+    그 사실이 `unknown` + 사유로 남는다(`corrected` 도 `not_corrected` 도 아니다).
+    """
+    from src.engine.universe_select import survivorship_of
+    value, reason = survivorship_of("tactical")
+    return {
+        "requested": "tactical", "effective": "tactical", "fell_back": False,
+        "survivorship": value, "asof_date": None, "reason": reason,
+        "tickers_screened": len(holdings),
+        "note": "택티컬 경로는 스크리닝을 거치지 않습니다.",
+    }
+
+
 # 싱글톤 (lazy)
 _SCREENER = None
 
@@ -1465,6 +1482,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
 
     try:
         from src.engine.filter_ast import parse_group
+        from src.engine.run_evidence import pit_evidence
         from src.kis_backtest_engine import DIAGNOSTIC_KEYS, run_backtest
 
         # 0) 택티컬/최적화 전략 충실 백테스트 — strategy_name="tactical:<sid>" → 동적 엔진 어댑터
@@ -1473,6 +1491,13 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             _emit({"phase": "simulating"})
             out = run_tactical_backtest(req.strategy_name.split(":", 1)[1], "kr",
                                         req.start_date, req.end_date, req.initial_capital)
+            # ★이 경로는 진단을 내지 않는다 — 그 사실을 지어내지 않고 그대로 적는다★
+            # 키를 아예 빼면 화면은 "매크로 룩어헤드 없음" 과 구별하지 못한다.
+            out.update({k: None for k in DIAGNOSTIC_KEYS})
+            out["universe"] = _tactical_universe_meta(out.get("screened_tickers") or [])
+            out["pit_evidence"] = pit_evidence(
+                price_basis=None, universe=out["universe"],
+                macro_lookahead=None, fundamentals_pit=None)
             _emit({"phase": "done"})
             return out
 
@@ -1496,25 +1521,42 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         # 편입된(상장폐지 포함) 종목이 오늘자 라이브 재무로 평가돼 "데이터 없음"으로 다시
         # 걸러지는 것을 방지(PIT 평가 경로, _evaluate_one_safe가 이 값으로 시점별 bsns_year를
         # 역산). 다른 유니버스 값은 기존처럼 None 그대로 — 일반 경로 무영향.
+        # ★유니버스 선택은 생존편향 보정 여부를 정한다 — 그 사실을 결과에 남긴다★
+        # `_uv_mode` 는 **요청**이고 `_uv_effective` 는 **실제로 돌린 것**이다.
+        # 둘이 다르면 그 자체가 폴백의 증거다(아래 `fell_back`).
         _asof_date_for_screener = None
+        _uv_fell_back = False
         if req.custom_tickers:
             _universe = req.custom_tickers
+            _uv_mode, _uv_effective = "custom_tickers", "custom_tickers"
         elif gran_tickers:
             _universe = gran_tickers
+            _uv_mode, _uv_effective = "granular", "granular"
         elif req.universe == "all_asof":
             # 시점 유니버스: 백테스트 시작일 당시 거래 종목 (KRX 백필 후 상폐 포함 — 생존편향 보정)
             from src.engine.universe_select import tickers_asof
             _asof = tickers_asof(req.start_date)
+            # ★폴백은 그대로 둔다 — 다만 더는 조용하지 않다★ 여기서 막으면 지금
+            # 도는 백테스트가 멈춘다. 폴백은 CLAUDE.md 의 4조건(의미가 알려짐 ·
+            # 라벨 · 동등 품질로 위장 불가 · 관측 가능)을 만족해야 허용된다 —
+            # 앞의 셋은 아래 `universe` 메타가, 넷째는 계약 테스트가 맡는다.
             _universe = _asof if _asof else "all_listed"  # 데이터 없으면 전종목→프리셋 폴백
+            _uv_fell_back = not _asof
+            _uv_mode = "all_asof"
+            _uv_effective = "all_asof" if _asof else "all_listed"
             _asof_date_for_screener = req.start_date
         elif req.universe == "top200_asof":
             # 시작일 당시 시총 상위 200 — KOSPI200 편입의 근사 재구성 (mktcap 시계열 필요)
             from src.engine.universe_select import top_mktcap_asof
             _asof = top_mktcap_asof(req.start_date, 200)
             _universe = _asof if _asof else "kospi200"
+            _uv_fell_back = not _asof
+            _uv_mode = "top200_asof"
+            _uv_effective = "top200_asof" if _asof else "kospi200"
             _asof_date_for_screener = req.start_date
         else:
             _universe = req.universe
+            _uv_mode, _uv_effective = "preset", str(req.universe)
         # 후보 풀 크기: "평가 종목 상한"(universe_eval_cap)이 스크리닝 후보 풀 크기를 조건식
         # 유무와 무관하게 항상 결정 (조건식 존재 여부로 게이팅하지 않음 — 근본 수정, 위 필드
         # 주석 참고).
@@ -1548,11 +1590,30 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         pool_tickers = ([it.stock_code for it in result.items[:pool_cap] if getattr(it, "stock_code", None)]
                         if req.replenishment_pool_cap > 0 else [])
 
+        # ★유니버스 라벨을 여기서 굳힌다★ 종목 수까지 있어야 규모를 함께 읽는다.
+        from src.engine.universe_select import survivorship_of
+        _uv_survivorship, _uv_reason = survivorship_of(_uv_mode, fell_back=_uv_fell_back)
+        _universe_meta = {
+            "requested": _uv_mode,
+            "effective": _uv_effective,
+            "fell_back": _uv_fell_back,
+            "survivorship": _uv_survivorship,
+            # 시점 유니버스가 아니면 기준일이라는 개념 자체가 없다 — 0 도 오늘도 아니다.
+            "asof_date": _asof_date_for_screener,
+            "reason": _uv_reason,
+            "tickers_screened": len(tickers),
+            "note": ("`corrected` 만이 그 시점 거래 종목을 실제로 세운 것입니다. "
+                     "`approximated` 는 시총 규칙 근사이고, `unknown` 은 보정 여부를 "
+                     "**알 수 없다**는 뜻이지 보정됐다는 뜻이 아닙니다."),
+        }
+
         if not tickers:
             return {
                 "error": True,
                 "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
                 "screened_count": 0,
+                # 유니버스가 텅 빈 이유가 폴백 때문일 수 있다 — 그 사실을 여기서도 낸다.
+                "universe": _universe_meta,
             }
         _emit({"phase": "screened", "count": len(tickers)})
 
@@ -1668,6 +1729,17 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             # 끊겨 있었다). 엔진이 안 낸 키는 `None` 으로 **명시**한다 — 프런트가
             # "키가 없다" 와 "값이 없다" 를 구별할 수 있어야 다음 단선도 보인다.
             **{k: bt.get(k) for k in DIAGNOSTIC_KEYS},
+            # ★유니버스가 생존편향을 보정했는가★ 엔진은 종목 목록만 받으므로
+            # 이 사실을 아는 것은 여기뿐이다.
+            "universe": _universe_meta,
+            # ★넷을 한 곳에서 읽는다★ — 로드맵 0단계의 완료 판정. 판정 규칙은
+            # `run_evidence` 에 있고 여기서는 축을 모아 넘기기만 한다.
+            "pit_evidence": pit_evidence(
+                price_basis=bt.get("price_basis"),
+                universe=_universe_meta,
+                macro_lookahead=bt.get("macro_lookahead"),
+                fundamentals_pit=bt.get("fundamentals_pit"),
+            ),
             "backtest_config": {
                 "strategy": eff_strategy,
                 "period": f"{req.start_date} ~ {req.end_date}",
