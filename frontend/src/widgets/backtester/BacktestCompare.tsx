@@ -14,6 +14,7 @@ import {
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
 import type { BacktestStatistics } from "@/entities/backtest/bridgeModel";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
+import { PerfLabel } from "@/shared/ui/PerfLabel";
 
 interface Row { k: keyof BacktestStatistics; label: string; suffix?: string; digits?: number; higherBetter: boolean }
 const CMP_METRICS: Row[] = [
@@ -78,6 +79,9 @@ export function BacktestCompare({ runId }: { runId: string }) {
           <div className="brun-crumb num">BACKTEST COMPARE · {runId}</div>
           <h1 className="brun-title">실행 비교</h1>
           <div className="brun-rmeta num">A: {a.strategy_name}</div>
+          {/* ★두 실행의 종류가 같다고 가정하지 않는다★ — 하나는 실데이터, 하나는
+              mock 일 수 있고 그때 Δ 는 전략 차이가 아니다(Z3). */}
+          <div className="brun-rmeta"><PerfLabel value={a.perf_label} scope="A" /></div>
         </div>
         <div className="brun-rhead-r">
           <button className="brun-btn" onClick={() => router.push(`/backtest/runs/${runId}/results`)}>← 결과로</button>
@@ -141,6 +145,10 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
 
       <section className="brun-card">
         <div className="brun-card-t">지표 델타 <span className="brun-note">Δ = B − A · 초록 = B 우위</span></div>
+        <div className="brun-cmp-labels">
+          <PerfLabel value={a.perf_label} scope="A" />
+          <PerfLabel value={b.perf_label} scope="B" />
+        </div>
         <div className="brun-tablewrap">
           <table className="brun-table brun-cmp">
             <thead><tr><th>지표</th><th>A</th><th>B</th><th>Δ</th></tr></thead>

@@ -14899,3 +14899,103 @@ a~j 중 **h**(체결 중복 사전확인 제거)가 24개 테스트를 전부 �
 
 **게이트** — ruff · 백엔드 **4,803 passed / 10 skipped**(직전 4,778 → +25).
 프런트는 건드리지 않았다.
+
+---
+
+## Z. 성과 숫자 옆에 ★"이 수치가 무엇인가"★ 를 적는다 (애드덤 합격기준 #3)
+
+**날짜** 2026-09-12 · **범위** 백엔드 9경로 + 프런트 공용 컴포넌트 1 + 부착 10화면 +
+트립와이어 · **수익률 계산은 한 자리도 바꾸지 않았다.**
+
+### 왜 — ★라벨을 프런트가 지어내면 장식이다★
+
+배지 관용구가 넷 있었는데(`brun-badge` 시점정합 · `tbt-prov` 데이터출처 ·
+`as-bt-badge` 데이터+OOS · `CockpitParts` 인라인 실행모드) **어느 것도 성과의 종류를
+말하지 않았다**. 그리고 "백테스트 페이지니까 BACKTEST" 는 사실이 아니라 **배치**다 —
+같은 컴포넌트를 다른 데이터로 재사용하는 순간 거짓말이 된다. 그래서 ★응답이 선언하고
+화면은 그린다★.
+
+### 무엇을
+
+- `src/domain/perf_kind.py` ★신규★ — `backtest`·`paper`·`shadow`·`ra_testbed`·`live`·
+  `unknown` 과 `backtest_label()`·`execution_label()`. ★두 축을 섞지 않는다★:
+  `kind`(무슨 **성과**) ⟂ `data_real`(무슨 **데이터**). 실데이터 백테스트도, mock
+  데이터 모의투자도 있다. 알아보지 못한 실행 모드는 `unknown` + **본 값**이고,
+  안전한 쪽(`paper`)으로도 기울지 않는다 — 기울면 다음 사람이 확인되지 않은 수치를
+  모의 성과로 읽는다.
+- **응답 9경로**가 `perf_label` 을 싣는다(기존 키 불변, 덧붙이기만):
+  `backtest/runs/{id}` · `screener/screen-to-backtest` · `allocation/analyze` ·
+  `allocation/backtest` · `multibacktest/{id}` · `multibacktest/{id}/attribution` ·
+  `multibacktest/counterfactual` · `macro/strategy/{sid}` · `live/daily-pnl`(★행별★).
+  ★열 번째를 붙였다가 되물렸다★ — `screener/advanced/run` 은 **스크리닝 결과**다.
+  한 시점의 횡단면 통과 종목이지 시뮬레이션이 아니어서 `backtest` 라벨은 **없는
+  사실**을 만든다. 계획표의 "screener_routes(백테스트)" 는 `screen-to-backtest` 를
+  가리킨 것이었고, 처음 배선할 때 옆 함수를 집었다. 데이터 축(`data_source`)은
+  그 응답에 원래 있었고 그대로 둔다.
+- `frontend/src/shared/ui/PerfLabel.tsx` ★신규★ + `.perf-label*` CSS(토큰만, 하드코딩
+  hex 0). ★기존 배지 넷은 한 글자도 건드리지 않았다★ — E2E 계약(ADR 001).
+- 부착 10화면 · `frontend/e2e/perf-label.spec.ts` ★신규★ ·
+  `tests/test_perf_label_contract.py` ★신규 트립와이어★.
+
+### ★측정이 계획을 세 번 뒤집었다★
+
+1. **`get_sync_engine` 이 아예 없었다**(Z2 중 발견). `stage11/12/13_routes` ·
+   `dag_runner` · `graph_runner` 등 **18개 import 사이트**가 존재하지 않는 이름을
+   부르고 있었다. 실측: `/daily-pnl` HTTP 500, `get_executor()` ImportError — ★스테이지
+   11/12/13 전 엔드포인트(실거래 포함)가 죽어 있었다★. `src/database.py` 에
+   `get_sync_engine()` 을 더하고 `tests/test_database_public_names.py` 로 못 박았다.
+2. **계획의 부착 목록 일곱이 모자랐다.** 트립와이어 검출기를 실제로 돌리자 **넷이 더**
+   나왔다 — `CustomBacktestRunner` · `ParameterOptimizer` · `StrategyModal` ·
+   `CompanyCockpit`. 앞의 셋은 붙였고 넷째는 ★전략 성과가 아니라 한 종목의 위험
+   지표★라 사유를 적어 허용했다. **손으로 셌으면 셋을 놓쳤다.**
+3. **`TearSheet`·`ParameterOptimizer` 는 지금 아무도 import 하지 않는다**(실측: 참조 0).
+   그래도 허용 목록에 넣지 않고 라벨을 붙였다 — 면제를 한 번 주면 다음 사람이 그
+   면제를 근거로 새 화면을 면제한다.
+
+### ★계획 문장에서 의도적으로 벗어난 곳★
+
+계획은 트립와이어가 "주석/**문자열**에만 나오는 표기는 위반이 아니다" 라고 적었다.
+그런데 이 저장소에서 지표 라벨은 **문자열 리터럴로 산다**
+(`{ key: "sharpe_ratio", label: "Sharpe" }`). 문자열을 빼면 검출기가 거의 장님이 된다.
+그래서 **주석만** 벗겼고, 그 선택을 짝 테스트 둘로 못 박았다(주석 전용 → 위반 아님 ·
+문자열 전용 → 위반 맞음).
+
+### 눈으로 — ★라벨이 없던 자리에 무엇이 있었나★
+
+```
+GET /api/v1/macro/strategy/permanent
+  총수익 76.3%  →  {"kind":"backtest","data_real":false}
+```
+로그는 그 76.3% 가 **모든 종목에서 `OHLCV mock fallback`** 을 탄 합성 곡선이었음을
+말한다. ★그 화면에는 아무 라벨도 없었다.★
+
+```
+POST /api/v1/allocation/analyze
+  Sharpe 0.89 · 최대낙폭 -11.58%  →  {"kind":"backtest","data_real":false}
+```
+
+### 변이 배터리 — a~i 전부 죽었다
+
+`data_real` 을 `None`→`False` 로 접기(a) · 알 수 없는 모드를 `paper` 로 기울이기(b) ·
+`kind` 를 `data_real` 에서 파생시키기(c) · 응답에서 `perf_label` 제거(d) · `/daily-pnl`
+NULL 모드를 `live` 로(e) · 허용 목록을 전체 허용으로(f) · 검출 정규식을 항상-빈-목록(g) ·
+주석 제거 단계 삭제(h) · ★프런트가 라벨 없을 때 `backtest` 를 그리기(i)★.
+
+### ★이 작업이 주장하지 않는 것★
+
+- **성과의 정확성을 말하지 않는다.** 라벨은 *무엇에서 나온 수치인가* 이지 *그 수치가
+  맞는가* 가 아니다.
+- **애드덤 #3 을 완전히 닫았다고 말하지 않는다.** 기존 배지 넷은 그대로여서 ★같은
+  화면에 축이 다른 배지가 둘 이상 보일 수 있다★. 허용 목록 8건도 남아 있다.
+- **페이퍼·실계좌 성과를 만든 것이 아니다.** `live_daily_pnl` 은 여전히 비어 있고,
+  `/daily-pnl` 라벨은 행이 생겼을 때를 위한 것이다.
+- **테스트베드 성과는 존재하지 않는다.** `ra_testbed` 는 어휘일 뿐 ★생산자가 없고★,
+  누가 만들면 `test_unused_vocabulary_has_no_producer` 가 빨개진다.
+- **`realism` 대시보드의 종류 축은 아직 제목에만 있다**(데이터 축은 헤더의
+  `Mock Data / Live Backend` 가 말한다). 허용 목록에 사유와 함께 남겼다.
+- **표본내/표본외는 다른 축이고 여기서 말하지 않는다** — `/analyze` 의 `summary` 는
+  최적화한 그 구간 위의 통계다.
+
+**게이트** — ruff · `tsc --noEmit` · `next build` · `eslint`/`lint:fsd` 0 errors ·
+백엔드 **4,853 passed / 10 skipped**(직전 4,803 → +50, 588초). E2E 는 서버 둘이 필요해
+이 컨테이너에서 돌리지 않았다 — CI 가 한다.

@@ -3,6 +3,8 @@
 
 import type { YieldCurvePoint } from "./api";
 
+import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
+
 export type { YieldCurvePoint };
 
 // YieldCurvePoint는 ./api 가 정본 (SSOT) — 중복 정의 제거
@@ -136,7 +138,9 @@ export interface PerfSummary {
 export interface StrategyDetail {
   id: string; name: string; family: string; signal: string; archetype: string; archetype_kr: string;
   holdings: TacticalHolding[]; profile: StrategyProfile; regime_fit: RegimeFit[];
-  perf: { curve: PerfPoint[]; summary: PerfSummary }; recent_return_12m: number | null;
+  /** `perf_label` = ★이 곡선이 무엇인가★ (Z3). 없으면 화면이 `unknown` 을 그린다. */
+  perf: { curve: PerfPoint[]; summary: PerfSummary; perf_label?: PerfLabelValue | null };
+  recent_return_12m: number | null;
   sources: { prices: boolean };
 }
 export interface StrategyAI { content: string; tokens: number; cost_krw: number; cached: boolean; error?: string | null }

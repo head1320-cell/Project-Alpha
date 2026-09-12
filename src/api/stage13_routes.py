@@ -23,6 +23,8 @@ import os
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.domain.perf_kind import execution_label
+
 router = APIRouter(prefix="/api/v1/live", tags=["live-trading"])
 
 
@@ -340,6 +342,14 @@ def live_daily_pnl(limit: int = Query(30, le=365)):
                 SELECT * FROM live_daily_pnl
                 ORDER BY trade_date DESC LIMIT :lim
             """), {"lim": limit}).fetchall()
-        return {"count": len(rows), "pnl_history": [dict(r._mapping) for r in rows]}
+        # ★행마다 다를 수 있다★ — 같은 표에 SHADOW/PAPER/LIVE 가 섞인다.
+        # `execution_mode` 가 비어 있으면 `unknown` 이다(어느 쪽으로도 기울지 않는다).
+        out = []
+        for r in rows:
+            row = dict(r._mapping)
+            row["perf_label"] = execution_label(
+                execution_mode=row.get("execution_mode")).to_dict()
+            out.append(row)
+        return {"count": len(out), "pnl_history": out}
     except Exception as e:
         raise HTTPException(500, str(e))

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Download, TrendingUp, TrendingDown, Shield, Activity } from "lucide-react";
 import { EquityChart, MonthlyHeatmap } from "./EquityChart";
 import type { BacktestResult } from "@/entities/backtest/chartModel";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 function fmt(v: number, pct = false, decimals = 2) {
   const s = v.toFixed(decimals);
@@ -33,9 +34,20 @@ function MetricCard({ label, value, trend, sub }: MetricCardProps) {
 interface Props {
   result: BacktestResult;
   strategyName?: string;
+  /**
+   * 응답이 실은 `perf_label`. ★`BacktestResult` 안에 두지 않고 밖에서 받는다★ —
+   * 이 컴포넌트는 결과 페이로드의 모양을 두 곳(`chartModel`·브릿지)에서 받는 자리에
+   * 있고, 라벨은 **응답 최상위**에 실린다.
+   *
+   * ★측정 기록★ — 이 티어시트는 **지금 아무 화면도 import 하지 않는다**(2026-09-12
+   * 실측: 저장소 전체에서 참조 0). 그래도 라벨을 붙여 두는 이유는, 다시 마운트되는
+   * 날 "라벨 없는 성과 화면" 으로 부활하지 않게 하기 위해서다. 허용 목록에 넣어
+   * 면제하면 다음 사람이 같은 면제를 근거로 새 화면을 면제한다.
+   */
+  perfLabel?: PerfLabelValue | null;
 }
 
-export function TearSheet({ result, strategyName }: Props) {
+export function TearSheet({ result, strategyName, perfLabel }: Props) {
   const [tradeTab, setTradeTab] = useState<"log" | "symbols">("log");
   const s = result.result.statistics;
   const trades  = result.result.trades ?? [];
@@ -57,6 +69,7 @@ export function TearSheet({ result, strategyName }: Props) {
       {/* ── 핵심 지표 4개 ── */}
       <div>
         <div className="label mb-2">핵심 성과 지표</div>
+        <div className="tsheet-perf"><PerfLabel value={perfLabel} /></div>
         <div className="grid grid-cols-4 gap-2">
           <MetricCard
             label="총 수익률"

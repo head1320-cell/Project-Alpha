@@ -61,10 +61,14 @@ def _decide(client, **kw) -> dict:
 ANALYZE_KEYS = {
     "cap_missing", "constraints_report", "correlation", "coverage", "enb", "ep",
     "error", "excluded", "flow", "frontier", "labels", "mc", "mes", "model",
-    "mu_engine", "names", "params", "points", "risk_contribution_optimized",
-    "risk_contributions", "risk_contributions_basis", "skipped_views", "summary",
+    "mu_engine", "names", "params", "perf_label", "points",
+    "risk_contribution_optimized", "risk_contributions",
+    "risk_contributions_basis", "skipped_views", "summary",
     "unknown_tickers", "views_applied", "weights",
 }
+#: ★`perf_label` 은 Z3 에서 **의도적으로** 늘린 키다★ — `summary` 의 Sharpe·MDD 를
+#: 그리는 화면(`MetricsTable`·`ResearchRunsPanel`)에 "이 수치가 무엇인가" 가 없었다.
+#: 이 골든이 그 추가를 잡아 준 것이 정상 동작이다. 기존 키는 하나도 바뀌지 않았다.
 #: ★요청했을 때만 키가 늘어난다★ — 라우트가 스스로 그렇게 적고 있다.
 ANALYZE_CONDITIONAL_EXTRA = {"conditional", "target_range"}
 ANALYZE_COMPANY_EXTRA = {"company_views"}

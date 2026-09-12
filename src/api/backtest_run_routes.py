@@ -26,6 +26,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import src.data.backtest_runs as br
+from src.domain.perf_kind import backtest_label
 
 logger = logging.getLogger("api.backtest_run")
 
@@ -637,6 +638,9 @@ def run_full(run_id: str):
         raise _store_unavailable(e, "full") from e
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
+    # ★응답이 스스로 종류를 말한다★ — 화면이 "백테스트 페이지니까" 로 추론하면
+    # 같은 컴포넌트를 다른 데이터로 재사용하는 순간 거짓말이 된다(Z2).
+    r["perf_label"] = backtest_label(is_mock_data=r.get("is_mock_data")).to_dict()
     return r
 
 

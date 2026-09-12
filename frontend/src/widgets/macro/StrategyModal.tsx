@@ -13,6 +13,7 @@ import { loadStrategyAI } from "@/entities/macro/data";
 import { HoldingsDonut, donutColor, SignalBadge, fmtPct } from "./cockpitParts";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
+import { PerfLabel } from "@/shared/ui/PerfLabel";
 const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
 function fitColor(f: number): string {
@@ -121,6 +122,9 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
                         <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#smPerf)" isAnimationActive={anim} />
                       </AreaChart>
                     </ResponsiveContainer>
+                    {/* ★이 총수익·CAGR 이 무엇인가★ — `/macro/strategy/{sid}` 가
+                        선언한다(Z3). 계획에 없던 화면이고 검출기가 찾아냈다. */}
+                    <div className="sm-perf-label"><PerfLabel value={detail.perf.perf_label} compact /></div>
                     <div className="sm-perf-stats">
                       {([["총수익", detail.perf.summary.total_return_pct], ["CAGR", detail.perf.summary.cagr_pct],
                          ["MDD", detail.perf.summary.mdd_pct], ["변동성", detail.perf.summary.vol_pct],

@@ -483,6 +483,8 @@ from src.api.allocation_pipeline import (  # noqa: F401
     build_belief,
     macro_gate_decision,
 )
+from src.data.mock_gate import mock_allowed
+from src.domain.perf_kind import backtest_label
 
 
 # ── /analyze ─────────────────────────────────────────────────────────────────
@@ -800,6 +802,10 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             "ep": opt.get("ep"),
             # 고정된 매크로 증거 — 없으면 `None` 이고, 그것이 "증거 없이 돌았다" 는 사실이다.
             "mes": mes_block,
+            # ★`summary` 는 과거 수익률 위의 시뮬레이션 통계다★ (`_series_stats`) —
+            # `MetricsTable`·`ResearchRunsPanel` 이 이 숫자를 그리면서 라벨이 없었다.
+            # 표본내/표본외는 **다른 축**이고 여기서 말하지 않는다(범위 밖).
+            "perf_label": backtest_label(is_mock_data=mock_allowed()).to_dict(),
         }
 
         # ★요청했을 때만 키가 늘어난다★ `conditional=False` 면 위 페이로드가 끝이고
@@ -827,7 +833,10 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                 inputs=req.model_dump(exclude={"record_run", "run_name"}),
                 outputs={"weights": payload["weights"], "flow": payload["flow"],
                          "summary": payload["summary"], "labels": payload["labels"],
-                         "views_applied": payload["views_applied"]},
+                         "views_applied": payload["views_applied"],
+                         # ★기록에도 종류를 남긴다★ — 이 커밋 이전에 기록된 런은
+                         # 이 키가 없고, 화면은 그것을 `unknown` 으로 그린다(사실이다).
+                         "perf_label": payload["perf_label"]},
                 # regime_snapshot_id 를 snapshot 에도 넣는다 — list_runs 는 inputs 를 제외하고
                 # snapshot 은 포함하므로(research_runs._row_to_dict, full=False), 여기 없으면
                 # 런 목록에서 스냅샷을 볼 수 없어 재열기 UI 가 성립하지 않는다.
@@ -898,6 +907,8 @@ def allocation_backtest(req: BacktestRequest):
             out["labels"] = _labels(names)
             out["coverage"] = coverage
             out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
+        # ★이 곡선이 무엇인지 응답이 말한다★ — mock 게이트가 유일한 데이터 판정 기준.
+        out["perf_label"] = backtest_label(is_mock_data=mock_allowed()).to_dict()
         return out
     except Exception:
         logger.exception("allocation backtest 실패")

@@ -1,5 +1,7 @@
 "use client";
 
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
+
 interface RegimeRow {
   regime: string;
   n_days: number;
@@ -16,6 +18,8 @@ interface RegimeRow {
 
 interface Props {
   rows: RegimeRow[];
+  /** `/multibacktest/{run_id}/attribution` 이 실은 `perf_label`. 없으면 `unknown`. */
+  perfLabel?: PerfLabelValue | null;
 }
 
 const REGIME_COLORS: Record<string, string> = {
@@ -32,7 +36,7 @@ const REGIME_LABELS: Record<string, string> = {
   DEFLATION:   "Deflation (성장↓ 인플↓)",
 };
 
-export default function RegimeAttributionTable({ rows }: Props) {
+export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
   if (!rows || rows.length === 0) {
     return (
       <div style={{
@@ -46,6 +50,8 @@ export default function RegimeAttributionTable({ rows }: Props) {
 
   return (
     <div style={{ overflowX: "auto" }}>
+      {/* ★국면별 알파도 시뮬레이션 위의 분해다★ — 라벨이 아예 없던 표다(Z3). */}
+      <div style={{ marginBottom: 8 }}><PerfLabel value={perfLabel} /></div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
         <thead>
           <tr style={{ borderBottom: "1px solid #1e2d4a" }}>

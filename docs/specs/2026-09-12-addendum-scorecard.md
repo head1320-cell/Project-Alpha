@@ -25,7 +25,7 @@
 |---|---|---|---|
 | 1 | paper trading 이 기본 실행 모드 | **통과** | 기본은 PAPER 보다 **더 안전한 `SHADOW`** — `order_executor.ExecutorState.mode`. 더해 `trading_engine.SafetyConfig.dry_run=True` · `kis_client` 팩터리 `KIS_IS_PAPER` 기본 `"1"` · `mock_gate.mock_allowed()` 기본 `"1"`. ★단 모드는 프로세스 로컬이라 재시작하면 `SHADOW` 로 되돌아간다★(영속 아님) |
 | 2 | 실제 브로커 주문이 호출되지 않는다 | **통과**(Y1 이후) | ★직전까지 미달이었다★ — `_execute_paper` 가 클라이언트를 확인하지 않아 `KIS_USE_MOCK=0`+`KIS_IS_PAPER=0` 이면 PAPER 가 실주문을 냈다. `execution/client_realism.py` + `tests/test_paper_mode_is_simulated.py` 가 막는다. LIVE 는 설계상 가능하되 확인 토큰 필요 |
-| 3 | 모든 성과에 상태 라벨 | ★**미달**★ | 종류 축(백테스트/페이퍼/실계좌)이 **공용 컴포넌트로 없다**. `BacktestResults` 는 PIT 배지, `TerminalBacktester` 는 실/Mock, `PolicyBacktest` 는 OOS — ★다른 축이다★. `StrategyComparison`·`BacktestCompare`·`TearSheet`·`ResearchRunsPanel`·`CounterfactualCompare` 는 라벨 없음. `backtest_runs` 에 모드 컬럼도 없다 → **P2** |
+| 3 | 모든 성과에 상태 라벨 | **부분**(Z 이후) | ★직전까지 미달이었다★ — 종류 축이 공용 컴포넌트로 없었다. 이제 `src/domain/perf_kind.py` 가 어휘를 갖고 **응답 9경로**가 `perf_label` 을 싣고 `shared/ui/PerfLabel.tsx` 가 그린다(부착 10화면 · 트립와이어 `tests/test_perf_label_contract.py`). ★`부분` 인 이유 둘★: ⑴ 기존 배지 넷(`brun-badge` PIT · `tbt-prov` 데이터 · `as-bt-badge` OOS · 인라인 모드)이 그대로라 **같은 화면에 축이 다른 배지가 둘 이상** 보일 수 있다. ⑵ 사유가 적힌 허용 목록 8건이 남아 있다(랜딩 데모 · 리얼리즘 둘 · 종목 위험지표 · 상태 제공자 · 기존 배지 셋) |
 | 4 | 백테스트가 PIT 제약 적용 | **부분** | `engine/run_evidence.py` 4축(price·universe·macro·fundamentals) · `data/pit_macro.accumulate_for_bars` · `dart_history` 빈티지. ★`signal_lag` 기본이 `0`★(`kis_backtest_engine:530`) — 같은 봉 신호·체결이 기본 |
 | 5 | look-ahead 검사 존재 | **통과** | 위 4축 + `AXIS_UNKNOWN` 이 ★통과가 아님★을 명시. `regime_probability` 가 평활 확률의 배분 사용을 거부. 단 **추정기 수준 누출**(전체표본 스케일링·윈저화)은 어느 축도 안 본다 — §4 |
 | 6 | 거래비용·슬리피지 반영 | **부분** | 반영은 된다. ★그런데 비용 모델이 넷이고 수수료 기본값이 10배 다르다★ — `kis_backtest_engine` `0.0015` vs `multi_strategy_backtest`·`realism_engine` `0.00015`. 단일 출처를 자처하는 `data/market_rules.py` 를 **어느 백테스트도 읽지 않는다**(세금·스프레드·호가단위·가격제한 전부 백테스트 미적용) |
@@ -37,7 +37,7 @@
 | 12 | kill switch 작동 | **부분** | 구조는 있고 `is_active()` 가 DB 실패 시 `True`(페일세이프). ★그런데 `auto_dd`·`auto_cb` 는 구조적으로 발동 불가★ — `live_daily_pnl` 에 쓰는 코드가 없어 드로다운이 항상 미상(P1 이 그 사실을 관측 가능하게 만들었다). `auto_api` 는 `api_failure_count` 를 아무도 안 채운다. `gradual` 청산은 ★1/5 만 팔고 멈춘다★ |
 | 13 | 테스트와 문서가 함께 생성 | **통과** | 저장소 관례 — 커밋마다 변이 배터리 + HISTORY + 스펙. 이 문서 자체가 그 예다 |
 
-**요약** — 통과 6 · 부분 4 · 미달 3. ★미달 셋(성과 라벨 · reason code · data lineage)은
+**요약** — 통과 6 · 부분 **5** · 미달 **2**(Z 이후. 직전: 통과 6 · 부분 4 · 미달 3). ★남은 미달 둘(reason code · data lineage)은
 전부 P2 가 집는다.★
 
 ---
@@ -70,7 +70,7 @@
 | FR-04 | "AI Quantec" 과 "Quantit" | 상호가 닮아 **다른 회사의 기능을 섞는다** | — | 매트릭스 §0-1 경고 + 한국어 상호를 1차 표기로 |
 | FR-05 | `SRC_VERIFIED` 0건 | 독자가 "4사가 불투명하다" 로 오독 | ★이 환경이 1차 출처를 못 연다★ | 매트릭스 §0-2 + §6 승급 대기 URL 목록 |
 | FR-06 | 회사 고유명 | 제품명이 내부 식별자로 굳는다 | — | 실측 0건 확인 + §7-2 중립 명칭 매핑 |
-| FR-07 | 성과 수치 | 백테스트 값이 실적으로 읽힌다 | 종류 라벨 부재(기준 #3) | 규칙 §3 의 4종 분리 + P2 에서 공용 라벨 |
+| FR-07 | 성과 수치 | 백테스트 값이 실적으로 읽힌다 | ★완화됨(Z)★ — 응답이 종류를 선언하고 화면이 그린다. 남은 위험은 허용 목록 8건과 축이 다른 배지의 공존 | 규칙 §3 의 4종 분리 + `perf_kind` 어휘 + 트립와이어 |
 
 ---
 
@@ -125,7 +125,7 @@
 ## 6. ★이 채점이 주장하지 않는 것★
 
 - **애드덤을 이행한 것이 아니다.** 채점했고, 안전 셋을 고쳤고, 나머지는 *어느 단계가
-  집는지*까지 적었다. 통과 6 · 부분 4 · 미달 3 은 **지금 상태**다.
+  집는지*까지 적었다. 통과 6 · 부분 5 · 미달 2 는 **지금 상태**다(Z 이후).
 - **`통과` 가 "투자에 쓸 수 있다" 는 뜻이 아니다.** 기준을 만족한다는 뜻이고,
   ★이 저장소는 경제적 가치 관문을 통과한 적이 없다★(CLAUDE.md §1).
 - **비용 모델을 고치지 않았다.** 10배 불일치는 ★측정된 채로 남는다★ — 어느 값이

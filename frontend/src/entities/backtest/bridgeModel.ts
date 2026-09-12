@@ -1,4 +1,5 @@
 import type { FilterGroupNode } from "@/shared/model/domain";
+import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 // 스크리너 → 백테스터 브릿지 모델 (백테스트 통계·거래·요청 페이로드).
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 
@@ -98,6 +99,12 @@ export interface ScreenToBacktestResult {
   };
   backtest_config: { strategy: string; period: string; initial_capital: number };
   data_source: { fundamentals: string; market_data: string; fully_real: boolean };
+  /**
+   * ★성과의 **종류**★ — `data_source` 와 **다른 축**이다(전자: 무슨 데이터,
+   * 후자: 무슨 성과). 서버가 `src/domain/perf_kind.py` 로 파생해 싣는다.
+   * 없으면 화면이 `unknown` 을 그린다 — ★화면이 종류를 추론하지 않는다★.
+   */
+  perf_label?: PerfLabelValue | null;
   /**
    * 매크로 토큰이 **어느 시점의 값으로** 평가됐는가.
    *

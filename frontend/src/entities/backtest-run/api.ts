@@ -8,6 +8,7 @@
  */
 
 import { API_BASE } from "@/shared/api/apiBase";
+import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 // 타입만 참조 — 런타임 결합 없음(빌드 시 소거). BacktestRun 은 백테스트 결과를 담는
 // 것이 본질이라 이 타입을 알아야 하고, 거대한 타입 클로저를 shared 로 끌어내리면
 // 커널이 잡동사니가 된다. @typescript-eslint 미설치로 규칙이 type-only 를 구분 못 해
@@ -48,6 +49,8 @@ export interface RunFull extends RunStatusLite {
   input_snapshot: Record<string, unknown> | null;
   parameter_snapshot: Record<string, unknown> | null;
   result: ScreenToBacktestResult | null;
+  /** ★실행 자체의 종류★ — `is_mock_data` 에서 서버가 파생한다(Z2). */
+  perf_label?: PerfLabelValue | null;
 }
 
 // HTTP 상태 코드를 실은 에러 — 로딩 페이지가 404(진짜 없음)와 5xx/네트워크(일시적, 재시도)를

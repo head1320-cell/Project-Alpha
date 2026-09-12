@@ -337,7 +337,8 @@ export default function MultiBacktestPage() {
               <Section title="Regime-Conditional Alpha"
                         icon={Activity}
                         subtitle="매크로 국면별 알파 분해">
-                <RegimeAttributionTable rows={attribution.regime_breakdown || []} />
+                <RegimeAttributionTable rows={attribution.regime_breakdown || []}
+                                        perfLabel={attribution.perf_label} />
               </Section>
             </>
           )}

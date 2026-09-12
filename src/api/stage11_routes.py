@@ -17,7 +17,20 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.domain.perf_kind import backtest_label
+
 router = APIRouter(prefix="/api/v1/multibacktest", tags=["multibacktest"])
+
+
+def _perf_label() -> dict:
+    """이 라우터가 내놓는 수치는 전부 **과거 데이터 위의 시뮬레이션**이다.
+
+    ★데이터 축은 mock 게이트가 유일한 판정 기준이다★ (`CLAUDE.md` §6) — 여기서
+    따로 추론하지 않는다. 세 엔드포인트(실행 조회 · 기여도 분해 · 카운터팩추얼)가
+    같은 파생을 쓰므로 한 군데에 둔다.
+    """
+    from src.data.mock_gate import mock_allowed
+    return backtest_label(is_mock_data=mock_allowed()).to_dict()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -107,6 +120,7 @@ def multibacktest_get(run_id: int):
         data = bt.load_run(run_id)
         if not data:
             raise HTTPException(404, f"Run {run_id} not found")
+        data["perf_label"] = _perf_label()
         return data
     except HTTPException:
         raise
@@ -141,6 +155,8 @@ def multibacktest_attribution(run_id: int, include_daily: bool = Query(False)):
         result = decomposer.decompose(run_id, include_daily=include_daily)
         if not result.get("available"):
             raise HTTPException(404, result.get("message", "Run not found"))
+        # 국면별 알파 표(`RegimeAttributionTable`)가 이 응답을 그린다 — 라벨이 없었다.
+        result["perf_label"] = _perf_label()
         return result
     except HTTPException:
         raise
@@ -187,7 +203,10 @@ def multibacktest_counterfactual(req: CounterfactualRequest):
             run_name="counterfactual",
         )
         analyzer = CounterfactualAnalyzer(get_sync_engine())
-        return analyzer.compare(base_config, req.scenarios)
+        out = analyzer.compare(base_config, req.scenarios)
+        # ★대안 시나리오도 시뮬레이션이다★ — "what-if" 는 종류를 바꾸지 않는다.
+        out["perf_label"] = _perf_label()
+        return out
     except Exception as e:
         raise HTTPException(500, str(e))
 

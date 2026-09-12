@@ -128,6 +128,18 @@ def get_engine():
     return _engine
 
 
+#: 동기 엔진의 다른 이름. ★18곳이 이 이름을 임포트하는데 정의가 없었다★ —
+#: `stage11`·`stage12`·`stage13`(실거래) 라우트와 `dag_runner`·`graph_runner` 가
+#: 전부 `try/except` 안에서 임포트해 `ImportError` 가 **HTTP 500 으로 조용히**
+#: 바뀌었고, 그래서 그 엔드포인트들이 통째로 죽어 있었다.
+#: 비동기 엔진은 `database_async` 가 맡으므로 "sync" 를 굳이 붙인 이름이 따로
+#: 필요했던 것이고, 여기가 그 자리다. `tests/test_database_public_names.py` 가
+#: 이제 **임포트되는 모든 이름이 실재하는지** 전수로 지킨다.
+def get_sync_engine():
+    """동기 SQLAlchemy 엔진 — `get_engine()` 과 같은 객체."""
+    return get_engine()
+
+
 def get_session_factory():
     if _SessionLocal is None:
         get_engine()

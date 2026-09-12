@@ -98,10 +98,21 @@ structural / synthetic_mechanism / real_forecast / real_economic
 | 실계좌 | 실제 자금 | — |
 
 - **한 화면에 두 종류를 이름 없이 함께 그리지 않는다.** 각 수치에 종류 라벨을 붙인다.
+  ★이 규칙은 이제 코드가 강제한다(Z)★ — 어휘는 `src/domain/perf_kind.py`, 응답 9경로가
+  `perf_label` 을 싣고, `frontend/src/shared/ui/PerfLabel.tsx` 가 그린다.
+  ★화면이 종류를 추론하지 않는다★ — 응답이 말하지 않으면 `unknown` + **왜 모르는지**이고,
+  "백테스트 페이지니까 백테스트" 로 기울지 않는다. 지표를 그리면서 라벨이 없는 위젯이
+  새로 생기면 `tests/test_perf_label_contract.py` 가 빨개진다(사유 있는 허용 목록 8건 예외).
+  ★섞이면 안 되는 축이 하나 더 있다★ — `kind`(무슨 **성과**)와 `data_real`(무슨 **데이터**)
+  는 독립이다. 실데이터 백테스트도, mock 데이터 페이퍼도 있다.
 - **과거 성과를 미래 수익으로 투사하는 UI 를 만들지 않는다.**
 - 이 저장소가 지금 낼 수 있는 것은 **백테스트뿐이다**. 페이퍼는 배선돼 있으나
   기록(`live_daily_pnl`)에 ★쓰는 코드가 없고★, 실계좌 성과는 존재하지 않는다
-  ([갭 분석](2026-09-12-ra-gap-analysis.md) §NAV).
+  ([갭 분석](2026-09-12-ra-gap-analysis.md) §NAV). 그리고 ★테스트베드 성과는
+  `ra_testbed` 라는 **어휘로만** 존재한다★ — 이 저장소는 제출한 적이 없고 그 값을
+  만드는 코드도 없다. 어휘에 둔 이유는 화면이 4종 분리를 *말할 수 있게* 하기
+  위해서이고, 누가 그 값을 만들기 시작하면
+  `tests/test_perf_label_wiring.py::test_unused_vocabulary_has_no_producer` 가 빨개진다.
 - CLAUDE.md §1 의 관문 사슬을 지운 것이 아니다 — ★이 저장소는 경제적 가치 관문을
   통과한 적이 없다.★ 제품 문서가 그 사실을 바꾸지 않는다.
 

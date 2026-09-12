@@ -5,6 +5,7 @@
  */
 
 import { API_BASE } from "@/shared/api/apiBase";
+import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,8 @@ export interface AnalyzeResult {
   // record_run=true 요청 시에만 존재 — null이면 DB 미가용(정직 보고)
   run_id?: string | null;
   run_recorded?: boolean;
+  /** ★이 수치가 무엇인가★ — 서버가 선언한다(Z3). 없으면 화면이 `unknown` 을 그린다. */
+  perf_label?: PerfLabelValue | null;
 }
 
 export interface PointRV { return_pct: number; volatility_pct: number }

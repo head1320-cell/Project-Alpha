@@ -17,6 +17,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.domain.perf_kind import backtest_label
 from src.observability.logging_config import get_logger
 
 logger = get_logger("api.screener")
@@ -605,6 +606,12 @@ def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
         "liquidity_gate":  liq_stats,
         "data_source":     _detect_data_source(result.items),
     }
+    # ★여기에 `perf_label` 을 붙였다가 되물렸다 (Z4 검토)★
+    # 이 응답은 **스크리닝 결과**다 — 한 시점의 횡단면 통과 종목이지 과거 데이터 위의
+    # 시뮬레이션이 아니다. `backtest` 라벨을 달면 "이 숫자는 시뮬레이션에서 나왔다" 는
+    # ★없는 사실★을 만든다. 계획표의 "screener_routes(백테스트)" 는
+    # `_screen_to_backtest_core` 를 가리킨 것이었고, 그쪽에는 붙어 있다.
+    # 데이터 축은 이 응답에 이미 `data_source` 로 있다(그건 다른 축이고 그대로 둔다).
     _RUN_ADVANCED_CACHE.set(cache_key, payload)
     return payload
 
@@ -1719,6 +1726,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
 
         # 3) 통합 응답
         _emit({"phase": "done"})
+        _ds = _detect_data_source(screened)
         return {
             "error": bt.get("error", False),
             "screened_tickers": [
@@ -1753,7 +1761,10 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
                 "period": f"{req.start_date} ~ {req.end_date}",
                 "initial_capital": req.initial_capital,
             },
-            "data_source": _detect_data_source(screened),
+            "data_source": _ds,
+            # ★이 화면들은 라벨이 아예 없었다★ — 전략 비교(StrategyComparison)가
+            # 이 응답을 그린다. `data_source` 는 **데이터 축**이고, 종류는 별개다.
+            "perf_label": backtest_label(is_mock_data=not _ds["fully_real"]).to_dict(),
         }
     except HTTPException:
         raise
