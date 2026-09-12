@@ -57,6 +57,100 @@ def _orphan_sweep_bg():
         _t.sleep(_ORPHAN_SWEEP_SEC)
 
 
+#: 리스크 감시 주기(초). 국면·잔고는 분 단위로 움직이므로 60초면 충분하고,
+#: 더 짧게 잡으면 브로커 조회 쿼터만 먹는다.
+_RISK_MONITOR_SEC = 60.0
+
+
+def _risk_monitor_bg():
+    """백그라운드(데몬): ★리스크를 주기적으로 재고 판정을 기록한다★ (P1-b)
+
+    ★왜 없었나★ — 탐지기(`kill_switch.should_auto_trigger`)·임계값·페일세이프는
+    전부 있었는데 **부르는 곳이 없었다**. 그 함수의 유일한 호출부는 클래스
+    docstring 의 예시였고, 주석은 *"모니터링 루프에서 호출"* 이라 적혀 있었다.
+    이 루프가 그 주석이 가리키던 자리다.
+
+    ★아무것도 막지 않는다★ — 기본은 재고·판정하고 **기록**하는 것까지다.
+    자동 발동은 `RISK_MONITOR_AUTOTRIGGER` 가 정확히 `"1"` 일 때만
+    (`risk_monitor.autotrigger_allowed()`).
+
+    ★죽지 않는다★ — 한 번의 예외로 끝나면 그 뒤로는 아무도 보지 않는다.
+    """
+    import logging
+    import time as _t
+    log = logging.getLogger("api.main")
+    last = None
+    while True:
+        try:
+            from src.database import get_engine
+            from src.execution.audit_trail import AuditTrail
+            from src.execution.kill_switch import KillSwitch
+            from src.execution.risk_monitor import run_once
+
+            engine = get_engine()
+            audit = AuditTrail(engine)
+            last = run_once(
+                kill_switch=KillSwitch(engine, audit),
+                audit=audit,
+                account_state=_monitor_account_state(),
+                regime_state=_monitor_regime_state(),
+                last=last,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:                  # noqa: BLE001
+            log.warning(f"리스크 감시 주기 실패(다음 주기에 재시도): {e}")
+        _t.sleep(_RISK_MONITOR_SEC)
+
+
+def _monitor_account_state() -> dict:
+    """감시용 계좌 상태. ★브로커가 없으면 0 이 아니라 `None` + 사유★
+
+    `OrderExecutor._fetch_account_state()` 는 브로커 클라이언트를 요구한다. 감시는
+    주문을 내지 않으므로 **실행기를 만들지 않고** 드로다운만 직접 읽는다 —
+    실행 경로를 우회하는 것이 아니라 **아예 들어가지 않는 것**이다.
+    """
+    from src.database import get_engine
+    from src.execution.drawdown import drawdown_from_history
+    dd = drawdown_from_history(get_engine())
+    return {
+        "equity_krw": None,
+        "current_drawdown_pct": dd.intraday_pct,
+        "cumulative_dd_pct": dd.cumulative_pct,
+        "drawdown_reason": dd.reason,
+    }
+
+
+def _monitor_regime_state() -> dict | None:
+    """감시용 국면 상태. ★못 읽으면 `None` — 0 으로 만들지 않는다.★
+
+    ★`systemic_risk_score` 를 싣지 않는다 — 지어낼 수 없기 때문이다.★
+
+    킬스위치의 `auto_risk` 는 `systemic_risk_score`(0~100)를 본다. 그런데 실측하면:
+
+      · 이 값의 생산자로 지목된 `src/engine/regime_model.MultiRegimeModel` 은
+        ★저장소에 존재하지 않는다★. `realism_engine._get_systemic_risk_pit` 와
+        `multi_strategy_backtest` 가 `try/except` 안에서 임포트해 ImportError 를
+        삼키므로, 그 경로는 **항상 `None`** 이다.
+      · `regime_analyzer.RegimeState` 가 드는 것은 `stress_score`(0~100)이고,
+        두 이름을 잇는 코드는 저장소 어디에도 없다.
+
+    둘이 같은 양인지 **확인된 적이 없다**. 파이프라인을 돌리려고 이름을 바꿔 끼우는
+    것은 CLAUDE.md §4 가 금지한 일이므로, 여기서는 국면 정보를 그대로 싣고
+    `systemic_risk_score` 는 **비워 둔다** → `auto_risk` 가 `unverified` 로 기록된다.
+    ★그 기록이 이 미상을 다음 사람에게 넘기는 방법이다.★
+    """
+    import logging
+    try:
+        from src.engine.regime_analyzer import get_regime_state
+        st = get_regime_state()
+        return {"regime": st.regime, "stress_score": st.stress_score,
+                "recommended_mode": st.recommended_mode}
+    except Exception as e:                      # noqa: BLE001
+        logging.getLogger("api.main").debug(f"국면 상태 조회 불가(미상으로 기록): {e}")
+        return None
+
+
 def _prewarm_real_data():
     """백그라운드(데몬 스레드): corp_code 맵 준비 + 기본 유니버스 팩터를 DB에 적재.
     이미 DB(factor_snapshot)에 적재돼 있으면 디스크/DB 캐시 히트로 빠르게 끝남."""
@@ -267,6 +361,14 @@ async def run_startup() -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"고아 스윕 데몬 기동 실패: {e}")
+
+    # 리스크 상시 감시 — ★관측만★(자동 발동은 RISK_MONITOR_AUTOTRIGGER=1 일 때만).
+    try:
+        import threading
+        threading.Thread(target=_risk_monitor_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"리스크 감시 데몬 기동 실패: {e}")
 
     # Initialize screener tables (legacy sync path)
     try:

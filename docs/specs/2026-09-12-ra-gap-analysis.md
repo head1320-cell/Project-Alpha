@@ -102,6 +102,29 @@ start_periodic_sync  기동 시퀀스에서 호출 ⇒ 없음. 수동 엔드포�
 > **요청이 들어올 때만** 한다. 사용자가 앱을 안 열면 아무도 보지 않는다.
 > ★부품이 아니라 배선이 빠진 것이므로, 이것은 비교적 싼 작업이다.★
 
+### ★고쳤다 — 그리고 고치다가 더 나쁜 것을 찾았다★ (2026-09-12, P1)
+
+배선은 `startup/lifecycle.py::_risk_monitor_bg()` 로 붙었고 판정은
+`execution/risk_monitor.py` 가 든다. ★그런데 배선 지점을 읽다가 이것이 나왔다★:
+
+`execution/order_executor.py::_fetch_account_state()` 가 드로다운 두 칸을
+**하드코딩 0** 으로 돌려주고 있었다(`# TODO: live monitor에서 계산`). 그 딕트를
+킬스위치(`auto_dd`·`auto_cb`)와 게이트웨이 ⑨ 서킷브레이커가 함께 읽으므로,
+★둘 다 구조적으로 발동할 수 없었다★. 예외 경로도 같은 0 이라 **조회 실패가 "손실
+0" 으로** 보였다.
+
+그 상태로 감시 데몬만 붙였다면 *"정상"* 을 기록하는, 아무것도 볼 수 없는 감시자가
+생겼을 것이다 — 없는 것보다 나쁘다. 그래서 순서를 바꿔 **미상을 미상으로**
+만드는 일(`execution/drawdown.py`)을 먼저 했다.
+
+그리고 `auto_risk` 도 같은 처지다: 그 입력(`systemic_risk_score`)의 생산자로
+지목된 `src/engine/regime_model.MultiRegimeModel` 이 ★저장소에 존재하지 않는다★
+(두 모듈이 `try/except` 안에서 임포트해 ImportError 를 삼킨다). `regime_analyzer`
+가 드는 것은 `stress_score` 이고 둘을 잇는 코드는 없다 — ★이름을 바꿔 끼우지 않고
+`unverified` 로 남겼다.★
+
+⇒ 판정은 `partial` 그대로다. **감시는 돌지만 볼 것이 아직 `unknown` 이다.**
+
 ---
 
 ## 4. 보유 포트폴리오 진단 — `partial` ★기계는 있는데 표면이 없다★

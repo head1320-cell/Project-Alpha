@@ -30,6 +30,8 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.execution.drawdown import REASON_FETCH_FAILED, drawdown_from_history
+
 logger = logging.getLogger(__name__)
 
 
@@ -447,20 +449,29 @@ class OrderExecutor:
                 for p in balance.get("positions", [])
             }
 
+            # ★드로다운은 재거나 모르거나다★ — 예전에는 0 을 박아 두어(TODO 주석과
+            # 함께) 킬스위치의 `auto_dd`/`auto_cb` 와 게이트웨이 ⑨ 서킷브레이커가
+            # **구조적으로 발동할 수 없었다**. 이제 못 재면 `None` + 사유다(P1-a).
+            dd = drawdown_from_history(self.engine)
             return {
                 "equity_krw":            balance.get("evaluated_total", 0),
                 "cash_krw":              balance.get("cash_krw", 0),
                 "positions":             positions,
                 "daily_turnover_krw":    daily_turnover,
-                "current_drawdown_pct":  0,    # TODO: live monitor에서 계산
-                "cumulative_dd_pct":     0,    # TODO: live monitor에서 계산
+                "current_drawdown_pct":  dd.intraday_pct,
+                "cumulative_dd_pct":     dd.cumulative_pct,
+                "drawdown_reason":       dd.reason,
             }
         except Exception as e:
             logger.error(f"Account state fetch 실패: {e}")
+            # ★조회 실패와 "잔고가 0" 은 다른 사실이다★ — 0 을 돌려주면 한도 검사가
+            # 전부 "여유 있음" 으로 읽히고, 실패가 **완전히 무음**이 된다.
             return {
-                "equity_krw": 0, "cash_krw": 0,
-                "positions": {}, "daily_turnover_krw": 0,
-                "current_drawdown_pct": 0, "cumulative_dd_pct": 0,
+                "equity_krw": None, "cash_krw": None,
+                "positions": {}, "daily_turnover_krw": None,
+                "current_drawdown_pct": None, "cumulative_dd_pct": None,
+                "drawdown_reason": f"{REASON_FETCH_FAILED}: {e}",
+                "state_reason": f"{REASON_FETCH_FAILED}: {e}",
             }
 
     def _insert_pending_order(self, client_order_id, signal, risk_result):

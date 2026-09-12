@@ -138,17 +138,25 @@ class KillSwitch:
         if self.is_active():
             return None  # 이미 발동된 상태
 
+        # ★미상을 0 으로 읽지 않는다★ — 예전에는 `_fetch_account_state` 가 드로다운을
+        # 하드코딩 0 으로 주어 1·2 가 **구조적으로 발동할 수 없었다**(P1-a).
+        # 못 본 항목은 건너뛰고, 무엇을 못 봤는지는 `unverified_checks()` 가 말한다.
+
         # 1. 누적 drawdown
-        cumul_dd = abs(account_state.get("cumulative_dd_pct", 0) or 0)
-        if cumul_dd >= self.config.auto_dd_threshold:
-            return ("auto_dd",
-                     f"누적 drawdown 한도 초과 ({cumul_dd:.1%} >= {self.config.auto_dd_threshold:.0%})")
+        raw_cumul = account_state.get("cumulative_dd_pct")
+        if raw_cumul is not None:
+            cumul_dd = abs(raw_cumul)
+            if cumul_dd >= self.config.auto_dd_threshold:
+                return ("auto_dd",
+                         f"누적 drawdown 한도 초과 ({cumul_dd:.1%} >= {self.config.auto_dd_threshold:.0%})")
 
         # 2. 일중 손실
-        intraday = abs(account_state.get("current_drawdown_pct", 0) or 0)
-        if intraday >= self.config.auto_intraday_loss:
-            return ("auto_cb",
-                     f"일중 손실 한도 초과 ({intraday:.1%} >= {self.config.auto_intraday_loss:.0%})")
+        raw_intraday = account_state.get("current_drawdown_pct")
+        if raw_intraday is not None:
+            intraday = abs(raw_intraday)
+            if intraday >= self.config.auto_intraday_loss:
+                return ("auto_cb",
+                         f"일중 손실 한도 초과 ({intraday:.1%} >= {self.config.auto_intraday_loss:.0%})")
 
         # 3. Systemic risk PANIC
         if regime_state:
@@ -164,6 +172,27 @@ class KillSwitch:
                      f"KIS API 연속 실패 ({api_failures}회)")
 
         return None
+
+    def unverified_checks(
+        self,
+        account_state: dict,
+        regime_state: dict | None = None,
+    ) -> tuple[str, ...]:
+        """★무엇을 보지 못했나★ — 발동하지 않은 것과 **못 본 것**은 다르다.
+
+        `should_auto_trigger()` 가 `None` 을 돌려줬을 때 그것이 *"한도 안에 있다"* 인지
+        *"잴 수 없었다"* 인지 구분할 방법이 없었다. 감시 루프가 "정상" 을 기록하려면
+        먼저 이것이 비어 있어야 한다.
+        """
+        out: list[str] = []
+        reason = account_state.get("drawdown_reason") or "unknown"
+        if account_state.get("cumulative_dd_pct") is None:
+            out.append(f"auto_dd: 누적 drawdown 미상 ({reason})")
+        if account_state.get("current_drawdown_pct") is None:
+            out.append(f"auto_cb: 일중 손실 미상 ({reason})")
+        if not regime_state or regime_state.get("systemic_risk_score") is None:
+            out.append("auto_risk: 국면 systemic_risk_score 미상")
+        return tuple(out)
 
     # ─────────────────────────────────────────────────────────────────────
     # 발동

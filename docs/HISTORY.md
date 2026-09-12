@@ -14719,3 +14719,92 @@ CORS 는 `"*"` + `allow_credentials=True`. `bcrypt`·`PyJWT` 는 requirements �
 
 **게이트** — ruff · 백엔드 **4,704 passed / 10 skipped**(변동 없음 — 코드를 안
 건드렸다). `git diff --stat -- src/ tests/ frontend/` 가 비어 있음을 확인했다.
+
+---
+
+## P1. 퀀트 코어 — ★감시를 켜기 전에, 감시가 볼 수 없다는 사실부터 보이게★
+
+RA 문서 묶음 다음으로 사용자가 **P1 퀀트 코어 전체**를 골랐다(원문 마스터 프롬프트의
+Phase 1 = *Signal Registry · Q-X Risk Monitor · Paper Engine*). 배선 지점을 읽다가
+★계획을 뒤집는 것★을 찾았고, 그래서 순서가 바뀌었다.
+
+### ★서킷브레이커 둘이 구조적으로 발동할 수 없었다★
+
+`execution/order_executor.py::_fetch_account_state()` 가 드로다운 두 칸을
+**하드코딩 0** 으로 돌려주고 있었다 — 주석은 `# TODO: live monitor에서 계산`.
+그 딕트를 **두 안전장치가 함께 읽는다**:
+
+| 소비자 | 무엇을 | 실제 동작 |
+|---|---|---|
+| `kill_switch.should_auto_trigger()` | `auto_dd`(누적 -10%) · `auto_cb`(일중 -5%) | ★영원히 `None`★ |
+| `risk_gateway._tier2_dynamic_checks()` ⑨ | 일중·누적 한도 | ★영원히 통과★ |
+
+예외 경로도 같은 0 이라 **조회 실패가 "손실 0" 으로** 보였다. R 작업에서
+`adj_status_of` 가 조회 실패를 `missing` 으로 보고하던 것과 같은 부류다.
+
+★그 상태로 감시 데몬만 붙였다면 최악이 됐다★ — 주기적으로 "정상" 을 기록하는,
+구조적으로 아무것도 볼 수 없는 감시자. 없는 것보다 나쁘다. 그래서 **미상을
+미상으로 만드는 일**(`execution/drawdown.py`)을 먼저 했다.
+
+### ★`systemic_risk_score` 는 생산자가 아예 없다★ (두 번째 발견)
+
+킬스위치의 세 번째 판정 `auto_risk` 는 `systemic_risk_score` 를 본다. 그런데:
+
+- 그 값의 생산자로 지목된 `src/engine/regime_model.MultiRegimeModel` 이
+  ★저장소에 존재하지 않는다★. `realism_engine` 과 `multi_strategy_backtest` 가
+  `try/except` 안에서 임포트해 **ImportError 를 삼킨다**.
+- `regime_analyzer.RegimeState` 가 드는 것은 `stress_score` 이고, 두 이름을 잇는
+  코드는 저장소 어디에도 없다.
+
+파이프라인을 돌리려고 이름을 바꿔 끼우면 **확인되지 않은 양으로 계좌가 청산될 수**
+있다. ★잇지 않고 `unverified` 로 남겼다★ — 그 기록이 이 미상을 다음 사람에게
+넘기는 방법이다(`test_the_producer_named_in_the_code_really_is_absent` 가 못 박는다).
+
+### ★고치다가 만든 뻔한 회귀를 잡았다★
+
+`equity_krw: 0` 을 `None` 으로 바꾸자 `risk_gateway` ⓶ 의 `equity * limit` 가
+**TypeError** 를 낸다. 예전에는 0 이 흘러 한도가 0 이 되면서 **우연히 거부**됐던 것이다
+— ★크래시는 거부가 아니다.★ 그래서 Tier1 맨 앞에 *"계좌 상태 미상이면 거부"* 를
+명시적으로 넣었다. 결과는 전과 같고(거부), 사유가 생겼을 뿐이다.
+
+### 한 것
+
+- `src/execution/drawdown.py` ★신규★ — 에쿼티 이력에서 (일중·누적) 드로다운.
+  ★못 재면 `None` + 사유★(`no_equity_history` · `no_positive_equity` · `fetch_failed: …`).
+- `risk_gateway` — 미상을 `checks_passed` 가 아니라 새 `checks_unverified` 에.
+  ★통과/차단 판정은 한 건도 바꾸지 않았다★(안전 판정 변경은 별도 승인 사항).
+- `kill_switch.unverified_checks()` ★신규★ — *"한도 안"* 과 *"못 봤다"* 를 구분.
+- `src/execution/risk_monitor.py` ★신규★ + `startup/lifecycle.py::_risk_monitor_bg()`
+  — ★관측만이 기본★. 자동 발동은 `RISK_MONITOR_AUTOTRIGGER` 가 **정확히 `"1"`**
+  일 때만(`mock_allowed()` 와 같은 엄격 비교). 같은 판정 반복은 기록하지 않는다.
+- `src/domain/signal_definition.py` ★신규★ — 다섯 카탈로그를 **덮는 뷰**.
+  값을 복사하지 않고 `owner_module` 로 가리킨다. 출처 하나가 죽어도 나머지를 내고
+  **죽었다는 사실을 `unavailable_sources` 에 남긴다**. 소비자는 `GET /api/v1/signals`.
+- `tests/test_risk_monitor_guard.py` ★신규★ — 감시 코드가 실행기를 만들지 않고 ·
+  `trigger()` 가 플래그 분기 안에만 있고 · `src/domain/` 이 저장·네트워크를 직접
+  쓰지 않는다. 셋 다 **테스트의 테스트**와 **주석 오탐 배제**를 붙였다.
+
+변이 11종(a~k)을 적용해 각각 죽는 테스트를 확인했다. `g`(env 비교를 느슨하게)는
+`"true"`·`"1 "`·`" 1"` 여섯 케이스를 한꺼번에 죽였고, `k`(감시자가 실행기를 생성)는
+가드가 잡았다.
+
+**눈으로** — 실 경로로 한 주기를 돌려 감사 기록을 읽었다:
+
+> `[WARN] unknown — 감시: 판정 불가 — auto_dd: 누적 drawdown 미상 (no_equity_history);`
+> `auto_cb: 일중 손실 미상 (no_equity_history); auto_risk: 국면 systemic_risk_score 미상`
+
+★*"정상"* 이 아니라 *"무엇을 못 봤는지"* 로 나온다 — 그것이 이 단계의 산출물이다.★
+
+### ★이 작업이 주장하지 않는 것★
+
+- **서킷브레이커를 고친 것이 아니다.** 여전히 드로다운을 **모른다**. 고치려면
+  에쿼티 이력(`live_daily_pnl`)에 **쓰는 코드**가 있어야 하고 그것은 브로커 연결을
+  요구한다 — P2 의 선두 항목으로 적었다.
+- **감시자가 무언가를 막지 않는다.** 기본은 관측·기록이고 자동 발동은 꺼져 있다.
+- **신호 카탈로그를 통합한 것이 아니다.** 덮는 뷰이고 원본 다섯은 그대로다.
+- **안전 판정을 바꾸지 않았다.** 라벨을 더했고, 유일한 판정 관련 변경(Tier1 미상
+  거부)은 ★기존 동작을 우연이 아니라 명시로 바꾼 것★이다.
+- **이 환경에서 실계좌·모의계좌를 검증한 것이 아니다.** 브로커가 없다.
+
+**게이트** — ruff · 백엔드 **4,778 passed / 10 skipped**(직전 4,704 → +74).
+프런트는 건드리지 않았다(`git status -- frontend/` 비어 있음).
