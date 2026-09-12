@@ -85,12 +85,22 @@ def get_executor():
 
 @router.post("/init-schema")
 def live_init_schema():
-    """live_* 5개 테이블 생성."""
+    """live_* 테이블 생성 + 체결 중복 방지 인덱스.
+
+    ★인덱스 결과를 삼키지 않는다★ — 기존 `live_fills` 에 같은 `kis_fill_id` 가
+    둘 이상이면 생성이 실패하고, 그 사실이 응답에 실린다(Y1-③).
+    """
     try:
         from src.database import get_sync_engine
-        from src.execution.live_schemas import init_live_trading_schema
-        n = init_live_trading_schema(get_sync_engine())
-        return {"status": "OK", "ddls_executed": n}
+        from src.execution.live_schemas import (
+            ensure_fill_dedup_index,
+            init_live_trading_schema,
+        )
+        engine = get_sync_engine()
+        n = init_live_trading_schema(engine)
+        dedup_ok, dedup_reason = ensure_fill_dedup_index(engine)
+        return {"status": "OK", "ddls_executed": n,
+                "fill_dedup_index": dedup_ok, "fill_dedup_reason": dedup_reason}
     except Exception as e:
         raise HTTPException(500, str(e))
 

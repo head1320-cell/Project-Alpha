@@ -170,6 +170,35 @@ LIVE_TRADING_SCHEMA_DDL = [
 ]
 
 
+#: 브로커 체결 재생을 막는 유일 인덱스. ★테이블 생성과 분리한다★ —
+#: 기존 DB 에 이미 중복 행이 있으면 생성이 **실패해야** 하고, 그 실패는
+#: 조용히 넘어가면 안 된다(`schema_add_columns` 가 세운 "검증하는 마이그레이션" 규율).
+FILL_DEDUP_INDEX = "ux_live_fills_kis_id"
+_FILL_DEDUP_DDL = (
+    f"CREATE UNIQUE INDEX IF NOT EXISTS {FILL_DEDUP_INDEX} "
+    "ON live_fills(kis_fill_id)"
+)
+
+
+def ensure_fill_dedup_index(engine) -> tuple[bool, str | None]:
+    """`(붙었는가, 사유)`. ★실패를 성공처럼 돌려주지 않는다.★
+
+    `kis_fill_id` 가 `NULL` 인 행은 UNIQUE 가 막지 않는다(SQLite·PostgreSQL 공통).
+    수동 체결 입력을 막지 않기 위해 의도한 것이고, 그만큼 ★수동 경로의 중복은
+    이 가드가 잡지 못한다★ — 지어낸 키로 채우지 않는다.
+    """
+    from sqlalchemy import text as _text
+    try:
+        with engine.begin() as conn:
+            conn.execute(_text(_FILL_DEDUP_DDL))
+        return True, None
+    except Exception as e:                               # noqa: BLE001
+        reason = (f"{FILL_DEDUP_INDEX} 생성 실패 — 기존 `live_fills` 에 같은 "
+                  f"`kis_fill_id` 가 둘 이상일 수 있습니다: {e}")
+        logger.error(reason)
+        return False, reason
+
+
 def init_live_trading_schema(engine) -> int:
     """5개 live_* 테이블 생성."""
     count = 0

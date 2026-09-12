@@ -14808,3 +14808,94 @@ Phase 1 = *Signal Registry · Q-X Risk Monitor · Paper Engine*). 배선 지점�
 
 **게이트** — ruff · 백엔드 **4,778 passed / 10 skipped**(직전 4,704 → +74).
 프런트는 건드리지 않았다(`git status -- frontend/` 비어 있음).
+
+---
+
+## Y. 애드덤을 ★채점했더니★ 돈이 나갈 수 있는 경로가 나왔다
+
+퍼플렉시티의 **MASTER PROMPT ADDENDUM**(사실성·퀀트 무결성·거버넌스·실행 안전)을
+P2 전에 반영하자는 요청. 애드덤은 문서 9개 · 도메인 객체 21개 · 실행모드 8개를
+요구한다. 읽기 전용 감사부터 돌렸고, ★상당수가 이미 있었다★ — 랜덤 K-fold 는
+저장소 전체에 0건(모든 분할이 시간순), walk-forward 가 중심 기법, look-ahead·생존편향은
+`run_evidence` 4축, 회사 고유명은 코드 식별자 0건.
+
+### ★그런데 감사가 안전 결함 셋을 찾았다★
+
+**① `ExecutionMode.PAPER` 가 모의를 보장하지 않았다.** `_execute_paper` 가 클라이언트를
+확인하지 않고 `place_order` 를 불렀다. 클라이언트는 셋 중 하나일 수 있다 — Mock ·
+KIS 모의투자 · ★KIS 실거래★. 즉 `KIS_USE_MOCK=0` + `KIS_IS_PAPER=0` 이면
+**PAPER 모드가 실주문을 냈다**. 모드 이름이 보장하는 것이 아무것도 없었던 것이다.
+
+**② 감사 기록이 실패해도 `audit_id` 를 돌려줬다.** INSERT 를 삼키고 미리 만든 id 를
+반환해서, DB 장애 중 낸 주문의 응답에 ★아무것도 가리키지 않는 감사 ID★ 가 실렸다 —
+감사 추적이 가장 필요한 순간에 거짓말을 한다.
+
+**③ `live_fills.kis_fill_id` 에 유일 제약이 없었다.** 브로커 재조회·재시도는 정상
+운영이므로 **재생은 일어난다**. 멱등이 아니면 `filled_quantity` 가 이중계산되고
+`avg_fill_price` 가 오염된다.
+
+### ★고치다가 네 번째가 드러났다★
+
+`_reject_order` 는 INSERT 만 했다. PAPER 가드가 **발주 직전**에 거부하자
+`client_order_id` UNIQUE 충돌이 났고, 그 예외를 빈 `except` 가 삼켜
+★DB 는 `PENDING`, 호출자는 `REJECTED`★ 가 됐다. 거부가 발주 이전 단계에서만
+일어나던 동안에는 드러나지 않던 결함이다. UPDATE-먼저로 고쳤다.
+
+### 한 것
+
+- `src/execution/client_realism.py` ★신규★ — `client_is_simulated()`.
+  ★판정 불가는 거부로 기운다★(미상은 통과가 아니다). `_execute_paper` 가 이것을 보고,
+  아니면 `paper_mode_real_client` 로 **주문을 내지 않는다**. ★`_execute_live` 는
+  건드리지 않았다★ — 거기에 가드를 더하면 실거래가 영영 막힌다(테스트가 못 박는다).
+- `audit_trail.log()` 반환형 `str | None` — 실패 시 `None` + ERROR. 편의 메서드 여섯도
+  같이. 호출부는 `_append_audit()` 로 `None` 을 목록에 넣지 않고 결과에 `audit_failed`.
+- `live_schemas.ensure_fill_dedup_index()` ★신규★ — `UNIQUE INDEX` 를 **테이블 생성과
+  분리**했다. 기존 중복이 있으면 **실패해야 하고 그 실패는 조용히 넘어가면 안 된다**.
+  `stage13_routes.live_init_schema` 응답에 결과가 실린다. `record_fill` 은 사전 확인 +
+  `IntegrityError` 로 멱등.
+- `_reject_order` 가 기존 행을 갱신한다(없으면 INSERT).
+- `docs/specs/2026-09-12-addendum-scorecard.md` ★신규★ — 애드덤 합격기준 13개 실측
+  (**통과 6 · 부분 4 · 미달 3**) · 문서 9개 주제 → 기존 문서 매핑 · Factuality Risk
+  Register 7건 · 퀀트/실행 평가.
+- 증거 매트릭스에 애드덤 §1.2 필드(`claim_id`·`source_type`·`publication_date`·
+  `confidence`·`current_status`·`implementation_decision`)를 **덧붙였다**. 등급은
+  `SRC_*` 유지 — ★`evidence_level`(근거의 종류)과 `confidence`(지지 정도)는 다른 축★.
+
+### ★고치지 않고 기록한 것★
+
+- **수수료 기본값 10배 불일치** — `kis_backtest_engine` `0.0015` vs 다전략·리얼리즘
+  `0.00015`. 단일 출처를 자처하는 `market_rules.py` 를 ★어느 백테스트도 읽지 않는다★
+  (세금·스프레드·호가단위·가격제한 전부 백테스트 미적용). 사용자 결정: **기록만**.
+  바꾸면 과거 모든 결과가 바뀌고, **어느 값이 맞는지 이 저장소가 잰 적이 없다**.
+- **모드 어휘 여섯 종** — "paper" 가 세 가지 뜻이다. 통합은 실거래 안전 영역이라
+  ★별도 승인 사항★. 지도만 그렸다(일곱 번째를 만들지 않는다).
+- **보강된 실행기가 기본 경로가 아니다** · **추정기 수준 누출을 보는 축이 없다**
+  (GARCH·DCC·Markov·GMM·DynamicFactor·GPD·Ledoit-Wolf 가 전체표본 적합).
+
+### 변이 배터리 — ★하나가 살아남았고, 그것이 사실을 알려 줬다★
+
+a~j 중 **h**(체결 중복 사전확인 제거)가 24개 테스트를 전부 통과했다. 인덱스가 있으면
+`IntegrityError` 경로가 가려 버리기 때문이다. ★즉 사전 확인은 **인덱스를 못 만든 DB**
+에서만 의미가 있는데, 그 경우가 현실의 degraded 상태다★(기존 중복 때문에 인덱스 생성이
+실패한 DB). 그 경우를 덮는 테스트를 더해 재조준했고, 그러자 h 가 죽었다.
+
+**눈으로** — `KIS_IS_PAPER=0` 을 흉내 낸 실클라이언트로 PAPER 주문을 시도했다:
+
+> `── 결과: REJECTED | paper_mode_real_client`
+> `── 브로커 호출 횟수: 0`
+> `── DB 상태: REJECTED | paper_mode_real_client`
+
+★이 변경 전에는 같은 조합이 조용히 실주문을 냈다.★
+
+### ★이 작업이 주장하지 않는 것★
+
+- **애드덤을 이행한 것이 아니다.** 채점했고 안전 셋을 고쳤다. 미달 셋(성과 라벨 ·
+  reason code · 주문까지의 계보)은 P2 가 집는다.
+- **PAPER 가 이제 안전하다고 말하지 않는다.** 한 경로를 막았을 뿐이고, ★인증이 없는 한
+  누구나 모드를 바꿀 수 있다★(P-1).
+- **비용 모델을 고치지 않았다.** 10배 불일치는 측정된 채로 남는다.
+- **규제 준수를 평가한 것이 아니다.** 코드에 무엇이 없는지를 셌을 뿐이다 —
+  업권·인가 판단은 이 저장소가 할 수 있는 일이 아니다.
+
+**게이트** — ruff · 백엔드 **4,803 passed / 10 skipped**(직전 4,778 → +25).
+프런트는 건드리지 않았다.

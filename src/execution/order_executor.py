@@ -30,6 +30,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.execution.client_realism import client_is_simulated
 from src.execution.drawdown import REASON_FETCH_FAILED, drawdown_from_history
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,18 @@ class ExecutorState:
 # ═══════════════════════════════════════════════════════════════════════════════
 # OrderExecutor
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _append_audit(audit_ids: list, audit_id) -> bool:
+    """감사 ID 를 목록에 넣는다. ★`None` 은 넣지 않는다★ — 반환값이 성공 여부.
+
+    `AuditTrail.log()` 는 기록 실패 시 `None` 을 준다(Y1-②). `None` 을 그대로
+    append 하면 "감사 ID 가 있다" 는 거짓 신호가 응답에 실린다.
+    """
+    if audit_id:
+        audit_ids.append(audit_id)
+        return True
+    return False
+
 
 class OrderExecutor:
     """
@@ -146,7 +159,7 @@ class OrderExecutor:
                       "order_type": signal.get("order_type"),
                       "mode": self.state.mode},
         )
-        audit_ids.append(sig_audit)
+        _append_audit(audit_ids, sig_audit)
 
         # ── 2. Kill switch 우선 확인 ─────────────────────────────────
         if self.kill_switch.is_active():
@@ -173,7 +186,7 @@ class OrderExecutor:
 
         risk_result = self.risk.check(signal, account_state, regime_state)
         risk_audit = self.audit.log_risk_decision(risk_result, signal)
-        audit_ids.append(risk_audit)
+        _append_audit(audit_ids, risk_audit)
 
         if not risk_result.approved:
             return self._reject_order(
@@ -225,7 +238,22 @@ class OrderExecutor:
         }
 
     def _execute_paper(self, client_order_id, signal, audit_ids) -> dict:
-        """PAPER: KIS 모의투자 또는 MockKISClient로 가상 거래."""
+        """PAPER: KIS 모의투자 또는 MockKISClient로 가상 거래.
+
+        ★모드 이름이 아니라 클라이언트가 판정 근거다★ — 예전에는 여기서 바로
+        `place_order` 를 불렀고, `KIS_USE_MOCK=0` + `KIS_IS_PAPER=0` 조합에서는
+        **PAPER 모드가 실주문을 냈다**(Y1-①). 판정 불가도 거부다.
+        """
+        simulated, why = client_is_simulated(self.kis)
+        if not simulated:
+            return self._reject_order(
+                client_order_id, signal,
+                reason="paper_mode_real_client",
+                message=(f"PAPER 모드인데 클라이언트가 모의가 아닙니다({why}) — "
+                         f"주문을 발송하지 않았습니다. 실거래는 LIVE 모드에서 "
+                         f"확인 토큰과 함께만 가능합니다."),
+                audit_ids=audit_ids,
+            )
         try:
             kis_resp = self.kis.place_order(
                 ticker=signal["ticker"], side=signal["side"],
@@ -237,11 +265,11 @@ class OrderExecutor:
             order_audit = self.audit.log_order_submitted(
                 client_order_id, signal, kis_resp,
             )
-            audit_ids.append(order_audit)
+            audit_ok = _append_audit(audit_ids, order_audit)
 
             self._update_order_submitted(client_order_id, kis_resp)
 
-            return {
+            out = {
                 "client_order_id": client_order_id,
                 "status":          "SUBMITTED",
                 "mode":            ExecutionMode.PAPER,
@@ -250,6 +278,10 @@ class OrderExecutor:
                 "audit_ids":       audit_ids,
                 "message":         "PAPER mode — KIS 모의투자 발주 완료",
             }
+            if not audit_ok:
+                # ★감사 기록이 없다는 사실을 응답이 말한다★
+                out["audit_failed"] = True
+            return out
         except Exception as e:
             return self._fail_order(
                 client_order_id, signal, str(e), audit_ids,
@@ -283,7 +315,7 @@ class OrderExecutor:
             order_audit = self.audit.log_order_submitted(
                 client_order_id, signal, kis_resp,
             )
-            audit_ids.append(order_audit)
+            _append_audit(audit_ids, order_audit)
 
             self._update_order_submitted(client_order_id, kis_resp)
 
@@ -523,8 +555,31 @@ class OrderExecutor:
 
     def _reject_order(self, client_order_id, signal, reason, message, audit_ids,
                        check_id=None):
+        """거부를 기록한다. ★행이 이미 있으면 갱신한다★
+
+        예전에는 INSERT 만 했다. 그래서 `_insert_pending_order` 뒤에 거부가 나면
+        `client_order_id` UNIQUE 충돌이 나고 그 예외를 아래 `except` 가 삼켜,
+        **DB 에는 `PENDING` 인데 호출자에게는 `REJECTED`** 가 돌아갔다. 거부가
+        발주 이전 단계에서만 일어나던 동안에는 드러나지 않던 결함이고, PAPER
+        가드(Y1-①)가 발주 직전에 거부하면서 드러났다.
+        """
         try:
             with self.engine.begin() as conn:
+                updated = conn.execute(text("""
+                    UPDATE live_orders
+                    SET status = 'REJECTED', reason_code = :rc, error_message = :em,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE client_order_id = :coid
+                """), {"coid": client_order_id, "rc": reason, "em": message}).rowcount
+                if updated:
+                    return {
+                        "client_order_id": client_order_id,
+                        "status":          "REJECTED",
+                        "mode":            self.state.mode,
+                        "reason":          reason,
+                        "message":         message,
+                        "audit_ids":       audit_ids,
+                    }
                 conn.execute(text("""
                     INSERT INTO live_orders (
                         client_order_id, strategy_id, execution_mode,
@@ -579,7 +634,7 @@ class OrderExecutor:
             context={"error": error},
             message=f"주문 실패: {error}",
         )
-        audit_ids.append(fail_audit)
+        _append_audit(audit_ids, fail_audit)
 
         return {
             "client_order_id": client_order_id,

@@ -172,3 +172,194 @@
   등급을 함께 옮긴다.
 - **없는 것을 "그 회사가 안 한다" 로 읽지 않는다.** `SRC_UNKNOWN` 은 **우리가
   모른다**는 뜻이다(CLAUDE.md §4, `미상 ≠ 0`).
+
+---
+
+## 7. ★필드 확장★ — 애드덤 §1.2 (덧붙임, 2026-09-12)
+
+> 원문 요구: [`../Project_Alpha_RA_Product_Master_Prompt.md`](../Project_Alpha_RA_Product_Master_Prompt.md) 의
+> **ADDENDUM** §1.2 · 채점: [`2026-09-12-addendum-scorecard.md`](2026-09-12-addendum-scorecard.md)
+>
+> ★위 §1~§6 을 고치지 않았다★ — 저장소 관례대로 **덧붙인다**. 등급 어휘도 그대로
+> `SRC_*` 다(애드덤은 `PUBLICLY_VERIFIED` 를 쓰지만, CLAUDE.md §2 가 새 어휘 생성을
+> 금하고 `E0~E5`·`L0~L3` 과 섞일 위험이 있어 접두사로 격리한 결정을 유지한다).
+
+### 7-0. ★두 축을 섞지 않는다★
+
+| 축 | 무엇을 재나 | 값 |
+|---|---|---|
+| `evidence_level` | **근거의 종류** — 1차 출처를 열었나, 요약만 봤나, 없나 | `SRC_VERIFIED` · `SRC_INFERRED` · `SRC_UNKNOWN` |
+| `confidence` | **그 근거가 주장을 얼마나 지지하나** — 여러 출처가 일치하나, 하나뿐인가 | `HIGH` · `MEDIUM` · `LOW` |
+
+★둘은 독립이다.★ 보도 여러 건이 일치하면 `SRC_INFERRED` + `HIGH` 일 수 있고,
+공식 페이지 한 줄이 애매하면 `SRC_VERIFIED` + `LOW` 일 수 있다. 그리고 이 둘은
+**우리 데이터 계보**(`E0~E5`)도 **모델 역량**(`L0~L3`, 방향 반대)도 아니다.
+
+### 7-1. 주장별 레코드
+
+★이 환경에서 `SRC_VERIFIED` 는 0건이다★(§0-2: `WebFetch` 전 도메인 차단).
+아래 `accessed_at` 은 전부 검색 요약을 본 날이다.
+
+```yaml
+- claim_id: SQ-01
+  company: 솔루션퀀트
+  claim: 투자자문업·투자일임업을 영위하며 2021-06-23 설립
+  source_url: https://www.saramin.co.kr/zf_user/company-info/view/csn/Y252bWhTTCtKRjFmRUhDQVhvVDllUT09
+  source_title: (주)솔루션퀀트 기업정보
+  source_type: third_party_blog        # 채용 플랫폼의 기업 DB — 1차가 아니다
+  publication_date: unknown
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED
+  confidence: MEDIUM
+  current_status: UNCLEAR              # 등록 상태는 변할 수 있다
+  implementation_decision: DO_NOT_IMPLEMENT   # 우리 인가 상태와 무관
+  notes: 금융위·금감원 등록 원부로 확인해야 CURRENT 로 올릴 수 있다
+
+- claim_id: SQ-02
+  company: 솔루션퀀트
+  claim: 편입 10종목 제한 · 업스트림 80% 집중 · 1위 25% / 차순위 3개 각 15%
+  source_url: https://www.blog.solutionquant.com/etf-221103/
+  source_title: 솔루션퀀트 ETF가 특별한 이유
+  source_type: official_company        # 회사 공식 블로그
+  publication_date: 2022-11-03         # URL 슬러그 기준(본문 미확인)
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED
+  confidence: MEDIUM
+  current_status: HISTORICAL           # 2022년 지수 설계에 대한 서술
+  implementation_decision: GENERALIZE  # ★집중을 규칙으로 명시한다는 발상만★
+  notes: 우리 쪽은 `Constraints.group_caps_pct` 로 이미 표현 가능. 수치를 베끼지 않는다
+
+- claim_id: QT-01
+  company: 콴텍 (AI QUANTEC)
+  claim: NH투자증권과 AI 어드바이저 솔루션 구독 계약, 비대면 투자상담에 접목
+  source_url: https://zdnet.co.kr/view/?no=20260521110105
+  source_title: 콴텍, NH투자증권과 'AI 어드바이저 솔루션' 공급 계약
+  source_type: press
+  publication_date: 2026-05-21
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED
+  confidence: HIGH                     # 복수 매체가 같은 내용을 보도
+  current_status: CURRENT
+  implementation_decision: GENERALIZE  # B2B 어댑터는 P4, 인가 확인 후
+  notes: 계약의 존재는 여러 곳이 일치. API·데이터 흐름은 SRC_UNKNOWN
+
+- claim_id: QT-02
+  company: 콴텍 (AI QUANTEC)
+  claim: Q-X 가 스트레스 시 방어자산으로 익스포저를 동적 이동한다
+  source_url: null
+  source_title: null
+  source_type: null
+  publication_date: null
+  accessed_at: 2026-09-12
+  evidence_level: SRC_UNKNOWN
+  confidence: LOW
+  current_status: UNCLEAR
+  implementation_decision: DO_NOT_IMPLEMENT
+  notes: ★원문 프롬프트의 서술이지 확인된 사실이 아니다★ 확인된 것은 "24시간
+         모니터링" 까지다. 우리 국면 로직을 이것의 근거로 삼지 않는다
+
+- claim_id: QI-01
+  company: 퀀팃 (Quantit)
+  claim: 분석→백테스트→전략 구현→자동매매를 잇는 Finter 플랫폼, 플랜잇으로 IRP 자동 운용
+  source_url: https://www.quantit.io/
+  source_title: Quantit | 퀀팃 | AI Fintech Company
+  source_type: official_company
+  publication_date: unknown
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED         # ★qt-advisor.com 은 egress 차단★
+  confidence: MEDIUM
+  current_status: CURRENT
+  implementation_decision: GENERALIZE
+  notes: 공식 사이트를 열지 못해 검색 요약에 의존
+
+- claim_id: QI-02
+  company: 퀀팃 (Quantit)
+  claim: TDF형 글라이드패스 디리스킹을 적용한다
+  source_url: null
+  source_title: null
+  source_type: null
+  publication_date: null
+  accessed_at: 2026-09-12
+  evidence_level: SRC_UNKNOWN
+  confidence: LOW
+  current_status: UNCLEAR
+  implementation_decision: GENERALIZE  # 기능은 타당하되 근거를 바꿔 적는다
+  notes: ★뒷받침하지 못했다★ 검색은 TDF·글라이드패스의 일반 설명만 돌려줬다.
+         로드맵에는 "퀀팃이 한다" 가 아니라 "연금 계좌에 필요한 기능" 으로 들어갔다
+
+- claim_id: FN-01
+  company: 핀트 (디셈버앤컴퍼니)
+  claim: 일반·연금저축·IRP·ISA 를 아우르는 멀티계좌 서비스
+  source_url: https://sports.khan.co.kr/article/202505280056003
+  source_title: 디셈버 핀트, 연금저축·IRP·ISA '절세계좌 삼총사' 투자 서비스 주목
+  source_type: press
+  publication_date: 2026-05-28
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED
+  confidence: HIGH                     # 복수 매체 + 공식 사이트 요약이 일치
+  current_status: CURRENT
+  implementation_decision: IMPLEMENT   # ★계좌 유형은 우리도 필요하다★ (P3, P-1 선행)
+  notes: 일임/자문 구분과 연도 표기는 미확정 — §4 의 "연도 주의" 참조
+
+- claim_id: FN-02
+  company: 핀트 (디셈버앤컴퍼니)
+  claim: "오늘 내 자산이 움직인 이유" — AI 가 일일 자산 변동을 요약
+  source_url: https://www.venturesquare.net/1109741
+  source_title: 오늘 내 자산이 움직인 이유, AI가 요약…핀트 투자화면 개편
+  source_type: press
+  publication_date: unknown
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED
+  confidence: HIGH
+  current_status: CURRENT
+  implementation_decision: GENERALIZE  # ★결정론적 템플릿으로★ — LLM 이 아니다 (P3)
+  notes: 저쪽이 무엇으로 만들었는지는 SRC_UNKNOWN. 우리 설계 근거는 감사 가능성이다
+
+- claim_id: FN-03
+  company: 핀트 (디셈버앤컴퍼니)
+  claim: 핀트 셀렉션 — 외부 운용사 전략을 수익률·안정성·운용 일관성 검증 후 구독
+  source_url: https://www.fintechtimes.co.kr/news/article.html?no=56876
+  source_title: 디셈버앤컴퍼니, 핀트에 외부 운용사 투자 전략 '핀트 셀렉션' 출시
+  source_type: press
+  publication_date: 2026-06-22
+  accessed_at: 2026-09-12
+  evidence_level: SRC_INFERRED
+  confidence: MEDIUM                   # 단일 매체
+  current_status: CURRENT
+  implementation_decision: GENERALIZE  # P4, 인가 확인 후
+  notes: 세 기준의 **구체적 산식**은 SRC_UNKNOWN
+
+- claim_id: KS-01
+  company: 코스콤
+  claim: RA 테스트베드 누적 통과율
+  source_url: https://www.fnnews.com/news/202504271833411275
+  source_title: 성과내는 코스콤 'RA 테스트베드'... 운영 10년 알고리즘 합격률 85%
+  source_type: press
+  publication_date: 2025-04-27
+  accessed_at: 2026-09-12
+  evidence_level: SRC_UNKNOWN          # ★출처마다 수치가 다르다★
+  confidence: LOW
+  current_status: UNCLEAR
+  implementation_decision: DO_NOT_IMPLEMENT
+  notes: 80% / 639-of-752 / 85% 세 값이 돌아왔고 분모가 달라 보인다.
+         ★하나를 골라 적지 않는다★ — §5 에 셋 다 URL 을 남겼다
+```
+
+### 7-2. ★중립 명칭 매핑★ (애드덤 §1.1)
+
+회사 고유 제품명을 **내부 식별자로 쓰지 않는다**. 실측 결과 ★코드에는 이미 0건★이고
+(`ISAAC`·`PREFACE`·`Q-Engine`·`Q-X`·`VOYDA`·`Plantit`·`아이작`·`프레퍼스`·`플랜잇`
+전부 `src/`·`frontend/src/` 에서 0회), 전부 이 문서를 비롯한 **산문**에만 있다.
+
+| 회사 명칭 | 우리 내부 명칭 | 지금 어디 |
+|---|---|---|
+| ISAAC | `DecisionEngine` / `AssetAllocationEngine` | `engine/investment_decision.py` · `engine/allocation_studio.py` |
+| PREFACE | `ExecutionOrchestrator` / `PersonalizationRuntime` | `engine/trading_engine.py` · `data/execution_store.py` (개인화는 없음) |
+| Q-Engine | `StrategyCompositionEngine` | `data/alpha_registry.py` + `engine/strategy_profiles.py` |
+| Q-X | `RiskMonitoringEngine` | ★`execution/risk_monitor.py`(P1)★ |
+| VOYDA | `AlternativeDataStrategy` / `ConcentratedAlphaStrategy` | 대체데이터 어댑터는 있으나 합성 셋은 운영 차단 |
+| Plantit | `RetirementAutoInvestService` | ★없음★ — 계좌 축이 없다(P3) |
+| fint Selection | `StrategyMarketplace` | ★없음★ — P4 |
+| — | `TargetDateDeRiskingPolicy` | ★없음★ — 글라이드패스(P2 설계) |
+
+★이 표는 "저쪽이 이렇게 만들었다" 가 아니다★ — *우리가 같은 역할을 무엇이라 부를지*다.

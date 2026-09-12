@@ -146,8 +146,14 @@ class AuditTrail:
         context: dict | None = None,
         actor: str = "system",
         message: str | None = None,
-    ) -> str:
-        """단일 audit 이벤트 기록. 반환: audit_id."""
+    ) -> str | None:
+        """단일 audit 이벤트 기록. 반환: `audit_id`, ★기록 실패 시 `None`★.
+
+        예전에는 INSERT 가 실패해도 미리 만들어 둔 `audit_id` 를 그대로 돌려줬다.
+        그래서 DB 장애 중 주문 응답에 ★아무것도 가리키지 않는 감사 ID★ 가 실렸다 —
+        감사 추적이 가장 필요한 순간에 거짓말을 한 것이다(CLAUDE.md §4 침묵 폴백 금지).
+        ★기록 실패가 주문 흐름을 멈추지는 않는다★ — 다만 없는 것을 있다고 하지 않는다.
+        """
         audit_id = f"AUD-{uuid.uuid4().hex[:12]}"
 
         # context를 안전하게 JSON 직렬화
@@ -184,7 +190,9 @@ class AuditTrail:
             elif severity == Severity.WARN:
                 logger.warning(f"[AUDIT WARN] {event_type}: {message}")
         except Exception as e:
-            logger.error(f"Audit log 실패: {e}")
+            # ★위조하지 않는다★ — 기록이 없으면 id 도 없다.
+            logger.error(f"Audit log 실패(감사 ID 없음): {e}")
+            return None
 
         return audit_id
 
@@ -193,7 +201,7 @@ class AuditTrail:
     # ─────────────────────────────────────────────────────────────────────
 
     def log_signal(self, strategy_id: int, ticker: str, side: str, quantity: int,
-                    source: str = "stage11", context: dict | None = None) -> str:
+                    source: str = "stage11", context: dict | None = None) -> str | None:
         return self.log(
             event_type=EventType.SIGNAL_RECEIVED,
             category=EventCategory.SIGNAL,
@@ -203,7 +211,7 @@ class AuditTrail:
             message=f"신호 수신: {side} {ticker} {quantity}주 (sid={strategy_id})",
         )
 
-    def log_risk_decision(self, check_result, order: dict) -> str:
+    def log_risk_decision(self, check_result, order: dict) -> str | None:
         """RiskCheckResult를 받아서 audit 기록."""
         if check_result.approved:
             return self.log(
@@ -242,7 +250,7 @@ class AuditTrail:
             )
 
     def log_order_submitted(self, client_order_id: str, order: dict,
-                              kis_response: dict | None = None) -> str:
+                              kis_response: dict | None = None) -> str | None:
         return self.log(
             event_type=EventType.ORDER_SUBMITTED,
             category=EventCategory.ORDER,
@@ -261,7 +269,7 @@ class AuditTrail:
         )
 
     def log_order_filled(self, client_order_id: str, fill_qty: int,
-                           fill_price: float, ticker: str) -> str:
+                           fill_price: float, ticker: str) -> str | None:
         return self.log(
             event_type=EventType.ORDER_FILLED,
             category=EventCategory.EXECUTION,
@@ -274,7 +282,7 @@ class AuditTrail:
         )
 
     def log_kill_switch(self, event_id: str, trigger_source: str, reason: str,
-                          equity: float, dd_pct: float) -> str:
+                          equity: float, dd_pct: float) -> str | None:
         return self.log(
             event_type=EventType.KILL_SWITCH_TRIGGERED,
             category=EventCategory.EMERGENCY,
@@ -288,7 +296,7 @@ class AuditTrail:
             message=f"🚨 Kill switch 발동: {reason}",
         )
 
-    def log_mode_change(self, old_mode: str, new_mode: str, actor: str = "user") -> str:
+    def log_mode_change(self, old_mode: str, new_mode: str, actor: str = "user") -> str | None:
         return self.log(
             event_type=EventType.MODE_CHANGED,
             category=EventCategory.SYSTEM,
