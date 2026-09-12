@@ -2,7 +2,7 @@
 
 > 매 세션 자동 로드됩니다. **100줄 미만으로 유지하세요** — 길면 읽히지 않습니다.
 > 기록 [`docs/HISTORY.md`](docs/HISTORY.md) · 스펙 [`docs/specs`](docs/specs) · 계획
-> [`docs/plans`](docs/plans) · 아키텍처·스택 [`docs/specs/architecture.md`](docs/specs/architecture.md) ·
+> [`docs/plans`](docs/plans) · 아키텍처·스택 [`docs/specs/architecture.md`](docs/specs/architecture.md) · 제품 축 규칙 [`docs/specs/2026-09-12-ra-product-rules.md`](docs/specs/2026-09-12-ra-product-rules.md) ·
 > 실행 `Makefile` · 환경변수 `.env.example`(**개발 기본값 `KIS_USE_MOCK=1`** — 외부 호출 0).
 > **수치는 문서가 아니라 코드가 진실입니다** — 개수를 적으면 반드시 낡습니다(과거
 > "라우트 223 → 268" 이 실측 332였습니다). 세지 말고 레지스트리를 읽으세요.
