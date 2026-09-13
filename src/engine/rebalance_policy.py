@@ -49,6 +49,19 @@ DECISION_TRADE = "trade"
 DECISION_HOLD = "hold"
 DECISION_UNDETERMINED = "undetermined"
 
+# ★사유를 **이름**으로도 부른다★ (AA2) — 자유 문자열 `reason` 은 사람이 읽는
+# 문장이고, `reason_code` 는 화면·리포트·감사가 **같은 사건을 같은 이름으로**
+# 부르기 위한 것이다. 어휘는 `src/domain/rebalance_reason.py` 단일 출처이고
+# 여기서는 판단을 바꾸지 않고 **덧붙이기만** 한다.
+from src.domain.rebalance_reason import (  # noqa: E402
+    REASON_BELOW_COST,
+    REASON_BENEFIT_UNKNOWN,
+    REASON_COST_UNKNOWN,
+    REASON_INSIDE_BAND,
+    REASON_NO_PORTFOLIO_VALUE,
+    REASON_UTILITY_GAIN,
+)
+
 
 def _weights_vector(names: list[str], w: dict[str, float]) -> np.ndarray:
     """퍼센트(0~100) dict → 소수 벡터. 없는 자산은 0."""
@@ -280,7 +293,8 @@ def rebalance_decision(current_weights: dict[str, float],
     pv = float(portfolio_value or 0.0)
     if pv <= 0:
         return {"decision": DECISION_UNDETERMINED, "available": False,
-                "reason": "포트폴리오 평가액이 0 이하입니다"}
+                "reason": "포트폴리오 평가액이 0 이하입니다",
+                "reason_code": REASON_NO_PORTFOLIO_VALUE}
 
     cost = _cost_block(current_weights, target_weights, pv,
                        price_of=price_of, adv_of=adv_of)
@@ -318,17 +332,20 @@ def rebalance_decision(current_weights: dict[str, float],
     }
 
     if not cost["available"]:
-        out.update(decision=DECISION_UNDETERMINED, reason=cost["reason"])
+        out.update(decision=DECISION_UNDETERMINED, reason=cost["reason"],
+                   reason_code=REASON_COST_UNKNOWN)
         return out
     if not benefit["available"]:
         # ★트리거만 보고 거래하라고 말하지 않는다★ 이것이 기존 결함이었다.
         out.update(decision=DECISION_UNDETERMINED, reason=benefit["reason"],
+                   reason_code=REASON_BENEFIT_UNKNOWN,
                    note="트리거가 울려도 편익을 모르면 거래를 권하지 않습니다")
         return out
 
     # ★모든 자산이 자기 밴드 안이면 거래하지 않는다★ 밴드를 알 때만 적용한다.
     if band["available"] and not outside:
         out.update(decision=DECISION_HOLD,
+                   reason_code=REASON_INSIDE_BAND,
                    reason=(f"자산 {len(keys)}종 전부가 각자의 무거래 밴드 안입니다 "
                            f"(최대 괴리 {round(max_gap, 2)}%p)"))
         return out
@@ -341,11 +358,13 @@ def rebalance_decision(current_weights: dict[str, float],
 
     if gain_pct > threshold:
         out.update(decision=DECISION_TRADE,
+                   reason_code=REASON_UTILITY_GAIN,
                    reason=(f"{horizon_days}영업일 기준 효용 개선 {round(gain_pct, 3)}% > "
                            f"비용 {round(cost_pct, 3)}% × (1+{hysteresis_mult}) "
                            f"= {round(threshold, 3)}%"))
     else:
         out.update(decision=DECISION_HOLD,
+                   reason_code=REASON_BELOW_COST,
                    reason=(f"{horizon_days}영업일 기준 효용 개선 {round(gain_pct, 3)}% 가 "
                            f"비용 문턱 {round(threshold, 3)}% 를 넘지 못합니다"))
     return out

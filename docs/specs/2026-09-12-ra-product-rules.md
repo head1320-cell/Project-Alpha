@@ -118,6 +118,25 @@ structural / synthetic_mechanism / real_forecast / real_economic
 
 ---
 
+## 3-1. 리밸런스 사유와 근거 — ★코드가 강제한다 (AA)★
+
+제안이 *"왜 그렇게 정했는가"* 와 *"무엇을 근거로 했는가"* 를 함께 말한다.
+
+- **사유는 열거된 상수다** — `src/domain/rebalance_reason.py`. ★두 축을 섞지
+  않는다★: `trigger`(왜 **검토**했는가) ⟂ `decision reason`(왜 **거래/보류/미정**
+  인가). 자유 문자열 `reason` 은 사람이 읽는 문장으로 **남겨 두고**, 코드는 감사가
+  같은 사건을 같은 이름으로 부르기 위한 것이다.
+- **근거는 축으로 접힌다** — `src/engine/decision_evidence.py` 가
+  `price`·`as_of`·`target`·`macro` 를 `run_evidence` 와 **같은 롤업 함수**로 접는다.
+  ★`as_of` 를 요청하지 않은 결정은 `unknown` 이다★ — 결함은 아니지만 "시점
+  정합됐다" 는 하지 않은 진술이다.
+- ★**재계산된 국면 경로는 `degraded` 다**★ — 스냅샷 없이 현재 데이터로 다시 계산한
+  분류는 결정 시점에 알 수 있던 것이 아니다. 그것이 관측된 look-ahead 다.
+- **주문은 판단을 가리킨다** — `execution_plans.dec_id`. 끊겨 있으면 **사유와 함께**
+  끊겼다고 말한다(`{}` 나 사유 없는 `null` 금지).
+
+---
+
 ## 4. 검증 체크리스트
 
 ```bash

@@ -57,6 +57,7 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.sleeve_routes",
     "src.api.backtest_run_routes",
     "src.api.signal_routes",
+    "src.api.diagnostics_routes",
 )
 
 CORS_ORIGINS = [

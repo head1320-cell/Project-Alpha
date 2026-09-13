@@ -30,14 +30,14 @@
 | 5 | look-ahead 검사 존재 | **통과** | 위 4축 + `AXIS_UNKNOWN` 이 ★통과가 아님★을 명시. `regime_probability` 가 평활 확률의 배분 사용을 거부. 단 **추정기 수준 누출**(전체표본 스케일링·윈저화)은 어느 축도 안 본다 — §4 |
 | 6 | 거래비용·슬리피지 반영 | **부분** | 반영은 된다. ★그런데 비용 모델이 넷이고 수수료 기본값이 10배 다르다★ — `kis_backtest_engine` `0.0015` vs `multi_strategy_backtest`·`realism_engine` `0.00015`. 단일 출처를 자처하는 `data/market_rules.py` 를 **어느 백테스트도 읽지 않는다**(세금·스프레드·호가단위·가격제한 전부 백테스트 미적용) |
 | 7 | 전략·모델·데이터 버전 추적 | **부분** | `code_version`(git SHA)이 `research_runs`·`backtest_runs`·`target_versions`·`regime_snapshots` 에 박힌다. `timing_rule_set_versions`·`scenario_pack_versions` 는 내용까지 보존. ★없는 것★: `strategy_version`·`feature_version`·`universe_version`·`cost_model_version`·모델 레지스트리 |
-| 8 | 리밸런싱 제안에 reason code | ★**미달**★ | `engine/rebalance_policy.py` 의 `reason` 은 **자유 문자열**. 열거 목록은 [`도메인 §4`](2026-09-12-ra-domain-architecture.md) 에 설계만 있다 → **P2** |
+| 8 | 리밸런싱 제안에 reason code | **통과**(AA) | ★직전까지 미달이었다★ — `rebalance_policy` 의 `reason` 은 자유 문자열뿐이었다. 이제 `src/domain/rebalance_reason.py` 가 **두 축**을 갖고(trigger ⟂ decision reason) `rebalance_decision` 의 6개 종료 분기가 각자 `reason_code` 를 낸다. `investment_decisions.reason_code` 컬럼까지 이어지고, ★AST 트립와이어가 7번째 분기를 막는다★(`tests/test_rebalance_reason.py`). ★생산자 없는 상수 넷은 만들지 않았다★ — 설계 문서의 제안이었을 뿐이다 |
 | 9 | 집중도·팩터 노출 계산 | **통과** | `engine/factor_exposure.factor_concentration` · `robust_opt`/`allocation_studio`/`collinearity_analyzer` 의 HHI·유효N · `constrained_opt.Constraints.group_caps_pct` · `liquidity_gate` |
-| 10 | 모든 주문 제안에 data lineage | ★**미달**★ | `pit_evidence` 가 ★백테스트 런에서 끊긴다★. `execution_store` 가 `run_id` 는 들지만 **데이터 빈티지 시점이 주문 제안까지 따라가지 않는다**. `audit_trail.log_signal` 도 신호는 적고 그 신호가 언제 알 수 있던 데이터인지는 안 적는다 → **P2** |
+| 10 | 모든 주문 제안에 data lineage | **부분**(AA) | ★직전까지 미달이었다★. `src/engine/decision_evidence.py` 가 결정측 축 넷(`price`·`as_of`·`target`·`macro`)을 세우고 **`run_evidence` 와 같은 롤업 함수**를 부른다. `execution_plans.dec_id` 로 주문이 판단을 가리키고 끊긴 계보는 사유와 함께 보고된다. ★`부분` 인 이유★: 결정측 축은 백테스트의 네 축과 **다른 것을 잰다** — 식별자 사슬은 이어졌지만 데이터 빈티지 시점 자체가 주문을 따라가는 것은 아니다 |
 | 11 | live 전환이 기본 차단 | **통과** | `set_mode(LIVE, confirm_token="EXPLICIT_LIVE_CONFIRMED")` 없이는 `ValueError`. ★다만 그 라우트에 인증이 없다★ — 토큰만 알면 누구나(→ **P-1**) |
 | 12 | kill switch 작동 | **부분** | 구조는 있고 `is_active()` 가 DB 실패 시 `True`(페일세이프). ★그런데 `auto_dd`·`auto_cb` 는 구조적으로 발동 불가★ — `live_daily_pnl` 에 쓰는 코드가 없어 드로다운이 항상 미상(P1 이 그 사실을 관측 가능하게 만들었다). `auto_api` 는 `api_failure_count` 를 아무도 안 채운다. `gradual` 청산은 ★1/5 만 팔고 멈춘다★ |
 | 13 | 테스트와 문서가 함께 생성 | **통과** | 저장소 관례 — 커밋마다 변이 배터리 + HISTORY + 스펙. 이 문서 자체가 그 예다 |
 
-**요약** — 통과 6 · 부분 **5** · 미달 **2**(Z 이후. 직전: 통과 6 · 부분 4 · 미달 3). ★남은 미달 둘(reason code · data lineage)은
+**요약** — 통과 **7** · 부분 **6** · 미달 **0**(AA 이후. Z 시점: 통과 6 · 부분 5 · 미달 2). ★미달은 이제 없다. 다만 `부분` 여섯이 남았고, 그것들은
 전부 P2 가 집는다.★
 
 ---
@@ -125,7 +125,10 @@
 ## 6. ★이 채점이 주장하지 않는 것★
 
 - **애드덤을 이행한 것이 아니다.** 채점했고, 안전 셋을 고쳤고, 나머지는 *어느 단계가
-  집는지*까지 적었다. 통과 6 · 부분 5 · 미달 2 는 **지금 상태**다(Z 이후).
+  집는지*까지 적었다. 통과 7 · 부분 6 · 미달 0 은 **지금 상태**다(AA 이후).
+- ★**미달 0 이 "애드덤을 이행했다" 는 뜻이 아니다**★ — `부분` 여섯은 각각
+  남은 것을 적고 있고, 그중 비용 모델 10배 불일치와 추정기 수준 누출은
+  **측정된 채로 남아 있다**.
 - **`통과` 가 "투자에 쓸 수 있다" 는 뜻이 아니다.** 기준을 만족한다는 뜻이고,
   ★이 저장소는 경제적 가치 관문을 통과한 적이 없다★(CLAUDE.md §1).
 - **비용 모델을 고치지 않았다.** 10배 불일치는 ★측정된 채로 남는다★ — 어느 값이

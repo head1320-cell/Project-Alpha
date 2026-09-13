@@ -1359,6 +1359,15 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
         # 치른 값이다). 저장된 leg 는 스토어에서 조회한다.
         decision.pop("legs", None)
 
+        # ★이 판단이 무엇 위에 섰는가★ (AA3) — 백테스트의 네 축은 여기서 생산되지
+        # 않으므로 `pit_evidence` 를 나르지 않고, **같은 롤업 함수**로 결정 경로가
+        # 아는 축 넷을 접는다. `cond_path` 의 `recomputed` 가 곧 관측된 look-ahead 다.
+        from src.engine.decision_evidence import decision_evidence
+        decision["evidence_rollup"] = decision_evidence(
+            coverage=coverage, as_of_requested=req.as_of,
+            target_source=target_source, regime_path=cond_path,
+            freshness=_freshness(coverage))
+
         # ★자산 개수가 아니라 팩터 개수★ (Brief §8.4) — 선택.
         factors = None
         if req.factor_exposure:

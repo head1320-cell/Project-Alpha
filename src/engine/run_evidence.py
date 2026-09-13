@@ -60,6 +60,52 @@ def _axis(state: str, reason: str | None, **detail: Any) -> dict[str, Any]:
     return {"state": state, "reason": reason, **detail}
 
 
+def rollup(axes: dict[str, dict | None],
+           labels: dict[str, str]) -> dict[str, Any]:
+    """축들 → 하나의 판정. ★규칙은 여기 한 곳에만 있다★
+
+    백테스트(`pit_evidence`)와 결정 경로(`decision_evidence`)가 **같은 함수**를
+    부른다. 두 곳에 복사하면 한쪽만 고쳐도 타입 에러가 나지 않고, 화면에 따라
+    다른 판정이 나온다 — `allocation_pipeline` 머리글이 적어 둔 바로 그 사건이다.
+
+    Args:
+        axes: 축 이름 → `_axis(...)` 또는 `None`(해당 없음).
+        labels: 축 이름 → 사람이 읽는 이름. 요약 문장에 쓴다.
+
+    ★`None` 축은 판정에 들어가지 않는다★ — 안 쓴 것과 재서 나쁜 것은 다르다.
+    """
+    applicable = [n for n, a in axes.items() if a is not None]
+    ok = [n for n in applicable if axes[n]["state"] == AXIS_OK]
+    broken = [n for n in applicable if axes[n]["state"] == AXIS_DEGRADED]
+    foggy = [n for n in applicable if axes[n]["state"] == AXIS_UNKNOWN]
+
+    if ok and not broken and not foggy:
+        status = STATUS_VERIFIED
+    elif ok:
+        status = STATUS_PARTIAL
+    elif broken:
+        status = STATUS_UNVERIFIED
+    else:
+        status = STATUS_UNKNOWN
+
+    if status == STATUS_VERIFIED:
+        summary = ("적용되는 모든 축이 시점 정합됐습니다: "
+                   + " · ".join(labels[n] for n in ok))
+    else:
+        bits = []
+        if broken:
+            bits.append("결함 " + " · ".join(labels[n] for n in broken))
+        if foggy:
+            bits.append("미상 " + " · ".join(labels[n] for n in foggy))
+        summary = " / ".join(bits)
+
+    return {"status": status, "axes": axes,
+            # ★안 쓴 축은 여기 없다★ — 매크로를 안 쓴 전략에 매크로 결함은 없다.
+            "applicable": applicable, "ok_axes": ok,
+            "broken_axes": broken, "unknown_axes": foggy,
+            "summary": summary}
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 축별 번역 — ★판정하지 않고 옮긴다★
 # ══════════════════════════════════════════════════════════════════════════
@@ -172,40 +218,9 @@ def pit_evidence(*, price_basis: dict | None, universe: dict | None,
         if axes.get(name) is None:
             axes[name] = _axis(AXIS_UNKNOWN, _NO_MEASUREMENT)
 
-    applicable = [n for n, a in axes.items() if a is not None]
-    ok = [n for n in applicable if axes[n]["state"] == AXIS_OK]
-    broken = [n for n in applicable if axes[n]["state"] == AXIS_DEGRADED]
-    foggy = [n for n in applicable if axes[n]["state"] == AXIS_UNKNOWN]
-
-    if ok and not broken and not foggy:
-        status = STATUS_VERIFIED
-    elif ok:
-        status = STATUS_PARTIAL
-    elif broken:
-        status = STATUS_UNVERIFIED
-    else:
-        status = STATUS_UNKNOWN
-
-    if status == STATUS_VERIFIED:
-        summary = ("적용되는 모든 축이 시점 정합됐습니다: "
-                   + " · ".join(AXIS_LABELS[n] for n in ok))
-    else:
-        bits = []
-        if broken:
-            bits.append("결함 " + " · ".join(AXIS_LABELS[n] for n in broken))
-        if foggy:
-            bits.append("미상 " + " · ".join(AXIS_LABELS[n] for n in foggy))
-        summary = " / ".join(bits)
-
+    rolled = rollup(axes, AXIS_LABELS)
     return {
-        "status": status,
-        "axes": axes,
-        # ★안 쓴 축은 여기 없다★ — 매크로를 안 쓴 전략에 매크로 결함은 없다.
-        "applicable": applicable,
-        "ok_axes": ok,
-        "broken_axes": broken,
-        "unknown_axes": foggy,
-        "summary": summary,
+        **rolled,
         # ★결론은 증거보다 강할 수 없다★ `verified` 도 보증 범위가 좁다.
         "note": ("이 판정은 **시점 정합**에 대한 것입니다 — 가격·유니버스·매크로·"
                  "재무의 *언제* 를 봅니다. `verified` 라도 값 자체의 정확성이나 "

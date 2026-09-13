@@ -91,13 +91,13 @@ CORS 는 `"*"` + `allow_credentials=True`(주석: `개발/배포 임시 허용`)
 
 | 항목 | 무엇 | 선행 |
 |---|---|---|
-| **보유 진단 표면** | `portfolio_factor_exposure()` · `risk_contributions()` · `factor_concentration()` 을 **하나의 진단 응답**으로. 죽은 `portfolio_manager.py` 의 문구를 되살리지 말고 새로 쓴다 | 입력이 "누구의 보유" 라면 ★P-1★. 요청 본문으로 받는 형태면 P-1 없이 가능 |
-| **사유 열거** | `RebalanceReason` 상수 도입, `rebalance_policy` 의 자유 문자열을 **매핑** | ★결정 경로 변경은 승인 사항★ — 매핑만 먼저, 판단 로직은 그대로 |
-| **PIT 증거를 제안까지** | `run_evidence.pit_evidence` 를 `RebalanceProposal` 에 실어 나른다 | — |
+| ~~**보유 진단 표면**~~ **완료(AA)** | `POST /api/v1/diagnostics/holdings` — 노출·집중도·리스크기여·유동성 + `evidence_rollup` 을 한 응답으로. 각 블록에 `available`+`reason`. 보유를 **요청 본문**으로 받으므로 P-1 불필요하고 그 경계를 `note` 가 적는다 | — |
+| ~~**사유 열거**~~ **완료(AA)** | `src/domain/rebalance_reason.py` — ★두 축★(trigger ⟂ decision reason). 6분기에 `reason_code` **덧붙임**(판단 0줄 변경) + AST 트립와이어. 합격기준 #8 **미달 → 통과**. ★설계 문서의 9개 중 넷은 생산자가 없어 만들지 않았다★ | 사용자 승인 완료 |
+| ~~**PIT 증거를 제안까지**~~ **완료(AA·형태 변경)** | ★그대로는 실행 불가였다★ — `pit_evidence` 의 네 축은 백테스트 산출물이고 결정 경로에 생산자가 없다. 대신 `decision_evidence` 가 결정측 축 넷을 세우고 **같은 롤업 함수**를 쓴다 | — |
 | **글라이드패스·적립** | ★설계만★ — 코드 없음 | ★P-1★ + 계좌 차원 |
 | ★**에쿼티 이력 기록**★ | `live_daily_pnl` 에 **쓰는 코드**. ★P1 의 `unknown` 을 숫자로 바꾸는 유일한 길★ | 브로커(모의 포함) 연결 |
 | ~~★**성과 상태 라벨**★~~ **완료(Z)** | `src/domain/perf_kind.py` 어휘 + 응답 9경로 `perf_label` + `shared/ui/PerfLabel.tsx`(부착 10화면) + 트립와이어. 합격기준 #3 **미달 → 부분**. ★`backtest_runs` 모드 컬럼은 의도적으로 만들지 않았다★ — 그 표에는 백테스트만 들어가므로 **항상 같은 값**인 컬럼이 되고, 언제나 같은 값이 들어가는 컬럼은 증거가 아니라 마이그레이션 비용이다. 응답 계층에서 파생한다. ★남은 것★: 기존 배지 넷과의 축 정리 · 허용 목록 8건(리얼리즘 대시보드 종류 축 포함) | — |
-| ★**주문 제안까지의 계보**★ | `pit_evidence` 를 `RebalanceProposal`·주문 제안까지 나른다. 합격기준 #10 **미달** | — |
+| ~~★**주문 제안까지의 계보**★~~ **부분(AA)** | `execution_plans.dec_id` 로 **식별자 사슬**을 이었다(`find_by_decision`·`plan_lineage`). 합격기준 #10 **미달 → 부분** — ★빈티지 시점 자체가 주문을 따라가지는 않는다★ | — |
 | **비용 모델 불일치** | 수수료 기본값 10배 차 · `market_rules` 를 백테스트가 안 읽음. ★이번엔 기록만★ | 어느 값이 맞는지 **재고 나서** |
 
 ★글라이드패스를 P2 에서 구현하지 않는 이유★ — 증거 매트릭스 §3 이 확인한 대로

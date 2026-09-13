@@ -66,6 +66,10 @@ STATUS_UNDETERMINED = "undetermined"
 _STATUSES = frozenset({STATUS_TRADE, STATUS_HOLD, STATUS_UNDETERMINED})
 
 #: JSON 으로 담는 부모 필드 — 결정 **간** 질의 대상이 아닌 것들.
+#: `reason_code` 컬럼을 실제로 쓸 수 있는가. ★False 여도 저장은 된다★ —
+#: 열거된 사유가 기록에서만 빠지고 응답에는 그대로 실린다.
+_has_reason_code = False
+
 _JSON_PARENT = ("belief", "evidence", "gradual", "triggers")
 #: 실수 컬럼 — ★전부 percent 또는 배수. 변환하지 않는다.★
 _NUM_PARENT = ("gain_pct", "cost_pct", "hysteresis_mult", "threshold_pct",
@@ -101,6 +105,7 @@ def _ensure_tables(engine) -> bool:
                 "created_at DOUBLE PRECISION, as_of VARCHAR(10), "
                 "case_id VARCHAR(40), scope VARCHAR(20), "
                 "decision_status VARCHAR(16), reason TEXT, "
+                "reason_code VARCHAR(32), "
                 "gain_pct DOUBLE PRECISION, cost_pct DOUBLE PRECISION, "
                 "hysteresis_mult DOUBLE PRECISION, threshold_pct DOUBLE PRECISION, "
                 "net_pct DOUBLE PRECISION, max_gap_pct DOUBLE PRECISION, "
@@ -125,10 +130,21 @@ def _ensure_tables(engine) -> bool:
                 f"CREATE INDEX IF NOT EXISTS ix_leg_outside ON {_LEGS} "
                 "(outside_band, ticker)"))
         _inited = True
-        return True
     except Exception as e:  # noqa: BLE001
         logger.warning(f"{_TABLE} 생성 실패: {e}")
         return False
+
+    # ★이미 있는 DB 에도 붙인다★ — 위 `CREATE TABLE IF NOT EXISTS` 는 기존 표를
+    # 손대지 않으므로 이 줄이 없으면 배포된 DB 에서만 조용히 컬럼이 없다(W1 이
+    # 세운 관례: 붙이기 + **쓸 수 있는지 확인**을 `add_columns` 가 함께 한다).
+    # ★못 붙어도 결정 저장은 계속된다★ — 사유 코드가 없는 기록이 남을 뿐이고,
+    # 그 사실은 `reason_code=None` 으로 관측 가능하다.
+    from src.data.schema_add_columns import add_columns
+    global _has_reason_code
+    _has_reason_code = add_columns(engine, _TABLE,
+                                   [("reason_code", "VARCHAR(32)")],
+                                   label=f"{_TABLE}.reason_code")
+    return True
 
 
 def _new_id() -> str:
@@ -202,6 +218,13 @@ def save_decision(decision: dict[str, Any], legs: list[dict[str, Any]] | None = 
             + ", ".join(f":n_{k}" for k in _NUM_PARENT) + ", "
             + ", ".join(f":j_{k}" for k in _JSON_PARENT)
             + ", :cv, :dv, :no")
+    # ★사유를 **이름**으로도 남긴다★ (AA2) — 자유 문자열 `reason` 은 문구가
+    # 바뀌면 과거 기록과 대조가 안 되지만, 코드는 같은 사건을 같은 이름으로
+    # 부른다. 컬럼을 못 붙였으면 싣지 않는다(쿼리를 깨지 않는다).
+    if _has_reason_code:
+        cols += ", reason_code"
+        vals += ", :rc"
+        parent["rc"] = decision.get("reason_code")
 
     leg_rows = []
     for leg in legs or []:

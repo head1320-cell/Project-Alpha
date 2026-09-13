@@ -274,6 +274,37 @@ export interface RebalanceProposal {
 
 ---
 
+### ★AA 에서 구현하며 이 절을 정정한다 (2026-09-13)★
+
+위 제안 목록 9개를 **코드와 대조**했더니 셋이 틀렸다. 정본은
+`src/domain/rebalance_reason.py` 이고 이 절은 그때의 설계 기록으로 남긴다.
+
+**① 한 목록이 아니라 두 축이다.** `calendar`·`regime_change`·`volatility_spike` 는
+결정 사유가 아니라 **`portfolio_rebalancer` 의 트리거**다(그것도 `vol_spike` 로 이름이
+다르다). `detect_triggers` 의 주석이 이미 그 구분을 적고 있었다 — *"트리거는 검토
+시점을 알릴 뿐 거래 근거가 아닙니다."* 한 자루에 넣으면 *"국면이 바뀌어 **거래했다**"*
+와 *"국면이 바뀌어 **들여다봤다**"* 가 같은 값이 된다.
+
+**② 넷은 생산자가 없어 만들지 않았다.**
+
+| 제안 상수 | 왜 안 만들었나 |
+|---|---|
+| `band_breach` | ★밴드 이탈은 TRADE 사유가 아니다★ — 이탈해도 편익<비용이면 HOLD 다 |
+| `constraint_binding` | `investment_decision._legs_from` 이 `[]` 로 고정한다 |
+| `contribution` · `glide_path` | 적립금·생애주기 코드 자체가 없다 |
+
+**③ 코드에는 있는데 목록에 없던 사유가 넷이다** — `inside_band`(전 자산이 무거래
+밴드 안) + `undetermined` 3종(`no_portfolio_value`·`cost_unknown`·`benefit_unknown`).
+★`inside_band` 는 가장 자주 일어나는 HOLD 중 하나인데 목록에 없었다.★
+
+**④ `pitEvidence` 도 형태가 바뀌었다.** 위 TS 타입은 `run_evidence` 의 판정을 그대로
+나르는 그림이었는데, 그 네 축(`price_basis`·`universe`·`macro_lookahead`·
+`fundamentals_pit`)은 **백테스트 엔진 산출물**이고 결정 경로에 생산자가 하나도 없다.
+`src/engine/decision_evidence.py` 가 **어휘와 롤업 함수는 그대로 재사용**하되 축은
+결정 경로가 실제로 아는 것(`price`·`as_of`·`target`·`macro`)으로 세운다.
+
+---
+
 ## 5. `DailyExplanationLog` — 5효과에 ★가격·환·배당 축을 더한다★
 
 ### 지금
