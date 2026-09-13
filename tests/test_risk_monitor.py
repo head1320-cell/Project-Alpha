@@ -76,8 +76,12 @@ def _unknown_state() -> dict:
 
 
 def _calm_state() -> dict:
+    # ★`api_failure_count` 가 추가됐다(AF2)★ — 이 상태는 "다 아는 상태" 를 자처하는데
+    #   예전에는 API 실패 횟수를 **빠뜨린 채** 그렇게 불렀다. `unverified_checks()` 가
+    #   그 항목을 세지 않았기 때문이고, 그것이 바로 AF 가 고친 사각지대다.
+    #   "다 안다" 가 실제로 다 아는 상태를 뜻하도록 값을 채운다.
     return {"equity_krw": 1, "current_drawdown_pct": 0.01, "cumulative_dd_pct": 0.02,
-            "drawdown_reason": None}
+            "drawdown_reason": None, "api_failure_count": 0}
 
 
 def _breach_state() -> dict:

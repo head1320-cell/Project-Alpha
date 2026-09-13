@@ -112,11 +112,25 @@ def test_a_breaching_drawdown_still_triggers():
 
 
 def test_nothing_is_unverified_when_everything_is_known():
-    """★짝★ 다 알면 미상 목록이 비어 있다."""
+    """★짝★ 다 알면 미상 목록이 비어 있다.
+
+    ★`api_failure_count` 가 추가됐다(AF2)★ — 예전에는 그 값을 빠뜨린 채 "다 안다" 고
+    불렀다. `unverified_checks()` 가 `auto_api` 를 세지 않았기 때문이고, 그 사각지대가
+    곧 `auto_api` 가 영원히 발동하지 못한 이유였다.
+    """
+    unv = _NeverActive().unverified_checks(
+        _state(current_drawdown_pct=0.01, cumulative_dd_pct=0.02,
+               drawdown_reason=None, api_failure_count=0),
+        regime_state={"systemic_risk_score": 10})
+    assert unv == (), unv
+
+
+def test_an_absent_api_failure_count_is_now_counted_as_unverified():
+    """★AF2 가 더한 것★ — 그 값이 없으면 "다 안다" 고 말하지 않는다."""
     unv = _NeverActive().unverified_checks(
         _state(current_drawdown_pct=0.01, cumulative_dd_pct=0.02, drawdown_reason=None),
         regime_state={"systemic_risk_score": 10})
-    assert unv == (), unv
+    assert any("auto_api" in u for u in unv), unv
 
 
 def test_api_failure_check_is_unaffected():

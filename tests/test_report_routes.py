@@ -191,11 +191,18 @@ def test_the_report_answers_without_a_token(client):
 
 # ── ★평문 응답에 마크다운·중복 서술어가 없다★ ──────────────────────────
 
+#: ★같은 결함(평문 응답의 마크다운)이 AB·AD·AF 에서 세 번 났다★ — 모듈을 하나씩
+#: 더하는 대신 **API 가 문장을 내는 모듈**을 넓게 잡는다.
 _PLAINTEXT_MODULES = (
     "src/api/report_routes.py",
     "src/api/account_policy_routes.py",
+    "src/api/scorecard_routes.py",
+    "src/api/stage13_routes.py",
     "src/engine/risky_share.py",
     "src/domain/account_policy.py",
+    "src/domain/distribution_gate.py",
+    "src/domain/strategy_scorecard.py",
+    "src/execution/kill_switch.py",
 )
 
 

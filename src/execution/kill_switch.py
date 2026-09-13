@@ -38,6 +38,13 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
+#: ★`gradual` 은 간이 구현이다★ — 1/5 만 매도하고 나머지는 남는다. 그 사실을 값으로
+#: 들고 다니지 않으면 호출자는 청산이 끝났다고 읽는다(AF).
+_GRADUAL_PARTIAL_REASON = (
+    "gradual 모드는 1/5 만 매도하는 간이 구현입니다 — "
+    "나머지 수량은 매도되지 않았습니다."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Configuration
@@ -166,10 +173,13 @@ class KillSwitch:
                          f"PANIC 국면 감지 (risk_score={risk_score:.0f})")
 
         # 4. API 실패율 (외부에서 주입)
-        api_failures = account_state.get("api_failure_count", 0)
-        if api_failures >= self.config.api_failure_threshold:
+        # ★미상을 0 으로 읽지 않는다★ — 위 1·2 에 적용한 P1-a 규율이 이 분기에만
+        #   빠져 있었다. `.get(…, 0)` 이면 아무도 기록하지 않는 값이 언제나 0 이 되어
+        #   `auto_api` 가 **구조적으로 발동할 수 없고**, 그 사실조차 보이지 않았다.
+        raw_api = account_state.get("api_failure_count")
+        if raw_api is not None and raw_api >= self.config.api_failure_threshold:
             return ("auto_api",
-                     f"KIS API 연속 실패 ({api_failures}회)")
+                     f"KIS API 연속 실패 ({raw_api}회)")
 
         return None
 
@@ -192,7 +202,35 @@ class KillSwitch:
             out.append(f"auto_cb: 일중 손실 미상 ({reason})")
         if not regime_state or regime_state.get("systemic_risk_score") is None:
             out.append("auto_risk: 국면 systemic_risk_score 미상")
+        if account_state.get("api_failure_count") is None:
+            out.append("auto_api: KIS API 실패 횟수 미상 "
+                       "(이 저장소에는 그 값을 기록하는 코드가 없습니다)")
         return tuple(out)
+
+    #: 자동 트리거 넷. ★`should_auto_trigger` 가 내는 `source` 문자열 그대로★
+    AUTO_TRIGGERS = ("auto_dd", "auto_cb", "auto_risk", "auto_api")
+
+    def trigger_readiness(self, account_state: dict,
+                          regime_state: dict | None = None) -> dict:
+        """★무엇이 무장됐고 무엇이 왜 불능인가★
+
+        `unverified_checks()` **위에 세운다** — 같은 사실을 두 곳에서 판정하면 갈린다.
+        운영 화면이 "킬스위치: 미발동" 만 보여 주면 안전망 넷이 서 있다고 읽히는데,
+        재료가 없는 트리거는 **영원히 발동하지 않는다**. 그 차이를 값으로 낸다.
+        """
+        unverified = self.unverified_checks(account_state, regime_state)
+        reasons = {u.split(":", 1)[0]: u.split(":", 1)[1].strip() for u in unverified}
+
+        inoperable = [{"trigger": name, "reason": reasons[name]}
+                      for name in self.AUTO_TRIGGERS if name in reasons]
+        armed = [{"trigger": name, "basis": "재료가 있어 임계 검사가 실제로 돈다"}
+                 for name in self.AUTO_TRIGGERS if name not in reasons]
+        return {
+            "armed": armed,
+            "inoperable": inoperable,
+            "summary": (f"자동 트리거 {len(self.AUTO_TRIGGERS)}개 중 "
+                        f"{len(armed)}개 무장 · {len(inoperable)}개 불능"),
+        }
 
     # ─────────────────────────────────────────────────────────────────────
     # 발동
@@ -262,10 +300,14 @@ class KillSwitch:
         # 4. 청산 (옵션)
         positions_closed = 0
         krw_recovered = 0
+        liquidation: dict = {"closed": 0, "partial": [], "failed": [],
+                             "krw_recovered": 0, "mode": liq_mode,
+                             "complete": True, "note": None}
         if liq_mode in ("immediate", "gradual") and kis_client:
-            positions_closed, krw_recovered = self._liquidate_positions(
-                kis_client, mode=liq_mode,
-            )
+            liquidation = self._liquidate_positions(kis_client, mode=liq_mode)
+            # ★감사 컬럼에는 **전량 청산분만** 간다★
+            positions_closed = liquidation["closed"]
+            krw_recovered = liquidation["krw_recovered"]
 
         # 5. 통계 업데이트
         try:
@@ -298,6 +340,10 @@ class KillSwitch:
             "n_orders_cancelled":   cancelled_count,
             "n_positions_closed":   positions_closed,
             "krw_recovered":        krw_recovered,
+            # ★반만 판 것을 조용히 성공으로 보이게 하지 않는다★
+            "liquidation":          liquidation,
+            "liquidation_complete": liquidation["complete"],
+            "liquidation_note":     liquidation["note"],
         }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -392,7 +438,7 @@ class KillSwitch:
     # Internal: 청산
     # ─────────────────────────────────────────────────────────────────────
 
-    def _liquidate_positions(self, kis_client, mode: str = "gradual") -> tuple[int, float]:
+    def _liquidate_positions(self, kis_client, mode: str = "gradual") -> dict:
         """
         보유 포지션 청산.
 
@@ -401,6 +447,9 @@ class KillSwitch:
         """
         n_closed = 0
         krw_recovered = 0.0
+        # ★청산·부분매도·실패를 가른다★ — 예전에는 셋이 전부 `n_closed` 였다.
+        partial: list[dict] = []
+        failed: list[dict] = []
 
         try:
             balance = kis_client.get_balance()
@@ -424,6 +473,8 @@ class KillSwitch:
                         logger.warning(f"비상 청산: {ticker} {qty}주 시장가 (event)")
                     except Exception as e:
                         logger.error(f"청산 실패 ({ticker}): {e}")
+                        failed.append({"ticker": ticker, "requested_qty": qty,
+                                       "reason": f"주문 실패: {e}"})
 
                 elif mode == "gradual":
                     # 5분할 — 실제 구현은 백그라운드 task로 (간이 구현: 1/5만 즉시)
@@ -433,19 +484,50 @@ class KillSwitch:
                             ticker=ticker, side="SELL", quantity=portion,
                             order_type="MARKET",
                         )
-                        n_closed += 1
+                        # ★`n_closed` 를 올리지 않는다★ — 1/5 을 판 것은 청산이
+                        #   아니다. 예전에는 여기서 올려 감사 테이블
+                        #   `live_kill_events.n_positions_closed` 까지 거짓이 갔다.
                         krw_recovered += portion * pos["current_price"]
+                        partial.append({
+                            "ticker": ticker,
+                            "sold_qty": portion,
+                            "remaining_qty": qty - portion,
+                            "reason": _GRADUAL_PARTIAL_REASON,
+                        })
                         logger.warning(
                             f"점진 청산 1/5: {ticker} {portion}/{qty}주 "
                             f"(추가 4회 분할 매도 필요)"
                         )
                     except Exception as e:
                         logger.error(f"점진 청산 실패 ({ticker}): {e}")
+                        failed.append({"ticker": ticker, "requested_qty": portion,
+                                       "reason": f"주문 실패: {e}"})
 
         except Exception as e:
             logger.error(f"청산 절차 실패: {e}")
+            failed.append({"ticker": None, "requested_qty": None,
+                           "reason": f"청산 절차 실패: {e}"})
 
-        return n_closed, krw_recovered
+        complete = not partial and not failed
+        note = None
+        if not complete:
+            bits = []
+            if partial:
+                bits.append(f"부분 매도 {len(partial)}종목(잔량 남음)")
+            if failed:
+                bits.append(f"실패 {len(failed)}건")
+            note = ("청산이 완료되지 않았습니다 — " + " · ".join(bits)
+                    + ". 남은 포지션은 매도되지 않았습니다.")
+
+        return {
+            "closed": n_closed,          # ★전량 청산된 포지션만★
+            "partial": partial,
+            "failed": failed,
+            "krw_recovered": krw_recovered,
+            "mode": mode,
+            "complete": complete,
+            "note": note,
+        }
 
     # ─────────────────────────────────────────────────────────────────────
     # Internal: 알림

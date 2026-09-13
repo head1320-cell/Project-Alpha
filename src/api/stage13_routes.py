@@ -291,6 +291,40 @@ def live_kill_status():
         raise HTTPException(500, str(e))
 
 
+@router.get("/kill-switch/readiness", dependencies=[Depends(require_login)])
+def live_kill_readiness():
+    """★자동 트리거 넷 중 무엇이 무장됐고 무엇이 왜 불능인가★ (AF4)
+
+    `/kill-switch/status` 는 `is_active` 만 말한다. 운영자가 그것만 보면 안전망 넷이
+    서 있다고 읽는데, ★재료가 없는 트리거는 영원히 발동하지 않는다★ — 지금
+    `auto_dd`·`auto_cb` 는 `live_daily_pnl` 이 비어 있고 `auto_api` 는 실패 횟수를
+    아무도 기록하지 않는다. 그 사실을 아는 것은 백그라운드 감시 데몬뿐이었다.
+
+    ★`/status` 를 건드리지 않는다★ — 그쪽은 열려 있고 싸다. 이 라우트는 계좌 상태에서
+    파생되므로 로그인을 요구한다.
+    """
+    try:
+        executor = get_executor()
+        # ★조회 실패를 빈 응답으로 삼키지 않는다★ — 빈 목록은 "다 무장됨" 으로 읽힌다.
+        try:
+            account_state = executor._fetch_account_state()
+            fetch_reason = None
+        except Exception as e:
+            account_state = {}
+            fetch_reason = f"계좌 상태를 조회하지 못했습니다: {type(e).__name__}"
+
+        readiness = executor.kill_switch.trigger_readiness(account_state, None)
+        return {
+            **readiness,
+            "is_active": executor.kill_switch.is_active(),
+            "account_state_reason": fetch_reason,
+            "note": ("불능 트리거는 임계값 문제가 아니라 재료가 없어서 발동하지 "
+                     "않습니다 — 임계를 낮춰도 달라지지 않습니다."),
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @router.get("/kill-switch/events", dependencies=[Depends(require_login)])
 def live_kill_events(limit: int = Query(50, le=200)):
     try:

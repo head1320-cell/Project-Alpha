@@ -82,6 +82,8 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "주문 상태 분포 — 활동량이 드러난다"),
     ("GET", "/api/v1/live/kill-switch/events"):
         (REQUIRE_LOGIN, "킬스위치 이력 — 이벤트에 당시 자기자본이 실린다"),
+    ("GET", "/api/v1/live/kill-switch/readiness"):
+        (REQUIRE_LOGIN, "자동 트리거 무장 여부(AF4) — 계좌 상태에서 파생된다"),
     ("GET", "/api/v1/account/holdings"):
         (REQUIRE_LOGIN, "보유 종목"),
     ("GET", "/api/v1/account/balance"):
