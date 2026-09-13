@@ -34,8 +34,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from src.api.auth import require_admin, require_login
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +201,7 @@ def gateway_stats():
 # Order State Machine
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/orders/active")
+@router.get("/orders/active", dependencies=[Depends(require_login)])
 def orders_active():
     """현재 체결 대기 중 주문 (PENDING/SUBMITTED/ACCEPTED/PARTIAL_FILL)."""
     try:
@@ -210,7 +212,7 @@ def orders_active():
         raise HTTPException(500, str(e))
 
 
-@router.get("/orders/state-distribution")
+@router.get("/orders/state-distribution", dependencies=[Depends(require_login)])
 def orders_state_distribution():
     """전체 주문의 상태 분포."""
     try:
@@ -226,7 +228,7 @@ class CleanupRequest(BaseModel):
     force:  bool = Field(default=False)
 
 
-@router.post("/orders/cleanup-eod")
+@router.post("/orders/cleanup-eod", dependencies=[Depends(require_admin)])
 def orders_cleanup_eod(req: CleanupRequest):
     """장 마감 전 미체결 정리."""
     try:

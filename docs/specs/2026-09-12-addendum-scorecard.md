@@ -33,7 +33,7 @@
 | 8 | 리밸런싱 제안에 reason code | **통과**(AA) | ★직전까지 미달이었다★ — `rebalance_policy` 의 `reason` 은 자유 문자열뿐이었다. 이제 `src/domain/rebalance_reason.py` 가 **두 축**을 갖고(trigger ⟂ decision reason) `rebalance_decision` 의 6개 종료 분기가 각자 `reason_code` 를 낸다. `investment_decisions.reason_code` 컬럼까지 이어지고, ★AST 트립와이어가 7번째 분기를 막는다★(`tests/test_rebalance_reason.py`). ★생산자 없는 상수 넷은 만들지 않았다★ — 설계 문서의 제안이었을 뿐이다 |
 | 9 | 집중도·팩터 노출 계산 | **통과** | `engine/factor_exposure.factor_concentration` · `robust_opt`/`allocation_studio`/`collinearity_analyzer` 의 HHI·유효N · `constrained_opt.Constraints.group_caps_pct` · `liquidity_gate` |
 | 10 | 모든 주문 제안에 data lineage | **부분**(AA) | ★직전까지 미달이었다★. `src/engine/decision_evidence.py` 가 결정측 축 넷(`price`·`as_of`·`target`·`macro`)을 세우고 **`run_evidence` 와 같은 롤업 함수**를 부른다. `execution_plans.dec_id` 로 주문이 판단을 가리키고 끊긴 계보는 사유와 함께 보고된다. ★`부분` 인 이유★: 결정측 축은 백테스트의 네 축과 **다른 것을 잰다** — 식별자 사슬은 이어졌지만 데이터 빈티지 시점 자체가 주문을 따라가는 것은 아니다 |
-| 11 | live 전환이 기본 차단 | **통과** | `set_mode(LIVE, confirm_token="EXPLICIT_LIVE_CONFIRMED")` 없이는 `ValueError`. ★다만 그 라우트에 인증이 없다★ — 토큰만 알면 누구나(→ **P-1**) |
+| 11 | live 전환이 기본 차단 | **통과** | `set_mode(LIVE, confirm_token="EXPLICIT_LIVE_CONFIRMED")` 없이는 `ValueError`. ★P-1(AC) 이후 그 라우트에 `require_admin` 이 붙었다★ — `confirm_token` 은 상수라 비밀이 아니었고, 이제 **admin 토큰**이 선행한다. 감사 로그의 행위자도 자칭이 아니라 토큰에서 관측된다 |
 | 12 | kill switch 작동 | **부분** | 구조는 있고 `is_active()` 가 DB 실패 시 `True`(페일세이프). ★그런데 `auto_dd`·`auto_cb` 는 구조적으로 발동 불가★ — `live_daily_pnl` 에 쓰는 코드가 없어 드로다운이 항상 미상(P1 이 그 사실을 관측 가능하게 만들었다). `auto_api` 는 `api_failure_count` 를 아무도 안 채운다. `gradual` 청산은 ★1/5 만 팔고 멈춘다★ |
 | 13 | 테스트와 문서가 함께 생성 | **통과** | 저장소 관례 — 커밋마다 변이 배터리 + HISTORY + 스펙. 이 문서 자체가 그 예다 |
 
@@ -113,7 +113,8 @@
   HTTP API 로 **도달할 수 없다**.
 - `live_orders` 상태를 기본 실행기가 **raw UPDATE** 로 쓴다(④의 전이표 우회).
 - ★규제 도메인 전무★ — 적합성·적정성·위험감수능력·투자목적·상품적격성·동의·
-  개인정보 어느 것도 `src/` 에 없다(전수 grep 0건). 그 선행 조건인 **인증도 없다**.
+  개인정보 어느 것도 `src/` 에 없다(전수 grep 0건). ★선행 조건인 인증은 P-1(AC)
+  에서 생겼다★ — 다만 그것은 문을 연 것이지 규제 도메인을 만든 것이 아니다.
 - 감사 추적에 **위변조 방지가 없다**(해시 체인·서명·시퀀스 없음). 보존은
   `data/retention.py` 가 `AUDIT` 로 분류해 삭제를 금지하지만, ★법적 보존 요건은
   명시된 미상★이다.
@@ -134,7 +135,9 @@
 - **비용 모델을 고치지 않았다.** 10배 불일치는 ★측정된 채로 남는다★ — 어느 값이
   맞는지 이 저장소가 잰 적이 없어서, 고치는 것보다 보이게 하는 것이 먼저다.
 - **모드 어휘를 정리하지 않았다.** 여섯은 그대로다.
-- **PAPER 가 이제 안전하다고 말하지 않는다.** 한 경로를 막았고, 인증이 없는 한
-  누구나 모드를 바꿀 수 있다는 사실은 그대로다(P-1).
+- **PAPER 가 이제 안전하다고 말하지 않는다.** 한 경로를 막았다. ★"누구나 모드를
+  바꿀 수 있다" 는 P-1(AC)에서 해소됐다★ — 이제 admin 토큰이 필요하고 누가 바꿨는지
+  감사 로그가 **관측**한다. 그러나 그것은 접근을 통제한 것이지 PAPER 경로의 정확성을
+  검증한 것이 아니다.
 - **규제 준수를 평가한 것이 아니다.** 코드에 무엇이 없는지를 셌을 뿐이고,
   ★업권·인가 판단은 이 저장소가 할 수 있는 일이 아니다★.

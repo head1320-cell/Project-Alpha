@@ -13,11 +13,14 @@
 // 미사용 메서드 정리는 별개 판단이라 손대지 않았다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import { API_BASE as BASE } from "@/shared/api/apiBase";
+import { authHeaders } from "@/shared/api/authToken";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    // ★인증 헤더를 한 곳에서 얹는다★(AC7). `...init` 뒤에 두어 호출자의 headers 를
+    // 덮어쓰지 않도록 병합한다 — 예전엔 `...init` 이 headers 를 통째로 날렸다.
+    headers: { "Content-Type": "application/json", ...init?.headers, ...authHeaders() },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

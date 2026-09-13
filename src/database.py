@@ -67,7 +67,21 @@ def _build_sqlite_fallback_url() -> str:
 
 
 DATABASE_URL = _build_database_url()
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "frm123!")
+#: ★기본 비밀번호를 바꾸지 않는다★ — 말없이 바꾸면 배포가 조용히 잠기고,
+#: `tests/test_api.py` 가 이 값을 고정하고 있다. 대신 **쓰이고 있다는 사실을
+#: 관측 가능하게** 만든다(`admin_password_state()` → `GET /api/v1/auth/me`).
+#: 인증(P-1)이 켜진 뒤로 이 값은 **돈 라우트의 열쇠**다 — 운영에서는 반드시 설정할 것.
+DEFAULT_ADMIN_PASSWORD = "frm123!"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
+
+
+def admin_password_state() -> str:
+    """`configured` | `default` — admin 비밀번호가 운영자가 정한 값인가.
+
+    ★`ADMIN_PASSWORD` 상수와 달리 호출 시점의 환경을 읽는다★ — 상수는 import 시각에
+    굳고, 이 함수는 "지금 이 프로세스가 어떤 상태인가" 를 말해야 하기 때문이다.
+    """
+    return "configured" if os.getenv("ADMIN_PASSWORD", "").strip() else "default"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Engine + Session Setup

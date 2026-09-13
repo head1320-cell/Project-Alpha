@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.api.auth import require_admin, require_login
+from src.domain.auth_identity import Principal, observed_actor
 from src.domain.perf_kind import execution_label
 
 router = APIRouter(prefix="/api/v1/live", tags=["live-trading"])
@@ -85,7 +87,7 @@ def get_executor():
 # 1. 스키마 초기화
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.post("/init-schema")
+@router.post("/init-schema", dependencies=[Depends(require_admin)])
 def live_init_schema():
     """live_* 테이블 생성 + 체결 중복 방지 인덱스.
 
@@ -121,7 +123,7 @@ class SignalRequest(BaseModel):
     source:      str = Field(default="manual")
 
 
-@router.post("/orders/submit")
+@router.post("/orders/submit", dependencies=[Depends(require_admin)])
 def live_submit_order(req: SignalRequest):
     """신호 → 위험 검증 → 모드 라우팅 → 실행."""
     try:
@@ -131,7 +133,7 @@ def live_submit_order(req: SignalRequest):
         raise HTTPException(500, str(e))
 
 
-@router.get("/orders")
+@router.get("/orders", dependencies=[Depends(require_login)])
 def live_list_orders(
     status: str | None = None,
     strategy_id: int | None = None,
@@ -146,7 +148,7 @@ def live_list_orders(
         raise HTTPException(500, str(e))
 
 
-@router.get("/orders/{client_order_id}")
+@router.get("/orders/{client_order_id}", dependencies=[Depends(require_login)])
 def live_get_order(client_order_id: str):
     try:
         executor = get_executor()
@@ -161,10 +163,13 @@ def live_get_order(client_order_id: str):
 
 
 @router.delete("/orders/{client_order_id}")
-def live_cancel_order(client_order_id: str, actor: str = "user"):
+def live_cancel_order(client_order_id: str, actor: str = "user",
+                      principal: Principal = Depends(require_admin)):
     try:
         executor = get_executor()
-        return executor.cancel_order(client_order_id, actor)
+        who = observed_actor(principal, actor)
+        result = executor.cancel_order(client_order_id, who["actor"])
+        return {**result, **who} if isinstance(result, dict) else result
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -173,7 +178,7 @@ def live_cancel_order(client_order_id: str, actor: str = "user"):
 # 3. 계좌 + 잔고
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/balance")
+@router.get("/balance", dependencies=[Depends(require_login)])
 def live_balance():
     """KIS 잔고 + 평가 + 보유 종목."""
     try:
@@ -194,11 +199,15 @@ class ModeChangeRequest(BaseModel):
 
 
 @router.post("/mode")
-def live_set_mode(req: ModeChangeRequest):
+def live_set_mode(req: ModeChangeRequest,
+                  principal: Principal = Depends(require_admin)):
     """⚠ LIVE 진입은 confirm_token='EXPLICIT_LIVE_CONFIRMED' 필요."""
     try:
         executor = get_executor()
-        return executor.set_mode(req.mode, req.actor, req.confirm_token)
+        # ★감사에 적히는 이름은 토큰에서 관측된 것이다★ — `req.actor` 는 넘기지 않는다.
+        who = observed_actor(principal, req.actor)
+        result = executor.set_mode(req.mode, who["actor"], req.confirm_token)
+        return {**result, **who}
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
@@ -231,32 +240,41 @@ class KillTriggerRequest(BaseModel):
 
 
 @router.post("/kill-switch/trigger")
-def live_kill_trigger(req: KillTriggerRequest):
+def live_kill_trigger(req: KillTriggerRequest,
+                      principal: Principal = Depends(require_admin)):
     """🚨 비상 정지."""
     try:
         executor = get_executor()
+        who = observed_actor(principal, req.actor)
         balance = executor.kis.get_balance()
-        return executor.kill_switch.trigger(
-            source=f"manual_{req.actor}",
+        result = executor.kill_switch.trigger(
+            source=f"manual_{who['actor']}",
             reason=req.reason,
             equity=balance.get("evaluated_total", 0),
             kis_client=executor.kis,
             liquidation_mode=req.liquidation_mode,
         )
+        return {**result, **who}
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 class KillResolveRequest(BaseModel):
-    resolved_by: str = Field(..., min_length=1)
+    #: ★선택 항목이 됐다★(AC5) — 해제자는 토큰에서 **관측**하므로 본문이 이름을
+    #: 주장할 필요가 없다. 필드를 지우지 않는 이유는 기존 호출자를 422 로 깨뜨리지
+    #: 않기 위해서이고, 주장이 토큰과 다르면 응답의 `claimed_actor` 에 남는다.
+    resolved_by: str | None = Field(default=None)
     notes:       str = Field(default="")
 
 
 @router.post("/kill-switch/resolve")
-def live_kill_resolve(req: KillResolveRequest):
+def live_kill_resolve(req: KillResolveRequest,
+                      principal: Principal = Depends(require_admin)):
     try:
         executor = get_executor()
-        return executor.kill_switch.resolve(req.resolved_by, req.notes)
+        who = observed_actor(principal, req.resolved_by)
+        result = executor.kill_switch.resolve(who["actor"], req.notes)
+        return {**result, **who}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -273,7 +291,7 @@ def live_kill_status():
         raise HTTPException(500, str(e))
 
 
-@router.get("/kill-switch/events")
+@router.get("/kill-switch/events", dependencies=[Depends(require_login)])
 def live_kill_events(limit: int = Query(50, le=200)):
     try:
         from sqlalchemy import text
@@ -293,7 +311,7 @@ def live_kill_events(limit: int = Query(50, le=200)):
 # 6. Audit Trail 조회
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/audit")
+@router.get("/audit", dependencies=[Depends(require_login)])
 def live_audit(
     event_type:     str | None = None,
     category:       str | None = None,
@@ -316,7 +334,7 @@ def live_audit(
         raise HTTPException(500, str(e))
 
 
-@router.get("/audit/summary")
+@router.get("/audit/summary", dependencies=[Depends(require_login)])
 def live_audit_summary(date: str | None = None):
     """단일 거래일 audit 요약."""
     try:
@@ -330,7 +348,7 @@ def live_audit_summary(date: str | None = None):
 # 7. Daily P&L
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/daily-pnl")
+@router.get("/daily-pnl", dependencies=[Depends(require_login)])
 def live_daily_pnl(limit: int = Query(30, le=365)):
     """일별 P&L 이력."""
     try:
