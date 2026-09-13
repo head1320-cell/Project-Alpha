@@ -113,6 +113,33 @@ OPEN_WITH_REASON: dict[tuple[str, str], str] = {
         "요청 본문의 보유로 도는 진단 — 저장된 계좌를 읽지 않는다(AA5)",
     ("POST", "/api/v1/explain/daily"):
         "요청 본문의 보유로 도는 설명 — 저장된 계좌를 읽지 않는다(AB4)",
+    ("POST", "/api/v1/strategies/scorecard"):
+        "알파 등록부·건강도·증거를 읽는 연구 표면(AE4) — 계좌·주문을 건드리지 않는다",
+    # ── `/strategies/` 마커를 넓히며 사정거리에 들어온 기존 연구 표면들(AE4) ──
+    # ★전수 검사가 분류되지 않은 라우트 열 개를 찾아냈다★ — 실측으로 확인한 결과
+    # `strategy_routes.py` 는 `TradingEngine`·`OrderExecutor`·`place_order` 를
+    # 한 번도 부르지 않는다. 시그널은 `daily_prices` 에서 **계산**될 뿐 집행되지 않는다.
+    ("GET", "/api/v1/strategies/list"):
+        "등록된 전략 목록 — 연구 자료이고 계좌·주문을 건드리지 않는다",
+    ("GET", "/api/v1/strategies/templates"):
+        "전략 템플릿 목록 — 체크인된 정의를 읽을 뿐이다",
+    ("POST", "/api/v1/strategies/build"):
+        "전략 정의 조립 — 저장·집행하지 않는다",
+    ("POST", "/api/v1/strategies/backtest"):
+        "과거 데이터 위의 시뮬레이션 — 주문 경로가 아니다",
+    ("POST", "/api/v1/strategies/import-and-backtest"):
+        "요청 본문의 정의를 백테스트한다 — 주문 경로가 아니다",
+    ("POST", "/api/v1/strategies/optimize"):
+        "파라미터 탐색 — 주문 경로가 아니다",
+    ("POST", "/api/v1/strategies/signal"):
+        "단일 종목 시그널 **계산** — 집행하지 않는다(실측: 주문 호출 0건)",
+    ("POST", "/api/v1/strategies/batch-signal"):
+        "일괄 시그널 **계산** — 집행하지 않는다(실측: 주문 호출 0건)",
+    ("POST", "/api/v1/strategies/dsl/validate"):
+        "전략 DSL 문법 검사 — 계산조차 하지 않는다",
+    ("POST", "/api/v1/strategies/dsl/backtest"):
+        "DSL 정의를 백테스트한다 — 주문 경로가 아니다",
+
     ("POST", "/api/v1/multibacktest/init-schema"):
         "백테스트 결과 테이블 DDL — 연구 인프라이고 계좌·주문을 건드리지 않는다",
     ("POST", "/api/v1/accounts/diagnose"):
@@ -143,6 +170,9 @@ MONEY_PATH_MARKERS = (
     # 그 영역을 **보지 못한다**. 넓게 잡고 면제는 사유로 적는다.
     "/accounts/",
     "/report/",
+    # AE4 로 전략 평가 표면이 생겼다 — 유통(P4)과 인접한 영역이라 전수 검사의
+    # 사정거리 안에 둔다.
+    "/strategies/",
 )
 
 
