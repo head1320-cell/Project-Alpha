@@ -116,7 +116,14 @@ class AttributionDecomposer:
             "strategy_contribution": strategy_contribution,
         }
         if include_daily:
-            result["daily_attribution"] = self._daily_attribution(daily_df)
+            rows = self._daily_attribution(daily_df)
+            # ★각 행이 스스로를 설명한다★ (AB4) — 기존 키는 하나도 바뀌지 않고
+            # `explanation` 이 덧붙는다. 문장은 결정론적 템플릿이 만든다(LLM 아님).
+            from src.engine.daily_explain_backtest import explain_backtest_day
+            for row in rows:
+                row["explanation"] = explain_backtest_day(
+                    row, run_id=run_id).to_dict()
+            result["daily_attribution"] = rows
 
         return _sanitize_for_json(result)
 
@@ -435,15 +442,42 @@ class AttributionDecomposer:
 
     @staticmethod
     def _daily_attribution(daily_df) -> list[dict]:
+        """일별 5효과. ★미상을 0 으로 접지 않는다★ (AB2)
+
+        예전에는 `float(r[col] or 0)` 이었다 — 같은 파일의 누적 경로가
+        `column_coverage`/`sum_known` 으로 정확히 피하고 있는 그 함정이다
+        (*"`fillna(0)` 은 '안 본 행' 과 '0 인 행' 을 같은 자리에 쓴다"*).
+        한 파일 안에서 한쪽만 규율 밖이었고, 소비자가 0 건이라 아무도 못 봤다.
+
+        일일 설명 엔진(AB)이 **첫 소비자**다. 0 으로 접힌 값을 문장으로 만들면
+        "배분 효과가 0 이었습니다" 라는 **없는 사실**을 말하게 되므로 여기서 막는다.
+
+        각 행에 `coverage` 를 함께 낸다 — 설명이 잔차를 `interaction`(복리)과
+        `unexplained`(복리+미관측 혼합) 중 무엇으로 부를지 가르는 근거다.
+        """
         if daily_df.empty:
             return []
-        return [{
-            "date": str(r["trade_date"].date()),
-            "portfolio_return": round(float(r["portfolio_return"] or 0) * 100, 4),
-            "allocation_effect": round(float(r["allocation_effect"] or 0) * 100, 4),
-            "selection_effect": round(float(r["selection_effect"] or 0) * 100, 4),
-            "macro_effect": round(float(r["macro_effect"] or 0) * 100, 4),
-            "netting_effect": round(float(r["netting_effect"] or 0) * 100, 4),
-            "cost_effect": round(float(r["cost_effect"] or 0) * 100, 4),
-            "regime": r["regime"],
-        } for _, r in daily_df.iterrows()]
+
+        def _num(v):
+            """관측값이면 퍼센트로, 아니면 ★`None` 그대로★."""
+            return None if v is None or pd.isna(v) else round(float(v) * 100, 4)
+
+        out: list[dict] = []
+        for _, r in daily_df.iterrows():
+            effects = {c: _num(r[c] if c in r else None) for c in EFFECT_COLUMNS}
+            missing = sorted(c for c, v in effects.items() if v is None)
+            out.append({
+                "date": str(r["trade_date"].date()),
+                "portfolio_return": _num(r["portfolio_return"]),
+                **effects,
+                "regime": r["regime"],
+                # ★그 행에서 몇 축을 봤는가★ — 누적 경로의 `column_coverage` 와
+                # 같은 것을 행 단위로 말한다.
+                "coverage": {
+                    "n_total": len(EFFECT_COLUMNS),
+                    "n_known": len(EFFECT_COLUMNS) - len(missing),
+                    "complete": not missing,
+                    "missing": missing,
+                },
+            })
+        return out
