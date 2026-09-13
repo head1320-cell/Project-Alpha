@@ -115,6 +115,10 @@ OPEN_WITH_REASON: dict[tuple[str, str], str] = {
         "요청 본문의 보유로 도는 설명 — 저장된 계좌를 읽지 않는다(AB4)",
     ("POST", "/api/v1/multibacktest/init-schema"):
         "백테스트 결과 테이블 DDL — 연구 인프라이고 계좌·주문을 건드리지 않는다",
+    ("POST", "/api/v1/accounts/diagnose"):
+        "요청 본문의 보유·계좌유형·한도로 도는 판정(AD4) — 저장된 계좌를 읽지 않는다",
+    ("POST", "/api/v1/report/portfolio"):
+        "요청 본문으로 도는 표면 넷의 조립(AD5) — 저장된 계좌를 읽지 않고 새 수치도 만들지 않는다",
 }
 
 #: 이 조각이 경로에 들어 있으면 "돈·PII 후보" 로 본다(트립와이어 ③).
@@ -135,6 +139,10 @@ MONEY_PATH_MARKERS = (
     "account/balance",
     "rebalance",
     "holdings",
+    # AD4·AD5 로 계좌·리포트 표면이 생겼다 — 마커가 닿지 않으면 전수 검사가
+    # 그 영역을 **보지 못한다**. 넓게 잡고 면제는 사유로 적는다.
+    "/accounts/",
+    "/report/",
 )
 
 

@@ -412,7 +412,7 @@ eslint FSD 규칙(역방향·동료 임포트 금지)을 그대로 받는다.
 
 | 무엇 | 어떻게 | 선행 |
 |---|---|---|
-| 계좌 차원 | `portfolios` 는 PK 가 `(username, ticker)` 라 계좌가 안 들어간다. **새 테이블**(`investor_profiles` · `accounts`)을 더하고 기존 표는 **건드리지 않는다** | ★P-1 인증★ |
+| 계좌 차원 | ★정정(AD, 2026-09-13)★ — `portfolios` PK 는 `(username, ticker)` 가 아니라 **`username` 하나**다(실측: 사용자당 한 행·한 종목이라 포트폴리오가 아니라 단일 포지션이다). 계좌가 안 들어간다는 결론은 같고 근거가 더 강하다. **새 테이블**(`investor_profiles` · `accounts`)을 더하고 기존 표는 **건드리지 않는다**. AD 는 아직 테이블을 만들지 않았고 **요청 본문**으로 받는다 | ★P-1 인증★ (완료) |
 | 컬럼 추가 | `src/data/schema_add_columns.py::add_columns()` **하나만** 쓴다(반환값 확인 필수) | — |
 | 보존 분류 | ★새 표를 만들면 `src/data/retention.py` 에 부류와 사유를 적어야 한다★ — 안 적으면 `tests/test_retention_policy.py` 가 실패한다 | — |
 | alembic | ★도입하지 않는다★ — [인프라 로드맵](../plans/2026-09-06-quant-db-infra-roadmap.md)의 "하지 않을 것" 표에 다시 볼 조건과 함께 있다 | — |
