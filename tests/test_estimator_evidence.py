@@ -157,7 +157,7 @@ def test_the_registry_is_not_empty():
     assert EXCLUDED_SITES, "제외 목록이 비었다 — 안 잰 것을 안 적었다"
 
 
-@pytest.mark.parametrize("rec", LEAKAGE_SITES, ids=lambda r: r.site)
+@pytest.mark.parametrize("rec", LEAKAGE_SITES, ids=lambda r: getattr(r, "site", "?"))
 def test_every_registered_site_is_fully_declared(rec):
     assert rec.site and rec.window and rec.vintage and rec.consumer
     assert rec.window in ("bounded", "trailing", "full_sample", "unmeasured")
@@ -166,14 +166,14 @@ def test_every_registered_site_is_fully_declared(rec):
     assert rec.note, f"{rec.site} 에 설명이 없다"
 
 
-@pytest.mark.parametrize("rec", LEAKAGE_SITES, ids=lambda r: r.site)
+@pytest.mark.parametrize("rec", LEAKAGE_SITES, ids=lambda r: getattr(r, "site", "?"))
 def test_every_registered_site_really_exists(rec):
     """★목록이 낡아 없는 파일을 가리키면 전수 검사는 통과하지만 아무것도 안 지킨다★"""
     rel = rec.site.split(":")[0]
     assert (_ROOT / rel).exists(), f"{rel} 이 없다 — 레지스트리가 낡았다"
 
 
-@pytest.mark.parametrize("rec", EXCLUDED_SITES, ids=lambda r: r["site"])
+@pytest.mark.parametrize("rec", EXCLUDED_SITES, ids=lambda r: r.get("site", "?") if isinstance(r, dict) else "?")
 def test_every_excluded_site_carries_a_reason(rec):
     """★사유 없는 제외는 금지★ — 안 잰 것을 안 잤다고 적어야 축이 거짓말을 안 한다."""
     assert rec["reason"], f"{rec['site']} 를 사유 없이 제외했다"

@@ -243,3 +243,30 @@ def test_the_leakage_block_is_not_inside_pit_evidence(frames):
     assert "estimator_leakage" in res
     assert "estimator_leakage" not in (res.get("pit_evidence") or {})
     assert "estimator_leakage" not in (res.get("perf_label") or {})
+
+
+def test_an_unreadable_opt_in_flag_is_unknown_not_off(frames):
+    """★미상 ≠ 꺼짐★ 플래그가 bool 이 아니면 **지어내지 않는다**.
+
+    변이 배터리에서 `return None` 을 `return False` 로 바꾼 변이가 **살아남았다** —
+    엔진 수준에서 이 경로를 아무도 밟지 않았기 때문이다. 미상을 "안 켰음" 으로 읽는
+    것이 정확히 AF 가 `api_failure_count` 에서 막은 결함이다.
+    """
+    from src.engine.run_evidence import STATUS_UNKNOWN, STATUS_VERIFIED
+    res = _run(strategy_params={"buy_conditions": BUY, "sell_conditions": SELL,
+                                "allow_snapshot_fundamentals": "yes"})
+    block = res["estimator_leakage"]
+    assert block["status"] == STATUS_UNKNOWN, "모양이 다른 값을 꺼짐으로 읽었다"
+    assert block["status"] != STATUS_VERIFIED
+    assert "snapshot_fundamentals" in block["unknown_axes"]
+    assert block["axes"]["snapshot_fundamentals"]["window"] is None
+
+
+def test_the_three_flag_shapes_are_all_distinguishable(frames):
+    """★짝★ 켜짐·꺼짐·미상 셋이 결과에서 갈린다 — 하나로 뭉개는 배선 배제."""
+    seen = {}
+    for flag in (True, False, "yes"):
+        block = _run(strategy_params={"buy_conditions": BUY, "sell_conditions": SELL,
+                                      "allow_snapshot_fundamentals": flag})["estimator_leakage"]
+        seen[repr(flag)] = block["status"]
+    assert len(set(seen.values())) == 3, f"세 경우가 구별되지 않는다: {seen}"
