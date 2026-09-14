@@ -121,6 +121,11 @@ LIVE_TRADING_SCHEMA_DDL = [
 
         starting_equity_krw REAL,
         ending_equity_krw   REAL,
+        -- ★이 수치가 시장에서 왔나 지어낸 것인가★ (AI)
+        -- `execution_mode` 와 **다른 축**이다: SHADOW 로 돌면서 실제 잔고를 읽을
+        -- 수도, PAPER 로 돌면서 mock 을 읽을 수도 있다. 어휘는
+        -- `src/domain/equity_observation.py` 가 갖는다.
+        equity_source      VARCHAR(16),
         realized_pnl_krw    REAL DEFAULT 0,
         unrealized_pnl_krw  REAL DEFAULT 0,
         daily_return_pct    REAL DEFAULT 0,
@@ -199,8 +204,13 @@ def ensure_fill_dedup_index(engine) -> tuple[bool, str | None]:
         return False, reason
 
 
+#: ★이미 만들어진 DB 에 붙이는 칸★ — `CREATE TABLE IF NOT EXISTS` 는 기존 표를
+#: 고치지 않으므로, 운영 DB 는 이 경로로만 컬럼을 얻는다(W1 이 세운 관용구).
+_EQUITY_SOURCE_COLS = [("equity_source", "VARCHAR(16)")]
+
+
 def init_live_trading_schema(engine) -> int:
-    """5개 live_* 테이블 생성."""
+    """5개 live_* 테이블 생성 + ★기존 표에 빠진 칸 덧붙이기★."""
     count = 0
     with engine.begin() as conn:
         for ddl in LIVE_TRADING_SCHEMA_DDL:
@@ -208,4 +218,13 @@ def init_live_trading_schema(engine) -> int:
                 conn.execute(text(ddl)); count += 1
             except Exception as e:
                 logger.warning(f"DDL failed: {e}")
+    # ★못 붙어도 죽지 않는다★ — `add_columns` 가 **실제로 쓸 수 있는지** 확인해
+    # bool 을 돌려주고, 못 쓰면 드로다운이 `no_equity_source_column` 으로 남는다
+    # (안전한 쪽). 여기서 예외를 올리면 스키마 초기화 전체가 무너진다.
+    try:
+        from src.data.schema_add_columns import add_columns
+        add_columns(engine, "live_daily_pnl", _EQUITY_SOURCE_COLS,
+                    label="에쿼티 출처(AI)")
+    except Exception as e:                                   # noqa: BLE001
+        logger.warning(f"equity_source 컬럼 추가 실패(그 칸 없이 동작): {e}")
     return count

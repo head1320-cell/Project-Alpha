@@ -43,10 +43,26 @@ def engine():
 
 
 def _row(eng, date: str, start: float, end: float) -> None:
+    """★출처를 안 적는 행★ — AI 이전에 쓰였을 법한 모양이다.
+
+    예전에는 이것이 곧 "실제 이력" 을 뜻했다(리더에 필터가 아예 없었으니까).
+    이제는 **미상**이고, 미상은 브로커가 아니다 — 그 사실을
+    `test_an_undeclared_source_is_not_treated_as_broker` 가 건다.
+    실제 조회 이력을 뜻하려면 `_broker()` 를 쓴다.
+    """
     with eng.begin() as c:
         c.execute(text(
             "INSERT INTO live_daily_pnl (trade_date, starting_equity_krw, ending_equity_krw) "
             "VALUES (:d, :s, :e)"), {"d": date, "s": start, "e": end})
+
+
+def _broker(eng, date: str, start: float, end: float) -> None:
+    """브로커에서 **실제로 조회한** 잔고 행 — 드로다운 계열에 들어갈 수 있는 유일한 것."""
+    with eng.begin() as c:
+        c.execute(text(
+            "INSERT INTO live_daily_pnl (trade_date, starting_equity_krw, "
+            "ending_equity_krw, equity_source) VALUES (:d, :s, :e, 'broker')"),
+            {"d": date, "s": start, "e": end})
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -73,8 +89,8 @@ def test_the_unknown_is_not_silently_falsy(engine):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_history_produces_numbers(engine):
-    _row(engine, "2026-09-01", 100_000_000, 100_000_000)
-    _row(engine, "2026-09-02", 100_000_000, 90_000_000)
+    _broker(engine, "2026-09-01", 100_000_000, 100_000_000)
+    _broker(engine, "2026-09-02", 100_000_000, 90_000_000)
     dd = drawdown_from_history(engine)
     assert dd.is_known is True
     assert dd.reason is None
@@ -84,7 +100,7 @@ def test_history_produces_numbers(engine):
 
 def test_a_flat_history_is_zero_drawdown_not_unknown(engine):
     """★0 을 못 쓰게 만든 것이 아니다★ — 진짜 0 은 0 이어야 한다."""
-    _row(engine, "2026-09-01", 100_000_000, 100_000_000)
+    _broker(engine, "2026-09-01", 100_000_000, 100_000_000)
     dd = drawdown_from_history(engine)
     assert dd.is_known is True
     assert dd.cumulative_pct == pytest.approx(0.0)
@@ -92,8 +108,8 @@ def test_a_flat_history_is_zero_drawdown_not_unknown(engine):
 
 def test_recovery_from_a_peak_still_counts_the_peak(engine):
     """정점 이후 회복해도 ★정점 대비★ 로 잰다."""
-    _row(engine, "2026-09-01", 100_000_000, 120_000_000)   # 정점 1.2억
-    _row(engine, "2026-09-02", 120_000_000, 108_000_000)
+    _broker(engine, "2026-09-01", 100_000_000, 120_000_000)   # 정점 1.2억
+    _broker(engine, "2026-09-02", 120_000_000, 108_000_000)
     dd = drawdown_from_history(engine)
     assert dd.cumulative_pct == pytest.approx(0.10)
 
@@ -123,7 +139,95 @@ def test_fetch_failure_and_no_history_are_different_reasons(engine):
 
 def test_zero_equity_history_is_not_an_error(engine):
     """★에쿼티가 0 인 것과 이력이 없는 것은 다르다.★"""
-    _row(engine, "2026-09-01", 0.0, 0.0)
+    _broker(engine, "2026-09-01", 0.0, 0.0)
     dd = drawdown_from_history(engine)
     assert dd.is_known is False
     assert "equity" in (dd.reason or ""), dd.reason
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ★AI4 — 출처로 거른다★ 합성 잔고로 킬스위치를 발동시키지 않는다
+#
+# `MockKISClient.get_balance()` 는 `self.cash` 로 만든 **완전 합성** 값이다
+# (`kis_client.py:804`). 그것이 계열에 들어가면 `auto_dd`·`auto_cb` 가 지어낸
+# 숫자로 발동한다 — CLAUDE.md §6 을 가장 위험한 자리에서 어기는 것이다.
+#
+# ★리더에는 원래 아무 필터도 없었다★ — `SELECT … ORDER BY trade_date` 가 전부였다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _sourced(eng, date: str, start: float, end: float, source: str) -> None:
+    with eng.begin() as c:
+        c.execute(text(
+            "INSERT INTO live_daily_pnl (trade_date, starting_equity_krw, "
+            "ending_equity_krw, equity_source) VALUES (:d, :s, :e, :src)"),
+            {"d": date, "s": start, "e": end, "src": source})
+
+
+def test_mock_only_history_is_unknown_not_a_number(engine):
+    """★핵심★ 합성만 있으면 드로다운은 **미상**이다 — 0 도 숫자도 아니다."""
+    from src.execution.drawdown import REASON_MOCK_ONLY
+    _sourced(engine, "2026-09-01", 100.0, 100.0, "mock")
+    _sourced(engine, "2026-09-02", 100.0, 80.0, "mock")
+    dd = drawdown_from_history(engine)
+    assert not dd.is_known
+    assert dd.intraday_pct is None and dd.cumulative_pct is None
+    assert dd.reason == REASON_MOCK_ONLY
+
+
+def test_broker_only_history_produces_numbers(engine):
+    """★짝★ 실제 조회 이력은 숫자가 된다 — 필터가 모든 것을 막지는 않는다."""
+    _sourced(engine, "2026-09-01", 100.0, 100.0, "broker")
+    _sourced(engine, "2026-09-02", 100.0, 80.0, "broker")
+    dd = drawdown_from_history(engine)
+    assert dd.is_known, dd.reason
+    assert dd.intraday_pct == pytest.approx(0.20)
+    assert dd.cumulative_pct == pytest.approx(0.20)
+
+
+def test_a_mixed_history_refuses_rather_than_quietly_picking(engine):
+    """★섞였으면 거절한다★ — broker 행만 조용히 고르지 않는다.
+
+    섞였다는 사실 자체가 사용자가 알아야 할 상태다(mock 으로 돌린 날이 이력에
+    남아 있다는 뜻). 조용히 골라 쓰면 그 사실이 사라진다.
+    """
+    from src.execution.drawdown import REASON_MIXED_SOURCE
+    _sourced(engine, "2026-09-01", 100.0, 100.0, "broker")
+    _sourced(engine, "2026-09-02", 100.0, 80.0, "mock")
+    dd = drawdown_from_history(engine)
+    assert not dd.is_known
+    assert dd.reason == REASON_MIXED_SOURCE
+
+
+def test_an_undeclared_source_is_not_treated_as_broker(engine):
+    """★미상 ≠ 브로커★ 출처를 안 적은 옛 행을 실제 조회로 읽지 않는다."""
+    from src.execution.drawdown import REASON_UNDECLARED_SOURCE
+    _row(engine, "2026-09-01", 100.0, 100.0)      # equity_source 없음
+    _row(engine, "2026-09-02", 100.0, 80.0)
+    dd = drawdown_from_history(engine)
+    assert not dd.is_known
+    assert dd.reason == REASON_UNDECLARED_SOURCE
+
+
+def test_the_four_refusals_are_all_different(engine):
+    """★짝★ 네 사유가 한 문자열로 뭉개지지 않는다."""
+    from src.execution.drawdown import (
+        REASON_MIXED_SOURCE,
+        REASON_MOCK_ONLY,
+        REASON_NO_HISTORY,
+        REASON_UNDECLARED_SOURCE,
+    )
+    assert len({REASON_NO_HISTORY, REASON_MOCK_ONLY,
+                REASON_MIXED_SOURCE, REASON_UNDECLARED_SOURCE}) == 4
+
+
+def test_the_filter_reuses_the_domain_verdict(engine):
+    """★판정을 두 곳에 두지 않는다★ — `usable_for_drawdown` 이 단일 출처다."""
+    import ast
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1]
+           / "src" / "execution" / "drawdown.py").read_text(encoding="utf-8")
+    imported = {n.module: {a.name for a in n.names}
+                for n in ast.walk(ast.parse(src))
+                if isinstance(n, ast.ImportFrom) and n.module}
+    assert "usable_for_drawdown" in imported.get("src.domain.equity_observation", set()), (
+        "출처 판정을 복사했다 — 한쪽만 고쳐도 타입 에러가 안 난다")

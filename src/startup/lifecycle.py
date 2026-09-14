@@ -89,6 +89,10 @@ def _risk_monitor_bg():
 
             engine = get_engine()
             audit = AuditTrail(engine)
+            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오고, 그 이력에
+            # 쓰는 코드가 저장소에 없어서 `auto_dd`·`auto_cb` 가 발동할 수 없었다(AI).
+            # 기록 실패는 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
+            _record_equity(engine, log)
             last = run_once(
                 kill_switch=KillSwitch(engine, audit),
                 audit=audit,
@@ -101,6 +105,33 @@ def _risk_monitor_bg():
         except Exception as e:                  # noqa: BLE001
             log.warning(f"리스크 감시 주기 실패(다음 주기에 재시도): {e}")
         _t.sleep(_RISK_MONITOR_SEC)
+
+
+def _record_equity(engine, log) -> None:
+    """오늘의 에쿼티를 이력에 남긴다. ★출처를 함께 적는다★
+
+    ★`_monitor_account_state()` 를 쓰지 않는 이유★ — 그쪽은 `equity_krw: None` 을
+    일부러 박아 둔다(감시는 브로커를 부르지 않는다는 판단). 여기서 그 값을 채우면
+    리스크 검사 **전체**가 보는 상태가 달라지므로, 잔고 읽기를 이 함수 안에만 둔다.
+
+    ★mock 이면 `mock` 으로 적는다★ — 안 쓰는 것이 아니라 라벨해서 쓴다. 그 행이
+    드로다운 계열에 못 들어가는 것은 리더가 거르기 때문이다(`drawdown.py`).
+    """
+    try:
+        from src.execution.equity_history import current_source, record_observation
+        from src.execution.kis_client import get_kis_client
+        from src.execution.order_executor import ExecutorState
+
+        balance = get_kis_client().get_balance() or {}
+        record_observation(
+            engine,
+            account_state={"equity_krw": balance.get("evaluated_total")},
+            execution_mode=str(getattr(ExecutorState.mode, "value", ExecutorState.mode)),
+            source=current_source(),
+        )
+    except Exception as e:                      # noqa: BLE001
+        # ★감시를 멈추지 않는다★ — 기록은 부차이고 판정이 본체다.
+        log.debug(f"에쿼티 이력 기록 건너뜀: {e}")
 
 
 def _monitor_account_state() -> dict:
