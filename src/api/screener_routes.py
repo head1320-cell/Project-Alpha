@@ -17,6 +17,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.domain.execution_assumption import SIGNAL_LAG_DEFAULT
 from src.domain.perf_kind import backtest_label
 from src.observability.logging_config import get_logger
 
@@ -1422,8 +1423,9 @@ class ScreenToBacktestRequest(BaseModel):
     # 동적 재편입(빈자리 즉시 보충)은 이 주기와 무관하게 항상 실행됨 — 이 필드는 "순위이탈
     # 보유종목 정리"가 발생하는 주기만 결정한다.
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
-    # 신호 기준일 (젠포트 Tip 3): 0=당일 봉(기존), 1=전일 봉 기준 신호→당일 체결(시가류 체결 look-ahead 제거)
-    signal_lag: int = Field(default=0, ge=0, le=5)
+    # 신호 기준일 (젠포트 Tip 3). ★기본은 1★ — 0(당일 봉)은 신호가 당일 종가를 쓰므로
+    # 장 시작 전에 계산할 수 없다. 0 을 **금지하지는 않고** 결과가 `same_bar` 로 말한다(AG).
+    signal_lag: int = Field(default=SIGNAL_LAG_DEFAULT, ge=0, le=5)
     # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
     rebuy_block_days: int = Field(default=0, ge=0, le=120)
     # 체결 가격 기준 ± 오프셋% (지정가 모델 — 도달 검증, 미도달 시 그날 미체결)

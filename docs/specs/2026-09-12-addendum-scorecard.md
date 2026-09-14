@@ -26,7 +26,7 @@
 | 1 | paper trading 이 기본 실행 모드 | **통과** | 기본은 PAPER 보다 **더 안전한 `SHADOW`** — `order_executor.ExecutorState.mode`. 더해 `trading_engine.SafetyConfig.dry_run=True` · `kis_client` 팩터리 `KIS_IS_PAPER` 기본 `"1"` · `mock_gate.mock_allowed()` 기본 `"1"`. ★단 모드는 프로세스 로컬이라 재시작하면 `SHADOW` 로 되돌아간다★(영속 아님) |
 | 2 | 실제 브로커 주문이 호출되지 않는다 | **통과**(Y1 이후) | ★직전까지 미달이었다★ — `_execute_paper` 가 클라이언트를 확인하지 않아 `KIS_USE_MOCK=0`+`KIS_IS_PAPER=0` 이면 PAPER 가 실주문을 냈다. `execution/client_realism.py` + `tests/test_paper_mode_is_simulated.py` 가 막는다. LIVE 는 설계상 가능하되 확인 토큰 필요 |
 | 3 | 모든 성과에 상태 라벨 | **부분**(Z 이후) | ★직전까지 미달이었다★ — 종류 축이 공용 컴포넌트로 없었다. 이제 `src/domain/perf_kind.py` 가 어휘를 갖고 **응답 9경로**가 `perf_label` 을 싣고 `shared/ui/PerfLabel.tsx` 가 그린다(부착 10화면 · 트립와이어 `tests/test_perf_label_contract.py`). ★`부분` 인 이유 둘★: ⑴ 기존 배지 넷(`brun-badge` PIT · `tbt-prov` 데이터 · `as-bt-badge` OOS · 인라인 모드)이 그대로라 **같은 화면에 축이 다른 배지가 둘 이상** 보일 수 있다. ⑵ 사유가 적힌 허용 목록 8건이 남아 있다(랜딩 데모 · 리얼리즘 둘 · 종목 위험지표 · 상태 제공자 · 기존 배지 셋) |
-| 4 | 백테스트가 PIT 제약 적용 | **부분** | `engine/run_evidence.py` 4축(price·universe·macro·fundamentals) · `data/pit_macro.accumulate_for_bars` · `dart_history` 빈티지. ★`signal_lag` 기본이 `0`★(`kis_backtest_engine:530`) — 같은 봉 신호·체결이 기본 |
+| 4 | 백테스트가 PIT 제약 적용 | **부분**(AG 이후) | `engine/run_evidence.py` 4축(price·universe·macro·fundamentals) · `data/pit_macro.accumulate_for_bars` · `dart_history` 빈티지. ★직전까지 `signal_lag` 기본이 `0` 이었다★ — 신호를 당일 종가에서 뽑고 그 종가에 체결했다(종가 확정 전에는 낼 수 없는 주문). 이제 기본이 `1` 이고 `src/domain/execution_assumption.py` 가 단일 출처이며, 결과가 `execution_assumption` 블록으로 `precomputable`/`same_bar`/`unrecorded` 를 **선언**한다(`lag=0` 은 금지가 아니라 라벨된다). ★`부분` 인 이유 둘★: ⑴ **데이터 누출 축이 여전히 없다**(§4 — GARCH·DCC 등 전체표본 적합). ⑵ 기록 이전 런은 재현 조건을 몰라 `unrecorded` 이고, 그것은 통과가 아니다 |
 | 5 | look-ahead 검사 존재 | **통과** | 위 4축 + `AXIS_UNKNOWN` 이 ★통과가 아님★을 명시. `regime_probability` 가 평활 확률의 배분 사용을 거부. 단 **추정기 수준 누출**(전체표본 스케일링·윈저화)은 어느 축도 안 본다 — §4 |
 | 6 | 거래비용·슬리피지 반영 | **부분** | 반영은 된다. ★그런데 비용 모델이 넷이고 수수료 기본값이 10배 다르다★ — `kis_backtest_engine` `0.0015` vs `multi_strategy_backtest`·`realism_engine` `0.00015`. 단일 출처를 자처하는 `data/market_rules.py` 를 **어느 백테스트도 읽지 않는다**(세금·스프레드·호가단위·가격제한 전부 백테스트 미적용) |
 | 7 | 전략·모델·데이터 버전 추적 | **부분** | `code_version`(git SHA)이 `research_runs`·`backtest_runs`·`target_versions`·`regime_snapshots` 에 박힌다. `timing_rule_set_versions`·`scenario_pack_versions` 는 내용까지 보존. ★없는 것★: `strategy_version`·`feature_version`·`universe_version`·`cost_model_version`·모델 레지스트리 |
@@ -78,7 +78,7 @@
 
 | 항목 | 판정 | 실측 |
 |---|---|---|
-| point-in-time 데이터 | **부분** | 4축 증거 + 빈티지 두 계열(재무·매크로). `signal_lag` 기본 0 |
+| point-in-time 데이터 | **부분** | 4축 증거 + 빈티지 두 계열(재무·매크로). `signal_lag` 기본은 `1`(AG — 결정이 장 시작 전 계산 가능)이고 실행마다 `execution_assumption` 으로 기록된다. ★기록 이전 런은 `unrecorded`★ |
 | bias 검사 | **부분** | look-ahead·생존편향은 축으로 존재. ★데이터 누출 축이 없다★ — `GARCH`·`DCC`·`MarkovRegression`·`GaussianMixture`·`DynamicFactor`·`genpareto`·`LedoitWolf` 가 **전체표본 적합**이고 어느 축도 그것을 보지 않는다. `z_score`·`neutralize`·`conditional_market` 도 미포함 |
 | 비용 모델 | **부분** | 넷이 공존, 10배 불일치(기준 #6). ★사용자 결정: 이번엔 기록만★ |
 | walk-forward | **통과** | `plan_walk_forward`/`simulate_walk_forward` 분리 + AST 테스트가 강제. rolling/expanding 선택 |

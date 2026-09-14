@@ -26,6 +26,11 @@ from datetime import datetime, timedelta
 import pandas as pd
 from sqlalchemy import text
 
+from src.domain.execution_assumption import (
+    SIGNAL_LAG_DEFAULT,
+    ExecutionAssumption,
+    assumption_label,
+)
 from src.engine.quant_metrics import compute_metrics
 
 logger = logging.getLogger(__name__)
@@ -101,7 +106,7 @@ def set_engine(engine):
 #: ★진단만 담는다★ `result`·`intraday`·`asset_alloc` 처럼 화면 본문이 직접
 #: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
 DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
-                   "price_basis")
+                   "price_basis", "execution_assumption")
 
 # ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
 #: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
@@ -525,9 +530,12 @@ class BacktestConfig:
     sell_time_start: str = "0900"       # 매도 시간 윈도 (HHMM)
     sell_time_end: str = "1530"
     # 신호 기준일 (젠포트 Tip 3: "전일 종가 기준 선정 → 익일 매매").
-    # 0 = 당일 봉 포함(기존 동작 불변, 종가 체결과 정합).
-    # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — 시가·전일종가류 체결의 look-ahead 제거.
-    signal_lag: int = 0
+    # 0 = 당일 봉 포함 — ★신호가 당일 종가를 쓰므로 장 시작 전에 계산할 수 없다★.
+    #     금지하지는 않는다(연구 목적). 결과가 `same_bar` 라고 **말한다**(AG).
+    # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — ★기본값★.
+    # ★기본값은 `src/domain/execution_assumption.SIGNAL_LAG_DEFAULT` 한 곳에 있다★ —
+    #   예전에는 세 곳에 `0` 이 따로 박혀 있어 서로 갈릴 수 있었다.
+    signal_lag: int = SIGNAL_LAG_DEFAULT
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2092,6 +2100,14 @@ class BacktestEngine:
                 getattr(self, "_price_labels", None),
                 self.cfg.price_basis_policy,
                 getattr(self, "_price_excluded", None)),
+            # ★이 결정을 장 시작 전에 계산할 수 있었나★ `perf_label`(Z) 과는 다른
+            # 축이다 — 저것은 "이 수치가 무엇인가"(백테스트/페이퍼/실계좌)이고
+            # 이것은 "어떤 실행 가정 위에 섰나" 다. ★요청값이 아니라 엔진이 실제로
+            # 쓴 값★ 이라서, 클라이언트가 안 보낸 런도 기본값이 그대로 기록된다.
+            "execution_assumption": assumption_label(ExecutionAssumption(
+                signal_lag=self.cfg.signal_lag,
+                buy_fill_type=self.cfg.buy_fill_type,
+                sell_fill_type=self.cfg.sell_fill_type)),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -2407,7 +2423,7 @@ def run_backtest(
     breakthrough_buy: bool = False,
     rebalance_period: str | None = None,
     market_timing: dict | None = None,
-    signal_lag: int = 0,
+    signal_lag: int = SIGNAL_LAG_DEFAULT,
     rebuy_block_days: int = 0,
     buy_fill_offset_pct: float = 0.0,
     sell_fill_offset_pct: float = 0.0,

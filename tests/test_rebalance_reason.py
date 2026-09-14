@@ -94,11 +94,24 @@ def test_no_producerless_constant_was_invented():
 # ═══════════════════════════════════════════════════════════════════════════
 # ①③ 6분기가 각자의 코드를 낸다
 # ═══════════════════════════════════════════════════════════════════════════
+#: ★이 테스트들은 가격 로더를 타면 안 된다★
+#: `rebalance_decision` → `_cost_block` → `build_plan` 의 기본 `price_of` 는
+#: `date.today()` 로 최근 30일을 읽는데, 이 환경엔 `daily_prices` 가 없어 **날짜로
+#: 시드된 mock 가격**이 나온다. 그러면 `cost_pct` 가 날마다 달라지고 → 동적 밴드가
+#: 달라지고 → `utility_gain` 과 `inside_band` 가 **달력에 따라 뒤바뀐다**.
+#: 실제로 2026-09-14 에 밴드 반폭이 1.029pp 로 나와 1.0pp 괴리를 삼켰다.
+#: ★분기 이름을 거는 테스트가 오늘 며칠인지에 달려 있으면 그것은 증거가 아니다.★
+#: (AG 범위 밖에서 발견 — 기본값 변경과 무관하고, 변경 전 트리에서도 실패한다.)
+_PRICE = 50_000.0
+_ADV = 5e10
+
+
 def _decide(**kw):
     from src.engine.rebalance_policy import rebalance_decision
     base = {"current_weights": {"A": 50.0, "B": 50.0},
             "target_weights": {"A": 50.0, "B": 50.0},
-            "portfolio_value": 100_000_000.0}
+            "portfolio_value": 100_000_000.0,
+            "price_of": lambda c: _PRICE, "adv_of": lambda c: _ADV}
     base.update(kw)
     cur = base.pop("current_weights")
     tgt = base.pop("target_weights")
@@ -325,3 +338,28 @@ def test_persistence_survives_a_missing_column(tmp_path, monkeypatch):
     # ★이 테스트가 정말 열화 경로를 탔는지 확인한다★ — 안 그러면 위 두 단정은
     # 정상 경로를 재는 것이고 ⑫는 아무것도 막지 못한다.
     assert ids._has_reason_code is False, "열화 경로를 타지 않았습니다"
+
+
+def test_the_reason_tests_never_touch_the_price_loader(monkeypatch):
+    """★테스트의 테스트★ — 위 단언들이 주변 환경(날짜·DB)에 안 기댄다.
+
+    실제 로더가 터지게 만들어도 분기 이름들이 그대로 나와야 한다. 그렇지 않으면
+    이 파일의 초록은 *오늘 mock 가격이 우연히 그랬다* 는 뜻일 뿐이다.
+    """
+    import numpy as np
+
+    import src.engine.execution_plan as ep
+
+    def boom(_code):
+        raise AssertionError("테스트가 실제 가격 로더를 탔다")
+
+    monkeypatch.setattr(ep, "_last_close", boom)
+    monkeypatch.setattr(ep, "_adv_won", boom)
+    gain = _decide(current_weights={"A": 60.0, "B": 40.0},
+                   target_weights={"A": 59.0, "B": 41.0}, names=["A", "B"],
+                   mu=np.array([0.001, 0.001]), sigma=np.eye(2) * 0.40)
+    assert gain["reason_code"] == REASON_UTILITY_GAIN, gain.get("reason")
+    band = _decide(current_weights={"A": 50.0, "B": 50.0},
+                   target_weights={"A": 50.0, "B": 50.0}, names=["A", "B"],
+                   mu=np.array([0.05, 0.05]), sigma=np.eye(2) * 0.04)
+    assert band["reason_code"] == REASON_INSIDE_BAND, band.get("reason")

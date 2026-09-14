@@ -26,6 +26,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import src.data.backtest_runs as br
+from src.domain.execution_assumption import assumption_from_result
 from src.domain.perf_kind import backtest_label
 
 logger = logging.getLogger("api.backtest_run")
@@ -338,6 +339,9 @@ _TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
     "fundamentals_pit": ("measured", "estimated", "unknown", "measured_pct"),
     "price_basis": ("state", "uniform_adjusted_pct"),
     "universe": ("survivorship", "effective", "fell_back"),
+    # ★이 런의 결정이 장 시작 전에 계산 가능했나★ 텔레메트리 행만 봐도
+    # 룩어헤드 위에 선 런을 셀 수 있어야 한다 (AG).
+    "execution_assumption": ("state", "signal_lag"),
 }
 
 
@@ -641,6 +645,11 @@ def run_full(run_id: str):
     # ★응답이 스스로 종류를 말한다★ — 화면이 "백테스트 페이지니까" 로 추론하면
     # 같은 컴포넌트를 다른 데이터로 재사용하는 순간 거짓말이 된다(Z2).
     r["perf_label"] = backtest_label(is_mock_data=r.get("is_mock_data")).to_dict()
+    # ★이 런의 결정을 장 시작 전에 계산할 수 있었나★ 다른 축이라 `perf_label` 과
+    # 나란히 선다. 기록 이전 런은 `result` 에 이 블록이 아예 없는데, 그때 키를
+    # 빼면 화면이 "값이 없다" 와 "질문한 적이 없다" 를 구별할 수 없다 — 리더가
+    # `unrecorded` + 사유로 **말한다**. ★미상을 0 으로 읽지 않는다★(AG).
+    r["execution_assumption"] = assumption_from_result(r.get("result"))
     return r
 
 

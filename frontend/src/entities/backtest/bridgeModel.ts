@@ -203,6 +203,27 @@ export interface ScreenToBacktestResult {
     excluded: { count: number; tickers: string[]; reason: string | null };
   } | null;
   /**
+   * 이 백테스트의 **결정을 장 시작 전에 계산할 수 있었나** (AG).
+   *
+   * ★`perf_label` 과 다른 축이다★ — 저것은 *"이 수치가 무엇인가"*(백테스트/
+   * 페이퍼/실계좌)이고 이것은 *"어떤 실행 가정 위에 섰나"* 다.
+   *
+   * 불변식은 하나다: `signal_lag >= 1` ⟺ 결정이 장 시작 전 계산 가능.
+   * 체결가 유형은 **실리되 판정을 바꾸지 않는다**(별개 축).
+   *
+   * ★`unrecorded` 는 통과가 아니다★ — 기록 이전 런은 `signal_lag` 이 `0`
+   * 이었는지 더 컸는지 **알 수 없다**. `precomputable_before_open` 이 `null`
+   * 인 것이 그 뜻이고, `false` 로 그리면 없는 사실이 생긴다.
+   */
+  execution_assumption?: {
+    state: "precomputable" | "same_bar" | "unrecorded";
+    reason: string | null;
+    precomputable_before_open: boolean | null;
+    signal_lag: number | null;
+    buy_fill_type: string | null;
+    sell_fill_type: string | null;
+  } | null;
+  /**
    * 유니버스가 **생존편향을 보정했는가**.
    *
    * ★`effective !== requested` 그 자체가 폴백의 증거다★ — 시점 유니버스를

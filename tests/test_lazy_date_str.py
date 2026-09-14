@@ -72,10 +72,14 @@ def frames(monkeypatch):
 
 
 def _engine(frames) -> BacktestEngine:
+    # ★이 골든은 *지연 생성이 수치를 안 바꿨다* 는 증거이지 기본값의 증거가
+    # 아니다★ — `signal_lag` 기본이 0→1 로 바뀌자(AG) 지문이 통째로 움직였다.
+    # 스냅샷이 무관한 기본값 변경에 흔들리지 않도록 **그때의 조건을 명시**한다.
     return BacktestEngine(BacktestConfig(
         symbols=list(frames), strategy_name="Condition",
         strategy_params={"buy_conditions": BUY, "sell_conditions": SELL},
-        start_date="2023-07-26", end_date="2026-07-26", max_positions=5))
+        start_date="2023-07-26", end_date="2026-07-26", max_positions=5,
+        signal_lag=0))
 
 
 def _force_fallback(monkeypatch):
