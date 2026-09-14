@@ -231,3 +231,37 @@ def test_the_filter_reuses_the_domain_verdict(engine):
                 if isinstance(n, ast.ImportFrom) and n.module}
     assert "usable_for_drawdown" in imported.get("src.domain.equity_observation", set()), (
         "출처 판정을 복사했다 — 한쪽만 고쳐도 타입 에러가 안 난다")
+
+
+def test_a_table_without_the_source_column_is_unknown(tmp_path):
+    """★컬럼이 없으면 어느 행이 실제 조회인지 **가릴 수 없다**★
+
+    변이 배터리에서 "컬럼이 없을 때 필터를 건너뛴다" 가 **살아남았다** — 픽스처가
+    언제나 컬럼을 만들어 주어 이 분기를 아무도 밟지 않았기 때문이다. 운영 DB 는
+    `CREATE TABLE IF NOT EXISTS` 로는 칸을 얻지 못하므로(`add_columns` 경로가
+    막히면) 실제로 이 상태가 될 수 있다.
+
+    ★그때 숫자를 내면 "출처를 확인했다" 는 없는 사실이 생긴다.★
+    """
+    from src.execution.drawdown import REASON_NO_SOURCE_COLUMN
+    eng = create_engine("sqlite://")
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE live_daily_pnl (trade_date DATE PRIMARY KEY, "
+                       "starting_equity_krw REAL, ending_equity_krw REAL)"))
+        c.execute(text("INSERT INTO live_daily_pnl VALUES ('2026-09-01', 100.0, 100.0)"))
+        c.execute(text("INSERT INTO live_daily_pnl VALUES ('2026-09-02', 100.0, 80.0)"))
+    dd = drawdown_from_history(eng)
+    assert not dd.is_known, "출처를 가릴 수 없는데 숫자를 냈다"
+    assert dd.reason == REASON_NO_SOURCE_COLUMN
+
+
+def test_the_no_column_path_is_not_the_only_outcome(tmp_path):
+    """★짝★ 컬럼이 있으면 그 사유가 나오지 않는다 — 언제나 거절하는 구현 배제."""
+    from src.execution.drawdown import REASON_NO_SOURCE_COLUMN
+    eng = create_engine("sqlite://")
+    init_live_trading_schema(eng)
+    _broker(eng, "2026-09-01", 100.0, 100.0)
+    _broker(eng, "2026-09-02", 100.0, 80.0)
+    dd = drawdown_from_history(eng)
+    assert dd.reason != REASON_NO_SOURCE_COLUMN
+    assert dd.is_known
