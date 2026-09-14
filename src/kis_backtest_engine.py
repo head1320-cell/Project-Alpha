@@ -31,6 +31,7 @@ from src.domain.execution_assumption import (
     ExecutionAssumption,
     assumption_label,
 )
+from src.engine.estimator_evidence import backtest_estimator_evidence
 from src.engine.quant_metrics import compute_metrics
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ def set_engine(engine):
 #: ★진단만 담는다★ `result`·`intraday`·`asset_alloc` 처럼 화면 본문이 직접
 #: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
 DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
-                   "price_basis", "execution_assumption")
+                   "price_basis", "execution_assumption", "estimator_leakage")
 
 # ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
 #: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
@@ -2108,6 +2109,13 @@ class BacktestEngine:
                 signal_lag=self.cfg.signal_lag,
                 buy_fill_type=self.cfg.buy_fill_type,
                 sell_fill_type=self.cfg.sell_fill_type)),
+            # ★옵트인 누출이 결과에서 보이게 한다★ `allow_snapshot_fundamentals`
+            # 를 켜면 오늘의 재무 스냅샷이 과거 전 구간에 방송되는데(`score_factors`),
+            # 그렇게 돈 실행의 결과가 깨끗한 실행과 **완전히 같았다**(AH 실측).
+            # `pit_evidence` 와는 다른 축이다 — 저것은 데이터의 시점 정합이고
+            # 이것은 추정이 어느 창·어느 빈티지 위에 섰나다.
+            "estimator_leakage": backtest_estimator_evidence(
+                snapshot_fundamentals=self._snapshot_fundamentals_used()),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -2162,6 +2170,25 @@ class BacktestEngine:
                 "total_cost": stats["total_commission"] + stats["total_slippage"],
             },
         }
+
+    def _snapshot_fundamentals_used(self) -> bool | None:
+        """이 실행이 **오늘의 재무 스냅샷**을 과거에 방송했나. ★미상은 False 가 아니다★
+
+        `allow_snapshot_fundamentals` 는 `ConditionStrategy` 의 옵트인이고
+        `strategy_params` 로 들어온다. ★키가 없다는 것과 `False` 는 다른 사실이다★ —
+        조건식 전략이 아닌 실행은 이 누출 경로 자체가 없으므로 `False`(해당 없음)이고,
+        조건식 전략인데 키가 없으면 기본값 `False` 가 적용된 것이라 역시 `False` 다.
+        값이 bool 로 해석되지 않으면 **지어내지 않고** `None` 을 낸다.
+        """
+        params = self.cfg.strategy_params
+        if not isinstance(params, dict):
+            return None
+        raw = params.get("allow_snapshot_fundamentals", False)
+        if isinstance(raw, bool):
+            return raw
+        if raw is None:
+            return False          # 명시적 미지정 = 기본값(끔)
+        return None               # 모양이 다르다 — 추측하지 않는다
 
     def _trade_to_dict(self, t: Trade) -> dict:
         return {

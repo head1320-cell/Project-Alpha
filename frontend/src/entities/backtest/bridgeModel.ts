@@ -224,6 +224,35 @@ export interface ScreenToBacktestResult {
     sell_fill_type: string | null;
   } | null;
   /**
+   * 이 실행의 **추정이 어느 창·어느 빈티지 위에 섰나** (AH).
+   *
+   * ★`pit_evidence` 와 다른 축이다★ — 저것은 *"데이터가 시점 정합인가"*(공표일·
+   * 빈티지)이고 이것은 *"추정이 어느 창에 적합됐나"* 다. 판정 규칙만 공유한다.
+   *
+   * ★축이 비어 있으면 그 누출 경로를 **쓰지 않았다**는 뜻★ — `ok` 가 아니다.
+   * 안 쓴 경로를 통과로 그리면 검증했다는 없는 사실이 생긴다.
+   *
+   * `snapshot_fundamentals` 축이 `degraded` 면 **오늘의 재무가 과거 전 구간에
+   * 방송된** 실행이다(`allow_snapshot_fundamentals` 옵트인). 그 조건은 창 전체에서
+   * 값이 변하지 않아 항상 참이거나 항상 거짓이 된다.
+   */
+  estimator_leakage?: {
+    status: "verified" | "partial" | "unverified" | "unknown";
+    axes: Record<string, {
+      state: "ok" | "degraded" | "unknown";
+      reason: string | null;
+      window: string | null;
+      vintage: string | null;
+      site?: string;
+    } | null>;
+    applicable: string[];
+    ok_axes: string[];
+    broken_axes: string[];
+    unknown_axes: string[];
+    summary: string;
+    note: string;
+  } | null;
+  /**
    * 유니버스가 **생존편향을 보정했는가**.
    *
    * ★`effective !== requested` 그 자체가 폴백의 증거다★ — 시점 유니버스를

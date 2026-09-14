@@ -35,9 +35,11 @@ from __future__ import annotations
 from typing import Any
 
 from src.domain.estimator_fit import (
+    STATE_OK,
     VINTAGE_AS_OF,
     VINTAGE_CURRENT,
     WINDOW_BOUNDED,
+    WINDOW_FULL_SAMPLE,
     WINDOW_TRAILING,
     EstimatorFit,
     fit_label,
@@ -49,6 +51,7 @@ ESTIMATOR_AXIS_LABELS = {
     "covariance": "공분산 추정",
     "regime_path": "국면 경로",
     "proxies": "대리계열 선택",
+    "snapshot_fundamentals": "재무 스냅샷 방송",
 }
 
 #: ★공분산은 언제나 축이다★ — 어떤 배분이든 Σ 를 쓴다. 값이 없으면 `unknown` 으로
@@ -179,3 +182,65 @@ def estimator_evidence(*, covariance: EstimatorFit | None = None,
     if proxies is not _ABSENT:
         axes["proxies"] = _axis(proxies)
     return {**rollup(axes, ESTIMATOR_AXIS_LABELS), "note": _NOTE}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 백테스트 쪽 — ★실측이 계획을 뒤집었다★
+#
+# 계획은 *"엔진이 이 추정기들에 도달하지 않으니 백테스트 결과에는 안 붙인다"* 였다.
+# 재보니 엔진에는 **옵트인 누출 플래그**가 따로 있었다: `allow_snapshot_fundamentals`
+# 를 켜면 `score_factors.py:151,156` 이 `pd.Series(np.full(n, v))` 로 **오늘의
+# ROE/PER/PBR 를 과거 전 구간에 방송**한다.
+#
+# ★그리고 그 실행의 결과는 깨끗한 실행과 구별되지 않았다★ — 플래그를 켜고 끄고
+# 각각 돌려 보니 결과의 최상위 키가 **완전히 같았다**. `thesis_backtest` 는 이미
+# 이 사실을 진단으로 적고 있었는데(*"스냅샷 상수 조건은 창 전체에서 값이 변하지
+# 않아 항상 참이거나 항상 거짓이 됩니다 — 그것이 look-ahead 의 관측 가능한
+# 형태입니다"*), 정작 엔진 결과만 그것을 몰랐다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SNAPSHOT_SITE = "src/kis_strategies/score_factors.py:build_score_panels"
+
+_SNAPSHOT_NOTE = ("오늘의 재무 스냅샷을 과거 전 구간에 방송했습니다 — 그 조건은 창 "
+                  "전체에서 값이 변하지 않아 항상 참이거나 항상 거짓이 되고, 그것이 "
+                  "look-ahead 의 관측 가능한 형태입니다.")
+
+_BACKTEST_NOTE = ("이 판정은 **추정이 어느 창·어느 빈티지 위에 섰나**만 말합니다. "
+                  "가격 슬라이스의 시점 정합은 별개 축이고 `pit_evidence` 가 답합니다. "
+                  "축이 비어 있으면 그 누출 경로를 **쓰지 않았다**는 뜻입니다.")
+
+
+def backtest_estimator_evidence(*, snapshot_fundamentals: bool | None = None
+                                ) -> dict[str, Any]:
+    """백테스트 실행의 추정 누출. ★배분과 축이 다르다 — 다른 것을 추정하기 때문★
+
+    · `True`  → 켜고 돌았다. `full_sample` 창 + `current` 빈티지 → `degraded`.
+    · `False` → **재봤더니 안 켰다** → `ok`. 이 축이 묻는 것은 *"이 실행이 오늘의
+      재무를 과거에 방송했나"* 이고 **아니오는 관측된 답**이다.
+    · `None`  → 플래그를 못 읽었다 → `unknown`. ★미상은 "안 켰음" 이 아니다★
+
+    ★축을 빼지 않는 이유★ — 처음에는 `False` 일 때 축을 아예 안 만들었다. 돌려
+    보니 깨끗한 실행이 **축 0개로 `unknown`** 이 되어 *"못 쟀다"* 로 읽혔다.
+    공허한 블록은 정직이 아니다.
+    """
+    axes: dict[str, dict | None] = {}
+    if snapshot_fundamentals is False:
+        axes["snapshot_fundamentals"] = {
+            "state": STATE_OK, "reason": None,
+            "window": None, "vintage": None, "site": _SNAPSHOT_SITE}
+    elif snapshot_fundamentals is None:
+        axes["snapshot_fundamentals"] = {
+            "state": AXIS_UNKNOWN,
+            "reason": ("재무 스냅샷 옵트인 여부를 읽지 못했습니다 — 켜고 돌았는지 "
+                       "알 수 없습니다."),
+            "window": None, "vintage": None, "site": _SNAPSHOT_SITE}
+    else:
+        label = fit_label(EstimatorFit(
+            site=_SNAPSHOT_SITE, window=WINDOW_FULL_SAMPLE, vintage=VINTAGE_CURRENT,
+            consumer="backtest", note=_SNAPSHOT_NOTE))
+        axes["snapshot_fundamentals"] = {
+            "state": label["state"],
+            "reason": f"{_SNAPSHOT_NOTE} ({label['reason']})",
+            "window": label["window"], "vintage": label["vintage"],
+            "site": _SNAPSHOT_SITE}
+    return {**rollup(axes, ESTIMATOR_AXIS_LABELS), "note": _BACKTEST_NOTE}

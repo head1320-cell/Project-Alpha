@@ -207,3 +207,39 @@ def test_the_run_detail_route_says_unrecorded_for_an_old_run(store):
     assert got["state"] == STATE_UNRECORDED
     assert got["signal_lag"] is None
     assert "알 수 없습니다" in got["reason"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AH — ★옵트인 누출이 결과에서 보이는가★
+#
+# `allow_snapshot_fundamentals=True` 로 돌린 실행과 끄고 돌린 실행의 결과가
+# **완전히 같았다**(직접 돌려 확인). 오늘의 ROE/PER/PBR 를 과거 전 구간에 방송한
+# 실행이 깨끗한 실행과 구별되지 않는다면, 그 수치를 본 사람은 알 방법이 없다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_a_snapshot_fundamentals_run_says_so(frames):
+    from src.engine.run_evidence import STATUS_VERIFIED
+    res = _run(strategy_params={"buy_conditions": BUY, "sell_conditions": SELL,
+                                "allow_snapshot_fundamentals": True})
+    block = res.get("estimator_leakage")
+    assert block is not None, "결과가 추정 누출을 말하지 않는다"
+    assert block["status"] != STATUS_VERIFIED
+    assert "snapshot_fundamentals" in block["broken_axes"]
+    assert "look-ahead" in block["axes"]["snapshot_fundamentals"]["reason"]
+
+
+def test_a_run_without_the_opt_in_is_measured_as_clean(frames):
+    """★짝★ 끄고 돈 실행은 **재봤더니 안 켰다**이지 미상이 아니다."""
+    from src.engine.run_evidence import STATUS_VERIFIED
+    block = _run()["estimator_leakage"]
+    assert block["status"] == STATUS_VERIFIED
+    assert "snapshot_fundamentals" in block["applicable"]
+    assert block["broken_axes"] == [] and block["unknown_axes"] == []
+
+
+def test_the_leakage_block_is_not_inside_pit_evidence(frames):
+    """★두 축을 안 섞는다★ — `pit_evidence` 는 데이터의 시점 정합을 묻는다."""
+    res = _run()
+    assert "estimator_leakage" in res
+    assert "estimator_leakage" not in (res.get("pit_evidence") or {})
+    assert "estimator_leakage" not in (res.get("perf_label") or {})

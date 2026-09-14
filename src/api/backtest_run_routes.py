@@ -342,6 +342,8 @@ _TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
     # ★이 런의 결정이 장 시작 전에 계산 가능했나★ 텔레메트리 행만 봐도
     # 룩어헤드 위에 선 런을 셀 수 있어야 한다 (AG).
     "execution_assumption": ("state", "signal_lag"),
+    # ★옵트인 누출을 켜고 돈 런을 행만 봐도 셀 수 있어야 한다★ (AH)
+    "estimator_leakage": ("status",),
 }
 
 
