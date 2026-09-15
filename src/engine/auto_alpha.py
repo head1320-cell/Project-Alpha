@@ -130,10 +130,18 @@ def generate_candidates(n: int = 12, seed: int = 0, mode: str = "random",
 def selection_bias_note(n_trials: int) -> dict[str, Any]:
     """다중검정/선택편향 경고(DSR-lite). N개 탐색 후 최고 IC를 고르면 최고값은 위로
     편향된다 — 검증 임계를 상향해야 함(정직한 과적합 경고). 근사: N개 표준정규 최댓값
-    기대 ≈ sqrt(2 ln N)."""
-    import math
+    기대 ≈ sqrt(2 ln N).
+
+    ★산수는 `src/domain/multiplicity.expected_max_z` 한 곳에만 있다★ (AJ1) — 같은
+    식이 두 곳에 있으면 한쪽만 고쳐도 타입 에러가 나지 않는다. 응답 모양은 불변이다
+    (프런트 `entities/experimental/api.ts:26` 이 세 키를 그대로 읽는다).
+
+    ★그리고 이 값은 deflated Sharpe 가 아니다★ — 여기 N 은 이 호출이 방금 센 후보
+    수이지 **실행 이력의 시행 횟수**가 아니다. 그 이력을 세는 자리는 저장소에 없다.
+    """
+    from src.domain.multiplicity import expected_max_z
     n = max(int(n_trials), 1)
-    inflation = math.sqrt(2 * math.log(n)) if n > 1 else 0.0
+    inflation = expected_max_z(n)
     return {
         "n_trials": n,
         "expected_max_z": round(inflation, 2),
