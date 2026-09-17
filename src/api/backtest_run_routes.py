@@ -344,6 +344,9 @@ _TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
     "execution_assumption": ("state", "signal_lag"),
     # ★옵트인 누출을 켜고 돈 런을 행만 봐도 셀 수 있어야 한다★ (AH)
     "estimator_leakage": ("status",),
+    # ★어떤 비용을 부과했고 몇 건을 못 쟀나★ (AK) — 행만 봐도 세금을 켜고 돈 런과
+    # 충격을 못 잰 런을 셀 수 있어야 한다. `total_bps` 는 한 줄로 답하는 값이다.
+    "cost_model": ("total_bps", "n_unmeasurable", "n_unmeasured_trades"),
 }
 
 

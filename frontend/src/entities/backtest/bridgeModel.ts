@@ -297,6 +297,39 @@ export interface ScreenToBacktestResult {
     summary: string;
     note: string;
   } | null;
+  /**
+   * ★이 실행이 무엇을 부과했고 무엇을 **못 쟀나**★ (AK)
+   *
+   * 성분 다섯이 **언제나** 실린다 — 빠진 성분은 0 이 아니라 부재이고, 부재는
+   * 화면에서 보이지 않는다.
+   *
+   * ★`off` 와 `unmeasurable` 을 같은 0원으로 읽지 말 것★ — 앞은 사용자가
+   * **끈 것**(선택)이고 뒤는 켰는데 **못 잰 것**(예: 거래대금이 없어 참여율을
+   * 구하지 못함)이다. 뒤쪽은 *"비용이 실제보다 싸게 나왔다"* 는 경고이고,
+   * `n_unmeasured_trades` 가 몇 건이 그랬는지 센다.
+   */
+  cost_model?: {
+    components: Record<
+      "commission" | "slippage" | "tax" | "spread" | "impact",
+      { state: "charged" | "off" | "unmeasurable" | "unsupported";
+        bps: number; krw: number; reason: string | null }
+    >;
+    total_krw: number;
+    total_bps: number;
+    n_unmeasurable: number;
+    /** 참여율을 못 구해 시장충격을 못 잰 거래 수. ★0 원이 아니라 미상이다★ */
+    n_unmeasured_trades: number;
+    /** 이 실행이 쓴 요율. `impact_coeff` 는 ★측정치가 아니라 설정값★ 이다. */
+    policy: {
+      commission_bps: number; slippage_bps: number;
+      charge_tax: boolean; tax_bps: number | null;
+      charge_spread: boolean; spread_bps: number | null;
+      charge_impact: boolean; impact_coeff: number | null;
+      impact_coeff_note: string;
+    };
+    /** 같은 금액을 한 번 사고 한 번 팔면 몇 bp인가(충격 제외) — 모델 비교용 자. */
+    round_trip_bps: number;
+  } | null;
 }
 
 // 백테스트 고급 옵션 (수수료/슬리피지/손절/익절)
@@ -431,6 +464,17 @@ export interface ScreenToBacktestBody {
   groups?: Array<{ mode: string; tickers: string[] }> | null;
   universe_eval_cap?: number;
   allow_snapshot_fundamentals?: boolean;
+  /**
+   * 누락 비용 옵트인 셋 (AK). ★전부 기본 꺼짐★
+   *
+   * 백테스트는 오래도록 수수료·슬리피지만 봤고 **증권거래세·스프레드·시장충격이
+   * 전부 0** 이었다 — 주문 직전 비용을 추정하는 실행 준비실은 셋 다 계산하는데도.
+   * 켜면 백엔드가 `market_rules` 의 **같은 요율**을 쓴다. ★요율은 보내지 않는다★ —
+   * 단일 출처를 클라이언트가 덮으면 두 세계가 다시 갈라진다.
+   */
+  charge_sell_tax?: boolean;
+  charge_spread?: boolean;
+  charge_market_impact?: boolean;
 }
 
 // FastAPI 에러 응답의 detail을 사람이 읽을 수 있는 문자열로 변환.

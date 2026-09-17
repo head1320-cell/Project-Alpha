@@ -52,7 +52,14 @@ SELL = [{"factor_token": "종가", "function_id": "pct", "params": {"n": 5},
 
 #: ★변경 **전** 코드(HEAD)에서 per-bar 폴백을 강제해 뜬 지문★
 #: 런 대 런 비교만으로는 프로덕션에 박힌 상수 오프셋을 못 잡는다(변이 C2 의 교훈).
-GOLDEN_SHA256 = "9ab4249d7d2338394a1b1a7832627237ddea63dfb8d751bd675602d3da6ffb9b"
+#: AK(비용 모델) 에서 **키가 추가되어** 지문이 움직였다 — ★값은 하나도 안 바뀌었다★.
+#: 이 파일과 `test_backtest_required_days_hoist.py` 는 **같은 fixture·같은 payload** 를
+#: 해시하므로 지문도 같다(그 자체가 중복이지만 이 작업의 범위 밖이다). 갱신 전에
+#: 키별로 대조해 확인했다: 거래 275→275 · 에쿼티 곡선 동일 · 거래 행과 통계의
+#: 기존 키 전부 동일. 새로 붙은 것은 `tax`·`spread`·`impact` 와
+#: `total_tax`·`total_spread`·`total_impact` 이고 기본 정책에서 전부 `0` 이다.
+#: ★지문이 깨지면 먼저 이 대조를 하고, 값이 움직였으면 갱신하지 말 것.★
+GOLDEN_SHA256 = "6958cffe20303b72b997d2439c52afae4ffb75733a33e473d2b11a6db5d29299"
 GOLDEN_TRADES = 275
 
 

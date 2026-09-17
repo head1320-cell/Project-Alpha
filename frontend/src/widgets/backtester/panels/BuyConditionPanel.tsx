@@ -68,6 +68,32 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="슬리피지">
           <QuickStepper value={s.slippagePct} onChange={(v) => set((x) => ({ ...x, slippagePct: v }))} unit="%" min={0} />
         </Field>
+        {/* ── 누락 비용 옵트인 셋 (AK) ★전부 기본 꺼짐★ ─────────────────
+            백테스트는 오래도록 수수료·슬리피지만 봤고 증권거래세·스프레드·
+            시장충격이 전부 0 이었다 — 주문 직전 비용을 추정하는 실행 준비실은
+            셋 다 계산하는데도. 켜면 백엔드가 `market_rules` 의 **같은 요율**을
+            쓴다. 기본을 켜지 않는 이유는 켜는 순간 저장된 실행들의 뜻이
+            바뀌기 때문이다. */}
+        <Field label="추가 비용">
+          <div className="flex w-full flex-col gap-1.5">
+            <SubToggle tone="sell" label="증권거래세" hint="매도 편도 18bp · 수수료보다 크다"
+              on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
+            <SubToggle tone="sell" label="호가 스프레드" hint="편도 2.5bp (스프레드의 절반)"
+              on={s.chargeSpread} onChange={(v) => set((x) => ({ ...x, chargeSpread: v }))} />
+            <SubToggle tone="sell" label="시장충격" hint="주문금액÷거래대금에 비례 · 거래대금 없으면 미상"
+              on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              {(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact)
+                ? "켠 비용은 실행 준비실과 같은 요율을 씁니다 — 결과의 비용 분해에 성분별로 실립니다."
+                : "끄면 수수료·슬리피지만 봅니다 — 0원이 아니라 ★안 본 것★이고, 결과가 그 사실을 적습니다."}
+            </span>
+            {s.chargeMarketImpact && (
+              <span style={{ fontSize: 11, color: "#d97706" }}>
+                ⚠ 거래대금이 없는 종목·기간은 충격을 0이 아니라 <b>미상</b>으로 남깁니다 — 그만큼 비용이 낮게 잡힙니다.
+              </span>
+            )}
+          </div>
+        </Field>
         <Field label="리밸런싱 주기">
           <Segmented value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
             options={[

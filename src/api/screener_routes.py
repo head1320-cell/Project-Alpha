@@ -1426,6 +1426,14 @@ class ScreenToBacktestRequest(BaseModel):
     # 신호 기준일 (젠포트 Tip 3). ★기본은 1★ — 0(당일 봉)은 신호가 당일 종가를 쓰므로
     # 장 시작 전에 계산할 수 없다. 0 을 **금지하지는 않고** 결과가 `same_bar` 로 말한다(AG).
     signal_lag: int = Field(default=SIGNAL_LAG_DEFAULT, ge=0, le=5)
+    # ── AK: 누락 비용 옵트인 셋 ★전부 기본 꺼짐★ ──────────────────────
+    # 백테스트는 오래도록 수수료·슬리피지만 봤고 ★증권거래세·스프레드·시장충격이
+    # 전부 0★ 이었다 — 실행 준비실(`execution_plan`)은 셋 다 계산하는데도.
+    # 켜면 `market_rules` 의 **같은 요율**을 쓴다. 기본을 켜지 않는 이유는 켜는
+    # 순간 저장된 모든 실행과 골든의 뜻이 바뀌기 때문이다.
+    charge_sell_tax: bool = False
+    charge_spread: bool = False
+    charge_market_impact: bool = False
     # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
     rebuy_block_days: int = Field(default=0, ge=0, le=120)
     # 체결 가격 기준 ± 오프셋% (지정가 모델 — 도달 검증, 미도달 시 그날 미체결)
@@ -1695,6 +1703,9 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             rebalance_period=req.rebalance_period,
             market_timing=req.market_timing,
             signal_lag=req.signal_lag,
+            charge_sell_tax=req.charge_sell_tax,
+            charge_spread=req.charge_spread,
+            charge_market_impact=req.charge_market_impact,
             rebuy_block_days=req.rebuy_block_days,
             liquidate_at_end=req.liquidate_at_end,
             price_basis_policy=req.price_basis_policy,

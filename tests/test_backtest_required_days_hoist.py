@@ -118,7 +118,13 @@ def test_required_days_is_read_a_handful_of_times_not_once_per_bar(frames, monke
 #: ★변경 **전** 코드(HEAD)에서 뜬 지문★ — 위 fixture 그대로 돌린 결과의 sha256.
 #: 이 값을 박아두지 않으면 "런 대 런이 같다" 만 걸리는데, 그것은 프로덕션 코드에
 #: **상수 오프셋**이 박혀도 통과한다(변이 C2 가 실제로 그렇게 살아남았다).
-GOLDEN_SHA256 = "9ab4249d7d2338394a1b1a7832627237ddea63dfb8d751bd675602d3da6ffb9b"
+#: AK(비용 모델) 에서 **키가 추가되어** 지문이 움직였다 — ★값은 하나도 안 바뀌었다★.
+#: 갱신 전에 키별로 대조해 확인했다: 거래 275→275 · 에쿼티 곡선 동일 · 거래 행의
+#: 기존 키 전부 동일 · 통계의 기존 키 전부 동일. 새로 붙은 것은 `tax`·`spread`·
+#: `impact`(거래 행)와 `total_tax`·`total_spread`·`total_impact`(통계)이고 기본
+#: 정책에서 전부 `0` 이다. ★지문이 깨지면 먼저 이 대조를 하고, 값이 움직였으면
+#: 갱신하지 말 것★ — 그것이 이 골든의 존재 이유다.
+GOLDEN_SHA256 = "6958cffe20303b72b997d2439c52afae4ffb75733a33e473d2b11a6db5d29299"
 GOLDEN_TRADES = 275
 
 

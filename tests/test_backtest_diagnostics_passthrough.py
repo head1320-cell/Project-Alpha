@@ -105,7 +105,7 @@ def test_every_diagnostic_key_reaches_the_response(monkeypatch):
 #: (`bridgeModel.ts`)과 텔레메트리(`backtest_run_routes.py`)도 함께 고쳐야 한다는
 #: 뜻이고, 이 테스트가 그 사실을 상기시키는 것이 목적이다.
 EXPECTED_DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
-                            "price_basis", "execution_assumption", "estimator_leakage")
+                            "price_basis", "execution_assumption", "estimator_leakage", "cost_model")
 
 
 def test_the_key_list_is_pinned():

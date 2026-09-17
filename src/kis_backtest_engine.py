@@ -22,10 +22,13 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import NamedTuple
 
 import pandas as pd
 from sqlalchemy import text
 
+from src.domain.cost_model import COMPONENTS as COST_COMPONENTS
+from src.domain.cost_model import CostPolicy, trade_cost
 from src.domain.execution_assumption import (
     SIGNAL_LAG_DEFAULT,
     ExecutionAssumption,
@@ -107,7 +110,8 @@ def set_engine(engine):
 #: ★진단만 담는다★ `result`·`intraday`·`asset_alloc` 처럼 화면 본문이 직접
 #: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
 DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
-                   "price_basis", "execution_assumption", "estimator_leakage")
+                   "price_basis", "execution_assumption", "estimator_leakage",
+                   "cost_model")
 
 # ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
 #: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
@@ -413,6 +417,54 @@ class Position:
     peak_price: float = 0.0      # 보유 중 최고가(종가 기준) — 트레일링 스탑용
 
 
+def _date_key(value) -> str:
+    """날짜 표기 정규화 — `2024-04-01` 과 `20240401` 을 같은 키로 (AK4)."""
+    return str(value).replace("-", "").strip()
+
+
+class _EngineCost(NamedTuple):
+    """`_trade_cost` 의 반환 — 호출부가 읽기 쉬운 모양.
+
+    ★`extra` 만 **추가 현금 효과**다★ — `slippage` 는 이미 체결가에 녹아 있어
+    현금에서 또 빼면 이중계산이 되고, `commission` 은 예전부터 현금에서 빠졌다.
+    """
+
+    commission: float
+    slippage: float
+    tax: float
+    spread: float
+    impact: float
+
+    @property
+    def extra(self) -> float:
+        return self.tax + self.spread + self.impact
+
+
+def policy_from_config(cfg) -> CostPolicy:
+    """`BacktestConfig` → `CostPolicy`. ★요율을 읽는 유일한 자리★ (AK4)
+
+    ★`market_rules` 가 단일 출처다★ — 여기서 18·5.0 을 다시 적으면 실행 준비실
+    (`execution_plan.build_plan`)과 조용히 갈라지고, 브로커·규정이 바뀔 때 고칠
+    자리가 둘이 된다. 도메인(`src/domain/cost_model.py`)은 설정을 안 읽으므로
+    그 경계가 여기다.
+    """
+    from src.data import market_rules as mr
+    from src.domain.cost_model import CostPolicy
+
+    return CostPolicy(
+        commission_bps=float(cfg.commission_rate) * 1e4,
+        slippage_bps=float(cfg.slippage_rate) * 1e4,
+        charge_tax=bool(getattr(cfg, "charge_sell_tax", False)),
+        charge_spread=bool(getattr(cfg, "charge_spread", False)),
+        charge_impact=bool(getattr(cfg, "charge_market_impact", False)),
+        tax_bps=mr.sell_tax_bp() if getattr(cfg, "charge_sell_tax", False) else None,
+        spread_bps=(mr.spread_bp_default()
+                    if getattr(cfg, "charge_spread", False) else None),
+        impact_coeff=(mr.impact_coeff()
+                      if getattr(cfg, "charge_market_impact", False) else None),
+    )
+
+
 @dataclass
 class Trade:
     date: str
@@ -423,6 +475,12 @@ class Trade:
     value: float
     commission: float
     slippage: float
+    # AK — 옵트인 비용 셋. ★기본 0.0 이라 기존 실행의 수치가 안 움직인다★
+    # `slippage` 는 이미 체결가에 녹아 있는 **기록**이지만, 이 셋은 실제 현금
+    # 유출입이다(매수는 더 내고 매도는 덜 받는다).
+    tax: float = 0.0
+    spread: float = 0.0
+    impact: float = 0.0
     pnl: float | None = None
     reason: str = ""
 
@@ -465,6 +523,13 @@ class BacktestConfig:
     # 경계의 점프 하나가 공분산·팩터 추정을 흔든다. `pass_labeled` 로 바꾸면
     # 예전 동작(그냥 통과)이지만 **그 선택이 결과에 남는다**.
     price_basis_policy: str = POLICY_EXCLUDE
+    # ── AK: 누락 비용 옵트인 셋 ★전부 기본 꺼짐★ ──────────────────────
+    # 켜는 순간 저장된 모든 실행과 골든의 뜻이 바뀌므로 기본을 건드리지 않는다.
+    # 요율은 전부 `src/data/market_rules.py` 에서 읽는다 — 켜면 실행 준비실
+    # (`execution_plan.build_plan`)과 **같은 값**을 쓴다.
+    charge_sell_tax: bool = False        # 매도 증권거래세+농특세 (기본 18bp)
+    charge_spread: bool = False          # 호가 스프레드 프록시 (편도 절반)
+    charge_market_impact: bool = False   # k·√참여율 — 참여율 미상이면 ★미상★
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
     cash_reserve_pct: float = 0.0
     # 자산배분 ETF 바스켓 (젠포트 자산배분 옵션). None=미사용.
@@ -571,6 +636,94 @@ class BacktestEngine:
         # 벡터화 경로(`signal_at`)를 쓰는 전략은 여기 들어오지 않으므로 비용을 안 낸다.
         self._fetch_frames: dict[str, dict] = {}
         self.ohlcv_all: dict[str, pd.DataFrame] = {}
+        # ── AK: 비용 모델 ────────────────────────────────────────────────
+        # ★열셋을 한 함수로 모은다★ — `value * rate` 를 손으로 쓰던 자리가
+        # 수수료 7곳·슬리피지 6곳이었고, 성분을 늘리려면 열셋을 다 고쳐야 했다.
+        self._cost_policy = policy_from_config(config)
+        self._cost_krw = {c: 0.0 for c in COST_COMPONENTS}
+        self._cost_states: dict[str, str] = {}
+        self._cost_reasons: dict[str, str | None] = {}
+        # ★못 잰 거래를 센다★ — 0 으로 부과하면 "충격이 없었다" 는 관측이 된다.
+        self._cost_unmeasured_trades = 0
+        self._adv_cache: dict[str, dict] = {}
+
+    def _adv_for(self, ticker: str, date_str: str) -> float | None:
+        """후행 20봉 평균 거래대금(원). ★없으면 `None` — 0 이 아니다★ (AK4)
+
+        ★당일 거래대금을 쓰지 않는다★ — 주문 시점에 그날의 거래대금은 아직
+        관측되지 않았고, 그것을 쓰면 비용 추정이 look-ahead 가 된다. `shift(1)`
+        로 전날까지만 본다.
+        """
+        cache = self._adv_cache.get(ticker)
+        if cache is None:
+            df = self.ohlcv_all.get(ticker)
+            if df is None or df.empty or "volume" not in df.columns:
+                self._adv_cache[ticker] = {}
+                return None
+            notional = df["close"].astype(float) * df["volume"].astype(float)
+            adv = notional.shift(1).rolling(20, min_periods=5).mean()
+            keys = (df["_date_str"].values if "_date_str" in df.columns
+                    else df.index.strftime("%Y%m%d").values)
+            # ★날짜 표기를 정규화한다★ — 거래는 `2024-04-01`, 프레임은 `20240401`
+            # 로 들어온다. 안 맞추면 조회가 **언제나 실패**해서 충격이 영원히
+            # 미상이 된다(실측으로 잡았다 — 그래서 `unmeasurable` 이 0 보다 낫다:
+            # 0 이었다면 "충격이 없다" 로 조용히 통과했을 것이다).
+            cache = {_date_key(k): (None if not pd.notna(v) or v <= 0 else float(v))
+                     for k, v in zip(keys, adv.to_numpy())}
+            self._adv_cache[ticker] = cache
+        return cache.get(_date_key(date_str))
+
+    def _trade_cost(self, value: float, side: str, ticker: str | None = None,
+                    date_str: str | None = None):
+        """거래 하나의 비용 — ★엔진에서 요율을 직접 곱하는 자리는 여기뿐★ (AK3)
+
+        Returns:
+            `CostBreakdown` + 편의 속성. `commission`·`slippage` 는 예전 뜻 그대로이고
+            `extra`(세금+스프레드+충격)만 **추가 현금 효과**다 — 슬리피지는 이미
+            체결가에 녹아 있어 두 번 빼면 이중계산이 된다.
+        """
+        participation = None
+        if self._cost_policy.charge_impact and ticker and date_str:
+            adv = self._adv_for(ticker, date_str)
+            if adv:
+                participation = float(value) / adv
+        bd = trade_cost(value, side, self._cost_policy, participation=participation)
+        by = {c.name: c for c in bd.components}
+        for name, comp in by.items():
+            self._cost_krw[name] += comp.krw
+            self._cost_states[name] = comp.state
+            self._cost_reasons[name] = comp.reason
+        if bd.n_unmeasurable:
+            self._cost_unmeasured_trades += 1
+        return _EngineCost(
+            commission=by["commission"].krw, slippage=by["slippage"].krw,
+            tax=by["tax"].krw, spread=by["spread"].krw, impact=by["impact"].krw)
+
+    def _cost_model_block(self) -> dict:
+        """이 실행이 **무엇을 부과했고 무엇을 못 쟀나**. (AK5)
+
+        ★`off` 와 `unmeasurable` 을 가른다★ — 둘 다 0원인데 앞은 선택이고
+        뒤는 *"비용이 실제보다 싸게 나왔다"* 는 경고다.
+        """
+        from src.domain.cost_model import (
+            STATE_OFF,
+            CostBreakdown,
+            CostComponent,
+            cost_label,
+            policy_label,
+            round_trip_bps,
+        )
+        comps = tuple(
+            CostComponent(name=n, state=self._cost_states.get(n, STATE_OFF),
+                          krw=self._cost_krw[n],
+                          reason=self._cost_reasons.get(n))
+            for n in COST_COMPONENTS)
+        total = sum(c.krw for c in comps)
+        label = cost_label(CostBreakdown(components=comps, total_krw=total))
+        return {**label,
+                "policy": policy_label(self._cost_policy),
+                "round_trip_bps": round_trip_bps(self._cost_policy)["round_trip_bps"],
+                "n_unmeasured_trades": self._cost_unmeasured_trades}
 
     def _emit(self, phase: str, done: int | None = None, total: int | None = None,
               extra: dict | None = None):
@@ -1255,12 +1408,12 @@ class BacktestEngine:
             if qty <= 0:
                 continue
             value = qty * exec_price
-            commission = value * self.cfg.commission_rate
-            if cost_total + value + commission > self._usable_cash():
+            cost = self._trade_cost(value, "buy", ticker, date_str)
+            if cost_total + value + cost.commission + cost.extra > self._usable_cash():
                 break
-            legs.append((exec_price, qty, value, commission))
+            legs.append((exec_price, qty, value, cost))
             qty_total += qty
-            cost_total += value + commission
+            cost_total += value + cost.commission + cost.extra
         if qty_total <= 0:
             return
         self.cash -= cost_total
@@ -1274,7 +1427,8 @@ class BacktestEngine:
         for i, (p, q, v, c) in enumerate(legs, 1):
             self.trades.append(Trade(
                 date=date_str, ticker=ticker, side="buy", price=p, quantity=q,
-                value=v, commission=c, slippage=v * self.cfg.slippage_rate,
+                value=v, commission=c.commission, slippage=c.slippage,
+                tax=c.tax, spread=c.spread, impact=c.impact,
                 reason=f"{reason} (래더 {i}/{len(legs)})"))
 
     def _execute_sell_ladder(self, ticker: str, fills: list, date_str: str, reason: str,
@@ -1387,10 +1541,11 @@ class BacktestEngine:
                 if qty <= 0:
                     continue
                 value = qty * buy_px
-                commission = value * self.cfg.commission_rate
-                if value + commission > self.cash:
+                cost = self._trade_cost(value, "buy", tk, date_str)
+                commission = cost.commission
+                if value + commission + cost.extra > self.cash:
                     continue
-                self.cash -= (value + commission)
+                self.cash -= (value + commission + cost.extra)
                 new_qty = held["qty"] + qty
                 held["avg"] = (held["avg"] * held["qty"] + buy_px * qty) / new_qty
                 held["qty"] = new_qty
@@ -1398,7 +1553,8 @@ class BacktestEngine:
                 self._etf_pos[tk] = held
                 self.trades.append(Trade(
                     date=date_str, ticker=tk, side="buy", price=buy_px, quantity=qty,
-                    value=value, commission=commission, slippage=value * self.cfg.slippage_rate,
+                    value=value, commission=commission, slippage=cost.slippage,
+                    tax=cost.tax, spread=cost.spread, impact=cost.impact,
                     reason="ETF 자산배분 리밸런싱"))
             else:  # 매도 (목표 초과분)
                 sell_px = px * (1 - self.cfg.slippage_rate)
@@ -1406,9 +1562,10 @@ class BacktestEngine:
                 if qty <= 0:
                     continue
                 value = qty * sell_px
-                commission = value * self.cfg.commission_rate
-                self.cash += (value - commission)
-                pnl = value - commission - qty * held["avg"]
+                cost = self._trade_cost(value, "sell", tk, date_str)
+                commission = cost.commission
+                self.cash += (value - commission - cost.extra)
+                pnl = value - commission - cost.extra - qty * held["avg"]
                 held["qty"] -= qty
                 held["last"] = px
                 if held["qty"] <= 0:
@@ -1417,7 +1574,8 @@ class BacktestEngine:
                     self._etf_pos[tk] = held
                 self.trades.append(Trade(
                     date=date_str, ticker=tk, side="sell", price=sell_px, quantity=qty,
-                    value=value, commission=commission, slippage=value * self.cfg.slippage_rate,
+                    value=value, commission=commission, slippage=cost.slippage,
+                    tax=cost.tax, spread=cost.spread, impact=cost.impact,
                     pnl=pnl, reason="ETF 자산배분 리밸런싱"))
 
     def _fill_with_offset(self, side: str, df_slice) -> float | None:
@@ -1634,10 +1792,11 @@ class BacktestEngine:
             if qty <= 0:
                 return
             value = qty * exec_price
-            commission = value * self.cfg.commission_rate
-            if value + commission > self._usable_cash():
+            cost = self._trade_cost(value, "buy", ticker, date_str)
+            commission = cost.commission
+            if value + commission + cost.extra > self._usable_cash():
                 return
-            self.cash -= (value + commission)
+            self.cash -= (value + commission + cost.extra)
             new_qty = existing.quantity + qty
             existing.avg_price = (existing.avg_price * existing.quantity + exec_price * qty) / new_qty
             existing.quantity = new_qty
@@ -1646,7 +1805,8 @@ class BacktestEngine:
             self.trades.append(Trade(
                 date=date_str, ticker=ticker, side="buy",
                 price=exec_price, quantity=qty, value=value,
-                commission=commission, slippage=value * self.cfg.slippage_rate,
+                commission=commission, slippage=cost.slippage,
+                tax=cost.tax, spread=cost.spread, impact=cost.impact,
                 reason=f"{reason} (분할매수 {existing.buy_count}차)",
             ))
             return
@@ -1677,16 +1837,18 @@ class BacktestEngine:
             return
 
         value = quantity * exec_price
-        commission = value * self.cfg.commission_rate
-        total_cost = value + commission
+        cost = self._trade_cost(value, "buy", ticker, date_str)
+        commission = cost.commission
+        total_cost = value + commission + cost.extra
 
         if total_cost > self._usable_cash():
             quantity = int((self._usable_cash() * 0.95) / (exec_price * (1 + self.cfg.commission_rate)))
             if quantity <= 0:
                 return
             value = quantity * exec_price
-            commission = value * self.cfg.commission_rate
-            total_cost = value + commission
+            cost = self._trade_cost(value, "buy", ticker, date_str)
+            commission = cost.commission
+            total_cost = value + commission + cost.extra
 
         self.cash -= total_cost
         self._buys_today = getattr(self, "_buys_today", 0) + 1
@@ -1708,7 +1870,8 @@ class BacktestEngine:
         self.trades.append(Trade(
             date=date_str, ticker=ticker, side="buy",
             price=exec_price, quantity=quantity, value=value,
-            commission=commission, slippage=value * self.cfg.slippage_rate,
+            commission=commission, slippage=cost.slippage,
+            tax=cost.tax, spread=cost.spread, impact=cost.impact,
             reason=reason,
         ))
 
@@ -1742,8 +1905,9 @@ class BacktestEngine:
 
         exec_price = price * (1 - self.cfg.slippage_rate)
         value = sell_qty * exec_price
-        commission = value * self.cfg.commission_rate
-        proceeds = value - commission
+        cost = self._trade_cost(value, "sell", ticker, date_str)
+        commission = cost.commission
+        proceeds = value - commission - cost.extra
         pnl = proceeds - (sell_qty * pos.avg_price) - commission
 
         self.cash += proceeds
@@ -1758,7 +1922,8 @@ class BacktestEngine:
         self.trades.append(Trade(
             date=date_str, ticker=ticker, side="sell",
             price=exec_price, quantity=sell_qty, value=value,
-            commission=commission, slippage=value * self.cfg.slippage_rate,
+            commission=commission, slippage=cost.slippage,
+            tax=cost.tax, spread=cost.spread, impact=cost.impact,
             pnl=pnl, reason=reason,
         ))
 
@@ -2116,6 +2281,13 @@ class BacktestEngine:
             # 이것은 추정이 어느 창·어느 빈티지 위에 섰나다.
             "estimator_leakage": backtest_estimator_evidence(
                 snapshot_fundamentals=self._snapshot_fundamentals_used()),
+            # ★이 실행이 무엇을 부과했고 무엇을 못 쟀나★ (AK5)
+            # 세금·스프레드·충격은 **기본 꺼짐**이라 기존 실행의 수치는 안
+            # 움직인다. 켜면 실행 준비실(`execution_plan`)과 같은 요율
+            # (`market_rules`)을 쓴다. ★`off` 와 `unmeasurable` 을 가른다★ —
+            # 둘 다 0원인데 앞은 선택이고 뒤는 "비용이 실제보다 싸게 나왔다" 는
+            # 경고다.
+            "cost_model": self._cost_model_block(),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -2200,6 +2372,11 @@ class BacktestEngine:
             "value": round(t.value, 0),
             "commission": round(t.commission, 0),
             "slippage": round(t.slippage, 0),
+            # AK — 옵트인 셋. ★기본 0 이라 기존 행의 값이 안 움직인다★
+            # 총액만 내면 *"어느 거래가 세금을 냈나"* 를 볼 수 없다.
+            "tax": round(t.tax, 0),
+            "spread": round(t.spread, 0),
+            "impact": round(t.impact, 0),
             "pnl": round(t.pnl, 0) if t.pnl is not None else None,
             "reason": t.reason,
         }
@@ -2273,6 +2450,10 @@ def _compute_statistics(
 
     total_commission = sum(t.commission for t in trades)
     total_slippage = sum(t.slippage for t in trades)
+    # AK — 옵트인 셋. ★기본은 전부 0 이라 기존 키의 값이 안 움직인다★
+    total_tax = sum(getattr(t, "tax", 0.0) for t in trades)
+    total_spread = sum(getattr(t, "spread", 0.0) for t in trades)
+    total_impact = sum(getattr(t, "impact", 0.0) for t in trades)
 
     base = {
         "total_return": round(total_return, 0),
@@ -2291,6 +2472,9 @@ def _compute_statistics(
         ),
         "total_commission": round(total_commission, 0),
         "total_slippage": round(total_slippage, 0),
+        "total_tax": round(total_tax, 0),
+        "total_spread": round(total_spread, 0),
+        "total_impact": round(total_impact, 0),
     }
 
     # QuantStats 표준 보강 지표 병합 (신규 키만 추가, 기존 키는 base 우선)
@@ -2431,6 +2615,12 @@ def run_backtest(
     initial_capital: float = 100_000_000,
     commission_rate: float = 0.0015,
     slippage_rate: float = 0.0005,
+    # ★누락 비용 옵트인 셋 — 기본 꺼짐★ (AK). `BacktestConfig` 와 같은 뜻이고,
+    # 이 편의 함수가 **또 하나의 기본값 자리**라 여기도 뚫어야 라우트에서 닿는다
+    # (`cost_model_registry` 가 `kis_backtest_engine_fn` 으로 적어 둔 자리다).
+    charge_sell_tax: bool = False,
+    charge_spread: bool = False,
+    charge_market_impact: bool = False,
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
@@ -2509,6 +2699,9 @@ def run_backtest(
         initial_capital=initial_capital,
         commission_rate=commission_rate,
         slippage_rate=slippage_rate,
+        charge_sell_tax=charge_sell_tax,
+        charge_spread=charge_spread,
+        charge_market_impact=charge_market_impact,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
         trailing_stop_pct=trailing_stop_pct,

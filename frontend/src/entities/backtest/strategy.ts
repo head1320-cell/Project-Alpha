@@ -113,6 +113,14 @@ export interface BacktestStrategy {
   endDate: string;
   feePct: number;
   slippagePct: number;
+  // ── 누락 비용 옵트인 셋 (AK) ★전부 기본 꺼짐★ ────────────────────────
+  // 백테스트는 오래도록 수수료·슬리피지만 봤고 ★증권거래세·스프레드·시장충격이
+  // 전부 0★ 이었다 — 실행 준비실(`execution_plan`)은 셋 다 계산하는데도.
+  // 켜면 백엔드가 `market_rules` 의 **같은 요율**을 쓴다. 기본을 켜지 않는 이유는
+  // 켜는 순간 저장된 모든 실행과 골든의 뜻이 바뀌기 때문이다.
+  chargeSellTax: boolean;        // 매도 증권거래세+농특세 (기본 18bp)
+  chargeSpread: boolean;         // 호가 스프레드 프록시 (편도 절반)
+  chargeMarketImpact: boolean;   // k·√참여율 — 거래대금을 모르면 ★미상★ (0 아님)
   evalCap: number;         // 평가 종목 상한 (4000=전체) — 전종목 유니버스 존중
   // 유동성 게이트: "off"=전종목(선택 존중, 기본) | "relaxed"=시총300억+ADV3억 | "standard"=시총1000억+ADV10억
   //   "off"면 filter_ast도 비워 per>0(적자기업 탈락) 필터를 걸지 않음 → 선택한 전 종목이 백테스트에 들어감
@@ -154,6 +162,11 @@ export function buildSummary(s: BacktestStrategy, tab: SummaryTab): SummaryGroup
         { label: "투자금", value: `${s.capital.toLocaleString()}만원` },
         { label: "기간", value: yearsBetween(s.startDate, s.endDate) },
         { label: "수수료", value: `${s.feePct}%` },
+        // ★안 켠 것과 못 잰 것을 가르는 라벨★ — 요약에서도 "무엇을 안 봤나" 가 보여야 한다.
+        { label: "추가 비용", muted: !(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact),
+          value: [s.chargeSellTax && "거래세", s.chargeSpread && "스프레드",
+                  s.chargeMarketImpact && "시장충격"].filter(Boolean).join(" · ")
+                 || "없음 (수수료·슬리피지만)" },
         { label: "리밸런싱", value: REBALANCE_LABELS[s.rebalancePeriod] ?? s.rebalancePeriod },
         { label: "신호 기준", value: s.signalLag === 1 ? "전일 종가 기준" : "당일 종가" },
         { label: "분봉 체결", value: s.intradayFill ? "정밀 (적재된 날만)" : "일봉 모델", muted: !s.intradayFill },

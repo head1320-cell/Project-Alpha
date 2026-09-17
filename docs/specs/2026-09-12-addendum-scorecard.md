@@ -28,7 +28,7 @@
 | 3 | 모든 성과에 상태 라벨 | **부분**(Z 이후) | ★직전까지 미달이었다★ — 종류 축이 공용 컴포넌트로 없었다. 이제 `src/domain/perf_kind.py` 가 어휘를 갖고 **응답 9경로**가 `perf_label` 을 싣고 `shared/ui/PerfLabel.tsx` 가 그린다(부착 10화면 · 트립와이어 `tests/test_perf_label_contract.py`). ★`부분` 인 이유 둘★: ⑴ 기존 배지 넷(`brun-badge` PIT · `tbt-prov` 데이터 · `as-bt-badge` OOS · 인라인 모드)이 그대로라 **같은 화면에 축이 다른 배지가 둘 이상** 보일 수 있다. ⑵ 사유가 적힌 허용 목록 8건이 남아 있다(랜딩 데모 · 리얼리즘 둘 · 종목 위험지표 · 상태 제공자 · 기존 배지 셋) |
 | 4 | 백테스트가 PIT 제약 적용 | **부분**(AG 이후) | `engine/run_evidence.py` 4축(price·universe·macro·fundamentals) · `data/pit_macro.accumulate_for_bars` · `dart_history` 빈티지. ★직전까지 `signal_lag` 기본이 `0` 이었다★ — 신호를 당일 종가에서 뽑고 그 종가에 체결했다(종가 확정 전에는 낼 수 없는 주문). 이제 기본이 `1` 이고 `src/domain/execution_assumption.py` 가 단일 출처이며, 결과가 `execution_assumption` 블록으로 `precomputable`/`same_bar`/`unrecorded` 를 **선언**한다(`lag=0` 은 금지가 아니라 라벨된다). ★`부분` 인 이유 둘★: ⑴ **데이터 누출 축이 여전히 없다**(§4 — GARCH·DCC 등 전체표본 적합). ⑵ 기록 이전 런은 재현 조건을 몰라 `unrecorded` 이고, 그것은 통과가 아니다 |
 | 5 | look-ahead 검사 존재 | **통과** | 위 4축 + `AXIS_UNKNOWN` 이 ★통과가 아님★을 명시. `regime_probability` 가 평활 확률의 배분 사용을 거부. AH 이후 **추정기 수준 누출**도 축이 생겼다(§4) — 다만 ★관측이지 수정이 아니다★. 그리고 AH 가 찾은 것 하나: 백테스트의 `allow_snapshot_fundamentals` 옵트인을 켜면 오늘의 재무가 과거 전 구간에 방송되는데, ★그렇게 돈 실행의 결과가 깨끗한 실행과 구별되지 않았다★ — 이제 `estimator_leakage` 블록이 말한다 |
-| 6 | 거래비용·슬리피지 반영 | **부분** | 반영은 된다. ★그런데 비용 모델이 넷이고 수수료 기본값이 10배 다르다★ — `kis_backtest_engine` `0.0015` vs `multi_strategy_backtest`·`realism_engine` `0.00015`. 단일 출처를 자처하는 `data/market_rules.py` 를 **어느 백테스트도 읽지 않는다**(세금·스프레드·호가단위·가격제한 전부 백테스트 미적용) |
+| 6 | 거래비용·슬리피지 반영 | **부분**(AK 이후) | ★직전 문장은 수도 진단도 절반만 맞았다★. ⑴ **넷이 아니라 열넷**이 비용 기본값을 스스로 정한다 — 15bp 진영(`kis_backtest_engine`·`kis_portfolio_analyzer`·`graph_runner`·`screener_routes`·`legacy_schemas`) vs 1.5bp 진영(`realism_engine`·`multi_strategy_backtest`·`multibacktest_schema` DB DEFAULT·`stage11_routes`·`stage12_routes`). ★API 스키마끼리도 갈라져서 같은 백테스트를 `stage11` 로 부르면 1.5bp, `screener` 로 부르면 15bp★ 다 — 요청이 값을 안 실으면 **문이 수수료를 정한다**. 슬리피지는 반대로 13자리 전부 `0.0005` 로 **일치**한다(없는 갈등을 만들지 않는다). ⑵ ★더 큰 것은 불일치가 아니라 누락이었다★ — `execution_plan.build_plan` 은 `market_rules` 에서 수수료 + **증권거래세 18bp(매도 편도)** + 스프레드 절반 + `k·√참여율` 충격을 전부 계산하는데 백테스트는 셋이 전부 0 이었다. 왕복 실측: 메인 엔진 40bp · 리얼리즘 13bp · 실행 준비실 26bp(+충격) — ★세 답이 다르고 방향도 일정하지 않다★. ⑶ AK 에서 그 셋이 **옵트인**으로 생겼다(`charge_sell_tax`·`charge_spread`·`charge_market_impact`, UI 토글). 요율은 `market_rules` 단일 출처를 읽고, 켜면 실행 준비실과 **같은 값**을 쓴다. 엔진의 비용 계산 **열셋**(수수료 7 · 슬리피지 6)은 한 함수로 모았고 ★골든으로 수치 불변을 확인★ 했다. ★`부분` 인 이유★: 기본은 여전히 꺼져 있고, **기본값 불일치는 그대로 남는다** — 15bp 도 1.5bp 도 이 저장소가 재본 적이 없어 안 재본 값으로 통일하면 ★거짓 합의★ 가 된다. 호가단위·가격제한은 비용이 아니라 체결 모델이라 여전히 미적용 |
 | 7 | 전략·모델·데이터 버전 추적 | **부분** | `code_version`(git SHA)이 `research_runs`·`backtest_runs`·`target_versions`·`regime_snapshots` 에 박힌다. `timing_rule_set_versions`·`scenario_pack_versions` 는 내용까지 보존. ★없는 것★: `strategy_version`·`feature_version`·`universe_version`·`cost_model_version`·모델 레지스트리 |
 | 8 | 리밸런싱 제안에 reason code | **통과**(AA) | ★직전까지 미달이었다★ — `rebalance_policy` 의 `reason` 은 자유 문자열뿐이었다. 이제 `src/domain/rebalance_reason.py` 가 **두 축**을 갖고(trigger ⟂ decision reason) `rebalance_decision` 의 6개 종료 분기가 각자 `reason_code` 를 낸다. `investment_decisions.reason_code` 컬럼까지 이어지고, ★AST 트립와이어가 7번째 분기를 막는다★(`tests/test_rebalance_reason.py`). ★생산자 없는 상수 넷은 만들지 않았다★ — 설계 문서의 제안이었을 뿐이다 |
 | 9 | 집중도·팩터 노출 계산 | **통과** | `engine/factor_exposure.factor_concentration` · `robust_opt`/`allocation_studio`/`collinearity_analyzer` 의 HHI·유효N · `constrained_opt.Constraints.group_caps_pct` · `liquidity_gate` |
@@ -80,7 +80,7 @@
 |---|---|---|
 | point-in-time 데이터 | **부분** | 4축 증거 + 빈티지 두 계열(재무·매크로). `signal_lag` 기본은 `1`(AG — 결정이 장 시작 전 계산 가능)이고 실행마다 `execution_assumption` 으로 기록된다. ★기록 이전 런은 `unrecorded`★ |
 | bias 검사 | **부분**(AH 이후) | look-ahead·생존편향은 축으로 존재하고, 이제 **데이터 누출 축**도 있다(`src/domain/estimator_fit.py` 어휘 + `src/engine/estimator_evidence.py` 롤업 — 판정은 `run_evidence.rollup` 공유). ★직전 문장은 사실이 아니었다★ — 여기 이름을 댔던 일곱 계열(`GARCH`·`DCC`·`MarkovRegression`·`GaussianMixture`·`DynamicFactor`·`genpareto`·`LedoitWolf`)은 **전부 리포트 전용**이고 백테스트·배분 결정에 닿지 않는다(`arch_model` 은 저장소에 아예 없고, `regime_ensemble` 은 스스로 *"배분에 쓰이지 않습니다"* 라고 적어 두었다). 실제로 결정에 닿는 자리는 `LEAKAGE_SITES` 의 여섯이고 `EXCLUDED_SITES` 가 안 잰 일곱을 사유와 함께 든다. ★`부분` 인 이유 둘★: ⑴ **관측만 했고 고치지 않았다**(사용자 결정 — 배분 경로 동작 변경은 별도 승인). ⑵ 축은 **창 ⟂ 빈티지** 두 축뿐이라 모형 설정 누출(하이퍼파라미터 선택 등)은 여전히 안 본다 |
-| 비용 모델 | **부분** | 넷이 공존, 10배 불일치(기준 #6). ★사용자 결정: 이번엔 기록만★ |
+| 비용 모델 | **부분**(AK 이후) | 열넷이 공존, 라우트별 10배(기준 #6). ★이제 기록만이 아니다★ — 증권거래세·스프레드·시장충격이 **옵트인으로 존재**하고(`src/domain/cost_model.py` 어휘 + `src/engine/cost_model_registry.py` 레지스트리, 판정은 `run_evidence.rollup` 공유) 실행 결과가 `cost_model` 로 **무엇을 부과했고 무엇을 못 쟀는지** 선언한다. ★`off` 와 `unmeasurable` 을 가른다★ — 둘 다 0원이지만 앞은 선택이고 뒤는 *"비용이 실제보다 싸게 나왔다"* 는 경고다(거래대금이 없어 참여율을 못 구한 거래 수를 센다). **기본은 전부 꺼짐**이라 기존 실행의 수치는 안 움직인다 |
 | walk-forward | **통과** | `plan_walk_forward`/`simulate_walk_forward` 분리 + AST 테스트가 강제. rolling/expanding 선택 |
 | 표본외 | **통과** | OOS 어휘가 화면까지 나간다(`PolicyBacktest` 의 "OOS · look-ahead 없음"). `company_view_control` 은 ★표본외가 없음을 스스로 밝힌다★ |
 | 귀인 | **부분** | 5효과 + 커버리지 측정 + 잔차 라벨. ★FX·국가·현금 기여 없음★, 수수료는 `cost_effect` 하나로 뭉쳐 있다 |
@@ -128,12 +128,15 @@
 - **애드덤을 이행한 것이 아니다.** 채점했고, 안전 셋을 고쳤고, 나머지는 *어느 단계가
   집는지*까지 적었다. 통과 7 · 부분 6 · 미달 0 은 **지금 상태**다(AA 이후).
 - ★**미달 0 이 "애드덤을 이행했다" 는 뜻이 아니다**★ — `부분` 여섯은 각각
-  남은 것을 적고 있고, 그중 비용 모델 10배 불일치와 추정기 수준 누출은
-  **측정된 채로 남아 있다**.
+  남은 것을 적고 있고, 그중 비용 모델 10배 불일치(AK 이후에도 **기본값은 그대로**)와
+  추정기 수준 누출은 **측정된 채로 남아 있다**.
 - **`통과` 가 "투자에 쓸 수 있다" 는 뜻이 아니다.** 기준을 만족한다는 뜻이고,
   ★이 저장소는 경제적 가치 관문을 통과한 적이 없다★(CLAUDE.md §1).
-- **비용 모델을 고치지 않았다.** 10배 불일치는 ★측정된 채로 남는다★ — 어느 값이
+- **비용 모델을 통일하지 않았다.** 10배 불일치는 ★측정된 채로 남는다★ — 어느 값이
   맞는지 이 저장소가 잰 적이 없어서, 고치는 것보다 보이게 하는 것이 먼저다.
+  ★AK 에서 바뀐 것은 통일이 아니라 **누락의 가시화**다★ — 증권거래세·스프레드·
+  시장충격이 옵트인으로 생겼고(기본 꺼짐), 결과가 무엇을 부과했고 무엇을 못
+  쟀는지 선언한다. 열넷은 그대로 열넷이다.
 - **모드 어휘를 정리하지 않았다.** 여섯은 그대로다.
 - **PAPER 가 이제 안전하다고 말하지 않는다.** 한 경로를 막았다. ★"누구나 모드를
   바꿀 수 있다" 는 P-1(AC)에서 해소됐다★ — 이제 admin 토큰이 필요하고 누가 바꿨는지

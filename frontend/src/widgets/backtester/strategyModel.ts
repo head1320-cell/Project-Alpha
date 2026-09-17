@@ -38,6 +38,8 @@ export const yearsAgo = (n: number) => {
 export const initialStrategy = (): BacktestStrategy => ({
   name: "내 전략",
   capital: 5000, startDate: yearsAgo(3), endDate: today(), feePct: 0.15, slippagePct: 0.05,
+  // ★기본 꺼짐★ — 켜는 순간 저장된 실행과 골든의 뜻이 바뀐다 (AK)
+  chargeSellTax: false, chargeSpread: false, chargeMarketImpact: false,
   // 평가 종목 상한 — 기본 200(조건 추가 시에도 안전한 속도). 조건 추가만으로 자동 전종목(4000)
   // 평가로 튀어 타임아웃/네트워크 에러가 나던 문제 수정 — 큰 값은 UniversePanel에서 사용자가
   // 명시적으로 선택.
@@ -133,6 +135,10 @@ export function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHand
     initial_capital: s.capital * 10000,
     commission_rate: s.feePct / 100,
     slippage_rate: s.slippagePct / 100,
+    // 요율은 보내지 않는다 — ★단일 출처는 백엔드의 `market_rules`★ (AK)
+    charge_sell_tax: s.chargeSellTax,
+    charge_spread: s.chargeSpread,
+    charge_market_impact: s.chargeMarketImpact,
     stop_loss_pct: sell.stopLoss.on ? sell.stopLoss.pct : null,
     take_profit_pct: sell.takeProfit.on ? sell.takeProfit.pct : null,
     trailing_stop_pct: sell.trailing.on ? sell.trailing.pct : null,

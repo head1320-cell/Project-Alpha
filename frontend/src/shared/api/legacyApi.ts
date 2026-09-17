@@ -258,6 +258,11 @@ export interface LegacyBacktestResult {
       profit_factor: number;
       total_commission: number;
       total_slippage: number;
+      // 누락 비용 옵트인 셋 (AK). ★기본 0 — 안 켠 것이지 없는 것이 아니다★
+      // 성분별 상태와 사유는 `cost_model` 블록에 있다.
+      total_tax?: number;
+      total_spread?: number;
+      total_impact?: number;
       avg_trade_return: number;
     };
     equity_curve: number[];
@@ -273,7 +278,12 @@ export interface LegacyBacktestResult {
 export interface Trade {
   date: string; ticker: string; side: "buy" | "sell";
   price: number; quantity: number; value: number;
-  commission: number; slippage: number; pnl: number | null; reason: string;
+  commission: number; slippage: number;
+  // ★어느 거래가 세금을 냈는지 총액만으로는 볼 수 없다★ (AK) — 기본 0.
+  // `tax` 는 매도에만 붙고, `impact` 는 참여율을 못 구하면 0 이지만 그때는
+  // `cost_model.components.impact.state` 가 `unmeasurable` 이다.
+  tax?: number; spread?: number; impact?: number;
+  pnl: number | null; reason: string;
 }
 
 export interface SymbolResult {
