@@ -19,12 +19,15 @@ import multiprocessing as mp
 import os
 import threading
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import CancelledError, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import src.data.backtest_runs as br
+from src.domain.execution_assumption import assumption_from_result
+from src.domain.perf_kind import backtest_label
 
 logger = logging.getLogger("api.backtest_run")
 
@@ -118,6 +121,56 @@ def shutdown_pool() -> None:
     except Exception:
         logger.exception("워커 풀 종료 중 오류(무시)")
 
+def _reset_pool() -> None:
+    """★broken 된 풀을 버리고 다음 제출에서 새로 만든다★
+
+    자식이 비정상 종료하면 `ProcessPoolExecutor` 는 **풀 전체**를 broken 으로
+    표시하고 이후 모든 `submit()` 이 즉시 실패한다. 예전에는 `_POOL` 을 앱 종료
+    외에 재설정하지 않아서, 한 번 죽으면 **API 를 재시작할 때까지 모든 백테스트가
+    실패했다** — 사용자가 말한 "계속 일어난다" 가 그것이다.
+    """
+    global _POOL
+    with _POOL_LOCK:
+        pool, _POOL = _POOL, None
+    if pool is not None:
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:                       # noqa: BLE001
+            logger.debug("broken 풀 정리 중 오류(무시)", exc_info=True)
+
+
+def _on_worker_done(run_id: str | None, fut) -> None:
+    """★죽은 자식을 관측한다★
+
+    `_worker` 는 자기 예외를 잡아 failed 로 기록한다. 그러나 자식이 **SIGKILL**
+    되면(OOM killer 가 대표적이다 — 실행당 RSS 90~247MB × 워커 4개) 그 `except` 는
+    돌지 못한다. 예전에는 `submit()` 의 Future 를 버려서 그 죽음을 아무도 관측하지
+    못했고, 행은 비종료로 남아 `RunMonitor` 가 1초마다 영원히 폴링했다.
+    """
+    try:
+        exc = fut.exception()
+    except CancelledError:
+        return
+    except Exception:                           # noqa: BLE001
+        return
+    if exc is None:
+        return                                  # 정상 완료 — `_worker` 가 이미 기록했다
+
+    if isinstance(exc, BrokenProcessPool):
+        _reset_pool()
+    logger.error(f"백테스트 워커가 비정상 종료했다 (run={run_id}): {type(exc).__name__}")
+    if not run_id:
+        return
+    try:
+        br.set_error(
+            run_id, "worker_died",
+            "실행 워커가 비정상 종료했습니다("
+            f"{type(exc).__name__}). 메모리 부족이나 프로세스 종료일 수 있습니다 — "
+            "유니버스 범위를 줄여 다시 실행해 보세요.")
+    except Exception:                           # noqa: BLE001
+        logger.exception(f"워커 사망을 기록하지 못했다 (run={run_id})")
+
+
 def _submit(fn, *args) -> None:
     """워커 디스패치 — **프로덕션은 항상 프로세스 풀이다.**
 
@@ -130,8 +183,20 @@ def _submit(fn, *args) -> None:
     ★이걸로 프로덕션 경로가 검증되지 않는 것은 아니다★ 풀을 실제로 타는
     `tests/test_backtest_worker_process.py` 가 별도 프로세스에서 완주하는 것과
     텔레메트리가 남는 것을 함께 단언한다.
+
+    ★Future 를 버리지 않는다★ 버리면 자식의 죽음이 어디에도 나타나지 않는다
+    (`tests/test_backtest_worker_death.py` 가 그 사고를 재현한다). 첫 인자가
+    run_id 라는 것은 두 호출부의 규약이고, 아니면 그냥 로그만 남긴다.
     """
-    _get_pool().submit(fn, *args)
+    run_id = args[0] if args and isinstance(args[0], str) else None
+    try:
+        fut = _get_pool().submit(fn, *args)
+    except BrokenProcessPool:
+        # 이전 실행의 자식이 죽어 풀이 broken 이다 — 버리고 **한 번만** 다시 세운다.
+        logger.warning("워커 풀이 broken 상태라 새로 세운다")
+        _reset_pool()
+        fut = _get_pool().submit(fn, *args)
+    fut.add_done_callback(lambda f: _on_worker_done(run_id, f))
 
 
 router = APIRouter(prefix="/api/v1/backtest", tags=["backtest-run"])
@@ -202,6 +267,114 @@ def _peak_rss_mb() -> float | None:
         return None
 
 
+#: 저장소 실패의 후보 원인 — ★가설을 가를 수 있어야 관측이다★
+#: 사용자 화면의 "연결이 불안정합니다"(status 폴링 3회 연속 실패)가 어느 쪽인지
+#: 다음 번에 말할 수 있게 하는 것이 목적이다. 재현하지 못한 상태라 **고치지 않고
+#: 관측만** 한다.
+_STORE_FAILURE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # SQLAlchemy QueuePool 고갈 — pool_size=5 + overflow=10, pool_timeout 기본 30초.
+    # 30초는 1초 폴링 주기보다 길어 요청이 쌓인다.
+    ("pool_exhausted", ("queuepool", "connection pool", "pool limit")),
+    # SQLite 폴백 시 워커의 진행 UPDATE 와 API 의 SELECT 가 쓰기 락에서 만난다.
+    ("store_locked", ("database is locked", "database table is locked", "deadlock")),
+    ("store_unreachable", ("could not translate host name", "could not connect",
+                           "connection refused", "server closed the connection")),
+)
+
+#: 사용자에게 보일 문구 — ★원문은 절대 싣지 않는다★ DB 예외 문자열에는 접속
+#: URL(자격증명 포함)이 섞일 수 있다. 분류만 내보내고 원문은 로그에 남긴다.
+_STORE_FAILURE_MESSAGE = {
+    "pool_exhausted": "실행 저장소 커넥션이 모두 사용 중입니다 — 잠시 후 재시도하세요.",
+    "store_locked": "실행 저장소가 잠겨 있습니다(동시 쓰기) — 잠시 후 재시도하세요.",
+    "store_unreachable": "실행 저장소에 연결할 수 없습니다 — 잠시 후 재시도하세요.",
+    "unknown": "실행 저장소를 일시적으로 사용할 수 없습니다 — 원인을 확인 중입니다. 잠시 후 재시도하세요.",
+}
+
+
+def classify_store_failure(message: str) -> str:
+    """저장소 실패 문자열을 후보 원인으로 분류한다. ★미상은 분류가 아니다★ —
+    짚이는 것이 없으면 그럴듯한 라벨을 붙이지 않고 `"unknown"` 이라고 적는다."""
+    low = (message or "").lower()
+    for cause, needles in _STORE_FAILURE_HINTS:
+        if any(n in low for n in needles):
+            return cause
+    return "unknown"
+
+
+def _store_unavailable(exc: Exception, where: str) -> HTTPException:
+    """503 + 분류된 사유. 원문은 로그에만 남긴다(자격증명 유출 방지)."""
+    cause = classify_store_failure(str(exc))
+    logger.warning(f"실행 저장소 실패({where}) cause={cause}: {exc}")
+    return HTTPException(503, {"cause": cause, "message": _STORE_FAILURE_MESSAGE[cause]})
+
+
+def _record_phase_seconds(tele: dict, marks: dict) -> None:
+    """단계별 소요를 계측에 싣는다 — ★잰 것만 싣는다★.
+
+    `marks` 는 `cb` 가 각 단계에 **처음 진입한** 시각과, 코어가 끝난 시각이다.
+      load_s = 로딩 시작 → 시뮬레이션 시작 (시뮬레이션에 도달했을 때만)
+      sim_s  = 시뮬레이션 시작 → 코어 종료
+
+    ★미측정 ≠ 0★ 경계가 없으면 키를 만들지 않는다. `sim_s: 0` 을 넣으면
+    "시뮬레이션이 0초였다"로 읽히는데, 사실은 거기까지 가지도 않은 것이다.
+    (`.md` §30 의 cache hit rate 를 뺀 규율과 같다.)
+    """
+    ld, sim, end = marks.get("loading_data_t0"), marks.get("simulating_t0"), marks.get("core_end")
+    if ld is not None and sim is not None:
+        tele["load_s"] = round(sim - ld, 3)
+    elif ld is not None and end is not None:
+        # 시뮬레이션에 도달하지 못한 채 코어가 끝났다 — 로딩만 잰다.
+        tele["load_s"] = round(end - ld, 3)
+    if sim is not None and end is not None:
+        tele["sim_s"] = round(end - sim, 3)
+
+
+#: 결과의 진단 키 → 텔레메트리에 실을 **필드**. ★손으로 세지 않는다★
+#:
+#: 사유 원본(토큰별 사유·종목 목록·사유 히스토그램)은 결과에 그대로 있고,
+#: 여기에는 **수치만** 싣는다 — 텔레메트리 행을 부풀리지 않기 위해서다.
+_TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
+    "signal_path": ("vectorized", "per_bar", "failed", "vectorized_pct"),
+    "macro_lookahead": ("pit", "live", "blocked", "pit_pct"),
+    "fundamentals_pit": ("measured", "estimated", "unknown", "measured_pct"),
+    "price_basis": ("state", "uniform_adjusted_pct"),
+    "universe": ("survivorship", "effective", "fell_back"),
+    # ★이 런의 결정이 장 시작 전에 계산 가능했나★ 텔레메트리 행만 봐도
+    # 룩어헤드 위에 선 런을 셀 수 있어야 한다 (AG).
+    "execution_assumption": ("state", "signal_lag"),
+    # ★옵트인 누출을 켜고 돈 런을 행만 봐도 셀 수 있어야 한다★ (AH)
+    "estimator_leakage": ("status",),
+    # ★어떤 비용을 부과했고 몇 건을 못 쟀나★ (AK) — 행만 봐도 세금을 켜고 돈 런과
+    # 충격을 못 잰 런을 셀 수 있어야 한다. `total_bps` 는 한 줄로 답하는 값이다.
+    "cost_model": ("total_bps", "n_unmeasurable", "n_unmeasured_trades"),
+}
+
+
+def _diagnostic_telemetry(result: dict | None) -> dict:
+    """결과의 진단을 텔레메트리 필드로 접는다. ★순수 함수★
+
+    ★없는 것에 키를 만들지 않는다★ 결과에 그 진단이 없거나 `None` 이면 여기에도
+    키가 생기지 않는다. `None` 을 넣으면 나중에 이 행을 읽는 사람이 "재봤더니
+    없더라" 로 읽는데, 그것은 하지 않은 진술이다 — `symbols_by_source` 가 이미
+    같은 규율이다(`.md` §30 의 cache hit rate 를 넣지 않은 이유와 같다).
+
+    ★모양이 다르면 추측하지 않는다★ dict 가 아니면 그냥 건너뛴다.
+    """
+    out: dict = {}
+    for key, fields in _TELEMETRY_FIELDS.items():
+        got = (result or {}).get(key)
+        if isinstance(got, dict):
+            out[key] = {f: got.get(f) for f in fields}
+    ev = (result or {}).get("pit_evidence")
+    if isinstance(ev, dict) and ev.get("status"):
+        # ★한 줄로 답하는 값★ — 축별 사유는 결과에 그대로 있다.
+        out["pit_status"] = ev["status"]
+        for name in ("broken_axes", "unknown_axes"):
+            if ev.get(name):
+                out[name] = list(ev[name])
+    return out
+
+
 def _finish_telemetry(run_id: str, tele: dict, meter: _QueryMeter,
                       t_start: float, cpu0: float) -> None:
     """실행 계측을 마무리해 DB 에 남긴다. 성공·실패·취소 모든 경로에서 부른다."""
@@ -253,6 +426,11 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
             return
 
         seen = {"stage": "validating"}
+        # 단계별 시각 — ★`duration_s` 총합만으로는 병목을 못 가른다★
+        # "5분 중 몇 분이 로딩이고 몇 분이 시뮬레이션인가" 를 답하려면 단계 경계가
+        # 있어야 한다. `cb` 는 이미 단계를 보고 있으므로 계측 지점을 새로 만들지
+        # 않고 여기에 시각만 찍는다. ★돌지 않은 단계는 키를 만들지 않는다★
+        marks: dict[str, float] = {}
 
         def cb(evt: dict) -> None:
             """진행 보고 + 협조적 취소 감지.
@@ -270,6 +448,15 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
                 msg = f"데이터 로딩 {done}/{total}" if total else None
                 if phase == "loading" and total:
                     tele["symbols_loaded"] = total
+                # ★왜 느렸는지 나중에 물을 수 있게 한다★ 엔진이 로딩을 마치며
+                # 출처 구성(db/kis/mock/unknown)을 한 번 보고한다. DB 적재가 얇아
+                # KIS 로 떨어지면 종목당 ~74콜 × 초당 20콜 전역 한도라 200종목이면
+                # 최소 12분이다 — 그 사실이 응답 어디에도 없었다.
+                if evt.get("sources"):
+                    tele["symbols_by_source"] = dict(evt["sources"])
+                # ★"적재는 됐는데 구간을 덮지 못했다" 를 사용자가 볼 수 있게★
+                if evt.get("coverage"):
+                    tele["symbols_by_coverage"] = dict(evt["coverage"])
             elif phase == "simulating":
                 stage = "simulating"
                 pct = 30 + (55 * done / total if done and total else 0)
@@ -278,6 +465,8 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
                     tele["sim_days"] = total
             else:
                 return
+
+            marks.setdefault(f"{stage}_t0", time.perf_counter())
 
             if seen["stage"] == stage:
                 if br.touch_progress(run_id, pct, msg) == "blocked":
@@ -294,21 +483,35 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         try:
             with meter:
                 result = _screen_to_backtest_core(req, progress_cb=cb)
+            marks["core_end"] = time.perf_counter()
+            _record_phase_seconds(tele, marks)
         except _Cancelled:
             logger.info(f"backtest run {run_id} 취소 감지 — 워커 정지")
             tele["cancelled"] = True
+            # ★실패·취소야말로 단계 분해가 필요하다★ 어디까지 갔다 멈췄는지가
+            # 진단의 전부다. 도달하지 못한 단계는 여전히 키를 만들지 않는다.
+            marks["core_end"] = time.perf_counter()
+            _record_phase_seconds(tele, marks)
             _finish_telemetry(run_id, tele, meter, t_start, cpu0)
             return
         except Exception:
             logger.exception(f"backtest run {run_id} 엔진 실패")
             br.set_error(run_id, "engine_error", "백테스트 실행 중 오류가 발생했습니다.")
             tele["failure_code"] = "engine_error"
+            marks["core_end"] = time.perf_counter()
+            _record_phase_seconds(tele, marks)
             _finish_telemetry(run_id, tele, meter, t_start, cpu0)
             return
 
         # 엔진이 지표까지 계산해 반환 → 마무리 단계 전이 후 결과 저장
         br.advance(run_id, "calculating_metrics", message="성과·리스크 지표 정리", progress=88)
         br.advance(run_id, "persisting_results", message="재현 가능한 결과 저장", progress=96)
+        # ★왜 느렸는지 나중에 물을 수 있게 한다★ 벡터화/per-bar 폴백 비율은
+        # 실행 시간을 5배까지 가르는데 지금까지 응답 어디에도 없었다.
+        # ★진단 집계는 한 곳에서★ 예전에는 여기서 키를 하나씩 꺼냈는데, 정작
+        # 라우트가 그 키들을 응답에 넣지 않아 **한 번도 실린 적이 없었다**(R1).
+        # 손으로 세는 자리를 없애 같은 단선이 다시 생기지 않게 한다.
+        tele.update(_diagnostic_telemetry(result))
         ds = (result or {}).get("data_source") or {}
         is_mock = None
         if isinstance(ds, dict):
@@ -319,7 +522,14 @@ def _worker(run_id: str, config: dict, submitted_at: float | None = None) -> Non
         if st and st["status"] == "cancelled":
             return
         _t = time.perf_counter()
-        r = br.set_result(run_id, result, is_mock_data=is_mock)
+        # ★`is_pit_verified` 컬럼이 드디어 쓰인다★ 지금까지 아무도 넘기지 않아
+        # 화면 배지가 모든 실행에서 "PIT 미검증" 이었다. ★미상은 거짓이 아니다★ —
+        # 컬럼이 NULL 을 받으므로 3-값을 그대로 보낸다.
+        from src.engine.run_evidence import is_pit_verified_flag
+        _ev = (result or {}).get("pit_evidence") or {}
+        r = br.set_result(run_id, result, is_mock_data=is_mock,
+                          is_pit_verified=is_pit_verified_flag(
+                              _ev.get("status") if isinstance(_ev, dict) else None))
         tele["persist_s"] = round(time.perf_counter() - _t, 3)
         if not r["ok"]:
             br.set_error(run_id, "persist_error", "결과 저장에 실패했습니다.")
@@ -350,7 +560,21 @@ def create_run(req: CreateRunRequest):
         run_id = br.create_run(req.strategy_name, req.config, requested_by=req.requested_by)
         if run_id is None:
             raise HTTPException(503, "실행 저장소(DB)를 사용할 수 없어 백테스트를 생성할 수 없습니다.")
-        _submit(_worker, run_id, req.config, time.time())
+        try:
+            _submit(_worker, run_id, req.config, time.time())
+        except Exception as e:
+            # ★행을 만들어 놓고 닫지 않으면 고아가 된다★ 아무 워커도 집어 가지
+            # 않는 `queued` 행이 남고, 프런트는 그것을 영원히 폴링한다.
+            logger.exception("워커 디스패치 실패")
+            try:
+                br.set_error(run_id, "dispatch_failed",
+                             f"백테스트 워커를 시작하지 못했습니다: {type(e).__name__}")
+            except Exception:                   # noqa: BLE001
+                logger.exception("디스패치 실패를 기록하지 못했다")
+            # ★사유를 지우지 않는다★ "처리 중 오류" 로 뭉개면 원인을 못 찾는다.
+            raise HTTPException(
+                503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+                     f"({type(e).__name__}).") from e
         return {"run_id": run_id, "status": "queued"}
     except HTTPException:
         raise
@@ -373,21 +597,64 @@ def run_status(run_id: str):
     # strict=True → DB 오류는 503(일시적, 프론트가 재시도), 진짜 없음만 404
     try:
         st = br.get_status(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "status") from e
     if st is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
     return st
+
+
+@router.get("/runs/{run_id}/telemetry")
+def run_telemetry(run_id: str):
+    """실행 계측 조회 — ★쓰기 전용이던 계측을 읽을 수 있게 한다★.
+
+    `_worker` 는 실행마다 `duration_s`·`cpu_s`·`cpu_util_pct`·`peak_rss_mb`·
+    `db_queries`·`queue_wait_s`·`symbols_by_source`·`load_s`·`sim_s` 를 남기는데,
+    그것을 돌려주는 경로가 없었다. 그래서 "왜 5분 걸렸나" 를 물어도 로딩과
+    시뮬레이션 중 어느 쪽인지 분해할 수 없었다.
+
+    404/503 매핑은 `run_status` 와 **같은 규약**이다 — 진짜 없는 실행만 404,
+    저장소 오류는 503(프런트가 '만료된 링크'로 오인하지 않게).
+
+    ★미상은 0 이 아니다★ 계측이 아직 없으면 `{}` 도 0 도 아니고
+    `available: false` + 사유다.
+    """
+    try:
+        st = br.get_status(run_id, strict=True)
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "telemetry.status") from e
+    if st is None:
+        raise HTTPException(404, "실행을 찾을 수 없습니다.")
+    try:
+        tele = br.get_telemetry(run_id, strict=True)
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "telemetry") from e
+    if tele is None:
+        reason = ("실행이 아직 끝나지 않아 계측이 기록되기 전입니다."
+                  if st.get("status") not in br.TERMINAL
+                  else "이 실행에는 계측 기록이 없습니다(계측 도입 이전이거나 계측 컬럼 미사용).")
+        return {"run_id": run_id, "status": st.get("status"),
+                "available": False, "telemetry": None, "reason": reason}
+    return {"run_id": run_id, "status": st.get("status"),
+            "available": True, "telemetry": tele, "reason": None}
 
 
 @router.get("/runs/{run_id}")
 def run_full(run_id: str):
     try:
         r = br.get_run(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "full") from e
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
+    # ★응답이 스스로 종류를 말한다★ — 화면이 "백테스트 페이지니까" 로 추론하면
+    # 같은 컴포넌트를 다른 데이터로 재사용하는 순간 거짓말이 된다(Z2).
+    r["perf_label"] = backtest_label(is_mock_data=r.get("is_mock_data")).to_dict()
+    # ★이 런의 결정을 장 시작 전에 계산할 수 있었나★ 다른 축이라 `perf_label` 과
+    # 나란히 선다. 기록 이전 런은 `result` 에 이 블록이 아예 없는데, 그때 키를
+    # 빼면 화면이 "값이 없다" 와 "질문한 적이 없다" 를 구별할 수 없다 — 리더가
+    # `unrecorded` + 사유로 **말한다**. ★미상을 0 으로 읽지 않는다★(AG).
+    r["execution_assumption"] = assumption_from_result(r.get("result"))
     return r
 
 
@@ -416,7 +683,20 @@ def run_retry(run_id: str):
                            requested_by=src.get("requested_by") or "user")
     if new_id is None:
         raise HTTPException(503, "실행 저장소(DB)를 사용할 수 없습니다.")
-    _submit(_worker, new_id, config, time.time())
+    # ★재시도도 같은 규율★ 제출이 실패하면 방금 만든 행을 닫는다 — 고아 `queued`
+    # 를 남기지 않는다(`create_run` 과 같은 이유).
+    try:
+        _submit(_worker, new_id, config, time.time())
+    except Exception as e:
+        logger.exception("재시도 워커 디스패치 실패")
+        try:
+            br.set_error(new_id, "dispatch_failed",
+                         f"백테스트 워커를 시작하지 못했습니다: {type(e).__name__}")
+        except Exception:                       # noqa: BLE001
+            logger.exception("디스패치 실패를 기록하지 못했다")
+        raise HTTPException(
+            503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+                 f"({type(e).__name__}).") from e
     return {"run_id": new_id, "status": "queued", "retried_from": run_id}
 
 
@@ -476,8 +756,8 @@ def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     """
     try:
         r = br.get_run(run_id, strict=True)
-    except br.BacktestStoreError:
-        raise HTTPException(503, "실행 저장소를 일시적으로 사용할 수 없습니다 — 잠시 후 재시도하세요.")
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "full") from e
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
 

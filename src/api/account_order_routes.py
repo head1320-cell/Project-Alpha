@@ -3,8 +3,9 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from src.api.auth import require_admin, require_login, require_self_or_admin
 from src.api.legacy_schemas import (
     AutoTradingConfig,
     BatchOrderRequest,
@@ -17,11 +18,12 @@ logger = logging.getLogger("api.account_order")
 router = APIRouter(tags=["account_order"])
 
 
-@router.get("/trade-history/{username}")
+@router.get("/trade-history/{username}",
+            dependencies=[Depends(require_self_or_admin)])
 def trade_history(username: str):
     return {"history": get_trade_history(username)}
 
-@router.post("/toggle-auto-trading")
+@router.post("/toggle-auto-trading", dependencies=[Depends(require_admin)])
 def toggle_auto_trading(cfg: AutoTradingConfig):
     trading_config["auto_mode"] = cfg.auto_mode
     trading_config["var_limit"] = cfg.var_limit
@@ -41,7 +43,7 @@ def _kis_mode_label(client) -> str:
         return "mock"
     return "paper" if getattr(getattr(client, "creds", None), "is_paper", True) else "real"
 
-@router.get("/api/v1/account/holdings")
+@router.get("/api/v1/account/holdings", dependencies=[Depends(require_login)])
 def get_holdings():
     """KIS API로 현재 보유 종목 조회."""
     try:
@@ -59,7 +61,7 @@ def get_holdings():
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
-@router.get("/api/v1/account/balance")
+@router.get("/api/v1/account/balance", dependencies=[Depends(require_login)])
 def get_balance():
     """예수금 및 평가금액 조회."""
     try:
@@ -87,7 +89,7 @@ def _trade_record_to_legacy(rec: dict) -> dict:
         "timestamp": rec["timestamp"], "blocked_by": rec.get("blocked_by"),
     }
 
-@router.post("/api/v1/orders/execute")
+@router.post("/api/v1/orders/execute", dependencies=[Depends(require_admin)])
 def execute_order(req: OrderRequest):
     """
     단일 주문 실행 — TradingEngine(6중 안전장치) 경유.
@@ -113,7 +115,7 @@ def execute_order(req: OrderRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
-@router.post("/api/v1/orders/batch")
+@router.post("/api/v1/orders/batch", dependencies=[Depends(require_admin)])
 def batch_execute_orders(req: BatchOrderRequest):
     """
     시그널 일괄 실행 — TradingEngine(6중 안전장치) 경유, 항상 dry_run(모의 실행).

@@ -15,6 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/shared/ui/shadcn/table";
 import type { AnalyzeResult, StressResult, SummaryStats, XrayFactor } from "@/entities/allocation/api";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { TIP_STYLE } from "@/shared/ui/chartStyle";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
@@ -596,30 +597,38 @@ const METRIC_ROWS: { key: keyof SummaryStats; label: string; suffix: string }[] 
   { key: "calmar", label: "Calmar", suffix: "" },
 ];
 
-export function MetricsTable({ summary }: { summary: AnalyzeResult["summary"] }) {
+export function MetricsTable(
+  { summary, perfLabel }: { summary: AnalyzeResult["summary"]; perfLabel?: PerfLabelValue | null },
+) {
   const { portfolio, benchmark, active, benchmark_label } = summary;
   return (
-    <table className="as-metrics">
-      <thead>
-        <tr><th>Metric</th><th>Portfolio</th><th>{benchmark_label || "Benchmark"}</th><th>Active</th></tr>
-      </thead>
-      <tbody>
-        {METRIC_ROWS.map((m) => {
-          const p = portfolio?.[m.key];
-          const b = benchmark?.[m.key];
-          const a = active?.[m.key];
-          return (
-            <tr key={m.key}>
-              <td>{m.label}</td>
-              <td className="num">{p != null ? `${p}${m.suffix}` : "—"}</td>
-              <td className="num">{b != null ? `${b}${m.suffix}` : "—"}</td>
-              <td className="num" style={{ color: a == null ? "var(--t-muted)" : a >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>
-                {a != null ? `${fmtSign(a, 2)}${m.suffix}` : "—"}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="as-metrics-wrap">
+      {/* ★이 Sharpe·최대낙폭이 무엇인지★ — `/analyze` 의 `summary` 는 제안된 비중을
+          과거 수익률 위에 돌린 시뮬레이션 통계다(`_series_stats`). 화면이 그 사실을
+          추론하지 않고 응답이 실은 라벨을 그대로 그린다(Z3). */}
+      <PerfLabel value={perfLabel} />
+      <table className="as-metrics">
+        <thead>
+          <tr><th>Metric</th><th>Portfolio</th><th>{benchmark_label || "Benchmark"}</th><th>Active</th></tr>
+        </thead>
+        <tbody>
+          {METRIC_ROWS.map((m) => {
+            const p = portfolio?.[m.key];
+            const b = benchmark?.[m.key];
+            const a = active?.[m.key];
+            return (
+              <tr key={m.key}>
+                <td>{m.label}</td>
+                <td className="num">{p != null ? `${p}${m.suffix}` : "—"}</td>
+                <td className="num">{b != null ? `${b}${m.suffix}` : "—"}</td>
+                <td className="num" style={{ color: a == null ? "var(--t-muted)" : a >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}>
+                  {a != null ? `${fmtSign(a, 2)}${m.suffix}` : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

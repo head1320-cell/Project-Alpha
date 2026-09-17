@@ -38,6 +38,11 @@ _TRANSITIONS: dict[str, set[str]] = {
 }
 
 
+#: `dec_id` 컬럼을 실제로 쓸 수 있는가. ★False 여도 계획은 저장·조회된다★ —
+#: 계보만 미상이 되고, 그 사실은 `plan_lineage()` 의 사유로 관측된다.
+_has_dec_id = False
+
+
 def _engine():
     from src.database import get_engine
     return get_engine()
@@ -54,14 +59,28 @@ def _ensure(engine) -> None:
             "plan_id VARCHAR(40) PRIMARY KEY, "
             "created_at DOUBLE PRECISION, updated_at DOUBLE PRECISION, "
             "name TEXT, status VARCHAR(20), run_id VARCHAR(40), "
-            "plan TEXT, pretrade TEXT, fills TEXT, audit TEXT)"
+            "plan TEXT, pretrade TEXT, fills TEXT, audit TEXT, "
+            # ★어느 **판단**에서 나온 계획인가★ (AA4) — `run_id` 는 백테스트
+            # 실행을 가리키고, 백테스트는 판단이 아니다.
+            "dec_id VARCHAR(40))"
         ))
+    # ★이미 있는 DB 에도 붙인다★ — `CREATE TABLE IF NOT EXISTS` 는 기존 표를
+    # 손대지 않는다. 못 붙어도 계획 저장·조회는 그대로 돌아가야 한다
+    # (`backtest_runs` 가 하트비트 컬럼에서 배운 것: 수정 전보다 나쁜 상태를
+    # 만들지 않는다). 붙이기 + **쓸 수 있는지 확인**은 `add_columns` 가 한다.
+    from src.data.schema_add_columns import add_columns
+    global _has_dec_id
+    _has_dec_id = add_columns(engine, _TABLE, [("dec_id", "VARCHAR(40)")],
+                              label=f"{_TABLE}.dec_id")
     _inited = True
 
 
 def _row(r, full: bool) -> dict[str, Any]:
     d = {"plan_id": r[0], "created_at": r[1], "updated_at": r[2],
-         "name": r[3], "status": r[4], "run_id": r[5]}
+         "name": r[3], "status": r[4], "run_id": r[5],
+         # ★컬럼이 없으면 미상이다★ — `None` 과 "연결이 없다" 는 여기서 같지만
+         # `plan_lineage()` 가 둘을 구별해 말한다.
+         "dec_id": r[10] if len(r) > 10 else None}
     for key, idx in (("audit", 9),):
         try:
             d[key] = json.loads(r[idx]) if r[idx] else []
@@ -76,11 +95,19 @@ def _row(r, full: bool) -> dict[str, Any]:
     return d
 
 
-_COLS = "plan_id, created_at, updated_at, name, status, run_id, plan, pretrade, fills, audit"
+#: ★순서를 바꾸지 않는다★ — `_row` 가 위치 인덱스로 읽는다. `dec_id` 는 **맨 뒤**
+#: 이고 컬럼이 없으면 목록에서 빠진다(그때 `_row` 가 `None` 으로 채운다).
+_COLS_BASE = ("plan_id, created_at, updated_at, name, status, run_id, "
+              "plan, pretrade, fills, audit")
+def _cols() -> str:
+    return f"{_COLS_BASE}, dec_id" if _has_dec_id else _COLS_BASE
 
 
 def create_plan(name: str, plan: dict, pretrade: dict,
-                run_id: str | None = None) -> str | None:
+                run_id: str | None = None,
+                dec_id: str | None = None) -> str | None:
+    """실행계획 저장. `dec_id` 는 ★이 계획을 낳은 판단★
+    (`investment_decisions.dec_id`)이고, 없으면 계보가 끊긴 계획이다."""
     try:
         engine = _engine()
         _ensure(engine)
@@ -90,13 +117,16 @@ def create_plan(name: str, plan: dict, pretrade: dict,
         audit = [{"ts": now, "action": "created", "status": "draft",
                   "detail": f"{plan.get('summary', {}).get('n_orders', 0)}건 주문"}]
         with engine.begin() as c:
-            c.execute(text(
-                f"INSERT INTO {_TABLE} ({_COLS}) VALUES "
-                "(:id, :ts, :ts, :nm, 'draft', :rid, :pl, :pt, NULL, :au)"),
-                {"id": pid, "ts": now, "nm": name, "rid": run_id,
-                 "pl": json.dumps(plan, ensure_ascii=False, default=str),
-                 "pt": json.dumps(pretrade, ensure_ascii=False, default=str),
-                 "au": json.dumps(audit, ensure_ascii=False)})
+            cols = _cols()
+            vals = "(:id, :ts, :ts, :nm, 'draft', :rid, :pl, :pt, NULL, :au"
+            params = {"id": pid, "ts": now, "nm": name, "rid": run_id,
+                      "pl": json.dumps(plan, ensure_ascii=False, default=str),
+                      "pt": json.dumps(pretrade, ensure_ascii=False, default=str),
+                      "au": json.dumps(audit, ensure_ascii=False)}
+            if _has_dec_id:
+                vals += ", :did"
+                params["did"] = dec_id
+            c.execute(text(f"INSERT INTO {_TABLE} ({cols}) VALUES {vals})"), params)
         return pid
     except Exception as e:
         logger.warning(f"execution plan 생성 실패: {e}")
@@ -109,7 +139,7 @@ def get_plan(plan_id: str) -> dict | None:
         _ensure(engine)
         from sqlalchemy import text
         with engine.connect() as c:
-            r = c.execute(text(f"SELECT {_COLS} FROM {_TABLE} WHERE plan_id = :id"),
+            r = c.execute(text(f"SELECT {_cols()} FROM {_TABLE} WHERE plan_id = :id"),
                           {"id": plan_id}).fetchone()
         return _row(r, full=True) if r else None
     except Exception as e:
@@ -124,7 +154,7 @@ def list_plans(limit: int = 30) -> list[dict]:
         from sqlalchemy import text
         with engine.connect() as c:
             rows = c.execute(text(
-                f"SELECT {_COLS} FROM {_TABLE} ORDER BY updated_at DESC LIMIT :l"),
+                f"SELECT {_cols()} FROM {_TABLE} ORDER BY updated_at DESC LIMIT :l"),
                 {"l": max(1, min(int(limit), 100))}).fetchall()
         return [_row(r, full=False) for r in rows]
     except Exception as e:
@@ -195,6 +225,49 @@ def record_fills(plan_id: str, fills: list[dict], actor: str = "user") -> dict:
         return {"ok": False, "reason": "DB 오류."}
 
 
+def find_by_decision(dec_id: str) -> dict | None:
+    """★어느 판단이 어떤 계획을 낳았나★ — `find_by_run` 의 판단 축 짝 (AA4).
+
+    컬럼을 못 붙인 배포에서는 항상 `None` 이다 — 그것이 "연결이 없다" 가 아니라
+    "찾을 수 없다" 라는 사실은 `plan_lineage()` 의 사유가 말한다.
+    """
+    if not _has_dec_id:
+        try:
+            _ensure(_engine())
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"execution plan 판단 조회 실패: {e}")
+            return None
+    if not _has_dec_id:
+        return None
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.begin() as c:
+            r = c.execute(text(
+                f"SELECT {_cols()} FROM {_TABLE} WHERE dec_id = :did "
+                "ORDER BY updated_at DESC LIMIT 1"), {"did": dec_id}).fetchone()
+        return _row(r, full=True) if r else None
+    except Exception as e:
+        logger.warning(f"execution plan 판단 조회 실패: {e}")
+        return None
+
+
+#: 계보가 끊긴 계획의 사유. ★`{}` 나 사유 없는 `null` 은 금지★(CLAUDE.md §4) —
+#: "연결이 없다" 와 "연결을 안 봤다" 가 같은 값이 되면 안 된다.
+_NO_DECISION_REASON = (
+    "이 계획은 기록된 판단을 가리키지 않습니다 — 수동으로 만들었거나, "
+    "판단을 저장하지 않고 실행계획만 세웠거나, `dec_id` 컬럼이 없는 배포입니다")
+
+
+def plan_lineage(plan: dict | None) -> dict:
+    """계획 → ★어느 판단에서 나왔는가★. 없으면 **사유와 함께** 없다고 말한다."""
+    dec_id = (plan or {}).get("dec_id")
+    if dec_id:
+        return {"decision": dec_id, "reason": None}
+    return {"decision": None, "reason": _NO_DECISION_REASON}
+
+
 def find_by_run(run_id: str) -> dict | None:
     """run_id로 연결된 최신 실행계획 전체 (Attribution의 체결·비용 연결용)."""
     try:
@@ -203,7 +276,7 @@ def find_by_run(run_id: str) -> dict | None:
         from sqlalchemy import text
         with engine.connect() as c:
             r = c.execute(text(
-                f"SELECT {_COLS} FROM {_TABLE} WHERE run_id = :rid ORDER BY updated_at DESC LIMIT 1"),
+                f"SELECT {_cols()} FROM {_TABLE} WHERE run_id = :rid ORDER BY updated_at DESC LIMIT 1"),
                 {"rid": run_id}).fetchone()
         return _row(r, full=True) if r else None
     except Exception as e:

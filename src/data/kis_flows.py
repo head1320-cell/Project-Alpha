@@ -43,9 +43,17 @@ CREATE TABLE IF NOT EXISTS investor_flows (
 """
 
 # 세부 주체(연기금/투신/사모/기타법인)는 KRX MDC 백필(krx_mdc)만 제공 — 마이그레이션 대상
-_MIGRATE_COLUMNS = ("pension_qty FLOAT", "pension_amt FLOAT", "trust_qty FLOAT",
-                    "trust_amt FLOAT", "pe_qty FLOAT", "pe_amt FLOAT",
-                    "othercorp_qty FLOAT", "othercorp_amt FLOAT")
+#: 후행 추가 컬럼 `(이름, DDL)` — `schema_add_columns.add_columns` 가 받는 모양.
+_MIGRATE_COLUMNS = (
+    ("pension_qty", "FLOAT"),
+    ("pension_amt", "FLOAT"),
+    ("trust_qty", "FLOAT"),
+    ("trust_amt", "FLOAT"),
+    ("pe_qty", "FLOAT"),
+    ("pe_amt", "FLOAT"),
+    ("othercorp_qty", "FLOAT"),
+    ("othercorp_amt", "FLOAT"),
+)
 
 # KIS 일별 적재용 — 3주체 컬럼만 갱신 (KRX 백필이 채운 세부 주체를 NULL로 덮지 않음)
 _UPSERT = """
@@ -97,12 +105,13 @@ def ensure_flows_table(engine) -> None:
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
-    for col in _MIGRATE_COLUMNS:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE investor_flows ADD COLUMN {col}"))
-        except Exception:
-            pass
+    # ★붙었는지 확인한다★ 예전에는 예외를 삼키고 끝이라, 권한 문제로 못 붙어도
+    # 붙은 줄 알고 이후 조회가 통째로 깨졌다(`schema_add_columns` 가 적어 둔 함정).
+    from src.data.schema_add_columns import add_columns
+    if not add_columns(engine, "investor_flows", list(_MIGRATE_COLUMNS),
+                       label="investor_flows"):
+        logger.warning("investor_flows 세부 주체 컬럼을 쓸 수 없습니다 — "
+                       "3주체만으로 동작합니다.")
 
 
 def bulk_upsert_flows(engine, ticker: str, rows: list[dict], full: bool = False) -> int:

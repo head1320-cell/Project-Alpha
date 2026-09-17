@@ -25,12 +25,14 @@ import pandas as pd  # noqa: E402
 import pytest  # noqa: E402
 
 from src.engine.attribution_decomposer import (  # noqa: E402
+    EFFECT_COLUMNS,
     AttributionDecomposer,
     _sanitize_for_json,
 )
 
-EFFECTS = ("allocation_effect", "selection_effect", "macro_effect",
-           "netting_effect", "cost_effect")
+#: ★효과 목록을 여기 다시 적지 않는다★ (AL3 에서 다섯 → 여섯이 되며 이 사본이
+#: 낡아 테스트 넷이 깨졌다). 단일 출처를 읽으면 다음 변경에도 안 낡는다.
+EFFECTS = EFFECT_COLUMNS
 
 
 def daily(rows: list[dict]) -> pd.DataFrame:
@@ -302,9 +304,22 @@ def _sqlite_engine(with_rows: bool = True, with_strategy_table: bool = True):
         c.execute(_t("INSERT INTO multibacktest_runs VALUES (1, 'r', '2026-01-01',"
                      " '2026-02-01', 'hrp', 5.0, 5.0, 1.0, -2.0)"))
         if with_rows:
-            c.execute(_t("INSERT INTO multibacktest_daily VALUES (1, '2026-01-05',"
-                         " 0.02, 5.0, 0.0, 0.0, 1, 0, 'GOLDILOCKS', 10.0,"
-                         " 0.01, 0.0, 0.02, 0.0, 0.0)"))
+            # ★위치 기반 INSERT 를 쓰지 않는다★ — 효과가 다섯에서 여섯이 되자
+            # (AL3) 값 개수가 어긋나 테스트 넷이 깨졌다. 칸 이름을 적으면
+            # `EFFECTS` 가 늘어도 안 낡는다.
+            # 원래 값을 **이름으로** 보존한다(예전 위치 기반 목록과 같은 수).
+            _v = {"allocation_effect": 0.01, "selection_effect": 0.0,
+                  "macro_effect": 0.02, "netting_effect": 0.0,
+                  "cost_effect": 0.0, "cash_effect": 0.0}
+            assert set(_v) == set(EFFECTS), "픽스처가 효과 목록과 어긋났습니다"
+            names = ", ".join(EFFECTS)
+            vals = ", ".join(str(_v[e]) for e in EFFECTS)
+            c.execute(_t(f"INSERT INTO multibacktest_daily (run_id, trade_date,"
+                         f" portfolio_return, cumulative_return, netting_savings,"
+                         f" turnover_pct, num_trades, rebalanced, regime,"
+                         f" systemic_risk, {names}) VALUES (1, '2026-01-05',"
+                         f" 0.02, 5.0, 0.0, 0.0, 1, 0, 'GOLDILOCKS', 10.0,"
+                         f" {vals})"))
             c.execute(_t("INSERT INTO multibacktest_strategy_daily VALUES"
                          " (1, '2026-01-05', 7, 0.5, 0.0, 0.01, 0.02)"))
     return eng

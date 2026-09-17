@@ -12,11 +12,13 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.domain.execution_assumption import SIGNAL_LAG_DEFAULT
+from src.domain.perf_kind import backtest_label
 from src.observability.logging_config import get_logger
 
 logger = get_logger("api.screener")
@@ -109,6 +111,23 @@ def _detect_data_source(items: list) -> dict:
         "fundamentals": "dart_real" if fund_real else "mock",
         "market_data":  "kis_real" if kis_real else "mock",
         "fully_real":   fund_real and kis_real,
+    }
+
+
+def _tactical_universe_meta(holdings: list) -> dict:
+    """택티컬 경로의 유니버스 라벨. ★없는 것을 지어내지 않는다★
+
+    이 경로는 스크리닝을 거치지 않고 전략이 든 ETF 슬리브를 그대로 돌린다 —
+    종목 유니버스라는 개념이 달라 생존편향 보정 여부를 **판정하지 않는다.**
+    그 사실이 `unknown` + 사유로 남는다(`corrected` 도 `not_corrected` 도 아니다).
+    """
+    from src.engine.universe_select import survivorship_of
+    value, reason = survivorship_of("tactical")
+    return {
+        "requested": "tactical", "effective": "tactical", "fell_back": False,
+        "survivorship": value, "asof_date": None, "reason": reason,
+        "tickers_screened": len(holdings),
+        "note": "택티컬 경로는 스크리닝을 거치지 않습니다.",
     }
 
 
@@ -588,6 +607,12 @@ def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
         "liquidity_gate":  liq_stats,
         "data_source":     _detect_data_source(result.items),
     }
+    # ★여기에 `perf_label` 을 붙였다가 되물렸다 (Z4 검토)★
+    # 이 응답은 **스크리닝 결과**다 — 한 시점의 횡단면 통과 종목이지 과거 데이터 위의
+    # 시뮬레이션이 아니다. `backtest` 라벨을 달면 "이 숫자는 시뮬레이션에서 나왔다" 는
+    # ★없는 사실★을 만든다. 계획표의 "screener_routes(백테스트)" 는
+    # `_screen_to_backtest_core` 를 가리킨 것이었고, 그쪽에는 붙어 있다.
+    # 데이터 축은 이 응답에 이미 `data_source` 로 있다(그건 다른 축이고 그대로 둔다).
     _RUN_ADVANCED_CACHE.set(cache_key, payload)
     return payload
 
@@ -1342,6 +1367,13 @@ class ScreenToBacktestRequest(BaseModel):
     custom_tickers: list[str] | None = None  # 관심그룹 종목 직접 지정 (있으면 universe 무시)
     filter_ast: FilterGroupModel
     liquidity_floor: str = "standard"
+    # 가격 정의가 섞인(`price_basis == "mixed"`) 종목을 어떻게 다루나 (로드맵 4단계).
+    # ★기본은 제외★ — 정의가 섞인 계열의 수익률은 정의가 섞인 수익률이고, 소스
+    # 경계의 점프 하나(누적 수정계수 전체)가 공분산·팩터 추정을 흔든다.
+    # `pass_labeled` 는 예전 동작(그냥 통과)이지만 **그 선택이 결과에 남는다**.
+    # ★`Literal` 이라 오타는 422 로 거절된다★ — 조용히 관대한 기본값으로 떨어지면
+    # 사용자는 제외됐다고 믿은 채 섞인 계열로 채점한다.
+    price_basis_policy: Literal["exclude", "pass_labeled"] = "exclude"
     max_tickers: int = Field(default=10, ge=1, le=30)  # 백테스트할 상위 종목 수
     sort_by: str = "composite_score"
     sort_dir: str = "desc"                       # 매수 우선순위 1차 방향 (desc|asc)
@@ -1391,8 +1423,17 @@ class ScreenToBacktestRequest(BaseModel):
     # 동적 재편입(빈자리 즉시 보충)은 이 주기와 무관하게 항상 실행됨 — 이 필드는 "순위이탈
     # 보유종목 정리"가 발생하는 주기만 결정한다.
     market_timing: dict | None = None    # {"index_ticker","action"("block_buy"|"exit_all"),"conditions":[조건식]}
-    # 신호 기준일 (젠포트 Tip 3): 0=당일 봉(기존), 1=전일 봉 기준 신호→당일 체결(시가류 체결 look-ahead 제거)
-    signal_lag: int = Field(default=0, ge=0, le=5)
+    # 신호 기준일 (젠포트 Tip 3). ★기본은 1★ — 0(당일 봉)은 신호가 당일 종가를 쓰므로
+    # 장 시작 전에 계산할 수 없다. 0 을 **금지하지는 않고** 결과가 `same_bar` 로 말한다(AG).
+    signal_lag: int = Field(default=SIGNAL_LAG_DEFAULT, ge=0, le=5)
+    # ── AK: 누락 비용 옵트인 셋 ★전부 기본 꺼짐★ ──────────────────────
+    # 백테스트는 오래도록 수수료·슬리피지만 봤고 ★증권거래세·스프레드·시장충격이
+    # 전부 0★ 이었다 — 실행 준비실(`execution_plan`)은 셋 다 계산하는데도.
+    # 켜면 `market_rules` 의 **같은 요율**을 쓴다. 기본을 켜지 않는 이유는 켜는
+    # 순간 저장된 모든 실행과 골든의 뜻이 바뀌기 때문이다.
+    charge_sell_tax: bool = False
+    charge_spread: bool = False
+    charge_market_impact: bool = False
     # 재매수 방지: 청산 후 N일(캘린더) 이내 재매수 금지 (0=미사용)
     rebuy_block_days: int = Field(default=0, ge=0, le=120)
     # 체결 가격 기준 ± 오프셋% (지정가 모델 — 도달 검증, 미도달 시 그날 미체결)
@@ -1465,7 +1506,8 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
 
     try:
         from src.engine.filter_ast import parse_group
-        from src.kis_backtest_engine import run_backtest
+        from src.engine.run_evidence import pit_evidence
+        from src.kis_backtest_engine import DIAGNOSTIC_KEYS, run_backtest
 
         # 0) 택티컬/최적화 전략 충실 백테스트 — strategy_name="tactical:<sid>" → 동적 엔진 어댑터
         if (req.strategy_name or "").startswith("tactical:"):
@@ -1473,6 +1515,13 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             _emit({"phase": "simulating"})
             out = run_tactical_backtest(req.strategy_name.split(":", 1)[1], "kr",
                                         req.start_date, req.end_date, req.initial_capital)
+            # ★이 경로는 진단을 내지 않는다 — 그 사실을 지어내지 않고 그대로 적는다★
+            # 키를 아예 빼면 화면은 "매크로 룩어헤드 없음" 과 구별하지 못한다.
+            out.update({k: None for k in DIAGNOSTIC_KEYS})
+            out["universe"] = _tactical_universe_meta(out.get("screened_tickers") or [])
+            out["pit_evidence"] = pit_evidence(
+                price_basis=None, universe=out["universe"],
+                macro_lookahead=None, fundamentals_pit=None)
             _emit({"phase": "done"})
             return out
 
@@ -1496,25 +1545,42 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         # 편입된(상장폐지 포함) 종목이 오늘자 라이브 재무로 평가돼 "데이터 없음"으로 다시
         # 걸러지는 것을 방지(PIT 평가 경로, _evaluate_one_safe가 이 값으로 시점별 bsns_year를
         # 역산). 다른 유니버스 값은 기존처럼 None 그대로 — 일반 경로 무영향.
+        # ★유니버스 선택은 생존편향 보정 여부를 정한다 — 그 사실을 결과에 남긴다★
+        # `_uv_mode` 는 **요청**이고 `_uv_effective` 는 **실제로 돌린 것**이다.
+        # 둘이 다르면 그 자체가 폴백의 증거다(아래 `fell_back`).
         _asof_date_for_screener = None
+        _uv_fell_back = False
         if req.custom_tickers:
             _universe = req.custom_tickers
+            _uv_mode, _uv_effective = "custom_tickers", "custom_tickers"
         elif gran_tickers:
             _universe = gran_tickers
+            _uv_mode, _uv_effective = "granular", "granular"
         elif req.universe == "all_asof":
             # 시점 유니버스: 백테스트 시작일 당시 거래 종목 (KRX 백필 후 상폐 포함 — 생존편향 보정)
             from src.engine.universe_select import tickers_asof
             _asof = tickers_asof(req.start_date)
+            # ★폴백은 그대로 둔다 — 다만 더는 조용하지 않다★ 여기서 막으면 지금
+            # 도는 백테스트가 멈춘다. 폴백은 CLAUDE.md 의 4조건(의미가 알려짐 ·
+            # 라벨 · 동등 품질로 위장 불가 · 관측 가능)을 만족해야 허용된다 —
+            # 앞의 셋은 아래 `universe` 메타가, 넷째는 계약 테스트가 맡는다.
             _universe = _asof if _asof else "all_listed"  # 데이터 없으면 전종목→프리셋 폴백
+            _uv_fell_back = not _asof
+            _uv_mode = "all_asof"
+            _uv_effective = "all_asof" if _asof else "all_listed"
             _asof_date_for_screener = req.start_date
         elif req.universe == "top200_asof":
             # 시작일 당시 시총 상위 200 — KOSPI200 편입의 근사 재구성 (mktcap 시계열 필요)
             from src.engine.universe_select import top_mktcap_asof
             _asof = top_mktcap_asof(req.start_date, 200)
             _universe = _asof if _asof else "kospi200"
+            _uv_fell_back = not _asof
+            _uv_mode = "top200_asof"
+            _uv_effective = "top200_asof" if _asof else "kospi200"
             _asof_date_for_screener = req.start_date
         else:
             _universe = req.universe
+            _uv_mode, _uv_effective = "preset", str(req.universe)
         # 후보 풀 크기: "평가 종목 상한"(universe_eval_cap)이 스크리닝 후보 풀 크기를 조건식
         # 유무와 무관하게 항상 결정 (조건식 존재 여부로 게이팅하지 않음 — 근본 수정, 위 필드
         # 주석 참고).
@@ -1548,11 +1614,30 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         pool_tickers = ([it.stock_code for it in result.items[:pool_cap] if getattr(it, "stock_code", None)]
                         if req.replenishment_pool_cap > 0 else [])
 
+        # ★유니버스 라벨을 여기서 굳힌다★ 종목 수까지 있어야 규모를 함께 읽는다.
+        from src.engine.universe_select import survivorship_of
+        _uv_survivorship, _uv_reason = survivorship_of(_uv_mode, fell_back=_uv_fell_back)
+        _universe_meta = {
+            "requested": _uv_mode,
+            "effective": _uv_effective,
+            "fell_back": _uv_fell_back,
+            "survivorship": _uv_survivorship,
+            # 시점 유니버스가 아니면 기준일이라는 개념 자체가 없다 — 0 도 오늘도 아니다.
+            "asof_date": _asof_date_for_screener,
+            "reason": _uv_reason,
+            "tickers_screened": len(tickers),
+            "note": ("`corrected` 만이 그 시점 거래 종목을 실제로 세운 것입니다. "
+                     "`approximated` 는 시총 규칙 근사이고, `unknown` 은 보정 여부를 "
+                     "**알 수 없다**는 뜻이지 보정됐다는 뜻이 아닙니다."),
+        }
+
         if not tickers:
             return {
                 "error": True,
                 "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
                 "screened_count": 0,
+                # 유니버스가 텅 빈 이유가 폴백 때문일 수 있다 — 그 사실을 여기서도 낸다.
+                "universe": _universe_meta,
             }
         _emit({"phase": "screened", "count": len(tickers)})
 
@@ -1618,8 +1703,12 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             rebalance_period=req.rebalance_period,
             market_timing=req.market_timing,
             signal_lag=req.signal_lag,
+            charge_sell_tax=req.charge_sell_tax,
+            charge_spread=req.charge_spread,
+            charge_market_impact=req.charge_market_impact,
             rebuy_block_days=req.rebuy_block_days,
             liquidate_at_end=req.liquidate_at_end,
+            price_basis_policy=req.price_basis_policy,
             buy_fill_offset_pct=req.buy_fill_offset_pct,
             sell_fill_offset_pct=req.sell_fill_offset_pct,
             max_buy_amount=req.max_buy_amount,
@@ -1650,6 +1739,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
 
         # 3) 통합 응답
         _emit({"phase": "done"})
+        _ds = _detect_data_source(screened)
         return {
             "error": bt.get("error", False),
             "screened_tickers": [
@@ -1661,12 +1751,33 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             "backtest": bt.get("result", bt),
             "intraday": bt.get("intraday"),  # 하이브리드 체결 적용/폴백 통계 (사용 시)
             "asset_alloc": bt.get("asset_alloc"),  # ETF 슬리브 최종 구성 (사용 시)
+            # ★진단 라벨은 손으로 세지 않는다★ 엔진이 `DIAGNOSTIC_KEYS` 로 선언하고
+            # 여기서 전개한다. 예전에는 이 자리에서 키를 하나씩 적었고, 그래서
+            # `macro_lookahead`·`fundamentals_pit`·`signal_path` 가 **통째로 빠진 채**
+            # 화면과 텔레메트리가 눈이 멀어 있었다(양쪽 코드는 멀쩡했는데 가운데가
+            # 끊겨 있었다). 엔진이 안 낸 키는 `None` 으로 **명시**한다 — 프런트가
+            # "키가 없다" 와 "값이 없다" 를 구별할 수 있어야 다음 단선도 보인다.
+            **{k: bt.get(k) for k in DIAGNOSTIC_KEYS},
+            # ★유니버스가 생존편향을 보정했는가★ 엔진은 종목 목록만 받으므로
+            # 이 사실을 아는 것은 여기뿐이다.
+            "universe": _universe_meta,
+            # ★넷을 한 곳에서 읽는다★ — 로드맵 0단계의 완료 판정. 판정 규칙은
+            # `run_evidence` 에 있고 여기서는 축을 모아 넘기기만 한다.
+            "pit_evidence": pit_evidence(
+                price_basis=bt.get("price_basis"),
+                universe=_universe_meta,
+                macro_lookahead=bt.get("macro_lookahead"),
+                fundamentals_pit=bt.get("fundamentals_pit"),
+            ),
             "backtest_config": {
                 "strategy": eff_strategy,
                 "period": f"{req.start_date} ~ {req.end_date}",
                 "initial_capital": req.initial_capital,
             },
-            "data_source": _detect_data_source(screened),
+            "data_source": _ds,
+            # ★이 화면들은 라벨이 아예 없었다★ — 전략 비교(StrategyComparison)가
+            # 이 응답을 그린다. `data_source` 는 **데이터 축**이고, 종류는 별개다.
+            "perf_label": backtest_label(is_mock_data=not _ds["fully_real"]).to_dict(),
         }
     except HTTPException:
         raise

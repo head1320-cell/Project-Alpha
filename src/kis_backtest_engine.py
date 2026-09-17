@@ -22,10 +22,19 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import NamedTuple
 
 import pandas as pd
 from sqlalchemy import text
 
+from src.domain.cost_model import COMPONENTS as COST_COMPONENTS
+from src.domain.cost_model import CostPolicy, trade_cost
+from src.domain.execution_assumption import (
+    SIGNAL_LAG_DEFAULT,
+    ExecutionAssumption,
+    assumption_label,
+)
+from src.engine.estimator_evidence import backtest_estimator_evidence
 from src.engine.quant_metrics import compute_metrics
 
 logger = logging.getLogger(__name__)
@@ -88,6 +97,261 @@ def set_engine(engine):
     """테스트 또는 의존성 주입 시 엔진을 직접 설정."""
     global _engine_override
     _engine_override = engine
+
+
+#: 결과에 실리는 **진단 키** — ★라우트가 손으로 세지 않게 한다★
+#:
+#: 이 목록이 생긴 이유: `_screen_to_backtest_core` 가 반환 dict 를 키로 손수
+#: 나열하면서 `signal_path`·`macro_lookahead`·`fundamentals_pit` 을 빠뜨렸고,
+#: 그래서 **엔진 안에서만 참인 라벨**이 됐다(화면도 텔레메트리도 비어 있었다).
+#: 키 하나를 되살리는 대신 목록을 여기 두고 라우트가 전개하게 한다 —
+#: 여기에 추가하면 라우트·텔레메트리·프런트 계약 테스트가 함께 걸린다.
+#:
+#: ★진단만 담는다★ `result`·`intraday`·`asset_alloc` 처럼 화면 본문이 직접
+#: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
+DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
+                   "price_basis", "execution_assumption", "estimator_leakage",
+                   "cost_model")
+
+# ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
+#: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
+#: 그 계열로 계산한 수익률은 정의가 섞인 수익률이다 — 소스 경계에서 계열이
+#: 점프하는데 그 점프는 기업행위가 아니라 **누적 수정계수 전체**라, 하루짜리
+#: 수십 % 이상치가 공분산·팩터 추정을 흔든다.
+#:
+#: ★예전에는 '그냥 통과' 가 사실상의 정책이었고 그것이 선택된 적이 없었다★ —
+#: `price_quality.assert_prices_backtest_eligible()` 은 운영 호출부가 0개였다.
+POLICY_EXCLUDE = "exclude"            # 그 티커를 백테스트에서 뺀다 (기본)
+POLICY_PASS_LABELED = "pass_labeled"  # 그대로 쓰되 결과에 라벨을 남긴다
+PRICE_BASIS_POLICIES = (POLICY_EXCLUDE, POLICY_PASS_LABELED)
+
+#: ★제외는 완화이지 해결이 아니다★ 사유가 그 말을 해야 한다 —
+#: 데이터가 고쳐진 것이 아니라 **유니버스가 줄었다**. 고치는 길은
+#: `krx_ingest.rebuild_adj_close()` 와 KRX 적재다.
+EXCLUDED_REASON = (
+    "가격 정의가 섞인 종목을 **제외하고** 돌았습니다 — 데이터가 고쳐진 것이 "
+    "아니라 유니버스가 줄었습니다. 원인(같은 `close` 에 두 정의가 들어간 것)은 "
+    "그대로이고, 고치려면 KRX 적재 후 `rebuild_adj_close()` 가 필요합니다."
+)
+
+
+def _signal_path_meta(counts: dict) -> dict:
+    """신호가 **어느 경로로** 났는지 보고한다.
+
+    ★미측정 ≠ 0%★ 신호 조회가 한 번도 없었으면 `vectorized_pct` 는 `0.0` 이 아니라
+    `None` 이다. `0.0` 을 적으면 "벡터화가 한 번도 안 먹혔다" 는 **하지 않은 진술**이
+    된다(같은 파일의 `intraday.applied_pct` 는 `0.0` 을 쓰는데, 그쪽은 분모가
+    체결 건수라 0 이 '체결이 없었다' 로 정확히 읽힌다 — 여기는 다르다).
+    """
+    tot = counts.get("vectorized", 0) + counts.get("per_bar", 0) + counts.get("failed", 0)
+    return {"vectorized": counts.get("vectorized", 0),
+            "per_bar": counts.get("per_bar", 0),
+            "failed": counts.get("failed", 0),
+            "vectorized_pct": (round(counts.get("vectorized", 0) / tot * 100, 1)
+                               if tot else None)}
+
+
+def _macro_lookahead_meta(ctx) -> dict | None:
+    """매크로 토큰이 **어느 시점의 값으로** 평가됐는지 보고한다.
+
+    ★안 쓴 것과 재본 것을 구별한다★ 매크로 토큰이 없는 전략에는 `None` 을 낸다 —
+    `{"pit": 0, "live": 0, ...}` 은 "재봤더니 전부 0" 으로 읽힌다. 같은 파일의
+    `intraday_meta` 가 이미 그 규약이다.
+
+    ★그러나 "썼는데 전부 라이브" 는 `0.0%` 다★ 그것은 측정된 사실이고, 여기서
+    `None` 을 내면 룩어헤드가 "안 썼다" 와 같은 모양으로 은폐된다.
+
+    ★`blocked` 도 분모에 있다★ 평가되지 못한 토큰도 PIT 가 아니다 — 분모에서
+    빼면 비율이 부풀려진다.
+
+    ★`live`·`blocked` 에는 반드시 사유가 붙는다★ 빈티지를 더 쌓아야 하는지,
+    제공자가 영영 못 주는지, DB 가 죽은 건지 처방이 셋 다 다르다.
+    """
+    if ctx is None or not getattr(ctx, "path", None):
+        return None
+    counts = ctx.counts()
+    tot = counts["pit"] + counts["live"] + counts["blocked"]
+    tokens = {}
+    for tok, rec in ctx.path.items():
+        reason = rec.get("reason") or ""
+        if rec["path"] != "pit" and not reason:
+            reason = "사유가 기록되지 않았습니다 — 이 라벨은 신뢰할 수 없습니다."
+        entry = {"path": rec["path"], "reason": reason}
+        # 개정이 **레그 판정**을 뒤집었는지 — PIT 인 토큰에만 붙는다.
+        rev = getattr(ctx, "revision", {}).get(tok)
+        if rev is not None:
+            entry["revision"] = rev
+        tokens[tok] = entry
+    return {
+        "pit": counts["pit"],
+        "live": counts["live"],
+        "blocked": counts["blocked"],
+        "pit_pct": round(counts["pit"] / tot * 100, 1) if tot else None,
+        "tokens": tokens,
+        "note": ("`live` 는 그 토큰이 **현재 개정본**으로 평가됐다는 뜻입니다 — "
+                 "그 토큰이 쓰인 조건에는 룩어헤드가 있습니다."),
+    }
+
+
+def _fundamentals_pit_meta(ctx) -> dict | None:
+    """재무 공시일이 **실측 접수일이었나 정적 시차 추정이었나** 를 보고한다.
+
+    `_macro_lookahead_meta` 와 같은 규율을 쓴다. 다만 ★세는 단위가 다르다★ —
+    매크로는 **토큰**(실행당 ~20개)이고 여기는 **(종목, 기간)**(종목 수백 ×
+    기간 수십)이다. 그래서 종목별 맵을 싣지 않는다(아래 `reasons`).
+
+    ★안 쓴 것과 재본 것을 구별한다★ PIT 재무 토큰이 없는 실행에는 `None`.
+    ★그러나 "썼는데 전부 추정" 은 `0.0%` 다★ 그것은 측정된 사실이다.
+    ★`unknown` 도 분모에 있다★ 못 읽은 것은 실측이 아니다 — 빼면 비율이 좋아 보인다.
+    """
+    if ctx is None:
+        return None
+    try:
+        counts = ctx.counts()
+        tickers = ctx.ticker_counts()
+        reasons = ctx.reasons()
+    except Exception:  # noqa: BLE001 — 라벨을 만들다 백테스트를 죽이지 않는다
+        return None
+    tot = counts["measured"] + counts["estimated"] + counts["unknown"]
+    if tot == 0 and not tickers.get("no_financials"):
+        return None          # 아무것도 보지 않았다 — 하지 않은 진술을 만들지 않는다
+
+    from src.engine.pit_store import (
+        ANNUAL_LAG_DAYS,
+        DISCLOSURE_LAG_DAYS,
+        FILING_SAME_DAY_GUARD_DAYS,
+    )
+    return {
+        # ★세는 단위를 밝힌다★ 봉도 신호도 아니다.
+        "unit": "ticker_period",
+        "measured": counts["measured"],
+        "estimated": counts["estimated"],
+        "unknown": counts["unknown"],
+        "measured_pct": (round(counts["measured"] / tot * 100, 1) if tot else None),
+        "tickers": tickers,
+        "reasons": reasons,
+        # 추정에 쓴 규칙을 함께 싣는다 — ★여기서 상수를 새로 적지 않는다★
+        "lag_days": {"annual": ANNUAL_LAG_DAYS, "quarterly": DISCLOSURE_LAG_DAYS},
+        "same_day_guard_days": FILING_SAME_DAY_GUARD_DAYS,
+        "note": ("`estimated` 는 공시일을 **정적 시차 규칙**(연간 90일 · 분기 45일)으로 "
+                 "추정했다는 뜻입니다 — 실제 접수일과 다를 수 있고, 늦게 공시된 "
+                 "보고서라면 그만큼 아직 공표되지 않은 재무를 본 것입니다."),
+        # ★날짜만 실측이라는 사실을 숨기지 않는다★
+        "value_note": ("실측한 것은 **공시일**입니다. 빈티지가 있는 기간은 값도 그 "
+                       "빈티지의 값을 쓰지만, `estimated` 기간의 값은 여전히 "
+                       "`financials_history`(정정공시가 원본을 덮어쓴 표)에서 옵니다 — "
+                       "그 기간에는 개정된 값이 과거 봉에 들어가는 **값 룩어헤드**가 "
+                       "남아 있습니다."),
+    }
+
+
+def _count_coverage(counts: dict, df) -> None:
+    """이 프레임이 **요청 구간을 덮었는가** 를 센다 (진단용).
+
+    `ohlcv_loader` 가 `attrs["coverage_ok"]` 를 붙인다. 예전에는 DB 채택 조건이
+    행 개수(`len >= 20`)뿐이라, 요청은 2023–2026 인데 2023–2024 만 적재된 종목이
+    **조용히 잘린 채** 백테스트로 흘러갔다.
+
+    ★미상은 통과가 아니다★ 라벨이 없으면 `"unknown"` 이다. `"ok"` 로 세면 로더를
+    거치지 않은 경로가 전부 "덮었다" 로 둔갑해 보고가 거짓이 된다.
+    """
+    try:
+        flag = df.attrs.get("coverage_ok")
+    except AttributeError:
+        flag = None
+    key = "ok" if flag is True else ("partial" if flag is False else "unknown")
+    counts[key] = counts.get(key, 0) + 1
+
+
+def _count_source(counts: dict, df) -> None:
+    """이 프레임이 **어디서 왔는가** 를 센다 (진단용).
+
+    ★계측 지점이 있어서 셀 수 있다★ `ohlcv_loader._tag` 가 `df.attrs["source"]` 로
+    `db`/`kis`/`mock` 을 붙인다. 그 태그를 **손대기 전에** 읽는다(pandas 연산에서
+    `attrs` 는 보존이 보장되지 않는다 — 로더 자신이 그렇게 적어 뒀다).
+
+    ★미상은 0 이 아니다★ 태그가 없으면 `"unknown"` 으로 센다. `db: 0` 으로 적으면
+    "DB 에서 하나도 안 왔다" 는 **하지 않은 진술**이 된다.
+
+    왜 이것이 필요한가: DB 적재가 얇으면 종목마다 KIS 로 떨어지고, KIS 일봉은
+    1콜 ~100봉이라 페이지네이션이 붙는다. 그런데 응답 어디에도 그 사실이 없어서
+    사용자는 왜 느린지 알 수 없었다.
+
+    ★이 독스트링의 앞 판은 수치가 틀렸다 — 고쳐 적는다★
+    "초당 **20**콜 **전역** 레이트리밋 → 200종목 최소 **12분**" 이라고 적었는데,
+    셋 다 틀렸다: 한도는 **18**콜(`kis_client.RateLimiter.calls_per_second`)이고,
+    리미터는 모듈 싱글턴의 **인스턴스** 속성이라 **프로세스마다 별개**이며(워커
+    4개면 합산 최대 72콜/초가 나간다 — 제공자 한도 초과), "12분" 은 **20년**
+    백테스트 값이다. 3년 구간은 종목당 ~14콜이라 200종목에 ≈2.6분이다.
+    """
+    src = df.attrs.get("source") if getattr(df, "attrs", None) else None
+    key = str(src) if src else "unknown"
+    counts[key] = counts.get(key, 0) + 1
+
+
+def _count_price_labels(basis_map: dict, adj_map: dict, tk: str, df) -> None:
+    """이 프레임의 **가격 정의 라벨**을 티커별로 담는다 (진단용).
+
+    ★값은 이미 지불됐다★ `ohlcv_loader._tag` 가 티커마다 `adj_status_of()` ·
+    `adj_close_coverage()` 를 이미 부르고 그 답을 `attrs` 에 붙여 둔다. 여기서는
+    **세기만** 하므로 DB 왕복이 늘지 않는다.
+
+    ★`copy()` 전에 읽는다★ 옆의 `_count_source`·`_count_coverage` 와 같은 자리다.
+    다만 **재보고 정확히 적는다**: 이 저장소의 pandas(2.2.2)에서는 `copy`·`iloc`·
+    `loc`·`reset_index`·`assign`·`concat`·`merge`·`groupby`·`astype`·`rename`
+    **어느 것도 `attrs` 를 떨어뜨리지 않았다**(실측). 즉 지금 순서를 뒤집어도
+    관측되는 결함은 없다 — 이 순서는 **버전 편차에 대한 예방**이고, 그 편차는
+    이 파일 자신이 겪은 적이 있다(`.iloc` 이 `attrs` 를 전파하지 않는 판본 때문에
+    `_fetch_frames` 가 방어적으로 다시 채운다). ★없는 결함을 막았다고 적지 않는다.★
+
+    ★미상을 지어내지 않는다★ 태그가 없으면 `None` 을 담고, 판정은
+    `price_quality.basis_rollup` 이 `unlabeled` 로 센다 — `missing`("행이 없다" 는
+    판단)과 다른 칸이다.
+    """
+    attrs = getattr(df, "attrs", None) or {}
+    basis_map[tk] = attrs.get("price_basis")
+    adj_map[tk] = attrs.get("adj_status")
+
+
+def _price_basis_meta(labels: dict | None, policy: str = POLICY_EXCLUDE,
+                      excluded: dict | None = None) -> dict | None:
+    """가격 정의 상태를 결과에 실을 모양으로. ★판정은 `price_quality` 가 한다★
+
+    `_macro_lookahead_meta`·`_fundamentals_pit_meta` 와 같은 규율이다 —
+    ★안 쓴 것과 재본 것을 구별한다★(프레임이 없으면 `None`). 다만 여기는
+    "해당 없음" 이 사실상 없다: 가격은 모든 백테스트가 쓴다.
+
+    ★등급 어휘를 엔진이 다시 쓰지 않는다★ 계산은 `basis_rollup` 하나에만 있고,
+    엔진은 라벨을 모아 넘길 뿐이다. 라벨을 만들다 백테스트를 죽이지 않는다.
+    """
+    if not labels:
+        return None
+    try:
+        from src.data.price_quality import basis_rollup
+        out = basis_rollup(labels.get("basis") or {}, labels.get("adj") or {})
+    except Exception:  # noqa: BLE001 — 라벨을 만들다 백테스트를 죽이지 않는다
+        logger.exception("price_basis 롤업 실패")
+        return None
+    if out is None:
+        return None
+
+    # ★제외했어도 위 롤업은 줄지 않는다★ 라벨은 제외 **전에** 세므로
+    # `mixed` 개수와 분모가 그대로다. 제외한 뒤에 세면 `mixed: 0` 이 되어
+    # **문제가 없었던 것처럼** 보인다.
+    names = sorted((excluded or {}).keys())
+    out["policy"] = policy
+    out["excluded"] = {
+        "count": len(names),
+        # 이름은 표본(위 `mixed_tickers` 와 같은 상한), 개수는 정확하다.
+        "tickers": names[:5],
+        "reason": EXCLUDED_REASON if names else None,
+    }
+    if names:
+        # ★사유가 정책마다 달라야 한다★ — `pit_evidence` 의 가격 축이 이 문장을
+        # 그대로 읽는다. 제외해도 축은 `degraded` 다(위 롤업이 mixed 를 세므로):
+        # 30종목을 조용히 버린 실행에 "검증됨" 을 다는 것이 **동등 품질로 위장**이다.
+        out["reason"] = " · ".join(x for x in (out.get("reason"), EXCLUDED_REASON) if x)
+    return out
 
 
 def load_ohlcv(
@@ -153,6 +417,54 @@ class Position:
     peak_price: float = 0.0      # 보유 중 최고가(종가 기준) — 트레일링 스탑용
 
 
+def _date_key(value) -> str:
+    """날짜 표기 정규화 — `2024-04-01` 과 `20240401` 을 같은 키로 (AK4)."""
+    return str(value).replace("-", "").strip()
+
+
+class _EngineCost(NamedTuple):
+    """`_trade_cost` 의 반환 — 호출부가 읽기 쉬운 모양.
+
+    ★`extra` 만 **추가 현금 효과**다★ — `slippage` 는 이미 체결가에 녹아 있어
+    현금에서 또 빼면 이중계산이 되고, `commission` 은 예전부터 현금에서 빠졌다.
+    """
+
+    commission: float
+    slippage: float
+    tax: float
+    spread: float
+    impact: float
+
+    @property
+    def extra(self) -> float:
+        return self.tax + self.spread + self.impact
+
+
+def policy_from_config(cfg) -> CostPolicy:
+    """`BacktestConfig` → `CostPolicy`. ★요율을 읽는 유일한 자리★ (AK4)
+
+    ★`market_rules` 가 단일 출처다★ — 여기서 18·5.0 을 다시 적으면 실행 준비실
+    (`execution_plan.build_plan`)과 조용히 갈라지고, 브로커·규정이 바뀔 때 고칠
+    자리가 둘이 된다. 도메인(`src/domain/cost_model.py`)은 설정을 안 읽으므로
+    그 경계가 여기다.
+    """
+    from src.data import market_rules as mr
+    from src.domain.cost_model import CostPolicy
+
+    return CostPolicy(
+        commission_bps=float(cfg.commission_rate) * 1e4,
+        slippage_bps=float(cfg.slippage_rate) * 1e4,
+        charge_tax=bool(getattr(cfg, "charge_sell_tax", False)),
+        charge_spread=bool(getattr(cfg, "charge_spread", False)),
+        charge_impact=bool(getattr(cfg, "charge_market_impact", False)),
+        tax_bps=mr.sell_tax_bp() if getattr(cfg, "charge_sell_tax", False) else None,
+        spread_bps=(mr.spread_bp_default()
+                    if getattr(cfg, "charge_spread", False) else None),
+        impact_coeff=(mr.impact_coeff()
+                      if getattr(cfg, "charge_market_impact", False) else None),
+    )
+
+
 @dataclass
 class Trade:
     date: str
@@ -163,6 +475,12 @@ class Trade:
     value: float
     commission: float
     slippage: float
+    # AK — 옵트인 비용 셋. ★기본 0.0 이라 기존 실행의 수치가 안 움직인다★
+    # `slippage` 는 이미 체결가에 녹아 있는 **기록**이지만, 이 셋은 실제 현금
+    # 유출입이다(매수는 더 내고 매도는 덜 받는다).
+    tax: float = 0.0
+    spread: float = 0.0
+    impact: float = 0.0
     pnl: float | None = None
     reason: str = ""
 
@@ -200,6 +518,18 @@ class BacktestConfig:
     expiry_fill_offset_pct: float = 0.0
     # 종목당 최대 매수 금액 (원). None=무제한
     max_buy_amount: float | None = None
+    # 가격 정의가 섞인(`price_basis == "mixed"`) 티커를 어떻게 다루나 (로드맵 4단계).
+    # 기본 `exclude` — 정의가 섞인 계열의 수익률은 정의가 섞인 수익률이고, 소스
+    # 경계의 점프 하나가 공분산·팩터 추정을 흔든다. `pass_labeled` 로 바꾸면
+    # 예전 동작(그냥 통과)이지만 **그 선택이 결과에 남는다**.
+    price_basis_policy: str = POLICY_EXCLUDE
+    # ── AK: 누락 비용 옵트인 셋 ★전부 기본 꺼짐★ ──────────────────────
+    # 켜는 순간 저장된 모든 실행과 골든의 뜻이 바뀌므로 기본을 건드리지 않는다.
+    # 요율은 전부 `src/data/market_rules.py` 에서 읽는다 — 켜면 실행 준비실
+    # (`execution_plan.build_plan`)과 **같은 값**을 쓴다.
+    charge_sell_tax: bool = False        # 매도 증권거래세+농특세 (기본 18bp)
+    charge_spread: bool = False          # 호가 스프레드 프록시 (편도 절반)
+    charge_market_impact: bool = False   # k·√참여율 — 참여율 미상이면 ★미상★
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
     cash_reserve_pct: float = 0.0
     # 자산배분 ETF 바스켓 (젠포트 자산배분 옵션). None=미사용.
@@ -266,9 +596,12 @@ class BacktestConfig:
     sell_time_start: str = "0900"       # 매도 시간 윈도 (HHMM)
     sell_time_end: str = "1530"
     # 신호 기준일 (젠포트 Tip 3: "전일 종가 기준 선정 → 익일 매매").
-    # 0 = 당일 봉 포함(기존 동작 불변, 종가 체결과 정합).
-    # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — 시가·전일종가류 체결의 look-ahead 제거.
-    signal_lag: int = 0
+    # 0 = 당일 봉 포함 — ★신호가 당일 종가를 쓰므로 장 시작 전에 계산할 수 없다★.
+    #     금지하지는 않는다(연구 목적). 결과가 `same_bar` 라고 **말한다**(AG).
+    # 1 = 전일 봉까지로 신호 평가, 체결은 당일 — ★기본값★.
+    # ★기본값은 `src/domain/execution_assumption.SIGNAL_LAG_DEFAULT` 한 곳에 있다★ —
+    #   예전에는 세 곳에 `0` 이 따로 박혀 있어 서로 갈릴 수 있었다.
+    signal_lag: int = SIGNAL_LAG_DEFAULT
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -293,13 +626,107 @@ class BacktestEngine:
         self._last_exit: dict[str, str] = {}    # 재매수 방지용 — 전량 청산일 {ticker: date_str}
         self._eod_liquidated = 0                # 기간종료 청산 종목 수 (통계 표기용)
         self._intraday = {"applied": 0, "fallback": 0}  # 하이브리드 체결 적용/일봉 폴백 건수
+        # 신호가 어느 경로로 났는가 — ★조용한 폴백을 센다★
+        # 폴백은 O(종목×봉)이라 저장소 실측이 "종목 1개 예외만으로 5배+ 슬로다운"
+        # 이라고 적어 뒀다. 그런데 어느 쪽이 얼마나 돌았는지 아무도 세지 않아,
+        # "백테스트가 왜 느리지" 를 물어볼 방법이 없었다. `_intraday` 와 같은 모양.
+        self._signal_path = {"vectorized": 0, "per_bar": 0, "failed": 0}
         self._etf_pos: dict[str, dict] = {}     # ETF 슬리브 보유 {ticker: {"qty","avg"}}
         # 종목별 fetcher 프레임 캐시 (P1-3) — 봉마다 DataFrame 을 새로 만들지 않는다.
         # 벡터화 경로(`signal_at`)를 쓰는 전략은 여기 들어오지 않으므로 비용을 안 낸다.
         self._fetch_frames: dict[str, dict] = {}
         self.ohlcv_all: dict[str, pd.DataFrame] = {}
+        # ── AK: 비용 모델 ────────────────────────────────────────────────
+        # ★열셋을 한 함수로 모은다★ — `value * rate` 를 손으로 쓰던 자리가
+        # 수수료 7곳·슬리피지 6곳이었고, 성분을 늘리려면 열셋을 다 고쳐야 했다.
+        self._cost_policy = policy_from_config(config)
+        self._cost_krw = {c: 0.0 for c in COST_COMPONENTS}
+        self._cost_states: dict[str, str] = {}
+        self._cost_reasons: dict[str, str | None] = {}
+        # ★못 잰 거래를 센다★ — 0 으로 부과하면 "충격이 없었다" 는 관측이 된다.
+        self._cost_unmeasured_trades = 0
+        self._adv_cache: dict[str, dict] = {}
 
-    def _emit(self, phase: str, done: int | None = None, total: int | None = None):
+    def _adv_for(self, ticker: str, date_str: str) -> float | None:
+        """후행 20봉 평균 거래대금(원). ★없으면 `None` — 0 이 아니다★ (AK4)
+
+        ★당일 거래대금을 쓰지 않는다★ — 주문 시점에 그날의 거래대금은 아직
+        관측되지 않았고, 그것을 쓰면 비용 추정이 look-ahead 가 된다. `shift(1)`
+        로 전날까지만 본다.
+        """
+        cache = self._adv_cache.get(ticker)
+        if cache is None:
+            df = self.ohlcv_all.get(ticker)
+            if df is None or df.empty or "volume" not in df.columns:
+                self._adv_cache[ticker] = {}
+                return None
+            notional = df["close"].astype(float) * df["volume"].astype(float)
+            adv = notional.shift(1).rolling(20, min_periods=5).mean()
+            keys = (df["_date_str"].values if "_date_str" in df.columns
+                    else df.index.strftime("%Y%m%d").values)
+            # ★날짜 표기를 정규화한다★ — 거래는 `2024-04-01`, 프레임은 `20240401`
+            # 로 들어온다. 안 맞추면 조회가 **언제나 실패**해서 충격이 영원히
+            # 미상이 된다(실측으로 잡았다 — 그래서 `unmeasurable` 이 0 보다 낫다:
+            # 0 이었다면 "충격이 없다" 로 조용히 통과했을 것이다).
+            cache = {_date_key(k): (None if not pd.notna(v) or v <= 0 else float(v))
+                     for k, v in zip(keys, adv.to_numpy())}
+            self._adv_cache[ticker] = cache
+        return cache.get(_date_key(date_str))
+
+    def _trade_cost(self, value: float, side: str, ticker: str | None = None,
+                    date_str: str | None = None):
+        """거래 하나의 비용 — ★엔진에서 요율을 직접 곱하는 자리는 여기뿐★ (AK3)
+
+        Returns:
+            `CostBreakdown` + 편의 속성. `commission`·`slippage` 는 예전 뜻 그대로이고
+            `extra`(세금+스프레드+충격)만 **추가 현금 효과**다 — 슬리피지는 이미
+            체결가에 녹아 있어 두 번 빼면 이중계산이 된다.
+        """
+        participation = None
+        if self._cost_policy.charge_impact and ticker and date_str:
+            adv = self._adv_for(ticker, date_str)
+            if adv:
+                participation = float(value) / adv
+        bd = trade_cost(value, side, self._cost_policy, participation=participation)
+        by = {c.name: c for c in bd.components}
+        for name, comp in by.items():
+            self._cost_krw[name] += comp.krw
+            self._cost_states[name] = comp.state
+            self._cost_reasons[name] = comp.reason
+        if bd.n_unmeasurable:
+            self._cost_unmeasured_trades += 1
+        return _EngineCost(
+            commission=by["commission"].krw, slippage=by["slippage"].krw,
+            tax=by["tax"].krw, spread=by["spread"].krw, impact=by["impact"].krw)
+
+    def _cost_model_block(self) -> dict:
+        """이 실행이 **무엇을 부과했고 무엇을 못 쟀나**. (AK5)
+
+        ★`off` 와 `unmeasurable` 을 가른다★ — 둘 다 0원인데 앞은 선택이고
+        뒤는 *"비용이 실제보다 싸게 나왔다"* 는 경고다.
+        """
+        from src.domain.cost_model import (
+            STATE_OFF,
+            CostBreakdown,
+            CostComponent,
+            cost_label,
+            policy_label,
+            round_trip_bps,
+        )
+        comps = tuple(
+            CostComponent(name=n, state=self._cost_states.get(n, STATE_OFF),
+                          krw=self._cost_krw[n],
+                          reason=self._cost_reasons.get(n))
+            for n in COST_COMPONENTS)
+        total = sum(c.krw for c in comps)
+        label = cost_label(CostBreakdown(components=comps, total_krw=total))
+        return {**label,
+                "policy": policy_label(self._cost_policy),
+                "round_trip_bps": round_trip_bps(self._cost_policy)["round_trip_bps"],
+                "n_unmeasured_trades": self._cost_unmeasured_trades}
+
+    def _emit(self, phase: str, done: int | None = None, total: int | None = None,
+              extra: dict | None = None):
         """진행률 콜백 발행(스트리밍용). 콜백 미설정/예외 시 무시 — 백테스트 결과엔 영향 없음."""
         cb = self.progress_cb
         if cb is None:
@@ -309,6 +736,8 @@ class BacktestEngine:
             evt["done"] = done
         if total is not None:
             evt["total"] = total
+        if extra:
+            evt.update(extra)
         try:
             cb(evt)
         except Exception:
@@ -332,6 +761,14 @@ class BacktestEngine:
         # 매수 우선순위식 — 워밍업·패널 산정 전에 등록 (문법 오류는 ValueError 전파 → 400)
         if self.cfg.buy_sort_expr and hasattr(strategy, "set_priority_expr"):
             strategy.set_priority_expr(self.cfg.buy_sort_expr)
+
+        # ★모르는 정책을 관대하게 넘기지 않는다★ 오타 하나가 "그냥 통과" 로
+        # 조용히 떨어지면, 사용자는 제외됐다고 믿은 채 섞인 계열로 채점한다.
+        # 래더 검증과 같은 자리·같은 예외(ValueError → 라우트가 400).
+        if self.cfg.price_basis_policy not in PRICE_BASIS_POLICIES:
+            raise ValueError(
+                f"price_basis_policy: {self.cfg.price_basis_policy!r} 는 알 수 없는 "
+                f"값입니다 (가능: {', '.join(PRICE_BASIS_POLICIES)})")
 
         # 래더 검증 (비중 합 ≤100, 단계 ≤10)
         for name, ladder in (("buy_ladder", self.cfg.buy_ladder),
@@ -379,12 +816,43 @@ class BacktestEngine:
                     d = pd.DataFrame()
             return tk, d
 
+        _src_counts: dict[str, int] = {}
+        _cov_counts: dict[str, int] = {}
+        # 가격 정의 라벨(티커별) — 결과의 `price_basis` 가 이것을 롤업한다.
+        _basis_labels: dict[str, str | None] = {}
+        _adj_labels: dict[str, str | None] = {}
+        self._price_labels = {"basis": _basis_labels, "adj": _adj_labels}
+        # 정책으로 뺀 티커 — ★이름으로 남긴다★ 개수만으로는 무엇이 빠졌는지 모른다.
+        _excluded: dict[str, str] = {}
+        self._price_excluded = _excluded
+
         def _absorb(tk: str, d):
             """메인 스레드에서만 호출 — ohlcv_map 갱신(딕셔너리 경쟁 없음)."""
             if d is not None and not d.empty:
-                # ★ 날짜 문자열 1회 생성 (매 거래일 strftime 제거 — O(N²) 병목 방지)
+                # ★출처를 손대기 전에 센다★ 아래 `copy()`·컬럼 추가 전에 읽는다.
+                _count_source(_src_counts, d)
+                _count_coverage(_cov_counts, d)
+                _count_price_labels(_basis_labels, _adj_labels, tk, d)
+                # ★센 다음에 뺀다★ 순서가 뒤집히면 보고에서 `mixed` 가 0 이 되어
+                # **문제가 없었던 것처럼** 보인다(제외 자체가 증거를 지운다).
+                #
+                # ★제외 지점이 여기 하나인 이유★ 하류는 이미 전부
+                # `if ticker not in ohlcv_map: continue` 로 방어한다 — 제외된
+                # 티커는 **로드에 실패한 티커와 같은 경로**를 타므로 새 분기가
+                # 늘지 않고, `replenishment_pool` 도 같은 `_absorb` 를 지난다.
+                if (self.cfg.price_basis_policy == POLICY_EXCLUDE
+                        and _basis_labels.get(tk) == "mixed"):
+                    _excluded[tk] = "price_basis=mixed"
+                    return
+                # ★안 쓰는 것에 42% 를 내지 않는다★
+                # 예전에는 여기서 모든 종목에 `_date_str` 을 즉시 붙였다. 그것은
+                # per-bar 폴백의 봉마다 `strftime` 을 없앤 정당한 최적화였지만,
+                # 소비처가 `_generate_signal_as_of` **하나뿐**(폴백 경로)인데
+                # 프레임 메모리의 **42%** 를 차지했다(실측 200종목: 24.7MB 중
+                # 10.4MB). 벡터화만 타는 실행은 한 번도 읽지 않고 그 값을 냈다.
+                # `_fetch_frames` 가 이미 종목별 1회 캐시이므로 거기서 만든다 —
+                # O(N²) 는 돌아오지 않는다.
                 d = d.copy()
-                d["_date_str"] = d.index.strftime("%Y%m%d")
                 d.attrs["ticker"] = tk  # 수급 토큰 해석용 (pandas attrs는 슬라이스에도 보존)
                 ohlcv_map[tk] = d
 
@@ -425,9 +893,22 @@ class BacktestEngine:
                     if done % _load_step == 0 or done == total_syms:
                         self._emit("loading", done=done, total=total_syms)
 
+        # ★로딩이 끝나면 출처 구성을 한 번 보고한다★ 상류(`_worker`)가 이것을
+        # 텔레메트리에 실어, "왜 느렸는가" 를 나중에 물을 수 있게 한다.
+        self._emit("loading", done=total_syms, total=total_syms,
+                   extra={"sources": dict(_src_counts),
+                          "coverage": dict(_cov_counts)})
+
         self.ohlcv_all = ohlcv_map   # per-bar 프레임 캐시가 원본으로 쓴다 (P1-3)
 
         if not ohlcv_map:
+            # ★조용히 죽지 않는다★ 데이터가 없어서인지 **정책이 다 뺐기 때문**인지
+            # 처방이 정반대다(적재하라 vs 정책을 바꾸거나 데이터를 고쳐라).
+            if _excluded:
+                return self._error_response(
+                    f"가격 정의가 섞여 {len(_excluded)}종목이 모두 제외됐습니다"
+                    f"(price_basis_policy={self.cfg.price_basis_policy}). "
+                    f"{EXCLUDED_REASON}")
             return self._error_response("No OHLCV data found in DB for given tickers/range")
 
         # 자산배분 ETF 바스켓 OHLCV 로드 (주식 슬리브와 분리)
@@ -452,6 +933,44 @@ class BacktestEngine:
         ref_ticker = max(ohlcv_map, key=lambda t: len(ohlcv_map[t]))
         all_dates = ohlcv_map[ref_ticker].index
         sim_dates = all_dates[all_dates >= pd.Timestamp(self.cfg.start_date)]
+
+        # ★매크로 시점(PIT) 컨텍스트★ — 실행 달력이 정해진 직후, 패널 사전계산 전에
+        # 심는다. 판정 기준이 **실행 달력**이어야 상장일이 다른 종목 사이에서 같은
+        # 토큰이 다른 의미를 갖지 않는다. `all_dates` 는 워밍업을 포함한다.
+        self._macro_ctx = None
+        if hasattr(strategy, "set_macro_ctx"):
+            try:
+                from src.kis_strategies.macro_pit_context import MacroPitContext
+                self._macro_ctx = MacroPitContext(all_dates)
+                strategy.set_macro_ctx(self._macro_ctx)
+            except Exception as e:  # noqa: BLE001
+                # ★조용히 넘어가지 않는다★ 실패하면 매크로는 라이브(룩어헤드)이고,
+                # 그 사실이 로그에 남아야 한다.
+                logger.warning(f"매크로 PIT 컨텍스트를 만들지 못했습니다 — "
+                               f"매크로 토큰은 라이브(룩어헤드)로 평가됩니다: {e}")
+
+        # ★재무 공시일(PIT) 컨텍스트★ — 매크로와 같은 자리, 같은 이유로 **패널
+        # 사전계산 전에** 심는다. `prepare_panel` 이 이미 PIT 재무 패널을 만들고
+        # 그것이 `(종목, len(df))` 로 캐시되므로, 늦게 심으면 라벨 없이 만들어진
+        # 패널이 조용히 이긴다.
+        #
+        # ★달력을 넘기지 않는다★ 매크로는 판정 단위가 토큰이라 실행 달력이
+        # 필요했지만(상장일이 다른 종목 사이에서 한 토큰이 두 의미를 갖지 않게),
+        # 재무는 (종목, 기간) 단위이고 데이터 유무로만 갈린다. 없는 인자를
+        # 흉내 내지 않는다.
+        self._fund_ctx = None
+        if hasattr(strategy, "set_fund_ctx"):
+            try:
+                from src.kis_strategies.fundamentals_pit_context import (
+                    FundamentalsPitContext,
+                )
+                self._fund_ctx = FundamentalsPitContext()
+                strategy.set_fund_ctx(self._fund_ctx)
+            except Exception as e:  # noqa: BLE001
+                # ★조용히 넘어가지 않는다★ 실패하면 재무는 정적 시차 추정으로
+                # 평가되고, 그 사실이 로그에 남아야 한다.
+                logger.warning(f"재무 PIT 컨텍스트를 만들지 못했습니다 — 재무 "
+                               f"공시일은 정적 시차 추정으로 평가됩니다: {e}")
 
         # 횡단면(순위/비율) 전략용 패널 사전계산 — 전 종목 동일시점 값이 필요한 함수 지원
         if hasattr(strategy, "prepare_panel"):
@@ -499,6 +1018,15 @@ class BacktestEngine:
 
         # 신호 기준일 시차 (젠포트식 전일 종가 기준). 0=당일 봉(기존)
         lag = max(0, int(self.cfg.signal_lag or 0))
+
+        # 워밍업 요구 봉수는 루프 동안 **상수**다 — `set_priority_expr` 는 위에서
+        # 이미 끝났고 조건 목록도 확정이다. 그런데 `required_days` 는 매 호출마다
+        # 처음부터 다시 계산하는 `@property` 라, 하루 × 종목 루프 안에서 읽으면
+        # 종목수 × 봉수 만큼 재계산된다. ★실측: 200종목 × 653일 = 130,601회,
+        # cProfile cumtime 27% — 시뮬레이션 전체의 15~25%★. 여기서 한 번 읽는다.
+        # (전략 클래스에 캐시를 넣지 않는다 — `_prio_ast` 를 나중에 세팅하는 다른
+        #  호출부의 의미가 조용히 달라진다. 소비 지점만 고치는 쪽이 경계를 안 넘는다.)
+        _required_days = strategy.required_days
 
         # Day-by-day 시뮬레이션
         _sim_total = len(sim_dates)
@@ -580,7 +1108,7 @@ class BacktestEngine:
 
                 # as-of 슬라이스 (미래 데이터 차단 — look-ahead bias 방지)
                 df_slice = ohlcv_map[ticker].loc[:sim_date]
-                if len(df_slice) < strategy.required_days + lag:
+                if len(df_slice) < _required_days + lag:
                     continue
 
                 # 신호 기준 봉: signal_lag>0이면 lag봉 이전 (체결은 당일 가격 그대로)
@@ -590,9 +1118,13 @@ class BacktestEngine:
                 signal = None
                 if self.cfg.vectorize_signals and hasattr(strategy, "signal_at"):
                     signal = strategy.signal_at(ticker, sig_date)
-                if signal is None:
+                if signal is not None:
+                    self._signal_path["vectorized"] += 1
+                else:
                     sig_slice = df_slice.iloc[: len(df_slice) - lag] if lag else df_slice
                     signal = self._generate_signal_as_of(strategy, ticker, sig_slice)
+                    # ★"두 경로 모두 실패" 를 "조건 미충족" 과 섞지 않는다★
+                    self._signal_path["per_bar" if signal is not None else "failed"] += 1
                 if signal is None:
                     continue
 
@@ -701,8 +1233,11 @@ class BacktestEngine:
             base = self.ohlcv_all.get(ticker)
             if base is None or base.empty:
                 return None
+            # ★여기서 처음 만든다★ 종목당 1회 — 이 캐시 자체가 종목별 1회다.
+            _ds = base["_date_str"].values if "_date_str" in base.columns \
+                else base.index.strftime("%Y%m%d").values
             full = pd.DataFrame({
-                "date": base["_date_str"].values,
+                "date": _ds,
                 "open": base["open"].values,
                 "high": base["high"].values,
                 "low": base["low"].values,
@@ -873,12 +1408,12 @@ class BacktestEngine:
             if qty <= 0:
                 continue
             value = qty * exec_price
-            commission = value * self.cfg.commission_rate
-            if cost_total + value + commission > self._usable_cash():
+            cost = self._trade_cost(value, "buy", ticker, date_str)
+            if cost_total + value + cost.commission + cost.extra > self._usable_cash():
                 break
-            legs.append((exec_price, qty, value, commission))
+            legs.append((exec_price, qty, value, cost))
             qty_total += qty
-            cost_total += value + commission
+            cost_total += value + cost.commission + cost.extra
         if qty_total <= 0:
             return
         self.cash -= cost_total
@@ -892,7 +1427,8 @@ class BacktestEngine:
         for i, (p, q, v, c) in enumerate(legs, 1):
             self.trades.append(Trade(
                 date=date_str, ticker=ticker, side="buy", price=p, quantity=q,
-                value=v, commission=c, slippage=v * self.cfg.slippage_rate,
+                value=v, commission=c.commission, slippage=c.slippage,
+                tax=c.tax, spread=c.spread, impact=c.impact,
                 reason=f"{reason} (래더 {i}/{len(legs)})"))
 
     def _execute_sell_ladder(self, ticker: str, fills: list, date_str: str, reason: str,
@@ -1005,10 +1541,11 @@ class BacktestEngine:
                 if qty <= 0:
                     continue
                 value = qty * buy_px
-                commission = value * self.cfg.commission_rate
-                if value + commission > self.cash:
+                cost = self._trade_cost(value, "buy", tk, date_str)
+                commission = cost.commission
+                if value + commission + cost.extra > self.cash:
                     continue
-                self.cash -= (value + commission)
+                self.cash -= (value + commission + cost.extra)
                 new_qty = held["qty"] + qty
                 held["avg"] = (held["avg"] * held["qty"] + buy_px * qty) / new_qty
                 held["qty"] = new_qty
@@ -1016,7 +1553,8 @@ class BacktestEngine:
                 self._etf_pos[tk] = held
                 self.trades.append(Trade(
                     date=date_str, ticker=tk, side="buy", price=buy_px, quantity=qty,
-                    value=value, commission=commission, slippage=value * self.cfg.slippage_rate,
+                    value=value, commission=commission, slippage=cost.slippage,
+                    tax=cost.tax, spread=cost.spread, impact=cost.impact,
                     reason="ETF 자산배분 리밸런싱"))
             else:  # 매도 (목표 초과분)
                 sell_px = px * (1 - self.cfg.slippage_rate)
@@ -1024,9 +1562,10 @@ class BacktestEngine:
                 if qty <= 0:
                     continue
                 value = qty * sell_px
-                commission = value * self.cfg.commission_rate
-                self.cash += (value - commission)
-                pnl = value - commission - qty * held["avg"]
+                cost = self._trade_cost(value, "sell", tk, date_str)
+                commission = cost.commission
+                self.cash += (value - commission - cost.extra)
+                pnl = value - commission - cost.extra - qty * held["avg"]
                 held["qty"] -= qty
                 held["last"] = px
                 if held["qty"] <= 0:
@@ -1035,7 +1574,8 @@ class BacktestEngine:
                     self._etf_pos[tk] = held
                 self.trades.append(Trade(
                     date=date_str, ticker=tk, side="sell", price=sell_px, quantity=qty,
-                    value=value, commission=commission, slippage=value * self.cfg.slippage_rate,
+                    value=value, commission=commission, slippage=cost.slippage,
+                    tax=cost.tax, spread=cost.spread, impact=cost.impact,
                     pnl=pnl, reason="ETF 자산배분 리밸런싱"))
 
     def _fill_with_offset(self, side: str, df_slice) -> float | None:
@@ -1094,7 +1634,8 @@ class BacktestEngine:
             from src.kis_strategies.factor_expr import eval_expr
 
             def tok(name: str):
-                s = _base_series(df_slice, "{" + name + "}")
+                s = _base_series(df_slice, "{" + name + "}",
+                                 macro_ctx=getattr(self, "_macro_ctx", None))
                 return None if s is None or len(s) == 0 else s.astype(float)
 
             out = eval_expr(ast, {"token": tok, "cross": lambda k: None,
@@ -1251,10 +1792,11 @@ class BacktestEngine:
             if qty <= 0:
                 return
             value = qty * exec_price
-            commission = value * self.cfg.commission_rate
-            if value + commission > self._usable_cash():
+            cost = self._trade_cost(value, "buy", ticker, date_str)
+            commission = cost.commission
+            if value + commission + cost.extra > self._usable_cash():
                 return
-            self.cash -= (value + commission)
+            self.cash -= (value + commission + cost.extra)
             new_qty = existing.quantity + qty
             existing.avg_price = (existing.avg_price * existing.quantity + exec_price * qty) / new_qty
             existing.quantity = new_qty
@@ -1263,7 +1805,8 @@ class BacktestEngine:
             self.trades.append(Trade(
                 date=date_str, ticker=ticker, side="buy",
                 price=exec_price, quantity=qty, value=value,
-                commission=commission, slippage=value * self.cfg.slippage_rate,
+                commission=commission, slippage=cost.slippage,
+                tax=cost.tax, spread=cost.spread, impact=cost.impact,
                 reason=f"{reason} (분할매수 {existing.buy_count}차)",
             ))
             return
@@ -1294,16 +1837,18 @@ class BacktestEngine:
             return
 
         value = quantity * exec_price
-        commission = value * self.cfg.commission_rate
-        total_cost = value + commission
+        cost = self._trade_cost(value, "buy", ticker, date_str)
+        commission = cost.commission
+        total_cost = value + commission + cost.extra
 
         if total_cost > self._usable_cash():
             quantity = int((self._usable_cash() * 0.95) / (exec_price * (1 + self.cfg.commission_rate)))
             if quantity <= 0:
                 return
             value = quantity * exec_price
-            commission = value * self.cfg.commission_rate
-            total_cost = value + commission
+            cost = self._trade_cost(value, "buy", ticker, date_str)
+            commission = cost.commission
+            total_cost = value + commission + cost.extra
 
         self.cash -= total_cost
         self._buys_today = getattr(self, "_buys_today", 0) + 1
@@ -1325,7 +1870,8 @@ class BacktestEngine:
         self.trades.append(Trade(
             date=date_str, ticker=ticker, side="buy",
             price=exec_price, quantity=quantity, value=value,
-            commission=commission, slippage=value * self.cfg.slippage_rate,
+            commission=commission, slippage=cost.slippage,
+            tax=cost.tax, spread=cost.spread, impact=cost.impact,
             reason=reason,
         ))
 
@@ -1359,8 +1905,9 @@ class BacktestEngine:
 
         exec_price = price * (1 - self.cfg.slippage_rate)
         value = sell_qty * exec_price
-        commission = value * self.cfg.commission_rate
-        proceeds = value - commission
+        cost = self._trade_cost(value, "sell", ticker, date_str)
+        commission = cost.commission
+        proceeds = value - commission - cost.extra
         pnl = proceeds - (sell_qty * pos.avg_price) - commission
 
         self.cash += proceeds
@@ -1375,7 +1922,8 @@ class BacktestEngine:
         self.trades.append(Trade(
             date=date_str, ticker=ticker, side="sell",
             price=exec_price, quantity=sell_qty, value=value,
-            commission=commission, slippage=value * self.cfg.slippage_rate,
+            commission=commission, slippage=cost.slippage,
+            tax=cost.tax, spread=cost.spread, impact=cost.impact,
             pnl=pnl, reason=reason,
         ))
 
@@ -1625,7 +2173,8 @@ class BacktestEngine:
         if sl.empty:
             return True
         from src.kis_strategies.condition_strategy import _eval_condition
-        evals = [r for r in (_eval_condition(sl, c) for c in conds) if r is not None]
+        evals = [r for r in (_eval_condition(sl, c, macro_ctx=getattr(self, "_macro_ctx", None))
+                             for c in conds) if r is not None]
         if not evals:
             return True
         return all(evals)
@@ -1706,6 +2255,39 @@ class BacktestEngine:
         return {
             "currency": "KRW",
             "intraday": intraday_meta,
+            "signal_path": _signal_path_meta(self._signal_path),
+            # ★룩어헤드가 있었다는 사실이 결과에 남는다★ 매크로를 안 쓴 실행은 None.
+            "macro_lookahead": _macro_lookahead_meta(getattr(self, "_macro_ctx", None)),
+            # ★재무 공시일이 실측이었나 추정이었나★ PIT 재무 토큰을 안 쓴 실행은 None.
+            "fundamentals_pit": _fundamentals_pit_meta(getattr(self, "_fund_ctx", None)),
+            # ★이 백테스트가 무슨 가격을 봤는가★ 원주가와 수정주가가 섞인 계열로
+            # 계산한 수익률은 정의가 섞인 수익률이다 — 조용히 넘기면 아무도 모른다.
+            "price_basis": _price_basis_meta(
+                getattr(self, "_price_labels", None),
+                self.cfg.price_basis_policy,
+                getattr(self, "_price_excluded", None)),
+            # ★이 결정을 장 시작 전에 계산할 수 있었나★ `perf_label`(Z) 과는 다른
+            # 축이다 — 저것은 "이 수치가 무엇인가"(백테스트/페이퍼/실계좌)이고
+            # 이것은 "어떤 실행 가정 위에 섰나" 다. ★요청값이 아니라 엔진이 실제로
+            # 쓴 값★ 이라서, 클라이언트가 안 보낸 런도 기본값이 그대로 기록된다.
+            "execution_assumption": assumption_label(ExecutionAssumption(
+                signal_lag=self.cfg.signal_lag,
+                buy_fill_type=self.cfg.buy_fill_type,
+                sell_fill_type=self.cfg.sell_fill_type)),
+            # ★옵트인 누출이 결과에서 보이게 한다★ `allow_snapshot_fundamentals`
+            # 를 켜면 오늘의 재무 스냅샷이 과거 전 구간에 방송되는데(`score_factors`),
+            # 그렇게 돈 실행의 결과가 깨끗한 실행과 **완전히 같았다**(AH 실측).
+            # `pit_evidence` 와는 다른 축이다 — 저것은 데이터의 시점 정합이고
+            # 이것은 추정이 어느 창·어느 빈티지 위에 섰나다.
+            "estimator_leakage": backtest_estimator_evidence(
+                snapshot_fundamentals=self._snapshot_fundamentals_used()),
+            # ★이 실행이 무엇을 부과했고 무엇을 못 쟀나★ (AK5)
+            # 세금·스프레드·충격은 **기본 꺼짐**이라 기존 실행의 수치는 안
+            # 움직인다. 켜면 실행 준비실(`execution_plan`)과 같은 요율
+            # (`market_rules`)을 쓴다. ★`off` 와 `unmeasurable` 을 가른다★ —
+            # 둘 다 0원인데 앞은 선택이고 뒤는 "비용이 실제보다 싸게 나왔다" 는
+            # 경고다.
+            "cost_model": self._cost_model_block(),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -1761,6 +2343,25 @@ class BacktestEngine:
             },
         }
 
+    def _snapshot_fundamentals_used(self) -> bool | None:
+        """이 실행이 **오늘의 재무 스냅샷**을 과거에 방송했나. ★미상은 False 가 아니다★
+
+        `allow_snapshot_fundamentals` 는 `ConditionStrategy` 의 옵트인이고
+        `strategy_params` 로 들어온다. ★키가 없다는 것과 `False` 는 다른 사실이다★ —
+        조건식 전략이 아닌 실행은 이 누출 경로 자체가 없으므로 `False`(해당 없음)이고,
+        조건식 전략인데 키가 없으면 기본값 `False` 가 적용된 것이라 역시 `False` 다.
+        값이 bool 로 해석되지 않으면 **지어내지 않고** `None` 을 낸다.
+        """
+        params = self.cfg.strategy_params
+        if not isinstance(params, dict):
+            return None
+        raw = params.get("allow_snapshot_fundamentals", False)
+        if isinstance(raw, bool):
+            return raw
+        if raw is None:
+            return False          # 명시적 미지정 = 기본값(끔)
+        return None               # 모양이 다르다 — 추측하지 않는다
+
     def _trade_to_dict(self, t: Trade) -> dict:
         return {
             "date": t.date,
@@ -1771,6 +2372,11 @@ class BacktestEngine:
             "value": round(t.value, 0),
             "commission": round(t.commission, 0),
             "slippage": round(t.slippage, 0),
+            # AK — 옵트인 셋. ★기본 0 이라 기존 행의 값이 안 움직인다★
+            # 총액만 내면 *"어느 거래가 세금을 냈나"* 를 볼 수 없다.
+            "tax": round(t.tax, 0),
+            "spread": round(t.spread, 0),
+            "impact": round(t.impact, 0),
             "pnl": round(t.pnl, 0) if t.pnl is not None else None,
             "reason": t.reason,
         }
@@ -1844,6 +2450,10 @@ def _compute_statistics(
 
     total_commission = sum(t.commission for t in trades)
     total_slippage = sum(t.slippage for t in trades)
+    # AK — 옵트인 셋. ★기본은 전부 0 이라 기존 키의 값이 안 움직인다★
+    total_tax = sum(getattr(t, "tax", 0.0) for t in trades)
+    total_spread = sum(getattr(t, "spread", 0.0) for t in trades)
+    total_impact = sum(getattr(t, "impact", 0.0) for t in trades)
 
     base = {
         "total_return": round(total_return, 0),
@@ -1862,6 +2472,9 @@ def _compute_statistics(
         ),
         "total_commission": round(total_commission, 0),
         "total_slippage": round(total_slippage, 0),
+        "total_tax": round(total_tax, 0),
+        "total_spread": round(total_spread, 0),
+        "total_impact": round(total_impact, 0),
     }
 
     # QuantStats 표준 보강 지표 병합 (신규 키만 추가, 기존 키는 base 우선)
@@ -2002,6 +2615,12 @@ def run_backtest(
     initial_capital: float = 100_000_000,
     commission_rate: float = 0.0015,
     slippage_rate: float = 0.0005,
+    # ★누락 비용 옵트인 셋 — 기본 꺼짐★ (AK). `BacktestConfig` 와 같은 뜻이고,
+    # 이 편의 함수가 **또 하나의 기본값 자리**라 여기도 뚫어야 라우트에서 닿는다
+    # (`cost_model_registry` 가 `kis_backtest_engine_fn` 으로 적어 둔 자리다).
+    charge_sell_tax: bool = False,
+    charge_spread: bool = False,
+    charge_market_impact: bool = False,
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
@@ -2021,11 +2640,12 @@ def run_backtest(
     breakthrough_buy: bool = False,
     rebalance_period: str | None = None,
     market_timing: dict | None = None,
-    signal_lag: int = 0,
+    signal_lag: int = SIGNAL_LAG_DEFAULT,
     rebuy_block_days: int = 0,
     buy_fill_offset_pct: float = 0.0,
     sell_fill_offset_pct: float = 0.0,
     max_buy_amount: float | None = None,
+    price_basis_policy: str = POLICY_EXCLUDE,
     cash_reserve_pct: float = 0.0,
     asset_alloc: dict | None = None,
     buy_sort_expr: str | None = None,
@@ -2079,6 +2699,9 @@ def run_backtest(
         initial_capital=initial_capital,
         commission_rate=commission_rate,
         slippage_rate=slippage_rate,
+        charge_sell_tax=charge_sell_tax,
+        charge_spread=charge_spread,
+        charge_market_impact=charge_market_impact,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
         trailing_stop_pct=trailing_stop_pct,
@@ -2104,6 +2727,7 @@ def run_backtest(
         buy_fill_offset_pct=buy_fill_offset_pct,
         sell_fill_offset_pct=sell_fill_offset_pct,
         max_buy_amount=max_buy_amount,
+        price_basis_policy=price_basis_policy,
         cash_reserve_pct=cash_reserve_pct,
         asset_alloc=asset_alloc,
         buy_sort_expr=buy_sort_expr,

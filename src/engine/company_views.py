@@ -108,8 +108,16 @@ def _usage() -> str:
     """★손으로 적지 않고 파생한다★ 손으로 넣으면 게이트가 거짓말을 할 수 있다
     (`timing_rules_v2:411` 이 같은 말을 한다).
 
-    `has_vintage=False` 는 `publication_dates()` 가 이미 보고하는 사실이다 —
-    실제 DART 접수일과 정정공시 이력이 저장소에 없다.
+    ★`has_vintage=False` 를 **일부러** 고정한다★ V4 이후 `publication_dates()` 는
+    빈티지 유무를 실제로 재서 보고하지만, 그 값을 여기 넣으면 `depth_ok`(재무
+    이력의 깊이)만 통과한 종목이 `backtest_eligible` 로 넘어간다 — `depth_ok` 는
+    **빈티지의 깊이**를 재지 않는다. 게이트를 여는 것은 라벨을 고치는 것과 다른
+    작업이고 별도 승인 사항이다.
+
+    ★U 이후에도 그대로다★ 이제 `as_of` 경로가 실제로 빈티지 재무를 쓰지만,
+    그것은 **배선**이지 게이트가 아니다. 게다가 as-of 로 바뀐 것은 재무뿐이고
+    rf·erp·beta·시총·가격은 여전히 오늘 값이다(`AS_OF_INPUTS` 가 그것을 이름으로
+    밝힌다) — 그 상태를 `backtest_eligible` 이라고 부를 수는 없다.
     """
     from src.data.pit_macro import derive_usage
     return derive_usage(has_vintage=False, depth_ok=True, lag_known=True).value
@@ -140,18 +148,15 @@ def company_views(codes: list[str], prices: dict[str, float], *,
     views: list[dict[str, Any]] = []
     reasons: dict[str, dict[str, Any]] = {}
 
-    if as_of:
-        # ★흉내내지 않는다★ 오늘 재무로 과거 뷰를 만들면 그것이 룩어헤드다.
-        # `publication_dates()` 가 이미 "이 스냅샷은 backtest_eligible 이 될 수
-        # 없습니다" 라고 적어 뒀고, 이 함수가 그 선언을 집행한다.
-        for c in codes:
-            reasons[str(c)] = _reason(
-                KIND_NO_VINTAGE,
-                f"as_of={as_of} 시점의 **빈티지 재무**가 없습니다 — DART 접수일과 "
-                f"정정공시 이력이 저장소에 없어(has_vintage=false) 오늘 재무로 과거 "
-                f"뷰를 만들면 룩어헤드가 됩니다.",
-                as_of=str(as_of), research_usage=_usage())
-        return views, reasons
+    # ★as_of 는 이제 재무를 빈티지로 바꾼다 (U)★ 예전에는 여기서 **전 종목을
+    # 무조건 거부**했다 — "오늘 재무로 과거 뷰를 만들면 룩어헤드" 라는 이유였고
+    # 그 판단은 옳았다. V3 의 `dart_history.history_as_of()` 가 그 시점 재무를
+    # 주게 되면서 거부의 **전제**가 사라졌다.
+    #
+    # ★거부가 없어지는 것이 아니라 대상이 바뀐다★ 빈티지가 없는 종목은 아래
+    # 루프에서 여전히 `KIND_NO_VINTAGE` 사유가 된다 — 오늘 재무로 조용히
+    # 대체하지 않는다. 그리고 ★재무만 as-of 다★ — rf·erp·beta·시총·가격은
+    # 아직 오늘 값이고 `as_of_inputs` 가 그것을 이름으로 밝힌다.
 
     kw: dict[str, Any] = {}
     if n is not None:
@@ -168,8 +173,11 @@ def company_views(codes: list[str], prices: dict[str, float], *,
             continue
         price = float(price)
 
+        call_kw = dict(kw)
+        if as_of:
+            call_kw["as_of"] = str(as_of)
         try:
-            dist = vd.valuation_distribution_for(code, price, **kw)
+            dist = vd.valuation_distribution_for(code, price, **call_kw)
         except Exception as e:  # noqa: BLE001
             logger.warning("밸류에이션 분포 실패 %s: %s: %s", code, type(e).__name__, e)
             reasons[code] = _reason(KIND_NO_DISTRIBUTION,
@@ -178,10 +186,17 @@ def company_views(codes: list[str], prices: dict[str, float], *,
 
         unified = dist.get("unified") or {}
         if not dist.get("available") or not unified.get("available"):
-            reasons[code] = _reason(
-                KIND_NO_DISTRIBUTION,
-                str(dist.get("reason") or unified.get("reason")
-                    or "분포를 만들 수 없습니다"))
+            why = str(dist.get("reason") or unified.get("reason")
+                      or "분포를 만들 수 없습니다")
+            # ★as-of 에서 분포가 안 나오는 지배적 원인은 빈티지 부재다★ 그것을
+            # 일반 분포 실패와 같은 칸에 넣으면 "적재하라" 라는 처방이 사라진다.
+            # 사유 문자열은 밑단이 준 것을 **그대로** 올린다(못 읽음 · 빈티지 없음 ·
+            # 연간 없음이 각각 다르고, 뭉치면 고치는 사람이 어디를 볼지 모른다).
+            if as_of:
+                reasons[code] = _reason(KIND_NO_VINTAGE, why,
+                                        as_of=str(as_of), research_usage=_usage())
+            else:
+                reasons[code] = _reason(KIND_NO_DISTRIBUTION, why)
             continue
 
         p10 = float(unified["p10"])
@@ -243,6 +258,10 @@ def company_views(codes: list[str], prices: dict[str, float], *,
             "measured": False,
             "research_usage": _usage(),
             "note": _NOTE,
+            # ★무엇이 시점 정합이고 무엇이 아닌가★ — 오늘 뷰에는 `None` 이라
+            # "as-of 였다" 는 하지 않은 진술이 생기지 않는다.
+            "as_of": str(as_of) if as_of else None,
+            "as_of_inputs": dist.get("as_of_inputs") if as_of else None,
         })
 
     return views, reasons

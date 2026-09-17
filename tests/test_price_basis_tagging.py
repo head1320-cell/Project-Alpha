@@ -59,7 +59,7 @@ def _df(n: int = 30):
 @pytest.fixture
 def stub(monkeypatch):
     """db·kis 경로가 값을 내도록 세운다 — 이 환경엔 `daily_prices` 가 없다."""
-    monkeypatch.setattr(ol, "_db_ohlcv_df", lambda c, s, e: _df())
+    monkeypatch.setattr(ol, "_db_ohlcv_df", lambda c, s, e, **kw: _df())
     monkeypatch.setattr(ol, "_kis_ohlcv_df", lambda c, s, e: _df())
     monkeypatch.setattr(ol, "ingest_df_to_db", lambda c, d: 0)
     monkeypatch.setattr("src.data.price_quality.adj_status_of", lambda code, **k: "adjusted")
@@ -162,7 +162,7 @@ def test_production_without_data_returns_empty_not_synthetic(monkeypatch):
     태깅을 더하면서 이 계약을 건드리지 않았다는 확인이다.
     """
     monkeypatch.setenv("KIS_USE_MOCK", "0")
-    monkeypatch.setattr(ol, "_db_ohlcv_df", lambda c, s, e: pd.DataFrame())
+    monkeypatch.setattr(ol, "_db_ohlcv_df", lambda c, s, e, **kw: pd.DataFrame())
     monkeypatch.setattr(ol, "_kis_ohlcv_df", lambda c, s, e: None)
     df = ol.load_ohlcv_unified("005930", "2024-01-01", "2024-03-01")
     assert df.empty, "운영에서 합성값이 나왔다"

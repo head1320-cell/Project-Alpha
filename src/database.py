@@ -67,7 +67,21 @@ def _build_sqlite_fallback_url() -> str:
 
 
 DATABASE_URL = _build_database_url()
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "frm123!")
+#: ★기본 비밀번호를 바꾸지 않는다★ — 말없이 바꾸면 배포가 조용히 잠기고,
+#: `tests/test_api.py` 가 이 값을 고정하고 있다. 대신 **쓰이고 있다는 사실을
+#: 관측 가능하게** 만든다(`admin_password_state()` → `GET /api/v1/auth/me`).
+#: 인증(P-1)이 켜진 뒤로 이 값은 **돈 라우트의 열쇠**다 — 운영에서는 반드시 설정할 것.
+DEFAULT_ADMIN_PASSWORD = "frm123!"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
+
+
+def admin_password_state() -> str:
+    """`configured` | `default` — admin 비밀번호가 운영자가 정한 값인가.
+
+    ★`ADMIN_PASSWORD` 상수와 달리 호출 시점의 환경을 읽는다★ — 상수는 import 시각에
+    굳고, 이 함수는 "지금 이 프로세스가 어떤 상태인가" 를 말해야 하기 때문이다.
+    """
+    return "configured" if os.getenv("ADMIN_PASSWORD", "").strip() else "default"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Engine + Session Setup
@@ -126,6 +140,18 @@ def get_engine():
     if _engine is None:
         _engine, _SessionLocal, _connected_url = _create_engine_with_fallback(DATABASE_URL)
     return _engine
+
+
+#: 동기 엔진의 다른 이름. ★18곳이 이 이름을 임포트하는데 정의가 없었다★ —
+#: `stage11`·`stage12`·`stage13`(실거래) 라우트와 `dag_runner`·`graph_runner` 가
+#: 전부 `try/except` 안에서 임포트해 `ImportError` 가 **HTTP 500 으로 조용히**
+#: 바뀌었고, 그래서 그 엔드포인트들이 통째로 죽어 있었다.
+#: 비동기 엔진은 `database_async` 가 맡으므로 "sync" 를 굳이 붙인 이름이 따로
+#: 필요했던 것이고, 여기가 그 자리다. `tests/test_database_public_names.py` 가
+#: 이제 **임포트되는 모든 이름이 실재하는지** 전수로 지킨다.
+def get_sync_engine():
+    """동기 SQLAlchemy 엔진 — `get_engine()` 과 같은 객체."""
+    return get_engine()
 
 
 def get_session_factory():

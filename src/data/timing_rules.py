@@ -59,19 +59,12 @@ def _ensure(engine) -> None:
             "name TEXT, market VARCHAR(8), rules TEXT, gate TEXT, notes TEXT, "
             "PRIMARY KEY (set_id, version))"
         ))
-    # SQLite 는 ADD COLUMN IF NOT EXISTS 가 없어 "이미 있음" 도 예외로 온다 → 삼킨다.
-    try:
-        with engine.begin() as c:
-            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN version INTEGER"))
-    except Exception:
-        pass
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SELECT version FROM {_TABLE} LIMIT 1"))
-        _has_version = True
-    except Exception as e:
-        _has_version = False
-        logger.warning(f"timing_rule_sets.version 사용 불가 — 버전 없이 동작: {e}")
+    # ★붙이기 + 확인을 손으로 쓰지 않는다★ `schema_add_columns.add_columns()` 가
+    # 두 단계를 다 하고 **쓸 수 있는지**를 돌려준다 — 같은 10줄을 여기저기 복사하면
+    # 반드시 갈라지고, 갈라져도 타입 에러가 나지 않는다.
+    from src.data.schema_add_columns import add_columns
+    _has_version = add_columns(engine, _TABLE, [("version", "INTEGER")],
+                           label="timing_rule_sets.version")
     _inited = True
 
 

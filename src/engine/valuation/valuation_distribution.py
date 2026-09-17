@@ -317,9 +317,32 @@ def valuation_distribution(fs, base_params: ValuationParams | None = None,
     }
 
 
+#: ★as-of 로 바뀌는 것은 재무뿐이다★ 나머지가 오늘 값이라는 사실을 **이름으로**
+#: 밝힌다 — 재무만 시점 정합으로 바꾸고 나머지를 말하지 않으면 "as-of 뷰" 라는
+#: 이름이 거짓이 된다. 0단계의 `price_basis`·`universe` 와 같은 규율이고,
+#: 화면과 뷰가 **같은 상수**를 보게 해 두 벌이 갈라지지 않게 한다.
+AS_OF_INPUTS = {
+    "financials": "vintage",    # `financials_vintages` 의 그 시점 최신 연간 빈티지
+    "price": "caller",          # 호출자가 준 값 — 이 층은 그것이 언제 값인지 모른다
+    "params": "today",          # rf · erp · beta · terminal growth (오늘 기준)
+    "market_cap": "today",      # 시가총액 (오늘 기준)
+}
+
+
 def valuation_distribution_for(code: str, current_price: float, *,
-                               n: int = DEFAULT_N, seed: int = SEED) -> dict:
-    """종목 코드로 분포. `load_statement` 를 타므로 **mock 게이트를 공짜로 받는다.**"""
+                               n: int = DEFAULT_N, seed: int = SEED,
+                               as_of: str | None = None) -> dict:
+    """종목 코드로 분포. `load_statement` 를 타므로 **mock 게이트를 공짜로 받는다.**
+
+    ★`as_of` 를 주면 재무만 **그 시점 빈티지**로 바꾼다★
+    (`dart_history.statement_as_of`). 그 경로는 **DB 빈티지만** 읽으므로 합성이
+    끼어들 자리가 없다 — `load_statement` 의 mock 게이트가 막던 "운영에서 DART
+    실패 시 합성 재무로 조용히 폴백" 이 구조적으로 불가능하다. ★새 폴백을 만들지
+    않는다★: 빈티지가 없으면 사유와 함께 `available:false` 다.
+
+    ★오늘 표(`financials_history`)로 되돌아가지 않는다★ 그 표는 정정이 원본을
+    덮은 결과라 as-of 를 답할 수 없다.
+    """
     from src.data.dart_client import DARTClient
     from src.engine.company_analytics import _mcap, resolve_default_params
     from src.engine.valuation.valuation_models import ValuationEngine
@@ -328,13 +351,31 @@ def valuation_distribution_for(code: str, current_price: float, *,
     base = ValuationParams(risk_free_rate=d["rf"], market_premium=d["erp"],
                            beta=d["beta"], terminal_growth_rate=d["g"],
                            projection_years=int(d["years"]))
-    loaded = ValuationEngine(DARTClient()).load_statement(
-        code, current_price, market_cap=_mcap(code))
-    if not loaded["available"]:
-        return _unavailable(loaded["reason"] or "재무제표를 가져오지 못했습니다")
+
+    if as_of:
+        from src.data import dart_history as dh
+        fs, why = dh.statement_as_of(str(code), str(as_of))
+        if fs is None:
+            # ★사유를 뭉개지 않는다★ 못 읽음·빈티지 없음·연간 없음이 그대로 올라간다.
+            return _unavailable(why or "as-of 재무를 만들지 못했습니다")
+        # ★손질을 복제하지 않고 같은 것을 부른다★ 이것을 빠뜨렸더니 `eps`·`bps` 가
+        # 비어 정정 전/후 재무가 달라도 적정가가 한 자리도 안 바뀌었다(실측).
+        ValuationEngine.prepare_statement(fs, current_price, market_cap=_mcap(code))
+        from src.data.stock_master import get_stock_name
+        loaded = {"fs": fs, "corp_name": get_stock_name(code) or str(code),
+                  "is_mock": False}
+    else:
+        loaded = ValuationEngine(DARTClient()).load_statement(
+            code, current_price, market_cap=_mcap(code))
+        if not loaded["available"]:
+            return _unavailable(loaded["reason"] or "재무제표를 가져오지 못했습니다")
+
     out = valuation_distribution(loaded["fs"], base, current_price, n=n, seed=seed)
     out["code"] = str(code)
     out["corp_name"] = loaded["corp_name"]
     out["is_mock"] = loaded["is_mock"]
     out["base_assumptions"] = d
+    if as_of:
+        out["as_of"] = str(as_of)
+        out["as_of_inputs"] = dict(AS_OF_INPUTS)
     return out

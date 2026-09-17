@@ -43,7 +43,12 @@ DEFAULT_DELTA = 2.5
 TRADING_DAYS = 252
 
 # |μ|/SE 가 이 값을 넘으면 "0과 구분된다" 고 본다(양측 95% 근사).
+# ★단일검정 임계다★ — 자산 n 개를 동시에 보는 다중검정 보정은 없고,
+# 그 사실은 `_multiplicity_note` 가 관측으로 적는다(AJ4). 값은 불변.
 _RESOLVABLE_T = 2.0
+
+#: 다중검정 **보고**용 가족 오류율. ★판정에 쓰이지 않는다★
+_MULTIPLICITY_ALPHA = 0.05
 
 
 def mu_standard_errors(R: np.ndarray) -> dict:
@@ -75,6 +80,50 @@ def mu_standard_errors(R: np.ndarray) -> dict:
         "n_resolvable": int(sum(resolvable)),
         "note": ("|μ|/SE 가 2 미만이면 그 자산의 기대수익은 표본상 0과 구분되지 "
                  "않습니다 — 그 μ 에 비중을 거는 것은 잡음에 거는 것입니다"),
+        # ★관측·라벨만 — 수치는 위 어느 것도 바뀌지 않았다★ (AJ4)
+        "multiplicity": _multiplicity_note(t),
+    }
+
+
+def _multiplicity_note(t) -> dict:
+    """★이 판정은 자산 n 개를 **동시에** 본다★ — 그 사실을 옆에 적는다 (AJ4).
+
+    임계 `_RESOLVABLE_T = 2.0` 은 **단일검정** 양측 95% 다. 자산이 늘수록 잡음
+    자산 하나쯤이 `resolvable` 로 통과할 확률이 커지고, 그 판정은
+    `uncertainty_scalar` 를 거쳐 **리밸런싱 밴드**로 간다 — 저장소에서 다중검정이
+    실제로 **비중을 움직이는 유일한 자리**다.
+
+    ★그런데 임계를 바꾸지 않는다★ — 배분 동작 변경은 별도 승인 사항이고
+    (CLAUDE.md §3), 이 블록은 *"보정하면 임계가 얼마이고 몇 개가 살아남는가"* 를
+    **보고만** 한다. 어떤 코드도 이 값을 읽지 않는다.
+    """
+    import numpy as np
+
+    from src.domain.multiplicity import (
+        CORRECTION_NONE,
+        FAMILY_DECLARED,
+        Family,
+        corrected_t_threshold,
+        multiplicity_label,
+    )
+
+    arr = np.asarray(t, dtype=float)
+    n = int(arr.size)
+    cut = corrected_t_threshold(_MULTIPLICITY_ALPHA, n or None)
+    label = multiplicity_label(
+        Family(size=(n or None), source=FAMILY_DECLARED, label="자산별 |μ|/SE"),
+        CORRECTION_NONE, alpha=_MULTIPLICITY_ALPHA)
+    return {
+        **label,
+        "single_test_t": _RESOLVABLE_T,
+        "bonferroni_t": (None if cut is None else round(float(cut), 4)),
+        "n_resolvable_if_corrected": (None if cut is None
+                                      else int((arr >= cut).sum())),
+        "note": (f"이 판정은 자산 {n}개를 **동시에** 봅니다. 현재 임계 "
+                 f"{_RESOLVABLE_T} 는 단일검정 양측 95% 라 보정되지 않았습니다 — "
+                 f"자산이 많을수록 잡음이 `resolvable` 로 새어 들어옵니다. "
+                 f"★임계는 바꾸지 않았습니다★(배분 동작 변경은 별도 승인). "
+                 f"이 블록은 관측이고, 어떤 코드도 이 값을 읽지 않습니다."),
     }
 
 

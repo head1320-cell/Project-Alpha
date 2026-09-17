@@ -208,7 +208,10 @@ class ExtendedFactorsStore(DeterministicMockStore):
         gp_prev = g("gross_profit_prev") or 0.0
 
         d: dict = {}
-        if rev > 0:
+        # ★매출총이익 미상을 원가율 100% 로 발행하지 않는다★
+        # `gp = g("gross_profit") or 0.0` 이면 cogs = 매출 전액이 되어
+        # **원가율 100%**(= 이익이 전혀 없다)라는 강한 주장이 나간다.
+        if rev > 0 and g("gross_profit") is not None:
             d["cogs_ratio"] = round(cogs / rev * 100, 2)
         if inv > 0:
             d["inv_turnover"] = round(rev / inv, 2)
@@ -221,7 +224,9 @@ class ExtendedFactorsStore(DeterministicMockStore):
         if mcap > 0:
             d["net_fin_asset"] = round(
                 (cash - tl * FINANCIAL_DEBT_RATIO) / mcap * 100, 2)
-        d["capex_amt"] = round(capex, 1)
+        # ★미상 capex 를 0억 으로 발행하지 않는다★ 무투자와 미상은 다르다.
+        if g("capex") is not None:
+            d["capex_amt"] = round(capex, 1)
         if op > 0:
             d["por"] = round(mcap / op, 2)
         if fcf > 0:

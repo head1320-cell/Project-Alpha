@@ -283,7 +283,7 @@ export default function OptimizerWorkspace() {
         <div className="as-opt-ev">
           <section className="as-card">
             <div className="as-card-title">SUMMARY METRICS</div>
-            {result ? <MetricsTable summary={result.summary} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
+            {result ? <MetricsTable summary={result.summary} perfLabel={result.perf_label} /> : <div className="as-empty">Re-optimize 실행 시 표시</div>}
             {/* ★롱숏이면 노출 두 축을 낸다 (P3)★ 넷 하나로는 롱 100/숏 0 과
                 롱 150/숏 50 을 구분할 수 없다. 숏이 없으면 이 줄은 뜨지 않는다. */}
             {result && (() => {

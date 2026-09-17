@@ -3,11 +3,15 @@
 ① lag=1이면 진입·청산이 정확히 한 거래일 뒤로 밀리고 체결가는 그날 가격
 ② lag=1에서 벡터화 on/off 동일 결과
 ③ 마켓타이밍 판단도 동일 시차 적용
-④ 기본값 0 = 기존 동작 불변
+④ ★기본값은 1★ — 결정이 장 시작 전에 계산 가능하다 (AG)
 """
 import pandas as pd
 import pytest
 
+from src.domain.execution_assumption import (
+    SIGNAL_LAG_DEFAULT,
+    decision_precomputable,
+)
 from src.kis_backtest_engine import BacktestConfig, BacktestEngine
 from src.kis_strategies import condition_strategy  # noqa: F401 — "Condition" 레지스트리 자기등록
 
@@ -67,10 +71,19 @@ def run(lag: int, vectorize: bool = True, market_timing: dict | None = None) -> 
     return [(t.date, t.side, round(t.price, 2)) for t in engine.trades]
 
 
-def test_default_is_zero():
+def test_default_is_one_so_the_decision_is_precomputable():
+    """★골든이 빨개진 것이 변경이 문 증거다★ — 지우지 않고 갱신한다.
+
+    예전 이름은 `test_default_is_zero` 였고 `signal_lag == 0` 을 못 박고 있었다.
+    그 기본값은 **신호를 당일 종가에서 뽑고 그 종가에 체결**했다 — 종가가
+    확정되기 전에는 계산할 수 없는 주문이다. 기본값을 바꾼 이유는 성과가 아니라
+    ★실행 가능성★ 이다(AG).
+    """
     cfg = BacktestConfig(symbols=["x"], strategy_name="s", strategy_params={},
                          start_date="2024-01-01", end_date="2024-02-01")
-    assert cfg.signal_lag == 0
+    assert cfg.signal_lag == SIGNAL_LAG_DEFAULT
+    assert cfg.signal_lag == 1, "기본이 1 이 아니면 결정이 장 시작 전에 안 선다"
+    assert decision_precomputable(cfg.signal_lag) is True
 
 
 def test_lag_shifts_entry_and_exit_by_one_bar(loaders):

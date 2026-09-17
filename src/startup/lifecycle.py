@@ -22,6 +22,166 @@ async def _collect_master_bg(engine):
     except Exception as e:
         log.warning(f"KIS 마스터 수집 실패(폴백 유지): {e}")
 
+#: 고아 백테스트 스윕 주기(초). `ORPHAN_SILENCE_SEC`(900) 보다 훨씬 짧아야
+#: 하트비트가 끊긴 실행이 **한 주기 안에** 거둬진다.
+_ORPHAN_SWEEP_SEC = 60.0
+
+
+def _orphan_sweep_bg():
+    """백그라운드(데몬): 워커가 죽어 비종료로 남은 백테스트 실행을 ★주기적으로★ 거둔다.
+
+    ★왜 기동 1회로는 부족한가★
+    예전에는 `run_startup()` 에서 한 번만 훑었다. 그래서 실행 워커가 죽으면 그 행은
+    **서버를 재시작할 때까지** 비종료로 남았고, 프런트(`RunMonitor`)는 1초마다
+    영원히 폴링했다 — 사용자에게는 "로딩이 끝나지 않는다" 로 보인다.
+
+    `backtest_run_routes._on_worker_done` 이 대부분의 사망을 즉시 잡지만 그것도
+    만능은 아니다: API 프로세스 자체가 죽거나 배포로 교체되면 그 콜백도 함께
+    사라진다. 이 루프가 마지막 그물이다.
+
+    ★죽지 않는다★ 한 번의 예외로 데몬이 끝나면 그 뒤로는 아무도 거두지 않는다.
+    """
+    import logging
+    import time as _t
+    log = logging.getLogger("api.main")
+    while True:
+        try:
+            from src.data.backtest_runs import sweep_orphaned
+            n = sweep_orphaned()
+            if n:
+                log.warning(f"고아 백테스트 {n}건 정리(주기 스윕)")
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:                  # noqa: BLE001
+            log.warning(f"고아 스윕 실패(다음 주기에 재시도): {e}")
+        _t.sleep(_ORPHAN_SWEEP_SEC)
+
+
+#: 리스크 감시 주기(초). 국면·잔고는 분 단위로 움직이므로 60초면 충분하고,
+#: 더 짧게 잡으면 브로커 조회 쿼터만 먹는다.
+_RISK_MONITOR_SEC = 60.0
+
+
+def _risk_monitor_bg():
+    """백그라운드(데몬): ★리스크를 주기적으로 재고 판정을 기록한다★ (P1-b)
+
+    ★왜 없었나★ — 탐지기(`kill_switch.should_auto_trigger`)·임계값·페일세이프는
+    전부 있었는데 **부르는 곳이 없었다**. 그 함수의 유일한 호출부는 클래스
+    docstring 의 예시였고, 주석은 *"모니터링 루프에서 호출"* 이라 적혀 있었다.
+    이 루프가 그 주석이 가리키던 자리다.
+
+    ★아무것도 막지 않는다★ — 기본은 재고·판정하고 **기록**하는 것까지다.
+    자동 발동은 `RISK_MONITOR_AUTOTRIGGER` 가 정확히 `"1"` 일 때만
+    (`risk_monitor.autotrigger_allowed()`).
+
+    ★죽지 않는다★ — 한 번의 예외로 끝나면 그 뒤로는 아무도 보지 않는다.
+    """
+    import logging
+    import time as _t
+    log = logging.getLogger("api.main")
+    last = None
+    while True:
+        try:
+            from src.database import get_engine
+            from src.execution.audit_trail import AuditTrail
+            from src.execution.kill_switch import KillSwitch
+            from src.execution.risk_monitor import run_once
+
+            engine = get_engine()
+            audit = AuditTrail(engine)
+            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오고, 그 이력에
+            # 쓰는 코드가 저장소에 없어서 `auto_dd`·`auto_cb` 가 발동할 수 없었다(AI).
+            # 기록 실패는 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
+            _record_equity(engine, log)
+            last = run_once(
+                kill_switch=KillSwitch(engine, audit),
+                audit=audit,
+                account_state=_monitor_account_state(),
+                regime_state=_monitor_regime_state(),
+                last=last,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:                  # noqa: BLE001
+            log.warning(f"리스크 감시 주기 실패(다음 주기에 재시도): {e}")
+        _t.sleep(_RISK_MONITOR_SEC)
+
+
+def _record_equity(engine, log) -> None:
+    """오늘의 에쿼티를 이력에 남긴다. ★출처를 함께 적는다★
+
+    ★`_monitor_account_state()` 를 쓰지 않는 이유★ — 그쪽은 `equity_krw: None` 을
+    일부러 박아 둔다(감시는 브로커를 부르지 않는다는 판단). 여기서 그 값을 채우면
+    리스크 검사 **전체**가 보는 상태가 달라지므로, 잔고 읽기를 이 함수 안에만 둔다.
+
+    ★mock 이면 `mock` 으로 적는다★ — 안 쓰는 것이 아니라 라벨해서 쓴다. 그 행이
+    드로다운 계열에 못 들어가는 것은 리더가 거르기 때문이다(`drawdown.py`).
+    """
+    try:
+        from src.execution.equity_history import current_source, record_observation
+        from src.execution.kis_client import get_kis_client
+        from src.execution.order_executor import ExecutorState
+
+        balance = get_kis_client().get_balance() or {}
+        record_observation(
+            engine,
+            account_state={"equity_krw": balance.get("evaluated_total")},
+            execution_mode=str(getattr(ExecutorState.mode, "value", ExecutorState.mode)),
+            source=current_source(),
+        )
+    except Exception as e:                      # noqa: BLE001
+        # ★감시를 멈추지 않는다★ — 기록은 부차이고 판정이 본체다.
+        log.debug(f"에쿼티 이력 기록 건너뜀: {e}")
+
+
+def _monitor_account_state() -> dict:
+    """감시용 계좌 상태. ★브로커가 없으면 0 이 아니라 `None` + 사유★
+
+    `OrderExecutor._fetch_account_state()` 는 브로커 클라이언트를 요구한다. 감시는
+    주문을 내지 않으므로 **실행기를 만들지 않고** 드로다운만 직접 읽는다 —
+    실행 경로를 우회하는 것이 아니라 **아예 들어가지 않는 것**이다.
+    """
+    from src.database import get_engine
+    from src.execution.drawdown import drawdown_from_history
+    dd = drawdown_from_history(get_engine())
+    return {
+        "equity_krw": None,
+        "current_drawdown_pct": dd.intraday_pct,
+        "cumulative_dd_pct": dd.cumulative_pct,
+        "drawdown_reason": dd.reason,
+    }
+
+
+def _monitor_regime_state() -> dict | None:
+    """감시용 국면 상태. ★못 읽으면 `None` — 0 으로 만들지 않는다.★
+
+    ★`systemic_risk_score` 를 싣지 않는다 — 지어낼 수 없기 때문이다.★
+
+    킬스위치의 `auto_risk` 는 `systemic_risk_score`(0~100)를 본다. 그런데 실측하면:
+
+      · 이 값의 생산자로 지목된 `src/engine/regime_model.MultiRegimeModel` 은
+        ★저장소에 존재하지 않는다★. `realism_engine._get_systemic_risk_pit` 와
+        `multi_strategy_backtest` 가 `try/except` 안에서 임포트해 ImportError 를
+        삼키므로, 그 경로는 **항상 `None`** 이다.
+      · `regime_analyzer.RegimeState` 가 드는 것은 `stress_score`(0~100)이고,
+        두 이름을 잇는 코드는 저장소 어디에도 없다.
+
+    둘이 같은 양인지 **확인된 적이 없다**. 파이프라인을 돌리려고 이름을 바꿔 끼우는
+    것은 CLAUDE.md §4 가 금지한 일이므로, 여기서는 국면 정보를 그대로 싣고
+    `systemic_risk_score` 는 **비워 둔다** → `auto_risk` 가 `unverified` 로 기록된다.
+    ★그 기록이 이 미상을 다음 사람에게 넘기는 방법이다.★
+    """
+    import logging
+    try:
+        from src.engine.regime_analyzer import get_regime_state
+        st = get_regime_state()
+        return {"regime": st.regime, "stress_score": st.stress_score,
+                "recommended_mode": st.recommended_mode}
+    except Exception as e:                      # noqa: BLE001
+        logging.getLogger("api.main").debug(f"국면 상태 조회 불가(미상으로 기록): {e}")
+        return None
+
+
 def _prewarm_real_data():
     """백그라운드(데몬 스레드): corp_code 맵 준비 + 기본 유니버스 팩터를 DB에 적재.
     이미 DB(factor_snapshot)에 적재돼 있으면 디스크/DB 캐시 히트로 빠르게 끝남."""
@@ -217,14 +377,29 @@ async def run_startup() -> None:
         import logging
         logging.getLogger(__name__).error(f"init_db failed (DB 준비 전일 수 있음): {e}")
 
-    # 고아 백테스트 실행 정리 — 실행 워커는 daemon 스레드라 재시작 시 정리 없이 사라진다.
-    # 훑지 않으면 그 행이 영원히 비종료로 남아 결과 페이지가 끝나지 않는 실행을 보여준다.
+    # 고아 백테스트 실행 정리 — 워커가 죽으면(OOM·배포·크래시) 그 행이 비종료로
+    # 남고 결과 페이지가 끝나지 않는 실행을 보여준다. ★기동 1회 + 주기 데몬★ 이다:
+    # 기동 훑기는 재시작 직후를 즉시 정리하고, 데몬은 그 뒤를 계속 지킨다.
     try:
         from src.data.backtest_runs import sweep_orphaned
         sweep_orphaned()
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
+    try:
+        import threading
+        threading.Thread(target=_orphan_sweep_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"고아 스윕 데몬 기동 실패: {e}")
+
+    # 리스크 상시 감시 — ★관측만★(자동 발동은 RISK_MONITOR_AUTOTRIGGER=1 일 때만).
+    try:
+        import threading
+        threading.Thread(target=_risk_monitor_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"리스크 감시 데몬 기동 실패: {e}")
 
     # Initialize screener tables (legacy sync path)
     try:

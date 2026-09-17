@@ -53,10 +53,17 @@ class DailyRecord:
     growth_signal:      float | None = None
     inflation_signal:   float | None = None
     allocation_effect:  float = 0
-    selection_effect:   float = 0
+    # ★기본이 `None` 이다★ (AL2) — 예전 기본 `0` 은 **상수가 관측 행세**를 했고,
+    # `column_coverage` 가 `pd.notna` 로 세는 탓에 `coverage_complete` 가 거짓으로
+    # 참이 되어 잔차가 `unexplained` 대신 `interaction`(복리)으로 이름 붙었다.
+    selection_effect:   float | None = None
     macro_effect:       float = 0
     netting_effect:     float = 0
+    #: 거래로 **나간** 돈만. ★현금이자를 여기 더하지 않는다★ (AL3)
     cost_effect:        float = 0
+    #: 안 쓴 현금이 **번** 이자. ★`None` 은 그 엔진에 현금 모델이 없다는 뜻★ —
+    #: 0 으로 적으면 "이자가 0 이었다" 는 관측이 되어 버린다.
+    cash_effect:        float | None = None
     num_trades:         int = 0
     turnover_pct:       float = 0
     netting_savings:    float = 0
@@ -329,10 +336,17 @@ class MultiStrategyBacktester:
                 systemic_risk=regime_info.get("systemic_risk_score") if regime_info else None,
                 growth_signal=regime_info.get("growth_signal") if regime_info else None,
                 inflation_signal=regime_info.get("inflation_signal") if regime_info else None,
-                allocation_effect=alloc_diff, selection_effect=0,
+                # ★상수 0 을 싣지 않는다★ (AL2) — 이 엔진은 선택 효과를 재지
+                # 않는다. Brinson 선택항은 전략별 벤치마크가 필요한데 그 계열이
+                # 저장소에 없다. 재료가 `None` 이면 기존 커버리지 가드가 제대로
+                # 작동해 잔차가 "복리" 로 오명명되지 않는다.
+                allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
                 netting_effect=netting_savings/equity if equity > 0 else 0,
                 cost_effect=cost_effect,
+                # ★이 엔진엔 현금 모델이 없다★ (AL3) — `cash` 라는 문자열이
+                # 이 파일에 한 번도 없었다. 0 이 아니라 미측정이다.
+                cash_effect=None,
                 num_trades=int(round(turnover * len(sids))) if rebalanced_today else 0,
                 turnover_pct=turnover * 100,
                 netting_savings=netting_savings, rebalanced=rebalanced_today,
@@ -409,6 +423,10 @@ class MultiStrategyBacktester:
         cum_macro = sum(r.macro_effect for r in records) * 100
         cum_cost = sum(r.cost_effect for r in records) * 100
         cum_netting = sum(r.netting_effect for r in records) * 100
+        # ★현금이자는 비용이 아니다★ (AL3) — 한 행도 못 봤으면 `None` 이다.
+        # 0 으로 적으면 "이자가 0 이었다" 는 **관측**이 되어 버린다.
+        _cash = [r.cash_effect for r in records if r.cash_effect is not None]
+        cum_cash = (float(sum(_cash)) * 100) if _cash else None
 
         regime_alpha = {}
         for regime in ["GOLDILOCKS", "REFLATION", "STAGFLATION", "DEFLATION"]:
@@ -445,6 +463,8 @@ class MultiStrategyBacktester:
                 "macro_effect_pct":      float(round(cum_macro, 2)),
                 "netting_effect_pct":    float(round(cum_netting, 2)),
                 "cost_effect_pct":       float(round(cum_cost, 2)),
+                "cash_effect_pct":       (None if cum_cash is None
+                                          else float(round(cum_cash, 2))),
             },
             "regime_alpha": regime_alpha,
         }
@@ -515,9 +535,13 @@ class MultiStrategyBacktester:
                     "pe": r["portfolio_equity"], "pr": r["portfolio_return"],
                     "cr": r["cumulative_return"], "dd": r["drawdown_pct"],
                     "rg": r.get("regime"), "sr": r.get("systemic_risk"),
-                    "ae": r["allocation_effect"], "se": 0,
+                    # ★세 번째 상수 0 이 여기 있었다★ (AL2) — 레코드를 고쳐도
+                    # 이 빌더가 `0` 을 덮어써서 DB 에는 여전히 거짓 관측이
+                    # 들어갔다. 레코드가 말하는 것을 그대로 싣는다.
+                    "ae": r["allocation_effect"], "se": r.get("selection_effect"),
                     "me": r["macro_effect"], "ne": r["netting_effect"],
-                    "ce": r["cost_effect"], "nsa": len(r["weights"]),
+                    "ce": r["cost_effect"], "cash": r.get("cash_effect"),
+                    "nsa": len(r["weights"]),
                     "nt": r["num_trades"], "tp": r["turnover_pct"],
                     "ns": r["netting_savings"], "rb": int(r["rebalanced"]),
                 })
@@ -533,10 +557,11 @@ class MultiStrategyBacktester:
                         run_id, trade_date, portfolio_equity, portfolio_return,
                         cumulative_return, drawdown_pct, regime, systemic_risk,
                         allocation_effect, selection_effect, macro_effect,
-                        netting_effect, cost_effect, num_strategies_active,
+                        netting_effect, cost_effect, cash_effect,
+                        num_strategies_active,
                         num_trades, turnover_pct, netting_savings, rebalanced
                     ) VALUES (:rid, :td, :pe, :pr, :cr, :dd, :rg, :sr,
-                              :ae, :se, :me, :ne, :ce, :nsa, :nt, :tp, :ns, :rb)
+                              :ae, :se, :me, :ne, :ce, :cash, :nsa, :nt, :tp, :ns, :rb)
                 """), daily_rows[i:i+500])
 
             for i in range(0, len(strategy_daily_rows), 500):

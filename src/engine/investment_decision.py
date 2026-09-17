@@ -201,6 +201,10 @@ def decide(current_weights: dict[str, float], target_weights: dict[str, float], 
         "as_of": as_of, "scope": scope,
         "decision_status": result.get("decision"),
         "reason": result.get("reason"),
+        # ★문구가 아니라 **이름**으로도 남긴다★ (AA2) — 자유 문자열은 문구를
+        # 다듬는 순간 과거 기록과 대조가 끊긴다. 상류가 분기마다 박은 값을
+        # 그대로 옮긴다(여기서 다시 판정하지 않는다).
+        "reason_code": result.get("reason_code"),
         # ★상류 이름·단위를 그대로★ percent 이지 bps 가 아니다.
         "gain_pct": benefit.get("gain_pct"),
         "cost_pct": cost.get("cost_pct"),

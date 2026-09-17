@@ -42,6 +42,7 @@ from datetime import time as dtime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +229,25 @@ class OrderStateMachine:
         if fill_quantity <= 0 or fill_price <= 0:
             return {"success": False, "error": "fill_quantity > 0, fill_price > 0 필요"}
 
+        # ★같은 브로커 체결을 두 번 세지 않는다★ (Y1-③)
+        # 브로커 재조회·재시도는 정상 운영이므로 **재생은 일어난다**. 멱등이 아니면
+        # `filled_quantity` 가 이중계산되고 `avg_fill_price` 가 오염된다.
+        # `kis_fill_id` 가 `None` 인 수동 체결은 이 가드가 잡지 못한다 — 지어낸 키로
+        # 채우지 않는다(그 한계는 `ensure_fill_dedup_index` docstring 에 있다).
+        if kis_fill_id:
+            try:
+                with self.engine.connect() as conn:
+                    seen = conn.execute(text(
+                        "SELECT 1 FROM live_fills WHERE kis_fill_id = :k LIMIT 1"
+                    ), {"k": kis_fill_id}).fetchone()
+            except Exception as e:                       # noqa: BLE001
+                logger.error(f"체결 중복 확인 실패: {e}")
+                return {"success": False, "error": f"중복 확인 실패: {e}"}
+            if seen:
+                logger.info(f"이미 기록된 체결 — 건너뜀 (kis_fill_id={kis_fill_id})")
+                return {"success": True, "duplicate": True,
+                        "message": f"이미 기록된 체결입니다 (kis_fill_id={kis_fill_id})"}
+
         try:
             # 1. live_fills 기록
             fill_value = fill_quantity * fill_price
@@ -262,6 +282,11 @@ class OrderStateMachine:
                     "coid": client_order_id, "fq": fill_quantity,
                     "fp": fill_price, "cm": commission_krw,
                 })
+        except IntegrityError as e:
+            # 위 사전 확인과 INSERT 사이의 경합 — ★중복은 실패가 아니라 중복이다★
+            logger.info(f"체결 중복(유일 인덱스가 잡음) — 건너뜀: {e}")
+            return {"success": True, "duplicate": True,
+                    "message": f"이미 기록된 체결입니다 (kis_fill_id={kis_fill_id})"}
         except Exception as e:
             logger.error(f"Fill 기록 실패: {e}")
             return {"success": False, "error": str(e)}

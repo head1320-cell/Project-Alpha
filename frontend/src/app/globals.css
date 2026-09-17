@@ -4151,6 +4151,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-badge.mock { background: #fef3c7; color: #b45309; }
 .brun-badge.real { background: var(--color-bull-bg); color: #15803d; }
 .brun-badge.warn { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
+/* PIT 판정이 넷이라 상태 클래스도 하나 는다 — ★기존 셋은 건드리지 않는다★
+   (ADR 001: 클래스명이 E2E 계약). `partial` = 일부 축만 시점 정합됨. */
+.brun-badge.partial { background: #fef3c7; color: #b45309; }
 .brun-mocknote { font-size: 10.5px; color: #b45309; background: #fffbeb; border-radius: 3px; padding: 6px 10px; }
 
 .brun-progress-wrap { display: flex; flex-direction: column; gap: 6px; }
@@ -5048,6 +5051,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .dark .brun-results .brun-mocknote { background: #2a2113; color: #fcd34d; }
 .dark .brun-results .brun-badge.mock { background: #2a2113; color: #fcd34d; }
 .dark .brun-results .brun-badge.real { color: #4ade80; }
+.dark .brun-results .brun-badge.partial { background: #2a2113; color: #fcd34d; }
 .dark .brun-results .brun-diag-list { color: #fcd34d; }
 .dark .brun-results .brun-diag-list li.brun-diag-omit { color: var(--t-muted); }
 .dark .brun-results .brun-tdetail td { background: rgb(124 116 255 / 0.10); }
@@ -7388,3 +7392,95 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tev-drawer-h { font-size: 11px; }        /* 9.5px — 포털이라 어느 스코프도 못 닿았다 */
 .tev-drawer-r dt { font-size: 11px; }     /* 10px — 같음 */
 .tev-drawer-n { font-size: 11px; }        /* 10px — 같음 */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §58. 성과 상태 라벨 `.perf-label` — ★"이 수치가 무엇인가"★ (Z3)
+   ═══════════════════════════════════════════════════════════════════════════
+   컴포넌트: `src/shared/ui/PerfLabel.tsx` · 어휘: `src/domain/perf_kind.py`.
+
+   ★기존 배지 넷과 겹치지 않는 새 이름이다★ — `brun-*` · `tbt-prov` · `as-bt-badge` ·
+   CockpitParts 인라인은 한 글자도 건드리지 않았다(E2E 계약, ADR 001). 그 넷은 각각
+   시점 정합 · 데이터 출처 · 데이터+OOS · 실행 모드를 말하고, 이것은 **성과의 종류**를
+   말한다. 축이 다르므로 같은 화면에 둘이 함께 보일 수 있다.
+
+   ★하드코딩 hex 를 쓰지 않는다★ — `.as-bt-badge` 가 라이트 리터럴로 다크에서 3.16:1
+   까지 떨어졌던 함정(:6016 머리글)을 되풀이하지 않는다. 배경은 라이트/다크 양쪽에
+   정의된 `--muted` 만 쓰고, 신호는 **글자색과 테두리**로 낸다.
+
+   ★`live` 의 빨강은 "손실" 이 아니라 "실제 자금"이다★ — 수익률 숫자의 빨강과 뜻이
+   다르므로 칩을 숫자에서 떼어 놓고 굵게 만든다(툴팁이 문장으로 다시 말한다).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.perf-label {
+  display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 6px;
+  font-family: var(--t-mono, monospace); font-size: 11px; line-height: 1.5;
+  padding: 2px 8px; border: 1px solid var(--border); border-radius: 3px;
+  background: var(--muted); color: var(--t-ink); vertical-align: middle;
+  max-width: 100%;
+}
+.perf-label__scope { font-weight: 700; color: var(--t-muted); }
+.perf-label__kind { font-weight: 700; letter-spacing: 0.04em; }
+.perf-label__data { color: var(--t-muted); }
+.perf-label__why { font-size: 11px; color: var(--t-muted); font-style: italic; }
+
+/* 종류별 신호. 백테스트는 **중립**이다 — 시뮬레이션이라는 사실 자체는 경고가 아니다. */
+.perf-label--backtest   { border-color: var(--t-border); }
+.perf-label--paper      { color: var(--color-caution); border-color: var(--color-caution); }
+.perf-label--shadow     { color: var(--t-muted); border-color: var(--t-border); }
+.perf-label--ra_testbed { color: var(--t-muted); border-color: var(--t-border); }
+.perf-label--live       { color: var(--destructive); border-color: var(--destructive); font-weight: 700; }
+/* ★미상은 회색으로 숨기지 않는다★ — 통과도 실패도 아니지만 **보여야** 한다. */
+.perf-label--unknown    { color: var(--color-caution); border-color: var(--color-caution); border-style: dashed; }
+
+/* 부착 자리 — 라벨을 숫자에서 떼어 놓는 여백만 준다(색·크기는 위 블록이 정한다). */
+.tcmp-th-label { margin-top: 4px; font-weight: 400; }
+.brun-cmp-labels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.tsheet-perf { margin-bottom: 8px; }
+.as-rr-perf { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.as-metrics-wrap { display: flex; flex-direction: column; gap: 8px; }
+.cbr-perf { margin-bottom: 10px; }
+.popt-perf { align-self: flex-start; }
+.sm-perf-label { margin: 6px 0 4px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §59. 로그인 화면 `.login-*` — ★인증이 들어오는 자리★ (AC7 / P-1)
+
+   ADR 001 대로 **CSS 클래스명이 E2E 계약**이다. `.login-field__input[name=…]` 과
+   `.login-error` 는 스펙이 집는 이름이니 바꾸면 스펙도 함께 고칠 것.
+   토큰만 쓰고 색은 전부 토큰 변수로 — 하드코딩 hex 를 두지 않는다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.login-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: var(--background); color: var(--t-ink);
+}
+.login-card {
+  width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 14px;
+  padding: 28px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card);
+}
+.login-card__title { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.login-card__note { font-size: 12px; line-height: 1.6; color: var(--t-muted); }
+
+.login-field { display: flex; flex-direction: column; gap: 5px; }
+.login-field__label { font-size: 11px; font-weight: 600; color: var(--t-muted); }
+.login-field__input {
+  padding: 8px 10px; font-size: 13px; color: var(--t-ink);
+  background: var(--background); border: 1px solid var(--border); border-radius: 4px;
+}
+.login-field__input:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+/* ★실패를 회색으로 숨기지 않는다★ — 사유는 읽히라고 있는 것이다. */
+.login-error {
+  font-size: 12px; line-height: 1.5; color: var(--destructive);
+  border-left: 2px solid var(--destructive); padding-left: 8px;
+}
+
+.login-submit {
+  margin-top: 4px; padding: 9px 12px; font-size: 13px; font-weight: 600;
+  color: var(--primary-foreground); background: var(--primary);
+  border: none; border-radius: 4px; cursor: pointer;
+}
+.login-submit:disabled { opacity: 0.6; cursor: default; }
+
+/* 관리 화면의 401 배너 — 빈 화면과 "권한 없음" 을 가른다. */
+.live-auth-banner__link { font-weight: 600; }

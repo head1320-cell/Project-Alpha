@@ -144,6 +144,34 @@ FACTORS = tuple(FACTOR_PROXIES)
 MIN_MONTHS = 24          # P2-4 와 같은 하한 — 얇은 베타는 부호도 못 믿는다
 _RESOLVABLE_T = 2.0
 
+#: BH 의 FDR 수준. ★관례이지 측정치가 아니다★ — 바꾸면 판정이 바뀌므로 함께 싣는다.
+BH_ALPHA = 0.05
+
+
+def _bh_over_assets(assets: dict, *, alpha: float = BH_ALPHA) -> dict:
+    """자산 × 팩터 전부를 **한 가족**으로 보고 BH 보정한다 (AJ3).
+
+    ★가족은 자산 하나가 아니다★ — 자산 K개를 넣으면 검정이 K×F 개이고, 그중
+    최대 t 를 골라 읽으면 선택편향이 K 배로 커진다. 그래서 `family_size` 는
+    시도한 (자산, 팩터) 쌍의 수이지 `n_tested`(자산당 팩터 수)가 아니다.
+
+    ★이 값은 `resolvable` 을 바꾸지 않는다★ — 그 판정은 단일검정 임계 2.0 그대로이고,
+    이 블록은 그 옆에 붙는 관측이다.
+    """
+    from src.domain.multiplicity import FAMILY_DECLARED, bh_block
+
+    t_by_name: dict[str, float | None] = {}
+    for code, a in assets.items():
+        if not a.get("available"):
+            continue
+        for factor, fit in (a.get("betas") or {}).items():
+            t_by_name[f"{code}:{factor}"] = (fit.get("t_stat")
+                                             if fit.get("available") else None)
+    return bh_block(t_by_name, family_size=(len(t_by_name) or None),
+                    family_source=FAMILY_DECLARED, alpha=alpha,
+                    scope="자산 × 팩터")
+
+
 
 def _macro_series_map() -> tuple[dict | None, str | None]:
     try:
@@ -316,6 +344,11 @@ def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
             "n_tested": n_factors,
             "note": (f"팩터 {n_factors}개를 동시에 봤습니다 — 개별 t값을 그 사실과 "
                      "함께 읽으십시오. 유의한 것만 골라 내면 데이터 마이닝입니다."),
+            # ★경고는 보정이 아니다★ (AJ3) — 위 문장은 이 자리가 처음부터 적고
+            # 있었지만 보정은 하지 않았다. 가족은 **자산 × 팩터** 전부다:
+            # `n_tested` 는 자산 하나가 본 팩터 수이고, 자산 K개를 넣으면 검정은
+            # K×F 개다. 두 수를 같은 칸에 적지 않는다.
+            "bh": _bh_over_assets(assets, alpha=BH_ALPHA),
         },
         "method": "univariate_ols_monthly",
         "causality": ("상관·회귀는 인과가 아닙니다. 동시대 월별 상관이며 "

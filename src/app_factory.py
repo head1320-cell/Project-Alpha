@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,14 +57,40 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.experimental_routes",
     "src.api.sleeve_routes",
     "src.api.backtest_run_routes",
+    "src.api.signal_routes",
+    "src.api.diagnostics_routes",
+    "src.api.explain_routes",
+    "src.api.auth_routes",
+    "src.api.account_policy_routes",
+    "src.api.report_routes",
+    "src.api.scorecard_routes",
 )
 
+#: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —
+#: `allow_credentials=True` 와 `"*"` 는 브라우저가 거부하는 조합이라 의도대로 동작한
+#: 적이 없었고, 그럼에도 목록에 남아 있는 동안 "아무 출처나 허용" 이라는 **틀린 의도**가
+#: 코드에 적혀 있었다. 배포 출처는 아래 `CORS_ALLOW_ORIGINS` 로 **선언**한다.
 CORS_ORIGINS = [
     "http://localhost:3000",      # Next.js 로컬 개발
     "http://localhost:8000",      # FastAPI 자체 (Swagger UI)
     "http://127.0.0.1:3000",
-    "*",                          # 개발/배포 임시 허용
 ]
+
+
+def resolve_cors_origins() -> list[str]:
+    """기본 출처 + `CORS_ALLOW_ORIGINS`(쉼표 구분) 환경변수.
+
+    ★환경변수로도 `"*"` 를 되살릴 수 없다★ — 뒷문을 만들면 잠근 의미가 없다.
+    빈 항목은 버린다(`"a,,b"` 같은 오타가 빈 출처를 만들지 않도록).
+    """
+    origins = list(CORS_ORIGINS)
+    for raw in os.getenv("CORS_ALLOW_ORIGINS", "").split(","):
+        origin = raw.strip()
+        if not origin or origin == "*":
+            continue
+        if origin not in origins:
+            origins.append(origin)
+    return origins
 
 
 def register_routers(app: FastAPI) -> int:
@@ -91,7 +118,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=CORS_ORIGINS,
+        allow_origins=resolve_cors_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -105,6 +132,14 @@ def create_app() -> FastAPI:
         install_observability(app)
     except Exception as e:
         logging.getLogger(__name__).warning(f"관측성 설치 실패(계속 진행): {e}")
+
+    # ★인증 비밀키가 열화했으면 기동 시 말한다★(P-1) — 조용히 넘어가면 운영자가
+    # "재시작하면 전원 로그아웃" 이라는 사실을 영영 모른다.
+    try:
+        from src.api.auth import warn_if_degraded
+        warn_if_degraded()
+    except Exception as e:  # pragma: no cover - 경고가 기동을 막지는 않는다
+        logging.getLogger(__name__).warning(f"인증 상태 확인 실패(계속 진행): {e}")
 
     from src.startup.lifecycle import run_startup
     app.add_event_handler("startup", run_startup)

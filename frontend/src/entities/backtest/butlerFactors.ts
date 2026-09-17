@@ -119,18 +119,38 @@ export const BUTLER_CATEGORIES: ButlerCategory[] = [
   {
     id: "x_macro", label: "매크로·시장·수급",
     groups: [
-      { label: "금리·환율", factors: [f("국고채(3년)"), f("국고채(10년)"), f("US국채(10년)"), f("US달러환율"), f("엔환율")] },
+      // ★매크로 그룹은 여기 없다★ — 백엔드 `/condition-tokens` 의 `macro_groups` 가
+      // 목록의 단일 출처다. 조회에 실패했을 때만 아래 MACRO_FALLBACK_GROUPS 가 쓰인다.
       { label: "지수", factors: [f("KOSPI지수_종가"), f("KOSDAQ지수_종가"), f("VIX_종가"), f("베타")] },
       { label: "투자자별 순매수", factors: [f("외국인순매수금액"), f("기관순매수금액"), f("개인순매수금액"), f("연기금순매수금액"), f("투신순매수금액")] },
     ],
   },
 ];
 
-/** 검색·호환용 평탄화 — (대분류, 중분류, 팩터) */
-export function butlerFlat(): { category: ButlerCategory; group: ButlerGroup; factor: GpFactor }[] {
-  const out: { category: ButlerCategory; group: ButlerGroup; factor: GpFactor }[] = [];
-  for (const c of BUTLER_CATEGORIES) for (const g of c.groups) for (const fac of g.factors) out.push({ category: c, group: g, factor: fac });
-  return out;
+/**
+ * 매크로 그룹의 ★폴백★ — 목록의 근거가 아니다.
+ *
+ * 진짜 목록은 백엔드 `/condition-tokens` 의 `macro_groups` 다. 이 상수는 그 조회가
+ * **실패했을 때만** 쓰이고, 그때 픽커는 "기본값을 보이는 중" 이라고 화면에 적는다.
+ * ★조용히 쓰면 구버전 목록이 진짜 목록으로 위장한다★ — 이 파일이 낡아도 사용자는
+ * 알 수 없게 된다.
+ *
+ * ★일부러 전부 적지 않았다★ 여기 없는 매크로 토큰(예: US국채(7년))이 백엔드에 있고,
+ * `e2e/factor-picker.spec.ts` 가 **그것이 화면에 뜨는지**로 "백엔드가 목록을 준다" 를
+ * 검사한다. 폴백을 완전하게 채우면 그 테스트가 공허해진다.
+ */
+export const MACRO_FALLBACK_GROUPS: ButlerGroup[] = [
+  { label: "국내 금리·환율", factors: [f("국고채(1년)"), f("국고채(3년)"), f("국고채(10년)"), f("US달러환율"), f("엔환율")] },
+  { label: "미국 국채", factors: [f("US국채(2년)"), f("US국채(10년)"), f("US국채(30년)")] },
+  { label: "미국 지표", factors: [f("US물가(전년비)"), f("US고용(전월차)"), f("US실업률"), f("US실질GDP(전년비)")] },
+];
+
+/** 백엔드가 준 토큰 목록 → 픽커 그룹. 표시명 = 토큰(매크로는 별칭이 없다). */
+export function macroGroupsFrom(
+  groups: { label: string; tokens: string[] }[] | undefined | null,
+): ButlerGroup[] | null {
+  if (!groups || groups.length === 0) return null;   // ★빈 목록을 목록으로 쓰지 않는다★
+  return groups.map((g) => ({ label: g.label, factors: g.tokens.map((t) => f(t)) }));
 }
 
 /** 팩터 expr/이름 → 백엔드 토큰(중괄호 제거). support-map 판정·평가에 사용. */

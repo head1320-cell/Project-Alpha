@@ -257,6 +257,25 @@ def _series_monthly_change(series) -> dict[str, float]:
     return out
 
 
+#: BH 의 FDR 수준. ★관례이지 측정치가 아니다★ — 함께 싣는다.
+BH_ALPHA = 0.05
+
+
+def _bh_over_core(rows: list[dict], family_size: int) -> dict:
+    """코어 계열 전부를 한 가족으로 보고 BH 보정한다 (AJ3).
+
+    ★기울기를 못 낸 계열은 가족에서 빠진다★ — `p=1.0` 으로 채우면 *"재봤더니
+    불유의"* 라는 관측이 되어 버린다. 그 사실은 `n_dropped`·`reason` 에 남는다.
+    """
+    from src.domain.multiplicity import FAMILY_DECLARED, bh_block
+
+    t_by_name = {r["series"]: (r.get("t_stat") if r.get("available") else None)
+                 for r in rows}
+    return bh_block(t_by_name, family_size=family_size,
+                    family_source=FAMILY_DECLARED, alpha=BH_ALPHA,
+                    scope="코어 매크로 계열")
+
+
 def _ols_beta(x: list[float], y: list[float]) -> dict:
     """단순회귀 y = a + b·x. 베타 · 표준오차 · t값. numpy 만 쓴다."""
     import numpy as np
@@ -338,6 +357,10 @@ def statistical_sensitivity(code: str, *, series_map: dict | None = None,
             "note": ("코어 계열을 **코드에 고정**하고 전부 보고합니다. 유의한 것만 "
                      "골라 내면 다중검정 보정 없는 데이터 마이닝이 됩니다 — "
                      f"{len(core)}개를 동시에 봤다는 사실을 t값과 함께 읽으십시오."),
+            # ★경고는 보정이 아니다★ (AJ3) — 위 문장은 이 자리가 처음부터 적고
+            # 있었다. 코어를 코드에 고정하는 것은 **탐색**을 막는 좋은 규율이지만,
+            # 고정된 가족에도 다중검정은 그대로 있다.
+            "bh": _bh_over_core(rows, len(core)),
         },
         # ★`causal_deep` 이 쓰는 문구 그대로★
         "causality": ("상관·회귀는 인과가 아닙니다. 이 기울기는 동시대 월별 상관이며 "

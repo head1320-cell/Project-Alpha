@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
 import type { FilterGroupNode } from "@/shared/model/domain";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 // 대형주 유니버스 필터 (기본)
 function largeCapFilter(): FilterGroupNode {
@@ -31,6 +32,9 @@ interface StrategyResult {
     profit_factor: number;
   };
   equity?: number[];
+  /** ★전략마다 따로 받는다★ — 같은 기간·유니버스라도 종목이 달라 데이터 축이
+   *  갈릴 수 있다. 하나를 재사용하면 그 순간 라벨이 추론이 된다. */
+  perfLabel?: PerfLabelValue | null;
 }
 
 // 비교 지표 정의 (라벨 + 단위 + 높을수록 좋은지)
@@ -94,6 +98,7 @@ export default function StrategyComparison() {
             id, label: labelOf(id), loading: false,
             stats: r.backtest.statistics,
             equity: r.backtest.equity_curve,
+            perfLabel: r.perf_label ?? null,
           });
         }
       } catch (e) {
@@ -202,6 +207,11 @@ export default function StrategyComparison() {
                       <th key={r.id} className="num">
                         <span className="tcmp-th-dot" style={{ background: COLORS[i % COLORS.length] }} />
                         {r.label}
+                        {/* ★이 열의 숫자가 무엇인지 응답이 말한 그대로 그린다★ —
+                            "백테스터 화면이니까" 로 추론하지 않는다(Z3). */}
+                        {!r.loading && !r.error && (
+                          <div className="tcmp-th-label"><PerfLabel value={r.perfLabel} compact /></div>
+                        )}
                       </th>
                     ))}
                   </tr>

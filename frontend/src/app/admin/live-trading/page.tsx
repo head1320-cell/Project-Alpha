@@ -7,7 +7,8 @@ import {
   CircleAlert, CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 
-import { API_BASE } from "@/shared/api/apiBase";
+import { getWithAuth, postJson } from "@/shared/api/apiBase";
+import { UNAUTHORIZED_MESSAGE } from "@/shared/api/authToken";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -26,22 +27,33 @@ export default function LiveTradingPage() {
   const [loading, setLoading] = useState(false);
   const [showKillConfirm, setShowKillConfirm] = useState(false);
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+  // ★401 을 빈 화면으로 접지 않는다★ — 잔고가 "없다" 와 "볼 권한이 없다" 는 다르다.
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Polling
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
+      // 잔고·주문은 로그인이 필요하고, 모드·킬스위치 상태는 열려 있다(P-1 레지스트리).
       const [modeRes, balRes, ordRes, killRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/live/mode`).then((r) => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/v1/live/balance`).then((r) => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/v1/live/orders?limit=20`).then((r) => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/v1/live/kill-switch/status`).then((r) => r.json()).catch(() => null),
+        getWithAuth("/api/v1/live/mode"),
+        getWithAuth("/api/v1/live/balance"),
+        getWithAuth("/api/v1/live/orders?limit=20"),
+        getWithAuth("/api/v1/live/kill-switch/status"),
       ]);
 
-      if (modeRes?.mode) setMode(modeRes.mode);
-      if (balRes) setBalance(balRes);
-      if (ordRes?.orders) setOrders(ordRes.orders);
-      if (killRes) setKillStatus(killRes);
+      const needsLogin = [balRes, ordRes].some((r) => r.status === 401);
+      setAuthError(needsLogin ? UNAUTHORIZED_MESSAGE : null);
+
+      const json = async (r: Response) => (r.ok ? r.json().catch(() => null) : null);
+      const [mode_, bal, ord, kill] = await Promise.all(
+        [modeRes, balRes, ordRes, killRes].map(json),
+      );
+
+      if (mode_?.mode) setMode(mode_.mode);
+      if (bal) setBalance(bal);
+      if (ord?.orders) setOrders(ord.orders);
+      if (kill) setKillStatus(kill);
     } finally {
       setLoading(false);
     }
@@ -59,22 +71,16 @@ export default function LiveTradingPage() {
       setShowLiveConfirm(true);
       return;
     }
-    await fetch(`${API_BASE}/api/v1/live/mode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: newMode, actor: "admin" }),
-    });
+    // ★`actor` 를 보내지 않는다★ — 서버가 토큰에서 관측한다(AC5). 예전엔 화면이
+    // "admin" 이라고 **주장**했고 감사 로그가 그 주장을 그대로 기록했다.
+    await postJson("/api/v1/live/mode", { mode: newMode });
     refresh();
   };
 
   const confirmLiveMode = async () => {
-    await fetch(`${API_BASE}/api/v1/live/mode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "LIVE", actor: "admin",
-        confirm_token: "EXPLICIT_LIVE_CONFIRMED",
-      }),
+    await postJson("/api/v1/live/mode", {
+      mode: "LIVE",
+      confirm_token: "EXPLICIT_LIVE_CONFIRMED",
     });
     setShowLiveConfirm(false);
     refresh();
@@ -82,27 +88,17 @@ export default function LiveTradingPage() {
 
   // Kill switch
   const triggerKill = async () => {
-    await fetch(`${API_BASE}/api/v1/live/kill-switch/trigger`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        reason: "Manual emergency stop from cockpit",
-        liquidation_mode: "hold",
-        actor: "admin",
-      }),
+    await postJson("/api/v1/live/kill-switch/trigger", {
+      reason: "Manual emergency stop from cockpit",
+      liquidation_mode: "hold",
     });
     setShowKillConfirm(false);
     refresh();
   };
 
   const resolveKill = async () => {
-    await fetch(`${API_BASE}/api/v1/live/kill-switch/resolve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        resolved_by: "admin",
-        notes: "Manual resolution from cockpit",
-      }),
+    await postJson("/api/v1/live/kill-switch/resolve", {
+      notes: "Manual resolution from cockpit",
     });
     refresh();
   };
@@ -114,6 +110,19 @@ export default function LiveTradingPage() {
         <div className="bg-gradient-to-r from-[#FF6B6B]/20 via-[#FF6B6B]/30 to-[#FF6B6B]/20 border-b border-[#FF6B6B]/40 py-1.5">
           <div className="max-w-[1600px] mx-auto px-8 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-[#FF6B6B] animate-pulse">
             ⚡ LIVE TRADING ACTIVE · REAL MONEY · EVERY ORDER COUNTS
+          </div>
+        </div>
+      )}
+
+      {/* ★인증 배너★ — 잔고가 비어 보이는 이유가 "없음" 이 아니라 "권한 없음" 일 때 */}
+      {authError && (
+        <div className="live-auth-banner bg-[#F5A623]/15 border-b border-[#F5A623]/40 py-2">
+          <div className="max-w-[1600px] mx-auto px-8 flex items-center gap-3">
+            <Lock size={14} className="text-[#F5A623]" />
+            <span className="text-[12px] text-[#F5A623]">{authError}</span>
+            <a href="/login" className="live-auth-banner__link text-[11px] underline text-[#F5A623]">
+              로그인
+            </a>
           </div>
         </div>
       )}

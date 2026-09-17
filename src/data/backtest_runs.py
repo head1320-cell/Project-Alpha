@@ -115,38 +115,22 @@ def _ensure(engine) -> None:
     # 하트비트 컬럼(후행 추가) — 이미 운영 중인 DB에는 테이블이 존재하므로 ALTER로 붙인다.
     # SQLite는 ADD COLUMN에 IF NOT EXISTS를 지원하지 않아 "이미 있음"도 예외로 오므로 삼킨다.
     # _COLS에는 넣지 않는다 — 넣으면 _row의 위치 인덱스가 전부 밀린다.
-    global _has_heartbeat
-    try:
-        with engine.begin() as c:
-            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN heartbeat_at DOUBLE PRECISION"))
-    except Exception:
-        pass
     # ★실제로 붙었는지 확인★ — 권한 등으로 ALTER가 실패했는데 이후 쿼리가 이 컬럼을
     # 참조하면 진행률 기록이 통째로 깨진다(수정 전보다 나쁨). 없으면 하트비트 기능만
     # 끄고 나머지는 그대로 동작시킨다(고아 정리는 created_at 폴백으로 계속 가능).
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SELECT heartbeat_at FROM {_TABLE} LIMIT 1"))
-        _has_heartbeat = True
-    except Exception as e:
-        _has_heartbeat = False
-        logger.warning(f"backtest_runs.heartbeat_at 사용 불가 — 하트비트 없이 동작: {e}")
+    # 붙이기+확인 두 단계는 `schema_add_columns.add_columns()` 가 한다 — 이 파일이
+    # 그 10줄을 **두 벌** 들고 있었고, 같은 산수를 복사하면 반드시 갈라진다.
+    from src.data.schema_add_columns import add_columns
+    global _has_heartbeat
+    _has_heartbeat = add_columns(engine, _TABLE,
+                                 [("heartbeat_at", "DOUBLE PRECISION")],
+                                 label="backtest_runs.heartbeat_at")
 
     # 텔레메트리 컬럼 — 12개 컬럼 대신 JSON 하나다. 항목이 늘 때마다 ALTER 를 하지
     # 않아도 되고, `_COLS` 를 건드리지 않아 `_row` 의 위치 인덱스가 안전하다.
     global _has_telemetry
-    try:
-        with engine.begin() as c:
-            c.execute(text(f"ALTER TABLE {_TABLE} ADD COLUMN telemetry TEXT"))
-    except Exception:
-        pass
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SELECT telemetry FROM {_TABLE} LIMIT 1"))
-        _has_telemetry = True
-    except Exception as e:
-        _has_telemetry = False
-        logger.warning(f"backtest_runs.telemetry 사용 불가 — 계측 없이 동작: {e}")
+    _has_telemetry = add_columns(engine, _TABLE, [("telemetry", "TEXT")],
+                                 label="backtest_runs.telemetry")
     _inited = True
 
 
@@ -477,8 +461,20 @@ def set_telemetry(run_id: str, payload: dict) -> bool:
         return False
 
 
-def get_telemetry(run_id: str) -> dict | None:
-    """계측 조회. 없으면 None — 지어내지 않는다."""
+def get_telemetry(run_id: str, strict: bool = False) -> dict | None:
+    """계측 조회. 없으면 None — 지어내지 않는다.
+
+    ★없음과 못 읽음은 다르다★ 이 함수는 예외를 **전부** 삼켜 `None` 을 돌려줬다.
+    그러면 "아직 기록 전"과 "DB 를 못 읽었다"가 같은 답이 되어, 사용자에게
+    "계측이 없습니다" 라고 단언하는 순간 그것이 거짓일 수 있다.
+
+    `get_status` 가 이미 쓰는 어휘를 그대로 쓴다 — 새 규약을 만들지 않는다:
+      strict=False(기본): 기존 호출부 보호(관대). DB 오류를 None 으로 삼킴.
+      strict=True(API 엔드포인트용): `BacktestStoreError` 로 올려 '없음'과 구분.
+
+    ★컬럼 부재는 오류가 아니다★ `_has_telemetry` 가 False 인 것은 이 배포에 계측
+    컬럼이 없다는 **알려진** 상태이므로 strict 여부와 무관하게 None 이다.
+    """
     if not _has_telemetry:
         return None
     try:
@@ -491,7 +487,10 @@ def get_telemetry(run_id: str) -> dict | None:
         if not r or not r[0]:
             return None
         return json.loads(r[0])
-    except Exception:
+    except Exception as e:
+        logger.warning(f"telemetry 조회 실패 {run_id}: {e}")
+        if strict:
+            raise BacktestStoreError(str(e)) from e
         return None
 
 

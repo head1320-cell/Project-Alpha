@@ -206,8 +206,13 @@ def probe_history(ticker: str = "005930") -> list[dict]:
         return [{"offset_days": o, "date": None, "bars": None,
                  "note": "mock 모드 — 실키(KIS_USE_MOCK=0)에서만 실측 가능"}
                 for o in PROBE_OFFSETS]
-    from src.execution.kis_client import get_kis_client
-    client = get_kis_client()
+    # ★진단 도구는 사유를 돌려준다★ 이 함수는 mock 모드에서도 예외 대신 `note` 를
+    # 담은 행을 낸다 — 키가 없을 때도 같은 모양이어야 호출자가 분기하지 않는다.
+    from src.execution.kis_client import try_kis_client
+    client, reason = try_kis_client()
+    if client is None:
+        return [{"offset_days": o, "date": None, "bars": None, "note": reason}
+                for o in PROBE_OFFSETS]
     out = []
     for o in PROBE_OFFSETS:
         d = datetime.now() - timedelta(days=o)

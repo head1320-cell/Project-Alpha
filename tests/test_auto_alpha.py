@@ -10,6 +10,7 @@
 import os
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
+import pytest  # noqa: E402
 
 from src.engine import auto_alpha as aa  # noqa: E402
 from src.engine.alpha_lab import parse_alpha  # noqa: E402
@@ -95,3 +96,36 @@ def test_catalog_honest_connected_flags():
     for fid in ("alt_data_events", "text_disclosure", "rl_allocation"):
         assert cat[fid]["connected"] is False
         assert cat[fid]["kind"] == "not_connected"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AJ1 ★골든★ — `selection_bias_note` 를 `multiplicity.expected_max_z` 로
+# 위임했다. 산수는 한 곳에만 있어야 하는데, 그 이동이 **응답 계약을 건드리면
+# 안 된다**: 프런트(`entities/experimental/api.ts:26`)가 세 키를 그대로 읽고
+# `AutoAlphaLab.tsx:76` 이 `note` 를 화면에 찍는다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_BIAS_GOLDEN = {
+    1: (0.0, "1개 후보를 탐색해 최고를 고르면 최고 IC의 t-stat은 약 +0.0σ"),
+    4: (1.67, "4개 후보를 탐색해 최고를 고르면 최고 IC의 t-stat은 약 +1.67σ"),
+    100: (3.03, "100개 후보를 탐색해 최고를 고르면 최고 IC의 t-stat은 약 +3.03σ"),
+}
+
+
+@pytest.mark.parametrize("n", sorted(_BIAS_GOLDEN))
+def test_selection_bias_note_keeps_its_contract(n):
+    """★위임해도 모양·값이 그대로★ — 키 셋, 반올림, 문장 머리."""
+    z, head = _BIAS_GOLDEN[n]
+    got = aa.selection_bias_note(n)
+    assert set(got) == {"n_trials", "expected_max_z", "note"}
+    assert got["n_trials"] == n
+    assert got["expected_max_z"] == z
+    assert got["note"].startswith(head)
+    assert "자동 보정되지 않습니다" in got["note"]
+
+
+def test_selection_bias_note_agrees_with_the_shared_arithmetic():
+    """★산수가 두 곳에 있으면 한쪽만 고쳐도 아무 테스트가 안 깨진다★"""
+    from src.domain.multiplicity import expected_max_z
+    for n in (2, 7, 50, 1000):
+        assert aa.selection_bias_note(n)["expected_max_z"] == round(expected_max_z(n), 2)

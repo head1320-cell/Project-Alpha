@@ -425,15 +425,161 @@ def assert_prices_backtest_eligible(tickers: list[str], *,
             f"{got['reason']}")
 
 
-def adj_status_of(ticker: str, *, engine=None) -> str:
-    """티커 하나의 네 상태 중 하나. ★조회 실패도 상태로 낸다★
+def adj_status_of(ticker: str, *, engine=None) -> str | None:
+    """티커 하나의 네 상태 중 하나, **또는 판정 불가면 `None`**.
 
-    `ohlcv_loader` 가 `df.attrs` 에 실을 값이다.
+    `ohlcv_loader` 가 `df.attrs["adj_status"]` 에 실을 값이다.
+
+    ★이전 판은 조회 실패도 `missing` 으로 냈다 — 그것을 고친다.★
+    `missing` 은 "`daily_prices` 에 행이 하나도 없습니다" 라는 **판단**이다.
+    커버리지 리포트 자체를 얻지 못한 경우(DB 없음·쿼리 실패)에 그 값을 내면
+    하지 않은 진술이 보고서에 실린다.
+
+    ★실제로 그렇게 나갔다★ — 0단계에서 목업 백테스트를 눈으로 확인하니 DB 없는
+    실행의 진단이 "수정주가 아님(91종목) — 000100, 000270, …" 이었다. 그 91종목에
+    대해 이 시스템은 아무것도 읽지 못했는데, 화면에는 확정된 결함으로 나갔다.
+    미상 ≠ 0 · 미검증 ≠ 검증 · 미적재 ≠ 제공자 미지원 과 같은 부류다.
+
+    Returns:
+        `STATES` 중 하나, 또는 리포트를 얻지 못했으면 `None`.
+        ★리포트를 얻었는데 그 티커가 없으면 그것은 진짜 `missing` 이다.★
     """
     cov = adj_close_coverage([ticker], engine=engine)
     if not cov.get("available"):
-        return STATE_MISSING
+        return None
     return cov["by_ticker"].get(str(ticker), STATE_MISSING)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 실행 단위 롤업 — ★백테스트가 실제로 로드한 프레임의 라벨을 센다★
+# ══════════════════════════════════════════════════════════════════════════
+#: 라벨이 **아예 없는** 티커. ★`STATES` 의 다섯째가 아니다★ — `STATES` 는 배타
+#: 분류이고 그 넷은 전부 *DB 를 읽고 내린 판단*이다. `unlabeled` 은 판단이 아니라
+#: **판단이 없음**이다(태깅 실패, `attrs` 유실, 로더를 안 거친 프레임).
+#:
+#: ★왜 `missing` 에 합치지 않나★ `missing` 은 "`daily_prices` 에 행이 하나도
+#: 없다" 는 진술이다. DB 를 못 읽은 실행을 그 칸에 세면, 하지 않은 진술이 보고서에
+#: 실린다 — "이 종목들은 데이터가 없습니다" 라고.
+ROLLUP_UNLABELED = "unlabeled"
+
+#: 사유에 실을 종목 이름 개수. `price_usage` 의 `[:5]` 와 같은 값이다.
+_ROLLUP_SAMPLE_CAP = 5
+
+
+def _sample(names: list[str]) -> list[str]:
+    """★결정론적 표본★ — 가장 작은 것부터. 개수는 따로(정확하게) 보고한다."""
+    return sorted(names)[:_ROLLUP_SAMPLE_CAP]
+
+
+def basis_rollup(basis_by_ticker: dict[str, str | None],
+                 adj_by_ticker: dict[str, str | None]) -> dict[str, Any] | None:
+    """실행 하나의 **가격 정의 상태**. ★순수 함수 — DB 를 보지 않는다★
+
+    입력은 `ohlcv_loader._tag` 가 프레임에 붙여 둔 두 라벨의 티커별 맵이다.
+    로더가 티커마다 이미 `adj_status_of()` / `adj_close_coverage()` 를 부르므로
+    **값은 이미 지불됐다** — 여기서는 세기만 하고 왕복을 늘리지 않는다.
+
+    ★등급 규칙을 새로 만들지 않는다★ 판정은 `price_usage()` 와 같은
+    **전부-아니면-전무** 계약이다: 모든 티커가 `adjusted` 이고 **그리고** 정의가
+    섞이지 않았을 때만 깨끗하다.
+
+    세 상태:
+        `ok`        전부 라벨이 있고 전부 `adjusted` 이며 `mixed` 가 없다
+        `degraded`  ★관측된★ 결함이 있다(`mixed`·`chain_broken`·`raw`·`missing`)
+        `unknown`   관측된 결함은 없지만 **못 잰 것**이 있다(`unknown`·라벨 없음)
+
+    ★`unknown` 은 절대 `ok` 로 세지 않는다★ — 미상은 통과가 아니다.
+    ★관측된 결함이 미상보다 강한 진술이다★ — 둘 다 있으면 `degraded` 이고,
+    미상은 사라지지 않고 개수와 사유에 남는다(강등이지 삭제가 아니다).
+
+    Returns:
+        프레임이 하나도 없으면 `None` — ★안 잰 것과 재서 0 인 것을 구별한다.★
+        `{unit, tickers, basis, adj_status, uniform_adjusted_pct, adjusted_pct,
+          mixed_tickers, unadjusted_tickers, unlabeled_tickers, state, reason,
+          source, version, note}`
+    """
+    tickers = sorted(set(basis_by_ticker) | set(adj_by_ticker))
+    if not tickers:
+        return None
+
+    basis_counts = dict.fromkeys(BASIS_CONSISTENCY, 0)
+    basis_counts[ROLLUP_UNLABELED] = 0
+    adj_counts = dict.fromkeys(STATES, 0)
+    adj_counts[ROLLUP_UNLABELED] = 0
+
+    mixed: list[str] = []
+    unadjusted: list[str] = []
+    unlabeled: list[str] = []
+
+    for tk in tickers:
+        b = basis_by_ticker.get(tk)
+        a = adj_by_ticker.get(tk)
+        # ★모르는 라벨을 아는 칸에 넣지 않는다★ 값이 없거나 어휘 밖이면 `unlabeled`.
+        bk = str(b) if b in BASIS_CONSISTENCY else ROLLUP_UNLABELED
+        ak = str(a) if a in STATES else ROLLUP_UNLABELED
+        basis_counts[bk] += 1
+        adj_counts[ak] += 1
+
+        if ROLLUP_UNLABELED in (bk, ak):
+            unlabeled.append(tk)
+        if bk == BASIS_MIXED:
+            mixed.append(tk)
+        if ak in (STATE_CHAIN_BROKEN, STATE_RAW, STATE_MISSING):
+            unadjusted.append(tk)
+
+    total = len(tickers)
+    known_defect = bool(mixed or unadjusted)
+    unmeasured = bool(unlabeled) or basis_counts[BASIS_UNKNOWN] > 0
+
+    if known_defect:
+        state = "degraded"
+    elif unmeasured:
+        state = "unknown"
+    else:
+        state = "ok"
+
+    # ★사유를 뭉치지 않는다★ 각 조건에 그것을 고칠 단서를 붙인다 —
+    # `price_usage` 가 쓰는 형식 그대로.
+    bits: list[str] = []
+    if mixed:
+        bits.append(f"가격 정의 혼합({len(mixed)}종목) — 원주가·수정주가가 한 계열에 "
+                    f"섞였습니다: {', '.join(_sample(mixed))}")
+    if unadjusted:
+        bits.append(f"수정주가 아님({len(unadjusted)}종목) — {', '.join(_sample(unadjusted))}")
+    if basis_counts[BASIS_UNKNOWN]:
+        bits.append(f"정의 미기록({basis_counts[BASIS_UNKNOWN]}종목) — 레거시 행이라 "
+                    "소급 추정하지 않습니다")
+    if unlabeled:
+        bits.append(f"라벨 없음({len(unlabeled)}종목) — 프레임에 품질 태그가 없습니다"
+                    "(DB 를 못 읽었거나 로더를 거치지 않았습니다): "
+                    f"{', '.join(_sample(unlabeled))}")
+
+    return {
+        # ★세는 단위를 밝힌다★ 봉도 행도 아니고 티커다.
+        "unit": "ticker",
+        "tickers": total,
+        "basis": basis_counts,
+        "adj_status": adj_counts,
+        "uniform_adjusted_pct": round(
+            basis_counts[BASIS_UNIFORM_ADJUSTED] / total * 100, 1),
+        "adjusted_pct": round(adj_counts[STATE_ADJUSTED] / total * 100, 1),
+        # ★이름을 낸다★ 개수만으로는 어느 종목을 고칠지 알 수 없다. 다만 이름은
+        # **표본**이고(위 개수가 정확하다) 가장 작은 것부터 결정론적으로 고른다.
+        "mixed_tickers": _sample(mixed),
+        "unadjusted_tickers": _sample(unadjusted),
+        "unlabeled_tickers": _sample(unlabeled),
+        "state": state,
+        "reason": " · ".join(bits) if bits else None,
+        # ★`attrs` 는 권위가 아니라 힌트다★(`ohlcv_loader._tag` 독스트링).
+        # 게이트를 세울 때는 `price_usage()` / `assert_prices_backtest_eligible()`
+        # 을 직접 부를 것 — 이 롤업은 **보고**다.
+        "source": "loader_attrs",
+        "version": QUALITY_VERSION,
+        "note": ("`state` 는 `price_usage()` 와 같은 전부-아니면-전무 계약입니다 — "
+                 "한 종목이라도 수정주가가 아니거나 정의가 섞이면 깨끗하지 "
+                 "않습니다. `unknown` 은 결함이 없다는 뜻이 아니라 **재지 못했다**는 "
+                 "뜻입니다."),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════

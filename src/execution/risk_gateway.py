@@ -66,6 +66,9 @@ class RiskCheckResult:
     adjustments:     dict = field(default_factory=dict)
     tier_failures:   list = field(default_factory=list)
     checks_passed:   list = field(default_factory=list)
+    #: ★확인하지 못한 검사★ — "통과" 와 섞이면 안 된다(미상 ≠ 검증, CLAUDE.md §4).
+    #: 여기 항목이 있다고 주문이 막히지는 않는다. **보이게 하는 것**이 목적이다.
+    checks_unverified: list = field(default_factory=list)
     metadata:        dict = field(default_factory=dict)
 
 
@@ -162,6 +165,15 @@ class RiskGateway:
     def _tier1_static_checks(self, order, state, result) -> bool:
         """5가지 정적 검증."""
         passed_all = True
+
+        # ⓪ ★계좌 상태를 모르면 통과시키지 않는다★
+        # 예전에는 상태 조회가 실패하면 `equity_krw = 0` 이 흘러 들어가 한도 계산이
+        # 0 이 되면서 **우연히** 거부됐다. 이제 실패는 `None` 이므로 그 우연에 기대지
+        # 않고 명시적으로 거부한다 — ★결과는 전과 같다(거부)★, 사유가 생겼을 뿐이다.
+        if state.get("equity_krw") is None:
+            result.tier_failures.append(
+                f"Tier1: 계좌 상태 미상 ({state.get('state_reason') or 'unknown'})")
+            return False
 
         # ① 시장 시간
         if not self.bypass_market_hours:
@@ -291,10 +303,20 @@ class RiskGateway:
                 result.checks_passed.append("regime_adaptive")
 
         # ⑨ Drawdown Circuit Breaker
-        intraday_dd = abs(state.get("current_drawdown_pct", 0) or 0)
-        cumul_dd = abs(state.get("cumulative_dd_pct", 0) or 0)
+        # ★미상을 0 으로 읽지 않는다★ — 예전에는 `_fetch_account_state` 가 드로다운을
+        # 하드코딩 0 으로 주어 이 검사가 **구조적으로 통과만** 했다(P1-a). 이제 `None`
+        # 이 올 수 있고, 그때는 `checks_passed` 가 아니라 `checks_unverified` 다.
+        # ★판정(통과/차단)은 바꾸지 않는다★ — 안전 판정 변경은 별도 승인 사항이다.
+        raw_intraday = state.get("current_drawdown_pct")
+        raw_cumul = state.get("cumulative_dd_pct")
+        dd_known = raw_intraday is not None and raw_cumul is not None
+        intraday_dd = abs(raw_intraday or 0)
+        cumul_dd = abs(raw_cumul or 0)
 
-        if intraday_dd >= self.limits.daily_loss_limit_pct:
+        if not dd_known:
+            reason = state.get("drawdown_reason") or "unknown"
+            result.checks_unverified.append(f"circuit_breaker: 드로다운 미상 ({reason})")
+        elif intraday_dd >= self.limits.daily_loss_limit_pct:
             result.tier_failures.append(
                 f"Tier2: 일중 손실 한도 도달 ({intraday_dd:.1%} >= {self.limits.daily_loss_limit_pct:.0%})"
             )

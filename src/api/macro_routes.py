@@ -447,6 +447,14 @@ def macro_strategy_detail(sid: str, market: str = Query("kr", pattern="^(us|kr)$
         d = build_detail(sid, market)
         if d is None:
             raise HTTPException(404, "전략을 찾을 수 없습니다.")
+        # ★`perf.summary` 는 과거 곡선 위의 시뮬레이션이다★ — 전략 상세 모달이
+        # 총수익·CAGR 을 라벨 없이 그리고 있었다(Z3). 데이터 축은 mock 게이트가
+        # 유일한 판정 기준이다(CLAUDE.md §6).
+        from src.data.mock_gate import mock_allowed
+        from src.domain.perf_kind import backtest_label
+        if isinstance(d.get("perf"), dict):
+            d["perf"]["perf_label"] = backtest_label(
+                is_mock_data=mock_allowed()).to_dict()
         return d
     except HTTPException:
         raise

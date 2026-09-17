@@ -5,6 +5,7 @@ import { Zap, Loader2 } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import type { OptimizeResult } from "@/entities/backtest/chartModel";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 interface ParamRange {
   name: string;
@@ -19,6 +20,15 @@ interface Props {
   paramRanges: ParamRange[];
   onOptimize: (ranges: Record<string, { min: number; max: number; step: number }>) => Promise<OptimizeResult | null>;
   onApply?: (params: Record<string, number>) => void;
+  /**
+   * 최적화를 돌린 쪽이 아는 사실. ★없으면 `unknown` 을 그린다★ — 이 컴포넌트는
+   * `onOptimize` 콜백으로 결과만 받으므로 스스로 종류를 알 수 없다.
+   *
+   * ★측정 기록★ — `TearSheet` 과 마찬가지로 지금 이 파일을 import 하는 화면이
+   * **없다**(2026-09-12 실측). 그래도 라벨을 붙여 둔다: 다시 붙는 날 "라벨 없는
+   * 성과 화면" 으로 부활하지 않게 하기 위해서다.
+   */
+  perfLabel?: PerfLabelValue | null;
 }
 
 function colorForSharpe(sharpe: number, min: number, max: number): string {
@@ -34,7 +44,7 @@ function colorForSharpe(sharpe: number, min: number, max: number): string {
   }
 }
 
-export function ParameterOptimizer({ paramRanges, onOptimize, onApply }: Props) {
+export function ParameterOptimizer({ paramRanges, onOptimize, onApply, perfLabel }: Props) {
   const anim = useChartAnimation();
   const [ranges, setRanges] = useState<Record<string, { min: number; max: number; step: number }>>(() =>
     Object.fromEntries(paramRanges.map((p) => [p.name, { min: p.min, max: p.max, step: p.step }]))
@@ -125,6 +135,9 @@ export function ParameterOptimizer({ paramRanges, onOptimize, onApply }: Props) 
           {/* Best params */}
           <div className="card-md flex flex-col gap-3">
             <div className="label">최적 파라미터 (Sharpe 기준)</div>
+            {/* ★격자 위의 최고 Sharpe 는 그 자체가 다중검정 결과다★ — 라벨은 그
+                문제를 말하지 않는다. 말하는 것은 "이 수치가 무엇에서 나왔는가"뿐. */}
+            <div className="popt-perf"><PerfLabel value={perfLabel} /></div>
             <div className="flex flex-wrap gap-2">
               {Object.entries(result.best_params).map(([k, v]) => (
                 <div key={k} className="flex flex-col gap-0.5 px-3 py-2 rounded-md"

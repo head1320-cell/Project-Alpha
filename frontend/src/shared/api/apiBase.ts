@@ -24,6 +24,8 @@
  * so every browser request hit the user's own machine and silently failed.
  */
 
+import { authHeaders } from "@/shared/api/authToken";
+
 const SENTINEL = "http://localhost:8000";
 
 function resolveApiBase(): string {
@@ -64,6 +66,16 @@ export function extractErrorDetail(err: unknown, fallback: string): string {
   return fallback;
 }
 
-/** JSON POST 단축 — 응답 파싱/에러 처리는 호출자 책임(기존 동작 유지). */
+/** JSON POST 단축 — 응답 파싱/에러 처리는 호출자 책임(기존 동작 유지).
+ *  ★인증 헤더는 여기서 한 번만 붙인다★(AC7) — 토큰이 없으면 아무것도 붙지 않으므로
+ *  공개 라우트는 이전과 똑같이 동작한다. */
 export const postJson = (path: string, body: unknown) =>
-  fetch(`${API_BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+
+/** GET 단축 — 위와 같은 이유로 인증 헤더를 한 곳에서 얹는다. */
+export const getWithAuth = (path: string, init?: RequestInit) =>
+  fetch(`${API_BASE}${path}`, { ...init, headers: { ...init?.headers, ...authHeaders() } });

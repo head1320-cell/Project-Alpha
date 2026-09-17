@@ -8,6 +8,7 @@
  */
 
 import { API_BASE } from "@/shared/api/apiBase";
+import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 // 타입만 참조 — 런타임 결합 없음(빌드 시 소거). BacktestRun 은 백테스트 결과를 담는
 // 것이 본질이라 이 타입을 알아야 하고, 거대한 타입 클로저를 shared 로 끌어내리면
 // 커널이 잡동사니가 된다. @typescript-eslint 미설치로 규칙이 type-only 를 구분 못 해
@@ -48,23 +49,36 @@ export interface RunFull extends RunStatusLite {
   input_snapshot: Record<string, unknown> | null;
   parameter_snapshot: Record<string, unknown> | null;
   result: ScreenToBacktestResult | null;
+  /** ★실행 자체의 종류★ — `is_mock_data` 에서 서버가 파생한다(Z2). */
+  perf_label?: PerfLabelValue | null;
 }
 
 // HTTP 상태 코드를 실은 에러 — 로딩 페이지가 404(진짜 없음)와 5xx/네트워크(일시적, 재시도)를
 // 구분해 폴링을 이어갈 수 있게 한다.
 export class ApiError extends Error {
   httpStatus: number;
-  constructor(message: string, httpStatus: number) {
+  /** 저장소 실패의 분류(백엔드가 붙인다): pool_exhausted | store_locked |
+   *  store_unreachable | unknown. 없으면 undefined — ★미상을 지어내지 않는다★. */
+  storeCause?: string;
+  constructor(message: string, httpStatus: number, storeCause?: string) {
     super(message);
     this.name = "ApiError";
     this.httpStatus = httpStatus;
+    this.storeCause = storeCause;
   }
 }
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
-    let detail = `${r.status}`;
+    let detail: unknown = `${r.status}`;
     try { detail = (await r.json())?.detail ?? detail; } catch { /* keep status */ }
+    // 503(저장소 실패)은 detail 이 {cause, message} 객체다 — 백엔드가 원인을
+    // 분류해 싣는다(원문은 자격증명이 섞일 수 있어 서버 로그에만 남는다).
+    // 그냥 String() 하면 "[object Object]" 가 되어 사용자가 아무것도 못 읽는다.
+    if (detail && typeof detail === "object") {
+      const d = detail as { cause?: string; message?: string };
+      throw new ApiError(d.message ?? `${r.status}`, r.status, d.cause);
+    }
     throw new ApiError(String(detail), r.status);
   }
   return r.json();

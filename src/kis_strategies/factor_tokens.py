@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pandas as pd
 
 from src import kis_indicators as ind
@@ -537,14 +539,60 @@ _MARKET_DERIVED = ("볼린저밴드_상단값", "볼린저밴드_하단값", "�
 
 _market_cache: dict[str, pd.DataFrame | None] = {}
 
+#: 실패를 기억해 두는 시간(초). ★성공은 오래 캐시해도 되지만 실패는 아니다★
+#: 이 캐시들은 실패한 `None` 을 **영구히** 들고 있었다. `uvicorn --workers 1` 이라
+#: 캐시가 프로세스 로컬이고 프로세스는 오래 산다 — 기동 직후 네트워크가 한 번
+#: 흔들리면 그 매크로/지수 토큰은 **서버를 재시작할 때까지** 계속 평가 불가였다.
+#: 그리고 조건식은 평가 불가를 조용히 건너뛴다 — 사용자는 매크로 조건이 걸린 줄
+#: 알지만 실제로는 무시된 백테스트를 본다.
+_MACRO_FAIL_TTL_SEC = 900.0
 
-def _market_df(prefix: str) -> pd.DataFrame | None:
-    """지수 OHLCV 로드(캐시). 실패 시 None 캐시(반복 시도 방지)."""
-    if prefix in _market_cache:
-        return _market_cache[prefix]
+#: {키: (실패 시각, 사유)} — ★사유 없는 실패는 금지★ 어떤 토큰이 왜 못 쓰이는지
+#: 말할 수 있어야 `macro_availability()` 가 보고할 수 있다.
+_macro_failures: dict[str, tuple[float, str]] = {}
+
+
+def _fail_fresh(key: str) -> bool:
+    """이 키의 실패가 아직 시효 안인가(= 재시도하지 않는다)."""
+    import time as _t
+    rec = _macro_failures.get(key)
+    return rec is not None and (_t.time() - rec[0]) < _MACRO_FAIL_TTL_SEC
+
+
+def _note_failure(key: str, reason: str) -> None:
+    import time as _t
+    _macro_failures[key] = (_t.time(), reason)
+
+
+def _note_success(key: str) -> None:
+    _macro_failures.pop(key, None)
+
+
+def macro_availability() -> dict:
+    """지금 이 프로세스에서 매크로·지수 토큰이 **쓸 수 있는 상태인가**.
+
+    ★미상은 실패가 아니다★ 아무도 물어본 적 없는 토큰은 어느 쪽에도 넣지 않는다
+    — '사용 불가' 로 보고하면 사용자가 없는 문제를 쫓는다.
+    """
+    ok = sorted([k for k, v in _ecos_cache.items() if v is not None]
+                + [k for k, v in _fred_cache.items() if v is not None]
+                + [k for k, v in _market_cache.items() if v is not None])
+    bad = {k: {"reason": r, "at": t} for k, (t, r) in _macro_failures.items()}
+    return {
+        "ok": ok,
+        "unavailable": bad,
+        "note": ("이 프로세스가 **실제로 조회해 본** 토큰만 보고합니다 — 목록에 없는 "
+                 "토큰은 '사용 불가' 가 아니라 '아직 조회한 적 없음' 입니다. "
+                 "매크로 토큰은 적재 대상이 아니라 조회 시점의 라이브 호출입니다."),
+        "fail_ttl_sec": _MACRO_FAIL_TTL_SEC,
+    }
+
+
+def _market_fetch(prefix: str) -> pd.DataFrame | None:
+    """지수 OHLCV 를 실제로 받아온다 (네트워크). 캐시·시효는 호출자 몫."""
     loader_sym, yf_sym = MARKET_SYMBOLS.get(prefix, (None, None))
     df = None
-    try:
+    if True:
         if loader_sym:
             from datetime import datetime
 
@@ -560,10 +608,29 @@ def _market_df(prefix: str) -> pd.DataFrame | None:
                 df = raw.rename(columns={"Open": "open", "High": "high", "Low": "low",
                                           "Close": "close", "Volume": "volume"})
                 df = df[["open", "high", "low", "close", "volume"]]
-    except Exception:
+    return None if (df is None or df.empty) else df
+
+
+def _market_df(prefix: str) -> pd.DataFrame | None:
+    """지수 OHLCV 로드(캐시). ★실패는 시효를 두고 다시 시도한다★
+
+    예전 독스트링은 "실패 시 None 캐시(반복 시도 방지)" 였다. 반복 시도를 막는
+    의도는 옳지만 **영구히** 막으면 기동 시 한 번의 네트워크 흔들림이 그 토큰을
+    프로세스 수명 내내 죽인다.
+    """
+    if prefix in _market_cache and not (_market_cache[prefix] is None
+                                        and not _fail_fresh(f"market:{prefix}")):
+        return _market_cache[prefix]
+    try:
+        df = _market_fetch(prefix)
+    except Exception as e:  # noqa: BLE001
         df = None
-    if df is not None and df.empty:
-        df = None
+        _note_failure(f"market:{prefix}", f"{type(e).__name__}: {e}")
+    else:
+        if df is None:
+            _note_failure(f"market:{prefix}", "지수 데이터가 비었습니다(적재·수집 미가용).")
+        else:
+            _note_success(f"market:{prefix}")
     _market_cache[prefix] = df
     return df
 
@@ -777,29 +844,43 @@ def _ecos_series(token: str) -> pd.Series | None:
     없었다)·키 검증(`len>10` vs `if key`)·HTTP 라이브러리. 분당 한도가 있는 API 에
     스로틀 없이 붙는 경로가 하나 더 있는 상태였다.
     """
+
+
+    if token in _ecos_cache and not (_ecos_cache[token] is None and not _fail_fresh(token)):
+        return _ecos_cache[token]
+    s = None
+    try:
+        s = _ecos_fetch(token)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(token, f"{type(e).__name__}: {e}")
+    else:
+        if s is None:
+            _note_failure(token, "ECOS 키가 없거나 미지원 토큰입니다.")
+        else:
+            _note_success(token)
+    _ecos_cache[token] = s
+    return s
+
+
+def _ecos_fetch(token: str) -> pd.Series | None:
+    """ECOS 를 실제로 조회한다 (네트워크). 캐시·시효는 호출자 몫."""
     from datetime import datetime
 
     from src.services.macro_collector import BokClient
 
-    if token in _ecos_cache:
-        return _ecos_cache[token]
     spec = ECOS_TOKENS.get(token)
-    s = None
-    if spec:
-        client = BokClient()
-        if client.is_configured:
-            try:
-                stat, item = spec
-                ts, vals = client.fetch_series(
-                    stat, item, start=ECOS_DAILY_START,
-                    end=datetime.now().strftime("%Y%m%d"), period="D",
-                    # ★수집기 기본값 1000 을 쓰면 조용히 잘린다★
-                    limit=ECOS_DAILY_LIMIT)
-                s = ecos_rows_to_series(ts, vals)
-            except Exception:
-                s = None
-    _ecos_cache[token] = s
-    return s
+    if not spec:
+        return None
+    client = BokClient()
+    if not client.is_configured:
+        return None
+    stat, item = spec
+    ts, vals = client.fetch_series(
+        stat, item, start=ECOS_DAILY_START,
+        end=datetime.now().strftime("%Y%m%d"), period="D",
+        # ★수집기 기본값 1000 을 쓰면 조용히 잘린다★
+        limit=ECOS_DAILY_LIMIT)
+    return ecos_rows_to_series(ts, vals)
 
 
 # ── FRED (미국 국채금리) — FRED_API_KEY 필요(무료, fred.stlouisfed.org) ──────
@@ -807,7 +888,111 @@ FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 FRED_TOKENS: dict[str, str] = {f"US국채({n}년)": f"DGS{n}" for n in (1, 2, 3, 5, 7, 10, 20, 30)}
 
+# ── FRED 지표 계열 — ★개정되는 것들★ ─────────────────────────────────────────
+#
+# ★왜 `FRED_TOKENS` 에 넣지 않는가★
+# 그 딕셔너리는 국채 커브 컴프리헨션이고, `test_fred_coordinates` 의
+# `test_token_maturity_matches_the_series_id` 가 *"손 예외가 들어오면 잡는다"* 로
+# 모든 키가 `US국채(N년)` 인지 검사한다. 그 가드는 정확히 이런 추가를 막으려고 있다.
+#
+# ★왜 이 계열들인가★ 위 커브 8개(DGS)와 ECOS 4개는 **개정되지 않거나 빈티지가
+# 구조적으로 불가**해서, PIT 배관이 제거할 룩어헤드가 애초에 없다. 아래 계열은
+# 개정된다 — 여기서부터 빈티지가 값을 한다.
+#
+# ★왜 레벨을 그대로 열지 않는가★ `CPIAUCSL` 은 지수라 310.3, `PAYEMS` 는 천명이라
+# 159,000 이다. 임계값을 쓸 수 없다. 계열마다 **의미 있는 표현 하나씩**만 연다 —
+# 기계적인 (계열 × 표현) 교차곱은 쓰이지 않는 토큰만 늘린다.
+#
+# 공표 주기는 여기 적지 않는다 — `SourceSpec.frequency` 의 규율이
+# *"메타 API 가 말해 주기 전까지 `None`"* 이고, 내가 아는 것은 확인이 아니다.
+# ★그리고 배선은 주기를 몰라도 정확하다★ — 누적기는 공표 시각 순으로 훑을 뿐이다.
+FRED_INDICATOR_TOKENS: dict[str, tuple[str, str]] = {
+    "US물가(전년비)":     ("CPIAUCSL", "yoy"),
+    "US고용(전월차)":     ("PAYEMS", "mom_diff"),
+    "US실업률":           ("UNRATE", "level"),
+    "US산업생산(전년비)": ("INDPRO", "yoy"),
+    "US통화량(전년비)":   ("M2SL", "yoy"),
+    "US소비자심리":       ("UMCSENT", "level"),
+    "US실질GDP(전년비)":  ("GDPC1", "yoy"),
+    "US금융환경지수":     ("NFCI", "level"),
+}
+
+#: 표현별로 몇 개월 전 값이 필요한가. ★`level` 은 0 — lag 을 찾지 않는다★
+INDICATOR_LAG_MONTHS: dict[str, int] = {"level": 0, "mom_diff": 1, "yoy": 12}
+
+
+# ── 매크로 토큰의 표시 그룹 — ★목록의 단일 출처★ ─────────────────────────────
+#
+# ★왜 만들었나 — 목록이 두 벌이었다★
+# 프런트 픽커(`butlerFactors.ts`)가 매크로 토큰을 손으로 들고 있었다. 그래서 여기에
+# 토큰을 더해도 **아무 테스트도 실패하지 않고** 화면에만 안 나왔다. 실측하니 백엔드
+# 20개 중 8개(US국채 1·2·3·5·7·20·30년, 국고채 1년)에 사용자가 닿을 수 없었다.
+#
+# 저장소는 같은 병을 이미 앓았다 — `ingest_registry` 이전의 `DbStatusPanel` 에서
+# `macro` 적재 대상이 화면에서만 빠져 있었다. 처방도 같다: **백엔드가 목록을 갖고
+# UI 는 그것을 그린다.**
+#
+# ★어휘를 다시 나열하지 않는다★ 그룹마다 출처 딕셔너리가 **정확히 하나**다. 손으로
+# 다시 적으면 두 벌이 갈라지고, 그게 지금 고치려는 병이다.
+@dataclass(frozen=True)
+class MacroTokenGroup:
+    """픽커에 한 덩어리로 보일 매크로 토큰들."""
+    label: str
+    tokens: tuple[str, ...]
+
+
+def macro_token_groups() -> tuple[MacroTokenGroup, ...]:
+    """조건식 매크로 어휘를 표시 그룹으로 — ★기존 딕셔너리에서 파생★.
+
+    ★미검증 토큰도 넣는다★ `ECOS_UNVERIFIED_TOKENS`(엔환율·국고채 2/5/20/30년)는
+    좌표가 확인되지 않아 `supported` 가 아니지만 **어휘로는 살아 있다** — 저장된
+    전략이 그것을 쓰고 있고, 목록에서 지우면 "그런 토큰은 없다" 로 읽힌다. 픽커가
+    사유와 함께 회색으로 그린다.
+
+    ★순서가 곧 화면 순서다★ 흔들리면 픽커가 실행마다 달라 보인다.
+    """
+    return (
+        MacroTokenGroup("국내 금리·환율",
+                        tuple(ECOS_TOKENS) + tuple(ECOS_UNVERIFIED_TOKENS)),
+        MacroTokenGroup("미국 국채", tuple(FRED_TOKENS)),
+        MacroTokenGroup("미국 지표", tuple(FRED_INDICATOR_TOKENS)),
+    )
+
 _fred_cache: dict[str, pd.Series | None] = {}
+
+
+def _apply_indicator(cur: pd.Series, lag: pd.Series, kind: str) -> pd.Series | None:
+    """`(현재값, lag 값)` → 표현. ★공식은 이 함수 하나에만 있다★
+
+    PIT 경로와 라이브 경로가 **같은 함수**를 쓴다. 각자 계산하면 언젠가 갈라지는데,
+    갈라진 두 값은 둘 다 그럴듯해서 어느 쪽이 틀렸는지 알 수 없다.
+
+    ★0 으로 나누지 않는다★ 전년비 분모가 0 이면 `inf` 인데, 조건식에서 `inf` 는
+    "무한히 큰 상승률" 로 읽혀 **어떤 임계값도 통과**시킨다. 미상이 맞다.
+    """
+    if kind == "level":
+        return cur
+    if kind == "mom_diff":
+        return cur - lag
+    if kind == "yoy":
+        denom = lag.where(lag != 0)      # 0 → NaN (★inf 금지★)
+        return (cur / denom - 1.0) * 100.0
+    return None
+
+
+def _lag_on_observation_axis(raw: pd.Series, months: int) -> pd.Series:
+    """관측 축에서 `months` 개월 전 값. ★위치가 아니라 달력이다★
+
+    `shift(months)` 는 **위치 이동**이라 관측에 결측이 하나만 있어도 다른 기간을
+    집는다(PIT 경로의 `_shift_period_months` 와 같은 함정). 달력으로 민 인덱스로
+    되찾고, 정확히 일치하는 관측이 없으면 NaN 이다 — 가장 가까운 값으로 대신하면
+    지어내기다.
+    """
+    if months <= 0:
+        return raw
+    out = raw.reindex(raw.index - pd.DateOffset(months=months))
+    out.index = raw.index
+    return out
 
 
 #: 일별 시계열 시작일 — 기존 동작을 그대로 옮긴다.
@@ -858,35 +1043,207 @@ def _fred_series(token: str) -> pd.Series | None:
     이 토큰은 **일별 종목 봉**에 정렬된다. 월별로 받으면 ffill 되어 그럴듯해
     보이지만 해상도가 사라진다.
     """
-    from src.services.macro_collector import FredClient
 
-    if token in _fred_cache:
+    if token in _fred_cache and not (_fred_cache[token] is None and not _fail_fresh(token)):
         return _fred_cache[token]
-    series_id = FRED_TOKENS.get(token)
     s = None
-    if series_id:
-        client = FredClient()
-        if client.is_configured:
-            try:
-                dates, values = client.fetch_series(
-                    series_id, start=FRED_DAILY_START,
-                    # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
-                    frequency=None)
-                s = fred_rows_to_series(dates, values)
-            except Exception:
-                s = None
+    try:
+        s = _fred_fetch(token)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(token, f"{type(e).__name__}: {e}")
+    else:
+        if s is None:
+            _note_failure(token, "FRED 키가 없거나 미지원 토큰입니다.")
+        else:
+            _note_success(token)
     _fred_cache[token] = s
     return s
 
 
-def resolve_macro_token(df: pd.DataFrame, token: str) -> pd.Series | None:
-    """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀)."""
+def _fred_fetch(token: str) -> pd.Series | None:
+    """FRED 를 실제로 조회한다 (네트워크). 캐시·시효는 호출자 몫."""
+    from src.services.macro_collector import FredClient
+
+    series_id = FRED_TOKENS.get(token) or _indicator_series_id(token)
+    if not series_id:
+        return None
+    client = FredClient()
+    if not client.is_configured:
+        return None
+    dates, values = client.fetch_series(
+        series_id, start=FRED_DAILY_START,
+        # ★월별 집계를 요청하지 않는다 — 원본 주기(일별)를 받는다★
+        # 지표 계열(월·분기)에도 `None` 이 맞다 — 계열의 **원래 주기**로 온다.
+        # `"m"` 을 주면 분기 계열이 월별로 보간돼 없는 해상도가 생긴다.
+        frequency=None)
+    return fred_rows_to_series(dates, values)
+
+
+def _indicator_series_id(token: str) -> str | None:
+    spec = FRED_INDICATOR_TOKENS.get(token)
+    return spec[0] if spec else None
+
+
+def _indicator_live(token: str) -> pd.Series | None:
+    """지표 토큰의 **라이브** 표현 — 관측 축에서 계산한 뒤 봉에 정렬한다.
+
+    ★봉에 정렬한 다음 계산하지 않는다★ 일별 봉으로 ffill 한 뒤 12개월을 밀면
+    "12개월" 이 아니라 "약 250 영업일" 이 되어 관측기간이 어긋난다.
+    """
+    spec = FRED_INDICATOR_TOKENS.get(token)
+    if not spec:
+        return None
+    _sid, kind = spec
+    raw = _fred_series(token)          # 캐시·사유 기록은 여기가 담당
+    if raw is None or raw.empty:
+        return None
+    lag = _lag_on_observation_axis(raw, INDICATOR_LAG_MONTHS.get(kind, 0))
+    out = _apply_indicator(raw, lag, kind)
+    return None if out is None else out.dropna()
+
+
+def _indicator_pit_by_bar(token: str, df: pd.DataFrame, *,
+                          obs_cache: dict | None = None) -> pd.Series | None:
+    """지표 토큰의 **PIT** 표현 — 봉마다 그 시점의 빈티지로.
+
+    ★분자와 분모가 같은 빈티지에서 나온다★ `pit_pair_for_bars` 가 한 번 읽어 두
+    시리즈를 준다. 분모만 라이브에서 가져오면 룩어헤드를 분모로 되들인다.
+    """
+    spec = FRED_INDICATOR_TOKENS.get(token)
+    if not spec:
+        return None
+    series_id, kind = spec
+    try:
+        from src.data.pit_macro import pit_pair_for_bars
+        got = pit_pair_for_bars(series_id, _df_dates(df),
+                                lag_months=INDICATOR_LAG_MONTHS.get(kind, 0),
+                                obs_cache=obs_cache)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(token, f"빈티지 조회 실패: {e}")
+        return None
+    if got is None:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(token, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    cur, lag = got
+    out = _apply_indicator(cur, lag, kind)
+    if out is None or out.dropna().empty:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(token, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    _note_success(token)
+    out.index = df.index               # 봉 인덱스로 되돌린다(`_align` 과 같은 규약)
+    return out
+
+
+#: ECOS 는 ★제공자 구조상 PIT 가 불가능하다★ — 빈티지 엔드포인트가 없어
+#: `pit_macro.fetch_observations` 가 ALFRED(FRED) 전용이다. 스토어에 그 계열 행이
+#: 있어도 그것은 `record_series` 의 **현재값 write-through**(`vintage_id=""`, 월별)
+#: 이지 빈티지가 아니다. 그것을 as-of 로 읽으면 순환 거짓 + 월별→일별 ffill 이다.
+REASON_PROVIDER_HAS_NO_VINTAGE = (
+    "이 제공자(한국은행 ECOS)는 빈티지를 주지 않습니다 — 시점 고정 조회가 "
+    "구조적으로 불가능합니다(영구). 라이브 조회는 개정 이력이 반영되지 않은 "
+    "현재값이므로 과거 시점 평가에서는 룩어헤드입니다."
+)
+
+
+def _pit_macro_series(name: str, as_of: str) -> pd.Series | None:
+    """`as_of` 시점 빈티지 → 시리즈. 없으면 `None` + 사유 기록.
+
+    ★라이브 폴백이 없다★ 폴백하면 PIT 인 값과 아닌 값이 한 시계열에 섞여, 라벨을
+    붙여도 소비자가 구별하지 못한다. 없으면 그 조건은 평가되지 않는다.
+
+    ★캐시를 쓰지도 남기지도 않는다★ `_fred_cache` 는 **라이브 전용**이다. PIT 산출이
+    거기 남으면 다음 라이브 조회가 과거 값을 받아 화면이 조용히 과거를 본다.
+    """
+    if name in ECOS_TOKENS:
+        _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
+        return None
+    series_id = FRED_TOKENS.get(name) or _indicator_series_id(name)
+    if not series_id:
+        return None
+    try:
+        from src.data.pit_macro import series_as_of
+        got = series_as_of(series_id, as_of)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(name, f"빈티지 조회 실패: {e}")
+        return None
+    if not got:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(name, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    periods, values = got
+    idx = pd.to_datetime(pd.Index(periods), errors="coerce")
+    out = pd.Series(values, index=idx).dropna()
+    spec = FRED_INDICATOR_TOKENS.get(name)
+    if spec:
+        # ★같은 스냅샷 안에서 민다★ `series_as_of` 가 준 것은 그 시점 하나의
+        # transaction-time 슬라이스다. 분모를 따로 조회하면 다른 슬라이스가 섞인다.
+        lag = _lag_on_observation_axis(out, INDICATOR_LAG_MONTHS.get(spec[1], 0))
+        out = _apply_indicator(out, lag, spec[1])
+        out = out.dropna() if out is not None else None
+        if out is None or out.empty:
+            from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+            _note_failure(name, REASON_NO_VINTAGE_FOR_ASOF)
+            return None
+    _note_success(name)
+    return out if len(out) else None
+
+
+def _pit_macro_by_bar(name: str, df: pd.DataFrame, *,
+                      obs_cache: dict | None = None) -> pd.Series | None:
+    """봉마다 ★그 봉 시점의 빈티지★ — 벡터화 경로용.
+
+    단일 `as_of` 를 창 전체에 쓰면 창 마지막 봉의 빈티지가 첫 봉에도 적용돼 **창
+    안에서 여전히 룩어헤드**다. `pit_series_for_bars` 가 봉마다 다른 값을 준다.
+    """
+    if name in ECOS_TOKENS:
+        _note_failure(name, REASON_PROVIDER_HAS_NO_VINTAGE)
+        return None
+    if name in FRED_INDICATOR_TOKENS:
+        return _indicator_pit_by_bar(name, df, obs_cache=obs_cache)
+    series_id = FRED_TOKENS.get(name)
+    if not series_id:
+        return None
+    try:
+        from src.data.pit_macro import pit_series_for_bars
+        out = pit_series_for_bars(series_id, _df_dates(df), obs_cache=obs_cache)
+    except Exception as e:  # noqa: BLE001
+        _note_failure(name, f"빈티지 조회 실패: {e}")
+        return None
+    if out is None or out.dropna().empty:
+        from src.services.macro_collector import REASON_NO_VINTAGE_FOR_ASOF
+        _note_failure(name, REASON_NO_VINTAGE_FOR_ASOF)
+        return None
+    _note_success(name)
+    out.index = df.index          # 봉 인덱스로 되돌린다(`_align` 과 같은 규약)
+    return out
+
+
+def resolve_macro_token(df: pd.DataFrame, token: str,
+                        as_of: str | None = None, *,
+                        obs_cache: dict | None = None) -> pd.Series | None:
+    """환율·금리 토큰 → 종목 날짜 정렬 시리즈. 키 없음·실패 시 None(건너뜀).
+
+    `as_of` 가 없으면 **라이브**(오늘 최신값) — 기존 동작 그대로다.
+    `as_of` 를 주면 **PIT 요청**이고 그 시점 빈티지만 쓴다. 빈티지가 없으면 값을
+    내지 않는다(현재 개정본으로 과거를 채점하지 않는다).
+    """
     name = (token or "").strip()
+    if as_of == "per_bar":
+        # ★봉마다 그 시점의 빈티지★ — 벡터화 경로(전 구간 일괄 평가)에서 쓴다.
+        return _pit_macro_by_bar(name, df, obs_cache=obs_cache)
+    if as_of:
+        s = _pit_macro_series(name, str(as_of))
+        return _align(s, df) if s is not None else None
     if name in ECOS_TOKENS:
         s = _ecos_series(name)
         return _align(s, df) if s is not None else None
     if name in FRED_TOKENS:
         s = _fred_series(name)
+        return _align(s, df) if s is not None else None
+    if name in FRED_INDICATOR_TOKENS:
+        s = _indicator_live(name)
         return _align(s, df) if s is not None else None
     return None
 
@@ -960,6 +1317,8 @@ def token_support() -> dict:
         supported[t] = "macro"
     for t in FRED_TOKENS:
         supported[t] = "macro"
+    for t in FRED_INDICATOR_TOKENS:
+        supported[t] = "macro"
     for t in FLOW_TOKENS:
         supported[t] = "flow"
     try:
@@ -987,5 +1346,9 @@ def token_support() -> dict:
                       "가격·수급·모멘텀 점수는 가격·거래량만으로 항상 계산, "
                       "성장·가치(→펀더멘탈·종합)는 '펀더멘털 조건 평가' 토글 필요(스냅샷 근사), "
                       "수급 레그는 투자자별 수급 적재 시 자동 반영",
+        # ★목록의 단일 출처★ — 픽커가 매크로 그룹을 이걸로 그린다. 프런트에
+        # 손으로 든 목록이 있으면 백엔드에 토큰을 더해도 화면에 안 나온다.
+        "macro_groups": [{"label": g.label, "tokens": list(g.tokens)}
+                         for g in macro_token_groups()],
         "substitutes": dict(SUBSTITUTES),
     }

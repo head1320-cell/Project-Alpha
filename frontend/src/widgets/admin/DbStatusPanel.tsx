@@ -11,7 +11,14 @@ import type { DataStatus, ResearchUsage } from "@/entities/regime-snapshot/model
 type DbStatus = Awaited<ReturnType<typeof api.dbStatus>>;
 type Cell = number | string | null;
 
-const TABLE_LABELS: Record<string, string> = {
+// ★목록을 여기서 들고 있지 않는다★
+// 예전에는 이 파일이 테이블 라벨 6개와 적재 버튼 6개를 **하드코딩**했다. 그래서
+// 백엔드에 적재 대상을 추가해도 화면에는 안 나왔고, 실제로 `macro` 가 그렇게
+// 빠져 있었다. 이제 `db-status.datasets`(적재 레지스트리)가 목록의 단일 출처다.
+//
+// 아래 표는 **폴백 라벨**일 뿐이다 — 레지스트리를 못 읽었을 때 화면이 키만
+// 나열하는 것을 막는다. 목록의 근거가 아니다.
+const FALLBACK_LABELS: Record<string, string> = {
   daily_prices: "일봉 (주식)",
   index_kospi_kosdaq: "지수 (KOSPI/KOSDAQ)",
   etf_cross_asset: "크로스에셋 ETF",
@@ -19,11 +26,6 @@ const TABLE_LABELS: Record<string, string> = {
   factor_snapshot: "펀더멘털 스냅샷",
   financials_history: "재무 시계열 (PIT)",
 };
-
-const INGEST_TARGETS: [string, string][] = [
-  ["index", "지수"], ["etf", "ETF 시세(크로스에셋 15)"], ["stocks", "주식 일봉"],
-  ["factors", "펀더멘털"], ["financials", "재무시계열"], ["flows", "수급(KIS)"],
-];
 
 const fmtNum = (v: Cell | undefined) =>
   typeof v === "number" ? v.toLocaleString() : v == null ? "—" : String(v);
@@ -79,6 +81,25 @@ export default function DbStatusPanel() {
     const id = setInterval(() => void load(), 5000);
     return () => clearInterval(id);
   }, [anyRunning, load]);
+
+  // ★온디맨드★ `daily_prices` 는 수백만 행이라 탭을 여는 것만으로 집계하지 않는다.
+  // 버튼을 눌러야 돌고, 백엔드가 TTL 캐시한다.
+  const [covTarget, setCovTarget] = useState("stocks");
+  const [covStart, setCovStart] = useState("2020-01-01");
+  const [covEnd, setCovEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [cov, setCov] = useState<Awaited<ReturnType<typeof api.dataCoverage>> | null>(null);
+  const [covLoading, setCovLoading] = useState(false);
+  const runCoverage = async () => {
+    setCovLoading(true);
+    setCov(null);
+    try {
+      setCov(await api.dataCoverage(covTarget, covStart, covEnd));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCovLoading(false);
+    }
+  };
 
   const trigger = async (target: string) => {
     setMsg(null);
@@ -178,7 +199,7 @@ export default function DbStatusPanel() {
                 const rows = cells.rows ?? cells.loaded;
                 return (
                   <tr key={key}>
-                    <td>{TABLE_LABELS[key] ?? key}</td>
+                    <td>{FALLBACK_LABELS[key] ?? key}</td>
                     <td className="num" style={{ fontFamily: "var(--t-mono)" }}>
                       {fmtNum(rows)}
                       {cells.total != null ? ` / ${fmtNum(cells.total)}` : ""}
@@ -219,17 +240,138 @@ export default function DbStatusPanel() {
             </>
           )}
 
+          {/* ── 적재 레지스트리 — 무엇이 어디서 와서 어디에 쌓이는가 ──
+              ★백엔드가 열거한다★ 앞으로 대상이 늘어도 이 파일은 안 고친다. */}
+          {st.datasets === null && st.datasets_error && (
+            <p className="tpage-intro" style={{ color: "#dc2626" }}>
+              적재 레지스트리를 읽을 수 없습니다 — {st.datasets_error}
+            </p>
+          )}
+          {st.datasets && st.datasets.length > 0 && (
+            <>
+              <SectionHead label="INGEST REGISTRY" index={`${st.datasets.length} DATASETS`} />
+              <table className="trisk-table">
+                <thead>
+                  <tr>
+                    <th>데이터셋</th><th>출처</th><th>저장 위치</th>
+                    <th>필요 키</th><th>없으면 못 도는 도구</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {st.datasets.map((d) => (
+                    <tr key={d.key}>
+                      <td>
+                        {d.label}
+                        {!d.triggerable && (
+                          <span style={{ color: "var(--t-muted)", fontSize: 11 }}> · 버튼 없음</span>
+                        )}
+                        {d.note && (
+                          <div style={{ color: "var(--t-muted)", fontSize: 11 }}>{d.note}</div>
+                        )}
+                      </td>
+                      <td style={{ fontFamily: "var(--t-mono)" }}>{d.source}</td>
+                      <td style={{ fontFamily: "var(--t-mono)", fontSize: 11 }}>
+                        {d.table}
+                        {/* ★슬라이스는 별개 테이블이 아니다★ index·etf 는 daily_prices 의 부분집합이다 */}
+                        {d.slice_of && (
+                          <div style={{ color: "var(--t-muted)" }}>└ {d.slice_of}</div>
+                        )}
+                      </td>
+                      <td style={{ fontFamily: "var(--t-mono)", fontSize: 11 }}>
+                        {/* ★키가 있다 ≠ 데이터가 온다★ 그래도 "키가 없어 못 받는다" 와
+                            "받았는데 비었다" 를 가르려면 이것이 필요하다. */}
+                        {d.required_env.length === 0 ? "—" : (
+                          <span style={{ color: d.env_ready ? "var(--color-bull)" : "var(--color-bear)" }}>
+                            {d.env_ready ? "● " : "○ "}{d.required_env.join(" · ")}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ color: "var(--t-muted)", fontSize: 11 }}>{d.tools.join(" · ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* ── 매크로 가용성 — ★적재 테이블이 아니라 조회 시점 라이브 호출이다★ ── */}
+          {st.macro && (
+            <>
+              <SectionHead label="MACRO TOKENS" index="LIVE (NOT INGESTED)" />
+              <p className="tpage-intro">{st.macro.note}</p>
+              {Object.keys(st.macro.unavailable).length === 0 ? (
+                <p className="tpage-intro" style={{ color: "var(--t-muted)" }}>
+                  실패로 기록된 토큰이 없습니다
+                  {st.macro.ok.length > 0 ? ` · 조회 성공 ${st.macro.ok.length}건` : ""}
+                </p>
+              ) : (
+                <table className="trisk-table">
+                  <thead><tr><th>토큰</th><th>사유</th></tr></thead>
+                  <tbody>
+                    {Object.entries(st.macro.unavailable).map(([k, v]) => (
+                      <tr key={k}>
+                        <td style={{ fontFamily: "var(--t-mono)" }}>{k}</td>
+                        <td style={{ color: "#dc2626", fontSize: 11 }}>{v.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )}
+
+          {/* ── 종목별 커버리지 — ★"적재됐다" 와 "충분히 적재됐다" 는 다르다★ ──
+              전체 행 수로는 1종목×40행과 2,700종목×40행이 구별되지 않는다.
+              무거운 집계라 **버튼을 눌러야** 돈다. */}
+          <SectionHead label="TICKER COVERAGE" index="ON DEMAND" />
+          <div className="tscenario-bar">
+            <select className="tchip-toggle" value={covTarget}
+                    onChange={(e) => setCovTarget(e.target.value)}>
+              {(st.datasets ?? []).map((d) => (
+                <option key={d.key} value={d.key}>{d.label}</option>
+              ))}
+            </select>
+            <input className="tchip-toggle" type="date" value={covStart}
+                   onChange={(e) => setCovStart(e.target.value)} />
+            <input className="tchip-toggle" type="date" value={covEnd}
+                   onChange={(e) => setCovEnd(e.target.value)} />
+            <button className="tchip-toggle active" disabled={covLoading}
+                    onClick={() => void runCoverage()}>
+              {covLoading ? "집계 중…" : "커버리지 집계"}
+            </button>
+          </div>
+          {cov && (
+            <p style={{ marginTop: 8, fontFamily: "var(--t-mono)", fontSize: 12 }}>
+              {/* ★미상 ≠ 0★ 못 잰 것을 "0종목" 으로 적으면 하지 않은 진술이 된다. */}
+              {cov.measured ? (
+                <>
+                  <b>{cov.label}</b> — {fmtNum(cov.tickers_total)}종목 중{" "}
+                  <b style={{ color: (cov.covering_pct ?? 0) >= 80 ? "var(--color-bull)" : "var(--color-bear)" }}>
+                    {fmtNum(cov.tickers_covering)}종목
+                  </b>
+                  {cov.covering_pct != null ? ` (${cov.covering_pct}%)` : ""} 이{" "}
+                  {cov.start} ~ {cov.end} 를 덮습니다
+                </>
+              ) : (
+                <span style={{ color: "var(--t-muted)" }}>
+                  <b>{cov.label}</b> — 측정 불가: {cov.reason}
+                </span>
+              )}
+            </p>
+          )}
+
           {/* 적재 실행 */}
           <SectionHead label="INGEST" index="BACKGROUND" />
           <div className="tscenario-bar">
-            {INGEST_TARGETS.map(([target, label]) => (
+            {(st.datasets ?? []).filter((d) => d.triggerable).map((d) => (
               <button
-                key={target}
+                key={d.key}
                 className="tchip-toggle"
-                disabled={!!st.ingest_running?.[target]}
-                onClick={() => void trigger(target)}
+                disabled={!!st.ingest_running?.[d.key]}
+                onClick={() => void trigger(d.key)}
+                title={`${d.source} → ${d.table}${d.note ? ` · ${d.note}` : ""}`}
               >
-                {st.ingest_running?.[target] ? `${label} 적재 중…` : label}
+                {st.ingest_running?.[d.key] ? `${d.label} 적재 중…` : d.label}
               </button>
             ))}
             <button className="tchip-toggle active" disabled={anyRunning} onClick={() => void trigger("all")}>

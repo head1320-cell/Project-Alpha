@@ -59,6 +59,16 @@ def krx_status():
         out.update({"available": False})
     return out
 
+def _vintage_stats() -> dict:
+    """재무 빈티지 적재 현황 — ★못 읽으면 `None` + 사유이지 0 이 아니다★."""
+    try:
+        from src.data.dart_history import vintage_stats
+        return vintage_stats()
+    except Exception as e:  # noqa: BLE001
+        return {"rows": None, "restated_periods": None, "skipped_no_rcept": 0,
+                "reason": f"빈티지 현황을 읽지 못했습니다: {type(e).__name__}: {e}"}
+
+
 @router.get("/api/v1/data/db-status")
 def db_status():
     """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요).
@@ -160,6 +170,7 @@ def db_status():
             fh = q("SELECT COUNT(*), MIN(bsns_year), MAX(bsns_year) FROM financials_history")
         fl = flows_status(engine)
 
+
         out["available"] = True
         out["tables"] = {
             "daily_prices": {"rows": dp_rows,
@@ -178,6 +189,10 @@ def db_status():
             "financials_history": {"rows": int(fh[0] or 0) if fh else 0,
                                    "start": str(fh[1]) if (fh and fh[1]) else None,
                                    "end": str(fh[2]) if (fh and fh[2]) else None},
+            # ★행 수가 아니라 `restated_periods` 가 답이다★ — "정정공시를 실제로
+            # 봤는가". 0 이면 "아직 본 적 없다" 이지 "정정공시가 없다" 가 아니다.
+            # ★못 읽으면 None + 사유★ — 여기서 0 으로 만들면 미상이 사라진다.
+            "financials_vintages": _vintage_stats(),
         }
         t = out["tables"]
         out["tools"] = {
@@ -186,10 +201,54 @@ def db_status():
             "백테스터(매크로·ETF)": t["etf_cross_asset"]["loaded"] >= max(1, int(t["etf_cross_asset"]["total"] * 0.6)),
             "벤치마크·국면": (t["index_kospi_kosdaq"]["rows"] or 0) > 0,
             "수급 시그널": (t["investor_flows"]["rows"] or 0) > 0,
-            "PIT 펀더멘털": (t["financials_history"]["rows"] or 0) > 0,
+            # ★추정과 실측을 한 칸에 넣지 않는다★ 예전 `"PIT 펀더멘털"` 은
+            # **추정 시차 표**(financials_history)를 근거로 *PIT* 능력을
+            # 주장했다. V4 이후 실측 접수일 경로가 따로 있으므로 가른다 —
+            # 사용자가 `measured_pct` 가 0 인 이유를 찾으러 오는 자리다.
+            "PIT 펀더멘털(추정 시차)": (t["financials_history"]["rows"] or 0) > 0,
+            # ★미상 ≠ 미준비★ 못 읽었으면 항목을 만들지 않는다. `False` 로 적으면
+            # "확인했더니 없다" 로 읽힌다. 사유는 tables.financials_vintages 가
+            # 이미 들고 있고, 값은 반드시 불리언이어야 한다 — 프런트가
+            # `Object.values(tools).filter(Boolean)` 로 센다(DbStatusPanel.tsx:114).
+            **({"PIT 펀더멘털(실측 접수일)": t["financials_vintages"]["rows"] > 0}
+               if t["financials_vintages"]["rows"] is not None else {}),
         }
     except Exception:
         logger.exception("db-status 조회 실패")
+    # ★적재 대상에 없는 데이터도 상태를 말한다★
+    # 조건식의 ECOS/FRED·해외지수 토큰은 `INGEST_TARGETS` 에 없고 조회 시점의
+    # 라이브 호출이라, 위 테이블 블록에 잡히지 않는다. `config` 의 `bok_key`·
+    # `fred_key` 는 **키가 있다**는 뜻일 뿐 **시계열이 온다**는 뜻이 아니다 —
+    # 그 간극이 사용자에게 보이지 않았다.
+    try:
+        from src.kis_strategies.factor_tokens import macro_availability
+        out["macro"] = macro_availability()
+    except Exception as e:  # noqa: BLE001
+        # ★지어내지 않는다★ 못 읽으면 그렇게 적는다(빈 dict 은 '문제 없음'으로 읽힌다).
+        out["macro"] = {"ok": [], "unavailable": {},
+                        "note": f"매크로 가용성을 확인할 수 없습니다: {e}"}
+    # ★UI 가 테이블 목록을 알 필요가 없다★
+    # 예전에는 프런트가 `TABLE_LABELS` 6개와 버튼 6개를 **하드코딩**했다. 그래서
+    # 적재 대상을 추가하려면 백엔드와 프런트를 따로 고쳐야 했고, 실제로 `macro`
+    # 가 빠져 있었다. 이제 백엔드가 스스로 열거하고 UI 는 그것을 그린다.
+    try:
+        from src.data.ingest_registry import DATASETS
+        out["datasets"] = [
+            {"key": d.key, "label": d.label, "source": d.source, "table": d.table,
+             "slice_of": d.slice_of, "tools": list(d.tools),
+             "required_env": list(d.required_env),
+             # ★키가 있다 ≠ 데이터가 온다★ 그래도 "키가 없어서 못 받는다" 와
+             # "받았는데 비었다" 를 가르려면 이것이 필요하다.
+             "env_ready": all(bool(os.getenv(e)) for e in d.required_env)
+                          if d.required_env else None,
+             "triggerable": d.triggerable, "note": d.note}
+            for d in DATASETS
+        ]
+    except Exception as e:  # noqa: BLE001
+        # ★지어내지 않는다★ 못 읽으면 빈 목록이 아니라 사유를 낸다 — 빈 목록은
+        # "적재 대상이 없다" 로 읽힌다.
+        out["datasets"] = None
+        out["datasets_error"] = f"적재 레지스트리를 읽을 수 없습니다: {e}"
     out["ingest_running"] = dict(INGEST_RUNNING)
     return out
 
@@ -259,7 +318,30 @@ def _ingest_run(target: str):
     if target == "flows":
         from src.data.kis_flows import sync_investor_flows
         return sync_investor_flows(all_listed=True)
+    if target == "macro":
+        # ★기존 백필을 연결만 한다★ `lifecycle.py` 가 이미 이 함수를 주기 실행한다
+        # (`auto_vintage_backfill(loop=True)`). 여기서는 1회만 돌린다 — 수동 버튼이
+        # 영원히 안 끝나던 financials 버그와 같은 실수를 반복하지 않는다.
+        from src.data.macro_vintage_backfill import auto_vintage_backfill
+        return auto_vintage_backfill(loop=False)
     return {"error": f"unknown target: {target}"}
+
+@router.get("/api/v1/data/coverage")
+def data_coverage(target: str, start: str, end: str):
+    """★종목별 커버리지★ — "내 유니버스의 몇 %가 이 기간을 덮는가".
+
+    `db-status` 의 전체 행 수로는 `1종목 × 40행` 과 `2,700종목 × 40행` 이 구별되지
+    않는다. 그 구별이 "백테스트가 왜 빈약한가" 에 답한다.
+
+    ★온디맨드다★ `daily_prices` 는 수백만 행이라 탭을 여는 것만으로 돌면 안 된다 —
+    호출해야 집계하고 결과는 TTL 캐시된다.
+    """
+    from src.data.coverage import ticker_coverage
+    try:
+        return ticker_coverage(target, start=start, end=end)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+
 
 @router.post("/api/v1/data/ingest/{target}")
 def ingest_trigger(target: str):

@@ -40,6 +40,10 @@ class ExecPlanRequest(BaseModel):
 class SavePlanRequest(ExecPlanRequest):
     name: str = Field("실행 계획", max_length=200)
     run_id: str | None = None
+    #: ★이 계획을 낳은 **판단**★ (`investment_decisions.dec_id`, AA4).
+    #: `run_id`(백테스트 실행)와 다른 축이다 — 백테스트는 판단이 아니다.
+    #: 없으면 계보가 끊긴 계획이고, 응답의 `lineage` 가 그 사실을 사유와 함께 말한다.
+    dec_id: str | None = None
 
 
 class TransitionRequest(BaseModel):
@@ -134,11 +138,15 @@ def execution_plan_save(req: SavePlanRequest):
             # ★미리보기만 막고 저장을 열어 두면 게이트가 아니다★
             return {"saved": False, "plan_id": None, **blocked}
         plan, pretrade = _compute(req, target or {})
-        pid = create_plan(req.name, plan, pretrade, run_id=req.run_id)
+        pid = create_plan(req.name, plan, pretrade, run_id=req.run_id,
+                          dec_id=req.dec_id)
         if pid is None:
             return {"saved": False, "plan_id": None, "message": "DB 미가용 — 저장되지 않음.",
                     "plan": plan, "pretrade": pretrade}
-        return {"saved": True, "plan_id": pid, "plan": plan, "pretrade": pretrade}
+        # ★계보를 응답이 말한다★ — 끊겨 있으면 **사유와 함께** 끊겼다고 적는다.
+        from src.data.execution_store import get_plan, plan_lineage
+        return {"saved": True, "plan_id": pid, "plan": plan, "pretrade": pretrade,
+                "lineage": plan_lineage(get_plan(pid))}
     except HTTPException:
         raise                      # ★미리보기만 막고 저장을 열어 두면 게이트가 아니다★
     except Exception:
@@ -159,11 +167,12 @@ def execution_plans_list():
 @router.get("/execution-plan/{plan_id}")
 def execution_plan_get(plan_id: str):
     try:
-        from src.data.execution_store import get_plan
+        from src.data.execution_store import get_plan, plan_lineage
         p = get_plan(plan_id)
         if p is None:
             raise HTTPException(404, "계획을 찾을 수 없습니다.")
-        return p
+        # ★조회하는 쪽에서도 계보를 읽는다★ (AA4) — 끊겨 있으면 사유가 함께 온다.
+        return {**p, "lineage": plan_lineage(p)}
     except HTTPException:
         raise
     except Exception:

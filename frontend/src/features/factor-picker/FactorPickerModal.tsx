@@ -23,7 +23,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useEffect, useMemo, useState } from "react";
 import { type GpFactor } from "@/entities/backtest/factorCatalog";
-import { BUTLER_CATEGORIES, butlerToken } from "@/entities/backtest/butlerFactors";
+import { BUTLER_CATEGORIES, MACRO_FALLBACK_GROUPS, butlerToken, macroGroupsFrom } from "@/entities/backtest/butlerFactors";
+import type { ButlerCategory, ButlerGroup } from "@/entities/backtest/butlerFactors";
 import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from "@/entities/backtest/factorFunctions";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type TokenSupportMap } from "@/entities/backtest/bridgeModel";
@@ -79,12 +80,28 @@ const idOf = (cat: string, group: string, name: string) => `${cat}/${group}/${na
 
 interface FlatFactor { catId: string; catLabel: string; group: string; f: GpFactor; id: string }
 
-const BUTLER_FLAT: FlatFactor[] = BUTLER_CATEGORIES.flatMap((c) =>
-  c.groups.flatMap((g) => g.factors.map((f) => ({
-    catId: c.id, catLabel: c.label, group: g.label, f, id: idOf(c.id, g.label, f.name),
-  }))),
-);
-const BY_ID = new Map(BUTLER_FLAT.map((x) => [x.id, x]));
+/**
+ * 카탈로그 = 정적 골격 + ★백엔드가 준 매크로 목록★.
+ *
+ * 매크로 그룹만 백엔드에서 온다. `x_macro` 카테고리의 나머지(지수·투자자별)는
+ * 백엔드의 `market`/`flow` 그룹이라 이 카테고리와 1:1 이 아니고, 거기서 하드코딩은
+ * 중복이 아니라 **큐레이션**이다(지수 토큰만 44개다 — 전부 펴면 픽커를 못 쓴다).
+ *
+ * `macroGroups` 가 `null` 이면 조회 실패다 — 폴백을 쓰되 화면이 그렇다고 말한다.
+ */
+function buildCatalog(macroGroups: ButlerGroup[] | null): ButlerCategory[] {
+  const macro = macroGroups ?? MACRO_FALLBACK_GROUPS;
+  return BUTLER_CATEGORIES.map((c) =>
+    c.id === "x_macro" ? { ...c, groups: [...macro, ...c.groups] } : c);
+}
+
+function flatten(cats: ButlerCategory[]): FlatFactor[] {
+  return cats.flatMap((c) =>
+    c.groups.flatMap((g) => g.factors.map((f) => ({
+      catId: c.id, catLabel: c.label, group: g.label, f, id: idOf(c.id, g.label, f.name),
+    }))),
+  );
+}
 
 const GROUP_BADGE: Record<string, string> = {
   fundamental: "재무", market: "시장", macro: "매크로", score: "점수 근사", flow: "수급",
@@ -99,6 +116,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   const [family, setFamily] = useState<string>(BUTLER_CATEGORIES[0]?.id ?? "");
   const [selId, setSelId] = useState<string | null>(null);
   const [support, setSupport] = useState<TokenSupportMap | null>(_supportCache);
+  // ★조회 실패를 삼키지 않는다★ 폴백 목록을 조용히 쓰면 구버전이 진짜로 위장한다.
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [fnId, setFnId] = useState<string>(initial?.functionId ?? "base");
   const [params, setParams] = useState<Record<string, string>>(initial?.params ?? {});
   const [innerFnId, setInnerFnId] = useState<string>(initial?.innerFunctionId ?? "base");
@@ -112,9 +131,18 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   useEffect(() => {
     if (!open || support) return;
     backtestBridgeApi.conditionTokens()
-      .then((s) => { _supportCache = s; setSupport(s); })
-      .catch(() => {});  // 실패 시 배지 없이 기존 동작
+      .then((s) => { _supportCache = s; setSupport(s); setCatalogError(null); })
+      .catch(() => setCatalogError(
+        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 보이는 중입니다 — "
+        + "최신 목록이 아닐 수 있습니다."));
   }, [open, support]);
+
+  // ★목록의 근거는 백엔드다★ 못 받으면 폴백이되, 위 catalogError 가 화면에 뜬다.
+  const catalog = useMemo(
+    () => buildCatalog(macroGroupsFrom(support?.macro_groups)), [support]);
+  const butlerFlat = useMemo(() => flatten(catalog), [catalog]);
+  const byId = useMemo(
+    () => new Map(butlerFlat.map((x) => [x.id, x])), [butlerFlat]);
 
   const supportInfo = useMemo(() => (name: string): SupportInfo => {
     if (!support) return { ok: true };
@@ -139,23 +167,23 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
     };
   }, [supportInfo]);
 
-  const allItems = useMemo(() => BUTLER_FLAT.map(toItem), [toItem]);
+  const allItems = useMemo(() => butlerFlat.map(toItem), [butlerFlat, toItem]);
   const items = useMemo(
-    () => BUTLER_FLAT.filter((x) => x.catId === family).map(toItem),
-    [family, toItem],
+    () => butlerFlat.filter((x) => x.catId === family).map(toItem),
+    [butlerFlat, family, toItem],
   );
 
   // 카테고리별 지원 개수 — 지원맵이 없으면 전체 개수만. 추정치로 채우지 않는다.
-  const families = useMemo(() => BUTLER_CATEGORIES.map((c) => {
+  const families = useMemo(() => catalog.map((c) => {
     const flat = c.groups.flatMap((g) => g.factors);
     const ok = support ? flat.filter((f) => supportInfo(tokenOf(f)).ok).length : null;
     return {
       id: c.id, label: c.label,
       countLabel: ok === null ? String(flat.length) : `${ok}/${flat.length}`,
     };
-  }), [support, supportInfo]);
+  }), [catalog, support, supportInfo]);
 
-  const sel = selId ? BY_ID.get(selId) : undefined;
+  const sel = selId ? byId.get(selId) : undefined;
   const factor = sel?.f ?? null;
   const selInfo = factor ? supportInfo(tokenOf(factor)) : null;
 
@@ -179,12 +207,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   const accent = TONES[tone];
   // 두 번째 팩터 후보: 지원 토큰만 (카테고리 optgroup)
   const factor2Options = useMemo(() =>
-    BUTLER_CATEGORIES.map((c) => ({
+    catalog.map((c) => ({
       label: c.label,
       names: [...new Set(c.groups.flatMap((g) => g.factors)
         .filter((f) => supportInfo(tokenOf(f)).ok).map((f) => tokenOf(f)))],
     })).filter((g) => g.names.length > 0),
-  [supportInfo]);
+  [catalog, supportInfo]);
 
   const setParam = (kind: string, idx: number, v: string) =>
     setParams((p) => ({ ...p, [paramKey(kind, idx)]: v }));
@@ -239,6 +267,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       applyLabel="입력"
       onApply={submit}
       applyDisabled={applyDisabled}
+      error={catalogError != null}
+      errorText={catalogError ?? undefined}
       note="지원 여부는 백엔드 /condition-tokens 가 단일 진실 공급원입니다 — 미지원 팩터는 평가에서 무시되므로 적용할 수 없습니다."
       // ★색조는 스타일이 아니라 CSS 변수 대입이다★ `--t-accent` 를 덮으면 셸의 기존
       // `.tfm-*` 규칙이 그대로 다시 물든다 — 새 CSS 없이 매수/매도 문맥 색을 지킨다.
@@ -273,7 +303,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                 {support!.substitutes![factor.name].map((n) => {
                   // 카탈로그에 없는 대체 제안은 **누를 수 없게** 둔다. 눌러도 아무 일이
                   // 없는 버튼은 사용자가 자기 조작을 의심하게 만든다.
-                  const hit = BUTLER_FLAT.find((x) => x.f.name === n || tokenOf(x.f) === n);
+                  const hit = butlerFlat.find((x) => x.f.name === n || tokenOf(x.f) === n);
                   return (
                     <button key={n} type="button" disabled={!hit}
                       onClick={() => hit && setSelId(hit.id)}

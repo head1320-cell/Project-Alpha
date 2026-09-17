@@ -61,10 +61,14 @@ def _decide(client, **kw) -> dict:
 ANALYZE_KEYS = {
     "cap_missing", "constraints_report", "correlation", "coverage", "enb", "ep",
     "error", "excluded", "flow", "frontier", "labels", "mc", "mes", "model",
-    "mu_engine", "names", "params", "points", "risk_contribution_optimized",
-    "risk_contributions", "risk_contributions_basis", "skipped_views", "summary",
+    "mu_engine", "names", "params", "perf_label", "points",
+    "risk_contribution_optimized", "risk_contributions",
+    "risk_contributions_basis", "skipped_views", "summary",
     "unknown_tickers", "views_applied", "weights",
 }
+#: ★`perf_label` 은 Z3 에서 **의도적으로** 늘린 키다★ — `summary` 의 Sharpe·MDD 를
+#: 그리는 화면(`MetricsTable`·`ResearchRunsPanel`)에 "이 수치가 무엇인가" 가 없었다.
+#: 이 골든이 그 추가를 잡아 준 것이 정상 동작이다. 기존 키는 하나도 바뀌지 않았다.
 #: ★요청했을 때만 키가 늘어난다★ — 라우트가 스스로 그렇게 적고 있다.
 ANALYZE_CONDITIONAL_EXTRA = {"conditional", "target_range"}
 ANALYZE_COMPANY_EXTRA = {"company_views"}
@@ -72,11 +76,16 @@ ANALYZE_ERROR_KEYS = {"error", "excluded", "message"}
 
 DECIDE_KEYS = {
     "available", "band", "benefit", "conditional", "cost", "coverage", "dec_id",
-    "decision", "excluded", "factors", "gradual", "hysteresis_mult",
-    "max_gap_pct", "model", "mu_uncertainty", "net_pct", "persist_reason",
-    "persisted", "reason", "research_context", "risk_model", "target_source",
-    "target_weights", "threshold_pct", "triggers", "unknown_tickers",
+    "decision", "evidence_rollup", "excluded", "factors", "gradual",
+    "hysteresis_mult", "max_gap_pct", "model", "mu_uncertainty", "net_pct",
+    "persist_reason", "persisted", "reason", "reason_code", "research_context",
+    "risk_model", "target_source", "target_weights", "threshold_pct",
+    "triggers", "unknown_tickers",
 }
+#: ★`reason_code` 와 `evidence_rollup` 은 AA 에서 **의도적으로** 늘린 키다★ —
+#: 전자는 애드덤 #8(자유 문자열이던 사유를 열거), 후자는 #10(이 판단이 무엇 위에
+#: 섰는가). 이 골든이 그 추가를 잡아 준 것이 정상 동작이고, **기존 키는 하나도
+#: 바뀌지 않았다**(값도 그대로 — `test_rebalance_reason` 의 골든이 못 박는다).
 #: 자산 <2 조기반환. ★모든 분기가 같은 키를 낸다★ 는 규율이 여기에도 있다
 #: (`dec_id`·`persisted`·`persist_reason` — `test_decision_route_delegation` 참고).
 DECIDE_EARLY_KEYS = {

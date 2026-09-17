@@ -9,6 +9,7 @@ import { TrendingUp, Loader2, Play } from "lucide-react";
 
 import { API_BASE } from "@/shared/api/apiBase";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 interface ScenarioResult {
   name: string;
@@ -183,6 +184,10 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
 
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* ★"의사결정 가치" 는 시뮬레이션 위의 차이다★ — 실현된 가치가 아니다.
+              종류는 서버가 말하고(`/counterfactual`), 화면은 그대로 그린다(Z3). */}
+          <div><PerfLabel value={result.perf_label as PerfLabelValue | null | undefined} /></div>
+
           {/* Decision Values Cards */}
           <div>
             <div style={{ fontSize: 10, color: "#6b7fa3", fontWeight: 600,

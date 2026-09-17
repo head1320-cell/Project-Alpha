@@ -221,6 +221,74 @@ def load_universe_frame() -> pd.DataFrame:
 load_universe_frame.cache_clear = invalidate_universe_frame
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 생존편향 보정 여부 — ★어휘의 주인은 여기다★
+# ══════════════════════════════════════════════════════════════════════════
+#: 그 시점에 거래되던 종목을 실제로 세웠다(이후 상장폐지 포함).
+SURVIVORSHIP_CORRECTED = "corrected"
+#: 시총 상위 재구성 — ★정확한 편입 이력이 아니다★ 아래 `top_mktcap_asof` 참고.
+SURVIVORSHIP_APPROXIMATED = "approximated"
+#: 오늘 기준 멤버십이다 — 상장폐지 종목이 애초에 없다.
+SURVIVORSHIP_NOT_CORRECTED = "not_corrected"
+#: 시점 구성 여부를 **알 수 없다**. ★미상 ≠ 보정 안 됨★ — 사용자가 준 목록은
+#: 그 시점 유니버스일 수도, 오늘 살아남은 종목만일 수도 있다. 우리는 모른다.
+SURVIVORSHIP_UNKNOWN = "unknown"
+
+_SURVIVORSHIP_BY_MODE: dict[str, tuple[str, str | None]] = {
+    "all_asof": (SURVIVORSHIP_CORRECTED, None),
+    "top200_asof": (
+        SURVIVORSHIP_APPROXIMATED,
+        "시총 상위 재구성입니다 — 지수 편입의 **근사**이지 실제 편입 이력이 "
+        "아닙니다(상장폐지 종목은 포함됩니다)."),
+    "preset": (
+        SURVIVORSHIP_NOT_CORRECTED,
+        "오늘 기준 프리셋 멤버십입니다 — 그 사이 상장폐지된 종목이 유니버스에 "
+        "없어 생존편향이 남아 있습니다."),
+    "granular": (
+        SURVIVORSHIP_NOT_CORRECTED,
+        "오늘 기준 시총군·업종으로 고른 목록입니다 — 상장폐지 종목이 없어 "
+        "생존편향이 남아 있습니다."),
+    "tactical": (
+        SURVIVORSHIP_UNKNOWN,
+        "택티컬·최적화 전략은 ETF 슬리브를 직접 들고 돌아 종목 유니버스라는 "
+        "개념이 다릅니다 — 이 경로에서는 생존편향 보정 여부를 판정하지 않습니다."),
+    "custom_tickers": (
+        SURVIVORSHIP_UNKNOWN,
+        "사용자가 지정한 종목 목록입니다 — 그 시점 구성인지 오늘 살아남은 "
+        "종목인지 이 시스템은 알 수 없습니다."),
+}
+
+#: ★폴백은 언제나 오늘자 프리셋이다★ 요청이 무엇이었든 결과는 같다.
+_FALLBACK_REASON = (
+    "요청한 시점 유니버스를 만들지 못해 오늘자 프리셋으로 폴백했습니다 — "
+    "상장폐지 종목이 빠져 생존편향이 그대로 남아 있습니다. "
+    "`krx_ingest` 로 그 시점 일봉을 적재하면 보정됩니다.")
+
+
+def survivorship_of(mode: str, *, fell_back: bool = False) -> tuple[str, str | None]:
+    """유니버스 선택 모드 → `(보정 여부, 사유)`. ★순수 함수★
+
+    ★왜 예/아니오가 아닌가★ 네 값이 필요하다: 실제로 세운 것 · 근사 재구성 ·
+    오늘자 멤버십 · **알 수 없음**. 셋으로 줄이면 "모른다" 가 "안 됐다" 나
+    "됐다" 중 하나로 흡수되고, 둘 다 하지 않은 진술이 된다.
+
+    ★모르는 모드를 낙관하지 않는다★ 등록되지 않은 모드는 `unknown` + 사유다.
+
+    Args:
+        mode: `all_asof` · `top200_asof` · `preset` · `granular` · `custom_tickers`
+        fell_back: 시점 조회가 빈 값을 내 오늘자 프리셋으로 떨어졌는가.
+            ★그러면 요청이 무엇이었든 `not_corrected` 다.★
+    """
+    if fell_back:
+        return SURVIVORSHIP_NOT_CORRECTED, _FALLBACK_REASON
+    got = _SURVIVORSHIP_BY_MODE.get(str(mode))
+    if got is None:
+        return SURVIVORSHIP_UNKNOWN, (
+            f"등록되지 않은 유니버스 모드입니다({mode}) — 보정 여부를 판정할 "
+            "규칙이 없습니다.")
+    return got
+
+
 def tickers_asof(date: str, engine=None, min_count: int = 50) -> list[str]:
     """해당일(없으면 직전 거래일) 거래된 종목 — DB(daily_prices) 기반 시점 유니버스.
 

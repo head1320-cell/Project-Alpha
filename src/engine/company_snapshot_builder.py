@@ -121,18 +121,46 @@ def _period_end(year: int, month: int) -> date:
 
 
 def publication_dates(code: str) -> dict:
-    """★공표일이 아니라 '규칙으로 추정한 가용일' 이다★ 이름값을 하지 않도록 못을 박는다.
+    """★공표일 — 실측 접수일이면 그렇게, 아니면 규칙이라고 적는다★
 
-    실제 DART 접수일과 정정공시 이력은 이 저장소에 없다. 그래서 이 블록은 숫자와
-    **함께 그 한계를 싣고**, `research_usage` 가 그 한계를 강제한다.
+    예전에는 이 블록 전체가 "규칙으로 추정한 가용일" 하나였고 `method` 와
+    `has_vintage` 를 **손으로 박아** 뒀다. V1~V3 이 DART 접수일(`rcept_dt`)을
+    받아 `financials_vintages` 에 쌓고 읽게 하면서 그 단정은 사실이 아니게 됐다 —
+    이제 기간마다 **재서** 적는다.
+
+    ★추정을 지우지 않는다★ `estimated_available_from` 과 `lag_days` 는 실측 옆에
+    그대로 남는다. 지우면 "규칙으로는 언제였나" 를 다시 물을 수 없고, 실측이
+    규칙보다 이른지 늦은지 비교할 근거가 사라진다. 강등이지 삭제가 아니다.
+
+    ★`has_vintage` 는 리포트가 아니라 게이트 입력이다★ `derive_usage` 가 이걸로
+    `backtest_eligible` 을 판정하므로 **모든 행이 실측일 때만** `True` 다 — 일부만
+    실측이면 개정 이력을 재구성할 수 없다. 못 읽었으면 `None`(★미상 ≠ 없음★).
+    사람이 읽을 뉘앙스는 `vintage` 블록이 든다.
     """
-    from src.data.dart_history import _REPRT_MONTH, load_history
+    from src.data.dart_history import _REPRT_MONTH, load_history, load_vintages
     from src.engine.pit_store import ANNUAL_LAG_DAYS, DISCLOSURE_LAG_DAYS, REPRT_ANNUAL
 
     rows = load_history(str(code))
     if not rows:
         return {"available": False,
                 "reason": "재무 시계열이 적재되지 않아 가용일을 추정할 수 없습니다"}
+
+    try:
+        vrows, vreason = load_vintages(str(code))
+    except Exception as e:  # noqa: BLE001 — 빈티지 실패가 이 블록을 죽이지 않는다
+        vrows, vreason = None, f"재무 빈티지를 읽지 못했습니다: {type(e).__name__}: {e}"
+
+    #: 기간 → ★최초★ 접수일. 이 기간이 **언제부터 알려졌나** 를 묻는 것이므로
+    #: 정정본이 아니라 최초 공시가 답이다(정정본은 값을 바꿀 뿐 공개 시점이 아니다).
+    filed: dict[tuple, str] = {}
+    for v in vrows or []:
+        try:
+            key = (int(v["year"]), str(v["reprt"]))
+        except Exception:  # noqa: BLE001 — 축을 못 읽는 행은 빈티지가 아니다
+            continue
+        dt = str(v.get("rcept_dt") or "")
+        if dt and (key not in filed or dt < filed[key]):
+            filed[key] = dt
 
     out = []
     for r in rows[-(_MAX_YEARS * 4):]:
@@ -141,24 +169,54 @@ def publication_dates(code: str) -> dict:
             continue
         end = _period_end(int(r["year"]), month)
         lag = ANNUAL_LAG_DAYS if str(r.get("reprt")) == REPRT_ANNUAL else DISCLOSURE_LAG_DAYS
+        est = (end + timedelta(days=lag)).isoformat()
+        f = filed.get((int(r["year"]), str(r.get("reprt"))))
         out.append({
             "year": int(r["year"]), "reprt": str(r["reprt"]),
             "period_end": end.isoformat(),
-            "estimated_available_from": (end + timedelta(days=lag)).isoformat(),
+            # ★규칙값은 실측 옆에 그대로 남는다★
+            "estimated_available_from": est,
             "lag_days": lag,
+            "filed_at": f,                                  # 실측 접수일 (없으면 None)
+            "basis": "measured" if f else "estimated",
+            "available_from": f or est,                     # 소비자가 쓸 하나
         })
+
+    n_meas = sum(1 for r in out if r["basis"] == "measured")
+    all_measured = bool(out) and n_meas == len(out)
+    method = ("measured_filing_date" if all_measured
+              else "mixed" if n_meas else "static_lag_rule")
+    if vrows is None:
+        state, has_vintage = "unreadable", None       # ★확인 못 했다★
+    elif all_measured:
+        state, has_vintage = "measured", True
+    elif n_meas:
+        state, has_vintage = "partial", False
+    else:
+        state, has_vintage = "none", False
+
+    if all_measured:
+        # ★여기서 "접수일이 저장소에 없다" 고 하면 거짓이다★ 다만 값 축은 남아 있다.
+        warning = ("이 날짜는 DART 접수일(실측)입니다. 다만 **값**은 정정공시가 원본을 "
+                   "덮어쓴 `financials_history` 에서 오므로 개정 편향이 값 축에 남아 "
+                   "있고, 그래서 이 스냅샷은 아직 backtest_eligible 이 아닙니다.")
+    else:
+        # ★추정이 한 줄이라도 있으면 이 경고는 남는다★ 조건부이지 삭제가 아니다.
+        warning = ("이 날짜 중 일부는 **실제 공표일이 아니라 정적 시차 규칙(연간 90일 · "
+                   "분기 45일)으로 추정한 가용일**입니다. 그 기간의 DART 접수일과 "
+                   "정정공시(restatement) 이력이 아직 적재되지 않아 개정 편향이 "
+                   "존재하며, 그래서 이 스냅샷은 backtest_eligible 이 될 수 없습니다.")
+
     return {
         "available": bool(out),
         "reason": None if out else "보고서 코드를 해석할 수 있는 행이 없습니다",
-        "method": "static_lag_rule",
+        "method": method,
         "lag_days": {"annual": ANNUAL_LAG_DAYS, "quarterly": DISCLOSURE_LAG_DAYS},
-        "has_vintage": False,
+        "has_vintage": has_vintage,
+        "vintage": {"state": state, "reason": vreason or "",
+                    "measured_rows": n_meas, "total_rows": len(out)},
         "rows": out,
-        # ★이 문장이 이 블록의 존재 이유다★
-        "warning": ("이 날짜는 **실제 공표일이 아니라 정적 시차 규칙(연간 90일 · "
-                    "분기 45일)으로 추정한 가용일**입니다. DART 접수일과 정정공시"
-                    "(restatement) 이력은 이 저장소에 없으므로 개정 편향이 존재하며, "
-                    "그래서 이 스냅샷은 backtest_eligible 이 될 수 없습니다."),
+        "warning": warning,
     }
 
 
@@ -338,7 +396,16 @@ def build_and_store(code: str, price: float | None = None,
     any_available = any(v.get("available") for v in sections.values())
     status = _data_status(sections["valuation"], any_available)
 
-    # ★손으로 지정하지 않는다★ 빈티지가 없으므로 forward_only 로 떨어진다.
+    # ★손으로 지정하지 않는다★ 다만 `has_vintage` 는 **일부러** False 로 고정한다.
+    #
+    # V4 이후 `publication_dates()` 는 빈티지 유무를 실제로 재서 보고한다. 그런데
+    # 그 값을 여기 그대로 넣으면 안 된다 — `derive_usage` 의 다른 조건인
+    # `depth_ok` 는 **재무 이력의 깊이**를 보지 재무 **빈티지의 깊이**를 보지
+    # 않는다. 빈티지 한 건짜리 종목이 `backtest_eligible` 로 넘어가 버린다.
+    #
+    # ★라벨을 고치는 것과 게이트를 여는 것은 다른 작업이다★ 게이트를 열려면
+    # 빈티지 깊이를 재는 조건이 먼저 있어야 하고, 그건 별도 승인 사항이다.
+    # `test_company_snapshot_builder.py` 의 트립와이어가 이 선을 지킨다.
     usage = derive_usage(
         has_vintage=False,
         depth_ok=bool(sections["financials"].get("available")),
@@ -346,7 +413,8 @@ def build_and_store(code: str, price: float | None = None,
         has_source=any_available,
     )
     if usage is ResearchUsage.BACKTEST_ELIGIBLE:  # pragma: no cover - 도달 불가
-        raise AssertionError("빈티지가 없는데 backtest_eligible 이 나왔다 — derive_usage 계약 위반")
+        raise AssertionError("has_vintage=False 인데 backtest_eligible 이 나왔다 — "
+                             "derive_usage 계약 위반")
 
     # 논지는 선택 — 없으면 섹션이 사유를 달고 비어 있는다(기본 동작 불변).
     sections["thesis"] = _section("thesis", lambda: _thesis(code, thesis))

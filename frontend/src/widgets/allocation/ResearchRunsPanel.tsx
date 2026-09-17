@@ -5,7 +5,20 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { attributionApi } from "@/entities/attribution/api";
 import { researchApi, type ReproduceResult, type ResearchRunFull, type ResearchRunSummary } from "@/entities/research/api";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { useAllocation } from "./AllocationProvider";
+
+/**
+ * 기록된 런의 `outputs` 에서 라벨을 꺼낸다.
+ *
+ * ★Z3 이전에 기록된 런에는 이 키가 없다★ — 그때 `undefined` 를 그대로 넘기면
+ * 컴포넌트가 `unknown` 을 그린다. 그것이 사실이다: 그 런은 자기 수치가 무엇인지
+ * 기록해 두지 않았다. 여기서 `backtest` 로 채우면 **없는 기록을 만드는 것**이다.
+ */
+function runPerfLabel(run: ResearchRunFull): PerfLabelValue | null {
+  const v = (run.outputs as { perf_label?: unknown }).perf_label;
+  return v && typeof v === "object" ? (v as PerfLabelValue) : null;
+}
 
 const fmtTs = (sec: number) => {
   try { return new Date(sec * 1000).toISOString().slice(0, 16).replace("T", " "); }
@@ -117,6 +130,12 @@ function CompareTable({ a, b }: { a: ResearchRunFull; b: ResearchRunFull }) {
   const col = (v: number) => (v > 0 ? "var(--color-bull)" : v < 0 ? "var(--color-bear)" : "var(--t-muted)");
   return (
     <div className="as-rr-cmp">
+      {/* ★두 런의 종류가 다르면 Δ 는 전략 차이가 아니다★ — 그래서 나란히 적는다.
+          기록에 라벨이 없는 옛 런은 `unknown` 으로 남는다(지어내지 않는다). */}
+      <div className="as-rr-perf">
+        <PerfLabel value={runPerfLabel(a)} scope="A" compact />
+        <PerfLabel value={runPerfLabel(b)} scope="B" compact />
+      </div>
       <table className="as-metrics">
         <thead><tr><th>자산</th><th className="num">A</th><th className="num">B</th><th className="num">Δ (B−A)</th></tr></thead>
         <tbody>

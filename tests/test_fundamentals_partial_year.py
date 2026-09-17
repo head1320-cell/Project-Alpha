@@ -42,6 +42,15 @@ def _install(monkeypatch, by_year: dict):
         def get_dividend_info(self, *a, **k):
             return {}
     monkeypatch.setattr(dc, "get_dart_client", lambda: _Dart())
+
+    # ★시총을 실측으로 공급한다★ 예전에는 `mcap` 이 없으면 `total_equity * 1.2`
+    # (PBR≈1.2 가정)로 지어내, 이 픽스처들이 **조작값 덕분에** 통과하고 있었다.
+    # 그 조작을 없앴으므로 시총은 실측으로 준다 — 단언은 그대로다.
+    import src.data.fundamentals_store as _fsmod
+    monkeypatch.setattr(_fsmod.FundamentalsStore, "_market_snapshot",
+                        lambda self, code: {"mcap_억": 10_000.0, "price": 20_000.0},
+                        raising=False)
+
     monkeypatch.setattr(dc, "get_corp_code", lambda t: None)
 
 
@@ -111,6 +120,11 @@ def test_db_served_path_makes_no_network_call(monkeypatch):
             raise AssertionError("라이브 배당 호출됨 — DB dps로 대체됐어야 함")
     monkeypatch.setattr(dc, "get_corp_code", _boom_corp)
     monkeypatch.setattr(dc, "get_dart_client", lambda: _Dart())
+    # 시총은 실측으로 공급 — 예전에는 `total_equity * 1.2` 조작이 이 자리를 메웠다.
+    import src.data.fundamentals_store as _fsmod
+    monkeypatch.setattr(_fsmod.FundamentalsStore, "_market_snapshot",
+                        lambda self, code: {"mcap_억": 10_000.0, "price": 20_000.0},
+                        raising=False)
 
     st = FundamentalsStore()
     raw = st._real_raw_financials("900004")     # BOOM 없이 통과해야 함

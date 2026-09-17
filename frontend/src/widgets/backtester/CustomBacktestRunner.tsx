@@ -4,7 +4,7 @@ import { useState } from "react";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type ScreenToBacktestResult } from "@/entities/backtest/bridgeModel";
 import type { BuilderState } from "@/entities/strategy/model";
-
+import { PerfLabel } from "@/shared/ui/PerfLabel";
 // ═══════════════════════════════════════════════════════════════════════════════
 // CustomBacktestRunner — 빌더 커스텀 전략(BuilderState)을 백테스트
 //   기성 전략과 동일한 터미널 결과 레이아웃. spec을 __custom__으로 백엔드 실행.
@@ -145,6 +145,10 @@ export default function CustomBacktestRunner({
 
           {result && st && (
             <div className="animate-fade-in">
+              {/* ★커스텀 전략도 시뮬레이션이다★ — `/screen-to-backtest` 가 종류를
+                  선언하고(Z2) 화면은 그것을 그린다. 계획의 부착 목록에 없었는데
+                  트립와이어 검출기를 돌려 보고 찾았다(Z4). */}
+              <div className="cbr-perf"><PerfLabel value={result.perf_label} /></div>
               <div className="tbt-stats">
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Total Return</div>
