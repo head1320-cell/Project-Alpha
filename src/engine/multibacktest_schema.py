@@ -44,6 +44,7 @@ MULTIBACKTEST_SCHEMA_DDL = [
         growth_signal REAL, inflation_signal REAL,
         allocation_effect REAL DEFAULT 0, selection_effect REAL DEFAULT 0,
         macro_effect REAL DEFAULT 0, netting_effect REAL DEFAULT 0, cost_effect REAL DEFAULT 0,
+        cash_effect REAL,
         num_strategies_active INTEGER, num_trades INTEGER DEFAULT 0,
         turnover_pct REAL DEFAULT 0, netting_savings REAL DEFAULT 0,
         rebalanced INTEGER DEFAULT 0,
@@ -65,6 +66,15 @@ MULTIBACKTEST_SCHEMA_DDL = [
 ]
 
 
+#: 기존 표에 뒤늦게 붙는 칸. ★W1 관용구★ — `add_columns` 가 bool 을 돌려주고
+#: 호출자는 **그 칸 없이도 동작해야** 한다(못 붙으면 `cash_effect` 는 `None` 으로
+#: 남고, 커버리지가 불완전해져 잔차가 "복리" 로 오명명되지 않는다 — 안전한 쪽).
+#:
+#: ★`DEFAULT` 를 주지 않는다★ — `selection_effect REAL DEFAULT 0` 이 바로
+#: **거짓 생성기**였다(AL2). 안 실으면 0 이 들어가 상수가 관측 행세를 한다.
+_DAILY_ADDED_COLS = [("cash_effect", "REAL")]
+
+
 def init_multibacktest_schema(engine) -> int:
     count = 0
     with engine.begin() as conn:
@@ -73,4 +83,11 @@ def init_multibacktest_schema(engine) -> int:
                 conn.execute(text(ddl)); count += 1
             except Exception as e:
                 logger.warning(f"DDL failed: {e}")
+    try:
+        from src.data.schema_add_columns import add_columns
+        add_columns(engine, "multibacktest_daily", _DAILY_ADDED_COLS,
+                    logger=logger)
+    except Exception as e:                                    # noqa: BLE001
+        # ★못 붙어도 진행한다★ — 칸이 없으면 `cash_effect` 가 미상으로 남을 뿐이다.
+        logger.warning(f"cash_effect 컬럼을 붙이지 못했습니다(미상으로 남습니다): {e}")
     return count

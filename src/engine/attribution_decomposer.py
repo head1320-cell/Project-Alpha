@@ -13,12 +13,18 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
+from src.engine.attribution_evidence import attribution_evidence
+
 logger = logging.getLogger(__name__)
 
 
-#: 5-Factor 분해의 효과 컬럼. 커버리지는 이 다섯을 기준으로 잰다.
+#: 분해의 효과 컬럼. 커버리지는 이 **여섯**을 기준으로 잰다.
+#: ★`cash_effect` 는 AL3 에서 갈라져 나왔다★ — 예전에는 현금이자가
+#: `cost_effect` 에 더해져 "거래 비용" 으로 렌더됐다(부호도 성격도 반대인 둘).
+#: ★`src/domain/daily_explanation.STRATEGY_DRIVERS` 와 **같아야 한다**★ —
+#: `tests/test_daily_explanation.py:77` 이 대조한다.
 EFFECT_COLUMNS = ("allocation_effect", "selection_effect", "macro_effect",
-                  "netting_effect", "cost_effect")
+                  "netting_effect", "cost_effect", "cash_effect")
 
 
 def _sanitize_for_json(obj):
@@ -109,6 +115,10 @@ class AttributionDecomposer:
                 "max_drawdown_pct":       run_info.get("max_drawdown_pct"),
             },
             "cumulative":            cumulative,
+            # ★어느 효과를 쟀고 어느 효과를 안 쟀나★ (AL4) — 커버리지는 *몇 행을
+            # 봤나* 이고 이것은 *왜 값이 없나* 다. FX·국가는 결함이 아니라
+            # 정의되지 않는 축이라 따로 실린다.
+            "attribution_evidence":  attribution_evidence(cumulative),
             "waterfall":             waterfall,
             "monthly":               monthly,
             "quarterly":             quarterly,
@@ -225,6 +235,8 @@ class AttributionDecomposer:
             "macro_effect_pct":        vals["macro_effect"],
             "netting_effect_pct":      vals["netting_effect"],
             "cost_effect_pct":         vals["cost_effect"],
+            # ★현금이자는 비용이 아니다★ (AL3) — 제 칸을 갖는다.
+            "cash_effect_pct":         vals["cash_effect"],
             # ★잔차는 커버리지에 따라 이름이 다르다★ 둘 중 하나만 값을 갖는다.
             "interaction_pct":         (round(residual, 3) if complete else None),
             "unexplained_pct":         (None if complete else round(residual, 3)),
@@ -307,16 +319,21 @@ class AttributionDecomposer:
         if daily_df.empty:
             return []
         df = daily_df.copy().set_index("trade_date")
+        # ★효과 칸에 `fillna(0)` 을 걸지 않는다★ (AL) — 걸면 "재지 않았다" 가
+        # 월간 표에서 `0.0` 이 되어, 같은 실행을 누적 표와 월간 표가 **다르게**
+        # 말한다. `sum(min_count=1)` 은 한 행도 못 보면 `NaN` 을 남긴다.
+        _effects = list(EFFECT_COLUMNS)
         agg = df.groupby(pd.Grouper(freq=freq)).agg({
-            "portfolio_return": "sum", "allocation_effect": "sum",
-            "selection_effect": "sum", "macro_effect": "sum",
-            "netting_effect": "sum", "cost_effect": "sum",
+            "portfolio_return": "sum",
+            **{c: (lambda x: x.sum(min_count=1)) for c in _effects},
             "netting_savings": "sum", "turnover_pct": "sum",
             "num_trades": "sum", "rebalanced": "sum",
-        }).fillna(0)
+        })
+        for col in ("portfolio_return", "netting_savings", "turnover_pct",
+                    "num_trades", "rebalanced"):
+            agg[col] = agg[col].fillna(0)
 
-        for col in ["portfolio_return", "allocation_effect", "selection_effect",
-                    "macro_effect", "netting_effect", "cost_effect"]:
+        for col in ["portfolio_return", *_effects]:
             agg[col] = agg[col] * 100
 
         compound = (
@@ -339,14 +356,28 @@ class AttributionDecomposer:
                 except (TypeError, ValueError):
                     return 0.0
 
+            def _effect(v, d=3):
+                """효과 칸 전용. ★미상은 `None` 으로 남는다★ (AL)
+
+                `_safe` 는 `0.0` 을 낸다 — 거래량·회전율처럼 "없으면 0" 이 맞는
+                칸에는 옳지만, 효과 칸에서는 **안 잰 것을 잰 0 으로** 만든다.
+                프런트는 이 표를 아직 안 읽으므로 계약이 깨질 소비자는 없다.
+                """
+                try:
+                    v = float(v)
+                except (TypeError, ValueError):
+                    return None
+                return None if (math.isnan(v) or math.isinf(v)) else round(v, d)
+
             result.append({
                 "period":                str(period_end.date()),
                 "portfolio_return_pct":  _safe(row.get("portfolio_return_compound", row["portfolio_return"])),
-                "allocation_effect_pct": _safe(row["allocation_effect"]),
-                "selection_effect_pct":  _safe(row["selection_effect"]),
-                "macro_effect_pct":      _safe(row["macro_effect"]),
-                "netting_effect_pct":    _safe(row["netting_effect"]),
-                "cost_effect_pct":       _safe(row["cost_effect"]),
+                "allocation_effect_pct": _effect(row["allocation_effect"]),
+                "selection_effect_pct":  _effect(row["selection_effect"]),
+                "macro_effect_pct":      _effect(row["macro_effect"]),
+                "netting_effect_pct":    _effect(row["netting_effect"]),
+                "cost_effect_pct":       _effect(row["cost_effect"]),
+                "cash_effect_pct":       _effect(row["cash_effect"]),
                 "netting_savings_value": _safe(row["netting_savings"], 2),
                 "turnover_pct":          _safe(row["turnover_pct"], 2),
                 "num_trades":            int(row["num_trades"] or 0),

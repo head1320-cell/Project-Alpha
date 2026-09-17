@@ -53,7 +53,7 @@ DRIVER_SETS = (DRIVER_SET_STRATEGY, DRIVER_SET_HOLDING)
 #: ★`attribution_decomposer.EFFECT_COLUMNS` 와 **같아야 한다**★ — 테스트가 대조한다.
 #: 여기 적어 두는 이유는 `src/domain/` 이 엔진을 import 하지 않기 위해서다(순수 계층).
 STRATEGY_DRIVERS = ("allocation_effect", "selection_effect", "macro_effect",
-                    "netting_effect", "cost_effect")
+                    "netting_effect", "cost_effect", "cash_effect")
 
 DRIVER_PRICE = "price"
 DRIVER_REBALANCE = "rebalance"
@@ -73,6 +73,9 @@ DRIVER_LABELS = {
     "macro_effect": "매크로 오버레이",
     "netting_effect": "청산 효과",
     "cost_effect": "거래 비용",
+    # ★현금이자는 비용이 아니다★ (AL3) — 예전에는 `cost_effect` 에 더해져
+    # "거래 비용" 이라는 이름으로 화면에 나갔다.
+    "cash_effect": "현금 이자",
     DRIVER_PRICE: "가격 변동",
     DRIVER_REBALANCE: "그날의 매매",
     DRIVER_FEE: "수수료와 세금",

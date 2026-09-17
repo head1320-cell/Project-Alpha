@@ -74,7 +74,10 @@ def test_the_row_carries_its_coverage():
     """★그 행에서 몇 축을 봤는가★ — 설명이 잔차의 종류를 가르는 근거다."""
     out = _daily([_row("2026-09-11", macro_effect=None, netting_effect=None)])
     cov = out[0]["coverage"]
-    assert cov["n_known"] == 3 and cov["n_total"] == len(EFFECT_COLUMNS)
+    # ★매직 넘버를 쓰지 않는다★ — 효과가 다섯에서 여섯이 되자(AL3) `3` 이
+    # 낡았다. 계약은 "둘을 뺀 나머지" 이지 특정 숫자가 아니다.
+    assert cov["n_known"] == len(EFFECT_COLUMNS) - 2
+    assert cov["n_total"] == len(EFFECT_COLUMNS)
     assert cov["complete"] is False
     assert sorted(cov["missing"]) == ["macro_effect", "netting_effect"]
 

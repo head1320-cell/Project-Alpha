@@ -13,6 +13,12 @@ interface RegimeRow {
   macro_effect_pct: number;
   netting_effect_pct: number;
   cost_effect_pct: number;
+  /**
+   * 안 쓴 현금이 **번** 이자 (AL3). ★예전에는 `cost_effect_pct` 에 더해져
+   * "거래 비용" 이라는 이름으로 나왔다★ — 부호도 성격도 반대인 둘이었다.
+   * 현금 모델이 없는 엔진에서는 `null`(미측정)이지 `0` 이 아니다.
+   */
+  cash_effect_pct?: number | null;
   avg_systemic_risk?: number;
 }
 
@@ -52,6 +58,13 @@ export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
     <div style={{ overflowX: "auto" }}>
       {/* ★국면별 알파도 시뮬레이션 위의 분해다★ — 라벨이 아예 없던 표다(Z3). */}
       <div style={{ marginBottom: 8 }}><PerfLabel value={perfLabel} /></div>
+      {/* ★이 표가 `selection_effect_pct` 를 안 그리는 것은 옳았다★ (AL) — 그
+          값은 오래도록 하드코딩된 `0` 이었다. 이제 백엔드가 `null`(미측정)을
+          내므로, 화면도 왜 없는지를 말한다. */}
+      <div style={{ marginBottom: 8, fontSize: 11, color: "#6b7fa3" }}>
+        ※ 전략 선택 효과는 <b>측정되지 않았습니다</b> — 전략별 벤치마크 계열이 없어
+        Brinson 선택항을 계산할 수 없습니다. 0 이 아니라 미상입니다.
+      </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
         <thead>
           <tr style={{ borderBottom: "1px solid #1e2d4a" }}>

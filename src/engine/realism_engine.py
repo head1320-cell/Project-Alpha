@@ -406,10 +406,20 @@ class RealisticBacktester:
                 drawdown_pct=drawdown,
                 regime=current_regime,
                 systemic_risk=current_systemic_risk,
-                allocation_effect=alloc_diff, selection_effect=0,
+                # ★상수 0 을 싣지 않는다★ (AL2) — 이 엔진은 선택 효과를 재지
+                # 않는다. `0` 은 `pd.notna` 라 커버리지가 1.0 으로 잡히고,
+                # `coverage_complete` 가 거짓으로 참이 되어 잔차가 "복리 효과" 로
+                # 오명명됐다. 재료가 `None` 이면 기존 가드가 제대로 작동한다.
+                allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
                 netting_effect=netting_savings/equity if equity > 0 else 0,
-                cost_effect=cost_effect + cash_yield,
+                # ★현금이자는 비용이 아니다★ (AL3) — 예전에는
+                # `cost_effect + cash_yield` 였다. 부호도(비용 음수·이자 양수)
+                # 성격도(나간 돈·번 돈) 반대인 둘을 한 칸에 넣고 화면이
+                # "거래 비용" 이라 불렀다. `net_return` 은 아래에서 둘을 그대로
+                # 더하므로 ★수익률·Sharpe·드로다운은 불변★ 이다.
+                cost_effect=cost_effect,
+                cash_effect=cash_yield,
                 num_trades=int(round(turnover * len(sids))) if rebalanced_today else 0,
                 turnover_pct=turnover * 100,
                 netting_savings=netting_savings, rebalanced=rebalanced_today,

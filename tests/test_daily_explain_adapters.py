@@ -35,16 +35,25 @@ from src.domain.daily_explanation import (
 from src.engine.daily_explain_backtest import explain_backtest_day
 from src.engine.daily_explain_holdings import explain_holdings_day
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # 백테스트 어댑터 — 총변동이 독립적으로 있다
 # ═══════════════════════════════════════════════════════════════════════════
+#: ★효과 수를 손으로 적지 않는다★ — AL3 에서 다섯 → 여섯이 되자 이 픽스처가
+#: 낡아 "완전한 행" 이 더 이상 완전하지 않았다.
+_EFFECT_VALUES = {"allocation_effect": 0.31, "selection_effect": 0.16,
+                  "macro_effect": -0.02, "netting_effect": 0.0,
+                  "cost_effect": -0.08, "cash_effect": 0.04}
+
+
 def _row(**over) -> dict:
+    from src.engine.attribution_decomposer import EFFECT_COLUMNS
+    n = len(EFFECT_COLUMNS)
+    assert set(_EFFECT_VALUES) == set(EFFECT_COLUMNS), (
+        "픽스처가 효과 목록과 어긋났습니다 — 값을 채우고 이 검사를 통과시키세요")
     base = {"date": "2026-09-11", "portfolio_return": 0.41,
-            "allocation_effect": 0.31, "selection_effect": 0.16,
-            "macro_effect": -0.02, "netting_effect": 0.0, "cost_effect": -0.08,
+            **_EFFECT_VALUES,
             "regime": "GOLDILOCKS",
-            "coverage": {"n_total": 5, "n_known": 5, "complete": True,
+            "coverage": {"n_total": n, "n_known": n, "complete": True,
                          "missing": []}}
     base.update(over)
     return base
@@ -54,8 +63,8 @@ def test_a_complete_row_calls_its_residual_interaction():
     exp = explain_backtest_day(_row(), run_id=7)
     assert exp.driver_set == DRIVER_SET_STRATEGY
     assert exp.residual_kind == RESIDUAL_INTERACTION
-    assert exp.residual_pct == pytest.approx(0.41 - (0.31 + 0.16 - 0.02 + 0.0 - 0.08),
-                                             abs=1e-9)
+    assert exp.residual_pct == pytest.approx(
+        0.41 - sum(_EFFECT_VALUES.values()), abs=1e-9)
     assert exp.missing_drivers == {}
 
 
