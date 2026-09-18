@@ -673,6 +673,41 @@ export interface AllocationBacktestResult {
   coverage?: { source?: string; start?: string; end?: string; n_obs?: number };
   benchmark_label?: string | null;
   excluded?: { ticker: string; reason: string }[];
+  /**
+   * ★이 곡선이 무엇인가★ (Z) — 응답은 예전부터 실었는데 **이 타입에 없어서**
+   * 화면이 볼 수 없었다. 그래서 이 위젯만 `PerfLabel` 을 달지 않았다.
+   */
+  perf_label?: PerfLabelValue | null;
+  /**
+   * ★룩어헤드를 어디까지 통제했나★ (E)
+   *
+   * 예전에는 화면이 `"OOS · look-ahead 없음"` 을 **상수로** 단정했다 — 응답에
+   * 근거가 하나도 없는데도. 이제 네 축을 판정해서 싣는다:
+   *
+   *   `window`   학습창 격리 — `R[lo:t]`, 구조적으로 참(가드 테스트가 지킨다)
+   *   `as_of`    절단일 고정 — 고정하지 않았으면 `degraded`
+   *   `universe` 생존편향   — ★이 경로는 재지 않는다★ → `unknown`
+   *   `price`    가격 정의  — ★이 경로는 재지 않는다★ → `unknown`
+   *
+   * ★`status` 는 절대 `verified` 가 되지 않는다★ — 재지 않는 축이 둘 있는 한.
+   * 그것이 결함이 아니라 **사실**이고, 화면은 그 사실을 그린다.
+   */
+  lookahead_evidence?: {
+    status: "verified" | "partial" | "unverified" | "unknown";
+    summary: string;
+    axes: Record<string, {
+      state: "ok" | "degraded" | "unknown";
+      reason: string | null;
+      [k: string]: unknown;
+    }>;
+    applicable: string[];
+    ok_axes: string[];
+    broken_axes: string[];
+    unknown_axes: string[];
+    /** 이 경로가 **아예 재지 않는** 축. 결함 목록과 섞지 않는다. */
+    unmeasured: string[];
+    note: string;
+  } | null;
 }
 
 export const allocationApi = {

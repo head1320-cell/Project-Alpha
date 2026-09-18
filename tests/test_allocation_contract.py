@@ -277,3 +277,96 @@ def test_the_factor_risk_sigma_survives_the_macro_block(client, monkeypatch):
     assert b["risk_model"]["applied"] is True, b["risk_model"].get("reason")
     assert seen["s_override"] is not None, \
         "risk_model.applied 는 참인데 팩터 Σ 가 최적화기에 닿지 않았다"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# E2 · 정책 백테스트 응답 계약 — ★여기엔 계약이 없었다★
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 실측: `/analyze` 에는 `ANALYZE_KEYS` 골든이 있는데 `/backtest` 에는 **없었다**.
+# 그래서 응답이 `perf_label` 을 싣는 것도, 프런트 타입(`AllocationBacktestResult`)에
+# 그 필드가 **아예 없어서 화면이 볼 수 없다**는 것도 아무도 잡지 못했다.
+
+BACKTEST = "/api/v1/allocation/backtest"
+
+BACKTEST_KEYS = {
+    "bench_curve", "benchmark_label", "coverage", "config", "conformal", "dates",
+    "drawdown_curve", "equity_curve", "error", "excluded", "impact", "labels",
+    "long_short", "notes", "regime_audit",
+    # ★이 실행이 무엇인가★ (Z) — 응답은 예전부터 실었는데 프런트 타입에 없었다.
+    "perf_label",
+    # ★룩어헤드를 어디까지 통제했나★ (E1) — 예전엔 화면이 상수로 단정했다.
+    "lookahead_evidence",
+    "metrics", "n_rebalances", "rebalances", "summary", "turnover_avg_pct",
+}
+
+
+def _backtest(client, **kw) -> dict:
+    body = {"tickers": TICKERS, "lookback_days": 500, "model": "mvo",
+            "rebalance": "M", "cost_bps": 10.0}
+    body.update(kw)
+    r = client.post(BACKTEST, json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert not out.get("error"), out.get("message")
+    return out
+
+
+def test_backtest_top_level_keys(client):
+    """★키를 정확히 건다★ — 늘어난 키도 보이게."""
+    assert set(_backtest(client)) == BACKTEST_KEYS
+
+
+def test_the_backtest_declares_what_kind_of_performance_it_is(client):
+    """응답이 `perf_label` 을 싣는다 — 화면이 배치로 추측하지 않게."""
+    lab = _backtest(client)["perf_label"]
+    assert lab and lab.get("kind") == "backtest"
+
+
+def test_the_backtest_declares_its_lookahead_control(client):
+    """★상수 배지를 대신할 증거★ — 그리고 그것은 `verified` 가 될 수 없다."""
+    ev = _backtest(client)["lookahead_evidence"]
+    from src.engine.allocation_evidence import LOOKAHEAD_AXES, UNMEASURED_AXES
+    assert set(ev["axes"]) == set(LOOKAHEAD_AXES)
+    assert ev["status"] != "verified", "재지 않는 축이 둘 있는 한 나올 수 없다"
+    for name in UNMEASURED_AXES:
+        assert ev["axes"][name]["state"] == "unknown"
+        assert ev["axes"][name]["reason"]
+
+
+def test_an_unpinned_as_of_is_reported_as_a_degradation(client):
+    """기본 호출은 절단일을 고정하지 않는다 — ★그 사실이 응답에 남는다★."""
+    ev = _backtest(client)["lookahead_evidence"]
+    assert ev["axes"]["as_of"]["state"] == "degraded"
+    assert ev["axes"]["as_of"]["as_of_effective"], "서버가 쓴 날은 남아야 한다"
+
+
+def test_pinning_the_as_of_flips_that_axis(client):
+    """★짝★ — 항상 `degraded` 인 구현을 배제한다."""
+    ev = _backtest(client, as_of="2025-06-30")["lookahead_evidence"]
+    assert ev["axes"]["as_of"]["state"] == "ok"
+    assert ev["axes"]["as_of"]["as_of_requested"] == "2025-06-30"
+
+
+def test_the_route_docstring_no_longer_claims_no_lookahead():
+    """★그 문장이 배지의 출처였다★ — 라우트가 단정하면 화면이 따라 단정한다.
+
+    소스 텍스트를 보는 이유: 이 주장은 **응답이 아니라 문서**에 있었고, 그래서
+    어떤 동작 테스트로도 잡히지 않았다.
+    """
+    import inspect
+
+    from src.api.allocation_routes import allocation_backtest
+    doc = inspect.getdoc(allocation_backtest) or ""
+    assert doc
+    # ★단정형만 금지한다★ 이 테스트도 처음엔 부분문자열 `"look-ahead 없음"` 을
+    # 통째로 금지했는데, 고친 docstring 이 그 문구를 **인용해서 부정**하자
+    # (`★"look-ahead 없음" 이라고 적지 않는다★`) 그대로 걸렸다. E 안에서만 세 번째
+    # 같은 실수다 — ★어휘만 보면 주장과 부정을 구별하지 못한다★. 그래서 옛
+    # **단정 구문**을 정확히 건다.
+    assert "산출(look-ahead 없음)" not in doc
+    assert "룩어헤드 없음." not in doc
+    # ★부정이 실제로 있어야 한다★ — 없으면 위 금지는 공허하다.
+    assert "적지 않는다" in doc
+    # ★대신 어디를 보라고 말한다★ — 지우기만 하면 다음 사람이 다시 쓴다.
+    assert "lookahead_evidence" in doc

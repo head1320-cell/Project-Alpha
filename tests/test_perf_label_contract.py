@@ -45,15 +45,20 @@ METRIC_TOKENS = (
 )
 
 #: ★사유 없는 면제는 없다★ 값이 빈 문자열이면 아래 테스트가 실패한다.
+#:
+#: ★E 에서 하나가 빠졌다(8 → 7)★ — `PolicyBacktest.tsx` 는 면제가 아니라 **고쳤다**.
+#: 그 자리의 `as-bt-badge ok` 가 `"OOS · look-ahead 없음"` 을 응답 근거 없이 상수로
+#: 단정하고 있었고(E), 이제 `PerfLabel` 과 `lookahead_evidence` 배지를 함께 그린다.
+#: `.mock`/`.real` 은 여전히 한 글자도 안 건드렸다(`allocation-stages2.spec.ts`).
+#:
+#: ★남은 일곱은 줄이려고 붙이지 않는다★ — 특히 `CompanyCockpit` 에 백테스트 라벨을
+#: 달면 **없는 시뮬레이션을 있다고** 말하게 된다. 목록의 길이는 목표가 아니다.
 ALLOWED: dict[str, str] = {
     "src/widgets/backtester/BacktestResults.tsx":
         "기존 `brun-badge`(PIT 시점정합) 배지를 유지한다 — E2E `backtest.spec.ts` 가 "
         "`.brun-*` 를 다수 단정하므로 이 커밋에서 건드리지 않는다(ADR 001).",
     "src/widgets/backtester/TerminalBacktester.tsx":
         "기존 `tbt-prov`(실데이터/합성) 배지를 유지한다 — 데이터 축은 이미 말하고 있다.",
-    "src/widgets/allocation/PolicyBacktest.tsx":
-        "기존 `as-bt-badge`(데이터+OOS) 배지를 유지한다 — `allocation-stages2.spec.ts:361` "
-        "이 클래스를 붙잡고 있다.",
     "src/widgets/landing/HeroDeckLive.tsx":
         "랜딩 데모다. 숫자 옆에 '예시 수치' 캡션이 이미 붙어 있어 라벨보다 강하게 "
         "말하고 있다 — 같은 자리에 두 문장이 겹치면 오히려 약해진다.",

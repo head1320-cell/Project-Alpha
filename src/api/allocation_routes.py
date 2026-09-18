@@ -485,6 +485,7 @@ from src.api.allocation_pipeline import (  # noqa: F401
 )
 from src.data.mock_gate import mock_allowed
 from src.domain.perf_kind import backtest_label
+from src.engine.allocation_evidence import lookahead_evidence
 
 
 # ── /analyze ─────────────────────────────────────────────────────────────────
@@ -877,7 +878,13 @@ def run_analyze(req: AnalyzeRequest) -> dict:
 @router.post("/backtest")
 def allocation_backtest(req: BacktestRequest):
     """정책(모델+뷰+제약+리밸런싱+비용)을 시점 밖으로 재현 — 각 리밸런싱 가중치는
-    과거 데이터로만 산출(look-ahead 없음). OOS 자산곡선 + compute_metrics 지표 반환."""
+    **그 시점 이전** 데이터로만 산출된다. OOS 자산곡선 + compute_metrics 지표 반환.
+
+    ★"look-ahead 없음" 이라고 적지 않는다★ 이 문장이 예전에 여기 있었고,
+    `PolicyBacktest.tsx` 가 그것을 **상수 배지**로 옮겨 적어 화면이 근거 없이
+    단정하고 있었다(E). 학습창 격리는 **한 축**일 뿐이고, 이 경로는 생존편향과
+    가격 정의를 아예 재지 않는다. 판정은 응답의 `lookahead_evidence` 가 한다 —
+    네 축 중 둘이 미상이라 그 롤업은 `verified` 가 될 수 없다."""
     _check_as_of(req.as_of)
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
@@ -909,6 +916,10 @@ def allocation_backtest(req: BacktestRequest):
             out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
         # ★이 곡선이 무엇인지 응답이 말한다★ — mock 게이트가 유일한 데이터 판정 기준.
         out["perf_label"] = backtest_label(is_mock_data=mock_allowed()).to_dict()
+        # ★룩어헤드를 어디까지 통제했는지도 응답이 말한다★ (E) — 예전에는 화면이
+        # 근거 없이 "look-ahead 없음" 이라고 단정했다. 관측·기록만이고 계산은
+        # 한 줄도 바뀌지 않는다.
+        out["lookahead_evidence"] = lookahead_evidence(coverage)
         return out
     except Exception:
         logger.exception("allocation backtest 실패")

@@ -1,9 +1,21 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
 // PolicyBacktest — 정책 walk-forward(OOS) 백테스트 (AAS 로드맵 07, 신뢰도 키스톤)
-//   현재 포트폴리오·모델·뷰·제약을 그대로 시점 밖으로 재현. 각 리밸런싱 가중치는 과거
-//   데이터로만 산출(look-ahead 없음), 리밸런싱마다 회전율 비용 차감. OOS 자산곡선 vs
-//   벤치마크 · 낙폭 · 지표표 · 회전율 · 시점별 비중. mock/OOS/비용 정직 배지.
+//   현재 포트폴리오·모델·뷰·제약을 그대로 시점 밖으로 재현. 각 리밸런싱 가중치는 **그
+//   시점 이전** 데이터로만 산출되고, 리밸런싱마다 회전율 비용을 차감한다. OOS 자산곡선
+//   vs 벤치마크 · 낙폭 · 지표표 · 회전율 · 시점별 비중.
+//
+// ★"look-ahead 없음" 이라고 적지 않는다 (E)★
+// ─────────────────────────────────────────────────────────────────────────────
+// 이 자리에 `<span className="as-bt-badge ok">OOS · look-ahead 없음</span>` 이 **상수**
+// 로 박혀 있었다. 응답에 그 주장을 뒷받침할 필드가 하나도 없었는데도 결과가 나오기만
+// 하면 무조건 렌더됐다 — ★상수가 관측 행세를 한다★(AL 의 `selection_effect=0`, AM 의
+// `"dev"` 와 같은 모양). 라우트 docstring 이 그 문장의 출처였고, E2E 가 그 문구를
+// 단정해 **테스트가 거짓 주장을 지키고** 있었다.
+//
+// 학습창 격리(`R[lo:t]`)는 구조적으로 참이지만 그것은 **한 축**이다. 생존편향과 가격
+// 정의는 이 경로가 아예 재지 않는다. 이제 화면은 응답의 `lookahead_evidence` 롤업을
+// 그대로 그린다 — ★재지 않는 축이 둘 있는 한 `verified` 는 나오지 않는다★.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -14,6 +26,8 @@ import {
 import { useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { TIP_STYLE } from "@/shared/ui/chartStyle";
 import { allocationApi, type AllocationBacktestResult } from "@/entities/allocation/api";
+// ★배럴(`@/shared/ui`)로 import 하지 않는다★ — 그 배럴에는 무게 경고가 붙어 있다.
+import { PerfLabel } from "@/shared/ui/PerfLabel";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 const fmt = (v: number | null | undefined, s = "", d = 2) =>
@@ -34,6 +48,36 @@ const fmt = (v: number | null | undefined, s = "", d = 2) =>
 // ═══════════════════════════════════════════════════════════════════════════════
 const col = (v: number | null | undefined) =>
   (v == null ? undefined : v >= 0 ? "var(--chart-up)" : "var(--chart-down)");
+/**
+ * 룩어헤드 롤업 → 배지 문구. ★응답이 말한 것만 옮긴다★
+ *
+ * 없거나 알아보지 못하면 `unknown` 이다 — `verified` 로 기울지 않는다. 기울면
+ * 고치려던 바로 그 거짓말(★응답에 없는 것을 화면이 단정★)이 돌아온다.
+ * `PerfLabel.resolvePerfLabel` 과 같은 규율이다.
+ */
+const LA_TEXT: Record<string, string> = {
+  verified: "룩어헤드 통제 확인",
+  partial: "룩어헤드 통제 부분",
+  unverified: "룩어헤드 결함",
+  unknown: "룩어헤드 미상",
+};
+
+const LA_MISSING =
+  "이 응답은 룩어헤드를 어디까지 통제했는지 말하지 않습니다";
+
+function lookaheadBadge(ev: AllocationBacktestResult["lookahead_evidence"]) {
+  if (!ev || typeof ev.status !== "string" || !(ev.status in LA_TEXT)) {
+    return { status: "unknown", text: LA_TEXT.unknown, title: LA_MISSING };
+  }
+  // ★안 잰 축을 따로 말한다★ — 결함 목록에 섞으면 "언젠가 재겠다" 와 "재는
+  // 자리를 안 지난다" 가 구별되지 않는다.
+  const unmeasured = (ev.unmeasured ?? [])
+    .map((n) => ev.axes?.[n]?.reason)
+    .filter(Boolean) as string[];
+  const title = [ev.summary, ...unmeasured, ev.note].filter(Boolean).join(" · ");
+  return { status: ev.status, text: LA_TEXT[ev.status], title };
+}
+
 const AXIS_TICK = { fontSize: 11 };
 const GRID = "var(--border)";
 
@@ -69,6 +113,7 @@ export function PolicyBacktest() {
   const turns = ok && res.rebalances ? res.rebalances.map((r) => ({ date: r.date, turnover: r.turnover_pct })) : [];
 
   const isMock = res?.coverage?.source === "mock";
+  const la = lookaheadBadge(res?.lookahead_evidence);
   const canRun = holdings.length >= 2;
 
   return (
@@ -106,8 +151,17 @@ export function PolicyBacktest() {
       {ok && (
         <>
           <div className="as-bt-badges">
+            {/* ★데이터 축 — 한 글자도 건드리지 않았다★ `allocation-stages2.spec.ts` 가
+                `.as-bt-badge.mock/.real` 을 붙잡고 있다(ADR 001). */}
             <span className={`as-bt-badge ${isMock ? "mock" : "real"}`}>{isMock ? "MOCK 데이터" : "실데이터"}</span>
-            <span className="as-bt-badge ok">OOS · look-ahead 없음</span>
+            {/* ★성과의 종류 — 응답이 말한 것만 그린다★ (Z) 응답은 예전부터 `perf_label`
+                을 실었는데 **타입에 없어서** 이 위젯만 못 보고 있었다. */}
+            <PerfLabel value={res.perf_label} compact />
+            {/* ★룩어헤드 — 상수였던 자리★ (E) `data-lookahead` 가 새 계약이다
+                (`allocation-backtest.spec.ts` 가 함께 고쳐졌다, ADR 001). */}
+            <span className="as-bt-badge" data-lookahead={la.status} title={la.title}>
+              {la.text}
+            </span>
             <span className="as-bt-badge">{res.config?.window} · {rebalance === "M" ? "월간" : "분기"} · 비용 {res.config?.cost_bps}bp</span>
             <span className="num">{res.n_rebalances}회 리밸런싱 · 평균 회전율 {fmt(res.turnover_avg_pct, "%", 1)}</span>
           </div>
