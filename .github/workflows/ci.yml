@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       KIS_USE_MOCK: "1"   # CI는 mock 데이터로 (실키 불필요)
+      # 빌드 식별자 (AM6). checkout 이 `.git` 을 주므로 측정도 되지만, PR 에서는
+      # 측정값이 **머지 커밋**이 된다 — 주입이 "무엇을 테스트했나" 에 정확하다.
+      GIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 

@@ -28,6 +28,15 @@ RUN touch src/__init__.py \
 # Set PYTHONPATH so "from src.xxx import ..." always works
 ENV PYTHONPATH=/app
 
+# ── 빌드 식별자 주입 (AM6) ───────────────────────────────────────────────
+#  ★.dockerignore 가 `.git` 을 제외하므로 컨테이너 안에서는 git 을 읽을 수 없다★
+#  따라서 이것이 **유일한 경로**다. 주입하지 않으면 `code_version()` 은 예전처럼
+#  조용한 "dev" 를 만들지 않고 미상(None) + 사유를 기록한다 — 모든 실행이
+#  서로 구별되지 않는 상태로 남는다는 뜻이고, 그 사실이 기록에 드러난다.
+#    빌드 예: docker build --build-arg GIT_SHA=$(git rev-parse HEAD) ...
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
+
 # Do NOT run database init at build time — DB isn't available yet.
 # Instead, init_db() is called at FastAPI startup via @app.on_event("startup").
 

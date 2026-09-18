@@ -233,6 +233,47 @@ def policy_label(policy: CostPolicy) -> dict:
     }
 
 
+#: `cost_model_version` 의 자릿수. 짧게 — 기록에 실리고 사람이 읽는다.
+POLICY_VERSION_LEN = 12
+
+
+def policy_version(policy: CostPolicy) -> str:
+    """비용 정책의 판본. ★설정의 해시이지 코드 버전이 아니다★ (AM5)
+
+    채점표 #7 이 `cost_model_version` 을 **없는 것**으로 적었다. 재료는 AK 가
+    이미 만들어 두었다 — `CostPolicy` 가 frozen dataclass 라서 같은 설정은 같은
+    해시가 된다. 지금은 **비용 설정이 다른 두 백테스트가 기록에서 구별되지
+    않는다**.
+
+    ★어휘를 섞지 않는다★ 이 값은 `build_identity.KIND_COST_MODEL` 축이고
+    `code_version`(빌드)과도 `DECISION_LOGIC_VERSION`(결정 로직)과도 다르다.
+    설정이 그대로면 코드가 바뀌어도 이 값은 그대로다 — 그래서 이것만으로
+    재현성을 말할 수 없다.
+
+    ★필드를 세지 않는다★ `dataclasses.fields` 로 읽으므로 정책에 필드를 더하면
+    해시가 자동으로 따라온다. 손으로 센 목록은 반드시 낡는다(CLAUDE.md).
+
+    ★`None` 과 `0.0` 을 접지 않는다★ 미상은 0 이 아니다 — 세금을 모르는 정책과
+    세금이 0 인 정책은 다른 정책이다.
+    """
+    import dataclasses
+    import hashlib
+    import json
+
+    body = {}
+    for f in dataclasses.fields(policy):
+        v = getattr(policy, f.name)
+        if isinstance(v, bool) or v is None:
+            body[f.name] = v          # ★불리언은 숫자가 아니다★
+        elif isinstance(v, (int, float)):
+            body[f.name] = float(v)   # `15` 와 `15.0` 은 같은 정책이다
+        else:
+            body[f.name] = v
+    blob = json.dumps(body, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:POLICY_VERSION_LEN]
+
+
 def round_trip_bps(policy: CostPolicy) -> dict:
     """★같은 왕복을 이 정책으로 재면 몇 bp인가★ — 모델끼리 비교하는 단일 자.
 

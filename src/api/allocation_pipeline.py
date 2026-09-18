@@ -453,12 +453,14 @@ def _macro_verification(*, universe, months, model) -> dict:
     ★메커니즘 판정을 요청 판정으로 옮기지 않는다★ — `research_manifest` 의
     `this_request_verified` 가 그 선을 긋는다.
     """
-    from src.engine.research_context import code_version
+    from src.engine.build_probe import current_identity
     from src.engine.research_manifest import load_manifest, verification_label
 
     manifest, why = load_manifest()
+    # ★값이 아니라 식별자를 넘긴다★ 문자열만 넘기면 트리 상태를 잃고, 그러면
+    # 노후화 검사가 다시 **대답할 수 없는 질문**이 된다 (AM3).
     lab = verification_label(manifest, universe=universe, months=months,
-                             model=model, code_version=code_version())
+                             model=model, code_version=current_identity())
     if manifest is None:
         lab = {**lab, "manifest_reason": why}
     return lab

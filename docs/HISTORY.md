@@ -16434,3 +16434,110 @@ MDD −8.43% · 총수익 46.59%)가 **그대로 통과**한다. `total_decompos
   `unexplained` 이고, 그것이 **사실에 맞는** 이름이다.
 - **수익률이 바뀌었다고 말하지 않는다.** `net_return` 은 안 건드렸고 기존 골든이
   그대로 통과한다 — 바뀐 것은 **분해의 라벨과 칸**이다.
+
+---
+
+## AM · 버전 추적 — ★재현성의 뿌리가 아무것도 식별하지 않았다★
+
+설계 `docs/plans` AM · 채점표 #7 정정 · 어휘 `src/domain/build_identity.py` ·
+측정 `src/engine/build_probe.py` · 레지스트리 `src/engine/version_registry.py`
+
+### 무엇을 재고 무엇을 찾았나
+
+AG~AL 이 쌓은 *"무엇을 어떻게 쟀나"* 기록 전체가 **하나의 식별자 위에** 서 있다.
+그 식별자를 실측했다.
+
+| 관측 | 실측값 |
+|---|---|
+| `code_version()` | `GIT_SHA or APP_VERSION or "dev"` — 두 환경변수가 **어디에도 설정돼 있지 않다**(Dockerfile·compose·Makefile·CI·`.env.example` 전부 0건) |
+| DB | `research_runs` 6 · `regime_snapshots` 656 · `backtest_runs.engine_version` 39 = ★701행 전부 `"dev"`★ |
+| `research_manifest.py:176` | `code_version == mv` → `"dev" == "dev"` → **항상 참** |
+| `.dockerignore:18` | `.git` 제외 → 컨테이너 안에서 측정 **불가능** |
+
+★AL 의 상수 `0` 과 **같은 모양**이다★ — `pd.notna(0)` 이 참이라 하드코딩된 0 이
+`coverage_complete` 를 통과시켰듯, `"dev" == "dev"` 가 참이라 노후화 검사가 한
+번도 발동하지 못했다. **가드는 있는데 도달할 수 없다.** 주석은 *"★노후화는 적되
+막지 않는다★"* 라고 쓰여 있었는데, 실제로는 **적지도 못했다.**
+
+### 무엇을 했나
+
+- **AM1 `src/domain/build_identity.py`** — 두 축(무엇의 버전인가 `kind` ⟂ 그 값을
+  어떻게 알았나 `method`) + 셋째 사실(작업 트리 `tree`). `is_version()` 이
+  `"dev"`·`""`·`"unknown"` 을 **버전이 아니라고** 판정한다. 순수 계층(AST 로
+  `os`·`subprocess`·`src` import 금지를 건다).
+- **AM2 `src/engine/build_probe.py`** — `git rev-parse HEAD` + `git status
+  --porcelain` 을 **프로세스당 1회** 재고 환경변수는 매번 읽는다(캐시가 환경까지
+  얼리면 배포 중 주입이 반영되지 않고, 환경까지 매번 재면 요청마다 subprocess 가
+  뜬다). 못 재면 `None` + **사유**. `run` 을 주입할 수 있어 테스트가 subprocess
+  없이 전 분기를 돈다.
+- **AM3** — `verification_label` 의 `code_version_matches` 가 `versions_comparable`
+  로 바뀌었다. ★양쪽이 진짜 버전이고 양쪽 트리가 깨끗할 때만★ 참/거짓이고
+  아니면 `None`(비교 불가)이다.
+- **AM4 `src/engine/version_registry.py`** — `run_evidence.rollup` 의 **일곱 번째**
+  호출자. 열두 축 + 없는 네 축을 사유와 함께 등록.
+- **AM5 `policy_version(CostPolicy)`** — 채점표가 *없다*고 적은 축 하나를
+  구현했다. `dataclasses.fields` 로 읽으므로 **필드를 세지 않는다**.
+- **AM6** — `Dockerfile.backend` 의 `ARG/ENV GIT_SHA` · compose `build.args` ·
+  CI `GIT_SHA: ${{ github.sha }}` · `.env.example` 문서화 + 정적 트립와이어.
+
+### ★실측이 계획을 뒤집었다★ (이번에도 셋)
+
+1. **아홉이 아니라 열둘이었다.** `MODEL_VERSION` 과 `ENGINE_VERSION` 이 각각
+   **두 벌**이고 값이 다르다(`regime_snapshots` · `company_snapshots`). AK 의
+   "넷이 아니라 열넷" 과 같은 패턴 — ★이름을 세지 말고 자리를 읽어야 한다.★
+2. **`backtest_runs.result_version` 은 상수조차 없었다.** `create_run` 안에
+   `"rv": "1"` 로 인라인 리터럴이 박혀 있고 39행 전부 `"1"` 이다 — 올릴 사람도
+   올릴 자리도 없다.
+3. **주입 우선순위를 바꾸려다 되돌렸다.** 측정이 더 정확하니 측정을 앞에 두려
+   했는데, 컨테이너에는 `.git` 이 없어 **주입이 유일한 진실**이다. 기존 순서를
+   보존하되 ★측정이 가능하면 대조★ 하고 어긋나면 사유에 남기는 쪽이 옳았다.
+
+### 변이 배터리 — ★하나가 살아남았고 그것이 가장 유익했다★
+
+첫 실행 11/12. 살아남은 `l` 은 `VersionAxis.identifies_runs` 를 뒤집는 변이였다.
+★손으로 적은 불리언을 아무도 관측과 대조하지 않았다★ — `True` 를 `False` 로
+바꿔도 전 테스트가 초록이었다. **AL 의 하드코딩 `0` 과 정확히 같은 모양이다:
+선언이 관측 행세를 한다.** 필드를 지우고 `identifies_runs(axis)` 로 **파생**하게
+한 뒤(`method` 가 `measured`/`injected` 인가) 두 방향 짝 테스트를 붙였다.
+재실행 **13/13**(`m` 추가 — 반대 방향 변이).
+
+### 실물 확인 (커밋 시점)
+
+- `current_identity()` → `3dfaa23…`(측정) · `tree=dirty` · 사유 있음
+- `code_version_matches` → **`None`** (옛 구현은 이 자리에서 언제나 `True`)
+- git 을 가리면 → `None` + *"`.dockerignore` 가 `.git` 을 제외하므로 정상입니다"*
+- `registry_evidence()` → `partial` · 12축 · 없는 축 4 · **실행을 구별하는 축 3** ·
+  박힌 상수 9
+
+### 전체 게이트
+
+lint(ruff) · **5,951 통과 / 10 스킵 / 0 실패**(직전 5,785 → +166) · 프런트
+`tsc --noEmit` · `next build` 전부 통과. 골든 둘은 그대로다.
+
+### ★돌고 있는 테스트 아래에서 소스를 고치지 말 것★ (도구 교훈)
+
+첫 전체 실행에서 둘이 red 였는데 **따로 돌리면 초록**이었다. 원인은 코드가
+아니라 나였다 — 실행 중에 `scripts/regime_control.py` 를 고쳐 줄 번호가 밀렸고,
+그 파일의 소스를 `inspect.getsource` 로 읽는 테스트 둘
+(`test_the_research_gate_delegates_to_the_single_source` ·
+`test_the_nulls_pay_the_same_impact_as_the_arms`)이 캐시된 옛 줄 번호로 새 내용을
+잘랐다. ★거짓 red 를 진짜 회귀로 착각하지 않으려면 원인을 먼저 증명해야 한다★
+— 손대지 않고 다시 돌려 5,951/0 을 확인했다.
+
+### ★이 작업이 주장하지 않는 것★
+
+- **재현 가능해졌다고 말하지 않는다.** 실행을 *구별 가능하게* 만들었을 뿐이고,
+  같은 SHA 가 같은 결과를 준다는 증거는 이 저장소에 없다(데이터·시각·외부
+  응답이 전부 움직인다).
+- **버전 추적이 됐다고 말하지 않는다.** 열둘 중 실행을 구별하는 것은 **셋**이고
+  나머지 아홉은 소스에 박힌 상수다. 채점표는 `부분` 그대로다.
+- **기존 701행을 고치지 않았다.** 소급해서 알 방법이 없으므로 리더가
+  `is_version()` 으로 **미상으로 읽을** 뿐이다 — 마이그레이션이 아니라 판독이다.
+- **`strategy_version`·`feature_version`·`universe_version`·모델 레지스트리를
+  구현하지 않았다.** 무엇을 해시할지부터 설계가 필요해 ★정교함을 위한 정교함★
+  이 될 위험이 있다 — **사유와 함께 등록만** 했고, 구현하면 트립와이어가 red 가
+  되어 등록을 지우게 된다.
+- **`DECISION_LOGIC_VERSION` 을 합치지 않았다.** `investment_decisions.py` 가
+  명시적으로 다른 축이라고 적어 두었고 그 판단은 옳다.
+- **수치는 아무것도 바뀌지 않았다.** 골든 둘(`GOLDEN_SHA256`)은 거래 JSON 을
+  해시하므로 영향이 없고, 실제로 그대로 통과한다.

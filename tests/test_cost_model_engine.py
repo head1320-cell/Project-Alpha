@@ -234,3 +234,38 @@ def test_the_declared_totals_match_the_trades(loader):
     assert comps["spread"]["krw"] == pytest.approx(sum(t.spread for t in eng.trades))
     assert comps["commission"]["krw"] == pytest.approx(
         sum(t.commission for t in eng.trades))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑫ AM5 · 결과가 **비용 설정의 판본**을 선언한다
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 채점표 #7 은 `cost_model_version` 을 없는 축으로 적었다. 지금은 비용 설정이
+# 다른 두 백테스트가 기록에서 **구별되지 않는다** — 옵트인 셋을 켜고 돌린 실행과
+# 끄고 돌린 실행이 같아 보인다.
+
+def test_the_result_declares_the_cost_model_version(loader):
+    from src.domain.cost_model import POLICY_VERSION_LEN
+    _, _, res = _run()
+    v = res["cost_model"]["version"]
+    assert isinstance(v, str) and len(v) == POLICY_VERSION_LEN
+
+
+def test_turning_on_a_cost_component_changes_the_version(loader):
+    """★이것이 요점이다★ — 다른 비용으로 돈 실행은 다른 판본이어야 한다."""
+    _, _, off = _run()
+    _, _, on = _run(charge_sell_tax=True)
+    assert off["cost_model"]["version"] != on["cost_model"]["version"]
+
+
+def test_the_version_matches_the_declared_policy(loader):
+    """선언된 판본이 **선언된 정책에서 나온 값**인지 대조한다.
+
+    ★상수를 실어도 통과하는 테스트는 증거가 아니다★ — 엔진이 쓴 정책으로
+    직접 계산해 맞춰 본다.
+    """
+    from src.domain.cost_model import policy_version
+    from src.kis_backtest_engine import policy_from_config
+    cfg = _cfg(charge_sell_tax=True)
+    _, _, res = _run(charge_sell_tax=True)
+    assert res["cost_model"]["version"] == policy_version(policy_from_config(cfg))

@@ -176,13 +176,30 @@ def test_the_engine_never_raises_http():
 
 # ── 5. ★단일 출처★ ───────────────────────────────────────────────────────
 def test_the_code_version_fallback_order(monkeypatch):
+    """★AM2 에서 마지막 칸이 바뀌었다★ `"dev"` → 측정, 못 재면 `None` + 사유.
+
+    주입 우선순위(`GIT_SHA` → `APP_VERSION`)는 그대로다 — 컨테이너에는 `.git` 이
+    없어(`.dockerignore`) 주입이 유일한 진실이기 때문이다. 바뀐 것은 **주입이
+    없을 때** 이며, 옛 코드는 여기서 `"dev"` 를 지어냈다. 그 상수 때문에 실측
+    701행이 전부 같은 값이 됐고 `research_manifest` 의 노후화 검사가 항상 참이
+    됐다 — ★가드는 있는데 도달할 수 없었다★.
+    """
+    from src.domain.build_identity import is_version
+    from src.engine.build_probe import current_identity
+
     monkeypatch.setenv("GIT_SHA", "sha-1")
     monkeypatch.setenv("APP_VERSION", "app-1")
     assert code_version() == "sha-1"
     monkeypatch.delenv("GIT_SHA")
     assert code_version() == "app-1", "APP_VERSION 이 두 번째 폴백이다"
+
     monkeypatch.delenv("APP_VERSION")
-    assert code_version() == "dev"
+    got = code_version()
+    assert got != "dev", "★`\"dev\"` 를 지어내지 않는다★"
+    if got is None:
+        assert current_identity().reason, "사유 없는 미상은 금지다"
+    else:
+        assert is_version(got), "측정된 커밋이어야 한다"
 
 
 def test_the_data_source_follows_the_mock_gate(monkeypatch):

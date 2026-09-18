@@ -711,6 +711,7 @@ class BacktestEngine:
             CostComponent,
             cost_label,
             policy_label,
+            policy_version,
             round_trip_bps,
         )
         comps = tuple(
@@ -722,6 +723,10 @@ class BacktestEngine:
         label = cost_label(CostBreakdown(components=comps, total_krw=total))
         return {**label,
                 "policy": policy_label(self._cost_policy),
+                # ★설정의 판본★ (AM5) 비용 설정이 다른 두 실행은 지금까지
+                # 기록에서 구별되지 않았다. 이것은 `code_version`(빌드)과 다른
+                # 축이다 — 설정이 그대로면 코드가 바뀌어도 그대로다.
+                "version": policy_version(self._cost_policy),
                 "round_trip_bps": round_trip_bps(self._cost_policy)["round_trip_bps"],
                 "n_unmeasured_trades": self._cost_unmeasured_trades}
 

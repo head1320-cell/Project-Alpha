@@ -104,6 +104,9 @@ CONDITIONAL_KEYS = {
 }
 VERIFICATION_KEYS = {
     "adjudicated", "blocked", "blocked_reason", "code_version_matches",
+    # AM3 — ★값과 그 값을 어떻게 알았는지를 함께 낸다★ `code_version_matches`
+    # 가 `None` 일 때 **왜** 대답할 수 없는지가 이 둘에 있다.
+    "code_version_method", "code_tree",
     "evidence", "evidence_grade", "evidence_grade_reason", "mechanism_verdict",
     "passed", "reason", "scope", "this_request_verified", "why",
 }

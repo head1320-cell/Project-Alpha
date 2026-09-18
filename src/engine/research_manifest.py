@@ -24,6 +24,15 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from src.domain.build_identity import (
+    METHOD_UNKNOWN,
+    METHODS,
+    TREE_UNKNOWN,
+    TREES,
+    BuildIdentity,
+    as_identity,
+    versions_comparable,
+)
 from src.engine.research_panel import evidence_grade
 from src.engine.research_verdict import VERDICT_NO_EVIDENCE, VERDICT_POSITIVE, classify
 
@@ -119,9 +128,29 @@ def _mismatches(adj: dict, *, universe, months, model, panel) -> list[str]:
     return out
 
 
+def _manifest_identity(m: dict) -> BuildIdentity:
+    """메니페스트가 **기록한** 빌드 식별자. ★JSON 은 무엇이든 담을 수 있다★
+
+    그래서 값을 검증해서 넣는다 — 모르는 `tree`/`method` 는 지어내지 않고
+    미상으로 접는다. 커밋된 메니페스트에는 `code_tree` 가 아예 없고, 그것은
+    **깨끗했다는 뜻이 아니라 잰 적이 없다는 뜻**이다.
+    """
+    value = m.get("code_version")
+    tree = m.get("code_tree")
+    method = m.get("code_version_method")
+    return BuildIdentity(
+        value=value if isinstance(value, str) else None,
+        method=method if method in METHODS else METHOD_UNKNOWN,
+        tree=tree if tree in TREES else TREE_UNKNOWN,
+        reason=(None if tree in TREES else
+                "이 메니페스트는 작업 트리 상태를 기록하지 않았습니다 — "
+                "깨끗했다는 뜻이 아니라 잰 적이 없다는 뜻입니다."))
+
+
 def verification_label(manifest: dict | None, *, universe=None, months=None,
                        model: str | None = None, panel: str | None = None,
-                       code_version: str | None = None) -> dict[str, Any]:
+                       code_version: BuildIdentity | str | None = None
+                       ) -> dict[str, Any]:
     """조건부 μ/Σ 에 붙일 검증 라벨. ★순수 함수다.★
 
     ★메커니즘 판정을 요청 판정으로 옮기지 않는다★ 이것이 이 함수의 존재 이유다.
@@ -132,6 +161,7 @@ def verification_label(manifest: dict | None, *, universe=None, months=None,
     그래서 라벨은 "당신 포트폴리오가 검증됐다" 가 아니라 "당신이 방금 쓴
     메커니즘의 검증 상태는 이렇고, 당신 경우와는 이렇게 다르다" 라고 말한다.
     """
+    req = as_identity(code_version)
     if manifest is None:
         return {
             "mechanism_verdict": VERDICT_NO_EVIDENCE, "passed": False,
@@ -140,6 +170,7 @@ def verification_label(manifest: dict | None, *, universe=None, months=None,
             "adjudicated": None, "scope": {"mismatches": None},
             "this_request_verified": False,
             "code_version_matches": None,
+            "code_version_method": req.method, "code_tree": req.tree,
             "reason": ("이 매크로 조건부 경로는 ★판정된 적이 없습니다★ — "
                        "미상은 통과가 아닙니다. 조건부 μ/Σ 가 적용됐다면 그것은 "
                        "예측력이 확인되어서가 아니라 계산이 가능해서입니다."),
@@ -162,18 +193,29 @@ def verification_label(manifest: dict | None, *, universe=None, months=None,
         reason = ("판정은 통과했으나 ★이 요청은 판정된 대상이 아닙니다★: "
                   + " · ".join(mism))
 
+    adj_ident = _manifest_identity(manifest)
     mv = manifest.get("code_version")
     return {
         "mechanism_verdict": manifest.get("verdict"), "passed": passed,
         "why": list(manifest.get("why") or []),
         "evidence_grade": grade, "evidence_grade_reason": grade_why,
         "adjudicated": {**adj, "code_version": mv,
+                        "code_tree": adj_ident.tree,
+                        "code_version_method": adj_ident.method,
                         "generated_at": manifest.get("generated_at")},
         "evidence": dict(manifest.get("evidence") or {}),
         "scope": {"mismatches": mism},
         "this_request_verified": verified,
         # ★노후화는 적되 막지 않는다★ 막는 것은 플래그의 몫이다.
-        "code_version_matches": (None if (code_version is None or mv is None)
-                                 else code_version == mv),
+        #
+        # ★이 한 줄이 AM3 의 전부다★ 옛 구현은 `code_version == mv` 였는데,
+        # 실측 결과 양쪽이 언제나 `"dev"`(701행) 여서 **항상 참**이었다 — 가드는
+        # 있는데 도달할 수 없었다. AL 의 하드코딩 `0` 이 `coverage_complete` 를
+        # 이긴 것과 같은 모양이다. 이제 판정은 세 상태다:
+        #   True  — 양쪽이 진짜 버전이고 양쪽 트리가 깨끗하며 값이 같다
+        #   False — 같은 조건에서 값이 다르다 (★진짜 노후화★)
+        #   None  — 대답할 수 없다 (미상·더러운 트리·`"dev"`)
+        "code_version_matches": versions_comparable(req, adj_ident),
+        "code_version_method": req.method, "code_tree": req.tree,
         "reason": reason,
     }

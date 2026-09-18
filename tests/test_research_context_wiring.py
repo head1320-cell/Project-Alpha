@@ -50,7 +50,12 @@ def test_the_stores_share_one_code_version():
 def test_the_borrowed_import_still_works():
     """★공개 표면 유지★ `target_versions` 가 `research_runs` 에서 빌려 쓴다."""
     from src.data.research_runs import code_version
-    assert callable(code_version) and isinstance(code_version(), str)
+    from src.domain.build_identity import is_version
+    assert callable(code_version)
+    got = code_version()
+    # ★환경에 따라 `None` 일 수 있다★ — git 을 못 읽는 컨테이너가 그렇다.
+    # 그래도 `"dev"` 같은 **버전 행세 값**은 나오지 않는다 (AM2).
+    assert got is None or is_version(got), got
 
 
 def test_the_backtest_engine_version_recovers_the_app_version_fallback(monkeypatch):

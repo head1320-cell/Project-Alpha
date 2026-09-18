@@ -77,13 +77,18 @@ _STATUS_COLS = _COLS.rsplit(",", 1)[0]
 ORPHAN_SILENCE_SEC = 900.0
 
 
-def engine_version() -> str:
+def engine_version() -> str | None:
     """백테스트 엔진 식별자.
 
     ★갈라졌던 폴백을 복구한다★ 이 함수는 `BACKTEST_ENGINE_VERSION or GIT_SHA or
     "dev"` 였다 — 세 저장소의 `code_version` 을 복사하는 동안 `APP_VERSION` 폴백이
     빠졌고, 그래서 `APP_VERSION` 만 설정한 환경에서는 **백테스트 기록만** "dev" 가
     됐다. 명시적 오버라이드는 그대로 두고, 그 뒤 폴백을 단일 출처에 위임한다.
+
+    ★AM2 에서 마지막 칸이 `"dev"` 에서 미상(`None`)으로 바뀌었다★ — 실측
+    `engine_version` 39행이 전부 `"dev"` 였고, 그것은 39개 실행을 **구별하지
+    못한다**는 뜻이었다. 이제 git 을 읽을 수 있으면 커밋이 들어가고, 못 읽으면
+    `None` + 사유(`build_probe.current_identity().reason`)다.
     """
     from src.engine.research_context import code_version
     return os.getenv("BACKTEST_ENGINE_VERSION") or code_version()
