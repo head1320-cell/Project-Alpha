@@ -89,7 +89,15 @@ class InvestorProfile:
         return {"state": "declared", "days": self.horizon_days, "reason": None}
 
     def to_dict(self) -> dict:
-        """프런트 타입(`frontend/src/entities/investor-profile/types.ts`)과 같은 표기."""
+        """camelCase 표기 — 프런트가 그대로 받을 수 있는 모양.
+
+        ★이 자리는 원래 **만들어진 적 없는 프런트 타입 파일**을 "프런트 타입"
+        이라며 가리키고 있었다(AO 에서 실측). 설계 문서가 *(제안)* 이라고 적어 둔
+        것을 docstring 이 이미 있는 것처럼 옮겨 적은 것이다 —
+        `docs/specs/2026-09-12-ra-domain-architecture.md` §1 이 그 제안이고,
+        대응하는 프런트 파일은 **아직 없다**. ★없는 파일을 가리키지 않는다★:
+        죽은 포인터는 `tests/test_doc_pointers.py` 가 전수로 막는다.
+        """
         return {
             "profileId": self.profile_id,
             "ownerId": self.owner_id,

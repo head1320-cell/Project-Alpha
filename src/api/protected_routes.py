@@ -146,6 +146,8 @@ OPEN_WITH_REASON: dict[tuple[str, str], str] = {
         "백테스트 결과 테이블 DDL — 연구 인프라이고 계좌·주문을 건드리지 않는다",
     ("POST", "/api/v1/accounts/diagnose"):
         "요청 본문의 보유·계좌유형·한도로 도는 판정(AD4) — 저장된 계좌를 읽지 않는다",
+    ("POST", "/api/v1/accounts/glidepath"):
+        "요청 본문의 보유·기간·곡선·적립 계획으로 도는 관측(AO4) — 저장된 계좌를 읽지 않고 아무것도 저장하지 않는다",
     ("POST", "/api/v1/report/portfolio"):
         "요청 본문으로 도는 표면 넷의 조립(AD5) — 저장된 계좌를 읽지 않고 새 수치도 만들지 않는다",
 }
