@@ -30,6 +30,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.execution.api_failure_probe import observe_into
 from src.execution.client_realism import client_is_simulated
 from src.execution.drawdown import REASON_FETCH_FAILED, drawdown_from_history
 
@@ -485,7 +486,9 @@ class OrderExecutor:
             # 함께) 킬스위치의 `auto_dd`/`auto_cb` 와 게이트웨이 ⑨ 서킷브레이커가
             # **구조적으로 발동할 수 없었다**. 이제 못 재면 `None` + 사유다(P1-a).
             dd = drawdown_from_history(self.engine)
-            return {
+            # ★`auto_api` 의 재료★(AQ) — 연속 실패 횟수는 이미 `CircuitBreaker` 가
+            # 세고 있었다. 세는 로직은 0줄 바뀌지 않고, 여기서 **읽어 실을** 뿐이다.
+            return observe_into({
                 "equity_krw":            balance.get("evaluated_total", 0),
                 "cash_krw":              balance.get("cash_krw", 0),
                 "positions":             positions,
@@ -493,18 +496,21 @@ class OrderExecutor:
                 "current_drawdown_pct":  dd.intraday_pct,
                 "cumulative_dd_pct":     dd.cumulative_pct,
                 "drawdown_reason":       dd.reason,
-            }
+            }, self.kis)
         except Exception as e:
             logger.error(f"Account state fetch 실패: {e}")
             # ★조회 실패와 "잔고가 0" 은 다른 사실이다★ — 0 을 돌려주면 한도 검사가
             # 전부 "여유 있음" 으로 읽히고, 실패가 **완전히 무음**이 된다.
-            return {
+            # ★조회가 실패한 순간이야말로 이 숫자가 가장 필요하다★(AQ) — KIS 가
+            # 죽어서 실패한 것이라면 그 실패는 방금 breaker 에 기록됐다. 여기서
+            # 싣지 않으면 `auto_api` 가 **정작 장애 중에** 미상으로 남는다.
+            return observe_into({
                 "equity_krw": None, "cash_krw": None,
                 "positions": {}, "daily_turnover_krw": None,
                 "current_drawdown_pct": None, "cumulative_dd_pct": None,
                 "drawdown_reason": f"{REASON_FETCH_FAILED}: {e}",
                 "state_reason": f"{REASON_FETCH_FAILED}: {e}",
-            }
+            }, self.kis)
 
     def _insert_pending_order(self, client_order_id, signal, risk_result):
         try:

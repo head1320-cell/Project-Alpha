@@ -144,10 +144,27 @@ def test_an_absent_api_failure_count_does_not_fire(ks):
 
 
 def test_an_absent_api_failure_count_is_reported_as_unverified(ks):
-    """★그리고 못 재고 있다는 사실이 보인다★ — P1-a 가 drawdown 에 한 것과 같다."""
+    """★그리고 못 재고 있다는 사실이 보인다★ — P1-a 가 drawdown 에 한 것과 같다.
+
+    ★AQ 가 이 단언을 고쳤다★ — 예전에는 `"기록" in u` 였는데, 그 낱말은
+    *"이 저장소에는 그 값을 기록하는 코드가 없습니다"* 라는 **고정 문구**에서
+    왔다. AQ 가 통로를 이으면서 그 문장이 거짓이 됐고, 사유는 관측이 준다
+    (mock 인지 · 클라이언트가 없는지 · 읽다 실패했는지). 낱말이 아니라
+    ★사유가 실제로 붙어 있는가★를 건다.
+    """
     unverified = ks.unverified_checks({}, None)
-    assert any("auto_api" in u for u in unverified), unverified
-    assert any("기록" in u for u in unverified if "auto_api" in u)
+    lines = [u for u in unverified if "auto_api" in u]
+    assert lines, unverified
+    # "auto_api: KIS API 실패 횟수 미상 (…사유…)" — 괄호 안이 비어 있으면 안 된다.
+    reason = lines[0].split("(", 1)[1].rstrip(")") if "(" in lines[0] else ""
+    assert len(reason.strip()) > 10, lines
+
+
+def test_the_unverified_reason_comes_from_the_observation(ks):
+    """★짝★ — 관측이 사유를 주면 그것이 그대로 보인다(고정 문구가 아니다)."""
+    state = {"api_failure_observation": {"reason": "테스트용 관측 사유입니다"}}
+    lines = [u for u in ks.unverified_checks(state, None) if "auto_api" in u]
+    assert lines and "테스트용 관측 사유입니다" in lines[0]
 
 
 def test_a_high_api_failure_count_does_fire(ks):

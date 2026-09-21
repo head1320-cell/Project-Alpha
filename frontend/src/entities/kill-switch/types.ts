@@ -89,6 +89,41 @@ export interface KillEvent {
   actions: ActionRollup;
 }
 
+/**
+ * KIS 연속 실패 관측 (AQ) — `GET /kill-switch/readiness` 의 `api_failure_observation`.
+ *
+ * ★`count` 가 `null` 이면 "0 회 실패" 가 아니라 "재지 못했다" 다★ — 화면이
+ * `?? 0` 으로 채우면 `auto_api` 가 무장된 것처럼 보인다.
+ */
+export type ApiFailureSource = "broker" | "mock" | "no_client" | "unknown";
+export type BreakerState = "closed" | "open" | "half_open" | "unknown";
+
+export interface ApiFailureObservation {
+  /** 연속 실패 횟수. ★broker 출처에서 읽었을 때만 숫자★ */
+  count: number | null;
+  state: ObservationState;
+  source: ApiFailureSource;
+  breaker_state: BreakerState;
+  /** ★차단 중 ≠ 실패 중★ — `open` 이면 호출 자체가 막혀 있다. */
+  blocking: boolean | null;
+  /** ★방금 열렸다 풀린 직후의 `0` 을 '건강' 으로 읽지 않게★ */
+  recently_tripped: boolean | null;
+  reason: string | null;
+  /** 화면이 지우면 안 되는 경고문(0 이 정상을 뜻하지 않는다). */
+  note: string;
+}
+
+/** `GET /kill-switch/readiness` (AF4 + AQ) */
+export interface KillSwitchReadiness {
+  armed: { trigger: string; basis: string }[];
+  inoperable: { trigger: string; reason: string }[];
+  summary: string;
+  is_active: boolean;
+  api_failure_observation: ApiFailureObservation | null;
+  account_state_reason: string | null;
+  note: string;
+}
+
 /** `GET /kill-switch/status` — ★최상위 키 둘은 골든이다★ (AF4 가 못 박았다). */
 export interface KillSwitchStatus {
   is_active: boolean;

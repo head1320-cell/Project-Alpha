@@ -332,6 +332,9 @@ def live_kill_readiness():
         return {
             **readiness,
             "is_active": executor.kill_switch.is_active(),
+            # ★왜 무장됐고 왜 아닌지의 재료★(AQ) — 판정은 위 `readiness` 가 하고,
+            # 이 블록은 `auto_api` 가 본 숫자와 그 출처·차단 상태를 그대로 낸다.
+            "api_failure_observation": account_state.get("api_failure_observation"),
             "account_state_reason": fetch_reason,
             "note": ("불능 트리거는 임계값 문제가 아니라 재료가 없어서 발동하지 "
                      "않습니다 — 임계를 낮춰도 달라지지 않습니다."),

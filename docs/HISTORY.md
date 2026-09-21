@@ -17023,3 +17023,154 @@ docstring). ★로드맵을 읽고 쓴 문장이 로드맵보다 낡았다★ �
 `api_failure_count` 를 `src/` 에서 **읽는 곳은 둘, 쓰는 곳은 0**(실측). 다만
 "연속 실패" 의 정의(무엇이 실패인가 · 창 · 리셋 조건)가 설계 판단이라
 ★지어내면 안 되는 부분★이고, 다음 턴에서 brainstorming 으로 연다.
+
+---
+
+## AQ. `auto_api` 재료 — ★세는 코드는 이미 있었다. 없는 것은 통로였다★ (2026-09-21)
+
+**한 줄** — 킬스위치의 `auto_api` 가 **브로커가 붙은 환경에서** 처음으로 무장될 수
+있게 한다. 다만 mock·미생성·미상에서는 ★무장한 척하지 않게★ 라벨한다.
+★세는 로직 0줄 · `should_auto_trigger` 0줄.★
+
+### ★실측이 지정 근거를 뒤집었다 — 이번에도★
+
+AP 가 로드맵에 적은 지정문은 *"KIS 클라이언트가 연속 실패를 **세어** 계좌 상태에
+실으면"* 이라고, **세는 코드를 만들어야 한다**는 전제로 썼다. 실측하면 있었다:
+
+```python
+# src/execution/kis_client.py:193  "N회 연속 실패 시 차단 (스레드 안전)"
+class CircuitBreaker:
+    failure_threshold: int = 5      # KillSwitchConfig.api_failure_threshold 와 같은 수
+    def record_success(self): self.failure_count = 0     # ★연속 의미★
+    def record_failure(self): self.failure_count += 1 ...
+```
+
+`_request`(`kis_client.py:330-357`)가 전송 오류와 `rt_cd != "0"` 에서
+`record_failure()`, 성공에서 `record_success()` 를 부른다. 즉 *"`api_failure_count`
+를 쓰는 곳이 0"* 은 **그 키**에 대해서만 참이었고, ★횟수 자체는 이미 유지되고
+있었다★. 없던 것은 **통로**다. 프로그램이 "카운터를 만든다" 에서 "있는 관측을
+잇고 라벨한다" 로 줄었다.
+
+### ★그냥 옮기면 거짓이 되는 자리 넷 (실측)★
+
+| 함정 | 근거 | 막은 방법 |
+|---|---|---|
+| `MockKISClient` 에 breaker 가 **없다** | `kis_client.py:749-869` 에 속성 자체가 없음 | `broker` 출처에서만 숫자를 낸다(AI 의 `equity_source` 선례) |
+| ★`HALF_OPEN` 이 카운트를 0 으로 되돌린다★ | `call_allowed()` 가 30초 뒤 `failure_count = 0` — 장애 중 0→5→0→5 로 순환 | `breaker_state`·`recently_tripped` 를 숫자와 **함께** 싣는다 |
+| 싱글턴이 없으면 잴 대상이 없다 | — | `no_client` + 사유. ★0 이 아니다★ |
+| `OPEN` 은 "실패 중" 과 다르다 | 차단 중에는 `record_failure()` 가 불리지 않아 카운트가 얼어붙는다 | `blocking` 을 **상태에서** 낸다(카운트로 계산하지 않는다) |
+
+### 무엇을 했나
+
+- **AQ1 `src/domain/api_health.py`** ★신규★(순수) — 출처 넷
+  (`broker`·`mock`·`no_client`·`unknown`) × breaker 상태 넷.
+  `usable_for_kill_switch` 는 ★`broker` 만 참★이고 대소문자·공백도 관대하게 보지
+  않는다. `api_failure_observation()` 은 재료가 아닌 출처에서 **숫자를 내지
+  않고** 사유를 낸다. `note` 가 ★"0 이 정상을 뜻하지 않는다"★ 를 적는다.
+- **AQ2 `src/execution/api_failure_probe.py`** ★신규★ — ★`get_kis_client()` 를
+  부르지 않는다★. 부르면 **없던 클라이언트를 만들고**, 그것은 AI 가 세운
+  *"감시는 브로커를 부르지 않는다"* 경계를 깬다. 모듈 속성 `_kis_singleton` 을
+  직접 읽고, 없으면 `no_client` 다. breaker 를 **읽기만** 한다(`record_*`·
+  `call_allowed` 미호출 — AST 로 고정).
+- **AQ3 두 생산자가 싣는다** — `order_executor._fetch_account_state`(성공·실패
+  **두 분기**)와 `startup/lifecycle._monitor_account_state` 가 **같은**
+  `observe_into()` 를 쓴다. ★관측일 때만 `api_failure_count` 키를 만든다★ —
+  미상에 `0` 을 채우면 AF2 가 세운 `is not None` 계약이 조용히 무너진다.
+- **AQ4 낡은 사유 문장 + 표면** — `unverified_checks` 의 고정 문구
+  *"이 저장소에는 그 값을 기록하는 코드가 없습니다"* 는 ★이 프로그램으로
+  거짓이 됐다★. 관측이 준 사유를 쓰도록 바꿨다.
+  `GET /kill-switch/readiness` 가 관측 블록을 함께 낸다. 프런트는 **타입만**.
+
+### ★계획의 한 항목을 실측이 바꿨다★
+
+계획의 변이 `g` 는 *"실패 분기에서 count 를 싣는다"* 를 **죽여야 할 변이**로
+적었다. 구현하며 보니 반대였다 — ★조회가 실패한 순간이야말로 이 숫자가 가장
+필요한 때다★. KIS 가 죽어서 `get_balance()` 가 실패했다면 그 실패는 방금 breaker 에
+기록됐고, 싣지 않으면 `auto_api` 가 **정작 장애 중에** 미상으로 남는다. 위험은
+"실패 분기에 싣는 것" 이 아니라 "미상을 `0` 으로 채우는 것"(변이 `e`)이었고,
+`observe_into` 가 그것을 구조로 막는다. 계획을 고쳐 두 분기 모두에 실었다.
+
+### ★낱말로 건 테스트 둘을 구조로 다시 썼다★
+
+- `test_an_absent_api_failure_count_is_reported_as_unverified` 가
+  `"기록" in u` 를 단언했다 — 그 낱말은 위의 **고정 문구**에서 왔고, 문구가
+  거짓이 되자 테스트도 함께 무너졌다. **사유가 실제로 붙어 있는가**를 걸도록 바꿨다.
+- `test_auto_api_is_named_as_inoperable_in_this_repository` 도 같은 낱말에
+  기대고 있었다. ★이 환경에서 불능인 진짜 이유는 "mock 클라이언트에 breaker 가
+  없다" 이므로★ `source == "mock"` 을 **구조로** 걸고, 짝(브로커 관측이면 무장)을
+  붙였다. ★부분문자열로 걸면 제 발을 건다 — 이 세션에서 여섯 번째다.★
+
+### 변이 배터리 (a~k + 둘, 전부 사망)
+
+| | 변이 | | 변이 |
+|---|---|---|---|
+| a | mock 인데 count 를 싣는다 | h | 낡은 고정 사유 문장을 되돌린다 |
+| b | 클라이언트가 없는데 0 을 싣는다 | i | 어휘 레지스트리를 비운다 |
+| c | breaker 상태를 버린다 | j | `should_auto_trigger` 를 `.get(…, 0)` 로 |
+| d | probe 가 `get_kis_client()` 를 부른다 | k | `blocking` 을 count 로 계산한다 |
+| e | 미상인데 count 키를 0 으로 채운다 | + | 생산자가 헬퍼를 안 쓴다 |
+| f | `usable_for_kill_switch` 가 mock 도 참 | + | `recently_tripped` 를 항상 거짓으로 |
+
+### ★이 작업이 하지 않은 것★
+
+- **세는 로직을 바꾸지 않았다.** `_request`·`CircuitBreaker`·`_fetch_token` 0줄.
+  ★토큰 발급 실패가 breaker 를 타지 않는 것은 그대로 남는다★ — 고치면 breaker 가
+  더 쉽게 열리고, `OPEN` 은 KIS 호출을 **실제로 차단**하므로 실거래 동작 변경이다.
+- **`should_auto_trigger` 를 바꾸지 않았다.** `OPEN` 을 발동 재료로 승격하지
+  않았다(사용자 결정). 기존 honesty 스위트가 그 불변을 지킨다.
+- **`auto_risk` 를 무장시키지 않았다.** `systemic_risk_score` 의 생산자가 저장소에
+  없고, `stress_score` 와 이름을 바꿔 끼우면 ★확인되지 않은 양으로 계좌가
+  청산된다★ — P1 의 판단을 뒤집지 않는다.
+- **실패의 종류를 가르지 않았다.** 전송·HTTP·`rt_cd`·레이트리밋이 같은
+  `RuntimeError` 로 뭉개지는 것은 ★관측된 결함으로 기록만★ 했다 — 다음 프로그램.
+- **`kis_gateway.py` 의 두 번째 circuit breaker 를 손대지 않았다.** 살아 있는 주문
+  경로에 연결돼 있지 않다는 사실만 기록한다.
+- **`auto_api` 가 이 환경에서 무장된다고 말하지 않는다.** mock 이라 `no breaker`
+  이고, 그래서 여전히 `inoperable` 이다. 실브로커·모의투자 검증은 그대로 남는다.
+- **채점표 #12 를 `통과` 로 올리지 않았다.** ★재는 것과 막는 것은 다르다.★
+- **화면을 만들지 않았다.** 타입까지다.
+
+### 검증
+
+- 전체 게이트 **6,275 통과 / 10 스킵 / 0 실패**(기준선 6,211 → **+64**:
+  api_health 31 · api_failure_probe 16 · api_failure_wiring 15 · 준비도 라우트 2).
+  `make all` 네 단계 통과 — lint · test · typecheck(`tsc --noEmit`, **종료 코드 0**) ·
+  build(`next build`, **종료 코드 0**). ★파이프 뒤의 `&& echo` 는 검증이 아니다★
+  (AP 에서 그렇게 거짓 통과를 한 번 만들었다).
+- **실물 ①** — 이 환경(mock)에서 `/kill-switch/readiness` 의 `auto_api` 는 여전히
+  `inoperable` 이고, 사유가 ★"기록하는 코드가 없다" 가 아니라 "mock 클라이언트에는
+  실패 카운터가 없다"★ 로 바뀌었다. 응답의 `api_failure_observation.source` 가
+  `"mock"` 이다.
+- **실물 ② 짝** — breaker 를 단 클라이언트를 주면 `api_failure_count` 가 실리고
+  `auto_api` 가 **무장**된다. 임계(5)에 닿으면 `should_auto_trigger` 가
+  `("auto_api", "KIS API 연속 실패 (5회)")` 를 낸다 — ★판정 코드는 0줄 바뀌었다★.
+- **실물 ③** — `get_balance()` 가 터지는 실패 분기에서도 `equity_krw` 는 `None`
+  (기존 계약)이면서 `api_failure_count=5`·`blocking=True` 가 실린다.
+- **실물 ④** — 싱글턴이 없는 프로세스에서는 `no_client` + 사유이고
+  `api_failure_count` 키가 **아예 없다**(0 이 아니다).
+
+### ★게이트에서 간헐 실패 하나를 만났고, AQ 가 아님을 재서 갈랐다★
+
+첫 전체 실행에서 `test_execution_assumption_wiring.py::test_a_saved_run_keeps_its_assumption`
+이 깨졌다(`store.transition(rid, "validating")` 이 `ok: False`). 단독 실행은 통과.
+★주장하지 않고 쟀다★:
+
+| 실행 | 결과 |
+|---|---|
+| AQ 있음 ① | 6,274 통과 / **1 실패** |
+| ★AQ 를 `git stash` 로 치움★ | 6,211 통과 / **0 실패** |
+| AQ 있음 ② (같은 트리) | **6,275 통과 / 0 실패** — 재현되지 않음 |
+
+AQ 가 있는 트리에서 같은 실패가 재현되지 않았고, 깨진 곳은 연구 실행 상태기계로
+AQ 가 건드린 계층(KIS·킬스위치·계좌 상태)과 겹치지 않는다. ★따라서 AQ 의 회귀가
+아니라 **순서·타이밍에 의존하는 간헐 실패**로 본다 — 고치지 않았고, 원인을
+밝히지도 못했다.★ 다음 사람이 같은 것을 만나면 이 기록부터 보라.
+
+### 다음 프로그램 — ★실패의 종류를 가른다★
+
+AQ 가 통로를 이으면서 재료의 **품질 한계**가 드러났다. `_request` 가 전송 오류 ·
+비-2xx · `rt_cd != "0"` · 레이트리밋을 전부 같은 `RuntimeError` 로 뭉개고(예외
+하위형이 하나도 없다), `live_orders.reason_code` 는 무엇이 일어났든 `"api_error"`
+다. ★주문 거절(정상 업무 응답)과 KIS 장애(안전 문제)가 같은 카운트에 들어간다.★
+임계값 문제가 아니라 **무엇을 세고 있는가**의 문제다. 다만 분류를 바꾸면 breaker
+가 열리는 조건이 바뀌므로 ★관측·기록부터 하고 분류 변경은 별도 승인★으로 둔다.

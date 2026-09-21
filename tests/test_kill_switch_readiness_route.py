@@ -75,13 +75,31 @@ def test_the_inoperable_triggers_say_why(client):
         assert row["reason"], f"{row['trigger']} 에 사유가 없다"
 
 
-def test_auto_api_is_named_as_inoperable_in_this_repository(client):
-    """★이 저장소에는 API 실패 횟수를 기록하는 코드가 없다★ — 그 사실이 보인다."""
+def test_auto_api_is_inoperable_because_the_client_is_mock(client):
+    """★AQ 가 이 테스트를 다시 썼다★ — 이유가 바뀌었고, 낱말로 걸면 안 된다.
+
+    예전 단언은 `"기록" in reason` 이었고 그 낱말은 *"이 저장소에는 그 값을
+    기록하는 코드가 없습니다"* 라는 고정 문구에서 왔다. AQ 가 통로를 이으면서
+    그 문장은 거짓이 됐다 — ★세는 코드는 `CircuitBreaker` 에 원래 있었다★.
+    이 환경에서 `auto_api` 가 여전히 불능인 진짜 이유는 **mock 클라이언트에
+    breaker 가 없다**는 것이고, 그것을 낱말이 아니라 **구조**로 건다.
+    """
     body = client.get("/api/v1/live/kill-switch/readiness",
                       headers=_admin(client)).json()
     names = {t["trigger"]: t["reason"] for t in body["inoperable"]}
-    assert "auto_api" in names
-    assert "기록" in names["auto_api"]
+    assert "auto_api" in names and names["auto_api"].strip()
+    obs = body["api_failure_observation"]
+    assert obs["source"] == "mock"
+    assert obs["count"] is None and obs["reason"]
+
+
+def test_the_readiness_surface_carries_the_api_observation(client):
+    """★판정 옆에 재료를 함께 낸다★ — 왜 불능인지 숫자와 출처로 보인다."""
+    obs = client.get("/api/v1/live/kill-switch/readiness",
+                     headers=_admin(client)).json()["api_failure_observation"]
+    assert set(obs) >= {"count", "state", "source", "breaker_state",
+                        "blocking", "recently_tripped", "reason", "note"}
+    assert "0" in obs["note"]          # 0 이 건강을 뜻하지 않는다는 경고
 
 
 def test_the_note_says_lowering_thresholds_would_not_help(client):

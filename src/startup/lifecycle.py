@@ -142,14 +142,17 @@ def _monitor_account_state() -> dict:
     실행 경로를 우회하는 것이 아니라 **아예 들어가지 않는 것**이다.
     """
     from src.database import get_engine
+    from src.execution.api_failure_probe import observe_into
     from src.execution.drawdown import drawdown_from_history
     dd = drawdown_from_history(get_engine())
-    return {
+    # ★`auto_api` 의 재료★(AQ) — `observe_into` 는 **이미 만들어진** 싱글턴만
+    # 읽는다. `get_kis_client()` 를 부르지 않으므로 위 경계가 그대로 지켜진다.
+    return observe_into({
         "equity_krw": None,
         "current_drawdown_pct": dd.intraday_pct,
         "cumulative_dd_pct": dd.cumulative_pct,
         "drawdown_reason": dd.reason,
-    }
+    })
 
 
 def _monitor_regime_state() -> dict | None:

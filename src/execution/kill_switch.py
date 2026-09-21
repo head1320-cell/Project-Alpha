@@ -82,6 +82,9 @@ _BLOCK_GUARD = ("execution/order_executor.py — 사전 검증(kill_switch_activ
                 "발주 직전 재확인(kill_switch_race), 두 지점")
 _UNOBSERVED_TEXT = "미상"
 
+#: 관측이 사유를 주지 않았을 때의 기본 문구. ★사유 없는 미상은 금지★(§4)
+_API_COUNT_UNKNOWN = "연속 실패 횟수를 읽지 못했습니다."
+
 #: 조치 기록이 없는 행의 사유. ★소급해 채우지 않는다★ — 이 어휘(AP)가 생기기
 #: 전에 쓰인 행은 무엇을 했는지 **적히지 않았을** 뿐이고, 안 적힌 것을 "했다" 로
 #: 채우면 없는 관측을 만든다.
@@ -285,8 +288,13 @@ class KillSwitch:
         if not regime_state or regime_state.get("systemic_risk_score") is None:
             out.append("auto_risk: 국면 systemic_risk_score 미상")
         if account_state.get("api_failure_count") is None:
+            # ★사유를 여기서 지어내지 않는다★(AQ) — 왜 못 쟀는지는 관측이 안다
+            # (mock 클라이언트인지 · 클라이언트가 없는지 · 읽다 실패했는지).
+            # 예전에는 "이 저장소에 기록하는 코드가 없다" 는 **고정 문구**였는데,
+            # 그 문장은 AQ 가 통로를 이으면서 거짓이 됐다.
+            obs = account_state.get("api_failure_observation") or {}
             out.append("auto_api: KIS API 실패 횟수 미상 "
-                       "(이 저장소에는 그 값을 기록하는 코드가 없습니다)")
+                       f"({obs.get('reason') or _API_COUNT_UNKNOWN})")
         return tuple(out)
 
     #: 자동 트리거 넷. ★`should_auto_trigger` 가 내는 `source` 문자열 그대로★

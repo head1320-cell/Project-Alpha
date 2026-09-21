@@ -205,6 +205,8 @@ _PLAINTEXT_MODULES = (
     "src/execution/kill_switch.py",
     # AP — 조치 사유·note 가 `/kill-switch/*` 응답으로 그대로 나간다.
     "src/domain/kill_action.py",
+    # AQ — 관측 사유·note 가 `/kill-switch/readiness` 응답으로 나간다.
+    "src/domain/api_health.py",
 )
 
 
