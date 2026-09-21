@@ -215,6 +215,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/failure_streak.py",
     # AU — 관문의 미충족 사유가 `/kill-switch/kis-codes` 응답으로 나간다.
     "src/domain/breaker_change_gate.py",
+    # AV — 신호 출처 등급의 사유·note 가 `GET /signals` 응답으로 나간다.
+    "src/domain/signal_evidence.py",
 )
 
 

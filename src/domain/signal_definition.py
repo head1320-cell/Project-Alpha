@@ -47,8 +47,14 @@ class SignalDefinition:
     release_lag: str | None = None
     revision_policy: str | None = None
     observation_window: dict | None = None
-    #: `source_registry.EVIDENCE_GRADES`(`E0~E3`). ★`SRC_*`·`L0~L3` 와 다른 축.★
+    #: ★출처 척도★ — `signal_evidence.PROVENANCE_GRADES`(`E0~E4`,
+    #: CLAUDE.md 2절: 합성·픽스처·제공자 파생·실 과거·시점 고정).
+    #: ★`source_registry.EVIDENCE_GRADES` 가 아니다★ — 그쪽은 글자만 같은
+    #: **확신도** 척도이고(AV 실측), 예전 주석이 그쪽을 가리키고 있었다.
+    #: `SRC_*`·`L0~L3` 와도 다른 축이다.
     evidence_grade: str | None = None
+    #: 왜 그 등급인가 · 왜 미상인가. ★사유 없이 미상으로 두지 않는다.★
+    evidence_grade_reason: str | None = None
     availability: str | None = None
     #: 왜 못 쓰는가. ★사유 없이 목록에서 빼지 않는다.★
     unavailable_reason: str | None = None
@@ -127,7 +133,17 @@ _ADAPTERS = {
 
 
 def collect_signals() -> SignalCatalog:
-    """다섯 출처를 조회 시 합친다. ★죽은 출처는 사유와 함께 남긴다.★"""
+    """다섯 출처를 조회 시 합친다. ★죽은 출처는 사유와 함께 남긴다.★
+
+    ★출처 등급은 어댑터가 아니라 규칙이 붙인다★(AV) — 다섯 어댑터는 자기
+    출처만 읽고, `signal_evidence` 가 *"이 신호가 어디서 왔는가"* 를 한 자리에서
+    판정한다. 어댑터마다 등급을 적으면 다섯 벌이 되고, 한쪽만 고쳐도 아무
+    테스트가 깨지지 않는다.
+    """
+    from dataclasses import replace
+
+    from src.domain.signal_evidence import signal_grade
+
     signals: list[SignalDefinition] = []
     unavailable: dict[str, str] = {}
     for kind, adapter in _ADAPTERS.items():
@@ -135,4 +151,10 @@ def collect_signals() -> SignalCatalog:
             signals.extend(adapter())
         except Exception as e:                           # noqa: BLE001
             unavailable[kind] = f"{type(e).__name__}: {e}"
-    return SignalCatalog(signals=tuple(signals), unavailable_sources=unavailable)
+
+    graded = []
+    for s in signals:
+        verdict = signal_grade(s)
+        graded.append(replace(s, evidence_grade=verdict["grade"],
+                              evidence_grade_reason=verdict["reason"]))
+    return SignalCatalog(signals=tuple(graded), unavailable_sources=unavailable)

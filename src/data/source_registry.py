@@ -399,6 +399,12 @@ FREQ_EVIDENCE_PATH = Path(
     or Path(__file__).resolve().parents[2] / "docs" / "specs" / "ecos-frequency-evidence.json")
 
 #: 등급 순서 — 낮은 확신이 조용히 사실이 되는 경로를 막는다.
+#:
+#: ★이것은 **확신도** 척도다 — 출처 척도가 아니다★(AV 실측). 여기서 `E2` 는
+#: *"메타 API 응답에서 관측했다"* 는 뜻이고, CLAUDE.md 2절의 `E2`(*"제공자
+#: 파생"*)와는 **다른 축**이다. 글자가 같아 섞기 쉬우니, 출처 등급이 필요한
+#: 쪽은 `src/domain/signal_evidence.py` 의 `PROV_*` 를 쓴다.
+#: CLAUDE.md 가 `capability.py` 의 `L0~L3` 에 대해 적어 둔 경고와 같은 모양이다.
 EVIDENCE_GRADES = ("E0", "E1", "E2", "E3")
 
 
