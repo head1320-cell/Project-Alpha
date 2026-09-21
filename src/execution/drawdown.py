@@ -15,10 +15,19 @@
 ## 이 모듈이 하는 것 / ★하지 않는 것★
 
 하는 것은 **미상을 미상으로 만드는 것**뿐이다. 드로다운을 실제로 **계산하려면
-에쿼티 이력**이 필요하고, 그 이력(`live_daily_pnl`)에 ★쓰는 코드가 저장소에 없다★
-(실측). 그래서 지금 이 함수는 거의 항상 `REASON_NO_HISTORY` 를 돌려준다.
+에쿼티 이력**이 필요하다.
 
-★그것이 결함이 아니라 결과물이다.★ 이전에는 같은 상황이 "손실 0%" 로 보였다.
+★이 문단은 AP 에서 정정됐다(2026-09-21).★ P1-a 시점에는 `live_daily_pnl` 에 기록을
+남기는 경로가 없어 이 함수가 거의 항상 `REASON_NO_HISTORY` 를 돌려줬다. 지금은
+**AI(2026-09-14)가 그 경로를 만들었다** — `execution/equity_history.record_observation`
+을 감시 데몬(`startup/lifecycle._risk_monitor_bg`)이 매 틱 부른다. 그래서 사유는
+환경에 따라 갈린다:
+
+    · mock 게이트 안에서는 `REASON_MOCK_ONLY` — 합성 잔고로 킬스위치를 켜지 않는다
+    · 브로커가 붙으면 `broker` 행이 쌓여 **숫자가 나온다**
+
+★그래도 이 함수가 보수적인 것은 결함이 아니라 결과물이다.★ 이전에는 같은 상황이
+"손실 0%" 로 보였다.
 
 ## 정의
 
@@ -37,7 +46,8 @@ from src.domain.equity_observation import SOURCE_MOCK, usable_for_drawdown
 
 logger = logging.getLogger(__name__)
 
-#: 에쿼티 이력이 한 행도 없다. ★`live_daily_pnl` 에 쓰는 코드가 아직 없다.★
+#: 에쿼티 이력이 한 행도 없다. ★행이 하나도 안 쌓인 상태이지 기록 경로가 없다는
+#: 뜻이 아니다★ — 기록은 `equity_history.record_observation` 이 한다(AI).
 REASON_NO_HISTORY = "no_equity_history"
 #: ★합성 잔고뿐이다★ — mock 으로 만든 수치로 킬스위치를 발동시키지 않는다.
 REASON_MOCK_ONLY = "mock_equity_only"

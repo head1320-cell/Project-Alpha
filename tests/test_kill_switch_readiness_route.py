@@ -168,11 +168,57 @@ def test_the_trigger_response_declares_whether_liquidation_completed(client):
 
 
 def test_a_hold_mode_kill_does_not_claim_any_liquidation(client):
-    """★짝★ — 청산하지 않기로 한 발동이 '완료' 로 읽히지 않는지."""
+    """★짝★ — 청산하지 않기로 한 발동이 '완료' 로 읽히지 않는지.
+
+    ★AP 가 이 단언을 고쳤다★ — 예전에는 `n_positions_closed == 0` 이었는데,
+    그 `0` 이야말로 이 테스트가 잡으려던 거짓이었다: *"0 주를 청산했다"* 와
+    *"청산을 시도하지 않았다"* 가 같은 값이었다. 이제 시도하지 않으면 `None`
+    이고, 무엇을 안 했는지는 `actions` 가 사유와 함께 말한다.
+    """
     res = client.post("/api/v1/live/kill-switch/trigger",
                       json={"reason": "AF 테스트 발동입니다",
                             "liquidation_mode": "hold"},
                       headers=_admin(client))
     body = res.json()
-    assert body["n_positions_closed"] == 0
+    assert body["n_positions_closed"] is None
+    assert body["liquidation_complete"] is None
     assert body["liquidation"]["partial"] == []
+    liq = next(r for r in body["actions"]["records"]
+               if r["action"] == "liquidate_positions")
+    assert liq["state"] == "skipped" and liq["reason"]
+
+
+# ── AP5 · 표면 둘이 ★같은 사실★ 을 말한다 ────────────────────────────────
+
+def test_the_events_surface_carries_the_actions(client):
+    """★발동했는가 ⟂ 무엇을 했는가★ — 이력에도 조치가 함께 온다."""
+    client.post("/api/v1/live/kill-switch/trigger",
+                json={"reason": "AP 테스트 발동입니다", "liquidation_mode": "hold"},
+                headers=_admin(client))
+    body = client.get("/api/v1/live/kill-switch/events",
+                      headers=_admin(client)).json()
+    assert body["count"] >= 1
+    actions = body["events"][0]["actions"]
+    assert actions["cleared"] is False
+    liq = next(r for r in actions["records"] if r["action"] == "liquidate_positions")
+    assert liq["state"] == "skipped" and liq["reason"]
+
+
+def test_both_surfaces_report_the_same_actions(client):
+    """★두 벌로 만들지 않았다★ — `/status` 와 `/events` 가 같은 함수를 쓴다."""
+    client.post("/api/v1/live/kill-switch/trigger",
+                json={"reason": "AP 테스트 발동입니다", "liquidation_mode": "hold"},
+                headers=_admin(client))
+    status = client.get("/api/v1/live/kill-switch/status").json()
+    events = client.get("/api/v1/live/kill-switch/events",
+                        headers=_admin(client)).json()
+    assert status["active_event"]["actions"] == events["events"][0]["actions"]
+
+
+def test_the_manual_trigger_declares_whether_it_observed_a_drawdown(client):
+    """★안 실은 0 이 사라졌다★ — 에쿼티 이력이 없으면 `unknown` 이라고 말한다."""
+    body = client.post("/api/v1/live/kill-switch/trigger",
+                       json={"reason": "AP 테스트 발동입니다"},
+                       headers=_admin(client)).json()
+    assert body["observations"]["dd_pct"]["state"] == "unknown"
+    assert body["observations"]["any_unobserved"] is True

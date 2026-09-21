@@ -23,7 +23,11 @@ scikit-learn==1.5.0
 
 # ─── 정량 모델 (VaR / GARCH / 파생) ───
 arch>=6.0.0
-statsmodels>=0.14.0
+# ★상한을 고정한다★ (AP, 2026-09-21 실측) — 0.15 가 `grangercausalitytests()` 의
+# `verbose` 인자를 **제거**했다. `causal_graph.granger_edges` 가 그 `TypeError` 를
+# `except Exception` 으로 삼켜 ★엣지 0개를 조용히 돌려준다★ — 크래시가 "인과 없음"
+# 으로 보인다. `fastapi==0.111.0` 과 같은 이유의 고정이다(CLAUDE.md §6).
+statsmodels>=0.14.0,<0.15
 QuantLib>=1.30
 networkx>=3.0
 

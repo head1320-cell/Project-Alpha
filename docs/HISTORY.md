@@ -16852,3 +16852,174 @@ AO 가 지정될 때의 **대안**이 그대로 남았다. `live_daily_pnl` 에 
 `auto_dd`·`auto_cb` 가 불능이고 채점표 #12 가 미달이다. CLAUDE.md §6 이 실거래
 안전을 **최우선**으로 두므로 네 축 중 어느 것보다 앞선다. AF3 이 이미 *무엇이
 무장됐나* 를 관측하니, 다음은 **관측을 재료로 바꾸는 것**(에쿼티 이력에 쓰는 코드)이다.
+
+---
+
+## AP. 킬스위치 발동 기록 — ★발동했는가 ⟂ 무엇을 했는가★ (2026-09-21)
+
+**한 줄** — *"킬스위치가 발동했다"* 와 *"발동해서 무엇을 했다"* 를 갈라, 기록이
+하지 않은 일을 한 것처럼 말하지 못하게 한다. ★동작은 0줄★(사용자 결정).
+
+### ★0. 먼저 — 컨테이너가 롤백됐고 원격이 살렸다★
+
+작업 시작 시점에 로컬 클론이 **`main`(PR #4 머지, AL 까지)으로 되돌아가 있었다.**
+AM·E·AN·AO 산출물이 디스크에서 사라졌고, 직전에 작업하던 **AP 는 커밋 전이라
+전부 소실**됐다. 원격에는 `b6ccb63`(AO)이 그대로 있어 거기서 복원했다
+(`git fetch` → `git checkout -B`, force push 불필요). 파이썬 의존성도 새
+컨테이너에 없어 재설치했다(debian `PyJWT`·`cryptography` 가 pip 판과 충돌해
+`--ignore-installed`·`--force-reinstall` 로 풀었다).
+
+★`main` 과의 격차는 해소하지 않았다★ — `main` 은 갈라진 큰 선(P9·P8·P7·매크로·
+컴퍼니 계열)을 갖고 있고 이 브랜치에는 없다. 리베이스하지 않기로 했으므로
+**다음 PR 머지 때 git 이 합친다.** 숨기지 않고 여기 적는다.
+
+★교훈★ — **커밋하지 않은 작업은 없는 작업이다.** 프로그램 하나를 통째로 다시
+썼다.
+
+### ★1. 실측이 계획을 뒤집었다 — 지정문부터 틀렸고, 그것을 내가 썼다★
+
+AO 가 로드맵에 적어 둔 "다음 프로그램" 지정문은 이랬다:
+
+> *"`live_daily_pnl` 에 **쓰는 코드가 없어** `auto_dd`·`auto_cb` 가 불능이고,
+> 채점표 #12 가 미달이다."*
+
+둘 다 사실이 아니었다.
+
+| 지정문 | 실측 |
+|---|---|
+| *"쓰는 코드가 없다"* | ★AI(2026-09-14)가 이미 만들었다★ — `execution/equity_history.record_observation`, 감시 데몬이 **60초마다** 기록 |
+| *"채점표 #12 미달"* | 채점표는 **부분**이라고 적혀 있었다(미달 0건) |
+
+같은 낡은 문장이 **코드 네 곳**에도 남아 있었다(`drawdown.py` 머리글 +
+`REASON_NO_HISTORY` 주석 · `lifecycle._risk_monitor_bg` 주석 · readiness
+docstring). ★로드맵을 읽고 쓴 문장이 로드맵보다 낡았다★ — `CLAUDE.md` 머리말의
+*"수치는 문서가 아니라 코드가 진실"* 이 수치만의 이야기가 아니라는 뜻이다.
+
+### ★2. 재실측에서 더 나쁜 것이 나왔다 — 발동 기록이 거짓말을 한다★
+
+`KillSwitch.trigger()` 의 기본값이 `equity: float = 0, dd_pct: float = 0` 이고
+**세 호출부 중 `dd_pct` 를 넘기는 곳이 하나도 없었다**:
+
+| 호출부 | equity | dd_pct | kis_client | liquidation_mode |
+|---|---|---|---|---|
+| `api/stage13_routes.py` (수동) | ✔ | ★✗ → 0★ | ✔ | ✔ |
+| `engine/reconciler.py` (대사) | ✔ | ★✗ → 0★ | ✔ | `"hold"` |
+| `execution/risk_monitor.py` (**자동**) | ★✗ → 0★ | ★✗ → 0★ | ★✗★ | ★✗ → `"hold"`★ |
+
+→ `live_kill_events.dd_at_trigger` 가 **저장소 전체에서 언제나 `0`**.
+★드로다운 때문에 발동한 사건의 드로다운이 `0` 으로 남는다★ — AM 의 `"dev"`
+(701행이 전부 같은 값), AL 의 `selection_effect=0` 과 **같은 모양**이다.
+
+거짓 둘 더:
+
+- 청산 결과 초기값이 `{"complete": True}` 이고 `liq_mode in ("immediate",
+  "gradual") and kis_client` 일 때만 교체된다 → ★`hold` 로 발동하면 **팔지 않고도**
+  `liquidation_complete: True`★.
+- `kis_client=None` 이면 `_cancel_open_orders` 를 건너뛰는데 `cancelled_count = 0`
+  이 그대로 기록된다 → ★"취소할 주문이 없었다" 와 "취소를 시도하지 않았다" 가
+  같은 `0`★.
+
+### 무엇을 했나
+
+- **AP1 `src/domain/kill_action.py`** ★신규★(순수) — 조치 넷
+  (`block_new_orders`·`cancel_open_orders`·`liquidate_positions`·`notify`) ×
+  상태 넷(`done`·`skipped`·`failed`·`unknown`). ★사유 없는 비-`done` 상태는
+  **생성 자체가 불가능**★(AD1 `AccountLimit` 선례). `action_rollup` 은 **빠진
+  조치를 `unknown` 으로 남기고** `cleared` 는 넷이 다 `done` 일 때만 참이다.
+  `observation_state` 는 ★잰 `0` 을 관측으로 본다★ — 문제는 *안 실은* `0` 이다.
+- **AP2 재료를 먼저 고친다** — `trigger()` 의 `equity`·`dd_pct` 기본값 `0` →
+  `None`(컬럼이 nullable 이라 NULL 이 들어간다). ★`_send_notification` 이 곧바로
+  터진다★ — `f"{None:,.0f}"` 는 `TypeError` 라, 미상이면 `"미상"` 을 찍게 갈랐다.
+  `stage13_routes` 의 `.get("evaluated_total", 0)` 폴백도 지웠다.
+- **AP3 세 호출부가 관측을 싣는다** — `DD_AXIS_BY_SOURCE` 로 ★어느 트리거가 어느
+  드로다운을 봤는지★ 갈랐다(`auto_dd`→누적 · `auto_cb`→일중). 원인이 아닌
+  트리거(`auto_risk`·`auto_api`·`manual`)는 `None` 이다 — 마침 손에 있는 숫자를
+  실으면 *"이 드로다운 때문에 발동했다"* 는 없는 사실이 된다. **AST 전수**가
+  `.trigger(` 호출부 전부에 `equity=`·`dd_pct=` **명시**를 요구한다(AA2 관용구).
+- **AP4 조치 기록** — 발동이 취한 넷을 `actions` 로 낸다. `n_orders_cancelled`·
+  `n_positions_closed`·`krw_recovered` 는 시도하지 않았으면 **NULL**,
+  `liquidation_complete` 는 **`bool | None`**(★미상 ≠ 거짓★).
+  `live_kill_events.actions_json` 을 `add_columns` 로 붙였다(W1 관용구).
+- **AP5 표면** — `active_event()` 와 `GET /kill-switch/events` 가 **같은
+  `decorate_event`** 를 쓴다. ★`/status` 최상위 키 골든은 불변★(`active_event`
+  안쪽만 늘었다). 프런트는 **타입만**(`entities/kill-switch/types.ts`) —
+  ★화면은 만들지 않았다.★
+- **AP6** — 낡은 문장 네 곳 · 로드맵 지정문 정정 + P2 "에쿼티 이력 기록" 행을
+  **완료(AI)** 로 · 채점표 #12 갱신.
+
+### ★AF 의 짝 테스트가 자기가 잡으려던 거짓을 단언하고 있었다★
+
+`test_a_hold_mode_kill_does_not_claim_any_liquidation` 이
+`n_positions_closed == 0` 을 단언했다. 이름은 *"청산을 주장하지 않는다"* 인데,
+**그 `0` 이야말로 잡으려던 거짓**이었다 — *"0 주를 청산했다"* 와 *"청산을
+시도하지 않았다"* 가 같은 값. `is None` 으로 고치고 왜 고쳤는지 docstring 에 적었다.
+
+### 변이 배터리 (a~l, 전부 사망)
+
+| | 변이 | | 변이 |
+|---|---|---|---|
+| a | `trigger()` 기본값을 다시 `0` 으로 | g | `cleared` 를 항상 참으로 |
+| b | 자동 경로가 dd 를 안 싣는다 | h | 과거 행을 `done` 으로 소급 |
+| c | 두 dd 축을 바꿔 싣는다 | i | 사유 없는 `ActionRecord` 허용 |
+| d | 클라이언트 없는데 `CANCEL: DONE` | j | AST 스캐너 무력화 |
+| e | `SKIPPED` 를 `DONE` 으로 접는다 | k | 새 호출부가 관측 없이 부른다 |
+| f | `hold` 인데 청산 완료라고 | l | 잰 `0` 을 미상으로 읽는다 |
+
+### ★이 작업이 하지 않은 것★
+
+- **동작을 바꾸지 않았다.** 자동 경로는 여전히 `kis_client` 를 넘기지 않아
+  ★미체결 주문을 취소하지 않는다★ — 이제 그 사실을 `skipped` + 사유로 **말할**
+  뿐이다. `default_liquidation_mode="hold"` 도 그대로다. ★고칠 자리가 어디인지는
+  기록으로 남기고, 고치는 것은 별도 승인 사항이다.★
+- **트리거를 무장시키지 않았다.** `auto_api` 의 `api_failure_count` 생산자도,
+  `auto_risk` 의 `systemic_risk_score` 도 만들지 않았다. 후자는 ★`stress_score`
+  와 이름을 바꿔 끼우면 확인되지 않은 양으로 계좌가 청산된다★ — P1 이 일부러
+  잇지 않았고 그 판단을 뒤집지 않는다.
+- **`gradual` 이 1/5 만 파는 것을 고치지 않았다**(AF1 이 회계만 정직하게 했다).
+- **실계좌·모의계좌에서 검증하지 않았다.** 브로커가 없다. `KIS_IS_PAPER=1`
+  검증은 `CLAUDE.md` §6 의 선행 조건으로 그대로 남는다.
+- **`auto_dd`·`auto_cb` 가 이 환경에서 무장된다고 말하지 않는다.** 리더가 브로커
+  행만 계열에 넣으므로 mock 환경은 `mock_equity_only` 다.
+- **채점표 #12 를 `통과` 로 올리지 않았다.** ★재는 것과 막는 것은 다르다.★
+- **감사 추적에 위변조 방지를 넣지 않았다**(채점표 §5 의 미상, 별건).
+- **화면을 만들지 않았다.** 타입까지다.
+- **`main` 과의 격차를 해소하지 않았다.** 위 §0 에 적었다.
+
+### 검증
+
+- 전체 게이트 **6,211 통과 / 10 스킵 / 0 실패**(복원 기준선 6,143 → **+68**:
+  kill_action 30 · kill_trigger_record 20 · kill_trigger_callers 15 ·
+  readiness 라우트 3). `make all` 네 단계 전부 통과 — lint(`ruff check`) ·
+  test · typecheck(`tsc --noEmit`, **종료 코드 0 확인**) · build(`next build`).
+- ★중간에 거짓 통과를 하나 만들었다★ — `npx tsc --noEmit | tail -5 && echo OK`
+  는 파이프라인 종료 코드가 `tail` 의 것이라 **실패해도 OK 가 찍힌다.** 실제로는
+  프런트 `node_modules` 가 새 컨테이너에 없어 e2e 스펙 전부가
+  `@playwright/test` 를 못 찾고 있었다. `npm ci` 후 종료 코드로 다시 쟀다.
+  ★파이프 뒤의 `&& echo` 는 검증이 아니다.★
+- ★`ruff format --check` 는 손대지 않았다★ — 저장소 750 중 725 가 걸리는
+  **기존 상태**이고 AO 에서 실측·기록했다.
+
+### ★곁가지로 찾은 것 — 의존성 상한이 없어 조용히 틀린 답이 나왔다★
+
+전체 게이트에서 `test_granger_detects_lagged_dependency` 가 깨졌다. ★AP 와 무관함을
+먼저 증명했다★ — `git stash` 로 변경을 전부 치우고 `b6ccb63` 에서 돌려도 같은 실패다.
+
+원인: `requirements.txt` 가 `statsmodels>=0.14.0` 으로 **상한이 없었고**, 새
+컨테이너가 **0.15.0** 을 받았다. 0.15 는 `grangercausalitytests()` 에서 `verbose`
+인자를 **제거**했고(시그니처 실측: `(x, maxlag, addconst=True)`), 그 `TypeError` 를
+`causal_graph.granger_edges` 의 `except Exception` 이 **삼킨다**. 결과는 예외가
+아니라 ★`available: True` + 엣지 0개★ — **크래시가 "인과 관계 없음" 으로 보인다.**
+`CLAUDE.md` §4 가 금지한 침묵 폴백의 실물이다.
+
+이번에 한 것은 **상한 고정 한 줄**뿐이다(`statsmodels>=0.14.0,<0.15`, 0.14.6 에서
+6건 통과 확인). `fastapi==0.111.0` 과 같은 이유의 고정이다(§6).
+★삼키는 `except` 는 고치지 않았다★ — 그것은 매크로 엔진 동작 변경이고(§3), 지금
+빈 답을 내는 경로가 갑자기 값을 내기 시작하는 것은 별도 승인 사항이다. **다음
+사람이 집을 수 있게 여기 적는다.**
+
+### 다음 프로그램 — ★`auto_api` 재료★
+
+넷 중 **재료가 진짜로 없는 자리**는 둘이고, 그중 `auto_api` 는 만들 수 있다 —
+`api_failure_count` 를 `src/` 에서 **읽는 곳은 둘, 쓰는 곳은 0**(실측). 다만
+"연속 실패" 의 정의(무엇이 실패인가 · 창 · 리셋 조건)가 설계 판단이라
+★지어내면 안 되는 부분★이고, 다음 턴에서 brainstorming 으로 연다.

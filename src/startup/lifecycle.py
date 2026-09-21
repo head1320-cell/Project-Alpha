@@ -89,9 +89,9 @@ def _risk_monitor_bg():
 
             engine = get_engine()
             audit = AuditTrail(engine)
-            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오고, 그 이력에
-            # 쓰는 코드가 저장소에 없어서 `auto_dd`·`auto_cb` 가 발동할 수 없었다(AI).
-            # 기록 실패는 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
+            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오므로, 이 줄이
+            # `auto_dd`·`auto_cb` 의 **재료를 만드는 자리**다(AI). 기록 실패는
+            # 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
             _record_equity(engine, log)
             last = run_once(
                 kill_switch=KillSwitch(engine, audit),

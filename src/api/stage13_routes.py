@@ -24,8 +24,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.api.auth import require_admin, require_login
+from src.database import get_engine
 from src.domain.auth_identity import Principal, observed_actor
 from src.domain.perf_kind import execution_label
+from src.execution.drawdown import drawdown_from_history
 
 router = APIRouter(prefix="/api/v1/live", tags=["live-trading"])
 
@@ -247,10 +249,18 @@ def live_kill_trigger(req: KillTriggerRequest,
         executor = get_executor()
         who = observed_actor(principal, req.actor)
         balance = executor.kis.get_balance()
+        # ★발동 시점의 드로다운을 **관측해** 싣는다★ (AP3) — 예전에는 아무도
+        # `dd_pct` 를 넘기지 않아 `dd_at_trigger` 가 저장소 전체에서 언제나 `0`
+        # 이었다. 못 재면 `None` 이고, 그 사실은 응답의 `observations` 가 말한다.
+        # ★이 값은 관측이지 원인이 아니다★ — 수동 발동은 사람이 일으킨 것이고
+        # `trigger_source` 가 그렇게 적는다.
+        dd = drawdown_from_history(get_engine())
         result = executor.kill_switch.trigger(
             source=f"manual_{who['actor']}",
             reason=req.reason,
-            equity=balance.get("evaluated_total", 0),
+            # ★`, 0` 폴백을 지웠다★ — 조회 실패가 "잔고 0" 이 되면 안 된다.
+            equity=balance.get("evaluated_total"),
+            dd_pct=dd.cumulative_pct,
             kis_client=executor.kis,
             liquidation_mode=req.liquidation_mode,
         )
@@ -296,9 +306,14 @@ def live_kill_readiness():
     """★자동 트리거 넷 중 무엇이 무장됐고 무엇이 왜 불능인가★ (AF4)
 
     `/kill-switch/status` 는 `is_active` 만 말한다. 운영자가 그것만 보면 안전망 넷이
-    서 있다고 읽는데, ★재료가 없는 트리거는 영원히 발동하지 않는다★ — 지금
-    `auto_dd`·`auto_cb` 는 `live_daily_pnl` 이 비어 있고 `auto_api` 는 실패 횟수를
-    아무도 기록하지 않는다. 그 사실을 아는 것은 백그라운드 감시 데몬뿐이었다.
+    서 있다고 읽는데, ★재료가 없는 트리거는 영원히 발동하지 않는다★. 그 사실을 아는
+    것은 백그라운드 감시 데몬뿐이었다.
+
+    ★넷의 현황은 AP 에서 다시 실측했다(2026-09-21).★ `auto_dd`·`auto_cb` 는 AI 가
+    에쿼티 기록 경로를 만들어 **잴 수 있게 됐다**(다만 리더가 브로커 행만 계열에
+    넣으므로 mock 환경에서는 `mock_equity_only` 로 남는다). `auto_risk` 는
+    `systemic_risk_score` 의 생산자가 저장소에 없고, `auto_api` 는 실패 횟수를
+    기록하는 코드가 없다 — ★이 응답이 매 요청 다시 재어 말한다.★
 
     ★`/status` 를 건드리지 않는다★ — 그쪽은 열려 있고 싸다. 이 라우트는 계좌 상태에서
     파생되므로 로그인을 요구한다.
@@ -336,7 +351,11 @@ def live_kill_events(limit: int = Query(50, le=200)):
                 SELECT * FROM live_kill_events
                 ORDER BY triggered_at DESC LIMIT :lim
             """), {"lim": limit}).fetchall()
-        return {"count": len(rows), "events": [dict(r._mapping) for r in rows]}
+        # ★`active_event()` 와 **같은 함수**로 조치를 붙인다★ — 두 표면이 같은
+        # 사실을 말해야 한다. 기록이 없는 과거 행은 `unknown` + 사유다(AP5).
+        from src.execution.kill_switch import decorate_event
+        return {"count": len(rows),
+                "events": [decorate_event(dict(r._mapping)) for r in rows]}
     except Exception as e:
         raise HTTPException(500, str(e))
 

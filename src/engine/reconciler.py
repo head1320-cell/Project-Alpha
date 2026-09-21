@@ -635,7 +635,12 @@ class BrokerReconciler:
         try:
             self.kill_switch.trigger(
                 source=source, reason=reason,
-                equity=equity, kis_client=self.kis,
+                equity=equity,
+                # ★대사 불일치는 드로다운과 무관하다★ — 마침 손에 있는 숫자를
+                # 실으면 기록이 "이 드로다운 때문에 멈췄다" 는 없는 사실을 말한다.
+                # 생략(기본값)과 **명시적 미상**은 다르고, 전수 검사가 명시를 요구한다.
+                dd_pct=None,
+                kis_client=self.kis,
                 liquidation_mode="hold",
             )
         except Exception as e:

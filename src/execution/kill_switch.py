@@ -29,12 +29,27 @@ Kill Switch — 비상 정지 시스템
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import text
+
+from src.domain.kill_action import (
+    ACTION_BLOCK_NEW_ORDERS,
+    ACTION_CANCEL_OPEN,
+    ACTION_LIQUIDATE,
+    ACTION_NOTIFY,
+    STATE_DONE,
+    STATE_FAILED,
+    STATE_SKIPPED,
+    ActionRecord,
+    action_rollup,
+    observations,
+    unknown_actions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +59,57 @@ _GRADUAL_PARTIAL_REASON = (
     "gradual 모드는 1/5 만 매도하는 간이 구현입니다 — "
     "나머지 수량은 매도되지 않았습니다."
 )
+
+#: ★시도하지 않은 것과 할 일이 없던 것을 가른다★ (AP4)
+_NO_CLIENT_CANCEL = (
+    "브로커 클라이언트 없이 발동해 미체결 주문 취소를 ★시도하지 않았습니다★ — "
+    "★미체결 주문이 남아 있을 수 있습니다.★ 자동 발동 경로"
+    "(`execution/risk_monitor.run_once`)가 이 모양입니다."
+)
+_NO_CLIENT_LIQUIDATE = (
+    "브로커 클라이언트 없이 발동해 청산을 ★시도하지 않았습니다★ — "
+    "보유는 그대로입니다."
+)
+_HOLD_LIQUIDATE = (
+    "청산 모드가 `hold` 라 포지션을 ★팔지 않았습니다★ — 발동은 이후 신규 주문을 "
+    "막을 뿐 보유를 줄이지 않습니다."
+)
+_NOTIFY_DISABLED = "통지가 꺼져 있습니다(`notification_enabled=False`)."
+_NOTIFY_FAILED = "통지 중 오류가 났습니다: {}"
+#: ★발동 즉시 구조적으로 참인 유일한 조치★ — 이벤트 행이 생기면 `is_active()` 가
+#: 참이 되고 실행기가 **두 지점**에서 막는다(검증 시점 · 발주 직전 레이스).
+_BLOCK_GUARD = ("execution/order_executor.py — 사전 검증(kill_switch_active)과 "
+                "발주 직전 재확인(kill_switch_race), 두 지점")
+_UNOBSERVED_TEXT = "미상"
+
+#: 조치 기록이 없는 행의 사유. ★소급해 채우지 않는다★ — 이 어휘(AP)가 생기기
+#: 전에 쓰인 행은 무엇을 했는지 **적히지 않았을** 뿐이고, 안 적힌 것을 "했다" 로
+#: 채우면 없는 관측을 만든다.
+_NO_ACTION_RECORD = (
+    "이 발동에는 조치 기록이 없습니다 — 조치를 기록하기 시작하기(AP) 전에 쓰인 "
+    "행이거나 기록에 실패했습니다. ★무엇을 했는지 알 수 없다는 뜻이고, "
+    "아무것도 안 했다는 뜻도 다 했다는 뜻도 아닙니다.★")
+_BROKEN_ACTION_RECORD = (
+    "조치 기록을 읽을 수 없습니다({}) — ★읽히지 않는 기록은 미상입니다.★")
+
+
+def decorate_event(row: dict | None) -> dict | None:
+    """저장된 발동 행 → 조치 기록을 붙인 행. ★없으면 `unknown`★ (AP5)
+
+    표면 둘(`/kill-switch/status` 의 `active_event` · `/kill-switch/events`)이
+    **같은 함수**를 쓴다 — 두 벌로 만들면 한쪽만 고쳐도 아무 테스트가 깨지지 않고,
+    화면에 따라 다른 사실이 보인다(`run_evidence.rollup` 이 세운 규율).
+    """
+    if not row:
+        return row
+    raw = row.get("actions_json")
+    if raw:
+        try:
+            return {**row, "actions": json.loads(raw)}
+        except Exception as e:                           # noqa: BLE001
+            return {**row, "actions": action_rollup(
+                unknown_actions(_BROKEN_ACTION_RECORD.format(e)))}
+    return {**row, "actions": action_rollup(unknown_actions(_NO_ACTION_RECORD))}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -116,6 +182,21 @@ class KillSwitch:
             logger.error(f"Kill switch 상태 조회 실패: {e}")
             return True   # 안전: 조회 실패 시 active 가정
 
+    def _store_actions(self, event_id: str, actions: dict) -> None:
+        """조치 기록을 이벤트 행에 남긴다. ★기록 실패가 발동을 무르지 않는다★
+
+        컬럼이 아직 없는 DB 에서도 발동 자체는 성립해야 한다 — 그래서 실패를
+        삼키되 흔적을 남긴다(`equity_history.record_observation` 과 같은 관용구).
+        """
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE live_kill_events SET actions_json = :a "
+                    "WHERE event_id = :eid"),
+                    {"a": json.dumps(actions, ensure_ascii=False), "eid": event_id})
+        except Exception as e:                           # noqa: BLE001
+            logger.warning(f"조치 기록 저장 실패(발동은 유효): {e}")
+
     def active_event(self) -> dict | None:
         """현재 미해결 kill 이벤트 (있다면)."""
         try:
@@ -125,7 +206,8 @@ class KillSwitch:
                     WHERE resolved_at IS NULL
                     ORDER BY triggered_at DESC LIMIT 1
                 """)).fetchone()
-                return dict(row._mapping) if row else None
+                # ★조치 기록을 함께 낸다★ — 없으면 `unknown`(AP5)
+                return decorate_event(dict(row._mapping)) if row else None
         except Exception as e:
             logger.error(f"Kill event 조회 실패: {e}")
             return None
@@ -240,8 +322,8 @@ class KillSwitch:
         self,
         source: str,
         reason: str,
-        equity: float = 0,
-        dd_pct: float = 0,
+        equity: float | None = None,
+        dd_pct: float | None = None,
         regime: str | None = None,
         kis_client=None,
         liquidation_mode: str | None = None,
@@ -252,8 +334,10 @@ class KillSwitch:
         Args:
             source:           manual | auto_dd | auto_cb | auto_risk | auto_api
             reason:           발동 사유 (자유 텍스트)
-            equity:           발동 시점 자산
-            dd_pct:           발동 시점 drawdown
+            equity:           발동 시점 자산. ★`None` 은 "안 실었다" 이고 `0` 이
+                              아니다★ — 예전 기본값 `0` 이 관측 행세를 했다(AP2).
+            dd_pct:           발동 시점 drawdown. 같은 규율 — ★어느 호출부도 이
+                              값을 넘기지 않아 저장소 전체에서 언제나 `0` 이었다.★
             regime:           발동 시점 regime
             kis_client:       KIS API 클라이언트 (미체결 취소용)
             liquidation_mode: gradual | immediate | hold
@@ -292,22 +376,42 @@ class KillSwitch:
 
         logger.critical(f"🚨 KILL SWITCH ACTIVATED — {source}: {reason}")
 
-        # 3. 미체결 주문 취소
-        cancelled_count = 0
+        # 3. 미체결 주문 취소 — ★시도하지 않은 것과 0 건을 가른다★
+        acts: list[ActionRecord] = [
+            ActionRecord(action=ACTION_BLOCK_NEW_ORDERS, state=STATE_DONE,
+                         detail={"guard": _BLOCK_GUARD}),
+        ]
+        cancelled_count: int | None = None
         if kis_client:
             cancelled_count = self._cancel_open_orders(kis_client)
+            acts.append(ActionRecord(action=ACTION_CANCEL_OPEN, state=STATE_DONE,
+                                     detail={"n_cancelled": cancelled_count}))
+        else:
+            acts.append(ActionRecord(action=ACTION_CANCEL_OPEN,
+                                     state=STATE_SKIPPED, reason=_NO_CLIENT_CANCEL))
 
-        # 4. 청산 (옵션)
-        positions_closed = 0
-        krw_recovered = 0
-        liquidation: dict = {"closed": 0, "partial": [], "failed": [],
-                             "krw_recovered": 0, "mode": liq_mode,
-                             "complete": True, "note": None}
+        # 4. 청산 (옵션) — ★안 판 것을 "완료" 라고 적지 않는다★
+        positions_closed: int | None = None
+        krw_recovered: float | None = None
+        #: ★`complete: None` 은 "시도하지 않았다"★ — 예전 초기값은 `True` 였고
+        #: `hold` 모드에서 교체되지 않아, 팔지 않고도 완료라고 말했다(AP4).
+        liquidation: dict = {"closed": None, "partial": [], "failed": [],
+                             "krw_recovered": None, "mode": liq_mode,
+                             "complete": None, "note": None}
         if liq_mode in ("immediate", "gradual") and kis_client:
             liquidation = self._liquidate_positions(kis_client, mode=liq_mode)
             # ★감사 컬럼에는 **전량 청산분만** 간다★
             positions_closed = liquidation["closed"]
             krw_recovered = liquidation["krw_recovered"]
+            acts.append(ActionRecord(action=ACTION_LIQUIDATE, state=STATE_DONE,
+                                     detail={k: liquidation[k] for k in
+                                             ("mode", "closed", "partial",
+                                              "failed", "complete", "note")}))
+        else:
+            acts.append(ActionRecord(
+                action=ACTION_LIQUIDATE, state=STATE_SKIPPED,
+                reason=_HOLD_LIQUIDATE if liq_mode == "hold" else _NO_CLIENT_LIQUIDATE,
+                detail={"mode": liq_mode}))
 
         # 5. 통계 업데이트
         try:
@@ -327,7 +431,18 @@ class KillSwitch:
 
         # 6. 알림 (placeholder — Slack/Email 통합 가능)
         if self.config.notification_enabled:
-            self._send_notification(event_id, source, reason, equity, dd_pct)
+            try:
+                self._send_notification(event_id, source, reason, equity, dd_pct)
+                acts.append(ActionRecord(action=ACTION_NOTIFY, state=STATE_DONE))
+            except Exception as e:                       # noqa: BLE001
+                acts.append(ActionRecord(action=ACTION_NOTIFY, state=STATE_FAILED,
+                                         reason=_NOTIFY_FAILED.format(e)))
+        else:
+            acts.append(ActionRecord(action=ACTION_NOTIFY, state=STATE_SKIPPED,
+                                     reason=_NOTIFY_DISABLED))
+
+        actions = action_rollup(acts)
+        self._store_actions(event_id, actions)
 
         return {
             "event_id":             event_id,
@@ -342,8 +457,14 @@ class KillSwitch:
             "krw_recovered":        krw_recovered,
             # ★반만 판 것을 조용히 성공으로 보이게 하지 않는다★
             "liquidation":          liquidation,
+            # ★시도하지 않았으면 `False` 가 아니라 `None`★ (미상 ≠ 거짓)
             "liquidation_complete": liquidation["complete"],
             "liquidation_note":     liquidation["note"],
+            # ★발동했는가 ⟂ 무엇을 했는가★ (AP)
+            "actions":              actions,
+            # ★값과 그 값을 어떻게 알았나를 함께 낸다★
+            "observations":         observations(equity_krw=equity, dd_pct=dd_pct,
+                                                 regime=regime),
         }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -535,15 +656,23 @@ class KillSwitch:
 
     @staticmethod
     def _send_notification(event_id: str, source: str, reason: str,
-                            equity: float, dd_pct: float):
-        """Slack/Email 알림 (현재는 로깅만, 추후 webhook 통합)."""
+                            equity: float | None, dd_pct: float | None):
+        """Slack/Email 알림 (현재는 로깅만, 추후 webhook 통합).
+
+        ★미상을 0 으로 찍지 않는다★ — `f"{None:,.0f}"` 는 `TypeError` 라 예전
+        서명(기본값 `0`)에서는 이 분기가 필요 없었다. 기본값을 `None` 으로
+        바꾸면서(AP2) 여기가 곧바로 터지므로, 미상은 **미상이라고 적는다.**
+        """
+        def _num(v, fmt):
+            return format(v, fmt) if isinstance(v, (int, float)) \
+                and not isinstance(v, bool) else _UNOBSERVED_TEXT
         msg = (
             f"🚨 KILL SWITCH ACTIVATED\n"
             f"Event: {event_id}\n"
             f"Source: {source}\n"
             f"Reason: {reason}\n"
-            f"Equity: {equity:,.0f}원\n"
-            f"Drawdown: {dd_pct:.2%}\n"
+            f"Equity: {_num(equity, ',.0f')}원\n"
+            f"Drawdown: {_num(dd_pct, '.2%')}\n"
             f"Time: {datetime.now().isoformat()}"
         )
         logger.critical(msg)

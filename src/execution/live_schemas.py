@@ -166,6 +166,8 @@ LIVE_TRADING_SCHEMA_DDL = [
         n_positions_closed INTEGER DEFAULT 0,
         krw_recovered      REAL DEFAULT 0,
 
+        actions_json       TEXT,
+
         resolved_at        TIMESTAMP,
         resolved_by        VARCHAR(50),
         resolution_notes   TEXT
@@ -208,6 +210,9 @@ def ensure_fill_dedup_index(engine) -> tuple[bool, str | None]:
 #: 고치지 않으므로, 운영 DB 는 이 경로로만 컬럼을 얻는다(W1 이 세운 관용구).
 _EQUITY_SOURCE_COLS = [("equity_source", "VARCHAR(16)")]
 
+#: ★발동이 **무엇을 했는가**★ — 같은 이유로 기존 DB 에는 이 경로로만 붙는다(AP4).
+_KILL_ACTION_COLS = [("actions_json", "TEXT")]
+
 
 def init_live_trading_schema(engine) -> int:
     """5개 live_* 테이블 생성 + ★기존 표에 빠진 칸 덧붙이기★."""
@@ -227,4 +232,11 @@ def init_live_trading_schema(engine) -> int:
                     label="에쿼티 출처(AI)")
     except Exception as e:                                   # noqa: BLE001
         logger.warning(f"equity_source 컬럼 추가 실패(그 칸 없이 동작): {e}")
+    try:
+        from src.data.schema_add_columns import add_columns
+        add_columns(engine, "live_kill_events", _KILL_ACTION_COLS,
+                    label="킬스위치 조치 기록(AP)")
+    except Exception as e:                                   # noqa: BLE001
+        # ★못 붙어도 발동은 성립한다★ — 조치 기록만 남지 않는다.
+        logger.warning(f"actions_json 컬럼 추가 실패(그 칸 없이 동작): {e}")
     return count

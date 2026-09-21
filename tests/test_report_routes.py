@@ -203,6 +203,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/distribution_gate.py",
     "src/domain/strategy_scorecard.py",
     "src/execution/kill_switch.py",
+    # AP — 조치 사유·note 가 `/kill-switch/*` 응답으로 그대로 나간다.
+    "src/domain/kill_action.py",
 )
 
 

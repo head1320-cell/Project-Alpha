@@ -44,6 +44,28 @@ VERDICT_UNKNOWN = "unknown"
 #: 감사 이벤트 타입(기존 `EventType` 어휘를 늘리지 않고 여기서 선언).
 EVENT_RISK_MONITOR = "RISK_MONITOR_TICK"
 
+#: ★어느 트리거가 **어느 드로다운**을 봤나★ (AP3)
+#:
+#: `kill_switch.should_auto_trigger()` 는 둘을 **다른 임계값**으로 비교한다 —
+#: `auto_dd` 는 누적(-10%), `auto_cb` 는 일중(-5%). 발동 기록에 남길 값은
+#: ★그 트리거가 실제로 비교한 값★이고, 둘을 바꿔 실으면 다른 사실이 된다.
+DD_AXIS_BY_SOURCE = {"auto_dd": "cumulative_dd_pct",
+                     "auto_cb": "current_drawdown_pct"}
+
+
+def dd_for_source(source: str | None, account_state: dict) -> float | None:
+    """이 트리거를 **일으킨** 드로다운. ★원인이 아니면 싣지 않는다★
+
+    `auto_risk`(국면)·`auto_api`(연속 실패)는 드로다운과 무관하므로 `None` 이다 —
+    마침 손에 있는 숫자를 실으면 기록이 *"이 드로다운 때문에 발동했다"* 는
+    **없는 사실**을 말하게 된다(CLAUDE.md §2 — 어떤 질문에 답한 것인지 밝힌다).
+    """
+    axis = DD_AXIS_BY_SOURCE.get(source or "")
+    if axis is None:
+        return None
+    value = (account_state or {}).get(axis)
+    return None if value is None else float(value)
+
 
 def autotrigger_allowed() -> bool:
     """★엄격 비교★ — `mock_gate.mock_allowed()` 와 같은 규약."""
@@ -119,7 +141,17 @@ def run_once(*, kill_switch, audit, account_state: dict,
 
     if v.verdict == VERDICT_WOULD_TRIGGER and autotrigger_allowed():
         try:
-            kill_switch.trigger(source=v.source, reason=v.reason)
+            # ★관측을 실어 보낸다★ (AP3) — 예전에는 `source`·`reason` 만 넘겨
+            # 기본값 `0` 이 `equity_at_trigger`·`dd_at_trigger` 에 관측인 척
+            # 기록됐다. ★`kis_client` 는 여전히 넘기지 않는다 — 동작 0줄★이고,
+            # 그 사실은 발동 기록의 `actions` 가 `skipped` + 사유로 말한다.
+            kill_switch.trigger(
+                source=v.source, reason=v.reason,
+                # 감시는 브로커를 부르지 않는다(AI 가 세운 경계) → 미상 그대로.
+                equity=(account_state or {}).get("equity_krw"),
+                dd_pct=dd_for_source(v.source, account_state),
+                regime=(regime_state or {}).get("regime"),
+            )
         except Exception as e:                           # noqa: BLE001
             logger.error(f"킬스위치 자동 발동 실패: {e}")
 
