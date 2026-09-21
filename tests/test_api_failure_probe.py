@@ -248,5 +248,5 @@ def test_the_frontend_type_declares_the_failure_label():
                 for line in block.splitlines()
                 if ":" in line and not line.strip().startswith(("*", "/"))}
     expected = {"kind", "label", "fault", "fault_reason", "counted_by_breaker",
-                "rt_cd", "status", "kis_msg", "note"}
+                "rt_cd", "msg_cd", "status", "kis_msg", "note"}
     assert expected <= declared, expected - declared

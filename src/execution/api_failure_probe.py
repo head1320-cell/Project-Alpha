@@ -43,6 +43,7 @@ from src.domain.api_health import (
     api_failure_observation,
 )
 from src.domain.kis_failure import failure_label
+from src.domain.kis_rt_cd import enriched_label
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +66,14 @@ def _last_failure(target: Any) -> dict | None:
     kind = getattr(target, "last_failure_kind", None)
     if not kind:
         return None
-    return failure_label(kind,
-                         rt_cd=getattr(target, "last_failure_rt_cd", None),
-                         status=getattr(target, "last_failure_status", None))
+    label = failure_label(kind,
+                          rt_cd=getattr(target, "last_failure_rt_cd", None),
+                          msg_cd=getattr(target, "last_failure_msg_cd", None),
+                          status=getattr(target, "last_failure_status", None))
+    # ★표가 표면에 닿는다★(AS) — 오늘은 표가 비어 있어 아무것도 바뀌지 않고,
+    # 채워지면 같은 자리가 책임 소재를 말한다. ★아무도 안 부르는 계약은 계약이
+    # 아니다★ — 이 저장소에는 배선만 되고 소비되지 않는 모듈 선례가 있다.
+    return enriched_label(label)
 
 
 def _singleton() -> Any:

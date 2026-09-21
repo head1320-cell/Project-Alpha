@@ -209,6 +209,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/api_health.py",
     # AR — 실패 종류의 책임 사유·note 가 같은 응답에 실려 나간다.
     "src/domain/kis_failure.py",
+    # AS — 표의 미상 사유·note 가 `/kill-switch/kis-codes` 응답으로 나간다.
+    "src/domain/kis_rt_cd.py",
 )
 
 

@@ -655,7 +655,9 @@ class OrderExecutor:
             ticker=signal["ticker"],
             reason_code=kind,
             # ★원자료를 함께 남긴다★ — 책임 소재는 단정하지 않는다(rt_cd 표 없음).
-            context={"error": error, "failure": label},
+            # ★실행 모드도 남긴다★(AS1) — `live_audit_trail` 에는 모드 칸이
+            # 없어서, 없으면 나중에 모의와 실계좌 관측이 조용히 합쳐진다.
+            context={"error": error, "failure": label, "execution_mode": mode},
             message=f"주문 실패: {error}",
         )
         _append_audit(audit_ids, fail_audit)

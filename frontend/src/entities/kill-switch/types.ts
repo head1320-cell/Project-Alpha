@@ -125,8 +125,30 @@ export interface KisFailureLabel {
   /** ★지금 circuit breaker 가 이 종류를 세는가★ — 기술이지 정책이 아니다. */
   counted_by_breaker: boolean;
   rt_cd: string | null;
+  /**
+   * ★표의 열쇠★ — `rt_cd` 는 `!== "0"` 이분법으로 쓰이는 거친 값이라 혼자서는
+   * 뜻을 가리지 못한다. `null` 은 **미상**이지 "KIS 가 주지 않는다" 가 아니다.
+   */
+  msg_cd: string | null;
   status: number | null;
   kis_msg: string | null;
+  note: string;
+  /**
+   * ★표가 무엇을 말하는가★ — 비어 있으면 `meaning` 이 `null` 이고 `reason` 이
+   * 왜 미상인지 적는다. 이 저장소는 KIS 에 닿지 못해 표가 비어 있다.
+   */
+  table?: KisFailureTable;
+}
+
+/** `rt_cd`/`msg_cd` 표가 이 코드에 대해 말하는 것. ★관측은 뜻이 아니다.★ */
+export interface KisFailureTable {
+  meaning: string | null;
+  fault: KisFault | null;
+  grade: string | null;
+  evidence_source: string | null;
+  /** 왜 미상인지. 표가 말해 주면 `null`. */
+  reason: string | null;
+  key: string | null;
   note: string;
 }
 
@@ -196,4 +218,49 @@ export interface KillTriggerResult {
   liquidation_note: string | null;
   actions: ActionRollup;
   observations: TriggerObservations;
+}
+
+/**
+ * ★우리가 본 KIS 업무 코드★ — `GET /api/v1/live/kill-switch/kis-codes` (AS4)
+ *
+ * `(rt_cd, msg_cd, 실행 모드)` 별 관측 하나. ★모드가 열쇠에 들어 있다★ —
+ * 모의와 실계좌 관측을 합치면 그 수치는 아무것도 뜻하지 않는다.
+ */
+export interface KisCodeObservation {
+  rt_cd: string | null;
+  /** `null` 은 미상 — KIS 가 주지 않는다는 뜻이 아니다. */
+  msg_cd: string | null;
+  execution_mode: string;
+  count: number;
+  first_seen: string | null;
+  last_seen: string | null;
+  /** ★해석하지 않은 원문★ — 문구로 뜻을 단정하지 않는다. */
+  sample_msg1: string | null;
+  key: string;
+}
+
+/** 본 적은 있으나 뜻을 모르는 코드. 많이 본 것이 먼저 온다. */
+export interface KisCodeGap extends KisCodeObservation {
+  /** 왜 미상인지. ★사유 없는 미상은 없다.★ */
+  reason: string | null;
+}
+
+/** 표의 현재 상태. ★관측만 있는 항목은 표의 크기가 아니다.★ */
+export interface KisCodeTable {
+  size: number;
+  observed_only: number;
+  min_grade: string;
+  grades: string[];
+  /** 표가 비어 있다면 왜 비었는지. 비어 있는 것이 정직한 상태다. */
+  why_empty: string | null;
+  path: string;
+  note: string;
+}
+
+export interface KisCodesResponse {
+  observed: KisCodeObservation[];
+  /** ★표가 비어 있으면 이것이 곧 `observed` 다★ — 그것이 지금의 진실이다. */
+  gaps: KisCodeGap[];
+  table: KisCodeTable;
+  note: string;
 }

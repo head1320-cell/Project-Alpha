@@ -193,7 +193,8 @@ def test_counts_toward_breaker_agrees_with_the_set(kind):
 def test_the_label_shape_is_pinned():
     label = failure_label(KIND_TRANSPORT)
     assert set(label) == {"kind", "label", "fault", "fault_reason",
-                          "counted_by_breaker", "rt_cd", "status", "kis_msg", "note"}
+                          "counted_by_breaker", "rt_cd", "msg_cd", "status",
+                          "kis_msg", "note"}
 
 
 def test_an_unregistered_kind_labels_as_unknown():

@@ -165,8 +165,14 @@ def classify(*, blocked: bool = False, exception_name: str | None = None,
 
 
 def failure_label(kind: Any, *, rt_cd: Any = None, status: Any = None,
-                  msg: Any = None) -> dict[str, Any]:
-    """종류 → 응답·기록에 싣는 블록. ★원자료를 함께 남긴다★"""
+                  msg: Any = None, msg_cd: Any = None) -> dict[str, Any]:
+    """종류 → 응답·기록에 싣는 블록. ★원자료를 함께 남긴다★
+
+    `msg_cd` 는 AS1 이 더한 칸이다 — 표의 **열쇠**이고, `rt_cd` 단독은
+    `!= "0"` 이분법으로 쓰이는 거친 값이라 열쇠가 되지 못한다.
+    ★없으면 `None` 이고 그것은 미상이지 미지원이 아니다★ — 이 저장소는 KIS
+    응답 봉투에 그 필드가 있는지 확인한 적이 없다.
+    """
     k = kind if kind in FAILURE_KINDS else KIND_UNKNOWN
     return {
         "kind": k,
@@ -175,6 +181,7 @@ def failure_label(kind: Any, *, rt_cd: Any = None, status: Any = None,
         "fault_reason": fault_reason(k),
         "counted_by_breaker": counts_toward_breaker(k),
         "rt_cd": rt_cd,
+        "msg_cd": msg_cd,
         "status": status,
         "kis_msg": msg,
         "note": _NOTE,

@@ -26,6 +26,11 @@ from pydantic import BaseModel, Field
 from src.api.auth import require_admin, require_login
 from src.database import get_engine
 from src.domain.auth_identity import Principal, observed_actor
+from src.domain.kis_rt_cd import (
+    fold_observations,
+    gap_list,
+    table_summary,
+)
 from src.domain.perf_kind import execution_label
 from src.execution.drawdown import drawdown_from_history
 
@@ -296,6 +301,43 @@ def live_kill_status():
         return {
             "is_active": executor.kill_switch.is_active(),
             "active_event": executor.kill_switch.active_event(),
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/kill-switch/kis-codes", dependencies=[Depends(require_login)])
+def live_kis_codes(limit: int = 5000):
+    """★우리가 본 KIS 업무 코드와, 아직 뜻을 모르는 것들★ (AS4)
+
+    AR 이 `business`(HTTP 200 + `rt_cd != "0"`)를 다른 실패와 갈라 놓았지만
+    ★그 종류의 뜻을 저장소가 모른다★ — `rt_cd`/`msg_cd` 를 뜻으로 옮기는 표가
+    없다. 장 종료 같은 정상 업무 응답과 KIS 장애가 같은 breaker 카운터에
+    들어가는 안전 역전이 거기서 나온다.
+
+    이 라우트는 그 표를 ★채우기 위한 재료★를 낸다:
+
+    - `observed` — 감사 로그에 쌓인 `(rt_cd, msg_cd, 실행 모드)` 별 관측.
+      ★모드를 합치지 않는다★ — 모의와 실계좌를 섞으면 수치가 뜻을 잃는다.
+    - `gaps` — 그중 표에 없는 것. ★표가 비어 있으면 gaps 가 곧 observed 이고,
+      그것이 지금의 진실이다.★
+    - `table` — 표의 크기와, 비어 있다면 왜 비어 있는지.
+
+    ★관측 횟수는 뜻의 증거가 아니다★ — 99번 본 코드도 KIS 문서나 실계좌
+    응답이 있기 전까지는 미상이다. 새 테이블은 만들지 않았다(감사 로그를
+    읽기 시점에 집계한다).
+    """
+    try:
+        executor = get_executor()
+        rows = executor.audit.kis_code_rows(limit=limit)
+        observed = fold_observations(rows)
+        return {
+            "observed": observed,
+            "gaps": gap_list(observed),
+            "table": table_summary(),
+            "note": ("표가 비어 있으면 모든 코드가 미상입니다 — 본 적이 있다는 "
+                     "것과 뜻을 안다는 것은 다릅니다. 표를 채우려면 KIS 문서나 "
+                     "실계좌 응답이 필요하고, 그것은 코드로 답할 수 없습니다."),
         }
     except Exception as e:
         raise HTTPException(500, str(e))

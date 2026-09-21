@@ -63,17 +63,20 @@ class KISCallError(RuntimeError):
     """
 
     def __init__(self, message: str, *, kind: str, rt_cd=None, status=None,
-                 kis_msg=None):
+                 kis_msg=None, msg_cd=None):
         super().__init__(message)
         self.kind = kind
         self.rt_cd = rt_cd
         self.status = status
         self.kis_msg = kis_msg
+        #: ★표의 열쇠★(AS1) — `rt_cd` 는 `!= "0"` 이분법으로 쓰이는 거친 값이라
+        #: 혼자서는 뜻을 가리지 못한다. 없으면 `None` 이고 그것은 미상이다.
+        self.msg_cd = msg_cd
 
     def label(self) -> dict:
         """기록·응답에 싣는 블록. ★책임 소재를 단정하지 않는다★"""
         return failure_label(self.kind, rt_cd=self.rt_cd, status=self.status,
-                             msg=self.kis_msg)
+                             msg=self.kis_msg, msg_cd=self.msg_cd)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -303,6 +306,7 @@ class KISClient:
         #: 이력으로 쌓인다.
         self.last_failure_kind: str | None = None
         self.last_failure_rt_cd: str | None = None
+        self.last_failure_msg_cd: str | None = None
         self.last_failure_status: int | None = None
         self._token_lock = threading.Lock()  # 동시 첫 호출 시 토큰 1회만 발급
 
@@ -370,10 +374,12 @@ class KISClient:
     # HTTP 호출 헬퍼
     # ─────────────────────────────────────────────────────────────────────
 
-    def _note_failure(self, kind: str, rt_cd=None, status=None) -> None:
+    def _note_failure(self, kind: str, rt_cd=None, status=None,
+                      msg_cd=None) -> None:
         """마지막 실패의 종류를 남긴다. ★기록이지 카운팅이 아니다★"""
         self.last_failure_kind = kind
         self.last_failure_rt_cd = rt_cd
+        self.last_failure_msg_cd = msg_cd
         self.last_failure_status = status
 
     def _request(self, method: str, path: str, headers: dict,
@@ -403,12 +409,16 @@ class KISClient:
             # KIS는 HTTP 200 + rt_cd로 성공/실패 구분
             rt_cd = str(data.get("rt_cd", ""))
             if rt_cd != "0":
+                # ★열쇠를 잡는다★(AS1) — 예전에는 이 칸을 읽지도 않고 버렸다.
+                # 있다고 가정하지 않는다: 없으면 `None` 이고 그것은 미상이다.
+                msg_cd = data.get("msg_cd")
                 self.circuit_breaker.record_failure()
-                self._note_failure(KIND_BUSINESS, rt_cd=rt_cd, status=status)
+                self._note_failure(KIND_BUSINESS, rt_cd=rt_cd, status=status,
+                                   msg_cd=msg_cd)
                 raise KISCallError(
                     f"KIS API 실패: rt_cd={rt_cd}, msg={data.get('msg1', 'unknown')}",
                     kind=KIND_BUSINESS, rt_cd=rt_cd, status=status,
-                    kis_msg=data.get("msg1"),
+                    kis_msg=data.get("msg1"), msg_cd=msg_cd,
                 )
 
             self.circuit_breaker.record_success()

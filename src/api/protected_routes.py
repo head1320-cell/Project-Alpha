@@ -84,6 +84,9 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "킬스위치 이력 — 이벤트에 당시 자기자본이 실린다"),
     ("GET", "/api/v1/live/kill-switch/readiness"):
         (REQUIRE_LOGIN, "자동 트리거 무장 여부(AF4) — 계좌 상태에서 파생된다"),
+    ("GET", "/api/v1/live/kill-switch/kis-codes"):
+        (REQUIRE_LOGIN, "본 KIS 업무 코드와 뜻 미상 목록(AS4) — 감사 로그의 "
+                        "실패 이력에서 파생되고 표본 `msg1` 원문이 실린다"),
     ("GET", "/api/v1/account/holdings"):
         (REQUIRE_LOGIN, "보유 종목"),
     ("GET", "/api/v1/account/balance"):

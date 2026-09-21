@@ -370,6 +370,51 @@ class AuditTrail:
             logger.error(f"Audit query 실패: {e}")
             return []
 
+    def kis_code_rows(self, start: datetime | None = None,
+                      end: datetime | None = None, limit: int = 5000) -> list[dict]:
+        """KIS 업무 코드 관측의 원료 — ★새 테이블을 만들지 않는다★ (AS4)
+
+        AR 이 실패마다 `context_json` 에 종류·`rt_cd` 를 남기기 시작했고 AS1 이
+        `msg_cd` 와 실행 모드를 더했다. 그러니 이미 쌓이고 있다 — 별도 카운터를
+        두면 같은 사실이 두 곳에 있게 되고, 어긋날 때 무엇이 진실인지 정하는
+        문제가 새로 생긴다. 집계는 읽기 시점에 한다(`daily_summary` 와 같다).
+
+        ★여기는 SQL 만 한다★ — 접는 것도 판정도 `src/domain/kis_rt_cd.py` 가
+        한다. 돌려주는 행은 그 쪽이 그대로 받는 모양이다.
+        """
+        sql = ("SELECT timestamp, context_json FROM live_audit_trail "
+               "WHERE event_type = :et AND context_json IS NOT NULL")
+        params: dict = {"et": EventType.ORDER_FAILED}
+        if start:
+            sql += " AND timestamp >= :start"; params["start"] = start
+        if end:
+            sql += " AND timestamp <= :end"; params["end"] = end
+        sql += " ORDER BY timestamp ASC LIMIT :limit"
+        params["limit"] = limit
+
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(text(sql), params).fetchall()
+        except Exception as e:                           # noqa: BLE001
+            logger.error(f"KIS 코드 관측 조회 실패: {e}")
+            return []
+
+        out: list[dict] = []
+        for r in rows:
+            m = r._mapping
+            try:
+                ctx = json.loads(m["context_json"])
+            except Exception:                            # noqa: BLE001
+                continue                                 # 깨진 행은 관측이 아니다
+            if not isinstance(ctx, dict) or not isinstance(ctx.get("failure"), dict):
+                continue
+            out.append({
+                "timestamp": m["timestamp"],
+                "execution_mode": ctx.get("execution_mode"),
+                "failure": ctx["failure"],
+            })
+        return out
+
     # ─────────────────────────────────────────────────────────────────────
     # 통계
     # ─────────────────────────────────────────────────────────────────────
