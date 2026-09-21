@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from src.api.auth import require_admin, require_login
 from src.database import get_engine
 from src.domain.auth_identity import Principal, observed_actor
+from src.domain.breaker_change_gate import gate_summary
 from src.domain.kis_rt_cd import (
     fold_observations,
     gap_list,
@@ -335,6 +336,10 @@ def live_kis_codes(limit: int = 5000):
             "observed": observed,
             "gaps": gap_list(observed),
             "table": table_summary(),
+            # ★이 코드를 breaker 카운트에서 뺄 수 있는가★(AU) — 오늘은 전부
+            #   막혀 있고 조건마다 사유가 붙는다. 판정 단위가 코드 하나하나인
+            #   이유는 `business` 가 의미가 아니라 모양이기 때문이다.
+            "gate": gate_summary(observed),
             "note": ("표가 비어 있으면 모든 코드가 미상입니다 — 본 적이 있다는 "
                      "것과 뜻을 안다는 것은 다릅니다. 표를 채우려면 KIS 문서나 "
                      "실계좌 응답이 필요하고, 그것은 코드로 답할 수 없습니다."),

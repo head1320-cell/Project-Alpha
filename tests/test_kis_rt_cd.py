@@ -131,6 +131,30 @@ def test_a_fault_outside_the_vocabulary_is_not_applied(tmp_path, monkeypatch, ba
     assert fault_from_table("1", "X")["fault"] == FAULT_UNKNOWN
 
 
+def test_the_meaning_carries_the_outage_flag(tmp_path, monkeypatch):
+    """★`outage` 는 `fault` 와 다른 축이다★ (AU)
+
+    AR 의 책임 소재 축에는 장 종료 같은 "아무의 문제도 아니다" 에 맞는 값이
+    없다. 그 축을 비틀어 쓰는 대신 목적 전용 칸을 두고, 표가 그것을 나른다.
+    """
+    _write_evidence(tmp_path, monkeypatch, {
+        "1/A": {"rt_cd": "1", "msg_cd": "A", "meaning": "장 종료",
+                "fault": FAULT_UNKNOWN, "outage": False, "grade": "K2"},
+    })
+    got = meaning_of("1", "A")
+    assert got["outage"] is False
+    assert got["fault"] == FAULT_UNKNOWN      # 두 축이 서로를 덮지 않는다
+
+
+def test_a_missing_outage_is_none_not_false(tmp_path, monkeypatch):
+    """★미상 ≠ 거짓★ — 안 적힌 것을 "장애 아님" 으로 읽으면 문이 열린다."""
+    _write_evidence(tmp_path, monkeypatch, {
+        "1/A": {"rt_cd": "1", "msg_cd": "A", "meaning": "장 종료",
+                "fault": FAULT_UNKNOWN, "grade": "K2"},
+    })
+    assert meaning_of("1", "A")["outage"] is None
+
+
 def test_an_unknown_code_says_why_it_is_unknown(tmp_path, monkeypatch):
     """★사유 없는 미상은 금지★ (CLAUDE.md §4)."""
     _write_evidence(tmp_path, monkeypatch, {})

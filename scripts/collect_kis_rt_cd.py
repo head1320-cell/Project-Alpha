@@ -25,8 +25,8 @@ AR 이 KIS 호출 실패를 일곱 종류로 갈랐지만 가장 많이 나오�
 - `--write` 없이는 증거 파일을 **쓰지 않는다**(기본은 읽기 전용 리포트).
 - 쓰더라도 등급은 `K1`(관측)이고, 적용선은 `K2` 다 — ★수집기가 아무리 돌아도
   책임 소재는 미상이다.★ 코드를 100번 본다고 그 뜻을 알게 되지 않는다.
-- 병합은 ★사람이 적은 것을 덮지 않는다★ — `meaning`·`fault`·`grade`·
-  `evidence_source`·`probed_at` 은 보존하고 `observed` 블록만 갱신한다.
+- 병합은 ★사람이 적은 것을 덮지 않는다★ — `meaning`·`fault`·`outage`·
+  `grade`·`evidence_source`·`probed_at` 은 보존하고 `observed` 만 갱신한다.
 - `first_seen` 은 ★UPDATE 하지 않는다★ — 같은 코드를 다시 봤다는 사실은 새
   정보가 아니고, 덮으면 "언제부터 알았나" 가 사라진다
   (`macro_observation_store` 가 `retrieved_at` 에 같은 규칙을 쓴다).
@@ -66,7 +66,8 @@ from src.domain.kis_rt_cd import (  # noqa: E402
 )
 
 #: ★사람의 것★ — 병합이 절대 덮지 않는 칸.
-CURATED_FIELDS = ("meaning", "fault", "grade", "evidence_source", "probed_at")
+CURATED_FIELDS = ("meaning", "fault", "outage", "grade",
+                  "evidence_source", "probed_at")
 
 _NO_ROWS = (
     "감사 로그에 KIS 업무 응답(rt_cd != 0) 관측이 없습니다 — 확인한 것이 "

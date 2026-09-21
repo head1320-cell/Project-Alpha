@@ -171,7 +171,7 @@ def test_the_merge_preserves_a_curated_entry(world):
     """변이 g — 손으로 얻은 증거를 파괴하면 죽는다."""
     insert, ev, write_evidence, env = world
     write_evidence({"1/A": {"rt_cd": "1", "msg_cd": "A", "meaning": "장 종료",
-                            "fault": "self", "grade": "K2",
+                            "fault": "self", "outage": False, "grade": "K2",
                             "evidence_source": "KIS 문서 3.2",
                             "probed_at": "2026-09-10"}})
     insert(msg_cd="A", n=7)
@@ -182,6 +182,8 @@ def test_the_merge_preserves_a_curated_entry(world):
     assert entry["grade"] == "K2"
     assert entry["evidence_source"] == "KIS 문서 3.2"
     assert entry["probed_at"] == "2026-09-10"
+    # ★AU 가 더한 칸도 사람의 것이다★ — 수집기가 덮으면 문이 다시 닫힌다.
+    assert entry["outage"] is False
     assert entry["observed"]["count"] == 7      # 관측만 갱신됐다
 
 

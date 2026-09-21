@@ -268,6 +268,41 @@ export interface KisCodesResponse {
   /** ★표가 비어 있으면 이것이 곧 `observed` 다★ — 그것이 지금의 진실이다. */
   gaps: KisCodeGap[];
   table: KisCodeTable;
+  /** 이 코드들을 breaker 카운트에서 뺄 수 있는가. 오늘은 전부 막혀 있다. */
+  gate: BreakerChangeGate;
+  note: string;
+}
+
+/** 조건 하나의 충족 여부. 미충족이면 `reason` 이 무엇을 해야 하는지 말한다. */
+export interface GateCondition {
+  met: boolean;
+  reason: string | null;
+}
+
+/** 코드 하나에 대한 판정. */
+export interface GateVerdict {
+  state: "allowed" | "blocked";
+  reason: string | null;
+  /** 못 채운 조건 이름들. */
+  unmet: string[];
+  conditions: Record<string, GateCondition>;
+  key: string;
+  note: string;
+}
+
+/**
+ * ★일부만 통과한 것은 통과가 아니다★ — 코드 하나라도 막혀 있으면 전체는
+ * `blocked` 다. 빈 목록도 `blocked` 이다(공허한 전칭을 주장하지 않는다).
+ */
+export interface BreakerChangeGate {
+  state: "allowed" | "blocked";
+  reason: string | null;
+  n_allowed: number;
+  n_blocked: number;
+  allowed_codes: GateVerdict[];
+  blocked_codes: GateVerdict[];
+  conditions: string[];
+  min_observations: number;
   note: string;
 }
 

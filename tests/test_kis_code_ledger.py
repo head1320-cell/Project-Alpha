@@ -206,6 +206,41 @@ def test_the_route_requires_login():
     assert "require_login" in block
 
 
+# ── ★문이 표면에 보인다★ (AU) ────────────────────────────────────────
+
+def test_the_route_reports_the_change_gate(client, audit):
+    """★이 코드를 카운트에서 뺄 수 있는가★ — 오늘은 전부 막혀 있다."""
+    from src.domain.breaker_change_gate import CHANGE_BLOCKED
+
+    c, _ = client
+    _insert(audit, msg_cd="A")
+    body = c.get("/api/v1/live/kill-switch/kis-codes").json()
+    assert body["gate"]["state"] == CHANGE_BLOCKED
+    assert body["gate"]["n_allowed"] == 0
+    assert body["gate"]["blocked_codes"][0]["unmet"]
+
+
+def test_the_route_gate_opens_for_a_fully_satisfied_code(client, audit):
+    """★짝★ — 조건을 갖추면 표면도 실제로 열린다(항상-거부가 아니다)."""
+    from src.domain.breaker_change_gate import (
+        CHANGE_ALLOWED,
+        MIN_OBSERVATIONS,
+    )
+
+    c, ev = client
+    for _ in range(MIN_OBSERVATIONS):
+        _insert(audit, msg_cd="A", mode="live")
+    ev.write_text(json.dumps({
+        "schema": 1, "min_grade_to_apply": "K2", "why_empty": "테스트",
+        "codes": {"1/A": {"rt_cd": "1", "msg_cd": "A", "meaning": "장 종료",
+                          "outage": False, "grade": "K2",
+                          "evidence_source": "KIS 문서"}},
+    }, ensure_ascii=False), encoding="utf-8")
+    body = c.get("/api/v1/live/kill-switch/kis-codes").json()
+    assert body["gate"]["state"] == CHANGE_ALLOWED
+    assert [x["key"] for x in body["gate"]["allowed_codes"]] == ["1/A"]
+
+
 # ── ★새 테이블을 만들지 않았다★ ────────────────────────────────────────
 
 def test_no_new_table_was_added_for_this():

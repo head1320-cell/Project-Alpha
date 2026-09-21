@@ -162,6 +162,11 @@ def meaning_of(rt_cd: Any, msg_cd: Any) -> dict[str, Any] | None:
     return {
         "meaning": entry.get("meaning"),
         "fault": entry.get("fault"),
+        # ★`fault` 와 다른 축이다★(AU) — AR 의 책임 소재 축에는 장 종료 같은
+        # "아무의 문제도 아니다" 에 해당하는 값이 없다. 그 축을 비틀어 쓰는
+        # 대신, 이 코드가 KIS 장애를 뜻하는가를 목적 전용 칸으로 둔다.
+        # `None` 은 미상이고 ★미상은 통과가 아니다★.
+        "outage": entry.get("outage"),
         "grade": entry.get("grade"),
         "evidence_source": entry.get("evidence_source"),
         "probed_at": entry.get("probed_at"),
