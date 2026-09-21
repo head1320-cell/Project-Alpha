@@ -28,6 +28,7 @@ import os
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -39,11 +40,13 @@ except ImportError:
     requests = None
 
 from src.domain.kis_failure import (
+    FAILURE_KINDS,
     KIND_BLOCKED,
     KIND_BUSINESS,
     KIND_MALFORMED,
     KIND_TOKEN,
     KIND_TRANSPORT,
+    KIND_UNKNOWN,
     failure_label,
 )
 
@@ -228,15 +231,44 @@ class RateLimiter:
             time.sleep(sleep_for)
 
 
+#: 연속 실패 링의 최대 길이. ★임계(5)보다 넉넉하게★ — 임계만큼만 담으면
+#: 넘치는 순간 구성이 사실상 언제나 카운트와 어긋난다.
+STREAK_RING = 20
+
+
 @dataclass
 class CircuitBreaker:
-    """N회 연속 실패 시 차단 (스레드 안전)."""
+    """N회 연속 실패 시 차단 (스레드 안전).
+
+    ★AT2 — 세는 것 옆에 **무엇을 셌는지**를 남긴다★
+
+    `auto_api` 는 이 카운트로 킬스위치를 겨냥하는데, AR 이 드러낸 대로 그 안에는
+    장 종료 같은 정상 업무 응답이 섞여 들어간다(`_request` 가 `rt_cd != "0"`
+    에서도 `record_failure()` 를 부른다). 예전에는 이 메서드가 **인자를 받지
+    않아** breaker 가 눈먼 채로 셌고, 종류는 `last_failure_kind` 한 칸뿐이라
+    *"5회 중 몇 회가 업무 응답이었나"* 를 판정 자리에서 알 수 없었다.
+
+    감사 로그로는 답할 수 없다 — `_request` 의 7개 호출부 중 감사 행이 남는
+    것은 주문·취소 둘뿐이라, `get_balance` 실패 5회는 어디에도 남지 않는다.
+    그래서 ★숫자와 같은 객체에 같은 수명으로★ 기록한다.
+
+    ★링은 카운터와 함께 비워진다★ — `failure_count` 가 0 이 되는 자리는 둘이고
+    (`record_success` · `call_allowed` 의 HALF_OPEN 전환) 하나만 비우면 구성이
+    **다른 집합**을 설명하게 된다. 넘치면 그 사실이 개수 불일치로 드러난다
+    (`failure_streak.streak_composition` 의 `describes_count`).
+
+    ★세는 것은 0줄 바뀌지 않았다★ — 임계값도, 어떤 종류가 카운트되는지도
+    그대로다. 그것을 바꾸는 것은 실거래 호출 경로 동작 변경이다(CLAUDE.md §6).
+    """
     failure_threshold: int = 5
     reset_timeout_seconds: float = 30.0
     failure_count: int = 0
     last_failure_time: datetime | None = None
     state: str = "CLOSED"
     _lock: threading.Lock = field(default_factory=threading.Lock)
+    #: ★경계 있는 링★ — 무제한이면 메모리가 새고 넘침을 감지할 수도 없다.
+    _recent_kinds: deque = field(
+        default_factory=lambda: deque(maxlen=STREAK_RING))
 
     def call_allowed(self) -> bool:
         with self._lock:
@@ -244,6 +276,8 @@ class CircuitBreaker:
                 if (datetime.now() - self.last_failure_time).total_seconds() > self.reset_timeout_seconds:
                     self.state = "HALF_OPEN"
                     self.failure_count = 0
+                    # ★카운터와 함께★ — 여기만 빠지면 0회를 5개가 설명한다.
+                    self._recent_kinds.clear()
                     return True
                 return False
             return True
@@ -252,14 +286,27 @@ class CircuitBreaker:
         with self._lock:
             self.failure_count = 0
             self.state = "CLOSED"
+            self._recent_kinds.clear()
 
-    def record_failure(self):
+    def record_failure(self, kind: str | None = None):
+        """연속 실패 하나. `kind` 는 `kis_failure.FAILURE_KINDS` 의 값.
+
+        ★기본값이 관측 행세를 하지 않게★ 모르면 `unknown` 이다 — 어휘 밖의
+        값도 마찬가지다(버리지도 믿지도 않는다).
+        """
         with self._lock:
             self.failure_count += 1
             self.last_failure_time = datetime.now()
+            self._recent_kinds.append(
+                kind if kind in FAILURE_KINDS else KIND_UNKNOWN)
             if self.failure_count >= self.failure_threshold:
                 self.state = "OPEN"
                 logger.error(f"Circuit breaker OPEN after {self.failure_count} failures")
+
+    def streak_kinds(self) -> tuple[str, ...]:
+        """지금 연속에 기록된 종류들(오래된 것부터). ★스냅샷이다★"""
+        with self._lock:
+            return tuple(self._recent_kinds)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -412,7 +459,7 @@ class KISClient:
                 # ★열쇠를 잡는다★(AS1) — 예전에는 이 칸을 읽지도 않고 버렸다.
                 # 있다고 가정하지 않는다: 없으면 `None` 이고 그것은 미상이다.
                 msg_cd = data.get("msg_cd")
-                self.circuit_breaker.record_failure()
+                self.circuit_breaker.record_failure(KIND_BUSINESS)
                 self._note_failure(KIND_BUSINESS, rt_cd=rt_cd, status=status,
                                    msg_cd=msg_cd)
                 raise KISCallError(
@@ -424,7 +471,7 @@ class KISClient:
             self.circuit_breaker.record_success()
             return data
         except requests.RequestException as e:
-            self.circuit_breaker.record_failure()
+            self.circuit_breaker.record_failure(KIND_TRANSPORT)
             self._note_failure(KIND_TRANSPORT)
             raise KISCallError(f"네트워크 오류: {e}", kind=KIND_TRANSPORT) from e
 

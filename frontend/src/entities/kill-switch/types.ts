@@ -162,6 +162,12 @@ export interface ApiFailureObservation {
   blocking: boolean | null;
   /** ★방금 열렸다 풀린 직후의 `0` 을 '건강' 으로 읽지 않게★ */
   recently_tripped: boolean | null;
+  /**
+   * ★그 숫자가 무엇이었나★(AT) — `broker` 출처가 아니면 `null` 이다(합성을
+   * 관측으로 팔지 않는다). `describes_count` 가 `true` 가 아니면 이 구성은
+   * 그 횟수를 설명하지 않는다 — 비율로 읽으면 안 된다.
+   */
+  streak: FailureStreak | null;
   reason: string | null;
   /** 화면이 지우면 안 되는 경고문(0 이 정상을 뜻하지 않는다). */
   note: string;
@@ -262,5 +268,23 @@ export interface KisCodesResponse {
   /** ★표가 비어 있으면 이것이 곧 `observed` 다★ — 그것이 지금의 진실이다. */
   gaps: KisCodeGap[];
   table: KisCodeTable;
+  note: string;
+}
+
+/** 연속 실패의 구성. ★무엇이 몇 번이지 누구 탓이 아니다.★ */
+export interface FailureStreak {
+  n_recorded: number;
+  count: number | null;
+  by_kind: Record<string, number>;
+  labels: Record<string, string>;
+  dominant: KisFailureKind | null;
+  business_n: number;
+  /** ★빈 연속에서는 `false`★ — 0회 중 0회를 전칭으로 읽지 않는다. */
+  all_business: boolean;
+  /** 지금 breaker 가 세는 종류의 개수. 기술이지 정책이 아니다. */
+  counted_n: number;
+  /** `null` 은 센 횟수를 모른다는 뜻 — 일치가 아니다. */
+  describes_count: boolean | null;
+  reason: string | null;
   note: string;
 }

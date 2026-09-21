@@ -186,7 +186,7 @@ from src.domain.kis_failure import (  # noqa: E402
 )
 
 PROBE_KEYS = {"count", "state", "source", "breaker_state", "blocking",
-              "recently_tripped", "reason", "note", "last_failure"}
+              "recently_tripped", "streak", "reason", "note", "last_failure"}
 
 
 class _BrokerWithHistory(_BrokerClient):

@@ -211,6 +211,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/kis_failure.py",
     # AS — 표의 미상 사유·note 가 `/kill-switch/kis-codes` 응답으로 나간다.
     "src/domain/kis_rt_cd.py",
+    # AT — 구성 사유·문장이 `auto_api` 발동 사유로 `live_kill_events` 에 남는다.
+    "src/domain/failure_streak.py",
 )
 
 

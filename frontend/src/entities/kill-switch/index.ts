@@ -5,6 +5,7 @@ export type {
   BreakerState,
   ActionRollup,
   ActionState,
+  FailureStreak,
   KillAction,
   KillEvent,
   KillEventsResponse,

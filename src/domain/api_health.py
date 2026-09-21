@@ -116,14 +116,20 @@ def _whole_count(value: Any) -> int | None:
 
 
 def api_failure_observation(*, count: Any, breaker_state: Any,
-                            source: Any, reason: str | None = None
-                            ) -> dict[str, Any]:
+                            source: Any, reason: str | None = None,
+                            streak: Any = None) -> dict[str, Any]:
     """KIS 연속 실패 관측 하나. ★숫자와 그 숫자를 어떻게 알았나를 함께 낸다★
 
     Returns:
         `{count, state, source, breaker_state, blocking, recently_tripped,
-          reason, note}` — `count` 는 ★`broker` 출처에서 정수를 읽었을 때만★
-        숫자이고, 그 외에는 `None` 이며 `reason` 이 왜인지 말한다.
+          streak, reason, note}` — `count` 는 ★`broker` 출처에서 정수를
+        읽었을 때만★ 숫자이고, 그 외에는 `None` 이며 `reason` 이 왜인지 말한다.
+
+    ★`streak` 도 같은 규칙을 탄다★(AT3) — 숫자를 못 내는 출처에서는 구성도
+    내지 않는다. `MockKISClient` 에는 breaker 가 아예 없으므로 그쪽의 구성은
+    합성이 되고, 합성을 관측으로 파는 순간 *"5회가 전부 업무 응답"* 이라는
+    **지어낸 문장**이 발동 기록에 남는다. ★접는 일 자체는 부르는 쪽이 한다★ —
+    이 모듈은 `src` 안의 무엇도 임포트하지 않는 잎이다.
     """
     src = source if source in API_SOURCES else SOURCE_UNKNOWN
     state = breaker_state if breaker_state in BREAKER_STATES else BREAKER_UNKNOWN
@@ -144,6 +150,12 @@ def api_failure_observation(*, count: Any, breaker_state: Any,
         # ★방금 열렸다 풀린 직후의 0 을 건강으로 읽지 않게★
         "recently_tripped": None if state == BREAKER_UNKNOWN
         else state in (BREAKER_OPEN, BREAKER_HALF_OPEN),
+        # ★그 숫자가 무엇이었나★(AT3) — 숫자를 못 내면 구성도 내지 않는다.
+        #   ★접는 것은 여기서 하지 않는다★: 이 계층은 잎이라 형제 모듈도
+        #   임포트하지 않는다. 부르는 쪽(`api_failure_probe`)이
+        #   `failure_streak.streak_composition` 으로 접어서 넘긴다.
+        "streak": (streak if usable_for_kill_switch(src)
+                   and isinstance(streak, dict) else None),
         "reason": why,
         "note": _NOTE,
     }

@@ -204,7 +204,7 @@ def test_the_module_touches_neither_storage_nor_network_nor_the_client():
 # ── ★프런트 타입과 응답이 어긋나면 화면이 조용히 빈다★ (AQ4) ────────────
 
 OBSERVATION_KEYS = {"count", "state", "source", "breaker_state", "blocking",
-                    "recently_tripped", "reason", "note"}
+                    "recently_tripped", "streak", "reason", "note"}
 
 _TYPES_TS = pathlib.Path("frontend/src/entities/kill-switch/types.ts")
 

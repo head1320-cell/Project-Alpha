@@ -37,6 +37,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.domain.failure_streak import streak_phrase
 from src.domain.kill_action import (
     ACTION_BLOCK_NEW_ORDERS,
     ACTION_CANCEL_OPEN,
@@ -263,8 +264,17 @@ class KillSwitch:
         #   `auto_api` 가 **구조적으로 발동할 수 없고**, 그 사실조차 보이지 않았다.
         raw_api = account_state.get("api_failure_count")
         if raw_api is not None and raw_api >= self.config.api_failure_threshold:
+            # ★그 5회가 무엇이었는지를 사유가 데리고 간다★(AT4) — 이 문자열은
+            #   `live_kill_events.trigger_reason` 에 **그대로** 저장되므로,
+            #   사건 조사를 하러 그 행을 열었을 때 구성이 남아 있다(DDL 0줄).
+            #   ★판정 조건은 한 글자도 바뀌지 않았다★ — 5회가 전부 업무 응답
+            #   이어도 여전히 발동한다. 그것을 고치는 것은 실거래 호출 경로
+            #   동작 변경이고(§6), 고치려면 먼저 이 수치가 있어야 한다.
+            obs = account_state.get("api_failure_observation") or {}
+            streak = obs.get("streak")
+            tail = streak_phrase(streak) if isinstance(streak, dict) else ""
             return ("auto_api",
-                     f"KIS API 연속 실패 ({raw_api}회)")
+                     f"KIS API 연속 실패 ({raw_api}회){tail}")
 
         return None
 

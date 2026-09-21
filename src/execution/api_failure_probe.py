@@ -42,6 +42,7 @@ from src.domain.api_health import (
     SOURCE_UNKNOWN,
     api_failure_observation,
 )
+from src.domain.failure_streak import streak_composition
 from src.domain.kis_failure import failure_label
 from src.domain.kis_rt_cd import enriched_label
 
@@ -115,10 +116,17 @@ def probe(client: Any = None) -> dict[str, Any]:
                                               source=SOURCE_MOCK),
                     "last_failure": _last_failure(target)}
         raw_state = getattr(breaker, "state", None)
+        # ★없으면 지어내지 않는다★(AT3) — 링이 없는 옛 객체·테스트 더블도
+        # 죽지 않아야 한다. 빈 구성은 `describes_count=False` 로 드러난다.
+        reader = getattr(breaker, "streak_kinds", None)
+        count = getattr(breaker, "failure_count", None)
+        streak = (streak_composition(reader(), count=count)
+                  if callable(reader) else None)
         return {**api_failure_observation(
-            count=getattr(breaker, "failure_count", None),
+            count=count,
             breaker_state=_BREAKER_STATE_MAP.get(str(raw_state), BREAKER_UNKNOWN),
             source=SOURCE_BROKER,
+            streak=streak,
         ), "last_failure": _last_failure(target)}
     except Exception as e:                                   # noqa: BLE001
         # ★삼키되 사유를 남긴다★ — 사유 없는 미상은 금지(CLAUDE.md §4).
