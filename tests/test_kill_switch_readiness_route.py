@@ -240,3 +240,17 @@ def test_the_manual_trigger_declares_whether_it_observed_a_drawdown(client):
                        headers=_admin(client)).json()
     assert body["observations"]["dd_pct"]["state"] == "unknown"
     assert body["observations"]["any_unobserved"] is True
+
+
+# ── AR4 · ★준비도 표면이 마지막 실패의 종류를 낸다★ ────────────────────
+
+def test_the_readiness_surface_carries_the_last_failure_slot(client):
+    """★`auto_api` 가 겨냥될 때 무엇 때문인지 말할 수 있게★
+
+    이 환경은 mock 이라 실패 이력이 없다 — 그래서 값은 `None` 이고, ★`None` 은
+    "실패 0회" 가 아니라 "잰 적이 없다"★ 는 뜻이다.
+    """
+    obs = client.get("/api/v1/live/kill-switch/readiness",
+                     headers=_admin(client)).json()["api_failure_observation"]
+    assert "last_failure" in obs
+    assert obs["last_failure"] is None

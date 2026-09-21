@@ -207,6 +207,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/kill_action.py",
     # AQ — 관측 사유·note 가 `/kill-switch/readiness` 응답으로 나간다.
     "src/domain/api_health.py",
+    # AR — 실패 종류의 책임 사유·note 가 같은 응답에 실려 나간다.
+    "src/domain/kis_failure.py",
 )
 
 

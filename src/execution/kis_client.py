@@ -38,7 +38,42 @@ try:
 except ImportError:
     requests = None
 
+from src.domain.kis_failure import (
+    KIND_BLOCKED,
+    KIND_BUSINESS,
+    KIND_MALFORMED,
+    KIND_TOKEN,
+    KIND_TRANSPORT,
+    failure_label,
+)
+
 logger = logging.getLogger(__name__)
+
+
+class KISCallError(RuntimeError):
+    """KIS 호출 실패 하나 — ★종류를 들고 다닌다★ (AR2)
+
+    ★메시지 문구는 예전 그대로다★ — `tests/test_ingest_doctor.py` 가
+    `"토큰 발급 실패"` **부분문자열**을 단언한다. 문구를 바꾸면 그 계약이 깨지므로
+    **타입과 속성만** 더한다.
+
+    ★`RuntimeError` 하위형인 이유★ — `src/` 의 모든 소비자가 `except Exception`
+    이라 하위형은 안전하고, `KISCredentialsMissing(RuntimeError)` 라는 선례가
+    이미 있다(`try_kis_client` 가 **타입으로** 잡는다).
+    """
+
+    def __init__(self, message: str, *, kind: str, rt_cd=None, status=None,
+                 kis_msg=None):
+        super().__init__(message)
+        self.kind = kind
+        self.rt_cd = rt_cd
+        self.status = status
+        self.kis_msg = kis_msg
+
+    def label(self) -> dict:
+        """기록·응답에 싣는 블록. ★책임 소재를 단정하지 않는다★"""
+        return failure_label(self.kind, rt_cd=self.rt_cd, status=self.status,
+                             msg=self.kis_msg)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -263,6 +298,12 @@ class KISClient:
         self.token: KISToken | None = None
         self.rate_limiter = RateLimiter()
         self.circuit_breaker = CircuitBreaker()
+        #: ★마지막 실패의 종류★ — 새 카운터가 아니라 한 칸짜리 기록이다(AR4).
+        #: 구성(무엇이 몇 번)의 증거는 `live_orders.reason_code` 와 감사 로그에
+        #: 이력으로 쌓인다.
+        self.last_failure_kind: str | None = None
+        self.last_failure_rt_cd: str | None = None
+        self.last_failure_status: int | None = None
         self._token_lock = threading.Lock()  # 동시 첫 호출 시 토큰 1회만 발급
 
     # ─────────────────────────────────────────────────────────────────────
@@ -296,7 +337,9 @@ class KISClient:
         }
         resp = requests.post(url, json=payload, timeout=self.timeout)
         if resp.status_code != 200:
-            raise RuntimeError(f"토큰 발급 실패: {resp.status_code} {resp.text}")
+            # ★`_request` 를 타지 않으므로 breaker 에 기록되지 않는다★(실측 그대로).
+            raise KISCallError(f"토큰 발급 실패: {resp.status_code} {resp.text}",
+                               kind=KIND_TOKEN, status=resp.status_code)
         data = resp.json()
         access_token = data["access_token"]
         # KIS 토큰 만료: access_token_token_expired는 epoch 또는 datetime string
@@ -327,10 +370,18 @@ class KISClient:
     # HTTP 호출 헬퍼
     # ─────────────────────────────────────────────────────────────────────
 
+    def _note_failure(self, kind: str, rt_cd=None, status=None) -> None:
+        """마지막 실패의 종류를 남긴다. ★기록이지 카운팅이 아니다★"""
+        self.last_failure_kind = kind
+        self.last_failure_rt_cd = rt_cd
+        self.last_failure_status = status
+
     def _request(self, method: str, path: str, headers: dict,
                   params: dict | None = None, json_body: dict | None = None) -> dict:
         if not self.circuit_breaker.call_allowed():
-            raise RuntimeError("Circuit breaker OPEN — KIS API 호출 차단됨")
+            # ★차단은 실패가 아니다★ — 호출 자체를 하지 않았으므로 카운트도 없다.
+            raise KISCallError("Circuit breaker OPEN — KIS API 호출 차단됨",
+                               kind=KIND_BLOCKED)
 
         self.rate_limiter.acquire()
         url = f"{self.base_url}{path}"
@@ -340,21 +391,32 @@ class KISClient:
                 method=method, url=url, headers=headers,
                 params=params, json=json_body, timeout=self.timeout,
             )
-            data = resp.json()
+            status = getattr(resp, "status_code", None)
+            try:
+                data = resp.json()
+            except Exception as e:                       # noqa: BLE001
+                # ★이름만 준다 — 세지는 않는다★(AR2). 예전에는 이 실패가 분류도
+                # 기록도 없이 그대로 샜다. `record_failure()` 는 **부르지 않는다**.
+                raise KISCallError(f"KIS 응답 본문을 읽을 수 없습니다: {e}",
+                                   kind=KIND_MALFORMED, status=status) from e
 
             # KIS는 HTTP 200 + rt_cd로 성공/실패 구분
             rt_cd = str(data.get("rt_cd", ""))
             if rt_cd != "0":
                 self.circuit_breaker.record_failure()
-                raise RuntimeError(
-                    f"KIS API 실패: rt_cd={rt_cd}, msg={data.get('msg1', 'unknown')}"
+                self._note_failure(KIND_BUSINESS, rt_cd=rt_cd, status=status)
+                raise KISCallError(
+                    f"KIS API 실패: rt_cd={rt_cd}, msg={data.get('msg1', 'unknown')}",
+                    kind=KIND_BUSINESS, rt_cd=rt_cd, status=status,
+                    kis_msg=data.get("msg1"),
                 )
 
             self.circuit_breaker.record_success()
             return data
         except requests.RequestException as e:
             self.circuit_breaker.record_failure()
-            raise RuntimeError(f"네트워크 오류: {e}")
+            self._note_failure(KIND_TRANSPORT)
+            raise KISCallError(f"네트워크 오류: {e}", kind=KIND_TRANSPORT) from e
 
     # ─────────────────────────────────────────────────────────────────────
     # 1. 주문 (현금)

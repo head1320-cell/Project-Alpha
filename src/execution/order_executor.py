@@ -30,9 +30,11 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.domain.kis_failure import failure_label
 from src.execution.api_failure_probe import observe_into
 from src.execution.client_realism import client_is_simulated
 from src.execution.drawdown import REASON_FETCH_FAILED, drawdown_from_history
+from src.execution.kis_client import KISCallError
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +289,8 @@ class OrderExecutor:
             return self._fail_order(
                 client_order_id, signal, str(e), audit_ids,
                 mode=ExecutionMode.PAPER,
+                # ★예외를 넘긴다★ — 종류가 기록까지 가려면 문자열로는 안 된다(AR3).
+                exc=e,
             )
 
     def _execute_live(self, client_order_id, signal, audit_ids) -> dict:
@@ -333,6 +337,8 @@ class OrderExecutor:
             return self._fail_order(
                 client_order_id, signal, str(e), audit_ids,
                 mode=ExecutionMode.LIVE,
+                # ★예외를 넘긴다★ — 종류가 기록까지 가려면 문자열로는 안 된다(AR3).
+                exc=e,
             )
 
     # ═════════════════════════════════════════════════════════════════════
@@ -616,16 +622,27 @@ class OrderExecutor:
             "audit_ids":       audit_ids,
         }
 
-    def _fail_order(self, client_order_id, signal, error, audit_ids, mode):
+    def _fail_order(self, client_order_id, signal, error, audit_ids, mode, exc=None):
+        """주문 실패를 기록한다. ★무엇이 일어났는지를 적는다★ (AR3)
+
+        예전에는 `reason_code` 가 **무엇이 일어났든** 상수 `"api_error"` 였다 —
+        전송 오류도, 장 종료 같은 업무 응답도, 토큰 실패도 한 글자로 같았다.
+        ★상수가 관측 행세를 한다★(AL 의 `selection_effect=0`, AM 의 `"dev"`,
+        AP 의 `dd_at_trigger=0` 과 같은 모양). 이제 예외가 들고 온 **종류**를
+        적고, 종류를 모르는 예외는 `unknown` 이다(상수가 아니다).
+        """
+        label = exc.label() if isinstance(exc, KISCallError) else failure_label(None)
+        kind = label["kind"]
+
         try:
             with self.engine.begin() as conn:
                 conn.execute(text("""
                     UPDATE live_orders
                     SET status = 'FAILED', error_message = :em,
-                        reason_code = 'api_error',
+                        reason_code = :rc,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE client_order_id = :coid
-                """), {"coid": client_order_id, "em": error})
+                """), {"coid": client_order_id, "em": error, "rc": kind})
         except Exception:
             pass
 
@@ -636,8 +653,9 @@ class OrderExecutor:
             severity=Severity.ERROR,
             client_order_id=client_order_id,
             ticker=signal["ticker"],
-            reason_code="api_error",
-            context={"error": error},
+            reason_code=kind,
+            # ★원자료를 함께 남긴다★ — 책임 소재는 단정하지 않는다(rt_cd 표 없음).
+            context={"error": error, "failure": label},
             message=f"주문 실패: {error}",
         )
         _append_audit(audit_ids, fail_audit)

@@ -98,6 +98,38 @@ export interface KillEvent {
 export type ApiFailureSource = "broker" | "mock" | "no_client" | "unknown";
 export type BreakerState = "closed" | "open" | "half_open" | "unknown";
 
+/**
+ * KIS 호출 실패의 종류 (AR) — `src/domain/kis_failure.py` 와 같은 어휘.
+ *
+ * ★`fault` 가 `"unknown"` 인 것은 실수가 아니다★ — `business`(rt_cd ≠ 0)는
+ * 주문 거절 같은 정상 업무 응답일 수도, KIS 장애일 수도 있는데 이 저장소에는
+ * `rt_cd` 를 뜻으로 옮기는 표가 없다. 화면이 "장애" 로 단정하면 안 된다.
+ */
+export type KisFailureKind =
+  | "blocked"
+  | "transport"
+  | "http_status"
+  | "malformed"
+  | "business"
+  | "token"
+  | "unknown";
+
+export type KisFault = "provider" | "self" | "unknown";
+
+export interface KisFailureLabel {
+  kind: KisFailureKind;
+  label: string;
+  fault: KisFault;
+  /** 책임 소재를 단정하지 않은 이유. 단정할 수 있으면 `null`. */
+  fault_reason: string | null;
+  /** ★지금 circuit breaker 가 이 종류를 세는가★ — 기술이지 정책이 아니다. */
+  counted_by_breaker: boolean;
+  rt_cd: string | null;
+  status: number | null;
+  kis_msg: string | null;
+  note: string;
+}
+
 export interface ApiFailureObservation {
   /** 연속 실패 횟수. ★broker 출처에서 읽었을 때만 숫자★ */
   count: number | null;
@@ -111,6 +143,8 @@ export interface ApiFailureObservation {
   reason: string | null;
   /** 화면이 지우면 안 되는 경고문(0 이 정상을 뜻하지 않는다). */
   note: string;
+  /** ★마지막 실패의 종류★ (AR). 아직 실패가 없으면 `null` — 0 이 아니다. */
+  last_failure: KisFailureLabel | null;
 }
 
 /** `GET /kill-switch/readiness` (AF4 + AQ) */

@@ -174,3 +174,79 @@ def test_the_probe_reads_the_singleton_without_importing_the_getter():
 def test_a_shapeless_client_is_unknown_not_broker(obj):
     """★모르는 모양을 브로커로 읽지 않는다★ (`None` 은 싱글턴 경로에서 따로 잰다)"""
     assert probe(obj)["source"] != SOURCE_BROKER
+
+
+# ── AR4 · ★마지막 실패의 종류가 관측과 함께 온다★ ───────────────────────
+
+from src.domain.kis_failure import (  # noqa: E402
+    FAULT_PROVIDER,
+    FAULT_UNKNOWN,
+    KIND_BUSINESS,
+    KIND_TRANSPORT,
+)
+
+PROBE_KEYS = {"count", "state", "source", "breaker_state", "blocking",
+              "recently_tripped", "reason", "note", "last_failure"}
+
+
+class _BrokerWithHistory(_BrokerClient):
+    def __init__(self, breaker, kind=None, rt_cd=None, status=None):
+        super().__init__(breaker)
+        self.last_failure_kind = kind
+        self.last_failure_rt_cd = rt_cd
+        self.last_failure_status = status
+
+
+def test_the_probe_shape_is_pinned():
+    assert set(probe(_BrokerClient(_Breaker(1)))) == PROBE_KEYS
+
+
+def test_a_client_with_no_failure_yet_reports_none():
+    """★아직 실패가 없으면 `None` 이다★ — 종류를 지어내지 않는다."""
+    assert probe(_BrokerWithHistory(_Breaker(0)))["last_failure"] is None
+
+
+def test_the_last_failure_kind_travels_with_the_count():
+    obs = probe(_BrokerWithHistory(_Breaker(3), kind=KIND_TRANSPORT))
+    assert obs["last_failure"]["kind"] == KIND_TRANSPORT
+    assert obs["last_failure"]["fault"] == FAULT_PROVIDER
+
+
+def test_a_business_last_failure_does_not_claim_fault():
+    """★짝★ — `rt_cd` 의 뜻을 모르므로 책임 소재를 단정하지 않는다."""
+    obs = probe(_BrokerWithHistory(_Breaker(5), kind=KIND_BUSINESS,
+                                   rt_cd="1", status=200))
+    lf = obs["last_failure"]
+    assert lf["fault"] == FAULT_UNKNOWN and lf["fault_reason"]
+    assert lf["rt_cd"] == "1" and lf["status"] == 200
+    # ★지금은 업무 응답도 카운터에 들어간다는 사실이 보인다★
+    assert lf["counted_by_breaker"] is True
+
+
+def test_a_mock_client_has_no_last_failure():
+    from src.execution.kis_client import MockKISClient
+    assert probe(MockKISClient())["last_failure"] is None
+
+
+_TYPES_TS = pathlib.Path("frontend/src/entities/kill-switch/types.ts")
+
+
+def test_the_frontend_type_declares_every_probe_key():
+    """★타입은 화면이 없어도 계약이다★ — 키가 빠지면 `undefined` 로 샌다."""
+    src = _TYPES_TS.read_text(encoding="utf-8")
+    block = src.split("export interface ApiFailureObservation {", 1)[1].split("\n}", 1)[0]
+    declared = {line.split(":", 1)[0].strip()
+                for line in block.splitlines()
+                if ":" in line and not line.strip().startswith(("*", "/"))}
+    assert PROBE_KEYS <= declared, PROBE_KEYS - declared
+
+
+def test_the_frontend_type_declares_the_failure_label():
+    src = _TYPES_TS.read_text(encoding="utf-8")
+    block = src.split("export interface KisFailureLabel {", 1)[1].split("\n}", 1)[0]
+    declared = {line.split(":", 1)[0].strip()
+                for line in block.splitlines()
+                if ":" in line and not line.strip().startswith(("*", "/"))}
+    expected = {"kind", "label", "fault", "fault_reason", "counted_by_breaker",
+                "rt_cd", "status", "kis_msg", "note"}
+    assert expected <= declared, expected - declared

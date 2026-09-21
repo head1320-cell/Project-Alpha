@@ -17174,3 +17174,139 @@ AQ 가 통로를 이으면서 재료의 **품질 한계**가 드러났다. `_req
 다. ★주문 거절(정상 업무 응답)과 KIS 장애(안전 문제)가 같은 카운트에 들어간다.★
 임계값 문제가 아니라 **무엇을 세고 있는가**의 문제다. 다만 분류를 바꾸면 breaker
 가 열리는 조건이 바뀌므로 ★관측·기록부터 하고 분류 변경은 별도 승인★으로 둔다.
+
+---
+
+## AR. 실패의 종류를 가른다 — ★차단 ≠ 실패 · 거절 ≠ 장애★ (2026-09-21)
+
+**한 줄** — KIS 호출 실패에 **종류**를 붙이고 기록이 그 종류를 말하게 한다.
+★breaker 가 무엇을 세는지는 0줄★ — 업무 응답은 여전히 카운트에 들어가고, 이제
+그 사실이 **보인다.**
+
+### ★드러난 안전 역전★
+
+```python
+# src/execution/kis_client.py::_request
+if rt_cd != "0":
+    self.circuit_breaker.record_failure()      # ← 업무 거절도 여기로 들어온다
+```
+```python
+# tests/test_realdata_parsing.py:275 — 저장소 자신의 픽스처
+KIS_ORDER_FAIL = {"rt_cd": "1", "msg1": "장 종료", "output": {}}
+```
+
+장 종료·잔고 부족 같은 **정상 업무 응답**이 KIS 장애와 **같은 카운터**에 들어간다.
+연속 5회면 breaker 가 `OPEN` → `get_balance` 까지 차단되고, ★AQ 가 통로를 이었으니
+`auto_api` 가 "KIS API 연속 실패 5회" 라는 **틀린 진단**으로 킬스위치를 겨냥한다.★
+
+실측한 실패 모양은 여섯인데 처리는 둘뿐이었다:
+
+| 자리 | breaker 기록 |
+|---|---|
+| breaker `OPEN` 거부 | ✗ (★우리가 막은 것★) |
+| `requests.RequestException` | ✔ |
+| `resp.json()` 실패(비-JSON 본문) | ★아무 데도 안 걸려 그대로 샌다★ |
+| `resp.status_code` | ★아무도 보지 않는다★ |
+| `rt_cd != "0"` | ✔ |
+| `_fetch_token` 실패 | ✗ (`_request` 를 안 탄다) |
+
+그리고 `_fail_order` 는 **무엇이 일어났든** `reason_code='api_error'` 를 박았다 —
+★상수가 관측 행세를 한다★, 이 저장소에서 **네 번째**(AL `selection_effect=0` ·
+AM `"dev"` · AP `dd_at_trigger=0`).
+
+### ★이 프로그램의 정직성 핵심 — `rt_cd` 의 뜻을 모른다★
+
+`rt_cd`/`msg_cd` 를 의미로 옮기는 표가 저장소 어디에도 없다(실측: `msg_cd` 매치
+**0건**, `rt_cd` 는 `!= "0"` 이분법뿐). 그러니 `"장 종료"` 를 패턴 매칭해
+*"이건 업무 거절"* 이라고 단정하면 ★어휘로 거는★ 실수이고, 확인한 적 없는 것을
+주장하는 것이다. **그래서 `business` 의 책임 소재는 `unknown` 으로 두었다.**
+
+산출은 *"breaker 를 올린 것이 `business` 였고, 그 뜻은 미상"* 이라는 **증거**이고,
+★막고 있는 것은 코드가 아니라 증거다.★
+
+### 무엇을 했나
+
+- **AR1 `src/domain/kis_failure.py`** ★신규★(순수) — ★두 축★ **무엇이
+  일어났나**(종류 일곱) ⟂ **누구의 문제인가**(`provider`·`self`·`unknown`).
+  `KIND_FAULT` 는 총함수이고, `COUNTED_BY_BREAKER` 는 ★지금 동작의 기술이지
+  정책이 아니다★. `classify()` 는 `requests` 를 import 하지 않고 **예외 이름만**
+  받는다(이 계층은 HTTP 를 알지 못한다).
+- **AR2 `KISCallError(RuntimeError)`** — ★메시지 문구를 한 글자도 바꾸지 않고★
+  타입과 속성(`kind`·`rt_cd`·`status`·`kis_msg`)만 더했다.
+  `KISCredentialsMissing(RuntimeError)` 가 이미 있고 `try_kis_client` 가 **타입으로**
+  잡는 선례가 있으며, `src/` 에 메시지를 파싱하는 소비자는 **0건**이다(실측).
+  ★유일한 동작 차이는 `malformed`★ — 지금은 `JSONDecodeError` 가 분류도 기록도
+  없이 새는데, **잡아서 이름만 주고 세지는 않는다**.
+- **AR3 `reason_code` 가 상수를 벗었다** — `_fail_order` 가 예외를 받아 종류를
+  적고, 감사 `context` 에 `rt_cd`·`status`·`fault` 가 남는다. 종류를 모르는
+  예외는 `unknown` 이다(또 다른 상수가 아니다).
+- **AR4 표면** — `KISClient` 가 `last_failure_kind` 를 **한 칸** 기록하고(★새
+  카운터를 만들지 않았다★ — 구성의 증거는 `live_orders.reason_code` 에 이력으로
+  쌓인다), `probe()` 가 `last_failure` 블록으로 싣고
+  `GET /kill-switch/readiness` 가 낸다. 프런트는 **타입만**.
+
+### ★트립와이어 — 기술이 코드와 어긋나면 죽는다★
+
+`COUNTED_BY_BREAKER` 는 주장이 아니라 **기술**이므로, AST 가 `_request` 안에서
+`record_failure()` 와 **같은 블록**에 있는 `kind=` 값을 모아 대조한다. 새 분기에서
+몰래 세기 시작하는 것도 같은 검사가 잡는다(`record_failure` 호출 자리 개수 고정).
+
+★스캐너를 처음엔 넓게 썼다★ — 바깥 `try` 를 통째로 훑으니 그 안의 다른 분기
+(`malformed`)까지 빨려 들어가, **세지 않는 종류가 세는 것처럼** 보였다. 형제
+문장 단위로 좁혀 고쳤다.
+
+### ★변이 `k` 가 살아남았다 — 총함수라고 주장만 하고 있었다★
+
+`KIND_FAULT` 에서 `KIND_MALFORMED` 를 지워도 테스트가 통과했다. `fault_of` 가
+`.get(kind, FAULT_UNKNOWN)` 이라 **빠진 종류를 조용히 미상으로 접고**, 테스트는
+`fault_of(kind) in FAULTS` 만 봤기 때문이다 — `unknown` 도 유효한 값이라 통과한다.
+★주장(총함수)을 **키로** 확인하도록 고쳤고★(`set(KIND_FAULT) == set(FAILURE_KINDS)`),
+provider 쪽 종류가 `unknown` 으로 접히지 않는지 짝을 붙였다. 나머지 a~j 는 첫 회
+전부 사망.
+
+### ★이 작업이 하지 않은 것★
+
+- **breaker 가 무엇을 세는지 바꾸지 않았다.** 업무 응답은 **여전히** 카운트에
+  들어간다. 고치려면 먼저 `rt_cd` 의 뜻이 필요하고, 그 전에 고치면 확인한 적
+  없는 것을 주장하게 된다.
+- **`rt_cd` 를 해석하지 않았다.** 표가 없으므로 `business` 의 fault 는 `unknown`
+  이다. ★한국어 문구 패턴 매칭 금지.★
+- **예외 메시지 문구를 바꾸지 않았다** — `tests/test_ingest_doctor.py` 가
+  `"토큰 발급 실패"` 부분문자열을 단언한다. ★이 세션에서 부분문자열 함정에 여섯
+  번 당했고, 이번엔 **먼저** 피했다.★
+- **토큰 실패를 세게 하지 않았다.** `_fetch_token` 이 breaker 를 안 타는 것 그대로.
+- **재시도·백오프를 만들지 않았다.** `RateLimiter` 도 여전히 사전 페이싱뿐이다.
+- **`kis_gateway.py` 가 예외 유형을 `str(e)` 로 부수는 자리를 고치지 않았다** —
+  그 경로는 살아 있는 주문 경로에 연결돼 있지 않다(실측). 사실만 적는다.
+- **데이터 적재 경로의 "데이터 없음 ⟂ 호출 실패" 혼동을 고치지 않았다** —
+  `ohlcv_loader`·`market_data` 가 둘을 같은 `None` 으로 접고 그 뒤가 mock 폴백이라
+  범위가 크다. ★별건으로 기록한다.★
+- **`auto_risk` 를 무장시키지 않았다.**
+- **채점표 #12 를 `통과` 로 올리지 않았다.** ★재는 것과 막는 것은 다르다.★
+- **화면을 만들지 않았다.** 타입까지다.
+
+### 검증 (실측)
+
+- `KIS_USE_MOCK=1 python3 -m pytest tests/ -q` — ★**6,340 통과 / 10 스킵 / 0 실패**
+  (813초)★. AQ 기준선 6,275 대비 **+65**. AQ 에서 한 번 깨졌던
+  `test_execution_assumption_wiring.py::test_a_saved_run_keeps_its_assumption` 은
+  이번 회차에 통과했다 — ★원인을 찾은 것이 아니라 재현되지 않은 것이다.★
+- 새 테스트 — `test_kis_failure.py` 39 · `test_kis_failure_wiring.py` 18, 그리고
+  `test_api_failure_probe.py`·`test_kill_switch_readiness_route.py` 에 추가분.
+- 실물 — `rt_cd="1"` 이면 `reason_code` 가 ★`api_error` 가 아니라 `business`★ 이고
+  감사 `context` 에 `rt_cd`·`fault="unknown"` 이 남는다. 연결 실패면 같은 자리가
+  `transport`·`fault="provider"` 라고 **다른 사실**을 말한다. breaker `OPEN` 이면
+  `blocked` 이고 `failure_count` 가 **늘지 않는다**. 비-JSON 본문이면 `malformed`
+  이고 역시 세지 않는다.
+- 게이트 — `ruff check src/ tests/` 통과 · `npx tsc --noEmit` 종료 코드 **0** ·
+  `npx next build` 종료 코드 **0**. ★파이프 뒤의 `&& echo` 가 아니라 종료 코드로
+  쟀다★(AP 에서 `| tail -5 && echo OK` 가 거짓 통과를 만든 적이 있다).
+  `ruff format --check` 는 725/750 파일이 기존부터 어긋나 있어 손대지 않았다.
+
+### 다음 프로그램 — ★`rt_cd` 표를 확보한다★
+
+가장 많이 나오는 종류(`business`)의 **뜻을 모른다**. 주문 거절과 KIS 장애를
+가르려면 `rt_cd`/`msg_cd` 의 의미가 필요하고 ★그것은 코드로 답할 수 없다★ —
+KIS 문서나 실계좌 응답이 있어야 한다. 로드맵의 "이 로드맵이 기대는 미상" 표에
+한 줄을 더했다. 표를 얻기 전에 할 수 있는 것은 **관측 축적**이고, AR 이 그
+축적을 시작시켰다.

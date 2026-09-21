@@ -42,6 +42,7 @@ from src.domain.api_health import (
     SOURCE_UNKNOWN,
     api_failure_observation,
 )
+from src.domain.kis_failure import failure_label
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,20 @@ _BREAKER_STATE_MAP = {
 }
 
 _PROBE_FAILED = "KIS 실패 횟수를 읽지 못했습니다: {}"
+
+
+def _last_failure(target: Any) -> dict | None:
+    """마지막 실패의 **종류**. ★없으면 지어내지 않는다★ (AR4)
+
+    두 어휘를 잇는 자리다 — `api_health`(관측 출처)는 도메인이고
+    `kis_failure`(실패 종류)도 도메인이라, 둘을 섞지 않고 **실행 계층**이 합친다.
+    """
+    kind = getattr(target, "last_failure_kind", None)
+    if not kind:
+        return None
+    return failure_label(kind,
+                         rt_cd=getattr(target, "last_failure_rt_cd", None),
+                         status=getattr(target, "last_failure_status", None))
 
 
 def _singleton() -> Any:
@@ -80,27 +95,32 @@ def probe(client: Any = None) -> dict[str, Any]:
     """
     target = client if client is not None else _singleton()
     if target is None:
-        return api_failure_observation(count=None, breaker_state=BREAKER_UNKNOWN,
-                                       source=SOURCE_NO_CLIENT)
+        return {**api_failure_observation(count=None,
+                                          breaker_state=BREAKER_UNKNOWN,
+                                          source=SOURCE_NO_CLIENT),
+                "last_failure": None}
     try:
         breaker = getattr(target, "circuit_breaker", None)
         if breaker is None:
             # ★mock 클라이언트에는 breaker 가 없다★ — 합성 호출의 실패는
             # 실패가 아니므로, 여기서 0 을 만들지 않는다.
-            return api_failure_observation(count=None,
-                                           breaker_state=BREAKER_UNKNOWN,
-                                           source=SOURCE_MOCK)
+            return {**api_failure_observation(count=None,
+                                              breaker_state=BREAKER_UNKNOWN,
+                                              source=SOURCE_MOCK),
+                    "last_failure": _last_failure(target)}
         raw_state = getattr(breaker, "state", None)
-        return api_failure_observation(
+        return {**api_failure_observation(
             count=getattr(breaker, "failure_count", None),
             breaker_state=_BREAKER_STATE_MAP.get(str(raw_state), BREAKER_UNKNOWN),
             source=SOURCE_BROKER,
-        )
+        ), "last_failure": _last_failure(target)}
     except Exception as e:                                   # noqa: BLE001
         # ★삼키되 사유를 남긴다★ — 사유 없는 미상은 금지(CLAUDE.md §4).
-        return api_failure_observation(count=None, breaker_state=BREAKER_UNKNOWN,
-                                       source=SOURCE_UNKNOWN,
-                                       reason=_PROBE_FAILED.format(e))
+        return {**api_failure_observation(count=None,
+                                          breaker_state=BREAKER_UNKNOWN,
+                                          source=SOURCE_UNKNOWN,
+                                          reason=_PROBE_FAILED.format(e)),
+                "last_failure": None}
 
 
 def observe_into(state: dict, client: Any = None) -> dict:
