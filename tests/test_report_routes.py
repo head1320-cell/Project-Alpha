@@ -221,6 +221,8 @@ _PLAINTEXT_MODULES = (
     "src/engine/timing_factor_meta.py",
     # AY — 공급 모듈이 없는 묶음의 사유·막는 질문이 `GET /signals` 로 나간다.
     "src/domain/signal_supply.py",
+    # AZ — 요율 출처의 사유·note 가 백테스트 `cost_model` 블록으로 나간다.
+    "src/domain/cost_provenance.py",
 )
 
 

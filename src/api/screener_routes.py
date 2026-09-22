@@ -1490,6 +1490,11 @@ class ScreenToBacktestRequest(BaseModel):
     replenishment_pool_cap: int = Field(default=100, ge=0, le=1000)
 
 
+#: ★이 문의 이름★(AZ) — 결과의 `cost_model.rate_provenance` 가 이것을 낸다.
+#: 실측: 이 문의 기본값은 왕복 40.0bp 이고 `stage11` 계열은 13.0bp 다.
+_COST_DOOR = "screener"
+
+
 def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
     """screen-to-backtest 핵심 로직 (unary + 스트리밍 공용).
 
@@ -1683,6 +1688,12 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
             initial_capital=req.initial_capital,
             commission_rate=req.commission_rate,
             slippage_rate=req.slippage_rate,
+            # ★문이 아는 사실을 결과까지 나른다★(AZ) — 요청이 요율을 명시했나,
+            #   아니면 **이 문의 기본값이 채웠나**. 값은 위 두 줄 그대로이고
+            #   여기서 바뀌는 것은 없다. `model_fields_set` 은 pydantic 이
+            #   *"요청 본문에 이 필드가 있었는가"* 를 그대로 답하는 자리다.
+            cost_door=_COST_DOOR,
+            cost_explicit_fields=frozenset(req.model_fields_set),
             stop_loss_pct=req.stop_loss_pct,
             take_profit_pct=req.take_profit_pct,
             trailing_stop_pct=req.trailing_stop_pct,

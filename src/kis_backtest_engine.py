@@ -581,6 +581,13 @@ class BacktestConfig:
     # 종목을 알 수 없으므로). 사용자향 API에는 끄는 스위치를 노출하지 않음 — 회귀비교용 내부 값.
     dynamic_replenishment: bool = True
     replenishment_pool: list[str] | None = None  # 재편입 후보풀(symbols의 상위집합). None=비활성
+    # ── ★비용 요율의 런타임 출처 — 관측 전용★ (AZ) ──────────────────────
+    # ★비용 **계산에 쓰이지 않는다**★ — 요청이 요율을 명시했는지(문만 아는
+    # 사실)를 결과 블록까지 나르기만 한다. 실측(2026-09-22): 요청이 안 실으면
+    # 문이 정하고 왕복 비용이 screener 계열 40.0bp, stage11 계열 13.0bp 로
+    # 갈린다. ★둘 다 `None` 이면 미상이다★ — 기본값이라고 단정하지 않는다.
+    cost_door: str | None = None
+    cost_explicit_fields: frozenset[str] | None = None
     # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
     vectorize_signals: bool = True
     # 매수 우선순위식 (젠포트 매수 종목 선택 우선순위): 봉마다 후보들의 식 값으로
@@ -721,7 +728,15 @@ class BacktestEngine:
             for n in COST_COMPONENTS)
         total = sum(c.krw for c in comps)
         label = cost_label(CostBreakdown(components=comps, total_krw=total))
+        from src.domain.cost_provenance import rate_provenance
         return {**label,
+                # ★적용된 요율이 **어디서 왔는가**★ (AZ) — 값은 안 바꾸고
+                # 라벨만 더한다. CLAUDE.md 4절이 폴백에 요구하는 둘
+                # (라벨 · 관측 가능)을 이 키가 채운다.
+                "rate_provenance": rate_provenance(
+                    door=self.cfg.cost_door,
+                    explicit=self.cfg.cost_explicit_fields,
+                    policy=self._cost_policy),
                 "policy": policy_label(self._cost_policy),
                 # ★설정의 판본★ (AM5) 비용 설정이 다른 두 실행은 지금까지
                 # 기록에서 구별되지 않았다. 이것은 `code_version`(빌드)과 다른
@@ -2675,6 +2690,9 @@ def run_backtest(
     liquidate_at_end: bool = True,
     dynamic_replenishment: bool = True,
     replenishment_pool: list[str] | None = None,
+    # ★관측 전용★(AZ) — 비용 계산에 쓰이지 않는다. 문만 아는 사실을 나른다.
+    cost_door: str | None = None,
+    cost_explicit_fields: frozenset[str] | None = None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -2755,6 +2773,8 @@ def run_backtest(
         buy_timing=buy_timing,
         dynamic_replenishment=dynamic_replenishment,
         replenishment_pool=replenishment_pool,
+        cost_door=cost_door,
+        cost_explicit_fields=cost_explicit_fields,
     )
     engine = BacktestEngine(cfg, progress_cb=progress_cb)
     return engine.run()
