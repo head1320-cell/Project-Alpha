@@ -84,6 +84,10 @@ PROVENANCE_LABELS = {
 #: 현재가·주가·거래량·거래대금이고, `alpha_expr` 은 카테고리가 `price` 다.
 BACKING_PRICE = "price"
 
+#: ★스토어가 출처를 선언한 필드★ — 가격일 수도 재무일 수도 있다. 가격으로
+#: 뭉뚱그리면 재무 필드에 "가격이 mock 에서 온다" 는 거짓 사유가 붙는다.
+BACKING_STORE = "store"
+
 #: 종류·카테고리 → 뒷받침. ★여기 없는 것은 미상이다★(낙관적으로 분류하지
 #: 않는다). 키는 `(kind, category)` 이고 카테고리가 `None` 이면 종류만 본다.
 KNOWN_BACKING: dict[tuple[str, str | None], str] = {
@@ -94,6 +98,19 @@ KNOWN_BACKING: dict[tuple[str, str | None], str] = {
 _BASIS_TOKEN = (
     "factor_tokens.BASE_TOKENS 여덟 개가 전부 가격·거래량입니다(실측) — "
     "그 값은 KIS 가격 경로에서 옵니다")
+
+_REASON_STORE_MOCK = (
+    "mock 게이트가 열려 있어 이 스토어가 읽는 적재 경로가 합성입니다 — "
+    "그 값은 지어낸 것입니다.")
+
+_REASON_STORE_PROVIDER = (
+    "mock 게이트가 닫혀 있어 이 스토어의 값이 제공자에서 파생됩니다. "
+    "★실제로 적재됐는지는 여기서 확인하지 않습니다★ — 순수 규칙은 저장 상태를 "
+    "알 수 없고, 아는 척하면 그것이 지어내기입니다.")
+
+_BASIS_ORIGIN = (
+    "이 필드는 {origin} 에서 병합됐습니다 — ★어느 스토어에서 왔는지는 병합 "
+    "자리가 아는 구조적 사실이고, 선언된 출처 원문을 해석한 것이 아닙니다.★")
 
 _BASIS_ALPHA_PRICE = (
     "alpha_lab.FIELDS 가 이 신호를 `price` 그룹으로 분류합니다 — 그 값은 "
@@ -108,10 +125,19 @@ _REASON_PROVIDER = (
     "여기서 확인하지 않습니다★ — 순수 규칙은 저장 상태를 알 수 없고, 아는 척하면 "
     "그것이 지어내기입니다.")
 
-_REASON_SCREENER = (
-    "이 신호의 출처가 카탈로그에 도달하지 않습니다 — filter_ast 의 병합이 "
-    "FieldMeta 를 만들 때 FactorMeta.source(문헌 인용)를 버립니다. "
-    "★기록이 없는 것이 아니라 옮기다 떨어뜨린 것입니다.★")
+#: ★AW 가 되살린 출처를 등급으로 옮기는 표★ — 선언된 출처가 있는 스토어만
+#: 여기 있다. `base_fields_store` 는 ★어디서 오는지 확인한 적이 없어★ 없다.
+BACKED_ORIGINS = ("fundamentals_store", "price_factors_store",
+                  "extended_factors_store")
+
+_REASON_BASE_FIELD = (
+    "이 필드는 base_fields_store 로 옮겨졌지만 ★선언된 출처가 없습니다★ — "
+    "원래 filter_ast 안에 맨손으로 적혀 있었고 어느 제공자에서 오는지 저장소가 "
+    "확인한 적이 없습니다. 적는 것이 곧 지어내기입니다.")
+
+_REASON_NO_ORIGIN = (
+    "이 신호는 어느 스토어에서 왔는지를 실어 나르지 않습니다 — 출처를 물을 "
+    "자리가 없습니다.")
 
 _REASON_TIMING = (
     "이 신호는 개정 정책(revision_policy)은 아는데 ★무엇에서 계산되는지는 "
@@ -146,10 +172,10 @@ def _backing(kind: Any, category: Any) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _unknown_reason(kind: Any) -> str:
+def _unknown_reason(kind: Any, origin: Any = None) -> str:
     """왜 못 정하는가. ★사유 없는 미상은 금지★ (CLAUDE.md 4절)."""
     if kind == KIND_SCREENER_FIELD:
-        return _REASON_SCREENER
+        return _REASON_BASE_FIELD if origin else _REASON_NO_ORIGIN
     if kind == KIND_TIMING_RULE:
         return _REASON_TIMING
     return _REASON_UNMAPPED
@@ -168,22 +194,32 @@ def signal_grade(signal: Any) -> dict[str, Any]:
     """
     kind = getattr(signal, "kind", None)
     category = getattr(signal, "category", None)
+    origin = getattr(signal, "origin", None)
     backing, basis = _backing(kind, category)
 
-    if backing != BACKING_PRICE:
+    # ★AW — 스토어가 출처를 선언하면 그것으로 판정한다★ 해석이 아니라
+    #   구조적 사실이다(어느 스토어에서 병합됐는가).
+    if backing is None and origin in BACKED_ORIGINS:
+        backing, basis = BACKING_STORE, _BASIS_ORIGIN.format(origin=origin)
+
+    if backing not in (BACKING_PRICE, BACKING_STORE):
         return {
             "signal_id": getattr(signal, "signal_id", None),
             "grade": None,
-            "reason": _unknown_reason(kind),
+            "reason": _unknown_reason(kind, origin),
             "basis": None,
             "note": _NOTE,
         }
 
     synthetic = _mock_open()
+    if backing == BACKING_STORE:
+        reason = _REASON_STORE_MOCK if synthetic else _REASON_STORE_PROVIDER
+    else:
+        reason = _REASON_MOCK if synthetic else _REASON_PROVIDER
     return {
         "signal_id": getattr(signal, "signal_id", None),
         "grade": PROV_E0 if synthetic else PROV_E2,
-        "reason": _REASON_MOCK if synthetic else _REASON_PROVIDER,
+        "reason": reason,
         "basis": basis,
         "note": _NOTE,
     }

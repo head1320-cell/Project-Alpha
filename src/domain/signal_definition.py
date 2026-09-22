@@ -43,6 +43,10 @@ class SignalDefinition:
     category: str
     #: ★단일 출처★ — 이 신호의 진실이 사는 모듈. 값을 복사해 오지 않는다.
     owner_module: str
+    #: ★데이터 출처★(AW) — 어느 스토어에서 왔나. 스크리너 필드는
+    #: `filter_ast.FieldMeta.origin` 에서 그대로 받는다. 해석이 필요 없는
+    #: 구조적 사실이고, 출처 등급이 읽는 유일한 칸이다.
+    origin: str | None = None
     #: 타이밍 쪽은 이미 이 둘을 안다(`timing_factor_meta` 가 출처에서 파생시킨다).
     release_lag: str | None = None
     revision_policy: str | None = None
@@ -73,9 +77,12 @@ class SignalCatalog:
 
 def _screener_fields() -> list[SignalDefinition]:
     from src.engine.filter_ast import FIELD_BY_ID
+    # ★AW 가 되살린 칸을 그대로 받는다★ — 예전에는 병합이 출처를 버려서
+    #   여기까지 올 것이 없었다.
     return [SignalDefinition(
         signal_id=f.id, kind=KIND_SCREENER_FIELD, label=f.label,
         category=f.category, owner_module="src.engine.filter_ast",
+        origin=getattr(f, "origin", None),
     ) for f in FIELD_BY_ID.values()]
 
 

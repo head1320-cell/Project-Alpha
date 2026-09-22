@@ -127,11 +127,46 @@ def test_every_grade_carries_what_it_looked_at(monkeypatch):
 
 # ── ★말할 수 없는 종류 — 미상 + 사유★ ────────────────────────────────
 
-def test_a_screener_field_is_unknown_because_the_merge_drops_the_source():
-    """★157개(73%)가 여기 걸린다★ — 사유가 구체적인 결함을 가리켜야 한다."""
+def test_a_screener_field_without_an_origin_is_unknown():
+    """★AW 이후 이 사유가 바뀌었다★
+
+    AV 때는 *"filter_ast 의 병합이 출처를 버린다"* 가 사유였다. AW 가 그것을
+    되살렸으므로 ★그 문장은 이제 거짓이다★ — 지금 미상인 이유는 신호가
+    출처를 실어 나르지 않아서다.
+    """
     out = signal_grade(_sig(KIND_SCREENER_FIELD, category="valuation"))
     assert out["grade"] is None
-    assert "filter_ast" in out["reason"]
+    assert out["reason"]
+    assert "버립니다" not in out["reason"], "낡은 사유가 남아 있다"
+
+
+def test_a_screener_field_with_a_backed_origin_is_graded(monkeypatch):
+    """★AW 가 되살린 것이 실제로 등급이 된다★"""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_SCREENER_FIELD, category="valuation",
+                            origin="fundamentals_store"))
+    assert out["grade"] == PROV_E0
+    assert "fundamentals_store" in out["basis"]
+
+
+def test_a_store_backed_reason_does_not_claim_it_is_price(monkeypatch):
+    """★재무 필드에 "가격이 mock 에서 온다" 는 거짓을 붙이지 않는다★
+
+    구현 중에 실제로 그 거짓을 만들었다가 잡았다 — 출처 기반 필드를 가격으로
+    뭉뚱그리면 사유가 틀린 것을 말한다.
+    """
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_SCREENER_FIELD, category="quality",
+                            origin="fundamentals_store"))
+    assert "가격" not in out["reason"]
+
+
+def test_a_base_field_is_unknown_because_nothing_declares_its_source():
+    """★스토어로 옮겼다고 출처를 아는 것이 아니다★ — 14개는 여전히 미상."""
+    out = signal_grade(_sig(KIND_SCREENER_FIELD, category="valuation",
+                            origin="base_fields_store"))
+    assert out["grade"] is None
+    assert out["reason"]
 
 
 def test_a_timing_rule_is_unknown_even_though_it_knows_its_revision_policy():

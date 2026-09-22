@@ -51,15 +51,29 @@ def test_every_signal_carries_a_grade_reason(monkeypatch):
         assert s.evidence_grade_reason, s.signal_id
 
 
-def test_the_screener_fields_stay_unknown_with_the_merge_reason(monkeypatch):
-    """★157개(73%)가 여기 걸린다★ — 사유가 구체적 결함을 가리킨다."""
+def test_most_screener_fields_are_now_graded(monkeypatch):
+    """★AW 이후 — 병합이 되살린 출처가 등급이 된다★
+
+    AV 때는 157개 전부가 미상이었다. 이제 선언된 출처가 있는 스토어에서 온
+    것은 등급을 받고, ★맨손 리터럴 14개만 미상으로 남는다★.
+    """
     monkeypatch.setenv("KIS_USE_MOCK", "1")
     fields = [s for s in collect_signals().signals
               if s.kind == KIND_SCREENER_FIELD]
     assert fields
-    for s in fields:
-        assert s.evidence_grade is None
-        assert "filter_ast" in s.evidence_grade_reason
+    graded = [s for s in fields if s.evidence_grade is not None]
+    ungraded = [s for s in fields if s.evidence_grade is None]
+    assert len(graded) > 100, len(graded)
+    # ★짝★ — 전부 등급이 붙으면 지어내고 있는 것이다.
+    assert ungraded, "기본 필드까지 등급을 받았다"
+    assert all(s.origin == "base_fields_store" for s in ungraded)
+
+
+def test_the_stale_merge_reason_is_gone(monkeypatch):
+    """변이 l — ★거짓이 된 문장이 남아 있으면 죽는다★"""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    for s in collect_signals().signals:
+        assert "버립니다" not in (s.evidence_grade_reason or "")
 
 
 def test_the_tokens_are_graded_synthetic_under_the_mock_gate(monkeypatch):

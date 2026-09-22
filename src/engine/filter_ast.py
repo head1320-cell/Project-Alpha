@@ -44,30 +44,47 @@ class FieldMeta:
     higher_better: bool    # True면 "상위 N%"가 높은 값 (ROE), False면 낮은 값 선호 (PER)
     typical_min: float
     typical_max: float
+    #: ★데이터 출처★(AW) — 어느 스토어에서 병합됐나. 해석이 필요 없는 구조적
+    #: 사실이고, `signal_evidence` 가 출처 등급을 파생할 때 읽는 유일한 칸이다.
+    origin: str | None = None
+    #: ★스토어가 선언한 출처 원문 — 해석하지 않는다★(AW). 실측: 스토어마다
+    #: 뜻이 다르다. `extended_factors` 는 제공자(`DART`·`KIS`)를 적고
+    #: `fundamentals` 는 문헌(`Piotroski (2000)`)을 적으며 `price_factors` 는
+    #: 둘을 섞어 적는다. 그래서 이 칸은 **원문 보관**이고 등급은 읽지 않는다 —
+    #: 문자열을 패턴으로 가르면 확인한 적 없는 것을 주장하게 된다.
+    source_declared: str | None = None
 
 
-FIELD_CATALOG: list[FieldMeta] = [
-    # 밸류에이션
-    FieldMeta("per",            "PER",          "valuation",     "배",  False, 0,   50),
-    FieldMeta("pbr",            "PBR",          "valuation",     "배",  False, 0,   10),
-    FieldMeta("gap_pct",        "괴리율",        "valuation",     "%",   False, -80, 80),
-    FieldMeta("intrinsic_value", "적정가",        "valuation",     "원",  True,  0,   1000000),
-    # 수익성
-    FieldMeta("roe_pct",        "ROE",          "profitability", "%",   True,  -10, 40),
-    FieldMeta("roa_pct",        "ROA",          "profitability", "%",   True,  -10, 25),
-    # 배당
-    FieldMeta("dividend_yield_pct", "배당수익률",  "dividend",      "%",   True,  0,   10),
-    # 안정성
-    FieldMeta("debt_ratio_pct", "부채비율",      "stability",     "%",   False, 0,   300),
-    FieldMeta("fcf_억",         "잉여현금흐름",   "stability",     "억",  True,  -5000, 50000),
-    # 시가총액은 규모(Size) 팩터 — 안정성 아님 (CIO 실사: 팩터 분류 체계 재정립)
-    FieldMeta("market_cap_억",  "시가총액",      "size",          "억",  True,  0,   5000000),
-    # 종합 스코어
-    FieldMeta("composite_score", "종합 점수",     "score",         "점",  True,  0,   100),
-    FieldMeta("gap_score",      "저평가 점수",    "score",         "점",  True,  0,   100),
-    FieldMeta("roe_score",      "수익성 점수",    "score",         "점",  True,  0,   100),
-    FieldMeta("stability_score", "안정성 점수",   "score",         "점",  True,  0,   100),
-]
+#: ★데이터 출처 어휘★(AW) — 병합 자리가 아는 구조적 사실이다.
+ORIGIN_BASE = "base_fields_store"
+ORIGIN_FUNDAMENTAL = "fundamentals_store"
+ORIGIN_PRICE = "price_factors_store"
+ORIGIN_EXTENDED = "extended_factors_store"
+
+ORIGINS = (ORIGIN_BASE, ORIGIN_FUNDAMENTAL, ORIGIN_PRICE, ORIGIN_EXTENDED)
+
+
+FIELD_CATALOG: list[FieldMeta] = []
+
+
+def _register_base_fields():
+    """기본 필드를 ★맨 먼저★ 등록한다(AW3).
+
+    예전에는 이 열넷이 `FIELD_CATALOG` 안에 맨손으로 적혀 있어 ★출처를 물을
+    자리조차 없었다★. `base_fields_store` 로 옮기고 여기서 되받는다 —
+    ★맨 먼저 돌아야 순서가 보존된다★(골든 스냅샷이 확인한다).
+    """
+    from src.data.base_fields_store import BASE_FIELDS
+    for b in BASE_FIELDS:
+        FIELD_CATALOG.append(FieldMeta(
+            b.id, b.label, b.category, b.unit,
+            b.higher_better, b.typical_min, b.typical_max,
+            origin=ORIGIN_BASE,
+            # ★근거를 확인한 적이 없다★ — 적는 것이 곧 지어내기다.
+            source_declared=None))
+
+
+_register_base_fields()
 
 # ─── FFL: 펀더멘털 팩터를 FIELD_CATALOG에 자동 등록 ───
 def _register_fundamental_fields():
@@ -76,8 +93,13 @@ def _register_fundamental_fields():
         from src.data.fundamentals_store import FUNDAMENTAL_FACTORS
         for fac in FUNDAMENTAL_FACTORS:
             if fac.id not in FIELD_BY_ID:
+                # ★병합 자리가 아는 것을 떨어뜨리지 않는다★(AW) — 예전에는
+                # 여기서 `fac.source` 가 사라졌고, 그래서 신호 157개의 출처를
+                # 저장소가 말할 수 없었다. 선언된 원문은 ★해석하지 않고★ 나른다.
                 meta = FieldMeta(fac.id, fac.label, fac.category, fac.unit,
-                                 fac.higher_better, fac.typical_min, fac.typical_max)
+                                 fac.higher_better, fac.typical_min, fac.typical_max,
+                                 origin=ORIGIN_FUNDAMENTAL,
+                                 source_declared=getattr(fac, "source", None))
                 FIELD_CATALOG.append(meta)
                 FIELD_BY_ID[fac.id] = meta
     except Exception as e:
@@ -93,8 +115,13 @@ def _register_price_fields():
         from src.data.price_factors_store import PRICE_FACTORS
         for fac in PRICE_FACTORS:
             if fac.id not in FIELD_BY_ID:
+                # ★병합 자리가 아는 것을 떨어뜨리지 않는다★(AW) — 예전에는
+                # 여기서 `fac.source` 가 사라졌고, 그래서 신호 157개의 출처를
+                # 저장소가 말할 수 없었다. 선언된 원문은 ★해석하지 않고★ 나른다.
                 meta = FieldMeta(fac.id, fac.label, fac.category, fac.unit,
-                                 fac.higher_better, fac.typical_min, fac.typical_max)
+                                 fac.higher_better, fac.typical_min, fac.typical_max,
+                                 origin=ORIGIN_PRICE,
+                                 source_declared=getattr(fac, "source", None))
                 FIELD_CATALOG.append(meta)
                 FIELD_BY_ID[fac.id] = meta
     except Exception as e:
@@ -109,8 +136,13 @@ def _register_extended_fields():
         from src.data.extended_factors_store import EXTENDED_FACTORS
         for fac in EXTENDED_FACTORS:
             if fac.id not in FIELD_BY_ID:
+                # ★병합 자리가 아는 것을 떨어뜨리지 않는다★(AW) — 예전에는
+                # 여기서 `fac.source` 가 사라졌고, 그래서 신호 157개의 출처를
+                # 저장소가 말할 수 없었다. 선언된 원문은 ★해석하지 않고★ 나른다.
                 meta = FieldMeta(fac.id, fac.label, fac.category, fac.unit,
-                                 fac.higher_better, fac.typical_min, fac.typical_max)
+                                 fac.higher_better, fac.typical_min, fac.typical_max,
+                                 origin=ORIGIN_EXTENDED,
+                                 source_declared=getattr(fac, "source", None))
                 FIELD_CATALOG.append(meta)
                 FIELD_BY_ID[fac.id] = meta
     except Exception as e:
