@@ -98,7 +98,10 @@ BACKING_VINTAGE = "vintage"
 #: 않는다). 키는 `(kind, category)` 이고 카테고리가 `None` 이면 종류만 본다.
 KNOWN_BACKING: dict[tuple[str, str | None], str] = {
     (KIND_STRATEGY_TOKEN, None): BACKING_PRICE,
-    (KIND_ALPHA_EXPR, "price"): BACKING_PRICE,
+    # ★AY — `(KIND_ALPHA_EXPR, "price")` 를 뺐다★ 그 열 개는 이제 `origin`
+    #   (`ohlcv_loader`)으로 판정한다. 같은 질문에 두 기계가 답하면 한쪽만
+    #   고쳐도 안 깨진다(`source_registry` 가 같은 이유를 적어 두었다).
+    #   ★등급 값은 바뀌지 않는다★ — 둘 다 mock 게이트로 E0/E2 다.
 }
 
 _BASIS_TOKEN = (
@@ -136,7 +139,7 @@ _REASON_PROVIDER = (
 #: `etf_prices`(AX)는 `load_ohlcv_unified(DB→KIS→mock)` 를 **재사용**하므로
 #: 스토어와 똑같이 mock 게이트가 지배한다 — 사유 문구가 그대로 참이다.
 BACKED_ORIGINS = ("fundamentals_store", "price_factors_store",
-                  "extended_factors_store", "etf_prices")
+                  "extended_factors_store", "etf_prices", "ohlcv_loader")
 
 _REASON_BASE_FIELD = (
     "이 필드는 base_fields_store 로 옮겨졌지만 ★선언된 출처가 없습니다★ — "
@@ -179,6 +182,21 @@ _REASON_TIMING_NO_SOURCE = (
 #: 남는 미상은 평가 함수가 없는 §6.1 묶음이고, 사유가 그것을 말한다.
 _REASON_TIMING = _REASON_TIMING_NO_SOURCE
 
+
+def _unsupplied_reason(key: str) -> str | None:
+    """★사유를 여기 베껴 적지 않는다★(AY) — 레지스트리가 단일 출처다.
+
+    `signal_supply.UNSUPPLIED` 에 **사유·막는 질문·승급 조건**이 함께 있고,
+    테스트가 그 승급 조건이 아직 참인지 확인한다. 여기서 문장을 복사하면
+    레지스트리를 고쳐도 응답이 안 따라온다.
+    """
+    from src.domain.signal_supply import UNSUPPLIED_BY_KEY
+
+    e = UNSUPPLIED_BY_KEY.get(key)
+    if e is None:
+        return None
+    return f"{e.reason} {e.blocks}"
+
 _REASON_UNMAPPED = (
     "이 종류·카테고리의 뒷받침을 이 규칙이 모릅니다 — 새 어댑터나 새 그룹이 "
     "생기면 ★조용히 통과시키지 않고★ 미상으로 둡니다.")
@@ -219,12 +237,17 @@ def _fred_key_present() -> bool:
     return bool(os.getenv(FRED_KEY_ENV, "").strip())
 
 
-def _unknown_reason(kind: Any, origin: Any = None) -> str:
+def _unknown_reason(kind: Any, origin: Any = None,
+                    category: Any = None) -> str:
     """왜 못 정하는가. ★사유 없는 미상은 금지★ (CLAUDE.md 4절)."""
     if kind == KIND_SCREENER_FIELD:
         return _REASON_BASE_FIELD if origin else _REASON_NO_ORIGIN
     if kind == KIND_TIMING_RULE:
         return _REASON_TIMING
+    if kind == KIND_ALPHA_EXPR:
+        # ★공급 모듈이 없는 묶음은 레지스트리가 말한다★(AY)
+        reason = _unsupplied_reason(f"{kind}.{category}") if category else None
+        return reason or _REASON_NO_ORIGIN
     return _REASON_UNMAPPED
 
 
@@ -267,7 +290,7 @@ def signal_grade(signal: Any) -> dict[str, Any]:
         return {
             "signal_id": getattr(signal, "signal_id", None),
             "grade": None,
-            "reason": _unknown_reason(kind, origin),
+            "reason": _unknown_reason(kind, origin, category),
             "basis": None,
             "note": _NOTE,
         }

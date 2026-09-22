@@ -18091,3 +18091,105 @@ CLAUDE.md §3 의 계층 경계와도 어긋나 보인다 — ★AX 는 관찰�
 - **적재·응답을 확인하지 않았다.** 키가 있다는 것은 읽혔다는 것이 아니다.
 - **미상을 0 으로 만들지 않았다.**
 - **화면을 만들지 않았다. 채점표를 올리지 않았다.**
+
+---
+
+## AY. `alpha_expr` 의 비대칭 — ★못 붙이는 이유를 검증되는 관측으로★ (2026-09-22, 축 ③)
+
+스펙 [`docs/superpowers/specs/2026-09-22-alpha-supply-asymmetry-design.md`](superpowers/specs/2026-09-22-alpha-supply-asymmetry-design.md) ·
+레지스트리 `src/domain/signal_supply.py` · 트립와이어 `tests/test_signal_supply.py` ·
+선례 `src/engine/version_registry.MISSING_AXES`
+
+### ★AX 의 경고가 맞았고, 프로그램의 모양을 바꿨다★
+
+AX 는 지정하면서 *"`origin` 어휘가 맞지 않는다. ★어휘를 늘리는 것이 정직하지
+않다면 이 프로그램은 하지 않는 것이 맞다★"* 고 적었다. 감사했고 **맞았다**.
+
+그래서 *"7개에 등급을 붙인다"* 가 아니라 ★"못 붙이는 이유를 **스스로
+무효화되는 관측**으로 만든다"★ 로 바꿨다. 사용자가 출처 축을 *"플랫폼 취지에
+맞는 가장 선진적인 방법"* 으로 위임했고, 이 저장소의 말로 옮기면 그것은
+**등급을 더 붙이는 것이 아니라** 로드맵 §0 의 규율 ③⑤ 와 축별 백엔드 방향 3
+(*"모르는 것은 레지스트리 + 사유로 등록… 구현되면 트립와이어가 red 로 알린다"*)
+을 그대로 따르는 것이다.
+
+### ★실측 — 같은 모듈 안에서 한쪽만 계층을 지킨다★
+
+| | 로더 | `src/data/` 공급 모듈 |
+|---|---|---|
+| `_load_price_series` (10개) | `src.data.ohlcv_loader.load_ohlcv_unified` | ★있다★ |
+| `_load_fundamentals` (7개) | `financials_history` 를 **직접 SELECT** | ★없다★ |
+
+결함의 이름이 *"재무 적재 상태를 모른다"*(AV 의 추측)에서
+★"공급 모듈이 없다"★ 라는 **구조적 사실**로 바뀐다.
+
+### ★적히지 않았던 규칙이 있었다★
+
+AW 가 `ORIGINS` 를, AX 가 `TIMING_ORIGINS` 를 만들며 여섯 값을 썼는데 규칙이
+**한 번도 적히지 않았다**: ★`origin` 은 실재하는 `src/data/` 공급 모듈의
+이름이다★. 여섯 값 모두 그러한데 아무도 걸지 않았다.
+
+`SUPPLY_PACKAGE = "src.data"` 로 규칙을 한 곳에 두고, 테스트가 선언된 모든
+값을 **실제로 임포트해 본다** — ★AW·AX 를 소급으로 경화한다★. 그래서
+`financials_history` 는 어휘에 넣지 않는다(모듈과 테이블은 다른 종류다).
+
+### ★"모른다" 를 "이것이 참인 동안은 못 붙인다" 로★
+
+7개에 붙어 있던 것은 `_REASON_UNMAPPED`(*"뒷받침을 **모릅니다**"*)였다 —
+**저장소는 다섯 가지를 아는데 모른다고 말하고 있었다.**
+
+`MissingAxis(key, label, reason, blocks)` 선례에 ★`promotes_when`★ 을 더한
+`UnsuppliedSignal` 을 만들고, ★그 조건이 아직 참인지를 테스트가 확인한다★:
+
+- `_load_price_series` 가 `src.data.*` 를 **지난다**
+- `_load_fundamentals` 가 `src.data.*` 를 **안 지난다**
+- ★짝★ — 둘이 **다르다**(전제가 무너지면 죽는다)
+
+**누군가 고치면 red 가 되고 그것이 승급 신호다.** 실패 메시지가
+*"이제 `UNSUPPLIED` 에서 빼고 등급을 붙여라"* 라고 말한다.
+사유는 레지스트리에서 **읽는다** — ★등급 규칙에 베껴 적지 않는다★.
+
+### ★두 기계를 하나로 — 값은 보존★
+
+`alpha_expr`(price) 10개는 `origin` 이 아니라 **카테고리 표**
+(`KNOWN_BACKING[(KIND_ALPHA_EXPR, "price")]`)로 등급을 받고 있었다 — AW·AX
+이전 방식이다. 그 줄을 빼고 `ohlcv_loader` 를 `BACKED_ORIGINS` 에 넣었다.
+★등급 **값**은 바뀌지 않는다★(둘 다 mock 게이트로 `E0`/`E2`). **기계는 바뀌고
+답은 그대로여야 한다 — 아니면 통합이 아니라 변경이다.**
+
+### 개정 축은 제 칸에 (사용자 결정)
+
+`fund` 7개에 `revision_policy="revised"` 를 실었다 — `financials_history` 가
+정정이 원본을 덮는 표라는 것은 저장소가 `pit_store`·`kis_backtest_engine`·
+`valuation_distribution` 세 곳에 적어 두었다. ★`price` 는 비웠다★ —
+수정주가 소급 변경 여부를 **이 프로그램은 재지 않았고**, 안 잰 것을
+`not_revised` 로 주장하면 그것이 지어내기다.
+
+### 검증 (실측)
+
+- `KIS_USE_MOCK=1 python3 -m pytest tests/ -q` — ★**6,662 통과 / 10 스킵 /
+  0 실패**(689초, 종료 코드 0)★. AX 기준선 6,637 대비 **+25**.
+- 게이트 — `ruff check src/ tests/ scripts/` 통과 · `npx tsc --noEmit` 종료
+  코드 **0** · `npx next build` 종료 코드 **0**. ★파이프 없이 종료 코드로 쟀다★.
+- 변이 **a~m 열셋 전부 기대대로**(`m` 은 ★짝★이라 통과해야 정상).
+  ★AW·AX 와 달리 보강 없이 한 번에 통과했다★ — 검증을 먼저 쓰고 구현한
+  순서(TDD)가 이번엔 헐거운 자리를 안 남겼다.
+- ★변이 `f` 가 이 프로그램의 핵심이다★ — `_load_fundamentals` 가 공급 모듈을
+  지나게 만들어 보면 테스트가 *"★승급 조건이 충족됐다★ — 이제 공급 모듈을
+  지난다: ['sqlalchemy', 'src.data', 'src.database']"* 라고 **말하며** 죽는다.
+  주장이 스스로 무효화되는지를 잰 것이다.
+- 등급이 붙은 신호 **185 유지** · 미상 **30 유지**. ★등급 개수는 이 프로그램의
+  산출물이 아니다★ — 산출물은 ⑴ 어휘 규칙이 구조로 걸린 것 ⑵ 사유가 검증되는
+  관측이 된 것 ⑶ 승급 조건이 코드가 된 것 ⑷ 등급 경로가 하나로 합쳐진 것이다.
+- alpha price 10개의 등급 **값이 그대로**(`E0`) — 통합의 계약을 테스트가 못 박는다.
+- `signal_supply.py` 를 평문 가드에 등록하고 ★무는지 변이로 확인★했다.
+
+### ★이 작업이 하지 않은 것★
+
+- **`alpha_lab.py` 를 한 줄도 안 고쳤다.** `fundamentals_store` 로 돌리면
+  값이 바뀐다(그 모듈은 `financials_history` 를 읽지 않는다 — grep 0건).
+  승인 사항이다.
+- **`financials_history` 를 `origin` 어휘에 넣지 않았다.**
+- **`adj_close` 를 건드리지 않았다.** `close` 를 쓴다는 것은 관측만 했다.
+- **`price` 의 `revision_policy` 를 주장하지 않았다.**
+- **정정 사실을 출처 사유에 섞지 않았다.**
+- **미상을 줄이지 않았다.** 0개 줄었고 그것이 정직이다.

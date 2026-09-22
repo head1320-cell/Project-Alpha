@@ -219,6 +219,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/signal_evidence.py",
     # AX — §6.1 "소스 없음" 사유·설명이 타이밍 팩터 카탈로그 응답으로 나간다.
     "src/engine/timing_factor_meta.py",
+    # AY — 공급 모듈이 없는 묶음의 사유·막는 질문이 `GET /signals` 로 나간다.
+    "src/domain/signal_supply.py",
 )
 
 

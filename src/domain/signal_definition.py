@@ -107,11 +107,28 @@ def _timing_rules() -> list[SignalDefinition]:
     return out
 
 
+#: ★AY — alpha_lab 의 두 로더가 비대칭이다★(실측)
+#:   `_load_price_series` 는 `src.data.ohlcv_loader` 를 지나고,
+#:   `_load_fundamentals` 는 `financials_history` 를 직접 SELECT 한다.
+#:   그래서 `fund` 에는 공급 모듈 이름이 **없다** — 표 이름은 다른 종류라
+#:   출처 어휘에 넣지 않는다(`signal_supply.UNSUPPLIED` 가 사유를 갖는다).
+_ALPHA_ORIGIN_BY_GROUP: dict[str, str | None] = {"price": "ohlcv_loader"}
+
+#: ★개정 축 — 출처 축과 섞지 않는다★(AY)
+#:   `financials_history` 는 정정이 원본을 덮는 표라 `revised` 다(저장소가
+#:   `pit_store`·`kis_backtest_engine`·`valuation_distribution` 세 곳에 적어
+#:   두었다). ★`price` 는 비운다★ — 수정주가가 소급 변경되는지를 이 프로그램은
+#:   재지 않았고, 안 잰 것을 `not_revised` 로 주장하면 그것이 지어내기다.
+_ALPHA_REVISION_BY_GROUP: dict[str, str | None] = {"fund": "revised"}
+
+
 def _alpha_fields() -> list[SignalDefinition]:
     from src.engine.alpha_lab import FIELDS
     return [SignalDefinition(
         signal_id=fid, kind=KIND_ALPHA_EXPR, label=label, category=group,
         owner_module="src.engine.alpha_lab",
+        origin=_ALPHA_ORIGIN_BY_GROUP.get(group),
+        revision_policy=_ALPHA_REVISION_BY_GROUP.get(group),
     ) for fid, label, group, _formula in FIELDS]
 
 

@@ -187,3 +187,60 @@ def test_the_fred_key_moves_the_rollup(monkeypatch):
     assert with_key < without, (with_key, without)
     # ★그래도 0 이 되지 않는다★ — 기본 필드와 소스 없는 팩터가 남는다.
     assert with_key > 0
+
+
+# ── ★AY — 등급 경로를 하나로 합쳤는데 값은 그대로★ ──────────────────────
+
+def test_the_alpha_price_grades_are_unchanged(monkeypatch):
+    """변이 k — ★동작 보존이 이 통합의 계약이다★
+
+    AV 때는 카테고리 표가, AY 부터는 `origin` 이 답한다. ★기계는 바뀌고
+    답은 그대로여야 한다★ — 아니면 그것은 통합이 아니라 변경이다.
+    """
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    price = [s for s in collect_signals().signals
+             if s.kind == "alpha_expr" and s.category == "price"]
+    assert len(price) >= 10, len(price)
+    assert all(s.evidence_grade == PROV_E0 for s in price)
+    assert all(s.origin == "ohlcv_loader" for s in price)
+
+
+def test_the_alpha_fund_group_stays_ungraded_with_the_registry_reason(
+        monkeypatch):
+    """변이 g·l — ★7개는 여전히 미상이고, 사유가 레지스트리에서 온다★"""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    from src.domain.signal_supply import UNSUPPLIED_BY_KEY
+
+    entry = UNSUPPLIED_BY_KEY["alpha_expr.fund"]
+    fund = [s for s in collect_signals().signals
+            if s.kind == "alpha_expr" and s.category == "fund"]
+    assert len(fund) >= 7, len(fund)
+    assert all(s.evidence_grade is None for s in fund)
+    assert all(entry.reason in (s.evidence_grade_reason or "") for s in fund)
+
+
+def test_the_revision_axis_is_filled_only_where_it_was_measured(monkeypatch):
+    """★안 잰 것을 주장하지 않는다★ — 변이 i.
+
+    `fund` 는 `revised`(정정이 원본을 덮는 표). `price` 는 ★비어 있다★ —
+    수정주가 소급 변경 여부를 이 프로그램은 재지 않았다.
+    """
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    alpha = [s for s in collect_signals().signals if s.kind == "alpha_expr"]
+    fund = [s for s in alpha if s.category == "fund"]
+    price = [s for s in alpha if s.category == "price"]
+    assert fund and price
+    assert all(s.revision_policy == "revised" for s in fund)
+    assert all(s.revision_policy is None for s in price)
+
+
+def test_the_rollup_did_not_move(monkeypatch):
+    """★이 프로그램은 미상을 줄이지 않는다★ — 그것이 산출물이 아니다."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    from src.domain.signal_evidence import grade_catalog
+    ev = grade_catalog(collect_signals())
+    assert ev["n_ungraded"] > 0
+    assert ev["complete"] is False
+    # ★짝★ — 그렇다고 아무것도 안 붙은 것도 아니다.
+    assert ev["n_graded"] > 150

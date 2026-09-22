@@ -108,13 +108,21 @@ def test_the_same_token_is_not_synthetic_outside_the_mock_gate(monkeypatch):
 
 
 def test_an_alpha_price_field_follows_the_same_path(monkeypatch):
+    """★AY 이후 — 등급은 카테고리가 아니라 `origin` 에서 나온다★
+
+    AV 때는 `KNOWN_BACKING[(alpha_expr, "price")]` 라는 카테고리 표가
+    답했다. AY 가 그 표를 지우고 출처로 통일했다 — ★등급 **값**은 그대로다★.
+    """
     monkeypatch.setenv("KIS_USE_MOCK", "1")
-    assert signal_grade(_sig(KIND_ALPHA_EXPR, category="price"))["grade"] == PROV_E0
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="price",
+                            origin="ohlcv_loader"))
+    assert out["grade"] == PROV_E0
 
 
 def test_a_real_mode_price_signal_is_provider_derived(monkeypatch):
     monkeypatch.setenv("KIS_USE_MOCK", "0")
-    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="price"))
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="price",
+                            origin="ohlcv_loader"))
     assert out["grade"] == PROV_E2
 
 
@@ -407,7 +415,8 @@ def test_the_rollup_counts_by_grade(monkeypatch):
     monkeypatch.setenv("KIS_USE_MOCK", "1")
     out = grade_catalog(_catalog(
         _sig(KIND_STRATEGY_TOKEN, signal_id="t1", category="token"),
-        _sig(KIND_ALPHA_EXPR, signal_id="a1", category="price"),
+        _sig(KIND_ALPHA_EXPR, signal_id="a1", category="price",
+             origin="ohlcv_loader"),
     ))
     assert out["by_grade"][PROV_E0] == 2
 
@@ -455,3 +464,53 @@ def test_the_module_imports_no_database_or_network():
             imported.add(node.module.split(".")[0])
     for banned in ("requests", "sqlalchemy", "httpx", "urllib"):
         assert banned not in imported, banned
+
+
+# ── ★AY — 두 기계를 하나로, 등급 값은 보존★ ─────────────────────────────
+
+def test_an_alpha_price_field_is_graded_by_its_origin(monkeypatch):
+    """★`KNOWN_BACKING` 카테고리 표가 아니라 `origin` 이 답한다★(AY)."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="price",
+                            origin="ohlcv_loader"))
+    assert out["grade"] == PROV_E0
+    assert "ohlcv_loader" in (out["basis"] or "")
+
+
+def test_the_alpha_category_table_no_longer_answers(monkeypatch):
+    """변이 j — ★같은 질문에 두 기계가 답하지 않는다★
+
+    `origin` 없이 카테고리만 `price` 인 신호는 이제 **미상**이다. 등급은
+    출처에서 나오지 카테고리 이름에서 나오지 않는다.
+    """
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="price", origin=None))
+    assert out["grade"] is None
+    assert out["reason"]
+
+
+def test_an_alpha_fund_field_is_unsupplied_with_a_precise_reason(monkeypatch):
+    """변이 g — ★"모릅니다" 로 되돌아가면 죽는다★
+
+    저장소는 다섯 가지를 안다. 그중 **출처 축에 속하는 것**을 말한다.
+    """
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="fund", origin=None))
+    assert out["grade"] is None
+    assert "financials_history" in out["reason"]
+    assert "뒷받침을 이 규칙이 모릅니다" not in out["reason"]
+
+
+def test_the_fund_reason_does_not_mix_in_the_revision_axis(monkeypatch):
+    """변이 h — ★출처 축 ⟂ 개정 축★ 정정 사실은 `revision_policy` 가 말한다."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="fund", origin=None))
+    for word in ("정정", "revised", "빈티지"):
+        assert word not in out["reason"], word
+
+
+def test_the_fund_reason_does_not_call_the_table_an_origin(monkeypatch):
+    """변이 d — ★모듈 이름과 테이블 이름은 다른 종류다★"""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_ALPHA_EXPR, category="fund", origin=None))
+    assert out["basis"] is None
