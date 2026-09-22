@@ -217,6 +217,8 @@ _PLAINTEXT_MODULES = (
     "src/domain/breaker_change_gate.py",
     # AV — 신호 출처 등급의 사유·note 가 `GET /signals` 응답으로 나간다.
     "src/domain/signal_evidence.py",
+    # AX — §6.1 "소스 없음" 사유·설명이 타이밍 팩터 카탈로그 응답으로 나간다.
+    "src/engine/timing_factor_meta.py",
 )
 
 

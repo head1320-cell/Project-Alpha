@@ -30,7 +30,7 @@
 | `strategy_token` | 8 | ✔ `BASE_TOKENS` 가 전부 가격·거래량이다 |
 | `alpha_expr` | 17 | ✔ 카테고리가 `price`/`fund` 로 갈려 있다 |
 | `screener_field` | 157 | ✘ ★`filter_ast` 병합이 `FactorMeta.source` 를 버린다★ |
-| `timing_rule` | 33 | ✘ 개정 정책은 아는데 **출처**는 모른다 |
+| `timing_rule` | 33 | ✔ 24 `etf_prices` · ✘ 5 키 없음 · ✘ 4 소스 없음 (AX) |
 
 ★157개(73%)가 미상이고, 그 사유가 구체적인 결함을 가리킨다★ — 그 목록이 이
 프로그램의 산출물이다. 미상을 `E0`(합성)으로 접지 않는다: 미상과 합성은 다른
@@ -169,12 +169,133 @@ def test_a_base_field_is_unknown_because_nothing_declares_its_source():
     assert out["reason"]
 
 
-def test_a_timing_rule_is_unknown_even_though_it_knows_its_revision_policy():
-    """★개정 정책 ⟂ 출처★ — 두 축을 섞지 않는다."""
+def test_a_timing_rule_without_an_origin_is_unknown():
+    """★AX 이후 — 출처를 안 싣는 것만 미상으로 남는다★
+
+    AX 이전에는 33개 **전부**가 미상이었고 사유가 *"개정 정책은 아는데 출처는
+    안 실어 나른다"* 였다. 이제 24개가 `etf_prices` 를 싣는다. 남는 것은
+    ★평가 함수가 아예 없는 §6.1 묶음 4개★다.
+    """
     out = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
-                            revision_policy="revised"))
+                            revision_policy="revised", origin=None))
     assert out["grade"] is None
     assert out["reason"]
+
+
+def test_the_revision_axis_still_does_not_decide_the_origin():
+    """★개정 정책 ⟂ 출처★ — 두 축은 여전히 갈려 있다(짝).
+
+    같은 `origin` 에 `revision_policy` 만 달리해도 판정이 움직이지 않는다.
+    """
+    a = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                          origin="etf_prices", revision_policy="revised"))
+    b = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                          origin="etf_prices", revision_policy="not_revised"))
+    assert a["grade"] == b["grade"]
+    assert a["reason"] == b["reason"]
+
+
+# ── ★AX — 두 로더가 다른 것에 지배된다★ ─────────────────────────────────
+
+def test_a_price_timing_factor_is_graded_by_the_mock_gate(monkeypatch):
+    """`etf_prices` 는 `load_ohlcv_unified` 를 재사용한다 — 게이트가 지배한다."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_TIMING_RULE, category="momentum",
+                            origin="etf_prices"))
+    assert out["grade"] == PROV_E0
+    assert out["basis"]
+
+
+def test_the_same_price_timing_factor_is_not_synthetic_outside_the_gate(
+        monkeypatch):
+    """★짝★ — 게이트가 실제로 판정을 움직인다."""
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    out = signal_grade(_sig(KIND_TIMING_RULE, category="momentum",
+                            origin="etf_prices"))
+    assert out["grade"] == PROV_E2
+
+
+def test_a_macro_factor_is_unknown_without_the_fred_key(monkeypatch):
+    """변이 e — ★키가 없으면 아무 값도 안 나온다. 등급을 붙이면 거짓이다★"""
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                            origin="pit_macro"))
+    assert out["grade"] is None
+    assert "FRED_API_KEY" in out["reason"]
+
+
+def test_a_macro_factor_is_graded_with_the_fred_key(monkeypatch):
+    """변이 m ★짝★ — 항상-거부가 아니다. 환경이 판정을 움직인다."""
+    monkeypatch.setenv("FRED_API_KEY", "x" * 8)
+    out = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                            origin="pit_macro"))
+    assert out["grade"] == PROV_E2
+    assert out["basis"]
+
+
+def test_the_mock_gate_does_not_move_the_macro_verdict(monkeypatch):
+    """변이 d — ★mock 게이트는 FRED 경로를 지배하지 않는다★
+
+    AW 에서 `BACKING_PRICE` 를 재사용했다가 재무 필드에 *"가격이 mock 에서
+    옵니다"* 라는 거짓을 붙인 적이 있다. 같은 실수를 여기서 반복하면 죽는다.
+    """
+    monkeypatch.setenv("FRED_API_KEY", "x" * 8)
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    opened = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                               origin="pit_macro"))
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    closed = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                               origin="pit_macro"))
+    assert opened["grade"] == closed["grade"]
+    assert opened["reason"] == closed["reason"]
+
+
+def test_a_macro_reason_never_claims_the_mock_gate_decided_it(monkeypatch):
+    """변이 d 의 문장 쪽 — ★등급이 맞아도 사유가 틀리면 거짓이다★"""
+    monkeypatch.setenv("FRED_API_KEY", "x" * 8)
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    out = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                            origin="pit_macro"))
+    assert "지어낸 것입니다" not in out["reason"]
+    assert "MockKISClient" not in out["reason"]
+
+
+def test_a_macro_factor_is_never_raised_to_the_vintage_grade(monkeypatch):
+    """★빈티지 리더를 지나는 것 ≠ 빈티지가 고정됐음을 확인한 것★
+
+    `E4`(시점 고정)는 강한 주장이고 순수 규칙은 그것을 확인할 수 없다.
+    """
+    monkeypatch.setenv("FRED_API_KEY", "x" * 8)
+    out = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                            origin="pit_macro"))
+    assert out["grade"] != "E4"
+
+
+def test_the_stale_timing_reason_is_gone(monkeypatch):
+    """변이 l — ★거짓이 된 문장이 남아 있으면 죽는다★
+
+    AV 가 적은 *"무엇에서 계산되는지는 실어 나르지 않습니다"* 는 이제
+    24개에 대해 거짓이다.
+
+    ★처음 쓴 이 테스트는 등급이 **붙는** 팩터를 겨눴고, 그래서 변이가
+    살아남았다★ — 낡은 문구는 **미상 경로**에서만 나온다. 미상으로 남는
+    두 묶음 **전부**를 본다.
+    """
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    reasons = [
+        signal_grade(_sig(KIND_TIMING_RULE, category="regime", origin=None)),
+        signal_grade(_sig(KIND_TIMING_RULE, category="regime",
+                          origin="pit_macro")),
+        signal_grade(_sig(KIND_TIMING_RULE, category="momentum",
+                          origin="etf_prices")),
+    ]
+    for out in reasons:
+        assert "실어 나르지 않습니다" not in (out["reason"] or ""), out["reason"]
+    # ★공허 방지★ — 실제로 미상이 섞여 있어야 이 검사가 의미를 갖는다.
+    assert any(o["grade"] is None for o in reasons)
+    assert any(o["grade"] is not None for o in reasons)
 
 
 def test_an_unknown_grade_is_never_folded_into_synthetic():

@@ -99,6 +99,10 @@ def _timing_rules() -> list[SignalDefinition]:
                 revision_policy=item.get("revision_policy"),
                 availability=item.get("availability"),
                 unavailable_reason=item.get("unavailable_reason"),
+                # ★AX 가 되살린 칸★ — 어느 로더에서 오는지는 카탈로그가
+                #   선언하고 AST 대조가 지킨다. `provenance` 는 다른 축이라
+                #   싣지 않는다(스크리너 카탈로그 API 로 이미 나간다).
+                origin=item.get("origin"),
             ))
     return out
 

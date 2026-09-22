@@ -32,7 +32,7 @@ AST 테스트가 지킨다.
     strategy_token    8개   ✔ BASE_TOKENS 가 전부 가격·거래량이다
     alpha_expr       17개   ✔ 카테고리가 price/fund 로 갈려 있다
     screener_field  157개   ✘ filter_ast 병합이 FactorMeta.source 를 버린다
-    timing_rule      33개   ✘ 개정 정책은 아는데 출처는 모른다
+    timing_rule      33개   ✔ 24개 etf_prices · ✘ 5개 키 없음 · ✘ 4개 소스 없음(AX)
 
 ★157개(73%)가 미상이고 그 사유가 구체적인 결함을 가리킨다★ — 그 목록이 이
 모듈의 산출물이다. 다섯 어댑터는 고치지 않았다: ★모르는 것을 알게 만들지
@@ -88,6 +88,12 @@ BACKING_PRICE = "price"
 #: 뭉뚱그리면 재무 필드에 "가격이 mock 에서 온다" 는 거짓 사유가 붙는다.
 BACKING_STORE = "store"
 
+#: ★기관 시계열(FRED/ALFRED/ECOS) 빈티지 리더★(AX) — mock 게이트가 이 경로를
+#: 지배하지 않는다. `FRED_API_KEY` 가 가른다. 스토어 쪽과 뭉치면 *"mock 게이트가
+#: 열려 있어 합성입니다"* 라는 거짓 사유가 붙는다 — AW 에서 가격으로 뭉쳤다가
+#: 만든 거짓과 같은 모양이다.
+BACKING_VINTAGE = "vintage"
+
 #: 종류·카테고리 → 뒷받침. ★여기 없는 것은 미상이다★(낙관적으로 분류하지
 #: 않는다). 키는 `(kind, category)` 이고 카테고리가 `None` 이면 종류만 본다.
 KNOWN_BACKING: dict[tuple[str, str | None], str] = {
@@ -127,8 +133,10 @@ _REASON_PROVIDER = (
 
 #: ★AW 가 되살린 출처를 등급으로 옮기는 표★ — 선언된 출처가 있는 스토어만
 #: 여기 있다. `base_fields_store` 는 ★어디서 오는지 확인한 적이 없어★ 없다.
+#: `etf_prices`(AX)는 `load_ohlcv_unified(DB→KIS→mock)` 를 **재사용**하므로
+#: 스토어와 똑같이 mock 게이트가 지배한다 — 사유 문구가 그대로 참이다.
 BACKED_ORIGINS = ("fundamentals_store", "price_factors_store",
-                  "extended_factors_store")
+                  "extended_factors_store", "etf_prices")
 
 _REASON_BASE_FIELD = (
     "이 필드는 base_fields_store 로 옮겨졌지만 ★선언된 출처가 없습니다★ — "
@@ -139,9 +147,37 @@ _REASON_NO_ORIGIN = (
     "이 신호는 어느 스토어에서 왔는지를 실어 나르지 않습니다 — 출처를 물을 "
     "자리가 없습니다.")
 
-_REASON_TIMING = (
-    "이 신호는 개정 정책(revision_policy)은 아는데 ★무엇에서 계산되는지는 "
-    "실어 나르지 않습니다★ — 개정 정책과 출처는 다른 축입니다.")
+#: ★AX — mock 게이트가 지배하지 않는 출처★. 여기 있는 것은 `FRED_API_KEY`
+#: 유무로 가른다(환경변수 관측이지 네트워크 호출이 아니다 — `mock_allowed()`
+#: 를 읽는 것과 같은 종류다).
+VINTAGE_ORIGINS = ("pit_macro",)
+
+#: 이름을 한 곳에만 둔다 — 사유 문구가 이 상수를 그대로 담아야 하므로.
+FRED_KEY_ENV = "FRED_API_KEY"
+
+_BASIS_VINTAGE = (
+    "이 팩터는 {origin} 의 기관 시계열 빈티지 리더를 지납니다 — 어느 리더를 "
+    "부르는지는 카탈로그가 선언하고 AST 대조가 지킵니다.")
+
+_REASON_VINTAGE_NO_KEY = (
+    f"{FRED_KEY_ENV} 가 없어 이 경로는 아무 값도 내지 않습니다 — pit_macro 는 "
+    "빈 결과를 돌려주고 0 으로 대체하지 않습니다. ★mock 게이트는 이 경로를 "
+    "지배하지 않으므로 합성으로 접지도 않습니다★ — 미상은 아무 주장도 아닙니다.")
+
+_REASON_VINTAGE_KEYED = (
+    f"{FRED_KEY_ENV} 가 있어 이 팩터가 기관 시계열에서 파생됩니다. "
+    "★E4(시점 고정)로 올리지 않습니다★ — 빈티지 리더를 지나는 것과 빈티지가 "
+    "실제로 고정됐음을 확인한 것은 다르고, 순수 규칙은 후자를 모릅니다. "
+    "실제로 응답·적재됐는지도 여기서 확인하지 않습니다.")
+
+_REASON_TIMING_NO_SOURCE = (
+    "이 타이밍 팩터는 평가 함수 자체가 없습니다(스펙 §6.1 '소스 없음') — "
+    "카탈로그가 스스로 unavailable 이라고 광고하고 그 사유를 답니다. "
+    "출처를 적는 것이 곧 지어내기입니다.")
+
+#: ★AX 가 이 문장을 거짓으로 만들었다★ — 24개가 이제 `etf_prices` 를 싣는다.
+#: 남는 미상은 평가 함수가 없는 §6.1 묶음이고, 사유가 그것을 말한다.
+_REASON_TIMING = _REASON_TIMING_NO_SOURCE
 
 _REASON_UNMAPPED = (
     "이 종류·카테고리의 뒷받침을 이 규칙이 모릅니다 — 새 어댑터나 새 그룹이 "
@@ -170,6 +206,17 @@ def _backing(kind: Any, category: Any) -> tuple[str | None, str | None]:
     if key in KNOWN_BACKING:
         return KNOWN_BACKING[key], _BASIS_ALPHA_PRICE
     return None, None
+
+
+def _fred_key_present() -> bool:
+    """★호출 시점에 환경을 읽는다★ — `_mock_open()` 과 같은 종류의 관측이다.
+
+    네트워크를 건드리지 않는다. *"키가 있다"* 는 *"읽혔다"* 가 아니고, 그
+    한계를 사유가 적는다.
+    """
+    import os
+
+    return bool(os.getenv(FRED_KEY_ENV, "").strip())
 
 
 def _unknown_reason(kind: Any, origin: Any = None) -> str:
@@ -202,12 +249,37 @@ def signal_grade(signal: Any) -> dict[str, Any]:
     if backing is None and origin in BACKED_ORIGINS:
         backing, basis = BACKING_STORE, _BASIS_ORIGIN.format(origin=origin)
 
-    if backing not in (BACKING_PRICE, BACKING_STORE):
+    # ★AX — 기관 시계열은 다른 것에 지배된다★ mock 게이트가 아니라 키다.
+    #   키가 없으면 이 경로는 아무 값도 내지 않으므로 ★미상★이고, 합성으로
+    #   접지 않는다(`E0` 은 "합성이라고 안다" 는 주장이다).
+    if backing is None and origin in VINTAGE_ORIGINS:
+        if not _fred_key_present():
+            return {
+                "signal_id": getattr(signal, "signal_id", None),
+                "grade": None,
+                "reason": _REASON_VINTAGE_NO_KEY,
+                "basis": None,
+                "note": _NOTE,
+            }
+        backing, basis = BACKING_VINTAGE, _BASIS_VINTAGE.format(origin=origin)
+
+    if backing not in (BACKING_PRICE, BACKING_STORE, BACKING_VINTAGE):
         return {
             "signal_id": getattr(signal, "signal_id", None),
             "grade": None,
             "reason": _unknown_reason(kind, origin),
             "basis": None,
+            "note": _NOTE,
+        }
+
+    # ★빈티지 경로는 mock 게이트를 읽지 않는다★ — 읽으면 거짓 사유가 붙는다.
+    if backing == BACKING_VINTAGE:
+        return {
+            "signal_id": getattr(signal, "signal_id", None),
+            # ★E4(시점 고정)로 올리지 않는다★ — 사유가 그 이유를 적는다.
+            "grade": PROV_E2,
+            "reason": _REASON_VINTAGE_KEYED,
+            "basis": basis,
             "note": _NOTE,
         }
 
