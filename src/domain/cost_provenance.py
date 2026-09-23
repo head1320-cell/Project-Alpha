@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from dataclasses import dataclass
 from typing import Any
 
 #: ★실측이 착지할 자리★ — 비어 있는 것이 정직한 현재 상태다(AS 선례).
@@ -61,8 +62,13 @@ RATE_REQUEST = "request"
 RATE_DOOR_DEFAULT = "door_default"
 #: ★문이 안 실어 보냈다 — 거짓이 아니라 미상이다★
 RATE_UNKNOWN = "unknown"
+#: ★문에 이 요율 칸이 **없다**★(BA) — 요청자가 줄 방법이 없었으므로
+#: `door_default`(*"요청이 안 실어서"*)라고 부르면 사유가 거짓이 된다.
+#: 실측: `ImportAndBacktestRequest` 는 두 칸 다 없고 `OptimizeRequest` 는
+#: `slippage_rate` 만 없다 — ★한 요청 안에서도 성분마다 다르다★.
+RATE_NO_FIELD = "door_has_no_field"
 
-RATE_ORIGINS = (RATE_REQUEST, RATE_DOOR_DEFAULT, RATE_UNKNOWN)
+RATE_ORIGINS = (RATE_REQUEST, RATE_DOOR_DEFAULT, RATE_NO_FIELD, RATE_UNKNOWN)
 
 # ── 축 ② 근거 — 그 요율을 재본 적이 있나 (다른 축) ───────────────────────
 BASIS_NEVER_MEASURED = "never_measured"
@@ -90,6 +96,10 @@ _REASON_DOOR = (
     "요청이 이 요율을 안 실어서 문({door})의 기본값이 채웠습니다. "
     "★같은 백테스트를 다른 문으로 부르면 값이 달라집니다.★")
 
+_REASON_NO_FIELD = (
+    "문({door})에 이 요율 칸이 없습니다 — ★요청자가 줄 방법이 없고★ 호출부의 "
+    "함수 기본값이 채웁니다. 안 준 것과 줄 수 없는 것은 다릅니다.")
+
 _REASON_UNKNOWN = (
     "이 실행 경로는 요청이 요율을 명시했는지를 실어 나르지 않습니다 — "
     "요청이 준 값인지 문의 기본값인지 ★알 수 없습니다★. "
@@ -102,6 +112,128 @@ _BASIS_REASON_NEVER = (
 _BASIS_REASON_OBSERVED = (
     "{path} 에 이 성분의 관측이 있습니다. ★관측은 계약 요율이 아닙니다★ — "
     "체결에서 계산한 bp 는 우대·이벤트·최소수수료에 흔들립니다.")
+
+
+# ── ★못 잇는 자리 — 종류가 다르면 처방이 다르다★ (BA) ───────────────────
+#: `cost_model_registry.COST_SITES`(정적 축)의 열넷 중 런타임 출처를 **물을 수
+#: 없는** 자리들. ★"아직 안 한 일" 과 "영구적으로 맞는 답" 을 가른다.★
+UNWIRED_OTHER_ENGINE = "other_engine"
+UNWIRED_NO_REQUEST = "no_request"
+UNWIRED_DB_DEFAULT = "db_default"
+UNWIRED_CONFIG_LAYER = "config_layer"
+
+UNWIRED_KINDS = (UNWIRED_OTHER_ENGINE, UNWIRED_NO_REQUEST,
+                 UNWIRED_DB_DEFAULT, UNWIRED_CONFIG_LAYER)
+
+#: 런타임 출처를 **싣는** 자리(`cost_model` 블록을 내는 엔진에 닿는다).
+#: ★손으로 센 개수를 적지 않는다★ — 테스트가 레지스트리와 대조한다.
+WIRED_SITE_KEYS = ("screener_routes", "legacy_schemas")
+
+_PERMANENT = ("이 자리는 ★영구적으로 미상이 맞다★ — 승급 조건이 없다.")
+
+
+@dataclass(frozen=True)
+class UnwiredCostSite:
+    """런타임 출처를 물을 수 없는 자리. ★왜 못 묻는지가 종류마다 다르다★
+
+    `version_registry.MissingAxis`·`signal_supply.UnsuppliedSignal` 과 같은
+    모양이다. `promotes_when` 이 ★"언제 이을 수 있나" 또는 "영구적이다"★ 를
+    적는다 — 영구적인 것을 임시라고 적으면 갚을 수 없는 부채가 된다.
+    """
+
+    key: str            # `cost_model_registry.COST_SITES` 의 key
+    kind: str
+    reason: str
+    promotes_when: str
+    #: ★이 자리가 **영구적으로** 미상인가★ — "아직 안 한 일" 과 구조로
+    #: 가른다. 문자열을 읽어 판정하면 문구를 고칠 때마다 판정이 흔들린다
+    #: (어휘로 걸지 않는다 — 이 저장소가 반복해 확인한 규율이다).
+    permanent: bool = False
+
+
+UNWIRED_SITES: tuple[UnwiredCostSite, ...] = (
+    # ── 다른 엔진 — ★비용을 부과하면서 cost_model 블록을 안 낸다★ ─────
+    UnwiredCostSite(
+        key="stage11_routes", kind=UNWIRED_OTHER_ENGINE,
+        reason=("이 문은 multi_strategy_backtest 엔진을 부르고, 그 엔진은 "
+                "결과에 cost_model 블록을 내지 않습니다 — 출처를 실을 자리가 "
+                "없습니다(실측: cost_model 을 내는 엔진은 kis_backtest_engine "
+                "하나뿐입니다)."),
+        promotes_when=("그 엔진이 cost_model 블록을 내게 되면 이 문도 이을 수 "
+                       "있습니다. 그것은 결과 모양을 바꾸는 일이라 저장된 "
+                       "응답·프런트 계약을 먼저 재야 합니다.")),
+    UnwiredCostSite(
+        key="stage12_routes", kind=UNWIRED_OTHER_ENGINE,
+        reason=("이 문은 realism_engine 을 부르고, 그 엔진은 결과에 "
+                "cost_model 블록을 내지 않습니다 — 출처를 실을 자리가 "
+                "없습니다."),
+        promotes_when=("그 엔진이 cost_model 블록을 내게 되면 이을 수 "
+                       "있습니다. 별건입니다.")),
+    UnwiredCostSite(
+        key="graph_schema", kind=UNWIRED_OTHER_ENGINE,
+        reason=("이 문은 graph_runner 를 부르고, 그 러너는 결과에 cost_model "
+                "블록을 내지 않습니다(실측: cost 키가 0건입니다)."),
+        promotes_when=("graph_runner 가 cost_model 블록을 내게 되면 이을 수 "
+                       "있습니다. 별건입니다.")),
+    # ── 요청이 없다 — ★호출부가 값을 정하는 것이 설계다★ ───────────────
+    UnwiredCostSite(
+        key="kis_backtest_engine", kind=UNWIRED_NO_REQUEST,
+        reason=("dataclass 기본값입니다 — 요청이 없으므로 \"요청이 "
+                "명시했는가\" 라는 질문 자체가 성립하지 않습니다. 이 자리의 "
+                "런타임 출처는 이 자리를 부른 문이 답합니다."),
+        promotes_when=_PERMANENT, permanent=True),
+    UnwiredCostSite(
+        key="kis_backtest_engine_fn", kind=UNWIRED_NO_REQUEST,
+        reason=("함수 기본값입니다 — 요청이 없습니다. 문이 요율을 안 넘기면 "
+                "여기가 채우고, 그 사실은 문 쪽의 door_has_no_field 가 "
+                "말합니다."),
+        promotes_when=_PERMANENT, permanent=True),
+    UnwiredCostSite(
+        key="kis_portfolio_analyzer", kind=UNWIRED_NO_REQUEST,
+        reason=("함수 기본값입니다 — 요청이 없으므로 \"요청이 명시했는가\" 가 "
+                "성립하지 않습니다."),
+        promotes_when=_PERMANENT, permanent=True),
+    UnwiredCostSite(
+        key="graph_runner", kind=UNWIRED_NO_REQUEST,
+        reason=("함수 기본값입니다 — 요청이 없습니다. 이 러너는 cost_model "
+                "블록도 내지 않습니다."),
+        promotes_when=_PERMANENT, permanent=True),
+    UnwiredCostSite(
+        key="realism_engine", kind=UNWIRED_NO_REQUEST,
+        reason=("dataclass 기본값입니다 — 요청이 없으므로 \"요청이 "
+                "명시했는가\" 가 성립하지 않습니다."),
+        promotes_when=_PERMANENT, permanent=True),
+    UnwiredCostSite(
+        key="multi_strategy_backtest", kind=UNWIRED_NO_REQUEST,
+        reason=("dataclass 기본값입니다 — 요청이 없으므로 \"요청이 "
+                "명시했는가\" 가 성립하지 않습니다."),
+        promotes_when=_PERMANENT, permanent=True),
+    # ── DB 기본값 — ★저장 시점이라 축이 다르다★ ────────────────────────
+    UnwiredCostSite(
+        key="multibacktest_schema", kind=UNWIRED_DB_DEFAULT,
+        reason=("DDL 의 DEFAULT 입니다 — 요청이 아니라 ★저장 시점에 DB 가★ "
+                "채웁니다. 런타임 출처 질문(요청이 줬나)이 성립하지 "
+                "않습니다."),
+        promotes_when=("★축이 다르므로 승급이 아니라 별개 질문입니다★ — "
+                       "\"이 행의 값을 누가 썼나\" 는 감사 축이 답할 일입니다."),
+        permanent=True),
+    # ── 설정 계층 — ★이미 단일 출처다★ ─────────────────────────────────
+    UnwiredCostSite(
+        key="execution_plan", kind=UNWIRED_CONFIG_LAYER,
+        reason=("이 자리는 리터럴이 아니라 market_rules 설정 계층을 읽습니다 "
+                "(rate_source=\"market_rules\") — 한 곳에서 고쳐지므로 문마다 "
+                "갈리는 문제가 애초에 없습니다."),
+        promotes_when=("★해당 없습니다★ — 이미 단일 출처라 이을 대상이 "
+                       "아닙니다."),
+        permanent=True),
+    UnwiredCostSite(
+        key="market_rules", kind=UNWIRED_CONFIG_LAYER,
+        reason=("요율 **단일 출처 자체**입니다 — 문이 아니라 설정입니다."),
+        promotes_when=("★해당 없습니다★ — 이 자리가 곧 기준입니다."),
+        permanent=True),
+)
+
+UNWIRED_BY_KEY = {e.key: e for e in UNWIRED_SITES}
 
 
 def _load_doc() -> dict[str, Any]:
@@ -126,11 +258,21 @@ def load_rate_evidence() -> tuple[dict[str, Any], str]:
     return observed, floor
 
 
-def _origin(door: Any, explicit: Any, part: str) -> tuple[str, str]:
-    """(출처, 사유). ★안 이은 문은 미상이지 기본값이 아니다★"""
+def _origin(door: Any, explicit: Any, available: Any,
+            part: str) -> tuple[str, str]:
+    """(출처, 사유). ★세 가지가 다르다★
+
+    ⑴ 안 이은 경로 → 미상 ⑵ 문이 묻지 않는다 → 줄 방법이 없었다
+    ⑶ 문이 묻는데 안 줬다 → 문의 기본값. ★셋을 한 칸에 넣으면 처방이 섞인다.★
+    """
     if explicit is None or door is None:
         return RATE_UNKNOWN, _REASON_UNKNOWN
-    if _FIELD_BY_PART[part] in set(explicit):
+    field = _FIELD_BY_PART[part]
+    # ★`available` 이 `None` 이면 "문이 그 칸을 갖는지 모른다"★ — 예전
+    #   판정 그대로 둔다(AZ 가 이은 자리가 안 깨진다).
+    if available is not None and field not in set(available):
+        return RATE_NO_FIELD, _REASON_NO_FIELD.format(door=door)
+    if field in set(explicit):
         return RATE_REQUEST, _REASON_REQUEST
     return RATE_DOOR_DEFAULT, _REASON_DOOR.format(door=door)
 
@@ -145,6 +287,7 @@ def _basis(observed: dict[str, Any], floor: str, part: str) -> tuple[str, str]:
 
 
 def rate_provenance(*, door: Any = None, explicit: Any = None,
+                    available: Any = None,
                     policy: Any = None) -> dict[str, Any]:
     """이 실행의 요율이 **어디서 왔는가**.
 
@@ -153,6 +296,8 @@ def rate_provenance(*, door: Any = None, explicit: Any = None,
             ★`None` 이면 안 이은 경로이고 결과는 미상이다.★
         explicit: 요청이 **명시한** 필드 이름 집합(pydantic `model_fields_set`).
             `None` 이면 미상 — 빈 집합(*"아무것도 안 줬다"*)과 다르다.
+        available: 문이 **가진** 필드 이름 집합(pydantic `model_fields`).
+            ★`None` 이면 "문이 그 칸을 갖는지 모른다"★ 이고 예전 판정 그대로다.
         policy: `cost_model.CostPolicy`. 적용된 요율을 **읽기만** 한다.
 
     Returns:
@@ -161,7 +306,7 @@ def rate_provenance(*, door: Any = None, explicit: Any = None,
     observed, floor = load_rate_evidence()
     out: dict[str, Any] = {"note": _NOTE, "min_grade_to_unify": floor}
     for part in _FIELD_BY_PART:
-        origin, reason = _origin(door, explicit, part)
+        origin, reason = _origin(door, explicit, available, part)
         basis, basis_reason = _basis(observed, floor, part)
         out[part] = {
             "origin": origin,

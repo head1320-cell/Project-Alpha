@@ -18301,3 +18301,113 @@ bp 는 우대·이벤트·최소수수료에 흔들려서, 100번 본다고 계�
 - **증거 파일을 채우지 않았다.** ★비어 있는 것이 정직한 현재 상태다.★
 - **채점표를 올리지 않았다.** #6 은 여전히 **부분**이다 —
   ★라벨을 붙인 것이 값을 잰 것은 아니다.★
+
+---
+
+## BA. 남은 문을 잇는다 — ★문이 세 종류였고 "열셋" 은 틀린 숫자였다★ (2026-09-22, 축 ①)
+
+스펙 [`docs/superpowers/specs/2026-09-22-cost-door-wiring-design.md`](superpowers/specs/2026-09-22-cost-door-wiring-design.md) ·
+어휘·레지스트리 `src/domain/cost_provenance.py` · 문 `src/api/strategy_routes.py` ·
+검증 `tests/test_cost_door_wiring.py`
+
+### ★AZ 의 경고가 맞았고, 실측이 두 번 더 뒤집었다★
+
+AZ 는 *"남은 문 열셋"* 이라 적으면서 경고를 달았다: *"내부 호출부는 '요청이
+명시했는가' 가 성립하지 않을 수 있다 — ★그러면 `unknown` 이 영구적으로 맞는
+답이고 잇는 것이 오히려 거짓★."* 쟀고 맞았다.
+
+**실측 ① — "열셋" 은 틀린 숫자다.** 이을 수 있는 자리는 **둘**(`screener`·
+`legacy_schemas`)뿐이고 나머지 열둘은 ⑴ 다른 엔진 3 ⑵ 요청이 없는 자리 6
+⑶ DB DDL 기본값 1 ⑷ `market_rules` 계열 2 다.
+
+**실측 ② — ★`cost_model` 블록을 내는 엔진은 하나뿐이다★**(전수).
+`multi_strategy_backtest`·`realism_engine`·`graph_runner` 는 **수수료를
+부과하면서 블록을 아예 안 낸다**(`graph_runner` 는 `cost` 키 0건).
+`rate_provenance` 이전에 ★비용을 말할 표면 자체가 없다★ — BA 는 관측·등록만
+하고 별건으로 지정했다(결과 모양을 바꾸는 일이라 저장된 응답·프런트 계약을
+먼저 재야 한다).
+
+### ★실측 ③ — 문이 세 종류였다★
+
+| | `ImportAndBacktest` | `KISBacktest` | `Optimize` | `DSLBacktest` |
+|---|---|---|---|---|
+| `commission_rate` 칸 | ★없음★ | 있음 | 있음 | 있음 |
+| `slippage_rate` 칸 | ★없음★ | 있음 | ★없음★ | 있음 |
+
+★칸이 없으면 요청자가 줄 방법이 없다★ — 그것을 `door_default`(*"요청이
+안 실어서"*)라 부르면 **사유가 거짓**이다. AZ 가 `unknown ≠ door_default` 를
+가른 것과 ★정확히 같은 모양의 실수★이고 한 단계 더 안쪽에 있었다.
+
+그래서 `RATE_NO_FIELD` 를 만들고 `rate_provenance` 가 `available`(문이 **가진**
+칸)을 받는다. ★`available=None` 이면 예전 그대로★라 AZ 가 이은 자리가 안 깨진다.
+
+### 무엇을 했나
+
+- **BA1 세 번째 값** — `door_has_no_field` + `available` 축. 네 값이 ★네 개의
+  다른 사유★를 단다(처방이 다르면 다르게 말한다).
+- **BA2 네 자리를 이었다** — `strategy_routes` 의 네 자리가 전부
+  `kis_backtest_engine` 을 부른다(실측). ★문 이름을 라우트마다 다르게★ —
+  `legacy_schemas` 로 뭉치면 *"어느 문으로 불렀나"* 를 못 답한다.
+- **BA3 못 잇는 열둘을 종류별로 등록** — `UnwiredCostSite` 네 종류.
+  ★`permanent` 를 **칸으로** 뒀다★ — `no_request`·`db_default`·`config_layer`
+  는 *"아직 안 한 일"* 이 아니라 **영구적으로 맞는 답**이고, 임시라 적으면
+  갚을 수 없는 부채가 된다.
+
+### ★트립와이어 — 열넷을 손으로 세지 않는다★
+
+이은 `key` + 못 이은 `key` = `cost_model_registry.COST_SITES` 의 `key`
+**전부**. 정적 레지스트리에서 **읽어** 대조하므로 누가 자리를 하나 더하면
+여기가 red 가 된다. *"개수를 적으면 반드시 낡는다"*(CLAUDE.md)의 적용이다.
+
+### ★제 테스트가 또 어휘로 걸고 있었다★
+
+`permanent` 판정을 처음엔 `promotes_when` 문자열에서 *"영구"·"아니"* 를 찾는
+방식으로 썼고, ★*"해당 없습니다"* 라고 적은 `config_layer` 두 항목을 놓쳤다★.
+구조(`permanent` 칸)로 고쳤다. **AR 이 `msg1` 에서, AU 가 원문 grep 에서,
+AX 가 모듈 상수에서, AY 가 `ImportFrom.names` 에서 만난 것과 같은 종류**다 —
+이번엔 제 레지스트리 판정 쪽이었다.
+
+### ★변이 하나가 살아남았고, 제가 규율을 하나 어겼다★
+
+**변이 `d`(네 라우트가 같은 문 이름을 쓴다)가 통과했다** — ★문 이름이 서로
+달라야 한다는 것을 아무도 걸고 있지 않았다★. `door` 칸의 **존재 이유**가
+*"어느 문으로 불렀나"* 인데 그것을 안 지키고 있었다. AST 로 `_DOOR_*` 상수를
+읽어 전부 다른지 확인하는 테스트 둘을 더해 죽였다.
+
+★그리고 제가 이 세션 내내 적어 둔 규율을 어겼다★ — *"돌고 있는 동안 소스를
+고치지 않는다"*. 전체 스위트를 배경으로 돌리면서 **변이 배터리로 소스를
+고쳤고**, 스위트가 **SIGSEGV(139)** 로 죽었다. 결과를 버리고 아무것도 안
+건드린 채 다시 돌렸다. ★규율을 적는 것과 지키는 것은 다르다.★
+
+### ★같은 모양의 코드 두 자리를 칠 뻔했다★
+
+`max_positions=req.max_positions,\n        )` 가 **두 곳**에 있었다(라우트
+하나와 `dsl_backtest` 의 `BacktestConfig`). 치환 카운트가 2 라고 알려 줘서
+행 번호로 정확히 넣었고, ★둘 다 이어야 하는 자리였다★.
+
+### 검증 (실측)
+
+- `KIS_USE_MOCK=1 python3 -m pytest tests/ -q` — ★**6,710 통과 / 10 스킵 /
+  0 실패**(704초, 종료 코드 0)★. AZ 기준선 6,694 대비 **+16**.
+- 게이트 — `ruff` 통과 · `npx tsc --noEmit` 종료 코드 **0** ·
+  `npx next build` 종료 코드 **0**. ★파이프 없이 종료 코드로 쟀다★.
+- 변이 **a~m 열셋 전부 기대대로**(`d` 는 테스트 보강 후 · `m` 은 짝이라 통과).
+
+    문                                commission         slippage
+    strategies/import-and-backtest    door_has_no_field  door_has_no_field
+    strategies/backtest               door_default       door_default
+    strategies/optimize               door_default       ★door_has_no_field★
+    strategies/dsl/backtest           door_default       door_default
+
+★`optimize` 가 한 요청 안에서 성분마다 다르게 나온다★ — 한 값으로 접었다면
+둘 중 하나가 거짓이 됐다.
+
+### ★이 작업이 하지 않은 것★
+
+- **세 엔진에 `cost_model` 블록을 만들지 않았다.** 가장 큰 발견이지만 별건이다.
+- **기본값을 통일하지 않았다.** 재본 적이 없다.
+- **요율 값을 한 자리도 안 바꿨다.** 골든 상수가 지킨다.
+- **`cost_model_registry` 를 고치지 않았다.** 읽기만 했다.
+- **영구적인 것을 임시라고 적지 않았다.**
+- **열넷을 손으로 세지 않았다.**
+- **채점표를 올리지 않았다.** #6 은 여전히 **부분**이다.

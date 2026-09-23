@@ -588,6 +588,10 @@ class BacktestConfig:
     # 갈린다. ★둘 다 `None` 이면 미상이다★ — 기본값이라고 단정하지 않는다.
     cost_door: str | None = None
     cost_explicit_fields: frozenset[str] | None = None
+    #: 문이 **가진** 요율 칸(BA). ★`None` 이면 "문이 그 칸을 갖는지 모른다"★ 이고
+    #: 예전 판정 그대로다. 칸이 없는 문(실측: `ImportAndBacktestRequest`)에서
+    #: 안 준 것을 `door_default` 라 부르면 사유가 거짓이 된다.
+    cost_available_fields: frozenset[str] | None = None
     # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
     vectorize_signals: bool = True
     # 매수 우선순위식 (젠포트 매수 종목 선택 우선순위): 봉마다 후보들의 식 값으로
@@ -736,6 +740,7 @@ class BacktestEngine:
                 "rate_provenance": rate_provenance(
                     door=self.cfg.cost_door,
                     explicit=self.cfg.cost_explicit_fields,
+                    available=self.cfg.cost_available_fields,
                     policy=self._cost_policy),
                 "policy": policy_label(self._cost_policy),
                 # ★설정의 판본★ (AM5) 비용 설정이 다른 두 실행은 지금까지
@@ -2693,6 +2698,7 @@ def run_backtest(
     # ★관측 전용★(AZ) — 비용 계산에 쓰이지 않는다. 문만 아는 사실을 나른다.
     cost_door: str | None = None,
     cost_explicit_fields: frozenset[str] | None = None,
+    cost_available_fields: frozenset[str] | None = None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -2775,6 +2781,7 @@ def run_backtest(
         replenishment_pool=replenishment_pool,
         cost_door=cost_door,
         cost_explicit_fields=cost_explicit_fields,
+        cost_available_fields=cost_available_fields,
     )
     engine = BacktestEngine(cfg, progress_cb=progress_cb)
     return engine.run()
