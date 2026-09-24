@@ -111,7 +111,15 @@ def set_engine(engine):
 #: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
 DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
                    "price_basis", "execution_assumption", "estimator_leakage",
-                   "cost_model")
+                   "cost_model", "fill_rules")
+
+#: `fill_rules` 블록의 설명 (BC). ★옵트인이고 기본 꺼짐★ — 켜도 부분체결·
+#: 호가 잔량·시가 단일가는 모른다.
+_FILL_RULES_NOTE = (
+    "체결 규칙은 옵트인이고 기본 꺼짐입니다 — 켜면 전일 종가 대비 가격제한 밖의 "
+    "체결은 그날 일어나지 않고, 원주가 척도에서만 호가 단위로 보수적 반올림"
+    "(매수 올림·매도 내림)합니다. 부분체결·호가 잔량·단일가 매매는 모델링하지 "
+    "않습니다. 전일 종가를 모르면 위반으로 치지 않고 미상으로 셉니다.")
 
 # ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
 #: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
@@ -530,6 +538,11 @@ class BacktestConfig:
     charge_sell_tax: bool = False        # 매도 증권거래세+농특세 (기본 18bp)
     charge_spread: bool = False          # 호가 스프레드 프록시 (편도 절반)
     charge_market_impact: bool = False   # k·√참여율 — 참여율 미상이면 ★미상★
+    # ── BC: 체결 규칙 옵트인 둘 ★전부 기본 꺼짐★ ──────────────────────
+    # ★비용이 아니라 체결 가능성이다★(AK) — 그래서 `cost_model` 이 아니라
+    # `fill_rules` 진단 키가 말한다. 규칙은 `market_rules` 에서 읽는다(새 표 없음).
+    enforce_price_limit: bool = False    # 전일 종가 ±가격제한 밖 → 그날 미체결
+    round_fills_to_tick: bool = False    # 원주가 척도에서 매수 up·매도 down
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
     cash_reserve_pct: float = 0.0
     # 자산배분 ETF 바스켓 (젠포트 자산배분 옵션). None=미사용.
@@ -657,6 +670,9 @@ class BacktestEngine:
         # ★못 잰 거래를 센다★ — 0 으로 부과하면 "충격이 없었다" 는 관측이 된다.
         self._cost_unmeasured_trades = 0
         self._adv_cache: dict[str, dict] = {}
+        # ── BC: 체결 규칙 계수 — ★꺼져 있으면 전부 0 이고 가격도 불변★ ──
+        self._fill_counts = {"n_rejected_by_limit": 0, "n_limit_unknown": 0,
+                             "n_rounded": 0, "n_tick_not_raw": 0}
 
     def _adv_for(self, ticker: str, date_str: str) -> float | None:
         """후행 20봉 평균 거래대금(원). ★없으면 `None` — 0 이 아니다★ (AK4)
@@ -749,6 +765,75 @@ class BacktestEngine:
                 "version": policy_version(self._cost_policy),
                 "round_trip_bps": round_trip_bps(self._cost_policy)["round_trip_bps"],
                 "n_unmeasured_trades": self._cost_unmeasured_trades}
+
+    def _prev_close(self, ticker: str, date_str: str) -> float | None:
+        """그날 **이전** 마지막 종가. ★없으면 `None` — 0 이 아니다★"""
+        df = self.ohlcv_all.get(ticker)
+        if df is None or df.empty or "close" not in df:
+            return None
+        try:
+            prior = df.loc[df.index < pd.Timestamp(date_str), "close"].dropna()
+        except Exception:  # noqa: BLE001 — 판정 못 하면 미상이다
+            return None
+        if prior.empty:
+            return None
+        v = float(prior.iloc[-1])
+        return v if v > 0 else None
+
+    def _fill_price(self, ticker: str, price: float, date_str: str,
+                    side: str) -> float | None:
+        """체결 규칙을 적용한 가격. ★`None` 이면 그날 미체결★ (BC2)
+
+        둘 다 꺼져 있으면 **가격을 그대로** 돌려준다 — 기존 실행은 불변이다.
+
+        - 호가: ★원주가 척도에서만★ 매수 `up`·매도 `down`(보수적). 수정주가
+          척도에는 호가 단위가 실재하지 않으므로 반올림하지 않고 센다.
+        - 가격제한: ★반올림한 가격으로★ 전일 종가 ±`price_limit_pct` 를 본다.
+          밖이면 **클립하지 않고** 미체결 — 클립하면 실재하지 않는 체결이다.
+          전일 종가가 없거나 가격 정의가 섞였으면(`mixed`) ★미상 — 위반이
+          아니다★: 거부하지 않고 센다.
+        """
+        cfg = self.cfg
+        if not (cfg.enforce_price_limit or cfg.round_fills_to_tick):
+            return price
+        from src.data import market_rules as mr
+        basis = ((getattr(self, "_price_labels", None) or {}).get("basis") or {}).get(ticker)
+        if cfg.round_fills_to_tick:
+            if basis != "raw":
+                self._fill_counts["n_tick_not_raw"] += 1
+            else:
+                rounded = mr.round_to_tick(price, "up" if side == "buy" else "down")
+                if rounded != price:
+                    self._fill_counts["n_rounded"] += 1
+                price = rounded
+        if cfg.enforce_price_limit:
+            prev = None if basis == "mixed" else self._prev_close(ticker, date_str)
+            if prev is None:
+                self._fill_counts["n_limit_unknown"] += 1
+            else:
+                band = mr.price_limit_pct() / 100.0
+                if not (prev * (1 - band) - 1e-9 <= price <= prev * (1 + band) + 1e-9):
+                    self._fill_counts["n_rejected_by_limit"] += 1
+                    return None
+        return price
+
+    def _fill_rules_block(self) -> dict:
+        """이 실행이 **어떤 체결 규칙을 켰고 무엇이 일어났나**. (BC3)
+
+        ★`cost_model` 안에 두지 않는다★ — 비용이 아니라 체결 가능성이다.
+        """
+        from src.data import market_rules as mr
+        cfg = self.cfg
+        return {
+            "enforce_price_limit": bool(cfg.enforce_price_limit),
+            "round_fills_to_tick": bool(cfg.round_fills_to_tick),
+            # 꺼졌으면 요율을 싣지 않는다 — 안 쓴 값을 쓴 것처럼 보이게 하지 않는다.
+            "price_limit_pct": mr.price_limit_pct() if cfg.enforce_price_limit else None,
+            **self._fill_counts,
+            # ★덮지 않는 경로를 이름으로★ — 이 둘은 `_execute_buy` 를 안 탄다.
+            "not_covered": ["ladder_buy", "etf_sleeve"],
+            "note": _FILL_RULES_NOTE,
+        }
 
     def _emit(self, phase: str, done: int | None = None, total: int | None = None,
               extra: dict | None = None):
@@ -1810,6 +1895,9 @@ class BacktestEngine:
             if self.cfg.max_buy_amount is not None:
                 remaining = self.cfg.max_buy_amount - existing.avg_price * existing.quantity
                 add_alloc = min(add_alloc, max(0.0, remaining))
+            price = self._fill_price(ticker, price, date_str, "buy")
+            if price is None:
+                return  # ★그날 미체결★ (BC — 가격제한 밖)
             exec_price = price * (1 + self.cfg.slippage_rate)
             if add_alloc < exec_price:
                 return
@@ -1853,6 +1941,9 @@ class BacktestEngine:
         alloc = min(alloc, self._usable_cash() * 0.95)
         if self.cfg.max_buy_amount is not None:
             alloc = min(alloc, self.cfg.max_buy_amount)  # 종목당 최대 매수 금액
+        price = self._fill_price(ticker, price, date_str, "buy")
+        if price is None:
+            return  # ★그날 미체결★ (BC — 가격제한 밖)
         if alloc < price:
             return
 
@@ -1928,6 +2019,9 @@ class BacktestEngine:
             else:
                 full_exit = False
 
+        price = self._fill_price(ticker, price, date_str, "sell")
+        if price is None:
+            return  # ★그날 미체결★ (BC — 하한가 밖이면 팔 수 없다)
         exec_price = price * (1 - self.cfg.slippage_rate)
         value = sell_qty * exec_price
         cost = self._trade_cost(value, "sell", ticker, date_str)
@@ -2313,6 +2407,8 @@ class BacktestEngine:
             # 둘 다 0원인데 앞은 선택이고 뒤는 "비용이 실제보다 싸게 나왔다" 는
             # 경고다.
             "cost_model": self._cost_model_block(),
+            # ★비용이 아니라 체결 가능성★ (BC) — 기본 꺼짐이면 계수가 전부 0 이다.
+            "fill_rules": self._fill_rules_block(),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -2646,6 +2742,9 @@ def run_backtest(
     charge_sell_tax: bool = False,
     charge_spread: bool = False,
     charge_market_impact: bool = False,
+    # ★체결 규칙 옵트인 둘 — 기본 꺼짐★ (BC). `BacktestConfig` 와 같은 뜻.
+    enforce_price_limit: bool = False,
+    round_fills_to_tick: bool = False,
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
@@ -2731,6 +2830,8 @@ def run_backtest(
         charge_sell_tax=charge_sell_tax,
         charge_spread=charge_spread,
         charge_market_impact=charge_market_impact,
+        enforce_price_limit=enforce_price_limit,
+        round_fills_to_tick=round_fills_to_tick,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
         trailing_stop_pct=trailing_stop_pct,

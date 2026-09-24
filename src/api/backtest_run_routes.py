@@ -347,6 +347,10 @@ _TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
     # ★어떤 비용을 부과했고 몇 건을 못 쟀나★ (AK) — 행만 봐도 세금을 켜고 돈 런과
     # 충격을 못 잰 런을 셀 수 있어야 한다. `total_bps` 는 한 줄로 답하는 값이다.
     "cost_model": ("total_bps", "n_unmeasurable", "n_unmeasured_trades"),
+    # ★체결 규칙을 켜고 돈 런과 그것이 무엇을 막았나★ (BC) — 비용과 다른 축이다.
+    "fill_rules": ("enforce_price_limit", "round_fills_to_tick",
+                   "n_rejected_by_limit", "n_limit_unknown", "n_rounded",
+                   "n_tick_not_raw"),
 }
 
 

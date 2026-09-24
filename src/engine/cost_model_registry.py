@@ -232,12 +232,16 @@ UNAPPLIED_RULES: tuple[dict[str, str], ...] = (
     {"rule": "impact_coeff", "status": "opt_in",
      "reason": ("시장충격 `k·√참여율`. AK 에서 `charge_market_impact` 로 켤 수 "
                 "있게 됐고 기본은 꺼짐. ★참여율을 못 구하면 0 이 아니라 미상★.")},
-    {"rule": "tick_size / is_on_tick / round_to_tick", "status": "absent",
-     "reason": ("호가 단위는 **비용이 아니라 체결 가능성**이다 — 체결 모델 변경은 "
-                "별건이라 이 작업의 범위 밖이다. `execution_plan` 만 경고한다.")},
-    {"rule": "price_limit_pct", "status": "absent",
-     "reason": ("가격제한(±30%)은 그날 체결 가능 범위를 정한다 — 역시 체결 모델이다. "
-                "백테스트는 제한가를 넘는 체결을 막지 않는다.")},
+    {"rule": "tick_size / is_on_tick / round_to_tick", "status": "opt_in",
+     "reason": ("호가 단위는 **비용이 아니라 체결 가능성**이다. BC 에서 "
+                "`round_fills_to_tick` 로 켤 수 있게 됐고 기본은 꺼짐 — 켜면 "
+                "★원주가 척도에서만★ 매수 올림·매도 내림. 결과는 `cost_model` 이 "
+                "아니라 `fill_rules` 가 말한다.")},
+    {"rule": "price_limit_pct", "status": "opt_in",
+     "reason": ("가격제한(±30%)은 그날 체결 가능 범위를 정한다. BC 에서 "
+                "`enforce_price_limit` 로 켤 수 있게 됐고 기본은 꺼짐 — 켜면 제한 "
+                "밖 체결은 ★그날 미체결★, 전일 종가 미상은 위반이 아니라 미상으로 "
+                "센다.")},
     {"rule": "board_lot", "status": "absent",
      "reason": ("매매 단위. 현재 전부 1주라 실효가 없지만, ETF·우선주 예외가 "
                 "데이터 계층에 생기면 그때는 수량이 달라진다.")},

@@ -339,6 +339,25 @@ export interface ScreenToBacktestResult {
      */
     version: string;
   } | null;
+  /**
+   * ★체결 규칙 — 비용이 아니라 체결 가능성★ (BC)
+   *
+   * 옵트인이고 **기본 꺼짐**이다. 꺼져 있으면 계수가 전부 0 이고 가격은 그대로다.
+   * `n_limit_unknown` 은 전일 종가를 몰라 판정하지 못한 체결이다 — ★위반이
+   * 아니라 미상★. `n_tick_not_raw` 는 수정주가 척도라 호가 단위를 적용하지 않은
+   * 체결이다. `not_covered` 는 이 규칙을 타지 않는 경로(래더 매수·ETF 슬리브)다.
+   */
+  fill_rules?: {
+    enforce_price_limit: boolean;
+    round_fills_to_tick: boolean;
+    price_limit_pct: number | null;
+    n_rejected_by_limit: number;
+    n_limit_unknown: number;
+    n_rounded: number;
+    n_tick_not_raw: number;
+    not_covered: string[];
+    note: string;
+  } | null;
 }
 
 // 백테스트 고급 옵션 (수수료/슬리피지/손절/익절)
