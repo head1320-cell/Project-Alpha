@@ -77,12 +77,41 @@ def test_turning_it_on_produces_the_block(client):
 
 
 def test_the_block_carries_its_grade_and_labels(client):
-    """★결과에 등급을 적는다★ — forward_only · mock 여부 · 포화 수."""
+    """★결과에 등급을 적는다★ — forward_only · mock 여부 · 포화 수.
+
+    ★예전 단언 `saturated == applied`("E0 산물은 전부 포화한다")는 불변식이 아니라
+    그날의 관측이었다★ (BE, 2026-09-24). 가격 창이 `datetime.now()` 로 잡혀 mock
+    가격이 날마다 바뀌고, 그날 `|z|` 가 1 미만인 뷰가 하나 생기자 `2 == 3` 으로
+    깨졌다 — 코드는 한 줄도 안 바뀌었다. 참인 불변식은 *"블록이 포화한 뷰를
+    정직하게 센다"* 이다.
+    """
     blk = _analyze(client, use_company_views=True)["company_views"]
     assert blk["research_usage"] == "forward_only"
     assert blk["any_mock"] is True                      # KIS_USE_MOCK=1
-    assert blk["saturated"] == blk["applied"]           # E0 산물은 전부 포화한다
+    views = blk["views"]
+    assert views, "뷰가 없으면 아래 세기는 공허하다"
+    assert blk["saturated"] == sum(1 for v in views if abs(v["z"]) >= cv.Z_FULL)
+    assert blk["saturated"] == sum(1 for v in views if v["confidence_saturated"])
     assert blk["note"]
+
+
+def test_saturation_is_decided_by_z_not_assumed(monkeypatch):
+    """★짝★ — 포화는 `|z| ≥ Z_FULL` 로 **판정**된다. 상수로 가정하지 않는다.
+
+    같은 분포에서 가격만 바꿔 `z` 를 1 아래·위로 둔다 — 포화 여부가 따라 바뀐다.
+    """
+    dist = {"available": True, "corp_name": "테스트",
+            "unified": {"available": True, "p10": 90.0, "p50": 100.0, "p90": 110.0},
+            "base_assumptions": {"years": 3.0}}
+    from src.engine.valuation import valuation_distribution as vd
+    monkeypatch.setattr(vd, "valuation_distribution_for",
+                        lambda code, price, **kw: dict(dist))
+    out = {}
+    for price in (95.0, 80.0):      # z = (100-95)/10 = 0.5 · (100-80)/10 = 2.0
+        views, reasons = cv.company_views(["000001"], {"000001": price})
+        assert views, reasons
+        out[price] = views[0]["confidence_saturated"]
+    assert out == {95.0: False, 80.0: True}, out
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -177,17 +177,24 @@ def test_create_run_does_not_leave_an_orphan_row_when_dispatch_fails(monkeypatch
 # 콜백(커밋 ①)이 대부분을 잡지만 그것도 만능이 아니다: API 프로세스 자체가 죽거나
 # 배포로 교체되면 콜백도 함께 사라진다. 주기 스윕이 그 마지막 그물이다.
 
-def test_the_orphan_sweeper_runs_periodically_not_only_at_startup():
-    """★기동 1회면 서버를 재시작해야만 복구된다★"""
-    import inspect
+def test_the_orphan_sweeper_runs_periodically_not_only_at_startup(monkeypatch):
+    """★기동 1회면 서버를 재시작해야만 복구된다★
+
+    ★소스 문자열이 아니라 동작으로 건다★ (BE) — 예전에는 `threading.Thread(
+    target=_orphan_sweep_bg, ...)` 라는 **글자**를 찾았다. 데몬을 등록부
+    (`_start_daemon_once`)로 옮기자 동작은 그대로인데 이 테스트만 깨졌다.
+    기동 시퀀스가 **실제로** 그 루프를 넘기는지를 본다.
+    """
+    import asyncio
 
     from src.startup import lifecycle
-    src = inspect.getsource(lifecycle)
-    assert "_orphan_sweep_bg" in src, (
-        "주기 스윕 데몬이 없다 — 워커가 죽으면 재시작까지 복구되지 않는다")
-    # 기동 시퀀스가 실제로 그 데몬을 띄우는가 (선언만 하고 안 띄우면 장식이다)
-    assert "threading.Thread(target=_orphan_sweep_bg, daemon=True).start()" in src, (
-        "데몬을 정의만 하고 기동하지 않는다")
+    started: dict = {}
+    monkeypatch.setattr(lifecycle, "_start_daemon_once",
+                        lambda name, target: started.setdefault(name, target) and "started")
+    asyncio.run(lifecycle.run_startup())
+    assert started.get("orphan_sweep") is lifecycle._orphan_sweep_bg, (
+        "기동 시퀀스가 주기 스윕 데몬을 띄우지 않는다 — 워커가 죽으면 재시작까지 "
+        f"복구되지 않는다: {sorted(started)}")
 
 
 def test_the_sweeper_loop_actually_calls_sweep_orphaned(monkeypatch):

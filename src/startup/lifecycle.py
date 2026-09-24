@@ -6,10 +6,55 @@ DB 초기화 · 고아 백테스트 정리 · 스크리너 테이블 · KIS mast
 """
 
 import logging
+import os
+import threading
 
 from src.database import init_db
 
 logger = logging.getLogger("api.startup")
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★주기 데몬은 한 프로세스에 이름당 하나 — 그리고 명시적으로만 끈다★ (BE)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 예전에는 `run_startup` 이 부를 때마다 **끝나지 않는** 루프를 새 스레드로 띄웠다.
+# 운영(`uvicorn --workers 1`)에서는 기동이 한 번이라 드러나지 않았지만,
+# `with TestClient(create_app())` 를 쓰는 테스트 파일 15개만 돌려도 스윕·리스크
+# 데몬이 ★각각 218개★ 살아 있었다(실측 2026-09-24). 그것들이 모듈 전역 엔진을
+# 바꾼 테스트의 **단일 연결**을 다른 스레드에서 써서 SQLite 안에서 SIGSEGV 가
+# 났다(재현: 5/5, 대조군 0/3).
+
+#: 이 스위치가 **정확히** `"0"` 이면 주기 데몬을 띄우지 않는다(mock 게이트 규율).
+DAEMONS_ENV = "LIFECYCLE_DAEMONS"
+
+#: 이름 → 스레드. ★살아 있는 동안 같은 이름을 다시 띄우지 않는다★
+_DAEMONS: dict[str, threading.Thread] = {}
+_DAEMONS_LOCK = threading.Lock()
+
+
+def daemons_disabled() -> bool:
+    """`LIFECYCLE_DAEMONS` 가 정확히 `"0"` 인가. 그 밖의 값·미설정은 켜짐."""
+    return os.getenv(DAEMONS_ENV) == "0"
+
+
+def _start_daemon_once(name: str, target) -> str:
+    """주기 데몬을 **이름당 하나만** 띄운다. `started`·`already_running`·`disabled`.
+
+    ★끄면 로그로 말한다★ — 운영에서 누가 이 스위치를 켜 두면 고아 스윕·리스크
+    감시가 조용히 사라지는데, 그것은 CLAUDE.md 4절의 침묵 폴백이다.
+    """
+    if daemons_disabled():
+        logger.warning(f"주기 데몬 '{name}' 을 띄우지 않았습니다 — {DAEMONS_ENV}=0 "
+                       "(명시적으로 꺼짐). 이 프로세스에서는 이 감시가 돌지 않습니다.")
+        return "disabled"
+    with _DAEMONS_LOCK:
+        cur = _DAEMONS.get(name)
+        if cur is not None and cur.is_alive():
+            return "already_running"
+        t = threading.Thread(target=target, name=f"lifecycle:{name}", daemon=True)
+        _DAEMONS[name] = t
+        t.start()
+        return "started"
 
 async def _collect_master_bg(engine):
     """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
@@ -390,16 +435,14 @@ async def run_startup() -> None:
         import logging
         logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
     try:
-        import threading
-        threading.Thread(target=_orphan_sweep_bg, daemon=True).start()
+        _start_daemon_once("orphan_sweep", _orphan_sweep_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"고아 스윕 데몬 기동 실패: {e}")
 
     # 리스크 상시 감시 — ★관측만★(자동 발동은 RISK_MONITOR_AUTOTRIGGER=1 일 때만).
     try:
-        import threading
-        threading.Thread(target=_risk_monitor_bg, daemon=True).start()
+        _start_daemon_once("risk_monitor", _risk_monitor_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"리스크 감시 데몬 기동 실패: {e}")
@@ -521,8 +564,7 @@ async def run_startup() -> None:
     try:
         import os
         if os.getenv("DART_API_KEY") and os.getenv("DART_HISTORY_BACKFILL", "1") != "0":
-            import threading
-            threading.Thread(target=_dart_history_backfill_bg, daemon=True).start()
+            _start_daemon_once("dart_history_backfill", _dart_history_backfill_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"DART 재무 시계열 백필 시작 실패: {e}")
@@ -535,8 +577,7 @@ async def run_startup() -> None:
         from src.data.mock_gate import mock_allowed
         if (not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))
                 and os.getenv("FLOWS_SYNC", "1") != "0"):
-            import threading
-            threading.Thread(target=_kis_flows_sync_bg, daemon=True).start()
+            _start_daemon_once("kis_flows_sync", _kis_flows_sync_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"KIS 수급 적재 시작 실패: {e}")
