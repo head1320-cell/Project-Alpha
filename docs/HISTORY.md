@@ -18411,3 +18411,121 @@ AX 가 모듈 상수에서, AY 가 `ImportFrom.names` 에서 만난 것과 같�
 - **영구적인 것을 임시라고 적지 않았다.**
 - **열넷을 손으로 세지 않았다.**
 - **채점표를 올리지 않았다.** #6 은 여전히 **부분**이다.
+
+---
+
+## BB. 세 엔진이 비용을 말한다 — ★셋은 같은 모양이 아니었고, BA 의 사유 하나가 거짓이었다★ (2026-09-24, 축 ①)
+
+스펙 [`docs/superpowers/specs/2026-09-24-engine-cost-blocks-design.md`](superpowers/specs/2026-09-24-engine-cost-blocks-design.md) ·
+빌더 `src/domain/cost_model.py::policy_only_block` · 문 헬퍼
+`src/domain/cost_provenance.py::door_cost_block` · 문 `stage11_routes`·
+`stage12_routes`·`strategy_routes.graph_backtest` · 검증
+`tests/test_engine_cost_blocks.py`·`tests/test_cost_door_wiring.py`
+
+### ★정정 — BA 가 거짓 사유를 적었다★
+
+BA 는 `graph_schema` 문을 *"graph_runner 를 부른다"* 고 등록했다. 실제로는
+**`dag_runner`** 로 간다. `graph_runner` 는 `src/` 에서 import 하는 곳이
+**0건**이다(AST 로 쟀다). BA 는 `"cost_model"` 이 어디 있는지는 전수로 쟀지만
+★문이 **어느 엔진으로 가는지**는 이름에서 짐작했다★. 사유를 고치고, 그 진술을
+AST 테스트로 걸었다(대조군: 같은 탐지기가 `dag_runner` 의 호출자를 찾는다).
+
+### ★실측이 계획을 또 뒤집었다 — realism 은 충격을 부과한다★
+
+계획은 *"세 엔진에 세금·스프레드·충격이 없다 → `off`"* 였다. 재 보니
+`realism_engine` 은 **시장충격을 기본으로 부과**한다 — 다만 메인 엔진의
+`k·√참여율` 이 아니라 회전율 기반 모델이고, ADV 는 요청의 `avg_adv_krw`
+**가정값**, 변동성은 `0.018` **고정**이다. 셋을 한 모양으로 접었다면
+realism 의 충격이 *"없다"* 로 거짓말을 했다. 빌더가 엔진마다 **있는 성분**을
+받고, realism 의 충격에는 *"참여율을 잰 것이 아니라 가정"* 이라는 사유가 붙는다.
+
+그리고 `off` 대신 ★AK 가 정의만 하고 아무도 안 쓰던 `STATE_UNSUPPORTED`★ 를
+썼다. `off` 는 *"켤 수 있었는데 안 켰다"* 이고, 켤 문이 없는 성분에 그렇게
+적으면 사용자가 문을 찾아 헤맨다. 새 어휘를 만들지 않았다.
+
+### 무엇을 했나
+
+- **BB1 공용 빌더 한 벌** — `policy_only_block`. 메인 엔진 블록의 키를 **전부
+  같은 이름으로** 싣는다(테스트가 메인 엔진을 **실제로 읽어** 부분집합임을 건다
+  — 손으로 적은 목록이면 메인 엔진이 키를 더할 때 조용히 갈린다). 센 적 없는
+  것은 전부 `None`: `n_unmeasured_trades`·`n_unmeasurable`·`total_bps`·
+  `breakdown`. ★일부만 셌으면 `total_krw` 도 None★ — 센 것만 더하면 싼 합계다.
+  오타 성분명과 *"없는 성분의 금액"* 은 `ValueError` 로 거절한다.
+- **BB2 네 문에서 붙인다** — `multibacktest/run`·`multibacktest/counterfactual`·
+  `realism/backtest`·`backtest/graph`. ★엔진 내부 0줄★. ★돌지 않은 실행에는
+  안 붙인다★(*"부과했다"* 가 거짓이 된다). 테스트가 블록의 bp 를 ★엔진이
+  실제로 받은 config★ 와 대조한다.
+- **BB3 레지스트리** — 셋을 `WIRED_SITE_KEYS` 로 옮겼다. ★`other_engine` 이
+  비었고 BA 의 `test_the_kinds_are_actually_used` 가 그 제거를 **요구했다**★ —
+  트립와이어가 일했다. ★남은 못 이은 자리는 전부 `permanent`★ 이고 그것을
+  테스트로 건다 — *"아직 할 일 0개"* 는 강한 진술이다.
+
+### ★문 둘은 오늘 돌지 않는다 — 고치지 않았다★
+
+실물로 돌려 보니 `multibacktest/run`·`counterfactual`·`realism/backtest` 가
+**전부 500** 이었다: `multi_strategy_backtest.py:85` 가 import 하는
+`src.engine.allocator.MultiStrategyAllocator` 가 ★이 체크아웃에 없다★(얕은
+클론이 가진 이력에도 없다). 기존 테스트는 엔진을 가짜로 바꿔서 이것을 못 봤다
+— ★BB 의 테스트도 같다★. 그래서 **이 셋에서 블록은 오늘 한 번도 안 나온다**.
+
+★배분 결정 경로라 고치지 않았다★(CLAUDE.md §3 — 별도 승인). 별건 제안으로
+남겼다. `backtest/graph` 는 mock 데이터로 **실제로** 돌려 확인했다:
+
+    요청                    commission          총계(원)   블록 krw == 엔진 통계
+    요율 안 줌              door_default 15bp   4,269,813  ✔ 3,202,360
+    commission_rate 1.5bp   request      1.5bp  1,404,070  ✔   324,016
+
+### ★변이 하나가 살아남았고, 그 뒤에 거짓 기록이 둘 더 있었다★
+
+**변이 `h`(stage11 기본 수수료를 1.5bp → 15bp)가 살아남았다** — 문 기본값을
+아무도 대조하지 않았다. 정적 레지스트리(`cost_model_registry`)는 값을 **적어만**
+두고 실제 pydantic 기본값과 맞춰 보지 않았다. 골든 테스트(절대값)와 *"레지스트리가
+실제 기본값을 말한다"* 테스트를 더하자 ★두 개가 즉시 red★ 가 됐다 — AK 가 적은
+기록이 틀려 있었다:
+
+- `graph_schema` 는 `commission_bps=None`(*"슬리피지만 적는다, 수수료는 러너가
+  정한다"*)으로 적혀 있었는데 요청 모델은 ★수수료 15bp 를 기본으로 갖는다★.
+  레지스트리의 왕복 표가 이 문을 **10bp 로 낮춰** 보고하고 있었다(실제 40bp).
+- `stage12_routes` 는 수수료·슬리피지만 적혀 있었는데 ★문 기본값이 시장충격을
+  켠다★.
+
+둘 다 고쳤다(레지스트리 **기록**의 정정이지 요율 값은 한 자리도 안 바꿨다).
+BA 의 `graph_runner` 와 같은 종류다 — ★값을 적은 자리를 그 값의 출처와 대조하지
+않으면 기록이 조용히 거짓이 된다.★
+
+### ★스위트가 한 번 SIGSEGV 로 죽었다 — 이번엔 소스를 안 고쳤다★
+
+첫 전체 실행이 `test_backtest_run_recovery` 에서 **139** 로 죽었다(12%, 스택은
+`startup/lifecycle.py` 의 배경 스레드). 소스는 안 고쳤지만 ★같은 시각에 다른
+pytest 프로세스(호가 표 테스트)를 돌렸다★ — 공유 SQLite 파일 위의 경합이 가장
+그럴듯한 원인이다(**추론**, 재현하지 않았다). BA 의 139 도 같은 테스트 근처였을
+수 있다. ★규율을 넓힌다: 스위트가 도는 동안에는 소스뿐 아니라 **다른 pytest 도**
+돌리지 않는다.★ 아무것도 곁에 돌리지 않은 재실행은 끝까지 갔다.
+
+### ★이 작업과 무관한 실패 하나 — 날짜가 바꿨다★
+
+`test_company_view_wiring::test_the_block_carries_its_grade_and_labels` 가
+`saturated 2 == applied 3` 으로 실패한다. ★BB 를 stash 한 HEAD 에서도 똑같이
+실패한다★ — BA 의 실행(2026-09-22)에서는 통과했다. 분석 창이 **오늘 기준 1년**
+이라 mock 데이터가 날짜와 함께 움직인다. 고치지 않았다(배분 경로) — 별건 제안으로
+남겼다.
+
+### 검증 (실측)
+
+- `KIS_USE_MOCK=1 python3 -m pytest tests/ -q` — ★**6,757 통과 / 10 스킵 /
+  1 실패**(628초)★. 실패 하나는 위의 날짜 의존 테스트이고 ★BB 를 stash 한 HEAD
+  에서도 똑같이 실패한다★. BA 기준선 6,710 대비 **+47**.
+- 게이트 — `ruff` 통과 · `npx tsc --noEmit` 종료 코드 **0** · `npx next build`
+  종료 코드 **0**. 프런트는 0줄(키 추가는 기존 타입을 깨지 않는다).
+- 변이 **a~q 전부 기대대로**(`h` 는 골든 추가 후 · `o` 는 짝이라 생존 · `q` 는
+  레지스트리 정정을 되돌리는 변이).
+
+### ★이 작업이 하지 않은 것★
+
+- **엔진 내부를 고치지 않았다.** 블록은 문에서 붙였다.
+- **`graph_runner` 에 아무것도 만들지 않았다.** 호출자 0건이다.
+- **없는 allocator 를 만들지 않았다.** 배분 정책이다.
+- **요율 값·기본값을 바꾸지 않았다.** 골든 상수가 지킨다.
+- **realism 의 충격 모델을 고치지 않았다.** 가정이라고 **말할** 뿐이다.
+- **netting 절감 추정(`turnover × 1.5`)을 다루지 않았다.** 별개 질문이다.
+- **프런트·채점표를 건드리지 않았다.** #6 은 여전히 **부분**이다.

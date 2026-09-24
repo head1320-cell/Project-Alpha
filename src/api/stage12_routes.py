@@ -18,6 +18,34 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/v1/realism", tags=["realism"])
 
+#: 비용 요율의 런타임 출처를 말하는 문 이름 (BB) — ★문마다 달라야 한다★
+_DOOR_REALISM_BACKTEST = "realism/backtest"
+#: ★이 엔진은 시장충격을 **기본으로** 부과한다★ — 세금·스프레드만 없다.
+_SUPPORTED = ("commission", "slippage", "impact")
+#: 이 엔진의 충격은 메인 엔진의 `k·√참여율` 과 **다른 모델**이다(실측
+#: `realism_engine.py` 의 `turnover_based_impact(... avg_volatility=0.018 ...)`).
+_IMPACT_NOTE = ("이 엔진의 시장충격은 회전율 기반 모델(`turnover_based_impact`)"
+                "입니다 — ADV 는 요청의 `avg_adv_krw` ★가정값★이고 변동성은 "
+                "0.018 로 고정돼 있어 ★참여율을 잰 것이 아니라 가정한 것★ 입니다.")
+
+
+def _cost_block(req: BaseModel, out: dict) -> dict:
+    """★엔진에 넘긴 그 요율★로 `cost_model` 블록을 만든다. 엔진 내부는 불변."""
+    from src.domain.cost_provenance import door_cost_block
+    stats = out.get("realism_stats") or {}
+    impact = stats.get("total_market_impact_cost")
+    return door_cost_block(
+        commission_rate=req.commission_rate, slippage_rate=req.slippage_rate,
+        cost_door=_DOOR_REALISM_BACKTEST,
+        cost_explicit_fields=frozenset(req.model_fields_set),
+        cost_available_fields=frozenset(type(req).model_fields),
+        engine="realism_engine", supported=_SUPPORTED,
+        charge_impact=req.enable_market_impact,
+        notes={"impact": _IMPACT_NOTE},
+        # ★엔진이 실제로 센 것만★ — 수수료·슬리피지는 이 엔진이 따로 안 센다.
+        totals=({"impact": impact}
+                if req.enable_market_impact and impact is not None else None))
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Realistic Backtest 실행
@@ -67,7 +95,11 @@ def realism_backtest(req: RealismBacktestRequest):
 
         bt = RealisticBacktester(get_sync_engine())
         config = RealismConfig(**req.model_dump())
-        return bt.run(config)
+        out = bt.run(config)
+        # ★돌지 않은 실행에 "부과했다" 를 붙이지 않는다★
+        if isinstance(out, dict) and out.get("success"):
+            out["cost_model"] = _cost_block(req, out)
+        return out
     except Exception as e:
         raise HTTPException(500, str(e))
 

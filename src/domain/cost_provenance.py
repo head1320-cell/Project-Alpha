@@ -117,17 +117,19 @@ _BASIS_REASON_OBSERVED = (
 # ── ★못 잇는 자리 — 종류가 다르면 처방이 다르다★ (BA) ───────────────────
 #: `cost_model_registry.COST_SITES`(정적 축)의 열넷 중 런타임 출처를 **물을 수
 #: 없는** 자리들. ★"아직 안 한 일" 과 "영구적으로 맞는 답" 을 가른다.★
-UNWIRED_OTHER_ENGINE = "other_engine"
+#: ★BA 에 있던 `other_engine`(다른 엔진이라 블록이 없다)은 BB 가 세 엔진에
+#: 블록을 주면서 비었다 — 쓰는 곳 없는 어휘를 남기지 않으려고 뺐다.★
 UNWIRED_NO_REQUEST = "no_request"
 UNWIRED_DB_DEFAULT = "db_default"
 UNWIRED_CONFIG_LAYER = "config_layer"
 
-UNWIRED_KINDS = (UNWIRED_OTHER_ENGINE, UNWIRED_NO_REQUEST,
-                 UNWIRED_DB_DEFAULT, UNWIRED_CONFIG_LAYER)
+UNWIRED_KINDS = (UNWIRED_NO_REQUEST, UNWIRED_DB_DEFAULT, UNWIRED_CONFIG_LAYER)
 
 #: 런타임 출처를 **싣는** 자리(`cost_model` 블록을 내는 엔진에 닿는다).
 #: ★손으로 센 개수를 적지 않는다★ — 테스트가 레지스트리와 대조한다.
-WIRED_SITE_KEYS = ("screener_routes", "legacy_schemas")
+#: 뒤의 셋은 BB — 거래별로 재지 않는 엔진이라 `door_cost_block` 이 정책만 싣는다.
+WIRED_SITE_KEYS = ("screener_routes", "legacy_schemas",
+                   "stage11_routes", "stage12_routes", "graph_schema")
 
 _PERMANENT = ("이 자리는 ★영구적으로 미상이 맞다★ — 승급 조건이 없다.")
 
@@ -152,29 +154,6 @@ class UnwiredCostSite:
 
 
 UNWIRED_SITES: tuple[UnwiredCostSite, ...] = (
-    # ── 다른 엔진 — ★비용을 부과하면서 cost_model 블록을 안 낸다★ ─────
-    UnwiredCostSite(
-        key="stage11_routes", kind=UNWIRED_OTHER_ENGINE,
-        reason=("이 문은 multi_strategy_backtest 엔진을 부르고, 그 엔진은 "
-                "결과에 cost_model 블록을 내지 않습니다 — 출처를 실을 자리가 "
-                "없습니다(실측: cost_model 을 내는 엔진은 kis_backtest_engine "
-                "하나뿐입니다)."),
-        promotes_when=("그 엔진이 cost_model 블록을 내게 되면 이 문도 이을 수 "
-                       "있습니다. 그것은 결과 모양을 바꾸는 일이라 저장된 "
-                       "응답·프런트 계약을 먼저 재야 합니다.")),
-    UnwiredCostSite(
-        key="stage12_routes", kind=UNWIRED_OTHER_ENGINE,
-        reason=("이 문은 realism_engine 을 부르고, 그 엔진은 결과에 "
-                "cost_model 블록을 내지 않습니다 — 출처를 실을 자리가 "
-                "없습니다."),
-        promotes_when=("그 엔진이 cost_model 블록을 내게 되면 이을 수 "
-                       "있습니다. 별건입니다.")),
-    UnwiredCostSite(
-        key="graph_schema", kind=UNWIRED_OTHER_ENGINE,
-        reason=("이 문은 graph_runner 를 부르고, 그 러너는 결과에 cost_model "
-                "블록을 내지 않습니다(실측: cost 키가 0건입니다)."),
-        promotes_when=("graph_runner 가 cost_model 블록을 내게 되면 이을 수 "
-                       "있습니다. 별건입니다.")),
     # ── 요청이 없다 — ★호출부가 값을 정하는 것이 설계다★ ───────────────
     UnwiredCostSite(
         key="kis_backtest_engine", kind=UNWIRED_NO_REQUEST,
@@ -195,8 +174,10 @@ UNWIRED_SITES: tuple[UnwiredCostSite, ...] = (
         promotes_when=_PERMANENT, permanent=True),
     UnwiredCostSite(
         key="graph_runner", kind=UNWIRED_NO_REQUEST,
-        reason=("함수 기본값입니다 — 요청이 없습니다. 이 러너는 cost_model "
-                "블록도 내지 않습니다."),
+        reason=("함수 기본값입니다 — 요청이 없습니다. ★이 러너는 호출자가 "
+                "0건입니다★(BB 실측: src/ 에 import 하는 곳이 없다) — "
+                "graph 문은 dag_runner 로 갑니다. 쓸 곳이 없으므로 블록을 "
+                "만들지 않았습니다."),
         promotes_when=_PERMANENT, permanent=True),
     UnwiredCostSite(
         key="realism_engine", kind=UNWIRED_NO_REQUEST,
@@ -318,3 +299,27 @@ def rate_provenance(*, door: Any = None, explicit: Any = None,
             "basis_reason": basis_reason,
         }
     return out
+
+
+def door_cost_block(*, commission_rate: Any, slippage_rate: Any,
+                    cost_door: str, cost_explicit_fields: Any,
+                    cost_available_fields: Any, engine: str, supported: Any,
+                    charge_impact: bool = False,
+                    notes: dict[str, str] | None = None,
+                    totals: dict[str, Any] | None = None) -> dict[str, Any]:
+    """거래별로 재지 않는 엔진의 `cost_model` 블록을 **문에서** 만든다 (BB2).
+
+    ★엔진 내부는 건드리지 않는다★ — 엔진에 넘긴 **그 요율**로 정책을 만들고,
+    요율의 출처는 메인 엔진과 같은 `rate_provenance` 가 답한다. 요율 → bp
+    환산은 메인 엔진(`policy_from_config`)과 같은 `× 1e4` 다.
+    """
+    from src.domain.cost_model import CostPolicy, policy_only_block
+
+    policy = CostPolicy(commission_bps=float(commission_rate) * 1e4,
+                        slippage_bps=float(slippage_rate) * 1e4,
+                        charge_impact=bool(charge_impact))
+    return policy_only_block(
+        policy, engine=engine, supported=supported, notes=notes, totals=totals,
+        provenance=rate_provenance(door=cost_door, explicit=cost_explicit_fields,
+                                   available=cost_available_fields,
+                                   policy=policy))

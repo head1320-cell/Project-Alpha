@@ -53,6 +53,8 @@ _DOOR_IMPORT_AND_BACKTEST = "strategies/import-and-backtest"
 _DOOR_KIS_BACKTEST = "strategies/backtest"
 _DOOR_OPTIMIZE = "strategies/optimize"
 _DOOR_DSL_BACKTEST = "strategies/dsl/backtest"
+#: ★이 문은 `dag_runner` 로 간다★ — BA 는 `graph_runner` 라고 잘못 적었다(BB 정정).
+_DOOR_GRAPH_BACKTEST = "backtest/graph"
 
 
 @router.post("/strategy-backtest")
@@ -823,7 +825,22 @@ def graph_backtest(req: dict):
 
         parsed_req = GraphBacktestRequest(**req)
         result = execute_dag_backtest(parsed_req)
-        return result.model_dump()
+        out = result.model_dump()
+        # ★돌지 않은 실행에 "부과했다" 를 붙이지 않는다★ (BB)
+        if result.success:
+            from src.domain.cost_provenance import door_cost_block
+            stats = result.statistics
+            out["cost_model"] = door_cost_block(
+                commission_rate=parsed_req.commission_rate,
+                slippage_rate=parsed_req.slippage_rate,
+                cost_door=_DOOR_GRAPH_BACKTEST,
+                cost_explicit_fields=frozenset(parsed_req.model_fields_set),
+                cost_available_fields=frozenset(type(parsed_req).model_fields),
+                engine="dag_runner", supported=("commission", "slippage"),
+                # ★이 엔진은 두 합계를 실제로 센다★ — 그것만 싣는다.
+                totals={"commission": stats.total_commission,
+                        "slippage": stats.total_slippage})
+        return out
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

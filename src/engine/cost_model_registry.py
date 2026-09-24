@@ -160,8 +160,10 @@ COST_SITES: tuple[CostSite, ...] = (
         key="stage12_routes",
         site="src/api/stage12_routes.py:commission_rate",
         label="Stage12 라우트 기본값", commission_bps=1.5, slippage_bps=5.0,
-        components=_BASIC,
-        note="리얼리즘 경로의 라우트 기본값.",
+        components=_c("commission", "slippage", "impact"),
+        note=("리얼리즘 경로의 라우트 기본값. ★문 기본값이 시장충격을 켠다★"
+              "(`enable_market_impact=True`) — BB 전에는 수수료·슬리피지만 적혀 "
+              "있었다."),
     ),
     CostSite(
         key="screener_routes",
@@ -181,10 +183,13 @@ COST_SITES: tuple[CostSite, ...] = (
     ),
     CostSite(
         key="graph_schema",
-        site="src/models/graph_schema.py:slippage_rate",
-        label="그래프 요청 스키마", commission_bps=None, slippage_bps=5.0,
-        components=_c("slippage"),
-        note="슬리피지만 자기 기본값을 적는다(수수료는 러너가 정한다).",
+        site="src/models/graph_schema.py:GraphBacktestRequest",
+        label="그래프 요청 스키마", commission_bps=15.0, slippage_bps=5.0,
+        components=_BASIC,
+        note=("★BB 정정★ 예전에는 *\"슬리피지만 적는다(수수료는 러너가 정한다)\"* "
+              "로 적혀 있었는데, 요청 모델은 수수료 15bp 도 기본으로 갖고 "
+              "`dag_runner` 로 그대로 넘긴다. 왕복 표가 이 문을 10bp 로 낮춰 "
+              "보고하고 있었다."),
     ),
     CostSite(
         key="market_rules",

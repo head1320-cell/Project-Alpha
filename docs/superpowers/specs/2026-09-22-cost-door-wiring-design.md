@@ -30,6 +30,11 @@ AZ 는 `screener` 한 문을 잇고 *"남은 문 열셋"* 이라 적으면서 �
 `"cost_model"` 전수: **`src/kis_backtest_engine.py` 한 곳**.
 `multi_strategy_backtest`·`realism_engine`·`graph_runner` 는 **수수료를
 부과하면서 블록을 아예 안 낸다**(`graph_runner` 는 `cost` 키 0건).
+
+> ★정정 (2026-09-24, BB)★ — `graph_schema` 문은 `graph_runner` 가 아니라
+> **`dag_runner`** 로 간다. `graph_runner` 는 호출자가 0건이다. 위 문장과 §5 의
+> `other_engine` 사유는 그 점에서 거짓이었다 — BB 가 바로잡았다
+> ([BB 스펙](2026-09-24-engine-cost-blocks-design.md)).
 ★`rate_provenance` 이전에 비용을 말할 표면 자체가 없다.★
 
 **BA 는 관측·등록만 한다** — 세 엔진의 결과 모양을 바꾸는 일이라 저장된

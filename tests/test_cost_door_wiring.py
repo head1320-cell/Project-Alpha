@@ -176,20 +176,73 @@ def test_the_permanent_kinds_are_marked_permanent():
         assert e.permanent == (e.kind in permanent_kinds), (e.key, e.kind)
 
 
-def test_the_other_engine_kind_is_not_permanent():
-    """★짝★ — 전부 영구적이라고 말하면 그것도 거짓이다."""
-    movable = [e for e in UNWIRED_SITES if not e.permanent]
-    assert movable
-    for e in movable:
-        assert e.kind == "other_engine", e.key
-        # 움직일 수 있는 자리는 ★무엇이 참이 되면★ 이을 수 있는지 적는다.
-        assert "cost_model" in e.promotes_when, e.key
+def test_every_remaining_unwired_site_is_permanent():
+    """변이 g — ★"아직 할 일" 이 0개★ (BB)
+
+    BA 가 움직일 수 있다고 적은 셋(`other_engine`)을 BB 가 이었다. 남은 것은
+    **전부** 영구적으로 맞는 답이다 — 강한 진술이라 하나라도 임시가 섞이면
+    여기가 red 가 된다.
+    """
+    assert UNWIRED_SITES
+    movable = [e.key for e in UNWIRED_SITES if not e.permanent]
+    assert movable == [], movable
 
 
-@pytest.mark.parametrize("key", ["screener_routes", "legacy_schemas"])
-def test_the_wired_keys_are_the_ones_that_reach_the_engine(key):
-    """★`cost_model` 을 내는 엔진에 닿는 자리만 이었다★(실측)."""
+def test_the_emptied_kind_left_the_vocabulary():
+    """변이 f — ★빈 어휘를 남기지 않는다★ `other_engine` 은 쓰는 곳이 없다."""
+    assert "other_engine" not in UNWIRED_KINDS
+
+
+@pytest.mark.parametrize("key", ["screener_routes", "legacy_schemas",
+                                 "stage11_routes", "stage12_routes",
+                                 "graph_schema"])
+def test_the_wired_keys_are_the_ones_that_reach_an_engine(key):
+    """★`cost_model` 을 내는 문만 이었다★ — BB 가 세 엔진에 블록을 줬다."""
     assert key in WIRED_SITE_KEYS
+
+
+def _importers_of(module_tail: str) -> list[str]:
+    """`src/` 에서 그 모듈을 import 하는 파일. ★AST 로 읽는다★"""
+    import ast
+    import pathlib
+
+    hits = []
+    for f in pathlib.Path("src").rglob("*.py"):
+        if f.stem == module_tail:
+            continue
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for n in ast.walk(tree):
+            names: list[str] = []
+            if isinstance(n, ast.ImportFrom):
+                names = [n.module or ""] + [a.name for a in n.names]
+            elif isinstance(n, ast.Import):
+                names = [a.name for a in n.names]
+            if any(x.split(".")[-1] == module_tail for x in names):
+                hits.append(str(f))
+                break
+    return hits
+
+
+def test_graph_runner_really_has_no_callers():
+    """★BA 의 사유가 거짓이었다★ — `graph_schema` 문은 `dag_runner` 로 간다.
+
+    `graph_runner` 는 호출자가 0건이다. 그 사실을 **사유에 적었으니** 코드가
+    뒷받침하는지 여기서 잰다. 누가 부르기 시작하면 red — 그때는 그 문에도
+    블록이 필요하다.
+    """
+    assert _importers_of("graph_runner") == []
+    # ★대조군★ — 같은 탐지기가 실제 호출자를 찾는다(항상-빈 탐지기 배제).
+    assert "src/api/strategy_routes.py" in _importers_of("dag_runner")
+    from src.domain.cost_provenance import UNWIRED_BY_KEY
+    assert "호출자" in UNWIRED_BY_KEY["graph_runner"].reason
+
+
+def test_no_block_was_built_for_the_runner_nobody_calls():
+    """변이 e — ★쓸 곳 없는 기능을 만들지 않는다★ (로드맵 §0 규율 ②)"""
+    import pathlib
+    src = pathlib.Path("src/engine/graph_runner.py").read_text(encoding="utf-8")
+    for name in ("policy_only_block", "door_cost_block", "cost_model"):
+        assert name not in src, name
 
 
 # ── ★문 이름은 서로 달라야 한다 — 그게 이 축의 존재 이유다★ ─────────────
@@ -217,13 +270,14 @@ def test_every_door_name_is_distinct():
     *"어느 문으로 불렀나"* 인데, 그것을 아무도 걸고 있지 않았다.
     """
     names: dict[str, str] = {}
-    for rel in ("src/api/strategy_routes.py", "src/api/screener_routes.py"):
+    for rel in ("src/api/strategy_routes.py", "src/api/screener_routes.py",
+                "src/api/stage11_routes.py", "src/api/stage12_routes.py"):
         for const, value in _door_constants(rel).items():
             assert value not in names, (
                 f"문 이름이 겹친다: {value!r} — {names[value]} · {rel}:{const}")
             names[value] = f"{rel}:{const}"
     # ★공허 방지★ — 하나도 못 읽었으면 위 전칭은 아무것도 안 본 것이다.
-    assert len(names) >= 5, names
+    assert len(names) >= 9, names
 
 
 def test_the_wired_call_sites_all_pass_a_door():

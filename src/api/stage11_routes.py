@@ -21,6 +21,24 @@ from src.domain.perf_kind import backtest_label
 
 router = APIRouter(prefix="/api/v1/multibacktest", tags=["multibacktest"])
 
+#: 비용 요율의 런타임 출처를 말하는 문 이름 (BB) — ★문마다 달라야 한다★
+_DOOR_MULTIBACKTEST_RUN = "multibacktest/run"
+_DOOR_MULTIBACKTEST_COUNTERFACTUAL = "multibacktest/counterfactual"
+#: 이 엔진에 **있는** 비용 성분. 세금·스프레드·충격은 ★없다★(끈 것이 아니다).
+_ENGINE = "multi_strategy_backtest"
+_SUPPORTED = ("commission", "slippage")
+
+
+def _cost_block(req: BaseModel, door: str) -> dict:
+    """★엔진에 넘긴 그 요율★로 `cost_model` 블록을 만든다. 엔진 내부는 불변."""
+    from src.domain.cost_provenance import door_cost_block
+    return door_cost_block(
+        commission_rate=req.commission_rate, slippage_rate=req.slippage_rate,
+        cost_door=door,
+        cost_explicit_fields=frozenset(req.model_fields_set),
+        cost_available_fields=frozenset(type(req).model_fields),
+        engine=_ENGINE, supported=_SUPPORTED)
+
 
 def _perf_label() -> dict:
     """이 라우터가 내놓는 수치는 전부 **과거 데이터 위의 시뮬레이션**이다.
@@ -92,7 +110,11 @@ def multibacktest_run(req: MultiBacktestRunRequest):
             max_weight=req.max_weight, min_weight=req.min_weight,
             run_name=req.run_name,
         )
-        return bt.run_and_save(config) if req.save else bt.run(config)
+        out = bt.run_and_save(config) if req.save else bt.run(config)
+        # ★돌지 않은 실행에 "부과했다" 를 붙이지 않는다★
+        if isinstance(out, dict) and out.get("success"):
+            out["cost_model"] = _cost_block(req, _DOOR_MULTIBACKTEST_RUN)
+        return out
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -206,6 +228,9 @@ def multibacktest_counterfactual(req: CounterfactualRequest):
         out = analyzer.compare(base_config, req.scenarios)
         # ★대안 시나리오도 시뮬레이션이다★ — "what-if" 는 종류를 바꾸지 않는다.
         out["perf_label"] = _perf_label()
+        # ★모든 시나리오가 같은 요율을 받는다★(counterfactual_analyzer 실측) —
+        # 그래서 블록 하나가 시나리오 전부를 말한다.
+        out["cost_model"] = _cost_block(req, _DOOR_MULTIBACKTEST_COUNTERFACTUAL)
         return out
     except Exception as e:
         raise HTTPException(500, str(e))

@@ -289,3 +289,99 @@ def round_trip_bps(policy: CostPolicy) -> dict:
     return {"buy_bps": round(buy, 4), "sell_bps": round(sell, 4),
             "round_trip_bps": round(buy + sell, 4),
             "impact_excluded": True, "reason": _ROUND_TRIP_REASON}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BB · 거래별로 재지 않는 엔진의 블록 — ★정책은 말하고, 안 센 것은 미상이다★
+# ═══════════════════════════════════════════════════════════════════════════
+
+_NO_BREAKDOWN = ("이 엔진은 거래별 비용 분해를 하지 않습니다 — 요율(정책)은 "
+                 "적용했지만 성분별 금액과 못 잰 거래 수는 ★센 적이 없어 미상★ "
+                 "입니다. 0 으로 적으면 '다 쟀다' 는 관측이 됩니다.")
+_NOT_COUNTED = "이 엔진은 이 성분의 금액을 따로 세지 않습니다 — 0 이 아니라 미상입니다."
+_IMPACT_NOT_A_RATE = ("시장충격은 참여율에 달린 식이라 고정 bp 로 적을 수 없습니다 — "
+                      "bp 칸은 미상으로 둡니다.")
+
+#: 성분 → (정책에서 켜짐 여부, 정책의 요율). ★수수료·슬리피지는 끌 수 없다★
+_SWITCH = {
+    COMPONENT_COMMISSION: (lambda p: True, lambda p: p.commission_bps),
+    COMPONENT_SLIPPAGE: (lambda p: True, lambda p: p.slippage_bps),
+    COMPONENT_TAX: (lambda p: p.charge_tax, lambda p: p.tax_bps),
+    COMPONENT_SPREAD: (lambda p: p.charge_spread, lambda p: p.spread_bps),
+    COMPONENT_IMPACT: (lambda p: p.charge_impact, lambda p: None),
+}
+
+
+def _unsupported_reason(engine: str) -> str:
+    return (f"{engine} 엔진에는 이 성분 자체가 없습니다 — ★끈 것(선택)도 못 잰 것"
+            f"(경고)도 아니고 부재입니다.★ 켤 문이 없으므로 요청으로 바꿀 수 없습니다.")
+
+
+def policy_only_block(policy: CostPolicy, *, engine: str, supported,
+                      provenance: dict, notes: dict | None = None,
+                      totals: dict | None = None) -> dict:
+    """거래별로 재지 않는 엔진의 `cost_model` 블록 (BB1). ★순수★
+
+    메인 엔진(`kis_backtest_engine._cost_model_block`)이 내는 키를 **전부**
+    같은 이름으로 싣는다 — 소비자가 어느 엔진이든 같게 읽는다. 다른 점은
+    ★센 적이 없는 것을 `None` 으로 둔다★ 는 것뿐이다.
+
+    Args:
+        engine: 블록을 낸 엔진 이름.
+        supported: 이 엔진에 **있는** 성분. 나머지는 `unsupported` 다.
+        provenance: `cost_provenance.rate_provenance(...)` 의 결과 그대로.
+        notes: 성분별 덧붙일 사유(예: 다른 충격 모델의 가정).
+        totals: ★엔진이 실제로 센★ 성분별 원화 합계. 일부만 있으면 총액은 미상.
+    """
+    supported = tuple(supported)
+    unknown = [n for n in supported if n not in COMPONENTS]
+    if unknown:
+        raise ValueError(f"알 수 없는 비용 성분: {unknown} — 오타가 조용히 "
+                         f"'unsupported' 가 되면 안 됩니다.")
+    totals = dict(totals or {})
+    stray = [n for n in totals if n not in supported]
+    if stray:
+        raise ValueError(f"이 엔진에 없는 성분의 금액: {stray} — 모순입니다.")
+    notes = dict(notes or {})
+
+    comps: dict[str, dict] = {}
+    for name in COMPONENTS:
+        note = notes.get(name)
+        if name not in supported:
+            comps[name] = {"state": STATE_UNSUPPORTED, "bps": None, "krw": None,
+                           "reason": _unsupported_reason(engine)}
+            continue
+        on, rate = _SWITCH[name]
+        if not on(policy):
+            comps[name] = {"state": STATE_OFF, "bps": None, "krw": None,
+                           "reason": _OFF_REASON}
+            continue
+        bps = _finite(rate(policy))
+        krw = _finite(totals.get(name))
+        reasons = [r for r in (
+            note,
+            None if bps is not None else (
+                _IMPACT_NOT_A_RATE if name == COMPONENT_IMPACT else _NO_RATE),
+            None if krw is not None else _NOT_COUNTED) if r]
+        comps[name] = {"state": STATE_CHARGED,
+                       "bps": round(bps, 4) if bps is not None else None,
+                       "krw": round(krw, 4) if krw is not None else None,
+                       "reason": " ".join(reasons) or None}
+
+    charged = [c for c in comps.values() if c["state"] == STATE_CHARGED]
+    counted_all = bool(charged) and all(c["krw"] is not None for c in charged)
+    return {
+        "engine": engine,
+        "components": comps,
+        # ★일부만 셌으면 합계는 미상★ — 센 것만 더하면 싼 합계가 된다.
+        "total_krw": round(sum(c["krw"] for c in charged), 2) if counted_all else None,
+        "total_bps": None,
+        "n_unmeasurable": None,
+        "rate_provenance": provenance,
+        "policy": policy_label(policy),
+        "version": policy_version(policy),
+        "round_trip_bps": round_trip_bps(policy)["round_trip_bps"],
+        "breakdown": None,
+        "breakdown_reason": _NO_BREAKDOWN,
+        "n_unmeasured_trades": None,
+    }
