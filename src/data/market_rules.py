@@ -55,8 +55,12 @@ def impact_coeff() -> float:
     return _envf("KR_IMPACT_COEFF", 10.0)
 
 
-# ── 호가 단위 (틱사이즈) — KRX 가격대별 표 (2023 개정 근사) ────────────────────
-# (상한가격, 틱). 가격 ≤ 상한이면 해당 틱. 마지막은 그 이상.
+# ── 호가 단위 (틱사이즈) — KRX 가격대별 표 (2023-01-25 개정) ──────────────────
+# (경계가격, 틱). ★가격 < 경계(미만)이면 해당 틱★ — 정확히 2,000원은 5원 단위다.
+# BD(2026-09-24): 예전에는 `<=`(이하)였고 실주문 경로(`OrderExecutor`)는 `<` 라
+# 여섯 경계에서 갈렸다. 증권사 안내·개편 보도가 전부 "미만" 이고 사용자가 KRX
+# 원문대로 확정했다(★KRX 1차 문서는 이 환경에서 403 이라 직접 확인하지 못했다★).
+# `OrderExecutor._get_tick_size` 가 이 표를 읽는다 — ★표는 여기 하나뿐이다★.
 _TICK_TABLE: list[tuple[float, float]] = [
     (2000, 1), (5000, 5), (20000, 10), (50000, 50),
     (200000, 100), (500000, 500), (float("inf"), 1000),
@@ -66,7 +70,7 @@ _TICK_TABLE: list[tuple[float, float]] = [
 def tick_size(price: float) -> float:
     """가격에 해당하는 KRX 호가 단위. 설정 표 기반(하드코딩 로직 아님)."""
     for ub, tick in _TICK_TABLE:
-        if price <= ub:
+        if price < ub:
             return tick
     return 1000
 
@@ -114,6 +118,7 @@ def rules_snapshot() -> dict:
         "impact_coeff": impact_coeff(),
         "board_lot": board_lot(),
         "price_limit_pct": price_limit_pct(),
-        "tick_table": [{"up_to": (None if ub == float("inf") else ub), "tick": t} for ub, t in _TICK_TABLE],
+        # ★`below` = 미만★ — `up_to` 는 "이하" 로 읽혀 경계를 거꾸로 말했다(BD).
+        "tick_table": [{"below": (None if ub == float("inf") else ub), "tick": t} for ub, t in _TICK_TABLE],
         "source": "KRX 공개 규칙 근사 (env 오버라이드 가능) — 실 정산은 브로커 확정값",
     }

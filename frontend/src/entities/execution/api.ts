@@ -49,7 +49,8 @@ export interface ExecutionPlan {
   rules: {
     commission_bp: number; sell_tax_bp: number; spread_bp: number; impact_coeff: number;
     board_lot: number; price_limit_pct: number;
-    tick_table: { up_to: number | null; tick: number }[];
+    /** `below` = 이 가격 **미만**이면 `tick`(KRX 경계는 미만이다). `null` 은 상한 없음. */
+    tick_table: { below: number | null; tick: number }[];
     source: string;
   };
   notes: string[];

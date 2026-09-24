@@ -148,14 +148,14 @@ class OrderExecutor:
 
     @staticmethod
     def _get_tick_size(price: int) -> int:
-        """한국 주식시장 호가단위 (2023년 기준) — 원본 그대로."""
-        if price < 2_000:    return 1
-        if price < 5_000:    return 5
-        if price < 20_000:   return 10
-        if price < 50_000:   return 50
-        if price < 200_000:  return 100
-        if price < 500_000:  return 500
-        return 1_000
+        """한국 주식시장 호가단위 — ★`market_rules` 의 표를 읽는다★ (BD)
+
+        예전에는 이 자리에 표가 따로 있었고(`<`) `market_rules`(`<=`)와 여섯
+        경계에서 갈렸다. 표를 하나로 합쳤다 — KRX 원문대로 **미만**. 내림
+        가격(`_round_to_tick`)은 1..1,000,000 전수로 이전과 같다(경계가 공배수).
+        """
+        from src.data.market_rules import tick_size
+        return int(tick_size(price))
 
     @staticmethod
     def _round_to_tick(price: int) -> int:
