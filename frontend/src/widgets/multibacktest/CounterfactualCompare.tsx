@@ -7,6 +7,7 @@ import {
 import { useMemo, useState } from "react";
 import { TrendingUp, Loader2, Play } from "lucide-react";
 
+import { unavailableReason } from "@/entities/realism/unavailable";
 import { API_BASE } from "@/shared/api/apiBase";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
@@ -106,7 +107,7 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
       if (data.available) {
         setResult(data);
       } else {
-        setError(data.message || "실행 실패");
+        setError(data.message || unavailableReason(data) || "실행 실패");
       }
     } catch (e) {
       setError(String(e));

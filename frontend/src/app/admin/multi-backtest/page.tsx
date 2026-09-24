@@ -13,6 +13,7 @@ import AttributionWaterfall from "@/widgets/multibacktest/AttributionWaterfall";
 import RegimeAttributionTable from "@/widgets/multibacktest/RegimeAttributionTable";
 import CounterfactualCompare from "@/widgets/multibacktest/CounterfactualCompare";
 
+import { unavailableReason } from "@/entities/realism/unavailable";
 import { API_BASE } from "@/shared/api/apiBase";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -47,6 +48,9 @@ export default function MultiBacktestPage() {
       ]);
       setStrategies(sRes.strategies || []);
       setRuns(rRes.runs || []);
+      // ★빈 목록으로 조용히 넘기지 않는다★ (BF) — 서브시스템이 없으면 그 사유를 보인다.
+      const why = unavailableReason(rRes);
+      if (why) setError(why);
     } catch (e) {
       console.error(e);
     } finally {
@@ -71,7 +75,7 @@ export default function MultiBacktestPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        setError(data.message || "실행 실패");
+        setError(data.message || unavailableReason(data) || "실행 실패");
         return;
       }
       setResult(data);
@@ -105,6 +109,11 @@ export default function MultiBacktestPage() {
         fetch(`${API_BASE}/api/v1/multibacktest/${runId}`).then((r) => r.json()),
         fetch(`${API_BASE}/api/v1/multibacktest/${runId}/attribution`).then((r) => r.json()),
       ]);
+      const why = unavailableReason(runRes);
+      if (why) {
+        setError(why);
+        return;
+      }
 
       // run 데이터 → result 형태로 변환
       const synthetic = {

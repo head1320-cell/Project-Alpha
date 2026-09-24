@@ -204,6 +204,10 @@ def test_the_counterfactual_response_declares_its_kind(monkeypatch):
 
     monkeypatch.setattr("src.database.get_sync_engine", lambda: object())
     monkeypatch.setattr("src.engine.counterfactual_analyzer.CounterfactualAnalyzer", _Fake)
+    # ★분석기가 "있다" 고 가정하는 테스트다★ (BF) — 실제 저장소에서는 그 엔진이 쓰는
+    # 모듈 다섯이 없어 이 문이 503 을 낸다(`test_multistrategy_availability`).
+    monkeypatch.setattr("src.engine.multistrategy_availability._spec_exists",
+                        lambda name: True)
     req = s11.CounterfactualRequest(strategy_ids=[1], start_date="2023-01-01",
                                     end_date="2023-06-30")
     body = s11.multibacktest_counterfactual(req)

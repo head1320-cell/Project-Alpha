@@ -236,6 +236,11 @@ def _fake_engine(monkeypatch, module: str, cls: str, result: dict,
     monkeypatch.setattr(importlib.import_module(module), cls, _Fake)
     import src.database as db
     monkeypatch.setattr(db, "get_sync_engine", lambda: None)
+    # ★엔진이 "있다" 고 가정하는 테스트다★ (BF) — 실제 저장소에서는 그 엔진이
+    # 쓰는 모듈 다섯이 없어 문이 503 을 낸다(`test_multistrategy_availability`).
+    # 여기서는 블록의 모양만 보므로 가용성 판정을 "전부 있음" 으로 둔다.
+    from src.engine import multistrategy_availability as ma
+    monkeypatch.setattr(ma, "_spec_exists", lambda name: True)
     return cap
 
 

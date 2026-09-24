@@ -18733,3 +18733,74 @@ AQ·AW 에서 *"원인을 찾은 것이 아니라 재현되지 않은 것이다"
   데몬이 없으면 안전하고, 그 픽스처는 다른 파일에도 같은 모양으로 있다.
 - **`_resolve_price` 의 시계를 고정하지 않았다.**
 - **한 번만 도는 백필 스레드는 등록부에 넣지 않았다** — 끝나는 스레드라 쌓이지 않는다.
+
+---
+
+## BF. 멀티전략 서브시스템 — ★없는 것을 없다고 말하고, 다시는 조용히 생기지 않게★ (2026-09-24, 축 ②)
+
+모듈 `src/engine/multistrategy_availability.py` ★신규★ · 문 `src/api/stage11_routes.py`·
+`stage12_routes.py` · 화면 `widgets/realism/RealismDashboard.tsx`·
+`app/admin/multi-backtest/page.tsx`·`widgets/multibacktest/CounterfactualCompare.tsx`·
+`entities/realism/unavailable.ts` ★신규★ · 검증 `tests/test_multistrategy_availability.py`
+★신규★·`tests/test_no_dangling_imports.py` ★신규★
+
+### ★BB 가 적은 범위가 틀렸다 — 하나가 아니라 다섯이다★
+
+BB 는 *"`src.engine.allocator` 가 없어 항상 500"* 이라 적었다. 읽기 전용 감사:
+
+- **없는 모듈이 다섯이다** — `allocator` · `strategy_registry` · `order_netting` ·
+  `macro_feed` · `regime_model`. `src/` 전수 AST 로 ★없는 모듈을 import 하는 곳은
+  정확히 이 다섯뿐★이고 전부 이 서브시스템이다.
+- **데이터도 없다** — 등록 전략의 일별 수익률 테이블이 스키마에 없다.
+- **한 번도 존재한 적이 없다** — GitHub 이력상 `multi_strategy_backtest.py` 는
+  2026-06-10 *"본체 코드베이스 이식 (0605_1019 스냅샷)"* 에 import 가 이미 끊긴 채
+  들어왔고, `src/engine/allocator.py` 경로의 커밋은 **0건**이다. import 가 함수 안에
+  있어서 모듈 로드·테스트·린트 어느 것도 석 달 동안 못 잡았다.
+- ★화면이 거짓말을 하고 있었다★ — `RealismDashboard` 는 하드코딩 `MOCK_*` 수치로
+  시작하고, 실행 버튼을 누르면 백엔드가 실패해도 `setUseMockData(false)` 를 불러
+  **가짜 수치를 둔 채 배지를 "Live Backend" 로** 바꿨다. 하나만 성공하면 실·모의가
+  섞였다. CLAUDE.md §4 의 *"동등 품질로 위장한 폴백"* 그대로다.
+
+사용자가 **정직한 비활성화 + 재발 방지** 를 골랐다(재구현·삭제 아님).
+
+### 무엇을 했나
+
+- **BF1 한 곳에서 말한다** — `MISSING`(다섯, 역할·사유를 사람 말로) · `DATA_GAP` ·
+  `missing_now()`(★선언이 아니라 `find_spec` 실측★ — 복원되면 스스로 빠진다) ·
+  `status()` · `http_unavailable()`.
+- **BF2 문 일곱이 503 + 사유** — multibacktest `run`·`runs`·`{id}` GET/DELETE·
+  `counterfactual`, realism `backtest`·`correlation-health`. ★가드는 `try:` 앞★ —
+  뒤의 `except Exception → 500` 이 HTTPException 까지 삼킨다(변이 b 가 그것을 쟀다).
+  필요 없는 문(`counterfactual/scenarios`·`market-impact/calibration` 등)은 그대로 200.
+- **BF3 끊긴 import 트립와이어 — 저장소 전체** — `src/` 의 끊긴 `src.*` import
+  집합 == 레지스트리. 새로 끊기면 red(*"고치거나 등록하라"*), 누가 복원하면 red
+  (*"승급: 빼라"*), `needed_by` 가 실제 importer 와 다르면 red. 대조군이 합성 소스의
+  끊긴 import 를 잡는다.
+- **BF4 화면** — 리얼리즘은 ★둘 다 성공할 때만★ 실데이터·"Live Backend", 아니면
+  모의 수치로 되돌리고 백엔드 사유를 한 줄로 보인다. 멀티전략 화면·반사실 위젯은
+  `detail.reason` 을 오류로 보이고, 목록이 503 이면 빈 목록 대신 사유를 보인다.
+  CSS 클래스·헤딩은 그대로(E2E 계약).
+- BB 의 비용 블록 테스트는 엔진을 가짜로 바꿔 **"있다" 고 가정**하는 테스트라, 그
+  가정을 가용성 판정에도 명시했다.
+
+### 검증 (실측)
+
+- 문 일곱 → **503** + 다섯 모듈 + 사유, 필요 없는 문 → 200(짝).
+- 변이 **a~i 기대대로** — 가드 제거 · 가드를 `try:` 안으로(→500) · `missing_now`
+  상수 `[]` · 레지스트리 항목 변조 · 있는 모듈 등록 · 사유 빈 문자열 · 503→500 ·
+  `needed_by` 거짓 전부 사망, 무해 변경(짝)은 생존.
+- ★첫 전체 실행이 BF 의 회귀 하나를 잡았다★ — `test_perf_label_wiring` 의 반사실
+  테스트가 분석기를 가짜로 바꾸면서 **서브시스템이 있다고 가정**하고 있었는데, 이제
+  문이 먼저 503 을 냈다. 가정을 가용성 판정에도 명시해 고쳤다(BB 테스트와 같은 처방).
+  변이 배터리에 그 파일이 없어서 배터리는 못 봤다 — ★전체 게이트가 제 일을 했다★.
+- `KIS_USE_MOCK=1 python3 -m pytest tests/ -q` — ★**6,838 통과 / 10 스킵 / 0 실패**
+  (755초, 종료 코드 0)★. BE 대비 **+18**.
+- `ruff` 통과 · `npx tsc --noEmit` **0** · `npx next build` **0**.
+
+### ★이 작업이 하지 않은 것★
+
+- **없는 모듈을 만들지 않았다.** hrp_macro·4국면 분류기는 배분 정책이다(§3 별도 승인).
+- **세 엔진·`regime_adaptive_allocator` 를 한 줄도 안 고쳤다.**
+- **서브시스템을 지우지 않았다.** 복원 경로와 BB 의 비용 블록이 그대로 남는다.
+- **리얼리즘 화면의 모의 수치를 지우지 않았다.** "Mock Data" 로 **라벨된** 채 남는다
+  — 위장만 멈췄다.

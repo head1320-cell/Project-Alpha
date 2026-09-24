@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.domain.perf_kind import backtest_label
+from src.engine.multistrategy_availability import http_unavailable
 
 router = APIRouter(prefix="/api/v1/multibacktest", tags=["multibacktest"])
 
@@ -92,6 +93,9 @@ class MultiBacktestRunRequest(BaseModel):
 @router.post("/run")
 def multibacktest_run(req: MultiBacktestRunRequest):
     """멀티 전략 통합 백테스트 실행."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.multi_strategy_backtest import BacktestConfig, MultiStrategyBacktester
@@ -122,6 +126,9 @@ def multibacktest_run(req: MultiBacktestRunRequest):
 @router.get("/runs")
 def multibacktest_list(limit: int = Query(50, ge=1, le=200)):
     """과거 실행 이력."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.multi_strategy_backtest import MultiStrategyBacktester
@@ -135,6 +142,9 @@ def multibacktest_list(limit: int = Query(50, ge=1, le=200)):
 @router.get("/{run_id}")
 def multibacktest_get(run_id: int):
     """단일 실행 상세 (daily + strategy_daily 포함)."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.multi_strategy_backtest import MultiStrategyBacktester
@@ -153,6 +163,9 @@ def multibacktest_get(run_id: int):
 @router.delete("/{run_id}")
 def multibacktest_delete(run_id: int):
     """실행 삭제 (cascade)."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.multi_strategy_backtest import MultiStrategyBacktester
@@ -208,6 +221,9 @@ class CounterfactualRequest(BaseModel):
 @router.post("/counterfactual")
 def multibacktest_counterfactual(req: CounterfactualRequest):
     """What-If 시나리오 병렬 실행 + 의사결정 가치 정량화."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.counterfactual_analyzer import CounterfactualAnalyzer

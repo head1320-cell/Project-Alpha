@@ -16,6 +16,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.engine.multistrategy_availability import http_unavailable
+
 router = APIRouter(prefix="/api/v1/realism", tags=["realism"])
 
 #: 비용 요율의 런타임 출처를 말하는 문 이름 (BB) — ★문마다 달라야 한다★
@@ -89,6 +91,9 @@ class RealismBacktestRequest(BaseModel):
 @router.post("/backtest")
 def realism_backtest(req: RealismBacktestRequest):
     """5가지 realism hook 통합 백테스트."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.realism_engine import RealismConfig, RealisticBacktester
@@ -296,6 +301,9 @@ class CorrelationHealthRequest(BaseModel):
 @router.post("/correlation-health")
 def realism_correlation_health(req: CorrelationHealthRequest):
     """상관관계 매트릭스 건강도 분석 (breakdown 감지)."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.regime_adaptive_allocator import RegimeAdaptiveAllocator

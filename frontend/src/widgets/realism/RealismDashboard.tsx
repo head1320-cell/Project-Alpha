@@ -20,6 +20,7 @@ import {
   type RealismBacktestResult,
 } from "@/entities/realism/data";
 
+import { unavailableReason } from "@/entities/realism/unavailable";
 import { API_BASE } from "@/shared/api/apiBase";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -30,6 +31,8 @@ export default function RealismDashboard() {
   const [reality, setReality] = useState<RealismBacktestResult>(MOCK_REALITY);
   const [loading, setLoading] = useState(false);
   const [useMockData, setUseMockData] = useState(true);
+  // ★백엔드가 실패하면 그 사유를 보인다★ (BF) — 모의 수치를 실데이터로 위장하지 않는다.
+  const [backendNote, setBackendNote] = useState<string | null>(null);
 
   // Derived data
   const kpis = useMemo(() => computeRealismKPIs(ideal, reality), [ideal, reality]);
@@ -68,11 +71,29 @@ export default function RealismDashboard() {
         }).then((r) => r.json()).catch(() => null),
       ]);
 
-      if (idealRes?.success) setIdeal(idealRes);
-      if (realityRes?.success) setReality(realityRes);
-      setUseMockData(false);
+      // ★둘 다 성공할 때만 실데이터다★ (BF) — 예전에는 실패해도 `setUseMockData(false)`
+      // 를 불러 모의 수치를 둔 채 배지만 "Live Backend" 로 바꿨고, 하나만 성공하면
+      // 실·모의가 한 화면에 섞였다.
+      if (idealRes?.success && realityRes?.success) {
+        setIdeal(idealRes);
+        setReality(realityRes);
+        setUseMockData(false);
+        setBackendNote(null);
+      } else {
+        setIdeal(MOCK_IDEAL);
+        setReality(MOCK_REALITY);
+        setUseMockData(true);
+        setBackendNote(
+          unavailableReason(idealRes) ?? unavailableReason(realityRes)
+            ?? "백엔드가 결과를 내지 않았습니다 — 아래 수치는 모의 데이터 그대로입니다.",
+        );
+      }
     } catch (e) {
       console.error(e);
+      setIdeal(MOCK_IDEAL);
+      setReality(MOCK_REALITY);
+      setUseMockData(true);
+      setBackendNote("백엔드에 닿지 못했습니다 — 아래 수치는 모의 데이터 그대로입니다.");
     } finally {
       setLoading(false);
     }
@@ -130,6 +151,12 @@ export default function RealismDashboard() {
               </button>
             </div>
           </div>
+
+          {backendNote && (
+            <p className="text-[11px] text-[#FFC857] font-mono mb-2" role="status">
+              {backendNote}
+            </p>
+          )}
 
           {/* Master Toggle */}
           <div className="flex justify-center py-4">

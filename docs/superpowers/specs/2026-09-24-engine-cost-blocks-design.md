@@ -95,6 +95,11 @@ MultiStrategyAllocator` 를 하는데 **그 모듈이 이 체크아웃에 없다
 가짜로 바꿔 ★엔진이 실제로 받은 config★ 와 블록의 bp 를 대조한다. `dag_runner`
 문은 mock 데이터로 **실제로** 돌려 확인했다.
 
+> ★후속 (BF, 같은 날)★ — 없는 모듈은 **다섯**이었고(allocator · strategy_registry ·
+> order_netting · macro_feed · regime_model) 수익률 테이블도 없다. 이 문들은 이제
+> 500 대신 503 + 사유를 낸다(`src/engine/multistrategy_availability.py`). 블록은
+> 서브시스템이 복원되는 날 그대로 나온다.
+
 ## 9. ★레지스트리의 거짓 기록 둘★ (변이 h 가 드러냈다)
 
 문 기본값을 절대값 골든으로 걸고 정적 레지스트리와 대조하자 두 줄이 red 가 됐다:
