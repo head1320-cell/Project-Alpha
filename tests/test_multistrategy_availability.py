@@ -24,9 +24,8 @@ import pytest
 from src.engine import multistrategy_availability as ma
 
 #: ★지금 없는 것★ — 복원될 때마다 줄어든다(트립와이어가 그것을 요구한다).
-#: BG1 에서 `src.engine.strategy_registry` 가 복원됐다.
-FIVE = {"src.engine.allocator",
-        "src.execution.order_netting", "src.data.macro_feed",
+#: BG1 에서 `src.engine.strategy_registry`, BG2 에서 `src.engine.allocator` 가 복원됐다.
+FIVE = {"src.execution.order_netting", "src.data.macro_feed",
         "src.engine.regime_model"}
 
 
@@ -63,9 +62,9 @@ def test_restoring_everything_makes_it_available(monkeypatch):
 
 
 def test_restoring_one_shrinks_the_list(monkeypatch):
-    monkeypatch.setattr(ma, "_spec_exists",
-                        lambda name: name == "src.engine.allocator")
-    assert "src.engine.allocator" not in ma.missing_now()
+    victim = sorted(FIVE)[0]          # ★아직 없는 것 하나★ — 복원이 진행되면 바뀐다
+    monkeypatch.setattr(ma, "_spec_exists", lambda name: name == victim)
+    assert victim not in ma.missing_now()
     assert len(ma.missing_now()) == len(FIVE) - 1
 
 

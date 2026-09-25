@@ -46,12 +46,6 @@ class MissingModule:
 
 MISSING: tuple[MissingModule, ...] = (
     MissingModule(
-        module="src.engine.allocator", needed_by=(_ENGINE,),
-        role="전략 배분기(MultiStrategyAllocator)",
-        reason=("inverse_vol·hrp·hrp_macro 로 전략 비중을 정하는 자리입니다. "
-                "hrp_macro 는 매크로 기울기를 얹는 배분 정책이라 새로 만들면 "
-                "별도 승인 사항입니다.")),
-    MissingModule(
         module="src.execution.order_netting", needed_by=(_ENGINE,),
         role="주문 네팅(OrderNettingEngine)",
         reason=("전략 간 상쇄 주문을 합치는 자리입니다. 엔진은 지금 네팅 절감을 "
