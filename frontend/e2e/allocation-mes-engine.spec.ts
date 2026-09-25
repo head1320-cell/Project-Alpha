@@ -49,7 +49,7 @@ async function patchAnalyze(page: Page, over: Record<string, unknown>) {
 
 /** 게이트 → 05 OPTIMIZE → `.as-run` 으로 실제 최적화를 돌린다. */
 async function enterOptimize(page: Page) {
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/optimize", { waitUntil: "networkidle" });
@@ -160,7 +160,7 @@ async function enterJournalBacktest(page: Page, conformal: unknown) {
     const body = await res.json();
     await route.fulfill({ response: res, json: { ...body, conformal } });
   });
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/journal", { waitUntil: "networkidle" });

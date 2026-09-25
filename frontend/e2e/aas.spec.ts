@@ -17,7 +17,7 @@ test("AAS: walk every stage + fire actions → zero 404, zero console errors", a
   page.on("dialog", (d) => d.dismiss().catch(() => {})); // never block on native dialogs
   const sink = trackErrors(page);
 
-  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await page.goto("/allocation/wizard", { waitUntil: "domcontentloaded" });
   await page.getByText("성장 추구").click();
   await expect(page).toHaveURL(/\/allocation\/construct/, { timeout: 15_000 });
 
@@ -48,7 +48,7 @@ test("AAS: stale Resume target is dropped (no dead-link 404)", async ({ page }) 
       holdings: [{ code: "005930", name: "삼성전자", weight: 100 }], views: [], model: "bl",
     }));
   });
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   const resume = page.locator(".aas-gate-resume");
   if (await resume.count()) {
     await resume.click();

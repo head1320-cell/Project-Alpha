@@ -18,7 +18,7 @@ test("Allocation: policy walk-forward backtest renders OOS equity + metrics + ho
   const sink = trackErrors(page);
 
   // goal gate seeds holdings
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await expect(page.locator(".aas-goal").first()).toBeVisible();
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });

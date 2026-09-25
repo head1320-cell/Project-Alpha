@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => { await freezeCharts(page); });
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function gotoMacro(page: Page) {
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/macro", { waitUntil: "networkidle" });

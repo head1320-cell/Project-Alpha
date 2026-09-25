@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => { await freezeCharts(page); });
 // 빈 Construct 로 들어가서 조용히 다른 것을 검증한다. 그래서 순서를 여기서 못 박는다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const GATE = "/allocation";
+const GATE = "/allocation/wizard"; // BI4 — `/allocation` 은 노드 캔버스(ADR 002)
 
 test("게이트: 프리셋 6 + 빈 프리셋 1, 그리고 첫 카드는 반드시 시드가 있는 프리셋", async ({ page }) => {
   await page.goto(GATE, { waitUntil: "networkidle" });

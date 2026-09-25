@@ -91,12 +91,17 @@ export const PHASES: PhaseMeta[] = [
   { key: "validation", label: "VALIDATION", ko: "검증", steps: ["/allocation/stress", "/allocation/explain", "/allocation/execution"] },
 ];
 
-// A pathname is a known Allocation Studio route iff it is the gate or exactly one of the
-// stage hrefs. Guards against stale sessionStorage `lastPos` (e.g. a renamed/removed route
-// like the old /allocation/optimizer) producing a dead URL → hard 404 on Resume.
+// ★AAS 의 입구는 둘이다★ (BI4 · ADR 002) — `/allocation` 은 노드 캔버스, 마법사의 목표 선택
+// 게이트는 `/allocation/wizard` 로 옮겼다. 마법사는 도구가 노드로 옮겨질 때까지 전부 남는다.
+export const CANVAS_HREF = "/allocation";
+export const WIZARD_GATE_HREF = "/allocation/wizard";
+
+// A pathname is a known Allocation Studio route iff it is the canvas, the wizard gate, or
+// exactly one of the stage hrefs. Guards against stale sessionStorage `lastPos` (e.g. a
+// renamed/removed route like the old /allocation/optimizer) producing a dead URL → hard 404.
 export function isKnownAllocationRoute(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  if (pathname === "/allocation") return true;
+  if (pathname === CANVAS_HREF || pathname === WIZARD_GATE_HREF) return true;
   return STAGES.some((s) => pathname === s.href);
 }
 

@@ -10,7 +10,7 @@
 import React, { useEffect } from "react";
 import { Check } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { BOOKENDS, PHASES, STAGES, stageIndex, useAllocation, type StageHref } from "./AllocationProvider";
+import { BOOKENDS, PHASES, STAGES, WIZARD_GATE_HREF, stageIndex, useAllocation, type StageHref } from "./AllocationProvider";
 import { overallConfidence } from "./ViewBuilder";
 
 const BY_HREF = new Map(STAGES.map((s) => [s.href as StageHref, s]));
@@ -153,7 +153,7 @@ export function WizardTracker() {
       {Bookend(BOOKENDS[BOOKENDS.length - 1])}
       <span className="aas-wiz-right">
         {isMock && <span className="aas-wiz-mock" title="현재 결과는 합성(mock) 데이터 기준">MOCK</span>}
-        <button className="aas-wiz-gate" title="목표 선택으로 돌아가기" onClick={() => router.push("/allocation")}>☰ 목표</button>
+        <button className="aas-wiz-gate" title="목표 선택으로 돌아가기" onClick={() => router.push(WIZARD_GATE_HREF)}>☰ 목표</button>
         <span className="aas-wiz-kbd num" title="키보드 ←/→ 로 단계 이동">◀ ▶</span>
       </span>
     </div>

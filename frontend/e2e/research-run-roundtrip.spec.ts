@@ -37,7 +37,7 @@ async function attachSnapshot(page: import("@playwright/test").Page): Promise<st
 
 /** 게이트에서 목표를 골라 자산을 시드한다(런 기록에는 자산 2개 이상이 필요). */
 async function seedHoldings(page: import("@playwright/test").Page) {
-  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await page.goto("/allocation/wizard", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".aas-gate")).toBeVisible({ timeout: 20_000 });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/(construct|overview)/, { timeout: 20_000 });

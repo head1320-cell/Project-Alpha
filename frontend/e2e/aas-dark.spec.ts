@@ -39,7 +39,7 @@ const STAGES: [path: string, label: string][] = [
 
 /** 게이트를 통과해 세션을 시드한다 — 빈 세션은 대부분의 패널이 빈 상태라 잴 것이 적다. */
 async function seed(page: Page) {
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
 }

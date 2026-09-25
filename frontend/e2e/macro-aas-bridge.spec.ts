@@ -98,7 +98,7 @@ test("AAS: snapshot 파라미터 없이 들어와도 게이트/스테이지가 �
 
   // 게이트는 layout 의 isGate 분기로 **크롬 없이** bare 렌더된다 — 위저드(.aas-wiz)가
   // 없는 것이 정상이고, 목표 선택 화면(.aas-gate)이 나와야 한다.
-  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await page.goto("/allocation/wizard", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".aas-gate")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".aas-goal").first()).toBeVisible();
 

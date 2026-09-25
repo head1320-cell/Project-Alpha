@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => { await freezeCharts(page); });
 
 /** 게이트에서 시드된 포트폴리오로 Construct 에 진입한다(다른 스펙과 같은 경로). */
 async function enterWithHoldings(page: Page) {
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await expect(page.locator(".as-wrow").first()).toBeVisible({ timeout: 15_000 });

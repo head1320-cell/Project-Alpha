@@ -172,7 +172,7 @@ test("목록 저장소 장애와 네트워크 오류가 서로 다른 화면이�
 
 test("같은 CaseBar 가 AAS 스테이지에도 있다 — 두 화면이 한 연구다", async ({ page }) => {
   await clearCasePointer(page);
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 20_000 });
 

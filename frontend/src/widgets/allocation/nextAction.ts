@@ -50,7 +50,7 @@ export interface NextAction {
 export function nextAction(s: WorkflowState): NextAction {
   // 1. 아무것도 시작하지 않았다 — 게이트가 목표를 정하는 입구다.
   if (!s.hasStudy && s.holdingsCount === 0 && !s.hasResult) {
-    return { key: "start", label: "연구 시작", href: "/allocation",
+    return { key: "start", label: "연구 시작", href: "/allocation/wizard",
       why: "아직 시작된 연구가 없습니다. 게이트에서 목표를 정하세요." };
   }
   // 2. 자산이 없으면 계산할 대상이 없다.

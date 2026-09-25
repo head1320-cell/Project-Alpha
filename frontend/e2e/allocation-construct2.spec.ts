@@ -32,7 +32,7 @@ test.beforeEach(async ({ page }) => { await freezeCharts(page); });
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function enterWithHoldings(page: Page) {
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await expect(page.locator(".as-wrow").first()).toBeVisible({ timeout: 15_000 });

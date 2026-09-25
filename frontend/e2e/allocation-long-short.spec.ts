@@ -52,7 +52,7 @@ async function patchOptimizedWeights(page: Page, optimized: Record<string, numbe
 }
 
 async function enterOptimize(page: Page) {
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/optimize", { waitUntil: "networkidle" });
@@ -85,7 +85,7 @@ test("★짝 단언 — 롱온리 결과에는 노출 줄이 뜨지 않는다★
 test("롱숏 제약 컨트롤은 하한이 음수일 때만 나타난다", async ({ page }) => {
   // ★게이트를 거쳐야 한다★ `/allocation/optimize` 로 직행하면 포트폴리오가 없어
   // 제약 패널이 렌더되지 않는다 — 한 번 그렇게 헛짚어 90s 타임아웃을 받았다.
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/optimize", { waitUntil: "networkidle" });
@@ -129,7 +129,7 @@ test("롱숏 제약 컨트롤은 하한이 음수일 때만 나타난다", async
 
 test("★숏이 있으면 집중도가 gross 기준이라고 화면이 말한다★", async ({ page }) => {
   // 01 CONSTRUCT 의 보유 비중에 숏을 넣는다 — `concentration()` 의 입력이다.
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
 
@@ -202,7 +202,7 @@ test("★롱숏 목표는 실행 화면에서 세 가지 이유로 막힌다★"
   // `compileTarget()` 을 호출해야 채워지는 로컬 상태다 — 페이지만 열면 null 이라
   // 차단 안내가 렌더될 조건 자체가 없다. 처음에 그걸 모르고 skip 으로 넘겼는데,
   // 그 skip 은 "이 단계의 산출물을 검증하지 않았다" 는 뜻이라 그대로 둘 수 없었다.
-  await page.goto("/allocation", { waitUntil: "networkidle" });
+  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
   await page.locator(".aas-goal").first().click();
   await page.waitForURL(/\/allocation\/construct/, { timeout: 15_000 });
   await page.goto("/allocation/optimize", { waitUntil: "networkidle" });
