@@ -10,7 +10,7 @@
  */
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { nodeSummary, type CatalogPort, type NodeExplain, type PgNodeData } from "@/entities/portfolio-graph";
+import { nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { usePortfolioGraph } from "./store";
 
 /** 포트 타입 → 색. 모르는 타입은 회색, 카탈로그에 없는 포트는 빨간 점선. */
@@ -22,11 +22,22 @@ export const PORT_COLORS: Record<string, string> = {
   Weights: "#16a34a",
   RiskReport: "#ef4444",
   BacktestResult: "#14b8a6",
+  // BK — 레포 도구 노드의 값
+  Scenario: "#e11d48",
+  StressReport: "#9f1239",
+  Scores: "#65a30d",
+  RegimeState: "#ca8a04",
+  TimingSignal: "#ea580c",
+  Trades: "#475569",
+  TargetVersion: "#0f766e",
+  StrategyResult: "#c026d3",
 };
 /** 포트 타입의 쉬운 이름 — 설정 탭의 받는 것/내는 것·포트 이름표. 모르는 타입은 이름 그대로. */
 export const PORT_PLAIN: Record<string, string> = {
   Universe: "종목", Returns: "수익률", Belief: "기대 수익", Views: "내 생각",
   Weights: "비중", RiskReport: "위험 나눔", BacktestResult: "과거 성과",
+  Scenario: "시나리오", StressReport: "충격 결과", Scores: "점수", RegimeState: "경기 국면",
+  TimingSignal: "타이밍 신호", Trades: "주문 목록", TargetVersion: "실행 목표", StrategyResult: "전략 묶음 성과",
 };
 const portColor = (t: string) => PORT_COLORS[t] ?? "#94a3b8";
 
@@ -42,8 +53,11 @@ const PORT_GAP = 22;
 
 export type CanvasNodeData = PgNodeData & { num?: number };
 
-function chipsOf(ex: NodeExplain | null | undefined): { cls: string; text: string }[] {
+function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: string; text: string }[] {
   const out: { cls: string; text: string }[] = [];
+  // 계보(BK0) — 서버가 하류로 나른 사실. 과거 검증에 쓸 수 없는 값임을 노드에서 바로 말한다.
+  if (lin?.pit === "forward_only") out.push({ cls: "assume", text: "지금 시점 전용" });
+  if (lin?.overlay) out.push({ cls: "assume", text: "노출 조절됨" });
   const trust = ex?.trust ?? [];
   if (trust.some((t) => t.state === "unknown" && t.text.includes("연습용"))) out.push({ cls: "unknown", text: "연습용 데이터" });
   else if (trust.some((t) => t.state === "unknown")) out.push({ cls: "unknown", text: "모르는 것 있음" });
@@ -129,8 +143,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
         <div className="pg-node-why">{ex.facts?.[0] ?? ex.title}</div>
       )}
       {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과예요.</div>}
-      {live?.status === "ok" && chipsOf(ex).length > 0 && (
-        <div className="pg-node-ev">{chipsOf(ex).map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
+      {live?.status === "ok" && chipsOf(ex, live.lineage).length > 0 && (
+        <div className="pg-node-ev">{chipsOf(ex, live.lineage).map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
       )}
       {errors.length > 0 && (
         <ul className="pg-node-errors">{errors.map((e, i) => <li key={i}>{e.message}</li>)}</ul>

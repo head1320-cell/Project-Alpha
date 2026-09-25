@@ -56,7 +56,24 @@ from src.engine import portfolio_graph as pg
 logger = logging.getLogger(__name__)
 
 PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
-              "BacktestResult")
+              "BacktestResult",
+              # BK — 레포 도구를 노드로 옮기며 생기는 값. 선언만 먼저(BK0), 노드는 웨이브마다.
+              "Scenario", "StressReport", "Scores", "RegimeState", "TimingSignal", "Trades",
+              "TargetVersion", "StrategyResult")
+
+
+def weights_value(names: list[str], weights: Any, *, sigma_annual: Any = None,
+                  sigma_source: str | None = None, req: Any = None, opt: Any = None,
+                  **extra: Any) -> dict:
+    """★Weights 포트 값의 계약★ (BK0) — 생산자가 여럿이 되므로 모양을 한 곳에서 정한다.
+
+    - `names`·`weights`(배열) — 필수.
+    - `sigma_annual`·`sigma_source` — 연율 공분산. 없으면 리스크 분해가 **실패**한다(지어내지 않는다).
+    - `req` — 이 비중을 만든 **규칙**(옵티마이저 요청). 없으면 정책 백테스트가 되돌려 볼 것이 없어
+      **거절**한다. 옵티마이저만 이것을 싣는다.
+    """
+    return {"names": list(names), "weights": weights, "sigma_annual": sigma_annual,
+            "sigma_source": sigma_source, "req": req, "opt": opt, **extra}
 
 _FORBID = ConfigDict(extra="forbid")
 
@@ -199,7 +216,9 @@ def _returns(inputs: dict, p) -> pg.NodeOutput:
         values={"returns": value},
         view={"names": names, "labels": _labels(names), "n_assets": len(names),
               "excluded": excluded, "coverage": coverage},
-        provenance=provenance)
+        provenance=provenance,
+        # ★연습용은 하류 전부로 흐른다★ (BK0) — 합성 수익률로 만든 비중·충격·성과는 모두 연습용.
+        tags={"practice": source == "mock", "sources": [f"returns:{source or '미상'}"]})
 
 
 def _views(inputs: dict, p) -> pg.NodeOutput:
@@ -258,8 +277,9 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         raise pg.NodeFailure(str(e)) from e
     constraints_report = _apply_constraints(req, names, R, opt, r["bench"])
     weights = np.asarray(opt["weights"], dtype=float)
-    value = {"req": req, "names": names, "opt": opt, "weights": weights,
-             "constraints_report": constraints_report}
+    value = weights_value(names, weights, sigma_annual=opt["sigma_annual"],
+                          sigma_source=opt.get("sigma_source", "trailing"), req=req, opt=opt,
+                          constraints_report=constraints_report)
     view = {
         "names": names, "labels": _labels(names), "model": req.model,
         "params": {"delta": req.delta, "tau": req.tau},
@@ -280,22 +300,41 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
 
 def _risk(inputs: dict, p) -> pg.NodeOutput:
     w = inputs["weights"]
-    opt, names = w["opt"], w["names"]
-    sigma_source = opt.get("sigma_source", "trailing")
+    names, sigma = w["names"], w.get("sigma_annual")
+    if sigma is None:
+        raise pg.NodeFailure("이 비중에는 공분산이 함께 오지 않아 위험을 나눌 수 없어요 — "
+                             "공분산을 추정하는 노드(비중 계산)의 비중을 이어 주세요.")
+    sigma_source = w.get("sigma_source") or "미상"
     view = {
         "risk_contribution_optimized": _risk_contribution_report(
-            w["weights"], opt["sigma_annual"], names,
+            w["weights"], sigma, names,
             weights_source="optimized", sigma_source=sigma_source),
-        "enb": {**_enb_report(w["weights"], opt["sigma_annual"], names),
+        "enb": {**_enb_report(w["weights"], sigma, names),
                 "weights_source": "optimized", "sigma_source": sigma_source},
     }
     return pg.NodeOutput(values={"risk": view}, view=view,
                          provenance={"sigma_source": sigma_source})
 
 
+def _backtest_admits(lineage: dict) -> str | None:
+    """정책 백테스트가 받지 않는 계보 (BK0) — 조용히 벗겨 내지 않고 거절한다."""
+    if lineage.get("overlay"):
+        return ("오늘 계산한 노출 조절이 얹힌 비중이에요. 오늘의 판단을 과거 전체에 쓰면 미래를 "
+                "보고 한 계산이 돼요 — ‘시점별 타이밍 시뮬레이션’으로 과거를 확인해 주세요.")
+    if lineage.get("pit") == "forward_only":
+        return ("지금 시점에만 쓸 수 있는 값(전망·국면 스냅샷)이 섞여 있어요. 과거에 쓰면 미래를 "
+                "보고 한 계산이 돼서 백테스트하지 않아요.")
+    return None
+
+
 def _backtest(inputs: dict, p) -> pg.NodeOutput:
     r, w = inputs["returns"], inputs["weights"]
-    req: AnalyzeRequest = w["req"]
+    req: AnalyzeRequest | None = w.get("req")
+    if req is None:
+        # 이 노드는 비중을 되돌리지 않고 **규칙(옵티마이저 요청)** 을 다시 돌린다. 규칙 없는
+        # 비중을 받아 옵티마이저 성과를 그 비중의 성과처럼 보이면 안 된다.
+        raise pg.NodeFailure("이 비중에는 과거로 되돌려 볼 규칙이 없어요 — 정책 백테스트는 "
+                             "‘비중 계산’ 노드의 규칙을 시점마다 다시 풀어요. 비중 계산 노드를 이어 주세요.")
     try:
         breq = BacktestRequest(
             tickers=r["universe"]["tickers"], benchmark=r["universe"]["benchmark"],
@@ -357,7 +396,7 @@ for _spec in (
     pg.NodeSpec("backtest", "정책 백테스트", stage="check", plain_label="과거로 돌려 보기",
                 plain_description="이 규칙대로 했다면 어땠을지 봐요.", explain=EXPLAINERS["backtest"],
                 inputs=(P("returns", "Returns"), P("weights", "Weights")),
-                outputs=(P("backtest", "BacktestResult"),), run=_backtest,
+                outputs=(P("backtest", "BacktestResult"),), run=_backtest, admits=_backtest_admits,
                 params_model=BacktestParams, category="분석",
                 description="같은 정책을 walk-forward 로 시점 밖에서 재현(/backtest 와 같다)."),
 ):

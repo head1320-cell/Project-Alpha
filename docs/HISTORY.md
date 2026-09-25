@@ -19385,3 +19385,41 @@ lookback 을 규칙 밖에서 끌어올림 · 계획 거부 통과(★처음엔 
 **하지 않은 것** — 새 계산 노드(BK~) · 비교 카드(이야기 탭에서 팬아웃 옵티마이저를 한 카드에 나란히 — 지금은
 각자 카드) · 자동 실행 토글(계산이 무겁다 — 기본 꺼짐 결정대로 아예 안 만들었다) · 사이트 전체 디자인 교체 ·
 프런트 단위 테스트 러너.
+
+---
+
+## BK · 레포의 분석 도구를 전부 캔버스 노드로 (2026-09-25) — 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md`
+
+사용자 요청: *"기존 레포에 있는 모든 툴을 다 커스텀해서 간편하게 사용할 수 있게 고도화"* → 캔버스
+팔레트에서 원래 있던 도구를 골라 잇는다. 결정: 안전한 것부터(W1 확인하기 → W2 신호·후보 → W3 거시·
+타이밍 → W4 실행·기록 → W5 전략·기업 → W6 정리) · 계산은 쓰지 않고 저장은 버튼 · 타이밍/국면을 비중에
+적용하는 노드는 **기존 함수만으로** 고도화(Macro→Allocation 승인 기록은 ADR 002 §7).
+
+감사(읽기 전용, 도구 약 40개)에서 찾은 위험: ① 회사 뷰가 Views 포트로 들어가면 백테스트에 샌다 ② 오늘
+노출을 얹은 비중의 백테스트는 룩어헤드 ③ `/stress` 역사 분기·`/timing` 은 mock 이어도 응답에 표시가 없다
+④ `/graph/run` 은 매번 모든 노드를 돈다 ⑤ `TargetVersionRequest.dry_run` 기본 False ⑥ 유통 금지 어휘.
+
+### BK0 · 공통 계약 — 계보 · 문지기 · 저장 문 (노드 0개 추가)
+- **엔진**(`portfolio_graph.py`): `NodeOutput.tags` → 결과 `lineage`(하류로 전이; 연습용·노출은 OR,
+  시점 정합은 pit < unknown < forward_only 중 가장 약한 값, 선언 안 한 노드는 판정에 끼지 않음) ·
+  `NodeSpec.admits`(계보 거절 → 실패 + 사유) · 결과마다 `view_hash` · `NodeSpec.save` +
+  `save_node`(다시 계산 → 해시 일치 때만 한 번; `no_node`·`not_savable`·`not_ok`·`stale`·`save_failed`).
+  카탈로그에 `savable`.
+- **노드**: 수익률 노드가 `practice`(mock 이면 참)를 단다 → 하류 전부 연습용 계보. `weights_value` 로
+  Weights 값 계약을 한 곳에. ★감사로 찾은 것★ 정책 백테스트는 입력 비중이 아니라 옵티마이저 **규칙**을
+  다시 푼다 — 규칙 없는 비중을 받으면 다른 것을 백테스트하고도 그 비중의 성과처럼 보였을 것이다. 이제
+  규칙 없는 비중·노출 조절·지금 시점 전용 계보는 **거절**. 리스크 분해는 공분산이 없으면 실패(지어내지
+  않는다). 새 포트 타입 8개 선언(Scenario·StressReport·Scores·RegimeState·TimingSignal·Trades·
+  TargetVersion·StrategyResult).
+- **문**: `POST /api/v1/allocation/graph/save` — `/run` 은 어떤 저장 함수도 부르지 않는다.
+- **트립와이어**(AST): `allocation_graph_nodes*.py` 는 주문 경로(`kis_order_executor`·`trading_engine`)를
+  import 하지 않고, `_save_*` 밖의 함수는 쓰기 이름(save_target·create_plan·record_run·transition·
+  place_order …)을 부르지 않는다.
+- **프런트**: 타입(`lineage`·`view_hash`·`savable`·`SaveResult`) · `portfolioGraphApi.save` · 새 포트 색·쉬운
+  이름 · 노드 칩 "지금 시점 전용"·"노출 조절됨". 저장하기 버튼 UI 는 첫 저장 노드와 함께(W4).
+
+**테스트** — 엔진 20(전이·약한 값·짝 깨끗한 계보·문지기 짝·해시·저장 5경로) · 노드 12(연습용 계보 짝 ·
+규칙 없는 비중/노출/지금 시점 거절 · 짝: 옵티마이저 정책은 그대로 · 공분산 없는 리스크 실패 · 포트 선언 ·
+저장 문 · 트립와이어 2). 기존 골든 전부 녹색(계산 경로 무변경). **변이 a~l 사망, 무해 m 생존**. 전체 **7127 passed · 10 skipped** · ruff 0 · tsc 0 · next build 성공(`/allocation` 119 kB 그대로).
+
+**하지 않은 것** — 새 노드(W1~) · 저장하기 버튼 UI(W4) · 라우트 응답의 mock 무표시 수정(범위 밖).

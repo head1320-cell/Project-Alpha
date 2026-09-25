@@ -88,3 +88,24 @@ ADR 001 의 ≥4 kB·15 kB 선은 **항상 뜨는 표면**에 걸린다. 캔버�
   `.pg-wizard` 드롭다운 안, 파일 안내 문구는 해요체. `.pg-node-status*` 는 눈에서 숨기고(점과 사유가
   말한다) 화면 읽기·E2E 용으로 남겼다.
 - `/allocation` 첫 로드는 **119 kB 그대로**다(토큰·폰트·새 패널은 캔버스 청크).
+
+## 7. 덧붙임 (BK0, 2026-09-25) — 레포 도구의 노드화 · 공통 계약 · Macro→Allocation 승인 기록
+
+스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md`.
+
+- **사용자 결정**: 캔버스 팔레트에서 원래 있던 분석 도구를 자유롭게 골라 잇는다. 순서는 안전한 것부터
+  (확인하기 → 신호·후보 → 거시·타이밍 → 실행·기록 → 전략·기업 → 정리). '계산하기'는 DB 에 쓰지 않고,
+  저장은 노드의 '저장하기' 버튼(`POST /graph/save`)으로만 — 서버가 다시 계산해 미리보기 해시가 같을 때만
+  한 번 쓴다. 실제 주문은 어느 노드에도 없다.
+- **★Macro→Allocation 별도 승인(CLAUDE.md §3)★** — 사용자가 "비중에 적용하는 노드를 퀀트 고객 입장에서
+  고도화해 적용" 하라고 답했다(2026-09-25). 범위는 **기존 함수 재사용뿐**: `timing_rules_v2.combine`·
+  `macro_overlay.three_way`·`target_versions.compile_target`(`final = base × exposure`, 나머지는 현금).
+  `MODE_CAP`·`REGIME_TILTS`·임계값·레거시 `/timing`·`constrained_solve`·`hrp_macro` 는 바꾸지 않는다.
+- **계보가 포트를 따라 흐른다**: 노드는 `tags`(`practice`·`pit`·`overlay`·`sources`)를 달고 엔진이 하류
+  결과의 `lineage` 로 합친다(연습용·노출은 OR, 시점 정합은 가장 약한 값). 노드는 `admits` 로 받지 않을
+  계보를 **거절**한다 — 조용히 벗겨 내지 않는다.
+- **정책 백테스트 문지기**: 이 노드는 비중이 아니라 옵티마이저의 **규칙(`req`)** 을 시점마다 다시 푼다.
+  그래서 규칙 없는 비중(노출 조절·알파·중립화 등)은 거절하고, 노출 조절·지금 시점 전용 계보도 거절한다
+  (오늘의 판단을 과거 전체에 쓰는 룩어헤드). 과거 검증은 시점별 시뮬레이션 노드로 안내한다.
+- **Weights 값 계약**(`weights_value`): `names`·`weights` 필수, `sigma_annual` 없으면 리스크 분해가 실패,
+  `req` 없으면 정책 백테스트가 거절.

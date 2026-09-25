@@ -85,6 +85,8 @@ export interface NodeCatalogEntry {
   inputs: CatalogPort[];
   outputs: CatalogPort[];
   params_schema: JsonSchema | null;
+  /** 저장하기 버튼이 있는 노드(BK0) — 저장은 `/graph/save` 로만, 계산은 쓰지 않는다. */
+  savable?: boolean;
 }
 
 export interface WorkflowStage { key: string; label: string }
@@ -132,7 +134,22 @@ export interface NodeRunResult {
   view: Record<string, unknown> | null;
   provenance: Record<string, unknown>;
   explain?: NodeExplain | null;
+  /** 하류로 흐르는 계보(BK0) — 연습용 · 시점 정합 · 노출 조절. */
+  lineage?: NodeLineage;
+  /** 미리보기 해시 — 저장할 때 "본 것 == 지금 계산" 확인에 쓴다. 계산 못 한 노드는 `null`. */
+  view_hash?: string | null;
 }
+
+export interface NodeLineage {
+  pit: "pit" | "unknown" | "forward_only" | null;
+  practice: boolean;
+  overlay: boolean;
+  sources: string[];
+}
+
+export type SaveResult =
+  | { ok: true; saved_id: string | null; text: string | null; node_id: string }
+  | { ok: false; code: "no_node" | "not_savable" | "not_ok" | "stale" | "save_failed"; message: string };
 
 export type GateState = "confirmed" | "assumed" | "partial" | "unknown" | "skipped" | "failed";
 

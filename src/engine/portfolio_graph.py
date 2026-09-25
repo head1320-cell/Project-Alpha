@@ -18,9 +18,16 @@ AAS 캔버스가 그린 노드-링크 그래프(파일 포맷 `project-alpha.por
 3. **옆 가지는 계속 돈다.** 한 가지의 실패가 관계없는 노드를 멈추지 않는다.
 4. 파일 포맷·버전이 다르거나 순환이 있으면 **아무것도 실행하지 않는다** — 순서를 정할 수
    없거나, 이 파일이 무엇을 뜻하는지 모르기 때문이다.
+5. **계보는 하류로 흐른다** (BK0). 노드가 단 태그(연습용 합성 · 시점 정합 · 노출을 얹음)는
+   모든 하류 결과의 `lineage` 에 합쳐진다 — 직접 부모만이 아니다. 노드는 `admits` 로 받지 않을
+   계보를 **거절**할 수 있고(실패 + 사유), 조용히 벗겨 내는 경로는 없다.
+6. **계산은 쓰지 않는다** (BK0). `run` 은 어떤 노드의 `save` 도 부르지 않는다. 저장은
+   `save_node` 가 그래프를 다시 계산해 **미리보기 해시가 같을 때만** 한 번 부른다.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -59,10 +66,47 @@ class Port:
 @dataclass
 class NodeOutput:
     """`values` 는 하류로 넘기는 **내부 값**(배열·프레임 가능), `view` 는 응답에 싣는
-    JSON 요약, `provenance` 는 출처·등급·미상 사유."""
+    JSON 요약, `provenance` 는 출처·등급·미상 사유, `tags` 는 **하류로 전이되는 계보**
+    (`pit` · `practice` · `overlay` · `sources` — `merge_lineage` 참조)."""
     values: dict[str, Any]
     view: dict[str, Any] | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
+    tags: dict[str, Any] = field(default_factory=dict)
+
+
+# ── 계보 (BK0) ───────────────────────────────────────────────────────────────
+
+#: 시점 정합 주장의 강도 — **약한 쪽이 이긴다**. 선언하지 않은 노드(None)는 판정에 끼지 않는다
+#: (모른다고 선언한 것은 "unknown" 이다 — 둘을 섞지 않는다).
+PIT_ORDER = ("pit", "unknown", "forward_only")
+
+
+def merge_lineage(*parts: Mapping[str, Any] | None) -> dict:
+    """계보 합치기(순수). `pit` 은 가장 약한 값, `practice`·`overlay` 는 OR, `sources` 는 합집합.
+
+    - `practice` — mock 게이트를 지나 **합성값**을 썼다(연습용).
+    - `pit` — `pit`(시점 고정) · `unknown`(모름) · `forward_only`(지금 시점 전용 — 과거에 쓰면 룩어헤드).
+    - `overlay` — 오늘 계산한 노출 조절을 얹은 비중(과거 전체에 쓰면 룩어헤드).
+    """
+    pit: str | None = None
+    practice = overlay = False
+    sources: set[str] = set()
+    for part in parts:
+        if not part:
+            continue
+        p = part.get("pit")
+        if p in PIT_ORDER and (pit is None or PIT_ORDER.index(p) > PIT_ORDER.index(pit)):
+            pit = p
+        practice = practice or bool(part.get("practice"))
+        overlay = overlay or bool(part.get("overlay"))
+        sources.update(str(x) for x in (part.get("sources") or ()))
+    return {"pit": pit, "practice": practice, "overlay": overlay, "sources": sorted(sources)}
+
+
+def view_hash(view: Any) -> str:
+    """미리보기 해시 — 같은 view 는 같은 값. 저장 전 "지금 계산 == 본 미리보기" 확인에 쓴다."""
+    blob = json.dumps(view, sort_keys=True, ensure_ascii=False, default=str, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
 RunFn = Callable[[dict[str, Any], Any], NodeOutput]
@@ -85,6 +129,10 @@ class NodeSpec:
     plain_label: str = ""
     plain_description: str = ""
     explain: Callable[[dict, dict, Any], dict] | None = None
+    #: 받지 않을 입력 계보 — 사유 문장을 돌려주면 노드는 실행되지 않고 **실패**한다 (BK0).
+    admits: Callable[[dict], str | None] | None = None
+    #: 저장 액션 `(values, view, params) -> {"saved_id", "text"}` — `run` 은 절대 부르지 않는다.
+    save: Callable[[dict, dict, Any], dict] | None = None
 
     @property
     def human(self) -> str:
@@ -128,6 +176,7 @@ class Registry:
             "inputs": [{"name": p.name, "type": p.type, "required": p.required}
                        for p in s.inputs],
             "outputs": [{"name": p.name, "type": p.type} for p in s.outputs],
+            "savable": s.save is not None,
             "params_schema": (s.params_model.model_json_schema()
                               if s.params_model is not None else None),
         } for s in self._specs.values()]
@@ -290,7 +339,8 @@ def validate(graph: Any, registry: Registry) -> dict:
 
 def _blocked(spec_type: str | None, reason: str, explain: dict | None = None) -> dict:
     return {"type": spec_type, "status": STATUS_BLOCKED, "reason": reason,
-            "view": None, "provenance": {}, "explain": explain}
+            "view": None, "provenance": {}, "explain": explain, "lineage": merge_lineage(),
+            "view_hash": None}
 
 
 # ── 쉬운 말 설명 (BJ1) ────────────────────────────────────────────────────────
@@ -318,14 +368,20 @@ def _explain_ok(spec: NodeSpec, out: NodeOutput, params: Any) -> dict:
 
 def run(graph: Any, registry: Registry) -> dict:
     """검증 → 위상 순서 실행. 반환:
-    `{"ok", "errors", "order", "nodes": {id: {type, status, reason, view, provenance}}}`.
+    `{"ok", "errors", "order", "nodes": {id: {type, status, reason, view, provenance,
+    explain, lineage, view_hash}}}`.
     """
+    return _execute(graph, registry)[0]
+
+
+def _execute(graph: Any, registry: Registry) -> tuple[dict, dict[str, dict[str, Any]], dict[str, Any]]:
+    """`run` 의 본체 — 보고서와 함께 노드별 내부 값·파라미터를 돌려준다(저장 액션 전용)."""
     doc = _document_errors(graph)
     if doc:
-        return {"ok": False, "errors": doc, "order": [], "nodes": {}}
+        return {"ok": False, "errors": doc, "order": [], "nodes": {}}, {}, {}
     errors, nodes, specs, params, incoming, order = _analyse(graph, registry)
     if order is None:
-        return {"ok": False, "errors": errors, "order": [], "nodes": {}}
+        return {"ok": False, "errors": errors, "order": [], "nodes": {}}, {}, {}
 
     own_error: dict[str, str] = {}
     for e in errors:
@@ -360,6 +416,14 @@ def run(graph: Any, registry: Registry) -> dict:
         inputs = {p.name: None for p in spec.inputs}
         for port, (src, sport) in incoming[nid].items():
             inputs[port] = values[src][sport]
+        # 상류 결과의 lineage 는 이미 그 위의 계보를 품고 있다 — 합치면 전이가 된다.
+        in_lineage = merge_lineage(*(results[src]["lineage"] for src, _ in incoming[nid].values()))
+        refusal = spec.admits(in_lineage) if spec.admits is not None else None
+        if refusal:
+            results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": refusal,
+                            "view": None, "provenance": {}, "explain": _explain_failed(refusal),
+                            "lineage": in_lineage, "view_hash": None}
+            continue
         try:
             out = spec.run(inputs, params.get(nid))
             missing = [p.name for p in spec.outputs if p.name not in (out.values or {})]
@@ -367,18 +431,53 @@ def run(graph: Any, registry: Registry) -> dict:
                 raise NodeFailure(f"노드가 선언한 출력 {', '.join(missing)} 을 내지 않았습니다.")
         except NodeFailure as e:
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": e.reason,
-                            "view": None, "provenance": {}, "explain": _explain_failed(e.reason)}
+                            "view": None, "provenance": {}, "explain": _explain_failed(e.reason),
+                            "lineage": in_lineage, "view_hash": None}
             continue
         except Exception as e:                        # noqa: BLE001
             logger.exception(f"그래프 노드 {nid}({raw_type}) 처리 실패")
             why = f"처리 중 오류({type(e).__name__}) — 서버 로그를 보세요."
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": why,
-                            "view": None, "provenance": {}, "explain": _explain_failed(why)}
+                            "view": None, "provenance": {}, "explain": _explain_failed(why),
+                            "lineage": in_lineage, "view_hash": None}
             continue
         values[nid] = out.values
         results[nid] = {"type": raw_type, "status": STATUS_OK, "reason": None,
                         "view": out.view, "provenance": dict(out.provenance or {}),
-                        "explain": _explain_ok(spec, out, params.get(nid))}
+                        "explain": _explain_ok(spec, out, params.get(nid)),
+                        "lineage": merge_lineage(in_lineage, out.tags),
+                        "view_hash": view_hash(out.view)}
 
     ok = not errors and all(r["status"] == STATUS_OK for r in results.values())
-    return {"ok": ok, "errors": errors, "order": order, "nodes": results}
+    return {"ok": ok, "errors": errors, "order": order, "nodes": results}, values, params
+
+
+# ── 저장 액션 (BK0) ───────────────────────────────────────────────────────────
+
+def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -> dict:
+    """그래프를 **다시 계산**해 `node_id` 의 view 해시가 사용자가 본 미리보기와 같을 때만
+    그 노드의 `save` 를 **한 번** 부른다. 결과 `{"ok": True, saved_id, text, node_id}` 또는
+    `{"ok": False, code, message}` — 코드: `no_node` · `not_savable` · `not_ok` · `stale` · `save_failed`.
+    """
+    report, values, params = _execute(graph, registry)
+    res = report["nodes"].get(node_id)
+    if res is None:
+        return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없어요."}
+    spec = registry.get(str(res.get("type")))
+    if spec is None or spec.save is None:
+        return {"ok": False, "code": "not_savable", "message": "이 노드는 저장할 것이 없어요."}
+    if res["status"] != STATUS_OK:
+        return {"ok": False, "code": "not_ok",
+                "message": f"이 노드가 계산되지 않아 저장할 수 없어요 — {res.get('reason')}"}
+    if res["view_hash"] != preview_hash:
+        return {"ok": False, "code": "stale",
+                "message": "보신 미리보기와 지금 계산이 달라요. 다시 계산한 뒤 저장해 주세요."}
+    try:
+        out = spec.save(values[node_id], res["view"] or {}, params.get(node_id))
+    except NodeFailure as e:
+        return {"ok": False, "code": "save_failed", "message": e.reason}
+    except Exception as e:                            # noqa: BLE001
+        logger.exception(f"그래프 노드 {node_id} 저장 실패")
+        return {"ok": False, "code": "save_failed",
+                "message": f"저장하지 못했어요({type(e).__name__}) — 서버 로그를 보세요."}
+    return {"ok": True, "saved_id": out.get("saved_id"), "text": out.get("text"), "node_id": node_id}

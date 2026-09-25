@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Body
+from pydantic import BaseModel, Field
 
 from src.api.allocation_graph_nodes import PORT_TYPES, REGISTRY, STAGES
 from src.domain.workflow_gates import evaluate as evaluate_gates
@@ -41,3 +42,20 @@ def graph_run(graph: Any = Body(...)) -> dict:
     stage_of = {t: REGISTRY.get(t).stage for t in REGISTRY.types()}
     report["gates"] = evaluate_gates([n for n in nodes if isinstance(n, dict)], report["nodes"], stage_of)
     return report
+
+
+class GraphSaveRequest(BaseModel):
+    graph: Any
+    node_id: str = Field(..., min_length=1, max_length=120)
+    #: 사용자가 본 미리보기의 `view_hash` — 지금 계산과 같을 때만 저장한다.
+    preview_hash: str = Field(..., min_length=1, max_length=64)
+
+
+@router.post("/save")
+def graph_save(req: GraphSaveRequest) -> dict:
+    """★저장은 여기서만★ (BK0) — `/run` 은 어떤 노드도 DB 에 쓰지 않는다(사용자 결정).
+
+    그래프를 다시 계산해 그 노드의 미리보기 해시가 같을 때만 노드의 저장 함수를 **한 번** 부른다.
+    거절(`ok: false` + `code`)은 200 으로 — 캔버스가 사유를 그 노드 옆에 그린다.
+    """
+    return pg.save_node(req.graph, req.node_id, req.preview_hash, REGISTRY)
