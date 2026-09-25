@@ -31,6 +31,7 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
+from src.api.allocation_graph_explain import EXPLAINERS, MODEL_PLAIN
 from src.api.allocation_pipeline import build_belief
 from src.api.allocation_routes import (
     AllocationView,
@@ -61,14 +62,25 @@ _FORBID = ConfigDict(extra="forbid")
 
 
 def _subset(name: str, source: type[BaseModel], fields: tuple[str, ...],
-            **overrides: Any) -> type[BaseModel]:
-    """요청 모델의 필드 정의를 **복사**해 노드 파라미터 모델을 만든다(범위를 다시 적지 않는다)."""
+            ui: dict[str, dict] | None = None, **overrides: Any) -> type[BaseModel]:
+    """요청 모델의 필드 정의를 **복사**해 노드 파라미터 모델을 만든다(범위를 다시 적지 않는다).
+
+    `ui` 는 화면용 메타(BJ1) — 쉬운 이름·질문·기본/전문가 층·프리셋. 스키마의 `x-ui` 로
+    나가고 **검증 규칙에는 끼어들지 않는다**(범위·선택지는 여전히 요청 모델 하나).
+    """
+    ui = ui or {}
     spec: dict[str, Any] = {}
     for f in fields:
-        fi = source.model_fields[f]
-        spec[f] = (fi.annotation, copy.deepcopy(fi))
+        fi = copy.deepcopy(source.model_fields[f])
+        if f in ui:
+            fi.json_schema_extra = {"x-ui": ui[f]}
+        spec[f] = (fi.annotation, fi)
     spec.update(overrides)
     return create_model(name, __config__=_FORBID, **spec)
+
+
+def _ui(label: str, tier: str = "basic", **kw: Any) -> dict:
+    return {"label": label, "tier": tier, **kw}
 
 
 def _pydantic_reason(e: ValidationError) -> str:
@@ -79,20 +91,70 @@ def _pydantic_reason(e: ValidationError) -> str:
 #: 카탈로그 enum 은 모델 **이름**이다. 이 환경에서 풀 수 있는지는 실행 시점에 다시 묻는다.
 _MODELS = tuple(_studio.model_availability())
 
-UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"))
-ReturnsParams = _subset("ReturnsParams", AnalyzeRequest, ("lookback_days", "as_of"))
+#: 퀀트 워크플로우 단계 — 팔레트·이야기의 묶음(BJ1). 순서가 곧 흐름이다.
+STAGES = [
+    {"key": "data", "label": "데이터"},
+    {"key": "signal", "label": "신호"},
+    {"key": "belief", "label": "생각 정하기"},
+    {"key": "build", "label": "비중 정하기"},
+    {"key": "check", "label": "확인하기"},
+    {"key": "act", "label": "실행·기록"},
+]
+
+UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"), ui={
+    "tickers": _ui("종목", question="어떤 종목으로 할까요?", help="종목 코드를 쉼표로 넣어요."),
+    "weights": _ui("지금 비중", "advanced", help="들고 있는 비중을 알려 주면 회전율 제약에 써요."),
+    "benchmark": _ui("비교 기준", "advanced", help="성과를 비교할 지수예요."),
+})
+ReturnsParams = _subset("ReturnsParams", AnalyzeRequest, ("lookback_days", "as_of"), ui={
+    "lookback_days": _ui("기간", question="얼마나 긴 과거를 볼까요?", unit="거래일",
+                         presets=[{"label": "1년", "value": 252}, {"label": "3년", "value": 756},
+                                  {"label": "5년", "value": 1260}]),
+    "as_of": _ui("기준일", "advanced",
+                 help="비우면 오늘이에요. 과거 날짜로 고정하면 그날까지의 데이터만 써요."),
+})
 EstimateParams = _subset("EstimateParams", AnalyzeRequest,
                          ("conditional", "require_verified_macro", "regime_weighting",
-                          "regime_mode", "rebalance"))
-OptimizerParams = _subset("OptimizerParams", AnalyzeRequest, ("delta", "tau", "constraints"),
-                          model=(Literal[_MODELS], Field("mvo")))
+                          "regime_mode", "rebalance"), ui={
+    "conditional": _ui("경기 국면 반영", question="경기 국면을 반영할까요?",
+                       help="켜면 지금 국면과 비슷했던 과거로 기대 수익을 잡아요."),
+    "require_verified_macro": _ui("확인된 국면 판정만 쓰기", "advanced"),
+    "regime_weighting": _ui("국면 가중 방식", "advanced",
+                            options={"hard": "확정 국면", "probabilistic": "확률 가중"}),
+    "regime_mode": _ui("국면 모드", "advanced", options={"live": "오늘 기준", "backtest": "과거 기준"}),
+    "rebalance": _ui("보유 기간", "advanced", options={"M": "한 달", "Q": "한 분기"}),
+})
+OptimizerParams = _subset(
+    "OptimizerParams", AnalyzeRequest, ("delta", "tau", "constraints"), ui={
+        "delta": _ui("위험 회피 정도", question="위험을 얼마나 피할까요?", widget="slider",
+                     ends=["과감하게", "신중하게"]),
+        "tau": _ui("내 생각 불확실성 τ", "advanced", help="클수록 내 생각이 비중을 더 크게 움직여요."),
+        "constraints": _ui("제약", question="한 종목에 최대 얼마까지 둘까요?",
+                           presets=[{"label": "제한 없음", "value": None},
+                                    {"label": "40%", "value": {"max_weight_pct": 40}},
+                                    {"label": "30%", "value": {"max_weight_pct": 30}},
+                                    {"label": "20%", "value": {"max_weight_pct": 20}}]),
+    },
+    model=(Literal[_MODELS], Field("mvo", json_schema_extra={"x-ui": _ui(
+        "계산 방식", question="어떤 방식으로 나눌까요?", widget="cards",
+        options={m: MODEL_PLAIN.get(m, m) for m in _MODELS})})))
 BacktestParams = _subset("BacktestParams", BacktestRequest,
-                         ("rebalance", "window_days", "cost_bps"))
+                         ("rebalance", "window_days", "cost_bps"), ui={
+    "rebalance": _ui("리밸런싱 주기", question="얼마나 자주 비중을 맞출까요?",
+                     options={"M": "매월", "Q": "분기마다"}),
+    "window_days": _ui("학습 기간", "advanced", help="비우면 처음부터 모든 과거를 써요(확장 창)."),
+    "cost_bps": _ui("거래비용", question="거래비용을 얼마로 볼까요?", unit="bp",
+                    presets=[{"label": "0.05%", "value": 5}, {"label": "0.1%", "value": 10},
+                             {"label": "0.3%", "value": 30}]),
+})
 
 
 class ViewsParams(BaseModel):
     model_config = _FORBID
-    views: list[AllocationView] = Field(default_factory=list, max_length=30)
+    views: list[AllocationView] = Field(
+        default_factory=list, max_length=30,
+        json_schema_extra={"x-ui": _ui("내 생각", question="어떤 전망을 넣을까요?",
+                                       help="종목의 1년 기대 수익과 확신을 적어요.")})
 
 
 # ── 노드 처리기 ──────────────────────────────────────────────────────────────
@@ -263,30 +325,37 @@ P = pg.Port
 
 REGISTRY = pg.Registry(port_types=PORT_TYPES)
 for _spec in (
-    pg.NodeSpec("universe", "유니버스", inputs=(), outputs=(P("universe", "Universe"),),
+    pg.NodeSpec("universe", "유니버스", stage="data", plain_label="종목 고르기",
+                plain_description="분석할 종목과 지금 비중을 정해요.", explain=EXPLAINERS["universe"], inputs=(), outputs=(P("universe", "Universe"),),
                 run=_universe, params_model=UniverseParams, category="입력",
                 description="종목 목록 · 현재 비중(선택) · 벤치마크."),
-    pg.NodeSpec("returns", "수익률", inputs=(P("universe", "Universe"),),
+    pg.NodeSpec("returns", "수익률", stage="data", plain_label="수익률 불러오기",
+                plain_description="기간과 기준일을 정해요.", explain=EXPLAINERS["returns"], inputs=(P("universe", "Universe"),),
                 outputs=(P("returns", "Returns"),), run=_returns, params_model=ReturnsParams,
                 category="데이터",
                 description="적재된 일별 수익률(lookback·절단일). 운영에서는 합성하지 않는다."),
-    pg.NodeSpec("views", "BL 뷰", inputs=(), outputs=(P("views", "Views"),), run=_views,
+    pg.NodeSpec("views", "BL 뷰", stage="belief", plain_label="내 생각 넣기",
+                plain_description="“삼성전자가 오를 것” 같은 전망을 넣어요.", explain=EXPLAINERS["views"], inputs=(), outputs=(P("views", "Views"),), run=_views,
                 params_model=ViewsParams, category="입력",
                 description="절대(assets) 또는 부호 있는 조합(weights) 뷰."),
-    pg.NodeSpec("estimate", "추정 설정", inputs=(P("returns", "Returns"),),
+    pg.NodeSpec("estimate", "추정 설정", stage="belief", plain_label="기대 수익 추정",
+                plain_description="과거 기준 또는 경기 국면을 반영해요.", explain=EXPLAINERS["estimate"], inputs=(P("returns", "Returns"),),
                 outputs=(P("belief", "Belief"),), run=_estimate, params_model=EstimateParams,
                 category="추정",
                 description="표본 또는 국면조건부 μ/Σ 설정. 계산은 옵티마이저가 자기 모델로 한다."),
-    pg.NodeSpec("optimizer", "옵티마이저",
+    pg.NodeSpec("optimizer", "옵티마이저", stage="build", plain_label="비중 계산",
+                plain_description="여러 방식 중 하나로 비중을 나눠요.", explain=EXPLAINERS["optimizer"],
                 inputs=(P("returns", "Returns"), P("belief", "Belief"),
                         P("views", "Views", required=False)),
                 outputs=(P("weights", "Weights"),), run=_optimizer,
                 params_model=OptimizerParams, category="배분",
                 description="/analyze 와 같은 최적화·제약. 결과는 가중치와 정책을 함께 나른다."),
-    pg.NodeSpec("risk", "리스크 분해", inputs=(P("weights", "Weights"),),
+    pg.NodeSpec("risk", "리스크 분해", stage="check", plain_label="흔들림 나눠 보기",
+                plain_description="어느 종목이 위험을 얼마나 만드는지 봐요.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),
                 outputs=(P("risk", "RiskReport"),), run=_risk, category="분석",
                 description="오일러 리스크 기여 · ENB/Neff (추천 포트폴리오 기준)."),
-    pg.NodeSpec("backtest", "정책 백테스트",
+    pg.NodeSpec("backtest", "정책 백테스트", stage="check", plain_label="과거로 돌려 보기",
+                plain_description="이 규칙대로 했다면 어땠을지 봐요.", explain=EXPLAINERS["backtest"],
                 inputs=(P("returns", "Returns"), P("weights", "Weights")),
                 outputs=(P("backtest", "BacktestResult"),), run=_backtest,
                 params_model=BacktestParams, category="분석",

@@ -78,6 +78,17 @@ class NodeSpec:
     params_model: type[BaseModel] | None = None
     description: str = ""
     category: str = ""
+    #: ★사람이 읽는 층★ (BJ1) — 워크플로우 단계 키, 쉬운 이름·설명, 결과 설명기.
+    #: 설명기는 `(view, provenance, params) -> dict` 이고 **결정적**이어야 한다(서버가 문장을
+    #: 만들고 화면은 그리기만 한다 — 사용자 결정).
+    stage: str = ""
+    plain_label: str = ""
+    plain_description: str = ""
+    explain: Callable[[dict, dict, Any], dict] | None = None
+
+    @property
+    def human(self) -> str:
+        return self.plain_label or self.label
 
     def input(self, name: str) -> Port | None:
         return next((p for p in self.inputs if p.name == name), None)
@@ -113,6 +124,7 @@ class Registry:
         return [{
             "type": s.type, "label": s.label, "category": s.category,
             "description": s.description,
+            "stage": s.stage, "plain_label": s.human, "plain_description": s.plain_description,
             "inputs": [{"name": p.name, "type": p.type, "required": p.required}
                        for p in s.inputs],
             "outputs": [{"name": p.name, "type": p.type} for p in s.outputs],
@@ -276,9 +288,32 @@ def validate(graph: Any, registry: Registry) -> dict:
 
 # ── 실행 ─────────────────────────────────────────────────────────────────────
 
-def _blocked(spec_type: str | None, reason: str) -> dict:
+def _blocked(spec_type: str | None, reason: str, explain: dict | None = None) -> dict:
     return {"type": spec_type, "status": STATUS_BLOCKED, "reason": reason,
-            "view": None, "provenance": {}}
+            "view": None, "provenance": {}, "explain": explain}
+
+
+# ── 쉬운 말 설명 (BJ1) ────────────────────────────────────────────────────────
+
+def _explain_failed(reason: str) -> dict:
+    return {"title": "계산하지 못했어요", "trust": [{"state": STATUS_FAILED, "text": reason}]}
+
+
+def _explain_ok(spec: NodeSpec, out: NodeOutput, params: Any) -> dict:
+    """노드 설명기를 부른다. ★설명이 실패해도 결과를 지우지 않고, 문장을 지어내지 않는다★ —
+    "설명을 만들지 못했어요" + 예외 종류를 몰라요(unknown)로 싣는다."""
+    if spec.explain is None:
+        return {"title": f"‘{spec.human}’를 계산했어요"}
+    try:
+        ex = spec.explain(out.view or {}, dict(out.provenance or {}), params)
+        if not isinstance(ex, dict) or not ex.get("title"):
+            raise TypeError("설명기가 title 을 가진 dict 를 돌려주지 않았습니다")
+        return ex
+    except Exception as e:                            # noqa: BLE001
+        logger.exception(f"설명기 실패: {spec.type}")
+        return {"title": f"‘{spec.human}’를 계산했어요",
+                "trust": [{"state": "unknown",
+                           "text": f"설명을 만들지 못했어요({type(e).__name__}) — 결과 숫자는 자세히 탭에 있어요."}]}
 
 
 def run(graph: Any, registry: Registry) -> dict:
@@ -304,14 +339,22 @@ def run(graph: Any, registry: Registry) -> dict:
         raw_type = str(nodes[nid].get("type"))
         spec = specs[nid]
         if nid in own_error:
-            results[nid] = _blocked(raw_type, own_error[nid])
+            ex = ({"title": "모르는 노드예요",
+                   "facts": [f"‘{raw_type}’는 이 서버에 없는 노드예요. 설정은 그대로 남아 있어요."]}
+                  if spec is None else
+                  {"title": "설정을 확인해 주세요", "facts": [own_error[nid]]})
+            results[nid] = _blocked(raw_type, own_error[nid], ex)
             continue
         bad_up = [(src, results[src]) for src, _ in incoming[nid].values()
                   if results.get(src, {}).get("status") != STATUS_OK]
         if bad_up:
             src, r = bad_up[0]
-            results[nid] = _blocked(raw_type, f"상류 {src}({r.get('type')}) 가 "
-                                              f"{r.get('status')} 입니다 — {r.get('reason')}")
+            up = registry.get(str(r.get("type")))
+            up_name = up.human if up else str(r.get("type"))
+            results[nid] = _blocked(
+                raw_type, f"상류 {src}({r.get('type')}) 가 {r.get('status')} 입니다 — {r.get('reason')}",
+                {"title": "계산하지 못했어요",
+                 "facts": [f"앞 단계 ‘{up_name}’에서 멈춰서 이 단계는 계산하지 않았어요."]})
             continue
         assert spec is not None                       # 모르는 타입은 own_error 에 있다
         inputs = {p.name: None for p in spec.inputs}
@@ -324,17 +367,18 @@ def run(graph: Any, registry: Registry) -> dict:
                 raise NodeFailure(f"노드가 선언한 출력 {', '.join(missing)} 을 내지 않았습니다.")
         except NodeFailure as e:
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": e.reason,
-                            "view": None, "provenance": {}}
+                            "view": None, "provenance": {}, "explain": _explain_failed(e.reason)}
             continue
         except Exception as e:                        # noqa: BLE001
             logger.exception(f"그래프 노드 {nid}({raw_type}) 처리 실패")
-            results[nid] = {"type": raw_type, "status": STATUS_FAILED,
-                            "reason": f"처리 중 오류({type(e).__name__}) — 서버 로그를 보세요.",
-                            "view": None, "provenance": {}}
+            why = f"처리 중 오류({type(e).__name__}) — 서버 로그를 보세요."
+            results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": why,
+                            "view": None, "provenance": {}, "explain": _explain_failed(why)}
             continue
         values[nid] = out.values
         results[nid] = {"type": raw_type, "status": STATUS_OK, "reason": None,
-                        "view": out.view, "provenance": dict(out.provenance or {})}
+                        "view": out.view, "provenance": dict(out.provenance or {}),
+                        "explain": _explain_ok(spec, out, params.get(nid))}
 
     ok = not errors and all(r["status"] == STATUS_OK for r in results.values())
     return {"ok": ok, "errors": errors, "order": order, "nodes": results}

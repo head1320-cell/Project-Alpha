@@ -278,3 +278,63 @@ def test_the_registry_refuses_undeclared_port_types_and_duplicates():
     reg.register(pg.NodeSpec("y", "y", inputs=(), outputs=(), run=_add))
     with pytest.raises(ValueError):
         reg.register(pg.NodeSpec("y", "y", inputs=(), outputs=(), run=_add))
+
+
+# ── BJ1 · 설명 자리 — ★모든 노드가 사람이 읽는 설명을 갖는다★ ─────────────
+
+def _explaining_registry() -> pg.Registry:
+    reg = pg.Registry(port_types=("Num",))
+    reg.register(pg.NodeSpec(
+        "const", "상수", inputs=(), outputs=(pg.Port("out", "Num"),), params_model=_ConstParams,
+        run=_const, stage="data", plain_label="숫자 정하기", plain_description="숫자 하나를 내요",
+        explain=lambda view, prov, params: {"title": f"숫자 {view['value']}을 정했어요"}))
+    reg.register(pg.NodeSpec("boom", "실패", inputs=(pg.Port("a", "Num"),),
+                             outputs=(pg.Port("out", "Num"),), run=_boom, plain_label="터지는 단계"))
+    reg.register(pg.NodeSpec("label", "글자", inputs=(pg.Port("x", "Num"),),
+                             outputs=(pg.Port("text", "Num"),), run=_label, plain_label="글자로 바꾸기"))
+    return reg
+
+
+def test_an_ok_node_carries_its_own_explanation():
+    out = pg.run(_g([_n("c", "const", value=3)], []), _explaining_registry())
+    assert out["nodes"]["c"]["explain"] == {"title": "숫자 3을 정했어요"}
+
+
+def test_a_node_without_an_explainer_still_gets_a_plain_title():
+    g = _g([_n("c", "const", value=3), _n("t", "label")], [_e("c", "out", "t", "x")])
+    out = pg.run(g, _explaining_registry())
+    assert out["nodes"]["t"]["explain"]["title"] == "‘글자로 바꾸기’를 계산했어요"
+
+
+def test_a_failed_node_says_so_in_plain_words_with_the_reason():
+    g = _g([_n("c", "const", value=1), _n("b", "boom"), _n("t", "label")],
+           [_e("c", "out", "b", "a"), _e("b", "out", "t", "x")])
+    out = pg.run(g, _explaining_registry())
+    fb = out["nodes"]["b"]["explain"]
+    assert fb["title"] == "계산하지 못했어요"
+    assert fb["trust"] == [{"state": "failed", "text": "일부러 실패 — 재료 없음"}]
+    tb = out["nodes"]["t"]["explain"]
+    assert tb["title"] == "계산하지 못했어요"
+    assert "앞 단계 ‘터지는 단계’" in tb["facts"][0], "막힌 이유는 상류의 쉬운 이름으로"
+
+
+def test_an_explainer_that_crashes_does_not_hide_the_result_or_invent_text():
+    reg = _explaining_registry()
+    reg.register(pg.NodeSpec("bad", "나쁜 설명", inputs=(), outputs=(pg.Port("out", "Num"),),
+                             run=lambda i, p: pg.NodeOutput(values={"out": 1}, view={"value": 1}),
+                             explain=lambda v, pr, pa: 1 / 0))
+    r = pg.run(_g([_n("x", "bad")], []), reg)["nodes"]["x"]
+    assert r["status"] == "ok" and r["view"] == {"value": 1}, "설명 실패가 결과를 지우지 않는다"
+    assert r["explain"]["trust"][0]["state"] == "unknown"
+    assert "ZeroDivisionError" in r["explain"]["trust"][0]["text"]
+
+
+def test_an_unknown_node_is_explained_as_unknown():
+    g = _g([_n("f", "future_node")], [])
+    ex = pg.run(g, _explaining_registry())["nodes"]["f"]["explain"]
+    assert ex["title"] == "모르는 노드예요" and "future_node" in ex["facts"][0]
+
+
+def test_the_catalog_carries_plain_words_and_stage():
+    c = {x["type"]: x for x in _explaining_registry().catalog()}["const"]
+    assert (c["stage"], c["plain_label"], c["plain_description"]) == ("data", "숫자 정하기", "숫자 하나를 내요")

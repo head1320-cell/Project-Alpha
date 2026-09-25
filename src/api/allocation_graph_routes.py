@@ -12,7 +12,8 @@ from typing import Any
 
 from fastapi import APIRouter, Body
 
-from src.api.allocation_graph_nodes import PORT_TYPES, REGISTRY
+from src.api.allocation_graph_nodes import PORT_TYPES, REGISTRY, STAGES
+from src.domain.workflow_gates import evaluate as evaluate_gates
 from src.engine import portfolio_graph as pg
 
 router = APIRouter(prefix="/api/v1/allocation/graph", tags=["allocation-graph"])
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/api/v1/allocation/graph", tags=["allocation-graph"])
 def graph_node_types() -> dict:
     """팔레트의 단일 출처 — 캔버스는 이것만 보고 노드·포트·파라미터 폼을 그린다."""
     return {"format": pg.FORMAT, "version": pg.VERSION, "port_types": list(PORT_TYPES),
-            "nodes": REGISTRY.catalog()}
+            "stages": STAGES, "nodes": REGISTRY.catalog()}
 
 
 @router.post("/validate")
@@ -34,4 +35,9 @@ def graph_validate(graph: Any = Body(...)) -> dict:
 def graph_run(graph: Any = Body(...)) -> dict:
     """위상 순서로 실행. 노드별 `{status, reason, view, provenance}` — 실패는 번지되
     지어내지 않는다(`portfolio_graph` 의 약속)."""
-    return pg.run(graph, REGISTRY)
+    report = pg.run(graph, REGISTRY)
+    # ★증거 관문★ (BJ1) — 그래프 구성과 노드 출처로 8 관문을 판정한다. 건너뛴 관문은 건너뜀이다.
+    nodes = graph.get("nodes") if isinstance(graph, dict) and isinstance(graph.get("nodes"), list) else []
+    stage_of = {t: REGISTRY.get(t).stage for t in REGISTRY.types()}
+    report["gates"] = evaluate_gates([n for n in nodes if isinstance(n, dict)], report["nodes"], stage_of)
+    return report
