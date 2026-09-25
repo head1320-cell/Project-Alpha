@@ -2798,6 +2798,10 @@ def run_backtest(
     cost_door: str | None = None,
     cost_explicit_fields: frozenset[str] | None = None,
     cost_available_fields: frozenset[str] | None = None,
+    # ★관측 전용★(BG) — 실행이 끝난 엔진을 콜백으로 넘긴다. 결과 dict 는 거래를
+    # 앞 500건만 싣으므로, 전략 레지스트리가 완전한 거래·종가로 보유를 복원하려면
+    # 엔진 객체가 필요하다. `None`(기본)이면 이 함수는 예전과 바이트 단위로 같다.
+    on_engine=None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -2885,4 +2889,7 @@ def run_backtest(
         cost_available_fields=cost_available_fields,
     )
     engine = BacktestEngine(cfg, progress_cb=progress_cb)
-    return engine.run()
+    result = engine.run()
+    if on_engine is not None:
+        on_engine(engine)
+    return result

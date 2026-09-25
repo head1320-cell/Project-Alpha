@@ -97,7 +97,8 @@
 ## 3. ③ 결정 기록 — 기본 영구, 삭제는 막지 않는다
 
 `backtest_runs` · `multibacktest_runs` · `multibacktest_daily` ·
-`multibacktest_strategy_daily` · `research_runs` · `research_cases` ·
+`multibacktest_strategy_daily` · `strategy_registry` · `strategy_daily` ·
+`research_runs` · `research_cases` ·
 `alpha_registry` · `journal_entries` · `investment_decisions` ·
 `investment_decision_legs` · `target_portfolio_versions` · `execution_plans` ·
 `company_snapshots` · `regime_snapshots` · `scenario_packs` ·

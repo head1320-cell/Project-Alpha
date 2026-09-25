@@ -23,7 +23,9 @@ import pytest
 
 from src.engine import multistrategy_availability as ma
 
-FIVE = {"src.engine.allocator", "src.engine.strategy_registry",
+#: ★지금 없는 것★ — 복원될 때마다 줄어든다(트립와이어가 그것을 요구한다).
+#: BG1 에서 `src.engine.strategy_registry` 가 복원됐다.
+FIVE = {"src.engine.allocator",
         "src.execution.order_netting", "src.data.macro_feed",
         "src.engine.regime_model"}
 
@@ -64,7 +66,7 @@ def test_restoring_one_shrinks_the_list(monkeypatch):
     monkeypatch.setattr(ma, "_spec_exists",
                         lambda name: name == "src.engine.allocator")
     assert "src.engine.allocator" not in ma.missing_now()
-    assert len(ma.missing_now()) == 4
+    assert len(ma.missing_now()) == len(FIVE) - 1
 
 
 def test_the_http_error_is_503_with_the_status():

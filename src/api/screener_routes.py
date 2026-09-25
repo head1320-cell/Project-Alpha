@@ -1495,6 +1495,121 @@ class ScreenToBacktestRequest(BaseModel):
 _COST_DOOR = "screener"
 
 
+def _effective_strategy(req: ScreenToBacktestRequest) -> tuple[str, dict]:
+    """조건식 전략 분기 (Genport식 진입/청산) — ★코어와 전략 레지스트리(BG)가 같은 함수를 쓴다★
+
+    strategy_name이 명시적으로 "Condition"이면 조건이 비어있어도(리스크룰만 설정) 이 분기를
+    태워 eff_params를 채운다 — 그래야 ConditionStrategy가 올바른 buy/sell_conditions로
+    생성되고, "GoldenCross" 같은 하드코딩 기본 전략(데드크로스 등 원치 않는 매도사유)으로
+    조용히 대체되지 않는다.
+    """
+    eff_strategy = req.strategy_name
+    eff_params = dict(req.strategy_params or {})
+    if req.buy_conditions or req.sell_conditions or req.strategy_name == "Condition":
+        from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
+        _ = condition_strategy
+        eff_strategy = "Condition"
+        eff_params = {
+            "buy_conditions": req.buy_conditions or [],
+            "sell_conditions": req.sell_conditions or [],
+            "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
+            "buy_logic": req.buy_logic,
+            "sell_logic": req.sell_logic,
+        }
+    return eff_strategy, eff_params
+
+
+def _factor_weights(req: ScreenToBacktestRequest, scores: dict) -> dict | None:
+    """팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵. 아니면 `None`.
+
+    점수가 높을수록 가중치↑ (0~1). 전부 같으면 0.5(동일가중).
+    """
+    if req.buy_weight_mode != "factor" or not scores:
+        return None
+    lo, hi = min(scores.values()), max(scores.values())
+    rng = hi - lo
+    return {t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()}
+
+
+def _backtest_kwargs(req: ScreenToBacktestRequest, tickers: list, pool_tickers: list,
+                     factor_weights: dict | None, eff_strategy: str, eff_params: dict,
+                     progress_cb=None) -> dict:
+    """스크리닝이 끝난 뒤 `run_backtest` 에 넘기는 인자 전부.
+
+    ★원래 경로와 전략 레지스트리의 재실행(BG)이 **같은 함수**를 쓴다★ — 인자 구성을 두
+    벌 두면 한쪽만 고쳐져 재현 검증이 이유 없이 실패하거나, 더 나쁘게는 통과한다.
+    """
+    return dict(
+        symbols=tickers,
+        strategy_name=eff_strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        strategy_params=eff_params,
+        initial_capital=req.initial_capital,
+        commission_rate=req.commission_rate,
+        slippage_rate=req.slippage_rate,
+        # ★문이 아는 사실을 결과까지 나른다★(AZ) — 요청이 요율을 명시했나,
+        #   아니면 **이 문의 기본값이 채웠나**. 값은 위 두 줄 그대로이고
+        #   여기서 바뀌는 것은 없다. `model_fields_set` 은 pydantic 이
+        #   *"요청 본문에 이 필드가 있었는가"* 를 그대로 답하는 자리다.
+        cost_door=_COST_DOOR,
+        cost_explicit_fields=frozenset(req.model_fields_set),
+        stop_loss_pct=req.stop_loss_pct,
+        take_profit_pct=req.take_profit_pct,
+        trailing_stop_pct=req.trailing_stop_pct,
+        max_positions=req.max_positions,
+        buy_fill_type=req.buy_fill_type,
+        sell_fill_type=req.sell_fill_type,
+        max_hold_days=req.max_hold_days,
+        min_hold_days=req.min_hold_days,
+        day_trade=req.day_trade,
+        sell_divide_pct=req.sell_divide_pct,
+        max_sell_divisions=req.max_sell_divisions,
+        buy_weight_mode=req.buy_weight_mode,
+        buy_divide_pct=req.buy_divide_pct,
+        max_buy_per_day=req.max_buy_per_day,
+        max_buy_count=req.max_buy_count,
+        factor_weights=factor_weights,
+        breakthrough_buy=req.breakthrough_buy,
+        rebalance_period=req.rebalance_period,
+        market_timing=req.market_timing,
+        signal_lag=req.signal_lag,
+        charge_sell_tax=req.charge_sell_tax,
+        charge_spread=req.charge_spread,
+        charge_market_impact=req.charge_market_impact,
+        rebuy_block_days=req.rebuy_block_days,
+        liquidate_at_end=req.liquidate_at_end,
+        price_basis_policy=req.price_basis_policy,
+        buy_fill_offset_pct=req.buy_fill_offset_pct,
+        sell_fill_offset_pct=req.sell_fill_offset_pct,
+        max_buy_amount=req.max_buy_amount,
+        cash_reserve_pct=req.cash_reserve_pct,
+        asset_alloc=req.asset_alloc,
+        buy_sort_expr=req.buy_sort_expr,
+        buy_sort_desc=req.buy_sort_desc,
+        intraday_fill=req.intraday_fill,
+        buy_time_start=req.buy_time_start,
+        buy_time_end=req.buy_time_end,
+        sell_time_start=req.sell_time_start,
+        sell_time_end=req.sell_time_end,
+        buy_fill_expr=req.buy_fill_expr,
+        sell_fill_expr=req.sell_fill_expr,
+        expiry_fill_type=req.expiry_fill_type,
+        expiry_fill_offset_pct=req.expiry_fill_offset_pct,
+        buy_ladder=req.buy_ladder,
+        sell_ladder=req.sell_ladder,
+        expiry_sell_method=req.expiry_sell_method,
+        breakthrough_base_type=req.breakthrough_base_type,
+        breakthrough_offset_pct=req.breakthrough_offset_pct,
+        breakthrough_direction=req.breakthrough_direction,
+        buy_timing=req.buy_timing,
+        progress_cb=progress_cb,
+        dynamic_replenishment=bool(pool_tickers),
+        replenishment_pool=pool_tickers or None,
+
+    )
+
+
 def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
     """screen-to-backtest 핵심 로직 (unary + 스트리밍 공용).
 
@@ -1647,106 +1762,16 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         _emit({"phase": "screened", "count": len(tickers)})
 
         # 팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵 생성
-        factor_weights = None
-        if req.buy_weight_mode == "factor":
-            scores = {it.stock_code: float(getattr(it, "composite_score", 0) or 0)
-                      for it in screened if getattr(it, "stock_code", None)}
-            if scores:
-                lo, hi = min(scores.values()), max(scores.values())
-                rng = hi - lo
-                # 점수가 높을수록 가중치↑ (0~1). 전부 같으면 0.5(동일가중)
-                factor_weights = {
-                    t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()
-                }
+        factor_weights = _factor_weights(req, {
+            it.stock_code: float(getattr(it, "composite_score", 0) or 0)
+            for it in screened if getattr(it, "stock_code", None)})
 
         # 조건식 전략 분기 (Genport식 진입/청산)
-        eff_strategy = req.strategy_name
-        eff_params = dict(req.strategy_params or {})
-        # strategy_name이 명시적으로 "Condition"이면 조건이 비어있어도(리스크룰만 설정) 이 분기를
-        # 태워 eff_params를 채운다 — 그래야 ConditionStrategy가 올바른 buy/sell_conditions로
-        # 생성되고, "GoldenCross" 같은 하드코딩 기본 전략(데드크로스 등 원치 않는 매도사유)으로
-        # 조용히 대체되지 않는다.
-        if req.buy_conditions or req.sell_conditions or req.strategy_name == "Condition":
-            from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
-            _ = condition_strategy
-            eff_strategy = "Condition"
-            eff_params = {
-                "buy_conditions": req.buy_conditions or [],
-                "sell_conditions": req.sell_conditions or [],
-                "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
-                "buy_logic": req.buy_logic,
-                "sell_logic": req.sell_logic,
-            }
+        eff_strategy, eff_params = _effective_strategy(req)
 
         # 2) 백테스트
-        bt = run_backtest(
-            symbols=tickers,
-            strategy_name=eff_strategy,
-            start_date=req.start_date,
-            end_date=req.end_date,
-            strategy_params=eff_params,
-            initial_capital=req.initial_capital,
-            commission_rate=req.commission_rate,
-            slippage_rate=req.slippage_rate,
-            # ★문이 아는 사실을 결과까지 나른다★(AZ) — 요청이 요율을 명시했나,
-            #   아니면 **이 문의 기본값이 채웠나**. 값은 위 두 줄 그대로이고
-            #   여기서 바뀌는 것은 없다. `model_fields_set` 은 pydantic 이
-            #   *"요청 본문에 이 필드가 있었는가"* 를 그대로 답하는 자리다.
-            cost_door=_COST_DOOR,
-            cost_explicit_fields=frozenset(req.model_fields_set),
-            stop_loss_pct=req.stop_loss_pct,
-            take_profit_pct=req.take_profit_pct,
-            trailing_stop_pct=req.trailing_stop_pct,
-            max_positions=req.max_positions,
-            buy_fill_type=req.buy_fill_type,
-            sell_fill_type=req.sell_fill_type,
-            max_hold_days=req.max_hold_days,
-            min_hold_days=req.min_hold_days,
-            day_trade=req.day_trade,
-            sell_divide_pct=req.sell_divide_pct,
-            max_sell_divisions=req.max_sell_divisions,
-            buy_weight_mode=req.buy_weight_mode,
-            buy_divide_pct=req.buy_divide_pct,
-            max_buy_per_day=req.max_buy_per_day,
-            max_buy_count=req.max_buy_count,
-            factor_weights=factor_weights,
-            breakthrough_buy=req.breakthrough_buy,
-            rebalance_period=req.rebalance_period,
-            market_timing=req.market_timing,
-            signal_lag=req.signal_lag,
-            charge_sell_tax=req.charge_sell_tax,
-            charge_spread=req.charge_spread,
-            charge_market_impact=req.charge_market_impact,
-            rebuy_block_days=req.rebuy_block_days,
-            liquidate_at_end=req.liquidate_at_end,
-            price_basis_policy=req.price_basis_policy,
-            buy_fill_offset_pct=req.buy_fill_offset_pct,
-            sell_fill_offset_pct=req.sell_fill_offset_pct,
-            max_buy_amount=req.max_buy_amount,
-            cash_reserve_pct=req.cash_reserve_pct,
-            asset_alloc=req.asset_alloc,
-            buy_sort_expr=req.buy_sort_expr,
-            buy_sort_desc=req.buy_sort_desc,
-            intraday_fill=req.intraday_fill,
-            buy_time_start=req.buy_time_start,
-            buy_time_end=req.buy_time_end,
-            sell_time_start=req.sell_time_start,
-            sell_time_end=req.sell_time_end,
-            buy_fill_expr=req.buy_fill_expr,
-            sell_fill_expr=req.sell_fill_expr,
-            expiry_fill_type=req.expiry_fill_type,
-            expiry_fill_offset_pct=req.expiry_fill_offset_pct,
-            buy_ladder=req.buy_ladder,
-            sell_ladder=req.sell_ladder,
-            expiry_sell_method=req.expiry_sell_method,
-            breakthrough_base_type=req.breakthrough_base_type,
-            breakthrough_offset_pct=req.breakthrough_offset_pct,
-            breakthrough_direction=req.breakthrough_direction,
-            buy_timing=req.buy_timing,
-            progress_cb=progress_cb,
-            dynamic_replenishment=bool(pool_tickers),
-            replenishment_pool=pool_tickers or None,
-        )
+        bt = run_backtest(**_backtest_kwargs(req, tickers, pool_tickers, factor_weights,
+                                             eff_strategy, eff_params, progress_cb))
 
         # 3) 통합 응답
         _emit({"phase": "done"})

@@ -52,12 +52,6 @@ MISSING: tuple[MissingModule, ...] = (
                 "hrp_macro 는 매크로 기울기를 얹는 배분 정책이라 새로 만들면 "
                 "별도 승인 사항입니다.")),
     MissingModule(
-        module="src.engine.strategy_registry",
-        needed_by=("src/api/stage12_routes.py", _ENGINE),
-        role="전략 레지스트리(StrategyRegistry)",
-        reason=("전략 정의와 일별 수익률 행렬을 읽는 자리입니다. 그 수익률을 담는 "
-                "테이블도 스키마에 없습니다.")),
-    MissingModule(
         module="src.execution.order_netting", needed_by=(_ENGINE,),
         role="주문 네팅(OrderNettingEngine)",
         reason=("전략 간 상쇄 주문을 합치는 자리입니다. 엔진은 지금 네팅 절감을 "
@@ -76,9 +70,10 @@ MISSING: tuple[MissingModule, ...] = (
                 "정책이라 별도 승인 사항입니다.")),
 )
 
-#: ★모듈을 복원해도 남는 공백★
-DATA_GAP = ("등록 전략의 일별 수익률을 담는 테이블이 스키마에 없습니다 — 모듈을 "
-            "복원해도 돌릴 재료가 없습니다.")
+#: ★모듈을 복원해도 남는 공백★ — BG1 에서 `strategy_registry` 가 복원되며 수익률
+#: 테이블(`strategy_daily`)이 생겼다. 이제 공백은 "등록된 전략이 있어야 한다" 이다.
+DATA_GAP = ("전략 수익률은 등록된 백테스트 실행에서 옵니다(strategy_registry, BG1) — "
+            "등록된 전략이 없으면 돌릴 재료가 없습니다.")
 
 _REASON = ("멀티전략·리얼리즘 백테스트는 이 저장소에서 동작하지 않습니다 — 필요한 "
            "모듈 {n}개가 없고 돌릴 데이터도 없습니다. 고장이 아니라 부재이며, "
