@@ -1,0 +1,295 @@
+"""AAS 그래프의 핵심 사슬 노드 — ★`/analyze`·`/backtest` 의 사본이 아니다★ (BI2)
+==============================================================================
+스펙 `docs/superpowers/specs/2026-09-25-aas-node-canvas-design.md` §4.3 · 실행기
+`src/engine/portfolio_graph.py`
+
+`run_analyze` 는 분석 산수의 **단일 출처**다(재현 엔드포인트가 그대로 부른다). 이 노드들은
+그 산수를 다시 쓰지 않고 **같은 함수**를 같은 순서로 부른다 — `_load_clean_returns` ·
+`build_belief` · `optimize` · `_apply_constraints` · `_risk_contribution_report` ·
+`_enb_report` · `_policy_backtest`. 순서(오케스트레이션)만 여기 있고, 그것이 갈라지는지는
+골든 테스트(`tests/test_allocation_graph.py`)가 `run_analyze`·`/backtest` 와 대조한다.
+
+## 노드 경계가 가짜가 아닌 이유 — 그리고 한 군데 예외
+
+`build_belief` 는 옵티마이저의 **모델**을 읽는다(모델마다 조건부 뷰가 다르다). 그래서
+`estimate` 노드는 μ/Σ 를 **미리 계산하지 않고 추정 설정을 나른다** — 옵티마이저가 자기
+모델 아래에서 `/analyze` 와 똑같이 `build_belief` 를 부른다. 설정을 미리 계산해 두면
+모델을 바꿨을 때 다른 모델의 믿음이 조용히 섞인다.
+
+## 파라미터 규칙의 단일 출처
+
+노드 파라미터 모델은 `AnalyzeRequest`·`BacktestRequest` 의 **필드 정의를 그대로 복사해**
+만든다(`_subset`). 범위를 여기 다시 적으면 두 곳이 갈라진다. 옵티마이저 노드는 결국
+`AnalyzeRequest` 를 만들어 부르므로, 조합 규칙(예: 뷰 형식)도 같은 검증을 지난다.
+"""
+from __future__ import annotations
+
+import copy
+import logging
+from typing import Any, Literal
+
+from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+
+from src.api.allocation_pipeline import build_belief
+from src.api.allocation_routes import (
+    AllocationView,
+    AnalyzeRequest,
+    BacktestRequest,
+    _apply_constraints,
+    _check_as_of,
+    _enb_report,
+    _ep_unavailable_reason,
+    _labels,
+    _load_clean_returns,
+    _policy_backtest,
+    _risk_contribution_report,
+    _unknown_tickers,
+    _w_dict,
+)
+from src.data.mock_gate import mock_allowed
+from src.domain.perf_kind import backtest_label
+from src.engine import allocation_studio as _studio
+from src.engine import portfolio_graph as pg
+
+logger = logging.getLogger(__name__)
+
+PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
+              "BacktestResult")
+
+_FORBID = ConfigDict(extra="forbid")
+
+
+def _subset(name: str, source: type[BaseModel], fields: tuple[str, ...],
+            **overrides: Any) -> type[BaseModel]:
+    """요청 모델의 필드 정의를 **복사**해 노드 파라미터 모델을 만든다(범위를 다시 적지 않는다)."""
+    spec: dict[str, Any] = {}
+    for f in fields:
+        fi = source.model_fields[f]
+        spec[f] = (fi.annotation, copy.deepcopy(fi))
+    spec.update(overrides)
+    return create_model(name, __config__=_FORBID, **spec)
+
+
+def _pydantic_reason(e: ValidationError) -> str:
+    return "; ".join(f"{'.'.join(str(x) for x in d['loc']) or '(전체)'}: {d['msg']}"
+                     for d in e.errors())
+
+
+#: 카탈로그 enum 은 모델 **이름**이다. 이 환경에서 풀 수 있는지는 실행 시점에 다시 묻는다.
+_MODELS = tuple(_studio.model_availability())
+
+UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"))
+ReturnsParams = _subset("ReturnsParams", AnalyzeRequest, ("lookback_days", "as_of"))
+EstimateParams = _subset("EstimateParams", AnalyzeRequest,
+                         ("conditional", "require_verified_macro", "regime_weighting",
+                          "regime_mode", "rebalance"))
+OptimizerParams = _subset("OptimizerParams", AnalyzeRequest, ("delta", "tau", "constraints"),
+                          model=(Literal[_MODELS], Field("mvo")))
+BacktestParams = _subset("BacktestParams", BacktestRequest,
+                         ("rebalance", "window_days", "cost_bps"))
+
+
+class ViewsParams(BaseModel):
+    model_config = _FORBID
+    views: list[AllocationView] = Field(default_factory=list, max_length=30)
+
+
+# ── 노드 처리기 ──────────────────────────────────────────────────────────────
+
+def _universe(inputs: dict, p) -> pg.NodeOutput:
+    value = {"tickers": list(p.tickers), "weights": p.weights, "benchmark": p.benchmark}
+    return pg.NodeOutput(
+        values={"universe": value},
+        view={"tickers": value["tickers"], "labels": _labels(value["tickers"]),
+              "weights": p.weights, "benchmark": p.benchmark,
+              "unknown_tickers": _unknown_tickers(value["tickers"])})
+
+
+def _returns(inputs: dict, p) -> pg.NodeOutput:
+    u = inputs["universe"]
+    try:
+        _check_as_of(p.as_of)
+    except HTTPException as e:
+        raise pg.NodeFailure(str(e.detail)) from e
+    returns, bench, excluded, coverage = _load_clean_returns(
+        u["tickers"], u["benchmark"], p.lookback_days, as_of=p.as_of)
+    if returns is None or len(returns.columns) < 2:
+        why = "; ".join(f"{x['ticker']}: {x['reason']}" for x in excluded) or "없음"
+        raise pg.NodeFailure("분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 "
+                             f"추가하세요. (제외: {why})")
+    names = list(returns.columns)
+    source = coverage.get("source")
+    provenance = {
+        "source": source,
+        # ★등급은 아는 만큼만★ mock 폴백은 합성(E0)이 확실하다. DB 적재분은 이 경로가
+        # 행 단위 출처를 싣지 않아 E1~E4 중 무엇인지 알 수 없다 — 지어내지 않는다.
+        "data_grade": "E0" if source == "mock" else None,
+        "data_grade_reason": (None if source == "mock" else
+                              "DB 적재분 — 이 경로는 행 단위 출처를 싣지 않아 픽스처·제공자"
+                              "·실 과거·시점고정 중 어느 것인지 관측되지 않았습니다."),
+        "as_of_effective": coverage.get("as_of_effective"),
+    }
+    value = {"universe": u, "lookback_days": p.lookback_days, "as_of": p.as_of,
+             "returns": returns, "bench": bench, "excluded": excluded,
+             "coverage": coverage, "names": names}
+    return pg.NodeOutput(
+        values={"returns": value},
+        view={"names": names, "labels": _labels(names), "n_assets": len(names),
+              "excluded": excluded, "coverage": coverage},
+        provenance=provenance)
+
+
+def _views(inputs: dict, p) -> pg.NodeOutput:
+    views = [v.model_dump() for v in p.views]
+    return pg.NodeOutput(values={"views": views},
+                         view={"n_views": len(views), "views": views})
+
+
+def _estimate(inputs: dict, p) -> pg.NodeOutput:
+    settings = p.model_dump()
+    note = ("조건부 μ/Σ 를 요청했습니다 — 옵티마이저가 자기 모델 아래에서 계산하고, 검증 "
+            "관문이 막으면 표본 추정으로 계산하며 그 사유를 옵티마이저 결과에 적습니다."
+            if p.conditional else
+            "표본(trailing) μ/Σ — 조건부 추정을 요청하지 않았습니다.")
+    return pg.NodeOutput(values={"belief": settings},
+                         view={"settings": settings, "note": note})
+
+
+def _optimizer(inputs: dict, p) -> pg.NodeOutput:
+    r, belief_settings = inputs["returns"], inputs["belief"]
+    avail = _studio.model_availability().get(p.model) or {}
+    if not avail.get("available"):
+        raise pg.NodeFailure(f"{p.model} 모델을 이 환경에서 풀 수 없습니다 — "
+                             f"{avail.get('reason') or '가용성 미상'}")
+    u = r["universe"]
+    try:
+        req = AnalyzeRequest(
+            tickers=u["tickers"], weights=u["weights"], benchmark=u["benchmark"],
+            lookback_days=r["lookback_days"], as_of=r["as_of"],
+            views=inputs.get("views") or None,
+            model=p.model, delta=p.delta, tau=p.tau, constraints=p.constraints,
+            **belief_settings)
+    except ValidationError as e:
+        raise pg.NodeFailure(f"요청 조합이 /analyze 규칙에 맞지 않습니다 — "
+                             f"{_pydantic_reason(e)}") from e
+    if req.model == "ep":
+        from src.engine.capability import probe_all
+        why = _ep_unavailable_reason(probe_all())
+        if why:
+            raise pg.NodeFailure(why)
+
+    import numpy as np
+
+    from src.engine.allocation_studio import optimize
+    from src.engine.entropy_views import EPUnavailable
+    returns, names = r["returns"], r["names"]
+    R = returns.values
+    belief = build_belief(req, returns, names)
+    views = [v.model_dump() for v in (req.views or [])]
+    try:
+        opt = optimize(req.model, names, R, views=views or None,
+                       delta=req.delta, tau=req.tau,
+                       s_override=belief.s_override, extra_views=belief.extra_views,
+                       company_views=None)
+    except EPUnavailable as e:
+        raise pg.NodeFailure(str(e)) from e
+    constraints_report = _apply_constraints(req, names, R, opt, r["bench"])
+    weights = np.asarray(opt["weights"], dtype=float)
+    value = {"req": req, "names": names, "opt": opt, "weights": weights,
+             "constraints_report": constraints_report}
+    view = {
+        "names": names, "labels": _labels(names), "model": req.model,
+        "params": {"delta": req.delta, "tau": req.tau},
+        "weights": _w_dict(names, weights),
+        "flow": {stage: _w_dict(names, w) for stage, w in opt["flow"].items()},
+        "views_applied": opt["views_applied"], "skipped_views": opt["skipped_views"],
+        "cap_missing": opt["cap_missing"], "mu_engine": opt.get("mu_engine"),
+        "ep": opt.get("ep"), "constraints_report": constraints_report,
+        "belief": {"conditional": req.conditional, "blocked": belief.blocked,
+                   "blocked_reason": belief.blocked_reason},
+    }
+    provenance = {"perf_label": backtest_label(is_mock_data=mock_allowed()).to_dict(),
+                  "data_source": r["coverage"].get("source"),
+                  "sigma_source": opt.get("sigma_source", "trailing"),
+                  "mu_engine": opt.get("mu_engine")}
+    return pg.NodeOutput(values={"weights": value}, view=view, provenance=provenance)
+
+
+def _risk(inputs: dict, p) -> pg.NodeOutput:
+    w = inputs["weights"]
+    opt, names = w["opt"], w["names"]
+    sigma_source = opt.get("sigma_source", "trailing")
+    view = {
+        "risk_contribution_optimized": _risk_contribution_report(
+            w["weights"], opt["sigma_annual"], names,
+            weights_source="optimized", sigma_source=sigma_source),
+        "enb": {**_enb_report(w["weights"], opt["sigma_annual"], names),
+                "weights_source": "optimized", "sigma_source": sigma_source},
+    }
+    return pg.NodeOutput(values={"risk": view}, view=view,
+                         provenance={"sigma_source": sigma_source})
+
+
+def _backtest(inputs: dict, p) -> pg.NodeOutput:
+    r, w = inputs["returns"], inputs["weights"]
+    req: AnalyzeRequest = w["req"]
+    try:
+        breq = BacktestRequest(
+            tickers=r["universe"]["tickers"], benchmark=r["universe"]["benchmark"],
+            lookback_days=r["lookback_days"], as_of=r["as_of"],
+            model=req.model, views=req.views, constraints=req.constraints,
+            delta=req.delta, tau=req.tau,
+            rebalance=p.rebalance, window_days=p.window_days, cost_bps=p.cost_bps)
+    except ValidationError as e:
+        raise pg.NodeFailure(f"정책 백테스트 규칙에 맞지 않습니다(/backtest 와 같은 규칙) — "
+                             f"{_pydantic_reason(e)}") from e
+    out = _policy_backtest(breq, r["returns"], r["bench"], r["excluded"], r["coverage"])
+    if out.get("error"):
+        raise pg.NodeFailure(str(out.get("message") or out.get("reason")
+                                 or "백테스트 계획 단계에서 거부됐습니다."))
+    out = dict(out)
+    out["belief_note"] = (
+        "조건부 μ/Σ 는 이 백테스트에 들어가지 않았습니다 — /backtest 와 같은 정의로, 각 "
+        "리밸런싱 시점의 표본 추정만 씁니다." if req.conditional else None)
+    return pg.NodeOutput(values={"backtest": out}, view=out,
+                         provenance={"perf_label": out.get("perf_label"),
+                                     "lookahead_evidence": out.get("lookahead_evidence")})
+
+
+# ── 레지스트리 ───────────────────────────────────────────────────────────────
+
+P = pg.Port
+
+REGISTRY = pg.Registry(port_types=PORT_TYPES)
+for _spec in (
+    pg.NodeSpec("universe", "유니버스", inputs=(), outputs=(P("universe", "Universe"),),
+                run=_universe, params_model=UniverseParams, category="입력",
+                description="종목 목록 · 현재 비중(선택) · 벤치마크."),
+    pg.NodeSpec("returns", "수익률", inputs=(P("universe", "Universe"),),
+                outputs=(P("returns", "Returns"),), run=_returns, params_model=ReturnsParams,
+                category="데이터",
+                description="적재된 일별 수익률(lookback·절단일). 운영에서는 합성하지 않는다."),
+    pg.NodeSpec("views", "BL 뷰", inputs=(), outputs=(P("views", "Views"),), run=_views,
+                params_model=ViewsParams, category="입력",
+                description="절대(assets) 또는 부호 있는 조합(weights) 뷰."),
+    pg.NodeSpec("estimate", "추정 설정", inputs=(P("returns", "Returns"),),
+                outputs=(P("belief", "Belief"),), run=_estimate, params_model=EstimateParams,
+                category="추정",
+                description="표본 또는 국면조건부 μ/Σ 설정. 계산은 옵티마이저가 자기 모델로 한다."),
+    pg.NodeSpec("optimizer", "옵티마이저",
+                inputs=(P("returns", "Returns"), P("belief", "Belief"),
+                        P("views", "Views", required=False)),
+                outputs=(P("weights", "Weights"),), run=_optimizer,
+                params_model=OptimizerParams, category="배분",
+                description="/analyze 와 같은 최적화·제약. 결과는 가중치와 정책을 함께 나른다."),
+    pg.NodeSpec("risk", "리스크 분해", inputs=(P("weights", "Weights"),),
+                outputs=(P("risk", "RiskReport"),), run=_risk, category="분석",
+                description="오일러 리스크 기여 · ENB/Neff (추천 포트폴리오 기준)."),
+    pg.NodeSpec("backtest", "정책 백테스트",
+                inputs=(P("returns", "Returns"), P("weights", "Weights")),
+                outputs=(P("backtest", "BacktestResult"),), run=_backtest,
+                params_model=BacktestParams, category="분석",
+                description="같은 정책을 walk-forward 로 시점 밖에서 재현(/backtest 와 같다)."),
+):
+    REGISTRY.register(_spec)

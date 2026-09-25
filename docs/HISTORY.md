@@ -19211,3 +19211,46 @@ multiple_inputs·missing_input·cycle) · `run`(칸 알고리즘, 동률은 파�
 노드가 결과를 지어냄.
 
 **하지 않은 것** — 실제 포트폴리오 노드(BI2) · 라우트 · 화면.
+
+### BI2 · 핵심 사슬 노드 + 문 — ★`/analyze`·`/backtest` 와 같은 수를 낸다★
+노드 7개(`src/api/allocation_graph_nodes.py`): `universe` · `returns` · `views` · `estimate` ·
+`optimizer` · `risk` · `backtest`. 문(`src/api/allocation_graph_routes.py`): `GET
+/api/v1/allocation/graph/node-types`(팔레트의 단일 출처) · `POST …/validate` · `POST …/run`.
+본문은 엄격 모델로 받지 않는다 — 불러온 파일이 틀렸을 때 422 한 덩어리가 아니라 노드별 명명
+오류를 200 으로 넘겨야 캔버스가 어느 노드가 틀렸는지 그릴 수 있다.
+
+**사본을 만들지 않았다.** `run_analyze` 가 분석 산수의 단일 출처라(재현 엔드포인트가 그대로
+부른다) 노드는 같은 함수를 같은 순서로 부른다. 인라인이던 조각 셋을 동작 불변으로 뽑아
+라우트와 노드가 함께 쓴다: `_ep_unavailable_reason` · `_apply_constraints` · `_policy_backtest`
+(기존 배분·재현 테스트 314 녹색 그대로). AST 트립와이어가 노드 모듈이 제약·백테스트·리스크
+산수를 엔진에서 직접 가져오는 것을 막는다.
+
+**설계 결정 — `estimate` 는 계산하지 않고 설정을 나른다.** `build_belief` 가 옵티마이저의
+모델을 읽기 때문이다(모델마다 조건부 뷰가 다르다). 미리 계산하면 모델을 바꿨을 때 다른 모델의
+믿음이 조용히 섞인다. 옵티마이저가 자기 모델로 `/analyze` 와 똑같이 부른다.
+
+**파라미터 규칙의 단일 출처** — 노드 파라미터 모델은 `AnalyzeRequest`·`BacktestRequest` 의
+필드 정의를 복사해 만든다(`_subset`, extra 금지). 옵티마이저 모델 이름은 `model_availability()`
+의 enum 이라 모르는 모델은 **실행 전** 검증에서 걸린다(캔버스가 바로 빨갛게). 이름은 알지만 이
+환경에서 못 푸는 모델은 실행 시 실패 + 가용성 사유(실행 시점에 다시 묻는다).
+
+**정직성** — `returns` 출처: mock 폴백은 `E0`(합성) 확실, DB 적재분은 이 경로가 행 단위 출처를
+싣지 않아 **등급 미상 + 사유**(E3 을 지어내지 않는다). 운영 모드에서 적재가 비면 합성하지 않고
+실패 → 하류 blocked. 백테스트 노드는 `/backtest` 의 lookback 하한(252)을 같은 규칙으로 따르고,
+조건부 μ/Σ 가 백테스트에 들어가지 않았다는 사실을 `belief_note` 로 말한다(`/backtest` 와 같은
+정의를 유지하되 숨기지 않는다). 계획 단계 거부(`{"error": True}`)는 결과가 아니라 실패다.
+
+**테스트 36** — 골든(mvo·bl+뷰·risk_parity·hrp·min_var+제약·bl+뷰+제약 == `run_analyze`;
+조건부 켠 bl·mvo == `run_analyze`; 현재 비중이 회전율 제약으로; 백테스트 노드 == `/backtest`) ·
+파라미터 범위 8 쌍 · 실패/막힘 · 운영 합성 금지와 mock 짝 · 라우트 넷 · AST 사본 금지.
+**변이 a~n 사망, 무해 짝 생존** — 제약 생략 · 믿음 무시(★처음엔 조건부 골든이 없어 이 변이가
+살 자리였다 — 끈 경우만 거는 골든은 옵티마이저가 믿음을 무시해도 통과한다★) · 자산 2개 미만
+통과 · DB 적재분에 E3 지어냄 · 뷰 누락 · 백테스트 비용 무시 · 조건부 미반영 문구 삭제 · 가용성
+검사 제거 · EP 프로브 생략 · 현재 비중 누락 · lookback 범위 상실 · 절단일 검사 생략 · 백테스트
+lookback 을 규칙 밖에서 끌어올림 · 계획 거부 통과(★처음엔 생존 — 테스트를 더했다★).
+
+**전체 게이트** — ruff · pytest **7052 passed · 10 skipped**.
+
+**하지 않은 것** — `/analyze` 부가 패널(현재 비중 분석·프런티어·MC 클라우드·MC 분포·요약 지표)
+노드화 · 기업 밸류에이션 뷰(`use_company_views`) · ResearchRun 기록 · MES·스냅샷·타이밍·시나리오
+링크(그래프 파일에 아직 자리가 없다) · 화면(BI3).

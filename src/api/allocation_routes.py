@@ -335,6 +335,47 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
     return returns, bench, excluded, coverage
 
 
+def _ep_unavailable_reason(probes: dict) -> str | None:
+    """엔트로피 풀링 요건 프로브 → 못 쓰면 사유(`/analyze` 와 그래프 옵티마이저 노드 공용)."""
+    ep_probe = probes.get("entropy_pooling", {})
+    if not ep_probe.get("ok"):
+        return ("엔트로피 풀링 엔진을 쓸 수 없습니다 — "
+                f"{ep_probe.get('reason') or '요건 미가용'}")
+    return None
+
+
+def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -> dict | None:
+    """P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체한다.
+
+    infeasible 이면 무제약 해를 유지하되 정직 사유를 함께 반환한다(조용한 무시 금지).
+    ★`/analyze` 와 AAS 그래프의 옵티마이저 노드가 이 함수 하나를 부른다★ (BI2) —
+    같은 산수를 두 곳에 두면 갈라진다. `opt` 를 제자리에서 바꾼다(예전 인라인과 같다).
+    """
+    if req.constraints is None:
+        return None
+    from src.engine.constrained_opt import Constraints, constrained_solve, sector_groups_for
+    cobj = Constraints(**req.constraints.model_dump())
+    if not cobj.any_active():
+        return None
+    sol = constrained_solve(
+        req.model, names, R,
+        mu=np.asarray(opt["mu_used"], dtype=float),
+        S=np.asarray(opt["sigma_annual"], dtype=float),
+        constraints=cobj,
+        w_current=req.weights,
+        groups_of=sector_groups_for(names),
+        bench_returns=(bench.values if bench is not None
+                       and len(bench) == R.shape[0] else None),
+    )
+    report = {k: sol.get(k) for k in
+              ("status", "violations", "binding", "relaxed",
+               "notes", "reason", "projected")}
+    if sol["status"] != "infeasible" and sol.get("weights") is not None:
+        opt["weights"] = np.asarray(sol["weights"], dtype=float)
+        opt["flow"]["optimized"] = opt["weights"]
+    return report
+
+
 def _series_stats(ret: np.ndarray, ppy: int = 252) -> dict:
     """일별 수익률 시리즈 → 헤드라인 지표 (연수익·변동성·Sharpe·MDD·Sortino·Calmar)."""
     r = np.asarray(ret, dtype=float)
@@ -566,11 +607,9 @@ def run_analyze(req: AnalyzeRequest) -> dict:
     if req.model == "ep":
         from src.engine.capability import probe_all
         probes = probe_all()
-        ep_probe = probes.get("entropy_pooling", {})
-        if not ep_probe.get("ok"):
-            raise HTTPException(
-                422, "엔트로피 풀링 엔진을 쓸 수 없습니다 — "
-                     f"{ep_probe.get('reason') or '요건 미가용'}")
+        ep_why = _ep_unavailable_reason(probes)
+        if ep_why:
+            raise HTTPException(422, ep_why)
         if mes_block is not None:
             # ★불일치는 정보다★ MES 가 고정된 시점의 레벨과 지금 레벨이 다르면
             # 그 사실을 숨기지 않는다 — CaseBar 가 세션 스냅샷 vs 케이스 MES 에
@@ -634,27 +673,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
 
         # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
         #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
-        constraints_report = None
-        if req.constraints is not None:
-            from src.engine.constrained_opt import Constraints, constrained_solve, sector_groups_for
-            cobj = Constraints(**req.constraints.model_dump())
-            if cobj.any_active():
-                sol = constrained_solve(
-                    req.model, names, R,
-                    mu=np.asarray(opt["mu_used"], dtype=float),
-                    S=np.asarray(opt["sigma_annual"], dtype=float),
-                    constraints=cobj,
-                    w_current=req.weights,
-                    groups_of=sector_groups_for(names),
-                    bench_returns=(bench.values if bench is not None
-                                   and len(bench) == R.shape[0] else None),
-                )
-                constraints_report = {k: sol.get(k) for k in
-                                      ("status", "violations", "binding", "relaxed",
-                                       "notes", "reason", "projected")}
-                if sol["status"] != "infeasible" and sol.get("weights") is not None:
-                    opt["weights"] = np.asarray(sol["weights"], dtype=float)
-                    opt["flow"]["optimized"] = opt["weights"]
+        constraints_report = _apply_constraints(req, names, R, opt, bench)
 
         # 1c) P2.5 — 목표 비중 **구간**. 같은 Σ 를 여러 모델로 풀어 산포를 낸다.
         #     ★제약 해는 넣지 않는다★ 제약이 걸린 가중치와 무제약 가중치를 한 구간에
@@ -893,37 +912,45 @@ def allocation_backtest(req: BacktestRequest):
             return {"error": True, "excluded": excluded,
                     "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요."}
 
-        names = list(returns.columns)
-        from src.engine.allocation_backtest import walk_forward
-        cobj = None
-        if req.constraints is not None:
-            from src.engine.constrained_opt import Constraints
-            cobj = Constraints(**req.constraints.model_dump())
-        views = [v.model_dump() for v in (req.views or [])]
-        bench_arr = (bench.reindex(returns.index).fillna(0.0).values
-                     if bench is not None else None)
-
-        out = walk_forward(
-            names, returns.values, list(returns.index),
-            model=req.model, views=views or None, constraints=cobj,
-            rebalance=req.rebalance, window_days=req.window_days,
-            cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau)
-
-        out["excluded"] = excluded
-        if not out.get("error"):
-            out["labels"] = _labels(names)
-            out["coverage"] = coverage
-            out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
-        # ★이 곡선이 무엇인지 응답이 말한다★ — mock 게이트가 유일한 데이터 판정 기준.
-        out["perf_label"] = backtest_label(is_mock_data=mock_allowed()).to_dict()
-        # ★룩어헤드를 어디까지 통제했는지도 응답이 말한다★ (E) — 예전에는 화면이
-        # 근거 없이 "look-ahead 없음" 이라고 단정했다. 관측·기록만이고 계산은
-        # 한 줄도 바뀌지 않는다.
-        out["lookahead_evidence"] = lookahead_evidence(coverage)
-        return out
+        return _policy_backtest(req, returns, bench, excluded, coverage)
     except Exception:
         logger.exception("allocation backtest 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def _policy_backtest(req: BacktestRequest, returns, bench, excluded, coverage) -> dict:
+    """적재된 수익률 위에서 정책 walk-forward 를 돌리고 응답을 만든다.
+
+    ★`/backtest` 와 AAS 그래프의 백테스트 노드가 이 함수 하나를 부른다★ (BI2).
+    """
+    names = list(returns.columns)
+    from src.engine.allocation_backtest import walk_forward
+    cobj = None
+    if req.constraints is not None:
+        from src.engine.constrained_opt import Constraints
+        cobj = Constraints(**req.constraints.model_dump())
+    views = [v.model_dump() for v in (req.views or [])]
+    bench_arr = (bench.reindex(returns.index).fillna(0.0).values
+                 if bench is not None else None)
+
+    out = walk_forward(
+        names, returns.values, list(returns.index),
+        model=req.model, views=views or None, constraints=cobj,
+        rebalance=req.rebalance, window_days=req.window_days,
+        cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau)
+
+    out["excluded"] = excluded
+    if not out.get("error"):
+        out["labels"] = _labels(names)
+        out["coverage"] = coverage
+        out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
+    # ★이 곡선이 무엇인지 응답이 말한다★ — mock 게이트가 유일한 데이터 판정 기준.
+    out["perf_label"] = backtest_label(is_mock_data=mock_allowed()).to_dict()
+    # ★룩어헤드를 어디까지 통제했는지도 응답이 말한다★ (E) — 예전에는 화면이
+    # 근거 없이 "look-ahead 없음" 이라고 단정했다. 관측·기록만이고 계산은
+    # 한 줄도 바뀌지 않는다.
+    out["lookahead_evidence"] = lookahead_evidence(coverage)
+    return out
 
 
 # ── /resolve-names ───────────────────────────────────────────────────────────

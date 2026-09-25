@@ -157,6 +157,7 @@ def _parse_params(spec: NodeSpec, raw: Any):
         return spec.params_model.model_validate(raw or {}), None
     except ValidationError as e:
         parts = [f"{'.'.join(str(x) for x in d['loc']) or '(전체)'}: {d['msg']}"
+                 + (f" (받은 값 {d['input']!r})" if d.get("type") != "missing" else "")
                  for d in e.errors()]
         return None, "; ".join(parts)
 
