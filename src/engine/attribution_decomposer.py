@@ -26,6 +26,33 @@ logger = logging.getLogger(__name__)
 EFFECT_COLUMNS = ("allocation_effect", "selection_effect", "macro_effect",
                   "netting_effect", "cost_effect", "cash_effect")
 
+#: ★수익률 항등식의 드라이버★ (BH2) — 엔진의 실제 식이다:
+#:     net_t = EW_t + alloc_t + cost_t (+ cash_t, realism)
+#: `EW_t` 는 그날 전략 수익률의 단순평균(동일가중 기준), `alloc_t = Σ(w−1/n)·r`.
+#: 워터폴·잔차는 **이것만** 더한다. ★`STRATEGY_DRIVERS` 와 같아야 한다★.
+IDENTITY_DRIVERS = ("baseline_effect", "allocation_effect", "cost_effect",
+                    "cash_effect")
+
+#: ★보고 전용 — 수익률에 없는 것은 스텝이 아니다★ (BH2)
+#: 예전 워터폴은 네팅을 '청산 효과' 스텝으로 더했고, 잔차가 정확히 그만큼 줄어
+#: 차트는 닫혔다 — 틀렸을 때 오히려 자기일관적이었다.
+REPORT_ONLY_EFFECTS = {
+    "netting_effect": ("네팅은 보고 전용입니다 — 전략 보유로 잰 상쇄 절감이지만 수익률에 "
+                       "더해지지 않습니다(엔진 계약). 워터폴의 스텝이 아닙니다."),
+    "macro_effect": ("매크로 조정은 이미 최종 가중 안에 있어 배분 효과에 들어 있습니다 — "
+                     "따로 더하면 이중 계산입니다. 배분 효과의 내역으로만 봅니다."),
+    "selection_effect": ("멀티전략에서 전략 선택 효과는 정의되지 않습니다 — 각 전략 내부의 "
+                         "선택은 동일가중 기준(전략 수익) 안에 들어 있고, Brinson 선택항에 "
+                         "필요한 전략별 벤치마크가 저장소에 없습니다."),
+}
+
+#: 항등식 검사 허용오차(일별 수익률 단위). 저장이 float64 여야 의미가 있다 —
+#: PostgreSQL 의 `REAL` 은 4바이트라 `schema_ddls` 가 `DOUBLE PRECISION` 으로 만든다.
+IDENTITY_TOL = 1e-9
+
+_CASH_NOT_MODELED = ("이 엔진에는 현금 이자 모델이 없습니다 — 수익률에도 들어 있지 않아 "
+                     "항등식이 현금 없이 닫힙니다(미상이 아니라 없는 축입니다).")
+
 
 def _sanitize_for_json(obj):
     """재귀적 NaN/Inf → ★`None`★ (JSON 안전).
@@ -189,23 +216,65 @@ class AttributionDecomposer:
             return {}, f"전략명 조회에 실패했습니다 — {type(e).__name__}: {e}"
 
     @staticmethod
-    def _cumulative_attribution(daily_df) -> dict:
-        """누적 분해 — ★합은 쓰되 무엇으로 만든 합인지 말한다★ (P4-a).
+    def _identity_check(daily_df) -> dict:
+        """★수익률 항등식을 데이터로 검증한다★ (BH2)
 
-        예전에는 다섯 효과를 전부 `fillna(0)` 으로 더했다. 그러면 `sum_factors`
-        가 미상만큼 줄고 `interaction = actual − sum_factors` 가 **정확히 그만큼을
-        흡수한다** — 구멍이 있는 패널과 없는 패널이 완전히 같은 리포트를 냈다.
-        ★리포트는 틀렸을 때 오히려 자기일관적이었다.★ 그래서 값을 `None` 으로
-        바꾸는 것만으로는 부족하고, **잔차의 이름**을 바꿔야 한다.
+        일별 `gap = net − (EW + alloc + cost + cash_or_0)`. 세 필수 드라이버를 전부 아는
+        행만 검사하고, 모든 행이 검사되고 최대 |gap| 이 허용오차 안일 때만 성립이다.
+        현금이 한 행도 관측되지 않았는데 성립하면 현금은 **이 엔진에 없는 축**이다.
+        """
+        n = int(len(daily_df))
+        if "baseline_effect" not in daily_df.columns or daily_df["baseline_effect"].isna().all():
+            return {"holds": False, "max_abs_gap": None, "n_rows": n, "n_rows_checked": 0,
+                    "not_modeled": [], "tolerance": IDENTITY_TOL,
+                    "reason": ("동일가중 기준(EW) 이 저장되지 않은 실행입니다(BH2 이전) — "
+                               "항등식을 검사할 수 없어 잔차를 설명하지 못합니다.")}
+        need = ["baseline_effect", "allocation_effect", "cost_effect", "portfolio_return"]
+        num = daily_df[need].apply(pd.to_numeric, errors="coerce")
+        known = num.notna().all(axis=1)
+        cash = (pd.to_numeric(daily_df["cash_effect"], errors="coerce")
+                if "cash_effect" in daily_df.columns
+                else pd.Series([np.nan] * n, index=daily_df.index, dtype=float))
+        cash_known = cash.notna()
+        sub = num[known]
+        gap = (sub["portfolio_return"] - sub["baseline_effect"] - sub["allocation_effect"]
+               - sub["cost_effect"] - cash[known].fillna(0.0))
+        max_gap = float(gap.abs().max()) if len(gap) else None
+        n_checked = int(known.sum())
+        holds = (n_checked == n and n > 0 and max_gap is not None
+                 and max_gap <= IDENTITY_TOL)
+        # 현금이 전부 None 인데 닫히면 "없는 축", 일부만 있으면 미상이 섞인 것이다.
+        not_modeled = ["cash_effect"] if (holds and not cash_known.any()) else []
+        if holds:
+            reason = None
+        elif n_checked < n:
+            reason = (f"{n - n_checked}/{n} 일에서 기준·배분·비용 중 하나가 미상이라 "
+                      "항등식을 검사하지 못했습니다.")
+        else:
+            reason = (f"항등식이 닫히지 않습니다 — 최대 일별 차이 {max_gap:.3g}"
+                      f"(허용 {IDENTITY_TOL:g}). 수익률에 드라이버 밖의 무엇이 들어 있습니다.")
+        return {"holds": bool(holds), "max_abs_gap": max_gap, "n_rows": n,
+                "n_rows_checked": n_checked, "not_modeled": not_modeled,
+                "tolerance": IDENTITY_TOL, "reason": reason}
+
+    @staticmethod
+    def _cumulative_attribution(daily_df) -> dict:
+        """누적 분해 — ★항등식을 검증하고, 수익률에 없는 것은 더하지 않는다★ (BH2)
+
+        P4-a 에서 커버리지·잔차 명명을 세웠고(미상 ≠ 0), BH2 에서 **무엇을 더하는가**를
+        고쳤다: 기준(EW) 을 0 으로 두고 수익률에 없는 네팅을 더하던 것을 버리고, 엔진의
+        실제 식 `net = EW + alloc + cost (+ cash)` 만 더한다. 복리는 `∏(1+r)−1−Σr` 로
+        **계산**한다 — 항등식이 성립하면 잔차는 그 복리 하나뿐이다.
         """
         if daily_df.empty:
             return {}
 
+        cols = [*EFFECT_COLUMNS, "baseline_effect"]
         vals: dict[str, float | None] = {}
         coverage: dict[str, dict] = {}
-        for col in EFFECT_COLUMNS:
+        for col in cols:
             v, cov = sum_known(daily_df, col, scale=100.0)
-            vals[col] = None if v is None else round(v, 3)
+            vals[col] = None if v is None else round(v, 6)
             coverage[col] = cov
 
         savings, savings_cov = sum_known(daily_df, "netting_savings")
@@ -217,23 +286,27 @@ class AttributionDecomposer:
             and not pd.isna(daily_df["cumulative_return"].iloc[-1])
             else float((1 + daily_df["portfolio_return"]).prod() - 1) * 100
         )
+        r = daily_df["portfolio_return"].astype(float)
+        compounding = (float((1 + r).prod() - 1) - float(r.sum())) * 100
 
-        known = [v for v in vals.values() if v is not None]
+        identity = AttributionDecomposer._identity_check(daily_df)
+        if identity["holds"]:
+            # ★같은 재료로 잰다★ — 항등식이 닫히는 실행이면 실제 수익률도 일별 수익의
+            # 곱으로 잰다(엔진의 `cumulative_return` 칸은 소수 4자리로 반올림돼 있다).
+            actual_cum = float((1 + r).prod() - 1) * 100
+        drivers = [c for c in IDENTITY_DRIVERS if c not in identity["not_modeled"]]
+        known = [vals[c] for c in drivers if vals[c] is not None]
         sum_factors = float(sum(known))
         residual = actual_cum - sum_factors
-        complete = all(coverage[c]["coverage"] == 1.0 for c in EFFECT_COLUMNS)
+        complete = identity["holds"]
 
-        # ★커버리지가 불완전하면 잔차를 "복리 효과" 라고 부르기를 거부한다★
-        # 그때 잔차는 복리와 **흡수된 미상**의 혼합이라, 복리라고 이름 붙이는
-        # 순간 하지 않은 분해를 주장하게 된다.
-        unexplained_reason = None
-        if not complete:
-            missing = [c for c in EFFECT_COLUMNS if coverage[c]["coverage"] < 1.0]
-            unexplained_reason = (
-                f"{', '.join(missing)} 의 커버리지가 불완전해 잔차가 복리 효과와 "
-                "미관측분의 혼합입니다 — 복리 효과로 읽을 수 없습니다")
+        unexplained_reason = None if complete else identity["reason"]
+
+        report_only = {c: {"value_pct": vals[c], "reason": why}
+                       for c, why in REPORT_ONLY_EFFECTS.items()}
 
         return {
+            "baseline_effect_pct":     vals["baseline_effect"],
             "allocation_effect_pct":   vals["allocation_effect"],
             "selection_effect_pct":    vals["selection_effect"],
             "macro_effect_pct":        vals["macro_effect"],
@@ -241,53 +314,55 @@ class AttributionDecomposer:
             "cost_effect_pct":         vals["cost_effect"],
             # ★현금이자는 비용이 아니다★ (AL3) — 제 칸을 갖는다.
             "cash_effect_pct":         vals["cash_effect"],
-            # ★잔차는 커버리지에 따라 이름이 다르다★ 둘 중 하나만 값을 갖는다.
-            "interaction_pct":         (round(residual, 3) if complete else None),
-            "unexplained_pct":         (None if complete else round(residual, 3)),
+            "cash_not_modeled_reason": (_CASH_NOT_MODELED
+                                        if "cash_effect" in identity["not_modeled"] else None),
+            # ★복리는 계산값이다★ — 항등식이 성립하면 잔차 = 이것(허용오차 안).
+            "compounding_pct":         round(compounding, 9),
+            # ★잔차는 항등식 성립 여부에 따라 이름이 다르다★ 둘 중 하나만 값을 갖는다.
+            "interaction_pct":         (round(residual, 9) if complete else None),
+            "unexplained_pct":         (None if complete else round(residual, 6)),
             "unexplained_reason":      unexplained_reason,
+            "identity":                identity,
+            "report_only":             report_only,
             "coverage":                coverage,
             "coverage_complete":       complete,
-            # 커버리지 0 인 효과는 워터폴 스텝을 만들 수 없다(값이 미상이다).
-            "waterfall_omitted":       [c for c in EFFECT_COLUMNS
-                                        if vals[c] is None],
-            "total_decomposed_pct":    round(sum_factors, 3),
-            "actual_return_pct":       round(actual_cum, 3),
+            # 값이 미상인 항등식 드라이버는 스텝을 만들 수 없다.
+            "waterfall_omitted":       [c for c in drivers if vals[c] is None],
+            "total_decomposed_pct":    round(sum_factors, 6),
+            "actual_return_pct":       round(actual_cum, 6),
             "netting_savings_value":   (None if savings is None
                                         else float(round(savings, 2))),
         }
 
     @staticmethod
     def _build_waterfall(cum) -> list[dict]:
-        """워터폴 — ★잔차를 두 번 세지 않는다★ (P4-a).
+        """워터폴 — ★동일가중 기준에서 시작해 실제에서 닫힌다★ (BH2)
 
-        예전에는 `baseline = actual − Σ효과` 였는데 `interaction` 이 **같은 식**
-        이었다. 그래서 같은 미설명분이 두 번 더해져 running_total 이 실제값을
-        넘어섰다가(실측 5.0 → 8.0) 마지막 "Actual Total" 스텝이 조용히 되돌려
-        놓았다. 이제 베이스라인은 0 에서 시작하고 잔차는 **한 번만** 센다 —
-        이 모듈에는 베이스라인을 0 이 아닌 값으로 앵커할 벤치마크가 없다.
+        `동일가중 기준 → 배분 → 비용 → (현금) → 복리 → 실제`. 항등식이 성립하면 복리는
+        **계산된** 스텝이고 잔차는 허용오차 안이다. 성립하지 않으면 마지막 몫은
+        "미설명 잔차" 이고 사유가 붙는다. ★수익률에 없는 네팅·매크로는 스텝이 아니다★.
 
-        ★불변식: 스텝 값은 절대 `None` 이 아니다★ 프론트가
-        `step.value.toFixed(2)` 를 부른다. 커버리지 0 인 효과는 스텝을 만들지
-        않고 `cum["waterfall_omitted"]` 가 그 사실을 남긴다.
-
-        ★`kind` 는 프론트의 닫힌 유니온 안에서만 쓴다★ `COLORS[step.kind]` 라
-        새 값을 넣으면 `undefined` 가 된다. 잔차는 `interaction` 을 유지하고
-        **라벨만** 바꾼다.
+        ★불변식★ 스텝 값은 `None` 이 아니다(프론트가 `toFixed` 를 부른다) · 잔차를 두 번
+        세지 않는다(P4-a) · `kind` 는 프론트의 닫힌 유니온 안에서만.
         """
         if not cum:
             return []
-        running = 0.0
+        base = cum.get("baseline_effect_pct")
+        # ★반올림은 표시에서만★ — 누적을 반올림한 값으로 이어 가면 스텝마다 오차가
+        # 쌓여 마지막 스텝이 실제와 어긋난다(실측 1e-3).
+        running = 0.0 if base is None else float(base)
         waterfall = [{
-            "step": "Baseline", "label": "베이스라인",
-            "value": 0.0, "running_total": 0.0, "kind": "baseline",
+            "step": "Baseline",
+            "label": "동일가중 기준" if base is not None else "기준 미상 — 0 에서 시작",
+            "value": round(running, 3), "running_total": round(running, 3),
+            "kind": "baseline",
         }]
         steps = [
-            ("Allocation Effect", "배분 효과", cum["allocation_effect_pct"]),
-            ("Selection Effect",  "전략 선택", cum["selection_effect_pct"]),
-            ("Macro Overlay",     "매크로 오버레이", cum["macro_effect_pct"]),
-            ("Netting Effect",    "청산 효과", cum["netting_effect_pct"]),
-            ("Transaction Cost",  "거래 비용", cum["cost_effect_pct"]),
+            ("Allocation Effect", "배분 효과", cum.get("allocation_effect_pct")),
+            ("Transaction Cost",  "거래 비용", cum.get("cost_effect_pct")),
         ]
+        if not cum.get("cash_not_modeled_reason"):
+            steps.append(("Cash Yield", "현금 이자", cum.get("cash_effect_pct")))
         for en, ko, val in steps:
             if val is None:                  # ★미상은 스텝이 될 수 없다★
                 continue
@@ -299,22 +374,22 @@ class AttributionDecomposer:
                 "kind": "positive" if val >= 0 else "negative",
             })
 
-        complete = cum.get("coverage_complete", True)
+        complete = cum.get("coverage_complete", False)
         resid = (cum.get("interaction_pct") if complete
                  else cum.get("unexplained_pct"))
-        if resid is not None and abs(resid) > 0.01:
+        if resid is not None and (abs(resid) > 1e-6 or not complete):
             running += resid
             waterfall.append({
-                "step": "Interaction" if complete else "Unexplained",
-                "label": "복리 효과" if complete else "미설명 잔차(커버리지 불완전)",
+                "step": "Compounding" if complete else "Unexplained",
+                "label": "복리 효과" if complete else "미설명 잔차",
                 "value": round(resid, 3),
                 "running_total": round(running, 3),
                 "kind": "interaction",
             })
         waterfall.append({
             "step": "Actual Total", "label": "실제 수익률",
-            "value": cum["actual_return_pct"],
-            "running_total": cum["actual_return_pct"], "kind": "total",
+            "value": round(cum["actual_return_pct"], 3),
+            "running_total": round(cum["actual_return_pct"], 3), "kind": "total",
         })
         return waterfall
 
@@ -323,10 +398,15 @@ class AttributionDecomposer:
         if daily_df.empty:
             return []
         df = daily_df.copy().set_index("trade_date")
+        # ★동일가중 기준 칸★ (BH2) — 옛 실행엔 칸이 없다 → NaN(= 미상)으로 둔다.
+        if "baseline_effect" not in df.columns:
+            df["baseline_effect"] = np.nan
         # ★효과 칸에 `fillna(0)` 을 걸지 않는다★ (AL) — 걸면 "재지 않았다" 가
         # 월간 표에서 `0.0` 이 되어, 같은 실행을 누적 표와 월간 표가 **다르게**
         # 말한다. `sum(min_count=1)` 은 한 행도 못 보면 `NaN` 을 남긴다.
-        _effects = list(EFFECT_COLUMNS)
+        _effects = [*EFFECT_COLUMNS, "baseline_effect"]
+        for c in _effects:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
         agg = df.groupby(pd.Grouper(freq=freq)).agg({
             "portfolio_return": "sum",
             **{c: (lambda x: x.sum(min_count=1)) for c in _effects},
@@ -376,6 +456,7 @@ class AttributionDecomposer:
             result.append({
                 "period":                str(period_end.date()),
                 "portfolio_return_pct":  _safe(row.get("portfolio_return_compound", row["portfolio_return"])),
+                "baseline_effect_pct":   _effect(row["baseline_effect"]),
                 "allocation_effect_pct": _effect(row["allocation_effect"]),
                 "selection_effect_pct":  _effect(row["selection_effect"]),
                 "macro_effect_pct":      _effect(row["macro_effect"]),
@@ -412,7 +493,14 @@ class AttributionDecomposer:
             else:
                 sharpe_reason = ("이 국면의 일수익 변동성이 0 이라 샤프가 "
                                  "정의되지 않습니다 — 0 이 아니라 미상입니다")
-            sys_risk_mean = subset["systemic_risk"].mean()
+            sys_risk_mean = pd.to_numeric(subset["systemic_risk"], errors="coerce").mean()
+
+            def _sum_pct(col):
+                """★미상은 `None`★ (BH2) — 예전 `fillna(0).sum()` 은 안 잰 것을 0 으로 뒀다."""
+                if col not in subset.columns:
+                    return None
+                v = pd.to_numeric(subset[col], errors="coerce").sum(min_count=1)
+                return None if pd.isna(v) else round(float(v) * 100, 3)
 
             result.append({
                 "regime": regime, "n_days": n,
@@ -421,10 +509,11 @@ class AttributionDecomposer:
                 "volatility_pct": round(float(vol * np.sqrt(252) * 100), 2),
                 "sharpe": sharpe,
                 "sharpe_reason": sharpe_reason,
-                "allocation_effect_pct": round(float(subset["allocation_effect"].fillna(0).sum() * 100), 3),
-                "macro_effect_pct": round(float(subset["macro_effect"].fillna(0).sum() * 100), 3),
-                "netting_effect_pct": round(float(subset["netting_effect"].fillna(0).sum() * 100), 3),
-                "cost_effect_pct": round(float(subset["cost_effect"].fillna(0).sum() * 100), 3),
+                "baseline_effect_pct": _sum_pct("baseline_effect"),
+                "allocation_effect_pct": _sum_pct("allocation_effect"),
+                "macro_effect_pct": _sum_pct("macro_effect"),
+                "netting_effect_pct": _sum_pct("netting_effect"),
+                "cost_effect_pct": _sum_pct("cost_effect"),
                 "avg_systemic_risk": (round(float(sys_risk_mean), 1)
                                        if not pd.isna(sys_risk_mean) else None),
             })
@@ -495,24 +584,46 @@ class AttributionDecomposer:
 
         def _num(v):
             """관측값이면 퍼센트로, 아니면 ★`None` 그대로★."""
-            return None if v is None or pd.isna(v) else round(float(v) * 100, 4)
+            try:
+                return None if v is None or pd.isna(v) else round(float(v) * 100, 9)
+            except (TypeError, ValueError):
+                return None
+
+        # ★실행 단위로 현금 모델이 있는지 먼저 본다★ (BH2) — 항등식이 현금 없이
+        # 닫히는 실행이면 현금은 그 날의 "미상" 이 아니라 **없는 축**이다.
+        run_identity = AttributionDecomposer._identity_check(daily_df)
+        not_modeled = list(run_identity["not_modeled"])
+        drivers = [c for c in IDENTITY_DRIVERS if c not in not_modeled]
 
         out: list[dict] = []
         for _, r in daily_df.iterrows():
-            effects = {c: _num(r[c] if c in r else None) for c in EFFECT_COLUMNS}
-            missing = sorted(c for c, v in effects.items() if v is None)
+            effects = {c: _num(r[c] if c in r else None)
+                       for c in (*EFFECT_COLUMNS, "baseline_effect")}
+            missing = sorted(c for c in EFFECT_COLUMNS if effects[c] is None)
+            total = _num(r["portfolio_return"])
+            known_drivers = [effects[c] for c in drivers if effects[c] is not None]
+            all_known = len(known_drivers) == len(drivers) and total is not None
+            gap = (None if not all_known else round(total - sum(known_drivers), 9))
             out.append({
                 "date": str(r["trade_date"].date()),
-                "portfolio_return": _num(r["portfolio_return"]),
+                "portfolio_return": total,
                 **effects,
                 "regime": r["regime"],
                 # ★그 행에서 몇 축을 봤는가★ — 누적 경로의 `column_coverage` 와
-                # 같은 것을 행 단위로 말한다.
+                # 같은 것을 행 단위로 말한다(저장된 여섯 칸 기준).
                 "coverage": {
                     "n_total": len(EFFECT_COLUMNS),
                     "n_known": len(EFFECT_COLUMNS) - len(missing),
                     "complete": not missing,
                     "missing": missing,
+                },
+                # ★그 날 항등식이 닫히는가★ (BH2) — 하루에는 복리가 없으므로 닫히면
+                # 잔차는 부동소수 오차뿐이다(%p 단위, 허용 IDENTITY_TOL×100).
+                "identity": {
+                    "drivers": drivers,
+                    "not_modeled": not_modeled,
+                    "gap_pct": gap,
+                    "closes": (gap is not None and abs(gap) <= IDENTITY_TOL * 100),
                 },
             })
         return out

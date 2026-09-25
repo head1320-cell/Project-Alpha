@@ -52,6 +52,9 @@ class DailyRecord:
     systemic_risk:      float | None = None
     growth_signal:      float | None = None
     inflation_signal:   float | None = None
+    #: ★동일가중 기준 EW_t★ (BH2) — 그날 전략 수익률의 단순평균. 귀인 항등식
+    #: `net = EW + alloc + cost (+ cash)` 의 첫 드라이버. `None` 은 기록하지 않은 옛 경로.
+    baseline_effect:    float | None = None
     allocation_effect:  float = 0
     # ★기본이 `None` 이다★ (AL2) — 예전 기본 `0` 은 **상수가 관측 행세**를 했고,
     # `column_coverage` 가 `pd.notna` 로 세는 탓에 `coverage_complete` 가 거짓으로
@@ -319,7 +322,8 @@ class MultiStrategyBacktester:
             day_returns = returns_matrix.iloc[t].to_dict()
             portfolio_ret = sum(current_weights.get(int(sid), 0) * day_returns.get(sid, 0) for sid in sids)
 
-            # Attribution
+            # Attribution — ★항등식: net = EW + alloc + cost★ (BH2)
+            baseline_ew = sum(day_returns.get(sid, 0) for sid in sids) / n_str
             alloc_diff = sum((current_weights.get(int(sid), 0) - 1/n_str) * day_returns.get(sid, 0) for sid in sids)
             macro_effect = sum(current_macro_adj.get(int(sid), 0) * day_returns.get(sid, 0) for sid in sids)
 
@@ -358,6 +362,7 @@ class MultiStrategyBacktester:
                 # 않는다. Brinson 선택항은 전략별 벤치마크가 필요한데 그 계열이
                 # 저장소에 없다. 재료가 `None` 이면 기존 커버리지 가드가 제대로
                 # 작동해 잔차가 "복리" 로 오명명되지 않는다.
+                baseline_effect=baseline_ew,
                 allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
                 netting_effect=(None if netting_savings is None
@@ -534,25 +539,41 @@ class MultiStrategyBacktester:
 
     @staticmethod
     def _record_to_dict(r: DailyRecord) -> dict:
+        """일별 기록 → dict. ★수익률·효과 칸은 반올림하지 않는다★ (BH2)
+
+        예전에는 `round(…, 6)` 이었다 — 화면에는 무해하지만 이 dict 가 그대로 저장되어
+        귀인 항등식 `net = EW + alloc + cost` 가 저장값에서 1e-6 만큼 어긋났다(검사 1e-9).
+        """
+        def _f(v):
+            return None if v is None else float(v)
+
         return {
             "date":              str(r.date.date()),
             "portfolio_equity":  float(round(r.portfolio_equity, 2)),
-            "portfolio_return":  float(round(r.portfolio_return, 6)),
+            "portfolio_return":  float(r.portfolio_return),
             "cumulative_return": float(round(r.cumulative_return, 4)),
             "drawdown_pct":      float(round(r.drawdown_pct, 4)),
             "regime":            r.regime,
             "systemic_risk":     r.systemic_risk,
-            "allocation_effect": float(round(r.allocation_effect, 6)),
-            "macro_effect":      float(round(r.macro_effect, 6)),
-            "netting_effect":    (None if r.netting_effect is None
-                                  else float(round(r.netting_effect, 6))),
-            "cost_effect":       float(round(r.cost_effect, 6)),
+            "baseline_effect":   _f(r.baseline_effect),
+            "allocation_effect": float(r.allocation_effect),
+            "selection_effect":  _f(r.selection_effect),
+            "macro_effect":      float(r.macro_effect),
+            "netting_effect":    _f(r.netting_effect),
+            "cost_effect":       float(r.cost_effect),
+            "cash_effect":       _f(r.cash_effect),
             "num_trades":        r.num_trades,
             "turnover_pct":      float(round(r.turnover_pct, 4)),
             "netting_savings":   (None if r.netting_savings is None
                                   else float(round(r.netting_savings, 2))),
             "rebalanced":        r.rebalanced,
             "weights":           {str(k): float(round(v, 4)) for k, v in r.weights.items()},
+            # ★저장이 상수 0 을 쓰지 않도록 재료를 싣는다★ (BH2) — 전략별 수익·기준 가중·
+            # 매크로 조정. 반올림한 `weights` 와 따로 **정밀** 가중도 싣는다(기여 = w·r).
+            "strategy_returns":  {str(k): float(v) for k, v in r.strategy_returns.items()},
+            "weights_exact":     {str(k): float(v) for k, v in r.weights.items()},
+            "base_weights":      {str(k): float(v) for k, v in r.base_weights.items()},
+            "macro_adj":         {str(k): float(v) for k, v in r.macro_adj.items()},
         }
 
     def _persist(self, config, result) -> int:
@@ -605,6 +626,7 @@ class MultiStrategyBacktester:
                     # ★세 번째 상수 0 이 여기 있었다★ (AL2) — 레코드를 고쳐도
                     # 이 빌더가 `0` 을 덮어써서 DB 에는 여전히 거짓 관측이
                     # 들어갔다. 레코드가 말하는 것을 그대로 싣는다.
+                    "be": r.get("baseline_effect"),
                     "ae": r["allocation_effect"], "se": r.get("selection_effect"),
                     "me": r["macro_effect"], "ne": r["netting_effect"],
                     "ce": r["cost_effect"], "cash": r.get("cash_effect"),
@@ -612,10 +634,19 @@ class MultiStrategyBacktester:
                     "nt": r["num_trades"], "tp": r["turnover_pct"],
                     "ns": r["netting_savings"], "rb": int(r["rebalanced"]),
                 })
-                for sid_str, w in r["weights"].items():
+                # ★상수 0 을 쓰지 않는다★ (BH2) — 예전 `"ma": 0, "sr_": 0, "c": 0` 은
+                # 전략별 기여를 "0 으로 관측" 되게 만들었다(커버리지 1.0 · 값 0).
+                exact = r.get("weights_exact") or r["weights"]
+                rets = r.get("strategy_returns") or {}
+                for sid_str, w in exact.items():
+                    ret = rets.get(sid_str)
                     strategy_daily_rows.append({
                         "rid": run_id, "td": r["date"], "sid": int(sid_str),
-                        "w": w, "bw": w, "ma": 0, "sr_": 0, "c": 0,
+                        "w": w,
+                        "bw": (r.get("base_weights") or {}).get(sid_str),
+                        "ma": (r.get("macro_adj") or {}).get(sid_str),
+                        "sr_": ret,
+                        "c": None if ret is None else w * ret,
                     })
 
             for i in range(0, len(daily_rows), 500):
@@ -623,11 +654,12 @@ class MultiStrategyBacktester:
                     INSERT INTO multibacktest_daily (
                         run_id, trade_date, portfolio_equity, portfolio_return,
                         cumulative_return, drawdown_pct, regime, systemic_risk,
+                        baseline_effect,
                         allocation_effect, selection_effect, macro_effect,
                         netting_effect, cost_effect, cash_effect,
                         num_strategies_active,
                         num_trades, turnover_pct, netting_savings, rebalanced
-                    ) VALUES (:rid, :td, :pe, :pr, :cr, :dd, :rg, :sr,
+                    ) VALUES (:rid, :td, :pe, :pr, :cr, :dd, :rg, :sr, :be,
                               :ae, :se, :me, :ne, :ce, :cash, :nsa, :nt, :tp, :ns, :rb)
                 """), daily_rows[i:i+500])
 

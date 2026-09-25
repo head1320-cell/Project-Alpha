@@ -375,8 +375,9 @@ export default function MultiBacktestPage() {
             <>
               <Section title="5-Factor Attribution Waterfall"
                         icon={GitBranch}
-                        subtitle="베이스라인 → 각 의사결정 효과 → 최종 수익">
-                <AttributionWaterfall waterfall={attribution.waterfall || []} />
+                        subtitle="동일가중 기준 → 배분 → 비용 → 복리 → 실제 (수익률 항등식)">
+                <AttributionWaterfall waterfall={attribution.waterfall || []}
+                                      notes={attributionNotes(attribution.cumulative)} />
               </Section>
 
               <Section title="Regime-Conditional Alpha"
@@ -460,3 +461,21 @@ function ResultProvenance({ perfLabel, sources, netting, nettingTotal }: {
   );
 }
 
+/** 워터폴 밖에 적을 것 — ★응답이 말한 것만★ (BH2). */
+function attributionNotes(cum: any): string[] {
+  if (!cum) return [];
+  const out: string[] = [];
+  const ident = cum.identity;
+  if (ident) {
+    out.push(ident.holds
+      ? `항등식이 닫힙니다 — 일별 최대 차이 ${Number(ident.max_abs_gap ?? 0).toExponential(1)} (${ident.n_rows_checked}/${ident.n_rows}일 검사).`
+      : `항등식을 확인하지 못했습니다 — ${ident.reason ?? "사유 없음"}`);
+  }
+  if (cum.cash_not_modeled_reason) out.push(`현금 이자: ${cum.cash_not_modeled_reason}`);
+  const net = cum.report_only?.netting_effect;
+  if (net) {
+    const krw = cum.netting_savings_value;
+    out.push(`네팅(보고 전용 · 스텝 아님): 절감 ${krw == null ? "미상" : `${Math.round(krw).toLocaleString()}원`} — ${net.reason}`);
+  }
+  return out;
+}

@@ -50,10 +50,12 @@ DRIVER_SET_STRATEGY = "strategy_effects"
 DRIVER_SET_HOLDING = "holding_drivers"
 DRIVER_SETS = (DRIVER_SET_STRATEGY, DRIVER_SET_HOLDING)
 
-#: ★`attribution_decomposer.EFFECT_COLUMNS` 와 **같아야 한다**★ — 테스트가 대조한다.
+#: ★`attribution_decomposer.IDENTITY_DRIVERS` 와 **같아야 한다**★ — 테스트가 대조한다.
 #: 여기 적어 두는 이유는 `src/domain/` 이 엔진을 import 하지 않기 위해서다(순수 계층).
-STRATEGY_DRIVERS = ("allocation_effect", "selection_effect", "macro_effect",
-                    "netting_effect", "cost_effect", "cash_effect")
+#: ★수익률 항등식의 드라이버만이다★ (BH2) — `net = EW + alloc + cost (+ cash)`.
+#: 예전 여섯(선택·매크로·청산 포함)은 수익률에 없는 네팅을 기여 순위에 올렸다.
+STRATEGY_DRIVERS = ("baseline_effect", "allocation_effect", "cost_effect",
+                    "cash_effect")
 
 DRIVER_PRICE = "price"
 DRIVER_REBALANCE = "rebalance"
@@ -68,6 +70,7 @@ HOLDING_DRIVERS = (DRIVER_PRICE, DRIVER_REBALANCE, DRIVER_FEE,
 #: 문장이 부르는 이름. 전략 다섯은 ★`attribution_decomposer._build_waterfall` 이
 #: 이미 쓰는 한국어 그대로★ — 같은 것을 두 이름으로 부르지 않는다.
 DRIVER_LABELS = {
+    "baseline_effect": "동일가중 기준",
     "allocation_effect": "배분 효과",
     "selection_effect": "전략 선택",
     "macro_effect": "매크로 오버레이",
@@ -101,7 +104,10 @@ UNMEASURABLE_DRIVERS = {
 RESIDUAL_INTERACTION = "interaction"
 #: 커버리지가 불완전할 때 = 복리와 **미관측분**의 혼합. ★복리라 부를 수 없다★
 RESIDUAL_UNEXPLAINED = "unexplained"
-RESIDUAL_KINDS = (RESIDUAL_INTERACTION, RESIDUAL_UNEXPLAINED)
+#: ★하루의 항등식이 닫힌다★ (BH2) — 하루에는 복리가 없으므로 드라이버가 전부 있으면
+#: 잔차는 부동소수 오차뿐이다. 그것을 "복리 상호작용" 이라 부르면 없는 것을 말한다.
+RESIDUAL_CLOSED = "closed"
+RESIDUAL_KINDS = (RESIDUAL_INTERACTION, RESIDUAL_UNEXPLAINED, RESIDUAL_CLOSED)
 
 #: 가격 기준 → 문장이 말할 한 절. `price_quality.BASIS_*` 와 키가 같다.
 #: ★평문이다 — 마크다운 강조를 쓰지 않는다★ 이 문자열은 API 응답으로 나가고
@@ -161,6 +167,9 @@ class DailyExplanation:
     residual_pct: float | None = None
     residual_kind: str | None = None
     residual_reason: str | None = None
+    #: ★없는 축★ (BH2) — 미상과 다르다. 드라이버 → 왜 이 엔진에 없는지.
+    #: (예: 현금 모델이 없는 엔진의 `cash_effect` — 수익률에도 들어 있지 않다)
+    not_modeled: dict[str, str] = field(default_factory=dict)
     #: 보유 수준에서만. `{"basis": <price_quality.BASIS_*>, "reason": …}`
     price_basis: dict | None = None
 
@@ -178,6 +187,7 @@ class DailyExplanation:
             "residual_pct": self.residual_pct,
             "residual_kind": self.residual_kind,
             "residual_reason": self.residual_reason,
+            "not_modeled": dict(self.not_modeled),
             "price_basis": self.price_basis,
             "summary_ko": self.summary_ko,
         }
@@ -258,10 +268,21 @@ def summarize_ko(exp: DailyExplanation) -> str:
         # ★조사는 **마지막** 낱말의 받침을 따른다★
         parts.append(f"{names}{_josa(labels[-1], '은', '는')} 재지 못했습니다.")
 
+    # ③′ 없는 축 — ★미상과 다르다★ (BH2)
+    if exp.not_modeled:
+        labels = [DRIVER_LABELS.get(k, k) for k in sorted(exp.not_modeled)]
+        names = ", ".join(labels)
+        parts.append(f"{names}{_josa(labels[-1], '은', '는')} 이 엔진이 모델링하지 않는 "
+                     "축입니다(수익률에 들어 있지 않습니다).")
+
     # ④ 잔차 — ★항상 있다★
     if exp.residual_pct is None:
         why = exp.residual_reason or "전체 변동 또는 축의 합을 알 수 없습니다"
         parts.append(f"잔차를 계산하지 못했습니다 — {why}.")
+    elif exp.residual_kind == RESIDUAL_CLOSED:
+        parts.append(
+            f"축의 합이 실제 변동과 맞습니다(차이 {_pct(exp.residual_pct)} — 부동소수 "
+            "오차).")
     elif exp.residual_kind == RESIDUAL_INTERACTION:
         parts.append(
             f"축의 합과 실제 변동의 차이 {_pct(exp.residual_pct)} 는 복리 "

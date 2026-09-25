@@ -323,6 +323,8 @@ class RealisticBacktester:
                 current_macro_adj.get(int(sid), 0) * day_returns.get(sid, 0)
                 for sid in sids
             )
+            # ★동일가중 기준★ (BH2) — 항등식 net = EW + alloc + cost + cash
+            baseline_ew = sum(day_returns.get(sid, 0) for sid in sids) / len(sids)
 
             # ── 거래 비용 + Hook ② Market Impact ───────────────────────
             turnover = 0.0
@@ -410,6 +412,7 @@ class RealisticBacktester:
                 # 않는다. `0` 은 `pd.notna` 라 커버리지가 1.0 으로 잡히고,
                 # `coverage_complete` 가 거짓으로 참이 되어 잔차가 "복리 효과" 로
                 # 오명명됐다. 재료가 `None` 이면 기존 가드가 제대로 작동한다.
+                baseline_effect=baseline_ew,
                 allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
                 netting_effect=(None if netting_savings is None

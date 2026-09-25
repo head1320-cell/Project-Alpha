@@ -131,4 +131,6 @@ def test_each_daily_row_explains_itself(monkeypatch):
     exp = row["explanation"]
     assert exp["driver_set"] == "strategy_effects"
     assert exp["residual_kind"] == "unexplained"
-    assert "매크로 오버레이" in exp["summary_ko"]
+    # ★못 잰 드라이버를 이름으로 부른다★ — BH2 부터 드라이버는 수익률 항등식의 넷이라
+    # (매크로는 보고 전용) 이 행에 없는 동일가중 기준이 불린다.
+    assert "동일가중 기준" in exp["summary_ko"]

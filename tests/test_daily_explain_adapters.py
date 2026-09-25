@@ -27,7 +27,7 @@ from src.domain.daily_explanation import (
     DRIVER_REBALANCE,
     DRIVER_SET_HOLDING,
     DRIVER_SET_STRATEGY,
-    RESIDUAL_INTERACTION,
+    RESIDUAL_CLOSED,
     RESIDUAL_UNEXPLAINED,
     STRATEGY_DRIVERS,
     fold_price_basis,
@@ -38,46 +38,70 @@ from src.engine.daily_explain_holdings import explain_holdings_day
 # ═══════════════════════════════════════════════════════════════════════════
 # 백테스트 어댑터 — 총변동이 독립적으로 있다
 # ═══════════════════════════════════════════════════════════════════════════
-#: ★효과 수를 손으로 적지 않는다★ — AL3 에서 다섯 → 여섯이 되자 이 픽스처가
-#: 낡아 "완전한 행" 이 더 이상 완전하지 않았다.
-_EFFECT_VALUES = {"allocation_effect": 0.31, "selection_effect": 0.16,
-                  "macro_effect": -0.02, "netting_effect": 0.0,
+#: ★BH2 — 드라이버는 수익률 항등식의 넷이다★ (`net = EW + alloc + cost + cash`).
+#: 예전 픽스처는 여섯 효과(선택·매크로·청산 포함)를 더해 "복리" 라 불렀다 — 하루에는
+#: 복리가 없고, 네팅은 수익률에 없다. 합이 총변동과 맞게 값을 고른다.
+_DRIVER_VALUES = {"baseline_effect": 0.36, "allocation_effect": 0.09,
                   "cost_effect": -0.08, "cash_effect": 0.04}
+_TOTAL = sum(_DRIVER_VALUES.values())
 
 
 def _row(**over) -> dict:
-    from src.engine.attribution_decomposer import EFFECT_COLUMNS
-    n = len(EFFECT_COLUMNS)
-    assert set(_EFFECT_VALUES) == set(EFFECT_COLUMNS), (
-        "픽스처가 효과 목록과 어긋났습니다 — 값을 채우고 이 검사를 통과시키세요")
-    base = {"date": "2026-09-11", "portfolio_return": 0.41,
-            **_EFFECT_VALUES,
-            "regime": "GOLDILOCKS",
-            "coverage": {"n_total": n, "n_known": n, "complete": True,
-                         "missing": []}}
+    assert set(_DRIVER_VALUES) == set(STRATEGY_DRIVERS), (
+        "픽스처가 드라이버 목록과 어긋났습니다 — 값을 채우고 이 검사를 통과시키세요")
+    base = {"date": "2026-09-11", "portfolio_return": _TOTAL,
+            **_DRIVER_VALUES,
+            # 보고 전용 — 드라이버가 아니다
+            "selection_effect": None, "macro_effect": 0.0, "netting_effect": 0.02,
+            "regime": None,
+            "identity": {"drivers": list(STRATEGY_DRIVERS), "not_modeled": [],
+                         "gap_pct": 0.0, "closes": True}}
     base.update(over)
     return base
 
 
-def test_a_complete_row_calls_its_residual_interaction():
+def test_a_closed_row_calls_its_residual_closed():
+    """하루에는 복리가 없다 — 항등식이 닫히면 잔차는 "닫힘"(부동소수 오차)."""
     exp = explain_backtest_day(_row(), run_id=7)
     assert exp.driver_set == DRIVER_SET_STRATEGY
-    assert exp.residual_kind == RESIDUAL_INTERACTION
-    assert exp.residual_pct == pytest.approx(
-        0.41 - sum(_EFFECT_VALUES.values()), abs=1e-9)
+    assert exp.residual_kind == RESIDUAL_CLOSED
+    assert exp.residual_pct == pytest.approx(0.0, abs=1e-9)
     assert exp.missing_drivers == {}
+    assert "netting_effect" not in exp.drivers, "네팅은 수익률 드라이버가 아니다"
 
 
 def test_an_incomplete_row_calls_its_residual_unexplained():
-    """★짝★ 커버리지가 불완전하면 복리라고 부르지 않는다."""
+    """★짝★ 드라이버가 빠지면 닫혔다고 말하지 않는다."""
     exp = explain_backtest_day(
-        _row(macro_effect=None,
-             coverage={"n_total": 5, "n_known": 4, "complete": False,
-                       "missing": ["macro_effect"]}), run_id=7)
+        _row(allocation_effect=None,
+             identity={"drivers": list(STRATEGY_DRIVERS), "not_modeled": [],
+                       "gap_pct": None, "closes": False}), run_id=7)
     assert exp.residual_kind == RESIDUAL_UNEXPLAINED
-    assert "macro_effect" in exp.missing_drivers
-    assert exp.missing_drivers["macro_effect"]
-    assert "복리" not in exp.summary_ko or "상호작용" not in exp.summary_ko
+    assert "allocation_effect" in exp.missing_drivers
+    assert exp.missing_drivers["allocation_effect"]
+    assert exp.residual_reason
+
+
+def test_a_row_that_does_not_close_is_unexplained():
+    """★짝★ 다 알아도 합이 안 맞으면(수익률에 무언가 더 들어 있으면) 닫힘이 아니다."""
+    exp = explain_backtest_day(
+        _row(portfolio_return=_TOTAL + 0.02,
+             identity={"drivers": list(STRATEGY_DRIVERS), "not_modeled": [],
+                       "gap_pct": 0.02, "closes": False}), run_id=7)
+    assert exp.residual_kind == RESIDUAL_UNEXPLAINED
+    assert exp.residual_pct == pytest.approx(0.02, abs=1e-9)
+
+
+def test_a_not_modeled_axis_is_neither_a_driver_nor_missing():
+    """현금 모델이 없는 엔진 — 현금은 미상이 아니라 없는 축이다."""
+    exp = explain_backtest_day(
+        _row(cash_effect=None, portfolio_return=_TOTAL - 0.04,
+             identity={"drivers": ["baseline_effect", "allocation_effect", "cost_effect"],
+                       "not_modeled": ["cash_effect"], "gap_pct": 0.0, "closes": True}),
+        run_id=7)
+    assert exp.residual_kind == RESIDUAL_CLOSED
+    assert "cash_effect" in exp.not_modeled and "cash_effect" not in exp.missing_drivers
+    assert "모델링하지 않" in exp.summary_ko
 
 
 def test_an_unknown_total_makes_the_residual_incalculable():

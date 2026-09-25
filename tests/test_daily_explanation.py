@@ -72,9 +72,12 @@ def test_the_two_driver_sets_share_no_name():
 
 
 def test_strategy_drivers_match_the_producer_verbatim():
-    """★`attribution_decomposer` 가 단일 출처다★ — 손으로 옮겨 적으면 낡는다."""
-    from src.engine.attribution_decomposer import EFFECT_COLUMNS
-    assert tuple(STRATEGY_DRIVERS) == tuple(EFFECT_COLUMNS)
+    """★`attribution_decomposer` 가 단일 출처다★ — 손으로 옮겨 적으면 낡는다.
+
+    BH2 부터 대조 대상은 수익률 항등식의 드라이버(`IDENTITY_DRIVERS`)다.
+    """
+    from src.engine.attribution_decomposer import IDENTITY_DRIVERS
+    assert tuple(STRATEGY_DRIVERS) == tuple(IDENTITY_DRIVERS)
 
 
 def test_every_driver_has_a_korean_label():

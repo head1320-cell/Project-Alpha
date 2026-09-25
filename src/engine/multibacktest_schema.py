@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from sqlalchemy import text
 
@@ -44,7 +45,7 @@ MULTIBACKTEST_SCHEMA_DDL = [
         growth_signal REAL, inflation_signal REAL,
         allocation_effect REAL DEFAULT 0, selection_effect REAL DEFAULT 0,
         macro_effect REAL DEFAULT 0, netting_effect REAL DEFAULT 0, cost_effect REAL DEFAULT 0,
-        cash_effect REAL,
+        cash_effect REAL, baseline_effect REAL,
         num_strategies_active INTEGER, num_trades INTEGER DEFAULT 0,
         turnover_pct REAL DEFAULT 0, netting_savings REAL DEFAULT 0,
         rebalanced INTEGER DEFAULT 0,
@@ -72,7 +73,10 @@ MULTIBACKTEST_SCHEMA_DDL = [
 #:
 #: ★`DEFAULT` 를 주지 않는다★ — `selection_effect REAL DEFAULT 0` 이 바로
 #: **거짓 생성기**였다(AL2). 안 실으면 0 이 들어가 상수가 관측 행세를 한다.
-_DAILY_ADDED_COLS = [("cash_effect", "REAL")]
+_DAILY_ADDED_COLS = [("cash_effect", "DOUBLE PRECISION"),
+                     # ★동일가중 기준(EW)★ (BH2) — 귀인 항등식의 첫 드라이버. 옛 행은
+                     # NULL(= 미상)로 남고 분해기가 "BH2 이전 실행" 이라고 말한다.
+                     ("baseline_effect", "DOUBLE PRECISION")]
 
 
 def schema_ddls(dialect: str) -> list[str]:
@@ -82,7 +86,10 @@ def schema_ddls(dialect: str) -> list[str]:
     (경고만 남기고) 저장이 통째로 죽었다. 칸·의미는 같고 자동 증가 키만 방언에 맞춘다.
     """
     if dialect == "postgresql":
-        return [d.replace("id INTEGER PRIMARY KEY AUTOINCREMENT", "id SERIAL PRIMARY KEY")
+        # ★PG 의 REAL 은 4바이트★ (BH2) — 귀인 항등식 검사(일별 1e-9)가 저장
+        # 반올림에 깨진다. SQLite 의 REAL 은 이미 8바이트다.
+        return [re.sub(r"\bREAL\b", "DOUBLE PRECISION",
+                       d.replace("id INTEGER PRIMARY KEY AUTOINCREMENT", "id SERIAL PRIMARY KEY"))
                 for d in MULTIBACKTEST_SCHEMA_DDL]
     return list(MULTIBACKTEST_SCHEMA_DDL)
 
@@ -97,8 +104,10 @@ def init_multibacktest_schema(engine) -> int:
                 logger.warning(f"DDL failed: {e}")
     try:
         from src.data.schema_add_columns import add_columns
+        # ★키워드는 `label` 이다★ (BH2 발견) — 예전 `logger=logger` 는 TypeError 로
+        # 아래 except 에 삼켜져, 기존 표에 뒤늦은 칸이 **한 번도** 붙지 않았다.
         add_columns(engine, "multibacktest_daily", _DAILY_ADDED_COLS,
-                    logger=logger)
+                    label="multibacktest_daily")
     except Exception as e:                                    # noqa: BLE001
         # ★못 붙어도 진행한다★ — 칸이 없으면 `cash_effect` 가 미상으로 남을 뿐이다.
         logger.warning(f"cash_effect 컬럼을 붙이지 못했습니다(미상으로 남습니다): {e}")

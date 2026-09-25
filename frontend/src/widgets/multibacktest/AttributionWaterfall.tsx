@@ -11,6 +11,8 @@ interface WaterfallStep {
 interface Props {
   waterfall: WaterfallStep[];
   height?: number;
+  /** ★차트 밖에 적을 것★ (BH2) — 항등식이 닫혔는지, 수익률 밖(보고 전용) 네팅 등. */
+  notes?: string[];
 }
 
 const COLORS = {
@@ -21,7 +23,7 @@ const COLORS = {
   total:       "#00e5ff",
 };
 
-export default function AttributionWaterfall({ waterfall, height = 320 }: Props) {
+export default function AttributionWaterfall({ waterfall, height = 320, notes = [] }: Props) {
   if (!waterfall || waterfall.length === 0) {
     return (
       <div style={{
@@ -149,9 +151,14 @@ export default function AttributionWaterfall({ waterfall, height = 320 }: Props)
         {/* Title */}
         <text x={padding.left} y={20}
                fill="#a7c8ff" fontSize="11" fontWeight="600">
-          5-Factor Attribution — 베이스라인부터 최종 수익까지의 단계별 기여
+          수익률 분해 — 동일가중 기준 → 배분 → 비용 → 복리 → 실제
         </text>
       </svg>
+      {notes.length > 0 && (
+        <div style={{ marginTop: 6, fontSize: 10, color: "#6b7fa3", lineHeight: 1.6 }}>
+          {notes.map((n, i) => <div key={i}>{n}</div>)}
+        </div>
+      )}
     </div>
   );
 }

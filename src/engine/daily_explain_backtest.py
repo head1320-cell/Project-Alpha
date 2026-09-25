@@ -18,8 +18,9 @@ from __future__ import annotations
 from typing import Any
 
 from src.domain.daily_explanation import (
+    DRIVER_LABELS,
     DRIVER_SET_STRATEGY,
-    RESIDUAL_INTERACTION,
+    RESIDUAL_CLOSED,
     RESIDUAL_UNEXPLAINED,
     STRATEGY_DRIVERS,
     DailyExplanation,
@@ -28,6 +29,9 @@ from src.domain.daily_explanation import (
 #: ★사유는 대시를 품지 않는다★ — 템플릿이 하나 붙인다(전수 테스트가 지킨다).
 _MISSING_EFFECT = "이 실행의 그날 행에서 관측되지 않았습니다(0 이 아니라 미상입니다)"
 
+_NOT_MODELED = ("이 엔진에는 이 축의 모델이 없고 수익률에도 들어 있지 않습니다"
+                "(미상이 아니라 없는 축입니다)")
+
 _NO_TOTAL = ("그날의 포트폴리오 수익률이 기록되지 않아 축의 합과 견줄 총변동이 "
              "없습니다")
 
@@ -35,17 +39,19 @@ _NO_TOTAL = ("그날의 포트폴리오 수익률이 기록되지 않아 축의 
 def explain_backtest_day(row: dict[str, Any], *, run_id: int | str) -> DailyExplanation:
     """일별 귀인 행 하나 → 설명.
 
-    Args:
-        row: `_daily_attribution` 의 원소. `coverage` 를 들고 있어야 한다
-            (AB2 가 붙였다) — 없으면 관측된 효과 수로 되센다.
+    ★항등식 기준★ (BH2) — 드라이버는 `net = EW + alloc + cost (+ cash)` 의 넷이다.
+    행의 `identity`(`_daily_attribution` 이 붙인다)가 그 날 항등식이 닫히는지와 이
+    실행에 **없는 축**(`not_modeled`)을 말한다. 닫히면 잔차는 `closed`(하루엔 복리가
+    없다), 아니면 `unexplained` + 사유다.
     """
+    ident = row.get("identity") or {}
+    not_modeled_keys = set(ident.get("not_modeled") or [])
     drivers: dict[str, float | None] = {
-        c: (None if row.get(c) is None else float(row[c])) for c in STRATEGY_DRIVERS
+        c: (None if row.get(c) is None else float(row[c]))
+        for c in STRATEGY_DRIVERS if c not in not_modeled_keys
     }
     missing = {c: _MISSING_EFFECT for c, v in drivers.items() if v is None}
-
-    cov = row.get("coverage") or {}
-    complete = bool(cov.get("complete", not missing))
+    not_modeled = {c: _NOT_MODELED for c in sorted(not_modeled_keys)}
 
     total = row.get("portfolio_return")
     total = None if total is None else float(total)
@@ -54,17 +60,18 @@ def explain_backtest_day(row: dict[str, Any], *, run_id: int | str) -> DailyExpl
         residual_pct, residual_kind, residual_reason = None, None, _NO_TOTAL
     else:
         known = [v for v in drivers.values() if v is not None]
-        residual_pct = round(total - float(sum(known)), 4)
-        if complete:
-            residual_kind, residual_reason = RESIDUAL_INTERACTION, None
+        residual_pct = round(total - float(sum(known)), 6)
+        if not missing and ident.get("closes"):
+            residual_kind, residual_reason = RESIDUAL_CLOSED, None
         else:
             residual_kind = RESIDUAL_UNEXPLAINED
-            names = ", ".join(sorted(missing)) or "일부 축"
-            # ★커버리지가 불완전하면 잔차를 "복리" 라고 부르기를 거부한다★
-            # (`AttributionDecomposer._cumulative` 의 같은 문장)
-            residual_reason = (
-                f"{names} 의 커버리지가 불완전해 잔차가 복리 효과와 미관측분의 "
-                "혼합입니다(복리 효과로 읽을 수 없습니다)")
+            if missing:
+                names = ", ".join(DRIVER_LABELS.get(c, c) for c in sorted(missing))
+                residual_reason = (f"그날 관측되지 않은 축({names})이 있어 축의 합이 실제 "
+                                   "변동과 맞는지 확인할 수 없습니다")
+            else:
+                residual_reason = ("축을 다 알아도 합이 실제 변동과 맞지 않습니다(수익률에 "
+                                   "드라이버 밖의 무엇이 들어 있습니다)")
 
     return DailyExplanation(
         as_of=str(row.get("date") or ""),
@@ -74,5 +81,6 @@ def explain_backtest_day(row: dict[str, Any], *, run_id: int | str) -> DailyExpl
         drivers=drivers, missing_drivers=missing,
         residual_pct=residual_pct, residual_kind=residual_kind,
         residual_reason=residual_reason,
+        not_modeled=not_modeled,
         price_basis=None,   # ★전략 분해는 가격 축을 다루지 않는다★
     )

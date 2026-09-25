@@ -51,23 +51,38 @@ def daily(rows: list[dict]) -> pd.DataFrame:
 # ①② ★거짓 완결성★ — 상수 0 이 사라지면 잔차의 이름이 바뀐다
 # ═══════════════════════════════════════════════════════════════════════════
 
-def test_an_unmeasured_selection_makes_the_coverage_incomplete():
-    """★핵심★ 미측정이 `None` 이면 가드가 비로소 작동한다."""
+def test_an_unmeasured_identity_driver_makes_the_residual_unexplained():
+    """★핵심★ 미측정이 `None` 이면 가드가 비로소 작동한다.
+
+    ★BH2 에서 가드의 대상이 바뀌었다★ — 예전엔 여섯 효과(선택 포함) 전부였고, 이제는
+    수익률 항등식의 드라이버(`IDENTITY_DRIVERS`: 동일가중 기준·배분·비용·현금)다.
+    선택 효과는 멀티전략에서 정의되지 않는 **보고 전용** 항목이 됐다.
+    """
     cum = AttributionDecomposer._cumulative_attribution(daily([
-        {"allocation_effect": 0.01, "selection_effect": np.nan,
+        {"baseline_effect": 0.02, "allocation_effect": np.nan,
          "portfolio_return": 0.03, "cumulative_return": 3.0},
     ]))
     assert cum["coverage_complete"] is False
-    assert cum["selection_effect_pct"] is None
     assert cum["interaction_pct"] is None, "복리라고 부르면 안 된다"
     assert cum["unexplained_pct"] is not None
-    assert "selection_effect" in cum["unexplained_reason"]
+    assert cum["unexplained_reason"].strip()
+
+
+def test_an_unmeasured_selection_is_report_only_now():
+    """선택 효과가 미상이어도 항등식은 닫힌다 — 선택은 수익률 드라이버가 아니다."""
+    cum = AttributionDecomposer._cumulative_attribution(daily([
+        {"baseline_effect": 0.02, "allocation_effect": 0.01, "selection_effect": np.nan,
+         "portfolio_return": 0.03, "cumulative_return": 3.0},
+    ]))
+    assert cum["coverage_complete"] is True
+    assert cum["selection_effect_pct"] is None
+    assert cum["report_only"]["selection_effect"]["reason"].strip()
 
 
 def test_a_fully_measured_book_still_calls_the_residual_interaction():
-    """★짝★ 언제나 불완전인 구현을 배제한다 — 여섯이 다 관측되면 복리다."""
+    """★짝★ 언제나 불완전인 구현을 배제한다 — 드라이버가 다 관측되고 닫히면 복리다."""
     cum = AttributionDecomposer._cumulative_attribution(daily([
-        {"allocation_effect": 0.01, "portfolio_return": 0.03,
+        {"baseline_effect": 0.02, "allocation_effect": 0.01, "portfolio_return": 0.03,
          "cumulative_return": 3.0},
     ]))
     assert cum["coverage_complete"] is True
@@ -79,14 +94,15 @@ def test_a_constant_zero_would_have_faked_completeness():
     """★이 작업이 고친 사고를 그대로 재현한다★
 
     `0.0` 은 `notna` 라 커버리지가 1.0 으로 잡힌다 — 그래서 상수 0 을 싣던
-    시절에는 `coverage_complete` 가 **거짓으로 참**이었다. 이 테스트는 그 메커니즘이
-    여전히 그렇게 동작함을 못 박는다(그래서 **생산자가** 0 을 실으면 안 된다).
+    시절에는 커버리지가 **거짓으로 완전**했다. 이 테스트는 그 메커니즘이 여전히
+    그렇게 동작함을 못 박는다(그래서 **생산자가** 0 을 실으면 안 된다).
     """
     cum = AttributionDecomposer._cumulative_attribution(daily([
         {"selection_effect": 0.0, "portfolio_return": 0.03,
          "cumulative_return": 3.0},
     ]))
-    assert cum["coverage_complete"] is True, "0 은 관측으로 세어진다 — 그것이 함정이었다"
+    assert cum["coverage"]["selection_effect"]["coverage"] == 1.0, \
+        "0 은 관측으로 세어진다 — 그것이 함정이었다"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -114,10 +130,13 @@ def test_cash_effect_is_one_of_the_effect_columns():
     assert len(EFFECT_COLUMNS) == 6
 
 
-def test_the_effect_columns_still_match_the_sentence_drivers():
-    """★같은 것을 두 이름으로 부르지 않는다★ (기존 대조가 여섯으로 통과해야 한다)"""
+def test_the_identity_drivers_match_the_sentence_drivers():
+    """★같은 것을 두 이름으로 부르지 않는다★ — BH2 부터 문장의 드라이버는 저장된 여섯
+    칸이 아니라 **수익률 항등식의 드라이버**다(네팅·매크로·선택은 보고 전용)."""
     from src.domain.daily_explanation import STRATEGY_DRIVERS
-    assert tuple(STRATEGY_DRIVERS) == tuple(EFFECT_COLUMNS)
+    from src.engine.attribution_decomposer import IDENTITY_DRIVERS
+    assert tuple(STRATEGY_DRIVERS) == tuple(IDENTITY_DRIVERS)
+    assert "cash_effect" in STRATEGY_DRIVERS
 
 
 def test_the_cash_effect_has_a_korean_label():
