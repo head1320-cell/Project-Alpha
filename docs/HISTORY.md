@@ -19000,3 +19000,46 @@ stage12 라우트 · 멀티전략 엔진 · 귀인 분해뿐이고 주문·계�
 - 귀인 분해가 보고 전용 네팅을 수익률 효과로 더하는 문제(BG3 발견) — 별도 과제로 올렸다.
 - 실행 후 설정 패널이 다시 마운트되며 기간 입력이 기본값으로 돌아간다(기존 동작, 별건).
 
+
+## BH. 남은 것 — 안전 경로 정직성 · 귀인 항등식 · 백테스트 국면 R4-a (2026-09-25, 축 ②·③)
+
+스펙 `docs/superpowers/specs/2026-09-25-bh-safety-attribution-regime-design.md`. 사용자가 네
+조각 중 셋(A 귀인 · B 안전 경로 · C 백테스트 국면)을 골랐고 D(systemic_risk 생산 →
+`auto_risk` 무장)는 하지 않는다. hrp_macro 는 계속 거절, 미상 국면은 트리거하지 않고 센다,
+국면은 KR·US 둘 다 엄격 PIT(KR 은 적재되면 코드 변경 없이 산다).
+
+### BH1 · 안전 경로 정직성 — ★아무것도 무장하지 않는다★
+
+**원칙: 입력이 있으면 판정(발동·차단)은 한 글자도 바뀌지 않는다.** 바꾼 것은 미상을 0 으로
+읽던 곳과 조용한 건너뜀뿐이다.
+- 킬스위치 `auto_risk` — `get(…, 0) or 0` → 없으면 분기를 건너뛴다. 결과는 예전과 같다(0 < 85
+  라 불발) — ★없는 점수로 비교하지 않는다는 것뿐★. 그래서 `or 0` 복귀 변이는 **살아남는 것이
+  맞다**(동작 동일, 배터리에 "생존 기대" 로 명시). 못 봤다는 사실은 기존 `unverified_checks` 가 말한다.
+- 주문 게이트웨이 ⑧(국면 적응) — `regime_state` 가 없으면 else 가 없어 ★통과도 미확인도
+  기록되지 않았다★. 이제 국면 없음 · 점수 없음 · `mode` 없음이 각각 `checks_unverified` 에
+  사유로 남는다(주문을 막지 않는다). ★`recommended_mode` 를 `mode` 로 매핑하지 않았다★ —
+  분석기는 `recommended_mode="DEFENSIVE"` 를 내고 이 검사는 `mode == "defensive"` 를 본다.
+  잇는 순간 방어 모드 매수 차단이 켜진다(판정 변경, 별도 승인). 불일치는 사유 문구로 남긴다.
+- readiness 라우트 — `regime_state=None` 하드코딩 → 감시 데몬과 **같은** 입력.
+  `lifecycle._monitor_regime_state` 를 `risk_monitor.current_regime_state` 로 옮겼고 lifecycle 은
+  별칭이다(두 벌 금지 — 테스트가 동일 객체를 단언). `auto_risk` 는 여전히 불능이고 사유가
+  실제 상태(국면은 있고 점수가 없다)를 말한다.
+- `realism_engine._get_systemic_risk_pit` — ★국면 모델이 생기는 순간 0.0 을 지어낼 함정★
+  이었다(`or 0`). BH3 전에 없앴다. 뉴스 브리핑 프롬프트도 없는 점수를 `0.0 / 100` 으로 LLM 에
+  주던 것을 "미상 — 이 값으로 판단하지 말 것" 으로.
+
+**경계 골든** — 킬 85 발동 / 84.99 불발 · 게이트웨이 70 차단 / 69.99 통과 · 방어 모드는 점수
+미상이어도 차단 · 다 알면 `checks_passed`(짝). ★실제 트립 경계를 거는 테스트가 처음 생겼다★.
+기존 짝 테스트 하나(`test_risk_unknown_labels::test_a_known_drawdown_still_reports_passed`)는
+"미확인 0 건" 을 국면 없이 단언했다 — ⑧ 이 이제 국면 미상을 말하므로 국면 재료를 채워 같은
+강도로 유지했다.
+
+**변이 a~k 사망, l(동작 동일) · m(무해 짝) 생존** — 킬 임계 `>=`→`>` · auto_risk 분기 죽임 ·
+⑧ 국면 없음 조용히 건너뜀 · 점수 미상을 통과로 · recommended_mode 매핑 · 방어 임계 70→71 ·
+점수 미상을 0 으로 · readiness None 하드코딩 · realism 미상→0 · 프롬프트 0.0 · lifecycle 복사본.
+
+**하지 않은 것** — `systemic_risk_score` 생산 · `auto_risk` 무장 · `stress_score` 별칭 ·
+`mode`↔`recommended_mode` 매핑 · 게이트웨이 ⑧ 호출부(`stage13` 의 `execute_signal`)가
+`regime_state` 를 넘기게 하는 배선(넘기면 ⑧ 이 판정에 참여한다 — 별도 승인).
+
+게이트: ruff 통과 · 전체 스위트 **6,950 통과 / 10 스킵 / 0 실패**(733초). 프런트 변경 없음.

@@ -466,8 +466,9 @@ class RealisticBacktester:
             if past.empty:
                 return None
             regime_info = MultiRegimeModel.classify_at_date(past, str(as_of_date.date()))
-            if regime_info:
-                return float(regime_info.get("systemic_risk_score", 0) or 0)
-            return None
+            # ★미상을 0 으로 만들지 않는다★ (BH1) — 예전 `get(…, 0) or 0` 은 국면
+            # 모델이 생기는 순간 점수 없는 날마다 systemic risk **0.0** 을 지어냈다.
+            score = (regime_info or {}).get("systemic_risk_score")
+            return None if score is None else float(score)
         except Exception:
             return None

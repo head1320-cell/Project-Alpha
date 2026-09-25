@@ -62,9 +62,16 @@ def test_the_verdict_is_unchanged_when_drawdown_is_unknown():
 
 
 def test_a_known_drawdown_still_reports_passed():
-    """★짝★ 알 때는 전과 똑같이 `checks_passed` 다(항상-unverified 구현 배제)."""
+    """★짝★ 알 때는 전과 똑같이 `checks_passed` 다(항상-unverified 구현 배제).
+
+    ★국면 상태도 채운다★ (BH1) — 게이트웨이 ⑧ 이 이제 국면 미상을 조용히 건너뛰지 않고
+    `checks_unverified` 에 남긴다. "아무것도 미확인이 없다" 를 계속 단언하려면 ⑧ 의
+    재료도 줘야 한다.
+    """
     res = _gw().check(_ORDER, _state(current_drawdown_pct=0.01, cumulative_dd_pct=0.02,
-                                     drawdown_reason=None))
+                                     drawdown_reason=None),
+                      regime_state={"regime": "Goldilocks", "mode": "normal",
+                                    "systemic_risk_score": 20})
     assert "circuit_breaker" in res.checks_passed
     assert res.checks_unverified == []
 

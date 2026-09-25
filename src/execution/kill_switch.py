@@ -252,8 +252,11 @@ class KillSwitch:
                          f"일중 손실 한도 초과 ({intraday:.1%} >= {self.config.auto_intraday_loss:.0%})")
 
         # 3. Systemic risk PANIC
-        if regime_state:
-            risk_score = regime_state.get("systemic_risk_score", 0) or 0
+        # ★미상을 0 으로 읽지 않는다★ (BH1) — 예전 `get(…, 0) or 0` 은 결과는 같았지만
+        #   (0 < 85 라 불발) **없는 점수를 0 으로 만들어** 비교했다. 없으면 이 분기를
+        #   건너뛰고, 못 봤다는 사실은 `unverified_checks()` 가 말한다. 판정 불변.
+        risk_score = (regime_state or {}).get("systemic_risk_score")
+        if risk_score is not None:
             if risk_score >= self.config.auto_risk_score:
                 return ("auto_risk",
                          f"PANIC 국면 감지 (risk_score={risk_score:.0f})")

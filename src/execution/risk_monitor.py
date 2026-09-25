@@ -67,6 +67,39 @@ def dd_for_source(source: str | None, account_state: dict) -> float | None:
     return None if value is None else float(value)
 
 
+def current_regime_state() -> dict | None:
+    """감시용 국면 상태. ★못 읽으면 `None` — 0 으로 만들지 않는다.★
+
+    ★감시 데몬(`lifecycle._risk_monitor_bg`)과 readiness 라우트가 같은 함수를 쓴다★
+    (BH1) — 예전에는 라우트가 `regime_state=None` 을 하드코딩해 데몬이 무엇을 보든
+    `auto_risk` 를 불능으로 보고했다.
+
+    ★`systemic_risk_score` 를 싣지 않는다 — 지어낼 수 없기 때문이다.★
+
+    킬스위치의 `auto_risk` 는 `systemic_risk_score`(0~100)를 본다. 그런데 실측하면:
+
+      · 이 값의 생산자로 지목된 `src/engine/regime_model.MultiRegimeModel` 은
+        ★저장소에 존재하지 않는다★. `realism_engine._get_systemic_risk_pit` 와
+        `multi_strategy_backtest` 가 `try/except` 안에서 임포트해 ImportError 를
+        삼키므로, 그 경로는 **항상 `None`** 이다.
+      · `regime_analyzer.RegimeState` 가 드는 것은 `stress_score`(0~100)이고,
+        두 이름을 잇는 코드는 저장소 어디에도 없다.
+
+    둘이 같은 양인지 **확인된 적이 없다**. 파이프라인을 돌리려고 이름을 바꿔 끼우는
+    것은 CLAUDE.md §4 가 금지한 일이므로, 여기서는 국면 정보를 그대로 싣고
+    `systemic_risk_score` 는 **비워 둔다** → `auto_risk` 가 `unverified` 로 기록된다.
+    ★그 기록이 이 미상을 다음 사람에게 넘기는 방법이다.★
+    """
+    try:
+        from src.engine.regime_analyzer import get_regime_state
+        st = get_regime_state()
+        return {"regime": st.regime, "stress_score": st.stress_score,
+                "recommended_mode": st.recommended_mode}
+    except Exception as e:                      # noqa: BLE001
+        logger.debug(f"국면 상태 조회 불가(미상으로 기록): {e}")
+        return None
+
+
 def autotrigger_allowed() -> bool:
     """★엄격 비교★ — `mock_gate.mock_allowed()` 와 같은 규약."""
     return os.getenv(AUTOTRIGGER_ENV, "") == "1"

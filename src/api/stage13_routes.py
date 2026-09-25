@@ -375,7 +375,11 @@ def live_kill_readiness():
             account_state = {}
             fetch_reason = f"계좌 상태를 조회하지 못했습니다: {type(e).__name__}"
 
-        readiness = executor.kill_switch.trigger_readiness(account_state, None)
+        # ★감시 데몬과 같은 국면 입력★ (BH1) — 예전에는 `None` 을 하드코딩해 데몬이
+        # 무엇을 보든 `auto_risk` 를 불능으로 보고했다. 모듈 속성으로 부른다(교체 가능).
+        from src.execution import risk_monitor
+        regime_state = risk_monitor.current_regime_state()
+        readiness = executor.kill_switch.trigger_readiness(account_state, regime_state)
         return {
             **readiness,
             "is_active": executor.kill_switch.is_active(),

@@ -273,12 +273,33 @@ class RiskGateway:
             result.checks_passed.append("market_impact")
 
         # ⑧ Regime-Adaptive
-        if regime_state:
-            regime = regime_state.get("regime", "NORMAL")
-            risk_score = regime_state.get("systemic_risk_score", 0) or 0
-            mode = regime_state.get("mode", "normal")
+        # ★조용히 건너뛰지 않는다★ (BH1) — 예전에는 `regime_state` 가 없으면 else 가
+        # 없어 통과도 미확인도 기록되지 않았고, 점수가 없으면 `or 0` 으로 0 을 만들었다.
+        # ★판정(차단·통과)은 입력이 있을 때 한 글자도 바뀌지 않는다★ — 바뀌는 것은
+        # 못 본 것을 `checks_unverified` 에 이름으로 남기는 것뿐이다(주문을 막지 않는다).
+        # ★`recommended_mode` 를 `mode` 로 매핑하지 않는다★ — 국면 분석기는
+        # `recommended_mode="DEFENSIVE"` 를 내고 이 검사는 `mode == "defensive"` 를 본다.
+        # 잇는 순간 방어 모드 매수 차단이 켜진다(판정 변경 — CLAUDE.md §6 별도 승인).
+        if not regime_state:
+            result.checks_unverified.append(
+                "regime_adaptive: 국면 상태 미상 — 방어 모드 매수 한도를 검사하지 못했습니다")
+        else:
+            regime = regime_state.get("regime") or "미상"
+            raw_score = regime_state.get("systemic_risk_score")
+            mode = regime_state.get("mode")
+            missing = []
+            if raw_score is None:
+                missing.append("systemic_risk_score")
+            if mode is None:
+                missing.append(
+                    "mode (recommended_mode 는 있으나 이 검사는 mode 를 읽는다 — 어휘가 "
+                    "다르고, 잇는 것은 판정 변경이라 하지 않았다)"
+                    if "recommended_mode" in regime_state else "mode")
+            defensive = (mode == "defensive"
+                         or (raw_score is not None and raw_score >= 70))
+            shown = "미상" if raw_score is None else f"{raw_score:.0f}"
 
-            if mode == "defensive" or risk_score >= 70:
+            if defensive:
                 if order["side"] == "BUY":
                     order_value = order["quantity"] * order["price"]
                     equity = state.get("equity_krw", 1)
@@ -289,7 +310,7 @@ class RiskGateway:
                     )
                     if current_position_value + order_value > max_in_defensive:
                         result.tier_failures.append(
-                            f"Tier2: Defensive mode (risk={risk_score:.0f}) "
+                            f"Tier2: Defensive mode (risk={shown}) "
                             f"→ 매수 한도 {self.limits.regime_defensive_max_value:.0%} 초과"
                         )
                     else:
@@ -299,6 +320,9 @@ class RiskGateway:
                         result.checks_passed.append("regime_adaptive (defensive)")
                 else:
                     result.checks_passed.append("regime_adaptive (sell allowed)")
+            elif missing:
+                result.checks_unverified.append(
+                    f"regime_adaptive: {' · '.join(missing)} 미상 — 방어 모드인지 판정하지 못했습니다")
             else:
                 result.checks_passed.append("regime_adaptive")
 
