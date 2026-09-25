@@ -173,14 +173,18 @@ class AttributionDecomposer:
         """
         if not strategy_ids:
             return {}, None
+        # ★이름은 전략 레지스트리에서 온다★ (BG5) — 예전에는 이 저장소에 없는
+        # `strategies` 표를 읽어 조회가 늘 실패했고, 모든 전략의 이름이 사유와 함께
+        # 비어 있었다(정직했지만 레지스트리가 복원된 지금은 사실이 옆에 있다).
         try:
-            with self.engine.connect() as conn:
-                placeholders = ",".join(f":s{i}" for i in range(len(strategy_ids)))
-                params = {f"s{i}": int(sid) for i, sid in enumerate(strategy_ids)}
-                rows = conn.execute(text(
-                    f"SELECT id, name FROM strategies WHERE id IN ({placeholders})"
-                ), params).fetchall()
-            return {int(r._mapping["id"]): r._mapping["name"] for r in rows}, None
+            from src.engine.strategy_registry import StrategyRegistry
+            reg = StrategyRegistry(self.engine)
+            names = {}
+            for sid in strategy_ids:
+                s = reg.get(sid)
+                if s is not None:
+                    names[int(s["id"])] = s["name"]
+            return names, None
         except Exception as e:
             return {}, f"전략명 조회에 실패했습니다 — {type(e).__name__}: {e}"
 
@@ -457,7 +461,7 @@ class AttributionDecomposer:
                 "strategy_name": strategy_names.get(sid_int),
                 "strategy_name_reason": (
                     None if sid_int in strategy_names
-                    else (names_error or f"id {sid_int} 이 strategies 에 없습니다")),
+                    else (names_error or f"id {sid_int} 이 전략 레지스트리에 없습니다")),
                 "avg_weight": round(avg_weight, 4),
                 "avg_macro_adjustment": round(avg_macro_adj, 4),
                 "cumulative_contribution_pct": (None if cum_contribution is None

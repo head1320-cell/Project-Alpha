@@ -49,7 +49,10 @@ export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
         padding: 24, textAlign: "center", color: "#6b7fa3", fontSize: 12,
         fontStyle: "italic",
       }}>
-        Regime 분해 데이터 없음 — 매크로 오버레이 활성화 필요
+        {/* ★켜서 될 일이 아니다★ (BG6) — 예전 안내("매크로 오버레이 활성화 필요")는
+            국면 분류기가 없는 저장소에서 따를 수 없는 지시였다. */}
+        Regime 분해 데이터 없음 — 국면 분류기(regime_model)가 아직 없어 날짜별 국면을
+        정하지 못했습니다(R4 전). 매크로 오버레이를 켜도 달라지지 않습니다.
       </div>
     );
   }

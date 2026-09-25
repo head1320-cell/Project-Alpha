@@ -12,15 +12,24 @@ import EquityWithRegimeBand from "@/widgets/multibacktest/EquityWithRegimeBand";
 import AttributionWaterfall from "@/widgets/multibacktest/AttributionWaterfall";
 import RegimeAttributionTable from "@/widgets/multibacktest/RegimeAttributionTable";
 import CounterfactualCompare from "@/widgets/multibacktest/CounterfactualCompare";
+import RegisterStrategyPanel from "@/widgets/multibacktest/RegisterStrategyPanel";
 
 import { unavailableReason } from "@/entities/realism/unavailable";
+import {
+  multibacktestApi,
+  type MultistrategyAvailability,
+  type RegisteredStrategy,
+  type SourcesBlock,
+} from "@/entities/multibacktest";
 import { API_BASE } from "@/shared/api/apiBase";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 import { KPICard, Section, btnStyle, headerStyle, loadingStyle } from "@/widgets/multibacktest/DashboardParts";
 
 export default function MultiBacktestPage() {
-  const [strategies, setStrategies] = useState<any[]>([]);
+  const [strategies, setStrategies] = useState<RegisteredStrategy[]>([]);
+  const [availability, setAvailability] = useState<MultistrategyAvailability | null>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -38,25 +47,38 @@ export default function MultiBacktestPage() {
     if (t) setScreenerTickers(t.split(",").filter(Boolean));
   }, []);
 
+  // ★전략은 멀티전략 레지스트리에서 온다★ (BG6) — 예전에는 그래프 전략 목록
+  // (`/api/v1/strategies`)을 읽었는데, 그 id 는 이 엔진이 모르는 id 였다.
+  const loadStrategies = useCallback(async () => {
+    try {
+      setStrategies(await multibacktestApi.strategies(true));
+    } catch (e) {
+      // ★빈 목록으로 조용히 넘기지 않는다★ — 못 읽었다고 말한다.
+      setStrategies([]);
+      setError(`등록된 전략을 읽지 못했습니다 — ${String(e)}`);
+    }
+  }, []);
+
   // 초기 로드
   const loadInit = useCallback(async () => {
     setLoading(true);
     try {
-      const [sRes, rRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/strategies?active_only=true`).then((r) => r.json()).catch(() => ({ strategies: [] })),
+      const [rRes, avail] = await Promise.all([
         fetch(`${API_BASE}/api/v1/multibacktest/runs?limit=10`).then((r) => r.json()).catch(() => ({ runs: [] })),
+        multibacktestApi.availability().catch(() => null),
+        loadStrategies(),
       ]);
-      setStrategies(sRes.strategies || []);
       setRuns(rRes.runs || []);
+      setAvailability(avail);
       // ★빈 목록으로 조용히 넘기지 않는다★ (BF) — 서브시스템이 없으면 그 사유를 보인다.
-      const why = unavailableReason(rRes);
+      const why = unavailableReason(rRes) ?? (avail && !avail.available ? avail.reason : null);
       if (why) setError(why);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadStrategies]);
 
   useEffect(() => { loadInit(); }, [loadInit]);
 
@@ -119,6 +141,8 @@ export default function MultiBacktestPage() {
       const synthetic = {
         success: true,
         run_id: runId,
+        perf_label: runRes.perf_label,
+        sources: runRes.sources,
         summary: {
           total_return_pct: runRes.run.total_return_pct,
           annualized_return_pct: runRes.run.annualized_return_pct,
@@ -228,6 +252,12 @@ export default function MultiBacktestPage() {
         </div>
       )}
 
+      {/* 전략 등록 (BG6) */}
+      <Section title="전략 등록" icon={Database}
+                subtitle="완료된 백테스트 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 등록합니다">
+        <RegisterStrategyPanel strategies={strategies} onChanged={loadStrategies} />
+      </Section>
+
       {/* 설정 패널 */}
       <Section title="백테스트 설정" icon={Layers}
                 subtitle={`등록된 전략 ${strategies.length}개 · 과거 실행 ${runs.length}개`}>
@@ -235,6 +265,7 @@ export default function MultiBacktestPage() {
           strategies={strategies}
           onRun={handleRun}
           running={running}
+          availability={availability}
         />
       </Section>
 
@@ -316,6 +347,11 @@ export default function MultiBacktestPage() {
                       color="#e040fb" />
           </div>
 
+          {/* ★이 수치가 무엇에서 나왔는가★ (BG6) — 라벨은 원천 실행들의 mock 여부로 */}
+          <ResultProvenance perfLabel={result.perf_label} sources={result.sources}
+                            netting={result.summary.netting}
+                            nettingTotal={result.summary.netting_total_savings} />
+
           {/* Equity + Regime */}
           <Section title="자산 곡선 + 매크로 국면" icon={TrendingUp}
                     subtitle={`${result.summary.n_trading_days}일 시뮬레이션`}>
@@ -370,3 +406,57 @@ export default function MultiBacktestPage() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+
+function dataText(mock: boolean | null | undefined): string {
+  if (mock === true) return "mock";
+  if (mock === false) return "실데이터";
+  return "데이터 미상";
+}
+
+/** 결과의 출처 — 원천 실행 · 데이터 축 · 네팅 근거. ★응답이 말한 것만★ 그린다. */
+function ResultProvenance({ perfLabel, sources, netting, nettingTotal }: {
+  perfLabel?: PerfLabelValue | null;
+  sources?: SourcesBlock | null;
+  netting?: {
+    enabled: boolean; basis: string; assumptions: string[];
+    n_measured_days: number; n_unmeasured_days: number;
+    first_unmeasured_reason: string | null;
+  } | null;
+  nettingTotal?: number | null;
+}) {
+  return (
+    <div style={{
+      padding: "10px 14px", marginBottom: 16, background: "#0a0e27",
+      border: "1px solid #1e2d4a", borderRadius: 6, fontSize: 11, color: "#a7c8ff",
+      display: "flex", flexDirection: "column", gap: 6,
+    }}>
+      <div><PerfLabel value={perfLabel} /></div>
+      <div>
+        <span style={{ color: "#6b7fa3" }}>출처 · </span>
+        {!sources ? "응답에 출처가 없습니다(과거 실행일 수 있습니다)."
+          : !sources.available ? sources.reason
+          : sources.strategies.map((s) => (
+            <span key={s.strategy_id} style={{ marginRight: 10 }}>
+              #{s.strategy_id}{s.name ? ` ${s.name}` : ""} ←{" "}
+              {s.registered ? `${s.source_run_id} (${dataText(s.is_mock_data)})` : (s.reason ?? "원천 미상")}
+            </span>
+          ))}
+      </div>
+      {netting && (
+        <div>
+          <span style={{ color: "#6b7fa3" }}>네팅 (보고 전용 · 수익률에 더하지 않음) · </span>
+          {!netting.enabled ? "꺼짐"
+            : <>
+                절감 {nettingTotal == null ? "미상" : `${Math.round(nettingTotal).toLocaleString()}원`}
+                {" · "}잰 날 {netting.n_measured_days} / 못 잰 날 {netting.n_unmeasured_days}
+                {netting.first_unmeasured_reason ? ` · ${netting.first_unmeasured_reason}` : ""}
+                <span title={netting.assumptions.join("\n")} style={{ color: "#6b7fa3" }}>
+                  {" "}· 근거 {netting.basis} (가정 {netting.assumptions.length}개)
+                </span>
+              </>}
+        </div>
+      )}
+    </div>
+  );
+}
+

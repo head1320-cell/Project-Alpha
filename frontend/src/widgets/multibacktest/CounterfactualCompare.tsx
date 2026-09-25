@@ -29,19 +29,28 @@ interface ComparisonRow {
   sharpe_diff_vs_baseline?: number;
 }
 
+// ★`null` 은 "가치 0" 이 아니다★ (BG3·BG5) — 두 쪽이 같은 계산이라 차이가 구조적으로
+// 0 인 비교(보고 전용 네팅 · hrp 기준의 매크로 오버레이 · inverse_vol 기준의 HRP)는
+// 서버가 `null` + `*_value_reason` 을 낸다. 예전 화면은 `?? 0` 으로 0 을 그렸다.
 interface DecisionValues {
   baseline_return_pct?: number;
-  macro_overlay_value_pct?: number;
+  macro_overlay_value_pct?: number | null;
   macro_overlay_value_bp_per_year?: number;
+  macro_overlay_value_reason?: string;
   macro_overlay_description?: string;
-  netting_value_pct?: number;
+  netting_value_pct?: number | null;
   netting_value_bp_per_year?: number;
+  netting_value_reason?: string;
+  /** 실제 보유로 잰 절감(원) — 수익률 차이가 아니다. */
+  netting_measured_savings?: number | null;
   netting_description?: string;
-  hrp_vs_inverse_vol_value_pct?: number;
+  hrp_vs_inverse_vol_value_pct?: number | null;
   hrp_vs_inverse_vol_value_bp_per_year?: number;
+  hrp_vs_inverse_vol_value_reason?: string;
   hrp_vs_inverse_vol_description?: string;
-  vs_equal_weight_value_pct?: number;
+  vs_equal_weight_value_pct?: number | null;
   vs_equal_weight_value_bp_per_year?: number;
+  vs_equal_weight_value_reason?: string;
   vs_equal_weight_description?: string;
 }
 
@@ -203,26 +212,23 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
               <DecisionCard
                 label="매크로 오버레이 가치"
-                value={result.decision_values?.macro_overlay_value_pct ?? 0}
-                bp={result.decision_values?.macro_overlay_value_bp_per_year ?? 0}
+                dv={result.decision_values} k="macro_overlay"
                 color="#e040fb"
               />
               <DecisionCard
                 label="중앙 청산 가치"
-                value={result.decision_values?.netting_value_pct ?? 0}
-                bp={result.decision_values?.netting_value_bp_per_year ?? 0}
+                dv={result.decision_values} k="netting"
                 color="#ff9800"
+                extra={nettingExtra(result.decision_values)}
               />
               <DecisionCard
                 label="HRP 클러스터링 가치"
-                value={result.decision_values?.hrp_vs_inverse_vol_value_pct ?? 0}
-                bp={result.decision_values?.hrp_vs_inverse_vol_value_bp_per_year ?? 0}
+                dv={result.decision_values} k="hrp_vs_inverse_vol"
                 color="#69f0ae"
               />
               <DecisionCard
                 label="전체 시스템 가치"
-                value={result.decision_values?.vs_equal_weight_value_pct ?? 0}
-                bp={result.decision_values?.vs_equal_weight_value_bp_per_year ?? 0}
+                dv={result.decision_values} k="vs_equal_weight"
                 color="#00e5ff"
                 highlight
               />
@@ -347,12 +353,28 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
   );
 }
 
-function DecisionCard({ label, value, bp, color, highlight }: {
-  label: string; value: number; bp: number; color: string; highlight?: boolean;
+type DecisionKey = "macro_overlay" | "netting" | "hrp_vs_inverse_vol" | "vs_equal_weight";
+
+function nettingExtra(dv?: DecisionValues | null): string | null {
+  const v = dv?.netting_measured_savings;
+  if (v === undefined) return null;
+  return v === null ? "실측 절감: 미상" : `실측 절감: ${Math.round(v).toLocaleString()}원`;
+}
+
+function DecisionCard({ label, dv, k, color, highlight, extra = null }: {
+  label: string; dv?: DecisionValues | null; k: DecisionKey; color: string;
+  highlight?: boolean; extra?: string | null;
 }) {
-  const isPositive = value >= 0;
+  const rec = (dv ?? {}) as Record<string, unknown>;
+  const raw = rec[`${k}_value_pct`];
+  const bpRaw = rec[`${k}_value_bp_per_year`];
+  const reason = rec[`${k}_value_reason`] as string | undefined;
+  // ★없는 값은 0 이 아니다★ — 시나리오가 빠졌거나(키 없음) 같은 계산이라 값이 아니다(null).
+  const value = typeof raw === "number" ? raw : null;
+  const bp = typeof bpRaw === "number" ? bpRaw : null;
+  const isPositive = value !== null && value >= 0;
   return (
-    <div style={{
+    <div title={reason} style={{
       padding: "12px 14px",
       background: highlight
         ? `linear-gradient(135deg, ${color}15, ${color}05)`
@@ -365,15 +387,35 @@ function DecisionCard({ label, value, bp, color, highlight }: {
                       marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 16, fontWeight: 700,
-                      color: isPositive ? color : "#ff5252",
-                      fontFamily: "'Roboto Mono', monospace" }}>
-        {isPositive ? "+" : ""}{value.toFixed(2)}%
-      </div>
-      <div style={{ fontSize: 9, color: "#6b7fa3", marginTop: 2,
-                      fontFamily: "'Roboto Mono', monospace" }}>
-        {isPositive ? "+" : ""}{bp.toFixed(0)} bp/yr
-      </div>
+      {value === null ? (
+        <>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#6b7fa3",
+                          fontFamily: "'Roboto Mono', monospace" }}>
+            —
+          </div>
+          <div style={{ fontSize: 9, color: "#6b7fa3", marginTop: 2, lineHeight: 1.4 }}>
+            {reason ?? (raw === undefined ? "이 비교의 시나리오가 실행되지 않았습니다." : "값이 없습니다.")}
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 16, fontWeight: 700,
+                          color: isPositive ? color : "#ff5252",
+                          fontFamily: "'Roboto Mono', monospace" }}>
+            {isPositive ? "+" : ""}{value.toFixed(2)}%
+          </div>
+          <div style={{ fontSize: 9, color: "#6b7fa3", marginTop: 2,
+                          fontFamily: "'Roboto Mono', monospace" }}>
+            {bp === null ? "— bp/yr" : `${bp >= 0 ? "+" : ""}${bp.toFixed(0)} bp/yr`}
+          </div>
+        </>
+      )}
+      {extra && (
+        <div style={{ fontSize: 9, color: color, marginTop: 4,
+                        fontFamily: "'Roboto Mono', monospace" }}>
+          {extra}
+        </div>
+      )}
     </div>
   );
 }

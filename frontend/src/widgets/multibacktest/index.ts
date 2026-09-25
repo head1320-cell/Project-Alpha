@@ -5,4 +5,5 @@ export { default as BacktestConfigPanel } from "./BacktestConfigPanel";
 export { default as CounterfactualCompare } from "./CounterfactualCompare";
 export { default as EquityWithRegimeBand } from "./EquityWithRegimeBand";
 export { default as RegimeAttributionTable } from "./RegimeAttributionTable";
+export { default as RegisterStrategyPanel } from "./RegisterStrategyPanel";
 export { default as WeightTimeseriesChart } from "./WeightTimeseriesChart";

@@ -298,9 +298,6 @@ def _sqlite_engine(with_rows: bool = True, with_strategy_table: bool = True):
                      " trade_date TEXT, strategy_id INTEGER, weight REAL,"
                      " macro_adjustment REAL, contribution REAL,"
                      " strategy_return REAL)"))
-        if with_strategy_table:
-            c.execute(_t("CREATE TABLE strategies (id INTEGER, name TEXT)"))
-            c.execute(_t("INSERT INTO strategies VALUES (7, '실제 전략명')"))
         c.execute(_t("INSERT INTO multibacktest_runs VALUES (1, 'r', '2026-01-01',"
                      " '2026-02-01', 'hrp', 5.0, 5.0, 1.0, -2.0)"))
         if with_rows:
@@ -322,6 +319,14 @@ def _sqlite_engine(with_rows: bool = True, with_strategy_table: bool = True):
                          f" {vals})"))
             c.execute(_t("INSERT INTO multibacktest_strategy_daily VALUES"
                          " (1, '2026-01-05', 7, 0.5, 0.0, 0.01, 0.02)"))
+    if with_strategy_table:
+        # ★이름은 전략 레지스트리에서 온다★ (BG5) — 예전 픽스처는 이 저장소에 없는
+        # `strategies` 표를 만들어 조회가 성공하는 척을 했다.
+        from src.engine.strategy_registry import StrategyRegistry
+        StrategyRegistry(eng)
+        with eng.begin() as c:
+            c.execute(_t("INSERT INTO strategy_registry (id, name, source_run_id,"
+                         " is_active) VALUES (7, '실제 전략명', 'bt_fixture', 1)"))
     return eng
 
 
@@ -360,7 +365,7 @@ def test_both_failure_modes_still_say_something():
 def test_a_name_lookup_failure_does_not_fabricate_a_name():
     """★미상인 이름은 이름이 아니다★ (`stock_master` 의 `"Unknown Corp"` 금지와
     같은 형태). 조회에 실패했으면 실패했다고 말한다."""
-    eng = _sqlite_engine(with_strategy_table=False)     # strategies 테이블 없음
+    eng = _sqlite_engine(with_strategy_table=False)     # 레지스트리에 id 7 이 없다
     out = AttributionDecomposer(eng).decompose(1)
     row = out["strategy_contribution"][0]
     assert row["strategy_name"] is None

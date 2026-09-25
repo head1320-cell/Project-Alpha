@@ -25,7 +25,7 @@ from src.engine import multistrategy_availability as ma
 
 #: ★지금 없는 것★ — 복원될 때마다 줄어든다(트립와이어가 그것을 요구한다).
 #: BG1 에서 `src.engine.strategy_registry`, BG2 에서 `src.engine.allocator`, BG3 에서
-#: `src.execution.order_netting` 이 복원됐다.
+#: `src.execution.order_netting` 이 복원됐다. 남은 둘은 R4 — ★기능 단위로만 막는다★(BG4).
 FIVE = {"src.data.macro_feed", "src.engine.regime_model"}
 
 
@@ -43,22 +43,47 @@ def test_every_entry_says_what_it_was_for_and_why():
         assert len(m.reason) > 20, m.module
 
 
-def test_the_status_names_the_modules_and_the_data_gap():
+# ── BG4 · ★기능 단위로 막는다★ ───────────────────────────────────────
+# 코어(레지스트리·배분기·네팅)가 복원됐다. 남은 둘(macro_feed·regime_model)은
+# `hrp_macro`·`regime_change` **만** 필요로 한다 — 그 요청만 422, 나머지는 돈다.
+
+def test_the_remaining_two_block_only_their_features():
+    for m in ma.MISSING:
+        assert m.features, f"{m.module} 는 기능이 없는 코어로 등록됐다 — 전부 503 이 된다"
+        assert set(m.features) <= set(ma.FEATURES), m.features
+
+
+def test_the_core_is_available_now():
     s = ma.status()
-    assert s["available"] is False
+    assert s["available"] is True
+    assert s["reason"] is None
+    assert ma.http_unavailable() is None
+    # ★없는 것은 여전히 이름으로 말한다★ — 가용이라고 숨기지 않는다.
     assert {m["module"] for m in s["missing"]} == FIVE
-    assert all(m["role"] for m in s["missing"])
-    assert s["reason"] and len(s["reason"]) > 30
     assert s["data_gap"] and "수익률" in s["data_gap"]
     assert s["since"]
+
+
+def test_the_status_names_the_unsupported_features_with_reasons():
+    feats = {f["feature"]: f for f in ma.status()["unsupported_features"]}
+    assert set(feats) == {"hrp_macro", "regime_change"}
+    assert feats["hrp_macro"]["field"] == "allocation_method"
+    assert feats["regime_change"]["field"] == "rebalance_policy"
+    for f in feats.values():
+        assert len(f["reason"]) > 20 and f["missing"]
+        assert set(f["missing"]) <= FIVE
+    # ★조용히 daily 가 되는 이유를 말한다★
+    assert "매일" in feats["regime_change"]["reason"]
 
 
 def test_restoring_everything_makes_it_available(monkeypatch):
     """★짝★ — 항상-불가 구현을 배제한다. 모듈이 생기면 스스로 풀린다."""
     monkeypatch.setattr(ma, "_spec_exists", lambda name: True)
     assert ma.missing_now() == []
-    assert ma.status()["available"] is True
-    assert ma.http_unavailable() is None
+    s = ma.status()
+    assert s["available"] is True and s["unsupported_features"] == []
+    assert ma.http_unsupported(allocation_method="hrp_macro",
+                               rebalance_policy="regime_change") is None
 
 
 def test_restoring_one_shrinks_the_list(monkeypatch):
@@ -68,14 +93,47 @@ def test_restoring_one_shrinks_the_list(monkeypatch):
     assert len(ma.missing_now()) == len(FIVE) - 1
 
 
-def test_the_http_error_is_503_with_the_status():
-    exc = ma.http_unavailable()
-    assert exc is not None and exc.status_code == 503
-    assert exc.detail["available"] is False
+@pytest.mark.parametrize("fields,feature", [
+    ({"allocation_method": "hrp_macro"}, "hrp_macro"),
+    ({"rebalance_policy": "regime_change"}, "regime_change"),
+    ({"allocation_method": "hrp_macro", "rebalance_policy": "regime_change"}, "hrp_macro"),
+])
+def test_an_unsupported_request_is_422_with_the_reason(fields, feature):
+    exc = ma.http_unsupported(**fields)
+    assert exc is not None and exc.status_code == 422
+    names = [u["feature"] for u in exc.detail["unsupported"]]
+    assert feature in names and len(names) == len(fields)
     assert exc.detail["reason"]
 
 
-# ── ★라우트가 503 + 사유를 낸다★ ─────────────────────────────────────
+@pytest.mark.parametrize("fields", [
+    {"allocation_method": "hrp", "rebalance_policy": "monthly"},
+    {"allocation_method": "inverse_vol", "rebalance_policy": "daily"},
+    {},
+])
+def test_a_supported_request_passes(fields):
+    """★짝★ — 항상-거부 구현 배제."""
+    assert ma.http_unsupported(**fields) is None
+
+
+def _fake_core_missing(monkeypatch):
+    """코어가 빠진 저장소를 흉내 낸다 — 503 경로가 죽은 코드가 되지 않게."""
+    fake = ma.MissingModule(module="src.engine._fake_core_for_test",
+                            needed_by=("x",), role="가짜 코어 모듈",
+                            reason="코어가 빠졌을 때 문이 503 을 내는지 보는 가짜 항목입니다.")
+    monkeypatch.setattr(ma, "MISSING", (*ma.MISSING, fake))
+    return fake
+
+
+def test_a_missing_core_module_is_503(monkeypatch):
+    fake = _fake_core_missing(monkeypatch)
+    exc = ma.http_unavailable()
+    assert exc is not None and exc.status_code == 503
+    assert exc.detail["available"] is False and exc.detail["reason"]
+    assert fake.module in {m["module"] for m in exc.detail["missing"]}
+
+
+# ── ★라우트★ ──────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
 def client():
@@ -86,14 +144,18 @@ def client():
 
 
 _BODY = {"strategy_ids": [1, 2], "start_date": "2024-01-02",
-         "end_date": "2024-06-28"}
+         "end_date": "2024-06-28", "allocation_method": "hrp"}
 
 GUARDED = [
     ("post", "/api/v1/multibacktest/run", _BODY),
     ("get", "/api/v1/multibacktest/runs", None),
     ("get", "/api/v1/multibacktest/7", None),
     ("delete", "/api/v1/multibacktest/7", None),
-    ("post", "/api/v1/multibacktest/counterfactual", _BODY),
+    ("post", "/api/v1/multibacktest/counterfactual",
+     {**_BODY, "base_allocation_method": "hrp"}),
+    ("get", "/api/v1/multibacktest/strategies", None),
+    ("post", "/api/v1/multibacktest/strategies", {"run_id": "bt_x", "name": "x"}),
+    ("delete", "/api/v1/multibacktest/strategies/7", None),
     ("post", "/api/v1/realism/backtest", _BODY),
     ("post", "/api/v1/realism/correlation-health", {"strategy_ids": [1, 2]}),
 ]
@@ -101,14 +163,49 @@ GUARDED = [
 
 @pytest.mark.parametrize("method,path,body", GUARDED,
                          ids=[f"{m.upper()} {p}" for m, p, _ in GUARDED])
-def test_the_guarded_routes_say_503_with_the_missing_modules(client, method,
-                                                             path, body):
+def test_the_guarded_routes_say_503_when_the_core_is_missing(client, monkeypatch,
+                                                             method, path, body):
     """변이 — 가드를 빼거나 `try:` 안으로 넣으면 500 이 된다."""
+    fake = _fake_core_missing(monkeypatch)
     r = getattr(client, method)(path, **({"json": body} if body else {}))
     assert r.status_code == 503, (r.status_code, r.text[:300])
     d = r.json()["detail"]
-    assert {m["module"] for m in d["missing"]} == FIVE
+    assert fake.module in {m["module"] for m in d["missing"]}
     assert d["reason"]
+
+
+@pytest.mark.parametrize("method,path,body", GUARDED,
+                         ids=[f"{m.upper()} {p}" for m, p, _ in GUARDED])
+def test_the_guarded_routes_are_not_503_now(client, method, path, body):
+    """★짝★ — 코어가 복원된 지금은 503 이 아니다(다른 결과는 각 문의 몫)."""
+    r = getattr(client, method)(path, **({"json": body} if body else {}))
+    assert r.status_code != 503, r.text[:300]
+
+
+UNSUPPORTED = [
+    ("/api/v1/multibacktest/run", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
+    ("/api/v1/multibacktest/run", {**_BODY, "rebalance_policy": "regime_change"},
+     "regime_change"),
+    ("/api/v1/multibacktest/counterfactual",
+     {**_BODY, "base_allocation_method": "hrp_macro"}, "hrp_macro"),
+    ("/api/v1/multibacktest/counterfactual",
+     {**_BODY, "base_allocation_method": "hrp", "base_rebalance_policy": "regime_change"},
+     "regime_change"),
+    ("/api/v1/realism/backtest", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
+    ("/api/v1/realism/backtest", {**_BODY, "rebalance_policy": "regime_change"},
+     "regime_change"),
+]
+
+
+@pytest.mark.parametrize("path,body,feature", UNSUPPORTED,
+                         ids=[f"{p} {f}" for p, _, f in UNSUPPORTED])
+def test_r4_features_are_422_with_the_reason(client, path, body, feature):
+    """★422 — 요청이 이 저장소에 없는 기능을 골랐다★ (500 도 503 도 아니다)."""
+    r = client.post(path, json=body)
+    assert r.status_code == 422, (r.status_code, r.text[:300])
+    d = r.json()["detail"]
+    assert [u["feature"] for u in d["unsupported"]] == [feature]
+    assert d["reason"] and d["unsupported"][0]["missing"]
 
 
 UNGUARDED = [

@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Play, Loader2, Calendar, Layers, Settings, Sparkles,
 } from "lucide-react";
+
+import {
+  unsupportedReason, type MultistrategyAvailability,
+} from "@/entities/multibacktest";
 
 interface Strategy {
   id: number;
@@ -29,9 +33,11 @@ interface Props {
   strategies: Strategy[];
   onRun: (config: Config) => Promise<void>;
   running: boolean;
+  /** `GET /availability` — ★안 되는 옵션과 그 사유는 서버가 말한다★ (BG6). */
+  availability?: MultistrategyAvailability | null;
 }
 
-export default function BacktestConfigPanel({ strategies, onRun, running }: Props) {
+export default function BacktestConfigPanel({ strategies, onRun, running, availability = null }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const twoYearsAgo = new Date();
   twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
@@ -42,13 +48,32 @@ export default function BacktestConfigPanel({ strategies, onRun, running }: Prop
     start_date: defaultStart,
     end_date: today,
     initial_capital: 10_000_000,
-    allocation_method: "hrp_macro",
+    // ★기본은 hrp★ (BG6) — hrp_macro 는 R4 전까지 서버가 422 로 막는다.
+    allocation_method: "hrp",
     rebalance_policy: "monthly",
     netting_enabled: true,
-    macro_overlay_enabled: true,
+    // 매크로 오버레이는 hrp_macro 에서만 작동한다 — 다른 방법에서는 효과가 없다.
+    macro_overlay_enabled: false,
     commission_rate: 0.00015,
     slippage_rate: 0.0005,
   });
+
+  // 전략이 새로 등록·비활성되면 선택을 맞춘다 — 사라진 id 는 빼고 새 id 는 넣는다.
+  const activeIds = strategies.filter((s) => s.is_active).map((s) => s.id).join(",");
+  useEffect(() => {
+    const ids = activeIds ? activeIds.split(",").map(Number) : [];
+    setConfig((c) => {
+      const kept = c.strategy_ids.filter((id) => ids.includes(id));
+      const added = ids.filter((id) => !c.strategy_ids.includes(id));
+      return { ...c, strategy_ids: [...kept, ...added] };
+    });
+  }, [activeIds]);
+
+  const macroWhy = unsupportedReason(availability, "allocation_method", "hrp_macro");
+  const regimeWhy = unsupportedReason(availability, "rebalance_policy", "regime_change");
+  const overlayWhy = config.allocation_method !== "hrp_macro"
+    ? "매크로 오버레이는 hrp_macro 에서만 작동합니다 — 지금 방법에서는 켜도 효과가 없습니다."
+    : null;
 
   const toggleStrategy = (sid: number) => {
     setConfig((c) => ({
@@ -75,7 +100,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running }: Prop
           {strategies.length === 0 ? (
             <div style={{ padding: 12, fontSize: 11, color: "#6b7fa3",
                             textAlign: "center" }}>
-              등록된 전략 없음 — Multi-Strategy 페이지에서 먼저 등록
+              등록된 전략 없음 — 위 &apos;전략 등록&apos; 에서 완료된 백테스트 실행을 등록하세요
             </div>
           ) : strategies.map((s) => {
             const selected = config.strategy_ids.includes(s.id);
@@ -144,7 +169,9 @@ export default function BacktestConfigPanel({ strategies, onRun, running }: Prop
                     style={inputStyle}>
               <option value="inverse_vol">① InverseVolatility</option>
               <option value="hrp">② HRP</option>
-              <option value="hrp_macro">③ HRP + Macro</option>
+              <option value="hrp_macro" disabled={macroWhy !== null}>
+                ③ HRP + Macro{macroWhy ? " (R4 전까지 불가)" : ""}
+              </option>
             </select>
           </div>
           <div>
@@ -156,17 +183,32 @@ export default function BacktestConfigPanel({ strategies, onRun, running }: Prop
               <option value="weekly">매주</option>
               <option value="monthly">매월</option>
               <option value="quarterly">매분기</option>
-              <option value="regime_change">국면 변경</option>
+              <option value="regime_change" disabled={regimeWhy !== null}>
+                국면 변경{regimeWhy ? " (R4 전까지 불가)" : ""}
+              </option>
             </select>
           </div>
         </div>
+
+        {/* ★안 되는 이유는 서버가 준 문장 그대로★ */}
+        {(macroWhy || regimeWhy) && (
+          <div style={{ fontSize: 10, color: "#ffab91", lineHeight: 1.5 }}>
+            {macroWhy && <div>HRP + Macro: {macroWhy}</div>}
+            {regimeWhy && <div>국면 변경: {regimeWhy}</div>}
+          </div>
+        )}
 
         {/* Toggles */}
         <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
           <Toggle label="중앙 청산 (Netting)" value={config.netting_enabled}
                    onChange={(v) => setConfig({ ...config, netting_enabled: v })} />
           <Toggle label="매크로 오버레이" value={config.macro_overlay_enabled}
+                   disabledReason={overlayWhy}
                    onChange={(v) => setConfig({ ...config, macro_overlay_enabled: v })} />
+        </div>
+        <div style={{ fontSize: 10, color: "#6b7fa3", lineHeight: 1.5 }}>
+          네팅은 ★보고 전용★입니다 — 전략 보유로 잰 상쇄 절감을 따로 보여 줄 뿐 수익률에는
+          더하지 않습니다.
         </div>
 
         {/* Run button */}
@@ -204,12 +246,18 @@ function Label({ icon: Icon, children }: { icon?: any; children: React.ReactNode
   );
 }
 
-function Toggle({ label, value, onChange }: {
+function Toggle({ label, value, onChange, disabledReason = null }: {
   label: string; value: boolean; onChange: (v: boolean) => void;
+  disabledReason?: string | null;
 }) {
+  const disabled = disabledReason !== null;
   return (
-    <div onClick={() => onChange(!value)} style={{
-      flex: 1, padding: "8px 10px", cursor: "pointer",
+    <div onClick={() => { if (!disabled) onChange(!value); }}
+         title={disabledReason ?? undefined}
+         aria-disabled={disabled}
+         style={{
+      flex: 1, padding: "8px 10px", cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.5 : 1,
       background: value ? "rgba(105,240,174,0.1)" : "#060a1a",
       border: `1px solid ${value ? "#69f0ae60" : "#1e2d4a"}`,
       borderRadius: 4, fontSize: 11,

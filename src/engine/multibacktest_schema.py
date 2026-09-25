@@ -75,10 +75,22 @@ MULTIBACKTEST_SCHEMA_DDL = [
 _DAILY_ADDED_COLS = [("cash_effect", "REAL")]
 
 
+def schema_ddls(dialect: str) -> list[str]:
+    """방언별 DDL — ★PostgreSQL 에는 AUTOINCREMENT 가 없다★ (BG5).
+
+    예전에는 SQLite 문법 하나뿐이라 PostgreSQL 에서 `multibacktest_runs` 생성이 실패하고
+    (경고만 남기고) 저장이 통째로 죽었다. 칸·의미는 같고 자동 증가 키만 방언에 맞춘다.
+    """
+    if dialect == "postgresql":
+        return [d.replace("id INTEGER PRIMARY KEY AUTOINCREMENT", "id SERIAL PRIMARY KEY")
+                for d in MULTIBACKTEST_SCHEMA_DDL]
+    return list(MULTIBACKTEST_SCHEMA_DDL)
+
+
 def init_multibacktest_schema(engine) -> int:
     count = 0
     with engine.begin() as conn:
-        for ddl in MULTIBACKTEST_SCHEMA_DDL:
+        for ddl in schema_ddls(engine.dialect.name):
             try:
                 conn.execute(text(ddl)); count += 1
             except Exception as e:

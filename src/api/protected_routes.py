@@ -147,6 +147,12 @@ OPEN_WITH_REASON: dict[tuple[str, str], str] = {
 
     ("POST", "/api/v1/multibacktest/init-schema"):
         "백테스트 결과 테이블 DDL — 연구 인프라이고 계좌·주문을 건드리지 않는다",
+    # ★`/strategies/` 마커에 걸린 BG5 의 새 문★ — 멀티전략 레지스트리는 연구 표면이다.
+    # 실측: `StrategyRegistry` 를 쓰는 곳은 stage11·stage12 라우트 · 멀티전략 엔진 ·
+    # 귀인 분해뿐이고, 주문·계좌·킬스위치 경로는 한 곳도 읽지 않는다.
+    ("DELETE", "/api/v1/multibacktest/strategies/{strategy_id}"):
+        "멀티전략 연구 레지스트리의 전략 비활성(BG5) — 지우지 않고 표시만 바꾼다. 레지스트리는 "
+        "백테스트·귀인만 읽고 주문·계좌 경로는 읽지 않는다(실측)",
     ("POST", "/api/v1/accounts/diagnose"):
         "요청 본문의 보유·계좌유형·한도로 도는 판정(AD4) — 저장된 계좌를 읽지 않는다",
     ("POST", "/api/v1/accounts/glidepath"):

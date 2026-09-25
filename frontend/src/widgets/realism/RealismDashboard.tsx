@@ -21,6 +21,7 @@ import {
 } from "@/entities/realism/data";
 
 import { unavailableReason } from "@/entities/realism/unavailable";
+import { multibacktestApi } from "@/entities/multibacktest";
 import { API_BASE } from "@/shared/api/apiBase";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -42,13 +43,27 @@ export default function RealismDashboard() {
   const fetchLiveData = async () => {
     setLoading(true);
     try {
+      // ★등록된 전략으로 돌린다★ (BG6) — 예전에는 존재하지 않는 `[1, 2, 3]` 을
+      // 하드코딩했다. 등록된 전략이 없으면 돌리지 않고 그렇게 말한다.
+      const registered = await multibacktestApi.strategies(true);
+      if (registered.length === 0) {
+        setIdeal(MOCK_IDEAL);
+        setReality(MOCK_REALITY);
+        setUseMockData(true);
+        setBackendNote(
+          "등록된 전략이 없습니다 — 멀티전략 페이지(전략 등록)에서 완료된 백테스트 실행을 "
+          + "등록하세요. 아래 수치는 모의 데이터 그대로입니다.");
+        return;
+      }
       const baseConfig = {
-        strategy_ids: [1, 2, 3],
+        strategy_ids: registered.map((s) => s.id),
         start_date: "2023-01-01",
         end_date: "2024-12-31",
         initial_capital: 10_000_000_000,
-        allocation_method: "hrp_macro",
+        // ★hrp★ — hrp_macro 는 R4 전까지 서버가 422 로 막는다(매크로 피드·국면 분류기 부재).
+        allocation_method: "hrp",
         rebalance_policy: "monthly",
+        macro_overlay_enabled: false,
       };
 
       const [idealRes, realityRes] = await Promise.all([

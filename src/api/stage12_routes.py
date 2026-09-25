@@ -16,7 +16,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.engine.multistrategy_availability import http_unavailable
+from src.engine.multistrategy_availability import http_unavailable, http_unsupported
 
 router = APIRouter(prefix="/api/v1/realism", tags=["realism"])
 
@@ -47,6 +47,34 @@ def _cost_block(req: BaseModel, out: dict) -> dict:
         # ★엔진이 실제로 센 것만★ — 수수료·슬리피지는 이 엔진이 따로 안 센다.
         totals=({"impact": impact}
                 if req.enable_market_impact and impact is not None else None))
+
+
+_SYSTEMIC_UNKNOWN = (
+    "systemic_risk 미상(R4 전) — 매크로 피드·국면 분류기가 없어 위험 점수를 한 번도 "
+    "받지 못했습니다. 적응 모드(normal·cautious·defensive)는 전략 수익률의 상관붕괴 "
+    "진단만으로 정해졌습니다.")
+
+
+def _regime_adaptive_block(req, out: dict) -> dict:
+    """★적응 모드가 무엇으로 정해졌는가★ (BG5) — 선언이 아니라 일별 기록에서 센다.
+
+    `systemic_risk` 를 받은 날이 0 이면 모드는 상관붕괴 진단만으로 정해진 것이다.
+    받은 날이 있으면(R4 뒤) 두 근거가 함께 쓰였다고 말한다.
+    """
+    if not req.enable_regime_adaptive:
+        return {"enabled": False, "basis": "off", "n_days_with_systemic_risk": None,
+                "reason": "enable_regime_adaptive=false — 적응 모드를 쓰지 않았습니다."}
+    days = out.get("daily_records") or []
+    n = sum(1 for r in days if r.get("systemic_risk") is not None)
+    stats = out.get("realism_stats") or {}
+    return {
+        "enabled": True,
+        "basis": "correlation_only" if n == 0 else "systemic_risk_and_correlation",
+        "n_days_with_systemic_risk": n,
+        "n_days": len(days),
+        "mode_distribution_pct": stats.get("mode_distribution_pct"),
+        "reason": _SYSTEMIC_UNKNOWN if n == 0 else None,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -91,9 +119,12 @@ class RealismBacktestRequest(BaseModel):
 @router.post("/backtest")
 def realism_backtest(req: RealismBacktestRequest):
     """5가지 realism hook 통합 백테스트."""
-    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    # ★코어가 없으면 503 · 없는 기능을 고르면 422★ (BF·BG4) — `try:` 앞이어야 한다.
     if (unavailable := http_unavailable()) is not None:
         raise unavailable
+    if (unsupported := http_unsupported(allocation_method=req.allocation_method,
+                                        rebalance_policy=req.rebalance_policy)) is not None:
+        raise unsupported
     try:
         from src.database import get_sync_engine
         from src.engine.realism_engine import RealismConfig, RealisticBacktester
@@ -104,6 +135,10 @@ def realism_backtest(req: RealismBacktestRequest):
         # ★돌지 않은 실행에 "부과했다" 를 붙이지 않는다★
         if isinstance(out, dict) and out.get("success"):
             out["cost_model"] = _cost_block(req, out)
+            out["regime_adaptive"] = _regime_adaptive_block(req, out)
+            # ★라벨은 원천 실행들의 mock 여부로★ (BG5) — multibacktest 와 같은 파생.
+            from src.api.stage11_routes import _attach_sources
+            _attach_sources(out, get_sync_engine(), req.strategy_ids)
         return out
     except Exception as e:
         raise HTTPException(500, str(e))

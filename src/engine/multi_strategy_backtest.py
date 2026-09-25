@@ -132,15 +132,26 @@ class MultiStrategyBacktester:
             "warnings":            errors,
         }
 
+    def _ensure_schema(self) -> None:
+        """저장 표가 없으면 만든다 — ★`/init-schema` 를 먼저 부르지 않아도 된다★ (BG5).
+
+        예전에는 표가 없으면 저장·목록이 500 이었다. 이미 있으면 건드리지 않는
+        DDL 이라 몇 번 불러도 같다.
+        """
+        from src.engine.multibacktest_schema import init_multibacktest_schema
+        init_multibacktest_schema(self.engine)
+
     def run_and_save(self, config: BacktestConfig) -> dict:
         result = self.run(config)
         if not result["success"]:
             return result
+        self._ensure_schema()
         run_id = self._persist(config, result)
         result["run_id"] = run_id
         return result
 
     def load_run(self, run_id: int) -> dict | None:
+        self._ensure_schema()
         with self.engine.connect() as conn:
             run_row = conn.execute(text("SELECT * FROM multibacktest_runs WHERE id = :rid"),
                                     {"rid": run_id}).fetchone()
@@ -160,6 +171,7 @@ class MultiStrategyBacktester:
         }
 
     def list_runs(self, limit: int = 50) -> list[dict]:
+        self._ensure_schema()
         with self.engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT id, run_name, strategy_ids, start_date, end_date,
@@ -561,7 +573,7 @@ class MultiStrategyBacktester:
                     :rn, :sids, :sd, :ed, :cap, :am, :rp, :ne, :me, :cr, :sr,
                     :tr, :ar, :sh, :mdd, :cal, :nts, :tt, :ttp, :nr, :ntd,
                     :cj, 'completed', :ds, CURRENT_TIMESTAMP
-                )
+                ) RETURNING id
             """), {
                 "rn": config.run_name or f"Backtest {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                 "sids": json.dumps(config.strategy_ids),
@@ -579,7 +591,9 @@ class MultiStrategyBacktester:
                 "cj": json.dumps(config.__dict__),
                 "ds": result["duration_seconds"],
             })
-            run_id = int(ins.lastrowid)
+            # ★`lastrowid` 는 PostgreSQL(psycopg2)에서 새 id 가 아니다★ (BG5) —
+            # 두 방언 모두 되는 `RETURNING id` 로 받는다(SQLite ≥ 3.35).
+            run_id = int(ins.scalar())
 
             daily_rows = []; strategy_daily_rows = []
             for r in result["daily_records"]:
