@@ -19181,3 +19181,33 @@ US 판정 0/196일 (나머지 미상) · regime_change(US) 트리거 0회 — US
 **전체 게이트** — ruff 통과 · `KIS_USE_MOCK=1 pytest tests/`(곁에 아무것도 안 돌림) **6989 passed ·
 10 skipped** (BH2 6970 → +19) · `tsc --noEmit` 0 · eslint(건드린 파일) 0 · `next build` 성공
 (경고 17 파일은 전부 이 작업이 건드리지 않은 기존 파일).
+
+---
+
+## BI · AAS 노드 캔버스 (2026-09-25) — 스펙 `docs/superpowers/specs/2026-09-25-aas-node-canvas-design.md` · ADR 002
+
+사용자 결정: AAS 의 모든 작업·툴을 ComfyUI 식 노드-링크 환경으로 · 실행은 백엔드 DAG ·
+첫 노드는 핵심 사슬 · 저장은 JSON 내보내기/불러오기(불러오면 바로 캔버스에 뜬다, 서버 저장은
+나중에 같은 포맷으로).
+
+### BI0 · 스펙 + ADR-002
+파일 포맷 `project-alpha.portfolio-graph` v1(파라미터·위치만) · 포트 타입 7종 · 핵심 노드 7개가
+감싸는 기존 함수(★사본 없음 — `run_analyze` 가 분석 산수의 단일 출처★) · `/allocation` 번들
+예산은 캔버스 도입 커밋에서 실측으로 재기준(ADR 001 개정). 마법사는 도구가 노드로 옮겨지는
+만큼만 걷는다 — 한 번에 지우면 아직 노드가 없는 도구가 소리 없이 사라진다.
+
+### BI1 · 순수 실행기 `src/engine/portfolio_graph.py`
+`Registry`(선언된 포트 타입만) · `validate`(명명 오류 코드: document·format·version·
+duplicate_node·unknown_type·bad_params·dangling_edge·unknown_port·type_mismatch·
+multiple_inputs·missing_input·cycle) · `run`(칸 알고리즘, 동률은 파일 순서). 약속 넷:
+**아무 노드도 버리지 않는다**(모르는 타입도 `blocked` + 사유로 자기 자리) · **실패는 번지되
+지어내지 않는다**(하류는 호출조차 안 되고 어느 상류 때문인지 적힌다, `view=None`) · **옆 가지는
+계속 돈다** · 포맷/버전/순환이면 아무것도 실행하지 않는다. 노드가 선언한 출력을 빠뜨리면 `None`
+을 넘기지 않고 실패로 본다. `dag_runner` 스키마와 섞지 않았다(단일 종목 신호 전용·합성 경로).
+
+**테스트 27 · 변이 a~m 사망, 무해 짝(로그 문구) 생존** — 상류 실패 무시 · 모르는 노드를 버림 ·
+타입 검사 제거 · 순환 검출 제거 · 필수 입력 검사 제거 · 다중 입력 허용 · 포맷 검사 제거 · 버전
+문자열 허용 · 선언 출력 누락 허용 · 실패를 ok 로 · 파라미터 오류 무시 · 옆 가지도 멈춤 · 막힌
+노드가 결과를 지어냄.
+
+**하지 않은 것** — 실제 포트폴리오 노드(BI2) · 라우트 · 화면.
