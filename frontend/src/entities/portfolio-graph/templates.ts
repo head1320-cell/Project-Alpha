@@ -15,15 +15,15 @@ export const CORE_CHAIN_TEMPLATE: GraphDoc = {
   version: GRAPH_VERSION,
   meta: { name: "기본 사슬" },
   nodes: [
-    n("universe", "universe", 0, 120, { tickers: ["005930", "000660", "035420"] }),
+    n("universe", "universe", 0, 140, { tickers: ["005930", "000660", "035420"] }),
     // lookback 은 비워 둔다(서버 기본 756일) — 마법사도 같은 기본값이라 "도구로 보내기" 가
     // 같은 수를 낸다. 756 은 정책 백테스트 하한(252)도 넘는다.
-    n("returns", "returns", 280, 120),
-    n("estimate", "estimate", 560, 20),
-    n("views", "views", 560, 260, { views: [] }),
-    n("optimizer", "optimizer", 840, 120, { model: "bl" }),
-    n("risk", "risk", 1120, 20),
-    n("backtest", "backtest", 1120, 240),
+    n("returns", "returns", 196, 140),
+    n("estimate", "estimate", 400, 20),
+    n("views", "views", 400, 270, { views: [] }),
+    n("optimizer", "optimizer", 600, 140, { model: "bl" }),
+    n("risk", "risk", 800, 0),
+    n("backtest", "backtest", 800, 260),
   ],
   edges: [
     e("universe", "universe", "returns", "universe"),

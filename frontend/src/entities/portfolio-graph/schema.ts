@@ -5,7 +5,7 @@
  * 읽어 칸의 **종류**만 정한다. 스키마가 표현하는 것 중 폼으로 옮기기 어려운 것(객체·객체
  * 목록 — 뷰·제약)은 JSON 편집칸으로 두고, 옳은지는 서버 검증(`/validate`)이 말한다.
  */
-import type { JsonSchema } from "./types";
+import type { JsonSchema, ParamUi } from "./types";
 
 export type FieldKind = "boolean" | "number" | "integer" | "enum" | "string" | "string_list" | "json";
 
@@ -20,6 +20,28 @@ export interface FieldSpec {
   max?: number;
   defaultValue?: unknown;
   description?: string;
+  /** 서버 x-ui — 없으면 전문가 층으로 본다(쉬운 이름이 없는 칸을 기본 화면에 내지 않는다). */
+  ui: ParamUi;
+  /** 원래 스키마 조각 — 객체 목록 편집기가 항목 스키마를 읽는다. */
+  raw: JsonSchema;
+}
+
+/** `$ref` 를 루트의 `$defs` 로 푼다. */
+export function resolveSchema(s: JsonSchema, root: JsonSchema | null): JsonSchema {
+  if (!s.$ref || !root) return s;
+  return root.$defs?.[s.$ref.replace(/^#\/\$defs\//, "")] ?? s;
+}
+
+/** 객체 목록 칸(예: 뷰 목록)의 항목 스키마. 아니면 `null`. */
+export function itemSchemaOf(f: FieldSpec, root: JsonSchema | null): JsonSchema | null {
+  const variants = f.raw.anyOf ?? [f.raw];
+  for (const v of variants) {
+    if (v.items) {
+      const it = resolveSchema(v.items, root);
+      if (it.properties) return { ...it, $defs: root?.$defs };
+    }
+  }
+  return null;
 }
 
 const typeOf = (s: JsonSchema): string | undefined =>
@@ -69,9 +91,12 @@ export function fieldsOf(schema: JsonSchema | null): FieldSpec[] {
     const nonNull = variants.filter((v) => typeOf(v) !== "null" || v.$ref);
     const nullable = variants.length !== nonNull.length;
     const base = nonNull.length === 1 ? kindOf(nonNull[0], schema) : { kind: "json" as const };
+    const ui: ParamUi = prop["x-ui"] ?? { label: prop.title ?? name, tier: "advanced" };
     return {
       name,
-      title: prop.title ?? name,
+      raw: prop,
+      ui,
+      title: ui.label ?? prop.title ?? name,
       nullable,
       required: required.has(name),
       defaultValue: prop.default,

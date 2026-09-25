@@ -40,6 +40,10 @@ export interface PgState {
   selectedId: string | null;
   running: boolean;
   runError: string | null;
+  /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
+  tab: "story" | "settings" | "detail";
+  expert: boolean;
+  openGate: string | null;
 
   setCatalog: (c: NodeCatalogEntry[] | null, err?: string | null) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -48,12 +52,17 @@ export interface PgState {
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
+  /** 같은 입력(들어오는 링크)·같은 설정으로 옆에 하나 더 — 설정만 바꿔 나란히 비교할 때. 나가는 링크는 잇지 않는다. */
+  duplicateNode: (id: string) => string | null;
   loadDoc: (doc: GraphDoc, problems?: string[]) => void;
   setName: (n: string) => void;
   select: (id: string | null) => void;
   setValidation: (v: ValidateReport | null) => void;
   startRun: () => void;
   finishRun: (r: RunReport | null, err?: string | null) => void;
+  setTab: (t: PgState["tab"]) => void;
+  setExpert: (v: boolean) => void;
+  setOpenGate: (k: string | null) => void;
 }
 
 let seq = 0;
@@ -78,6 +87,9 @@ export const usePortfolioGraph = create<PgState>((set, get) => ({
   selectedId: null,
   running: false,
   runError: null,
+  tab: "story",
+  expert: false,
+  openGate: null,
 
   setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
 
@@ -121,6 +133,22 @@ export const usePortfolioGraph = create<PgState>((set, get) => ({
     reportStale: s.report !== null,
   })),
 
+  duplicateNode: (id) => {
+    const src = get().nodes.find((n) => n.id === id);
+    if (!src) return null;
+    const nid = newId(src.data.kind, new Set(get().nodes.map((n) => n.id)));
+    const node: PgNode = {
+      ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + 150 },
+      data: { ...src.data, params: structuredClone(src.data.params ?? {}) },
+    };
+    const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
+      ...e, id: `${e.source}.${e.sourceHandle}->${nid}.${e.targetHandle}`, target: nid, selected: false,
+    }));
+    set((s) => ({ nodes: [...s.nodes, node], edges: [...s.edges, ...incoming], selectedId: nid,
+                  reportStale: s.report !== null }));
+    return nid;
+  },
+
   loadDoc: (doc, problems = []) => {
     const { nodes, edges } = fromDoc(doc, get().catalog ?? []);
     set({
@@ -139,4 +167,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => ({
     report: report ?? s.report,
     reportStale: report ? false : s.reportStale,
   })),
+  setTab: (tab) => set({ tab }),
+  setExpert: (expert) => set({ expert }),
+  setOpenGate: (openGate) => set({ openGate }),
 }));

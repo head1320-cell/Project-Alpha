@@ -1,0 +1,207 @@
+"use client";
+/**
+ * 설정 탭 — 기본(쉬운 질문) ↔ 전문가(모든 파라미터) (BJ3 · 목업 승인본)
+ * ==========================================================================
+ * 위에는 n8n 식 **받는 것 / 내는 것**. 기본 화면은 서버 x-ui 의 `tier: basic` 칸만 질문형으로:
+ * 선택 카드(options) · 슬라이더(widget=slider) · 프리셋 칩 · 켬/끔. 전문가 토글을 켜면 모든
+ * 파라미터를 쉬운 이름 + 파라미터 키 + 범위로(`NodeInspector`). ★규칙은 서버에만 있다★ —
+ * 값이 틀리면 서버 검증이 노드 위에 빨갛게 말한다. 빈 칸 = 서버 기본값(키를 지운다).
+ */
+import type { Edge } from "reactflow";
+import { Copy, Plus, X } from "lucide-react";
+import {
+  fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type PgNode,
+} from "@/entities/portfolio-graph";
+import { ListField, NodeInspector } from "./NodeInspector";
+import { PORT_PLAIN } from "./GraphNode";
+
+type Params = Record<string, unknown>;
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+function setOrClear(p: Params, k: string, v: unknown): Params {
+  const next = { ...p };
+  if (v === undefined) delete next[k]; else next[k] = v;
+  return next;
+}
+
+/** 객체 목록(예: 내 생각 목록) — 항목 스키마의 기본 칸만 한 줄씩. 전문가 칸은 전문가 설정에서. */
+function ObjectList({ f, item, value, onChange }: {
+  f: FieldSpec; item: JsonSchema; value: unknown; onChange: (v: unknown) => void;
+}) {
+  const rows = Array.isArray(value) ? (value as Params[]) : [];
+  const fields = fieldsOf(item).filter((x) => x.ui.tier === "basic");
+  const blank = Object.fromEntries(fields.filter((x) => x.defaultValue !== undefined && x.defaultValue !== null)
+    .map((x) => [x.name, x.defaultValue]));
+  const put = (i: number, row: Params) => onChange(rows.map((r, j) => (j === i ? row : r)));
+  return (
+    <div className="pg-basic-field" data-field={f.name}>
+      <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
+      {rows.length === 0 && <p className="pg-help">아직 없어요.</p>}
+      {rows.map((row, i) => (
+        <div key={i} className="pg-objrow">
+          {fields.map((x) => (
+            <label key={x.name} className="pg-objcell">
+              <span>{x.ui.label}</span>
+              {x.kind === "string_list" ? (
+                <ListField value={row[x.name]} onChange={(v) => put(i, setOrClear(row, x.name, v))} />
+              ) : x.ui.options ? (
+                <select className="pg-field-input" value={String(row[x.name] ?? x.defaultValue ?? "")}
+                        onChange={(e) => put(i, setOrClear(row, x.name, x.kind === "integer" || x.kind === "number"
+                          ? Number(e.target.value) : e.target.value))}>
+                  {Object.entries(x.ui.options).map(([k, lab]) => <option key={k} value={k}>{lab}</option>)}
+                </select>
+              ) : (
+                <input className="pg-field-input" type="number" min={x.min} max={x.max} step="any"
+                       value={row[x.name] === undefined ? "" : String(row[x.name])}
+                       placeholder={x.defaultValue !== undefined ? String(x.defaultValue) : ""}
+                       onChange={(e) => put(i, setOrClear(row, x.name, e.target.value === "" ? undefined : Number(e.target.value)))} />
+              )}
+            </label>
+          ))}
+          <button type="button" className="pg-icon-btn" aria-label={`${i + 1}번째 항목 지우기`}
+                  onClick={() => onChange(rows.filter((_, j) => j !== i))}><X size={14} /></button>
+        </div>
+      ))}
+      <button type="button" className="pg-add" onClick={() => onChange([...rows, { ...blank }])}>
+        <Plus size={14} /> {f.ui.label} 추가
+      </button>
+      {f.ui.help && <p className="pg-help">{f.ui.help}</p>}
+    </div>
+  );
+}
+
+function BasicField({ f, value, root, onChange }: {
+  f: FieldSpec; value: unknown; root: JsonSchema | null; onChange: (v: unknown) => void;
+}) {
+  const eff = value !== undefined ? value : f.defaultValue;
+  const item = f.kind === "json" ? itemSchemaOf(f, root) : null;
+  if (item) return <ObjectList f={f} item={item} value={eff} onChange={onChange} />;
+  const q = <div className="pg-q">{f.ui.question ?? f.ui.label}</div>;
+  const help = f.ui.help ? <p className="pg-help">{f.ui.help}</p> : null;
+
+  if (f.ui.options) {
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <div className="pg-choices">
+          {Object.entries(f.ui.options).map(([k, label]) => (
+            <button key={k} type="button" className={`pg-choice${same(eff, k) ? " on" : ""}`} aria-pressed={same(eff, k)}
+                    onClick={() => onChange(k)}>
+              <b>{label}</b>
+            </button>
+          ))}
+        </div>
+        {help}
+      </div>
+    );
+  }
+  if (f.ui.presets) {
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <div className="pg-chips">
+          {f.ui.presets.map((p) => (
+            <button key={p.label} type="button" className={`pg-chip${same(eff, p.value) ? " on" : ""}`} aria-pressed={same(eff, p.value)}
+                    onClick={() => onChange(p.value === null ? undefined : p.value)}>{p.label}</button>
+          ))}
+        </div>
+        {help}
+      </div>
+    );
+  }
+  if (f.ui.widget === "slider" && (f.kind === "number" || f.kind === "integer") && f.min !== undefined && f.max !== undefined) {
+    const v = typeof eff === "number" ? eff : f.min;
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <input className="pg-slider" type="range" min={f.min} max={f.max} step={f.kind === "integer" ? 1 : (f.max - f.min) / 100}
+               value={v} aria-label={f.ui.label} onChange={(e) => onChange(Number(e.target.value))} />
+        <div className="pg-slider-ends"><span>{f.ui.ends?.[0] ?? f.min}</span><span className="pg-slider-v">{v.toFixed(1)}</span><span>{f.ui.ends?.[1] ?? f.max}</span></div>
+        {help}
+      </div>
+    );
+  }
+  if (f.kind === "string_list") {
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <ListField value={eff} onChange={onChange} />
+        {help}
+      </div>
+    );
+  }
+  if (f.kind === "boolean") {
+    const on = eff === true;
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <div className="pg-chips">
+          <button type="button" className={`pg-chip${on ? " on" : ""}`} aria-pressed={on} onClick={() => onChange(true)}>네</button>
+          <button type="button" className={`pg-chip${!on ? " on" : ""}`} aria-pressed={!on} onClick={() => onChange(false)}>아니요</button>
+        </div>
+        {help}
+      </div>
+    );
+  }
+  return null;   // 기본 화면에 알맞은 위젯이 없는 칸은 전문가 설정에서 다룬다.
+}
+
+export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate }: {
+  node: PgNode;
+  entry: NodeCatalogEntry | undefined;
+  nodes: PgNode[];
+  edges: Edge[];
+  catalog: NodeCatalogEntry[];
+  expert: boolean;
+  onExpert: (v: boolean) => void;
+  onChange: (p: Params) => void;
+  onRemove: () => void;
+  onDuplicate: () => void;
+}) {
+  const params = node.data.params ?? {};
+  const plainOf = (id: string) => {
+    const k = nodes.find((n) => n.id === id)?.data.kind;
+    return catalog.find((c) => c.type === k)?.plain_label ?? k ?? id;
+  };
+  const incoming = edges.filter((e) => e.target === node.id);
+  const receives = (entry?.inputs ?? []).map((p) => {
+    const e = incoming.find((x) => x.targetHandle === p.name);
+    const nm = PORT_PLAIN[p.type] ?? p.name;
+    return e ? `${nm} ← ${plainOf(e.source)}` : p.required === false ? `${nm}(선택, 비어 있음)` : `${nm}(아직 연결 안 됨)`;
+  });
+  // 고르는 칸(카드)이 먼저 — "어떤 방식으로" 가 "얼마나" 보다 앞선 질문이다. 나머지는 서버 순서.
+  const basic = fieldsOf(entry?.params_schema ?? null).filter((f) => f.ui.tier === "basic")
+    .map((f, i) => ({ f, i })).sort((a, b) => Number(!a.f.ui.options) - Number(!b.f.ui.options) || a.i - b.i)
+    .map((x) => x.f);
+  const basicRendered = basic.map((f) => ({ f, el: <BasicField key={f.name} f={f} value={params[f.name]}
+                                                               root={entry?.params_schema ?? null}
+                                                               onChange={(v) => onChange(setOrClear(params, f.name, v))} /> }));
+
+  return (
+    <section className="pg-settings">
+      {entry && (
+        <dl className="pg-io">
+          <div><dt>받는 것</dt><dd>{receives.length ? receives.join(", ") : "없어요 — 여기서 시작해요."}</dd></div>
+          <div><dt>내는 것</dt><dd>{entry.outputs.map((o) => PORT_PLAIN[o.type] ?? o.name).join(", ") || "없어요"}</dd></div>
+        </dl>
+      )}
+      {!expert && entry && (
+        <div className="pg-basic">
+          {basicRendered.map((x) => x.el)}
+          {basic.length === 0 && <p className="pg-help">바꿀 설정이 없어요.</p>}
+          <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 써요.</p>
+        </div>
+      )}
+      <div className="pg-actions">
+        <button type="button" className="pg-btn pg-dup" onClick={onDuplicate} title="같은 입력으로 하나 더 (Ctrl+D)">
+          <Copy size={14} /> 복제해서 비교하기
+        </button>
+      </div>
+      <label className="pg-mode">
+        <span>전문가 설정 보기</span>
+        <input type="checkbox" role="switch" className="pg-switch" checked={expert} onChange={(e) => onExpert(e.target.checked)} />
+      </label>
+      {(expert || !entry) && <NodeInspector node={node} entry={entry} onChange={onChange} onRemove={onRemove} />}
+    </section>
+  );
+}

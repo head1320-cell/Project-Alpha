@@ -43,7 +43,7 @@ function JsonField({ f, value, onChange }: { f: FieldSpec; value: unknown; onCha
 }
 
 /** 목록 칸 — 입력 중에는 글자 그대로 두고, 벗어날 때 목록으로 반영한다(쉼표가 먹히지 않게). */
-function ListField({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
+export function ListField({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
   const joined = Array.isArray(value) ? value.join(", ") : "";
   const [text, setText] = useState(joined);
   useEffect(() => { setText(joined); }, [joined]);

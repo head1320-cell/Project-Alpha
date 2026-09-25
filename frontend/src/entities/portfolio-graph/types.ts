@@ -57,6 +57,20 @@ export interface JsonSchema {
   additionalProperties?: boolean | JsonSchema;
   $ref?: string;
   $defs?: Record<string, JsonSchema>;
+  /** 화면 메타(BJ1) — 쉬운 이름·질문·기본/전문가 층·프리셋·선택지 라벨. 검증 규칙이 아니다. */
+  "x-ui"?: ParamUi;
+}
+
+export interface ParamUi {
+  label: string;
+  tier: "basic" | "advanced";
+  question?: string;
+  help?: string;
+  unit?: string;
+  widget?: "slider" | "cards";
+  ends?: [string, string];
+  presets?: { label: string; value: unknown }[];
+  options?: Record<string, string>;
 }
 
 export interface NodeCatalogEntry {
@@ -64,15 +78,22 @@ export interface NodeCatalogEntry {
   label: string;
   category: string;
   description: string;
+  /** 퀀트 워크플로우 단계 키(`stages` 의 key). */
+  stage: string;
+  plain_label: string;
+  plain_description: string;
   inputs: CatalogPort[];
   outputs: CatalogPort[];
   params_schema: JsonSchema | null;
 }
 
+export interface WorkflowStage { key: string; label: string }
+
 export interface NodeCatalog {
   format: string;
   version: number;
   port_types: string[];
+  stages: WorkflowStage[];
   nodes: NodeCatalogEntry[];
 }
 
@@ -92,6 +113,17 @@ export interface ValidateReport {
 
 export type NodeStatus = "ok" | "blocked" | "failed";
 
+export type TrustState = "confirmed" | "assumed" | "unknown" | "failed";
+
+/** 서버가 만든 쉬운 말 설명(BJ1) — 화면은 그리기만 한다. */
+export interface NodeExplain {
+  title: string;
+  headline?: { label: string; value: number | null; unit: string; text: string } | null;
+  facts?: string[];
+  trust?: { state: TrustState; text: string }[];
+  unmeasured?: string[];
+}
+
 export interface NodeRunResult {
   type: string | null;
   status: NodeStatus;
@@ -99,9 +131,25 @@ export interface NodeRunResult {
   /** 노드마다 모양이 다르다 — 결과 패널이 타입별로 읽는다. 막힌 노드는 `null`. */
   view: Record<string, unknown> | null;
   provenance: Record<string, unknown>;
+  explain?: NodeExplain | null;
+}
+
+export type GateState = "confirmed" | "assumed" | "partial" | "unknown" | "skipped" | "failed";
+
+export interface Gate {
+  key: string;
+  label: string;
+  state: GateState;
+  reasons: { state: GateState | TrustState; text: string }[];
+}
+
+export interface GateReport {
+  gates: Gate[];
+  summary: { confirmed: number; total: number; text: string; note: string };
 }
 
 export interface RunReport extends ValidateReport {
   order: string[];
   nodes: Record<string, NodeRunResult>;
+  gates?: GateReport;
 }

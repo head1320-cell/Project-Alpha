@@ -27,7 +27,7 @@ const PortfolioCanvas = dynamic(() => import("@/widgets/portfolio-graph/Portfoli
 /** 넘길 수 있는 도구 — 마법사 세션의 보유·뷰·모델을 읽는 단계들. */
 const HANDOFF_TARGETS: HandoffTarget[] = (["/allocation/optimize", "/allocation/stress", "/allocation/timing",
   "/allocation/explain", "/allocation/execution", "/allocation/journal"] as const)
-  .map((href) => ({ href, label: `${STAGES.find((s) => s.href === href)?.title ?? href} 로` }));
+  .map((href) => ({ href, label: `${STAGES.find((s) => s.href === href)?.title ?? href}에서 보기` }));
 
 export default function AllocationCanvasPage() {
   const router = useRouter();
@@ -59,15 +59,18 @@ export default function AllocationCanvasPage() {
 
   return (
     <div className="aas-root pg-page">
-      <nav className="pg-wizard-links" aria-label="마법사 도구">
-        <span className="pg-wizard-links-k">마법사 도구</span>
-        <span className="pg-wizard-links-why">아직 노드가 없는 도구는 기존 단계 화면에서 씁니다 —</span>
-        <Link href={WIZARD_GATE_HREF} className="pg-wizard-link">목표 선택</Link>
-        {STAGES.map((s) => (
-          <Link key={s.href} href={s.href} className="pg-wizard-link">{s.title}</Link>
-        ))}
-      </nav>
-      <PortfolioCanvas onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} />
+      <PortfolioCanvas onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} topExtra={
+        <details className="pg-wizard">
+          <summary className="pg-btn pg-btn--ghost">단계별 마법사</summary>
+          <nav className="pg-wizard-links" aria-label="마법사 도구">
+            <p className="pg-wizard-links-why">아직 노드가 없는 도구는 예전 단계 화면에서 써요.</p>
+            <Link href={WIZARD_GATE_HREF} className="pg-wizard-link">목표 선택</Link>
+            {STAGES.map((s) => (
+              <Link key={s.href} href={s.href} className="pg-wizard-link">{s.title}</Link>
+            ))}
+          </nav>
+        </details>
+      } />
     </div>
   );
 }
