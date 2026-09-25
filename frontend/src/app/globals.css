@@ -7762,3 +7762,27 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-node-stale { margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--pg-mute); }
 .pg-import-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pg-file-note { color: var(--pg-body); }
+
+/* ── 확인하기 노드 결과 (BK W1) ── */
+.pg-model-type { display: inline-block; margin: 0 0 8px; padding: 3px 8px; font-size: 12px; font-weight: 600; border-radius: 6px; }
+.pg-model-type--hist { color: var(--pg-ok); background: var(--pg-ok-soft); }
+.pg-model-type--hypo { color: var(--pg-assume); background: var(--pg-assume-soft); }
+.pg-table th { padding: 4px 0; font-size: 12px; font-weight: 600; text-align: left; color: var(--pg-mute); }
+.pg-table th.pg-td-num { text-align: right; }
+.pg-neg { color: var(--pg-fail); }
+.pg-heat-wrap { overflow-x: auto; }
+.pg-heat { border-collapse: separate; border-spacing: 2px; font-size: 12px; color: var(--pg-ink); }
+.pg-heat th { padding: 2px 4px; font-weight: 600; color: var(--pg-body); white-space: nowrap; text-align: left; }
+.pg-heat td { min-width: 44px; padding: 5px 6px; text-align: right; border-radius: 4px; background: var(--pg-soft); }
+.pg-heat td.pos { background: color-mix(in srgb, var(--pg-blue) var(--pg-heat, 0%), var(--pg-paper)); }
+.pg-heat td.neg { background: color-mix(in srgb, var(--pg-fail) var(--pg-heat, 0%), var(--pg-paper)); }
+.pg-z { display: grid; gap: 8px; margin: 8px 0; padding: 0; list-style: none; }
+.pg-z-row { display: grid; grid-template-columns: 72px 1fr 58px auto; align-items: center; gap: 8px; font-size: 13px; color: var(--pg-ink); }
+.pg-z-track { position: relative; height: 16px; background: linear-gradient(90deg, transparent calc(50% - 1px), var(--pg-line) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)), var(--pg-soft); border-radius: 8px; }
+.pg-z-bench { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--pg-mute); }
+.pg-z-dot { position: absolute; top: 3px; width: 10px; height: 10px; margin-left: -5px; background: var(--pg-blue); border-radius: 50%; }
+.pg-z-dot.neg { background: var(--pg-fail); }
+.pg-z-v { font-weight: 600; text-align: right; }
+.pg-z-cov { font-size: 12px; color: var(--pg-unknown); }
+.pg-select { width: 100%; height: 44px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 600; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid var(--pg-line); border-radius: 12px; }
+.pg-select:focus { border-color: var(--pg-blue); outline: none; }

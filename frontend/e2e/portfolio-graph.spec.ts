@@ -34,7 +34,8 @@ async function run(page: Page) {
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   await page.locator(".pg-run").click();
   const body = await (await resp).json();
-  await expect(page.locator(".pg-summary").first()).toContainText("완료", { timeout: 30_000 });
+  // 결과 요약 칸 — 검증 오류·낡음 알림(같은 .pg-summary)과 구별한다.
+  await expect(page.locator(".pg-summary:not(.pg-summary--err):not(.pg-summary--stale)")).toContainText("완료", { timeout: 30_000 });
   return body;
 }
 
@@ -63,7 +64,10 @@ const strip = (doc: { meta?: object }) => ({ ...doc, meta: undefined });
 test("캔버스: 카탈로그 팔레트 · 기본 사슬 실행 → 7 노드 완료 · 오류 0", async ({ page }) => {
   const sink = trackErrors(page);
   await openCanvas(page);
-  await expect(page.locator(".pg-palette-item")).toHaveCount(7);
+  // 팔레트 = 서버 카탈로그(핵심 사슬 7 + BK 웨이브 노드).
+  const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  await expect(page.locator(".pg-palette-item")).toHaveCount(catalog.nodes.length);
+  expect(catalog.nodes.length).toBeGreaterThan(7);
   await expect(page.locator(".pg-node")).toHaveCount(7);
   const body = await run(page);
   expect(body.ok).toBe(true);
@@ -321,4 +325,34 @@ test("복제해서 비교: 같은 입력·같은 설정으로 하나 더 · 나�
   expect(body.nodes[dup.id].view.model).toBe("min_var");
   await tab(page, "story");
   await expect(page.locator(".pg-step")).toHaveCount(8);
+});
+
+test("확인하기 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산 → 이야기·자세히에 서버 결과", async ({ page }) => {
+  await openCanvas(page);
+  for (const kind of ["scenario_stress", "corr_stress", "sensitivity", "factor_xray"]) {
+    await expect(page.locator(`.pg-palette-item[data-kind="${kind}"]`), kind).toBeVisible();
+  }
+  await page.locator('.pg-palette-item[data-kind="scenario_stress"]').click();
+  const added = page.locator('.pg-node[data-kind="scenario_stress"]').last();
+  const id = (await added.getAttribute("data-node-id"))!;
+  // 빈 곳으로 옮긴 뒤 옵티마이저 비중을 잇는다.
+  const box = (await page.locator(".pg-canvas").boundingBox())!;
+  const head = (await added.locator(".pg-node-k").boundingBox())!;
+  await page.mouse.move(head.x + 20, head.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 140, box.y + box.height - 110, { steps: 10 });
+  await page.mouse.up();
+  await drag(page, handle(page, "optimizer", "weights", "source"), handle(page, id, "weights", "target"));
+  // 설정 탭: 시나리오는 목록(19개)에서 고른다 — 과거 위기(실제 시세 재생).
+  await tab(page, "settings");
+  await page.locator('.pg-basic-field[data-field="scenario"] select').selectOption("hist_2020_covid");
+  const body = await run(page);
+  const r = body.nodes[id];
+  expect(r.status, r.reason).toBe("ok");
+  await expect(status(page, id)).toHaveText("완료");
+  await tab(page, "story");
+  await expect(page.locator(`.pg-step[data-node-id="${id}"] .pg-step-title`)).toHaveText(r.explain.title);
+  await page.locator(`.pg-step[data-node-id="${id}"] .pg-more`).click();
+  await expect(page.locator(".pg-model-type")).toContainText("역사 리플레이");
+  await expect(page.locator(".pg-side .pg-chart")).toBeVisible();
 });

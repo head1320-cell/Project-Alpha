@@ -147,7 +147,10 @@ def test_no_overclaiming_words_in_any_explanation(market, kw):
 
 def test_no_overclaiming_words_in_the_explainer_source():
     lits = []
-    for f in ("src/api/allocation_graph_explain.py", "src/domain/workflow_gates.py"):
+    files = sorted({*map(str, pathlib.Path("src/api").glob("allocation_graph_*.py")),
+                    "src/domain/workflow_gates.py"})
+    assert len(files) >= 4, files                 # 설명기 · 노드 · 문 · 웨이브 모듈이 모두 쓸린다
+    for f in files:
         tree = ast.parse(pathlib.Path(f).read_text("utf-8"))
         lits += [n.value for n in ast.walk(tree)
                  if isinstance(n, ast.Constant) and isinstance(n.value, str)]

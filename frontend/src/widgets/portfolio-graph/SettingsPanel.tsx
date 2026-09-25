@@ -79,6 +79,19 @@ function BasicField({ f, value, root, onChange }: {
   const q = <div className="pg-q">{f.ui.question ?? f.ui.label}</div>;
   const help = f.ui.help ? <p className="pg-help">{f.ui.help}</p> : null;
 
+  if (f.ui.options && Object.keys(f.ui.options).length > 12) {
+    // 선택지가 12개를 넘으면(예: 시나리오 19개) 카드 벽 대신 한 줄 목록 — 고른 것이 한눈에 보인다.
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <select className="pg-select" value={String(eff ?? "")} aria-label={f.ui.label}
+                onChange={(e) => onChange(e.target.value)}>
+          {Object.entries(f.ui.options).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select>
+        {help}
+      </div>
+    );
+  }
   if (f.ui.options) {
     return (
       <div className="pg-basic-field" data-field={f.name}>

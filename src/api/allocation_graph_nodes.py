@@ -401,3 +401,9 @@ for _spec in (
                 description="같은 정책을 walk-forward 로 시점 밖에서 재현(/backtest 와 같다)."),
 ):
     REGISTRY.register(_spec)
+
+
+# ── BK 웨이브 노드 — 모듈마다 자기 노드를 등록한다(이 파일을 더 키우지 않는다) ──────────
+from src.api import allocation_graph_nodes_check as _check  # noqa: E402
+
+_check.register(REGISTRY)

@@ -292,7 +292,8 @@ CORE = {"universe", "returns", "views", "estimate", "optimizer", "risk", "backte
 
 def test_the_catalog_has_the_core_chain_with_typed_ports():
     cat = {c["type"]: c for c in gn.REGISTRY.catalog()}
-    assert set(cat) == CORE
+    # 핵심 사슬은 늘 있다 — BK 웨이브가 노드를 더한다(각 웨이브 테스트가 자기 노드를 건다).
+    assert set(cat) >= CORE
     assert cat["optimizer"]["inputs"] == [
         {"name": "returns", "type": "Returns", "required": True},
         {"name": "belief", "type": "Belief", "required": True},
@@ -316,7 +317,7 @@ def test_the_node_types_route_serves_the_catalog(client):
     assert r.status_code == 200
     body = r.json()
     assert body["format"] == pg.FORMAT and body["version"] == pg.VERSION
-    assert {n["type"] for n in body["nodes"]} == CORE
+    assert {n["type"] for n in body["nodes"]} >= CORE
     assert set(body["port_types"]) >= {"Universe", "Returns", "Weights"}
 
 

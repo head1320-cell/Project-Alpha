@@ -10,6 +10,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import type { NodeRunResult } from "@/entities/portfolio-graph";
+import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -146,6 +147,20 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
+const OWN_PERF_LABEL = new Set(["scenario_stress"]);
+
+/** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
+const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
+  optimizer: ({ v }) => <Optimizer v={v} />,
+  risk: ({ v }) => <Risk v={v} />,
+  backtest: ({ v }) => <Backtest v={v} />,
+  returns: ({ v, prov }) => <Returns v={v} prov={prov} />,
+  scenario_stress: ({ v, prov }) => <ScenarioStressResult v={v} prov={prov} />,
+  corr_stress: ({ v }) => <CorrStressResult v={v} />,
+  sensitivity: ({ v }) => <SensitivityResult v={v} />,
+  factor_xray: ({ v }) => <FactorXrayResult v={v} />,
+};
+
 export function NodeResultPanel({ kind, result, stale, extra }: {
   kind: string;
   result: NodeRunResult | undefined;
@@ -164,12 +179,9 @@ export function NodeResultPanel({ kind, result, stale, extra }: {
         <span className="pg-node-status-k">{STATUS_TEXT[result.status]}</span>
         {result.reason && <span className="pg-node-status-why">{result.reason}</span>}
       </div>
-      {prov.perf_label ? <div className="pg-perf"><PerfLabel value={prov.perf_label as PerfLabelValue} /></div> : null}
-      {v && kind === "optimizer" && <Optimizer v={v} />}
-      {v && kind === "risk" && <Risk v={v} />}
-      {v && kind === "backtest" && <Backtest v={v} />}
-      {v && kind === "returns" && <Returns v={v} prov={prov} />}
-      {v && !["optimizer", "risk", "backtest", "returns"].includes(kind) && <Generic v={v} />}
+      {/* 성과 라벨 — 자기 렌더러가 숫자 옆에 직접 그리는 종류는 여기서 겹쳐 그리지 않는다. */}
+      {prov.perf_label && !OWN_PERF_LABEL.has(kind) ? <div className="pg-perf"><PerfLabel value={prov.perf_label as PerfLabelValue} /></div> : null}
+      {v && (RENDERERS[kind] ? RENDERERS[kind]({ v, prov }) : <Generic v={v} />)}
       {extra}
     </section>
   );

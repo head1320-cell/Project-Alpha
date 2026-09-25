@@ -254,6 +254,84 @@ def _shock_inputs(code: str):
                                beta_1y=None, composite_score=50)
 
 
+def historical_replay(holdings: dict[str, float], scenario: str, benchmark: str) -> tuple[dict, str]:
+    """역사 윈도우 리플레이 — `/stress` 와 그래프 노드가 **같은 함수**를 부른다 (BK W1).
+
+    `holdings` 는 `signed_fractions` 를 지난 분수. 반환 `(응답, 출처)` — 출처는 `"db"` ·
+    `"mock"`(mock 게이트를 지난 합성 폴백) · `"none"`(시세 없음). 응답 모양은 `/stress` 그대로다
+    (출처는 라우트 응답에 싣지 않는다 — 노드가 계보로 나른다).
+    """
+    win = _HIST_WINDOWS[scenario]
+    from src.kis_portfolio_analyzer import load_returns
+    df = load_returns(list(holdings) + [benchmark], win["start"], win["end"])
+    source = "db"
+    if df is None or df.empty:
+        source = "none"
+        mock_df = _mock_returns_fallback(list(holdings) + [benchmark],
+                                         win["start"], win["end"])
+        if mock_df is not None:
+            df = mock_df
+            source = "mock"
+    avail = [c for c in holdings if df is not None and not df.empty and c in df.columns
+             and int(df[c].dropna().shape[0]) >= _MIN_OBS]
+    if not avail:
+        return ({"error": False, "mode": "historical", "available": False,
+                 "scenario": scenario, "label": win["label"],
+                 "reason": "해당 기간 시세 데이터 미보유 (KRX 백필 범위 밖)"}, "none")
+    dropped = [c for c in holdings if c not in avail]
+    sub = df[avail].dropna()
+    w = np.array([holdings[c] for c in avail])
+    # ★gross 로 나눈다★ `w.sum()` 은 넷이라 달러중립에서 폭발한다.
+    w = w / np.abs(w).sum()
+    port = sub.values @ w
+    eq = np.cumprod(1.0 + port)
+    dd = eq / np.maximum.accumulate(eq) - 1.0
+    out = {
+        "error": False, "mode": "historical", "available": True,
+        "scenario": scenario, "label": win["label"],
+        "dates": [str(d.date()) for d in sub.index],
+        "portfolio_dd": [round(float(x) * 100, 2) for x in dd],
+        "max_dd_pct": round(float(dd.min()) * 100, 2),
+        "total_return_pct": round(float(eq[-1] - 1.0) * 100, 2),
+        "dropped": dropped,
+    }
+    if benchmark in df.columns:
+        b = df[benchmark].reindex(sub.index).ffill().dropna()
+        if len(b) >= _MIN_OBS:
+            beq = np.cumprod(1.0 + b.values)
+            bdd = beq / np.maximum.accumulate(beq) - 1.0
+            out["benchmark_dd"] = [round(float(x) * 100, 2) for x in bdd]
+            out["benchmark_max_dd_pct"] = round(float(bdd.min()) * 100, 2)
+            out["benchmark_label"] = benchmark
+    return out, source
+
+
+def hypothetical_shock(holdings: dict[str, float], scenario: str, severity: float) -> dict:
+    """가상 시나리오(M8) 충격 가중합 — `/stress` 와 그래프 노드가 같은 함수를 부른다 (BK W1)."""
+    from src.engine.stress_test_analyzer import STRESS_SCENARIOS, _stock_shock
+    if scenario not in STRESS_SCENARIOS:
+        return {"error": True, "message": f"미지원 시나리오: {scenario}"}
+    sev = float(severity)
+    rows = []
+    port_shock = 0.0
+    for code, w in holdings.items():
+        item = _shock_inputs(code)
+        shock = round(_stock_shock(item, scenario) * sev, 2)
+        port_shock += w * shock
+        rows.append({"stock_code": code, "corp_name": item.corp_name,
+                     "weight_pct": round(w * 100, 2), "shock_pct": shock,
+                     "contribution_pct": round(w * shock, 2)})
+    rows.sort(key=lambda x: x["shock_pct"])
+    return {
+        "error": False, "mode": "hypothetical", "available": True,
+        "scenario": scenario, "severity": sev,
+        "label": STRESS_SCENARIOS[scenario]["label"],
+        "portfolio_shock_pct": round(port_shock, 2),
+        "rows": rows,
+        "note": f"종목 펀더멘털(부채·PER·배당·ROE·베타) 기반 M8 충격 추정의 가중합 (배율 {sev:g}×).",
+    }
+
+
 @router.post("/stress")
 def allocation_stress(req: StressRequest):
     """가상 시나리오(M8 펀더멘털 충격 가중합) 또는 역사 윈도우 리플레이."""
@@ -261,73 +339,9 @@ def allocation_stress(req: StressRequest):
         holdings = signed_fractions(req.holdings)   # ★부호 보존 · gross 정규화★
         if not holdings:
             return {"error": True, "message": "보유 비중이 없습니다 (gross = 0)."}
-
-        # ── 역사 리플레이 ──
         if req.scenario in _HIST_WINDOWS:
-            win = _HIST_WINDOWS[req.scenario]
-            from src.kis_portfolio_analyzer import load_returns
-            df = load_returns(list(holdings) + [req.benchmark], win["start"], win["end"])
-            if df is None or df.empty:
-                mock_df = _mock_returns_fallback(list(holdings) + [req.benchmark],
-                                                 win["start"], win["end"])
-                if mock_df is not None:
-                    df = mock_df
-            avail = [c for c in holdings if not df.empty and c in df.columns
-                     and int(df[c].dropna().shape[0]) >= _MIN_OBS]
-            if not avail:
-                return {"error": False, "mode": "historical", "available": False,
-                        "scenario": req.scenario, "label": win["label"],
-                        "reason": "해당 기간 시세 데이터 미보유 (KRX 백필 범위 밖)"}
-            dropped = [c for c in holdings if c not in avail]
-            sub = df[avail].dropna()
-            w = np.array([holdings[c] for c in avail])
-            # ★gross 로 나눈다★ `w.sum()` 은 넷이라 달러중립에서 폭발한다.
-            w = w / np.abs(w).sum()
-            port = sub.values @ w
-            eq = np.cumprod(1.0 + port)
-            dd = eq / np.maximum.accumulate(eq) - 1.0
-            out = {
-                "error": False, "mode": "historical", "available": True,
-                "scenario": req.scenario, "label": win["label"],
-                "dates": [str(d.date()) for d in sub.index],
-                "portfolio_dd": [round(float(x) * 100, 2) for x in dd],
-                "max_dd_pct": round(float(dd.min()) * 100, 2),
-                "total_return_pct": round(float(eq[-1] - 1.0) * 100, 2),
-                "dropped": dropped,
-            }
-            if req.benchmark in df.columns:
-                b = df[req.benchmark].reindex(sub.index).ffill().dropna()
-                if len(b) >= _MIN_OBS:
-                    beq = np.cumprod(1.0 + b.values)
-                    bdd = beq / np.maximum.accumulate(beq) - 1.0
-                    out["benchmark_dd"] = [round(float(x) * 100, 2) for x in bdd]
-                    out["benchmark_max_dd_pct"] = round(float(bdd.min()) * 100, 2)
-                    out["benchmark_label"] = req.benchmark
-            return out
-
-        # ── 가상 시나리오 (M8) ──
-        from src.engine.stress_test_analyzer import STRESS_SCENARIOS, _stock_shock
-        if req.scenario not in STRESS_SCENARIOS:
-            return {"error": True, "message": f"미지원 시나리오: {req.scenario}"}
-        sev = float(req.severity)
-        rows = []
-        port_shock = 0.0
-        for code, w in holdings.items():
-            item = _shock_inputs(code)
-            shock = round(_stock_shock(item, req.scenario) * sev, 2)
-            port_shock += w * shock
-            rows.append({"stock_code": code, "corp_name": item.corp_name,
-                         "weight_pct": round(w * 100, 2), "shock_pct": shock,
-                         "contribution_pct": round(w * shock, 2)})
-        rows.sort(key=lambda x: x["shock_pct"])
-        return {
-            "error": False, "mode": "hypothetical", "available": True,
-            "scenario": req.scenario, "severity": sev,
-            "label": STRESS_SCENARIOS[req.scenario]["label"],
-            "portfolio_shock_pct": round(port_shock, 2),
-            "rows": rows,
-            "note": f"종목 펀더멘털(부채·PER·배당·ROE·베타) 기반 M8 충격 추정의 가중합 (배율 {sev:g}×).",
-        }
+            return historical_replay(holdings, req.scenario, req.benchmark)[0]
+        return hypothetical_shock(holdings, req.scenario, req.severity)
     except Exception:
         logger.exception("stress 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -495,10 +509,6 @@ def allocation_stress_correlation(req: StressCorrRequest):
     """상관-국면 스트레스 — 위기 시 상관이 target_rho로 수렴한다고 가정하고 공분산을 재구성,
     포트폴리오 변동성·VaR·자산별 기여 VaR의 base 대비 변화를 산출 (PortfolioRiskModel 재사용)."""
     try:
-        from scipy.stats import norm
-
-        from src.models.portfolio_risk import PortfolioRiskModel
-
         returns, _b, excluded, coverage = _load_clean_returns(req.tickers, None, req.lookback_days)
         if returns is None or len(returns.columns) < 2:
             return {"error": True, "message": "분석 가능한 자산이 2개 미만입니다.", "excluded": excluded}
@@ -513,44 +523,65 @@ def allocation_stress_correlation(req: StressCorrRequest):
                 w = np.ones(n)
         else:
             w = np.ones(n)
-        w = w / np.abs(w).sum()          # ★gross★ net 은 달러중립에서 0 이다
-
-        ann = math.sqrt(252.0)
-        prm = PortfolioRiskModel(confidence_level=req.confidence_level)
-        base_var, base_vol_d = prm.calculate_portfolio_var(returns, w, req.portfolio_value)
-        base_comp = prm.component_var(returns, w, req.portfolio_value)
-
-        sig = returns.std().values
-        corr = returns.corr().values
-        off = ~np.eye(n, dtype=bool)
-        stressed = corr.copy()
-        stressed[off] = corr[off] + (req.target_rho - corr[off]) * req.intensity
-        np.fill_diagonal(stressed, 1.0)
-        cov_s = np.outer(sig, sig) * stressed
-        var_d = float(w @ cov_s @ w)
-        s_vol_d = float(np.sqrt(max(var_d, 0.0)))
-        z = float(norm.ppf(req.confidence_level))
-        s_var = z * s_vol_d * req.portfolio_value
-        s_marg = (cov_s @ w) / (s_vol_d + 1e-12) * z * req.portfolio_value
-        s_comp = w * s_marg
-
-        labels = _labels(names)
-        return {
-            "error": False, "names": names, "labels": labels,
-            "confidence_level": req.confidence_level, "target_rho": req.target_rho,
-            "intensity": req.intensity,
-            "base": {"port_vol_pct": round(base_vol_d * ann * 100, 2),
-                     "var_amount": round(base_var, 0),
-                     "component_var": {names[i]: round(float(base_comp[i]), 0) for i in range(n)}},
-            "stressed": {"port_vol_pct": round(s_vol_d * ann * 100, 2),
-                         "var_amount": round(s_var, 0),
-                         "component_var": {names[i]: round(float(s_comp[i]), 0) for i in range(n)}},
-            "delta_vol_pct": round((s_vol_d / base_vol_d - 1) * 100, 1) if base_vol_d > 0 else None,
-            "delta_var_pct": round((s_var / base_var - 1) * 100, 1) if base_var > 0 else None,
-            "corr_shift": {"from_avg_rho": round(float(corr[off].mean()), 3),
-                           "to_avg_rho": round(float(stressed[off].mean()), 3)},
-            "excluded": excluded, "coverage": coverage,
-        }
+        out = stress_correlation_report(returns, w, target_rho=req.target_rho, intensity=req.intensity,
+                                        confidence_level=req.confidence_level,
+                                        portfolio_value=req.portfolio_value)
+        out.update({"excluded": excluded, "coverage": coverage})
+        return out
     except Exception:
         logger.exception("stress-correlation 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def stress_correlation_report(returns, w, *, target_rho: float, intensity: float,
+                              confidence_level: float, portfolio_value: float) -> dict:
+    """상관-국면 스트레스 본체 — `/stress-correlation` 과 그래프 노드가 같은 함수를 부른다 (BK W1).
+
+    `returns` 는 일별 수익률 프레임(열 = 자산), `w` 는 같은 순서의 비중 배열(gross 로 정규화한다).
+    위기 시 상관이 `target_rho` 로 수렴한다고 **가정**하고 공분산을 재구성해 변동성·VaR·자산별
+    기여 VaR 의 base 대비 변화를 낸다(PortfolioRiskModel 재사용).
+    """
+    from scipy.stats import norm
+
+    from src.models.portfolio_risk import PortfolioRiskModel
+
+    names = list(returns.columns)
+    n = len(names)
+    w = np.asarray(w, dtype=float)
+    w = w / np.abs(w).sum()          # ★gross★ net 은 달러중립에서 0 이다
+
+    ann = math.sqrt(252.0)
+    prm = PortfolioRiskModel(confidence_level=confidence_level)
+    base_var, base_vol_d = prm.calculate_portfolio_var(returns, w, portfolio_value)
+    base_comp = prm.component_var(returns, w, portfolio_value)
+
+    sig = returns.std().values
+    corr = returns.corr().values
+    off = ~np.eye(n, dtype=bool)
+    stressed = corr.copy()
+    stressed[off] = corr[off] + (target_rho - corr[off]) * intensity
+    np.fill_diagonal(stressed, 1.0)
+    cov_s = np.outer(sig, sig) * stressed
+    var_d = float(w @ cov_s @ w)
+    s_vol_d = float(np.sqrt(max(var_d, 0.0)))
+    z = float(norm.ppf(confidence_level))
+    s_var = z * s_vol_d * portfolio_value
+    s_marg = (cov_s @ w) / (s_vol_d + 1e-12) * z * portfolio_value
+    s_comp = w * s_marg
+
+    labels = _labels(names)
+    return {
+        "error": False, "names": names, "labels": labels,
+        "confidence_level": confidence_level, "target_rho": target_rho,
+        "intensity": intensity,
+        "base": {"port_vol_pct": round(base_vol_d * ann * 100, 2),
+                 "var_amount": round(base_var, 0),
+                 "component_var": {names[i]: round(float(base_comp[i]), 0) for i in range(n)}},
+        "stressed": {"port_vol_pct": round(s_vol_d * ann * 100, 2),
+                     "var_amount": round(s_var, 0),
+                     "component_var": {names[i]: round(float(s_comp[i]), 0) for i in range(n)}},
+        "delta_vol_pct": round((s_vol_d / base_vol_d - 1) * 100, 1) if base_vol_d > 0 else None,
+        "delta_var_pct": round((s_var / base_var - 1) * 100, 1) if base_var > 0 else None,
+        "corr_shift": {"from_avg_rho": round(float(corr[off].mean()), 3),
+                       "to_avg_rho": round(float(stressed[off].mean()), 3)},
+    }
