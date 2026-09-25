@@ -268,6 +268,18 @@ class CounterfactualAnalyzer:
             if not sc:
                 continue
             s = sc["summary"]
+            if key == "netting":
+                # ★네팅은 보고 전용이다★ (BG3) — 수익률에 더해지지 않으므로 켠 것과
+                # 끈 것의 수익률 차이는 **구조적으로 0** 이다. 그것을 "가치 0" 이라
+                # 부르지 않는다. 잰 절감액(원화)을 따로 싣는다.
+                result["netting_value_pct"] = None
+                result["netting_value_reason"] = (
+                    "네팅은 보고 전용이라 수익률에 더하지 않습니다 — 켠 것과 끈 것의 "
+                    "수익률 차이는 구조적으로 0 이며 가치의 측정이 아닙니다. "
+                    "대신 실제 보유로 잰 절감액(netting_measured_savings)을 보세요.")
+                result["netting_measured_savings"] = b.get("netting_total_savings")
+                result["netting_description"] = description
+                continue
             alpha_pct = b["total_return_pct"] - s["total_return_pct"]
             sharpe_diff = b["sharpe_ratio"] - s["sharpe_ratio"]
             annualized_alpha = alpha_pct / n_years

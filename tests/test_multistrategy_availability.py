@@ -24,9 +24,9 @@ import pytest
 from src.engine import multistrategy_availability as ma
 
 #: ★지금 없는 것★ — 복원될 때마다 줄어든다(트립와이어가 그것을 요구한다).
-#: BG1 에서 `src.engine.strategy_registry`, BG2 에서 `src.engine.allocator` 가 복원됐다.
-FIVE = {"src.execution.order_netting", "src.data.macro_feed",
-        "src.engine.regime_model"}
+#: BG1 에서 `src.engine.strategy_registry`, BG2 에서 `src.engine.allocator`, BG3 에서
+#: `src.execution.order_netting` 이 복원됐다.
+FIVE = {"src.data.macro_feed", "src.engine.regime_model"}
 
 
 # ── 레지스트리 · 실측 ─────────────────────────────────────────────────

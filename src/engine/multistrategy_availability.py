@@ -46,11 +46,6 @@ class MissingModule:
 
 MISSING: tuple[MissingModule, ...] = (
     MissingModule(
-        module="src.execution.order_netting", needed_by=(_ENGINE,),
-        role="주문 네팅(OrderNettingEngine)",
-        reason=("전략 간 상쇄 주문을 합치는 자리입니다. 엔진은 지금 네팅 절감을 "
-                "회전율 × 1.5 로 추정하고 있어 이 모듈의 결과를 쓰지 않습니다.")),
-    MissingModule(
         module="src.data.macro_feed", needed_by=(_ENGINE,),
         role="매크로 피드(MacroFeedCollector)",
         reason=("hrp_macro 용 매크로 행렬을 만드는 자리입니다. 저장소의 매크로 "

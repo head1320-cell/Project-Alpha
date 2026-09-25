@@ -58,7 +58,8 @@ class DailyRecord:
     # 참이 되어 잔차가 `unexplained` 대신 `interaction`(복리)으로 이름 붙었다.
     selection_effect:   float | None = None
     macro_effect:       float = 0
-    netting_effect:     float = 0
+    #: ★`None` 은 그날 네팅을 판정하지 못했다는 뜻★ (BG3) — 보유를 몰랐다.
+    netting_effect:     float | None = 0
     #: 거래로 **나간** 돈만. ★현금이자를 여기 더하지 않는다★ (AL3)
     cost_effect:        float = 0
     #: 안 쓴 현금이 **번** 이자. ★`None` 은 그 엔진에 현금 모델이 없다는 뜻★ —
@@ -66,7 +67,9 @@ class DailyRecord:
     cash_effect:        float | None = None
     num_trades:         int = 0
     turnover_pct:       float = 0
-    netting_savings:    float = 0
+    netting_savings:    float | None = 0
+    #: 네팅을 판정하지 못한 사유(`netting_savings is None` 일 때만).
+    netting_reason:     str | None = None
     rebalanced:         bool = False
     weights:            dict = field(default_factory=dict)
     base_weights:       dict = field(default_factory=dict)
@@ -219,11 +222,16 @@ class MultiStrategyBacktester:
             except Exception as e:
                 logger.warning(f"Macro data unavailable: {e}")
 
+        # ★네팅의 재료★ (BG3) — 등록 때 재실행에서 나온 일별 종목 보유.
+        holdings = self.registry.load_holdings(
+            config.strategy_ids, config.start_date, config.end_date)
+
         return {
             "returns_matrix": returns_matrix,
             "strategies":     strategies,
             "strategy_names": strategy_names,
             "macro_df":       macro_df,
+            "holdings":       holdings,
         }
 
     # ─── 핵심 시뮬레이션 루프 ─────────────────────────────────────────
@@ -248,7 +256,6 @@ class MultiStrategyBacktester:
 
         daily_records = []
         warnings = []
-        cumulative_savings = 0.0
 
         for t, date in enumerate(returns_matrix.index):
             rebalanced_today = False
@@ -307,7 +314,6 @@ class MultiStrategyBacktester:
             # Cost + Netting
             turnover = 0.0
             cost_effect = 0.0
-            netting_savings = 0.0
 
             if rebalanced_today and t > 0:
                 prev_w = daily_records[-1].weights if daily_records else current_weights
@@ -315,11 +321,11 @@ class MultiStrategyBacktester:
                 total_rate = config.commission_rate + config.slippage_rate
                 cost_effect = -turnover * total_rate
 
-                if config.netting_enabled:
-                    estimated_raw_turnover = turnover * 1.5
-                    estimated_savings_pct = (estimated_raw_turnover - turnover) * total_rate
-                    netting_savings = estimated_savings_pct * equity
-                    cumulative_savings += netting_savings
+            # ★네팅은 실제 보유로 잰다★ (BG3) — 예전에는 리밸런싱 날에만
+            # `(회전율 × 1.5 − 회전율) × 요율` 이라는 지어낸 수를 적었다. 전략들은
+            # 매일 안에서 거래하므로 매일 잰다. ★보고 전용★ — 수익률에 안 더한다.
+            netting_savings, netting_reason = self._netting(
+                config, data, daily_records, current_weights, date, equity)
 
             net_return = portfolio_ret + cost_effect
             equity_new = equity * (1 + net_return)
@@ -342,14 +348,16 @@ class MultiStrategyBacktester:
                 # 작동해 잔차가 "복리" 로 오명명되지 않는다.
                 allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
-                netting_effect=netting_savings/equity if equity > 0 else 0,
+                netting_effect=(None if netting_savings is None
+                                else (netting_savings / equity if equity > 0 else 0)),
                 cost_effect=cost_effect,
                 # ★이 엔진엔 현금 모델이 없다★ (AL3) — `cash` 라는 문자열이
                 # 이 파일에 한 번도 없었다. 0 이 아니라 미측정이다.
                 cash_effect=None,
                 num_trades=int(round(turnover * len(sids))) if rebalanced_today else 0,
                 turnover_pct=turnover * 100,
-                netting_savings=netting_savings, rebalanced=rebalanced_today,
+                netting_savings=netting_savings, netting_reason=netting_reason,
+                rebalanced=rebalanced_today,
                 weights=current_weights.copy(),
                 base_weights=current_base_weights.copy(),
                 macro_adj=current_macro_adj.copy(),
@@ -359,6 +367,40 @@ class MultiStrategyBacktester:
             equity = equity_new
 
         return daily_records, warnings
+
+    def _netting(self, config, data, daily_records, current_weights, date,
+                 equity) -> tuple[float | None, str | None]:
+        """그날의 네팅 절감 — `(원화, None)` 또는 `(None, 사유)`. 꺼져 있으면 0(선택).
+
+        realism 엔진도 이 메서드를 쓴다 — 두 벌을 두지 않는다.
+        """
+        # 첫날은 엔진이 비용도 물리지 않는 날(전날이 없다)이라 네팅도 0 이다 —
+        # 요약은 이 날을 잰 날로 세지 않는다(`netting_summary`).
+        if not config.netting_enabled or not daily_records:
+            return 0.0, None
+        prev = daily_records[-1]
+        return self.netting_engine.savings(
+            prev_weights=prev.weights, cur_weights=current_weights,
+            holdings=data.get("holdings") or {},
+            prev_date=str(pd.Timestamp(prev.date).date()),
+            date=str(pd.Timestamp(date).date()), equity=equity,
+            rate=config.commission_rate + config.slippage_rate)
+
+    @staticmethod
+    def netting_summary(records, enabled: bool) -> dict:
+        """★잰 날과 못 잰 날을 함께★ — 합계만 내면 미상이 0 으로 녹는다."""
+        from src.execution.order_netting import ASSUMPTIONS, NETTING_BASIS
+        # ★첫날은 세지 않는다★ — 비교할 전날이 없어 잰 것도 못 잰 것도 아니다.
+        known = [r.netting_savings for r in records[1:] if r.netting_savings is not None]
+        unknown = [r for r in records[1:] if r.netting_savings is None]
+        return {
+            "enabled": bool(enabled),
+            "basis": NETTING_BASIS if enabled else "off",
+            "assumptions": list(ASSUMPTIONS) if enabled else [],
+            "n_measured_days": len(known) if enabled else 0,
+            "n_unmeasured_days": len(unknown),
+            "first_unmeasured_reason": unknown[0].netting_reason if unknown else None,
+        }
 
     @staticmethod
     def _compute_rebalance_dates(trading_days, policy) -> set:
@@ -417,12 +459,17 @@ class MultiStrategyBacktester:
         dd = (equities/max_eq - 1) * 100
         mdd = float(dd.min())
         calmar = rar["calmar_ratio"] or 0
-        total_savings = sum(r.netting_savings for r in records)
+        # ★아는 날만 더한다★ (BG3) — 모르는 날을 0 으로 녹이지 않고 따로 센다.
+        # 첫날은 엔진이 비용을 물리지 않는 날이라(전날이 없다) 네팅도 0 이다 — 그
+        # 0 이 "잰 날" 로 세여 전부 미상인 실행의 합계를 0 으로 만들지 않게 뺀다.
+        _ns = [r.netting_savings for r in records[1:] if r.netting_savings is not None]
+        total_savings = float(sum(_ns)) if _ns else None
 
         cum_alloc = sum(r.allocation_effect for r in records) * 100
         cum_macro = sum(r.macro_effect for r in records) * 100
         cum_cost = sum(r.cost_effect for r in records) * 100
-        cum_netting = sum(r.netting_effect for r in records) * 100
+        _ne = [r.netting_effect for r in records[1:] if r.netting_effect is not None]
+        cum_netting = (float(sum(_ne)) * 100) if _ne else None
         # ★현금이자는 비용이 아니다★ (AL3) — 한 행도 못 봤으면 `None` 이다.
         # 0 으로 적으면 "이자가 0 이었다" 는 **관측**이 되어 버린다.
         _cash = [r.cash_effect for r in records if r.cash_effect is not None]
@@ -457,11 +504,15 @@ class MultiStrategyBacktester:
             "total_turnover_pct":     float(round(sum(r.turnover_pct for r in records), 2)),
             "n_rebalances":           sum(1 for r in records if r.rebalanced),
             "n_trading_days":         n_days,
-            "netting_total_savings":  float(round(total_savings, 2)),
+            "netting_total_savings":  (None if total_savings is None
+                                       else float(round(total_savings, 2))),
+            "netting": MultiStrategyBacktester.netting_summary(
+                records, getattr(config, "netting_enabled", True)),
             "attribution": {
                 "allocation_effect_pct": float(round(cum_alloc, 2)),
                 "macro_effect_pct":      float(round(cum_macro, 2)),
-                "netting_effect_pct":    float(round(cum_netting, 2)),
+                "netting_effect_pct":    (None if cum_netting is None
+                                          else float(round(cum_netting, 2))),
                 "cost_effect_pct":       float(round(cum_cost, 2)),
                 "cash_effect_pct":       (None if cum_cash is None
                                           else float(round(cum_cash, 2))),
@@ -481,11 +532,13 @@ class MultiStrategyBacktester:
             "systemic_risk":     r.systemic_risk,
             "allocation_effect": float(round(r.allocation_effect, 6)),
             "macro_effect":      float(round(r.macro_effect, 6)),
-            "netting_effect":    float(round(r.netting_effect, 6)),
+            "netting_effect":    (None if r.netting_effect is None
+                                  else float(round(r.netting_effect, 6))),
             "cost_effect":       float(round(r.cost_effect, 6)),
             "num_trades":        r.num_trades,
             "turnover_pct":      float(round(r.turnover_pct, 4)),
-            "netting_savings":   float(round(r.netting_savings, 2)),
+            "netting_savings":   (None if r.netting_savings is None
+                                  else float(round(r.netting_savings, 2))),
             "rebalanced":        r.rebalanced,
             "weights":           {str(k): float(round(v, 4)) for k, v in r.weights.items()},
         }

@@ -328,7 +328,6 @@ class RealisticBacktester:
             turnover = 0.0
             cost_effect = 0.0
             impact_cost = 0.0
-            netting_savings = 0.0
 
             if rebalanced_today and t > 0:
                 prev_w = daily_records[-1].weights if daily_records else current_weights
@@ -376,10 +375,11 @@ class RealisticBacktester:
                                 current_weights[sid] = prev_w.get(sid, 0) + diff * scaling
                         stats["total_buying_power_truncations"] += 1
 
-                # Netting 효과 (기존 Stage 11)
-                if config.netting_enabled:
-                    estimated_raw = turnover * 1.5
-                    netting_savings = (estimated_raw - turnover) * total_rate * equity
+            # ── Netting 효과 — ★실제 보유로 잰다★ (BG3) ────────────────
+            # 예전 `(회전율 × 1.5 − 회전율) × 요율` 은 지어낸 수였다. 기본 엔진과
+            # 같은 헬퍼를 쓴다(구매력 절단 뒤의 가중으로). ★보고 전용★.
+            netting_savings, netting_reason = self.base._netting(
+                config, data, daily_records, current_weights, date, equity)
 
             # ── Hook ③: Cash Yield ────────────────────────────────────
             cash_yield = 0.0
@@ -412,7 +412,8 @@ class RealisticBacktester:
                 # 오명명됐다. 재료가 `None` 이면 기존 가드가 제대로 작동한다.
                 allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
-                netting_effect=netting_savings/equity if equity > 0 else 0,
+                netting_effect=(None if netting_savings is None
+                                else (netting_savings / equity if equity > 0 else 0)),
                 # ★현금이자는 비용이 아니다★ (AL3) — 예전에는
                 # `cost_effect + cash_yield` 였다. 부호도(비용 음수·이자 양수)
                 # 성격도(나간 돈·번 돈) 반대인 둘을 한 칸에 넣고 화면이
@@ -422,7 +423,8 @@ class RealisticBacktester:
                 cash_effect=cash_yield,
                 num_trades=int(round(turnover * len(sids))) if rebalanced_today else 0,
                 turnover_pct=turnover * 100,
-                netting_savings=netting_savings, rebalanced=rebalanced_today,
+                netting_savings=netting_savings, netting_reason=netting_reason,
+                rebalanced=rebalanced_today,
                 weights=current_weights.copy(),
                 base_weights=current_base_weights.copy(),
                 macro_adj=current_macro_adj.copy(),
