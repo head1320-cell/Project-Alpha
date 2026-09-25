@@ -40,7 +40,7 @@ def daily(rows: list[dict]) -> pd.DataFrame:
     """일별 프레임 — 안 준 칸은 0.0(관측된 0)."""
     base = {**{e: 0.0 for e in EFFECT_COLUMNS}, "portfolio_return": 0.0,
             "netting_savings": 0.0, "turnover_pct": 0.0, "num_trades": 1,
-            "rebalanced": 0, "regime": "GOLDILOCKS", "systemic_risk": 10.0}
+            "rebalanced": 0, "regime": "Goldilocks", "systemic_risk": 10.0}
     df = pd.DataFrame([{**base, **r} for r in rows])
     df["trade_date"] = pd.to_datetime(
         pd.date_range("2026-01-05", periods=len(df), freq="B"))

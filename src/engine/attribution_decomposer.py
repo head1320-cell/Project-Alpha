@@ -474,9 +474,19 @@ class AttributionDecomposer:
     def _regime_breakdown(daily_df) -> list[dict]:
         if daily_df.empty or "regime" not in daily_df.columns:
             return []
+        # ★어휘는 `regime_axes.QUADRANTS` 하나★ (BH3) — 예전 대문자 `DEFLATION` 어휘는
+        # 저장소의 국면 정의(Disinflation)와 달라 **맞는 행이 0** 이었다. 국면이 미상인 날은
+        # 따로 "미상" 한 줄로 센다 — 빠뜨리면 표의 일수 합이 실행 일수보다 작아진다.
+        from src.engine.regime_axes import QUADRANTS
+        # 어휘 밖의 라벨(옛 실행의 대문자 등)은 ★조용히 버리지 않고★ 제 줄로 센다.
+        others = sorted({str(x) for x in daily_df["regime"].dropna().unique()}
+                        - set(QUADRANTS))
         result = []
-        for regime in ["GOLDILOCKS", "REFLATION", "STAGFLATION", "DEFLATION"]:
-            subset = daily_df[daily_df["regime"] == regime]
+        for regime in (*QUADRANTS, *others, None):
+            if regime is None:
+                subset = daily_df[daily_df["regime"].isna()]
+            else:
+                subset = daily_df[daily_df["regime"] == regime]
             if subset.empty:
                 continue
             n = len(subset)
@@ -503,7 +513,12 @@ class AttributionDecomposer:
                 return None if pd.isna(v) else round(float(v) * 100, 3)
 
             result.append({
-                "regime": regime, "n_days": n,
+                "regime": regime if regime is not None else "미상",
+                "regime_known": regime in QUADRANTS,
+                "regime_note": (None if regime in QUADRANTS
+                                else ("국면 미상인 날" if regime is None
+                                      else "사분면 어휘(regime_axes.QUADRANTS) 밖의 라벨")),
+                "n_days": n,
                 "n_days_pct": round(n/len(daily_df) * 100, 1),
                 "annualized_return_pct": round(float(avg_ret * 252 * 100), 2),
                 "volatility_pct": round(float(vol * np.sqrt(252) * 100), 2),

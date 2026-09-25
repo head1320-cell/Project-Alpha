@@ -286,7 +286,7 @@ def test_the_regime_breakdown_keeps_an_unknown_effect_unknown():
     df = frame(_ROWS)
     df["regime"] = "Goldilocks"
     df["macro_effect"] = np.nan
-    row = AttributionDecomposer._regime_breakdown(df.assign(regime="GOLDILOCKS"))[0]
+    row = AttributionDecomposer._regime_breakdown(df)[0]
     assert row["macro_effect_pct"] is None
     assert row["baseline_effect_pct"] == pytest.approx(
         sum(r["baseline_effect"] for r in _ROWS) * 100, abs=1e-3)       # ★짝★

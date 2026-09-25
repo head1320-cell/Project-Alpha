@@ -19098,3 +19098,86 @@ stage12 라우트 · 멀티전략 엔진 · 귀인 분해뿐이고 주문·계�
 
 게이트: ruff · tsc · eslint(FSD) · `next build` 통과 · 전체 스위트 **6,970 통과 / 10 스킵 /
 0 실패**(743초).
+
+### BH3 · 백테스트 국면 R4-a — ★새 분류기를 짜지 않는다, 엄격 PIT, KR·US 둘 다★ (`hrp_macro` 는 계속 거절)
+
+**`src/engine/regime_model.py` ★복원★** — `MultiRegimeModel.classify_at(as_of, market)` 은 저장소의
+국면 단일 정의 `regime_axes`(성장×물가 z · `quadrant` · `quadrant_probs`)를 **그대로** 쓴다(헤더
+배지와 백테스트가 다른 국면을 말하지 않게). 계열은 `pit_macro.series_as_of(key, as_of)` — 그 시점
+공표 빈티지만(빈 vintage_id 제거·공표 ≤ as_of). `series_as_of` 에 `engine=` 통과 인자만 더했다
+(판정 로직 두 벌 금지). 라벨 문턱은 분석기와 같다(두 축 성분 ≥1, 합 ≥3) — 모자라면 `None` +
+무엇이 없는지("데이터 부족" 을 라벨로 쓰지 않는다). `panel(days, markets)` 은 **그 달 첫 거래일의
+전날**을 as-of 로 월 1회 판정해 앞으로 채운다(결정일은 전날까지 공표분 — 보수적 지연).
+★`systemic_risk_score` 는 늘 None + 사유★ — D(킬스위치 무장)는 하지 않는다.
+
+**KR·US 둘 다, 하드코딩 없음(사용자: *"나중에 KR 도 데이터 적재할 거야. 감안해서 진행해"*)** —
+시장별 차단 코드가 없다. 지금 KR(ECOS)은 빈티지가 없어 대부분 미상이고 결과가 그렇게 말한다.
+KR 빈티지를 `macro_observations` 에 `vintage_id`·`release_timestamp` 와 함께 적재하면 **코드 변경
+없이** KR 라벨이 나온다(테스트: 주입 로더로 KR 계열을 주면 KR 라벨).
+
+**엔진(두 엔진이 같은 `regime_step` 을 쓴다)**
+- `regime_market`(kr|us, 기본 kr) — 결정 시장. 두 시장 라벨은 늘 `regimes` 로 싣는다.
+- `regime_change` — ★예전엔 "월간 + 국면이 None 이면 **매일**"★ 이었다. 이제 첫 적격일 1회 배분 +
+  **알려진 라벨 → 다른 알려진 라벨**일 때만 리밸런싱. 미상인 날은 트리거하지 않고, 미상을 사이에
+  둔 같은 라벨은 전환이 아니다. 요약 `regime_rebalance`(시장·known/unknown 일수·트리거 수·초기 배분
+  날짜, 전부 미상이면 *"초기 배분 고정과 같다 — 국면 기반 결과가 아니다"*), `regime_labels`(시장별
+  커버리지·첫 미상 사유).
+- 국면은 관측이다 — `regime_change` 가 아니면 라벨이 달라도 수익률·리밸런싱이 같다(짝 테스트).
+- realism 의 systemic risk 는 국면 판정에서 읽는다(`_systemic_risk_of`, 없으면 None) — 예전
+  `_get_systemic_risk_pit` 는 없는 API(`classify_at_date`)를 부르던 죽은 경로였다.
+
+**가용성** — `regime_model` 이 MISSING 에서 빠졌다(트립와이어). `regime_change` 는 풀렸고
+`hrp_macro` 는 `macro_feed` 부재 + 사용자 결정으로 **422 그대로**(사유 문구를 BH 결정으로 갱신).
+
+**어휘 하나** — `regime_axes.QUADRANTS`(Goldilocks·Reflation·Stagflation·**Disinflation**). 엔진
+요약·분해기 국면표·프런트(국면 띠·국면 표·realism 차트·모의 타임라인)의 대문자 `DEFLATION` 어휘를
+걷었다(예전엔 맞는 행이 0). 국면표는 미상인 날을 "미상" 줄로, 어휘 밖 라벨(옛 실행)은 **조용히
+버리지 않고** 제 줄 + `regime_known=false` + 사유로 센다.
+
+**문·화면** — 세 문에 `regime_market`(Literal 검증), 반사실 시나리오가 국면 시장을 잃지 않는다.
+설정 패널에 국면 시장 선택(regime_change 옵션은 가용성에 따라 자동 활성), 결과에 *"국면(엄격 PIT ·
+관측) · KR 판정 0/196일(나머지 미상) · US …"* 한 줄과 regime_change 트리거 수·사유.
+
+**기존 테스트 정정** — `test_risk_monitor` 의 "regime_model 이 없다" 단언 → "있지만 점수를 생산하지
+않는다" · 가용성 테스트의 regime_change 422 → 짝(200) · BH1 의 realism 점수 테스트를 새 경로로 ·
+분해기 픽스처의 대문자 라벨 → 사분면 어휘.
+
+**변이 a~k 사망, 무해 짝 생존** — 미상이면 매일(두 엔진) · 미상을 라벨로 셈 · 패널이 당일 공표분 ·
+성분 문턱 3→1 · systemic 을 지어냄 · KR 하드코딩 차단 · regime_model 을 MISSING 에 되돌림 · 반사실이
+국면 시장을 잃음 · 결정 시장 무시 · 국면표가 미상 날을 버림 · 시장 검증 제거.
+
+**사고 기록(되돌림)** — realism 엔진 패치 중 슬라이스 끝이 시작보다 앞이라(`run` 이 대상 함수보다
+위에 있었다) 빈 문자열을 치환해 파일이 깨졌다. 커밋된 BH2 판으로 `git checkout` 해 되돌리고 명시
+구간으로 다시 적용했다. 교훈: 빈 `old` 를 치환하지 않도록 치환 헬퍼가 빈 문자열을 거부해야 한다.
+
+**하지 않은 것** — `hrp_macro` 기울기 · `systemic_risk_score` · `stress_score` 별칭 · 빈티지 적재
+(데이터 작업은 사용자) · KR 을 비-PIT 개정값으로 채우기 · 저장소의 다른 대문자 사분면 표기
+(`research_preregistration.py` · 매크로 화면의 사분면 도식 레이블 — 멀티전략 경로가 아니다).
+
+**게이트가 잡은 것 — 소스 스캔 픽스처** — `test_multi_strategy_metrics_single_source` 는
+`_compute_summary` 본문의 `r.<속성>` 을 스캔해 그 속성만 `0.0` 으로 채운 레코드를 만든다. BH3 의
+국면 커버리지 도우미(`regime_labels_summary`)는 본문 **밖**에서 `regimes` 를 읽어 스캔에 안
+잡혔다 → 7 errors. `regime=None` 처럼 `regimes`·`regime_reasons` 도 미상(None)으로 명시했다.
+★엔진에 `getattr(..., None)` 폴백을 넣지 않았다★ — 실제 레코드(`DailyRecord`)는 늘 이 칸을
+가지므로, 폴백은 칸이 사라진 회귀를 조용히 삼킨다. 골든 5개(Sharpe 1.168 등)는 그대로.
+
+**브라우저 실물 E2E(mock)가 찾은 것 — 실행 뒤 폼이 기본값으로 돌아간다(기존 결함, `cc2c34d`)** —
+실행이 끝나면 `loadInit()` 이 `loading` 을 다시 켜고, 페이지가 전체 로딩 화면으로 바뀌며 설정
+패널이 언마운트돼 상태가 기본값(매월·KR·오늘-2년)으로 초기화됐다. 결과 줄은 *"regime_change(US)"*
+라고 말하는데 폼은 *"매월 · KR"* 을 보이는 불일치 — 국면 시장 선택이 생기며 더 잘 보이게 됐다.
+RED(수정 전 스크립트): `{"policy":"monthly","market":"kr","start":"2024-09-25"}` →
+GREEN(수정 후): `{"policy":"regime_change","market":"us","start":"2023-06-01"}`. 수정은 한 줄 —
+전체 화면 로딩은 첫 로드 한 번뿐(초기값 `true`), 갱신은 제자리에서. 이력은 여전히 갱신된다(3건).
+★CSS 클래스명은 건드리지 않았다(E2E 계약)★. 새로고침 버튼도 이제 폼을 지우지 않는다.
+
+**E2E 관측(mock, 등록 2전략 · 2023-06-01~2024-03-01 · HRP)** — `regime_change` 선택 가능 ·
+`hrp_macro` 비활성(사유 표시) · 결과 줄 *"국면 (엄격 PIT · 관측) · KR 판정 0/196일 (나머지 미상) ·
+US 판정 0/196일 (나머지 미상) · regime_change(US) 트리거 0회 — US 국면이 전 구간 미상이라
+트리거가 없었습니다 — 첫 적격일의 초기 배분을 끝까지 유지한 것과 같습니다(국면 기반 결과가
+아닙니다)."* · 가중치 시계열 *"1회 리밸런싱"*(초기 배분만) · 국면 표 "미상" 행 · 페이지 오류 0.
+★이 환경의 빈티지가 0 건이라 두 시장 모두 미상이 정답이다★ — 라벨이 나왔다면 그것이 결함이다.
+국면 라벨이 실제로 붙는 경로는 주입 로더 골든(`tests/test_regime_model.py`)이 건다(관측 아님 · 합성).
+
+**전체 게이트** — ruff 통과 · `KIS_USE_MOCK=1 pytest tests/`(곁에 아무것도 안 돌림) **6989 passed ·
+10 skipped** (BH2 6970 → +19) · `tsc --noEmit` 0 · eslint(건드린 파일) 0 · `next build` 성공
+(경고 17 파일은 전부 이 작업이 건드리지 않은 기존 파일).

@@ -13,6 +13,8 @@ Usage (main_api.py):
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -97,6 +99,8 @@ class RealismBacktestRequest(BaseModel):
     max_weight:            float = Field(default=0.50, gt=0, le=1)
     min_weight:            float = Field(default=0.02, ge=0, lt=1)
     run_name:              str | None = None
+    #: ★국면 판정 시장★ (BH3)
+    regime_market:         Literal["kr", "us"] = Field(default="kr")
 
     # ─ Stage 12 신규 토글 ──────────────────────────────────────────────
     enable_market_impact:       bool = Field(default=True)

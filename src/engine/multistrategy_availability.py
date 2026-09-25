@@ -51,18 +51,14 @@ class MissingModule:
     features: tuple[str, ...] = ()
 
 
-#: 기능 → (요청 칸, 값, 사유). ★R4 전까지 막는 두 가지★ — 나머지 요청은 돈다.
+#: 기능 → (요청 칸, 값, 사유). ★R4 에서 남은 하나★ — 나머지 요청은 돈다.
+#: `regime_change` 는 BH3 에서 국면 모델(`regime_model`)이 복원되며 풀렸다.
 FEATURES: dict[str, tuple[str, str, str]] = {
     "hrp_macro": (
         "allocation_method", "hrp_macro",
-        "hrp_macro 는 HRP 위에 매크로 국면 기울기를 얹는 배분 정책인데 매크로 피드"
-        "(macro_feed)·국면 분류기(regime_model)가 이 저장소에 없습니다 — R4 에서 별도 "
-        "승인 후 다룹니다. hrp 또는 inverse_vol 을 고르세요."),
-    "regime_change": (
-        "rebalance_policy", "regime_change",
-        "국면 변경 리밸런싱은 국면 분류기(regime_model)가 있어야 합니다. 없으면 국면이 "
-        "늘 미상이라 엔진이 매일 리밸런싱합니다 — 조용히 daily 가 되므로 R4 전까지 "
-        "막습니다. daily·weekly·monthly·quarterly 중에서 고르세요."),
+        "hrp_macro 는 HRP 위에 매크로 국면 기울기를 얹는 배분 정책인데, 기울기 규칙이 "
+        "정해지지 않았고 매크로 피드(macro_feed)가 없습니다 — 사용자가 계속 거절하기로 "
+        "했습니다(BH, 증거가 생긴 뒤 별도 설계). hrp 또는 inverse_vol 을 고르세요."),
 }
 
 
@@ -73,14 +69,6 @@ MISSING: tuple[MissingModule, ...] = (
         reason=("hrp_macro 용 매크로 행렬을 만드는 자리입니다. 저장소의 매크로 "
                 "계층(pit_macro·macro_observation_store)과는 다른 이름의 모듈입니다."),
         features=("hrp_macro",)),
-    MissingModule(
-        module="src.engine.regime_model",
-        needed_by=(_ENGINE, "src/engine/realism_engine.py"),
-        role="4국면 분류기(MultiRegimeModel)",
-        reason=("GOLDILOCKS·REFLATION·STAGFLATION·DEFLATION 으로 날짜를 분류하는 "
-                "자리입니다. 저장소 어디에도 이 분류기가 없고, 만들면 국면-배분 "
-                "정책이라 별도 승인 사항입니다."),
-        features=("hrp_macro", "regime_change")),
 )
 
 #: ★모듈을 복원해도 남는 공백★ — BG1 에서 `strategy_registry` 가 복원되며 수익률

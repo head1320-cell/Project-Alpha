@@ -274,7 +274,8 @@ def test_the_availability_route_says_what_is_unsupported(client):
     assert r.status_code == 200, r.text[:300]
     d = r.json()
     assert d["available"] is True
-    assert {u["feature"] for u in d["unsupported_features"]} == {"hrp_macro", "regime_change"}
+    # BH3 에서 regime_change 가 풀렸다 — 남은 것은 hrp_macro 하나.
+    assert {u["feature"] for u in d["unsupported_features"]} == {"hrp_macro"}
     assert all(u["reason"] for u in d["unsupported_features"])
 
 

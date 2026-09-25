@@ -255,8 +255,15 @@ def test_the_monitor_does_not_fabricate_a_systemic_risk_score():
             "★확인되지 않은 매핑으로 그 칸을 채웠다★ — 잇기로 했다면 근거를 문서에 남길 것"
 
 
-def test_the_producer_named_in_the_code_really_is_absent():
-    """★테스트의 테스트★ 위 주장이 낡으면 여기서 먼저 깨진다."""
-    import importlib
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("src.engine.regime_model")
+def test_the_regime_model_exists_but_never_produces_the_score():
+    """★테스트의 테스트★ 위 주장이 낡으면 여기서 먼저 깨진다.
+
+    BH3 에서 `src.engine.regime_model` 이 **복원됐다** — 그러나 백테스트 국면(사분면)만
+    판정하고 `systemic_risk_score` 는 **생산하지 않는다**(D 는 하지 않기로 했다). 그래서
+    `auto_risk` 의 재료는 여전히 없다. 모듈이 점수를 내기 시작하면 여기서 깨진다.
+    """
+    from src.engine.regime_model import MultiRegimeModel
+    for market in ("kr", "us"):
+        call = MultiRegimeModel.classify_at("2024-03-31", market,
+                                            series_loader=lambda k, a: None)
+        assert call["systemic_risk_score"] is None and call["systemic_risk_reason"]

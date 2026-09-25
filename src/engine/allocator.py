@@ -29,9 +29,9 @@ MIN_OBS = 20
 
 METHODS = ("inverse_vol", "hrp")
 
-_MACRO_REASON = ("hrp_macro 는 매크로 국면 기울기를 얹는 배분 정책인데 국면 분류기"
-                 "(regime_model)·매크로 피드(macro_feed)가 아직 없습니다 — R4 에서 "
-                 "별도 승인 후 다룹니다.")
+_MACRO_REASON = ("hrp_macro 는 매크로 국면 기울기를 얹는 배분 정책인데 기울기 규칙이 "
+                 "정해지지 않았고 매크로 피드(macro_feed)가 없습니다 — 사용자가 계속 거절하기로 "
+                 "했습니다(BH, R4 · 증거가 생긴 뒤 별도 설계).")
 
 
 def _unavailable(method: str, reason: str, **extra) -> dict:

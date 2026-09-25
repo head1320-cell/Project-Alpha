@@ -14,6 +14,8 @@ APIRouter 모듈. 기존 main_api.py에서 다음과 같이 통합:
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -156,6 +158,8 @@ class MultiBacktestRunRequest(BaseModel):
     min_weight:            float = Field(default=0.02, ge=0, lt=1)
     run_name:              str | None = None
     save:                  bool = Field(default=True)
+    #: ★국면 판정 시장★ (BH3) — regime_change 트리거·결과 `regime` 칸. 두 시장 라벨은 늘 실린다.
+    regime_market:         Literal["kr", "us"] = Field(default="kr")
 
 
 @router.post("/run")
@@ -180,6 +184,7 @@ def multibacktest_run(req: MultiBacktestRunRequest):
             lookback_days=req.lookback_days,
             max_weight=req.max_weight, min_weight=req.min_weight,
             run_name=req.run_name,
+            regime_market=req.regime_market,
         )
         out = bt.run_and_save(config) if req.save else bt.run(config)
         # ★돌지 않은 실행에 "부과했다" 를 붙이지 않는다★
@@ -348,6 +353,7 @@ class CounterfactualRequest(BaseModel):
     scenarios: list[str] = Field(
         default=["baseline", "no_macro_overlay", "no_netting", "equal_weight"],
     )
+    regime_market:         Literal["kr", "us"] = Field(default="kr")
 
 
 @router.post("/counterfactual")
@@ -372,6 +378,7 @@ def multibacktest_counterfactual(req: CounterfactualRequest):
             slippage_rate=req.slippage_rate,
             lookback_days=req.lookback_days,
             run_name="counterfactual",
+            regime_market=req.regime_market,
         )
         analyzer = CounterfactualAnalyzer(get_sync_engine())
         out = analyzer.compare(base_config, req.scenarios)

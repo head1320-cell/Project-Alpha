@@ -27,6 +27,8 @@ interface Config {
   macro_overlay_enabled: boolean;
   commission_rate: number;
   slippage_rate: number;
+  /** ★국면 판정 시장★ (BH3) — regime_change 트리거·결과의 국면 칸. 두 시장 라벨은 늘 실린다. */
+  regime_market: "kr" | "us";
 }
 
 interface Props {
@@ -56,6 +58,9 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
     macro_overlay_enabled: false,
     commission_rate: 0.00015,
     slippage_rate: 0.0005,
+    // 기본 kr — 전략이 한국 주식이다. 지금은 KR 빈티지가 없어 국면이 대부분 미상이고,
+    // 결과가 그렇게 말한다(적재되면 코드 변경 없이 산다).
+    regime_market: "kr",
   });
 
   // 전략이 새로 등록·비활성되면 선택을 맞춘다 — 사라진 id 는 빼고 새 id 는 넣는다.
@@ -188,6 +193,17 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
               </option>
             </select>
           </div>
+        </div>
+
+        {/* 국면 시장 — ★엄격 PIT(그 시점 공표 빈티지만)★ (BH3) */}
+        <div>
+          <Label>국면 시장 (regime_change·국면 표 기준)</Label>
+          <select value={config.regime_market}
+                  onChange={(e) => setConfig({ ...config, regime_market: e.target.value as "kr" | "us" })}
+                  style={inputStyle}>
+            <option value="kr">KR 국면 (빈티지 적재 전에는 대부분 미상)</option>
+            <option value="us">US 국면 (FRED/ALFRED 빈티지)</option>
+          </select>
         </div>
 
         {/* ★안 되는 이유는 서버가 준 문장 그대로★ */}

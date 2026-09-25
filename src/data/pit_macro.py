@@ -194,7 +194,7 @@ def fetch_observations(
     return out
 
 
-def series_as_of(series_id: str, as_of: str | None):
+def series_as_of(series_id: str, as_of: str | None, *, engine=None):
     """`as_of` 시점에 **알 수 있었던** 계열 → `(관측기간들, 값들)`. 없으면 `None`.
 
     ★이 함수가 공용인 이유★ 예전에는 같은 로직이 `macro_collector._from_vintage_store`
@@ -215,7 +215,7 @@ def series_as_of(series_id: str, as_of: str | None):
     except Exception:  # noqa: BLE001
         return None
     try:
-        obs = _load(series_id, as_of=as_of) or []
+        obs = _load(series_id, as_of=as_of, engine=engine) or []
     except Exception as e:  # noqa: BLE001 — 조회 실패는 "빈티지 없음" 이지 오류가 아니다
         logger.debug("빈티지 조회 실패 (%s): %s", series_id, e)
         return None

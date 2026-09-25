@@ -60,8 +60,10 @@ export default function MultiBacktestPage() {
   }, []);
 
   // 초기 로드
+  // ★전체 화면 로딩은 첫 로드 한 번뿐이다★ (BH3) — 실행 뒤 목록 갱신이 `loading` 을
+  // 다시 켜면 설정 패널이 언마운트돼 기본값(매월·KR)으로 돌아가, 화면의 결과를 만든
+  // 설정과 폼이 어긋난다. 초기값 `true` 가 첫 로드를 덮으므로 여기서 켜지 않는다.
   const loadInit = useCallback(async () => {
-    setLoading(true);
     try {
       const [rRes, avail] = await Promise.all([
         fetch(`${API_BASE}/api/v1/multibacktest/runs?limit=10`).then((r) => r.json()).catch(() => ({ runs: [] })),
@@ -350,7 +352,9 @@ export default function MultiBacktestPage() {
           {/* ★이 수치가 무엇에서 나왔는가★ (BG6) — 라벨은 원천 실행들의 mock 여부로 */}
           <ResultProvenance perfLabel={result.perf_label} sources={result.sources}
                             netting={result.summary.netting}
-                            nettingTotal={result.summary.netting_total_savings} />
+                            nettingTotal={result.summary.netting_total_savings}
+                            regimeLabels={result.summary.regime_labels}
+                            regimeRebalance={result.summary.regime_rebalance} />
 
           {/* Equity + Regime */}
           <Section title="자산 곡선 + 매크로 국면" icon={TrendingUp}
@@ -415,7 +419,14 @@ function dataText(mock: boolean | null | undefined): string {
 }
 
 /** 결과의 출처 — 원천 실행 · 데이터 축 · 네팅 근거. ★응답이 말한 것만★ 그린다. */
-function ResultProvenance({ perfLabel, sources, netting, nettingTotal }: {
+interface RegimeCoverage {
+  n_known_days: number;
+  n_unknown_days: number;
+  first_unknown_reason: string | null;
+}
+
+function ResultProvenance({ perfLabel, sources, netting, nettingTotal, regimeLabels,
+                            regimeRebalance }: {
   perfLabel?: PerfLabelValue | null;
   sources?: SourcesBlock | null;
   netting?: {
@@ -424,6 +435,11 @@ function ResultProvenance({ perfLabel, sources, netting, nettingTotal }: {
     first_unmeasured_reason: string | null;
   } | null;
   nettingTotal?: number | null;
+  regimeLabels?: Record<string, RegimeCoverage> | null;
+  regimeRebalance?: {
+    market: string; n_known_days: number; n_unknown_days: number;
+    n_triggers: number; reason: string | null;
+  } | null;
 }) {
   return (
     <div style={{
@@ -455,6 +471,28 @@ function ResultProvenance({ perfLabel, sources, netting, nettingTotal }: {
                   {" "}· 근거 {netting.basis} (가정 {netting.assumptions.length}개)
                 </span>
               </>}
+        </div>
+      )}
+      {regimeLabels && (
+        <div>
+          <span style={{ color: "#6b7fa3" }}>국면 (엄격 PIT · 관측) · </span>
+          {(["kr", "us"] as const).map((m) => {
+            const c = regimeLabels[m];
+            if (!c) return null;
+            const total = c.n_known_days + c.n_unknown_days;
+            return (
+              <span key={m} title={c.first_unknown_reason ?? undefined} style={{ marginRight: 10 }}>
+                {m.toUpperCase()} 판정 {c.n_known_days}/{total}일
+                {c.n_unknown_days > 0 ? " (나머지 미상)" : ""}
+              </span>
+            );
+          })}
+          {regimeRebalance && (
+            <span>
+              · regime_change({regimeRebalance.market.toUpperCase()}) 트리거 {regimeRebalance.n_triggers}회
+              {regimeRebalance.reason ? ` — ${regimeRebalance.reason}` : ""}
+            </span>
+          )}
         </div>
       )}
     </div>

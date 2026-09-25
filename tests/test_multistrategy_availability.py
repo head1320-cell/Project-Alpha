@@ -25,8 +25,9 @@ from src.engine import multistrategy_availability as ma
 
 #: ★지금 없는 것★ — 복원될 때마다 줄어든다(트립와이어가 그것을 요구한다).
 #: BG1 에서 `src.engine.strategy_registry`, BG2 에서 `src.engine.allocator`, BG3 에서
-#: `src.execution.order_netting` 이 복원됐다. 남은 둘은 R4 — ★기능 단위로만 막는다★(BG4).
-FIVE = {"src.data.macro_feed", "src.engine.regime_model"}
+#: `src.execution.order_netting`, BH3 에서 `src.engine.regime_model` 이 복원됐다. 남은
+#: 하나는 hrp_macro 용 매크로 피드 — ★기능 단위로만 막는다★(BG4).
+FIVE = {"src.data.macro_feed"}
 
 
 # ── 레지스트리 · 실측 ─────────────────────────────────────────────────
@@ -47,7 +48,7 @@ def test_every_entry_says_what_it_was_for_and_why():
 # 코어(레지스트리·배분기·네팅)가 복원됐다. 남은 둘(macro_feed·regime_model)은
 # `hrp_macro`·`regime_change` **만** 필요로 한다 — 그 요청만 422, 나머지는 돈다.
 
-def test_the_remaining_two_block_only_their_features():
+def test_the_remaining_modules_block_only_their_features():
     for m in ma.MISSING:
         assert m.features, f"{m.module} 는 기능이 없는 코어로 등록됐다 — 전부 503 이 된다"
         assert set(m.features) <= set(ma.FEATURES), m.features
@@ -66,14 +67,11 @@ def test_the_core_is_available_now():
 
 def test_the_status_names_the_unsupported_features_with_reasons():
     feats = {f["feature"]: f for f in ma.status()["unsupported_features"]}
-    assert set(feats) == {"hrp_macro", "regime_change"}
+    assert set(feats) == {"hrp_macro"}, "regime_change 는 BH3 에서 풀렸다"
     assert feats["hrp_macro"]["field"] == "allocation_method"
-    assert feats["regime_change"]["field"] == "rebalance_policy"
     for f in feats.values():
         assert len(f["reason"]) > 20 and f["missing"]
         assert set(f["missing"]) <= FIVE
-    # ★조용히 daily 가 되는 이유를 말한다★
-    assert "매일" in feats["regime_change"]["reason"]
 
 
 def test_restoring_everything_makes_it_available(monkeypatch):
@@ -93,22 +91,21 @@ def test_restoring_one_shrinks_the_list(monkeypatch):
     assert len(ma.missing_now()) == len(FIVE) - 1
 
 
-@pytest.mark.parametrize("fields,feature", [
-    ({"allocation_method": "hrp_macro"}, "hrp_macro"),
-    ({"rebalance_policy": "regime_change"}, "regime_change"),
-    ({"allocation_method": "hrp_macro", "rebalance_policy": "regime_change"}, "hrp_macro"),
+@pytest.mark.parametrize("fields", [
+    {"allocation_method": "hrp_macro"},
+    {"allocation_method": "hrp_macro", "rebalance_policy": "regime_change"},
 ])
-def test_an_unsupported_request_is_422_with_the_reason(fields, feature):
+def test_an_unsupported_request_is_422_with_the_reason(fields):
     exc = ma.http_unsupported(**fields)
     assert exc is not None and exc.status_code == 422
-    names = [u["feature"] for u in exc.detail["unsupported"]]
-    assert feature in names and len(names) == len(fields)
+    assert [u["feature"] for u in exc.detail["unsupported"]] == ["hrp_macro"]
     assert exc.detail["reason"]
 
 
 @pytest.mark.parametrize("fields", [
     {"allocation_method": "hrp", "rebalance_policy": "monthly"},
     {"allocation_method": "inverse_vol", "rebalance_policy": "daily"},
+    {"allocation_method": "hrp", "rebalance_policy": "regime_change"},
     {},
 ])
 def test_a_supported_request_passes(fields):
@@ -184,18 +181,10 @@ def test_the_guarded_routes_are_not_503_now(client, method, path, body):
 
 UNSUPPORTED = [
     ("/api/v1/multibacktest/run", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
-    ("/api/v1/multibacktest/run", {**_BODY, "rebalance_policy": "regime_change"},
-     "regime_change"),
     ("/api/v1/multibacktest/counterfactual",
      {**_BODY, "base_allocation_method": "hrp_macro"}, "hrp_macro"),
-    ("/api/v1/multibacktest/counterfactual",
-     {**_BODY, "base_allocation_method": "hrp", "base_rebalance_policy": "regime_change"},
-     "regime_change"),
     ("/api/v1/realism/backtest", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
-    ("/api/v1/realism/backtest", {**_BODY, "rebalance_policy": "regime_change"},
-     "regime_change"),
 ]
-
 
 @pytest.mark.parametrize("path,body,feature", UNSUPPORTED,
                          ids=[f"{p} {f}" for p, _, f in UNSUPPORTED])
@@ -206,6 +195,21 @@ def test_r4_features_are_422_with_the_reason(client, path, body, feature):
     d = r.json()["detail"]
     assert [u["feature"] for u in d["unsupported"]] == [feature]
     assert d["reason"] and d["unsupported"][0]["missing"]
+
+
+REGIME_CHANGE = [
+    ("/api/v1/multibacktest/run", {**_BODY, "rebalance_policy": "regime_change"}),
+    ("/api/v1/multibacktest/counterfactual",
+     {**_BODY, "base_allocation_method": "hrp", "base_rebalance_policy": "regime_change"}),
+    ("/api/v1/realism/backtest", {**_BODY, "rebalance_policy": "regime_change"}),
+]
+
+
+@pytest.mark.parametrize("path,body", REGIME_CHANGE, ids=[p for p, _ in REGIME_CHANGE])
+def test_regime_change_is_no_longer_refused(client, path, body):
+    """★짝★ — BH3 에서 국면 모델이 복원돼 regime_change 는 422 가 아니다."""
+    r = client.post(path, json=body)
+    assert r.status_code not in (422, 503), (r.status_code, r.text[:300])
 
 
 UNGUARDED = [

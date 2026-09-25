@@ -63,6 +63,8 @@ interface Config {
   rebalance_policy: string;
   commission_rate: number;
   slippage_rate: number;
+  /** BH3 — 시나리오가 기준과 같은 시장의 국면을 보게 한다. */
+  regime_market?: "kr" | "us";
 }
 
 interface Props {
@@ -109,6 +111,7 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
           base_rebalance_policy: baseConfig.rebalance_policy,
           commission_rate: baseConfig.commission_rate,
           slippage_rate: baseConfig.slippage_rate,
+          regime_market: baseConfig.regime_market ?? "kr",
           scenarios: DEFAULT_SCENARIOS,
         }),
       });

@@ -102,14 +102,15 @@ function generateEquityCurve(
   return records;
 }
 
+// 모의 수치의 국면 띠 — 어휘는 백엔드 `regime_axes.QUADRANTS` 와 같다(BH3).
 const REGIME_TIMELINE = [
-  { day: 0,    regime: "GOLDILOCKS" },
-  { day: 95,   regime: "REFLATION" },
-  { day: 180,  regime: "STAGFLATION" },
-  { day: 230,  regime: "GOLDILOCKS" },
-  { day: 340,  regime: "DEFLATION" },
-  { day: 380,  regime: "STAGFLATION" },
-  { day: 460,  regime: "GOLDILOCKS" },
+  { day: 0,    regime: "Goldilocks" },
+  { day: 95,   regime: "Reflation" },
+  { day: 180,  regime: "Stagflation" },
+  { day: 230,  regime: "Goldilocks" },
+  { day: 340,  regime: "Disinflation" },
+  { day: 380,  regime: "Stagflation" },
+  { day: 460,  regime: "Goldilocks" },
 ];
 
 export const MOCK_IDEAL: RealismBacktestResult = {

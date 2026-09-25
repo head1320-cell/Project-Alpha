@@ -21,11 +21,13 @@ interface Props {
   maxPoints?: number;
 }
 
+// ★어휘는 백엔드 `regime_axes.QUADRANTS` 하나★ (BH3) — 예전 대문자 DEFLATION 어휘는
+// 저장소의 국면 정의(Disinflation)와 달라 칠해질 띠가 0 이었다. 미상인 날은 칠하지 않는다.
 const REGIME_COLORS: Record<string, string> = {
-  GOLDILOCKS:  "rgba(105,240,174,0.10)",
-  REFLATION:   "rgba(255,235,59,0.10)",
-  STAGFLATION: "rgba(255,82,82,0.10)",
-  DEFLATION:   "rgba(66,165,245,0.10)",
+  Goldilocks:   "rgba(105,240,174,0.10)",
+  Reflation:    "rgba(255,235,59,0.10)",
+  Stagflation:  "rgba(255,82,82,0.10)",
+  Disinflation: "rgba(66,165,245,0.10)",
 };
 
 export default function EquityWithRegimeBand({

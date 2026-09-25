@@ -78,10 +78,9 @@ def current_regime_state() -> dict | None:
 
     킬스위치의 `auto_risk` 는 `systemic_risk_score`(0~100)를 본다. 그런데 실측하면:
 
-      · 이 값의 생산자로 지목된 `src/engine/regime_model.MultiRegimeModel` 은
-        ★저장소에 존재하지 않는다★. `realism_engine._get_systemic_risk_pit` 와
-        `multi_strategy_backtest` 가 `try/except` 안에서 임포트해 ImportError 를
-        삼키므로, 그 경로는 **항상 `None`** 이다.
+      · 이 값의 생산자로 지목됐던 `src/engine/regime_model.MultiRegimeModel` 은
+        BH3 에서 복원됐지만 ★백테스트 사분면만 판정하고 이 점수는 생산하지 않는다★
+        (늘 `None` + 사유 — 킬스위치 재료라 별도 승인, 사용자가 D 를 제외했다).
       · `regime_analyzer.RegimeState` 가 드는 것은 `stress_score`(0~100)이고,
         두 이름을 잇는 코드는 저장소 어디에도 없다.
 

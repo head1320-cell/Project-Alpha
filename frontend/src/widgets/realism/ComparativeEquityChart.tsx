@@ -9,18 +9,19 @@ import { TrendingUp, Sparkles, Zap } from "lucide-react";
 import type { RealismBacktestResult } from "@/entities/realism/data";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
+// ★어휘는 백엔드 `regime_axes.QUADRANTS` 하나★ (BH3)
 const REGIME_BG: Record<string, string> = {
-  GOLDILOCKS:  "rgba(222,255,154,0.04)",
-  REFLATION:   "rgba(255,200,87,0.04)",
-  STAGFLATION: "rgba(255,107,107,0.05)",
-  DEFLATION:   "rgba(66,165,245,0.04)",
+  Goldilocks:   "rgba(222,255,154,0.04)",
+  Reflation:    "rgba(255,200,87,0.04)",
+  Stagflation:  "rgba(255,107,107,0.05)",
+  Disinflation: "rgba(66,165,245,0.04)",
 };
 
 const REGIME_LABEL: Record<string, { color: string; label: string }> = {
-  GOLDILOCKS:  { color: "#DEFF9A", label: "Goldilocks" },
-  REFLATION:   { color: "#FFC857", label: "Reflation" },
-  STAGFLATION: { color: "#FF6B6B", label: "Stagflation" },
-  DEFLATION:   { color: "#7DD3FC", label: "Deflation" },
+  Goldilocks:   { color: "#DEFF9A", label: "Goldilocks" },
+  Reflation:    { color: "#FFC857", label: "Reflation" },
+  Stagflation:  { color: "#FF6B6B", label: "Stagflation" },
+  Disinflation: { color: "#7DD3FC", label: "Disinflation" },
 };
 
 interface Props {

@@ -177,6 +177,9 @@ class CounterfactualAnalyzer:
             max_weight=base_config.max_weight,
             min_weight=base_config.min_weight,
             run_name=f"{base_config.run_name or 'CF'}_{override.name}",
+            # ★시나리오가 국면 시장을 잃지 않는다★ (BH3) — 빠뜨리면 regime_change 기준이
+            # 시나리오마다 다른 시장을 따라 비교가 같은 질문이 아니게 된다.
+            regime_market=getattr(base_config, "regime_market", "kr"),
         )
 
     @staticmethod

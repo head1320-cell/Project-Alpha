@@ -39,6 +39,10 @@ class BacktestConfig:
     max_weight:             float = 0.50
     min_weight:             float = 0.02
     run_name:               str | None = None
+    #: ★국면 판정 시장★ (BH3) — `regime_change` 트리거와 결과의 `regime` 칸이 이 시장을
+    #: 따른다. 두 시장 라벨은 항상 `regimes` 로 함께 싣는다. 기본 kr — 전략이 한국
+    #: 주식이고 KR 데이터 적재가 예정돼 있다(지금은 빈티지가 없어 대부분 미상이다).
+    regime_market:          str = "kr"
 
 
 @dataclass
@@ -74,6 +78,9 @@ class DailyRecord:
     #: 네팅을 판정하지 못한 사유(`netting_savings is None` 일 때만).
     netting_reason:     str | None = None
     rebalanced:         bool = False
+    #: 시장 → 그날의 사분면 라벨(미상이면 None) · 미상 사유 (BH3)
+    regimes:            dict = field(default_factory=dict)
+    regime_reasons:     dict = field(default_factory=dict)
     weights:            dict = field(default_factory=dict)
     base_weights:       dict = field(default_factory=dict)
     macro_adj:          dict = field(default_factory=dict)
@@ -211,6 +218,8 @@ class MultiStrategyBacktester:
             return {"ok": False, "error": f"알 수 없는 method: {config.allocation_method}"}
         if config.rebalance_policy not in ("daily","weekly","monthly","quarterly","regime_change"):
             return {"ok": False, "error": f"알 수 없는 정책: {config.rebalance_policy}"}
+        if getattr(config, "regime_market", "kr") not in ("kr", "us"):
+            return {"ok": False, "error": f"알 수 없는 국면 시장: {config.regime_market}"}
         return {"ok": True}
 
     def _load_data(self, config: BacktestConfig) -> dict:
@@ -241,12 +250,42 @@ class MultiStrategyBacktester:
         holdings = self.registry.load_holdings(
             config.strategy_ids, config.start_date, config.end_date)
 
+        # ★국면 — 관측★ (BH3) — 두 시장 모두 엄격 PIT(빈티지 스토어, 전날까지 공표분).
+        # 가중에는 영향이 없다. `regime_change` 만 결정 시장의 라벨 전환을 트리거로 읽는다.
+        from src.engine.regime_model import MultiRegimeModel
+        regime_panel = MultiRegimeModel.panel(
+            list(returns_matrix.index), markets=("kr", "us"), engine=self.engine)
+
         return {
             "returns_matrix": returns_matrix,
             "strategies":     strategies,
             "strategy_names": strategy_names,
             "macro_df":       macro_df,
             "holdings":       holdings,
+            "regime_panel":   regime_panel,
+        }
+
+    @staticmethod
+    def regime_step(panel: dict, market: str, date, policy: str, state: dict) -> dict:
+        """그날의 국면 + `regime_change` 트리거 판정 — ★두 엔진이 같은 함수를 쓴다★ (BH3)
+
+        `state` 는 호출자가 들고 다닌다(`prev_known`). 트리거는 **알려진 라벨 → 다른
+        알려진 라벨** 일 때만이다. 예전에는 국면이 None 이면 **매일** 리밸런싱했다.
+        """
+        calls = {m: (panel.get(m) or {}).get(date) or {} for m in ("kr", "us")}
+        call = calls.get(market) or {}
+        label = call.get("regime")
+        changed = False
+        if policy == "regime_change":
+            prev = state.get("prev_known")
+            changed = label is not None and prev is not None and label != prev
+            if label is not None:
+                state["prev_known"] = label
+        return {
+            "label": label, "call": call, "changed": changed,
+            "regimes": {m: c.get("regime") for m, c in calls.items()},
+            "reasons": {m: c.get("reason") for m, c in calls.items()
+                        if c.get("regime") is None},
         }
 
     # ─── 핵심 시뮬레이션 루프 ─────────────────────────────────────────
@@ -254,8 +293,12 @@ class MultiStrategyBacktester:
     def _simulate(self, config, data) -> tuple[list[DailyRecord], list[str]]:
         returns_matrix = data["returns_matrix"]
         strategies = data["strategies"]
-        macro_df = data["macro_df"]
         sids = config.strategy_ids
+        panel = data.get("regime_panel") or {}
+        market = getattr(config, "regime_market", "kr")
+        regime_policy = config.rebalance_policy == "regime_change"
+        regime_state: dict = {}
+        needs_initial = regime_policy
 
         rebalance_dates = self._compute_rebalance_dates(
             list(returns_matrix.index), config.rebalance_policy,
@@ -267,7 +310,6 @@ class MultiStrategyBacktester:
         current_weights = {int(sid): 1.0/n_str for sid in sids}
         current_base_weights = current_weights.copy()
         current_macro_adj = {int(sid): 0.0 for sid in sids}
-        current_regime = None
 
         daily_records = []
         warnings = []
@@ -275,11 +317,12 @@ class MultiStrategyBacktester:
         for t, date in enumerate(returns_matrix.index):
             rebalanced_today = False
 
-            # 리밸런싱 트리거
-            should_rebal = (
-                date in rebalance_dates
-                or (config.rebalance_policy == "regime_change" and current_regime is None)
-            )
+            # 국면(관측) + 리밸런싱 트리거 — ★미상인 날은 트리거하지 않는다★ (BH3)
+            reg = self.regime_step(panel, market, date, config.rebalance_policy, regime_state)
+            if regime_policy:
+                should_rebal = needs_initial or reg["changed"]
+            else:
+                should_rebal = date in rebalance_dates
 
             if should_rebal and t > 0:
                 past_returns = returns_matrix.iloc[:t]
@@ -298,8 +341,8 @@ class MultiStrategyBacktester:
                             current_weights = {int(k): float(v) for k, v in alloc_result["weights"].items()}
                             current_base_weights = {int(k): float(v) for k, v in alloc_result.get("base_weights", {}).items()}
                             current_macro_adj = {int(k): float(v) for k, v in alloc_result.get("macro_adjustments", {}).items()}
-                            current_regime = alloc_result.get("regime")
                             rebalanced_today = True
+                            needs_initial = False
                             for sid in sids:
                                 if int(sid) not in current_weights:
                                     current_weights[int(sid)] = 0.0
@@ -307,17 +350,6 @@ class MultiStrategyBacktester:
                                     current_macro_adj[int(sid)] = 0.0
                     except Exception as e:
                         warnings.append(f"{date.date()}: 리밸런싱 실패 {e}")
-
-            # 매크로 정보 (PIT-safe)
-            regime_info = None
-            if config.macro_overlay_enabled and not macro_df.empty:
-                try:
-                    from src.engine.regime_model import MultiRegimeModel
-                    past_macro = macro_df[macro_df["date"] < date] if "date" in macro_df.columns else pd.DataFrame()
-                    if not past_macro.empty:
-                        regime_info = MultiRegimeModel.classify_at_date(past_macro, str(date.date()))
-                except Exception:
-                    pass
 
             day_returns = returns_matrix.iloc[t].to_dict()
             portfolio_ret = sum(current_weights.get(int(sid), 0) * day_returns.get(sid, 0) for sid in sids)
@@ -354,10 +386,12 @@ class MultiStrategyBacktester:
                 portfolio_return=net_return,
                 cumulative_return=cum_return,
                 drawdown_pct=drawdown,
-                regime=regime_info.get("regime") if regime_info else current_regime,
-                systemic_risk=regime_info.get("systemic_risk_score") if regime_info else None,
-                growth_signal=regime_info.get("growth_signal") if regime_info else None,
-                inflation_signal=regime_info.get("inflation_signal") if regime_info else None,
+                regime=reg["label"],
+                # ★생산하지 않는다★ — regime_model 은 systemic_risk 를 늘 None 으로 낸다.
+                systemic_risk=None,
+                growth_signal=reg["call"].get("growth_signal"),
+                inflation_signal=reg["call"].get("inflation_signal"),
+                regimes=reg["regimes"], regime_reasons=reg["reasons"],
                 # ★상수 0 을 싣지 않는다★ (AL2) — 이 엔진은 선택 효과를 재지
                 # 않는다. Brinson 선택항은 전략별 벤치마크가 필요한데 그 계열이
                 # 저장소에 없다. 재료가 `None` 이면 기존 커버리지 가드가 제대로
@@ -404,6 +438,39 @@ class MultiStrategyBacktester:
             rate=config.commission_rate + config.slippage_rate)
 
     @staticmethod
+    def regime_labels_summary(records) -> dict:
+        """시장별 국면 커버리지 — ★안 잰 날을 센다★ (BH3)."""
+        out = {}
+        for m in ("kr", "us"):
+            known = [r for r in records if (r.regimes or {}).get(m) is not None]
+            unknown = [r for r in records if (r.regimes or {}).get(m) is None]
+            first = next(((r.regime_reasons or {}).get(m) for r in unknown
+                          if (r.regime_reasons or {}).get(m)), None)
+            out[m] = {"n_known_days": len(known), "n_unknown_days": len(unknown),
+                      "first_unknown_reason": first if unknown else None}
+        return out
+
+    @staticmethod
+    def regime_rebalance_summary(records, config) -> dict | None:
+        """`regime_change` 의 결과 — ★무엇이 트리거했고 무엇이 미상이었나★ (BH3)."""
+        if getattr(config, "rebalance_policy", None) != "regime_change":
+            return None
+        m = getattr(config, "regime_market", "kr")
+        n_rebal = sum(1 for r in records if r.rebalanced)
+        known = sum(1 for r in records if (r.regimes or {}).get(m) is not None)
+        unknown = len(records) - known
+        triggers = max(0, n_rebal - 1)
+        reason = None
+        if known == 0:
+            reason = (f"{m.upper()} 국면이 전 구간 미상이라 트리거가 없었습니다 — 첫 적격일의 "
+                      "초기 배분을 끝까지 유지한 것과 같습니다(국면 기반 결과가 아닙니다).")
+        return {"market": m, "n_known_days": known, "n_unknown_days": unknown,
+                "n_triggers": triggers,
+                "initial_allocation_date": next((str(r.date.date()) for r in records
+                                                 if r.rebalanced), None),
+                "reason": reason}
+
+    @staticmethod
     def netting_summary(records, enabled: bool) -> dict:
         """★잰 날과 못 잰 날을 함께★ — 합계만 내면 미상이 0 으로 녹는다."""
         from src.execution.order_netting import ASSUMPTIONS, NETTING_BASIS
@@ -432,7 +499,11 @@ class MultiStrategyBacktester:
                 wk = (d.year, d.isocalendar().week)
                 if wk not in seen:
                     dates.add(d); seen.add(wk)
-        elif policy in ("monthly", "regime_change"):
+        elif policy == "regime_change":
+            # ★달력 날이 없다★ (BH3) — 첫 적격일 배분 + 알려진 라벨 전환만(엔진이 판정).
+            # 예전엔 월간 취급 + "국면 None 이면 매일" 이었다.
+            return set()
+        elif policy == "monthly":
             seen = set()
             for d in trading_days:
                 key = (d.year, d.month)
@@ -492,8 +563,9 @@ class MultiStrategyBacktester:
         _cash = [r.cash_effect for r in records if r.cash_effect is not None]
         cum_cash = (float(sum(_cash)) * 100) if _cash else None
 
+        from src.engine.regime_axes import QUADRANTS
         regime_alpha = {}
-        for regime in ["GOLDILOCKS", "REFLATION", "STAGFLATION", "DEFLATION"]:
+        for regime in QUADRANTS:
             r_rets = [r.portfolio_return for r in records if r.regime == regime]
             if r_rets:
                 avg_ret = np.mean(r_rets)
@@ -525,6 +597,9 @@ class MultiStrategyBacktester:
                                        else float(round(total_savings, 2))),
             "netting": MultiStrategyBacktester.netting_summary(
                 records, getattr(config, "netting_enabled", True)),
+            "regime_labels": MultiStrategyBacktester.regime_labels_summary(records),
+            "regime_rebalance": MultiStrategyBacktester.regime_rebalance_summary(
+                records, config),
             "attribution": {
                 "allocation_effect_pct": float(round(cum_alloc, 2)),
                 "macro_effect_pct":      float(round(cum_macro, 2)),
@@ -554,6 +629,7 @@ class MultiStrategyBacktester:
             "cumulative_return": float(round(r.cumulative_return, 4)),
             "drawdown_pct":      float(round(r.drawdown_pct, 4)),
             "regime":            r.regime,
+            "regimes":           dict(r.regimes or {}),
             "systemic_risk":     r.systemic_risk,
             "baseline_effect":   _f(r.baseline_effect),
             "allocation_effect": float(r.allocation_effect),

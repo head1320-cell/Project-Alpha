@@ -17,8 +17,6 @@
 from __future__ import annotations
 
 import os
-import sys
-import types
 
 import pytest
 
@@ -188,27 +186,17 @@ def test_the_lifecycle_alias_is_the_shared_function():
 
 # ── 미상을 0 으로 만들던 나머지 두 곳 ───────────────────────────────────
 
-def test_realism_does_not_turn_a_missing_score_into_zero(monkeypatch):
-    """★regime_model 이 생기는 순간의 함정★ — 점수 키가 없으면 0.0 이 아니라 None."""
-    import pandas as pd
+def test_realism_does_not_turn_a_missing_score_into_zero():
+    """★regime_model 이 생기는 순간의 함정★ — 점수 키가 없으면 0.0 이 아니라 None.
 
+    BH3 에서 realism 은 국면 판정(`regime_model` 의 결과)에서 점수를 읽는다
+    (`_systemic_risk_of`). 예전 `_get_systemic_risk_pit` 의 `or 0` 은 BH1 에서 막았다.
+    """
     from src.engine.realism_engine import RealisticBacktester
-    fake = types.ModuleType("src.engine.regime_model")
-
-    class MultiRegimeModel:
-        @staticmethod
-        def classify_at_date(past, date):
-            return {"regime": "Goldilocks"}
-
-    fake.MultiRegimeModel = MultiRegimeModel
-    monkeypatch.setitem(sys.modules, "src.engine.regime_model", fake)
-    df = pd.DataFrame({"date": pd.to_datetime(["2024-01-02", "2024-01-03"]), "x": [1, 2]})
-    assert RealisticBacktester._get_systemic_risk_pit(df, pd.Timestamp("2024-01-05")) is None
-
-    MultiRegimeModel.classify_at_date = staticmethod(
-        lambda past, date: {"regime": "Goldilocks", "systemic_risk_score": 42.0})
-    assert RealisticBacktester._get_systemic_risk_pit(
-        df, pd.Timestamp("2024-01-05")) == 42.0          # ★짝★ 값이 있으면 그 값
+    assert RealisticBacktester._systemic_risk_of({"regime": "Goldilocks"}) is None
+    assert RealisticBacktester._systemic_risk_of(None) is None
+    assert RealisticBacktester._systemic_risk_of(
+        {"regime": "Goldilocks", "systemic_risk_score": 42.0}) == 42.0   # ★짝★
 
 
 def test_the_briefing_prompt_does_not_invent_a_zero_score():

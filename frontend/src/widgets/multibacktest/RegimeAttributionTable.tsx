@@ -20,6 +20,9 @@ interface RegimeRow {
    */
   cash_effect_pct?: number | null;
   avg_systemic_risk?: number;
+  /** BH3 — 사분면 어휘 안의 라벨인가. 미상·어휘 밖이면 false + `regime_note`. */
+  regime_known?: boolean;
+  regime_note?: string | null;
 }
 
 interface Props {
@@ -28,18 +31,21 @@ interface Props {
   perfLabel?: PerfLabelValue | null;
 }
 
+// ★어휘는 백엔드 `regime_axes.QUADRANTS` 하나★ (BH3). "미상" 줄은 국면을 판정하지 못한
+// 날이고(빈티지 없음), 어휘 밖 라벨은 백엔드가 `regime_known=false` + 사유로 따로 싣는다.
 const REGIME_COLORS: Record<string, string> = {
-  GOLDILOCKS:  "#69f0ae",
-  REFLATION:   "#ffeb3b",
-  STAGFLATION: "#ff5252",
-  DEFLATION:   "#42a5f5",
+  Goldilocks:   "#69f0ae",
+  Reflation:    "#ffeb3b",
+  Stagflation:  "#ff5252",
+  Disinflation: "#42a5f5",
 };
 
 const REGIME_LABELS: Record<string, string> = {
-  GOLDILOCKS:  "Goldilocks (성장↑ 인플↓)",
-  REFLATION:   "Reflation (성장↑ 인플↑)",
-  STAGFLATION: "Stagflation (성장↓ 인플↑)",
-  DEFLATION:   "Deflation (성장↓ 인플↓)",
+  Goldilocks:   "성장↑ 물가↓",
+  Reflation:    "성장↑ 물가↑",
+  Stagflation:  "성장↓ 물가↑",
+  Disinflation: "성장↓ 물가 둔화",
+  미상:         "그 시점에 공표된 빈티지로 판정하지 못한 날",
 };
 
 export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
@@ -51,8 +57,8 @@ export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
       }}>
         {/* ★켜서 될 일이 아니다★ (BG6) — 예전 안내("매크로 오버레이 활성화 필요")는
             국면 분류기가 없는 저장소에서 따를 수 없는 지시였다. */}
-        Regime 분해 데이터 없음 — 국면 분류기(regime_model)가 아직 없어 날짜별 국면을
-        정하지 못했습니다(R4 전). 매크로 오버레이를 켜도 달라지지 않습니다.
+        Regime 분해 데이터 없음 — 이 실행에 저장된 일별 행이 없습니다. (국면을 판정하지 못한
+        날은 &quot;미상&quot; 줄로 따로 셉니다 — 빈티지가 없는 기간이면 그 줄만 나옵니다.)
       </div>
     );
   }
@@ -101,7 +107,7 @@ export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
                         {row.regime}
                       </div>
                       <div style={{ fontSize: 9, color: "#6b7fa3" }}>
-                        {REGIME_LABELS[row.regime] || ""}
+                        {REGIME_LABELS[row.regime] || row.regime_note || ""}
                       </div>
                     </div>
                   </div>

@@ -35,8 +35,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-import pandas as pd
-
 logger = logging.getLogger(__name__)
 
 
@@ -61,6 +59,8 @@ class RealismConfig:
     max_weight:             float = 0.50
     min_weight:             float = 0.02
     run_name:               str | None = None
+    #: ★국면 판정 시장★ (BH3) — `BacktestConfig.regime_market` 과 같다.
+    regime_market:          str = "kr"
 
     # ─ Stage 12 신규 토글 ──────────────────────────────────────────────
     enable_market_impact:        bool = True
@@ -141,6 +141,7 @@ class RealisticBacktester:
             lookback_days=config.lookback_days,
             max_weight=config.max_weight, min_weight=config.min_weight,
             run_name=config.run_name,
+            regime_market=config.regime_market,
         )
 
         validation = self.base._validate_config(bt_config)
@@ -204,8 +205,11 @@ class RealisticBacktester:
         current_weights = {int(sid): 1.0/n_str for sid in sids}
         current_base_weights = current_weights.copy()
         current_macro_adj = {int(sid): 0.0 for sid in sids}
-        current_regime = None
-        current_systemic_risk = None
+        # ★국면은 패널에서 — 기본 엔진과 같은 함수★ (BH3)
+        panel = data.get("regime_panel") or {}
+        regime_policy = config.rebalance_policy == "regime_change"
+        regime_state: dict = {}
+        needs_initial = regime_policy
         # ★현금 버퍼는 변수가 아니라 **비중**으로 표현된다★ (P4 잔여)
         # 예전에는 `current_cash_buffer` 를 네 곳에서 대입하고 **한 번도 읽지
         # 않았다**. 경제적 효과는 이미 비중에 있다 — 아래 `invested_ratio =
@@ -230,18 +234,20 @@ class RealisticBacktester:
             rebalanced_today = False
             adaptive_mode = "normal"
 
-            # ── 리밸런싱 ───────────────────────────────────────────────
-            should_rebal = (
-                date in rebalance_dates
-                or (config.rebalance_policy == "regime_change" and current_regime is None)
-            )
+            # ── 국면(관측) + 리밸런싱 — ★미상인 날은 트리거하지 않는다★ (BH3) ──
+            reg = self.base.regime_step(panel, config.regime_market, date,
+                                        config.rebalance_policy, regime_state)
+            if regime_policy:
+                should_rebal = needs_initial or reg["changed"]
+            else:
+                should_rebal = date in rebalance_dates
 
             if should_rebal and t > 0:
                 past_returns = returns_matrix.iloc[:t]
                 if len(past_returns) >= 20:
                     try:
-                        # Stage 9 risk_score 조회 (PIT-safe)
-                        risk_score = self._get_systemic_risk_pit(data["macro_df"], date)
+                        # systemic risk — ★국면 모델은 생산하지 않는다★ (BH3·D 제외)
+                        risk_score = self._systemic_risk_of(reg["call"])
 
                         # Hook ⑤: Regime-Adaptive Allocator
                         if config.enable_regime_adaptive:
@@ -277,9 +283,8 @@ class RealisticBacktester:
                             current_weights = {int(k): float(v) for k, v in alloc_result["weights"].items()}
                             current_base_weights = {int(k): float(v) for k, v in alloc_result.get("base_weights", {}).items()}
                             current_macro_adj = {int(k): float(v) for k, v in alloc_result.get("macro_adjustments", {}).items()}
-                            current_regime = alloc_result.get("regime")
-                            current_systemic_risk = alloc_result.get("systemic_risk_score") or risk_score
                             rebalanced_today = True
+                            needs_initial = False
 
                             # Hook ①: Capacity Constraint
                             if config.enable_capacity_constraint:
@@ -406,8 +411,11 @@ class RealisticBacktester:
                 portfolio_return=net_return,
                 cumulative_return=cum_return,
                 drawdown_pct=drawdown,
-                regime=current_regime,
-                systemic_risk=current_systemic_risk,
+                regime=reg["label"],
+                systemic_risk=self._systemic_risk_of(reg["call"]),
+                growth_signal=reg["call"].get("growth_signal"),
+                inflation_signal=reg["call"].get("inflation_signal"),
+                regimes=reg["regimes"], regime_reasons=reg["reasons"],
                 # ★상수 0 을 싣지 않는다★ (AL2) — 이 엔진은 선택 효과를 재지
                 # 않는다. `0` 은 `pd.notna` 라 커버리지가 1.0 으로 잡히고,
                 # `coverage_complete` 가 거짓으로 참이 되어 잔차가 "복리 효과" 로
@@ -453,25 +461,16 @@ class RealisticBacktester:
         return daily_records, stats
 
     # ═════════════════════════════════════════════════════════════════════
-    # PIT-safe systemic risk 조회
+    # systemic risk — ★국면 판정에서 읽는다, 지어내지 않는다★
     # ═════════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def _get_systemic_risk_pit(macro_df: pd.DataFrame, as_of_date: pd.Timestamp) -> float | None:
-        """t일 이전 매크로 데이터로 systemic risk score 계산 (PIT-safe)."""
-        if macro_df.empty:
-            return None
-        try:
-            from src.engine.regime_model import MultiRegimeModel
-            if "date" not in macro_df.columns:
-                return None
-            past = macro_df[macro_df["date"] < as_of_date]
-            if past.empty:
-                return None
-            regime_info = MultiRegimeModel.classify_at_date(past, str(as_of_date.date()))
-            # ★미상을 0 으로 만들지 않는다★ (BH1) — 예전 `get(…, 0) or 0` 은 국면
-            # 모델이 생기는 순간 점수 없는 날마다 systemic risk **0.0** 을 지어냈다.
-            score = (regime_info or {}).get("systemic_risk_score")
-            return None if score is None else float(score)
-        except Exception:
-            return None
+    def _systemic_risk_of(call: dict | None) -> float | None:
+        """그날 국면 판정의 systemic risk. ★없으면 None — 0 을 만들지 않는다★ (BH1·BH3)
+
+        예전 `_get_systemic_risk_pit` 는 `get(…, 0) or 0` 으로 점수 없는 날마다 0.0 을
+        지어낼 자리였다(BH1 에서 막음). 국면 모델(`regime_model`)은 이 점수를 생산하지
+        않으므로(킬스위치 재료 — 별도 승인) 지금은 늘 None 이다.
+        """
+        score = (call or {}).get("systemic_risk_score")
+        return None if score is None else float(score)
