@@ -27,6 +27,7 @@ import { Loader2 } from "lucide-react";
 import {
   buildHandoff,
   CORE_CHAIN_TEMPLATE,
+  TEMPLATES,
   parseFile,
   PG_NODE_TYPE,
   portfolioGraphApi,
@@ -39,7 +40,7 @@ import {
 import { ExportButton, ImportControl, readGraphFile } from "@/features/portfolio-graph-io";
 import { GateRail } from "./GateRail";
 import { GraphNode, PORT_COLORS } from "./GraphNode";
-import { NodePalette, PALETTE_MIME } from "./NodePalette";
+import { NodePalette, PALETTE_MIME, type WizardAlias } from "./NodePalette";
 import { NodeResultPanel } from "./NodeResultPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { StoryPanel } from "./StoryPanel";
@@ -56,6 +57,8 @@ export interface PortfolioCanvasProps {
   handoffTargets?: HandoffTarget[];
   /** 상단 바 오른쪽 — 예전 화면(마법사) 링크 등. app 계층이 채운다. */
   topExtra?: ReactNode;
+  /** 마법사 화면 이름 → 노드(팔레트 검색 별칭). app 계층이 대응표로 채운다. */
+  wizardAliases?: WizardAlias[];
 }
 
 function readWip(): string | null {
@@ -65,7 +68,7 @@ function readWip(): string | null {
 
 const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"]] as const;
 
-export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra }: PortfolioCanvasProps) {
+export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wizardAliases }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
   const rf = useRef<ReactFlowInstance | null>(null);
   const canvasEl = useRef<HTMLDivElement>(null);
@@ -176,9 +179,10 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra }: Po
     fit();
   }, []);
 
-  const loadTemplate = useCallback(() => {
-    usePortfolioGraph.getState().loadDoc(CORE_CHAIN_TEMPLATE);
-    setFileNote("기본 흐름을 불러왔어요. 종목은 예시예요 — ‘종목 고르기’에서 바꿔 보세요.");
+  const loadTemplate = useCallback((key: string) => {
+    const t = TEMPLATES.find((x) => x.key === key) ?? TEMPLATES[0];
+    usePortfolioGraph.getState().loadDoc(t.doc);
+    setFileNote(`‘${t.name}’을 불러왔어요. 종목·조건은 예시예요 — 노드를 눌러 바꿔 보세요.`);
     fit();
   }, []);
 
@@ -274,7 +278,7 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra }: Po
       ))}
 
       <div className="pg-body">
-        {s.catalog && <NodePalette catalog={s.catalog} stages={stages} onAdd={(k) => addAt(k)} onTemplate={loadTemplate} />}
+        {s.catalog && <NodePalette catalog={s.catalog} stages={stages} aliases={wizardAliases} onAdd={(k) => addAt(k)} onTemplate={loadTemplate} />}
         <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}`}
              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(e.dataTransfer.types.includes("Files")); }}
              onDragLeave={() => setDragOver(false)}

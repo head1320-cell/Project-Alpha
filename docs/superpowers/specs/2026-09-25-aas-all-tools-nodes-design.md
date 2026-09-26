@@ -90,6 +90,24 @@ BJ(토스식 워크플로우 UX)는 끝났다(`7d4c757`). 사용자 요청: *"�
   `/screener/fields` 카탈로그로 조건 줄 추가(필드·비교·값). 규칙은 서버 `validate()` 만.
 - 템플릿: 기본 사슬 · 스트레스 점검 · 스크리너 → 배분 · 타이밍 적용 → 실행 목표.
 
+### 5. 마법사 도구 대응표 (W6 · 코드의 단일 출처는 `frontend/src/app/allocation/wizardNodeMap.ts`)
+
+| 마법사 단계 | 캔버스 노드 |
+|---|---|
+| 00 OVERVIEW | — (캔버스 전체가 그 자리) |
+| 0M MACRO PHASE | 경기 국면 불러오기(`regime`) |
+| 01 CONSTRUCT | 종목 고르기 · 수익률 불러오기 · 조건으로 종목 거르기 · 팩터로 점수 매기기 · 점수로 비중 정하기 · 묶음 합치기 |
+| 02 ALPHA LAB | 알파 식으로 점수 매기기 |
+| 03 THESIS | 내 생각 넣기 · 기업 전망 넣기 · 기대 수익 추정 |
+| 04 TIMING | 타이밍 신호 · 노출 조절(비중에 적용) · 시점별 타이밍 시뮬레이션 |
+| 05 OPTIMIZE | 비중 계산 · 흔들림 나눠 보기 · 치우침 없애기 · 과거로 돌려 보기 |
+| 06 STRESS | 상황에 넣어 보기 · 상관이 치솟으면 · 기대수익이 틀리면? · 어떤 성격인가요? |
+| 07 ATTRIBUTION | 결정 되짚기 |
+| 08 EXECUTION | 주문 목록 미리보기 · 실행 목표 만들기 |
+| 09 JOURNAL | 결정 기록 남기기 |
+
+마법사 밖 도구: 전략 묶음 돌려 보기(멀티전략 백테스트 화면) · 가치평가로 점수 매기기(가치평가 화면).
+
 ## 재사용
 엔진 `src/engine/portfolio_graph.py`(Registry·run·NodeFailure) · 노드 패턴 `src/api/allocation_graph_nodes.py`
 (`_subset`·`_ui`·`STAGES`·`PORT_TYPES`) · 설명 `src/api/allocation_graph_explain.py` · 관문

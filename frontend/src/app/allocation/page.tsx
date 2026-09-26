@@ -2,8 +2,8 @@
 // /allocation = AAS 노드 캔버스 (BI3·BI4 · ADR 002 · 사용자 결정).
 // 포트폴리오를 노드-링크 그래프로 설계·분석한다. 계산은 백엔드 그래프 실행기가 한다.
 //
-// ★마법사는 보존한다★(사용자 결정) — 아직 노드가 없는 도구(스트레스·타이밍·실행·저널 …)는
-// 위 "마법사 도구" 줄에서 연다. 캔버스의 옵티마이저 결과는 "도구로 보내기" 로 넘기는데,
+// ★마법사는 보존한다★(사용자 결정) — BK 로 모든 단계의 도구가 노드가 됐지만(대응표 `wizardNodeMap.ts`), 단계별
+// 화면이 편한 사람은 위 "마법사 도구" 줄에서 연다. 캔버스의 옵티마이저 결과는 "도구로 보내기" 로 넘기는데,
 // ★숫자가 아니라 입력★을 마법사 세션에 넣는다 — 마법사가 같은 /analyze 로 다시 구한다.
 // 세션 세터를 부르는 것은 이 파일(app 계층)이다: 위젯끼리는 서로 import 하지 않는다(FSD).
 import { useEffect, useState } from "react";
@@ -13,8 +13,9 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { HandoffPayload } from "@/entities/portfolio-graph";
 import type { AllocationModel, ConstraintsInput } from "@/entities/allocation";
-import type { HandoffTarget } from "@/widgets/portfolio-graph";
+import type { HandoffTarget, WizardAlias } from "@/widgets/portfolio-graph";
 import { STAGES, WIZARD_GATE_HREF, useAllocation } from "@/widgets/allocation/AllocationProvider";
+import { WIZARD_NODE_MAP } from "./wizardNodeMap";
 
 // reactflow 는 무겁다 — 첫 로드에서 빼고 캔버스 청크로 싣는다(ADR 002 §2).
 const PortfolioCanvas = dynamic(() => import("@/widgets/portfolio-graph/PortfolioCanvas"), {
@@ -28,6 +29,10 @@ const PortfolioCanvas = dynamic(() => import("@/widgets/portfolio-graph/Portfoli
 const HANDOFF_TARGETS: HandoffTarget[] = (["/allocation/optimize", "/allocation/stress", "/allocation/timing",
   "/allocation/explain", "/allocation/execution", "/allocation/journal"] as const)
   .map((href) => ({ href, label: `${STAGES.find((s) => s.href === href)?.title ?? href}에서 보기` }));
+
+/** 팔레트 검색 별칭 — 마법사 화면 이름(`06 STRESS Stress`)으로 그 일을 하는 노드를 찾는다 (BK W6). */
+const WIZARD_ALIASES: WizardAlias[] = STAGES.map((s) => ({
+  name: `${s.n} ${s.label} ${s.title}`, short: `${s.n} ${s.label}`, nodes: WIZARD_NODE_MAP[s.href] }));
 
 export default function AllocationCanvasPage() {
   const router = useRouter();
@@ -59,11 +64,11 @@ export default function AllocationCanvasPage() {
 
   return (
     <div className="aas-root pg-page">
-      <PortfolioCanvas onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} topExtra={
+      <PortfolioCanvas onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} wizardAliases={WIZARD_ALIASES} topExtra={
         <details className="pg-wizard">
           <summary className="pg-btn pg-btn--ghost">단계별 마법사</summary>
           <nav className="pg-wizard-links" aria-label="마법사 도구">
-            <p className="pg-wizard-links-why">아직 노드가 없는 도구는 예전 단계 화면에서 써요.</p>
+            <p className="pg-wizard-links-why">같은 도구를 단계별 화면으로 쓰고 싶을 때 열어요. 팔레트에서 화면 이름으로 찾으면 그 일을 하는 노드가 나와요.</p>
             <Link href={WIZARD_GATE_HREF} className="pg-wizard-link">목표 선택</Link>
             {STAGES.map((s) => (
               <Link key={s.href} href={s.href} className="pg-wizard-link">{s.title}</Link>

@@ -1,6 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { contrastAudit, trackErrors, uniq, type AuditResult } from "./helpers";
+import { TEMPLATES } from "../src/entities/portfolio-graph/templates";
+import { WIZARD_NODE_MAP } from "../src/app/allocation/wizardNodeMap";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AAS 노드 캔버스 (BI3·BI4 · ADR 002) — `/allocation`
@@ -566,4 +568,46 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
   } finally {
     await page.request.delete(`${api}/${made.run_id}`);
   }
+});
+
+test("정리(BK W6): 템플릿 넷이 서버 검증을 통과하고 돈다 · 단계 접기 · 마법사 화면 이름으로 찾기", async ({ page }) => {
+  await openCanvas(page);
+  const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const types = new Set(catalog.nodes.map((c: { type: string }) => c.type));
+  // 대응표의 모든 노드 종류가 카탈로그에 실제로 있다 — 이름만 적힌 대응은 없다.
+  for (const [href, kinds] of Object.entries(WIZARD_NODE_MAP)) {
+    for (const k of kinds) expect(types.has(k), `${href} → ${k}`).toBe(true);
+  }
+
+  await expect(page.locator(".pg-template")).toHaveCount(TEMPLATES.length);
+  for (const t of TEMPLATES) {
+    await page.locator(`.pg-template[data-template="${t.key}"]`).click();
+    await expect(page.locator(".pg-node")).toHaveCount(t.doc.nodes.length);
+    const doc = await exportDoc(page);
+    const v = await (await page.request.post("http://localhost:8000/api/v1/allocation/graph/validate", { data: doc })).json();
+    expect(v.errors, `${t.key}: ${JSON.stringify(v.errors)}`).toEqual([]);
+    if (t.key === "stress" || t.key === "screener") {
+      const body = await run(page);
+      for (const [id, r] of Object.entries(body.nodes as Record<string, { status: string; reason: string }>)) {
+        expect(r.status, `${t.key}.${id}: ${r.reason}`).toBe("ok");
+      }
+    }
+  }
+
+  // 단계 접기 — 개수는 그대로 보이고, 항목은 숨는다. 찾는 중에는 늘 펼친다.
+  const check = page.locator('.pg-palette-group[data-stage="check"]');
+  const toggle = check.locator(".pg-palette-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const n = await check.locator(".pg-palette-item").count();
+  await expect(check.locator(".pg-palette-count")).toHaveText(String(n));
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(check.locator(".pg-palette-item").first()).toBeHidden();
+
+  // 마법사 화면 이름으로 찾는다 — "THESIS" 는 어느 노드의 이름·설명·종류에도 없고 대응표로만 닿는다.
+  await page.getByLabel("노드 찾기").fill("THESIS");
+  await expect(page.locator('.pg-palette-item[data-kind="company_views"]')).toBeVisible();
+  await expect(page.locator('.pg-palette-item[data-kind="views"]')).toBeVisible();
+  await expect(page.locator('.pg-palette-item[data-kind="screener"]')).toBeHidden();
+  await expect(check.locator(".pg-palette-count")).toHaveCount(0);   // 맞는 것이 없는 단계는 숨는다
 });
