@@ -128,8 +128,9 @@ def test_the_new_port_types_are_declared_once():
 # ── 저장 문 ──────────────────────────────────────────────────────────────────
 
 def test_the_save_route_refuses_a_node_that_cannot_save(client, market):
-    g = chain()
-    r = client.post("/api/v1/allocation/graph/save", json={"graph": g, "node_id": "o", "preview_hash": "x"})
+    g = chain()                            # 비중 계산은 BL2 부터 저장(연구 기록)한다 — 저장이 없는 리스크 분해로 본다
+    rid = next(n["id"] for n in g["nodes"] if n["type"] == "risk")
+    r = client.post("/api/v1/allocation/graph/save", json={"graph": g, "node_id": rid, "preview_hash": "x"})
     assert r.status_code == 200
     assert r.json()["ok"] is False and r.json()["code"] == "not_savable"
 

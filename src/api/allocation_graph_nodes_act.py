@@ -223,13 +223,13 @@ def register(registry: pg.Registry) -> None:
                     plain_description="비중을 실행 목표로 만들어요. 저장은 버튼으로 한 번만 해요.",
                     inputs=(P("weights", "Weights"),), outputs=(P("target", "TargetVersion"),),
                     run=_target_version, params_model=TargetParams, explain=_explain_target, category="실행",
-                    wants_lineage=True, save=_save_target_version,
+                    wants_lineage=True, save=_save_target_version, save_label="실행 목표로 저장",
                     description="compile_target 미리보기 · 저장은 /graph/save → save_target."),
         pg.NodeSpec("decision_journal", "결정 기록", stage="act", plain_label="결정 기록 남기기",
                     plain_description="무엇을 왜 정했는지 저널에 남겨요. 저장은 버튼으로 해요.",
                     inputs=(P("target", "TargetVersion"), P("trades", "Trades", required=False),
                             P("stress", "StressReport", required=False)),
                     outputs=(), run=_journal, params_model=JournalParams, explain=_explain_journal, category="기록",
-                    save=_save_journal, description="저널 항목 미리보기 · 저장은 create_entry 한 번."),
+                    save=_save_journal, save_label="판단 기록 저장", description="저널 항목 미리보기 · 저장은 create_entry 한 번."),
     ):
         registry.register(spec)

@@ -99,6 +99,8 @@ export interface NodeCatalogEntry {
   params_schema: JsonSchema | null;
   /** 저장하기 버튼이 있는 노드(BK0) — 저장은 `/graph/save` 로만, 계산은 쓰지 않는다. */
   savable?: boolean;
+  /** 저장 버튼에 쓰는 말(BL2) — 누르면 일어나는 일. 저장하지 않는 노드는 null. */
+  save_label?: string | null;
 }
 
 export interface WorkflowStage { key: string; label: string }

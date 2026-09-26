@@ -133,6 +133,8 @@ class NodeSpec:
     admits: Callable[[dict], str | None] | None = None
     #: 저장 액션 `(values, view, params) -> {"saved_id", "text"}` — `run` 은 절대 부르지 않는다.
     save: Callable[[dict, dict, Any], dict] | None = None
+    #: 저장 버튼에 쓰는 말(BL2) — 버튼은 누르면 일어나는 일을 말한다('연구 기록 남기기'). `save` 가 있으면 반드시 준다.
+    save_label: str | None = None
     #: 참이면 `run(inputs, params, lineage)` — 입력 계보를 **읽어야** 판단이 서는 노드(BK W4: 실행 목표는
     #: 연습용 데이터로 만든 비중을 실행 가능으로 두지 않는다). 거절만 할 거라면 `admits` 를 쓴다.
     wants_lineage: bool = False
@@ -180,6 +182,7 @@ class Registry:
                        for p in s.inputs],
             "outputs": [{"name": p.name, "type": p.type} for p in s.outputs],
             "savable": s.save is not None,
+            "save_label": s.save_label if s.save is not None else None,
             "params_schema": (s.params_model.model_json_schema()
                               if s.params_model is not None else None),
         } for s in self._specs.values()]

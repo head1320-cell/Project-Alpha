@@ -370,6 +370,33 @@ def _backtest(inputs: dict, p) -> pg.NodeOutput:
 
 P = pg.Port
 
+# ── 저장 (BL2) ────────────────────────────────────────────────────────────────
+
+def _save_research_run(values: dict, view: dict, params: Any) -> dict:
+    """비중 계산 → **연구 기록 남기기** (BL2 · 마법사 OPTIMIZE 의 '기록' 을 옮김).
+
+    ★기록은 `/analyze` 가 남긴다★ 재현(`/research-runs/{id}/reproduce`)이 그 경로를 다시 부르기 때문이다. 그런데
+    캔버스에는 `/analyze` 에 없는 칸이 있다(예: 회사 뷰의 수렴 기간). 그 경로가 미리보기와 **다른 비중**을 내면 그 기록은
+    재현하면 다른 것이 나오는 거짓 기록이다 — 그래서 먼저 기록 없이 계산해 대조하고, 같을 때만 기록한다.
+    """
+    from src.api.allocation_routes import run_analyze
+    req: AnalyzeRequest = values["weights"]["req"]
+    upd: dict[str, Any] = {"run_name": "노드 캔버스 기록"}
+    if view.get("company_views_used"):
+        upd["use_company_views"] = True
+    probe = run_analyze(req.model_copy(update={**upd, "record_run": False}))
+    got = (probe.get("weights") or {}).get("optimized") or {}
+    want = view.get("weights") or {}
+    if set(got) != set(want) or any(abs(float(got[k]) - float(want[k])) > 1e-6 for k in want):
+        raise pg.NodeFailure("기록 경로(/analyze)가 이 미리보기와 다른 비중을 내서 기록하지 않았어요 — "
+                             "/analyze 에 없는 설정(예: 회사 뷰의 수렴 기간)을 기본값으로 돌리면 기록할 수 있어요.")
+    out = run_analyze(req.model_copy(update={**upd, "record_run": True}))
+    rid = out.get("run_id")
+    if not rid:
+        raise pg.NodeFailure("DB 를 쓸 수 없어 연구 기록을 남기지 못했어요.")
+    return {"saved_id": rid, "text": f"연구 기록으로 남겼어요 · {rid}"}
+
+
 REGISTRY = pg.Registry(port_types=PORT_TYPES)
 for _spec in (
     pg.NodeSpec("universe", "유니버스", stage="data", plain_label="종목 고르기",
@@ -396,6 +423,7 @@ for _spec in (
                         P("views", "Views", required=False)),
                 outputs=(P("weights", "Weights"),), run=_optimizer,
                 params_model=OptimizerParams, category="배분",
+                save=_save_research_run, save_label="연구 기록 남기기",
                 description="/analyze 와 같은 최적화·제약. 결과는 가중치와 정책을 함께 나른다."),
     pg.NodeSpec("risk", "리스크 분해", stage="check", plain_label="흔들림 나눠 보기",
                 plain_description="어느 종목이 위험을 얼마나 만드는지 봐요.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),

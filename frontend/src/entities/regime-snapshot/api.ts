@@ -39,6 +39,16 @@ export const regimeSnapshotApi = {
     return body?.snapshots ?? [];
   },
 
+  /** 최신순 요약 목록 — ★실패를 빈 목록으로 삼키지 않는다★ (BL2 기록함). `list` 는 기존 소비자 호환으로 남긴다:
+   *  그쪽은 실패와 "스냅샷 없음" 을 구분하지 못한다. 새 화면은 이것을 쓴다. */
+  async listStrict(limit = 50): Promise<RegimeSnapshotSummary[]> {
+    const r = await fetch(`${API_BASE}${BASE}?limit=${limit}`);
+    const body = (await readJson(r)) as { snapshots?: RegimeSnapshotSummary[] } | null;
+    if (!r.ok) throw new Error(extractErrorDetail(body, `스냅샷 목록 실패 (HTTP ${r.status})`));
+    if (!body || !Array.isArray(body.snapshots)) throw new Error("스냅샷 목록 응답 형식이 달라요.");
+    return body.snapshots;
+  },
+
   /** 두 스냅샷 차이 — 국면이 언제 어떻게 바뀌었는지. */
   async compare(a: string, b: string): Promise<unknown | null> {
     const q = new URLSearchParams({ a, b }).toString();

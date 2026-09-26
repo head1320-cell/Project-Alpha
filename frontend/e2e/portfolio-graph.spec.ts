@@ -747,3 +747,168 @@ test("명령 팔레트·계산 기록(BL1): Ctrl+K 로 노드 추가 · 두 번 
     }
   }
 });
+
+// ── BL2 · 마법사에만 있던 기능을 캔버스로 ─────────────────────────────────────
+const API = "http://localhost:8000/api/v1";
+const sheet = (page: Page, k: "execution" | "records" | "alphas") => page.locator(`dialog.pg-sheet[data-sheet="${k}"]`);
+const openSheet = (page: Page, label: string) => page.locator(".pg-drawers .pg-drawer-open", { hasText: label }).click();
+
+test("실행실 서랍(BL2): 저장된 실행 목표에서만 계획 · 연구용 목표는 고를 수 없다 · 사전 점검 · 상태 전이", async ({ page }) => {
+  const sink = trackErrors(page);
+  // 실행 가능한 목표 하나(연습용 계보가 붙지 않은 API 경로)와 연구용 목표 하나를 심는다.
+  const ok = await (await page.request.post(`${API}/allocation/target-versions`, {
+    data: { base_weights: { "005930": 40, "000660": 35, "035420": 25 }, note: "E2E BL2 실행 가능" } })).json();
+  expect(ok.saved, ok.message).toBe(true);
+  expect(ok.status).toBe("executable");
+  await openCanvas(page);
+  await openSheet(page, "실행실");
+  const s = sheet(page, "execution");
+  await expect(s).toBeVisible();
+  await s.getByRole("tab", { name: "새 계획 만들기" }).click();
+  const row = s.locator(`.pg-pick-row[data-tpv="${ok.tpv_id}"]`);
+  await expect(row).toBeEnabled();
+  // ★짝★ 연구용 목표는 목록에 있되 고를 수 없고 사유가 보인다(있을 때).
+  const research = s.locator(".pg-pick-row:disabled");
+  if (await research.count()) await expect(research.first()).toContainText("연구용");
+  await row.click();
+  await s.getByRole("button", { name: "주문 목록 미리 보기" }).click();
+  await expect(s.locator(".pg-kv")).toContainText("주문");
+  await expect(s.locator(".pg-checks li").first()).toBeVisible();
+  await expect(s.locator(".pg-note", { hasText: "현금에서 시작" })).toBeVisible();
+  await s.getByRole("textbox", { name: "계획 이름" }).fill("E2E BL2 계획");
+  const saved = page.waitForResponse((r) => r.url().includes("/execution-plan/save"));
+  await s.getByRole("button", { name: "계획 저장" }).click();
+  const sb = await (await saved).json();
+  expect(sb.saved, sb.reason ?? sb.message).toBe(true);
+  // 저장하면 목록으로 돌아가 그 계획이 열린다 — 초안에서 검토로.
+  const flow = s.locator(`[data-plan="${sb.plan_id}"]`);
+  await expect(flow).toContainText("초안");
+  await flow.locator('button[data-to="reviewed"]').click();
+  await expect(flow.locator(".pg-save-msg")).toContainText("검토됨");
+  // 사전 점검이 막았다면 승인 버튼이 잠기고 사유가 보인다(짝: 막히지 않았다면 열려 있다).
+  const approve = flow.locator('button[data-to="approved"]');
+  if (sb.pretrade.can_approve) await expect(approve).toBeEnabled();
+  else { await expect(approve).toBeDisabled(); await expect(flow.locator(".pg-warn")).toContainText("승인할 수 없어요"); }
+  await expect(flow.locator(".pg-note")).toContainText("실제 주문은 나가지 않아요");
+  // Esc 로 닫힌다.
+  await page.keyboard.press("Escape");
+  await expect(s).toBeHidden();
+  // 뒷정리 — E2E DB 는 스펙끼리 공유된다(마법사 실행실 스펙이 목록을 센다).
+  expect((await page.request.delete(`${API}/allocation/execution-plan/${sb.plan_id}`)).ok()).toBe(true);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+test("실행실 서랍(BL2): 서버가 막은 목표는 계획을 만들지 않고 사유를 그대로 보인다", async ({ page }) => {
+  await openCanvas(page);
+  // 목록을 가로채 연구용 목표를 '실행 가능' 으로 속여 보인다 — 그래도 서버의 R0 차단선이 막아야 한다.
+  const fake = await (await page.request.post(`${API}/allocation/target-versions`, {
+    data: { base_weights: { "005930": 60, "000660": 40 }, note: "E2E BL2 차단", dry_run: true } })).json();
+  await page.route(/\/allocation\/target-versions\?/, (r) => r.request().method() === "GET"
+    ? r.fulfill({ json: { available: true, versions: [{ ...fake, tpv_id: "tpv_missing_e2e", status: "executable", created_at: 0 }] } })
+    : r.continue());
+  await openSheet(page, "실행실");
+  const s = sheet(page, "execution");
+  await s.getByRole("tab", { name: "새 계획 만들기" }).click();
+  await s.locator('.pg-pick-row[data-tpv="tpv_missing_e2e"]').click();
+  await s.getByRole("button", { name: "주문 목록 미리 보기" }).click();
+  await expect(s.locator(".pg-warn")).toContainText("목표 버전을 찾을 수 없습니다");
+  await expect(s.getByRole("button", { name: "계획 저장" })).toHaveCount(0);
+});
+
+test("기록함 서랍(BL2): 판단 기록 회고 쓰기·지우기 · 연구 기록 대조 · 스냅샷 · 못 읽음 ≠ 없음", async ({ page }) => {
+  const j = await (await page.request.post(`${API}/allocation/journal`, {
+    data: { title: "E2E BL2 판단", record: { decision: "비중을 유지" } } })).json();
+  expect(j.saved).toBe(true);
+  await openCanvas(page);
+  await openSheet(page, "기록함");
+  const s = sheet(page, "records");
+  const item = s.locator(`[data-entry="${j.entry_id}"]`);
+  await expect(item).toContainText("E2E BL2 판단");
+  await expect(item).toContainText("연구 기록과 이어지지 않았어요");
+  await item.getByRole("button", { name: "회고 쓰기" }).click();
+  await item.getByRole("textbox").fill("석 달 뒤 확인");
+  await item.locator("select").selectOption("too_early");
+  await item.getByRole("button", { name: "회고 저장" }).click();
+  await expect(item).toContainText("회고: 석 달 뒤 확인");
+  await expect(item).toContainText("판단하기 일러요");
+  page.once("dialog", (d) => d.accept());
+  await item.getByRole("button", { name: "E2E BL2 판단 삭제" }).click();
+  await expect(item).toHaveCount(0);
+
+  await s.getByRole("tab", { name: "국면 스냅샷" }).click();
+  await expect(s.locator(".pg-note", { hasText: "과거 백테스트에는 쓸 수 없어요" })).toBeVisible();
+
+  // ★못 읽은 것과 없는 것은 다른 문장★ — 목록 요청을 실패시키면 '없어요' 가 아니라 '불러오지 못했어요'.
+  await page.route("**/research-runs?**", (r) => r.fulfill({ status: 500, body: "x" }));
+  await s.getByRole("tab", { name: "연구 기록" }).click();
+  await expect(s.locator(".pg-field-err")).toContainText("불러오지 못했어요");
+  await expect(s.locator(".pg-help", { hasText: "연구 기록이 없어요" })).toHaveCount(0);
+});
+
+test("알파 목록 서랍(BL2): 식 점검 → 초안 등록 → 실험으로 올리기 · 검증 단계는 검증 기록 없이 거절 · 지우기", async ({ page }) => {
+  await openCanvas(page);
+  await openSheet(page, "알파");
+  const s = sheet(page, "alphas");
+  await s.locator(".pg-rec-add summary").click();
+  await s.getByLabel("이름").fill("E2E BL2 알파");
+  await s.getByLabel("식").fill("zscore(roe) - zscore(debt_ratio)");
+  await s.getByRole("button", { name: "식 점검" }).click();
+  await expect(s.locator(".pg-rec-add [role=status]")).toBeVisible();
+  const created = page.waitForResponse((r) => r.url().endsWith("/alpha-registry") && r.request().method() === "POST");
+  await s.getByRole("button", { name: "초안으로 등록" }).click();
+  const a = (await (await created).json()).alpha;
+  const row = s.locator(`[data-alpha="${a.alpha_id}"]`);
+  await expect(row).toContainText("초안");
+  await row.getByRole("button", { name: /실험.*올리기/ }).click();
+  await row.getByRole("button", { name: "올리기", exact: true }).click();
+  await expect(row).toContainText("실험");
+  // ★짝★ 서버 요건: 검증 기록(run) 없이는 검증 단계로 못 올린다 — 사유를 그대로.
+  await row.getByRole("button", { name: /검증 단계.*올리기/ }).click();
+  await row.getByRole("button", { name: "올리기", exact: true }).click();
+  await expect(row.locator(".pg-warn")).toContainText("검증");
+  await expect(row.locator(".pg-rec-row .pg-tag").last()).toContainText("실험");
+  page.once("dialog", (d) => d.accept());
+  await row.getByRole("button", { name: "E2E BL2 알파 삭제" }).click();
+  await expect(row).toHaveCount(0);
+});
+
+test("저장 버튼(BL2): 비중 계산은 '연구 기록 남기기' · 기록함에서 그 기록을 다시 계산해 대조", async ({ page }) => {
+  await openCanvas(page);
+  await run(page);
+  await node(page, "optimizer").click();
+  await tab(page, "settings");
+  const btn = page.locator(".pg-save-btn");
+  await expect(btn).toHaveText("연구 기록 남기기");
+  await btn.click();
+  const msg = page.locator(".pg-save-msg");
+  await expect(msg).toContainText("연구 기록으로 남겼어요");
+  const rid = /·\s*(\S+)\s*$/.exec((await msg.textContent()) ?? "")?.[1];
+  expect(rid).toBeTruthy();
+  await openSheet(page, "기록함");
+  const s = sheet(page, "records");
+  await s.getByRole("tab", { name: "연구 기록" }).click();
+  const item = s.locator(`[data-run="${rid}"]`);
+  await item.getByRole("button", { name: "다시 계산해 대조" }).click();
+  await expect(item.locator(".pg-rec-verdict, .pg-warn")).toBeVisible({ timeout: 60_000 });
+  page.once("dialog", (d) => d.accept());
+  await item.getByRole("button", { name: `${rid} 삭제` }).click();
+  await expect(item).toHaveCount(0);
+});
+
+test("서랍 대비(BL2): 세 서랍 라이트·다크 AA", async ({ page }) => {
+  await openCanvas(page);
+  for (const [label, k] of [["실행실", "execution"], ["기록함", "records"], ["알파", "alphas"]] as const) {
+    for (const scheme of ["light", "dark"] as const) {
+      await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), scheme === "dark");
+      await openSheet(page, label);
+      await expect(sheet(page, k)).toBeVisible();
+      await page.waitForTimeout(400);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(`dialog.pg-sheet[data-sheet="${k}"]`));
+      expect(audit.checked, `${label}: 검사한 텍스트 수`).toBeGreaterThan(4);
+      expect(audit.low, `${label} ${scheme} AA 미달`).toEqual([]);
+      if (scheme === "dark") expect(audit.bright, `${label} 다크인데 밝은 배경`).toEqual([]);
+      await page.keyboard.press("Escape");
+    }
+  }
+});

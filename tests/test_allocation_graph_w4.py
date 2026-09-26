@@ -170,7 +170,10 @@ def test_a_database_that_cannot_write_is_an_honest_failure(client, market, price
 
 def test_the_catalog_marks_only_the_record_nodes_savable():
     cat = {c["type"]: c for c in gn.REGISTRY.catalog()}
-    assert {t for t, c in cat.items() if c["savable"]} == {"target_version", "decision_journal"}
+    # BL2 가 비중 계산(연구 기록)·타이밍 신호(규칙 저장)를 더했다 — 전체 집합은 test_allocation_graph_bl2 가 못 박는다.
+    # 여기서는 W4 의 두 기록 노드가 저장 가능하고, 주문 목록은 여전히 아니라는 것만 본다.
+    assert {"target_version", "decision_journal"} <= {t for t, c in cat.items() if c["savable"]}
+    assert cat["order_preview"]["savable"] is False
 
 
 # ── 공통 ─────────────────────────────────────────────────────────────────────

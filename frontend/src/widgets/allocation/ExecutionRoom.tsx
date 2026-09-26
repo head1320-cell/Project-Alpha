@@ -116,11 +116,14 @@ export function ExecutionRoom() {
     mutationFn: async () => {
       const tv = await compileTarget();
       setTargetVersion(tv);
-      return executionApi.preview(
+      const r = await executionApi.preview(
         tv.tpv_id
           ? { ...reqBody!, tpv_id: tv.tpv_id, target_weights: tv.final_weights }
           : { ...reqBody!, target_weights: tv.final_weights },   // 미기록 — 목표는 그대로 옳다
       );
+      // ★차단은 계획이 없는 응답이다★ (R0) — 계획을 읽다 죽지 말고 서버 사유를 오류로 보인다.
+      if (r.blocked) throw new Error(r.reason);
+      return r;
     },
     onSuccess: (d) => {
       setPreview({ plan: d.plan, pretrade: d.pretrade });
@@ -224,6 +227,7 @@ export function ExecutionRoom() {
           <button className="as-exec-run primary" disabled={previewMut.isPending} onClick={() => previewMut.mutate()}>
             {previewMut.isPending ? "산출 중…" : "실행 계획 산출"}
           </button>
+          {previewMut.isError && <p className="as-note" role="alert">계획을 만들지 않았습니다 — {(previewMut.error as Error).message}</p>}
         </div>
         {/* ★무엇을 향해 주문하는지 화면이 말한다★ 오버레이가 걸렸는데 화면이 그 사실을
             말하지 않으면 사용자는 완전투자로 주문하는 줄 안다 — 그것이 R0 이 고친 결함이다. */}

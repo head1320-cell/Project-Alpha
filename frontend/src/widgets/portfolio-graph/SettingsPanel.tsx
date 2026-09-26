@@ -203,7 +203,9 @@ function BasicField({ f, value, root, onChange }: {
 }
 
 /** 저장하기 (BK W4) — ★계산은 쓰지 않는다★ 서버가 다시 계산해 이 미리보기와 같을 때만 한 번 저장한다. */
-function SaveBox({ result, stale, onSave }: { result?: NodeRunResult; stale: boolean; onSave: () => Promise<SaveResult> }) {
+function SaveBox({ result, stale, onSave, label }: {
+  result?: NodeRunResult; stale: boolean; onSave: () => Promise<SaveResult>; label?: string | null;
+}) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const ready = result?.status === "ok" && !!result.view_hash && !stale;
@@ -220,7 +222,7 @@ function SaveBox({ result, stale, onSave }: { result?: NodeRunResult; stale: boo
                 } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
                 finally { setBusy(false); }
               }}>
-        {busy ? "저장하는 중…" : "이 미리보기를 저장하기"}
+        {busy ? "저장하는 중…" : label ?? "이 미리보기를 저장하기"}
       </button>
       <p className="pg-help">{why ?? "지금 본 미리보기를 한 번 저장해요. 주문은 나가지 않아요."}</p>
       {msg && <p className={`pg-save-msg${msg.ok ? "" : " pg-save-msg--err"}`} role="status">{msg.text}</p>}
@@ -278,7 +280,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
           <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 써요.</p>
         </div>
       )}
-      {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} />}
+      {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} label={entry.save_label} />}
       <div className="pg-actions">
         <button type="button" className="pg-btn pg-dup" onClick={onDuplicate} title="같은 입력으로 하나 더 (Ctrl+D)">
           <Copy size={14} /> 복제해서 비교하기

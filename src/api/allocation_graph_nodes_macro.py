@@ -328,6 +328,24 @@ def _explain_simulation(view: dict, prov: dict, params: Any) -> dict:
             "trust": trust, "unmeasured": ["이 신호대로 했을 때의 수익 — 여기서는 노출만 보여 줘요", "거래 비용"]}
 
 
+def _save_timing_rules(values: dict, view: dict, params: Any) -> dict:
+    """타이밍 신호 → **규칙 저장** (BL2 · 마법사 TIMING 의 '규칙 저장' 을 옮김). `/timing-rules` 문을 그대로 부른다 —
+    정규화(`rule_from_spec`·`stamp_pit`)와 버전 매기기가 한 곳에만 있게."""
+    from fastapi import HTTPException
+
+    from src.api.timing_routes import TimingRuleSetRequest, allocation_timing_rules_save
+    sig = values["signal"]
+    try:
+        out = allocation_timing_rules_save(TimingRuleSetRequest(
+            name="캔버스 타이밍 규칙", market=sig["market"], rules=list(sig["specs"]),
+            gate={"combination": sig["combination"], "k": sig["k"]}, notes="노드 캔버스에서 저장"))
+    except HTTPException as e:
+        raise pg.NodeFailure(str(e.detail)) from e
+    ver = out.get("version")
+    tail = f" v{ver}" if ver is not None else " (버전 미상)"
+    return {"saved_id": out["set_id"], "text": f"타이밍 규칙으로 저장했어요 · {out['set_id']}{tail}"}
+
+
 # ── 등록 ─────────────────────────────────────────────────────────────────────
 
 def register(registry: pg.Registry) -> None:
@@ -340,6 +358,7 @@ def register(registry: pg.Registry) -> None:
                     plain_description="추세·변동성 같은 신호로 지금 위험-온인지 봐요.",
                     inputs=(), outputs=(P("signal", "TimingSignal"),), run=_timing_signal, params_model=TimingParams,
                     explain=_explain_timing, category="타이밍",
+                    save=_save_timing_rules, save_label="타이밍 규칙 저장",
                     description="V2 룰셋 → 팩터별 3-상태 → 조합(3자 비교와 같은 파생)."),
         pg.NodeSpec("exposure_overlay", "노출 조절", stage="build", plain_label="노출 조절(비중에 적용)",
                     plain_description="타이밍·경기 국면 판단대로 주식 비중을 줄이고 나머지는 현금으로 둬요.",

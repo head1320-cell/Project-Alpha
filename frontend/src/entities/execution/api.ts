@@ -65,7 +65,10 @@ export interface PreTrade {
   note: string;
 }
 
-export interface PlanPreview { error: boolean; plan: ExecutionPlan; pretrade: PreTrade }
+/** `blocked` 면 계획을 만들지 않은 것이다(R0 차단선) — `plan`·`pretrade` 가 없고 `reason` 이 온다. */
+export type PlanPreview =
+  | { error: boolean; blocked?: false; tpv_id?: string | null; plan: ExecutionPlan; pretrade: PreTrade }
+  | { error: boolean; blocked: true; tpv_id?: string | null; reason: string };
 
 export interface AuditEntry {
   ts: number; action: string; status?: string; from?: string;
@@ -87,6 +90,8 @@ export interface ExecPlanRequest {
    *  주문 목표로 쓰고, 승인되지 않은 목표(`research_only`)면 사유와 함께 거부한다. */
   tpv_id?: string | null;
   target_weights: Record<string, number>;    // % (tpv_id 와 함께 보내면 서버가 대조한다)
+  /** 단위를 선언한다 — 합이 모호 구간이면 서버가 추측하지 않고 422 로 막는다. */
+  weight_unit?: "percent" | "fraction";
   portfolio_value: number;
   restricted?: string[];
   limits?: Record<string, number>;            // turnover_cap_pct 등
@@ -107,7 +112,7 @@ export const executionApi = {
   },
 
   save: async (req: ExecPlanRequest & { name: string; run_id?: string | null }):
-    Promise<{ saved: boolean; plan_id: string | null; message?: string; plan: ExecutionPlan; pretrade: PreTrade }> => {
+    Promise<{ saved: boolean; plan_id: string | null; message?: string; reason?: string; plan?: ExecutionPlan; pretrade?: PreTrade }> => {
     const r = await fetch(`${API_BASE}/api/v1/allocation/execution-plan/save`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req),
     });

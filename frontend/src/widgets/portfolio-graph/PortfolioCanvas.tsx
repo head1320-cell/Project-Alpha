@@ -30,7 +30,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Boxes, Command, LayoutGrid, Loader2, Map as MapIcon, Redo2, Undo2 } from "lucide-react";
+import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Map as MapIcon, Redo2, Sigma, Undo2 } from "lucide-react";
 import {
   buildHandoff,
   CORE_CHAIN_TEMPLATE,
@@ -45,13 +45,17 @@ import {
   type WorkflowStage,
 } from "@/entities/portfolio-graph";
 import { ExportButton, ImportControl, readGraphFile } from "@/features/portfolio-graph-io";
+import { AlphaSheetBody } from "./AlphaSheet";
 import { CommandPalette, type PaletteCommand } from "./CommandPalette";
+import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { GraphNode, PORT_COLORS } from "./GraphNode";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { NodePalette, PALETTE_MIME, type WizardAlias } from "./NodePalette";
 import { NodeResultPanel } from "./NodeResultPanel";
+import { RecordsSheetBody } from "./RecordsSheet";
 import { SettingsPanel } from "./SettingsPanel";
+import { Sheet } from "./Sheet";
 import { StoryPanel } from "./StoryPanel";
 import { RunHistory } from "./RunHistory";
 import { ancestorsOf, usePortfolioGraph } from "./store";
@@ -82,6 +86,18 @@ function readWip(): string | null {
 
 const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"]] as const;
 
+
+type DrawerKey = "execution" | "records" | "alphas";
+/** 서랍 셋 — 마법사 EXECUTION·JOURNAL·ALPHA LAB 의 기록 화면을 옮겼다(BL2). 계산은 노드, 기록 관리는 서랍. */
+const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archive; Body: () => ReactNode }[] = [
+  { key: "execution", label: "실행실", Icon: ClipboardList, Body: ExecutionSheetBody,
+    sub: "저장한 실행 목표로 주문 계획을 만들고 검토·승인해요. 주문은 나가지 않아요." },
+  { key: "records", label: "기록함", Icon: Archive, Body: RecordsSheetBody,
+    sub: "판단 기록·연구 기록·실행 목표·국면 스냅샷을 다시 보고 고쳐요." },
+  { key: "alphas", label: "알파", Icon: Sigma, Body: AlphaSheetBody,
+    sub: "알파 식을 등록하고 단계를 올리거나 내려요." },
+];
+
 export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wizardAliases }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
   const rf = useRef<ReactFlowInstance | null>(null);
@@ -91,6 +107,8 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  // 서랍(BL2) — 계산하지 않는 기록 화면. 노드가 아니라 캔버스 옆에서 연다.
+  const [drawer, setDrawer] = useState<DrawerKey | null>(null);
   // 노드 카드의 "여기까지 계산" 버튼이 부를 함수 — 아래에서 정의되고, 카드는 이 참조로 부른다.
   const runToRef = useRef<(id: string) => void>(() => {});
   const previewRef = useRef<(id: string | null) => void>(() => {});
@@ -273,6 +291,7 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+      if (t?.closest("dialog")) return;                   // 서랍·명령 찾기 안의 키는 그 대화상자 몫이다
       const st = usePortfolioGraph.getState();
       const mod = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
@@ -303,6 +322,8 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
       run: () => usePortfolioGraph.getState().setMinimap(!usePortfolioGraph.getState().showMinimap) },
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
       run: () => usePortfolioGraph.getState().groupPicked() },
+    ...DRAWERS.map((d) => ({ id: `drawer:${d.key}`, group: "서랍", label: `${d.label} 열기`, hint: d.sub,
+                             run: () => setDrawer(d.key) })),
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
@@ -354,6 +375,14 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
             {Object.values(s.report.nodes).filter((r) => r.status === "failed").length}
           </span>
         )}
+        <nav className="pg-drawers" aria-label="서랍">
+          {DRAWERS.map((d) => (
+            <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog"
+                    aria-expanded={drawer === d.key} onClick={() => setDrawer(d.key)}>
+              <d.Icon size={15} aria-hidden="true" />{d.label}
+            </button>
+          ))}
+        </nav>
         {topExtra}
         <ImportControl onLoad={applyLoad} />
         <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups)}
@@ -384,6 +413,11 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
 
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} catalog={s.catalog ?? []} commands={commands}
                       onAddNode={(k) => addAt(k)} />
+      {DRAWERS.map((d) => (
+        <Sheet key={d.key} testId={d.key} open={drawer === d.key} onClose={() => setDrawer(null)} title={d.label} sub={d.sub}>
+          <d.Body />
+        </Sheet>
+      ))}
 
       <div className="pg-body">
         {s.catalog && <NodePalette catalog={s.catalog} stages={stages} aliases={wizardAliases} onAdd={(k) => addAt(k)} onTemplate={loadTemplate} />}
@@ -402,7 +436,7 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
             onInit={(inst) => { rf.current = inst; }}
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
             onPaneClick={() => s.select(null)}
-            deleteKeyCode={["Backspace", "Delete"]}
+            deleteKeyCode={drawer || cmdOpen ? null : ["Backspace", "Delete"]}
             multiSelectionKeyCode={["Meta", "Control"]}
             defaultEdgeOptions={{ type: "default" }}
             fitView
