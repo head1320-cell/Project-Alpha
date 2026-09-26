@@ -429,3 +429,141 @@ test("노출 조절(BK W3): 직접 정한 노출 60% → 조절 후 막대에 �
     expect(audit.low, dark ? "dark" : "light").toEqual([]);
   }
 });
+
+test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 번 · 연습용 데이터 목표는 연구용 · 낡으면 잠김", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push({ id: "q", type: "order_preview", params: { portfolio_value: 100000000 }, position: { x: 1000, y: 380 } });
+  doc.nodes.push({ id: "tv", type: "target_version", params: { note: "E2E" }, position: { x: 1000, y: 520 } });
+  doc.nodes.push({ id: "jr", type: "decision_journal", params: { title: "E2E 결정", thesis: "테스트", decision: "hold" }, position: { x: 1220, y: 520 } });
+  doc.edges.push({ id: "w1", source: "optimizer", source_port: "weights", target: "q", target_port: "weights" });
+  doc.edges.push({ id: "w2", source: "optimizer", source_port: "weights", target: "tv", target_port: "weights" });
+  doc.edges.push({ id: "w3", source: "tv", source_port: "target", target: "jr", target_port: "target" });
+  doc.edges.push({ id: "w4", source: "q", source_port: "trades", target: "jr", target_port: "trades" });
+  await importText(page, "w4.json", JSON.stringify(doc));
+
+  // 저장 전: 계산만으로는 아무것도 쓰지 않는다 — /graph/save 요청이 없어야 한다.
+  const saves: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("/allocation/graph/save")) saves.push(r.url()); });
+  const body = await run(page);
+  for (const id of ["q", "tv", "jr"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+  expect(saves).toEqual([]);
+  expect(body.nodes.tv.view.target.status, "mock 수익률 → 연습용 계보 → 연구용 목표").toBe("research_only");
+  expect(body.nodes.tv.view.target.status_reason).toContain("연습용");
+
+  await node(page, "tv").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-model-type")).toContainText("연구용 목표");
+  await tab(page, "settings");
+  const save = page.locator(".pg-save-btn");
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.locator(".pg-save-msg")).toContainText("연구용 실행 목표로 저장했어요");
+  expect(saves).toHaveLength(1);
+
+  await node(page, "jr").click();
+  await page.locator(".pg-save-btn").click();
+  await expect(page.locator(".pg-save-msg")).toContainText("결정을 기록했어요");
+  expect(saves).toHaveLength(2);
+  // 뒷정리 — E2E DB 는 스펙끼리 공유된다. 남기면 마법사 저널 화면 스펙이 이 항목을 보고 달라진다.
+  const entryId = /·\s*(\S+)\s*$/.exec((await page.locator(".pg-save-msg").textContent()) ?? "")?.[1];
+  expect(entryId).toBeTruthy();
+  expect((await page.request.delete(`http://localhost:8000/api/v1/allocation/journal/${entryId}`)).ok()).toBe(true);
+
+  // 설정을 바꾸면 미리보기가 낡는다 — 다시 계산하기 전에는 저장할 수 없다.
+  await node(page, "optimizer").click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await node(page, "tv").click();
+  await expect(page.locator(".pg-save-btn")).toBeDisabled();
+  await expect(page.locator(".pg-save .pg-help")).toContainText("다시 계산한 뒤");
+});
+
+test("기업·가치평가(BK W5): 기업 전망은 비중까지 가고 과거 검증은 막힘 · 가치평가 점수 → 비중", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const old = doc.edges.find((e: { target: string; target_port: string }) => e.target === "optimizer" && e.target_port === "views");
+  doc.edges = doc.edges.filter((e: { id: string }) => e !== old);
+  doc.nodes.push({ id: "c", type: "company_views", params: {}, position: { x: 600, y: 560 } });
+  doc.nodes.push({ id: "s", type: "valuation_scores", params: {}, position: { x: 380, y: 700 } });
+  doc.nodes.push({ id: "w", type: "scores_to_weights", params: { top_k: 5 }, position: { x: 620, y: 700 } });
+  doc.edges.push({ id: "c1", source: "returns", source_port: "returns", target: "c", target_port: "returns" });
+  if (old) doc.edges.push({ id: "c2", source: old.source, source_port: old.source_port, target: "c", target_port: "views" });
+  doc.edges.push({ id: "c3", source: "c", source_port: "views", target: "optimizer", target_port: "views" });
+  doc.edges.push({ id: "s1", source: "universe", source_port: "universe", target: "s", target_port: "universe" });
+  doc.edges.push({ id: "s2", source: "s", source_port: "scores", target: "w", target_port: "scores" });
+  await importText(page, "w5.json", JSON.stringify(doc));
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-run").click();
+  const body = await (await resp).json();
+  expect(body.nodes.c.status, body.nodes.c.reason).toBe("ok");
+  expect(body.nodes.optimizer.status).toBe("ok");
+  expect(body.nodes.optimizer.view.company_views_used, "회사 뷰는 사용자 뷰와 섞이지 않고 따로 센다").toBe(body.nodes.c.view.views.length);
+  expect(body.nodes.optimizer.lineage.pit).toBe("forward_only");
+  expect(body.nodes.backtest.status, "지금 시점 전용 전망이 섞인 비중은 과거로 돌리지 않는다").toBe("failed");
+  expect(body.nodes.backtest.reason).toContain("지금 시점");
+  expect(body.nodes.s.status, body.nodes.s.reason).toBe("ok");
+  expect(body.nodes.w.status, body.nodes.w.reason).toBe("ok");
+  for (const [code, sc] of Object.entries(body.nodes.s.view.scores as Record<string, number>)) {
+    const row = body.nodes.s.view.rows.find((r: { ticker: string }) => r.ticker === code);
+    expect(sc, `${code}: 점수 = −괴리율`).toBeCloseTo(-row.gap_pct, 4);
+    expect(row.verdict).not.toBe("데이터 없음");
+  }
+
+  await node(page, "c").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-model-type")).toContainText("지금 시점에만");
+  await node(page, "s").click();
+  await expect(page.locator(".pg-side .pg-table tbody tr").first()).toBeVisible();
+  await expect(page.locator(".pg-side .pg-note")).toContainText("0으로 치지 않고");
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(150);
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+    expect(audit.checked).toBeGreaterThan(10);
+    expect(audit.low, dark ? "dark" : "light").toEqual([]);
+  }
+});
+
+test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 · 등록된 전략이 없으면 무엇을 할지 말한다", async ({ page }) => {
+  const api = "http://localhost:8000/api/v1/research-runs";
+  const made = await (await page.request.post(api, { data: {
+    kind: "analyze", name: "E2E 되짚기", inputs: {},
+    outputs: { weights: { optimized: { "005930": 60, "000660": 40 } },
+               summary: { portfolio: { expected_return_pct: 8, volatility_pct: 20 } } } } })).json();
+  expect(made.recorded, made.message).toBe(true);
+  try {
+    await openCanvas(page);
+    const doc = { ...(await exportDoc(page)), nodes: [
+      { id: "a", type: "attribution_review", params: {}, position: { x: 80, y: 80 } },
+      { id: "m", type: "strategy_backtest", params: {}, position: { x: 80, y: 280 } }], edges: [] };
+    await importText(page, "w5b.json", JSON.stringify(doc));
+
+    await node(page, "m").click();
+    await tab(page, "settings");
+    await expect(page.locator('.pg-basic-field[data-field="strategy_ids"]')).toContainText("등록된 전략이 없어요");
+
+    await node(page, "a").click();
+    const row = page.locator('.pg-basic-field[data-field="run_id"] .pg-pick-row', { hasText: "E2E 되짚기" });
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute("aria-checked", "false");
+    await row.click();
+    await expect(row).toHaveAttribute("aria-checked", "true");
+    const exported = await exportDoc(page);
+    expect(exported.nodes.find((n: { id: string }) => n.id === "a").params.run_id, "고른 값이 파라미터가 된다").toBe(made.run_id);
+
+    // 전략 노드는 아직 비어 있다 — 그래프에서 빼고 되짚기만 계산한다.
+    await importText(page, "w5c.json", JSON.stringify({ ...exported, nodes: exported.nodes.filter((n: { id: string }) => n.id === "a") }));
+    const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+    await page.locator(".pg-run").click();
+    const body = await (await resp).json();
+    expect(body.nodes.a.status, body.nodes.a.reason).toBe("ok");
+    expect(body.nodes.a.view.run_id).toBe(made.run_id);
+    await node(page, "a").click();
+    await tab(page, "detail");
+    await expect(page.locator(".pg-side .pg-chips-static")).toContainText("종목 선택");
+    await tab(page, "story");
+    await expect(page.locator(".pg-side")).toContainText("되짚");
+  } finally {
+    await page.request.delete(`${api}/${made.run_id}`);
+  }
+});

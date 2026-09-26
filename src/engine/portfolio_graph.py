@@ -133,6 +133,9 @@ class NodeSpec:
     admits: Callable[[dict], str | None] | None = None
     #: 저장 액션 `(values, view, params) -> {"saved_id", "text"}` — `run` 은 절대 부르지 않는다.
     save: Callable[[dict, dict, Any], dict] | None = None
+    #: 참이면 `run(inputs, params, lineage)` — 입력 계보를 **읽어야** 판단이 서는 노드(BK W4: 실행 목표는
+    #: 연습용 데이터로 만든 비중을 실행 가능으로 두지 않는다). 거절만 할 거라면 `admits` 를 쓴다.
+    wants_lineage: bool = False
 
     @property
     def human(self) -> str:
@@ -425,7 +428,8 @@ def _execute(graph: Any, registry: Registry) -> tuple[dict, dict[str, dict[str, 
                             "lineage": in_lineage, "view_hash": None}
             continue
         try:
-            out = spec.run(inputs, params.get(nid))
+            out = (spec.run(inputs, params.get(nid), in_lineage) if spec.wants_lineage
+                   else spec.run(inputs, params.get(nid)))
             missing = [p.name for p in spec.outputs if p.name not in (out.values or {})]
             if missing:
                 raise NodeFailure(f"노드가 선언한 출력 {', '.join(missing)} 을 내지 않았습니다.")

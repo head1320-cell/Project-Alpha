@@ -321,7 +321,9 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra }: Po
               <SettingsPanel node={selected} entry={selEntry} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []}
                              expert={s.expert} onExpert={s.setExpert}
                              onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
-                             onDuplicate={() => s.duplicateNode(selected.id)} />
+                             onDuplicate={() => s.duplicateNode(selected.id)}
+                             result={selResult} stale={s.reportStale}
+                             onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")} />
             )}
             {s.tab === "detail" && selected && (
               <NodeResultPanel

@@ -13,6 +13,8 @@ import type { NodeRunResult } from "@/entities/portfolio-graph";
 import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";
 import { NeutralizeResult, ScoresResult, ScoresToWeightsResult, ScreenerResult, SleeveResult } from "./SignalResults";
 import { OverlayResult, RegimeResult, SimulationResult, TimingResult } from "./MacroResults";
+import { JournalResult, OrdersResult, TargetResult } from "./ActResults";
+import { AttributionResult, CompanyViewsResult, StrategyBacktestResult, ValuationScoresResult } from "./StrategyResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -149,7 +151,7 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-const OWN_PERF_LABEL = new Set(["scenario_stress"]);
+const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest"]);
 
 /** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
 const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
@@ -171,6 +173,13 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   timing_signal: ({ v }) => <TimingResult v={v} />,
   exposure_overlay: ({ v }) => <OverlayResult v={v} />,
   timing_simulation: ({ v }) => <SimulationResult v={v} />,
+  order_preview: ({ v }) => <OrdersResult v={v} />,
+  target_version: ({ v }) => <TargetResult v={v} />,
+  decision_journal: ({ v }) => <JournalResult v={v} />,
+  strategy_backtest: ({ v }) => <StrategyBacktestResult v={v} />,
+  company_views: ({ v }) => <CompanyViewsResult v={v} />,
+  valuation_scores: ({ v }) => <ValuationScoresResult v={v} />,
+  attribution_review: ({ v }) => <AttributionResult v={v} />,
 };
 
 export function NodeResultPanel({ kind, result, stale, extra }: {

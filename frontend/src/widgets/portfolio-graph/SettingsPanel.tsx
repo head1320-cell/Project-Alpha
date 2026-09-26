@@ -7,13 +7,16 @@
  * 파라미터를 쉬운 이름 + 파라미터 키 + 범위로(`NodeInspector`). ★규칙은 서버에만 있다★ —
  * 값이 틀리면 서버 검증이 노드 위에 빨갛게 말한다. 빈 칸 = 서버 기본값(키를 지운다).
  */
+import { useState } from "react";
 import type { Edge } from "reactflow";
 import { Copy, Plus, X } from "lucide-react";
 import {
-  fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type PgNode,
+  fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type NodeRunResult, type PgNode,
+  type SaveResult,
 } from "@/entities/portfolio-graph";
 import { ListField, NodeInspector } from "./NodeInspector";
 import { FilterEditor } from "./FilterEditor";
+import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
 
 type Params = Record<string, unknown>;
@@ -109,6 +112,27 @@ function BasicField({ f, value, root, onChange }: {
       </div>
     );
   }
+  if (f.ui.widget === "text") {
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <textarea className="pg-text" rows={f.name === "title" ? 1 : 3} value={typeof eff === "string" ? eff : ""}
+                  aria-label={f.ui.label} maxLength={f.raw.maxLength}
+                  onChange={(e) => onChange(e.target.value === "" && f.defaultValue === undefined ? undefined : e.target.value)} />
+        {help}
+      </div>
+    );
+  }
+  if (f.ui.widget === "pick" && f.ui.source) {
+    // 저장된 것에서 고르기 — 등록된 전략(여럿) · 연구 기록(하나). 목록은 기존 문에서 온다.
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <PickField source={f.ui.source} multi={f.kind !== "string"} value={eff} onChange={onChange} />
+        {help}
+      </div>
+    );
+  }
   if (f.ui.widget === "filter") {
     // 스크리너 조건 — 프리셋 칩으로 시작하고, 줄 편집기로 고친다(규칙은 서버 검증).
     return (
@@ -178,7 +202,34 @@ function BasicField({ f, value, root, onChange }: {
   return null;   // 기본 화면에 알맞은 위젯이 없는 칸은 전문가 설정에서 다룬다.
 }
 
-export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate }: {
+/** 저장하기 (BK W4) — ★계산은 쓰지 않는다★ 서버가 다시 계산해 이 미리보기와 같을 때만 한 번 저장한다. */
+function SaveBox({ result, stale, onSave }: { result?: NodeRunResult; stale: boolean; onSave: () => Promise<SaveResult> }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const ready = result?.status === "ok" && !!result.view_hash && !stale;
+  const why = !result ? "먼저 계산해 주세요." : stale ? "바뀐 설정으로 다시 계산한 뒤 저장할 수 있어요."
+    : result.status !== "ok" ? "이 노드가 계산되지 않아 저장할 것이 없어요." : null;
+  return (
+    <div className="pg-save">
+      <button type="button" className="pg-btn pg-btn--primary pg-save-btn" disabled={!ready || busy}
+              onClick={async () => {
+                setBusy(true); setMsg(null);
+                try {
+                  const r = await onSave();
+                  setMsg(r.ok ? { ok: true, text: r.text ?? "저장했어요" } : { ok: false, text: r.message });
+                } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+                finally { setBusy(false); }
+              }}>
+        {busy ? "저장하는 중…" : "이 미리보기를 저장하기"}
+      </button>
+      <p className="pg-help">{why ?? "지금 본 미리보기를 한 번 저장해요. 주문은 나가지 않아요."}</p>
+      {msg && <p className={`pg-save-msg${msg.ok ? "" : " pg-save-msg--err"}`} role="status">{msg.text}</p>}
+    </div>
+  );
+}
+
+export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
+  result, stale, onSave }: {
   node: PgNode;
   entry: NodeCatalogEntry | undefined;
   nodes: PgNode[];
@@ -189,6 +240,9 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   onChange: (p: Params) => void;
   onRemove: () => void;
   onDuplicate: () => void;
+  result?: NodeRunResult;
+  stale: boolean;
+  onSave: () => Promise<SaveResult>;
 }) {
   const params = node.data.params ?? {};
   const plainOf = (id: string) => {
@@ -224,6 +278,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
           <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 써요.</p>
         </div>
       )}
+      {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} />}
       <div className="pg-actions">
         <button type="button" className="pg-btn pg-dup" onClick={onDuplicate} title="같은 입력으로 하나 더 (Ctrl+D)">
           <Copy size={14} /> 복제해서 비교하기

@@ -50,6 +50,7 @@ export interface JsonSchema {
   minimum?: number;
   maximum?: number;
   pattern?: string;
+  maxLength?: number;
   items?: JsonSchema;
   anyOf?: JsonSchema[];
   properties?: Record<string, JsonSchema>;
@@ -67,7 +68,9 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards" | "filter";
+  widget?: "slider" | "cards" | "filter" | "text" | "pick";
+  /** `widget: "pick"` 가 부를 목록 이름(BK W5) — `strategies` · `research_runs`. 주소가 아니다. */
+  source?: string;
   ends?: [string, string];
   presets?: { label: string; value: unknown }[];
   options?: Record<string, string>;

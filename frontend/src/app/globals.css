@@ -4666,7 +4666,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
 .tev-measured    .tev-l { background: var(--color-bull-bg); color: #15803d; }
 .tev-estimated   .tev-l { background: #fef3c7; color: #b45309; }
-.tev-caution     .tev-l { background: #fef3c7; color: #a16207; border: 1px solid #f59e0b; }
+.tev-caution     .tev-l { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
 .tev-unavailable .tev-l { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
 /* 없음은 회색이지만 **연하게 죽이지 않는다** — 흐리게 그리면 "괜찮다" 로 읽힌다. */
 .tev-unavailable .tev-r { color: var(--t-text); }
@@ -7813,3 +7813,28 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-sig--risk_off .pg-sig-dot { background: var(--pg-fail); }
 .pg-sig--unavailable .pg-sig-dot { background: repeating-linear-gradient(45deg, var(--pg-unknown) 0 2px, var(--pg-unknown-soft) 2px 4px); }
 .pg-sig-state { font-weight: 600; color: var(--pg-body); }
+/* ── 실행·기록 노드 (BK W4) ── */
+.pg-text { width: 100%; padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.5; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid var(--pg-line); border-radius: 12px; resize: vertical; }
+.pg-text:focus { border-color: var(--pg-blue); outline: none; }
+.pg-save { display: grid; gap: 6px; margin: 4px 0 14px; padding: 14px; background: var(--pg-soft); border-radius: 14px; }
+.pg-save-btn { justify-self: start; }
+.pg-save-msg { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--pg-ok); }
+.pg-save-msg--err { color: var(--pg-fail); }
+.pg-checks { display: grid; gap: 6px; margin: 8px 0; padding: 0; list-style: none; }
+.pg-checks li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; font-size: 13px; line-height: 1.45; color: var(--pg-body); }
+
+/* ── 전략·기업 노드 (BK W5) ── */
+.pg-pick { display: grid; gap: 6px; }
+.pg-pick-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; font: inherit; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid var(--pg-line); border-radius: 12px; cursor: pointer; }
+.pg-pick-row.on { background: var(--pg-blue-soft); border-color: var(--pg-blue); }
+.pg-pick-row:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-pick-box { flex: none; width: 18px; height: 18px; border: 1.5px solid var(--pg-mute); border-radius: 5px; background: var(--pg-paper); }
+.pg-pick[role="radiogroup"] .pg-pick-box { border-radius: 50%; }
+.pg-pick-row.on .pg-pick-box { border-color: var(--pg-blue); background: radial-gradient(circle, var(--pg-blue) 0 45%, transparent 50%); }
+.pg-pick-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
+.pg-pick-main b { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.pg-pick-sub { font-size: 12px; color: var(--pg-mute); }
+.pg-pick-err { display: grid; gap: 6px; justify-items: start; }
+.pg-src { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pg-src li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--pg-ink); }
+.pg-chips-static { display: flex; flex-wrap: wrap; gap: 6px; }

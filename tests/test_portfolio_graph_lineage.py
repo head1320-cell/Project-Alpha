@@ -201,3 +201,25 @@ def test_save_refuses_a_node_that_did_not_compute():
 def test_catalog_says_which_nodes_can_save():
     cat = {c["type"]: c for c in _registry().catalog()}
     assert cat["keep"]["savable"] is True and cat["pass"]["savable"] is False
+
+
+# ── 계보를 읽는 노드 (BK W4) ──────────────────────────────────────────────────
+
+def test_a_node_that_asks_for_lineage_receives_its_merged_input_lineage():
+    seen = {}
+
+    def peek(inputs, p, lineage):
+        seen.update(lineage)
+        return pg.NodeOutput(values={"out": 0}, view={"practice": lineage["practice"]})
+    reg = _registry()
+    reg.register(pg.NodeSpec("peek", "보기", inputs=(pg.Port("a", "Num"),), outputs=(pg.Port("out", "Num"),),
+                             run=peek, wants_lineage=True))
+    rep = pg.run(_g([_n("s", "src", practice=True, pit="forward_only"), _n("p", "pass"), _n("k", "peek")],
+                    [_e("s", "p"), _e("p", "k")]), reg)
+    assert rep["nodes"]["k"]["status"] == "ok", rep["nodes"]["k"]["reason"]
+    assert seen["practice"] is True and seen["pit"] == "forward_only"
+
+
+def test_ordinary_nodes_are_still_called_with_two_arguments():
+    rep = pg.run(_g([_n("s", "src"), _n("p", "pass")], [_e("s", "p")]), _registry())
+    assert rep["nodes"]["p"]["status"] == "ok"

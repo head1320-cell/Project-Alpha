@@ -122,7 +122,7 @@ export function DecisionJournal() {
                 {new Date(e.created_at * 1000).toLocaleString("ko-KR").slice(0, 17)}
                 {e.attribution ? " · Attribution✔" : ""}
               </span>
-              <button className="as-x" title="삭제" onClick={() => delMut.mutate(e.entry_id)}>×</button>
+              <button className="as-x" title="삭제" aria-label={`${e.title} 삭제`} onClick={() => delMut.mutate(e.entry_id)}>×</button>
             </div>
 
             {/* ★재현 사슬 — 결정 → 런 → 스냅샷 → 코드★
