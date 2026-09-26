@@ -40,6 +40,7 @@ import {
   portfolioGraphApi,
   toDoc,
   topoOrder,
+  type GraphDoc,
   type HandoffPayload,
   type ParseResult,
   type WorkflowStage,
@@ -77,6 +78,8 @@ export interface PortfolioCanvasProps {
   topExtra?: ReactNode;
   /** 마법사 화면 이름 → 노드(팔레트 검색 별칭). app 계층이 대응표로 채운다. */
   wizardAliases?: WizardAlias[];
+  /** 다른 화면이 넘긴 흐름(BL2b — 매크로 스냅샷 등). 있으면 세션 복원 대신 이것을 연다. */
+  initialDoc?: { doc: GraphDoc; note: string } | null;
 }
 
 function readWip(): string | null {
@@ -98,7 +101,7 @@ const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archiv
     sub: "알파 식을 등록하고 단계를 올리거나 내려요." },
 ];
 
-export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wizardAliases }: PortfolioCanvasProps) {
+export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wizardAliases, initialDoc }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
   const rf = useRef<ReactFlowInstance | null>(null);
   const canvasEl = useRef<HTMLDivElement>(null);
@@ -123,14 +126,21 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
         if (!alive) return;
         setStages(cat.stages ?? []);
         usePortfolioGraph.getState().setCatalog(cat.nodes);
-        const saved = readWip();
-        const parsed = saved ? parseFile(saved) : null;
         const st = usePortfolioGraph.getState();
-        if (st.nodes.length === 0) st.loadDoc(parsed?.doc ?? CORE_CHAIN_TEMPLATE, parsed?.problems ?? []);
+        if (initialDoc) {
+          // 다른 화면이 넘긴 흐름(예: 매크로 스냅샷) — 지금 캔버스가 있으면 되돌리기로 돌아갈 수 있다(loadDoc 이 기록한다).
+          st.loadDoc(initialDoc.doc);
+          setFileNote(initialDoc.note + (st.past.length ? " 이전 캔버스는 되돌리기(Ctrl+Z)로 돌아가요." : ""));
+        } else {
+          const saved = readWip();
+          const parsed = saved ? parseFile(saved) : null;
+          if (st.nodes.length === 0) st.loadDoc(parsed?.doc ?? CORE_CHAIN_TEMPLATE, parsed?.problems ?? []);
+        }
         fit();
       })
       .catch((e: Error) => { if (alive) usePortfolioGraph.getState().setCatalog(null, e.message); });
     return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만(넘겨받은 흐름은 열 때 한 번 싣는다)
   }, []);
 
   const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups),

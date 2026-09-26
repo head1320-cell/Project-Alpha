@@ -94,6 +94,20 @@ const TIMING_TEMPLATE: GraphDoc = doc("타이밍 적용 → 실행 목표", [
   e("orders", "trades", "journal", "trades"),
 ]);
 
+/**
+ * 매크로 화면에서 넘어온 국면 스냅샷으로 여는 흐름 (BL2b) — 타이밍 흐름에 '경기 국면 불러오기'(그 스냅샷)를 붙이고
+ * 노출 조절이 타이밍과 국면을 함께 따르게 한다. ★스냅샷 id 는 서버가 확인한다★ — 없는 id 면 국면 노드가 사유와 함께 실패한다.
+ */
+export function macroSnapshotDoc(snapshotId: string): GraphDoc {
+  return doc("매크로 스냅샷 반영", [
+    ...TIMING_TEMPLATE.nodes.map((x) => (x.id === "overlay" ? { ...x, params: { ...x.params, follow: "timing_macro" } } : x)),
+    n("regime", "regime", 600, 470, { snapshot_id: snapshotId }),
+  ], [
+    ...TIMING_TEMPLATE.edges,
+    e("regime", "regime", "overlay", "regime"),
+  ]);
+}
+
 export interface GraphTemplate { key: string; name: string; description: string; doc: GraphDoc }
 
 /** 팔레트의 "빠른 시작" 목록 — 순서가 곧 권하는 순서다. */

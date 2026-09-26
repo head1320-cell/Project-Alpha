@@ -574,6 +574,26 @@ REASON_NO_VINTAGE_FOR_ASOF = (
 )
 
 
+#: 저장소 경로에서 계열이 비었을 때의 사유 — "API 키가 없다" 류의 사유와 처방이 다르다.
+REASON_NOT_IN_STORE = ("저장된 관측이 없습니다 — 매크로 화면에서 한 번 수집하면 저장됩니다"
+                       "(이 경로는 외부를 호출하지 않습니다).")
+
+
+def _stored_series(key: str) -> tuple[list[str], list[float]]:
+    """관측 스토어의 **빈티지 없는** 행 → `(timestamps, values)` (BL2b · `store_only`).
+
+    빈티지 있는 행은 `_from_vintage_store` 가 먼저 본다(그쪽이 우선이다). 여기 남는 것은 수집 파이프라인이
+    `record_series` 로 적은 행이라 공표시각이 비어 있다 — 그래서 같은 기간의 여러 조회 중 **가장 늦게 가져온**
+    값을 쓴다(`retrieved_at`). 판정 규칙은 공용 `latest_vintage_per_period` 를 그대로 쓴다(두 벌 금지).
+    """
+    from src.data.macro_observation_store import load
+    from src.data.pit_macro import latest_vintage_per_period
+    obs = [o for o in load(key) if not o.vintage_id]
+    rows = sorted(latest_vintage_per_period(obs, stamp_of=lambda o: o.retrieved_at),
+                  key=lambda o: o.observation_period)
+    return [o.observation_period for o in rows], [float(o.value) for o in rows]
+
+
 def _from_vintage_store(key: str, as_of: str | None):
     """관측 스토어에서 **빈티지 있는** 관측만 골라 `(timestamps, values)`.
 
@@ -621,7 +641,7 @@ class MacroCollector:
     # ─────────────────────────────────────────────────────────────────────
 
     def collect_all(self, use_cache: bool = True,
-                    as_of: str | None = None) -> MacroSnapshot:
+                    as_of: str | None = None, *, store_only: bool = False) -> MacroSnapshot:
         """모든 지표 통합 수집.
 
         ★두 모드를 라벨한다 — 조용히 섞지 않는다★
@@ -633,7 +653,13 @@ class MacroCollector:
                          결함이다.
 
         기존 호출부 11곳은 전부 `as_of` 없이 부르므로 **동작이 이전과 같다**.
+
+        ★`store_only=True` — 저장된 관측만 (BL2b)★ 외부 API 를 부르지 않고 `macro_observation_store`
+        에 쌓인 관측으로 **같은 정규화**를 거친 계열을 만든다. 캐시를 읽지도 쓰지도 않고, 읽은 것을
+        다시 적재하지 않으며, 없으면 mock 으로 채우지 않는다(개발 모드에서도). 계산 노드가 운영에서
+        계산할 때마다 BOK·FRED 를 부르고 관측을 적재하지 않게 하려는 경로다.
         """
+        live = not store_only
         series_map = {}
 
         # 한국 매크로 (6종)
@@ -656,9 +682,10 @@ class MacroCollector:
                 # `_collect_one` 이 같은 반복 안에서 동기로 부르므로 값이 맞아
                 # 살아 있는 버그는 아니었지만, 누군가 스레드풀·async 로 바꾸는 순간
                 # 11개 시리즈가 전부 마지막 stat 코드를 조회한다. 두 루프의 관례를 맞춘다.
-                fetcher=lambda s=stat, i=item: self.bok.fetch_series(s, i),
+                fetcher=(lambda k=key: _stored_series(k)) if store_only
+                else (lambda s=stat, i=item: self.bok.fetch_series(s, i)),
                 use_cache=use_cache, as_of=as_of,
-                source="BOK",
+                source="BOK", live=live,
             )
 
         # ── 파생 스프레드 (레지스트리의 `derived_from` 이 정의한다) ──────────
@@ -679,9 +706,10 @@ class MacroCollector:
         for fred_id, meta in FRED_INDICATORS.items():
             series_map[fred_id] = self._collect_one(
                 key=fred_id, name=meta["name"], unit=meta["unit"],
-                fetcher=lambda fid=fred_id: self.fred.fetch_series(fid),
+                fetcher=(lambda fid=fred_id: _stored_series(fid)) if store_only
+                else (lambda fid=fred_id: self.fred.fetch_series(fid)),
                 use_cache=use_cache, as_of=as_of,
-                source="FRED",
+                source="FRED", live=live,
             )
 
         return MacroSnapshot(
@@ -765,6 +793,7 @@ class MacroCollector:
     def _collect_one(
         self, key: str, name: str, unit: str,
         fetcher, use_cache: bool, source: str, as_of: str | None = None,
+        live: bool = True,
     ) -> MacroSeries:
         """단일 지표 수집 — 캐시 확인 → 외부 호출 → Mock fallback.
 
@@ -773,7 +802,7 @@ class MacroCollector:
         """
         # ★PIT 조회는 캐시를 쓰지도 남기지도 않는다★ as_of 산출이 캐시에 남으면
         # 다음 라이브 조회가 과거 값을 받는다 — 화면이 조용히 과거를 본다.
-        if use_cache and as_of is None:
+        if live and use_cache and as_of is None:
             with self._lock:
                 entry = self._cache.get(key)
                 if entry:
@@ -806,7 +835,11 @@ class MacroCollector:
         # Fallback to Mock — mock 모드만. 운영(KIS_USE_MOCK=0)선 합성 금지 → 정직 unavailable.
         # ★PIT 요청은 mock 으로 채우지 않는다★ 합성값으로 과거를 채점하면 그것은
         # 시점 정합이 아니라 날조다.
-        if not values and as_of is None:
+        if not values and as_of is None and not live:
+            # ★저장소 경로는 합성으로 채우지 않는다★ — 없으면 없다고 말한다(개발 모드에서도).
+            actual_source = "unavailable"
+            unavailable_reason = REASON_NOT_IN_STORE
+        elif not values and as_of is None:
             from src.data.mock_gate import mock_allowed
             from src.data.source_registry import new_source_mock_allowed
             if mock_allowed() and new_source_mock_allowed(key):
@@ -881,7 +914,7 @@ class MacroCollector:
             reason=unavailable_reason,
         )
 
-        if as_of is None:
+        if as_of is None and live:
             with self._lock:
                 self._cache[key] = (time.time(), series)
 
@@ -898,7 +931,8 @@ class MacroCollector:
             from src.data.macro_observation_store import record_series
             # ★스토어에서 읽은 것을 스토어에 되쓰지 않는다★ 순환이고, 빈티지 행을
             # `vintage_id=""` 사본으로 오염시킨다.
-            if not vintage_used:
+            # 저장소 경로(`live=False`)는 저장소에서 읽은 것이므로 같은 이유로 되쓰지 않는다.
+            if not vintage_used and live:
                 record_series(series)
         except Exception as e:  # noqa: BLE001 — 기록 실패가 수집을 실패로 만들지 않는다
             logger.debug(f"매크로 관측 기록 실패 ({key}): {e}")

@@ -202,19 +202,32 @@ class AlphaParams(BaseModel):
             help="알파 실험실과 같은 식이에요. 필드: mom_6m · vol_60d · roe · earnings_yield …")})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
         "기준일", "advanced", help="비우면 오늘이에요. 과거 날짜를 넣으면 그날까지의 값으로 계산해요.")})
+    alpha_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
+        "등록된 알파", question="등록한 알파를 쓸까요?", widget="pick", source="alphas",
+        help="고르면 그 알파의 식을 써요(위 식 칸보다 먼저예요). 알파 서랍에서 등록해요.")})
+
+
+def registry_expr(alpha_id: str) -> tuple[str, dict]:
+    """레지스트리 알파 → `(식, 출처)`. ★없는 id 를 조용히 넘기지 않는다★ (BL2b)."""
+    from src.data.alpha_registry import get_alpha
+    row = get_alpha(alpha_id)
+    if not row or not row.get("expr"):
+        raise pg.NodeFailure(f"등록된 알파 {alpha_id} 을(를) 찾지 못했어요 — 알파 서랍에서 확인하거나 비워 두세요.")
+    return str(row["expr"]), {"alpha_id": alpha_id, "name": row.get("name"), "version": row.get("version")}
 
 
 def _alpha_score(inputs: dict, p: AlphaParams) -> pg.NodeOutput:
     from src.engine import alpha_lab
     tickers = list(inputs["universe"]["tickers"])
-    out = alpha_lab.score_alpha(p.expr, tickers, as_of=p.as_of)
+    expr, source = (registry_expr(p.alpha_id) if p.alpha_id else (p.expr, None))
+    out = alpha_lab.score_alpha(expr, tickers, as_of=p.as_of)
     if not out.get("available"):
         raise pg.NodeFailure(f"알파 점수를 내지 못했어요 — {out.get('reason')}")
     ranked = sorted(out["scores"].items(), key=lambda kv: kv[1], reverse=True)
     scores = {c: round(float(s), 4) for c, s in ranked}
     view = {"scores": scores, "labels": _ar._labels([c for c, _ in ranked[:30]]), "expr": out["expr"],
             "as_of_requested": out.get("as_of_requested"), "as_of_effective": out.get("as_of_effective"),
-            "coverage": out.get("coverage"), "n_universe": out.get("n_universe")}
+            "coverage": out.get("coverage"), "n_universe": out.get("n_universe"), "expr_source": source}
     return pg.NodeOutput(values={"scores": {"scores": scores, "kind": "alpha", "as_of": out.get("as_of_effective")}},
                          view=view, provenance={"as_of_effective": out.get("as_of_effective")},
                          tags={"pit": "unknown" if p.as_of else "forward_only", "practice": mock_allowed(),
@@ -230,8 +243,10 @@ def _explain_alpha(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, _TODAY))
     if mock_allowed():
         trust.append(_t(UNKNOWN, _DEV))
+    src = view.get("expr_source")
     return {"title": f"{n}종목에 알파 점수를 매겼어요",
-            "facts": [f"식: {view.get('expr')}", f"{view.get('n_universe')}종목 중 {view.get('coverage')}종목이 유한한 점수를 가졌어요."],
+            "facts": [f"식: {view.get('expr')}",
+                      *([f"등록된 알파 ‘{src.get('name')}’ v{src.get('version')}의 식이에요."] if src else []), f"{view.get('n_universe')}종목 중 {view.get('coverage')}종목이 유한한 점수를 가졌어요."],
             "trust": trust, "unmeasured": ["이 알파의 예측력(IC) — 알파 실험실에서 따로 재요", "거래 비용"]}
 
 

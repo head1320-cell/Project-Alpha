@@ -455,3 +455,6 @@ _act.register(REGISTRY)
 from src.api import allocation_graph_nodes_strategy as _strategy  # noqa: E402
 
 _strategy.register(REGISTRY)
+from src.api import allocation_graph_nodes_bl2 as _bl2  # noqa: E402
+
+_bl2.register(REGISTRY)

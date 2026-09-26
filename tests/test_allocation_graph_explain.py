@@ -207,7 +207,7 @@ def test_every_preset_is_a_value_the_server_accepts():
 
 
 def _required(t):
-    return {"tickers": ["005930"]} if t == "universe" else {}
+    return {"universe": {"tickers": ["005930"]}, "alpha_portfolio": {"alpha_ids": ["al_1"]}}.get(t, {})
 
 
 def test_enum_options_cover_exactly_the_allowed_values():

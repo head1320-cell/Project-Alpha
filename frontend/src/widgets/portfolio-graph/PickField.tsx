@@ -9,6 +9,15 @@
 import { useEffect, useState } from "react";
 import { multibacktestApi } from "@/entities/multibacktest";
 import { researchApi } from "@/entities/research";
+import { alphaApi } from "@/entities/alpha/api";
+import { API_BASE } from "@/shared/api/apiBase";
+
+/** 저장된 시나리오 팩 — 목록 문은 `/scenario-packs` 하나다. 실패를 빈 목록으로 삼키지 않는다. */
+async function scenarioPackList(): Promise<{ pack_id: string; label: string; version?: number }[]> {
+  const r = await fetch(`${API_BASE}/api/v1/allocation/scenario-packs`);
+  if (!r.ok) throw new Error(`저장된 시나리오 목록을 읽지 못했어요 (HTTP ${r.status}).`);
+  return ((await r.json()) as { packs?: { pack_id: string; label: string; version?: number }[] }).packs ?? [];
+}
 
 type Item = { value: string | number; label: string; sub?: string; chips: { text: string; tone: "assumed" | "unknown" }[] };
 type State = { kind: "loading" } | { kind: "error"; text: string } | { kind: "ready"; items: Item[] };
@@ -16,7 +25,11 @@ type State = { kind: "loading" } | { kind: "error"; text: string } | { kind: "re
 const EMPTY: Record<string, string> = {
   strategies: "등록된 전략이 없어요 — 백테스트 결과를 전략으로 등록하면 여기에 나와요.",
   research_runs: "연구 기록이 없어요 — 비중 계산 결과를 연구 기록으로 남기면 여기에 나와요.",
+  alphas: "등록된 알파가 없어요 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나와요.",
+  scenario_packs: "저장된 시나리오가 없어요 — 직접 정한 충격을 쓰거나, 시나리오를 저장하면 여기에 나와요.",
 };
+
+const ALPHA_KO: Record<string, string> = { draft: "초안", experimental: "실험", validated: "검증 단계", approved: "승인", retired: "폐기" };
 
 async function load(source: string): Promise<Item[]> {
   if (source === "strategies") {
@@ -36,6 +49,21 @@ async function load(source: string): Promise<Item[]> {
       value: r.run_id, label: r.name || r.kind,
       sub: `${new Date(r.created_at * 1000).toLocaleDateString("ko-KR")} · ${r.kind}`,
       chips: r.snapshot?.coverage?.source === "mock" ? [{ text: "연습용 데이터", tone: "unknown" as const }] : [],
+    }));
+  }
+  if (source === "alphas") {
+    return (await alphaApi.registry()).alphas.filter((a) => a.status !== "retired").map((a) => ({
+      value: a.alpha_id, label: a.name, sub: `${ALPHA_KO[a.status] ?? a.status} · v${a.version} · ${a.expr}`,
+      chips: [
+        ...(a.is_template ? [{ text: "예시", tone: "unknown" as const }] : []),
+        ...(a.status !== "approved" ? [{ text: "승인 전", tone: "assumed" as const }] : []),
+      ],
+    }));
+  }
+  if (source === "scenario_packs") {
+    return (await scenarioPackList()).map((p) => ({
+      value: p.pack_id, label: p.label, sub: `v${p.version ?? "?"} · ${p.pack_id}`,
+      chips: [{ text: "가정 충격", tone: "assumed" as const }],
     }));
   }
   throw new Error(`이 화면이 모르는 목록이에요(${source}) — 전문가 설정에서 직접 넣어 주세요.`);

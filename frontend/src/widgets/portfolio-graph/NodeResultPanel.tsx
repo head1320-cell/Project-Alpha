@@ -15,6 +15,10 @@ import { NeutralizeResult, ScoresResult, ScoresToWeightsResult, ScreenerResult, 
 import { OverlayResult, RegimeResult, SimulationResult, TimingResult } from "./MacroResults";
 import { JournalResult, OrdersResult, TargetResult } from "./ActResults";
 import { AttributionResult, CompanyViewsResult, StrategyBacktestResult, ValuationScoresResult } from "./StrategyResults";
+import {
+  AlphaPortfolioResult, AlphaValidateResult, EnsembleResult, FrontierResult, HealthResult, RegimeExplainResult,
+  SleeveAnalyticsResult, ThreeWayResult,
+} from "./Bl2Results";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -180,6 +184,18 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   company_views: ({ v }) => <CompanyViewsResult v={v} />,
   valuation_scores: ({ v }) => <ValuationScoresResult v={v} />,
   attribution_review: ({ v }) => <AttributionResult v={v} />,
+  frontier: ({ v }) => <FrontierResult v={v} />,
+  regime_ensemble: ({ v }) => <EnsembleResult v={v} />,
+  regime_explain: ({ v }) => <RegimeExplainResult v={v} />,
+  scenario_three_way: ({ v }) => <ThreeWayResult v={v} />,
+  custom_scenario: ({ v, prov }) => <ScenarioStressResult v={v} prov={prov} />,
+  strategy_health: ({ v }) => <HealthResult v={v} />,
+  sleeve_analytics: ({ v }) => <SleeveAnalyticsResult v={v} />,
+  alpha_validate: ({ v }) => <AlphaValidateResult v={v} />,
+  alpha_portfolio: ({ v }) => (
+    <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
+                                                  labels={v.labels as Record<string, string> | undefined} />} />
+  ),
 };
 
 export function NodeResultPanel({ kind, result, stale, extra }: {

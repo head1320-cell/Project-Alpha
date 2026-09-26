@@ -11,11 +11,16 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import type { HandoffPayload } from "@/entities/portfolio-graph";
+import type { GraphDoc, HandoffPayload } from "@/entities/portfolio-graph";
+// 템플릿 하나만 — 엔티티 전체(api·검증·포맷)를 첫 로드에 싣지 않는다.
+import { macroSnapshotDoc } from "@/entities/portfolio-graph/templates";
 import type { AllocationModel, ConstraintsInput } from "@/entities/allocation";
 import type { HandoffTarget, WizardAlias } from "@/widgets/portfolio-graph";
 import { STAGES, WIZARD_GATE_HREF, useAllocation } from "@/widgets/allocation/AllocationProvider";
 import { WIZARD_NODE_MAP } from "./wizardNodeMap";
+
+// 케이스 바는 react-query·배지를 싣는다 — 첫 로드(기준 120 kB)를 키우지 않게 따로 싣는다(BL2b).
+const CaseBar = dynamic(() => import("@/features/case-bar/CaseBar"), { ssr: false });
 
 // reactflow 는 무겁다 — 첫 로드에서 빼고 캔버스 청크로 싣는다(ADR 002 §2).
 const PortfolioCanvas = dynamic(() => import("@/widgets/portfolio-graph/PortfolioCanvas"), {
@@ -41,6 +46,16 @@ export default function AllocationCanvasPage() {
   // 마법사는 하단 nav 로 검증 단계에 들어갈 때만 스스로 재계산하므로, 직접 이동하면 결과가
   // 비어 있다. ★같은 경로(ensureFreshRun)★를 부를 뿐 계산을 새로 짜지 않는다.
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  // 다른 화면이 넘긴 흐름(BL2b) — `?snapshot=<id>`(매크로 화면의 국면 스냅샷). 주소는 브라우저에서만 읽는다
+  // (정적 빌드에서 검색 파라미터를 기다리지 않게). 읽기 전(undefined)에는 캔버스를 그리지 않아 한 번만 싣는다.
+  const [boot, setBoot] = useState<{ doc: GraphDoc; note: string } | null | undefined>(undefined);
+  const [snapshotId, setSnapshotId] = useState<string | null>(null);
+  useEffect(() => {
+    const sid = new URLSearchParams(window.location.search).get("snapshot");
+    setSnapshotId(sid);
+    setBoot(sid ? { doc: macroSnapshotDoc(sid),
+                    note: `매크로 화면에서 가져온 국면 스냅샷 ${sid}로 ‘매크로 스냅샷 반영’ 흐름을 열었어요.` } : null);
+  }, []);
   useEffect(() => {
     if (!pendingHref) return;
     alloc.ensureFreshRun();
@@ -64,7 +79,12 @@ export default function AllocationCanvasPage() {
 
   return (
     <div className="aas-root pg-page">
-      <PortfolioCanvas onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} wizardAliases={WIZARD_ALIASES} topExtra={
+      {boot !== undefined && <PortfolioCanvas initialDoc={boot} onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} wizardAliases={WIZARD_ALIASES} topExtra={<>
+        {/* 연구 케이스 — 매크로 화면과 같은 케이스 바. 캔버스 높이를 뺏지 않게 상단 바에서 펼친다(BL2b). */}
+        <details className="pg-wizard pg-casebox">
+          <summary className="pg-btn pg-btn--ghost" title="연구 케이스">케이스</summary>
+          <div className="pg-casebox-panel"><CaseBar sessionSnapshotId={snapshotId} /></div>
+        </details>
         <details className="pg-wizard">
           <summary className="pg-btn pg-btn--ghost">단계별 마법사</summary>
           <nav className="pg-wizard-links" aria-label="마법사 도구">
@@ -75,7 +95,7 @@ export default function AllocationCanvasPage() {
             ))}
           </nav>
         </details>
-      } />
+      </>} />}
     </div>
   );
 }

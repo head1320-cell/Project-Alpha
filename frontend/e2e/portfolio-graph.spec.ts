@@ -912,3 +912,126 @@ test("서랍 대비(BL2): 세 서랍 라이트·다크 AA", async ({ page }) => 
     }
   }
 });
+
+// ── BL2b · 마법사에서 옮긴 계산 노드 · 매크로 스냅샷 다리 ────────────────────
+test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직접 만든 시나리오·묶음 분석이 돌고 결과가 그림으로 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const rules = [{ factor_id: "abs_mom" }, { factor_id: "ma_month" }];
+  doc.nodes.push(
+    { id: "fr", type: "frontier", params: {}, position: { x: 1000, y: 0 } },
+    { id: "en", type: "regime_ensemble", params: { market: "kr" }, position: { x: 1000, y: 160 } },
+    { id: "tm", type: "timing_signal", params: { rules }, position: { x: 800, y: 480 } },
+    { id: "tw", type: "scenario_three_way", params: { scenario: "rate_hike_200bp" }, position: { x: 1000, y: 480 } },
+    { id: "cs", type: "custom_scenario", params: { market_shock: -8, momentum: -3 }, position: { x: 1000, y: 640 } },
+    { id: "o2", type: "optimizer", params: { model: "hrp" }, position: { x: 800, y: 320 } },
+    { id: "sa", type: "sleeve_analytics", params: {}, position: { x: 1000, y: 320 } },
+  );
+  doc.edges.push(
+    { id: "b1", source: "returns", source_port: "returns", target: "fr", target_port: "returns" },
+    { id: "b2", source: "optimizer", source_port: "weights", target: "fr", target_port: "weights" },
+    { id: "b3", source: "optimizer", source_port: "weights", target: "tw", target_port: "weights" },
+    { id: "b4", source: "tm", source_port: "signal", target: "tw", target_port: "signal" },
+    { id: "b5", source: "optimizer", source_port: "weights", target: "cs", target_port: "weights" },
+    { id: "b6", source: "returns", source_port: "returns", target: "o2", target_port: "returns" },
+    { id: "b7", source: "estimate", source_port: "belief", target: "o2", target_port: "belief" },
+    { id: "b8", source: "optimizer", source_port: "weights", target: "sa", target_port: "a" },
+    { id: "b9", source: "o2", source_port: "weights", target: "sa", target_port: "b" },
+  );
+  await importText(page, "bl2b.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["fr", "en", "tw", "cs", "sa"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+  // 개발 모드의 국면은 연습용 계보다(운영은 저장된 관측만 — 백엔드 테스트가 가른다).
+  expect(body.nodes.en.lineage.practice).toBe(true);
+
+  for (const [id, sel] of [["fr", ".pg-frontier"], ["en", ".pg-ensemble"], ["tw", ".pg-threeway"], ["cs", ".pg-shock"], ["sa", ".pg-corr"]] as const) {
+    await node(page, id).click();
+    await tab(page, "detail");
+    await expect(page.locator(`.pg-side ${sel}`), id).toBeVisible();
+  }
+  // ★구름과 곡선은 같은 단위(%)★ — 한쪽만 100배면 곡선이 축 끝에 눌려 안 보인다(실측으로 잡은 결함).
+  await node(page, "fr").click();
+  const ticks = await page.locator(".pg-frontier .recharts-xAxis .recharts-cartesian-axis-tick-value").allTextContents();
+  const xs = ticks.map((t) => parseFloat(t)).filter((x) => Number.isFinite(x));
+  expect(xs.length).toBeGreaterThan(2);
+  expect(Math.max(...xs), `x축 눈금 ${ticks.join(",")}`).toBeLessThan(300);
+  await node(page, "en").click();
+  await expect(page.locator(".pg-ensemble thead th")).toHaveCount(4);          // 국면 + 세 방법
+  await expect(page.locator(".pg-ensemble tbody tr")).toHaveCount(4);          // 네 국면
+  await node(page, "tw").click();
+  await expect(page.locator(".pg-threeway tbody tr")).toHaveCount(3);
+  // 국면을 잇지 않았으니 '타이밍 + 국면' 갈래는 손실을 적지 않는다(0 으로 채우지 않는다).
+  await expect(page.locator(".pg-threeway tbody tr").nth(2)).toContainText("미계산");
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await node(page, "fr").click();
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+    expect(audit.checked).toBeGreaterThan(10);
+    expect(audit.low, dark ? "dark" : "light").toEqual([]);
+  }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+test("매크로 다리(BL2b): ?snapshot= 으로 열면 국면 노드가 그 스냅샷을 쓰고 케이스 바가 보인다 · 없는 스냅샷은 사유", async ({ page }) => {
+  const snap = await (await page.request.post(`${API}/regime-snapshots/from-current?market=kr`)).json();
+  expect(snap.recorded, snap.message).toBe(true);
+  await page.goto(`/allocation?snapshot=${snap.snapshot_id}`, { waitUntil: "domcontentloaded" });
+  await expect(node(page, "regime")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".pg-file-note")).toContainText(snap.snapshot_id);
+  await page.locator(".pg-casebox > summary").click();
+  await expect(page.locator(".pg-casebox .as-case")).toBeVisible();
+  const body = await run(page);
+  expect(body.nodes.regime.status, body.nodes.regime.reason).toBe("ok");
+  expect(body.nodes.regime.view.snapshot_id).toBe(snap.snapshot_id);
+  // 노출 조절은 국면을 받았다 — 막히지 않았다(이 환경은 타이밍 신호 데이터가 없어 정직하게 실패할 수 있다).
+  expect(body.nodes.overlay.status, body.nodes.overlay.reason).not.toBe("blocked");
+  // 짝: 없는 스냅샷이면 국면 노드가 사유와 함께 실패하고 하류는 막힌다(다른 스냅샷으로 바꿔치지 않는다).
+  await page.goto("/allocation?snapshot=rgs_0_missing", { waitUntil: "domcontentloaded" });
+  await expect(node(page, "regime")).toBeVisible({ timeout: 30_000 });
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-run").click();
+  const bad = await (await resp).json();
+  expect(bad.nodes.regime.status).toBe("failed");
+  expect(bad.nodes.regime.reason).toContain("rgs_0_missing");
+  expect(bad.nodes.overlay.status).toBe("blocked");
+});
+
+test("알파 검증 → 알파 서랍(BL2b): 검증 기록 전엔 '검증 단계'로 못 올리고, 기록을 남기면 올라간다", async ({ page }) => {
+  const up = await (await page.request.post(`${API}/alpha-registry`, {
+    data: { name: "E2E BL2b 알파", expr: "zscore(mom_6m) - zscore(vol_60d)" } })).json();
+  const aid = up.alpha.alpha_id as string;
+  expect((await (await page.request.post(`${API}/alpha-registry/${aid}/promote`, { data: { to_status: "experimental" } })).json()).ok).toBe(true);
+  await openCanvas(page);
+  // 짝(먼저): 기록 없이 올리면 서버가 사유와 함께 거절한다.
+  await openSheet(page, "알파");
+  const row = sheet(page, "alphas").locator(`[data-alpha="${aid}"]`);
+  await row.getByRole("button", { name: /검증 단계.*올리기/ }).click();
+  await row.getByRole("button", { name: "올리기", exact: true }).click();
+  await expect(row.locator(".pg-warn")).toContainText("검증");
+  await page.keyboard.press("Escape");
+
+  const doc = await exportDoc(page);
+  doc.nodes.push({ id: "av", type: "alpha_validate", params: { alpha_id: aid, universe: "kospi50", months: 12 }, position: { x: 1000, y: 0 } });
+  await importText(page, "av.json", JSON.stringify(doc));
+  const body = await run(page);
+  expect(body.nodes.av.status, body.nodes.av.reason).toBe("ok");
+  await node(page, "av").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-kv")).toContainText("평균 IC");
+  await tab(page, "settings");
+  await expect(page.locator(".pg-save-btn")).toHaveText("검증 기록 남기기");
+  await page.locator(".pg-save-btn").click();
+  await expect(page.locator(".pg-save-msg")).toContainText("알파에 붙였어요");
+  const rid = /·\s*(\S+)\s*·/.exec((await page.locator(".pg-save-msg").textContent()) ?? "")?.[1];
+
+  await openSheet(page, "알파");
+  await expect(row).toContainText("검증 기록");
+  await row.getByRole("button", { name: /검증 단계.*올리기/ }).click();
+  await row.getByRole("button", { name: "올리기", exact: true }).click();
+  await expect(row.locator(".pg-rec-row .pg-tag").last()).toContainText("검증 단계");
+  // 뒷정리 — E2E DB 는 스펙끼리 공유된다.
+  expect((await page.request.delete(`${API}/alpha-registry/${aid}`)).ok()).toBe(true);
+  if (rid) await page.request.delete(`${API}/research-runs/${rid}`);
+});
