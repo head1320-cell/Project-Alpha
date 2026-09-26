@@ -338,3 +338,9 @@ def test_an_unknown_node_is_explained_as_unknown():
 def test_the_catalog_carries_plain_words_and_stage():
     c = {x["type"]: x for x in _explaining_registry().catalog()}["const"]
     assert (c["stage"], c["plain_label"], c["plain_description"]) == ("data", "숫자 정하기", "숫자 하나를 내요")
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

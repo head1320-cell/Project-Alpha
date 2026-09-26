@@ -290,3 +290,9 @@ def test_the_regime_title_uses_the_right_particle(snaps, regime, title):
     snaps["rs_1"]["regime"] = regime
     g = {"format": pg.FORMAT, "version": pg.VERSION, "nodes": [_node("g", "regime", snapshot_id="rs_1")], "edges": []}
     assert title in _run(g)["nodes"]["g"]["explain"]["title"]
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

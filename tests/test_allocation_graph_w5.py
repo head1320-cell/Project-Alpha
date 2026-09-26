@@ -232,3 +232,9 @@ def test_every_w5_node_speaks_politely_without_overclaiming(market, co, valuatio
         assert r["status"] == "ok", r["reason"]
         assert r["explain"]["title"].endswith("요"), r["explain"]["title"]
         assert not [t for t in _texts(r["explain"]) for w in FORBIDDEN if w in t], r["type"]
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

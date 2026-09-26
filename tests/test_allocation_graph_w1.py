@@ -266,3 +266,9 @@ def test_a_historical_replay_says_what_kind_of_performance_it_is(market):
     assert lab["kind"] == "backtest" and "고정" in lab["kind_reason"] and lab["data_real"] is True
     hypo = _run(_stress_graph(scenario="semi_selloff"))["nodes"]["s"]
     assert "perf_label" not in hypo["provenance"]
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

@@ -19618,3 +19618,33 @@ V2 와 섞지 않는다) · 국면 앙상블/설명 노드 · 시나리오 3자 
 
 **게이트** — tsc·eslint 통과 · allocation/aas/portfolio E2E 196/196 · ruff 통과 · `KIS_USE_MOCK=1 pytest tests/` 7244 통과 /
 10 건너뜀 / 0 실패 · next build `/allocation` 119 → 120 kB.
+
+## BL — 마법사 제거 · 플랫폼 전체 분석 도구를 노드로 · 노드 링크 UI 고도화 (2026-09-26 ~)
+
+사용자 요청: *"마법사 제거하고, 기존 플랫폼에 있는 '모든 분석 툴'을 커스텀해서 활용하고 사용할 수 있게 '노드 링크 UI'를
+더 고도화."* 결정: 범위 = 플랫폼 전체(계산이 없는 화면 제외) · ★마법사 고유 기능은 캔버스로 먼저 옮기고 확인한 뒤 제거★
+(ADR 002 의 "마법사 제거는 별도 승인" 의 승인). 조사(n8n 부분 실행·데이터 고정, KNIME 신호등·메타노드·노드 모니터, ComfyUI
+서브그래프, React Flow 되돌리기·복사·자동 배치·미니맵·도구줄, Popover·anchor positioning)는 계획에 표로. 순서: BL0 안전 가드 →
+BL1 캔버스 고도화 → BL2 마법사 고유 기능 이전 → BL3 플랫폼 도구 노드 → BL4 마법사 제거.
+
+### BL0 · 안전 가드 — 주문 경로 import 를 넓게, 계산 중 쓰기는 런타임에
+- **감사로 찾은 구멍 둘**: ① 노드 모듈 금지 import 가 `src.kis_order_executor`·`src.engine.trading_engine` 뿐이었다 — 실주문
+  경로 `src.execution.order_executor`·`src.execution.kis_client`·`src.api.kis_gateway`·`trading_routes`·`account_order_routes`·
+  `stage13_routes(_extensions)` 가 비어 있었고, `from src.execution import order_executor` 같은 **이름 꼴**도 못 잡았다.
+  ② 쓰기 검사는 노드 모듈이 **직접** 부르는 이름만 봤다 — 감싼 함수 안의 쓰기(`alpha_validate(record_run=True)` 등)는 못 봤다.
+- **판별기**(`tests/test_allocation_graph_bl0.py::order_path_imports`): `import a.b` · `from a import b` · `from a.b import c` 를
+  전체 이름으로 본다. 짝 — 네팅(`order_netting`)·미리보기 문(`execution_routes`)·`stage11_routes` 는 잡지 않는다.
+- **런타임 감시**(`tests/graph_write_guard.py`): 알려진 쓰기 함수 33개(연구 기록·실행 목표·실행 계획·저널·케이스·백테스트 기록·
+  국면/기업 스냅샷·알파 레지스트리·타이밍 규칙·전략 등록·멀티전략 저장)를 "그래프 계산 중이면 기록" 으로 바꾸고, 계산 구간은
+  `portfolio_graph._execute` 로 표시한다. `from … import f` 로 **미리 묶인 사본**까지 바꾼다. 노드 안 예외는 엔진이 삼키므로
+  예외가 아니라 **기록**으로 알리고 테스트 끝에 실패시킨다. 저장 문(`save_node`)의 쓰기는 `_execute` 뒤라 허용 — 사용자 결정
+  ("계산은 쓰지 않고, 저장은 버튼") 그대로. **그래프 테스트 11개 파일 전부**가 이 감시 아래에서 돈다(빠진 파일 검사 포함).
+- **실측(★찾은 것★)**: 조건부 μ/Σ 를 요청한 옵티마이저(`test_the_conditional_belief_equals_analyze[bl]`)가 `/analyze` 와 똑같이
+  매크로 수집기를 불러 `macro_observation_store.record_series` 로 **관측 빈티지를 기록**했다. 이것은 사용자 기록이 아니라
+  시점 정합(PIT)의 재료라 막지 않고 `ingestion` 으로 **따로 드러낸다**(짝: 같은 계산의 사용자 기록 쓰기는 여전히 위반).
+- **변이** 6/6 사망(금지 목록에서 `order_executor` 빼기 · 묶인 사본 재바인딩 제거 · 수집을 위반으로 · 감시 끄기 · 끝 검사 제거 ·
+  이름 꼴 무시). 끝 검사는 **내부 pytest 실행**으로 확인한다(쓰는 테스트는 teardown 오류, 쓰지 않는 짝은 통과).
+
+**하지 않은 것** — 수집기 쓰기 끄기(PIT 재료라 막지 않는다 — BL3 의 매크로 노드도 같은 규칙으로 드러낸다) · 저장소 코드 변경 0.
+
+**게이트** — ruff 통과 · `KIS_USE_MOCK=1 pytest tests/` 7262 통과 / 10 건너뜀 / 0 실패(그래프 테스트 257 이 감시 아래).

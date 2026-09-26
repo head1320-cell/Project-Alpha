@@ -223,3 +223,9 @@ def test_a_node_that_asks_for_lineage_receives_its_merged_input_lineage():
 def test_ordinary_nodes_are_still_called_with_two_arguments():
     rep = pg.run(_g([_n("s", "src"), _n("p", "pass")], [_e("s", "p")]), _registry())
     assert rep["nodes"]["p"]["status"] == "ok"
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

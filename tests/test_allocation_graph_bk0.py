@@ -169,3 +169,9 @@ def test_run_functions_never_call_a_write():
                 f = call.func
                 name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
                 assert name not in _WRITE_CALLS and not name.startswith("_save_"), (path.name, fn.name, name)
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

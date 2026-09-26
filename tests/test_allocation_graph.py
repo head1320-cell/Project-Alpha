@@ -365,3 +365,9 @@ def test_the_nodes_do_not_import_the_arithmetic_directly():
             and (n.module or "").startswith("src.engine") for a in n.names}
     assert seen, "★공허 금지★ — 스캔이 아무것도 못 보면 이 테스트는 증거가 아니다"
     assert seen <= _ALLOWED_ENGINE_IMPORTS, seen - _ALLOWED_ENGINE_IMPORTS
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")

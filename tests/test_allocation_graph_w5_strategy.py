@@ -120,3 +120,9 @@ def test_an_explicit_rate_stays_explicit_and_a_default_stays_default(client):
     assert m["view"]["cost_model"] == ref["cost_model"]
     default = _node(strategy_ids=ids, **_KNOBS)["view"]["cost_model"]
     assert default != m["view"]["cost_model"]
+
+
+# ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.
+from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
+
+pytestmark = pytest.mark.usefixtures("graph_write_guard")
