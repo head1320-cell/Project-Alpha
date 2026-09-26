@@ -463,3 +463,6 @@ _bl2.register(REGISTRY)
 from src.api import allocation_graph_nodes_backtest as _backtest  # noqa: E402
 
 _backtest.register(REGISTRY)
+from src.api import allocation_graph_nodes_macro_w2 as _macro_w2  # noqa: E402
+
+_macro_w2.register(REGISTRY)

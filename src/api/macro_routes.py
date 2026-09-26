@@ -131,18 +131,21 @@ def macro_yield_curve():
     try:
         from src.services.macro_collector import MacroCollector
         snap = MacroCollector.get_default().collect_all()
-        analyzer = _get_analyzer()
-        curve, inversion, severity = analyzer._analyze_yield_curve(snap.series)
-        return {
-            "points":            curve["points"],
-            "spread_2y10y_bp":   curve["spread_2y10y_bp"],
-            "inversion":         inversion,
-            "inversion_severity": severity,
-            "interpretation":    _interpret_curve(curve, inversion, severity),
-            "timestamp":         snap.timestamp,
-        }
+        return {**yield_curve_view(snap.series), "timestamp": snap.timestamp}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+def yield_curve_view(series: dict) -> dict:
+    """곡선·스프레드·역전·해석 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다(계열만 주입)."""
+    curve, inversion, severity = _get_analyzer()._analyze_yield_curve(series)
+    return {
+        "points":            curve["points"],
+        "spread_2y10y_bp":   curve["spread_2y10y_bp"],
+        "inversion":         inversion,
+        "inversion_severity": severity,
+        "interpretation":    _interpret_curve(curve, inversion, severity),
+    }
 
 
 def _interpret_curve(curve: dict, inversion: bool, severity: float | None) -> str:
@@ -328,6 +331,28 @@ _THEME_LABEL = {"growth": "성장", "inflation": "물가", "rates": "금리·통
                 "liquidity": "유동성·신용", "sentiment": "수급·심리", "korea": "한국"}
 
 
+def dashboard_themes(series: dict) -> list[dict]:
+    """6테마 지표 행 — `series` 는 `{키: asdict(MacroSeries)}`. 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다."""
+    themes = []
+    for key, ids in _THEME_MAP.items():
+        inds = []
+        for sid in ids:
+            s = series.get(sid)
+            if not s:
+                continue
+            vals = [v for v in (s.get("values") or []) if v is not None]
+            prev = vals[-2] if len(vals) >= 2 else None
+            latest = s.get("latest")
+            delta = round(latest - prev, 3) if (latest is not None and prev is not None) else None
+            inds.append({
+                "id": sid, "name": s.get("name"), "unit": s.get("unit"),
+                "latest": latest, "z_score": s.get("z_score"), "percentile": s.get("percentile"),
+                "delta": delta, "spark": [round(v, 4) for v in vals[-24:]],
+            })
+        themes.append({"key": key, "label": _THEME_LABEL[key], "indicators": inds})
+    return themes
+
+
 @router.get("/dashboard")
 def macro_dashboard():
     """6테마 매크로 지표 대시보드 — 각 지표 최근값·Δ·z-score(5년)·sparkline. FRED+ECOS 실데이터(키 없으면 mock)."""
@@ -335,27 +360,9 @@ def macro_dashboard():
     try:
         from src.services.macro_collector import MacroCollector
         snap = MacroCollector.get_default().collect_all().to_dict()
-        series = snap.get("series", {})
-        themes = []
-        for key, ids in _THEME_MAP.items():
-            inds = []
-            for sid in ids:
-                s = series.get(sid)
-                if not s:
-                    continue
-                vals = [v for v in (s.get("values") or []) if v is not None]
-                prev = vals[-2] if len(vals) >= 2 else None
-                latest = s.get("latest")
-                delta = round(latest - prev, 3) if (latest is not None and prev is not None) else None
-                inds.append({
-                    "id": sid, "name": s.get("name"), "unit": s.get("unit"),
-                    "latest": latest, "z_score": s.get("z_score"), "percentile": s.get("percentile"),
-                    "delta": delta, "spark": [round(v, 4) for v in vals[-24:]],
-                })
-            themes.append({"key": key, "label": _THEME_LABEL[key], "indicators": inds})
         return {
             "as_of": snap.get("timestamp"),
-            "themes": themes,
+            "themes": dashboard_themes(snap.get("series", {})),
             "sources": {"fred": bool(os.getenv("FRED_API_KEY")), "bok": bool(os.getenv("BOK_API_KEY"))},
         }
     except Exception:
@@ -690,6 +697,54 @@ def macro_source_coverage(include_ladder: bool = Query(True)):
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+def long_run_view(vars: str | None, months: int) -> dict:
+    """공적분 판정 본문 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다.
+
+    계열은 `load_series` 가 읽는다 — 노드는 `series_source(...)` 로 저장된 관측을 주입한다.
+    상한 초과·엔진 거부는 `CoreVariableError`(라우트는 422 로 옮긴다).
+    """
+    from src.engine.cointegration import (
+        MAX_CORE_VARS,
+        CoreVariableError,
+        analyze_long_run,
+        default_core_variables,
+    )
+    from src.engine.macro_models.base import load_series
+
+    requested = ([v.strip() for v in vars.split(",") if v.strip()]
+                 if vars else list(default_core_variables()))
+
+    # ★상한은 **요청** 개수로 잰다★ 적재 뒤에 재면 수집 안 된 계열이 조용히
+    # 빠져 8개 요청이 3개로 줄고, 그러면 상한을 넘겨도 통과한다. 사용자가 몇 개를
+    # 물었는지가 판단 대상이지 몇 개가 우연히 있었는지가 아니다.
+    if len(requested) > MAX_CORE_VARS:
+        raise CoreVariableError(
+            f"코어 변수는 최대 {MAX_CORE_VARS}개입니다 — {len(requested)}개를 "
+            "요청했습니다. VECM 의 모수는 대략 K²p 라 관측 수를 넘으면 결과가 "
+            "노이즈가 됩니다. 차원 축소(PCA)로 줄이지 않는 이유는 요인이 해석을 "
+            "잃기 때문입니다 — 코어 변수를 골라 주세요.")
+
+    try:
+        series = load_series(tuple(requested), months)
+    except Exception:
+        logger.exception("long-run 시리즈 적재 실패")
+        series = {}
+
+    out = analyze_long_run(series)
+
+    # ★요청한 것과 쓴 것이 다를 수 있다★ 수집되지 않은 계열은 조용히 빠지는데,
+    # 그 사실을 안 적으면 화면은 7개로 판정한 줄 안다.
+    out["requested"] = requested
+    out["used"] = sorted(series)
+    missing = sorted(set(requested) - set(series))
+    if missing:
+        out["missing"] = missing
+        out["missing_note"] = (
+            f"요청한 계열 중 {len(missing)}개가 수집되지 않아 빠졌습니다: "
+            f"{', '.join(missing)}. 남은 계열로 낸 판정입니다.")
+    return out
+
+
 @router.get("/long-run")
 def macro_long_run(vars: str | None = Query(None),
                    months: int = Query(240, ge=24, le=600)):
@@ -703,54 +758,31 @@ def macro_long_run(vars: str | None = Query(None),
     **요청이 잘못된 것**이므로 사유를 그대로 사용자에게 돌려준다.
     """
     try:
-        from src.engine.cointegration import (
-            MAX_CORE_VARS,
-            CoreVariableError,
-            analyze_long_run,
-            default_core_variables,
-        )
-        from src.engine.macro_models.base import load_series
-
-        requested = ([v.strip() for v in vars.split(",") if v.strip()]
-                     if vars else list(default_core_variables()))
-
-        # ★상한은 **요청** 개수로 잰다★ 적재 뒤에 재면 수집 안 된 계열이 조용히
-        # 빠져 8개 요청이 3개로 줄고, 그러면 상한을 넘겨도 통과한다. 사용자가 몇 개를
-        # 물었는지가 판단 대상이지 몇 개가 우연히 있었는지가 아니다.
-        if len(requested) > MAX_CORE_VARS:
-            raise HTTPException(422, (
-                f"코어 변수는 최대 {MAX_CORE_VARS}개입니다 — {len(requested)}개를 "
-                "요청했습니다. VECM 의 모수는 대략 K²p 라 관측 수를 넘으면 결과가 "
-                "노이즈가 됩니다. 차원 축소(PCA)로 줄이지 않는 이유는 요인이 해석을 "
-                "잃기 때문입니다 — 코어 변수를 골라 주세요."))
-
+        from src.engine.cointegration import CoreVariableError
         try:
-            series = load_series(tuple(requested), months)
-        except Exception:
-            logger.exception("long-run 시리즈 적재 실패")
-            series = {}
-
-        try:
-            out = analyze_long_run(series)
+            return long_run_view(vars, months)
         except CoreVariableError as e:
             raise HTTPException(422, str(e)) from e
-
-        # ★요청한 것과 쓴 것이 다를 수 있다★ 수집되지 않은 계열은 조용히 빠지는데,
-        # 그 사실을 안 적으면 화면은 7개로 판정한 줄 안다.
-        out["requested"] = requested
-        out["used"] = sorted(series)
-        missing = sorted(set(requested) - set(series))
-        if missing:
-            out["missing"] = missing
-            out["missing_note"] = (
-                f"요청한 계열 중 {len(missing)}개가 수집되지 않아 빠졌습니다: "
-                f"{', '.join(missing)}. 남은 계열로 낸 판정입니다.")
-        return out
     except HTTPException:
         raise
     except Exception:
         logger.exception("long-run 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def forecast_coverage_view(series: dict, *, market: str, months: int, k: int, alpha: float) -> dict:
+    """국면 예측집합 실측 적중률 본문 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다(계열만 주입)."""
+    from src.engine.regime_forecast import forecast_coverage
+    from src.engine.regime_transitions import regime_path
+    path_out = regime_path(series, market=market, months=months)
+    points = path_out.get("points") or []
+    if not points:
+        return {"available": False,
+                "reason": path_out.get("reason")
+                or "국면 경로를 만들 수 없습니다 — 매크로 계열이 부족합니다."}
+    out = forecast_coverage([p["regime"] for p in points], k=k, alpha=alpha)
+    out["market"] = market
+    return out
 
 
 @router.get("/regime-forecast-coverage")
@@ -765,24 +797,31 @@ def macro_regime_forecast_coverage(market: str = Query("kr"),
     언제든 올라가기 때문이다.
     """
     try:
-        from src.engine.regime_forecast import forecast_coverage
-        from src.engine.regime_transitions import regime_path
         from src.services.macro_collector import MacroCollector
 
         snap = MacroCollector().collect_all(use_cache=True)
-        path_out = regime_path(getattr(snap, "series", {}) or {},
-                               market=market, months=months)
-        points = path_out.get("points") or []
-        if not points:
-            return {"available": False,
-                    "reason": path_out.get("reason")
-                    or "국면 경로를 만들 수 없습니다 — 매크로 계열이 부족합니다."}
-        out = forecast_coverage([p["regime"] for p in points], k=k, alpha=alpha)
-        out["market"] = market
-        return out
+        return forecast_coverage_view(getattr(snap, "series", {}) or {}, market=market,
+                                      months=months, k=k, alpha=alpha)
     except Exception:
         logger.exception("regime-forecast-coverage 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def regime_consensus_view(series: dict, *, market: str, months: int) -> dict:
+    """세 국면 도구의 합의/불일치 본문 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다(계열만 주입)."""
+    from src.engine.macro_models.ensemble import combine_studio_views
+    from src.engine.regime_ensemble import regime_ensemble
+    ens = regime_ensemble(series, market=market, months=months)
+    views = {}
+    for name, res in (ens.get("tools") or {}).items():
+        if res.get("available"):
+            views[name] = {"available": True, "verdict": res.get("argmax")}
+        else:
+            views[name] = {"available": False, "reason": res.get("reason")}
+    out = combine_studio_views(views)
+    out["market"] = market
+    out["months"] = months
+    return out
 
 
 @router.get("/regime-consensus")
@@ -795,22 +834,9 @@ def macro_regime_consensus(market: str = Query("kr"),
     사유와 함께 이름이 남고, 하나만 답했으면 합의가 아니며, 동수는 결론이 아니다.
     """
     try:
-        from src.engine.macro_models.ensemble import combine_studio_views
-        from src.engine.regime_ensemble import regime_ensemble
         from src.services.macro_collector import MacroCollector
         snap = MacroCollector().collect_all(use_cache=True)
-        ens = regime_ensemble(getattr(snap, "series", {}) or {},
-                              market=market, months=months)
-        views = {}
-        for name, res in (ens.get("tools") or {}).items():
-            if res.get("available"):
-                views[name] = {"available": True, "verdict": res.get("argmax")}
-            else:
-                views[name] = {"available": False, "reason": res.get("reason")}
-        out = combine_studio_views(views)
-        out["market"] = market
-        out["months"] = months
-        return out
+        return regime_consensus_view(getattr(snap, "series", {}) or {}, market=market, months=months)
     except Exception:
         logger.exception("regime-consensus 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")

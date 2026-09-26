@@ -22,6 +22,9 @@ import {
 import {
   BacktestAttributionResult, BacktestCompareResult, BacktestLoadResult, BacktestSetupResult, RunProgress,
 } from "./BacktestResults";
+import {
+  ConsensusResult, CoverageResult, LongRunResult, MacroDashboardResult, StudioResult, YieldCurveResult,
+} from "./MacroW2Results";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -199,6 +202,12 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   backtest_load: ({ v, prov }) => <BacktestLoadResult v={v} prov={prov} />,
   backtest_attribution: ({ v }) => <BacktestAttributionResult v={v} />,
   backtest_compare: ({ v }) => <BacktestCompareResult v={v} />,
+  yield_curve: ({ v }) => <YieldCurveResult v={v} />,
+  macro_dashboard: ({ v }) => <MacroDashboardResult v={v} />,
+  regime_consensus: ({ v }) => <ConsensusResult v={v} />,
+  regime_forecast_coverage: ({ v }) => <CoverageResult v={v} />,
+  long_run: ({ v }) => <LongRunResult v={v} />,
+  macro_studio: ({ v }) => <StudioResult v={v} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />

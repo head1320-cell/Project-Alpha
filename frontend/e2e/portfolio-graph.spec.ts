@@ -1150,3 +1150,81 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
   // 이 실행은 진짜로 끝났을 수도, 아직일 수도 있다 — 어느 쪽이든 화면은 그 사실을 말한다.
   await expect(page.locator(".pg-side .pg-kv", { hasText: "총수익" }).or(page.locator(".pg-runprog"))).toBeVisible({ timeout: 60_000 });
 });
+
+test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·장기 관계·스튜디오가 돌고 그림으로 · 못 돌면 사유 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  // 노드 아홉 개와 옆 패널이 한 화면에 들어오도록 — 가려진 노드를 억지로 누르지 않는다.
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const eight = "KR_BASE_RATE,KR_TERM_SPREAD,KR_CPI,USD_KRW,KOSPI,KR_CREDIT_SPREAD,KR_IP,KR_10Y";
+  doc.nodes.push(
+    { id: "yc", type: "yield_curve", params: {}, position: { x: 1100, y: 0 } },
+    { id: "db", type: "macro_dashboard", params: {}, position: { x: 1100, y: 260 } },
+    { id: "dr", type: "macro_dashboard", params: { theme: "rates" }, position: { x: 1400, y: 260 } },
+    { id: "rc", type: "regime_consensus", params: { market: "kr" }, position: { x: 1100, y: 520 } },
+    { id: "fc", type: "regime_forecast_coverage", params: { market: "kr", months: 120 }, position: { x: 1400, y: 520 } },
+    { id: "lr", type: "long_run", params: { months: 120 }, position: { x: 1100, y: 780 } },
+    { id: "l8", type: "long_run", params: { vars: eight }, position: { x: 1400, y: 780 } },
+    { id: "st", type: "macro_studio", params: { studio: "neural-sde" }, position: { x: 1100, y: 1040 } },
+    { id: "pt", type: "macro_studio", params: { studio: "pinn-tail" }, position: { x: 1400, y: 1040 } },
+  );
+  await importText(page, "bl3w2.json", JSON.stringify(doc));
+  const body = await run(page);
+  // 노드가 아홉 개 더 붙어 옆 패널이 열리면 일부가 화면 밖으로 밀린다 — 고르기 전에 화면에 맞춘다.
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  for (const id of ["yc", "db", "dr", "rc", "fc", "lr", "st"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    // 개발 모드의 매크로는 연습용 계보다(운영은 저장된 관측만 — 백엔드 테스트가 가른다).
+    expect(body.nodes[id].lineage.practice, id).toBe(true);
+  }
+  // ★못 돌면 숫자 대신 사유★ — 상한 초과는 거부, 표본이 모자란 꼬리 모델은 엔진 사유 그대로
+  expect(body.nodes.l8.status).toBe("failed");
+  expect(body.nodes.l8.reason).toContain("최대 7개");
+  expect(body.nodes.pt.status).toBe("failed");
+  expect(body.nodes.pt.reason).toContain("돌리지 못했어요");
+
+  // 곡선: mock 곡선은 역전이다 — 칠한 구간과 '경험칙' 라벨
+  await pick("yc");
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-curve--inv")).toBeVisible();
+  expect(await page.locator(".pg-side .pg-curve .recharts-reference-area").count()).toBeGreaterThan(0);
+  await expect(page.locator(".pg-side .pg-tag", { hasText: "경험칙" })).toBeVisible();
+  // 대시보드: 전부면 여섯 테마, 테마를 고르면 하나
+  await pick("db");
+  await expect(page.locator(".pg-side .pg-dash-theme")).toHaveCount(6);
+  expect(await page.locator(".pg-side .pg-zbar:not(.pg-zbar--none) i").count(), "잰 z 는 막대로(모름으로 접지 않는다)").toBeGreaterThan(10);
+  await pick("dr");
+  await expect(page.locator(".pg-side .pg-dash-theme")).toHaveCount(1);
+  await expect(page.locator(".pg-side .pg-dash-h")).toHaveText("금리·통화");
+  // 합의: 세 방법이 한 줄씩(평균 한 줄이 아니다)
+  await pick("rc");
+  await expect(page.locator(".pg-side .pg-consensus tbody tr")).toHaveCount(3);
+  // 적중률: 목표·실측과 집합 크기 두 묶음
+  await pick("fc");
+  await expect(page.locator(".pg-side .pg-bars")).toHaveCount(2);
+  // 장기 관계: 검정표 줄 수 = 쓴 계열 수 · 빠진 계열은 경고로
+  await pick("lr");
+  const used = (body.nodes.lr.view.result.used as string[]).length;
+  await expect(page.locator(".pg-side .pg-trace tbody tr")).toHaveCount(used);
+  if ((body.nodes.lr.view.result.missing ?? []).length) await expect(page.locator(".pg-side .pg-warn")).toContainText("빠졌습니다");
+  // 스튜디오: 대체 엔진이 낸 수열 · 프런티어는 돌리지 않는다고 적는다
+  await pick("st");
+  expect(await page.locator(".pg-side .pg-spark-cell").count()).toBeGreaterThan(0);
+  await expect(page.locator(".pg-side .pg-studio-frontier")).toContainText("이 노드는 돌리지 않아요");
+
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["yc", "db"]) {
+      await pick(id);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(10);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
