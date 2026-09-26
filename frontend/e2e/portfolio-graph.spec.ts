@@ -1228,3 +1228,69 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });
+
+test("기업 노드(BL3 W3): 일곱 노드가 돌고 풋볼필드·분포·표로 · 모르는 종목·검증 못 할 테제는 사유 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const kill = { logic: "AND", conditions: [{ field: "roe", op: "lt", value: 8 }], groups: [] };
+  const bad = { logic: "AND", conditions: [{ field: "no_such_field", op: "gt", value: 1 }], groups: [] };
+  const at = (i: number) => ({ x: 1100 + (i % 2) * 300, y: Math.floor(i / 2) * 260 });
+  const add: [string, string, Record<string, unknown>][] = [
+    ["cv", "company_valuation", { code: "005930" }], ["rd", "reverse_dcf", { code: "005930" }],
+    ["vd", "valuation_distribution", { code: "005930", n: 500 }], ["fd", "financial_deep", { code: "005930" }],
+    ["rk", "risk_deep", { code: "005930" }], ["ms", "company_macro_sensitivity", { code: "005930" }],
+    ["th", "thesis_check", { code: "005930", claim: "메모리 업황 회복", kill_conditions: kill }],
+    ["uk", "company_valuation", { code: "999999" }], ["tb", "thesis_check", { code: "005930", claim: "x", kill_conditions: bad }],
+  ];
+  add.forEach(([id, type, params], i) => doc.nodes.push({ id, type, params, position: at(i) }));
+  await importText(page, "bl3w3.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["cv", "rd", "vd", "rk", "ms", "th"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    expect(body.nodes[id].lineage.practice, id).toBe(true);
+    expect(body.nodes[id].view.name, id).toBe("삼성전자");
+  }
+  // ★못 하면 사유★ — 재무 미적재(mock) · 모르는 코드 · 레지스트리에 없는 필드
+  expect(body.nodes.fd.status).toBe("failed");
+  expect(body.nodes.fd.reason).toContain("재무");
+  expect(body.nodes.uk.status).toBe("failed");
+  expect(body.nodes.uk.reason).toContain("999999");
+  expect(body.nodes.tb.status).toBe("failed");
+  expect(body.nodes.tb.reason).toContain("no_such_field");
+
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  await pick("cv");
+  await tab(page, "detail");
+  // 풋볼필드: 방법마다 한 줄 · 현재가 세로선이 줄마다 · 가정 표의 출처 칩(연습용은 '모름' 톤)
+  const bands = (body.nodes.cv.view.result.football_field.bands as unknown[]).length;
+  await expect(page.locator(".pg-side .pg-ff-row")).toHaveCount(bands);
+  await expect(page.locator(".pg-side .pg-ff-row .pg-ff-price")).toHaveCount(bands);
+  await expect(page.locator(".pg-side .pg-assume .pg-tag--unknown").first()).toContainText("연습용");
+  await expect(page.locator(".pg-side .pg-sens-base")).toHaveCount(1);
+  await pick("vd");
+  await expect(page.locator(".pg-side .pg-q-row")).toHaveCount(1 + Object.keys(body.nodes.vd.view.result.by_model).length);
+  await pick("rd");
+  await expect(page.locator(".pg-side .pg-bar-row")).toHaveCount(2);
+  await pick("ms");
+  await expect(page.locator(".pg-side .pg-msens-stat caption")).toContainText("상관 ≠ 인과");
+  await pick("th");
+  await expect(page.locator(".pg-side .pg-thesis tbody tr")).toHaveCount(1);
+  await expect(page.locator(".pg-side .pg-thesis .pg-tag")).not.toHaveClass(/pg-tag--failed/);
+
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["cv", "vd"]) {
+      await pick(id);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(10);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
