@@ -19875,3 +19875,7 @@ mock 의 T10Y2Y 계열(+1.6%p)과 곡선의 10Y−2Y(−127bp)가 서로 다른 
 있다(매크로와 달리 저장소 전용 경로가 없다). 종목 이름 해소도 DART corpCode 를 볼 수 있다.
 
 **게이트(커밋 시점)** — 위 표적 검사까지. 넓은 E2E·전체 pytest 는 커밋 뒤 — 결과는 후속 기록.
+
+**게이트 후속(BL3 W3)** — 넓은 E2E 273/273 · ruff 통과 · 전체 pytest 7405 passed / 10 skipped. 게이트 묶음에 `compan|valuation`
+패턴을 더했지만 그 이름의 E2E 스펙은 없다 — `/company` 화면의 라벨 변경(W3-0)은 E2E 로 따로 확인하지 않았고, 백엔드 테스트
+(`test_rf_beta_source_labels.py` · `test_company_analytics.py` · `test_company_snapshot_builder.py`)가 지킨다.
