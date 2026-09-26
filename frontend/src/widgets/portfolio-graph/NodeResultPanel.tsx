@@ -155,7 +155,7 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest"]);
+const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate"]);
 
 /** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
 const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
@@ -191,7 +191,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   custom_scenario: ({ v, prov }) => <ScenarioStressResult v={v} prov={prov} />,
   strategy_health: ({ v }) => <HealthResult v={v} />,
   sleeve_analytics: ({ v }) => <SleeveAnalyticsResult v={v} />,
-  alpha_validate: ({ v }) => <AlphaValidateResult v={v} />,
+  alpha_validate: ({ v, prov }) => <AlphaValidateResult v={v} prov={prov} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />

@@ -31,6 +31,7 @@ from src.api.allocation_graph_nodes import _FORBID, _labels, _ui, weights_value
 from src.api.allocation_graph_nodes_check import holdings_pct
 from src.api.allocation_graph_nodes_signal import registry_expr
 from src.data.mock_gate import mock_allowed
+from src.domain.perf_kind import backtest_label
 from src.engine import portfolio_graph as pg
 from src.engine.kr_scenario_pack import FACTORS
 from src.engine.scenario_packs import PACKS
@@ -402,7 +403,11 @@ def _alpha_validate(inputs: dict, p: AlphaValidateParams) -> pg.NodeOutput:
         raise pg.NodeFailure(f"알파를 검증하지 못했어요 — {_detail(e)}") from e
     if out.get("error"):
         raise pg.NodeFailure(f"알파를 검증하지 못했어요 — {out.get('message') or '사유 미상'}")
+    # ★롱숏 수익·샤프·낙폭은 성과 숫자다★ — 무슨 성과인지(과거 시뮬레이션 · 비용 미반영) 라벨을 단다.
+    label = {**backtest_label(is_mock_data=mock_allowed()).to_dict(),
+             "kind_reason": "점수 상·하위 분위를 과거에 사고판 시뮬레이션이에요(거래 비용 미반영)."}
     return pg.NodeOutput(values={}, view={"result": out, "expr_source": src},
+                         provenance={"perf_label": label},
                          tags={"practice": mock_allowed(), "sources": ["alpha_lab"]})
 
 

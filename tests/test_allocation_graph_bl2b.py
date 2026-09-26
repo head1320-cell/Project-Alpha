@@ -317,6 +317,9 @@ def test_alpha_validate_equals_the_route_and_records_nothing(no_record):
     ref = alpha_validate(ValidateRequest(expr="zscore(mom_6m)", universe="kospi50", months=12, quantiles=5,
                                          record_run=False))
     assert r["view"]["result"] == ref
+    # 롱숏 성과 숫자에는 무슨 성과인지 라벨이 붙는다(과거 시뮬레이션 · 개발 모드면 합성 데이터)
+    lab = r["provenance"]["perf_label"]
+    assert lab["kind"] == "backtest" and lab["data_real"] is False and "비용" in lab["kind_reason"]
 
 
 def test_saving_an_alpha_validation_attaches_it_to_the_registry_alpha(client, no_record, monkeypatch):

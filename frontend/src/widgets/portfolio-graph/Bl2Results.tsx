@@ -6,6 +6,7 @@
  */
 import type { ReactNode } from "react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -216,7 +217,7 @@ export function SleeveAnalyticsResult({ v }: { v: Dict }) {
 
 // ── 알파 검증 · 알파 포트폴리오 ─────────────────────────────────────────────
 
-export function AlphaValidateResult({ v }: { v: Dict }) {
+export function AlphaValidateResult({ v, prov }: { v: Dict; prov: Dict }) {
   const r = (v.result as Dict) ?? {};
   const ic = (r.ic as Dict) ?? {};
   const oos = (r.is_oos as Dict) ?? {};
@@ -230,7 +231,8 @@ export function AlphaValidateResult({ v }: { v: Dict }) {
       <KV rows={[
         ["평균 IC", sgn(ic.mean)], ["ICIR", sgn(ic.icir, 2)], ["t 값", sgn(ic.t_stat, 2)], ["적중률", pct(ic.hit_rate, 0)],
         ["앞 절반 / 뒤 절반 IC", `${sgn(oos.is_ic)} / ${sgn(oos.oos_ic)} (${String(oos.split ?? "?")})`],
-        ["롱숏", `총 ${pct(ls.total_return_pct)} · 샤프 ${sgn(ls.sharpe, 2)} · 최대 낙폭 ${pct(ls.mdd_pct)}`],
+        ["롱숏", <>{prov.perf_label ? <PerfLabel value={prov.perf_label as PerfLabelValue} /> : null}
+                  {` 총 ${pct(ls.total_return_pct)} · 샤프 ${sgn(ls.sharpe, 2)} · 최대 낙폭 ${pct(ls.mdd_pct)}`}</>],
         ["기간", `${String(r.period_start ?? "?")} ~ ${String(r.period_end ?? "?")} · ${String(r.n_periods ?? "—")}번`],
       ]} />
       {q.length > 0 && (

@@ -7948,3 +7948,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-casebox-panel { position: absolute; right: 0; top: 42px; z-index: 30; width: min(720px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; padding: 4px; background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 14px; box-shadow: var(--pg-shadow); }
 .pg-ensemble .pg-strong { font-weight: 700; color: var(--pg-ink); }
 .pg-dot-point { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 1px; background: var(--pg-assume); border-radius: 50%; }
+.pg-casebox { position: relative; }
+.pg-casebox > summary { list-style: none; }
+.pg-casebox > summary::-webkit-details-marker { display: none; }

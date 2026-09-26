@@ -81,7 +81,7 @@ export default function AllocationCanvasPage() {
     <div className="aas-root pg-page">
       {boot !== undefined && <PortfolioCanvas initialDoc={boot} onHandoff={handoff} handoffTargets={HANDOFF_TARGETS} wizardAliases={WIZARD_ALIASES} topExtra={<>
         {/* 연구 케이스 — 매크로 화면과 같은 케이스 바. 캔버스 높이를 뺏지 않게 상단 바에서 펼친다(BL2b). */}
-        <details className="pg-wizard pg-casebox">
+        <details className="pg-casebox">
           <summary className="pg-btn pg-btn--ghost" title="연구 케이스">케이스</summary>
           <div className="pg-casebox-panel"><CaseBar sessionSnapshotId={snapshotId} /></div>
         </details>
