@@ -19834,3 +19834,20 @@ mock 의 T10Y2Y 계열(+1.6%p)과 곡선의 10Y−2Y(−127bp)가 서로 다른 
 
 **게이트 후속(BL3 W2)** — 넓은 E2E 272/272(배분·AAS·캔버스·매크로·백테스트·스크리너·route-health·perf-label) · ruff 통과 ·
 전체 pytest 7357 passed / 10 skipped. W1 후속에서 고친 `backtest.spec` 단언도 이 묶음에서 통과했다.
+
+### BL3 W3-0 · 가치평가 기본 가정의 출처 라벨 — 기본값·합성값이 '실시간 관측'으로 불리던 결함
+
+**무엇을** — `company_analytics.resolve_default_params` 의 Rf·β **라벨만** 고쳤다. `RegimeState.dynamic_risk_free_rate_source`
+(`KR_10Y.source` — BOK·MOCK… · 계열이 없어 기본값이면 `default`)를 더하고, `get_dynamic_risk_free_rate_with_source()` 가 `(rf, 출처)`
+를 준다. 라벨: BOK → "ECOS 국고채 10년 (최신 관측)" · MOCK → "연습용 합성 (mock) — 국고채 10년 대용" · 기본값 → "기본값 (국고채 10년
+근사)" · β 는 mock 모드면 "연습용 합성 (mock)", 아니면 "일봉 1년 실측 (DB·KIS)".
+
+**왜** — 감사 실측: `get_dynamic_risk_free_rate()` 는 실패하면 0.035 를, 국면 상태는 `KR_10Y` 가 없으면 0.035 를 돌려주는데
+라벨은 무조건 "ECOS 국고채 10년 (실시간)" 이었다 — **기본값이 실시간 관측으로 둔갑**했다. mock 모드의 합성 KR_10Y·합성 β 도
+'실시간'·'KIS 1년 실측' 이었다. 기업 노드(W3)가 이 표를 그대로 옮길 것이라 먼저 고쳤다.
+
+**검증** — `tests/test_rf_beta_source_labels.py` 12(출처 셋 · 기본값은 ECOS 가 아니다 · 범위 밖은 기본값 · β 두 모드 · 값 골든) ·
+국면 관련 테스트 17 파일 242 통과 · 변이 6/6 죽음(무해 1 생존).
+
+**하지 않은 것** — Rf·β **값**, `get_dynamic_risk_free_rate()` 의미(킬스위치·밸류에이션 소비자) 불변. '최신 관측'이 공표 시각과
+정합하는지(PIT)는 재지 않았다 — 라벨은 출처만 말한다.
