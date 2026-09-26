@@ -410,3 +410,6 @@ _check.register(REGISTRY)
 from src.api import allocation_graph_nodes_signal as _signal  # noqa: E402
 
 _signal.register(REGISTRY)
+from src.api import allocation_graph_nodes_macro as _macro  # noqa: E402
+
+_macro.register(REGISTRY)

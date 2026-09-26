@@ -7792,3 +7792,24 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-filter-row:has(.pg-filter-v + .pg-filter-v) { grid-template-columns: minmax(0, 1fr) 64px 56px 56px 28px; }
 .pg-filter .pg-field-input { height: 34px; padding: 0 8px; font-size: 13px; }
 .pg-filter-logic { margin-bottom: 2px; }
+/* ── 거시·타이밍 노드 (BK W3) — 노출 조절의 두 줄 막대가 이 웨이브의 유일한 새 시각 요소 ── */
+.pg-exposure { display: grid; gap: 8px; margin: 4px 0 12px; }
+.pg-stack { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 8px; }
+.pg-stack-cap { font-size: 12.5px; font-weight: 600; color: var(--pg-body); }
+.pg-stack-bar { display: flex; height: 22px; overflow: hidden; background: var(--pg-soft); border-radius: 6px; }
+.pg-stack-bar i { display: block; height: 100%; border-right: 1px solid var(--pg-paper); }
+.pg-stack-bar i.pg-stack-cash { background: repeating-linear-gradient(45deg, var(--pg-line) 0 4px, var(--pg-soft) 4px 8px); }
+.pg-exposure-sum { margin: 2px 0 0 60px; font-size: 14px; font-weight: 700; color: var(--pg-ink); }
+.pg-legs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.pg-leg { display: grid; gap: 2px; padding: 8px 10px; border: 1.5px solid var(--pg-line); border-radius: 10px; }
+.pg-leg b { font-size: 18px; color: var(--pg-ink); }
+.pg-leg-k, .pg-leg-s { font-size: 12px; color: var(--pg-body); }
+.pg-leg--on { border-color: var(--pg-blue); background: var(--pg-blue-soft); }
+.pg-leg--on .pg-leg-k { color: var(--pg-blue-ink); font-weight: 700; }
+.pg-sig { display: grid; gap: 6px; margin: 8px 0; padding: 0; list-style: none; }
+.pg-sig-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; font-size: 13.5px; color: var(--pg-ink); }
+.pg-sig-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--pg-line); }
+.pg-sig--risk_on .pg-sig-dot { background: var(--pg-ok); }
+.pg-sig--risk_off .pg-sig-dot { background: var(--pg-fail); }
+.pg-sig--unavailable .pg-sig-dot { background: repeating-linear-gradient(45deg, var(--pg-unknown) 0 2px, var(--pg-unknown-soft) 2px 4px); }
+.pg-sig-state { font-weight: 600; color: var(--pg-body); }

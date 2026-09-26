@@ -12,6 +12,7 @@ import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import type { NodeRunResult } from "@/entities/portfolio-graph";
 import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";
 import { NeutralizeResult, ScoresResult, ScoresToWeightsResult, ScreenerResult, SleeveResult } from "./SignalResults";
+import { OverlayResult, RegimeResult, SimulationResult, TimingResult } from "./MacroResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -166,6 +167,10 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   scores_to_weights: ({ v }) => <ScoresToWeightsResult v={v} />,
   neutralize: ({ v }) => <NeutralizeResult v={v} />,
   sleeve_combine: ({ v }) => <SleeveResult v={v} />,
+  regime: ({ v }) => <RegimeResult v={v} />,
+  timing_signal: ({ v }) => <TimingResult v={v} />,
+  exposure_overlay: ({ v }) => <OverlayResult v={v} />,
+  timing_simulation: ({ v }) => <SimulationResult v={v} />,
 };
 
 export function NodeResultPanel({ kind, result, stale, extra }: {

@@ -394,3 +394,38 @@ test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로
   expect(conds[0]).toMatchObject({ field: "roe", op: "gt", value: 10 });
   expect(conds[1].value).toBe(5);
 });
+
+test("노출 조절(BK W3): 직접 정한 노출 60% → 조절 후 막대에 현금 칸 · 조절한 비중의 백테스트는 막힘", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push({ id: "x", type: "exposure_overlay", params: { follow: "manual", manual_exposure_pct: 60 }, position: { x: 1000, y: 400 } });
+  doc.nodes.push({ id: "b2", type: "backtest", params: {}, position: { x: 1200, y: 400 } });
+  doc.edges.push({ id: "ex1", source: "optimizer", source_port: "weights", target: "x", target_port: "weights" });
+  doc.edges.push({ id: "ex2", source: "x", source_port: "weights", target: "b2", target_port: "weights" });
+  doc.edges.push({ id: "ex3", source: "returns", source_port: "returns", target: "b2", target_port: "returns" });
+  await importText(page, "w3.json", JSON.stringify(doc));
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-run").click();
+  const body = await (await resp).json();
+  expect(body.nodes.x.status, body.nodes.x.reason).toBe("ok");
+  expect(body.nodes.x.view.exposure).toBeCloseTo(0.6, 6);
+  expect(body.nodes.x.lineage.overlay).toBe(true);
+  expect(body.nodes.b2.status).toBe("failed");
+  expect(body.nodes.b2.reason).toContain("노출");
+  expect(body.nodes.backtest.status, "짝 — 조절 전 비중의 백테스트는 그대로").toBe("ok");
+  await expect(node(page, "x").locator(".pg-node-ev")).toContainText("노출 조절됨");
+  await node(page, "x").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-stack")).toHaveCount(2);
+  await expect(page.locator(".pg-stack").nth(1).locator(".pg-stack-cash")).toHaveCount(1);
+  await expect(page.locator(".pg-exposure-sum")).toContainText("주식 60%");
+  await expect(page.locator(".pg-exposure-sum")).toContainText("현금 40%");
+  // 새 렌더러의 대비 — 라이트·다크 모두 AA(패널 안만 잰다).
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(150);
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+    expect(audit.checked).toBeGreaterThan(10);
+    expect(audit.low, dark ? "dark" : "light").toEqual([]);
+  }
+});
