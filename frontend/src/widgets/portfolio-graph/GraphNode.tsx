@@ -32,6 +32,7 @@ export const PORT_COLORS: Record<string, string> = {
   Trades: "#475569",
   TargetVersion: "#0f766e",
   StrategyResult: "#c026d3",
+  BacktestRun: "#b45309",
 };
 /** 포트 타입의 쉬운 이름 — 설정 탭의 받는 것/내는 것·포트 이름표. 모르는 타입은 이름 그대로. */
 export const PORT_PLAIN: Record<string, string> = {
@@ -39,6 +40,7 @@ export const PORT_PLAIN: Record<string, string> = {
   Weights: "비중", RiskReport: "위험 나눔", BacktestResult: "과거 성과",
   Scenario: "시나리오", StressReport: "충격 결과", Scores: "점수", RegimeState: "경기 국면",
   TimingSignal: "타이밍 신호", Trades: "주문 목록", TargetVersion: "실행 목표", StrategyResult: "전략 묶음 성과",
+  BacktestRun: "백테스트 실행",
 };
 const portColor = (t: string) => PORT_COLORS[t] ?? "#94a3b8";
 

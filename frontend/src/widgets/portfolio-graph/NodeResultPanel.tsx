@@ -19,6 +19,9 @@ import {
   AlphaPortfolioResult, AlphaValidateResult, EnsembleResult, FrontierResult, HealthResult, RegimeExplainResult,
   SleeveAnalyticsResult, ThreeWayResult,
 } from "./Bl2Results";
+import {
+  BacktestAttributionResult, BacktestCompareResult, BacktestLoadResult, BacktestSetupResult, RunProgress,
+} from "./BacktestResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -155,7 +158,7 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate"]);
+const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load"]);
 
 /** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
 const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
@@ -192,17 +195,25 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   strategy_health: ({ v }) => <HealthResult v={v} />,
   sleeve_analytics: ({ v }) => <SleeveAnalyticsResult v={v} />,
   alpha_validate: ({ v, prov }) => <AlphaValidateResult v={v} prov={prov} />,
+  backtest_setup: ({ v }) => <BacktestSetupResult v={v} />,
+  backtest_load: ({ v, prov }) => <BacktestLoadResult v={v} prov={prov} />,
+  backtest_attribution: ({ v }) => <BacktestAttributionResult v={v} />,
+  backtest_compare: ({ v }) => <BacktestCompareResult v={v} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />
   ),
 };
 
-export function NodeResultPanel({ kind, result, stale, extra }: {
+export function NodeResultPanel({ kind, result, stale, extra, params, onReload }: {
   kind: string;
   result: NodeRunResult | undefined;
   stale: boolean;
   extra?: ReactNode;
+  /** 노드 파라미터 — 백테스트 불러오기가 진행 중인 실행을 읽을 때 쓴다(BL3 W1). */
+  params?: Record<string, unknown>;
+  /** 이 노드만 다시 계산 — 진행 카드의 '결과 불러오기'. */
+  onReload?: () => void;
 }) {
   if (!result) {
     return <p className="pg-panel-note">아직 실행 결과가 없습니다 — 위의 “실행” 을 누르세요.</p>;
@@ -219,6 +230,9 @@ export function NodeResultPanel({ kind, result, stale, extra }: {
       {/* 성과 라벨 — 자기 렌더러가 숫자 옆에 직접 그리는 종류는 여기서 겹쳐 그리지 않는다. */}
       {prov.perf_label && !OWN_PERF_LABEL.has(kind) ? <div className="pg-perf"><PerfLabel value={prov.perf_label as PerfLabelValue} /></div> : null}
       {v && (RENDERERS[kind] ? RENDERERS[kind]({ v, prov }) : <Generic v={v} />)}
+      {/* 진행 중·끝난 실행은 노드가 '아직' 으로 실패한다 — 그 실행을 읽기만 하며 끝나기를 기다린다. */}
+      {kind === "backtest_load" && result.status === "failed" && typeof params?.run_id === "string" && onReload
+        && result.reason?.startsWith("아직") && <RunProgress runId={params.run_id} onReload={onReload} />}
       {extra}
     </section>
   );

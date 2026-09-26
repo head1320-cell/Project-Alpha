@@ -143,3 +143,46 @@ def test_the_response_survives_json_encoding(client, finished_run):
     assert r.status_code == 200
     import json
     json.dumps(r.json())
+
+
+# ── 4. 워커가 실제로 저장하는 모양 (BL3 W1 에서 발견) ─────────────────────────
+@pytest.fixture(scope="module")
+def worker_shaped_run() -> str:
+    """★워커는 `_screen_to_backtest_core` 의 응답 **전체**를 저장한다★ (`backtest_run_routes._worker` →
+    `br.set_result(run_id, result)`). 위 `finished_run` 은 `.get("backtest")` 만 저장해 — 워커와 다른 모양으로 —
+    귀인이 실제 실행에서 늘 "월별 수익률이 없습니다" 로 답하던 단선을 가리고 있었다."""
+    from src.api.screener_routes import ScreenToBacktestRequest, _screen_to_backtest_core
+    rid = br.create_run("귀인테스트-워커모양", {"kind": "test"})
+    if not rid:
+        pytest.skip("실행 저장소를 쓸 수 없다")
+    req = ScreenToBacktestRequest(
+        custom_tickers=["005930", "000660"],
+        filter_ast={"logic": "AND", "conditions": [], "groups": []},
+        strategy_name="Condition",
+        buy_conditions=[{"factor_token": "종가", "function_id": "base", "op": "gte", "rhs": 0}],
+        sell_conditions=[], start_date="2021-01-01", end_date="2025-12-31", max_positions=2, max_tickers=2)
+    payload = _screen_to_backtest_core(req)
+    if not (payload or {}).get("backtest"):
+        pytest.skip("이 환경에서 백테스트를 낼 수 없다")
+    br.advance(rid, "simulating")
+    if not br.set_result(rid, payload)["ok"]:
+        pytest.skip("결과 저장 실패")
+    return rid
+
+
+def test_a_run_stored_the_way_the_worker_stores_it_gets_an_attribution(client, worker_shaped_run):
+    b = client.get(_url(worker_shaped_run)).json()
+    assert b["available"] is True, b.get("reason")
+    assert b["months_from_run"] > 0
+
+
+def test_the_two_shapes_give_the_same_monthly_returns():
+    """짝: 응답 전체든 그 안의 `backtest` 든 같은 월별 수익률을 읽는다 — 어느 한쪽을 지어내지 않는다."""
+    from src.engine.backtest_attribution import monthly_returns_from_result
+    inner = {"monthly_returns": [{"year": 2024, "month": 1, "return_pct": 1.5},
+                                 {"year": 2024, "month": 2, "return_pct": -0.5}]}
+    a = monthly_returns_from_result(inner)
+    b = monthly_returns_from_result({"screened_count": 2, "backtest": inner})
+    assert a["available"] and b["available"] and a["returns"] == b["returns"]
+    # 둘 다 없으면 여전히 사유(빈 dict 가 아니다)
+    assert monthly_returns_from_result({"screened_count": 2, "backtest": {}})["available"] is False

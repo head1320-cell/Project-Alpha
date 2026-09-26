@@ -82,10 +82,39 @@ class ScreenerParams(BaseModel):
     liquidity_floor: Literal["off", "relaxed", "standard", "institutional"] = Field(
         "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
             "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
+    as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
+        "과거 시점", "advanced", help="넣으면 그날 알 수 있던 값으로만 걸러요(시점 고정 스크리너). 비우면 지금 값이에요. "
+                                    "과거 시점 거르기는 유동성 문턱·정렬 방향을 쓰지 않아요.")})
+
+
+def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
+    """시점 고정 스크리너(BL3 W1) — `/screener/run-pit` 라우트 함수 그대로(기준일 검사·룩어헤드 차단이 그 안에 있다)."""
+    try:
+        out = _sr.screener_run_pit(_sr.PITRunRequest(
+            universe=p.universe, custom_tickers=list(cand["tickers"]) if cand else None, filter_ast=p.filter_ast,
+            as_of_date=p.as_of, sort_by=p.sort_by, limit=max(p.top_n, 50)))
+    except HTTPException as e:
+        raise pg.NodeFailure(f"과거 시점으로 거르지 못했어요 — {e.detail}") from e
+    picked = (out.get("items") or [])[: p.top_n]
+    tickers = [it["stock_code"] for it in picked if it.get("stock_code")]
+    if len(tickers) < 2:
+        raise pg.NodeFailure(f"{p.as_of}에 조건에 맞는 종목이 {len(tickers)}개뿐이에요 — 조건을 넓히거나 날짜를 바꿔 주세요.")
+    practice = mock_allowed()
+    view = {"tickers": tickers, "labels": _ar._labels(tickers),
+            "items": _plain_items(picked, ("stock_code", "corp_name", "composite_score", "per", "pbr", "roe",
+                                           "dividend_yield", "market_cap")),
+            "total_evaluated": out.get("total_evaluated"), "total_passed": out.get("total_passed"),
+            "universe": "직접 이은 종목" if cand else _UNIVERSE_LABEL.get(p.universe, p.universe),
+            "data_source": {}, "liquidity_gate": None, "as_of": p.as_of}
+    return pg.NodeOutput(
+        values={"universe": {"tickers": tickers, "weights": None, "benchmark": "KOSPI"}}, view=view,
+        tags={"pit": "pit", "practice": practice, "sources": [f"screener_pit:{p.as_of}"]})
 
 
 def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
     cand = inputs.get("universe")
+    if p.as_of:
+        return _screener_pit(cand, p)
     req = _sr.AdvancedRunRequest(
         universe=p.universe, custom_tickers=list(cand["tickers"]) if cand else None,
         filter_ast=p.filter_ast, sort_by=p.sort_by, ascending=p.ascending,

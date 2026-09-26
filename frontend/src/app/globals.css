@@ -7951,3 +7951,16 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-casebox { position: relative; }
 .pg-casebox > summary { list-style: none; }
 .pg-casebox > summary::-webkit-details-marker { display: none; }
+
+/* ── 백테스트 웨이브 (BL3 W1) — 진행 카드가 이 웨이브의 유일한 움직임 ── */
+.pg-runprog { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding: 14px 16px; background: var(--pg-soft); border-radius: 14px; }
+.pg-runprog-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 15px; color: var(--pg-ink); }
+.pg-runprog-pct { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--pg-ink); }
+.pg-runprog-bar { height: 8px; overflow: hidden; background: var(--pg-line); border-radius: 999px; }
+.pg-runprog-bar > span { display: block; height: 100%; background: var(--pg-blue); border-radius: inherit; transition: width 600ms cubic-bezier(.2, .8, .2, 1); }
+.pg-runprog--done .pg-runprog-bar > span { background: var(--pg-ok); }
+.pg-runprog-stage { margin: 0; font-size: 13px; line-height: 1.5; color: var(--pg-body); }
+.pg-runprog .pg-btn { align-self: flex-start; }
+@media (prefers-reduced-motion: reduce) { .pg-runprog-bar > span { transition: none; } }
+.pg-save-follow { margin-top: 8px; }
+.pg-cmp-warn { margin-bottom: 10px; }

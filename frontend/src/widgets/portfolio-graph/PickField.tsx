@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { multibacktestApi } from "@/entities/multibacktest";
 import { researchApi } from "@/entities/research";
 import { alphaApi } from "@/entities/alpha/api";
+import { backtestRunApi } from "@/entities/backtest-run";
 import { API_BASE } from "@/shared/api/apiBase";
 
 /** 저장된 시나리오 팩 — 목록 문은 `/scenario-packs` 하나다. 실패를 빈 목록으로 삼키지 않는다. */
@@ -26,6 +27,7 @@ const EMPTY: Record<string, string> = {
   strategies: "등록된 전략이 없어요 — 백테스트 결과를 전략으로 등록하면 여기에 나와요.",
   research_runs: "연구 기록이 없어요 — 비중 계산 결과를 연구 기록으로 남기면 여기에 나와요.",
   alphas: "등록된 알파가 없어요 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나와요.",
+  backtest_runs: "백테스트가 없어요 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 나와요(목록을 못 읽어도 비어 보일 수 있어요).",
   scenario_packs: "저장된 시나리오가 없어요 — 직접 정한 충격을 쓰거나, 시나리오를 저장하면 여기에 나와요.",
 };
 
@@ -57,6 +59,17 @@ async function load(source: string): Promise<Item[]> {
       chips: [
         ...(a.is_template ? [{ text: "예시", tone: "unknown" as const }] : []),
         ...(a.status !== "approved" ? [{ text: "승인 전", tone: "assumed" as const }] : []),
+      ],
+    }));
+  }
+  if (source === "backtest_runs") {
+    return (await backtestRunApi.list()).runs.map((r) => ({
+      value: r.run_id, label: r.strategy_name || r.run_id,
+      sub: `${new Date(r.created_at * 1000).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · ${r.run_id}`,
+      chips: [
+        ...(r.status !== "completed" ? [{ text: r.status === "failed" ? "실패" : `진행 ${Math.round(r.progress_percent ?? 0)}%`, tone: "assumed" as const }] : []),
+        ...(r.is_mock_data === true ? [{ text: "연습용 데이터", tone: "unknown" as const }] : []),
+        ...(r.is_mock_data === null ? [{ text: "데이터 출처 미상", tone: "unknown" as const }] : []),
       ],
     }));
   }

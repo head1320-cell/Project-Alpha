@@ -744,6 +744,61 @@ def _proxy_selection(window_as_of: str | None, truncated: bool, prox: dict) -> d
     }
 
 
+class _ProxyResolutionError(Exception):
+    """팩터 대리계열을 해소하지 못했다 — 라우트는 500, 노드는 사유 있는 실패로 바꾼다."""
+
+
+def factor_attribution_for_run(r: dict, run_id: str, *, series_map: dict | None = None,
+                               truncate_to_window: bool = False) -> dict:
+    """실행 한 건의 매크로 팩터 귀인 — 라우트와 캔버스 노드(BL3 W1)가 **같은 본문**을 쓴다.
+
+    `series_map` 을 주면 그 매크로 계열로 대리계열을 고른다(노드는 운영에서 **저장된 관측만** 넘긴다 — 라우트처럼
+    수집기를 부르지 않는다). 비우면 예전 라우트 동작 그대로(`resolve_proxies` 가 수집기를 부른다).
+    """
+    from src.api.json_safe import finite_payload
+    from src.engine.backtest_attribution import (
+        factor_attribution,
+        monthly_returns_from_result,
+    )
+
+    monthly = monthly_returns_from_result(r.get("result"))
+    if not monthly["available"]:
+        return {"available": False, "reason": monthly["reason"],
+                "run_id": run_id, "status": r.get("status")}
+
+    # ★귀인한 창을 응답이 말한다 (P9 ①)★ 대리계열 **선택**은 오늘까지의 관측
+    # 수로 이뤄지는데, 그 사실이 응답 어디에도 없었다. 계수에는 수치적
+    # 룩어헤드가 없다(`factor_attribution` 이 공통 달로 교집합을 잡는다) —
+    # 고치는 것은 **선택의 시점 표기**다.
+    # ★라벨 기본 · 절단은 플래그★ 절단을 기본으로 켜면 계열이 짧아져 귀인
+    # 수치가 움직인다. 그것은 이 슬라이스의 범위가 아니다(P5 ③ 과 같은 규율).
+    window_as_of = _window_as_of(monthly["returns"])
+    try:
+        from src.engine.factor_exposure import resolve_proxies
+        prox = resolve_proxies(series_map, as_of=window_as_of if truncate_to_window else None)
+    except Exception as e:
+        raise _ProxyResolutionError(str(e)) from e
+    # ★모든 분기가 같은 라벨을 낸다★ 절단을 켜면 계열이 짧아져 아무 팩터도
+    # 안 남을 수 있다(정직한 거절이다). 그때 라벨이 빠지면 소비자는 **왜**
+    # 거절됐는지 — 자른 탓인지 수집기가 빈 탓인지 — 구별할 수 없다.
+    if not prox.get("available"):
+        return {"available": False, "reason": prox.get("reason"),
+                "run_id": run_id, "status": r.get("status"),
+                "proxy_selection": _proxy_selection(
+                    window_as_of, truncate_to_window, prox)}
+
+    out = factor_attribution(monthly["returns"], prox["resolved"])
+    out.update(proxy_selection=_proxy_selection(
+        window_as_of, truncate_to_window, prox))
+    out.update(run_id=run_id, status=r.get("status"),
+               strategy_name=r.get("strategy_name"),
+               months_from_run=monthly["n_months"],
+               skipped_rows=monthly["skipped_rows"],
+               proxies={f: i["series"] for f, i in prox["resolved"].items()},
+               unresolved=prox.get("unresolved", {}))
+    return finite_payload(out)
+
+
 @router.get("/runs/{run_id}/factor-attribution")
 def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     """★무엇이 이 수익을 만들었나★ 실현수익을 매크로 팩터와 α 로 쪼갠다 (P3-2).
@@ -765,46 +820,8 @@ def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     if r is None:
         raise HTTPException(404, "실행을 찾을 수 없습니다.")
 
-    from src.api.json_safe import finite_payload
-    from src.engine.backtest_attribution import (
-        factor_attribution,
-        monthly_returns_from_result,
-    )
-
-    monthly = monthly_returns_from_result(r.get("result"))
-    if not monthly["available"]:
-        return {"available": False, "reason": monthly["reason"],
-                "run_id": run_id, "status": r.get("status")}
-
-    # ★귀인한 창을 응답이 말한다 (P9 ①)★ 대리계열 **선택**은 오늘까지의 관측
-    # 수로 이뤄지는데, 그 사실이 응답 어디에도 없었다. 계수에는 수치적
-    # 룩어헤드가 없다(`factor_attribution` 이 공통 달로 교집합을 잡는다) —
-    # 고치는 것은 **선택의 시점 표기**다.
-    # ★라벨 기본 · 절단은 플래그★ 절단을 기본으로 켜면 계열이 짧아져 귀인
-    # 수치가 움직인다. 그것은 이 슬라이스의 범위가 아니다(P5 ③ 과 같은 규율).
-    window_as_of = _window_as_of(monthly["returns"])
     try:
-        from src.engine.factor_exposure import resolve_proxies
-        prox = resolve_proxies(as_of=window_as_of if truncate_to_window else None)
-    except Exception:
+        return factor_attribution_for_run(r, run_id, truncate_to_window=truncate_to_window)
+    except _ProxyResolutionError:
         logger.exception("팩터 계열 해소 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
-    # ★모든 분기가 같은 라벨을 낸다★ 절단을 켜면 계열이 짧아져 아무 팩터도
-    # 안 남을 수 있다(정직한 거절이다). 그때 라벨이 빠지면 소비자는 **왜**
-    # 거절됐는지 — 자른 탓인지 수집기가 빈 탓인지 — 구별할 수 없다.
-    if not prox.get("available"):
-        return {"available": False, "reason": prox.get("reason"),
-                "run_id": run_id, "status": r.get("status"),
-                "proxy_selection": _proxy_selection(
-                    window_as_of, truncate_to_window, prox)}
-
-    out = factor_attribution(monthly["returns"], prox["resolved"])
-    out.update(proxy_selection=_proxy_selection(
-        window_as_of, truncate_to_window, prox))
-    out.update(run_id=run_id, status=r.get("status"),
-               strategy_name=r.get("strategy_name"),
-               months_from_run=monthly["n_months"],
-               skipped_rows=monthly["skipped_rows"],
-               proxies={f: i["series"] for f, i in prox["resolved"].items()},
-               unresolved=prox.get("unresolved", {}))
-    return finite_payload(out)

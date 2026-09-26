@@ -36,6 +36,11 @@ def monthly_returns_from_result(result: dict | None) -> dict:
     """
     if not isinstance(result, dict):
         return {"available": False, "reason": "백테스트 결과가 없습니다"}
+    # ★워커가 저장하는 모양을 읽는다 (BL3 W1)★ 백그라운드 워커는 `_screen_to_backtest_core` 의 응답 **전체**를
+    # 저장하고, 월별 수익률은 그 안의 `backtest` 에 있다. 예전에는 최상위만 봐서 실제 실행에서는 늘 "없다" 고
+    # 답했다(배선 테스트가 `.get("backtest")` 만 저장해 가려졌다). 최상위에 없을 때만 한 단계 내려간다.
+    if "monthly_returns" not in result and isinstance(result.get("backtest"), dict):
+        result = result["backtest"]
     rows = result.get("monthly_returns")
     if rows is None:
         return {"available": False,

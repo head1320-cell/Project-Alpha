@@ -486,7 +486,17 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
                              onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
                              onDuplicate={() => s.duplicateNode(selected.id)}
                              result={selResult} stale={s.reportStale}
-                             onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")} />
+                             onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")}
+                             saveFollowUp={selected.data.kind === "backtest_setup" ? {
+                               label: "결과 불러오기 노드 추가",
+                               run: (runId) => {
+                                 // 시작한 실행을 읽는 노드를 설정 노드 오른쪽에 붙이고 고른다 — 링크는 없다(읽기는 run_id 로 한다).
+                                 const st = usePortfolioGraph.getState();
+                                 const id = st.addNode("backtest_load", { x: selected.position.x + 240, y: selected.position.y });
+                                 st.updateParams(id, { run_id: runId });
+                                 st.select(id);
+                               },
+                             } : null} />
             )}
             {s.tab === "detail" && selected && (
               <>
@@ -494,6 +504,8 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
                 kind={selected.data.kind}
                 result={selResult}
                 stale={s.reportStale}
+                params={selected.data.params}
+                onReload={() => void runTo(selected.id)}
                 extra={handoff && (
                   <div className="pg-handoff-box">
                     <h4 className="pg-h4">단계별 마법사로 이어서 보기</h4>

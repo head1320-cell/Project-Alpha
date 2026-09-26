@@ -203,9 +203,11 @@ function BasicField({ f, value, root, onChange }: {
 }
 
 /** 저장하기 (BK W4) — ★계산은 쓰지 않는다★ 서버가 다시 계산해 이 미리보기와 같을 때만 한 번 저장한다. */
-function SaveBox({ result, stale, onSave, label }: {
+function SaveBox({ result, stale, onSave, label, followUp }: {
   result?: NodeRunResult; stale: boolean; onSave: () => Promise<SaveResult>; label?: string | null;
+  followUp?: { label: string; run: (savedId: string) => void } | null;
 }) {
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const ready = result?.status === "ok" && !!result.view_hash && !stale;
@@ -219,6 +221,7 @@ function SaveBox({ result, stale, onSave, label }: {
                 try {
                   const r = await onSave();
                   setMsg(r.ok ? { ok: true, text: r.text ?? "저장했어요" } : { ok: false, text: r.message });
+                  setSavedId(r.ok ? r.saved_id : null);
                 } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
                 finally { setBusy(false); }
               }}>
@@ -226,12 +229,15 @@ function SaveBox({ result, stale, onSave, label }: {
       </button>
       <p className="pg-help">{why ?? "지금 본 미리보기를 한 번 저장해요. 주문은 나가지 않아요."}</p>
       {msg && <p className={`pg-save-msg${msg.ok ? "" : " pg-save-msg--err"}`} role="status">{msg.text}</p>}
+      {followUp && savedId && (
+        <button type="button" className="pg-btn pg-btn--primary pg-save-follow" onClick={() => followUp.run(savedId)}>{followUp.label}</button>
+      )}
     </div>
   );
 }
 
 export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
-  result, stale, onSave }: {
+  result, stale, onSave, saveFollowUp }: {
   node: PgNode;
   entry: NodeCatalogEntry | undefined;
   nodes: PgNode[];
@@ -245,6 +251,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   result?: NodeRunResult;
   stale: boolean;
   onSave: () => Promise<SaveResult>;
+  /** 저장 뒤 이어서 할 일(BL3 W1 — 백테스트를 시작하면 '결과 불러오기 노드 추가'). */
+  saveFollowUp?: { label: string; run: (savedId: string) => void } | null;
 }) {
   const params = node.data.params ?? {};
   const plainOf = (id: string) => {
@@ -280,7 +288,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
           <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 써요.</p>
         </div>
       )}
-      {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} label={entry.save_label} />}
+      {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} label={entry.save_label}
+                                         followUp={saveFollowUp} />}
       <div className="pg-actions">
         <button type="button" className="pg-btn pg-dup" onClick={onDuplicate} title="같은 입력으로 하나 더 (Ctrl+D)">
           <Copy size={14} /> 복제해서 비교하기

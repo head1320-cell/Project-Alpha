@@ -59,7 +59,9 @@ PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
               "BacktestResult",
               # BK — 레포 도구를 노드로 옮기며 생기는 값. 선언만 먼저(BK0), 노드는 웨이브마다.
               "Scenario", "StressReport", "Scores", "RegimeState", "TimingSignal", "Trades",
-              "TargetVersion", "StrategyResult")
+              "TargetVersion", "StrategyResult",
+              # BL3 W1 — 백그라운드에서 끝난 조건식 백테스트 실행 한 건(불러오기 노드가 낸다).
+              "BacktestRun")
 
 
 def weights_value(names: list[str], weights: Any, *, sigma_annual: Any = None,
@@ -458,3 +460,6 @@ _strategy.register(REGISTRY)
 from src.api import allocation_graph_nodes_bl2 as _bl2  # noqa: E402
 
 _bl2.register(REGISTRY)
+from src.api import allocation_graph_nodes_backtest as _backtest  # noqa: E402
+
+_backtest.register(REGISTRY)

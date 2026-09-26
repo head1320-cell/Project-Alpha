@@ -1035,3 +1035,118 @@ test("알파 검증 → 알파 서랍(BL2b): 검증 기록 전엔 '검증 단계
   expect((await page.request.delete(`${API}/alpha-registry/${aid}`)).ok()).toBe(true);
   if (rid) await page.request.delete(`${API}/research-runs/${rid}`);
 });
+
+// ── BL3 W1 · 백테스트 웨이브 — 시작은 버튼, 읽기는 노드 ─────────────────────
+test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 · '백테스트 시작' 한 번 → 불러오기 노드 → 진행 카드 → 결과·라벨 → 귀인·비교", async ({ page }) => {
+  test.setTimeout(240_000);
+  const sink = trackErrors(page);
+  await openCanvas(page);
+  const doc = { format: "project-alpha.portfolio-graph", version: 1, meta: { name: "BL3 W1" }, edges: [],
+    nodes: [{ id: "bs", type: "backtest_setup", position: { x: 0, y: 0 },
+              params: { universe: "kospi50", strategy_name: "GoldenCross", start_date: "2021-01-01", end_date: "2024-12-31", max_tickers: 3, max_positions: 3 } }] };
+  await importText(page, "bl3.json", JSON.stringify(doc));
+  const starts: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("/api/v1/backtest/runs") && r.method() === "POST") starts.push(r.url()); });
+  const body = await run(page);
+  expect(body.nodes.bs.status, body.nodes.bs.reason).toBe("ok");
+  expect(starts, "계산은 백테스트를 시작하지 않는다").toEqual([]);
+
+  await node(page, "bs").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-kv")).toContainText("골든크로스");
+  await tab(page, "settings");
+  await expect(page.locator(".pg-save-btn")).toHaveText("백테스트 시작");
+  const saved = page.waitForResponse((r) => r.url().includes("/allocation/graph/save"));
+  await page.locator(".pg-save-btn").click();
+  const sv = await (await saved).json();
+  expect(sv.ok, sv.message).toBe(true);
+  await expect(page.locator(".pg-save-msg")).toContainText("백테스트를 시작했어요");
+  await page.locator(".pg-save-follow").click();                               // 결과 불러오기 노드 추가
+  const loader = page.locator(".pg-node").filter({ hasText: "백테스트 결과 보기" });
+  await expect(loader).toHaveCount(1);
+
+  // 계산 — 아직이면 진행 카드가 뜨고, 끝나면 '결과 불러오기' 가 밝아진다(읽기만 한다).
+  await page.locator(".pg-run").click();
+  await tab(page, "detail");
+  const prog = page.locator(".pg-runprog");
+  const done = page.locator(".pg-kv", { hasText: "총수익" });
+  await expect(prog.or(done)).toBeVisible({ timeout: 60_000 });
+  if (await prog.isVisible()) {
+    await expect(prog.getByRole("button", { name: "결과 불러오기" })).toBeEnabled({ timeout: 180_000 });
+    await prog.getByRole("button", { name: "결과 불러오기" }).click();
+  }
+  await expect(done).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(".pg-side .pg-perf")).toBeVisible();                 // 성과 숫자 옆에 무슨 성과인지
+
+  // 귀인 · 비교(같은 실행 둘 — 조건이 같으니 경고가 없다)
+  const cur = await exportDoc(page);
+  const lid = cur.nodes.find((n: { type: string }) => n.type === "backtest_load").id as string;
+  const rid = cur.nodes.find((n: { type: string }) => n.type === "backtest_load").params.run_id as string;
+  cur.nodes.push({ id: "ba", type: "backtest_attribution", params: {}, position: { x: 520, y: 0 } },
+                 { id: "l2", type: "backtest_load", params: { run_id: rid }, position: { x: 240, y: 200 } },
+                 { id: "bc", type: "backtest_compare", params: {}, position: { x: 520, y: 200 } });
+  cur.edges.push({ id: "e1", source: lid, source_port: "run", target: "ba", target_port: "run" },
+                 { id: "e2", source: lid, source_port: "run", target: "bc", target_port: "a" },
+                 { id: "e3", source: "l2", source_port: "run", target: "bc", target_port: "b" });
+  await importText(page, "bl3b.json", JSON.stringify(cur));
+  const b2 = await run(page);
+  expect(b2.nodes.bc.status, b2.nodes.bc.reason).toBe("ok");
+  expect(b2.nodes.bc.view.differences).toEqual([]);
+  expect(["ok", "failed"]).toContain(b2.nodes.ba.status);
+  if (b2.nodes.ba.status === "ok") {
+    await node(page, "ba").click();
+    await expect(page.locator(".pg-side .pg-attr")).toBeVisible();
+  } else {
+    expect(b2.nodes.ba.reason, "귀인을 못 하면 사유가 있다").toContain("귀인");
+  }
+  await node(page, "bc").click();
+  await expect(page.locator(".pg-side .pg-cmp tbody tr")).toHaveCount(7);
+  await expect(page.locator(".pg-side .pg-cmp-warn")).toHaveCount(0);
+  expect(starts, "백테스트 시작은 버튼 한 번뿐").toHaveLength(0);                // 저장 문(/graph/save)이 시작했다 — /backtest/runs POST 는 없다
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+});
+
+test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리고, 끝나면 '결과 불러오기'가 밝아진다 · 대비 AA", async ({ page }) => {
+  await openCanvas(page);
+  // 끝난 실행 하나를 만든다(버튼 경로와 같은 라우트) — 화면이 '아직' 을 받도록 응답만 바꾼다.
+  const created = await (await page.request.post(`${API}/backtest/runs`, { data: { strategy_name: "E2E 진행 카드",
+    config: { universe: "kospi50", filter_ast: { logic: "AND", conditions: [], groups: [] }, strategy_name: "GoldenCross",
+              start_date: "2023-01-01", end_date: "2023-12-31", max_tickers: 2, max_positions: 2 } } })).json();
+  const rid = created.run_id as string;
+  const doc = { format: "project-alpha.portfolio-graph", version: 1, meta: {}, edges: [],
+    nodes: [{ id: "lo", type: "backtest_load", params: { run_id: rid }, position: { x: 0, y: 0 } }] };
+  await importText(page, "prog.json", JSON.stringify(doc));
+  let step = 0;
+  await page.route(/\/backtest\/runs\/[^/]+\/status/, (r) => r.fulfill({ json: step === 0
+    ? { run_id: rid, status: "simulating", progress_percent: 45, current_stage: "simulating", status_message: "", strategy_name: "E2E",
+        created_at: 0, started_at: 0, completed_at: null, error_code: null, error_message: null, correlation_id: null,
+        is_mock_data: true, is_pit_verified: null, engine_version: null }
+    : { run_id: rid, status: "completed", progress_percent: 100, current_stage: "completed", status_message: "", strategy_name: "E2E",
+        created_at: 0, started_at: 0, completed_at: 1, error_code: null, error_message: null, correlation_id: null,
+        is_mock_data: true, is_pit_verified: null, engine_version: null } }));
+  await page.route("**/allocation/graph/run**", async (route) => {
+    const resp = await route.fetch();
+    const j = await resp.json();
+    j.nodes.lo = { ...j.nodes.lo, status: "failed", view: null, reason: "아직 끝나지 않았어요 — 45% · 시뮬레이션. 끝나면 다시 계산해 주세요." };
+    await route.fulfill({ response: resp, json: j });
+  });
+  await page.locator(".pg-run").click();
+  await node(page, "lo").click();
+  await tab(page, "detail");
+  const card = page.locator(".pg-runprog");
+  await expect(card).toContainText("45%");
+  await expect(card.getByRole("button", { name: "결과 불러오기" })).toBeDisabled();
+  for (const dark of [false, true]) {
+    await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-runprog"));
+    expect(audit.checked).toBeGreaterThan(2);
+    expect(audit.low, dark ? "dark" : "light").toEqual([]);
+  }
+  step = 1;                                                               // 다음 읽기에서 끝남
+  await expect(card.getByRole("button", { name: "결과 불러오기" })).toBeEnabled({ timeout: 10_000 });
+  await expect(card).toContainText("끝났어요");
+  await page.unroute("**/allocation/graph/run**");
+  await card.getByRole("button", { name: "결과 불러오기" }).click();
+  // 이 실행은 진짜로 끝났을 수도, 아직일 수도 있다 — 어느 쪽이든 화면은 그 사실을 말한다.
+  await expect(page.locator(".pg-side .pg-kv", { hasText: "총수익" }).or(page.locator(".pg-runprog"))).toBeVisible({ timeout: 60_000 });
+});
