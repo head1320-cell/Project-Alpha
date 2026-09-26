@@ -7838,3 +7838,4 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-src { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .pg-src li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--pg-ink); }
 .pg-chips-static { display: flex; flex-wrap: wrap; gap: 6px; }
+.pg-verdict { display: block; font-size: 12px; color: var(--pg-mute); }

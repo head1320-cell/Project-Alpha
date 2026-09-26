@@ -154,11 +154,10 @@ export function ValuationScoresResult({ v }: { v: Dict }) {
   return (
     <>
       <table className="pg-table">
-        <thead><tr><th>종목</th><th>판정</th><th className="pg-td-bar">싼 정도</th><th className="pg-td-num">적정가 대비</th></tr></thead>
+        <thead><tr><th>종목 · 판정</th><th className="pg-td-bar">싼 정도</th><th className="pg-td-num">적정가 대비</th></tr></thead>
         <tbody>{ranked.map(([c, s]) => (
           <tr key={c}>
-            <td className="pg-td-name" title={c}>{labels[c] ?? c}</td>
-            <td>{String(byCode[c]?.verdict ?? "—")}</td>
+            <td className="pg-td-name" title={c}>{labels[c] ?? c}<span className="pg-verdict">{String(byCode[c]?.verdict ?? "—")}</span></td>
             <td className="pg-td-bar"><span className={`pg-bar${s < 0 ? " pg-bar--neg" : ""}`} style={{ width: `${(Math.abs(s) / max) * 100}%` }} /></td>
             <td className="pg-td-num">{s >= 0 ? `${s.toFixed(1)}% 싸요` : `${(-s).toFixed(1)}% 비싸요`}</td>
           </tr>

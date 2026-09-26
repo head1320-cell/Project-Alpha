@@ -244,11 +244,18 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         raise pg.NodeFailure(f"{p.model} 모델을 이 환경에서 풀 수 없습니다 — "
                              f"{avail.get('reason') or '가용성 미상'}")
     u = r["universe"]
+    # ★회사 뷰는 사용자 뷰와 섞지 않는다★ (BK W5) — `/analyze use_company_views` 와 같은 자리
+    # (`optimize(company_views=…)`)로 넘겨야 공시 `company_views_used` 가 제 몫만 센다. 사용자 뷰
+    # (`AllocationView`)에는 `source` 칸이 없어 이 갈래에 잡히지 않는다.
+    co_source = _studio._company_source()                   # 회사 뷰 출처 라벨의 단일 출처
+    incoming = list(inputs.get("views") or [])
+    company = [v for v in incoming if v.get("source") == co_source]
+    user_views = [v for v in incoming if v.get("source") != co_source]
     try:
         req = AnalyzeRequest(
             tickers=u["tickers"], weights=u["weights"], benchmark=u["benchmark"],
             lookback_days=r["lookback_days"], as_of=r["as_of"],
-            views=inputs.get("views") or None,
+            views=user_views or None,
             model=p.model, delta=p.delta, tau=p.tau, constraints=p.constraints,
             **belief_settings)
     except ValidationError as e:
@@ -272,7 +279,7 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau,
                        s_override=belief.s_override, extra_views=belief.extra_views,
-                       company_views=None)
+                       company_views=company or None)
     except EPUnavailable as e:
         raise pg.NodeFailure(str(e)) from e
     constraints_report = _apply_constraints(req, names, R, opt, r["bench"])
@@ -288,6 +295,7 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         "views_applied": opt["views_applied"], "skipped_views": opt["skipped_views"],
         "cap_missing": opt["cap_missing"], "mu_engine": opt.get("mu_engine"),
         "ep": opt.get("ep"), "constraints_report": constraints_report,
+        "company_views_used": opt.get("company_views_used"),
         "belief": {"conditional": req.conditional, "blocked": belief.blocked,
                    "blocked_reason": belief.blocked_reason},
     }
@@ -416,3 +424,6 @@ _macro.register(REGISTRY)
 from src.api import allocation_graph_nodes_act as _act  # noqa: E402
 
 _act.register(REGISTRY)
+from src.api import allocation_graph_nodes_strategy as _strategy  # noqa: E402
+
+_strategy.register(REGISTRY)

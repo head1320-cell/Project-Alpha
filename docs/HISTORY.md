@@ -19564,3 +19564,34 @@ V2 와 섞지 않는다) · 국면 앙상블/설명 노드 · 시나리오 3자 
 (서버 저널 항목이 있는 상태로 재현·통과) · next build `/allocation` 119 kB 그대로.
 이 커밋에는 W5 화면 선행분(고르기 위젯 `PickField` · 렌더러 `StrategyResults` · CSS · E2E 2건)이 함께 들어간다 —
 서버 노드는 W5 커밋에서 들어오고, 그 전까지 카탈로그에 해당 노드가 없어 화면에 나타나지 않는다(W5 E2E 는 W5 게이트에서 돈다).
+
+### BK W5 · 전략·기업 노드 4종 — ★기존 문을 그대로 부르고, 지금 시점 전용은 과거로 보내지 않는다★
+- **노드**(`src/api/allocation_graph_nodes_strategy.py`): 전략 묶음 돌려 보기(`strategy_backtest` —
+  `/multibacktest/run` 을 **`save=False`** 로 그대로 호출: 같은 가드·비용 블록·출처·라벨, 실행 기록 0 · 배분 방식은
+  `allocator.METHODS` 만이라 `hrp_macro` 는 선택지에 없다 · 기간을 비우면 고른 전략이 **함께 기록된 전체**이고 화면이
+  그렇게 말한다 · ★사용자가 정한 칸만 문으로 넘긴다★ — 노드 기본값까지 넘기면 문의 비용 블록이 기본 요율을
+  "명시" 로 적었다(골든이 잡음)) · 기업 전망 넣기(`company_views` — `/analyze use_company_views` 와 같은
+  `prices_for`·`company_views(as_of=수익률 기준일)` · 내 생각(Views)을 받아 함께 넘김 · `pit: forward_only` · 뷰가 0개면
+  실패 + 종목별 사유) · 가치평가로 점수 매기기(`valuation_scores` — `/valuation/compare` 그대로 · 점수 = −괴리율 ·
+  ★적정가를 못 낸 종목(엔진이 괴리율 0·"데이터 없음" 을 낸다)은 점수에서 빼고 사유로★ — 미상 ≠ 0 · forward_only) ·
+  결정 되짚기(`attribution_review` — `/attribution/{run_id}` 의 `_attribution_for` · 읽기만).
+- **옵티마이저 배선만**: 들어온 Views 를 출처(`allocation_studio._company_source()`)로 갈라 회사 뷰는
+  `optimize(company_views=…)`, 나머지는 `AnalyzeRequest.views` — `/analyze` 와 같은 자리라 공시
+  `company_views_used` 가 제 몫만 센다(view 에 추가). 배분 정책·최적화기 의미는 그대로(골든 3종이 증명).
+- **화면**: 고르기 위젯 `PickField`(x-ui `widget:"pick"` · `source: strategies|research_runs` → 기존
+  `multibacktestApi.strategies`·`researchApi.list` · 불러오는 중 / 저장소를 못 읽음(사유·다시 불러오기) / 없음(무엇을 하면
+  생기는지) 세 상태 · 고른 값이 목록에 없으면 지우지 않고 경고) · 렌더러 4(`StrategyResults.tsx` — 계좌 곡선 + 낙폭 띠 ·
+  성과 나누기의 `null` 은 "안 쟀어요" · 전략별 출처 칩 · 기업 전망 표 · 가치평가 표(판정은 이름 아래) · 되짚기의 안 잰 분해 칩).
+- **테스트** — 백엔드 26(기업 전망 골든 3 · 회사/사용자 뷰 분리(짝) · 기준일 전달 · forward_only → 백테스트 거절(짝: 없으면
+  통과) · 뷰 0개 실패 · 가치평가 == compare 행 · −괴리율 · 미상 제외 · 가격 없음 사유 · 점수 → 비중 · 되짚기 == 라우트 ·
+  없는 기록 · 전략 == 문(hrp·inverse_vol) · 기록 0 · 공통 구간 · 연습용 · 없는 전략 · hrp_macro 미제공 · 엔진이 모든
+  리밸런싱 선택지를 받음(짝) · 명시/기본 요율(짝) · 해요체/금지어) · 변이 a~j 사망(미상=0 · 회사 뷰 섞기 · save=True · 구간 무시 ·
+  forward_only 제거 · as_of 누락 · 뷰 0개 ok · 전 칸 전달 · 점수 부호 · 되짚기 기준일 누락), 무해 k(설명 문구) 생존 ·
+  E2E 2(실제 mock 경로로 기업 전망 → 비중 · 백테스트 거절 · 가치평가 → 비중 · 라이트/다크 AA · 연구 기록 고르기 → 파라미터 →
+  되짚기 · 전략 없음 안내).
+
+**하지 않은 것** — 전략 등록 노드(등록은 재현 대조가 필요한 쓰기라 기존 화면에 둔다) · `hrp_macro` · 전략 묶음
+결과를 다른 노드로 잇기(StrategyResult 를 받는 노드가 아직 없다) · 연구 기록 저장 노드(그래프 실행 기록은 별도 설계).
+
+**게이트** — ruff 통과 · `KIS_USE_MOCK=1 pytest tests/` 7244 통과 / 10 건너뜀 / 0 실패 · allocation/aas/portfolio E2E
+195/195 · next build `/allocation` 119 kB 그대로.
