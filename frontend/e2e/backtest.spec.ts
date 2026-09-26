@@ -219,7 +219,9 @@ test("Backtest: completed run → results workspace renders + refresh recovery (
   await expect(page.locator(".brun-card-t", { hasText: "Attribution" })).toBeVisible();
   await expect(page.locator(".brun-diag-omit")).toContainText("MFE/MAE");
   await expect(page.getByText("MOCK 데이터").first()).toBeVisible();
-  await expect(page.getByText("PIT 미검증").first()).toBeVisible();
+  // 픽스처에는 `pit_evidence` 가 없다 — 판정할 자료가 없으면 '미검증'이 아니라 '판정불가'다
+  // (a7b2765 의 네 상태 배지). 옛 단언은 '미검증' 이었고 그 뒤로 조용히 깨져 있었다.
+  await expect(page.getByText("PIT 판정불가").first()).toBeVisible();
   await expect(page.locator("table").first()).toBeVisible(); // symbols / trades
   const body = await page.locator("body").innerText();
   expect(body).toContain("삼성전자");
@@ -290,6 +292,23 @@ test("Backtest: compare two completed runs → overlay + metric delta + config d
 // num_trades: 3 이라 '산출 불가'가 0개다. 그래서 아래 첫 테스트는 조건을 만들어서 검사하고,
 // 두 번째 테스트가 '조건이 아닐 때는 뜨지 않는다'를 지킨다. 둘이 같이 있어야 계약이 닫힌다.
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ★짝★ 자료가 있고 판정이 '미검증' 이면 그 라벨이 뜨고 '판정불가' 로 접히지 않는다 — 위 테스트와 함께
+// 네 상태를 둘로 접는 구현(자료 유무와 무관하게 한 라벨)을 배제한다.
+test("Backtest: pit_evidence 가 unverified 면 'PIT 미검증' — 판정불가와 섞지 않는다", async ({ page }) => {
+  const full = JSON.parse(JSON.stringify(completedRun().full));
+  full.result.pit_evidence = {
+    status: "unverified", axes: { price: { state: "degraded", reason: "원주가" }, universe: { state: "ok", reason: null } },
+    applicable: ["price", "universe"], ok_axes: ["universe"], broken_axes: ["price"], unknown_axes: [],
+    summary: "가격 축이 시점 정합이 아닙니다(E2E).", note: "시점 정합에 대한 판정입니다.",
+  };
+  await page.route(`**/api/v1/backtest/runs/${STUB_RUN_ID}`, (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(full) }));
+  await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
+  await expect(page.locator(".brun-badge", { hasText: "PIT 미검증" })).toBeVisible();
+  expect(await page.locator(".brun-badge", { hasText: "PIT 판정불가" }).count()).toBe(0);
+  await expect(page.getByText("가격 축이 시점 정합이 아닙니다(E2E).").first()).toBeVisible();
+});
 
 test("S1b: 벤치마크가 없고 체결이 0건이면 그 지표들을 '산출 불가'로 사유와 함께 적는다", async ({ page }) => {
   // 기존 픽스처를 깊은 복사해서 조건만 뒤집는다(compare 테스트가 쓰는 방식과 같다).
