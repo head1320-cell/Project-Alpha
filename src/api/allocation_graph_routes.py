@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
 from src.api.allocation_graph_nodes import PORT_TYPES, REGISTRY, STAGES
@@ -33,10 +33,19 @@ def graph_validate(graph: Any = Body(...)) -> dict:
 
 
 @router.post("/run")
-def graph_run(graph: Any = Body(...)) -> dict:
+def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_length=2000)) -> dict:
     """위상 순서로 실행. 노드별 `{status, reason, view, provenance}` — 실패는 번지되
-    지어내지 않는다(`portfolio_graph` 의 약속)."""
-    report = pg.run(graph, REGISTRY)
+    지어내지 않는다(`portfolio_graph` 의 약속).
+
+    `?targets=a,b` 는 ★그 노드들과 조상만★ 계산한다(BL1 "여기까지 계산"). 부분 계산에는 증거 관문 판정을 내지
+    않는다 — 관문은 그래프 전체를 보고 판정하는데 계산하지 않은 노드를 "건너뜀" 으로 셀 수 없다(`gates: null` + 사유).
+    """
+    ids = [t for t in (targets or "").split(",") if t] if targets is not None else None
+    report = pg.run(graph, REGISTRY, targets=ids)
+    if ids is not None:
+        report["gates"] = None
+        report["gates_reason"] = "일부만 계산했어요 — 증거 관문은 전체를 계산할 때 판정해요."
+        return report
     # ★증거 관문★ (BJ1) — 그래프 구성과 노드 출처로 8 관문을 판정한다. 건너뛴 관문은 건너뜀이다.
     nodes = graph.get("nodes") if isinstance(graph, dict) and isinstance(graph.get("nodes"), list) else []
     stage_of = {t: REGISTRY.get(t).stage for t in REGISTRY.types()}

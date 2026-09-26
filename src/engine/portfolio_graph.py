@@ -369,20 +369,50 @@ def _explain_ok(spec: NodeSpec, out: NodeOutput, params: Any) -> dict:
                            "text": f"설명을 만들지 못했어요({type(e).__name__}) — 결과 숫자는 자세히 탭에 있어요."}]}
 
 
-def run(graph: Any, registry: Registry) -> dict:
+def run(graph: Any, registry: Registry, targets: list[str] | None = None) -> dict:
     """검증 → 위상 순서 실행. 반환:
     `{"ok", "errors", "order", "nodes": {id: {type, status, reason, view, provenance,
     explain, lineage, view_hash}}}`.
+
+    `targets` 를 주면 ★그 노드들과 조상만★ 계산한다(BL1 "여기까지 계산" — n8n 의 Execute step). 나머지 노드는
+    결과에 **없다** — 이전 결과를 섞는 것은 화면의 일이고, 화면은 그것을 "이전 계산" 으로 표시한다. 보고서에
+    `partial: {targets, computed}` 가 붙는다. 계산한 노드의 값은 전체 계산과 같다(같은 함수·같은 입력).
     """
-    return _execute(graph, registry)[0]
+    return _execute(graph, registry, targets)[0]
 
 
-def _execute(graph: Any, registry: Registry) -> tuple[dict, dict[str, dict[str, Any]], dict[str, Any]]:
+def _ancestors(targets: list[str], incoming: dict[str, dict]) -> set[str]:
+    need, stack = set(), list(targets)
+    while stack:
+        nid = stack.pop()
+        if nid in need:
+            continue
+        need.add(nid)
+        stack.extend(src for src, _ in incoming.get(nid, {}).values())
+    return need
+
+
+def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
+             ) -> tuple[dict, dict[str, dict[str, Any]], dict[str, Any]]:
     """`run` 의 본체 — 보고서와 함께 노드별 내부 값·파라미터를 돌려준다(저장 액션 전용)."""
     doc = _document_errors(graph)
     if doc:
         return {"ok": False, "errors": doc, "order": [], "nodes": {}}, {}, {}
     errors, nodes, specs, params, incoming, order = _analyse(graph, registry)
+    partial = None
+    if targets is not None:
+        unknown = [t for t in targets if t not in nodes]
+        if unknown or not targets:
+            why = (f"계산할 노드가 그래프에 없어요: {', '.join(unknown)}" if unknown else "계산할 노드를 고르지 않았어요.")
+            return {"ok": False, "errors": [_err("unknown_target", why)], "order": [], "nodes": {}}, {}, {}
+        need = _ancestors(list(targets), incoming)
+        edge_target = {_edge_id(e): str(e.get("target")) for e in graph["edges"] if isinstance(e, Mapping)}
+        # 이 부분과 무관한 노드·링크의 오류는 이 계산을 막지 않는다(다른 곳의 설정 실수가 여기를 멈추지 않게).
+        errors = [e for e in errors if (e.get("node_id") in need) or
+                  (e.get("node_id") is None and (e.get("edge_id") is None or edge_target.get(e["edge_id"]) in need))]
+        if order is not None:
+            order = [n for n in order if n in need]
+            partial = {"targets": list(targets), "computed": order}
     if order is None:
         return {"ok": False, "errors": errors, "order": [], "nodes": {}}, {}, {}
 
@@ -453,7 +483,10 @@ def _execute(graph: Any, registry: Registry) -> tuple[dict, dict[str, dict[str, 
                         "view_hash": view_hash(out.view)}
 
     ok = not errors and all(r["status"] == STATUS_OK for r in results.values())
-    return {"ok": ok, "errors": errors, "order": order, "nodes": results}, values, params
+    report = {"ok": ok, "errors": errors, "order": order, "nodes": results}
+    if partial is not None:
+        report["partial"] = partial
+    return report, values, params
 
 
 # ── 저장 액션 (BK0) ───────────────────────────────────────────────────────────

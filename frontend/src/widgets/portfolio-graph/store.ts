@@ -1,10 +1,19 @@
 "use client";
 /**
- * 포트폴리오 캔버스 상태 (BI3) — reactflow 노드·엣지 + 카탈로그 + 검증·실행 보고.
+ * 포트폴리오 캔버스 상태 (BI3 → BL1) — reactflow 노드·엣지 + 카탈로그 + 검증·실행 보고.
  * ==========================================================================
  * ★낡은 결과를 새 그래프의 결과처럼 보이지 않는다★ — 노드·링크·파라미터가 바뀌면
  * `reportStale` 이 서고, 화면은 "현재 그래프의 결과가 아닙니다" 라고 말한다. 위치 이동은
  * 계산에 영향이 없으므로 결과를 낡게 만들지 않는다.
+ *
+ * BL1 (조사 → 적용):
+ * - **여기까지 계산**(n8n Execute step): 부분 계산 결과를 이전 결과에 **합치되**, 이번에 계산하지 않은 노드는
+ *   `previous: true` 로 표시한다 — 이전 값을 지금 값처럼 보이지 않는다.
+ * - **되돌리기/다시하기**: 구조·설정·위치(끌기 한 번 = 한 단계)를 스냅숏 50개까지.
+ * - **여러 개 고르기 · 복사/붙여넣기**: 붙여넣으면 id 를 새로 받고, 링크는 **고른 것끼리**만 따라온다.
+ * - **자동 정리**: 위상 깊이로 열, 같은 깊이는 이전 세로 순서 — 새 의존성 없음.
+ * - **묶음 상자**(KNIME 메타노드·ComfyUI 서브그래프): 문서의 `groups` — 계산에는 끼지 않는 화면 정보다.
+ * - **계산 기록**: 세션 최근 10회 — 노드마다 상태·헤드라인을 남겨 두 계산을 비교한다.
  */
 import { create } from "zustand";
 import {
@@ -19,18 +28,32 @@ import {
 import {
   fromDoc,
   PG_NODE_TYPE,
+  topoOrder,
   type GraphDoc,
+  type GraphGroup,
   type NodeCatalogEntry,
+  type NodeStatus,
   type PgNode,
   type RunReport,
   type ValidateReport,
 } from "@/entities/portfolio-graph";
+
+/** 계산 기록 한 줄 — 노드마다 상태와 헤드라인만(원 결과는 두지 않는다: 가볍게, 비교에 필요한 만큼). */
+export interface RunRecord {
+  at: number;
+  partial: string[] | null;
+  counts: { ok: number; blocked: number; failed: number };
+  nodes: Record<string, { status: NodeStatus; headline: string | null; value: number | null }>;
+}
+
+interface Snapshot { nodes: PgNode[]; edges: Edge[]; groups: GraphGroup[] }
 
 export interface PgState {
   catalog: NodeCatalogEntry[] | null;
   catalogError: string | null;
   nodes: PgNode[];
   edges: Edge[];
+  groups: GraphGroup[];
   name: string;
   report: RunReport | null;
   reportStale: boolean;
@@ -38,8 +61,19 @@ export interface PgState {
   /** 마지막 불러오기에서 건너뛴 것(깨진 링크 등) — 조용히 버리지 않고 말한다. */
   loadProblems: string[];
   selectedId: string | null;
+  /** 함께 고른 노드들(상자 끌기·Shift) — 복사·묶기·삭제의 대상. `selectedId` 는 그중 패널에 보이는 하나. */
+  picked: string[];
   running: boolean;
+  /** 지금 계산 중인 노드들(부분 계산이면 대상의 조상) — 경로를 밝힌다. */
+  runningIds: string[] | null;
+  /** "여기까지 계산" 에 마우스를 올렸을 때 계산될 노드 — 누르기 전에 무엇이 돌지 보인다. */
+  preview: string[] | null;
   runError: string | null;
+  runs: RunRecord[];
+  past: Snapshot[];
+  future: Snapshot[];
+  clip: { nodes: PgNode[]; edges: Edge[] } | null;
+  showMinimap: boolean;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
   tab: "story" | "settings" | "detail";
   expert: boolean;
@@ -52,14 +86,27 @@ export interface PgState {
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
+  removePicked: () => void;
   /** 같은 입력(들어오는 링크)·같은 설정으로 옆에 하나 더 — 설정만 바꿔 나란히 비교할 때. 나가는 링크는 잇지 않는다. */
   duplicateNode: (id: string) => string | null;
   loadDoc: (doc: GraphDoc, problems?: string[]) => void;
   setName: (n: string) => void;
   select: (id: string | null) => void;
   setValidation: (v: ValidateReport | null) => void;
-  startRun: () => void;
+  startRun: (ids?: string[] | null) => void;
   finishRun: (r: RunReport | null, err?: string | null) => void;
+  setPreview: (ids: string[] | null) => void;
+  undo: () => void;
+  redo: () => void;
+  copy: () => number;
+  paste: () => number;
+  autoLayout: () => void;
+  groupPicked: (label?: string) => string | null;
+  ungroup: (id: string) => void;
+  toggleGroup: (id: string) => void;
+  renameGroup: (id: string, label: string) => void;
+  moveGroup: (id: string, dx: number, dy: number) => void;
+  setMinimap: (v: boolean) => void;
   setTab: (t: PgState["tab"]) => void;
   setExpert: (v: boolean) => void;
   setOpenGate: (k: string | null) => void;
@@ -73,101 +120,327 @@ const newId = (kind: string, taken: Set<string>) => {
 };
 
 const STRUCTURAL = new Set(["add", "remove", "reset"]);
+const HISTORY = 50;
+const RUNS = 10;
+/** 같은 노드의 설정을 잇달아 고치면 한 단계로 묶는다(글자 하나마다 되돌리기 한 번이면 못 쓴다). */
+const COALESCE_MS = 800;
+let lastParamEdit: { id: string; at: number } | null = null;
+let dragging = false;
 
-export const usePortfolioGraph = create<PgState>((set, get) => ({
-  catalog: null,
-  catalogError: null,
-  nodes: [],
-  edges: [],
-  name: "",
-  report: null,
-  reportStale: false,
-  validation: null,
-  loadProblems: [],
-  selectedId: null,
-  running: false,
-  runError: null,
-  tab: "story",
-  expert: false,
-  openGate: null,
+/** 조상(자신 포함) — 서버 `portfolio_graph._ancestors` 와 같은 규칙. "여기까지 계산" 이 돌 노드들. */
+export function ancestorsOf(ids: string[], edges: { source: string; target: string }[]): string[] {
+  const into = new Map<string, string[]>();
+  for (const e of edges) into.set(e.target, [...(into.get(e.target) ?? []), e.source]);
+  const seen = new Set<string>();
+  const stack = [...ids];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    stack.push(...(into.get(n) ?? []));
+  }
+  return [...seen];
+}
 
-  setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
+const clean = (nodes: PgNode[]) => nodes.map((n) => ({ ...n, selected: false, dragging: false }));
 
-  onNodesChange: (changes) => set((s) => {
-    const structural = changes.some((c) => STRUCTURAL.has(c.type));
-    const removed = new Set(changes.filter((c) => c.type === "remove").map((c) => (c as { id: string }).id));
-    return {
-      nodes: applyNodeChanges(changes, s.nodes) as PgNode[],
-      edges: removed.size ? s.edges.filter((e) => !removed.has(e.source) && !removed.has(e.target)) : s.edges,
-      selectedId: s.selectedId && removed.has(s.selectedId) ? null : s.selectedId,
-      reportStale: s.reportStale || (structural && s.report !== null),
-    };
-  }),
+function record(report: RunReport, partial: string[] | null): RunRecord {
+  const nodes: RunRecord["nodes"] = {};
+  const counts = { ok: 0, blocked: 0, failed: 0 };
+  for (const [id, r] of Object.entries(report.nodes)) {
+    if (r.previous) continue;
+    counts[r.status] += 1;
+    const h = r.explain?.headline;
+    nodes[id] = { status: r.status, headline: h ? (h.text ?? (h.value != null ? `${h.value}${h.unit ?? ""}` : null)) : null,
+                  value: typeof h?.value === "number" ? h.value : null };
+  }
+  return { at: Date.now(), partial, counts, nodes };
+}
 
-  onEdgesChange: (changes) => set((s) => ({
-    edges: applyEdgeChanges(changes, s.edges),
-    reportStale: s.reportStale || (changes.some((c) => STRUCTURAL.has(c.type)) && s.report !== null),
-  })),
+export const usePortfolioGraph = create<PgState>((set, get) => {
+  /** 지금 상태를 되돌리기 칸에 넣는다 — 바꾸기 **직전**에 부른다. */
+  const push = () => set((s) => ({
+    past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups }].slice(-HISTORY),
+    future: [],
+  }));
 
-  connect: (c) => set((s) => ({
-    edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges),
-    reportStale: s.report !== null,
-  })),
-
-  addNode: (kind, position) => {
-    const id = newId(kind, new Set(get().nodes.map((n) => n.id)));
-    const node: PgNode = { id, type: PG_NODE_TYPE, position, data: { kind, params: {} } };
-    set((s) => ({ nodes: [...s.nodes, node], selectedId: id, reportStale: s.report !== null }));
-    return id;
-  },
-
-  updateParams: (id, params) => set((s) => ({
-    nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, params } } : n)),
-    reportStale: s.report !== null,
-  })),
-
-  removeNode: (id) => set((s) => ({
-    nodes: s.nodes.filter((n) => n.id !== id),
-    edges: s.edges.filter((e) => e.source !== id && e.target !== id),
-    selectedId: s.selectedId === id ? null : s.selectedId,
-    reportStale: s.report !== null,
-  })),
-
-  duplicateNode: (id) => {
-    const src = get().nodes.find((n) => n.id === id);
-    if (!src) return null;
-    const nid = newId(src.data.kind, new Set(get().nodes.map((n) => n.id)));
-    const node: PgNode = {
-      ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + 150 },
-      data: { ...src.data, params: structuredClone(src.data.params ?? {}) },
-    };
-    const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
-      ...e, id: `${e.source}.${e.sourceHandle}->${nid}.${e.targetHandle}`, target: nid, selected: false,
-    }));
-    set((s) => ({ nodes: [...s.nodes, node], edges: [...s.edges, ...incoming], selectedId: nid,
-                  reportStale: s.report !== null }));
-    return nid;
-  },
-
-  loadDoc: (doc, problems = []) => {
-    const { nodes, edges } = fromDoc(doc, get().catalog ?? []);
-    set({
-      nodes, edges, name: doc.meta?.name ?? "", loadProblems: problems,
-      report: null, reportStale: false, validation: null, selectedId: null, runError: null,
-    });
-  },
-
-  setName: (name) => set({ name }),
-  select: (selectedId) => set({ selectedId }),
-  setValidation: (validation) => set({ validation }),
-  startRun: () => set({ running: true, runError: null }),
-  finishRun: (report, err = null) => set((s) => ({
+  return {
+    catalog: null,
+    catalogError: null,
+    nodes: [],
+    edges: [],
+    groups: [],
+    name: "",
+    report: null,
+    reportStale: false,
+    validation: null,
+    loadProblems: [],
+    selectedId: null,
+    picked: [],
     running: false,
-    runError: err,
-    report: report ?? s.report,
-    reportStale: report ? false : s.reportStale,
-  })),
-  setTab: (tab) => set({ tab }),
-  setExpert: (expert) => set({ expert }),
-  setOpenGate: (openGate) => set({ openGate }),
-}));
+    runningIds: null,
+    preview: null,
+    runError: null,
+    runs: [],
+    past: [],
+    future: [],
+    clip: null,
+    showMinimap: false,
+    tab: "story",
+    expert: false,
+    openGate: null,
+
+    setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
+
+    onNodesChange: (changes) => {
+      const structural = changes.some((c) => STRUCTURAL.has(c.type));
+      const drag = changes.find((c) => c.type === "position") as { dragging?: boolean } | undefined;
+      if (structural) push();
+      else if (drag?.dragging && !dragging) { dragging = true; push(); }          // 끌기 한 번 = 한 단계
+      if (drag && drag.dragging === false) dragging = false;
+      set((s) => {
+        const removed = new Set(changes.filter((c) => c.type === "remove").map((c) => (c as { id: string }).id));
+        const nodes = applyNodeChanges(changes, s.nodes) as PgNode[];
+        const selChanged = changes.some((c) => c.type === "select");
+        const picked = selChanged ? nodes.filter((n) => n.selected).map((n) => n.id)
+          : s.picked.filter((id) => !removed.has(id));
+        return {
+          nodes,
+          edges: removed.size ? s.edges.filter((e) => !removed.has(e.source) && !removed.has(e.target)) : s.edges,
+          groups: removed.size ? s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !removed.has(m)) }))
+            .filter((g) => g.members.length > 0) : s.groups,
+          picked,
+          selectedId: s.selectedId && removed.has(s.selectedId) ? null
+            : (selChanged && picked.length === 1 ? picked[0] : s.selectedId),
+          reportStale: s.reportStale || (structural && s.report !== null),
+        };
+      });
+    },
+
+    onEdgesChange: (changes) => {
+      if (changes.some((c) => STRUCTURAL.has(c.type))) push();
+      set((s) => ({
+        edges: applyEdgeChanges(changes, s.edges),
+        reportStale: s.reportStale || (changes.some((c) => STRUCTURAL.has(c.type)) && s.report !== null),
+      }));
+    },
+
+    connect: (c) => {
+      push();
+      set((s) => ({
+        edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges),
+        reportStale: s.report !== null,
+      }));
+    },
+
+    addNode: (kind, position) => {
+      push();
+      const id = newId(kind, new Set(get().nodes.map((n) => n.id)));
+      const node: PgNode = { id, type: PG_NODE_TYPE, position, data: { kind, params: {} } };
+      set((s) => ({ nodes: [...s.nodes, node], selectedId: id, picked: [id], reportStale: s.report !== null }));
+      return id;
+    },
+
+    updateParams: (id, params) => {
+      const now = Date.now();
+      if (!(lastParamEdit && lastParamEdit.id === id && now - lastParamEdit.at < COALESCE_MS)) push();
+      lastParamEdit = { id, at: now };
+      set((s) => ({
+        nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, params } } : n)),
+        reportStale: s.report !== null,
+      }));
+    },
+
+    removeNode: (id) => {
+      push();
+      set((s) => ({
+        nodes: s.nodes.filter((n) => n.id !== id),
+        edges: s.edges.filter((e) => e.source !== id && e.target !== id),
+        groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })).filter((g) => g.members.length),
+        selectedId: s.selectedId === id ? null : s.selectedId,
+        picked: s.picked.filter((p) => p !== id),
+        reportStale: s.report !== null,
+      }));
+    },
+
+    removePicked: () => {
+      const ids = new Set(get().picked.length ? get().picked : get().selectedId ? [get().selectedId!] : []);
+      if (!ids.size) return;
+      push();
+      set((s) => ({
+        nodes: s.nodes.filter((n) => !ids.has(n.id)),
+        edges: s.edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
+        groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.has(m)) })).filter((g) => g.members.length),
+        selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId,
+        picked: [],
+        reportStale: s.report !== null,
+      }));
+    },
+
+    duplicateNode: (id) => {
+      const src = get().nodes.find((n) => n.id === id);
+      if (!src) return null;
+      push();
+      const nid = newId(src.data.kind, new Set(get().nodes.map((n) => n.id)));
+      const node: PgNode = {
+        ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + 150 },
+        data: { ...src.data, params: structuredClone(src.data.params ?? {}) },
+      };
+      const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
+        ...e, id: `${e.source}.${e.sourceHandle}->${nid}.${e.targetHandle}`, target: nid, selected: false,
+      }));
+      set((s) => ({ nodes: [...s.nodes, node], edges: [...s.edges, ...incoming], selectedId: nid, picked: [nid],
+                    reportStale: s.report !== null }));
+      return nid;
+    },
+
+    loadDoc: (doc, problems = []) => {
+      const cur = get();
+      if (cur.nodes.length) push();
+      const { nodes, edges } = fromDoc(doc, cur.catalog ?? []);
+      const ids = new Set(nodes.map((n) => n.id));
+      const groups = (doc.groups ?? []).map((g) => ({ ...g, members: g.members.filter((m) => ids.has(m)) }))
+        .filter((g) => g.members.length);
+      set({
+        nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
+        report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
+      });
+    },
+
+    setName: (name) => set({ name }),
+    select: (selectedId) => set({ selectedId, picked: selectedId ? [selectedId] : [] }),
+    setValidation: (validation) => set({ validation }),
+    startRun: (ids = null) => set({ running: true, runError: null, runningIds: ids, preview: null }),
+    finishRun: (report, err = null) => set((s) => {
+      if (!report) return { running: false, runningIds: null, runError: err };
+      const partial = report.partial?.targets ?? null;
+      let merged = report;
+      if (partial && s.report) {
+        // ★이번에 계산하지 않은 노드는 이전 결과를 "이전 계산" 으로 남긴다 — 지금 값처럼 보이지 않는다.
+        const prev = Object.fromEntries(Object.entries(s.report.nodes)
+          .filter(([id]) => !(id in report.nodes) && s.nodes.some((n) => n.id === id))
+          .map(([id, r]) => [id, { ...r, previous: true }]));
+        merged = { ...report, nodes: { ...prev, ...report.nodes } };
+      }
+      return {
+        running: false, runningIds: null, runError: err,
+        report: merged,
+        reportStale: false,
+        runs: [record(report, partial), ...s.runs].slice(0, RUNS),
+      };
+    }),
+    setPreview: (preview) => set({ preview }),
+
+    undo: () => set((s) => {
+      const prev = s.past[s.past.length - 1];
+      if (!prev) return {};
+      return {
+        past: s.past.slice(0, -1),
+        future: [{ nodes: clean(s.nodes), edges: s.edges, groups: s.groups }, ...s.future].slice(0, HISTORY),
+        nodes: prev.nodes, edges: prev.edges, groups: prev.groups, picked: [],
+        selectedId: prev.nodes.some((n) => n.id === s.selectedId) ? s.selectedId : null,
+        reportStale: s.report !== null,
+      };
+    }),
+
+    redo: () => set((s) => {
+      const next = s.future[0];
+      if (!next) return {};
+      return {
+        future: s.future.slice(1),
+        past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups }].slice(-HISTORY),
+        nodes: next.nodes, edges: next.edges, groups: next.groups, picked: [],
+        selectedId: next.nodes.some((n) => n.id === s.selectedId) ? s.selectedId : null,
+        reportStale: s.report !== null,
+      };
+    }),
+
+    copy: () => {
+      const s = get();
+      const ids = new Set(s.picked.length ? s.picked : s.selectedId ? [s.selectedId] : []);
+      if (!ids.size) return 0;
+      const nodes = s.nodes.filter((n) => ids.has(n.id));
+      // ★링크는 고른 것끼리만★ — 고르지 않은 노드로 들어오던 링크를 따라 붙이면 붙인 자리에서 뜻이 바뀐다.
+      const edges = s.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+      set({ clip: { nodes: structuredClone(clean(nodes)), edges: structuredClone(edges) } });
+      return nodes.length;
+    },
+
+    paste: () => {
+      const s = get();
+      if (!s.clip?.nodes.length) return 0;
+      push();
+      const taken = new Set(s.nodes.map((n) => n.id));
+      const remap = new Map<string, string>();
+      const nodes = s.clip.nodes.map((n) => {
+        const id = newId(n.data.kind, taken);
+        taken.add(id);
+        remap.set(n.id, id);
+        return { ...n, id, selected: true, position: { x: n.position.x + 48, y: n.position.y + 48 },
+                 data: { ...n.data, params: structuredClone(n.data.params ?? {}) } };
+      });
+      const edges = s.clip.edges.map((e) => {
+        const source = remap.get(e.source)!;
+        const target = remap.get(e.target)!;
+        return { ...e, source, target, id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, selected: false };
+      });
+      set({
+        nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), ...nodes], edges: [...s.edges, ...edges],
+        picked: nodes.map((n) => n.id), selectedId: nodes.length === 1 ? nodes[0].id : s.selectedId,
+        reportStale: s.report !== null,
+        // 다음 붙여넣기는 또 한 칸 비껴 놓는다.
+        clip: { nodes: s.clip.nodes.map((n) => ({ ...n, position: { x: n.position.x + 48, y: n.position.y + 48 } })),
+                edges: s.clip.edges },
+      });
+      return nodes.length;
+    },
+
+    autoLayout: () => {
+      const s = get();
+      if (!s.nodes.length) return;
+      push();
+      const order = topoOrder(s.nodes.map((n) => n.id), s.edges);
+      const depth = new Map<string, number>();
+      for (const id of order) {
+        const ins = s.edges.filter((e) => e.target === id).map((e) => (depth.get(e.source) ?? 0) + 1);
+        depth.set(id, ins.length ? Math.max(...ins) : 0);
+      }
+      const cols = new Map<number, PgNode[]>();
+      for (const n of s.nodes) cols.set(depth.get(n.id) ?? 0, [...(cols.get(depth.get(n.id) ?? 0) ?? []), n]);
+      const pos = new Map<string, { x: number; y: number }>();
+      for (const [d, col] of cols) {
+        // 같은 깊이는 **지금의 세로 순서**를 지킨다 — 사람이 둔 위아래를 뒤섞지 않는다.
+        col.sort((a, b) => a.position.y - b.position.y).forEach((n, i) => pos.set(n.id, { x: d * 230, y: i * 170 }));
+      }
+      set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) });
+    },
+
+    groupPicked: (label) => {
+      const s = get();
+      const ids = s.picked.filter((id) => s.nodes.some((n) => n.id === id));
+      if (ids.length < 2) return null;
+      push();
+      const id = `grp_${Date.now().toString(36)}${(++seq).toString(36)}`;
+      // 한 노드는 한 묶음에만 — 다른 묶음에 있던 노드는 옮겨 온다.
+      const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.includes(m)) }))
+        .filter((g) => g.members.length >= 1);
+      set({ groups: [...groups, { id, label: label ?? `묶음 ${groups.length + 1}`, members: ids, collapsed: false }] });
+      return id;
+    },
+
+    ungroup: (id) => { push(); set((s) => ({ groups: s.groups.filter((g) => g.id !== id) })); },
+    toggleGroup: (id) => set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)) })),
+    renameGroup: (id, label) => set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, label } : g)) })),
+    moveGroup: (id, dx, dy) => set((s) => {
+      const g = s.groups.find((x) => x.id === id);
+      if (!g || (!dx && !dy)) return {};
+      const m = new Set(g.members);
+      return { nodes: s.nodes.map((n) => (m.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n)) };
+    }),
+
+    setMinimap: (showMinimap) => set({ showMinimap }),
+    setTab: (tab) => set({ tab }),
+    setExpert: (expert) => set({ expert }),
+    setOpenGate: (openGate) => set({ openGate }),
+  };
+});

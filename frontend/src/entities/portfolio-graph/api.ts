@@ -21,8 +21,10 @@ export const portfolioGraphApi = {
     readJson<NodeCatalog>(await getWithAuth(`${BASE}/node-types`), "노드 카탈로그 조회"),
   validate: async (doc: GraphDoc): Promise<ValidateReport> =>
     readJson<ValidateReport>(await postJson(`${BASE}/validate`, doc), "그래프 검증"),
-  run: async (doc: GraphDoc): Promise<RunReport> =>
-    readJson<RunReport>(await postJson(`${BASE}/run`, doc), "그래프 실행"),
+  /** `targets` 를 주면 그 노드들과 조상만 계산한다(BL1 "여기까지 계산") — 관문 판정은 없다. */
+  run: async (doc: GraphDoc, targets?: string[]): Promise<RunReport> =>
+    readJson<RunReport>(await postJson(targets?.length ? `${BASE}/run?targets=${encodeURIComponent(targets.join(","))}` : `${BASE}/run`, doc),
+                        "그래프 실행"),
   /** 저장은 여기서만 — 서버가 다시 계산해 미리보기 해시가 같을 때만 한 번 쓴다(BK0). */
   save: async (doc: GraphDoc, nodeId: string, previewHash: string): Promise<SaveResult> =>
     readJson<SaveResult>(await postJson(`${BASE}/save`, { graph: doc, node_id: nodeId, preview_hash: previewHash }), "노드 저장"),

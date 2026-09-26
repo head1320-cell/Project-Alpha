@@ -24,12 +24,21 @@ export interface GraphDocEdge {
   target_port: string;
 }
 
+/** 묶음 상자(BL1) — ★계산에는 끼지 않는 화면 정보★. 서버는 이 칸을 읽지 않고, 파일에만 남는다. */
+export interface GraphGroup {
+  id: string;
+  label: string;
+  members: string[];
+  collapsed?: boolean;
+}
+
 export interface GraphDoc {
   format: typeof GRAPH_FORMAT;
   version: typeof GRAPH_VERSION;
   meta?: { name?: string; exported_at?: string };
   nodes: GraphDocNode[];
   edges: GraphDocEdge[];
+  groups?: GraphGroup[];
 }
 
 // ── 카탈로그 (`GET /api/v1/allocation/graph/node-types`) ────────────────────
@@ -141,6 +150,8 @@ export interface NodeRunResult {
   lineage?: NodeLineage;
   /** 미리보기 해시 — 저장할 때 "본 것 == 지금 계산" 확인에 쓴다. 계산 못 한 노드는 `null`. */
   view_hash?: string | null;
+  /** ★이번 "여기까지 계산" 에서 계산하지 않은 노드★(BL1) — 화면이 이전 결과를 남기며 붙인다. 서버는 내지 않는다. */
+  previous?: boolean;
 }
 
 export interface NodeLineage {
@@ -171,5 +182,8 @@ export interface GateReport {
 export interface RunReport extends ValidateReport {
   order: string[];
   nodes: Record<string, NodeRunResult>;
-  gates?: GateReport;
+  gates?: GateReport | null;
+  /** 부분 계산(BL1 "여기까지 계산") — 있으면 관문은 `null` 이고 `gates_reason` 이 이유를 말한다. */
+  partial?: { targets: string[]; computed: string[] };
+  gates_reason?: string;
 }

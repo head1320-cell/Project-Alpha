@@ -611,3 +611,139 @@ test("정리(BK W6): 템플릿 넷이 서버 검증을 통과하고 돈다 · �
   await expect(page.locator('.pg-palette-item[data-kind="screener"]')).toBeHidden();
   await expect(check.locator(".pg-palette-count")).toHaveCount(0);   // 맞는 것이 없는 단계는 숨는다
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BL1 — 노드 링크 UI 고도화 (조사: n8n Execute step · KNIME 메타노드 · React Flow 편집 도구)
+// ─────────────────────────────────────────────────────────────────────────────
+const mod = process.platform === "darwin" ? "Meta" : "Control";
+
+test("여기까지 계산(BL1): 올리면 돌 경로가 밝아지고, 누르면 조상만 계산 · 나머지는 이전 계산으로 표시", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "optimizer").click();
+  const btn = page.locator(".pg-run-to");
+  await btn.hover();
+  for (const id of ["universe", "returns", "estimate", "views", "optimizer"]) {
+    await expect(page.locator(`.react-flow__node[data-id="${id}"]`), id).toHaveClass(/pg-on-path/);
+  }
+  await expect(page.locator('.react-flow__node[data-id="backtest"]'), "짝 — 하류는 밝히지 않는다").not.toHaveClass(/pg-on-path/);
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"));
+  await btn.click();
+  const r = await resp;
+  expect(r.url()).toContain("targets=optimizer");
+  const body = await r.json();
+  expect(Object.keys(body.nodes).sort()).toEqual(["estimate", "optimizer", "returns", "universe", "views"]);
+  expect(body.gates).toBeNull();
+  await expect(page.locator(".pg-summary--partial")).toContainText("여기까지 계산 · 5개");
+  await expect(page.locator(".pg-rail-summary")).toContainText("전체를 계산할 때");
+
+  // 전체 계산 뒤 한 곳만 다시 계산하면, 계산하지 않은 노드는 이전 결과로 남되 그렇다고 말한다.
+  await run(page);
+  await node(page, "risk").click();
+  await page.keyboard.press("Shift+Enter");
+  await expect(page.locator(".pg-summary--partial")).toBeVisible();
+  await expect(node(page, "backtest")).toHaveClass(/pg-node--previous/);
+  await expect(node(page, "backtest")).toContainText("이전 계산 결과예요");
+  await expect(node(page, "risk"), "짝 — 이번에 계산한 노드는 이전 표시가 없다").not.toHaveClass(/pg-node--previous/);
+});
+
+test("편집 도구(BL1): 되돌리기·다시하기 · 복사·붙여넣기(링크는 고른 것끼리) · 자동 정리", async ({ page }) => {
+  await openCanvas(page);
+  const count = () => page.locator(".pg-node").count();
+  const n0 = await count();
+  await node(page, "risk").click();
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".pg-node")).toHaveCount(n0 - 1);
+  await page.keyboard.press(`${mod}+z`);
+  await expect(page.locator(".pg-node")).toHaveCount(n0);
+  await page.keyboard.press(`${mod}+Shift+z`);
+  await expect(page.locator(".pg-node")).toHaveCount(n0 - 1);
+  await page.keyboard.press(`${mod}+z`);
+
+  // 두 노드(종목 고르기 → 수익률 불러오기)를 함께 골라 복사 → 붙이면 둘과 그 사이 링크 하나만 따라온다.
+  await node(page, "universe").click();
+  await node(page, "returns").click({ modifiers: [mod === "Meta" ? "Meta" : "Control"] });
+  await expect(page.locator(".pg-hint")).toContainText("2개 골랐어요");
+  const before = await exportDoc(page);
+  await page.keyboard.press(`${mod}+c`);
+  await page.keyboard.press(`${mod}+v`);
+  await expect(page.locator(".pg-node")).toHaveCount(n0 + 2);
+  const after = await exportDoc(page);
+  const fresh = after.nodes.filter((n: { id: string }) => !before.nodes.some((b: { id: string }) => b.id === n.id));
+  expect(fresh.map((n: { type: string }) => n.type).sort()).toEqual(["returns", "universe"]);
+  const freshIds = new Set(fresh.map((n: { id: string }) => n.id));
+  const newEdges = after.edges.filter((e: { id: string }) => !before.edges.some((b: { id: string }) => b.id === e.id));
+  expect(newEdges).toHaveLength(1);
+  expect(freshIds.has(newEdges[0].source) && freshIds.has(newEdges[0].target)).toBe(true);
+
+  // 자동 정리 — 흐름 순서가 왼쪽 → 오른쪽. ★먼저 뒤집어 놓는다★ 기본 템플릿은 이미 정리돼 있어 그대로 두면
+  // 정리 버튼이 아무것도 안 해도 통과한다(변이 D 가 실제로 살아남았다).
+  const messy = await exportDoc(page);
+  messy.nodes = messy.nodes.map((n: { position: { x: number; y: number } }) => ({ ...n, position: { x: -n.position.x, y: n.position.y } }));
+  await importText(page, "messy.json", JSON.stringify(messy));
+  const before2 = await exportDoc(page);
+  const bx = (id: string) => before2.nodes.find((n: { id: string }) => n.id === id).position.x;
+  expect(bx("universe"), "뒤집힌 상태에서 출발").toBeGreaterThan(bx("backtest"));
+  await page.getByRole("button", { name: "자동 정리" }).click();
+  const laid = await exportDoc(page);
+  const x = (id: string) => laid.nodes.find((n: { id: string }) => n.id === id).position.x;
+  expect(x("universe")).toBeLessThan(x("returns"));
+  expect(x("returns")).toBeLessThan(x("optimizer"));
+  expect(x("optimizer")).toBeLessThan(x("backtest"));
+});
+
+test("묶음 상자(BL1): 고른 노드를 묶고 접으면 숨고 요약만 · 파일에 남고 다시 불러와도 그대로", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "risk").click();
+  await node(page, "backtest").click({ modifiers: [mod === "Meta" ? "Meta" : "Control"] });
+  await page.keyboard.press(`${mod}+g`);
+  const frame = page.locator(".pg-group");
+  await expect(frame).toHaveCount(1);
+  await expect(frame).toContainText("노드 2개");
+  await frame.getByLabel("묶음 이름").fill("확인 묶음");
+  await frame.getByRole("button", { name: "묶음 접기" }).click();
+  await expect(node(page, "risk")).toBeHidden();
+  await expect(frame).toHaveClass(/pg-group--collapsed/);
+  const doc = await exportDoc(page);
+  expect(doc.groups).toEqual([expect.objectContaining({ label: "확인 묶음", members: ["risk", "backtest"], collapsed: true })]);
+  // 접어도 계산은 그대로 — 서버로 가는 그래프에는 묶음이 없다.
+  const body = await run(page);
+  expect(body.nodes.risk.status).toBe("ok");
+  await importText(page, "grouped.json", JSON.stringify(doc));
+  await expect(page.locator(".pg-group").getByLabel("묶음 이름"), "이름은 입력칸 값이다").toHaveValue("확인 묶음");
+  await page.locator(".pg-group").getByRole("button", { name: "묶음 펼치기" }).click();
+  await expect(node(page, "risk")).toBeVisible();
+});
+
+test("명령 팔레트·계산 기록(BL1): Ctrl+K 로 노드 추가 · 두 번 계산하면 노드별 기록 두 줄 · 대비 AA", async ({ page }) => {
+  await openCanvas(page);
+  await page.keyboard.press(`${mod}+k`);
+  const dlg = page.getByRole("dialog", { name: "명령 찾기" });
+  await expect(dlg).toBeVisible();
+  await dlg.getByLabel("명령 찾기").fill("상관이");
+  await expect(dlg.locator(".pg-cmd-item").first()).toContainText("상관이 치솟으면 추가");
+  await page.keyboard.press("Enter");
+  await expect(dlg).toBeHidden();
+  await expect(page.locator('.pg-node[data-kind="corr_stress"]')).toHaveCount(1);
+  await page.keyboard.press(`${mod}+z`);
+  await expect(page.locator('.pg-node[data-kind="corr_stress"]')).toHaveCount(0);
+
+  await run(page);
+  await run(page);
+  await node(page, "optimizer").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-history tbody tr")).toHaveCount(2);
+  await expect(page.locator(".pg-history tbody tr").first(), "가장 최근 줄이 앞 계산과 비교한다").toContainText("같음");
+
+  // 대비 — 기록 표는 팔레트를 닫은 채로, 팔레트는 연 채로(열면 뒤는 가림막 아래라 재지 않는다).
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(150);
+    for (const scope of [".pg-side", ".pg-cmd"]) {
+      if (scope === ".pg-cmd") await page.keyboard.press(`${mod}+k`);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(scope));
+      expect(audit.checked, scope).toBeGreaterThan(5);
+      expect(audit.low, `${scope} ${dark ? "dark" : "light"}`).toEqual([]);
+      if (scope === ".pg-cmd") await page.keyboard.press("Escape");
+    }
+  }
+});

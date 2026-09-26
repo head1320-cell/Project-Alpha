@@ -16,6 +16,7 @@ import {
   type GraphDoc,
   type GraphDocEdge,
   type GraphDocNode,
+  type GraphGroup,
   type NodeCatalogEntry,
 } from "./types";
 
@@ -111,12 +112,25 @@ export function parseFile(text: string): ParseResult {
       target: e.target as string, target_port: e.target_port as string,
     });
   }
+  // 묶음 상자(BL1) — 없는 노드를 가리키는 구성원은 빼고, 비면 묶음도 뺀다(말하고).
+  const groups: GraphGroup[] = [];
+  if (Array.isArray(raw.groups)) {
+    for (const [i, g] of (raw.groups as unknown[]).entries()) {
+      if (!isObj(g) || typeof g.id !== "string" || !Array.isArray(g.members)) {
+        problems.push(`묶음 #${i + 1} 에 id·members 가 없어 건너뛰었어요.`);
+        continue;
+      }
+      const members = (g.members as unknown[]).filter((m): m is string => typeof m === "string" && seen.has(m));
+      if (!members.length) { problems.push(`묶음 "${String(g.label ?? g.id)}" 에 남은 노드가 없어 건너뛰었어요.`); continue; }
+      groups.push({ id: g.id, label: typeof g.label === "string" ? g.label : g.id, members, collapsed: g.collapsed === true });
+    }
+  }
   const meta = isObj(raw.meta) ? {
     name: typeof raw.meta.name === "string" ? raw.meta.name : undefined,
     exported_at: typeof raw.meta.exported_at === "string" ? raw.meta.exported_at : undefined,
   } : undefined;
   return {
-    doc: { format: GRAPH_FORMAT, version: GRAPH_VERSION, meta, nodes, edges },
+    doc: { format: GRAPH_FORMAT, version: GRAPH_VERSION, meta, nodes, edges, ...(groups.length ? { groups } : {}) },
     problems,
   };
 }
@@ -164,11 +178,12 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
 }
 
 /** reactflow → 문서. 실행 결과는 넣지 않는다(파라미터·위치만). */
-export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"]): GraphDoc {
+export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], groups?: GraphGroup[]): GraphDoc {
   return {
     format: GRAPH_FORMAT,
     version: GRAPH_VERSION,
     ...(meta ? { meta } : {}),
+    ...(groups?.length ? { groups: groups.map((g) => ({ ...g, members: [...g.members] })) } : {}),
     nodes: nodes.map((n) => ({
       id: n.id,
       type: n.data.kind,

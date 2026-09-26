@@ -9,7 +9,8 @@
  * 포트는 타입 색 점, 이름·타입은 마우스를 올리면(전문가용) 보인다.
  */
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "reactflow";
+import { Handle, NodeToolbar, Position, type NodeProps } from "reactflow";
+import { Play } from "lucide-react";
 import { nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { usePortfolioGraph } from "./store";
 
@@ -51,7 +52,12 @@ const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as con
 const PORT_TOP = 46;
 const PORT_GAP = 22;
 
-export type CanvasNodeData = PgNodeData & { num?: number };
+export type CanvasNodeData = PgNodeData & {
+  num?: number;
+  /** "여기까지 계산" — 캔버스가 채운다. 올리면 돌 경로가 밝아지고(미리보기), 누르면 이 노드와 조상만 계산한다(BL1). */
+  onRunTo?: (id: string) => void;
+  onPreviewRunTo?: (id: string | null) => void;
+};
 
 function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: string; text: string }[] {
   const out: { cls: string; text: string }[] = [];
@@ -89,6 +95,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const validation = usePortfolioGraph((s) => s.validation);
   const result = report?.nodes[id];
   const live = result && !stale ? result : undefined;
+  const running = usePortfolioGraph((s) => s.running);
+  const single = usePortfolioGraph((s) => s.picked.length <= 1);
   const errors = (validation?.errors ?? []).filter((e) => e.node_id === id);
 
   const unknown = !!data.unknownReason || !entry;
@@ -126,8 +134,16 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   }
 
   return (
-    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}`} data-node-id={id} data-kind={data.kind}
-         style={{ minHeight: minH }}>
+    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}`}
+         data-node-id={id} data-kind={data.kind} style={{ minHeight: minH }}>
+      <NodeToolbar isVisible={selected && single} position={Position.Top} offset={8}>
+        <button type="button" className="pg-run-to" disabled={running}
+                onMouseEnter={() => data.onPreviewRunTo?.(id)} onMouseLeave={() => data.onPreviewRunTo?.(null)}
+                onFocus={() => data.onPreviewRunTo?.(id)} onBlur={() => data.onPreviewRunTo?.(null)}
+                onClick={() => { data.onPreviewRunTo?.(null); data.onRunTo?.(id); }}>
+          <Play size={12} aria-hidden="true" /> 여기까지 계산 <kbd>Shift+Enter</kbd>
+        </button>
+      </NodeToolbar>
       <div className="pg-node-k">
         <i className="pg-node-num" style={{ background: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)" }}>{data.num ?? "·"}</i>
         <span className="pg-node-plain">{entry.plain_label}</span>
@@ -143,6 +159,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
         <div className="pg-node-why">{ex.facts?.[0] ?? ex.title}</div>
       )}
       {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과예요.</div>}
+      {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았어요 — 이전 계산 결과예요.</div>}
       {live?.status === "ok" && chipsOf(ex, live.lineage).length > 0 && (
         <div className="pg-node-ev">{chipsOf(ex, live.lineage).map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
       )}

@@ -24,7 +24,7 @@ const IDLE_STATIONS = [
   ["cost", "거래비용"], ["oos", "처음 보는 기간"], ["economic", "돈이 되는지"], ["live", "모의·실계좌"],
 ] as const;
 
-export function GateRail({ report }: { report: GateReport | null }) {
+export function GateRail({ report, note = null }: { report: GateReport | null; note?: string | null }) {
   const open = usePortfolioGraph((s) => s.openGate);
   const setOpen = usePortfolioGraph((s) => s.setOpenGate);
   const gates = report?.gates ?? IDLE_STATIONS.map(([key, label]) => ({ key, label, state: "idle" as const, reasons: [] }));
@@ -41,7 +41,7 @@ export function GateRail({ report }: { report: GateReport | null }) {
         <strong>이 결과를 어디까지 믿을 수 있을까요</strong>
         <span className="pg-rail-summary">
           {report ? `${report.summary.text} ${report.summary.note}`
-                  : "계산하면 8개 관문 중 어디까지 확인됐는지 보여 드려요."}
+                  : note ?? "계산하면 8개 관문 중 어디까지 확인됐는지 보여 드려요."}
         </span>
       </div>
       <ol className="pg-track">
