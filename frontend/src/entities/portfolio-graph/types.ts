@@ -67,7 +67,7 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards";
+  widget?: "slider" | "cards" | "filter";
   ends?: [string, string];
   presets?: { label: string; value: unknown }[];
   options?: Record<string, string>;

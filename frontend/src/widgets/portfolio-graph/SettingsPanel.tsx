@@ -13,6 +13,7 @@ import {
   fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type PgNode,
 } from "@/entities/portfolio-graph";
 import { ListField, NodeInspector } from "./NodeInspector";
+import { FilterEditor } from "./FilterEditor";
 import { PORT_PLAIN } from "./GraphNode";
 
 type Params = Record<string, unknown>;
@@ -104,6 +105,24 @@ function BasicField({ f, value, root, onChange }: {
             </button>
           ))}
         </div>
+        {help}
+      </div>
+    );
+  }
+  if (f.ui.widget === "filter") {
+    // 스크리너 조건 — 프리셋 칩으로 시작하고, 줄 편집기로 고친다(규칙은 서버 검증).
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        {f.ui.presets && (
+          <div className="pg-chips">
+            {f.ui.presets.map((p) => (
+              <button key={p.label} type="button" className={`pg-chip${same(eff, p.value) ? " on" : ""}`} aria-pressed={same(eff, p.value)}
+                      onClick={() => onChange(p.value)}>{p.label}</button>
+            ))}
+          </div>
+        )}
+        <FilterEditor value={eff} onChange={onChange} />
         {help}
       </div>
     );

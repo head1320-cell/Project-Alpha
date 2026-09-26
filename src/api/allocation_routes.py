@@ -1052,13 +1052,48 @@ def _factor_weights(codes: list[str], score_map: dict[str, float],
     return {names[i]: round(float(wv[i]) * 100, 2) for i in range(len(names))}
 
 
+def factor_scores(rows: list[dict], factors: list[FactorSpec]) -> tuple[list[tuple[str, float]], list[dict], dict[str, float]]:
+    """방향 인지 z-score 가중합 — `/factor-portfolio` 와 그래프 노드가 같은 함수를 부른다 (BK W2).
+
+    반환 `(ranked, factor_meta, cov_w)` — `ranked` 는 점수 내림차순 `(코드, 점수)`, `cov_w` 는
+    종목별 커버된 팩터 가중치 합(1 미만이면 일부 팩터 결측을 재정규화한 것).
+    """
+    from src.engine.filter_ast import FIELD_BY_ID
+    total_w = sum(max(f.weight, 0.0) for f in factors) or 1.0
+    scores: dict[str, float] = {}
+    cov_w: dict[str, float] = {}
+    factor_meta = []
+    for f in factors:
+        meta = FIELD_BY_ID.get(f.id)
+        hb = bool(getattr(meta, "higher_better", True)) if meta else True
+        direction = f.direction if f.direction in (1, -1) else (1 if hb else -1)
+        pairs = [(r["stock_code"], _xf(r.get(f.id), None)) for r in rows]
+        arr = np.array([v for _, v in pairs if v is not None], dtype=float)
+        covered = arr.size >= 10 and float(arr.std(ddof=1)) > 1e-12
+        factor_meta.append({"id": f.id, "label": getattr(meta, "label", f.id),
+                            "direction": direction, "covered": covered, "n": int(arr.size)})
+        if not covered:
+            continue
+        mean, std = float(arr.mean()), float(arr.std(ddof=1))
+        wf = max(f.weight, 0.0) / total_w
+        for code, v in pairs:
+            if v is None:
+                continue
+            z = float(np.clip((v - mean) / std * direction, -3.0, 3.0))
+            scores[code] = scores.get(code, 0.0) + wf * z
+            cov_w[code] = cov_w.get(code, 0.0) + wf
+
+    ranked = sorted(((c, scores[c] / cov_w[c]) for c in scores if cov_w[c] > 0),
+                    key=lambda x: x[1], reverse=True)
+    return ranked, factor_meta, cov_w
+
+
 @router.post("/factor-portfolio")
 def allocation_factor_portfolio(req: FactorPortfolioRequest):
     """팩터 기반 포트폴리오 — 방향 인지 z-score 가중합으로 후보 유니버스를 점수화하고
     상위 K종목을 선정, 지정 방식(균등/팩터틸트/역변동성/리스크패리티/최소분산/HRP)으로 비중화."""
     try:
         from src.data.stock_master import get_stock_name
-        from src.engine.filter_ast import FIELD_BY_ID
 
         rows = _rows_for_tickers(req.tickers) if req.tickers else _factor_sample_rows(req.sample_size)
         rows = [r for r in rows if r.get("stock_code")]
@@ -1067,32 +1102,7 @@ def allocation_factor_portfolio(req: FactorPortfolioRequest):
                     "message": "후보 종목이 부족합니다. 유니버스를 적재하거나 종목을 직접 지정하세요.",
                     "candidates": len(rows)}
 
-        total_w = sum(max(f.weight, 0.0) for f in req.factors) or 1.0
-        scores: dict[str, float] = {}
-        cov_w: dict[str, float] = {}
-        factor_meta = []
-        for f in req.factors:
-            meta = FIELD_BY_ID.get(f.id)
-            hb = bool(getattr(meta, "higher_better", True)) if meta else True
-            direction = f.direction if f.direction in (1, -1) else (1 if hb else -1)
-            pairs = [(r["stock_code"], _xf(r.get(f.id), None)) for r in rows]
-            arr = np.array([v for _, v in pairs if v is not None], dtype=float)
-            covered = arr.size >= 10 and float(arr.std(ddof=1)) > 1e-12
-            factor_meta.append({"id": f.id, "label": getattr(meta, "label", f.id),
-                                "direction": direction, "covered": covered, "n": int(arr.size)})
-            if not covered:
-                continue
-            mean, std = float(arr.mean()), float(arr.std(ddof=1))
-            wf = max(f.weight, 0.0) / total_w
-            for code, v in pairs:
-                if v is None:
-                    continue
-                z = float(np.clip((v - mean) / std * direction, -3.0, 3.0))
-                scores[code] = scores.get(code, 0.0) + wf * z
-                cov_w[code] = cov_w.get(code, 0.0) + wf
-
-        ranked = sorted(((c, scores[c] / cov_w[c]) for c in scores if cov_w[c] > 0),
-                        key=lambda x: x[1], reverse=True)
+        ranked, factor_meta, cov_w = factor_scores(rows, req.factors)
         if len(ranked) < 2:
             return {"error": True,
                     "message": "선택한 팩터로 점수화 가능한 종목이 부족합니다(팩터 데이터 결측).",

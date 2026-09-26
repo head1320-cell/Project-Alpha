@@ -407,3 +407,6 @@ for _spec in (
 from src.api import allocation_graph_nodes_check as _check  # noqa: E402
 
 _check.register(REGISTRY)
+from src.api import allocation_graph_nodes_signal as _signal  # noqa: E402
+
+_signal.register(REGISTRY)

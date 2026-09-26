@@ -356,3 +356,41 @@ test("확인하기 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산
   await expect(page.locator(".pg-model-type")).toContainText("역사 리플레이");
   await expect(page.locator(".pg-side .pg-chart")).toBeVisible();
 });
+
+test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로 비중 · 오늘 값 표시 · 조건 편집기", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes = [
+    { id: "scr", type: "screener", params: { universe: "kospi50", top_n: 10 }, position: { x: 0, y: 100 } },
+    { id: "alp", type: "alpha_score", params: {}, position: { x: 220, y: 100 } },
+    { id: "w", type: "scores_to_weights", params: { top_k: 5 }, position: { x: 440, y: 100 } },
+  ];
+  doc.edges = [
+    { id: "e1", source: "scr", source_port: "universe", target: "alp", target_port: "universe" },
+    { id: "e2", source: "alp", source_port: "scores", target: "w", target_port: "scores" },
+  ];
+  await importText(page, "w2.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["scr", "alp", "w"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+  expect(body.nodes.scr.lineage.pit).toBe("forward_only");
+  await expect(node(page, "scr").locator(".pg-node-ev")).toContainText("지금 시점 전용");
+  await node(page, "w").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-table tr")).toHaveCount(5);
+
+  // 조건 편집기 — 프리셋으로 시작해 한 줄 더한다. 필드 목록은 서버 카탈로그에서 온다.
+  await node(page, "scr").click();
+  await tab(page, "settings");
+  const f = page.locator('.pg-basic-field[data-field="filter_ast"]');
+  await f.locator(".pg-chip", { hasText: "꾸준히 버는" }).click();
+  await expect(f.locator(".pg-filter-row")).toHaveCount(1);
+  await f.locator(".pg-add").click();
+  await expect(f.locator(".pg-filter-row")).toHaveCount(2);
+  await expect(f.locator(".pg-filter-row").first().locator("select").first().locator('option[value="roe"]')).toHaveCount(1);
+  await f.locator(".pg-filter-row").nth(1).locator("input").fill("5");
+  const saved = await exportDoc(page);
+  const conds = saved.nodes.find((n: { id: string }) => n.id === "scr").params.filter_ast.conditions;
+  expect(conds).toHaveLength(2);
+  expect(conds[0]).toMatchObject({ field: "roe", op: "gt", value: 10 });
+  expect(conds[1].value).toBe(5);
+});

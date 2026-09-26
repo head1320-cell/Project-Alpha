@@ -136,7 +136,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
       <div className="pg-node-t">{summary ?? entry.plain_label}</div>
       {headline && headline.value !== null && (
         <div className="pg-node-v" title={headline.label}>
-          {Number(headline.value).toFixed(1)}<small>{headline.unit} {headline.label.replace(/ 비중$/, "")}</small>
+          {Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit} {headline.label.replace(/ 비중$/, "")}</small>
         </div>
       )}
       {live && live.status !== "ok" && ex && (

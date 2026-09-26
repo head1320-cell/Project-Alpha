@@ -177,11 +177,13 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
                 if n.get("type") in types and n.get("id") in results]
 
     signal_types = tuple(t for t, st in stage_of.items() if st == "signal")
+    # 비중은 옵티마이저만 만들지 않는다(BK W2 — 점수→비중·중립화·묶음 합치기) — 단계로 모은다.
+    build_types = tuple(t for t, st in stage_of.items() if st == "build")
     rules: dict[str, list[dict]] = {
         "data": _data(of("returns")),
         "pit": _pit(of("returns")),
         "signal": _signal(of(*signal_types)) if signal_types else [],
-        "build": _build(of("optimizer")),
+        "build": _build(of(*build_types)) if build_types else [],
         "cost": _cost(of("backtest")),
         "oos": _oos(of("backtest")),
         "economic": [],

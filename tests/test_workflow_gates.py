@@ -147,3 +147,12 @@ def test_the_run_route_carries_gates(monkeypatch):
                                          json=chain(lookback=1008, backtest={})).json()
     assert [g["key"] for g in body["gates"]["gates"]][:2] == ["data", "pit"]
     assert next(g for g in body["gates"]["gates"] if g["key"] == "cost")["state"] == "assumed"
+
+
+def test_any_build_stage_node_counts_for_the_build_gate():
+    """BK W2 — 비중은 옵티마이저만 만들지 않는다(점수→비중·중립화·묶음 합치기). 짝: 신호만 있으면 건너뜀."""
+    stage = {**STAGE, "scores_to_weights": "build"}
+    rep = wg.evaluate(_nodes("alpha", "scores_to_weights"), {"alpha": _ok(), "scores_to_weights": _ok()}, stage)
+    assert _gate(rep, "build")["state"] == "confirmed"
+    only_signal = wg.evaluate(_nodes("alpha"), {"alpha": _ok()}, stage)
+    assert _gate(only_signal, "build")["state"] == "skipped"
