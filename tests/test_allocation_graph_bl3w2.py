@@ -141,9 +141,12 @@ def test_macro_studio_equals_the_route(monkeypatch, sid):
 
 
 def test_macro_studio_does_not_offer_the_view_compiler():
+    from pydantic import ValidationError
+
     from src.api.allocation_graph_nodes_macro_w2 import StudioParams
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         StudioParams(studio="agentic-mcp")
+    assert StudioParams(studio="pinn-tail").studio == "pinn-tail"   # 짝: 목록 안의 모델은 받는다
 
 
 def test_macro_studio_never_probes_the_frontier(monkeypatch):
