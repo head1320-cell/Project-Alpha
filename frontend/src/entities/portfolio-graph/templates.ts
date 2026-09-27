@@ -115,6 +115,23 @@ const RISK_TEMPLATE: GraphDoc = doc("포트폴리오 위험 점검", [
 ]);
 
 /**
+ * 리밸런싱 판단 (BL3 W5) — 비중을 정하고, 지금 들고 있는 비중에서 옮길 가치가 있는지(효용 개선 대 비용)를 본 뒤 주문 목록까지.
+ * ★지금 비중은 예시★ — 판단 노드 설정에서 바꾼다. 결정 기록은 저장 버튼으로만 남는다.
+ */
+const REBALANCE_TEMPLATE: GraphDoc = doc("리밸런싱 판단", [
+  ...HEAD.nodes,
+  n("optimizer", "optimizer", 600, 140, { model: "risk_parity" }),
+  n("decide", "rebalance_decision", 820, 60, {
+    holdings: [{ code: "005930", pct: 50 }, { code: "000660", pct: 30 }, { code: "035420", pct: 20 }],
+  }),
+  n("orders", "order_preview", 820, 260),
+], [
+  ...HEAD.edges,
+  e("optimizer", "weights", "decide", "weights"),
+  e("optimizer", "weights", "orders", "weights"),
+]);
+
+/**
  * 매크로 화면에서 넘어온 국면 스냅샷으로 여는 흐름 (BL2b) — 타이밍 흐름에 '경기 국면 불러오기'(그 스냅샷)를 붙이고
  * 노출 조절이 타이밍과 국면을 함께 따르게 한다. ★스냅샷 id 는 서버가 확인한다★ — 없는 id 면 국면 노드가 사유와 함께 실패한다.
  */
@@ -142,4 +159,6 @@ export const TEMPLATES: GraphTemplate[] = [
     description: "타이밍 신호로 노출을 줄이고 실행 목표·주문 목록·결정 기록까지 이어요." },
   { key: "risk", name: "포트폴리오 위험 점검", doc: RISK_TEMPLATE,
     description: "정한 비중이 하루에 얼마나 잃을 수 있는지 보고, 지수 선물로 시장 위험을 줄일 계약 수까지 계산해요." },
+  { key: "rebalance", name: "리밸런싱 판단", doc: REBALANCE_TEMPLATE,
+    description: "지금 들고 있는 비중에서 목표로 옮길 가치가 있는지 효용과 비용을 견줘 보고 주문 목록까지 봐요." },
 ];

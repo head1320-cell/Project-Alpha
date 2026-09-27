@@ -36,6 +36,9 @@ import {
   BondCalcResult, CvaCalcResult, DccResult, FrtbResult, FuturesHedgeResult, HoldingVarResult, IrcCalcResult, McVarResult,
   OptionCalcResult, RollingSharpeResult, VarEsResult, VolModelsResult,
 } from "./RiskResults";
+import {
+  CapacityResult, CashResult, CounterfactualResult, ImpactResult, ImplementResult, PairResult, RebalanceResult,
+} from "./AllocExtraResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -172,7 +175,7 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load"]);
+const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load", "counterfactual"]);
 
 /** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
 const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
@@ -246,6 +249,13 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   futures_hedge: ({ v }) => <FuturesHedgeResult v={v} />,
   cva_calc: ({ v }) => <CvaCalcResult v={v} />,
   irc_calc: ({ v }) => <IrcCalcResult v={v} />,
+  rebalance_decision: ({ v }) => <RebalanceResult v={v} />,
+  implement_exposures: ({ v }) => <ImplementResult v={v} />,
+  pair_spread: ({ v }) => <PairResult v={v} />,
+  market_impact: ({ v }) => <ImpactResult v={v} />,
+  cash_yield: ({ v }) => <CashResult v={v} />,
+  strategy_capacity: ({ v }) => <CapacityResult v={v} />,
+  counterfactual: ({ v, prov }) => <CounterfactualResult v={v} prov={prov} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />

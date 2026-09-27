@@ -28,6 +28,13 @@ function setOrClear(p: Params, k: string, v: unknown): Params {
   return next;
 }
 
+/** 행 칸의 선택지 — 서버가 준 이름표(`x-ui.options`)가 우선, 없으면 스키마의 enum 값을 그대로. */
+function rowOptions(x: FieldSpec): Record<string, string> | null {
+  if (x.ui.options) return x.ui.options;
+  if (x.kind === "enum" && x.options?.length) return Object.fromEntries(x.options.map((o) => [o, o]));
+  return null;
+}
+
 /** 객체 목록(예: 내 생각 목록) — 항목 스키마의 기본 칸만 한 줄씩. 전문가 칸은 전문가 설정에서. */
 function ObjectList({ f, item, value, onChange }: {
   f: FieldSpec; item: JsonSchema; value: unknown; onChange: (v: unknown) => void;
@@ -48,12 +55,17 @@ function ObjectList({ f, item, value, onChange }: {
               <span>{x.ui.label}</span>
               {x.kind === "string_list" ? (
                 <ListField value={row[x.name]} onChange={(v) => put(i, setOrClear(row, x.name, v))} />
-              ) : x.ui.options ? (
+              ) : rowOptions(x) ? (
                 <select className="pg-field-input" value={String(row[x.name] ?? x.defaultValue ?? "")}
                         onChange={(e) => put(i, setOrClear(row, x.name, x.kind === "integer" || x.kind === "number"
                           ? Number(e.target.value) : e.target.value))}>
-                  {Object.entries(x.ui.options).map(([k, lab]) => <option key={k} value={k}>{lab}</option>)}
+                  {Object.entries(rowOptions(x) ?? {}).map(([k, lab]) => <option key={k} value={k}>{lab}</option>)}
                 </select>
+              ) : x.kind === "string" ? (
+                // ★글자 칸은 글자로★ 예전에는 숫자 입력으로 그려 종목코드 "000660" 이 660 이 됐다(BL3 W5 에서 발견).
+                <input className="pg-field-input" type="text" value={row[x.name] === undefined ? "" : String(row[x.name])}
+                       placeholder={x.defaultValue !== undefined && x.defaultValue !== null ? String(x.defaultValue) : ""}
+                       onChange={(e) => put(i, setOrClear(row, x.name, e.target.value === "" ? undefined : e.target.value))} />
               ) : (
                 <input className="pg-field-input" type="number" min={x.min} max={x.max} step="any"
                        value={row[x.name] === undefined ? "" : String(row[x.name])}

@@ -43,6 +43,8 @@ WRITERS: tuple[tuple[str, str], ...] = (
     ("src.engine.company_snapshot_builder", "build_and_store"),
     ("src.engine.strategy_registry", "StrategyRegistry.register"),
     ("src.engine.multi_strategy_backtest", "MultiStrategyBacktester._persist"),
+    # BL3 W5 — 리밸런싱 판단의 결정 기록. 계산은 record_decision=False 라 부르지 않는다(저장 버튼만).
+    ("src.data.investment_decisions", "save_decision"),
 )
 
 

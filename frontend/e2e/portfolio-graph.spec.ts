@@ -570,7 +570,7 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
   }
 });
 
-test("정리(BK W6): 템플릿 다섯이 서버 검증을 통과하고 돈다 · 단계 접기 · 마법사 화면 이름으로 찾기", async ({ page }) => {
+test("정리(BK W6): 템플릿 여섯이 서버 검증을 통과하고 돈다 · 단계 접기 · 마법사 화면 이름으로 찾기", async ({ page }) => {
   await openCanvas(page);
   const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const types = new Set(catalog.nodes.map((c: { type: string }) => c.type));
@@ -586,7 +586,7 @@ test("정리(BK W6): 템플릿 다섯이 서버 검증을 통과하고 돈다 ·
     const doc = await exportDoc(page);
     const v = await (await page.request.post("http://localhost:8000/api/v1/allocation/graph/validate", { data: doc })).json();
     expect(v.errors, `${t.key}: ${JSON.stringify(v.errors)}`).toEqual([]);
-    if (t.key === "stress" || t.key === "screener" || t.key === "risk") {
+    if (t.key === "stress" || t.key === "screener" || t.key === "risk" || t.key === "rebalance") {
       const body = await run(page);
       for (const [id, r] of Object.entries(body.nodes as Record<string, { status: string; reason: string }>)) {
         expect(r.status, `${t.key}.${id}: ${r.reason}`).toBe("ok");
@@ -1551,6 +1551,89 @@ test("파생·신용 계산기(BL3 W4): 옵션·채권·헤지·CVA·IRC · 모�
 
   expect(uniq(sink.api404), "404").toEqual([]);
   expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+test("배분 추가(BL3 W5): 리밸런싱 저울 · 기록은 버튼 한 번 · 노출→상품 · 페어 · 충격 · 현금 금리 출처 · 용량 모름 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const HOLD = [{ code: "005930", pct: 50 }, { code: "000660", pct: 30 }, { code: "035420", pct: 20 }];
+  const add: [string, string, Record<string, unknown>, boolean][] = [
+    ["rb", "rebalance_decision", { holdings: HOLD }, true],
+    ["im", "implement_exposures", { exposures: [{ exposure: "equity", pct: 60 }, { exposure: "duration", pct: 30 }] }, false],
+    ["pr", "pair_spread", {}, false], ["mi", "market_impact", {}, false], ["cy", "cash_yield", {}, true],
+    ["sc", "strategy_capacity", { strategy_ids: [987654] }, false],
+    ["nh", "rebalance_decision", { holdings: [] }, true],                   // 지금 비중이 없다 — 사유로 실패
+    ["rh", "rebalance_decision", { holdings: HOLD, hysteresis_mult: 50 }, true],  // 문턱을 크게 — 짝: 그대로 두기
+  ];
+  add.forEach(([id, type, params, withW], i) => {
+    doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 3) * 260, y: Math.floor(i / 3) * 240 } });
+    if (withW) doc.edges.push({ id: `optimizer.weights->${id}.weights`, source: "optimizer", source_port: "weights", target: id, target_port: "weights" });
+  });
+  await importText(page, "bl3w5.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["rb", "im", "pr", "mi", "cy", "sc"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+  }
+  expect(body.nodes.rb.view.result.persisted).toBe(false);                 // 계산은 기록하지 않는다
+  expect(body.nodes.nh.status).toBe("failed");
+  expect(body.nodes.nh.reason).toContain("지금 들고");
+  expect(body.nodes.im.view.result.placed_pct).toBeCloseTo(90, 5);        // 요청한 만큼만 놓는다(남는 10% 는 현금 — 재분배 없음)
+  const cap = body.nodes.sc.view.result.capacities["987654"];
+  expect(cap.available).toBe(false);
+  expect(cap.capacity_krw).toBeNull();                                    // 무한대가 아니라 모름
+
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  await pick("rb");
+  await tab(page, "detail");
+  const d = body.nodes.rb.view.result.decision as string;
+  if (d === "undetermined") {
+    await expect(page.locator(".pg-side .pg-scale")).toHaveCount(0);
+  } else {
+    // ★저울★ 문턱선 하나 · 막대가 문턱을 넘으면 진하다 — 판정과 그림이 같은 말을 한다
+    await expect(page.locator(".pg-side .pg-scale-bar")).toHaveCount(1);
+    await expect(page.locator(".pg-side .pg-scale-gain--over")).toHaveCount(d === "trade" ? 1 : 0);
+  }
+  await expect(page.locator(".pg-side .pg-verdict")).toHaveText(d === "trade" ? "거래할 가치가 있어요" : d === "hold" ? "그대로 두는 게 나아요" : "판단할 수 없어요");
+  // 짝 — 문턱이 51배면 같은 효용 개선도 넘지 못한다: 판정 '그대로' · 막대는 연하게
+  expect(body.nodes.rh.view.result.decision).toBe("hold");
+  await pick("rh");
+  await expect(page.locator(".pg-side .pg-scale-bar")).toHaveCount(1);
+  await expect(page.locator(".pg-side .pg-scale-gain--over")).toHaveCount(0);
+  await expect(page.locator(".pg-side .pg-verdict")).toHaveText("그대로 두는 게 나아요");
+  await pick("cy");
+  await expect(page.locator(".pg-side .pg-co-head .pg-tag")).toHaveText(body.nodes.cy.view.result.rf_is_assumed ? "기본값(가정)" : String(body.nodes.cy.view.result.rf_source));
+  await pick("sc");
+  await expect(page.locator(".pg-side .pg-tag--unknown", { hasText: "모름" })).toHaveCount(1);
+
+  // 설정의 행 목록 — 종목코드는 글자 칸(예전에는 숫자 칸이라 "000660" 이 660 이 됐다)
+  await pick("rb");
+  await tab(page, "settings");
+  const codeCell = page.locator('.pg-side [data-field="holdings"] .pg-objrow').nth(1).locator('input[type="text"]');
+  await expect(codeCell).toHaveValue("000660");
+  // ★기록은 버튼 한 번★ — 계산 중엔 persisted=false(위), 누르면 /graph/save 가 한 번 불리고 결정 번호가 나온다
+  const saves: string[] = [];
+  page.on("request", (q) => { if (q.url().includes("/allocation/graph/save")) saves.push(q.url()); });
+  await page.locator(".pg-save-btn").click();
+  await expect(page.locator(".pg-save-msg")).toContainText("결정 기록으로 남겼어요");
+  expect(saves).toHaveLength(1);
+
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["rb", "im"]) {
+      await pick(id);
+      await tab(page, "detail");
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(8);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });
