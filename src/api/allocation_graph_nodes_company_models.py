@@ -4,17 +4,18 @@
 같은 수인지는 `tests/test_allocation_graph_bl3w3b.py` 골든이 라우트와 대조한다.
 
 C1(데이터형): EVA·가치 동인 · 가치의 층(Greenwald 3층) · 배수·PEG·정당 배수 · 영업 동인 몬테카를로.
+C2(가정형): 시나리오 가중 · 의사결정 나무 · 합산가치(SOTP)·지주사 NAV · 실물옵션 — 확률·값·배수·지분율은 사람이 정한다(행 목록 편집기).
 공통: 종목은 이름으로 판정 · 가격은 출처와 함께(W3 `_priced`) · 결과의 `inputs` 가 관측/근사/가정/미상을 가른다 · 못 하면 사유.
 """
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from src.api import company_model_routes as cmr
 from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _t
-from src.api.allocation_graph_nodes import _ui
+from src.api.allocation_graph_nodes import _FORBID, _ui
 from src.api.allocation_graph_nodes_company import _base_trust, _out, _Priced, _priced
 from src.engine import portfolio_graph as pg
 
@@ -216,6 +217,187 @@ def _explain_driver_mc(view: dict, prov: dict, params: Any) -> dict:
             "unmeasured": ["동인끼리의 상관(함께 나빠지는 해) — 독립으로 뒀어요"]}
 
 
+# ══ C2 — 가정형 ══════════════════════════════════════════════════════════════
+
+def _rows(items: list, model) -> list:
+    return [model(**x.model_dump()) for x in items]
+
+
+# ── 시나리오 가중 ────────────────────────────────────────────────────────────
+
+class ScenarioItem(BaseModel):
+    model_config = _FORBID
+    name: str = Field("시나리오", max_length=20, json_schema_extra={"x-ui": _ui("이름")})
+    prob: float = Field(0.5, ge=0, le=1, json_schema_extra={"x-ui": _ui("확률")})
+    g: float | None = Field(None, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("영구성장률")})
+    beta: float | None = Field(None, ge=0.1, le=3.0, json_schema_extra={"x-ui": _ui("베타")})
+    rf: float | None = Field(None, ge=0, le=0.15, json_schema_extra={"x-ui": _ui("무위험수익률", "advanced")})
+    erp: float | None = Field(None, ge=0, le=0.15, json_schema_extra={"x-ui": _ui("시장위험프리미엄", "advanced")})
+
+
+class ScenariosParams(_Priced):
+    # ★기본값은 default(리터럴)로★ — default_factory 는 JSON 스키마에 기본값을 싣지 않아, 설정 화면이 "아직 없어요" 라고
+    # 보이면서 서버는 세 시나리오로 계산하는 어긋남이 생긴다(스크린샷 비평에서 잡음).
+    scenarios: list[ScenarioItem] = Field(
+        default=[ScenarioItem(name="약세", prob=0.25, g=0.01, beta=1.3), ScenarioItem(name="기본", prob=0.5),
+                 ScenarioItem(name="강세", prob=0.25, g=0.03, beta=0.9)],
+        max_length=8, json_schema_extra={"x-ui": _ui(
+            "시나리오", question="어떤 경우들을 얼마의 확률로 볼까요?",
+            help="2~5개 · 확률의 합은 1 · 비운 가정은 기본값(가치평가 샌드박스와 같다).")})
+
+
+def _scenarios(inputs: dict, p: ScenariosParams) -> pg.NodeOutput:
+    head = _priced(p)
+    return _call(cmr.company_model_scenarios, head,
+                 cmr.ScenariosRequest(price=head["price"], scenarios=_rows(p.scenarios, cmr.ScenarioRow)),
+                 "시나리오로 묶지 못했어요")
+
+
+def _explain_scenarios(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    pa = r.get("prob_above_price")
+    title = f"확률로 묶은 적정가 {_won(r.get('weighted'))}"
+    facts = [f"{x['name']} ({x['prob']:.0%}): {_won(x['value'])}" for x in r.get("rows") or []]
+    if isinstance(pa, (int, float)):
+        facts.append(f"지금 가격 이상일 확률 {pa:.0%}")
+    trust = [*_base_trust(view, prov), *_inputs_trust(r),
+             _t(ASSUMED, "확률은 사람이 정한 값이에요 — 측정한 빈도가 아니에요.")]
+    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["정한 확률이 맞는지"]}
+
+
+# ── 의사결정 나무 ────────────────────────────────────────────────────────────
+
+class BranchItem(BaseModel):
+    model_config = _FORBID
+    id: str = Field("A", max_length=20, json_schema_extra={"x-ui": _ui("가지 id")})
+    parent: str = Field("", max_length=20, json_schema_extra={"x-ui": _ui("부모 id", help="비우면 맨 처음 갈림길이에요.")})
+    label: str = Field("", max_length=40, json_schema_extra={"x-ui": _ui("사건")})
+    prob: float = Field(0.5, ge=0, le=1, json_schema_extra={"x-ui": _ui("확률")})
+    value: float | None = Field(None, json_schema_extra={"x-ui": _ui("주당 가치(끝 가지)")})
+
+
+class TreeParams(_Priced):
+    branches: list[BranchItem] = Field(
+        default=[
+            BranchItem(id="A", label="규제 승인", prob=0.6), BranchItem(id="B", label="승인 실패", prob=0.4, value=38000),
+            BranchItem(id="A1", parent="A", label="시장 안착", prob=0.7, value=80000),
+            BranchItem(id="A2", parent="A", label="경쟁 심화", prob=0.3, value=55000)],
+        max_length=30, json_schema_extra={"x-ui": _ui(
+            "가지", question="어떤 사건이 어떻게 갈리나요?",
+            help="같은 부모 아래 확률의 합은 1 · 끝 가지에는 주당 가치 · 깊이 4단계까지.")})
+
+
+def _tree(inputs: dict, p: TreeParams) -> pg.NodeOutput:
+    head = _priced(p)
+    return _call(cmr.company_model_decision_tree, head,
+                 cmr.DecisionTreeRequest(price=head["price"], branches=_rows(p.branches, cmr.TreeBranch)),
+                 "의사결정 나무를 계산하지 못했어요")
+
+
+def _explain_tree(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    paths = r.get("paths") or []
+    facts = [f"{' → '.join(str(x) for x in pth['labels'])}: {pth['prob']:.0%} · {_won(pth['value'])}" for pth in paths[:4]]
+    trust = [*_base_trust(view, prov), *_inputs_trust(r),
+             _t(ASSUMED, "가지·확률·값은 모두 사람이 정했어요 — 나무는 그 가정을 정직하게 접을 뿐이에요.")]
+    if r.get("ignored_values"):
+        trust.append(_t(UNKNOWN, f"중간 가지의 값은 쓰지 않았어요(아래 가지로 계산): {', '.join(r['ignored_values'])}"))
+    return {"title": f"기대 가치 {_won(r.get('expected_value'))}", "facts": facts, "trust": trust,
+            "unmeasured": ["사건의 확률 자체"]}
+
+
+# ── 합산가치(SOTP)·지주사 NAV ─────────────────────────────────────────────────
+
+class SegmentItem(BaseModel):
+    model_config = _FORBID
+    name: str = Field("부문", max_length=30, json_schema_extra={"x-ui": _ui("부문")})
+    metric: float = Field(0.0, json_schema_extra={"x-ui": _ui("지표(억원)", help="EBITDA·순이익 등")})
+    multiple: float = Field(5.0, ge=0, le=100, json_schema_extra={"x-ui": _ui("배수")})
+
+
+class SubsidiaryItem(BaseModel):
+    model_config = _FORBID
+    code: str = Field("000660", pattern=r"^\d{6}$", json_schema_extra={"x-ui": _ui("자회사 종목코드")})
+    stake_pct: float = Field(20.0, ge=0, le=100, json_schema_extra={"x-ui": _ui("지분율(%)")})
+
+
+class SotpParams(_Priced):
+    segments: list[SegmentItem] = Field(default_factory=list, max_length=12, json_schema_extra={"x-ui": _ui(
+        "사업 부문", question="직접 하는 사업을 부문별로 나누면?", help="부문 실적은 저장소에 없어요 — 직접 넣어요.")})
+    subsidiaries: list[SubsidiaryItem] = Field(default_factory=list, max_length=12, json_schema_extra={"x-ui": _ui(
+        "상장 자회사", question="가진 상장 자회사와 지분율은?", help="시가총액은 조회하고, 지분율은 직접 넣어요.")})
+    holding_discount_pct: float = Field(0.0, ge=0, lt=100, json_schema_extra={"x-ui": _ui(
+        "지주사 할인", question="합계에서 얼마를 깎을까요?", unit="%",
+        presets=[{"label": "없음", "value": 0}, {"label": "30%", "value": 30}, {"label": "50%", "value": 50}],
+        help="한국 지주사는 흔히 NAV 에서 할인돼 거래돼요 — 할인율은 가정이에요.")})
+    net_debt_eok: float | None = Field(None, json_schema_extra={"x-ui": _ui(
+        "순차입금(억원)", "advanced", help="비우면 총부채로 근사해요(DCF 와 같은 다리 — 보수적).")})
+
+
+def _sotp(inputs: dict, p: SotpParams) -> pg.NodeOutput:
+    head = _priced(p)
+    req = cmr.SotpRequest(price=head["price"], segments=_rows(p.segments, cmr.SotpSegment),
+                          subsidiaries=_rows(p.subsidiaries, cmr.SotpSubsidiary),
+                          holding_discount_pct=p.holding_discount_pct, net_debt_eok=p.net_debt_eok)
+    return _call(cmr.company_model_sotp, head, req, "합산가치를 계산하지 못했어요")
+
+
+def _explain_sotp(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    title = f"부문·자회사를 합치면 주당 {_won(r.get('per_share'))}"
+    facts = [f"{x['name']}: {x['value']:,.0f}억" for x in r.get("segments") or []]
+    facts += [f"{x.get('name') or x['code']} 지분 {x['stake_pct']:.0f}%: {x['value']:,.0f}억" for x in r.get("subsidiaries") or []]
+    trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r)]
+    for x in r.get("excluded") or []:
+        trust.append(_t(UNKNOWN, f"{x.get('code')}: 합계에서 뺐어요 — {x.get('reason')}"))
+    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["부문별 적정 배수(피어 부문 자료 없음)"]}
+
+
+# ── 실물옵션 ─────────────────────────────────────────────────────────────────
+
+class RealOptionParams(_Priced):
+    kind: str = Field("call", pattern="^(call|put)$", json_schema_extra={"x-ui": _ui(
+        "옵션 종류", question="어떤 선택권의 값을 볼까요?", widget="cards",
+        options={"call": "확장·연기(들어갈 권리)", "put": "포기(빠져나올 권리)"})})
+    S: float = Field(1000.0, gt=0, json_schema_extra={"x-ui": _ui(
+        "사업 가치(억원)", question="그 사업의 지금 가치는?", help="현금흐름의 현재가치 — 가정이에요.")})
+    K: float = Field(1200.0, gt=0, json_schema_extra={"x-ui": _ui(
+        "투자비·처분가(억원)", question="들어가려면(또는 빠져나오면) 얼마?")})
+    T: float = Field(3.0, gt=0, le=30, json_schema_extra={"x-ui": _ui(
+        "결정까지", unit="년", presets=[{"label": "1년", "value": 1}, {"label": "3년", "value": 3}, {"label": "5년", "value": 5}])})
+    sigma: float = Field(0.35, gt=0, le=2, json_schema_extra={"x-ui": _ui(
+        "사업 가치 변동성", presets=[{"label": "20%", "value": 0.2}, {"label": "35%", "value": 0.35}, {"label": "60%", "value": 0.6}],
+        help="옵션 값을 가장 크게 좌우하는 가정이에요.")})
+    q: float = Field(0.0, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
+        "누수율", "advanced", help="기다리는 동안 놓치는 현금흐름 비율(배당처럼 다뤄요).")})
+    n_steps: int = Field(500, ge=50, le=2000, json_schema_extra={"x-ui": _ui("이항 단계 수", "advanced")})
+
+
+def _real_option(inputs: dict, p: RealOptionParams) -> pg.NodeOutput:
+    head = _priced(p)
+    req = cmr.RealOptionRequest(price=head["price"], S=p.S, K=p.K, T=p.T, sigma=p.sigma, q=p.q, kind=p.kind,
+                                n_steps=p.n_steps)
+    return _call(cmr.company_model_real_option, head, req, "실물옵션을 계산하지 못했어요")
+
+
+def _explain_real_option(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    bs, bi = (r.get("black_scholes") or {}).get("value"), (r.get("binomial") or {}).get("value")
+    title = (f"선택권의 값 {bs:,.0f}억(유럽형) · {bi:,.0f}억(미국형)" if isinstance(bs, (int, float)) and isinstance(bi, (int, float))
+             else "실물옵션을 계산했어요")
+    npv = r.get("static_npv")
+    facts = []
+    if isinstance(npv, (int, float)):
+        facts.append(f"지금 바로 하면 {npv:,.0f}억 — 선택권이 더하는 값 {r.get('option_premium', 0):,.0f}억")
+    ps = r.get("per_share") or {}
+    if isinstance(ps.get("black_scholes"), (int, float)):
+        facts.append(f"주당 {_won(ps['black_scholes'])} (현재가의 {ps.get('vs_price_pct', 0):.1f}%)")
+    trust = [*_base_trust(view, prov), *_inputs_trust(r), _t(CONFIRMED, (r.get("early_exercise") or {}).get("note", ""))]
+    if r.get("note"):
+        trust.append(_t(ASSUMED, r["note"]))
+    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["사업 가치의 변동성(측정하지 않은 가정)"]}
+
+
 # ── 등록 ─────────────────────────────────────────────────────────────────────
 
 def register(registry: pg.Registry) -> None:
@@ -237,5 +419,21 @@ def register(registry: pg.Registry) -> None:
                     plain_description="매출 성장·마진·재투자를 흔들어 주당 가치가 어디서 어디까지 나오는지 봐요.",
                     run=_driver_mc, params_model=DriverMcParams, explain=_explain_driver_mc,
                     description="company_model_driver_mc 라우트 함수 그대로(시드 고정 재현).", **common),
+        pg.NodeSpec("company_scenarios", "시나리오 가중", plain_label="경우를 확률로 묶기",
+                    plain_description="약세·기본·강세처럼 경우마다 가정을 바꾸고 확률을 둬 적정가를 묶어요.",
+                    run=_scenarios, params_model=ScenariosParams, explain=_explain_scenarios,
+                    description="company_model_scenarios 라우트 함수 그대로(행마다 샌드박스와 같은 엔진).", **common),
+        pg.NodeSpec("company_decision_tree", "의사결정 나무", plain_label="사건이 갈리면",
+                    plain_description="승인·실패처럼 갈리는 사건을 나무로 그려 기대 가치를 접어요.",
+                    run=_tree, params_model=TreeParams, explain=_explain_tree,
+                    description="company_model_decision_tree 라우트 함수 그대로.", **common),
+        pg.NodeSpec("company_sotp", "합산가치(SOTP)", plain_label="부문·자회사 합치기",
+                    plain_description="사업 부문과 상장 자회사 지분을 더하고 지주사 할인을 반영해요.",
+                    run=_sotp, params_model=SotpParams, explain=_explain_sotp,
+                    description="company_model_sotp 라우트 함수 그대로(자회사 시총 조회).", **common),
+        pg.NodeSpec("company_real_option", "실물옵션", plain_label="선택권의 값",
+                    plain_description="확장·연기·포기처럼 나중에 정할 수 있는 선택권의 값을 블랙-숄즈와 이항으로 봐요.",
+                    run=_real_option, params_model=RealOptionParams, explain=_explain_real_option,
+                    description="company_model_real_option 라우트 함수 그대로(BS + CRR 이항).", **common),
     ):
         registry.register(spec)

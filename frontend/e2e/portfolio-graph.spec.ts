@@ -1351,3 +1351,62 @@ test("기업 분석 모델(BL3 W3b-C1): EVA·가치의 층·배수 PEG·영업 M
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });
+
+test("기업 분석 모델(BL3 W3b-C2): 시나리오·나무·SOTP·실물옵션 · 기본 시나리오가 설정에 보인다 · 확률 합 틀리면 사유 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const add: [string, string, Record<string, unknown>][] = [
+    ["sc", "company_scenarios", { code: "005930" }], ["dt", "company_decision_tree", { code: "005930" }],
+    ["so", "company_sotp", { code: "005930", segments: [{ name: "반도체", metric: 200000, multiple: 6 }],
+      subsidiaries: [{ code: "000660", stake_pct: 20 }, { code: "999999", stake_pct: 10 }], holding_discount_pct: 30 }],
+    ["ro", "company_real_option", { code: "005930", kind: "put", S: 900, K: 1000, T: 2, sigma: 0.3 }],
+    ["bp", "company_scenarios", { code: "005930", scenarios: [{ name: "a", prob: 0.3 }, { name: "b", prob: 0.3 }] }],
+    ["bt", "company_decision_tree", { code: "005930", branches: [{ id: "A", prob: 0.5, value: 1 }, { id: "B", prob: 0.3, value: 2 }] }],
+  ];
+  add.forEach(([id, type, params], i) => doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 2) * 300, y: Math.floor(i / 2) * 260 } }));
+  await importText(page, "bl3w3c2.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["sc", "dt", "so", "ro"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    expect(body.nodes[id].lineage.practice, id).toBe(true);
+  }
+  expect(body.nodes.bp.status).toBe("failed");
+  expect(body.nodes.bp.reason).toContain("합");
+  expect(body.nodes.bt.status).toBe("failed");
+  expect(body.nodes.bt.reason).toContain("합");
+  expect(body.nodes.dt.view.result.expected_value).toBeCloseTo(58700, 0);
+
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  await pick("sc");
+  // ★설정에 보이는 것 = 서버가 계산에 쓴 것★ — 기본 시나리오 셋이 설정 화면에 그대로 보인다
+  await tab(page, "settings");
+  await expect(page.locator('.pg-side [data-field="scenarios"] .pg-objrow')).toHaveCount(3);
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-scen tbody tr")).toHaveCount(3);
+  await pick("dt");
+  await expect(page.locator(".pg-side .pg-tree-row")).toHaveCount(4);
+  await expect(page.locator(".pg-side .pg-paths tbody tr")).toHaveCount(3);
+  await pick("so");
+  await expect(page.locator(".pg-side .pg-warn", { hasText: "999999" })).toBeVisible();
+  await expect(page.locator(".pg-side .pg-sotp-total")).toContainText("남는 지분가치");
+  await pick("ro");
+  await expect(page.locator(".pg-side .pg-opt-cell")).toHaveCount(2);
+  await expect(page.locator(".pg-side .pg-inputs .pg-tag", { hasText: "가정" }).first()).toBeVisible();
+
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["sc", "so", "ro"]) {
+      await pick(id);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(10);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});

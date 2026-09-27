@@ -252,3 +252,122 @@ export function DriverMcResult({ v }: { v: Dict }) {
     </>
   );
 }
+
+// ══ C2 — 가정형 ═════════════════════════════════════════════════════════════
+
+const AKO: Record<string, string> = { rf: "무위험", beta: "베타", erp: "ERP", g: "영구성장" };
+
+export function ScenariosResult({ v }: { v: Dict }) {
+  const r = (v.result as Dict) ?? {};
+  const rows = (r.rows as Dict[]) ?? [];
+  const price = num(v.price);
+  return (
+    <>
+      <Head v={v} />
+      <table className="pg-table pg-scen">
+        <thead><tr><th>경우</th><th className="pg-td-num">확률</th><th>바꾼 가정</th><th className="pg-td-num">적정가</th></tr></thead>
+        <tbody>{rows.map((x) => (
+          <tr key={String(x.name)}>
+            <td className="pg-td-name">{String(x.name)}</td>
+            <td className="pg-td-num">{pc(x.prob, 0)}</td>
+            <td className="pg-muted">{((x.changed as string[]) ?? []).map((k2) => {
+              const a = (x.assumptions as Dict)?.[k2];
+              return `${AKO[k2] ?? k2} ${k2 === "beta" ? (num(a) === null ? "—" : (a as number).toFixed(2)) : pc(a, 1)}`;
+            }).join(" · ") || "기본값"}</td>
+            <td className={`pg-td-num${price !== null && (num(x.value) ?? 0) < price ? " pg-muted" : ""}`}>{won(x.value)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <KV rows={[["확률로 묶은 적정가", won(r.weighted)], ["흩어짐(표준편차)", won(r.std)],
+                 ["지금 가격 이상일 확률", num(r.prob_above_price) === null ? "—" : pc(r.prob_above_price, 0)]]} />
+      <InputsTable r={r} />
+    </>
+  );
+}
+
+export function DecisionTreeResult({ v }: { v: Dict }) {
+  const r = (v.result as Dict) ?? {};
+  const nodes = (r.nodes as Dict[]) ?? [];
+  const kids = (p: string) => nodes.filter((n) => String(n.parent ?? "") === p);
+  const walk = (p: string): Dict[] => kids(p).flatMap((n) => [n, ...walk(String(n.id))]);
+  const order = walk("");
+  return (
+    <>
+      <Head v={v} />
+      <ul className="pg-tree" aria-label="의사결정 나무">
+        {order.map((n) => (
+          <li key={String(n.id)} className={`pg-tree-row${n.leaf ? " pg-tree-row--leaf" : ""}`} style={{ paddingLeft: `${(num(n.depth) ?? 1) * 14 - 14}px` }}>
+            <span className="pg-tree-p">{pc(n.prob, 0)}</span>
+            <span className="pg-tree-l">{String(n.label || n.id)}</span>
+            <span className="pg-tree-v">{n.leaf ? won(n.ev) : `기대 ${won(n.ev)}`}</span>
+          </li>
+        ))}
+      </ul>
+      <KV rows={[["기대 가치", won(r.expected_value)],
+                 ["지금 가격 이상일 확률", num(r.prob_above_price) === null ? "—" : pc(r.prob_above_price, 0)]]} />
+      <table className="pg-table pg-paths">
+        <caption>끝까지 가는 길</caption>
+        <tbody>{((r.paths as Dict[]) ?? []).map((pth, i) => (
+          <tr key={i}><td className="pg-td-name">{((pth.labels as string[]) ?? []).join(" → ")}</td>
+            <td className="pg-td-num">{pc(pth.prob, 0)}</td><td className="pg-td-num">{won(pth.value)}</td></tr>
+        ))}</tbody>
+      </table>
+      {((r.ignored_values as string[]) ?? []).length > 0 && <p className="pg-note">중간 가지의 값은 쓰지 않았어요: {((r.ignored_values as string[]) ?? []).join(", ")}</p>}
+      <InputsTable r={r} />
+    </>
+  );
+}
+
+export function SotpResult({ v }: { v: Dict }) {
+  const r = (v.result as Dict) ?? {};
+  const eo = (x: unknown) => (num(x) === null ? "—" : `${Math.round(x as number).toLocaleString("ko-KR")}억`);
+  const steps: [string, number | null, string][] = [
+    ...((r.segments as Dict[]) ?? []).map((x) => [`${String(x.name)} (${(num(x.metric) ?? 0).toLocaleString("ko-KR")}억 × ${String(x.multiple)}배)`, num(x.value), "plus"] as [string, number | null, string]),
+    ...((r.subsidiaries as Dict[]) ?? []).map((x) => [`${String(x.name ?? x.code)} 지분 ${String(x.stake_pct)}%`, num(x.value), "plus"] as [string, number | null, string]),
+    ["순차입금", num(r.net_debt) === null ? null : -(r.net_debt as number), "minus"],
+    [`지주사 할인 ${String(r.discount_pct ?? 0)}%`, num(r.nav) === null || num(r.after_discount) === null ? null : (r.after_discount as number) - (r.nav as number), "minus"],
+  ];
+  return (
+    <>
+      <Head v={v} />
+      <table className="pg-table pg-sotp">
+        <tbody>
+          {steps.map(([label, val, kind], i) => (
+            <tr key={i}><td className="pg-td-name">{label}</td>
+              <td className={`pg-td-num${kind === "minus" ? " pg-neg" : ""}`}>{val === null ? "—" : `${val >= 0 ? "+" : "−"}${eo(Math.abs(val))}`}</td></tr>
+          ))}
+          <tr className="pg-sotp-total"><td className="pg-td-name">남는 지분가치</td><td className="pg-td-num">{eo(r.after_discount)}</td></tr>
+        </tbody>
+      </table>
+      <KV rows={[["주당", num(r.per_share) === null ? `— ${String(r.per_share_reason ?? "")}` : won(r.per_share)],
+                 ["할인 전 주당", won(r.per_share_before_discount)]]} />
+      {((r.excluded as Dict[]) ?? []).map((x, i) => <p key={i} className="pg-warn">{String(x.code)}: 합계에서 뺐어요 — {String(x.reason ?? "사유 미상")}</p>)}
+      <HistoryNote r={r} />
+      <InputsTable r={r} />
+    </>
+  );
+}
+
+export function RealOptionResult({ v }: { v: Dict }) {
+  const r = (v.result as Dict) ?? {};
+  const bs = (r.black_scholes as Dict) ?? {};
+  const bi = (r.binomial as Dict) ?? {};
+  const ee = (r.early_exercise as Dict) ?? {};
+  const ps = (r.per_share as Dict) ?? {};
+  const eo = (x: unknown) => (num(x) === null ? "—" : `${(x as number).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}억`);
+  return (
+    <>
+      <Head v={v} />
+      <div className="pg-opt">
+        <div className="pg-opt-cell"><span className="pg-opt-k">블랙-숄즈 · 유럽형</span><b className="pg-opt-v">{eo(bs.value)}</b></div>
+        <div className="pg-opt-cell"><span className="pg-opt-k">CRR 이항 · 미국형 ({String(bi.steps ?? "—")}단계)</span><b className="pg-opt-v">{eo(bi.value)}</b></div>
+      </div>
+      <KV rows={[["지금 바로 하면(정적 NPV)", eo(r.static_npv)], ["선택권이 더하는 값", eo(r.option_premium)],
+                 ["조기 행사의 값", eo(ee.premium)], ["주당", num(ps.black_scholes) === null ? "—" : `${won(ps.black_scholes)} (현재가의 ${(num(ps.vs_price_pct) ?? 0).toFixed(1)}%)`]]} />
+      {ee.note ? <p className="pg-note">{String(ee.note)}</p> : null}
+      <p className="pg-note">{String(r.note ?? "")}</p>
+      <HistoryNote r={r} />
+      <InputsTable r={r} />
+    </>
+  );
+}

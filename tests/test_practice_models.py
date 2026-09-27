@@ -231,3 +231,130 @@ def test_driver_mc_refuses_a_terminal_growth_at_or_above_wacc():
     out = pm.driver_monte_carlo(_hist(), _hist()[-1], hot, sigma_growth=0.03, sigma_margin=0.02, sigma_reinvest=0.01,
                                 years=5, n=100, seed=1, price=100.0)
     assert out["available"] is False and "WACC" in out["reason"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# C2 — 가정형 모델: 시나리오 가중 · 의사결정 나무 · SOTP·지주사 NAV · 실물옵션
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_scenarios_by_hand():
+    rows = [{"name": "약세", "prob": 0.25, "value": 30000}, {"name": "기본", "prob": 0.5, "value": 50000},
+            {"name": "강세", "prob": 0.25, "value": 80000}]
+    out = pm.scenario_weighted(rows, price=45000)
+    w = 0.25 * 30000 + 0.5 * 50000 + 0.25 * 80000
+    assert out["weighted"] == pytest.approx(w)
+    assert out["std"] == pytest.approx(math.sqrt(0.25 * (30000 - w) ** 2 + 0.5 * (50000 - w) ** 2 + 0.25 * (80000 - w) ** 2))
+    assert out["prob_above_price"] == pytest.approx(0.75)
+    assert out["worst"]["name"] == "약세" and out["best"]["name"] == "강세"
+
+
+@pytest.mark.parametrize("rows,why", [
+    ([{"name": "a", "prob": 0.5, "value": 1}, {"name": "b", "prob": 0.4, "value": 2}], "합"),
+    ([{"name": "a", "prob": 1.0, "value": 1}], "2~5"),
+    ([{"name": "a", "prob": 0.5, "value": 1}, {"name": "b", "prob": 0.5, "value": None}], "b"),
+    ([{"name": "a", "prob": 1.2, "value": 1}, {"name": "b", "prob": -0.2, "value": 2}], "확률"),
+])
+def test_scenarios_refuse_bad_inputs(rows, why):
+    out = pm.scenario_weighted(rows, price=1.0)
+    assert out["available"] is False and why in out["reason"]
+
+
+TREE = [{"id": "A", "parent": "", "label": "규제 승인", "prob": 0.6, "value": None},
+        {"id": "B", "parent": "", "label": "승인 실패", "prob": 0.4, "value": 38000},
+        {"id": "A1", "parent": "A", "label": "시장 안착", "prob": 0.7, "value": 80000},
+        {"id": "A2", "parent": "A", "label": "경쟁 심화", "prob": 0.3, "value": 55000}]
+
+
+def test_decision_tree_by_hand():
+    out = pm.decision_tree(TREE, price=50000)
+    assert out["available"] is True
+    assert out["expected_value"] == pytest.approx(0.6 * (0.7 * 80000 + 0.3 * 55000) + 0.4 * 38000)
+    paths = {p["path"][-1]: p["prob"] for p in out["paths"]}
+    assert paths == pytest.approx({"A1": 0.42, "A2": 0.18, "B": 0.4})
+    ev = {n["id"]: n["ev"] for n in out["nodes"]}
+    assert ev["A"] == pytest.approx(72500)
+    assert out["prob_above_price"] == pytest.approx(0.6)
+
+
+@pytest.mark.parametrize("mut,why", [
+    (lambda t: [*t[:2], {**t[2], "prob": 0.5}, t[3]], "합"),
+    (lambda t: [*t, {"id": "C", "parent": "Z", "label": "고아", "prob": 1.0, "value": 1}], "Z"),
+    (lambda t: [{**t[0], "parent": "A2"}, *t[1:]], "순환"),
+    (lambda t: [*t[:3], {**t[3], "value": None}], "값"),
+    (lambda t: [*t, {**t[3]}], "중복"),
+    (lambda t: [], "가지"),
+])
+def test_decision_tree_refuses_broken_trees(mut, why):
+    out = pm.decision_tree(mut([dict(x) for x in TREE]), price=1.0)
+    assert out["available"] is False and why in out["reason"]
+
+
+def test_decision_tree_depth_is_limited():
+    deep = [{"id": f"n{i}", "parent": f"n{i - 1}" if i else "", "label": str(i), "prob": 1.0,
+             "value": 1 if i == 5 else None} for i in range(6)]
+    out = pm.decision_tree(deep, price=1.0)
+    assert out["available"] is False and "깊이" in out["reason"]
+
+
+def test_sotp_by_hand():
+    segs = [{"name": "반도체", "metric": 1000.0, "multiple": 6.0}, {"name": "가전", "metric": 200.0, "multiple": 4.0}]
+    subs = [{"code": "000660", "name": "SK하이닉스", "market_cap": 1000.0, "stake_pct": 20.0},
+            {"code": "999999", "name": None, "market_cap": None, "stake_pct": 10.0, "reason": "모르는 종목"}]
+    out = pm.sotp(segs, subs, net_debt=500.0, holding_discount_pct=30.0, shares=100_000_000)
+    gross = 1000 * 6 + 200 * 4 + 1000 * 0.2
+    nav = gross - 500
+    assert out["gross"] == pytest.approx(gross) and out["nav"] == pytest.approx(nav)
+    assert out["after_discount"] == pytest.approx(nav * 0.7)
+    assert out["per_share"] == pytest.approx(nav * 0.7 * 1e8 / 100_000_000)
+    assert [x["code"] for x in out["excluded"]] == ["999999"]
+    assert out["per_share_before_discount"] == pytest.approx(nav * 1e8 / 100_000_000)
+
+
+def test_sotp_needs_at_least_one_part():
+    out = pm.sotp([], [], net_debt=0.0, holding_discount_pct=0.0, shares=1)
+    assert out["available"] is False and "부문" in out["reason"]
+
+
+def test_sotp_refuses_a_negative_multiple():
+    out = pm.sotp([{"name": "x", "metric": 10.0, "multiple": -1.0}], [], net_debt=0.0, holding_discount_pct=0.0, shares=1)
+    assert out["available"] is False and "배수" in out["reason"]
+
+
+def _bs(S, K, T, r, q, s, call=True):
+    N = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))  # noqa: E731
+    d1 = (math.log(S / K) + (r - q + s * s / 2) * T) / (s * math.sqrt(T))
+    d2 = d1 - s * math.sqrt(T)
+    if call:
+        return S * math.exp(-q * T) * N(d1) - K * math.exp(-r * T) * N(d2)
+    return K * math.exp(-r * T) * N(-d2) - S * math.exp(-q * T) * N(-d1)
+
+
+def test_real_option_black_scholes_textbook_value():
+    out = pm.real_option(S=100, K=100, T=1, sigma=0.2, r=0.05, q=0.0, kind="call", n_steps=500)
+    assert out["black_scholes"]["value"] == pytest.approx(10.4506, abs=1e-3)
+    assert out["static_npv"] == pytest.approx(0.0)
+    assert out["option_premium"] == pytest.approx(out["black_scholes"]["value"])
+
+
+def test_real_option_leakage_matches_the_dividend_formula():
+    out = pm.real_option(S=100, K=110, T=2, sigma=0.3, r=0.04, q=0.03, kind="call", n_steps=500)
+    assert out["black_scholes"]["value"] == pytest.approx(_bs(100, 110, 2, 0.04, 0.03, 0.3), abs=1e-3)
+
+
+def test_an_abandonment_option_values_early_exercise():
+    out = pm.real_option(S=100, K=100, T=1, sigma=0.2, r=0.05, q=0.0, kind="put", n_steps=500)
+    assert out["binomial"]["value"] > out["black_scholes"]["value"]
+    assert out["early_exercise"]["premium"] > 0
+
+
+def test_a_call_without_leakage_has_no_early_exercise_premium_only_grid_error():
+    out = pm.real_option(S=100, K=100, T=1, sigma=0.2, r=0.05, q=0.0, kind="call", n_steps=200)
+    ee = out["early_exercise"]
+    assert ee["premium"] == 0.0 and "격자" in ee["note"]
+
+
+@pytest.mark.parametrize("kw", [{"sigma": 0.0}, {"T": 0.0}, {"S": 0.0}, {"K": -1.0}])
+def test_real_option_refuses_degenerate_inputs(kw):
+    base = dict(S=100, K=100, T=1, sigma=0.2, r=0.05, q=0.0, kind="call", n_steps=200)
+    out = pm.real_option(**{**base, **kw})
+    assert out["available"] is False

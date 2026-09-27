@@ -26,8 +26,12 @@ from tests.test_allocation_graph import _node  # noqa: E402
 pytestmark = pytest.mark.usefixtures("graph_write_guard")
 
 CODE, PX = "005930", 50000.0
-KINDS = ("company_eva", "company_value_layers", "company_multiples", "company_driver_mc")
-FAST = {"company_multiples": {"peers": False}, "company_driver_mc": {"n": 300}}
+C1 = ("company_eva", "company_value_layers", "company_multiples", "company_driver_mc")
+C2 = ("company_scenarios", "company_decision_tree", "company_sotp", "company_real_option")
+KINDS = C1 + C2
+SEG = [{"name": "반도체", "metric": 200000, "multiple": 6}]
+FAST = {"company_multiples": {"peers": False}, "company_driver_mc": {"n": 300},
+        "company_sotp": {"segments": SEG, "subsidiaries": [{"code": "000660", "stake_pct": 20}], "holding_discount_pct": 30}}
 
 
 def _one(kind, **params):
@@ -39,7 +43,7 @@ def _p(kind, **kw):
     return {"code": CODE, **FAST.get(kind, {}), **kw}
 
 
-def test_the_four_c1_nodes_are_registered():
+def test_the_eight_company_model_nodes_are_registered():
     assert set(KINDS) <= set(gn.REGISTRY.types())
 
 
@@ -177,3 +181,79 @@ def test_practice_follows_the_mock_gate_even_when_the_result_is_not_flagged(monk
     assert _one("company_multiples", **_p("company_multiples", price=PX))["lineage"]["practice"] is True
     monkeypatch.setenv("KIS_USE_MOCK", "0")
     assert _one("company_multiples", **_p("company_multiples", price=PX))["lineage"]["practice"] is False
+
+
+
+# ══ C2 — 가정형 ══════════════════════════════════════════════════════════════
+
+def test_scenarios_equal_the_route_and_each_row_is_the_sandbox_value():
+    from src.engine.company_analytics import valuation_sandbox
+    rows = [{"name": "약세", "prob": 0.3, "g": 0.01, "beta": 1.3}, {"name": "기본", "prob": 0.7}]
+    r = _one("company_scenarios", **_p("company_scenarios", price=PX, scenarios=rows))
+    ref = cmr.company_model_scenarios(CODE, cmr.ScenariosRequest(price=PX, scenarios=rows))
+    assert r["view"]["result"] == ref and ref["available"] is True
+    # ★같은 엔진★ — 각 행의 값 = 그 가정으로 돌린 샌드박스 통합값
+    for row, sc in zip(ref["rows"], rows):
+        ov = {k: v for k, v in sc.items() if k in ("g", "beta")}
+        assert row["value"] == valuation_sandbox(CODE, PX, ov)["unified"]["value"], row["name"]
+
+
+def test_scenario_probabilities_that_do_not_sum_to_one_fail():
+    rows = [{"name": "a", "prob": 0.3}, {"name": "b", "prob": 0.3}]
+    r = _one("company_scenarios", **_p("company_scenarios", price=PX, scenarios=rows))
+    assert r["status"] == "failed" and "합" in r["reason"]
+
+
+def test_the_default_decision_tree_and_the_route_agree():
+    r = _one("company_decision_tree", **_p("company_decision_tree", price=PX))
+    assert r["status"] == "ok", r["reason"]
+    assert r["view"]["result"]["expected_value"] == pytest.approx(0.6 * (0.7 * 80000 + 0.3 * 55000) + 0.4 * 38000)
+    from src.api.allocation_graph_nodes_company_models import TreeParams
+    ref = cmr.company_model_decision_tree(CODE, cmr.DecisionTreeRequest(
+        price=PX, branches=[cmr.TreeBranch(**b.model_dump()) for b in TreeParams().branches]))
+    assert r["view"]["result"] == ref
+
+
+def test_a_broken_tree_fails_with_the_reason():
+    bad = [{"id": "A", "prob": 0.5, "value": 1}, {"id": "B", "prob": 0.3, "value": 2}]
+    r = _one("company_decision_tree", **_p("company_decision_tree", price=PX, branches=bad))
+    assert r["status"] == "failed" and "합" in r["reason"]
+
+
+def test_sotp_equals_the_route_excludes_unknown_subsidiaries_and_labels_net_debt():
+    subs = [{"code": "000660", "stake_pct": 20}, {"code": "999999", "stake_pct": 10}]
+    r = _one("company_sotp", **_p("company_sotp", price=PX, subsidiaries=subs))
+    ref = cmr.company_model_sotp(CODE, cmr.SotpRequest(price=PX, segments=SEG, subsidiaries=subs, holding_discount_pct=30))
+    assert r["view"]["result"] == ref
+    assert [x["code"] for x in ref["excluded"]] == ["999999"]
+    assert _basis(ref, "net_debt")["basis"] == "근사"
+    own = cmr.company_model_sotp(CODE, cmr.SotpRequest(price=PX, segments=SEG, net_debt_eok=1000))
+    assert _basis(own, "net_debt")["basis"] == "가정" and own["net_debt"] == 1000
+
+
+def test_sotp_without_any_part_fails():
+    r = _one("company_sotp", code=CODE, price=PX)
+    assert r["status"] == "failed" and "부문" in r["reason"]
+
+
+def test_real_option_equals_the_route_and_labels_the_risk_free_rate_source():
+    prm = {"code": CODE, "price": PX, "kind": "put", "S": 900, "K": 1000, "T": 2, "sigma": 0.3}
+    g = {"format": pg.FORMAT, "version": pg.VERSION, "edges": [],
+         "nodes": [{"id": "c", "type": "company_real_option", "params": prm, "position": {"x": 0, "y": 0}}]}
+    r = pg.run(g, gn.REGISTRY)["nodes"]["c"]
+    ref = cmr.company_model_real_option(CODE, cmr.RealOptionRequest(price=PX, kind="put", S=900, K=1000, T=2, sigma=0.3))
+    assert r["view"]["result"] == ref
+    from src.engine.company_analytics import resolve_default_params
+    assert _basis(ref, "r")["source"] == resolve_default_params(CODE)["rf_source"]
+    assert ref["per_share"]["black_scholes"] > 0
+
+
+def test_default_rows_are_published_in_the_schema_so_the_settings_show_what_the_server_uses():
+    """`default_factory` 는 JSON 스키마에 기본값을 싣지 않는다 — 설정이 '아직 없어요' 라고 보이며 서버는 기본 행으로 계산하던 어긋남."""
+    cat = {e["type"]: e for e in gn.REGISTRY.catalog()}
+    sc = cat["company_scenarios"]["params_schema"]["properties"]["scenarios"]["default"]
+    tr = cat["company_decision_tree"]["params_schema"]["properties"]["branches"]["default"]
+    assert len(sc) == 3 and len(tr) == 4
+    from src.api.allocation_graph_nodes_company_models import ScenariosParams, TreeParams
+    assert [x["prob"] for x in sc] == [x.prob for x in ScenariosParams(code=CODE).scenarios]
+    assert len(TreeParams(code=CODE).branches) == 4

@@ -326,3 +326,196 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
             "seed": seed, "inputs": inputs,
             "note": ("'가치 분포' 노드는 할인율·성장률 **가정**을 흔들고, 이 노드는 매출·마진·재투자라는 **영업**을 흔들어요 — "
                      "다른 불확실성이에요. 폭(σ)은 잰 값이 아니라 정한 값이에요.")}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# C2 — 가정형 모델(값·확률을 사람이 정한다): 시나리오 가중 · 의사결정 나무 · SOTP·지주사 NAV · 실물옵션
+# ══════════════════════════════════════════════════════════════════════════════
+
+_TOL = 1e-6
+
+
+def scenario_weighted(rows: list[dict], *, price: float | None) -> dict:
+    """이산 확률 시나리오 — `rows = [{name, prob, value}]`(value = 주당 적정가, 라우트가 같은 엔진으로 계산해 넣는다).
+
+    가중 평균 · 표준편차 · 현재가 이상일 확률 · 최악/최선. 확률 합이 1 이 아니거나 한 시나리오라도 값을 못 내면 계산하지 않는다.
+    """
+    inputs = [_inp("prob", "시나리오 확률", [r.get("prob") for r in rows], ASSUMED, "사람이 정한 확률")]
+    if not 2 <= len(rows) <= 5:
+        return _off("시나리오는 2~5개여야 해요", inputs=inputs)
+    probs = [_num(r.get("prob")) for r in rows]
+    if any(p is None or p < 0 or p > 1 for p in probs):
+        return _off("확률은 0 과 1 사이여야 해요", inputs=inputs)
+    if abs(sum(probs) - 1.0) > _TOL:
+        return _off(f"확률의 합이 1 이어야 해요(지금 {sum(probs):.2f}) — 나눠 맞추지 않아요", inputs=inputs)
+    missing = [str(r.get("name")) for r in rows if _num(r.get("value")) is None]
+    if missing:
+        return _off(f"값을 내지 못한 시나리오가 있어요: {', '.join(missing)} — 빼고 가중하지 않아요", inputs=inputs)
+    vals = [float(r["value"]) for r in rows]
+    w = sum(p * v for p, v in zip(probs, vals))
+    std = math.sqrt(sum(p * (v - w) ** 2 for p, v in zip(probs, vals)))
+    ranked = sorted(zip(rows, vals), key=lambda x: x[1])
+    return {"available": True, "reason": None, "rows": [{**r, "value": v} for r, v in zip(rows, vals)],
+            "weighted": w, "std": std,
+            "prob_above_price": (sum(p for p, v in zip(probs, vals) if v >= price) if price else None),
+            "worst": {"name": ranked[0][0].get("name"), "value": ranked[0][1]},
+            "best": {"name": ranked[-1][0].get("name"), "value": ranked[-1][1]},
+            "price": price, "inputs": inputs}
+
+
+_TREE_MAX_DEPTH, _TREE_MAX_BRANCHES = 4, 30
+
+
+def decision_tree(branches: list[dict], *, price: float | None) -> dict:
+    """의사결정 나무 — `branches = [{id, parent, label, prob, value}]`. 부모가 비면 뿌리의 자식이다.
+
+    확률은 부모 안에서의 조건부 확률(형제 합 = 1), 값은 끝 가지(잎)의 주당 가치. 뒤에서 앞으로 기대값을 접는다.
+    형제 확률 합 ≠ 1 · 없는 부모 · 순환 · 값 없는 잎 · 중복 id · 깊이 > 4 · 가지 > 30 은 계산하지 않고 사유를 댄다.
+    """
+    inputs = [_inp("branches", "가지·확률·값", len(branches), ASSUMED, "사람이 그린 나무")]
+    if not branches:
+        return _off("가지가 하나도 없어요 — 사건을 하나 이상 그려 주세요", inputs=inputs)
+    if len(branches) > _TREE_MAX_BRANCHES:
+        return _off(f"가지는 {_TREE_MAX_BRANCHES}개까지예요", inputs=inputs)
+    ids = [str(b.get("id") or "").strip() for b in branches]
+    if any(not i for i in ids) or len(set(ids)) != len(ids):
+        return _off("가지 id 가 비었거나 중복됐어요", inputs=inputs)
+    by = {i: {**b, "id": i, "parent": str(b.get("parent") or "").strip()} for i, b in zip(ids, branches)}
+    for b in by.values():
+        if b["parent"] and b["parent"] not in by:
+            return _off(f"‘{b['id']}’의 부모 ‘{b['parent']}’가 없어요", inputs=inputs)
+    kids: dict[str, list[str]] = {}
+    for b in by.values():
+        kids.setdefault(b["parent"], []).append(b["id"])
+
+    depth: dict[str, int] = {}
+
+    def _depth(i: str, seen: set[str]) -> int:
+        if i in seen:
+            raise ValueError(f"가지 ‘{i}’에서 순환이 있어요")
+        if i in depth:
+            return depth[i]
+        p = by[i]["parent"]
+        depth[i] = 1 if not p else _depth(p, seen | {i}) + 1
+        return depth[i]
+    try:
+        for i in by:
+            _depth(i, set())
+    except ValueError as e:
+        return _off(str(e), inputs=inputs)
+    if max(depth.values()) > _TREE_MAX_DEPTH:
+        return _off(f"깊이는 {_TREE_MAX_DEPTH}단계까지예요", inputs=inputs)
+    for parent, ch in kids.items():
+        ps = [_num(by[c].get("prob")) for c in ch]
+        if any(p is None or p < 0 or p > 1 for p in ps):
+            return _off(f"‘{parent or '처음'}’ 아래 확률은 0 과 1 사이여야 해요", inputs=inputs)
+        if abs(sum(ps) - 1.0) > _TOL:
+            return _off(f"‘{parent or '처음'}’ 아래 확률의 합이 1 이어야 해요(지금 {sum(ps):.2f})", inputs=inputs)
+    leaves = [i for i in by if i not in kids]
+    no_val = [i for i in leaves if _num(by[i].get("value")) is None]
+    if no_val:
+        return _off(f"끝 가지에는 값이 있어야 해요: {', '.join(no_val)}", inputs=inputs)
+
+    ev: dict[str, float] = {}
+
+    def _ev(i: str) -> float:
+        if i not in kids:
+            ev[i] = float(by[i]["value"])
+        else:
+            ev[i] = sum(float(by[c]["prob"]) * _ev(c) for c in kids[i])
+        return ev[i]
+    total = sum(float(by[c]["prob"]) * _ev(c) for c in kids.get("", []))
+    paths = []
+    for leaf in leaves:
+        chain, p, cur = [], 1.0, leaf
+        while cur:
+            chain.append(cur)
+            p *= float(by[cur]["prob"])
+            cur = by[cur]["parent"]
+        paths.append({"path": list(reversed(chain)), "labels": [by[c].get("label") for c in reversed(chain)],
+                      "prob": p, "value": float(by[leaf]["value"])})
+    paths.sort(key=lambda x: -x["prob"])
+    ignored = [i for i in kids if i and _num(by[i].get("value")) is not None]
+    return {"available": True, "reason": None, "expected_value": total,
+            "nodes": [{"id": i, "parent": by[i]["parent"], "label": by[i].get("label"), "prob": float(by[i]["prob"]),
+                       "depth": depth[i], "ev": ev[i], "leaf": i not in kids} for i in ids],
+            "paths": paths,
+            "prob_above_price": (sum(x["prob"] for x in paths if x["value"] >= price) if price else None),
+            "ignored_values": ignored, "price": price, "inputs": inputs}
+
+
+def sotp(segments: list[dict], subsidiaries: list[dict], *, net_debt: float, holding_discount_pct: float,
+         shares: float | None) -> dict:
+    """합산가치(SOTP)·지주사 NAV — 단위 억원.
+
+    부문 가치 = 지표(EBITDA·순이익 등) × 배수(가정) · 상장 자회사 = 시가총액 × 지분율(지분율은 가정 — 저장소에 없다) ·
+    NAV = 합계 − 순차입금 · 지주사 할인은 NAV 전체에(가정). 시총을 못 구한 자회사는 합계에서 빼고 `excluded` 에 사유를 적는다.
+    """
+    inputs = [_inp("multiples", "부문 배수", [s.get("multiple") for s in segments], ASSUMED),
+              _inp("stakes", "자회사 지분율", [s.get("stake_pct") for s in subsidiaries], ASSUMED, "저장소에 없음 — 입력"),
+              _inp("discount", "지주사 할인", holding_discount_pct, ASSUMED, unit="%"),
+              _inp("net_debt", "순차입금", net_debt, APPROX, unit="억")]
+    if not segments and not subsidiaries:
+        return _off("부문이나 자회사를 하나 이상 넣어 주세요", inputs=inputs)
+    if any((_num(s.get("multiple")) or 0) < 0 for s in segments):
+        return _off("배수는 0 이상이어야 해요", inputs=inputs)
+    if not 0 <= holding_discount_pct < 100:
+        return _off("지주사 할인은 0~100% 사이여야 해요", inputs=inputs)
+    seg_rows = []
+    for s in segments:
+        m, x = _num(s.get("metric")), _num(s.get("multiple"))
+        if m is None or x is None:
+            return _off(f"부문 ‘{s.get('name')}’의 지표나 배수가 비었어요", inputs=inputs)
+        seg_rows.append({"name": s.get("name"), "metric": m, "multiple": x, "value": m * x})
+    sub_rows, excluded = [], []
+    for s in subsidiaries:
+        mc, st = _num(s.get("market_cap")), _num(s.get("stake_pct"))
+        if st is None or not 0 <= st <= 100:
+            excluded.append({**s, "reason": "지분율은 0~100% 여야 해요"})
+        elif mc is None:
+            excluded.append({**s, "reason": s.get("reason") or "시가총액을 구하지 못했어요"})
+        else:
+            sub_rows.append({**s, "value": mc * st / 100})
+    gross = sum(r["value"] for r in seg_rows) + sum(r["value"] for r in sub_rows)
+    nav = gross - net_debt
+    after = nav * (1 - holding_discount_pct / 100)
+    per = (lambda v: v * 1e8 / shares) if shares else (lambda v: None)
+    return {"available": True, "reason": None, "segments": seg_rows, "subsidiaries": sub_rows, "excluded": excluded,
+            "gross": gross, "net_debt": net_debt, "nav": nav, "discount_pct": holding_discount_pct,
+            "after_discount": after, "per_share": per(after), "per_share_before_discount": per(nav),
+            "per_share_reason": None if shares else "발행주식수를 몰라 주당 가치를 낼 수 없어요", "inputs": inputs}
+
+
+def real_option(*, S: float, K: float, T: float, sigma: float, r: float, q: float, kind: str,
+                n_steps: int = 500) -> dict:
+    """실물옵션 — 블랙-숄즈(유럽형, 닫힌 식) + CRR 이항(미국형, 조기 행사).
+
+    `call` = 확장·연기 옵션(사업 가치 S 로 투자비 K 를 들여 들어갈 권리) · `put` = 포기 옵션(사업을 K 에 넘길 권리).
+    누수율 q(기다리는 동안 새는 현금흐름)는 배당처럼 다룬다(블랙-숄즈에는 S·e^(−qT) 를 넣는다 — 같은 식).
+    모든 입력은 가정이다 — 시장에서 관측한 옵션 가격이 아니다.
+    """
+    from src.models.ficc_engine import FICCEngine
+    from src.models.ql_exotics_pricer import _py_american_binomial_price
+
+    inputs = [_inp("S", "사업 가치(기초자산)", S, ASSUMED, unit="억"), _inp("K", "투자비·처분가(행사가)", K, ASSUMED, unit="억"),
+              _inp("T", "만기", T, ASSUMED, unit="년"), _inp("sigma", "사업 가치 변동성", sigma, ASSUMED),
+              _inp("q", "누수율", q, ASSUMED), _inp("r", "무위험수익률", r, APPROX)]
+    if S <= 0 or K <= 0:
+        return _off("사업 가치와 행사가는 0 보다 커야 해요", inputs=inputs)
+    if T <= 0 or sigma <= 0:
+        return _off("만기와 변동성은 0 보다 커야 해요 — 불확실성이 없으면 옵션 가치도 없어요", inputs=inputs)
+    kind = "put" if kind == "put" else "call"
+    g = FICCEngine.bs_greeks(S * math.exp(-q * T), K, T, r, sigma, kind)
+    bs = float(g["Price"])
+    binom = float(_py_american_binomial_price(S, K, T, r, q, sigma, kind, int(n_steps)))
+    npv = (S - K) if kind == "call" else (K - S)
+    gap = binom - bs
+    tol = max(0.005 * bs, 1e-9)
+    ee = ({"premium": gap, "note": "조기에 행사할 수 있어서 생기는 값이에요(미국형 − 유럽형)."} if gap > tol else
+          {"premium": 0.0, "note": f"두 값의 차이 {gap:+.4f} 는 이항 격자의 오차 범위예요 — 조기 행사로 얻는 값은 없어요."})
+    return {"available": True, "reason": None, "kind": kind,
+            "black_scholes": {"value": bs, "delta": g.get("Delta"), "vega": g.get("Vega"), "engine": "블랙-숄즈(유럽형)"},
+            "binomial": {"value": binom, "steps": int(n_steps), "engine": "CRR 이항(미국형)"},
+            "early_exercise": ee, "static_npv": npv, "option_premium": bs - max(npv, 0.0),
+            "inputs": inputs,
+            "note": "옵션 가치는 입력 가정(특히 변동성)의 함수예요 — 시장에서 관측한 가격이 아니에요."}
