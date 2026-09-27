@@ -121,6 +121,8 @@ export interface PgState {
   growing: boolean;
   /** 캔버스 한 줄 안내(전략 추가·블록 저장 결과). */
   note: string | null;
+  /** 안내가 되돌릴 수 있는 동작 뒤에 떴나(BN N3) — 그러면 안내 줄에 [되돌리기] 가 붙고 잠시 뒤 스스로 닫힌다. */
+  noteUndo: boolean;
 
   setCatalog: (c: NodeCatalogEntry[] | null, err?: string | null) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -167,7 +169,12 @@ export interface PgState {
   /** 상자를 내 블록으로 — 이 브라우저에 넣고, 파일로 받을 수 있게 블록을 돌려준다(저장소가 막혀도 파일은 된다). */
   saveBlock: (groupId: string) => GraphBlock | null;
   removeBlock: (index: number) => void;
-  setNote: (n: string | null) => void;
+  setNote: (n: string | null, undoable?: boolean) => void;
+  /** 동작을 하고 그 안내를 띄운다 — 동작이 되돌리기 기록을 남겼으면 안내 줄에 [되돌리기] 가 붙는다(BN N3). */
+  act: (fn: () => string) => void;
+  /** 노드를 놓고 곧바로 잇는다(BN N3 선 끌어 놓기) — 되돌리기 한 번에 둘 다. */
+  addLinked: (kind: string, position: { x: number; y: number },
+              link: { node: string; handle: string; side: "source" | "target"; port: string }) => string;
   /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내. */
   makeBranch: (rootId: string, strategyId?: string) => string;
   /** 갈래를 지운다 — 복제 노드도 함께. */
@@ -294,6 +301,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     blocks: [],
     blocksAvailable: true,
     note: null,
+    noteUndo: false,
     branches: [],
     simple: false,
     growing: false,
@@ -339,6 +347,19 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges),
         reportStale: s.report !== null,
       }));
+    },
+
+    addLinked: (kind, position, link) => {
+      push();
+      const s = get();
+      const id = newId(kind, new Set(s.nodes.map((n) => n.id)));
+      const node: PgNode = { id, type: PG_NODE_TYPE, position, data: { kind, params: {} } };
+      const c = link.side === "source"
+        ? { source: link.node, sourceHandle: link.handle, target: id, targetHandle: link.port }
+        : { source: id, sourceHandle: link.port, target: link.node, targetHandle: link.handle };
+      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], selectedId: id, picked: [id], reportStale: s.report !== null,
+            edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges) });
+      return id;
     },
 
     addNode: (kind, position) => {
@@ -446,7 +467,12 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       groups: focusGroup ? s.groups.map((g) => (g.id === focusGroup ? { ...g, collapsed: false } : g)) : s.groups,
     })),
     toggleFilter: (k) => set((s) => ({ filters: s.filters.includes(k) ? s.filters.filter((x) => x !== k) : [...s.filters, k] })),
-    setNote: (note) => set({ note }),
+    setNote: (note, undoable = false) => set({ note, noteUndo: !!note && undoable }),
+    act: (fn) => {
+      const before = get().past.length;
+      const note = fn();
+      set({ note, noteUndo: get().past.length > before });
+    },
     setSimple: (simple) => set({ simple }),
     setGrowing: (growing) => set({ growing }),
     makeBranch: (rootIdArg, strategyId) => {
@@ -542,7 +568,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const ok = cur.available && writeBlocks([...cur.blocks.filter((b) => b.label !== block.label), block]);
       const r = readBlocks();
       set({ blocks: r.blocks, blocksAvailable: r.available && ok,
-            note: ok ? `‘${g.label}’을 내 블록에 넣었어요 — 이 브라우저에만 있어요. 다른 곳에서 쓰려면 파일로 받아 두세요.`
+            noteUndo: false, note: ok ? `‘${g.label}’을 내 블록에 넣었어요 — 이 브라우저에만 있어요. 다른 곳에서 쓰려면 파일로 받아 두세요.`
                      : `이 브라우저에 블록을 저장할 수 없어요 — ‘${g.label}’은 파일로 받아 두세요.` });
       return block;
     },

@@ -53,7 +53,7 @@ function BranchFrameImpl({ data }: NodeProps<BranchFrameData>) {
         <span className="pg-branch-of">‘{data.rootName}’에서 갈라짐</span>
         <button type="button" className="pg-branch-promote nodrag" disabled={data.diffs.length === 0}
                 title="이 갈래의 바꾼 설정을 원본에 옮기고 갈래를 지워요 (되돌리기 가능)"
-                onClick={() => { const st = usePortfolioGraph.getState(); st.setNote(st.promoteBranch(data.branchId)); }}>
+                onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.promoteBranch(data.branchId)); }}>
           <ArrowUpToLine size={13} aria-hidden="true" /> 이 갈래를 원본으로
         </button>
         <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 지우기`}

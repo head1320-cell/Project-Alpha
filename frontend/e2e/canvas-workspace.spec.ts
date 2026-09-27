@@ -1225,3 +1225,267 @@ for (const scheme of ["light", "dark"] as const) {
     });
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BN N3 · 캔버스 손길 — 거는 것:
+//  · 선을 빈 곳에 놓으면 후보 = ★그 포트 타입을 받는(내는) 카탈로그 노드와 정확히 같다★ · 고르면 놓고 이음 · 되돌리기 한 번에 둘 다(짝: 입력에서 끌면 내는 노드)
+//  · 우클릭 — 노드(여기까지 계산·갈래·복제·그림 고정·지우기) · 빈 곳(여기에 추가·붙여넣기·정리·찾기)
+//  · 안내 줄 [되돌리기] · 되돌릴 수 있는 안내만 8초 뒤 닫힘 · 올려 두면 기다림 · 되돌릴 수 없는 안내는 남음(짝)
+//  · 빈 필수 입력 — 포트 고리 + "‘비중’을 이어 주세요"(이으면 사라짐 짝) · Ctrl+F 찾기 · ? 단축키(입력 중엔 안 뜸 짝)
+//  · 계산 중 "· n개" = 계산하는 노드 수 · 좁은 폭 "더 보기"(넓으면 없음 짝) · 끌면 11px 격자 · 라이트/다크 AA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type Cat = { nodes: { type: string; inputs: { name: string; type: string }[]; outputs: { name: string; type: string }[] }[] };
+const catalogOf = async (page: Page) => (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()) as Cat;
+
+/** 포트에서 끌어 캔버스 아래쪽 빈 띠(맞춤이 비워 둔 자리)에 놓는다. */
+async function dragToEmpty(page: Page, handle: string) {
+  const h = (await page.locator(handle).boundingBox())!;
+  const cv = (await page.locator(".react-flow").boundingBox())!;
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cv.x + cv.width * 0.45, cv.y + cv.height - 90, { steps: 12 });
+  await page.mouse.up();
+}
+
+test("선 끌어 놓기(BN N3): 후보 = 비중을 받는 카탈로그 노드 전부 · 고르면 놓고 이음 · 되돌리기 한 번에 둘 다 · 짝: 입력에서 끌면 내는 노드", async ({ page }) => {
+  await openCanvas(page);
+  const cat = await catalogOf(page);
+  const n0 = (await wip(page)).nodes.length;
+  await dragToEmpty(page, '.react-flow__node[data-id="optimizer"] .react-flow__handle.source[data-handleid="weights"]');
+  const quick = page.locator(".pg-quick");
+  await expect(quick).toHaveAttribute("data-type", "Weights");
+  const want = cat.nodes.filter((c) => c.inputs.some((p) => p.type === "Weights")).map((c) => c.type).slice(0, 30).sort();
+  expect((await quick.locator(".pg-quick-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")))).sort()).toEqual(want);
+  await quick.locator('.pg-quick-item[data-kind="risk"]').click();
+  let doc = await wip(page);
+  expect(doc.nodes.length).toBe(n0 + 1);
+  const added = doc.nodes.find((n) => n.type === "risk" && !["risk"].includes(n.id))!;
+  expect(doc.edges.some((e) => e.source === "optimizer" && e.source_port === "weights" && e.target === added.id && e.target_port === "weights")).toBe(true);
+  await expect(page.locator(".pg-note")).toContainText("이었어요");
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Control+z");
+  doc = await wip(page);
+  expect(doc.nodes.length).toBe(n0);
+  expect(doc.edges.some((e) => e.target === added.id)).toBe(false);
+
+  // 짝 — 입력(수익률)에서 끌면 수익률을 **내는** 노드만.
+  await dragToEmpty(page, '.react-flow__node[data-id="risk"] .react-flow__handle.target[data-handleid="weights"]');
+  await expect(quick).toHaveAttribute("data-type", "Weights");
+  const makers = cat.nodes.filter((c) => c.outputs.some((p) => p.type === "Weights")).map((c) => c.type).slice(0, 30).sort();
+  expect((await quick.locator(".pg-quick-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")))).sort()).toEqual(makers);
+  await page.keyboard.press("Escape");
+  await expect(quick).toHaveCount(0);
+  expect((await wip(page)).nodes.length).toBe(n0);
+});
+
+test("우클릭(BN N3): 노드 메뉴 — 그림 고정·풀기·지우기(되돌리기) · 빈 곳 메뉴 — 여기에 추가 → 찾아 넣기", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "optimizer").click({ button: "right" });
+  const menu = page.locator('.pg-ctx[aria-label="노드 메뉴"]');
+  expect(await menu.locator(".pg-ctx-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-action"))))
+    .toEqual(["run-to", "branch", "duplicate", "pin", "remove"]);
+  await expect(menu.locator('[data-action="run-to"]')).toBeFocused();
+  await menu.locator('[data-action="pin"]').click();
+  await expect(node(page, "optimizer")).toHaveClass(/pg-node--pinned/);
+  await node(page, "optimizer").click({ button: "right" });
+  await expect(menu.locator('[data-action="pin"]')).toHaveText("그림 고정 풀기");
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+
+  await node(page, "risk").click({ button: "right" });
+  await menu.locator('[data-action="remove"]').click();
+  await expect(node(page, "risk")).toHaveCount(0);
+  await page.locator(".pg-note-undo").click();
+  await expect(node(page, "risk")).toHaveCount(1);
+
+  const cv = (await page.locator(".react-flow").boundingBox())!;
+  await page.mouse.click(cv.x + cv.width * 0.5, cv.y + cv.height - 90, { button: "right" });
+  const pane = page.locator('.pg-ctx[aria-label="캔버스 메뉴"]');
+  expect(await pane.locator(".pg-ctx-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-action"))))
+    .toEqual(["add-here", "paste", "layout", "find"]);
+  await expect(pane.locator('[data-action="paste"]')).toBeDisabled();                  // 복사한 것이 없다
+  await pane.locator('[data-action="add-here"]').click();
+  const quick = page.locator(".pg-quick");
+  await expect(quick).toHaveAttribute("data-type", "");
+  const n0 = (await wip(page)).nodes.length;
+  await quick.locator("input").fill("스트레스");
+  await expect(quick.locator(".pg-quick-item").first()).toBeVisible();
+  const kind = await quick.locator(".pg-quick-item").first().getAttribute("data-kind");
+  await quick.locator("input").press("Enter");
+  const doc = await wip(page);
+  expect(doc.nodes.length).toBe(n0 + 1);
+  expect(doc.nodes.filter((n) => n.type === kind).length).toBeGreaterThan(0);
+});
+
+test("안내 줄(BN N3): [되돌리기] · 되돌릴 수 있는 안내는 8초 뒤 닫힘 · 올려 두면 기다림 · 짝: 되돌릴 수 없는 안내는 남음", async ({ page }) => {
+  test.setTimeout(150_000);
+  await openCanvas(page);
+  await makeBranch(page, "optimizer");
+  const note = page.locator(".pg-note");
+  await expect(note.locator(".pg-note-undo")).toBeVisible();
+  await note.hover();
+  await page.waitForTimeout(9_000);
+  await expect(note).toBeVisible();                                                        // 올려 두면 기다린다
+  await page.mouse.move(5, 5);
+  await expect(note).toHaveCount(0, { timeout: 10_000 });
+  expect(((await wip(page)) as BDoc).branches).toHaveLength(1);                            // 닫혀도 동작은 그대로
+
+  await makeBranch(page, "optimizer", "command");                                          // 키보드 길(명령 찾기)도 되돌릴 수 있는 안내
+  await page.locator(".pg-note-undo").click();
+  expect(((await wip(page)) as BDoc).branches).toHaveLength(1);
+  await expect(page.locator(".pg-note")).toContainText("되돌렸어요");
+
+  // 짝 — 되돌릴 수 없는 안내(묶지 못한 사유)는 사람이 닫을 때까지 남고 [되돌리기] 도 없다.
+  await page.locator('.pg-tab[data-tab="story"]').click();
+  await page.locator('.pg-step[data-node-id="universe"] .pg-step-num').click();
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
+  await page.keyboard.press("Enter");
+  await expect(note).toContainText("비중을 내는 노드가 없어요");
+  await expect(note.locator(".pg-note-undo")).toHaveCount(0);
+  await page.waitForTimeout(9_000);
+  await expect(note).toContainText("비중을 내는 노드가 없어요");
+});
+
+test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 이어 주세요' · 이으면 사라짐(짝) · 이어진 노드엔 없음", async ({ page }) => {
+  await openCanvas(page);
+  await expect(page.locator(".pg-port--missing")).toHaveCount(0);                            // 기본 사슬은 다 이어져 있다
+  const cv = (await page.locator(".react-flow").boundingBox())!;
+  await page.mouse.click(cv.x + cv.width * 0.5, cv.y + cv.height - 90, { button: "right" });
+  await page.locator('[data-action="add-here"]').click();
+  await page.locator(".pg-quick input").fill("흔들림");
+  await page.locator('.pg-quick-item[data-kind="risk"]').click();
+  await expect(page.locator(".pg-quick")).toHaveCount(0);
+  const doc = await wip(page);
+  const fresh = doc.nodes.find((n) => n.type === "risk" && n.id !== "risk")!;
+  const card = node(page, fresh.id);
+  await expect(card.locator(".pg-node-need")).toHaveText("‘비중’을 이어 주세요");
+  await expect(card.locator('.pg-port--missing .react-flow__handle[data-handleid="weights"]')).toHaveCount(1);
+  // 짝 — 선을 이으면 고리와 한 줄이 사라진다.
+  await dragFromTo(page, '.react-flow__node[data-id="optimizer"] .react-flow__handle.source[data-handleid="weights"]',
+                   `.react-flow__node[data-id="${fresh.id}"] .react-flow__handle.target[data-handleid="weights"]`);
+  await expect(card.locator(".pg-node-need")).toHaveCount(0);
+  await expect(card.locator(".pg-port--missing")).toHaveCount(0);
+});
+
+async function dragFromTo(page: Page, from: string, to: string) {
+  const a = (await page.locator(from).boundingBox())!;
+  const b = (await page.locator(to).boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 14 });
+  await page.mouse.up();
+}
+
+test("찾기·단축키(BN N3): Ctrl+F 로 이름을 찾아 Enter → 그 노드를 고름 · 없으면 말함 · ? 는 단축키 한 장(입력 중엔 안 뜸 짝)", async ({ page }) => {
+  await openCanvas(page);
+  const cat = await catalogOf(page) as Cat & { nodes: { type: string; plain_label: string }[] };
+  const label = (cat.nodes as { type: string; plain_label: string }[]).find((c) => c.type === "optimizer")!.plain_label;
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Control+f");
+  const input = page.locator(".pg-find input");
+  await expect(input).toBeFocused();
+  await input.fill("없는노드이름");
+  await expect(page.locator(".pg-find")).toContainText("맞는 노드가 없어요");
+  await input.fill(label);
+  await expect(page.locator('.pg-find-item[data-node-id="optimizer"]')).toBeVisible();
+  await input.press("Enter");
+  await expect(page.locator(".pg-find")).toHaveCount(0);
+  await expect(node(page, "optimizer")).toHaveClass(/pg-node--selected/);
+
+  await page.locator(".pg-name").fill("무엇?");                                              // 입력 중의 ? 는 글자다
+  await expect(page.locator(".pg-keys")).not.toBeVisible();
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("?");
+  await expect(page.locator(".pg-keys")).toBeVisible();
+  expect(await page.locator(".pg-keys-list > div").count()).toBeGreaterThanOrEqual(10);
+  await expect(page.locator(".pg-keys")).toContainText("Ctrl+F");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pg-keys")).not.toBeVisible();
+});
+
+test("계산 중(BN N3): 단추에 '계산하는 중 · n개'(= 계산하는 노드 수) · 그 노드들의 점이 숨 쉼 · 끝나면 돌아옴", async ({ page }) => {
+  await openCanvas(page);
+  await page.route("**/api/v1/allocation/graph/run**", async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  const n = (await wip(page)).nodes.length;
+  await page.locator(".pg-run").click();
+  await expect(page.locator(".pg-run")).toContainText(`계산하는 중 · ${n}개`);
+  await expect(page.locator(".pg-node-dot--running")).toHaveCount(n);
+  await expect(page.locator(".pg-run")).toHaveText("계산하기", { timeout: 120_000 });
+  await expect(page.locator(".pg-node-dot--running")).toHaveCount(0);
+});
+
+test("상단 줄(BN N3): 1024px 이면 서랍·불러오기·내보내기가 '더 보기' 에 · 서랍이 열림 · 짝: 1280px 이면 '더 보기' 없음 · 390px 가로 스크롤 0", async ({ page }) => {
+  await recordDownloadNames(page);
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await openCanvas(page);
+  await expect(page.locator(".pg-more")).toBeVisible();
+  await expect(page.locator(".pg-toolbar .pg-drawers")).toBeHidden();
+  await expect(page.locator(".pg-toolbar .pg-export")).toBeHidden();
+  await page.locator(".pg-more").click();
+  const drawers = page.locator(".pg-more-menu [data-drawer]");
+  expect(await drawers.count()).toBe(3);
+  await page.locator(".pg-more-export").click();
+  expect(await lastDownloadName(page)).toMatch(/\.json$/);
+  await page.locator(".pg-more").click();
+  await drawers.first().click();
+  await expect(page.locator("dialog[open]")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.locator(".pg-more")).toBeHidden();
+  await expect(page.locator(".pg-toolbar .pg-drawers")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+});
+
+test("격자 맞춤(BN N3): 노드를 끌면 11px 격자에 선다(자동 정리 자리는 그대로)", async ({ page }) => {
+  await openCanvas(page);
+  const card = (await node(page, "optimizer").boundingBox())!;
+  await page.mouse.move(card.x + 60, card.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(card.x + 97, card.y + 63, { steps: 10 });
+  await page.mouse.up();
+  const p = (await wip(page)).nodes.find((n) => n.id === "optimizer")!.position;
+  expect([Math.round(p.x) % 11, Math.round(p.y) % 11]).toEqual([0, 0]);
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BN N3): ${scheme} — 빠른 추가 · 우클릭 메뉴 · 찾기 · 단축키 · 안내 되돌리기 · 빈 입력 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    const check = async (sel: string, min = 2) => {
+      const a = await page.evaluate<AuditResult>(contrastAudit(sel));
+      expect(a.checked, sel).toBeGreaterThanOrEqual(min);
+      expect(a.low, `${scheme} ${sel}`).toEqual([]);
+      if (scheme === "dark") expect(a.bright, `${sel} 다크인데 밝은 배경`).toEqual([]);
+    };
+    await dragToEmpty(page, '.react-flow__node[data-id="optimizer"] .react-flow__handle.source[data-handleid="weights"]');
+    await check(".pg-quick", 6);
+    await page.locator('.pg-quick-item[data-kind="risk"]').click();
+    await check(".pg-note", 2);
+    await node(page, "optimizer").click({ button: "right" });
+    await check(".pg-ctx", 5);
+    await page.keyboard.press("Escape");
+    await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+    await page.keyboard.press("Control+f");
+    await page.locator(".pg-find input").fill("비중");
+    await check(".pg-find", 2);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("?");
+    await check(".pg-keys", 10);
+    await page.keyboard.press("Escape");
+    // 빈 입력 한 줄 — 잇지 않은 노드를 빈 곳 메뉴로 하나 놓는다.
+    const cv = (await page.locator(".react-flow").boundingBox())!;
+    await page.mouse.click(cv.x + cv.width * 0.5, cv.y + cv.height - 90, { button: "right" });
+    await page.locator('[data-action="add-here"]').click();
+    await page.locator(".pg-quick input").fill("흔들림");
+    await page.locator('.pg-quick-item[data-kind="risk"]').click();
+    await expect(page.locator(".pg-node-need").first()).toBeVisible();
+    await check(".pg-node-need", 1);
+  });
+}

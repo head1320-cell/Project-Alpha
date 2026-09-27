@@ -109,7 +109,7 @@ function MyBlocks() {
   useEffect(() => { usePortfolioGraph.getState().loadBlocks(); }, []);
   const insert = (i: number) => {
     const st = usePortfolioGraph.getState();
-    st.setNote(st.insertBlock(st.blocks[i]));
+    st.act(() => st.insertBlock(st.blocks[i]));
   };
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -117,7 +117,7 @@ function MyBlocks() {
     if (!r.block) { setProblem(`「${f.name}」을 넣지 않았어요 — ${r.problem} 캔버스는 그대로예요.`); return; }
     setProblem(null);
     const st = usePortfolioGraph.getState();
-    st.setNote(st.insertBlock(r.block));
+    st.act(() => st.insertBlock(r.block!));
   };
   return (
     <section className="pg-blocks" aria-label="내 블록">

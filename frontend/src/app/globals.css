@@ -6761,3 +6761,59 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-theme .pg-branch-promote:disabled { opacity: .5; cursor: default; }
 .pg-field-help { display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.5; color: var(--pg-body); }
 .pg-ticker-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--pg-assume); }
+
+/* ── BN N3 · 캔버스 손길 — 선 끌어 놓기 빠른 추가 · 우클릭 메뉴 · 찾기 · 단축키 · 안내 되돌리기 · 빈 입력 · 계산 중 · 상단 줄 ─────
+   떠 있는 판은 모두 같은 한 장(종이 · 12px 모서리 · 한 겹 그림자) — 캔버스 위에 잠깐 나타났다가 Esc·바깥 누르기로 사라진다. */
+.pg-quick, .pg-ctx, .pg-find, .pg-more-menu { position: absolute; z-index: 50; background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(25 31 40 / 18%); }
+.pg-quick { width: 300px; padding: 8px; }
+.pg-quick-h { margin: 2px 6px 8px; font-size: 12.5px; font-weight: 700; color: var(--pg-body); }
+.pg-quick-search, .pg-find-box { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; color: var(--pg-body); background: var(--pg-soft); border-radius: 9px; }
+.pg-quick-search input, .pg-find-box input { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--pg-ink); background: none; border: 0; outline: none; }
+.pg-quick-search:focus-within, .pg-find-box:focus-within { box-shadow: inset 0 0 0 1.5px var(--pg-blue); }
+.pg-quick-list, .pg-find-list { max-height: 260px; overflow-y: auto; margin: 6px 0 0; padding: 0; list-style: none; }
+.pg-quick-item, .pg-find-item { padding: 7px 9px; border-radius: 8px; cursor: pointer; }
+.pg-quick-item b, .pg-find-item b { display: block; font-size: 13.5px; color: var(--pg-ink); }
+.pg-quick-item span, .pg-find-item span { display: block; overflow: hidden; font-size: 12px; line-height: 1.4; color: var(--pg-body); text-overflow: ellipsis; white-space: nowrap; }
+.pg-quick-item[aria-selected="true"], .pg-find-item[aria-selected="true"] { background: var(--pg-blue-soft); }
+.pg-quick-item[aria-selected="true"] b, .pg-find-item[aria-selected="true"] b { color: var(--pg-blue-ink); }
+.pg-quick-empty { padding: 8px 9px; font-size: 13px; color: var(--pg-body); }
+.pg-ctx, .pg-more-menu { width: 230px; padding: 6px; }
+.pg-theme .pg-ctx-item { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; font: inherit; font-size: 13px; font-weight: 600; color: var(--pg-ink);
+  text-align: left; background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-ctx-item:hover, .pg-theme .pg-ctx-item:focus-visible { background: var(--pg-soft); outline: none; }
+.pg-theme .pg-ctx-item:disabled { opacity: .45; cursor: default; background: none; }
+.pg-theme .pg-ctx-item--danger { color: var(--pg-fail); }
+.pg-find { top: 12px; left: 50%; width: min(420px, calc(100% - 32px)); padding: 8px; transform: translateX(-50%); }
+.pg-theme .pg-find-x { display: grid; place-items: center; width: 26px; height: 26px; color: var(--pg-body); background: none; border: 0; border-radius: 7px; cursor: pointer; }
+.pg-keys { width: min(460px, calc(100vw - 32px)); padding: 22px 24px 20px; color: var(--pg-ink); background: var(--pg-paper); border: 0; border-radius: 18px; box-shadow: 0 24px 64px rgb(25 31 40 / 28%); }
+.pg-keys::backdrop { background: rgb(25 31 40 / 36%); }
+.pg-keys-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pg-keys-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+.pg-theme .pg-keys .pg-sheet-x { display: grid; place-items: center; width: 34px; height: 34px; color: var(--pg-body); background: none; border: 0; border-radius: 10px; cursor: pointer; }
+.pg-keys-list { display: grid; gap: 2px; margin: 0; }
+.pg-keys-list div { display: grid; grid-template-columns: 170px 1fr; align-items: center; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--pg-line); }
+.pg-keys-list dt kbd { padding: 2px 7px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--pg-ink); background: var(--pg-soft); border-radius: 6px; }
+.pg-keys-list dd { margin: 0; font-size: 13.5px; color: var(--pg-body); }
+.pg-keys-foot { margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--pg-body); }
+.pg-theme .pg-note-undo { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-left: auto; padding: 0 10px; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--pg-blue-ink); background: var(--pg-blue-soft); border: 0; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.pg-note--undoable .pg-note-x { margin-left: 0; }
+/* 비어 있는 필수 입력 — 포트에 고리, 제목 아래 한 줄(서버 검증과 같은 사실을 쉬운 말로) */
+.pg-port--missing .pg-handle { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pg-assume) 45%, transparent); }
+.pg-node-need { margin-top: 6px; padding: 3px 8px; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--pg-assume); background: var(--pg-assume-soft); border-radius: 8px; }
+.pg-canvas[data-zoom="far"] .pg-node-need { display: none; }
+/* 계산 중 — 계산하는 노드의 상태 점이 천천히 숨 쉰다(감속 모션이면 멈춘 파란 점) */
+.pg-node-dot--running { background: var(--pg-blue); animation: pg-breathe 1.2s ease-in-out infinite; }
+@keyframes pg-breathe { 50% { transform: scale(1.6); opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .pg-node-dot--running { animation: none; } }
+/* 상단 줄 — 무리 사이 가는 구분선 · 좁으면(<1280) 서랍·불러오기·내보내기를 "더 보기" 로 */
+.pg-toolbar .pg-name { border-left: 1px solid var(--pg-line); padding-left: 12px; }
+.pg-more-wrap { position: relative; display: none; }
+.pg-theme .pg-more { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--pg-ink);
+  background: var(--pg-soft); border: 0; border-radius: 9px; cursor: pointer; }
+.pg-more-menu { top: calc(100% + 6px); right: 0; }
+@media (max-width: 1279px) {
+  .pg-more-wrap { display: inline-block; }
+  .pg-toolbar .pg-drawers, .pg-toolbar .pg-import, .pg-toolbar .pg-export { display: none; }
+}

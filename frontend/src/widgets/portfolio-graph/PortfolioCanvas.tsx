@@ -33,7 +33,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Plus, Redo2, Sparkles, Sigma, Undo2, X } from "lucide-react";
+import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, MoreHorizontal, Pin, PinOff, Play, Plus, Redo2, Route, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   CORE_CHAIN_TEMPLATE,
   goalDoc,
@@ -43,6 +43,7 @@ import {
   PG_NODE_TYPE,
   portfolioGraphApi,
   toDoc,
+  nodeSummary,
   topoOrder,
   type GraphDoc,
   type NodeRunResult,
@@ -59,6 +60,7 @@ import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge"
 import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_COLORS, PORT_PLAIN } from "./GraphNode";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
+import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
@@ -186,6 +188,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const [cmdOpen, setCmdOpen] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [welcome, setWelcome] = useState(false);
+  // 캔버스 손길(BN N3) — 선 끌어 놓기 빠른 추가 · 우클릭 메뉴 · 찾기 · 단축키 한 장.
+  const [quick, setQuick] = useState<QuickAddState | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; clientX: number; clientY: number; nodeId: string | null } | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const connectFrom = useRef<QuickAddState["from"]>(null);
   useEffect(() => { setWelcome(!welcomeSeen()); }, []);
   const closeWelcome = () => { markWelcomed(); setWelcome(false); };
   // 서랍(BL2) — 계산하지 않는 기록 화면. 노드가 아니라 캔버스 옆에서 연다.
@@ -377,7 +385,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const [filtersOpen, setFiltersOpen] = useState(false);
   const addStrategy = useCallback((src: Parameters<PgState["addStrategy"]>[0]) => {
     const st = usePortfolioGraph.getState();
-    st.setNote(st.addStrategy(src));
+    st.act(() => st.addStrategy(src));
     setStratOpen(false);
     fit();
   }, []);
@@ -477,6 +485,79 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     return id;
   }, []);
 
+  // ── 선 끌어 놓기 빠른 추가(BN N3) — 포트에서 끌어 빈 곳에 놓으면 그 값을 이을 노드만 보인다 ──────────
+  const onConnectStart = useCallback((_: unknown, p: { nodeId: string | null; handleId: string | null; handleType: "source" | "target" | null }) => {
+    const st = usePortfolioGraph.getState();
+    const kind = st.nodes.find((n) => n.id === p.nodeId)?.data.kind;
+    const entry = st.catalog?.find((c) => c.type === kind);
+    const side = p.handleType ?? "source";
+    const port = (side === "source" ? entry?.outputs : entry?.inputs)?.find((x) => x.name === p.handleId);
+    connectFrom.current = p.nodeId && p.handleId && port ? { node: p.nodeId, handle: p.handleId, side, type: port.type } : null;
+  }, []);
+  const onConnectEnd = useCallback((e: MouseEvent | TouchEvent) => {
+    const from = connectFrom.current;
+    connectFrom.current = null;
+    const target = e.target as Element | null;
+    if (!from || !target?.classList.contains("react-flow__pane")) return;     // 포트에 놓았으면 평소의 연결
+    const pt = "changedTouches" in e ? e.changedTouches[0] : e;
+    const box = canvasEl.current?.getBoundingClientRect();
+    setQuick({ from, x: pt.clientX - (box?.left ?? 0), y: pt.clientY - (box?.top ?? 0), clientX: pt.clientX, clientY: pt.clientY });
+  }, []);
+  const quickPick = useCallback((kind: string, port: string | null) => {
+    const q = quick;
+    setQuick(null);
+    if (!q || !rf.current) return;
+    const at = rf.current.screenToFlowPosition({ x: q.clientX, y: q.clientY });
+    const st = usePortfolioGraph.getState();
+    if (q.from && port) {
+      // 입력에 이미 선이 있으면(입력 하나에 선 하나) 잇지 않고 놓기만 하고 말한다.
+      const taken = q.from.side === "target" && st.edges.some((e) => e.target === q.from!.node && e.targetHandle === q.from!.handle);
+      if (!taken) {
+        st.act(() => { st.addLinked(kind, at, { ...q.from!, port }); return "노드를 놓고 이었어요."; });
+        st.setTab("settings");
+        return;
+      }
+      st.addNode(kind, at);
+      st.setNote("노드를 놓았어요 — 그 입력에는 이미 선이 있어 잇지 않았어요.");
+      return;
+    }
+    addAt(kind, at);
+  }, [quick, addAt]);
+
+  /** 우클릭 메뉴의 항목 — 노드면 노드 동작, 빈 곳이면 추가·붙여넣기·정리. 같은 동작이 명령 찾기에도 있다. */
+  const ctxItems = useMemo((): MenuItem[] => {
+    if (!ctx) return [];
+    const st = usePortfolioGraph.getState();
+    if (!ctx.nodeId) {
+      return [
+        { key: "add-here", label: "여기에 노드 추가", icon: <Plus size={14} aria-hidden="true" />,
+          run: () => setQuick({ from: null, x: ctx.x, y: ctx.y, clientX: ctx.clientX, clientY: ctx.clientY }) },
+        { key: "paste", label: "붙여넣기", icon: <ClipboardPaste size={14} aria-hidden="true" />, disabled: !st.clip?.nodes.length,
+          run: () => { usePortfolioGraph.getState().paste(); } },
+        { key: "layout", label: "자동 정리", icon: <LayoutGrid size={14} aria-hidden="true" />, disabled: st.nodes.length === 0,
+          run: () => { usePortfolioGraph.getState().autoLayout(); fit(); } },
+        { key: "find", label: "노드 찾기 (Ctrl+F)", icon: <SearchIcon size={14} aria-hidden="true" />, run: () => setFindOpen(true) },
+      ];
+    }
+    const id = ctx.nodeId;
+    const r = st.reportStale ? undefined : st.report?.nodes[id];
+    const pinned = st.pinned.includes(id);
+    return [
+      { key: "run-to", label: "여기까지 계산", icon: <Play size={14} aria-hidden="true" />, disabled: st.running, run: () => runToRef.current(id) },
+      { key: "branch", label: "갈래 만들기", icon: <GitBranch size={14} aria-hidden="true" />,
+        run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.makeBranch(id)); } },
+      { key: "duplicate", label: "복제 (Ctrl+D)", icon: <Copy size={14} aria-hidden="true" />,
+        run: () => { usePortfolioGraph.getState().duplicateNode(id); } },
+      { key: "pin", label: pinned ? "그림 고정 풀기" : "그림 고정", icon: pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />,
+        run: () => usePortfolioGraph.getState().togglePin(id) },
+      ...(r && r.status !== "ok" ? [{ key: "cause", label: "원인 따라가기", icon: <Route size={14} aria-hidden="true" />,
+                                      run: () => usePortfolioGraph.getState().showCause(id) }] : []),
+      { key: "remove", label: "지우기", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
+        run: () => { const x = usePortfolioGraph.getState(); x.act(() => { x.removeNode(id); return "노드를 지웠어요."; }); } },
+    ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 메뉴를 열 때마다 새로 만든다
+  }, [ctx]);
+
   const applyLoad = useCallback((r: ParseResult, fileName: string) => {
     if (!r.doc) {
       setFileNote(`「${fileName}」을 불러오지 않았어요 — ${r.problems.join(" ")} 캔버스는 그대로예요.`);
@@ -518,9 +599,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   /** 목표로 시작 — 답으로 조립한 흐름을 싣고(되돌리기 가능), 흐름 순서대로 한 번 자라나게 한 뒤 곧바로 계산한다. */
   const startGoal = useCallback((goal: Parameters<typeof goalDoc>[0], tickers: string[], lookback: number | null) => {
     const st = usePortfolioGraph.getState();
-    st.loadDoc(goalDoc(goal, tickers, lookback));
+    st.act(() => {
+      st.loadDoc(goalDoc(goal, tickers, lookback));
+      return "답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있어요.";
+    });
     setGoalOpen(false);
-    st.setNote("답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있고, 되돌리기(Ctrl+Z)로 이전 캔버스로 돌아가요.");
     st.setGrowing(true);
     setTimeout(() => usePortfolioGraph.getState().setGrowing(false), 1800);
     fit();
@@ -538,7 +621,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   };
   branchStrategyRef.current = (groupId) => {
     const st = usePortfolioGraph.getState();
-    st.setNote(st.makeBranch("", groupId));
+    st.act(() => st.makeBranch("", groupId));
   };
   previewRef.current = (id) => {
     const st = usePortfolioGraph.getState();
@@ -555,6 +638,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       const mod = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
       if (mod && k === "k") { e.preventDefault(); setCmdOpen(true); }
+      else if (mod && k === "f") { e.preventDefault(); setFindOpen(true); }
+      else if ((e.key === "?" || (e.key === "/" && e.shiftKey)) && !mod) { e.preventDefault(); setKeysOpen(true); }
       else if (mod && e.key === "Enter" && !st.running) { e.preventDefault(); void run(); }
       else if (e.shiftKey && e.key === "Enter" && !st.running && st.selectedId) { e.preventDefault(); void runTo(st.selectedId); }
       else if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); st.undo(); }
@@ -578,6 +663,15 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
 
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
+    { id: "find", group: "보기", label: "캔버스에서 노드 찾기", keys: "Ctrl+F", run: () => setFindOpen(true) },
+    { id: "keys", group: "도움말", label: "단축키 보기", keys: "?", run: () => setKeysOpen(true) },
+    ...(s.selectedId ? [
+      { id: "dup", group: "편집", label: "고른 노드 복제", keys: "Ctrl+D", run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.duplicateNode(st.selectedId); } },
+      { id: "pin", group: "보기", label: s.pinned.includes(s.selectedId) ? "고른 노드 그림 고정 풀기" : "고른 노드 그림 고정",
+        run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.togglePin(st.selectedId); } },
+      { id: "remove", group: "편집", label: "고른 노드 지우기", keys: "Delete",
+        run: () => { const st = usePortfolioGraph.getState(); const id = st.selectedId; if (id) st.act(() => { st.removeNode(id); return "노드를 지웠어요."; }); } },
+    ] : []),
     { id: "goal", group: "시작", label: "목표로 새로 시작", hint: "무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 계산해요",
       run: () => setGoalOpen(true) },
     { id: "simple", group: "보기", label: s.simple ? "캔버스로 돌아가기" : "간단히 보기", hint: "노드 없이 정할 것과 결과만 봐요",
@@ -594,9 +688,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       run: () => usePortfolioGraph.getState().groupPicked() },
     ...(s.selectedId ? [{ id: "branch", group: "비교", label: "고른 노드에서 갈래 만들기",
                           hint: "그 노드와 하류를 복제해 설정만 바꿔 나란히 봐요(한 노드에 4개까지)",
-                          run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.setNote(st.makeBranch(st.selectedId)); } }] : []),
+                          run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.act(() => st.makeBranch(st.selectedId!)); } }] : []),
     { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 해요",
-      run: () => { const st = usePortfolioGraph.getState(); st.setNote(st.strategyPicked()); } },
+      run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.strategyPicked()); } },
     ...strategySources.map((x) => ({ id: `strategy:${x.key}`, group: "전략", label: `전략 추가: ${x.label}`, hint: x.sub,
                                      run: () => addStrategy(x.src) })),
     ...DRAWERS.map((d) => ({ id: `drawer:${d.key}`, group: "서랍", label: `${d.label} 열기`, hint: d.sub,
@@ -677,6 +771,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             {Object.values(s.report.nodes).filter((r) => r.status === "failed").length}
           </span>
         )}
+        <MoreMenu drawers={DRAWERS} onDrawer={(k) => setDrawer(k as DrawerKey)} onImport={applyLoad} canExport={s.nodes.length > 0}
+                  getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned)} />
         <nav className="pg-drawers" aria-label="서랍">
           {DRAWERS.map((d) => (
             <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog"
@@ -691,7 +787,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                       disabled={s.nodes.length === 0} />
         <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
                 disabled={s.running || !s.catalog || s.nodes.length === 0}>
-          {s.running ? <><Loader2 size={14} className="spin" /> 계산하는 중</> : "계산하기"}
+          {s.running ? <><Loader2 size={14} className="spin" /> 계산하는 중{s.runningIds ? ` · ${s.runningIds.length}개` : ""}</> : "계산하기"}
         </button>
       </header>
 
@@ -720,12 +816,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </div>
       )}
       {fileNote && <p className="pg-banner pg-file-note">{fileNote}</p>}
-      {s.note && (
-        <p className="pg-banner pg-note" role="status">
-          {s.note}
-          <button type="button" className="pg-note-x" aria-label="안내 닫기" onClick={() => s.setNote(null)}><X size={13} aria-hidden="true" /></button>
-        </p>
-      )}
+      {s.note && <NoteLine key={s.note} />}
       {s.loadProblems.length > 0 && (
         <div className="pg-banner pg-banner--warn pg-load-problems">
           불러오면서 건너뛴 항목이 {s.loadProblems.length}개 있어요:
@@ -736,6 +827,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         <p key={i} className="pg-banner pg-banner--err">{e.message}</p>
       ))}
 
+      <ShortcutSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
       <GoalStart open={goalOpen} onClose={() => setGoalOpen(false)} catalog={s.catalog ?? []} onStart={startGoal} />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} catalog={s.catalog ?? []} commands={commands}
                       onAddNode={(k) => addAt(k)} />
@@ -767,7 +859,23 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             onNodesChange={onNodesChange}
             onEdgesChange={s.onEdgesChange}
             onConnect={s.connect}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
             isValidConnection={isValidConnection}
+            onNodeContextMenu={(e, n) => {
+              e.preventDefault();
+              if (n.id.startsWith("frame:") || n.id.startsWith("branch:")) return;
+              const box = canvasEl.current?.getBoundingClientRect();
+              s.select(n.id);
+              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: n.id });
+            }}
+            onPaneContextMenu={(e) => {
+              e.preventDefault();
+              const box = canvasEl.current?.getBoundingClientRect();
+              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null });
+            }}
+            snapToGrid
+            snapGrid={[11, 11]}
             onInit={(inst) => { rf.current = inst; }}
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
             onPaneClick={() => { s.select(null); if (s.cause) s.showCause(null); }}
@@ -863,7 +971,21 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
           ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
-            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. Shift 를 누른 채 끌면 여러 개를 골라요."}</div>}
+            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. 선을 빈 곳에 놓으면 이을 노드를 찾아요 · 단축키 ?"}</div>}
+          {quick && s.catalog && (
+            <QuickAdd at={quick} catalog={s.catalog} box={canvasEl.current?.getBoundingClientRect()} onPick={quickPick} onClose={() => setQuick(null)} />
+          )}
+          {ctx && (
+            <ContextMenu x={ctx.x} y={ctx.y} box={canvasEl.current?.getBoundingClientRect()} items={ctxItems}
+                         label={ctx.nodeId ? "노드 메뉴" : "캔버스 메뉴"} onClose={() => setCtx(null)} />
+          )}
+          {findOpen && (
+            <FindBar onPick={(id) => focusRef.current(id)} onClose={() => setFindOpen(false)}
+                     nodes={s.nodes.map((n) => {
+                       const entry = s.catalog?.find((c) => c.type === n.data.kind);
+                       return { id: n.id, label: entry?.plain_label ?? n.data.kind, sub: nodeSummary(entry, n.data.params ?? {}) ?? n.id };
+                     })} />
+          )}
         </div>
         <aside className="pg-side" aria-label="설명과 설정">
           <nav className="pg-tabs" role="tablist">

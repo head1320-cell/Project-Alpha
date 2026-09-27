@@ -77,10 +77,12 @@ function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: 
   return out;
 }
 
-function Port({ port, side, index, unknown, label }: { port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean; label?: string }) {
+function Port({ port, side, index, unknown, label, missing }: {
+  port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean; label?: string; missing?: boolean;
+}) {
   const color = unknown ? "var(--pg-fail)" : portColor(port.type);
   return (
-    <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}`} style={{ top: PORT_TOP + index * PORT_GAP }}
+    <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}${missing ? " pg-port--missing" : ""}`} style={{ top: PORT_TOP + index * PORT_GAP }}
          title={unknown ? `${port.name} — 카탈로그에 없는 포트예요(파일의 링크를 버리지 않고 남겼어요)`
                         : `${label ? `${label} · ` : ""}${port.name} · ${port.type}${port.required === false ? " (선택)" : ""}`}>
       <Handle type={side === "in" ? "target" : "source"} position={side === "in" ? Position.Left : Position.Right}
@@ -117,7 +119,11 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
     }));
   });
   const portBand = JSON.parse(portBandKey) as [string, number | null, string][];
-  const errors = (validation?.errors ?? []).filter((e) => e.node_id === id);
+  // 필수 입력이 비었는데 서버가 이미 말한 것(missing_input)은 아래 "이어 주세요" 한 줄로 쉽게 바꿔 보인다(같은 사실 — BN N3).
+  const errors = (validation?.errors ?? []).filter((e) => e.node_id === id && e.code !== "missing_input");
+  // 비어 있는 필수 입력 — 연결 규칙과 같은 판정(필수 · 들어오는 선 없음). 포트에 고리, 제목 아래 한 줄.
+  const linkedIn = usePortfolioGraph((s) => s.edges.filter((e) => e.target === id).map((e) => e.targetHandle).join("|"));
+  const runningHere = usePortfolioGraph((s) => s.running && !!s.runningIds?.includes(id));
 
   const unknown = !!data.unknownReason || !entry;
   const inputs: { p: CatalogPort; unknown?: boolean }[] = [
@@ -145,6 +151,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
     ...(data.extraOutputs ?? []).map((name) => ({ p: { name, type: "?" }, unknown: true })),
   ];
   const minH = PORT_TOP + Math.max(shownInputs.length, outputs.length) * PORT_GAP;
+  const linkedSet = new Set(linkedIn ? linkedIn.split("|") : []);
+  const missing = (entry?.inputs ?? []).filter((p) => p.required !== false && !linkedSet.has(p.name));
   const ex = live?.explain;
   const headline = live?.status === "ok" ? ex?.headline : null;
   const summary = nodeSummary(entry, data.params ?? {});
@@ -186,7 +194,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
           <Play size={12} aria-hidden="true" /> 여기까지 계산 <kbd>Shift+Enter</kbd>
         </button>
         <button type="button" className="pg-branch-make"
-                onClick={() => { const st = usePortfolioGraph.getState(); st.setNote(st.makeBranch(id)); }}
+                onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.makeBranch(id)); }}
                 title="이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봐요">
           <GitBranch size={12} aria-hidden="true" /> 갈래 만들기
         </button>
@@ -203,7 +211,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
           <span className="pg-node-warn" role="img" aria-label={`확인할 것 ${warns.length}개`}
                 title={warns.map((t) => t.text).join("\n")}>!{warns.length}</span>
         )}
-        <span className={`pg-node-dot pg-node-dot--${state}`} aria-hidden="true" />
+        <span className={`pg-node-dot pg-node-dot--${runningHere ? "running" : state}`} aria-hidden="true" />
       </div>
       <div className="pg-node-far" aria-hidden="true">
         <span className="pg-node-far-name">{entry.plain_label}</span>
@@ -214,6 +222,11 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
         </span>
       </div>
       <div className="pg-node-t">{summary ?? entry.plain_label}</div>
+      {missing.length > 0 && (
+        <div className="pg-node-need" role="note">
+          {missing.map((p) => `‘${PORT_PLAIN[p.type] ?? p.name}’`).join(", ")}을 이어 주세요
+        </div>
+      )}
       {headline && headline.value !== null && (
         <div className="pg-node-v" title={headline.label}>
           {Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit} {headline.label.replace(/ 비중$/, "")}</small>
@@ -260,7 +273,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
           {live.reason && <span className="pg-node-status-why">{live.reason}</span>}
         </div>
       )}
-      {shownInputs.map((x, i) => <Port key={`i-${x.p.name}`} port={x.p} side="in" index={i} unknown={x.unknown} label={inLabel(x.p.name)} />)}
+      {shownInputs.map((x, i) => <Port key={`i-${x.p.name}`} port={x.p} side="in" index={i} unknown={x.unknown} label={inLabel(x.p.name)}
+                                        missing={!x.unknown && missing.some((m) => m.name === x.p.name)} />)}
       {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} />)}
     </div>
   );
