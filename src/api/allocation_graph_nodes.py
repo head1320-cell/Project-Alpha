@@ -478,3 +478,6 @@ _risk_nodes.register(REGISTRY)
 from src.api import allocation_graph_nodes_alloc_extra as _alloc_extra  # noqa: E402
 
 _alloc_extra.register(REGISTRY)
+from src.api import allocation_graph_nodes_current as _current  # noqa: E402
+
+_current.register(REGISTRY)

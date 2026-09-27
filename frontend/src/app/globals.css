@@ -8087,3 +8087,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-scale-bar { stroke: var(--pg-ink); stroke-width: 2.5; }
 .pg-verdict { font-size: 22px; }
 .pg-verdict--undetermined { color: var(--pg-unknown); }
+
+/* ── BL4 · 마법사에서 옮긴 계약의 자리 ───────────────────────────────────────
+   μ 엔진 근거 · 롱숏 네 축 · 롱숏 실행 막힘 · 룩어헤드 · 분포 무가정 구간 · 팩 신원 · 국면 전환 신용구간.
+   전부 조용한 자리다 — 결론을 바꾸는 사실만 경고색(--pg-assume)을 쓴다. */
+.pg-eng, .pg-la, .pg-bt-cf, .pg-ls-exposure, .pg-ls-blocked { display: grid; gap: 6px; margin: 10px 0; }
+.pg-eng-row, .pg-la-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0; font-size: 13px; color: var(--pg-body); }
+.pg-eng-v { font-weight: 700; color: var(--pg-ink); }
+.pg-ls-exposure { padding: 10px 12px; border: 1px solid var(--pg-line); border-radius: 10px; }
+.pg-ls-blocked { padding: 10px 12px; border: 1px solid var(--pg-assume); border-radius: 10px; background: var(--pg-assume-soft); }
+.pg-ls-blocked .pg-list, .pg-ls-blocked .pg-warn { color: var(--pg-ink); }
+.pg-la-unmeasured { font-size: 12px; color: var(--pg-mute); }
+.pg-pack-id { margin: 0 0 8px; font-size: 12px; color: var(--pg-mute); }
+.pg-scroll-x { overflow-x: auto; max-width: 100%; }
+.pg-ci { font-size: 11px; color: var(--pg-mute); white-space: nowrap; }
+.pg-regime-matrix td, .pg-regime-matrix th { white-space: nowrap; }
+.pg-regime-matrix tr[data-shrunk="1"] td { color: var(--pg-mute); }
+.pg-ap-corr tr.dup td { color: var(--pg-assume); font-weight: 600; }
+.pg-rec-verdict ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }

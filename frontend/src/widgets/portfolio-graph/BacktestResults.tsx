@@ -30,8 +30,8 @@ export function BacktestSetupResult({ v }: { v: Dict }) {
         ["후보 범위", String(v.universe_label ?? c.universe ?? "—")],
         ["규칙", String(v.strategy_label ?? c.strategy_name ?? "—")],
         ["기간", `${String(c.start_date)} ~ ${String(c.end_date)}`],
-        ["종목 · 동시 보유", `${String(c.max_tickers)}개 · ${String(c.max_positions)}개`],
-        ["비용", `수수료 ${fmt((num(c.commission_rate) ?? 0) * 100)}% · 슬리피지 ${fmt((num(c.slippage_rate) ?? 0) * 100)}%${c.charge_sell_tax ? " · 매도세" : ""}`],
+        ["종목 · 동시 보유", `${num(c.max_tickers) === null ? "—" : `${String(c.max_tickers)}개`} · ${num(c.max_positions) === null ? "—" : `${String(c.max_positions)}개`}`],
+        ["비용", `수수료 ${num(c.commission_rate) === null ? "—" : `${fmt((c.commission_rate as number) * 100)}%`} · 슬리피지 ${num(c.slippage_rate) === null ? "—" : `${fmt((c.slippage_rate as number) * 100)}%`}${c.charge_sell_tax ? " · 매도세" : ""}`],
       ]} />
       <p className="pg-note">아직 돌리지 않았어요 — 설정 탭의 ‘백테스트 시작’을 누르면 백그라운드에서 돌아요.</p>
     </>

@@ -10,15 +10,17 @@ import type { NodeCatalogEntry, NodeRunResult, PgNode } from "@/entities/portfol
 
 const TRUST_TEXT = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패" } as const;
 
-function Bars({ weights, labels }: { weights: Record<string, number>; labels?: Record<string, string> }) {
-  const rows = Object.entries(weights).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+function Bars({ weights, labels }: { weights: Record<string, number | null>; labels?: Record<string, string> }) {
+  // ★모르는 비중은 0 으로 그리지 않는다★ — 수가 아닌 칸은 막대 없이 "—".
+  const rows = Object.entries(weights).sort((a, b) => Math.abs(b[1] ?? 0) - Math.abs(a[1] ?? 0));
   return (
     <div className="pg-bars">
       {rows.map(([k, v]) => (
         <div key={k} className="pg-bar-row">
           <span className="pg-bar-name">{labels?.[k] ?? k}</span>
-          <span className="pg-bar-track"><i className={v < 0 ? "neg" : ""} style={{ width: `${Math.min(100, Math.abs(v))}%` }} /></span>
-          <span className="pg-bar-pct">{v.toFixed(1)}%</span>
+          <span className="pg-bar-track">{typeof v === "number" && Number.isFinite(v)
+            ? <i className={v < 0 ? "neg" : ""} style={{ width: `${Math.min(100, Math.abs(v))}%` }} /> : null}</span>
+          <span className="pg-bar-pct">{typeof v === "number" && Number.isFinite(v) ? `${v.toFixed(1)}%` : "—"}</span>
         </div>
       ))}
     </div>

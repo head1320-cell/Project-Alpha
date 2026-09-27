@@ -67,6 +67,18 @@ export function TargetResult({ v }: { v: Dict }) {
         {num(tv.cash_weight) ? <tr><td className="pg-td-name">현금</td><td /><td className="pg-td-num">{pct(tv.cash_weight, 2)}</td></tr> : null}
       </tbody></table>
       {(tv.overlay as Dict | null)?.source ? <p className="pg-note">노출 조절 근거: {String((tv.overlay as Dict).source)}</p> : null}
+      {/* ★롱숏 목표는 실행할 수 없다 — 왜인지 항목별로 말한다★ 나중에 무엇이 풀렸는지 알 수 있게 나눠 둔다. */}
+      {tv.mode === "long_short" && (
+        <div className="pg-ls-blocked" role="note">
+          <p className="pg-warn">이 목표는 실행할 수 없어요 — 연구·백테스트 전용이에요.
+            {num(tv.gross_after) !== null ? ` (gross ${pct(tv.gross_after)} · net ${pct(tv.net_after)})` : ""}</p>
+          <ul className="pg-list pg-ls-blocked-l">
+            <li>차입 가능 여부가 연동돼 있지 않아요 — 빌릴 수 있는지 늘 모름이에요.</li>
+            <li>KIS 주문 유형에 공매도가 없어요 — 사기·팔기 주문은 일반 현금 주문이에요.</li>
+            <li>실행기가 들고 있지 않은 종목의 매도를 건너뛰어요 — 숏 진입이 주문으로 나가지 않아요.</li>
+          </ul>
+        </div>
+      )}
     </>
   );
 }

@@ -185,3 +185,16 @@ test("같은 CaseBar 가 AAS 스테이지에도 있다 — 두 화면이 한 연
   // 포인터는 브라우저 로컬임을 라벨이 말한다.
   await expect(page.locator(".as-case-foot")).toContainText("이 브라우저에만");
 });
+
+// ── 캔버스 (BL4) — 마법사 스테이지에 있던 같은 CaseBar 가 캔버스 위에 있다 ───────────────
+test("같은 CaseBar 가 캔버스에도 있다 — 두 화면이 한 연구다", async ({ page }) => {
+  await clearCasePointer(page);
+  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await page.locator(".pg-casebox > summary").click();
+  await expect(page.locator(".pg-casebox .as-case")).toBeVisible({ timeout: 20_000 });
+  // 같은 칩을 두 번 그리지 않는다: MES 칩(또는 '없음')은 CaseBar 에만 있다.
+  expect(await page.locator(".pg-casebox .as-case-mes, .pg-casebox .as-case-na").count()).toBeGreaterThan(0);
+  // 포인터는 브라우저 로컬임을 라벨이 말한다.
+  await expect(page.locator(".pg-casebox .as-case-foot")).toContainText("이 브라우저에만");
+});

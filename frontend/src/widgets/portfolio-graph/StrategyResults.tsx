@@ -148,7 +148,9 @@ export function ValuationScoresResult({ v }: { v: Dict }) {
   const rows = (v.rows as Dict[]) ?? [];
   const scores = (v.scores as Record<string, number>) ?? {};
   const labels = (v.labels as Record<string, string>) ?? {};
-  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  // 수를 모르는 종목은 순위에 넣지 않는다(0 으로 가운데에 세우지 않는다) — 아래에 따로 적는다.
+  const ranked = Object.entries(scores).filter(([, s]) => typeof s === "number" && Number.isFinite(s)).sort((a, b) => b[1] - a[1]);
+  const unscored = Object.entries(scores).filter(([, s]) => !(typeof s === "number" && Number.isFinite(s))).map(([c]) => c);
   const byCode = Object.fromEntries(rows.map((r) => [String(r.ticker), r]));
   const max = Math.max(1e-9, ...ranked.map(([, s]) => Math.abs(s)));
   return (
@@ -163,6 +165,7 @@ export function ValuationScoresResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
+      {unscored.length > 0 && <p className="pg-warn">점수를 내지 못한 종목: {unscored.map((c) => labels[c] ?? c).join(", ")}</p>}
       <p className="pg-note">점수는 −괴리율이에요. 적정가를 내지 못한 종목은 0으로 치지 않고 아래에 따로 적어요.</p>
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="점수를 매기지 못한 종목" />
     </>

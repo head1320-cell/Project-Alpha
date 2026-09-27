@@ -92,17 +92,29 @@ function JournalTab() {
   return <ul className="pg-rec-list">{list.map((e) => <JournalRow key={e.entry_id} e={e} />)}</ul>;
 }
 
+/**
+ * 재현 판정 — ★다섯 상태는 서로 다른 문장이다★ 같음 · 달라짐(무엇이) · 대조할 것 없음 · 재현할 수 없음 · 응답 없음(네트워크).
+ * 재현 좌표가 관측 마지막 날로 추정된 것이면 그 사실을 적는다.
+ */
 function Verdict({ r }: { r: ReproduceResult }) {
-  if (!r.reproducible) return <p className="pg-warn" role="status">다시 계산할 수 없어요 — {r.reason}</p>;
+  if (!r.reproducible) {
+    return <p className="pg-warn pg-rec-verdict" role="status" data-verdict="refused">재현할 수 없어요 — {r.reason}</p>;
+  }
   const tag = r.verdict === "identical" ? "confirmed" : r.verdict === "drifted" ? "assumed" : "unknown";
   const text = r.verdict === "identical" ? "같은 비중이 다시 나왔어요"
-    : r.verdict === "drifted" ? `비중이 달라졌어요 — 가장 큰 차이 ${r.max_delta_pp ?? "미상"}%p`
+    : r.verdict === "drifted" ? `비중이 달라졌어요 — 가장 큰 차이 ${r.max_delta_pp == null ? "미상" : r.max_delta_pp.toFixed(2)}%p`
       : `대조할 것이 없었어요 — ${r.reason ?? "사유 미상"}`;
+  const moved = (r.deltas ?? []).slice().sort((a, b) => Math.abs(b.delta_pp) - Math.abs(a.delta_pp)).slice(0, 3);
   return (
-    <p className="pg-rec-verdict" role="status">
-      <span className={`pg-tag pg-tag--${tag}`}>{r.verdict === "identical" ? "같음" : r.verdict === "drifted" ? "달라짐" : "대조 불가"}</span>
-      {text} · 기준일 {r.as_of}{r.estimated ? "(추정한 기준일)" : ""}
-    </p>
+    <div className="pg-rec-verdict" role="status" data-verdict={r.verdict}>
+      <p className="pg-rec-text">
+        <span className={`pg-tag pg-tag--${tag}`}>{r.verdict === "identical" ? "같음" : r.verdict === "drifted" ? "달라짐" : "대조 불가"}</span>
+        {" "}{text} · 기준일 {r.as_of}{r.estimated ? " (관측 마지막 날로 추정한 기준일)" : ""}
+      </p>
+      {r.verdict === "drifted" && moved.length > 0 && (
+        <ul>{moved.map((d) => <li key={d.code}>{d.code} {d.recorded.toFixed(2)}% → {d.fresh.toFixed(2)}% ({d.delta_pp >= 0 ? "+" : ""}{d.delta_pp.toFixed(2)}%p)</li>)}</ul>
+      )}
+    </div>
   );
 }
 
@@ -135,7 +147,9 @@ function RunsTab() {
                     onClick={() => { if (window.confirm("이 연구 기록을 지울까요? 되돌릴 수 없어요.")) del.mutate(r.run_id); }}>지우기</button>
           </div>
           {res[r.run_id] && <Verdict r={res[r.run_id]} />}
-          {repro.isError && repro.variables === r.run_id && <p className="pg-field-err">대조하지 못했어요 — {(repro.error as Error).message}</p>}
+          {repro.isError && repro.variables === r.run_id && (
+            <p className="pg-field-err pg-rec-verdict" data-verdict="network">응답을 받지 못했어요 — 재현이 실패한 것과 달라요. 연결을 확인하고 다시 눌러 주세요. ({(repro.error as Error).message})</p>
+          )}
         </li>
       );
     })}</ul>

@@ -175,7 +175,7 @@ export function MultiplesResult({ v }: { v: Dict }) {
                  ["PEG", num(r.peg) === null ? `— ${String(r.peg_reason ?? "")}` : (r.peg as number).toFixed(2)]]} />
       <table className="pg-table pg-sens pg-peg">
         <caption>EPS 성장률(행) × PEG(열)이면 맞는 주가</caption>
-        <thead><tr><th />{(m.peg_axis ?? []).map((p) => <th key={p} className="pg-td-num">{p.toFixed(2)}</th>)}</tr></thead>
+        <thead><tr><th />{(m.peg_axis ?? []).map((p, i) => <th key={i} className="pg-td-num">{typeof p === "number" ? p.toFixed(2) : "—"}</th>)}</tr></thead>
         <tbody>{(m.prices ?? []).map((row, i) => (
           <tr key={i}>
             <th className="pg-td-num">{(m.growth_axis ?? [])[i]}%</th>

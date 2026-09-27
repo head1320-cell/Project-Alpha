@@ -79,3 +79,34 @@ test("desktop(1440px): 편집 워크스테이션 — 근거와 컨트롤이 함�
   await expect(page.locator(".aas-wiz")).toBeVisible();
   await expect(page.locator(".aas-content")).toBeVisible();
 });
+
+// ── 캔버스 (BL4 · 마법사 화면의 좁은 폭 계약을 옮김) ─────────────────────────────
+// 마법사의 문맥 줄은 사라졌다. 캔버스에서 좁은 폭이 줄이면 안 되는 것은 ① 계산 버튼 ② 결과 요약 ③ **연습용(합성) 경고**
+// ④ 노드의 상태와 사유다 — 폭이 좁다고 "연습용" 이 사라지면 합성 수가 실데이터처럼 읽힌다.
+for (const [name, size] of [["mobile", MOBILE], ["tablet", TABLET]] as const) {
+  test(`캔버스 ${name}(${size.width}px): 가로 스크롤 없음 · 계산·요약·연습용 경고·노드 상태가 남는다`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".pg-node").first()).toBeAttached({ timeout: 30_000 });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, "가로 오버플로 픽셀").toBeLessThanOrEqual(1);
+
+    const run = page.locator(".pg-run");
+    await run.scrollIntoViewIfNeeded();
+    await expect(run).toBeVisible();
+    const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+    await run.click();
+    await resp;
+    const summary = page.locator(".pg-summary:not(.pg-summary--err):not(.pg-summary--stale)");
+    await expect(summary).toContainText("완료", { timeout: 30_000 });
+    await summary.scrollIntoViewIfNeeded();
+    await expect(summary).toBeVisible();
+    // 이야기 탭 맨 위의 연습용 경고 — 개발 환경의 수익률은 합성이다.
+    await page.locator('.pg-tab[data-tab="story"]').click();
+    const practice = page.locator(".pg-side").getByText("연습용", { exact: false }).first();
+    await practice.scrollIntoViewIfNeeded();
+    await expect(practice).toBeVisible();
+    const after = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(after, "계산 뒤 가로 오버플로 픽셀").toBeLessThanOrEqual(1);
+  });
+}

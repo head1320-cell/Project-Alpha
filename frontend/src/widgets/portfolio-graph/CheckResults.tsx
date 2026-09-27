@@ -69,6 +69,9 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
   return (
     <>
       <p className={`pg-model-type pg-model-type--${historical ? "hist" : "hypo"}`}>{String(pack.model_type_label ?? "")}</p>
+      {/* ★재현 좌표는 라벨이 아니라 pack_id@hash★ 같은 이름의 팩도 정의가 바뀌면 해시가 바뀐다. */}
+      {pack.identity ? <p className="pg-pack-id">{String(pack.family_label ?? "")} · <span className="pg-code">{String(pack.identity)}</span>
+        {historical && pack.severity_applies === false ? " · 실제 시세 재생이라 강도 배율을 쓰지 않아요" : ""}</p> : null}
       {historical ? (
         <>
           {/* 기간 수익률·낙폭은 성과 숫자다 — 서버가 단 라벨(고정 비중 재생)을 숫자 바로 위에. */}
@@ -101,6 +104,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
             </>
           )}
           {r.note ? <p className="pg-note">{String(r.note)}</p> : null}
+          <p className="pg-note pg-linear">선형 근사예요 — 종목별 충격 × 비중을 더했어요. 충격이 커질 때 상관이 바뀌는 효과는 넣지 않았어요.</p>
         </>
       )}
     </>
@@ -151,9 +155,10 @@ export function SensitivityResult({ v }: { v: Dict }) {
           <tbody>{m.map((row, i) => (
             <tr key={names[i]}>
               <th scope="row">{short(names[i])}</th>
-              {row.map((d, j) => (
-                <td key={j} style={{ ["--pg-heat" as string]: `${Math.round((Math.abs(d) / max) * 40)}%` }}
-                    className={d < 0 ? "neg" : d > 0 ? "pos" : ""}>{d > 0 ? "+" : ""}{d.toFixed(1)}</td>
+              {row.map((d, j) => (num(d) === null
+                ? <td key={j}>—</td>
+                : <td key={j} style={{ ["--pg-heat" as string]: `${Math.round((Math.abs(d) / max) * 40)}%` }}
+                      className={d < 0 ? "neg" : d > 0 ? "pos" : ""}>{d > 0 ? "+" : ""}{d.toFixed(1)}</td>
               ))}
             </tr>
           ))}</tbody>
@@ -172,16 +177,17 @@ export function FactorXrayResult({ v }: { v: Dict }) {
       <p className="pg-note">가운데가 유니버스 평균(0σ)이에요. 굵은 점이 이 비중, 세로 선이 {String(r.benchmark_label ?? "기준")}.</p>
       <ul className="pg-z">
         {fs.map((f) => {
-          const z = num(f.portfolio_z) ?? 0;
-          const b = num(f.benchmark_z) ?? 0;
+          // ★모르는 위치를 가운데(0σ)에 찍지 않는다★ — 값이 없으면 점도 수도 그리지 않는다.
+          const z = num(f.portfolio_z);
+          const b = num(f.benchmark_z);
           return (
             <li key={String(f.id)} className="pg-z-row">
               <span className="pg-z-name">{String(f.label)}</span>
               <span className="pg-z-track" aria-hidden="true">
-                <i className="pg-z-bench" style={{ left: at(b) }} />
-                <b className={`pg-z-dot${z < 0 ? " neg" : ""}`} style={{ left: at(z) }} />
+                {b !== null && <i className="pg-z-bench" style={{ left: at(b) }} />}
+                {z !== null && <b className={`pg-z-dot${z < 0 ? " neg" : ""}`} style={{ left: at(z) }} />}
               </span>
-              <span className="pg-z-v">{z > 0 ? "+" : ""}{z.toFixed(2)}σ</span>
+              <span className="pg-z-v">{z === null ? "—" : `${z > 0 ? "+" : ""}${z.toFixed(2)}σ`}</span>
               {(num(f.coverage_pct) ?? 100) < 99.5 && <span className="pg-z-cov">{pct(f.coverage_pct, 0)}만</span>}
             </li>
           );

@@ -120,7 +120,9 @@ export function PairResult({ v }: { v: Dict }) {
   return (
     <>
       <KV rows={[
-        ...Object.entries(w).map(([k, x]) => [`${x >= 0 ? "사기" : "팔기"} · ${labels[k] ?? k}`, `${Math.abs(x).toFixed(1)}`] as [string, ReactNode]),
+        ...Object.entries(w).map(([k, x]) => (typeof x === "number" && Number.isFinite(x)
+          ? [`${x >= 0 ? "사기" : "팔기"} · ${labels[k] ?? k}`, `${Math.abs(x).toFixed(1)}`]
+          : [`${labels[k] ?? k}`, "— (모름)"]) as [string, ReactNode]),
         ["순 β", r.net_beta === null ? "모름" : String(r.net_beta)],
       ]} />
       {r.beta_reason ? <p className="pg-warn">{String(r.beta_reason)}</p> : null}

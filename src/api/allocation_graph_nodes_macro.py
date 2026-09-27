@@ -126,8 +126,30 @@ class TimingParams(BaseModel):
         "기준일", "advanced", help="비우면 오늘이에요.")})
 
 
+def _refuse_unreadable_factors(p: TimingParams) -> None:
+    """★영원히 못 읽는 팩터를 위험-오프로 조용히 세지 않는다★ (BL4 · 마법사 팩터 창의 계약).
+
+    결합 규칙은 읽지 못한 팩터를 보수적으로 위험-오프로 접는다 — 데이터가 잠시 비는 경우엔 맞는 규칙이지만, 카탈로그에
+    없는 팩터·소스가 없는 팩터·기준일 없이는 못 읽는 팩터는 **늘** 못 읽어 노출을 조용히 깎는다. 그런 규칙은 계산 전에
+    사유와 함께 막는다(엔진·결합 규칙은 바꾸지 않는다).
+    """
+    from src.engine.timing_factors import CATALOG
+    by_id = {c["id"]: c for c in CATALOG}
+    for r in p.rules:
+        c = by_id.get(r.factor_id)
+        if c is None:
+            raise pg.NodeFailure(f"카탈로그에 없는 신호예요: ‘{r.factor_id}’ — 방향을 추측하지 않아요. 목록에서 골라 주세요.")
+        if c.get("availability") == "unavailable":
+            raise pg.NodeFailure(f"‘{c['label']}’은(는) 쓸 수 없어요 — "
+                                 f"{c.get('unavailable_reason') or '데이터 소스를 보유하고 있지 않습니다.'}")
+        if c.get("requires_as_of") and not p.as_of:
+            raise pg.NodeFailure(f"‘{c['label']}’은(는) 기준일(as_of)이 있어야 그 시점의 값을 읽을 수 있어요 — "
+                                 "기준일을 넣거나 이 신호를 빼 주세요.")
+
+
 def _timing_signal(inputs: dict, p: TimingParams) -> pg.NodeOutput:
     from src.engine import timing_rules_v2 as v2
+    _refuse_unreadable_factors(p)
     specs = [r.model_dump(exclude_none=True) for r in p.rules]
     rule_set = v2.rule_set_from_specs(specs, market=p.market, combination=p.combination, k=p.k, set_id="graph")
     try:

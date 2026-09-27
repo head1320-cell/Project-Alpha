@@ -49,7 +49,7 @@ export function TimingResult({ v }: { v: Dict }) {
   const fs = (v.factor_states as Dict[]) ?? [];
   return (
     <>
-      <KV rows={[["합친 판단", STATE[String(c.state)] ?? String(c.state)], ["권하는 노출", pct((num(c.exposure) ?? 0) * 100, 0)],
+      <KV rows={[["합친 판단", STATE[String(c.state)] ?? String(c.state)], ["권하는 노출", num(c.exposure) === null ? "— (계산하지 못했어요)" : pct((c.exposure as number) * 100, 0)],
                  ["켜짐 · 꺼짐 · 못 읽음", `${String(c.on_count)} · ${String(c.off_count)} · ${String(c.unavailable_count)}`]]} />
       <ul className="pg-sig">
         {fs.map((f) => (

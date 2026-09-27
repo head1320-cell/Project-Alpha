@@ -97,11 +97,11 @@ export function CompanyValuationResult({ v }: { v: Dict }) {
       {(sens.grid ?? []).length > 0 && (
         <table className="pg-table pg-sens">
           <caption>할인율(행) × 영구성장률(열)이 바뀌면</caption>
-          <thead><tr><th />{(sens.g_axis ?? []).map((g) => <th key={g} className="pg-td-num">{fx(g * 100, 1, "%")}</th>)}</tr></thead>
+          <thead><tr><th />{(sens.g_axis ?? []).map((g, k) => <th key={k} className="pg-td-num">{num(g) === null ? "—" : fx(g * 100, 1, "%")}</th>)}</tr></thead>
           <tbody>{(sens.grid ?? []).map((row, i) => (
             <tr key={i}>
-              <th className="pg-td-num">{fx((sens.ke_axis ?? [])[i] * 100, 2, "%")}</th>
-              {row.map((c, j) => <td key={j} className={`pg-td-num${i === mid && j === midg ? " pg-strong pg-sens-base" : ""}`}>{Math.round(c / 1000).toLocaleString("ko-KR")}천</td>)}
+              <th className="pg-td-num">{num((sens.ke_axis ?? [])[i]) === null ? "—" : fx((sens.ke_axis ?? [])[i] * 100, 2, "%")}</th>
+              {row.map((c, j) => <td key={j} className={`pg-td-num${i === mid && j === midg ? " pg-strong pg-sens-base" : ""}`}>{num(c) === null ? "—" : `${Math.round(c / 1000).toLocaleString("ko-KR")}천`}</td>)}
             </tr>
           ))}</tbody>
         </table>

@@ -101,6 +101,8 @@ export function EnsembleResult({ v }: { v: Dict }) {
   );
 }
 
+const pp = (v: unknown) => (num(v) === null ? "—" : `${((v as number) * 100).toFixed(0)}%`);
+
 export function RegimeExplainResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   const tr = (r.transitions as Dict) ?? {};
@@ -109,29 +111,67 @@ export function RegimeExplainResult({ v }: { v: Dict }) {
   const fc = (tr.forecast as Dict) ?? {};
   const drivers = ((dr.drivers as Dict[]) ?? []).slice().sort((a, b) => Math.abs(num(b.phi) ?? 0) - Math.abs(num(a.phi) ?? 0)).slice(0, 6);
   const mean = (fc.mean as Record<string, number>) ?? {};
+  const ci = (fc.ci90 as Record<string, [number, number]>) ?? {};
+  const rows = (tr.rows as Dict[]) ?? [];
+  const regimes = (tr.regimes as string[]) ?? rows.map((x) => String(x.from));
+  // ★Shapley 는 합이 맞아야 한다★ 기준 + 기여 합 = 이 국면의 확률. 어긋남(효율성 잔차)을 숨기지 않는다.
+  const base = num(dr.baseline), prob = num(dr.probability), sumPhi = num(dr.sum_phi), resid = num(dr.efficiency_residual);
   return (
     <>
       <KV rows={[
         ["지금 국면", tr.available ? rk(tr.current) : `— ${String(tr.reason ?? "")}`],
         ["이어진 기간", num(tr.run_length_months) === null ? "—" : `${String(tr.run_length_months)}개월`],
-        ["분류한 기간", `${String(span.first ?? "?")} ~ ${String(span.last ?? "?")} · ${String(span.n_months ?? "—")}개월${span.truncated ? " (요청보다 짧아요)" : ""}`],
+        ["관측 창", <span key="w" className="pg-regime-window">{String(span.first ?? "?")} ~ {String(span.last ?? "?")} · {String(span.n_months ?? "—")}개월
+          {span.truncated ? ` (요청 ${String(span.requested ?? "?")}개월보다 짧아요${num(span.dropped_incomplete) ? ` · 덜 채워진 ${String(span.dropped_incomplete)}개월 뺌` : ""})` : ""}</span>],
       ]} />
       {drivers.length > 0 && (
         <>
-          <h4 className="pg-h4">이 국면을 만든 지표 (확률 {pct((num(dr.probability) ?? 0) * 100, 0)} · 기준 {pct((num(dr.baseline) ?? 0) * 100, 0)})</h4>
-          <table className="pg-table">
+          <h4 className="pg-h4">이 국면을 만든 지표 (확률 {pp(prob)} · 기준 {pp(base)})</h4>
+          <table className="pg-table pg-shapley">
             <tbody>{drivers.map((d, i) => (
               <tr key={i}><td className="pg-td-name">{String(d.label ?? d.feature ?? d.name ?? "—")}</td>
-                <td className={`pg-td-num${(num(d.phi) ?? 0) < 0 ? " pg-neg" : ""}`}>{sgn((num(d.phi) ?? 0) * 100, 1)}%p</td></tr>
+                <td className={`pg-td-num${(num(d.phi) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(d.phi) === null ? "—" : `${sgn((d.phi as number) * 100, 1)}%p`}</td></tr>
             ))}</tbody>
           </table>
+          {base !== null && prob !== null && sumPhi !== null && (
+            <p className="pg-note pg-shapley-sum">기준 {pp(base)} + 기여 합 {sgn(sumPhi * 100, 1)}%p = {pp(base + sumPhi)}
+              {resid !== null && Math.abs(resid) > 1e-6 ? ` · 모델 확률 ${pp(prob)} 과 ${sgn(resid * 100, 2)}%p 어긋나요` : ` · 모델 확률 ${pp(prob)} 과 맞아요`}</p>
+          )}
+        </>
+      )}
+      {rows.length > 0 && (
+        <>
+          <h4 className="pg-h4">다음 달 전환 확률 (90% 신용구간)</h4>
+          <div className="pg-scroll-x">
+            <table className="pg-table pg-regime-matrix">
+              <thead><tr><th>지금 → 다음</th>{regimes.map((g) => <th key={g} className="pg-td-num">{rk(g).split("(")[0]}</th>)}<th className="pg-td-num">관측</th></tr></thead>
+              <tbody>{rows.map((row) => {
+                const m = (row.mean as Record<string, number>) ?? {};
+                const c = (row.ci90 as Record<string, [number, number]>) ?? {};
+                return (
+                  <tr key={String(row.from)} data-shrunk={row.shrunk ? "1" : "0"}>
+                    <td className="pg-td-name">{rk(row.from).split("(")[0]}</td>
+                    {regimes.map((g) => (
+                      <td key={g} className="pg-td-num">{pp(m[g])}<span className="pg-ci">{c[g] ? ` ${pp(c[g][0])}~${pp(c[g][1])}` : ""}</span></td>
+                    ))}
+                    <td className="pg-td-num">{String(row.n ?? "—")}개월</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+          {rows.filter((row) => row.shrunk).map((row) => (
+            <p key={String(row.from)} className="pg-warn pg-regime-sparse">{rk(row.from)}에서 떠난 관측이 적어요 — 값이 사전분포 쪽에 머물러 구간이 넓어요{row.reason ? ` (${String(row.reason)})` : ""}.</p>
+          ))}
+          {tr.note ? <p className="pg-note">{String(tr.note)}</p> : null}
         </>
       )}
       {fc.available ? (
         <>
-          <h4 className="pg-h4">{String(fc.k ?? "")}개월 뒤 국면 확률</h4>
-          <table className="pg-table"><tbody>{Object.entries(mean).sort((a, b) => b[1] - a[1]).map(([g, p]) => (
-            <tr key={g}><td className="pg-td-name">{rk(g)}</td><td className="pg-td-num">{pct(p * 100, 0)}</td></tr>
+          <h4 className="pg-h4">{String(fc.k ?? "")}개월 뒤 국면 확률 (90% 구간)</h4>
+          <table className="pg-table pg-regime-fc"><tbody>{Object.entries(mean).sort((a, b) => b[1] - a[1]).map(([g, p]) => (
+            <tr key={g}><td className="pg-td-name">{rk(g)}</td><td className="pg-td-num">{pp(p)}</td>
+              <td className="pg-td-num pg-ci">{ci[g] ? `${pp(ci[g][0])} ~ ${pp(ci[g][1])}` : "—"}</td></tr>
           ))}</tbody></table>
         </>
       ) : <p className="pg-warn">전환 예측을 하지 못했어요 — {String(fc.reason ?? "사유 미상")}</p>}
@@ -156,8 +196,8 @@ export function ThreeWayResult({ v }: { v: Dict }) {
         <tbody>{Object.entries(legs).map(([k, g]) => (
           <tr key={k}>
             <td className="pg-td-name">{LEG_KO[k] ?? k}</td>
-            <td>{STATE_KO[String(g.state)] ?? String(g.state)}</td>
-            <td className="pg-td-num">{pct((num(g.exposure) ?? 0) * 100, 0)}</td>
+            <td>{STATE_KO[String(g.state)] ?? String(g.state)}{g.state === "unavailable" && g.reason ? <span className="pg-pick-sub pg-3w-na"> — {String(g.reason)}</span> : null}</td>
+            <td className="pg-td-num">{num(g.exposure) === null ? "—" : pct((g.exposure as number) * 100, 0)}</td>
             <td className={`pg-td-num${(num(g.shock_pct) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(g.shock_pct) === null ? "미계산" : pct(g.shock_pct, 2)}</td>
           </tr>
         ))}</tbody>
@@ -223,18 +263,41 @@ export function AlphaValidateResult({ v, prov }: { v: Dict; prov: Dict }) {
   const oos = (r.is_oos as Dict) ?? {};
   const ls = (r.long_short as Dict) ?? {};
   const q = ((r.quantiles as Dict)?.ann_return_pct as number[]) ?? [];
+  const decay = (r.decay as Record<string, number | null>) ?? {};
+  const top = (r.latest_scores_top as Dict[]) ?? [];
   const max = Math.max(1, ...q.map((x) => Math.abs(x)));
   const src = v.expr_source as Dict | null;
   return (
     <>
       <p className="pg-model-type pg-model-type--hypo">{src ? `등록된 알파 ‘${String(src.name)}’ v${String(src.version)}` : "식으로 검증"} · {String(r.expr ?? "")}</p>
       <KV rows={[
-        ["평균 IC", sgn(ic.mean)], ["ICIR", sgn(ic.icir, 2)], ["t 값", sgn(ic.t_stat, 2)], ["적중률", pct(ic.hit_rate, 0)],
-        ["앞 절반 / 뒤 절반 IC", `${sgn(oos.is_ic)} / ${sgn(oos.oos_ic)} (${String(oos.split ?? "?")})`],
+        // ★IC 가 없으면 약세로 칠하지 않는다★ — 못 잰 것과 음수는 다른 사실이다.
+        ["평균 IC", <span key="ic" className={`pg-av-ic${(num(ic.mean) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(ic.mean) === null ? "— (못 쟀어요)" : sgn(ic.mean)}</span>],
+        ["ICIR", sgn(ic.icir, 2)], ["t 값", sgn(ic.t_stat, 2)], ["적중률", pct(ic.hit_rate, 0)],
         ["롱숏", <>{prov.perf_label ? <PerfLabel value={prov.perf_label as PerfLabelValue} /> : null}
                   {` 총 ${pct(ls.total_return_pct)} · 샤프 ${sgn(ls.sharpe, 2)} · 최대 낙폭 ${pct(ls.mdd_pct)}`}</>],
         ["기간", `${String(r.period_start ?? "?")} ~ ${String(r.period_end ?? "?")} · ${String(r.n_periods ?? "—")}번`],
       ]} />
+      {/* ★DECAY 와 앞/뒤 절반은 다른 질문이다★ — 보유 기간별 IC(얼마나 오래 가나) · 기간 분할 IC(시간이 지나도 버티나). */}
+      {Object.keys(decay).length > 0 && (
+        <>
+          <h4 className="pg-h4">보유 기간별 IC (신호가 얼마나 오래 가나)</h4>
+          <table className="pg-table pg-av-decay"><tbody>{Object.entries(decay).map(([k, x]) => (
+            <tr key={k}><td className="pg-td-name">{k.replace("m", "개월")}</td>
+              <td className={`pg-td-num${(num(x) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(x) === null ? "— (못 쟀어요)" : sgn(x)}</td></tr>
+          ))}</tbody></table>
+        </>
+      )}
+      <h4 className="pg-h4">앞 절반 / 뒤 절반 IC (시간이 지나도 버티나)</h4>
+      <table className="pg-table pg-av-isoos"><tbody>
+        <tr><td className="pg-td-name">앞 절반</td><td className={`pg-td-num${(num(oos.is_ic) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(oos.is_ic) === null ? "— (못 쟀어요)" : sgn(oos.is_ic)}</td></tr>
+        <tr><td className="pg-td-name">뒤 절반</td><td className={`pg-td-num${(num(oos.oos_ic) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(oos.oos_ic) === null ? "— (못 쟀어요)" : sgn(oos.oos_ic)}</td></tr>
+        <tr><td className="pg-td-name">나눈 방식</td><td className="pg-td-num">{String(oos.split ?? "—")}</td></tr>
+      </tbody></table>
+      {top.length > 0 && (
+        <p className="pg-note pg-av-stale">상위 종목 점수는 표본 마지막 날({String(r.period_end ?? "미상")}) 값이에요 — 오늘 기준 비중은 ‘알파 포트폴리오’ 노드로 봐요.
+          {" "}{top.slice(0, 5).map((t) => String(t.name ?? t.ticker)).join(", ")}</p>
+      )}
       {q.length > 0 && (
         <>
           <h4 className="pg-h4">점수 분위별 연 수익 (낮은 점수 → 높은 점수)</h4>
@@ -252,12 +315,27 @@ export function AlphaValidateResult({ v, prov }: { v: Dict; prov: Dict }) {
 
 export function AlphaPortfolioResult({ v, bars }: { v: Dict; bars: ReactNode }) {
   const excluded = (v.excluded as Dict[]) ?? [];
+  const warnings = (v.warnings as string[]) ?? [];
+  const pairs = (v.pairwise as Dict[]) ?? [];
   return (
     <>
-      <KV rows={[["실질 알파 수", num(v.effective_n) === null ? "—" : (v.effective_n as number).toFixed(1)],
+      <KV rows={[["유효 알파 수", num(v.effective_n) === null ? "—" : (v.effective_n as number).toFixed(1)],
                  ["기준일", String(v.as_of_effective ?? "오늘")]]} />
+      {/* ★경고·제외 사유는 접지 않는다★ — 같은 베팅을 두 번 한 것, 빠진 알파가 있는 것은 결과를 읽는 방식을 바꾼다. */}
+      {warnings.map((w, i) => <p key={`w${i}`} className="pg-warn pg-ap-warn">{w}</p>)}
+      {excluded.map((e, i) => <p key={`x${i}`} className="pg-warn pg-ap-warn">뺀 알파 {String(e.alpha_id)} — {String(e.reason)}</p>)}
+      {pairs.length > 0 && (
+        <table className="pg-table pg-ap-corr">
+          <thead><tr><th>두 알파</th><th className="pg-td-num">순위 상관</th></tr></thead>
+          <tbody>{pairs.map((x, i) => (
+            <tr key={i} className={x.duplicate ? "dup" : ""}>
+              <td className="pg-td-name">{String(x.a)} · {String(x.b)}{x.duplicate ? " (사실상 같은 베팅)" : ""}</td>
+              <td className="pg-td-num">{num(x.rho) === null ? String(x.reason ?? "정의할 수 없어요") : sgn(x.rho, 2)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
       {bars}
-      {excluded.length > 0 && <p className="pg-warn">뺀 알파: {excluded.map((e) => `${String(e.alpha_id)}(${String(e.reason)})`).join(", ")}</p>}
       <p className="pg-note">{String(v.note ?? "")}</p>
     </>
   );

@@ -1637,3 +1637,465 @@ test("배분 추가(BL3 W5): 리밸런싱 저울 · 기록은 버튼 한 번 · 
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BL4 — 마법사를 지우기 전에 옮긴 계약 (대응표 docs/specs/2026-09-27-bl4-wizard-contract-map.md)
+// ★같은 계약을 두 곳이 지키는 순간을 만든 다음 한 곳을 지운다★ — 이 테스트들은 마법사가 있는 동안에도 통과해야 한다.
+// 서버 응답을 손으로 지어내지 않는다: 실제 응답을 받아 그 계약이 재는 칸만 덮어쓴다(마법사 스펙들의 관례).
+// ─────────────────────────────────────────────────────────────────────────────
+type RunBody = { ok: boolean; nodes: Record<string, { status: string; reason: string | null; view: Record<string, unknown> | null; [k: string]: unknown }> };
+
+async function patchRun(page: Page, fn: (body: RunBody) => void) {
+  await page.unroute("**/api/v1/allocation/graph/run**");
+  await page.route("**/api/v1/allocation/graph/run**", async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as RunBody;
+    fn(body);
+    await route.fulfill({ response: res, json: body });
+  });
+}
+
+async function detail(page: Page, id: string) {
+  await node(page, id).click();
+  await tab(page, "detail");
+}
+
+const LS = { "005930": 60.0, "000660": 50.0, "035420": 30.0, "051910": -25.0, "005380": -15.0 };
+
+test("롱숏(BL4): 숏이 있으면 gross·net·롱·숏과 gross 기준 집중도 · 롱숏 목표는 실행 막힘 세 사유 · 롱온리는 둘 다 없음(짝)", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push({ id: "tv", type: "target_version", params: { note: "E2E BL4" }, position: { x: 1000, y: 520 } });
+  doc.edges.push({ id: "t1", source: "optimizer", source_port: "weights", target: "tv", target_port: "weights" });
+  await importText(page, "ls.json", JSON.stringify(doc));
+
+  // 짝(먼저): 롱온리 결과에는 노출 네 축도, 실행 막힘도 뜨지 않는다 — 늘 그리는 구현을 배제한다.
+  const plain = await run(page);
+  expect(plain.nodes.tv.status, plain.nodes.tv.reason).toBe("ok");
+  await detail(page, "optimizer");
+  await expect(page.locator(".pg-side .pg-table tr").first()).toBeVisible();
+  await expect(page.locator(".pg-side .pg-ls-exposure")).toHaveCount(0);
+  await detail(page, "tv");
+  await expect(page.locator(".pg-side .pg-ls-blocked")).toHaveCount(0);
+
+  await patchRun(page, (b) => {
+    b.nodes.optimizer.view = { ...b.nodes.optimizer.view, weights: LS };
+    const tgt = (b.nodes.tv.view as { target: Record<string, unknown> }).target;
+    (b.nodes.tv.view as { target: Record<string, unknown> }).target = {
+      ...tgt, mode: "long_short", cash_weight: null, gross_after: 180, net_after: 100, status: "research_only",
+      status_reason: "롱숏 목표는 연구·백테스트 전용입니다", final_weights: LS };
+  });
+  await run(page);
+  await detail(page, "optimizer");
+  const exp = page.locator(".pg-side .pg-ls-exposure");
+  for (const t of ["180.0%", "100.0%", "140.0%", "-40.0%", "gross 기준"]) await expect(exp).toContainText(t);
+  // ★HHI 가 롱 다리만으로 계산되지 않는다★ gross 180 기준 (60²+50²+30²+25²+15²)/180² × 10⁴ = 2423 — 롱만이면 3571.
+  await expect(exp).toContainText("2,423");
+  await detail(page, "tv");
+  const blocked = page.locator(".pg-side .pg-ls-blocked");
+  await expect(blocked).toContainText("실행할 수 없어요");
+  const items = blocked.locator(".pg-ls-blocked-l li");
+  await expect(items).toHaveCount(3);
+  await expect(items.nth(0)).toContainText("차입");
+  await expect(items.nth(1)).toContainText("공매도");
+  await expect(items.nth(2)).toContainText("들고 있지 않은");
+});
+
+test("μ 엔진(BL4): 라벨은 서버 mu_engine 그대로 — model 이 bl 이어도 mvo 면 MVO · EP 는 신뢰도를 안 쓴다고 말한다 · 쓸 수 없는 엔진은 비중 대신 사유", async ({ page }) => {
+  await openCanvas(page);
+  await patchRun(page, (b) => { b.nodes.optimizer.view = { ...b.nodes.optimizer.view, model: "bl", mu_engine: "mvo", ep: null }; });
+  await run(page);
+  await detail(page, "optimizer");
+  const eng = page.locator(".pg-side .pg-eng-v");
+  await expect(eng).toHaveText(/MVO/);
+  await expect(eng).not.toHaveText(/Black-Litterman/);
+
+  await patchRun(page, (b) => {
+    b.nodes.optimizer.view = { ...b.nodes.optimizer.view, model: "ep", mu_engine: "ep",
+      ep: { available: true, feasible: true, n_views: 1, kl: 0.12, ens: 640, ens_prior: 756, confidence_used: false, violations: [], skipped: [], note: null } };
+  });
+  await run(page);
+  await detail(page, "optimizer");
+  await expect(eng).toHaveText("Entropy Pooling");
+  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 사용하지 않습니다");
+  await expect(page.locator(".pg-side .pg-eng")).toContainText("756 → 640");
+
+  // 쓸 수 없는 엔진은 비중 숫자가 아니라 사유가 온다 — 실제 서버 경로. 같은 종목을 +40% 이상이자 −40% 이하로 보는 두 뷰는
+  // 동시에 만족하는 분포가 없어 EP 가 실현 불가다(그 배합으로는 배분하지 않는다).
+  await page.unroute("**/api/v1/allocation/graph/run**");
+  const doc = await exportDoc(page);
+  doc.nodes.find((n: { id: string }) => n.id === "optimizer").params = { model: "ep" };
+  doc.nodes.find((n: { id: string }) => n.id === "views").params = { views: [
+    { assets: ["005930"], direction: 1, magnitude_pct: 40, confidence: 90 },
+    { assets: ["005930"], direction: -1, magnitude_pct: 40, confidence: 90 }] };
+  await importText(page, "ep.json", JSON.stringify(doc));
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-run").click();
+  const bad = await (await resp).json();
+  expect(bad.nodes.optimizer.status).toBe("failed");
+  expect(String(bad.nodes.optimizer.reason).length).toBeGreaterThan(10);
+  await detail(page, "optimizer");
+  await expect(page.locator(".pg-side .pg-node-status-why")).toContainText(String(bad.nodes.optimizer.reason).slice(0, 12));
+  await expect(page.locator(".pg-side .pg-table")).toHaveCount(0);
+});
+
+test("룩어헤드·예측 구간(BL4): 배지는 응답이 말한 상태만 — '확인'으로 기울지 않는다 · 적중률은 홀드아웃 분수 · 못 재면 사유", async ({ page }) => {
+  await openCanvas(page);
+  const body = await run(page);
+  const st = (body.nodes.backtest.view as { lookahead_evidence?: { status?: string } }).lookahead_evidence?.status ?? "unknown";
+  await detail(page, "backtest");
+  const badge = page.locator(".pg-side [data-lookahead]");
+  await expect(badge).toHaveAttribute("data-lookahead", st);
+  // 안 잰 축이 있으면 '확인'이 될 수 없다 — 서버 롤업이 그렇게 말하고, 화면은 목록으로 옮긴다.
+  expect(st).not.toBe("verified");
+  await expect(page.locator(".pg-side .pg-la-unmeasured li").first()).toContainText("안 잰 것");
+
+  // 응답이 말하지 않으면 '미상' — 확인으로 기울지 않는다(짝: 없는 필드를 지어내지 않는다).
+  await patchRun(page, (b) => {
+    const v = b.nodes.backtest.view as Record<string, unknown>;
+    delete v.lookahead_evidence;
+    v.conformal = { available: true, alpha: 0.1, unit: "daily_mean_return", n_pairs: 56, n_required: 9,
+      next_period: { point: 0.00058, lower: -0.0033, upper: 0.00445, half_width: 0.00387 },
+      measured_coverage: { available: true, coverage: 0.9411764705882353, n: 17, hits: 16, mean_width: 0.0077, n_calibration: 39 }, note: null };
+  });
+  await run(page);
+  await detail(page, "backtest");
+  await expect(badge).toHaveAttribute("data-lookahead", "unknown");
+  const cf = page.locator(".pg-side .pg-bt-cf");
+  await expect(cf).toContainText("94.1%");
+  await expect(cf).toContainText("16/17");
+  await expect(cf).not.toContainText("90.0%");
+
+  await patchRun(page, (b) => {
+    (b.nodes.backtest.view as Record<string, unknown>).conformal = { available: false, alpha: 0.1, n_pairs: 8, n_required: 9,
+      reason: "완료된 리밸런스 구간이 8개로 보정 최소치 9개에 미치지 못합니다 (α=0.1) — 구간을 만들 수 없습니다." };
+  });
+  await run(page);
+  await detail(page, "backtest");
+  await expect(cf.locator(".pg-bt-cf-na")).toContainText("보정 최소치");
+  await expect(cf).not.toContainText("~");
+});
+
+test("지금 비중 대 목표(BL4): '지금 비중' 노드를 충격에 이으면 두 충격이 나란히 · 지금 비중을 안 적으면 균등으로 바꾸지 않고 사유(짝)", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const uni = doc.nodes.find((n: { id: string }) => n.id === "universe");
+  const [a, b] = uni.params.tickers as string[];
+  uni.params = { ...uni.params, weights: { [a]: 70, [b]: 30 } };
+  doc.nodes.push(
+    { id: "cw", type: "current_weights", params: {}, position: { x: 700, y: 560 } },
+    { id: "sc", type: "scenario_stress", params: { scenario: "rate_hike_200bp" }, position: { x: 1000, y: 560 } },
+    { id: "st", type: "scenario_stress", params: { scenario: "rate_hike_200bp" }, position: { x: 1000, y: 700 } },
+  );
+  doc.edges.push(
+    { id: "c1", source: "universe", source_port: "universe", target: "cw", target_port: "universe" },
+    { id: "c2", source: "cw", source_port: "weights", target: "sc", target_port: "weights" },
+    { id: "c3", source: "optimizer", source_port: "weights", target: "st", target_port: "weights" },
+  );
+  await importText(page, "cw.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["cw", "sc", "st"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+  const shock = (id: string) => (body.nodes[id].view as { result: { portfolio_shock_pct: number } }).result.portfolio_shock_pct;
+  expect(shock("sc"), "지금 보유의 충격이 목표의 충격을 복사했다").not.toBe(shock("st"));
+  await detail(page, "cw");
+  await expect(page.locator(".pg-side .pg-current-basis")).toContainText("지금 비중");
+  await expect(page.locator(".pg-side .pg-table tr").first()).toContainText("70.00%");
+
+  // 짝: 지금 비중을 안 적으면 만들지 않는다 — 충격은 막히고 목표 쪽은 그대로 돈다.
+  uni.params = { ...uni.params, weights: null };
+  await importText(page, "cw2.json", JSON.stringify(doc));
+  const bad = await run(page);
+  expect(bad.nodes.cw.status).toBe("failed");
+  expect(bad.nodes.cw.reason).toContain("균등");
+  expect(bad.nodes.sc.status).toBe("blocked");
+  expect(bad.nodes.st.status).toBe("ok");
+});
+
+test("시나리오 팩 신원(BL4): 가정 충격은 '실제로 일어난 적 없음' · pack_id@hash · 선형 근사 고지 · 역사 재생은 실제 시세·강도 미적용", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push(
+    { id: "k1", type: "scenario_stress", params: { scenario: "semi_selloff" }, position: { x: 1000, y: 560 } },
+    { id: "k2", type: "scenario_stress", params: { scenario: "hist_2020_covid" }, position: { x: 1000, y: 700 } },
+  );
+  doc.edges.push(
+    { id: "k1e", source: "optimizer", source_port: "weights", target: "k1", target_port: "weights" },
+    { id: "k2e", source: "optimizer", source_port: "weights", target: "k2", target_port: "weights" },
+  );
+  await importText(page, "packs.json", JSON.stringify(doc));
+  const body = await run(page);
+  expect(body.nodes.k1.status, body.nodes.k1.reason).toBe("ok");
+  await detail(page, "k1");
+  await expect(page.locator(".pg-side .pg-model-type--hypo")).toContainText("실제로 일어난 적 없음");
+  await expect(page.locator(".pg-side .pg-pack-id")).toContainText(/semi_selloff@[0-9a-f]{12}/);
+  await expect(page.locator(".pg-side .pg-linear")).toContainText("선형");
+  expect(body.nodes.k2.status, body.nodes.k2.reason).toBe("ok");
+  await detail(page, "k2");
+  await expect(page.locator(".pg-side .pg-model-type--hist")).toContainText("실제 시세");
+  await expect(page.locator(".pg-side .pg-pack-id")).toContainText("강도 배율을 쓰지 않아요");
+  await expect(page.locator(".pg-side .pg-linear")).toHaveCount(0);   // 재생은 선형 합이 아니다
+});
+
+test("타이밍 신호(BL4): 소스 없는 신호·목록에 없는 신호는 위험-오프로 세지 않고 사유 · 쓸 수 있는 신호는 돈다(짝)", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push(
+    { id: "t1", type: "timing_signal", params: { rules: [{ factor_id: "abs_mom" }, { factor_id: "borrow_short_interest" }] }, position: { x: 1000, y: 560 } },
+    { id: "t2", type: "timing_signal", params: { rules: [{ factor_id: "abs_mom" }, { factor_id: "no_such_factor" }] }, position: { x: 1000, y: 700 } },
+    { id: "t3", type: "timing_signal", params: { rules: [{ factor_id: "abs_mom" }, { factor_id: "ma_month" }] }, position: { x: 1000, y: 840 } },
+  );
+  await importText(page, "tf.json", JSON.stringify(doc));
+  const body = await run(page);
+  expect(body.nodes.t1.status).toBe("failed");
+  expect(body.nodes.t1.reason).toContain("대차잔고");
+  expect(body.nodes.t1.reason).toContain("피드");
+  expect(body.nodes.t2.status).toBe("failed");
+  expect(body.nodes.t2.reason).toContain("no_such_factor");
+  expect(body.nodes.t3.status, body.nodes.t3.reason).toBe("ok");
+  await detail(page, "t1");
+  await expect(page.locator(".pg-side .pg-node-status-why")).toContainText("쓸 수 없어요");
+});
+
+test("알파(BL4): 보유 기간별 IC 와 앞/뒤 절반을 따로 · 못 잰 IC 를 약세로 칠하지 않음 · 상위 종목 점수의 날짜 · 포트폴리오 경고·상관 · 미승인은 사유", async ({ page }) => {
+  await openCanvas(page);
+  const draft = await (await page.request.post(`${API}/alpha-registry`, {
+    data: { name: "E2E BL4 초안 알파", expr: "zscore(mom_6m)" } })).json();
+  const aid = draft.alpha.alpha_id as string;
+  try {
+    const doc = await exportDoc(page);
+    doc.nodes.push(
+      { id: "av", type: "alpha_validate", params: { expr: "zscore(mom_6m)", universe: "kospi50", months: 12 }, position: { x: 1000, y: 560 } },
+      { id: "ap", type: "alpha_portfolio", params: { alpha_ids: [aid], universe: "kospi50" }, position: { x: 1000, y: 700 } },
+    );
+    await importText(page, "alpha.json", JSON.stringify(doc));
+    const body = await run(page);
+    expect(body.nodes.av.status, body.nodes.av.reason).toBe("ok");
+    const r = (body.nodes.av.view as { result: { period_end: string } }).result;
+    await detail(page, "av");
+    await expect(page.locator(".pg-side .pg-av-decay tr").first()).toBeVisible();
+    await expect(page.locator(".pg-side .pg-av-isoos")).toContainText("앞 절반");
+    await expect(page.locator(".pg-side .pg-av-stale")).toContainText(r.period_end);
+    await expect(page.locator(".pg-side .pg-av-stale")).toContainText("알파 포트폴리오");
+    // 승인되지 않은 알파는 포트폴리오가 되지 않는다 — 서버 사유 그대로.
+    expect(body.nodes.ap.status).toBe("failed");
+    expect(body.nodes.ap.reason).toContain("만들지 않았습니다");
+
+    await patchRun(page, (b) => {
+      const v = b.nodes.av.view as { result: { ic: Record<string, unknown> } };
+      v.result.ic = { ...v.result.ic, mean: null };
+      b.nodes.ap = { ...b.nodes.ap, status: "ok", reason: null, view: {
+        weights: { "005930": 50, "000660": 50 }, labels: { "005930": "삼성전자", "000660": "SK하이닉스" }, effective_n: 1.03,
+        pairwise: [{ a: aid, b: "al_twin", rho: 0.97, duplicate: true }, { a: "A", b: "B", rho: null, reason: "분산이 0 이라 상관을 정의할 수 없습니다." }],
+        warnings: ["두 알파의 순위상관이 +0.97 입니다 — 사실상 같은 베팅입니다.", "1개 알파가 산출 불가로 제외됐습니다 — 재정규화하지 않았습니다."],
+        excluded: [{ alpha_id: "al_broken", reason: "필드 커버리지가 부족합니다." }], note: "거래비용 미반영", as_of_effective: "2026-08-14" } };
+    });
+    await run(page);
+    await detail(page, "av");
+    const ic = page.locator(".pg-side .pg-av-ic");
+    await expect(ic).toContainText("못 쟀어요");
+    await expect(ic).not.toHaveClass(/pg-neg/);
+    await detail(page, "ap");
+    const warns = page.locator(".pg-side .pg-ap-warn");
+    await expect(warns).toHaveCount(3);
+    for (const w of await warns.all()) expect(await w.locator("xpath=ancestor::details").count(), "경고가 접혔다").toBe(0);
+    await expect(page.locator(".pg-side .pg-ap-corr tr.dup")).toBeVisible();
+    await expect(page.locator(".pg-side .pg-ap-corr tbody tr").nth(1)).toContainText("정의할 수 없습니다");
+  } finally {
+    await page.request.delete(`${API}/alpha-registry/${aid}`);
+  }
+});
+
+test("국면 설명(BL4): 관측 창을 적고 · 전환 확률은 90% 신용구간과 함께 · 얇은 행은 글로 · Shapley 합이 확률과 맞는다", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push({ id: "rx", type: "regime_explain", params: { market: "kr" }, position: { x: 1000, y: 560 } });
+  await importText(page, "rx.json", JSON.stringify(doc));
+  const body = await run(page);
+  expect(body.nodes.rx.status, body.nodes.rx.reason).toBe("ok");
+  await detail(page, "rx");
+  await expect(page.locator(".pg-side .pg-regime-window")).toContainText("개월");
+  await expect(page.locator(".pg-side .pg-regime-matrix tbody tr")).toHaveCount(4);
+  await expect(page.locator(".pg-side .pg-regime-matrix .pg-ci").first()).toContainText("~");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("=");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("맞아요");
+
+  // 얇은 행은 숫자만 두지 않는다 · 효율성 잔차가 있으면 어긋난다고 말한다(맞는다고 적지 않는다).
+  await patchRun(page, (b) => {
+    const r = (b.nodes.rx.view as { result: { transitions: { rows: Record<string, unknown>[] }; drivers: Record<string, unknown> } }).result;
+    r.transitions.rows[0] = { ...r.transitions.rows[0], shrunk: true, reason: "관측 2개월" };
+    r.drivers.efficiency_residual = 0.02;
+  });
+  await run(page);
+  await detail(page, "rx");
+  await expect(page.locator(".pg-side .pg-regime-sparse")).toContainText("관측이 적어요");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("어긋나요");
+});
+
+test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트워크 · 재현 다섯 상태의 문장이 모두 다르다 · 재현은 기록하지 않는다", async ({ page }) => {
+  await openCanvas(page);
+  const runs = sheet(page, "records");
+  const openRuns = async () => {
+    await openSheet(page, "기록함");
+    await runs.getByRole("tab", { name: "연구 기록" }).click();
+  };
+  const stubList = async (fn: (route: import("@playwright/test").Route) => Promise<void>) => {
+    await page.unroute("**/api/v1/research-runs?**");
+    await page.route("**/api/v1/research-runs?**", async (route) => (route.request().method() === "GET" ? fn(route) : route.fallback()));
+  };
+  const texts: string[] = [];
+  await stubList((r) => r.fulfill({ json: { available: true, runs: [] } }));
+  await openRuns();
+  texts.push(await runs.locator('[role="tabpanel"]').innerText());
+  await expect(runs.locator(".pg-help")).toContainText("연구 기록이 없어요");
+  await page.keyboard.press("Escape");
+  await stubList((r) => r.fulfill({ json: { available: false, runs: [], reason: "연구 기록 저장소를 읽을 수 없어요 — 테이블이 없어요." } }));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await openRuns();
+  await expect(runs.locator(".pg-warn")).toContainText("저장소");
+  texts.push(await runs.locator('[role="tabpanel"]').innerText());
+  await page.keyboard.press("Escape");
+  await stubList((r) => r.abort());
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await openRuns();
+  await expect(runs.locator(".pg-field-err")).toContainText("기록이 없는 것과 달라요", { timeout: 20_000 });
+  texts.push(await runs.locator('[role="tabpanel"]').innerText());
+  expect(new Set(texts).size, texts.join(" | ")).toBe(3);
+  await page.keyboard.press("Escape");
+
+  // 재현 다섯 상태 — 서버 판정은 pytest 가 재고, 여기서는 문장이 서로 다른지를 잰다.
+  const RID = "rr_e2e_bl4";
+  await stubList((r) => r.fulfill({ json: { available: true, runs: [{ run_id: RID, kind: "allocation_analyze", name: "E2E", created_at: 1760000000, snapshot: { coverage: { start: "2023-01-02", end: "2026-08-03" } } }] } }));
+  const DONE = { reproducible: true, run_id: RID, kind: "allocation_analyze", basis: "recorded_as_of", as_of: "2026-08-03", estimated: false,
+    weights: { recorded: { "005930": 60 }, fresh: { "005930": 60 } }, verdict: "identical", max_delta_pp: 0, deltas: [] };
+  const CASES: (Record<string, unknown> | "abort")[] = [
+    DONE,
+    { ...DONE, verdict: "drifted", max_delta_pp: 7.5, deltas: [{ code: "005930", recorded: 60, fresh: 52.5, delta_pp: -7.5 }] },
+    { ...DONE, verdict: "incomparable", weights: { recorded: null, fresh: {} }, reason: "기록된 비중이 없어 대조할 것이 없습니다." },
+    { reproducible: false, run_id: RID, kind: "allocation_analyze", basis: "none", reason: "재현 좌표(as_of)가 없습니다." },
+    "abort",
+  ];
+  const bodies: string[] = [];
+  const said: string[] = [];
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await openRuns();
+  for (const c of CASES) {
+    await page.unroute("**/research-runs/*/reproduce");
+    await page.route("**/research-runs/*/reproduce", async (route) => {
+      bodies.push(route.request().postData() ?? "");
+      return c === "abort" ? route.abort() : route.fulfill({ json: c });
+    });
+    await runs.getByRole("button", { name: "다시 계산해 대조" }).click();
+    const out = runs.locator(`[data-run="${RID}"] .pg-rec-verdict`).last();
+    await expect(out).toBeVisible({ timeout: 20_000 });
+    const state = c === "abort" ? "network" : c.reproducible === false ? "refused" : String(c.verdict);
+    await expect(runs.locator(`[data-run="${RID}"] [data-verdict="${state}"]`)).toBeVisible();
+    said.push(await runs.locator(`[data-run="${RID}"] [data-verdict="${state}"]`).innerText());
+  }
+  expect(new Set(said).size, said.join(" | ")).toBe(5);
+  expect(said[1]).toContain("005930");                         // 무엇이 움직였는지 말한다
+  expect(said[0]).not.toContain("추정");
+  for (const b of bodies) expect(JSON.parse(b).record, "재현이 새 기록을 남기려 했다").toBe(false);
+});
+
+test("스냅샷(BL4): ?snapshot= 으로 연 캔버스는 새로고침해도 같은 스냅샷을 쓴다", async ({ page }) => {
+  const snap = await (await page.request.post(`${API}/regime-snapshots/from-current?market=kr`)).json();
+  expect(snap.recorded, snap.message).toBe(true);
+  await page.goto(`/allocation?snapshot=${snap.snapshot_id}`, { waitUntil: "domcontentloaded" });
+  await expect(node(page, "regime")).toBeVisible({ timeout: 30_000 });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(node(page, "regime")).toBeVisible({ timeout: 30_000 });
+  const body = await run(page);
+  expect(body.nodes.regime.status, body.nodes.regime.reason).toBe("ok");
+  expect((body.nodes.regime.view as { snapshot_id: string }).snapshot_id).toBe(snap.snapshot_id);
+});
+
+/**
+ * ★계산하지 못한 값을 0 으로 그리지 않는다★ — 렌더러 전수 변이 검사.
+ * 실제 응답의 수를 **전부 null 로 바꿔** 돌려주면, 수를 모르는 자리가 어떻게 그려지는지가 드러난다. 그때 `0.0`·`NaN`·
+ * `undefined`·`Infinity` 가 글로 보이면 그 렌더러는 모르는 것을 0 으로 채우는 것이다(차트 눈금 svg 는 제외).
+ */
+function nullNumbers(x: unknown): unknown {
+  if (typeof x === "number") return null;
+  // 서버가 글로 만든 소수(입력 표의 "0.041" 같은 칸)도 지운다 — 종목 코드("005930")는 소수점이 없어 남는다.
+  if (typeof x === "string" && /^[+−-]?\d+\.\d+%?$/.test(x.trim())) return null;
+  if (Array.isArray(x)) return x.map(nullNumbers);
+  if (x && typeof x === "object") return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, nullNumbers(v)]));
+  return x;
+}
+const FAKE_ZERO = /(^|[^\d.,])[+−-]?0\.0+(%|%p|배|원)?(?![\d])|NaN|Infinity|undefined/;
+
+test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그리지 않고 깨지지도 않는다 — 템플릿 여섯 + 지금 비중 · 수를 전부 지운 응답으로", async ({ page }) => {
+  test.setTimeout(600_000);
+  let lastError = "";
+  page.on("pageerror", (e) => { lastError = e.message; });
+  // 프로덕션 빌드의 렌더 오류는 pageerror 가 아니라 console.error 로 온다(오류 경계가 잡는다).
+  page.on("console", (m) => { if (m.type() === "error" && /TypeError|Error:/.test(m.text())) lastError = m.text().split("\n")[0]; });
+  await openCanvas(page);
+  const bad: string[] = [];
+  // 템플릿 여섯 + 지금 비중 + **입력·필수 파라미터가 없는 노드 전부**(카탈로그에서 고른다 — 렌더러 대부분을 덮는다).
+  const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const inputless = (catalog.nodes as { type: string; inputs: { required?: boolean }[]; params_schema?: { required?: string[] } }[])
+    .filter((c) => !c.inputs.some((i) => i.required !== false) && !(c.params_schema?.required ?? []).length)
+    .map((c) => c.type);
+  expect(inputless.length).toBeGreaterThan(30);
+  const keys = [...TEMPLATES.map((t) => t.key), "bl4", "inputless"];
+  const load = async (key: string) => {
+    await page.unroute("**/api/v1/allocation/graph/run**");
+    if (key === "inputless") {
+      const doc = await exportDoc(page);
+      doc.nodes = inputless.map((type, i) => ({ id: `n${i}`, type, params: {}, position: { x: (i % 6) * 260, y: Math.floor(i / 6) * 200 } }));
+      doc.edges = [];
+      await importText(page, "inputless.json", JSON.stringify(doc));
+    } else if (key === "bl4") {
+      await page.locator('.pg-template[data-template="core"]').click();
+      const doc = await exportDoc(page);
+      const uni = doc.nodes.find((n: { id: string }) => n.id === "universe");
+      uni.params = { ...uni.params, weights: { [uni.params.tickers[0]]: 100 } };
+      doc.nodes.push({ id: "cw", type: "current_weights", params: {}, position: { x: 700, y: 560 } });
+      doc.edges.push({ id: "c1", source: "universe", source_port: "universe", target: "cw", target_port: "universe" });
+      await importText(page, "bl4.json", JSON.stringify(doc));
+    } else {
+      await page.locator(`.pg-template[data-template="${key}"]`).click();
+    }
+    await patchRun(page, (b) => {
+      for (const r of Object.values(b.nodes)) if (r.view) r.view = nullNumbers(r.view) as Record<string, unknown>;
+    });
+    const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 180_000 });
+    await page.locator(".pg-run").click();
+    return (await (await resp).json()) as RunBody;
+  };
+  for (const key of keys) {
+    lastError = "";
+    const body = await load(key);
+    await page.waitForTimeout(500);
+    if (await page.getByText("Application error").count()) {
+      bad.push(`${key}: 결과가 오자 캔버스가 깨짐(노드 카드·이야기) — ${lastError}`);
+      await openCanvas(page);
+      continue;
+    }
+    for (const [id, r] of Object.entries(body.nodes)) {
+      if (r.status !== "ok" || !r.view) continue;
+      lastError = "";
+      // 이야기 탭의 번호로 고른다 — 템플릿 노드가 팔레트 뒤에 놓여도 캔버스 좌표에 기대지 않는다.
+      await tab(page, "story");
+      await page.locator(`.pg-step[data-node-id="${id}"] .pg-step-num`).click({ timeout: 15_000 });
+      await tab(page, "detail");
+      if (await page.getByText("Application error").count()) {
+        bad.push(`${key}/${id}(${String(r.type ?? "")}): 깨짐 — ${lastError}`);
+        await openCanvas(page);
+        await load(key);
+        continue;
+      }
+      const text = await page.locator(".pg-side .pg-result").evaluate((el) => {
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+          acceptNode: (n) => ((n.parentElement?.closest("svg") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)) });
+        const out: string[] = [];
+        for (let n = w.nextNode(); n; n = w.nextNode()) out.push(n.textContent ?? "");
+        return out.join(" ");
+      });
+      const m = FAKE_ZERO.exec(text);
+      if (m) bad.push(`${key}/${id}(${String(r.type ?? "")}): “${text.slice(Math.max(0, m.index - 30), m.index + 30)}”`);
+    }
+  }
+  expect(bad, bad.join("\n")).toEqual([]);
+});
