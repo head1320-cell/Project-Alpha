@@ -19879,3 +19879,36 @@ mock 의 T10Y2Y 계열(+1.6%p)과 곡선의 10Y−2Y(−127bp)가 서로 다른 
 **게이트 후속(BL3 W3)** — 넓은 E2E 273/273 · ruff 통과 · 전체 pytest 7405 passed / 10 skipped. 게이트 묶음에 `compan|valuation`
 패턴을 더했지만 그 이름의 E2E 스펙은 없다 — `/company` 화면의 라벨 변경(W3-0)은 E2E 로 따로 확인하지 않았고, 백엔드 테스트
 (`test_rf_beta_source_labels.py` · `test_company_analytics.py` · `test_company_snapshot_builder.py`)가 지킨다.
+
+### BL3 W3b-C1 · 기업 분석 현업 모델 넷 — EVA·가치 동인 · 가치의 층(Greenwald) · 배수·PEG·정당 배수 · 영업 동인 MC
+
+**무엇을** — 사용자 요청("기업노드에 현업 모델 추가 · 더 있으면 조사해 추가") 중 데이터로 도는 넷. 엔진 `src/engine/valuation/practice_models.py`
+(순수 함수) · 라우트 `src/api/company_model_routes.py`(`POST /api/v1/company/{code}/models/{eva|value-layers|multiples|driver-mc}`,
+`app_factory` 등록) · 노드 `allocation_graph_nodes_company_models.py`(W3 의 종목·가격·계보 도우미 재사용) · 프런트 `CompanyModelResults.tsx`.
+사용자 결정: 3-Floor = Greenwald 3층(자산 → 수익력 EPV → 성장) · 조사로 더한 모델 넷(EPV · 정당 PBR/PER · 가치 동인 공식 · 지주사 NAV —
+NAV 는 C2 SOTP 안) · 몬테카를로는 **영업 동인**(기존 '가치 분포'는 할인율 가정 MC).
+- EVA = NOPAT − WACC×투하자본 · 투하자본 ≈ 총자산 − 유동부채, **유동부채를 모르면 총자산**(EVA 를 낮게 잡는 쪽 — 행마다 방법 이름) · 초과이익이
+  N 년에 0 으로 줄어든다는 가정 · 가치 동인 = NOPAT₁(1 − g/RONIC)/(WACC − g), RONIC 을 비우면 최근 ROIC(근사 라벨).
+- 가치의 층 — 자산층(장부 자본, 재생산원가 근사) · EPV(가용 연도 평균 마진 × 최근 매출 × (1−t)/WACC − 총부채) · 성장까지(샌드박스 통합값 그대로)
+  · 층별 확률 가중 — ★합이 1 이 아니면 계산하지 않는다(나눠 맞추지 않는다)★ · 가중을 둔 층을 못 재면 0 으로 채우지 않는다.
+- 배수 — 성장률 × PEG 격자의 암시 주가 · 정당 PBR=(ROE−g)/(Ke−g) · 정당 PER=배당성향(1+g)/(Ke−g) · 피어 PER 중앙값 · EPS≤0 이면 배수를 쓰지 않는다
+  · EPS 성장률을 모르면 '미상'(0 이 아니다).
+- 영업 동인 MC — 중심은 재무 이력(성장 CAGR·평균 마진·재투자율), 폭은 가정 · 재투자율 = (NOPAT − (영업CF − CAPEX))/매출(감가상각을 영업CF 가
+  품는다는 근사 — 처음엔 총 CAPEX 를 썼다가 mock 에서 모든 경로가 음수가 되어 바꿨다) · 시드 고정 재현 · 매출이 사라지는 경로는 버리고 센다.
+- ★WACC 는 DCF 엔진의 식★ — `dcf_wacc` 를 따로 두되 `compute_dcf` 가 보고하는 `wacc_pct` 와 네 가지 자본구조에서 대조하는 드리프트 테스트로 묶었다
+  (기존 모델 코드는 건드리지 않았다). 저장소의 두 번째 WACC(재무 심층 카드, Kd=Rf+2%p)와의 불일치는 설명에 적고 고치지 않았다.
+- ★운영에서 DART 이력의 합성 폴백 연도는 버리고 센다★ — `DARTClient.get_financial_statement` 는 실패하면 mock 게이트와 무관하게 합성 재무를
+  준다(`is_mock=True`). `load_statement` 는 이것을 막지만 이력 경로(`get_financial_history`)에는 막는 곳이 없었다. 새 라우트는 막는다.
+  ★기존 `/api/v1/valuation/financial`(기업 화면 재무 탭)은 여전히 막지 않는다★ — 이 웨이브 밖의 결함으로 기록만 한다.
+
+**검증** — `tests/test_practice_models.py` 25(손으로 푼 수 · WACC 드리프트 · 가드마다 짝) · `tests/test_allocation_graph_bl3w3b.py` 23(골든 넷 ·
+모르는 코드 · 가격 짝 · 합성 이력 운영에서 버림/개발에서 씀 · RONIC 근사 라벨 짝 · 미상 성장률 · 연습용 계보 짝) · 그래프 계약 420 ·
+변이 백엔드 20/20(처음 생존 1 — 결과의 `is_mock` 이 이미 참이라 'mock 허용이면 연습용' 절반이 시험되지 않았다 → 짝 테스트) ·
+프런트 4/4(1 은 타입 좁힘으로 빌드 불가 — 같은 선을 다른 변이가 덮음) · E2E 1(라이트/다크 AA) · 첫 로드 121 kB 불변.
+
+**스크린샷 비평으로 고친 것** — 입력 표에 투하자본이 15자리 원 단위로 · EPS 성장률 25.42 에 % 가 없었다 → 입력에 `unit` 을 싣는다.
+
+**하지 않은 것** — C2(시나리오 가중 · 의사결정 나무 · SOTP·지주사 NAV · 실물옵션) · 기존 RIM·DCF·DDM·통합 가중치 · WACC 두 벌 통일 · `/company` 화면
+통합(라우트만) · 감가상각·현금·이자부채 수집(근사로 대신하고 라벨).
+
+**게이트(커밋 시점)** — 위 표적 검사까지. 넓은 E2E·전체 pytest 는 C2 뒤에 한 번 — 결과는 후속 기록.

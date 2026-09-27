@@ -29,6 +29,7 @@ import {
   CompanyValuationResult, FinancialDeepResult, MacroSensitivityResult, ReverseDcfResult, RiskDeepResult, ThesisCheckResult,
   ValuationDistributionResult,
 } from "./CompanyResults";
+import { DriverMcResult, EvaResult, MultiplesResult, ValueLayersResult } from "./CompanyModelResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -219,6 +220,10 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   risk_deep: ({ v }) => <RiskDeepResult v={v} />,
   company_macro_sensitivity: ({ v }) => <MacroSensitivityResult v={v} />,
   thesis_check: ({ v }) => <ThesisCheckResult v={v} />,
+  company_eva: ({ v }) => <EvaResult v={v} />,
+  company_value_layers: ({ v }) => <ValueLayersResult v={v} />,
+  company_multiples: ({ v }) => <MultiplesResult v={v} />,
+  company_driver_mc: ({ v }) => <DriverMcResult v={v} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />

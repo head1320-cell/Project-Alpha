@@ -1294,3 +1294,60 @@ test("기업 노드(BL3 W3): 일곱 노드가 돌고 풋볼필드·분포·표�
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });
+
+test("기업 분석 모델(BL3 W3b-C1): EVA·가치의 층·배수 PEG·영업 MC · 입력 표 · 가중 합 틀리면 사유 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const add: [string, string, Record<string, unknown>][] = [
+    ["ev", "company_eva", { code: "005930" }], ["vl", "company_value_layers", { code: "005930" }],
+    ["mu", "company_multiples", { code: "005930", peers: false }], ["mc", "company_driver_mc", { code: "005930", n: 500 }],
+    ["bw", "company_value_layers", { code: "005930", w_asset: 0.5, w_epv: 0.5, w_full: 0.5 }],
+  ];
+  add.forEach(([id, type, params], i) => doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 2) * 300, y: Math.floor(i / 2) * 260 } }));
+  await importText(page, "bl3w3b.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["ev", "vl", "mu", "mc"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    expect(body.nodes[id].lineage.practice, id).toBe(true);
+  }
+  // ★가중을 나눠 맞추지 않는다★
+  expect(body.nodes.bw.status).toBe("failed");
+  expect(body.nodes.bw.reason).toContain("합");
+
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  await pick("vl");
+  await tab(page, "detail");
+  // 가치의 층: 잰 층마다 선 하나 + 현재가 선 하나 · 입력 표의 칩
+  const measured = (body.nodes.vl.view.result.layers as { key: string; per_share: number | null }[])
+    .filter((l) => l.key !== "growth" && l.per_share !== null).length + (body.nodes.vl.view.result.full_per_share !== null ? 1 : 0);
+  await expect(page.locator(".pg-side .pg-floors-line")).toHaveCount(measured);
+  await expect(page.locator(".pg-side .pg-floors-price")).toHaveCount(1);
+  await expect(page.locator(".pg-side .pg-inputs .pg-tag", { hasText: "근사" }).first()).toBeVisible();
+  await pick("ev");
+  const evYears = (body.nodes.ev.view.result.years as { available: boolean }[]).filter((y) => y.available).length;
+  await expect(page.locator(".pg-side .pg-eva tbody tr")).toHaveCount(evYears);
+  await expect(page.locator(".pg-side .pg-kv").first()).toContainText("성장이 가치를");
+  await pick("mu");
+  await expect(page.locator(".pg-side .pg-peg tbody tr")).toHaveCount(5);
+  await expect(page.locator(".pg-side .pg-peg .pg-sens-base")).toHaveCount(1);
+  await pick("mc");
+  await expect(page.locator(".pg-side .pg-hist-bar")).toHaveCount(20);
+  await expect(page.locator(".pg-side .pg-inputs .pg-tag", { hasText: "관측" }).first()).toBeVisible();
+
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["vl", "mc", "mu"]) {
+      await pick(id);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(10);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});

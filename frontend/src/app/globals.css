@@ -8013,5 +8013,28 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-assume .pg-tag { white-space: normal; line-height: 1.35; }
 .pg-claim { margin: 0 0 8px; padding: 6px 10px; border-left: 3px solid var(--pg-line); font-size: 13.5px; color: var(--pg-body); }
 .pg-list { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--pg-ink); }
+
+/* BL3 W3b · 기업 분석 모델 — '가치의 층' 하나만 크게 */
+.pg-floors { display: block; width: 100%; max-width: 360px; height: auto; margin: 2px 0 10px; }
+.pg-floors-well { fill: var(--pg-soft); }
+.pg-floors-fill { fill: var(--pg-blue-soft); }
+.pg-floors-line { stroke: var(--pg-blue); stroke-width: 2; }
+.pg-floors-price { stroke: var(--pg-assume); stroke-width: 2.5; }
+.pg-floors-leader { stroke: var(--pg-line); stroke-width: 1; fill: none; }
+.pg-floors-base { stroke: var(--pg-mute); stroke-width: 1; }
+.pg-floors-t { font-size: 11.5px; fill: var(--pg-body); }
+.pg-floors-t--price { fill: var(--pg-ink); font-weight: 700; }
+.pg-floors-zero { font-size: 10.5px; fill: var(--pg-mute); }
+.pg-inputs, .pg-eva, .pg-peg, .pg-just { margin-top: 10px; }
+.pg-inputs caption, .pg-peg caption, .pg-just caption { text-align: left; font-size: 12px; font-weight: 600; color: var(--pg-mute); padding-bottom: 3px; }
+.pg-inputs td, .pg-eva td, .pg-eva th, .pg-just td { padding: 3px 6px 3px 0; }
+.pg-eva th { font-weight: 600; color: var(--pg-mute); text-align: left; }
+.pg-eva .pg-td-bar { width: 38%; }
+.pg-peg .pg-strong { font-weight: 700; color: var(--pg-ink); }
+.pg-hist { display: block; width: 100%; max-width: 360px; height: auto; margin: 2px 0 4px; }
+.pg-hist-bar { fill: var(--pg-blue-soft); }
+.pg-hist-bar--mid { fill: var(--pg-blue); }
+.pg-hist-med { stroke: var(--pg-ink); stroke-width: 1.5; }
+.pg-hist-price { stroke: var(--pg-assume); stroke-width: 2.5; }
 .pg-save-follow { margin-top: 8px; }
 .pg-cmp-warn { margin-bottom: 10px; }

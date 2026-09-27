@@ -469,3 +469,6 @@ _macro_w2.register(REGISTRY)
 from src.api import allocation_graph_nodes_company as _company  # noqa: E402
 
 _company.register(REGISTRY)
+from src.api import allocation_graph_nodes_company_models as _company_models  # noqa: E402
+
+_company_models.register(REGISTRY)
