@@ -7,9 +7,11 @@
  * `LEGACY_SCREENS`(BL4 — 마법사는 지웠고 옛 주소는 캔버스로 온다). 맨 아래 "빠른 시작" 은 템플릿.
  * 클릭하면 캔버스 가운데에, 끌면 놓은 자리에 놓인다.
  */
-import { useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
-import { TEMPLATES, type NodeCatalogEntry, type WorkflowStage } from "@/entities/portfolio-graph";
+import { useEffect, useState } from "react";
+import { ChevronDown, Download, Search, Trash2, Upload } from "lucide-react";
+import { parseBlock, TEMPLATES, type NodeCatalogEntry, type WorkflowStage } from "@/entities/portfolio-graph";
+import { downloadBlock } from "./GroupFrame";
+import { usePortfolioGraph } from "./store";
 import { legacyScreensOf } from "@/entities/portfolio-graph/legacyScreens";
 import { STAGE_VAR } from "./GraphNode";
 
@@ -74,6 +76,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
         );
       })}
       {needle && !catalog.some(match) && <p className="pg-palette-soon">‘{q}’에 맞는 노드가 없어요.</p>}
+      <MyBlocks />
       <section className="pg-quickstart" aria-label="빠른 시작">
         <h4 className="pg-quickstart-h">빠른 시작</h4>
         {TEMPLATES.map((t) => (
@@ -84,5 +87,57 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
         ))}
       </section>
     </aside>
+  );
+}
+
+/**
+ * 내 블록 (BM C2 · ComfyUI 블루프린트) — 상자를 저장해 두고 다시 넣는다. ★이 브라우저에만★ 있다(편의 — 신뢰 저장은 파일).
+ * 저장소를 못 쓰면 "없음" 이 아니라 "저장할 수 없음" 이라 말하고, 파일 불러오기는 그대로 된다.
+ */
+function MyBlocks() {
+  const blocks = usePortfolioGraph((s) => s.blocks);
+  const available = usePortfolioGraph((s) => s.blocksAvailable);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => { usePortfolioGraph.getState().loadBlocks(); }, []);
+  const insert = (i: number) => {
+    const st = usePortfolioGraph.getState();
+    st.setNote(st.insertBlock(st.blocks[i]));
+  };
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    const r = parseBlock(await f.text());
+    if (!r.block) { setProblem(`「${f.name}」을 넣지 않았어요 — ${r.problem} 캔버스는 그대로예요.`); return; }
+    setProblem(null);
+    const st = usePortfolioGraph.getState();
+    st.setNote(st.insertBlock(r.block));
+  };
+  return (
+    <section className="pg-blocks" aria-label="내 블록">
+      <h4 className="pg-blocks-h">내 블록 <span className="pg-blocks-where">이 브라우저에만</span></h4>
+      {!available && <p className="pg-blocks-note">이 브라우저에 블록을 저장할 수 없어요 — 상자의 ‘파일로 받기’를 쓰고, 파일로 불러와요.</p>}
+      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없어요. 상자 머리의 책갈피 버튼으로 전략이나 묶음을 넣어 두세요.</p>}
+      {blocks.map((b, i) => (
+        <div key={`${b.label}-${i}`} className="pg-block" data-block={b.label}>
+          <button type="button" className="pg-block-add" onClick={() => insert(i)}
+                  title={b.kind === "strategy" ? "새 전략 띠로 넣고 포트폴리오에 이어요" : "묶음으로 넣어요"}>
+            <b>{b.label}</b>
+            <span>{b.kind === "strategy" ? "전략" : "묶음"} · 노드 {b.nodes.length}개</span>
+          </button>
+          <button type="button" className="pg-block-x" aria-label={`${b.label} 파일로 받기`} onClick={() => downloadBlock(b)}>
+            <Download size={13} aria-hidden="true" />
+          </button>
+          <button type="button" className="pg-block-x" aria-label={`${b.label} 지우기`}
+                  onClick={() => usePortfolioGraph.getState().removeBlock(i)}>
+            <Trash2 size={13} aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+      <label className="pg-block-import">
+        <Upload size={13} aria-hidden="true" /> 블록 파일 불러오기
+        <input type="file" accept=".json,application/json" className="pg-block-input"
+               onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ""; }} />
+      </label>
+      {problem && <p className="pg-blocks-note pg-blocks-note--err" role="alert">{problem}</p>}
+    </section>
   );
 }

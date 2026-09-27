@@ -122,7 +122,14 @@ export function parseFile(text: string): ParseResult {
       }
       const members = (g.members as unknown[]).filter((m): m is string => typeof m === "string" && seen.has(m));
       if (!members.length) { problems.push(`묶음 "${String(g.label ?? g.id)}" 에 남은 노드가 없어 건너뛰었어요.`); continue; }
-      groups.push({ id: g.id, label: typeof g.label === "string" ? g.label : g.id, members, collapsed: g.collapsed === true });
+      const strategy = g.kind === "strategy";
+      groups.push({ id: g.id, label: typeof g.label === "string" ? g.label : g.id, members, collapsed: g.collapsed === true,
+                    // 전략 상자(BM C2) — 선택 칸. 모르는 값은 버리고 그냥 묶음으로 읽는다(옛 문서는 그대로).
+                    ...(strategy ? {
+                      kind: "strategy" as const,
+                      color: Number.isInteger(g.color) && (g.color as number) >= 0 ? (g.color as number) % 6 : 0,
+                      output: typeof g.output === "string" && members.includes(g.output) ? g.output : null,
+                    } : {}) });
     }
   }
   const meta = isObj(raw.meta) ? {

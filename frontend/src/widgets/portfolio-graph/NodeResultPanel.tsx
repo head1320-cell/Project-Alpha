@@ -12,7 +12,7 @@ import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import type { NodeRunResult } from "@/entities/portfolio-graph";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";
-import { NeutralizeResult, ScoresResult, ScoresToWeightsResult, ScreenerResult, SleeveResult } from "./SignalResults";
+import { NeutralizeResult, PortfolioCombineResult, ScoresResult, ScoresToWeightsResult, ScreenerResult, SleeveResult } from "./SignalResults";
 import { OverlayResult, RegimeResult, SimulationResult, TimingResult } from "./MacroResults";
 import { JournalResult, OrdersResult, TargetResult } from "./ActResults";
 import { AttributionResult, CompanyViewsResult, StrategyBacktestResult, ValuationScoresResult } from "./StrategyResults";
@@ -308,6 +308,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   scores_to_weights: ({ v }) => <ScoresToWeightsResult v={v} />,
   neutralize: ({ v }) => <NeutralizeResult v={v} />,
   sleeve_combine: ({ v }) => <SleeveResult v={v} />,
+  portfolio_combine: ({ v }) => <PortfolioCombineResult v={v} />,
   regime: ({ v }) => <RegimeResult v={v} />,
   timing_signal: ({ v }) => <TimingResult v={v} />,
   exposure_overlay: ({ v }) => <OverlayResult v={v} />,

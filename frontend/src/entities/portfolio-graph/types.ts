@@ -30,6 +30,12 @@ export interface GraphGroup {
   label: string;
   members: string[];
   collapsed?: boolean;
+  /** 전략 상자(BM C2) — 비중을 내는 한 흐름. 없으면 그냥 묶음. 계산에는 끼지 않는다(화면 정보). */
+  kind?: "group" | "strategy";
+  /** 전략 띠 색(0~5). */
+  color?: number;
+  /** 전략의 비중을 내는 노드 id — 포트폴리오 노드에 잇는 출력. */
+  output?: string | null;
 }
 
 export interface GraphDoc {

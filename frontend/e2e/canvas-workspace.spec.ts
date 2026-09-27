@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { contrastAudit, type AuditResult } from "./helpers";
 import { fmtElapsed, fmtGlance } from "../src/entities/portfolio-graph/glance";
 
@@ -247,6 +248,286 @@ for (const scheme of ["light", "dark"] as const) {
     await node(page, "risk").locator(".pg-cause-btn").click();
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-canvas"));
     expect(audit.checked).toBeGreaterThan(20);
+    expect(audit.low, `${scheme} AA 미달`).toEqual([]);
+    if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// C2 · 여러 전략 → 한 포트폴리오 — 거는 것:
+//  · 전략 추가: 지금 흐름을 첫 전략으로 묶고 새 전략 띠를 넣어 '전략 합치기'에 잇는다 · 이름은 겹치지 않는다(짝)
+//  · 포트폴리오 노드의 전략 이름 = 전략 상자 이름(이름을 바꾸면 파라미터도) · 계산하면 서버의 전략별 몫이 표로
+//  · 전략 지도 정리: 단계 레인 + 포트폴리오 레인, 전략은 띠마다 아래로 · 접으면 대리 포트, 펼치면 사라짐 · 들어가기/나가기
+//  · 상태 필터(서버 결과 그대로 셈) · 한 노드를 고르면 닿지 않은 선은 옅게
+//  · 내 블록: 이 브라우저에 저장 → 새로고침해도 남음 → 넣기 · 파일 받기/불러오기 · 다른 포맷 거부 · 저장소가 막히면 파일만(말함)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type Doc = { nodes: { id: string; type: string; params: Record<string, unknown>; position: { x: number; y: number } }[];
+             edges: { source: string; target: string; source_port: string; target_port: string }[];
+             groups?: { id: string; label: string; members: string[]; kind?: string; output?: string | null; color?: number }[] };
+const wip = (page: Page) => page.evaluate(() => JSON.parse(sessionStorage.getItem("alpha_pg_wip") ?? "{}")) as Promise<Doc>;
+
+/** 헤드리스 Chromium 은 blob 내려받기의 이름을 "download" 로 보고한다(그래프 내보내기도 같다) — 페이지가 붙인 이름을 직접 적어 둔다. */
+async function recordDownloadNames(page: Page) {
+  await page.addInitScript(() => {
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      const w = window as unknown as { __dlNames?: string[] };
+      if (this.download) (w.__dlNames ??= []).push(this.download);
+      return click.call(this);
+    };
+  });
+}
+const lastDownloadName = (page: Page) =>
+  page.evaluate(() => ((window as unknown as { __dlNames?: string[] }).__dlNames ?? []).slice(-1)[0] ?? "");
+
+async function addStrategy(page: Page, source: string) {
+  await page.locator(".pg-strat-add").click();
+  await page.locator(`.pg-strat-item[data-source="${source}"]`).click();
+  await expect(page.locator(".pg-note")).toBeVisible();
+}
+
+test("전략 추가(BM C2): 지금 흐름이 첫 전략이 되고 새 전략이 띠로 들어와 '전략 합치기'에 이어진다 · 계산하면 서버의 전략별 몫", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  await expect(page.locator(".pg-group--strategy")).toHaveCount(2);
+  let doc = await wip(page);
+  const strategies = (doc.groups ?? []).filter((g) => g.kind === "strategy");
+  const pf = doc.nodes.find((n) => n.type === "portfolio_combine")!;
+  expect(pf, "포트폴리오 노드가 생겼다").toBeTruthy();
+  const into = doc.edges.filter((e) => e.target === pf.id);
+  expect(into.map((e) => e.source).sort()).toEqual(strategies.map((g) => g.output).sort());
+  const labels = pf.params.labels as Record<string, string>;
+  expect(into.map((e) => labels[e.target_port]).sort()).toEqual(strategies.map((g) => g.label).sort());
+
+  // 짝 — 같은 전략을 또 넣으면 이름이 겹치지 않는다.
+  await addStrategy(page, "tpl:stress");
+  doc = await wip(page);
+  const names = (doc.groups ?? []).filter((g) => g.kind === "strategy").map((g) => g.label);
+  expect(new Set(names).size).toBe(names.length);
+  expect(names).toContain("충격 점검 2");
+
+  const body = await run(page);
+  const r = body.nodes[pf.id] as NodeRes & { view: { result: { sleeve_allocation: Record<string, number> } } };
+  expect(r.status, String(r.reason)).toBe("ok");
+  expect(Object.keys(r.view.result.sleeve_allocation).sort()).toEqual([...names].sort());
+  await page.locator(`.pg-step[data-node-id="${pf.id}"] .pg-step-num`).click();
+  await page.locator('.pg-tab[data-tab="detail"]').click();
+  await expect(page.locator(".pg-strat-table tbody tr")).toHaveCount(3);
+  for (const [label, share] of Object.entries(r.view.result.sleeve_allocation)) {
+    const row = page.locator(".pg-strat-table tbody tr", { hasText: label });
+    await expect(row.locator("td").nth(1)).toHaveText(`${share.toFixed(1)}%`);
+  }
+});
+
+test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바뀌고 결과는 낡음 · 비중 없는 노드는 전략으로 못 묶음(사유)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  await run(page);
+  const label = page.locator(".pg-group--strategy .pg-group-label").last();
+  await label.fill("모멘텀");
+  const doc = await wip(page);
+  const pf = doc.nodes.find((n) => n.type === "portfolio_combine")!;
+  expect(Object.values(pf.params.labels as Record<string, string>)).toContain("모멘텀");
+  await expect(page.locator(".pg-summary--stale")).toBeVisible();
+
+  // 짝 — 비중을 내지 않는 노드만 골라 전략으로 묶으면 묶지 않고 사유를 말한다.
+  await node(page, "s2_universe").click();
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없어요");
+});
+
+test("전략 지도(BM C2): 자동 정리 = 단계 레인 + 포트폴리오 레인 · 전략은 띠마다 아래로 · 포트폴리오는 맨 오른쪽", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  await page.locator('button[aria-label="자동 정리"]').click();
+  await expect(page.locator(".pg-lane--portfolio")).toHaveCount(1);
+  const stages = (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()).stages as unknown[];
+  await expect(page.locator(".pg-lane")).toHaveCount(stages.length + 1);
+  const doc = await wip(page);
+  const [a, b] = (doc.groups ?? []).filter((g) => g.kind === "strategy");
+  const y = (id: string) => doc.nodes.find((n) => n.id === id)!.position.y;
+  const x = (id: string) => doc.nodes.find((n) => n.id === id)!.position.x;
+  expect(Math.min(...b.members.map(y)), "두 번째 전략 띠는 첫 띠 아래").toBeGreaterThan(Math.max(...a.members.map(y)));
+  const pf = doc.nodes.find((n) => n.type === "portfolio_combine")!;
+  expect(pf.position.x).toBeGreaterThan(Math.max(...[...a.members, ...b.members].map(x)));
+  // 짝 — 전략이 없으면 예전 정리(레인 없음).
+  await page.locator('.pg-template[data-template="core"]').click();
+  await page.locator('button[aria-label="자동 정리"]').click();
+  await expect(page.locator(".pg-lane")).toHaveCount(0);
+});
+
+test("접으면 대리 포트 · 펼치면 사라짐 · 들어가기는 그 전략만 밝히고 Esc 로 나옴(BM C2)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const frame = page.locator(".pg-group--strategy").last();
+  const gid = await frame.getAttribute("data-group-id");
+  const doc = await wip(page);
+  const members = doc.groups!.find((g) => g.id === gid)!.members;
+  await frame.locator(".pg-group-toggle").click();
+  for (const m of members.slice(0, 3)) await expect(node(page, m)).toBeHidden();
+  await expect(frame.locator(".pg-proxy--out")).toHaveCount(1);             // 비중 출력 하나가 포트폴리오로
+  // 선은 상자의 대리 포트에서 포트폴리오로 이어져 보인다.
+  await expect(page.locator(`.react-flow__handle[data-nodeid="frame:${gid}"].source`)).toHaveCount(1);
+  await frame.locator(".pg-group-toggle").click();
+  await expect(frame.locator(".pg-proxy")).toHaveCount(0);
+  await expect(node(page, members[0])).toBeVisible();
+
+  await frame.locator(".pg-group-dive").click();
+  await expect(page.locator(".pg-crumb")).toContainText("충격 점검");
+  const other = doc.groups!.find((g) => g.kind === "strategy" && g.id !== gid)!;
+  await expect(rfNode(page, other.members[0])).toHaveClass(/pg-dim/);
+  await expect(rfNode(page, members[0])).not.toHaveClass(/pg-dim/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pg-crumb")).toHaveCount(0);
+  await expect(page.locator(".react-flow__node.pg-dim")).toHaveCount(0);
+});
+
+test("상태 필터(BM C2): 칩 수 = 서버 결과로 센 수 · 켜면 맞지 않는 노드는 흐림 · 끄면 원래대로(짝) · 한 노드를 고르면 닿지 않은 선은 옅게", async ({ page }) => {
+  await openCanvas(page);
+  await failOneTicker(page);
+  const body = await run(page);
+  const failed = Object.entries(body.nodes).filter(([, r]) => r.status === "failed").map(([id]) => id);
+  const blocked = Object.entries(body.nodes).filter(([, r]) => r.status === "blocked").map(([id]) => id);
+  await expect(page.locator(".pg-filter")).toHaveCount(0);                  // 접혀 있다 — 노드를 가리지 않는다
+  await page.locator(".pg-filters-toggle").click();
+  await expect(page.locator('.pg-filter[data-filter="failed"] .pg-filter-n')).toHaveText(String(failed.length));
+  await expect(page.locator('.pg-filter[data-filter="blocked"] .pg-filter-n')).toHaveText(String(blocked.length));
+  await page.locator('.pg-filter[data-filter="failed"]').click();
+  for (const id of failed) await expect(rfNode(page, id)).not.toHaveClass(/pg-dim/);
+  for (const id of blocked) await expect(rfNode(page, id)).toHaveClass(/pg-dim/);
+  await page.locator('.pg-filter[data-filter="failed"]').click();
+  await expect(page.locator(".react-flow__node.pg-dim")).toHaveCount(0);
+
+  await node(page, "views").click();
+  const faint = await page.locator(".react-flow__edge").evaluateAll((es) => es.map((e) => ({
+    id: e.getAttribute("data-testid") ?? "", faint: (e.getAttribute("class") ?? "").includes("pg-edge--faint") })));
+  for (const e of faint) expect(e.faint, e.id).toBe(!e.id.includes("views"));
+});
+
+test("내 블록(BM C2): 저장 → 새로고침해도 남음('이 브라우저에만') → 넣으면 새 전략 띠 · 파일 받기·불러오기 · 다른 포맷은 거부", async ({ page }) => {
+  await recordDownloadNames(page);
+  await page.addInitScript(() => { try { if (!sessionStorage.getItem("__kept")) { localStorage.removeItem("alpha_pg_blocks"); sessionStorage.setItem("__kept", "1"); } } catch { /* noop */ } });
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const frame = page.locator(".pg-group--strategy").last();
+  await frame.locator(".pg-group-label").fill("충격 블록");
+  await frame.locator(".pg-group-save").click();
+  await expect(page.locator(".pg-note")).toContainText("이 브라우저에만");
+  await expect(page.locator(".pg-blocks-where")).toHaveText("이 브라우저에만");
+  await page.reload();
+  await expect(page.locator('.pg-block[data-block="충격 블록"]')).toBeVisible({ timeout: 30_000 });
+
+  const before = (await wip(page)).groups?.filter((g) => g.kind === "strategy").length ?? 0;
+  await page.locator('.pg-block[data-block="충격 블록"] .pg-block-add').click();
+  const after = await wip(page);
+  expect(after.groups!.filter((g) => g.kind === "strategy").length).toBe(before + 1);
+  const pf = after.nodes.find((n) => n.type === "portfolio_combine")!;
+  // 같은 이름의 전략이 이미 있으니 겹치지 않게 번호가 붙는다.
+  expect(Object.values(pf.params.labels as Record<string, string>)).toContain("충격 블록 2");
+
+  // 파일 받기 → 형식 그대로
+  const dl = page.waitForEvent("download");
+  await page.locator('.pg-block[data-block="충격 블록"] .pg-block-x').first().click();
+  const d = await dl;
+  expect(await lastDownloadName(page)).toMatch(/^충격_블록\.pgblock\.json$/);
+  const file = JSON.parse(readFileSync((await d.path())!, "utf-8"));
+  expect(file.format).toBe("project-alpha.pgblock");
+  expect(file.kind).toBe("strategy");
+  // 다른 포맷은 넣지 않는다 — 캔버스 그대로.
+  const n0 = (await wip(page)).nodes.length;
+  await page.locator(".pg-block-input").setInputFiles({ name: "graph.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, nodes: [], edges: [] })) });
+  await expect(page.locator(".pg-blocks-note--err")).toContainText("블록 파일이 아니에요");
+  expect((await wip(page)).nodes.length).toBe(n0);
+  // 받은 블록 파일은 다시 넣을 수 있다(왕복).
+  await page.locator(".pg-block-input").setInputFiles({ name: "충격_블록.pgblock.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(file)) });
+  expect((await wip(page)).nodes.length).toBeGreaterThan(n0);
+});
+
+test("내 블록: 이 브라우저에 저장할 수 없으면 '없음' 이 아니라 '저장할 수 없음' 이라 말하고, 파일로는 받는다(BM C2)", async ({ page }) => {
+  await recordDownloadNames(page);
+  await page.addInitScript(() => {
+    // 이 브라우저의 블록 저장소만 막는다(세션 저장소의 작업 중 문서는 그대로).
+    const ls = window.localStorage;
+    const set = Storage.prototype.setItem;
+    const get = Storage.prototype.getItem;
+    Storage.prototype.setItem = function (k: string, v: string) {
+      if (this === ls && k === "alpha_pg_blocks") throw new Error("blocked");
+      return set.call(this, k, v);
+    };
+    Storage.prototype.getItem = function (k: string) {
+      if (this === ls && k === "alpha_pg_blocks") throw new Error("blocked");
+      return get.call(this, k);
+    };
+  });
+  await openCanvas(page);
+  await expect(page.locator(".pg-blocks-note")).toContainText("저장할 수 없어요");
+  await addStrategy(page, "tpl:stress");
+  const dl = page.waitForEvent("download");
+  await page.locator(".pg-group--strategy .pg-group-file").last().click();
+  await dl;
+  expect(await lastDownloadName(page)).toMatch(/\.pgblock\.json$/);
+  await expect(page.locator(".pg-note")).toContainText("파일로 받아 두세요");
+});
+
+test("옛 문서(전략 칸 없는 묶음)는 그대로 읽히고 · 전략 문서는 내보내기 → 불러오기 왕복에서 전략 칸이 그대로(BM C2)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const dl = page.waitForEvent("download");
+  await page.locator(".pg-export").click();
+  const doc = JSON.parse(readFileSync((await (await dl).path())!, "utf-8"));
+  const strat = doc.groups.filter((g: { kind?: string }) => g.kind === "strategy");
+  expect(strat.length).toBe(2);
+  await page.locator(".pg-import-input").setInputFiles({ name: "s.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(doc)) });
+  await expect(page.locator(".pg-group--strategy")).toHaveCount(2);
+  const back = await wip(page);
+  expect(back.groups!.map((g) => [g.label, g.kind, g.output])).toEqual(doc.groups.map((g: { label: string; kind: string; output: string }) => [g.label, g.kind, g.output]));
+  // 옛 문서 — kind 가 없으면 그냥 묶음.
+  const old = { ...doc, groups: doc.groups.map((g: Record<string, unknown>) => ({ id: g.id, label: g.label, members: g.members })) };
+  await page.locator(".pg-import-input").setInputFiles({ name: "old.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(old)) });
+  await expect(page.locator(".pg-group--strategy")).toHaveCount(0);
+  await expect(page.locator(".pg-group")).toHaveCount(2);
+});
+
+test("큰 그래프(BM C2): 전략 열여섯(노드 100개 넘게)을 넣고 지도로 정리해도 깨지지 않고 움직인다 — 그림 시간 기록 · 빈 자리가 없으면 말한다", async ({ page }) => {
+  test.setTimeout(360_000);
+  let err = "";
+  page.on("pageerror", (e) => { err = e.message; });
+  await openCanvas(page);
+  for (let i = 0; i < 15; i++) await addStrategy(page, i % 2 ? "tpl:stress" : "tpl:rebalance");
+  // 포트폴리오 노드의 자리는 8개 — 넘치면 잇지 않았다고 말한다(조용히 버리지 않는다).
+  await expect(page.locator(".pg-note")).toContainText("잇지 못했어요");
+  const n = (await wip(page)).nodes.length;
+  expect(n).toBeGreaterThan(100);
+  const t0 = Date.now();
+  await page.locator('button[aria-label="자동 정리"]').click();
+  await expect(page.locator(".pg-lane--portfolio")).toHaveCount(1);
+  const ms = Date.now() - t0;
+  test.info().annotations.push({ type: "perf", description: `노드 ${n}개 지도 정리 → 그림 ${ms}ms` });
+  await page.mouse.move(700, 600);
+  await page.mouse.down();
+  await page.mouse.move(500, 500, { steps: 10 });
+  await page.mouse.up();
+  expect(err).toBe("");
+  expect(ms).toBeLessThan(10_000);
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BM C2): ${scheme} — 전략 지도 · 전략 추가 메뉴 · 내 블록 · 필터 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    await addStrategy(page, "tpl:stress");
+    await page.locator('button[aria-label="자동 정리"]').click();
+    await run(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await zoomTo(page, "mid");
+    await page.locator(".pg-filters-toggle").click();
+    await page.locator(".pg-strat-add").click();
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-root"));
+    expect(audit.checked).toBeGreaterThan(60);
     expect(audit.low, `${scheme} AA 미달`).toEqual([]);
     if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
   });

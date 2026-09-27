@@ -32,9 +32,10 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Map as MapIcon, Redo2, Sigma, Undo2 } from "lucide-react";
+import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Filter, Map as MapIcon, Plus, Redo2, Sigma, Undo2, X } from "lucide-react";
 import {
   CORE_CHAIN_TEMPLATE,
+  LANE,
   TEMPLATES,
   parseFile,
   PG_NODE_TYPE,
@@ -42,6 +43,7 @@ import {
   toDoc,
   topoOrder,
   type GraphDoc,
+  type NodeRunResult,
   type ParseResult,
   type WorkflowStage,
 } from "@/entities/portfolio-graph";
@@ -51,8 +53,8 @@ import { CommandPalette, type PaletteCommand } from "./CommandPalette";
 import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
-import { GraphNode, PORT_COLORS } from "./GraphNode";
-import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
+import { GraphNode, PORT_COLORS, PORT_PLAIN } from "./GraphNode";
+import { GroupFrame, Lane, PG_GROUP_TYPE, PG_LANE_TYPE, type GroupFrameData, type LaneData } from "./GroupFrame";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
@@ -61,9 +63,9 @@ import { SettingsPanel } from "./SettingsPanel";
 import { Sheet } from "./Sheet";
 import { StoryPanel } from "./StoryPanel";
 import { RunHistory } from "./RunHistory";
-import { ancestorsOf, usePortfolioGraph } from "./store";
+import { ancestorsOf, usePortfolioGraph, type FilterKey, type PgState } from "./store";
 
-const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame };
+const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_LANE_TYPE]: Lane };
 const EDGE_TYPES = { [PG_WIRE_TYPE]: EvidenceEdge };
 /** 확대 3단계(BM C1 · 의미 확대) — 멀리: 이름과 숫자 하나 · 보통: 카드 · 가까이: 작은 그림·계산 시간까지. */
 export const ZOOM_FAR = 0.55;
@@ -113,6 +115,15 @@ function neighbour(id: string, key: string, nodes: { id: string; position: { x: 
   return null;
 }
 
+const FILTERS: [FilterKey, string][] = [
+  ["failed", "실패"], ["blocked", "막힘"], ["practice", "연습용"], ["forward", "지금 시점 전용"], ["assumed", "가정 있음"],
+];
+function matchFilter(k: FilterKey, r: NodeRunResult): boolean {
+  return (k === "failed" && r.status === "failed") || (k === "blocked" && r.status === "blocked")
+    || (k === "practice" && !!r.lineage?.practice) || (k === "forward" && r.lineage?.pit === "forward_only")
+    || (k === "assumed" && !!r.explain?.trust?.some((t) => t.state === "assumed"));
+}
+
 function readWip(): string | null {
   try { return typeof window === "undefined" ? null : sessionStorage.getItem(WIP_KEY); }
   catch { return null; }
@@ -158,6 +169,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       .then((cat) => {
         if (!alive) return;
         setStages(cat.stages ?? []);
+        usePortfolioGraph.getState().setStages(cat.stages ?? []);
         usePortfolioGraph.getState().setCatalog(cat.nodes);
         const st = usePortfolioGraph.getState();
         if (initialDoc) {
@@ -181,32 +193,91 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
-  const hidden = useMemo(() => new Set(s.groups.filter((g) => g.collapsed).flatMap((g) => g.members)), [s.groups]);
   const cause = s.reportStale ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = s.report && !s.reportStale ? s.report.nodes : null;
+  // BM C2 — 들어간 상자·필터가 켜지면 나머지를 흐린다(원인 경로가 켜져 있으면 그것이 먼저다).
+  const focusSet = useMemo(() => {
+    const g = s.groups.find((x) => x.id === s.focusGroup);
+    return g ? new Set(g.members) : null;
+  }, [s.groups, s.focusGroup]);
+  const filterSet = useMemo(() => {
+    if (!s.filters.length || !live) return null;
+    return new Set(s.nodes.map((n) => n.id).filter((id) => {
+      const r = live[id];
+      if (!r) return false;
+      return s.filters.some((f) => matchFilter(f, r));
+    }));
+  }, [s.filters, s.nodes, live]);
+  const keep = cause ? causeSet : focusSet ?? filterSet;
+  /** 노드 → 그 노드가 든 접힌 상자(대리 포트로 선을 다시 그린다). */
+  const collapsedOf = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of s.groups) if (g.collapsed && g.id !== s.focusGroup) for (const id of g.members) m.set(id, g.id);
+    return m;
+  }, [s.groups, s.focusGroup]);
+  const portColor = useCallback((nodeId: string, handle: string | null | undefined, side: "in" | "out") => {
+    const kind = s.nodes.find((n) => n.id === nodeId)?.data.kind;
+    const entry = s.catalog?.find((c) => c.type === kind);
+    const p = (side === "out" ? entry?.outputs : entry?.inputs)?.find((x) => x.name === handle);
+    return { color: p ? PORT_COLORS[p.type] ?? "#94a3b8" : "#94a3b8", plain: p ? PORT_PLAIN[p.type] ?? p.name : handle ?? "?" };
+  }, [s.nodes, s.catalog]);
+  const bandOf = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of s.groups) if (g.kind === "strategy") for (const id of g.members) m.set(id, g.color ?? 0);
+    return m;
+  }, [s.groups]);
+
   const numbered = useMemo(() => {
     const num = new Map(order.map((id, i) => [id, i + 1]));
     const picked = new Set(s.picked);
     // 선택은 스토어가 진실 — 이야기 카드에서 고른 노드도, 상자로 여러 개 고른 노드도 캔버스에서 선택돼 보인다.
     const cards: Node[] = s.nodes.map((n) => ({
-      ...n, hidden: hidden.has(n.id), selected: picked.has(n.id) || n.id === s.selectedId,
+      ...n, hidden: collapsedOf.has(n.id), selected: picked.has(n.id) || n.id === s.selectedId,
       className: [path.has(n.id) && "pg-on-path",
-                  cause && (causeSet.has(n.id) ? "pg-on-cause" : "pg-dim"),
+                  keep && !keep.has(n.id) && "pg-dim",
+                  cause && causeSet.has(n.id) && "pg-on-cause",
                   cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
       data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current },
     }));
     const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
       const ms = s.nodes.filter((n) => g.members.includes(n.id));
       const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
-      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 30;
+      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - (g.kind === "strategy" ? 58 : 30);
       const x1 = Math.max(...ms.map((n) => n.position.x)) + NODE_W + GROUP_PAD;
       const y1 = Math.max(...ms.map((n) => n.position.y)) + NODE_H + GROUP_PAD;
+      const inside = new Set(g.members);
+      const collapsed = collapsedOf.has(g.members[0] ?? "") && !!g.collapsed;
+      const proxyIn = collapsed ? s.edges.filter((e) => inside.has(e.target) && !inside.has(e.source)).map((e) => {
+        const pc = portColor(e.target, e.targetHandle, "in");
+        return { id: `in|${e.target}|${e.targetHandle}`, label: pc.plain, color: pc.color };
+      }) : [];
+      const outs = new Map<string, { id: string; label: string; color: string }>();
+      if (collapsed) {
+        for (const e of s.edges.filter((x) => inside.has(x.source) && !inside.has(x.target))) {
+          const pc = portColor(e.source, e.sourceHandle, "out");
+          outs.set(`${e.source}|${e.sourceHandle}`, { id: `out|${e.source}|${e.sourceHandle}`, label: pc.plain, color: pc.color });
+        }
+      }
+      const dimmed = keep && !g.members.some((m) => keep.has(m));
       return { id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false,
-               data: { groupId: g.id, label: g.label, collapsed: !!g.collapsed, members: g.members, width: x1 - x0, height: y1 - y0 } };
+               className: dimmed ? "pg-dim" : undefined,
+               data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
+                       kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
+                       output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()] } };
     });
-    return [...frames, ...cards];
-  }, [s.nodes, s.groups, order, s.selectedId, s.picked, path, hidden, cause, causeSet]);
+    const lanes: Node<LaneData>[] = s.lanes ? [
+      ...s.lanes.lanes.map((l) => ({ id: `lane:${l.key}`, type: PG_LANE_TYPE, position: { x: l.x, y: 0 }, zIndex: -2,
+        selectable: false, draggable: false, focusable: false,
+        data: { label: l.label, width: l.width, height: s.lanes!.height + LANE.top + 40 } })),
+      { id: "lane:portfolio", type: PG_LANE_TYPE, position: { x: s.lanes.portfolioX, y: 0 }, zIndex: -2, selectable: false,
+        draggable: false, focusable: false,
+        data: { label: "포트폴리오", width: LANE.slot * 2, height: s.lanes.height + LANE.top + 40, portfolio: true } },
+    ] : [];
+    return [...lanes, ...frames, ...cards];
+  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.lanes]);
+  /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
+  const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
   const edgesStyled = useMemo(() => s.edges.map((e) => {
     const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
     const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
@@ -214,18 +285,58 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     const src = live?.[e.source];
     const wire = wireOf(src, e.sourceHandle ? src?.briefs?.[e.sourceHandle] : null);
     const onCause = !!cause && causeSet.has(e.source) && causeSet.has(e.target);
+    const kept = !keep || (keep.has(e.source) && keep.has(e.target));
+    // 접힌 상자 — 안쪽끼리는 숨기고, 경계를 넘는 선은 상자의 대리 포트로(실제 링크는 그대로).
+    const gs = collapsedOf.get(e.source);
+    const gt = collapsedOf.get(e.target);
+    const remap = gs && gs === gt ? { hidden: true }
+      : { ...(gs ? { source: `frame:${gs}`, sourceHandle: `out|${e.source}|${e.sourceHandle}` } : {}),
+          ...(gt ? { target: `frame:${gt}`, targetHandle: `in|${e.target}|${e.targetHandle}` } : {}) };
+    const faint = faintOthers && e.source !== faintOthers && e.target !== faintOthers;
     const cls = ["pg-wire", wire.evidence && `pg-wire--${wire.evidence}`, wire.forward && "pg-wire--forward",
-                 lit && "pg-edge--path", cause && (onCause ? "pg-edge--cause" : "pg-dim")].filter(Boolean).join(" ");
-    return { ...e, type: PG_WIRE_TYPE, data: wire, animated: lit && s.running, className: cls,
+                 lit && "pg-edge--path", onCause && "pg-edge--cause", !kept && "pg-dim", faint && "pg-edge--faint",
+                 (gs || gt) && "pg-wire--proxy"].filter(Boolean).join(" ");
+    return { ...e, ...remap, type: PG_WIRE_TYPE, data: wire, animated: lit && s.running, className: cls,
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : out ? PORT_COLORS[out.type] ?? "#94a3b8" : "#94a3b8",
                       strokeWidth: lit || onCause ? 3.5 : 2.5 } };
-  }), [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet]);
+  }), [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet, keep, collapsedOf, faintOthers]);
+  /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
+  const strategySources = useMemo(() => {
+    const cat = s.catalog ?? [];
+    const producesWeights = (d: { nodes: { type: string }[] }) =>
+      d.nodes.some((n) => cat.find((c) => c.type === n.type)?.outputs.some((o) => o.type === "Weights"));
+    return [
+      ...TEMPLATES.filter((t) => producesWeights(t.doc)).map((t) => ({ key: `tpl:${t.key}`, label: t.name, sub: t.description,
+        src: { label: t.name, nodes: t.doc.nodes, edges: t.doc.edges } })),
+      ...s.blocks.filter((b) => b.kind === "strategy").map((b, i) => ({ key: `blk:${i}`, label: b.label, sub: `내 블록 · 노드 ${b.nodes.length}개`,
+        src: { label: b.label, nodes: b.nodes, edges: b.edges, output: b.output } })),
+    ];
+  }, [s.catalog, s.blocks]);
+  const [stratOpen, setStratOpen] = useState(false);
+  // 필터 칩은 접어 둔다 — 캔버스 위에 떠 있는 칩이 노드를 가리지 않게(열 때만 펼친다).
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const addStrategy = useCallback((src: Parameters<PgState["addStrategy"]>[0]) => {
+    const st = usePortfolioGraph.getState();
+    st.setNote(st.addStrategy(src));
+    setStratOpen(false);
+    fit();
+  }, []);
+
+  // 들어가기 — 그 상자에 맞춰 확대하고, 나오면 전체로.
+  useEffect(() => {
+    if (!rf.current) return;
+    const g = s.groups.find((x) => x.id === s.focusGroup);
+    if (g) setTimeout(() => rf.current?.fitView({ nodes: g.members.map((id) => ({ id })), padding: 0.25, maxZoom: 1.2, duration: 250 }), 30);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 들어가고 나올 때만
+  }, [s.focusGroup]);
+  const focused = s.groups.find((g) => g.id === s.focusGroup);
 
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
     const rest: NodeChange[] = [];
     for (const c of changes) {
+      if ("id" in c && c.id.startsWith("lane:")) continue;
       if ("id" in c && c.id.startsWith("frame:")) {
         if (c.type === "position" && c.position) {
           const frame = numbered.find((n) => n.id === c.id);
@@ -359,6 +470,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       else if (mod && k === "g") { e.preventDefault(); st.groupPicked(); }
       else if (mod && k === "d" && st.selectedId) { e.preventDefault(); st.duplicateNode(st.selectedId); }
       else if (e.key === "Escape" && st.cause) st.showCause(null);
+      else if (e.key === "Escape" && st.focusGroup) { st.setFocusGroup(null); fit(); }
       else if (e.key === "Escape" && st.openGate) st.setOpenGate(null);
       else if (e.altKey && e.key.startsWith("Arrow") && st.selectedId) {
         // 키보드로 노드 사이 이동(접근성) — ←→ 선을 따라 앞·뒤 단계, ↑↓ 흐름 번호 순서.
@@ -382,12 +494,16 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       run: () => usePortfolioGraph.getState().setMinimap(!usePortfolioGraph.getState().showMinimap) },
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
       run: () => usePortfolioGraph.getState().groupPicked() },
+    { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 해요",
+      run: () => { const st = usePortfolioGraph.getState(); st.setNote(st.strategyPicked()); } },
+    ...strategySources.map((x) => ({ id: `strategy:${x.key}`, group: "전략", label: `전략 추가: ${x.label}`, hint: x.sub,
+                                     run: () => addStrategy(x.src) })),
     ...DRAWERS.map((d) => ({ id: `drawer:${d.key}`, group: "서랍", label: `${d.label} 열기`, hint: d.sub,
                              run: () => setDrawer(d.key) })),
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.showMinimap, cmdOpen]);
+  ], [s.selectedId, s.showMinimap, cmdOpen, strategySources]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -416,6 +532,23 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                   disabled={s.nodes.length === 0} onClick={() => { s.autoLayout(); fit(); }}><LayoutGrid size={16} /></button>
           <button type="button" className="pg-icon-tool" aria-label="고른 노드 묶기 (Ctrl+G)" title="고른 노드 묶기 (Ctrl+G)"
                   disabled={s.picked.length < 2} onClick={() => s.groupPicked()}><Boxes size={16} /></button>
+          <span className="pg-strat-menu-wrap">
+            <button type="button" className="pg-strat-add" aria-haspopup="menu" aria-expanded={stratOpen}
+                    disabled={!s.catalog} onClick={() => setStratOpen((o) => !o)}>
+              <Plus size={15} aria-hidden="true" />전략 추가
+            </button>
+            {stratOpen && (
+              <div className="pg-strat-menu" role="menu" aria-label="전략 추가">
+                <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 합치기’에 이어요</p>
+                {strategySources.map((x) => (
+                  <button key={x.key} type="button" role="menuitem" className="pg-strat-item" data-source={x.key}
+                          onClick={() => addStrategy(x.src)}>
+                    <b>{x.label}</b><span>{x.sub}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
           <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
                   aria-label="미니맵" title="미니맵" onClick={() => s.setMinimap(!s.showMinimap)}><MapIcon size={16} /></button>
           <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
@@ -479,6 +612,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </div>
       )}
       {fileNote && <p className="pg-banner pg-file-note">{fileNote}</p>}
+      {s.note && (
+        <p className="pg-banner pg-note" role="status">
+          {s.note}
+          <button type="button" className="pg-note-x" aria-label="안내 닫기" onClick={() => s.setNote(null)}><X size={13} aria-hidden="true" /></button>
+        </p>
+      )}
       {s.loadProblems.length > 0 && (
         <div className="pg-banner pg-banner--warn pg-load-problems">
           불러오면서 건너뛴 항목이 {s.loadProblems.length}개 있어요:
@@ -516,6 +655,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             onInit={(inst) => { rf.current = inst; }}
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
             onPaneClick={() => { s.select(null); if (s.cause) s.showCause(null); }}
+            onNodeDoubleClick={(_, n) => { if (n.id.startsWith("frame:")) s.setFocusGroup(n.id.slice(6)); }}
             deleteKeyCode={drawer || cmdOpen ? null : ["Backspace", "Delete"]}
             multiSelectionKeyCode={["Meta", "Control"]}
             defaultEdgeOptions={{ type: PG_WIRE_TYPE }}
@@ -525,6 +665,31 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="var(--pg-line)" />
             <ZoomWatch el={canvasEl} />
+            {focused && (
+              <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">
+                <button type="button" className="pg-crumb-root" onClick={() => { s.setFocusGroup(null); fit(); }}>포트폴리오</button>
+                <span aria-hidden="true">›</span>
+                <b>{focused.label}</b>
+                <button type="button" className="pg-cause-clear" onClick={() => { s.setFocusGroup(null); fit(); }}>나가기 <kbd>Esc</kbd></button>
+              </Panel>
+            )}
+            {live && (
+              <Panel position="top-right" className="pg-filters" aria-label="상태로 걸러 보기">
+                <button type="button" className="pg-filters-toggle" aria-expanded={filtersOpen}
+                        onClick={() => setFiltersOpen((o) => !o)}>
+                  <Filter size={13} aria-hidden="true" />걸러 보기{s.filters.length ? ` · ${s.filters.length}` : ""}
+                </button>
+                {filtersOpen && FILTERS.map(([k, label]) => {
+                  const n = Object.values(live).filter((r) => matchFilter(k, r)).length;
+                  return (
+                    <button key={k} type="button" className="pg-filter" data-filter={k} aria-pressed={s.filters.includes(k)}
+                            disabled={n === 0 && !s.filters.includes(k)} onClick={() => s.toggleFilter(k)}>
+                      {label} <span className="pg-filter-n">{n}</span>
+                    </button>
+                  );
+                })}
+              </Panel>
+            )}
             {live && (
               <Panel position="top-left" className="pg-wire-legend" aria-label="선 모양 읽는 법">
                 {WIRE_LEGEND.map((w) => (
@@ -556,7 +721,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             <Controls showInteractive={false} />
             {s.showMinimap && (
               <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap"
-                       nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent" : "var(--pg-line)")} />
+                       nodeColor={(n) => (n.type === PG_GROUP_TYPE || n.type === PG_LANE_TYPE ? "transparent"
+                         : bandOf.has(n.id) ? `var(--pg-band-${bandOf.get(n.id)})` : "var(--pg-line)")} />
             )}
           </ReactFlow>
           <p className="pg-sr-live" aria-live="polite">{announce}</p>

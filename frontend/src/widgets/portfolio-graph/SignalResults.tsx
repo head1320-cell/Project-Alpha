@@ -111,3 +111,44 @@ export function SleeveResult({ v }: { v: Dict }) {
     </>
   );
 }
+
+/** 전략 합치기(BM C2) — 전략별 몫·위험 분담·변동성, 전략 사이 상관, 합친 종목 비중. 모르는 칸은 "—". */
+export function PortfolioCombineResult({ v }: { v: Dict }) {
+  const r = (v.result as Dict) ?? {};
+  const rows = (v.strategies as Dict[] | undefined) ?? [];
+  const corr = v.correlation as { labels: string[]; matrix: (number | null)[][] } | null | undefined;
+  return (
+    <>
+      <h4 className="pg-h4">전략별 몫</h4>
+      <table className="pg-table pg-strat-table">
+        <thead><tr><th>전략</th><th>몫</th><th>위험 분담</th><th>흔들림(연)</th><th>종목</th></tr></thead>
+        <tbody>
+          {rows.map((s) => (
+            <tr key={String(s.port)} data-port={String(s.port)}>
+              <td className="pg-td-name">{String(s.label)}</td>
+              <td className="pg-td-num">{pct(s.share_pct, 1)}</td>
+              <td className="pg-td-num">{pct(s.risk_pct, 1)}</td>
+              <td className="pg-td-num">{pct(s.vol_pct, 1)}</td>
+              <td className="pg-td-num">{num(s.n_holdings) === null ? "—" : String(s.n_holdings)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h4 className="pg-h4">전략 사이 상관</h4>
+      {corr ? (
+        <table className="pg-table pg-corr-table">
+          <thead><tr><th />{corr.labels.map((l) => <th key={l} scope="col">{l}</th>)}</tr></thead>
+          <tbody>
+            {corr.labels.map((l, i) => (
+              <tr key={l}><th scope="row">{l}</th>
+                {corr.matrix[i].map((x, j) => <td key={j} className="pg-td-num">{i === j ? "" : fx(x, 2)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className="pg-help">상관을 재지 못했어요 — {String(v.correlation_reason ?? "사유 없음")}</p>}
+      <h4 className="pg-h4">합친 종목 비중</h4>
+      <Bars values={(r.combined_weights_pct as Record<string, number>) ?? {}} labels={v.labels as Record<string, string>} unit="%" />
+    </>
+  );
+}

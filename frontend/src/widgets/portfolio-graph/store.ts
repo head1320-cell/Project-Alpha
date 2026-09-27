@@ -27,9 +27,27 @@ import {
 } from "reactflow";
 import {
   fromDoc,
+  GRAPH_FORMAT,
+  GRAPH_VERSION,
+  blockFromGroup,
+  insertDoc,
+  mapLayout,
+  readBlocks,
+  toDoc,
+  writeBlocks,
   PG_NODE_TYPE,
+  PORTFOLIO_NODE,
+  PORTFOLIO_PORTS,
+  portfolioLane,
+  STRATEGY_COLORS,
+  strategyOutput,
   topoOrder,
+  type GraphBlock,
+  type LaneBox,
+  type WorkflowStage,
   type GraphDoc,
+  type GraphDocEdge,
+  type GraphDocNode,
   type GraphGroup,
   type NodeCatalogEntry,
   type NodeStatus,
@@ -82,6 +100,19 @@ export interface PgState {
   pinned: string[];
   /** 원인 경로(BM C1) — 막힘·실패 노드에서 계산 못 한 상류를 따라 첫 원인까지. 켜지면 나머지는 흐려진다. */
   cause: { from: string; path: string[]; roots: string[] } | null;
+  /** 단계 순서(서버 카탈로그) — 전략 지도 정리의 열 순서. */
+  stages: WorkflowStage[];
+  /** 전략 지도 정리가 그린 단계 레인(BM C2) — 다른 정리를 하거나 불러오면 지운다. */
+  lanes: { lanes: LaneBox[]; height: number; portfolioX: number } | null;
+  /** 들어간 전략 상자(ComfyUI 서브그래프 들어가기) — 나머지는 흐리게, 상단에 빵부스러기. */
+  focusGroup: string | null;
+  /** 캔버스 필터(Dataiku) — 맞지 않는 노드·선을 흐린다. 여러 개면 하나라도 맞으면 남긴다. */
+  filters: FilterKey[];
+  /** 내 블록(이 브라우저) — 저장소를 못 쓰면 `blocksAvailable: false`(없음과 다르다). 신뢰 저장은 파일. */
+  blocks: GraphBlock[];
+  blocksAvailable: boolean;
+  /** 캔버스 한 줄 안내(전략 추가·블록 저장 결과). */
+  note: string | null;
 
   setCatalog: (c: NodeCatalogEntry[] | null, err?: string | null) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -116,6 +147,29 @@ export interface PgState {
   setOpenGate: (k: string | null) => void;
   togglePin: (id: string) => void;
   showCause: (id: string | null) => void;
+  setStages: (st: WorkflowStage[]) => void;
+  /** 전략 하나를 새 띠로 넣고 포트폴리오 노드에 잇는다. 전략이 처음이면 지금 흐름을 ‘전략 1’로 묶는다. 돌려주는 값은 한 줄 안내. */
+  addStrategy: (src: { label: string; nodes: GraphDocNode[]; edges: GraphDocEdge[]; output?: string | null }) => string;
+  /** 고른 노드를 전략 상자로 묶는다 — 비중을 내는 노드가 없으면 묶지 않고 사유. */
+  strategyPicked: () => string;
+  insertBlock: (b: GraphBlock) => string;
+  setFocusGroup: (id: string | null) => void;
+  toggleFilter: (k: FilterKey) => void;
+  clearLanes: () => void;
+  loadBlocks: () => void;
+  /** 상자를 내 블록으로 — 이 브라우저에 넣고, 파일로 받을 수 있게 블록을 돌려준다(저장소가 막혀도 파일은 된다). */
+  saveBlock: (groupId: string) => GraphBlock | null;
+  removeBlock: (index: number) => void;
+  setNote: (n: string | null) => void;
+}
+
+export type FilterKey = "failed" | "blocked" | "practice" | "forward" | "assumed";
+
+/** 전략 이름 — 이미 있는 이름이면 숫자를 붙인다(포트폴리오 노드는 이름이 겹치면 사유와 함께 멈춘다). */
+function uniqueLabel(want: string, groups: GraphGroup[]): string {
+  const taken = new Set(groups.map((g) => g.label));
+  if (!taken.has(want)) return want;
+  for (let k = 2; ; k++) if (!taken.has(`${want} ${k}`)) return `${want} ${k}`;
 }
 
 let seq = 0;
@@ -219,6 +273,13 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     openGate: null,
     pinned: [],
     cause: null,
+    stages: [],
+    lanes: null,
+    focusGroup: null,
+    filters: [],
+    blocks: [],
+    blocksAvailable: true,
+    note: null,
 
     setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
 
@@ -334,7 +395,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
         report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
-        pinned: [], cause: null,
+        pinned: [], cause: null, lanes: null, focusGroup: null, filters: [],
       });
     },
 
@@ -361,6 +422,34 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       };
     }),
     setPreview: (preview) => set({ preview }),
+    setStages: (stages) => set({ stages }),
+    setFocusGroup: (focusGroup) => set((s) => ({
+      focusGroup,
+      groups: focusGroup ? s.groups.map((g) => (g.id === focusGroup ? { ...g, collapsed: false } : g)) : s.groups,
+    })),
+    toggleFilter: (k) => set((s) => ({ filters: s.filters.includes(k) ? s.filters.filter((x) => x !== k) : [...s.filters, k] })),
+    clearLanes: () => set({ lanes: null }),
+    setNote: (note) => set({ note }),
+    loadBlocks: () => { const r = readBlocks(); set({ blocks: r.blocks, blocksAvailable: r.available }); },
+    saveBlock: (groupId) => {
+      const s = get();
+      const g = s.groups.find((x) => x.id === groupId);
+      if (!g) return null;
+      const block = blockFromGroup(g, toDoc(s.nodes, s.edges, undefined, s.groups));
+      const cur = readBlocks();
+      const ok = cur.available && writeBlocks([...cur.blocks.filter((b) => b.label !== block.label), block]);
+      const r = readBlocks();
+      set({ blocks: r.blocks, blocksAvailable: r.available && ok,
+            note: ok ? `‘${g.label}’을 내 블록에 넣었어요 — 이 브라우저에만 있어요. 다른 곳에서 쓰려면 파일로 받아 두세요.`
+                     : `이 브라우저에 블록을 저장할 수 없어요 — ‘${g.label}’은 파일로 받아 두세요.` });
+      return block;
+    },
+    removeBlock: (i) => {
+      const cur = readBlocks();
+      const next = cur.blocks.filter((_, k) => k !== i);
+      const ok = writeBlocks(next);
+      set({ blocks: ok ? next : cur.blocks, blocksAvailable: ok });
+    },
     togglePin: (id) => set((s) => ({ pinned: s.pinned.includes(id) ? s.pinned.filter((x) => x !== id) : [...s.pinned, id] })),
     showCause: (id) => set((s) => {
       if (!id || s.reportStale) return { cause: null };
@@ -436,6 +525,14 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const s = get();
       if (!s.nodes.length) return;
       push();
+      if (s.groups.some((g) => g.kind === "strategy") && s.stages.length) {
+        // 전략이 있으면 전략 지도로 — (전략 띠 × 단계 열) 칸, 오른쪽 끝은 포트폴리오 레인.
+        const stageOf = (kind: string) => s.catalog?.find((c) => c.type === kind)?.stage;
+        const m = mapLayout(s.nodes, s.edges, s.groups, s.stages, stageOf);
+        set({ nodes: s.nodes.map((n) => (m.positions.has(n.id) ? { ...n, position: m.positions.get(n.id)! } : n)),
+              lanes: { lanes: m.lanes, height: m.height, portfolioX: m.portfolioX } });
+        return;
+      }
       const order = topoOrder(s.nodes.map((n) => n.id), s.edges);
       const depth = new Map<string, number>();
       for (const id of order) {
@@ -449,7 +546,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         // 같은 깊이는 **지금의 세로 순서**를 지킨다 — 사람이 둔 위아래를 뒤섞지 않는다.
         col.sort((a, b) => a.position.y - b.position.y).forEach((n, i) => pos.set(n.id, { x: d * 230, y: i * 170 }));
       }
-      set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) });
+      set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })), lanes: null });
     },
 
     groupPicked: (label) => {
@@ -465,9 +562,118 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       return id;
     },
 
+    strategyPicked: () => {
+      const s = get();
+      const ids = s.picked.filter((id) => s.nodes.some((n) => n.id === id));
+      if (!ids.length) return "전략으로 묶을 노드를 먼저 골라 주세요.";
+      const output = strategyOutput(ids, s.nodes, s.edges, s.catalog ?? []);
+      if (!output) return "고른 노드에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요. 그냥 묶으려면 Ctrl+G 를 써요.";
+      push();
+      const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.includes(m)) })).filter((g) => g.members.length);
+      const used = new Set(groups.filter((g) => g.kind === "strategy").map((g) => g.color ?? 0));
+      const color = [...Array(STRATEGY_COLORS).keys()].find((c) => !used.has(c)) ?? groups.length % STRATEGY_COLORS;
+      const label = uniqueLabel(`전략 ${groups.filter((g) => g.kind === "strategy").length + 1}`, groups);
+      set({ groups: [...groups, { id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label, members: ids,
+                                  collapsed: false, kind: "strategy", color, output }] });
+      return `고른 노드 ${ids.length}개를 ‘${label}’로 묶었어요. 포트폴리오에 합치려면 ‘전략 추가’로 전략을 하나 더 넣거나, 비중 출력을 ‘전략 합치기’ 노드에 이어요.`;
+    },
+
+    addStrategy: (src) => {
+      const s = get();
+      const catalog = s.catalog ?? [];
+      push();
+      let groups = [...s.groups];
+      let nodes = [...s.nodes];
+      let edges = [...s.edges];
+      let wrapped = "";
+      // ① 처음 전략이면 지금 흐름(어느 묶음에도, 포트폴리오 레인에도 없는 노드)을 ‘전략 1’로 묶는다.
+      if (!groups.some((g) => g.kind === "strategy")) {
+        const lane = portfolioLane(nodes, edges, groups);
+        const free = nodes.filter((n) => !groups.some((g) => g.members.includes(n.id)) && !lane.has(n.id)).map((n) => n.id);
+        const out = strategyOutput(free, nodes, edges, catalog);
+        if (out) {
+          const label = uniqueLabel(s.name.trim() || "전략 1", groups);
+          groups.push({ id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label, members: free, collapsed: false,
+                        kind: "strategy", color: 0, output: out });
+          wrapped = `지금 흐름을 ‘${label}’로 묶고, `;
+        }
+      }
+      // ② 새 전략을 가장 아래 노드 밑에 넣는다.
+      const maxY = nodes.length ? Math.max(...nodes.map((n) => n.position.y)) : 0;
+      const minX = nodes.length ? Math.min(...nodes.map((n) => n.position.x)) : 0;
+      const k = groups.filter((g) => g.kind === "strategy").length + 1;
+      const ins = insertDoc(src, new Set(nodes.map((n) => n.id)), `s${k}_`, { x: minX, y: nodes.length ? maxY + 300 : 0 });
+      const added = fromDoc({ format: GRAPH_FORMAT, version: GRAPH_VERSION, nodes: ins.nodes, edges: ins.edges }, catalog);
+      nodes = [...nodes, ...added.nodes];
+      edges = [...edges, ...added.edges];
+      const newIds = added.nodes.map((n) => n.id);
+      const output = (src.output && ins.map.get(src.output)) || strategyOutput(newIds, nodes, edges, catalog);
+      const used = new Set(groups.filter((g) => g.kind === "strategy").map((g) => g.color ?? 0));
+      const color = [...Array(STRATEGY_COLORS).keys()].find((c) => !used.has(c)) ?? k % STRATEGY_COLORS;
+      const label = uniqueLabel(src.label, groups);
+      groups.push({ id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label, members: newIds, collapsed: false,
+                    kind: "strategy", color, output });
+      // ③ 포트폴리오 노드 — 없으면 오른쪽 끝에 만들고, 아직 잇지 않은 전략 출력을 빈 포트에 잇는다.
+      let pf = nodes.find((n) => n.data.kind === PORTFOLIO_NODE && !groups.some((g) => g.members.includes(n.id)));
+      if (!pf && catalog.some((c) => c.type === PORTFOLIO_NODE)) {
+        const maxX = Math.max(...nodes.map((n) => n.position.x));
+        const ys = nodes.map((n) => n.position.y);
+        pf = { id: newId(PORTFOLIO_NODE, new Set(nodes.map((n) => n.id))), type: PG_NODE_TYPE,
+               position: { x: maxX + 320, y: (Math.min(...ys) + Math.max(...ys)) / 2 }, data: { kind: PORTFOLIO_NODE, params: {} } };
+        nodes.push(pf);
+      }
+      let unwired = 0;
+      if (pf) {
+        const labels = { ...((pf.data.params.labels as Record<string, string>) ?? {}) };
+        for (const g of groups.filter((x) => x.kind === "strategy" && x.output)) {
+          if (edges.some((e) => e.source === g.output && e.target === pf!.id)) continue;
+          const port = PORTFOLIO_PORTS.find((p) => !edges.some((e) => e.target === pf!.id && e.targetHandle === p));
+          const outPort = catalog.find((c) => c.type === nodes.find((n) => n.id === g.output)?.data.kind)?.outputs.find((o) => o.type === "Weights")?.name;
+          if (!port || !outPort) { unwired += 1; continue; }
+          edges.push({ id: `${g.output}.${outPort}->${pf.id}.${port}`, source: g.output!, sourceHandle: outPort, target: pf.id, targetHandle: port });
+          labels[port] = g.label;
+        }
+        const pid = pf.id;
+        nodes = nodes.map((n) => (n.id === pid ? { ...n, data: { ...n.data, params: { ...n.data.params, labels } } } : n));
+      }
+      set({ nodes, edges, groups, reportStale: s.report !== null, selectedId: null, picked: [] });
+      if (!output) return `‘${label}’을 넣었어요. 이 전략에는 비중을 내는 노드가 없어 포트폴리오에 잇지 않았어요.`;
+      if (unwired) return `${wrapped}‘${label}’을 넣었어요. 포트폴리오 노드의 빈 자리(최대 ${PORTFOLIO_PORTS.length}개)가 없어 ${unwired}개는 잇지 못했어요.`;
+      return `${wrapped}‘${label}’을 넣어 ‘전략 합치기’에 이었어요. 계산하면 전략별 몫이 보여요.`;
+    },
+
+    insertBlock: (b) => {
+      if (b.kind === "strategy") return get().addStrategy({ label: b.label, nodes: b.nodes, edges: b.edges, output: b.output });
+      const s = get();
+      push();
+      const maxY = s.nodes.length ? Math.max(...s.nodes.map((n) => n.position.y)) : 0;
+      const minX = s.nodes.length ? Math.min(...s.nodes.map((n) => n.position.x)) : 0;
+      const ins = insertDoc(b, new Set(s.nodes.map((n) => n.id)), "b_", { x: minX, y: s.nodes.length ? maxY + 300 : 0 });
+      const added = fromDoc({ format: GRAPH_FORMAT, version: GRAPH_VERSION, nodes: ins.nodes, edges: ins.edges }, s.catalog ?? []);
+      const label = uniqueLabel(b.label, s.groups);
+      set({ nodes: [...s.nodes, ...added.nodes], edges: [...s.edges, ...added.edges], reportStale: s.report !== null,
+            groups: [...s.groups, { id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label,
+                                    members: added.nodes.map((n) => n.id), collapsed: false }] });
+      return `‘${label}’ 블록을 넣었어요 — 노드 ${added.nodes.length}개. 필요한 입력을 이어 주세요.`;
+    },
+
     ungroup: (id) => { push(); set((s) => ({ groups: s.groups.filter((g) => g.id !== id) })); },
     toggleGroup: (id) => set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)) })),
-    renameGroup: (id, label) => set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, label } : g)) })),
+    renameGroup: (id, label) => set((s) => {
+      const groups = s.groups.map((g) => (g.id === id ? { ...g, label } : g));
+      const g = groups.find((x) => x.id === id);
+      // 전략 이름은 포트폴리오 노드의 전략 이름(파라미터)과 같아야 한다 — 이은 포트의 이름을 함께 바꾼다.
+      const e = g?.kind === "strategy" && g.output
+        ? s.edges.find((x) => x.source === g.output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
+      if (!e || !e.targetHandle || !label.trim()) return { groups };
+      return {
+        groups, reportStale: s.report !== null,
+        nodes: s.nodes.map((n) => (n.id === e.target
+          ? { ...n, data: { ...n.data, params: { ...n.data.params,
+              labels: { ...((n.data.params.labels as Record<string, string>) ?? {}), [e.targetHandle!]: label.trim().slice(0, 40) } } } }
+          : n)),
+      };
+    }),
     moveGroup: (id, dx, dy) => set((s) => {
       const g = s.groups.find((x) => x.id === id);
       if (!g || (!dx && !dy)) return {};
