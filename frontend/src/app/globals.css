@@ -1037,7 +1037,6 @@ h6 { font-size: 1rem; }
 .tbuilder-preset-chip:hover { border-color: var(--t-accent); color: var(--t-accent); }
 .tbuilder-preset-chip.active { border-color: var(--t-accent); background: rgba(18,0,255,0.04); color: var(--t-accent); font-weight: 500; }
 
-
 /* ═══════════════════════════════════════════════════════════════════════════════
    Backtester 고급 옵션 + 확장 결과 (수수료/손익절, 보조지표, 거래내역)
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -1094,7 +1093,6 @@ h6 { font-size: 1rem; }
 .tbt-tradelog td { padding: 9px 12px; border-bottom: 1px solid var(--t-border); }
 .tbt-tradelog td.num { font-family: var(--t-mono); }
 .tbt-tradelog tbody tr:hover { background: var(--t-surface); }
-
 
 @keyframes tshimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
@@ -1166,7 +1164,6 @@ h6 { font-size: 1rem; }
   color: var(--t-muted); cursor: pointer; white-space: nowrap; transition: all 0.1s;
 }
 .tscreener-handoff-clear:hover { border-color: #dc2626; color: #dc2626; }
-
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    전략 비교 (Strategy Comparison)
@@ -3238,444 +3235,127 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ═══════════════════════════════════════════════════════════════════════════
    Allocation Studio (.as-*) — 3-존 콕핏, Institutional Terminal 토큰
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-root { display: flex; flex-direction: column; gap: 8px; }
-.as-grid { display: grid; grid-template-columns: 236px minmax(0, 1fr) 280px; gap: 8px; align-items: start; }
-@media (max-width: 1280px) { .as-grid { grid-template-columns: 230px minmax(0, 1fr); } .as-right { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; } }
-@media (max-width: 900px) { .as-grid { grid-template-columns: 1fr; } }
 
 /* 스테퍼 */
-.as-stepper { display: flex; align-items: center; gap: 5px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 3px 8px; }
-.as-step { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 2px; background: none; padding: 3px 8px; font-size: 11px; color: var(--t-ink); cursor: pointer; }
-.as-step:hover { border-color: var(--t-border); background: var(--t-surface); }
-.as-step-n { font-family: var(--t-mono); font-size: 10px; color: var(--t-accent); border: 1px solid var(--t-accent); border-radius: 2px; padding: 1px 5px; }
-.as-stepper-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.as-coverage { font-size: 10px; color: var(--t-muted); font-variant-numeric: tabular-nums; }
-.as-save-btn { border: 1px solid var(--t-border); border-radius: 2px; background: #fff; font-size: 11px; padding: 5px 10px; cursor: pointer; }
-.as-save-btn:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
-.as-save-btn:disabled { opacity: .45; cursor: default; }
-.as-save-panel { display: flex; gap: 8px; align-items: center; border: 1px solid var(--t-border); background: var(--t-surface); border-radius: 2px; padding: 8px 10px; }
-.as-save-panel .as-input { flex: 1; }
 
 /* 카드 공통 */
 .as-card { border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.as-card-title { font-size: 10px; letter-spacing: .07em; font-weight: 600; color: var(--t-ink); display: flex; align-items: center; gap: 7px; }
+
 /* ★결과를 흐리지 않는다 (A4-X1)★ 여기엔 `opacity: .55` 가 있었고, 5개 스테이지의
    결과 패널 9곳에 붙어 있었다. 흐린 숫자는 두 가지를 동시에 한다 — AA 아래로 떨어뜨리고
    (`--t-muted` #71717a 4.83:1 → 약 2.4:1), 그러면서도 여전히 읽히기 때문에 사용자는
    **낡은 값을 읽고 판단한다**. A1 이 stale 상태에서 내린 결론(흐리게 하지 말고 적어라)이
    loading 상태에는 적용된 적이 없었다. 어떤 테스트도 이 값을 본 적이 없다.
    상호작용은 실제로 막히므로 pointer-events 는 남긴다. 상태는 .as-busy 가 **글로** 말한다. */
-.as-loading { pointer-events: none; }
-.as-badge { font-size: 9px; color: var(--t-accent); border: 1px solid var(--t-accent); border-radius: 2px; padding: 1px 5px; letter-spacing: .04em; }
-.as-note { font-size: 10px; color: var(--t-muted); line-height: 1.5; }
+
 .as-note-inline { font-size: 9.5px; color: var(--t-muted); font-weight: 400; letter-spacing: 0; }
 .as-err { font-size: 11px; color: var(--color-bear, #dc2626); }
 .as-empty { font-size: 11px; color: var(--t-muted); padding: 10px 0; }
 
 /* 중앙 레이아웃 */
 .as-center { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.as-top3 { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(140px, .62fr) minmax(200px, .85fr); gap: 8px; }
-@media (max-width: 1100px) { .as-top3 { grid-template-columns: 1fr; } }
-.as-mid2 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 8px; }
-@media (max-width: 1100px) { .as-mid2 { grid-template-columns: 1fr; } }
 
 /* 좌측 레일 */
-.as-rail { display: flex; flex-direction: column; gap: 8px; }
-.as-rail-sec { border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 7px 9px; display: flex; flex-direction: column; gap: 6px; }
-.as-rail-title { font-size: 10.5px; letter-spacing: .08em; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
-.as-input { border: 1px solid var(--t-border); border-radius: 2px; padding: 6px 8px; font-size: 12px; width: 100%; background: #fff; }
-.as-input:focus { outline: none; border-color: var(--t-accent); }
-.as-search-hits { display: flex; flex-direction: column; border: 1px solid var(--t-border); border-radius: 2px; max-height: 190px; overflow-y: auto; }
-.as-hit { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; font-size: 11.5px; background: #fff; border: none; border-bottom: 1px solid var(--t-surface); cursor: pointer; text-align: left; }
-.as-hit:hover { background: rgba(18,0,255,.04); }
-.as-hit .num { color: var(--t-muted); font-size: 10px; }
-.as-wl-row { display: flex; flex-wrap: wrap; gap: 5px; }
-.as-chip { border: 1px solid var(--t-border); border-radius: 2px; background: #fff; font-size: 10.5px; padding: 3px 8px; cursor: pointer; color: var(--t-ink); }
-.as-chip:hover { border-color: var(--t-accent); color: var(--t-accent); }
-.as-chip.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); color: var(--t-accent); }
-.as-chip.sm { font-size: 9.5px; padding: 2px 6px; }
-.as-holding { display: flex; align-items: center; gap: 6px; }
-.as-holding-nm { flex: 1; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .as-w-input { width: 58px; border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 5px; font-size: 11px; text-align: right; }
 .as-w-input::-webkit-outer-spin-button, .as-w-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.as-w-unit { font-size: 10px; color: var(--t-muted); }
+
 .as-x { border: none; background: none; color: var(--t-muted); font-size: 13px; cursor: pointer; padding: 0 3px; line-height: 1; }
 .as-x:hover { color: var(--color-bear, #dc2626); }
-.as-study { display: flex; align-items: center; gap: 4px; }
-.as-study-load { flex: 1; display: flex; flex-direction: column; gap: 1px; text-align: left; border: 1px solid var(--t-surface); border-radius: 2px; background: none; padding: 5px 7px; cursor: pointer; }
-.as-study-load:hover { border-color: var(--t-accent); }
-.as-study-nm { font-size: 11.5px; }
-.as-study-meta { font-size: 9.5px; color: var(--t-muted); }
 
 /* 뷰 빌더 */
-.as-views { display: flex; flex-direction: column; gap: 8px; }
-.as-view { border: 1px solid var(--t-surface); border-left: 3px solid var(--t-accent); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: #fff; }
-.as-view-top { display: flex; gap: 6px; align-items: center; }
-.as-view-label { font-size: 11.5px; }
-.as-view-assets { display: flex; flex-wrap: wrap; gap: 4px; }
-.as-view-ctrl { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.as-seg { display: inline-flex; border: 1px solid var(--t-border); border-radius: 2px; overflow: hidden; }
-.as-seg button { border: none; background: #fff; font-size: 10.5px; padding: 4px 9px; cursor: pointer; color: var(--t-muted); }
-.as-seg button.on { background: rgba(18,0,255,.06); color: var(--t-accent); font-weight: 600; }
-.as-mini { font-size: 10.5px; color: var(--t-muted); display: inline-flex; align-items: center; gap: 5px; }
-.as-conf { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 130px; }
-.as-conf input[type="range"] { width: 100%; accent-color: var(--t-accent); }
-.as-add-view { border: 1px dashed var(--t-border); border-radius: 2px; background: none; font-size: 11px; color: var(--t-muted); padding: 6px; cursor: pointer; }
-.as-add-view:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
-.as-add-view:disabled { opacity: .45; cursor: default; }
 
 /* 옵티마이저 패널 */
-.as-models { flex-wrap: wrap; }
-.as-models button { font-size: 10px; padding: 4px 7px; }
-.as-param { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--t-muted); }
-.as-param input[type="range"] { width: 100%; accent-color: var(--t-accent); }
-.as-param em { font-style: normal; }
-.as-run { border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent); color: #fff; font-size: 12px; font-weight: 600; padding: 7px; cursor: pointer; letter-spacing: .04em; }
-.as-run:hover:not(:disabled) { opacity: .9; }
-.as-run:disabled { opacity: .45; cursor: default; }
 
 /* 게이지 */
-.as-gauge { position: relative; }
-.as-gauge-c { position: absolute; inset: 38px 0 0 0; display: flex; flex-direction: column; align-items: center; gap: 1px; pointer-events: none; }
-.as-gauge-c b { font-family: var(--t-mono); font-size: 24px; color: var(--t-accent); }
-.as-gauge-c span { font-size: 9px; color: var(--t-muted); letter-spacing: .05em; }
-.as-gauge-c em { font-style: normal; font-size: 10px; color: var(--t-ink); }
 
 /* Sankey */
-.as-sankey-heads { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--t-muted); letter-spacing: .05em; padding: 0 4px 4px; }
-.as-lam-w { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 
 /* 하단 분석 탭 */
-.as-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--t-border); padding-bottom: 8px; }
-.as-tabs button { border: 1px solid transparent; border-radius: 2px; background: none; font-size: 10.5px; letter-spacing: .06em; padding: 5px 10px; cursor: pointer; color: var(--t-muted); }
-.as-tabs button:hover { border-color: var(--t-border); }
-.as-tabs button.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); color: var(--t-accent); font-weight: 600; }
-.as-scenario { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; }
-@media (max-width: 900px) { .as-scenario { grid-template-columns: 1fr; } }
-.as-scenario-list { display: flex; flex-direction: column; gap: 5px; }
-.as-scen { display: flex; flex-direction: column; gap: 1px; text-align: left; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 6px 9px; cursor: pointer; }
-.as-scen span { font-size: 11.5px; }
-.as-scen em { font-style: normal; font-size: 9.5px; color: var(--t-muted); }
-.as-scen:hover:not(.off) { border-color: var(--t-accent); }
-.as-scen.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); }
-.as-scen.off { opacity: .5; cursor: default; }
-.as-shock-head { font-size: 12px; margin-bottom: 6px; }
-.as-stress-meta, .as-mc-meta { display: flex; gap: 16px; font-size: 11px; color: var(--t-muted); margin-top: 6px; flex-wrap: wrap; }
 
 /* 지표 테이블 */
-.as-metrics { width: 100%; border-collapse: collapse; font-size: 11px; }
-.as-metrics th { text-align: right; font-size: 10px; letter-spacing: .05em; color: var(--t-muted); border-bottom: 1px solid var(--t-border); padding: 4px 8px; font-weight: 600; }
-.as-metrics th:first-child, .as-metrics td:first-child { text-align: left; }
-.as-metrics td { text-align: right; padding: 3px 7px; border-bottom: 1px solid var(--t-surface); font-variant-numeric: tabular-nums; }
 
 /* 팩터 X-ray */
-.as-xray { display: flex; flex-direction: column; gap: 6px; }
-.as-xray-row { display: grid; grid-template-columns: 62px minmax(0, 1fr) 40px auto; gap: 7px; align-items: center; }
-.as-xray-label { font-size: 10.5px; color: var(--t-ink); }
-.as-xray-track { position: relative; height: 12px; background: var(--t-surface); border-radius: 2px; overflow: hidden; }
-.as-xray-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--t-border); }
-.as-xray-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 1px; }
-.as-xray-bar.pos { background: var(--t-accent); opacity: .85; }
-.as-xray-bar.neg { background: #7c3aed; opacity: .7; }
-.as-xray-bench { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--t-ink); transform: translateX(-50%); opacity: .65; }
-.as-xray-val { font-size: 10.5px; text-align: right; }
-.as-xray-cov { font-size: 9px; color: #a16207; border: 1px solid #a16207; border-radius: 2px; padding: 0 3px; }
 
 /* 도넛 + 비중 목록 */
-.as-donut-wrap { display: flex; gap: 10px; align-items: center; }
-.as-donut-legend { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.as-donut-li { display: flex; align-items: center; gap: 6px; font-size: 10.5px; }
-.as-donut-li i { width: 8px; height: 8px; border-radius: 1px; flex: none; }
-.as-donut-nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-weights { display: flex; flex-direction: column; gap: 5px; }
-.as-wrow { display: grid; grid-template-columns: minmax(0, 1fr) 80px 48px; gap: 8px; align-items: center; font-size: 11px; }
-.as-wrow-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-wrow-bar { height: 8px; background: var(--t-surface); border-radius: 1px; overflow: hidden; }
-.as-wrow-bar i { display: block; height: 100%; background: var(--t-accent); opacity: .8; }
-.as-right { display: flex; flex-direction: column; gap: 8px; }
 
 /* ── Research OS R1 — 밀도·컨텍스트·인과 체인·타임라인 (.as-* 확장) ── */
 /* 얇은 트랙 + 작은 정밀 썸 (Gemini ③) */
-.as-root input[type="range"] { -webkit-appearance: none; appearance: none; height: 14px; background: transparent; cursor: pointer; }
-.as-root input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--t-border); border-radius: 1px; }
-.as-root input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: var(--t-accent); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--t-accent); margin-top: -4px; }
-.as-root input[type="range"]::-moz-range-track { height: 2px; background: var(--t-border); border-radius: 1px; }
-.as-root input[type="range"]::-moz-range-thumb { width: 8px; height: 8px; border-radius: 50%; background: var(--t-accent); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--t-accent); }
 
 /* 컨텍스트 스트립 — Current Regime + 카나리 */
-.as-ctx { display: flex; align-items: center; gap: 8px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 4px 8px; flex-wrap: wrap; }
-.as-ctx-regime { display: inline-flex; align-items: center; gap: 7px; font-family: var(--t-mono); font-size: 10px; letter-spacing: .05em; border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 8px; text-decoration: none; color: var(--t-ink); }
-.as-ctx-regime:hover { filter: brightness(0.97); }
+
 /* A9: 기하·색은 Badge(variant) 로 옮겼다 — 이 규칙들은 `@tailwind utilities`(4줄)보다
    뒤에 있어서 남겨 두면 Badge 의 유틸리티를 이긴다(§48 .brun-card · §50 .aas-gate-skip
    과 같은 함정). 서체만 남기고 나머지는 뺀다. 클래스는 E2E 훅으로 계속 산다. */
-.as-ctx-mode { font-family: var(--t-mono); }
+
 /* [data-mode] 색 매핑은 ContextStrip 의 MODE_TONE → Badge variant 로 이동했다.
    data-mode 속성 자체는 남는다(E2E 가 읽는다). */
-.as-ctx-stress { font-family: var(--t-mono); font-size: 9.5px; color: var(--t-muted); }
-.as-ctx-fill { flex: 1; }
-.as-ctx-canary { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
-.as-ctx-canary em { font-style: normal; font-family: var(--t-mono); font-size: 9px; color: var(--t-muted); letter-spacing: .04em; }
-.as-ctx-canary b { font-variant-numeric: tabular-nums; }
-.as-ctx-spark { display: block; }
 
 /* 테제 인과관계 체인 (Gemini ③ — 폼 탈피) */
-.as-chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.as-chain-node { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--t-border); background: var(--t-surface); border-radius: 2px; padding: 3px 7px; font-size: 10.5px; }
-.as-chain-node.accent { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
-.as-chain-arrow { color: var(--t-muted); font-size: 11px; opacity: .7; }
-.as-chain-thesis { flex: 1 1 150px; min-width: 130px; }
-.as-chain-thesis input { border: none; border-bottom: 1px dashed var(--t-border); background: none; width: 100%; font-size: 11px; padding: 2px 1px; }
-.as-chain-thesis input:focus { outline: none; border-bottom-color: var(--t-accent); }
-.as-chain-conf { display: inline-flex; align-items: center; gap: 6px; min-width: 120px; }
-.as-chain-conf input[type="range"] { width: 78px; }
-.as-chain-conf b { font-size: 10px; font-variant-numeric: tabular-nums; }
 
 /* 연구 타임라인 (Git식 실제 액션 로그) */
-.as-timeline { display: flex; flex-direction: column; gap: 0; max-height: 190px; overflow-y: auto; }
-.as-tl-item { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; position: relative; }
-.as-tl-item::before { content: ""; position: absolute; left: 2.5px; top: 0; bottom: -2px; width: 1px; background: var(--t-border); }
-.as-tl-item:last-child::before { bottom: auto; height: 8px; }
-.as-tl-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-accent); flex: none; position: relative; z-index: 1; }
-.as-tl-time { font-family: var(--t-mono); font-size: 9px; color: var(--t-muted); flex: none; font-variant-numeric: tabular-nums; }
-.as-tl-msg { font-size: 10.5px; line-height: 1.45; }
 
 /* Robustness 상시 카드 */
-.as-robust-row { display: flex; align-items: baseline; gap: 10px; font-size: 10.5px; flex-wrap: wrap; }
-.as-robust-row b { font-variant-numeric: tabular-nums; }
-.as-scen-mini { width: 100%; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 3px 6px; background: #fff; font-family: var(--t-mono); }
 
 /* Explainability 미니트리 (가중치 행 확장) */
-.as-wrow-btn { all: unset; display: grid; grid-template-columns: minmax(0, 1fr) 80px 48px; gap: 8px; align-items: center; font-size: 11px; width: 100%; cursor: pointer; }
-.as-wrow-btn:hover .as-wrow-nm { color: var(--t-accent); }
-.as-explain { border-left: 2px solid var(--t-accent); margin: 2px 0 4px 2px; padding: 3px 0 3px 8px; display: flex; flex-direction: column; gap: 2px; }
-.as-explain-step { display: flex; align-items: baseline; gap: 6px; font-size: 10px; }
-.as-explain-step em { font-style: normal; color: var(--t-muted); min-width: 108px; }
-.as-explain-step b { font-variant-numeric: tabular-nums; }
-.as-explain-step .delta { font-size: 9.5px; }
-.as-explain-road { font-size: 9px; color: var(--t-muted); }
 
 /* ── Research OS v2 — 마이크로 워크스페이스 (.as-* 확장) ── */
 /* 서브 내비게이션 (워크스페이스 탭) */
 /* ── Allocation Studio 파이프라인 크롬 (Claude Design 핸드오프) ── */
 @keyframes aasFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .aas-root { display: flex; flex-direction: column; gap: 8px; }
-.aas-crumb { font-size: 11px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .05em; }
-.aas-crumb span { color: var(--t-accent); }
-.aas-header { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
-.aas-header-title { font-size: 22px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
-.aas-header-desc { font-size: 11px; color: var(--t-muted); margin-top: 3px; }
-.aas-header-sp { flex: 1; }
-.aas-header-mock { font-size: 9px; color: #a16207; border: 1px solid #a16207; border-radius: 2px; padding: 1px 5px; letter-spacing: .04em; align-self: center; }
-.aas-header-cov { font-size: 10px; color: var(--t-muted); align-self: center; }
-.aas-run { border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent); color: #fff; font-size: 11px; font-weight: 600; padding: 7px 16px; cursor: pointer; letter-spacing: .05em; font-family: var(--t-mono); text-transform: uppercase; }
-.aas-run:hover:not(:disabled) { opacity: .88; }
-.aas-run:disabled { opacity: .5; cursor: default; }
 
 /* 파이프라인 바 */
-.aas-pipe { display: flex; align-items: stretch; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 4px 6px; overflow-x: auto; }
-.aas-pipe-seg { display: flex; align-items: center; flex: 1; min-width: 0; }
-.aas-pipe-conn { flex: none; width: 14px; height: 1px; background: var(--t-border); margin: 0 2px; }
-.aas-pipe-chip { flex: 1; min-width: 118px; display: flex; align-items: center; gap: 8px; padding: 4px 9px; border: 1px solid transparent; border-radius: 2px; background: none; cursor: pointer; text-align: left; }
-.aas-pipe-chip:hover { border-color: var(--t-border); background: var(--t-surface); }
-.aas-pipe-chip.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); }
-.aas-pipe-dot { flex: none; width: 5px; height: 5px; background: #fff; border: 1px solid var(--t-border); }
-.aas-pipe-dot.done { background: var(--t-accent); border-color: var(--t-accent); }
-.aas-pipe-n { font-size: 10px; color: var(--t-muted); }
-.aas-pipe-chip.on .aas-pipe-n { color: var(--t-accent); }
-.aas-pipe-meta { min-width: 0; display: flex; flex-direction: column; }
-.aas-pipe-label { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aas-pipe-sub { font-size: 8.5px; color: var(--t-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aas-pipe-kbd { flex: none; align-self: center; font-size: 9px; color: var(--t-muted); padding: 0 8px; white-space: nowrap; }
-
-.aas-content { animation: aasFade .18s ease-out; display: flex; flex-direction: column; gap: 8px; }
 
 /* 하단 nav */
-.aas-botnav { display: flex; align-items: center; gap: 12px; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 2px; padding: 6px 10px; margin-top: 2px; }
-.aas-botnav-prev, .aas-botnav-next { font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 5px 12px; cursor: pointer; color: var(--t-ink); }
-.aas-botnav-prev:hover:not(:disabled), .aas-botnav-next:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
-.aas-botnav-next { background: var(--t-accent); color: #fff; border-color: var(--t-accent); margin-left: auto; }
-.aas-botnav-next:hover:not(:disabled) { opacity: .88; color: #fff; }
-.aas-botnav-prev:disabled, .aas-botnav-next:disabled { opacity: .4; cursor: default; }
-.aas-botnav-mid { font-size: 9.5px; color: var(--t-muted); margin: 0 auto; }
 
 /* 00 OVERVIEW — KPI + 12-col */
-.aas-kpi { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 1100px) { .aas-kpi { grid-template-columns: repeat(3, 1fr); } }
-.aas-kpi-c { border: 1px solid var(--t-border); border-radius: 2px; padding: 9px 12px; background: #fff; min-width: 0; }
-.aas-kpi-l { font-size: 9.5px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aas-kpi-v { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
-.aas-kpi-s { font-size: 9.5px; margin-top: 5px; white-space: nowrap; }
-.aas-ov { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: start; }
-@media (max-width: 1100px) { .aas-ov { grid-template-columns: repeat(6, 1fr); } }
-.aas-ov > section { min-width: 0; }
-.aas-xlink { margin-left: auto; font-size: 10px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 1px 6px; background: none; cursor: pointer; text-decoration: none; }
-.aas-xlink:hover { color: var(--t-accent); border-color: var(--t-accent); }
 
 /* 01 CONSTRUCT — 프리미티브 */
 .aas-map { display: flex; height: 72px; border-radius: 2px; overflow: hidden; gap: 1px; }
 .aas-map-b { display: flex; flex-direction: column; justify-content: center; padding: 0 8px; min-width: 0; }
 .aas-map-b span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aas-cmp-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 132px; gap: 10px; align-items: center; }
-.aas-cmp-bars { display: flex; flex-direction: column; gap: 2px; }
-.aas-cmp-bars > div { height: 5px; background: var(--t-surface); }
-.aas-cmp-bars i { display: block; height: 100%; }
-.aas-conc { display: flex; gap: 18px; flex-wrap: wrap; font-size: 10.5px; color: var(--t-muted); }
-.aas-conc b { font-family: var(--t-mono); color: var(--t-ink); font-variant-numeric: tabular-nums; }
 
 /* ═══ Multi-Stage Wizard — 게이트 · 진행 트래커 · 인텐트 · 고급 접기 · 주 CTA ═══ */
 /* 헤더: 상시 RE-OPTIMIZE 대신 게이트 복귀 ghost 버튼 */
-.aas-header-gate { align-self: center; font-size: 10px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 5px 10px; background: #fff; cursor: pointer; letter-spacing: .04em; }
-.aas-header-gate:hover { border-color: var(--t-accent); color: var(--t-accent); }
 
 /* "이 단계에서 할 일" 인텐트 라인 (Contextual Isolation) */
-.aas-intent { font-size: 11px; color: var(--t-muted); border-left: 2px solid var(--t-accent); padding: 1px 0 1px 9px; line-height: 1.5; }
-.aas-intent b { color: var(--t-ink); font-weight: 600; font-size: 10.5px; margin-right: 2px; }
 
 /* 고급 옵션 접기 (Progressive Disclosure) — 네이티브 <details> */
-.aas-adv { border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); }
-.aas-adv > summary { cursor: pointer; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--t-muted); padding: 6px 9px; list-style: none; user-select: none; }
-.aas-adv > summary::-webkit-details-marker { display: none; }
-.aas-adv > summary::before { content: "▸"; color: var(--t-accent); margin-right: 5px; }
-.aas-adv[open] > summary::before { content: "▾"; }
-.aas-adv > summary:hover { color: var(--t-accent); }
-.aas-adv > *:not(summary) { margin: 6px 9px 9px; }
 
 /* Optimize — 현재 엔진 요약 */
-.as-engine-cur { font-size: 11px; color: var(--t-muted); }
-.as-engine-cur b { color: var(--t-ink); font-family: var(--t-mono); }
 
 /* 하단 가이드 nav — 단일 주 CTA 강조 + 재시작 ghost */
-.aas-botnav-next.primary { font-size: 12px; font-weight: 700; padding: 8px 20px; }
-.aas-botnav-restart { margin-left: auto; font-size: 11px; font-family: var(--t-mono); border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 5px 12px; cursor: pointer; color: var(--t-muted); letter-spacing: .03em; }
-.aas-botnav-restart:hover { border-color: var(--t-accent); color: var(--t-accent); }
 
 /* ── 목표 선택 게이트 ── */
-.aas-gate { max-width: 980px; margin: 0 auto; padding: 22px 8px 40px; display: flex; flex-direction: column; gap: 14px; }
-.aas-gate-q { font-size: 26px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.15; margin: 0; }
-.aas-gate-lead { font-size: 12px; color: var(--t-muted); line-height: 1.65; max-width: 740px; margin: 0; }
-.aas-gate-lead b { color: var(--t-ink); font-weight: 600; }
-.aas-gate-resume { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--t-accent); background: rgba(18,0,255,.05); border-radius: 2px; padding: 10px 14px; cursor: pointer; font-size: 12px; color: var(--t-ink); text-align: left; }
-.aas-gate-resume:hover { background: rgba(18,0,255,.09); }
-.aas-gate-resume em { font-style: normal; color: var(--t-accent); }
-.aas-gate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-top: 2px; }
+
 .aas-goal { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 14px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; min-height: 108px; }
 .aas-goal:hover:not(:disabled) { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
 .aas-goal:disabled { opacity: .5; cursor: default; }
-.aas-goal-head { display: flex; align-items: center; gap: 9px; }
-.aas-goal-ic { width: 22px; height: 22px; color: var(--t-accent); flex: none; }
-.aas-goal-t { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-.aas-goal-d { font-size: 11px; color: var(--t-muted); flex: 1; }
-.aas-goal-seed { display: flex; flex-wrap: wrap; gap: 5px; }
-.aas-goal-seed span { font-size: 9px; color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 1px 5px; background: var(--t-surface); }
-.aas-goal-custom { border-style: dashed; }
-.aas-gate-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; border-top: 1px solid var(--t-border); padding-top: 14px; }
-.aas-gate-footsec { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.aas-gate-footlab { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--t-muted); min-width: 132px; }
-.aas-gate-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.aas-gate-skip { font-size: 11px; font-family: var(--t-mono); color: var(--t-muted); background: none; border: none; cursor: pointer; padding: 2px 0; }
-.aas-gate-skip:hover { color: var(--t-accent); }
 
 /* ── 위저드 진행 트래커 (3 페이즈 + 북엔드) ── */
-.aas-wiz { display: flex; align-items: stretch; gap: 6px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 5px 7px; overflow-x: auto; }
-.aas-wiz-sep { flex: none; align-self: center; width: 12px; height: 1px; background: var(--t-border); }
-.aas-wiz-book { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 60px; border: 1px solid transparent; border-radius: 2px; background: var(--t-surface); cursor: pointer; padding: 4px 6px; color: var(--t-muted); }
-.aas-wiz-book:hover { border-color: var(--t-border); }
-.aas-wiz-book.on { border-color: var(--t-accent); background: rgba(18,0,255,.05); color: var(--t-ink); }
-.aas-wiz-booklab { font-size: 8px; letter-spacing: .05em; white-space: nowrap; }
-.aas-wiz-phase { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--t-border); border-radius: 2px; padding: 4px 6px; background: var(--t-surface); }
-.aas-wiz-phase.on { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
-.aas-wiz-phaselab { display: flex; align-items: baseline; gap: 6px; }
-.aas-wiz-phaselab b { font-size: 9px; letter-spacing: .08em; color: var(--t-ink); }
-.aas-wiz-phaselab em { font-style: normal; font-size: 9px; color: var(--t-muted); }
-.aas-wiz-phasenum { margin-left: auto; font-size: 8px; color: var(--t-muted); }
-.aas-wiz-steps { display: flex; gap: 4px; min-width: 0; }
-.aas-wiz-step { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 2px; background: var(--card); cursor: pointer; padding: 3px 7px; text-align: left; }
-.aas-wiz-step:hover { border-color: var(--t-border); }
-.aas-wiz-step.on { border-color: var(--t-accent); background: rgba(18,0,255,.06); }
-.aas-wiz-dot { flex: none; width: 6px; height: 6px; background: var(--card); border: 1px solid var(--t-border); border-radius: 50%; }
-.aas-wiz-step.done .aas-wiz-dot, .aas-wiz-book.done .aas-wiz-dot { background: var(--t-accent); border-color: var(--t-accent); }
-.aas-wiz-meta { min-width: 0; display: flex; flex-direction: column; }
-.aas-wiz-lab { font-size: 10px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aas-wiz-lab b { color: var(--t-accent); font-weight: 600; }
-.aas-wiz-sub { font-size: 8.5px; color: var(--t-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aas-wiz-kbd { flex: none; align-self: center; font-size: 9px; color: var(--t-muted); padding: 0 4px; white-space: nowrap; }
 
 /* 허브 */
-.as-hub { display: flex; flex-direction: column; gap: 8px; }
-.as-hub-bar { display: flex; align-items: center; gap: 12px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; padding: 6px 10px; flex-wrap: wrap; }
-.as-hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: start; }
-.as-expand { margin-left: auto; font-size: 12px; color: var(--t-muted); text-decoration: none; border: 1px solid var(--t-border); border-radius: 2px; padding: 0 5px; line-height: 1.4; }
-.as-expand:hover { color: var(--t-accent); border-color: var(--t-accent); }
 
 /* 워크스페이스 2-열 공통 */
 .as-ws2 { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 8px; align-items: start; }
 .as-ws2 aside { min-width: 0; }
 .as-ws2 main { min-width: 0; }
-.as-ws-opt { grid-template-columns: 320px minmax(0, 1fr); }
-.as-ws-exp { grid-template-columns: minmax(0, 1fr) 320px; }
-.as-ws-jr { grid-template-columns: 340px minmax(0, 1fr); }
-@media (max-width: 1000px) { .as-ws2, .as-ws-opt, .as-ws-exp, .as-ws-jr { grid-template-columns: 1fr; } }
+
+@media (max-width: 1000px) { .as-ws2{ grid-template-columns: 1fr; } }
 
 /* Sensitivity Heatmap */
-.as-heat-wrap { overflow-x: auto; }
-.as-heat { border-collapse: collapse; font-size: 10px; width: 100%; }
-.as-heat th { font-family: var(--t-mono); font-weight: 500; color: var(--t-muted); padding: 3px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--t-border); }
-.as-heat tbody th { text-align: left; border-bottom: 1px solid var(--t-surface); }
-.as-heat tbody th em { font-style: normal; font-size: 8.5px; color: var(--t-accent); }
-.as-heat td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--t-surface); font-variant-numeric: tabular-nums; min-width: 52px; }
-.as-heat .as-heat-corner { text-align: left; font-size: 8.5px; }
-.as-heat .as-heat-base { color: var(--t-muted); border-left: 1px solid var(--t-border); }
 
 /* Decision Journal */
-.as-jr-field { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; }
-.as-jr-field em { font-style: normal; color: var(--t-muted); font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .04em; }
-.as-jr-entry { border: 1px solid var(--t-border); border-left: 3px solid var(--t-accent); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.as-jr-head { display: flex; align-items: baseline; gap: 10px; }
-.as-jr-head b { font-size: 12px; }
-.as-jr-head .as-x { margin-left: auto; }
-.as-jr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 14px; }
-.as-jr-grid em, .as-jr-review em { font-style: normal; color: var(--t-muted); font-family: var(--t-mono); font-size: 9px; letter-spacing: .05em; display: block; }
-.as-jr-grid p { font-size: 11px; line-height: 1.5; margin: 1px 0 0; }
-.as-jr-review { border-top: 1px dashed var(--t-border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
-.as-jr-review p { font-size: 11px; margin: 0; }
 
 /* ══ Allocation Studio 신규 툴 (팩터 빌더 · 타이밍 · 상관국면 · 위저드 우측유틸) ══ */
 /* 위저드 트래커 우측 유틸 (제거된 헤더의 MOCK·목표 재배치) */
-.aas-wiz-right { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
-.aas-wiz-mock { font-size: 8.5px; color: #a16207; border: 1px solid #a16207; border-radius: 2px; padding: 1px 4px; letter-spacing: .04em; }
-.aas-wiz-gate { font-size: 11px; font-family: var(--t-mono); color: var(--t-muted); border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 7px; background: var(--card); cursor: pointer; white-space: nowrap; }
-.aas-wiz-gate:hover { border-color: var(--t-accent); color: var(--t-accent); }
 
 /* Factor Builder (01 Construct — 팩터 빌더 모드) */
-.as-fb { display: flex; flex-direction: column; gap: 8px; }
-.as-fb-mode { margin-bottom: 6px; }
-.as-fb-row { display: flex; flex-direction: column; gap: 5px; }
-.as-fb-add, .as-fb-params select, .as-tm-kind, .as-tm-sig, .as-tm-set select { border: 1px solid var(--t-border); border-radius: 2px; font-size: 11px; padding: 4px 6px; background: #fff; }
-.as-fb-presets { display: flex; flex-wrap: wrap; gap: 4px; }
-.as-fb-fac { display: flex; align-items: center; gap: 6px; font-size: 11px; border-bottom: 1px solid var(--t-surface); padding: 3px 0; }
-.as-fb-fac-nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-fb-fac-w { color: var(--t-muted); font-size: 10px; white-space: nowrap; }
-.as-fb-fac-w input { width: 46px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 2px 4px; text-align: right; }
-.as-fb-dir { display: inline-flex; border: 1px solid var(--t-border); border-radius: 2px; overflow: hidden; }
-.as-fb-dir button { border: none; background: #fff; font-size: 9.5px; padding: 2px 5px; cursor: pointer; color: var(--t-muted); }
-.as-fb-dir button.on { background: rgba(18,0,255,.06); color: var(--t-accent); font-weight: 600; }
-.as-fb-params { display: flex; flex-direction: column; gap: 6px; }
-.as-fb-params label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--t-muted); }
-.as-fb-params input[type="range"] { accent-color: var(--t-accent); }
-.as-fb-result { margin-top: 6px; border-top: 1px solid var(--t-border); padding-top: 6px; }
-.as-fb-result-head { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--t-muted); margin-bottom: 4px; }
+
 .as-fb-apply { border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent); color: #fff; font-size: 10.5px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
 .as-fb-apply:hover:not(:disabled) { opacity: .9; }
 .as-fb-apply:disabled { opacity: .45; cursor: default; }
-
-.as-tm-risk { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
-.as-tm-risk-row { display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 4px 8px; background: rgba(18,0,255,.03); border-left: 2px solid var(--t-accent); border-radius: 2px; }
-.as-tm-risk-k { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-muted); }
-.as-tm-risk-row b { color: var(--t-accent); }
-.as-enb { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--t-surface); font-size: 11px; }
-.as-enb-k { color: var(--t-muted); text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; }
-.as-enb b { font-size: 16px; color: var(--t-accent); }
 
 /* ── AAS TIMING 통합 팩터 창 (TimingFactorModal) + 팩터 칩 ── */
 .tfm-backdrop { position: fixed; inset: 0; z-index: 9998; background: rgba(15,23,42,.45);
@@ -3741,9 +3421,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   border: 1px solid var(--t-border); border-left: 2px solid var(--t-accent); border-radius: 2px;
   padding: 7px 8px; background: var(--t-surface); word-break: break-all; }
 /* 승격 노트 — 승격 대상 행 바로 아래 인라인 */
-.as-al-promote { display: flex; align-items: center; gap: 5px; padding: 6px 8px; margin: -2px 0 4px;
-  border: 1px solid var(--t-accent); border-top: none; border-radius: 0 0 2px 2px; background: rgba(18,0,255,.04); }
-.as-al-promote .as-input { flex: 1; min-width: 0; }
+
 .tfc-list { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; }
 .tfc-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   border: 1px solid var(--t-border); border-left: 2px solid var(--t-accent); border-radius: 2px; padding: 6px 8px; background: var(--t-surface); }
@@ -3752,387 +3430,71 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tfc-chip-tk { font-size: 10px; color: var(--t-accent); }
 .tfc-chip-cond { font-size: 10px; color: var(--t-muted); }
 .tfc-chip-acts { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.tfc-chip-acts .as-tm-num { width: 62px; }
+
 @media (max-width: 820px) { .tfm-body { grid-template-columns: 1fr; } .tfm-left { border-right: none; border-bottom: 1px solid var(--t-border); } }
 
 /* ── Policy Backtest (walk-forward OOS) ── */
-.as-bt-controls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.as-bt-controls .as-tm-set { margin-top: 0; }
-.as-bt-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 6px; font-size: 10.5px; color: var(--t-muted); }
+
 .as-bt-badge { font-size: 9.5px; font-weight: 600; letter-spacing: .03em; padding: 2px 7px; border-radius: 2px; border: 1px solid var(--t-border); background: var(--t-surface); color: var(--t-muted); }
 .as-bt-badge.mock { color: #b45309; background: #fffbeb; border-color: #fde68a; }
 .as-bt-badge.real { color: #16a34a; background: #dcfce7; border-color: #bbf7d0; }
 .as-bt-badge.ok { color: var(--t-accent); background: rgba(18,0,255,.05); border-color: rgba(18,0,255,.2); }
-.as-bt-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 8px 0; }
-.as-bt-kpi { border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); padding: 6px 8px; }
-.as-bt-kpi-l { font-size: 8.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--t-muted); }
-.as-bt-kpi-v { font-size: 15px; font-weight: 700; color: var(--t-ink); }
-.as-bt-card { margin-top: 10px; }
-.as-bt-t { font-size: 11px; font-weight: 600; color: var(--t-ink); margin-bottom: 4px; }
-.as-bt-wtbl-wrap { overflow-x: auto; }
-.as-bt-wtbl { width: 100%; border-collapse: collapse; font-size: 10.5px; white-space: nowrap; }
-.as-bt-wtbl th { text-align: right; font-size: 9px; color: var(--t-muted); border-bottom: 1px solid var(--t-border); padding: 4px 7px; font-weight: 500; }
-.as-bt-wtbl th:first-child, .as-bt-wtbl td:first-child { text-align: left; }
-.as-bt-wtbl td { text-align: right; padding: 3px 7px; border-bottom: 1px solid var(--t-surface); font-variant-numeric: tabular-nums; }
-.as-fb-code { color: var(--t-muted); font-size: 9.5px; }
 
 /* Timing (03 — 카나리·마켓타이밍) */
-.as-tm-canary { display: flex; align-items: center; gap: 5px; padding: 3px 0; border-bottom: 1px solid var(--t-surface); flex-wrap: wrap; }
-.as-tm-id { width: 68px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 3px 5px; font-family: var(--t-mono); text-transform: uppercase; }
-.as-tm-num { width: 52px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; padding: 3px 5px; text-align: right; }
-.as-tm-sig { flex: 1; min-width: 90px; }
-.as-tm-set { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--t-muted); margin-top: 4px; }
-.as-tm-set input, .as-tm-set select { border: 1px solid var(--t-border); border-radius: 2px; font-size: 11px; padding: 4px 6px; background: #fff; }
-.as-tm-verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px; }
-.as-tm-sig-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 2px; letter-spacing: .03em; }
-.as-tm-sig-badge.risk_on { background: rgba(22,163,74,.1); color: #16a34a; border: 1px solid #16a34a; }
-.as-tm-sig-badge.risk_off { background: rgba(220,38,38,.08); color: var(--color-bear); border: 1px solid var(--color-bear); }
-.as-tm-mkt { display: flex; align-items: center; gap: 12px; }
-.as-tm-mkt-lab { display: flex; flex-direction: column; }
-.as-tm-mkt-lab b { font-size: 13px; }
-.as-tm-comps { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 4px 12px; margin: 6px 0; }
-.as-tm-comp { display: flex; align-items: baseline; justify-content: space-between; font-size: 10.5px; color: var(--t-muted); }
-.as-tm-corr-head { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
-.as-tm-corr-head > div { display: flex; flex-direction: column; }
-.as-tm-corr-head span { font-size: 9.5px; color: var(--t-muted); text-transform: uppercase; letter-spacing: .04em; }
-.as-tm-corr-head b { font-size: 12px; font-variant-numeric: tabular-nums; }
-.as-tm-corr-head em { font-style: normal; font-size: 10px; }
 
 /* 3-way / 2-way 세그먼트 (Construct 모드 · Timing 마켓) */
-.as-seg-3 button, .as-seg-2 button { flex: 1; text-align: center; }
 
 /* ── 마켓 지수 게이트 프리셋 (Timing — 백테스터 마켓타이밍 브릿지) ── */
-.as-tm-gates { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
-@media (max-width: 1180px) { .as-tm-gates { grid-template-columns: 1fr; } }
-.as-tm-gate { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 8px 10px;
-  border: 1px solid var(--t-border); border-radius: 3px; background: #fff; cursor: pointer; transition: all .14s ease; }
-.as-tm-gate:hover { border-color: var(--t-accent); background: rgba(18,0,255,.03); transform: translateY(-1px); box-shadow: 0 3px 10px -4px rgba(18,0,255,.2); }
-.as-tm-gate-t { font-size: 11.5px; font-weight: 600; color: var(--t-ink); }
-.as-tm-gate-s { font-size: 10px; color: var(--t-muted); line-height: 1.4; }
 
 /* ── 매크로 전략 라이브러리 (Construct 3번째 모드) ── */
-.as-sl { display: flex; flex-direction: column; gap: 8px; }
-.as-sl-search { border: 1px solid var(--t-border); border-radius: 2px; font-size: 11px; padding: 5px 8px; background: #fff; }
-.as-sl-search:focus { outline: none; border-color: var(--t-accent); box-shadow: 0 0 0 3px rgba(18,0,255,.1); }
-.as-sl-list { display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 260px); overflow-y: auto; padding-right: 2px; }
-.as-sl-group { display: flex; flex-direction: column; gap: 5px; }
-.as-sl-fam { font-family: var(--t-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--t-accent);
-  padding-bottom: 3px; border-bottom: 1px solid var(--t-border); }
-.as-sl-fam b { color: var(--t-muted); font-weight: 400; margin-left: 4px; }
-.as-sl-card { border: 1px solid var(--t-border); border-radius: 3px; padding: 8px 10px; background: #fff;
-  display: flex; flex-direction: column; gap: 5px; transition: box-shadow .14s ease, border-color .14s ease; }
-.as-sl-card:hover { box-shadow: 0 2px 8px -3px rgba(17,17,17,.12); }
-.as-sl-card.on { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
-.as-sl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.as-sl-name { font-size: 12px; font-weight: 600; color: var(--t-ink); }
-.as-sl-sig { font-size: 9.5px; white-space: nowrap; }
-.as-sl-desc { font-size: 10px; color: var(--t-muted); line-height: 1.4; }
-.as-sl-holds { display: flex; flex-wrap: wrap; gap: 4px; }
-.as-sl-hold { font-size: 9.5px; padding: 1px 6px; border: 1px solid var(--t-border); border-radius: 2px; background: var(--t-surface); color: var(--t-ink); }
-.as-sl-hold b { color: var(--t-muted); }
-.as-sl-more { font-size: 9.5px; color: var(--t-muted); align-self: center; }
-.as-sl-load { align-self: flex-start; margin-top: 2px; }
 
 /* ── 국내 시나리오팩 (05 Stress — P3-b) ── */
-.as-krs-list { flex-wrap: wrap; }
-.as-krs-hero { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0; }
-.as-krs-hero > div { border: 1px solid var(--t-border); border-radius: 3px; padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
-.as-krs-hero em { font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-muted); }
-.as-krs-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 8px 0; }
-@media (max-width: 900px) { .as-krs-cols { grid-template-columns: 1fr; } }
-.as-krs-h { font-family: var(--t-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--t-accent); margin-bottom: 4px; border-bottom: 1px solid var(--t-border); padding-bottom: 3px; }
-.as-krs-h em { font-style: normal; color: var(--t-muted); margin-left: 5px; letter-spacing: 0; }
-.as-krs-frow { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; padding: 3px 0; border-bottom: 1px dotted var(--t-surface); }
-.as-krs-assume { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; padding: 8px 10px; background: var(--t-surface); border-radius: 3px; font-size: 10.5px; color: var(--t-muted); }
-.as-krs-assume b { color: var(--t-ink); margin-left: 3px; }
-.as-krs-exec { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--t-muted); line-height: 1.5; margin-bottom: 4px; }
-.as-krs-exec b { color: var(--t-ink); }
 
 /* ── 제약 조건 패널 (05 Optimize — P3) ── */
-.as-ct-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 6px 0; }
-.as-ct-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--t-muted); }
-.as-ct-grid label em { font-style: normal; font-size: 8.5px; opacity: .8; }
-.as-ct-grid .as-input { padding: 4px 6px; font-size: 11px; }
-.as-ct-report { margin-top: 8px; border: 1px solid var(--t-border); border-left-width: 3px;
-  border-radius: 3px; padding: 8px 10px; font-size: 10.5px; display: flex; flex-direction: column; gap: 3px; }
-.as-ct-report b { font-size: 11px; }
-.as-ct-report.ok { border-left-color: var(--color-bull); }
-.as-ct-report.ok b { color: var(--color-bull); }
-.as-ct-report.approx { border-left-color: #d97706; }
-.as-ct-report.approx b { color: #92610a; }
-.as-ct-report.infeasible { border-left-color: var(--color-bear); background: rgba(220,38,38,.04); }
-.as-ct-report.infeasible b { color: var(--color-bear); }
-.as-ct-line { color: var(--t-muted); line-height: 1.45; }
-.as-ct-line.viol { color: #92610a; }
 
 /* ── Alpha Lab (02 — P2) ── */
-.as-al-expr { font-family: var(--t-mono); font-size: 12px; resize: vertical; }
-.as-al-lint { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
-.as-al-lint-item { font-size: 10.5px; padding: 4px 8px; border-radius: 2px; border: 1px solid var(--t-border); }
-.as-al-lint-item b { font-family: var(--t-mono); font-size: 9px; margin-right: 6px; }
-.as-al-lint-item.error { border-color: var(--color-bear); color: var(--color-bear); background: rgba(220,38,38,.05); }
-.as-al-lint-item.warn { border-color: #d97706; color: #92610a; background: rgba(217,119,6,.06); }
-.as-al-lint-item.info { color: var(--t-muted); }
-.as-al-item { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--t-surface); padding: 3px 0; }
-.as-al-item.on .as-al-name { color: var(--t-accent); }
-.as-al-pick { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  background: none; border: none; cursor: pointer; text-align: left; padding: 3px 2px; }
-.as-al-name { font-size: 11.5px; font-weight: 600; color: var(--t-ink); display: inline-flex; align-items: center; gap: 5px; }
-.as-al-tpl { font-style: normal; font-family: var(--t-mono); font-size: 8px; padding: 1px 4px;
-  border: 1px solid var(--t-border); border-radius: 2px; color: var(--t-muted); }
-.as-al-ver { font-style: normal; font-size: 9px; color: var(--t-muted); }
-.as-al-status { font-size: 9.5px; padding: 1px 7px; border-radius: 2px; border: 1px solid var(--t-border); color: var(--t-muted); white-space: nowrap; }
-.as-al-status.s-experimental { border-color: #d97706; color: #92610a; }
-.as-al-status.s-validated { border-color: var(--t-accent); color: var(--t-accent); }
-.as-al-status.s-approved { border-color: var(--color-bull); color: var(--color-bull); }
-.as-al-status.s-retired { opacity: .5; }
-.as-al-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px; }
-@media (max-width: 1180px) { .as-al-kpis { grid-template-columns: repeat(3, 1fr); } }
-.as-al-kpi { border: 1px solid var(--t-border); border-radius: 3px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
-.as-al-kpi em { font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--t-muted); }
-.as-al-kpi b { font-size: 14px; }
-.as-al-qbars { display: flex; align-items: stretch; gap: 10px; height: 84px; padding: 6px 2px 0; }
-.as-al-qcol { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
-.as-al-qbar { width: 70%; border-radius: 2px 2px 0 0; }
-.as-al-qcol .num { font-size: 9px; color: var(--t-muted); }
 
 /* ── ResearchRuns 패널 (Journal — P1 재현성) ── */
-.as-rr-record { display: flex; gap: 6px; margin-bottom: 8px; }
-.as-rr-record .as-input { flex: 1; }
-.as-rr-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--t-border);
-  border-radius: 3px; margin-bottom: 4px; cursor: pointer; background: #fff; transition: all .12s ease; }
-.as-rr-item:hover { border-color: var(--t-accent); }
-.as-rr-item.on { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
-.as-rr-item.active { box-shadow: inset 3px 0 0 var(--t-accent); }
-.as-rr-name { flex: 1; font-size: 11.5px; font-weight: 600; color: var(--t-ink);
-  display: inline-flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-rr-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-accent); flex-shrink: 0; }
-.as-rr-src { font-size: 8.5px; padding: 1px 5px; border: 1px solid var(--t-border); border-radius: 2px;
-  color: var(--t-muted); letter-spacing: .05em; flex-shrink: 0; }
-.as-rr-cmp { margin-top: 10px; border-top: 1px solid var(--t-border); padding-top: 8px; }
 
 /* ── 불러온 전략 배너 (Construct main 상단) ── */
-.as-sl-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; margin-bottom: 4px;
-  border: 1px solid rgba(18,0,255,.2); border-left: 3px solid var(--t-accent); border-radius: 3px; background: rgba(18,0,255,.035); }
-.as-sl-banner-badge { font-family: var(--t-mono); font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
-  padding: 2px 7px; background: var(--t-accent); color: #fff; border-radius: 2px; }
-.as-sl-banner-name { font-size: 13px; font-weight: 600; color: var(--t-ink); }
-.as-sl-banner-sig { font-size: 10.5px; color: var(--t-muted); }
-.as-sl-banner-x { margin-left: auto; font-family: var(--t-mono); font-size: 10px; padding: 3px 8px;
-  background: transparent; border: 1px solid var(--t-border); border-radius: 2px; color: var(--t-muted); cursor: pointer; transition: all .12s; }
-.as-sl-banner-x:hover { border-color: var(--color-bear); color: var(--color-bear); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Execution Readiness Room (Full Expansion P4) — 오더 diff·비용·pre-trade·워크플로
    한국 관례: 매수=빨강 · 매도=파랑 (손익 bull/bear 색과 별개).
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-exec { display: flex; flex-direction: column; gap: 12px; }
-.as-exec-buy { color: #dc2626; font-weight: 600; }
-.as-exec-sell { color: #2563eb; font-weight: 600; }
 
 /* 설정 행 */
-.as-exec-cfg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 8px 0 4px; }
-.as-exec-cfg label { display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: var(--t-muted); letter-spacing: .03em; }
-.as-exec-cfg input { width: 130px; padding: 5px 7px; border: 1px solid var(--t-border); border-radius: 2px;
-  font-family: var(--t-mono); font-size: 11.5px; background: var(--t-bg, #fff); color: var(--t-ink); }
-.as-exec-cfg input::-webkit-outer-spin-button, .as-exec-cfg input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.as-exec-cfg input[type=number] { -moz-appearance: textfield; }
-.as-exec-restr input, .as-exec-restr { width: 210px; }
-.as-exec-hint { font-size: 9.5px; color: var(--t-muted); }
-.as-exec-limits { margin: 0; }
-.as-exec-limits .as-exec-cfg { padding: 4px 9px 9px; }
-.as-exec-run { padding: 7px 16px; border: 1px solid var(--t-accent); border-radius: 2px; background: var(--t-accent);
-  color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .04em; cursor: pointer; transition: opacity .12s; }
-.as-exec-run:disabled { opacity: .55; cursor: default; }
 
 /* KPI 스트립 */
-.as-exec-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-.as-exec-kpi { border: 1px solid var(--t-border); border-radius: 3px; background: var(--t-surface); padding: 8px 10px;
-  display: flex; flex-direction: column; gap: 2px; }
-.as-exec-kpi .k { font-size: 9px; letter-spacing: .07em; text-transform: uppercase; color: var(--t-muted); }
-.as-exec-kpi b { font-size: 17px; font-weight: 700; color: var(--t-ink); font-variant-numeric: tabular-nums; }
-.as-exec-kpi em { font-size: 9px; color: var(--t-muted); font-style: normal; }
-.as-exec-kpi.verdict.pass { border-color: var(--color-bull); }
-.as-exec-kpi.verdict.warning { border-color: #d97706; }
-.as-exec-kpi.verdict.block { border-color: var(--color-bear); background: var(--color-bear-bg); }
-.as-exec-kpi.verdict b { font-size: 14px; }
 
 /* 본문 그리드 */
-.as-exec-grid { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(260px, 1fr); gap: 12px; }
-.as-exec-side { display: flex; flex-direction: column; gap: 12px; }
-@media (max-width: 1000px) { .as-exec-grid { grid-template-columns: 1fr; } .as-exec-kpis { grid-template-columns: repeat(2, 1fr); } }
 
 /* 오더 테이블 */
-.as-exec-tablewrap { overflow-x: auto; }
-.as-exec-table { font-size: 10.5px; margin-top: 6px; }
-.as-exec-table td { white-space: nowrap; }
-.as-exec-warn-row td { background: rgba(217,119,6,.05); }
-.as-exec-code { display: block; font-size: 8.5px; color: var(--t-muted); }
-.as-exec-stage { color: var(--t-muted); font-size: 8.5px; }
-.as-exec-tick { display: block; font-size: 8px; color: var(--t-muted); }
-.as-exec-costchips { display: inline-flex; gap: 5px; margin-left: 6px; font-size: 8px; color: var(--t-muted); }
-.as-exec-costchips span { border: 1px solid var(--t-border); border-radius: 2px; padding: 0 3px; }
-.as-exec-warnlist { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--t-border);
-  font-size: 10px; color: #b45309; display: flex; flex-direction: column; gap: 3px; }
-.as-exec-warnlist b { color: var(--t-ink); }
 
 /* pre-trade 체크 */
-.as-exec-checks { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.as-exec-checks li { display: flex; align-items: center; gap: 7px; font-size: 10.5px; padding: 4px 6px; border-radius: 2px; }
-.as-exec-checks li.warning { background: rgba(217,119,6,.05); }
-.as-exec-checks li.block { background: var(--color-bear-bg); }
-.as-exec-chk { font-size: 8.5px; font-weight: 700; letter-spacing: .04em; padding: 1px 6px; border-radius: 2px; flex-shrink: 0; }
-.as-exec-chk.pass { background: var(--color-bull-bg); color: #15803d; }
-.as-exec-chk.warning { background: #fef3c7; color: #b45309; }
-.as-exec-chk.block { background: var(--color-bear); color: #fff; }
-.as-exec-chk-name { font-weight: 600; color: var(--t-ink); }
-.as-exec-chk-detail { margin-left: auto; color: var(--t-muted); font-size: 9.5px; }
-.as-exec-total td { border-top: 1px solid var(--t-border); }
 
 /* 워크플로 */
-.as-exec-save { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-.as-exec-save input { padding: 6px 9px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 11.5px; width: 220px; }
-.as-exec-save button, .as-exec-wf-btns button { padding: 6px 13px; border: 1px solid var(--t-border); border-radius: 2px;
-  background: var(--t-surface); color: var(--t-ink); font-size: 10.5px; font-weight: 600; cursor: pointer; transition: all .12s; }
-.as-exec-save button.primary, .as-exec-wf-btns button.primary { background: var(--t-accent); border-color: var(--t-accent); color: #fff; }
-.as-exec-save button:disabled, .as-exec-wf-btns button:disabled { opacity: .5; cursor: default; }
-.as-exec-dbwarn { font-size: 10px; color: #b45309; }
-.as-exec-wf { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-.as-exec-wf-head { display: flex; align-items: center; gap: 10px; font-size: 11.5px; }
-.as-exec-status { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; padding: 2px 9px; border-radius: 2px;
-  background: var(--t-surface); border: 1px solid var(--t-border); color: var(--t-ink); }
-.as-exec-status.approved, .as-exec-status.paper_submitted { background: var(--color-bull-bg); color: #15803d; border-color: transparent; }
-.as-exec-status.filled, .as-exec-status.reconciled { background: var(--t-accent); color: #fff; border-color: transparent; }
-.as-exec-status.cancelled, .as-exec-status.rejected { background: var(--color-bear-bg); color: #b91c1c; border-color: transparent; }
-.as-exec-noapprove { font-size: 10px; color: var(--color-bear); font-weight: 600; }
-.as-exec-wf-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-.as-exec-audit { margin-top: 4px; }
-.as-exec-auditlist { list-style: none; margin: 0; padding: 6px 9px; display: flex; flex-direction: column; gap: 3px; }
-.as-exec-auditlist li { display: flex; gap: 8px; font-size: 10px; color: var(--t-ink); align-items: baseline; }
-.as-exec-audit-t { color: var(--t-muted); font-size: 9px; flex-shrink: 0; }
-.as-exec-audit-a { font-weight: 600; }
-.as-exec-audit-d { color: var(--t-muted); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Attribution · Decision Journal · Strategy Health (Full Expansion P5)
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-attr { display: flex; flex-direction: column; gap: 10px; }
-.as-attr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 10.5px; color: var(--t-muted); }
-.as-attr-run { font-weight: 600; color: var(--t-ink); }
-.as-attr-warn { color: #b45309; font-weight: 600; font-size: 10px; }
+
 .as-attr-basis { font-size: 8px; font-weight: 700; letter-spacing: .03em; padding: 1px 5px; border-radius: 2px; margin-left: 5px; vertical-align: middle; }
 .as-attr-basis.real { background: var(--color-bull-bg); color: #15803d; }
 .as-attr-basis.mock { background: #fef3c7; color: #b45309; }
 .as-attr-basis.unavailable { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
-.as-attr-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.as-attr-cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 900px) { .as-attr-cards, .as-attr-cards2 { grid-template-columns: 1fr; } }
-.as-attr-card { border: 1px solid var(--t-border); border-radius: 3px; background: var(--t-surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
-.as-attr-card .k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--t-muted); }
-.as-attr-card b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--t-ink); }
-.as-attr-link { font-size: 10.5px; color: var(--t-muted); padding: 8px 10px; border: 1px dashed var(--t-border); border-radius: 3px; }
-.as-attr-link b { color: var(--t-accent); }
 
 /* Decision Journal (서버) */
-.as-dj-form { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
-.as-dj-runrow { font-size: 10px; }
-.as-dj-run { color: var(--t-accent); font-weight: 600; }
-.as-dj-list { display: flex; flex-direction: column; gap: 8px; }
-.as-dj-attr { font-size: 10px; color: var(--t-ink); background: var(--t-surface); border-radius: 2px; padding: 4px 7px; margin: 4px 0; }
-.as-dq { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 2px; background: var(--t-surface); border: 1px solid var(--t-border); color: var(--t-ink); margin-left: 6px; }
-.as-dq.good_outcome_good_process { background: var(--color-bull-bg); color: #15803d; border-color: transparent; }
-.as-dq.bad_outcome_bad_process { background: var(--color-bear-bg); color: #b91c1c; border-color: transparent; }
-.as-dq.good_outcome_bad_process, .as-dq.bad_outcome_good_process { background: #fef3c7; color: #b45309; border-color: transparent; }
 
 /* Strategy Health */
-.as-health-counts { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; }
-.as-health-pill { font-size: 9px; font-weight: 700; letter-spacing: .03em; padding: 2px 7px; border-radius: 2px; }
-.as-health-pill.healthy { background: var(--color-bull-bg); color: #15803d; }
-.as-health-pill.watch { background: #fef3c7; color: #b45309; }
-.as-health-pill.de_risk { background: var(--color-bear-bg); color: #b91c1c; }
-.as-health-pill.paused { background: #e5e7eb; color: #374151; }
-.as-health-pill.retired { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
-.as-health-derisk { font-size: 10px; color: #b91c1c; background: var(--color-bear-bg); border-radius: 2px; padding: 5px 8px; margin-bottom: 6px; }
-.as-health-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.as-health-item { display: flex; align-items: center; gap: 7px; font-size: 10.5px; padding: 3px 5px; border-radius: 2px; }
-.as-health-item.de_risk, .as-health-item.paused { background: rgba(220,38,38,.04); }
-.as-health-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.as-health-dot.healthy { background: var(--color-bull); }
-.as-health-dot.watch { background: #d97706; }
-.as-health-dot.de_risk { background: var(--color-bear); }
-.as-health-dot.paused { background: #6b7280; }
-.as-health-dot.retired { background: var(--t-border); }
-.as-health-name { flex: 1; font-weight: 600; color: var(--t-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-health-status { font-size: 9.5px; color: var(--t-muted); }
-.as-health-sig { font-size: 9px; color: var(--t-muted); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    AutoAlpha 실험실 (Full Expansion P6 — Experimental) — 후보 생성 샌드박스
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-aa { display: flex; flex-direction: column; gap: 8px; }
-.as-aa-exp { font-size: 8px; font-weight: 800; letter-spacing: .08em; padding: 1px 6px; border-radius: 2px;
-  background: #7c3aed; color: #fff; }
-.as-aa-gov { font-size: 10px; color: #6d28d9; background: rgba(124,58,237,.06); border: 1px solid rgba(124,58,237,.22);
-  border-radius: 3px; padding: 6px 9px; line-height: 1.45; }
-.as-aa-gov b { color: #5b21b6; }
-.as-aa-ctrl { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
-.as-aa-ctrl label { display: flex; flex-direction: column; gap: 3px; font-size: 9.5px; color: var(--t-muted); }
-.as-aa-ctrl input, .as-aa-ctrl select { padding: 5px 7px; border: 1px solid var(--t-border); border-radius: 2px;
-  font-size: 11px; font-family: var(--t-mono); width: 92px; background: var(--t-bg, #fff); color: var(--t-ink); }
-.as-aa-ctrl input::-webkit-outer-spin-button, .as-aa-ctrl input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.as-aa-seeds { font-family: var(--t-mono); font-size: 11px; }
-.as-aa-meta { font-size: 10px; color: var(--t-muted); }
-.as-aa-bias { font-size: 10px; color: #b45309; background: #fffbeb; border-radius: 2px; padding: 5px 8px; line-height: 1.4; }
-.as-aa-list { display: flex; flex-direction: column; gap: 3px; max-height: 320px; overflow-y: auto; }
-.as-aa-cand { display: flex; align-items: center; gap: 8px; padding: 4px 7px; border: 1px solid var(--t-border);
-  border-radius: 2px; background: var(--t-surface); }
-.as-aa-cand.on { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
-.as-aa-pick { display: flex; align-items: center; }
-.as-aa-expr { flex: 1; font-family: var(--t-mono); font-size: 11px; color: var(--t-ink); overflow-x: auto; white-space: nowrap; }
-.as-aa-warn { font-size: 9px; color: #b45309; flex-shrink: 0; }
-.as-aa-stage { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-.as-aa-cat { border-top: 1px solid var(--t-border); padding-top: 6px; margin-top: 4px; }
-.as-aa-cat-row { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-size: 10px; }
-.as-aa-cat-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.as-aa-cat-dot.on { background: var(--color-bull); }
-.as-aa-cat-dot.off { background: var(--t-border); }
-.as-aa-cat-lab { font-weight: 600; color: var(--t-ink); flex-shrink: 0; }
-.as-aa-cat-badge { font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 2px; flex-shrink: 0; }
-.as-aa-cat-badge.on { background: var(--color-bull-bg); color: #15803d; }
-.as-aa-cat-badge.off { background: var(--t-surface); color: var(--t-muted); border: 1px solid var(--t-border); }
-.as-aa-cat-desc { font-size: 9px; color: var(--t-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Neutralize · Sleeve Studio (Full Expansion P3 잔여)
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-neu-ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
-.as-neu-opt { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--t-muted); }
-.as-neu-beta { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--t-muted); }
-.as-neu-beta input { width: 56px; padding: 3px 6px; border: 1px solid var(--t-border); border-radius: 2px; font-family: var(--t-mono); font-size: 11px; }
-.as-neu-rep { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10.5px; margin: 4px 0; }
-.as-neu-ok { color: var(--color-bull); }
-.as-neu-bad { color: var(--color-bear); }
-.as-neu-warn { font-size: 10px; color: #b45309; background: #fffbeb; border-radius: 2px; padding: 4px 7px; width: 100%; }
-
-.as-slv { display: flex; flex-direction: column; gap: 7px; }
-.as-slv-save { display: flex; gap: 6px; }
-.as-slv-save input { flex: 1; }
-.as-slv-list { display: flex; flex-direction: column; gap: 3px; }
-.as-slv-item { display: flex; align-items: center; gap: 7px; padding: 4px 7px; border: 1px solid var(--t-border); border-radius: 2px; font-size: 10.5px; }
-.as-slv-item.on { border-color: var(--t-accent); background: rgba(18,0,255,.04); }
-.as-slv-name { flex: 1; font-weight: 600; color: var(--t-ink); }
-.as-slv-budget { width: 52px; padding: 2px 5px; border: 1px solid var(--t-accent); border-radius: 2px; font-family: var(--t-mono); font-size: 10px; }
-.as-slv-ctrl { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
-.as-slv-res { margin-top: 4px; }
-.as-slv-clusters { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0; }
-.as-slv-cl { font-size: 10px; padding: 2px 7px; border-radius: 2px; border: 1px solid var(--t-border); }
-.as-slv-cl.cl-0 { background: rgba(18,0,255,.08); border-color: rgba(18,0,255,.3); }
-.as-slv-cl.cl-1 { background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.35); }
-.as-slv-cl.cl-2 { background: rgba(217,119,6,.10); border-color: rgba(217,119,6,.35); }
-.as-slv-cl.cl-3 { background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.3); }
-.as-slv-cl.cl-4 { background: rgba(124,58,237,.10); border-color: rgba(124,58,237,.35); }
-.as-slv-cl.cl-5 { background: rgba(8,145,178,.10); border-color: rgba(8,145,178,.35); }
-.as-chip.sm { font-size: 9.5px; padding: 2px 7px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BacktestRun — 로딩 잡 모니터 + 결과 워크스페이스 (Backtest Run Workflow)
@@ -4236,7 +3598,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .brun-trow { cursor: pointer; } .brun-trow:hover { background: var(--t-surface); }
 .brun-tdetail td { background: rgba(18,0,255,.03); text-align: left; font-size: 10px; color: var(--t-muted); display: flex; gap: 16px; flex-wrap: wrap; }
 
-
 /* ═══════════════════════════════════════════════════════════════════════════
    30. .devui-*  —  /dev/ui  shared/ui 프리미티브 격리 갤러리 (내부 라우트)
    갤러리 프레임 전용. 표본 안의 앱 클래스(.pv-* · .tstate-* …)는 건드리지 않는다.
@@ -4277,10 +3638,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   background: var(--bs-danger-bg, #f8d7da); color: #58151c; border: 1px solid rgba(220,53,69,.25); }
 
 /* 컨텍스트 스트립: 붙어 있는 스냅샷 */
-.as-ctx-snap { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px;
-  border: 1px solid var(--t-border); background: var(--t-surface); text-decoration: none; color: inherit; font-size: 11px; }
-.as-ctx-snap:hover { border-color: var(--t-accent); }
-.as-ctx-snap em { font-style: normal; font-size: 9px; letter-spacing: .08em; color: var(--t-muted); }
+
 /* .as-ctx-usage 기하 → Badge. */
 
 /* 사용 등급 색 — forward_only 는 경고색으로(과거 검증 불가를 숨기지 않는다).
@@ -4288,25 +3646,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    밝아지고 배경은 흰 채로 남는 결함 계열이었다. 이제 USAGE_TONE → Badge variant. */
 
 /* 0M 스테이지 */
-.as-macro-map { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
-.as-macro-row { display: flex; align-items: baseline; gap: 10px; }
-.as-macro-k { width: 132px; flex-shrink: 0; font-size: 12px; color: var(--t-muted); }
-.as-macro-v { font-size: 15px; font-weight: 600; }
-.as-macro-sub { font-size: 11px; color: var(--t-muted); }
-.as-macro-expl { margin: 10px 0; font-size: 13px; line-height: 1.6; }
-.as-macro-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
-.as-macro-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; background: var(--t-surface);
-  border: 1px solid var(--t-border); }
-.as-macro-warn { border-left: 3px solid #f59e0b; padding-left: 10px; }
-.as-macro-repro { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; padding-top: 10px;
-  border-top: 1px solid var(--t-border); font-size: 10px; color: var(--t-muted); }
-.as-macro-repro code { font-size: 10px; }
-.as-macro-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-.as-macro-attached { font-size: 12px; font-weight: 600; color: #15803d; }
-.as-macro-detach { font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
-  border: 1px solid var(--t-border); background: var(--bg-card); color: var(--t-muted); }
-.as-macro-detach:hover { border-color: var(--danger, #dc2626); color: var(--danger, #dc2626); }
-.as-macro-missing code { font-size: 11px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    32. 리서치 컨텍스트 스트립 확장 (Phase 4b) — 스펙 §4 의 9개 요소.
@@ -4314,19 +3653,11 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    새 수정자/요소 클래스만 추가한다.
    ═══════════════════════════════════════════════════════════════════════════ */
 /* PINNED / LIVE — 고정된 국면인지 지금 값인지 반드시 눈에 보이게 */
-.as-ctx-src { font-style: normal; font-size: 8px; letter-spacing: .1em; opacity: .75;
-  margin-right: 5px; padding: 1px 4px; border-radius: 2px; border: 1px solid currentColor; }
-.as-ctx-regime.pinned { box-shadow: inset 0 0 0 1px currentColor; }
 
-.as-ctx-asof, .as-ctx-status, .as-ctx-study, .as-ctx-run, .as-ctx-univ,
-.as-ctx-rules, .as-ctx-scen, .as-ctx-stale {
+.as-ctx-stale {
   display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 4px;
   border: 1px solid var(--t-border); background: var(--t-surface); font-size: 11px;
   white-space: nowrap; }
-.as-ctx-study em, .as-ctx-run em, .as-ctx-snap em {
-  font-style: normal; font-size: 8px; letter-spacing: .08em; color: var(--t-muted); }
-.as-ctx-run, .as-ctx-snap { text-decoration: none; color: inherit; }
-.as-ctx-run:hover, .as-ctx-snap:hover { border-color: var(--t-accent); }
 
 /* 미반영 변경 — 마지막 계산이 현재 입력을 반영하지 않는다는 경고 */
 /* .as-ctx-stale · .as-ctx-mock → Badge variant="warn". 라이트 전용 앰버 리터럴 제거. */
@@ -4339,15 +3670,11 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
      (1280 미만)과 태블릿 사용자에게만 재현성을 숨기는 셈이었다.
      P10 스펙이 390·768 에서 이 두 칩을 찾다가 실패해 드러났다.
      우선순위는 순서로 표현한다 — 접지 않고 뒤로 흐르게 둔다. */
-  .as-ctx-scen, .as-ctx-rules { order: 9; }
+  
 }
 
 /* 33. 런 되돌리기 버튼 (Phase 4c) — 재현성은 "저장했다"가 아니라 "다시 열어서 같은 것을
    본다"로 증명된다. 삭제(.as-x) 옆이라 파괴적 액션과 시각적으로 구분한다. */
-.as-rr-reopen { font-size: 10px; padding: 2px 7px; margin-left: auto; border-radius: 4px;
-  cursor: pointer; border: 1px solid var(--t-border); background: var(--bg-card); color: var(--t-ink); }
-.as-rr-reopen:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
-.as-rr-reopen:disabled { opacity: .55; cursor: progress; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    34. shadcn/ui 토큰 브릿지 (ADR 001 §2.1 · Phase 5)
@@ -4466,62 +3793,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    함께 고쳐야 한다. 이 페이지는 순수 CSS 구역이므로 Tailwind 를 끌어들이지 않는다
    (ADR 001 의 이전 순서는 Backtester 공용 컴포넌트가 다음이다 — 새치기하지 않는다).
    ══════════════════════════════════════════════════════════════════════════ */
-.as-3w .as-card-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.as-3w-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
-  font-size: 10px; font-weight: 600; color: var(--t-text); cursor: pointer;
-  padding: 3px 8px; border: 1px solid var(--t-border); border-radius: 999px;
-  background: var(--t-panel); }
-.as-3w-toggle input { accent-color: var(--t-accent); cursor: pointer; }
 
-.as-3w-combo { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; }
-.as-3w-combo-k { font-size: 9.5px; font-weight: 700; letter-spacing: .04em;
-  color: var(--t-muted); text-transform: uppercase; }
-
-.as-3w-legs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 900px) { .as-3w-legs { grid-template-columns: 1fr; } }
-
-.as-3w-leg { border: 1px solid var(--t-border); border-radius: 8px; padding: 9px 10px;
-  background: var(--t-panel); display: flex; flex-direction: column; gap: 6px; }
 /* 타이밍+매크로가 결론이므로 시선을 그쪽에 둔다 */
-.as-3w-leg.timing_macro { border-color: var(--t-accent); }
-.as-3w-leg-hd { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
-.as-3w-leg-nm { font-size: 10px; font-weight: 700; color: var(--t-text); }
-.as-3w-state { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
-  white-space: nowrap; }
-.as-3w-state.risk_on { color: var(--color-bull);
-  background: color-mix(in srgb, var(--color-bull) 14%, transparent); }
-.as-3w-state.risk_off { color: var(--color-bear);
-  background: color-mix(in srgb, var(--color-bear) 14%, transparent); }
+
 /* 결측은 위험-오프와 다른 사실이므로 색도 달라야 한다 — 같은 빨강이면 구별이 사라진다 */
-.as-3w-state.unavailable { color: var(--t-muted);
-  background: color-mix(in srgb, var(--t-muted) 14%, transparent); }
-
-.as-3w-exp { display: flex; align-items: baseline; gap: 5px; }
-.as-3w-exp b { font-size: 17px; line-height: 1; color: var(--t-text); }
-.as-3w-bar { height: 5px; border-radius: 3px; background: var(--t-border); overflow: hidden; }
-.as-3w-bar i { display: block; height: 100%; background: var(--t-accent); }
-.as-3w-counts { font-size: 9px; color: var(--t-muted); }
-.as-3w-why { margin: 0; font-size: 9.5px; line-height: 1.55; color: var(--t-muted); }
-
-.as-3w-conflict { margin-top: 9px; padding: 8px 10px; border-radius: 7px; font-size: 10px;
-  line-height: 1.6; color: var(--t-text);
-  border: 1px solid color-mix(in srgb, var(--color-bear) 40%, var(--t-border));
-  background: color-mix(in srgb, var(--color-bear) 8%, transparent); }
-
-.as-3w-ov { margin-top: 9px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  font-size: 10px; color: var(--t-text); padding: 7px 9px; border-radius: 7px;
-  border: 1px dashed var(--t-border); }
-.as-3w-ov-k { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: var(--t-muted);
-  text-transform: uppercase; }
-.as-3w-ov-none { color: var(--t-muted); line-height: 1.6; display: block; }
-.as-3w-ov-na, .as-3w-ov-off { font-size: 9.5px; color: var(--t-muted); flex-basis: 100%; }
 
 /* §35b 룰셋 버전 미상 — 재현 좌표가 없다는 사실을 눈에 띄게 (7c) */
-.as-ctx-rules-na { color: var(--color-bear); font-weight: 700; }
-.as-3w-save { font-size: 9.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
-  border: 1px solid var(--t-accent); color: var(--t-accent); background: transparent;
-  cursor: pointer; }
-.as-3w-save:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §36 카탈로그 셸 — 프리셋 + 초안/적용본 비교 (스펙 §8.1 요구 11·12, Phase 6d).
@@ -4597,58 +3874,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── 시나리오 팩 model_type + 시나리오×3자 비교 (Phase 9, 스펙 §5) ──────────────
    ★두 등급은 반드시 달라 보여야 한다★ 같은 스타일이면 구별이 없는 것과 같고,
    이 배지의 존재 이유가 바로 "역사인가 가정인가" 의 구별이다(정직성 라벨과 같은 규칙). */
-.as-model-type { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
-  letter-spacing: .02em; white-space: nowrap; font-style: normal; align-self: flex-start; }
-.as-model-type.mt-historical_replay { color: var(--color-bull);
-  background: color-mix(in srgb, var(--color-bull) 14%, transparent); }
-.as-model-type.mt-hypothetical { color: var(--t-accent);
-  background: color-mix(in srgb, var(--t-accent) 14%, transparent); }
-.as-ctx-scen-id { color: var(--t-muted); font-size: 9px; font-style: normal; }
 
-.as-s3w-hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.as-s3w-pack { font-size: 11px; font-weight: 700; color: var(--t-text); }
-.as-s3w-basis { font-size: 10px; color: var(--t-muted); }
-.as-s3w-legs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-@media (max-width: 720px) { .as-s3w-legs { grid-template-columns: 1fr; } }
-.as-s3w-leg { border: 1px solid var(--t-border); border-radius: 8px; padding: 9px 10px;
-  display: flex; flex-direction: column; gap: 4px; }
-.as-s3w-leg.timing_macro { border-color: var(--t-accent); }
-.as-s3w-nm { font-size: 10px; font-weight: 700; color: var(--t-text); }
-.as-s3w-loss { font-size: 18px; line-height: 1.1; }
-.as-s3w-loss.neg { color: var(--color-bear); }
-.as-s3w-loss.pos { color: var(--color-bull); }
-.as-s3w-exp { font-size: 10px; color: var(--t-muted); }
 /* 판정 불가는 숫자 자리에 숫자가 없다 — 0% 로 채우면 가장 안전해 보인다. */
-.as-s3w-na { font-size: 10px; color: var(--t-muted); line-height: 1.5; }
-.as-s3w-conflict { border-left: 2px solid var(--t-accent); padding-left: 8px; }
 
 /* ── 런 근거 · 팩 변경 표시 (Phase 10b) ─────────────────────────────────────── */
 /* ★"그때와 다른 팩" 은 경고이지 정보가 아니다★ 조용히 현재 팩을 보여주면 사용자는 그 런이
    재현됐다고 믿는다 — 눈에 걸리는 색을 쓴다(as-ctx-rules-na 와 같은 규칙). */
-.as-ctx-scen-drift { font-style: normal; margin-left: 4px; }
-.as-rr-rationale { border-top: 1px solid var(--t-border); margin-top: 8px; padding-top: 8px;
-  display: flex; flex-direction: column; gap: 4px; }
-.as-rr-rat-row { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: 11px; }
-.as-rr-rat-row em { color: var(--t-muted); font-style: normal; font-weight: 700; }
-.as-rr-rat-row span { color: var(--t-text); line-height: 1.5; }
 
 /* ── 타이밍 오버레이 (Phase 10c, 스펙 §8) ──────────────────────────────────── */
-.as-tov-head { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
-.as-tov-head > div { display: flex; flex-direction: column; gap: 2px; }
-.as-tov-head span { font-size: 10px; color: var(--t-muted); }
-.as-tov-head b { font-size: 15px; }
-.as-tov-exp { color: var(--t-accent); }
-.as-tov-table { margin-bottom: 8px; }
+
 /* 오버레이는 줄이기만 한다 — Δ 는 언제나 0 이하다. */
-.as-tov-d { color: var(--color-bear); }
-.as-tov-conc { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
-.as-tov-conc > div { display: flex; flex-direction: column; gap: 2px; }
-.as-tov-conc span { font-size: 10px; color: var(--t-muted); }
-.as-tov-conc b { font-size: 11px; }
-.as-tov-viol { margin: 4px 0 0 14px; padding: 0; }
-.as-tov-off { margin-left: auto; }
+
 /* 파괴적 교체는 오버레이와 **다르게 보여야** 한다 — 같은 모양이면 같은 일로 읽힌다. */
-.as-tm-replace { border-color: var(--color-bear); color: var(--color-bear); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    38. 증거 배지 .tev-* (UI/UX 현대화 P2)
@@ -4703,13 +3940,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
    스트립 본체(.as-ctx)는 건드리지 않는다. 기존 클래스는 전부 E2E 계약이다.
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-ctx-warns { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.as-ctx-warn { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  border: 1px solid #f59e0b; border-left-width: 3px; background: #fffbeb; border-radius: 2px; padding: 5px 9px; }
-.as-ctx-warn-l { font-family: var(--t-mono); font-size: 10px; letter-spacing: .03em; color: #a16207; white-space: nowrap; }
-.as-ctx-warn-r { font-size: 11px; color: var(--t-ink); line-height: 1.45; min-width: 0; }
+
 /* 서랍 트리거는 스트립 안에서 다른 칩과 같은 높이로 앉는다. */
-.as-ctx-ev { align-self: center; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    41. 리서치 워크스페이스 셸 (UI/UX 현대화 P3.5)
@@ -4724,16 +3956,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    단일 CTA 는 근거가 없으면 그냥 명령이다. 사유를 툴팁에 넣으면 P3 에서 걷어낸 것을
    다시 들여오는 셈이므로 보이는 텍스트로 둔다.
    ═══════════════════════════════════════════════════════════════════════════ */
-.aas-wiz-step.superseded, .aas-wiz-book.superseded { border-color: #f59e0b; background: #fffbeb; }
-.aas-wiz-step.superseded .aas-wiz-dot, .aas-wiz-book.superseded .aas-wiz-dot { background: #f59e0b; }
-.aas-wiz-step.superseded .aas-wiz-sub { color: #a16207; font-weight: 600; }
 
-.aas-botnav-why { font-size: 10.5px; color: var(--t-muted); line-height: 1.4; flex: 1 1 auto;
-  min-width: 0; text-align: right; margin-left: auto; }
 /* 재계산 안내는 단순 부연이 아니라 경고다 — 낡은 수치를 보고 있다는 뜻이므로 눈에 띄어야 한다. */
-.aas-botnav-why[data-next="recalc"] { color: #a16207; font-weight: 600; }
-.aas-botnav-next { margin-left: 0; }
-.aas-wiz-booksup { font-family: var(--t-mono); font-size: 8.5px; letter-spacing: .03em; color: #a16207; font-weight: 700; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    42. 연구 색인 .as-ri-* (UI/UX 현대화 P4)
@@ -4742,49 +3966,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    격자는 정보 위계를 세우는 도구로만 쓴다(계획서 §4).
    신원 → 맥락 → 할 일 하나 → 최근 런 → 최근 스터디 순서가 곧 설계다.
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-ri { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--t-border);
-  background: #fff; border-radius: 2px; padding: 10px 12px; margin-bottom: 8px; }
-.as-ri-id { display: flex; gap: 24px; flex-wrap: wrap; align-items: baseline;
-  border-bottom: 1px solid var(--t-border); padding-bottom: 8px; }
-.as-ri-id-main { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
-.as-ri-k { font-family: var(--t-mono); font-size: 8.5px; letter-spacing: .1em; color: var(--t-muted); }
-.as-ri-v { font-size: 13px; color: var(--t-ink); overflow-wrap: anywhere; }
+
 /* 없음은 흐리게 죽이지 않는다 — 흐리면 "괜찮다" 로 읽힌다. 다만 값과는 구별한다. */
-.as-ri-none { font-size: 11px; color: #a16207; }
 
-.as-ri-ctx { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
-.as-ri-c { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.as-ri-c em { font-style: normal; font-size: 8.5px; letter-spacing: .06em; color: var(--t-muted); text-transform: uppercase; }
-.as-ri-c b { font-size: 11px; color: var(--t-ink); overflow-wrap: anywhere; }
-
-.as-ri-next { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  border-top: 1px solid var(--t-border); padding-top: 8px; }
-.as-ri-next-b { font-family: var(--t-mono); font-size: 11.5px; font-weight: 700; letter-spacing: .03em;
-  background: var(--t-accent); color: #fff; border: 1px solid var(--t-accent); border-radius: 2px;
-  padding: 6px 14px; cursor: pointer; }
-.as-ri-next-b:hover { opacity: .88; }
-.as-ri-next-why { font-size: 10.5px; color: var(--t-muted); line-height: 1.45; min-width: 0; flex: 1; }
-.as-ri-next-b[data-next="recalc"] { background: #a16207; border-color: #a16207; }
-
-.as-ri-sec { border-top: 1px solid var(--t-border); padding-top: 8px; }
-.as-ri-sec-h { display: flex; align-items: center; gap: 9px; margin-bottom: 5px;
-  font-family: var(--t-mono); font-size: 9px; letter-spacing: .08em; color: var(--t-muted); text-transform: uppercase; }
-.as-ri-more { margin-left: auto; font-size: 9.5px; color: var(--t-accent); text-decoration: none; text-transform: none; }
-.as-ri-more:hover { text-decoration: underline; }
-
-.as-ri-runs, .as-ri-studies { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.as-ri-run, .as-ri-study { display: flex; align-items: baseline; gap: 10px; font-size: 10.5px;
-  padding: 3px 5px; border-radius: 2px; min-width: 0; }
-.as-ri-run:nth-child(odd), .as-ri-study:nth-child(odd) { background: var(--t-surface); }
-.as-ri-run.on { box-shadow: inset 2px 0 0 var(--t-accent); }
-.as-ri-run-id { color: var(--t-muted); font-size: 9.5px; white-space: nowrap; }
-.as-ri-run-nm, .as-ri-study-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--t-ink); }
-.as-ri-run-t { color: var(--t-muted); font-size: 9.5px; white-space: nowrap; }
-.as-ri-run-mock { font-style: normal; font-size: 8.5px; font-weight: 700; color: #a16207;
-  background: #fef3c7; border-radius: 2px; padding: 1px 4px; }
 /* 판정 불가 다리 — 숫자·막대 대신 사유(P5). 성과처럼 보이지 않아야 하므로 주의색 점선. */
-.as-3w-na { font-size: 10.5px; color: #a16207; background: #fffbeb; border: 1px dashed #f59e0b;
-  border-radius: 2px; padding: 6px 8px; line-height: 1.4; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    43. 엔진 진행률 표기 · 단계 목록 (UI/UX 현대화 P8)
@@ -4808,13 +3993,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    룰셋 버전·팩 해시는 런의 inputs 에 있고 목록 응답에는 없다. 채워 넣지 않고 어디서
    볼 수 있는지만 적는다.
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-dj-chain { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  border-top: 1px dashed var(--t-border); margin-top: 6px; padding-top: 6px; }
-.as-dj-link { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
-.as-dj-link em { font-style: normal; font-size: 8.5px; letter-spacing: .06em; color: var(--t-muted); text-transform: uppercase; }
-.as-dj-link b { font-size: 10px; color: var(--t-ink); overflow-wrap: anywhere; }
-.as-dj-arrow { color: var(--t-border); font-size: 10px; }
-.as-dj-more { font-size: 9.5px; color: var(--t-muted); margin-left: auto; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    45. 반응형 — 신원은 어느 폭에서도 사라지지 않는다 (UI/UX 현대화 P10)
@@ -4837,41 +4015,35 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
   /* 색인은 한 줄에 하나씩 — 잘리는 것보다 길어지는 편이 낫다. */
-  .as-ri-id { flex-direction: column; gap: 6px; }
-  .as-ri-ctx { gap: 12px; }
-  .as-ri-next { flex-direction: column; align-items: stretch; }
-  .as-ri-next-why { text-align: left; }
-  .as-ri-run, .as-ri-study { flex-wrap: wrap; gap: 4px 8px; }
+  
+  
+  
+  
+  
 
   /* 하단 nav 의 사유는 버튼 위로 — 오른쪽 정렬을 유지하면 폭이 없다. */
-  .aas-botnav { flex-wrap: wrap; }
-  .aas-botnav-why { text-align: left; margin-left: 0; flex-basis: 100%; order: 3; }
-  .aas-botnav-next { order: 2; margin-left: auto; }
+  
+  
+  
 
   /* 경고는 좁은 폭에서도 라벨과 사유가 함께 읽혀야 한다. */
-  .as-ctx-warn { flex-direction: column; align-items: flex-start; gap: 3px; }
+  
 }
 @media (max-width: 390px) {
   /* 카나리의 스파크라인만 접는다 — 값과 라벨은 남는다(보조 시각화이지 신원이 아니다). */
-  .as-ctx-spark { display: none; }
+  
   /* 신원 칩은 줄바꿈으로 흘리되 숨기지 않는다. 가로 스크롤은 만들지 않는다. */
-  .as-ctx { gap: 6px; padding: 5px 7px; }
-  .as-ctx-regime, .as-ctx-asof, .as-ctx-status, .as-ctx-usage, .as-ctx-study,
-  .as-ctx-run, .as-ctx-univ, .as-ctx-rules, .as-ctx-scen, .as-ctx-stale, .as-ctx-snap {
+  
+  .as-ctx-stale{
     max-width: 100%; overflow-wrap: anywhere;
   }
   /* 채움 스페이서는 좁은 폭에서 줄만 낭비한다. */
-  .as-ctx-fill { display: none; }
-  .as-dj-chain { gap: 5px; }
-  .as-dj-more { margin-left: 0; flex-basis: 100%; }
+  
+  
+  
 }
 /* D6 — 링크로 지목된 런 행. 활성 런(.active)과 다른 표시여야 한다: "지금 세션의 런" 과
    "링크가 가리킨 런" 은 다른 사실이다. */
-.as-rr-item.focused { box-shadow: inset 3px 0 0 var(--t-accent); background: var(--t-surface); }
-.as-rr-focus-missing { font-size: 10.5px; color: #a16207; background: #fffbeb;
-  border: 1px dashed #f59e0b; border-radius: 2px; padding: 6px 9px; margin-bottom: 6px; line-height: 1.45; }
-.as-ri-run-id { color: var(--t-accent); text-decoration: none; }
-.as-ri-run-id:hover { text-decoration: underline; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    46. 랜딩 스크롤 연동 모션 (L1)
@@ -5075,64 +4247,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    하한을 채택했다. 밀도는 여백과 배치에서 얻고, 글자는 읽히는 선을 지킨다.
    폭이 모자라면 `.aas-wiz` 의 기존 overflow-x:auto 가 스크롤한다.
    ═══════════════════════════════════════════════════════════════════════════ */
-.aas-wiz {
-  position: sticky; top: 0; z-index: 25;
-  /* #fff 하드코딩을 토큰으로 — 스티키는 아래 콘텐츠를 가려야 하므로 불투명해야 한다. */
-  background: var(--card);
-  border-color: var(--border);
-  /* 붙었을 때 아래 내용과의 경계를 만든다(정적일 때도 무해한 정도로 약하게). */
-  box-shadow: 0 1px 0 var(--border);
-}
+
 /* 스테퍼가 붙어 있는 동안 인텐트·컨텍스트가 그 아래로 지나가도 겹쳐 보이지 않게. */
 .aas-root { position: relative; }
 
 /* 가독 하한 — 위 주석의 이유. 숫자는 계속 .num(tabular-nums)을 탄다. */
-.aas-wiz-lab { font-size: 11px; }
-.aas-wiz-sub { font-size: 11px; }
-.aas-wiz-booklab { font-size: 11px; }
-.aas-wiz-phaselab b, .aas-wiz-phaselab em { font-size: 11px; }
-.aas-wiz-phasenum { font-size: 11px; }
-.aas-wiz-kbd { font-size: 11px; }
-.aas-wiz-booksup { font-size: 11px; }
 
 /* ── 신선도 배너 ────────────────────────────────────────────────────────────
    ★opacity-50 오버레이를 쓰지 않는다★ 흐린 숫자는 AA 아래로 떨어지고, 그래도 여전히
    읽히는 틀린 숫자다. 숫자는 전각 대비로 두고 낡았다는 사실을 글자로 적는다. */
-.aas-fresh {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  border: 1px solid var(--border); border-left-width: 3px;
-  border-radius: var(--radius, 3px);
-  padding: 7px 10px; font-size: 12px; line-height: 1.5;
-  background: var(--card); color: var(--foreground);
-}
+
 /* superseded = 화면에 숫자가 **있고** 낡았다 → 주의색. missing = 숫자가 아예 없다 → 중립. */
-.aas-fresh-superseded { border-left-color: #b45309; background: #fffbeb; }
-.aas-fresh-missing { border-left-color: var(--t-muted); }
-.aas-fresh-k {
-  flex: none; font-family: var(--t-mono); font-size: 12px; font-weight: 700;
-  letter-spacing: .03em; text-transform: uppercase;
-}
-.aas-fresh-superseded .aas-fresh-k { color: #92400e; }
-.aas-fresh-missing .aas-fresh-k { color: var(--t-muted); }
-.aas-fresh-r { flex: 1 1 260px; min-width: 0; color: var(--foreground); }
-.aas-fresh-b {
-  flex: none; padding: 5px 11px; font-size: 12px; cursor: pointer;
-  border: 1px solid var(--t-accent); border-radius: var(--radius, 3px);
-  background: var(--t-accent); color: #fff;
-}
-.aas-fresh-b:hover:not(:disabled) { opacity: .9; }
-.aas-fresh-b:disabled { opacity: .5; cursor: default; }
 
 /* 좁은 폭 — 배너는 접히되 사라지지 않는다(사유가 사라지면 배지는 그냥 색이 된다). */
-@media (max-width: 820px) {
-  .aas-fresh { align-items: flex-start; }
-  .aas-fresh-b { width: 100%; }
-}
 
 /* 다크 — 경고색은 어두운 배경에서 명도를 올린다(#b45309 은 zinc-900 위에서 AA 미달). */
-.dark .aas-fresh-superseded { border-left-color: #fcd34d; background: #2a2113; }
-.dark .aas-fresh-superseded .aas-fresh-k { color: #fcd34d; }
-.dark .aas-fresh-b { color: #09090b; }
 
 /* ── §49 계속: 스테퍼의 다크 마감 ────────────────────────────────────────────
    ★컨테이너만 토큰으로 바꾸면 반만 다크가 된다★
@@ -5142,10 +4271,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    대비 감사로 잡았고(육안으로는 "좀 흐리네" 로 지나간다), 자식들도 토큰으로 내렸다.
    활성 표시의 accent 틴트는 라이트 기준 rgba(18,0,255) 라 다크에서 배경과 붙는다 —
    다크 액센트(#7c74ff)로 갈아끼운다. */
-.dark .aas-wiz-step.on { background: rgb(124 116 255 / .14); border-color: var(--t-accent); }
-.dark .aas-wiz-book.on { background: rgb(124 116 255 / .14); border-color: var(--t-accent); }
-.dark .aas-wiz-phase.on { background: rgb(124 116 255 / .10); border-color: var(--t-accent); }
-.dark .aas-wiz-mock { color: #fcd34d; border-color: #fcd34d; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    50. 목표 게이트 — 온보딩 위저드 (A2)
@@ -5176,93 +4301,36 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    제거 이유와 잃은 것은 GoalGate.tsx 의 주석에 기록돼 있다. */
 
 /* ── 프리셋 그리드 — 브리프의 grid-cols-1 md:grid-cols-3 ─────────────────── */
-.aas-gate-grid { grid-template-columns: 1fr; gap: 14px; margin-top: 4px; }
-@media (min-width: 768px) {
-  .aas-gate-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 
 /* ── 프리셋 카드 ────────────────────────────────────────────────────────────
    Card asChild 로 DOM 노드는 진짜 <button> 이다 — 탭 스톱 하나, Enter/Space 무료.
    여백의 주인이 `.aas-goal`(padding 14) 에서 CardHeader/CardContent 로 넘어간다. */
-.aas-gate .aas-goal {
-  padding: 0; gap: 0;
-  background: var(--card);
-  border-color: var(--border);
-  border-radius: var(--radius, 3px);
-  transition: border-color .12s ease, box-shadow .12s ease;
-}
+
 /* ★호버 전용 어포던스를 만들지 않는다★ 이 카드는 이 화면의 주 동작이다.
    호버만 반응하면 키보드 사용자에게는 아무 일도 안 일어난다(P3 가 ContextStrip 에서
    고친 것과 같은 결함). 포커스에도 같은 처리를 준다 — 전역 포커스 링(:2690)은 그대로 살린다. */
-.aas-gate .aas-goal:hover:not(:disabled),
-.aas-gate .aas-goal:focus-visible {
-  border-color: var(--t-accent);
-  background: var(--card);
-  box-shadow: 0 2px 8px rgb(0 0 0 / .07);
-}
-.aas-gate .aas-goal:disabled { opacity: .5; cursor: default; }
 
 /* CardHeader 는 flex-col 이 기본이다 — 아이콘과 제목은 한 줄에 놓는다. */
-.aas-gate .aas-goal-head {
-  flex-direction: row; align-items: center; gap: 10px;
-  padding: 10px 12px; width: 100%;
-}
-.aas-gate .aas-goal-body {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
-  flex: 1; width: 100%; padding: 11px 12px;
-}
+
 /* 아이콘 컨테이너 — 브리프의 `bg-blue-50 dark:bg-blue-950/50 p-2.5 rounded-lg` 를
    토큰 틴트로. 값은 §49 의 `.aas-wiz-step.on` 과 같은 것을 쓴다(파일에 틴트는 하나만). */
-.aas-goal-icw {
-  display: inline-flex; align-items: center; justify-content: center; flex: none;
-  padding: 8px; border-radius: 8px;
-  background: rgb(18 0 255 / .06); color: var(--t-accent);
-}
-.aas-goal-ic { width: 18px; height: 18px; }
-.aas-gate .aas-goal-t { font-size: 13.5px; text-align: left; }
-.aas-gate .aas-goal-d { font-size: 12px; line-height: 1.55; text-align: left; flex: 1; }
+
 /* Badge(variant="secondary")가 이기게 하되, 이기는 특이도로 같은 토큰을 다시 적는다.
    `.aas-goal-seed span`(:3556, 9px·--t-surface·radius 2px)이 유틸리티를 이기기 때문이다.
    선택자는 JSX 가 실제로 붙이는 `.aas-goal-bdg` 를 쓴다 — 붙어만 있고 규칙이 없는 클래스를
    또 만들지 않기 위해서다(이번에 `.aas-goal-strategy` 가 그 상태로 발견돼 지웠다). */
-.aas-gate .aas-goal-bdg {
-  font-size: 11px; padding: 2px 7px;
-  border-color: var(--border);
-  border-radius: var(--radius, 3px);
-  background: var(--secondary);
-  color: var(--secondary-foreground);
-}
 
 /* ── 빈 프리셋 — 사전 구성된 템플릿과 시각적으로 분리 ───────────────────── */
-.aas-gate .aas-goal-custom { border-width: 2px; border-style: dashed; }
-.aas-gate .aas-goal-custom:hover, .aas-gate .aas-goal-custom:focus-visible { border-color: var(--t-accent); }
 
 /* ── 이어서 계속 · 푸터 · 건너뛰기 ─────────────────────────────────────────── */
-.aas-gate-resume { background: var(--card); font-size: 12px; }
-.aas-gate-resume:hover { background: rgb(18 0 255 / .06); }
-.aas-gate-footlab { font-size: 11px; }
+
 /* `.as-chip` 은 전역 클래스다(소비처 다수) — 게이트 안으로만 스코프해서 올린다. */
-.aas-gate .as-chip { font-size: 11px; background: var(--card); color: var(--foreground); border-color: var(--border); }
-.aas-gate-footskip { justify-content: flex-end; }
-.aas-gate .aas-gate-skip {
-  font-family: inherit; font-size: 12px; color: var(--foreground);
-  background: transparent; border: 0; padding: 0 10px;
-}
-.aas-gate .aas-gate-skip:hover { background: var(--muted); color: var(--foreground); }
 
 /* ── 좁은 폭 ───────────────────────────────────────────────────────────────── */
-@media (max-width: 640px) {
-  .aas-gate-q { font-size: 21px; }
-}
 
 /* ── 다크 ──────────────────────────────────────────────────────────────────
    §47 이 --t-* 를 뒤집어 주므로 토큰 규칙은 저절로 따라온다. 남는 것은 위에서
    하드코딩한 라이트 액센트 틴트와, 지면 자체뿐이다("카드만 어둡고 지면이 희면 반만 다크"). */
-.dark .aas-gate { background: var(--background); color: var(--foreground); }
-.dark .aas-goal-icw { background: rgb(124 116 255 / .14); }
-.dark .aas-gate-resume:hover { background: rgb(124 116 255 / .14); }
-.dark .aas-gate .aas-goal:hover:not(:disabled),
-.dark .aas-gate .aas-goal:focus-visible { box-shadow: 0 2px 8px rgb(0 0 0 / .45); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    51. 01 CONSTRUCT — 컨트롤 패널 + 결과 패널 (A3)
@@ -5300,26 +4368,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    암시적 행으로 밀려났다 — 한 줄이어야 할 것이 세로로 쌓였다.
    어떤 스펙도 그 두 화면의 행 레이아웃을 보지 않아서 조용히 살아남았다.
    레이아웃은 수식자 클래스로 옮기고 `.as-wrow` 는 E2E 계약으로만 남긴다. */
-.as-wrow-edit {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 62px 10px 26px;
-  grid-template-areas: "nm in unit del" "sl sl sl sl";
-  gap: 4px 6px;
-  align-items: center;
-  padding: 3px 0;
-}
-.as-wrow-edit .as-holding-nm { grid-area: nm; font-size: 12px; }
-.as-wrow-edit .as-w-input { grid-area: in; }
-.as-wrow-edit .as-w-unit { grid-area: unit; font-size: 11px; color: var(--t-muted); }
-.as-wrow-edit .as-wrow-del { grid-area: del; }
-.as-wrow-slider { grid-area: sl; }
+
 /* `.as-w-input`(:3287, width 58px·11px·자체 border)이 Input 유틸리티를 이긴다 — 되돌린다. */
-.as-ws2 .as-wrow-edit .as-w-input {
-  width: 100%; font-size: 12px; padding: 2px 6px; text-align: right;
-  border-color: var(--input); background: var(--background); color: var(--foreground);
-}
-.as-ws2 .as-wrow-edit .as-wrow-del { width: 26px; height: 26px; color: var(--t-muted); }
-.as-ws2 .as-wrow-edit .as-wrow-del:hover { color: var(--destructive); background: var(--muted); }
 
 /* ── 배분 게이지 ─────────────────────────────────────────────────────────────
    ★색만으로 말하지 않는다★ 예전에는 합계 숫자의 색만 바뀌었다. 바 + 숫자 + 문장. */
@@ -5328,17 +4378,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    `.as-gauge-c`(:3333, position:absolute)를 얹는다. 여기서 같은 이름에 flex 레이아웃과
    패딩을 더하면서, 03 THESIS·04 TIMING 의 반원 게이지가 설계에 없던 세로 패딩 8px 을
    얻었다(position 은 속성별 캐스케이드라 살아남아 좌표는 안 깨졌고, 그래서 조용했다). */
-.as-gauge-w { display: flex; flex-direction: column; gap: 5px; padding: 2px 0 6px; }
-.as-gauge-r { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.as-gauge-v { font-size: 12px; font-weight: 700; }
-.as-gauge-s { font-size: 11px; color: var(--t-muted); }
-.as-gauge-s.off { color: #b45309; font-weight: 600; }
-.dark .as-gauge-s.off { color: #fcd34d; }
-.as-rail-acts { gap: 6px; }
 
 /* ── 배분 맵: 스트립 + 범례 + 도넛 ──────────────────────────────────────────── */
-.as-alloc2 { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 12px; align-items: start; }
-@media (max-width: 900px) { .as-alloc2 { grid-template-columns: 1fr; } }
+
 .aas-mapwrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .aas-map { height: 26px; }             /* 글자를 뺐으므로 72px 이 필요 없다 */
 .aas-map-b { padding: 0; }
@@ -5347,44 +4389,17 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .aas-legend-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 .aas-legend-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 128px; }
 .aas-legend-i b { font-size: 12px; color: var(--foreground); }
-.aas-donut { min-width: 0; }
 
 /* ── 비중 비교 표 ────────────────────────────────────────────────────────────
    `.aas-cmp-row`(:3505)의 3열 그리드는 더 이상 쓰지 않는다(진짜 <table> 로 갔다). */
-.aas-cmp-t { color: var(--foreground); }
-.aas-cmp-t .aas-cmp-nm {
-  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500;
-  color: var(--foreground); max-width: 180px; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
-}
+
 /* 미계산 = 숫자가 아니다. 서체도 정렬도 숫자와 다르게 둬서 값으로 안 읽히게 한다. */
-.aas-cmp-na { font-size: 11px; color: var(--t-muted); font-style: normal; }
 
 /* ── 집중도 스탯 ─────────────────────────────────────────────────────────────── */
-.as-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.as-stat {
-  display: flex; flex-direction: column; gap: 2px;
-  border: 1px solid var(--border); border-radius: var(--radius, 3px);
-  padding: 7px 9px; background: var(--card); min-width: 0;
-}
-.as-stat-k { font-size: 11px; color: var(--muted-foreground); }
-.as-stat-v { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--foreground); }
-@media (max-width: 640px) { .as-stats { grid-template-columns: 1fr; } }
-
-.as-cov { font-size: 12px; color: var(--foreground); }
 
 /* 재계산 필요 배지 — 결과를 흐리는 대신 낡았다고 **적는다**(A1 의 결론). */
-.as-stale-b { margin-left: 8px; font-size: 11px; }
 
 /* ── 고급 설정 접기 ──────────────────────────────────────────────────────────── */
-.as-adv { border: 1px solid var(--border); border-radius: var(--radius, 3px); background: var(--card); }
-.as-adv-s {
-  cursor: pointer; padding: 8px 10px; font-size: 12px; font-weight: 600;
-  display: flex; align-items: center; gap: 8px; color: var(--foreground);
-}
-.as-adv-s:hover { color: var(--t-accent); }
-.as-adv-s:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-.as-adv-b { border-top: 1px solid var(--border); padding: 10px; }
 
 /* ── 다크 마감 ───────────────────────────────────────────────────────────────
    §47 이 토큰을 뒤집으므로 토큰 규칙은 따라온다. 남는 것은 이 화면의 평문 규칙들이
@@ -5398,15 +4413,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    (`.as-wrow` 관련 규칙은 넓히지 않는다 — overview 가 같은 클래스명을 다른 구조로
     재사용하고 있어서, 넓히면 그쪽 레이아웃이 깨진다.) */
 .dark .aas-root { background: var(--background); color: var(--foreground); }
-.dark .aas-root .as-rail-sec { background: var(--card); border-color: var(--border); }
+
 .dark .aas-root .as-card { background: var(--card); border-color: var(--border); }
-.dark .aas-root .as-chip { background: var(--card); color: var(--foreground); border-color: var(--border); }
-.dark .aas-root .as-hit { background: var(--card); color: var(--foreground); }
+
 /* 검색 입력도 `background:#fff` 하드코딩(:3274). 대비 자체는 통과하지만 다크 화면에
    흰 판이 남는 것은 "반만 다크"라 §47 이 경고한 상태다 — 감사의 bright 검사가 잡았다. */
-.dark .aas-root .as-input { background: var(--background); color: var(--foreground); border-color: var(--input); }
-.dark .aas-root .as-input::placeholder { color: var(--muted-foreground); }
-.dark .aas-root .as-seg { background: var(--card); border-color: var(--border); }
+
 /* ★비활성 탭에 --muted-foreground 를 쓰지 않는다 — 내가 심었다가 감사로 잡은 결함★
    첫 판은 `color: var(--muted-foreground)`(#a1a1aa) 였다. zinc-900 카드 위에서
    **2.56:1** 로 측정됐다(10.5px 본문 기준 4.5:1 필요). 비활성이라고 흐리게 하는 것은
@@ -5418,19 +4430,14 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    `.as-seg` 만 var(--card) 로 바꾼 첫 수정에서는 버튼이 흰색 그대로였고, 글자를
    --foreground(#fafafa)로 올린 탓에 **1.04:1** 이 됐다 — A1 의 `.aas-wiz-step` 과
    똑같은 모양이다. 배경도 같이 내린다. */
-.dark .aas-root .as-seg button { background: var(--card); color: var(--foreground); }
-.dark .aas-root .as-seg button.on { background: rgb(124 116 255 / .14); color: var(--foreground); font-weight: 600; }
 
 /* ── 가독 하한 — 산문 12px · 크롬 라벨 11px (§49·§50 과 같은 기준) ─────────────
    스코프는 위와 같은 이유로 `.aas-root` 다 — 그래야 overview·execution 도 받는다. */
-.aas-root .as-rail-title { font-size: 12px; }
-.aas-root .as-note, .aas-root .as-note-inline { font-size: 11px; }
+
+.aas-root .as-note-inline { font-size: 11px; }
 .aas-root .as-empty { font-size: 12px; }
-.aas-root .as-card-title { font-size: 12px; }
+
 /* 모드 전환 탭과 칩 — 둘 다 10.5px 이었다(:3281 .as-chip, .as-seg button). */
-.aas-root .as-seg button { font-size: 11px; }
-.aas-root .as-chip { font-size: 11px; }
-.aas-root .as-hit, .aas-root .as-study-nm, .aas-root .as-study-meta { font-size: 11px; }
 
 /* ── 슬라이더 외형 (shadcn/shadcn/slider.tsx = 네이티브 range) ────────────────
    ::-webkit-slider-thumb 같은 의사요소는 Tailwind 유틸리티로 표현할 수 없어서
@@ -5461,54 +4468,20 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── X1: 계산 중임을 흐림이 아니라 글로 말한다 ───────────────────────────────
    `.as-loading` 의 `opacity:.55` 는 :3256 에서 제거했다(사유는 그 자리에 기록).
    그 자리를 대신하는 것이 이 줄이다. 스피너는 장식이고, 정보는 문장에 있다. */
-.as-busy {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font-size: 11px; color: var(--foreground);
-  border: 1px solid var(--border); border-left: 3px solid var(--t-accent);
-  border-radius: var(--radius, 3px); background: var(--muted);
-  padding: 5px 9px;
-}
-.as-busy-spin {
-  flex: none; width: 10px; height: 10px; border-radius: 9999px;
-  border: 2px solid var(--t-accent); border-right-color: transparent;
-  animation: asBusySpin .7s linear infinite;
-}
+
 /* 회전은 순수 장식이라 reduced-motion 에서 그냥 멈춘다 — 멈춰도 정보 손실이 없다. */
-@media (prefers-reduced-motion: reduce) { .as-busy-spin { animation: none; } }
+
 @keyframes asBusySpin { to { transform: rotate(360deg); } }
-.as-busy-l { font-weight: 600; }
+
 /* ★이 줄이 X1 의 핵심이다★ 흐림이 하던 말("이건 지금 값이 아니다")을 글로 한다.
    흐림과 달리 색각·흑백·스크린리더 어디서도 전달된다. */
-.as-busy-stale { color: var(--muted-foreground); }
-.dark .as-busy { background: var(--card); }
 
 /* ── X2: 다크 — §51 이 넓힌 `.aas-root` 스코프가 아직 닿지 않은 패밀리들 ──────
    AAS CSS 에서 `background:#fff` 를 직접 든 규칙은 30개였고 §51 이 6개를 덮었다.
    나머지 중 스테이지 본문에 실제로 렌더되는 것들을 여기서 마저 덮는다.
    토큰 규칙(§47)은 자동으로 따라오므로 남는 것은 이 하드코딩 흰색뿐이다. */
-.dark .aas-root .aas-kpi-c,
-.dark .aas-root .as-al-kpi,
-.dark .aas-root .as-view,
-.dark .aas-root .as-scen-mini,
-.dark .aas-root .as-sl-card,
-.dark .aas-root .as-sl-search,
-.dark .aas-root .as-krs-hero > div,
-.dark .aas-root .as-tm-gate,
-.dark .aas-root .as-rr-item,
-.dark .aas-root .as-ri,
-.dark .aas-root .aas-pipe,
-.dark .aas-root .as-hub-bar,
-.dark .aas-root .as-scen,
-.dark .aas-root .as-fb-dir button,
-.dark .aas-root .as-tm-set input,
-.dark .aas-root .as-tm-set select,
-.dark .aas-root .as-save-btn,
-.dark .aas-root .as-stepper {
-  background: var(--card); color: var(--foreground); border-color: var(--border);
-}
+
 /* 텍스트 입력만은 카드색이 아니라 배경색이어야 "입력 가능"으로 읽힌다(§51 과 동일). */
-.dark .aas-root .as-sl-search,
-.dark .aas-root .as-tm-set input { background: var(--background); }
 
 /* ── X2-2: 다크 스윕이 실제로 찾아낸 것 (111건 → 근본원인 6개) ────────────────
    스코프를 넓히자마자 11개 스테이지 전부가 빨개졌다. 목록을 색으로 묶으니 개별
@@ -5535,59 +4508,30 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 
 /* 액센트로 칠한 버튼 — 다크 액센트(#7c74ff)는 밝은 라벤더라 흰 글씨가 3.62:1 이다.
    `--primary-foreground: #09090b` 이 이미 다크에 있는데 이 버튼들만 #fff 를 박고 있었다. */
-.dark .aas-root .as-fb-apply,
-.dark .aas-root .as-run,
-.dark .aas-root .as-ri-next-b,
-.dark .aas-root .aas-botnav-next.primary,
-.dark .aas-root .as-save-btn.primary { color: #09090b; }
+.dark .aas-root .as-fb-apply{ color: #09090b; }
 
 /* 남은 하드코딩 흰 배경 — 위 스윕이 이름을 대 준 것들만. 추측으로 넓히지 않는다. */
 /* ★`.aas-botnav-next` 는 여기 넣으면 안 된다★ 한 번 넣었다가 스윕이 잡았다.
    그 버튼의 배경은 흰색이 아니라 `var(--t-accent)`(:3489)다. 카드색으로 덮으니
    위에서 글자를 #09090b 로 내린 것과 겹쳐 **1.12:1** 이 됐다 — 고치려던 것보다 나빠졌다. */
-.dark .aas-root .as-ctx,
-.dark .aas-root .aas-botnav-prev,
-.dark .aas-root .tfm-fams button,
-.dark .aas-root .as-rr-reopen,
-.dark .aas-root .as-fb-add,
-.dark .aas-root .as-fb-params select,
-.dark .aas-root .as-tm-kind,
-.dark .aas-root .as-tm-sig,
-.dark .aas-root .as-tm-set select { background: var(--card); color: var(--foreground); }
-.dark .aas-root .tfm-search,
-.dark .aas-root .as-tm-num { background: var(--background); color: var(--foreground); }
+.dark .aas-root .tfm-fams button{ background: var(--card); color: var(--foreground); }
+.dark .aas-root .tfm-search{ background: var(--background); color: var(--foreground); }
 /* 벤치마크 기준선 — 2px 짜리 참조선이라 글자를 얹지 않는다. 그래도 --foreground(#fafafa)
    를 쓰면 감사의 "밝은 배경" 검사에 걸린다(그 검사는 표면과 장식을 구분하지 못한다).
    실제로도 순백 선은 다크에서 과하게 튄다 — 회색으로 충분히 보인다. */
-.dark .aas-root .as-xray-bench { background: var(--t-muted); }
 
 /* 상태 틴트 — 라이트 전용 호박/초록 리터럴. 토큰화된 것은 위 .dark 블록이 이미
    처리했고, 여기 남은 것은 hex 를 직접 든 규칙들이다. */
 .dark .aas-root .as-ctx-stale,
-.dark .aas-root .as-health-pill.watch,
-.dark .aas-root .as-ri-run-mock,
 .dark .aas-root .as-attr-basis.mock,
 .dark .aas-root .tev-estimated .tev-l,
 .dark .aas-root .tev-caution .tev-l { background: rgb(251 191 36 / .16); color: #fcd34d; }
-.dark .aas-root .as-3w-na,
-.dark .aas-root .as-ctx-warn,
-.dark .aas-root .as-aa-bias,
-.dark .aas-root .as-neu-warn { background: rgb(251 191 36 / .10); color: #fcd34d; }
-.dark .aas-root .as-ctx-warn-l,
-.dark .aas-root .as-ctx-warn-r { color: #fcd34d; }
-.dark .aas-root .as-ctx-mock,
-.dark .aas-root .as-xray-cov,
-.dark .aas-root .aas-header-mock { color: #fcd34d; border-color: #fcd34d; }
-.dark .aas-root .as-ctx-regime,
-.dark .aas-root .as-usage-backtest_eligible,
-.dark .aas-root .as-aa-cat-badge.on { background: rgb(74 222 128 / .16); color: #4ade80; }
-.dark .aas-root .as-usage-forward_only { background: rgb(251 191 36 / .16); color: #fcd34d; }
+
+.dark .aas-root .as-ctx-mock{ color: #fcd34d; border-color: #fcd34d; }
+
 /* 거버넌스 보라 — #6d28d9 / #5b21b6 은 어두운 배경에서 2:1 아래다. */
-.dark .aas-root .as-aa-gov { background: rgb(167 139 250 / .12); color: #c4b5fd; }
-.dark .aas-root .as-aa-gov b { color: #ddd6fe; }
+
 /* 알파 레지스트리 상태 배지 — #92610a 는 다크에서 안 보인다. */
-.dark .aas-root .as-al-status.s-experimental,
-.dark .aas-root .as-al-lint-item.warn { color: #fcd34d; border-color: #fcd34d; }
 
 /* ── X2-3: 매크로 색 스케일 토큰화 (entities/macro/api.ts 가 참조) ────────────
    `REGIME_COLORS` 와 `zScoreColor()` 는 인라인 style 로 들어가므로 CSS 규칙으로
@@ -5613,10 +4557,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 }
 
 /* 남은 호박 리터럴 두 곳 — 스윕이 이름을 대 준 것만. */
-.dark .aas-root .as-ri-none,
-.dark .aas-root .as-badge-mock { color: #fcd34d; }
-.as-badge-mock { color: #a16207; border-color: #a16207; align-self: flex-start; }
-.dark .aas-root .as-badge-mock { border-color: #fcd34d; }
 
 /* ── X2-4: 네이티브 폼 컨트롤 ────────────────────────────────────────────────
    마지막 두 건은 클래스 없는 `<input>` 이었다. 어떤 규칙도 배경을 주지 않으니 UA
@@ -5634,58 +4574,26 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 가독 하한 — 산문 12px · 크롬 11px (§49·§50·§51 과 같은 기준) ───────────── */
-.aas-kpi-l { font-size: 11px; }
-.aas-kpi-s { font-size: 11px; }
-.aas-xlink { font-size: 11px; }
-.aas-conc { font-size: 11px; }
 
 /* ── 견고성 행 ───────────────────────────────────────────────────────────────
    예전에는 이 행 전체가 인라인 style 이었다 — 클래스가 없으니 E2E 훅도, 다크도,
    타입 하한도 붙일 자리가 없었고 9px·10.5px 가 그대로 박혀 있었다. */
-.aas-ov-rob { display: flex; align-items: baseline; gap: 10px; font-size: 12px; min-width: 0; }
-.aas-ov-rob-l { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aas-ov-rob-m { font-style: normal; font-size: 11px; color: var(--t-muted); white-space: nowrap; }
-.aas-ov-rob-v.bull { color: var(--color-bull); }
-.aas-ov-rob-v.bear { color: var(--color-bear); }
+
 /* Δ 열 — 9.5px 인라인이었다. */
-.aas-ov-d { font-size: 11px; }
-.aas-ov-d.bull { color: var(--color-bull); }
-.aas-ov-d.bear { color: var(--color-bear); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    54. A4-L — 02 ALPHA LAB (표현식 · 레지스트리 · 검증 리포트) + .tfm-* 하한
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 가독 하한 — 이 스테이지가 스튜디오에서 가장 나빴다 (8~10px) ────────────── */
-.aas-root .as-al-name { font-size: 12px; }
-.aas-root .as-al-tpl { font-size: 11px; }        /* 8px 이었다 */
-.aas-root .as-al-ver { font-size: 11px; }
-.aas-root .as-al-status { font-size: 11px; }
-.aas-root .as-al-kpi em { font-size: 11px; }
-.aas-root .as-al-kpi b { font-size: 15px; }
-.aas-root .as-al-qcol .num { font-size: 11px; }
-.aas-root .as-al-lint-item { font-size: 12px; }
-.aas-root .as-al-lint-item b { font-size: 11px; }
-.aas-root .as-metrics { font-size: 12px; }
-.aas-root .as-metrics th { font-size: 11px; }
-.aas-root .as-fb-apply, .aas-root .as-fb-add { font-size: 11px; }
-.aas-root .as-sl-hold { font-size: 11px; }
+
+        /* 8px 이었다 */
+
+.aas-root .as-fb-apply{ font-size: 11px; }
 
 /* Rank IC — 값이 있을 때만 색이 붙는다(A4-L1). 미산출은 색 없이 `—`. */
-.as-al-kpi b.bull { color: var(--color-bull); }
-.as-al-kpi b.bear { color: var(--color-bear); }
 
 /* 레지스트리 행에 표현식을 드러낸다 — 좁으면 줄임표, 전문은 선택 시 에디터에 뜬다. */
-.as-al-expr-r {
-  font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 260px; flex: 1; text-align: left;
-}
-.as-al-pick { gap: 8px; }
-.as-al-tables { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-@media (max-width: 900px) { .as-al-tables { grid-template-columns: 1fr; } }
-.as-al-ls-t { margin-top: 10px; }
-.as-al-notes { margin-top: 4px; }
 
 /* ── CatalogueShell(.tfm-*) 하한 — 소비자 6개에 그대로 파급된다 ───────────────
    알파·타이밍·스트레스·팩터피커·스크리너·수식빌더가 모두 이 셸을 쓴다.
@@ -5715,45 +4623,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    팩터 X-ray, 하단 내비 — 은 한 번도 하한이 적용된 적이 없다. 다크 스윕이 같은
    사각지대를 찾아낸 것과 정확히 같은 이유다(감사 범위가 곧 발견 범위다). */
 .aas-root .tev-l, .aas-root .tev-r { font-size: 11px; }
-.aas-root .as-xray-label, .aas-root .as-xray-val { font-size: 11px; }
-.aas-root .as-xray-cov { font-size: 11px; }
-.aas-root .aas-botnav-mid { font-size: 11px; }
-.aas-root .aas-botnav-why { font-size: 11px; }
-.aas-root .as-ctx-src { font-size: 11px; }
-.aas-root .as-ctx-mode, .aas-root .as-ctx-stress, .aas-root .as-ctx-regime,
-.aas-root .as-ctx-canary, .aas-root .as-ctx-canary em,
-.aas-root .as-ctx-snap, .aas-root .as-ctx-snap em, .aas-root .as-ctx-usage,
-.aas-root .as-ctx-scen-id, .aas-root .as-ctx-scen-drift,
-.aas-root .as-ctx-study em, .aas-root .as-ctx-run em { font-size: 11px; }
-.aas-root .as-ctx-warn-l { font-size: 11px; }
-.aas-root .as-badge { font-size: 11px; }
-.aas-root .as-note { font-size: 11px; }
-.aas-root .aas-kpi-l, .aas-root .aas-kpi-s { font-size: 11px; }
-.aas-root .as-al-qcol .num, .aas-root .as-al-kpi em { font-size: 11px; }
-.aas-root .as-sl-hold, .aas-root .as-sl-sig, .aas-root .as-sl-desc,
-.aas-root .as-sl-more, .aas-root .as-sl-fam { font-size: 11px; }
+
 /* AutoAlphaLab(실험 샌드박스) · 인텐트 · 모델타입 배지 — 8~10.5px 이었다. */
-.aas-root .aas-intent b { font-size: 11px; }
-.aas-root .as-model-type { font-size: 11px; }
+
 .aas-root .tev-drawer-t { font-size: 11px; }
-.aas-root .as-aa-exp { font-size: 11px; }        /* 8px 이었다 */
-.aas-root .as-aa-gov, .aas-root .as-aa-gov b { font-size: 11px; }
-.aas-root .as-aa-ctrl label { font-size: 11px; }
-.aas-root .as-aa-cat-lab { font-size: 11px; }
-.aas-root .as-aa-cat-badge { font-size: 11px; }  /* 8px 이었다 */
-.aas-root .as-aa-cat-desc { font-size: 11px; }
-.aas-root .as-aa-meta, .aas-root .as-aa-bias, .aas-root .as-aa-warn,
-.aas-root .as-aa-seeds, .aas-root .as-aa-expr, .aas-root .as-aa-cat-row { font-size: 11px; }
+        /* 8px 이었다 */
+
+  /* 8px 이었다 */
+
 /* 리서치 색인(P4) — 8.5~10.5px. 런 ID·시각은 재현성의 핵심 정보인데 가장 작았다. */
-.aas-root .as-ri-k { font-size: 11px; }          /* 8.5px 이었다 */
-.aas-root .as-ri-c em { font-size: 11px; }
-.aas-root .as-ri-next-why { font-size: 11px; }
-.aas-root .as-ri-sec-h, .aas-root .as-ri-sec span { font-size: 11px; }
-.aas-root .as-ri-more { font-size: 11px; }
-.aas-root .as-ri-run, .aas-root .as-ri-study { font-size: 11px; }
-.aas-root .as-ri-run-id, .aas-root .as-ri-run-t { font-size: 11px; }
-.aas-root .as-ri-run-nm { font-size: 11px; }
-.aas-root .as-ri-run-mock { font-size: 11px; }   /* 8.5px 이었다 */
+          /* 8.5px 이었다 */
+
+   /* 8.5px 이었다 */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    55. A5 — 공통 구조: 레일 폭 스케일 · 라이트 대비 · 타입 하한
@@ -5770,9 +4651,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    슬라이더 · 자산군 스위치 입력 2개 · 추세 오버레이 세그먼트 · 리스크 제어가 들어간다 —
    스튜디오에서 가장 빽빽한 레일이 가장 좁은 칼럼을 받고 있었다.
    A1 은 이 둘을 "오늘은 무해"로 기록했다. 무해하지 않았다. */
-.as-ws-tm  { grid-template-columns: 340px minmax(0, 1fr); }
-.as-ws-rob { grid-template-columns: 320px minmax(0, 1fr); }
-@media (max-width: 1000px) { .as-ws-tm, .as-ws-rob { grid-template-columns: 1fr; } }
 
 /* ── S5: 라이트 모드 대비 — 감사가 이름을 대 준 것만 ──────────────────────────
    A4 는 `.aas-root` 를 **다크에서만** 쟀다. 라이트를 재니 모든 라우트에서 같은 4건이
@@ -5795,78 +4673,35 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 }
 /* 낡음 배지의 #854d0e 는 §59 의 --st-warn-fg 로 승격했다(한곳에서만 정의). */
 /* 04 — 매크로 오버레이 체크박스 라벨(클래스 없는 span). */
-.aas-root .as-3w-toggle span { font-size: 11px; }
 
 /* ── S4: 타입 하한 — 브라우저에서 잰 목록 그대로 ─────────────────────────────
    0M 과 01 은 이미 0건이었다(§52·§53 이 덮었다). 아래는 03·04·05 에서 실제로
    11px 미만으로 렌더된 것들이다. 추측으로 넓히지 않는다. */
 /* 03·04 — 반원 신뢰도 게이지 (parts.tsx ConfidenceGauge) */
-.aas-root .as-gauge-c span { font-size: 11px; }
-.aas-root .as-gauge-c em { font-size: 11px; }
+
 /* 04 — 마켓 게이트 · 팩터 칩 · 3자 비교 · 컴포짓 */
-.aas-root .as-tm-gate-s { font-size: 11px; }
+
 .aas-root .tfc-chip-tk, .aas-root .tfc-chip-cond { font-size: 11px; }
-.aas-root .as-fb-code { font-size: 11px; }
-.aas-root .as-3w-combo-k, .aas-root .as-3w-save { font-size: 11px; }
-.aas-root .as-3w-leg-nm, .aas-root .as-3w-state { font-size: 11px; }
-.aas-root .as-3w-counts, .aas-root .as-3w-why { font-size: 11px; }
-.aas-root .as-3w-na, .aas-root .as-3w-ov { font-size: 11px; }
-.aas-root .as-3w-ov-k, .aas-root .as-3w-ov-na, .aas-root .as-3w-ov-off { font-size: 11px; }
-.aas-root .as-tm-comp { font-size: 11px; }
+
 /* 04·05 — 라벨 달린 컨트롤. 클래스가 없는 span/em 이라 부모로 스코프한다. */
-.aas-root .as-param > span, .aas-root .as-param em { font-size: 11px; }
-.aas-root .as-tm-set > span, .aas-root .as-tm-set em { font-size: 11px; }
-.aas-root .as-conf > span { font-size: 11px; }
+
 /* 05 — 접기 요약 · 제약 조건 격자 · 중립화 */
-.aas-root .aas-adv > summary { font-size: 11px; }
-.aas-root .as-ct-grid label { font-size: 11px; }
-.aas-root .as-ct-grid label em { font-size: 11px; }   /* 8.5px 이었다 */
-.aas-root .as-neu-opt, .aas-root .as-neu-beta, .aas-root .as-neu-rep { font-size: 11px; }
+
+   /* 8.5px 이었다 */
+
 /* 산키 단 머리글 — 노드 라벨은 SVG 라 parts.tsx 에서 고쳤다(CSS 가 닿지 않는다). */
-.aas-root .as-sankey-heads { font-size: 11px; }
 
 /* ── 0M — 막다른 빈 상태를 행동 가능하게 ────────────────────────────────────── */
-.as-macro-none { display: flex; flex-direction: column; gap: 8px; }
-.as-macro-none-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.as-macro-open {
-  display: inline-flex; align-items: center; gap: 5px;
-  text-decoration: none; width: fit-content;
-}
-.as-macro-learn { margin-top: 0; }
-.as-macro-learn .as-card-title { margin-top: 8px; }
-.as-macro-learn .as-card-title:first-child { margin-top: 0; }
 
 /* ── 03 — 뷰 효과 표 ─────────────────────────────────────────────────────────
    비중 비교 표(§51 .aas-cmp-t)와 같은 서체·정렬을 쓴다. Δ 만 방향색을 갖는데,
    숫자에 부호가 항상 붙으므로 색은 보조다(색만으로 말하지 않는다). */
-.as-ve-d.up { color: var(--color-bull); }
-.as-ve-d.down { color: var(--color-bear); }
-.as-thesis-state { margin-left: 8px; }
-.as-thesis-state.s-off { color: var(--t-muted); border-color: var(--t-border); }
 
 /* ── 04 — 컴포짓 하위 점수 막대 ──────────────────────────────────────────────
    전부 0–100 같은 척도다. 팩터 X-ray 트랙과 같은 모양을 재사용한다. */
-.as-tm-comps { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 5px 14px; }
-.as-tm-comp {
-  display: grid; grid-template-columns: minmax(0, 1fr) 72px 30px;
-  align-items: center; gap: 8px; color: var(--foreground);
-}
-.as-tm-comp-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-tm-comp-track {
-  height: 5px; border-radius: 9999px; background: var(--secondary); overflow: hidden;
-}
-.as-tm-comp-fill { display: block; height: 100%; border-radius: 9999px; background: var(--t-muted); }
-.as-tm-comp-fill.up { background: var(--color-bull); }
-.as-tm-comp-fill.down { background: var(--color-bear); }
-.as-tm-comp-v { text-align: right; }
-.as-tm-comp-v.up { color: var(--color-bull); }
-.as-tm-comp-v.down { color: var(--color-bear); }
 
 /* ── 05 — 근거 패널을 메인으로 (S2) ─────────────────────────────────────────
    지표표와 분포는 나란히. 좁아지면 쌓인다. */
-.as-opt-ev { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-@media (max-width: 1180px) { .as-opt-ev { grid-template-columns: 1fr; } }
-.as-tov-noop { border-left: 3px solid var(--t-accent); padding-left: 8px; }
 
 /* ★같은 함정에 또 빠졌다 — 그리고 이 파일이 이미 경고하고 있었다 (A5)★
    위 `:root` 에서 라이트 대비를 고쳤더니 **다크가 깨졌다**. `:root` 와 `.dark` 는
@@ -5913,90 +4748,50 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 09 JOURNAL — 정책 백테스트 ────────────────────────────────────────────── */
-.aas-root .as-bt-badges { font-size: 11px; }
+
 .aas-root .as-bt-badge { font-size: 11px; }
-.aas-root .as-bt-kpi-l { font-size: 11px; }      /* 8.5 → 11 */
-.aas-root .as-bt-t { font-size: 12px; }
-.aas-root .as-bt-wtbl { font-size: 11px; }
-.aas-root .as-bt-wtbl th { font-size: 11px; }    /* 9 → 11 */
+      /* 8.5 → 11 */
+
+    /* 9 → 11 */
 
 /* ── 09 JOURNAL — 저널 엔트리 · 런 목록 · 결정 사슬 · 건강도 ──────────────── */
-.aas-root .as-jr-field { font-size: 11px; }
-.aas-root .as-jr-field em { font-size: 11px; }
-.aas-root .as-jr-grid em, .aas-root .as-jr-review em { font-size: 11px; }
-.aas-root .as-jr-grid p, .aas-root .as-jr-review p { font-size: 12px; }  /* 산문 */
-.aas-root .as-rr-src { font-size: 11px; }        /* 8.5 → 11 */
-.aas-root .as-rr-reopen { font-size: 11px; }
-.aas-root .as-rr-rat-row { font-size: 11px; }
-.aas-root .as-rr-focus-missing { font-size: 11px; }
-.aas-root .as-dj-runrow, .aas-root .as-dj-attr { font-size: 11px; }
-.aas-root .as-dj-link em, .aas-root .as-dj-link b { font-size: 11px; }
-.aas-root .as-dj-arrow, .aas-root .as-dj-more { font-size: 11px; }
-.aas-root .as-health-pill { font-size: 11px; }
-.aas-root .as-health-derisk { font-size: 11px; }
-.aas-root .as-health-item { font-size: 11px; }
-.aas-root .as-health-status, .aas-root .as-health-sig { font-size: 11px; }
+
+  /* 산문 */
+        /* 8.5 → 11 */
 
 /* ── 08 EXECUTION — 스튜디오에서 가장 작은 타입이 모여 있던 자리 ──────────── */
-.aas-root .as-exec-cfg label { font-size: 11px; }
-.aas-root .as-exec-hint { font-size: 11px; }
-.aas-root .as-exec-kpi .k, .aas-root .as-exec-kpi em { font-size: 11px; }
-.aas-root .as-exec-table { font-size: 11px; }
-.aas-root .as-exec-code { font-size: 11px; }     /* 8.5 → 11 */
-.aas-root .as-exec-stage { font-size: 11px; }    /* 8.5 → 11 */
-.aas-root .as-exec-tick { font-size: 11px; }     /* 8   → 11 */
-.aas-root .as-exec-costchips { font-size: 11px; }/* 8   → 11 */
-.aas-root .as-exec-checks li { font-size: 11px; }
-.aas-root .as-exec-chk { font-size: 11px; }      /* 8.5 → 11 */
-.aas-root .as-exec-chk-detail { font-size: 11px; }
-.aas-root .as-exec-dbwarn { font-size: 11px; }
-.aas-root .as-exec-status { font-size: 11px; }
-.aas-root .as-exec-noapprove { font-size: 11px; }
-.aas-root .as-exec-auditlist li { font-size: 11px; }
-.aas-root .as-exec-audit-t { font-size: 11px; }
-.aas-root .as-exec-warnlist li { font-size: 12px; }  /* 경고는 산문이다 */
+
+     /* 8.5 → 11 */
+    /* 8.5 → 11 */
+     /* 8   → 11 */
+/* 8   → 11 */
+
+      /* 8.5 → 11 */
+
+  /* 경고는 산문이다 */
 
 /* ── 07 ATTRIBUTION ────────────────────────────────────────────────────────── */
-.aas-root .as-attr-head { font-size: 11px; }
-.aas-root .as-attr-warn { font-size: 11px; }
+
 .aas-root .as-attr-basis { font-size: 11px; }    /* 8 → 11 */
-.aas-root .as-attr-card .k { font-size: 11px; }
-.aas-root .as-attr-link { font-size: 12px; }     /* 산문 */
+
+     /* 산문 */
 /* 07 의 과의존 수치는 인라인 `style={{fontSize:13}}` 이었다 — 어떤 CSS 도 닿지 않는
    자리라 A4-V2 와 같은 방식으로 클래스로 내렸다. */
-.aas-root .as-attr-dep { font-size: 13px; }
 
 /* ── 06 STRESS ─────────────────────────────────────────────────────────────── */
-.aas-root .as-scen em { font-size: 11px; }
-.aas-root .as-scen-mini { font-size: 11px; }
-.aas-root .as-krs-hero em { font-size: 11px; }
-.aas-root .as-krs-h { font-size: 11px; }
-.aas-root .as-krs-frow { font-size: 11px; }
-.aas-root .as-krs-assume { font-size: 11px; }
-.aas-root .as-krs-exec { font-size: 12px; }      /* 실행 가능성·헤지는 산문 */
-.as-krs-na { font-family: inherit; font-weight: 600; font-size: 12px; color: var(--t-muted); }
+
+      /* 실행 가능성·헤지는 산문 */
 
 /* ── 라이트 리터럴 → 토큰 (평시에 렌더되지 않아 다크 스윕이 못 본 상태들) ──── */
-.as-exec-dbwarn, .as-attr-warn { color: var(--color-caution); }
-.as-health-derisk { color: var(--color-bear); }
-.as-scen-mini { background: var(--card); color: var(--foreground); }
-.as-rr-focus-missing { color: var(--color-caution); background: var(--muted); }
 
 /* ── A6 신규 클래스 ────────────────────────────────────────────────────────── */
 /* 09 — 정책 백테스트가 2단 그리드 위 전폭 밴드로 올라왔다. */
-.as-jr-policy { margin-bottom: 8px; }
 
 /* 08 — 승인 차단 사유. `disabled` 버튼의 title 에서 내려온 문장이라 눈에 띄어야 하고,
    `role="status"` 로 상태 변화 시 낭독된다. 색은 토큰(라이트/다크 양쪽 정의됨). */
-.as-exec-blockwhy {
-  font-size: 12px; line-height: 1.55;
-  color: var(--color-bear); background: var(--color-bear-bg);
-  border-left: 3px solid var(--color-bear);
-  border-radius: 2px; padding: 7px 10px; margin: 6px 0;
-}
+
 /* 08 — 비용칩이 한 글자에서 낱말로 바뀌면서 길어졌다. 줄바꿈을 허용하지 않으면
    9열 표에서 마지막 열이 밀린다. */
-.aas-root .as-exec-costchips { flex-wrap: wrap; row-gap: 2px; }
 
 /* ── §56 보강 — 스펙이 잡아낸 두 패밀리 (측정 > grep) ──────────────────────────
    §56 의 첫 판은 06~09 **자체** 패밀리를 prefix 로 grep 해서 만들었다. 브라우저에서
@@ -6007,11 +4802,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
                   코너 셀과 tbody th em 은 8.5px
    grep 은 "내가 아는 이름" 만 본다. 이 두 건은 도구를 바꿔서가 아니라 **화면을 재서**
    나왔다 — 이 스펙이 존재하는 이유 그대로다. */
-.aas-root .as-s3w-basis, .aas-root .as-s3w-nm,
-.aas-root .as-s3w-exp, .aas-root .as-s3w-na { font-size: 11px; }
-.aas-root .as-heat { font-size: 11px; }
-.aas-root .as-heat tbody th em { font-size: 11px; }
-.aas-root .as-heat .as-heat-corner { font-size: 11px; }
 
 /* ── 정책 백테스트 정직 배지 — 라이트 리터럴 2줄 ─────────────────────────────
    `.as-bt-badge.mock` 은 `#fffbeb / #b45309 / #fde68a`, `.real` 은 `#dcfce7 / #16a34a`.
@@ -6028,8 +4818,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    §56 의 06~09 패밀리 grep 에도, §55 의 04 패밀리 규칙에도 들어가지 않았다 —
    이름이 소속을 잘못 말하고 있던 경우다. 클래스명은 E2E 계약이라 바꾸지 않고,
    하한만 건다. */
-.aas-root .as-tm-corr-head span { font-size: 11px; }
-.aas-root .as-tm-corr-head em { font-size: 11px; }
 
 /* ── 같은 함정의 나머지 세 곳 (A6, 커밋 후 발견) ────────────────────────────
    `.as-bt-badge` 를 고치고 나서 같은 모양을 검색했더니 셋이 더 나왔다:
@@ -6049,9 +4837,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    "틴트 배경 위의 하락색" 을 위한 토큰을 따로 둔다. */
 :root { --color-bear-on-tint: #b91c1c; }
 .dark { --color-bear-on-tint: #fca5a5; }
-.as-exec-status.cancelled, .as-exec-status.rejected { color: var(--color-bear-on-tint); }
-.as-dq.bad_outcome_bad_process { color: var(--color-bear-on-tint); }
-.as-health-pill.de_risk { color: var(--color-bear-on-tint); }
 
 /* ── `.as-dq` — §56 의 prefix grep 이 놓친 09 의 패밀리 (A6, 프로브가 발견) ────
    조건부 상태 가드를 만들면서 `.as-dq.bad_outcome_bad_process` 가 **9px** 로
@@ -6063,12 +4848,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    네 변형 전부 색이 하드코딩이고, 그중 둘은 **배경까지** 라이트 리터럴(`#fef3c7`)
    이라 다크에서 밝은 판이 그대로 남는다(감사의 bright 검사 대상).
    전부 토큰으로 옮기고 하한을 건다. */
-.aas-root .as-dq { font-size: 11px; }
-.as-dq.good_outcome_good_process { color: var(--chart-up); }
-.as-dq.bad_outcome_bad_process { color: var(--color-bear-on-tint); }
-.as-dq.good_outcome_bad_process, .as-dq.bad_outcome_good_process {
-  background: var(--muted); color: var(--color-caution);
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §57 — A7
@@ -6080,15 +4859,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    (한 화면에 primary 는 하나) 테두리만 있는 보조 버튼으로 둔다.
    `margin-left: auto` 는 `.aas-botnav-next` 가 이미 갖고 있어서 여기엔 걸지 않는다 —
    걸면 둘이 서로 밀어내며 가운데 메타가 찌그러진다. */
-.aas-botnav-rec {
-  font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em;
-  border: 1px solid var(--t-accent); border-radius: 2px;
-  background: transparent; color: var(--t-accent);
-  padding: 5px 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
-}
-.aas-botnav-rec:hover { background: rgb(18 0 255 / .06); }
-.aas-botnav-rec:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.dark .aas-botnav-rec:hover { background: rgb(124 116 255 / .14); }
 
 /* ── 02 AlphaLab 레지스트리 행 — 세로로 쏟아지던 글자의 원인 ────────────────
    스크린샷의 `↑ 검 증 됨` 세로 쌓임은 폰트가 아니라 **flex 축소** 문제였다.
@@ -6097,10 +4867,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    이름+표현식이 자리를 먼저 먹으면 남은 폭이 승격 칩에게 몇 px 만 돌아가고,
    그 폭에서 텍스트가 글자 단위로 줄바꿈됐다.
    → 줄어들어야 하는 쪽에 `min-width: 0`, 줄어들면 안 되는 쪽에 `flex-shrink: 0`. */
-.as-al-item > * { min-width: 0; }
-.as-al-item > .as-chip, .as-al-item > .as-x { flex-shrink: 0; white-space: nowrap; }
-.as-al-pick { min-width: 0; }
-.as-al-pick > .as-al-expr-r { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── ArchiveDrawer — 측면 서랍 ──────────────────────────────────────────────
    ★복합 선택자를 쓴다★ `.shad-content` 와 `.as-arch` 는 둘 다 단일 클래스라 특정도가
@@ -6142,109 +4908,25 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    세 도구를 나란히. **가로 3열이 곧 "합치지 않았다" 는 표현**이다 — 한 칸으로
    합치면 화면이 먼저 평균을 냈다고 말하게 된다. 좁아지면 세로로 쌓이되 여전히
    셋이다(아코디언으로 접지 않는다). */
-.as-rge { display: flex; flex-direction: column; gap: 10px; }
-.as-rge-refresh {
-  margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-family: var(--t-mono); letter-spacing: .03em;
-  border: 1px solid var(--t-border); border-radius: 2px; background: transparent;
-  color: var(--t-muted); padding: 3px 9px; cursor: pointer; white-space: nowrap;
-}
-.as-rge-refresh:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
-.as-rge-refresh:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.as-rge-refresh:disabled { cursor: progress; opacity: .7; }
 
-.as-rge-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 1100px) { .as-rge-tools { grid-template-columns: 1fr; } }
-
-.as-rge-tool {
-  border: 1px solid var(--t-border); border-radius: 3px; padding: 9px 10px;
-  background: var(--card); display: flex; flex-direction: column; gap: 7px; min-width: 0;
-}
 /* 미가용 칸은 **비어 보여야** 한다 — 막대가 없는 것이 곧 신호다. 흐리게 만들지
    않는다(디밍은 A4-X1 에서 접근성 문제로 걷어냈다). 점선 테두리로 "여기엔 값이
    없다" 를 말한다. */
-.as-rge-tool.na { border-style: dashed; }
-.as-rge-tool-h { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.as-rge-tool-n { font-size: 11px; letter-spacing: .04em; color: var(--foreground); min-width: 0; }
-.as-rge-pick {
-  margin-left: auto; flex-shrink: 0; white-space: nowrap;
-  font-size: 11px; padding: 2px 7px; border-radius: 2px; border: 1px solid transparent;
-}
-
-.as-rge-bars { display: flex; flex-direction: column; gap: 4px; }
-.as-rge-bar { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.as-rge-bar-l { font-size: 11px; color: var(--t-muted); width: 84px; flex-shrink: 0; }
-.as-rge-track {
-  flex: 1 1 auto; min-width: 0; height: 8px; border-radius: 2px;
-  background: var(--t-border); overflow: hidden;
-}
-.as-rge-track > i { display: block; height: 100%; }
-.as-rge-bar-v { font-size: 11px; width: 34px; text-align: right; flex-shrink: 0; color: var(--foreground); }
-.as-rge-how { font-size: 12px; line-height: 1.5; color: var(--t-muted); }
 
 /* 일치/불일치 — 갈렸다는 사실이 결론이다. 경고색은 쓰지 않는다(결함이 아니다). */
-.as-rge-agree {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
-  font-size: 12px; padding: 7px 10px; border-radius: 3px;
-  border: 1px solid var(--t-border); background: var(--t-surface); color: var(--foreground);
-}
-.as-rge-agree.split { border-color: var(--t-accent); }
-.as-rge-agree-p {
-  font-size: 11px; font-family: var(--t-mono); color: var(--t-muted);
-  border: 1px solid var(--t-border); border-radius: 2px; padding: 1px 6px;
-}
-.as-rge-foot { font-size: 11px; color: var(--t-muted); }
 
 /* ── 전이 그래프 ────────────────────────────────────────────────────────────
    SVG 안의 `font-size` 는 이 파일이 닿지 못한다 — 컴포넌트가 직접 11 이상으로
    쓴다(A5 의 SankeyNode, A6 의 축 눈금에서 두 번 겪은 함정). 여기서는 컨테이너와
    포커스 링만 맡는다. */
-.as-rgg { display: flex; flex-direction: column; gap: 7px; }
-.as-rgg-svg { width: 100%; height: auto; max-height: 300px; display: block; }
-.as-rgg-node { cursor: default; }
-.as-rgg-node:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
-.as-rgg-cap { font-size: 12px; line-height: 1.6; color: var(--t-muted); margin: 0; }
-.as-rgg-legend {
-  display: flex; flex-wrap: wrap; gap: 4px 12px;
-  font-size: 11px; color: var(--t-muted);
-}
 
 /* ── 07 측정 대상 피커 — 런 · 기준일 (A7-4) ────────────────────────────────
    네이티브 `<select>` 와 `<input type="date">` 를 쓴다. 저장소 관례이고(§S3a 가
    Select 도입을 기각하며 기록한 이유: 네이티브 44개가 이미 접근성을 갖췄고 공짜다),
    date 는 특히 브라우저의 달력·키보드 입력·로케일을 그대로 얻는다. */
-.as-attr-pick-row {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 7px 10px;
-}
-.as-attr-pick-l { font-size: 11px; letter-spacing: .04em; color: var(--t-muted); flex-shrink: 0; }
-.as-attr-pick-run {
-  flex: 1 1 260px; min-width: 0;                 /* 긴 런 라벨이 형제를 밀어내지 않게 */
-  font-size: 12px; font-family: var(--t-mono);
-  border: 1px solid var(--t-border); border-radius: 2px;
-  background: var(--card); color: var(--foreground); padding: 4px 7px;
-}
-.as-attr-pick-asof {
-  font-size: 12px; border: 1px solid var(--t-border); border-radius: 2px;
-  background: var(--card); color: var(--foreground); padding: 4px 7px; flex-shrink: 0;
-}
-.as-attr-pick-run:focus-visible, .as-attr-pick-asof:focus-visible {
-  outline: 2px solid var(--ring); outline-offset: 1px;
-}
-.as-attr-pick-reset {
-  font-size: 11px; font-family: var(--t-mono);
-  border: 1px solid var(--t-border); border-radius: 2px; background: transparent;
-  color: var(--t-muted); padding: 3px 9px; cursor: pointer; flex-shrink: 0;
-}
-.as-attr-pick-reset:hover { border-color: var(--t-accent); color: var(--t-accent); }
-.as-attr-pick-reset:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.as-attr-pick-sel { font-size: 11px; color: var(--t-muted); margin-top: 6px; }
 
 /* 경과 0일 사유 — 경고색은 쓰지 않는다. 결함이 아니라 **구간이 없다** 는 사실이고,
    런을 바꾸면 풀린다. 접지도 않는다(A5 가 그은 경계: 설명은 접고 사유는 접지 않는다). */
-.as-attr-zero {
-  font-size: 12px; line-height: 1.6;
-  border-left: 2px solid var(--t-accent); padding-left: 9px;
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §58 — A8 · 0M 국면 설명가능성 · 전환위험 · 시간맥락
@@ -6278,119 +4960,18 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-rgr-lg > b { font-family: var(--t-mono); color: var(--foreground); }
 
 /* ── 세그먼트 탭 ──────────────────────────────────────────────────────────── */
-.as-rge-tabs {
-  display: flex; gap: 2px; padding: 2px;
-  border: 1px solid var(--t-border); border-radius: 3px;
-  background: var(--t-surface); width: fit-content; max-width: 100%;
-  overflow-x: auto;
-}
-.as-rge-tab {
-  font-size: 12px; letter-spacing: .02em; white-space: nowrap;
-  border: none; border-radius: 2px; background: transparent;
-  color: var(--t-muted); padding: 5px 12px; cursor: pointer;
-}
-.as-rge-tab:hover { color: var(--foreground); }
-.as-rge-tab.on { background: var(--card); color: var(--foreground); font-weight: 600; }
-.as-rge-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.as-rge-panel { display: flex; flex-direction: column; gap: 10px; }
 
 /* 미가용 요약 — 탭 바깥. 경고색이 아니라 사실 전달이다. */
-.as-rge-na {
-  display: flex; flex-direction: column; gap: 3px;
-  font-size: 12px; line-height: 1.5; color: var(--foreground);
-  border-left: 2px solid var(--t-accent); padding: 6px 0 6px 9px;
-}
 
 /* ── 전이행렬 ─────────────────────────────────────────────────────────────── */
-.as-rgt { display: flex; flex-direction: column; gap: 9px; }
-.as-rgt-lead, .as-rgt-foot { font-size: 12px; line-height: 1.6; color: var(--t-muted); }
+
 /* 좁은 폭에서 표만 가로 스크롤한다 — 페이지 전체가 밀리지 않게. */
-.as-rgt-wrap { overflow-x: auto; }
-.as-rgt-tbl { width: 100%; border-collapse: collapse; min-width: 520px; }
-.as-rgt-tbl th, .as-rgt-tbl td {
-  border: 1px solid var(--t-border); padding: 5px 7px; text-align: center;
-}
-.as-rgt-tbl thead th { font-size: 11px; letter-spacing: .03em; background: var(--t-surface); }
-.as-rgt-corner { font-size: 11px; color: var(--t-muted); text-align: left; white-space: nowrap; }
-.as-rgt-tbl tbody th { font-size: 12px; text-align: left; white-space: nowrap; }
-.as-rgt-tbl tbody tr.on { outline: 2px solid var(--t-accent); outline-offset: -2px; }
-.as-rgt-now {
-  margin-left: 5px; font-size: 11px; font-family: var(--t-mono);
-  border: 1px solid var(--t-accent); color: var(--t-accent);
-  border-radius: 2px; padding: 0 4px;
-}
-.as-rgt-tbl td > b { display: block; font-size: 12px; font-family: var(--t-mono); color: var(--foreground); }
-.as-rgt-ci {
-  display: block; font-size: 11px;
-  /* ★muted 를 쓰지 않는다 — 대비 감사가 잡았다★ 이 칸은 틴트가 깔린 배경 위에
-     있어서 `--t-muted`(zinc-500/400)로는 라이트 1.76:1 · 다크 3.32:1 로 AA 를
-     통과하지 못한다. 계산해 보면 틴트를 0.20 까지 낮춰도 muted 는 ~3.2:1 이라
-     여전히 미달이다 — 즉 배경이 아니라 **토큰 선택**이 틀린 것이다.
-     신용구간은 장식이 아니라 읽어야 하는 숫자이므로 본문색을 쓰고, 주 값과는
-     크기(12px 볼드 vs 11px 보통)로 위계를 만든다. A6 이 `--color-bear-on-tint`
-     에서 배운 것과 같은 교훈: 용도가 다르면 토큰도 달라야 한다. */
-  color: var(--foreground);
-}
-.as-rgt-n, .as-rgt-dur { font-size: 12px; color: var(--t-muted); }
+
 /* 수축 사유 — 글자로 말한다(색만으로 의미 전달 금지). */
-.as-rgt-shrunk {
-  font-size: 12px; line-height: 1.5; color: var(--foreground);
-  border-left: 2px solid var(--t-accent); padding-left: 9px;
-}
-.as-rgt-fc { display: flex; flex-direction: column; gap: 5px; }
-.as-rgt-fc-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; }
-.as-rgt-fc-rows { display: flex; flex-direction: column; gap: 4px; }
-.as-rgt-fc-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.as-rgt-fc-l { font-size: 12px; color: var(--t-muted); width: 96px; flex-shrink: 0; }
-.as-rgt-fc-track {
-  flex: 1 1 auto; min-width: 0; height: 8px; border-radius: 2px;
-  background: var(--t-border); overflow: hidden;
-}
-.as-rgt-fc-track > i { display: block; height: 100%; }
-.as-rgt-fc-v { font-size: 12px; width: 38px; text-align: right; flex-shrink: 0; color: var(--foreground); }
-.as-rgt-fc-ci { font-size: 11px; width: 78px; text-align: right; flex-shrink: 0; color: var(--t-muted); }
 
 /* ── 드라이버 워터폴 ──────────────────────────────────────────────────────── */
-.as-rgd { display: flex; flex-direction: column; gap: 8px; }
-.as-rgd-lead, .as-rgd-note { font-size: 12px; line-height: 1.6; color: var(--t-muted); margin: 0; }
-.as-rgd-anchor {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  font-size: 12px; padding: 6px 9px; border-radius: 3px;
-  background: var(--t-surface); border: 1px solid var(--t-border);
-}
-.as-rgd-anchor-l { color: var(--t-muted); }
-.as-rgd-anchor > b { font-size: 13px; font-family: var(--t-mono); }
-.as-rgd-final { border-color: var(--t-accent); }
-.as-rgd-rows { display: flex; flex-direction: column; gap: 4px; }
-.as-rgd-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.as-rgd-name { font-size: 12px; color: var(--foreground); width: 132px; flex-shrink: 0; }
-.as-rgd-axis { display: block; font-size: 11px; color: var(--t-muted); font-style: normal; }
-/* 중앙 0 기준 좌우 발산 막대 — 부호가 위치로도 읽힌다(색만으로 전달하지 않는다). */
-.as-rgd-track {
-  position: relative; flex: 1 1 auto; min-width: 0; height: 14px;
-  background: var(--t-surface); border-radius: 2px;
-}
-.as-rgd-zero {
-  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-  background: var(--t-border);
-}
-.as-rgd-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 1px; }
-.as-rgd-bar.up { background: var(--chart-up); }
-.as-rgd-bar.dn { background: var(--chart-down); }
-.as-rgd-phi { font-size: 12px; width: 62px; text-align: right; flex-shrink: 0; }
-.as-rgd-phi.up { color: var(--chart-up); }
-.as-rgd-phi.dn { color: var(--chart-down); }
-.as-rgd-axc { font-size: 11px; width: 78px; text-align: right; flex-shrink: 0; color: var(--t-muted); }
-.as-rgd-check {
-  font-size: 12px; line-height: 1.6; color: var(--foreground);
-  border-left: 2px solid var(--t-accent); padding-left: 9px;
-}
-.as-rgd-check.bad { border-left-color: var(--color-bear-on-tint); color: var(--color-bear-on-tint); }
 
-@media (max-width: 900px) {
-  .as-rgd-name { width: 104px; }
-  .as-rgt-fc-l { width: 78px; }
-}
+/* 중앙 0 기준 좌우 발산 막대 — 부호가 위치로도 읽힌다(색만으로 전달하지 않는다). */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §59 — A9: 01 CONSTRUCT 컴포넌트 품질 (스테퍼 폭 · 배지 수렴 · 밀도)
@@ -6419,56 +5000,22 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* W1 — 스텝 수 비례 배분 */
-.aas-wiz-phase { flex: var(--wiz-steps, 1) 1 0; }
 
 /* W2 — 세로 스텝: 마커 위 · 라벨 아래. 라벨이 가로폭을 통째로 쓴다. */
-.aas-wiz-step {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1px;
-  /* ATTRIBUTION(11px/600) ≈ 85px + 좌우 패딩 12px. 이 값이 "절대 안 잘린다" 의 근거다. */
-  min-width: 97px;
-  padding: 4px 6px;
-}
-.aas-wiz-mark {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 14px; padding: 0 3px;
-  font-size: 11px; line-height: 1;
-  color: var(--t-muted);
-  border: 1px solid var(--t-border); border-radius: 2px;
-  background: var(--card);
-}
-.aas-wiz-step.on .aas-wiz-mark { color: var(--t-accent); border-color: var(--t-accent); }
+
 /* 액센트 위 글자색은 `--primary-foreground` 를 쓴다 — 라이트 #fff / 다크 #09090b.
    다크 액센트(#7c74ff)는 밝은 라벤더라 흰 글씨가 3.62:1 로 미달이고, §52 가 이미
    그 이유로 이 토큰을 갈라 두었다. 여기서 #fff 를 박으면 그 교훈을 되돌리는 것이다. */
-.aas-wiz-step.done .aas-wiz-mark {
-  color: var(--primary-foreground); background: var(--t-accent); border-color: var(--t-accent);
-}
+
 /* ★nowrap 을 푼다★ `min-width: 97px` 은 **끊을 수 없는 가장 긴 낱말**(ATTRIBUTION)
    기준이다. 두 낱말짜리 라벨(`MACRO PHASE` 94px, `ALPHA LAB`)은 그보다 넓을 수 있어서
    실측에서 11px 넘쳤다. 한 낱말은 min-width 가 보장하고, 여러 낱말은 줄바꿈으로 받는다
    — 어느 쪽도 잘리지 않는다. `.aas-wiz-steps` 가 flex 라 형제 높이는 함께 늘어난다. */
-.aas-wiz-lab {
-  font-size: 11px; max-width: 100%;
-  white-space: normal; text-overflow: clip;
-  line-height: 1.25; overflow-wrap: break-word;
-}
 
 /* W4 — 라이트 전용 앰버 리터럴을 토큰으로.
    `--color-caution` 계열은 §52 에 다크 짝(#fbbf24)이 이미 있다. 새 토큰 0개로
    라이트 전용 결함이 닫힌다. (Phase 1 의 --warn-fg/--warn-mark 분리가 승인되면
    그쪽이 이것을 대체한다 — 지금 두 벌을 만들지 않는다.) */
-.aas-wiz-step.superseded, .aas-wiz-book.superseded {
-  border-color: var(--color-caution); background: var(--color-caution-bg);
-}
-.aas-wiz-step.superseded .aas-wiz-mark {
-  color: var(--color-caution); border-color: var(--color-caution); background: var(--card);
-}
-.aas-wiz-step.superseded .aas-wiz-sub,
-.aas-wiz-booksup { color: var(--color-caution); }
-.aas-wiz-mock { color: var(--color-caution); border-color: var(--color-caution); }
 
 /* ── B1: 상태 배지 토큰 — "칠하는 색"과 "읽는 색"을 나눈다 ────────────────────
    Badge 의 warn/bull/bear variant 가 참조한다. 왜 `--color-*` 를 그대로 안 쓰는가:
@@ -6495,42 +5042,17 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ★단위까지 맞춘다★ 첫 판에서 `padding: 2px 8px` 로 적었더니 Badge 쪽은 1.75px 7px 로
    나왔다 — 루트 폰트가 14px 이라 Badge 의 rem 기반 `py-0.5`/`px-2` 가 그렇게 계산된다.
    px 리터럴로는 영원히 안 맞으므로 같은 rem 값을 쓴다. */
-.as-ctx-regime { padding: 0.125rem 0.5rem; border-radius: var(--radius); }
 
 /* ── D: 밀도 — 지표에 맥락을 주고, 카드 크롬을 줄인다 ─────────────────────────
    `.as-stat-x` 는 지표 밑의 한 줄 맥락이다. `HHI 1,842` 는 기준선이 없으면 아무
    뜻도 아니었다. 다만 **임계값은 만들지 않는다** — 이미 참인 것(정의식, 보유 종목
    수)만 적는다. 지어낸 밴드는 근거처럼 보여서 더 위험하다. */
-.as-stat-x { font-size: 11px; color: var(--muted-foreground); line-height: 1.35; }
-.as-conc-bar {
-  display: block; height: 4px; margin-top: 4px;
-  background: var(--secondary); border-radius: 2px; overflow: hidden;
-}
-.as-conc-bar i { display: block; height: 100%; background: var(--t-accent); }
-.as-conc-cov {
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
-}
 
 /* ── D3: 비중 행 머리글 + Δ 칩 ─────────────────────────────────────────────
    Δ 열은 `auto` 라 최적화 결과가 없을 때 **폭 0 으로 접힌다** — 빈 칸이 자리를
    먹지 않는다. 결과가 없으면 칩 자체를 안 그리므로 `0.0%p` 가 찍힐 일도 없다. */
-.as-wrow-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 62px 10px auto 26px;
-  gap: 4px 6px; align-items: center; padding: 2px 0 4px;
-  font-size: 11px; color: var(--muted-foreground);
-  border-bottom: 1px solid var(--border);
-}
-.as-wrow-head-w { grid-column: 2 / 4; text-align: right; }
-.as-wrow-head-d { text-align: right; }
-.as-wrow-edit { grid-template-columns: minmax(0, 1fr) 62px 10px auto 26px; }
-.as-wrow-edit { grid-template-areas: "nm in unit dlt del" "sl sl sl sl sl"; }
-.as-w-delta { grid-area: dlt; font-size: 11px; text-align: right; white-space: nowrap; }
+
 /* 방향은 색만이 아니라 **부호**로도 말한다(+/−는 항상 렌더된다). */
-.as-w-delta.up   { color: var(--st-bull-fg); }
-.as-w-delta.dn   { color: var(--st-bear-fg); }
-.as-w-delta.flat { color: var(--muted-foreground); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §60 — A10 그래픽 패스: 모듈러 스케일 · 4px 리듬 · 무게 위계 · 엘리베이션
@@ -6585,51 +5107,32 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   background: var(--card);
   box-shadow: var(--elev-1);
 }
-.as-stat {
-  padding: var(--sp-2) var(--sp-3);
-  gap: var(--sp-1);
-  border-radius: var(--radius);
-  box-shadow: var(--elev-1);
-}
 
 /* ── 위계는 크기가 아니라 무게·색으로 ──
    예전에는 카드 제목이 10px 라 **작아서** 라벨처럼 읽혔다. 이제 제목과 부제가
    **같은 11px** 이고 굵기(600 vs 400)와 색(foreground vs muted)만 다르다 —
    요청 3번이 말하는 "크기 말고 무게·색" 이 이 한 쌍에 그대로 들어 있다. */
-.as-card-title {
-  font-size: var(--fs-chrome); font-weight: 600;
-  letter-spacing: var(--tr-label); color: var(--foreground);
-  gap: var(--sp-2);
-}
+
 .as-note-inline {
   font-size: var(--fs-chrome); font-weight: 400;
   letter-spacing: 0; color: var(--muted-foreground);
 }
-.as-note   { font-size: var(--fs-chrome); line-height: var(--lh-normal); color: var(--muted-foreground); }
+
 .as-empty  { font-size: var(--fs-chrome); color: var(--muted-foreground); padding: var(--sp-3) 0; }
 
 /* 라벨(대문자 크롬) vs 데이터(모노 tabular) vs 강조 수치 — 세 역할을 문법으로 가른다.
    `.num` 은 427곳이 쓰는 tabular-nums 관례라 건드리지 않는다. */
-.as-stat-k { font-size: var(--fs-chrome); font-weight: 500; letter-spacing: var(--tr-label);
-             color: var(--muted-foreground); }
-.as-stat-v { font-size: var(--fs-h2); font-weight: 600; letter-spacing: var(--tr-heading); }
 
 /* ── 스테퍼도 같은 리듬으로 ── */
-.aas-wiz      { gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-radius: var(--radius); }
-.aas-wiz-step { padding: var(--sp-1); gap: var(--sp-1); }
-.aas-wiz-phase{ padding: var(--sp-1) var(--sp-2); gap: var(--sp-1); border-radius: var(--radius); }
 
 /* ── 구분선을 여백으로 ──
    ★A9 에서 내가 넣은 선을 내가 지운다★ `.as-conc-cov` 는 카드 안에서 이미 여백으로
    갈라져 있는데 `border-top` 으로 한 번 더 갈랐다. 선을 빼고 여백만 남긴다 —
    요청 4번이 말하는 "불필요한 구분선을 여백으로" 의 가장 가까운 사례가 이것이었다. */
-.as-conc-cov { margin-top: var(--sp-3); padding-top: 0; border-top: none; gap: var(--sp-2); }
 
 /* Badge 가 px 토큰으로 옮겨졌으므로 regime 칩도 같은 px 로 되돌린다.
    A9 은 rem(0.125/0.5)으로 맞췄는데, 그건 Badge 가 rem 이었기 때문이다 —
    기준이 그리드로 바뀌었으니 둘 다 px 다. 기하 동일 가드는 계속 성립한다. */
-.as-ctx-regime { padding: 2px var(--sp-2); border-radius: var(--radius); }
-.as-ctx { gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-radius: var(--radius); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §61 — Phase 1 잔여 색 토큰 (승인됨): 액센트 램프 · Secondary 분리 ·
@@ -6723,24 +5226,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   .as-ws2 .as-center > .as-card:nth-of-type(3) { animation-delay: 80ms; }
 
   /* 인포그래픽 — 비중 바가 0 에서 자란다. 폭만 움직이므로 숫자는 처음부터 최종값이다. */
-  .as-ws2 .aas-map,
-  .as-ws2 .as-conc-bar > i { animation: a11-grow var(--dur-3) var(--ease-out) both; }
+  .as-ws2 .aas-map{ animation: a11-grow var(--dur-3) var(--ease-out) both; }
 
   /* 상태 전환 — transform/opacity/색만. width·height 는 건드리지 않는다. */
   .as-ws2 .as-card       { transition: box-shadow var(--dur-1) var(--ease-out); }
-  .as-ws2 .as-wrow       { transition: background-color var(--dur-1) var(--ease-out); }
-  .as-ws2 .as-w-delta    { transition: color var(--dur-1) var(--ease-out); }
-  .as-ws2 .as-stat       { transition: border-color var(--dur-1) var(--ease-out); }
+  
+  
+  
 }
 
 /* 호버·포커스는 모션과 무관하게 항상 있다(reduced-motion 이어도 상태는 보여야 한다). */
 .as-ws2 .as-card:hover { box-shadow: var(--elev-2); }
-.as-ws2 .as-wrow:hover { background: var(--brand-tint); }
-.as-ws2 .as-stat:hover { border-color: var(--brand-edge); }
 
 @keyframes a11-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes a11-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.as-ws2 .aas-map, .as-ws2 .as-conc-bar > i { transform-origin: left center; }
+.as-ws2 .aas-map{ transform-origin: left center; }
 
 /* ★reduced-motion 이면 전부 끄고 opacity:1 로 고정한다.★
    막으려는 함정은 랜딩 §46 이 기록한 것과 같다 — `both` 로 채운 애니메이션이 **멈춘 채**
@@ -6755,8 +5255,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    흔한 오작성이며, 그 형태로 프로브해 red 를 확인했다. 보험 두 줄은 비용이 0 이라 남긴다. */
 @media (prefers-reduced-motion: reduce) {
   .as-ws2 .as-center > .as-card,
-  .as-ws2 .aas-map,
-  .as-ws2 .as-conc-bar > i {
+  .as-ws2 .aas-map{
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
@@ -6850,16 +5349,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    내지 않고 사유를 적으므로, 여기 색은 **상태를 구별**하는 용도이지 의미를 혼자
    나르지 않는다(문구가 항상 함께 있다).
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-rob-basis-table { width: 100%; }
-.as-rob-basis-table td.num, .as-rob-basis-table th { text-align: right; }
-.as-rob-basis-table td:first-child, .as-rob-basis-table th:first-child { text-align: left; }
-.as-rob-basis-d { color: var(--muted-foreground); }
-.as-rob-basis-cash td { border-top: 1px solid var(--border); }
-.as-rob-basis-na, .as-rob-basis-same, .as-rob-basis-meta { font-size: var(--fs-chrome); }
-.as-3w-basis { font-size: var(--fs-chrome); color: var(--muted-foreground); }
-.as-rob-kpi2 { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: baseline;
-  margin-top: var(--sp-1); font-size: var(--fs-chrome); }
-.as-rob-kpi2 em { color: var(--muted-foreground); font-style: normal; margin-right: 4px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    64. P1 — 재현 결과 (.as-rr-repro*)
@@ -6872,29 +5361,13 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    통과하는 세 스펙의 레이아웃 가정을 건드리게 되므로, 결과 블록이 **있을 때만**
    `:has()` 로 wrap 을 켠다 — 선행 규칙 바이트 불변.
    ═══════════════════════════════════════════════════════════════════════════ */
-.as-rr-repro { font-size: var(--fs-chrome); padding: 2px 7px; border-radius: 4px;
-  cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
-.as-rr-repro:hover:not(:disabled) { border-color: var(--t-accent); color: var(--t-accent); }
-.as-rr-repro:disabled { opacity: .55; cursor: progress; }
 
-.as-rr-item:has(.as-rr-repro-out) { flex-wrap: wrap; }
-.as-rr-repro-out { flex: 0 0 100%; margin-top: var(--sp-1); padding: var(--sp-1) var(--sp-2);
-  border-left: 3px solid var(--border); font-size: var(--fs-chrome);
-  line-height: var(--lh-normal); color: var(--foreground); }
-.as-rr-repro-ok { border-left-color: var(--chart-up); }
-.as-rr-repro-drift { border-left-color: var(--warn-mark, var(--st-warn-mark)); }
 /* 비교 불가·재현 불가는 **결과가 아니라 상태**다 — 성공/실패 어느 색도 쓰지 않는다. */
-.as-rr-repro-incomp, .as-rr-repro-no { color: var(--muted-foreground); }
-.as-rr-repro-net { border-left-color: var(--destructive); }
-.as-rr-repro-uni { margin-top: 2px; color: var(--muted-foreground); }
+
 /* 추정 재현 배지 — 확정 재현과 같은 무게로 읽히면 안 된다. */
-.as-rr-repro-est { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 3px;
-  border: 1px solid var(--warn-mark, var(--st-warn-mark));
-  color: var(--warn-fg, var(--st-warn-fg)); font-size: var(--fs-chrome); }
 
 /* REAL 배지 — 인라인 `#15803d` 를 걷어낸 자리 (다크 3.53:1 이었다).
    `.as-bt-badge.real` 과 같은 토큰을 쓴다: 초록은 한 곳에서만 정의한다. */
-.as-rr-src.real { color: var(--chart-up); border-color: var(--chart-up); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    65. M1-U — 연구 케이스 컨텍스트 바 (.as-case*)
@@ -7103,70 +5576,21 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* 낡은 점수 고지 — 이 화면에서 가장 조용했던 거짓을 말로 바꾼 줄 */
-.as-ap-stale { font-size: var(--fs-sm); color: var(--st-warn-fg);
-  background: var(--st-warn-bg); border: 1px solid var(--st-warn-bd);
-  border-radius: var(--radius); padding: var(--sp-1) var(--sp-2); margin-top: var(--sp-1); }
-
-.as-ap-sub { margin-left: var(--sp-2); font-size: var(--fs-chrome);
-  font-weight: 400; color: var(--muted-foreground); }
 
 /* 알파 선택 — 승인되지 않은 행은 흐리지 않고 **사유를 붙인다**(디밍 금지 규칙) */
-.as-ap-picks { display: flex; flex-direction: column; gap: 2px; margin: var(--sp-2) 0; }
-.as-ap-none { font-size: var(--fs-sm); color: var(--muted-foreground); }
-.as-ap-pick { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
-  padding: 3px var(--sp-1); border-radius: 3px; font-size: var(--fs-sm); }
-.as-ap-pick:hover { background: var(--muted, transparent); }
-.as-ap-pname { color: var(--foreground); }
-.as-ap-why { font-size: var(--fs-chrome); color: var(--st-warn-fg); flex: 1 1 240px; }
-.as-ap-w { width: 62px; font-size: var(--fs-chrome); padding: 2px 4px;
-  border: 1px solid var(--border); border-radius: 3px;
-  background: var(--card); color: var(--foreground); }
 
 /* 컨트롤 */
-.as-ap-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
-  padding-top: var(--sp-2); border-top: 1px solid var(--border); }
-.as-ap-f { display: inline-flex; align-items: center; gap: 4px;
-  font-size: var(--fs-chrome); color: var(--muted-foreground); }
-.as-ap-n, .as-ap-s, .as-ap-d { font-size: var(--fs-chrome); padding: 2px 4px;
-  border: 1px solid var(--border); border-radius: 3px;
-  background: var(--card); color: var(--foreground); }
-.as-ap-n { width: 56px; }
 
 /* 상태 — 네트워크 오류와 서버 차단은 다른 사실이라 다른 줄이다 (R0-S 어휘) */
-.as-ap-net { margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-2);
-  font-size: var(--fs-sm); color: var(--foreground);
-  border-left: 2px solid var(--destructive); }
-.as-ap-blocked { margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-2);
-  font-size: var(--fs-sm); color: var(--foreground);
-  border-left: 2px solid var(--warn-mark); }
-.as-ap-r { color: var(--muted-foreground); margin-top: 2px; }
 
-.as-ap-out { margin-top: var(--sp-2); }
-.as-ap-meta { font-size: var(--fs-chrome); color: var(--muted-foreground); }
-.as-ap-nr { font-style: normal; color: var(--st-warn-fg); }
 /* ★경고는 접지 않는다★ */
-.as-ap-warn { margin-top: 3px; padding: 3px var(--sp-2); font-size: var(--fs-sm);
-  color: var(--foreground); border-left: 2px solid var(--warn-mark); }
 
-.as-ap-corr, .as-ap-hold { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); }
-.as-ap-corr th, .as-ap-hold th { text-align: left; font-size: var(--fs-chrome);
-  font-weight: 500; color: var(--muted-foreground); padding: 3px 0;
-  border-bottom: 1px solid var(--border); }
-.as-ap-corr td, .as-ap-hold td { font-size: var(--fs-sm); padding: 3px 0;
-  border-bottom: 1px solid var(--border); color: var(--foreground); }
-.as-ap-corr td.num, .as-ap-hold td.num,
-.as-ap-corr th:last-child, .as-ap-hold th:not(:first-child) { text-align: right; }
 /* 중복 쌍은 **색만으로 말하지 않는다** — 값이 옆에 있고 경고 문장이 위에 있다. */
-.as-ap-corr tr.dup td { color: var(--st-warn-fg); }
-.as-ap-code { font-style: normal; color: var(--muted-foreground); }
-
-.as-ap-acts { display: flex; flex-wrap: wrap; align-items: center;
-  gap: var(--sp-2); margin-top: var(--sp-2); }
 
 @media (max-width: 900px) {
   /* 좁은 폭에서도 사유는 사라지지 않는다 — 접히기만 한다 (P10 §8 계약) */
-  .as-ap-why { flex-basis: 100%; }
-  .as-ap-f { flex: 1 1 100%; }
+  
+  
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -7177,37 +5601,10 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    §56 하한 준수: 산문 12px · 크롬 라벨 11px. 색은 토큰만. 애니메이션 없음.
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-.as-eng { display: flex; flex-direction: column; gap: var(--sp-2); }
-.as-eng-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
-.as-eng-k { font-size: 11px; color: var(--muted-foreground); letter-spacing: .05em; }
-.as-eng-v { font-size: 13px; color: var(--foreground); font-weight: 600; }
-.as-eng-badge {
-  font-size: 11px; padding: 1px var(--sp-2); border-radius: var(--radius);
-  border: 1px solid var(--border); background: var(--card); color: var(--foreground);
-  white-space: nowrap;
-}
 /* ★색만으로 의미를 전달하지 않는다★ 배지의 문구가 이미 "실현 불가" 라고 말하고,
    색은 그것을 거드는 역할이다. */
-.as-eng-badge.bad { border-color: var(--chart-down); color: var(--chart-down); }
-.as-eng-note { font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
-.as-eng-warn {
-  font-size: 12px; line-height: 1.55; color: var(--warn-fg);
-  border-left: 2px solid var(--warn-mark); padding-left: var(--sp-2);
-}
-.as-eng-viol { margin: 0; padding-left: var(--sp-4); font-size: 12px; line-height: 1.6; }
-.as-eng-viol b { font-weight: 600; }
 
-.as-bt-cf {
-  display: flex; flex-direction: column; gap: var(--sp-1);
-  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2);
-  border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
-}
-.as-bt-cf-t { font-size: 11px; letter-spacing: .05em; color: var(--muted-foreground); font-weight: 600; }
-.as-bt-cf-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
-.as-bt-cf-k { font-size: 11px; color: var(--muted-foreground); letter-spacing: .05em; }
 /* 미가용은 숫자 자리에 사유가 들어간다 — 0 이나 공백이 아니다. */
-.as-bt-cf-na { font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
-.as-bt-cf-note { font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §68 롱숏 (P3) — 숏을 조용히 버리지 않기 위해 필요한 최소한의 것만
@@ -7232,35 +5629,14 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .as-ls-neg { color: var(--color-bear); }
 
 /* 도넛이 gross 기준임을 밝히는 줄. §56 하한(11px) 을 지킨다. */
-.as-ls-basis { margin-top: 6px; font-size: 11px; line-height: 1.55; }
 
 /* 노출 두 축을 넣은 표 행 — 현금 행과 같은 자리를 쓰되 이름이 다르다. */
-.as-ls-exposure-row td:first-child { white-space: nowrap; }
 
 /* 실행 차단 — 죽은 버튼 대신 막힌 이유. 경고가 아니라 사실이라 톤을 낮춘다. */
-.as-ls-blocked {
-  margin: 10px 0; padding: 10px 12px;
-  border: 1px solid var(--border); border-left: 3px solid var(--color-bear);
-  border-radius: 4px; background: var(--muted);
-}
-.as-ls-blocked-t { display: block; font-size: 12px; line-height: 1.5; color: var(--foreground); }
-.as-ls-blocked-l { margin: 6px 0 0; padding-left: 18px; }
-.as-ls-blocked-l li {
-  font-size: 11px; line-height: 1.65; color: var(--muted-foreground); list-style: disc;
-}
-.as-ls-blocked-l code { font-size: 10.5px; font-family: var(--t-mono); }
 
 /* 05 의 롱숏 컨트롤 — 기존 .as-cons-* 밀도를 따른다(새 스케일 도입 금지). */
-.as-ls-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
-.as-ls-field { display: flex; flex-direction: column; gap: 3px; min-width: 92px; }
-.as-ls-field > span { font-size: 10px; letter-spacing: .05em; color: var(--muted-foreground); }
-.as-ls-field > input { font-size: 12px; font-family: var(--t-mono); }
-.as-ls-hint { font-size: 11px; line-height: 1.55; color: var(--muted-foreground); flex-basis: 100%; }
 
 /* 결과의 노출 요약 — 넷 하나로 말할 수 없으니 두 축을 나란히. */
-.as-ls-exposure { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
-.as-ls-exposure > span { font-size: 11px; color: var(--muted-foreground); }
-.as-ls-exposure b { font-size: 12px; color: var(--foreground); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §69 — P4 매크로 지능 패널 (소스 커버리지 · 장기관계 · 예측 적중률 · 불일치)
@@ -7435,8 +5811,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .tcmp-th-label { margin-top: 4px; font-weight: 400; }
 .brun-cmp-labels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
 .tsheet-perf { margin-bottom: 8px; }
-.as-rr-perf { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.as-metrics-wrap { display: flex; flex-direction: column; gap: 8px; }
+
 .cbr-perf { margin-bottom: 10px; }
 .popt-perf { align-self: flex-start; }
 .sm-perf-label { margin: 6px 0 4px; }
@@ -7535,13 +5910,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-summary { font-size: 13px; color: var(--pg-mute); }
 .pg-summary--stale { color: var(--pg-assume); font-weight: 600; }
 .pg-summary--err { color: var(--pg-fail); font-weight: 600; }
-.pg-wizard { position: relative; }
-.pg-wizard > summary { list-style: none; }
-.pg-wizard > summary::-webkit-details-marker { display: none; }
-.pg-wizard-links { position: absolute; right: 0; top: 42px; z-index: 30; width: 260px; display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 14px; box-shadow: var(--pg-shadow); }
-.pg-wizard-links-why { width: 100%; margin: 0 0 4px; font-size: 12.5px; color: var(--pg-mute); }
-.pg-wizard-link { padding: 5px 10px; font-size: 13px; color: var(--pg-ink); background: var(--pg-soft); border-radius: 999px; }
-.pg-wizard-link:hover { color: var(--pg-blue-ink); }
 
 /* ── 증거 관문 레일 ── */
 .pg-rail { position: relative; padding: 14px 28px 12px; background: var(--pg-paper); border-bottom: 1px solid var(--pg-line); }
@@ -7767,11 +6135,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-node-status--ok, .pg-node-status--blocked, .pg-node-status--failed { font-size: 13px; }
 .pg-result > .pg-node-status { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--pg-soft); }
 .pg-result > .pg-node-status .pg-node-status-k { font-weight: 700; }
-.pg-handoff-box { margin-top: 14px; padding: 14px; background: var(--pg-soft); border-radius: 14px; }
-.pg-handoff-box .pg-note { color: var(--pg-body); }
-.pg-handoff-targets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.pg-handoff { background: var(--pg-paper); }
-.pg-handoff-notcarried { margin-top: 8px; color: var(--pg-assume); }
 @media (prefers-reduced-motion: reduce) { .pg-switch::after { transition: none; } }
 .pg-node-stale { margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--pg-mute); }
 .pg-import-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
@@ -8105,3 +6468,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-regime-matrix tr[data-shrunk="1"] td { color: var(--pg-mute); }
 .pg-ap-corr tr.dup td { color: var(--pg-assume); font-weight: 600; }
 .pg-rec-verdict ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+
+/* ── BL4 · 옛 주소 안내 — 한 줄. 예전 화면 이름과 그 일을 하는 곳(노드·템플릿·서랍)만 말한다. ── */
+.pg-legacy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--pg-ink); background: var(--pg-blue-soft); }
+.pg-legacy .pg-btn { padding: 4px 10px; font-size: 12.5px; background: var(--pg-paper); }

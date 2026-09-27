@@ -95,26 +95,6 @@ test("Shell header: RegimeBadge loads real regime data and links to /macro", asy
   expect(uniq([...sink.api404, ...sink.apiOther4xx5xx]), "regime 조회가 4xx/5xx 면 안 된다").toEqual([]);
 });
 
-test("AAS Timing gauge value does not overlap the composite label", async ({ page }) => {
-  await page.goto("/allocation/timing", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(2500);
-  const gaugeNum = await page.locator(".as-gauge-c b").first().boundingBox().catch(() => null);
-  const label = await page.locator(".as-tm-mkt-lab").first().boundingBox().catch(() => null);
-  // if the composite section rendered, the big number and the label must not intersect
-  if (gaugeNum && label) expect(intersects(gaugeNum, label), "gauge value overlaps label").toBe(false);
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// S1d — 셸 크롬의 키보드 포커스 링
-// ─────────────────────────────────────────────────────────────────────────────
-// globals.css 의 포커스 링 규칙은 원래 .terminal-main 한정이었다. 헤더와 사이드바는
-// 그 밖에 있어서 앱 크롬의 인터랙티브 요소가 전부 UA 기본 outline(1px auto)로 떨어졌다.
-// 탭 순서상 앞쪽 전체가 "지금 어디에 있는지" 안 보이는 구간이었다는 뜻이다.
-//
-// ★샘플이 아니라 전수로 센다★ .first() 하나만 보면 나머지 10개가 벗겨져도 초록이다.
-// 이 세션에서 세 번 겪은 '아무것도 안 지키는 초록'이 정확히 그 모양이었다.
-// ═══════════════════════════════════════════════════════════════════════════════
-
 test("S1d: 셸 크롬(헤더·사이드바)의 모든 포커스 대상이 앱 포커스 링을 받는다", async ({ page }) => {
   await page.goto("/dashboard", { waitUntil: "networkidle" });
   await expect(page.locator(".terminal-nav .nav-item").first()).toBeVisible();

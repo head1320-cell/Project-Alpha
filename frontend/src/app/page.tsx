@@ -118,11 +118,11 @@ const PILLARS = [
 const PIPELINE: Array<{ n: string; label: string; carries: string; href?: string }> = [
   { n: "1", label: "매크로 관측", carries: "LIVE", href: "/macro" },
   { n: "2", label: "스냅샷 고정", carries: "snapshot_id" },
-  { n: "3", label: "AAS 에서 참조", carries: "값 복사 아님", href: "/allocation/macro" },
-  { n: "4", label: "타이밍 규칙", carries: "name@version", href: "/allocation/timing" },
-  { n: "5", label: "시나리오 도전", carries: "pack_id@해시", href: "/allocation/stress" },
-  { n: "6", label: "최적화 · 백테스트", carries: "run_id", href: "/allocation/optimize" },
-  { n: "7", label: "저널 · 귀인", carries: "결정 사슬", href: "/allocation/journal" },
+  { n: "3", label: "AAS 에서 참조", carries: "값 복사 아님", href: "/allocation?from=macro" },
+  { n: "4", label: "타이밍 규칙", carries: "name@version", href: "/allocation?from=timing" },
+  { n: "5", label: "시나리오 도전", carries: "pack_id@해시", href: "/allocation?from=stress" },
+  { n: "6", label: "최적화 · 백테스트", carries: "run_id", href: "/allocation?from=optimize" },
+  { n: "7", label: "저널 · 귀인", carries: "결정 사슬", href: "/allocation?from=journal" },
 ];
 
 /**
@@ -193,12 +193,12 @@ const FOOTER_COLS: Array<{ h: string; items: Array<{ t: string; href?: string }>
   {
     h: "리서치 단계",
     items: [
-      { t: "연구 색인", href: "/allocation/overview" },
-      { t: "매크로 근거", href: "/allocation/macro" },
-      { t: "타이밍 규칙", href: "/allocation/timing" },
-      { t: "시나리오 검증", href: "/allocation/stress" },
-      { t: "결정 저널", href: "/allocation/journal" },
-      { t: "귀인", href: "/allocation/explain" },
+      { t: "연구 색인", href: "/allocation?from=overview" },
+      { t: "매크로 근거", href: "/allocation?from=macro" },
+      { t: "타이밍 규칙", href: "/allocation?from=timing" },
+      { t: "시나리오 검증", href: "/allocation?from=stress" },
+      { t: "결정 저널", href: "/allocation?from=journal" },
+      { t: "귀인", href: "/allocation?from=explain" },
     ],
   },
   {

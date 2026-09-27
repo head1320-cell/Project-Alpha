@@ -20069,3 +20069,33 @@ E2E 1(저울 두 판정 · 저장 1회 · 글자 칸 · 라이트/다크 AA) + �
 
 **하지 않은 것** — 마법사 삭제(다음 커밋) · 팩터 카탈로그 창·영향 미리보기·프리셋·단계 CTA 를 캔버스에 다시 만들기(N/A + 사유, 대응표) · 결합 규칙의
 결측 = 위험-오프 정책(그대로 — 막은 것은 '영원히 못 읽는 신호' 뿐) · 캔버스 옵티마이저의 케이스 증거(MES) 묶기.
+
+### BL4-2~5 · 마법사 제거 — 옛 주소는 캔버스로 · 랜딩·매크로 연결 · 계약 목록 정리
+
+**무엇을** — 대응표(`docs/specs/2026-09-27-bl4-wizard-contract-map.md`)의 모든 행이 "이전됨/N/A+사유" 가 된 뒤(`b46f7bb` 에서 마법사가 있는 채로
+넓은 E2E 489/489) 지웠다. 소스 61 파일(`app/allocation` 스테이지 12 · `layout.tsx` · `wizardNodeMap.ts` · `widgets/allocation` 46 · 넘기기 `handoff.ts`) ·
+E2E 31 파일 · CSS 선택자 1,512(8,107 → 6,482 줄 · `.as-/.aas-` 클래스 789 → 153 — 남은 소스가 한 번이라도 부르면 남김; 주석 속 이름도 남기는 보수적 기준) ·
+캔버스의 넘기기 상자·"단계별 마법사" 줄·`.pg-handoff*`·`.pg-wizard*`.
+- **옛 주소** — `next.config.js` `redirects()`: `/allocation/<화면 12>` → `/allocation?from=<화면>`(307 · 쿼리 보존). 화면 경로 이동이라 API 주소를 박는
+  `rewrites` 금지와 다르다(주석으로 적음). 캔버스는 `entities/portfolio-graph/legacyScreens.ts` 로 배너 한 줄 + 그 일을 하는 노드로 팔레트 검색 + 맞는
+  템플릿·서랍 버튼. 모르는 화면은 404, 모르는 `from` 은 배너 없음(짝). 팔레트의 "예전 화면 이름으로 찾기"(THESIS·06 …)도 이 표로 옮겼다.
+- **연결** — 랜딩 링크 11 → `/allocation?from=`(리다이렉트를 거치지 않음) · `/macro` "Allocation Studio 에서 열기" → `/allocation?snapshot=` ·
+  `AllocationMap` → `shared/ui`(`/dev/ui` 표본) · ESLint 슬라이스 경계 규칙 삭제(대상 폴더가 없다).
+- **계약 목록** — `test_evidence_claim_contract.WEAK_CLAIMS` 는 면제 0 이 됐다(마지막 면제 `ResearchRunsPanel` 이 마법사와 함께 사라짐). 빈 목록을 허용하고,
+  운영 소스의 단정 후보도 0 이 되었으므로 "스캐너가 살아 있다" 를 **지워진 파일이 쓰던 모양을 심은 표본**(`정합 보장`·`look-ahead 없음` 은 잡고, 부정문은
+  안 잡는다 — 짝)으로 지킨다. `test_perf_label_contract.ALLOWED` 에서 `AllocationProvider` 삭제. `test_badge_axis_registry`: `as-bt-badge`(마법사) 삭제,
+  "정책 백테스트가 세 축을 말한다" 는 캔버스 `NodeResultPanel` 로(데이터·성과 = `PerfLabel`, 룩어헤드 = `data-lookahead`). `allocation_evidence.py` 머리글의
+  낡은 경로 정정.
+- **E2E 재작성** — `route-health`: 옛 주소 12 리다이렉트(배너·노드·템플릿/서랍 버튼·오류 0) + 쿼리 보존 + 짝(404·모르는 from) · `macro-aas-bridge`: 버튼 →
+  캔버스 · 새로고침 · 지금 시점 전용 칩 · 저장 실패면 이동 안 함 · 없는 스냅샷 · `landing`: 옛 단계 링크가 곧장 캔버스 · `dev-ui`: 롱숏 표본 2(옮김) ·
+  `macro-case`·`nav`·`responsive` 의 마법사 테스트 삭제(캔버스판은 BL4-0·1) · `portfolio-graph`: 넘기기·게이트 테스트 삭제, 예전 화면 표 대조.
+
+**번들** — `/allocation` 첫 로드 122 → 93.1 kB(마법사 세션 제공자를 싣지 않는다).
+
+**하지 않은 것** — 백엔드 라우트 삭제(노드가 같은 함수를 부른다) · 캔버스 기능 추가(옮기기와 지우기만) · 마법사 전용이던 엔티티 API 중 캔버스·서랍이 쓰는 것
+(`entities/allocation` 등)의 정리 — 사용처 0 인 함수 가지치기는 별도.
+
+**게이트(BL4 전체)** — 넓은 E2E 216/216(마법사 스펙 31 파일을 지운 뒤 · 지우기 전 `b46f7bb` 에서는 489/489) · 전체 pytest 7625 passed / 11 skipped ·
+ruff · tsc · eslint 오류 0 · next build. ★게이트 중 한 번 실패한 것을 적는다★ — `test_a_ticker_left_out_of_the_weights_is_zero_not_dropped` 가 전체 실행에서만
+틀렸다(0.7 대신 70/101). 원인은 코드가 아니라 **변이 배터리가 남긴 `.pyc`**: 변이 `f`(`0.0`→`1.0`)는 원본과 바이트 수가 같고, 되돌리기가 같은 초에 끝나
+파이썬이 변이된 바이트코드를 유효하다고 믿었다. `__pycache__` 를 지우고 다시 돌려 통과. 다음 변이 배터리는 `PYTHONDONTWRITEBYTECODE=1` 로 돌린다.

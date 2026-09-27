@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { trackErrors, uniq, STUB_RUN_ID, stubCompletedRun } from "./helpers";
+import { LEGACY_SCREENS } from "../src/entities/portfolio-graph/legacyScreens";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 라우트 건강도 스윕 — UI/UX 현대화 P0
@@ -25,34 +26,47 @@ import { trackErrors, uniq, STUB_RUN_ID, stubCompletedRun } from "./helpers";
 // 완료 런 픽스처(helpers.ts::stubCompletedRun)를 공유해서 연다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** AAS 스테이지 4종 — layout.tsx 의 공통 크롬 + 라우트 고유 마커. */
-const AAS_STAGES: { path: string; marker: string; label: string }[] = [
-  { path: "/allocation/overview", marker: ".aas-xlink", label: "00 OVERVIEW" },
-  { path: "/allocation/thesis", marker: ".as-card-title", label: "02 THESIS" },
-  { path: "/allocation/explain", marker: ".as-card-title", label: "08 EXPLAIN" },
-  { path: "/allocation/execution", marker: ".as-card, .as-exec", label: "07 EXECUTION" },
-];
+/**
+ * ★옛 마법사 주소 12 개 — 지운 화면이 404 가 아니라 캔버스로 온다★ (BL4)
+ * `next.config.js` redirects 가 `/allocation/<화면>` → `/allocation?from=<화면>` 으로 보낸다(쿼리 보존). 캔버스는 그 화면의 이름을
+ * 한 줄로 말하고, 그 일을 하는 노드로 팔레트 검색을 채운다. 표는 `entities/portfolio-graph/legacyScreens.ts` 하나.
+ */
+const LEGACY = Object.entries(LEGACY_SCREENS) as [string, (typeof LEGACY_SCREENS)[keyof typeof LEGACY_SCREENS]][];
 
-for (const { path, marker, label } of AAS_STAGES) {
-  test(`Route health: ${path} (${label}) renders honestly on a cold start`, async ({ page }) => {
+for (const [key, screen] of LEGACY) {
+  test(`Route health: 옛 주소 /allocation/${key} → 캔버스 · ‘${screen.title}’ 안내 · 오류 0`, async ({ page }) => {
     const sink = trackErrors(page);
-    await page.goto(path, { waitUntil: "networkidle" });
-
-    // 공통 크롬(인텐트·컨텍스트 스트립·트래커·하단 nav)이 붙었는가 — layout 자체의 회귀 가드
-    await expect(page.locator(".aas-intent")).toBeVisible();
-    await expect(page.locator(".aas-content")).toBeVisible();
-    // 라우트 고유 콘텐츠가 실제로 있는가 (빈 div 가 아님)
-    await expect(page.locator(marker).first()).toBeVisible();
+    await page.goto(`/allocation/${key}`, { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(new RegExp(`/allocation\\?from=${key}$`));
+    await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+    const banner = page.locator(".pg-legacy");
+    await expect(banner).toContainText(screen.title);
+    // 그 일을 하는 노드가 팔레트에 보인다(검색이 예전 이름으로 채워진다) · 템플릿·서랍이 있으면 그 버튼도.
+    for (const kind of screen.nodes) await expect(page.locator(`.pg-palette-item[data-kind="${kind}"]`), kind).toBeVisible();
+    await expect(page.locator(".pg-legacy-template")).toHaveCount(screen.template ? 1 : 0);
+    await expect(page.locator(".pg-legacy-drawer")).toHaveCount(screen.drawer ? 1 : 0);
 
     const body = await page.locator("body").innerText();
-    expect(body.trim().length, `${path} 본문이 비어 있으면 안 된다`).toBeGreaterThan(200);
-    expect(body, `${path} 인코딩`).not.toMatch(/�/);
-
-    expect(uniq(sink.pageErrors), `${path} page errors`).toEqual([]);
-    expect(uniq(sink.consoleErrors), `${path} console errors`).toEqual([]);
-    expect(uniq(sink.api404), `${path} API 404s`).toEqual([]);
+    expect(body, "인코딩").not.toMatch(/�/);
+    expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+    expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+    expect(uniq(sink.api404), "API 404s").toEqual([]);
   });
 }
+
+test("Route health: 옛 주소의 쿼리는 따라온다 — /allocation/macro?snapshot= 은 캔버스가 그 스냅샷으로 연다", async ({ page }) => {
+  await page.goto("/allocation/macro?snapshot=rgs_0_e2e_missing", { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL(/\/allocation\?(?=.*from=macro)(?=.*snapshot=rgs_0_e2e_missing)/);
+  await expect(page.locator(".pg-file-note")).toContainText("rgs_0_e2e_missing", { timeout: 30_000 });
+});
+
+test("Route health: 짝 — 모르는 옛 화면은 404, 모르는 from 은 안내를 지어내지 않는다", async ({ page }) => {
+  const res = await page.goto("/allocation/not-a-stage", { waitUntil: "domcontentloaded" });
+  expect(res?.status(), "모르는 화면을 캔버스로 보내면 안 된다(오타가 조용히 성공한다)").toBe(404);
+  await page.goto("/allocation?from=bogus", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".pg-legacy")).toHaveCount(0);
+});
 
 test("Route health: /backtest/runs/[runId]/results renders from the shared completed-run fixture", async ({ page }) => {
   const sink = trackErrors(page);

@@ -73,9 +73,7 @@ ALLOWED: dict[str, str] = {
         "★전략 성과가 아니다★ — 한 종목의 가격 이력에서 잰 위험 지표"
         "(VaR·ES·변동성·Sharpe·MDD)다. 여기에 '백테스트' 라벨을 붙이면 "
         "없는 시뮬레이션을 있다고 말하는 셈이다.",
-    "src/widgets/allocation/AllocationProvider.tsx":
-        "★화면이 아니다★ — 상태 제공자이고, 잡힌 `sharpe` 는 스터디 저장 시 만드는 "
-        "저널 초안 **문자열**이다. 성과 패널을 그리지 않는다.",
+    # (BL4) `src/widgets/allocation/AllocationProvider.tsx` — 마법사와 함께 지웠다. 허용 사유도 함께 사라진다.
 }
 
 

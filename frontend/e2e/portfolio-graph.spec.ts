@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { contrastAudit, trackErrors, uniq, type AuditResult } from "./helpers";
 import { TEMPLATES } from "../src/entities/portfolio-graph/templates";
-import { WIZARD_NODE_MAP } from "../src/app/allocation/wizardNodeMap";
+import { LEGACY_SCREENS } from "../src/entities/portfolio-graph/legacyScreens";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AAS 노드 캔버스 (BI3·BI4 · ADR 002) — `/allocation`
@@ -13,7 +13,7 @@ import { WIZARD_NODE_MAP } from "../src/app/allocation/wizardNodeMap";
 //  · 상류 실패 → 하류는 "막힘" + 어느 상류 때문인지 (기본값으로 돌지 않는다)
 //  · ★내보내기 → 새 탭에서 불러오기 → 같은 문서★ (왕복) — 불러오면 즉시 캔버스에 뜬다
 //  · 모르는 노드는 버리지 않는다(빨간 미상 노드, 다시 내보내면 그대로) · 다른 포맷은 거부
-//  · 마법사로 넘기기 → 마법사가 같은 /analyze 로 **같은 최적 비중**을 다시 구한다
+//  · (BL4) 마법사는 지웠다 — 옛 주소는 route-health 가, 옛 화면 이름 검색은 아래 "정리" 가 지킨다
 //  BJ(토스식 UX · 스펙 2026-09-25-aas-workflow-ux):
 //  · 이야기 탭 = 서버 explain 을 노드 번호 순서로 · 연습용이면 맨 위 경고 · 카드 ↔ 노드 선택
 //  · 증거 관문 레일 — 계산 전엔 판정 없음, 계산 뒤 ★건너뛴 관문은 선이 끊긴다★(짝: 이어진 구간)
@@ -177,47 +177,6 @@ test("모르는 노드는 버리지 않는다 · 다른 포맷은 캔버스를 �
   await importText(page, "broken.json", "{not json");
   await expect(page.locator(".pg-file-note")).toContainText("JSON 이 아닙니다");
   await expect(page.locator(".pg-node")).toHaveCount(8);
-});
-
-test("넘기기: 마법사가 같은 /analyze 로 같은 최적 비중을 다시 구한다", async ({ page }) => {
-  // ★마법사 세션을 다른 δ·τ 로 미리 채운다★ — 캔버스에서 비워 둔 δ·τ(서버 기본값)를 넘기지
-  // 않으면 마법사는 이 값으로 계산해 다른 수가 나온다. 기본값끼리 같으면 이 테스트는 공허하다.
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem("pg_test_seeded")) return;
-    sessionStorage.setItem("pg_test_seeded", "1");
-    sessionStorage.setItem("alpha_alloc_wip", JSON.stringify({
-      holdings: [{ code: "000270", name: "기아", weight: 100 }], views: [], model: "mvo", delta: 6, tau: 0.5,
-    }));
-  });
-  await openCanvas(page);
-  // 뷰 하나 — δ·τ 가 결과에 들어가게(뷰 없는 BL 은 δ 와 무관하다).
-  const doc = await exportDoc(page);
-  doc.nodes.find((n: { id: string }) => n.id === "views").params = {
-    views: [{ assets: ["005930"], direction: 1, magnitude_pct: 6, confidence: 70 }],
-  };
-  await importText(page, "with-view.json", JSON.stringify(doc));
-  const body = await run(page);
-  expect(body.nodes.optimizer.view.views_applied, "뷰가 실제로 들어갔다").toBe(true);
-  const canvasWeights = body.nodes.optimizer.view.weights;
-  await node(page, "optimizer").click();
-  await tab(page, "detail");
-  await expect(page.locator(".pg-handoff-notcarried")).toContainText("균등 비중");
-  const analyze = page.waitForResponse(
-    (r) => r.url().includes("/allocation/analyze") && r.request().method() === "POST", { timeout: 60_000 });
-  await page.locator('.pg-handoff[data-href="/allocation/stress"]').click();
-  await expect(page).toHaveURL(/\/allocation\/stress/, { timeout: 20_000 });
-  const req = (await analyze).request().postDataJSON();
-  expect([req.delta, req.tau], "캔버스가 실제로 쓴 δ·τ").toEqual([2.5, 0.05]);
-  const res = await (await analyze).json();
-  expect(res.weights.optimized, "마법사가 다시 구한 최적 비중 == 캔버스").toEqual(canvasWeights);
-});
-
-test("마법사는 보존된다: 게이트는 /allocation/wizard, 캔버스 줄에서 열린다", async ({ page }) => {
-  await openCanvas(page);
-  await page.locator(".pg-wizard > summary").click();
-  await page.locator(".pg-wizard-link", { hasText: "목표 선택" }).click();
-  await expect(page).toHaveURL(/\/allocation\/wizard/);
-  await expect(page.locator(".aas-goal").first()).toBeVisible({ timeout: 20_000 });
 });
 
 test("이야기: 노드 번호 순서의 서버 설명 · 연습용 경고 · 카드를 누르면 노드가 선택된다", async ({ page }) => {
@@ -570,13 +529,14 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
   }
 });
 
-test("정리(BK W6): 템플릿 여섯이 서버 검증을 통과하고 돈다 · 단계 접기 · 마법사 화면 이름으로 찾기", async ({ page }) => {
+test("정리(BK W6): 템플릿 여섯이 서버 검증을 통과하고 돈다 · 단계 접기 · 예전 화면 이름으로 찾기", async ({ page }) => {
   await openCanvas(page);
   const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const types = new Set(catalog.nodes.map((c: { type: string }) => c.type));
-  // 대응표의 모든 노드 종류가 카탈로그에 실제로 있다 — 이름만 적힌 대응은 없다.
-  for (const [href, kinds] of Object.entries(WIZARD_NODE_MAP)) {
-    for (const k of kinds) expect(types.has(k), `${href} → ${k}`).toBe(true);
+  // 예전 화면 표(BL4)의 모든 노드 종류가 카탈로그에 실제로 있다 — 이름만 적힌 대응은 없다. 템플릿 키도 실제로 있다.
+  for (const [key, screen] of Object.entries(LEGACY_SCREENS)) {
+    for (const k of screen.nodes) expect(types.has(k), `${key} → ${k}`).toBe(true);
+    if (screen.template) expect(TEMPLATES.some((t) => t.key === screen.template), `${key} → ${screen.template}`).toBe(true);
   }
 
   await expect(page.locator(".pg-template")).toHaveCount(TEMPLATES.length);
@@ -604,7 +564,7 @@ test("정리(BK W6): 템플릿 여섯이 서버 검증을 통과하고 돈다 ·
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(check.locator(".pg-palette-item").first()).toBeHidden();
 
-  // 마법사 화면 이름으로 찾는다 — "THESIS" 는 어느 노드의 이름·설명·종류에도 없고 대응표로만 닿는다.
+  // 예전 화면 이름으로 찾는다 — "THESIS" 는 어느 노드의 이름·설명·종류에도 없고 예전 화면 표로만 닿는다.
   await page.getByLabel("노드 찾기").fill("THESIS");
   await expect(page.locator('.pg-palette-item[data-kind="company_views"]')).toBeVisible();
   await expect(page.locator('.pg-palette-item[data-kind="views"]')).toBeVisible();

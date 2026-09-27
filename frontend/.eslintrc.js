@@ -73,26 +73,7 @@ module.exports = {
       files: ["src/app/**"],
       rules: { "import/no-restricted-paths": "off" },
     },
-    {
-      // ── AAS 컨텍스트 슬라이스 경계 (Phase 11b) ───────────────────────────────
-      // 슬라이스를 나눈 이유는 상태의 **소유자가 하나**가 되게 하는 것이다. 슬라이스끼리
-      // 직접 import 하면 서로의 세터를 부를 수 있게 되고, 그 순간 나눈 의미가 사라진다
-      // (파일만 늘고 결합은 그대로 — 리팩터링이 아니라 분산이다).
-      //
-      // `PortfolioContext` 만 예외다. 그것이 **기반**이고 나머지가 그 안에 중첩된다 —
-      // 타이밍·시나리오·런 쿼리가 전부 보유 종목을 읽기 때문에 성립하는 위계다.
-      // 슬라이스 간 합성이 필요하면 조립 계층(`AllocationProvider`)이 한다.
-      files: ["src/widgets/allocation/slices/**"],
-      rules: {
-        "no-restricted-imports": ["error", {
-          patterns: [{
-            group: ["./TimingContext", "./ScenarioContext", "./RunContext",
-                    "../slices/TimingContext", "../slices/ScenarioContext", "../slices/RunContext"],
-            message: "슬라이스는 서로를 import 할 수 없습니다 (기반 PortfolioContext 만 예외). "
-                   + "합성이 필요하면 조립 계층인 AllocationProvider 에서 하세요.",
-          }],
-        }],
-      },
-    },
+    // (BL4) AAS 컨텍스트 슬라이스 경계 규칙은 마법사(`src/widgets/allocation/slices`)와 함께 지웠다 — 캔버스 상태는
+    // `widgets/portfolio-graph/store` 하나(zustand)라 슬라이스가 없다.
   ],
 };

@@ -7,14 +7,15 @@
 
 ## 왜 이 모듈이 생겼나
 
-`frontend/src/widgets/allocation/PolicyBacktest.tsx` 가 **하드코딩 상수**로 이렇게
+예전 마법사의 정책 백테스트 화면(`PolicyBacktest.tsx` — BL4 에서 마법사와 함께 지움, 지금은 캔버스
+`frontend/src/widgets/portfolio-graph/NodeResultPanel.tsx` 의 `Lookahead` 가 이 응답을 읽는다)이 **하드코딩 상수**로 이렇게
 말하고 있었다:
 
     <span className="as-bt-badge ok">OOS · look-ahead 없음</span>
 
 응답에 이 주장을 뒷받침할 필드가 **하나도 없었고**, 라우트는 그 문장을 docstring
 에만 적어 두었다. ★AL 의 `selection_effect=0`, AM 의 `"dev"` 와 같은 모양이다 —
-상수가 관측 행세를 한다.★ 더구나 E2E(`allocation-backtest.spec.ts`)가 그 문장을
+상수가 관측 행세를 한다.★ 더구나 그때의 E2E(`allocation-backtest.spec.ts`)가 그 문장을
 단정해서 **테스트가 거짓 주장을 지키고 있었다.**
 
 ## ★주장의 절반은 참이다 — 섞지 않는다★ (CLAUDE.md §2)

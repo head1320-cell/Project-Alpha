@@ -359,3 +359,46 @@ test("★S1f: .dark 를 켜면 토큰이 실제로 바뀐다★", async ({ page 
   const fg = await card.evaluate((e) => getComputedStyle(e).color);
   expect(fg, "다크에서 글자색").toBe("rgb(250, 250, 250)");
 });
+
+// ── 롱숏 노출·집중도 (BL4 · `allocation-long-short.spec.ts` 에서 옮김 — 마법사 화면 테스트는 캔버스
+//    `portfolio-graph.spec.ts` 롱숏(BL4) 가 지키고, 공용 계산 `shared/lib/exposure` 와 `shared/ui/AllocationMap` 은 여기서) ──
+test("★concentration() 이 숏을 버리지 않는다 — /dev/ui 표본으로 실측★", async ({ page }) => {
+  // 화면 경로로 음수 보유를 만들 UI 가 없다(보유 입력은 롱온리다). 그래서 격리
+  // 라우트에 표본을 두고 **실제 번들 코드가 계산한 값**을 읽는다 — Step 3b 가
+  // 세운 관례이고, 청크 경로를 직접 import 하는 것보다 빌드 해시에 안 묶인다.
+  await page.goto("/dev/ui", { waitUntil: "networkidle" });
+
+  const lo = page.locator('.devui-ls-basis[data-case="long-only"]');
+  const ls = page.locator('.devui-ls-basis[data-case="long-short"]');
+  await expect(lo).toHaveText("net");
+  await expect(ls).toHaveText("gross");
+
+  // ★이 숫자가 F3 의 증거다★ 롱숏 [60, 50, 30, -25, -15] 의 gross 는 180.
+  //   올바른 값 : (60²+50²+30²+25²+15²)/180² × 10⁴ = 7850/32400 × 10⁴ = 2422.8
+  //   예전 값   : 롱 다리만(분모 140) → (60²+50²+30²)/140² × 10⁴ = 7000/19600 × 10⁴ = 3571.4
+  // 예전 식은 집중도를 **1.47배 크게**(= 더 집중된 것처럼) 보고했다. 두 값이 1000
+  // 이상 벌어지므로 이 단언은 반올림이 아니라 식이 바뀌었는지를 잰다.
+  const hhi = Number(await page.locator('.devui-ls-hhi[data-case="long-short"]').innerText());
+  expect(hhi).toBeGreaterThan(2400);
+  expect(hhi).toBeLessThan(2450);
+  expect(hhi, "롱 다리만으로 계산한 예전 값이 나왔다").toBeLessThan(3000);
+
+  // 노출 네 축도 같은 표본에서 확인 — gross 180 · net 100 · long 140 · short −40
+  await expect(page.locator(".devui-ls-legs")).toContainText("gross 180.0");
+  await expect(page.locator(".devui-ls-legs")).toContainText("net 100.0");
+  await expect(page.locator(".devui-ls-legs")).toContainText("short -40.0");
+});
+
+test("★AllocationMap 이 숏을 두 번째 스트립으로 그린다 — 버리지 않는다★", async ({ page }) => {
+  await page.goto("/dev/ui", { waitUntil: "networkidle" });
+  const map = page.locator(".devui-ls-map");
+
+  // 롱 스트립 + 숏 스트립 = 2 (예전에는 filter(w>0) 라 1개였고 숏은 사라졌다)
+  await expect(map.locator(".aas-map")).toHaveCount(2);
+  await expect(map.locator(".as-ls-map-short")).toBeVisible();
+
+  // 범례는 5종목 전부 — 숏 2개가 음수 값으로 남는다
+  await expect(map.locator(".aas-legend-i")).toHaveCount(5);
+  await expect(map.locator(".as-ls-neg")).toHaveCount(2);
+  await expect(map.locator(".aas-legend-i", { hasText: "LG화학" })).toContainText("-25.0%");
+});

@@ -88,13 +88,11 @@ BADGES: tuple[Badge, ...] = (
           "(데이터), 하나는 `res.pit_evidence` 를 읽는 PIT 배지다."),
     Badge(("tbt-prov",), (AXIS_DATA_SOURCE,),
           "터미널 백테스터의 출처 표시(`result.data_source.fully_real`)."),
-    Badge(("as-bt-badge",), (AXIS_DATA_SOURCE,),
-          "정책 백테스트의 mock/real. ★`allocation-stages2.spec.ts` 가 붙잡고 "
-          "있어 E 에서도 한 글자도 건드리지 않았다★(ADR 001)."),
     Badge(("data-lookahead",), (AXIS_LOOKAHEAD,),
-          "E 가 만든 자리. 예전에는 `as-bt-badge ok` 가 `\"OOS · look-ahead "
+          "E 가 만든 자리. 예전에는 마법사의 `as-bt-badge ok` 가 `\"OOS · look-ahead "
           "없음\"` 을 **상수로** 단정했다 — 이제 응답의 `lookahead_evidence` 를 "
-          "읽는다."),
+          "읽는다. BL4 에서 마법사를 지워 캔버스 정책 백테스트 렌더러(`NodeResultPanel`)가 "
+          "이 자리를 잇는다(데이터 축은 그 옆의 `PerfLabel`)."),
     Badge(("ca-mockbadge",), (AXIS_DATA_SOURCE,),
           "종목 카드의 합성 데이터 표시(`c.priceIsSynthetic`)."),
     Badge(("t-mode-badge",), (AXIS_RUN_MODE,),
@@ -192,7 +190,9 @@ def test_the_policy_backtest_now_speaks_three_axes():
 
     예전에는 데이터 축 하나와 **근거 없는 상수** 하나였다.
     """
-    p = SRC / "widgets" / "allocation" / "PolicyBacktest.tsx"
+    # BL4 — 마법사 `PolicyBacktest.tsx` 를 지웠다. 캔버스 정책 백테스트 결과가 같은 세 축을 말한다
+    # (데이터·성과 종류 = `PerfLabel`, 룩어헤드 = `data-lookahead`).
+    p = SRC / "widgets" / "portfolio-graph" / "NodeResultPanel.tsx"
     assert axes_on(p) == {AXIS_DATA_SOURCE, AXIS_PERF_KIND, AXIS_LOOKAHEAD}
 
 

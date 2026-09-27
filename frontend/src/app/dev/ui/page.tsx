@@ -57,7 +57,7 @@ import {
 import { MiniViz, StatGrid, Stat, type MiniVizKind } from "@/shared/ui/MiniViz";
 import SectionHead from "@/shared/ui/SectionHead";
 // §68 롱숏 표본 — 숏이 든 비중을 화면 경로로 만들 UI 가 없어 여기서만 잴 수 있다.
-import { AllocationMap } from "@/widgets/allocation/AllocationMap";
+import { AllocationMap } from "@/shared/ui/AllocationMap";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────

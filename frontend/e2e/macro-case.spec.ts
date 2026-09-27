@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { freezeCharts } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// M1-U — 연구 케이스 컨텍스트 바 (`/macro` + `/allocation/*` 양쪽)
+// M1-U — 연구 케이스 컨텍스트 바 (`/macro` + `/allocation` 캔버스 양쪽 — BL4 에서 마법사 스테이지는 지웠다)
 // ─────────────────────────────────────────────────────────────────────────────
 // ★이 스펙이 지키는 것★
 //  1. 케이스가 없으면 **없다고 말한다** — 첫 케이스를 임의로 골라 그리지 않는다.
@@ -168,22 +168,6 @@ test("목록 저장소 장애와 네트워크 오류가 서로 다른 화면이�
   await page.goto("/macro", { waitUntil: "networkidle" });
   await expect(page.locator(".as-case-warn-net")).toBeVisible({ timeout: 20_000 });
   expect(await page.locator(".as-case-warn-store").count(), "네트워크 오류를 장애로 그렸다").toBe(0);
-});
-
-test("같은 CaseBar 가 AAS 스테이지에도 있다 — 두 화면이 한 연구다", async ({ page }) => {
-  await clearCasePointer(page);
-  await page.goto("/allocation/wizard", { waitUntil: "networkidle" });
-  await page.locator(".aas-goal").first().click();
-  await page.waitForURL(/\/allocation\/construct/, { timeout: 20_000 });
-
-  await expect(page.locator(".as-case")).toBeVisible({ timeout: 20_000 });
-  // ContextStrip 도 그대로 살아 있어야 한다 — CaseBar 가 그것을 대체하지 않는다.
-  await expect(page.locator(".as-ctx")).toBeVisible();
-  // 그리고 같은 칩을 두 번 그리지 않는다: MES 칩은 CaseBar 에만 있다.
-  expect(await page.locator(".as-case-mes, .as-case-na").count()).toBeGreaterThan(0);
-
-  // 포인터는 브라우저 로컬임을 라벨이 말한다.
-  await expect(page.locator(".as-case-foot")).toContainText("이 브라우저에만");
 });
 
 // ── 캔버스 (BL4) — 마법사 스테이지에 있던 같은 CaseBar 가 캔버스 위에 있다 ───────────────

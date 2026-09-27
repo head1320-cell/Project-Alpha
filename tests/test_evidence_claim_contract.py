@@ -103,12 +103,10 @@ IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 #:         빼면서 랜딩은 **필요 없어졌다**.
 #: ★필요 없는 면제는 유령이고, 유령은 "여기는 원래 예외" 라고 거짓말한다.★
 #: `test_every_weak_claim_is_actually_needed` 가 매번 그것을 잡아냈다.
-WEAK_CLAIMS: dict[str, str] = {
-    "src/widgets/allocation/ResearchRunsPanel.tsx":
-        "버튼 **툴팁**(`inputs/outputs 정합 보장`)이고, 누르면 서버가 실제로 "
-        "재계산해 기록하는 **동작 설명**이다 — 성과나 무누출 판정이 아니다. "
-        "★다만 '보장' 은 이 저장소 기준으로 과한 낱말이라 면제로 남기고 기록한다.★",
-}
+#:   다섯째(BL4): 마법사를 지우며 `ResearchRunsPanel` 도 사라졌다 → **면제 0**. 빈 목록은 "면제가 없다" 는
+#:         좋은 상태다. 대신 스캐너가 살아 있는지는 그 파일이 쓰던 모양(`정합 보장`)을 심은 표본으로 지킨다
+#:         (`test_the_scanner_is_not_dead`).
+WEAK_CLAIMS: dict[str, str] = {}
 
 _COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 #: 보간(`{}`)이 없는 **순수** 리터럴만 본다 — 보간이 있으면 값이 데이터에서 온다.
@@ -282,8 +280,7 @@ def test_the_false_positive_fixtures_are_not_empty():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def test_every_weak_claim_has_a_reason():
-    """★사유 없는 면제는 없다★"""
-    assert WEAK_CLAIMS
+    """★사유 없는 면제는 없다★ (면제가 0 이면 공허하게 통과한다 — 목록이 비는 것이 목표이므로 괜찮다)"""
     for path, reason in WEAK_CLAIMS.items():
         assert reason and reason.strip(), path
 
@@ -322,20 +319,23 @@ def test_every_weak_claim_is_actually_needed(rel):
     assert claims_in(p), f"{rel} 은 면제가 필요 없다 — 목록에서 지우십시오"
 
 
-def test_the_scanner_is_not_dead_on_production_code():
+def test_the_scanner_is_not_dead(tmp_path):
     """★공허한 통과를 막는다★ (AL 의 변이 `d` 가 가르친 것)
 
-    본 규칙(`test_no_screen_asserts_evidence_it_does_not_read`)은 지금 **위반 0**
-    이다 — E 가 유일한 위반을 고쳤기 때문이다. 그런데 스캐너가 아무것도 못
-    잡는 상태여도 똑같이 초록이다. 둘을 가르기 위해, 실제 소스에서 **후보를
-    하나라도** 찾는지 못 박는다.
-
-    ★실측을 적어 둔다★ 운영 소스의 단정 후보는 둘이고, 그중 하나
-    (`ResearchRunsPanel.tsx`)는 **규칙 ②가 실제로 해제**한다 — 이미 `perf_label`
-    을 읽기 때문이다. 나머지 하나(랜딩)는 읽을 응답이 없어 면제로 남는다.
-    처음에 나는 ②가 운영 코드에서 안 돈다고 적었는데 **틀렸다**: 면제를 먼저
-    거르는 순서로 재느라 해제를 못 봤다.
+    본 규칙(`test_no_screen_asserts_evidence_it_does_not_read`)은 지금 **위반 0** 이고, BL4 로 마법사가 사라진 뒤에는
+    운영 소스의 **단정 후보도 0** 이다(마지막 후보 `ResearchRunsPanel.tsx` 의 툴팁 "inputs/outputs 정합 보장" 이 마법사와
+    함께 지워졌다). 스캐너가 죽어도 똑같이 초록이므로 둘을 가른다: ① 운영 소스를 실제로 훑는다(파일 수) ② 지워진 파일이
+    쓰던 **바로 그 모양**을 심으면 잡는다 ③ 짝 — 같은 문장을 부정하면 잡지 않는다.
     """
-    candidates = [(_rel(p), ax, frag)
-                  for p in _sources() for ax, frag, _ in claims_in(p)]
-    assert candidates, "운영 소스에서 단정 후보를 하나도 못 찾았다 — 스캐너가 죽었다"
+    srcs = _sources()
+    assert len(srcs) > 100, f"운영 소스를 {len(srcs)}개만 봤다 — 경로가 틀렸다"
+    for p in srcs:
+        claims_in(p)                                  # 어느 파일에서도 깨지지 않는다
+    planted = tmp_path / "PlantedRunsPanel.tsx"
+    planted.write_text('<button title="inputs/outputs 정합 보장">재계산</button>\n'
+                       '<span>OOS · look-ahead 없음</span>\n', encoding="utf-8")
+    axes = {ax for ax, _, _ in claims_in(planted)}
+    assert {"guaranteed", "no_lookahead"} <= axes, axes
+    negated = tmp_path / "NegatedRunsPanel.tsx"
+    negated.write_text('<span>룩어헤드 없음을 판정할 자료가 없습니다</span>\n', encoding="utf-8")
+    assert not claims_in(negated)

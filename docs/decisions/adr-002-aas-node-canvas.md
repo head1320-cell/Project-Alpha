@@ -123,3 +123,24 @@ ADR 001 의 ≥4 kB·15 kB 선은 **항상 뜨는 표면**에 걸린다. 캔버�
   정하지 않는다(비운 칸은 서버 기본값) — E2E 가 넷 모두 `/graph/validate` 오류 0 을, 둘은 계산까지 전부 완료를 확인한다.
   타이밍 템플릿은 타이밍 요인을 못 읽는 환경에서 노출 조절이 **정직하게 거절**한다(설계 그대로 — 직접 정함으로 바꿀 수 있다).
 - 번들: `/allocation` 첫 로드 119 → 120 kB(팔레트가 마법사 스테이지 목록을 props 로 받는다; 캔버스 청크는 동적 로드 그대로).
+
+## 9. 덧붙임 (BL4, 2026-09-27) — 마법사 제거
+
+**승인** — §8 의 "제거는 별도 승인 사항" 은 BL 시작 때 사용자 답("마법사 고유 기능은 캔버스로 먼저 옮기고, 옮긴 것을 확인한
+뒤 마법사를 지운다")으로 승인됐다. 그 순서를 지켰다:
+
+1. **계약 대응표** `docs/specs/2026-09-27-bl4-wizard-contract-map.md` — 마법사 E2E 36 파일의 계약마다 "이전됨(파일:제목)" 또는
+   "N/A(사유)". 빈칸 18 은 마법사가 있는 채로 캔버스에 먼저 채우고(`current_weights` 노드 · 타이밍 신호 가드 · 렌더러 정직성 ·
+   렌더러 전수 변이 검사), 그 상태에서 넓은 E2E 489/489 를 통과시킨 뒤(커밋 `b46f7bb`) 지웠다.
+2. **지운 것** — `app/allocation/{overview,macro,construct,alphalab,thesis,timing,optimize,stress,explain,execution,journal,wizard}` ·
+   `app/allocation/layout.tsx`(AllocationProvider·StageChrome) · `widgets/allocation/*`(46 파일 — `AllocationMap` 은 `shared/ui` 로 옮김) ·
+   `wizardNodeMap.ts` · 넘기기(`entities/portfolio-graph/handoff.ts` · 캔버스의 넘기기 상자 · "단계별 마법사" 줄) · 마법사 E2E 31 파일 ·
+   마법사 전용 CSS(`.as-*`·`.aas-*` 선택자 1,512 개 — 남은 소스가 부르는 153 클래스는 남김).
+3. **옛 주소** — `next.config.js` `redirects()` 가 `/allocation/<화면>` → `/allocation?from=<화면>`(쿼리 보존). API 주소를 박는 `rewrites`
+   금지 규칙과는 다른 것이다(화면 경로 이동). 캔버스는 `entities/portfolio-graph/legacyScreens.ts` 로 한 줄 안내 + 그 일을 하는 노드로
+   팔레트 검색 + 맞는 템플릿·서랍 버튼을 보인다. 모르는 화면은 404, 모르는 `from` 은 안내 없음(짝).
+4. **연결** — 랜딩 링크 11 은 `/allocation?from=` 으로 곧장(리다이렉트를 거치지 않음) · `/macro` 의 "Allocation Studio 에서 열기" 는
+   `/allocation?snapshot=`(마법사 0M 이 아니라 캔버스의 매크로 스냅샷 흐름).
+
+**결과** — `/allocation` 첫 로드 122 → 93.1 kB(마법사 세션 제공자를 싣지 않는다). 백엔드 라우트는 지우지 않았다(노드가 같은 함수를
+부르고, `/api/v1/allocation/*` 는 다른 화면·스크립트도 쓴다).

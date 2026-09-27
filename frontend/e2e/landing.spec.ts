@@ -324,3 +324,18 @@ for (const [w, h] of [[390, 844], [1280, 900], [1440, 900]] as [number, number][
     await expect(page.locator(".lp-deck-sample")).toBeVisible();
   });
 }
+
+test("BL4: 예전 리서치 단계 링크는 캔버스로 곧장 간다 — 리다이렉트를 거치지 않고, 그 화면이 하던 일을 안내한다", async ({ page }) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  const hrefs = await page.locator(".lp-footer-list a, .lp-pipe a").evaluateAll(
+    (els) => [...new Set(els.map((e) => e.getAttribute("href") ?? "").filter((h) => h.startsWith("/allocation")))]);
+  // 지운 마법사 주소를 직접 가리키는 링크가 없다(있으면 리다이렉트 한 번을 더 탄다).
+  expect(hrefs.filter((h) => /^\/allocation\/[a-z]/.test(h)), hrefs.join(", ")).toEqual([]);
+  const legacy = hrefs.filter((h) => h.includes("from="));
+  expect(legacy.length, hrefs.join(", ")).toBeGreaterThanOrEqual(6);
+  for (const h of legacy) {
+    const res = await page.goto(h, { waitUntil: "domcontentloaded" });
+    expect(res?.status(), h).toBe(200);
+    await expect(page.locator(".pg-legacy"), h).toBeVisible({ timeout: 30_000 });
+  }
+});

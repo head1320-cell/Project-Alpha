@@ -11,7 +11,7 @@
  * - 그래프가 바뀌면 곧바로 서버 검증을 불러 노드 위에 오류를 빨갛게 그린다.
  * - 불러오기(파일 선택·드래그앤드롭)는 **즉시** 캔버스를 교체한다. 다른 포맷이면 캔버스를
  *   건드리지 않고 사유를 말한다. 모르는 노드는 버리지 않고 빨갛게 남긴다.
- * - ★마법사 세션에 직접 손대지 않는다★ — 넘기기는 `onHandoff` 로 알릴 뿐이다(FSD).
+ * - BL4 — 마법사를 지웠다. 옛 주소로 온 사람에게는 그 화면이 하던 일을 여기서 어떻게 하는지 한 줄로 안내한다(`legacy`).
  *
  * BL1 — 조사(n8n·KNIME·ComfyUI·React Flow)에서 가져온 편집 도구: 여기까지 계산(Shift+Enter) · 되돌리기(Ctrl+Z)/
  * 다시하기(Ctrl+Shift+Z) · 복사(Ctrl+C)/붙여넣기(Ctrl+V) · 여러 개 지우기 · 자동 정리 · 미니맵 · 묶음 상자(Ctrl+G) ·
@@ -32,7 +32,6 @@ import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Map as MapIcon, Redo2, Sigma, Undo2 } from "lucide-react";
 import {
-  buildHandoff,
   CORE_CHAIN_TEMPLATE,
   TEMPLATES,
   parseFile,
@@ -41,7 +40,6 @@ import {
   toDoc,
   topoOrder,
   type GraphDoc,
-  type HandoffPayload,
   type ParseResult,
   type WorkflowStage,
 } from "@/entities/portfolio-graph";
@@ -52,7 +50,8 @@ import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { GraphNode, PORT_COLORS } from "./GraphNode";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
-import { NodePalette, PALETTE_MIME, type WizardAlias } from "./NodePalette";
+import { NodePalette, PALETTE_MIME } from "./NodePalette";
+import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
 import { RecordsSheetBody } from "./RecordsSheet";
 import { SettingsPanel } from "./SettingsPanel";
@@ -68,18 +67,13 @@ const NODE_W = 176;
 const NODE_H = 150;
 const WIP_KEY = "alpha_pg_wip";
 
-export interface HandoffTarget { href: string; label: string }
-
 export interface PortfolioCanvasProps {
-  /** 옵티마이저 결과를 마법사 도구로 넘길 때. 없으면 넘기기 버튼을 그리지 않는다. */
-  onHandoff?: (payload: HandoffPayload, target: HandoffTarget) => void;
-  handoffTargets?: HandoffTarget[];
-  /** 상단 바 오른쪽 — 예전 화면(마법사) 링크 등. app 계층이 채운다. */
+  /** 상단 바 오른쪽 — 케이스 상자 등. app 계층이 채운다. */
   topExtra?: ReactNode;
-  /** 마법사 화면 이름 → 노드(팔레트 검색 별칭). app 계층이 대응표로 채운다. */
-  wizardAliases?: WizardAlias[];
   /** 다른 화면이 넘긴 흐름(BL2b — 매크로 스냅샷 등). 있으면 세션 복원 대신 이것을 연다. */
   initialDoc?: { doc: GraphDoc; note: string } | null;
+  /** 옛 주소(`/allocation/<화면>` → `?from=`)로 왔을 때 그 예전 화면(BL4). 배너·팔레트 검색·템플릿·서랍을 안내한다. */
+  legacy?: LegacyScreen | null;
 }
 
 function readWip(): string | null {
@@ -91,7 +85,7 @@ const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세
 
 
 type DrawerKey = "execution" | "records" | "alphas";
-/** 서랍 셋 — 마법사 EXECUTION·JOURNAL·ALPHA LAB 의 기록 화면을 옮겼다(BL2). 계산은 노드, 기록 관리는 서랍. */
+/** 서랍 셋 — 예전 EXECUTION·JOURNAL·ALPHA LAB 화면의 기록 관리를 옮겼다(BL2). 계산은 노드, 기록 관리는 서랍. */
 const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archive; Body: () => ReactNode }[] = [
   { key: "execution", label: "실행실", Icon: ClipboardList, Body: ExecutionSheetBody,
     sub: "저장한 실행 목표로 주문 계획을 만들고 검토·승인해요. 주문은 나가지 않아요." },
@@ -101,7 +95,7 @@ const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archiv
     sub: "알파 식을 등록하고 단계를 올리거나 내려요." },
 ];
 
-export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wizardAliases, initialDoc }: PortfolioCanvasProps) {
+export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
   const rf = useRef<ReactFlowInstance | null>(null);
   const canvasEl = useRef<HTMLDivElement>(null);
@@ -349,8 +343,6 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
   const selEntry = s.catalog?.find((c) => c.type === selected?.data.kind);
   const selResult = selected ? s.report?.nodes[selected.id] : undefined;
   const nErrors = s.validation?.errors.length ?? 0;
-  const handoff = selected?.data.kind === "optimizer" && onHandoff && !s.reportStale
-    ? buildHandoff(doc, selected.id, s.report?.nodes ?? null) : null;
 
   return (
     <div className="pg-root pg-theme">
@@ -410,6 +402,23 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
         <p className="pg-banner pg-banner--err">노드 목록을 불러오지 못했어요 — {s.catalogError}. 서버가 켜져 있는지 확인해 주세요.</p>
       )}
       {s.runError && <p className="pg-banner pg-banner--err">계산 요청이 실패했어요 — {s.runError}</p>}
+      {legacy && (
+        <div className="pg-banner pg-legacy" role="note">
+          <span>예전 ‘{legacy.title}’ 화면은 이제 이 캔버스에서 해요. {legacy.nodes.length
+            ? "그 일을 하는 노드를 왼쪽 목록에 찾아 두었어요."
+            : "요약은 캔버스 전체와 이야기 탭이 그 자리를 대신해요."}</span>
+          {legacy.template && (
+            <button type="button" className="pg-btn pg-legacy-template" onClick={() => loadTemplate(legacy.template!)}>
+              ‘{TEMPLATES.find((t) => t.key === legacy.template)?.name ?? legacy.template}’ 흐름 열기
+            </button>
+          )}
+          {legacy.drawer && (
+            <button type="button" className="pg-btn pg-legacy-drawer" onClick={() => setDrawer(legacy.drawer!)}>
+              {DRAWERS.find((d) => d.key === legacy.drawer)?.label ?? legacy.drawer} 서랍 열기
+            </button>
+          )}
+        </div>
+      )}
       {fileNote && <p className="pg-banner pg-file-note">{fileNote}</p>}
       {s.loadProblems.length > 0 && (
         <div className="pg-banner pg-banner--warn pg-load-problems">
@@ -430,7 +439,7 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
       ))}
 
       <div className="pg-body">
-        {s.catalog && <NodePalette catalog={s.catalog} stages={stages} aliases={wizardAliases} onAdd={(k) => addAt(k)} onTemplate={loadTemplate} />}
+        {s.catalog && <NodePalette catalog={s.catalog} stages={stages} initialQuery={legacy?.aliases[1] ?? ""} onAdd={(k) => addAt(k)} onTemplate={loadTemplate} />}
         <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}`}
              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(e.dataTransfer.types.includes("Files")); }}
              onDragLeave={() => setDragOver(false)}
@@ -506,29 +515,6 @@ export function PortfolioCanvas({ onHandoff, handoffTargets = [], topExtra, wiza
                 stale={s.reportStale}
                 params={selected.data.params}
                 onReload={() => void runTo(selected.id)}
-                extra={handoff && (
-                  <div className="pg-handoff-box">
-                    <h4 className="pg-h4">단계별 마법사로 이어서 보기</h4>
-                    {handoff.payload ? (
-                      <>
-                        <p className="pg-note">계산된 숫자가 아니라 <b>입력</b>(종목·지금 비중·생각·방식·제약)을 넘겨요. 마법사가 같은 계산으로 다시 구해요.</p>
-                        {handoff.payload.notCarried.length > 0 && (
-                          <ul className="pg-list pg-handoff-notcarried">
-                            {handoff.payload.notCarried.map((m, i) => <li key={i}>{m}</li>)}
-                          </ul>
-                        )}
-                        <div className="pg-handoff-targets">
-                          {handoffTargets.map((t) => (
-                            <button key={t.href} type="button" className="pg-handoff pg-btn" data-href={t.href}
-                                    onClick={() => onHandoff?.(handoff.payload!, t)}>
-                              {t.label}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    ) : <p className="pg-warn">{handoff.reason}</p>}
-                  </div>
-                )}
               />
               <h4 className="pg-h4 pg-history-h">계산 기록</h4>
               <RunHistory nodeId={selected.id} runs={s.runs} />
