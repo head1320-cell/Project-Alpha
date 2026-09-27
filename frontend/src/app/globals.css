@@ -8052,3 +8052,26 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-opt-v { font-size: 18px; color: var(--pg-ink); }
 .pg-save-follow { margin-top: 8px; }
 .pg-cmp-warn { margin-bottom: 10px; }
+
+/* BL3 W4 · 리스크·파생·신용 — '손실 꼬리' 하나만 진하게, 나머지는 조용히. 색은 중립(손실을 빨강으로 겁주지 않는다). */
+.pg-risk-lead { display: grid; gap: 2px; margin: 2px 0 10px; }
+.pg-risk-big { font-size: 26px; font-weight: 750; letter-spacing: -0.03em; color: var(--pg-ink); }
+.pg-risk-say { font-size: 13.5px; line-height: 1.5; color: var(--pg-body); }
+.pg-risk-bars .pg-bar-row { grid-template-columns: 96px 1fr auto; }
+.pg-risk-bar-v { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; }
+.pg-risk-tail { display: block; width: 100%; max-width: 380px; height: auto; margin: 0 0 2px; }
+.pg-risk-bin { fill: var(--pg-soft); stroke: var(--pg-line); stroke-width: 0.5; }
+.pg-risk-bin--tail { fill: var(--pg-ink); stroke: none; }
+.pg-risk-var { stroke: var(--pg-ink); stroke-width: 1.5; }
+.pg-risk-var-t { font-size: 11.5px; font-weight: 700; fill: var(--pg-ink); }
+.pg-risk-es { stroke: var(--pg-body); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.pg-risk-lines { display: block; width: 100%; max-width: 360px; height: auto; margin: 2px 0 4px; }
+.pg-scen .pg-risk-lines { max-width: 140px; margin: 0; }
+.pg-risk-zero { stroke: var(--pg-mute); stroke-width: 1; stroke-dasharray: 2 3; }
+.pg-risk-line { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.pg-risk-line--a { stroke: var(--pg-blue); }
+.pg-risk-line--b { stroke: var(--pg-mute); }
+.pg-risk-key { display: inline-block; width: 12px; height: 3px; margin: 0 5px 2px 8px; vertical-align: middle; border-radius: 2px; }
+.pg-risk-key--a { background: var(--pg-blue); } .pg-risk-key--b { background: var(--pg-mute); }
+.pg-calc { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 480px) { .pg-calc { grid-template-columns: 1fr 1fr; } }

@@ -235,9 +235,9 @@ export const api = {
   prices: (ticker: string, days = 60) =>
     get<{ ticker: string; prices: OHLCV[] }>(`/api/v1/prices/${ticker}?days=${days}`),
 
-  // Options (existing endpoints)
-  priceCurve: (body: unknown) => post<unknown>("/price-curve", body),
-  optionPrice: (body: unknown) => post<unknown>("/option-price", body),
+  // 옵션 — 백엔드 `derivatives_routes.analyze_option`(블랙-숄즈 유럽형). 예전 `/option-price`·`/price-curve` 는
+  // 서버에 없는 주소였다(BL3 W4 감사) — 없는 주소를 부르는 함수를 남기지 않는다.
+  optionPrice: (body: unknown) => post<unknown>("/analyze-option", body),
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────

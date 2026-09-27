@@ -31,7 +31,7 @@ function Head({ v }: { v: Dict }) {
 const BASIS_TONE: Record<string, string> = { 관측: "confirmed", 근사: "assumed", 가정: "assumed", 미상: "unknown" };
 
 /** 입력 표 — 모든 모델이 같은 모양. 값이 수면 비율(0~1 은 %), 목록이면 이어 쓰고, 글이면 그대로. */
-function InputsTable({ r }: { r: Dict }) {
+export function InputsTable({ r }: { r: Dict }) {
   const rows = (r.inputs as Dict[]) ?? [];
   if (!rows.length) return null;
   const show = (x: unknown, unit?: unknown) => (Array.isArray(x) ? x.map(String).join(" · ")

@@ -570,7 +570,7 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
   }
 });
 
-test("정리(BK W6): 템플릿 넷이 서버 검증을 통과하고 돈다 · 단계 접기 · 마법사 화면 이름으로 찾기", async ({ page }) => {
+test("정리(BK W6): 템플릿 다섯이 서버 검증을 통과하고 돈다 · 단계 접기 · 마법사 화면 이름으로 찾기", async ({ page }) => {
   await openCanvas(page);
   const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const types = new Set(catalog.nodes.map((c: { type: string }) => c.type));
@@ -586,7 +586,7 @@ test("정리(BK W6): 템플릿 넷이 서버 검증을 통과하고 돈다 · �
     const doc = await exportDoc(page);
     const v = await (await page.request.post("http://localhost:8000/api/v1/allocation/graph/validate", { data: doc })).json();
     expect(v.errors, `${t.key}: ${JSON.stringify(v.errors)}`).toEqual([]);
-    if (t.key === "stress" || t.key === "screener") {
+    if (t.key === "stress" || t.key === "screener" || t.key === "risk") {
       const body = await run(page);
       for (const [id, r] of Object.entries(body.nodes as Record<string, { status: string; reason: string }>)) {
         expect(r.status, `${t.key}.${id}: ${r.reason}`).toBe("ok");
@@ -1407,6 +1407,144 @@ test("기업 분석 모델(BL3 W3b-C2): 시나리오·나무·SOTP·실물옵션
       expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
     }
   }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+test("리스크 노드(BL3 W4): VaR·MC·변동성·보유기간·FRTB·롤링 샤프·동적 상관 · 손실 꼬리 · 비중 없음·짧은 창은 사유 · 대비 AA", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const add: [string, string, Record<string, unknown>, boolean][] = [
+    ["vr", "var_es", {}, true], ["mc", "mc_var", { n_simulations: 5000 }, true], ["vm", "vol_models", {}, true],
+    ["hv", "holding_var", {}, true], ["fr", "frtb_es", {}, true], ["rs", "rolling_sharpe", { window: 126 }, true],
+    ["dc", "dcc_corr", {}, false],
+    ["nw", "var_es", {}, false],                              // 비중을 잇지 않은 포트폴리오 — 사유로 실패
+    ["lw", "rolling_sharpe", { window: 756 }, true],          // 창이 표본보다 길다 — 0 을 내지 않고 실패
+  ];
+  add.forEach(([id, type, params, withW], i) => {
+    doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 3) * 260, y: Math.floor(i / 3) * 240 } });
+    doc.edges.push({ id: `returns.returns->${id}.returns`, source: "returns", source_port: "returns", target: id, target_port: "returns" });
+    if (withW) doc.edges.push({ id: `optimizer.weights->${id}.weights`, source: "optimizer", source_port: "weights", target: id, target_port: "weights" });
+  });
+  await importText(page, "bl3w4.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const id of ["vr", "mc", "vm", "hv", "fr", "rs", "dc"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    expect(body.nodes[id].lineage.practice, id).toBe(true);      // mock 수익률 → 위험 수치도 연습용
+  }
+  expect(body.nodes.nw.status).toBe("failed");
+  expect(body.nodes.nw.reason).toContain("비중");
+  expect(body.nodes.lw.status).toBe("failed");
+  expect(body.nodes.lw.reason).toContain("756일 창");
+
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  await pick("vr");
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-risk-big")).toContainText("원");
+  // 세 방법 + 종목 셋(구성)
+  await expect(page.locator(".pg-side .pg-risk-bars .pg-bar-row")).toHaveCount(3 + 3);
+  await expect(page.locator(".pg-side .pg-inputs .pg-tag", { hasText: "관측" }).first()).toBeVisible();
+
+  // ★손실 꼬리★ — VaR 선보다 더 잃은 칸만 진하다(서버 히스토그램 그대로 세어 대조).
+  await pick("mc");
+  const r = body.nodes.mc.view.result;
+  const tail = (r.histogram.bin_centers as number[]).filter((c) => c <= -r.mc_var_amount).length;
+  await expect(page.locator(".pg-side .pg-risk-bin")).toHaveCount(r.histogram.counts.length);
+  await expect(page.locator(".pg-side .pg-risk-bin--tail")).toHaveCount(tail);
+  expect(tail).toBeGreaterThan(0);
+  expect(tail).toBeLessThan(r.histogram.counts.length);
+  await expect(page.locator(".pg-side .pg-risk-var")).toHaveCount(1);
+
+  await pick("vm");
+  await expect(page.locator(".pg-side .pg-risk-line")).toHaveCount(2);
+  await expect(page.locator(".pg-side .pg-note").first()).toContainText("앞날을 더 잘 맞힌다는 뜻이 아니에요");
+  await pick("hv");
+  await expect(page.locator(".pg-side .pg-scen tbody tr")).toHaveCount(8);
+  await pick("fr");
+  await expect(page.locator(".pg-side .pg-warn")).toHaveCount(0);           // 756일 표본 — 스트레스 구간을 찾았다
+  await pick("dc");
+  await expect(page.locator(".pg-side .pg-scen tbody tr")).toHaveCount(3);  // 종목 셋 → 쌍 셋
+
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["vr", "mc", "fr"]) {
+      await pick(id);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(10);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+test("파생·신용 계산기(BL3 W4): 옵션·채권·헤지·CVA·IRC · 모든 칸이 가정 · /derivatives 옵션 탭이 실제 라우트로 그린다", async ({ page }) => {
+  const sink = trackErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  const add: [string, string, Record<string, unknown>][] = [
+    ["op", "option_calc", { S: 100, K: 100, T: 1, r: 0.05, sigma: 0.2 }], ["bd", "bond_calc", {}],
+    ["hg", "futures_hedge", { current_beta: 1.2 }], ["cv", "cva_calc", {}], ["ir", "irc_calc", { n_simulations: 5000 }],
+    ["hz", "futures_hedge", { current_beta: 0 }],
+  ];
+  add.forEach(([id, type, params], i) => doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 2) * 300, y: Math.floor(i / 2) * 260 } }));
+  await importText(page, "bl3w4c.json", JSON.stringify(doc));
+  const body = await run(page);
+  for (const [id] of add) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+  expect(body.nodes.op.view.result.Price).toBeCloseTo(10.4506, 4);
+  expect(body.nodes.cv.view.result.bcva_spread).toBeUndefined();          // 단위가 맞지 않는 모델 출력은 싣지 않는다
+  expect(body.nodes.hz.view.result.expected_var_reduction_pct).toBeNull(); // β=0 에서 '0% 감소' 라고 말하지 않는다
+
+  const pick = async (id: string) => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await node(page, id).click();
+  };
+  await pick("op");
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-opt-v").first()).toHaveText("10.4506");
+  await expect(page.locator(".pg-side .pg-inputs .pg-tag", { hasText: "관측" })).toHaveCount(0);   // 계산기는 아무것도 관측하지 않는다
+  await pick("cv");
+  await expect(page.locator(".pg-side .pg-h4 .pg-tag--assumed")).toHaveText("양식화");
+  await pick("hz");
+  await expect(page.locator(".pg-side .pg-kv")).toContainText("계산 안 함");
+  await pick("ir");
+  await expect(page.locator(".pg-side .pg-scen tbody tr")).toHaveCount(2);
+  for (const dark of [false, true]) {
+    if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
+    for (const id of ["op", "cv"]) {
+      await pick(id);
+      const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
+      expect(audit.checked).toBeGreaterThan(8);
+      expect(audit.low, `${id} ${dark ? "dark" : "light"}`).toEqual([]);
+    }
+  }
+
+  // /derivatives — 예전엔 없는 /option-price 를 불러 404 였고, 고쳐도 소문자 키를 읽어 아무것도 안 그렸다.
+  await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  let calls = 0;
+  page.on("request", (q) => { if (q.url().includes("/analyze-option")) calls += 1; });
+  await page.goto("/derivatives", { waitUntil: "domcontentloaded" });
+  const inputs = page.locator("input.input");
+  await inputs.nth(0).fill("100"); await inputs.nth(1).fill("100");
+  await inputs.nth(2).fill("0.2"); await inputs.nth(3).fill("0.05"); await inputs.nth(4).fill("1");
+  await page.getByRole("button", { name: "프라이싱 실행" }).click();
+  await expect(page.getByTestId("option-greeks")).toContainText("10.4506");
+  expect(calls).toBe(1);
+  // 짝: 만기 0 — 서버는 조용히 0 을 돌려주므로 화면이 보내기 전에 막는다.
+  await inputs.nth(4).fill("0");
+  await page.getByRole("button", { name: "프라이싱 실행" }).click();
+  await expect(page.getByText("0보다 커야")).toBeVisible();
+  await expect(page.getByTestId("option-greeks")).toHaveCount(0);
+  expect(calls).toBe(1);
+
+  expect(uniq(sink.api404), "404").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });

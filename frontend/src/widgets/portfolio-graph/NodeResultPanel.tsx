@@ -32,6 +32,10 @@ import {
 import {
   DecisionTreeResult, DriverMcResult, EvaResult, MultiplesResult, RealOptionResult, ScenariosResult, SotpResult, ValueLayersResult,
 } from "./CompanyModelResults";
+import {
+  BondCalcResult, CvaCalcResult, DccResult, FrtbResult, FuturesHedgeResult, HoldingVarResult, IrcCalcResult, McVarResult,
+  OptionCalcResult, RollingSharpeResult, VarEsResult, VolModelsResult,
+} from "./RiskResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -230,6 +234,18 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   company_decision_tree: ({ v }) => <DecisionTreeResult v={v} />,
   company_sotp: ({ v }) => <SotpResult v={v} />,
   company_real_option: ({ v }) => <RealOptionResult v={v} />,
+  var_es: ({ v }) => <VarEsResult v={v} />,
+  mc_var: ({ v }) => <McVarResult v={v} />,
+  vol_models: ({ v }) => <VolModelsResult v={v} />,
+  holding_var: ({ v }) => <HoldingVarResult v={v} />,
+  frtb_es: ({ v }) => <FrtbResult v={v} />,
+  rolling_sharpe: ({ v }) => <RollingSharpeResult v={v} />,
+  dcc_corr: ({ v }) => <DccResult v={v} />,
+  option_calc: ({ v }) => <OptionCalcResult v={v} />,
+  bond_calc: ({ v }) => <BondCalcResult v={v} />,
+  futures_hedge: ({ v }) => <FuturesHedgeResult v={v} />,
+  cva_calc: ({ v }) => <CvaCalcResult v={v} />,
+  irc_calc: ({ v }) => <IrcCalcResult v={v} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />

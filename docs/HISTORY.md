@@ -19940,3 +19940,44 @@ SOTP 제외·순차입 라벨 짝 · Rf 출처 라벨) · 변이 백엔드 17/17
 **게이트(커밋 시점)** — 위 표적 검사 + 그래프 계약 스위트. 넓은 E2E·전체 pytest 는 커밋 뒤 — 결과는 후속 기록.
 
 **게이트 후속(BL3 W3b C1+C2)** — 넓은 E2E 275/275 · ruff 통과 · 전체 pytest 7497 passed / 10 skipped.
+
+### BL3 W4 · 리스크·파생·신용 노드 — VaR·ES · 몬테카를로 VaR · 변동성 모델 · 보유기간 VaR · FRTB ES · 롤링 샤프 · 동적 상관 · 옵션·채권·선물 헤지·CVA·IRC 계산기
+
+**무엇을** — `/risk-tools`·`/derivatives` 화면과 legacy 라우트에만 있던 리스크 도구 일곱과 파생·신용 계산기 다섯을 캔버스 노드로
+(`src/api/allocation_graph_nodes_risk.py`, 프런트 `RiskResults.tsx`, 템플릿 '포트폴리오 위험 점검'). 사슬 끝에서 위험을 바로 잰다:
+유니버스 → 수익률 → 비중 → VaR·MC → 선물 헤지.
+- ★외부를 부르지 않는다★ — 리스크 라우트는 종목마다 `MarketDataLoader`(yfinance)를 부른다. 노드는 **Returns 포트(DB 적재분·개발 mock)**와
+  Weights 포트를 받아 **같은 모델 클래스**(`ParametricRiskModel`·`PortfolioRiskModel`·`MonteCarloVaR`·`VolatilityModelComparison`·
+  `holding_period_var_es`·`FRTBExpectedShortfall`·`rolling_sharpe`·`dcc_garch_full_report`)를 직접 부른다. 그래서 골든은 '라우트' 가 아니라
+  **같은 계열에 모델을 직접 부른 값**이다(라우트와는 기간·출처가 달라 값이 다를 수 있다 — 설명에 적는다).
+- 모델은 로그수익률을 기대한다(라우트의 `fetch_returns` 가 로그) → 단순수익률을 `log1p` 로 정확히 바꾼다. −100% 이하 수익률은 사유 실패.
+- 포트폴리오 계열 = 비중을 Returns 열에 맞춰 **gross(Σ|w|) 정규화**(라우트와 같은 규칙) — 합이 1 이 아니면 입력 표에 '가정' 으로 적는다
+  (현금 비중이 위험에서 빠진다). `series` 에 종목 코드를 적으면 그 종목 하나(비중 불필요).
+- ★모델 코드는 바꾸지 않고 침묵 폴백을 노드가 먼저 막는다★ — `rolling_sharpe` 는 계열이 창보다 짧으면 `current: 0` 을 낸다 → 사유 실패 ·
+  `FRTBExpectedShortfall._stress_fallback` 은 250일이 안 되면 스트레스 ES 자리에 현재 ES 를 넣는다 → `stress_window_found` 로 드러내고 설명이
+  '못 찾음' 이라고 말한다 · `bs_greeks` 는 S·T·σ ≤ 0 이면 모든 값 0 → 파라미터 검증에서 거절 · EWMA 반감기 `inf` 는 엄격한 JSON 이 아니다 → `None`.
+- 계산기는 입력 포트가 없고 모든 칸이 '가정'. 선물 헤지만 수익률·비중을 이으면 β 를 **관측**(포트폴리오 대 비교 기준 cov/var, 표본 일수·기간 표시).
+
+**감사로 찾은 기존 결함(모델 코드는 그대로 — 노드·화면에서 막거나 드러냄)**
+- `/derivatives` 옵션 탭 — ① 서버에 없는 `/option-price` 를 불렀다(404) ② 고쳐도 엔진의 대문자 키(`Price`)를 소문자로 읽어 아무것도 그리지 않았다
+  ③ 제목 "Black-76" 인데 엔진은 현물 블랙-숄즈. → `/analyze-option` · 키 맞춤 · 제목·부제 정정 · 0 이하 입력은 보내기 전에 막는다.
+  쓰지 않는 `priceCurve`(없는 `/price-curve`)는 지웠다. 다른 탭의 Hull-White·QuantLib 문구는 검증하지 않았다(별도 감사).
+- `CVAEngine.bcva_spread` — `s × EPE × 10⁴` 를 "bps" 로 표기한다(금액에 10⁴ 를 곱한 수 — 예: 396억 "bp"). 노드는 이 칸을 싣지 않고 설명에 적는다.
+  `/calculate-cva` 라우트는 여전히 낸다.
+- `HedgingSimulator.expected_var_reduction_pct` — 목표 β 기준이라 반올림해 **0계약이어도 100% 감소**라고 말하고, β=0 이면 0 을 낸다.
+  노드는 반올림 뒤 실제 β 와 그 감소율을 따로 싣고(`beta_after_rounding`), β=0 이면 '계산 안 함'. 스크린샷 비평에서 찾았다(mock 수익률은
+  지수와 독립이라 β≈0.04 → 0계약인데 화면이 "β → 0 · 100%" 라고 썼다).
+- CVA 노출 곡선은 거래 종류별 **양식화 모양**(시뮬레이션 아님) · IRC 전이행렬은 코드 상수(S&P 1년 평균, 한국 미보정) — 라벨로 드러냄.
+
+**검증** — `tests/test_allocation_graph_bl3w4.py` 57(골든 = 같은 계열의 모델 · 비중 없음/없는 종목/전부 0/−100% 실패 · gross 라벨 짝 ·
+짧은 창 실패 짝 · FRTB 구간 못 찾음 짝 · 60 관측 짝 · DCC 6종목 상한 · MC 시드 재현 · 풋-콜 패리티 · 0 이하 거절 · β 관측/가정/0 · 반올림 뒤 β ·
+BCVA 스프레드 없음 · 기간구조 2점 짝 · IRC 리터럴 기본 행) · 그래프 계약 스위트 434(BL0 쓰기 0 포함) · 변이 백엔드 18/18 · 프런트 변이(아래) ·
+E2E 2(리스크 일곱 + 실패 둘 · 손실 꼬리 칸 수 = 서버 히스토그램 · 계산기 다섯 · `/derivatives` 실제 라우트 10.4506 + 만기 0 은 요청 없이 막힘 ·
+라이트/다크 AA) + 템플릿 다섯 검증·실행.
+
+**스크린샷 비평으로 고친 것** — 입력 표가 1.5 미만 수를 % 로 그려 λ 0.94 가 "94.00%", β 1.2 가 "120%" 로 찍혔다 → 비율이 아닌 값은 문자열로 ·
+헤지의 '반올림 뒤 β'(위).
+
+**하지 않은 것** — 모델 코드 수정(위 결함은 기록만) · `AIVolatilityEngine`(랜덤포레스트 "AI VaR" — 표본외 관문 없이 예측을 주장) ·
+`mc_path_simulation`(전역 `np.random.seed` 를 바꾼다) · 스트레스 라우트(`scenario_stress` 노드가 있다) · VaR 매핑·집계·WWR · `/risk-tools` 화면
+이전(BL4 대응표) · yfinance 경로.

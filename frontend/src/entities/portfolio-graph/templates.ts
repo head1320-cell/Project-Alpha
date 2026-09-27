@@ -95,6 +95,26 @@ const TIMING_TEMPLATE: GraphDoc = doc("타이밍 적용 → 실행 목표", [
 ]);
 
 /**
+ * 포트폴리오 위험 점검 (BL3 W4) — 정한 비중의 하루 손실(세 방법)·모의 경로의 손실 꼬리를 보고, 과거 표본으로 잰 β 로
+ * 지수 선물 헤지 계약 수까지. ★β 는 칸을 비워 수익률·비중에서 잰다★ — 선물 가격은 예시값이라 노드가 '가정' 으로 적는다.
+ */
+const RISK_TEMPLATE: GraphDoc = doc("포트폴리오 위험 점검", [
+  ...HEAD.nodes,
+  n("optimizer", "optimizer", 600, 140, { model: "risk_parity" }),
+  n("var", "var_es", 820, 0),
+  n("mc", "mc_var", 820, 170),
+  n("hedge", "futures_hedge", 1040, 90, { current_beta: null }),
+], [
+  ...HEAD.edges,
+  e("returns", "returns", "var", "returns"),
+  e("optimizer", "weights", "var", "weights"),
+  e("returns", "returns", "mc", "returns"),
+  e("optimizer", "weights", "mc", "weights"),
+  e("returns", "returns", "hedge", "returns"),
+  e("optimizer", "weights", "hedge", "weights"),
+]);
+
+/**
  * 매크로 화면에서 넘어온 국면 스냅샷으로 여는 흐름 (BL2b) — 타이밍 흐름에 '경기 국면 불러오기'(그 스냅샷)를 붙이고
  * 노출 조절이 타이밍과 국면을 함께 따르게 한다. ★스냅샷 id 는 서버가 확인한다★ — 없는 id 면 국면 노드가 사유와 함께 실패한다.
  */
@@ -120,4 +140,6 @@ export const TEMPLATES: GraphTemplate[] = [
     description: "조건으로 거른 종목에 팩터 점수를 매겨 흔들림 기준으로 나눠요." },
   { key: "timing", name: "타이밍 적용 → 실행 목표", doc: TIMING_TEMPLATE,
     description: "타이밍 신호로 노출을 줄이고 실행 목표·주문 목록·결정 기록까지 이어요." },
+  { key: "risk", name: "포트폴리오 위험 점검", doc: RISK_TEMPLATE,
+    description: "정한 비중이 하루에 얼마나 잃을 수 있는지 보고, 지수 선물로 시장 위험을 줄일 계약 수까지 계산해요." },
 ];

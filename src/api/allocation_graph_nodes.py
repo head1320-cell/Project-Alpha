@@ -472,3 +472,6 @@ _company.register(REGISTRY)
 from src.api import allocation_graph_nodes_company_models as _company_models  # noqa: E402
 
 _company_models.register(REGISTRY)
+from src.api import allocation_graph_nodes_risk as _risk_nodes  # noqa: E402
+
+_risk_nodes.register(REGISTRY)

@@ -22,7 +22,7 @@ function DerivativesContent() {
     <>
       <PageHeader
         title="파생상품 평가"
-        subtitle="Black-76, SABR, Hull-White 등 학계 표준 모델로 옵션·금리 파생을 평가합니다"
+        subtitle="옵션 이론가는 블랙-숄즈(유럽형)로 계산해요 — 나머지 탭은 설명만 있고 계산은 아직 없어요"
         breadcrumb={[{ label: "홈", href: "/dashboard" }, { label: "파생상품 평가" }]}
       />
       <PageContent>
@@ -43,6 +43,12 @@ function DerivativesContent() {
 }
 
 // ── Tab 0: Option Pricing ─────────────────────────────────────────────────────
+// 서버(`FICCEngine.bs_greeks`)가 주는 키 그대로 — 대문자다. 예전 화면은 소문자·없는 키(vanna·volga)를 읽어 아무것도 그리지 못했다.
+const GREEKS: [string, string][] = [
+  ["Price", "이론가"], ["Delta", "델타"], ["Gamma", "감마"],
+  ["Theta", "세타 (1일)"], ["Vega", "베가 (변동성 1%p)"], ["Rho", "로 (금리 1%p)"],
+];
+
 function OptionPricingTab() {
   const [spot, setSpot]     = useState(100);
   const [strike, setStrike] = useState(100);
@@ -55,6 +61,12 @@ function OptionPricingTab() {
   const [error, setError]   = useState("");
 
   async function run() {
+    // 서버 엔진은 S·T·σ ≤ 0 이면 모든 값을 0 으로 돌려준다(침묵 폴백) — 보내기 전에 막는다.
+    if (!(spot > 0 && strike > 0 && vol > 0 && ttm > 0)) {
+      setResult(null);
+      setError("가격·행사가·변동성·만기는 0보다 커야 계산할 수 있어요.");
+      return;
+    }
     setLoading(true); setError("");
     try {
       const r = await api.optionPrice({
@@ -68,7 +80,7 @@ function OptionPricingTab() {
   return (
     <div className="flex flex-col gap-5">
       <div className="card-md">
-        <Section title="옵션 입력 (Black-76)">
+        <Section title="옵션 입력 (블랙-숄즈, 유럽형)">
           <FormRow cols={3}>
             <Field label="기초자산가 (S)"><input className="input" type="number" value={spot}   onChange={(e) => setSpot(Number(e.target.value))} /></Field>
             <Field label="행사가 (K)">    <input className="input" type="number" value={strike} onChange={(e) => setStrike(Number(e.target.value))} /></Field>
@@ -94,10 +106,10 @@ function OptionPricingTab() {
       {error && <ErrorMsg msg={error} />}
 
       {result && (
-        <div className="grid grid-cols-4 gap-3 animate-slide-up">
-          {["price", "delta", "gamma", "theta", "vega", "rho", "vanna", "volga"].map((k) => (
-            result[k] != null && (
-              <StatCard key={k} label={k.toUpperCase()} value={result[k].toFixed(6)} trend="neutral" />
+        <div className="grid grid-cols-4 gap-3 animate-slide-up" data-testid="option-greeks">
+          {GREEKS.map(([k, label]) => (
+            typeof result[k] === "number" && (
+              <StatCard key={k} label={label} value={result[k].toFixed(4)} trend="neutral" />
             )
           ))}
         </div>
