@@ -19981,3 +19981,6 @@ E2E 2(리스크 일곱 + 실패 둘 · 손실 꼬리 칸 수 = 서버 히스토�
 **하지 않은 것** — 모델 코드 수정(위 결함은 기록만) · `AIVolatilityEngine`(랜덤포레스트 "AI VaR" — 표본외 관문 없이 예측을 주장) ·
 `mc_path_simulation`(전역 `np.random.seed` 를 바꾼다) · 스트레스 라우트(`scenario_stress` 노드가 있다) · VaR 매핑·집계·WWR · `/risk-tools` 화면
 이전(BL4 대응표) · yfinance 경로.
+
+**게이트 후속(BL3 W4)** — 넓은 E2E 319/319 · ruff 통과(커밋 전 E731 하나를 고쳐 커밋) · 전체 pytest 7554 passed / 10 skipped ·
+프런트 변이 5/5(손실 꼬리 방향 · 옵션 키 대소문자 · 0 이하 사전 차단 · 호출 주소 · β=0 '계산 안 함').
