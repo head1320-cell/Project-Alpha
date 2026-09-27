@@ -29,8 +29,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
+import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -138,6 +140,9 @@ class NodeSpec:
     #: 참이면 `run(inputs, params, lineage)` — 입력 계보를 **읽어야** 판단이 서는 노드(BK W4: 실행 목표는
     #: 연습용 데이터로 만든 비중을 실행 가능으로 두지 않는다). 거절만 할 거라면 `admits` 를 쓴다.
     wants_lineage: bool = False
+    #: 캔버스 위 작은 그림(BM C1) `view -> {kind, points, unit?, caption?} | None` — ★보기의 값을 그대로 옮긴다★(새 수를
+    #: 만들지 않는다). 엔진이 모양을 검사하고, 틀리거나 실패하면 그림 없이(null) 결과는 그대로 둔다.
+    glance: Callable[[dict], dict | None] | None = None
 
     @property
     def human(self) -> str:
@@ -157,6 +162,8 @@ class Registry:
     def __init__(self, port_types: tuple[str, ...]):
         self.port_types = tuple(port_types)
         self._specs: dict[str, NodeSpec] = {}
+        #: 포트 타입 → 값의 한 줄 요약(BM C1 선 위 요약). 없는 타입은 요약하지 않는다.
+        self.port_briefs: dict[str, Callable[[Any], str | None]] = {}
 
     def register(self, spec: NodeSpec) -> None:
         if spec.type in self._specs:
@@ -168,6 +175,19 @@ class Registry:
 
     def get(self, type_: str) -> NodeSpec | None:
         return self._specs.get(type_)
+
+    def set_glance(self, type_: str, fn: Callable[[dict], dict | None]) -> None:
+        """이미 등록된 노드에 작은 그림 함수를 붙인다(BM C1) — 노드 모듈을 건드리지 않고 한 곳에서 관리한다."""
+        spec = self._specs.get(type_)
+        if spec is None:
+            raise ValueError(f"그림을 붙일 노드가 없습니다: {type_}")
+        self._specs[type_] = replace(spec, glance=fn)
+
+    def set_port_brief(self, port_type: str, fn: Callable[[Any], str | None]) -> None:
+        """포트 타입에 값의 한 줄 요약 함수를 붙인다(BM C1) — 캔버스가 선 가운데에 그린다."""
+        if port_type not in self.port_types:
+            raise ValueError(f"선언되지 않은 포트 타입: {port_type}")
+        self.port_briefs[port_type] = fn
 
     def types(self) -> list[str]:
         return list(self._specs)
@@ -346,7 +366,7 @@ def validate(graph: Any, registry: Registry) -> dict:
 def _blocked(spec_type: str | None, reason: str, explain: dict | None = None) -> dict:
     return {"type": spec_type, "status": STATUS_BLOCKED, "reason": reason,
             "view": None, "provenance": {}, "explain": explain, "lineage": merge_lineage(),
-            "view_hash": None}
+            "view_hash": None, "glance": None, "elapsed_ms": None, "briefs": {}}
 
 
 # ── 쉬운 말 설명 (BJ1) ────────────────────────────────────────────────────────
@@ -372,6 +392,72 @@ def _explain_ok(spec: NodeSpec, out: NodeOutput, params: Any) -> dict:
                            "text": f"설명을 만들지 못했어요({type(e).__name__}) — 결과 숫자는 자세히 탭에 있어요."}]}
 
 
+# ── 캔버스 위 작은 그림 (BM C1) ────────────────────────────────────────────────
+
+#: 그림 종류 → 점 수 상한. 막대(비중·기여)·값 목록은 카드에 들어갈 만큼, 선은 모양이 보일 만큼.
+GLANCE_MAX = {"bars": 24, "values": 24, "hist": 24, "line": 48}
+GLANCE_KINDS = tuple(GLANCE_MAX)
+
+
+def _finite_or_none(v: Any) -> float | None:
+    if v is None or isinstance(v, bool):
+        return None
+    if not isinstance(v, (int, float)):
+        raise TypeError(f"그림 값이 수가 아닙니다: {type(v).__name__}")
+    f = float(v)
+    return f if math.isfinite(f) else None           # ★모르는 수는 모른다★ — 0 으로 바꾸지 않는다
+
+
+def _check_glance(g: Any) -> dict | None:
+    """그림 모양 검사 — 맞으면 정리한 dict, 틀리면 예외(부르는 쪽이 그림 전체를 버린다)."""
+    if g is None:
+        return None
+    if not isinstance(g, Mapping):
+        raise TypeError("그림이 dict 가 아닙니다")
+    kind = g.get("kind")
+    if kind not in GLANCE_MAX:
+        raise ValueError(f"모르는 그림 종류: {kind!r}")
+    pts = g.get("points")
+    if not isinstance(pts, list) or not pts or len(pts) > GLANCE_MAX[kind]:
+        raise ValueError(f"그림 점 수가 맞지 않습니다: {len(pts) if isinstance(pts, list) else pts!r}")
+    out = [{"label": str(p.get("label")), "value": _finite_or_none(p.get("value"))} for p in pts]
+    if all(p["value"] is None for p in out):
+        raise ValueError("그림의 값이 모두 비어 있습니다")
+    unit, caption = g.get("unit"), g.get("caption")
+    return {"kind": kind, "points": out, "unit": str(unit) if unit is not None else None,
+            "caption": str(caption) if caption is not None else None}
+
+
+def _glance_ok(spec: NodeSpec, view: Any) -> dict | None:
+    if spec.glance is None or not isinstance(view, Mapping):
+        return None
+    try:
+        return _check_glance(spec.glance(dict(view)))
+    except Exception:                                 # noqa: BLE001
+        logger.warning(f"그림을 만들지 못함: {spec.type}", exc_info=True)
+        return None
+
+
+BRIEF_MAX = 80
+
+
+def _briefs_ok(spec: NodeSpec, values: Mapping, registry: Registry) -> dict[str, str]:
+    """출력 포트마다 값의 한 줄 요약 — 요약 함수가 없거나 실패하거나 빈 글이면 그 포트는 빠진다(지어내지 않는다)."""
+    out: dict[str, str] = {}
+    for p in spec.outputs:
+        fn = registry.port_briefs.get(p.type)
+        if fn is None or p.name not in values:
+            continue
+        try:
+            text = fn(values[p.name])
+        except Exception:                             # noqa: BLE001
+            logger.warning(f"선 요약을 만들지 못함: {spec.type}.{p.name}", exc_info=True)
+            continue
+        if isinstance(text, str) and 0 < len(text) <= BRIEF_MAX:
+            out[p.name] = text
+    return out
+
+
 def run(graph: Any, registry: Registry, targets: list[str] | None = None) -> dict:
     """검증 → 위상 순서 실행. 반환:
     `{"ok", "errors", "order", "nodes": {id: {type, status, reason, view, provenance,
@@ -382,6 +468,11 @@ def run(graph: Any, registry: Registry, targets: list[str] | None = None) -> dic
     `partial: {targets, computed}` 가 붙는다. 계산한 노드의 값은 전체 계산과 같다(같은 함수·같은 입력).
     """
     return _execute(graph, registry, targets)[0]
+
+
+def _ms(t0: float) -> float:
+    """노드 계산 시간(ms) — 계산기(run)만 잰다. 설명·그림은 넣지 않는다."""
+    return round((time.perf_counter() - t0) * 1000.0, 1)
 
 
 def _ancestors(targets: list[str], incoming: dict[str, dict]) -> set[str]:
@@ -458,8 +549,10 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
         if refusal:
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": refusal,
                             "view": None, "provenance": {}, "explain": _explain_failed(refusal),
-                            "lineage": in_lineage, "view_hash": None}
+                            "lineage": in_lineage, "view_hash": None, "glance": None, "elapsed_ms": None,
+                            "briefs": {}}
             continue
+        t0 = time.perf_counter()
         try:
             out = (spec.run(inputs, params.get(nid), in_lineage) if spec.wants_lineage
                    else spec.run(inputs, params.get(nid)))
@@ -469,21 +562,26 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
         except NodeFailure as e:
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": e.reason,
                             "view": None, "provenance": {}, "explain": _explain_failed(e.reason),
-                            "lineage": in_lineage, "view_hash": None}
+                            "lineage": in_lineage, "view_hash": None, "glance": None,
+                            "elapsed_ms": _ms(t0), "briefs": {}}
             continue
         except Exception as e:                        # noqa: BLE001
             logger.exception(f"그래프 노드 {nid}({raw_type}) 처리 실패")
             why = f"처리 중 오류({type(e).__name__}) — 서버 로그를 보세요."
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": why,
                             "view": None, "provenance": {}, "explain": _explain_failed(why),
-                            "lineage": in_lineage, "view_hash": None}
+                            "lineage": in_lineage, "view_hash": None, "glance": None,
+                            "elapsed_ms": _ms(t0), "briefs": {}}
             continue
+        elapsed = _ms(t0)
         values[nid] = out.values
         results[nid] = {"type": raw_type, "status": STATUS_OK, "reason": None,
                         "view": out.view, "provenance": dict(out.provenance or {}),
                         "explain": _explain_ok(spec, out, params.get(nid)),
                         "lineage": merge_lineage(in_lineage, out.tags),
-                        "view_hash": view_hash(out.view)}
+                        "view_hash": view_hash(out.view),
+                        "glance": _glance_ok(spec, out.view), "elapsed_ms": elapsed,
+                        "briefs": _briefs_ok(spec, out.values, registry)}
 
     ok = not errors and all(r["status"] == STATUS_OK for r in results.values())
     report = {"ok": ok, "errors": errors, "order": order, "nodes": results}

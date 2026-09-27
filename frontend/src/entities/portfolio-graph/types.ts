@@ -154,6 +154,22 @@ export interface NodeRunResult {
   view_hash?: string | null;
   /** ★이번 "여기까지 계산" 에서 계산하지 않은 노드★(BL1) — 화면이 이전 결과를 남기며 붙인다. 서버는 내지 않는다. */
   previous?: boolean;
+  /** 캔버스 위 작은 그림(BM C1) — ★서버가 보기에서 고른 수 그대로★. 그릴 수 없으면 `null`(빈 그림을 지어내지 않는다). */
+  glance?: NodeGlance | null;
+  /** 이 노드의 계산 시간(ms) — 돌지 않은 노드(막힘)는 `null`. */
+  elapsed_ms?: number | null;
+  /** 출력 포트마다 흐르는 값의 한 줄(서버) — 선 가운데에 그린다. 요약이 없는 포트는 키가 없다. */
+  briefs?: Record<string, string>;
+}
+
+export type GlanceKind = "bars" | "line" | "hist" | "values";
+
+/** 작은 그림 — 점 값이 `null` 이면 모르는 값이다(0 이 아니다). */
+export interface NodeGlance {
+  kind: GlanceKind;
+  points: { label: string; value: number | null }[];
+  unit: string | null;
+  caption: string | null;
 }
 
 export interface NodeLineage {

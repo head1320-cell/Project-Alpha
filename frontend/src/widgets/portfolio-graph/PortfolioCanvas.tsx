@@ -17,12 +17,14 @@
  * 다시하기(Ctrl+Shift+Z) · 복사(Ctrl+C)/붙여넣기(Ctrl+V) · 여러 개 지우기 · 자동 정리 · 미니맵 · 묶음 상자(Ctrl+G) ·
  * 명령 팔레트(Ctrl+K) · 계산 기록. ★이번 대담함은 한 곳★ — "여기까지 계산" 에 올리면 돌 경로가 먼저 밝아진다.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
+  useStore,
   type Connection,
   type Node,
   type NodeChange,
@@ -48,6 +50,7 @@ import { AlphaSheetBody } from "./AlphaSheet";
 import { CommandPalette, type PaletteCommand } from "./CommandPalette";
 import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
+import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { GraphNode, PORT_COLORS } from "./GraphNode";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
@@ -61,6 +64,24 @@ import { RunHistory } from "./RunHistory";
 import { ancestorsOf, usePortfolioGraph } from "./store";
 
 const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame };
+const EDGE_TYPES = { [PG_WIRE_TYPE]: EvidenceEdge };
+/** 확대 3단계(BM C1 · 의미 확대) — 멀리: 이름과 숫자 하나 · 보통: 카드 · 가까이: 작은 그림·계산 시간까지. */
+export const ZOOM_FAR = 0.55;
+export const ZOOM_NEAR = 1.05;
+export type ZoomLevel = "far" | "mid" | "near";
+export const zoomLevel = (z: number): ZoomLevel => (z < ZOOM_FAR ? "far" : z > ZOOM_NEAR ? "near" : "mid");
+
+/** 확대 값을 캔버스 요소의 `data-zoom`·`--pg-z` 로 옮긴다 — 노드를 다시 그리지 않고 CSS 가 단계별로 보이고 숨긴다. */
+function ZoomWatch({ el }: { el: RefObject<HTMLDivElement> }) {
+  const z = useStore((st) => st.transform[2]);
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    node.dataset.zoom = zoomLevel(z);
+    node.style.setProperty("--pg-z", String(z));
+  }, [z, el]);
+  return null;
+}
 /** 묶음 상자 여백·노드 카드 크기(대략) — 상자는 안의 노드를 감싸는 사각형이다. */
 const GROUP_PAD = 28;
 const NODE_W = 176;
@@ -74,6 +95,22 @@ export interface PortfolioCanvasProps {
   initialDoc?: { doc: GraphDoc; note: string } | null;
   /** 옛 주소(`/allocation/<화면>` → `?from=`)로 왔을 때 그 예전 화면(BL4). 배너·팔레트 검색·템플릿·서랍을 안내한다. */
   legacy?: LegacyScreen | null;
+}
+
+/** 이웃 노드 — ←→ 는 선을 따라(같은 줄에 가까운 것 먼저), ↑↓ 는 흐름 번호 순서. 없으면 null. */
+function neighbour(id: string, key: string, nodes: { id: string; position: { x: number; y: number } }[],
+                   edges: { source: string; target: string }[]): string | null {
+  const me = nodes.find((n) => n.id === id);
+  if (!me) return null;
+  const near = (ids: string[]) => ids.map((x) => nodes.find((n) => n.id === x)).filter((n): n is typeof me => !!n)
+    .sort((a, b) => Math.abs(a.position.y - me.position.y) - Math.abs(b.position.y - me.position.y))[0]?.id ?? null;
+  if (key === "ArrowRight") return near(edges.filter((e) => e.source === id).map((e) => e.target));
+  if (key === "ArrowLeft") return near(edges.filter((e) => e.target === id).map((e) => e.source));
+  const order = topoOrder(nodes.map((n) => n.id), edges);
+  const i = order.indexOf(id);
+  if (key === "ArrowDown") return order[i + 1] ?? null;
+  if (key === "ArrowUp") return i > 0 ? order[i - 1] : null;
+  return null;
 }
 
 function readWip(): string | null {
@@ -109,6 +146,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   // 노드 카드의 "여기까지 계산" 버튼이 부를 함수 — 아래에서 정의되고, 카드는 이 참조로 부른다.
   const runToRef = useRef<(id: string) => void>(() => {});
   const previewRef = useRef<(id: string | null) => void>(() => {});
+  const focusRef = useRef<(id: string) => void>(() => {});
+  const [announce, setAnnounce] = useState("");
 
   const fit = () => setTimeout(() => rf.current?.fitView({ padding: 0.08, maxZoom: 1 }), 60);
 
@@ -143,13 +182,18 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
   const hidden = useMemo(() => new Set(s.groups.filter((g) => g.collapsed).flatMap((g) => g.members)), [s.groups]);
+  const cause = s.reportStale ? null : s.cause;
+  const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
+  const live = s.report && !s.reportStale ? s.report.nodes : null;
   const numbered = useMemo(() => {
     const num = new Map(order.map((id, i) => [id, i + 1]));
     const picked = new Set(s.picked);
     // 선택은 스토어가 진실 — 이야기 카드에서 고른 노드도, 상자로 여러 개 고른 노드도 캔버스에서 선택돼 보인다.
     const cards: Node[] = s.nodes.map((n) => ({
       ...n, hidden: hidden.has(n.id), selected: picked.has(n.id) || n.id === s.selectedId,
-      className: path.has(n.id) ? "pg-on-path" : undefined,
+      className: [path.has(n.id) && "pg-on-path",
+                  cause && (causeSet.has(n.id) ? "pg-on-cause" : "pg-dim"),
+                  cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
       data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current },
     }));
     const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
@@ -162,14 +206,20 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                data: { groupId: g.id, label: g.label, collapsed: !!g.collapsed, members: g.members, width: x1 - x0, height: y1 - y0 } };
     });
     return [...frames, ...cards];
-  }, [s.nodes, s.groups, order, s.selectedId, s.picked, path, hidden]);
+  }, [s.nodes, s.groups, order, s.selectedId, s.picked, path, hidden, cause, causeSet]);
   const edgesStyled = useMemo(() => s.edges.map((e) => {
     const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
     const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
     const lit = path.has(e.source) && path.has(e.target);
-    return { ...e, animated: lit && s.running, className: lit ? "pg-edge--path" : undefined,
-             style: { stroke: out ? PORT_COLORS[out.type] ?? "#94a3b8" : "#94a3b8", strokeWidth: lit ? 3.5 : 2.5 } };
-  }), [s.edges, s.nodes, s.catalog, path, s.running]);
+    const src = live?.[e.source];
+    const wire = wireOf(src, e.sourceHandle ? src?.briefs?.[e.sourceHandle] : null);
+    const onCause = !!cause && causeSet.has(e.source) && causeSet.has(e.target);
+    const cls = ["pg-wire", wire.evidence && `pg-wire--${wire.evidence}`, wire.forward && "pg-wire--forward",
+                 lit && "pg-edge--path", cause && (onCause ? "pg-edge--cause" : "pg-dim")].filter(Boolean).join(" ");
+    return { ...e, type: PG_WIRE_TYPE, data: wire, animated: lit && s.running, className: cls,
+             style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : out ? PORT_COLORS[out.type] ?? "#94a3b8" : "#94a3b8",
+                      strokeWidth: lit || onCause ? 3.5 : 2.5 } };
+  }), [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet]);
 
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -308,7 +358,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       else if (mod && k === "v") { if (st.paste()) e.preventDefault(); }
       else if (mod && k === "g") { e.preventDefault(); st.groupPicked(); }
       else if (mod && k === "d" && st.selectedId) { e.preventDefault(); st.duplicateNode(st.selectedId); }
+      else if (e.key === "Escape" && st.cause) st.showCause(null);
       else if (e.key === "Escape" && st.openGate) st.setOpenGate(null);
+      else if (e.altKey && e.key.startsWith("Arrow") && st.selectedId) {
+        // 키보드로 노드 사이 이동(접근성) — ←→ 선을 따라 앞·뒤 단계, ↑↓ 흐름 번호 순서.
+        const next = neighbour(st.selectedId, e.key, st.nodes, st.edges);
+        if (next) { e.preventDefault(); focusRef.current(next); }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -337,7 +393,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     usePortfolioGraph.getState().select(id);
     const n = usePortfolioGraph.getState().nodes.find((x) => x.id === id);
     if (n && rf.current) rf.current.setCenter(n.position.x + 90, n.position.y + 60, { zoom: rf.current.getZoom(), duration: 250 });
+    const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);
+    setAnnounce(n ? `${entry?.plain_label ?? n.data.kind} 노드를 골랐어요` : "");
   }, []);
+  focusRef.current = focusNode;
 
   const selected = s.nodes.find((n) => n.id === s.selectedId);
   const selEntry = s.catalog?.find((c) => c.type === selected?.data.kind);
@@ -448,29 +507,62 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             nodes={numbered}
             edges={edgesStyled}
             nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            minZoom={0.2}
             onNodesChange={onNodesChange}
             onEdgesChange={s.onEdgesChange}
             onConnect={s.connect}
             isValidConnection={isValidConnection}
             onInit={(inst) => { rf.current = inst; }}
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
-            onPaneClick={() => s.select(null)}
+            onPaneClick={() => { s.select(null); if (s.cause) s.showCause(null); }}
             deleteKeyCode={drawer || cmdOpen ? null : ["Backspace", "Delete"]}
             multiSelectionKeyCode={["Meta", "Control"]}
-            defaultEdgeOptions={{ type: "default" }}
+            defaultEdgeOptions={{ type: PG_WIRE_TYPE }}
             fitView
             fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="var(--pg-line)" />
+            <ZoomWatch el={canvasEl} />
+            {live && (
+              <Panel position="top-left" className="pg-wire-legend" aria-label="선 모양 읽는 법">
+                {WIRE_LEGEND.map((w) => (
+                  <span key={w.key} className={`pg-wire-key pg-wire-key--${w.key}`} title={w.help}>
+                    <svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" /></svg>{w.label}
+                  </span>
+                ))}
+              </Panel>
+            )}
+            {cause && (
+              <Panel position="top-center" className="pg-cause-banner" role="status">
+                <span>
+                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 첫 원인이에요" : "첫 원인"}
+                  {" — "}
+                  {cause.roots.map((r) => {
+                    const n = s.nodes.find((x) => x.id === r);
+                    const name = s.catalog?.find((c) => c.type === n?.data.kind)?.plain_label ?? n?.data.kind ?? r;
+                    return (
+                      <button key={r} type="button" className="pg-cause-root-btn" onClick={() => focusNode(r)}
+                              title={live?.[r]?.reason ?? undefined}>
+                        {name}: {live?.[r]?.explain?.facts?.[0] ?? live?.[r]?.reason ?? "사유 없음"}
+                      </button>
+                    );
+                  })}
+                </span>
+                <button type="button" className="pg-cause-clear" onClick={() => s.showCause(null)}>다 보기 <kbd>Esc</kbd></button>
+              </Panel>
+            )}
             <Controls showInteractive={false} />
             {s.showMinimap && (
               <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap"
                        nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent" : "var(--pg-line)")} />
             )}
           </ReactFlow>
+          <p className="pg-sr-live" aria-live="polite">{announce}</p>
           <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
+            : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
             : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. Shift 를 누른 채 끌면 여러 개를 골라요."}</div>
         </div>
         <aside className="pg-side" aria-label="설명과 설정">

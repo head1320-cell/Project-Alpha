@@ -78,6 +78,10 @@ export interface PgState {
   tab: "story" | "settings" | "detail";
   expert: boolean;
   openGate: string | null;
+  /** 미리보기 고정(BM C1 · TouchDesigner 뷰어 플래그) — 어떤 확대에서도 작은 그림을 보인다. 화면 정보(파일에 없다). */
+  pinned: string[];
+  /** 원인 경로(BM C1) — 막힘·실패 노드에서 계산 못 한 상류를 따라 첫 원인까지. 켜지면 나머지는 흐려진다. */
+  cause: { from: string; path: string[]; roots: string[] } | null;
 
   setCatalog: (c: NodeCatalogEntry[] | null, err?: string | null) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -110,6 +114,8 @@ export interface PgState {
   setTab: (t: PgState["tab"]) => void;
   setExpert: (v: boolean) => void;
   setOpenGate: (k: string | null) => void;
+  togglePin: (id: string) => void;
+  showCause: (id: string | null) => void;
 }
 
 let seq = 0;
@@ -140,6 +146,28 @@ export function ancestorsOf(ids: string[], edges: { source: string; target: stri
     stack.push(...(into.get(n) ?? []));
   }
   return [...seen];
+}
+
+/**
+ * 원인 경로 — `id` 에서 상류로, **완료가 아닌** 노드만 따라 올라간다(완료된 상류는 원인이 아니다).
+ * 뿌리 = 계산 못 한 상류가 더 없는 노드(스스로 실패했거나 자기 설정 때문에 막힌 노드). 결과가 없는 노드는 따라가지 않는다.
+ */
+export function causePath(id: string, edges: { source: string; target: string }[],
+                          results: Record<string, { status: NodeStatus }> | null | undefined): { path: string[]; roots: string[] } {
+  const bad = (n: string) => !!results?.[n] && results[n].status !== "ok";
+  if (!bad(id)) return { path: [], roots: [] };
+  const seen = new Set<string>();
+  const roots: string[] = [];
+  const stack = [id];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    const up = edges.filter((e) => e.target === n && bad(e.source)).map((e) => e.source);
+    if (!up.length) roots.push(n);
+    stack.push(...up);
+  }
+  return { path: [...seen], roots };
 }
 
 const clean = (nodes: PgNode[]) => nodes.map((n) => ({ ...n, selected: false, dragging: false }));
@@ -189,6 +217,8 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     tab: "story",
     expert: false,
     openGate: null,
+    pinned: [],
+    cause: null,
 
     setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
 
@@ -304,13 +334,14 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
         report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
+        pinned: [], cause: null,
       });
     },
 
     setName: (name) => set({ name }),
     select: (selectedId) => set({ selectedId, picked: selectedId ? [selectedId] : [] }),
     setValidation: (validation) => set({ validation }),
-    startRun: (ids = null) => set({ running: true, runError: null, runningIds: ids, preview: null }),
+    startRun: (ids = null) => set({ running: true, runError: null, runningIds: ids, preview: null, cause: null }),
     finishRun: (report, err = null) => set((s) => {
       if (!report) return { running: false, runningIds: null, runError: err };
       const partial = report.partial?.targets ?? null;
@@ -330,6 +361,12 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       };
     }),
     setPreview: (preview) => set({ preview }),
+    togglePin: (id) => set((s) => ({ pinned: s.pinned.includes(id) ? s.pinned.filter((x) => x !== id) : [...s.pinned, id] })),
+    showCause: (id) => set((s) => {
+      if (!id || s.reportStale) return { cause: null };
+      const { path, roots } = causePath(id, s.edges, s.report?.nodes);
+      return { cause: path.length ? { from: id, path, roots } : null };
+    }),
 
     undo: () => set((s) => {
       const prev = s.past[s.past.length - 1];

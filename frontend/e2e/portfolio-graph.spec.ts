@@ -2018,7 +2018,11 @@ test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그�
       await page.locator(`.pg-template[data-template="${key}"]`).click();
     }
     await patchRun(page, (b) => {
-      for (const r of Object.values(b.nodes)) if (r.view) r.view = nullNumbers(r.view) as Record<string, unknown>;
+      for (const r of Object.values(b.nodes)) {
+        if (r.view) r.view = nullNumbers(r.view) as Record<string, unknown>;
+        // BM C1 — 캔버스 위 작은 그림도 같은 검사를 받는다(점 값을 모두 지운다).
+        if (r.glance) r.glance = nullNumbers(r.glance);
+      }
     });
     const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 180_000 });
     await page.locator(".pg-run").click();
@@ -2033,6 +2037,11 @@ test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그�
       await openCanvas(page);
       continue;
     }
+    // BM C1 — 노드 카드의 작은 그림(숨어 있어도 글자는 DOM 에 있다): 모르는 값을 0 으로 그리지 않는다.
+    const glanceText = (await page.locator(".pg-canvas .pg-node-glance").allTextContents()).join(" ");
+    const gm = FAKE_ZERO.exec(glanceText);
+    if (gm) bad.push(`${key}/그림: “${glanceText.slice(Math.max(0, gm.index - 30), gm.index + 30)}”`);
+    if (Object.values(body.nodes).some((r) => r.glance) && !glanceText.includes("모름")) bad.push(`${key}/그림: 지운 값을 '모름' 으로 적지 않음`);
     for (const [id, r] of Object.entries(body.nodes)) {
       if (r.status !== "ok" || !r.view) continue;
       lastError = "";

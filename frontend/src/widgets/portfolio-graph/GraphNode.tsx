@@ -10,8 +10,9 @@
  */
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "reactflow";
-import { Play } from "lucide-react";
-import { nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { Pin, PinOff, Play, Route } from "lucide-react";
+import { fmtElapsed, nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { Glance } from "./Glance";
 import { usePortfolioGraph } from "./store";
 
 /** 포트 타입 → 색. 모르는 타입은 회색, 카탈로그에 없는 포트는 빨간 점선. */
@@ -99,6 +100,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const live = result && !stale ? result : undefined;
   const running = usePortfolioGraph((s) => s.running);
   const single = usePortfolioGraph((s) => s.picked.length <= 1);
+  const pinned = usePortfolioGraph((s) => s.pinned.includes(id));
+  const togglePin = usePortfolioGraph((s) => s.togglePin);
+  const showCause = usePortfolioGraph((s) => s.showCause);
   const errors = (validation?.errors ?? []).filter((e) => e.node_id === id);
 
   const unknown = !!data.unknownReason || !entry;
@@ -115,6 +119,10 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const headline = live?.status === "ok" ? ex?.headline : null;
   const summary = nodeSummary(entry, data.params ?? {});
   const state = live?.status ?? (stale && result ? "stale" : errors.length ? "warn" : "idle");
+  // 제목 줄 경고(Blender) — 서버 trust 의 '지키지 못함'·'모름' 수. 설정 오류는 따로 빨갛게 적힌다.
+  const warns = live?.status === "ok" ? (ex?.trust ?? []).filter((t) => t.state === "failed" || t.state === "unknown") : [];
+  const glance = live?.status === "ok" ? live.glance ?? null : null;
+  const elapsed = typeof live?.elapsed_ms === "number" ? live.elapsed_ms : null;
 
   if (unknown) {
     return (
@@ -136,8 +144,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   }
 
   return (
-    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}`}
-         data-node-id={id} data-kind={data.kind} style={{ minHeight: minH }}>
+    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}`}
+         data-node-id={id} data-kind={data.kind}
+         style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)" }}>
       <NodeToolbar isVisible={selected && single} position={Position.Top} offset={8}>
         <button type="button" className="pg-run-to" disabled={running}
                 onMouseEnter={() => data.onPreviewRunTo?.(id)} onMouseLeave={() => data.onPreviewRunTo?.(null)}
@@ -145,11 +154,28 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
                 onClick={() => { data.onPreviewRunTo?.(null); data.onRunTo?.(id); }}>
           <Play size={12} aria-hidden="true" /> 여기까지 계산 <kbd>Shift+Enter</kbd>
         </button>
+        <button type="button" className="pg-pin" aria-pressed={pinned} onClick={() => togglePin(id)}
+                title="멀리서 볼 때도 이 노드의 작은 그림을 보여요">
+          {pinned ? <PinOff size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
+          {pinned ? "그림 고정 풀기" : "그림 고정"}
+        </button>
       </NodeToolbar>
       <div className="pg-node-k">
         <i className="pg-node-num" style={{ background: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)" }}>{data.num ?? "·"}</i>
         <span className="pg-node-plain">{entry.plain_label}</span>
+        {warns.length > 0 && (
+          <span className="pg-node-warn" role="img" aria-label={`확인할 것 ${warns.length}개`}
+                title={warns.map((t) => t.text).join("\n")}>!{warns.length}</span>
+        )}
         <span className={`pg-node-dot pg-node-dot--${state}`} aria-hidden="true" />
+      </div>
+      <div className="pg-node-far" aria-hidden="true">
+        <span className="pg-node-far-name">{entry.plain_label}</span>
+        <span className={`pg-node-far-v pg-node-far-v--${state}`}>
+          {headline && headline.value !== null
+            ? <>{Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit}</small></>
+            : live ? STATUS_TEXT[live.status] : stale && result ? "예전 결과" : "계산 전"}
+        </span>
       </div>
       <div className="pg-node-t">{summary ?? entry.plain_label}</div>
       {headline && headline.value !== null && (
@@ -159,6 +185,16 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
       )}
       {live && live.status !== "ok" && ex && (
         <div className="pg-node-why">{ex.facts?.[0] ?? ex.title}</div>
+      )}
+      {live && live.status !== "ok" && (
+        <button type="button" className="pg-cause-btn nodrag" onClick={(e) => { e.stopPropagation(); showCause(id); }}
+                title="계산하지 못한 앞 단계를 따라 첫 원인까지 밝혀요">
+          <Route size={12} aria-hidden="true" /> 원인 따라가기
+        </button>
+      )}
+      {glance && <div className="pg-node-glance"><Glance glance={glance} /></div>}
+      {elapsed !== null && (
+        <div className="pg-node-time" title="이 노드의 계산 시간(서버)">계산 {fmtElapsed(elapsed)}</div>
       )}
       {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과예요.</div>}
       {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았어요 — 이전 계산 결과예요.</div>}

@@ -481,3 +481,7 @@ _alloc_extra.register(REGISTRY)
 from src.api import allocation_graph_nodes_current as _current  # noqa: E402
 
 _current.register(REGISTRY)
+# ★그림은 마지막에 붙인다★ (BM C1) — 모든 노드가 등록된 뒤 한 곳에서.
+from src.api import allocation_graph_glance as _glance  # noqa: E402
+
+_glance.register(REGISTRY)

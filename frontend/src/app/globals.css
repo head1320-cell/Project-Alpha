@@ -5875,6 +5875,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --pg-st-data: #4e5968; --pg-st-signal: #7c3aed; --pg-st-belief: #6a3de8; --pg-st-build: #1f6fe5;
   --pg-st-check: #0b7274; --pg-st-act: #8f5a07; --pg-cta: #1b64da;
   --pg-shadow: 0 1px 2px rgb(25 31 40 / 6%), 0 6px 20px rgb(25 31 40 / 6%);
+  --pg-wire-off: #b0b8c1;
   font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-feature-settings: "tnum" 1; letter-spacing: -0.01em; color: var(--pg-ink);
 }
@@ -5884,6 +5885,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   --pg-ok: #3ccf91; --pg-ok-soft: #10281f; --pg-assume: #f5b453; --pg-assume-soft: #2b2112;
   --pg-unknown: #a3acb8; --pg-unknown-soft: #23262b; --pg-fail: #ff6b76; --pg-fail-soft: #33171b;
   --pg-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 35%);
+  --pg-wire-off: #545b64;
 }
 .pg-page { gap: 0; }
 /* 캔버스는 셸의 40px 여백을 쓰지 않는다 — 작업 면이 화면 끝까지(목업 승인본). */
@@ -6472,3 +6474,72 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* ── BL4 · 옛 주소 안내 — 한 줄. 예전 화면 이름과 그 일을 하는 곳(노드·템플릿·서랍)만 말한다. ── */
 .pg-legacy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--pg-ink); background: var(--pg-blue-soft); }
 .pg-legacy .pg-btn { padding: 4px 10px; font-size: 12.5px; background: var(--pg-paper); }
+
+/* ── BM C1 · 결과가 캔버스에 — 확대 3단계 · 작은 그림 · 증거 선 · 원인 경로 ─────────────────────────
+   캔버스 요소의 data-zoom(far|mid|near)·--pg-z 를 ZoomWatch 가 쓴다. 노드는 다시 그리지 않고 CSS 가 보이고 숨긴다. */
+.pg-node-far { display: none; }
+.pg-node-glance, .pg-node-time { display: none; }
+.pg-canvas[data-zoom="near"] .pg-node-glance, .pg-node--pinned .pg-node-glance { display: block; }
+.pg-canvas[data-zoom="near"] .pg-node-time { display: block; }
+/* 멀리 — 이름과 숫자 하나. 글자는 화면에서 11px 아래로 줄지 않게 확대의 역수로 키운다(확대 0.3까지). */
+.pg-canvas[data-zoom="far"] .pg-node { border-left: 6px solid var(--pg-stage); }
+.pg-canvas[data-zoom="far"] .pg-node-k, .pg-canvas[data-zoom="far"] .pg-node-t, .pg-canvas[data-zoom="far"] .pg-node-v,
+.pg-canvas[data-zoom="far"] .pg-node-ev, .pg-canvas[data-zoom="far"] .pg-node-errors, .pg-canvas[data-zoom="far"] .pg-node-why,
+.pg-canvas[data-zoom="far"] .pg-cause-btn, .pg-canvas[data-zoom="far"] .pg-wire-brief { display: none; }
+.pg-canvas[data-zoom="far"] .pg-node-far { display: flex; flex-direction: column; gap: 2px; }
+.pg-node-far-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: min(34px, calc(11.5px / var(--pg-z, 1))); font-weight: 700; line-height: 1.2; color: var(--pg-ink); }
+.pg-node-far-v { font-size: min(44px, calc(15px / var(--pg-z, 1))); font-weight: 800; letter-spacing: -0.02em; color: var(--pg-ink); line-height: 1.15; }
+.pg-node-far-v small { margin-left: 2px; font-size: .6em; font-weight: 700; color: var(--pg-mute); }
+.pg-node-far-v--failed { color: var(--pg-fail); } .pg-node-far-v--blocked { color: var(--pg-assume); }
+.pg-node-far-v--idle, .pg-node-far-v--stale, .pg-node-far-v--warn { font-size: min(30px, calc(11.5px / var(--pg-z, 1))); font-weight: 600; color: var(--pg-mute); }
+/* 제목 줄 경고 수(Blender) */
+.pg-node-warn { flex: none; padding: 0 6px; font-size: 11px; font-weight: 800; line-height: 18px; color: var(--pg-assume); background: var(--pg-assume-soft); border-radius: 9px; }
+.pg-node-time { margin-top: 6px; font-size: 11px; color: var(--pg-mute); }
+.pg-theme .pg-cause-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 8px; font: inherit; font-size: 12px; font-weight: 700; color: var(--pg-blue-ink); background: var(--pg-blue-soft); border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-pin { display: inline-flex; align-items: center; gap: 6px; height: 30px; margin-left: 6px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 700; color: var(--pg-ink); background: var(--pg-paper); border: 0; border-radius: 15px; box-shadow: var(--pg-shadow); cursor: pointer; }
+.pg-theme .pg-pin[aria-pressed="true"] { color: var(--pg-blue-ink); background: var(--pg-blue-soft); }
+/* 작은 그림 */
+.pg-glance { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--pg-line); }
+.pg-gl-cap { margin-bottom: 4px; font-size: 11px; font-weight: 700; color: var(--pg-mute); }
+.pg-gl-bars { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.pg-gl-bars li { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 5px; font-size: 11px; color: var(--pg-body); }
+.pg-gl-lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-gl-track { height: 6px; background: var(--pg-soft); border-radius: 3px; overflow: hidden; }
+.pg-gl-track i { display: block; height: 100%; background: var(--pg-stage, var(--pg-blue)); border-radius: 3px; }
+.pg-gl-neg .pg-gl-track i { background: repeating-linear-gradient(45deg, var(--pg-fail) 0 2px, transparent 2px 4px); }
+.pg-gl-unknown .pg-gl-track { background: none; border: 1px dashed var(--pg-line); }
+.pg-gl-unknown .pg-gl-val { color: var(--pg-unknown); font-weight: 600; }
+.pg-gl-val { font-weight: 700; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-gl-more { font-size: 11px; color: var(--pg-mute); }
+.pg-gl-svg { display: block; overflow: visible; }
+.pg-gl-svg polyline { stroke: var(--pg-stage, var(--pg-blue)); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.pg-gl-svg circle, .pg-gl-svg rect { fill: var(--pg-stage, var(--pg-blue)); }
+.pg-gl-ends { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--pg-body); font-variant-numeric: tabular-nums; }
+.pg-gl-note { font-size: 11px; color: var(--pg-unknown); }
+.pg-gl-values { display: grid; gap: 2px; margin: 0; }
+.pg-gl-values div { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; }
+.pg-gl-values dt { color: var(--pg-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-gl-values dd { margin: 0; font-weight: 700; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+/* 증거 선 — 색은 포트 타입, 모양은 계보 */
+.react-flow__edge.pg-wire--practice .react-flow__edge-path { stroke-dasharray: 7 5; }
+.react-flow__edge.pg-wire--blocked .react-flow__edge-path { stroke-dasharray: 2 7; }
+.pg-wire-ticks { stroke-width: 10px; stroke-dasharray: 1.8 8; opacity: .7; }
+.pg-wire-brief { position: absolute; padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--pg-body); background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 10px; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
+.pg-wire-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 10px; padding: 6px 12px; font-size: 12px; color: var(--pg-body); background: var(--pg-paper); border-radius: 12px; box-shadow: var(--pg-shadow); }
+.pg-wire-key { display: inline-flex; align-items: center; gap: 5px; cursor: help; }
+.pg-wire-key line { stroke: var(--pg-body); stroke-width: 2.2; }
+.pg-wire-key--practice line { stroke-dasharray: 5 3.5; }
+.pg-wire-key--forward line { stroke-width: 7; stroke-dasharray: 1.6 5; }
+.pg-wire-key--blocked line { stroke: var(--pg-mute); stroke-dasharray: 2 5; }
+/* 원인 경로 · 흐리기 */
+.react-flow__node.pg-dim { opacity: .28; }
+.react-flow__edge.pg-dim { opacity: .15; }
+.react-flow__node.pg-on-cause .pg-node { border-color: var(--pg-fail); box-shadow: 0 0 0 5px rgb(217 45 60 / 14%), var(--pg-shadow); }
+.react-flow__node.pg-cause-root .pg-node { outline: 3px solid var(--pg-fail); outline-offset: 3px; }
+.pg-edge--cause .react-flow__edge-path { stroke: var(--pg-fail) !important; }
+.pg-cause-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: min(720px, calc(100% - 32px)); margin-top: 58px; padding: 8px 14px; font-size: 13px; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid var(--pg-fail); border-radius: 12px; box-shadow: var(--pg-shadow); }
+.pg-theme .pg-cause-root-btn { padding: 0; font: inherit; font-weight: 700; color: var(--pg-fail); text-align: left; background: none; border: 0; text-decoration: underline; cursor: pointer; }
+.pg-theme .pg-cause-clear { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 700; color: var(--pg-ink); background: var(--pg-soft); border: 0; border-radius: 8px; cursor: pointer; }
+.pg-cause-clear kbd { font: inherit; font-size: 11px; color: var(--pg-body); }
+.pg-sr-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 640px) { .pg-wire-legend { font-size: 11px; gap: 2px 8px; } .pg-hint { white-space: normal; width: calc(100% - 32px); text-align: center; } }
