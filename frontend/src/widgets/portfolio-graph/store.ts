@@ -30,6 +30,9 @@ import {
   GRAPH_FORMAT,
   GRAPH_VERSION,
   blockFromGroup,
+  branchScope,
+  MAX_BRANCHES,
+  nextBranchLetter,
   insertDoc,
   mapLayout,
   readBlocks,
@@ -43,6 +46,7 @@ import {
   strategyOutput,
   topoOrder,
   type GraphBlock,
+  type GraphBranch,
   type LaneBox,
   type WorkflowStage,
   type GraphDoc,
@@ -64,7 +68,7 @@ export interface RunRecord {
   nodes: Record<string, { status: NodeStatus; headline: string | null; value: number | null }>;
 }
 
-interface Snapshot { nodes: PgNode[]; edges: Edge[]; groups: GraphGroup[] }
+interface Snapshot { nodes: PgNode[]; edges: Edge[]; groups: GraphGroup[]; branches?: GraphBranch[] }
 
 export interface PgState {
   catalog: NodeCatalogEntry[] | null;
@@ -93,7 +97,7 @@ export interface PgState {
   clip: { nodes: PgNode[]; edges: Edge[] } | null;
   showMinimap: boolean;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
-  tab: "story" | "settings" | "detail";
+  tab: "story" | "settings" | "detail" | "branches";
   expert: boolean;
   openGate: string | null;
   /** 미리보기 고정(BM C1 · TouchDesigner 뷰어 플래그) — 어떤 확대에서도 작은 그림을 보인다. 화면 정보(파일에 없다). */
@@ -111,6 +115,8 @@ export interface PgState {
   /** 내 블록(이 브라우저) — 저장소를 못 쓰면 `blocksAvailable: false`(없음과 다르다). 신뢰 저장은 파일. */
   blocks: GraphBlock[];
   blocksAvailable: boolean;
+  /** 갈래(BM C3) — 화면 정보. 복제 노드 자체는 보통 노드다. */
+  branches: GraphBranch[];
   /** 캔버스 한 줄 안내(전략 추가·블록 저장 결과). */
   note: string | null;
 
@@ -161,6 +167,10 @@ export interface PgState {
   saveBlock: (groupId: string) => GraphBlock | null;
   removeBlock: (index: number) => void;
   setNote: (n: string | null) => void;
+  /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내. */
+  makeBranch: (rootId: string) => string;
+  /** 갈래를 지운다 — 복제 노드도 함께. */
+  removeBranch: (id: string) => void;
 }
 
 export type FilterKey = "failed" | "blocked" | "practice" | "forward" | "assumed";
@@ -242,7 +252,7 @@ function record(report: RunReport, partial: string[] | null): RunRecord {
 export const usePortfolioGraph = create<PgState>((set, get) => {
   /** 지금 상태를 되돌리기 칸에 넣는다 — 바꾸기 **직전**에 부른다. */
   const push = () => set((s) => ({
-    past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups }].slice(-HISTORY),
+    past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }].slice(-HISTORY),
     future: [],
   }));
 
@@ -280,6 +290,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     blocks: [],
     blocksAvailable: true,
     note: null,
+    branches: [],
 
     setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
 
@@ -396,6 +407,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
         report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
         pinned: [], cause: null, lanes: null, focusGroup: null, filters: [],
+        branches: (doc.branches ?? []).filter((b) => b.root in b.map),
       });
     },
 
@@ -430,6 +442,62 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     toggleFilter: (k) => set((s) => ({ filters: s.filters.includes(k) ? s.filters.filter((x) => x !== k) : [...s.filters, k] })),
     clearLanes: () => set({ lanes: null }),
     setNote: (note) => set({ note }),
+    makeBranch: (rootId) => {
+      const s = get();
+      const root = s.nodes.find((n) => n.id === rootId);
+      if (!root) return "갈래를 만들 노드를 찾지 못했어요.";
+      // 갈래의 갈래는 원본 뿌리에 붙인다 — 비교 표가 한 원본을 기준으로 선다.
+      const parent = s.branches.find((b) => rootId in b.map);
+      const ofRoot = parent ? parent.map[rootId] : rootId;
+      if (parent && parent.root !== rootId) return "갈래는 뿌리 노드에서만 다시 만들 수 있어요 — 갈래 안의 뿌리(점선 틀의 맨 앞)를 골라 주세요.";
+      const letter = nextBranchLetter(ofRoot, s.branches);
+      if (!letter) return `한 노드에 갈래는 ${MAX_BRANCHES}개까지예요 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커져요. 쓰지 않는 갈래를 지우고 만들어 주세요.`;
+      const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches);
+      push();
+      const taken = new Set(s.nodes.map((n) => n.id));
+      const idOf = new Map<string, string>();
+      for (const id of scope) {
+        let nid = `${id}__${letter.toLowerCase()}`;
+        for (let k = 2; taken.has(nid); k++) nid = `${id}__${letter.toLowerCase()}${k}`;
+        taken.add(nid);
+        idOf.set(id, nid);
+      }
+      const src = parent ? parent : null;
+      // 갈래의 갈래면 그 갈래의 설정을 이어받는다(바꾼 값 위에서 또 바꾼다).
+      const from = (orig: string) => (src ? Object.entries(src.map).find(([, o]) => o === orig)?.[0] : undefined) ?? orig;
+      const ys = scope.map((id) => s.nodes.find((n) => n.id === id)!.position.y);
+      // 갈래마다 한 칸씩 아래로 — 칸 높이 = 복제 범위의 높이 + 틀 머리·여백(겹치지 않게).
+      const band = Math.max(...ys) - Math.min(...ys) + 150 + 56 + 2 * 28 + 60;          // 카드 · 틀 머리 · 위아래 여백 · 틈
+      const dy = band * (1 + s.branches.filter((b) => b.of_root === ofRoot).length);
+      const copies: PgNode[] = scope.map((id) => {
+        const base = s.nodes.find((n) => n.id === from(id)) ?? s.nodes.find((n) => n.id === id)!;
+        const orig = s.nodes.find((n) => n.id === id)!;
+        return { ...orig, id: idOf.get(id)!, selected: false, position: { x: orig.position.x, y: orig.position.y + dy },
+                 data: { ...orig.data, params: structuredClone(base.data.params ?? {}) } };
+      });
+      const inScope = new Set(scope);
+      // 안쪽 선은 복제끼리, 밖에서 들어오는 선은 원본과 같이. 밖으로 나가는 선은 잇지 않는다.
+      const newEdges: Edge[] = s.edges.filter((e) => inScope.has(e.target)).map((e) => {
+        const source = inScope.has(e.source) ? idOf.get(e.source)! : e.source;
+        const target = idOf.get(e.target)!;
+        return { ...e, id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, source, target, selected: false };
+      });
+      const branch: GraphBranch = { id: `br_${Date.now().toString(36)}${(++seq).toString(36)}`, label: `갈래 ${letter}`,
+        root: idOf.get(ofRoot)!, of_root: ofRoot, map: Object.fromEntries(scope.map((id) => [idOf.get(id)!, id])) };
+      set({ nodes: [...s.nodes, ...copies], edges: [...s.edges, ...newEdges], branches: [...s.branches, branch],
+            selectedId: branch.root, picked: [branch.root], reportStale: s.report !== null, tab: "settings" });
+      return `‘${branch.label}’를 만들었어요 — 노드 ${scope.length}개를 복제했어요. 설정을 바꾸고 계산하면 원본과 다른 값만 나란히 보여요.`;
+    },
+    removeBranch: (id) => {
+      const s = get();
+      const b = s.branches.find((x) => x.id === id);
+      if (!b) return;
+      push();
+      const ids = new Set(Object.keys(b.map));
+      set({ nodes: s.nodes.filter((n) => !ids.has(n.id)), edges: s.edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
+            branches: s.branches.filter((x) => x.id !== id), reportStale: s.report !== null,
+            selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId, picked: [] });
+    },
     loadBlocks: () => { const r = readBlocks(); set({ blocks: r.blocks, blocksAvailable: r.available }); },
     saveBlock: (groupId) => {
       const s = get();
@@ -462,8 +530,8 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       if (!prev) return {};
       return {
         past: s.past.slice(0, -1),
-        future: [{ nodes: clean(s.nodes), edges: s.edges, groups: s.groups }, ...s.future].slice(0, HISTORY),
-        nodes: prev.nodes, edges: prev.edges, groups: prev.groups, picked: [],
+        future: [{ nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }, ...s.future].slice(0, HISTORY),
+        nodes: prev.nodes, edges: prev.edges, groups: prev.groups, branches: prev.branches ?? [], picked: [],
         selectedId: prev.nodes.some((n) => n.id === s.selectedId) ? s.selectedId : null,
         reportStale: s.report !== null,
       };
@@ -474,8 +542,8 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       if (!next) return {};
       return {
         future: s.future.slice(1),
-        past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups }].slice(-HISTORY),
-        nodes: next.nodes, edges: next.edges, groups: next.groups, picked: [],
+        past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }].slice(-HISTORY),
+        nodes: next.nodes, edges: next.edges, groups: next.groups, branches: next.branches ?? [], picked: [],
         selectedId: next.nodes.some((n) => n.id === s.selectedId) ? s.selectedId : null,
         reportStale: s.report !== null,
       };

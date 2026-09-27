@@ -10,8 +10,8 @@
  */
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "reactflow";
-import { Pin, PinOff, Play, Route } from "lucide-react";
-import { fmtElapsed, nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
+import { fmtDelta, fmtElapsed, headlineDelta, nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
 import { usePortfolioGraph } from "./store";
 
@@ -103,6 +103,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const pinned = usePortfolioGraph((s) => s.pinned.includes(id));
   const togglePin = usePortfolioGraph((s) => s.togglePin);
   const showCause = usePortfolioGraph((s) => s.showCause);
+  // 갈래(BM C3) — 이 노드가 복제본이면 원본 id. 원본 대비 Δ 는 헤드라인 이름·단위가 같을 때만.
+  const origId = usePortfolioGraph((s) => s.branches.find((b) => id in b.map)?.map[id] ?? null);
+  const origResult = usePortfolioGraph((s) => (origId && !s.reportStale ? s.report?.nodes[origId] : undefined));
   const errors = (validation?.errors ?? []).filter((e) => e.node_id === id);
 
   const unknown = !!data.unknownReason || !entry;
@@ -154,6 +157,11 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
                 onClick={() => { data.onPreviewRunTo?.(null); data.onRunTo?.(id); }}>
           <Play size={12} aria-hidden="true" /> 여기까지 계산 <kbd>Shift+Enter</kbd>
         </button>
+        <button type="button" className="pg-branch-make"
+                onClick={() => { const st = usePortfolioGraph.getState(); st.setNote(st.makeBranch(id)); }}
+                title="이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봐요">
+          <GitBranch size={12} aria-hidden="true" /> 갈래 만들기
+        </button>
         <button type="button" className="pg-pin" aria-pressed={pinned} onClick={() => togglePin(id)}
                 title="멀리서 볼 때도 이 노드의 작은 그림을 보여요">
           {pinned ? <PinOff size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
@@ -192,6 +200,10 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
           <Route size={12} aria-hidden="true" /> 원인 따라가기
         </button>
       )}
+      {origId && live && (() => {
+        const d = headlineDelta(origResult, live);
+        return d ? <div className="pg-node-delta" title="같은 이름·단위의 헤드라인끼리 뺀 값이에요">원본 대비 <b>{fmtDelta(d)}</b></div> : null;
+      })()}
       {glance && <div className="pg-node-glance"><Glance glance={glance} /></div>}
       {elapsed !== null && (
         <div className="pg-node-time" title="이 노드의 계산 시간(서버)">계산 {fmtElapsed(elapsed)}</div>

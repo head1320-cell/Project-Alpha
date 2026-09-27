@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { contrastAudit, type AuditResult } from "./helpers";
 import { fmtElapsed, fmtGlance } from "../src/entities/portfolio-graph/glance";
+import { fmtDelta } from "../src/entities/portfolio-graph/branch";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BM — 캔버스를 "포트폴리오 설계 작업실"로 (설계 docs/superpowers/specs/2026-09-27-canvas-workspace-design.md)
@@ -526,6 +527,141 @@ for (const scheme of ["light", "dark"] as const) {
     await zoomTo(page, "mid");
     await page.locator(".pg-filters-toggle").click();
     await page.locator(".pg-strat-add").click();
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-root"));
+    expect(audit.checked).toBeGreaterThan(60);
+    expect(audit.low, `${scheme} AA 미달`).toEqual([]);
+    if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// C3 · 갈래 만들기 + 차이만 보기 — 거는 것:
+//  · 갈래 = 뿌리 + 하류 복제 · 들어오는 선은 원본과 같이 · ★나가는 선은 잇지 않는다★ · 한 뿌리에 4개까지(5번째 거절 + 사유)
+//  · 바꾼 설정만 칩 · 비교 표는 ★값이 다른 행만★(서버 결과로 센 수와 같다) · 계산 못 한 칸 "—" · Δ 는 같은 이름·단위일 때만
+//  · 다중 비교 정직성 문장 · 추천·순위 없음 · 지우기 · 되돌리기 · 파일 왕복
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type BDoc = Doc & { branches?: { id: string; label: string; root: string; of_root: string; map: Record<string, string> }[] };
+async function makeBranch(page: Page, id: string, via: "toolbar" | "command" = "toolbar") {
+  if (via === "toolbar") {
+    await node(page, id).click();
+    await page.locator(".pg-branch-make").click();
+  } else {
+    // 키보드 길 — 이야기에서 고르고 명령 찾기(Ctrl+K)로. 갈래가 쌓여 원본이 화면 밖이어도 된다.
+    await page.locator('.pg-tab[data-tab="story"]').click();
+    await page.locator(`.pg-step[data-node-id="${id}"] .pg-step-num`).click();
+    await page.keyboard.press("Control+k");
+    await page.getByLabel("명령 찾기").last().fill("갈래 만들기");
+    await page.keyboard.press("Enter");
+  }
+  await expect(page.locator(".pg-note")).toBeVisible();
+}
+
+test("갈래(BM C3): 뿌리와 하류를 복제 · 들어오는 선은 원본과 같이 · 나가는 선은 잇지 않음 · 5번째 갈래는 사유와 함께 거절", async ({ page }) => {
+  await openCanvas(page);
+  await makeBranch(page, "optimizer");
+  let doc = (await wip(page)) as BDoc;
+  expect(doc.branches?.length).toBe(1);
+  const b = doc.branches![0];
+  expect(b.label).toBe("갈래 B");
+  expect(new Set(Object.values(b.map))).toEqual(new Set(["optimizer", "risk", "backtest"]));
+  const copies = new Set(Object.keys(b.map));
+  const into = (id: string) => doc.edges.filter((e) => e.target === id).map((e) => `${copies.has(e.source) ? b.map[e.source] : e.source}.${e.source_port}->${e.target_port}`).sort();
+  for (const [c, o] of Object.entries(b.map)) expect(into(c), c).toEqual(into(o));
+  expect(doc.edges.filter((e) => copies.has(e.source) && !copies.has(e.target)), "갈래 밖으로 나가는 선").toEqual([]);
+  await expect(page.locator(".pg-branch")).toHaveCount(1);
+  await expect(page.locator(".pg-branch .pg-branch-same")).toBeVisible();          // 아직 원본과 같다 — 만든 직후 화면은 읽을 수 있는 확대
+  const boxes: { y: number; h: number }[] = [];
+
+  for (const l of ["C", "D", "E"]) {
+    await makeBranch(page, "optimizer", "command");
+    doc = (await wip(page)) as BDoc;
+    expect(doc.branches!.map((x) => x.label)).toContain(`갈래 ${l}`);
+  }
+  // 갈래 틀끼리 겹치지 않는다.
+  for (const b of await page.locator(".pg-branch").all()) { const r = (await b.boundingBox())!; boxes.push({ y: r.y, h: r.height }); }
+  boxes.sort((a, z) => a.y - z.y);
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i].y, "갈래 틀 겹침").toBeGreaterThanOrEqual(boxes[i - 1].y + boxes[i - 1].h - 1);
+  await makeBranch(page, "optimizer", "command");
+  await expect(page.locator(".pg-note")).toContainText("4개까지");
+  expect(((await wip(page)) as BDoc).branches!.length).toBe(4);
+});
+
+test("차이만 보기(BM C3): 바꾼 설정 칩 · 표는 값이 다른 행만(서버 결과로 센 수) · Δ = 같은 이름·단위일 때만 · 정직성 문장 · 추천 없음", async ({ page }) => {
+  await openCanvas(page);
+  await makeBranch(page, "optimizer");
+  const doc = (await wip(page)) as BDoc;
+  const b = doc.branches![0];
+  const copyOf = (o: string) => Object.entries(b.map).find(([, x]) => x === o)![0];
+  const opt = doc.nodes.find((n) => n.id === copyOf("optimizer"))!;
+  opt.params = { ...opt.params, model: "min_var" };
+  await page.locator(".pg-import-input").setInputFiles({ name: "b.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, ...doc })) });
+  await expect(page.locator(".pg-branch-chip").first()).toContainText("→");
+  const body = await run(page);
+  const head = (id: string) => {
+    const r = body.nodes[id] as NodeRes & { explain?: { headline?: { value: number | null; unit: string; label: string } | null } };
+    if (r.status !== "ok") return r.status === "blocked" ? "막힘" : "실패";
+    const h = r.explain?.headline;
+    if (!h || h.value === null) return "—";
+    return `${Number.isInteger(h.value) ? h.value : h.value.toFixed(2)}${h.unit ?? ""}`;
+  };
+  const differing = Object.entries(b.map).filter(([c, o]) => head(c) !== head(o)).length;
+  expect(differing, "방식을 바꿨으니 적어도 한 결과는 달라야 한다(빈 표로 통과하지 않게)").toBeGreaterThan(0);
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  await expect(page.locator(".pg-branch-honest")).toContainText("우연히 좋아 보이는");
+  await expect(page.locator(".pg-branch-row--set")).toHaveCount(1);
+  await expect(page.locator(".pg-branch-row--out")).toHaveCount(differing);
+  const panel = (await page.locator(".pg-branch-compare").textContent()) ?? "";
+  expect(panel).not.toMatch(/추천|가장 좋은|최고|우월|더 나은/);
+  // Δ — 복제 카드의 칩은 원본과 같은 이름·단위의 헤드라인일 때만, 값은 서버 두 수의 차.
+  let checked = 0;
+  for (const [c, o] of Object.entries(b.map)) {
+    type H = { value: number | null; unit: string; label: string } | null | undefined;
+    const hc = (body.nodes[c] as { explain?: { headline?: H } }).explain?.headline;
+    const ho = (body.nodes[o] as { explain?: { headline?: H } }).explain?.headline;
+    const same = body.nodes[c].status === "ok" && body.nodes[o].status === "ok" && hc && ho && hc.value !== null && ho.value !== null
+      && hc.unit === ho.unit && hc.label === ho.label;
+    const chip = node(page, c).locator(".pg-node-delta b");
+    if (same) { checked += 1; await expect(chip, c).toHaveText(fmtDelta({ value: hc!.value! - ho!.value!, unit: ho!.unit === "%" ? "%p" : ho!.unit })); }
+    else await expect(chip, c).toHaveCount(0);
+  }
+  expect(checked, "Δ 칩을 적어도 하나는 확인한다").toBeGreaterThan(0);
+});
+
+test("갈래 지우기·되돌리기·파일 왕복(BM C3): 지우면 복제도 함께 · Ctrl+Z 로 돌아옴 · 내보내고 불러와도 갈래 그대로", async ({ page }) => {
+  await openCanvas(page);
+  const n0 = (await wip(page)).nodes.length;
+  await makeBranch(page, "optimizer");
+  await page.keyboard.press("Escape");
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Control+z");
+  expect((await wip(page)).nodes.length).toBe(n0);
+  expect(((await wip(page)) as BDoc).branches ?? []).toEqual([]);
+  await page.keyboard.press("Control+Shift+z");
+  expect(((await wip(page)) as BDoc).branches?.length).toBe(1);
+
+  const dl = page.waitForEvent("download");
+  await page.locator(".pg-export").click();
+  const file = JSON.parse(readFileSync((await (await dl).path())!, "utf-8"));
+  expect(file.branches.length).toBe(1);
+  await page.locator(".pg-import-input").setInputFiles({ name: "x.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(file)) });
+  await expect(page.locator(".pg-branch")).toHaveCount(1);
+
+  await page.locator(".pg-branch-x").click();
+  await expect(page.locator(".pg-branch")).toHaveCount(0);
+  expect((await wip(page)).nodes.length).toBe(n0);
+  await expect(page.locator('.pg-tab[data-tab="branches"]')).toHaveCount(0);
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BM C3): ${scheme} — 갈래 틀 · 비교 표 · 정직성 문장 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    await makeBranch(page, "optimizer");
+    await run(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.locator('.pg-tab[data-tab="branches"]').click();
+    await zoomTo(page, "mid");
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-root"));
     expect(audit.checked).toBeGreaterThan(60);
     expect(audit.low, `${scheme} AA 미달`).toEqual([]);

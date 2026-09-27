@@ -15,6 +15,7 @@ import {
   type CatalogPort,
   type GraphDoc,
   type GraphDocEdge,
+  type GraphBranch,
   type GraphDocNode,
   type GraphGroup,
   type NodeCatalogEntry,
@@ -132,12 +133,27 @@ export function parseFile(text: string): ParseResult {
                     } : {}) });
     }
   }
+  // 갈래(BM C3) — 없는 노드를 가리키는 짝은 빼고, 뿌리가 없으면 갈래를 뺀다(말하고). 옛 문서에는 없다.
+  const branches: GraphBranch[] = [];
+  if (Array.isArray(raw.branches)) {
+    for (const [i, b] of (raw.branches as unknown[]).entries()) {
+      if (!isObj(b) || typeof b.id !== "string" || typeof b.root !== "string" || typeof b.of_root !== "string" || !isObj(b.map)) {
+        problems.push(`갈래 #${i + 1} 에 id·root·of_root·map 이 없어 건너뛰었어요.`);
+        continue;
+      }
+      const map = Object.fromEntries(Object.entries(b.map as Record<string, unknown>)
+        .filter(([c, o]) => typeof o === "string" && seen.has(c) && seen.has(o)) as [string, string][]);
+      if (!(b.root in map) || !seen.has(b.of_root)) { problems.push(`갈래 "${String(b.label ?? b.id)}" 의 뿌리가 없어 건너뛰었어요.`); continue; }
+      branches.push({ id: b.id, label: typeof b.label === "string" ? b.label : b.id, root: b.root, of_root: b.of_root, map });
+    }
+  }
   const meta = isObj(raw.meta) ? {
     name: typeof raw.meta.name === "string" ? raw.meta.name : undefined,
     exported_at: typeof raw.meta.exported_at === "string" ? raw.meta.exported_at : undefined,
   } : undefined;
   return {
-    doc: { format: GRAPH_FORMAT, version: GRAPH_VERSION, meta, nodes, edges, ...(groups.length ? { groups } : {}) },
+    doc: { format: GRAPH_FORMAT, version: GRAPH_VERSION, meta, nodes, edges, ...(groups.length ? { groups } : {}),
+           ...(branches.length ? { branches } : {}) },
     problems,
   };
 }
@@ -185,12 +201,15 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
 }
 
 /** reactflow → 문서. 실행 결과는 넣지 않는다(파라미터·위치만). */
-export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], groups?: GraphGroup[]): GraphDoc {
+export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], groups?: GraphGroup[], branches?: GraphBranch[]): GraphDoc {
+  const ids = new Set(nodes.map((n) => n.id));
+  const live = pruneBranches(branches ?? [], ids);
   return {
     format: GRAPH_FORMAT,
     version: GRAPH_VERSION,
     ...(meta ? { meta } : {}),
     ...(groups?.length ? { groups: groups.map((g) => ({ ...g, members: [...g.members] })) } : {}),
+    ...(live.length ? { branches: live } : {}),
     nodes: nodes.map((n) => ({
       id: n.id,
       type: n.data.kind,
@@ -205,6 +224,12 @@ export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], g
       target_port: e.targetHandle ?? "",
     })),
   };
+}
+
+/** 지워진 노드를 가리키는 갈래 짝을 뺀다 — 뿌리가 사라진 갈래는 통째로 뺀다. */
+export function pruneBranches(branches: GraphBranch[], ids: Set<string>): GraphBranch[] {
+  return branches.map((b) => ({ ...b, map: Object.fromEntries(Object.entries(b.map).filter(([c, o]) => ids.has(c) && ids.has(o))) }))
+    .filter((b) => b.root in b.map);
 }
 
 /** 사람이 읽는 파일 이름 — `이름.portfolio-graph.json`. */

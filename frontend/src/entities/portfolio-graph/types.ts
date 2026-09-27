@@ -38,6 +38,19 @@ export interface GraphGroup {
   output?: string | null;
 }
 
+/** 갈래(BM C3) — 뿌리 노드와 그 하류를 복제한 "이 조건이면?" 한 벌. 계산에는 끼지 않는 화면 정보(복제 노드는 보통 노드다). */
+export interface GraphBranch {
+  id: string;
+  /** "갈래 B" … "갈래 E". */
+  label: string;
+  /** 복제한 뿌리(이 갈래 안의 id). */
+  root: string;
+  /** 원본 뿌리. */
+  of_root: string;
+  /** 복제 id → 원본 id. */
+  map: Record<string, string>;
+}
+
 export interface GraphDoc {
   format: typeof GRAPH_FORMAT;
   version: typeof GRAPH_VERSION;
@@ -45,6 +58,7 @@ export interface GraphDoc {
   nodes: GraphDocNode[];
   edges: GraphDocEdge[];
   groups?: GraphGroup[];
+  branches?: GraphBranch[];
 }
 
 // ── 카탈로그 (`GET /api/v1/allocation/graph/node-types`) ────────────────────

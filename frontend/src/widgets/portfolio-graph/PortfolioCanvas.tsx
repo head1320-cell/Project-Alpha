@@ -52,6 +52,7 @@ import { AlphaSheetBody } from "./AlphaSheet";
 import { CommandPalette, type PaletteCommand } from "./CommandPalette";
 import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
+import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { GraphNode, PORT_COLORS, PORT_PLAIN } from "./GraphNode";
 import { GroupFrame, Lane, PG_GROUP_TYPE, PG_LANE_TYPE, type GroupFrameData, type LaneData } from "./GroupFrame";
@@ -65,7 +66,7 @@ import { StoryPanel } from "./StoryPanel";
 import { RunHistory } from "./RunHistory";
 import { ancestorsOf, usePortfolioGraph, type FilterKey, type PgState } from "./store";
 
-const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_LANE_TYPE]: Lane };
+const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_LANE_TYPE]: Lane, [PG_BRANCH_TYPE]: BranchFrame };
 const EDGE_TYPES = { [PG_WIRE_TYPE]: EvidenceEdge };
 /** 확대 3단계(BM C1 · 의미 확대) — 멀리: 이름과 숫자 하나 · 보통: 카드 · 가까이: 작은 그림·계산 시간까지. */
 export const ZOOM_FAR = 0.55;
@@ -129,7 +130,7 @@ function readWip(): string | null {
   catch { return null; }
 }
 
-const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"]] as const;
+const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"], ["branches", "갈래"]] as const;
 
 
 type DrawerKey = "execution" | "records" | "alphas";
@@ -188,8 +189,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만(넘겨받은 흐름은 열 때 한 번 싣는다)
   }, []);
 
-  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups),
-    [s.nodes, s.edges, s.name, s.groups]);
+  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches),
+    [s.nodes, s.edges, s.name, s.groups, s.branches]);
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
@@ -274,8 +275,22 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         draggable: false, focusable: false,
         data: { label: "포트폴리오", width: LANE.slot * 2, height: s.lanes.height + LANE.top + 40, portfolio: true } },
     ] : [];
-    return [...lanes, ...frames, ...cards];
-  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.lanes]);
+    // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.
+    const branchFrames: Node<BranchFrameData>[] = s.branches.flatMap((b) => {
+      const ms = s.nodes.filter((n) => n.id in b.map);
+      if (!ms.length) return [];
+      const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
+      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 56;
+      const x1 = Math.max(...ms.map((n) => n.position.x)) + NODE_W + GROUP_PAD;
+      const y1 = Math.max(...ms.map((n) => n.position.y)) + NODE_H + GROUP_PAD;
+      const root = s.nodes.find((n) => n.id === b.of_root);
+      return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
+                className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined,
+                data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []),
+                        rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
+    });
+    return [...lanes, ...frames, ...branchFrames, ...cards];
+  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.lanes, s.branches, s.catalog]);
   /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
   const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
   const edgesStyled = useMemo(() => s.edges.map((e) => {
@@ -330,13 +345,23 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 들어가고 나올 때만
   }, [s.focusGroup]);
   const focused = s.groups.find((g) => g.id === s.focusGroup);
+  // 갈래를 막 만들었으면 원본 뿌리와 새 갈래가 함께 보이게 옮긴다(복제는 원본 아래에 놓인다).
+  const nBranches = useRef(s.branches.length);
+  useEffect(() => {
+    const grew = s.branches.length > nBranches.current;
+    nBranches.current = s.branches.length;
+    const b = s.branches[s.branches.length - 1];
+    if (!grew || !b || !rf.current) return;
+    const ids = [...Object.keys(b.map), ...Object.values(b.map)].map((id) => ({ id }));
+    setTimeout(() => rf.current?.fitView({ nodes: ids, padding: 0.2, minZoom: 0.6, maxZoom: 1, duration: 250 }), 30);
+  }, [s.branches]);
 
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
     const rest: NodeChange[] = [];
     for (const c of changes) {
-      if ("id" in c && c.id.startsWith("lane:")) continue;
+      if ("id" in c && (c.id.startsWith("lane:") || c.id.startsWith("branch:"))) continue;
       if ("id" in c && c.id.startsWith("frame:")) {
         if (c.type === "position" && c.position) {
           const frame = numbered.find((n) => n.id === c.id);
@@ -494,6 +519,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       run: () => usePortfolioGraph.getState().setMinimap(!usePortfolioGraph.getState().showMinimap) },
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
       run: () => usePortfolioGraph.getState().groupPicked() },
+    ...(s.selectedId ? [{ id: "branch", group: "비교", label: "고른 노드에서 갈래 만들기",
+                          hint: "그 노드와 하류를 복제해 설정만 바꿔 나란히 봐요(한 노드에 4개까지)",
+                          run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.setNote(st.makeBranch(st.selectedId)); } }] : []),
     { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 해요",
       run: () => { const st = usePortfolioGraph.getState(); st.setNote(st.strategyPicked()); } },
     ...strategySources.map((x) => ({ id: `strategy:${x.key}`, group: "전략", label: `전략 추가: ${x.label}`, hint: x.sub,
@@ -579,7 +607,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </nav>
         {topExtra}
         <ImportControl onLoad={applyLoad} />
-        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups)}
+        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches)}
                       disabled={s.nodes.length === 0} />
         <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
                 disabled={s.running || !s.catalog || s.nodes.length === 0}>
@@ -733,7 +761,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </div>
         <aside className="pg-side" aria-label="설명과 설정">
           <nav className="pg-tabs" role="tablist">
-            {TABS.map(([k, label]) => (
+            {TABS.filter(([k]) => k !== "branches" || s.branches.length > 0).map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={s.tab === k}
                       className={`pg-tab${s.tab === k ? " on" : ""}`} data-tab={k} onClick={() => s.setTab(k)}>{label}</button>
             ))}
@@ -744,7 +772,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                           stale={s.reportStale} selectedId={s.selectedId} onSelect={focusNode}
                           onDetail={(id) => { focusNode(id); s.setTab("detail"); }} />
             )}
-            {s.tab !== "story" && !selected && (
+            {s.tab === "branches" && (
+              <BranchCompare branches={s.branches} nodes={s.nodes} catalog={s.catalog ?? []}
+                             results={s.report?.nodes ?? null} stale={s.reportStale} />
+            )}
+            {s.tab !== "story" && s.tab !== "branches" && !selected && (
               <p className="pg-empty">캔버스나 이야기에서 노드를 하나 골라 주세요.</p>
             )}
             {s.tab === "settings" && selected && (
