@@ -56,22 +56,22 @@ function OptionPricingTab() {
   const [rate, setRate]     = useState(0.035);
   const [ttm, setTtm]       = useState(0.25);
   const [opt, setOpt]       = useState<"call" | "put">("call");
-  const [result, setResult] = useState<Record<string, number> | null>(null);
+  const [result, setResult] = useState<Record<string, number | boolean | null> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState("");
 
   async function run() {
-    // 서버 엔진은 S·T·σ ≤ 0 이면 모든 값을 0 으로 돌려준다(침묵 폴백) — 보내기 전에 막는다.
-    if (!(spot > 0 && strike > 0 && vol > 0 && ttm > 0)) {
+    // 서버도 422 로 거절한다(BL3 M2) — 요청 전에 같은 규칙으로 막아 왕복을 아낀다. 만기 0 은 내재가치로 계산된다.
+    if (!(spot > 0 && strike > 0 && vol > 0 && ttm >= 0)) {
       setResult(null);
-      setError("가격·행사가·변동성·만기는 0보다 커야 계산할 수 있어요.");
+      setError("가격·행사가·변동성은 0보다 커야 하고, 만기는 0 이상이어야 계산할 수 있어요.");
       return;
     }
     setLoading(true); setError("");
     try {
       const r = await api.optionPrice({
         S: spot, K: strike, sigma: vol, r: rate, T: ttm, option_type: opt,
-      }) as Record<string, number>;
+      }) as Record<string, number | boolean | null>;
       setResult(r);
     } catch (e) { setError((e as Error).message); }
     setLoading(false);
@@ -105,12 +105,19 @@ function OptionPricingTab() {
 
       {error && <ErrorMsg msg={error} />}
 
+      {result && result.at_expiry && (
+        <p data-testid="option-expiry" style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+          만기예요 — 시간 가치는 없고 내재가치만 남아요. 등가격이면 델타는 정의되지 않아요.
+        </p>
+      )}
       {result && (
         <div className="grid grid-cols-4 gap-3 animate-slide-up" data-testid="option-greeks">
           {GREEKS.map(([k, label]) => (
-            typeof result[k] === "number" && (
-              <StatCard key={k} label={label} value={result[k].toFixed(4)} trend="neutral" />
-            )
+            typeof result[k] === "number" ? (
+              <StatCard key={k} label={label} value={(result[k] as number).toFixed(4)} trend="neutral" />
+            ) : result[k] === null ? (
+              <StatCard key={k} label={label} value="정의 안 됨" trend="neutral" />
+            ) : null
           ))}
         </div>
       )}

@@ -19984,3 +19984,27 @@ E2E 2(리스크 일곱 + 실패 둘 · 손실 꼬리 칸 수 = 서버 히스토�
 
 **게이트 후속(BL3 W4)** — 넓은 E2E 319/319 · ruff 통과(커밋 전 E731 하나를 고쳐 커밋) · 전체 pytest 7554 passed / 10 skipped ·
 프런트 변이 5/5(손실 꼬리 방향 · 옵션 키 대소문자 · 0 이하 사전 차단 · 호출 주소 · β=0 '계산 안 함').
+
+### BL3 M · 모델 결함 8건 — 틀린 수를 지어내던 곳을 모델에서 고친다
+
+**무엇을** — W4 는 노드 앞에서만 막아서 `/calculate-*`·`/analyze-option`·`/rolling-sharpe`·`/realism/*` 라우트는 여전히 틀린 수를 냈다.
+이번에는 **모델에서** 고치고 노드의 임시 가드를 걷어 냈다(한 곳에서만 막는다). 배분 추가 웨이브 감사에서 같은 종류가 셋 더 나와 함께 고쳤다.
+- M1 `CVAEngine.bcva_spread` — `s×EPE×10⁴` 를 "bps" 라 불렀다(1e10 명목에 약 4e10 'bp'). → 연간 **금액**(`*_running_annual`, "원/년")과
+  명목 대비 bp(`*_running_bp_of_notional`)를 이름대로. 노드는 다시 싣는다(설명: "스프레드 × 평균 노출의 근사").
+- M2 `FICCEngine.bs_greeks` — S·K·σ ≤ 0·T<0 이면 모든 값 0(가격 0 원 옵션). → `ValueError`(사유), `/analyze-option` 은 422.
+  **T=0 은 내재가치**(예전 0 원 — 내가격 콜도 0 이었다) · 델타 계단 · 등가격 델타는 `None`(정의되지 않음). 캔버스 옵션 노드·`/derivatives` 화면도 T=0 허용.
+- M3 `rolling_sharpe` — 창보다 짧으면 `current: 0`, 변동성 0 창은 inf. → 값 `None` + `reason`, inf 제거.
+- M4 `FRTBExpectedShortfall.stressed_es` — 폴백일 때 표시는 'N/A' 문자열뿐. → `stress_window_found` + `reason`(값은 문서화된 폴백 그대로 — 자본 공식 불변).
+- M5 `HedgingSimulator.equity_futures_hedge` — 감소율이 목표 β 기준(반올림 0계약에도 100%) · β=0 이면 0. → `beta_after_rounding` 기준 ·
+  β=0 이면 `None` + 사유 · `reduction_basis` 문장(키 이름은 호환을 위해 그대로, 뜻은 'β 감소율').
+- M6 `pair_spread` — 수동 헤지비율에서 모르는 β 를 0 으로 넣어 순 β·'베타 중립' 을 말했다 · 수동인데 `basis: "beta"`. → `None` + 사유 · `manual`.
+- M7 `CashRateProvider` — 저장된 금리가 없거나 조회가 실패하면 조용히 3.5%. → `get_rate_with_source()` 가 `(값, 출처)` · `daily_yield`·`/cash-rate` 에
+  `rf_source`·`rf_is_assumed`. **`get_rate` 값·시그니처 불변**(백테스트 `realism_engine` 소비자).
+- M8 `LiquidityCapacityEstimator._fallback_capacity` — `capacity_krw: inf`("무제약 가정") — `/capacity/estimate` 응답이 엄격 JSON 이 아니었다.
+  → `None` + `reason`. 소비자는 이미 `available` 로 건너뛰므로 동작 불변(테스트로 확인).
+
+**검증** — `tests/test_model_honesty_fixes.py` 33(결함마다 빨강 → 초록 · 짝: 정상 입력 값 불변 — BS 10.4506 · 계약 수 · 단방향 CVA · 금리 값 ·
+용량 조정) · W4 노드 테스트 갱신(모델 필드를 읽는다) · 영향 스위트(`test_api`·`test_quant_models`·W4) 323 · 변이 16/16 · E2E 2(`/derivatives` T=0 내재가치
+10 · σ=0 은 요청 없이 막힘).
+
+**하지 않은 것** — `default_rf`(3.5%) 값 · 백테스트 엔진의 현금·용량 사용 방식 · CVA 노출 곡선(여전히 양식화 — 라벨) · IRC 전이행렬.

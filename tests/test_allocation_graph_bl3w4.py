@@ -321,7 +321,7 @@ def test_option_equals_black_scholes_and_the_hand_value():
     assert r["view"]["result"]["Price"] - put["Price"] == pytest.approx(100 - 100 * np.exp(-0.05), abs=1e-3)  # 풋-콜 패리티
 
 
-@pytest.mark.parametrize("bad", [{"T": 0}, {"sigma": 0}, {"S": 0}, {"K": -1}])
+@pytest.mark.parametrize("bad", [{"T": -0.1}, {"sigma": 0}, {"S": 0}, {"K": -1}])
 def test_option_refuses_zero_or_negative_inputs_instead_of_returning_zero_prices(bad):
     rep = _calc("option_calc", **bad)
     assert rep["ok"] is False and any(e["code"] == "bad_params" and e["node_id"] == "c" for e in rep["errors"])
@@ -389,7 +389,7 @@ def test_hedge_with_connected_returns_but_no_benchmark_fails(market):
     assert rk  # 모듈 로드 확인
 
 
-def test_cva_equals_the_engine_without_the_mislabelled_bcva_spread():
+def test_cva_equals_the_engine_including_the_running_cost_in_named_units():
     r = _calc("cva_calc", notional=5e9, maturity_years=3, cds_spread_bps=200)["nodes"]["c"]
     ref = CVAEngine(0.03, 0.40).full_cva_report(notional=5e9, maturity_years=3, cds_spread_bps=200, position_type="irs",
                                                 volatility=0.02, bank_cds_spread_bps=50, bank_recovery=0.40,
@@ -397,8 +397,8 @@ def test_cva_equals_the_engine_without_the_mislabelled_bcva_spread():
     got = r["view"]["result"]
     for k in ("unilateral_cva", "bilateral_cva", "stressed_cva", "pd_from_cds", "exposure_profile"):
         assert got[k] == ref[k]
-    assert "bcva_spread" not in got                                         # 단위가 맞지 않는 모델 출력은 싣지 않는다
-    assert any("스프레드" in t["text"] and t["state"] == "unknown" for t in r["explain"]["trust"])
+    assert got["bcva_spread"] == ref["bcva_spread"] and got["bcva_spread"]["unit_amount"] == "원/년"   # BL3 M1 뒤 — 이름대로의 단위
+    assert any("연간 순비용" in t["text"] for t in r["explain"]["trust"])
 
 
 def test_cva_bootstraps_a_term_structure_only_with_two_or_more_points():
@@ -431,10 +431,17 @@ def test_hedge_reports_the_beta_after_rounding_not_the_target():
     small = _calc("futures_hedge", portfolio_value=1e9, current_beta=0.041, target_beta=0.0)["nodes"]["c"]
     r = small["view"]["result"]
     assert r["contracts_to_trade"] == 0
-    assert r["beta_after_rounding"] == pytest.approx(0.041) and r["beta_reduction_after_rounding_pct"] == pytest.approx(0.0)
+    assert r["beta_after_rounding"] == pytest.approx(0.041) and r["expected_var_reduction_pct"] == pytest.approx(0.0)
     assert "0.04" in small["explain"]["title"] and "→ 0 " not in small["explain"]["title"]
     big = _calc("futures_hedge", portfolio_value=1e9, current_beta=1.2, target_beta=0.0, futures_price=350.0)["nodes"]["c"]
     b = big["view"]["result"]
     after = 1.2 + b["contracts_to_trade"] * 350.0 * 250000 / 1e9
     assert b["beta_after_rounding"] == pytest.approx(after)
-    assert b["beta_reduction_after_rounding_pct"] == pytest.approx(abs(1.2 - after) / 1.2 * 100)
+    assert b["expected_var_reduction_pct"] == pytest.approx(round(abs(1.2 - after) / 1.2 * 100, 1))
+
+
+def test_option_at_expiry_is_its_intrinsic_value():
+    """BL3 M2 — 만기 T=0 은 거절이 아니라 내재가치(예전 엔진은 0 원)."""
+    r = _calc("option_calc", S=120, K=100, T=0, option_type="call")["nodes"]["c"]
+    assert r["status"] == "ok" and r["view"]["result"]["Price"] == 20.0 and r["view"]["result"]["at_expiry"] is True
+    assert "내재가치" in r["explain"]["title"]

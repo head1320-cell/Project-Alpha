@@ -1498,7 +1498,7 @@ test("파생·신용 계산기(BL3 W4): 옵션·채권·헤지·CVA·IRC · 모�
   const body = await run(page);
   for (const [id] of add) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
   expect(body.nodes.op.view.result.Price).toBeCloseTo(10.4506, 4);
-  expect(body.nodes.cv.view.result.bcva_spread).toBeUndefined();          // 단위가 맞지 않는 모델 출력은 싣지 않는다
+  expect(body.nodes.cv.view.result.bcva_spread.unit_amount).toBe("원/년");  // BL3 M1 — 금액을 bp 라 부르지 않는다
   expect(body.nodes.hz.view.result.expected_var_reduction_pct).toBeNull(); // β=0 에서 '0% 감소' 라고 말하지 않는다
 
   const pick = async (id: string) => {
@@ -1536,12 +1536,18 @@ test("파생·신용 계산기(BL3 W4): 옵션·채권·헤지·CVA·IRC · 모�
   await page.getByRole("button", { name: "프라이싱 실행" }).click();
   await expect(page.getByTestId("option-greeks")).toContainText("10.4506");
   expect(calls).toBe(1);
-  // 짝: 만기 0 — 서버는 조용히 0 을 돌려주므로 화면이 보내기 전에 막는다.
-  await inputs.nth(4).fill("0");
+  // 만기 0 — 내재가치(BL3 M2: 예전엔 0 원). 행사가 90 이면 콜 내재가치 10.
+  await inputs.nth(1).fill("90"); await inputs.nth(4).fill("0");
+  await page.getByRole("button", { name: "프라이싱 실행" }).click();
+  await expect(page.getByTestId("option-expiry")).toBeVisible();
+  await expect(page.getByTestId("option-greeks")).toContainText("10.0000");
+  expect(calls).toBe(2);
+  // 짝: 변동성 0 — 서버도 422 로 거절하지만 화면이 보내기 전에 막는다(요청 없음).
+  await inputs.nth(2).fill("0");
   await page.getByRole("button", { name: "프라이싱 실행" }).click();
   await expect(page.getByText("0보다 커야")).toBeVisible();
   await expect(page.getByTestId("option-greeks")).toHaveCount(0);
-  expect(calls).toBe(1);
+  expect(calls).toBe(2);
 
   expect(uniq(sink.api404), "404").toEqual([]);
   expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);

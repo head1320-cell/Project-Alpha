@@ -155,19 +155,31 @@ def pair_spread(long_code: str, short_code: str, betas: dict[str, float],
                 hedge_ratio: float | None = None) -> dict[str, Any]:
     """동일 업종 페어 — 베타중립 헤지비율(β_long/β_short)로 롱1·숏h."""
     bl, bs = betas.get(long_code), betas.get(short_code)
+    manual = hedge_ratio is not None
     if hedge_ratio is None:
         if not bl or not bs or bs == 0:
             return {"error": True, "message": "베타 미보유 — 헤지비율 산출 불가(직접 지정 필요)."}
         hedge_ratio = bl / bs
-    net_beta = (bl or 0) - hedge_ratio * (bs or 0)
+    # ★모르는 β 를 0 으로 넣지 않는다★ (BL3 M6) — 예전에는 `(bl or 0) − h·(bs or 0)` 으로 계산해 모르는 쪽을 0 으로 두고
+    # '베타 중립' 이라고까지 말했다.
+    missing = [c for c, b in ((long_code, bl), (short_code, bs)) if b is None]
+    if missing:
+        net_beta, neutral = None, None
+        beta_reason = f"{', '.join(missing)} 의 β 를 몰라 순 β 를 계산하지 않았어요."
+    else:
+        net_beta = round(float(bl - hedge_ratio * bs), 6)
+        neutral = abs(net_beta) < 1e-4
+        beta_reason = None
     return {
         "error": False,
         "long": long_code, "short": short_code,
         "hedge_ratio": round(float(hedge_ratio), 4),
         "weights": {long_code: 100.0, short_code: round(-float(hedge_ratio) * 100, 2)},
-        "net_beta": round(float(net_beta), 6),
-        "beta_neutral": abs(net_beta) < 1e-4,
-        "basis": "beta" if betas.get(long_code) is not None else "manual",
+        "net_beta": net_beta,
+        "beta_neutral": neutral,
+        "beta_reason": beta_reason,
+        "betas": {long_code: bl, short_code: bs},
+        "basis": "manual" if manual else "beta",
         "note": "베타중립 헤지비율 = β_long/β_short. 코인티그레이션·상대강도 기반은 별도 지정. "
                 "페어 붕괴·유동성·차입 불가 시 청산 룰은 실행계획에서 관리.",
     }

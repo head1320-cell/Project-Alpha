@@ -346,7 +346,7 @@ export function FuturesHedgeResult({ v }: { v: Dict }) {
         ["계약 1개의 크기", krw(r.contract_value)],
         ["헤지 명목", krw(r.hedge_notional)],
         ["반올림 전 계약 수", fx(r.raw_contracts)],
-        ["β 감소율 (반올림 뒤, 시장 위험만)", r.beta_reduction_after_rounding_pct == null ? "계산 안 함" : `${fx(r.beta_reduction_after_rounding_pct, 1)}%`],
+        ["β 감소율 (반올림 뒤, 시장 위험만)", r.expected_var_reduction_pct == null ? "계산 안 함" : `${fx(r.expected_var_reduction_pct, 1)}%`],
       ]} />
       {r.reduction_reason ? <p className="pg-note">{String(r.reduction_reason)}</p>
         : <p className="pg-note">종목 고유의 위험은 선물로 줄지 않아요.</p>}
@@ -372,6 +372,7 @@ export function CvaCalcResult({ v }: { v: Dict }) {
       <KV rows={[
         ["우리 쪽 부도 위험(DVA)", krw(b.dva_amount)],
         ["순값(BCVA)", krw(b.bcva_amount)],
+        ["해마다 드는 순비용 근사", krw((r.bcva_spread as Dict)?.bcva_running_annual)],
         ["스프레드 충격 뒤 CVA", `${krw(st.stressed_cva)} (+${fx(st.stress_loss_pct, 1)}%)`],
         ["상대방 5년 부도 확률", pc(pd["5y_pd"], 2)],
         ["연 스프레드 환산", `${fx(u.cva_spread_bps, 1)}bp`],

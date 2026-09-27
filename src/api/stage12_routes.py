@@ -215,12 +215,15 @@ def realism_cash_rate(
         from src.engine.cash_management import CashRateProvider
         provider = CashRateProvider(get_sync_engine())
         ts = pd.to_datetime(as_of_date) if as_of_date else pd.Timestamp.now()
-        rate = provider.get_rate(ts)
+        rate, source = provider.get_rate_with_source(ts)
         return {
             "as_of_date":      str(ts.date()) if hasattr(ts, "date") else str(ts),
             "rf_annual":       round(rate, 5),
             "rf_annual_pct":   round(rate * 100, 3),
             "rf_daily":        round(rate / 252, 8),
+            # ★관측인지 기본값인지★ (BL3 M7)
+            "rf_source":       source,
+            "rf_is_assumed":   source in ("default", "error"),
         }
     except Exception as e:
         raise HTTPException(500, str(e))

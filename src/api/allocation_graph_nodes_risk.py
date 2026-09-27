@@ -359,8 +359,8 @@ def _frtb_es(inputs: dict, p: FrtbParams) -> pg.NodeOutput:
     s = _series(inputs, p.series)
     _need(s, _MIN_OBS, "FRTB ES")
     res = FRTBExpectedShortfall().single_ticker_report(s["lr"], p.portfolio_value, p.risk_factor_type)
-    start = str((res.get("stressed_es") or {}).get("stress_window_start") or "")
-    res["stress_window_found"] = not start.startswith("N/A")
+    # 스트레스 구간을 찾았는지는 모델이 말한다(BL3 M4) — 노드는 그 플래그를 윗단으로 올려 화면·설명이 쓰게 한다.
+    res["stress_window_found"] = bool((res.get("stressed_es") or {}).get("stress_window_found"))
     return _out(s, res, [_value_input(p.portfolio_value),
                          {"key": "lh", "label": "유동성 기간", "value": LIQUIDITY_HORIZON_MAP[p.risk_factor_type],
                           "unit": "일", "basis": "가정", "source": f"규제 표의 '{p.risk_factor_type}' 칸"},
@@ -478,7 +478,7 @@ class OptionParams(BaseModel):
     model_config = _FORBID
     S: float = Field(100.0, gt=0, json_schema_extra={"x-ui": _ui("기초자산 가격", question="지금 기초자산은 얼마인가요?")})
     K: float = Field(100.0, gt=0, json_schema_extra={"x-ui": _ui("행사가", question="얼마에 사고팔 권리인가요?")})
-    T: float = Field(0.25, gt=0, le=30, json_schema_extra={"x-ui": _ui(
+    T: float = Field(0.25, ge=0, le=30, json_schema_extra={"x-ui": _ui(
         "만기", unit="년", presets=[{"label": "3개월", "value": 0.25}, {"label": "1년", "value": 1.0}])})
     r: float = Field(0.035, ge=-0.05, le=0.3, json_schema_extra={"x-ui": _ui("무위험수익률", help="연율, 연속복리.")})
     sigma: float = Field(0.25, gt=0, le=5, json_schema_extra={"x-ui": _ui(
@@ -499,6 +499,11 @@ def _option(inputs: dict, p: OptionParams) -> pg.NodeOutput:
 def _explain_option(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     kind = "콜" if str(r.get("Type")).upper() == "CALL" else "풋"
+    if r.get("at_expiry"):
+        return {"title": f"만기인 {kind} 옵션 — 내재가치 {r.get('Price')}만 남아요",
+                "facts": ["시간 가치가 없어 감마·베가·세타·로는 0 이에요",
+                          "델타는 내가격이면 ±1, 외가격이면 0, 등가격이면 정의되지 않아요"],
+                "trust": [_t(ASSUMED, _CALC_TRUST)], "unmeasured": ["만기 당일의 결제 방식(현금/실물)"]}
     return {"title": f"이 {kind} 옵션의 이론가는 {r.get('Price')}예요",
             "facts": [f"델타 {r.get('Delta')} — 기초자산이 1 오르면 옵션값이 이만큼 움직여요",
                       f"베가 {r.get('Vega')} (변동성 1%p 당) · 세타 {r.get('Theta')} (하루 당) · 로 {r.get('Rho')} (금리 1%p 당)"],
@@ -580,17 +585,8 @@ def _hedge(inputs: dict, p: HedgeParams) -> pg.NodeOutput:
     else:
         beta = float(p.current_beta)
         beta_in = _assumed("beta", "지금 β", f"{beta:.3f}")
-    sim = HedgingSimulator(p.futures_price, p.multiplier)
-    res = sim.equity_futures_hedge(p.portfolio_value, beta, p.target_beta)
-    # ★계약은 정수다★ 모델의 감소율은 목표 β 기준이라, 반올림해 0계약이어도 '100% 감소' 라고 말한다 — 반올림 뒤 실제 β 를 따로 싣는다.
-    after = beta + res["contracts_to_trade"] * sim.contract_value / p.portfolio_value
-    res["beta_after_rounding"] = after
-    res["beta_reduction_after_rounding_pct"] = abs(beta - after) / abs(beta) * 100 if beta != 0 else None
-    if beta == 0:
-        res["expected_var_reduction_pct"] = None
-        res["reduction_reason"] = "지금 β 가 0 이라 줄일 시장 위험이 없어요 — 감소율을 계산하지 않아요."
-    else:
-        res["reduction_reason"] = None
+    # 반올림 뒤 β·감소율·β=0 사유는 모델이 낸다(BL3 M5) — 노드는 그대로 싣는다.
+    res = HedgingSimulator(p.futures_price, p.multiplier).equity_futures_hedge(p.portfolio_value, beta, p.target_beta)
     return _calc_out(res, [beta_in, _assumed("target", "목표 β", f"{p.target_beta:.3f}"),
                            _assumed("value", "헤지할 금액", p.portfolio_value, "원"),
                            _assumed("F", "선물 가격", p.futures_price, source="예시·직접 입력 — 오늘 가격이 아니에요"),
@@ -654,7 +650,6 @@ def _cva(inputs: dict, p: CvaParams) -> pg.NodeOutput:
         position_type=p.position_type, volatility=p.volatility, bank_cds_spread_bps=p.bank_cds_spread_bps,
         bank_recovery=p.bank_recovery, spread_shock_bps=p.spread_shock_bps,
         cds_term_structure=ts if len(ts) >= 2 else None)       # 라우트와 같은 규칙: 두 점 이상이어야 기간구조
-    res.pop("bcva_spread", None)
     return _calc_out(res, [_assumed("notional", "명목 금액", p.notional, "원"), _assumed("maturity", "만기", p.maturity_years, "년"),
                            _assumed("cds", "상대방 CDS 스프레드", p.cds_spread_bps, "bp", "직접 넣은 값 — 시장 호가를 읽지 않았어요"),
                            _assumed("rr", "회수율", p.recovery_rate),
@@ -669,10 +664,11 @@ def _explain_cva(view: dict, prov: dict, params: Any) -> dict:
     title = f"상대방 부도 위험의 값(CVA)은 {_eok(u.get('cva_amount'))}이에요"
     facts = [f"우리 쪽 부도 위험(DVA)까지 넣은 순값(BCVA) {_eok(b.get('bcva_amount'))}",
              f"상대방 스프레드가 넓어지면 CVA {_eok(st.get('stressed_cva'))} (+{st.get('stress_loss_pct')}%)",
-             f"연 스프레드로 환산 {u.get('cva_spread_bps')}bp"]
+             f"연 스프레드로 환산 {u.get('cva_spread_bps')}bp",
+             f"해마다 드는 순비용 근사(BCVA) {_eok((r.get('bcva_spread') or {}).get('bcva_running_annual'))}"]
     trust = [_t(ASSUMED, _CALC_TRUST),
              _t(ASSUMED, "노출 곡선은 거래 종류별로 정해진 모양(양식화)이에요 — 금리·환율 경로를 시뮬레이션한 값이 아니에요."),
-             _t(UNKNOWN, "모델의 BCVA 연 스프레드는 단위가 맞지 않아(금액을 bp 로 표기) 싣지 않았어요.")]
+             _t(ASSUMED, "연간 순비용은 스프레드 × 평균 노출의 근사예요 — 기간별 할인·생존확률을 넣은 CVA 와 다른 값이에요.")]
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["담보·네팅 계약의 효과", "노출과 부도의 상관(Wrong-Way)"]}
 
 
