@@ -15,6 +15,7 @@ import {
   type SaveResult,
 } from "@/entities/portfolio-graph";
 import { ListField, NodeInspector } from "./NodeInspector";
+import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
@@ -185,6 +186,16 @@ function BasicField({ f, value, root, onChange }: {
         <input className="pg-slider" type="range" min={f.min} max={f.max} step={f.kind === "integer" ? 1 : (f.max - f.min) / 100}
                value={v} aria-label={f.ui.label} onChange={(e) => onChange(Number(e.target.value))} />
         <div className="pg-slider-ends"><span>{f.ui.ends?.[0] ?? f.min}</span><span className="pg-slider-v">{v.toFixed(1)}</span><span>{f.ui.ends?.[1] ?? f.max}</span></div>
+        {help}
+      </div>
+    );
+  }
+  if (f.ui.widget === "tickers") {
+    // 종목 이름 찾기(BN N2) — 코드 목록은 그대로, 이름은 서버 종목 검색에서만.
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <TickerField value={eff} onChange={onChange} />
         {help}
       </div>
     );

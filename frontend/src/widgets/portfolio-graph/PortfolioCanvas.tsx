@@ -113,6 +113,14 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null) {
 const NODE_W = 176;
 const NODE_H = 150;
 const WIP_KEY = "alpha_pg_wip";
+/** 첫 방문 환영 줄(BN N2)을 본 적 있나 — 이 브라우저 localStorage. 못 읽거나 못 쓰면 "본 적 없음"(올 때마다 뜨되 닫을 수 있다). */
+const WELCOME_KEY = "alpha_pg_welcomed";
+function welcomeSeen(): boolean {
+  try { return localStorage.getItem(WELCOME_KEY) === "1"; } catch { return false; }
+}
+function markWelcomed() {
+  try { localStorage.setItem(WELCOME_KEY, "1"); } catch { /* 적을 수 없으면 이번만 닫는다 */ }
+}
 
 export interface PortfolioCanvasProps {
   /** 상단 바 오른쪽 — 케이스 상자 등. app 계층이 채운다. */
@@ -177,6 +185,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const [dragOver, setDragOver] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
+  const [welcome, setWelcome] = useState(false);
+  useEffect(() => { setWelcome(!welcomeSeen()); }, []);
+  const closeWelcome = () => { markWelcomed(); setWelcome(false); };
   // 서랍(BL2) — 계산하지 않는 기록 화면. 노드가 아니라 캔버스 옆에서 연다.
   const [drawer, setDrawer] = useState<DrawerKey | null>(null);
   // 노드 카드의 "여기까지 계산" 버튼이 부를 함수 — 아래에서 정의되고, 카드는 이 참조로 부른다.
@@ -215,8 +226,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만(넘겨받은 흐름은 열 때 한 번 싣는다)
   }, []);
 
-  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches),
-    [s.nodes, s.edges, s.name, s.groups, s.branches]);
+  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches, s.pinned),
+    [s.nodes, s.edges, s.name, s.groups, s.branches, s.pinned]);
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
@@ -676,7 +687,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </nav>
         {topExtra}
         <ImportControl onLoad={applyLoad} />
-        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches)}
+        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned)}
                       disabled={s.nodes.length === 0} />
         <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
                 disabled={s.running || !s.catalog || s.nodes.length === 0}>
@@ -839,10 +850,20 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
               </button>
             </div>
           )}
-          <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
+          {welcome && !dragOver ? (
+            <div className="pg-welcome" role="region" aria-label="처음 오셨을 때">
+              <p>처음이세요? 하려는 일을 고르면 흐름을 만들어 드려요.</p>
+              <button type="button" className="pg-welcome-go" onClick={() => { closeWelcome(); setGoalOpen(true); }}>
+                <Sparkles size={14} aria-hidden="true" /> 목표로 시작
+              </button>
+              <button type="button" className="pg-welcome-x" aria-label="환영 안내 닫기" onClick={closeWelcome}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
+          ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
-            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. Shift 를 누른 채 끌면 여러 개를 골라요."}</div>
+            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. Shift 를 누른 채 끌면 여러 개를 골라요."}</div>}
         </div>
         <aside className="pg-side" aria-label="설명과 설정">
           <nav className="pg-tabs" role="tablist">

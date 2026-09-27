@@ -11,3 +11,4 @@ export * from "./glance";
 export * from "./strategy";
 export * from "./branch";
 export * from "./goals";
+export * from "./stocks";

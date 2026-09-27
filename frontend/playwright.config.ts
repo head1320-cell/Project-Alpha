@@ -25,6 +25,8 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: CHROMIUM ? { executablePath: CHROMIUM } : {},
+    // 기본은 "캔버스 환영 줄을 이미 본 사람"(BN N2) — 첫 방문 화면은 그 테스트 묶음에서만 storageState 를 비워 확인한다.
+    storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "alpha_pg_welcomed", value: "1" }] }] },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [

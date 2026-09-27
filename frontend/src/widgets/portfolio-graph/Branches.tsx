@@ -2,14 +2,14 @@
 /**
  * 갈래 틀 · 갈래 비교 (BM C3 · "이 조건이면?" — 사람이 정한 갈래 ≤ 4)
  * ==========================================================================
- * 틀: 복제 노드를 감싼 점선 상자 — 이름("갈래 B") · **바꾼 설정만**(칩) · 지우기.
+ * 틀: 복제 노드를 감싼 점선 상자 — 이름("갈래 B") · **바꾼 설정만**(칩) · 이 갈래를 원본으로(BN N2 승격) · 지우기.
  * 비교: 원본과 갈래들을 열로, ★값이 다른 행만★ — 바꾼 설정 행 + 결과(헤드라인) 행. 계산하지 못한 칸은 "—"(0 이 아니다).
  * ★다중 비교 정직성★ — 표 위에 늘 한 줄: 같은 과거로 여러 갈래를 고르면 우연히 좋아 보이는 쪽을 고를 위험이 커진다.
  * 가장 좋은 갈래를 고르거나 추천하지 않는다(정렬도 하지 않는다 — 갈래 순서 그대로).
  */
 import { memo } from "react";
 import type { NodeProps } from "reactflow";
-import { Trash2 } from "lucide-react";
+import { ArrowUpToLine, Trash2 } from "lucide-react";
 import {
   fieldsOf,
   paramDiff,
@@ -51,6 +51,11 @@ function BranchFrameImpl({ data }: NodeProps<BranchFrameData>) {
       <div className="pg-branch-head">
         <b className="pg-branch-name">{data.label}</b>
         <span className="pg-branch-of">‘{data.rootName}’에서 갈라짐</span>
+        <button type="button" className="pg-branch-promote nodrag" disabled={data.diffs.length === 0}
+                title="이 갈래의 바꾼 설정을 원본에 옮기고 갈래를 지워요 (되돌리기 가능)"
+                onClick={() => { const st = usePortfolioGraph.getState(); st.setNote(st.promoteBranch(data.branchId)); }}>
+          <ArrowUpToLine size={13} aria-hidden="true" /> 이 갈래를 원본으로
+        </button>
         <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 지우기`}
                 title="갈래와 복제한 노드를 지워요" onClick={() => remove(data.branchId)}>
           <Trash2 size={14} aria-hidden="true" />

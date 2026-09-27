@@ -197,7 +197,12 @@ test("막힘은 끊긴 회색 선 · 선 위 한 줄은 서버 briefs 그대로 
   expect(body.nodes.returns.status).toBe("failed");
   await zoomTo(page, "mid");
   await expect(page.locator(".react-flow__edge[data-testid^='rf__edge-returns']").first()).toHaveClass(/pg-wire--blocked/);
-  await expect(page.locator(".pg-wire-brief")).toHaveText(["가짜 한 줄"]);
+  // 선 라벨 = 이음선마다 원천 노드의 서버 briefs[출력 포트] 그대로(완료한 원천만) — 바꿔 보낸 한 줄도, BN N2 에서 더한 요약(생각 n개 등)도.
+  const edges = (await page.evaluate(() => JSON.parse(sessionStorage.getItem("alpha_pg_wip") ?? "{}"))).edges as { source: string; source_port: string }[];
+  const want = edges.map((e) => (body.nodes[e.source]?.status === "ok" ? body.nodes[e.source]?.briefs?.[e.source_port] : undefined))
+    .filter((x): x is string => !!x).sort();
+  expect(want).toContain("가짜 한 줄");
+  await expect.poll(async () => (await page.locator(".pg-wire-brief").allTextContents()).sort()).toEqual(want);
   // 실패한 노드는 briefs 가 비어 있다 — 나가는 선에 라벨이 없다.
   expect(body.nodes.returns.briefs).toEqual({});
 });
@@ -1031,5 +1036,192 @@ for (const scheme of ["light", "dark"] as const) {
     expect(audit.checked).toBeGreaterThan(30);
     expect(audit.low, `${scheme} AA 미달`).toEqual([]);
     if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BN N2 · BM 이 하지 않고 남긴 것 — 거는 것:
+//  · 그림 고정이 파일에 남는다(pinned 왕복) · 없는 노드를 가리키는 고정은 불러올 때 뺀다(짝)
+//  · 갈래 승격 — 복제의 설정이 원본으로 가고 갈래·복제는 사라짐 · 결과는 낡음 · 되돌리기 한 번으로 돌아옴
+//  · 첫 방문 환영 줄 — 한 번 · 닫으면 다시 안 뜸 · [목표로 시작] · 저장소가 막히면 늘 뜨되 닫힘(짝)
+//  · 종목 이름 — 칩 "이름 · 코드"(서버 이름) · 모르는 코드는 "이름 모름"(짝) · 이름으로 찾으면 후보 = 서버 검색 · 골라 넣기 ·
+//    검색이 실패하면 빈 목록이 아니라 실패라고 말함
+//  · 위험 회피 δ — 초심자 질문에서 빠짐(전문가에서만) · 도움말이 어디서만 쓰이는지 말함
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("그림 고정이 파일에 남는다(BN N2): 내보내기 → 불러오기 왕복 · 없는 노드를 가리키는 고정은 뺀다(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "optimizer").click();
+  await page.locator(".pg-pin").click();
+  await expect(node(page, "optimizer")).toHaveClass(/pg-node--pinned/);
+  const dl = page.waitForEvent("download");
+  await page.locator(".pg-export").click();
+  const doc = JSON.parse(readFileSync((await (await dl).path())!, "utf-8"));
+  expect(doc.pinned).toEqual(["optimizer"]);
+  await page.locator('.pg-template[data-template="core"]').click();
+  await expect(node(page, "optimizer")).not.toHaveClass(/pg-node--pinned/);
+  const withGhost = { ...doc, pinned: ["optimizer", "no_such_node"] };
+  await page.locator(".pg-import-input").setInputFiles({ name: "p.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(withGhost)) });
+  await expect(node(page, "optimizer")).toHaveClass(/pg-node--pinned/);
+  expect((await wip(page) as Doc & { pinned?: string[] }).pinned).toEqual(["optimizer"]);
+});
+
+test("갈래 승격(BN N2): '이 갈래를 원본으로' — 바꾼 설정이 원본으로 · 갈래·복제는 사라짐 · 결과 낡음 · 되돌리기 한 번", async ({ page }) => {
+  await openCanvas(page);
+  await run(page);
+  await makeBranch(page, "optimizer");
+  let doc = (await wip(page)) as BDoc;
+  const br = doc.branches![0];
+  const copy = Object.entries(br.map).find(([, o]) => o === "optimizer")![0];
+  await node(page, copy).click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await page.locator('.pg-basic-field[data-field="constraints"] .pg-chip', { hasText: "20%" }).click();
+  const n0 = doc.nodes.length;
+  const before = JSON.stringify(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints ?? null);
+  await page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-promote`).click();
+  await expect(page.locator(".pg-note")).toContainText("원본으로 옮겼어요");
+  doc = (await wip(page)) as BDoc;
+  expect(doc.branches ?? []).toEqual([]);
+  expect(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints).toEqual({ max_weight_pct: 20 });
+  expect(doc.nodes.some((n) => n.id === copy)).toBe(false);
+  expect(doc.nodes.length).toBe(n0 - Object.keys(br.map).length);
+  await expect(page.locator(".pg-summary--stale")).toBeVisible();
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Control+z");
+  doc = (await wip(page)) as BDoc;
+  expect(doc.branches).toHaveLength(1);
+  expect(JSON.stringify(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints ?? null)).toBe(before);
+});
+
+test.describe("첫 방문(BN N2)", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });                 // 이 묶음만 처음 온 사람
+
+  test("환영 줄: 처음이면 한 줄 · 캔버스를 가리지 않음 · 닫으면 새로고침해도 다시 안 뜸 · [목표로 시작]", async ({ page }) => {
+    await openCanvas(page);
+    const w = page.locator(".pg-welcome");
+    await expect(w).toBeVisible();
+    await expect(w).toContainText("처음이세요");
+    // 가리지 않는다 — 맞춰 본 노드들은 환영 줄 위에 있다.
+    const wb = (await w.boundingBox())!;
+    const bottoms = await page.locator(".react-flow__node").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().bottom));
+    expect(Math.max(...bottoms)).toBeLessThanOrEqual(wb.y);
+    await w.locator(".pg-welcome-go").click();
+    await expect(page.locator(".pg-goal")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(w).toHaveCount(0);                                          // 목표로 시작을 눌렀으니 본 것
+    await page.reload();
+    await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(".pg-welcome")).toHaveCount(0);
+  });
+
+  test("환영 줄 짝: 이 브라우저에 적을 수 없으면 올 때마다 뜨되 닫을 수 있다(조용히 사라지지 않는다)", async ({ page }) => {
+    await page.addInitScript(() => {
+      Storage.prototype.setItem = () => { throw new Error("blocked"); };
+      Storage.prototype.getItem = () => { throw new Error("blocked"); };
+    });
+    await openCanvas(page);
+    await expect(page.locator(".pg-welcome")).toBeVisible();
+    await page.locator(".pg-welcome-x").click();
+    await expect(page.locator(".pg-welcome")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(".pg-welcome")).toBeVisible();
+  });
+});
+
+test("환영 줄은 본 적 있으면 뜨지 않는다(BN N2 · 기본 E2E 상태)", async ({ page }) => {
+  await openCanvas(page);
+  await expect(page.locator(".pg-hint")).toBeVisible();
+  await expect(page.locator(".pg-welcome")).toHaveCount(0);
+});
+
+test("종목 이름(BN N2): 칩 = 서버 이름 · 코드 · 모르는 코드는 '이름 모름'(짝) · 이름으로 찾으면 후보 = 서버 검색 · ↓ Enter 로 넣기", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "universe").click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  const field = page.locator('.pg-basic-field[data-field="tickers"]');
+  const doc = await wip(page);
+  const codes = doc.nodes.find((n) => n.id === "universe")!.params.tickers as string[];
+  for (const c of codes) {
+    const hit = ((await (await page.request.get(`http://localhost:8000/api/v1/screener/stock-search?q=${c}&limit=5`)).json()).items as { code: string; name: string }[])
+      .find((x) => x.code === c);
+    const chip = field.locator(`.pg-stock-chip[data-code="${c}"]`);
+    await expect(chip.locator(".pg-stock-name")).toHaveText(hit ? hit.name : "이름 모름");
+  }
+  const input = field.locator("input");
+  await input.fill(`${codes.join(", ")}, 999999`);
+  await input.press("Enter");
+  await expect(field.locator('.pg-stock-chip[data-code="999999"] .pg-stock-name')).toHaveText("이름 모름");
+  await expect(field.locator('.pg-stock-chip[data-code="999999"]')).toHaveAttribute("data-name", "unknown");
+  // 짝 — 이름 글자를 그대로 두고 벗어나면 종목으로 넣지 않고, 뺐다고 말한다(코드만 넣는다).
+  await input.fill(`${codes.join(", ")}, 삼성없는회사`);
+  await input.press("Escape");
+  await input.press("Enter");
+  await expect(field.locator(".pg-ticker-note")).toContainText("‘삼성없는회사’");
+  expect((await wip(page)).nodes.find((n) => n.id === "universe")!.params.tickers).toEqual(codes);
+
+  const server = (await (await page.request.get(`http://localhost:8000/api/v1/screener/stock-search?q=${encodeURIComponent("삼성")}&limit=8`)).json()).items as { code: string; name: string }[];
+  expect(server.length, "mock 마스터에도 '삼성' 이 있어야 이 검사가 뜻이 있다").toBeGreaterThan(1);
+  await input.fill("005930, 삼성");
+  const list = page.locator(".pg-suggest-item");
+  await expect(list).toHaveCount(server.length);
+  await expect(list.first()).toHaveAttribute("data-code", server[0].code);
+  await expect(list.first()).toHaveAttribute("aria-selected", "true");
+  // 이미 넣은 005930 이 아닌 첫 후보를 ↓ 로 골라 Enter — 그 토막이 코드로 바뀌고 곧바로 목록에 들어간다.
+  const k = server.findIndex((x) => x.code !== "005930");
+  for (let i = 0; i < k; i++) await input.press("ArrowDown");
+  await input.press("Enter");
+  await expect(page.locator(".pg-suggest")).toHaveCount(0);
+  await expect(input).toHaveValue(`005930, ${server[k].code}`);
+  expect((await wip(page)).nodes.find((n) => n.id === "universe")!.params.tickers).toEqual(["005930", server[k].code]);
+  await expect(field.locator(`.pg-stock-chip[data-code="${server[k].code}"] .pg-stock-name`)).toHaveText(server[k].name);
+});
+
+test("종목 검색이 실패하면 빈 목록이 아니라 실패라고 말한다 · 코드는 그대로 넣을 수 있다(BN N2)", async ({ page }) => {
+  await page.route("**/api/v1/screener/stock-search**", (r) => r.fulfill({ status: 503, body: "{}" }));
+  await openCanvas(page);
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="build"]').click();
+  await page.locator(".pg-goal-input").fill("005930, 삼성");
+  await expect(page.locator(".pg-suggest-note--err")).toContainText("HTTP 503");
+  await expect(page.locator(".pg-suggest-item")).toHaveCount(0);
+  await expect(page.locator('.pg-goal-chip[data-code="005930"]')).toHaveAttribute("data-name", "failed");
+  await expect(page.locator('.pg-goal-chip[data-code="005930"] .pg-stock-name')).toHaveText("이름 확인 못 함");
+});
+
+test("위험 회피 δ(BN N2): 초심자 질문에 없음 · 전문가에서만, 도움말은 어디서만 비중을 움직이는지 말함", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "optimizer").click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await expect(page.locator('.pg-basic-field[data-field="delta"]')).toHaveCount(0);
+  await expect(page.locator(".pg-settings")).not.toContainText("위험을 얼마나 피할까요");
+  const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const help = cat.nodes.find((c: { type: string }) => c.type === "optimizer").params_schema.properties.delta["x-ui"].help as string;
+  await page.locator(".pg-mode .pg-switch").check();
+  await expect(page.locator(".pg-field-help", { hasText: help })).toBeVisible();
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test.describe(`대비(BN N2): ${scheme}`, () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+    test("환영 줄 · 종목 후보 목록·칩 · 갈래 승격 단추 AA 미달 0", async ({ page }) => {
+      await openCanvas(page);
+      if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+      let audit = await page.evaluate<AuditResult>(contrastAudit(".pg-welcome"));
+      expect(audit.checked).toBeGreaterThan(1);
+      expect(audit.low, `${scheme} 환영 줄`).toEqual([]);
+      await makeBranch(page, "optimizer");
+      audit = await page.evaluate<AuditResult>(contrastAudit(".pg-branch"));
+      expect(audit.low, `${scheme} 갈래 틀`).toEqual([]);
+      await page.locator('.pg-tab[data-tab="story"]').click();
+      await page.locator('.pg-step[data-node-id="universe"] .pg-step-num').click();
+      await page.locator('.pg-tab[data-tab="settings"]').click();
+      await page.locator('.pg-basic-field[data-field="tickers"] input').fill("005930, 삼성");
+      await expect(page.locator(".pg-suggest-item").first()).toBeVisible();
+      audit = await page.evaluate<AuditResult>(contrastAudit(".pg-basic-field[data-field='tickers']"));
+      expect(audit.checked).toBeGreaterThan(4);
+      expect(audit.low, `${scheme} 종목 후보·칩`).toEqual([]);
+      if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+    });
   });
 }

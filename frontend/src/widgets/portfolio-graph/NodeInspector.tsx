@@ -135,6 +135,8 @@ export function NodeInspector({ node, entry, onChange, onRemove }: {
           </span>
           <Field f={f} value={params[f.name]}
                  onChange={(v) => onChange(v === undefined ? without(params, f.name) : { ...params, [f.name]: v })} />
+          {/* 서버 x-ui 도움말(BN N2) — 전문가 칸도 무엇을 움직이는지(또는 움직이지 않는지) 쉬운 말로 */}
+          {f.ui.help && <span className="pg-field-help">{f.ui.label !== f.title ? `${f.ui.label} — ` : ""}{f.ui.help}</span>}
         </label>
       ))}
     </section>

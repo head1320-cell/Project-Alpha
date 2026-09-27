@@ -35,6 +35,7 @@ import {
   nextBranchLetter,
   insertDoc,
   mapLayout,
+  paramDiff,
   readBlocks,
   toDoc,
   writeBlocks,
@@ -171,6 +172,8 @@ export interface PgState {
   makeBranch: (rootId: string, strategyId?: string) => string;
   /** 갈래를 지운다 — 복제 노드도 함께. */
   removeBranch: (id: string) => void;
+  /** 갈래 승격(BN N2) — 복제의 설정을 원본으로 옮기고 갈래·복제를 지운다(되돌리기 한 번). 돌려주는 값은 한 줄 안내. */
+  promoteBranch: (id: string) => string;
   setSimple: (v: boolean) => void;
   setGrowing: (v: boolean) => void;
 }
@@ -409,7 +412,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
         report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
-        pinned: [], cause: null, focusGroup: null, filters: [],
+        pinned: (doc.pinned ?? []).filter((id) => nodes.some((n) => n.id === id)), cause: null, focusGroup: null, filters: [],
         branches: (doc.branches ?? []).filter((b) => b.root in b.map),
       });
     },
@@ -505,6 +508,29 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({ nodes: s.nodes.filter((n) => !ids.has(n.id)), edges: s.edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
             branches: s.branches.filter((x) => x.id !== id), reportStale: s.report !== null,
             selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId, picked: [] });
+    },
+    promoteBranch: (id) => {
+      const s = get();
+      const b = s.branches.find((x) => x.id === id);
+      if (!b) return "갈래를 찾지 못했어요.";
+      push();
+      const copies = new Set(Object.keys(b.map));
+      const copyOf = new Map(Object.entries(b.map).map(([c, o]) => [o, c]));
+      let moved = 0;
+      const nodes = s.nodes.filter((n) => !copies.has(n.id)).map((n) => {
+        const c = copyOf.has(n.id) ? s.nodes.find((x) => x.id === copyOf.get(n.id)) : undefined;
+        if (!c) return n;
+        moved += paramDiff(n.data.params ?? {}, c.data.params ?? {}).length;
+        return { ...n, data: { ...n.data, params: structuredClone(c.data.params ?? {}) } };
+      });
+      set({ nodes, edges: s.edges.filter((e) => !copies.has(e.source) && !copies.has(e.target)),
+            groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.has(m)) })),
+            branches: s.branches.filter((x) => x.id !== id), reportStale: s.report !== null,
+            pinned: s.pinned.filter((p) => !copies.has(p)),
+            selectedId: s.selectedId && copies.has(s.selectedId) ? null : s.selectedId, picked: [] });
+      return moved
+        ? `‘${b.label}’의 바꾼 설정 ${moved}개를 원본으로 옮겼어요 — 다시 계산해 주세요. 되돌리기(Ctrl+Z)로 돌아갈 수 있어요.`
+        : `‘${b.label}’은 원본과 같아서 옮길 설정이 없었어요 — 갈래만 지웠어요. 되돌리기(Ctrl+Z)로 돌아갈 수 있어요.`;
     },
     loadBlocks: () => { const r = readBlocks(); set({ blocks: r.blocks, blocksAvailable: r.available }); },
     saveBlock: (groupId) => {

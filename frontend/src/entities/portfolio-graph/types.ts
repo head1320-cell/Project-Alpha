@@ -59,6 +59,8 @@ export interface GraphDoc {
   edges: GraphDocEdge[];
   groups?: GraphGroup[];
   branches?: GraphBranch[];
+  /** 그림 고정(BN N2) — 멀리서도 작은 그림을 보이는 노드 id. 화면 정보(서버는 읽지 않는다). */
+  pinned?: string[];
 }
 
 // ── 카탈로그 (`GET /api/v1/allocation/graph/node-types`) ────────────────────
@@ -97,7 +99,7 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards" | "filter" | "text" | "pick";
+  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers";
   /** `widget: "pick"` 가 부를 목록 이름(BK W5) — `strategies` · `research_runs`. 주소가 아니다. */
   source?: string;
   ends?: [string, string];

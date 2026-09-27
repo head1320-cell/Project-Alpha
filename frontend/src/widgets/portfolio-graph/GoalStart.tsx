@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { fieldsOf, GOALS, parseTickers, type GoalKey, type NodeCatalogEntry } from "@/entities/portfolio-graph";
+import { StockChip, TickerInput, useStockNames } from "./TickerInput";
 
 const DEFAULT_TICKERS = "005930, 000660, 035420";
 
@@ -32,6 +33,7 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
   const parsed = parseTickers(text);
   const tickers = g?.tickers === "one" ? parsed.tickers.slice(0, 1) : parsed.tickers;
   const tickersOk = g?.tickers === "one" ? tickers.length === 1 : tickers.length >= 2;
+  const names = useStockNames(step === 1 ? tickers : []);
   /** 기간 선택지 — 서버가 준 프리셋만. 없으면 이 질문을 건너뛴다(지어내지 않는다). */
   const periods = useMemo(() => {
     const f = fieldsOf(catalog.find((c) => c.type === "returns")?.params_schema ?? null).find((x) => x.name === "lookback_days");
@@ -64,17 +66,16 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
         <section>
           <h2 className="pg-goal-q">{g.tickers === "one" ? "어느 기업을 볼까요?" : "어떤 종목으로 할까요?"}</h2>
           <label className="pg-goal-field">
-            <span>{g.tickers === "one" ? "종목 코드 하나" : "종목 코드를 쉼표로 — 두 개 이상"}</span>
-            <input className="pg-goal-input" value={text} onChange={(e) => setText(e.target.value)} autoFocus
-                   aria-describedby="pg-goal-tickers-help" />
+            <span>{g.tickers === "one" ? "종목 코드 하나 — 또는 이름으로 찾기" : "종목 코드를 쉼표로, 또는 이름으로 찾기 — 두 개 이상"}</span>
+            <TickerInput value={text} onText={setText}
+                         inputProps={{ className: "pg-goal-input", autoFocus: true, "aria-describedby": "pg-goal-tickers-help" }} />
           </label>
           <div className="pg-goal-chips" aria-live="polite">
-            {tickers.map((t) => <span key={t} className="pg-goal-chip">{t}</span>)}
+            {tickers.map((t) => <StockChip key={t} code={t} name={names[t]} className="pg-goal-chip" />)}
           </div>
           <p id="pg-goal-tickers-help" className="pg-goal-help">
-            {parsed.rejected.length ? `‘${parsed.rejected.join(", ")}’은 종목 코드로 읽지 못해 뺐어요. ` : ""}
+            {parsed.rejected.length ? `‘${parsed.rejected.join(", ")}’은 종목 코드로 읽지 못해 뺐어요 — 이름이면 위의 후보에서 골라 주세요. ` : ""}
             {g.tickers === "one" && parsed.tickers.length > 1 ? "첫 번째 종목만 써요. " : ""}
-            종목 이름은 계산하면 이야기 탭에 나와요.
           </p>
           <div className="pg-goal-actions">
             <button type="button" className="pg-btn pg-btn--ghost" onClick={() => setStep(0)}>이전</button>

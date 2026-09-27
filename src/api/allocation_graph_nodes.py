@@ -121,7 +121,8 @@ STAGES = [
 ]
 
 UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"), ui={
-    "tickers": _ui("종목", question="어떤 종목으로 할까요?", help="종목 코드를 쉼표로 넣어요."),
+    "tickers": _ui("종목", question="어떤 종목으로 할까요?", widget="tickers",
+                   help="종목 코드를 쉼표로 넣거나, 이름을 치고 후보에서 골라요."),
     "weights": _ui("지금 비중", "advanced", help="들고 있는 비중을 알려 주면 회전율 제약에 써요."),
     "benchmark": _ui("비교 기준", "advanced", help="성과를 비교할 지수예요."),
 })
@@ -145,8 +146,12 @@ EstimateParams = _subset("EstimateParams", AnalyzeRequest,
 })
 OptimizerParams = _subset(
     "OptimizerParams", AnalyzeRequest, ("delta", "tau", "constraints"), ui={
-        "delta": _ui("위험 회피 정도", question="위험을 얼마나 피할까요?", widget="slider",
-                     ends=["과감하게", "신중하게"]),
+        # BN N2 — δ 는 시장 균형 수익 π = δΣw_mkt 에만 들어가고, π 는 블랙-리터먼 + 내 생각이 있을 때만 쓰인다
+        # (`allocation_studio.optimize`). 다른 방식에서는 비중이 움직이지 않으니 초심자 질문("위험을 얼마나 피할까요?")으로 두지 않는다.
+        # 옵티마이저 의미는 그대로 — 표시만 사실에 맞춘다(tests/test_optimizer_delta_honest.py).
+        "delta": _ui("시장 균형 수익 크기 δ", "advanced", widget="slider", ends=["내 생각 쪽", "시장 균형 쪽"],
+                     help="블랙-리터먼에서 내 생각이 있을 때만 비중에 영향을 줘요 — 클수록 시장 균형 쪽으로 기울어요. "
+                          "다른 계산 방식에서는 비중이 바뀌지 않아요."),
         "tau": _ui("내 생각 불확실성 τ", "advanced", help="클수록 내 생각이 비중을 더 크게 움직여요."),
         "constraints": _ui("제약", question="한 종목에 최대 얼마까지 둘까요?",
                            presets=[{"label": "제한 없음", "value": None},

@@ -240,8 +240,94 @@ def brief_weights(v: Mapping) -> str | None:
     return f"{len(_w_dict(names, np.asarray(xs)))}종목 · 합 {total:.0f}%"
 
 
+# ── BN N2 · 선 요약을 더 많은 포트 타입으로 — 값 모양은 생산 노드에서 확인한 것만(tests/test_graph_briefs_more.py) ──
+# 충격 결과(StressReport)는 생산 노드마다 모양이 둘이고 단위가 분명하지 않아, 기대 수익 설정(Belief)은 셀 것이 없어,
+# 시나리오·전략 묶음 성과·백테스트 실행은 기본 실행에서 값을 확인하지 못해 요약하지 않는다(키가 없다 = 지어내지 않는다).
+
+_PHASE_PLAIN = {"Goldilocks": "골디락스", "Reflation": "리플레이션", "Stagflation": "스태그플레이션",
+                "Deflation": "디플레이션", "Disinflation": "디스인플레이션"}
+_SIGNAL_PLAIN = (("risk_on", "위험-온"), ("risk_off", "위험-오프"), ("unavailable", "판단 불가"))
+
+
+def _finite(v: Any) -> float | None:
+    x = _num(v)
+    return x if x is not None and math.isfinite(x) else None
+
+
+def _count(v: Any) -> int | None:
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+
+
+def brief_views(v: Any) -> str | None:
+    return f"생각 {len(v)}개" if isinstance(v, list) else None
+
+
+def brief_scores(v: Any) -> str | None:
+    s = v.get("scores") if isinstance(v, Mapping) else None
+    if not isinstance(s, Mapping) or not s:
+        return None
+    unknown = sum(1 for x in s.values() if _finite(x) is None)
+    return f"{len(s)}종목 점수" + (f" · {unknown}개 모름" if unknown else "")
+
+
+def brief_regime(v: Any) -> str | None:
+    p = v.get("phase_probabilities") if isinstance(v, Mapping) else None
+    known = {str(k): x for k, x in (p.items() if isinstance(p, Mapping) else []) if _finite(x) is not None}
+    if not known:
+        return None
+    top = max(known, key=lambda k: known[k])
+    return f"{_PHASE_PLAIN.get(top, top)} {float(known[top]) * 100:.0f}%"
+
+
+def brief_timing(v: Any) -> str | None:
+    states = v.get("states") if isinstance(v, Mapping) else None
+    if not isinstance(states, list) or not states:
+        return None
+    vals = [getattr(s, "value", s) for s in states]
+    if any(x not in dict(_SIGNAL_PLAIN) for x in vals):
+        return None                                   # 모르는 상태 — 세지 않는다
+    return " · ".join([f"신호 {len(vals)}개", *(f"{name} {vals.count(k)}" for k, name in _SIGNAL_PLAIN if vals.count(k))])
+
+
+def brief_trades(v: Any) -> str | None:
+    s = _get(v, "plan", "summary")
+    n, b, sl = (_count(s.get(k)) for k in ("n_orders", "n_buy", "n_sell")) if isinstance(s, Mapping) else (None,) * 3
+    if n is None:
+        return None
+    return f"주문 {n}건" + (f" · 매수 {b} · 매도 {sl}" if b is not None and sl is not None else "")
+
+
+def brief_target(v: Any) -> str | None:
+    tv = v.get("tv") if isinstance(v, Mapping) else None
+    fw = tv.get("final_weights") if isinstance(tv, Mapping) else None
+    cash = _finite(tv.get("cash_weight")) if isinstance(tv, Mapping) else None
+    if not isinstance(fw, Mapping) or cash is None or any(_finite(x) is None for x in fw.values()):
+        return None
+    held = sum(1 for x in fw.values() if abs(float(x)) > 1e-9)
+    # 실행 노드(`target_version`)의 설명과 같은 말 — executable 이 아니면 연구용.
+    kind = "실행할 수 있는 목표" if tv.get("status") == "executable" else "연구용 목표"
+    return f"{kind} · {held}종목 · 현금 {cash:.0f}%"
+
+
+def brief_backtest(v: Any) -> str | None:
+    if not isinstance(v, Mapping) or v.get("error"):
+        return None
+    d = v.get("dates")
+    if not isinstance(d, list) or len(d) < 2:
+        return None
+    return f"{len(d)}일 · {d[0]}~{d[-1]}"
+
+
+def brief_risk(v: Any) -> str | None:
+    vol = _finite(_get(v, "risk_contribution_optimized", "portfolio_volatility_pct"))
+    # 보기의 설명(`explain_risk`)과 같은 단위 — 1년 기준 변동성.
+    return f"연 변동성 {vol:.1f}%" if vol is not None else None
+
+
 BRIEFS: dict[str, Callable[[Any], str | None]] = {
     "Universe": brief_universe, "Returns": brief_returns, "Weights": brief_weights,
+    "Views": brief_views, "Scores": brief_scores, "RegimeState": brief_regime, "TimingSignal": brief_timing,
+    "Trades": brief_trades, "TargetVersion": brief_target, "BacktestResult": brief_backtest, "RiskReport": brief_risk,
 }
 
 
