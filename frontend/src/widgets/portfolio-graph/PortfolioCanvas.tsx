@@ -32,9 +32,10 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Filter, Map as MapIcon, Plus, Redo2, Sigma, Undo2, X } from "lucide-react";
+import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Plus, Redo2, Sparkles, Sigma, Undo2, X } from "lucide-react";
 import {
   CORE_CHAIN_TEMPLATE,
+  goalDoc,
   LANE,
   TEMPLATES,
   parseFile,
@@ -54,6 +55,7 @@ import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
+import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_COLORS, PORT_PLAIN } from "./GraphNode";
 import { GroupFrame, Lane, PG_GROUP_TYPE, PG_LANE_TYPE, type GroupFrameData, type LaneData } from "./GroupFrame";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
@@ -64,6 +66,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { Sheet } from "./Sheet";
 import { StoryPanel } from "./StoryPanel";
 import { RunHistory } from "./RunHistory";
+import { SimpleView } from "./SimpleView";
 import { ancestorsOf, usePortfolioGraph, type FilterKey, type PgState } from "./store";
 
 const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_LANE_TYPE]: Lane, [PG_BRANCH_TYPE]: BranchFrame };
@@ -153,6 +156,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(false);
   // 서랍(BL2) — 계산하지 않는 기록 화면. 노드가 아니라 캔버스 옆에서 연다.
   const [drawer, setDrawer] = useState<DrawerKey | null>(null);
   // 노드 카드의 "여기까지 계산" 버튼이 부를 함수 — 아래에서 정의되고, 카드는 이 참조로 부른다.
@@ -470,6 +474,17 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     }
   }, []);
   const runTo = useCallback((id: string) => run([id]), [run]);
+  /** 목표로 시작 — 답으로 조립한 흐름을 싣고(되돌리기 가능), 흐름 순서대로 한 번 자라나게 한 뒤 곧바로 계산한다. */
+  const startGoal = useCallback((goal: Parameters<typeof goalDoc>[0], tickers: string[], lookback: number | null) => {
+    const st = usePortfolioGraph.getState();
+    st.loadDoc(goalDoc(goal, tickers, lookback));
+    setGoalOpen(false);
+    st.setNote("답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있고, 되돌리기(Ctrl+Z)로 이전 캔버스로 돌아가요.");
+    st.setGrowing(true);
+    setTimeout(() => usePortfolioGraph.getState().setGrowing(false), 1800);
+    fit();
+    void run();
+  }, [run]);
   runToRef.current = (id) => { if (!usePortfolioGraph.getState().running) void runTo(id); };
   previewRef.current = (id) => {
     const st = usePortfolioGraph.getState();
@@ -509,6 +524,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
 
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
+    { id: "goal", group: "시작", label: "목표로 새로 시작", hint: "무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 계산해요",
+      run: () => setGoalOpen(true) },
+    { id: "simple", group: "보기", label: s.simple ? "캔버스로 돌아가기" : "간단히 보기", hint: "노드 없이 정할 것과 결과만 봐요",
+      run: () => { const st = usePortfolioGraph.getState(); st.setSimple(!st.simple); } },
     ...(s.selectedId ? [{ id: "run-to", group: "계산", label: "고른 노드까지 계산", keys: "Shift+Enter",
                           run: () => void runTo(usePortfolioGraph.getState().selectedId!) }] : []),
     { id: "undo", group: "편집", label: "되돌리기", keys: "Ctrl+Z", run: () => usePortfolioGraph.getState().undo() },
@@ -531,7 +550,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.showMinimap, cmdOpen, strategySources]);
+  ], [s.selectedId, s.showMinimap, cmdOpen, strategySources, s.simple]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -551,6 +570,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     <div className="pg-root pg-theme">
       <header className="pg-toolbar">
         <h1 className="pg-title">포트폴리오 설계</h1>
+
         <div className="pg-edit-tools" role="toolbar" aria-label="편집">
           <button type="button" className="pg-icon-tool" aria-label="되돌리기 (Ctrl+Z)" title="되돌리기 (Ctrl+Z)"
                   disabled={s.past.length === 0} onClick={s.undo}><Undo2 size={16} /></button>
@@ -560,6 +580,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                   disabled={s.nodes.length === 0} onClick={() => { s.autoLayout(); fit(); }}><LayoutGrid size={16} /></button>
           <button type="button" className="pg-icon-tool" aria-label="고른 노드 묶기 (Ctrl+G)" title="고른 노드 묶기 (Ctrl+G)"
                   disabled={s.picked.length < 2} onClick={() => s.groupPicked()}><Boxes size={16} /></button>
+          <button type="button" className="pg-icon-tool pg-goal-open" aria-label="목표로 시작" title="목표로 시작 — 무엇을 하려는지 고르면 흐름을 만들어 계산해요"
+                  disabled={!s.catalog} onClick={() => setGoalOpen(true)}><Sparkles size={16} /></button>
+          <button type="button" className={`pg-icon-tool pg-simple-toggle${s.simple ? " on" : ""}`} aria-pressed={s.simple}
+                  aria-label="간단히 보기" title="간단히 보기 — 노드 없이 정할 것과 결과만" onClick={() => s.setSimple(!s.simple)}>
+            <LayoutList size={16} />
+          </button>
           <span className="pg-strat-menu-wrap">
             <button type="button" className="pg-strat-add" aria-haspopup="menu" aria-expanded={stratOpen}
                     disabled={!s.catalog} onClick={() => setStratOpen((o) => !o)}>
@@ -656,6 +682,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         <p key={i} className="pg-banner pg-banner--err">{e.message}</p>
       ))}
 
+      <GoalStart open={goalOpen} onClose={() => setGoalOpen(false)} catalog={s.catalog ?? []} onStart={startGoal} />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} catalog={s.catalog ?? []} commands={commands}
                       onAddNode={(k) => addAt(k)} />
       {DRAWERS.map((d) => (
@@ -664,9 +691,16 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </Sheet>
       ))}
 
-      <div className="pg-body">
-        {s.catalog && <NodePalette catalog={s.catalog} stages={stages} initialQuery={legacy?.aliases[1] ?? ""} onAdd={(k) => addAt(k)} onTemplate={loadTemplate} />}
-        <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}`}
+      {s.simple && (
+        <SimpleView nodes={s.nodes} edges={s.edges} groups={s.groups} catalog={s.catalog ?? []}
+                    results={s.report?.nodes ?? null} stale={s.reportStale} running={s.running} onRun={() => void run()}
+                    onChange={(id, p) => s.updateParams(id, p)}
+                    onCause={(id) => { s.setSimple(false); s.select(id); setTimeout(() => usePortfolioGraph.getState().showCause(id), 60); }} />
+      )}
+      <div className="pg-body" hidden={s.simple}>
+        {s.catalog && <NodePalette catalog={s.catalog} stages={stages} initialQuery={legacy?.aliases[1] ?? ""} onAdd={(k) => addAt(k)} onTemplate={loadTemplate}
+                                  onGoal={() => setGoalOpen(true)} />}
+        <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}${s.growing ? " pg-growing" : ""}`}
              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(e.dataTransfer.types.includes("Files")); }}
              onDragLeave={() => setDragOver(false)}
              onDrop={onDrop}>
@@ -754,6 +788,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             )}
           </ReactFlow>
           <p className="pg-sr-live" aria-live="polite">{announce}</p>
+          {s.catalog && s.nodes.length === 0 && (
+            <div className="pg-empty-start">
+              <p>비어 있어요. 무엇을 하려는지 고르면 흐름을 만들어 드려요.</p>
+              <button type="button" className="pg-btn pg-btn--primary" onClick={() => setGoalOpen(true)}>
+                <Sparkles size={14} aria-hidden="true" /> 목표로 시작
+              </button>
+            </div>
+          )}
           <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"

@@ -117,6 +117,10 @@ export interface PgState {
   blocksAvailable: boolean;
   /** 갈래(BM C3) — 화면 정보. 복제 노드 자체는 보통 노드다. */
   branches: GraphBranch[];
+  /** 간단히 보기(BM C4) — 노드 없이 정할 것 → 결과. 같은 스토어라 바꾼 값은 노드 설정이다. */
+  simple: boolean;
+  /** 목표로 시작한 직후 한 번 — 노드가 흐름 순서대로 자라난다(감속 모션이면 없음). */
+  growing: boolean;
   /** 캔버스 한 줄 안내(전략 추가·블록 저장 결과). */
   note: string | null;
 
@@ -171,6 +175,8 @@ export interface PgState {
   makeBranch: (rootId: string) => string;
   /** 갈래를 지운다 — 복제 노드도 함께. */
   removeBranch: (id: string) => void;
+  setSimple: (v: boolean) => void;
+  setGrowing: (v: boolean) => void;
 }
 
 export type FilterKey = "failed" | "blocked" | "practice" | "forward" | "assumed";
@@ -291,6 +297,8 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     blocksAvailable: true,
     note: null,
     branches: [],
+    simple: false,
+    growing: false,
 
     setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
 
@@ -442,6 +450,8 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     toggleFilter: (k) => set((s) => ({ filters: s.filters.includes(k) ? s.filters.filter((x) => x !== k) : [...s.filters, k] })),
     clearLanes: () => set({ lanes: null }),
     setNote: (note) => set({ note }),
+    setSimple: (simple) => set({ simple }),
+    setGrowing: (growing) => set({ growing }),
     makeBranch: (rootId) => {
       const s = get();
       const root = s.nodes.find((n) => n.id === rootId);

@@ -668,3 +668,151 @@ for (const scheme of ["light", "dark"] as const) {
     if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// C4 · 처음 쓰는 사람 — 목표로 시작 + 간단히 보기. 거는 것:
+//  · 목표 → 종목 → 기간(서버 프리셋) → 흐름이 조립되고 곧바로 계산 · 답은 기본 층 파라미터에만(기본값을 고르면 키가 없다 — 짝)
+//  · 읽지 못한 종목 코드는 버리지 않고 말함 · 종목 수가 모자라면 다음으로 못 감(짝) · 되돌리기로 이전 캔버스
+//  · 자라나는 흐름은 한 번, 감속 모션이면 없음 · 빈 캔버스는 시작하라고 말함
+//  · 간단히 보기: 정할 것(설정 탭과 같은 위젯) · 결과(서버 값 그대로) · 바꾸면 노드 설정 · 막힘은 캔버스의 원인 경로로
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function startGoal(page: Page, goal: string, tickers: string, period?: number | "default") {
+  await page.locator(".pg-goal-open").click();
+  await expect(page.locator(".pg-goal-card")).toHaveCount(4);
+  await page.locator(`.pg-goal-card[data-goal="${goal}"]`).click();
+  await page.locator(".pg-goal-input").fill(tickers);
+  if (period !== undefined) {
+    await page.locator(".pg-goal-next").click();
+    if (period === "default") await page.locator(".pg-goal-period").first().click();
+    else await page.locator(`.pg-goal-period[data-days="${period}"]`).click();
+  }
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-goal-go").click();
+  return (await (await resp).json()) as RunBody;
+}
+
+test("목표로 시작(BM C4): 목표 → 종목 → 서버 프리셋 기간 → 흐름 조립 + 곧바로 계산 · 되돌리기로 이전 캔버스", async ({ page }) => {
+  await openCanvas(page);
+  const before = (await wip(page)).nodes.map((n) => n.id).sort();
+  const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const presets = (cat.nodes.find((c: { type: string }) => c.type === "returns").params_schema.properties.lookback_days["x-ui"].presets as { value: number }[]);
+  const pick = presets[0].value;
+  // 읽지 못한 코드는 말하고 뺀다 · 두 개 미만이면 다음으로 못 간다(짝).
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="build"]').click();
+  await page.locator(".pg-goal-input").fill("005930, 삼성");
+  await expect(page.locator(".pg-goal-help")).toContainText("‘삼성’");
+  await expect(page.locator(".pg-goal-next")).toBeDisabled();
+  await page.locator(".pg-goal-input").fill("005930, 000660");
+  await expect(page.locator(".pg-goal-next")).toBeEnabled();
+  await page.locator(".pg-goal-next").click();
+  await expect(page.locator(".pg-goal-period")).toHaveCount(presets.length + 1);          // 기본값 + 서버 프리셋
+  await page.keyboard.press("Escape");
+
+  const body = await startGoal(page, "build", "005930, 000660", pick);
+  const doc = await wip(page);
+  expect(doc.nodes.find((n) => n.type === "universe")!.params.tickers).toEqual(["005930", "000660"]);
+  expect(doc.nodes.find((n) => n.type === "returns")!.params.lookback_days).toBe(pick);
+  expect(Object.values(body.nodes).some((r) => r.status === "ok")).toBe(true);
+  await expect(page.locator(".pg-summary:not(.pg-summary--err):not(.pg-summary--stale)")).toContainText("완료", { timeout: 30_000 });
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Control+z");
+  expect((await wip(page)).nodes.map((n) => n.id).sort()).toEqual(before);
+});
+
+test("목표로 시작: 기간을 '기본값' 으로 두면 키를 넣지 않는다(서버 기본값) · 기업 하나는 두 단계 · 결과는 완료 아니면 사유(BM C4)", async ({ page }) => {
+  await openCanvas(page);
+  await startGoal(page, "check", "005930, 000660, 035420", "default");
+  const doc = await wip(page);
+  expect("lookback_days" in doc.nodes.find((n) => n.type === "returns")!.params).toBe(false);
+
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="company"]').click();
+  await expect(page.locator(".pg-goal-step")).toHaveText("2 / 2");                 // 기간을 묻지 않는다
+  await page.keyboard.press("Escape");
+  const body = await startGoal(page, "company", "000660");
+  const d2 = await wip(page);
+  expect(d2.nodes.map((n) => n.type).sort()).toEqual(["company_valuation", "valuation_distribution"]);
+  for (const n of d2.nodes) expect(n.params.code).toBe("000660");
+  for (const r of Object.values(body.nodes)) expect(r.status === "ok" || !!r.reason, JSON.stringify(r).slice(0, 200)).toBe(true);
+});
+
+test("자라나는 흐름(BM C4): 시작한 뒤 한 번 · 흐름 번호 순서로 늦게 · 감속 모션이면 없음(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="build"]').click();
+  await page.locator(".pg-goal-next").click();
+  await page.locator(".pg-goal-go").click();
+  await expect(page.locator(".pg-canvas")).toHaveClass(/pg-growing/);
+  const anim = await node(page, "optimizer").evaluate((el) => ({ name: getComputedStyle(el).animationName, delay: getComputedStyle(el).animationDelay }));
+  expect(anim.name).toBe("pg-grow");
+  const d1 = await node(page, "universe").evaluate((el) => parseFloat(getComputedStyle(el).animationDelay));
+  expect(parseFloat(anim.delay)).toBeGreaterThan(d1);
+  await expect(page.locator(".pg-canvas")).not.toHaveClass(/pg-growing/, { timeout: 5_000 });
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="build"]').click();
+  await page.locator(".pg-goal-next").click();
+  await page.locator(".pg-goal-go").click();
+  await expect(page.locator(".pg-canvas")).toHaveClass(/pg-growing/);
+  expect(await node(page, "optimizer").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+});
+
+test("빈 캔버스는 시작하라고 말한다 — 누르면 목표로 시작(BM C4)", async ({ page }) => {
+  await openCanvas(page);
+  await page.locator(".pg-import-input").setInputFiles({ name: "empty.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, nodes: [], edges: [] })) });
+  await expect(page.locator(".pg-empty-start")).toContainText("비어 있어요");
+  await page.locator(".pg-empty-start button").click();
+  await expect(page.locator(".pg-goal-card")).toHaveCount(4);
+});
+
+test("간단히 보기(BM C4): 노드 대신 정할 것 → 결과 · 결과 = 서버 값 · 바꾸면 노드 설정이 바뀌고 낡음 · 막힘은 캔버스 원인 경로로", async ({ page }) => {
+  await openCanvas(page);
+  await page.locator(".pg-simple-toggle").click();
+  await expect(page.locator(".pg-simple")).toBeVisible();
+  await expect(page.locator(".pg-body")).toBeHidden();
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-simple-run").click();
+  const body = (await (await resp).json()) as RunBody;
+  type Ex = { explain?: { headline?: { value: number | null } | null } };
+  const shown = Object.entries(body.nodes).filter(([, r]) => r.status !== "ok" || (r as Ex).explain?.headline || r.glance).map(([id]) => id);
+  await expect(page.locator(".pg-simple-result")).toHaveCount(shown.length);
+  const h = (body.nodes.optimizer as Ex).explain!.headline!.value!;
+  await expect(page.locator('.pg-simple-result[data-node-id="optimizer"] .pg-simple-headline b')).toHaveText(Number.isInteger(h) ? String(h) : h.toFixed(1));
+  // 질문을 바꾸면 노드 설정이 바뀐다(같은 위젯 · 같은 스토어).
+  const ask = page.locator('.pg-simple-ask[data-node-id="universe"] input').first();
+  await ask.fill("005930");
+  await ask.press("Enter");
+  await expect(page.locator(".pg-simple-stale")).toBeVisible();
+  expect((await wip(page)).nodes.find((n) => n.id === "universe")!.params.tickers).toEqual(["005930"]);
+  const resp2 = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-simple-run").click();
+  await resp2;
+  const blocked = page.locator(".pg-simple-result--blocked, .pg-simple-result--failed").first();
+  await expect(blocked).toBeVisible();
+  await blocked.locator(".pg-cause-btn").click();
+  await expect(page.locator(".pg-simple")).toHaveCount(0);
+  await expect(page.locator(".pg-cause-banner")).toContainText("첫 원인");
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BM C4): ${scheme} — 목표로 시작 · 간단히 보기 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.locator(".pg-goal-open").click();
+    let audit = await page.evaluate<AuditResult>(contrastAudit(".pg-goal"));
+    expect(audit.checked).toBeGreaterThan(8);
+    expect(audit.low, `${scheme} 목표 AA`).toEqual([]);
+    await page.keyboard.press("Escape");
+    await page.locator(".pg-simple-toggle").click();
+    await page.locator(".pg-simple-run").click();
+    await expect(page.locator(".pg-simple-result").first()).toBeVisible({ timeout: 120_000 });
+    audit = await page.evaluate<AuditResult>(contrastAudit(".pg-simple"));
+    expect(audit.checked).toBeGreaterThan(30);
+    expect(audit.low, `${scheme} 간단히 보기 AA`).toEqual([]);
+    if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+  });
+}

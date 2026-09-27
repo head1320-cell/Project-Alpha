@@ -6637,3 +6637,61 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-branch-table th[scope="col"]:first-child { text-align: left; }
 .pg-branch-diff { font-weight: 800; color: var(--pg-blue-ink); }
 .pg-branch-table-wrap + .pg-branch-table-wrap { margin-top: 20px; }
+
+/* ── BM C4 · 목표로 시작 · 간단히 보기 · 자라나는 흐름 ─────────────────────────────────────── */
+.pg-theme .pg-icon-tool.pg-goal-open { color: var(--pg-blue-ink); }
+.pg-theme .pg-goal-entry { display: block; width: 100%; margin-bottom: 6px; padding: 10px; font: inherit; text-align: left; background: var(--pg-paper); border: 1.5px solid var(--pg-blue); border-radius: 12px; cursor: pointer; }
+.pg-goal-entry b { display: block; font-size: 14px; color: var(--pg-ink); }
+.pg-goal-entry span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.45; color: var(--pg-body); }
+.pg-goal { width: min(620px, calc(100vw - 32px)); margin: 10vh auto auto; padding: 22px 26px 24px; color: var(--pg-ink); background: var(--pg-paper); border: 0; border-radius: 22px; box-shadow: 0 24px 60px rgb(25 31 40 / 24%); font-family: "Pretendard Variable", Pretendard, -apple-system, sans-serif; }
+.pg-goal::backdrop { background: rgb(25 31 40 / 32%); }
+.pg-goal-head { display: flex; align-items: center; justify-content: space-between; }
+.pg-goal-step { margin: 0; font-size: 13px; font-weight: 700; color: var(--pg-body); font-variant-numeric: tabular-nums; }
+.pg-goal-q { margin: 6px 0 16px; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+.pg-goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pg-theme .pg-goal-card, .pg-goal .pg-goal-card { display: flex; flex-direction: column; gap: 6px; min-height: 108px; padding: 16px; font: inherit; text-align: left; color: var(--pg-ink); background: var(--pg-soft); border: 1.5px solid transparent; border-radius: 16px; cursor: pointer; }
+.pg-goal .pg-goal-card:hover, .pg-goal .pg-goal-card:focus-visible { border-color: var(--pg-blue); background: var(--pg-paper); outline: none; }
+.pg-goal-card b { font-size: 16px; font-weight: 800; }
+.pg-goal-card span { font-size: 13px; line-height: 1.5; color: var(--pg-body); }
+.pg-goal-foot, .pg-goal-help { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--pg-body); }
+.pg-goal-field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--pg-body); }
+.pg-goal-input { height: 48px; padding: 0 14px; font: inherit; font-size: 17px; font-variant-numeric: tabular-nums; color: var(--pg-ink); background: var(--pg-soft); border: 1.5px solid transparent; border-radius: 12px; }
+.pg-goal-input:focus { border-color: var(--pg-blue); outline: none; background: var(--pg-paper); }
+.pg-goal-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; margin-top: 10px; }
+.pg-goal-chip { padding: 3px 10px; font-size: 13px; font-weight: 700; color: var(--pg-blue-ink); background: var(--pg-blue-soft); border-radius: 12px; font-variant-numeric: tabular-nums; }
+.pg-goal-periods { display: flex; flex-wrap: wrap; gap: 8px; }
+.pg-goal .pg-goal-period { height: 40px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 700; color: var(--pg-body); background: var(--pg-soft); border: 1.5px solid transparent; border-radius: 20px; cursor: pointer; }
+.pg-goal .pg-goal-period[aria-checked="true"] { color: var(--pg-blue-ink); background: var(--pg-blue-soft); border-color: var(--pg-blue); }
+.pg-goal-actions { display: flex; justify-content: space-between; margin-top: 22px; }
+.pg-goal .pg-btn:disabled { opacity: .45; cursor: default; }
+@media (max-width: 560px) { .pg-goal-grid { grid-template-columns: 1fr; } .pg-goal-q { font-size: 20px; } }
+.pg-empty-start { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; font-size: 15px; color: var(--pg-body); pointer-events: none; }
+.pg-empty-start .pg-btn { pointer-events: auto; }
+/* 자라나는 흐름 — 목표로 시작한 뒤 한 번, 흐름 번호 순서대로. 감속 모션이면 없음. */
+@keyframes pg-grow { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+.pg-growing .pg-node { animation: pg-grow .34s cubic-bezier(.2, .7, .3, 1) both; animation-delay: calc(var(--pg-i, 0) * 90ms); }
+@media (prefers-reduced-motion: reduce) { .pg-growing .pg-node { animation: none; } }
+/* 간단히 보기 */
+.pg-simple { flex: 1; overflow-y: auto; padding: 28px 20px 60px; background: var(--pg-canvas); }
+.pg-simple > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+.pg-simple-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.pg-simple-h { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; color: var(--pg-ink); }
+.pg-simple-sub { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--pg-body); }
+.pg-simple-stale { margin-top: 14px; padding: 10px 14px; font-size: 13.5px; color: var(--pg-ink); background: var(--pg-assume-soft); border-radius: 12px; }
+.pg-simple-sec { margin-top: 28px; }
+.pg-simple-sec-h { margin: 0 0 4px; font-size: 18px; font-weight: 800; color: var(--pg-ink); }
+.pg-simple-step { margin: 18px 0 8px; font-size: 13.5px; font-weight: 700; color: var(--pg-body); }
+.pg-simple-ask, .pg-simple-result { margin-bottom: 10px; padding: 16px 18px; background: var(--pg-paper); border-radius: 18px; box-shadow: var(--pg-shadow); }
+.pg-simple-kind { margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--pg-body); }
+.pg-simple-title { margin: 0; font-size: 17px; font-weight: 800; color: var(--pg-ink); line-height: 1.4; }
+.pg-simple-headline { display: flex; align-items: baseline; gap: 6px; margin: 8px 0 0; }
+.pg-simple-headline b { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-simple-headline span { font-size: 13px; font-weight: 600; color: var(--pg-body); }
+.pg-simple-result .pg-glance { max-width: 320px; }
+.pg-simple-result--blocked { border-left: 4px solid var(--pg-assume); }
+.pg-simple-result--failed { border-left: 4px solid var(--pg-fail); }
+.pg-simple-why { margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: var(--pg-body); }
+.pg-simple-trust { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 13.5px; line-height: 1.5; color: var(--pg-body); }
+.pg-simple-unmeasured { margin-top: 10px; font-size: 13px; color: var(--pg-body); }
+.pg-simple-unmeasured summary { cursor: pointer; font-weight: 600; }
+.pg-body[hidden] { display: none; }

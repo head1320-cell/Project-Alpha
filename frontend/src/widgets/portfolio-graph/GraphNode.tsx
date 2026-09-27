@@ -149,7 +149,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   return (
     <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}`}
          data-node-id={id} data-kind={data.kind}
-         style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)" }}>
+         style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
+                  ["--pg-i" as string]: data.num ?? 0 }}>
       <NodeToolbar isVisible={selected && single} position={Position.Top} offset={8}>
         <button type="button" className="pg-run-to" disabled={running}
                 onMouseEnter={() => data.onPreviewRunTo?.(id)} onMouseLeave={() => data.onPreviewRunTo?.(null)}

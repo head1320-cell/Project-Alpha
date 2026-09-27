@@ -248,6 +248,21 @@ function SaveBox({ result, stale, onSave, label, followUp }: {
   );
 }
 
+/** 기본 층 질문들 — 설정 탭과 간단히 보기(BM C4)가 같은 위젯을 쓴다(고르는 칸이 먼저, 나머지는 서버 순서). */
+export function BasicFields({ entry, params, onChange }: {
+  entry: NodeCatalogEntry | undefined; params: Params; onChange: (p: Params) => void;
+}) {
+  const basic = fieldsOf(entry?.params_schema ?? null).filter((f) => f.ui.tier === "basic")
+    .map((f, i) => ({ f, i })).sort((a, b) => Number(!a.f.ui.options) - Number(!b.f.ui.options) || a.i - b.i)
+    .map((x) => x.f);
+  return (
+    <>
+      {basic.map((f) => <BasicField key={f.name} f={f} value={params[f.name]} root={entry?.params_schema ?? null}
+                                    onChange={(v) => onChange(setOrClear(params, f.name, v))} />)}
+    </>
+  );
+}
+
 export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
   result, stale, onSave, saveFollowUp }: {
   node: PgNode;

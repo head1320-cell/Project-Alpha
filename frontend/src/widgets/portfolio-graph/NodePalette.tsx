@@ -17,13 +17,15 @@ import { STAGE_VAR } from "./GraphNode";
 
 export const PALETTE_MIME = "application/x-pg-node";
 
-export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate }: {
+export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal }: {
   catalog: NodeCatalogEntry[];
   stages: WorkflowStage[];
   /** 처음 검색어 — 옛 주소로 온 사람에게 그 화면의 일을 하는 노드를 먼저 보인다(BL4). */
   initialQuery?: string;
   onAdd: (kind: string) => void;
   onTemplate: (key: string) => void;
+  /** 목표로 시작(BM C4) — 빠른 시작 맨 위. */
+  onGoal?: () => void;
 }) {
   /** 노드 종류 → 그 일을 하던 예전 화면(검색·툴팁용). */
   const legacyOf = (kind: string) => legacyScreensOf(kind);
@@ -79,6 +81,12 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
       <MyBlocks />
       <section className="pg-quickstart" aria-label="빠른 시작">
         <h4 className="pg-quickstart-h">빠른 시작</h4>
+        {onGoal && (
+          <button type="button" className="pg-goal-entry" onClick={onGoal}>
+            <b>목표로 시작하기</b>
+            <span>무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 바로 계산해요.</span>
+          </button>
+        )}
         {TEMPLATES.map((t) => (
           <button key={t.key} type="button" className="pg-template" data-template={t.key} onClick={() => onTemplate(t.key)}>
             <b>{t.name}</b>
