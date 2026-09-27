@@ -16,7 +16,15 @@ type N = { id: string; position: { x: number; y: number }; data: { kind: string;
 type E = { source: string; target: string };
 
 /** 갈래로 복제할 노드 — 뿌리 + (같은 전략 안의 / 전략 밖이면 포트폴리오 레인을 뺀) 하류. 다른 갈래의 복제본은 포함하지 않는다. */
-export function branchScope(root: string, nodes: N[], edges: E[], groups: GraphGroup[], branches: GraphBranch[]): string[] {
+export function branchScope(root: string, nodes: N[], edges: E[], groups: GraphGroup[], branches: GraphBranch[],
+                            scope?: string[]): string[] {
+  if (scope) {
+    // 전략째 갈래(BN N2) — 범위는 전략 구성원 전부(다른 갈래의 복제·포트폴리오 노드는 빼고).
+    const copiesOf = new Set(branches.flatMap((b) => Object.keys(b.map)));
+    const inScope = new Set(scope);
+    return nodes.map((n) => n.id).filter((id) => inScope.has(id) && !copiesOf.has(id)
+      && nodes.find((n) => n.id === id)?.data.kind !== PORTFOLIO_NODE);
+  }
   const inStrategy = groups.find((g) => g.kind === "strategy" && g.members.includes(root));
   const lane = portfolioLane(nodes, edges, groups);
   const copies = new Set(branches.flatMap((b) => Object.keys(b.map)));

@@ -2,8 +2,8 @@
  * 전략 지도 (BM C2) — 순수 함수. 여러 전략(상자)이 한 포트폴리오로 모이는 캔버스의 배치·삽입·블록 파일.
  * ==========================================================================
  * ★화면 정보만 다룬다★ — 전략 상자(`groups[].kind === "strategy"`)는 계산에 끼지 않는다. 계산은 `portfolio_combine` 노드가 한다.
- * - `mapLayout`: (전략 띠 행 × 단계 열) 칸에 놓는다. 같은 단계 안의 사슬은 깊이 순서대로 작은 열로 나눈다(선이 세로로 꺾이지 않게).
- *   전략에 속하지 않은 노드 중 `portfolio_combine` 과 그 하류는 맨 오른쪽 **포트폴리오 레인**으로, 나머지는 "공용" 띠로.
+ * - `mapLayout`: ★그냥 노드와 선이다★(BN N1 — 레인·배경 칸을 그리지 않는다). 전략마다 한 줄, 줄 안은 흐름 깊이 순서로 왼쪽 → 오른쪽.
+ *   전략에 속하지 않은 노드 중 `portfolio_combine` 과 그 하류는 모든 줄의 오른쪽에 세로로 쌓고, 나머지는 맨 아래 "공용" 줄로.
  * - `insertDoc`: 문서(템플릿·블록)를 id 를 새로 받아 끼워 넣는다 — 링크는 문서 안의 것만 따라온다.
  * - 블록 파일 `project-alpha.pgblock` v1 — 그래프 파일과 같은 규칙(다른 포맷은 거부, 모르는 노드는 버리지 않음).
  */
@@ -14,15 +14,12 @@ export const STRATEGY_COLORS = 6;
 export const PORTFOLIO_NODE = "portfolio_combine";
 export const PORTFOLIO_PORTS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"] as const;
 
-export const LANE = { slot: 236, row: 190, bandGap: 96, top: 200, left: 0 } as const;
+/** 지도 치수 — 보통 자동 정리와 같은 칸(열 230 · 행 170). 전략 사이·포트폴리오 앞은 상자 머리가 들어갈 만큼 띄운다. */
+export const MAP = { col: 230, row: 170, bandGap: 120, portfolioGap: 90 } as const;
 
 type Pos = { x: number; y: number };
 type N = { id: string; position: Pos; data: { kind: string } };
 type E = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
-
-export interface LaneBox { key: string; label: string; x: number; width: number }
-export interface BandBox { groupId: string | null; label: string; color: number | null; y: number; height: number }
-export interface MapLayout { positions: Map<string, Pos>; lanes: LaneBox[]; bands: BandBox[]; height: number; portfolioX: number }
 
 /** 전략의 출력 — 구성원 중 Weights 를 내는 마지막 노드(흐름 순서). 없으면 null. */
 export function strategyOutput(members: string[], nodes: N[], edges: E[], catalog: NodeCatalogEntry[]): string | null {
@@ -49,8 +46,7 @@ export function portfolioLane(nodes: N[], edges: E[], groups: GraphGroup[]): Set
   return out;
 }
 
-export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[], stageKeys: { key: string; label: string }[],
-                          stageOf: (kind: string) => string | undefined): MapLayout {
+export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[]): Map<string, Pos> {
   const order = topoOrder(nodes.map((n) => n.id), edges);
   const depth = new Map<string, number>();
   for (const id of order) {
@@ -61,68 +57,47 @@ export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[], stageKey
   const strategies = groups.filter((g) => g.kind === "strategy");
   const owner = new Map<string, string>();
   for (const g of strategies) for (const m of g.members) owner.set(m, g.id);
-  const bandKeys: (string | null)[] = [...strategies.map((g) => g.id)];
+  const bandKeys: (string | null)[] = strategies.map((g) => g.id);
   if (nodes.some((n) => !owner.has(n.id) && !lane.has(n.id))) bandKeys.push(null);
-  const stageIdx = new Map(stageKeys.map((s, i) => [s.key, i]));
-  const colOf = (n: N) => stageIdx.get(stageOf(n.data.kind) ?? "") ?? 0;
-
-  // 단계 열 안의 작은 열 = 그 단계에서 만나는 서로 다른 깊이(띠마다 따로 세고, 열 폭은 가장 넓은 띠에 맞춘다).
-  const subOf = new Map<string, number>();
-  const width = stageKeys.map(() => 1);
-  for (const b of bandKeys) {
-    const members = nodes.filter((n) => !lane.has(n.id) && (owner.get(n.id) ?? null) === b);
-    stageKeys.forEach((_, c) => {
-      const ds = [...new Set(members.filter((n) => colOf(n) === c).map((n) => depth.get(n.id) ?? 0))].sort((a, z) => a - z);
-      members.filter((n) => colOf(n) === c).forEach((n) => subOf.set(n.id, ds.indexOf(depth.get(n.id) ?? 0)));
-      width[c] = Math.max(width[c], ds.length || 1);
-    });
-  }
-  const lanes: LaneBox[] = [];
-  let x = LANE.left;
-  // 아무 노드도 없는 단계는 좁게(이름만 보이게) — 빈 열이 지도를 넓히지 않는다.
-  const used = new Set(nodes.filter((n) => !lane.has(n.id)).map(colOf));
-  stageKeys.forEach((s, c) => {
-    const w = used.has(c) ? width[c] * LANE.slot : Math.round(LANE.slot * 0.45);
-    lanes.push({ key: s.key, label: s.label, x, width: w });
-    x += w;
-  });
-  const portfolioX = x + LANE.slot * 0.4;
 
   const positions = new Map<string, Pos>();
-  const bands: BandBox[] = [];
-  let y = LANE.top;
+  let y = 0;
+  let maxDepth = 0;
   for (const b of bandKeys) {
-    const members = order.filter((id) => !lane.has(id) && (owner.get(id) ?? null) === b)
-      .map((id) => nodes.find((n) => n.id === id)!).filter(Boolean);
-    const stack = new Map<string, number>();
+    // 줄 안: 같은 깊이는 흐름 순서대로 아래로 — 사슬 하나면 한 줄로 곧게 선다.
+    const perDepth = new Map<number, number>();
     let rows = 1;
-    for (const n of members) {
-      const c = colOf(n);
-      const key = `${c}:${subOf.get(n.id) ?? 0}`;
-      const r = stack.get(key) ?? 0;
-      stack.set(key, r + 1);
+    for (const id of order.filter((x) => !lane.has(x) && (owner.get(x) ?? null) === b)) {
+      const d = depth.get(id) ?? 0;
+      const r = perDepth.get(d) ?? 0;
+      perDepth.set(d, r + 1);
       rows = Math.max(rows, r + 1);
-      positions.set(n.id, { x: lanes[c].x + (subOf.get(n.id) ?? 0) * LANE.slot + 24, y: y + r * LANE.row });
+      maxDepth = Math.max(maxDepth, d);
+      positions.set(id, { x: d * MAP.col, y: y + r * MAP.row });
     }
-    const g = strategies.find((s) => s.id === b);
-    bands.push({ groupId: b, label: g?.label ?? "공용", color: g?.color ?? null, y, height: rows * LANE.row });
-    y += rows * LANE.row + LANE.bandGap;
+    y += rows * MAP.row + MAP.bandGap;
   }
+  const height = Math.max(MAP.row, y - MAP.bandGap);
+  // 포트폴리오 노드(와 그 하류) — 모든 줄의 오른쪽. 첫 열은 줄 전체의 가운데에 세로로 쌓는다(여러 개면 겹치지 않게).
   const laneIds = order.filter((id) => lane.has(id));
   const laneDepth = new Map<string, number>();
   for (const id of laneIds) {
     const ins = edges.filter((e) => e.target === id && lane.has(e.source)).map((e) => (laneDepth.get(e.source) ?? 0) + 1);
     laneDepth.set(id, ins.length ? Math.max(...ins) : 0);
   }
-  const perCol = new Map<number, number>();
-  const mid = LANE.top + Math.max(0, (y - LANE.top - LANE.bandGap) / 2 - LANE.row / 2);
+  // 전략 상자의 최소 폭(머리 줄이 들어갈 만큼)을 넘도록 적어도 세 칸 오른쪽.
+  const x0 = (bandKeys.length ? Math.max(maxDepth + 1, 3) : 0) * MAP.col + MAP.portfolioGap;
+  const count = new Map<number, number>();
+  for (const id of laneIds) count.set(laneDepth.get(id)!, (count.get(laneDepth.get(id)!) ?? 0) + 1);
+  const seen = new Map<number, number>();
   for (const id of laneIds) {
-    const d = laneDepth.get(id) ?? 0;
-    const r = perCol.get(d) ?? 0;
-    perCol.set(d, r + 1);
-    positions.set(id, { x: portfolioX + d * LANE.slot + 24, y: (d === 0 ? mid : LANE.top) + r * LANE.row });
+    const d = laneDepth.get(id)!;
+    const r = seen.get(d) ?? 0;
+    seen.set(d, r + 1);
+    const top = Math.max(0, height / 2 - (count.get(d)! * MAP.row) / 2);
+    positions.set(id, { x: x0 + d * MAP.col, y: Math.round(top + r * MAP.row) });
   }
-  return { positions, lanes, bands, height: Math.max(y - LANE.top, LANE.row), portfolioX };
+  return positions;
 }
 
 /** 문서를 끼워 넣을 때의 새 id — `${prefix}${원래 id}`, 겹치면 숫자를 붙인다. */

@@ -6547,32 +6547,17 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-sr-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 640px) { .pg-wire-legend { font-size: 11px; gap: 2px 8px; } .pg-hint { white-space: normal; width: calc(100% - 32px); text-align: center; } }
 
-/* ── BM C2 · 전략 지도 — 전략 띠 × 단계 레인 · 포트폴리오 레인 ─────────────────────────────
-   대담함은 이 한 곳: 멀리서 보면 캔버스가 전략(가로 띠) × 단계(세로 레인) 격자가 되고 오른쪽 포트폴리오 레인으로 모인다. */
+/* ── BM C2 · 전략 상자 · 대리 포트 · 필터 · 전략 추가 · 내 블록 ───────────────────────────────
+   (C2 의 단계 레인 격자는 BN N1 에서 걷었다 — 전략 지도는 노드와 선만. 아래 BN N1 블록 참고.) */
 .pg-band-0 { --pg-band: var(--pg-band-0); } .pg-band-1 { --pg-band: var(--pg-band-1); } .pg-band-2 { --pg-band: var(--pg-band-2); }
 .pg-band-3 { --pg-band: var(--pg-band-3); } .pg-band-4 { --pg-band: var(--pg-band-4); } .pg-band-5 { --pg-band: var(--pg-band-5); }
-.pg-group--strategy { background: color-mix(in srgb, var(--pg-band) 8%, transparent); border: 0; border-left: 6px solid var(--pg-band); border-radius: 6px 20px 20px 6px; }
-.pg-group--strategy.pg-group--collapsed { background: var(--pg-paper); box-shadow: var(--pg-shadow); }
-.pg-group--strategy .pg-group-head { height: 44px; }
-.pg-group--strategy .pg-group-label { width: 11em; font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
 .pg-group-time { font-variant-numeric: tabular-nums; }
 .pg-group-tools { display: inline-flex; gap: 2px; }
-.pg-group-out { display: flex; align-items: baseline; gap: 6px; padding: 0 14px 6px 40px; color: var(--pg-body); font-size: 12px; }
-.pg-group-out b { font-size: 20px; font-weight: 800; color: var(--pg-ink); letter-spacing: -0.02em; }
-.pg-group-out small { margin-left: 2px; font-size: 12px; font-weight: 700; color: var(--pg-body); }
-.pg-group-warn { padding: 0 14px 8px 40px; font-size: 12px; color: var(--pg-assume); }
 .pg-proxy { position: absolute; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--pg-body); white-space: nowrap; }
 .pg-proxy--in { left: 0; padding-left: 12px; } .pg-proxy--out { right: 0; padding-right: 12px; }
 .pg-group .pg-handle { width: 12px !important; height: 12px !important; border-width: 2.5px !important; }
-.pg-lane { position: relative; border-left: 1px dashed var(--pg-line); background: transparent; pointer-events: none; }
-.pg-lane-label { position: absolute; top: 14px; left: 16px; font-size: 13px; font-weight: 700; color: var(--pg-body); }
-.pg-lane--portfolio { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pg-blue) 6%, transparent) 0 10px, transparent 10px 20px); border-left: 2px solid color-mix(in srgb, var(--pg-blue) 45%, var(--pg-line)); border-radius: 0 20px 20px 0; }
-.pg-lane--portfolio .pg-lane-label { color: var(--pg-blue-ink); }
-.pg-canvas[data-zoom="far"] .pg-lane-label, .pg-canvas[data-zoom="far"] .pg-group--strategy .pg-group-label { font-size: min(40px, calc(14px / var(--pg-z, 1))); }
-.pg-canvas[data-zoom="far"] .pg-group--strategy .pg-group-label { width: 14em; height: auto; }
 .pg-group--collapsed .pg-group-label { flex: 1; width: auto; }
 .pg-canvas[data-zoom="far"] .pg-group-sum { display: none; }
-.pg-group--strategy .pg-group-sum { color: var(--pg-body); }
 .react-flow__edge.pg-edge--faint { opacity: .3; }
 .react-flow__edge.pg-wire--proxy .react-flow__edge-path { stroke-width: 2px; }
 /* 들어가기 빵부스러기 · 필터 칩 */
@@ -6695,3 +6680,54 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-simple-unmeasured { margin-top: 10px; font-size: 13px; color: var(--pg-body); }
 .pg-simple-unmeasured summary { cursor: pointer; font-weight: 600; }
 .pg-body[hidden] { display: none; }
+
+/* ── BN N1 · 노드 링크 전략 지도 — 펼친 전략 = 띠 색 묶음 상자 · 접은 전략 = 노드 카드 한 장 ─────────────────
+   캔버스의 노드·선 말고 새 그림 문법을 들이지 않는다(사용자 결정). 레인·배경 칸·몫만큼 굵은 선 없음 — 선은 늘 포트 타입 색. */
+.pg-group--strategy { min-width: 520px; background: color-mix(in srgb, var(--pg-band) 5%, transparent); border-color: color-mix(in srgb, var(--pg-band) 55%, var(--pg-line)); }
+.pg-group--strategy .pg-group-label { width: 10em; font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+.pg-group-sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pg-group--strategy .pg-group-sum { color: var(--pg-body); }   /* 띠 색 바탕 위 — mute 는 AA 미달(4.26:1) */
+.pg-group-share { flex: none; display: inline-flex; align-items: baseline; gap: 4px; height: 24px; padding: 0 9px; font-size: 12px; font-weight: 600; line-height: 24px; color: var(--pg-body); background: var(--pg-paper); border-radius: 12px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pg-band) 45%, var(--pg-line)); }
+.pg-group-share b { font-size: 13px; font-weight: 800; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-theme .pg-group-run { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-right: 2px; padding: 0 9px; font: inherit; font-size: 12px; font-weight: 700; color: var(--pg-blue-ink); white-space: nowrap; background: var(--pg-blue-soft); border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-group-run:disabled { opacity: .5; cursor: default; }
+.pg-group-out { display: flex; align-items: baseline; gap: 6px; padding: 0 14px 6px 40px; color: var(--pg-body); font-size: 12px; }
+.pg-group-out b { font-size: 20px; font-weight: 800; color: var(--pg-ink); letter-spacing: -0.02em; }
+.pg-group-out small { margin-left: 2px; font-size: 12px; font-weight: 700; color: var(--pg-body); }
+.pg-group-warn { padding: 0 14px 8px 40px; font-size: 12px; color: var(--pg-assume); }
+.pg-pip { display: inline-block; width: 7px; height: 7px; margin: 0 4px 1px 0; border-radius: 50%; vertical-align: middle; }
+.pg-pip--ok { background: var(--pg-ok); } .pg-pip--blocked { background: var(--pg-assume); } .pg-pip--failed { background: var(--pg-fail); }
+.pg-canvas[data-zoom="far"] .pg-group--strategy .pg-group-label { width: 14em; height: auto; font-size: min(40px, calc(14px / var(--pg-z, 1))); }
+.pg-canvas[data-zoom="far"] .pg-group-share, .pg-canvas[data-zoom="far"] .pg-group-share b { height: auto; font-size: min(32px, calc(12px / var(--pg-z, 1))); line-height: 1.5; }
+/* 접은 전략 — 노드 카드와 같은 몸: 같은 폭 계열 · 같은 모서리 · 같은 그림자 · 같은 포트 점 */
+.pg-group.pg-snode { width: 208px; min-width: 0; padding: 12px 13px; background: var(--pg-paper); border: 1.5px solid transparent; border-radius: 16px; box-shadow: var(--pg-shadow); }
+.pg-snode .pg-node-k { padding-right: 26px; }
+.pg-snode-mark { flex: none; width: 18px; height: 18px; background: var(--pg-band); border-radius: 6px; }
+.pg-theme .pg-snode-open { position: absolute; top: 8px; right: 8px; }
+.pg-snode .pg-snode-name { display: block; width: calc(100% + 7px); margin: 6px 0 0 -7px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.pg-snode-share { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin: 4px 0 0; }
+.pg-snode-share b { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-snode-share b i { margin-left: 1px; font-size: 14px; font-style: normal; }
+.pg-snode-share small { font-size: 12px; font-weight: 600; color: var(--pg-body); }
+.pg-snode-status { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--pg-body); }
+.pg-snode .pg-group-warn { margin: 6px 0 0; padding: 0; line-height: 1.45; }
+.pg-theme .pg-snode-run { justify-content: center; width: 100%; height: 30px; margin: 10px 0 0; }
+.pg-snode .pg-proxy { padding: 0; }
+.pg-snode:hover .pg-port-name { display: block; position: absolute; top: -9px; padding: 1px 6px; font-size: 11px; color: var(--pg-body); background: var(--pg-soft); border-radius: 4px; white-space: nowrap; }
+.pg-canvas[data-zoom="far"] .pg-group.pg-snode { border-left: 6px solid var(--pg-band); }
+.pg-canvas[data-zoom="far"] .pg-snode-name, .pg-canvas[data-zoom="far"] .pg-snode-share, .pg-canvas[data-zoom="far"] .pg-snode-status,
+.pg-canvas[data-zoom="far"] .pg-snode-run, .pg-canvas[data-zoom="far"] .pg-snode .pg-group-warn { display: none; }
+/* 종착점 — 전략 합치기 카드의 몫 도넛 */
+.pg-node[data-kind="portfolio_combine"] { width: 236px; }
+.pg-node-terminal { margin-top: 10px; }
+.pg-donut { display: flex; align-items: center; gap: 12px; }
+.pg-donut svg { flex: none; }
+.pg-donut-track { stroke: var(--pg-soft); }
+.pg-donut-n { font-size: 20px; font-weight: 800; fill: var(--pg-ink); }
+.pg-donut-sub { font-size: 10px; font-weight: 600; fill: var(--pg-body); }
+.pg-donut-legend { display: grid; gap: 3px; min-width: 0; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.pg-donut-legend li { display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 6px; color: var(--pg-body); }
+.pg-donut-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.pg-donut-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-donut-legend b { color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-canvas[data-zoom="far"] .pg-donut-legend { display: none; }

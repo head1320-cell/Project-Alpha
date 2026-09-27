@@ -47,7 +47,6 @@ import {
   topoOrder,
   type GraphBlock,
   type GraphBranch,
-  type LaneBox,
   type WorkflowStage,
   type GraphDoc,
   type GraphDocEdge,
@@ -104,10 +103,8 @@ export interface PgState {
   pinned: string[];
   /** 원인 경로(BM C1) — 막힘·실패 노드에서 계산 못 한 상류를 따라 첫 원인까지. 켜지면 나머지는 흐려진다. */
   cause: { from: string; path: string[]; roots: string[] } | null;
-  /** 단계 순서(서버 카탈로그) — 전략 지도 정리의 열 순서. */
+  /** 단계 순서(서버 카탈로그). */
   stages: WorkflowStage[];
-  /** 전략 지도 정리가 그린 단계 레인(BM C2) — 다른 정리를 하거나 불러오면 지운다. */
-  lanes: { lanes: LaneBox[]; height: number; portfolioX: number } | null;
   /** 들어간 전략 상자(ComfyUI 서브그래프 들어가기) — 나머지는 흐리게, 상단에 빵부스러기. */
   focusGroup: string | null;
   /** 캔버스 필터(Dataiku) — 맞지 않는 노드·선을 흐린다. 여러 개면 하나라도 맞으면 남긴다. */
@@ -165,14 +162,13 @@ export interface PgState {
   insertBlock: (b: GraphBlock) => string;
   setFocusGroup: (id: string | null) => void;
   toggleFilter: (k: FilterKey) => void;
-  clearLanes: () => void;
   loadBlocks: () => void;
   /** 상자를 내 블록으로 — 이 브라우저에 넣고, 파일로 받을 수 있게 블록을 돌려준다(저장소가 막혀도 파일은 된다). */
   saveBlock: (groupId: string) => GraphBlock | null;
   removeBlock: (index: number) => void;
   setNote: (n: string | null) => void;
   /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내. */
-  makeBranch: (rootId: string) => string;
+  makeBranch: (rootId: string, strategyId?: string) => string;
   /** 갈래를 지운다 — 복제 노드도 함께. */
   removeBranch: (id: string) => void;
   setSimple: (v: boolean) => void;
@@ -290,7 +286,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     pinned: [],
     cause: null,
     stages: [],
-    lanes: null,
     focusGroup: null,
     filters: [],
     blocks: [],
@@ -414,7 +409,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
         report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
-        pinned: [], cause: null, lanes: null, focusGroup: null, filters: [],
+        pinned: [], cause: null, focusGroup: null, filters: [],
         branches: (doc.branches ?? []).filter((b) => b.root in b.map),
       });
     },
@@ -448,12 +443,15 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       groups: focusGroup ? s.groups.map((g) => (g.id === focusGroup ? { ...g, collapsed: false } : g)) : s.groups,
     })),
     toggleFilter: (k) => set((s) => ({ filters: s.filters.includes(k) ? s.filters.filter((x) => x !== k) : [...s.filters, k] })),
-    clearLanes: () => set({ lanes: null }),
     setNote: (note) => set({ note }),
     setSimple: (simple) => set({ simple }),
     setGrowing: (growing) => set({ growing }),
-    makeBranch: (rootId) => {
+    makeBranch: (rootIdArg, strategyId) => {
       const s = get();
+      // 전략째 갈래(BN N2) — 뿌리 = 전략의 흐름 첫 노드, 범위 = 전략 구성원 전부.
+      const strat = strategyId ? s.groups.find((g) => g.id === strategyId && g.kind === "strategy") : undefined;
+      const members = strat ? topoOrder(s.nodes.map((n) => n.id), s.edges).filter((id) => strat.members.includes(id)) : null;
+      const rootId = members?.[0] ?? rootIdArg;
       const root = s.nodes.find((n) => n.id === rootId);
       if (!root) return "갈래를 만들 노드를 찾지 못했어요.";
       // 갈래의 갈래는 원본 뿌리에 붙인다 — 비교 표가 한 원본을 기준으로 선다.
@@ -462,7 +460,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       if (parent && parent.root !== rootId) return "갈래는 뿌리 노드에서만 다시 만들 수 있어요 — 갈래 안의 뿌리(점선 틀의 맨 앞)를 골라 주세요.";
       const letter = nextBranchLetter(ofRoot, s.branches);
       if (!letter) return `한 노드에 갈래는 ${MAX_BRANCHES}개까지예요 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커져요. 쓰지 않는 갈래를 지우고 만들어 주세요.`;
-      const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches);
+      const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches, members ?? undefined);
       push();
       const taken = new Set(s.nodes.map((n) => n.id));
       const idOf = new Map<string, string>();
@@ -603,12 +601,10 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const s = get();
       if (!s.nodes.length) return;
       push();
-      if (s.groups.some((g) => g.kind === "strategy") && s.stages.length) {
-        // 전략이 있으면 전략 지도로 — (전략 띠 × 단계 열) 칸, 오른쪽 끝은 포트폴리오 레인.
-        const stageOf = (kind: string) => s.catalog?.find((c) => c.type === kind)?.stage;
-        const m = mapLayout(s.nodes, s.edges, s.groups, s.stages, stageOf);
-        set({ nodes: s.nodes.map((n) => (m.positions.has(n.id) ? { ...n, position: m.positions.get(n.id)! } : n)),
-              lanes: { lanes: m.lanes, height: m.height, portfolioX: m.portfolioX } });
+      if (s.groups.some((g) => g.kind === "strategy")) {
+        // 전략이 있으면 전략마다 한 줄 · 포트폴리오 노드는 오른쪽(BN N1 — 노드와 선만, 레인 없음).
+        const pos = mapLayout(s.nodes, s.edges, s.groups);
+        set({ nodes: s.nodes.map((n) => (pos.has(n.id) ? { ...n, position: pos.get(n.id)! } : n)) });
         return;
       }
       const order = topoOrder(s.nodes.map((n) => n.id), s.edges);
@@ -624,7 +620,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         // 같은 깊이는 **지금의 세로 순서**를 지킨다 — 사람이 둔 위아래를 뒤섞지 않는다.
         col.sort((a, b) => a.position.y - b.position.y).forEach((n, i) => pos.set(n.id, { x: d * 230, y: i * 170 }));
       }
-      set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })), lanes: null });
+      set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) });
     },
 
     groupPicked: (label) => {

@@ -13,6 +13,7 @@ import { Handle, NodeToolbar, Position, type NodeProps } from "reactflow";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
 import { fmtDelta, fmtElapsed, headlineDelta, nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
+import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
 
 /** 포트 타입 → 색. 모르는 타입은 회색, 카탈로그에 없는 포트는 빨간 점선. */
@@ -76,17 +77,17 @@ function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: 
   return out;
 }
 
-function Port({ port, side, index, unknown }: { port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean }) {
+function Port({ port, side, index, unknown, label }: { port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean; label?: string }) {
   const color = unknown ? "var(--pg-fail)" : portColor(port.type);
   return (
     <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}`} style={{ top: PORT_TOP + index * PORT_GAP }}
          title={unknown ? `${port.name} — 카탈로그에 없는 포트예요(파일의 링크를 버리지 않고 남겼어요)`
-                        : `${port.name} · ${port.type}${port.required === false ? " (선택)" : ""}`}>
+                        : `${label ? `${label} · ` : ""}${port.name} · ${port.type}${port.required === false ? " (선택)" : ""}`}>
       <Handle type={side === "in" ? "target" : "source"} position={side === "in" ? Position.Left : Position.Right}
               id={port.name} className="pg-handle"
               style={{ background: unknown ? "transparent" : color, borderColor: unknown ? color : "var(--pg-paper)",
                        borderStyle: unknown ? "dashed" : "solid" }} />
-      <span className="pg-port-name">{unknown ? `${port.name}(미상)` : PORT_PLAIN[port.type] ?? port.name}</span>
+      <span className="pg-port-name">{unknown ? `${port.name}(미상)` : label ?? PORT_PLAIN[port.type] ?? port.name}</span>
     </div>
   );
 }
@@ -106,6 +107,16 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   // 갈래(BM C3) — 이 노드가 복제본이면 원본 id. 원본 대비 Δ 는 헤드라인 이름·단위가 같을 때만.
   const origId = usePortfolioGraph((s) => s.branches.find((b) => id in b.map)?.map[id] ?? null);
   const origResult = usePortfolioGraph((s) => (origId && !s.reportStale ? s.report?.nodes[origId] : undefined));
+  // 종착점(BN N1) — 전략 합치기 노드는 몫 도넛. 포트 → 이은 전략의 띠 색·이름(화면 정보) · 몫은 서버 결과 그대로.
+  // 셀렉터는 문자열(JSON)을 돌려 같은 내용이면 다시 그리지 않는다 — 전략 이름에 어떤 글자가 들어가도 깨지지 않게 JSON.
+  const portBandKey = usePortfolioGraph((s) => {
+    if (data.kind !== "portfolio_combine") return "[]";
+    return JSON.stringify(s.edges.filter((e) => e.target === id).map((e) => {
+      const g = s.groups.find((x) => x.kind === "strategy" && x.members.includes(e.source));
+      return [e.targetHandle ?? "", g ? g.color ?? 0 : null, g?.label ?? ""];
+    }));
+  });
+  const portBand = JSON.parse(portBandKey) as [string, number | null, string][];
   const errors = (validation?.errors ?? []).filter((e) => e.node_id === id);
 
   const unknown = !!data.unknownReason || !entry;
@@ -113,11 +124,27 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
     ...(entry?.inputs ?? []).map((p) => ({ p })),
     ...(data.extraInputs ?? []).map((name) => ({ p: { name, type: "?" }, unknown: true })),
   ];
+  // 전략 합치기(BN N1) — 여덟 자리를 다 늘어놓지 않는다: 이은 자리 + 꼭 필요한 자리 + 빈 자리 하나만. 이은 자리의 이름은 전략 이름.
+  const combine = data.kind === "portfolio_combine";
+  const linkedPorts = new Map(portBand.map(([port, , name]) => [port, name] as const));
+  const portLabels = (data.params?.labels ?? {}) as Record<string, unknown>;
+  let spare = false;
+  const shownInputs = combine ? inputs.filter((x) => {
+    if (x.unknown || linkedPorts.has(x.p.name) || x.p.required !== false) return true;
+    if (!spare) { spare = true; return true; }
+    return false;
+  }) : inputs;
+  const inLabel = (name: string): string | undefined => {
+    if (!combine) return undefined;
+    if (!linkedPorts.has(name)) return "전략 더 잇기";
+    const l = portLabels[name];
+    return typeof l === "string" && l.trim() ? l : linkedPorts.get(name) || undefined;
+  };
   const outputs: { p: CatalogPort; unknown?: boolean }[] = [
     ...(entry?.outputs ?? []).map((p) => ({ p })),
     ...(data.extraOutputs ?? []).map((name) => ({ p: { name, type: "?" }, unknown: true })),
   ];
-  const minH = PORT_TOP + Math.max(inputs.length, outputs.length) * PORT_GAP;
+  const minH = PORT_TOP + Math.max(shownInputs.length, outputs.length) * PORT_GAP;
   const ex = live?.explain;
   const headline = live?.status === "ok" ? ex?.headline : null;
   const summary = nodeSummary(entry, data.params ?? {});
@@ -205,7 +232,17 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
         const d = headlineDelta(origResult, live);
         return d ? <div className="pg-node-delta" title="같은 이름·단위의 헤드라인끼리 뺀 값이에요">원본 대비 <b>{fmtDelta(d)}</b></div> : null;
       })()}
-      {glance && <div className="pg-node-glance"><Glance glance={glance} /></div>}
+      {combine && portBand.length > 0 && (() => {
+        const rows = (live?.status === "ok" ? (live.view?.strategies as { port: string; label: string; share_pct: unknown }[] | undefined) : undefined) ?? [];
+        const slices: DonutSlice[] = portBand.map(([port, color, name]) => {
+          const row = rows.find((r) => r.port === port);
+          const v = row?.share_pct;
+          return { port, label: row?.label ?? (name || port), share: typeof v === "number" && Number.isFinite(v) ? v : null,
+                   color: color === null ? "var(--pg-mute)" : `var(--pg-band-${color})` };
+        });
+        return <div className="pg-node-terminal"><StrategyDonut slices={slices} /></div>;
+      })()}
+      {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} /></div>}
       {elapsed !== null && (
         <div className="pg-node-time" title="이 노드의 계산 시간(서버)">계산 {fmtElapsed(elapsed)}</div>
       )}
@@ -223,7 +260,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
           {live.reason && <span className="pg-node-status-why">{live.reason}</span>}
         </div>
       )}
-      {inputs.map((x, i) => <Port key={`i-${x.p.name}`} port={x.p} side="in" index={i} unknown={x.unknown} />)}
+      {shownInputs.map((x, i) => <Port key={`i-${x.p.name}`} port={x.p} side="in" index={i} unknown={x.unknown} label={inLabel(x.p.name)} />)}
       {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} />)}
     </div>
   );

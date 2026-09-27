@@ -340,24 +340,45 @@ test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바�
   await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없어요");
 });
 
-test("전략 지도(BM C2): 자동 정리 = 단계 레인 + 포트폴리오 레인 · 전략은 띠마다 아래로 · 포트폴리오는 맨 오른쪽", async ({ page }) => {
+test("전략 지도(BM C2 → BN N1): 자동 정리 = 노드와 선만(배경 칸 없음) · 전략마다 한 줄 · 포트폴리오 노드는 오른쪽, 여럿이면 세로로 쌓임", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   await page.locator('button[aria-label="자동 정리"]').click();
-  await expect(page.locator(".pg-lane--portfolio")).toHaveCount(1);
-  const stages = (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()).stages as unknown[];
-  await expect(page.locator(".pg-lane")).toHaveCount(stages.length + 1);
-  const doc = await wip(page);
+  let doc = await wip(page);
+  // 그려진 것은 노드 카드와 상자뿐 — 끌 수도 고를 수도 없는 배경 노드(레인)가 없다.
+  await expect(page.locator(".react-flow__node")).toHaveCount(doc.nodes.length + doc.groups!.length);
   const [a, b] = (doc.groups ?? []).filter((g) => g.kind === "strategy");
   const y = (id: string) => doc.nodes.find((n) => n.id === id)!.position.y;
   const x = (id: string) => doc.nodes.find((n) => n.id === id)!.position.x;
-  expect(Math.min(...b.members.map(y)), "두 번째 전략 띠는 첫 띠 아래").toBeGreaterThan(Math.max(...a.members.map(y)));
+  expect(Math.min(...b.members.map(y)), "두 번째 전략 줄은 첫 줄 아래").toBeGreaterThan(Math.max(...a.members.map(y)));
+  for (const g of [a, b]) {
+    // 줄 안은 흐름 순서대로 왼쪽 → 오른쪽: 선은 늘 오른쪽으로 간다.
+    for (const e of doc.edges.filter((e) => g.members.includes(e.source) && g.members.includes(e.target))) {
+      expect(x(e.target), `${e.source} → ${e.target}`).toBeGreaterThan(x(e.source));
+    }
+  }
   const pf = doc.nodes.find((n) => n.type === "portfolio_combine")!;
   expect(pf.position.x).toBeGreaterThan(Math.max(...[...a.members, ...b.members].map(x)));
-  // 짝 — 전략이 없으면 예전 정리(레인 없음).
+
+  // 포트폴리오 노드가 둘이면 같은 열에 세로로 쌓인다(겹치지 않는다).
+  const two = JSON.parse(JSON.stringify(doc)) as Doc;
+  two.nodes.push({ ...pf, id: "pf_two" });
+  for (const e of doc.edges.filter((e) => e.target === pf.id)) two.edges.push({ ...e, target: "pf_two" });
+  await page.locator(".pg-import-input").setInputFiles({ name: "two.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(two)) });
+  await expect(node(page, "pf_two")).toBeVisible();
+  await page.locator('button[aria-label="자동 정리"]').click();
+  doc = await wip(page);
+  const p1 = doc.nodes.find((n) => n.id === pf.id)!.position;
+  const p2 = doc.nodes.find((n) => n.id === "pf_two")!.position;
+  expect(p2.x).toBe(p1.x);
+  expect(Math.abs(p2.y - p1.y)).toBeGreaterThanOrEqual(170);
+
+  // 짝 — 전략이 없으면 예전 정리(깊이 × 230).
   await page.locator('.pg-template[data-template="core"]').click();
   await page.locator('button[aria-label="자동 정리"]').click();
-  await expect(page.locator(".pg-lane")).toHaveCount(0);
+  doc = await wip(page);
+  expect(doc.nodes.find((n) => n.id === "optimizer")!.position.x % 230).toBe(0);
+  await expect(page.locator(".react-flow__node")).toHaveCount(doc.nodes.length);
 });
 
 test("접으면 대리 포트 · 펼치면 사라짐 · 들어가기는 그 전략만 밝히고 Esc 로 나옴(BM C2)", async ({ page }) => {
@@ -506,7 +527,11 @@ test("큰 그래프(BM C2): 전략 열여섯(노드 100개 넘게)을 넣고 지
   expect(n).toBeGreaterThan(100);
   const t0 = Date.now();
   await page.locator('button[aria-label="자동 정리"]').click();
-  await expect(page.locator(".pg-lane--portfolio")).toHaveCount(1);
+  await expect.poll(async () => {
+    const d = await wip(page);
+    const pfx = Math.max(...d.nodes.filter((x) => x.type === "portfolio_combine").map((x) => x.position.x));
+    return pfx > Math.max(...d.nodes.filter((x) => x.type !== "portfolio_combine").map((x) => x.position.x));
+  }, { timeout: 10_000 }).toBe(true);
   const ms = Date.now() - t0;
   test.info().annotations.push({ type: "perf", description: `노드 ${n}개 지도 정리 → 그림 ${ms}ms` });
   await page.mouse.move(700, 600);
@@ -813,6 +838,198 @@ for (const scheme of ["light", "dark"] as const) {
     audit = await page.evaluate<AuditResult>(contrastAudit(".pg-simple"));
     expect(audit.checked).toBeGreaterThan(30);
     expect(audit.low, `${scheme} 간단히 보기 AA`).toEqual([]);
+    if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BN N1 · 전략 지도도 노드와 선(사용자 결정: "원래 캔버스의 노드 링크 UI") — 거는 것:
+//  · 접은 전략 = 노드 카드 한 장: 노드 수 · 이름 · 몫 = ★그 전략 포트의 서버 share_pct★(응답을 바꾸면 따라온다) · 계산 전 "—"
+//    · 서버가 몫을 주지 않으면 "—" 와 이유, 도넛 조각도 없다(짝) · 포트폴리오에 잇지 않은 전략은 그 이유(짝)
+//  · 선은 그대로 — 합치기로 들어가는 선도 몫과 상관없이 같은 굵기·포트 타입 색
+//  · 포트폴리오 노드의 입력 자리: 이은 자리 + 빈 자리 하나만 · 이은 자리 이름 = 전략 이름
+//  · 이 전략만 계산(상자 머리·접은 카드) = 전략 안에서 하류가 없는 노드만 대상 · 다른 전략은 이전 결과
+//  · 전략째 갈래 — 전략 노드 전부 복제 · 포트폴리오로 나가는 선은 잇지 않음 · 되돌리기
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type Strat = NonNullable<Doc["groups"]>[number];
+const strategiesOf = (doc: Doc) => (doc.groups ?? []).filter((g) => g.kind === "strategy");
+const portfolioOf = (doc: Doc) => doc.nodes.find((n) => n.type === "portfolio_combine")!;
+const portOf = (doc: Doc, g: Strat) => doc.edges.find((e) => e.source === g.output && e.target === portfolioOf(doc).id)!.target_port;
+type ShareRow = { port: string; share_pct?: number };
+const shareRows = (body: RunBody, pfId: string) => ((body.nodes[pfId] as NodeRes & { view: { strategies: ShareRow[] } }).view.strategies);
+
+test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바꿔 보내면 따라옴) · 계산 전 '—' · 서버가 안 주면 '—'+이유, 도넛 조각 없음(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const pf = portfolioOf(doc);
+  const [a, b] = strategiesOf(doc);
+  const frameB = page.locator(`.pg-group--strategy[data-group-id="${b.id}"]`);
+  await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).click();
+  const card = page.locator(`.pg-snode[data-group-id="${a.id}"]`);
+  await expect(card.locator(".pg-node-k")).toHaveText(`전략 · 노드 ${a.members.length}개`);
+  await expect(card.locator(".pg-snode-name")).toHaveValue(a.label);
+  await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "");
+  await expect(card.locator(".pg-snode-share")).toContainText("계산하면 보여요");
+  await expect(frameB.locator(".pg-group-share")).toHaveText("몫 —");
+
+  const fake: Record<string, number> = { [portOf(doc, a)]: 61.2, [portOf(doc, b)]: 38.8 };
+  await patchRun(page, (body) => { for (const r of shareRows(body, pf.id)) r.share_pct = fake[r.port]; });
+  await run(page);
+  await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "61.2");
+  await expect(card.locator(".pg-snode-share b")).toHaveText("61.2%");
+  await expect(frameB.locator(".pg-group-share")).toHaveText("몫 38.8%");
+  const donut = node(page, pf.id).locator(".pg-donut");
+  await expect(donut.locator(`circle[data-port="${portOf(doc, a)}"]`)).toHaveAttribute("data-share", "61.2");
+  await expect(donut.locator(`circle[data-port="${portOf(doc, b)}"]`)).toHaveAttribute("data-share", "38.8");
+  await expect(donut.locator(`li[data-port="${portOf(doc, a)}"] b`)).toHaveText("61.2%");
+
+  // 선은 그대로 — 몫이 61 대 39 여도 합치기로 들어가는 두 선은 같은 굵기, 비중(Weights) 색.
+  const into = page.locator(`.react-flow__edge[aria-label$=" to ${pf.id}"] .react-flow__edge-path`);
+  await expect(into).toHaveCount(2);
+  const styles = await into.evaluateAll((ps) => ps.map((p) => [getComputedStyle(p).strokeWidth, getComputedStyle(p).stroke]));
+  expect(new Set(styles.map((x) => x[0]))).toEqual(new Set(["2.5px"]));
+  expect(new Set(styles.map((x) => x[1]))).toEqual(new Set(["rgb(22, 163, 74)"]));
+
+  // 짝 — 서버가 A 의 몫을 주지 않으면: "—" 와 이유 · 도넛 조각 없음 · 목록 "—" (0·균등으로 채우지 않는다).
+  await patchRun(page, (body) => { for (const r of shareRows(body, pf.id)) if (r.port === portOf(doc, a)) delete r.share_pct; });
+  await run(page);
+  await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "");
+  await expect(card.locator(".pg-snode-share")).toContainText("몫을 모름");
+  await expect(donut.locator(`circle[data-port="${portOf(doc, a)}"]`)).toHaveCount(0);
+  await expect(donut.locator(`li[data-port="${portOf(doc, a)}"] b`)).toHaveText("—");
+  await expect(frameB.locator(".pg-group-share")).not.toHaveText("몫 —");
+});
+
+test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리 하나만 · 이은 자리 이름 = 전략 이름 · 잇지 않은 전략 카드는 그 이유(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  let doc = await wip(page);
+  const pf = portfolioOf(doc);
+  const handles = () => page.locator(`.react-flow__node[data-id="${pf.id}"] .react-flow__handle.target`);
+  const portName = (port: string) => node(page, pf.id).locator(`.pg-port:has(.react-flow__handle[data-handleid="${port}"]) .pg-port-name`);
+  await expect(handles()).toHaveCount(3);                                   // s1·s2 + 빈 자리 하나 — 여덟 자리를 늘어놓지 않는다
+  const labels = pf.params.labels as Record<string, string>;
+  for (const [port, label] of Object.entries(labels)) await expect(portName(port)).toHaveText(label);
+  await expect(portName("s3")).toHaveText("전략 더 잇기");
+  await addStrategy(page, "tpl:rebalance");
+  await expect(handles()).toHaveCount(4);
+
+  // 짝 — 세 번째 전략의 선을 빼고 불러오면 자리는 다시 셋이고, 그 전략 카드는 몫 대신 "포트폴리오에 잇지 않았어요".
+  doc = await wip(page);
+  const third = strategiesOf(doc)[2];
+  const port3 = portOf(doc, third);
+  const cut = JSON.parse(JSON.stringify(doc)) as Doc;
+  cut.edges = cut.edges.filter((e) => !(e.source === third.output && e.target === pf.id));
+  const pfCut = cut.nodes.find((n) => n.id === pf.id)!;
+  delete (pfCut.params.labels as Record<string, string>)[port3];
+  await page.locator(".pg-import-input").setInputFiles({ name: "cut.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(cut)) });
+  await expect(handles()).toHaveCount(3);
+  await run(page);
+  await page.locator(`.pg-group--strategy[data-group-id="${third.id}"] .pg-group-toggle`).click();
+  await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toContainText("포트폴리오에 잇지 않았어요");
+  await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toHaveAttribute("data-share", "");
+});
+
+test("이 전략만 계산(BN N1): 상자 머리·접은 카드 — 대상 = 전략 안에서 하류가 없는 노드 · 다른 전략은 이전 결과로 남음", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  await run(page);
+  const doc = await wip(page);
+  const [a, b] = strategiesOf(doc);
+  const leaves = (g: Strat) => g.members.filter((m) => !doc.edges.some((e) => e.source === m && g.members.includes(e.target))).sort();
+  const targetsOf = async (click: () => Promise<void>) => {
+    const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+    await click();
+    return (new URL((await resp).url()).searchParams.get("targets") ?? "").split(",").sort();
+  };
+  expect(await targetsOf(() => page.locator(`.pg-group--strategy[data-group-id="${b.id}"] .pg-group-run`).click())).toEqual(leaves(b));
+  await expect(node(page, a.members[0])).toHaveClass(/pg-node--previous/);
+  await expect(node(page, b.output!)).not.toHaveClass(/pg-node--previous/);
+
+  await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).click();
+  // 두 전략을 다 담으면 멀리 확대라 카드는 이름·몫만 보인다(노드 카드와 같은 규칙) — 여기서는 단추가 부르는 동작만 확인한다.
+  expect(await targetsOf(() => page.locator(`.pg-snode[data-group-id="${a.id}"] .pg-group-run`).dispatchEvent("click"))).toEqual(leaves(a));
+  await expect(node(page, b.output!)).toHaveClass(/pg-node--previous/);
+});
+
+test("전략째 갈래(BN N1): 상자 머리에서 — 전략 노드 전부 복제 · 안쪽 선은 복제끼리 · 포트폴리오로 나가는 선은 잇지 않음 · 되돌리기", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  let doc = (await wip(page)) as BDoc;
+  const [, b] = strategiesOf(doc);
+  const pf = portfolioOf(doc);
+  await page.locator(`.pg-group--strategy[data-group-id="${b.id}"] .pg-group-branch`).click();
+  await expect(page.locator(".pg-note")).toContainText("갈래");
+  doc = (await wip(page)) as BDoc;
+  expect(doc.branches).toHaveLength(1);
+  const br = doc.branches![0];
+  expect(Object.values(br.map).sort()).toEqual([...b.members].sort());
+  const copies = Object.keys(br.map);
+  expect(doc.edges.filter((e) => copies.includes(e.source) && e.target === pf.id)).toEqual([]);
+  const inner = (ids: string[]) => doc.edges.filter((e) => ids.includes(e.source) && ids.includes(e.target)).length;
+  expect(inner(copies)).toBe(inner(b.members));
+  await expect(page.locator(".pg-branch")).toHaveCount(1);
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".pg-branch")).toHaveCount(0);
+  expect(((await wip(page)) as BDoc).branches ?? []).toEqual([]);
+});
+
+test("맞춰 보기(BN N1 에서 찾은 결함): 떠 있는 판(선 범례·안내 줄)이 맨 위 상자 머리와 노드를 가리지 않는다 — 자동 정리 뒤·맞춤 버튼 뒤", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });                 // 다 담기는 크기 — 넘치는 경우는 아래에서 따로
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  await addStrategy(page, "tpl:rebalance");
+  await run(page);                                                          // 선 범례는 계산한 뒤에 뜬다
+  const check = async (when: string) => {
+    await page.waitForTimeout(300);
+    const legend = (await page.locator(".pg-wire-legend").boundingBox())!;
+    const filters = (await page.locator(".pg-filters-toggle").boundingBox())!;
+    const hint = (await page.locator(".pg-hint").boundingBox())!;
+    const tops = await page.locator(".react-flow__node:not([style*='visibility: hidden'])").evaluateAll((els) =>
+      els.filter((e) => (e as HTMLElement).offsetParent !== null).map((e) => { const r = e.getBoundingClientRect(); return [r.top, r.bottom]; }));
+    expect(Math.min(...tops.map((t) => t[0])), `${when}: 가장 위 노드·상자가 선 범례·걸러 보기 아래`)
+      .toBeGreaterThanOrEqual(Math.max(legend.y + legend.height, filters.y + filters.height));
+    expect(Math.max(...tops.map((t) => t[1])), `${when}: 가장 아래 노드가 안내 줄 위`).toBeLessThanOrEqual(hint.y);
+    // 맨 위 전략 상자의 접기 단추를 실제로 누를 수 있다(가로막히면 trial 이 실패한다).
+    await page.locator(".pg-group--strategy .pg-group-toggle").first().click({ trial: true, timeout: 3_000 });
+  };
+  await page.locator('button[aria-label="자동 정리"]').click();
+  await check("자동 정리 뒤");
+  await page.mouse.move(700, 600);
+  await page.mouse.wheel(0, 400);
+  await page.locator(".react-flow__controls-fitview").click();
+  await check("맞춤 버튼 뒤");
+
+  // 짝 — 가장 작게 줄여도 넘치는 작은 창: 가운데 두지 않고 흐름의 시작에 붙인다(맨 위 머리는 여전히 판 아래·누를 수 있다).
+  await page.setViewportSize({ width: 1024, height: 560 });
+  await page.locator(".react-flow__controls-fitview").click();
+  await page.waitForTimeout(300);
+  const legend = (await page.locator(".pg-wire-legend").boundingBox())!;
+  const top = await page.locator(".react-flow__node").evaluateAll((els) =>
+    Math.min(...els.filter((e) => (e as HTMLElement).offsetParent !== null).map((e) => e.getBoundingClientRect().top)));
+  expect(top).toBeGreaterThanOrEqual(legend.y + legend.height);
+  await page.locator(".pg-group--strategy .pg-group-toggle").first().click({ trial: true, timeout: 3_000 });
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BN N1): ${scheme} — 접은 전략 카드 · 상자 머리 몫 · 포트폴리오 도넛·자리 이름 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    await addStrategy(page, "tpl:stress");
+    await page.locator('button[aria-label="자동 정리"]').click();
+    await run(page);
+    const doc = await wip(page);
+    const [a] = strategiesOf(doc);
+    await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).click();
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await zoomTo(page, "mid");
+    await expect(page.locator(".pg-snode .pg-snode-share b")).toBeVisible();
+    await node(page, portfolioOf(doc).id).hover();
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-canvas"));
+    expect(audit.checked).toBeGreaterThan(30);
+    expect(audit.low, `${scheme} AA 미달`).toEqual([]);
     if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
   });
 }

@@ -22,6 +22,7 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
+  getRectOfNodes,
   MiniMap,
   Panel,
   useStore,
@@ -36,7 +37,7 @@ import { Archive, Boxes, ClipboardList, Command, LayoutGrid, Loader2, Filter, La
 import {
   CORE_CHAIN_TEMPLATE,
   goalDoc,
-  LANE,
+  PORTFOLIO_NODE,
   TEMPLATES,
   parseFile,
   PG_NODE_TYPE,
@@ -57,7 +58,7 @@ import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFra
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_COLORS, PORT_PLAIN } from "./GraphNode";
-import { GroupFrame, Lane, PG_GROUP_TYPE, PG_LANE_TYPE, type GroupFrameData, type LaneData } from "./GroupFrame";
+import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
@@ -69,7 +70,7 @@ import { RunHistory } from "./RunHistory";
 import { SimpleView } from "./SimpleView";
 import { ancestorsOf, usePortfolioGraph, type FilterKey, type PgState } from "./store";
 
-const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_LANE_TYPE]: Lane, [PG_BRANCH_TYPE]: BranchFrame };
+const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_BRANCH_TYPE]: BranchFrame };
 const EDGE_TYPES = { [PG_WIRE_TYPE]: EvidenceEdge };
 /** 확대 3단계(BM C1 · 의미 확대) — 멀리: 이름과 숫자 하나 · 보통: 카드 · 가까이: 작은 그림·계산 시간까지. */
 export const ZOOM_FAR = 0.55;
@@ -90,6 +91,25 @@ function ZoomWatch({ el }: { el: RefObject<HTMLDivElement> }) {
 }
 /** 묶음 상자 여백·노드 카드 크기(대략) — 상자는 안의 노드를 감싸는 사각형이다. */
 const GROUP_PAD = 28;
+/** 맞춰 보기의 안쪽 여백(px) — 위 64 = 선 범례·걸러 보기 판(10 + 36 + 여유), 아래 64 = 안내 줄. */
+const FIT_INSET = { top: 64, bottom: 64, left: 24, right: 24 } as const;
+
+/** 맞춰 보기 — 떠 있는 판(위: 선 범례·걸러 보기 · 아래: 안내 줄)이 노드·상자 머리를 가리지 않게 위아래를 비워 둔다.
+ *  (BN N1 에서 찾은 결함: 균일 여백 맞춤은 맨 위 전략 상자의 머리 줄을 선 범례 밑에 두어 누를 수 없었다.) */
+function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null) {
+  if (!inst || !el) return;
+  const ns = inst.getNodes().filter((n) => !n.hidden && n.width && n.height);
+  if (!ns.length) return;
+  const b = getRectOfNodes(ns);
+  const w = Math.max(1, el.clientWidth - FIT_INSET.left - FIT_INSET.right);
+  const h = Math.max(1, el.clientHeight - FIT_INSET.top - FIT_INSET.bottom);
+  const zoom = Math.min(1, Math.max(0.2, Math.min(w / b.width, h / b.height)));
+  // 가장 작게 줄여도 넘치면 가운데 두지 않고 흐름의 시작(왼쪽 위)에 붙인다 — 넘친 쪽은 오른쪽·아래로 간다.
+  const dx = w - b.width * zoom;
+  const dy = h - b.height * zoom;
+  inst.setViewport({ x: FIT_INSET.left + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
+                     y: FIT_INSET.top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom });
+}
 const NODE_W = 176;
 const NODE_H = 150;
 const WIP_KEY = "alpha_pg_wip";
@@ -163,9 +183,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const runToRef = useRef<(id: string) => void>(() => {});
   const previewRef = useRef<(id: string | null) => void>(() => {});
   const focusRef = useRef<(id: string) => void>(() => {});
+  const runStrategyRef = useRef<(groupId: string) => void>(() => {});
+  const branchStrategyRef = useRef<(groupId: string) => void>(() => {});
   const [announce, setAnnounce] = useState("");
 
-  const fit = () => setTimeout(() => rf.current?.fitView({ padding: 0.08, maxZoom: 1 }), 60);
+  const fit = () => setTimeout(() => fitClear(rf.current, canvasEl.current), 60);
 
   // ── 카탈로그 → 복원(세션) 또는 기본 사슬 ──────────────────────────────
   useEffect(() => {
@@ -233,6 +255,19 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     return m;
   }, [s.groups]);
 
+  /** 전략(출력 노드)의 몫 — 이은 포트폴리오 노드 결과의 서버 값(`view.strategies[port].share_pct`). 계산 전·모르면 null. */
+  const shareByEdge = useCallback((target: string, port: string | null | undefined): number | null => {
+    const r = live?.[target];
+    if (!r || r.status !== "ok" || !port) return null;
+    const rows = (r.view?.strategies as { port: string; share_pct: unknown }[] | undefined) ?? [];
+    const v = rows.find((x) => x.port === port)?.share_pct;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  }, [live]);
+  const shareOf = useCallback((output: string | null): { share: number | null; linked: boolean } => {
+    const e = output ? s.edges.find((x) => x.source === output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
+    return { share: e ? shareByEdge(e.target, e.targetHandle) : null, linked: !!e };
+  }, [s.edges, s.nodes, shareByEdge]);
+
   const numbered = useMemo(() => {
     const num = new Map(order.map((id, i) => [id, i + 1]));
     const picked = new Set(s.picked);
@@ -247,8 +282,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     }));
     const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
       const ms = s.nodes.filter((n) => g.members.includes(n.id));
+      const strat = g.kind === "strategy";
       const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
-      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - (g.kind === "strategy" ? 58 : 30);
+      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 30;
       const x1 = Math.max(...ms.map((n) => n.position.x)) + NODE_W + GROUP_PAD;
       const y1 = Math.max(...ms.map((n) => n.position.y)) + NODE_H + GROUP_PAD;
       const inside = new Set(g.members);
@@ -269,16 +305,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                className: dimmed ? "pg-dim" : undefined,
                data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
                        kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
-                       output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()] } };
+                       output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()],
+                       ...(strat ? shareOf(g.output ?? null) : { share: null, linked: false }),
+                       onRunStrategy: runStrategyRef.current, onBranchStrategy: branchStrategyRef.current } };
     });
-    const lanes: Node<LaneData>[] = s.lanes ? [
-      ...s.lanes.lanes.map((l) => ({ id: `lane:${l.key}`, type: PG_LANE_TYPE, position: { x: l.x, y: 0 }, zIndex: -2,
-        selectable: false, draggable: false, focusable: false,
-        data: { label: l.label, width: l.width, height: s.lanes!.height + LANE.top + 40 } })),
-      { id: "lane:portfolio", type: PG_LANE_TYPE, position: { x: s.lanes.portfolioX, y: 0 }, zIndex: -2, selectable: false,
-        draggable: false, focusable: false,
-        data: { label: "포트폴리오", width: LANE.slot * 2, height: s.lanes.height + LANE.top + 40, portfolio: true } },
-    ] : [];
     // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.
     const branchFrames: Node<BranchFrameData>[] = s.branches.flatMap((b) => {
       const ms = s.nodes.filter((n) => n.id in b.map);
@@ -293,8 +323,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                 data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []),
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
-    return [...lanes, ...frames, ...branchFrames, ...cards];
-  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.lanes, s.branches, s.catalog]);
+    return [...frames, ...branchFrames, ...cards];
+  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf]);
   /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
   const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
   const edgesStyled = useMemo(() => s.edges.map((e) => {
@@ -365,7 +395,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     const st = usePortfolioGraph.getState();
     const rest: NodeChange[] = [];
     for (const c of changes) {
-      if ("id" in c && (c.id.startsWith("lane:") || c.id.startsWith("branch:"))) continue;
+      if ("id" in c && c.id.startsWith("branch:")) continue;
       if ("id" in c && c.id.startsWith("frame:")) {
         if (c.type === "position" && c.position) {
           const frame = numbered.find((n) => n.id === c.id);
@@ -486,6 +516,19 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     void run();
   }, [run]);
   runToRef.current = (id) => { if (!usePortfolioGraph.getState().running) void runTo(id); };
+  // 이 전략만 계산(BN N1) — 전략 구성원 중 하류가 전략 안에 없는 노드(출력·잎)를 대상으로 부분 계산.
+  runStrategyRef.current = (groupId) => {
+    const st = usePortfolioGraph.getState();
+    const g = st.groups.find((x) => x.id === groupId);
+    if (!g || st.running) return;
+    const inside = new Set(g.members);
+    const targets = g.members.filter((m) => !st.edges.some((e) => e.source === m && inside.has(e.target)));
+    if (targets.length) void run(targets);
+  };
+  branchStrategyRef.current = (groupId) => {
+    const st = usePortfolioGraph.getState();
+    st.setNote(st.makeBranch("", groupId));
+  };
   previewRef.current = (id) => {
     const st = usePortfolioGraph.getState();
     st.setPreview(id ? ancestorsOf([id], st.edges) : null);
@@ -780,10 +823,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                 <button type="button" className="pg-cause-clear" onClick={() => s.showCause(null)}>다 보기 <kbd>Esc</kbd></button>
               </Panel>
             )}
-            <Controls showInteractive={false} />
+            <Controls showInteractive={false} onFitView={() => fitClear(rf.current, canvasEl.current)} />
             {s.showMinimap && (
               <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap"
-                       nodeColor={(n) => (n.type === PG_GROUP_TYPE || n.type === PG_LANE_TYPE ? "transparent"
+                       nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent"
                          : bandOf.has(n.id) ? `var(--pg-band-${bandOf.get(n.id)})` : "var(--pg-line)")} />
             )}
           </ReactFlow>
