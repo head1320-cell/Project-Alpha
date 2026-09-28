@@ -173,3 +173,52 @@ test("알약과 원인 배너(BQ Q2): 원인 따라가기 배너·들어간 상�
     await page.locator(".pg-cause-root-btn").first().click({ trial: true, timeout: 3_000 });
   }
 });
+
+// BQ 마감 — 마지막 스크린샷 점검에서 찾은 것: 긴 요약(전략 둘)에서 1440 도구줄이 두 줄 · 1024 에서 선 범례가 걸러 보기와 겹침·안내가 창 밑으로 잘림 ·
+// 390 에서 도구줄 단추·범례가 화면 밖(잘려서 누를 수 없음) · 아래 시트 머리 닫기 단추.
+test("마감(BQ): 전략 둘(긴 요약)에서도 1440 도구줄 한 줄 · 계산하기가 첫 줄", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCanvas(page);
+  await page.locator(".pg-strat-add").click();
+  await page.locator('.pg-strat-item[data-source="tpl:stress"]').click();
+  await run(page);
+  await expect(page.locator(".pg-summary").first()).toContainText("완료 1");     // 두 자리 수
+  const tb = await box(page.locator(".pg-toolbar"));
+  expect(tb.height, "한 줄").toBeLessThanOrEqual(60);
+});
+
+test("마감(BQ): 1024 — 선 범례·걸러 보기·알약이 서로 안 겹치고 판 안에 · 안내가 판 밑으로 잘리지 않는다", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openCanvas(page);
+  await run(page);
+  const lg = await box(page.locator(".pg-wire-legend"));
+  const ft = await box(page.locator(".pg-filters-toggle"));
+  const pb = await box(pill(page));
+  const pl = await box(page.locator(".pg-palette"));
+  const sd = await box(page.locator(".pg-side"));
+  expect(overlaps(lg, ft), "범례 × 걸러 보기").toBe(false);
+  expect(overlaps(lg, pb) || overlaps(ft, pb), "알약").toBe(false);
+  for (const b of [lg, ft, pb]) expect(overlaps(b, pl) || overlaps(b, sd), "판").toBe(false);
+  const hint = await box(page.locator(".pg-hint, .pg-welcome").first());
+  expect(overlaps(hint, sd) || overlaps(hint, pl), "안내가 판 밑으로").toBe(false);
+});
+
+test("마감(BQ): 390 — 도구줄 단추·범례·시트 닫기 단추가 모두 화면 안(누를 수 있다)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openCanvas(page);
+  await run(page);
+  const out = await page.evaluate(() => [...document.querySelectorAll(".pg-toolbar button, .pg-toolbar input, .pg-wire-legend")]
+    .filter((e) => (e as HTMLElement).offsetParent !== null && e.getBoundingClientRect().width > 2)
+    .filter((e) => { const r = e.getBoundingClientRect(); return r.right > innerWidth + 0.5 || r.left < -0.5; })
+    .map((e) => (e.getAttribute("aria-label") || e.className).toString().slice(0, 40)));
+  expect(out, "화면 밖").toEqual([]);
+  // 범례 — 걸러 보기·알약과 겹치지 않고, 각 칸은 한 줄(글자 단위로 꺾이지 않는다)
+  const lg = await box(page.locator(".pg-wire-legend"));
+  expect(overlaps(lg, await box(page.locator(".pg-filters-toggle"))) || overlaps(lg, await box(pill(page)))).toBe(false);
+  const keyH = await page.locator(".pg-wire-key").evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().height)));
+  expect(keyH, "범례 칸이 한 줄").toBeLessThan(24);
+  await page.locator('.pg-node[data-node-id="optimizer"]').click();
+  const x = await box(page.locator('.pg-side .pg-panel-toggle[data-panel="right"]'));
+  expect(x.x + x.width).toBeLessThanOrEqual(390);
+  await page.locator('.pg-side .pg-panel-toggle[data-panel="right"]').click({ trial: true, timeout: 3_000 });
+});

@@ -110,12 +110,14 @@ const TOOLBAR_H = 48;
 /** 맞춰 보기 — 떠 있는 판(위: 선 범례·걸러 보기 · 아래: 안내 줄)이 노드·상자 머리를 가리지 않게 위아래를 비워 둔다.
  *  (BN N1 에서 찾은 결함: 균일 여백 맞춤은 맨 위 전략 상자의 머리 줄을 선 범례 밑에 두어 누를 수 없었다.) */
 function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
-                  opts: { ids?: string[]; minZoom?: number; maxZoom?: number; duration?: number } = {}) {
-  if (!inst || !el) return;
+                  opts: { ids?: string[]; minZoom?: number; maxZoom?: number; duration?: number } = {}): boolean {
+  if (!inst || !el) return false;
   // 일부만 맞출 때(갈래·들어가기 — BO O5)도 같은 여백 — 예전 fitView 는 맨 위 노드의 도구줄을 캔버스 위 끝 밖으로 밀었다.
   const want = opts.ids ? new Set(opts.ids) : null;
-  const ns = inst.getNodes().filter((n) => !n.hidden && n.width && n.height && (!want || want.has(n.id)));
-  if (!ns.length) return;
+  const shown = inst.getNodes().filter((n) => !n.hidden && (!want || want.has(n.id)));
+  const ns = shown.filter((n) => n.width && n.height);
+  // 아직 크기를 잰 노드가 모자라면(파일을 막 불러온 직후) 맞추지 않고 "못 맞춤" 을 알린다 — 부르는 쪽이 다음 프레임에 다시.
+  if (!ns.length || ns.length < shown.length) return false;
   const b = getRectOfNodes(ns);
   // 떠 있는 왼쪽 목록·오른쪽 창(BQ Q1)이 가리는 폭만큼 더 비운다 — 캔버스는 판 뒤까지 이어져 있다.
   const ins = floatInsets(el);
@@ -130,6 +132,7 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
   inst.setViewport({ x: L + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
                      y: top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom },
                    opts.duration ? { duration: opts.duration } : undefined);
+  return true;
 }
 const NODE_W = 176;
 /** React Flow 확대 한계 — `minZoom` 속성과 기본 최대(2). */
@@ -250,7 +253,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     return () => { ro.disconnect(); clearTimeout(t); };
   }, [leftShown, rightShown, panels.rightW, !!s.catalog]);
 
-  const fit = () => setTimeout(() => fitClear(rf.current, canvasEl.current), 60);
+  // 맞춰 보기 — 불러온 직후엔 노드 크기를 아직 모를 수 있어, 잴 수 있을 때까지 프레임마다 다시(최대 20번). 한 번만 60ms 뒤에 하던 것은
+  // 크기를 재기 전이면 조용히 건너뛰어, 불러온 흐름이 떠 있는 판 밑에 남는 일이 가끔 있었다(묶음 상자 E2E 가 3번에 1번 찾음).
+  const fit = () => {
+    let tries = 0;
+    const go = () => { if (!fitClear(rf.current, canvasEl.current) && tries++ < 20) requestAnimationFrame(go); };
+    setTimeout(go, 60);
+  };
   /** 판 사이 보이는 가운데를 기준으로 확대·축소(BQ Q1). */
   const zoomBy = useCallback((k: number) => {
     const inst = rf.current;
