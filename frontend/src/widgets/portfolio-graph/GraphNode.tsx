@@ -16,26 +16,7 @@ import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
 
-/** 포트 타입 → 색. 모르는 타입은 회색, 카탈로그에 없는 포트는 빨간 점선. */
-export const PORT_COLORS: Record<string, string> = {
-  Universe: "#6366f1",
-  Returns: "#0ea5e9",
-  Belief: "#a855f7",
-  Views: "#f59e0b",
-  Weights: "#16a34a",
-  RiskReport: "#ef4444",
-  BacktestResult: "#14b8a6",
-  // BK — 레포 도구 노드의 값
-  Scenario: "#e11d48",
-  StressReport: "#9f1239",
-  Scores: "#65a30d",
-  RegimeState: "#ca8a04",
-  TimingSignal: "#ea580c",
-  Trades: "#475569",
-  TargetVersion: "#0f766e",
-  StrategyResult: "#c026d3",
-  BacktestRun: "#b45309",
-};
+import { portColor } from "@/entities/portfolio-graph/ports";
 /** 포트 타입의 쉬운 이름 — 설정 탭의 받는 것/내는 것·포트 이름표. 모르는 타입은 이름 그대로. */
 export const PORT_PLAIN: Record<string, string> = {
   Universe: "종목", Returns: "수익률", Belief: "기대 수익", Views: "내 생각",
@@ -44,7 +25,6 @@ export const PORT_PLAIN: Record<string, string> = {
   TimingSignal: "타이밍 신호", Trades: "주문 목록", TargetVersion: "실행 목표", StrategyResult: "전략 묶음 성과",
   BacktestRun: "백테스트 실행",
 };
-const portColor = (t: string) => PORT_COLORS[t] ?? "#94a3b8";
 
 /** 워크플로우 단계 → 번호 배지 색(토큰). */
 export const STAGE_VAR: Record<string, string> = {

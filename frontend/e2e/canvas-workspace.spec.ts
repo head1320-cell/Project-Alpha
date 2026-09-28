@@ -5,6 +5,7 @@ import { fmtElapsed, fmtGlance } from "../src/entities/portfolio-graph/glance";
 import { fmtDelta } from "../src/entities/portfolio-graph/branch";
 import { quickAddItems } from "../src/entities/portfolio-graph/quickadd";
 import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
+import { PORT_COLORS, PORT_UNKNOWN_COLOR } from "../src/entities/portfolio-graph/ports";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BM — 캔버스를 "포트폴리오 설계 작업실"로 (설계 docs/superpowers/specs/2026-09-27-canvas-workspace-design.md)
@@ -258,6 +259,56 @@ for (const scheme of ["light", "dark"] as const) {
     expect(audit.checked).toBeGreaterThan(20);
     expect(audit.low, `${scheme} AA 미달`).toEqual([]);
     if (scheme === "dark") expect(audit.bright, "다크인데 밝은 배경").toEqual([]);
+  });
+}
+
+// BQ Q3 · 바탕 가시성 — 거는 것: 바탕은 청회색(무채색 아님) · 점은 보이되 조용하다(짝: 선보다 약하다) ·
+// 모든 선(끊긴 회색 포함)은 바탕과 3:1 이상(비텍스트 대비) · 카드는 바탕과 다른 판 + 1px 테두리로 떠 보인다.
+for (const scheme of ["light", "dark"] as const) {
+  test(`바탕(BQ Q3): ${scheme} — 청회색 바탕 · 조용한 점 · 선 3:1 이상 · 카드 테두리`, async ({ page }) => {
+    await openCanvas(page);
+    await failOneTicker(page);
+    await run(page);
+    await expect(page.locator(".react-flow__edge.pg-wire--blocked").first()).toBeAttached();
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    const r = await page.evaluate(([ports]) => {
+      const rgb = (s: string) => { const m = s.match(/(\d+(?:\.\d+)?)/g) ?? []; return m.slice(0, 3).map(Number); };
+      const lum = ([r, g, b]: number[]) => {
+        const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const ratio = (a: number[], b: number[]) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      const canvas = rgb(getComputedStyle(document.querySelector(".pg-canvas")!).backgroundColor);
+      const dotEl = document.querySelector(".react-flow__background circle, .react-flow__background path");
+      const dot = dotEl ? rgb(getComputedStyle(dotEl).fill) : [];
+      const wires = Array.from(document.querySelectorAll<SVGPathElement>(".react-flow__edge .react-flow__edge-path")).map((p) => ({
+        id: p.closest(".react-flow__edge")?.getAttribute("data-testid") ?? "?",
+        blocked: !!p.closest(".pg-wire--blocked"),
+        ratio: ratio(rgb(getComputedStyle(p).stroke), canvas),
+      }));
+      const card = getComputedStyle(document.querySelector(".pg-node")!);
+      // 이 흐름에 없는 포트 타입까지 — 선 색 토큰 전부를 같은 바탕에서 잰다.
+      const probe = document.createElement("i");
+      document.querySelector(".pg-canvas")!.appendChild(probe);
+      const tokens = Object.entries(ports).map(([t, c]) => { probe.style.color = c; return { t, c, ratio: ratio(rgb(getComputedStyle(probe).color), canvas) }; });
+      probe.remove();
+      return { canvas, dot: dot.length ? ratio(dot, canvas) : 0, wires, tokens,
+               card: ratio(rgb(card.backgroundColor), canvas), cardBorderW: card.borderTopWidth,
+               cardBorder: ratio(rgb(card.borderTopColor), rgb(card.backgroundColor)) };
+    }, [{ ...PORT_COLORS, "?": PORT_UNKNOWN_COLOR, off: "var(--pg-wire-off)" }] as const);
+    const [cr, , cb] = r.canvas;
+    expect(cb - cr, "바탕이 푸른 기를 띤다(무채색 아님)").toBeGreaterThanOrEqual(6);
+    expect(r.dot, "점이 보인다").toBeGreaterThanOrEqual(1.25);
+    expect(r.dot, "점은 조용하다 — 선보다 약하다").toBeLessThan(2.2);
+    expect(r.wires.length).toBeGreaterThan(3);
+    expect(r.wires.some((w) => w.blocked), "끊긴 선도 잰다").toBe(true);
+    expect(r.wires.filter((w) => w.ratio < 3).map((w) => `${w.id} ${w.ratio.toFixed(2)}`), `${scheme} 3:1 미만 선`).toEqual([]);
+    expect(r.tokens.length).toBeGreaterThan(15);
+    expect(r.tokens.every((x) => x.c.startsWith("var(")), "선 색은 테마 토큰").toBe(true);
+    expect(r.tokens.filter((x) => x.ratio < 3).map((x) => `${x.t} ${x.ratio.toFixed(2)}`), `${scheme} 3:1 미만 토큰`).toEqual([]);
+    expect(r.card, "카드가 바탕과 다른 판").toBeGreaterThanOrEqual(1.1);
+    expect(r.cardBorderW).toBe("1px");
+    expect(r.cardBorder, "테두리가 카드와 구별된다").toBeGreaterThan(1.05);
   });
 }
 
@@ -906,7 +957,12 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await expect(into).toHaveCount(2);
   const styles = await into.evaluateAll((ps) => ps.map((p) => [getComputedStyle(p).strokeWidth, getComputedStyle(p).stroke]));
   expect(new Set(styles.map((x) => x[0]))).toEqual(new Set(["2.5px"]));
-  expect(new Set(styles.map((x) => x[1]))).toEqual(new Set(["rgb(22, 163, 74)"]));
+  // 색은 테마 토큰(BQ Q3) — 비중 선 색을 같은 캔버스에서 풀어 비교한다(값을 박지 않는다).
+  const weightsColor = await page.locator(".pg-canvas").evaluate((el) => {
+    const i = document.createElement("i"); i.style.color = "var(--pg-port-Weights)"; el.appendChild(i);
+    const c = getComputedStyle(i).color; i.remove(); return c;
+  });
+  expect(new Set(styles.map((x) => x[1]))).toEqual(new Set([weightsColor]));
 
   // 짝 — 서버가 A 의 몫을 주지 않으면: "—" 와 이유 · 도넛 조각 없음 · 목록 "—" (0·균등으로 채우지 않는다).
   await patchRun(page, (body) => { for (const r of shareRows(body, pf.id)) if (r.port === portOf(doc, a)) delete r.share_pct; });

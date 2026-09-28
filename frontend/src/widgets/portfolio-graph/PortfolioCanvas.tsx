@@ -59,7 +59,8 @@ import { GateRail } from "./GateRail";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { GoalStart } from "./GoalStart";
-import { GraphNode, PORT_COLORS, PORT_PLAIN } from "./GraphNode";
+import { GraphNode, PORT_PLAIN } from "./GraphNode";
+import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
@@ -273,7 +274,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     const kind = s.nodes.find((n) => n.id === nodeId)?.data.kind;
     const entry = s.catalog?.find((c) => c.type === kind);
     const p = (side === "out" ? entry?.outputs : entry?.inputs)?.find((x) => x.name === handle);
-    return { color: p ? PORT_COLORS[p.type] ?? "#94a3b8" : "#94a3b8", plain: p ? PORT_PLAIN[p.type] ?? p.name : handle ?? "?" };
+    return { color: portTypeColor(p?.type), plain: p ? PORT_PLAIN[p.type] ?? p.name : handle ?? "?" };
   }, [s.nodes, s.catalog]);
   const bandOf = useMemo(() => {
     const m = new Map<string, number>();
@@ -383,7 +384,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                  lit && "pg-edge--path", onCause && "pg-edge--cause", !kept && "pg-dim", faint && "pg-edge--faint",
                  (gs || gt) && "pg-wire--proxy"].filter(Boolean).join(" ");
     return { ...e, ...remap, type: PG_WIRE_TYPE, data: wire, animated: lit && s.running, className: cls,
-             style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : out ? PORT_COLORS[out.type] ?? "#94a3b8" : "#94a3b8",
+             style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: lit || onCause ? 3.5 : 2.5 } };
   }), [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet, keep, collapsedOf, faintOthers]);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
@@ -921,7 +922,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="var(--pg-line)" />
+            <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="var(--pg-dot)" />
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">

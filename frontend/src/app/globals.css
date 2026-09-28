@@ -5867,27 +5867,44 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ★단 하나의 강한 요소 = 증거 관문 레일★. 나머지는 조용히.
    ═══════════════════════════════════════════════════════════════════════════ */
 .pg-theme {
-  --pg-paper: #ffffff; --pg-canvas: #f4f6f9; --pg-ink: #191f28; --pg-body: #4e5968; --pg-mute: #6b7684;
+  --pg-paper: #ffffff; --pg-canvas: #eef2f7; --pg-ink: #191f28; --pg-body: #4e5968; --pg-mute: #5f6b7a;
   --pg-line: #e5e8eb; --pg-soft: #f2f4f6; --pg-blue: #3182f6; --pg-blue-ink: #1b64da; --pg-blue-soft: #e8f3ff;
   --pg-ok: #08724e; --pg-ok-soft: #e3f6ee; --pg-assume: #a15c00; --pg-assume-soft: #fff4e0;
   --pg-unknown: #5b6573; --pg-unknown-soft: #eef0f3; --pg-fail: #d92d3c; --pg-fail-soft: #fdecee;
   /* 단계 색은 흰 번호 글자를 얹으므로 AA(4.5:1) 이상으로 잡는다 — 라이트·다크 공통. */
   --pg-st-data: #4e5968; --pg-st-signal: #7c3aed; --pg-st-belief: #6a3de8; --pg-st-build: #1f6fe5;
   --pg-st-check: #0b7274; --pg-st-act: #8f5a07; --pg-cta: #1b64da;
-  --pg-shadow: 0 1px 2px rgb(25 31 40 / 6%), 0 6px 20px rgb(25 31 40 / 6%);
-  --pg-wire-off: #b0b8c1;
+  --pg-shadow: 0 1px 2px rgb(25 31 40 / 8%), 0 6px 20px rgb(25 31 40 / 9%);
+  /* BQ Q3 — 바탕은 옅은 청회색, 점은 보이되 선보다 약하게, 카드는 1px 테두리로 떠 보이게. 판 위계: 바탕 < 카드 < 떠 있는 판. */
+  --pg-dot: #c3ccd8; --pg-card-line: #dce2ea;
+  --pg-float-shadow: 0 2px 6px rgb(25 31 40 / 6%), 0 12px 32px rgb(25 31 40 / 10%);
+  /* 선 색 — 바탕(#eef2f7)과 3:1 이상(비텍스트 대비). 모자란 색은 같은 색상에서 명도만 낮췄다. */
+  --pg-wire-off: #7d8894;
+  --pg-port-Universe: #6366f1; --pg-port-Returns: #0c8ec8; --pg-port-Belief: #a855f7; --pg-port-Views: #ba7808;
+  --pg-port-Weights: #159946; --pg-port-RiskReport: #ef4444; --pg-port-BacktestResult: #109788; --pg-port-Scenario: #e11d48;
+  --pg-port-StressReport: #9f1239; --pg-port-Scores: #5d960c; --pg-port-RegimeState: #b27904; --pg-port-TimingSignal: #e5560c;
+  --pg-port-Trades: #475569; --pg-port-TargetVersion: #0f766e; --pg-port-StrategyResult: #c026d3; --pg-port-BacktestRun: #b45309;
+  --pg-port-unknown: #798697;
   /* 전략 띠 6색(BM C2) — 단계 색·상태 색과 다른 저채도 계열. 넓은 띠의 옅은 바탕과 왼쪽 레일에만 쓴다. */
   --pg-band-0: #3d5a80; --pg-band-1: #5b6b2a; --pg-band-2: #7a3f6f; --pg-band-3: #8a5a12; --pg-band-4: #6b4a3a; --pg-band-5: #3f5f5a;
   font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-feature-settings: "tnum" 1; letter-spacing: -0.01em; color: var(--pg-ink);
 }
 .dark .pg-theme {
-  --pg-paper: #17191c; --pg-canvas: #101114; --pg-ink: #f2f4f6; --pg-body: #c1c7cf; --pg-mute: #9aa3ad;
-  --pg-line: #2c3036; --pg-soft: #1f2226; --pg-blue: #4d94ff; --pg-blue-ink: #8ab8ff; --pg-blue-soft: #16233a;
+  --pg-paper: #1a2029; --pg-canvas: #0e131b; --pg-ink: #f2f4f6; --pg-body: #c1c7cf; --pg-mute: #9aa3ad;
+  --pg-line: #2c3542; --pg-soft: #212833; --pg-blue: #4d94ff; --pg-blue-ink: #8ab8ff; --pg-blue-soft: #16233a;
   --pg-ok: #3ccf91; --pg-ok-soft: #10281f; --pg-assume: #f5b453; --pg-assume-soft: #2b2112;
   --pg-unknown: #a3acb8; --pg-unknown-soft: #23262b; --pg-fail: #ff6b76; --pg-fail-soft: #33171b;
   --pg-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 35%);
-  --pg-wire-off: #545b64;
+  --pg-dot: #2a3441; --pg-card-line: #2c3542;
+  --pg-float-shadow: 0 2px 6px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 50%);
+  /* 선 색 — 바탕(#0e131b)과 3:1 이상. 모자란 색은 같은 색상에서 명도만 높였다. */
+  --pg-wire-off: #707a88;
+  --pg-port-Universe: #6366f1; --pg-port-Returns: #0ea5e9; --pg-port-Belief: #a855f7; --pg-port-Views: #f59e0b;
+  --pg-port-Weights: #16a34a; --pg-port-RiskReport: #ef4444; --pg-port-BacktestResult: #14b8a6; --pg-port-Scenario: #e11d48;
+  --pg-port-StressReport: #b03d5d; --pg-port-Scores: #65a30d; --pg-port-RegimeState: #ca8a04; --pg-port-TimingSignal: #ea580c;
+  --pg-port-Trades: #5d697b; --pg-port-TargetVersion: #0f766e; --pg-port-StrategyResult: #c026d3; --pg-port-BacktestRun: #b45309;
+  --pg-port-unknown: #94a3b8;
   --pg-band-0: #8fb0dc; --pg-band-1: #b3c47a; --pg-band-2: #d59ccb; --pg-band-3: #deb173; --pg-band-4: #c9a391; --pg-band-5: #93bdb6;
 }
 .pg-page { gap: 0; }
@@ -6004,7 +6021,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-canvas .react-flow__controls button svg { fill: currentColor; }
 
 /* ── 노드 카드 ── */
-.pg-node { position: relative; width: 164px; padding: 12px 13px; font-size: 12px; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid transparent; border-radius: 16px; box-shadow: var(--pg-shadow); }
+.pg-node { position: relative; width: 164px; padding: 12px 13px; font-size: 12px; color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 16px; box-shadow: var(--pg-shadow); }
 .pg-node--selected { border-color: var(--pg-blue); box-shadow: 0 0 0 4px rgb(49 130 246 / 16%), var(--pg-shadow); }
 .pg-node--failed { border-color: var(--pg-fail); }
 .pg-node--warn { border-color: var(--pg-assume); }
@@ -6281,7 +6298,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-cmd-empty { padding: 18px; font-size: 13.5px; color: var(--pg-mute); }
 
 /* 미니맵 · 계산 기록 */
-.pg-canvas .pg-minimap { background: var(--pg-paper); border-radius: 12px; box-shadow: var(--pg-shadow); }
+.pg-canvas .pg-minimap { background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 12px; box-shadow: var(--pg-shadow); }
+.pg-canvas .pg-minimap .react-flow__minimap-mask { fill: color-mix(in srgb, var(--pg-canvas) 70%, transparent); }
+.pg-canvas .react-flow__background circle { fill: var(--pg-dot); }
 .pg-history-h { margin-top: 20px; }
 .pg-history { width: 100%; font-size: 13px; border-collapse: collapse; color: var(--pg-ink); }
 .pg-history th { padding: 4px 0; font-size: 12px; font-weight: 600; text-align: left; color: var(--pg-mute); }
