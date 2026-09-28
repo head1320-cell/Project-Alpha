@@ -140,3 +140,11 @@ def test_analytics_uses_the_costed_series():
     assert ana["correlation"]["성장"]["혼합"] == round(float(corr[0, 2]), 3)
     plain = sc.sleeve_analytics(SLEEVES, ret_matrix=ret, rebalance_every=every)
     assert ana["correlation"] != plain["correlation"]
+
+
+def test_cadence_help_points_to_the_cost_field():
+    """주기 칸 도움말이 '거래비용은 넣지 않아요' 라고 말하면 비용 칸이 생긴 지금은 거짓이다(점검 스크린샷에서 찾았다)."""
+    from src.api.allocation_graph_nodes_portfolio import PortfolioCombineParams as P
+    props = P.model_json_schema()["properties"]
+    help_ = props["rebalance"]["x-ui"]["help"]
+    assert "넣지 않아요" not in help_ and props["cost_bps"]["x-ui"]["label"] in help_

@@ -6634,6 +6634,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-branch-table th[scope="row"] { font-size: 12.5px; font-weight: 600; color: var(--pg-ink); text-align: left; }
 .pg-branch-table th[scope="col"] { font-size: 12px; font-weight: 700; color: var(--pg-body); text-align: right; }
 .pg-branch-table th[scope="col"]:first-child { text-align: left; }
+/* 값 칸 사이 간격 — 없으면 "min_var" "risk_parity" 가 붙어 "min_varrisk_parity" 로 읽혔다(BP 점검 스크린샷). */
+.pg-branch-table td, .pg-branch-table th[scope="col"]:not(:first-child) { padding-left: 12px; }
 .pg-branch-diff { font-weight: 800; color: var(--pg-blue-ink); }
 .pg-branch-table-wrap + .pg-branch-table-wrap { margin-top: 20px; }
 

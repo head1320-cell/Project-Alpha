@@ -44,7 +44,8 @@ class PortfolioCombineParams(BaseModel):
         options={k: v[1] for k, v in REBALANCE.items()}, empty_value="D",
         # 스키마 경로가 선택지 키를 가나다(알파벳)순으로 다시 늘어놓아 "매일·한 달·한 분기·매주" 가 됐다 — 짧은 주기부터의 순서를 따로 준다.
         order=list(REBALANCE),
-        help="되돌리는 사이에는 비중이 가격 따라 흘러가요. 비우면 매일 되돌린다고 봐요. 되돌릴 때의 거래비용은 넣지 않아요.")})
+        help="되돌리는 사이에는 비중이 가격 따라 흘러가요. 비우면 매일 되돌린다고 봐요. "
+             "되돌릴 때의 거래비용은 아래 ‘되돌리는 비용’에서 정해요.")})
 
     # BP P2 — 사용자 승인: 되돌릴 때마다 회전율 × 이 비용(bp)을 전략 흐름에서 뺀다. 0 이면 BO O2 와 같다(비트 단위).
     cost_bps: float = Field(0, ge=0, le=200, json_schema_extra={"x-ui": _ui(
