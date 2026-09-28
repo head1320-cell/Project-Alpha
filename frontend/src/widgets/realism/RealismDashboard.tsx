@@ -51,8 +51,8 @@ export default function RealismDashboard() {
         setReality(MOCK_REALITY);
         setUseMockData(true);
         setBackendNote(
-          "등록된 전략이 없습니다 — 멀티전략 페이지(전략 등록)에서 완료된 백테스트 실행을 "
-          + "등록하세요. 아래 수치는 모의 데이터 그대로입니다.");
+          "등록된 전략이 없어요 — 멀티전략 페이지(전략 등록)에서 완료된 백테스트 실행을 "
+          + "등록하세요. 아래 수치는 모의 데이터 그대로예요.");
         return;
       }
       const baseConfig = {
@@ -100,7 +100,7 @@ export default function RealismDashboard() {
         setUseMockData(true);
         setBackendNote(
           unavailableReason(idealRes) ?? unavailableReason(realityRes)
-            ?? "백엔드가 결과를 내지 않았습니다 — 아래 수치는 모의 데이터 그대로입니다.",
+            ?? "백엔드가 결과를 내지 않았어요 — 아래 수치는 모의 데이터 그대로예요.",
         );
       }
     } catch (e) {
@@ -108,7 +108,7 @@ export default function RealismDashboard() {
       setIdeal(MOCK_IDEAL);
       setReality(MOCK_REALITY);
       setUseMockData(true);
-      setBackendNote("백엔드에 닿지 못했습니다 — 아래 수치는 모의 데이터 그대로입니다.");
+      setBackendNote("백엔드에 닿지 못했어요 — 아래 수치는 모의 데이터 그대로예요.");
     } finally {
       setLoading(false);
     }

@@ -56,12 +56,12 @@ export default function MacroPage() {
       const res = await regimeSnapshotApi.createFromCurrent("kr");
       if (!res.recorded || !res.snapshot_id) {
         // 저장 실패를 성공으로 위장하지 않는다 — 이동하지 않고 사유를 보여 준다.
-        setAasError(res.message || "스냅샷이 저장되지 않아 이동하지 않았습니다.");
+        setAasError(res.message || "스냅샷이 저장되지 않아 이동하지 않았어요.");
         return;
       }
       router.push(`/allocation?snapshot=${encodeURIComponent(res.snapshot_id)}`);
     } catch (e) {
-      setAasError(e instanceof Error ? e.message : "스냅샷 생성에 실패했습니다.");
+      setAasError(e instanceof Error ? e.message : "스냅샷 생성에 실패했어요.");
     } finally {
       setAasBusy(false);
     }

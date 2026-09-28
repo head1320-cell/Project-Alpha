@@ -41,7 +41,7 @@ function CoverageBlock() {
   });
 
   if (q.isLoading) return <div className="mx-loading">소스 커버리지 확인 중…</div>;
-  if (q.isError || !q.data) return <Reason text="소스 커버리지를 불러오지 못했습니다 — 네트워크 오류입니다." />;
+  if (q.isError || !q.data) return <Reason text="소스 커버리지를 불러오지 못했어요 — 네트워크 오류예요." />;
 
   const { providers, keys, ladder } = q.data;
   return (
@@ -114,7 +114,7 @@ function LongRunBlock() {
   });
 
   if (q.isLoading) return <div className="mx-loading">장기관계 검정 중…</div>;
-  if (q.isError || !q.data) return <Reason text="장기관계 검정을 불러오지 못했습니다 — 네트워크 오류입니다." />;
+  if (q.isError || !q.data) return <Reason text="장기관계 검정을 불러오지 못했어요 — 네트워크 오류예요." />;
   if (!q.data.available) return <Reason text={q.data.reason} />;
 
   const d = q.data;
@@ -163,7 +163,7 @@ function ForecastBlock() {
   });
 
   if (q.isLoading) return <div className="mx-loading">예측 적중률 측정 중…</div>;
-  if (q.isError || !q.data) return <Reason text="예측 적중률을 불러오지 못했습니다 — 네트워크 오류입니다." />;
+  if (q.isError || !q.data) return <Reason text="예측 적중률을 불러오지 못했어요 — 네트워크 오류예요." />;
   if (!q.data.available) return <Reason text={q.data.reason} />;
 
   const d = q.data;
@@ -201,7 +201,7 @@ function ConsensusBlock() {
   });
 
   if (q.isLoading) return <div className="mx-loading">국면 도구 대조 중…</div>;
-  if (q.isError || !q.data) return <Reason text="국면 합의를 불러오지 못했습니다 — 네트워크 오류입니다." />;
+  if (q.isError || !q.data) return <Reason text="국면 합의를 불러오지 못했어요 — 네트워크 오류예요." />;
 
   const d = q.data;
   return (

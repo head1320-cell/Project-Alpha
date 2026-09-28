@@ -72,7 +72,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
     if (!lhsExpr) { setExprCheck(null); return; }
     try {
       const r = await backtestBridgeApi.validateExpr(lhsExpr);
-      if (!r.ok) setExprCheck({ ok: false, msg: r.error ?? "식이 올바르지 않습니다" });
+      if (!r.ok) setExprCheck({ ok: false, msg: r.error ?? "식이 올바르지 않아요" });
       else setExprCheck({
         ok: true,
         msg: `유효한 식${r.lookback ? ` · 룩백 ${r.lookback}봉` : ""}${r.unknown_tokens?.length ? ` · ⚠ 미지원 토큰(건너뜀): ${r.unknown_tokens.join(", ")}` : ""}`,
@@ -122,7 +122,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
       const skip = r.skipped?.length ? ` · 변환 불가 ${r.skipped.length}건` : "";
       setNlMsg(added.length
         ? `${added.length}개 조건 추가 (${r.source === "claude" ? "AI" : "규칙"})${skip} — 펀더멘털 토큰은 '펀더멘털 조건 평가' 토글 필요`
-        : `변환된 조건이 없습니다${skip}`);
+        : `변환된 조건이 없어요${skip}`);
       setNlQuery("");
     } catch { setNlMsg("변환 요청 실패 — 백엔드 연결을 확인하세요"); }
     finally { setNlBusy(false); }
@@ -150,7 +150,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
       const r = await backtestBridgeApi.validateLogic(expr, conditions.length);
       setLogicCheck(r.ok
         ? { ok: true, msg: `유효한 식${r.lookback ? ` · 추가 룩백 ${r.lookback}봉` : ""}` }
-        : { ok: false, msg: r.error ?? "식이 올바르지 않습니다" });
+        : { ok: false, msg: r.error ?? "식이 올바르지 않아요" });
     } catch { setLogicCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하세요" }); }
   };
 
@@ -179,7 +179,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
               </button>
             </div>
             {savedSets.length === 0 ? (
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>저장된 조건식 세트가 없습니다</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>저장된 조건식 세트가 없어요</span>
             ) : savedSets.map((sv) => (
               <div key={sv.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button type="button" onClick={() => handleLoadSet(sv)} title="이 세트 불러오기"
@@ -194,7 +194,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         )}
         {conditions.length === 0 && (
           <div style={{ fontSize: 12, color: "var(--text-muted)", border: "1px dashed var(--border-strong)", borderRadius: R, padding: "12px 11px", marginBottom: 7, lineHeight: 1.6 }}>
-            아직 조건이 없습니다. 오른쪽에서 수식을 만들어 추가하세요.
+            아직 조건이 없어요. 오른쪽에서 수식을 만들어 추가하세요.
           </div>
         )}
         {conditions.map((c, i) => (

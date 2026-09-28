@@ -397,7 +397,7 @@ function DecisionCard({ label, dv, k, color, highlight, extra = null }: {
             —
           </div>
           <div style={{ fontSize: 9, color: "#6b7fa3", marginTop: 2, lineHeight: 1.4 }}>
-            {reason ?? (raw === undefined ? "이 비교의 시나리오가 실행되지 않았습니다." : "값이 없습니다.")}
+            {reason ?? (raw === undefined ? "이 비교의 시나리오가 실행되지 않았어요." : "값이 없어요.")}
           </div>
         </>
       ) : (

@@ -77,11 +77,11 @@ export const USAGE_LABEL: Record<ResearchUsage, string> = {
 
 /** 왜 그 등급인지 — UI 가 툴팁에 그대로 쓴다. 한계를 숨기지 않기 위한 문장이다. */
 export const USAGE_REASON: Record<ResearchUsage, string> = {
-  backtest_eligible: "빈티지 이력·공표지연이 모델링되어 과거 시뮬레이션에 쓸 수 있습니다.",
+  backtest_eligible: "빈티지 이력·공표지연이 모델링되어 과거 시뮬레이션에 쓸 수 있어요.",
   forward_only:
-    "개정 이력(빈티지)이 없어 과거 시점의 값을 재구성할 수 없습니다. " +
-    "전방 리서치 맥락으로만 쓰이며 과거 시뮬레이션에서는 차단됩니다.",
-  unavailable: "데이터 출처가 없습니다.",
+    "개정 이력(빈티지)이 없어 과거 시점의 값을 재구성할 수 없어요. " +
+    "전방 리서치 맥락으로만 쓰이며 과거 시뮬레이션에서는 차단돼요.",
+  unavailable: "데이터 출처가 없어요.",
 };
 
 export const STATUS_LABEL: Record<DataStatus, string> = {

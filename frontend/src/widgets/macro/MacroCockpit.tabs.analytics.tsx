@@ -78,7 +78,7 @@ export function CorrelationsTab({ corr, market, setMarket, loading, causal }: {
                 ))}
               </div>
             ) : null}
-            <p className="mc-card-note">{causal?.note ?? ""} 엣지 굵기 = 유의성(p 낮을수록 굵음). 상관 히트맵이 답하지 못하는 &quot;누가 누구를 선행하는가&quot;를 보여줍니다.</p>
+            <p className="mc-card-note">{causal?.note ?? ""} 엣지 굵기 = 유의성(p 낮을수록 굵음). 상관 히트맵이 답하지 못하는 &quot;누가 누구를 선행하는가&quot;를 보여줘요.</p>
           </div>
         </div>
       )}

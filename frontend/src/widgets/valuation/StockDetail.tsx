@@ -46,7 +46,7 @@ export default function StockDetail({ item, onClose }: StockDetailProps) {
       <div className="card-md h-full flex items-center justify-center text-secondary">
         <div className="text-center">
           <Info size={32} className="mx-auto mb-3 opacity-40" />
-          <div className="text-sm">좌측에서 종목을 선택하면 상세 분석이 표시됩니다.</div>
+          <div className="text-sm">좌측에서 종목을 선택하면 상세 분석이 표시돼요.</div>
         </div>
       </div>
     );

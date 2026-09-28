@@ -57,8 +57,8 @@ export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
       }}>
         {/* ★켜서 될 일이 아니다★ (BG6) — 예전 안내("매크로 오버레이 활성화 필요")는
             국면 분류기가 없는 저장소에서 따를 수 없는 지시였다. */}
-        Regime 분해 데이터 없음 — 이 실행에 저장된 일별 행이 없습니다. (국면을 판정하지 못한
-        날은 &quot;미상&quot; 줄로 따로 셉니다 — 빈티지가 없는 기간이면 그 줄만 나옵니다.)
+        Regime 분해 데이터 없음 — 이 실행에 저장된 일별 행이 없어요. (국면을 판정하지 못한
+        날은 &quot;미상&quot; 줄로 따로 세요 — 빈티지가 없는 기간이면 그 줄만 나와요.)
       </div>
     );
   }
@@ -71,8 +71,8 @@ export default function RegimeAttributionTable({ rows, perfLabel }: Props) {
           값은 오래도록 하드코딩된 `0` 이었다. 이제 백엔드가 `null`(미측정)을
           내므로, 화면도 왜 없는지를 말한다. */}
       <div style={{ marginBottom: 8, fontSize: 11, color: "#6b7fa3" }}>
-        ※ 전략 선택 효과는 <b>측정되지 않았습니다</b> — 전략별 벤치마크 계열이 없어
-        Brinson 선택항을 계산할 수 없습니다. 0 이 아니라 미상입니다.
+        ※ 전략 선택 효과는 <b>측정되지 않았어요</b> — 전략별 벤치마크 계열이 없어
+        Brinson 선택항을 계산할 수 없어요. 0 이 아니라 미상이에요.
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
         <thead>

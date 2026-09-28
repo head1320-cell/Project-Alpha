@@ -133,8 +133,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
     backtestBridgeApi.conditionTokens()
       .then((s) => { _supportCache = s; setSupport(s); setCatalogError(null); })
       .catch(() => setCatalogError(
-        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 보이는 중입니다 — "
-        + "최신 목록이 아닐 수 있습니다."));
+        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 보이는 중이에요 — "
+        + "최신 목록이 아닐 수 있어요."));
   }, [open, support]);
 
   // ★목록의 근거는 백엔드다★ 못 받으면 폴백이되, 위 catalogError 가 화면에 뜬다.
@@ -254,7 +254,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       open={open}
       onClose={onClose}
       title="팩터 선택"
-      subtitle="팩터를 고르고 함수를 씌워 조건식 한 항을 만듭니다"
+      subtitle="팩터를 고르고 함수를 씌워 조건식 한 항을 만들어요"
       ariaLabel="팩터 선택"
       searchPlaceholder="조건을 단어로 입력하세요"
       families={families}
@@ -269,7 +269,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       applyDisabled={applyDisabled}
       error={catalogError != null}
       errorText={catalogError ?? undefined}
-      note="지원 여부는 백엔드 /condition-tokens 가 단일 진실 공급원입니다 — 미지원 팩터는 평가에서 무시되므로 적용할 수 없습니다."
+      note="지원 여부는 백엔드 /condition-tokens 가 단일 진실 공급원이에요 — 미지원 팩터는 평가에서 무시되므로 적용할 수 없어요."
       // ★색조는 스타일이 아니라 CSS 변수 대입이다★ `--t-accent` 를 덮으면 셸의 기존
       // `.tfm-*` 규칙이 그대로 다시 물든다 — 새 CSS 없이 매수/매도 문맥 색을 지킨다.
       styleVars={{

@@ -34,7 +34,7 @@ export function LoadingState({ label = "데이터를 불러오는 중", sub }: {
   );
 }
 
-export function EmptyState({ label = "표시할 데이터가 없습니다", sub }: { label?: string; sub?: ReactNode }) {
+export function EmptyState({ label = "표시할 데이터가 없어요", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-empty">
       <span className="tstate-glyph" aria-hidden>◇</span>
@@ -44,7 +44,7 @@ export function EmptyState({ label = "표시할 데이터가 없습니다", sub 
   );
 }
 
-export function ErrorState({ label = "오류가 발생했습니다", sub }: { label?: string; sub?: ReactNode }) {
+export function ErrorState({ label = "오류가 발생했어요", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-error" role="alert">
       <span>[ ERROR ] {label}</span>

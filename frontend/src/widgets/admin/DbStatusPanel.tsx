@@ -244,7 +244,7 @@ export default function DbStatusPanel() {
               ★백엔드가 열거한다★ 앞으로 대상이 늘어도 이 파일은 안 고친다. */}
           {st.datasets === null && st.datasets_error && (
             <p className="tpage-intro" style={{ color: "#dc2626" }}>
-              적재 레지스트리를 읽을 수 없습니다 — {st.datasets_error}
+              적재 레지스트리를 읽을 수 없어요 — {st.datasets_error}
             </p>
           )}
           {st.datasets && st.datasets.length > 0 && (
@@ -301,7 +301,7 @@ export default function DbStatusPanel() {
               <p className="tpage-intro">{st.macro.note}</p>
               {Object.keys(st.macro.unavailable).length === 0 ? (
                 <p className="tpage-intro" style={{ color: "var(--t-muted)" }}>
-                  실패로 기록된 토큰이 없습니다
+                  실패로 기록된 토큰이 없어요
                   {st.macro.ok.length > 0 ? ` · 조회 성공 ${st.macro.ok.length}건` : ""}
                 </p>
               ) : (
@@ -350,7 +350,7 @@ export default function DbStatusPanel() {
                     {fmtNum(cov.tickers_covering)}종목
                   </b>
                   {cov.covering_pct != null ? ` (${cov.covering_pct}%)` : ""} 이{" "}
-                  {cov.start} ~ {cov.end} 를 덮습니다
+                  {cov.start} ~ {cov.end} 를 덮어요
                 </>
               ) : (
                 <span style={{ color: "var(--t-muted)" }}>
@@ -419,7 +419,7 @@ export default function DbStatusPanel() {
 
           <p className="tpage-intro" style={{ marginTop: 10 }}>
             키 없는 소스는 자동 건너뜀(no-op) · 진행은 "↻ 새로고침"으로 확인 · 대형 백필은 백그라운드 수 시간.
-            펀더멘털과 재무시계열은 같은 DART 일일 한도를 공유 — 동시 실행 시 한도 도달이 빨라집니다(권장: 재무시계열 완주 후 펀더멘털).
+            펀더멘털과 재무시계열은 같은 DART 일일 한도를 공유 — 동시 실행 시 한도 도달이 빨라져요(권장: 재무시계열 완주 후 펀더멘털).
           </p>
           {msg && (
             <p style={{ marginTop: 8, fontFamily: "var(--t-mono)", fontSize: 12, color: "var(--t-accent)" }}>{msg}</p>

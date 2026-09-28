@@ -260,7 +260,7 @@ export async function loadNetwork(code: string): Promise<NetworkInfo> {
     mk("customer", "고객사", g.customer),
     mk("competitor", "경쟁사", g.competitor),
   ].filter((grp) => grp.nodes.length);
-  return { groups, note: groups.length ? undefined : "등록된 밸류체인 관계가 없습니다." };
+  return { groups, note: groups.length ? undefined : "등록된 밸류체인 관계가 없어요." };
 }
 
 export async function loadRisk(code: string): Promise<RiskInfo> {
@@ -293,7 +293,7 @@ export async function loadRisk(code: string): Promise<RiskInfo> {
     const g = v as Record<string, unknown>;
     return { varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol), sharpe: null, mdd: null };
   }
-  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표를 계산할 수 없습니다 — 해당 종목 일별 시세가 아직 적재되지 않았습니다(시세 수집 후 활성)." };
+  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표를 계산할 수 없어요 — 해당 종목 일별 시세가 아직 적재되지 않았어요(시세 수집 후 활성)." };
 }
 
 export async function loadNarrative(item: object, valuationDetail: object): Promise<NarrativeInfo> {

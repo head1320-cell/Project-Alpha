@@ -49,17 +49,17 @@ const KIND_TEXT: Record<PerfKind, string> = {
 
 /** 마우스오버로 읽는 한 줄 — 라벨이 **무엇을 주장하는지** 적는다. */
 const KIND_HINT: Record<PerfKind, string> = {
-  backtest: "과거 데이터 위의 시뮬레이션입니다 — 실제로 체결된 적이 없습니다.",
-  paper: "모의투자 계좌에서 실시간으로 집행된 결과입니다 — 실제 자금이 아닙니다.",
-  shadow: "신호만 기록하고 주문은 내지 않았습니다.",
-  ra_testbed: "표준 심사 환경(테스트베드)의 성과입니다.",
-  live: "실계좌에서 실제 자금으로 집행된 결과입니다.",
-  unknown: "이 수치가 무엇에서 나왔는지 응답이 말하지 않았습니다.",
+  backtest: "과거 데이터 위의 시뮬레이션이에요 — 실제로 체결된 적이 없어요.",
+  paper: "모의투자 계좌에서 실시간으로 집행된 결과예요 — 실제 자금이 아니에요.",
+  shadow: "신호만 기록하고 주문은 내지 않았어요.",
+  ra_testbed: "표준 심사 환경(테스트베드)의 성과예요.",
+  live: "실계좌에서 실제 자금으로 집행된 결과예요.",
+  unknown: "이 수치가 무엇에서 나왔는지 응답이 말하지 않았어요.",
 };
 
 /** ★응답에 라벨이 아예 없을 때의 사유★ — 비어 있는 것과 모르는 것을 구별한다. */
 export const PERF_LABEL_MISSING_REASON =
-  "이 응답은 수치의 종류를 말하지 않습니다";
+  "이 응답은 수치의 종류를 말하지 않아요";
 
 function isKnownKind(k: string): k is PerfKind {
   return (PERF_KINDS as readonly string[]).includes(k);
@@ -82,7 +82,7 @@ export function resolvePerfLabel(
   if (!isKnownKind(value.kind)) {
     return {
       kind: "unknown",
-      kindReason: `알아보지 못한 종류입니다(본 값: ${JSON.stringify(value.kind)})`,
+      kindReason: `알아보지 못한 종류예요(본 값: ${JSON.stringify(value.kind)})`,
       dataReal: value.data_real ?? null,
       dataReason: value.data_reason ?? null,
     };

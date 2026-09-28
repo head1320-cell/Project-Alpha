@@ -54,13 +54,13 @@ export function frequencyWarningText(v: FrequencyVerdict): string | null {
   const f = frequencyLabel(v.factorFreq);
   const r = frequencyLabel(v.rebalance);
   if (v.kind === "unknown") {
-    return `주기 정렬을 판정할 수 없습니다 (팩터 ${f} · 리밸런싱 ${r}). ` +
-      "등급을 모르는 주기라 경고를 지어내지 않습니다.";
+    return `주기 정렬을 판정할 수 없어요 (팩터 ${f} · 리밸런싱 ${r}). ` +
+      "등급을 모르는 주기라 경고를 지어내지 않아요.";
   }
   if (v.kind === "factor_faster") {
-    return `팩터는 ${f}으로 갱신되는데 리밸런싱은 ${r}입니다 — ` +
-      "그 사이의 신호 변화는 반영되지 않고 버려집니다.";
+    return `팩터는 ${f}으로 갱신되는데 리밸런싱은 ${r}이에요 — ` +
+      "그 사이의 신호 변화는 반영되지 않고 버려져요.";
   }
-  return `리밸런싱은 ${r}인데 팩터는 ${f}으로만 갱신됩니다 — ` +
-    "같은 값이 반복 적용되어 거래만 늘고 신호는 새로 들어오지 않습니다.";
+  return `리밸런싱은 ${r}인데 팩터는 ${f}으로만 갱신돼요 — ` +
+    "같은 값이 반복 적용되어 거래만 늘고 신호는 새로 들어오지 않아요.";
 }

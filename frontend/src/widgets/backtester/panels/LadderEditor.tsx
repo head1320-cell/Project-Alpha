@@ -44,7 +44,7 @@ export default function LadderEditor({ steps, onChange, side }: {
           + 추가
         </button>
         <span style={{ fontSize: 11, color: total > 100 ? "#dc2626" : "var(--text-muted)" }}>
-          비중 합 {total}% {total > 100 ? "— 100%를 넘을 수 없습니다" : ""}
+          비중 합 {total}% {total > 100 ? "— 100%를 넘을 수 없어요" : ""}
         </span>
       </div>
       <span style={{ fontSize: 11, color: "var(--text-muted)" }}>

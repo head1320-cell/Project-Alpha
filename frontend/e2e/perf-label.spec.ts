@@ -97,7 +97,7 @@ test("★`perf_label` 이 없으면 `unknown` 이다 — `backtest` 로 기울�
   await expect(labels.first().locator(".perf-label__kind")).toHaveText("미상");
   // ★왜 모르는지도 함께 나온다★ — 빈 `unknown` 은 사유 없는 "unavailable" 과 같다.
   await expect(labels.first().locator(".perf-label__why"))
-    .toContainText("종류를 말하지 않습니다");
+    .toContainText("종류를 말하지 않아요");
 });
 
 // ── 3. ★핵심 주장★ 라벨은 배치가 아니라 사실이다 ────────────────────────────

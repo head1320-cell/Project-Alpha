@@ -62,7 +62,7 @@ export function RegimeRibbon({ points, span, runLength, occupancy }: RegimeRibbo
   if (!points.length) {
     return (
       <div className="as-rgr as-rgr-empty">
-        분류 가능한 달이 없어 리본을 그릴 수 없습니다
+        분류 가능한 달이 없어 리본을 그릴 수 없어요
         {span.dropped_incomplete > 0 && ` (축이 불완전한 달 ${span.dropped_incomplete}개월 제외)`}
       </div>
     );

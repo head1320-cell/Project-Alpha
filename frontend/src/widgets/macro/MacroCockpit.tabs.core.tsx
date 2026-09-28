@@ -223,7 +223,7 @@ export function RegimeTab({ regime, traj, strips, axisHist }: {
             <AxisBreakdown title="성장 축" detail={regime.axis_detail.growth} />
             <AxisBreakdown title="물가 축" detail={regime.axis_detail.inflation} />
           </div>
-          <p className="mc-card-note">히트맵의 σ는 원시 레벨 z(지수형은 항상 우상향 → 구조적 +)이고, 국면 축은 YoY 변환 z를 사용합니다 — 두 수치가 다른 것은 모순이 아니라 변환 차이입니다. 이 표가 축의 실제 입력입니다.</p>
+          <p className="mc-card-note">히트맵의 σ는 원시 레벨 z(지수형은 항상 우상향 → 구조적 +)이고, 국면 축은 YoY 변환 z를 사용해요 — 두 수치가 다른 것은 모순이 아니라 변환 차이예요. 이 표가 축의 실제 입력이에요.</p>
         </div>
       )}
       {regime.regime_probs && (
@@ -310,7 +310,7 @@ export function ValuationTab({ core, aStrips }: { core: MacroCore; aStrips?: Ass
             <div className="mc-krval-item"><span>시장 PBR 중앙값</span><b>{fmtNum(v.kr_market.pbr_median)}배</b></div>
             <div className="mc-krval-item"><span>표본 종목수</span><b>{v.kr_market.n.toLocaleString()}</b></div>
           </div>
-        ) : <div className="mc-empty-sm">한국 시장 밸류는 종목 스냅샷 적재 후 활성됩니다 (GCP factor_snapshot).</div>}
+        ) : <div className="mc-empty-sm">한국 시장 밸류는 종목 스냅샷 적재 후 활성돼요 (GCP factor_snapshot).</div>}
       </div>
     </div>
   );

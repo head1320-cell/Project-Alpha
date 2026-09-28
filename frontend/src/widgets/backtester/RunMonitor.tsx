@@ -104,13 +104,13 @@ export function RunMonitor({ runId }: { runId: string }) {
 
   // 진짜 없는 실행(첫 로드 404): 만료/잘못된 링크
   if (trulyGone) {
-    return <div className="brun-shell"><div className="brun-err">실행을 찾을 수 없습니다 — 만료되었거나 잘못된 링크일 수 있습니다.
+    return <div className="brun-shell"><div className="brun-err">실행을 찾을 수 없어요 — 만료되었거나 잘못된 링크일 수 있어요.
       <button className="brun-btn" onClick={() => router.push("/backtest")}>← 전략 편집기로</button></div></div>;
   }
   // 아직 첫 상태가 없음 — 로딩 중(또는 일시적 오류로 재시도 중, 폴링은 계속됨)
   if (!st) {
     return <div className="brun-shell"><div className="brun-loading">
-      {statusQ.isError ? "실행 상태를 불러오는 중 — 연결이 불안정해 재시도 중입니다…" : "실행 상태 불러오는 중…"}
+      {statusQ.isError ? "실행 상태를 불러오는 중 — 연결이 불안정해 재시도 중이에요…" : "실행 상태 불러오는 중…"}
     </div></div>;
   }
 
@@ -150,7 +150,7 @@ export function RunMonitor({ runId }: { runId: string }) {
 
       {failed ? (
         <div className="brun-err-panel">
-          <div className="brun-err-title">{st.status === "cancelled" ? "실행이 취소되었습니다" : "실행이 실패했습니다"}</div>
+          <div className="brun-err-title">{st.status === "cancelled" ? "실행이 취소되었어요" : "실행이 실패했어요"}</div>
           {st.error_message && <div className="brun-err-msg">{st.error_message}</div>}
           {st.correlation_id && <div className="brun-err-cid num">추적 ID: {st.correlation_id}</div>}
           <div className="brun-err-actions">
@@ -189,13 +189,13 @@ export function RunMonitor({ runId }: { runId: string }) {
             <div className="brun-msg">
               {st.status_message}
               {stalled && (
-                <span className="brun-stalled">· 이 실행은 예상보다 오래 걸리고 있습니다 (여전히 실행 중 — 취소/재시도 가능)</span>
+                <span className="brun-stalled">· 이 실행은 예상보다 오래 걸리고 있어요 (여전히 실행 중 — 취소/재시도 가능)</span>
               )}
               {reconnecting && (
                 <>
                   <span className="brun-reconnect">
-                    · 상태를 불러오지 못하고 있습니다 — 아래 숫자는 마지막으로 받은 값입니다.
-                    서버에서는 계속 실행 중일 수 있습니다.
+                    · 상태를 불러오지 못하고 있어요 — 아래 숫자는 마지막으로 받은 값이에요.
+                    서버에서는 계속 실행 중일 수 있어요.
                     {storeCauseText && ` (${storeCauseText})`}
                   </span>
                   <button className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
@@ -232,7 +232,7 @@ export function RunMonitor({ runId }: { runId: string }) {
                   {Object.keys(cfg).length === 0 && <tr><td colSpan={2} className="brun-note">설정 로딩 중…</td></tr>}
                 </tbody>
               </table>
-              <div className="brun-note">가격·비용은 사전 추정 · 결과는 완료 후 고정 URL에서 재현 가능합니다.</div>
+              <div className="brun-note">가격·비용은 사전 추정 · 결과는 완료 후 고정 URL에서 재현 가능해요.</div>
             </section>
           </div>
         </>

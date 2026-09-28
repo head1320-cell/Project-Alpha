@@ -179,7 +179,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const handlePick = useCallback((pick: FactorPick) => {
     setModalOpen(false);
     const r = resolveFactor(pick.factorToken) ?? resolveFactor(pick.factorName);
-    if (!r) { setNotice(`‘${pick.factorName}’은(는) 단면 스크리닝에서 지원되지 않습니다 (백테스터 전용 시계열·수급 팩터).`); return; }
+    if (!r) { setNotice(`‘${pick.factorName}’은(는) 단면 스크리닝에서 지원되지 않아요 (백테스터 전용 시계열·수급 팩터).`); return; }
     setNotice(null);
     const meta = metaById.get(r.id);
     const isRank = pick.functionId === "rank";
@@ -483,7 +483,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           </div>
 
           {group.conditions.length === 0 ? (
-            <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 「팩터1, 팩터2 …」로 위에 쌓이고, 조건식에 자동으로 들어갑니다.</div>
+            <div className="bsc-rail-empty">아직 추가된 팩터가 없어요.<br />「＋ 팩터 추가」로 조건을 더하면 「팩터1, 팩터2 …」로 위에 쌓이고, 조건식에 자동으로 들어가요.</div>
           ) : (
             <div className="bsc-rail-list">
               {group.conditions.map((c, i) => {
@@ -629,7 +629,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                     유니버스 <b>{uniTotal.toLocaleString()}</b>종목 · 적재 {(results.ingested_count ?? 0).toLocaleString()} · 평가 {(results.evaluated_actual ?? results.total_evaluated).toLocaleString()}
                     {gateOn && (results.liquidity_gate?.filtered_out ?? 0) > 0 ? <> · 유동성 제외 {(results.liquidity_gate?.filtered_out ?? 0).toLocaleString()}</> : null}
                     {" · 신규 "}{results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s
-                    {results.capped ? <span className="bsc-capped-badge" title="미적재 종목이 많아 이번 실행에서 일부만 평가되었습니다. Data Infra에서 전체 적재를 실행하면 해소됩니다.">평가 상한 발동</span> : null}
+                    {results.capped ? <span className="bsc-capped-badge" title="미적재 종목이 많아 이번 실행에서 일부만 평가되었어요. Data Infra에서 전체 적재를 실행하면 해소돼요.">평가 상한 발동</span> : null}
                   </>
                 : <>대기 중…</>}
           </div>
@@ -637,13 +637,13 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           {/* 적재 미완 안내 — 유니버스가 실제 상장 수보다 작게 보이는 이유를 명시 */}
           {results && !loading && (results.ingested_count ?? 0) < (results.universe_size ?? 0) && (
             <div className="bsc-ingest-hint">
-              이 유니버스는 마스터 {(results.universe_size ?? 0).toLocaleString()}종목 중 <b>{(results.ingested_count ?? 0).toLocaleString()}</b>종목만 적재되어 있습니다 — Admin → Data Infra에서 <b>펀더멘털 적재</b>를 실행하면 전 종목으로 확장됩니다.
+              이 유니버스는 마스터 {(results.universe_size ?? 0).toLocaleString()}종목 중 <b>{(results.ingested_count ?? 0).toLocaleString()}</b>종목만 적재되어 있어요 — Admin → Data Infra에서 <b>펀더멘털 적재</b>를 실행하면 전 종목으로 확장돼요.
             </div>
           )}
 
           {/* 0개 진단 */}
           {diagnostic && (
-            <div className="bsc-diag">조건에 맞는 종목 <b>0개</b> — 가장 제한적인 조건은 <b>{diagnostic.label}</b>(단독 {diagnostic.count.toLocaleString()}개)입니다. 완화하거나 제거해 보세요.</div>
+            <div className="bsc-diag">조건에 맞는 종목 <b>0개</b> — 가장 제한적인 조건은 <b>{diagnostic.label}</b>(단독 {diagnostic.count.toLocaleString()}개)이에요. 완화하거나 제거해 보세요.</div>
           )}
 
           <div className="bsc-table-wrap" ref={tableWrapRef}>
@@ -666,7 +666,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                 {pageItems.map((it, vi) => renderRow(it, curPage * PAGE_SIZE + vi))}
               </tbody>
             </table>
-            {!loading && sortedItems.length === 0 && !diagnostic && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없습니다</div>}
+            {!loading && sortedItems.length === 0 && !diagnostic && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없어요</div>}
           </div>
 
           {/* 페이지 바 — 100행/페이지 */}

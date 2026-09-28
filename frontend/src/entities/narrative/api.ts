@@ -275,10 +275,10 @@ export const DOMAIN_COLORS: Record<NarrativeDomain, string> = {
 };
 
 export const DOMAIN_DESCRIPTIONS: Record<NarrativeDomain, string> = {
-  stock:          "RIM·DCF·DDM 가치평가 결과를 자연어로 해석합니다.",
-  portfolio:      "백테스트 결과 + 5-Factor Attribution을 분석합니다.",
-  macro:          "현재 시장 국면(Regime)과 5종 매크로 지표를 해석합니다.",
-  operations:     "Kill switch 발동 / Drift 등 운영 사건을 사후 분석합니다.",
-  counterfactual: "실제 결과와 N개 가상 시나리오를 비교해 의사결정의 가치를 정량화합니다.",
-  daily:          "오늘의 모든 운영·시장·포지션 활동을 통합 요약합니다.",
+  stock:          "RIM·DCF·DDM 가치평가 결과를 자연어로 해석해요.",
+  portfolio:      "백테스트 결과 + 5-Factor Attribution을 분석해요.",
+  macro:          "현재 시장 국면(Regime)과 5종 매크로 지표를 해석해요.",
+  operations:     "Kill switch 발동 / Drift 등 운영 사건을 사후 분석해요.",
+  counterfactual: "실제 결과와 N개 가상 시나리오를 비교해 의사결정의 가치를 정량화해요.",
+  daily:          "오늘의 모든 운영·시장·포지션 활동을 통합 요약해요.",
 };

@@ -26,7 +26,7 @@ export default function CompanyPage() {
     queryFn: () => loadCompanyCore(code),
   });
   const error = queryError
-    ? ((queryError as Error)?.message === "NOT_FOUND" ? `종목 ${code}을(를) 찾을 수 없습니다.` : "데이터를 불러오지 못했습니다 (백엔드 확인).")
+    ? ((queryError as Error)?.message === "NOT_FOUND" ? `종목 ${code}을(를) 찾을 수 없어요.` : "데이터를 불러오지 못했어요 (백엔드 확인).")
     : null;
 
   // 스크리너 핸드오프 (sessionStorage)

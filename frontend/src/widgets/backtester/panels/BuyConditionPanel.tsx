@@ -84,12 +84,12 @@ export default function BuyConditionPanel({ s, set }: {
               on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
               {(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact)
-                ? "켠 비용은 실행 준비실과 같은 요율을 씁니다 — 결과의 비용 분해에 성분별로 실립니다."
-                : "끄면 수수료·슬리피지만 봅니다 — 0원이 아니라 ★안 본 것★이고, 결과가 그 사실을 적습니다."}
+                ? "켠 비용은 실행 준비실과 같은 요율을 써요 — 결과의 비용 분해에 성분별로 실려요."
+                : "끄면 수수료·슬리피지만 봐요 — 0원이 아니라 ★안 본 것★이고, 결과가 그 사실을 적어요."}
             </span>
             {s.chargeMarketImpact && (
               <span style={{ fontSize: 11, color: "#d97706" }}>
-                ⚠ 거래대금이 없는 종목·기간은 충격을 0이 아니라 <b>미상</b>으로 남깁니다 — 그만큼 비용이 낮게 잡힙니다.
+                ⚠ 거래대금이 없는 종목·기간은 충격을 0이 아니라 <b>미상</b>으로 남겨요 — 그만큼 비용이 낮게 잡혀요.
               </span>
             )}
           </div>

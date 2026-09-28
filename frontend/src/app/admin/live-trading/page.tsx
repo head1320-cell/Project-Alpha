@@ -337,7 +337,7 @@ export default function LiveTradingPage() {
         <ConfirmModal
           icon={Zap} iconColor="#FF6B6B"
           title="LIVE 모드 진입"
-          description="실거래 모드로 전환합니다. 이 시점부터 모든 주문은 실제 자금이 이동됩니다."
+          description="실거래 모드로 전환해요. 이 시점부터 모든 주문은 실제 자금이 이동돼요."
           warnings={[
             "주문 검증 통과 시 KIS API로 실제 발주",
             "Kill Switch는 모든 미체결을 즉시 취소",
@@ -355,7 +355,7 @@ export default function LiveTradingPage() {
         <ConfirmModal
           icon={Power} iconColor="#FF6B6B"
           title="Kill Switch 발동"
-          description="모든 거래를 즉시 중단합니다."
+          description="모든 거래를 즉시 중단해요."
           warnings={[
             "모든 미체결 주문 일괄 취소",
             "신규 주문 거부 (재개까지)",

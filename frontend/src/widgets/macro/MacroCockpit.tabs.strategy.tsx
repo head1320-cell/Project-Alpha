@@ -121,7 +121,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, onTranspla
   if (!recommend.top || !recommend.regime || !Array.isArray(recommend.top.holdings_final)) {
     return (
       <div className="mc-empty-sm">
-        추천 데이터가 불완전합니다 — 국면·전략 계산에 필요한 값이 부족해 표시할 수 없습니다 (데이터 미가용).
+        추천 데이터가 불완전해요 — 국면·전략 계산에 필요한 값이 부족해 표시할 수 없어요 (데이터 미가용).
         데이터 적재 후 다시 시도하세요.
       </div>
     );
@@ -138,7 +138,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, onTranspla
       </div>
       {recommend.low_conviction && (
         <div className="mc-warn">
-          저확신 국면(신뢰도 {confPct}%) — 배분에 현금성 {top.cash_overlay_pct.toFixed(0)}%를 자동 편입해 방향성 오류 리스크를 낮췄습니다.
+          저확신 국면(신뢰도 {confPct}%) — 배분에 현금성 {top.cash_overlay_pct.toFixed(0)}%를 자동 편입해 방향성 오류 리스크를 낮췄어요.
         </div>
       )}
       <div className="mc-grid">
@@ -191,7 +191,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, onTranspla
         <div className="mc-card span2">
           <div className="mc-card-h">AI 근거 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "Claude" : "규칙 기반"}</span></div>
           <p className="mc-narr">{recommend.narrative}</p>
-          {recommend.narrative_source === "rule" && <p className="mc-narr-note">※ ANTHROPIC_API_KEY 설정 시 Claude가 국면·성과를 종합한 서술을 생성합니다.</p>}
+          {recommend.narrative_source === "rule" && <p className="mc-narr-note">※ ANTHROPIC_API_KEY 설정 시 Claude가 국면·성과를 종합한 서술을 생성해요.</p>}
         </div>
         <div className="mc-card span2">
           <div className="mc-card-h">전체 13전략 랭킹 — 적합도(62%) + 트레일링 성과(38%)</div>
@@ -201,7 +201,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, onTranspla
               <CompositeRow key={r.id} rank={idx + 1} name={r.name} composite={r.composite} fit={r.fit_score} perf={r.recent_return_12m} signal={r.signal} active={r.id === top.id} />
             ))}
           </div>
-          <p className="mc-card-note">성과는 각 전략의 현재 비중을 트레일링 12개월 수익률에 적용한 추정치입니다(실 ETF 시세 — 키 없으면 mock). 미래 수익을 보장하지 않습니다.</p>
+          <p className="mc-card-note">성과는 각 전략의 현재 비중을 트레일링 12개월 수익률에 적용한 추정치예요(실 ETF 시세 — 키 없으면 mock). 미래 수익을 보장하지 않아요.</p>
           <p className="mc-card-note">{recommend.data_lag_note}</p>
         </div>
       </div>

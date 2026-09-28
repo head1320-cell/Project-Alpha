@@ -66,7 +66,7 @@ export function BacktestCompare({ runId }: { runId: string }) {
 
   if (aQ.isLoading) return <div className="brun-shell"><div className="brun-loading">불러오는 중…</div></div>;
   if (aQ.isError || !aQ.data) return (
-    <div className="brun-shell"><div className="brun-err">실행을 찾을 수 없습니다.
+    <div className="brun-shell"><div className="brun-err">실행을 찾을 수 없어요.
       <button className="brun-btn" onClick={() => router.push("/backtest")}>← 편집기로</button></div></div>
   );
   const a = aQ.data;
@@ -88,12 +88,12 @@ export function BacktestCompare({ runId }: { runId: string }) {
         </div>
       </header>
 
-      {!aComparable && <div className="brun-mocknote">실행 A가 완료 상태가 아니어서 비교할 수 없습니다 (상태: {a.status}).</div>}
+      {!aComparable && <div className="brun-mocknote">실행 A가 완료 상태가 아니어서 비교할 수 없어요 (상태: {a.status}).</div>}
 
       <section className="brun-card">
         <div className="brun-card-t">실행 B 선택 <span className="brun-note">완료된 다른 실행만</span></div>
         {candidates.length === 0 ? (
-          <div className="brun-note">비교할 완료된 다른 실행이 없습니다 — 백테스트를 하나 더 실행하세요.</div>
+          <div className="brun-note">비교할 완료된 다른 실행이 없어요 — 백테스트를 하나 더 실행하세요.</div>
         ) : (
           <select className="brun-select" value={bId} onChange={(e) => setBId(e.target.value)}>
             <option value="">— 실행 B 선택 —</option>
@@ -121,7 +121,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
   }, [a, b]);
   const lenMismatch = (a.result?.backtest.equity_curve?.length ?? 0) !== (b.result?.backtest.equity_curve?.length ?? 0);
 
-  if (!bComparable) return <div className="brun-mocknote">실행 B가 완료 상태가 아니어서 비교할 수 없습니다 (상태: {b.status}).</div>;
+  if (!bComparable) return <div className="brun-mocknote">실행 B가 완료 상태가 아니어서 비교할 수 없어요 (상태: {b.status}).</div>;
   const sa = a.result!.backtest.statistics as BacktestStatistics;
   const sb = b.result!.backtest.statistics as BacktestStatistics;
 
@@ -140,7 +140,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
             <Line isAnimationActive={anim} type="monotone" dataKey="B" stroke="#e11d48" dot={false} strokeWidth={1.4} name={`B · ${b.strategy_name}`} />
           </LineChart>
         </ResponsiveContainer>
-        {lenMismatch && <div className="brun-note">두 실행의 기간·길이가 달라 인덱스 기준으로 정렬했습니다 — 절대 비교는 주의.</div>}
+        {lenMismatch && <div className="brun-note">두 실행의 기간·길이가 달라 인덱스 기준으로 정렬했어요 — 절대 비교는 주의.</div>}
       </section>
 
       <section className="brun-card">

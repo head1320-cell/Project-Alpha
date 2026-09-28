@@ -128,7 +128,7 @@ test("★05 VIEWS: 시나리오 없이 컴파일하면 '검사하지 않았다' 
   await expect(page.locator(".ms-card-sub .tstate-unavail-l", { hasText: "실현가능성" }))
     .toBeVisible();
   const body = (await page.locator(".ms-card-sub").textContent()) ?? "";
-  expect(body, "검사하지 않았다는 사실").toContain("검사하지 않았습니다");
+  expect(body, "검사하지 않았다는 사실").toContain("검사하지 않았어요");
   // 삭제 버튼은 아이콘 하나이므로 접근 가능한 이름이 있어야 한다.
   await expect(page.locator(".ms-vdel").first()).toHaveAttribute("aria-label", /삭제/);
 });

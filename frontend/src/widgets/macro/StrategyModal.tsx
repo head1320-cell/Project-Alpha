@@ -51,7 +51,7 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
         <DialogTitle className="sr-only">{detail?.name ?? "전략 상세"}</DialogTitle>
         <button className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
         {loading && <div className="mc-modal-load">전략 상세 불러오는 중…</div>}
-        {!loading && !detail && <div className="mc-modal-load">전략 상세를 불러올 수 없습니다.</div>}
+        {!loading && !detail && <div className="mc-modal-load">전략 상세를 불러올 수 없어요.</div>}
         {!loading && detail && (
           <div className="sm-body">
             {/* 헤더 */}
@@ -152,7 +152,7 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
                 <button className="sm-ai-btn" onClick={runAi} disabled={aiLoading}>
                   {aiLoading ? "생성 중…" : ai ? "다시 생성" : "AI 분석 생성"}
                 </button>
-                {!ai && !aiLoading && <span className="sm-ai-hint">현재 국면·배분을 종합해 이 전략의 적합성을 분석합니다 (ANTHROPIC_API_KEY 필요 · 토큰 비용).</span>}
+                {!ai && !aiLoading && <span className="sm-ai-hint">현재 국면·배분을 종합해 이 전략의 적합성을 분석해요 (ANTHROPIC_API_KEY 필요 · 토큰 비용).</span>}
                 {ai?.error && <div className="sm-ai-err">{ai.error}</div>}
                 {ai && !ai.error && ai.content && (
                   <div className="sm-ai-body">

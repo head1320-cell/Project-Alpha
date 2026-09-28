@@ -37,7 +37,7 @@ export function AllocationMap({ items }: { items: { code: string; name: string; 
   // 그리고, 두 줄의 스케일을 gross 로 공유해 길이를 서로 비교할 수 있게 한다.
   const shorts = items.filter((x) => x.weight < 0);
   const gross = tot + shorts.reduce((a, x) => a + Math.abs(x.weight), 0);
-  if (!shown.length && !shorts.length) return <div className="as-empty">비중이 있는 자산이 없습니다.</div>;
+  if (!shown.length && !shorts.length) return <div className="as-empty">비중이 있는 자산이 없어요.</div>;
   const scale = shorts.length ? gross : tot;
   return (
     <div className="aas-mapwrap">
@@ -52,7 +52,7 @@ export function AllocationMap({ items }: { items: { code: string; name: string; 
           <div className="as-ls-legrow">
             <span className="as-ls-legtag short">숏</span>
             <span className="as-ls-legnote">
-              아래 막대는 숏 다리입니다 — 위 롱 다리와 같은 gross 스케일이라 길이를 그대로 비교할 수 있습니다.
+              아래 막대는 숏 다리예요 — 위 롱 다리와 같은 gross 스케일이라 길이를 그대로 비교할 수 있어요.
             </span>
           </div>
           <div className="aas-map as-ls-map-short">

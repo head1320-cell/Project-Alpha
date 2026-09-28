@@ -55,7 +55,7 @@ export default function MultiBacktestPage() {
     } catch (e) {
       // ★빈 목록으로 조용히 넘기지 않는다★ — 못 읽었다고 말한다.
       setStrategies([]);
-      setError(`등록된 전략을 읽지 못했습니다 — ${String(e)}`);
+      setError(`등록된 전략을 읽지 못했어요 — ${String(e)}`);
     }
   }, []);
 
@@ -256,7 +256,7 @@ export default function MultiBacktestPage() {
 
       {/* 전략 등록 (BG6) */}
       <Section title="전략 등록" icon={Database}
-                subtitle="완료된 백테스트 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 등록합니다">
+                subtitle="완료된 백테스트 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 등록해요">
         <RegisterStrategyPanel strategies={strategies} onChanged={loadStrategies} />
       </Section>
 
@@ -450,7 +450,7 @@ function ResultProvenance({ perfLabel, sources, netting, nettingTotal, regimeLab
       <div><PerfLabel value={perfLabel} /></div>
       <div>
         <span style={{ color: "#6b7fa3" }}>출처 · </span>
-        {!sources ? "응답에 출처가 없습니다(과거 실행일 수 있습니다)."
+        {!sources ? "응답에 출처가 없어요(과거 실행일 수 있어요)."
           : !sources.available ? sources.reason
           : sources.strategies.map((s) => (
             <span key={s.strategy_id} style={{ marginRight: 10 }}>
@@ -506,8 +506,8 @@ function attributionNotes(cum: any): string[] {
   const ident = cum.identity;
   if (ident) {
     out.push(ident.holds
-      ? `항등식이 닫힙니다 — 일별 최대 차이 ${Number(ident.max_abs_gap ?? 0).toExponential(1)} (${ident.n_rows_checked}/${ident.n_rows}일 검사).`
-      : `항등식을 확인하지 못했습니다 — ${ident.reason ?? "사유 없음"}`);
+      ? `항등식이 닫혀요 — 일별 최대 차이 ${Number(ident.max_abs_gap ?? 0).toExponential(1)} (${ident.n_rows_checked}/${ident.n_rows}일 검사).`
+      : `항등식을 확인하지 못했어요 — ${ident.reason ?? "사유 없음"}`);
   }
   if (cum.cash_not_modeled_reason) out.push(`현금 이자: ${cum.cash_not_modeled_reason}`);
   const net = cum.report_only?.netting_effect;

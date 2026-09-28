@@ -53,4 +53,4 @@ export function authHeaders(): Record<string, string> {
 
 /** 401 을 사람이 읽을 수 있는 한 문장으로. 화면마다 다른 말을 하지 않도록 한 곳에 둔다. */
 export const UNAUTHORIZED_MESSAGE =
-  "로그인이 필요합니다 — 이 화면은 계좌·주문을 다루므로 인증된 사용자만 볼 수 있습니다.";
+  "로그인이 필요해요 — 이 화면은 계좌·주문을 다루므로 인증된 사용자만 볼 수 있어요.";

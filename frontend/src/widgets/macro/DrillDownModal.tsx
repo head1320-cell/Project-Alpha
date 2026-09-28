@@ -35,7 +35,7 @@ export function DrillDownModal({ series, loading, onClose }: { series: MacroSeri
         <DialogTitle className="sr-only">{series?.name ?? "지표 상세"}</DialogTitle>
         <button className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
         {loading && <div className="mc-modal-load">시계열 불러오는 중…</div>}
-        {!loading && !series && <div className="mc-modal-load">데이터를 불러올 수 없습니다.</div>}
+        {!loading && !series && <div className="mc-modal-load">데이터를 불러올 수 없어요.</div>}
         {!loading && series && (
           <>
             <div className="mc-modal-h">

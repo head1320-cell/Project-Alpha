@@ -46,7 +46,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
     } catch (e) {
       // ★빈 목록으로 조용히 넘기지 않는다★ — 못 읽었다고 말한다.
       setRuns([]);
-      setRunsError(`백테스트 실행 목록을 읽지 못했습니다 — ${String(e)}`);
+      setRunsError(`백테스트 실행 목록을 읽지 못했어요 — ${String(e)}`);
     }
   }, []);
 
@@ -65,7 +65,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
       const res = await multibacktestApi.register(run.run_id, names[run.run_id]);
       if (res.ok) {
         setOutcome({ ok: true,
-          text: `등록했습니다 — #${res.strategy.id} ${res.strategy.name} `
+          text: `등록했어요 — #${res.strategy.id} ${res.strategy.name} `
             + `(재현 ${res.strategy.repro?.compared_points ?? "?"}점 일치)` });
         onChanged();
       } else {
@@ -84,7 +84,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
     setOutcome(null);
     try {
       await multibacktestApi.deactivate(s.id);
-      setOutcome({ ok: true, text: `#${s.id} ${s.name} 을(를) 비활성했습니다.` });
+      setOutcome({ ok: true, text: `#${s.id} ${s.name} 을(를) 비활성했어요.` });
       onChanged();
     } catch (e) {
       setOutcome({ ok: false, text: `비활성 실패 — ${String(e)}` });
@@ -102,7 +102,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
           {runsError && <div style={{ ...rowText, color: "#ffab91" }}>{runsError}</div>}
           {!runsError && runs.length === 0 && (
             <div style={{ ...rowText, color: "#6b7fa3", textAlign: "center" }}>
-              완료된 실행이 없습니다 — 스크리너 → 백테스트를 먼저 실행하세요.
+              완료된 실행이 없어요 — 스크리너 → 백테스트를 먼저 실행하세요.
             </div>
           )}
           {runs.map((r) => {
@@ -146,7 +146,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
         <div style={listStyle}>
           {strategies.length === 0 && (
             <div style={{ ...rowText, color: "#6b7fa3", textAlign: "center" }}>
-              등록된 전략이 없습니다 — 왼쪽에서 완료된 실행을 등록하세요.
+              등록된 전략이 없어요 — 왼쪽에서 완료된 실행을 등록하세요.
             </div>
           )}
           {strategies.map((s) => (
@@ -162,7 +162,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
                 </div>
               </div>
               <button onClick={() => deactivate(s)} disabled={busy !== null}
-                      style={btnStyle(busy === null)} title="비활성 — 지우지 않습니다">
+                      style={btnStyle(busy === null)} title="비활성 — 지우지 않아요">
                 {busy === `s${s.id}` ? <Loader2 size={11} className="spin" /> : <Trash2 size={11} />}
                 비활성
               </button>

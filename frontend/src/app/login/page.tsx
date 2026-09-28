@@ -37,13 +37,13 @@ export default function LoginPage() {
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         // 서버가 준 사유를 그대로 — 없으면 "모른다" 고 적는다.
-        setError(body?.detail ?? `로그인 실패 (HTTP ${res.status}) — 사유를 받지 못했습니다.`);
+        setError(body?.detail ?? `로그인 실패 (HTTP ${res.status}) — 사유를 받지 못했어요.`);
         return;
       }
       setToken(body.access_token);
       window.location.href = "/";
     } catch {
-      setError("서버에 연결하지 못했습니다 — 자격 증명 문제인지 여부는 알 수 없습니다.");
+      setError("서버에 연결하지 못했어요 — 자격 증명 문제인지 여부는 알 수 없어요.");
     } finally {
       setBusy(false);
     }
@@ -54,8 +54,8 @@ export default function LoginPage() {
       <form className="login-card" onSubmit={submit}>
         <h1 className="login-card__title">로그인</h1>
         <p className="login-card__note">
-          계좌·주문·감사 화면은 인증된 사용자만 볼 수 있습니다. 연구·백테스트 화면은
-          로그인 없이 그대로 동작합니다.
+          계좌·주문·감사 화면은 인증된 사용자만 볼 수 있어요. 연구·백테스트 화면은
+          로그인 없이 그대로 동작해요.
         </p>
 
         <label className="login-field">

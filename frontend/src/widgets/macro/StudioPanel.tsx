@@ -105,7 +105,7 @@ function SpanLine({ span }: { span: StudioSpan | null }) {
   return (
     <p className={`ms-span${span.truncated ? " ms-span-trunc" : ""}`}>
       {span.truncated
-        ? `관측 ${span.n}개 / 요청 ${span.requested}개${range} — 요청보다 짧은 구간으로 계산했습니다.`
+        ? `관측 ${span.n}개 / 요청 ${span.requested}개${range} — 요청보다 짧은 구간으로 계산했어요.`
         : `관측 ${span.n}개 / 요청 ${span.requested}개${range}.`}
     </p>
   );
@@ -129,7 +129,7 @@ export function StudioOutcome({ res }: { res: StudioResult }) {
       {/* ★한계는 접지 않는다★ */}
       {res.note && <p className="ms-note">{res.note}</p>}
       {rows.length === 0 ? (
-        <p className="ms-out-na">이 엔진은 이번 실행에서 산출값을 내지 않았습니다.</p>
+        <p className="ms-out-na">이 엔진은 이번 실행에서 산출값을 내지 않았어요.</p>
       ) : (
         <table className="ms-out">
           <tbody>
@@ -155,10 +155,10 @@ export function FrontierCard({ d }: { d: StudioDescriptor }) {
       <p className="ms-card-s">{f.summary}</p>
       {f.available ? (
         <p className="ms-note">
-          {f.note ?? "요건은 충족됐지만 이 엔진의 구현은 아직 없습니다 — 계약만 존재합니다."}
+          {f.note ?? "요건은 충족됐지만 이 엔진의 구현은 아직 없어요 — 계약만 존재해요."}
         </p>
       ) : (
-        <UnavailableState label="이 엔진은 지금 쓸 수 없습니다" reason={f.reason} />
+        <UnavailableState label="이 엔진은 지금 쓸 수 없어요" reason={f.reason} />
       )}
     </section>
   );
@@ -189,8 +189,8 @@ export function StudioPanel({ id, months = 60 }: { id: string; months?: number }
 
       {listQ.isLoading && <LoadingState label="스튜디오 계약을 불러오는 중" />}
       {listQ.isError && (
-        <ErrorState label="스튜디오 목록에 닿지 못했습니다"
-          sub="서버가 미가용이라고 답한 것과 다릅니다 — 응답 자체를 받지 못했습니다." />
+        <ErrorState label="스튜디오 목록에 닿지 못했어요"
+          sub="서버가 미가용이라고 답한 것과 달라요 — 응답 자체를 받지 못했어요." />
       )}
       {d && <FrontierCard d={d} />}
 
@@ -201,8 +201,8 @@ export function StudioPanel({ id, months = 60 }: { id: string; months?: number }
         {d && <p className="ms-card-s">{d.substitute.summary}</p>}
         {runQ.isLoading && <LoadingState label="대체 엔진 실행 중" />}
         {runQ.isError && (
-          <ErrorState label="스튜디오 실행에 닿지 못했습니다"
-            sub="서버가 미가용이라고 답한 것과 다릅니다 — 응답 자체를 받지 못했습니다." />
+          <ErrorState label="스튜디오 실행에 닿지 못했어요"
+            sub="서버가 미가용이라고 답한 것과 달라요 — 응답 자체를 받지 못했어요." />
         )}
         {runQ.data && <StudioOutcome res={runQ.data} />}
       </section>

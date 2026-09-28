@@ -57,7 +57,7 @@ export default function AssetAllocPanel({ s, set }: {
     <Section title="자산배분 옵션" hint="ETF 바스켓 · 주기 리밸런싱" tone="neutral"
       enabled={a.enabled} onToggle={(on) => patch({ enabled: on })}>
       <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-        전체 포트폴리오 자산의 일정 비율을 ETF로 상시 보유하도록 설정합니다. 잔여는 현금.
+        전체 포트폴리오 자산의 일정 비율을 ETF로 상시 보유하도록 설정해요. 잔여는 현금.
       </div>
 
       <Field label="자산 배분 비중">
@@ -66,7 +66,7 @@ export default function AssetAllocPanel({ s, set }: {
         <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>주식</span>
         <QuickStepper value={a.stockPct} onChange={(v) => patch({ stockPct: v })} chips={[30, 60]} unit="%" min={0} max={100} />
         <span style={{ fontSize: 11, color: cashPct < 0 ? "#dc2626" : "var(--text-muted)" }}>
-          현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘습니다" : ""}
+          현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘어요" : ""}
         </span>
       </Field>
 
@@ -93,7 +93,7 @@ export default function AssetAllocPanel({ s, set }: {
         </div>
         {a.basket.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "10px 10px" }}>
-            자산군이 없습니다 — 프리셋을 선택하거나 "자산군 추가"로 ETF를 담으세요.
+            자산군이 없어요 — 프리셋을 선택하거나 "자산군 추가"로 ETF를 담으세요.
           </div>
         ) : a.basket.map((l, i) => (
           <div key={l.ticker} style={{ display: "grid", gridTemplateColumns: "76px 1fr 84px 32px", gap: 6, padding: "7px 10px", alignItems: "center", borderTop: "1px solid var(--border)", fontSize: 13 }}>
@@ -123,7 +123,7 @@ export default function AssetAllocPanel({ s, set }: {
       </div>
 
       <div style={{ fontSize: 11, color: "#d97706", marginTop: 9, lineHeight: 1.6 }}>
-        ⚠ ETF 사전 교육 의무 안내 — 레버리지/인버스 ETF 투자를 위해서는 기본 예탁금 충족 및 사전 교육 이수가 필요합니다 (백테스트는 무관, 실거래 시 유의).
+        ⚠ ETF 사전 교육 의무 안내 — 레버리지/인버스 ETF 투자를 위해서는 기본 예탁금 충족 및 사전 교육 이수가 필요해요 (백테스트는 무관, 실거래 시 유의).
       </div>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
         ETF 슬리브는 주식 전략과 별도 보유 · 매수 기준가 미도달분은 다음 주기 재시도 (보수적)

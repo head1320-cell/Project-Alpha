@@ -153,7 +153,7 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
       setStratModal((m) => (m && m.sid === sid ? { ...m, detail: d, loading: false } : m)));
   }, [market]);
 
-  if (!regime) return <div className="mc-empty">매크로 데이터를 불러올 수 없습니다. 백엔드 연결을 확인하세요.</div>;
+  if (!regime) return <div className="mc-empty">매크로 데이터를 불러올 수 없어요. 백엔드 연결을 확인하세요.</div>;
 
   return (
     <div className="mc">
@@ -175,7 +175,7 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
           {/* 현재 국면을 불변 스냅샷으로 고정해 AAS 로 — 휘발성 복사가 아니라 서버 ID 전달 */}
           {onOpenInAAS && (
             <button className="mc-brief-chip mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}
-              title="현재 국면 판정을 스냅샷으로 저장하고 Allocation Studio 에서 엽니다">
+              title="현재 국면 판정을 스냅샷으로 저장하고 Allocation Studio 에서 열어요">
               {aasBusy ? "스냅샷 생성 중…" : "Allocation Studio에서 열기 →"}
             </button>
           )}

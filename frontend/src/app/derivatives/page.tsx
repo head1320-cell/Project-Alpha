@@ -131,8 +131,8 @@ function VolSurfaceTab() {
     <div className="card-md">
       <Section title="변동성 표면 (Implied Volatility Surface)">
         <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          기간 구조와 행사가 구조에 따른 내재변동성 표면을 시각화합니다.
-          SABR 모델로 fitting하여 외삽/내삽이 가능합니다.
+          기간 구조와 행사가 구조에 따른 내재변동성 표면을 시각화해요.
+          SABR 모델로 fitting하여 외삽/내삽이 가능해요.
         </p>
         <div className="badge-warning" style={{ display: "inline-block", padding: "4px 10px", marginTop: 8 }}>
           개발 중 — 옵션 시장 데이터 연동 필요
@@ -170,8 +170,8 @@ function RatesTab() {
     <div className="card-md">
       <Section title="금리 모델 (Hull-White 1F · SABR)">
         <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          Hull-White 1Factor 모델과 SABR 변동성 모델을 사용하여 시장 데이터에 대한 캘리브레이션을 수행합니다.
-          QuantLib과 연동되어 채권/스왑 가격 결정과 그릭 계산을 지원합니다.
+          Hull-White 1Factor 모델과 SABR 변동성 모델을 사용하여 시장 데이터에 대한 캘리브레이션을 수행해요.
+          QuantLib과 연동되어 채권/스왑 가격 결정과 그릭 계산을 지원해요.
         </p>
         <div className="grid grid-cols-2 gap-3 mt-3">
           <div className="card-sm">
@@ -194,8 +194,8 @@ function MonteCarloTab() {
     <div className="card-md">
       <Section title="Monte Carlo 시뮬레이션">
         <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          GBM (Geometric Brownian Motion) 기반 경로 시뮬레이션으로 path-dependent 옵션과 exotic 상품을 평가합니다.
-          백테스트에서 다중 시나리오 분석에도 활용됩니다.
+          GBM (Geometric Brownian Motion) 기반 경로 시뮬레이션으로 path-dependent 옵션과 exotic 상품을 평가해요.
+          백테스트에서 다중 시나리오 분석에도 활용돼요.
         </p>
         <div className="grid grid-cols-3 gap-3 mt-3">
           <StatCard label="기본 경로 수" value="10,000" trend="neutral" />

@@ -121,7 +121,7 @@ export default function UniversePanel({ s, set, live = true }: {
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             {(u.survivorshipMode ?? "off") === "off"
               ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 사용"
-              : "시작일 당시 실제 거래 종목 기준(상장폐지 포함) — 아래 시총군·업종·ETF·관심그룹 선택은 적용되지 않습니다"}
+              : "시작일 당시 실제 거래 종목 기준(상장폐지 포함) — 아래 시총군·업종·ETF·관심그룹 선택은 적용되지 않아요"}
           </span>
         </div>
         <Segmented tone="neutral" value={u.survivorshipMode ?? "off"}
@@ -207,7 +207,7 @@ export default function UniversePanel({ s, set, live = true }: {
         </button>
       </div>
       {u.groups.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>관심그룹이 없습니다 — "그룹 추가"로 종목을 묶어보세요.</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>관심그룹이 없어요 — "그룹 추가"로 종목을 묶어보세요.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {u.groups.map((g, i) => (

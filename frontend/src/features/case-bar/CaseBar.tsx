@@ -45,13 +45,13 @@ function CaseCreateForm({ onDone }: { onDone: (caseId: string) => void }) {
     onSuccess: (res) => {
       if (!res.created || !res.case_id) {
         // 저장 실패를 성공으로 위장하지 않는다 — 사유를 그 자리에 적는다.
-        setMsg(res.message || "케이스가 저장되지 않았습니다.");
+        setMsg(res.message || "케이스가 저장되지 않았어요.");
         return;
       }
       qc.invalidateQueries({ queryKey: ["research-cases"] });
       onDone(res.case_id);
     },
-    onError: (e) => setMsg(e instanceof Error ? e.message : "케이스 생성에 실패했습니다."),
+    onError: (e) => setMsg(e instanceof Error ? e.message : "케이스 생성에 실패했어요."),
   });
 
   const ready = name.trim().length > 0 && question.trim().length > 0;
@@ -141,12 +141,12 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
           <>
             <span className="as-case-id num">{caseId}</span>
             <span className="as-case-q as-case-unres">
-              이 케이스의 내용을 불러오지 못했습니다 — 질문·고정 증거·목표를 여기서 읽을 수 없습니다.
+              이 케이스의 내용을 불러오지 못했어요 — 질문·고정 증거·목표를 여기서 읽을 수 없어요.
             </span>
           </>
         ) : (
           // ★지어낸 id 를 그리지 않는다★ 케이스가 없으면 없다고 적는다.
-          <span className="as-case-none">케이스 없음 — 이 화면의 작업은 아직 어느 연구에도 묶이지 않습니다.</span>
+          <span className="as-case-none">케이스 없음 — 이 화면의 작업은 아직 어느 연구에도 묶이지 않아요.</span>
         )}
 
         {/* 케이스 선택 — 네이티브 select(저장소 관례. A3 가 Select 프리미티브를 기각한 근거 그대로) */}
@@ -198,7 +198,7 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
         ) : capQ.isLoading ? (
           <span className="as-case-na">능력 레벨 확인 중…</span>
         ) : (
-          <span className="as-case-na">능력 레벨을 읽지 못했습니다</span>
+          <span className="as-case-na">능력 레벨을 읽지 못했어요</span>
         )}
       </div>
 
@@ -216,19 +216,19 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
           <div className="as-case-warn as-case-warn-div">
             <b className="as-case-warn-l">증거 불일치</b>
             <span className="as-case-warn-r">
-              이 세션이 붙인 스냅샷({sessionSnapshotId})과 케이스가 고정한 매크로 증거({mesId})가 다릅니다.
+              이 세션이 붙인 스냅샷({sessionSnapshotId})과 케이스가 고정한 매크로 증거({mesId})가 달라요.
             </span>
           </div>
         )}
         {unresolved && (
           <div className="as-case-warn as-case-warn-missing">
-            <b className="as-case-warn-l">케이스를 읽지 못했습니다</b>
+            <b className="as-case-warn-l">케이스를 읽지 못했어요</b>
             <span className="as-case-warn-r">
               {chainQ.isError
-                ? `선택한 케이스(${caseId})를 서버에서 가져오지 못했습니다 — 삭제되었거나 저장소를 읽을 수 없습니다.`
+                ? `선택한 케이스(${caseId})를 서버에서 가져오지 못했어요 — 삭제되었거나 저장소를 읽을 수 없어요.`
                 : chainQ.isLoading
-                  ? `선택한 케이스(${caseId})를 불러오는 중입니다.`
-                  : `선택한 케이스(${caseId})가 열린 케이스 목록에 없습니다.`}
+                  ? `선택한 케이스(${caseId})를 불러오는 중이에요.`
+                  : `선택한 케이스(${caseId})가 열린 케이스 목록에 없어요.`}
             </span>
           </div>
         )}
@@ -242,7 +242,7 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
           <div className="as-case-warn as-case-warn-net">
             <b className="as-case-warn-l">네트워크 오류</b>
             <span className="as-case-warn-r">
-              케이스 목록에 닿지 못했습니다 — 케이스가 없는 것과 다릅니다.
+              케이스 목록에 닿지 못했어요 — 케이스가 없는 것과 달라요.
             </span>
           </div>
         )}
@@ -250,7 +250,7 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
 
       {/* ★포인터는 브라우저 로컬, 케이스는 서버★ 라벨이 그 경계를 지킨다. */}
       <div className="as-case-foot">
-        활성 케이스 선택은 이 브라우저에만 저장됩니다 — 케이스 자체는 서버에 있습니다.
+        활성 케이스 선택은 이 브라우저에만 저장돼요 — 케이스 자체는 서버에 있어요.
       </div>
     </div>
   );

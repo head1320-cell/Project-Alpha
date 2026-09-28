@@ -60,8 +60,8 @@ export function ViewsStudio() {
 
       {listQ.isLoading && <LoadingState label="스튜디오 계약을 불러오는 중" />}
       {listQ.isError && (
-        <ErrorState label="스튜디오 목록에 닿지 못했습니다"
-          sub="서버가 미가용이라고 답한 것과 다릅니다 — 응답 자체를 받지 못했습니다." />
+        <ErrorState label="스튜디오 목록에 닿지 못했어요"
+          sub="서버가 미가용이라고 답한 것과 달라요 — 응답 자체를 받지 못했어요." />
       )}
       {d && <FrontierCard d={d} />}
 
@@ -114,16 +114,16 @@ export function ViewsStudio() {
         </form>
 
         {m.isError && (
-          <ErrorState label="컴파일 요청에 닿지 못했습니다"
-            sub="서버가 미가용이라고 답한 것과 다릅니다 — 응답 자체를 받지 못했습니다." />
+          <ErrorState label="컴파일 요청에 닿지 못했어요"
+            sub="서버가 미가용이라고 답한 것과 달라요 — 응답 자체를 받지 못했어요." />
         )}
         {res && <StudioOutcome res={res} />}
         {res?.available && res.outputs.feasible === null && (
           // 서버의 note 가 이미 같은 말을 하지만, 이 한 줄은 **검사 결과 자리**에 놓인다 —
           // 빈 자리를 남기면 "검사했고 문제없음" 으로 읽힌다.
           <UnavailableState
-            label="실현가능성 — 검사하지 않았습니다"
-            reason="시나리오를 주지 않았습니다. 모순이 없다는 뜻이 아니라, 확인하지 않았다는 뜻입니다." />
+            label="실현가능성 — 검사하지 않았어요"
+            reason="시나리오를 주지 않았어요. 모순이 없다는 뜻이 아니라, 확인하지 않았다는 뜻이에요." />
         )}
       </section>
     </div>

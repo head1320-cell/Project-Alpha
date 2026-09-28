@@ -77,7 +77,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
   const macroWhy = unsupportedReason(availability, "allocation_method", "hrp_macro");
   const regimeWhy = unsupportedReason(availability, "rebalance_policy", "regime_change");
   const overlayWhy = config.allocation_method !== "hrp_macro"
-    ? "매크로 오버레이는 hrp_macro 에서만 작동합니다 — 지금 방법에서는 켜도 효과가 없습니다."
+    ? "매크로 오버레이는 hrp_macro 에서만 작동해요 — 지금 방법에서는 켜도 효과가 없어요."
     : null;
 
   const toggleStrategy = (sid: number) => {
@@ -223,8 +223,8 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
                    onChange={(v) => setConfig({ ...config, macro_overlay_enabled: v })} />
         </div>
         <div style={{ fontSize: 10, color: "#6b7fa3", lineHeight: 1.5 }}>
-          네팅은 ★보고 전용★입니다 — 전략 보유로 잰 상쇄 절감을 따로 보여 줄 뿐 수익률에는
-          더하지 않습니다.
+          네팅은 ★보고 전용★이에요 — 전략 보유로 잰 상쇄 절감을 따로 보여 줄 뿐 수익률에는
+          더하지 않아요.
         </div>
 
         {/* Run button */}

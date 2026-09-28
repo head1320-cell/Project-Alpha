@@ -58,7 +58,7 @@ export default function TerminalBacktester() {
   const handleSaveStrategy = () => {
     saveBacktestStrategy(s);
     setSaved(listSavedStrategies());
-    setSaveMsg(`'${s.name || "내 전략"}' 저장됨 — 새로고침·재방문 후에도 유지됩니다`);
+    setSaveMsg(`'${s.name || "내 전략"}' 저장됨 — 새로고침·재방문 후에도 유지돼요`);
     setTimeout(() => setSaveMsg(null), 4000);
   };
   const handleLoadStrategy = (item: SavedBacktestStrategy) => {
@@ -240,10 +240,10 @@ export default function TerminalBacktester() {
                 </svg>
               </div>
               <div className="bt-empty-kbd">[ AWAITING_SIMULATION ]</div>
-              <div className="bt-empty-title">전략을 실행할 준비가 되었습니다</div>
+              <div className="bt-empty-title">전략을 실행할 준비가 되었어요</div>
               <div className="bt-empty-sub">
                 좌측에서 매수·매도 조건과 매매 대상을 설정한 뒤 우측의 <b>백테스트 실행</b>을 누르면
-                자산곡선·성과지표·거래내역이 여기에 표시됩니다.
+                자산곡선·성과지표·거래내역이 여기에 표시돼요.
               </div>
             </div>
           )}
@@ -402,7 +402,7 @@ export default function TerminalBacktester() {
                 <div className="tbt-chart">
                   <div className="tbt-chart-head"><div className="tbt-chart-title">거래내역</div></div>
                   <div style={{ padding: "14px 4px", color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 12, lineHeight: 1.6 }}>
-                    월간 리밸런싱 전략 — 개별 체결 로그가 없습니다.<br />
+                    월간 리밸런싱 전략 — 개별 체결 로그가 없어요.<br />
                     월 단위 성과는 위의 <strong>Monthly Returns</strong> 히트맵을 참고하세요.
                   </div>
                 </div>

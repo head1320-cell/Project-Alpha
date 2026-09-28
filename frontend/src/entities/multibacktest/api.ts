@@ -99,7 +99,7 @@ function detailReason(body: any, status: number): string {
   const d = body?.detail;
   if (d && typeof d === "object" && typeof d.reason === "string") return d.reason;
   if (typeof d === "string") return d;
-  return `요청이 실패했습니다 (HTTP ${status})`;
+  return `요청이 실패했어요 (HTTP ${status})`;
 }
 
 export const multibacktestApi = {

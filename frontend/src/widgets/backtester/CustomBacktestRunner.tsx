@@ -101,7 +101,7 @@ export default function CustomBacktestRunner({
           </button>
           {loading && (
             <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--t-muted)", marginTop: -8, lineHeight: 1.5 }}>
-              커스텀 전략 시뮬레이션 중...<br />최대 ~15초 소요됩니다.
+              커스텀 전략 시뮬레이션 중...<br />최대 ~15초 소요돼요.
             </div>
           )}
 

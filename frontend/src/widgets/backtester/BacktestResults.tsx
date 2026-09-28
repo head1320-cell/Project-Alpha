@@ -103,10 +103,10 @@ function absentReason(
   tradeCount: number | null,
 ): string | null {
   if (k === "information_ratio" && !hasBenchmark) {
-    return "벤치마크를 지정하지 않아 추적오차를 계산할 수 없습니다.";
+    return "벤치마크를 지정하지 않아 추적오차를 계산할 수 없어요.";
   }
   if (tradeCount === 0 && TRADE_QUALITY_KEYS.has(k)) {
-    return "이 기간에 체결이 한 건도 없어 거래 통계가 나오지 않습니다.";
+    return "이 기간에 체결이 한 건도 없어 거래 통계가 나오지 않아요.";
   }
   return null;
 }
@@ -132,14 +132,14 @@ function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
   if (live.length > 0) {
     out.push(
       `매크로 룩어헤드 — ${live.join(" · ")} 은(는) 빈티지가 없어 현재 개정본으로 ` +
-      `평가됐습니다. 이 토큰이 쓰인 조건은 그 시점에 알 수 없던 값을 봅니다.`,
+      `평가됐어요. 이 토큰이 쓰인 조건은 그 시점에 알 수 없던 값을 봐요.`,
     );
   }
   const blocked = names("blocked");
   if (blocked.length > 0) {
     out.push(
       `매크로 미평가 — ${blocked.join(" · ")} 은(는) 값을 얻지 못해 해당 조건이 ` +
-      `평가되지 않았습니다(${ml.tokens[blocked[0]].reason}).`,
+      `평가되지 않았어요(${ml.tokens[blocked[0]].reason}).`,
     );
   }
   // 개정이 판정을 실제로 뒤집었는가 — ★레그 기준이라는 말을 함께 싣는다★
@@ -147,17 +147,17 @@ function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
     const r = v.revision;
     if (!r) continue;
     if (r.flip_pct == null) {
-      out.push(`${tok} — 개정 영향은 측정하지 못했습니다(${r.reason}).`);
+      out.push(`${tok} — 개정 영향은 측정하지 못했어요(${r.reason}).`);
     } else if (r.flip > 0) {
       out.push(
         `${tok} — 데이터 개정이 이 토큰 조건의 판정을 ${r.bars}봉 중 ${r.flip}봉` +
-        `(${r.flip_pct}%)에서 뒤집었습니다. 매크로 레그 기준이며 최종 신호가 ` +
-        `갈린 비율은 아닙니다.`,
+        `(${r.flip_pct}%)에서 뒤집었어요. 매크로 레그 기준이며 최종 신호가 ` +
+        `갈린 비율은 아니에요.`,
       );
     }
   }
   if (live.length === 0 && blocked.length === 0 && ml.pit > 0) {
-    out.push(`매크로 ${ml.pit}개 토큰은 모두 그 시점의 빈티지로 평가됐습니다.`);
+    out.push(`매크로 ${ml.pit}개 토큰은 모두 그 시점의 빈티지로 평가됐어요.`);
   }
   return out;
 }
@@ -181,7 +181,7 @@ function fundamentalsHonesty(fp: ScreenToBacktestResult["fundamentals_pit"]): st
     const r = fp.reasons?.vintage_table_unreadable;
     out.push(
       `재무 공시일 미상 — ${fp.unknown}개 (종목, 기간)에서 빈티지 유무를 확인하지 ` +
-      `못해 정적 시차로 추정했습니다${r?.reason ? ` (${r.reason})` : ""}.`,
+      `못해 정적 시차로 추정했어요${r?.reason ? ` (${r.reason})` : ""}.`,
     );
   }
   if (fp.estimated > 0) {
@@ -190,21 +190,21 @@ function fundamentalsHonesty(fp: ScreenToBacktestResult["fundamentals_pit"]): st
     out.push(
       `재무 공시일 추정 — ${fp.estimated}개 (종목, 기간)이 실제 접수일 대신 정적 ` +
       `시차(연간 ${fp.lag_days.annual}일 · 분기 ${fp.lag_days.quarterly}일)로 ` +
-      `평가됐습니다. 늦게 공시된 보고서라면 그만큼 아직 공표되지 않은 재무를 ` +
-      `본 것입니다.${eg}`,
+      `평가됐어요. 늦게 공시된 보고서라면 그만큼 아직 공표되지 않은 재무를 ` +
+      `본 것이에요.${eg}`,
     );
   }
   if (fp.measured > 0) {
     out.push(
       `재무 공시일 실측 — ${fp.measured}개 (종목, 기간)은 DART 접수일` +
       `${fp.same_day_guard_days > 0 ? ` + ${fp.same_day_guard_days}일` : ""} 기준으로 ` +
-      `평가됐습니다${fp.measured_pct == null ? "" : ` (${fp.measured_pct}%)`}.`,
+      `평가됐어요${fp.measured_pct == null ? "" : ` (${fp.measured_pct}%)`}.`,
     );
   }
   if (fp.tickers?.no_financials > 0) {
     out.push(
       `재무 미적재 — ${fp.tickers.no_financials}개 종목은 적재된 재무가 없어 PIT ` +
-      `재무 조건이 **평가되지 않았습니다**(조건이 거짓이었다는 뜻이 아닙니다).`,
+      `재무 조건이 **평가되지 않았어요**(조건이 거짓이었다는 뜻이 아니에요).`,
     );
   }
   // ★날짜만 실측이라는 사실★ — 추정 기간이 하나라도 있으면 값 축이 남는다.
@@ -231,41 +231,41 @@ function priceHonesty(pb: ScreenToBacktestResult["price_basis"]): string[] {
   if (mixed > 0) {
     out.push(
       `가격 정의 혼합 — ${mixed}종목의 종가에 원주가와 수정주가가 섞여 ` +
-      `있습니다. 소스 경계에서 계열이 점프하며, 그 점프는 기업행위가 아니라 ` +
-      `누적 수정계수 전체입니다.${sample(pb.mixed_tickers)}`,
+      `있어요. 소스 경계에서 계열이 점프하며, 그 점프는 기업행위가 아니라 ` +
+      `누적 수정계수 전체예요.${sample(pb.mixed_tickers)}`,
     );
   }
   const bad = pb.unadjusted_tickers?.length ?? 0;
   if (bad > 0) {
     out.push(
-      `수정주가 아님 — ${bad}종목이 원주가이거나 수정 체인이 끊겨 있습니다. ` +
-      `분할·병합일의 수익률이 실제 손익이 아닙니다.${sample(pb.unadjusted_tickers)}`,
+      `수정주가 아님 — ${bad}종목이 원주가이거나 수정 체인이 끊겨 있어요. ` +
+      `분할·병합일의 수익률이 실제 손익이 아니에요.${sample(pb.unadjusted_tickers)}`,
     );
   }
   const foggy = (pb.basis?.unlabeled ?? 0) + (pb.basis?.unknown ?? 0);
   if (foggy > 0) {
     out.push(
-      `가격 정의 미상 — ${foggy}종목은 정의를 확인하지 못했습니다(레거시 행이거나 ` +
-      `품질 태그가 없습니다). ★확인 결과 문제없음이 아니라 확인하지 못한 ` +
-      `것입니다.★${sample(pb.unlabeled_tickers)}`,
+      `가격 정의 미상 — ${foggy}종목은 정의를 확인하지 못했어요(레거시 행이거나 ` +
+      `품질 태그가 없어요). ★확인 결과 문제없음이 아니라 확인하지 못한 ` +
+      `것이에요.★${sample(pb.unlabeled_tickers)}`,
     );
   }
   if (pb.state === "ok") {
-    out.push(`가격 정의 — ${pb.tickers}종목 전부가 수정주가이고 정의가 균일합니다.`);
+    out.push(`가격 정의 — ${pb.tickers}종목 전부가 수정주가이고 정의가 균일해요.`);
   }
   // ★제외는 완화이지 해결이 아니다★ 그 사실을 함께 말한다.
   // 0건이면 아무 말도 하지 않는다 — 안 뺀 것과 뺄 것이 없었던 것은 같다.
   if (pb.excluded?.count > 0) {
     out.push(
-      `가격 정의 정책 — ${pb.excluded.count}종목을 백테스트에서 **제외**했습니다` +
+      `가격 정의 정책 — ${pb.excluded.count}종목을 백테스트에서 **제외**했어요` +
       `${pb.excluded.tickers.length ? ` (예: ${pb.excluded.tickers.join(" · ")})` : ""}. ` +
-      `데이터가 고쳐진 것이 아니라 유니버스가 줄었습니다 — 위 혼합 개수는 ` +
-      `제외 전 기준이고, 그래서 이 실행은 "검증됨" 이 되지 않습니다.`,
+      `데이터가 고쳐진 것이 아니라 유니버스가 줄었어요 — 위 혼합 개수는 ` +
+      `제외 전 기준이고, 그래서 이 실행은 "검증됨" 이 되지 않아요.`,
     );
   } else if (pb.policy === "pass_labeled" && (pb.basis?.mixed ?? 0) > 0) {
     out.push(
-      `가격 정의 정책 — 혼합 종목을 **그대로 쓰도록** 선택했습니다` +
-      `(price_basis_policy=pass_labeled). 위 점프가 수익률에 그대로 들어갑니다.`,
+      `가격 정의 정책 — 혼합 종목을 **그대로 쓰도록** 선택했어요` +
+      `(price_basis_policy=pass_labeled). 위 점프가 수익률에 그대로 들어가요.`,
     );
   }
   return out;
@@ -284,28 +284,28 @@ function universeHonesty(uv: ScreenToBacktestResult["universe"]): string[] {
   if (uv.fell_back) {
     out.push(
       `유니버스 폴백 — ${uv.requested} 를 요청했지만 그 시점 유니버스를 만들지 ` +
-      `못해 오늘자 ${uv.effective} 로 돌았습니다. 상장폐지 종목이 빠져 ` +
-      `생존편향이 그대로 남아 있습니다.`,
+      `못해 오늘자 ${uv.effective} 로 돌았어요. 상장폐지 종목이 빠져 ` +
+      `생존편향이 그대로 남아 있어요.`,
     );
   } else if (uv.survivorship === "not_corrected") {
     out.push(
-      `유니버스 생존편향 — 오늘 기준 멤버십(${uv.effective})입니다. 그 사이 ` +
-      `상장폐지된 종목이 유니버스에 없어 성과가 위로 치우칩니다.`,
+      `유니버스 생존편향 — 오늘 기준 멤버십(${uv.effective})이에요. 그 사이 ` +
+      `상장폐지된 종목이 유니버스에 없어 성과가 위로 치우쳐요.`,
     );
   } else if (uv.survivorship === "approximated") {
     out.push(
-      `유니버스 근사 — 시총 상위 재구성입니다(${uv.asof_date ?? "기준일 미상"}). ` +
-      `상장폐지 종목은 포함되지만 실제 지수 편입 이력은 아닙니다.`,
+      `유니버스 근사 — 시총 상위 재구성이에요(${uv.asof_date ?? "기준일 미상"}). ` +
+      `상장폐지 종목은 포함되지만 실제 지수 편입 이력은 아니에요.`,
     );
   } else if (uv.survivorship === "unknown") {
     out.push(
-      `유니버스 미상 — ${uv.reason ?? "보정 여부를 판정할 수 없습니다."} ` +
-      `★보정됐다는 뜻이 아닙니다.★`,
+      `유니버스 미상 — ${uv.reason ?? "보정 여부를 판정할 수 없어요."} ` +
+      `★보정됐다는 뜻이 아니에요.★`,
     );
   } else {
     out.push(
       `유니버스 생존편향 보정 — ${uv.asof_date ?? "기준일"} 당시 거래된 ` +
-      `${uv.tickers_screened}종목(이후 상장폐지 포함)으로 돌았습니다.`,
+      `${uv.tickers_screened}종목(이후 상장폐지 포함)으로 돌았어요.`,
     );
   }
   return out;
@@ -346,8 +346,8 @@ export function BacktestResults({ runId }: { runId: string }) {
     // 404(진짜 없음)만 확정 실패, 그 외(5xx/네트워크)는 일시적 → 재시도 유도
     const gone = (q.error as { httpStatus?: number } | null)?.httpStatus === 404;
     return <div className="brun-shell"><div className="brun-err">
-      {gone ? "결과를 찾을 수 없습니다 — 만료되었거나 잘못된 링크일 수 있습니다."
-            : "결과를 일시적으로 불러오지 못했습니다 — 연결을 확인하고 재시도하세요."}
+      {gone ? "결과를 찾을 수 없어요 — 만료되었거나 잘못된 링크일 수 있어요."
+            : "결과를 일시적으로 불러오지 못했어요 — 연결을 확인하고 재시도하세요."}
       <div className="brun-err-actions" style={{ marginTop: 10 }}>
         {!gone && <button className="brun-btn primary" onClick={() => q.refetch()}>재시도</button>}
         <button className="brun-btn" onClick={() => router.push("/backtest")}>← 편집기로</button>
@@ -358,7 +358,7 @@ export function BacktestResults({ runId }: { runId: string }) {
   const run = q.data;
   if (run.status !== "completed" || !run.result) {
     return <div className="brun-shell"><div className="brun-err">
-      이 실행은 {run.status} 상태입니다 — 완료된 결과가 없습니다.
+      이 실행은 {run.status} 상태예요 — 완료된 결과가 없어요.
       <button className="brun-btn" onClick={() => router.push(`/backtest/runs/${runId}/loading`)}>진행 상황 보기</button>
     </div></div>;
   }
@@ -408,7 +408,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         <div className="brun-rhead-r">
           <span className={`brun-badge ${isMock ? "mock" : "real"}`}>{isMock ? "MOCK 데이터" : "실데이터"}</span>
           <span className={`brun-badge ${pitBadge.cls}`}
-                title={res.pit_evidence?.summary ?? "시점 정합을 판정할 자료가 없습니다."}>
+                title={res.pit_evidence?.summary ?? "시점 정합을 판정할 자료가 없어요."}>
             {pitBadge.label}
           </span>
           <button className="brun-btn" onClick={() => router.push(`/backtest/runs/${runId}/compare`)}>비교</button>
@@ -416,7 +416,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           <button className="brun-btn primary" onClick={() => router.push("/backtest")}>← 편집기로</button>
         </div>
       </header>
-      {isMock && <div className="brun-mocknote">합성(mock) 데이터 기준 결과입니다 — 수치는 참고용. 실데이터는 GCP 적재 후 자동 반영됩니다.</div>}
+      {isMock && <div className="brun-mocknote">합성(mock) 데이터 기준 결과예요 — 수치는 참고용. 실데이터는 GCP 적재 후 자동 반영돼요.</div>}
 
       {/* Overview — 엔진이 산출한 모든 지표를 그룹별로(데이터 없는 항목 생략) */}
       <Card className="brun-card">
@@ -550,16 +550,16 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         <ul className="brun-diag-list">
           {res.pit_evidence && res.pit_evidence.status !== "verified" &&
             <li>시점 정합 {pitBadge.label} — {res.pit_evidence.summary}</li>}
-          {!res.pit_evidence && <li>시점 정합을 판정할 자료가 이 실행에 없습니다 — 검증됐다는 뜻이 아닙니다.</li>}
-          {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요합니다.</li>}
-          {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·유니버스·기간을 점검하세요.</li>}
+          {!res.pit_evidence && <li>시점 정합을 판정할 자료가 이 실행에 없어요 — 검증됐다는 뜻이 아니에요.</li>}
+          {isMock && <li>합성(mock) 데이터 — 절대 수치는 참고용이며 실데이터 적재 후 재실행이 필요해요.</li>}
+          {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없어요 — 신호·유니버스·기간을 점검하세요.</li>}
           {universeLines.map((t, i) => <li key={`uv${i}`}>{t}</li>)}
           {priceLines.map((t, i) => <li key={`pb${i}`}>{t}</li>)}
           {macroLines.map((t, i) => <li key={`ml${i}`}>{t}</li>)}
           {fundLines.map((t, i) => <li key={`fp${i}`}>{t}</li>)}
           {res.pit_evidence && res.pit_evidence.status === "verified" &&
             <li className="brun-diag-omit">{res.pit_evidence.note}</li>}
-          <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않습니다(추정치로 대체하지 않음).</li>
+          <li className="brun-diag-omit">롤링 지표·시점별 익스포저·거래별 MFE/MAE는 현재 엔진이 산출하지 않아 표시하지 않아요(추정치로 대체하지 않음).</li>
         </ul>
         </CardContent>
       </Card>

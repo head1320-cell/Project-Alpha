@@ -230,7 +230,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                   </>
                 )}
               </>
-            ) : <div className="ca-cp-empty">재무 시계열을 불러올 수 없습니다 (DART 미등록 종목이거나 데이터 없음).</div>}
+            ) : <div className="ca-cp-empty">재무 시계열을 불러올 수 없어요 (DART 미등록 종목이거나 데이터 없음).</div>}
           </div>
         )}
 
@@ -282,7 +282,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                     </div>
                   ))}
                 </div>
-              ) : <div className="ca-cp-empty">{network.note ?? "등록된 관계가 없습니다."}</div>}
+              ) : <div className="ca-cp-empty">{network.note ?? "등록된 관계가 없어요."}</div>}
           </div>
         )}
 
@@ -305,7 +305,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                   ))}
                 </div>
               )}
-            <div className="ca-cp-empty" style={{ marginTop: 8, fontSize: 11 }}>※ 종목 일별 시세(최근 ~400봉)에서 역사적 VaR·ES·변동성·MDD·Sharpe를 직접 산출합니다. 시세가 적재되지 않은 종목은 표본 부족으로 표시되지 않을 수 있습니다.</div>
+            <div className="ca-cp-empty" style={{ marginTop: 8, fontSize: 11 }}>※ 종목 일별 시세(최근 ~400봉)에서 역사적 VaR·ES·변동성·MDD·Sharpe를 직접 산출해요. 시세가 적재되지 않은 종목은 표본 부족으로 표시되지 않을 수 있어요.</div>
           </div>
         )}
 
@@ -315,7 +315,7 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
               <div className="ca-cp-card-h plain">AI 기업 분석 <span className="ca-mockbadge">Claude</span></div>
               <button className="ca-cp-ai-btn" onClick={runNarrative} disabled={narrLoading}>{narrLoading ? "생성 중…" : narr ? "다시 생성" : "AI 분석 생성"}</button>
             </div>
-            {!narr && !narrLoading && <div className="ca-cp-empty">버튼을 눌러 가치평가·재무·팩터를 종합한 AI 내러티브를 생성합니다. (ANTHROPIC_API_KEY 필요 · 토큰 비용 발생)</div>}
+            {!narr && !narrLoading && <div className="ca-cp-empty">버튼을 눌러 가치평가·재무·팩터를 종합한 AI 내러티브를 생성해요. (ANTHROPIC_API_KEY 필요 · 토큰 비용 발생)</div>}
             {narr?.error && <div className="ca-cp-empty">AI 생성 실패: {narr.error}</div>}
             {narr && !narr.error && (
               <div className="ca-cp-ai-body">

@@ -38,9 +38,9 @@ function tokenize(text: string, count: number): Tok[] {
       let j = i + 2;
       let num = "";
       while (j < s.length && s[j] >= "0" && s[j] <= "9") { num += s[j]; j++; }
-      if (num === "") throw new ParseError("'팩터' 뒤에 번호가 필요합니다");
+      if (num === "") throw new ParseError("'팩터' 뒤에 번호가 필요해요");
       const n = parseInt(num, 10);
-      if (n < 1 || n > count) throw new ParseError(`팩터${n} 는 없는 팩터입니다 (팩터1~팩터${count})`);
+      if (n < 1 || n > count) throw new ParseError(`팩터${n} 는 없는 팩터예요 (팩터1~팩터${count})`);
       toks.push({ t: "ref", index: n - 1 });
       i = j; continue;
     }
@@ -55,7 +55,7 @@ function tokenize(text: string, count: number): Tok[] {
       const m = /^f(\d+)$/i.exec(w);
       if (m) {
         const n = parseInt(m[1], 10);
-        if (n < 1 || n > count) throw new ParseError(`F${n} 는 없는 팩터입니다 (팩터1~팩터${count})`);
+        if (n < 1 || n > count) throw new ParseError(`F${n} 는 없는 팩터예요 (팩터1~팩터${count})`);
         toks.push({ t: "ref", index: n - 1 });
         i = j; continue;
       }
@@ -84,25 +84,25 @@ function parseTokens(toks: Tok[]): ExprNode {
   }
   function parseAtom(): ExprNode {
     const tk = peek();
-    if (!tk) throw new ParseError("팩터가 필요한 자리에 식이 끝났습니다");
+    if (!tk) throw new ParseError("팩터가 필요한 자리에 식이 끝났어요");
     if (tk.t === "lp") {
       next();
       const inner = parseOr();
-      if (peek()?.t !== "rp") throw new ParseError("괄호가 맞지 않습니다");
+      if (peek()?.t !== "rp") throw new ParseError("괄호가 맞지 않아요");
       next();
       return inner;
     }
     if (tk.t === "ref") { next(); return { type: "ref", index: tk.index }; }
-    if (tk.t === "and" || tk.t === "or") throw new ParseError("연산자 앞에 팩터가 필요합니다");
-    throw new ParseError("괄호가 맞지 않습니다");
+    if (tk.t === "and" || tk.t === "or") throw new ParseError("연산자 앞에 팩터가 필요해요");
+    throw new ParseError("괄호가 맞지 않아요");
   }
 
   const ast = parseOr();
   if (pos < toks.length) {
     const tk = toks[pos];
-    if (tk.t === "ref") throw new ParseError("팩터 사이에 연산자(and/or)가 필요합니다");
-    if (tk.t === "rp") throw new ParseError("괄호가 맞지 않습니다");
-    throw new ParseError("조건식을 끝까지 해석하지 못했습니다");
+    if (tk.t === "ref") throw new ParseError("팩터 사이에 연산자(and/or)가 필요해요");
+    if (tk.t === "rp") throw new ParseError("괄호가 맞지 않아요");
+    throw new ParseError("조건식을 끝까지 해석하지 못했어요");
   }
   return ast;
 }
@@ -110,11 +110,11 @@ function parseTokens(toks: Tok[]): ExprNode {
 export function parseExpr(text: string, count: number): ParseResult {
   try {
     const toks = tokenize(text, count);
-    if (toks.length === 0) return { ok: false, error: "조건식이 비어 있습니다" };
+    if (toks.length === 0) return { ok: false, error: "조건식이 비어 있어요" };
     return { ok: true, ast: parseTokens(toks) };
   } catch (e) {
     if (e instanceof ParseError) return { ok: false, error: e.message };
-    return { ok: false, error: "조건식을 해석할 수 없습니다" };
+    return { ok: false, error: "조건식을 해석할 수 없어요" };
   }
 }
 

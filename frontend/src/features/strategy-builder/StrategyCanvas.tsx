@@ -301,7 +301,7 @@ export default function StrategyCanvas() {
         </div>
 
         <div style={{ padding: "10px 14px", borderTop: "1px solid #1e2d4a", fontSize: 10, color: "#4a5f80", lineHeight: 1.5 }}>
-          노드를 드래그하여 캔버스에 놓으세요.<br />노드 사이를 마우스로 연결합니다.
+          노드를 드래그하여 캔버스에 놓으세요.<br />노드 사이를 마우스로 연결해요.
         </div>
       </aside>
 
