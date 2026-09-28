@@ -201,10 +201,12 @@ test("이야기: 노드 번호 순서의 서버 설명 · 연습용 경고 · �
 test("관문 레일: 계산 전 판정 없음 · 건너뛴 관문은 끊기고 이어진 구간은 잇는다", async ({ page }) => {
   await openCanvas(page);
   const stn = (k: string) => page.locator(`.pg-stn[data-gate="${k}"]`);
-  await expect(page.locator(".pg-stn")).toHaveCount(8);
-  await expect(page.locator(".pg-stn--idle")).toHaveCount(8);
+  await page.locator(".pg-rail-pill").click();                        // 레일은 캔버스 위 알약 안에 접혀 있다(BQ Q2) — 펼쳐서 본다
+  await expect(page.locator(".pg-rail .pg-stn")).toHaveCount(8);
+  await expect(page.locator(".pg-rail .pg-stn--idle")).toHaveCount(8);
   await expect(stn("build").locator("button")).toBeDisabled();
   const body = await run(page);
+  await page.locator(".pg-rail-pill").click();                        // 계산하기를 누르면(카드 바깥) 카드가 접힌다 — 다시 펼친다
   const gates = Object.fromEntries(body.gates.gates.map((g: { key: string; state: string }) => [g.key, g.state]));
   for (const [k, st] of Object.entries(gates)) await expect(stn(k), k).toHaveClass(new RegExp(`pg-stn--${st}\\b`));
   // 이 그래프에는 신호 노드가 없다 — 신호는 건너뜀이고, 경제적 가치·실계좌는 이 경로에 없다.
@@ -251,6 +253,7 @@ for (const scheme of ["light", "dark"] as const) {
     await openCanvas(page);
     await run(page);
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.locator(".pg-rail-pill").click();
     await page.locator('.pg-stn[data-gate="cost"] button').click();
     await page.waitForTimeout(200);
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-root"));
@@ -601,6 +604,8 @@ test("여기까지 계산(BL1): 올리면 돌 경로가 밝아지고, 누르면 
   expect(Object.keys(body.nodes).sort()).toEqual(["estimate", "optimizer", "returns", "universe", "views"]);
   expect(body.gates).toBeNull();
   await expect(page.locator(".pg-summary--partial")).toContainText("여기까지 계산 · 5개");
+  await expect(page.locator(".pg-rail-pill")).toContainText("관문은 전체를 계산해야 봐요");
+  await page.locator(".pg-rail-pill").click();
   await expect(page.locator(".pg-rail-summary")).toContainText("전체를 계산할 때");
 
   // 전체 계산 뒤 한 곳만 다시 계산하면, 계산하지 않은 노드는 이전 결과로 남되 그렇다고 말한다.

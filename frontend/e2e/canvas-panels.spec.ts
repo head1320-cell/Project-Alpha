@@ -252,6 +252,10 @@ for (const [w, mode] of [[1440, "full"], [1280, "icons"], [1024, "more"]] as con
     const runB = await box(page.locator(".pg-run"));
     expect(runB.x + runB.width).toBeLessThanOrEqual(tb.x + tb.width);
     expect(runB.y).toBeGreaterThanOrEqual(tb.y);
+    // 결과 요약은 줄이지도 자르지도 않는다 — 실패 수·연습용 표시가 "…" 뒤로 숨으면 안 된다.
+    const sum = page.locator(".pg-summary:not(.pg-summary--err):not(.pg-summary--stale)");
+    expect(await sum.evaluate((e) => e.scrollWidth - e.clientWidth), "요약이 잘리지 않는다").toBeLessThanOrEqual(0);
+    await expect(sum.locator(".pg-summary-practice")).toBeVisible();
     const drawer = page.locator(".pg-toolbar .pg-drawer-open").first();
     if (mode === "more") {
       await expect(page.locator(".pg-toolbar .pg-more-wrap > .pg-more")).toBeVisible();

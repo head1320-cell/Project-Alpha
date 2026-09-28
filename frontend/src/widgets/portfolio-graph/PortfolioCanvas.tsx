@@ -99,6 +99,11 @@ function ZoomWatch({ el }: { el: RefObject<HTMLDivElement> }) {
 const GROUP_PAD = 28;
 /** 맞춰 보기의 안쪽 여백(px) — 위 64 = 선 범례·걸러 보기 판(10 + 36 + 여유), 아래 64 = 안내 줄. */
 const FIT_INSET = { top: 64, bottom: 64, left: 24, right: 24 } as const;
+/** 판 사이 가운데가 이보다 좁으면 선 범례·걸러 보기가 알약 아래 둘째 줄로 내려간다(BQ Q2) — 맞춰 보기 위 여백도 그만큼. */
+const TIGHT_MIDDLE = 760;
+const TIGHT_ROW = 44;
+/** 위 여백 — 둘째 줄이 있으면 그만큼 더. */
+const fitTop = (el: HTMLElement | null) => FIT_INSET.top + (el?.closest("[data-tight]") ? TIGHT_ROW : 0);
 /** 노드 도구줄 높이 + 간격(px) — 고른 노드 위에 이만큼 비어 있어야 도구줄이 떠 있는 판 밑에 깔리지 않는다. */
 const TOOLBAR_H = 48;
 
@@ -116,13 +121,14 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
   const ins = floatInsets(el);
   const L = FIT_INSET.left + ins.left;
   const w = Math.max(1, el.clientWidth - L - FIT_INSET.right - ins.right);
-  const h = Math.max(1, el.clientHeight - FIT_INSET.top - FIT_INSET.bottom - ins.bottom);
+  const top = fitTop(el);
+  const h = Math.max(1, el.clientHeight - top - FIT_INSET.bottom - ins.bottom);
   const zoom = Math.min(opts.maxZoom ?? 1, Math.max(opts.minZoom ?? 0.2, Math.min(w / b.width, h / b.height)));
   // 가장 작게 줄여도 넘치면 가운데 두지 않고 흐름의 시작(왼쪽 위)에 붙인다 — 넘친 쪽은 오른쪽·아래로 간다.
   const dx = w - b.width * zoom;
   const dy = h - b.height * zoom;
   inst.setViewport({ x: L + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
-                     y: FIT_INSET.top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom },
+                     y: top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom },
                    opts.duration ? { duration: opts.duration } : undefined);
 }
 const NODE_W = 176;
@@ -228,8 +234,21 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
     setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
   }, []);
+  // 판 사이 가운데가 좁으면(알약 + 선 범례 + 걸러 보기가 한 줄에 안 듦) 범례·걸러 보기를 한 줄 아래로(BQ Q2).
+  const [tight, setTight] = useState(false);
   const leftShown = panels.left && !panels.focus;
   const rightShown = panels.right && !panels.focus;
+  useEffect(() => {
+    const el = canvasEl.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => { const ins = floatInsets(el); setTight(el.clientWidth - ins.left - ins.right < TIGHT_MIDDLE); };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    // 판 자체의 크기도 본다 — 왼쪽 목록은 카탈로그가 온 뒤에야 그려진다.
+    el.closest(".pg-root")?.querySelectorAll(".pg-palette, .pg-side").forEach((x) => ro.observe(x));
+    const t = setTimeout(measure, 0);                                   // 판이 열리고 닫힌 뒤의 폭
+    return () => { ro.disconnect(); clearTimeout(t); };
+  }, [leftShown, rightShown, panels.rightW, !!s.catalog]);
 
   const fit = () => setTimeout(() => fitClear(rf.current, canvasEl.current), 60);
   /** 판 사이 보이는 가운데를 기준으로 확대·축소(BQ Q1). */
@@ -465,7 +484,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       const left = n.positionAbsolute.x * vp.zoom + vp.x;
       const right = left + (n.width ?? NODE_W) * vp.zoom;
       const ins = floatInsets(el);
-      const need = FIT_INSET.top + TOOLBAR_H;
+      const need = fitTop(el) + TOOLBAR_H;
       const dy = top < need ? need - top : 0;
       let dx = 0;
       const maxRight = el.clientWidth - ins.right - 16;
@@ -813,7 +832,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
 
   return (
     <div className="pg-root pg-theme" data-left={leftShown ? "open" : "closed"} data-right={rightShown ? "open" : "closed"}
-         data-simple={s.simple || undefined} style={{ "--pg-right-w": `${panels.rightW}px` } as CSSProperties}>
+         data-simple={s.simple || undefined} data-tight={tight || undefined} style={{ "--pg-right-w": `${panels.rightW}px` } as CSSProperties}>
       <header className="pg-toolbar">
         <h1 className="pg-title">포트폴리오 설계</h1>
 
@@ -868,7 +887,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             {Object.values(s.report.nodes).filter((r) => r.status === "blocked").length} · 실패{" "}
             {Object.values(s.report.nodes).filter((r) => r.status === "failed").length}
             {/* 좁은 화면에서도 누르지 않고 보이는 연습용 표시(BQ Q1) — 오른쪽 창이 닫혀 있고 노드 칩이 멀리 확대에서 숨어도 합성 수가 실데이터처럼 읽히지 않게. */}
-            {Object.values(s.report.nodes).some((r) => r.lineage?.practice) && <b className="pg-summary-practice"> · 연습용 데이터</b>}
+            {Object.values(s.report.nodes).some((r) => r.lineage?.practice) && (
+              <b className="pg-summary-practice" title="연습용 합성 데이터로 계산한 결과예요 — 실제 시세가 아니에요"> · 연습용</b>
+            )}
           </span>
         )}
         <MoreMenu drawers={DRAWERS} onDrawer={(k) => setDrawer(k as DrawerKey)} onImport={applyLoad} canExport={s.nodes.length > 0}
@@ -891,8 +912,6 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </button>
       </header>
 
-      <GateRail report={s.report && !s.reportStale ? s.report.gates ?? null : null}
-                note={s.report?.partial && !s.reportStale ? s.report.gates_reason ?? null : null} />
 
       {s.catalogError && (
         <p className="pg-banner pg-banner--err">노드 목록을 불러오지 못했어요 — {s.catalogError}. 서버가 켜져 있는지 확인해 주세요.</p>
@@ -935,6 +954,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         </Sheet>
       ))}
 
+      {/* 진행상황 알약(BQ Q2) — 캔버스 위 가운데. 간단히 보기에서는 그 위에 한 줄로. */}
+      {s.simple && <GateRail report={s.report && !s.reportStale ? s.report.gates ?? null : null}
+                  note={s.report?.partial && !s.reportStale ? s.report.gates_reason ?? null : null} />}
       {s.simple && (
         <SimpleView nodes={s.nodes} edges={s.edges} groups={s.groups} catalog={s.catalog ?? []}
                     results={s.report?.nodes ?? null} stale={s.reportStale} running={s.running} onRun={() => void run()}
@@ -1058,6 +1080,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             )}
           </ReactFlow>
           <p className="pg-sr-live" aria-live="polite">{announce}</p>
+          {!s.simple && <GateRail report={s.report && !s.reportStale ? s.report.gates ?? null : null}
+                  note={s.report?.partial && !s.reportStale ? s.report.gates_reason ?? null : null} />}
           {s.catalog && s.nodes.length === 0 && (
             <div className="pg-empty-start">
               <p>비어 있어요. 무엇을 하려는지 고르면 흐름을 만들어 드려요.</p>
