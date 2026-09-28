@@ -99,7 +99,7 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers";
+  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port";
   /** `widget: "pick"` 가 부를 목록 이름(BK W5) — `strategies` · `research_runs`. 주소가 아니다. */
   source?: string;
   ends?: [string, string];
@@ -107,6 +107,8 @@ export interface ParamUi {
   options?: Record<string, string>;
   /** 다른 칸이 이 값들 중 하나일 때만 보인다(BO O1) — 예: `{model: ["mv_utility"]}`. 규칙은 서버가 준다. */
   show_if?: Record<string, unknown[]>;
+  /** 선택지 순서(BO O2) — 스키마 경로가 키 순서를 바꿀 수 있어 서버가 따로 준다. 없으면 받은 순서. */
+  order?: string[];
   /** 비워 두면 서버가 쓰는 값(BO O1) — 표시만 한다. 문서에 이 값을 쓰지 않는다. */
   empty_value?: unknown;
 }

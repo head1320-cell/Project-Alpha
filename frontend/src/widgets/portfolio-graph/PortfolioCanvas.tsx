@@ -36,6 +36,7 @@ import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, MoreHorizontal, Pin, PinOff, Play, Plus, Redo2, Route, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   CORE_CHAIN_TEMPLATE,
+  fieldsOf,
   goalDoc,
   PORTFOLIO_NODE,
   TEMPLATES,
@@ -282,10 +283,17 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     const v = rows.find((x) => x.port === port)?.share_pct;
     return typeof v === "number" && Number.isFinite(v) ? v : null;
   }, [live]);
-  const shareOf = useCallback((output: string | null): { share: number | null; linked: boolean } => {
+  /** 리밸런싱 주기의 쉬운 이름(BO O2) — 서버 x-ui 선택지. 카탈로그가 없으면 표시하지 않는다(지어내지 않는다). */
+  const rebalUi = useMemo(() => fieldsOf(s.catalog?.find((c) => c.type === PORTFOLIO_NODE)?.params_schema ?? null)
+    .find((f) => f.name === "rebalance")?.ui ?? null, [s.catalog]);
+  const shareOf = useCallback((output: string | null): { share: number | null; linked: boolean; rebalance: string | null } => {
     const e = output ? s.edges.find((x) => x.source === output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
-    return { share: e ? shareByEdge(e.target, e.targetHandle) : null, linked: !!e };
-  }, [s.edges, s.nodes, shareByEdge]);
+    const pf = e ? s.nodes.find((n) => n.id === e.target) : undefined;
+    const set = (pf?.data.params.rebalance ?? {}) as Record<string, string>;
+    const code = e?.targetHandle ? set[e.targetHandle] ?? (rebalUi?.empty_value as string | undefined) : undefined;
+    return { share: e ? shareByEdge(e.target, e.targetHandle) : null, linked: !!e,
+             rebalance: code ? rebalUi?.options?.[code] ?? null : null };
+  }, [s.edges, s.nodes, shareByEdge, rebalUi]);
 
   const numbered = useMemo(() => {
     const num = new Map(order.map((id, i) => [id, i + 1]));
@@ -325,7 +333,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
                        kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
                        output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()],
-                       ...(strat ? shareOf(g.output ?? null) : { share: null, linked: false }),
+                       ...(strat ? shareOf(g.output ?? null) : { share: null, linked: false, rebalance: null }),
                        onRunStrategy: runStrategyRef.current, onBranchStrategy: branchStrategyRef.current } };
     });
     // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.

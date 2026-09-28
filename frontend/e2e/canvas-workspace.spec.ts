@@ -1635,3 +1635,102 @@ for (const scheme of ["light", "dark"] as const) {
     expect(audit.low, `${scheme} 목표 ③ AA`).toEqual([]);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BO O2 · 전략별 리밸런싱 주기 (사용자 승인 배분 동작 변경 — 기본 '매일' 은 지금까지와 같은 계산). 거는 것:
+//  · 포트폴리오 노드 설정에서 이어진 전략마다 한 줄 · 선택지 = 서버 x-ui · 비우면 '매일'(문서엔 키 없음) · 매일로 되돌리면 키가 빠짐(짝)
+//  · 전략 상자 머리·접은 카드에 그 전략의 주기 · 계산하면 서버 보기(strategies[].rebalance)와 설명이 같은 주기를 말함
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("리밸런싱 주기(BO O2): 전략마다 고름 · 비우면 매일(키 없음) · 상자·접은 카드·서버 보기·설명이 같은 주기 · 매일로 되돌리면 키 빠짐(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const pf = portfolioOf(doc);
+  const [a, b] = strategiesOf(doc);
+  const pa = portOf(doc, a), pb = portOf(doc, b);
+  const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const ui = cat.nodes.find((c: { type: string }) => c.type === "portfolio_combine").params_schema.properties.rebalance["x-ui"] as {
+    options: Record<string, string>; empty_value: string; question: string; order: string[] };
+  const frameA = page.locator(`.pg-group--strategy[data-group-id="${a.id}"]`);
+  await expect(frameA.locator(".pg-group-rebal")).toHaveText(`리밸런싱 ${ui.options[ui.empty_value]}`);
+
+  await node(page, pf.id).click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  const field = page.locator('.pg-basic-field[data-field="rebalance"]');
+  await expect(field.locator(".pg-q")).toHaveText(ui.question);
+  await expect(field.locator(".pg-perport-row")).toHaveCount(2);
+  const rowA = field.locator(`.pg-perport-row[data-port="${pa}"]`);
+  await expect(rowA.locator(".pg-perport-name")).toHaveText(a.label);
+  await expect(rowA.locator(".pg-chip")).toHaveCount(Object.keys(ui.options).length);
+  await expect(rowA.locator(".pg-chip")).toHaveText(ui.order.map((k) => ui.options[k]));   // 짧은 주기부터(서버 순서)
+  await expect(rowA.locator('.pg-chip[aria-checked="true"]')).toHaveText(ui.options[ui.empty_value]);
+  const params = () => wip(page).then((d) => portfolioOf(d).params);
+  expect("rebalance" in (await params())).toBe(false);
+
+  await rowA.locator(".pg-chip", { hasText: ui.options.Q }).click();
+  expect((await params()).rebalance).toEqual({ [pa]: "Q" });
+  await expect(frameA.locator(".pg-group-rebal")).toHaveText(`리밸런싱 ${ui.options.Q}`);
+  await expect(page.locator(`.pg-group--strategy[data-group-id="${b.id}"] .pg-group-rebal`)).toHaveText(`리밸런싱 ${ui.options.D}`);
+
+  const body = await run(page);
+  const r = body.nodes[pf.id] as NodeRes & { view: { strategies: { port: string; rebalance: string }[] };
+                                            explain: { trust: { text: string }[] } };
+  expect(r.view.strategies.find((x) => x.port === pa)!.rebalance).toBe("Q");
+  expect(r.view.strategies.find((x) => x.port === pb)!.rebalance).toBe("D");
+  expect(r.explain.trust.some((t) => t.text.includes(`${a.label}: ${ui.options.Q}`))).toBe(true);
+
+  await frameA.locator(".pg-group-toggle").click();
+  await expect(page.locator(`.pg-snode[data-group-id="${a.id}"] .pg-snode-rebal`)).toHaveText(`리밸런싱 ${ui.options.Q}`);
+
+  // 짝 — 매일로 되돌리면 키가 빠진다(서버 기본값과 같은 문서)
+  await node(page, pf.id).click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await rowA.locator(".pg-chip", { hasText: ui.options.D }).click();
+  expect("rebalance" in (await params())).toBe(false);
+});
+
+test("리밸런싱 주기(BO O2): 포트폴리오에 잇지 않은 전략에는 주기 표시가 없다(짝) · 전략이 없으면 설정이 그 이유를 말함", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const pf = portfolioOf(doc);
+  const [a] = strategiesOf(doc);
+  const [b] = strategiesOf(doc).slice(1);
+  await expect(page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-rebal`)).toHaveCount(1);
+  const cut = { ...doc, edges: doc.edges.filter((x) => !(x.source === a.output && x.target === pf.id)) };
+  await page.locator(".pg-import-input").setInputFiles({ name: "cut.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, ...cut })) });
+  await expect(page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-rebal`)).toHaveCount(0);
+  await expect(page.locator(`.pg-group--strategy[data-group-id="${b.id}"] .pg-group-rebal`)).toHaveCount(1);
+  // 전략이 하나도 이어지지 않은 포트폴리오 노드 — 설정이 그 이유를 말한다.
+  const none = { ...doc, edges: doc.edges.filter((x) => x.target !== pf.id) };
+  await page.locator(".pg-import-input").setInputFiles({ name: "none.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, ...none })) });
+  await node(page, pf.id).click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await expect(page.locator('.pg-basic-field[data-field="rebalance"] .pg-help').first()).toContainText("전략을 이어 주면");
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BO O2): ${scheme} — 전략마다 주기 고르기 · 상자·접은 카드의 주기 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await addStrategy(page, "tpl:stress");
+    const doc = await wip(page);
+    const pf = portfolioOf(doc);
+    const [a] = strategiesOf(doc);
+    await node(page, pf.id).click();
+    await page.locator('.pg-tab[data-tab="settings"]').click();
+    await page.locator(`.pg-perport-row[data-port="${portOf(doc, a)}"] .pg-chip`).nth(2).click();
+    let audit = await page.evaluate<AuditResult>(contrastAudit('.pg-basic-field[data-field="rebalance"]'));
+    expect(audit.checked).toBeGreaterThan(8);
+    expect(audit.low, `${scheme} 주기 고르기 AA`).toEqual([]);
+    audit = await page.evaluate<AuditResult>(contrastAudit(".pg-group-rebal"));
+    expect(audit.low, `${scheme} 상자 주기 AA`).toEqual([]);
+    await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).evaluate((el) => (el as HTMLElement).click());
+    audit = await page.evaluate<AuditResult>(contrastAudit(".pg-snode-rebal"));
+    expect(audit.checked).toBeGreaterThan(0);
+    expect(audit.low, `${scheme} 접은 카드 주기 AA`).toEqual([]);
+  });
+}

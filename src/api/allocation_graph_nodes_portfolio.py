@@ -28,6 +28,9 @@ METHODS = {"risk_parity": "위험 똑같이", "equal": "똑같이", "inverse_vol
            "min_var": "흔들림 최소", "hrp": "비슷한 것끼리 묶어"}
 #: 엔진이 풀리지 않으면 역변동성으로 바꾸는 방식 — 그 경우인지 결과에 표시되지 않는다.
 SILENT_FALLBACK = ("min_var", "hrp")
+#: 전략별 리밸런싱 주기 (BO O2 — 사용자 승인 배분 동작 변경) — 코드 → (거래일, 쉬운 이름).
+#: 거래일 수는 관례(주 5·달 21·분기 63)다. 매일(D)은 지금까지의 흐름과 같은 식이다.
+REBALANCE: dict[str, tuple[int, str]] = {"D": (1, "매일"), "W": (5, "매주"), "M": (21, "한 달"), "Q": (63, "한 분기")}
 
 
 class PortfolioCombineParams(BaseModel):
@@ -36,6 +39,20 @@ class PortfolioCombineParams(BaseModel):
         "합치는 방식", question="전략끼리 어떻게 나눌까요?", widget="cards", options=METHODS)})
     labels: dict[str, str] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
         "전략 이름", tier="advanced", help="포트(s1~s8)마다 전략 이름. 캔버스가 전략 상자 이름으로 채워요.")})
+    rebalance: dict[str, Literal[tuple(REBALANCE)]] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
+        "리밸런싱 주기", question="전략마다 얼마나 자주 비중을 되돌릴까요?", widget="per_port",
+        options={k: v[1] for k, v in REBALANCE.items()}, empty_value="D",
+        # 스키마 경로가 선택지 키를 가나다(알파벳)순으로 다시 늘어놓아 "매일·한 달·한 분기·매주" 가 됐다 — 짧은 주기부터의 순서를 따로 준다.
+        order=list(REBALANCE),
+        help="되돌리는 사이에는 비중이 가격 따라 흘러가요. 비우면 매일 되돌린다고 봐요. 되돌릴 때의 거래비용은 넣지 않아요.")})
+
+    @field_validator("rebalance")
+    @classmethod
+    def _known_rebalance_ports(cls, v: dict[str, str]) -> dict[str, str]:
+        bad = [k for k in v if k not in PORTS]
+        if bad:
+            raise ValueError(f"없는 포트: {', '.join(bad)} (s1~s{N_PORTS})")
+        return v
 
     @field_validator("labels")
     @classmethod
@@ -65,11 +82,16 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
         raise pg.NodeFailure(f"전략 이름이 겹쳐요({', '.join(dup)}) — 이름이 같으면 전략별 몫을 나눌 수 없어요. 전략 상자 이름을 바꿔 주세요.")
     if len(sleeves) < 2:
         raise pg.NodeFailure("전략이 두 개 이상 있어야 합칠 수 있어요.")
+    # 전략별 주기 — 이어진 포트만(이어지지 않은 포트의 칸은 이름처럼 쓰이지 않는다). 모두 매일이면 넘기지 않는다 —
+    # 기본 계산은 지금과 같은 호출이다.
+    codes_of = {port: p.rebalance.get(port, "D") for port in ports}
+    every = {name: REBALANCE[codes_of[port]][0] for port, name in zip(ports, names)}
+    every_arg = every if any(k > 1 for k in every.values()) else None
     ret = sc._load_ret_matrix(sleeves)
-    out = sc.combine_sleeves(sleeves, method=p.method, ret_matrix=ret)
+    out = sc.combine_sleeves(sleeves, method=p.method, ret_matrix=ret, rebalance_every=every_arg)
     if out.get("error"):
         raise pg.NodeFailure(str(out.get("message")))
-    ana = sc.sleeve_analytics(sleeves, ret_matrix=ret, weights=out["sleeve_allocation"])
+    ana = sc.sleeve_analytics(sleeves, ret_matrix=ret, weights=out["sleeve_allocation"], rebalance_every=every_arg)
     cm = ana.get("correlation") or {}
     corr = None if ana.get("error") else {"labels": names, "matrix": [[cm[a][b] for b in names] for a in names]}
     cw = out["combined_weights_pct"]
@@ -77,7 +99,8 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
     arr = np.array([cw[c] / 100.0 for c in codes], dtype=float)
     strategies = [{"port": port, "label": name, "share_pct": out["sleeve_allocation"][name],
                    "risk_pct": out["risk_contribution_pct"][name], "vol_pct": out["sleeve_vol_pct"][name],
-                   "n_holdings": len(s["weights"])} for port, name, s in zip(ports, names, sleeves)]
+                   "n_holdings": len(s["weights"]), "rebalance": codes_of[port]}
+                  for port, name, s in zip(ports, names, sleeves)]
     view = {"result": out, "labels": _labels(codes), "strategies": strategies, "correlation": corr,
             "correlation_reason": ana.get("message") if ana.get("error") else None}
     return pg.NodeOutput(values={"weights": weights_value(codes, arr)}, view=view,
@@ -86,11 +109,21 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
 
 def _explain(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
-    facts = [f"{s['label']}: 몫 {s['share_pct']:.1f}% · 위험 분담 {s['risk_pct']:.1f}%" for s in view.get("strategies") or []]
+    facts = [f"{s['label']}: 몫 {s['share_pct']:.1f}% · 위험 분담 {s['risk_pct']:.1f}% · "
+             f"리밸런싱 {REBALANCE.get(s.get('rebalance') or 'D', REBALANCE['D'])[1]}" for s in view.get("strategies") or []]
     trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 전략의 수익 흐름으로 몫을 정하고 종목 비중을 합쳤어요(묶음 합치기와 같은 계산).")]
     if r.get("method") in SILENT_FALLBACK:
         trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿔요 — 이 결과가 그 경우인지는 표시되지 않아요."))
-    trust.append(_t(ASSUMED, "전략 수익은 각 전략의 지금 비중을 과거에 고정해 만든 흐름이에요 — 전략이 과거에 실제로 낸 성과가 아니에요."))
+    rows_all = view.get("strategies") or []
+    codes = [x.get("rebalance") or "D" for x in rows_all]
+    if all(c == "D" for c in codes):
+        trust.append(_t(ASSUMED, "전략 수익은 각 전략의 지금 비중으로 매일 되돌린다고 보고 과거에 적용한 흐름이에요 — "
+                                 "전략이 과거에 실제로 낸 성과가 아니에요."))
+    else:
+        each = ", ".join(f"{x['label']}: {REBALANCE[c][1]}" for x, c in zip(rows_all, codes))
+        trust.append(_t(ASSUMED, f"전략 수익은 전략마다 정한 주기({each})로 지금 비중으로 되돌리고, 그 사이에는 비중이 "
+                                 "가격 따라 흘러가게 해서 과거에 적용한 흐름이에요 — 전략이 과거에 실제로 낸 성과가 아니에요."))
+    trust.append(_t(ASSUMED, "되돌릴 때 드는 거래비용은 넣지 않았어요 — 자주 되돌리는 전략일수록 실제보다 좋게 보여요."))
     if view.get("correlation") is None:
         trust.append(_t(UNKNOWN, f"전략 사이 상관을 재지 못했어요 — {view.get('correlation_reason') or '사유 없음'}"))
     rows = [x for x in (view.get("strategies") or []) if isinstance(x.get("share_pct"), (int, float))]
@@ -98,7 +131,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     headline = None if top is None else {"label": f"{top['label']} 몫", "value": top["share_pct"], "unit": "%",
                                          "text": f"가장 큰 몫은 {top['label']} {top['share_pct']:.1f}%"}
     return {"title": f"{r.get('n_sleeves')}개 전략을 {r.get('n_stocks')}종목 포트폴리오로 합쳤어요", "headline": headline, "facts": facts,
-            "trust": trust, "unmeasured": ["전략 사이 상관이 앞으로 유지될지", "전략마다 다른 리밸런싱 주기"]}
+            "trust": trust, "unmeasured": ["전략 사이 상관이 앞으로 유지될지", "되돌릴 때 드는 거래비용"]}
 
 
 def glance(view: dict) -> dict | None:

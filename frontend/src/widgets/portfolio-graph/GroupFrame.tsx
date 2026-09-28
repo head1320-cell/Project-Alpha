@@ -32,6 +32,8 @@ export interface GroupFrameData {
   share?: number | null;
   /** 전략의 출력이 포트폴리오 노드에 이어졌나 — 몫을 모를 때 그 이유를 가른다. */
   linked?: boolean;
+  /** 포트폴리오 노드에서 정한 이 전략의 리밸런싱 주기(쉬운 이름, BO O2). 잇지 않았으면 null — 표시하지 않는다. */
+  rebalance?: string | null;
   /** "이 전략만 계산" — 캔버스가 채운다(부분 계산). */
   onRunStrategy?: (groupId: string) => void;
   /** 전략째 갈래 — 캔버스가 채운다. */
@@ -102,6 +104,9 @@ function GroupFrameImpl({ data }: NodeProps<GroupFrameData>) {
                 title={known(data.share) ? "포트폴리오에서 이 전략이 차지하는 몫(서버 계산)" : shareWhy(!!results, data.linked)}>
             몫 <b>{known(data.share) ? `${data.share.toFixed(1)}%` : "—"}</b>
           </span>
+        )}
+        {strategy && data.rebalance && (
+          <span className="pg-group-rebal" title="포트폴리오 노드에서 정한 이 전략의 리밸런싱 주기">리밸런싱 {data.rebalance}</span>
         )}
         <span className="pg-group-sum">
           노드 {data.members.length}개{results
@@ -205,6 +210,7 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
           ? <><b>—</b><small>{shareWhy(computed, data.linked)}</small></>
           : <><b>{share.toFixed(1)}<i>%</i></b><small>포트폴리오 몫</small></>}
       </p>
+      {data.rebalance && <p className="pg-snode-rebal">리밸런싱 {data.rebalance}</p>}
       {computed && (
         <p className="pg-snode-status">
           <i className="pg-pip pg-pip--ok" />완료 {ok}

@@ -128,10 +128,68 @@ function PresetSlider({ f, value, onChange }: { f: FieldSpec; value: unknown; on
   );
 }
 
-function BasicField({ f, value, root, onChange }: {
-  f: FieldSpec; value: unknown; root: JsonSchema | null; onChange: (v: unknown) => void;
+/** 이어진 전략 한 줄 — 포트와 이름(BO O2). */
+export interface LinkedPort { port: string; label: string }
+
+/**
+ * 전략마다 하나씩 고르기 (BO O2 · `widget: "per_port"`) — 이어진 전략마다 한 줄, 선택지는 서버 x-ui.
+ * 비운 포트는 서버가 `empty_value` 로 본다 — 그 칩을 고르면 키를 지운다(문서가 서버 기본값과 같게).
+ */
+function PerPort({ f, value, ports, onChange }: {
+  f: FieldSpec; value: unknown; ports: LinkedPort[]; onChange: (v: unknown) => void;
+}) {
+  const cur = (value && typeof value === "object" ? value : {}) as Record<string, string>;
+  const order = f.ui.order ?? [];
+  const opts = Object.entries(f.ui.options ?? {})
+    .sort(([a], [b]) => (order.indexOf(a) + 1 || 1e9) - (order.indexOf(b) + 1 || 1e9));
+  const put = (port: string, code: string) => {
+    const next = { ...cur };
+    if (code === f.ui.empty_value) delete next[port]; else next[port] = code;
+    onChange(Object.keys(next).length ? next : undefined);
+  };
+  return (
+    <div className="pg-basic-field" data-field={f.name}>
+      <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
+      {ports.length === 0
+        ? <p className="pg-help">전략을 이어 주면 전략마다 고를 수 있어요.</p>
+        : (
+          <div className="pg-perport">
+            {ports.map((p) => {
+              const on = cur[p.port] ?? f.ui.empty_value;
+              return (
+                <div key={p.port} className="pg-perport-row" data-port={p.port}>
+                  <span className="pg-perport-name">{p.label}</span>
+                  <div className="pg-chips" role="radiogroup" aria-label={`${p.label} ${f.ui.label}`}>
+                    {opts.map(([k, lab]) => (
+                      <button key={k} type="button" role="radio" aria-checked={on === k}
+                              className={`pg-chip pg-chip--sm${on === k ? " on" : ""}`} onClick={() => put(p.port, k)}>{lab}</button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      {f.ui.help && <p className="pg-help">{f.ui.help}</p>}
+    </div>
+  );
+}
+
+/** 이어진 포트 — 들어오는 선의 포트 순서, 이름은 `labels`(캔버스가 전략 이름으로 채움). 선을 모르면 `labels` 만으로. */
+function linkedPorts(params: Params, edges?: Edge[], nodeId?: string): LinkedPort[] {
+  const labels = (params.labels && typeof params.labels === "object" ? params.labels : {}) as Record<string, string>;
+  const ports = edges && nodeId
+    ? edges.filter((e) => e.target === nodeId && e.targetHandle).map((e) => e.targetHandle as string)
+    : Object.keys(labels);
+  return [...new Set(ports)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((port) => ({ port, label: labels[port] ?? `전략 ${port.replace(/^s/, "")}` }));
+}
+
+function BasicField({ f, value, root, ports, onChange }: {
+  f: FieldSpec; value: unknown; root: JsonSchema | null; ports: LinkedPort[]; onChange: (v: unknown) => void;
 }) {
   const eff = value !== undefined ? value : f.defaultValue;
+  if (f.ui.widget === "per_port") return <PerPort f={f} value={value} ports={ports} onChange={onChange} />;
   const item = f.kind === "json" ? itemSchemaOf(f, root) : null;
   if (item) return <ObjectList f={f} item={item} value={eff} onChange={onChange} />;
   const q = <div className="pg-q">{f.ui.question ?? f.ui.label}</div>;
@@ -312,7 +370,7 @@ export function BasicFields({ entry, params, onChange }: {
   return (
     <>
       {basic.map((f) => <BasicField key={f.name} f={f} value={params[f.name]} root={entry?.params_schema ?? null}
-                                    onChange={(v) => onChange(setOrClear(params, f.name, v))} />)}
+                                    ports={linkedPorts(params)} onChange={(v) => onChange(setOrClear(params, f.name, v))} />)}
     </>
   );
 }
@@ -349,8 +407,9 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   // 고르는 칸(카드)이 먼저 — "어떤 방식으로" 가 "얼마나" 보다 앞선 질문이다. 나머지는 서버 순서.
   // `show_if` 로 지금 방식에서 뜻이 없는 칸은 숨긴다(BO O1).
   const basic = basicFieldsOf(entry?.params_schema ?? null, params);
+  const ports = linkedPorts(params, edges, node.id);
   const basicRendered = basic.map((f) => ({ f, el: <BasicField key={f.name} f={f} value={params[f.name]}
-                                                               root={entry?.params_schema ?? null}
+                                                               root={entry?.params_schema ?? null} ports={ports}
                                                                onChange={(v) => onChange(setOrClear(params, f.name, v))} /> }));
 
   return (
