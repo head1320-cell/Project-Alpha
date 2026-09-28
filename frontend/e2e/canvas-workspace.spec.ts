@@ -1734,3 +1734,85 @@ for (const scheme of ["light", "dark"] as const) {
     expect(audit.low, `${scheme} 접은 카드 주기 AA`).toEqual([]);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BO O3 · 갈래 비교의 다중 비교 보정 — 과거 성과 노드가 갈래에 있으면 서버가 N(원본 + 갈래)으로 보정한 확률. 거는 것:
+//  · 칸 값 = 서버 `/graph/branch-evidence` 값 그대로(보낸 곡선 = 각 백테스트 노드 결과의 equity_curve) · N 문장 · "N 은 하한" 문장
+//  · 갈래 하나를 더 만들면 N 이 늘어 같은 원본의 보정 확률이 달라진다(짝 — N 을 무시하는 구현을 죽인다)
+//  · 과거 성과 노드가 갈래에 없으면 보정하지 않고 이유를 말한다(짝) · 추천·정렬 없음은 그대로
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function branchWithModel(page: Page, model: string) {
+  await makeBranch(page, "optimizer", "command");
+  const doc = (await wip(page)) as BDoc;
+  const b = doc.branches![doc.branches!.length - 1];
+  const copy = Object.entries(b.map).find(([, o]) => o === "optimizer")![0];
+  const n = doc.nodes.find((x) => x.id === copy)!;
+  n.params = { ...n.params, model };
+  await page.locator(".pg-import-input").setInputFiles({ name: "b.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, ...doc })) });
+  await expect(page.locator(".pg-branch-chip").last()).toContainText("→");
+}
+
+test("갈래 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결과 · N 문장·하한 문장 · 갈래가 늘면 N 이 늘고 값이 바뀜(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await branchWithModel(page, "min_var");
+  let sent: { series: { label: string; equity: number[] }[] } | null = null;
+  let got: { n: number; rows: { dsr: number | null; psr0: number | null }[] } | null = null;
+  page.on("response", async (r) => {
+    if (r.url().includes("/graph/branch-evidence")) { sent = JSON.parse(r.request().postData() ?? "null"); got = await r.json(); }
+  });
+  const body = await run(page);
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  const dsr = page.locator('.pg-branch-row--dsr[data-row^="dsr:"]');
+  await expect(dsr).toHaveCount(1, { timeout: 30_000 });
+  await expect.poll(() => got?.n ?? 0).toBe(2);
+  const doc = (await wip(page)) as BDoc;
+  const b = doc.branches![0];
+  const btCopy = Object.entries(b.map).find(([, o]) => o === "backtest")![0];
+  const eq = (id: string) => (body.nodes[id] as unknown as { view: { equity_curve: number[] } }).view.equity_curve;
+  expect(sent!.series.map((s) => s.equity)).toEqual([eq("backtest"), eq(btCopy)]);
+  const cells = dsr.locator("td");
+  for (let i = 0; i < 2; i++) {
+    const v = got!.rows[i].dsr;
+    await expect(cells.nth(i)).toHaveText(v === null ? "—" : `${Math.round(v * 100)}%`);
+  }
+  await expect(page.locator(".pg-branch-n")).toHaveAttribute("data-n", "2");
+  await expect(page.locator(".pg-branch-n")).toContainText("실제로 비교한 수는 더 많을 수");
+  const first = got!.rows[0].dsr;
+
+  // 짝 — 갈래를 하나 더 만들면 N = 3, 같은 원본의 보정 확률이 달라진다.
+  await branchWithModel(page, "risk_parity");
+  got = null;
+  await run(page);
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  await expect.poll(() => got?.n ?? 0).toBe(3);
+  expect(got!.rows[0].dsr).not.toBe(first);
+  await expect(page.locator(".pg-branch-n")).toHaveAttribute("data-n", "3");
+  const panel = (await page.locator(".pg-branch-compare").textContent()) ?? "";
+  expect(panel).not.toMatch(/추천|가장 좋은|최고|우월|더 나은/);
+});
+
+test("갈래 보정(BO O3): 과거 성과 노드가 갈래에 없으면 보정하지 않고 이유를 말한다(짝)", async ({ page }) => {
+  await openCanvas(page);
+  await makeBranch(page, "risk");
+  await run(page);
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  await expect(page.locator(".pg-branch-dsr-none")).toContainText("과거 성과 노드가 갈래에 들어 있어야");
+  await expect(page.locator(".pg-branch-row--dsr")).toHaveCount(0);
+});
+
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BO O3): ${scheme} — 갈래 비교의 보정 행·N 문장 AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await branchWithModel(page, "min_var");
+    await run(page);
+    await page.locator('.pg-tab[data-tab="branches"]').click();
+    await expect(page.locator('.pg-branch-row--dsr[data-row^="dsr:"] td').first()).toHaveText(/%|—/, { timeout: 30_000 });
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-branch-compare"));
+    expect(audit.checked).toBeGreaterThan(10);
+    expect(audit.low, `${scheme} 갈래 비교 AA`).toEqual([]);
+  });
+}

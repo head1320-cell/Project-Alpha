@@ -4,7 +4,7 @@
  * 오류를 200 으로 돌려준다 — 여기서 HTTP 오류는 "서버에 닿지 못했다" 뿐이다.
  */
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
-import type { GraphDoc, NodeCatalog, RunReport, SaveResult, ValidateReport } from "./types";
+import type { BranchEvidence, GraphDoc, NodeCatalog, RunReport, SaveResult, ValidateReport } from "./types";
 
 const BASE = "/api/v1/allocation/graph";
 
@@ -28,4 +28,7 @@ export const portfolioGraphApi = {
   /** 저장은 여기서만 — 서버가 다시 계산해 미리보기 해시가 같을 때만 한 번 쓴다(BK0). */
   save: async (doc: GraphDoc, nodeId: string, previewHash: string): Promise<SaveResult> =>
     readJson<SaveResult>(await postJson(`${BASE}/save`, { graph: doc, node_id: nodeId, preview_hash: previewHash }), "노드 저장"),
+  /** 갈래 비교의 다중 비교 보정(BO O3) — 과거 성과 곡선들 → PSR·DSR. 표시만, 저장하지 않는다. */
+  branchEvidence: async (series: { label: string; equity: number[] }[]): Promise<BranchEvidence> =>
+    readJson<BranchEvidence>(await postJson(`${BASE}/branch-evidence`, { series }), "갈래 보정 계산"),
 };

@@ -6,13 +6,17 @@
  * 비교: 원본과 갈래들을 열로, ★값이 다른 행만★ — 바꾼 설정 행 + 결과(헤드라인) 행. 계산하지 못한 칸은 "—"(0 이 아니다).
  * ★다중 비교 정직성★ — 표 위에 늘 한 줄: 같은 과거로 여러 갈래를 고르면 우연히 좋아 보이는 쪽을 고를 위험이 커진다.
  * 가장 좋은 갈래를 고르거나 추천하지 않는다(정렬도 하지 않는다 — 갈래 순서 그대로).
+ * 과거 성과(백테스트) 노드가 갈래에 들어 있으면 서버가 N(원본 + 갈래 수)으로 보정한 샤프 확률(DSR)을 함께(BO O3) —
+ * N 은 지금 남아 있는 갈래만 센 하한이라는 서버 문장도 그대로 보인다.
  */
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import type { NodeProps } from "reactflow";
 import { ArrowUpToLine, Trash2 } from "lucide-react";
 import {
   fieldsOf,
   paramDiff,
+  portfolioGraphApi,
+  type BranchEvidence,
   shortValue,
   type GraphBranch,
   type NodeCatalogEntry,
@@ -84,6 +88,64 @@ function headlineText(r: NodeRunResult | undefined, previous: boolean): string {
 }
 
 /** 오른쪽 패널 "갈래" 탭 — 원본 뿌리마다 표 하나. */
+/** 확률 한 칸 — 모르면 "—" 와 그 사유(마우스를 올리면). 0 으로 채우지 않는다. */
+function probCell(v: number | null | undefined, why: string | null | undefined): { text: string; title?: string } {
+  return typeof v === "number" && Number.isFinite(v) ? { text: `${Math.round(v * 100)}%` } : { text: "—", title: why ?? "잴 수 없어요" };
+}
+
+/**
+ * 과거 성과 노드 하나의 보정 행(BO O3) — 원본·갈래의 누적 곡선을 서버에 보내 PSR·DSR 을 받는다.
+ * 곡선이 하나라도 없으면 보내지 않고 이유를 말한다(있는 것만으로 N 을 줄이면 보정이 약해진다).
+ */
+function DsrRows({ name, labels, curves }: { name: string; labels: string[]; curves: (number[] | null)[] }) {
+  const [ev, setEv] = useState<BranchEvidence | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const missing = labels.filter((_, i) => !curves[i]);
+  const key = JSON.stringify(curves.map((c) => (c ? [c.length, c[c.length - 1]] : null)));
+  useEffect(() => {
+    setEv(null); setErr(null);
+    if (missing.length) return;
+    let alive = true;
+    portfolioGraphApi.branchEvidence(labels.map((label, i) => ({ label, equity: curves[i]! })))
+      .then((r) => { if (alive) setEv(r); })
+      .catch((e: Error) => { if (alive) setErr(e.message); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const colspan = labels.length + 1;
+  if (missing.length) {
+    return (
+      <tr className="pg-branch-row--dsr" data-row={`dsr:${name}`}>
+        <th scope="row">보정 · {name}</th>
+        <td colSpan={colspan - 1} className="pg-branch-dsr-why">{missing.join(", ")}의 과거 성과가 아직 없어요 — 모두 계산해야 보정할 수 있어요.</td>
+      </tr>
+    );
+  }
+  if (err || !ev) {
+    return (
+      <tr className="pg-branch-row--dsr" data-row={`dsr:${name}`}>
+        <th scope="row">보정 · {name}</th>
+        <td colSpan={colspan - 1} className="pg-branch-dsr-why">{err ?? "보정하는 중…"}</td>
+      </tr>
+    );
+  }
+  const row = (key: "psr0" | "dsr", title: string) => (
+    <tr className="pg-branch-row--dsr" data-row={`${key}:${name}`}>
+      <th scope="row">{title}</th>
+      {ev.rows.map((r, i) => {
+        const c = probCell(r[key], key === "dsr" ? (r.reason ?? ev.reason) : r.reason);
+        return <td key={i} className="pg-td-num" data-value={r[key] ?? ""} title={c.title}>{c.text}</td>;
+      })}
+    </tr>
+  );
+  return (
+    <>
+      {row("psr0", `보정 · ${name} · 샤프가 0보다 클 확률`)}
+      {row("dsr", `보정 · ${name} · ${ev.n}번 비교한 운을 감안한 확률`)}
+    </>
+  );
+}
+
 export function BranchCompare({ branches, nodes, catalog, results, stale }: {
   branches: GraphBranch[]; nodes: PgNode[]; catalog: NodeCatalogEntry[];
   results: Record<string, NodeRunResult> | null; stale: boolean;
@@ -122,6 +184,14 @@ export function BranchCompare({ branches, nodes, catalog, results, stale }: {
             rows.push({ key: `out:${orig}`, kind: "out", name: `${entry?.plain_label ?? orig}${h?.label ? ` · ${h.label}` : ""}`, cells });
           }
         }
+        // 과거 성과 노드(백테스트) — 갈래에 복제된 것만. 곡선은 서버 결과 그대로(`equity_curve`), 낡은 결과는 쓰지 않는다.
+        const btests = origIds.filter((id) => node(id)?.data.kind === "backtest");
+        const curveOf = (id: string | undefined): number[] | null => {
+          const r = res(id);
+          const c = r?.status === "ok" && !r.previous ? (r.view as { equity_curve?: unknown } | undefined)?.equity_curve : null;
+          return Array.isArray(c) && c.every((x) => typeof x === "number") ? (c as number[]) : null;
+        };
+        const evNote = btests.length ? "지금 남아 있는 갈래만 셌어요 — 그 전에 바꿔 보고 지운 설정까지 치면 실제로 비교한 수는 더 많을 수 있어요." : null;
         return (
           <section key={root} className="pg-branch-table-wrap" data-root={root}>
             <h4 className="pg-h4">‘{rootEntry?.plain_label ?? root}’ 갈래 {bs.length}개</h4>
@@ -129,7 +199,16 @@ export function BranchCompare({ branches, nodes, catalog, results, stale }: {
               갈래 {bs.length}개를 같은 과거로 비교했어요 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커져요.
               표본 밖에서 확인하기 전에는 결론 내리지 마세요.
             </p>
-            {rows.length === 0 ? (
+            {btests.length > 0 && (
+              <p className="pg-branch-n" data-n={bs.length + 1}>
+                원본과 갈래 {bs.length}개, 모두 {bs.length + 1}번 비교했어요 — 아래 ‘운을 감안한 확률’은 이 수로 보정한 값이에요.
+                {evNote && <> {evNote}</>}
+              </p>
+            )}
+            {btests.length === 0 && (
+              <p className="pg-help pg-branch-dsr-none">과거 성과 노드가 갈래에 들어 있어야 여러 번 비교한 운을 감안해 보정할 수 있어요.</p>
+            )}
+            {rows.length === 0 && btests.length === 0 ? (
               <p className="pg-help">아직 원본과 다른 값이 없어요 — 갈래의 설정을 바꾸고 계산해 보세요.</p>
             ) : (
               <table className="pg-table pg-branch-table">
@@ -140,6 +219,11 @@ export function BranchCompare({ branches, nodes, catalog, results, stale }: {
                       <th scope="row">{r.kind === "set" ? "설정 · " : "결과 · "}{r.name}</th>
                       {r.cells.map((c, i) => <td key={i} className={`pg-td-num${i > 0 && c !== r.cells[0] ? " pg-branch-diff" : ""}`}>{c}</td>)}
                     </tr>
+                  ))}
+                  {btests.map((orig) => (
+                    <DsrRows key={orig} name={catalog.find((c) => c.type === node(orig)?.data.kind)?.plain_label ?? orig}
+                             labels={["원본", ...bs.map((b) => b.label)]}
+                             curves={[curveOf(orig), ...bs.map((b) => curveOf(copyOf(b, orig)))]} />
                   ))}
                 </tbody>
               </table>

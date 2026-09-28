@@ -233,3 +233,12 @@ export interface RunReport extends ValidateReport {
   partial?: { targets: string[]; computed: string[] };
   gates_reason?: string;
 }
+
+/** 갈래 비교의 다중 비교 보정(BO O3) — 서버 `/graph/branch-evidence` 응답. 못 잰 값은 null + 사유. */
+export interface BranchEvidenceRow {
+  label: string; t: number; sr: number | null; skew: number | null; kurt: number | null;
+  psr0: number | null; dsr: number | null; reason: string | null;
+}
+export interface BranchEvidence {
+  n: number; sr0: number | null; var_sr: number | null; rows: BranchEvidenceRow[]; reason: string | null; note: string;
+}

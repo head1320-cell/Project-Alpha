@@ -68,3 +68,34 @@ def graph_save(req: GraphSaveRequest) -> dict:
     거절(`ok: false` + `code`)은 200 으로 — 캔버스가 사유를 그 노드 옆에 그린다.
     """
     return pg.save_node(req.graph, req.node_id, req.preview_hash, REGISTRY)
+
+
+class BranchSeries(BaseModel):
+    label: str = Field(..., min_length=1, max_length=80)
+    #: 백테스트 노드가 준 누적 곡선(`equity_curve`) 그대로 — 화면이 수익을 다시 계산하지 않는다.
+    equity: list[float] = Field(..., min_length=2, max_length=20_000)
+
+
+class BranchEvidenceRequest(BaseModel):
+    series: list[BranchSeries] = Field(..., min_length=1, max_length=40)
+
+
+@router.post("/branch-evidence")
+def graph_branch_evidence(req: BranchEvidenceRequest) -> dict:
+    """갈래 비교의 다중 비교 보정 (BO O3) — 원본 + 갈래들의 과거 성과 곡선 → PSR·DSR. ★표시만★ — 저장하지 않는다.
+
+    곡선이 망가졌으면(0 이하·비유한) 그 행만 사유를 달고 N 에는 넣는다 — 비교한 수를 줄이면 보정이 약해진다.
+    """
+    from src.engine import deflated_sharpe as ds
+    rows, broken = [], {}
+    for s in req.series:
+        try:
+            rows.append({"label": s.label, "returns": ds.returns_from_equity(s.equity)})
+        except ValueError as e:
+            broken[s.label] = str(e)
+            rows.append({"label": s.label, "returns": []})
+    out = ds.compare(rows)
+    for r in out["rows"]:
+        if r["label"] in broken:
+            r["reason"] = broken[r["label"]]
+    return out
