@@ -9,7 +9,7 @@
  * 포트는 타입 색 점, 이름·타입은 마우스를 올리면(전문가용) 보인다.
  */
 import { memo } from "react";
-import { Handle, NodeToolbar, Position, type NodeProps } from "reactflow";
+import { Handle, NodeToolbar, Position, useStore, type NodeProps } from "reactflow";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
 import { fmtDelta, fmtElapsed, headlineDelta, nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
@@ -94,7 +94,12 @@ function Port({ port, side, index, unknown, label, missing }: {
   );
 }
 
-function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
+/** 캔버스 위 떠 있는 판(선 범례·걸러 보기)이 차지하는 높이 + 도구줄 높이(px). 노드 위 끝이 이보다 위면 도구줄을 아래로(BP P1). */
+const TOOLBAR_FLIP_Y = 64 + 48;
+
+function GraphNodeImpl({ id, data, selected, yPos }: NodeProps<CanvasNodeData>) {
+  // 고른 노드가 캔버스 위쪽 띠에 있으면 도구줄이 떠 있는 판(걸러 보기)과 겹친다 — 그때만 노드 아래에 둔다.
+  const toolbarBelow = useStore((s) => selected && yPos * s.transform[2] + s.transform[1] < TOOLBAR_FLIP_Y);
   const entry = usePortfolioGraph((s) => s.catalog?.find((c) => c.type === data.kind));
   const report = usePortfolioGraph((s) => s.report);
   const stale = usePortfolioGraph((s) => s.reportStale);
@@ -186,7 +191,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
          data-node-id={id} data-kind={data.kind}
          style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
                   ["--pg-i" as string]: data.num ?? 0 }}>
-      <NodeToolbar isVisible={selected && single} position={Position.Top} offset={8}>
+      <NodeToolbar isVisible={selected && single} position={toolbarBelow ? Position.Bottom : Position.Top} offset={8}>
         <button type="button" className="pg-run-to" disabled={running}
                 onMouseEnter={() => data.onPreviewRunTo?.(id)} onMouseLeave={() => data.onPreviewRunTo?.(null)}
                 onFocus={() => data.onPreviewRunTo?.(id)} onBlur={() => data.onPreviewRunTo?.(null)}

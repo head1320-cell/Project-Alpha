@@ -1894,3 +1894,54 @@ test("접은 전략 카드(BO O5): 출력 노드 자리에 선다 · 끌면 구�
   const after = (await wip(page)).nodes.find((n) => n.id === a.members[0])!.position;
   expect(after.x - before.x).toBeGreaterThan(40);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BP P1 · 캔버스 잔여 UX — 위쪽 노드의 도구줄은 아래로(떠 있는 판과 겹치지 않게) · 받는 것의 빈 선택 포트는 묶어서.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function panNodeTo(page: Page, id: string, targetY: number) {
+  const pane = (await canvas(page).boundingBox())!;
+  const nb = (await rfNode(page, id).boundingBox())!;
+  const sx = pane.x + 30, sy = pane.y + pane.height / 2;       // 빈 자리를 잡고 판을 끈다
+  await page.mouse.move(sx, sy); await page.mouse.down();
+  await page.mouse.move(sx, sy + (pane.y + targetY - nb.y), { steps: 8 }); await page.mouse.up();
+  await page.waitForTimeout(150);
+}
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+test("도구줄 자리(BP P1): 노드가 캔버스 위쪽 띠에 있으면 도구줄이 노드 아래 · 걸러 보기 판과 안 겹침 · 짝: 가운데면 위", async ({ page }) => {
+  await openCanvas(page);
+  await run(page);                                               // 걸러 보기 판은 계산 뒤에 선다
+  await expect(page.locator(".pg-filters")).toBeVisible();
+  await panNodeTo(page, "risk", 12);
+  await node(page, "risk").click();
+  const bar = page.locator(".react-flow__node-toolbar");
+  await expect(bar).toBeVisible();
+  let nb = (await rfNode(page, "risk").boundingBox())!;
+  let tb = (await bar.boundingBox())!;
+  expect(tb.y, "아래로").toBeGreaterThanOrEqual(nb.y + nb.height - 1);
+  expect(overlaps(tb, (await page.locator(".pg-filters").boundingBox())!)).toBe(false);
+  // 짝 — 가운데로 옮기면 위로 돌아온다
+  await panNodeTo(page, "risk", 300);
+  await node(page, "risk").click();
+  nb = (await rfNode(page, "risk").boundingBox())!;
+  tb = (await bar.boundingBox())!;
+  expect(tb.y + tb.height, "위로").toBeLessThanOrEqual(nb.y + 1);
+});
+
+test("받는 것(BP P1): 전략 합치기의 빈 선택 포트는 '비중 빈 자리 n개(선택)' 한 줄 · 이은 것은 하나씩", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const pf = portfolioOf(doc);
+  await node(page, pf.id).click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  const dd = page.locator(".pg-io dd").first();
+  const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const nPorts = cat.nodes.find((c: { type: string }) => c.type === "portfolio_combine").inputs.length as number;
+  const linked = doc.edges.filter((e) => e.target === pf.id).length;
+  await expect(dd).toContainText(`비중 빈 자리 ${nPorts - linked}개(선택)`);
+  await expect(dd).not.toContainText("선택, 비어 있음");
+  expect(((await dd.textContent()) ?? "").split("←").length - 1).toBe(linked);
+});

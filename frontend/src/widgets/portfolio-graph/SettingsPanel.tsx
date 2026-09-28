@@ -399,11 +399,16 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
     return catalog.find((c) => c.type === k)?.plain_label ?? k ?? id;
   };
   const incoming = edges.filter((e) => e.target === node.id);
-  const receives = (entry?.inputs ?? []).map((p) => {
+  // 이어진 입력은 하나씩, 비어 있는 선택 입력은 타입별로 묶어 센다(BP P1 — 전략 합치기의 빈 자리 여섯 개를 줄마다 적지 않는다).
+  const emptyOptional = new Map<string, number>();
+  const receives = (entry?.inputs ?? []).flatMap((p) => {
     const e = incoming.find((x) => x.targetHandle === p.name);
     const nm = PORT_PLAIN[p.type] ?? p.name;
-    return e ? `${nm} ← ${plainOf(e.source)}` : p.required === false ? `${nm}(선택, 비어 있음)` : `${nm}(아직 연결 안 됨)`;
+    if (e) return [`${nm} ← ${plainOf(e.source)}`];
+    if (p.required === false) { emptyOptional.set(nm, (emptyOptional.get(nm) ?? 0) + 1); return []; }
+    return [`${nm}(아직 연결 안 됨)`];
   });
+  for (const [nm, n] of emptyOptional) receives.push(n > 1 ? `${nm} 빈 자리 ${n}개(선택)` : `${nm}(선택, 비어 있음)`);
   // 고르는 칸(카드)이 먼저 — "어떤 방식으로" 가 "얼마나" 보다 앞선 질문이다. 나머지는 서버 순서.
   // `show_if` 로 지금 방식에서 뜻이 없는 칸은 숨긴다(BO O1).
   const basic = basicFieldsOf(entry?.params_schema ?? null, params);
