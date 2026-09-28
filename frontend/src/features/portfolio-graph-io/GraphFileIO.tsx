@@ -45,8 +45,8 @@ export function ExportButton({ getDoc, disabled }: { getDoc: () => GraphDoc; dis
   return (
     <button type="button" className={`pg-export ${BTN}`} disabled={disabled}
             onClick={() => downloadGraph(getDoc())}
-            title="파라미터·위치만 저장합니다(실행 결과는 담지 않습니다 — 불러와서 다시 실행)">
-      <Download size={13} /> 내보내기
+            title="설정·위치만 파일로 받아요(계산 결과는 담지 않아요 — 불러와서 다시 계산해요)">
+      <Download size={13} aria-hidden="true" /> <span className="pg-tl">내보내기</span>
     </button>
   );
 }
@@ -55,8 +55,8 @@ export function ImportControl({ onLoad }: { onLoad: (r: ParseResult, fileName: s
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <button type="button" className={`pg-import ${BTN}`} onClick={() => input.current?.click()}>
-        <Upload size={13} /> 불러오기
+      <button type="button" className={`pg-import ${BTN}`} title="그래프 파일 불러오기" onClick={() => input.current?.click()}>
+        <Upload size={13} aria-hidden="true" /> <span className="pg-tl">불러오기</span>
       </button>
       <input ref={input} type="file" accept=".json,application/json" className="pg-import-input" hidden
              onChange={async (e) => {

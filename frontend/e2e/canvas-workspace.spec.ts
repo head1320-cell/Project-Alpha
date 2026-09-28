@@ -65,6 +65,35 @@ async function zoomTo(page: Page, level: "far" | "mid" | "near") {
   await expect(canvas(page)).toHaveAttribute("data-zoom", level);
 }
 
+/** 떠 있는 판·노드·토스트에 가리지 않은 빈 캔버스 한 점(화면 좌표) — BQ Q1 뒤로 캔버스가 판 뒤까지 이어져 있다. */
+async function emptyPoint(page: Page): Promise<{ x: number; y: number }> {
+  return page.evaluate(() => {
+    const r = document.querySelector(".react-flow")!.getBoundingClientRect();
+    for (let y = r.bottom - 90; y > r.top + 80; y -= 17)
+      for (let x = r.left + 20; x < r.right - 20; x += 23)
+        if (document.elementFromPoint(x, y)?.classList.contains("react-flow__pane")) return { x, y };
+    throw new Error("빈 캔버스 자리가 없다");
+  });
+}
+async function clickEmpty(page: Page) { const p = await emptyPoint(page); await page.mouse.click(p.x, p.y); }
+/** 노드가 떠 있는 판·토스트 밑이면 빈 캔버스를 끌어 판 사이 가운데로 옮긴다(사람이 판을 끄는 것과 같다). */
+async function reveal(page: Page, id: string) {
+  const r = await page.evaluate((nid) => {
+    const n = document.querySelector(`.react-flow__node[data-id="${nid}"]`)?.getBoundingClientRect();
+    if (!n) return null;
+    const hit = (sel: string) => { const e = document.querySelector<HTMLElement>(sel); return e && e.offsetParent ? e.getBoundingClientRect() : null; };
+    const over = (b: DOMRect | null) => !!b && n.left < b.right && b.left < n.right && n.top < b.bottom && b.top < n.bottom;
+    const pl = hit(".pg-palette"), sd = hit(".pg-side"), cv = document.querySelector(".react-flow")!.getBoundingClientRect();
+    if (![pl, sd, hit(".pg-toasts")].some(over)) return null;
+    const left = pl ? pl.right : cv.left, right = sd ? sd.left : cv.right;
+    return { dx: (left + right) / 2 - (n.left + n.width / 2), dy: (cv.top + cv.bottom) / 2 - (n.top + n.height / 2) };
+  }, id);
+  if (!r) return;
+  const p = await emptyPoint(page);
+  await page.mouse.move(p.x, p.y); await page.mouse.down();
+  await page.mouse.move(p.x + r.dx, p.y + r.dy, { steps: 8 }); await page.mouse.up();
+}
+
 async function failOneTicker(page: Page) {
   await node(page, "universe").click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
@@ -225,7 +254,8 @@ test("원인 따라가기(BM C1): 막힌 노드에서 첫 원인까지 밝히고
   for (const id of ["universe", "views"]) await expect(rfNode(page, id), id).toHaveClass(/pg-dim/);
   await page.locator(".pg-cause-root-btn").first().click();
   await expect(node(page, "returns")).toHaveClass(/pg-node--selected/);
-  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } }).catch(() => {});
+  await clickEmpty(page);
+  await reveal(page, "risk");
   await node(page, "risk").locator(".pg-cause-btn").click();
   await page.keyboard.press("Escape");
   await expect(page.locator(".pg-cause-banner")).toHaveCount(0);
@@ -1098,6 +1128,8 @@ for (const scheme of ["light", "dark"] as const) {
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
     await zoomTo(page, "mid");
     await expect(page.locator(".pg-snode .pg-snode-share b")).toBeVisible();
+    // 떠 있는 오른쪽 창(BQ Q1) 밑에 포트폴리오 노드가 올 수 있다 — 캔버스만 재므로 창을 닫고 올린다.
+    await page.keyboard.press("]");
     await node(page, portfolioOf(doc).id).hover();
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-canvas"));
     expect(audit.checked).toBeGreaterThan(30);
@@ -1305,13 +1337,19 @@ for (const scheme of ["light", "dark"] as const) {
 type Cat = { nodes: { type: string; inputs: { name: string; type: string }[]; outputs: { name: string; type: string }[] }[] };
 const catalogOf = async (page: Page) => (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()) as Cat;
 
-/** 포트에서 끌어 캔버스 아래쪽 빈 띠(맞춤이 비워 둔 자리)에 놓는다. */
+/** 포트에서 끌어 캔버스 아래쪽 빈 자리(맞춤이 비워 둔 띠 — 떠 있는 판·노드가 없는 곳, BQ Q1)에 놓는다. */
 async function dragToEmpty(page: Page, handle: string) {
   const h = (await page.locator(handle).boundingBox())!;
-  const cv = (await page.locator(".react-flow").boundingBox())!;
+  const at = await page.evaluate(() => {
+    const r = document.querySelector(".react-flow")!.getBoundingClientRect();
+    for (let y = r.bottom - 90; y > r.top + 120; y -= 17)
+      for (let x = r.left + r.width * 0.3; x < r.right - 40; x += 23)
+        if (document.elementFromPoint(x, y)?.classList.contains("react-flow__pane")) return { x, y };
+    throw new Error("빈 캔버스 자리가 없다");
+  });
   await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
   await page.mouse.down();
-  await page.mouse.move(cv.x + cv.width * 0.45, cv.y + cv.height - 90, { steps: 12 });
+  await page.mouse.move(at.x, at.y, { steps: 12 });
   await page.mouse.up();
 }
 
@@ -1366,8 +1404,8 @@ test("우클릭(BN N3): 노드 메뉴 — 그림 고정·풀기·지우기(되�
   await page.locator(".pg-note-undo").click();
   await expect(node(page, "risk")).toHaveCount(1);
 
-  const cv = (await page.locator(".react-flow").boundingBox())!;
-  await page.mouse.click(cv.x + cv.width * 0.5, cv.y + cv.height - 90, { button: "right" });
+  const ep = await emptyPoint(page);
+  await page.mouse.click(ep.x, ep.y, { button: "right" });
   const pane = page.locator('.pg-ctx[aria-label="캔버스 메뉴"]');
   expect(await pane.locator(".pg-ctx-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-action"))))
     .toEqual(["add-here", "paste", "layout", "find"]);
@@ -1418,8 +1456,8 @@ test("안내 줄(BN N3): [되돌리기] · 되돌릴 수 있는 안내는 8초 �
 test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 이어 주세요' · 이으면 사라짐(짝) · 이어진 노드엔 없음", async ({ page }) => {
   await openCanvas(page);
   await expect(page.locator(".pg-port--missing")).toHaveCount(0);                            // 기본 사슬은 다 이어져 있다
-  const cv = (await page.locator(".react-flow").boundingBox())!;
-  await page.mouse.click(cv.x + cv.width * 0.5, cv.y + cv.height - 90, { button: "right" });
+  const ep = await emptyPoint(page);
+  await page.mouse.click(ep.x, ep.y, { button: "right" });
   await page.locator('[data-action="add-here"]').click();
   await page.locator(".pg-quick input").fill("흔들림");
   await page.locator('.pg-quick-item[data-kind="risk"]').click();
@@ -1547,8 +1585,8 @@ for (const scheme of ["light", "dark"] as const) {
     await check(".pg-keys", 10);
     await page.keyboard.press("Escape");
     // 빈 입력 한 줄 — 잇지 않은 노드를 빈 곳 메뉴로 하나 놓는다.
-    const cv = (await page.locator(".react-flow").boundingBox())!;
-    await page.mouse.click(cv.x + cv.width * 0.5, cv.y + cv.height - 90, { button: "right" });
+    const ep = await emptyPoint(page);
+    await page.mouse.click(ep.x, ep.y, { button: "right" });
     await page.locator('[data-action="add-here"]').click();
     await page.locator(".pg-quick input").fill("흔들림");
     await page.locator('.pg-quick-item[data-kind="risk"]').click();
@@ -1713,6 +1751,7 @@ test("리밸런싱 주기(BO O2): 전략마다 고름 · 비우면 매일(키 �
   const frameA = page.locator(`.pg-group--strategy[data-group-id="${a.id}"]`);
   await expect(frameA.locator(".pg-group-rebal")).toHaveText(`리밸런싱 ${ui.options[ui.empty_value]}`);
 
+  await reveal(page, pf.id);
   await node(page, pf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   const field = page.locator('.pg-basic-field[data-field="rebalance"]');
@@ -1747,6 +1786,7 @@ test("리밸런싱 주기(BO O2): 전략마다 고름 · 비우면 매일(키 �
   await expect(page.locator(`.pg-snode[data-group-id="${a.id}"] .pg-snode-rebal`)).toBeVisible();
 
   // 짝 — 매일로 되돌리면 키가 빠진다(서버 기본값과 같은 문서)
+  await reveal(page, pf.id);
   await node(page, pf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await rowA.locator(".pg-chip", { hasText: ui.options.D }).click();
@@ -1770,6 +1810,7 @@ test("리밸런싱 주기(BO O2): 포트폴리오에 잇지 않은 전략에는 
   const none = { ...doc, edges: doc.edges.filter((x) => x.target !== pf.id) };
   await page.locator(".pg-import-input").setInputFiles({ name: "none.json", mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, ...none })) });
+  await reveal(page, pf.id);
   await node(page, pf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await expect(page.locator('.pg-basic-field[data-field="rebalance"] .pg-help').first()).toContainText("전략을 이어 주면");
@@ -1783,6 +1824,7 @@ for (const scheme of ["light", "dark"] as const) {
     const doc = await wip(page);
     const pf = portfolioOf(doc);
     const [a] = strategiesOf(doc);
+    await reveal(page, pf.id);
     await node(page, pf.id).click();
     await page.locator('.pg-tab[data-tab="settings"]').click();
     await page.locator(`.pg-perport-row[data-port="${portOf(doc, a)}"] .pg-chip`).nth(2).click();
@@ -1917,10 +1959,10 @@ test("빠른 추가 순서(BO O5): 내보내는 선이면 다음 단계부터, �
   // 화면 — 비중 노드의 내보내기 포트에서 빈 곳으로 끌어 놓으면 같은 순서.
   const handle = node(page, "optimizer").locator('.react-flow__handle-right').first();
   const hb = (await handle.boundingBox())!;
-  const pane = (await canvas(page).boundingBox())!;
+  const drop = await emptyPoint(page);
   await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
   await page.mouse.down();
-  await page.mouse.move(pane.x + pane.width - 120, pane.y + pane.height - 120, { steps: 8 });
+  await page.mouse.move(drop.x, drop.y, { steps: 8 });
   await page.mouse.up();
   const shown = await page.locator(".pg-quick-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
   expect(shown.slice(0, 8)).toEqual(down.slice(0, 8).map((x) => x.c.type));
@@ -2006,6 +2048,7 @@ test("받는 것(BP P1): 전략 합치기의 빈 선택 포트는 '비중 빈 �
   await addStrategy(page, "tpl:stress");
   const doc = await wip(page);
   const pf = portfolioOf(doc);
+  await reveal(page, pf.id);
   await node(page, pf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   const dd = page.locator(".pg-io dd").first();
@@ -2025,6 +2068,7 @@ test("되돌리는 비용(BP P2): 칩 = 서버 프리셋 · 기본 '넣지 않�
   const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const ui = cat.nodes.find((c: { type: string }) => c.type === "portfolio_combine").params_schema.properties.cost_bps["x-ui"] as
     { question: string; presets: { label: string; value: number }[] };
+  await reveal(page, pf.id);
   await node(page, pf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   const field = page.locator('.pg-basic-field[data-field="cost_bps"]');

@@ -17,10 +17,11 @@
  * 다시하기(Ctrl+Shift+Z) · 복사(Ctrl+C)/붙여넣기(Ctrl+V) · 여러 개 지우기 · 자동 정리 · 미니맵 · 묶음 상자(Ctrl+G) ·
  * 명령 팔레트(Ctrl+K) · 계산 기록. ★이번 대담함은 한 곳★ — "여기까지 계산" 에 올리면 돌 경로가 먼저 밝아진다.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
+  ControlButton,
   Controls,
   getRectOfNodes,
   MiniMap,
@@ -33,7 +34,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, MoreHorizontal, Pin, PinOff, Play, Plus, Redo2, Route, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
+import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Route, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   CORE_CHAIN_TEMPLATE,
   fieldsOf,
@@ -59,11 +60,12 @@ import { GateRail } from "./GateRail";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { GoalStart } from "./GoalStart";
-import { GraphNode, PORT_PLAIN } from "./GraphNode";
+import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_MIME } from "./NodePalette";
+import { DEFAULT_PANELS, NARROW_Q, RIGHT_W, clampW, floatInsets, readPanels, savePanels, toggle, type Panels } from "./panels";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
 import { RecordsSheetBody } from "./RecordsSheet";
@@ -110,17 +112,23 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
   const ns = inst.getNodes().filter((n) => !n.hidden && n.width && n.height && (!want || want.has(n.id)));
   if (!ns.length) return;
   const b = getRectOfNodes(ns);
-  const w = Math.max(1, el.clientWidth - FIT_INSET.left - FIT_INSET.right);
-  const h = Math.max(1, el.clientHeight - FIT_INSET.top - FIT_INSET.bottom);
+  // 떠 있는 왼쪽 목록·오른쪽 창(BQ Q1)이 가리는 폭만큼 더 비운다 — 캔버스는 판 뒤까지 이어져 있다.
+  const ins = floatInsets(el);
+  const L = FIT_INSET.left + ins.left;
+  const w = Math.max(1, el.clientWidth - L - FIT_INSET.right - ins.right);
+  const h = Math.max(1, el.clientHeight - FIT_INSET.top - FIT_INSET.bottom - ins.bottom);
   const zoom = Math.min(opts.maxZoom ?? 1, Math.max(opts.minZoom ?? 0.2, Math.min(w / b.width, h / b.height)));
   // 가장 작게 줄여도 넘치면 가운데 두지 않고 흐름의 시작(왼쪽 위)에 붙인다 — 넘친 쪽은 오른쪽·아래로 간다.
   const dx = w - b.width * zoom;
   const dy = h - b.height * zoom;
-  inst.setViewport({ x: FIT_INSET.left + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
+  inst.setViewport({ x: L + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
                      y: FIT_INSET.top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom },
                    opts.duration ? { duration: opts.duration } : undefined);
 }
 const NODE_W = 176;
+/** React Flow 확대 한계 — `minZoom` 속성과 기본 최대(2). */
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 2;
 const NODE_H = 150;
 const WIP_KEY = "alpha_pg_wip";
 /** 첫 방문 환영 줄(BN N2)을 본 적 있나 — 이 브라우저 localStorage. 못 읽거나 못 쓰면 "본 적 없음"(올 때마다 뜨되 닫을 수 있다). */
@@ -213,8 +221,30 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const runStrategyRef = useRef<(groupId: string) => void>(() => {});
   const branchStrategyRef = useRef<(groupId: string) => void>(() => {});
   const [announce, setAnnounce] = useState("");
+  // 떠 있는 판(BQ Q1) — 여닫기·폭. 넓은 화면에서 바꾼 것만 이 브라우저에 남긴다(좁은 화면은 늘 닫힌 채 시작).
+  const [panels, setPanels] = useState<Panels>(DEFAULT_PANELS);
+  const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
+  useEffect(() => { setPanels(readPanels(narrowNow(), window.innerWidth >= 1440)); }, []);
+  const updatePanels = useCallback((f: (p: Panels) => Panels) => {
+    setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
+  }, []);
+  const leftShown = panels.left && !panels.focus;
+  const rightShown = panels.right && !panels.focus;
 
   const fit = () => setTimeout(() => fitClear(rf.current, canvasEl.current), 60);
+  /** 판 사이 보이는 가운데를 기준으로 확대·축소(BQ Q1). */
+  const zoomBy = useCallback((k: number) => {
+    const inst = rf.current;
+    const el = canvasEl.current;
+    if (!inst || !el) return;
+    const vp = inst.getViewport();
+    const ins = floatInsets(el);
+    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * k));
+    const cx = ins.left + (el.clientWidth - ins.left - ins.right) / 2;
+    const cy = (el.clientHeight - ins.bottom) / 2;
+    const r = z / vp.zoom;
+    inst.setViewport({ x: cx - (cx - vp.x) * r, y: cy - (cy - vp.y) * r, zoom: z });
+  }, []);
 
   // ── 카탈로그 → 복원(세션) 또는 기본 사슬 ──────────────────────────────
   useEffect(() => {
@@ -419,18 +449,36 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const focused = s.groups.find((g) => g.id === s.focusGroup);
   // 고른 노드가 캔버스 위쪽 띠(선 범례·걸러 보기 판)에 있으면 도구줄이 그 판 밑에 깔린다 — 도구줄이 보이도록 판만 살짝 내린다(BP P1).
   // 도구줄을 노드 아래로 뒤집으면 아래 노드를 가려 그 노드를 누르려던 손이 '갈래 만들기' 를 누른다(첫 시도에서 E2E 가 찾았다).
+  // 고른 노드가 떠 있는 판(BQ Q1) 밑에 있어도 판을 옆으로 옮겨 보이게 한다 — 이미 보이면 움직이지 않는다.
   useEffect(() => {
     const inst = rf.current;
     const id = s.selectedId;
     // 우클릭으로 고른 경우엔 움직이지 않는다 — 메뉴가 그 자리에 떠 있는데 판이 밀리면 가리키던 곳이 어긋난다(도구줄도 안 보인다).
     if (!inst || !id || s.picked.length > 1 || ctx) return;
-    const n = inst.getNode(id);
-    if (!n?.positionAbsolute) return;
-    const vp = inst.getViewport();
-    const top = n.positionAbsolute.y * vp.zoom + vp.y;
-    const need = FIT_INSET.top + TOOLBAR_H;
-    if (top < need) inst.setViewport({ ...vp, y: vp.y + (need - top) }, { duration: 200 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 고를 때만
+    // 창이 막 열린 뒤의 폭을 재도록 한 박자 늦게.
+    const t = setTimeout(() => {
+      const n = inst.getNode(id);
+      const el = canvasEl.current;
+      if (!n?.positionAbsolute || !el) return;
+      const vp = inst.getViewport();
+      const top = n.positionAbsolute.y * vp.zoom + vp.y;
+      const left = n.positionAbsolute.x * vp.zoom + vp.x;
+      const right = left + (n.width ?? NODE_W) * vp.zoom;
+      const ins = floatInsets(el);
+      const need = FIT_INSET.top + TOOLBAR_H;
+      const dy = top < need ? need - top : 0;
+      let dx = 0;
+      const maxRight = el.clientWidth - ins.right - 16;
+      if (right > maxRight) dx = maxRight - right;
+      if (left + dx < ins.left + 16) dx = ins.left + 16 - left;
+      if (dx || dy) inst.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: 200 });
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 고를 때·창이 열리고 닫힐 때만
+  }, [s.selectedId, rightShown, leftShown]);
+  // 노드를 고르면 오른쪽 창이 열린다 — × 로 닫았으면 다음에 고를 때 다시 열린다. 집중 모드(\)에서는 고르기만.
+  useEffect(() => {
+    if (s.selectedId) setPanels((p) => (p.focus || p.right ? p : { ...p, right: true }));
   }, [s.selectedId]);
   // 갈래를 막 만들었으면 원본 뿌리와 새 갈래가 함께 보이게 옮긴다(복제는 원본 아래에 놓인다).
   const nBranches = useRef(s.branches.length);
@@ -683,6 +731,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       else if (mod && k === "v") { if (st.paste()) e.preventDefault(); }
       else if (mod && k === "g") { e.preventDefault(); st.groupPicked(); }
       else if (mod && k === "d" && st.selectedId) { e.preventDefault(); st.duplicateNode(st.selectedId); }
+      else if (!mod && !e.altKey && e.key === "[") { e.preventDefault(); updatePanels((p) => toggle(p, "left")); }
+      else if (!mod && !e.altKey && e.key === "]") { e.preventDefault(); updatePanels((p) => toggle(p, "right")); }
+      else if (!mod && !e.altKey && e.key === "\\") { e.preventDefault(); updatePanels((p) => toggle(p, "focus")); }
       else if (e.key === "Escape" && st.cause) st.showCause(null);
       else if (e.key === "Escape" && st.focusGroup) { st.setFocusGroup(null); fit(); }
       else if (e.key === "Escape" && st.openGate) st.setOpenGate(null);
@@ -694,7 +745,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [run, runTo]);
+  }, [run, runTo, updatePanels]);
 
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
@@ -717,6 +768,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     { id: "redo", group: "편집", label: "다시하기", keys: "Ctrl+Shift+Z", run: () => usePortfolioGraph.getState().redo() },
     { id: "layout", group: "보기", label: "자동 정리", hint: "흐름 순서대로 왼쪽에서 오른쪽으로 놓아요",
       run: () => { usePortfolioGraph.getState().autoLayout(); fit(); } },
+    { id: "panel-left", group: "보기", label: leftShown ? "왼쪽 목록 닫기" : "왼쪽 목록 열기", keys: "[",
+      run: () => updatePanels((p) => toggle(p, "left")) },
+    { id: "panel-right", group: "보기", label: rightShown ? "오른쪽 창 닫기" : "오른쪽 창 열기", keys: "]",
+      run: () => updatePanels((p) => toggle(p, "right")) },
+    { id: "panel-focus", group: "보기", label: panels.focus ? "집중 끝내기" : "집중해서 보기", keys: "\\",
+      hint: "왼쪽 목록과 오른쪽 창을 잠시 모두 닫아요", run: () => updatePanels((p) => toggle(p, "focus")) },
     { id: "minimap", group: "보기", label: s.showMinimap ? "미니맵 끄기" : "미니맵 켜기",
       run: () => usePortfolioGraph.getState().setMinimap(!usePortfolioGraph.getState().showMinimap) },
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
@@ -733,12 +790,17 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.showMinimap, cmdOpen, strategySources, s.simple]);
+  ], [s.selectedId, s.showMinimap, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
     const n = usePortfolioGraph.getState().nodes.find((x) => x.id === id);
-    if (n && rf.current) rf.current.setCenter(n.position.x + 90, n.position.y + 60, { zoom: rf.current.getZoom(), duration: 250 });
+    if (n && rf.current) {
+      // 떠 있는 판 사이의 가운데로(BQ Q1) — 캔버스 가운데는 창 밑일 수 있다.
+      const z = rf.current.getZoom();
+      const ins = floatInsets(canvasEl.current);
+      rf.current.setCenter(n.position.x + 90 + (ins.right - ins.left) / 2 / z, n.position.y + 60 + ins.bottom / 2 / z, { zoom: z, duration: 250 });
+    }
     const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);
     setAnnounce(n ? `${entry?.plain_label ?? n.data.kind} 노드를 골랐어요` : "");
   }, []);
@@ -750,7 +812,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const nErrors = s.validation?.errors.length ?? 0;
 
   return (
-    <div className="pg-root pg-theme">
+    <div className="pg-root pg-theme" data-left={leftShown ? "open" : "closed"} data-right={rightShown ? "open" : "closed"}
+         data-simple={s.simple || undefined} style={{ "--pg-right-w": `${panels.rightW}px` } as CSSProperties}>
       <header className="pg-toolbar">
         <h1 className="pg-title">포트폴리오 설계</h1>
 
@@ -804,15 +867,17 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             완료 {Object.values(s.report.nodes).filter((r) => r.status === "ok").length} · 막힘{" "}
             {Object.values(s.report.nodes).filter((r) => r.status === "blocked").length} · 실패{" "}
             {Object.values(s.report.nodes).filter((r) => r.status === "failed").length}
+            {/* 좁은 화면에서도 누르지 않고 보이는 연습용 표시(BQ Q1) — 오른쪽 창이 닫혀 있고 노드 칩이 멀리 확대에서 숨어도 합성 수가 실데이터처럼 읽히지 않게. */}
+            {Object.values(s.report.nodes).some((r) => r.lineage?.practice) && <b className="pg-summary-practice"> · 연습용 데이터</b>}
           </span>
         )}
         <MoreMenu drawers={DRAWERS} onDrawer={(k) => setDrawer(k as DrawerKey)} onImport={applyLoad} canExport={s.nodes.length > 0}
                   getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned)} />
         <nav className="pg-drawers" aria-label="서랍">
           {DRAWERS.map((d) => (
-            <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog"
+            <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog" title={d.sub}
                     aria-expanded={drawer === d.key} onClick={() => setDrawer(d.key)}>
-              <d.Icon size={15} aria-hidden="true" />{d.label}
+              <d.Icon size={15} aria-hidden="true" /><span className="pg-tl">{d.label}</span>
             </button>
           ))}
         </nav>
@@ -850,8 +915,6 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
           )}
         </div>
       )}
-      {fileNote && <p className="pg-banner pg-file-note">{fileNote}</p>}
-      {s.note && <NoteLine key={s.note} />}
       {s.loadProblems.length > 0 && (
         <div className="pg-banner pg-banner--warn pg-load-problems">
           불러오면서 건너뛴 항목이 {s.loadProblems.length}개 있어요:
@@ -880,7 +943,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       )}
       <div className="pg-body" hidden={s.simple}>
         {s.catalog && <NodePalette catalog={s.catalog} stages={stages} initialQuery={legacy?.aliases[1] ?? ""} onAdd={(k) => addAt(k)} onTemplate={loadTemplate}
-                                  onGoal={() => setGoalOpen(true)} />}
+                                  onGoal={() => setGoalOpen(true)} hidden={!leftShown} onClose={() => updatePanels((p) => toggle(p, "left"))} />}
+        {!leftShown && (
+          <button type="button" className="pg-palette-fab" aria-label="노드 목록 열기 ([)" title="노드 추가 — 목록 열기 ([)"
+                  onClick={() => updatePanels((p) => toggle(p, "left"))}><Plus size={20} aria-hidden="true" /></button>
+        )}
         <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}${s.growing ? " pg-growing" : ""}`}
              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(e.dataTransfer.types.includes("Files")); }}
              onDragLeave={() => setDragOver(false)}
@@ -890,7 +957,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             edges={edgesStyled}
             nodeTypes={NODE_TYPES}
             edgeTypes={EDGE_TYPES}
-            minZoom={0.2}
+            minZoom={MIN_ZOOM}
             onNodesChange={onNodesChange}
             onEdgesChange={s.onEdgesChange}
             onConnect={s.connect}
@@ -977,7 +1044,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                 <button type="button" className="pg-cause-clear" onClick={() => s.showCause(null)}>다 보기 <kbd>Esc</kbd></button>
               </Panel>
             )}
-            <Controls showInteractive={false} onFitView={() => fitClear(rf.current, canvasEl.current)} />
+            {/* 확대·축소는 떠 있는 판 사이 가운데를 기준으로(BQ Q1) — 기본 단추는 판 뒤 캔버스 가운데를 기준으로 해 노드를 창 밑으로 민다. */}
+            <Controls showZoom={false} showFitView={false} showInteractive={false}>
+              <ControlButton className="react-flow__controls-zoomin" title="확대" aria-label="확대" onClick={() => zoomBy(1.2)}><Plus size={14} aria-hidden="true" /></ControlButton>
+              <ControlButton className="react-flow__controls-zoomout" title="축소" aria-label="축소" onClick={() => zoomBy(1 / 1.2)}><Minus size={14} aria-hidden="true" /></ControlButton>
+              <ControlButton className="react-flow__controls-fitview" title="맞춰 보기" aria-label="맞춰 보기"
+                             onClick={() => fitClear(rf.current, canvasEl.current)}><Maximize size={13} aria-hidden="true" /></ControlButton>
+            </Controls>
             {s.showMinimap && (
               <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap"
                        nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent"
@@ -1010,10 +1083,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
           {quick && s.catalog && (
             <QuickAdd at={quick} catalog={s.catalog} stageKeys={stages.map((x) => x.key)}
                       fromKind={quick.from ? s.nodes.find((n) => n.id === quick.from!.node)?.data.kind ?? null : null}
-                      box={canvasEl.current?.getBoundingClientRect()} onPick={quickPick} onClose={() => setQuick(null)} />
+                      box={canvasEl.current?.getBoundingClientRect()} inset={floatInsets(canvasEl.current)} onPick={quickPick} onClose={() => setQuick(null)} />
           )}
           {ctx && (
-            <ContextMenu x={ctx.x} y={ctx.y} box={canvasEl.current?.getBoundingClientRect()} items={ctxItems}
+            <ContextMenu x={ctx.x} y={ctx.y} box={canvasEl.current?.getBoundingClientRect()} inset={floatInsets(canvasEl.current)} items={ctxItems}
                          label={ctx.nodeId ? "노드 메뉴" : "캔버스 메뉴"} onClose={() => setCtx(null)} />
           )}
           {findOpen && (
@@ -1024,7 +1097,20 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                      })} />
           )}
         </div>
-        <aside className="pg-side" aria-label="설명과 설정">
+        <aside className="pg-side" aria-label="설명과 설정" hidden={!rightShown}>
+          <SideResize width={panels.rightW} onChange={(w, done) => (done ? updatePanels : setPanels)((p) => ({ ...p, rightW: w }))} />
+          <header className="pg-side-head">
+            <h2 className="pg-side-title">
+              {selected ? (
+                <>
+                  <b className="pg-side-num" style={{ background: STAGE_VAR[selEntry?.stage ?? ""] ?? "var(--pg-st-data)" }}>{order.indexOf(selected.id) + 1}</b>
+                  <span>{selEntry?.plain_label ?? selected.data.kind}</span>
+                </>
+              ) : <span>이 설계 한눈에</span>}
+            </h2>
+            <button type="button" className="pg-panel-toggle" data-panel="right" aria-label="오른쪽 창 닫기 (])" title="오른쪽 창 닫기 (])"
+                    onClick={() => updatePanels((p) => toggle(p, "right"))}><PanelRightClose size={18} aria-hidden="true" /></button>
+          </header>
           <nav className="pg-tabs" role="tablist">
             {TABS.filter(([k]) => k !== "branches" || s.branches.length > 0).map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={s.tab === k}
@@ -1077,8 +1163,49 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             )}
           </div>
         </aside>
+        {!rightShown && (
+          <button type="button" className="pg-side-fab" aria-label="오른쪽 창 열기 (])" title="이야기·설정 창 열기 (])"
+                  onClick={() => updatePanels((p) => toggle(p, "right"))}><PanelRightOpen size={18} aria-hidden="true" /></button>
+        )}
+      </div>
+      {/* 안내·파일 안내 — 캔버스 아래 가운데 떠 있는 토스트(BQ Q1). 되돌리기·8초 닫힘은 NoteLine 그대로, 파일 안내는 사람이 닫을 때까지. */}
+      <div className="pg-toasts">
+        {s.note && <NoteLine key={s.note} />}
+        {fileNote && (
+          <p className="pg-banner pg-file-note" role="status">
+            {fileNote}
+            <button type="button" className="pg-toast-x" aria-label="파일 안내 닫기" onClick={() => setFileNote(null)}><X size={13} aria-hidden="true" /></button>
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+/** 오른쪽 창 폭 손잡이(BQ Q1) — 끌거나, 초점을 두고 ←(넓게)·→(좁게)·Home·End. 300~600px. 끝났을 때만 이 브라우저에 남긴다. */
+function SideResize({ width, onChange }: { width: number; onChange: (w: number, done: boolean) => void }) {
+  const drag = useRef<{ x: number; w: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const onKey = (e: ReactKeyboardEvent) => {
+    const next = e.key === "ArrowLeft" ? width + RIGHT_W.step : e.key === "ArrowRight" ? width - RIGHT_W.step
+      : e.key === "Home" ? RIGHT_W.min : e.key === "End" ? RIGHT_W.max : null;
+    if (next === null) return;
+    e.preventDefault();
+    onChange(clampW(next), true);
+  };
+  const move = (e: ReactPointerEvent) => { if (drag.current) onChange(clampW(drag.current.w + (drag.current.x - e.clientX)), false); };
+  const end = (e: ReactPointerEvent) => {
+    if (!drag.current) return;
+    onChange(clampW(drag.current.w + (drag.current.x - e.clientX)), true);
+    drag.current = null;
+    setDragging(false);
+  };
+  return (
+    <div className="pg-side-resize" role="separator" aria-orientation="vertical" aria-label="오른쪽 창 폭"
+         aria-valuemin={RIGHT_W.min} aria-valuemax={RIGHT_W.max} aria-valuenow={width} tabIndex={0}
+         data-drag={dragging || undefined} onKeyDown={onKey}
+         onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, w: width }; setDragging(true); }}
+         onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
   );
 }
 

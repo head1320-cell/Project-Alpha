@@ -8,7 +8,7 @@
  * 클릭하면 캔버스 가운데에, 끌면 놓은 자리에 놓인다.
  */
 import { useEffect, useState } from "react";
-import { ChevronDown, Download, Search, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Download, PanelLeftClose, Search, Trash2, Upload } from "lucide-react";
 import { parseBlock, TEMPLATES, type NodeCatalogEntry, type WorkflowStage } from "@/entities/portfolio-graph";
 import { downloadBlock } from "./GroupFrame";
 import { usePortfolioGraph } from "./store";
@@ -17,7 +17,7 @@ import { STAGE_VAR } from "./GraphNode";
 
 export const PALETTE_MIME = "application/x-pg-node";
 
-export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal }: {
+export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal, hidden = false, onClose }: {
   catalog: NodeCatalogEntry[];
   stages: WorkflowStage[];
   /** 처음 검색어 — 옛 주소로 온 사람에게 그 화면의 일을 하는 노드를 먼저 보인다(BL4). */
@@ -26,6 +26,9 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
   onTemplate: (key: string) => void;
   /** 목표로 시작(BM C4) — 빠른 시작 맨 위. */
   onGoal?: () => void;
+  /** 떠 있는 판(BQ Q1) — 접혀 있으면 숨는다(검색어·접은 단계는 그대로 남는다). */
+  hidden?: boolean;
+  onClose?: () => void;
 }) {
   /** 노드 종류 → 그 일을 하던 예전 화면(검색·툴팁용). */
   const legacyOf = (kind: string) => legacyScreensOf(kind);
@@ -40,11 +43,20 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
     .filter((k) => !known.has(k)).map((k) => ({ key: k, label: k || "기타" }))];
 
   return (
-    <aside className="pg-palette" aria-label="노드 추가">
-      <label className="pg-search">
-        <Search size={14} aria-hidden="true" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="무엇을 추가할까요?" aria-label="노드 찾기" />
-      </label>
+    <aside className="pg-palette" aria-label="노드 추가" hidden={hidden}>
+      <div className="pg-palette-top">
+        <div className="pg-palette-head">
+          <h2 className="pg-palette-title">노드 추가</h2>
+          {onClose && (
+            <button type="button" className="pg-panel-toggle" data-panel="left" aria-label="왼쪽 목록 닫기 ([)"
+                    title="왼쪽 목록 닫기 ([)" onClick={onClose}><PanelLeftClose size={18} aria-hidden="true" /></button>
+          )}
+        </div>
+        <label className="pg-search">
+          <Search size={14} aria-hidden="true" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="무엇을 추가할까요?" aria-label="노드 찾기" />
+        </label>
+      </div>
       {groups.map((st) => {
         const all = catalog.filter((c) => c.stage === st.key);
         const items = all.filter(match);

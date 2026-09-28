@@ -278,7 +278,14 @@ test("복제해서 비교: 같은 입력·같은 설정으로 하나 더 · 나�
   // 복제본만 설정을 바꿔 나란히 — 원본은 그대로.
   await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
-  await page.locator(".pg-canvas").click({ position: { x: 20, y: 20 } });
+  // 입력 칸 밖 빈 캔버스를 누른다 — 떠 있는 판(BQ Q1) 밑이 아닌 곳.
+  const ep = await page.evaluate(() => {
+    const r = document.querySelector(".react-flow")!.getBoundingClientRect();
+    for (let y = r.top + 80; y < r.bottom - 80; y += 17) for (let x = r.left + 20; x < r.right - 20; x += 23)
+      if (document.elementFromPoint(x, y)?.classList.contains("react-flow__pane")) return { x, y };
+    throw new Error("빈 캔버스 자리가 없다");
+  });
+  await page.mouse.click(ep.x, ep.y);
   await page.keyboard.press("Control+Enter");
   const body = await (await resp).json();
   expect(body.nodes[dup.id].status).toBe("ok");

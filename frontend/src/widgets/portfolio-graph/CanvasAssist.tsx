@@ -24,12 +24,18 @@ function useDismiss(ref: React.RefObject<HTMLElement>, onClose: () => void) {
   }, [ref, onClose]);
 }
 
-/** 화면 가장자리에서 판이 잘리지 않게 자리를 당긴다(캔버스 안 좌표). 캔버스가 창 아래로 이어지면 **보이는 부분**에 맞춘다. */
-function clampAt(x: number, y: number, box: DOMRect | undefined, w: number, h: number) {
+/** 캔버스 위에 떠 있는 판(BQ Q1)이 가리는 폭 — `panels.floatInsets` 가 잰다. */
+export type Insets = { left: number; right: number; bottom: number };
+const NO_INSET: Insets = { left: 0, right: 0, bottom: 0 };
+
+/** 화면 가장자리에서 판이 잘리지 않게 자리를 당긴다(캔버스 안 좌표). 캔버스가 창 아래로 이어지면 **보이는 부분**에 맞춘다.
+ *  떠 있는 왼쪽 목록·오른쪽 창 밑으로도 들어가지 않는다(BQ Q1). */
+function clampAt(x: number, y: number, box: DOMRect | undefined, w: number, h: number, inset: Insets = NO_INSET) {
   if (!box) return { left: x, top: y };
   const visH = typeof window === "undefined" ? box.height : Math.min(box.height, window.innerHeight - box.top);
   const visW = typeof window === "undefined" ? box.width : Math.min(box.width, window.innerWidth - box.left);
-  return { left: Math.max(8, Math.min(x, visW - w - 8)), top: Math.max(8, Math.min(y, visH - h - 8)) };
+  return { left: Math.max(8 + inset.left, Math.min(x, visW - w - 8 - inset.right)),
+           top: Math.max(8, Math.min(y, visH - h - 8 - inset.bottom)) };
 }
 
 export interface QuickAddState {
@@ -40,8 +46,8 @@ export interface QuickAddState {
 }
 
 /** 선을 빈 곳에 놓으면 — "이 값을 받는(내는) 노드" 만 보이는 작은 찾기 목록. */
-export function QuickAdd({ at, catalog, stageKeys, fromKind, box, onPick, onClose }: {
-  at: QuickAddState; catalog: NodeCatalogEntry[]; stageKeys: string[]; fromKind: string | null; box: DOMRect | undefined;
+export function QuickAdd({ at, catalog, stageKeys, fromKind, box, inset, onPick, onClose }: {
+  at: QuickAddState; catalog: NodeCatalogEntry[]; stageKeys: string[]; fromKind: string | null; box: DOMRect | undefined; inset?: Insets;
   onPick: (kind: string, port: string | null) => void; onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,7 +58,7 @@ export function QuickAdd({ at, catalog, stageKeys, fromKind, box, onPick, onClos
   // 순서는 흐름 단계(BO O5) — 끌어 온 노드의 다음 단계가 먼저(받는 선이면 앞 단계가 먼저).
   const items = useMemo(() => quickAddItems(catalog, from ? { ...from, kind: fromKind } : null, stageKeys, q),
                         [catalog, from, fromKind, stageKeys, q]);
-  const pos = clampAt(at.x, at.y, box, 300, 390);
+  const pos = clampAt(at.x, at.y, box, 300, 390, inset);
   const title = !from ? "여기에 노드 추가"
     : from.side === "source" ? `‘${PORT_PLAIN[from.type] ?? from.type}’을 받는 노드` : `‘${PORT_PLAIN[from.type] ?? from.type}’을 내는 노드`;
   return (
@@ -85,8 +91,8 @@ export function QuickAdd({ at, catalog, stageKeys, fromKind, box, onPick, onClos
 export interface MenuItem { key: string; label: string; icon?: ReactNode; danger?: boolean; disabled?: boolean; run: () => void }
 
 /** 우클릭 메뉴 — 노드 · 빈 곳. 첫 항목에 초점, ↑↓ Enter Esc. */
-export function ContextMenu({ x, y, box, items, label, onClose }: {
-  x: number; y: number; box: DOMRect | undefined; items: MenuItem[]; label: string; onClose: () => void;
+export function ContextMenu({ x, y, box, inset, items, label, onClose }: {
+  x: number; y: number; box: DOMRect | undefined; inset?: Insets; items: MenuItem[]; label: string; onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(ref, onClose);
@@ -97,7 +103,7 @@ export function ContextMenu({ x, y, box, items, label, onClose }: {
     bs[(i + dir + bs.length) % bs.length]?.focus();
   };
   return (
-    <div ref={ref} className="pg-ctx" role="menu" aria-label={label} style={clampAt(x, y, box, 230, items.length * 34 + 16)}
+    <div ref={ref} className="pg-ctx" role="menu" aria-label={label} style={clampAt(x, y, box, 230, items.length * 34 + 16, inset)}
          onKeyDown={(e) => {
            if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
            else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
@@ -163,6 +169,9 @@ export const SHORTCUTS: [string, string][] = [
   ["Delete", "고른 노드·선 지우기"],
   ["Alt+← →", "선을 따라 앞·뒤 단계로"],
   ["Alt+↑ ↓", "흐름 번호 순서로"],
+  ["[", "왼쪽 목록 열고 닫기"],
+  ["]", "오른쪽 창 열고 닫기"],
+  ["\\", "집중해서 보기 — 두 판을 잠시 모두 닫기·다시 열기"],
   ["Esc", "원인 경로 · 들어간 상자 · 판 닫기"],
   ["?", "이 목록"],
 ];

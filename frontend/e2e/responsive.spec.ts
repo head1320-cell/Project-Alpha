@@ -37,7 +37,12 @@ for (const [name, size] of [["mobile", MOBILE], ["tablet", TABLET]] as const) {
     await expect(summary).toContainText("완료", { timeout: 30_000 });
     await summary.scrollIntoViewIfNeeded();
     await expect(summary).toBeVisible();
-    // 이야기 탭 맨 위의 연습용 경고 — 개발 환경의 수익률은 합성이다.
+    // 좁은 화면(≤820px)은 오른쪽 창이 닫힌 채(아래 시트 — BQ Q1) 시작하고, 멀리 확대에서는 노드의 연습용 칩도 숨는다.
+    // 그래도 연습용 표시는 누르지 않고 보인다 — 도구줄 결과 요약에.
+    await expect(summary.locator(".pg-summary-practice")).toBeVisible();
+    await expect(summary.locator(".pg-summary-practice")).toContainText("연습용");
+    // 이야기 탭 맨 위의 연습용 경고 — 개발 환경의 수익률은 합성이다. 창을 열면(한 번 누름) 맨 위에 있다.
+    await page.locator(".pg-side-fab").click();
     await page.locator('.pg-tab[data-tab="story"]').click();
     const practice = page.locator(".pg-side").getByText("연습용", { exact: false }).first();
     await practice.scrollIntoViewIfNeeded();
