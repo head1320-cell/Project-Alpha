@@ -1684,6 +1684,11 @@ test("리밸런싱 주기(BO O2): 전략마다 고름 · 비우면 매일(키 �
 
   await frameA.locator(".pg-group-toggle").click();
   await expect(page.locator(`.pg-snode[data-group-id="${a.id}"] .pg-snode-rebal`)).toHaveText(`리밸런싱 ${ui.options.Q}`);
+  // 멀리 보기에서는 이름과 숫자 하나만(의미 확대) — 주기 줄은 숨는다(짝: 보통 확대에서는 보인다).
+  await zoomTo(page, "far");
+  await expect(page.locator(`.pg-snode[data-group-id="${a.id}"] .pg-snode-rebal`)).toBeHidden();
+  await zoomTo(page, "mid");
+  await expect(page.locator(`.pg-snode[data-group-id="${a.id}"] .pg-snode-rebal`)).toBeVisible();
 
   // 짝 — 매일로 되돌리면 키가 빠진다(서버 기본값과 같은 문서)
   await node(page, pf.id).click();
@@ -1731,6 +1736,7 @@ for (const scheme of ["light", "dark"] as const) {
     audit = await page.evaluate<AuditResult>(contrastAudit(".pg-group-rebal"));
     expect(audit.low, `${scheme} 상자 주기 AA`).toEqual([]);
     await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).evaluate((el) => (el as HTMLElement).click());
+    await zoomTo(page, "mid");                                   // 멀리 보기에서는 주기 줄이 숨는다(의미 확대)
     audit = await page.evaluate<AuditResult>(contrastAudit(".pg-snode-rebal"));
     expect(audit.checked).toBeGreaterThan(0);
     expect(audit.low, `${scheme} 접은 카드 주기 AA`).toEqual([]);

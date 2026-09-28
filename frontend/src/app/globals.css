@@ -6730,7 +6730,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-snode:hover .pg-port-name { display: block; position: absolute; top: -9px; padding: 1px 6px; font-size: 11px; color: var(--pg-body); background: var(--pg-soft); border-radius: 4px; white-space: nowrap; }
 .pg-canvas[data-zoom="far"] .pg-group.pg-snode { border-left: 6px solid var(--pg-band); }
 .pg-canvas[data-zoom="far"] .pg-snode-name, .pg-canvas[data-zoom="far"] .pg-snode-share, .pg-canvas[data-zoom="far"] .pg-snode-status,
-.pg-canvas[data-zoom="far"] .pg-snode-run, .pg-canvas[data-zoom="far"] .pg-snode .pg-group-warn { display: none; }
+.pg-canvas[data-zoom="far"] .pg-snode-run, .pg-canvas[data-zoom="far"] .pg-snode .pg-group-warn,
+.pg-canvas[data-zoom="far"] .pg-snode-rebal, .pg-canvas[data-zoom="far"] .pg-group-rebal { display: none; }
 /* 종착점 — 전략 합치기 카드의 몫 도넛 */
 .pg-node[data-kind="portfolio_combine"] { width: 236px; }
 .pg-node-terminal { margin-top: 10px; }
