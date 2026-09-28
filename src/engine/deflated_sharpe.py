@@ -19,6 +19,13 @@ Ratio"). 순수 함수 — 입력은 수익 흐름(일별), 출력은 값 + 사�
 **이 캔버스에 지금 남아 있는 갈래 수 + 원본**으로 셀 수 있다. 그러나 그 전에 바꿔 보고 버린 설정은
 세지 않으므로 ★실제 시도 수보다 작을 수 있다 — 보정이 약한 쪽으로 틀린다.★ 응답이 그 사실을 함께 말한다.
 
+## 유효 N (BP P3) — 갈래끼리 닮으면 독립으로 센 수는 더 작다
+
+N 은 **비교한 수**라 독립 시행을 가정한다. 갈래는 서로 닮아 있어(같은 종목·같은 과거) 실제로 독립인 시도는 더 적다.
+수익 흐름의 상관행렬 고유값 λ 로 참여비 `N_eff = (Σλ)² / Σλ²` 를 추정해(독립이면 N, 모두 같으면 1) 그 수로 한 번 더 보정한다.
+**추정이다** — 두 수는 반대로 틀린다: N 은 지운 설정을 세지 않아 작고(보정이 약함), N_eff 는 닮음을 빼 더 작다(보정이 더 약함).
+둘 다 보이고 어느 쪽도 "맞는 값" 이라 하지 않는다. N_eff 가 2 보다 작으면 기대 최대 식이 뜻을 잃어 값을 내지 않는다(사유).
+
 ## 주장하지 않는 것
 
 - 과최적화가 없다고 말하지 않는다. 표본외 검증도 아니다(같은 과거 위의 비교다).
@@ -92,6 +99,26 @@ def expected_max_sr(n: int, var_sr: float) -> float:
                                           + EULER_GAMMA * _norm_ppf(1 - 1 / (n * math.e)))
 
 
+def participation_ratio(C: np.ndarray) -> float:
+    """상관행렬의 참여비 (Σλ)² / Σλ² — 독립이면 차원 수, 완전히 같으면 1."""
+    lam = np.clip(np.linalg.eigvalsh(np.asarray(C, dtype=float)), 0.0, None)
+    den = float((lam ** 2).sum())
+    return float(lam.sum() ** 2 / den) if den > 0 else 1.0
+
+
+def _n_eff(series: list[dict], rows: list[dict]) -> tuple[float | None, str | None]:
+    bad = [r["label"] for r in rows if r["sr"] is None]
+    if bad:
+        return None, f"샤프를 못 잰 대상({', '.join(map(str, bad))})이 있어 서로 얼마나 닮았는지 잴 수 없어요"
+    arrs = [np.asarray(s["returns"], dtype=float) for s in series]
+    t = min(a.size for a in arrs)
+    M = np.vstack([a[-t:] for a in arrs])                     # 끝을 맞춘다(같은 날까지의 흐름)
+    C = np.corrcoef(M)
+    if not np.all(np.isfinite(C)):
+        return None, "상관을 계산하지 못했어요(흔들림이 없는 흐름이 있어요)"
+    return participation_ratio(C), None
+
+
 def compare(series: list[dict]) -> dict[str, Any]:
     """[{label, returns}] → 후보별 SR·PSR(0)·DSR + N·SR₀. 값을 못 내면 None + 사유(0 으로 채우지 않는다).
 
@@ -109,8 +136,10 @@ def compare(series: list[dict]) -> dict[str, Any]:
         rows.append(row)
     n = len(series)
     srs = [r["sr"] for r in rows if r["sr"] is not None]
+    for r in rows:
+        r["dsr_eff"] = None
     out: dict[str, Any] = {"n": n, "sr0": None, "var_sr": None, "rows": rows, "reason": None,
-                           "note": NOTE_N_LOWER_BOUND}
+                           "note": NOTE_N_LOWER_BOUND, "n_eff": None, "sr0_eff": None, "n_eff_reason": None}
     if n < 2:
         out["reason"] = "비교할 대상이 둘 이상이어야 보정할 수 있어요"
         return out
@@ -126,4 +155,15 @@ def compare(series: list[dict]) -> dict[str, Any]:
     for r in rows:
         if r["sr"] is not None and r["psr0"] is not None:
             r["dsr"] = psr(r["sr"], sr0, r["t"], r["skew"], r["kurt"])
+    n_eff, why = _n_eff(series, rows)
+    out["n_eff"], out["n_eff_reason"] = n_eff, why
+    if n_eff is not None and n_eff < 2:
+        out["n_eff_reason"] = (f"서로 닮아 독립으로 센 수가 {n_eff:.2f} 로 2 보다 작아요 — "
+                               "기대 최대 샤프를 정할 수 없어 이 보정은 내지 않아요")
+    elif n_eff is not None:
+        sr0_eff = expected_max_sr(n_eff, var)
+        out["sr0_eff"] = sr0_eff
+        for r in rows:
+            if r["sr"] is not None and r["psr0"] is not None:
+                r["dsr_eff"] = psr(r["sr"], sr0_eff, r["t"], r["skew"], r["kurt"])
     return out

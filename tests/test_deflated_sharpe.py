@@ -151,3 +151,51 @@ def test_route_path_has_no_distribution_marker():
     assert paths
     for m in ("marketplace", "subscribe", "provider", "publish", "storefront", "/share", "entitlement", "billing"):
         assert all(m not in p for p in paths)
+
+
+# ── BP P3 · 유효 N — 갈래끼리 닮아 있으면 독립으로 센 수는 더 작다 ─────────────────────────────
+
+def _corr_series(rho: float, k: int, T: int = 600, seed: int = 11) -> list[np.ndarray]:
+    rng = np.random.default_rng(seed)
+    common = rng.normal(0, 1, T)
+    return [0.0004 * (i + 1) + 0.01 * (np.sqrt(rho) * common + np.sqrt(1 - rho) * rng.normal(0, 1, T)) for i in range(k)]
+
+
+def test_n_eff_is_about_n_for_independent_and_small_for_similar():
+    ind = ds.compare([{"label": str(i), "returns": r} for i, r in enumerate(_corr_series(0.0, 5))])
+    assert 4.0 <= ind["n_eff"] <= 5.0 + 1e-9
+    sim = ds.compare([{"label": str(i), "returns": r} for i, r in enumerate(_corr_series(0.97, 5))])
+    assert 1.0 <= sim["n_eff"] < 1.3
+    assert sim["n"] == 5 and sim["n_eff"] <= sim["n"]
+
+
+def test_dsr_eff_uses_n_eff_and_is_not_below_dsr():
+    out = ds.compare([{"label": str(i), "returns": r} for i, r in enumerate(_corr_series(0.6, 6))])
+    assert 2 <= out["n_eff"] < out["n"]
+    assert out["sr0_eff"] == pytest.approx(ds.expected_max_sr(out["n_eff"], out["var_sr"]))
+    assert out["sr0_eff"] < out["sr0"]
+    for r in out["rows"]:
+        assert r["dsr_eff"] == pytest.approx(ds.psr(r["sr"], out["sr0_eff"], r["t"], r["skew"], r["kurt"]))
+        assert r["dsr_eff"] >= r["dsr"] - 1e-12       # 덜 센 만큼 덜 깎는다
+
+
+def test_n_eff_below_two_says_why():
+    out = ds.compare([{"label": str(i), "returns": r} for i, r in enumerate(_corr_series(0.97, 5))])
+    assert out["sr0_eff"] is None and "2 보다 작아" in out["n_eff_reason"]
+    assert all(r["dsr_eff"] is None for r in out["rows"])
+    assert out["sr0"] is not None                      # N(하한) 기준 보정은 그대로 있다
+
+
+def test_n_eff_needs_every_series():
+    rows = [{"label": str(i), "returns": r} for i, r in enumerate(_corr_series(0.2, 3))]
+    rows.append({"label": "짧음", "returns": _series(0.001, T=30)})
+    out = ds.compare(rows)
+    assert out["n_eff"] is None and "짧음" in out["n_eff_reason"]
+    assert out["sr0"] is not None                      # N 보정은 그대로(N=4)
+
+
+def test_participation_ratio_golden():
+    """상관행렬 고유값 λ 로 (Σλ)²/Σλ² — 두 흐름의 상관 ρ 면 2/(1+ρ²)."""
+    C = np.array([[1.0, 0.5], [0.5, 1.0]])
+    assert ds.participation_ratio(C) == pytest.approx(2 / (1 + 0.25))
+    assert ds.participation_ratio(np.eye(4)) == pytest.approx(4.0)

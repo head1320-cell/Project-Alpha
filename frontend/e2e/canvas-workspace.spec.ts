@@ -1787,6 +1787,15 @@ test("갈래 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결
   }
   await expect(page.locator(".pg-branch-n")).toHaveAttribute("data-n", "2");
   await expect(page.locator(".pg-branch-n")).toContainText("실제로 비교한 수는 더 많을 수");
+  // BP P3 — 닮음을 뺀 독립 수로 한 번 더(서버 값 그대로, 못 내면 "—")
+  const eff = page.locator('.pg-branch-row--dsr[data-row^="dsr_eff:"]');
+  await expect(eff).toHaveCount(1);
+  const ge = got as unknown as { n_eff: number | null; rows: { dsr_eff: number | null }[] };
+  for (let i = 0; i < 2; i++) {
+    const v = ge.rows[i].dsr_eff;
+    await expect(eff.locator("td").nth(i)).toHaveText(v === null ? "—" : `${Math.round(v * 100)}%`);
+  }
+  if (ge.n_eff !== null) await expect(eff.locator("th")).toContainText(ge.n_eff.toFixed(1));
   const first = got!.rows[0].dsr;
 
   // 짝 — 갈래를 하나 더 만들면 N = 3, 같은 원본의 보정 확률이 달라진다.
@@ -1910,7 +1919,7 @@ async function panNodeTo(page: Page, id: string, targetY: number) {
 const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-test("도구줄 자리(BP P1): 노드가 캔버스 위쪽 띠에 있으면 도구줄이 노드 아래 · 걸러 보기 판과 안 겹침 · 짝: 가운데면 위", async ({ page }) => {
+test("도구줄 자리(BP P1): 위쪽 띠에 있는 노드를 고르면 판이 살짝 내려와 도구줄이 걸러 보기 판과 안 겹침 · 도구줄은 늘 노드 위(아래 노드를 가리지 않음) · 짝: 가운데 노드는 판이 안 움직임", async ({ page }) => {
   await openCanvas(page);
   await run(page);                                               // 걸러 보기 판은 계산 뒤에 선다
   await expect(page.locator(".pg-filters")).toBeVisible();
@@ -1918,16 +1927,22 @@ test("도구줄 자리(BP P1): 노드가 캔버스 위쪽 띠에 있으면 도�
   await node(page, "risk").click();
   const bar = page.locator(".react-flow__node-toolbar");
   await expect(bar).toBeVisible();
+  await page.waitForTimeout(350);                                // 판이 내려오는 동안
+  const pane = (await canvas(page).boundingBox())!;
   let nb = (await rfNode(page, "risk").boundingBox())!;
   let tb = (await bar.boundingBox())!;
-  expect(tb.y, "아래로").toBeGreaterThanOrEqual(nb.y + nb.height - 1);
+  expect(tb.y + tb.height, "노드 위").toBeLessThanOrEqual(nb.y + 1);
+  expect(tb.y, "캔버스 위 띠 아래").toBeGreaterThanOrEqual(pane.y + 60);
   expect(overlaps(tb, (await page.locator(".pg-filters").boundingBox())!)).toBe(false);
-  // 짝 — 가운데로 옮기면 위로 돌아온다
+  // 짝 — 가운데 노드는 판이 움직이지 않는다
   await panNodeTo(page, "risk", 300);
+  const before = (await rfNode(page, "risk").boundingBox())!;
   await node(page, "risk").click();
+  await page.waitForTimeout(350);
   nb = (await rfNode(page, "risk").boundingBox())!;
+  expect(Math.abs(nb.y - before.y)).toBeLessThan(1);
   tb = (await bar.boundingBox())!;
-  expect(tb.y + tb.height, "위로").toBeLessThanOrEqual(nb.y + 1);
+  expect(tb.y + tb.height).toBeLessThanOrEqual(nb.y + 1);
 });
 
 test("받는 것(BP P1): 전략 합치기의 빈 선택 포트는 '비중 빈 자리 n개(선택)' 한 줄 · 이은 것은 하나씩", async ({ page }) => {
@@ -1944,4 +1959,28 @@ test("받는 것(BP P1): 전략 합치기의 빈 선택 포트는 '비중 빈 �
   await expect(dd).toContainText(`비중 빈 자리 ${nPorts - linked}개(선택)`);
   await expect(dd).not.toContainText("선택, 비어 있음");
   expect(((await dd.textContent()) ?? "").split("←").length - 1).toBe(linked);
+});
+
+test("되돌리는 비용(BP P2): 칩 = 서버 프리셋 · 기본 '넣지 않기'(키 없음) · 0.3% → 문서 30 · 계산하면 설명이 30bp 를 말함", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const pf = portfolioOf(doc);
+  const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  const ui = cat.nodes.find((c: { type: string }) => c.type === "portfolio_combine").params_schema.properties.cost_bps["x-ui"] as
+    { question: string; presets: { label: string; value: number }[] };
+  await node(page, pf.id).click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  const field = page.locator('.pg-basic-field[data-field="cost_bps"]');
+  await expect(field.locator(".pg-q")).toHaveText(ui.question);
+  await expect(field.locator(".pg-chip")).toHaveText(ui.presets.map((p) => p.label));
+  await expect(field.locator(".pg-chip", { hasText: ui.presets[0].label })).toHaveAttribute("aria-pressed", "true");
+  const params = () => wip(page).then((d) => portfolioOf(d).params);
+  expect("cost_bps" in (await params())).toBe(false);
+  await field.locator(".pg-chip", { hasText: "0.3%" }).click();
+  expect((await params()).cost_bps).toBe(30);
+  const body = await run(page);
+  const r = body.nodes[pf.id] as unknown as { explain: { trust: { text: string }[]; unmeasured: string[] } };
+  expect(r.explain.trust.some((t) => t.text.includes("30bp"))).toBe(true);
+  expect(r.explain.unmeasured).toContain("슬리피지·시장 충격");
 });

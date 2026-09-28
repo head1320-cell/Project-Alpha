@@ -46,6 +46,12 @@ class PortfolioCombineParams(BaseModel):
         order=list(REBALANCE),
         help="되돌리는 사이에는 비중이 가격 따라 흘러가요. 비우면 매일 되돌린다고 봐요. 되돌릴 때의 거래비용은 넣지 않아요.")})
 
+    # BP P2 — 사용자 승인: 되돌릴 때마다 회전율 × 이 비용(bp)을 전략 흐름에서 뺀다. 0 이면 BO O2 와 같다(비트 단위).
+    cost_bps: float = Field(0, ge=0, le=200, json_schema_extra={"x-ui": _ui(
+        "되돌리는 비용", question="비중을 되돌릴 때 거래비용을 얼마로 볼까요?", unit="bp",
+        presets=[{"label": "넣지 않기", "value": 0}, {"label": "0.1%", "value": 10}, {"label": "0.3%", "value": 30}],
+        help="되돌릴 때 옮긴 비중(사고판 양쪽 합) × 이 비용을 빼요. 슬리피지·시장 충격은 넣지 않아요.")})
+
     @field_validator("rebalance")
     @classmethod
     def _known_rebalance_ports(cls, v: dict[str, str]) -> dict[str, str]:
@@ -87,11 +93,14 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
     codes_of = {port: p.rebalance.get(port, "D") for port in ports}
     every = {name: REBALANCE[codes_of[port]][0] for port, name in zip(ports, names)}
     every_arg = every if any(k > 1 for k in every.values()) else None
+    cost_arg = {name: float(p.cost_bps) for name in names} if p.cost_bps > 0 else None
     ret = sc._load_ret_matrix(sleeves)
-    out = sc.combine_sleeves(sleeves, method=p.method, ret_matrix=ret, rebalance_every=every_arg)
+    out = sc.combine_sleeves(sleeves, method=p.method, ret_matrix=ret, rebalance_every=every_arg,
+                             rebalance_cost_bps=cost_arg)
     if out.get("error"):
         raise pg.NodeFailure(str(out.get("message")))
-    ana = sc.sleeve_analytics(sleeves, ret_matrix=ret, weights=out["sleeve_allocation"], rebalance_every=every_arg)
+    ana = sc.sleeve_analytics(sleeves, ret_matrix=ret, weights=out["sleeve_allocation"], rebalance_every=every_arg,
+                              rebalance_cost_bps=cost_arg)
     cm = ana.get("correlation") or {}
     corr = None if ana.get("error") else {"labels": names, "matrix": [[cm[a][b] for b in names] for a in names]}
     cw = out["combined_weights_pct"]
@@ -102,6 +111,7 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
                    "n_holdings": len(s["weights"]), "rebalance": codes_of[port]}
                   for port, name, s in zip(ports, names, sleeves)]
     view = {"result": out, "labels": _labels(codes), "strategies": strategies, "correlation": corr,
+            "cost_bps": float(p.cost_bps),
             "correlation_reason": ana.get("message") if ana.get("error") else None}
     return pg.NodeOutput(values={"weights": weights_value(codes, arr)}, view=view,
                          tags={"practice": mock_allowed(), "sources": ["portfolio_combine"]})
@@ -123,7 +133,12 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
         each = ", ".join(f"{x['label']}: {REBALANCE[c][1]}" for x, c in zip(rows_all, codes))
         trust.append(_t(ASSUMED, f"전략 수익은 전략마다 정한 주기({each})로 지금 비중으로 되돌리고, 그 사이에는 비중이 "
                                  "가격 따라 흘러가게 해서 과거에 적용한 흐름이에요 — 전략이 과거에 실제로 낸 성과가 아니에요."))
-    trust.append(_t(ASSUMED, "되돌릴 때 드는 거래비용은 넣지 않았어요 — 자주 되돌리는 전략일수록 실제보다 좋게 보여요."))
+    cost = float(view.get("cost_bps") or 0.0)
+    if cost > 0:
+        trust.append(_t(ASSUMED, f"되돌릴 때마다 옮긴 비중(사고판 양쪽 합) × {cost:g}bp 를 거래비용으로 뺐어요 — "
+                                 "내가 정한 값이고, 슬리피지·시장 충격은 넣지 않았어요."))
+    else:
+        trust.append(_t(ASSUMED, "되돌릴 때 드는 거래비용은 넣지 않았어요 — 자주 되돌리는 전략일수록 실제보다 좋게 보여요."))
     if view.get("correlation") is None:
         trust.append(_t(UNKNOWN, f"전략 사이 상관을 재지 못했어요 — {view.get('correlation_reason') or '사유 없음'}"))
     rows = [x for x in (view.get("strategies") or []) if isinstance(x.get("share_pct"), (int, float))]
@@ -131,7 +146,9 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     headline = None if top is None else {"label": f"{top['label']} 몫", "value": top["share_pct"], "unit": "%",
                                          "text": f"가장 큰 몫은 {top['label']} {top['share_pct']:.1f}%"}
     return {"title": f"{r.get('n_sleeves')}개 전략을 {r.get('n_stocks')}종목 포트폴리오로 합쳤어요", "headline": headline, "facts": facts,
-            "trust": trust, "unmeasured": ["전략 사이 상관이 앞으로 유지될지", "되돌릴 때 드는 거래비용"]}
+            "trust": trust, "unmeasured": ["전략 사이 상관이 앞으로 유지될지",
+                           "슬리피지·시장 충격" if cost > 0 else "되돌릴 때 드는 거래비용",
+                           "전략 사이 몫을 되돌리는 비용"]}
 
 
 def glance(view: dict) -> dict | None:

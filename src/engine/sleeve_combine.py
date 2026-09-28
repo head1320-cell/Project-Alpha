@@ -20,25 +20,37 @@ logger = logging.getLogger(__name__)
 SLEEVE_METHODS = ("equal", "inverse_vol", "risk_parity", "risk_budget", "min_var", "hrp", "score")
 
 
-def _drift_returns(R: np.ndarray, w: np.ndarray, every: int) -> np.ndarray:
+def _drift_returns(R: np.ndarray, w: np.ndarray, every: int, cost_bps: float = 0.0) -> np.ndarray:
     """k 거래일마다 목표 비중으로 되돌리는 슬리브의 일별 수익 (BO O2 — 사용자 승인 배분 동작 변경).
 
     되돌린 날 사이에는 보유량이 종목 수익만큼 흘러간다(드리프트). k 일째 **끝에** 목표 비중으로 되돌린다.
-    거래비용은 넣지 않는다 — 호출부가 그 사실을 말한다.
+    `cost_bps`(BP P2 — 사용자 승인): 되돌리는 날 회전율(흘러간 비중과 목표의 차의 절댓값 합 — 사고판 양쪽) × 비용을
+    그날 가치에서 뺀다. 0 이면 BO O2 와 같다. 슬리피지·시장 충격은 넣지 않는다 — 호출부가 그 사실을 말한다.
     """
     T = R.shape[0]
     out = np.empty(T)
+    c = cost_bps / 1e4
     v = w.copy()                                  # 합 1 로 정규화된 보유 가치
     for t in range(T):
         grown = v * (1.0 + R[t])
         tot = float(grown.sum())
-        out[t] = tot - 1.0
-        v = w.copy() if (t + 1) % every == 0 else grown / tot
+        if (t + 1) % every == 0:
+            turnover = float(np.abs(grown / tot - w).sum()) if c > 0 else 0.0
+            out[t] = tot * (1.0 - c * turnover) - 1.0
+            v = w.copy()
+        else:
+            out[t] = tot - 1.0
+            v = grown / tot
     return out
 
 
+#: 거래비용 상한(bp) — 이보다 크면 입력 실수로 본다(10%).
+COST_BPS_MAX = 1000.0
+
+
 def _sleeve_return_series(sleeves: list[dict], ret_matrix: dict[str, list[float]],
-                          rebalance_every: dict[str, int] | None = None) -> tuple[list[str], np.ndarray]:
+                          rebalance_every: dict[str, int] | None = None,
+                          cost_bps: dict[str, float] | None = None) -> tuple[list[str], np.ndarray]:
     """슬리브별 일별수익 행렬 (T×S). ret_matrix: code -> 일별수익 리스트(정렬 동일 길이).
 
     `rebalance_every` (BO O2): 슬리브 이름 → 되돌리는 주기(거래일). 없거나 1 이면 **지금과 같은 식**
@@ -48,6 +60,11 @@ def _sleeve_return_series(sleeves: list[dict], ret_matrix: dict[str, list[float]
     bad = {k: v for k, v in every_of.items() if not isinstance(v, int) or isinstance(v, bool) or v < 1}
     if bad:
         raise ValueError(f"리밸런싱 주기는 1 이상의 거래일 수여야 해요: {bad}")
+    cost_of = dict(cost_bps or {})
+    bad_cost = {k: v for k, v in cost_of.items()
+                if not isinstance(v, (int, float)) or isinstance(v, bool) or not np.isfinite(v) or not 0 <= v <= COST_BPS_MAX}
+    if bad_cost:
+        raise ValueError(f"거래비용은 0~{COST_BPS_MAX:g}bp 의 숫자여야 해요: {bad_cost}")
     codes = sorted({c for s in sleeves for c in s.get("weights", {})})
     codes = [c for c in codes if c in ret_matrix and len(ret_matrix[c]) >= 2]
     if not codes:
@@ -62,7 +79,10 @@ def _sleeve_return_series(sleeves: list[dict], ret_matrix: dict[str, list[float]
         if wsum > 0:
             w = w / wsum
         k = every_of.get(s["name"], 1)
-        S[:, j] = R @ w if k <= 1 or wsum <= 0 else _drift_returns(R, w, k)
+        cb = float(cost_of.get(s["name"], 0.0))
+        # 주기 1·비용 0 이면 지금까지의 식 그대로. 비용이 있으면 매일 주기라도 매일 되돌리는 비용을 낸다.
+        S[:, j] = (R @ w if wsum <= 0 or (k <= 1 and cb <= 0)
+                   else _drift_returns(R, w, max(k, 1), cb))
     return names, S
 
 
@@ -130,7 +150,8 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
                     risk_budget: dict[str, float] | None = None,
                     scores: dict[str, float] | None = None,
                     ret_matrix: dict[str, list[float]] | None = None,
-                    rebalance_every: dict[str, int] | None = None) -> dict[str, Any]:
+                    rebalance_every: dict[str, int] | None = None,
+                    rebalance_cost_bps: dict[str, float] | None = None) -> dict[str, Any]:
     """슬리브 결합(2단계) — 슬리브 레벨 배분 + 종목 레벨 집계.
 
     `rebalance_every` — 슬리브별 되돌림 주기(거래일, `_sleeve_return_series`). 없으면 기존과 같고 응답 키도 같다.
@@ -139,7 +160,7 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
         return {"error": True, "message": "슬리브가 없습니다."}
     if ret_matrix is None:
         ret_matrix = _load_ret_matrix(sleeves)
-    names, S = _sleeve_return_series(sleeves, ret_matrix, rebalance_every)
+    names, S = _sleeve_return_series(sleeves, ret_matrix, rebalance_every, rebalance_cost_bps)
     if S.size == 0 or S.shape[1] < 1:
         return {"error": True, "message": "슬리브 수익 시계열을 만들 수 없습니다 (시세 부족)."}
 
@@ -203,16 +224,19 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
     if rebalance_every is not None:
         # 쓴 주기를 그대로 돌려준다(주지 않은 슬리브는 1 = 매일). 주지 않았으면 키도 없다.
         out["rebalance_every"] = {nm: int(rebalance_every.get(nm, 1)) for nm in names}
+    if rebalance_cost_bps is not None:
+        out["rebalance_cost_bps"] = {nm: float(rebalance_cost_bps.get(nm, 0.0)) for nm in names}
     return out
 
 
 def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | None = None,
                      weights: dict[str, float] | None = None,
-                     rebalance_every: dict[str, int] | None = None) -> dict[str, Any]:
-    """슬리브 간 상관·군집·리스크 기여·꼬리의존 (§8 검증). 주기는 `combine_sleeves` 와 같은 흐름을 쓰려고 받는다."""
+                     rebalance_every: dict[str, int] | None = None,
+                     rebalance_cost_bps: dict[str, float] | None = None) -> dict[str, Any]:
+    """슬리브 간 상관·군집·리스크 기여·꼬리의존 (§8 검증). 주기·비용은 `combine_sleeves` 와 같은 흐름을 쓰려고 받는다."""
     if ret_matrix is None:
         ret_matrix = _load_ret_matrix(sleeves)
-    names, S = _sleeve_return_series(sleeves, ret_matrix, rebalance_every)
+    names, S = _sleeve_return_series(sleeves, ret_matrix, rebalance_every, rebalance_cost_bps)
     n = len(names)
     if S.size == 0 or n < 2:
         return {"error": True, "message": "분석에 슬리브 2개 이상·시세가 필요합니다."}

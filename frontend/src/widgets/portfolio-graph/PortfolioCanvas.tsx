@@ -96,6 +96,8 @@ function ZoomWatch({ el }: { el: RefObject<HTMLDivElement> }) {
 const GROUP_PAD = 28;
 /** 맞춰 보기의 안쪽 여백(px) — 위 64 = 선 범례·걸러 보기 판(10 + 36 + 여유), 아래 64 = 안내 줄. */
 const FIT_INSET = { top: 64, bottom: 64, left: 24, right: 24 } as const;
+/** 노드 도구줄 높이 + 간격(px) — 고른 노드 위에 이만큼 비어 있어야 도구줄이 떠 있는 판 밑에 깔리지 않는다. */
+const TOOLBAR_H = 48;
 
 /** 맞춰 보기 — 떠 있는 판(위: 선 범례·걸러 보기 · 아래: 안내 줄)이 노드·상자 머리를 가리지 않게 위아래를 비워 둔다.
  *  (BN N1 에서 찾은 결함: 균일 여백 맞춤은 맨 위 전략 상자의 머리 줄을 선 범례 밑에 두어 누를 수 없었다.) */
@@ -414,6 +416,21 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 들어가고 나올 때만
   }, [s.focusGroup]);
   const focused = s.groups.find((g) => g.id === s.focusGroup);
+  // 고른 노드가 캔버스 위쪽 띠(선 범례·걸러 보기 판)에 있으면 도구줄이 그 판 밑에 깔린다 — 도구줄이 보이도록 판만 살짝 내린다(BP P1).
+  // 도구줄을 노드 아래로 뒤집으면 아래 노드를 가려 그 노드를 누르려던 손이 '갈래 만들기' 를 누른다(첫 시도에서 E2E 가 찾았다).
+  useEffect(() => {
+    const inst = rf.current;
+    const id = s.selectedId;
+    // 우클릭으로 고른 경우엔 움직이지 않는다 — 메뉴가 그 자리에 떠 있는데 판이 밀리면 가리키던 곳이 어긋난다(도구줄도 안 보인다).
+    if (!inst || !id || s.picked.length > 1 || ctx) return;
+    const n = inst.getNode(id);
+    if (!n?.positionAbsolute) return;
+    const vp = inst.getViewport();
+    const top = n.positionAbsolute.y * vp.zoom + vp.y;
+    const need = FIT_INSET.top + TOOLBAR_H;
+    if (top < need) inst.setViewport({ ...vp, y: vp.y + (need - top) }, { duration: 200 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 고를 때만
+  }, [s.selectedId]);
   // 갈래를 막 만들었으면 원본 뿌리와 새 갈래가 함께 보이게 옮긴다(복제는 원본 아래에 놓인다).
   const nBranches = useRef(s.branches.length);
   useEffect(() => {

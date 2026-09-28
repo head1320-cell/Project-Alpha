@@ -129,11 +129,12 @@ function DsrRows({ name, labels, curves }: { name: string; labels: string[]; cur
       </tr>
     );
   }
-  const row = (key: "psr0" | "dsr", title: string) => (
+  const row = (key: "psr0" | "dsr" | "dsr_eff", title: string) => (
     <tr className="pg-branch-row--dsr" data-row={`${key}:${name}`}>
       <th scope="row">{title}</th>
       {ev.rows.map((r, i) => {
-        const c = probCell(r[key], key === "dsr" ? (r.reason ?? ev.reason) : r.reason);
+        const c = probCell(r[key], key === "dsr" ? (r.reason ?? ev.reason)
+          : key === "dsr_eff" ? (r.reason ?? ev.reason ?? ev.n_eff_reason) : r.reason);
         return <td key={i} className="pg-td-num" data-value={r[key] ?? ""} title={c.title}>{c.text}</td>;
       })}
     </tr>
@@ -142,6 +143,9 @@ function DsrRows({ name, labels, curves }: { name: string; labels: string[]; cur
     <>
       {row("psr0", `보정 · ${name} · 샤프가 0보다 클 확률`)}
       {row("dsr", `보정 · ${name} · ${ev.n}번 비교한 운을 감안한 확률`)}
+      {row("dsr_eff", ev.n_eff !== null
+        ? `보정 · ${name} · 서로 닮은 만큼 뺀 약 ${ev.n_eff.toFixed(1)}번으로 감안한 확률(추정)`
+        : `보정 · ${name} · 서로 닮은 만큼 뺀 수로 감안한 확률(추정)`)}
     </>
   );
 }

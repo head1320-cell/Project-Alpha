@@ -238,7 +238,11 @@ export interface RunReport extends ValidateReport {
 export interface BranchEvidenceRow {
   label: string; t: number; sr: number | null; skew: number | null; kurt: number | null;
   psr0: number | null; dsr: number | null; reason: string | null;
+  /** 닮음을 뺀 독립 수(N_eff)로 보정한 확률(BP P3) — N_eff 를 못 재거나 2 미만이면 null. */
+  dsr_eff: number | null;
 }
 export interface BranchEvidence {
   n: number; sr0: number | null; var_sr: number | null; rows: BranchEvidenceRow[]; reason: string | null; note: string;
+  /** 수익 흐름 상관의 참여비로 추정한 독립 시행 수(BP P3) · 그 수의 기대 최대 SR · 못 낸 사유. */
+  n_eff: number | null; sr0_eff: number | null; n_eff_reason: string | null;
 }
