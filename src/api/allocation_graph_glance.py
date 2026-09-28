@@ -241,8 +241,8 @@ def brief_weights(v: Mapping) -> str | None:
 
 
 # ── BN N2 · 선 요약을 더 많은 포트 타입으로 — 값 모양은 생산 노드에서 확인한 것만(tests/test_graph_briefs_more.py) ──
-# 충격 결과(StressReport)는 생산 노드마다 모양이 둘이고 단위가 분명하지 않아, 기대 수익 설정(Belief)은 셀 것이 없어,
-# 시나리오·전략 묶음 성과·백테스트 실행은 기본 실행에서 값을 확인하지 못해 요약하지 않는다(키가 없다 = 지어내지 않는다).
+# 기대 수익 설정(Belief)은 셀 것이 없어, 시나리오·전략 묶음 성과·백테스트 실행은 기본 실행에서 값을 확인하지 못해
+# 요약하지 않는다(키가 없다 = 지어내지 않는다). 충격 결과(StressReport)는 BO O4 에서 생산 노드 셋의 모양을 확인해 더했다(아래).
 
 _PHASE_PLAIN = {"Goldilocks": "골디락스", "Reflation": "리플레이션", "Stagflation": "스태그플레이션",
                 "Deflation": "디플레이션", "Disinflation": "디스인플레이션"}
@@ -324,10 +324,47 @@ def brief_risk(v: Any) -> str | None:
     return f"연 변동성 {vol:.1f}%" if vol is not None else None
 
 
+_STRESS_LABEL_MAX = 28
+
+
+def brief_stress(v: Any) -> str | None:
+    """충격 결과 (BO O4) — 생산 노드 셋의 모양을 **각 노드 설명(explain)이 쓰는 키·단위 그대로** 읽는다.
+
+    - 시나리오 충격 · 과거 재생(`result.mode == "historical"`): `max_dd_pct` — 최대 낙폭(%)
+    - 시나리오 충격 · 가정 충격: `portfolio_shock_pct` — 추정 충격(%)
+    - 직접 만든 시나리오: `shock_pct` — 예상 충격(%)
+    - 상관 스트레스: `stressed.port_vol_pct` — 위기 때 연 변동성(%). ★`delta_vol_pct` 는 %p 인지 % 인지 분명하지 않아 쓰지 않는다.★
+    모양이 이 넷이 아니면 요약하지 않는다(None).
+    """
+    r = v.get("result") if isinstance(v, Mapping) else None
+    if not isinstance(r, Mapping):
+        return None
+    pack = v.get("pack") if isinstance(v.get("pack"), Mapping) else r.get("pack")
+    label = pack.get("label") if isinstance(pack, Mapping) else None
+    head = f"{label} · " if isinstance(label, str) and 0 < len(label) <= _STRESS_LABEL_MAX else ""
+
+    def signed(x: float) -> str:
+        return ("+" if x >= 0 else "−") + f"{abs(x):.1f}%"
+    if r.get("mode") == "historical":
+        dd = _finite(r.get("max_dd_pct"))
+        return f"{head}최대 낙폭 {signed(dd)}" if dd is not None else None
+    if "portfolio_shock_pct" in r:
+        x = _finite(r.get("portfolio_shock_pct"))
+        return f"{head}추정 충격 {signed(x)}" if x is not None else None
+    if "shock_pct" in r:
+        x = _finite(r.get("shock_pct"))
+        return f"{head}예상 충격 {signed(x)}" if x is not None else None
+    if isinstance(r.get("stressed"), Mapping):
+        vol = _finite(r["stressed"].get("port_vol_pct"))
+        return f"위기 때 연 변동성 {vol:.1f}%" if vol is not None else None
+    return None
+
+
 BRIEFS: dict[str, Callable[[Any], str | None]] = {
     "Universe": brief_universe, "Returns": brief_returns, "Weights": brief_weights,
     "Views": brief_views, "Scores": brief_scores, "RegimeState": brief_regime, "TimingSignal": brief_timing,
     "Trades": brief_trades, "TargetVersion": brief_target, "BacktestResult": brief_backtest, "RiskReport": brief_risk,
+    "StressReport": brief_stress,
 }
 
 

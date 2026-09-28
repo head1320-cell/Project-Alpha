@@ -12,3 +12,4 @@ export * from "./strategy";
 export * from "./branch";
 export * from "./goals";
 export * from "./stocks";
+export * from "./quickadd";

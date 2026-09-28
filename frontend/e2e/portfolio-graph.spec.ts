@@ -175,7 +175,7 @@ test("모르는 노드는 버리지 않는다 · 다른 포맷은 캔버스를 �
   await expect(page.locator(".pg-file-note")).toContainText("불러오지 않았어요");
   await expect(page.locator(".pg-node")).toHaveCount(8);
   await importText(page, "broken.json", "{not json");
-  await expect(page.locator(".pg-file-note")).toContainText("JSON 이 아닙니다");
+  await expect(page.locator(".pg-file-note")).toContainText("JSON 형식이 아니에요");
   await expect(page.locator(".pg-node")).toHaveCount(8);
 });
 
@@ -1677,7 +1677,7 @@ test("μ 엔진(BL4): 라벨은 서버 mu_engine 그대로 — model 이 bl 이�
   await run(page);
   await detail(page, "optimizer");
   await expect(eng).toHaveText("Entropy Pooling");
-  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 사용하지 않습니다");
+  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 쓰지 않아요");
   await expect(page.locator(".pg-side .pg-eng")).toContainText("756 → 640");
 
   // 쓸 수 없는 엔진은 비중 숫자가 아니라 사유가 온다 — 실제 서버 경로. 같은 종목을 +40% 이상이자 −40% 이하로 보는 두 뷰는

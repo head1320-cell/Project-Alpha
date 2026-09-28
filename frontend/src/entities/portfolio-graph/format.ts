@@ -55,7 +55,7 @@ export function parseFile(text: string): ParseResult {
   try {
     raw = JSON.parse(text);
   } catch (e) {
-    return { doc: null, problems: [`JSON 이 아닙니다 — ${(e as Error).message}`] };
+    return { doc: null, problems: [`JSON 형식이 아니에요 — ${(e as Error).message}. 파일이 잘렸거나 다른 형식인지 확인해 주세요`] };
   }
   if (!isObj(raw)) return { doc: null, problems: ["문서가 객체가 아닙니다."] };
   const problems: string[] = [];

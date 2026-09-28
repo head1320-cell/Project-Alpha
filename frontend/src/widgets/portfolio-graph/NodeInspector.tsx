@@ -35,7 +35,7 @@ function JsonField({ f, value, onChange }: { f: FieldSpec; value: unknown; onCha
                 onBlur={() => {
                   if (!text.trim()) { setErr(null); onChange(undefined); return; }
                   try { onChange(JSON.parse(text)); setErr(null); }
-                  catch (e) { setErr(`JSON 이 아닙니다 — ${(e as Error).message}. 반영하지 않았습니다.`); }
+                  catch (e) { setErr(`JSON 형식이 아니라서 반영하지 않았어요 — ${(e as Error).message}. 괄호와 따옴표를 확인해 주세요.`); }
                 }} />
       {err && <div className="pg-field-err">{err}</div>}
     </>
@@ -113,7 +113,7 @@ export function NodeInspector({ node, entry, onChange, onRemove }: {
           <div className="pg-panel-title">{entry?.label ?? node.data.kind}</div>
           <div className="pg-panel-sub">{node.id}</div>
         </div>
-        <button type="button" className="pg-btn pg-btn--danger" onClick={onRemove} title="노드 삭제">
+        <button type="button" className="pg-btn pg-btn--danger" onClick={onRemove} title="노드 지우기 (Delete)" aria-label="노드 지우기">
           <Trash2 size={13} />
         </button>
       </header>
@@ -124,7 +124,7 @@ export function NodeInspector({ node, entry, onChange, onRemove }: {
           <pre className="pg-raw">{JSON.stringify(params, null, 2)}</pre>
         </>
       )}
-      {entry && fields.length === 0 && <p className="pg-panel-note">설정할 파라미터가 없습니다.</p>}
+      {entry && fields.length === 0 && <p className="pg-panel-note">바꿀 설정이 없어요.</p>}
       {fields.map((f) => (
         <label key={f.name} className="pg-field">
           <span className="pg-field-label">

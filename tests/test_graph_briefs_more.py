@@ -7,8 +7,8 @@ BM C1 은 종목·수익률·비중 세 타입만 선 위에 한 줄을 썼다. 
 - 골든(실제 실행) — 생산 노드가 낸 포트 값을 엿보아(spy) 테스트가 **값에서 직접** 기대 글을 다시 만든다. 선 요약 = 그 글.
   생산 노드의 모양이 바뀌면 요약이 빠져 이 테스트가 실패한다(조용히 틀린 글을 쓰지 않는다).
 - 짝 — 모양이 틀리거나(키 없음·수가 아님·빈 목록) 모르는 상태 값이면 요약하지 않는다(None). 0 으로 채우지 않는다.
-- 요약하지 않는 타입(충격 결과 · 기대 수익 설정 · 시나리오 · 전략 묶음 성과 · 백테스트 실행)은 선 요약 함수가 없다 —
-  충격 결과는 생산 노드마다 모양이 둘이고 단위가 분명하지 않아, 나머지는 기본 실행에서 값을 확인하지 못해 쓰지 않았다.
+- 요약하지 않는 타입(기대 수익 설정 · 시나리오 · 전략 묶음 성과 · 백테스트 실행)은 선 요약 함수가 없다 —
+  기본 실행에서 값을 확인하지 못해 쓰지 않았다. 충격 결과는 BO O4 에서 더했다(tests/test_graph_stress_briefs.py).
 """
 from __future__ import annotations
 
@@ -28,7 +28,8 @@ from tests.test_allocation_graph import T3, _edge, _node, chain, market  # noqa:
 pytestmark = pytest.mark.usefixtures("graph_write_guard")
 
 NEW = ("Views", "Scores", "RegimeState", "TimingSignal", "Trades", "TargetVersion", "BacktestResult", "RiskReport")
-NOT_SUMMARISED = ("StressReport", "Belief", "Scenario", "StrategyResult", "BacktestRun")
+# 충격 결과(StressReport)는 BO O4 에서 생산 노드 셋의 모양을 확인해 더했다 — tests/test_graph_stress_briefs.py.
+NOT_SUMMARISED = ("Belief", "Scenario", "StrategyResult", "BacktestRun")
 
 
 def test_the_new_port_types_have_a_brief_and_the_unconfirmed_ones_do_not():

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, MoreHorizontal, Search, Undo2, Upload, X } from "lucide-react";
-import type { GraphDoc, NodeCatalogEntry, ParseResult } from "@/entities/portfolio-graph";
+import { quickAddItems, type GraphDoc, type NodeCatalogEntry, type ParseResult } from "@/entities/portfolio-graph";
 import { downloadGraph, readGraphFile } from "@/features/portfolio-graph-io";
 import { PORT_PLAIN } from "./GraphNode";
 import { usePortfolioGraph } from "./store";
@@ -40,8 +40,8 @@ export interface QuickAddState {
 }
 
 /** 선을 빈 곳에 놓으면 — "이 값을 받는(내는) 노드" 만 보이는 작은 찾기 목록. */
-export function QuickAdd({ at, catalog, box, onPick, onClose }: {
-  at: QuickAddState; catalog: NodeCatalogEntry[]; box: DOMRect | undefined;
+export function QuickAdd({ at, catalog, stageKeys, fromKind, box, onPick, onClose }: {
+  at: QuickAddState; catalog: NodeCatalogEntry[]; stageKeys: string[]; fromKind: string | null; box: DOMRect | undefined;
   onPick: (kind: string, port: string | null) => void; onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -49,17 +49,9 @@ export function QuickAdd({ at, catalog, box, onPick, onClose }: {
   const [active, setActive] = useState(0);
   useDismiss(ref, onClose);
   const from = at.from;
-  const items = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return catalog.flatMap((c) => {
-      // 타입이 맞는 첫 포트 — 선을 받는 쪽이면 입력, 선을 내는 쪽이면 출력(연결 규칙과 같은 타입 일치).
-      const port = !from ? null
-        : (from.side === "source" ? c.inputs : c.outputs).find((p) => p.type === from.type)?.name ?? undefined;
-      if (port === undefined) return [];
-      if (needle && ![c.plain_label, c.plain_description, c.type].some((x) => x?.toLowerCase().includes(needle))) return [];
-      return [{ c, port }];
-    }).slice(0, 30);
-  }, [catalog, from, q]);
+  // 순서는 흐름 단계(BO O5) — 끌어 온 노드의 다음 단계가 먼저(받는 선이면 앞 단계가 먼저).
+  const items = useMemo(() => quickAddItems(catalog, from ? { ...from, kind: fromKind } : null, stageKeys, q),
+                        [catalog, from, fromKind, stageKeys, q]);
   const pos = clampAt(at.x, at.y, box, 300, 390);
   const title = !from ? "여기에 노드 추가"
     : from.side === "source" ? `‘${PORT_PLAIN[from.type] ?? from.type}’을 받는 노드` : `‘${PORT_PLAIN[from.type] ?? from.type}’을 내는 노드`;

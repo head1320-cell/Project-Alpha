@@ -98,7 +98,7 @@ function EngineEvidence({ v }: { v: Dict }) {
         <>
           <p className="pg-note">반영한 뷰 {String(ep.n_views ?? "—")}개 · 유효 시나리오 {ensPrior === null ? "—" : Math.round(ensPrior)} → {ens === null ? "—" : Math.round(ens)}</p>
           {ep.confidence_used === false && (
-            <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 사용하지 않습니다 — 부등식 뷰는 경성 제약이라 대응하는 손잡이가 없어요. 뷰가 과한지는 유효 시나리오 수로 봐요.</p>
+            <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 쓰지 않아요 — 부등식 뷰는 경성 제약이라 대응하는 손잡이가 없어요. 뷰가 과한지는 유효 시나리오 수로 봐요.</p>
           )}
           {ensDrop && <p className="pg-warn" role="status">유효 시나리오 수가 크게 무너졌어요 — 뷰가 사전분포보다 강해서 표본 몇 개에 기댄 상태예요.</p>}
           {ep.note ? <p className="pg-note">{String(ep.note)}</p> : null}
@@ -137,7 +137,7 @@ function Optimizer({ v }: { v: Dict }) {
         ["제약", cr ? `${String(cr.status)}${cr.reason ? ` — ${String(cr.reason)}` : ""}` : "없음"],
       ]} />
       <EngineEvidence v={v} />
-      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 가 막혀 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
+      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 가 막혀서 표본 추정으로 계산했어요 — {String(belief.blocked_reason)}</p>}
       {cap.length > 0 && <p className="pg-note">시가총액 미상 종목 {cap.length}개 — 시장 균형 가중은 그 종목에 대해 가정입니다.</p>}
       {((v.skipped_views as unknown[]) ?? []).length > 0 && (
         <p className="pg-warn">건너뛴 뷰: {JSON.stringify(v.skipped_views)}</p>
@@ -389,13 +389,13 @@ export function NodeResultPanel({ kind, result, stale, extra, params, onReload }
   onReload?: () => void;
 }) {
   if (!result) {
-    return <p className="pg-panel-note">아직 실행 결과가 없습니다 — 위의 “실행” 을 누르세요.</p>;
+    return <p className="pg-panel-note">아직 계산하지 않았어요 — 위의 ‘계산하기’를 누르세요.</p>;
   }
   const v = result.view;
   const prov = result.provenance ?? {};
   return (
     <section className={`pg-result${stale ? " pg-result--stale" : ""}`}>
-      {stale && <p className="pg-warn">이 결과는 현재 그래프의 결과가 아닙니다 — 그래프가 바뀌었습니다. 다시 실행하세요.</p>}
+      {stale && <p className="pg-warn">설정이 바뀌어서 이 결과는 지금 그래프와 달라요 — 다시 계산해 주세요.</p>}
       <div className={`pg-node-status pg-node-status--${result.status}`}>
         <span className="pg-node-status-k">{STATUS_TEXT[result.status]}</span>
         {result.reason && <span className="pg-node-status-why">{result.reason}</span>}

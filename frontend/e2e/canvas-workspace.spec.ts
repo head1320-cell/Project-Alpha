@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { contrastAudit, type AuditResult } from "./helpers";
 import { fmtElapsed, fmtGlance } from "../src/entities/portfolio-graph/glance";
 import { fmtDelta } from "../src/entities/portfolio-graph/branch";
+import { quickAddItems } from "../src/entities/portfolio-graph/quickadd";
+import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BM — 캔버스를 "포트폴리오 설계 작업실"로 (설계 docs/superpowers/specs/2026-09-27-canvas-workspace-design.md)
@@ -1816,3 +1818,73 @@ for (const scheme of ["light", "dark"] as const) {
     expect(audit.low, `${scheme} 갈래 비교 AA`).toEqual([]);
   });
 }
+// ═══════════════════════════════════════════════════════════════════════════════
+// BO O5 · UX 잔여 — 빠른 추가 후보는 흐름 단계 순서 · 갈래를 만든 뒤 맞춤이 떠 있는 판을 비켜 감 · 접은 전략 카드는 출력 노드 자리.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("빠른 추가 순서(BO O5): 내보내는 선이면 다음 단계부터, 받는 선이면 앞 단계부터 · 화면 목록 = 순서 함수", async ({ page }) => {
+  await openCanvas(page);
+  const cat = (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()) as
+    { nodes: NodeCatalogEntry[]; stages: { key: string }[] };
+  const keys = cat.stages.map((s) => s.key);
+  const at = (t: string) => keys.indexOf(cat.nodes.find((c) => c.type === t)!.stage);
+  const down = quickAddItems(cat.nodes, { side: "source", type: "Weights", kind: "optimizer" }, keys);
+  const o = at("optimizer");
+  const dist = (t: string, side: "source" | "target") => { const d = side === "source" ? at(t) - o : o - at(t); return d >= 0 ? d : keys.length - d; };
+  const ds = down.map((x) => dist(x.c.type, "source"));
+  expect(ds, "흐름 방향 거리 순").toEqual([...ds].sort((a, b) => a - b));
+  expect(down.length).toBeGreaterThan(3);
+  const up = quickAddItems(cat.nodes, { side: "target", type: "Weights", kind: "risk" }, keys);
+  const o2 = at("risk");
+  const us = up.map((x) => { const d = o2 - at(x.c.type); return d >= 0 ? d : keys.length - d; });
+  expect(us).toEqual([...us].sort((a, b) => a - b));
+  // 거르는 규칙은 그대로 — 순서만 바뀐다(같은 집합).
+  const plain = cat.nodes.filter((c) => c.inputs.some((p) => p.type === "Weights")).map((c) => c.type).sort();
+  const all = quickAddItems(cat.nodes, { side: "source", type: "Weights", kind: "optimizer" }, keys, "", 1000);
+  expect(all.map((x) => x.c.type).sort()).toEqual(plain);
+
+  // 화면 — 비중 노드의 내보내기 포트에서 빈 곳으로 끌어 놓으면 같은 순서.
+  const handle = node(page, "optimizer").locator('.react-flow__handle-right').first();
+  const hb = (await handle.boundingBox())!;
+  const pane = (await canvas(page).boundingBox())!;
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pane.x + pane.width - 120, pane.y + pane.height - 120, { steps: 8 });
+  await page.mouse.up();
+  const shown = await page.locator(".pg-quick-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+  expect(shown.slice(0, 8)).toEqual(down.slice(0, 8).map((x) => x.c.type));
+});
+
+test("갈래 맞춤(BO O5): 갈래를 만든 뒤 보이는 노드는 위 떠 있는 판(선 범례) 아래에 선다 — 도구줄이 캔버스 위로 잘리지 않음", async ({ page }) => {
+  await openCanvas(page);
+  await makeBranch(page, "optimizer");
+  await page.waitForTimeout(400);
+  const pane = (await canvas(page).boundingBox())!;
+  const doc = (await wip(page)) as BDoc;
+  const ids = [...Object.keys(doc.branches![0].map), ...Object.values(doc.branches![0].map)];
+  for (const id of ids) {
+    const r = (await rfNode(page, id).boundingBox())!;
+    expect(r.y - pane.y, `${id} 위 여백`).toBeGreaterThanOrEqual(56);
+  }
+});
+
+test("접은 전략 카드(BO O5): 출력 노드 자리에 선다 · 끌면 구성원이 함께 움직임(그대로)", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const [a] = strategiesOf(doc);
+  const outBox = (await rfNode(page, a.output!).boundingBox())!;
+  await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).evaluate((el) => (el as HTMLElement).click());
+  const card = page.locator(`.pg-snode[data-group-id="${a.id}"]`);
+  await expect(card).toBeVisible();
+  const cb = (await card.boundingBox())!;
+  expect(Math.abs(cb.x - outBox.x)).toBeLessThan(3);
+  expect(Math.abs(cb.y - outBox.y)).toBeLessThan(3);
+  const before = (await wip(page)).nodes.find((n) => n.id === a.members[0])!.position;
+  await page.mouse.move(cb.x + 40, cb.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(cb.x + 40 + 88, cb.y + 10 + 44, { steps: 6 });
+  await page.mouse.up();
+  const after = (await wip(page)).nodes.find((n) => n.id === a.members[0])!.position;
+  expect(after.x - before.x).toBeGreaterThan(40);
+});

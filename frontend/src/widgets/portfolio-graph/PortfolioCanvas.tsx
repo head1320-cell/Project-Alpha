@@ -99,19 +99,23 @@ const FIT_INSET = { top: 64, bottom: 64, left: 24, right: 24 } as const;
 
 /** 맞춰 보기 — 떠 있는 판(위: 선 범례·걸러 보기 · 아래: 안내 줄)이 노드·상자 머리를 가리지 않게 위아래를 비워 둔다.
  *  (BN N1 에서 찾은 결함: 균일 여백 맞춤은 맨 위 전략 상자의 머리 줄을 선 범례 밑에 두어 누를 수 없었다.) */
-function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null) {
+function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
+                  opts: { ids?: string[]; minZoom?: number; maxZoom?: number; duration?: number } = {}) {
   if (!inst || !el) return;
-  const ns = inst.getNodes().filter((n) => !n.hidden && n.width && n.height);
+  // 일부만 맞출 때(갈래·들어가기 — BO O5)도 같은 여백 — 예전 fitView 는 맨 위 노드의 도구줄을 캔버스 위 끝 밖으로 밀었다.
+  const want = opts.ids ? new Set(opts.ids) : null;
+  const ns = inst.getNodes().filter((n) => !n.hidden && n.width && n.height && (!want || want.has(n.id)));
   if (!ns.length) return;
   const b = getRectOfNodes(ns);
   const w = Math.max(1, el.clientWidth - FIT_INSET.left - FIT_INSET.right);
   const h = Math.max(1, el.clientHeight - FIT_INSET.top - FIT_INSET.bottom);
-  const zoom = Math.min(1, Math.max(0.2, Math.min(w / b.width, h / b.height)));
+  const zoom = Math.min(opts.maxZoom ?? 1, Math.max(opts.minZoom ?? 0.2, Math.min(w / b.width, h / b.height)));
   // 가장 작게 줄여도 넘치면 가운데 두지 않고 흐름의 시작(왼쪽 위)에 붙인다 — 넘친 쪽은 오른쪽·아래로 간다.
   const dx = w - b.width * zoom;
   const dy = h - b.height * zoom;
   inst.setViewport({ x: FIT_INSET.left + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
-                     y: FIT_INSET.top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom });
+                     y: FIT_INSET.top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom },
+                   opts.duration ? { duration: opts.duration } : undefined);
 }
 const NODE_W = 176;
 const NODE_H = 150;
@@ -328,7 +332,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         }
       }
       const dimmed = keep && !g.members.some((m) => keep.has(m));
-      return { id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false,
+      // 접은 전략 카드는 전략의 출력 노드 자리에 선다(BO O5) — 포트폴리오로 가는 선이 전략 폭만큼 길어지지 않게.
+      // 자리는 여전히 노드에서 계산하므로 카드를 끌면 구성원이 함께 움직이는 규칙(차이만 옮김)은 그대로다.
+      const outNode = collapsed && strat && g.output ? ms.find((n) => n.id === g.output) : undefined;
+      const at = outNode ? { x: outNode.position.x, y: outNode.position.y } : { x: x0, y: y0 };
+      return { id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: at, zIndex: -1, selectable: false,
                className: dimmed ? "pg-dim" : undefined,
                data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
                        kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
@@ -402,7 +410,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   useEffect(() => {
     if (!rf.current) return;
     const g = s.groups.find((x) => x.id === s.focusGroup);
-    if (g) setTimeout(() => rf.current?.fitView({ nodes: g.members.map((id) => ({ id })), padding: 0.25, maxZoom: 1.2, duration: 250 }), 30);
+    if (g) setTimeout(() => fitClear(rf.current, canvasEl.current, { ids: g.members, maxZoom: 1.2, duration: 250 }), 30);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 들어가고 나올 때만
   }, [s.focusGroup]);
   const focused = s.groups.find((g) => g.id === s.focusGroup);
@@ -413,8 +421,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     nBranches.current = s.branches.length;
     const b = s.branches[s.branches.length - 1];
     if (!grew || !b || !rf.current) return;
-    const ids = [...Object.keys(b.map), ...Object.values(b.map)].map((id) => ({ id }));
-    setTimeout(() => rf.current?.fitView({ nodes: ids, padding: 0.2, minZoom: 0.6, maxZoom: 1, duration: 250 }), 30);
+    const ids = [...Object.keys(b.map), ...Object.values(b.map)];
+    setTimeout(() => fitClear(rf.current, canvasEl.current, { ids, minZoom: 0.6, maxZoom: 1, duration: 250 }), 30);
   }, [s.branches]);
 
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
@@ -982,7 +990,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
             : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. 선을 빈 곳에 놓으면 이을 노드를 찾아요 · 단축키 ?"}</div>}
           {quick && s.catalog && (
-            <QuickAdd at={quick} catalog={s.catalog} box={canvasEl.current?.getBoundingClientRect()} onPick={quickPick} onClose={() => setQuick(null)} />
+            <QuickAdd at={quick} catalog={s.catalog} stageKeys={stages.map((x) => x.key)}
+                      fromKind={quick.from ? s.nodes.find((n) => n.id === quick.from!.node)?.data.kind ?? null : null}
+                      box={canvasEl.current?.getBoundingClientRect()} onPick={quickPick} onClose={() => setQuick(null)} />
           )}
           {ctx && (
             <ContextMenu x={ctx.x} y={ctx.y} box={canvasEl.current?.getBoundingClientRect()} items={ctxItems}
