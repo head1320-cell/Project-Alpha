@@ -707,7 +707,13 @@ for (const scheme of ["light", "dark"] as const) {
 //  · 간단히 보기: 정할 것(설정 탭과 같은 위젯) · 결과(서버 값 그대로) · 바꾸면 노드 설정 · 막힘은 캔버스의 원인 경로로
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function startGoal(page: Page, goal: string, tickers: string, period?: number | "default") {
+/** 남은 질문은 기본으로 두고 끝까지 — "다음" 이 있으면 누르고, 마지막에 "이 흐름으로 시작". */
+async function finishGoal(page: Page) {
+  while (await page.locator(".pg-goal-next").isVisible()) await page.locator(".pg-goal-next").click();
+  await page.locator(".pg-goal-go").click();
+}
+
+async function startGoal(page: Page, goal: string, tickers: string, period?: number | "default", risk?: number | "keep") {
   await page.locator(".pg-goal-open").click();
   await expect(page.locator(".pg-goal-card")).toHaveCount(4);
   await page.locator(`.pg-goal-card[data-goal="${goal}"]`).click();
@@ -717,8 +723,13 @@ async function startGoal(page: Page, goal: string, tickers: string, period?: num
     if (period === "default") await page.locator(".pg-goal-period").first().click();
     else await page.locator(`.pg-goal-period[data-days="${period}"]`).click();
   }
+  if (risk !== undefined) {
+    await page.locator(".pg-goal-next").click();
+    if (risk === "keep") await page.locator(".pg-goal-risk").first().click();
+    else await page.locator(`.pg-goal-risk[data-risk="${risk}"]`).click();
+  }
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
-  await page.locator(".pg-goal-go").click();
+  await finishGoal(page);
   return (await (await resp).json()) as RunBody;
 }
 
@@ -772,8 +783,7 @@ test("자라나는 흐름(BM C4): 시작한 뒤 한 번 · 흐름 번호 순서�
   await openCanvas(page);
   await page.locator(".pg-goal-open").click();
   await page.locator('.pg-goal-card[data-goal="build"]').click();
-  await page.locator(".pg-goal-next").click();
-  await page.locator(".pg-goal-go").click();
+  await finishGoal(page);
   await expect(page.locator(".pg-canvas")).toHaveClass(/pg-growing/);
   const anim = await node(page, "optimizer").evaluate((el) => ({ name: getComputedStyle(el).animationName, delay: getComputedStyle(el).animationDelay }));
   expect(anim.name).toBe("pg-grow");
@@ -784,8 +794,7 @@ test("자라나는 흐름(BM C4): 시작한 뒤 한 번 · 흐름 번호 순서�
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.locator(".pg-goal-open").click();
   await page.locator('.pg-goal-card[data-goal="build"]').click();
-  await page.locator(".pg-goal-next").click();
-  await page.locator(".pg-goal-go").click();
+  await finishGoal(page);
   await expect(page.locator(".pg-canvas")).toHaveClass(/pg-growing/);
   expect(await node(page, "optimizer").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
 });
@@ -1487,5 +1496,142 @@ for (const scheme of ["light", "dark"] as const) {
     await page.locator('.pg-quick-item[data-kind="risk"]').click();
     await expect(page.locator(".pg-node-need").first()).toBeVisible();
     await check(".pg-node-need", 1);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BO O1 · 위험 성향 손잡이 (사용자 승인 옵티마이저 변경 — 새 방식 `mv_utility` 만). 거는 것:
+//  · 질문은 그 방식을 골랐을 때만(show_if) — 다른 방식에서는 없음(짝) · 칩 = 서버 프리셋 · 비우면 "보통 · 기본"(문서엔 키 없음)
+//  · 칩을 고르면 그 값 · "직접 정하기" 는 슬라이더(전문가) · 칩 밖의 값이면 처음부터 직접 정하기
+//  · 계산: 덜/많이 피함의 비중이 다르다 · 설명은 λ 와 출처(가정)를 말한다
+//  · 목표로 시작 ③: 프리셋 → 비중 노드가 mv_utility + λ · "지금 방식 그대로" 면 템플릿 그대로(짝)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function optimizerUi(page: Page) {
+  const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
+  return cat.nodes.find((c: { type: string }) => c.type === "optimizer").params_schema.properties.risk_aversion["x-ui"] as {
+    question: string; presets: { label: string; value: number }[]; empty_value: number; help: string };
+}
+
+test("위험 성향(BO O1): 그 방식을 고를 때만 질문 · 칩 = 서버 프리셋 · 비우면 '보통 · 기본' · 직접 정하기는 슬라이더 · 방식 바꾸면 숨음(짝)", async ({ page }) => {
+  await openCanvas(page);
+  const ui = await optimizerUi(page);
+  await node(page, "optimizer").click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  const field = page.locator('.pg-basic-field[data-field="risk_aversion"]');
+  await expect(field).toHaveCount(0);                                            // 템플릿 방식(bl)에서는 없음
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 성향에 맞춰" }).click();
+  await expect(field).toBeVisible();
+  await expect(field.locator(".pg-q")).toHaveText(ui.question);
+  const chips = field.locator(".pg-chip:not(.pg-chip--custom)");
+  await expect(chips).toHaveCount(ui.presets.length);
+  for (let i = 0; i < ui.presets.length; i++) await expect(chips.nth(i)).toContainText(ui.presets[i].label);
+  // 비워 두면 서버가 쓰는 값의 칩에 "기본" — 문서에는 키가 없다
+  const dflt = ui.presets.findIndex((p) => p.value === ui.empty_value);
+  await expect(chips.nth(dflt)).toHaveAttribute("aria-pressed", "true");
+  await expect(chips.nth(dflt)).toContainText("기본");
+  const opt = () => wip(page).then((d) => d.nodes.find((n) => n.id === "optimizer")!.params);
+  expect("risk_aversion" in (await opt())).toBe(false);
+  expect((await opt()).model).toBe("mv_utility");
+  // 칩 → 그 값
+  const hi = ui.presets[ui.presets.length - 1];
+  await chips.nth(ui.presets.length - 1).click();
+  expect((await opt()).risk_aversion).toBe(hi.value);
+  await expect(chips.nth(ui.presets.length - 1)).toHaveAttribute("aria-pressed", "true");
+  await expect(chips.nth(dflt)).not.toContainText("기본");
+  await expect(field.locator(".pg-slider")).toHaveCount(0);
+  // 직접 정하기 → 슬라이더, 값은 문서로
+  await field.locator(".pg-chip--custom").click();
+  const slider = field.locator(".pg-slider");
+  await expect(slider).toBeVisible();
+  await slider.fill("7");
+  expect((await opt()).risk_aversion).toBe(7);
+  for (let i = 0; i < ui.presets.length; i++) await expect(chips.nth(i)).toHaveAttribute("aria-pressed", "false");
+  await expect(field.locator(".pg-slider-v")).toHaveText("7.0");
+  // 짝 — 방식을 바꾸면 질문이 사라진다
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await expect(field).toHaveCount(0);
+});
+
+test("위험 성향(BO O1): 칩 밖의 값이면 처음부터 직접 정하기 · 덜/많이 피함은 비중이 다르다 · 설명이 λ 와 가정을 말함", async ({ page }) => {
+  await openCanvas(page);
+  const ui = await optimizerUi(page);
+  await node(page, "optimizer").click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 성향에 맞춰" }).click();
+  const field = page.locator('.pg-basic-field[data-field="risk_aversion"]');
+  const lo = ui.presets[0], hi = ui.presets[ui.presets.length - 1];
+
+  await field.locator(".pg-chip", { hasText: lo.label }).click();
+  const a = await run(page);
+  await field.locator(".pg-chip", { hasText: hi.label }).click();
+  const b = await run(page);
+  const wa = (a.nodes.optimizer as unknown as { view: { weights: Record<string, number> } }).view.weights;
+  const wb = (b.nodes.optimizer as unknown as { view: { weights: Record<string, number> } }).view.weights;
+  expect(JSON.stringify(wa)).not.toBe(JSON.stringify(wb));
+  const ex = (b.nodes.optimizer as unknown as { explain: { facts: string[]; trust: { text: string }[] } }).explain;
+  expect(ex.facts.some((f) => f.includes(`λ ${hi.value}`))).toBe(true);
+  expect(ex.trust.some((t) => t.text.includes("내가 고른 값"))).toBe(true);
+
+  // 문서에 칩 밖의 값이 오면 → 직접 정하기가 켜진 채로 보인다
+  await field.locator(".pg-chip--custom").click();
+  await field.locator(".pg-slider").fill("12.5");
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await node(page, "optimizer").click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await expect(field.locator(".pg-chip--custom")).toHaveAttribute("aria-pressed", "true");
+  await expect(field.locator(".pg-slider")).toHaveValue("12.5");
+});
+
+test("목표로 시작 ③(BO O1): 위험 성향 = 서버 프리셋 → 비중 노드 mv_utility + λ · '지금 방식 그대로' 면 템플릿 그대로(짝) · 점검 목표엔 묻지 않음", async ({ page }) => {
+  await openCanvas(page);
+  const ui = await optimizerUi(page);
+  const pick = ui.presets[ui.presets.length - 1];
+  await startGoal(page, "build", "005930, 000660, 035420", "default", pick.value);
+  let o = (await wip(page)).nodes.find((n) => n.type === "optimizer")!.params;
+  expect(o.model).toBe("mv_utility");
+  expect(o.risk_aversion).toBe(pick.value);
+
+  await startGoal(page, "build", "005930, 000660, 035420", "default", "keep");
+  o = (await wip(page)).nodes.find((n) => n.type === "optimizer")!.params;
+  expect(o.model).toBe("bl");
+  expect("risk_aversion" in o).toBe(false);
+
+  // 단계 수: 만들기 = 목표·종목·기간·위험(4) · 점검 = 목표·종목·기간(3)
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="build"]').click();
+  await expect(page.locator(".pg-goal-step")).toHaveText("2 / 4");
+  await page.locator(".pg-goal-next").click();
+  await page.locator(".pg-goal-next").click();
+  await expect(page.locator(".pg-goal-risk")).toHaveCount(ui.presets.length + 1);
+  await expect(page.locator(".pg-goal-go")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.locator(".pg-goal-open").click();
+  await page.locator('.pg-goal-card[data-goal="check"]').click();
+  await expect(page.locator(".pg-goal-step")).toHaveText("2 / 3");
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`대비(BO O1): ${scheme} — 위험 성향 칩·직접 정하기 · 목표로 시작 ③ AA 미달 0`, async ({ page }) => {
+    await openCanvas(page);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await node(page, "optimizer").click();
+    await page.locator('.pg-tab[data-tab="settings"]').click();
+    await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 성향에 맞춰" }).click();
+    const field = page.locator('.pg-basic-field[data-field="risk_aversion"]');
+    let audit = await page.evaluate<AuditResult>(contrastAudit('.pg-basic-field[data-field="risk_aversion"]'));
+    expect(audit.low, `${scheme} 칩 AA`).toEqual([]);
+    await field.locator(".pg-chip--custom").click();
+    audit = await page.evaluate<AuditResult>(contrastAudit('.pg-basic-field[data-field="risk_aversion"]'));
+    expect(audit.checked).toBeGreaterThan(5);
+    expect(audit.low, `${scheme} 직접 정하기 AA`).toEqual([]);
+    await page.locator(".pg-goal-open").click();
+    await page.locator('.pg-goal-card[data-goal="build"]').click();
+    await page.locator(".pg-goal-next").click();
+    await page.locator(".pg-goal-next").click();
+    await page.locator(".pg-goal-risk").nth(2).click();
+    audit = await page.evaluate<AuditResult>(contrastAudit(".pg-goal"));
+    expect(audit.checked).toBeGreaterThan(6);
+    expect(audit.low, `${scheme} 목표 ③ AA`).toEqual([]);
   });
 }

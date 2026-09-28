@@ -105,3 +105,25 @@ export function fieldsOf(schema: JsonSchema | null): FieldSpec[] {
     };
   });
 }
+
+/**
+ * 지금 값으로 보이는 칸인가(BO O1 — `x-ui.show_if`). 조건 칸의 값은 문서 값, 없으면 스키마 기본값.
+ * ★다른 방식에서는 비중을 못 움직이는 손잡이를 질문으로 내놓지 않는다★ — δ 의 교훈(BN N2).
+ */
+export function isShown(f: FieldSpec, params: Record<string, unknown>, fields: FieldSpec[]): boolean {
+  const cond = f.ui.show_if;
+  if (!cond) return true;
+  return Object.entries(cond).every(([k, allowed]) => {
+    const dep = fields.find((x) => x.name === k);
+    const v = params[k] !== undefined ? params[k] : dep?.defaultValue;
+    return allowed.some((a) => JSON.stringify(a) === JSON.stringify(v ?? null));
+  });
+}
+
+/** 기본 층 질문 — 보이는 칸만, 고르는 칸(카드)이 먼저, 나머지는 서버 순서. 설정 탭·간단히 보기·요약이 같이 쓴다. */
+export function basicFieldsOf(schema: JsonSchema | null, params: Record<string, unknown>): FieldSpec[] {
+  const all = fieldsOf(schema);
+  return all.filter((f) => f.ui.tier === "basic" && isShown(f, params, all))
+    .map((f, i) => ({ f, i })).sort((a, b) => Number(!a.f.ui.options) - Number(!b.f.ui.options) || a.i - b.i)
+    .map((x) => x.f);
+}

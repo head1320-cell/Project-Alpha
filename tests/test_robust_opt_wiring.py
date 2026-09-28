@@ -60,7 +60,9 @@ def test_the_legacy_models_are_still_all_there():
     for m in LEGACY_MODELS:
         assert m in MODELS, m
     assert "robust" in MODELS
-    assert len(MODELS) == len(LEGACY_MODELS) + 1, "가산이어야 한다"
+    # BO O1 — `mv_utility`(평균-분산 효용)도 가산으로 더해졌다(사용자 승인, tests/test_risk_aversion_knob.py).
+    assert "mv_utility" in MODELS
+    assert len(MODELS) == len(LEGACY_MODELS) + 2, "가산이어야 한다"
 
 
 def test_adding_robust_did_not_change_any_legacy_model_output(R):

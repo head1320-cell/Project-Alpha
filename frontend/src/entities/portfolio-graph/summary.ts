@@ -3,7 +3,7 @@
  * ★서버 x-ui 만 읽는다★(선택지 라벨·프리셋·쉬운 이름) — 요약 규칙을 노드마다 화면에 적지 않는다.
  * 선택지 → 목록 → 프리셋 → 그 밖의 값 순서로 첫 번째 기본 칸을 쓴다. 없으면 쉬운 이름.
  */
-import { fieldsOf, type FieldSpec } from "./schema";
+import { fieldsOf, isShown, type FieldSpec } from "./schema";
 import type { NodeCatalogEntry } from "./types";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -17,7 +17,8 @@ function rank(f: FieldSpec): number {
 
 export function nodeSummary(entry: NodeCatalogEntry | undefined, params: Record<string, unknown>): string | null {
   if (!entry) return null;
-  const basic = fieldsOf(entry.params_schema).filter((f) => f.ui.tier === "basic").sort((a, b) => rank(a) - rank(b));
+  const all = fieldsOf(entry.params_schema);
+  const basic = all.filter((f) => f.ui.tier === "basic" && isShown(f, params, all)).sort((a, b) => rank(a) - rank(b));
   for (const f of basic) {
     const v = params[f.name] !== undefined ? params[f.name] : f.defaultValue;
     const preset = f.ui.presets?.find((p) => same(p.value, v ?? null));

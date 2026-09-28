@@ -105,6 +105,10 @@ export interface ParamUi {
   ends?: [string, string];
   presets?: { label: string; value: unknown }[];
   options?: Record<string, string>;
+  /** 다른 칸이 이 값들 중 하나일 때만 보인다(BO O1) — 예: `{model: ["mv_utility"]}`. 규칙은 서버가 준다. */
+  show_if?: Record<string, unknown[]>;
+  /** 비워 두면 서버가 쓰는 값(BO O1) — 표시만 한다. 문서에 이 값을 쓰지 않는다. */
+  empty_value?: unknown;
 }
 
 export interface NodeCatalogEntry {

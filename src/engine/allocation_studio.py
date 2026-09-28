@@ -34,7 +34,13 @@ DELTA_DEFAULT = 2.5   # 위험회피(균형 기대수익 스케일) — risk_all
 TAU_DEFAULT = 0.05    # prior 불확실성 — risk_allocations와 동일
 
 MODELS = ("mvo", "bl", "ep", "risk_parity", "hrp", "min_var", "max_div", "min_cvar",
-          "robust")
+          "robust", "mv_utility")
+
+#: 평균-분산 효용 `max wᵀμ − (λ/2)·wᵀΣw` 의 위험 회피 λ 기본값 (BO O1 — 사용자 승인 변경).
+#: ★관례적인 값이지 이 사용자에게 맞는 값이 아니다★ — 주지 않고 쓰면 응답이 `source: "default"` 로
+#: 가정임을 밝힌다. 화면 프리셋 "보통" 과 같은 값이다(`OptimizerParams.risk_aversion`).
+#: 합성 목(mock) 유니버스에서 1.5~10 사이에서 비중이 뚜렷이 달라지는 것을 실측해 프리셋을 골랐다.
+RISK_AVERSION_DEFAULT = 4.0
 
 
 # ── 시가총액 prior ────────────────────────────────────────────────────────────
@@ -270,6 +276,7 @@ def model_availability() -> dict[str, dict]:
         "min_var": dict(opt_ok), "max_div": dict(opt_ok), "min_cvar": dict(opt_ok),
         # 로버스트도 SLSQP 를 쓴다 — scipy 가 없으면 못 푼다.
         "robust": dict(opt_ok),
+        "mv_utility": dict(opt_ok),
         # ERC 는 순수 numpy 반복이라 scipy 없이도 돈다.
         "risk_parity": {"available": True, "reason": None},
         "hrp": {"available": _HAS_HCLUST,
@@ -279,10 +286,19 @@ def model_availability() -> dict[str, dict]:
 
 
 def _raw_weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None,
-                           S: np.ndarray) -> np.ndarray | None:
-    """모델의 **원 출력** — 실패하면 `None`. 폴백은 호출부가 결정한다."""
+                           S: np.ndarray, risk_aversion: float | None = None) -> np.ndarray | None:
+    """모델의 **원 출력** — 실패하면 `None`. 폴백은 호출부가 결정한다.
+
+    `risk_aversion` 은 `mv_utility` 만 읽는다 — 다른 방식에는 들어가지 않는다.
+    """
     n = R.shape[1]
-    if model == "min_var":
+    if model == "mv_utility":
+        # 평균-분산 효용 (BO O1). max-sharpe(`mvo`)는 위험 크기를 상쇄해 λ 가 비중을 못 움직이지만,
+        # 효용은 λ 가 클수록 분산을 더 무겁게 벌해 최소분산 쪽으로, 작을수록 기대수익 쪽으로 간다.
+        mu = mu_override if mu_override is not None else R.mean(axis=0) * 252.0
+        lam = RISK_AVERSION_DEFAULT if risk_aversion is None else float(risk_aversion)
+        w = _opt(lambda x: -(float(x @ mu) - 0.5 * lam * float(x @ S @ x)), n)
+    elif model == "min_var":
         w = _opt(lambda x: float(x @ S @ x), n)
     elif model == "risk_parity":
         w = _erc_weights(S)
@@ -322,14 +338,16 @@ def _raw_weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | 
 
 
 def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
-                      S_annual: np.ndarray | None = None) -> np.ndarray:
+                      S_annual: np.ndarray | None = None,
+                      risk_aversion: float | None = None) -> np.ndarray:
     """모델 → long-only 합1 가중치 벡터. 최적화 실패/부재 시 inverse-vol 폴백.
 
     mvo: 트레일링 평균 max-sharpe · bl: mu_override(BL posterior) max-sharpe ·
-    risk_parity: ERC · hrp: 계층적 · min_var: 최소분산.
+    risk_parity: ERC · hrp: 계층적 · min_var: 최소분산 ·
+    mv_utility: 평균-분산 효용(위험 회피 λ = `risk_aversion`, 없으면 기본값).
     """
     S = S_annual if S_annual is not None else _cov(R) * 252.0
-    w = _raw_weights_for_model(model, R, mu_override, S)
+    w = _raw_weights_for_model(model, R, mu_override, S, risk_aversion)
     return _inverse_vol_w(R) if w is None else w
 
 
@@ -353,7 +371,8 @@ def optimize(model: str, names: list[str], R: np.ndarray,
              delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
              s_override: np.ndarray | None = None,
              extra_views: list[dict] | None = None,
-             company_views: list[dict] | None = None) -> dict:
+             company_views: list[dict] | None = None,
+             risk_aversion: float | None = None) -> dict:
     """모델+뷰 → 최종 가중치 + Sankey 3단계(시장→뷰반영→최적화) + 메타.
 
     flow 의미: market = 시가총액 캡가중 · view_applied = 뷰가 있으면 BL
@@ -424,12 +443,15 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         w_final = w_view if mu_bl is not None else w_mkt
     elif model == "ep":
         w_final = weights_for_model("mvo", R, mu_override=mu_ep, S_annual=S)
+    elif model == "mv_utility":
+        w_final = weights_for_model(model, R, mu_override=None, S_annual=S,
+                                    risk_aversion=risk_aversion)
     else:
         w_final = weights_for_model(model, R, mu_override=None, S_annual=S)
 
     mu_used = (mu_ep if mu_ep is not None
                else (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0))
-    return {
+    out = {
         "names": names,
         "weights": w_final,
         "flow": {"market": w_mkt, "view_applied": w_view, "optimized": w_final},
@@ -461,6 +483,13 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         "company_views_used": _used_by_source(
             all_views, _company_source(), skipped_views),
     }
+    if model == "mv_utility":
+        # ★λ 는 쓴 방식에서만 공시한다★ 다른 방식의 응답 모양은 한 글자도 바뀌지 않는다. 주지 않았으면
+        # 관례값을 **가정**으로 밝힌다 — 화면이 "나에게 맞춘 값" 처럼 보이지 않게.
+        out["risk_aversion"] = (
+            {"value": RISK_AVERSION_DEFAULT, "source": "default"} if risk_aversion is None
+            else {"value": float(risk_aversion), "source": "user"})
+    return out
 
 
 # ── Target Weight Range (모델 산포) ──────────────────────────────────────────

@@ -145,7 +145,7 @@ EstimateParams = _subset("EstimateParams", AnalyzeRequest,
     "rebalance": _ui("보유 기간", "advanced", options={"M": "한 달", "Q": "한 분기"}),
 })
 OptimizerParams = _subset(
-    "OptimizerParams", AnalyzeRequest, ("delta", "tau", "constraints"), ui={
+    "OptimizerParams", AnalyzeRequest, ("delta", "tau", "risk_aversion", "constraints"), ui={
         # BN N2 — δ 는 시장 균형 수익 π = δΣw_mkt 에만 들어가고, π 는 블랙-리터먼 + 내 생각이 있을 때만 쓰인다
         # (`allocation_studio.optimize`). 다른 방식에서는 비중이 움직이지 않으니 초심자 질문("위험을 얼마나 피할까요?")으로 두지 않는다.
         # 옵티마이저 의미는 그대로 — 표시만 사실에 맞춘다(tests/test_optimizer_delta_honest.py).
@@ -153,6 +153,19 @@ OptimizerParams = _subset(
                      help="블랙-리터먼에서 내 생각이 있을 때만 비중에 영향을 줘요 — 클수록 시장 균형 쪽으로 기울어요. "
                           "다른 계산 방식에서는 비중이 바뀌지 않아요."),
         "tau": _ui("내 생각 불확실성 τ", "advanced", help="클수록 내 생각이 비중을 더 크게 움직여요."),
+        # BO O1 — 사용자가 승인한 "움직이는 손잡이". ★`mv_utility` 를 골랐을 때만 보인다★(`show_if`) —
+        # 다른 방식에서는 비중이 바뀌지 않으니 초심자 질문으로 내놓지 않는다(δ 의 교훈).
+        # 프리셋은 초보자용, 슬라이더("직접 정하기")는 전문가용 — 같은 값 하나를 두 방식으로 고른다.
+        "risk_aversion": _ui(
+            "위험 회피 λ", question="위험을 얼마나 피할까요?", widget="slider",
+            ends=["수익 쪽", "안정 쪽"], show_if={"model": ["mv_utility"]},
+            # 비워 두면 서버가 쓰는 값 — 화면이 "보통(기본)" 을 표시만 한다(문서에 값을 쓰지 않는다).
+            empty_value=_studio.RISK_AVERSION_DEFAULT,
+            presets=[{"label": "덜 피함", "value": 1.5},
+                     {"label": "보통", "value": _studio.RISK_AVERSION_DEFAULT},
+                     {"label": "많이 피함", "value": 10.0}],
+            help="클수록 흔들림을 줄이는 쪽으로, 작을수록 기대 수익 쪽으로 나눠요. "
+                 "세 값은 관례적인 크기라 나에게 맞는 값은 가정이에요 — 비우면 ‘보통’을 써요."),
         "constraints": _ui("제약", question="한 종목에 최대 얼마까지 둘까요?",
                            presets=[{"label": "제한 없음", "value": None},
                                     {"label": "40%", "value": {"max_weight_pct": 40}},
@@ -263,8 +276,8 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
             tickers=u["tickers"], weights=u["weights"], benchmark=u["benchmark"],
             lookback_days=r["lookback_days"], as_of=r["as_of"],
             views=user_views or None,
-            model=p.model, delta=p.delta, tau=p.tau, constraints=p.constraints,
-            **belief_settings)
+            model=p.model, delta=p.delta, tau=p.tau, risk_aversion=p.risk_aversion,
+            constraints=p.constraints, **belief_settings)
     except ValidationError as e:
         raise pg.NodeFailure(f"요청 조합이 /analyze 규칙에 맞지 않습니다 — "
                              f"{_pydantic_reason(e)}") from e
@@ -286,7 +299,7 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau,
                        s_override=belief.s_override, extra_views=belief.extra_views,
-                       company_views=company or None)
+                       company_views=company or None, risk_aversion=req.risk_aversion)
     except EPUnavailable as e:
         raise pg.NodeFailure(str(e)) from e
     constraints_report = _apply_constraints(req, names, R, opt, r["bench"])
@@ -297,6 +310,10 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
     view = {
         "names": names, "labels": _labels(names), "model": req.model,
         "params": {"delta": req.delta, "tau": req.tau},
+        **({"risk_aversion": opt["risk_aversion"]} if "risk_aversion" in opt else {}),
+        # BO O1 — 이어진 생각이 있는데 그 생각을 쓰지 않는 방식이면 그 수를 말한다(없으면 키도 없다).
+        **({"views_unused": len(incoming)}
+           if incoming and req.model not in ("bl", "ep") else {}),
         "weights": _w_dict(names, weights),
         "flow": {stage: _w_dict(names, w) for stage, w in opt["flow"].items()},
         "views_applied": opt["views_applied"], "skipped_views": opt["skipped_views"],

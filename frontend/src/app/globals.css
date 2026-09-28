@@ -6087,6 +6087,11 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-chip { height: 36px; padding: 0 14px; font-size: 14px; font-weight: 600; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid var(--pg-line); border-radius: 18px; cursor: pointer; }
 .pg-chip.on { color: var(--pg-blue-ink); background: var(--pg-blue-soft); border-color: var(--pg-blue); }
 .pg-slider { width: 100%; accent-color: var(--pg-blue); }
+.pg-chip-default { font-weight: 500; color: var(--pg-mute); }
+.pg-chip.on .pg-chip-default { color: var(--pg-blue-ink); }
+.pg-chip--custom { border-style: dashed; }
+.pg-chip--custom.on { border-style: solid; }
+.pg-custom { margin-top: 10px; }
 .pg-slider-ends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12.5px; color: var(--pg-mute); }
 .pg-slider-v { font-weight: 700; color: var(--pg-ink); }
 /* 행 칸은 흘려 채운다 — 칸이 둘뿐인 행(종목코드·비중)에서 격자의 28px 열로 둘째 칸이 밀려 사라지던 것(BL3 W5 스크린샷). */
@@ -6645,8 +6650,8 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-goal-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; margin-top: 10px; }
 .pg-goal-chip { padding: 3px 10px; font-size: 13px; font-weight: 700; color: var(--pg-blue-ink); background: var(--pg-blue-soft); border-radius: 12px; font-variant-numeric: tabular-nums; }
 .pg-goal-periods { display: flex; flex-wrap: wrap; gap: 8px; }
-.pg-goal .pg-goal-period { height: 40px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 700; color: var(--pg-body); background: var(--pg-soft); border: 1.5px solid transparent; border-radius: 20px; cursor: pointer; }
-.pg-goal .pg-goal-period[aria-checked="true"] { color: var(--pg-blue-ink); background: var(--pg-blue-soft); border-color: var(--pg-blue); }
+.pg-goal .pg-goal-period, .pg-goal .pg-goal-risk { height: 40px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 700; color: var(--pg-body); background: var(--pg-soft); border: 1.5px solid transparent; border-radius: 20px; cursor: pointer; }
+.pg-goal .pg-goal-period[aria-checked="true"], .pg-goal .pg-goal-risk[aria-checked="true"] { color: var(--pg-blue-ink); background: var(--pg-blue-soft); border-color: var(--pg-blue); }
 .pg-goal-actions { display: flex; justify-content: space-between; margin-top: 22px; }
 .pg-goal .pg-btn:disabled { opacity: .45; cursor: default; }
 @media (max-width: 560px) { .pg-goal-grid { grid-template-columns: 1fr; } .pg-goal-q { font-size: 20px; } }

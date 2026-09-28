@@ -11,7 +11,7 @@ import { useState } from "react";
 import type { Edge } from "reactflow";
 import { Copy, Plus, X } from "lucide-react";
 import {
-  fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type NodeRunResult, type PgNode,
+  basicFieldsOf, fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type NodeRunResult, type PgNode,
   type SaveResult,
 } from "@/entities/portfolio-graph";
 import { ListField, NodeInspector } from "./NodeInspector";
@@ -82,6 +82,47 @@ function ObjectList({ f, item, value, onChange }: {
       <button type="button" className="pg-add" onClick={() => onChange([...rows, { ...blank }])}>
         <Plus size={14} /> {f.ui.label} 추가
       </button>
+      {f.ui.help && <p className="pg-help">{f.ui.help}</p>}
+    </div>
+  );
+}
+
+/**
+ * 프리셋 + 직접 정하기 (BO O1) — 초보자는 칩 셋 중 하나, 전문가는 "직접 정하기" 로 슬라이더.
+ * 값이 칩에 없으면 처음부터 직접 정하기 상태. 비워 두면 서버가 쓰는 값(`empty_value`)을 "기본" 으로 표시만 한다.
+ */
+function PresetSlider({ f, value, onChange }: { f: FieldSpec; value: unknown; onChange: (v: unknown) => void }) {
+  const presets = f.ui.presets ?? [];
+  const onPreset = (v: unknown) => presets.some((p) => same(p.value, v));
+  // 칩에 없는 값이면 늘 직접 정하기 — 상태로 들고 있지 않아 다른 노드로 옮겨도 어긋나지 않는다.
+  const [forced, setCustom] = useState(false);
+  const custom = forced || (value !== undefined && value !== null && !onPreset(value));
+  const shown = value !== undefined ? value : f.ui.empty_value;
+  const min = f.min ?? 0, max = f.max ?? 1;
+  const v = typeof shown === "number" ? shown : min;
+  return (
+    <div className="pg-basic-field" data-field={f.name}>
+      <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
+      <div className="pg-chips" role="group" aria-label={f.ui.label}>
+        {presets.map((p) => {
+          const on = !custom && same(shown, p.value);
+          return (
+            <button key={p.label} type="button" className={`pg-chip${on ? " on" : ""}`} aria-pressed={on}
+                    onClick={() => { setCustom(false); onChange(p.value === null ? undefined : p.value); }}>
+              {p.label}{value === undefined && same(f.ui.empty_value, p.value) && <span className="pg-chip-default"> · 기본</span>}
+            </button>
+          );
+        })}
+        <button type="button" className={`pg-chip pg-chip--custom${custom ? " on" : ""}`} aria-pressed={custom}
+                onClick={() => setCustom(true)}>직접 정하기</button>
+      </div>
+      {custom && (
+        <div className="pg-custom">
+          <input className="pg-slider" type="range" min={min} max={max} step={f.kind === "integer" ? 1 : 0.5}
+                 value={v} aria-label={`${f.ui.label} 직접 정하기`} onChange={(e) => onChange(Number(e.target.value))} />
+          <div className="pg-slider-ends"><span>{f.ui.ends?.[0] ?? min}</span><span className="pg-slider-v">{v.toFixed(1)}</span><span>{f.ui.ends?.[1] ?? max}</span></div>
+        </div>
+      )}
       {f.ui.help && <p className="pg-help">{f.ui.help}</p>}
     </div>
   );
@@ -163,6 +204,10 @@ function BasicField({ f, value, root, onChange }: {
         {help}
       </div>
     );
+  }
+  if (f.ui.presets && f.ui.widget === "slider" && (f.kind === "number" || f.kind === "integer")
+      && f.min !== undefined && f.max !== undefined) {
+    return <PresetSlider f={f} value={value} onChange={onChange} />;
   }
   if (f.ui.presets) {
     return (
@@ -263,9 +308,7 @@ function SaveBox({ result, stale, onSave, label, followUp }: {
 export function BasicFields({ entry, params, onChange }: {
   entry: NodeCatalogEntry | undefined; params: Params; onChange: (p: Params) => void;
 }) {
-  const basic = fieldsOf(entry?.params_schema ?? null).filter((f) => f.ui.tier === "basic")
-    .map((f, i) => ({ f, i })).sort((a, b) => Number(!a.f.ui.options) - Number(!b.f.ui.options) || a.i - b.i)
-    .map((x) => x.f);
+  const basic = basicFieldsOf(entry?.params_schema ?? null, params);
   return (
     <>
       {basic.map((f) => <BasicField key={f.name} f={f} value={params[f.name]} root={entry?.params_schema ?? null}
@@ -304,9 +347,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
     return e ? `${nm} ← ${plainOf(e.source)}` : p.required === false ? `${nm}(선택, 비어 있음)` : `${nm}(아직 연결 안 됨)`;
   });
   // 고르는 칸(카드)이 먼저 — "어떤 방식으로" 가 "얼마나" 보다 앞선 질문이다. 나머지는 서버 순서.
-  const basic = fieldsOf(entry?.params_schema ?? null).filter((f) => f.ui.tier === "basic")
-    .map((f, i) => ({ f, i })).sort((a, b) => Number(!a.f.ui.options) - Number(!b.f.ui.options) || a.i - b.i)
-    .map((x) => x.f);
+  // `show_if` 로 지금 방식에서 뜻이 없는 칸은 숨긴다(BO O1).
+  const basic = basicFieldsOf(entry?.params_schema ?? null, params);
   const basicRendered = basic.map((f) => ({ f, el: <BasicField key={f.name} f={f} value={params[f.name]}
                                                                root={entry?.params_schema ?? null}
                                                                onChange={(v) => onChange(setOrClear(params, f.name, v))} /> }));

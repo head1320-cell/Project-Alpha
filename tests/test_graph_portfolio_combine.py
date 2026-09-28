@@ -146,7 +146,10 @@ def test_combined_weights_flow_downstream_to_risk(market):
     # 합친 비중에는 공분산이 없다 — 위험 분해는 지어내지 않고 사유와 함께 실패한다(Weights 계약).
     assert rep["nodes"]["k"]["status"] == "failed" and rep["nodes"]["k"]["reason"]
     w = pg._execute(g, gn.REGISTRY)[1]["p"]["weights"]
-    assert abs(float(np.abs(np.asarray(w["weights"])).sum()) - 1.0) < 1e-6
+    # 엔진은 합친 비중을 %로 소수 넷째 자리에서 반올림한다(`combine_sleeves` — round(·, 4)) → 종목마다 오차 ≤ 5e-7.
+    # 예전 한도 1e-6 은 종목 3개의 반올림 오차 합(최대 1.5e-6)보다 좁아 합성 시세 날짜에 따라 빨개졌다(2026-09-28 실측 1.0000010).
+    arr = np.abs(np.asarray(w["weights"]))
+    assert abs(float(arr.sum()) - 1.0) <= len(arr) * 5e-7 + 1e-12
 
 
 def test_a_skipped_optional_port_keeps_its_number_in_the_default_name(market):

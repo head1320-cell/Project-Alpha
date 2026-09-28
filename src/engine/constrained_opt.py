@@ -290,8 +290,12 @@ def constrained_solve(model: str, names: list[str], R: np.ndarray,
                       constraints: Constraints,
                       w_current: dict[str, float] | None = None,
                       groups_of: dict[str, str] | None = None,
-                      bench_returns: np.ndarray | None = None) -> dict:
-    """제약 하 최종 가중치. 반환 status: ok | approx | infeasible (지시서 3분법)."""
+                      bench_returns: np.ndarray | None = None,
+                      risk_aversion: float | None = None) -> dict:
+    """제약 하 최종 가중치. 반환 status: ok | approx | infeasible (지시서 3분법).
+
+    `risk_aversion` 은 `mv_utility`(평균-분산 효용, BO O1)만 읽는다 — 다른 방식의 목적식은 그대로다.
+    """
     n = len(names)
     groups: dict[str, list[int]] = {}
     for i, t in enumerate(names):
@@ -337,7 +341,13 @@ def constrained_solve(model: str, names: list[str], R: np.ndarray,
     def variance(w):
         return float(w @ S @ w)
 
-    objective = variance if model == "min_var" else neg_sharpe
+    def neg_utility(w):
+        from src.engine.allocation_studio import RISK_AVERSION_DEFAULT
+        lam = RISK_AVERSION_DEFAULT if risk_aversion is None else float(risk_aversion)
+        return -(float(w @ mu) - 0.5 * lam * float(w @ S @ w))
+
+    objective = (variance if model == "min_var"
+                 else neg_utility if model == "mv_utility" else neg_sharpe)
     cov_only = model in ("risk_parity", "hrp")
 
     if cov_only:

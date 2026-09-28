@@ -597,10 +597,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   }, []);
   const runTo = useCallback((id: string) => run([id]), [run]);
   /** 목표로 시작 — 답으로 조립한 흐름을 싣고(되돌리기 가능), 흐름 순서대로 한 번 자라나게 한 뒤 곧바로 계산한다. */
-  const startGoal = useCallback((goal: Parameters<typeof goalDoc>[0], tickers: string[], lookback: number | null) => {
+  const startGoal = useCallback((goal: Parameters<typeof goalDoc>[0], tickers: string[], lookback: number | null,
+                                 riskAversion: number | null) => {
     const st = usePortfolioGraph.getState();
     st.act(() => {
-      st.loadDoc(goalDoc(goal, tickers, lookback));
+      st.loadDoc(goalDoc(goal, tickers, lookback, riskAversion));
       return "답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있어요.";
     });
     setGoalOpen(false);

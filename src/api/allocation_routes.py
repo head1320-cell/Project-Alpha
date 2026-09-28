@@ -161,6 +161,10 @@ class AnalyzeRequest(BaseModel):
     views: list[AllocationView] | None = None
     model: str = "mvo"                                # mvo|bl|risk_parity|hrp|min_var
     delta: float = Field(2.5, ge=0.5, le=10)          # 위험회피 λ (π 스케일)
+    # ── BO O1: 평균-분산 효용(`mv_utility`)의 위험 회피 λ (선택) ──────────────────
+    #   ★`mv_utility` 만 읽는다★ 다른 방식에서는 들어가지 않는다. 없으면 엔진이 관례값을 쓰고
+    #   `risk_aversion.source == "default"` 로 가정임을 밝힌다. 기존 요청은 None 이라 동작 불변.
+    risk_aversion: float | None = Field(None, ge=0.5, le=20)
     tau: float = Field(0.05, ge=0.001, le=1.0)
     lookback_days: int = Field(756, ge=90, le=3650)   # 거래일 기준 ~3년
     # ── P1: 데이터 절단일 고정 (선택) ──────────────────────────────────────
@@ -373,6 +377,7 @@ def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -
         groups_of=sector_groups_for(names),
         bench_returns=(bench.values if bench is not None
                        and len(bench) == R.shape[0] else None),
+        risk_aversion=getattr(req, "risk_aversion", None),
     )
     report = {k: sol.get(k) for k in
               ("status", "violations", "binding", "relaxed",
@@ -676,7 +681,8 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau,
                        s_override=s_override, extra_views=extra_views,
-                       company_views=(co_stack or {}).get("views"))
+                       company_views=(co_stack or {}).get("views"),
+                       risk_aversion=req.risk_aversion)
 
         # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
         #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
@@ -827,6 +833,8 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             # EP 일 때만 채워진다.
             "mu_engine": opt.get("mu_engine"),
             "ep": opt.get("ep"),
+            # BO O1 — 평균-분산 효용일 때만 쓴 λ 와 그 출처(가정/사용자). 다른 방식은 키도 없다.
+            **({"risk_aversion": opt["risk_aversion"]} if "risk_aversion" in opt else {}),
             # 고정된 매크로 증거 — 없으면 `None` 이고, 그것이 "증거 없이 돌았다" 는 사실이다.
             "mes": mes_block,
             # ★`summary` 는 과거 수익률 위의 시뮬레이션 통계다★ (`_series_stats`) —
@@ -1347,7 +1355,8 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                        views=[v.model_dump() for v in (req.views or [])] or None,
                        delta=req.delta, tau=req.tau,
                        s_override=s_override, extra_views=extra_views,
-                       company_views=(co_stack or {}).get("views"))
+                       company_views=(co_stack or {}).get("views"),
+                       risk_aversion=req.risk_aversion)
 
         if req.target_weights:
             target = {k: float(v) for k, v in req.target_weights.items()}

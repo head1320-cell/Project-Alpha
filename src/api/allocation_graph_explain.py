@@ -34,6 +34,7 @@ MODEL_PLAIN = {
     "mvo": "수익 대비 위험 최적", "bl": "내 생각 반영", "ep": "내 생각 반영(엔트로피 풀링)",
     "risk_parity": "위험 똑같이", "hrp": "비슷한 것끼리 묶어", "min_var": "흔들림 최소",
     "max_div": "분산 최대", "min_cvar": "큰 손실 최소", "robust": "추정 오차에 강하게",
+    "mv_utility": "위험 성향에 맞춰",
 }
 
 _PRACTICE = "연습용 합성 데이터예요 — 실제 시세가 아니라서 실제 성과를 말해 주지 않아요."
@@ -172,6 +173,19 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
     if view.get("skipped_views"):
         trust.append(_t(UNKNOWN, f"넣은 생각 중 {len(view['skipped_views'])}개는 쓸 수 없어서 빠졌어요."))
     facts = [f"계산 방식: {MODEL_PLAIN.get(model, model)}"]
+    ra = view.get("risk_aversion") or None
+    if ra:
+        # BO O1 — 쓴 λ 와 그 출처. 비워 두었으면 관례값이라는 사실을 **가정**으로 밝힌다.
+        facts.append(f"위험 회피 λ {ra.get('value'):g}")
+        if ra.get("source") == "default":
+            trust.append(_t(ASSUMED, f"위험을 얼마나 피할지 정하지 않아서 관례적인 값(λ {ra.get('value'):g}, "
+                                     "‘보통’)으로 계산했어요 — 나에게 맞는 값은 아니에요."))
+        else:
+            trust.append(_t(ASSUMED, f"위험 회피 λ {ra.get('value'):g}는 내가 고른 값이에요 — "
+                                     "이 값이 나에게 맞는지는 이 계산이 말해 주지 않아요."))
+    if view.get("views_unused"):
+        trust.append(_t(ASSUMED, f"이어진 생각 {view['views_unused']}개는 이 계산 방식에서 쓰이지 않아요 — "
+                                 "‘내 생각 반영’을 고르면 비중에 들어가요."))
     if model in _MARKET_PRIOR_MODELS:
         facts.append("내 생각을 반영했어요." if view.get("views_applied") else "반영된 생각이 없어요.")
     return {"title": "비중을 이렇게 나눴어요", "headline": headline, "facts": facts, "trust": trust}

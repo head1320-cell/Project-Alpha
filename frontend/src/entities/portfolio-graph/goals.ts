@@ -17,19 +17,25 @@ export interface Goal {
   tickers: "many" | "one";
   /** 기간 질문이 있나(수익률 노드가 있는 흐름만). */
   period: boolean;
+  /** 위험 성향 질문이 있나(BO O1 — 비중을 새로 나누는 흐름만. 정한 비중을 점검하는 흐름에는 묻지 않는다). */
+  risk: boolean;
 }
 
 export const GOALS: Goal[] = [
-  { key: "build", title: "새 포트폴리오 만들기", sub: "종목을 고르면 비중을 나누고, 위험과 과거 성과를 함께 봐요.", tickers: "many", period: true },
-  { key: "check", title: "비중의 위험 점검", sub: "정한 비중이 하루에 얼마나 잃을 수 있는지, 위기 충격에서 어떤지 봐요.", tickers: "many", period: true },
-  { key: "timing", title: "타이밍 규칙 시험", sub: "타이밍 신호로 노출을 줄였을 때의 목표 비중과 주문 목록을 봐요. 주문은 나가지 않아요.", tickers: "many", period: true },
-  { key: "company", title: "기업 하나 깊게", sub: "한 기업의 적정가를 여러 모델로 보고, 가치가 어디쯤 몰려 있는지 봐요.", tickers: "one", period: false },
+  { key: "build", title: "새 포트폴리오 만들기", sub: "종목을 고르면 비중을 나누고, 위험과 과거 성과를 함께 봐요.", tickers: "many", period: true, risk: true },
+  { key: "check", title: "비중의 위험 점검", sub: "정한 비중이 하루에 얼마나 잃을 수 있는지, 위기 충격에서 어떤지 봐요.", tickers: "many", period: true, risk: false },
+  { key: "timing", title: "타이밍 규칙 시험", sub: "타이밍 신호로 노출을 줄였을 때의 목표 비중과 주문 목록을 봐요. 주문은 나가지 않아요.", tickers: "many", period: true, risk: true },
+  { key: "company", title: "기업 하나 깊게", sub: "한 기업의 적정가를 여러 모델로 보고, 가치가 어디쯤 몰려 있는지 봐요.", tickers: "one", period: false, risk: false },
 ];
 
 const TEMPLATE_OF: Record<Exclude<GoalKey, "company">, string> = { build: "core", check: "risk", timing: "timing" };
 
-/** 답 → 문서. 템플릿의 유니버스 종목과 수익률 기간만 바꾼다(기간을 고르지 않았으면 그대로 — 서버 기본값). */
-export function goalDoc(goal: GoalKey, tickers: string[], lookbackDays: number | null): GraphDoc {
+/**
+ * 답 → 문서. 템플릿의 유니버스 종목과 수익률 기간만 바꾼다(기간을 고르지 않았으면 그대로 — 서버 기본값).
+ * 위험 성향(BO O1)을 골랐으면 비중 노드를 `mv_utility` + 그 λ 로 — 고르지 않았으면 템플릿 방식 그대로.
+ */
+export function goalDoc(goal: GoalKey, tickers: string[], lookbackDays: number | null,
+                        riskAversion: number | null = null): GraphDoc {
   if (goal === "company") {
     const code = tickers[0];
     return {
@@ -47,6 +53,9 @@ export function goalDoc(goal: GoalKey, tickers: string[], lookbackDays: number |
   for (const n of doc.nodes) {
     if (n.type === "universe") n.params = { ...n.params, tickers: [...tickers] };
     if (n.type === "returns" && lookbackDays !== null) n.params = { ...n.params, lookback_days: lookbackDays };
+    if (n.type === "optimizer" && riskAversion !== null && GOALS.find((g) => g.key === goal)?.risk) {
+      n.params = { ...n.params, model: "mv_utility", risk_aversion: riskAversion };
+    }
   }
   return doc;
 }
