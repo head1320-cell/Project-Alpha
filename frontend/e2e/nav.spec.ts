@@ -69,30 +69,25 @@ test("Breadcrumb does not overlap the tab top toolbar (Company + Screener)", asy
   await expect(page.locator(".ca-pg-go")).toBeVisible();
 });
 
-test("Shell header: RegimeBadge loads real regime data and links to /macro", async ({ page }) => {
+test("Shell header(BR R3): 오른쪽 슬롯은 회원 프로필 동그라미 — 국면 배지는 없다(국면은 /macro) · 모든 탭에서 같다", async ({ page }) => {
   const sink = trackErrors(page);
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
 
-  // 셸 헤더의 우측 슬롯 — 삭제된 TopNav 에 있던 것을 TerminalShell 로 옮겼다.
+  // 셸 헤더의 우측 슬롯 — BR R3 에서 국면 배지를 빼고 회원 프로필로 바꿨다(사용자 결정).
   const slot = page.locator(".terminal-header .header-actions");
   await expect(slot).toBeVisible();
-
-  // 배지는 macroApi.regime() 이 돌아오기 전까지 .skeleton 을 렌더한다.
-  // 로딩 상태로 굳지 않고 실제 데이터로 바뀌는 것까지 확인한다 — 이게 이 테스트의 핵심이다.
-  const badge = slot.locator('a[href="/macro"]');
-  await expect(badge).toBeVisible({ timeout: 20_000 });
+  await expect(slot.locator(".pf-avatar")).toBeVisible();
+  // 짝 — 예전 계약(국면 배지 = /macro 링크)이 머리 줄에 남아 있지 않다.
+  await expect(slot.locator('a[href="/macro"]')).toHaveCount(0);
   await expect(slot.locator(".skeleton")).toHaveCount(0);
 
-  // regime 라벨 + stress 점수(정수)가 함께 표시된다
-  await expect(badge).toHaveAttribute("title", /Stress\s+\d+\s*\/\s*100/);
-  expect((await badge.innerText()).trim().length, "배지에 텍스트가 있어야 한다").toBeGreaterThan(0);
-
-  // 셸에 붙었으므로 다른 탭에서도 나와야 한다
+  // 셸에 붙었으므로 다른 탭에서도 같다 · 국면은 /macro 화면에 그대로 있다.
   await page.goto("/screener", { waitUntil: "domcontentloaded" });
-  await expect(page.locator('.terminal-header .header-actions a[href="/macro"]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".terminal-header .header-actions .pf-avatar")).toBeVisible();
+  await expect(page.locator('.terminal-header .header-actions a[href="/macro"]')).toHaveCount(0);
 
-  expect(uniq(sink.pageErrors), "regime badge page errors").toEqual([]);
-  expect(uniq([...sink.api404, ...sink.apiOther4xx5xx]), "regime 조회가 4xx/5xx 면 안 된다").toEqual([]);
+  expect(uniq(sink.pageErrors), "shell header page errors").toEqual([]);
+  expect(uniq([...sink.api404, ...sink.apiOther4xx5xx]), "토큰이 없으면 /auth/me 도 부르지 않는다 — 4xx/5xx 없음").toEqual([]);
 });
 
 test("S1d: 셸 크롬(헤더·사이드바)의 모든 포커스 대상이 앱 포커스 링을 받는다", async ({ page }) => {
@@ -104,7 +99,7 @@ test("S1d: 셸 크롬(헤더·사이드바)의 모든 포커스 대상이 앱 �
   );
   const n = await targets.count();
   // 크롬 자체가 사라지면 0개가 되고 아래 루프가 통째로 비어 통과한다 — 그래서 먼저 센다.
-  // 브랜드 1 + 레일 토글 1 + 네비 8 = 10 이 하한. 국면 배지는 API 응답에 달려 있어 뺐다.
+  // 브랜드 1 + 레일 토글 1 + 네비 8 = 10 이 하한(+ 프로필 동그라미 1 — BR R3).
   expect(n, "셸 크롬의 포커스 대상 수").toBeGreaterThanOrEqual(10);
 
   const bare: string[] = [];

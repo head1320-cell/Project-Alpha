@@ -785,7 +785,7 @@ h6 { font-size: 1rem; }
   transition: background 0.1s ease, color 0.1s ease;
 }
 .terminal-nav .nav-item:hover { color: var(--t-ink); background: rgba(18, 0, 255, 0.03); }
-.terminal-nav .nav-item.active { color: var(--t-ink); background: #fff; }
+.terminal-nav .nav-item.active { color: var(--t-ink); background: var(--t-bg); }   /* BR R3 — #fff 고정이던 것(다크에서 흰 칸) */
 .terminal-nav .nav-item.active::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-accent);
 }
@@ -7007,3 +7007,34 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
     top: 88px; max-width: calc(100% - var(--pg-left-inset) - var(--pg-right-inset) - 24px); }
 }
 .pg-wire-key { white-space: nowrap; }   /* 범례 칸은 글자 단위로 꺾이지 않는다 */
+
+/* ── BR R3 · 머리 줄 프로필 — 동그라미 하나, 누르면 아래로 카드(토스) ─────────────────────────────────
+   셸 토큰(--t-*)만 쓴다 — `.dark` 가 같은 이름을 뒤집으므로 다크를 갖춘 화면에서 그대로 따라온다. */
+.pf { position: relative; }
+.pf-avatar { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: var(--t-accent); border: 0; border-radius: 50%; cursor: pointer; }
+.pf-avatar[data-state="signed_out"], .pf-avatar[data-state="unknown"], .pf-avatar[data-state="loading"] { color: var(--t-muted); background: var(--t-surface); box-shadow: inset 0 0 0 1px var(--t-border); }
+.pf-avatar[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-accent) 22%, transparent); }
+.pf-person { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.pf-card { position: absolute; top: calc(100% + 12px); right: 0; z-index: 200; width: 272px; max-width: calc(100vw - 32px); padding: 16px; color: var(--t-ink); background: var(--t-bg); border: 1px solid var(--t-border); border-radius: 16px; box-shadow: 0 4px 12px rgb(0 0 0 / 6%), 0 16px 40px rgb(0 0 0 / 12%); transform-origin: top right; animation: pf-in .14s cubic-bezier(.2, .8, .2, 1); }
+@keyframes pf-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pf-card { animation: none; } }
+.pf-who { display: flex; align-items: center; gap: 12px; }
+.pf-avatar--lg { width: 40px; height: 40px; font-size: 17px; flex: none; cursor: default; }
+.pf-card .pf-avatar--lg { color: #fff; background: var(--t-accent); box-shadow: none; }
+.pf-who-t { display: grid; gap: 3px; min-width: 0; }
+.pf-name { overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.pf-role { justify-self: start; padding: 1px 8px; font-size: 12px; font-weight: 600; line-height: 20px; color: var(--t-ink); background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 10px; }
+.pf-sub { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--t-muted); }
+.pf-sec { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--t-border); }
+.pf-h { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; color: var(--t-muted); }
+.pf-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 10px; }
+.pf-seg-b { height: 30px; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--t-muted); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.pf-seg-b.on { color: var(--t-ink); background: var(--t-bg); box-shadow: 0 1px 3px rgb(0 0 0 / 12%); }
+.pf-theme-note { margin-top: 8px; }
+.pf-actions { display: grid; }
+.pf-logout, .pf-retry, .pf-login { display: flex; align-items: center; justify-content: center; height: 40px; font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; border: 0; border-radius: 10px; cursor: pointer; }
+.pf-logout, .pf-retry { color: var(--t-ink); background: var(--t-surface); box-shadow: inset 0 0 0 1px var(--t-border); }
+.pf-login { color: #fff; background: var(--t-accent); }
+/* 다크의 액센트(#7c74ff)는 흰 글자와 3.8:1 — 어두운 글자를 쓴다(--primary-foreground 와 같은 값). */
+.dark .pf-avatar:not([data-state="signed_out"]):not([data-state="unknown"]):not([data-state="loading"]),
+.dark .pf-card .pf-avatar--lg, .dark .pf-login { color: #09090b; }

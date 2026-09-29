@@ -18,8 +18,8 @@ import { trackErrors, uniq } from "./helpers";
 // kit 은 전부 인라인 스타일이라(.bs-numbox 외 클래스 없음) role·태그로 검증한다.
 //
 // 개수 단언은 전부 갤러리 루트(.devui)로 범위를 좁힌다. 셸(TerminalShell)이
-// 페이지를 감싸고 있어서다 — 예를 들어 헤더의 RegimeBadge 는 로딩 중 .skeleton 을
-// 렌더하므로, 범위를 좁히지 않으면 skeleton 개수가 타이밍에 따라 흔들린다.
+// 페이지를 감싸고 있어서다 — 예전에는 헤더의 국면 배지가 로딩 중 .skeleton 을 렌더했다(BR R3 에서
+// 프로필로 바뀌었다). 셸이 무엇을 그리든 갤러리의 개수가 흔들리지 않게 범위를 좁힌다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // 갤러리가 선언한 표본 이름 — page.tsx 의 <Specimen name=…> 과 1:1 이어야 한다.
@@ -54,9 +54,8 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     const names = await g.locator(".devui-item .devui-item-name").allInnerTexts();
     expect(names.map((s) => s.trim())).toEqual(SPECIMENS);
 
-    // 갤러리 자체는 데이터를 부르지 않는다. 셸(TerminalShell)의 RegimeBadge 가
-    // /macro/regime 을 한 번 호출하지만 그것은 200 이어야 하므로, 4xx/5xx 가
-    // 하나라도 잡히면 실패다.
+    // 갤러리 자체는 데이터를 부르지 않는다. 셸(TerminalShell)의 프로필은 토큰이 있을 때만
+    // /auth/me 를 부른다(여기서는 토큰이 없다) — 4xx/5xx 가 하나라도 잡히면 실패다.
     expect(uniq([...sink.api404, ...sink.apiOther4xx5xx]), "4xx/5xx 응답이 없어야 한다").toEqual([]);
     expect(uniq(sink.pageErrors), "uncaught page errors").toEqual([]);
 

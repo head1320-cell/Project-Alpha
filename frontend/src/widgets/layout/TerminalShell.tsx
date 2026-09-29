@@ -11,7 +11,7 @@ import { screenerApi } from "@/entities/screener/api/core";
 import { macroApi } from "@/entities/macro/api";
 import { loadCompanyCore } from "@/entities/company/data";
 import { allocationApi } from "@/entities/allocation/api";
-import { RegimeBadge } from "@/entities/macro/RegimeBadge";
+import { ProfileMenu, useThemeSync } from "@/features/profile";
 import { Breadcrumb } from "./Breadcrumb";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -108,6 +108,8 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
   // 터치/클릭 토글 — 호버가 없는 환경에서 사이드바를 고정으로 펼침
   const [pinned, setPinned] = useState(false);
   const prefetchTab = usePrefetchers();
+  // 화면 테마(BR R3) — 랜딩으로 나가도 다크가 남지 않게 셸이 조기 반환하기 전에 맞춘다.
+  useThemeSync(pathname ?? "");
 
   // 루트(/)는 랜딩 페이지 — 터미널 셸 없이 풀블리드 렌더 (CTA가 /dashboard로 진입)
   if (pathname === "/") return <>{children}</>;
@@ -125,10 +127,9 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
           </div>
         </Link>
 
-        {/* 현재 시장 국면 배지 — 클릭하면 /macro 로. 삭제된 TopNav 가 유일 소비자였던
-            것을 셸로 옮겨 살렸다. .header-actions 는 이미 정의만 되어 있던 빈 슬롯. */}
+        {/* 회원 프로필(BR R3) — 동그라미를 누르면 아래로 카드. 국면 배지는 뺐다(국면은 /macro 에). */}
         <div className="header-actions">
-          <RegimeBadge />
+          <ProfileMenu />
         </div>
       </header>
 

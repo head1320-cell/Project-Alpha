@@ -8,7 +8,7 @@
  *  · MetricCard      — 균질 KPI 카드
  *  · Sparkline       — 미니 SVG line
  *
- *  (RegimeBadge / useRegimeInfo 는 macroApi 의존이라 entities/macro 로 이동)
+ *  (RegimeBadge 는 BR R3 에서 지웠다 — 셸 머리 줄이 유일한 소비자였고 그 자리는 회원 프로필이 됐다. 국면은 /macro)
  *  (CommandPalette / CommandHint 는 삭제 — 도달 불가 코드였다. 커밋 메시지 참고)
  */
 

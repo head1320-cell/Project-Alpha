@@ -13,8 +13,8 @@
 // "순수 CSS 유지 · UI 프레임워크 이전 금지"(CLAUDE.md) 와 충돌한다. 이 라우트는
 // 앱 자체의 빌드/CSS/E2E 를 그대로 쓴다 — 새 의존성 0개.
 //
-// 갤러리 자체는 네트워크 호출 0(모든 표본이 하드코딩 props). 단 셸(TerminalShell) 헤더의
-// RegimeBadge 가 /macro/regime 을 한 번 부르므로 페이지 전체로는 0이 아니다.
+// 갤러리 자체는 네트워크 호출 0(모든 표본이 하드코딩 props). 셸(TerminalShell) 머리 줄의 프로필은
+// 로그인 토큰이 있을 때만 /auth/me 를 한 번 부른다(토큰이 없으면 0).
 // nav 에 링크되지 않은 내부 라우트다.
 //
 // 제외 없음. 처음엔 CommandPalette / CommandHint 두 개를 뺐었는데, 그 둘은 도달 불가
