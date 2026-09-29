@@ -7038,3 +7038,47 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 다크의 액센트(#7c74ff)는 흰 글자와 3.8:1 — 어두운 글자를 쓴다(--primary-foreground 와 같은 값). */
 .dark .pf-avatar:not([data-state="signed_out"]):not([data-state="unknown"]):not([data-state="loading"]),
 .dark .pf-card .pf-avatar--lg, .dark .pf-login { color: #09090b; }
+
+/* ── BR R1 · 견고성 — 같이 무너지나 ─────────────────────────────────────────────────────────────
+   수는 서버 view 그대로. 한 번에 한 계열(칩으로 고름) — 색만으로 가르지 않는다. 띠 = 표본 오차 95%(면), 값 = 선. */
+.pg-rob { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--pg-line); }
+.pg-rob-story { display: grid; gap: 6px; margin: 4px 0 8px; padding: 0; list-style: none; }
+.pg-rob-story li { position: relative; padding-left: 14px; font-size: 14px; line-height: 1.55; color: var(--pg-ink); }
+.pg-rob-story li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--pg-blue); }
+.pg-rob-sec { margin-top: 8px; border-radius: 12px; background: var(--pg-soft); }
+.pg-rob-sec > summary { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; font-size: 14px; font-weight: 700; color: var(--pg-ink); cursor: pointer; list-style: none; }
+.pg-rob-sec > summary::-webkit-details-marker { display: none; }
+.pg-rob-sec > summary::after { content: "펼치기"; margin-left: auto; font-size: 12px; font-weight: 600; color: var(--pg-body); }
+.pg-rob-sec[open] > summary::after { content: "접기"; }
+.pg-rob-sec > summary span { font-size: 12px; font-weight: 600; color: var(--pg-body); }
+.pg-rob-sec > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.pg-rob-sec > :last-child { padding-bottom: 12px; }
+.pg-rob-sec .pg-table { background: transparent; }
+.pg-rob-picks { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.pg-rob-trend { display: block; width: 100%; max-width: 360px; height: auto; margin: 2px 0 4px; }
+.pg-rob-line { fill: none; stroke: var(--pg-blue); stroke-width: 1.8; stroke-linejoin: round; }
+.pg-rob-band { fill: color-mix(in srgb, var(--pg-blue) 16%, transparent); stroke: none; }
+.pg-rob-dd { display: block; width: 100%; max-width: 360px; height: auto; margin: 4px 0; }
+.pg-rob-dd-name { font-size: 11px; font-weight: 600; fill: var(--pg-body); }
+.pg-rob-dd-track { stroke: var(--pg-line); stroke-width: 1; }
+.pg-rob-dd-bar { fill: var(--pg-fail); opacity: .8; }
+.pg-rob-dd-worst { stroke: var(--pg-mute); stroke-dasharray: 3 3; }
+.pg-rob-hatch { stroke: var(--pg-mute); stroke-width: 1.5; }
+.pg-rob-shock { margin-top: 6px; }
+.pg-rob-shock-h { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: 13px; font-weight: 600; color: var(--pg-ink); }
+.pg-rob-shock .pg-td-num small { font-size: 12px; color: var(--pg-body); }
+.pg-bar--muted { background: var(--pg-mute); }
+.pg-rob-h5 { margin: 12px 0 4px; font-size: 13px; font-weight: 700; color: var(--pg-ink); }
+.pg-rob-warn { color: var(--pg-assume); }
+/* 정적 상관표 — 발산 색(양 = 파랑 · 음 = 빨강 · 세기 = |ρ|) + 글자 값. 모르는 칸은 "—". */
+.pg-corr-table td.pos { background: color-mix(in srgb, var(--pg-blue) var(--pg-heat, 0%), transparent); }
+.pg-corr-table td.neg { background: color-mix(in srgb, var(--pg-fail) var(--pg-heat, 0%), transparent); }
+/* 고른 노드 위 작은 막대(BR R1b) — 묶기 · 견고성 비교. 조건이 안 되면 흐리게(누르면 사유를 안내 줄로). */
+.pg-selbar { display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; font-size: 13px; color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 12px; box-shadow: var(--pg-float-shadow); }
+.pg-selbar-n { margin-right: 4px; font-weight: 600; color: var(--pg-body); white-space: nowrap; }
+.pg-theme .pg-selbar-b { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; font: inherit; font-size: 13px; font-weight: 700; color: var(--pg-ink); white-space: nowrap; background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-selbar-b:hover { background: var(--pg-soft); }
+.pg-theme .pg-selbar-compare { color: var(--pg-blue-ink); background: var(--pg-blue-soft); }
+.pg-theme .pg-selbar-compare[aria-disabled="true"] { color: var(--pg-body); background: var(--pg-soft); cursor: default; }
+.pg-rob-legend { display: grid; gap: 4px; margin: 4px 0 8px; padding: 0; list-style: none; font-size: 13px; color: var(--pg-body); }
+.pg-rob-legend b { margin-right: 6px; color: var(--pg-ink); }

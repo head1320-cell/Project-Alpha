@@ -241,11 +241,26 @@ def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | N
     if S.size == 0 or n < 2:
         return {"error": True, "message": "분석에 슬리브 2개 이상·시세가 필요합니다."}
 
-    corr = np.corrcoef(S.T)
-    corr = np.nan_to_num(corr, nan=0.0)
+    # BR R1a — 흔들림 없는 슬리브(비중이 비었거나 숏만 있어 흐름이 0)의 상관은 **모름**이다. 예전에는
+    # `nan_to_num(…, 0)` 으로 "서로 무관(0)" 이라고 보고했다 — 조용한 폴백. 잰 쌍만 쓰고 나머지는 None + 사유.
+    flat = [j for j in range(n) if float(np.var(S[:, j])) <= 1e-16]
+    ok = [j for j in range(n) if j not in flat]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr = np.corrcoef(S.T)
+    corr[flat, :] = np.nan
+    corr[:, flat] = np.nan
+    for j in ok:
+        corr[j, j] = 1.0
+    for j in flat:
+        corr[j, j] = 1.0
 
-    # 계층 군집 (scipy linkage; 없으면 상관 임계 그룹핑)
-    clusters = _cluster_labels(corr)
+    # 계층 군집 (scipy linkage; 없으면 상관 임계 그룹핑) — 잰 슬리브끼리만. 흔들림 없는 슬리브는 군집 모름.
+    clusters: list[int | None] = [None] * n
+    if len(ok) >= 2:
+        for j, lab in zip(ok, _cluster_labels(corr[np.ix_(ok, ok)])):
+            clusters[j] = lab
+    elif len(ok) == 1:
+        clusters[ok[0]] = 0
     # 꼬리 의존: 하위 10% 동시초과 빈도 / 0.1 (>1이면 꼬리 동반 하락 경향)
     tail = _tail_dependency(S)
     # 리스크 기여 (weights 주어지면 그 배분, 아니면 등가중)
@@ -257,18 +272,25 @@ def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | N
     cov = _cov_local(S)
     rc = _risk_contributions(w, cov)
 
-    return {
+    measured = [float(corr[i, j]) for i in range(n) for j in range(i + 1, n) if np.isfinite(corr[i, j])]
+    known = [c for c in clusters if c is not None]
+    out = {
         "error": False,
         "sleeves": names,
-        "correlation": {names[i]: {names[j]: round(float(corr[i, j]), 3) for j in range(n)} for i in range(n)},
-        "clusters": {names[j]: int(clusters[j]) for j in range(n)},
-        "n_clusters": int(max(clusters) + 1) if len(clusters) else 0,
+        "correlation": {names[i]: {names[j]: (round(float(corr[i, j]), 3) if np.isfinite(corr[i, j]) else None)
+                                   for j in range(n)} for i in range(n)},
+        "clusters": {names[j]: (int(clusters[j]) if clusters[j] is not None else None) for j in range(n)},
+        "n_clusters": int(max(known) + 1) if known and len(ok) >= 2 else None,
         "risk_contribution_pct": {names[j]: round(float(rc[j]) * 100, 2) for j in range(n)},
         "tail_dependency": tail,
-        "avg_correlation": round(float((corr.sum() - n) / (n * (n - 1))), 3) if n > 1 else 0.0,
+        "avg_correlation": round(float(np.mean(measured)), 3) if measured else None,
         "note": "상관·계층군집·리스크 기여·하위꼬리 동반(10% 동시초과). 상관·꼬리의존이 높은 "
                 "슬리브는 분산효과가 작아 함께 무너지기 쉬움 — 중복 알파 점검.",
     }
+    if flat:
+        out["correlation_reasons"] = {names[j]: "흔들림이 없어 상관을 잴 수 없어요(비중이 비었거나 숏만 있어 흐름이 0 이에요)"
+                                      for j in flat}
+    return out
 
 
 def _cluster_labels(corr: np.ndarray, threshold: float = 0.5) -> list[int]:

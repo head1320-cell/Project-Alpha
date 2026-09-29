@@ -115,14 +115,27 @@ def test_node_zero_cost_equals_before_and_says_no_cost():
     assert "되돌릴 때 드는 거래비용" in b["explain"]["unmeasured"]
 
 
-def test_node_cost_moves_numbers_and_explains():
+def test_node_cost_moves_numbers_and_explains(monkeypatch):
+    """노드가 비용을 엔진까지 나르고(계약) 설명이 그 값을 말한다.
+
+    ★예전에는 30bp 로 반올림한 변동성·몫이 달라지는지를 봤다★ — 비용은 대체로 평균만 끌어내리고 흔들림은 거의 그대로라,
+    합성 시세 날짜에 따라 차이가 반올림(0.01) 아래로 숨었다(2026-09-29 합성 시세에서 빨개짐 · 커밋된 코드에서도 같음).
+    숫자가 실제로 움직이는지는 엔진 테스트(`test_analytics_uses_the_costed_series`, 1000bp)가 본다. 여기서는 전달을 본다.
+    """
     from src.api import allocation_graph_nodes as gn
     from src.engine import portfolio_graph as pg
+    seen: list[dict | None] = []
+    real = sc.combine_sleeves
+
+    def spy(*args, **kw):
+        seen.append(kw.get("rebalance_cost_bps"))
+        return real(*args, **kw)
+    monkeypatch.setattr(sc, "combine_sleeves", spy)
     a = pg.run(_graph({"s1": "D", "s2": "W"}), gn.REGISTRY)["nodes"]["pc"]
     c = pg.run(_with_cost(30, {"s1": "D", "s2": "W"}), gn.REGISTRY)["nodes"]["pc"]
-    assert c["status"] == "ok", c["reason"]
-    assert c["view"]["result"]["sleeve_vol_pct"] != a["view"]["result"]["sleeve_vol_pct"] or \
-        c["view"]["result"]["sleeve_allocation"] != a["view"]["result"]["sleeve_allocation"]
+    assert a["status"] == "ok" and c["status"] == "ok", c["reason"]
+    assert seen[0] is None                                          # 짝 — 비용 0 이면 넘기지 않는다(예전 호출 그대로)
+    assert seen[1] and set(seen[1].values()) == {30.0} and sorted(seen[1]) == sorted(x["label"] for x in c["view"]["strategies"])
     assert c["view"]["cost_bps"] == 30
     trust = " ".join(t["text"] for t in c["explain"]["trust"])
     assert "30bp" in trust and "거래비용은 넣지 않았어요" not in trust

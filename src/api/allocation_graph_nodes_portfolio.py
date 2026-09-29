@@ -111,9 +111,15 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
                    "risk_pct": out["risk_contribution_pct"][name], "vol_pct": out["sleeve_vol_pct"][name],
                    "n_holdings": len(s["weights"]), "rebalance": codes_of[port]}
                   for port, name, s in zip(ports, names, sleeves)]
+    # BR R1 — 견고성(관측만): 몫을 정한 것과 같은 흐름(같은 수익 행렬·주기·비용)으로 · 몫은 합치기 결과 그대로.
+    from src.api.allocation_graph_robustness import count_shorts, robustness_view
+    s_names, S = sc._sleeve_return_series(sleeves, ret, every_arg, cost_arg)
+    robustness = robustness_view(s_names, S, [out["sleeve_allocation"][nm] / 100.0 for nm in s_names],
+                                 shorts_dropped=count_shorts(sleeves))
     view = {"result": out, "labels": _labels(codes), "strategies": strategies, "correlation": corr,
             "cost_bps": float(p.cost_bps),
-            "correlation_reason": ana.get("message") if ana.get("error") else None}
+            "correlation_reason": ana.get("message") if ana.get("error") else None,
+            "robustness": robustness}
     return pg.NodeOutput(values={"weights": weights_value(codes, arr)}, view=view,
                          tags={"practice": mock_allowed(), "sources": ["portfolio_combine"]})
 
@@ -142,6 +148,11 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, "되돌릴 때 드는 거래비용은 넣지 않았어요 — 자주 되돌리는 전략일수록 실제보다 좋게 보여요."))
     if view.get("correlation") is None:
         trust.append(_t(UNKNOWN, f"전략 사이 상관을 재지 못했어요 — {view.get('correlation_reason') or '사유 없음'}"))
+    rob = view.get("robustness") or {}
+    if rob.get("available"):
+        facts += list(rob.get("story") or [])[:2]
+    elif rob:
+        trust.append(_t(UNKNOWN, f"견고성을 재지 못했어요 — {rob.get('reason') or '사유 없음'}"))
     rows = [x for x in (view.get("strategies") or []) if isinstance(x.get("share_pct"), (int, float))]
     top = max(rows, key=lambda x: x["share_pct"]) if rows else None
     headline = None if top is None else {"label": f"{top['label']} 몫", "value": top["share_pct"], "unit": "%",

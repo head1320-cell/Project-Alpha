@@ -7,6 +7,8 @@
 import type { ReactNode } from "react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
+import { RobustnessView } from "./RobustnessResults";
+import { usePortfolioGraph } from "./store";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -232,7 +234,24 @@ export function HealthResult({ v }: { v: Dict }) {
   );
 }
 
+/** 견고성 비교의 '묶음 N' 이 캔버스의 어느 노드인지 — 지금 이어진 선에서 읽는다(파라미터에 이름을 적어 두면 선을 바꿀 때 낡는다). */
+function useSleeveLegend(ports: string[]): [string, string][] {
+  const selected = usePortfolioGraph((s) => s.selectedId);
+  const edges = usePortfolioGraph((s) => s.edges);
+  const nodes = usePortfolioGraph((s) => s.nodes);
+  const catalog = usePortfolioGraph((s) => s.catalog);
+  return ports.map((port, i) => {
+    const e = edges.find((x) => x.target === selected && x.targetHandle === port);
+    const n = e ? nodes.find((x) => x.id === e.source) : undefined;
+    const title = n ? catalog?.find((c) => c.type === n.data.kind)?.plain_label ?? n.data.kind : "이어진 노드 없음";
+    const num = (n?.data as { num?: number } | undefined)?.num;
+    return [`묶음 ${i + 1}`, num ? `${num} ${title}` : title];
+  });
+}
+
+/** 견고성 비교(BR R1b — BL2b 묶음 분석을 올림) — 같이 무너지나 + 예전 표(상관·군집·위험 몫). */
 export function SleeveAnalyticsResult({ v }: { v: Dict }) {
+  const legend = useSleeveLegend((v.ports as string[] | undefined) ?? []);
   const r = (v.result as Dict) ?? {};
   const names = (r.sleeves as string[]) ?? Object.keys((r.correlation as Dict) ?? {});
   const corr = (r.correlation as Record<string, Record<string, number>>) ?? {};
@@ -240,6 +259,13 @@ export function SleeveAnalyticsResult({ v }: { v: Dict }) {
   const tail = (r.tail_dependency as Dict) ?? {};
   return (
     <>
+      {legend.length ? (
+        <ul className="pg-rob-legend" aria-label="묶음과 이어진 노드">
+          {legend.map(([k, t]) => <li key={k}><b>{k}</b>{t}</li>)}
+        </ul>
+      ) : null}
+      <RobustnessView rob={v.robustness as Dict | undefined} />
+      <h4 className="pg-h4">묶음 사이 상관 · 위험 몫</h4>
       <KV rows={[["평균 상관", num(r.avg_correlation) === null ? "—" : (r.avg_correlation as number).toFixed(2)],
                  ["군집", `${String(r.n_clusters ?? "—")}개`],
                  ["함께 빠지는 정도", num(tail.lower_tail_coexceedance) === null ? "—" : `${(tail.lower_tail_coexceedance as number).toFixed(2)} (1 = 서로 무관)`]]} />

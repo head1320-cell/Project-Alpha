@@ -25,7 +25,9 @@ import ReactFlow, {
   Controls,
   getRectOfNodes,
   MiniMap,
+  NodeToolbar,
   Panel,
+  Position,
   useStore,
   type Connection,
   type Node,
@@ -34,9 +36,10 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Route, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
+import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   CORE_CHAIN_TEMPLATE,
+  compareTargets,
   fieldsOf,
   goalDoc,
   PORTFOLIO_NODE,
@@ -635,6 +638,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   }, [quick, addAt]);
 
   /** 우클릭 메뉴의 항목 — 노드면 노드 동작, 빈 곳이면 추가·붙여넣기·정리. 같은 동작이 명령 찾기에도 있다. */
+  const compareCheck = useMemo(() => compareTargets(s.picked, s.nodes, s.catalog ?? []), [s.picked, s.nodes, s.catalog]);
+  const pickedIsOneGroup = useMemo(() => s.groups.some((g) => g.members.length === s.picked.length
+    && s.picked.every((id) => g.members.includes(id))), [s.groups, s.picked]);
+
   const ctxItems = useMemo((): MenuItem[] => {
     if (!ctx) return [];
     const st = usePortfolioGraph.getState();
@@ -658,6 +665,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.makeBranch(id)); } },
       { key: "duplicate", label: "복제 (Ctrl+D)", icon: <Copy size={14} aria-hidden="true" />,
         run: () => { usePortfolioGraph.getState().duplicateNode(id); } },
+      ...(st.picked.length > 1 && st.picked.includes(id)
+        ? [{ key: "compare", label: "고른 노드 견고성 비교", icon: <Scale size={14} aria-hidden="true" />,
+             run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.comparePicked()); } }] : []),
       { key: "pin", label: pinned ? "그림 고정 풀기" : "그림 고정", icon: pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />,
         run: () => usePortfolioGraph.getState().togglePin(id) },
       ...(r && r.status !== "ok" ? [{ key: "cause", label: "원인 따라가기", icon: <Route size={14} aria-hidden="true" />,
@@ -811,6 +821,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                           run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.act(() => st.makeBranch(st.selectedId!)); } }] : []),
     { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 해요",
       run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.strategyPicked()); } },
+    { id: "compare-picked", group: "비교", label: "고른 노드 견고성 비교",
+      hint: "비중을 내는 노드 2~4개를 골라, 평소·위기 때 같이 움직이는지와 크게 잃은 구간이 겹치는지 봐요",
+      run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); } },
     ...strategySources.map((x) => ({ id: `strategy:${x.key}`, group: "전략", label: `전략 추가: ${x.label}`, hint: x.sub,
                                      run: () => addStrategy(x.src) })),
     ...DRAWERS.map((d) => ({ id: `drawer:${d.key}`, group: "서랍", label: `${d.label} 열기`, hint: d.sub,
@@ -1074,6 +1087,23 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                 </span>
                 <button type="button" className="pg-cause-clear" onClick={() => s.showCause(null)}>다 보기 <kbd>Esc</kbd></button>
               </Panel>
+            )}
+            {/* 고른 노드 위 작은 막대(BR R1b) — 둘 이상 고르면 묶기 · 견고성 비교. 조건이 안 되면 단추는 흐리고, 누르면 사유를 안내 줄로. */}
+            {/* 고른 노드 **아래**에 — 전략·묶음 상자의 머리는 위에 있어, 위에 띄우면 상자 머리 단추를 가렸다(E2E 가 찾음).
+                고른 것이 한 상자의 구성원 전부면(방금 묶었을 때) 상자 머리가 그 역할을 하므로 띄우지 않는다. */}
+            {!s.simple && s.picked.length > 1 && !pickedIsOneGroup && (
+              <NodeToolbar nodeId={s.picked} isVisible position={Position.Bottom} offset={14} className="pg-selbar">
+                <span className="pg-selbar-n">{s.picked.length}개 골랐어요</span>
+                <button type="button" className="pg-selbar-b" onClick={() => usePortfolioGraph.getState().groupPicked()}
+                        title="고른 노드를 상자로 묶어요 (Ctrl+G)">
+                  <Boxes size={14} aria-hidden="true" /> 묶기
+                </button>
+                <button type="button" className="pg-selbar-b pg-selbar-compare" aria-disabled={!compareCheck.ok || undefined}
+                        title={compareCheck.ok ? "고른 노드를 ‘견고성 비교’에 이어요 — 같이 무너지는지 봐요" : compareCheck.reason}
+                        onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); }}>
+                  <Scale size={14} aria-hidden="true" /> 견고성 비교
+                </button>
+              </NodeToolbar>
             )}
             {/* 확대·축소는 떠 있는 판 사이 가운데를 기준으로(BQ Q1) — 기본 단추는 판 뒤 캔버스 가운데를 기준으로 해 노드를 창 밑으로 민다. */}
             <Controls showZoom={false} showFitView={false} showInteractive={false}>

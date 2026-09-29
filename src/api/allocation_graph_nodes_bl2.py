@@ -352,23 +352,78 @@ def _explain_health(view: dict, prov: dict, params: Any) -> dict:
             "unmeasured": unmeasured or ["실거래 성과"]}
 
 
-# ── 묶음 분석 ────────────────────────────────────────────────────────────────
+# ── 견고성 비교 (BL2b 묶음 분석 → BR R1b) ─────────────────────────────────────
+# 비중 묶음 2~4개가 평소·위기 때 얼마나 같이 움직이는지 · 상관이 치솟으면 · 크게 잃은 구간이 겹치는지(관측만).
+# 종류 id 는 `sleeve_analytics` 그대로(저장된 파일이 열린다). 예전 표(상관·군집·위험 몫)는 view.result 에 그대로 남는다.
 
-def _sleeve_analytics(inputs: dict, p: Any) -> pg.NodeOutput:
-    from src.engine.sleeve_combine import sleeve_analytics
-    sleeves = [{"name": f"묶음 {i + 1}", "weights": holdings_pct(inputs[k])}
-               for i, k in enumerate(("a", "b", "c", "d")) if inputs.get(k) is not None]
-    out = sleeve_analytics(sleeves)
-    if isinstance(out, dict) and out.get("available") is False:
-        raise pg.NodeFailure(f"묶음 사이를 재지 못했어요 — {out.get('reason') or '사유 미상'}")
-    return pg.NodeOutput(values={}, view={"result": out, "n": len(sleeves)}, tags={"practice": mock_allowed()})
+#: 볼 기간 → 거래일 수.
+PERIODS: dict[str, tuple[int, str]] = {"1y": (252, "최근 1년"), "3y": (756, "최근 3년")}
+
+
+class RobustCompareParams(BaseModel):
+    model_config = _FORBID
+    period: Literal[tuple(PERIODS)] = Field("1y", json_schema_extra={"x-ui": _ui(
+        "볼 기간", question="얼마나 긴 과거로 볼까요?", widget="cards", options={k: v[1] for k, v in PERIODS.items()},
+        help="길수록 나빴던 날이 더 많이 들어와요. 시세가 모자라면 있는 만큼만 보고 실제 길이를 적어요.")})
+    window: Literal[20, 60, 120] = Field(60, json_schema_extra={"x-ui": _ui(
+        "상관 창", "advanced", unit="거래일", presets=[{"label": "한 달", "value": 20}, {"label": "석 달", "value": 60},
+                                                    {"label": "반년", "value": 120}],
+        help="상관 추이를 몇 거래일씩 끊어 볼지예요. 짧을수록 빨리 바뀌지만 흔들려요.")})
+    shock_rho: Literal[0.7, 0.8, 0.9] = Field(0.8, json_schema_extra={"x-ui": _ui(
+        "치솟는 상관", "advanced", presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
+                                         {"label": "0.9", "value": 0.9}],
+        help="묶음끼리 상관이 이 값으로 오른다고 가정하고 합친 흔들림을 다시 재요.")})
+
+
+def _sleeve_analytics(inputs: dict, p: RobustCompareParams) -> pg.NodeOutput:
+    from src.api.allocation_graph_robustness import count_shorts, robustness_view
+    from src.engine import sleeve_combine as sc
+    ports = [k for k in ("a", "b", "c", "d") if inputs.get(k) is not None]
+    sleeves = [{"name": f"묶음 {i + 1}", "weights": holdings_pct(inputs[k])} for i, k in enumerate(ports)]
+    days = PERIODS[p.period][0]
+    ret = sc._load_ret_matrix(sleeves, lookback=days)
+    out = sc.sleeve_analytics(sleeves, ret_matrix=ret)
+    # BR R1b — 엔진은 {"error": True, "message"} 를 돌려준다. 예전에는 `available is False` 를 봐서 실패가 '완료 + 빈 표' 였다.
+    if not isinstance(out, dict) or out.get("error"):
+        why = out.get("message") if isinstance(out, dict) else None
+        raise pg.NodeFailure(f"묶음 사이를 재지 못했어요 — {why or '사유 미상'}")
+    names, S = sc._sleeve_return_series(sleeves, ret)
+    rob = robustness_view(names, S, None, window=p.window, target_rho=p.shock_rho, shorts_dropped=count_shorts(sleeves))
+    view = {"result": out, "n": len(sleeves), "ports": ports, "requested_days": days, "robustness": rob}
+    return pg.NodeOutput(values={}, view=view, tags={"practice": mock_allowed()})
 
 
 def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
-    return {"title": f"묶음 {view.get('n')}개가 얼마나 겹치는지 봤어요",
-            "trust": [_t(CONFIRMED, "각 묶음의 과거 수익률로 상관·군집·위험 기여를 쟀어요."),
-                      _t(ASSUMED, "과거 상관이 앞으로도 같다고 본 결과예요.")],
-            "unmeasured": ["위기 때 상관(보통 더 높아져요 — ‘상관이 치솟으면’ 노드로 봐요)"]}
+    rob = view.get("robustness") or {}
+    n_days, want = rob.get("n_days"), view.get("requested_days")
+    trust = [_t(ASSUMED, "지금 비중을 이 기간 내내 들고 있었다고 보고 잰 흐름이에요 — 실제 운용 기록이 아니에요."),
+             _t(ASSUMED, "묶음끼리 몫은 똑같이 나눴다고 봤어요(합친 흔들림·충격 계산).")]
+    if rob.get("available"):
+        trust.insert(0, _t(CONFIRMED, f"묶음 {view.get('n')}개의 과거 {n_days}거래일 수익으로 상관 추이·위기일·최악 구간을 쟀어요."))
+        if isinstance(n_days, int) and isinstance(want, int) and n_days < want:
+            trust.append(_t(UNKNOWN, f"{want}거래일을 보려 했지만 시세가 {n_days}거래일뿐이었어요."))
+        crisis = rob.get("crisis") or {}
+        if crisis.get("basis") != "market":
+            trust.append(_t(UNKNOWN, str(crisis.get("note") or "시장 자료 없이 위기일을 골랐어요.")))
+        trust.append(_t(ASSUMED, "치솟는 상관은 내가 정한 값이에요 — 실제 위기에는 흔들림도 함께 커져요."))
+        if rob.get("shorts_dropped"):
+            trust.append(_t(UNKNOWN, f"숏 비중 {rob['shorts_dropped']}개는 흐름에서 빼고 쟀어요."))
+    else:
+        trust.append(_t(UNKNOWN, f"견고성을 재지 못했어요 — {rob.get('reason') or '사유 없음'}"))
+    eff = rob.get("effective_n") or {}
+    headline = None if eff.get("value") is None else {
+        "label": "실질 독립 개수", "value": eff["value"], "unit": "개",
+        "text": f"묶음 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였어요"}
+    return {"title": f"묶음 {view.get('n')}개가 같이 무너지는지 봤어요", "headline": headline,
+            "facts": list(rob.get("story") or []), "trust": trust,
+            "unmeasured": ["앞으로도 같을지(과거 관계예요)", "돈이 되는지(경제적 가치)",
+                           "날짜로 맞춘 비교(시세의 끝을 맞췄어요)"]}
+
+
+def _glance_sleeves(view: dict) -> dict | None:
+    from src.api.allocation_graph_glance import _bars_from
+    pairs = ((view.get("robustness") or {}).get("crisis") or {}).get("pairs") or []
+    return _bars_from({f"{x['a']}·{x['b']}": x.get("crisis_rho") for x in pairs}, unit=None, caption="위기일 상관(쌍별)")
 
 
 # ── 알파 검증 · 알파 포트폴리오 ───────────────────────────────────────────────
@@ -540,12 +595,14 @@ def register(registry: pg.Registry) -> None:
                     plain_description="등록한 알파들이 건강한지, 줄이거나 멈출 것이 있는지 봐요.",
                     inputs=(), outputs=(), run=_strategy_health, explain=_explain_health, category="알파",
                     description="/strategy-health 라우트 함수(읽기만)."),
-        pg.NodeSpec("sleeve_analytics", "묶음 분석", stage="check", plain_label="묶음끼리 겹치나",
-                    plain_description="비중 묶음 둘 이상이 얼마나 같이 움직이는지 봐요.",
+        pg.NodeSpec("sleeve_analytics", "견고성 비교", stage="check", plain_label="같이 무너지나 보기",
+                    plain_description="비중 묶음 2~4개가 평소·위기 때 얼마나 같이 움직이는지, 상관이 치솟으면 어떻게 되는지, "
+                                      "크게 잃은 구간이 겹치는지 봐요.",
                     inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False),
                             P("d", "Weights", required=False)), outputs=(),
-                    run=_sleeve_analytics, explain=_explain_sleeves, category="확인",
-                    description="sleeve_analytics(/sleeve-analytics 와 같다)."),
+                    run=_sleeve_analytics, params_model=RobustCompareParams, explain=_explain_sleeves,
+                    glance=_glance_sleeves, category="확인",
+                    description="sleeve_analytics(/sleeve-analytics 와 같은 표) + strategy_robustness(관측만)."),
         pg.NodeSpec("alpha_validate", "알파 검증", stage="signal", plain_label="알파 식 검증하기",
                     plain_description="알파 식의 점수가 과거에 다음 달 수익 순위와 얼마나 맞았는지 재요.",
                     inputs=(), outputs=(), run=_alpha_validate, params_model=AlphaValidateParams,

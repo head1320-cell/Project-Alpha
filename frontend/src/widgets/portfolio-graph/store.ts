@@ -45,6 +45,9 @@ import {
   portfolioLane,
   STRATEGY_COLORS,
   strategyOutput,
+  compareTargets,
+  COMPARE_KIND,
+  COMPARE_PORTS,
   topoOrder,
   type GraphBlock,
   type GraphBranch,
@@ -162,6 +165,8 @@ export interface PgState {
   addStrategy: (src: { label: string; nodes: GraphDocNode[]; edges: GraphDocEdge[]; output?: string | null }) => string;
   /** 고른 노드를 전략 상자로 묶는다 — 비중을 내는 노드가 없으면 묶지 않고 사유. */
   strategyPicked: () => string;
+  /** 고른 노드 견고성 비교(BR R1b) — 비중을 내는 노드 2~4개를 새 '견고성 비교' 노드에 잇는다(되돌리기 한 번). 돌려주는 값은 한 줄 안내. */
+  comparePicked: () => string;
   insertBlock: (b: GraphBlock) => string;
   setFocusGroup: (id: string | null) => void;
   toggleFilter: (k: FilterKey) => void;
@@ -702,6 +707,26 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({ groups: [...groups, { id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label, members: ids,
                                   collapsed: false, kind: "strategy", color, output }] });
       return `고른 노드 ${ids.length}개를 ‘${label}’로 묶었어요. 포트폴리오에 합치려면 ‘전략 추가’로 전략을 하나 더 넣거나, 비중 출력을 ‘전략 합치기’ 노드에 이어요.`;
+    },
+
+    comparePicked: () => {
+      const s = get();
+      const chk = compareTargets(s.picked, s.nodes, s.catalog ?? []);
+      if (!chk.ok) return chk.reason;
+      push();
+      const id = newId(COMPARE_KIND, new Set(s.nodes.map((n) => n.id)));
+      const from = s.nodes.filter((n) => chk.sources.some((x) => x.id === n.id));
+      const x = Math.max(...from.map((n) => n.position.x)) + 260;
+      const y = from.reduce((a, n) => a + n.position.y, 0) / from.length;
+      const node: PgNode = { id, type: PG_NODE_TYPE, position: { x, y }, data: { kind: COMPARE_KIND, params: {} } };
+      let edges = s.edges;
+      chk.sources.forEach((src, i) => {
+        const c = { source: src.id, sourceHandle: src.handle, target: id, targetHandle: COMPARE_PORTS[i] };
+        edges = addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, edges);
+      });
+      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedId: id, picked: [id],
+            reportStale: s.report !== null });
+      return `고른 ${chk.sources.length}개를 ‘견고성 비교’에 이었어요 — 계산하면 같이 무너지는지 보여요.`;
     },
 
     addStrategy: (src) => {

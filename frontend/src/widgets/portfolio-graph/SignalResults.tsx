@@ -4,6 +4,7 @@
  * 수는 서버 view 그대로 — 다시 계산하지 않는다.
  */
 import type { ReactNode } from "react";
+import { RobustnessView } from "./RobustnessResults";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -141,12 +142,17 @@ export function PortfolioCombineResult({ v }: { v: Dict }) {
           <tbody>
             {corr.labels.map((l, i) => (
               <tr key={l}><th scope="row">{l}</th>
-                {corr.matrix[i].map((x, j) => <td key={j} className="pg-td-num">{i === j ? "" : fx(x, 2)}</td>)}
+                {corr.matrix[i].map((x, j) => (i === j || num(x) === null
+                  ? <td key={j} className="pg-td-num" title={i === j ? undefined : "흔들림이 없는 전략이 있어 잴 수 없어요"}>{i === j ? "" : "—"}</td>
+                  // 발산 색 — 세기 = |ρ|, 같은 방향 파랑 · 반대 방향 빨강. 글자 값이 늘 함께 있다(색만으로 읽지 않는다).
+                  : <td key={j} className={`pg-td-num ${(x as number) < 0 ? "neg" : "pos"}`}
+                        style={{ ["--pg-heat" as string]: `${Math.round(Math.abs(x as number) * 32)}%` }}>{fx(x, 2)}</td>))}
               </tr>
             ))}
           </tbody>
         </table>
       ) : <p className="pg-help">상관을 재지 못했어요 — {String(v.correlation_reason ?? "사유 없음")}</p>}
+      <RobustnessView rob={v.robustness as Dict | undefined} />
       <h4 className="pg-h4">합친 종목 비중</h4>
       <Bars values={(r.combined_weights_pct as Record<string, number>) ?? {}} labels={v.labels as Record<string, string>} unit="%" />
     </>
