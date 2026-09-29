@@ -11,7 +11,7 @@
  */
 import { memo } from "react";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "reactflow";
-import type { NodeLineage, NodeStatus } from "@/entities/portfolio-graph";
+import { BRIEF_DX, type NodeLineage, type NodeStatus } from "@/entities/portfolio-graph";
 
 export const PG_WIRE_TYPE = "pgWire";
 
@@ -43,7 +43,11 @@ export const WIRE_LEGEND: { key: string; label: string; help: string }[] = [
 ];
 
 function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data }: EdgeProps<WireData>) {
-  const [path, lx, ly] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const [path] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  // 라벨은 선 가운데가 아니라 ★원천 카드 바로 오른쪽 틈★에(BS2) — 가운데는 열을 건너뛰는 선에서 중간 카드 위에 떨어졌다
+  // (실측: 확대 1 에서 라벨 17개 중 13개가 카드를 덮음). 라벨은 원천 포트의 요약이라 원천 옆이 맞는 자리이기도 하다.
+  const lx = sourceX + BRIEF_DX;
+  const ly = sourceY;
   return (
     <>
       {data?.forward && <path d={path} className="pg-wire-ticks" fill="none" style={{ stroke: style?.stroke }} />}

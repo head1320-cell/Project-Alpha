@@ -175,6 +175,60 @@ function PerPort({ f, value, ports, onChange }: {
   );
 }
 
+/**
+ * 전략마다 숫자 하나 (BS4 · `widget: "per_port_number"`) — 위험 예산·점수·몫. 이어진 전략마다 한 줄.
+ * `sum_to` 가 있으면 합을 늘 보인다 — 맞으면 조용히, 아니면 얼마가 남았는지. ★판정은 서버가 한다★(틀리면 노드가 사유로 실패).
+ * 빈 칸은 키를 지운다 — 서버는 빈 전략의 이름을 들어 실패한다(다른 방법으로 대신 계산하지 않는다).
+ */
+function PerPortNumber({ f, value, ports, onChange }: {
+  f: FieldSpec; value: unknown; ports: LinkedPort[]; onChange: (v: unknown) => void;
+}) {
+  const cur = (value && typeof value === "object" ? value : {}) as Record<string, number>;
+  const put = (port: string, raw: string) => {
+    const next = { ...cur };
+    if (raw.trim() === "" || !Number.isFinite(Number(raw))) delete next[port]; else next[port] = Number(raw);
+    onChange(Object.keys(next).length ? next : undefined);
+  };
+  const vals = ports.map((p) => cur[p.port]).filter((x): x is number => typeof x === "number");
+  const total = vals.reduce((a, b) => a + b, 0);
+  const target = f.ui.sum_to;
+  const filled = vals.length === ports.length;
+  const ok = target === undefined ? filled : filled && Math.abs(total - target) <= 0.01;
+  const left = target === undefined ? 0 : Math.round((target - total) * 100) / 100;
+  return (
+    <div className="pg-basic-field" data-field={f.name}>
+      <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
+      {ports.length === 0
+        ? <p className="pg-help">전략을 이어 주면 전략마다 정할 수 있어요.</p>
+        : (
+          <div className="pg-perport">
+            {ports.map((p) => (
+              <label key={p.port} className="pg-perport-row pg-perport-row--num" data-port={p.port}>
+                <span className="pg-perport-name">{p.label}</span>
+                <span className="pg-perport-num">
+                  <input className="pg-field-input" type="number" inputMode="decimal" min={0} step="any"
+                         aria-label={`${p.label} ${f.ui.label}`} value={cur[p.port] === undefined ? "" : String(cur[p.port])}
+                         onChange={(e) => put(p.port, e.target.value)} />
+                  {f.ui.unit && <span className="pg-perport-unit">{f.ui.unit}</span>}
+                </span>
+              </label>
+            ))}
+            <p className="pg-perport-sum" data-ok={ok ? "1" : "0"} aria-live="polite">
+              {!filled
+                ? `${ports.length - vals.length}개 전략이 비어 있어요`
+                : target === undefined
+                  ? `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""}`
+                  : ok
+                    ? `합 ${target}${f.ui.unit ?? ""} — 맞아요`
+                    : `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""} — ${left > 0 ? `${left}${f.ui.unit ?? ""} 더 정해 주세요` : `${-left}${f.ui.unit ?? ""} 줄여 주세요`}`}
+            </p>
+          </div>
+        )}
+      {f.ui.help && <p className="pg-help">{f.ui.help}</p>}
+    </div>
+  );
+}
+
 /** 이어진 포트 — 들어오는 선의 포트 순서, 이름은 `labels`(캔버스가 전략 이름으로 채움). 선을 모르면 `labels` 만으로. */
 function linkedPorts(params: Params, edges?: Edge[], nodeId?: string): LinkedPort[] {
   const labels = (params.labels && typeof params.labels === "object" ? params.labels : {}) as Record<string, string>;
@@ -190,6 +244,7 @@ function BasicField({ f, value, root, ports, onChange }: {
 }) {
   const eff = value !== undefined ? value : f.defaultValue;
   if (f.ui.widget === "per_port") return <PerPort f={f} value={value} ports={ports} onChange={onChange} />;
+  if (f.ui.widget === "per_port_number") return <PerPortNumber f={f} value={value} ports={ports} onChange={onChange} />;
   const item = f.kind === "json" ? itemSchemaOf(f, root) : null;
   if (item) return <ObjectList f={f} item={item} value={eff} onChange={onChange} />;
   const q = <div className="pg-q">{f.ui.question ?? f.ui.label}</div>;
@@ -209,14 +264,20 @@ function BasicField({ f, value, root, ports, onChange }: {
     );
   }
   if (f.ui.options) {
+    // 순서는 서버가 준 `order`(스키마 경로가 키를 다시 늘어놓는다) · 설명은 `descriptions`(BS4) — 무엇을 하는지 한 줄.
+    const order = f.ui.order ?? [];
+    const opts = Object.entries(f.ui.options)
+      .sort(([a], [b]) => (order.indexOf(a) + 1 || 1e9) - (order.indexOf(b) + 1 || 1e9));
+    const desc = f.ui.descriptions;
     return (
       <div className="pg-basic-field" data-field={f.name}>
         {q}
-        <div className="pg-choices">
-          {Object.entries(f.ui.options).map(([k, label]) => (
+        <div className={`pg-choices${desc ? " pg-choices--desc" : ""}`}>
+          {opts.map(([k, label]) => (
             <button key={k} type="button" className={`pg-choice${same(eff, k) ? " on" : ""}`} aria-pressed={same(eff, k)}
-                    onClick={() => onChange(k)}>
+                    data-choice={k} onClick={() => onChange(k)}>
               <b>{label}</b>
+              {desc?.[k] && <span className="pg-choice-help">{desc[k]}</span>}
             </button>
           ))}
         </div>

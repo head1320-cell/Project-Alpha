@@ -46,6 +46,12 @@ import {
   STRATEGY_COLORS,
   strategyOutput,
   compareTargets,
+  CARD_BODY_H,
+  COL,
+  COMBINE_W,
+  NODE_W,
+  ROW_GAP,
+  cardHeight,
   topoOrder,
   type GraphBlock,
   type GraphBranch,
@@ -507,7 +513,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const from = (orig: string) => (src ? Object.entries(src.map).find(([, o]) => o === orig)?.[0] : undefined) ?? orig;
       const ys = scope.map((id) => s.nodes.find((n) => n.id === id)!.position.y);
       // 갈래마다 한 칸씩 아래로 — 칸 높이 = 복제 범위의 높이 + 틀 머리·여백(겹치지 않게).
-      const band = Math.max(...ys) - Math.min(...ys) + 150 + 56 + 2 * 28 + 60;          // 카드 · 틀 머리 · 위아래 여백 · 틈
+      const band = Math.max(...ys) - Math.min(...ys) + CARD_BODY_H + 56 + 2 * 28 + 60;  // 카드 · 틀 머리 · 위아래 여백 · 틈
       const dy = band * (1 + s.branches.filter((b) => b.of_root === ofRoot).length);
       const copies: PgNode[] = scope.map((id) => {
         const base = s.nodes.find((n) => n.id === from(id)) ?? s.nodes.find((n) => n.id === id)!;
@@ -658,7 +664,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       push();
       if (s.groups.some((g) => g.kind === "strategy")) {
         // 전략이 있으면 전략마다 한 줄 · 포트폴리오 노드는 오른쪽(BN N1 — 노드와 선만, 레인 없음).
-        const pos = mapLayout(s.nodes, s.edges, s.groups);
+        const pos = mapLayout(s.nodes, s.edges, s.groups, s.catalog);
         set({ nodes: s.nodes.map((n) => (pos.has(n.id) ? { ...n, position: pos.get(n.id)! } : n)) });
         return;
       }
@@ -672,8 +678,12 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       for (const n of s.nodes) cols.set(depth.get(n.id) ?? 0, [...(cols.get(depth.get(n.id) ?? 0) ?? []), n]);
       const pos = new Map<string, { x: number; y: number }>();
       for (const [d, col] of cols) {
-        // 같은 깊이는 **지금의 세로 순서**를 지킨다 — 사람이 둔 위아래를 뒤섞지 않는다.
-        col.sort((a, b) => a.position.y - b.position.y).forEach((n, i) => pos.set(n.id, { x: d * 230, y: i * 170 }));
+        // 같은 깊이는 **지금의 세로 순서**를 지킨다 — 사람이 둔 위아래를 뒤섞지 않는다. 줄은 카드 높이 + 틈(BS2).
+        let top = 0;
+        for (const n of col.sort((a, b) => a.position.y - b.position.y)) {
+          pos.set(n.id, { x: d * COL, y: top });
+          top += cardHeight(n.data.kind, s.catalog) + ROW_GAP;
+        }
       }
       set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) });
     },
@@ -714,7 +724,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       push();
       const id = newId(chk.kind, new Set(s.nodes.map((n) => n.id)));
       const from = s.nodes.filter((n) => chk.sources.some((x) => x.id === n.id));
-      const x = Math.max(...from.map((n) => n.position.x)) + 260;
+      const x = Math.max(...from.map((n) => n.position.x)) + COL + (from.some((n) => n.data.kind === PORTFOLIO_NODE) ? COMBINE_W - NODE_W : 0);
       const y = from.reduce((a, n) => a + n.position.y, 0) / from.length;
       const node: PgNode = { id, type: PG_NODE_TYPE, position: { x, y }, data: { kind: chk.kind, params: {} } };
       let edges = s.edges;

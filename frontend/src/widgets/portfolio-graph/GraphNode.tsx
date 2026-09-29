@@ -9,12 +9,13 @@
  * 포트는 타입 색 점, 이름·타입은 마우스를 올리면(전문가용) 보인다.
  */
 import { memo } from "react";
-import { Handle, NodeToolbar, Position, type NodeProps } from "reactflow";
+import { Handle, NodeToolbar, Position, useStore, type NodeProps } from "reactflow";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { fmtDelta, fmtElapsed, headlineDelta, nodeSummary, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { fmtDelta, fmtElapsed, headlineDelta, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
+import { parsePlace, placeToolbar } from "./toolbarPlace";
 
 import { portColor } from "@/entities/portfolio-graph/ports";
 /** 포트 타입의 쉬운 이름 — 설정 탭의 받는 것/내는 것·포트 이름표. 모르는 타입은 이름 그대로. */
@@ -33,8 +34,7 @@ export const STAGE_VAR: Record<string, string> = {
 };
 
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
-const PORT_TOP = 46;
-const PORT_GAP = 22;
+// 포트 줄 치수(PORT_TOP·PORT_GAP)는 배치(`size.ts`)와 한 자리 — 배치가 카드 높이를 같은 식으로 셈한다(BS2).
 
 export type CanvasNodeData = PgNodeData & {
   num?: number;
@@ -74,6 +74,10 @@ function Port({ port, side, index, unknown, label, missing }: {
   );
 }
 
+/** 한 노드 도구줄의 화면 크기(실측, 확대와 무관) — 자리 고르기에만 쓴다. */
+const NODE_TOOLBAR_W = 190;
+const NODE_TOOLBAR_H = 36;
+
 function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const entry = usePortfolioGraph((s) => s.catalog?.find((c) => c.type === data.kind));
   const report = usePortfolioGraph((s) => s.report);
@@ -83,6 +87,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const live = result && !stale ? result : undefined;
   const running = usePortfolioGraph((s) => s.running);
   const single = usePortfolioGraph((s) => s.picked.length <= 1);
+  // 도구줄 자리(BS2) — 위 가운데가 다른 카드를 덮으면 덜 덮는 자리로. 보일 때만 잰다.
+  const place = parsePlace(useStore((st) => (selected && single
+    ? placeToolbar(st, [id], NODE_TOOLBAR_W, NODE_TOOLBAR_H, 8) : `${Position.Top}|center`)));
   const pinned = usePortfolioGraph((s) => s.pinned.includes(id));
   const togglePin = usePortfolioGraph((s) => s.togglePin);
   const showCause = usePortfolioGraph((s) => s.showCause);
@@ -166,22 +173,24 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
          data-node-id={id} data-kind={data.kind}
          style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
                   ["--pg-i" as string]: data.num ?? 0 }}>
-      <NodeToolbar isVisible={selected && single} position={Position.Top} offset={8}>
-        <button type="button" className="pg-run-to" disabled={running}
+      <NodeToolbar isVisible={selected && single} position={place.position} align={place.align} offset={8}>
+        {/* 촘촘한 격자(BS2)에서 도구줄이 옆 카드를 덮지 않게 짧게 — 주 동작만 글, 나머지는 아이콘 + 이름(aria-label·title).
+            예전 386px(단축키 글·세 단추 글)은 확대 0.64 에서 카드 네 장 폭이었다. 단축키는 title·aria-keyshortcuts 로. */}
+        <button type="button" className="pg-run-to" disabled={running} title="여기까지 계산 (Shift+Enter)" aria-keyshortcuts="Shift+Enter"
                 onMouseEnter={() => data.onPreviewRunTo?.(id)} onMouseLeave={() => data.onPreviewRunTo?.(null)}
                 onFocus={() => data.onPreviewRunTo?.(id)} onBlur={() => data.onPreviewRunTo?.(null)}
                 onClick={() => { data.onPreviewRunTo?.(null); data.onRunTo?.(id); }}>
-          <Play size={12} aria-hidden="true" /> 여기까지 계산 <kbd>Shift+Enter</kbd>
+          <Play size={12} aria-hidden="true" /> 여기까지 계산
         </button>
-        <button type="button" className="pg-branch-make"
+        <button type="button" className="pg-branch-make pg-tb-icon" aria-label="갈래 만들기"
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.makeBranch(id)); }}
-                title="이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봐요">
-          <GitBranch size={12} aria-hidden="true" /> 갈래 만들기
+                title="갈래 만들기 — 이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봐요">
+          <GitBranch size={14} aria-hidden="true" />
         </button>
-        <button type="button" className="pg-pin" aria-pressed={pinned} onClick={() => togglePin(id)}
-                title="멀리서 볼 때도 이 노드의 작은 그림을 보여요">
-          {pinned ? <PinOff size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
-          {pinned ? "그림 고정 풀기" : "그림 고정"}
+        <button type="button" className="pg-pin pg-tb-icon" aria-pressed={pinned} onClick={() => togglePin(id)}
+                aria-label={pinned ? "그림 고정 풀기" : "그림 고정"}
+                title={pinned ? "그림 고정 풀기" : "그림 고정 — 멀리서 볼 때도 이 노드의 작은 그림을 보여요"}>
+          {pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />}
         </button>
       </NodeToolbar>
       <div className="pg-node-k">

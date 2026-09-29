@@ -114,6 +114,58 @@ export function SleeveResult({ v }: { v: Dict }) {
 }
 
 /** 전략 합치기(BM C2) — 전략별 몫·위험 분담·변동성, 전략 사이 상관, 합친 종목 비중. 모르는 칸은 "—". */
+/**
+ * 방법 비교 (BS4, 관측) — 같은 흐름·같은 공분산 위에서 방법마다 몫(막대) · 합친 흔들림 · 분산 효과 · 실질 개수.
+ * ★어느 방법이 낫다는 판정이 아니다★ 서버 문구(`note`)를 그대로 보이고, 못 잰 줄은 사유를 보인다.
+ */
+function MethodCompare({ mc, names }: { mc: Dict | undefined; names: string[] }) {
+  if (!mc) return null;
+  if (!mc.available) return <p className="pg-help pg-mc-na">방법을 비교하지 못했어요 — {String(mc.reason ?? "사유 없음")}</p>;
+  const rows = (mc.rows as Dict[] | undefined) ?? [];
+  const color = (i: number) => `var(--cat-${(i % 10) + 1})`;
+  return (
+    <section className="pg-mc" aria-label="방법 비교">
+      <h4 className="pg-h4">방법 비교</h4>
+      <p className="pg-help pg-mc-note">{String(mc.note ?? "")}</p>
+      <ul className="pg-mc-legend" aria-hidden="true">
+        {names.map((n, i) => <li key={n}><i style={{ background: color(i) }} />{n}</li>)}
+      </ul>
+      <ol className="pg-mc-list">
+        {rows.map((r) => {
+          const on = r.method === mc.current;
+          const fb = (r.fallback as Dict | undefined)?.used === true;
+          const shares = (r.shares as Record<string, number> | undefined) ?? {};
+          return (
+            <li key={String(r.method)} className={`pg-mc-row${on ? " on" : ""}`} data-method={String(r.method)}
+                data-current={on ? "1" : "0"} data-available={r.available ? "1" : "0"}>
+              <div className="pg-mc-head">
+                <b>{String(r.label ?? r.method)}</b>
+                {on && <span className="pg-mc-chip pg-mc-chip--on">지금</span>}
+                {fb && <span className="pg-mc-chip pg-mc-chip--fb" title={String((r.fallback as Dict).reason ?? "")}>대신 계산</span>}
+              </div>
+              {r.available ? (
+                <>
+                  <div className="pg-mc-bar" role="img"
+                       aria-label={names.map((n) => `${n} ${pct(shares[n], 1)}`).join(", ")}>
+                    {names.map((n, i) => (num(shares[n]) ?? 0) > 0 && (
+                      <span key={n} className="pg-mc-seg" style={{ width: `${shares[n]}%`, background: color(i) }} title={`${n} ${pct(shares[n], 1)}`} />
+                    ))}
+                  </div>
+                  <dl className="pg-mc-nums">
+                    <div><dt>흔들림(연)</dt><dd>{pct(r.vol_pct, 1)}</dd></div>
+                    <div><dt>분산 효과</dt><dd>{fx(r.div_ratio, 2)}배</dd></div>
+                    <div><dt>실질 개수</dt><dd>{fx(r.effective_n, 1)}개</dd></div>
+                  </dl>
+                </>
+              ) : <p className="pg-mc-reason">{String(r.reason ?? "사유 없음")}</p>}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 export function PortfolioCombineResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   const rows = (v.strategies as Dict[] | undefined) ?? [];
@@ -135,6 +187,7 @@ export function PortfolioCombineResult({ v }: { v: Dict }) {
           ))}
         </tbody>
       </table>
+      <MethodCompare mc={v.method_compare as Dict | undefined} names={rows.map((s) => String(s.label))} />
       <h4 className="pg-h4">전략 사이 상관</h4>
       {corr ? (
         <table className="pg-table pg-corr-table">

@@ -288,6 +288,10 @@ test("기록끼리 견고성(BS3): 정책 백테스트 둘을 고르면 막대�
   await node(page, bts[1].id).click({ modifiers: [mod] });
   const bar = page.locator(".pg-selbar");
   await expect(bar.locator(".pg-selbar-compare")).not.toHaveAttribute("aria-disabled", "true");
+  // BS2 — 아래 끝 노드를 골라도 막대가 캔버스 안에 있다(아래가 모자라면 위로). 예전에는 안내 줄 밑에 깔렸다.
+  const bb = (await bar.boundingBox())!;
+  const cb = (await page.locator(".pg-canvas").boundingBox())!;
+  expect(bb.y + bb.height, "막대가 캔버스 아래로 나가지 않는다").toBeLessThanOrEqual(cb.y + cb.height - 50);
   await bar.locator(".pg-selbar-compare").click();
   await expect(page.locator(".pg-note")).toContainText("기록끼리 견고성");
   doc = await wip(page);

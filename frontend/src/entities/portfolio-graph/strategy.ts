@@ -9,13 +9,15 @@
  */
 import type { GraphDoc, GraphDocEdge, GraphDocNode, GraphGroup, NodeCatalogEntry } from "./types";
 import { topoOrder } from "./order";
+import { CARD_BODY_H, COL, COMBINE_W, NODE_W, ROW_GAP, cardHeight } from "./size";
 
 export const STRATEGY_COLORS = 6;
 export const PORTFOLIO_NODE = "portfolio_combine";
 export const PORTFOLIO_PORTS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"] as const;
 
-/** 지도 치수 — 보통 자동 정리와 같은 칸(열 230 · 행 170). 전략 사이·포트폴리오 앞은 상자 머리가 들어갈 만큼 띄운다. */
-export const MAP = { col: 230, row: 170, bandGap: 120, portfolioGap: 90 } as const;
+/** 지도 치수 — 열은 카드 폭 + 라벨 틈(`size.ts`), 줄은 ★카드 높이 + 틈으로 쌓는다★(BS2 — 예전 고정 170).
+ *  `row` 는 카드 하나짜리 줄의 높이(빈 지도·최소 높이)다. 전략 사이·포트폴리오 앞은 상자 머리가 들어갈 만큼 띄운다. */
+export const MAP = { col: COL, row: CARD_BODY_H + ROW_GAP, bandGap: 120, portfolioGap: 90 } as const;
 
 type Pos = { x: number; y: number };
 type N = { id: string; position: Pos; data: { kind: string } };
@@ -46,7 +48,9 @@ export function portfolioLane(nodes: N[], edges: E[], groups: GraphGroup[]): Set
   return out;
 }
 
-export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[]): Map<string, Pos> {
+export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[], catalog?: NodeCatalogEntry[] | null): Map<string, Pos> {
+  const kindOf = new Map(nodes.map((n) => [n.id, n.data.kind] as const));
+  const hOf = (id: string) => cardHeight(kindOf.get(id) ?? "", catalog) + ROW_GAP;
   const order = topoOrder(nodes.map((n) => n.id), edges);
   const depth = new Map<string, number>();
   for (const id of order) {
@@ -64,18 +68,18 @@ export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[]): Map<str
   let y = 0;
   let maxDepth = 0;
   for (const b of bandKeys) {
-    // 줄 안: 같은 깊이는 흐름 순서대로 아래로 — 사슬 하나면 한 줄로 곧게 선다.
-    const perDepth = new Map<number, number>();
-    let rows = 1;
+    // 줄 안: 같은 깊이는 흐름 순서대로 아래로 — 사슬 하나면 한 줄로 곧게 선다. 아래 카드는 위 카드 높이 + 틈만큼.
+    const cursor = new Map<number, number>();
+    let bandH = MAP.row;
     for (const id of order.filter((x) => !lane.has(x) && (owner.get(x) ?? null) === b)) {
       const d = depth.get(id) ?? 0;
-      const r = perDepth.get(d) ?? 0;
-      perDepth.set(d, r + 1);
-      rows = Math.max(rows, r + 1);
+      const top = cursor.get(d) ?? 0;
+      cursor.set(d, top + hOf(id));
+      bandH = Math.max(bandH, top + hOf(id));
       maxDepth = Math.max(maxDepth, d);
-      positions.set(id, { x: d * MAP.col, y: y + r * MAP.row });
+      positions.set(id, { x: d * MAP.col, y: y + top });
     }
-    y += rows * MAP.row + MAP.bandGap;
+    y += bandH + MAP.bandGap;
   }
   const height = Math.max(MAP.row, y - MAP.bandGap);
   // 포트폴리오 노드(와 그 하류) — 모든 줄의 오른쪽. 첫 열은 줄 전체의 가운데에 세로로 쌓는다(여러 개면 겹치지 않게).
@@ -87,15 +91,17 @@ export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[]): Map<str
   }
   // 전략 상자의 최소 폭(머리 줄이 들어갈 만큼)을 넘도록 적어도 세 칸 오른쪽.
   const x0 = (bandKeys.length ? Math.max(maxDepth + 1, 3) : 0) * MAP.col + MAP.portfolioGap;
-  const count = new Map<number, number>();
-  for (const id of laneIds) count.set(laneDepth.get(id)!, (count.get(laneDepth.get(id)!) ?? 0) + 1);
+  const total = new Map<number, number>();
+  for (const id of laneIds) total.set(laneDepth.get(id)!, (total.get(laneDepth.get(id)!) ?? 0) + hOf(id));
+  // 첫 열(합치기 카드)이 보통 카드보다 넓다 — 그 뒤 열은 넓은 만큼 오른쪽으로(카드가 다음 열을 덮지 않게).
+  const wide = laneIds.some((id) => laneDepth.get(id) === 0 && kindOf.get(id) === PORTFOLIO_NODE) ? COMBINE_W - NODE_W : 0;
   const seen = new Map<number, number>();
   for (const id of laneIds) {
     const d = laneDepth.get(id)!;
-    const r = seen.get(d) ?? 0;
-    seen.set(d, r + 1);
-    const top = Math.max(0, height / 2 - (count.get(d)! * MAP.row) / 2);
-    positions.set(id, { x: x0 + d * MAP.col, y: Math.round(top + r * MAP.row) });
+    const at = seen.get(d) ?? 0;
+    seen.set(d, at + hOf(id));
+    const top = Math.max(0, height / 2 - (total.get(d)! - ROW_GAP) / 2);
+    positions.set(id, { x: x0 + d * MAP.col + (d > 0 ? wide : 0), y: Math.round(top + at) });
   }
   return positions;
 }

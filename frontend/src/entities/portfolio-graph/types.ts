@@ -99,7 +99,7 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port";
+  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port" | "per_port_number";
   /** `widget: "pick"` 가 부를 목록 이름(BK W5) — `strategies` · `research_runs`. 주소가 아니다. */
   source?: string;
   ends?: [string, string];
@@ -111,6 +111,10 @@ export interface ParamUi {
   order?: string[];
   /** 비워 두면 서버가 쓰는 값(BO O1) — 표시만 한다. 문서에 이 값을 쓰지 않는다. */
   empty_value?: unknown;
+  /** 선택지마다 한 줄 설명(BS4) — 무엇을 하는지. 낫다는 말이 아니다. */
+  descriptions?: Record<string, string>;
+  /** 전략마다 숫자(`per_port_number`)의 합이 이 값이어야 한다(BS4) — 화면은 합을 보여 줄 뿐, 판정은 서버가 한다. */
+  sum_to?: number;
 }
 
 export interface NodeCatalogEntry {

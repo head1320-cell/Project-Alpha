@@ -17,7 +17,18 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-SLEEVE_METHODS = ("equal", "inverse_vol", "risk_parity", "risk_budget", "min_var", "hrp", "score")
+SLEEVE_METHODS = ("equal", "inverse_vol", "risk_parity", "risk_budget", "min_var", "hrp", "score",
+                  # BS4 — 사용자 승인(2026-09-29): 고를 때만 쓰인다. 기본값(risk_parity)은 그대로.
+                  "manual", "crisis_risk_parity", "max_diversification")
+#: 입력이 없어도 되는 방법 — 방법 비교표가 같은 흐름에서 나란히 잰다.
+INPUT_FREE_METHODS = ("risk_parity", "equal", "inverse_vol", "min_var", "hrp", "max_diversification", "crisis_risk_parity")
+#: 위기일 — 시장 대용이 가장 나빴던 이 비율의 날(견고성 절 `crisis_correlation` 과 같은 선택).
+CRISIS_Q = 0.1
+#: 위기일이 이보다 적으면 위기 공분산을 믿을 수 없어 실패한다(평소 공분산으로 가지 않는다).
+CRISIS_MIN_DAYS = 20
+#: 몫 직접 정하기 — 합 100 에서 이만큼까지 허용(반올림).
+MANUAL_SUM_TOL = 0.01
+_NO_FALLBACK = {"used": False, "from": None, "reason": None}
 
 
 def _drift_returns(R: np.ndarray, w: np.ndarray, every: int, cost_bps: float = 0.0) -> np.ndarray:
@@ -146,13 +157,139 @@ def _risk_contributions(w: np.ndarray, cov: np.ndarray) -> np.ndarray:
     return rc / tot
 
 
+class _MethodFailure(ValueError):
+    """고른 방법을 이 입력으로 계산할 수 없다 — 다른 방법으로 대신하지 않고 사유와 함께 실패한다."""
+
+
+def _inverse_vol(vols: np.ndarray) -> np.ndarray:
+    inv = 1.0 / vols
+    return inv / inv.sum()
+
+
+def _fb(method: str, reason: str) -> dict[str, Any]:
+    return {"used": True, "from": method, "reason": reason}
+
+
+def _crisis_rows(market_returns: list[float] | None, T: int) -> np.ndarray:
+    """시장 대용의 가장 나빴던 `CRISIS_Q` 날 — 흐름과 **끝을 맞춘다**(합치기가 종목을 줄 세우는 방식과 같다)."""
+    if market_returns is None:
+        raise _MethodFailure("위기 때 위험 균형에는 시장 대용 흐름이 필요해요 — 시장을 정할 수 없어 계산하지 않았어요.")
+    m = np.asarray(market_returns, dtype=float)
+    if m.size < T:
+        raise _MethodFailure(f"시장 대용 흐름({m.size}일)이 전략 흐름({T}일)보다 짧아 위기일을 맞출 수 없어요.")
+    m = m[-T:]
+    if not np.all(np.isfinite(m)) or float(np.var(m)) <= 0:
+        raise _MethodFailure("시장 대용 흐름에 빈 값이 있거나 흔들림이 없어 위기일을 고를 수 없어요.")
+    crisis = m <= np.quantile(m, CRISIS_Q)
+    if int(crisis.sum()) < CRISIS_MIN_DAYS:
+        raise _MethodFailure(f"위기일이 {int(crisis.sum())}일뿐이라(최소 {CRISIS_MIN_DAYS}일) 위기 때 공분산을 믿을 수 없어요 — "
+                             "기간을 늘려 주세요.")
+    return crisis
+
+
+def _crisis_moment(Sc: np.ndarray) -> np.ndarray:
+    """위기일 2차 적률 E[r rᵀ] — ★평균을 빼지 않는다★.
+
+    공분산은 평균을 뺀다. 위기일에 늘 같이 크게 떨어지는 전략은 그 하락이 **평균**으로 빠져 공분산에 거의 남지 않는다
+    (실측: 위기일마다 시장의 3배로 떨어지는 전략에 수축 공분산 위험 균형이 33.3% 를 줬다 — 평소 위험 균형은 20.3%).
+    같이 잃은 크기 자체를 보려고 평균을 빼지 않은 적률을 쓴다. 대각에 아주 작은 값을 더해 풀이를 안정시킨다.
+    """
+    m = Sc.shape[0]
+    return Sc.T @ Sc / m + np.eye(Sc.shape[1]) * 1e-12
+
+
+def _max_diversification(cov: np.ndarray, vols: np.ndarray) -> np.ndarray:
+    """분산 효과 Σwσ/σ_p 최대(롱온리·합 1). 못 풀면 실패 — 다른 방법으로 대신하지 않는다."""
+    from src.engine.risk_allocations import _opt
+    w = _opt(lambda w: -float(w @ vols) / float(np.sqrt(max(w @ cov @ w, 1e-18))), len(vols))
+    if w is None:
+        raise _MethodFailure("분산 효과 최대 계산이 풀리지 않았어요 — 다른 방법을 골라 주세요.")
+    w = np.clip(np.asarray(w, dtype=float), 0.0, None)
+    return w / w.sum()
+
+
+def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, names: list[str], *,
+              risk_budget: dict[str, float] | None = None, scores: dict[str, float] | None = None,
+              shares: dict[str, float] | None = None,
+              market_returns: list[float] | None = None) -> tuple[np.ndarray, dict[str, Any], dict[str, Any] | None]:
+    """슬리브 몫 · 대체 여부 · 위기일 정보. ★기존 방법의 식·분기는 예전 그대로다★(골든) — 대체한 경우를 말할 뿐이다."""
+    n = len(names)
+    fallback: dict[str, Any] = dict(_NO_FALLBACK)
+    crisis = None
+    if method == "equal" or n == 1:
+        alloc = np.ones(n) / n
+    elif method == "inverse_vol":
+        alloc = _inverse_vol(vols)
+    elif method == "score" and scores:
+        sc_ = np.array([max(scores.get(nm, 0.0), 0.0) for nm in names])
+        if sc_.sum() > 0:
+            alloc = sc_ / sc_.sum()
+        else:
+            alloc = np.ones(n) / n
+            fallback = _fb(method, "점수가 모두 0 이라 똑같이 나눴어요.")
+    elif method == "min_var":
+        alloc = None
+        try:
+            from src.engine.risk_allocations import _opt
+            alloc = _opt(lambda w: w @ cov @ w, n)
+        except Exception:
+            alloc = None
+        if alloc is None:
+            # 예전에는 `_opt` 가 None 을 내면(풀리지 않음) 다음 줄에서 터졌고, 예외일 때만 조용히 역변동성으로 갔다.
+            alloc = _inverse_vol(vols)
+            fallback = _fb(method, "흔들림 최소 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했어요.")
+    elif method == "hrp":
+        try:
+            from src.engine.risk_allocations import _hrp_weights
+            alloc = _hrp_weights(cov)
+        except Exception:
+            alloc = _inverse_vol(vols)
+            fallback = _fb(method, "계층 위험 균형 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했어요.")
+    elif method == "risk_budget" and risk_budget:
+        b = np.array([max(risk_budget.get(nm, 1.0), 1e-6) for nm in names])
+        alloc = _risk_budget_weights(cov, b)
+    elif method == "manual":
+        alloc = _manual_shares(shares, names)
+    elif method == "crisis_risk_parity":
+        rows = _crisis_rows(market_returns, S.shape[0])
+        alloc = _risk_budget_weights(_crisis_moment(S[rows]), np.ones(n))
+        crisis = {"days": int(rows.sum()), "q": CRISIS_Q, "n_days": int(S.shape[0])}
+    elif method == "max_diversification":
+        alloc = _max_diversification(cov, vols)
+    else:  # risk_parity (등예산)
+        alloc = _risk_budget_weights(cov, np.ones(n))
+        if method != "risk_parity":
+            why = {"score": "점수를 주지 않아", "risk_budget": "위험 예산을 주지 않아"}.get(method, f"모르는 방식({method})이라")
+            fallback = _fb(method, f"{why} 위험 똑같이로 계산했어요.")
+    return alloc, fallback, crisis
+
+
+def _manual_shares(shares: dict[str, float] | None, names: list[str]) -> np.ndarray:
+    if not shares:
+        raise _MethodFailure("몫 직접 정하기에는 전략마다 몫(%)이 필요해요.")
+    missing = [nm for nm in names if nm not in shares]
+    if missing:
+        raise _MethodFailure(f"몫을 정하지 않은 전략이 있어요: {', '.join(missing)}")
+    v = np.array([float(shares[nm]) for nm in names])
+    if not np.all(np.isfinite(v)) or (v < 0).any():
+        raise _MethodFailure("몫에 음수나 빈 값이 있어요 — 0 이상으로 정해 주세요.")
+    if abs(float(v.sum()) - 100.0) > MANUAL_SUM_TOL:
+        raise _MethodFailure(f"몫의 합이 {float(v.sum()):g}% 예요 — 100% 가 되게 맞춰 주세요.")
+    return v / 100.0
+
+
 def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
                     risk_budget: dict[str, float] | None = None,
                     scores: dict[str, float] | None = None,
                     ret_matrix: dict[str, list[float]] | None = None,
                     rebalance_every: dict[str, int] | None = None,
-                    rebalance_cost_bps: dict[str, float] | None = None) -> dict[str, Any]:
+                    rebalance_cost_bps: dict[str, float] | None = None,
+                    shares: dict[str, float] | None = None,
+                    market_returns: list[float] | None = None) -> dict[str, Any]:
     """슬리브 결합(2단계) — 슬리브 레벨 배분 + 종목 레벨 집계.
+
+    BS4 — `shares`(몫 직접, %) · `market_returns`(위기 때 위험 균형의 시장 대용 일별 수익 — 끝을 맞춘다) 는 그 방법을
+    고를 때만 쓰인다. `fallback` 은 엔진이 다른 방법으로 대신 계산했는지 말한다(값은 예전과 같다).
 
     `rebalance_every` — 슬리브별 되돌림 주기(거래일, `_sleeve_return_series`). 없으면 기존과 같고 응답 키도 같다.
     """
@@ -167,34 +304,11 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
     n = len(sleeves)
     cov = _cov_local(S) if n >= 2 else np.array([[max(np.var(S[:, 0]), 1e-8)]])
     vols = np.sqrt(np.clip(np.diag(cov), 1e-12, None))
-
-    if method == "equal" or n == 1:
-        alloc = np.ones(n) / n
-    elif method == "inverse_vol":
-        inv = 1.0 / vols
-        alloc = inv / inv.sum()
-    elif method == "score" and scores:
-        sc = np.array([max(scores.get(s["name"], 0.0), 0.0) for s in sleeves])
-        alloc = sc / sc.sum() if sc.sum() > 0 else np.ones(n) / n
-    elif method == "min_var":
-        try:
-            from src.engine.risk_allocations import _opt
-            alloc = _opt(lambda w: w @ cov @ w, n)
-        except Exception:
-            inv = 1.0 / vols
-            alloc = inv / inv.sum()
-    elif method == "hrp":
-        try:
-            from src.engine.risk_allocations import _hrp_weights
-            alloc = _hrp_weights(cov)
-        except Exception:
-            inv = 1.0 / vols
-            alloc = inv / inv.sum()
-    elif method == "risk_budget" and risk_budget:
-        b = np.array([max(risk_budget.get(s["name"], 1.0), 1e-6) for s in sleeves])
-        alloc = _risk_budget_weights(cov, b)
-    else:  # risk_parity (등예산)
-        alloc = _risk_budget_weights(cov, np.ones(n))
+    try:
+        alloc, fallback, crisis = _allocate(method, S, cov, vols, names, risk_budget=risk_budget, scores=scores,
+                                            shares=shares, market_returns=market_returns)
+    except _MethodFailure as e:
+        return {"error": True, "message": str(e), "method": method}
 
     rc = _risk_contributions(alloc, cov)
 
@@ -220,13 +334,51 @@ def combine_sleeves(sleeves: list[dict], method: str = "risk_parity",
         "combined_weights_pct": combined,
         "n_sleeves": n, "n_stocks": len(combined),
         "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+        "fallback": fallback,
     }
+    if crisis is not None:
+        out["crisis"] = crisis
     if rebalance_every is not None:
         # 쓴 주기를 그대로 돌려준다(주지 않은 슬리브는 1 = 매일). 주지 않았으면 키도 없다.
         out["rebalance_every"] = {nm: int(rebalance_every.get(nm, 1)) for nm in names}
     if rebalance_cost_bps is not None:
         out["rebalance_cost_bps"] = {nm: float(rebalance_cost_bps.get(nm, 0.0)) for nm in names}
     return out
+
+
+def compare_sleeve_methods(sleeves: list[dict], ret_matrix: dict[str, list[float]] | None = None,
+                           rebalance_every: dict[str, int] | None = None,
+                           rebalance_cost_bps: dict[str, float] | None = None,
+                           market_returns: list[float] | None = None) -> dict[str, Any]:
+    """방법 비교표 (BS4, 관측) — 입력이 필요 없는 방법마다 **같은 흐름·같은 공분산**에서 몫·합친 흔들림·분산 효과·실질 개수.
+
+    ★어느 방법이 낫다는 판정이 아니다★ 과거 흐름 위에서 각 방법이 무엇을 하는지 나란히 보일 뿐이다. 분산 효과는 몫을 정한
+    공분산(수축) 기준이라 견고성 절(표본 표준편차)의 값과 조금 다를 수 있다.
+    """
+    if ret_matrix is None:
+        ret_matrix = _load_ret_matrix(sleeves)
+    names, S = _sleeve_return_series(sleeves, ret_matrix, rebalance_every, rebalance_cost_bps)
+    if S.size == 0 or S.shape[1] < 2:
+        return {"available": False, "rows": [], "reason": "전략 둘 이상의 흐름이 있어야 방법을 비교할 수 있어요."}
+    cov = _cov_local(S)
+    vols = np.sqrt(np.clip(np.diag(cov), 1e-12, None))
+    rows = []
+    for m in INPUT_FREE_METHODS:
+        try:
+            w, fb, _ = _allocate(m, S, cov, vols, names, market_returns=market_returns)
+        except _MethodFailure as e:
+            rows.append({"method": m, "available": False, "reason": str(e)})
+            continue
+        sp = float(np.sqrt(max(w @ cov @ w, 0.0)))
+        rows.append({"method": m, "available": True,
+                     "shares": {names[j]: round(float(w[j]) * 100, 2) for j in range(len(names))},
+                     "vol_pct": round(sp * np.sqrt(252) * 100, 2),
+                     "div_ratio": round(float(w @ vols) / sp, 3) if sp > 0 else None,
+                     "effective_n": round(1.0 / float(np.sum(w ** 2)), 3),
+                     "fallback": fb})
+    return {"available": True, "rows": rows, "n_days": int(S.shape[0]),
+            "note": "같은 과거 흐름 위에서 방법마다 몫을 나란히 본 거예요 — 어느 방법이 낫다는 뜻이 아니에요. "
+                    "분산 효과는 몫을 정한 공분산 기준이에요."}
 
 
 def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | None = None,

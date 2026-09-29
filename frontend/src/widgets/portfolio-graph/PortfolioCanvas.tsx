@@ -38,8 +38,12 @@ import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
+  BRIEF_MAX_W,
   CORE_CHAIN_TEMPLATE,
+  cardHeight,
+  cardWidth,
   compareTargets,
+  NODE_W,
   fieldsOf,
   goalDoc,
   PORTFOLIO_NODE,
@@ -112,6 +116,40 @@ const TOOLBAR_H = 48;
 
 /** 맞춰 보기 — 떠 있는 판(위: 선 범례·걸러 보기 · 아래: 안내 줄)이 노드·상자 머리를 가리지 않게 위아래를 비워 둔다.
  *  (BN N1 에서 찾은 결함: 균일 여백 맞춤은 맨 위 전략 상자의 머리 줄을 선 범례 밑에 두어 누를 수 없었다.) */
+/** 고른 노드 막대의 자리(BS2) — 아래가 기본(상자 머리를 가리지 않게), 아래 공간이 모자라면 위로.
+ *  캔버스 아래에는 안내 줄(약 60px)이 떠 있다 — 예전에는 아래 끝의 노드를 고르면 막대가 그 밑에 깔려 누를 수 없었다(E2E 가 찾음). */
+const SELBAR_ROOM = 14 + 44 + 64;
+/** 막대 폭(대략) — 가운데 맞춤이 떠 있는 판 밑으로 들어가는지 볼 때 쓴다. */
+const SELBAR_W = 300;
+function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
+  // 가로도 — 가운데에 두면 떠 있는 오른쪽 창·왼쪽 목록 밑으로 들어가는 경우 고른 노드의 끝에 맞춘다(E2E 가 찾음).
+  const place = useStore((st) => {
+    const [tx, ty, zoom] = st.transform;
+    let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+    for (const id of ids) {
+      const n = st.nodeInternals.get(id);
+      if (!n) continue;
+      const p = n.positionAbsolute ?? n.position;
+      top = Math.min(top, p.y * zoom + ty);
+      bottom = Math.max(bottom, (p.y + (n.height ?? 0)) * zoom + ty);
+      left = Math.min(left, p.x * zoom + tx);
+      right = Math.max(right, (p.x + (n.width ?? 0)) * zoom + tx);
+    }
+    const ins = floatInsets(st.domNode ?? null);
+    const mid = (left + right) / 2;
+    const align = mid + SELBAR_W / 2 > st.width - ins.right ? "end" : mid - SELBAR_W / 2 < ins.left ? "start" : "center";
+    const below = st.height - ins.bottom - bottom >= SELBAR_ROOM || top < SELBAR_ROOM;
+    return `${below ? "b" : "t"}|${align}`;
+  });
+  const [side, align] = place.split("|") as ["b" | "t", "start" | "center" | "end"];
+  return (
+    <NodeToolbar nodeId={ids} isVisible position={side === "b" ? Position.Bottom : Position.Top} align={align} offset={14}
+                 className="pg-selbar">
+      {children}
+    </NodeToolbar>
+  );
+}
+
 function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
                   opts: { ids?: string[]; minZoom?: number; maxZoom?: number; duration?: number } = {}): boolean {
   if (!inst || !el) return false;
@@ -137,11 +175,9 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
                    opts.duration ? { duration: opts.duration } : undefined);
   return true;
 }
-const NODE_W = 176;
 /** React Flow 확대 한계 — `minZoom` 속성과 기본 최대(2). */
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
-const NODE_H = 150;
 const WIP_KEY = "alpha_pg_wip";
 /** 첫 방문 환영 줄(BN N2)을 본 적 있나 — 이 브라우저 localStorage. 못 읽거나 못 쓰면 "본 적 없음"(올 때마다 뜨되 닫을 수 있다). */
 const WELCOME_KEY = "alpha_pg_welcomed";
@@ -380,8 +416,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       const strat = g.kind === "strategy";
       const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
       const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 30;
-      const x1 = Math.max(...ms.map((n) => n.position.x)) + NODE_W + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y)) + NODE_H + GROUP_PAD;
+      // 상자 경계는 카드의 실제 폭·배치 높이로(BS2 — 예전 176·150 은 실제 카드와 달랐다).
+      const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
+      const y1 = Math.max(...ms.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) + GROUP_PAD;
       const inside = new Set(g.members);
       const collapsed = collapsedOf.has(g.members[0] ?? "") && !!g.collapsed;
       const proxyIn = collapsed ? s.edges.filter((e) => inside.has(e.target) && !inside.has(e.source)).map((e) => {
@@ -414,8 +451,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       if (!ms.length) return [];
       const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
       const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 56;
-      const x1 = Math.max(...ms.map((n) => n.position.x)) + NODE_W + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y)) + NODE_H + GROUP_PAD;
+      const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
+      const y1 = Math.max(...ms.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) + GROUP_PAD;
       const root = s.nodes.find((n) => n.id === b.of_root);
       return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
                 className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined,
@@ -426,12 +463,18 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf]);
   /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
   const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
-  const edgesStyled = useMemo(() => s.edges.map((e) => {
+  const edgesStyled = useMemo(() => {
+    // 선 요약은 ★원천 포트의 요약★이다 — 한 포트에서 여러 선이 나가면 같은 글이 겹쳐 쌓였다. 포트마다 한 번만(BS2).
+    const briefed = new Set<string>();
+    return s.edges.map((e) => {
     const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
     const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
     const lit = path.has(e.source) && path.has(e.target);
     const src = live?.[e.source];
-    const wire = wireOf(src, e.sourceHandle ? src?.briefs?.[e.sourceHandle] : null);
+    const portKey = `${e.source}|${e.sourceHandle}`;
+    const firstFromPort = !briefed.has(portKey);
+    briefed.add(portKey);
+    const wire = wireOf(src, e.sourceHandle && firstFromPort ? src?.briefs?.[e.sourceHandle] : null);
     const onCause = !!cause && causeSet.has(e.source) && causeSet.has(e.target);
     const kept = !keep || (keep.has(e.source) && keep.has(e.target));
     // 접힌 상자 — 안쪽끼리는 숨기고, 경계를 넘는 선은 상자의 대리 포트로(실제 링크는 그대로).
@@ -447,7 +490,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     return { ...e, ...remap, type: PG_WIRE_TYPE, data: wire, animated: lit && s.running, className: cls,
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: lit || onCause ? 3.5 : 2.5 } };
-  }), [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet, keep, collapsedOf, faintOthers]);
+    });
+  }, [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet, keep, collapsedOf, faintOthers]);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
   const strategySources = useMemo(() => {
     const cat = s.catalog ?? [];
@@ -993,6 +1037,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                   onClick={() => updatePanels((p) => toggle(p, "left"))}><Plus size={20} aria-hidden="true" /></button>
         )}
         <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}${s.growing ? " pg-growing" : ""}`}
+             style={{ "--pg-node-w": NODE_W, "--pg-brief-w": `${BRIEF_MAX_W}px` } as React.CSSProperties}
              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(e.dataTransfer.types.includes("Files")); }}
              onDragLeave={() => setDragOver(false)}
              onDrop={onDrop}>
@@ -1092,7 +1137,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             {/* 고른 노드 **아래**에 — 전략·묶음 상자의 머리는 위에 있어, 위에 띄우면 상자 머리 단추를 가렸다(E2E 가 찾음).
                 고른 것이 한 상자의 구성원 전부면(방금 묶었을 때) 상자 머리가 그 역할을 하므로 띄우지 않는다. */}
             {!s.simple && s.picked.length > 1 && !pickedIsOneGroup && (
-              <NodeToolbar nodeId={s.picked} isVisible position={Position.Bottom} offset={14} className="pg-selbar">
+              <SelBar ids={s.picked}>
                 <span className="pg-selbar-n">{s.picked.length}개 골랐어요</span>
                 <button type="button" className="pg-selbar-b" onClick={() => usePortfolioGraph.getState().groupPicked()}
                         title="고른 노드를 상자로 묶어요 (Ctrl+G)">
@@ -1103,7 +1148,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                         onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); }}>
                   <Scale size={14} aria-hidden="true" /> 견고성 비교
                 </button>
-              </NodeToolbar>
+              </SelBar>
             )}
             {/* 확대·축소는 떠 있는 판 사이 가운데를 기준으로(BQ Q1) — 기본 단추는 판 뒤 캔버스 가운데를 기준으로 해 노드를 창 밑으로 민다. */}
             <Controls showZoom={false} showFitView={false} showInteractive={false}>

@@ -23,11 +23,29 @@ P = pg.Port
 N_PORTS = 8
 PORTS = tuple(f"s{i}" for i in range(1, N_PORTS + 1))
 
-#: `sleeve_combine` 노드와 같은 선택지(같은 엔진 방식) — 쉬운 이름도 같다.
+#: 앞 다섯은 `sleeve_combine` 노드와 같은 선택지(같은 엔진 방식·쉬운 이름). BS4 — 사용자 승인(2026-09-29): 뒤 다섯은
+#: 고를 때만 쓰인다. 기본값(risk_parity)과 기존 방법의 답은 그대로다(`tests/test_bs4_golden.py`).
 METHODS = {"risk_parity": "위험 똑같이", "equal": "똑같이", "inverse_vol": "덜 흔들리는 쪽에 더",
-           "min_var": "흔들림 최소", "hrp": "비슷한 것끼리 묶어"}
-#: 엔진이 풀리지 않으면 역변동성으로 바꾸는 방식 — 그 경우인지 결과에 표시되지 않는다.
-SILENT_FALLBACK = ("min_var", "hrp")
+           "min_var": "흔들림 최소", "hrp": "비슷한 것끼리 묶어",
+           "crisis_risk_parity": "위기 때 위험 똑같이", "max_diversification": "분산 효과 최대",
+           "risk_budget": "위험 예산 직접", "score": "점수 비례", "manual": "몫 직접 정하기"}
+#: 방법마다 한 줄 — 무엇을 하는지(낫다는 말이 아니다).
+METHOD_HELP = {
+    "risk_parity": "전략마다 전체 흔들림에 보태는 몫이 같게 나눠요.",
+    "equal": "전략마다 똑같이 나눠요.",
+    "inverse_vol": "덜 흔들리는 전략에 더 줘요. 전략 사이 상관은 보지 않아요.",
+    "min_var": "합친 흔들림이 가장 작아지게 나눠요. 한두 전략에 몰릴 수 있어요.",
+    "hrp": "비슷하게 움직이는 전략끼리 묶은 뒤 묶음 사이에서 위험을 나눠요.",
+    "crisis_risk_parity": "시장이 가장 나빴던 날(하위 10%)에 같이 잃은 크기로 위험을 똑같이 나눠요.",
+    "max_diversification": "전략끼리 서로 상쇄하는 효과(분산 효과)가 가장 크게 나눠요.",
+    "risk_budget": "전략마다 위험을 몇 %씩 맡길지 직접 정해요.",
+    "score": "전략마다 점수를 주면 점수에 비례해 나눠요.",
+    "manual": "전략마다 몫(%)을 직접 정해요. 흐름으로 정하지 않아요.",
+}
+#: 전략마다 숫자를 받는 방법 → (파라미터 이름, 쉬운 이름). 없으면 ★실패★(엔진처럼 위험 똑같이로 가지 않는다).
+NEEDS_NUMBERS = {"risk_budget": ("budgets", "위험 예산"), "score": ("scores", "점수"), "manual": ("shares", "몫")}
+#: 합이 100 이어야 하는 숫자.
+SUM_100 = ("budgets", "shares")
 #: 전략별 리밸런싱 주기 (BO O2 — 사용자 승인 배분 동작 변경) — 코드 → (거래일, 쉬운 이름).
 #: 거래일 수는 관례(주 5·달 21·분기 63)다. 매일(D)은 지금까지의 흐름과 같은 식이다.
 REBALANCE: dict[str, tuple[int, str]] = {"D": (1, "매일"), "W": (5, "매주"), "M": (21, "한 달"), "Q": (63, "한 분기")}
@@ -36,7 +54,17 @@ REBALANCE: dict[str, tuple[int, str]] = {"D": (1, "매일"), "W": (5, "매주"),
 class PortfolioCombineParams(BaseModel):
     model_config = _FORBID
     method: Literal[tuple(METHODS)] = Field("risk_parity", json_schema_extra={"x-ui": _ui(
-        "합치는 방식", question="전략끼리 어떻게 나눌까요?", widget="cards", options=METHODS)})
+        "합치는 방식", question="전략끼리 어떻게 나눌까요?", widget="cards", options=METHODS, order=list(METHODS),
+        descriptions=METHOD_HELP, help="처음은 ‘위험 똑같이’예요. 자세히 탭의 ‘방법 비교’에서 같은 흐름 위의 몫을 나란히 볼 수 있어요.")})
+    budgets: dict[str, float] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
+        "위험 예산", question="전략마다 위험을 몇 %씩 맡길까요?", widget="per_port_number", unit="%", sum_to=100,
+        show_if={"method": ["risk_budget"]}, help="합이 100% 가 되게 정해요. 몫이 아니라 전체 흔들림에 보태는 몫이에요.")})
+    scores: dict[str, float] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
+        "점수", question="전략마다 점수를 몇 점 줄까요?", widget="per_port_number", unit="점",
+        show_if={"method": ["score"]}, help="0 이상. 점수에 비례해 몫을 나눠요.")})
+    shares: dict[str, float] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
+        "몫", question="전략마다 몫을 몇 %씩 줄까요?", widget="per_port_number", unit="%", sum_to=100,
+        show_if={"method": ["manual"]}, help="합이 100% 가 되게 정해요.")})
     labels: dict[str, str] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
         "전략 이름", tier="advanced", help="포트(s1~s8)마다 전략 이름. 캔버스가 전략 상자 이름으로 채워요.")})
     rebalance: dict[str, Literal[tuple(REBALANCE)]] = Field(default_factory=dict, json_schema_extra={"x-ui": _ui(
@@ -61,6 +89,17 @@ class PortfolioCombineParams(BaseModel):
             raise ValueError(f"없는 포트: {', '.join(bad)} (s1~s{N_PORTS})")
         return v
 
+    @field_validator("budgets", "scores", "shares")
+    @classmethod
+    def _numbers_by_port(cls, v: dict[str, float]) -> dict[str, float]:
+        bad = [k for k in v if k not in PORTS]
+        if bad:
+            raise ValueError(f"없는 포트: {', '.join(bad)} (s1~s{N_PORTS})")
+        neg = [k for k, x in v.items() if not np.isfinite(x) or x < 0 or x > 1e6]
+        if neg:
+            raise ValueError(f"0 이상의 숫자여야 해요: {', '.join(neg)}")
+        return v
+
     @field_validator("labels")
     @classmethod
     def _known_ports(cls, v: dict[str, str]) -> dict[str, str]:
@@ -71,6 +110,40 @@ class PortfolioCombineParams(BaseModel):
         if long:
             raise ValueError(f"전략 이름은 1~40자: {', '.join(long)}")
         return {k: x.strip() for k, x in v.items()}
+
+
+def _numbers_for(p: PortfolioCombineParams, ports: list[str], names: list[str]) -> dict[str, dict[str, float]]:
+    """전략마다 받는 숫자(위험 예산·점수·몫)를 이름 기준으로 — 이어진 전략 하나라도 비면 ★실패★ + 사유."""
+    need = NEEDS_NUMBERS.get(p.method)
+    if need is None:
+        return {}
+    field, plain = need
+    given: dict[str, float] = getattr(p, field)
+    missing = [nm for port, nm in zip(ports, names) if port not in given]
+    if missing:
+        raise pg.NodeFailure(f"‘{METHODS[p.method]}’은 전략마다 {plain}이 있어야 해요 — 비어 있는 전략: {', '.join(missing)}. "
+                             "다른 방법으로 대신 계산하지 않았어요.")
+    vals = {nm: float(given[port]) for port, nm in zip(ports, names)}
+    total = sum(vals.values())
+    if field in SUM_100 and abs(total - 100.0) > 0.01:
+        raise pg.NodeFailure(f"{plain}의 합이 {total:g}% 예요 — 100% 가 되게 맞춰 주세요.")
+    if field == "scores" and total <= 0:
+        raise pg.NodeFailure("점수가 모두 0 이에요 — 한 전략 이상에 0 보다 큰 점수를 주세요.")
+    return {"budgets": {"risk_budget": vals}, "scores": {"scores": vals}, "shares": {"shares": vals}}[field]
+
+
+def _market_for(sleeves: list[dict]) -> dict[str, Any]:
+    """위기일을 고를 시장 대용 — 견고성 절과 같은 선택(`market_proxy`) · 같은 날짜 있는 종가 로더. 없으면 사유."""
+    from src.api import robustness_inputs as ri
+    pick = ri.market_proxy(ri._codes(sleeves))
+    if pick["ticker"] is None:
+        return {"ticker": None, "label": None, "returns": None, "reason": pick["reason"]}
+    rows = ri._indexed(pick["ticker"], 252 + 40)
+    px = np.asarray([c for _, c in rows], dtype=float)
+    if px.size < 31 or not np.all(np.isfinite(px)) or (px <= 0).any():
+        return {"ticker": pick["ticker"], "label": pick["label"], "returns": None,
+                "reason": f"{pick['label']} 시세가 모자라요({px.size}일)"}
+    return {"ticker": pick["ticker"], "label": pick["label"], "returns": (px[1:] / px[:-1] - 1.0).tolist(), "reason": None}
 
 
 def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput:
@@ -95,11 +168,22 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
     every = {name: REBALANCE[codes_of[port]][0] for port, name in zip(ports, names)}
     every_arg = every if any(k > 1 for k in every.values()) else None
     cost_arg = {name: float(p.cost_bps) for name in names} if p.cost_bps > 0 else None
+    by_name = _numbers_for(p, ports, names)
     ret = sc._load_ret_matrix(sleeves)
+    market = _market_for(sleeves)
+    if p.method == "crisis_risk_parity" and market["returns"] is None:
+        raise pg.NodeFailure(f"위기 때 위험 똑같이는 시장 대용이 있어야 해요 — {market['reason']}")
     out = sc.combine_sleeves(sleeves, method=p.method, ret_matrix=ret, rebalance_every=every_arg,
-                             rebalance_cost_bps=cost_arg)
+                             rebalance_cost_bps=cost_arg, market_returns=market["returns"], **by_name)
     if out.get("error"):
         raise pg.NodeFailure(str(out.get("message")))
+    compare = sc.compare_sleeve_methods(sleeves, ret_matrix=ret, rebalance_every=every_arg,
+                                        rebalance_cost_bps=cost_arg, market_returns=market["returns"])
+    compare["current"] = p.method
+    for row in compare.get("rows") or []:
+        row["label"] = METHODS[row["method"]]
+        if row["method"] == "crisis_risk_parity" and not row["available"] and market["returns"] is None:
+            row["reason"] = f"시장 대용이 없어요 — {market['reason']}"
     ana = sc.sleeve_analytics(sleeves, ret_matrix=ret, weights=out["sleeve_allocation"], rebalance_every=every_arg,
                               rebalance_cost_bps=cost_arg)
     cm = ana.get("correlation") or {}
@@ -119,7 +203,8 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
     view = {"result": out, "labels": _labels(codes), "strategies": strategies, "correlation": corr,
             "cost_bps": float(p.cost_bps),
             "correlation_reason": ana.get("message") if ana.get("error") else None,
-            "robustness": robustness}
+            "robustness": robustness, "method_compare": compare,
+            "market": {"ticker": market["ticker"], "label": market["label"], "reason": market["reason"]}}
     return pg.NodeOutput(values={"weights": weights_value(codes, arr)}, view=view,
                          tags={"practice": mock_allowed(), "sources": ["portfolio_combine"]})
 
@@ -129,8 +214,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"{s['label']}: 몫 {s['share_pct']:.1f}% · 위험 분담 {s['risk_pct']:.1f}% · "
              f"리밸런싱 {REBALANCE.get(s.get('rebalance') or 'D', REBALANCE['D'])[1]}" for s in view.get("strategies") or []]
     trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 전략의 수익 흐름으로 몫을 정하고 종목 비중을 합쳤어요(묶음 합치기와 같은 계산).")]
-    if r.get("method") in SILENT_FALLBACK:
-        trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿔요 — 이 결과가 그 경우인지는 표시되지 않아요."))
+    trust += _method_trust(r, view)
     rows_all = view.get("strategies") or []
     codes = [x.get("rebalance") or "D" for x in rows_all]
     if all(c == "D" for c in codes):
@@ -161,6 +245,29 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
             "trust": trust, "unmeasured": ["전략 사이 상관이 앞으로 유지될지",
                            "슬리피지·시장 충격" if cost > 0 else "되돌릴 때 드는 거래비용",
                            "전략 사이 몫을 되돌리는 비용"]}
+
+
+def _method_trust(r: dict, view: dict) -> list[dict]:
+    """고른 방법이 무엇에 기대는지 · 엔진이 대신 계산했는지(BS4 — 예전엔 min_var·hrp 에서 "모름"이었다)."""
+    m, fb, out = r.get("method"), r.get("fallback") or {}, []
+    if fb.get("used"):
+        out.append(_t(ASSUMED, f"‘{METHODS.get(m, m)}’ 대신 계산했어요 — {fb.get('reason')}"))
+    elif m in ("min_var", "hrp"):
+        out.append(_t(CONFIRMED, f"‘{METHODS[m]}’ 계산이 풀렸어요 — 다른 방법으로 대신 계산하지 않았어요."))
+    if m == "manual":
+        out.append(_t(ASSUMED, "몫은 내가 정한 몫이에요 — 전략 흐름으로 정한 것이 아니에요."))
+    elif m == "risk_budget":
+        out.append(_t(ASSUMED, "내가 정한 위험 예산대로 위험을 나눴어요 — 예산 자체는 흐름으로 정한 것이 아니에요."))
+    elif m == "score":
+        out.append(_t(ASSUMED, "내가 준 점수에 비례해 나눴어요 — 점수가 앞날을 맞힌다는 근거는 여기서 재지 않았어요."))
+    elif m == "crisis_risk_parity":
+        c, mk = r.get("crisis") or {}, view.get("market") or {}
+        out.append(_t(ASSUMED, f"위기일은 {mk.get('label')} 이 가장 나빴던 10% 날 {c.get('days')}일이에요 — 전략 흐름과 끝을 맞춰 "
+                               "줄을 세웠고, 그날 같이 잃은 크기로 위험을 똑같이 나눴어요. 지난 위기가 다음 위기를 닮는다는 보장은 없어요."))
+    elif m == "max_diversification":
+        out.append(_t(ASSUMED, "분산 효과(전략끼리 상쇄되는 정도)가 가장 크게 나눴어요 — 과거의 흔들림과 상관이 앞으로도 "
+                               "유지된다고 가정해요."))
+    return out
 
 
 def glance(view: dict) -> dict | None:

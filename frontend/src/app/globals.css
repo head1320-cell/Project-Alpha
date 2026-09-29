@@ -6020,12 +6020,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-canvas .react-flow__controls button svg { fill: currentColor; }
 
 /* ── 노드 카드 ── */
-.pg-node { position: relative; width: 164px; padding: 12px 13px; font-size: 12px; color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 16px; box-shadow: var(--pg-shadow); }
+.pg-node { position: relative; width: calc(var(--pg-node-w, 150) * 1px); padding: 12px 13px; font-size: 12px; color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 16px; box-shadow: var(--pg-shadow); }
 .pg-node--selected { border-color: var(--pg-blue); box-shadow: 0 0 0 4px rgb(49 130 246 / 16%), var(--pg-shadow); }
 .pg-node--failed { border-color: var(--pg-fail); }
 .pg-node--warn { border-color: var(--pg-assume); }
 .pg-node--stale { opacity: 0.62; }
-.pg-node--unknown { width: 210px; background: var(--pg-fail-soft); border: 1.5px dashed var(--pg-fail); box-shadow: none; }
+.pg-node--unknown { width: calc(var(--pg-node-w, 150) * 1px); background: var(--pg-fail-soft); border: 1.5px dashed var(--pg-fail); box-shadow: none; }
 .pg-node-k { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--pg-mute); }
 .pg-node-num { display: grid; place-items: center; width: 16px; height: 16px; font-size: 10px; font-style: normal; color: #fff; border-radius: 5px; flex: none; }
 .pg-node-plain { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -6117,6 +6117,38 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-perport { display: grid; gap: 10px; }
 .pg-perport-row { display: grid; gap: 6px; }
 .pg-perport-name { font-size: 13.5px; font-weight: 700; color: var(--pg-ink); }
+/* BS4 — 전략마다 숫자(위험 예산·점수·몫). 이름 왼쪽 · 칸 오른쪽 한 줄, 합은 늘 보인다. */
+.pg-perport-row--num { grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+.pg-perport-num { display: inline-flex; align-items: center; gap: 6px; }
+.pg-perport-num .pg-field-input { width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
+.pg-perport-unit { font-size: 13px; color: var(--pg-mute); }
+.pg-perport-sum { margin: 2px 0 0; padding: 8px 12px; font-size: 13.5px; font-weight: 600; border-radius: 10px;
+  color: var(--pg-body); background: var(--pg-soft); font-variant-numeric: tabular-nums; }
+.pg-perport-sum[data-ok="0"] { color: var(--pg-ink); background: var(--pg-assume-soft); box-shadow: inset 3px 0 0 var(--pg-assume); }
+/* 방법 카드 설명(BS4) — 설명이 있으면 한 줄에 하나(두 칸은 설명이 네 줄로 잘린다). */
+.pg-choices--desc { grid-template-columns: 1fr; }
+.pg-choice-help { display: block; margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--pg-mute); word-break: keep-all; }
+.pg-choice.on .pg-choice-help { color: var(--pg-body); }
+/* 방법 비교(BS4) — 줄마다 이름 · 몫 막대 · 숫자 셋. 지금 방법은 파란 테. */
+.pg-mc { margin: 18px 0 8px; }
+.pg-mc-note { margin: 0 0 10px; word-break: keep-all; }
+.pg-mc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 12.5px; color: var(--pg-body); }
+.pg-mc-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+.pg-mc-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pg-mc-row { padding: 12px 14px; background: var(--pg-paper); border: 1.5px solid var(--pg-line); border-radius: 12px; }
+.pg-mc-row.on { border-color: var(--pg-blue); background: var(--pg-blue-soft); }
+.pg-mc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.pg-mc-head b { font-size: 14px; color: var(--pg-ink); }
+.pg-mc-chip { padding: 1px 8px; font-size: 12px; font-weight: 700; border-radius: 999px; }
+.pg-mc-chip--on { color: var(--pg-blue-ink); background: var(--pg-paper); border: 1px solid var(--pg-blue); }
+.pg-mc-chip--fb { color: var(--pg-ink); background: var(--pg-soft); border: 1px dashed var(--pg-mute); }
+.pg-mc-bar { display: flex; height: 10px; overflow: hidden; border-radius: 5px; background: var(--pg-soft); }
+.pg-mc-seg { height: 100%; }
+.pg-mc-seg + .pg-mc-seg { box-shadow: inset 1.5px 0 0 var(--pg-paper); }
+.pg-mc-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 0; }
+.pg-mc-nums dt { font-size: 12px; color: var(--pg-mute); }
+.pg-mc-nums dd { margin: 2px 0 0; font-size: 14px; font-weight: 700; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-mc-reason { margin: 0; font-size: 13px; line-height: 1.5; color: var(--pg-mute); word-break: keep-all; }
 .pg-chip--sm { height: 32px; padding: 0 12px; font-size: 13px; }
 .pg-group-rebal { font-size: 12px; font-weight: 600; color: var(--pg-body); white-space: nowrap; }
 .pg-snode-rebal { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: var(--pg-body); }
@@ -6267,7 +6299,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 여기까지 계산 — 노드 위 도구줄과 ★밝아지는 경로(이번 대담함의 한 곳)★ */
 .pg-theme .pg-run-to { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 700; color: #fff; background: var(--pg-cta); border: 0; border-radius: 15px; box-shadow: var(--pg-shadow); cursor: pointer; }
 .pg-theme .pg-run-to:disabled { opacity: .5; cursor: default; }
-.pg-theme .pg-run-to kbd { padding: 1px 5px; font: inherit; font-size: 11px; font-weight: 600; background: rgb(255 255 255 / 18%); border-radius: 4px; }
 .pg-theme .pg-run-to:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 .react-flow__node.pg-on-path .pg-node { border-color: var(--pg-blue); box-shadow: 0 0 0 5px rgb(49 130 246 / 14%), var(--pg-shadow); transition: box-shadow .18s ease, border-color .18s ease; }
 .pg-edge--path .react-flow__edge-path { filter: drop-shadow(0 0 3px rgb(49 130 246 / 45%)); }
@@ -6537,6 +6568,9 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-theme .pg-cause-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 8px; font: inherit; font-size: 12px; font-weight: 700; color: var(--pg-blue-ink); background: var(--pg-blue-soft); border: 0; border-radius: 8px; cursor: pointer; }
 .pg-theme .pg-pin, .pg-theme .pg-branch-make { display: inline-flex; align-items: center; gap: 6px; height: 30px; margin-left: 6px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 700; color: var(--pg-ink); background: var(--pg-paper); border: 0; border-radius: 15px; box-shadow: var(--pg-shadow); cursor: pointer; }
 .pg-theme .pg-pin[aria-pressed="true"] { color: var(--pg-blue-ink); background: var(--pg-blue-soft); }
+/* 아이콘 단추(BS2) — 30px 원. 이름은 aria-label·title 이 말한다. */
+.pg-theme .pg-tb-icon { justify-content: center; width: 30px; padding: 0; }
+.pg-theme .pg-tb-icon:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 /* 작은 그림 */
 .pg-glance { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--pg-line); }
 .pg-gl-cap { margin-bottom: 4px; font-size: 11px; font-weight: 700; color: var(--pg-mute); }
@@ -6563,7 +6597,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .react-flow__edge.pg-wire--practice .react-flow__edge-path { stroke-dasharray: 7 5; }
 .react-flow__edge.pg-wire--blocked .react-flow__edge-path { stroke-dasharray: 2 7; }
 .pg-wire-ticks { stroke-width: 10px; stroke-dasharray: 1.8 8; opacity: .7; }
-.pg-wire-brief { position: absolute; padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--pg-body); background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 10px; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
+.pg-wire-brief { position: absolute; max-width: var(--pg-brief-w, 64px); padding: 2px 6px; font-size: 11px; font-weight: 600; line-height: 1.3; text-align: center; color: var(--pg-body); background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 8px; word-break: keep-all; overflow-wrap: anywhere; pointer-events: none; font-variant-numeric: tabular-nums; }
 .pg-wire-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 10px; padding: 6px 12px; font-size: 12px; color: var(--pg-body); background: var(--pg-paper); border-radius: 12px; box-shadow: var(--pg-shadow); }
 .pg-wire-key { display: inline-flex; align-items: center; gap: 5px; cursor: help; }
 .pg-wire-key line { stroke: var(--pg-body); stroke-width: 2.2; }

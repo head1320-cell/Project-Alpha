@@ -370,6 +370,7 @@ for (const scheme of ["light", "dark"] as const) {
     await node(page, "risk").locator(".pg-cause-btn").click();
     await page.keyboard.press("Escape");
     await zoomTo(page, "near");
+    await reveal(page, "risk");            // 격자가 넓어져(BS2) 가까이 확대하면 오른쪽 판 밑에 들 수 있다
     await node(page, "risk").locator(".pg-cause-btn").click();
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-canvas"));
     expect(audit.checked).toBeGreaterThan(20);

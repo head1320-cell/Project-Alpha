@@ -1,0 +1,581 @@
+{
+ "engine": {
+  "default": {
+   "combined_weights_pct": {
+    "000660": 26.9283,
+    "005930": 15.2599,
+    "035420": 16.7551,
+    "051910": 28.7398,
+    "068270": 12.317
+   },
+   "error": false,
+   "method": "risk_parity",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_allocation": {
+    "가": 25.43,
+    "나": 33.51,
+    "다": 41.06
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "equal": {
+   "combined_weights_pct": {
+    "000660": 30.0,
+    "005930": 20.0,
+    "035420": 16.6667,
+    "051910": 23.3333,
+    "068270": 10.0
+   },
+   "error": false,
+   "method": "equal",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 46.46,
+    "나": 34.06,
+    "다": 19.48
+   },
+   "sleeve_allocation": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "hrp": {
+   "combined_weights_pct": {
+    "000660": 24.0253,
+    "005930": 11.881,
+    "035420": 16.1046,
+    "051910": 33.5924,
+    "068270": 14.3967
+   },
+   "error": false,
+   "method": "hrp",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 23.03,
+    "나": 29.07,
+    "다": 47.9
+   },
+   "sleeve_allocation": {
+    "가": 19.8,
+    "나": 32.21,
+    "다": 47.99
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "inverse_vol": {
+   "combined_weights_pct": {
+    "000660": 29.902,
+    "005930": 17.2896,
+    "035420": 18.3756,
+    "051910": 24.1029,
+    "068270": 10.3298
+   },
+   "error": false,
+   "method": "inverse_vol",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 39.74,
+    "나": 38.63,
+    "다": 21.63
+   },
+   "sleeve_allocation": {
+    "가": 28.82,
+    "나": 36.75,
+    "다": 34.43
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "min_var": {
+   "combined_weights_pct": {
+    "000660": 22.9194,
+    "005930": 10.0613,
+    "035420": 16.2118,
+    "051910": 35.5652,
+    "068270": 15.2422
+   },
+   "error": false,
+   "method": "min_var",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 18.08,
+    "나": 27.73,
+    "다": 54.19
+   },
+   "sleeve_allocation": {
+    "가": 16.77,
+    "나": 32.42,
+    "다": 50.81
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "rebalance_cost": {
+   "combined_weights_pct": {
+    "000660": 26.9468,
+    "005930": 15.2497,
+    "035420": 16.7803,
+    "051910": 28.7162,
+    "068270": 12.3069
+   },
+   "error": false,
+   "method": "risk_parity",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "rebalance_cost_bps": {
+    "가": 10.0,
+    "나": 10.0,
+    "다": 0.0
+   },
+   "rebalance_every": {
+    "가": 5,
+    "나": 21,
+    "다": 1
+   },
+   "risk_contribution_pct": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_allocation": {
+    "가": 25.42,
+    "나": 33.56,
+    "다": 41.02
+   },
+   "sleeve_vol_pct": {
+    "가": 18.86,
+    "나": 14.77,
+    "다": 15.79
+   }
+  },
+  "risk_budget": {
+   "combined_weights_pct": {
+    "000660": 29.4504,
+    "005930": 21.522,
+    "035420": 15.1023,
+    "051910": 23.7477,
+    "068270": 10.1776
+   },
+   "error": false,
+   "method": "risk_budget",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 50.0,
+    "나": 30.0,
+    "다": 20.0
+   },
+   "sleeve_allocation": {
+    "가": 35.87,
+    "나": 30.2,
+    "다": 33.93
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "risk_budget_missing": {
+   "combined_weights_pct": {
+    "000660": 26.9283,
+    "005930": 15.2599,
+    "035420": 16.7551,
+    "051910": 28.7398,
+    "068270": 12.317
+   },
+   "error": false,
+   "method": "risk_budget",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_allocation": {
+    "가": 25.43,
+    "나": 33.51,
+    "다": 41.06
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "risk_parity": {
+   "combined_weights_pct": {
+    "000660": 26.9283,
+    "005930": 15.2599,
+    "035420": 16.7551,
+    "051910": 28.7398,
+    "068270": 12.317
+   },
+   "error": false,
+   "method": "risk_parity",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_allocation": {
+    "가": 25.43,
+    "나": 33.51,
+    "다": 41.06
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "score": {
+   "combined_weights_pct": {
+    "000660": 42.5,
+    "005930": 45.0,
+    "035420": 12.5,
+    "051910": 0.0,
+    "068270": 0.0
+   },
+   "error": false,
+   "method": "score",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 82.27,
+    "나": 17.73,
+    "다": -0.0
+   },
+   "sleeve_allocation": {
+    "가": 75.0,
+    "나": 25.0,
+    "다": 0.0
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "score_missing": {
+   "combined_weights_pct": {
+    "000660": 26.9283,
+    "005930": 15.2599,
+    "035420": 16.7551,
+    "051910": 28.7398,
+    "068270": 12.317
+   },
+   "error": false,
+   "method": "score",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_allocation": {
+    "가": 25.43,
+    "나": 33.51,
+    "다": 41.06
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  },
+  "unknown_method": {
+   "combined_weights_pct": {
+    "000660": 26.9283,
+    "005930": 15.2599,
+    "035420": 16.7551,
+    "051910": 28.7398,
+    "068270": 12.317
+   },
+   "error": false,
+   "method": "whatever",
+   "n_sleeves": 3,
+   "n_stocks": 5,
+   "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+   "risk_contribution_pct": {
+    "가": 33.33,
+    "나": 33.33,
+    "다": 33.33
+   },
+   "sleeve_allocation": {
+    "가": 25.43,
+    "나": 33.51,
+    "다": 41.06
+   },
+   "sleeve_vol_pct": {
+    "가": 18.87,
+    "나": 14.8,
+    "다": 15.79
+   }
+  }
+ },
+ "node": {
+  "default": {
+   "result": {
+    "combined_weights_pct": {
+     "000660": 30.5308,
+     "005930": 28.4794,
+     "035420": 40.9898
+    },
+    "error": false,
+    "method": "risk_parity",
+    "n_sleeves": 3,
+    "n_stocks": 3,
+    "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+    "risk_contribution_pct": {
+     "전략 1": 33.33,
+     "전략 2": 33.33,
+     "전략 3": 33.33
+    },
+    "sleeve_allocation": {
+     "전략 1": 36.95,
+     "전략 2": 31.5,
+     "전략 3": 31.55
+    },
+    "sleeve_vol_pct": {
+     "전략 1": 21.46,
+     "전략 2": 19.99,
+     "전략 3": 23.01
+    }
+   },
+   "robustness_available": true,
+   "status": "ok",
+   "strategies": [
+    {
+     "label": "전략 1",
+     "n_holdings": 2,
+     "port": "s1",
+     "rebalance": "D",
+     "risk_pct": 33.33,
+     "share_pct": 36.95,
+     "vol_pct": 21.46
+    },
+    {
+     "label": "전략 2",
+     "n_holdings": 2,
+     "port": "s2",
+     "rebalance": "D",
+     "risk_pct": 33.33,
+     "share_pct": 31.5,
+     "vol_pct": 19.99
+    },
+    {
+     "label": "전략 3",
+     "n_holdings": 2,
+     "port": "s3",
+     "rebalance": "D",
+     "risk_pct": 33.33,
+     "share_pct": 31.55,
+     "vol_pct": 23.01
+    }
+   ],
+   "view_keys": [
+    "correlation",
+    "correlation_reason",
+    "cost_bps",
+    "labels",
+    "result",
+    "robustness",
+    "strategies"
+   ]
+  },
+  "equal_rebalance": {
+   "result": {
+    "combined_weights_pct": {
+     "000660": 30.0,
+     "005930": 26.6667,
+     "035420": 43.3333
+    },
+    "error": false,
+    "method": "equal",
+    "n_sleeves": 3,
+    "n_stocks": 3,
+    "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+    "rebalance_cost_bps": {
+     "전략 1": 10.0,
+     "전략 2": 10.0,
+     "전략 3": 10.0
+    },
+    "rebalance_every": {
+     "전략 1": 21,
+     "전략 2": 1,
+     "전략 3": 1
+    },
+    "risk_contribution_pct": {
+     "전략 1": 28.1,
+     "전략 2": 35.57,
+     "전략 3": 36.33
+    },
+    "sleeve_allocation": {
+     "전략 1": 33.33,
+     "전략 2": 33.33,
+     "전략 3": 33.33
+    },
+    "sleeve_vol_pct": {
+     "전략 1": 21.48,
+     "전략 2": 19.99,
+     "전략 3": 23.01
+    }
+   },
+   "robustness_available": true,
+   "status": "ok",
+   "strategies": [
+    {
+     "label": "전략 1",
+     "n_holdings": 2,
+     "port": "s1",
+     "rebalance": "M",
+     "risk_pct": 28.1,
+     "share_pct": 33.33,
+     "vol_pct": 21.48
+    },
+    {
+     "label": "전략 2",
+     "n_holdings": 2,
+     "port": "s2",
+     "rebalance": "D",
+     "risk_pct": 35.57,
+     "share_pct": 33.33,
+     "vol_pct": 19.99
+    },
+    {
+     "label": "전략 3",
+     "n_holdings": 2,
+     "port": "s3",
+     "rebalance": "D",
+     "risk_pct": 36.33,
+     "share_pct": 33.33,
+     "vol_pct": 23.01
+    }
+   ],
+   "view_keys": [
+    "correlation",
+    "correlation_reason",
+    "cost_bps",
+    "labels",
+    "result",
+    "robustness",
+    "strategies"
+   ]
+  },
+  "hrp": {
+   "result": {
+    "combined_weights_pct": {
+     "000660": 33.639,
+     "005930": 31.6131,
+     "035420": 34.7479
+    },
+    "error": false,
+    "method": "hrp",
+    "n_sleeves": 3,
+    "n_stocks": 3,
+    "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
+    "risk_contribution_pct": {
+     "전략 1": 45.92,
+     "전략 2": 32.2,
+     "전략 3": 21.88
+    },
+    "sleeve_allocation": {
+     "전략 1": 44.77,
+     "전략 2": 31.47,
+     "전략 3": 23.77
+    },
+    "sleeve_vol_pct": {
+     "전략 1": 21.46,
+     "전략 2": 19.99,
+     "전략 3": 23.01
+    }
+   },
+   "robustness_available": true,
+   "status": "ok",
+   "strategies": [
+    {
+     "label": "전략 1",
+     "n_holdings": 2,
+     "port": "s1",
+     "rebalance": "D",
+     "risk_pct": 45.92,
+     "share_pct": 44.77,
+     "vol_pct": 21.46
+    },
+    {
+     "label": "전략 2",
+     "n_holdings": 2,
+     "port": "s2",
+     "rebalance": "D",
+     "risk_pct": 32.2,
+     "share_pct": 31.47,
+     "vol_pct": 19.99
+    },
+    {
+     "label": "전략 3",
+     "n_holdings": 2,
+     "port": "s3",
+     "rebalance": "D",
+     "risk_pct": 21.88,
+     "share_pct": 23.77,
+     "vol_pct": 23.01
+    }
+   ],
+   "view_keys": [
+    "correlation",
+    "correlation_reason",
+    "cost_bps",
+    "labels",
+    "result",
+    "robustness",
+    "strategies"
+   ]
+  }
+ }
+}

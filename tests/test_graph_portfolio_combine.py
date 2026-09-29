@@ -122,11 +122,18 @@ def test_strategy_view_lists_share_risk_vol_and_correlation(market):
     assert g["kind"] == "bars" and sorted(p["value"] for p in g["points"]) == sorted(res["sleeve_allocation"].values())
 
 
-def test_min_var_says_it_does_not_know_whether_the_fallback_was_used(market):
+def test_min_var_says_whether_it_fell_back(market, monkeypatch):
+    """BS4 — 예전엔 "그 경우인지 모른다"(UNKNOWN)였다. 이제 엔진이 `fallback` 을 싣고, 노드는 실제로 대체했는지 말한다."""
     ex = _run(_graph(2, method="min_var"))["nodes"]["p"]["explain"]
-    assert any(t["state"] == "unknown" and "역변동성" in t["text"] for t in ex["trust"])
-    ex2 = _run(_graph(2, method="equal"))["nodes"]["p"]["explain"]
-    assert not any("역변동성" in t["text"] for t in ex2["trust"])        # 짝 — 그 방식이 아니면 말하지 않는다
+    assert not any(t["state"] == "unknown" and "역변동성" in t["text"] for t in ex["trust"])
+    assert any(t["state"] == "confirmed" and "대신 계산하지 않았어요" in t["text"] for t in ex["trust"])
+    from src.engine import risk_allocations as ra
+    monkeypatch.setattr(ra, "_opt", lambda f, n: None)
+    ex2 = _run(_graph(2, method="min_var"))["nodes"]["p"]["explain"]       # 짝 — 풀리지 않으면 그렇다고 말한다
+    assert any(t["state"] == "assumed" and "역변동성" in t["text"] and "풀리지 않아" in t["text"] for t in ex2["trust"])
+    assert not any("대신 계산하지 않았어요" in t["text"] for t in ex2["trust"])   # 대체했는데 "풀렸어요" 라고 함께 말하지 않는다
+    ex3 = _run(_graph(2, method="equal"))["nodes"]["p"]["explain"]
+    assert not any("역변동성" in t["text"] or "대신 계산" in t["text"] for t in ex3["trust"])
 
 
 def test_no_price_history_fails_with_the_engine_reason(market, monkeypatch):

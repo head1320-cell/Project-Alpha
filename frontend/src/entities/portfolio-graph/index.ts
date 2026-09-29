@@ -14,3 +14,4 @@ export * from "./goals";
 export * from "./stocks";
 export * from "./quickadd";
 export * from "./compare";
+export * from "./size";

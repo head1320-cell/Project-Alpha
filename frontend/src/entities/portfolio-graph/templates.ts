@@ -5,7 +5,11 @@
  * 서버 기본값이고, 옳은지는 서버 검증(`/graph/validate`)이 말한다(E2E 가 네 템플릿 모두 확인).
  */
 import { GRAPH_FORMAT, GRAPH_VERSION, type GraphDoc } from "./types";
+import { COL } from "./size";
 
+/** 열 번호 → x (BS2) — 배치 격자(`COL`)에 맞춘다. 예전 손으로 적은 x(0·196·400·600…)는 열 틈이 46px 이라
+ *  자동 정리 전에는 선 요약이 옆 카드를 덮었다. */
+const c = (col: number) => col * COL;
 const n = (id: string, type: string, x: number, y: number, params: Record<string, unknown> = {}) =>
   ({ id, type, params, position: { x, y } });
 const e = (source: string, source_port: string, target: string, target_port: string) =>
@@ -19,11 +23,11 @@ const TICKERS = ["005930", "000660", "035420"];
 /** 종목 → 수익률 → 추정 → 비중 계산 — 여러 템플릿의 앞부분. */
 const HEAD = {
   nodes: [
-    n("universe", "universe", 0, 140, { tickers: TICKERS }),
+    n("universe", "universe", c(0), 140, { tickers: TICKERS }),
     // lookback 은 비워 둔다(서버 기본 756일) — 마법사도 같은 기본값이라 "도구로 보내기" 가
     // 같은 수를 낸다. 756 은 정책 백테스트 하한(252)도 넘는다.
-    n("returns", "returns", 196, 140),
-    n("estimate", "estimate", 400, 20),
+    n("returns", "returns", c(1), 140),
+    n("estimate", "estimate", c(2), 20),
   ],
   edges: [
     e("universe", "universe", "returns", "universe"),
@@ -35,10 +39,10 @@ const HEAD = {
 
 export const CORE_CHAIN_TEMPLATE: GraphDoc = doc("기본 사슬", [
   ...HEAD.nodes,
-  n("views", "views", 400, 270, { views: [] }),
-  n("optimizer", "optimizer", 600, 140, { model: "bl" }),
-  n("risk", "risk", 800, 0),
-  n("backtest", "backtest", 800, 260),
+  n("views", "views", c(2), 270, { views: [] }),
+  n("optimizer", "optimizer", c(3), 140, { model: "bl" }),
+  n("risk", "risk", c(4), 0),
+  n("backtest", "backtest", c(4), 260),
 ], [
   ...HEAD.edges,
   e("views", "views", "optimizer", "views"),
@@ -49,10 +53,10 @@ export const CORE_CHAIN_TEMPLATE: GraphDoc = doc("기본 사슬", [
 
 const STRESS_TEMPLATE: GraphDoc = doc("충격 점검", [
   ...HEAD.nodes,
-  n("optimizer", "optimizer", 600, 140, { model: "risk_parity" }),
-  n("scenario", "scenario_stress", 820, 0),
-  n("corr", "corr_stress", 820, 170),
-  n("sens", "sensitivity", 820, 340),
+  n("optimizer", "optimizer", c(3), 140, { model: "risk_parity" }),
+  n("scenario", "scenario_stress", c(4), 0),
+  n("corr", "corr_stress", c(4), 170),
+  n("sens", "sensitivity", c(4), 340),
 ], [
   ...HEAD.edges,
   e("optimizer", "weights", "scenario", "weights"),
@@ -63,11 +67,11 @@ const STRESS_TEMPLATE: GraphDoc = doc("충격 점검", [
 ]);
 
 const SCREENER_TEMPLATE: GraphDoc = doc("조건으로 고른 종목 나누기", [
-  n("screener", "screener", 0, 140),
-  n("returns", "returns", 220, 20),
-  n("scores", "factor_scores", 220, 240),
-  n("weights", "scores_to_weights", 460, 140, { weighting: "inverse_vol" }),
-  n("risk", "risk", 680, 140),
+  n("screener", "screener", c(0), 140),
+  n("returns", "returns", c(1), 20),
+  n("scores", "factor_scores", c(1), 240),
+  n("weights", "scores_to_weights", c(2), 140, { weighting: "inverse_vol" }),
+  n("risk", "risk", c(3), 140),
 ], [
   e("screener", "universe", "returns", "universe"),
   e("screener", "universe", "scores", "universe"),
@@ -78,12 +82,12 @@ const SCREENER_TEMPLATE: GraphDoc = doc("조건으로 고른 종목 나누기", 
 
 const TIMING_TEMPLATE: GraphDoc = doc("타이밍 적용 → 실행 목표", [
   ...HEAD.nodes,
-  n("optimizer", "optimizer", 600, 140, { model: "hrp" }),
-  n("signal", "timing_signal", 600, 330),
-  n("overlay", "exposure_overlay", 820, 200),
-  n("target", "target_version", 1040, 120),
-  n("orders", "order_preview", 1040, 300),
-  n("journal", "decision_journal", 1260, 200),
+  n("optimizer", "optimizer", c(3), 140, { model: "hrp" }),
+  n("signal", "timing_signal", c(3), 330),
+  n("overlay", "exposure_overlay", c(4), 200),
+  n("target", "target_version", c(5), 120),
+  n("orders", "order_preview", c(5), 300),
+  n("journal", "decision_journal", c(6), 200),
 ], [
   ...HEAD.edges,
   e("optimizer", "weights", "overlay", "weights"),
@@ -100,10 +104,10 @@ const TIMING_TEMPLATE: GraphDoc = doc("타이밍 적용 → 실행 목표", [
  */
 const RISK_TEMPLATE: GraphDoc = doc("포트폴리오 위험 점검", [
   ...HEAD.nodes,
-  n("optimizer", "optimizer", 600, 140, { model: "risk_parity" }),
-  n("var", "var_es", 820, 0),
-  n("mc", "mc_var", 820, 170),
-  n("hedge", "futures_hedge", 1040, 90, { current_beta: null }),
+  n("optimizer", "optimizer", c(3), 140, { model: "risk_parity" }),
+  n("var", "var_es", c(4), 0),
+  n("mc", "mc_var", c(4), 170),
+  n("hedge", "futures_hedge", c(5), 90, { current_beta: null }),
 ], [
   ...HEAD.edges,
   e("returns", "returns", "var", "returns"),
@@ -120,11 +124,11 @@ const RISK_TEMPLATE: GraphDoc = doc("포트폴리오 위험 점검", [
  */
 const REBALANCE_TEMPLATE: GraphDoc = doc("리밸런싱 판단", [
   ...HEAD.nodes,
-  n("optimizer", "optimizer", 600, 140, { model: "risk_parity" }),
-  n("decide", "rebalance_decision", 820, 60, {
+  n("optimizer", "optimizer", c(3), 140, { model: "risk_parity" }),
+  n("decide", "rebalance_decision", c(4), 60, {
     holdings: [{ code: "005930", pct: 50 }, { code: "000660", pct: 30 }, { code: "035420", pct: 20 }],
   }),
-  n("orders", "order_preview", 820, 260),
+  n("orders", "order_preview", c(4), 260),
 ], [
   ...HEAD.edges,
   e("optimizer", "weights", "decide", "weights"),
@@ -138,7 +142,7 @@ const REBALANCE_TEMPLATE: GraphDoc = doc("리밸런싱 판단", [
 export function macroSnapshotDoc(snapshotId: string): GraphDoc {
   return doc("매크로 스냅샷 반영", [
     ...TIMING_TEMPLATE.nodes.map((x) => (x.id === "overlay" ? { ...x, params: { ...x.params, follow: "timing_macro" } } : x)),
-    n("regime", "regime", 600, 470, { snapshot_id: snapshotId }),
+    n("regime", "regime", c(3), 470, { snapshot_id: snapshotId }),
   ], [
     ...TIMING_TEMPLATE.edges,
     e("regime", "regime", "overlay", "regime"),
