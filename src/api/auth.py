@@ -106,8 +106,11 @@ def warn_if_degraded() -> None:
 # ── 발급과 검증 ─────────────────────────────────────────────────────────────
 
 def create_access_token(username: str, role: str,
-                        ttl_hours: float = DEFAULT_TTL_HOURS) -> str:
-    """★`ttl_hours` 가 음수면 이미 만료된 토큰이 나온다★ — 테스트가 쓰는 길이다."""
+                        ttl_hours: float = DEFAULT_TTL_HOURS, *, token_version: int = 0) -> str:
+    """★`ttl_hours` 가 음수면 이미 만료된 토큰이 나온다★ — 테스트가 쓰는 길이다.
+
+    `tv` 는 계정의 토큰 판(BS1) — 비밀번호를 바꾸면 판이 올라 옛 토큰이 `get_current_principal` 에서 죽는다.
+    """
     now = dt.datetime.now(dt.timezone.utc)
     return jwt.encode(
         {
@@ -115,6 +118,7 @@ def create_access_token(username: str, role: str,
             "role": role,
             "iat": now,
             "exp": now + dt.timedelta(hours=ttl_hours),
+            "tv": int(token_version),
         },
         _signing_secret(),
         algorithm=_ALGORITHM,
@@ -127,6 +131,11 @@ def decode_access_token(token: str) -> Principal:
     ★`algorithms=[_ALGORITHM]` 을 못 박는다★ — 이것을 비우면 `alg: none` 토큰이
     통과하는 고전적 우회가 열린다.
     """
+    return _decode(token)[0]
+
+
+def _decode(token: str) -> tuple[Principal, int]:
+    """`(신원, 토큰 판)`. `tv` 가 없는 토큰(BS1 전 발급)은 판 0 이다."""
     if not token or not token.strip():
         raise AuthError("토큰 형식 오류 — 빈 토큰입니다.")
     try:
@@ -153,10 +162,13 @@ def decode_access_token(token: str) -> Principal:
             return None
         return dt.datetime.fromtimestamp(raw, dt.timezone.utc).isoformat()
 
+    tv = payload.get("tv", 0)
+    if not isinstance(tv, int) or isinstance(tv, bool):
+        raise AuthError(f"토큰 판(tv)이 정수가 아닙니다({tv!r}).")
     return Principal(
         username=username, role=role, source=SOURCE_TOKEN,
         issued_at=_iso("iat"), expires_at=_iso("exp"),
-    )
+    ), tv
 
 
 # ── FastAPI 의존성 ──────────────────────────────────────────────────────────
@@ -169,40 +181,71 @@ def _bearer_token(request: Request) -> str | None:
     return value.strip()
 
 
+def _refuse(detail: str) -> HTTPException:
+    return HTTPException(401, detail, headers={"WWW-Authenticate": "Bearer"})
+
+
 def get_current_principal(request: Request) -> Principal:
-    """신원이 없거나 검증에 실패하면 **401** — 사유를 함께 돌려준다."""
+    """신원이 없거나 검증에 실패하면 **401** — 사유를 함께 돌려준다.
+
+    ★서명만으로 믿지 않는다(BS1)★ — 서명이 맞아도 ⑴ 계정이 사라졌거나 ⑵ 비밀번호를 바꿔 토큰 판이
+    올랐으면 401 이다. 예전에는 비밀번호를 바꿔도 옛 토큰이 12시간 살았다. DB 에 닿지 못하면 503 —
+    "확인하지 못함" 을 통과로도 거절로도 접지 않는다.
+    """
     token = _bearer_token(request)
     if token is None:
-        raise HTTPException(
-            401, "인증이 필요합니다 — Authorization: Bearer <토큰> 헤더가 없습니다.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _refuse("인증이 필요합니다 — Authorization: Bearer <토큰> 헤더가 없습니다.")
     try:
-        return decode_access_token(token)
+        p, tv = _decode(token)
     except AuthError as e:
-        raise HTTPException(401, str(e),
-                            headers={"WWW-Authenticate": "Bearer"}) from None
+        raise _refuse(str(e)) from None
+    from src.database import account_state
+    try:
+        acct = account_state(p.username)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("계정 상태를 읽지 못함: %s", type(e).__name__)
+        raise HTTPException(503, "계정 상태를 확인하지 못했어요 — 신원 DB 에 닿지 못했습니다.") from None
+    if acct is None:
+        raise _refuse("계정을 찾을 수 없어요 — 다시 로그인하세요.")
+    if tv != acct["token_version"]:
+        raise _refuse("비밀번호가 바뀌어 이 토큰은 더 쓸 수 없어요 — 다시 로그인하세요.")
+    request.state.must_change_password = acct["must_change_password"]
+    return p
 
 
-def require_admin(p: Principal = Depends(get_current_principal)) -> Principal:
+def _must_change_gate(request: Request) -> None:
+    """관리자가 발급·초기화한 임시 비밀번호로는 보호 라우트가 열리지 않는다 — **403**(누구인지는 안다)."""
+    if getattr(request.state, "must_change_password", False):
+        raise HTTPException(403, "비밀번호를 먼저 바꿔 주세요 — 관리자가 준 임시 비밀번호로는 이 화면을 열 수 없어요.")
+
+
+def require_admin(request: Request, p: Principal = Depends(get_current_principal)) -> Principal:
     """신원은 확인됐으나 역할이 모자라면 **403** — 401 이 아니다."""
+    _must_change_gate(request)
     if not is_admin(p):
         raise HTTPException(
             403, f"권한 부족 — 이 작업은 admin 역할이 필요합니다(현재: {p.role}).")
     return p
 
 
-def require_login(p: Principal = Depends(get_current_principal)) -> Principal:
+def require_login(request: Request, p: Principal = Depends(get_current_principal)) -> Principal:
     """로그인만 요구한다(역할 무관). 계좌·감사처럼 PII 이지만 돈을 옮기지 않는 표면."""
+    _must_change_gate(request)
     return p
 
 
-def require_self_or_admin(username: str,
+def require_login_to_change_password(p: Principal = Depends(get_current_principal)) -> Principal:
+    """로그인만 요구하되 ★바꿀 차례여도 통과★ — 비밀번호 바꾸기 자리만 쓴다(여기를 막으면 영영 못 바꾼다)."""
+    return p
+
+
+def require_self_or_admin(username: str, request: Request,
                           p: Principal = Depends(get_current_principal)) -> Principal:
     """경로의 `username` 자원을 이 신원이 읽어도 되는가 — 아니면 **403**.
 
     `username` 은 경로 파라미터에서 FastAPI 가 채워 준다.
     """
+    _must_change_gate(request)
     if not can_read_user(p, username):
         raise HTTPException(
             403, f"권한 부족 — {username!r} 의 자료는 본인 또는 admin 만 볼 수 있습니다.")

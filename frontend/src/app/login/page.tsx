@@ -4,7 +4,7 @@
  * /login — 최소 로그인 화면 (AC7)
  * ==========================================================================
  * 백엔드 P-1 이 돈·PII 라우트를 잠갔으므로 토큰을 받아 오는 자리가 필요하다.
- * ★이 화면은 계정을 만들지 않는다★ — 가입 표면은 만들지 않기로 했고(운영 조치),
+ * ★이 화면은 계정을 만들지 않는다★ — 가입 표면은 만들지 않기로 했고(운영 조치 — BS1 부터 관리자가 /settings 에서 발급),
  * 여기서 하는 일은 자격 증명을 `POST /api/v1/auth/login` 에 넘기고 토큰을 보관하는
  * 것뿐이다.
  *
@@ -41,7 +41,8 @@ export default function LoginPage() {
         return;
       }
       setToken(body.access_token);
-      window.location.href = "/";
+      // 관리자가 준 임시 비밀번호로 들어왔다 — 바꾸기 전에는 보호 화면이 열리지 않으니 곧장 바꾸는 칸으로(BS1).
+      window.location.href = body.must_change_password === true ? "/settings#password" : "/";
     } catch {
       setError("서버에 연결하지 못했어요 — 자격 증명 문제인지 여부는 알 수 없어요.");
     } finally {
@@ -57,6 +58,7 @@ export default function LoginPage() {
           계좌·주문·감사 화면은 인증된 사용자만 볼 수 있어요. 연구·백테스트 화면은
           로그인 없이 그대로 동작해요.
         </p>
+        <p className="login-card__note">계정은 관리자에게 받아요 — 따로 가입하는 곳은 없어요.</p>
 
         <label className="login-field">
           <span className="login-field__label">아이디</span>

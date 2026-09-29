@@ -95,6 +95,16 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     # ── 경로에 남의 이름이 들어간다 ───────────────────────────────────────
     ("GET", "/trade-history/{username}"):
         (REQUIRE_SELF_OR_ADMIN, "★타인 PII★ — 로드맵 완료 판정의 403 이 이 라우트다"),
+
+    # ── 계정 (BS1) — 공개 가입은 없다: 발급은 관리자만 ─────────────────────
+    ("POST", "/api/v1/auth/password"):
+        (REQUIRE_LOGIN, "내 비밀번호 바꾸기 — 바꿀 차례여도 열린다(여기를 막으면 영영 못 바꾼다)"),
+    ("GET", "/api/v1/auth/users"):
+        (REQUIRE_ADMIN, "계정 목록 — 누가 이 시스템에 들어올 수 있는지 드러난다"),
+    ("POST", "/api/v1/auth/users"):
+        (REQUIRE_ADMIN, "계정 발급 — 로그인만 하면 실계좌 잔고가 열리므로 운영자만"),
+    ("POST", "/api/v1/auth/users/{username}/reset-password"):
+        (REQUIRE_ADMIN, "남의 비밀번호 초기화 — 그 사람의 토큰이 모두 죽는다"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.
@@ -204,11 +214,18 @@ def auth_requirement_of_route(route) -> str | None:
 
     레지스트리와 대조하려면 "적어 둔 것" 이 아니라 "붙어 있는 것" 을 봐야 한다.
     """
-    from src.api.auth import require_admin, require_login, require_self_or_admin
+    from src.api.auth import (
+        require_admin,
+        require_login,
+        require_login_to_change_password,
+        require_self_or_admin,
+    )
 
     by_call = {
         require_admin: REQUIRE_ADMIN,
         require_login: REQUIRE_LOGIN,
+        # 바꿀 차례여도 통과하는 로그인 — 요구 수준은 로그인이다(BS1).
+        require_login_to_change_password: REQUIRE_LOGIN,
         require_self_or_admin: REQUIRE_SELF_OR_ADMIN,
     }
     dependant = getattr(route, "dependant", None)

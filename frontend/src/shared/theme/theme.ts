@@ -18,6 +18,9 @@ export const THEMES: [Theme, string][] = [["light", "라이트"], ["dark", "다�
 export const DARK_READY: { pattern: RegExp; label: string }[] = [
   { pattern: /^\/allocation(\/|$)/, label: "포트폴리오 설계" },
   { pattern: /^\/backtest\/runs\/[^/]+\/results\/?$/, label: "백테스트 결과" },
+  // BS1 — 토큰(`--t-*`·shadcn 다리)만 쓰는 화면. settings.spec 이 다크 AA 로 확인한다.
+  { pattern: /^\/settings\/?$/, label: "설정" },
+  { pattern: /^\/login\/?$/, label: "로그인" },
 ];
 export const darkReady = (path: string) => DARK_READY.some((r) => r.pattern.test(path));
 

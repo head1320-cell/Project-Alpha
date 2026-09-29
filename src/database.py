@@ -18,6 +18,7 @@ Connection resolution order:
 """
 
 import os
+import secrets
 import time
 from contextlib import contextmanager
 
@@ -25,6 +26,7 @@ import bcrypt
 from dotenv import load_dotenv
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -75,13 +77,6 @@ DEFAULT_ADMIN_PASSWORD = "frm123!"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
 
-def admin_password_state() -> str:
-    """`configured` | `default` — admin 비밀번호가 운영자가 정한 값인가.
-
-    ★`ADMIN_PASSWORD` 상수와 달리 호출 시점의 환경을 읽는다★ — 상수는 import 시각에
-    굳고, 이 함수는 "지금 이 프로세스가 어떤 상태인가" 를 말해야 하기 때문이다.
-    """
-    return "configured" if os.getenv("ADMIN_PASSWORD", "").strip() else "default"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Engine + Session Setup
@@ -202,6 +197,28 @@ class User(Base):
                                cascade="all, delete-orphan")
     trades = relationship("TradeLog", back_populates="user",
                            cascade="all, delete-orphan")
+    security = relationship("UserSecurity", back_populates="user", uselist=False,
+                            cascade="all, delete-orphan")
+
+
+class UserSecurity(Base):
+    """계정 보안 상태 (BS1) — ★`users` 를 고치지 않고 옆에 둔다★.
+
+    `users` 에 열을 더하면 운영 DB 에 `ALTER` 가 필요하고, 실패하면 ORM 조회 전체가 깨진다
+    (`schema_add_columns` 주석의 함정). 새 테이블은 `create_all` 이 만든다. 행이 없으면
+    기본값(토큰 판 0 · 바꿀 차례 아님)이다 — 예전 계정이 그대로 로그인된다.
+    """
+    __tablename__ = "user_security"
+
+    username = Column(String(64), ForeignKey("users.username", ondelete="CASCADE"),
+                      primary_key=True)
+    #: 토큰에 실리는 판(`tv`). 비밀번호를 바꾸거나 초기화하면 1 오른다 → 옛 토큰이 죽는다.
+    token_version = Column(Integer, default=0, nullable=False)
+    #: 관리자가 발급·초기화한 임시 비밀번호 — 바꾸기 전에는 보호 라우트가 열리지 않는다.
+    must_change_password = Column(Boolean, default=False, nullable=False)
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="security")
 
 
 class Portfolio(Base):
@@ -374,6 +391,147 @@ def create_user(username: str, password: str, role: str = "analyst") -> bool:
         return True
 
 
+def _unusable_hash() -> str:
+    """★아무도 모르는 비밀번호의 해시★ — 로그인 이외의 길로 생긴 계정이 알려진 값으로 열리지 않게.
+
+    예전에는 `hash_password("temp")` 였다 — 코드를 읽은 누구나 그 계정으로 로그인할 수 있었다(BS1).
+    이 계정을 쓰려면 관리자가 설정에서 비밀번호를 초기화한다.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Account Security (BS1) — 비밀번호 바꾸기 · 관리자 발급 · 옛 토큰 폐기
+# ═══════════════════════════════════════════════════════════════════════════════
+
+#: 발급·초기화 때 만드는 임시 비밀번호 길이(`token_urlsafe` 바이트 수 → 약 16자).
+_TEMP_PASSWORD_BYTES = 12
+
+
+def _security_row(s, username: str) -> "UserSecurity":
+    row = s.get(UserSecurity, username)
+    if row is None:
+        row = UserSecurity(username=username, token_version=0, must_change_password=False)
+        s.add(row)
+        s.flush()
+    return row
+
+
+def account_state(username: str) -> dict | None:
+    """토큰을 믿기 전에 보는 계정 상태. 계정이 없으면 `None`(삭제된 계정의 토큰은 죽는다).
+
+    반환: `{role, token_version, must_change_password, password_changed_at}`.
+    ★DB 에 닿지 못하면 예외가 그대로 올라간다★ — 호출자(`auth.get_current_principal`)가 503 으로 말한다.
+    """
+    with session_scope() as s:
+        user = s.get(User, username)
+        if user is None:
+            return None
+        sec = s.get(UserSecurity, username)
+        return {
+            "role": user.role,
+            "token_version": int(sec.token_version) if sec else 0,
+            "must_change_password": bool(sec.must_change_password) if sec else False,
+            "password_changed_at": sec.password_changed_at.isoformat()
+            if sec and sec.password_changed_at else None,
+        }
+
+
+def set_password(username: str, new_plain: str, *, must_change: bool) -> int | None:
+    """해시를 바꾸고 토큰 판을 올린다. 새 판을 돌려준다. 계정이 없으면 `None`."""
+    import datetime as _dt
+    with session_scope() as s:
+        user = s.get(User, username)
+        if user is None:
+            return None
+        user.password_hash = hash_password(new_plain)
+        sec = _security_row(s, username)
+        sec.token_version = int(sec.token_version or 0) + 1
+        sec.must_change_password = must_change
+        sec.password_changed_at = _dt.datetime.now(_dt.timezone.utc)
+        return int(sec.token_version)
+
+
+def issue_account(username: str, role: str) -> str | None:
+    """관리자 발급 — 임시 비밀번호를 만들어 **돌려주기만** 한다(저장은 해시). 이미 있으면 `None`."""
+    temp = secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
+    with session_scope() as s:
+        if s.get(User, username) is not None:
+            return None
+        s.add(User(username=username, password_hash=hash_password(temp), role=role))
+        s.flush()
+        s.add(UserSecurity(username=username, token_version=0, must_change_password=True))
+    return temp
+
+
+def reset_account_password(username: str) -> str | None:
+    """관리자 초기화 — 새 임시 비밀번호 · 바꿀 차례 · 옛 토큰 폐기. 계정이 없으면 `None`."""
+    temp = secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
+    return temp if set_password(username, temp, must_change=True) is not None else None
+
+
+def list_accounts() -> list[dict]:
+    """관리자 목록 — ★해시·비밀번호를 싣지 않는다★."""
+    with session_scope() as s:
+        out = []
+        for u in s.query(User).order_by(User.username).all():
+            sec = s.get(UserSecurity, u.username)
+            out.append({
+                "username": u.username,
+                "role": u.role,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "must_change_password": bool(sec.must_change_password) if sec else False,
+                "password_changed_at": sec.password_changed_at.isoformat()
+                if sec and sec.password_changed_at else None,
+            })
+        return out
+
+
+#: 해시 → 기본값을 받는가. bcrypt 비교는 비싸다(rounds 12) — 해시가 바뀌면 새로 잰다.
+_DEFAULT_CHECK: dict[str, bool] = {}
+
+
+def _admin_accepts_default() -> bool | None:
+    with session_scope() as s:
+        admin = s.get(User, "admin")
+        stored = admin.password_hash if admin else None
+    if stored is None:
+        return None
+    if stored not in _DEFAULT_CHECK:
+        _DEFAULT_CHECK.clear()
+        _DEFAULT_CHECK[stored] = verify_password(DEFAULT_ADMIN_PASSWORD, stored)
+    return _DEFAULT_CHECK[stored]
+
+
+def admin_password_state() -> str:
+    """`configured` | `default` | `unknown` — ★admin 계정이 **지금** 기본 비밀번호를 받는가★.
+
+    예전에는 환경변수 `ADMIN_PASSWORD` 가 있는지만 봤다. 그런데 그 값은 admin 행을 **처음 만들 때만**
+    쓰인다 — 나중에 설정해도 계정은 여전히 기본값을 받는데 "configured" 라고 말했고, 설정 화면에서
+    바꿔도 "default" 라고 말했다(BS1 감사). 이제 DB 의 해시를 직접 본다.
+    """
+    try:
+        accepts = _admin_accepts_default()
+    except Exception:  # noqa: BLE001 — 모름은 모름이라고 말한다
+        return "unknown"
+    if accepts is None:
+        return "unknown"
+    return "default" if accepts else "configured"
+
+
+def admin_password_reason() -> str | None:
+    """상태의 이유. `configured` 이면 `None`."""
+    state = admin_password_state()
+    if state == "configured":
+        return None
+    if state == "unknown":
+        return "admin 계정을 찾지 못했거나 DB 에 닿지 못했어요 — 기본 비밀번호인지 모릅니다."
+    if os.getenv("ADMIN_PASSWORD", "").strip():
+        return ("ADMIN_PASSWORD 가 설정돼 있지만 admin 계정은 아직 기본 비밀번호를 받아요 — "
+                "환경변수는 계정을 처음 만들 때만 쓰여요. 설정 화면에서 바꾸세요.")
+    return "admin 계정이 기본 비밀번호를 받아요 — 설정 화면에서 바꾸세요."
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Portfolio Functions
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -406,7 +564,7 @@ def update_user_portfolio(
             if not user:
                 s.add(User(
                     username=username,
-                    password_hash=hash_password("temp"),
+                    password_hash=_unusable_hash(),
                     role="analyst",
                 ))
                 s.flush()
@@ -427,7 +585,7 @@ def log_trade(username: str, ticker: str, qty: int, side: str, status: str) -> N
         if not user:
             s.add(User(
                 username=username,
-                password_hash=hash_password("temp"),
+                password_hash=_unusable_hash(),
                 role="analyst",
             ))
             s.flush()

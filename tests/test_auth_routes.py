@@ -143,10 +143,16 @@ def test_me_declares_whether_the_admin_password_is_still_the_default(client):
     assert body["admin_password_state"] == "default"
 
 
-def test_a_configured_admin_password_is_reported_as_configured(client, monkeypatch):
-    """★짝★ — 항상-default 구현을 배제한다."""
-    monkeypatch.setenv("ADMIN_PASSWORD", "a-real-operator-password")
-    tok = _token(client, "admin", "frm123!")
+def test_a_configured_admin_password_is_reported_as_configured(client):
+    """★짝★ — 항상-default 구현을 배제한다.
+
+    BS1 에서 판정이 **계정**을 보게 됐다: 예전에는 환경변수 `ADMIN_PASSWORD` 만 봤는데, 그 값은 admin 행을
+    처음 만들 때만 쓰여서 "설정했지만 계정은 아직 `frm123!` 를 받는" 배포를 configured 라고 말했다(이 테스트가
+    바로 그 상황을 configured 로 고정하고 있었다). 이제 admin 이 기본값을 더는 받지 않을 때만 configured 다 —
+    환경변수만 설정한 경우는 `test_account_security.py` 가 default 로 본다.
+    """
+    dbmod.set_password("admin", "a-real-operator-password", must_change=False)
+    tok = _token(client, "admin", "a-real-operator-password")
     body = client.get("/api/v1/auth/me",
                       headers={"Authorization": f"Bearer {tok}"}).json()
     assert body["admin_password_state"] == "configured"

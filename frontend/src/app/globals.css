@@ -7093,3 +7093,84 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 견고성 표 — 전략 이름은 사용자가 짓는다(길 수 있다). `nowrap` 이름 칸이 자동 배치 표를 판 밖으로 밀었다 → 고정 배치 + 이름은 어절에서 꺾는다. */
 .pg-rob .pg-table { table-layout: fixed; }
 .pg-rob .pg-td-name { white-space: normal; overflow: visible; word-break: keep-all; overflow-wrap: anywhere; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   설정 (BS1) — 계정 · 비밀번호 · 화면 · (관리자) 계정 관리. 프로필 카드와 같은 말투(둥근 16 · 분할 단추 · 40px 단추).
+   ★하나만 두드러지게★ = 맨 위 신원 머리(큰 동그라미 + 이름). 나머지는 조용한 한 줄 목록.
+   ★토큰만 쓴다★(`--t-*` · `--primary` · `--destructive`) — 그래서 DARK_READY 에 들어간다(settings.spec 다크 AA).
+   ★`.set-*` 가 E2E 계약이다★(e2e/settings.spec.ts).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.set { max-width: 600px; margin: 0 auto; padding: 32px 16px 72px; color: var(--t-ink); word-break: keep-all; overflow-wrap: anywhere;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+.set-title { margin: 0 0 20px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.set-card { padding: 20px; background: var(--t-bg); border: 1px solid var(--t-border); border-radius: 16px; }
+.set-sec { margin-top: 28px; }
+.set-h { margin: 0 0 10px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.set-sub { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--t-muted); }
+.set-sub--lead { margin: -2px 0 12px; }
+.set-strong { margin: 0 0 4px; font-size: 16px; font-weight: 700; line-height: 1.45; }
+.set-head { display: flex; align-items: center; gap: 16px; }
+.set-avatar { display: grid; place-items: center; flex: none; width: 60px; height: 60px; font-size: 26px; font-weight: 800; color: var(--primary-foreground); background: var(--primary); border-radius: 50%; }
+.set-head-t { display: grid; gap: 4px; min-width: 0; }
+.set-name { overflow: hidden; font-size: 22px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.set-role, .set-chip { justify-self: start; display: inline-block; padding: 1px 9px; font-size: 12.5px; font-weight: 600; line-height: 21px; color: var(--t-ink); background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 11px; }
+.set-chip--warn { background: color-mix(in srgb, #f59e0b 24%, var(--t-bg)); border-color: color-mix(in srgb, #f59e0b 45%, var(--t-bg)); }
+.set-must { margin: 12px 0 0; padding: 12px 14px; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--t-ink); background: color-mix(in srgb, #f59e0b 20%, var(--t-bg)); border-radius: 12px; }
+.set-warn { margin: 0 0 14px; padding: 10px 12px; font-size: 13.5px; line-height: 1.5; color: var(--t-ink); background: color-mix(in srgb, #f59e0b 18%, var(--t-bg)); border-radius: 10px; }
+.set-pw, .set-issue-form { display: grid; gap: 14px; }
+.set-field { display: grid; gap: 6px; }
+.set-label { font-size: 13.5px; font-weight: 600; color: var(--t-ink); }
+.set-label--row { align-self: center; }
+.set-input { height: 44px; padding: 0 12px; font: inherit; font-size: 15px; color: var(--t-ink); background: var(--t-bg); border: 1px solid var(--t-border); border-radius: 10px; }
+.set-input:focus { outline: 2px solid var(--ring); outline-offset: 1px; border-color: transparent; }
+.set-input[aria-invalid="true"] { border-color: var(--destructive); }
+.set-hint { font-size: 13px; color: var(--destructive); }
+.set-rules { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: -2px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--t-muted); }
+.set-rule { display: inline-flex; align-items: center; gap: 5px; }
+.set-rule[data-ok="true"] { color: var(--t-ink); }
+.set-rule-mark { display: inline-grid; place-items: center; width: 16px; height: 16px; font-size: 11px; font-weight: 800; border-radius: 50%; background: var(--t-surface); box-shadow: inset 0 0 0 1px var(--t-border); }
+.set-rule[data-ok="true"] .set-rule-mark { color: var(--primary-foreground); background: var(--primary); box-shadow: none; }
+.set-error { margin: 0; padding-left: 10px; font-size: 13.5px; line-height: 1.5; color: var(--destructive); border-left: 2px solid var(--destructive); }
+.set-done { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--t-ink); }
+.set-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.set-card > .set-sub { margin-top: 10px; }
+.set-seg { display: grid; grid-template-columns: repeat(3, minmax(72px, 1fr)); gap: 2px; padding: 3px; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 10px; }
+.set-seg--2 { grid-template-columns: repeat(2, minmax(72px, 1fr)); }
+.set-seg-b { height: 34px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 600; color: var(--t-muted); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.set-seg-b.on { color: var(--t-ink); background: var(--t-bg); box-shadow: 0 1px 3px rgb(0 0 0 / 12%); }
+.set-btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; font: inherit; font-size: 15px; font-weight: 700; color: var(--t-ink); text-decoration: none; background: var(--t-surface); border: 0; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--t-border); cursor: pointer; }
+.set-btn--primary { color: var(--primary-foreground); background: var(--primary); box-shadow: none; }
+.set-btn:disabled { opacity: 0.45; cursor: default; }
+.set-btn--sm { height: 34px; padding: 0 12px; font-size: 13.5px; border-radius: 9px; }
+.set-btn--danger { color: #fff; background: var(--destructive); box-shadow: none; }
+.set-btn:focus-visible, .set-seg-b:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.set-signed-out, .set-unknown { display: grid; justify-items: start; gap: 10px; }
+.set-signed-out .set-strong, .set-unknown .set-strong { margin: 0; }
+.set-logout { width: 100%; }
+.set-issued { display: grid; gap: 8px; margin-top: 12px; border-color: var(--primary); }
+.set-issued .set-strong { margin: 0; }
+.set-issued-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+/* 임시 비밀번호는 글자 하나하나를 옮겨 적어야 한다 — 고정폭이 0/O · l/1 을 가른다. */
+.set-issued-pw { padding: 8px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; color: var(--t-ink); background: var(--t-surface); border-radius: 10px; overflow-wrap: anywhere; user-select: all;
+  flex: 0 0 auto; max-width: 100%; } /* 줄어들지 않는다 — 390 에서 한 글자만 다음 줄로 넘어갔다(스크린샷) */
+.set-issued-close { justify-self: start; margin-top: 4px; }
+.set-list { display: grid; margin-top: 12px; padding-top: 6px; padding-bottom: 6px; }
+.set-acct { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--t-border); }
+.set-acct:first-child { border-top: 0; }
+.set-acct-t { display: grid; gap: 5px; min-width: 0; }
+.set-acct-name { overflow-wrap: anywhere; font-size: 15px; font-weight: 700; }
+.set-acct-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.set-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@media (max-width: 480px) {
+  .set { padding-top: 20px; }
+  .set-title { font-size: 22px; }
+  .set-card { padding: 16px; }
+  .set-avatar { width: 52px; height: 52px; font-size: 22px; }
+  .set-name { font-size: 19px; }
+}
+/* 프로필 카드의 '설정' 줄(BS1) */
+.pf-settings { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding: 10px 2px; font-size: 14px; font-weight: 700; color: var(--t-ink); text-decoration: none; border-radius: 8px; }
+.pf-settings:hover { background: var(--t-surface); }
+.pf-settings:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.pf-settings-sub { font-size: 12.5px; font-weight: 500; color: var(--t-muted); }
+.pf-must { color: var(--t-ink); font-weight: 600; }

@@ -3,14 +3,15 @@
  * 머리 줄 프로필 (BR R3) — 동그라미 하나, 누르면 아래로 카드가 펼쳐진다(토스).
  * ==========================================================================
  * 카드에는 세 가지만: 이름·역할 · 화면 테마 · 로그인/로그아웃. 국면 배지는 머리 줄에서 뺐다(국면은 /macro).
+ * BS1 — 그 아래 '설정' 줄 하나(계정·비밀번호·화면은 /settings 에서). 바꿀 차례면 이름 밑에 그렇다고 적는다.
  * Esc·바깥 누르기로 닫고 연 단추로 초점을 돌려준다. 바깥 누르기는 잡는 단계의 pointerdown 으로 본다 —
  * 캔버스 판(d3-zoom)이 mousedown 을 멈춰 거품 단계로는 오지 않는다(BQ Q2 에서 배운 것).
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ROLE_KO, useSession } from "./session";
-import { darkReady, DARK_READY, THEMES, useTheme } from "./theme";
+import { ROLE_KO, useSession } from "@/entities/session";
+import { darkReady, DARK_READY, THEMES, useTheme } from "@/shared/theme";
 
 function Person() {
   return (
@@ -62,7 +63,8 @@ export function ProfileMenu() {
             <span className="pf-avatar pf-avatar--lg" aria-hidden="true">{initial ?? <Person />}</span>
             <div className="pf-who-t">
               {signedIn ? (
-                <><strong className="pf-name">{session.username}</strong>{role ? <span className="pf-role">{role}</span> : null}</>
+                <><strong className="pf-name">{session.username}</strong>{role ? <span className="pf-role">{role}</span> : null}
+                  {session.mustChange ? <span className="pf-sub pf-must">비밀번호를 바꿀 차례예요</span> : null}</>
               ) : session.kind === "unknown" ? (
                 <><strong className="pf-name">계정 정보를 확인하지 못했어요</strong><span className="pf-sub">{session.reason}</span></>
               ) : session.kind === "loading" ? (
@@ -90,6 +92,9 @@ export function ProfileMenu() {
           </div>
 
           <div className="pf-sec pf-actions">
+            <Link href="/settings" className="pf-settings" onClick={() => setOpen(false)}>
+              설정<span className="pf-settings-sub">{signedIn ? "계정 · 비밀번호 · 화면" : "화면"}</span>
+            </Link>
             {signedIn ? (
               <button type="button" className="pf-logout" onClick={logout}>로그아웃</button>
             ) : session.kind === "unknown" ? (
