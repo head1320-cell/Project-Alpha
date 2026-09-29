@@ -137,6 +137,92 @@ test("확대 3단계(BM C1): 멀리는 이름·숫자 하나, 보통은 카드, 
   }
 });
 
+// BR R2 — 노드 안 글자가 커 보였다(사용자). 다른 노드 링크 도구(n8n·ComfyUI·Node-RED)의 제목 13~14px · 본문 11~12px 결로.
+// 멀리 볼 때는 화면 11px 바닥을 지키되 ★그보다 크지 않다(짝)★ — 작아진 카드를 글자가 채우던 것.
+const fontPx = (loc: import("@playwright/test").Locator) => loc.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+const screenPx = (loc: import("@playwright/test").Locator) => loc.evaluate((el) => {
+  const z = Number(getComputedStyle(el.closest(".pg-canvas")!).getPropertyValue("--pg-z"));
+  return parseFloat(getComputedStyle(el).fontSize) * z;
+});
+/** 글자마다 줄의 위치를 재서, 줄이 바뀐 자리(다음 줄 첫 글자의 번호)를 돌려준다. */
+const lineBreaks = (loc: import("@playwright/test").Locator) => loc.evaluate((el) => {
+  const tn = el.firstChild as Text;
+  const text = tn.data;
+  const tops: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const r = document.createRange();
+    r.setStart(tn, i); r.setEnd(tn, i + 1);
+    const rect = [...r.getClientRects()].find((x) => x.width > 0);
+    tops.push(rect ? rect.top : NaN);
+  }
+  const at: number[] = [];
+  let last = tops.find((t) => !Number.isNaN(t)) ?? 0;
+  for (let i = 1; i < text.length; i++) {
+    if (Number.isNaN(tops[i])) continue;
+    if (tops[i] > last + 2) at.push(i);
+    last = tops[i];
+  }
+  return { text, at };
+});
+
+test("글자 크기(BR R2): 보통은 제목 14·값 18(제목 < 값) · 멀리는 화면 11px 바닥이되 더 크지 않다(짝) · 한국어는 어절에서 꺾인다", async ({ page }) => {
+  await openCanvas(page);
+  await run(page);
+  const opt = node(page, "optimizer");
+  await zoomTo(page, "mid");
+  const kind = await fontPx(opt.locator(".pg-node-k"));
+  const title = await fontPx(opt.locator(".pg-node-t"));
+  const value = await fontPx(opt.locator(".pg-node-v"));
+  expect(kind, "종류 줄").toBeGreaterThanOrEqual(10.5);
+  expect(kind, "종류 줄").toBeLessThanOrEqual(11.5);
+  expect(title, "제목").toBeGreaterThanOrEqual(13);
+  expect(title, "제목").toBeLessThanOrEqual(14.5);
+  expect(value, "값").toBeGreaterThanOrEqual(17);
+  expect(value, "값").toBeLessThanOrEqual(19);
+  expect(title, "짝 — 제목이 값보다 크지 않다").toBeLessThan(value);
+
+  await zoomTo(page, "far");
+  const farName = await screenPx(opt.locator(".pg-node-far-name"));
+  const farValue = await screenPx(opt.locator(".pg-node-far-v"));
+  expect(farName, "멀리 — 이름 바닥").toBeGreaterThanOrEqual(10.9);
+  expect(farName, "짝 — 이름이 바닥보다 크게 부풀지 않는다(예전 11.5px 도 아니다)").toBeLessThanOrEqual(11.25);
+  expect(farValue, "멀리 — 숫자 바닥").toBeGreaterThanOrEqual(10.9);
+  expect(farValue, "짝 — 숫자가 이름보다 한참 크지 않다").toBeLessThanOrEqual(13.5);
+
+  // 한국어는 어절(띄어쓰기)에서 꺾인다 — "수익률 불러\n오기" 처럼 음절 가운데서 꺾이지 않는다.
+  // ★공허한 검사가 아니게★ 적어도 한 이름은 실제로 두 줄이어야 한다.
+  let wrapped = 0;
+  for (const id of ["returns", "estimate"]) {
+    const { text, at } = await lineBreaks(node(page, id).locator(".pg-node-far-name"));
+    wrapped += at.length;
+    for (const i of at) expect(text[i - 1] === " " || text[i] === " ", `${id} "${text}" 가 ${i}번째 글자에서 꺾였다`).toBe(true);
+  }
+  expect(wrapped, "두 줄로 꺾인 이름이 있어야 검사가 의미가 있다").toBeGreaterThan(0);
+});
+
+test("글자 크기(BR R2): 접은 전략 카드도 같은 결 — 이름 14 · 몫 18 · 멀리서 전략 이름은 화면 13px 아래", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const doc = await wip(page);
+  const [a] = (doc.groups ?? []).filter((g) => g.kind === "strategy");
+  await page.locator(`.pg-group--strategy[data-group-id="${a.id}"] .pg-group-toggle`).click();
+  await run(page);
+  await zoomTo(page, "mid");
+  const card = page.locator(`.pg-snode[data-group-id="${a.id}"]`);
+  await expect(card.locator(".pg-snode-share b")).toBeVisible();
+  const name = await fontPx(card.locator(".pg-snode-name"));
+  const share = await fontPx(card.locator(".pg-snode-share b"));
+  expect(name).toBeGreaterThanOrEqual(13);
+  expect(name).toBeLessThanOrEqual(14.5);
+  expect(share).toBeGreaterThanOrEqual(17);
+  expect(share).toBeLessThanOrEqual(19);
+  await zoomTo(page, "far");
+  const label = page.locator(".pg-group--strategy:not(.pg-snode) .pg-group-label").first();
+  const lp = await screenPx(label);
+  expect(lp, "멀리 — 전략 이름 바닥").toBeGreaterThanOrEqual(10.9);
+  expect(lp, "짝 — 전략 이름이 부풀지 않는다").toBeLessThanOrEqual(13);
+});
+
 test("작은 그림 = 서버 glance 그대로(BM C1): 응답을 바꾸면 카드가 따라 바뀌고 null 은 '모름' · 계산 시간도 서버 값", async ({ page }) => {
   await openCanvas(page);
   await patchRun(page, (b) => {
