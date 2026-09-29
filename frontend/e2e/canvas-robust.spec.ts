@@ -92,9 +92,9 @@ test("견고성 절(BR R1a): 전략 합치기 자세히 = 서버 view.robustness
 
   const crisis = rob.crisis as { pairs: { co_drops: number; expected_co_drops: number }[]; crisis_days: number };
   const cs = await openSection(page, "위기 때 상관");
-  await expect(cs.locator("tbody tr")).toHaveCount(crisis.pairs.length);
+  await expect(cs.locator(".pg-rob-pair")).toHaveCount(crisis.pairs.length);
   const p0 = crisis.pairs[0];
-  await expect(cs.locator("tbody tr").first()).toContainText(`${p0.co_drops}일 · 평소 관계라면 약 ${p0.expected_co_drops.toFixed(0)}일`);
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveText(`같이 떨어진 날 ${p0.co_drops}일 · 평소 관계라면 약 ${p0.expected_co_drops.toFixed(0)}일`);
   await expect(cs).toContainText(`${crisis.crisis_days}일`);
 
   const shock = rob.shock as { scenarios: { kind: string; available: boolean; stressed_vol_pct?: number }[] };
@@ -107,6 +107,10 @@ test("견고성 절(BR R1a): 전략 합치기 자세히 = 서버 view.robustness
   const dd = rob.drawdown as { strategies: { max_drawdown_pct: number | null }[] };
   const dsec = await openSection(page, "최악 구간 겹침");
   await expect(dsec.locator(".pg-rob-dd-bar")).toHaveCount(dd.strategies.filter((x) => x.max_drawdown_pct !== null).length);
+  // 자릿수를 맞춘다("-7.5%" 옆 "-15.14%" 가 아니게) — 서버 값 그대로, 소수 둘째 자리.
+  for (const x of dd.strategies) {
+    if (x.max_drawdown_pct !== null) await expect(dsec).toContainText(`${x.max_drawdown_pct.toFixed(2)}% · `);
+  }
 
   const eff = rob.effective_n as { value: number; n: number };
   const more = await openSection(page, "더 보기");
@@ -135,8 +139,8 @@ test("견고성 절(BR R1a): 모르면 '—' 와 서버 사유 — 0 으로 그�
   await run(page);
   await openCombine(page, pfId);
   const cs = await openSection(page, "위기 때 상관");
-  await expect(cs.locator("tbody tr").first().locator("td").nth(3)).toHaveText("—");
-  await expect(cs.locator("tbody tr").first().locator("td").nth(3)).toHaveAttribute("title", "흔들림이 없어요(테스트)");
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveText("같이 떨어진 날 —");
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveAttribute("title", "흔들림이 없어요(테스트)");
   const more = await openSection(page, "더 보기");
   await expect(more.locator(".pg-kv div").first()).toContainText("—");
   await expect(more).toContainText("상관을 못 잰 쌍이 있어요(테스트)");

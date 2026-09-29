@@ -9,6 +9,7 @@ import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAx
 import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { RobustnessView } from "./RobustnessResults";
 import { usePortfolioGraph } from "./store";
+import { topoOrder } from "@/entities/portfolio-graph";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -244,8 +245,9 @@ function useSleeveLegend(ports: string[]): [string, string][] {
     const e = edges.find((x) => x.target === selected && x.targetHandle === port);
     const n = e ? nodes.find((x) => x.id === e.source) : undefined;
     const title = n ? catalog?.find((c) => c.type === n.data.kind)?.plain_label ?? n.data.kind : "이어진 노드 없음";
-    const num = (n?.data as { num?: number } | undefined)?.num;
-    return [`묶음 ${i + 1}`, num ? `${num} ${title}` : title];
+    // 캔버스 카드의 번호와 같은 번호(흐름 순서) — 같은 종류를 둘 이으면 이름만으로는 가를 수 없다.
+    const no = n ? topoOrder(nodes.map((x) => x.id), edges).indexOf(n.id) + 1 : 0;
+    return [`묶음 ${i + 1}`, no ? `${no}번 ${title}` : title];
   });
 }
 

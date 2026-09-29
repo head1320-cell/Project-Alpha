@@ -112,7 +112,7 @@ def test_story_mentions_effective_count_and_shock(market):
     text = " ".join(rob["story"])
     assert f"약 {rob['effective_n']['value']:.1f}개" in text
     ex = _run(_graph(3))["nodes"]["p"]["explain"]
-    assert any("따로 움직였어요" in f for f in ex["facts"])
+    assert any("처럼 움직였어요" in f for f in ex["facts"])
 
 
 # ══ R1b · 견고성 비교 노드(`sleeve_analytics` 올림) ═══════════════════════════════

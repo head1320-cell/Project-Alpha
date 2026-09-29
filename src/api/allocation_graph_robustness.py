@@ -68,8 +68,9 @@ def shock_block(names: Sequence[str], S: np.ndarray, shares: Sequence[float] | N
     for kind, rho in wanted:
         row: dict[str, Any] = {"kind": kind, "rho": round(rho, 3)}
         if now >= rho:
+            # 이름·숫자 뒤 조사는 소리에 따라 달라진다 — 괄호로 두어 조사를 붙이지 않는다(스크린샷에서 "1.00 라" 를 찾았다).
             row.update(available=False,
-                       reason=f"지금 평균 상관이 이미 {now:.2f} 라 {rho:.2f} 로 올려도 흔들림이 커지지 않아요")
+                       reason=f"지금 평균 상관({now:.2f})이 이미 정한 값({rho:.2f}) 이상이라 올려도 흔들림이 커지지 않아요")
         else:
             rep = stress_correlation_report(df, w, target_rho=rho, intensity=1.0, confidence_level=0.95,
                                             portfolio_value=_VALUE)
@@ -87,19 +88,19 @@ def story(rep: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     eff = rep.get("effective_n") or {}
     if eff.get("value") is not None:
-        lines.append(f"{eff['n']}개가 실제로는 약 {eff['value']:.1f}개처럼 따로 움직였어요.")
+        lines.append(f"{eff['n']}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였어요 — 적을수록 서로 같이 움직인 거예요.")
     crisis = rep.get("crisis") or {}
     rows = [p for p in crisis.get("pairs") or [] if p.get("co_drops") is not None and p.get("expected_co_drops")]
     if rows:
         top = max(rows, key=lambda p: p["co_drops"] / p["expected_co_drops"])
         more = top["co_drops"] >= 1.5 * top["expected_co_drops"] and top["co_drops"] - top["expected_co_drops"] >= 3
         small = " 날이 적어 흔들리는 값이에요." if crisis.get("small_sample") else ""
+        # 사용자가 지은 이름 뒤에는 조사를 붙이지 않는다('충격 점검가' 처럼 어긋난다) — 쌍은 문장 끝에 둔다.
+        pair = f"{top['a']}·{top['b']} {top['co_drops']}일 대 약 {top['expected_co_drops']:.0f}일"
         if more:
-            lines.append(f"가장 나빴던 날에 {top['a']}·{top['b']}가 같이 떨어진 날이 평소 관계로 기대되는 것보다 많았어요"
-                         f"({top['co_drops']}일 대 약 {top['expected_co_drops']:.0f}일).{small}")
+            lines.append(f"가장 나빴던 날에 같이 떨어진 날이 평소 관계로 기대되는 것보다 많았어요 — {pair}.{small}")
         else:
-            lines.append(f"가장 나빴던 날에 같이 떨어진 날은 평소 관계로 기대되는 만큼이었어요"
-                         f"(가장 많은 {top['a']}·{top['b']} {top['co_drops']}일 대 약 {top['expected_co_drops']:.0f}일).{small}")
+            lines.append(f"가장 나빴던 날에 같이 떨어진 날은 평소 관계로 기대되는 만큼이었어요 — 가장 많은 쌍 {pair}.{small}")
     shock = rep.get("shock") or {}
     first = next((s for s in shock.get("scenarios") or [] if s.get("kind") == "assumed"), None)
     if first and first.get("available") and first.get("delta_vol_pct") is not None:
@@ -108,7 +109,7 @@ def story(rep: dict[str, Any]) -> list[str]:
     pairs = [p for p in dd.get("pairs") or [] if p.get("overlap") is not None]
     if pairs:
         top = max(pairs, key=lambda p: p["overlap"])
-        lines.append(f"가장 크게 잃은 구간은 {top['a']}·{top['b']}가 {top['overlap'] * 100:.0f}% 겹쳐요.")
+        lines.append(f"가장 크게 잃은 구간이 가장 많이 겹친 쌍은 {top['a']}·{top['b']} — {top['overlap'] * 100:.0f}% 겹쳐요.")
     return lines
 
 

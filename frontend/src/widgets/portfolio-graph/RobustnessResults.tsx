@@ -85,19 +85,16 @@ function Crisis({ c }: { c: Dict }) {
         {c.basis === "market" ? `시장(KODEX 200)이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤어요
         {c.small_sample ? " — 날이 적어 흔들리는 값이에요." : "."}
       </p>
-      <table className="pg-table pg-rob-crisis">
-        <thead><tr><th>쌍</th><th>평소 상관</th><th>위기일 상관</th><th>같이 떨어진 날</th></tr></thead>
-        <tbody>{pairs.map((p) => (
-          <tr key={`${p.a}-${p.b}`}>
-            <td className="pg-td-name">{p.a}·{p.b}</td>
-            <td className="pg-td-num">{fx(p.normal_rho)}</td>
-            <td className="pg-td-num">{fx(p.crisis_rho)}</td>
-            <td className="pg-td-num" title={p.reason ? String(p.reason) : undefined}>
-              {num(p.co_drops) ? `${p.co_drops}일 · 평소 관계라면 약 ${fx(p.expected_co_drops, 0)}일` : "—"}
-            </td>
-          </tr>
-        ))}</tbody>
-      </table>
+      {/* 쌍마다 한 덩어리 — 네 칸 표는 판 폭에서 머리글이 음절 가운데서 꺾였다(스크린샷). */}
+      <ul className="pg-rob-pairs">{pairs.map((p) => (
+        <li key={`${p.a}-${p.b}`} className="pg-rob-pair">
+          <b className="pg-rob-pair-name">{p.a}·{p.b}</b>
+          <span>상관 평소 {fx(p.normal_rho)} → 위기일 {fx(p.crisis_rho)}</span>
+          <span className="pg-rob-codrop" title={p.reason ? String(p.reason) : undefined}>
+            {num(p.co_drops) ? `같이 떨어진 날 ${p.co_drops}일 · 평소 관계라면 약 ${fx(p.expected_co_drops, 0)}일` : "같이 떨어진 날 —"}
+          </span>
+        </li>
+      ))}</ul>
       <p className="pg-help">
         나쁜 날만 골라 재면 관계가 그대로여도 상관이 높아 보여요. 그래서 둘 다 제 가장 나쁜 10% 날에 함께 든 날을,
         전체 상관이 같은 보통 관계에서 기대되는 날 수와 나란히 봐요.
@@ -118,19 +115,23 @@ function Shock({ s }: { s: Dict }) {
         <div key={String(r.kind)} className="pg-rob-shock" data-kind={String(r.kind)}>
           <p className="pg-rob-shock-h">
             <span className={`pg-tag pg-tag--${r.kind === "assumed" ? "assumed" : "confirmed"}`}>{r.kind === "assumed" ? "가정" : "관측"}</span>
-            {r.kind === "assumed" ? `상관이 ${fx(r.rho, 1)}로 치솟으면` : `실제로 본 가장 높은 상관 ${fx(r.rho)}이면`}
+            {r.kind === "assumed" ? `상관이 ${fx(r.rho, 1)}로 치솟으면` : `실제로 본 가장 높은 상관(${fx(r.rho)})일 때`}
           </p>
           {r.available ? (
-            <table className="pg-table"><tbody>
-              <tr><td className="pg-td-name">지금 흔들림(연)</td>
-                <td className="pg-td-bar"><span className="pg-bar pg-bar--muted" style={{ width: `${(Number(r.base_vol_pct) / max) * 100}%` }} /></td>
-                <td className="pg-td-num">{pct(r.base_vol_pct)}</td></tr>
-              <tr><td className="pg-td-name">충격 뒤</td>
-                <td className="pg-td-bar"><span className="pg-bar" style={{ width: `${(Number(r.stressed_vol_pct) / max) * 100}%` }} /></td>
-                <td className="pg-td-num">{pct(r.stressed_vol_pct)} <small>({signed(r.delta_vol_pct)})</small></td></tr>
-              <tr><td className="pg-td-name">하루 VaR 95%</td><td />
-                <td className="pg-td-num">{pct(r.base_var_pct, 2)} → {pct(r.stressed_var_pct, 2)}</td></tr>
-            </tbody></table>
+            <>
+              <table className="pg-table pg-rob-shock-bars"><tbody>
+                <tr><td className="pg-td-name">지금</td>
+                  <td className="pg-td-bar"><span className="pg-bar pg-bar--muted" style={{ width: `${(Number(r.base_vol_pct) / max) * 100}%` }} /></td>
+                  <td className="pg-td-num">{pct(r.base_vol_pct)}</td></tr>
+                <tr><td className="pg-td-name">충격 뒤</td>
+                  <td className="pg-td-bar"><span className="pg-bar" style={{ width: `${(Number(r.stressed_vol_pct) / max) * 100}%` }} /></td>
+                  <td className="pg-td-num">{pct(r.stressed_vol_pct)}</td></tr>
+              </tbody></table>
+              <dl className="pg-kv">
+                <div><dt>흔들림(연) 변화</dt><dd>{signed(r.delta_vol_pct)}</dd></div>
+                <div><dt>하루 VaR 95%</dt><dd>{pct(r.base_var_pct, 2)} → {pct(r.stressed_var_pct, 2)}</dd></div>
+              </dl>
+            </>
           ) : <p className="pg-help">{String(r.reason ?? "")}</p>}
         </div>
       ))}
@@ -150,7 +151,7 @@ function Drawdown({ d, nDays }: { d: Dict; nDays: number }) {
   return (
     <>
       <svg className="pg-rob-dd" viewBox={`0 0 ${W} ${H}`} role="img"
-           aria-label={`가장 크게 잃은 구간 — ${rows.map((r) => `${String(r.name)} ${num(r.max_drawdown_pct) ? `${r.max_drawdown_pct}%` : "없음"}`).join(" · ")}`}>
+           aria-label={`가장 크게 잃은 구간 — ${rows.map((r) => `${String(r.name)} ${num(r.max_drawdown_pct) ? pct(r.max_drawdown_pct, 2) : "없음"}`).join(" · ")}`}>
         <defs>
           <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" className="pg-rob-hatch" />
@@ -176,7 +177,7 @@ function Drawdown({ d, nDays }: { d: Dict; nDays: number }) {
       <table className="pg-table"><tbody>
         {rows.map((r) => (
           <tr key={String(r.name)}><td className="pg-td-name">{String(r.name)}</td>
-            <td className="pg-td-num">{num(r.max_drawdown_pct) ? `${r.max_drawdown_pct}% · ${String(r.days)}거래일` : String(r.reason ?? "—")}</td></tr>
+            <td className="pg-td-num">{num(r.max_drawdown_pct) ? `${pct(r.max_drawdown_pct, 2)} · ${String(r.days)}거래일` : String(r.reason ?? "—")}</td></tr>
         ))}
         {pairs.map((p) => (
           <tr key={`${p.a}-${p.b}`}><td className="pg-td-name">{p.a}·{p.b} 겹침</td>
@@ -185,8 +186,9 @@ function Drawdown({ d, nDays }: { d: Dict; nDays: number }) {
       </tbody></table>
       {w ? (
         <>
-          <p className="pg-note">합친 흐름이 가장 나빴던 {String(w.days)}거래일({String(w.start_ago)}~{String(w.end_ago)}거래일 전 · 빗금): 합침 {pct(w.combined_pct, 2)}</p>
+          <p className="pg-note">합친 흐름이 가장 나빴던 {String(w.days)}거래일 · {String(w.start_ago)}~{String(w.end_ago)}거래일 전(빗금)</p>
           <table className="pg-table"><tbody>
+            <tr className="pg-rob-worst-all"><td className="pg-td-name">합친 흐름</td><td className="pg-td-num">{pct(w.combined_pct, 2)}</td></tr>
             {Object.entries((w.returns_pct as Record<string, number>) ?? {}).map(([k, x]) => (
               <tr key={k}><td className="pg-td-name">{k}</td><td className="pg-td-num">{pct(x, 2)}</td></tr>
             ))}
@@ -213,8 +215,9 @@ function More({ rob }: { rob: Dict }) {
       <table className="pg-table"><tbody>{((st.pairs as Pair[]) ?? []).map((p) => (
         <tr key={`${p.a}-${p.b}`} data-changed={p.changed === true ? "yes" : p.changed === false ? "no" : "unknown"}>
           <td className="pg-td-name">{p.a}·{p.b}</td>
-          <td className="pg-td-num">{fx(p.first)} → {fx(p.second)}</td>
-          <td className="pg-td-num">{p.changed === true ? "달라졌어요" : p.changed === false ? "비슷해요" : String(p.reason ?? "—")}</td>
+          <td className="pg-td-num" title={p.changed === null || p.changed === undefined ? String(p.reason ?? "") : undefined}>
+            {fx(p.first)} → {fx(p.second)} · {p.changed === true ? "달라졌어요" : p.changed === false ? "비슷해요" : "모름"}
+          </td>
         </tr>
       ))}</tbody></table>
       <p className="pg-help">{String(st.note ?? "")}</p>
@@ -233,7 +236,7 @@ export function RobustnessView({ rob }: { rob: Dict | null | undefined }) {
     <section className="pg-rob" aria-label="견고성">
       <h4 className="pg-h4">견고성 — 같이 무너지나</h4>
       {/* 성과 종류는 응답이 선언한 것 그대로 — 없으면 PerfLabel 이 '모름'을 그린다(지어내지 않는다). */}
-      <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·흔들림" /></div>
+      <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·흔들림" compact /></div>
       <ul className="pg-rob-story">{story.map((s) => <li key={s}>{s}</li>)}</ul>
       <p className="pg-help">
         지금 비중을 지난 {nDays}거래일 그대로 들고 있었다고 보고 쟀어요 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아니에요.

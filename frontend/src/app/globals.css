@@ -7082,3 +7082,14 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-theme .pg-selbar-compare[aria-disabled="true"] { color: var(--pg-body); background: var(--pg-soft); cursor: default; }
 .pg-rob-legend { display: grid; gap: 4px; margin: 4px 0 8px; padding: 0; list-style: none; font-size: 13px; color: var(--pg-body); }
 .pg-rob-legend b { margin-right: 6px; color: var(--pg-ink); }
+/* BR 마감 — 위기 때 상관은 쌍마다 한 덩어리(좁은 판에서 네 칸 표가 꺾였다) · 충격 막대는 값 하나씩 */
+.pg-rob-pairs { display: grid; gap: 8px; margin: 6px 0; padding: 0; list-style: none; }
+.pg-rob-pair { display: grid; gap: 2px; padding: 8px 10px; font-size: 13px; line-height: 1.5; color: var(--pg-body); background: var(--pg-paper); border-radius: 10px; }
+.pg-rob-pair-name { font-weight: 700; color: var(--pg-ink); }
+.pg-rob-codrop { color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-rob-worst-all td { font-weight: 700; color: var(--pg-ink); }
+/* 절 안에 바로 놓인 표 — `.pg-table` 은 폭 100% 라 좌우 12px 여백을 더하면 판 밖으로 24px 넘쳤다(스크린샷: 낙폭·안정성 값이 가장자리에 붙음). */
+.pg-rob-sec > .pg-table { width: calc(100% - 24px); }
+/* 견고성 표 — 전략 이름은 사용자가 짓는다(길 수 있다). `nowrap` 이름 칸이 자동 배치 표를 판 밖으로 밀었다 → 고정 배치 + 이름은 어절에서 꺾는다. */
+.pg-rob .pg-table { table-layout: fixed; }
+.pg-rob .pg-td-name { white-space: normal; overflow: visible; word-break: keep-all; overflow-wrap: anywhere; }
