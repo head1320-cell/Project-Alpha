@@ -114,17 +114,29 @@ def story(rep: dict[str, Any]) -> list[str]:
 
 
 def robustness_view(names: Sequence[str], S: np.ndarray, shares: Sequence[float] | None, *, market: str = "kr",
-                    window: int = 60, target_rho: float = 0.8, shorts_dropped: int = 0) -> dict[str, Any]:
-    """엔진 보고서 + 시장 대용 + 충격 + 이야기. 계산이 깨지면 조용히 넘기지 않고 사유와 함께 `available: False`."""
+                    window: int = 60, target_rho: float = 0.8, shorts_dropped: int = 0,
+                    dates: Sequence[str] | None = None, market_returns: np.ndarray | None = None,
+                    market_reason: str | None = None, market_label: str | None = None) -> dict[str, Any]:
+    """엔진 보고서 + 시장 대용 + 충격 + 이야기. 계산이 깨지면 조용히 넘기지 않고 사유와 함께 `available: False`.
+
+    `dates`·`market_returns` (BS3) — 날짜로 맞춘 흐름이면 부르는 쪽(`robustness_for_sleeves`)이 같은 날짜의 시장 대용을
+    넘긴다. 주지 않으면 예전처럼 끝 맞춤 KODEX 200(`market_series`).
+    """
     from src.engine.strategy_robustness import robustness_report
     try:
         T = int(np.asarray(S).shape[0])
-        mk, mk_reason = market_series(T, market)
-        rep = robustness_report(names, S, shares, market=mk, window=window)
+        if dates is not None:
+            mk, mk_reason = market_returns, market_reason
+        else:
+            mk, mk_reason = market_series(T, market)
+            market_label = "KODEX 200" if mk is not None else None
+        rep = robustness_report(names, S, shares, market=mk, window=window, dates=dates)
         if not rep.get("available"):
             return rep
         if mk is None:
             rep["crisis"]["market_reason"] = mk_reason
+        else:
+            rep["crisis"]["market_label"] = market_label
         roll = rep["rolling"]
         rep["shock"] = shock_block(names, np.asarray(S, dtype=float), shares, target_rho,
                                    roll.get("avg_max") if roll.get("available") else None)
@@ -139,6 +151,42 @@ def robustness_view(names: Sequence[str], S: np.ndarray, shares: Sequence[float]
     except Exception as e:  # noqa: BLE001 — 배분은 그대로 두고 이 절만 모른다고 말한다
         logger.exception("견고성 계산 실패")
         return {"available": False, "reason": f"견고성을 계산하지 못했어요 — {type(e).__name__}: {e}"}
+
+
+def robustness_for_sleeves(sleeves: Sequence[dict], shares: Sequence[float] | None, *, lookback: int = 252,
+                           rebalance_every: dict[str, int] | None = None, cost_bps: dict[str, float] | None = None,
+                           window: int = 60, target_rho: float = 0.8) -> dict[str, Any]:
+    """전략 흐름을 ★날짜로 맞춰★ 견고성을 잰다(BS3). 날짜를 못 받으면 끝 맞춤 흐름으로 재고 그렇다고 라벨을 단다.
+
+    - 시장 대용은 전략이 든 종목으로 고른다(`robustness_inputs.market_proxy` — 한국·미국·섞임).
+    - 합치기가 쓰는 끝 맞춤 흐름과 다른지 `alignment` 로 관측한다(합치기는 고치지 않는다).
+    """
+    from src.api import robustness_inputs as ri
+    from src.engine import sleeve_combine as sc
+    d = ri.dated_sleeve_returns(sleeves, lookback=lookback, rebalance_every=rebalance_every, cost_bps=cost_bps)
+    if d.get("available"):
+        proxy = ri.market_proxy(ri._codes(sleeves))
+        if proxy["ticker"]:
+            mk, why = ri.market_on_dates(proxy["ticker"], d["dates"])
+        else:
+            mk, why = None, proxy["reason"]
+        rep = robustness_view(d["names"], d["S"], shares, window=window, target_rho=target_rho,
+                              shorts_dropped=count_shorts(sleeves), dates=d["dates"], market_returns=mk,
+                              market_reason=why, market_label=proxy["label"])
+        if rep.get("available"):
+            rep["alignment"] = ri.alignment_check(sleeves, lookback=lookback, rebalance_every=rebalance_every,
+                                                  cost_bps=cost_bps, dated=d)
+            if rep["alignment"].get("same") is False:
+                rep["story"].append(f"종목마다 끝을 맞춘 흐름과 날짜로 맞춘 흐름이 {rep['alignment']['differing_days']}일 "
+                                    "달라요 — 여기 수는 날짜로 맞춘 쪽이에요.")
+        return rep
+    # 날짜를 못 받았다 — 끝 맞춤으로 재되 날짜를 지어내지 않고 이유를 단다(라벨 붙은 열화).
+    names, S = sc._sleeve_return_series(list(sleeves), sc._load_ret_matrix(list(sleeves), lookback=lookback),
+                                        rebalance_every, cost_bps)
+    rep = robustness_view(names, S, shares, window=window, target_rho=target_rho, shorts_dropped=count_shorts(sleeves))
+    if rep.get("available"):
+        rep["dates_reason"] = f"날짜로 맞추지 못해 끝을 맞춘 흐름으로 쟀어요 — {d.get('reason')}"
+    return rep
 
 
 def count_shorts(sleeves: Sequence[dict]) -> int:

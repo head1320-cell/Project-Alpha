@@ -2,7 +2,7 @@
 /**
  * 견고성 — 같이 무너지나 (BR R1). 전략 합치기의 한 절 · 견고성 비교 노드의 본문.
  * ★수는 서버 view(`robustness`) 그대로★ — 다시 계산하지 않는다. 모르는 칸은 "—" 와 서버 사유.
- * 가로축은 "n거래일 전" — 시세 로더에 날짜가 없어 날짜를 지어내지 않는다(서버 `axis: trading_days_ago`).
+ * 가로축 — 서버가 날짜를 주면(`axis: date`, BS3 · 로더가 준 날짜) 날짜, 아니면 "n거래일 전"(날짜를 지어내지 않는다).
  * 색만으로 가르지 않는다: 추이는 한 번에 한 계열(칩으로 고름) · 띠는 면, 값은 선 · 막대마다 글자 값.
  */
 import { useId, useState } from "react";
@@ -15,7 +15,7 @@ const pct = (v: unknown, d = 1) => (num(v) ? `${v.toFixed(d)}%` : "—");
 const signed = (v: unknown, d = 0) => (num(v) ? `${v > 0 ? "+" : ""}${v.toFixed(d)}%` : "—");
 
 type Pair = { a: string; b: string } & Dict;
-type Rolling = { available: boolean; reason?: string; window: number; ago: number[]; pairs: (Pair & {
+type Rolling = { available: boolean; reason?: string; window: number; ago: number[]; end_dates?: string[]; pairs: (Pair & {
   values: (number | null)[]; lo: (number | null)[]; hi: (number | null)[]; current: number | null; max: number | null; n_empty: number })[];
   avg: (number | null)[]; avg_current: number | null; avg_max: number | null; note?: string };
 
@@ -62,8 +62,8 @@ function Trend({ r }: { r: Rolling }) {
         <line x1={pad} x2={W - pad} y1={Y(0)} y2={Y(0)} className="pg-risk-zero" />
         {bands.map((b, k) => <polygon key={`b${k}`} points={b} className="pg-rob-band" />)}
         {lines.map((l, k) => <polyline key={`l${k}`} points={l} className="pg-rob-line" />)}
-        <text x={pad} y={H + 13} className="pg-floors-t">{r.ago[0]}거래일 전</text>
-        <text x={W - pad} y={H + 13} textAnchor="end" className="pg-floors-t">오늘</text>
+        <text x={pad} y={H + 13} className="pg-floors-t">{r.end_dates?.length ? r.end_dates[0] : `${r.ago[0]}거래일 전`}</text>
+        <text x={W - pad} y={H + 13} textAnchor="end" className="pg-floors-t">{r.end_dates?.length ? r.end_dates[r.end_dates.length - 1] : "오늘"}</text>
         <text x={W - pad} y={Y(1) + 9} textAnchor="end" className="pg-floors-t">1</text>
         <text x={W - pad} y={Y(-1) - 2} textAnchor="end" className="pg-floors-t">−1</text>
       </svg>
@@ -82,7 +82,7 @@ function Crisis({ c }: { c: Dict }) {
   return (
     <>
       <p className="pg-note">
-        {c.basis === "market" ? `시장(KODEX 200)이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤어요
+        {c.basis === "market" ? `시장(${String(c.market_label ?? "KODEX 200")})이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤어요
         {c.small_sample ? " — 날이 적어 흔들리는 값이에요." : "."}
       </p>
       {/* 쌍마다 한 덩어리 — 네 칸 표는 판 폭에서 머리글이 음절 가운데서 꺾였다(스크린샷). */}
@@ -140,7 +140,7 @@ function Shock({ s }: { s: Dict }) {
   );
 }
 
-function Drawdown({ d, nDays }: { d: Dict; nDays: number }) {
+function Drawdown({ d, nDays, period }: { d: Dict; nDays: number; period?: { start: string; end: string } }) {
   const rows = (d.strategies as Dict[]) ?? [];
   const pairs = (d.pairs as Pair[]) ?? [];
   const w = d.worst_window as Dict | null;
@@ -171,13 +171,14 @@ function Drawdown({ d, nDays }: { d: Dict; nDays: number }) {
             )}
           </g>
         ))}
-        <text x={labelW} y={H - 3} className="pg-floors-t">{nDays - 1}거래일 전</text>
-        <text x={W - pad} y={H - 3} textAnchor="end" className="pg-floors-t">오늘</text>
+        <text x={labelW} y={H - 3} className="pg-floors-t">{period ? period.start : `${nDays - 1}거래일 전`}</text>
+        <text x={W - pad} y={H - 3} textAnchor="end" className="pg-floors-t">{period ? period.end : "오늘"}</text>
       </svg>
       <table className="pg-table"><tbody>
         {rows.map((r) => (
           <tr key={String(r.name)}><td className="pg-td-name">{String(r.name)}</td>
-            <td className="pg-td-num">{num(r.max_drawdown_pct) ? `${pct(r.max_drawdown_pct, 2)} · ${String(r.days)}거래일` : String(r.reason ?? "—")}</td></tr>
+            <td className="pg-td-num">{num(r.max_drawdown_pct) ? `${pct(r.max_drawdown_pct, 2)} · ${String(r.days)}거래일` : String(r.reason ?? "—")}
+              {r.start_date ? <small className="pg-rob-span">{String(r.start_date)}~{String(r.end_date)}</small> : null}</td></tr>
         ))}
         {pairs.map((p) => (
           <tr key={`${p.a}-${p.b}`}><td className="pg-td-name">{p.a}·{p.b} 겹침</td>
@@ -186,7 +187,7 @@ function Drawdown({ d, nDays }: { d: Dict; nDays: number }) {
       </tbody></table>
       {w ? (
         <>
-          <p className="pg-note">합친 흐름이 가장 나빴던 {String(w.days)}거래일 · {String(w.start_ago)}~{String(w.end_ago)}거래일 전(빗금)</p>
+          <p className="pg-note">합친 흐름이 가장 나빴던 {String(w.days)}거래일 · {w.start_date ? `${String(w.start_date)}~${String(w.end_date)}` : `${String(w.start_ago)}~${String(w.end_ago)}거래일 전`}(빗금)</p>
           <table className="pg-table"><tbody>
             <tr className="pg-rob-worst-all"><td className="pg-td-name">합친 흐름</td><td className="pg-td-num">{pct(w.combined_pct, 2)}</td></tr>
             {Object.entries((w.returns_pct as Record<string, number>) ?? {}).map(([k, x]) => (
@@ -225,24 +226,32 @@ function More({ rob }: { rob: Dict }) {
   );
 }
 
-export function RobustnessView({ rob }: { rob: Dict | null | undefined }) {
+/** `basis` — 무엇의 흐름인가: 지금 비중을 과거에 들고 있었다면(weights) · 이미 있는 백테스트 기록(records, BS3). */
+export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | undefined; basis?: "weights" | "records" }) {
   if (!rob) return null;
   if (!rob.available) return <section className="pg-rob" aria-label="견고성"><h4 className="pg-h4">견고성</h4><Unknown text="견고성을 재지 못했어요" reason={rob.reason} /></section>;
   const roll = rob.rolling as Rolling;
   const nDays = Number(rob.n_days);
   const story = (rob.story as string[]) ?? [];
   const shorts = Number(rob.shorts_dropped ?? 0);
+  const period = rob.axis === "date" ? (rob.period as { start: string; end: string } | undefined) : undefined;
+  const align = rob.alignment as { same?: boolean | null; reason?: string | null } | undefined;
   return (
     <section className="pg-rob" aria-label="견고성">
       <h4 className="pg-h4">견고성 — 같이 무너지나</h4>
       {/* 성과 종류는 응답이 선언한 것 그대로 — 없으면 PerfLabel 이 '모름'을 그린다(지어내지 않는다). */}
       <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·흔들림" compact /></div>
       <ul className="pg-rob-story">{story.map((s) => <li key={s}>{s}</li>)}</ul>
-      <p className="pg-help">
-        지금 비중을 지난 {nDays}거래일 그대로 들고 있었다고 보고 쟀어요 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아니에요.
+      <p className="pg-help pg-rob-basis">
+        {period ? `${period.start}~${period.end} · ${nDays}거래일을 날짜로 맞춰 쟀어요. ` : ""}
+        {basis === "records"
+          ? "과거 백테스트 기록끼리예요 — 실거래 기록이 아니고, 앞으로도 같다는 뜻도 아니에요."
+          : `지금 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 들고 있었다고 보고 쟀어요 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아니에요.`}
         {rob.shares_basis === "equal" ? " 몫은 똑같이 나눴다고 봤어요." : ""}
         {shorts > 0 ? ` 숏 비중 ${shorts}개는 빼고 쟀어요.` : ""}
       </p>
+      {rob.dates_reason ? <p className="pg-help pg-rob-dates-reason">{String(rob.dates_reason)}</p> : null}
+      {align?.same === false ? <p className="pg-note pg-rob-align">{String(align.reason)}</p> : null}
       <details className="pg-rob-sec" open>
         <summary>상관 추이 <span>{roll.available ? `${roll.window}거래일 창` : "모름"}</span></summary>
         {roll.available ? <Trend r={roll} /> : <Unknown text="상관 추이를 보지 못했어요" reason={roll.reason} />}
@@ -257,12 +266,43 @@ export function RobustnessView({ rob }: { rob: Dict | null | undefined }) {
       </details>
       <details className="pg-rob-sec">
         <summary>최악 구간 겹침</summary>
-        <Drawdown d={(rob.drawdown as Dict) ?? {}} nDays={nDays} />
+        <Drawdown d={(rob.drawdown as Dict) ?? {}} nDays={nDays} period={period} />
       </details>
       <details className="pg-rob-sec">
         <summary>더 보기 <span>실질 개수 · 분산 효과 · 안정성</span></summary>
         <More rob={rob} />
       </details>
     </section>
+  );
+}
+
+const SRC_KO: Record<string, string> = { registered: "등록 전략", backtest_run: "백테스트 실행", backtest_result: "정책 백테스트" };
+const DATA_TAG: Record<string, [string, string]> = {
+  real: ["confirmed", "실데이터"], synthetic: ["assumed", "연습용(합성)"], unknown: ["unknown", "데이터 모름"],
+};
+
+/** 기록끼리 견고성 (BS3) — 무엇을 이었는지(출처·데이터·시점 고정)를 먼저, 그다음 같은 견고성 본문. ★실거래 기록이 아니다★. */
+export function RecordRobustnessResult({ v }: { v: Dict }) {
+  const series = (v.series as Dict[]) ?? [];
+  return (
+    <>
+      <ul className="pg-rec-series" aria-label="이은 기록">
+        {series.map((s) => {
+          const [tone, text] = DATA_TAG[String(s.data)] ?? DATA_TAG.unknown;
+          return (
+            <li key={`${String(s.source)}-${String(s.ref)}`} className="pg-rec-item" data-source={String(s.source)}>
+              <b>{String(s.label)}</b>
+              <span className="pg-rec-chips">
+                <span className="pg-tag">{SRC_KO[String(s.source)] ?? String(s.source)}</span>
+                <span className={`pg-tag pg-tag--${tone}`}>{text}</span>
+                <span className={`pg-tag pg-tag--${s.pit === true ? "confirmed" : "unknown"}`}>{s.pit === true ? "시점 고정" : "시점 고정 미확인"}</span>
+              </span>
+              <span>{String(s.note)} · 곡선 {String(s.n_days)}일</span>
+            </li>
+          );
+        })}
+      </ul>
+      <RobustnessView rob={v.robustness as Dict} basis="records" />
+    </>
   );
 }

@@ -376,7 +376,7 @@ class RobustCompareParams(BaseModel):
 
 
 def _sleeve_analytics(inputs: dict, p: RobustCompareParams) -> pg.NodeOutput:
-    from src.api.allocation_graph_robustness import count_shorts, robustness_view
+    from src.api.allocation_graph_robustness import robustness_for_sleeves
     from src.engine import sleeve_combine as sc
     ports = [k for k in ("a", "b", "c", "d") if inputs.get(k) is not None]
     sleeves = [{"name": f"묶음 {i + 1}", "weights": holdings_pct(inputs[k])} for i, k in enumerate(ports)]
@@ -387,8 +387,8 @@ def _sleeve_analytics(inputs: dict, p: RobustCompareParams) -> pg.NodeOutput:
     if not isinstance(out, dict) or out.get("error"):
         why = out.get("message") if isinstance(out, dict) else None
         raise pg.NodeFailure(f"묶음 사이를 재지 못했어요 — {why or '사유 미상'}")
-    names, S = sc._sleeve_return_series(sleeves, ret)
-    rob = robustness_view(names, S, None, window=p.window, target_rho=p.shock_rho, shorts_dropped=count_shorts(sleeves))
+    # BS3 — 날짜로 맞춘 흐름(못 맞추면 끝 맞춤 + 라벨) · 시장 대용은 든 종목으로.
+    rob = robustness_for_sleeves(sleeves, None, lookback=days, window=p.window, target_rho=p.shock_rho)
     view = {"result": out, "n": len(sleeves), "ports": ports, "requested_days": days, "robustness": rob}
     return pg.NodeOutput(values={}, view=view, tags={"practice": mock_allowed()})
 
@@ -408,6 +408,14 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, "치솟는 상관은 내가 정한 값이에요 — 실제 위기에는 흔들림도 함께 커져요."))
         if rob.get("shorts_dropped"):
             trust.append(_t(UNKNOWN, f"숏 비중 {rob['shorts_dropped']}개는 흐름에서 빼고 쟀어요."))
+        if rob.get("axis") == "date":
+            p0 = rob.get("period") or {}
+            trust.append(_t(CONFIRMED, f"종목 시세를 날짜로 맞춰 {p0.get('start')}~{p0.get('end')} 를 쟀어요."))
+        elif rob.get("dates_reason"):
+            trust.append(_t(UNKNOWN, str(rob["dates_reason"])))
+        al = rob.get("alignment") or {}
+        if al.get("same") is False:
+            trust.append(_t(UNKNOWN, str(al.get("reason"))))
     else:
         trust.append(_t(UNKNOWN, f"견고성을 재지 못했어요 — {rob.get('reason') or '사유 없음'}"))
     eff = rob.get("effective_n") or {}
@@ -416,8 +424,8 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
         "text": f"묶음 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였어요"}
     return {"title": f"묶음 {view.get('n')}개가 같이 무너지는지 봤어요", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
-            "unmeasured": ["앞으로도 같을지(과거 관계예요)", "돈이 되는지(경제적 가치)",
-                           "날짜로 맞춘 비교(시세의 끝을 맞췄어요)"]}
+            "unmeasured": ["앞으로도 같을지(과거 관계예요)", "돈이 되는지(경제적 가치)"]
+            + ([] if rob.get("axis") == "date" else ["날짜로 맞춘 비교(시세의 끝을 맞췄어요)"])}
 
 
 def _glance_sleeves(view: dict) -> dict | None:

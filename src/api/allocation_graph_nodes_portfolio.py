@@ -112,10 +112,10 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
                    "n_holdings": len(s["weights"]), "rebalance": codes_of[port]}
                   for port, name, s in zip(ports, names, sleeves)]
     # BR R1 — 견고성(관측만): 몫을 정한 것과 같은 흐름(같은 수익 행렬·주기·비용)으로 · 몫은 합치기 결과 그대로.
-    from src.api.allocation_graph_robustness import count_shorts, robustness_view
-    s_names, S = sc._sleeve_return_series(sleeves, ret, every_arg, cost_arg)
-    robustness = robustness_view(s_names, S, [out["sleeve_allocation"][nm] / 100.0 for nm in s_names],
-                                 shorts_dropped=count_shorts(sleeves))
+    # BS3 — 흐름은 날짜로 맞춘다(못 맞추면 끝 맞춤 + 라벨). 합치기가 쓴 끝 맞춤과 다르면 `alignment` 가 말한다.
+    from src.api.allocation_graph_robustness import robustness_for_sleeves
+    robustness = robustness_for_sleeves(sleeves, [out["sleeve_allocation"][s["name"]] / 100.0 for s in sleeves],
+                                        rebalance_every=every_arg, cost_bps=cost_arg)
     view = {"result": out, "labels": _labels(codes), "strategies": strategies, "correlation": corr,
             "cost_bps": float(p.cost_bps),
             "correlation_reason": ana.get("message") if ana.get("error") else None,

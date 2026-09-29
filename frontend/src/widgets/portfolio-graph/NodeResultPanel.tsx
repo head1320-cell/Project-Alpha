@@ -6,6 +6,7 @@
  * 먼저 온다. 막힌 노드는 결과를 지어내지 않는다(`view` 가 `null`).
  */
 import type { ReactNode } from "react";
+import { RecordRobustnessResult } from "./RobustnessResults";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
@@ -327,6 +328,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   custom_scenario: ({ v, prov }) => <ScenarioStressResult v={v} prov={prov} />,
   strategy_health: ({ v }) => <HealthResult v={v} />,
   sleeve_analytics: ({ v }) => <SleeveAnalyticsResult v={v} />,
+  record_robustness: ({ v }) => <RecordRobustnessResult v={v} />,
   alpha_validate: ({ v, prov }) => <AlphaValidateResult v={v} prov={prov} />,
   backtest_setup: ({ v }) => <BacktestSetupResult v={v} />,
   backtest_load: ({ v, prov }) => <BacktestLoadResult v={v} prov={prov} />,

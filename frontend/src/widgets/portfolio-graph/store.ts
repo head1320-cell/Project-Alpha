@@ -46,8 +46,6 @@ import {
   STRATEGY_COLORS,
   strategyOutput,
   compareTargets,
-  COMPARE_KIND,
-  COMPARE_PORTS,
   topoOrder,
   type GraphBlock,
   type GraphBranch,
@@ -714,19 +712,19 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const chk = compareTargets(s.picked, s.nodes, s.catalog ?? []);
       if (!chk.ok) return chk.reason;
       push();
-      const id = newId(COMPARE_KIND, new Set(s.nodes.map((n) => n.id)));
+      const id = newId(chk.kind, new Set(s.nodes.map((n) => n.id)));
       const from = s.nodes.filter((n) => chk.sources.some((x) => x.id === n.id));
       const x = Math.max(...from.map((n) => n.position.x)) + 260;
       const y = from.reduce((a, n) => a + n.position.y, 0) / from.length;
-      const node: PgNode = { id, type: PG_NODE_TYPE, position: { x, y }, data: { kind: COMPARE_KIND, params: {} } };
+      const node: PgNode = { id, type: PG_NODE_TYPE, position: { x, y }, data: { kind: chk.kind, params: {} } };
       let edges = s.edges;
-      chk.sources.forEach((src, i) => {
-        const c = { source: src.id, sourceHandle: src.handle, target: id, targetHandle: COMPARE_PORTS[i] };
+      chk.sources.forEach((src) => {
+        const c = { source: src.id, sourceHandle: src.handle, target: id, targetHandle: src.port };
         edges = addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, edges);
       });
       set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedId: id, picked: [id],
             reportStale: s.report !== null });
-      return `고른 ${chk.sources.length}개를 ‘견고성 비교’에 이었어요 — 계산하면 같이 무너지는지 보여요.`;
+      return `고른 ${chk.sources.length}개를 ‘${chk.label}’에 이었어요 — 계산하면 같이 무너지는지 보여요.`;
     },
 
     addStrategy: (src) => {

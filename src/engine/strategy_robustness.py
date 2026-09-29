@@ -250,18 +250,42 @@ def diversification(S: np.ndarray, shares: Sequence[float] | None = None) -> dic
 
 # ── 묶음 보고서 ───────────────────────────────────────────────────────────────
 
+def _attach_dates(rep: dict[str, Any], dates: Sequence[str]) -> None:
+    """★로더가 준 날짜만★ 붙인다(BS3) — 'n거래일 전' 번호(`*_ago`)는 그대로 두고 옆에 날짜를 단다."""
+    T = len(dates)
+    at = lambda ago: dates[T - 1 - ago]  # noqa: E731
+    rep["axis"] = "date"
+    rep["period"] = {"start": dates[0], "end": dates[-1]}
+    roll = rep["rolling"]
+    if roll.get("available"):
+        roll["end_dates"] = [at(a) for a in roll["ago"]]
+    for row in rep["drawdown"].get("strategies") or []:
+        if row.get("max_drawdown_pct") is not None:
+            row["start_date"], row["end_date"] = at(row["start_ago"]), at(row["end_ago"])
+    w = rep["drawdown"].get("worst_window")
+    if w:
+        w["start_date"], w["end_date"] = at(w["start_ago"]), at(w["end_ago"])
+
+
 def robustness_report(names: Sequence[str], S: np.ndarray, shares: Sequence[float] | None = None, *,
                       market: np.ndarray | None = None, window: int = 60, q: float = 0.1,
-                      worst_window: int = 20) -> dict[str, Any]:
-    """위 블록을 한 번에. 상관 급등 충격(`shock`)은 부르는 쪽(노드 층)이 `stress_correlation_report` 로 붙인다."""
+                      worst_window: int = 20, dates: Sequence[str] | None = None) -> dict[str, Any]:
+    """위 블록을 한 번에. 상관 급등 충격(`shock`)은 부르는 쪽(노드 층)이 `stress_correlation_report` 로 붙인다.
+
+    `dates` (BS3) — 흐름 행마다의 날짜(로더가 준 것). 주면 `axis="date"` 와 블록마다 날짜가 붙고, 주지 않으면
+    예전처럼 'n거래일 전' 만 싣는다(날짜를 지어내지 않는다). 길이가 흐름과 다르면 실패 + 사유.
+    """
     names = list(names)
     S = np.asarray(S, dtype=float)
     if S.ndim != 2 or S.shape[1] < 2 or len(names) != S.shape[1]:
         return {"available": False, "reason": "견고성은 흐름이 둘 이상 있어야 볼 수 있어요"}
     if S.shape[0] < 30:
         return {"available": False, "reason": f"흐름이 {S.shape[0]}거래일뿐이라 견고성을 볼 수 없어요(적어도 30일)"}
+    if dates is not None and len(dates) != S.shape[0]:
+        return {"available": False,
+                "reason": f"날짜 수({len(dates)})가 흐름 길이({S.shape[0]})와 달라 어느 날의 값인지 말할 수 없어요"}
     _, basis = _shares(shares, len(names))
-    return {
+    rep = {
         "available": True, "names": names, "n_days": int(S.shape[0]), "axis": "trading_days_ago",
         "shares_basis": basis,
         "rolling": rolling_correlation(names, S, window),
@@ -271,3 +295,6 @@ def robustness_report(names: Sequence[str], S: np.ndarray, shares: Sequence[floa
         "effective_n": effective_count(names, S),
         "diversification": diversification(S, shares),
     }
+    if dates is not None:
+        _attach_dates(rep, list(dates))
+    return rep

@@ -7,7 +7,7 @@
 - 계산이 깨지면 합치기는 성공하고 이 절만 `available: False` + 사유(조용히 비우지 않는다).
 - 충격: 지금 상관이 이미 목표 이상이면 올리지 않고 사유 · 아니면 흔들림이 커진다(짝).
 - 숏 비중은 흐름에서 빠진다 — 그 수를 밝힌다 · 없으면 0(짝).
-- 응답에 날짜 키가 없다 · 이야기에 판정 어휘가 없다.
+- 날짜는 로더가 준 것만(BS3) · 못 받으면 날짜 키 없이 사유 · 이야기에 판정 어휘가 없다.
 """
 from __future__ import annotations
 
@@ -58,20 +58,36 @@ def test_combine_carries_robustness_from_the_same_series(market):
     json.dumps(r, allow_nan=False)
 
 
-def test_no_dates_and_no_verdict_words(market):
+def test_dates_come_from_the_loader_and_no_verdict_words(market):
+    """BS3 — 계약이 바뀌었다: 예전에는 날짜 키가 아예 없었다(로더에 날짜가 없었다). 이제 날짜 있는 로더로 줄을 세우고
+    ★로더가 준 날짜만★ 싣는다 — 기간 끝이 로더의 마지막 날짜와 같다."""
+    from src.data.etf_prices import daily_closes_indexed
     rob = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]
-    assert not any("date" in k.lower() for k in _keys(rob))
+    assert rob["axis"] == "date" and rob["period"]["end"] == daily_closes_indexed(A, "kr", 5)[-1][0]
+    assert rob["alignment"]["same"] is True          # mock 은 모든 종목이 같은 날에 거래한다
     text = " ".join(rob["story"])
     assert rob["story"] and not any(w in text for w in BANNED)
 
 
+def test_without_dated_prices_there_are_no_dates_and_it_says_why_pair(market, monkeypatch):
+    """짝 — 날짜 있는 시세를 못 받으면 끝 맞춤으로 재고, 날짜를 지어내지 않으며 그렇다고 말한다."""
+    from src.api import robustness_inputs as ri
+    monkeypatch.setattr(ri, "dated_sleeve_returns", lambda *a, **k: {"available": False, "reason": "테스트: 날짜 없음"})
+    rob = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]
+    assert rob["available"] and rob["axis"] == "trading_days_ago"
+    assert not any("date" in k.lower() and k != "dates_reason" for k in _keys(rob))
+    assert "테스트: 날짜 없음" in rob["dates_reason"]
+
+
 def test_market_missing_is_labelled_pair(market, monkeypatch):
-    monkeypatch.setattr(agr, "market_series", lambda T, market="kr": (None, "시장 대용 시세가 없어요(테스트)"))
+    from src.api import robustness_inputs as ri
+    monkeypatch.setattr(ri, "market_on_dates", lambda t, dates: (None, "시장 대용 시세가 없어요(테스트)"))
     c = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]["crisis"]
     assert c["basis"] == "strategy_mean" and "부풀" in c["note"] and c["market_reason"] == "시장 대용 시세가 없어요(테스트)"
-    monkeypatch.setattr(agr, "market_series", lambda T, market="kr": (np.random.default_rng(1).normal(0, .01, T), None))
+    monkeypatch.setattr(ri, "market_on_dates",
+                        lambda t, dates: (np.random.default_rng(1).normal(0, .01, len(dates)), None))
     c2 = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]["crisis"]
-    assert c2["basis"] == "market" and "market_reason" not in c2
+    assert c2["basis"] == "market" and "market_reason" not in c2 and c2["market_label"] == "KODEX 200"
 
 
 def test_a_broken_robustness_keeps_the_combine_and_says_why(market, monkeypatch):

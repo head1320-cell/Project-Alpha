@@ -81,7 +81,9 @@ test("견고성 절(BR R1a): 전략 합치기 자세히 = 서버 view.robustness
   const lab = rob.perf_label as { kind: string; data_real: boolean };
   expect(lab.kind).toBe("backtest");
   await expect(root.locator(`.perf-label.perf-label--${lab.kind}`)).toBeVisible();
-  await expect(root).toContainText(`지난 ${rob.n_days}거래일`);
+  // BS3 — 날짜가 있으면 기간(서버 값), 없으면 'n거래일'(짝은 '날짜를 못 받으면' pytest).
+  const per = rob.period as { start: string; end: string } | undefined;
+  await expect(root).toContainText(per ? `${per.start}~${per.end} · ${rob.n_days}거래일` : `지난 ${rob.n_days}거래일`);
 
   // 상관 추이 — 기본으로 펼쳐져 있고, 한 쌍이면 칩 없이 그 쌍.
   const roll = rob.rolling as { pairs: { values: (number | null)[] }[]; window: number };
@@ -207,11 +209,11 @@ test("고른 노드 견고성 비교(BR R1b) 짝: 비중을 내지 않는 노드
   await expect(bar).toBeVisible();
   const btn = bar.locator(".pg-selbar-compare");
   await expect(btn).toHaveAttribute("aria-disabled", "true");
-  await expect(btn).toHaveAttribute("title", /비중을 내는 노드끼리만/);
+  await expect(btn).toHaveAttribute("title", /비중이나 기록을 내는 노드끼리만/);
   const before = (await wip(page)).nodes.length;
   // aria-disabled 는 누를 수 있다(누르면 사유를 말한다) — Playwright 는 aria-disabled 를 '누를 수 없음'으로 보므로 force.
   await btn.click({ force: true });
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드끼리만");
+  await expect(page.locator(".pg-note")).toContainText("비중이나 기록을 내는 노드끼리만");
   expect((await wip(page)).nodes).toHaveLength(before);
   // 하나만 고르면 막대가 없다.
   await node(page, "optimizer").click();
@@ -252,4 +254,71 @@ test("고른 노드 막대(BR R1b): 고른 노드 아래에 뜨고 · 묶으면 
   await expect(bar, "묶은 뒤에는 상자 머리가 그 역할 — 막대가 없다").toHaveCount(0);
   await page.locator(".pg-group").getByRole("button", { name: "묶음 접기" }).click();
   await expect(page.locator(".pg-group").getByRole("button", { name: "묶음 펼치기" })).toBeVisible();
+});
+
+// ══ BS3 · 날짜 축 · 기록끼리 견고성 ══════════════════════════════════════════════
+
+test("날짜 축(BS3): 합치기 견고성 절은 서버가 준 날짜로 — 기간·추이 축·낙폭 구간이 서버 값 그대로", async ({ page }) => {
+  await openCanvas(page);
+  await addStrategy(page, "tpl:stress");
+  const body = await run(page);
+  const doc = await wip(page);
+  const pf = doc.nodes.find((n) => n.type === "portfolio_combine")!;
+  const rob = body.nodes[pf.id].view!.robustness as Dict;
+  expect(rob.axis).toBe("date");
+  const period = rob.period as { start: string; end: string };
+  await openCombine(page, pf.id);
+  await expect(page.locator(".pg-side .pg-rob-basis")).toContainText(`${period.start}~${period.end}`);
+  const ends = (rob.rolling as { end_dates: string[] }).end_dates;
+  await expect(page.locator(".pg-side .pg-rob-trend")).toContainText(ends[ends.length - 1]);
+  const dd = rob.drawdown as { strategies: { start_date?: string; end_date?: string }[] };
+  const first = dd.strategies.find((x) => x.start_date);
+  const dsec = await openSection(page, "최악 구간 겹침");
+  if (first) await expect(dsec).toContainText(`${first.start_date}~${first.end_date}`);
+});
+
+test("기록끼리 견고성(BS3): 정책 백테스트 둘을 고르면 막대가 '기록끼리 견고성'에 t1·t2 로 잇고 · 계산하면 출처 칩과 날짜", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "backtest").click();
+  await page.keyboard.press("Control+d");
+  let doc = await wip(page);
+  const bts = doc.nodes.filter((n) => n.type === "backtest");
+  expect(bts).toHaveLength(2);
+  await node(page, bts[0].id).click();
+  await node(page, bts[1].id).click({ modifiers: [mod] });
+  const bar = page.locator(".pg-selbar");
+  await expect(bar.locator(".pg-selbar-compare")).not.toHaveAttribute("aria-disabled", "true");
+  await bar.locator(".pg-selbar-compare").click();
+  await expect(page.locator(".pg-note")).toContainText("기록끼리 견고성");
+  doc = await wip(page);
+  const rec = doc.nodes.filter((n) => n.type === "record_robustness");
+  expect(rec).toHaveLength(1);
+  expect(doc.nodes.filter((n) => n.type === "sleeve_analytics")).toHaveLength(0);
+  expect(doc.edges.filter((e) => e.target === rec[0].id).map((e) => e.target_port).sort()).toEqual(["t1", "t2"]);
+
+  const body = await run(page);
+  const r = body.nodes[rec[0].id];
+  expect(r.status, String(r.reason)).toBe("ok");
+  await node(page, rec[0].id).click();
+  await page.locator('.pg-tab[data-tab="detail"]').click();
+  const items = page.locator(".pg-side .pg-rec-item");
+  await expect(items).toHaveCount(2);
+  await expect(items.first()).toHaveAttribute("data-source", "backtest_result");
+  await expect(items.first()).toContainText("연습용(합성)");                  // mock — 실데이터라고 하지 않는다
+  const period = (r.view!.robustness as Dict).period as { start: string; end: string };
+  await expect(page.locator(".pg-side .pg-rob-basis")).toContainText(`${period.start}~${period.end}`);
+  await expect(page.locator(".pg-side .pg-rob-basis")).toContainText("실거래 기록이 아니고");
+});
+
+test("기록끼리 견고성(BS3) 짝: 비중과 기록이 섞이면 흐린 단추 · 사유만 — 노드를 만들지 않는다", async ({ page }) => {
+  await openCanvas(page);
+  await node(page, "backtest").click();
+  await node(page, "optimizer").click({ modifiers: [mod] });
+  const btn = page.locator(".pg-selbar .pg-selbar-compare");
+  await expect(btn).toHaveAttribute("aria-disabled", "true");
+  await expect(btn).toHaveAttribute("title", /비중과 기록은 따로/);
+  const before = (await wip(page)).nodes.length;
+  await btn.click({ force: true });
+  await expect(page.locator(".pg-note")).toContainText("비중과 기록은 따로");
+  expect((await wip(page)).nodes).toHaveLength(before);
 });

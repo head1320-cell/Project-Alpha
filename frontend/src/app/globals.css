@@ -7088,6 +7088,13 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-rob-pair-name { font-weight: 700; color: var(--pg-ink); }
 .pg-rob-codrop { color: var(--pg-ink); font-variant-numeric: tabular-nums; }
 .pg-rob-worst-all td { font-weight: 700; color: var(--pg-ink); }
+/* BS3 — 날짜 축 · 날짜로 맞춘 흐름과 끝 맞춤이 다를 때 한 줄 · 기록 출처 칩 */
+.pg-rob-span { display: block; font-size: 12px; font-weight: 500; color: var(--pg-body); }
+.pg-rob-align { padding: 8px 10px; color: var(--pg-ink); background: var(--pg-assume-soft); border-radius: 10px; }
+.pg-rec-series { display: grid; gap: 6px; margin: 4px 0 10px; padding: 0; list-style: none; }
+.pg-rec-item { display: grid; gap: 2px; padding: 8px 10px; font-size: 13px; line-height: 1.45; color: var(--pg-body); background: var(--pg-soft); border-radius: 10px; }
+.pg-rec-item b { color: var(--pg-ink); }
+.pg-rec-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 /* 절 안에 바로 놓인 표 — `.pg-table` 은 폭 100% 라 좌우 12px 여백을 더하면 판 밖으로 24px 넘쳤다(스크린샷: 낙폭·안정성 값이 가장자리에 붙음). */
 .pg-rob-sec > .pg-table { width: calc(100% - 24px); }
 /* 견고성 표 — 전략 이름은 사용자가 짓는다(길 수 있다). `nowrap` 이름 칸이 자동 배치 표를 판 밖으로 밀었다 → 고정 배치 + 이름은 어절에서 꺾는다. */
