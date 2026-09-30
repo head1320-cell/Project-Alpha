@@ -27,12 +27,12 @@ export function EquityChart({ curve, benchmark }: { curve: number[]; benchmark?:
   }).join(" ");
   const pts = toPts(curve);
   const up = curve[curve.length - 1] >= curve[0];
-  const color = up ? "#16a34a" : "#dc2626";
+  const color = up ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)";
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 240, borderBottom: "1px solid var(--t-border)", borderLeft: "1px solid var(--t-border)" }} preserveAspectRatio="none">
       <polygon points={`0,${H} ${pts} ${W},${H}`} fill={color} opacity="0.06" />
       {hasBench && (
-        <polyline points={toPts(benchmark!)} fill="none" stroke="#71717a" strokeWidth="1.5" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" opacity="0.8" />
+        <polyline points={toPts(benchmark!)} fill="none" stroke="var(--hx-t-71717a)" strokeWidth="1.5" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" opacity="0.8" />
       )}
       <polyline points={pts} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
     </svg>
@@ -56,8 +56,8 @@ export function DrawdownChart({ curve }: { curve: number[] }) {
   }).join(" ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 140, borderTop: "1px solid var(--t-border)" }} preserveAspectRatio="none">
-      <polygon points={`0,0 ${pts} ${W},0`} fill="#dc2626" opacity="0.08" />
-      <polyline points={pts} fill="none" stroke="#dc2626" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <polygon points={`0,0 ${pts} ${W},0`} fill="var(--hx-t-dc2626)" opacity="0.08" />
+      <polyline points={pts} fill="none" stroke="var(--hx-t-dc2626)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -80,7 +80,7 @@ export function MonthlyHeatmap({ data }: { data: Array<MonthlyReturn | number> }
       {cells.map((c, i) => (
         <div key={i} style={{ padding: "10px 4px", borderRadius: 2, background: colorFor(c.val), textAlign: "center" }}>
           <div style={{ fontFamily: "var(--t-mono)", fontSize: 9, color: "var(--t-muted)", marginBottom: 2 }}>{c.label}</div>
-          <div style={{ fontFamily: "var(--t-mono)", fontSize: 12, fontWeight: 600, color: c.val >= 0 ? "#15803d" : "#b91c1c" }}>
+          <div style={{ fontFamily: "var(--t-mono)", fontSize: 12, fontWeight: 600, color: c.val >= 0 ? "var(--hx-t-15803d)" : "var(--hx-t-b91c1c)" }}>
             {c.val >= 0 ? "+" : ""}{c.val.toFixed(1)}
           </div>
         </div>
@@ -96,7 +96,7 @@ export function MetricsTearsheet({ st }: { st: BacktestStatistics }) {
   const num = (x: number | null | undefined, dp = 2) => (has(x) ? x.toFixed(dp) : "—");
   const won = (x: number | null | undefined) => (has(x) ? `₩${Math.round(x).toLocaleString()}` : "—");
   const days = (x: number | null | undefined) => (has(x) ? `${Math.round(x)}일` : "—");
-  const RED = "#dc2626", GREEN = "#16a34a";
+  const RED = "var(--hx-t-dc2626)", GREEN = "var(--hx-t-16a34a)";
 
   type Row = { label: string; value: string; hint?: string; color?: string };
   const groups: { title: string; rows: Row[] }[] = [
@@ -206,7 +206,7 @@ export function SymbolPerfTable({ rows, roundTrips, screened }: {
 
   const won = (v: number | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}₩${Math.abs(Math.round(v)).toLocaleString()}`);
   const pct = (v: number | undefined, dp = 2) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}%`);
-  const col = (v: number | undefined) => ((v ?? 0) >= 0 ? "#16a34a" : "#dc2626");
+  const col = (v: number | undefined) => ((v ?? 0) >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)");
   const daysOf = (t: BacktestTrade) => {
     try {
       if (!t.entry_date || !t.exit_date) return "—";

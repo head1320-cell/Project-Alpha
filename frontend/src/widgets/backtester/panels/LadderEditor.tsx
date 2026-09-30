@@ -43,7 +43,7 @@ export default function LadderEditor({ steps, onChange, side }: {
           onClick={() => onChange([...steps, { movePct: side === "buy" ? -1 * (steps.length) : 1 * (steps.length + 1), weightPct: 10 }])}>
           + 추가
         </button>
-        <span style={{ fontSize: 11, color: total > 100 ? "#dc2626" : "var(--text-muted)" }}>
+        <span style={{ fontSize: 11, color: total > 100 ? "var(--hx-t-dc2626)" : "var(--text-muted)" }}>
           비중 합 {total}% {total > 100 ? "— 100%를 넘을 수 없어요" : ""}
         </span>
       </div>

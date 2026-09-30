@@ -75,7 +75,7 @@ export default function ThemeTree({ selected, onChange }: {
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", background: "var(--bg-section)" }}>
                 <button type="button" onClick={() => toggleGroup(g)} aria-label="그룹 전체"
                   style={{ width: 15, height: 15, borderRadius: 3, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border-strong)", cursor: "pointer", background: grpAll ? "var(--bs-primary, #1200ff)" : grpSome ? "var(--bg-card)" : "transparent" }}>
-                  {grpAll && <Check size={11} style={{ color: "#fff" }} />}
+                  {grpAll && <Check size={11} style={{ color: "var(--on-accent)" }} />}
                   {grpSome && <span style={{ width: 7, height: 2, background: "var(--bs-primary, #1200ff)" }} />}
                 </button>
                 <button type="button" onClick={() => toggleOpen(g.id)}

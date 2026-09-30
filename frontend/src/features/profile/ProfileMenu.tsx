@@ -11,7 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ROLE_KO, useSession } from "@/entities/session";
-import { darkReady, DARK_READY, THEMES, useTheme } from "@/shared/theme";
+import { darkException, darkReady, THEMES, useTheme } from "@/shared/theme";
 
 function Person() {
   return (
@@ -86,7 +86,9 @@ export function ProfileMenu() {
             </div>
             {!ready && theme !== "light" ? (
               <p className="pf-sub pf-theme-note">
-                이 화면은 아직 밝게만 볼 수 있어요 — {DARK_READY.map((r) => r.label).join("·")}에서 어둡게 보여요.
+                {darkException(pathname)?.looks === "dark"
+                  ? "이 화면은 테마와 상관없이 늘 어둡게 보여요."
+                  : "이 화면은 아직 밝게만 볼 수 있어요 — 다른 화면은 고른 테마를 따라요."}
               </p>
             ) : null}
           </div>

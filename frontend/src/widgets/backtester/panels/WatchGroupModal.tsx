@@ -214,7 +214,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
               onSave(name.trim() || "관심그룹", Array.from(selected.keys()), items);
               onClose();
             }}
-            style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: canSave ? "var(--bs-primary, #1200ff)" : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 24px", cursor: canSave ? "pointer" : "not-allowed" }}>
+            style={{ fontSize: 13, fontWeight: 500, color: "var(--on-accent)", background: canSave ? "var(--bs-primary, #1200ff)" : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 24px", cursor: canSave ? "pointer" : "not-allowed" }}>
             저장하기
           </button>
         </div>

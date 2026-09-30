@@ -98,7 +98,7 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
           <h4>Value Creation <span className="ca-cp-sub">ROIC − WACC 스프레드 · {d.roic_wacc.note}</span></h4>
           <div className="ca-fd-legend">
             ROIC <b>{d.roic_wacc.roic}%</b> − WACC <b>{d.roic_wacc.wacc}%</b> ={" "}
-            <b style={{ color: d.roic_wacc.spread > 0 ? "#0e7c4a" : "#b0325a" }}>
+            <b style={{ color: d.roic_wacc.spread > 0 ? "var(--hx-t-0e7c4a)" : "var(--hx-t-b0325a)" }}>
               {d.roic_wacc.spread > 0 ? "+" : ""}{d.roic_wacc.spread}%p
             </b>{" "}· {d.roic_wacc.verdict}
           </div>

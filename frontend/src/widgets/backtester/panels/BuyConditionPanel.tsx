@@ -88,7 +88,7 @@ export default function BuyConditionPanel({ s, set }: {
                 : "끄면 수수료·슬리피지만 봐요 — 0원이 아니라 ★안 본 것★이고, 결과가 그 사실을 적어요."}
             </span>
             {s.chargeMarketImpact && (
-              <span style={{ fontSize: 11, color: "#d97706" }}>
+              <span style={{ fontSize: 11, color: "var(--hx-t-d97706)" }}>
                 ⚠ 거래대금이 없는 종목·기간은 충격을 0이 아니라 <b>미상</b>으로 남겨요 — 그만큼 비용이 낮게 잡혀요.
               </span>
             )}
@@ -112,7 +112,7 @@ export default function BuyConditionPanel({ s, set }: {
           <Segmented value={String(s.signalLag)} onChange={(v) => set((x) => ({ ...x, signalLag: v === "1" ? 1 : 0 }))}
             options={[{ id: "0", label: "당일 종가" }, { id: "1", label: "전일 종가 기준" }]} />
           {s.signalLag === 0 && (s.buy.fillType !== "close" || s.sell.fillType !== "close") ? (
-            <span style={{ fontSize: 11, color: "#d97706" }}>
+            <span style={{ fontSize: 11, color: "var(--hx-t-d97706)" }}>
               ⚠ 당일 종가로 만든 신호를 시가·전일가에 체결하면 look-ahead — 전일 종가 기준 권장
             </span>
           ) : (
@@ -167,7 +167,7 @@ export default function BuyConditionPanel({ s, set }: {
               </div>
               <OffsetInput value={s.buy.breakthroughOffsetPct}
                 onChange={(breakthroughOffsetPct) => patchBuy({ breakthroughOffsetPct })} />
-              <span style={{ fontSize: 11, color: "#d97706" }}>
+              <span style={{ fontSize: 11, color: "var(--hx-t-d97706)" }}>
                 ⚠ 당일 시초가 등 변동성 큰 기준은 불공정 거래 소지에 유의하세요
               </span>
             </div>

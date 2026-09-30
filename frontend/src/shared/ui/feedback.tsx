@@ -101,7 +101,7 @@ export function TickValue({
 
 
 export function MetricCard({
-  label, value, unit = "", delta, sublabel, color = "#1200ff", icon: Icon,
+  label, value, unit = "", delta, sublabel, color = "var(--hx-t-1200ff)", icon: Icon,
   loading = false, format = "number", digits = 2,
 }: {
   label: string;
@@ -130,7 +130,7 @@ export function MetricCard({
       </div>
       <div className="flex items-center gap-2 mt-1 min-h-[14px]">
         {delta != null && (
-          <span className="text-[10px] font-mono tabular-nums flex items-center gap-0.5" style={{ color: delta >= 0 ? "#16a34a" : "#dc2626" }}>
+          <span className="text-[10px] font-mono tabular-nums flex items-center gap-0.5" style={{ color: delta >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>
             {delta >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             {delta >= 0 ? "+" : ""}{delta.toFixed(2)}%
           </span>
@@ -144,7 +144,7 @@ export function MetricCard({
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
 export function Sparkline({
-  data, width = 80, height = 24, color = "#22c55e", className = "",
+  data, width = 80, height = 24, color = "var(--hx-t-22c55e)", className = "",
 }: {
   data: number[]; width?: number; height?: number; color?: string; className?: string;
 }) {
@@ -153,7 +153,7 @@ export function Sparkline({
   const step = width / (data.length - 1);
   const points = data.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * height).toFixed(1)}`).join(" ");
   const isUp = data[data.length - 1] >= data[0];
-  const stroke = color === "auto" ? (isUp ? "#16a34a" : "#dc2626") : color;
+  const stroke = color === "auto" ? (isUp ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)") : color;
   return (
     <span className={`sparkline inline-block ${className}`}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>

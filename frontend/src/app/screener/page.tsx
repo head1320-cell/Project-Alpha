@@ -16,7 +16,7 @@ export default function ScreenerPage() {
           onChange={(e) => setUniverse(e.target.value)}
           style={{
             fontFamily: "var(--t-mono)", fontSize: 11, padding: "5px 9px",
-            border: "1px solid var(--t-border)", borderRadius: 2, background: "#fff",
+            border: "1px solid var(--t-border)", borderRadius: 2, background: "var(--hx-b-ffffff)",
             color: "var(--t-ink)", cursor: "pointer", minWidth: 130,
           }}
         >

@@ -14,7 +14,7 @@ import { HoldingsDonut, donutColor, SignalBadge, fmtPct } from "./cockpitParts";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
 import { PerfLabel } from "@/shared/ui/PerfLabel";
-const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
+const TIP = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
 function fitColor(f: number): string {
   if (f >= 0.8) return "var(--color-bull)";

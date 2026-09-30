@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { fmtNum, fmtPct, fmtZ } from "./cockpitParts";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
-const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
+const TIP_STYLE = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
 export function DrillDownModal({ series, loading, onClose }: { series: MacroSeries | null; loading: boolean; onClose: () => void }) {
   const anim = useChartAnimation();

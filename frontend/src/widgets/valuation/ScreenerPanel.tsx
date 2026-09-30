@@ -203,7 +203,7 @@ export default function ScreenerPanel({ onSelect, selectedTicker }: ScreenerPane
 
       {/* Error */}
       {error && (
-        <div className="card-md p-3 text-xs" style={{ color: "#dc2626" }}>
+        <div className="card-md p-3 text-xs" style={{ color: "var(--hx-t-dc2626)" }}>
           ⚠ {error}
         </div>
       )}

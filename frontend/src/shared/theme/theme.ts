@@ -21,7 +21,28 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   // BS1 — 토큰(`--t-*`·shadcn 다리)만 쓰는 화면. settings.spec 이 다크 AA 로 확인한다.
   { pattern: /^\/settings\/?$/, label: "설정" },
   { pattern: /^\/login\/?$/, label: "로그인" },
+  // BS5 — 레거시 모듈. 라이트는 계산 스타일 골든 그대로, 다크는 주요 상태 전부 AA(E2E dark-modules.spec.ts).
+  { pattern: /^\/dashboard\/?$/, label: "대시보드" },
+  { pattern: /^\/screener\/?$/, label: "스크리너" },
+  { pattern: /^\/backtest\/?$/, label: "백테스터" },
+  { pattern: /^\/backtest\/runs\/[^/]+\/(loading|compare)\/?$/, label: "백테스트 진행·비교" },
+  { pattern: /^\/macro(\/|$)/, label: "매크로" },
+  { pattern: /^\/insights\/?$/, label: "기업 분석" },
+  { pattern: /^\/risk-tools\/?$/, label: "위험" },
+  { pattern: /^\/admin\/data\/?$/, label: "데이터" },
+  { pattern: /^\/derivatives\/?$/, label: "파생" },
 ];
+
+/**
+ * 테마를 따르지 않는 화면(BS5) — 안내 문구가 이것만 말한다. `looks` 는 그 화면이 늘 보이는 쪽.
+ * 첫 화면은 셸 밖 브랜드 밴드라 밝게만, 관리 화면 셋은 처음부터 어두운 조종석이라 늘 어둡게다.
+ */
+export const DARK_EXCEPTIONS: { pattern: RegExp; label: string; looks: "light" | "dark" }[] = [
+  { pattern: /^\/$/, label: "첫 화면", looks: "light" },
+  { pattern: /^\/dev(\/|$)/, label: "개발 화면", looks: "light" },
+  { pattern: /^\/admin\/(live-trading|multi-backtest|realism)(\/|$)/, label: "실거래·다중 백테스트·현실성 관리 화면", looks: "dark" },
+];
+export const darkException = (path: string) => DARK_EXCEPTIONS.find((r) => r.pattern.test(path)) ?? null;
 export const darkReady = (path: string) => DARK_READY.some((r) => r.pattern.test(path));
 
 export function readTheme(): Theme {

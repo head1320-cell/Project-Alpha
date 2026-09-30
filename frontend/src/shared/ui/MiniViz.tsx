@@ -11,7 +11,7 @@ export function MiniViz({ kind, className = "t-miniviz" }: { kind: MiniVizKind; 
       <svg className={className} viewBox="0 0 120 36" preserveAspectRatio="xMidYMid meet">
         {hs.map((h, i) => (
           <rect key={i} x={i * 12 + 2} y={36 - h} width="7" height={h}
-            fill={i === hs.length - 1 ? "var(--t-accent)" : "#d4d4d8"} />
+            fill={i === hs.length - 1 ? "var(--t-accent)" : "var(--hx-b-d4d4d8)"} />
         ))}
       </svg>
     );
@@ -22,7 +22,7 @@ export function MiniViz({ kind, className = "t-miniviz" }: { kind: MiniVizKind; 
         <polyline points="2,30 22,26 42,29 62,18 82,21 102,10 118,13"
           fill="none" stroke="var(--t-accent)" strokeWidth="1.6" />
         <polyline points="2,32 22,31 42,32 62,28 82,29 102,24 118,26"
-          fill="none" stroke="#d4d4d8" strokeWidth="1.2" />
+          fill="none" stroke="var(--hx-b-d4d4d8)" strokeWidth="1.2" />
       </svg>
     );
   }
@@ -42,7 +42,7 @@ export function MiniViz({ kind, className = "t-miniviz" }: { kind: MiniVizKind; 
       <svg className={className} viewBox="0 0 120 36" preserveAspectRatio="xMidYMid meet">
         {[6, 16, 26].map((y, i) => (
           <g key={i}>
-            <rect x="2" y={y} width={86 - i * 18} height="3.5" fill="#e4e4e7" />
+            <rect x="2" y={y} width={86 - i * 18} height="3.5" fill="var(--hx-b-e4e4e7)" />
             <rect x="2" y={y} width={40 - i * 8} height="3.5" fill="var(--t-accent)" opacity="0.65" />
           </g>
         ))}
@@ -52,7 +52,7 @@ export function MiniViz({ kind, className = "t-miniviz" }: { kind: MiniVizKind; 
   // gauge
   return (
     <svg className={className} viewBox="0 0 120 36" preserveAspectRatio="xMidYMid meet">
-      <circle cx="60" cy="18" r="13" fill="none" stroke="#e4e4e7" strokeWidth="2.5" />
+      <circle cx="60" cy="18" r="13" fill="none" stroke="var(--hx-b-e4e4e7)" strokeWidth="2.5" />
       <path d="M 60 5 A 13 13 0 0 1 72.3 22" fill="none" stroke="var(--t-accent)" strokeWidth="2.5" />
     </svg>
   );

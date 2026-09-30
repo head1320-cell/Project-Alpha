@@ -12,9 +12,9 @@ import {
 import type { MacroCorrelations, MacroTiming, TimingComponent, TrajectoryPoint, TrendRow } from "@/entities/macro/analysisModel";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
-const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
+const TIP = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 const PAIR_COLORS: Record<string, string> = {
-  "SPY-TLT": "#1200ff", "SPY-GLD": "#a16207", "SPY-PDBC": "#ea580c", "SPY-EEM": "#0891b2", "SPY-HYG": "#dc2626",
+  "SPY-TLT": "var(--hx-t-1200ff)", "SPY-GLD": "var(--hx-t-a16207)", "SPY-PDBC": "var(--hx-t-ea580c)", "SPY-EEM": "var(--hx-t-0891b2)", "SPY-HYG": "var(--hx-t-dc2626)",
 };
 const fmt1 = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`);
 
@@ -78,7 +78,7 @@ export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] 
         <ReferenceLine y={0} stroke="var(--t-ink)" strokeWidth={1} />
         {pairs.map((p) => (
           <Line key={p.key} type="monotone" dataKey={p.key} name={p.label}
-            stroke={PAIR_COLORS[p.key] ?? "#64748b"} strokeWidth={p.key === "SPY-TLT" ? 2.4 : 1.2}
+            stroke={PAIR_COLORS[p.key] ?? "var(--hx-t-64748b)"} strokeWidth={p.key === "SPY-TLT" ? 2.4 : 1.2}
             dot={false} isAnimationActive={anim} />
         ))}
       </LineChart>
@@ -94,14 +94,14 @@ export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }}>
-        <defs><linearGradient id="mcaAvg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#dc2626" stopOpacity={0.28} /><stop offset="100%" stopColor="#dc2626" stopOpacity={0.03} /></linearGradient></defs>
+        <defs><linearGradient id="mcaAvg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--hx-t-dc2626)" stopOpacity={0.28} /><stop offset="100%" stopColor="var(--hx-t-dc2626)" stopOpacity={0.03} /></linearGradient></defs>
         <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" vertical={false} />
         <XAxis dataKey="t" tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" minTickGap={32} />
         <YAxis domain={[0, 1]} tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" width={36} />
         <Tooltip contentStyle={TIP} />
         <ReferenceArea y1={0.6} y2={1} fill="rgba(220,38,38,0.06)" stroke="none" />
         <ReferenceLine y={0.6} stroke="var(--color-bear)" strokeDasharray="3 3" label={{ value: "상관 붕괴 위험", position: "insideTopRight", fontSize: 9, fill: "var(--color-bear)" }} />
-        <Area type="monotone" dataKey="corr" stroke="#dc2626" strokeWidth={1.6} fill="url(#mcaAvg)" isAnimationActive={anim} />
+        <Area type="monotone" dataKey="corr" stroke="var(--hx-t-dc2626)" strokeWidth={1.6} fill="url(#mcaAvg)" isAnimationActive={anim} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -161,9 +161,9 @@ function PctCell({ v }: { v: number | null | undefined }) {
 }
 
 const TREND_PILL: Record<string, { fg: string; bg: string }> = {
-  "상승": { fg: "#0e7c4a", bg: "rgba(22,163,74,.12)" },
-  "하락": { fg: "#b91c1c", bg: "rgba(220,38,38,.10)" },
-  "중립": { fg: "#71717a", bg: "rgba(113,113,122,.10)" },
+  "상승": { fg: "var(--hx-t-0e7c4a)", bg: "rgba(22,163,74,.12)" },
+  "하락": { fg: "var(--hx-t-b91c1c)", bg: "rgba(220,38,38,.10)" },
+  "중립": { fg: "var(--hx-t-71717a)", bg: "rgba(113,113,122,.10)" },
 };
 
 export function TrendTable({ assets }: { assets: TrendRow[] }) {
@@ -186,7 +186,7 @@ export function TrendTable({ assets }: { assets: TrendRow[] }) {
                     <span className="mca-rsi-track">
                       <i className="mca-rsi-zone" />
                       <i className="mca-rsi-dot" style={{ left: `${Math.max(0, Math.min(100, rsi))}%`,
-                        background: rsi >= 70 ? "#dc2626" : rsi <= 30 ? "#2563eb" : "#71717a" }} />
+                        background: rsi >= 70 ? "var(--hx-b-dc2626)" : rsi <= 30 ? "var(--hx-b-2563eb)" : "var(--hx-b-71717a)" }} />
                     </span>
                     {rsi.toFixed(0)}
                   </span>
@@ -230,7 +230,7 @@ export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
           <Scatter data={data} line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} lineType="joint"
             fill="var(--t-accent)" fillOpacity={0.45} isAnimationActive={anim} />
           <ReferenceDot x={last.x} y={last.y} r={16} fill="var(--t-accent)" fillOpacity={0.14} stroke="none" />
-          <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--t-accent)" stroke="#fff" strokeWidth={1.5} />
+          <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--t-accent)" stroke="var(--hx-b-ffffff)" strokeWidth={1.5} />
         </ScatterChart>
       </ResponsiveContainer>
     </div>

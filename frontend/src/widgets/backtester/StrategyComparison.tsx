@@ -50,7 +50,7 @@ const METRICS: { key: keyof NonNullable<StrategyResult["stats"]>; label: string;
   { key: "num_trades", label: "거래수", unit: "회", higher: true },
 ];
 
-const COLORS = ["#1200ff", "#dc2626", "#059669", "#d97706", "#7c3aed"];
+const COLORS = ["var(--hx-t-1200ff)", "var(--hx-t-dc2626)", "var(--hx-t-059669)", "var(--hx-t-d97706)", "var(--hx-t-7c3aed)"];
 
 export default function StrategyComparison() {
   const [available, setAvailable] = useState<Array<{ id: string; label: string }>>([]);
@@ -224,7 +224,7 @@ export default function StrategyComparison() {
                         <td className="tcmp-metric-label">{m.label}</td>
                         {results.map((r) => {
                           if (r.loading) return <td key={r.id} className="num tcmp-loading-cell">···</td>;
-                          if (r.error) return <td key={r.id} className="num" style={{ color: "#dc2626" }}>—</td>;
+                          if (r.error) return <td key={r.id} className="num" style={{ color: "var(--hx-t-dc2626)" }}>—</td>;
                           const v = r.stats![m.key];
                           const isBest = best !== null && v === best && results.filter((x) => x.stats).length > 1;
                           return (

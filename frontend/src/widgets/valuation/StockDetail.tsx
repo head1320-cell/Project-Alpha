@@ -122,7 +122,7 @@ export default function StockDetail({ item, onClose }: StockDetailProps) {
         </div>
       )}
       {error && !loading && (
-        <div className="card-md p-4 text-center text-sm" style={{ color: "#dc2626" }}>
+        <div className="card-md p-4 text-center text-sm" style={{ color: "var(--hx-t-dc2626)" }}>
           데이터 로드 실패: {error}
         </div>
       )}
@@ -152,26 +152,26 @@ function PriceValueBand({ item, detail }: { item: ScreenerItem; detail: Valuatio
   const anim = useChartAnimation();
   // 차트 데이터: 현재가 + 3-모델 적정가 + 통합 적정가
   const data = [
-    { name: "현재가", value: item.current_price, color: "#111111" },
+    { name: "현재가", value: item.current_price, color: "var(--hx-t-111111)" },
     {
       name: "RIM",
       value: item.rim_value ?? 0,
-      color: "#16a34a",
+      color: "var(--hx-t-16a34a)",
       formula: "BPS + Σ(ROE-Ke)·BPS / (1+Ke)^t",
     },
     {
       name: "DCF",
       value: item.dcf_value ?? 0,
-      color: "#10b981",
+      color: "var(--hx-t-10b981)",
       formula: "ΣFCF / (1+WACC)^t + TV/(1+WACC)^n",
     },
     {
       name: "DDM",
       value: item.ddm_value ?? 0,
-      color: "#22c55e",
+      color: "var(--hx-t-22c55e)",
       formula: "ΣD / (1+Ke)^t + Pn/(1+Ke)^n",
     },
-    { name: "통합", value: item.intrinsic_value, color: "#0e7490" },
+    { name: "통합", value: item.intrinsic_value, color: "var(--hx-t-0e7490)" },
   ].filter(d => d.value > 0);
 
   return (
@@ -184,18 +184,18 @@ function PriceValueBand({ item, detail }: { item: ScreenerItem; detail: Valuatio
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis dataKey="name" stroke="#737373" style={{ fontSize: 11 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--hx-b-e5e7eb)" vertical={false} />
+          <XAxis dataKey="name" stroke="var(--hx-t-737373)" style={{ fontSize: 11 }} />
           <YAxis
-            stroke="#737373"
+            stroke="var(--hx-t-737373)"
             style={{ fontSize: 10 }}
             tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
           />
           <Tooltip
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
             contentStyle={{
-              background: "#fff",
-              border: "1px solid #d4d4d8",
+              background: "var(--hx-b-ffffff)",
+              border: "1px solid var(--hx-d-d4d4d8)",
               borderRadius: 6,
               fontSize: 12,
             }}
@@ -207,9 +207,9 @@ function PriceValueBand({ item, detail }: { item: ScreenerItem; detail: Valuatio
           />
           <ReferenceLine
             y={item.current_price}
-            stroke="#000"
+            stroke="var(--hx-t-000000)"
             strokeDasharray="4 2"
-            label={{ value: "현재가", position: "right", fontSize: 9, fill: "#000" }}
+            label={{ value: "현재가", position: "right", fontSize: 9, fill: "var(--hx-t-000000)" }}
           />
           <Bar isAnimationActive={anim} dataKey="value" radius={[4, 4, 0, 0]}>
             {data.map((entry, idx) => (
@@ -252,7 +252,7 @@ function GapGauge({ gapPct }: { gapPct: number }) {
             data={[{ value: normalized, fill: color }]}
           >
             <RadialBar isAnimationActive={anim}
-              background={{ fill: "#f3f4f6" }}
+              background={{ fill: "var(--hx-b-f3f4f6)" }}
               dataKey="value"
               cornerRadius={6}
             />
@@ -283,19 +283,19 @@ const MODEL_INFO = {
     name: "잔여이익모델 (Residual Income)",
     formula: "V = BPS + Σ (ROE - Kₑ) × BPS / (1 + Kₑ)ᵗ",
     best: "수익성 높은 기업 (ROE > Kₑ)",
-    color: "#16a34a",
+    color: "var(--hx-t-16a34a)",
   },
   DCF: {
     name: "현금흐름할인법 (Discounted Cash Flow)",
     formula: "V = Σ FCFₜ / (1 + WACC)ᵗ + TV / (1 + WACC)ⁿ",
     best: "안정적 현금흐름 기업",
-    color: "#10b981",
+    color: "var(--hx-t-10b981)",
   },
   DDM: {
     name: "배당할인법 (Dividend Discount)",
     formula: "V = Σ Dₜ / (1 + Kₑ)ᵗ + Pₙ / (1 + Kₑ)ⁿ",
     best: "배당주 / 금융주",
-    color: "#22c55e",
+    color: "var(--hx-t-22c55e)",
   },
 };
 
@@ -362,9 +362,9 @@ function ModelBreakdown({ detail }: { detail: ValuationDetail }) {
 
 function ScoreBreakdown({ item }: { item: ScreenerItem }) {
   const data = [
-    { name: "Gap (저평가)", value: item.gap_score, weight: 0.6, color: "#16a34a" },
-    { name: "ROE (수익성)", value: item.roe_score, weight: 0.2, color: "#10b981" },
-    { name: "Stability (안정성)", value: item.stability_score, weight: 0.2, color: "#22c55e" },
+    { name: "Gap (저평가)", value: item.gap_score, weight: 0.6, color: "var(--hx-t-16a34a)" },
+    { name: "ROE (수익성)", value: item.roe_score, weight: 0.2, color: "var(--hx-t-10b981)" },
+    { name: "Stability (안정성)", value: item.stability_score, weight: 0.2, color: "var(--hx-t-22c55e)" },
   ];
 
   return (

@@ -41,7 +41,7 @@ export default function CustomBacktestRunner({
   const st = result?.backtest?.statistics;
   const fmt = (v: number | undefined, suffix = "", digits = 1) =>
     v === undefined ? "—" : `${v >= 0 && suffix === "%" ? "+" : ""}${v.toFixed(digits)}${suffix}`;
-  const posColor = (v: number | undefined) => ((v ?? 0) >= 0 ? "#16a34a" : "#dc2626");
+  const posColor = (v: number | undefined) => ((v ?? 0) >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)");
 
   // 전략 요약 (지표/조건 개수)
   const nIndicators = spec.indicators?.length ?? 0;
@@ -90,7 +90,7 @@ export default function CustomBacktestRunner({
           </div>
           <div className="tbt-group">
             <label className="tbt-label">Max Positions ({maxTickers})</label>
-            <input type="range" min="3" max="20" value={maxTickers} onChange={(e) => setMaxTickers(+e.target.value)} style={{ accentColor: "#1200ff" }} />
+            <input type="range" min="3" max="20" value={maxTickers} onChange={(e) => setMaxTickers(+e.target.value)} style={{ accentColor: "var(--hx-t-1200ff)" }} />
           </div>
           <div className="tbt-group">
             <label className="tbt-label">Initial Capital (₩)</label>
@@ -118,7 +118,7 @@ export default function CustomBacktestRunner({
         {/* 분석 뷰포트 */}
         <div className="tbt-viewport">
           {err && (
-            <div className="tbt-empty" style={{ color: "#dc2626" }}>
+            <div className="tbt-empty" style={{ color: "var(--hx-t-dc2626)" }}>
               <div>
                 <div style={{ fontFamily: "var(--t-mono)", fontSize: 11, marginBottom: 8 }}>[ ERROR ]</div>
                 {err}
@@ -160,7 +160,7 @@ export default function CustomBacktestRunner({
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Sharpe</div>
-                  <div className="tbt-stat-value" style={{ color: (st.sharpe_ratio ?? 0) >= 1 ? "#16a34a" : "var(--t-ink)" }}>{fmt(st.sharpe_ratio, "", 2)}</div>
+                  <div className="tbt-stat-value" style={{ color: (st.sharpe_ratio ?? 0) >= 1 ? "var(--hx-t-16a34a)" : "var(--t-ink)" }}>{fmt(st.sharpe_ratio, "", 2)}</div>
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Sortino</div>
@@ -168,7 +168,7 @@ export default function CustomBacktestRunner({
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Max DD</div>
-                  <div className="tbt-stat-value" style={{ color: "#dc2626" }}>-{Math.abs(st.max_drawdown_pct)}%</div>
+                  <div className="tbt-stat-value" style={{ color: "var(--hx-t-dc2626)" }}>-{Math.abs(st.max_drawdown_pct)}%</div>
                 </div>
               </div>
 
@@ -183,7 +183,7 @@ export default function CustomBacktestRunner({
               <div className="tbt-chart">
                 <div className="tbt-chart-head">
                   <div className="tbt-chart-title">Constituents ({result.screened_count})</div>
-                  <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, padding: "2px 8px", borderRadius: 2, background: result.data_source.fully_real ? "#dcfce7" : "#fafafa", color: result.data_source.fully_real ? "#15803d" : "var(--t-muted)", border: "1px solid var(--t-border)" }}>
+                  <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, padding: "2px 8px", borderRadius: 2, background: result.data_source.fully_real ? "var(--hx-b-dcfce7)" : "var(--hx-b-fafafa)", color: result.data_source.fully_real ? "var(--hx-t-15803d)" : "var(--t-muted)", border: "1px solid var(--t-border)" }}>
                     {result.data_source.fully_real ? "REAL_DATA" : "MOCK_DATA"}
                   </span>
                 </div>
@@ -216,7 +216,7 @@ function EquityChart({ curve }: { curve: number[] }) {
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
   const up = curve[curve.length - 1] >= curve[0];
-  const color = up ? "#16a34a" : "#dc2626";
+  const color = up ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)";
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 240, borderBottom: "1px solid var(--t-border)", borderLeft: "1px solid var(--t-border)" }} preserveAspectRatio="none">
       <polygon points={`0,${H} ${pts} ${W},${H}`} fill={color} opacity="0.06" />

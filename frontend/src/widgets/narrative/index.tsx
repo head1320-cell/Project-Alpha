@@ -101,7 +101,7 @@ export function NarrativeDisplay({
   };
 
   const html = renderMarkdown(response.content);
-  const color = domain ? DOMAIN_COLORS[domain] : "#1200ff";
+  const color = domain ? DOMAIN_COLORS[domain] : "var(--hx-t-1200ff)";
 
   return (
     <div className="card-md">
@@ -120,14 +120,14 @@ export function NarrativeDisplay({
           )}
           {response.error && (
             <span className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-mono"
-                   style={{ background: "#fef2f2", color: "#dc2626" }}>
+                   style={{ background: "var(--hx-b-fef2f2)", color: "var(--hx-t-dc2626)" }}>
               mock
             </span>
           )}
         </div>
         <div className="flex items-center gap-1">
           <button onClick={handleCopy} className="p-1.5 hover:bg-light rounded transition" title="복사">
-            {copied ? <Check size={12} style={{ color: "#16a34a" }} /> : <Copy size={12} />}
+            {copied ? <Check size={12} style={{ color: "var(--hx-t-16a34a)" }} /> : <Copy size={12} />}
           </button>
           <button onClick={handleDownload} className="p-1.5 hover:bg-light rounded transition" title="다운로드">
             <Download size={12} />
@@ -163,11 +163,11 @@ export function NarrativeDisplay({
         :global(.narrative-body) {
           font-size: 13px;
           line-height: 1.7;
-          color: #212529;
+          color: var(--hx-t-212529);
         }
         :global(.narrative-body h1) {
           font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.75rem;
-          padding-bottom: 0.5rem; border-bottom: 1px solid #dee2e6;
+          padding-bottom: 0.5rem; border-bottom: 1px solid var(--hx-b-dee2e6);
         }
         :global(.narrative-body h2) {
           font-size: 1.15rem; font-weight: 700; margin: 1.2rem 0 0.5rem;
@@ -186,17 +186,17 @@ export function NarrativeDisplay({
           margin: 0.25rem 0;
         }
         :global(.narrative-body strong) {
-          font-weight: 600; color: #111;
+          font-weight: 600; color: var(--hx-t-111111);
         }
         :global(.narrative-body code) {
           font-family: 'Roboto Mono', monospace;
-          background: #f3f4f7; padding: 0.1em 0.3em;
+          background: var(--hx-b-f3f4f7); padding: 0.1em 0.3em;
           border-radius: 3px; font-size: 0.9em;
         }
         :global(.narrative-body blockquote) {
           border-left: 3px solid ${color}; opacity: 0.85;
           padding: 0.5em 1em; margin: 0.75em 0;
-          background: #f8f9fa; font-size: 0.95em;
+          background: var(--hx-b-f8f9fa); font-size: 0.95em;
         }
         :global(.narrative-body .md-table) {
           width: 100%; border-collapse: collapse; margin: 0.75em 0;
@@ -204,10 +204,10 @@ export function NarrativeDisplay({
         }
         :global(.narrative-body .md-table th),
         :global(.narrative-body .md-table td) {
-          border: 1px solid #dee2e6; padding: 0.4em 0.6em; text-align: left;
+          border: 1px solid var(--hx-b-dee2e6); padding: 0.4em 0.6em; text-align: left;
         }
         :global(.narrative-body .md-table th) {
-          background: #f8f9fa; font-weight: 600;
+          background: var(--hx-b-f8f9fa); font-weight: 600;
         }
       `}</style>
     </div>
@@ -276,7 +276,7 @@ export function StreamingNarrative({
       </div>
 
       {error && (
-        <div className="p-4 text-xs" style={{ color: "#dc2626" }}>
+        <div className="p-4 text-xs" style={{ color: "var(--hx-t-dc2626)" }}>
           <AlertCircle size={14} className="inline mr-1" />
           {error}
         </div>
@@ -457,17 +457,17 @@ export function UsageMonitor() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="총 호출" value={stats.total_calls.toLocaleString()} color="#0891b2" />
-        <Stat label="캐시 히트" value={stats.total_cached.toLocaleString()} color="#16a34a" />
+        <Stat label="총 호출" value={stats.total_calls.toLocaleString()} color="var(--hx-t-0891b2)" />
+        <Stat label="캐시 히트" value={stats.total_cached.toLocaleString()} color="var(--hx-t-16a34a)" />
         <Stat
           label="총 토큰"
           value={`${(stats.total_input_tokens + stats.total_output_tokens).toLocaleString()}`}
-          color="#8b5cf6"
+          color="var(--hx-t-8b5cf6)"
         />
         <Stat
           label="총 비용 (원)"
           value={`${stats.total_cost_krw.toFixed(0)}`}
-          color="#dc2626"
+          color="var(--hx-t-dc2626)"
         />
       </div>
 

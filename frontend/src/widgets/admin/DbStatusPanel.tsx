@@ -231,7 +231,7 @@ export default function DbStatusPanel() {
                         <td>{label}</td>
                         <td className="num" style={{ fontFamily: "var(--t-mono)" }}>{p.master.toLocaleString()}</td>
                         <td className="num" style={{ fontFamily: "var(--t-mono)" }}>{p.ingested.toLocaleString()}</td>
-                        <td className="num" style={{ fontFamily: "var(--t-mono)", color: pct >= 100 ? "#16a34a" : pct >= 50 ? "var(--t-ink)" : "#dc2626" }}>{pct}%</td>
+                        <td className="num" style={{ fontFamily: "var(--t-mono)", color: pct >= 100 ? "var(--hx-t-16a34a)" : pct >= 50 ? "var(--t-ink)" : "var(--hx-t-dc2626)" }}>{pct}%</td>
                       </tr>
                     );
                   })}
@@ -243,7 +243,7 @@ export default function DbStatusPanel() {
           {/* ── 적재 레지스트리 — 무엇이 어디서 와서 어디에 쌓이는가 ──
               ★백엔드가 열거한다★ 앞으로 대상이 늘어도 이 파일은 안 고친다. */}
           {st.datasets === null && st.datasets_error && (
-            <p className="tpage-intro" style={{ color: "#dc2626" }}>
+            <p className="tpage-intro" style={{ color: "var(--hx-t-dc2626)" }}>
               적재 레지스트리를 읽을 수 없어요 — {st.datasets_error}
             </p>
           )}
@@ -311,7 +311,7 @@ export default function DbStatusPanel() {
                     {Object.entries(st.macro.unavailable).map(([k, v]) => (
                       <tr key={k}>
                         <td style={{ fontFamily: "var(--t-mono)" }}>{k}</td>
-                        <td style={{ color: "#dc2626", fontSize: 11 }}>{v.reason}</td>
+                        <td style={{ color: "var(--hx-t-dc2626)", fontSize: 11 }}>{v.reason}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -390,7 +390,7 @@ export default function DbStatusPanel() {
                   <b style={{ color: "var(--t-ink)" }}>{k}</b>
                   {" · "}{s.running ? "실행 중" : s.finished_at ? `완료 ${s.finished_at}` : "대기"}
                   {s.progress ? ` · ${s.progress.stage ?? ""} ${(s.progress.done ?? 0).toLocaleString()}/${(s.progress.total ?? 0).toLocaleString()} (저장 ${(s.progress.saved ?? 0).toLocaleString()} · 실패 ${(s.progress.failures ?? 0).toLocaleString()})` : ""}
-                  {s.last_error ? <span style={{ color: "#dc2626" }}> · {s.last_error}</span> : null}
+                  {s.last_error ? <span style={{ color: "var(--hx-t-dc2626)" }}> · {s.last_error}</span> : null}
                 </div>
               ))}
             </div>
@@ -400,7 +400,7 @@ export default function DbStatusPanel() {
           {st.dart_usage && (
             <p style={{ marginTop: 8, fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-muted)" }}>
               DART 사용량(프로세스 기동 이후): 요청 {st.dart_usage.requests.toLocaleString()} · 에러 {Object.values(st.dart_usage.errors).reduce((a, b) => a + b, 0).toLocaleString()}
-              {st.dart_usage.quota_exhausted && <b style={{ color: "#dc2626" }}> · 일일 한도 도달 — 적재 자동 중단, 내일 재실행 시 이어짐</b>}
+              {st.dart_usage.quota_exhausted && <b style={{ color: "var(--hx-t-dc2626)" }}> · 일일 한도 도달 — 적재 자동 중단, 내일 재실행 시 이어짐</b>}
               {st.dart_usage.last_error && <span> · 최근 에러: [{st.dart_usage.last_error.status}] {st.dart_usage.last_error.message}</span>}
             </p>
           )}
@@ -410,7 +410,7 @@ export default function DbStatusPanel() {
             <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
               {(["dart", "krx", "kis"] as const).map((s) => (
                 <div key={s} style={{ fontFamily: "var(--t-mono)", fontSize: 11 }}>
-                  <b style={{ color: doctor[s].ok ? "#16a34a" : "#dc2626" }}>{doctor[s].ok ? "✓" : "✗"} {s.toUpperCase()}</b>
+                  <b style={{ color: doctor[s].ok ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{doctor[s].ok ? "✓" : "✗"} {s.toUpperCase()}</b>
                   <span style={{ color: "var(--t-muted)" }}> — {doctor[s].message}</span>
                 </div>
               ))}

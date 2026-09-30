@@ -11,7 +11,7 @@ import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entit
 import type { RegimeState } from "@/entities/macro/api";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
-const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11 } as const;
+const TIP = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11 } as const;
 
 // 지표 키 → 짧은 한글 (브리핑·스택 범례 공용)
 export const IND_KR: Record<string, string> = {
@@ -36,7 +36,7 @@ export function CycleStripGrid({ data }: { data: CycleStrips }) {
                 title={`${months[i]} · ${row.label}: ${z == null ? "—" : (z >= 0 ? "+" : "") + z.toFixed(2) + "σ"}`} />
             ))}
           </div>
-          <b className="mv-strip-now" style={{ color: (row.cells.at(-1) ?? 0) >= 0 ? "#dc2626" : "#2563eb" }}>
+          <b className="mv-strip-now" style={{ color: (row.cells.at(-1) ?? 0) >= 0 ? "var(--hx-t-dc2626)" : "var(--hx-t-2563eb)" }}>
             {row.cells.at(-1) == null ? "—" : `${(row.cells.at(-1) as number) >= 0 ? "+" : ""}${(row.cells.at(-1) as number).toFixed(1)}σ`}
           </b>
         </div>
@@ -53,7 +53,7 @@ export function AxisStackChart({ hist, axis }: { hist: AxisHistory; axis: "growt
   const anim = useChartAnimation();
   const partsKey = axis === "growth" ? "growth_parts" : "inflation_parts";
   const keys = Array.from(new Set(hist.points.flatMap((p) => Object.keys(p[partsKey] ?? {}))));
-  const COLORS = ["#1200ff", "#16a34a", "#ea580c", "#0891b2", "#a16207", "#7c3aed"];
+  const COLORS = ["var(--hx-t-1200ff)", "var(--hx-t-16a34a)", "var(--hx-t-ea580c)", "var(--hx-t-0891b2)", "var(--hx-t-a16207)", "var(--hx-t-7c3aed)"];
   const data = hist.points.map((p) => ({
     t: p.t, score: p[axis],
     ...Object.fromEntries(keys.map((k) => [k, p[partsKey]?.[k] ?? 0])),
@@ -68,7 +68,7 @@ export function AxisStackChart({ hist, axis }: { hist: AxisHistory; axis: "growt
         {keys.map((k, i) => (
           <Bar key={k} dataKey={k} stackId="s" fill={COLORS[i % COLORS.length]} fillOpacity={0.75} isAnimationActive={anim} />
         ))}
-        <Line dataKey="score" stroke="#111" strokeWidth={1.6} dot={false} isAnimationActive={anim} name={axis === "growth" ? "성장 축" : "물가 축"} />
+        <Line dataKey="score" stroke="var(--hx-t-111111)" strokeWidth={1.6} dot={false} isAnimationActive={anim} name={axis === "growth" ? "성장 축" : "물가 축"} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -126,7 +126,7 @@ export function KrUsCompareTable({ data }: { data: KrUsCompare }) {
 // ═══ 상단 3분할 카드 (Gemini UI 개편 1순위 — 도넛 중심 국면 요약) ═══════════════
 
 const QUAD_TONE2: Record<string, string> = {
-  Goldilocks: "#16a34a", Reflation: "#ea580c", Stagflation: "#dc2626", Disinflation: "#2563eb",
+  Goldilocks: "var(--hx-t-16a34a)", Reflation: "var(--hx-t-ea580c)", Stagflation: "var(--hx-t-dc2626)", Disinflation: "var(--hx-t-2563eb)",
 };
 const QUAD_SHORT: Record<string, string> = {
   Goldilocks: "골디락스", Reflation: "리플레이션", Stagflation: "스태그플레이션", Disinflation: "디스인플레이션",
@@ -155,7 +155,7 @@ function DonutRing({ pct, color, big, small, size = 108 }: {
 function AxisPill({ label, v, upGood }: { label: string; v: number; upGood: boolean }) {
   const up = v >= 0;
   const good = up === upGood;
-  const fg = good ? "#0e7c4a" : "#b0325a";
+  const fg = good ? "var(--hx-t-0e7c4a)" : "var(--hx-t-b0325a)";
   const bg = good ? "rgba(22,163,74,.10)" : "rgba(220,38,38,.09)";
   return (
     <span className="mv-pill" style={{ color: fg, background: bg }}>
@@ -170,7 +170,7 @@ export function RegimeDonutCard({ label, state }: { label: string; state: Regime
   const top = state.regime && probs[state.regime] != null ? state.regime
     : (Object.entries(probs).sort((a, b) => b[1] - a[1])[0]?.[0] ?? state.regime);
   const p = probs[top] ?? state.confidence ?? 0;
-  const color = QUAD_TONE2[top] ?? "#1200ff";
+  const color = QUAD_TONE2[top] ?? "var(--hx-t-1200ff)";
   const others = Object.entries(probs).filter(([k]) => k !== top).sort((a, b) => b[1] - a[1]).slice(0, 2);
   return (
     <div className="mv-rcard" style={{ borderTopColor: color }}>
@@ -195,11 +195,11 @@ export function RegimeDonutCard({ label, state }: { label: string; state: Regime
 // Stress·모드 카드 — 도넛(0-100) + 모드 뱃지 + 역전 경고
 export function StressModeCard({ state, realData, asOf }: { state: RegimeState; realData: boolean; asOf: string }) {
   const s = state.stress_score;
-  const color = s >= 70 ? "#dc2626" : s >= 50 ? "#d97706" : "#16a34a";
+  const color = s >= 70 ? "var(--hx-t-dc2626)" : s >= 50 ? "var(--hx-t-d97706)" : "var(--hx-t-16a34a)";
   const modeBg = state.recommended_mode === "DEFENSIVE" ? "rgba(220,38,38,.12)"
     : state.recommended_mode === "CAUTIOUS" ? "rgba(217,119,6,.12)" : "rgba(22,163,74,.10)";
-  const modeFg = state.recommended_mode === "DEFENSIVE" ? "#b91c1c"
-    : state.recommended_mode === "CAUTIOUS" ? "#b45309" : "#0e7c4a";
+  const modeFg = state.recommended_mode === "DEFENSIVE" ? "var(--hx-t-b91c1c)"
+    : state.recommended_mode === "CAUTIOUS" ? "var(--hx-t-b45309)" : "var(--hx-t-0e7c4a)";
   return (
     <div className="mv-rcard" style={{ borderTopColor: color }}>
       <DonutRing pct={s / 100} color={color} big={s.toFixed(0)} small="STRESS" />
@@ -208,7 +208,7 @@ export function StressModeCard({ state, realData, asOf }: { state: RegimeState; 
         <b className="mv-rcard-quad"><span className="mv-pill" style={{ color: modeFg, background: modeBg }}>{state.recommended_mode}</span></b>
         <div className="mv-rcard-pills">
           {state.yield_inversion && (
-            <span className="mv-pill" style={{ color: "#b0325a", background: "rgba(220,38,38,.09)" }}>
+            <span className="mv-pill" style={{ color: "var(--hx-t-b0325a)", background: "rgba(220,38,38,.09)" }}>
               수익률곡선 역전 {state.inversion_severity != null ? `${state.inversion_severity.toFixed(0)}bp` : ""}
             </span>
           )}

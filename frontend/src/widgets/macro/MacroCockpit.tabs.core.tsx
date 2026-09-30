@@ -106,8 +106,8 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
             <button key={ind.id} className="mc-ext-row" onClick={() => onDrill(ind.id)}>
               <span className="mc-ext-nm">{ind.name}</span>
               <span className="mc-ext-v">{fmtNum(ind.latest)} {ind.unit}</span>
-              <span className="mc-ext-z" style={{ color: ind.z_score! >= 0 ? "var(--color-bear)" : "#2563eb" }}>{fmtZ(ind.z_score)}</span>
-              {ind.z_score! >= 0 ? <TrendingUp size={13} color="var(--color-bear)" /> : <TrendingDown size={13} color="#2563eb" />}
+              <span className="mc-ext-z" style={{ color: ind.z_score! >= 0 ? "var(--color-bear)" : "var(--hx-t-2563eb)" }}>{fmtZ(ind.z_score)}</span>
+              {ind.z_score! >= 0 ? <TrendingUp size={13} color="var(--color-bear)" /> : <TrendingDown size={13} color="var(--hx-t-2563eb)" />}
             </button>
           ))}
           {!extreme.length && <div className="mc-empty-sm">지표 데이터 없음</div>}

@@ -7,28 +7,28 @@ export function verdictColor(verdict: string): {
   border: string;
 } {
   if (verdict.includes("극심한 저평가"))
-    return { fg: "#15803d", bg: "#dcfce7", border: "#86efac" };
+    return { fg: "var(--hx-t-15803d)", bg: "var(--hx-b-dcfce7)", border: "var(--hx-d-86efac)" };
   if (verdict.includes("저평가") && !verdict.includes("약간"))
-    return { fg: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" };
+    return { fg: "var(--hx-t-16a34a)", bg: "var(--hx-b-f0fdf4)", border: "var(--hx-d-bbf7d0)" };
   if (verdict === "약간 저평가")
-    return { fg: "#65a30d", bg: "#f7fee7", border: "#d9f99d" };
+    return { fg: "var(--hx-t-65a30d)", bg: "var(--hx-b-f7fee7)", border: "var(--hx-d-d9f99d)" };
   if (verdict === "적정")
-    return { fg: "#525252", bg: "#fafafa", border: "#e5e5e5" };
+    return { fg: "var(--hx-t-525252)", bg: "var(--hx-b-fafafa)", border: "var(--hx-d-e5e5e5)" };
   if (verdict === "약간 고평가")
-    return { fg: "#ea580c", bg: "#fff7ed", border: "#fed7aa" };
+    return { fg: "var(--hx-t-ea580c)", bg: "var(--hx-b-fff7ed)", border: "var(--hx-d-fed7aa)" };
   if (verdict.includes("극심한 고평가"))
-    return { fg: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
-  return { fg: "#dc2626", bg: "#fef2f2", border: "#fecaca" }; // 고평가
+    return { fg: "var(--hx-t-b91c1c)", bg: "var(--hx-b-fef2f2)", border: "var(--hx-d-fecaca)" };
+  return { fg: "var(--hx-t-dc2626)", bg: "var(--hx-b-fef2f2)", border: "var(--hx-d-fecaca)" }; // 고평가
 }
 
 export function gapColor(gapPct: number): string {
-  if (gapPct <= -30) return "#15803d";  // 짙은 녹색
-  if (gapPct <= -15) return "#16a34a";
-  if (gapPct <= -5)  return "#65a30d";
-  if (gapPct <= 5)   return "#737373";  // 회색
-  if (gapPct <= 15)  return "#ea580c";
-  if (gapPct <= 30)  return "#dc2626";
-  return "#b91c1c";                       // 짙은 빨강
+  if (gapPct <= -30) return "var(--hx-t-15803d)";  // 짙은 녹색
+  if (gapPct <= -15) return "var(--hx-t-16a34a)";
+  if (gapPct <= -5)  return "var(--hx-t-65a30d)";
+  if (gapPct <= 5)   return "var(--hx-t-737373)";  // 회색
+  if (gapPct <= 15)  return "var(--hx-t-ea580c)";
+  if (gapPct <= 30)  return "var(--hx-t-dc2626)";
+  return "var(--hx-t-b91c1c)";                       // 짙은 빨강
 }
 
 export function formatKrw(v: number | null | undefined): string {

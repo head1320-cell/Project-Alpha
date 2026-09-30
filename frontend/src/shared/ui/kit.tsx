@@ -12,8 +12,8 @@ export type Tone = "buy" | "sell" | "neutral";
 
 export const TONES: Record<Tone, { accent: string; bg: string; text: string }> = {
   buy: { accent: "var(--danger)", bg: "var(--danger-light)", text: "var(--danger)" },
-  sell: { accent: "#1565c0", bg: "#e7f0fb", text: "#1565c0" },
-  neutral: { accent: "var(--text-primary)", bg: "var(--bg-section)", text: "var(--text-primary)" },
+  sell: { accent: "var(--hx-t-1565c0)", bg: "var(--hx-b-e7f0fb)", text: "var(--hx-t-1565c0)" },
+  neutral: { accent: "var(--kit-neutral)", bg: "var(--bg-section)", text: "var(--text-primary)" },
 };
 
 const R = "var(--bs-border-radius)";
@@ -58,7 +58,7 @@ export function Toggle({ on, onChange, tone = "neutral", size = "md" }: {
         background: on ? TONES[tone].accent : "var(--border-strong)", transition: "background .15s",
       }}
     >
-      <span style={{ width: k, height: k, borderRadius: "50%", background: "#fff" }} />
+      <span style={{ width: k, height: k, borderRadius: "50%", background: "var(--hx-b-ffffff)" }} />
     </button>
   );
 }

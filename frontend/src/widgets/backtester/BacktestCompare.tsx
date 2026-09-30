@@ -131,13 +131,13 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
         <div className="brun-card-t">정규화 자산곡선 (시작=100)</div>
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={overlay} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="2 3" stroke="#eee" />
+            <CartesianGrid strokeDasharray="2 3" stroke="var(--hx-b-eeeeee)" />
             <XAxis dataKey="i" tick={{ fontSize: 9 }} minTickGap={60} />
             <YAxis tick={{ fontSize: 9 }} width={44} />
             <Tooltip formatter={(v: number) => v?.toFixed(1)} contentStyle={{ fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Line isAnimationActive={anim} type="monotone" dataKey="A" stroke="#1200ff" dot={false} strokeWidth={1.6} name={`A · ${a.strategy_name}`} />
-            <Line isAnimationActive={anim} type="monotone" dataKey="B" stroke="#e11d48" dot={false} strokeWidth={1.4} name={`B · ${b.strategy_name}`} />
+            <Line isAnimationActive={anim} type="monotone" dataKey="A" stroke="var(--hx-t-1200ff)" dot={false} strokeWidth={1.6} name={`A · ${a.strategy_name}`} />
+            <Line isAnimationActive={anim} type="monotone" dataKey="B" stroke="var(--hx-t-e11d48)" dot={false} strokeWidth={1.4} name={`B · ${b.strategy_name}`} />
           </LineChart>
         </ResponsiveContainer>
         {lenMismatch && <div className="brun-note">두 실행의 기간·길이가 달라 인덱스 기준으로 정렬했어요 — 절대 비교는 주의.</div>}
@@ -157,7 +157,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
                 const va = num(sa[r.k]); const vb = num(sb[r.k]);
                 const d = va != null && vb != null ? vb - va : null;
                 const better = d == null ? 0 : (r.higherBetter ? Math.sign(d) : -Math.sign(d));
-                const dc = better > 0 ? "#16a34a" : better < 0 ? "#dc2626" : undefined;
+                const dc = better > 0 ? "var(--hx-t-16a34a)" : better < 0 ? "var(--hx-t-dc2626)" : undefined;
                 return (
                   <tr key={r.k}>
                     <td>{r.label}</td>

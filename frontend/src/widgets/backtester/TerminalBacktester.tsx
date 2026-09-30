@@ -90,7 +90,7 @@ export default function TerminalBacktester() {
   const st = result?.backtest?.statistics;
   const fmt = (v: number | undefined, suffix = "", digits = 1) =>
     v === undefined ? "—" : `${v >= 0 && suffix === "%" ? "+" : ""}${v.toFixed(digits)}${suffix}`;
-  const posColor = (v: number | undefined) => ((v ?? 0) >= 0 ? "#16a34a" : "#dc2626");
+  const posColor = (v: number | undefined) => ((v ?? 0) >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)");
 
   return (
     <div className="tpage-fade bt2">
@@ -223,7 +223,7 @@ export default function TerminalBacktester() {
         {/* 분석 뷰포트 */}
         <div className="tbt-viewport">
           {err && (
-            <div className="tbt-empty" style={{ color: "#dc2626" }}>
+            <div className="tbt-empty" style={{ color: "var(--hx-t-dc2626)" }}>
               <div>
                 <div style={{ fontFamily: "var(--t-mono)", fontSize: 11, marginBottom: 8 }}>[ ERROR ]</div>
                 {err}
@@ -307,7 +307,7 @@ export default function TerminalBacktester() {
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Sharpe</div>
-                  <div className="tbt-stat-value" style={{ color: (st.sharpe_ratio ?? 0) >= 1 ? "#16a34a" : "var(--t-ink)" }}>{fmt(st.sharpe_ratio, "", 2)}</div>
+                  <div className="tbt-stat-value" style={{ color: (st.sharpe_ratio ?? 0) >= 1 ? "var(--hx-t-16a34a)" : "var(--t-ink)" }}>{fmt(st.sharpe_ratio, "", 2)}</div>
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Sortino</div>
@@ -315,18 +315,18 @@ export default function TerminalBacktester() {
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Calmar</div>
-                  <div className="tbt-stat-value" style={{ color: (st.calmar_ratio ?? 0) >= 0 ? "var(--t-ink)" : "#dc2626" }}>{fmt(st.calmar_ratio, "", 2)}</div>
+                  <div className="tbt-stat-value" style={{ color: (st.calmar_ratio ?? 0) >= 0 ? "var(--t-ink)" : "var(--hx-t-dc2626)" }}>{fmt(st.calmar_ratio, "", 2)}</div>
                 </div>
                 <div className="tbt-stat">
                   <div className="tbt-stat-label">Max DD</div>
-                  <div className="tbt-stat-value" style={{ color: "#dc2626" }}>-{Math.abs(st.max_drawdown_pct)}%</div>
+                  <div className="tbt-stat-value" style={{ color: "var(--hx-t-dc2626)" }}>-{Math.abs(st.max_drawdown_pct)}%</div>
                 </div>
               </div>
 
               {/* 보조 지표 바 (승률·손익비·수수료) */}
               <div className="tbt-substats">
                 <span>승률 <b>{st.win_rate}%</b></span>
-                <span>손익비(PF) <b style={{ color: (st.profit_factor ?? 0) >= 1 ? "#16a34a" : "#dc2626" }}>{fmt(st.profit_factor, "", 2)}</b></span>
+                <span>손익비(PF) <b style={{ color: (st.profit_factor ?? 0) >= 1 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{fmt(st.profit_factor, "", 2)}</b></span>
                 <span>거래 <b>{st.num_trades}회</b></span>
                 <span>평균손익 <b style={{ color: posColor(st.avg_trade_return) }}>{fmt(st.avg_trade_return, "%", 2)}</b></span>
                 <span>수수료 <b>₩{Math.round(st.total_commission).toLocaleString()}</b></span>
@@ -360,7 +360,7 @@ export default function TerminalBacktester() {
                     </div>
                     <div className="tbt-bench-metric">
                       <span className="tbt-bench-label">초과수익 (α 원천)</span>
-                      <span className="tbt-bench-val" style={{ color: result.backtest.benchmark.excess_return_pct >= 0 ? "#16a34a" : "#dc2626" }}>
+                      <span className="tbt-bench-val" style={{ color: result.backtest.benchmark.excess_return_pct >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>
                         {result.backtest.benchmark.excess_return_pct >= 0 ? "+" : ""}{result.backtest.benchmark.excess_return_pct}%
                       </span>
                     </div>
@@ -381,7 +381,7 @@ export default function TerminalBacktester() {
                 <div className="tbt-chart">
                   <div className="tbt-chart-head">
                     <div className="tbt-chart-title">Drawdown</div>
-                    <div className="tbt-chart-title" style={{ color: "#dc2626" }}>최대 -{Math.abs(st.max_drawdown_pct)}%</div>
+                    <div className="tbt-chart-title" style={{ color: "var(--hx-t-dc2626)" }}>최대 -{Math.abs(st.max_drawdown_pct)}%</div>
                   </div>
                   <DrawdownChart curve={result.backtest.drawdown_curve} />
                 </div>
@@ -413,7 +413,7 @@ export default function TerminalBacktester() {
               <div className="tbt-chart">
                 <div className="tbt-chart-head">
                   <div className="tbt-chart-title">거래내역 ({result.screened_count})</div>
-                  <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, padding: "2px 8px", borderRadius: 2, background: result.data_source.fully_real ? "#dcfce7" : "#fafafa", color: result.data_source.fully_real ? "#15803d" : "var(--t-muted)", border: "1px solid var(--t-border)" }}>
+                  <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, padding: "2px 8px", borderRadius: 2, background: result.data_source.fully_real ? "var(--hx-b-dcfce7)" : "var(--hx-b-fafafa)", color: result.data_source.fully_real ? "var(--hx-t-15803d)" : "var(--t-muted)", border: "1px solid var(--t-border)" }}>
                     {result.data_source.fully_real ? "REAL_DATA" : "MOCK_DATA"}
                   </span>
                 </div>

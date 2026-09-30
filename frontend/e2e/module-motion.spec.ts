@@ -255,7 +255,8 @@ for (const m of MODULES) {
   test(`${m.name}: 라이트 WCAG AA (기록된 기존 결함 이하)`, async ({ page }) => {
     await freezeCharts(page);
     await goto(page, m.path);
-    // ★다크는 재지 않는다 — 이 7개 모듈에는 다크 구현이 없다★ 실측: `.dark` 규칙이
+    // 다크는 BS5 부터 `dark-modules.spec.ts` 가 주요 상태 전부에서 잰다(여기는 라이트 기록만).
+    // (BS5 이전 기록) ★다크는 재지 않는다 — 이 7개 모듈에는 다크 구현이 없다★ 실측: `.dark` 규칙이
     // `.aas-root`(73) · `.brun-results`(10) · `.aas-gate`(3) 에만 있고, 이 모듈들의
     // 클래스(`.dash-card` `.mc-card` `.tbt-*` `.bsc-*` `.trisk-*` …)에는 **0건**이다.
     // 없는 기능을 단언하면 가드가 아니라 영원한 빨강이 된다. 다크 확장은 별도 단계다.

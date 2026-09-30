@@ -65,7 +65,7 @@ export default function AssetAllocPanel({ s, set }: {
         <QuickStepper value={a.etfPct} onChange={(v) => patch({ etfPct: v })} chips={[5, 10, 30]} unit="%" min={0} max={100} />
         <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>주식</span>
         <QuickStepper value={a.stockPct} onChange={(v) => patch({ stockPct: v })} chips={[30, 60]} unit="%" min={0} max={100} />
-        <span style={{ fontSize: 11, color: cashPct < 0 ? "#dc2626" : "var(--text-muted)" }}>
+        <span style={{ fontSize: 11, color: cashPct < 0 ? "var(--hx-t-dc2626)" : "var(--text-muted)" }}>
           현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘어요" : ""}
         </span>
       </Field>
@@ -117,12 +117,12 @@ export default function AssetAllocPanel({ s, set }: {
             균등 배분
           </button>
         )}
-        <span style={{ fontSize: 11, color: wsum !== 100 ? "#d97706" : "var(--text-muted)" }}>
+        <span style={{ fontSize: 11, color: wsum !== 100 ? "var(--hx-t-d97706)" : "var(--text-muted)" }}>
           배분 합 {wsum}%{wsum !== 100 ? " — 100%로 맞춰주세요 (실행 시 정규화)" : ""}
         </span>
       </div>
 
-      <div style={{ fontSize: 11, color: "#d97706", marginTop: 9, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 11, color: "var(--hx-t-d97706)", marginTop: 9, lineHeight: 1.6 }}>
         ⚠ ETF 사전 교육 의무 안내 — 레버리지/인버스 ETF 투자를 위해서는 기본 예탁금 충족 및 사전 교육 이수가 필요해요 (백테스트는 무관, 실거래 시 유의).
       </div>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>

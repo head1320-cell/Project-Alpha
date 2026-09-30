@@ -34,8 +34,8 @@ export function sigColor(sig: string): string {
   if (sig.includes("방어")) return "var(--color-bear)";
   return "var(--color-caution)";
 }
-const DONUT_COLORS = ["#1200ff", "#16a34a", "#ea580c", "#0891b2", "#a16207", "#7c3aed", "#dc2626", "#0d9488", "#c026d3", "#64748b"];
-const TIP_STYLE = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
+const DONUT_COLORS = ["var(--hx-t-1200ff)", "var(--hx-t-16a34a)", "var(--hx-t-ea580c)", "var(--hx-t-0891b2)", "var(--hx-t-a16207)", "var(--hx-t-7c3aed)", "var(--hx-t-dc2626)", "var(--hx-t-0d9488)", "var(--hx-t-c026d3)", "var(--hx-t-64748b)"];
+const TIP_STYLE = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RegimeScatter — 성장(x) × 물가(y) 2D 산점도 + 4국면 배경 + 현재위치 글로우 마커
@@ -66,7 +66,7 @@ export function RegimeScatter({ g, i }: { g: number; i: number }) {
           <ReferenceLine y={0} stroke="var(--t-border)" strokeWidth={1} />
           <ReferenceDot x={x} y={y} r={18} fill="var(--t-accent)" fillOpacity={0.12} stroke="none" />
           <ReferenceDot x={x} y={y} r={9} fill="var(--t-accent)" fillOpacity={0.32} stroke="none" />
-          <ReferenceDot x={x} y={y} r={4.5} fill="var(--t-accent)" stroke="#fff" strokeWidth={1.5} />
+          <ReferenceDot x={x} y={y} r={4.5} fill="var(--t-accent)" stroke="var(--hx-b-ffffff)" strokeWidth={1.5} />
           <Scatter data={pt} fill="var(--t-accent)" fillOpacity={0} isAnimationActive={anim} />
         </ScatterChart>
       </ResponsiveContainer>
@@ -103,7 +103,7 @@ export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: 
       {sectors.map((s) => <text key={s.lbl + "t"} x={s.lx} y={s.ly} fontSize={8.5} fill="var(--t-muted)" textAnchor="middle" fontFamily="var(--t-mono, monospace)">{s.lbl}</text>)}
       <line x1={cx} y1={cy} x2={nx.toFixed(1)} y2={ny.toFixed(1)} stroke="var(--t-accent)" strokeWidth={2} />
       <circle cx={nx} cy={ny} r={6} fill="var(--t-accent)" fillOpacity={0.18} />
-      <circle cx={nx} cy={ny} r={3.2} fill="var(--t-accent)" stroke="#fff" strokeWidth={1} />
+      <circle cx={nx} cy={ny} r={3.2} fill="var(--t-accent)" stroke="var(--hx-b-ffffff)" strokeWidth={1} />
       <circle cx={cx} cy={cy} r={3} fill="var(--t-ink)" />
       <text x={cx} y={cy + R + 14} fontSize={9} fill="var(--t-muted)" textAnchor="middle" fontFamily="var(--t-mono, monospace)">강도 {(mag * 100).toFixed(0)}%</text>
     </svg>
@@ -264,7 +264,7 @@ export function CompositeRow({ rank, name, composite, fit, perf, signal, onClick
 // ProbBars — 사분면 확률 분포 (정적 '신뢰도 %' 텍스트 대체, 합=1)
 const QUAD_ORDER = ["Goldilocks", "Reflation", "Stagflation", "Disinflation"] as const;
 const QUAD_COLOR: Record<string, string> = {
-  Goldilocks: "#16a34a", Reflation: "#ea580c", Stagflation: "#dc2626", Disinflation: "#2563eb",
+  Goldilocks: "var(--hx-t-16a34a)", Reflation: "var(--hx-t-ea580c)", Stagflation: "var(--hx-t-dc2626)", Disinflation: "var(--hx-t-2563eb)",
 };
 export function ProbBars({ probs, compact = false }: { probs: Record<string, number>; compact?: boolean }) {
   if (!probs || !Object.keys(probs).length) return null;
@@ -298,7 +298,7 @@ export function AxisBreakdown({ title, detail }: { title: string; detail?: { sco
             <tr key={c.key}>
               <td>{c.key}</td>
               <td>{c.transform === "yoy" ? "YoY" : "레벨"}</td>
-              <td style={{ color: c.z >= 0 ? "#dc2626" : "#2563eb" }}>{c.z >= 0 ? "+" : ""}{c.z.toFixed(2)}</td>
+              <td style={{ color: c.z >= 0 ? "var(--hx-t-dc2626)" : "var(--hx-t-2563eb)" }}>{c.z >= 0 ? "+" : ""}{c.z.toFixed(2)}</td>
               <td>{c.z_mom == null ? "—" : `${c.z_mom >= 0 ? "+" : ""}${c.z_mom.toFixed(2)}`}</td>
               <td>{(c.weight * 100).toFixed(0)}%</td>
               <td><b>{c.contribution >= 0 ? "+" : ""}{c.contribution.toFixed(3)}</b></td>
@@ -320,7 +320,7 @@ export function CbGauge({ name, bank }: { name: string; bank?: { available: bool
   const pos = ((s + 1) / 2) * 100;
   return (
     <div className="mc-cbg">
-      <div className="mc-cbg-h">{name} <b style={{ color: s > 0.2 ? "#dc2626" : s < -0.2 ? "#2563eb" : "var(--t-muted)" }}>{bank.label}</b></div>
+      <div className="mc-cbg-h">{name} <b style={{ color: s > 0.2 ? "var(--hx-t-dc2626)" : s < -0.2 ? "var(--hx-t-2563eb)" : "var(--t-muted)" }}>{bank.label}</b></div>
       <div className="mc-cbg-track">
         <i className="mc-cbg-marker" style={{ left: `${pos}%` }} />
       </div>
@@ -332,7 +332,7 @@ export function CbGauge({ name, bank }: { name: string; bank?: { available: bool
 
 // AllocAttribution — 비중 결정 요인 분해 (base+성장+물가+스트레스 = 최종, 룰 항 정확 분해)
 export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label: string; base: number; growth: number; inflation: number; stress: number; final: number }> }) {
-  const TERMS = [["growth", "성장", "#16a34a"], ["inflation", "물가", "#ea580c"], ["stress", "스트레스", "#dc2626"]] as const;
+  const TERMS = [["growth", "성장", "var(--hx-t-16a34a)"], ["inflation", "물가", "var(--hx-t-ea580c)"], ["stress", "스트레스", "var(--hx-t-dc2626)"]] as const;
   const maxAbs = Math.max(...rows.flatMap((r) => [Math.abs(r.growth), Math.abs(r.inflation), Math.abs(r.stress)]), 1);
   return (
     <div className="mc-attr">
@@ -354,7 +354,7 @@ export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label
           <b className="mc-attr-final">{r.final.toFixed(1)}%</b>
         </div>
       ))}
-      <div className="mc-attr-legend">기본(전천후 중립) + <i style={{ background: "#16a34a" }} />성장 + <i style={{ background: "#ea580c" }} />물가 + <i style={{ background: "#dc2626" }} />스트레스 = 최종 (룰 항 정확 분해)</div>
+      <div className="mc-attr-legend">기본(전천후 중립) + <i style={{ background: "var(--hx-b-16a34a)" }} />성장 + <i style={{ background: "var(--hx-b-ea580c)" }} />물가 + <i style={{ background: "var(--hx-b-dc2626)" }} />스트레스 = 최종 (룰 항 정확 분해)</div>
     </div>
   );
 }
@@ -392,7 +392,7 @@ export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; l
     <svg viewBox="0 0 340 280" className="mc-causal">
       <defs>
         <marker id="mcArrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={5} markerHeight={5} orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" fill="#1200ff" opacity={0.65} />
+          <path d="M0,0 L8,4 L0,8 z" fill="var(--hx-t-1200ff)" opacity={0.65} />
         </marker>
       </defs>
       {edges.map((e, k) => {
@@ -404,7 +404,7 @@ export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; l
         const w = Math.max(0.6, 2.4 - e.p * 20);   // p 낮을수록 굵게
         return (
           <g key={k}>
-            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke="#1200ff" strokeWidth={w} opacity={0.5} markerEnd="url(#mcArrow)">
+            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke="var(--hx-t-1200ff)" strokeWidth={w} opacity={0.5} markerEnd="url(#mcArrow)">
               <title>{e.from} → {e.to} · lag {e.lag}개월 · p={e.p}</title>
             </line>
           </g>

@@ -131,7 +131,7 @@ test("프로필: 401 이면 토큰을 지우고 '로그인이 끝났어요' · 5
   await expect(card(page).locator(".pf-name")).toHaveText("lee");
 });
 
-test("화면 테마: 다크를 고르면 설계 화면은 어둡게(새로고침해도) · 다크가 없는 화면은 밝게 두고 그렇다고 말한다(짝)", async ({ page }) => {
+test("화면 테마: 다크를 고르면 설계 화면·모듈은 어둡게(새로고침해도) · 늘 어두운 관리 화면·다크가 없는 화면은 그렇다고 말한다(짝)", async ({ page }) => {
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
   expect(await isDark(page), "기본은 라이트 — 지금 화면 그대로").toBe(false);
@@ -145,7 +145,21 @@ test("화면 테마: 다크를 고르면 설계 화면은 어둡게(새로고침
   await page.reload({ waitUntil: "domcontentloaded" });
   expect(await isDark(page), "새로고침해도 — 첫 그림 전에 붙는다").toBe(true);
 
+  // BS5 — 스크리너도 다크를 갖췄다(예전 이 자리는 "밝게"였다).
   await page.goto("/screener", { waitUntil: "domcontentloaded" });
+  await expect(avatar(page)).toBeVisible();
+  expect(await isDark(page), "다크를 갖춘 모듈은 어둡게").toBe(true);
+  await avatar(page).click();
+  await expect(card(page).locator(".pf-theme-note")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // 짝 — 늘 어두운 관리 화면은 테마와 상관없다고 말한다(밝게만이라고 하지 않는다).
+  await page.goto("/admin/live-trading", { waitUntil: "domcontentloaded" });
+  await expect(avatar(page)).toBeVisible();
+  await avatar(page).click();
+  await expect(card(page).locator(".pf-theme-note")).toContainText("늘 어둡게");
+  await page.keyboard.press("Escape");
+  // 짝 — 다크가 없는 화면은 밝게 두고 그렇다고 말한다.
+  await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toBeVisible();
   expect(await isDark(page), "다크가 없는 화면은 밝게").toBe(false);
   await avatar(page).click();

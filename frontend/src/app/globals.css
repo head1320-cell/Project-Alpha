@@ -7215,3 +7215,1056 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pf-settings:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .pf-settings-sub { font-size: 12.5px; font-weight: 500; color: var(--t-muted); }
 .pf-must { color: var(--t-ink); font-weight: 600; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BS5 — 레거시 모듈 다크 (대시보드·스크리너·백테스터·매크로·기업·위험·데이터·파생)
+   ───────────────────────────────────────────────────────────────────────────
+   ① 토큰: 레거시 토큰(--bs-* · --text-* · --bg-* · 상태색 · --color-bull/bear)을 .dark 에서 뒤집는다 —
+      var() 로 쓰는 규칙은 이것만으로 따라온다. ② 글자로 적힌 색은 생성 파일 dark-modules.css
+      (scripts/gen-dark-modules.mjs). ③ 그래도 남는 것은 아래 "BS5 손질" 에서 손으로.
+   ★라이트는 바꾸지 않는다★ 모두 .dark 아래다 — E2E dark-modules.spec.ts 의 라이트 계산 스타일 골든이 잰다.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* 채운 강조색·상태색 위 글자 — 라이트 흰색 그대로. kit 의 '중립' 색조 — 라이트는 본문 글자색 그대로(스위치·점·단추 바탕).
+   ★.dark 보다 앞에 둔다★ :root 와 .dark 는 특이도가 같아 뒤에 온 것이 이긴다. */
+:root { --on-accent: #ffffff; --kit-neutral: var(--text-primary); }
+.dark {
+  --bs-body-bg: #09090b;
+  --bs-body-color: #fafafa;
+  --bs-body-color-rgb: 250, 250, 250;
+  --bs-tertiary-bg: #18181b;
+  --bs-secondary-bg: #1f1f23;
+  --bs-light: #18181b;
+  --bs-subtle: #1c1a33;
+  --bs-border-color: #27272a;
+  --bs-secondary-color: #a1a1aa;
+  --bs-tertiary-color: #8b8b94;
+  --bs-link-color: #8f88ff;
+  --bs-link-hover-color: #b1acff;
+  --bs-primary-bg-subtle: #1c1a33;
+  --bs-primary-text-emphasis: #c7c3ff;
+  --bs-success: #4ade80;
+  --bs-success-bg: #10281f;
+  --bs-danger: #f87171;
+  --bs-danger-bg: #2d1416;
+  --bs-warning: #fbbf24;
+  --bs-warning-bg: #2b2112;
+  --bs-info: #22d3ee;
+  --bs-info-bg: #0f2a31;
+  --border-strong: #3f3f46;
+  --text-muted: rgb(250 250 250 / 0.6);
+  --success-light: #10281f;
+  --color-bull: #4ade80; --color-bull-bg: #10281f;
+  --color-bear: #f87171; --color-bear-bg: #2d1416;
+  --color-caution: #fbbf24; --color-caution-bg: #2b2112;
+  /* 강조색은 글자로 읽히게 밝힌다. 그 위 글자는 --on-accent(어두운 글자)가 맡는다 — 흰 글자면 2.3~3.6:1 이었다. */
+  --bs-primary: #8f88ff;
+  --bs-primary-hover: #b1acff;
+  --on-accent: #09090b;
+  --kit-neutral: var(--t-accent);
+  color-scheme: dark;
+}
+
+/* BS5-GEN:BEGIN */
+/* ★생성 구역 — 손대지 마세요★ scripts/gen-dark-modules.mjs 가 이 파일의 나머지에서 만든다(BS5).
+   레거시 모듈 규칙의 글자로 적힌 색에 대한 다크 짝 — 모두 .dark 아래라 라이트에는 적용되지 않는다.
+   규칙 262개 · 선언 315개 · 인라인 hex 토큰 66개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
+:root {
+    --hx-b-16a34a: #16a34a;
+    --hx-b-2563eb: #2563eb;
+    --hx-b-71717a: #71717a;
+    --hx-b-d4d4d8: #d4d4d8;
+    --hx-b-dc2626: #dc2626;
+    --hx-b-dcfce7: #dcfce7;
+    --hx-b-dee2e6: #dee2e6;
+    --hx-b-e4e4e7: #e4e4e7;
+    --hx-b-e5e5e5: #e5e5e5;
+    --hx-b-e5e7eb: #e5e7eb;
+    --hx-b-e7f0fb: #e7f0fb;
+    --hx-b-ea580c: #ea580c;
+    --hx-b-ececef: #ececef;
+    --hx-b-eeeeee: #eeeeee;
+    --hx-b-f0fdf4: #f0fdf4;
+    --hx-b-f3f4f6: #f3f4f6;
+    --hx-b-f3f4f7: #f3f4f7;
+    --hx-b-f7fee7: #f7fee7;
+    --hx-b-f8f9fa: #f8f9fa;
+    --hx-b-fafafa: #fafafa;
+    --hx-b-fef2f2: #fef2f2;
+    --hx-b-fff7ed: #fff7ed;
+    --hx-b-ffffff: #ffffff;
+    --hx-d-86efac: #86efac;
+    --hx-d-bbf7d0: #bbf7d0;
+    --hx-d-d4d4d8: #d4d4d8;
+    --hx-d-d9f99d: #d9f99d;
+    --hx-d-dc2626: #dc2626;
+    --hx-d-e5e5e5: #e5e5e5;
+    --hx-d-fecaca: #fecaca;
+    --hx-d-fed7aa: #fed7aa;
+    --hx-t-000000: #000000;
+    --hx-t-059669: #059669;
+    --hx-t-0891b2: #0891b2;
+    --hx-t-0d9488: #0d9488;
+    --hx-t-0e7490: #0e7490;
+    --hx-t-0e7c4a: #0e7c4a;
+    --hx-t-10b981: #10b981;
+    --hx-t-111111: #111111;
+    --hx-t-1200ff: #1200ff;
+    --hx-t-1565c0: #1565c0;
+    --hx-t-15803d: #15803d;
+    --hx-t-16a34a: #16a34a;
+    --hx-t-212529: #212529;
+    --hx-t-22c55e: #22c55e;
+    --hx-t-2563eb: #2563eb;
+    --hx-t-525252: #525252;
+    --hx-t-64748b: #64748b;
+    --hx-t-65a30d: #65a30d;
+    --hx-t-71717a: #71717a;
+    --hx-t-737373: #737373;
+    --hx-t-7c3aed: #7c3aed;
+    --hx-t-7f1d1d: #7f1d1d;
+    --hx-t-8b5cf6: #8b5cf6;
+    --hx-t-9ca3af: #9ca3af;
+    --hx-t-a16207: #a16207;
+    --hx-t-b0325a: #b0325a;
+    --hx-t-b45309: #b45309;
+    --hx-t-b91c1c: #b91c1c;
+    --hx-t-c026d3: #c026d3;
+    --hx-t-c7c7cf: #c7c7cf;
+    --hx-t-d97706: #d97706;
+    --hx-t-dc2626: #dc2626;
+    --hx-t-e11d48: #e11d48;
+    --hx-t-ea580c: #ea580c;
+    --hx-t-f97316: #f97316
+}
+.dark {
+    --hx-b-16a34a: #16a34a;
+    --hx-b-2563eb: #2563eb;
+    --hx-b-71717a: #71717a;
+    --hx-b-d4d4d8: #2f2f35;
+    --hx-b-dc2626: #dc2626;
+    --hx-b-dcfce7: #1a3623;
+    --hx-b-dee2e6: #272b2f;
+    --hx-b-e4e4e7: #26262b;
+    --hx-b-e5e5e5: #27272c;
+    --hx-b-e5e7eb: #25282d;
+    --hx-b-e7f0fb: #192533;
+    --hx-b-ea580c: #ea580c;
+    --hx-b-ececef: #222226;
+    --hx-b-eeeeee: #222226;
+    --hx-b-f0fdf4: #17311f;
+    --hx-b-f3f4f6: #212429;
+    --hx-b-f3f4f7: #20222a;
+    --hx-b-f7fee7: #2b3318;
+    --hx-b-f8f9fa: #1b1b1f;
+    --hx-b-fafafa: #1b1b1e;
+    --hx-b-fef2f2: #1c1c1f;
+    --hx-b-fff7ed: #312618;
+    --hx-b-ffffff: #18181b;
+    --hx-d-86efac: #86efac;
+    --hx-d-bbf7d0: #285337;
+    --hx-d-d4d4d8: #3a3a40;
+    --hx-d-d9f99d: #d9f99d;
+    --hx-d-dc2626: #dc2626;
+    --hx-d-e5e5e5: #333338;
+    --hx-d-fecaca: #532828;
+    --hx-d-fed7aa: #533f28;
+    --hx-t-000000: #f4f4f5;
+    --hx-t-059669: #7ffbd4;
+    --hx-t-0891b2: #80e2f9;
+    --hx-t-0d9488: #85f4ea;
+    --hx-t-0e7490: #86dcf3;
+    --hx-t-0e7c4a: #88f2c2;
+    --hx-t-10b981: #85f4d0;
+    --hx-t-111111: #e8e8ea;
+    --hx-t-1200ff: #847aff;
+    --hx-t-1565c0: #87b9f2;
+    --hx-t-15803d: #8decb1;
+    --hx-t-16a34a: #8aefaf;
+    --hx-t-212529: #d9d9dd;
+    --hx-t-22c55e: #8eebb0;
+    --hx-t-2563eb: #86a8f4;
+    --hx-t-525252: #b8b8bf;
+    --hx-t-64748b: #b2bbc8;
+    --hx-t-65a30d: #c6f584;
+    --hx-t-71717a: #9e9ea7;
+    --hx-t-737373: #a0a0a9;
+    --hx-t-7c3aed: #ae86f4;
+    --hx-t-7f1d1d: #e69393;
+    --hx-t-8b5cf6: #a681f8;
+    --hx-t-9ca3af: #9ca3af;
+    --hx-t-a16207: #f9c880;
+    --hx-t-b0325a: #e298af;
+    --hx-t-b45309: #f9b581;
+    --hx-t-b91c1c: #ee8c8c;
+    --hx-t-c026d3: #e18feb;
+    --hx-t-c7c7cf: #c7c7cf;
+    --hx-t-d97706: #fbc17e;
+    --hx-t-dc2626: #ed8d8d;
+    --hx-t-e11d48: #f08aa0;
+    --hx-t-ea580c: #f9aa81;
+    --hx-t-f97316: #fcb17e
+}
+:where(.dark) ::-webkit-scrollbar-thumb {
+    background: #272f38
+}
+@layer utilities {
+    :where(.dark) .card-header {
+        background-color: rgb(255 255 255 / 0.042)
+    }
+    :where(.dark) .btn-primary {
+        color: var(--on-accent)
+    }
+    :where(.dark) .btn-primary:hover {
+        color: var(--on-accent)
+    }
+    :where(.dark) .btn-outline-primary:hover {
+        color: var(--on-accent)
+    }
+    :where(.dark) .table-striped > tbody > tr:nth-of-type(odd) > td {
+        background-color: rgb(255 255 255 / 0.028)
+    }
+    :where(.dark) .badge-success, :where(.dark) .badge-green {
+        background-color: #23372e;
+        color: #8feac1
+    }
+    :where(.dark) .badge-danger, :where(.dark) .badge-red {
+        background-color: #381b1e;
+        color: #e5949c
+    }
+    :where(.dark) .badge-warning, :where(.dark) .badge-amber {
+        background-color: #39321b;
+        color: #fbdc7e
+    }
+    :where(.dark) .badge-info, :where(.dark) .badge-blue {
+        background-color: #1b3439;
+        color: #81e5f8
+    }
+}
+:where(.dark) .pv-hero::before {
+    background-image: radial-gradient(circle at 20% 50%, rgb(24 24 27 / 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgb(24 24 27 / 0.06) 0%, transparent 50%)
+}
+:where(.dark) .pv-hero-stats {
+    border-top: 1px solid rgb(39 39 43 / 0.15)
+}
+:where(.dark) .pv-cat-card {
+    background: #18181b
+}
+:where(.dark) .pv-cat-icon {
+    background: var(--cat-bg, #1c1c20)
+}
+:where(.dark) .pv-cat-desc {
+    background: #1a1a1e
+}
+:where(.dark) .pv-tool-link {
+    border-bottom: 1px solid #353946
+}
+:where(.dark) .skeleton {
+    background: linear-gradient(90deg, #25282d 25%, #212429 50%, #25282d 75%)
+}
+:where(.dark) .glass-card {
+    background: rgb(24 24 27 / 0.72);
+    border: 1px solid rgb(39 39 43 / 0.4)
+}
+:where(.dark) .account .avatar {
+    background: #222226
+}
+:where(.dark) .sidebar-backdrop {
+    background: rgb(255 255 255 / 0.252)
+}
+:where(.dark) .tcrumb {
+    background: rgb(24 24 27 / 0.72)
+}
+:where(.dark) .tbt-run {
+    color: var(--on-accent)
+}
+:where(.dark) .tticker-badge {
+    color: var(--on-accent)
+}
+:where(.dark) .tbt-mode:hover {
+    background: #18181b
+}
+:where(.dark) .tbt-mode.active {
+    background: #18181b
+}
+:where(.dark) .tbuilder-bridge-badge.ok {
+    background: #1a3623;
+    color: #8decb1
+}
+:where(.dark) .tbuilder-bridge-badge.custom {
+    background: #3a341c;
+    color: #f9c880
+}
+:where(.dark) .tbuilder-bridge-btn {
+    color: var(--on-accent)
+}
+:where(.dark) .tbuilder-preset-chip {
+    background: #18181b
+}
+:where(.dark) .tbt-stage.done .tbt-stage-dot {
+    color: var(--on-accent)
+}
+:where(.dark) .tbt-skeleton-line {
+    background: linear-gradient(90deg, var(--t-surface) 0%, #232327 50%, var(--t-surface) 100%)
+}
+:where(.dark) .tbt-skeleton-chart {
+    background: linear-gradient(90deg, var(--t-surface) 0%, #232327 50%, var(--t-surface) 100%)
+}
+:where(.dark) .tsend-bt-btn {
+    color: var(--on-accent)
+}
+:where(.dark) .tscreener-handoff-badge {
+    color: var(--on-accent)
+}
+:where(.dark) .tscreener-handoff-cond {
+    background: #18181b
+}
+:where(.dark) .tscreener-handoff-clear:hover {
+    color: #ed8d8d
+}
+:where(.dark) .tcmp-strategy-chip {
+    background: #18181b
+}
+:where(.dark) .tcmp-strategy-chip.on {
+    color: var(--on-accent)
+}
+:where(.dark) .tbt-bench-metric {
+    background: var(--t-surface, #1b1b1e)
+}
+:where(.dark) .tbt-save-btn {
+    background: #18181b
+}
+:where(.dark) .tbt-saved-del:hover {
+    color: #ed8d8d
+}
+:where(.dark) .tbt-export-btn {
+    background: #18181b
+}
+:where(.dark) .tbt-prov.real {
+    background: #17311f;
+    border-color: #285337
+}
+:where(.dark) .tbt-prov.mock {
+    background: #1b1b1e
+}
+:where(.dark) .tbt-prov.mock .tbt-prov-dot {
+    background: #4a4a54
+}
+:where(.dark) .tbt-prov.real .tbt-prov-main {
+    color: #8decb1
+}
+:where(.dark) .tbt-prov-detail b.on {
+    color: #8decb1
+}
+:where(.dark) .tbt-watch-toggle {
+    background: #18181b
+}
+:where(.dark) .tbt-watch-chip {
+    background: #1b1b1e
+}
+:where(.dark) .tbt-watch-chip button:hover {
+    color: #ed8d8d
+}
+:where(.dark) .lp-root {
+    background: #18181b
+}
+:where(.dark) .lp-up {
+    color: #8aefaf
+}
+:where(.dark) .lp-down {
+    color: #ed8d8d
+}
+:where(.dark) .lp-topbar {
+    background: #342d19;
+    border-bottom: 1px solid #534828
+}
+:where(.dark) .lp-topbar-k {
+    color: #e7d093
+}
+:where(.dark) .lp-topbar-t {
+    color: #e9d390
+}
+:where(.dark) .lp-topbar-t b {
+    color: #ecd58e
+}
+:where(.dark) .lp-nav-cta {
+    color: var(--on-accent) !important
+}
+:where(.dark) .lp-btn-primary {
+    color: var(--on-accent)
+}
+:where(.dark) .lp-btn-ghost:hover {
+    border-color: #3a3a40
+}
+:where(.dark) .lp-btn-onaccent {
+    background: #18181b
+}
+:where(.dark) .lp-btn-onaccent-ghost {
+    border-color: rgb(39 39 43 / 0.45)
+}
+:where(.dark) .lp-btn-onaccent-ghost:hover {
+    background: rgb(24 24 27 / 0.12);
+    border-color: rgb(39 39 43 / 0.7)
+}
+:where(.dark) .lp-deck {
+    background: #18181b
+}
+:where(.dark) .lp-deck-top {
+    background: #1b1b1e
+}
+:where(.dark) .lp-deck-dots i {
+    background: #28282d
+}
+:where(.dark) .lp-deck-sample {
+    background: #342d19;
+    color: #e7d093
+}
+:where(.dark) .lp-deck-v {
+    color: #8aefaf
+}
+:where(.dark) .lp-deck-fbar {
+    background: #20242c
+}
+:where(.dark) .lp-pipe-step {
+    background: #18181b
+}
+:where(.dark) .lp-guard-eyebrow {
+    color: #9cddb7
+}
+:where(.dark) .lp-guard-test {
+    color: #9cddb7
+}
+:where(.dark) .lp-src-limit-k {
+    background: #342d19;
+    border: 1px solid #534828;
+    color: #e7d093
+}
+:where(.dark) .lp-cta {
+    color: var(--on-accent)
+}
+:where(.dark) .t-mode-badge[data-real="1"] {
+    color: #8aefaf;
+    border-color: #4be785
+}
+:where(.dark) .t-mode-badge[data-real="0"] {
+    color: #f9c880;
+    border-color: #f7aa3b
+}
+:where(.dark) .tchip-toggle {
+    background: #18181b
+}
+:where(.dark) .tticker-analyze {
+    color: var(--on-accent)
+}
+:where(.dark) .tdata-badge.real {
+    color: #8decb1
+}
+:where(.dark) .bsc-rail {
+    background: #18181b
+}
+:where(.dark) .bsc-add-btn {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-chip-op {
+    background: #18181b
+}
+:where(.dark) .bsc-chip-val {
+    background: #18181b
+}
+:where(.dark) .bsc-expr {
+    background: #18181b
+}
+:where(.dark) .bsc-expr-input:focus {
+    background: #18181b
+}
+:where(.dark) .bsc-expr-search {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-bt-btn {
+    background: #18181b
+}
+:where(.dark) .bsc-fav.on {
+    color: #facc80
+}
+:where(.dark) .bsc-go-company {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-logic-toggle {
+    background: #18181b
+}
+:where(.dark) .bsc-logic-toggle span.on {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-preset-confirm {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-notice {
+    color: #f7cd83
+}
+:where(.dark) .bsc-capped-badge {
+    color: #f9b581;
+    background: #312c18
+}
+:where(.dark) .bsc-pager button {
+    background: #18181b
+}
+:where(.dark) .bsc-pager button.on {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-mcap-btn {
+    background: #18181b
+}
+:where(.dark) .bsc-mcap-btn.active {
+    color: var(--on-accent)
+}
+:where(.dark) .bsc-range-input::-webkit-slider-thumb {
+    background: #18181b
+}
+:where(.dark) .bsc-range-input::-moz-range-thumb {
+    background: #18181b
+}
+:where(.dark) .bsc-field-tech {
+    color: #ae86f4;
+    border: 1px solid #2f2853
+}
+:where(.dark) .bsc-colpicker {
+    background: #18181b
+}
+:where(.dark) .bsc-diag {
+    color: #f7cd83
+}
+:where(.dark) .tbt-action-msg {
+    color: #8aefaf
+}
+:where(.dark) .tbt-saved-del:hover {
+    color: #ed8d8d
+}
+:where(.dark) .bt2 .tbt-mode-switch {
+    background: #18181b
+}
+:where(.dark) .bt2 .tbt-mode {
+    background: #18181b
+}
+:where(.dark) .bt2 .tbt-stat {
+    background: #18181b
+}
+:where(.dark) .bt2 .tbt-stat-hero {
+    background: linear-gradient(180deg, rgba(18,0,255,0.045), #18181b 62%)
+}
+:where(.dark) .bt2 .tbt-chart {
+    background: #18181b
+}
+:where(.dark) .bt2 .tbt-substats {
+    background: #18181b
+}
+:where(.dark) .bt2 .tbt-ts-group {
+    background: #18181b
+}
+:where(.dark) .bt2 .tbt-tradelog tbody tr:nth-child(even) {
+    background: rgb(24 24 27 / 0.55)
+}
+:where(.dark) .bt2 .tbt-prov.mock {
+    border-left-color: #51515a
+}
+:where(.dark) .bt2 .tbt-empty {
+    background: radial-gradient(120% 80% at 50% 0%, rgba(18,0,255,0.025), transparent 60%),
+    repeating-linear-gradient(0deg, transparent, transparent 23px, rgb(255 255 255 / 0.028) 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, rgb(255 255 255 / 0.028) 24px)
+}
+:where(.dark) .bt-empty-glyph {
+    background: #18181b
+}
+:where(.dark) .ca-lab-cand {
+    background: #18181b
+}
+:where(.dark) .ca-lab-ticker {
+    background: #18181b
+}
+:where(.dark) .ca-mockbadge {
+    background: #1f1f23
+}
+:where(.dark) .ca-band-track {
+    background: #222226
+}
+:where(.dark) .ca-fbar-track {
+    background: #222226
+}
+:where(.dark) .ca-tm {
+    background: #18181b
+}
+:where(.dark) .ca-tm-search {
+    background: #18181b
+}
+:where(.dark) .ca-tm-rail-item:hover {
+    background: #1f1f23
+}
+:where(.dark) .ca-tm-score-bar {
+    background: #222226
+}
+:where(.dark) .ca-tm-toggle button {
+    background: #18181b
+}
+:where(.dark) .ca-tm-cons-item {
+    background: #18181b
+}
+:where(.dark) .ca-cp {
+    background: #18181b
+}
+:where(.dark) .ca-cp-metric {
+    background: #18181b
+}
+:where(.dark) .ca-cp-peer:hover:not(.self) {
+    background: #1f1f23
+}
+:where(.dark) .ca-cp-judge-row i {
+    background: #222226
+}
+:where(.dark) .ca-cp-catbar i {
+    background: #222226
+}
+:where(.dark) .ca-pg-search input {
+    background: #18181b
+}
+:where(.dark) .ca-pg-sug {
+    background: #18181b
+}
+:where(.dark) .dash-card {
+    background: #18181b
+}
+:where(.dark) .dash-skel {
+    background: linear-gradient(90deg, #1e1e22 25%, #222226 37%, #1e1e22 63%)
+}
+:where(.dark) .dash-search input {
+    background: #18181b
+}
+:where(.dark) .dash-sug {
+    background: #18181b
+}
+:where(.dark) .dash-macro {
+    background: rgb(24 24 27 / 0.72)
+}
+:where(.dark) .dash-picks-table td {
+    border-bottom: 1px solid #2d2d32
+}
+:where(.dark) .ca-pg-go {
+    color: var(--on-accent)
+}
+:where(.dark) .ca-pg-chip {
+    background: #18181b
+}
+:where(.dark) .ca-cp-fintabs button {
+    background: #18181b
+}
+:where(.dark) .ca-cp-ai-btn {
+    color: var(--on-accent)
+}
+:where(.dark) .tstate-unavail {
+    color: #f9c880;
+    background: #312c18
+}
+:where(.dark) .mc-banner {
+    background: #18181b
+}
+:where(.dark) .mc-src.mock {
+    background: #1e1e22
+}
+:where(.dark) .mc-card {
+    background: #18181b
+}
+:where(.dark) .mc-ind:hover {
+    background: #18181b
+}
+:where(.dark) .mc-bt-btn {
+    color: var(--on-accent)
+}
+:where(.dark) .mc-bt-btn.sm {
+    background: #18181b
+}
+:where(.dark) .mc-bt-btn.sm:hover {
+    color: var(--on-accent)
+}
+:where(.dark) .mc-ext-row:hover {
+    background: #18181b
+}
+:where(.dark) .mc-mkt button.on {
+    color: var(--on-accent)
+}
+:where(.dark) .mc-stratcard {
+    background: #18181b
+}
+:where(.dark) .mc-modal-bg {
+    background: rgb(255 255 255 / 0.504)
+}
+:where(.dark) .mc-modal {
+    background: #18181b
+}
+:where(.dark) .mc-fam-n {
+    color: var(--on-accent)
+}
+:where(.dark) .sm-modal {
+    background: #18181b
+}
+:where(.dark) .sm-fam {
+    color: var(--on-accent)
+}
+:where(.dark) .sm-fit-lbl em {
+    color: var(--on-accent)
+}
+:where(.dark) .sm-ai-btn {
+    color: var(--on-accent)
+}
+:where(.dark) .ca-cp-sec {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-cp-sub {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .ca-ff-dcf {
+    fill: #847aff
+}
+:where(.dark) .ca-ff-rim {
+    fill: #88f2c2
+}
+:where(.dark) .ca-ff-ddm {
+    fill: #ffe37a
+}
+:where(.dark) .ca-ff-w52 {
+    fill: #9e9ea7
+}
+:where(.dark) .ca-ff-graham {
+    fill: #e298af
+}
+:where(.dark) .ca-ff-peer_per {
+    fill: #9ca8dd
+}
+:where(.dark) .ca-ff-peer_pbr {
+    fill: #96dae3
+}
+:where(.dark) .ca-ff-mid {
+    stroke: #e8e8ea
+}
+:where(.dark) .ca-ff-price {
+    stroke: #ff7a7a
+}
+:where(.dark) .ca-ff-na {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .ca-vt-slabel .ca-vt-src {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .ca-vt-reset {
+    border: 1px solid var(--t-border, #333338);
+    background: var(--t-bg, #18181b)
+}
+:where(.dark) .ca-heat th, :where(.dark) .ca-heat td {
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-heat-c.na {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .ca-comps th, :where(.dark) .ca-comps td {
+    border-bottom: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-comps tr.median {
+    background: var(--t-surface, #1b1b1e)
+}
+:where(.dark) .ca-cp-note {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .ca-fd-ni {
+    stroke: #e8e8ea
+}
+:where(.dark) .ca-fd-ocf {
+    stroke: #847aff
+}
+:where(.dark) .ca-fd-flag.bad {
+    background: #331818;
+    color: #e298af
+}
+:where(.dark) .ca-fd-flag.warn {
+    background: #352b19;
+    color: #ffe37a
+}
+:where(.dark) .ca-fd-flag.ok {
+    background: #1c3226;
+    color: #88f2c2
+}
+:where(.dark) .ca-fd-tbl th, :where(.dark) .ca-fd-tbl td {
+    border-bottom: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-fd-wf-track {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-rd-basis.real {
+    background: #1c3226;
+    color: #88f2c2
+}
+:where(.dark) .ca-rd-basis.approx {
+    background: #352b19;
+    color: #ffe37a
+}
+:where(.dark) .ca-rd-basis.neutral {
+    background: var(--t-surface, #1b1b1e);
+    color: var(--t-muted, #9e9ea7);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-ff2-label {
+    color: var(--t-text, #e8e8ea)
+}
+:where(.dark) .ca-ff2-track {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-ff2-val.dn {
+    color: #e298af
+}
+:where(.dark) .ca-ff2-price {
+    border-left: 2px dashed #ff3333
+}
+:where(.dark) .ca-ff2-price-tag {
+    color: #ff7a7a;
+    background: var(--t-bg, #18181b)
+}
+:where(.dark) .ca-ff2-tick {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .ca-rr-svg {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-rr-node {
+    fill: #9e9ea7
+}
+:where(.dark) .ca-rr-node.self {
+    fill: #847aff
+}
+:where(.dark) .ca-rr-name {
+    fill: #847aff
+}
+:where(.dark) .ca-rr-qlabel {
+    fill: var(--t-muted, #8c8c97)
+}
+:where(.dark) .ca-rr-popup {
+    background: var(--t-bg, #18181b);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .ca-heat-toggle button {
+    border: 1px solid var(--t-border, #333338);
+    background: var(--t-bg, #18181b)
+}
+:where(.dark) .ca-heat-toggle button.on {
+    background: var(--t-surface, #1c1c20);
+    color: #847aff
+}
+:where(.dark) .ca-iso-cell.up {
+    fill: #88f2c2
+}
+:where(.dark) .ca-iso-cell.dn {
+    fill: #9ca8dd
+}
+:where(.dark) .mc-pb-track {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .mc-axisbd-t th, :where(.dark) .mc-axisbd-t td {
+    border-bottom: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .mc-cbg-track {
+    background: linear-gradient(90deg, #2563eb 0%, #27272c 50%, #dc2626 100%)
+}
+:where(.dark) .mc-band-track {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .mc-brief {
+    background: var(--t-surface, #1b1b1e);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .mc-brief-chip {
+    border: 1px solid var(--t-border, #333338);
+    background: var(--t-bg, #18181b);
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .mc-brief-chip.on, :where(.dark) .mc-brief-chip:hover {
+    color: #847aff
+}
+:where(.dark) .mv-cmp th, :where(.dark) .mv-cmp td {
+    border-bottom: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .mc-search {
+    border: 1px solid var(--t-border, #333338);
+    background: var(--t-bg, #18181b)
+}
+:where(.dark) .mv-rcard {
+    background: var(--t-bg, #18181b);
+    border: 1px solid var(--t-border, #333338)
+}
+:where(.dark) .mv-donut-big {
+    fill: var(--t-ink, #e8e8ea)
+}
+:where(.dark) .mv-donut-small {
+    fill: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .mv-rcard-lbl {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .mv-rcard-others {
+    color: var(--t-muted, #9e9ea7)
+}
+:where(.dark) .mv-src-real {
+    color: #88f2c2
+}
+:where(.dark) .mv-src-mock {
+    color: #f9b581
+}
+:where(.dark) .mca-rsi-track {
+    background: var(--t-surface, #1e1e22)
+}
+:where(.dark) .mc-tabs .mc-tab:hover {
+    border-color: var(--t-border, #333338);
+    background: var(--t-surface, #1b1b1e)
+}
+:where(.dark) .as-card {
+    background: #18181b
+}
+:where(.dark) .as-err {
+    color: var(--color-bear, #ed8d8d)
+}
+:where(.dark) .as-x:hover {
+    color: var(--color-bear, #ed8d8d)
+}
+:where(.dark) .as-fb-apply {
+    color: var(--on-accent)
+}
+:where(.dark) .tfm {
+    background: #18181b
+}
+:where(.dark) .tfm-fams button {
+    background: #18181b
+}
+:where(.dark) .tfm-imp-up {
+    color: #84f5b7
+}
+:where(.dark) .tfm-imp-down {
+    color: #ec938d
+}
+:where(.dark) .tfm-imp-same {
+    background: rgb(255 255 255 / 0.056)
+}
+:where(.dark) .tfm-row {
+    background: #18181b
+}
+:where(.dark) .tfm-row.off:hover {
+    background: #18181b
+}
+:where(.dark) .as-bt-badge.mock {
+    color: #f9b581;
+    background: #312c18
+}
+:where(.dark) .as-bt-badge.real {
+    color: #8aefaf;
+    background: #1a3623;
+    border-color: #285337
+}
+:where(.dark) .as-attr-basis.real {
+    color: #8decb1
+}
+:where(.dark) .as-attr-basis.mock {
+    background: #3a341c;
+    color: #f9b581
+}
+:where(.dark) .brun-badge.mock {
+    background: #3a341c;
+    color: #f9b581
+}
+:where(.dark) .brun-badge.real {
+    color: #8decb1
+}
+:where(.dark) .brun-badge.partial {
+    background: #3a341c;
+    color: #f9b581
+}
+:where(.dark) .brun-mocknote {
+    color: #f9b581;
+    background: #312c18
+}
+:where(.dark) .brun-reconnect {
+    color: var(--color-caution, #fbc17e)
+}
+:where(.dark) .brun-recheck {
+    background: #18181b
+}
+:where(.dark) .brun-card {
+    background: #18181b
+}
+:where(.dark) .brun-err-title {
+    color: #ee8c8c
+}
+:where(.dark) .brun-btn {
+    background: #18181b
+}
+:where(.dark) .brun-btn.primary {
+    color: var(--on-accent)
+}
+:where(.dark) .brun-diag-list {
+    color: #f9b581
+}
+:where(.dark) .brun-select {
+    background: #18181b
+}
+:where(.dark) .mc-aas-err {
+    background: var(--bs-danger-bg, #381b1e);
+    color: #e5949c
+}
+:where(.dark) .tfm-freq-sel {
+    background: #18181b
+}
+:where(.dark) .tfm-freq-warn {
+    color: #f3af86;
+    border: 1px solid rgb(250 160 56 / 0.35)
+}
+:where(.dark) .tfm-hist-bar.s-unavailable {
+    border-bottom: 2px dotted #faa038
+}
+:where(.dark) .tfm-hist-st.s-risk_off {
+    color: #b2bbc8
+}
+:where(.dark) .tfm-hist-st.s-unavailable {
+    color: #f3af86
+}
+:where(.dark) .tfm-hist-miss {
+    color: #f3af86
+}
+:where(.dark) .tev-measured    .tev-l {
+    color: #8decb1
+}
+:where(.dark) .tev-estimated   .tev-l {
+    background: #3a341c;
+    color: #f9b581
+}
+:where(.dark) .tev-caution     .tev-l {
+    background: #3a341c;
+    color: #f3af86
+}
+/* BS5-GEN:END */
+
+/* ── BS5 손질 — 생성 뒤에도 대비 감사에 걸린 것 ───────────────────────────── */
+/* Recharts 기본값 — 축 눈금 글자는 라이브러리가 fill="#666" 속성으로 넣는다(다크에서 3.1:1). 속성은 CSS 가 이긴다.
+   기본 툴팁·범례는 인라인 style 이라 다크에서만 !important 로 덮는다(라이트는 그대로). */
+.dark .recharts-cartesian-axis-tick-value, .dark .recharts-polar-angle-axis-tick-value,
+.dark .recharts-polar-radius-axis-tick-value { fill: var(--t-muted); }
+.dark .recharts-default-tooltip { background-color: var(--card) !important; border-color: var(--border) !important; color: var(--foreground); }
+.dark .recharts-tooltip-label { color: var(--foreground) !important; }
+/* 셸 브레드크럼 구분자 — 라이트는 테두리색(1.26:1, 기록된 기존 결함)이고 다크에서는 1.19:1 이었다. 다크만 흐린 글자로. */
+.dark .tcrumb-sep { color: var(--t-muted); }
+/* 강조색 바탕 단추의 글자는 생성기가 --on-accent 로 바꾼다. 누름 색(#0e00cc)은 짙어서 어두운 글자와 안 맞는다 — 밝은 짝으로. */
+.dark .bsc-add-btn:hover, .dark .ca-pg-go:hover { background: #9d97ff; }
+/* 글자색 바탕 단추(전략 저장) — 다크에서 글자색이 밝아져 흰 바탕 단추가 됐다. 다른 주 단추와 같은 강조색으로. */
+.dark .tbt-action-save { color: var(--on-accent); background: var(--t-accent); }
+/* 비활성 글자가 테두리색이면 다크에서 거의 안 보인다 — 흐린 글자로(누를 수 없음은 커서가 말한다). */
+.dark .bsc-preset-save:disabled { color: #8b8b94; }
+/* 기업 밴드 표식 — 2px 막대 위 라벨은 막대의 바탕을 물려받아 대비가 1:1 로 재진다. 라벨에 제 바탕을 주고, 막대는 흐린 선으로. */
+.dark .ca-band-marker.price { background: #a1a1aa; }
+.dark .ca-band-marker-lbl { background: var(--t-bg); padding: 0 2px; }

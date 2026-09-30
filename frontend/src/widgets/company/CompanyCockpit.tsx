@@ -208,8 +208,8 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                   </table>
                   <div className="ca-cp-kpibars">
                     <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.quarters} dataKey="revenue" xKey="q" /></div>
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.quarters} dataKey="op" color="#16a34a" xKey="q" /></div>
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.quarters} dataKey="ni" color="#1200ff" xKey="q" /></div>
+                    <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.quarters} dataKey="op" color="var(--hx-t-16a34a)" xKey="q" /></div>
+                    <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.quarters} dataKey="ni" color="var(--hx-t-1200ff)" xKey="q" /></div>
                   </div>
                   </>
                 ) : (
@@ -224,8 +224,8 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
                     </table>
                     <div className="ca-cp-kpibars">
                       <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.years} dataKey="revenue" /></div>
-                      <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.years} dataKey="op" color="#16a34a" /></div>
-                      <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.years} dataKey="ni" color="#1200ff" /></div>
+                      <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.years} dataKey="op" color="var(--hx-t-16a34a)" /></div>
+                      <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.years} dataKey="ni" color="var(--hx-t-1200ff)" /></div>
                     </div>
                   </>
                 )}

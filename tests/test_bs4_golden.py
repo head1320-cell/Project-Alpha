@@ -6,6 +6,9 @@
 방법을 더하기 **전에** 엔진 `combine_sleeves` 의 출력(기존 7 방법 · 입력 있음/없음 · 주기·비용)과 `portfolio_combine` 노드의
 몫·비중·view 키를 `tests/golden/sleeve_combine_methods.json` 에 얼렸다. 바뀐 뒤에도 같아야 한다. 더해도 되는 것은
 `fallback` 키(엔진 — 대체를 드러낸다)와 view 의 `method_compare`(관측 표)·`market`(위기일 대용)뿐이고, 그 둘은 비교에서 뺀다.
+
+★노드 골든의 수익은 고정 값이다★ 처음엔 mock 로더를 썼는데, 로더가 오늘을 끝으로 창을 잡아 9-29 에 얼린 값이 9-30 에 달라졌다
+(코드 변화 없음). 노드 부분은 방법을 더하기 **전** 커밋(6901d99)에서 고정 수익으로 다시 얼렸다 — 엔진 부분은 처음 얼린 값과 같다.
 """
 from __future__ import annotations
 
@@ -57,11 +60,25 @@ def engine_case(k: str) -> dict:
 NODE_CASES = {"default": {}, "hrp": {"method": "hrp"}, "equal_rebalance": {"method": "equal", "rebalance": {"s1": "M"}, "cost_bps": 10}}
 
 
+def _fixed_ret_matrix(sleeves, **_):
+    """★오늘 날짜와 무관한 수익★ — mock 로더는 오늘을 끝으로 창을 잡아 날마다 값이 달랐다(9-29 에 얼린 골든이 9-30 에 깨짐)."""
+    codes = sorted({c for s in sleeves for c in s.get("weights", {})})
+    rng = np.random.default_rng(20260930)
+    base = rng.normal(0, 0.01, 400)
+    return {c: [float(x) for x in base * (0.4 + 0.3 * i) + rng.normal(0, 0.01, 400) * (1 + 0.2 * i)] for i, c in enumerate(codes)}
+
+
 def node_case(k: str) -> dict:
     from src.api import allocation_graph_nodes as gn
     from src.engine import portfolio_graph as pg
+    from src.engine import sleeve_combine as sc
     from tests.test_graph_portfolio_combine import _graph
-    r = pg.run(_graph(3, **NODE_CASES[k]), gn.REGISTRY)["nodes"]["p"]
+    orig = sc._load_ret_matrix
+    sc._load_ret_matrix = _fixed_ret_matrix
+    try:
+        r = pg.run(_graph(3, **NODE_CASES[k]), gn.REGISTRY)["nodes"]["p"]
+    finally:
+        sc._load_ret_matrix = orig
     v = r["view"]
     return json.loads(json.dumps({"status": r["status"], "result": {x: y for x, y in v["result"].items() if x not in NEW_ENGINE_KEYS},
                                   "strategies": v["strategies"], "view_keys": sorted(set(v) - NEW_VIEW_KEYS),

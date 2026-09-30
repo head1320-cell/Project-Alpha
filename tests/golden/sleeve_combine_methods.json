@@ -363,9 +363,9 @@
   "default": {
    "result": {
     "combined_weights_pct": {
-     "000660": 30.5308,
-     "005930": 28.4794,
-     "035420": 40.9898
+     "000660": 33.3783,
+     "005930": 30.5538,
+     "035420": 36.0679
     },
     "error": false,
     "method": "risk_parity",
@@ -378,14 +378,14 @@
      "전략 3": 33.33
     },
     "sleeve_allocation": {
-     "전략 1": 36.95,
-     "전략 2": 31.5,
-     "전략 3": 31.55
+     "전략 1": 42.69,
+     "전략 2": 32.61,
+     "전략 3": 24.71
     },
     "sleeve_vol_pct": {
-     "전략 1": 21.46,
-     "전략 2": 19.99,
-     "전략 3": 23.01
+     "전략 1": 15.93,
+     "전략 2": 17.94,
+     "전략 3": 24.14
     }
    },
    "robustness_available": true,
@@ -397,8 +397,8 @@
      "port": "s1",
      "rebalance": "D",
      "risk_pct": 33.33,
-     "share_pct": 36.95,
-     "vol_pct": 21.46
+     "share_pct": 42.69,
+     "vol_pct": 15.93
     },
     {
      "label": "전략 2",
@@ -406,8 +406,8 @@
      "port": "s2",
      "rebalance": "D",
      "risk_pct": 33.33,
-     "share_pct": 31.5,
-     "vol_pct": 19.99
+     "share_pct": 32.61,
+     "vol_pct": 17.94
     },
     {
      "label": "전략 3",
@@ -415,8 +415,8 @@
      "port": "s3",
      "rebalance": "D",
      "risk_pct": 33.33,
-     "share_pct": 31.55,
-     "vol_pct": 23.01
+     "share_pct": 24.71,
+     "vol_pct": 24.14
     }
    ],
    "view_keys": [
@@ -452,9 +452,9 @@
      "전략 3": 1
     },
     "risk_contribution_pct": {
-     "전략 1": 28.1,
-     "전략 2": 35.57,
-     "전략 3": 36.33
+     "전략 1": 22.37,
+     "전략 2": 33.02,
+     "전략 3": 44.6
     },
     "sleeve_allocation": {
      "전략 1": 33.33,
@@ -462,9 +462,9 @@
      "전략 3": 33.33
     },
     "sleeve_vol_pct": {
-     "전략 1": 21.48,
-     "전략 2": 19.99,
-     "전략 3": 23.01
+     "전략 1": 15.94,
+     "전략 2": 17.94,
+     "전략 3": 24.14
     }
    },
    "robustness_available": true,
@@ -475,27 +475,27 @@
      "n_holdings": 2,
      "port": "s1",
      "rebalance": "M",
-     "risk_pct": 28.1,
+     "risk_pct": 22.37,
      "share_pct": 33.33,
-     "vol_pct": 21.48
+     "vol_pct": 15.94
     },
     {
      "label": "전략 2",
      "n_holdings": 2,
      "port": "s2",
      "rebalance": "D",
-     "risk_pct": 35.57,
+     "risk_pct": 33.02,
      "share_pct": 33.33,
-     "vol_pct": 19.99
+     "vol_pct": 17.94
     },
     {
      "label": "전략 3",
      "n_holdings": 2,
      "port": "s3",
      "rebalance": "D",
-     "risk_pct": 36.33,
+     "risk_pct": 44.6,
      "share_pct": 33.33,
-     "vol_pct": 23.01
+     "vol_pct": 24.14
     }
    ],
    "view_keys": [
@@ -511,9 +511,9 @@
   "hrp": {
    "result": {
     "combined_weights_pct": {
-     "000660": 33.639,
-     "005930": 31.6131,
-     "035420": 34.7479
+     "000660": 36.8751,
+     "005930": 38.7846,
+     "035420": 24.3403
     },
     "error": false,
     "method": "hrp",
@@ -521,19 +521,19 @@
     "n_stocks": 3,
     "note": "2단계 결합 — 슬리브 레벨 배분 × 슬리브 내 종목비중. 리스크 기여는 슬리브 공분산 기준.",
     "risk_contribution_pct": {
-     "전략 1": 45.92,
-     "전략 2": 32.2,
-     "전략 3": 21.88
+     "전략 1": 56.69,
+     "전략 2": 25.35,
+     "전략 3": 17.96
     },
     "sleeve_allocation": {
-     "전략 1": 44.77,
-     "전략 2": 31.47,
-     "전략 3": 23.77
+     "전략 1": 59.88,
+     "전략 2": 25.84,
+     "전략 3": 14.27
     },
     "sleeve_vol_pct": {
-     "전략 1": 21.46,
-     "전략 2": 19.99,
-     "전략 3": 23.01
+     "전략 1": 15.93,
+     "전략 2": 17.94,
+     "전략 3": 24.14
     }
    },
    "robustness_available": true,
@@ -544,27 +544,27 @@
      "n_holdings": 2,
      "port": "s1",
      "rebalance": "D",
-     "risk_pct": 45.92,
-     "share_pct": 44.77,
-     "vol_pct": 21.46
+     "risk_pct": 56.69,
+     "share_pct": 59.88,
+     "vol_pct": 15.93
     },
     {
      "label": "전략 2",
      "n_holdings": 2,
      "port": "s2",
      "rebalance": "D",
-     "risk_pct": 32.2,
-     "share_pct": 31.47,
-     "vol_pct": 19.99
+     "risk_pct": 25.35,
+     "share_pct": 25.84,
+     "vol_pct": 17.94
     },
     {
      "label": "전략 3",
      "n_holdings": 2,
      "port": "s3",
      "rebalance": "D",
-     "risk_pct": 21.88,
-     "share_pct": 23.77,
-     "vol_pct": 23.01
+     "risk_pct": 17.96,
+     "share_pct": 14.27,
+     "vol_pct": 24.14
     }
    ],
    "view_keys": [

@@ -135,7 +135,7 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
       {/* 도구 행 */}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
         <button type="button" onClick={() => setPickerOpen(true)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 500, color: "#fff", background: accent.accent, border: "none", borderRadius: R, padding: "7px 12px", cursor: "pointer" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 500, color: "var(--on-accent)", background: accent.accent, border: "none", borderRadius: R, padding: "7px 12px", cursor: "pointer" }}>
           <Plus size={14} /> 팩터
         </button>
         <span style={{ display: "inline-flex", gap: 4 }}>

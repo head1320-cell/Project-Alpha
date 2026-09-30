@@ -78,7 +78,7 @@ function MiniHistogram({ values, op, threshold }: { values: number[]; op?: strin
         {counts.map((c, i) => {
           const mid = min + ((i + 0.5) / BINS) * span;
           const h = (c / maxC) * 28;
-          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--t-accent)" : "#d4d4d8"} />;
+          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--t-accent)" : "var(--hx-b-d4d4d8)"} />;
         })}
         <line x1={tx * 100} y1={0} x2={tx * 100} y2={30} stroke="var(--color-bear)" strokeWidth="0.8" />
       </svg>

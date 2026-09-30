@@ -174,7 +174,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
               <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="세트 이름"
                 style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "5px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
               <button type="button" onClick={handleSaveSet} disabled={conditions.length === 0}
-                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: conditions.length ? "#fff" : "var(--text-muted)", background: conditions.length ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "5px 9px", cursor: conditions.length ? "pointer" : "not-allowed", flexShrink: 0 }}>
+                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: conditions.length ? "var(--on-accent)" : "var(--text-muted)", background: conditions.length ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "5px 9px", cursor: conditions.length ? "pointer" : "not-allowed", flexShrink: 0 }}>
                 <Save size={12} /> 저장
               </button>
             </div>
@@ -221,14 +221,14 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
             <input value={logicExpr ?? ""} spellCheck={false}
               onChange={(e) => { onLogicChange(e.target.value); setLogicCheck(null); }}
               placeholder={`예: every(A,3) and (B or C) — 비우면 ${logicDefaultLabel}`}
-              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "9px 11px", border: `1px solid ${logicCheck && !logicCheck.ok ? "#dc2626" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "9px 11px", border: `1px solid ${logicCheck && !logicCheck.ok ? "var(--hx-d-dc2626)" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
               <button type="button" onClick={verifyLogic}
                 style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 9px", cursor: "pointer", flexShrink: 0 }}>
                 <ShieldCheck size={13} /> 조건식 검증
               </button>
               {logicCheck && (
-                <span style={{ fontSize: 11, color: logicCheck.ok ? "#16a34a" : "#dc2626" }}>{logicCheck.msg}</span>
+                <span style={{ fontSize: 11, color: logicCheck.ok ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{logicCheck.msg}</span>
               )}
             </div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
@@ -255,7 +255,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
             <input value={directExpr} spellCheck={false}
               onChange={(e) => { setDirectExpr(e.target.value); setExprCheck(null); }}
               placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})"
-              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "10px 12px", border: `1px solid ${exprCheck && !exprCheck.ok ? "#dc2626" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "10px 12px", border: `1px solid ${exprCheck && !exprCheck.ok ? "var(--hx-d-dc2626)" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
               사칙연산(+,−,×,÷)·괄호·{"{팩터}"}·함수 조합 — 기간은 {"{20일}"} 형태 · 우변은 아래 값
             </div>
@@ -268,7 +268,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
             style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 9px", cursor: lhsExpr ? "pointer" : "not-allowed", opacity: lhsExpr ? 1 : 0.5, flexShrink: 0 }}>
             <ShieldCheck size={13} /> 식 검증
           </button>
-          {exprCheck && <span style={{ fontSize: 11, color: exprCheck.ok ? "#16a34a" : "#dc2626" }}>{exprCheck.msg}</span>}
+          {exprCheck && <span style={{ fontSize: 11, color: exprCheck.ok ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{exprCheck.msg}</span>}
         </div>
 
         {/* 연산자 + 값 */}
@@ -301,7 +301,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         </div>
 
         <button type="button" onClick={save} disabled={!canSave}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "#fff", background: canSave ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 0", cursor: canSave ? "pointer" : "not-allowed" }}>
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "var(--on-accent)", background: canSave ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 0", cursor: canSave ? "pointer" : "not-allowed" }}>
           <Check size={14} /> 조건식 저장
         </button>
 
@@ -314,7 +314,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
                 placeholder="자연어로 입력 — 예: PER 15 이하이고 ROE 상위 30%"
                 style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
               <button type="button" onClick={runNl} disabled={nlBusy || !nlQuery.trim()}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, color: "#fff", background: nlBusy || !nlQuery.trim() ? "var(--border-strong)" : accent.accent, border: "none", borderRadius: R, padding: "8px 12px", cursor: nlBusy || !nlQuery.trim() ? "not-allowed" : "pointer", flexShrink: 0 }}>
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, color: "var(--on-accent)", background: nlBusy || !nlQuery.trim() ? "var(--border-strong)" : accent.accent, border: "none", borderRadius: R, padding: "8px 12px", cursor: nlBusy || !nlQuery.trim() ? "not-allowed" : "pointer", flexShrink: 0 }}>
                 <Sparkles size={13} /> {nlBusy ? "변환 중…" : "AI 변환"}
               </button>
             </div>

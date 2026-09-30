@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { setToken } from "@/shared/api/authToken";
 import { ROLE_KO, useSession } from "@/entities/session";
-import { DARK_READY, THEMES, useTheme } from "@/shared/theme";
+import { DARK_EXCEPTIONS, THEMES, useTheme } from "@/shared/theme";
 import { changePassword, issueAccount, listAccounts, resetAccount, type Account } from "./api";
 import { passwordRules } from "./passwordRules";
 
@@ -175,7 +175,10 @@ function ThemeSection() {
           </div>
         </div>
         {theme !== "light" ? (
-          <p className="set-sub set-theme-note">어둡게 보이는 화면: {DARK_READY.map((r) => r.label).join("·")}. 나머지 화면은 밝게 보여요.</p>
+          <p className="set-sub set-theme-note">
+            {DARK_EXCEPTIONS.filter((x) => x.looks === "light").map((x) => x.label).join("·")}은 밝게,{" "}
+            {DARK_EXCEPTIONS.filter((x) => x.looks === "dark").map((x) => x.label).join("·")}은 늘 어둡게 보여요. 나머지는 고른 테마를 따라요.
+          </p>
         ) : null}
         <p className="set-sub">이 브라우저에만 남아요.</p>
       </div>

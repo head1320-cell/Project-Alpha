@@ -71,7 +71,7 @@ export default function MacroRadar() {
 
   if (error || !state) {
     return (
-      <div className="card-md p-6 text-center" style={{ color: "#dc2626" }}>
+      <div className="card-md p-6 text-center" style={{ color: "var(--hx-t-dc2626)" }}>
         <AlertTriangle size={24} className="mx-auto mb-2" />
         <div className="text-sm">{error || "매크로 데이터 로드 실패"}</div>
       </div>
@@ -144,7 +144,7 @@ function QuadrantBox({ state }: { state: RegimeState }) {
       <div className="relative" style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 20, right: 20, left: 0, bottom: 30 }}>
-            <CartesianGrid strokeDasharray="2 2" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="2 2" stroke="var(--hx-b-e5e7eb)" />
             <XAxis
               type="number"
               dataKey="x"
@@ -152,7 +152,7 @@ function QuadrantBox({ state }: { state: RegimeState }) {
               ticks={[-2, -1, 0, 1, 2]}
               tickFormatter={(v: number) => v.toFixed(0)}
               label={{ value: "← 디스인플레이션 | 인플레이션 →", position: "bottom", offset: 12, fontSize: 10 }}
-              stroke="#737373"
+              stroke="var(--hx-t-737373)"
               style={{ fontSize: 10 }}
             />
             <YAxis
@@ -162,22 +162,22 @@ function QuadrantBox({ state }: { state: RegimeState }) {
               ticks={[-2, -1, 0, 1, 2]}
               tickFormatter={(v: number) => v.toFixed(0)}
               label={{ value: "↑ 성장 | 수축 ↓", angle: -90, position: "insideLeft", fontSize: 10 }}
-              stroke="#737373"
+              stroke="var(--hx-t-737373)"
               style={{ fontSize: 10 }}
             />
             <ZAxis type="number" range={[600, 600]} />
-            <ReferenceLine x={0} stroke="#9ca3af" strokeWidth={1.5} />
-            <ReferenceLine y={0} stroke="#9ca3af" strokeWidth={1.5} />
+            <ReferenceLine x={0} stroke="var(--hx-t-9ca3af)" strokeWidth={1.5} />
+            <ReferenceLine y={0} stroke="var(--hx-t-9ca3af)" strokeWidth={1.5} />
             <Tooltip
               cursor={{ strokeDasharray: "3 3" }}
-              contentStyle={{ background: "#fff", border: "1px solid #d4d4d8", borderRadius: 6, fontSize: 11 }}
+              contentStyle={{ background: "var(--hx-b-ffffff)", border: "1px solid var(--hx-d-d4d4d8)", borderRadius: 6, fontSize: 11 }}
               formatter={(_v: number, name: string) => [`${(_v as number).toFixed(2)}`, name]}
             />
             <Scatter isAnimationActive={anim}
               data={[{ x, y }]}
               fill={c.fg}
             >
-              <Cell stroke="#fff" strokeWidth={3} />
+              <Cell stroke="var(--hx-b-ffffff)" strokeWidth={3} />
             </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
@@ -233,7 +233,7 @@ function StressGauge({ state }: { state: RegimeState }) {
             endAngle={0}
             data={[{ value: score, fill: color }]}
           >
-            <RadialBar isAnimationActive={anim} background={{ fill: "#f3f4f6" }} dataKey="value" cornerRadius={6} />
+            <RadialBar isAnimationActive={anim} background={{ fill: "var(--hx-b-f3f4f6)" }} dataKey="value" cornerRadius={6} />
           </RadialBarChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -277,7 +277,7 @@ function DynamicParamCard({
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="text-sm font-bold text-primary flex items-center gap-2">
-            <Shield size={14} style={{ color: "#8b5cf6" }} />
+            <Shield size={14} style={{ color: "var(--hx-t-8b5cf6)" }} />
             동적 파라미터
           </h3>
           <p className="text-[10px] text-secondary mt-0.5 font-mono">
@@ -311,7 +311,7 @@ function DynamicParamCard({
           <div className="text-[10px] uppercase tracking-wider text-secondary mb-0.5">
             Kill Switch DD Threshold
           </div>
-          <div className="text-2xl font-bold font-mono" style={{ color: "#dc2626" }}>
+          <div className="text-2xl font-bold font-mono" style={{ color: "var(--hx-t-dc2626)" }}>
             {state.dynamic_kill_dd_threshold != null ? `-${(state.dynamic_kill_dd_threshold * 100).toFixed(2)}` : "—"}%
           </div>
           <div className="text-[9px] text-secondary mt-0.5">
@@ -326,10 +326,10 @@ function DynamicParamCard({
           <div
             className="text-base font-bold mt-1 px-2 py-1 rounded text-center"
             style={{
-              color: state.recommended_mode === "DEFENSIVE" ? "#dc2626" :
-                     state.recommended_mode === "CAUTIOUS"  ? "#ea580c" : "#16a34a",
-              background: state.recommended_mode === "DEFENSIVE" ? "#fef2f2" :
-                          state.recommended_mode === "CAUTIOUS"  ? "#fff7ed" : "#f0fdf4",
+              color: state.recommended_mode === "DEFENSIVE" ? "var(--hx-t-dc2626)" :
+                     state.recommended_mode === "CAUTIOUS"  ? "var(--hx-t-ea580c)" : "var(--hx-t-16a34a)",
+              background: state.recommended_mode === "DEFENSIVE" ? "var(--hx-b-fef2f2)" :
+                          state.recommended_mode === "CAUTIOUS"  ? "var(--hx-b-fff7ed)" : "var(--hx-b-f0fdf4)",
             }}
           >
             {state.recommended_mode}
@@ -355,7 +355,7 @@ function YieldCurveChart({ state }: { state: RegimeState }) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-sm font-bold text-primary flex items-center gap-2">
-            <Activity size={14} style={{ color: inv ? "#dc2626" : "#0891b2" }} />
+            <Activity size={14} style={{ color: inv ? "var(--hx-t-dc2626)" : "var(--hx-t-0891b2)" }} />
             US Treasury Yield Curve
           </h3>
           <p className="text-[10px] text-secondary mt-0.5 font-mono">
@@ -365,7 +365,7 @@ function YieldCurveChart({ state }: { state: RegimeState }) {
         {inv && (
           <div
             className="px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1"
-            style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}
+            style={{ background: "var(--hx-b-fef2f2)", color: "var(--hx-t-dc2626)", border: "1px solid var(--hx-d-fecaca)" }}
           >
             <AlertTriangle size={11} />
             역전 {severity != null ? `${severity.toFixed(0)}bp` : ""}
@@ -375,23 +375,23 @@ function YieldCurveChart({ state }: { state: RegimeState }) {
 
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={points} margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="label" stroke="#737373" style={{ fontSize: 10 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--hx-b-e5e7eb)" />
+          <XAxis dataKey="label" stroke="var(--hx-t-737373)" style={{ fontSize: 10 }} />
           <YAxis
-            stroke="#737373"
+            stroke="var(--hx-t-737373)"
             style={{ fontSize: 10 }}
             tickFormatter={(v: number) => `${v.toFixed(1)}%`}
           />
           <Tooltip
-            contentStyle={{ background: "#fff", border: "1px solid #d4d4d8", borderRadius: 6, fontSize: 11 }}
+            contentStyle={{ background: "var(--hx-b-ffffff)", border: "1px solid var(--hx-d-d4d4d8)", borderRadius: 6, fontSize: 11 }}
             formatter={(v: number) => [`${v.toFixed(2)}%`, "Yield"]}
           />
           <Line isAnimationActive={anim}
             type="monotone"
             dataKey="yield_pct"
-            stroke={inv ? "#dc2626" : "#0891b2"}
+            stroke={inv ? "var(--hx-t-dc2626)" : "var(--hx-t-0891b2)"}
             strokeWidth={2}
-            dot={{ r: 4, fill: inv ? "#dc2626" : "#0891b2" }}
+            dot={{ r: 4, fill: inv ? "var(--hx-t-dc2626)" : "var(--hx-t-0891b2)" }}
             activeDot={{ r: 6 }}
           />
         </LineChart>
@@ -424,11 +424,11 @@ const TILT_LABELS: Record<string, string> = {
 };
 
 const TILT_COLORS: Record<string, string> = {
-  "++": "#16a34a",
-  "+":  "#65a30d",
-  "0":  "#737373",
-  "-":  "#ea580c",
-  "--": "#dc2626",
+  "++": "var(--hx-t-16a34a)",
+  "+":  "var(--hx-t-65a30d)",
+  "0":  "var(--hx-t-737373)",
+  "-":  "var(--hx-t-ea580c)",
+  "--": "var(--hx-t-dc2626)",
 };
 
 function AssetTilts({ state }: { state: RegimeState }) {
@@ -437,7 +437,7 @@ function AssetTilts({ state }: { state: RegimeState }) {
   return (
     <div className="card-md p-4 h-full">
       <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-1">
-        <Gauge size={14} style={{ color: "#8b5cf6" }} />
+        <Gauge size={14} style={{ color: "var(--hx-t-8b5cf6)" }} />
         자산군 권고 비중
       </h3>
       <p className="text-[10px] text-secondary mb-3 font-mono">
@@ -508,11 +508,11 @@ function MacroHeatmap({ rows }: { rows: HeatmapRow[] }) {
                     <span className="text-[9px] text-secondary ml-0.5">{r.unit}</span>
                   </td>
                   <td className="py-1.5 px-2 text-right font-mono"
-                       style={{ color: r.mom_pct != null && r.mom_pct >= 0 ? "#16a34a" : "#dc2626" }}>
+                       style={{ color: r.mom_pct != null && r.mom_pct >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>
                     {r.mom_pct != null ? `${r.mom_pct >= 0 ? "+" : ""}${r.mom_pct.toFixed(2)}%` : "—"}
                   </td>
                   <td className="py-1.5 px-2 text-right font-mono"
-                       style={{ color: r.yoy != null && r.yoy >= 0 ? "#16a34a" : "#dc2626" }}>
+                       style={{ color: r.yoy != null && r.yoy >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>
                     {r.yoy != null ? `${r.yoy >= 0 ? "+" : ""}${r.yoy.toFixed(2)}` : "—"}
                   </td>
                   <td className="py-1.5 px-2 text-right">

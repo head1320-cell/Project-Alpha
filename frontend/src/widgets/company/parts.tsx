@@ -8,7 +8,7 @@ import type { CompanyData, FactorVal, FactorGroup, ModelResult, Scenario, Verdic
 import { won, eok, pct, toneColor, pctColor } from "@/entities/company/insightsModel";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 
-const ACCENT = "#1200ff", BULL = "#16a34a", BEAR = "#dc2626", MUTED = "#71717a", BORDER = "#e5e5e5";
+const ACCENT = "var(--hx-t-1200ff)", BULL = "var(--hx-t-16a34a)", BEAR = "var(--hx-t-dc2626)", MUTED = "var(--hx-t-71717a)", BORDER = "var(--hx-b-e5e5e5)";
 
 export function VerdictBadge({ verdict, tone, big }: { verdict: string; tone: VerdictTone; big?: boolean }) {
   const c = toneColor(tone);
@@ -25,7 +25,7 @@ export function Gauge({ value, label, sub, color = ACCENT, size = 132 }: { value
   return (
     <div className="ca-gauge" style={{ width: w }}>
       <svg viewBox="0 0 120 70" width={w} height={h}>
-        <path d="M 10 62 A 50 50 0 0 1 110 62" fill="none" stroke="#ececef" strokeWidth="10" strokeLinecap="round" pathLength={100} />
+        <path d="M 10 62 A 50 50 0 0 1 110 62" fill="none" stroke="var(--hx-b-ececef)" strokeWidth="10" strokeLinecap="round" pathLength={100} />
         <path d="M 10 62 A 50 50 0 0 1 110 62" fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" pathLength={100} strokeDasharray={`${v} 100`} />
         <text x="60" y="54" textAnchor="middle" className="ca-gauge-num" style={{ fill: color }}>{Math.round(value)}</text>
       </svg>
@@ -36,11 +36,11 @@ export function Gauge({ value, label, sub, color = ACCENT, size = 132 }: { value
 }
 
 export function ScoreRing({ score, size = 84 }: { score: number; size?: number }) {
-  const c = score >= 66 ? BULL : score <= 40 ? BEAR : "#d97706";
+  const c = score >= 66 ? BULL : score <= 40 ? BEAR : "var(--hx-t-d97706)";
   return (
     <div className="ca-ring" style={{ width: size, height: size }}>
       <svg viewBox="0 0 80 80" width={size} height={size}>
-        <circle cx="40" cy="40" r="34" fill="none" stroke="#ececef" strokeWidth="7" />
+        <circle cx="40" cy="40" r="34" fill="none" stroke="var(--hx-b-ececef)" strokeWidth="7" />
         <circle cx="40" cy="40" r="34" fill="none" stroke={c} strokeWidth="7" strokeLinecap="round" pathLength={100} strokeDasharray={`${score} 100`} transform="rotate(-90 40 40)" />
         <text x="40" y="45" textAnchor="middle" className="ca-ring-num" style={{ fill: c }}>{score}</text>
       </svg>
@@ -79,7 +79,7 @@ export function KpiBars({ data, dataKey, xKey = "year", color = ACCENT, height =
         <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: MUTED, fontFamily: "var(--t-mono)" }} tickLine={false} axisLine={{ stroke: BORDER }} />
         <Tooltip formatter={(v: number) => [fmt(v), ""]} contentStyle={{ fontFamily: "var(--t-mono)", fontSize: 11, borderRadius: 2, border: `1px solid ${BORDER}` }} cursor={{ fill: "rgba(18,0,255,0.04)" }} />
         <Bar isAnimationActive={anim} dataKey={dataKey} radius={[2, 2, 0, 0]}>
-          {data.map((d, i) => <Cell key={i} fill={num(d) < 0 ? BEAR : i === data.length - 1 ? color : "#c7c7cf"} />)}
+          {data.map((d, i) => <Cell key={i} fill={num(d) < 0 ? BEAR : i === data.length - 1 ? color : "var(--hx-t-c7c7cf)"} />)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -149,9 +149,9 @@ export function Radar({ groups, size = 240 }: { groups: FactorGroup[]; size?: nu
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="ca-radar">
       {[0.25, 0.5, 0.75, 1].map((rr, k) => (
-        <polygon key={k} points={groups.map((_, i) => pt(i, R * rr).join(",")).join(" ")} fill="none" stroke="#ececef" strokeWidth="1" />
+        <polygon key={k} points={groups.map((_, i) => pt(i, R * rr).join(",")).join(" ")} fill="none" stroke="var(--hx-b-ececef)" strokeWidth="1" />
       ))}
-      {groups.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#ececef" strokeWidth="1" />; })}
+      {groups.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--hx-b-ececef)" strokeWidth="1" />; })}
       <polygon points={poly} fill="rgba(18,0,255,0.12)" stroke={ACCENT} strokeWidth="1.6" />
       {avg.map((v, i) => { const [x, y] = pt(i, (v / 100) * R); return <circle key={i} cx={x} cy={y} r="2.6" fill={ACCENT} />; })}
       {groups.map((g, i) => { const [x, y] = pt(i, R + 16); return <text key={i} x={x} y={y} textAnchor="middle" className="ca-radar-lbl">{g.label.split("·")[0]}</text>; })}

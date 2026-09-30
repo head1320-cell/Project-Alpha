@@ -355,9 +355,9 @@ export function trendColor(trend: string): string {
 }
 
 export function stressColor(score: number): string {
-  if (score >= 80) return "#7f1d1d";
-  if (score >= 60) return "#dc2626";
-  if (score >= 40) return "#f97316";
-  if (score >= 20) return "#16a34a";
-  return "#0891b2";
+  if (score >= 80) return "var(--hx-t-7f1d1d)";
+  if (score >= 60) return "var(--hx-t-dc2626)";
+  if (score >= 40) return "var(--hx-t-f97316)";
+  if (score >= 20) return "var(--hx-t-16a34a)";
+  return "var(--hx-t-0891b2)";
 }
