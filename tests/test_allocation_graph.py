@@ -294,11 +294,14 @@ def test_the_catalog_has_the_core_chain_with_typed_ports():
     cat = {c["type"]: c for c in gn.REGISTRY.catalog()}
     # 핵심 사슬은 늘 있다 — BK 웨이브가 노드를 더한다(각 웨이브 테스트가 자기 노드를 건다).
     assert set(cat) >= CORE
-    assert cat["optimizer"]["inputs"] == [
+    # BT1 — 포트는 역할(role)과 싣는 값(gives)을 함께 낸다(없는 포트는 키가 없다).
+    assert [{k: p[k] for k in ("name", "type", "required")} for p in cat["optimizer"]["inputs"]] == [
         {"name": "returns", "type": "Returns", "required": True},
         {"name": "belief", "type": "Belief", "required": True},
         {"name": "views", "type": "Views", "required": False}]
-    assert cat["optimizer"]["outputs"] == [{"name": "weights", "type": "Weights"}]
+    assert all(p["role"] for p in cat["optimizer"]["inputs"])
+    assert cat["optimizer"]["outputs"] == [{"name": "weights", "type": "Weights",
+                                            "gives": [{"key": "req"}, {"key": "sigma_annual"}]}]
     models = cat["optimizer"]["params_schema"]["properties"]["model"]
     assert set(models["enum"]) == set(__import__(
         "src.engine.allocation_studio", fromlist=["x"]).model_availability())

@@ -27,9 +27,11 @@ from tests.test_allocation_graph import T3, _edge, _node, chain, market  # noqa:
 
 pytestmark = pytest.mark.usefixtures("graph_write_guard")
 
-NEW = ("Views", "Scores", "RegimeState", "TimingSignal", "Trades", "TargetVersion", "BacktestResult", "RiskReport")
+NEW = ("Views", "Scores", "RegimeState", "TimingSignal", "Trades", "TargetVersion", "BacktestResult", "RiskReport",
+       "Belief")
 # 충격 결과(StressReport)는 BO O4 에서 생산 노드 셋의 모양을 확인해 더했다 — tests/test_graph_stress_briefs.py.
-NOT_SUMMARISED = ("Belief", "Scenario", "StrategyResult", "BacktestRun")
+# 기대 수익 설정(Belief)은 BT1 에서 추정 노드를 돌려 모양을 확인해 더했다.
+NOT_SUMMARISED = ("Scenario", "StrategyResult", "BacktestRun")
 
 
 def test_the_new_port_types_have_a_brief_and_the_unconfirmed_ones_do_not():
@@ -73,6 +75,8 @@ def _expect(port_type: str, v) -> str:
         return f"{len(d)}일 · {d[0]}~{d[-1]}"
     if port_type == "RiskReport":
         return f"연 변동성 {v['risk_contribution_optimized']['portfolio_volatility_pct']:.1f}%"
+    if port_type == "Belief":
+        return "경기 국면 반영" if v["conditional"] else "과거 기준"
     raise AssertionError(port_type)
 
 
@@ -100,7 +104,7 @@ def test_real_producers_briefs_equal_the_text_rebuilt_from_their_values(market, 
                    _edge("r", "returns", "bt", "returns"), _edge("o", "weights", "bt", "weights")]
     rep = pg.run(g, gn.REGISTRY)["nodes"]
     port_of = {"vw": "views", "cv": "views", "vs": "scores", "rg": "regime", "ts": "signal", "op": "trades",
-               "tv": "target", "bt": "backtest", "k": "risk"}
+               "tv": "target", "bt": "backtest", "k": "risk", "e": "belief"}
     checked = set()
     for nid, port in port_of.items():
         r = rep[nid]
@@ -127,6 +131,7 @@ def test_real_producers_briefs_equal_the_text_rebuilt_from_their_values(market, 
     ("BacktestResult", {"error": True, "dates": ["2024-01-02", "2024-01-03"]}),
     ("RiskReport", {}), ("RiskReport", {"risk_contribution_optimized": {"portfolio_volatility_pct": None}}),
     ("RiskReport", {"risk_contribution_optimized": {"portfolio_volatility_pct": float("nan")}}),
+    ("Belief", None), ("Belief", {}), ("Belief", {"rebalance": "M"}),
 ])
 def test_a_value_of_the_wrong_shape_is_not_summarised(port_type, bad):
     assert gl.BRIEFS[port_type](bad) is None
@@ -157,3 +162,9 @@ def test_every_new_brief_fits_the_engine_limit():
     for t, v in samples.items():
         s = gl.BRIEFS[t](v)
         assert isinstance(s, str) and 0 < len(s) <= pg.BRIEF_MAX, (t, s)
+
+
+def test_belief_brief_names_the_setting_both_ways():
+    """BT1 — 기대 수익 설정은 두 값을 모두 말한다(짝): 켜면 국면 반영, 끄면 과거 기준."""
+    assert gl.BRIEFS["Belief"]({"conditional": True}) == "경기 국면 반영"
+    assert gl.BRIEFS["Belief"]({"conditional": False}) == "과거 기준"

@@ -13,7 +13,10 @@ from typing import Any
 from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
-from src.api.allocation_graph_nodes import PORT_TYPES, REGISTRY, STAGES
+from src.api.allocation_graph_nodes import PORT_PLAIN, PORT_TYPES, REGISTRY, STAGES
+from src.api.allocation_graph_roles import NEED_PLAIN
+from src.domain import design_procedure as proc
+from src.domain.workflow_gates import GATES
 from src.domain.workflow_gates import evaluate as evaluate_gates
 from src.engine import portfolio_graph as pg
 
@@ -24,12 +27,72 @@ router = APIRouter(prefix="/api/v1/allocation/graph", tags=["allocation-graph"])
 def graph_node_types() -> dict:
     """팔레트의 단일 출처 — 캔버스는 이것만 보고 노드·포트·파라미터 폼을 그린다."""
     return {"format": pg.FORMAT, "version": pg.VERSION, "port_types": list(PORT_TYPES),
-            "stages": STAGES, "nodes": REGISTRY.catalog()}
+            "stages": STAGES, "nodes": REGISTRY.catalog(),
+            # BT1 — 화면이 사본을 들지 않게: 포트 쉬운 이름 · 관문 이름(레일의 빈 역).
+            "port_plain": PORT_PLAIN, "gates": [{"key": k, "label": lbl} for k, lbl in GATES]}
+
+
+def _kinds() -> dict[str, dict]:
+    """절차 판정이 읽는 종류 표 — 포트·단계·쉬운 이름만(파라미터 스키마는 필요 없다)."""
+    out = {}
+    for t in REGISTRY.types():
+        s = REGISTRY.get(t)
+        out[t] = {"stage": s.stage, "plain_label": s.human,
+                  "inputs": [{"name": p.name, "type": p.type, "required": p.required, "needs": list(p.needs)}
+                             for p in s.inputs],
+                  "outputs": [{"name": p.name, "type": p.type, "gives": [g.to_dict() for g in p.gives]}
+                              for p in s.outputs]}
+    return out
+
+
+def _needs_errors(nodes: list, edges: list, kinds: dict[str, dict]) -> list[dict]:
+    """★타입은 맞지만 계산할 때 실패할 선★ (BT1) — 확실할 때만. 실행 결과는 바꾸지 않는다(`/run` 은 이것을 모른다)."""
+    out = []
+    for u in proc.unmet_needs(nodes, edges, kinds):
+        src, dst = kinds[str(_type_of(nodes, u["source"]))], kinds[str(_type_of(nodes, u["target"]))]
+        what = NEED_PLAIN.get(u["key"], u["key"])
+        always = sorted({k["plain_label"] for k in kinds.values()
+                         for o in k["outputs"] for g in o["gives"] if g["key"] == u["key"]
+                         and not g.get("when") and not g.get("from")})
+        # 보내는 쪽이 조건부로 줄 수 있으면(입력을 이으면) 그것을 먼저 말한다 — 가장 가까운 고치는 법.
+        own_when = next((g["when"] for o in src["outputs"] if o["name"] == u["source_port"]
+                         for g in o["gives"] if g["key"] == u["key"] and g.get("when")), None)
+        if own_when:
+            ptype = next((i["type"] for i in src["inputs"] if i["name"] == own_when), own_when)
+            fix = f"‘{src['plain_label']}’에 {proc.quote_obj(PORT_PLAIN.get(ptype, own_when))} 이으면 줄 수 있어요."
+        else:
+            fix = f"{' · '.join(f'‘{g}’' for g in always)}의 비중을 이어 주세요." if always else None
+        edge = next((e for e in edges if isinstance(e, dict) and e.get("source") == u["source"]
+                     and e.get("source_port") == u["source_port"] and e.get("target") == u["target"]
+                     and e.get("target_port") == u["target_port"]), {})
+        out.append({"code": "needs_unmet", "node_id": u["target"], "edge_id": pg._edge_id(edge) if edge else None,
+                    "message": f"‘{dst['plain_label']}’에 필요한 {what}이 ‘{src['plain_label']}’의 비중에는 없어요 — "
+                               "이대로 계산하면 실패해요.",
+                    "fix": fix})
+    return out
+
+
+def _type_of(nodes: list, nid: str) -> str | None:
+    return next((n.get("type") for n in nodes if isinstance(n, dict) and n.get("id") == nid), None)
+
+
+def _procedure(graph: Any, kinds: dict[str, dict]) -> dict | None:
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) \
+            or not isinstance(graph.get("edges"), list):
+        return None
+    return proc.evaluate(graph["nodes"], graph["edges"], kinds, STAGES, PORT_PLAIN)
 
 
 @router.post("/validate")
 def graph_validate(graph: Any = Body(...)) -> dict:
-    return pg.validate(graph, REGISTRY)
+    """검증 + ★절차★(BT1) — 편집마다 불리므로 계산 전에도 절차 탭·다음 한 걸음이 보인다."""
+    rep = pg.validate(graph, REGISTRY)
+    kinds = _kinds()
+    if isinstance(graph, dict) and not any(e.get("code") in pg.FATAL_CODES or e.get("code") == "document"
+                                           for e in rep["errors"]):
+        extra = _needs_errors(graph["nodes"], graph["edges"], kinds)
+        rep = {"ok": rep["ok"] and not extra, "errors": rep["errors"] + extra}
+    return {**rep, "procedure": _procedure(graph, kinds)}
 
 
 @router.post("/run")
@@ -49,7 +112,10 @@ def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_leng
     # ★증거 관문★ (BJ1) — 그래프 구성과 노드 출처로 8 관문을 판정한다. 건너뛴 관문은 건너뜀이다.
     nodes = graph.get("nodes") if isinstance(graph, dict) and isinstance(graph.get("nodes"), list) else []
     stage_of = {t: REGISTRY.get(t).stage for t in REGISTRY.types()}
-    report["gates"] = evaluate_gates([n for n in nodes if isinstance(n, dict)], report["nodes"], stage_of)
+    history = {t: REGISTRY.get(t).human for t in REGISTRY.types() if REGISTRY.get(t).simulates_history}
+    report["gates"] = evaluate_gates([n for n in nodes if isinstance(n, dict)], report["nodes"], stage_of,
+                                     history_types=history)
+    report["procedure"] = _procedure(graph, _kinds())
     return report
 
 

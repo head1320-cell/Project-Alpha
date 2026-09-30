@@ -63,6 +63,15 @@ PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
               # BL3 W1 — 백그라운드에서 끝난 조건식 백테스트 실행 한 건(불러오기 노드가 낸다).
               "BacktestRun")
 
+#: 포트 타입 → 사람이 읽는 이름(BT1 — 캔버스·절차 문장이 같은 말을 쓴다. 화면 사본은 이것을 받는다).
+PORT_PLAIN = {
+    "Universe": "종목", "Returns": "수익률", "Belief": "기대 수익", "Views": "내 생각",
+    "Weights": "비중", "RiskReport": "위험 나눔", "BacktestResult": "과거 성과",
+    "Scenario": "시나리오", "StressReport": "충격 결과", "Scores": "점수", "RegimeState": "경기 국면",
+    "TimingSignal": "타이밍 신호", "Trades": "주문 목록", "TargetVersion": "실행 목표",
+    "StrategyResult": "전략 묶음 성과", "BacktestRun": "백테스트 실행",
+}
+
 
 def weights_value(names: list[str], weights: Any, *, sigma_annual: Any = None,
                   sigma_source: str | None = None, req: Any = None, opt: Any = None,
@@ -513,3 +522,7 @@ _portfolio.register(REGISTRY)
 from src.api import allocation_graph_glance as _glance  # noqa: E402
 
 _glance.register(REGISTRY)
+# ★관계는 그다음에★ (BT1) — 포트 역할·요구값·싣는 값·과거 시뮬레이션 표시를 한 곳에서.
+from src.api import allocation_graph_roles as _roles  # noqa: E402
+
+_roles.register(REGISTRY)

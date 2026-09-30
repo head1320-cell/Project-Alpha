@@ -170,11 +170,25 @@ _SKIP = {
 }
 
 
-def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, str]) -> dict:
-    """그래프 → 8 관문 `{key, label, state, reasons[]}` + 요약."""
+def _subj_particle(word: str) -> str:
+    """받침이 있으면 '이', 없으면 '가'."""
+    ch = next((c for c in reversed(word) if "가" <= c <= "힣"), "")
+    return "이" if ch and (ord(ch) - 0xAC00) % 28 else "가"
+
+
+def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, str],
+             history_types: dict[str, str] | None = None) -> dict:
+    """그래프 → 8 관문 `{key, label, state, reasons[], node_ids[]}` + 요약.
+
+    `history_types` — 과거를 시뮬레이션하거나 그 기록을 읽는 노드 종류 → 쉬운 이름(BT1, 라우트가 레지스트리에서
+    넘긴다 — 이 모듈은 레지스트리를 모른다). 정책 백테스트(`backtest`)가 없는데 이런 노드가 있으면 거래비용·
+    처음 보는 기간은 **몰라요**다: "단계가 없어요"는 사실이 아니고, 관문이 그 결과를 아직 읽지 않으므로 확인도 아니다.
+    """
+    def ids(*types: str) -> list[str]:
+        return [str(n["id"]) for n in nodes if n.get("type") in types and n.get("id") in results]
+
     def of(*types: str) -> list[dict]:
-        return [results[n["id"]] for n in nodes
-                if n.get("type") in types and n.get("id") in results]
+        return [results[i] for i in ids(*types)]
 
     signal_types = tuple(t for t, st in stage_of.items() if st == "signal")
     # 비중은 옵티마이저만 만들지 않는다(BK W2 — 점수→비중·중립화·묶음 합치기) — 단계로 모은다.
@@ -189,14 +203,26 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
         "economic": [],
         "live": [],
     }
+    feeders = {"data": ids("returns"), "pit": ids("returns"), "signal": ids(*signal_types),
+               "build": ids(*build_types), "cost": ids("backtest"), "oos": ids("backtest"),
+               "economic": [], "live": []}
+    hist = {t: lbl for t, lbl in (history_types or {}).items() if t != "backtest"}
+    present = [n for n in nodes if n.get("type") in hist and n.get("id")]
+    if present and not rules["cost"]:
+        names = sorted({hist[str(n["type"])] for n in present})
+        who = " · ".join(f"‘{x}’" for x in names) + _subj_particle(names[-1])
+        rules["cost"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과의 거래비용을 읽지 않아요 — "
+                                     "‘과거로 돌려 보기’를 이으면 잴 수 있어요.")]
+        rules["oos"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과로 처음 보는 기간을 판정하지 "
+                                    "않아요 — ‘과거로 돌려 보기’를 이으면 잴 수 있어요.")]
+        feeders["cost"] = feeders["oos"] = [str(n["id"]) for n in present]
     gates = []
     for key, label in GATES:
         reasons = rules[key] or [_r(SKIPPED, _SKIP[key])]
         gates.append({"key": key, "label": label, "state": _combine(reasons) if rules[key] else SKIPPED,
-                      "reasons": reasons})
+                      "reasons": reasons, "node_ids": feeders[key]})
     n_ok = sum(g["state"] == CONFIRMED for g in gates)
     text = (f"{len(gates)}개 관문 중 {n_ok}개만 확인했어요." if n_ok < len(gates)
             else f"{len(gates)}개 관문을 모두 확인했어요.")
     return {"gates": gates, "summary": {"confirmed": n_ok, "total": len(gates), "text": text,
                                         "note": "끊긴 곳은 아직 재지 않은 곳이에요."}}
-

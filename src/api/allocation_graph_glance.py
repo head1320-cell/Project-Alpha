@@ -360,11 +360,21 @@ def brief_stress(v: Any) -> str | None:
     return None
 
 
+def brief_belief(v: Any) -> str | None:
+    """기대 수익 설정 (BT1) — 추정 노드가 넘기는 **설정 그대로**(수를 만들지 않는다)."""
+    if not isinstance(v, Mapping) or "conditional" not in v:
+        return None
+    return "경기 국면 반영" if v.get("conditional") else "과거 기준"
+
+
 BRIEFS: dict[str, Callable[[Any], str | None]] = {
     "Universe": brief_universe, "Returns": brief_returns, "Weights": brief_weights,
     "Views": brief_views, "Scores": brief_scores, "RegimeState": brief_regime, "TimingSignal": brief_timing,
     "Trades": brief_trades, "TargetVersion": brief_target, "BacktestResult": brief_backtest, "RiskReport": brief_risk,
     "StressReport": brief_stress,
+    # BT1 — 기대 수익 설정은 추정 노드를 실제로 돌려 값 모양을 확인했다(tests/test_graph_briefs_more.py).
+    # 백테스트 실행·전략 묶음 성과는 저장된 실행 없이 모양을 확인하지 못해 여전히 쓰지 않는다.
+    "Belief": brief_belief,
 }
 
 

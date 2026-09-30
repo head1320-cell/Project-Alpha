@@ -59,10 +59,33 @@ class NodeFailure(Exception):
 
 
 @dataclass(frozen=True)
+class Gives:
+    """출력 포트가 싣는 값 하나(BT1) — 타입은 같아도 받는 쪽이 요구하는 값(`Port.needs`)이 있다.
+
+    - `Gives("req")` — 늘 준다.
+    - `Gives("sigma_annual", when="returns")` — 입력 `returns` 가 이어졌을 때 **줄 수도** 있다(데이터·설정에 따라).
+    - `Gives("sigma_annual", from_="weights")` — 입력 `weights` 가 받은 값을 넘긴다.
+    """
+    key: str
+    when: str | None = None
+    from_: str | None = None
+
+    def to_dict(self) -> dict:
+        return {"key": self.key, **({"when": self.when} if self.when else {}),
+                **({"from": self.from_} if self.from_ else {})}
+
+
+@dataclass(frozen=True)
 class Port:
     name: str
     type: str
     required: bool = True
+    #: 받는 쪽이 이 입력을 **무엇에 쓰는지** — 캔버스 선 판이 그대로 보인다(BT1). 모르면 비워 둔다(지어내지 않는다).
+    role: str = ""
+    #: 입력: 보내는 쪽이 꼭 실어야 하는 값 키(`Gives.key`). 안 실리면 계산할 때 실패한다.
+    needs: tuple[str, ...] = ()
+    #: 출력: 이 포트가 싣는 값(`Gives`).
+    gives: tuple[Gives, ...] = ()
 
 
 @dataclass
@@ -143,6 +166,9 @@ class NodeSpec:
     #: 캔버스 위 작은 그림(BM C1) `view -> {kind, points, unit?, caption?} | None` — ★보기의 값을 그대로 옮긴다★(새 수를
     #: 만들지 않는다). 엔진이 모양을 검사하고, 틀리거나 실패하면 그림 없이(null) 결과는 그대로 둔다.
     glance: Callable[[dict], dict | None] | None = None
+    #: 과거를 시뮬레이션하거나 그 기록을 읽는 노드(BT1) — 증거 관문이 "과거로 돌려 보는 단계가 없어요"라고
+    #: 사실과 다르게 말하지 않게 한다(있지만 관문이 아직 그 결과를 읽지 않는다 = 몰라요).
+    simulates_history: bool = False
 
     @property
     def human(self) -> str:
@@ -189,6 +215,36 @@ class Registry:
             raise ValueError(f"선언되지 않은 포트 타입: {port_type}")
         self.port_briefs[port_type] = fn
 
+    def set_port_meta(self, type_: str, port: str, *, role: str | None = None,
+                      needs: tuple[str, ...] | None = None, gives: tuple[Gives, ...] | None = None) -> None:
+        """이미 등록된 노드 포트에 사람 말 역할·요구값·싣는 값을 붙인다(BT1) — 노드 모듈을 건드리지 않고 한 곳에서."""
+        spec = self._specs.get(type_)
+        if spec is None:
+            raise ValueError(f"메타를 붙일 노드가 없습니다: {type_}")
+
+        def patch(ports: tuple[Port, ...], side: str) -> tuple[Port, ...]:
+            if not any(p.name == port for p in ports):
+                raise ValueError(f"{type_}: {side} 포트 {port} 가 없습니다")
+            out = []
+            for p in ports:
+                if p.name == port:
+                    p = replace(p, **{k: v for k, v in (("role", role), ("needs", needs), ("gives", gives))
+                                      if v is not None})
+                out.append(p)
+            return tuple(out)
+
+        if gives is not None:
+            self._specs[type_] = replace(spec, outputs=patch(spec.outputs, "출력"))
+        else:
+            self._specs[type_] = replace(spec, inputs=patch(spec.inputs, "입력"))
+
+    def mark_history(self, type_: str) -> None:
+        """과거를 시뮬레이션하거나 그 기록을 읽는 노드로 표시한다(BT1 — 증거 관문 문장 정정)."""
+        spec = self._specs.get(type_)
+        if spec is None:
+            raise ValueError(f"표시할 노드가 없습니다: {type_}")
+        self._specs[type_] = replace(spec, simulates_history=True)
+
     def types(self) -> list[str]:
         return list(self._specs)
 
@@ -198,9 +254,15 @@ class Registry:
             "type": s.type, "label": s.label, "category": s.category,
             "description": s.description,
             "stage": s.stage, "plain_label": s.human, "plain_description": s.plain_description,
-            "inputs": [{"name": p.name, "type": p.type, "required": p.required}
+            # BT1 — role·needs·gives 는 있을 때만 싣는다(없는 포트의 모양은 그대로).
+            "inputs": [{"name": p.name, "type": p.type, "required": p.required,
+                        **({"role": p.role} if p.role else {}),
+                        **({"needs": list(p.needs)} if p.needs else {})}
                        for p in s.inputs],
-            "outputs": [{"name": p.name, "type": p.type} for p in s.outputs],
+            "outputs": [{"name": p.name, "type": p.type,
+                         **({"gives": [g.to_dict() for g in p.gives]} if p.gives else {})}
+                        for p in s.outputs],
+            **({"simulates_history": True} if s.simulates_history else {}),
             "savable": s.save is not None,
             "save_label": s.save_label if s.save is not None else None,
             "params_schema": (s.params_model.model_json_schema()
