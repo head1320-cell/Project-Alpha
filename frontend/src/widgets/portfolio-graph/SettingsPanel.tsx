@@ -19,6 +19,7 @@ import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
+import { sourcesFor } from "@/entities/portfolio-graph";
 
 type Params = Record<string, unknown>;
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -436,8 +437,56 @@ export function BasicFields({ entry, params, onChange }: {
   );
 }
 
+/**
+ * 끌지 않고 잇기(BT4) — 입력마다 고르기 칸 하나. 목록은 그래프 안에서 이 타입을 낼 수 있고 이어도 되는 노드만
+ * (`sourcesFor` — 끌어 잇기와 같은 규칙). 고를 곳이 없고 이어진 것도 없으면 그 줄을 그리지 않는다(빈 고르기 칸은 할 일이 없다).
+ */
+function SourcePicks({ node, entry, nodes, edges, catalog, plainOf, onRewire }: {
+  node: PgNode; entry: NodeCatalogEntry; nodes: PgNode[]; edges: Edge[]; catalog: NodeCatalogEntry[];
+  plainOf: (id: string) => string;
+  onRewire: (port: string, source: string | null, sourceHandle: string | null) => void;
+}) {
+  const rows = entry.inputs.map((p) => {
+    const cur = edges.find((e) => e.target === node.id && e.targetHandle === p.name);
+    const opts = sourcesFor(node.id, p, nodes, edges, catalog, PORT_PLAIN);
+    return { p, cur, opts };
+  }).filter((r) => r.cur || r.opts.length);
+  if (!rows.length) return null;
+  const many = new Set(rows.map((r) => r.p.type)).size < rows.length;
+  return (
+    <div className="pg-io-picks">
+      {rows.map(({ p, cur, opts }) => {
+        const nm = PORT_PLAIN[p.type] ?? p.name;
+        const value = cur ? `${cur.source}|${cur.sourceHandle}` : "";
+        // 같은 이름 노드가 둘이면 id 를, 한 노드가 같은 타입을 둘 내면 포트 이름을 붙여 구분한다.
+        const sameName = (id: string) => new Set(opts.filter((o) => plainOf(o.node) === plainOf(id)).map((o) => o.node)).size > 1;
+        const dup = (id: string) => opts.filter((o) => o.node === id).length > 1;
+        return (
+          <label key={p.name} className="pg-io-pick" data-port={p.name}>
+            <span>{`‘${many ? `${nm} · ${p.name}` : nm}’ 어디서 받을까요`}</span>
+            <select value={value} onChange={(ev) => {
+              const [src, h] = ev.target.value ? ev.target.value.split("|") : [null, null];
+              onRewire(p.name, src, h);
+            }}>
+              <option value="">{p.required === false ? "받지 않아요(선택 입력)" : "아직 고르지 않았어요"}</option>
+              {cur && !opts.some((o) => o.node === cur.source && o.port === cur.sourceHandle) && (
+                <option value={value}>{plainOf(cur.source)}</option>
+              )}
+              {opts.map((o) => (
+                <option key={`${o.node}|${o.port}`} value={`${o.node}|${o.port}`}>
+                  {plainOf(o.node)}{sameName(o.node) ? ` (${o.node})` : ""}{dup(o.node) ? ` · ${o.port}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
-  result, stale, onSave, saveFollowUp }: {
+  result, stale, onSave, saveFollowUp, onRewire }: {
   node: PgNode;
   entry: NodeCatalogEntry | undefined;
   nodes: PgNode[];
@@ -453,6 +502,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   onSave: () => Promise<SaveResult>;
   /** 저장 뒤 이어서 할 일(BL3 W1 — 백테스트를 시작하면 '결과 불러오기 노드 추가'). */
   saveFollowUp?: { label: string; run: (savedId: string) => void } | null;
+  /** 끌지 않고 잇기(BT4) — 입력마다 "어디서 받을까요". 없으면 고르기 칸을 그리지 않는다. */
+  onRewire?: (port: string, source: string | null, sourceHandle: string | null) => void;
 }) {
   const params = node.data.params ?? {};
   const plainOf = (id: string) => {
@@ -486,6 +537,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
           <div><dt>내는 것</dt><dd>{entry.outputs.map((o) => PORT_PLAIN[o.type] ?? o.name).join(", ") || "없어요"}</dd></div>
         </dl>
       )}
+      {entry && onRewire && <SourcePicks node={node} entry={entry} nodes={nodes} edges={edges} catalog={catalog} plainOf={plainOf}
+                                         onRewire={onRewire} />}
       {!expert && entry && (
         <div className="pg-basic">
           {basicRendered.map((x) => x.el)}

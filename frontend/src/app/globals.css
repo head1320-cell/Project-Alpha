@@ -8268,3 +8268,117 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 /* 기업 밴드 표식 — 2px 막대 위 라벨은 막대의 바탕을 물려받아 대비가 1:1 로 재진다. 라벨에 제 바탕을 주고, 막대는 흐린 선으로. */
 .dark .ca-band-marker.price { background: #a1a1aa; }
 .dark .ca-band-marker-lbl { background: var(--t-bg); padding: 0 2px; }
+
+/* ═══ BT2 · 절차 탭 — 여섯 단계가 한 줄 척추로 이어진다(관문 레일과 같은 말: 실선 = 채움, 점선 = 아직) ═══ */
+.pg-left-tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; border-radius: 12px; background: var(--pg-soft); }
+.pg-left-tab { height: 32px; border: 0; border-radius: 9px; background: transparent; color: var(--pg-mute); font-size: 14px; font-weight: 600; cursor: pointer; }
+.pg-left-tab--on { background: var(--pg-paper); color: var(--pg-ink); box-shadow: 0 1px 2px rgb(25 31 40 / 10%); }
+.pg-left-tab:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 1px; }
+.pg-proc-wrap { padding: 2px 2px 12px; }
+.pg-proc { list-style: none; margin: 0; padding: 0; }
+.pg-proc-step { position: relative; display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 10px 8px 14px; border-radius: 12px; }
+/* 척추 — 표식 사이를 잇는다. 이 단계가 채워졌으면 실선, 아니면 점선. */
+.pg-proc-step:not(:last-child)::after { content: ""; position: absolute; left: 21px; top: 40px; bottom: -8px; width: 2px;
+  background: repeating-linear-gradient(180deg, var(--pg-line) 0 4px, transparent 4px 8px); }
+.pg-proc-step--filled:not(:last-child)::after { background: var(--pg-ink); opacity: .55; }
+.pg-proc-step--here { background: var(--pg-blue-soft); }
+.pg-proc-mark { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; font-weight: 700; color: var(--pg-mute); background: var(--pg-paper); border: 2px dashed var(--pg-mute); }
+/* 채움은 증거가 아니라 "단계가 있다"는 뜻 — 확인(초록)과 섞지 않게 잉크색으로 칠한다. */
+.pg-proc-step--filled .pg-proc-mark { border: 2px solid var(--pg-ink); background: var(--pg-ink); color: var(--pg-paper); }
+.pg-proc-step--blocked .pg-proc-mark { border: 2px solid var(--pg-fail); color: var(--pg-fail); background: var(--pg-fail-soft); }
+/* 일부 — 노드는 있지만 그 단계의 관문을 아직 잴 수 없다: 실선 테두리 + 반만 칠함(채움과 모양이 다르다). */
+.pg-proc-step--partial .pg-proc-mark { border: 2px solid var(--pg-ink); color: var(--pg-ink);
+  background: linear-gradient(90deg, var(--pg-soft) 50%, var(--pg-paper) 50%); }
+.pg-proc-step--empty[data-need="optional"] .pg-proc-mark { border-style: dotted; }
+.pg-proc-body { min-width: 0; }
+.pg-proc-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.pg-proc-head .pg-proc-name { font: inherit; font-size: 15px; font-weight: 700; letter-spacing: inherit; color: var(--pg-ink);
+  padding: 0; border: 0; background: none; text-align: left; }
+button.pg-proc-name { cursor: pointer; }
+button.pg-proc-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; border-radius: 4px; }
+.pg-proc-need { font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 6px; background: var(--pg-soft); color: var(--pg-mute); }
+.pg-proc-need--required { background: var(--pg-blue-soft); color: var(--pg-blue-ink); }
+.pg-proc-text { margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: var(--pg-body); word-break: keep-all; overflow-wrap: anywhere; }
+.pg-proc-step--blocked .pg-proc-text { color: var(--pg-fail); }
+.pg-proc-gates { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.pg-proc-gate { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--pg-mute); }
+.pg-proc-gate i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--pg-line); background: var(--pg-paper); }
+.pg-proc-gate[data-state="confirmed"] i { background: var(--pg-ok); border-color: var(--pg-ok); }
+.pg-proc-gate[data-state="assumed"] i { background: var(--pg-assume-soft); border-color: var(--pg-assume); }
+.pg-proc-gate[data-state="partial"] i { background: linear-gradient(90deg, var(--pg-ok) 50%, var(--pg-unknown-soft) 50%); border-color: var(--pg-ok); }
+.pg-proc-gate[data-state="unknown"] i { background: var(--pg-unknown-soft); border-color: var(--pg-unknown); }
+.pg-proc-gate[data-state="skipped"] i { border-style: dashed; border-color: var(--pg-mute); }
+.pg-proc-gate[data-state="failed"] i { background: var(--pg-fail); border-color: var(--pg-fail); }
+.pg-proc-fix { margin-top: 10px; height: 34px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--pg-blue-soft);
+  color: var(--pg-blue-ink); font-size: 14px; font-weight: 700; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-proc-fix:hover { filter: brightness(0.97); }
+.pg-proc-fix:focus-visible, .pg-proc-retry:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-proc-done { margin: 4px 8px 0; padding: 10px 12px; border-radius: 10px; background: var(--pg-soft); font-size: 13px; color: var(--pg-body); }
+.pg-proc-empty { padding: 12px 8px; font-size: 13px; color: var(--pg-body); }
+.pg-proc-retry { margin-top: 8px; height: 32px; padding: 0 12px; border: 1px solid var(--pg-line); border-radius: 9px; background: var(--pg-paper); color: var(--pg-ink); font-weight: 600; cursor: pointer; }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-proc-step { transition: background-color .12s ease; }
+}
+/* BT2 — 관문 설명에서 그 관문을 판정한 노드로 가고, 건너뛴·모르는 관문은 잴 수 있게 하는 한 걸음을 바로 한다. */
+.pg-gate-nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; }
+.pg-gate-nodes-h { width: 100%; font-size: 12px; color: var(--pg-mute); }
+.pg-gate-node { height: 28px; padding: 0 10px; border: 1px solid var(--pg-line); border-radius: 8px; background: var(--pg-paper);
+  color: var(--pg-ink); font-size: 13px; font-weight: 600; cursor: pointer; }
+.pg-gate-node:hover { border-color: var(--pg-blue); }
+.pg-gate-fix { display: block; margin-top: 10px; height: 34px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--pg-cta);
+  color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+.pg-gate-node:focus-visible, .pg-gate-fix:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+/* BT3 — 다음 한 걸음: 아래 안내 줄 자리에 서버가 고른 한 걸음 + [붙이기]·[다음에]. 누를 수 있어야 한다. */
+.pg-hint.pg-next { display: flex; align-items: center; gap: 10px; pointer-events: auto; white-space: normal; padding: 8px 8px 8px 16px;
+  max-width: min(640px, calc(100% - var(--pg-left-inset, 0px) - var(--pg-right-inset, 0px) - 24px)); color: var(--pg-ink); }
+.pg-next-text { margin: 0; flex: 1; font-size: 13px; line-height: 1.45; word-break: keep-all; }
+.pg-next-go { flex: none; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--pg-cta); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+.pg-next-later { flex: none; height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: var(--pg-mute); font-size: 13px; cursor: pointer; }
+.pg-next-go:focus-visible, .pg-next-later:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+/* BT3 — "‘수익률’을 이어 주세요" 의 이름이 단추다: 누르면 그 값을 내는 노드만 보이는 빠른 추가. */
+.pg-node-need-btn { padding: 0; border: 0; background: none; font: inherit; color: inherit; font-weight: 700;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.pg-node-need-btn:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 1px; border-radius: 3px; }
+/* BT4 — 끄는 동안: 이을 수 있는 점은 또렷하게(고리), 안 되는 점은 흐리게, 타입은 맞지만 요구값이 없으면 점선 고리. */
+.pg-port--can .pg-handle { box-shadow: 0 0 0 3px var(--pg-paper), 0 0 0 5px var(--pg-blue); }
+.pg-port--needs .pg-handle { box-shadow: 0 0 0 3px var(--pg-paper), 0 0 0 5px var(--pg-assume); }
+.pg-port--needs .pg-port-name { color: var(--pg-assume); }
+.pg-port--off .pg-handle { opacity: .25; }
+/* BT4 — 선: 올리거나 고르면 가운데에 타입 이름 알약 · 고른 선은 굵고 또렷하게 · 선 탭 */
+.pg-wire-type { position: absolute; pointer-events: none; padding: 2px 8px; border-radius: 10px; background: var(--pg-ink); color: var(--pg-paper);
+  font-size: 12px; font-weight: 700; white-space: nowrap; z-index: 5; }
+.react-flow__edge.pg-wire--picked .react-flow__edge-path { stroke-width: 4 !important; filter: drop-shadow(0 0 3px rgb(49 130 246 / 55%)); }
+.pg-wire-sheet { display: flex; flex-direction: column; gap: 14px; }
+.pg-wire-row h3 { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--pg-mute); }
+.pg-wire-row p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--pg-ink); word-break: keep-all; overflow-wrap: anywhere; }
+.pg-wire-row .pg-wire-muted, .pg-wire-muted { color: var(--pg-body); }
+.pg-wire-type-name { font-weight: 700; }
+.pg-wire-node { padding: 0; border: 0; background: none; font: inherit; font-weight: 700; color: var(--pg-blue-ink); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; }
+.pg-wire-node:focus-visible, .pg-wire-insert:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; border-radius: 4px; }
+.pg-wire-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pg-wire-chip { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--pg-soft); color: var(--pg-ink); }
+.pg-wire-chip--practice { background: var(--pg-assume-soft); color: var(--pg-assume); }
+.pg-wire-chip--forward, .pg-wire-chip--overlay { background: var(--pg-unknown-soft); color: var(--pg-ink); }
+.pg-wire-warn { margin-top: 8px !important; padding: 8px 10px; border-radius: 8px; background: var(--pg-fail-soft); color: var(--pg-fail) !important; font-size: 13px !important; }
+.pg-wire-stops { margin-top: 4px !important; font-size: 13px !important; }
+.pg-wire-inserts { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pg-wire-insert { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border: 1px solid var(--pg-line);
+  border-radius: 10px; background: var(--pg-paper); color: var(--pg-ink); text-align: left; cursor: pointer; font: inherit; }
+.pg-wire-insert b { font-size: 14px; }
+.pg-wire-insert span { font-size: 12px; color: var(--pg-body); }
+.pg-wire-insert:hover { border-color: var(--pg-blue); }
+.pg-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* BT4 — 끌지 않고 잇기: 입력마다 "어디서 받을까요" 고르기 */
+.pg-io-picks { display: flex; flex-direction: column; gap: 10px; margin: -6px 0 18px; }
+.pg-io-pick { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--pg-mute); }
+.pg-io-pick select { font: inherit; font-weight: 500; font-size: 14px; color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-line);
+  border-radius: 10px; padding: 8px 10px; min-height: 40px; }
+.pg-io-pick select:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 1px; }
+.react-flow__edge.pg-wire--drop .react-flow__edge-path { stroke: var(--pg-blue) !important; stroke-width: 5 !important; stroke-dasharray: none !important; }
+/* BT4 — 끄는 동안 이을 수 있는 포트는 이름을 보인다(어디에 놓을지 읽힌다) · 요구값이 걸리는 포트는 사유를 함께 */
+.pg-port--can .pg-port-name, .pg-port--needs .pg-port-name { display: block; position: absolute; top: -9px; padding: 1px 6px; font-size: 11px;
+  background: var(--pg-soft); border-radius: 4px; white-space: nowrap; z-index: 2; }
+.pg-port--can .pg-port-name { color: var(--pg-blue-ink); font-weight: 700; }

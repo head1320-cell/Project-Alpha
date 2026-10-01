@@ -69,6 +69,12 @@ export interface CatalogPort {
   name: string;
   type: string;
   required?: boolean;
+  /** 받는 쪽이 이 입력을 무엇에 쓰는지(BT1) — 서버가 확인한 곳만 있다. 없으면 화면은 그 줄을 생략한다. */
+  role?: string;
+  /** 입력: 보내는 쪽이 꼭 실어야 하는 값(BT1). */
+  needs?: string[];
+  /** 출력: 싣는 값 — 늘(`key`만) · 입력이 있으면(`when`) · 입력에서 넘김(`from`). */
+  gives?: { key: string; when?: string; from?: string }[];
 }
 
 /** JSON Schema 의 쓰는 부분만 — 서버(pydantic)가 만든다. */
@@ -133,6 +139,8 @@ export interface NodeCatalogEntry {
   savable?: boolean;
   /** 저장 버튼에 쓰는 말(BL2) — 누르면 일어나는 일. 저장하지 않는 노드는 null. */
   save_label?: string | null;
+  /** 과거를 시뮬레이션하거나 그 기록을 읽는 노드(BT1). */
+  simulates_history?: boolean;
 }
 
 export interface WorkflowStage { key: string; label: string }
@@ -143,6 +151,10 @@ export interface NodeCatalog {
   port_types: string[];
   stages: WorkflowStage[];
   nodes: NodeCatalogEntry[];
+  /** 포트 타입 → 쉬운 이름(BT1 — 서버가 준다). */
+  port_plain?: Record<string, string>;
+  /** 관문 이름(BT1) — 계산 전 레일의 빈 역. */
+  gates?: { key: string; label: string }[];
 }
 
 // ── 검증·실행 보고 ──────────────────────────────────────────────────────────
@@ -152,11 +164,49 @@ export interface GraphError {
   message: string;
   node_id: string | null;
   edge_id: string | null;
+  /** 고치는 법 한 줄(BT1) — 서버가 쓴다. */
+  fix?: string | null;
+}
+
+// ── 설계 절차 (BT1 — `/validate`·`/run` 의 `procedure`) ─────────────────────
+
+export type StepNeed = "required" | "recommended" | "optional";
+/** `partial` — 노드는 있는데 이 단계가 재는 관문을 아직 잴 수 없다(예: 종목만 있고 수익률이 없다). */
+export type StepState = "filled" | "partial" | "empty" | "blocked";
+
+export interface ProcedureStep {
+  key: string;
+  label: string;
+  need: StepNeed;
+  state: StepState;
+  node_ids: string[];
+  feeds_gates: string[];
+  text: string;
+}
+
+/** 이을 선 — `@new` 는 붙일 새 노드. */
+export interface AttachEdge { source: string; source_port: string; target: string; target_port: string }
+
+export interface ProcedureSuggestion {
+  action: "add" | "connect";
+  kind: string | null;
+  label: string | null;
+  text: string;
+  attach: AttachEdge[];
+  unlocks: string[];
+}
+
+export interface Procedure {
+  steps: ProcedureStep[];
+  next: ProcedureSuggestion | null;
+  by_gate: Record<string, ProcedureSuggestion | null>;
+  done_text: string | null;
 }
 
 export interface ValidateReport {
   ok: boolean;
   errors: GraphError[];
+  procedure?: Procedure | null;
 }
 
 export type NodeStatus = "ok" | "blocked" | "failed";
@@ -222,6 +272,8 @@ export interface Gate {
   label: string;
   state: GateState;
   reasons: { state: GateState | TrustState; text: string }[];
+  /** 이 관문 판정에 쓰인 노드(BT1). */
+  node_ids?: string[];
 }
 
 export interface GateReport {

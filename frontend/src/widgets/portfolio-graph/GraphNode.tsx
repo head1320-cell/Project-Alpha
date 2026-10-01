@@ -11,7 +11,7 @@
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type NodeProps } from "reactflow";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { fmtDelta, fmtElapsed, headlineDelta, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
@@ -40,6 +40,8 @@ export type CanvasNodeData = PgNodeData & {
   num?: number;
   /** "여기까지 계산" — 캔버스가 채운다. 올리면 돌 경로가 밝아지고(미리보기), 누르면 이 노드와 조상만 계산한다(BL1). */
   onRunTo?: (id: string) => void;
+  /** 빠진 입력을 이을 노드 찾기(BT3) — 그 입력에서 선을 끈 것과 같다. */
+  onNeed?: (id: string, port: string, type: string) => void;
   onPreviewRunTo?: (id: string | null) => void;
 };
 
@@ -57,19 +59,41 @@ function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: 
   return out;
 }
 
-function Port({ port, side, index, unknown, label, missing }: {
-  port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean; label?: string; missing?: boolean;
+/**
+ * 끄는 동안 이 포트에 이을 수 있나(BT4) — `can`(이을 수 있음) · `needs`(타입은 맞지만 받는 쪽이 요구하는 값을 보내는 쪽이
+ * 선언하지 않음 — 이으면 서버가 "계산하면 실패해요"라고 말한다) · `off`(안 됨) · null(끄는 중이 아님·같은 쪽).
+ */
+function useDragFit(nodeId: string | undefined, port: CatalogPort, side: "in" | "out"): "can" | "needs" | "off" | null {
+  const start = useStore((st) => (st.connectionNodeId && st.connectionHandleId
+    ? `${st.connectionNodeId}|${st.connectionHandleId}|${st.connectionHandleType}` : null));
+  if (!start || !nodeId) return null;
+  const [sn, sh, stype] = start.split("|");
+  if ((stype === "source") === (side === "out")) return null;              // 같은 쪽 점은 표시하지 않는다
+  const g = usePortfolioGraph.getState();
+  const c = side === "in" ? { source: sn, sourceHandle: sh, target: nodeId, targetHandle: port.name }
+                          : { source: nodeId, sourceHandle: port.name, target: sn, targetHandle: sh };
+  if (connectionProblem(c, g.nodes, g.edges, g.catalog ?? [], g.catalogMeta?.portPlain ?? PORT_PLAIN)) return "off";
+  const kind = (id: string) => g.catalog?.find((x) => x.type === g.nodes.find((n) => n.id === id)?.data.kind);
+  const out = kind(c.source)?.outputs.find((o) => o.name === c.sourceHandle);
+  const inp = kind(c.target)?.inputs.find((i) => i.name === c.targetHandle);
+  return needsGap(out, inp).length ? "needs" : "can";
+}
+
+function Port({ port, side, index, unknown, label, missing, nodeId }: {
+  port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean; label?: string; missing?: boolean; nodeId?: string;
 }) {
   const color = unknown ? "var(--pg-fail)" : portColor(port.type);
+  const fit = useDragFit(unknown ? undefined : nodeId, port, side);
   return (
-    <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}${missing ? " pg-port--missing" : ""}`} style={{ top: PORT_TOP + index * PORT_GAP }}
+    <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}${missing ? " pg-port--missing" : ""}${fit ? ` pg-port--${fit}` : ""}`} style={{ top: PORT_TOP + index * PORT_GAP }}
          title={unknown ? `${port.name} — 카탈로그에 없는 포트예요(파일의 링크를 버리지 않고 남겼어요)`
                         : `${label ? `${label} · ` : ""}${port.name} · ${port.type}${port.required === false ? " (선택)" : ""}`}>
       <Handle type={side === "in" ? "target" : "source"} position={side === "in" ? Position.Left : Position.Right}
               id={port.name} className="pg-handle"
               style={{ background: unknown ? "transparent" : color, borderColor: unknown ? color : "var(--pg-paper)",
                        borderStyle: unknown ? "dashed" : "solid" }} />
-      <span className="pg-port-name">{unknown ? `${port.name}(미상)` : label ?? PORT_PLAIN[port.type] ?? port.name}</span>
+      <span className="pg-port-name">{unknown ? `${port.name}(미상)` : label ?? PORT_PLAIN[port.type] ?? port.name}
+        {fit === "needs" && <span className="pg-port-why"> · 보내는 쪽이 필요한 값을 주지 않을 수 있어요</span>}</span>
     </div>
   );
 }
@@ -213,7 +237,13 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
       <div className="pg-node-t">{summary ?? entry.plain_label}</div>
       {missing.length > 0 && (
         <div className="pg-node-need" role="note">
-          {missing.map((p) => `‘${PORT_PLAIN[p.type] ?? p.name}’`).join(", ")}을 이어 주세요
+          {data.onNeed ? missing.map((p, i) => (
+            <span key={p.name}>{i > 0 && ", "}
+              <button type="button" className="pg-node-need-btn nodrag" data-port={p.name}
+                      aria-label={`‘${PORT_PLAIN[p.type] ?? p.name}’을 낼 노드 찾기`}
+                      onClick={(e) => { e.stopPropagation(); data.onNeed?.(id, p.name, p.type); }}>‘{PORT_PLAIN[p.type] ?? p.name}’</button>
+            </span>
+          )) : missing.map((p) => `‘${PORT_PLAIN[p.type] ?? p.name}’`).join(", ")}을 이어 주세요
         </div>
       )}
       {headline && headline.value !== null && (
@@ -263,8 +293,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
         </div>
       )}
       {shownInputs.map((x, i) => <Port key={`i-${x.p.name}`} port={x.p} side="in" index={i} unknown={x.unknown} label={inLabel(x.p.name)}
-                                        missing={!x.unknown && missing.some((m) => m.name === x.p.name)} />)}
-      {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} />)}
+                                        missing={!x.unknown && missing.some((m) => m.name === x.p.name)} nodeId={id} />)}
+      {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} nodeId={id} />)}
     </div>
   );
 }

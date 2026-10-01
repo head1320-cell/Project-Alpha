@@ -7,7 +7,7 @@
  * `LEGACY_SCREENS`(BL4 — 마법사는 지웠고 옛 주소는 캔버스로 온다). 맨 아래 "빠른 시작" 은 템플릿.
  * 클릭하면 캔버스 가운데에, 끌면 놓은 자리에 놓인다.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, Download, PanelLeftClose, Search, Trash2, Upload } from "lucide-react";
 import { parseBlock, TEMPLATES, type NodeCatalogEntry, type WorkflowStage } from "@/entities/portfolio-graph";
 import { downloadBlock } from "./GroupFrame";
@@ -16,8 +16,13 @@ import { legacyScreensOf } from "@/entities/portfolio-graph/legacyScreens";
 import { STAGE_VAR } from "./GraphNode";
 
 export const PALETTE_MIME = "application/x-pg-node";
+/** 끄는 동안(dragover)에는 값을 읽을 수 없어 종류를 타입 이름에 싣는다(BT4 선 위에 놓기 — 끼울 수 있는 선만 강조). */
+export const PALETTE_KIND_PREFIX = "application/x-pg-kind.";
 
-export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal, hidden = false, onClose }: {
+export type LeftTab = "proc" | "add";
+
+export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal, hidden = false, onClose,
+                              tab = "add", onTab, procedure }: {
   catalog: NodeCatalogEntry[];
   stages: WorkflowStage[];
   /** 처음 검색어 — 옛 주소로 온 사람에게 그 화면의 일을 하는 노드를 먼저 보인다(BL4). */
@@ -29,6 +34,10 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
   /** 떠 있는 판(BQ Q1) — 접혀 있으면 숨는다(검색어·접은 단계는 그대로 남는다). */
   hidden?: boolean;
   onClose?: () => void;
+  /** 왼쪽 판의 탭(BT2) — 절차 | 노드 추가. 절차 내용은 캔버스가 그려 넘긴다. */
+  tab?: LeftTab;
+  onTab?: (t: LeftTab) => void;
+  procedure?: ReactNode;
 }) {
   /** 노드 종류 → 그 일을 하던 예전 화면(검색·툴팁용). */
   const legacyOf = (kind: string) => legacyScreensOf(kind);
@@ -46,17 +55,32 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
     <aside className="pg-palette" aria-label="노드 추가" hidden={hidden}>
       <div className="pg-palette-top">
         <div className="pg-palette-head">
-          <h2 className="pg-palette-title">노드 추가</h2>
+          {procedure && onTab ? (
+            <div className="pg-left-tabs" role="tablist" aria-label="왼쪽 판">
+              {([["proc", "절차"], ["add", "노드 추가"]] as const).map(([k, label]) => (
+                <button key={k} type="button" role="tab" id={`pg-left-tab-${k}`} aria-selected={tab === k}
+                        aria-controls={`pg-left-panel-${k}`} data-tab={k}
+                        className={`pg-left-tab${tab === k ? " pg-left-tab--on" : ""}`} onClick={() => onTab(k)}>{label}</button>
+              ))}
+            </div>
+          ) : <h2 className="pg-palette-title">노드 추가</h2>}
           {onClose && (
             <button type="button" className="pg-panel-toggle" data-panel="left" aria-label="왼쪽 목록 닫기 ([)"
                     title="왼쪽 목록 닫기 ([)" onClick={onClose}><PanelLeftClose size={18} aria-hidden="true" /></button>
           )}
         </div>
-        <label className="pg-search">
-          <Search size={14} aria-hidden="true" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="무엇을 추가할까요?" aria-label="노드 찾기" />
-        </label>
+        {tab === "add" && (
+          <label className="pg-search">
+            <Search size={14} aria-hidden="true" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="무엇을 추가할까요?" aria-label="노드 찾기" />
+          </label>
+        )}
       </div>
+      {procedure && tab === "proc" && (
+        <div id="pg-left-panel-proc" role="tabpanel" aria-labelledby="pg-left-tab-proc">{procedure}</div>
+      )}
+      <div id="pg-left-panel-add" role={procedure ? "tabpanel" : undefined}
+           aria-labelledby={procedure ? "pg-left-tab-add" : undefined} hidden={tab !== "add"}>
       {groups.map((st) => {
         const all = catalog.filter((c) => c.stage === st.key);
         const items = all.filter(match);
@@ -79,7 +103,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
               {items.map((c) => (
                 <button key={c.type} type="button" className="pg-palette-item" data-kind={c.type} draggable
                         title={`${c.label} (${c.type})${legacyOf(c.type).length ? ` · 예전 화면 ${legacyOf(c.type).map((a) => a.aliases[1] ?? a.title).join(", ")}` : ""}`}
-                        onDragStart={(e) => { e.dataTransfer.setData(PALETTE_MIME, c.type); e.dataTransfer.effectAllowed = "move"; }}
+                        onDragStart={(e) => { e.dataTransfer.setData(PALETTE_MIME, c.type); e.dataTransfer.setData(PALETTE_KIND_PREFIX + c.type, ""); e.dataTransfer.effectAllowed = "move"; }}
                         onClick={() => onAdd(c.type)}>
                   <b>{c.plain_label}</b>
                   <span>{c.plain_description}</span>
@@ -106,6 +130,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
           </button>
         ))}
       </section>
+      </div>
     </aside>
   );
 }

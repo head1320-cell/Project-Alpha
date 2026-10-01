@@ -22,6 +22,9 @@ export interface WireData {
   /** 지금 시점 전용 — 실선·점선과 함께 올 수 있어 따로 둔다. */
   forward: boolean;
   brief: string | null;
+  /** 포트 타입 쉬운 이름(BT4) — 올리거나 고르면 선 가운데에 보인다. */
+  typeLabel?: string | null;
+  hover?: boolean;
 }
 
 /** 원천 노드 결과 → 선 모양. 결과가 없거나 낡았으면 `null`(모양 없음). */
@@ -42,8 +45,8 @@ export const WIRE_LEGEND: { key: string; label: string; help: string }[] = [
   { key: "blocked", label: "끊긴 회색", help: "앞 단계가 막히거나 실패해 값이 흐르지 않았어요" },
 ];
 
-function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data }: EdgeProps<WireData>) {
-  const [path] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data, selected }: EdgeProps<WireData>) {
+  const [path, mx, my] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   // 라벨은 선 가운데가 아니라 ★원천 카드 바로 오른쪽 틈★에(BS2) — 가운데는 열을 건너뛰는 선에서 중간 카드 위에 떨어졌다
   // (실측: 확대 1 에서 라벨 17개 중 13개가 카드를 덮음). 라벨은 원천 포트의 요약이라 원천 옆이 맞는 자리이기도 하다.
   const lx = sourceX + BRIEF_DX;
@@ -56,6 +59,13 @@ function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePositi
         <EdgeLabelRenderer>
           <div className="pg-wire-brief" data-edge-id={id}
                style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}>{data.brief}</div>
+        </EdgeLabelRenderer>
+      )}
+      {(data?.hover || selected) && data?.typeLabel && (
+        <EdgeLabelRenderer>
+          <div className="pg-wire-type" data-edge-id={id} style={{ transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}>
+            {data.typeLabel}
+          </div>
         </EdgeLabelRenderer>
       )}
     </>

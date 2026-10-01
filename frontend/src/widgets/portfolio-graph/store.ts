@@ -53,6 +53,8 @@ import {
   ROW_GAP,
   cardHeight,
   topoOrder,
+  NEW_NODE,
+  type ProcedureSuggestion,
   type GraphBlock,
   type GraphBranch,
   type WorkflowStage,
@@ -87,6 +89,14 @@ export interface PgState {
   report: RunReport | null;
   reportStale: boolean;
   validation: ValidateReport | null;
+  /** 검증 요청이 서버에 닿지 못했다(BT2) — 절차 칸이 "불러오지 못했어요"를 말한다. */
+  validationError: boolean;
+  /** 사람이 직접 고른 노드인가(BT3) — 추가하면 자동으로 골라지므로 그것과 가른다(연속 추가가 사슬로 이어지지 않게). */
+  pickedByUser: boolean;
+  /** 절차 줄에 올린 동안 또렷하게 둘 노드(BT2). */
+  procHover: string[] | null;
+  /** 카탈로그가 함께 준 이름표(BT1) — 관문 이름 · 포트 쉬운 이름. */
+  catalogMeta: { gates: { key: string; label: string }[]; portPlain: Record<string, string> } | null;
   /** 마지막 불러오기에서 건너뛴 것(깨진 링크 등) — 조용히 버리지 않고 말한다. */
   loadProblems: string[];
   selectedId: string | null;
@@ -104,7 +114,9 @@ export interface PgState {
   clip: { nodes: PgNode[]; edges: Edge[] } | null;
   showMinimap: boolean;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
-  tab: "story" | "settings" | "detail" | "branches";
+  tab: "story" | "settings" | "detail" | "branches" | "wire";
+  /** 오른쪽 판 "선" 탭이 보이는 선(BT4). */
+  selectedEdge: string | null;
   expert: boolean;
   openGate: string | null;
   /** 미리보기 고정(BM C1 · TouchDesigner 뷰어 플래그) — 어떤 확대에서도 작은 그림을 보인다. 화면 정보(파일에 없다). */
@@ -135,6 +147,8 @@ export interface PgState {
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   connect: (c: Connection) => void;
+  /** 이 입력을 받는 곳을 바꾼다(BT4 끌지 않고 잇기) — 있던 선을 떼고 새 선을 잇는다. `source` 가 null 이면 떼기만. 되돌리기 한 번. */
+  rewire: (target: string, port: string, source: string | null, sourceHandle: string | null) => void;
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
@@ -145,6 +159,9 @@ export interface PgState {
   setName: (n: string) => void;
   select: (id: string | null) => void;
   setValidation: (v: ValidateReport | null) => void;
+  setValidationError: (v: boolean) => void;
+  setProcHover: (ids: string[] | null) => void;
+  setCatalogMeta: (m: PgState["catalogMeta"]) => void;
   startRun: (ids?: string[] | null) => void;
   finishRun: (r: RunReport | null, err?: string | null) => void;
   setPreview: (ids: string[] | null) => void;
@@ -184,6 +201,18 @@ export interface PgState {
   /** 노드를 놓고 곧바로 잇는다(BN N3 선 끌어 놓기) — 되돌리기 한 번에 둘 다. */
   addLinked: (kind: string, position: { x: number; y: number },
               link: { node: string; handle: string; side: "source" | "target"; port: string }) => string;
+  /**
+   * 서버 절차의 한 걸음을 그대로 한다(BT2) — `add` 는 노드를 놓고 `attach` 의 선을 모두 잇는다(`@new` = 새 노드),
+   * `connect` 는 선만 잇는다. 되돌리기 한 번. 새 노드는 보내는 쪽 오른쪽 열(없으면 받는 쪽 왼쪽 열)에 놓는다.
+   * 돌려주는 값은 새 노드 id(없으면 null).
+   */
+  applySuggestion: (sug: ProcedureSuggestion) => string | null;
+  /** 선을 골라 "선" 탭을 연다(BT4). null 이면 닫는다. */
+  selectEdge: (id: string | null) => void;
+  /** 선을 끊는다(BT4) — 되돌리기 한 번. */
+  cutEdge: (id: string) => void;
+  /** 선 사이에 노드를 끼운다(BT4) — 원래 선을 지우고 보내는 쪽 → 새 노드 → 받는 쪽으로 잇는다. 되돌리기 한 번. */
+  insertOnEdge: (edgeId: string, kind: string, inPort: string, outPort: string, at?: { x: number; y: number }) => string | null;
   /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내. */
   makeBranch: (rootId: string, strategyId?: string) => string;
   /** 갈래를 지운다 — 복제 노드도 함께. */
@@ -219,6 +248,22 @@ let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
 
 /** 조상(자신 포함) — 서버 `portfolio_graph._ancestors` 와 같은 규칙. "여기까지 계산" 이 돌 노드들. */
+/** 하류(BT4·BT5) — 이 노드들에서 선을 따라 닿는 모든 노드(자기 자신은 뺀다). */
+export function descendantsOf(ids: string[], edges: { source: string; target: string }[]): string[] {
+  const out = new Map<string, string[]>();
+  for (const e of edges) out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
+  const seen = new Set<string>();
+  const stack = [...ids.flatMap((i) => out.get(i) ?? [])];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    stack.push(...(out.get(n) ?? []));
+  }
+  for (const i of ids) seen.delete(i);
+  return [...seen];
+}
+
 export function ancestorsOf(ids: string[], edges: { source: string; target: string }[]): string[] {
   const into = new Map<string, string[]>();
   for (const e of edges) into.set(e.target, [...(into.get(e.target) ?? []), e.source]);
@@ -287,6 +332,10 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     report: null,
     reportStale: false,
     validation: null,
+    validationError: false,
+    procHover: null,
+    pickedByUser: false,
+    catalogMeta: null,
     loadProblems: [],
     selectedId: null,
     picked: [],
@@ -300,6 +349,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     clip: null,
     showMinimap: false,
     tab: "story",
+    selectedEdge: null,
     expert: false,
     openGate: null,
     pinned: [],
@@ -358,6 +408,17 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       }));
     },
 
+    rewire: (target, port, source, sourceHandle) => {
+      push();
+      set((s) => {
+        const kept = s.edges.filter((e) => !(e.target === target && e.targetHandle === port));
+        const edges = source && sourceHandle
+          ? addEdge({ source, sourceHandle, target, targetHandle: port, id: `${source}.${sourceHandle}->${target}.${port}` }, kept)
+          : kept;
+        return { edges, selectedEdge: null, reportStale: s.report !== null };
+      });
+    },
+
     addLinked: (kind, position, link) => {
       push();
       const s = get();
@@ -366,8 +427,67 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const c = link.side === "source"
         ? { source: link.node, sourceHandle: link.handle, target: id, targetHandle: link.port }
         : { source: id, sourceHandle: link.port, target: link.node, targetHandle: link.handle };
-      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], selectedId: id, picked: [id], reportStale: s.report !== null,
+      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], selectedId: id, picked: [id], pickedByUser: false, reportStale: s.report !== null,
             edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges) });
+      return id;
+    },
+
+    applySuggestion: (sug) => {
+      push();
+      const s = get();
+      const ids = new Set(s.nodes.map((n) => n.id));
+      const pos = (id: string) => s.nodes.find((n) => n.id === id)?.position;
+      let id: string | null = null;
+      let nodes = s.nodes;
+      if (sug.action === "add" && sug.kind) {
+        id = newId(sug.kind, ids);
+        const from = sug.attach.find((a) => a.target === NEW_NODE && a.source !== NEW_NODE);
+        const to = sug.attach.find((a) => a.source === NEW_NODE && a.target !== NEW_NODE);
+        const anchor = (from && pos(from.source)) ?? (to && pos(to.target));
+        const dx = from ? COL : to ? -COL : 0;
+        const bottom = s.nodes.reduce((m, n) => Math.max(m, n.position.y), 0);
+        const position = anchor ? { x: anchor.x + dx, y: anchor.y } : { x: 0, y: s.nodes.length ? bottom + 200 : 0 };
+        nodes = [...s.nodes.map((n) => ({ ...n, selected: false })),
+                 { id, type: PG_NODE_TYPE, position, data: { kind: sug.kind, params: {} } }];
+      }
+      let edges = s.edges;
+      for (const a of sug.attach) {
+        const c = { source: a.source === NEW_NODE ? id! : a.source, sourceHandle: a.source_port,
+                    target: a.target === NEW_NODE ? id! : a.target, targetHandle: a.target_port };
+        if (!c.source || !c.target) continue;
+        edges = addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, edges);
+      }
+      set({ nodes, edges, reportStale: s.report !== null,
+            ...(id ? { selectedId: id, picked: [id], pickedByUser: false } : {}) });
+      return id;
+    },
+
+    selectEdge: (id) => set((s) => (id ? { selectedEdge: id, tab: "wire", selectedId: null, picked: [], pickedByUser: false }
+                                       : { selectedEdge: null, tab: s.tab === "wire" ? "story" : s.tab })),
+
+    cutEdge: (id) => {
+      push();
+      set((s) => ({ edges: s.edges.filter((e) => e.id !== id), selectedEdge: s.selectedEdge === id ? null : s.selectedEdge,
+                    tab: s.selectedEdge === id && s.tab === "wire" ? "story" : s.tab, reportStale: s.report !== null }));
+    },
+
+    insertOnEdge: (edgeId, kind, inPort, outPort, at) => {
+      const s = get();
+      const e = s.edges.find((x) => x.id === edgeId);
+      if (!e) return null;
+      push();
+      const id = newId(kind, new Set(s.nodes.map((n) => n.id)));
+      const a = s.nodes.find((n) => n.id === e.source)?.position;
+      const b = s.nodes.find((n) => n.id === e.target)?.position;
+      const position = at ?? (a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 + 60 } : a ?? { x: 0, y: 0 });
+      const node: PgNode = { id, type: PG_NODE_TYPE, position, data: { kind, params: {} } };
+      let edges = s.edges.filter((x) => x.id !== edgeId);
+      const c1 = { source: e.source, sourceHandle: e.sourceHandle ?? null, target: id, targetHandle: inPort };
+      const c2 = { source: id, sourceHandle: outPort, target: e.target, targetHandle: e.targetHandle ?? null };
+      edges = addEdge({ ...c1, id: `${c1.source}.${c1.sourceHandle}->${c1.target}.${c1.targetHandle}` }, edges);
+      edges = addEdge({ ...c2, id: `${c2.source}.${c2.sourceHandle}->${c2.target}.${c2.targetHandle}` }, edges);
+      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedEdge: null, tab: "settings",
+            selectedId: id, picked: [id], pickedByUser: false, reportStale: s.report !== null });
       return id;
     },
 
@@ -375,7 +495,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       push();
       const id = newId(kind, new Set(get().nodes.map((n) => n.id)));
       const node: PgNode = { id, type: PG_NODE_TYPE, position, data: { kind, params: {} } };
-      set((s) => ({ nodes: [...s.nodes, node], selectedId: id, picked: [id], reportStale: s.report !== null }));
+      set((s) => ({ nodes: [...s.nodes, node], selectedId: id, picked: [id], pickedByUser: false, reportStale: s.report !== null }));
       return id;
     },
 
@@ -448,8 +568,12 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     },
 
     setName: (name) => set({ name }),
-    select: (selectedId) => set({ selectedId, picked: selectedId ? [selectedId] : [] }),
-    setValidation: (validation) => set({ validation }),
+    select: (selectedId) => set((s) => ({ selectedId, picked: selectedId ? [selectedId] : [], pickedByUser: !!selectedId,
+                                           ...(selectedId && s.selectedEdge ? { selectedEdge: null, tab: s.tab === "wire" ? "settings" : s.tab } : {}) })),
+    setValidation: (validation) => set({ validation, validationError: false }),
+    setValidationError: (validationError) => set({ validationError }),
+    setProcHover: (procHover) => set({ procHover }),
+    setCatalogMeta: (catalogMeta) => set({ catalogMeta }),
     startRun: (ids = null) => set({ running: true, runError: null, runningIds: ids, preview: null, cause: null }),
     finishRun: (report, err = null) => set((s) => {
       if (!report) return { running: false, runningIds: null, runError: err };

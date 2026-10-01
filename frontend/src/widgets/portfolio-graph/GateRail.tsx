@@ -14,7 +14,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import type { GateReport, GateState } from "@/entities/portfolio-graph";
+import type { GateReport, GateState, ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { usePortfolioGraph } from "./store";
 
 const STATE_TEXT: Record<GateState | "idle", string> = {
@@ -25,11 +25,10 @@ const REASON_TEXT: Record<string, string> = {
   confirmed: "확인", assumed: "가정", partial: "절반", unknown: "몰라요", skipped: "건너뜀", failed: "실패",
 };
 
-/** 계산 전에도 역 이름은 보인다 — 서버 판정과 같은 순서·이름(판정 없이 이름만). */
-const IDLE_STATIONS = [
-  ["data", "데이터"], ["pit", "시점"], ["signal", "신호"], ["build", "비중 계산"],
-  ["cost", "거래비용"], ["oos", "처음 보는 기간"], ["economic", "돈이 되는지"], ["live", "모의·실계좌"],
-] as const;
+/*
+ * 계산 전에도 역 이름은 보인다 — 이름은 서버 카탈로그(`/node-types` 의 `gates`)에서 받는다(BT2).
+ * 예전에는 화면이 이름 목록을 따로 들고 있어 서버와 어긋날 수 있었다.
+ */
 
 export const RAIL_KEY = "alpha_pg_rail";
 const readOpen = () => { try { return localStorage.getItem(RAIL_KEY) === "open"; } catch { return false; } };
@@ -38,7 +37,16 @@ const saveOpen = (v: boolean) => { try { localStorage.setItem(RAIL_KEY, v ? "ope
 let seenFailed = new Set<string>();
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function GateRail({ report, note = null }: { report: GateReport | null; note?: string | null }) {
+export function GateRail({ report, note = null, byGate = null, nodeLabel, onFocusNode, onApply }: {
+  report: GateReport | null;
+  note?: string | null;
+  /** 관문마다 잴 수 있게 하는 한 걸음(BT2 — 서버 절차의 `by_gate`). */
+  byGate?: Record<string, ProcedureSuggestion | null> | null;
+  nodeLabel?: (id: string) => string;
+  onFocusNode?: (id: string) => void;
+  onApply?: (s: ProcedureSuggestion) => void;
+}) {
+  const meta = usePortfolioGraph((s) => s.catalogMeta);
   const open = usePortfolioGraph((s) => s.openGate);
   const setOpen = usePortfolioGraph((s) => s.setOpenGate);
   const [expanded, setExpanded] = useState(false);
@@ -78,7 +86,7 @@ export function GateRail({ report, note = null }: { report: GateReport | null; n
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 펼쳐 있을 때만
   }, [expanded]);
 
-  const gates = report?.gates ?? IDLE_STATIONS.map(([key, label]) => ({ key, label, state: "idle" as const, reasons: [] }));
+  const gates = report?.gates ?? (meta?.gates ?? []).map(({ key, label }) => ({ key, label, state: "idle" as const, reasons: [] }));
   const openGate = report?.gates.find((g) => g.key === open);
   const openIndex = gates.findIndex((g) => g.key === open);
   const passes = (st: string) => st === "confirmed" || st === "assumed" || st === "partial";
@@ -132,6 +140,21 @@ export function GateRail({ report, note = null }: { report: GateReport | null; n
                     <li key={i}><span className={`pg-tag pg-tag--${r.state}`}>{REASON_TEXT[r.state] ?? r.state}</span><span>{r.text}</span></li>
                   ))}
                 </ul>
+                {!!openGate.node_ids?.length && onFocusNode && (
+                  <div className="pg-gate-nodes">
+                    <span className="pg-gate-nodes-h">이 관문을 판정한 노드</span>
+                    {openGate.node_ids.map((id) => (
+                      <button key={id} type="button" className="pg-gate-node" data-node={id}
+                              onClick={() => { setOpen(null); onFocusNode(id); }}>{nodeLabel?.(id) ?? id}</button>
+                    ))}
+                  </div>
+                )}
+                {(openGate.state === "skipped" || openGate.state === "unknown") && byGate?.[openGate.key] && onApply && (
+                  <button type="button" className="pg-gate-fix" title={byGate[openGate.key]!.text}
+                          onClick={() => { const sug = byGate[openGate.key]!; setOpen(null); onApply(sug); }}>
+                    ‘{byGate[openGate.key]!.label}’ 붙이기
+                  </button>
+                )}
                 <button type="button" className="pg-gate-close" onClick={() => setOpen(null)}>닫기</button>
               </div>
             )}
