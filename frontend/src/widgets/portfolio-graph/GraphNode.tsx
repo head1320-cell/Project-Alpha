@@ -105,7 +105,8 @@ const NODE_TOOLBAR_H = 36;
 function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const entry = usePortfolioGraph((s) => s.catalog?.find((c) => c.type === data.kind));
   const report = usePortfolioGraph((s) => s.report);
-  const stale = usePortfolioGraph((s) => s.reportStale);
+  // 이 노드의 결과만 본다(BT5) — 다른 곳을 바꿔도 이 카드는 낡지 않는다(하류일 때만 낡는다).
+  const stale = usePortfolioGraph((s) => s.staleIds.includes(id));
   const validation = usePortfolioGraph((s) => s.validation);
   const result = report?.nodes[id];
   const live = result && !stale ? result : undefined;
@@ -119,7 +120,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const showCause = usePortfolioGraph((s) => s.showCause);
   // 갈래(BM C3) — 이 노드가 복제본이면 원본 id. 원본 대비 Δ 는 헤드라인 이름·단위가 같을 때만.
   const origId = usePortfolioGraph((s) => s.branches.find((b) => id in b.map)?.map[id] ?? null);
-  const origResult = usePortfolioGraph((s) => (origId && !s.reportStale ? s.report?.nodes[origId] : undefined));
+  const origResult = usePortfolioGraph((s) => (origId && !s.staleIds.includes(origId) ? s.report?.nodes[origId] : undefined));
   // 종착점(BN N1) — 전략 합치기 노드는 몫 도넛. 포트 → 이은 전략의 띠 색·이름(화면 정보) · 몫은 서버 결과 그대로.
   // 셀렉터는 문자열(JSON)을 돌려 같은 내용이면 다시 그리지 않는다 — 전략 이름에 어떤 글자가 들어가도 깨지지 않게 JSON.
   const portBandKey = usePortfolioGraph((s) => {

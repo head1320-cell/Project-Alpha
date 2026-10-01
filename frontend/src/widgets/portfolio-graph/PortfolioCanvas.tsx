@@ -370,9 +370,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
-  const cause = s.reportStale ? null : s.cause;
+  /** 결과가 지금 그래프의 것이 아닌 노드(BT5) — 바뀐 노드와 그 하류만. 나머지는 결과·선 모양·한눈 요약을 그대로 둔다. */
+  const staleSet = useMemo(() => new Set(s.staleIds), [s.staleIds]);
+  const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
-  const live = s.report && !s.reportStale ? s.report.nodes : null;
+  const live = useMemo(() => (s.report
+    ? (staleSet.size ? Object.fromEntries(Object.entries(s.report.nodes).filter(([id]) => !staleSet.has(id))) : s.report.nodes)
+    : null), [s.report, staleSet]);
   // BM C2 — 들어간 상자·필터가 켜지면 나머지를 흐린다(원인 경로가 켜져 있으면 그것이 먼저다).
   const focusSet = useMemo(() => {
     const g = s.groups.find((x) => x.id === s.focusGroup);
@@ -750,7 +754,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       ];
     }
     const id = ctx.nodeId;
-    const r = st.reportStale ? undefined : st.report?.nodes[id];
+    const r = st.staleIds.includes(id) ? undefined : st.report?.nodes[id];
     const pinned = st.pinned.includes(id);
     return [
       { key: "run-to", label: "여기까지 계산", icon: <Play size={14} aria-hidden="true" />, disabled: st.running, run: () => runToRef.current(id) },
@@ -848,6 +852,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
     }
   }, []);
   const runTo = useCallback((id: string) => run([id]), [run]);
+  /** 바뀐 곳만 계산(BT5) — 낡은 노드들을 목표로 하는 부분 계산("여기까지 계산" 과 같은 길). 관문은 부분 계산이라 내지 않는다(기존 사유 문구). */
+  const runStale = useCallback(() => {
+    const ids = usePortfolioGraph.getState().staleIds;
+    return ids.length ? run(ids) : Promise.resolve();
+  }, [run]);
   /** 목표로 시작 — 답으로 조립한 흐름을 싣고(되돌리기 가능), 흐름 순서대로 한 번 자라나게 한 뒤 곧바로 계산한다. */
   const startGoal = useCallback((goal: Parameters<typeof goalDoc>[0], tickers: string[], lookback: number | null,
                                  riskAversion: number | null) => {
@@ -991,7 +1000,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   const stageOf = useCallback((kind: string) => s.catalog?.find((c) => c.type === kind)?.stage, [s.catalog]);
   const gateLabel = useCallback((key: string) => s.catalogMeta?.gates.find((g) => g.key === key)?.label ?? key, [s.catalogMeta]);
   const gateStateOf = useCallback((key: string) =>
-    (s.report && !s.reportStale ? s.report.gates?.gates.find((g) => g.key === key)?.state ?? null : null), [s.report, s.reportStale]);
+    (s.report ? s.report.gates?.gates.find((g) => g.key === key)?.state ?? null : null), [s.report]);
   const focusNodes = useCallback((ids: string[]) => {
     if (!ids.length || !rf.current) return;
     if (ids.length === 1) { focusNode(ids[0]); return; }
@@ -1077,7 +1086,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                onChange={(e) => s.setName(e.target.value)} />
         <span className="pg-toolbar-spacer" />
         {nErrors > 0 && <span className="pg-summary pg-summary--err">설정을 확인할 곳이 {nErrors}군데 있어요</span>}
-        {s.reportStale && <span className="pg-summary pg-summary--stale">바뀐 설정으로 다시 계산해 주세요</span>}
+        {s.reportStale && (
+          <span className="pg-summary pg-summary--stale" data-count={s.staleIds.length}>
+            예전 결과 {s.staleIds.length}개
+            <button type="button" className="pg-stale-run" disabled={s.running} onClick={() => void runStale()}
+                    title="바뀐 노드와 그 하류만 다시 계산해요">바뀐 곳만 계산</button>
+          </span>
+        )}
         {s.report?.partial && !s.reportStale && (
           <span className="pg-summary pg-summary--partial">여기까지 계산 · {s.report.partial.computed.length}개</span>
         )}
@@ -1155,13 +1170,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       ))}
 
       {/* 진행상황 알약(BQ Q2) — 캔버스 위 가운데. 간단히 보기에서는 그 위에 한 줄로. */}
-      {s.simple && <GateRail report={s.report && !s.reportStale ? s.report.gates ?? null : null}
-                  note={s.report?.partial && !s.reportStale ? s.report.gates_reason ?? null : null}
+      {s.simple && <GateRail report={s.report?.gates ?? null} stale={s.reportStale}
+                  note={s.report?.partial ? s.report.gates_reason ?? null : null}
                   byGate={s.validation?.procedure?.by_gate ?? null} nodeLabel={nodeLabel}
                   onFocusNode={focusNode} onApply={applySuggestion} />}
       {s.simple && (
         <SimpleView nodes={s.nodes} edges={s.edges} groups={s.groups} catalog={s.catalog ?? []}
-                    results={s.report?.nodes ?? null} stale={s.reportStale} running={s.running} onRun={() => void run()}
+                    results={s.report?.nodes ?? null} staleIds={staleSet} running={s.running} onRun={() => void run()}
                     onChange={(id, p) => s.updateParams(id, p)}
                     onCause={(id) => { s.setSimple(false); s.select(id); setTimeout(() => usePortfolioGraph.getState().showCause(id), 60); }} />
       )}
@@ -1303,8 +1318,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             )}
           </ReactFlow>
           <p className="pg-sr-live" aria-live="polite">{announce}</p>
-          {!s.simple && <GateRail report={s.report && !s.reportStale ? s.report.gates ?? null : null}
-                  note={s.report?.partial && !s.reportStale ? s.report.gates_reason ?? null : null}
+          {!s.simple && <GateRail report={s.report?.gates ?? null} stale={s.reportStale}
+                  note={s.report?.partial ? s.report.gates_reason ?? null : null}
                   byGate={s.validation?.procedure?.by_gate ?? null} nodeLabel={nodeLabel}
                   onFocusNode={focusNode} onApply={applySuggestion} />}
           {s.catalog && s.nodes.length === 0 && (
@@ -1377,16 +1392,16 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
           <div className="pg-panel">
             {s.tab === "story" && (
               <StoryPanel order={order} nodes={s.nodes} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
-                          stale={s.reportStale} selectedId={s.selectedId} onSelect={focusNode}
+                          staleIds={staleSet} selectedId={s.selectedId} onSelect={focusNode}
                           onDetail={(id) => { focusNode(id); s.setTab("detail"); }} />
             )}
             {s.tab === "branches" && (
               <BranchCompare branches={s.branches} nodes={s.nodes} catalog={s.catalog ?? []}
-                             results={s.report?.nodes ?? null} stale={s.reportStale} />
+                             results={s.report?.nodes ?? null} staleIds={staleSet} />
             )}
             {s.tab === "wire" && selEdge && (
               <WirePanel edge={selEdge} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
-                         stale={s.reportStale} errors={s.validation?.errors ?? []} plain={s.catalogMeta?.portPlain ?? PORT_PLAIN}
+                         stale={staleSet.has(selEdge.source)} errors={s.validation?.errors ?? []} plain={s.catalogMeta?.portPlain ?? PORT_PLAIN}
                          order={order} onFocus={focusNode}
                          onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => { st.cutEdge(selEdge.id); return "선을 끊었어요."; }); }}
                          onInsert={(k, i, o) => { const st = usePortfolioGraph.getState();
@@ -1400,7 +1415,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                              expert={s.expert} onExpert={s.setExpert}
                              onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
                              onDuplicate={() => s.duplicateNode(selected.id)}
-                             result={selResult} stale={s.reportStale}
+                             result={selResult} stale={staleSet.has(selected.id)}
+                             onFocus={focusNode} onImpact={s.setProcHover}
                              onRewire={(port, src, h) => {
                                const st = usePortfolioGraph.getState();
                                st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 이었어요." : "선을 뗐어요."; });
@@ -1422,7 +1438,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
               <NodeResultPanel
                 kind={selected.data.kind}
                 result={selResult}
-                stale={s.reportStale}
+                stale={staleSet.has(selected.id)}
                 params={selected.data.params}
                 onReload={() => void runTo(selected.id)}
               />

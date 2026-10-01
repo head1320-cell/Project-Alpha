@@ -300,11 +300,27 @@ test("증거 선(BM C1): 선 모양 = 원천 계보 · 계산 전과 낡은 결�
   // 범례는 '실데이터' 라고 말하지 않는다.
   await expect(page.locator(".pg-wire-legend")).not.toContainText("실데이터");
 
-  // 낡으면 모양을 거둔다.
+  // 낡으면 그 노드와 하류에서 나가는 선만 모양을 거둔다(BT5) — ★짝★ 바뀌지 않은 상류의 선은 모양을 그대로 둔다.
+  // (예전엔 노드를 복제만 해도 모든 선의 모양이 사라졌다 — 복제한 새 노드는 결과가 없을 뿐 아무것도 낡게 하지 않는다.)
   await node(page, "views").click();
   await page.keyboard.press("Control+d");
+  await expect(page.locator(".pg-summary--stale")).toHaveCount(0);
+  await node(page, "optimizer").click();
+  await page.locator('.pg-tab[data-tab="settings"]').click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
   await expect(page.locator(".pg-summary--stale")).toBeVisible();
-  await expect(shaped).toHaveCount(0);
+  const down = new Set<string>(["optimizer"]);                                     // 비중 계산과 그 하류
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const x of doc.edges as { source: string; target: string }[]) if (down.has(x.source) && !down.has(x.target)) { down.add(x.target); grew = true; }
+  }
+  expect(down.size, "하류가 있어야 짝이 공허하지 않다").toBeGreaterThan(1);
+  expect((doc.edges as { source: string }[]).some((x) => !down.has(x.source)), "상류 선이 있어야 짝이 공허하지 않다").toBe(true);
+  for (const e of doc.edges as { id: string; source: string }[]) {
+    const cls = (await page.locator(`.react-flow__edge[data-testid="rf__edge-${e.id}"]`).getAttribute("class")) ?? "";
+    const shapedNow = /pg-wire--(plain|practice|blocked)/.test(cls);
+    expect(shapedNow, `${e.id} — ${down.has(e.source) ? "낡은 노드에서 나가는 선은 모양을 거둔다" : "상류 선은 모양을 유지한다"}`).toBe(!down.has(e.source));
+  }
 });
 
 test("막힘은 끊긴 회색 선 · 선 위 한 줄은 서버 briefs 그대로 — 없으면 라벨도 없다(BM C1)", async ({ page }) => {

@@ -68,18 +68,19 @@ function Step({ n, node, entry, result, stale, current, onSelect, onDetail }: {
   );
 }
 
-export function StoryPanel({ order, nodes, catalog, results, stale, selectedId, onSelect, onDetail }: {
+export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedId, onSelect, onDetail }: {
   order: string[];
   nodes: PgNode[];
   catalog: NodeCatalogEntry[];
   results: Record<string, NodeRunResult> | null;
-  stale: boolean;
+  /** 결과가 지금 그래프의 것이 아닌 노드(BT5) — 그 단계만 "다시 계산" 이라고 말하고 나머지 설명은 그대로 둔다. */
+  staleIds: ReadonlySet<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onDetail: (id: string) => void;
 }) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const practice = !stale && Object.values(results ?? {}).some((r) =>
+  const practice = Object.entries(results ?? {}).filter(([id]) => !staleIds.has(id)).map(([, r]) => r).some((r) =>
     (r.explain?.trust ?? []).some((t) => t.state === "unknown" && t.text.includes("연습용")));
   if (!nodes.length) {
     return <p className="pg-empty">캔버스가 비어 있어요. 왼쪽에서 노드를 끌어 오거나 ‘빠른 시작’을 눌러 보세요.</p>;
@@ -91,14 +92,18 @@ export function StoryPanel({ order, nodes, catalog, results, stale, selectedId, 
           <b>연습용 결과예요.</b> 실제 시세가 아니라 합성 데이터로 계산했어요. 투자 판단에 쓰기 전에 실데이터로 다시 계산해 주세요.
         </div>
       )}
-      {stale && results && <div className="pg-notice pg-notice--stale" role="note">그래프가 바뀌었어요. ‘계산하기’를 누르면 설명이 새로 나와요.</div>}
+      {staleIds.size > 0 && results && (
+        <div className="pg-notice pg-notice--stale" role="note">
+          그래프가 바뀌어서 {staleIds.size}개 단계의 설명이 예전 결과예요. ‘바뀐 곳만 계산’을 누르면 그 단계만 새로 나와요.
+        </div>
+      )}
       <ol className="pg-steps">
         {order.map((id, i) => {
           const node = byId.get(id);
           if (!node) return null;
           return (
             <Step key={id} n={i + 1} node={node} entry={catalog.find((c) => c.type === node.data.kind)}
-                  result={results?.[id]} stale={stale} current={selectedId === id}
+                  result={results?.[id]} stale={staleIds.has(id)} current={selectedId === id}
                   onSelect={() => onSelect(id)} onDetail={() => onDetail(id)} />
           );
         })}

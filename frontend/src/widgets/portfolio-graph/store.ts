@@ -2,9 +2,11 @@
 /**
  * 포트폴리오 캔버스 상태 (BI3 → BL1) — reactflow 노드·엣지 + 카탈로그 + 검증·실행 보고.
  * ==========================================================================
- * ★낡은 결과를 새 그래프의 결과처럼 보이지 않는다★ — 노드·링크·파라미터가 바뀌면
- * `reportStale` 이 서고, 화면은 "현재 그래프의 결과가 아닙니다" 라고 말한다. 위치 이동은
- * 계산에 영향이 없으므로 결과를 낡게 만들지 않는다.
+ * ★낡은 결과를 새 그래프의 결과처럼 보이지 않는다★ — 노드·링크·파라미터가 바뀌면 **바뀐 노드와 그 하류만**
+ * `staleIds` 에 들고, 화면은 그 노드에서만 "지금 그래프의 결과가 아니에요" 라고 말한다(BT5 — 예전엔 전역 불리언 하나라
+ * 설정 하나만 바꿔도 모든 카드가 낡았다). 판정은 계산 때 남긴 깊은 서명과 지금 서명의 비교다(`staleness.ts`) — 모든 동작
+ * (설정·선·지우기·붙여넣기·갈래·되돌리기)이 같은 규칙을 탄다. 위치 이동은 계산에 영향이 없으므로 결과를 낡게 만들지 않는다.
+ * `reportStale` 은 호환용 파생값이다: 결과가 있는 노드 중 하나라도 낡았는가.
  *
  * BL1 (조사 → 적용):
  * - **여기까지 계산**(n8n Execute step): 부분 계산 결과를 이전 결과에 **합치되**, 이번에 계산하지 않은 노드는
@@ -68,6 +70,7 @@ import {
   type RunReport,
   type ValidateReport,
 } from "@/entities/portfolio-graph";
+import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
 
 /** 계산 기록 한 줄 — 노드마다 상태와 헤드라인만(원 결과는 두지 않는다: 가볍게, 비교에 필요한 만큼). */
 export interface RunRecord {
@@ -87,7 +90,14 @@ export interface PgState {
   groups: GraphGroup[];
   name: string;
   report: RunReport | null;
+  /** 호환용 파생값(BT5) — `staleIds` 가 하나라도 있는가. 직접 쓰지 않는다(매 변경마다 다시 센다). */
   reportStale: boolean;
+  /** 결과가 지금 그래프의 것이 아닌 노드(BT5) — 바뀐 노드와 그 하류. 파생값이다. */
+  staleIds: string[];
+  /** 노드마다 그 결과를 계산할 때의 깊은 서명(BT5). 결과가 없으면 null. */
+  snap: Record<string, string> | null;
+  /** 지금 진행 중인 계산을 시작할 때의 서명 — 계산 중에 편집해도 계산한 그래프를 기준으로 남긴다. */
+  runSigs: Record<string, string> | null;
   validation: ValidateReport | null;
   /** 검증 요청이 서버에 닿지 못했다(BT2) — 절차 칸이 "불러오지 못했어요"를 말한다. */
   validationError: boolean;
@@ -247,7 +257,6 @@ const COALESCE_MS = 800;
 let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
 
-/** 조상(자신 포함) — 서버 `portfolio_graph._ancestors` 와 같은 규칙. "여기까지 계산" 이 돌 노드들. */
 /** 하류(BT4·BT5) — 이 노드들에서 선을 따라 닿는 모든 노드(자기 자신은 뺀다). */
 export function descendantsOf(ids: string[], edges: { source: string; target: string }[]): string[] {
   const out = new Map<string, string[]>();
@@ -264,6 +273,7 @@ export function descendantsOf(ids: string[], edges: { source: string; target: st
   return [...seen];
 }
 
+/** 조상(자신 포함) — 서버 `portfolio_graph._ancestors` 와 같은 규칙. "여기까지 계산" 이 돌 노드들. */
 export function ancestorsOf(ids: string[], edges: { source: string; target: string }[]): string[] {
   const into = new Map<string, string[]>();
   for (const e of edges) into.set(e.target, [...(into.get(e.target) ?? []), e.source]);
@@ -315,7 +325,21 @@ function record(report: RunReport, partial: string[] | null): RunRecord {
   return { at: Date.now(), partial, counts, nodes };
 }
 
-export const usePortfolioGraph = create<PgState>((set, get) => {
+export const usePortfolioGraph = create<PgState>((rawSet, get) => {
+  /**
+   * 모든 변경 뒤에 낡음을 다시 센다(BT5) — 그래프·결과·서명이 바뀐 때만. 동작마다 손으로 표시하던 방식은 갈래·붙여넣기·되돌리기
+   * 같은 경로에서 빠뜨리기 쉬웠다.
+   */
+  let seen: [unknown, unknown, unknown, unknown] = [null, null, null, null];
+  const derive = () => {
+    const s = get();
+    if (seen[0] === s.nodes && seen[1] === s.edges && seen[2] === s.report && seen[3] === s.snap) return;
+    seen = [s.nodes, s.edges, s.report, s.snap];
+    const staleIds = staleNodes(s.nodes, s.edges, s.report?.nodes, s.snap);
+    const same = staleIds.length === s.staleIds.length && staleIds.every((x, i) => x === s.staleIds[i]);
+    if (!same || s.reportStale !== staleIds.length > 0) rawSet({ staleIds: same ? s.staleIds : staleIds, reportStale: staleIds.length > 0 });
+  };
+  const set: typeof rawSet = (...a: Parameters<typeof rawSet>) => { rawSet(...a); derive(); };
   /** 지금 상태를 되돌리기 칸에 넣는다 — 바꾸기 **직전**에 부른다. */
   const push = () => set((s) => ({
     past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }].slice(-HISTORY),
@@ -331,6 +355,9 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     name: "",
     report: null,
     reportStale: false,
+    staleIds: [],
+    snap: null,
+    runSigs: null,
     validation: null,
     validationError: false,
     procHover: null,
@@ -387,7 +414,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
           picked,
           selectedId: s.selectedId && removed.has(s.selectedId) ? null
             : (selChanged && picked.length === 1 ? picked[0] : s.selectedId),
-          reportStale: s.reportStale || (structural && s.report !== null),
         };
       });
     },
@@ -396,7 +422,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       if (changes.some((c) => STRUCTURAL.has(c.type))) push();
       set((s) => ({
         edges: applyEdgeChanges(changes, s.edges),
-        reportStale: s.reportStale || (changes.some((c) => STRUCTURAL.has(c.type)) && s.report !== null),
       }));
     },
 
@@ -404,7 +429,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       push();
       set((s) => ({
         edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges),
-        reportStale: s.report !== null,
       }));
     },
 
@@ -415,7 +439,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         const edges = source && sourceHandle
           ? addEdge({ source, sourceHandle, target, targetHandle: port, id: `${source}.${sourceHandle}->${target}.${port}` }, kept)
           : kept;
-        return { edges, selectedEdge: null, reportStale: s.report !== null };
+        return { edges, selectedEdge: null };
       });
     },
 
@@ -427,7 +451,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const c = link.side === "source"
         ? { source: link.node, sourceHandle: link.handle, target: id, targetHandle: link.port }
         : { source: id, sourceHandle: link.port, target: link.node, targetHandle: link.handle };
-      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], selectedId: id, picked: [id], pickedByUser: false, reportStale: s.report !== null,
+      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], selectedId: id, picked: [id], pickedByUser: false,
             edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges) });
       return id;
     },
@@ -457,8 +481,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         if (!c.source || !c.target) continue;
         edges = addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, edges);
       }
-      set({ nodes, edges, reportStale: s.report !== null,
-            ...(id ? { selectedId: id, picked: [id], pickedByUser: false } : {}) });
+      set({ nodes, edges, ...(id ? { selectedId: id, picked: [id], pickedByUser: false } : {}) });
       return id;
     },
 
@@ -468,7 +491,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     cutEdge: (id) => {
       push();
       set((s) => ({ edges: s.edges.filter((e) => e.id !== id), selectedEdge: s.selectedEdge === id ? null : s.selectedEdge,
-                    tab: s.selectedEdge === id && s.tab === "wire" ? "story" : s.tab, reportStale: s.report !== null }));
+                    tab: s.selectedEdge === id && s.tab === "wire" ? "story" : s.tab }));
     },
 
     insertOnEdge: (edgeId, kind, inPort, outPort, at) => {
@@ -487,7 +510,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       edges = addEdge({ ...c1, id: `${c1.source}.${c1.sourceHandle}->${c1.target}.${c1.targetHandle}` }, edges);
       edges = addEdge({ ...c2, id: `${c2.source}.${c2.sourceHandle}->${c2.target}.${c2.targetHandle}` }, edges);
       set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedEdge: null, tab: "settings",
-            selectedId: id, picked: [id], pickedByUser: false, reportStale: s.report !== null });
+            selectedId: id, picked: [id], pickedByUser: false });
       return id;
     },
 
@@ -495,7 +518,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       push();
       const id = newId(kind, new Set(get().nodes.map((n) => n.id)));
       const node: PgNode = { id, type: PG_NODE_TYPE, position, data: { kind, params: {} } };
-      set((s) => ({ nodes: [...s.nodes, node], selectedId: id, picked: [id], pickedByUser: false, reportStale: s.report !== null }));
+      set((s) => ({ nodes: [...s.nodes, node], selectedId: id, picked: [id], pickedByUser: false }));
       return id;
     },
 
@@ -505,7 +528,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       lastParamEdit = { id, at: now };
       set((s) => ({
         nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, params } } : n)),
-        reportStale: s.report !== null,
       }));
     },
 
@@ -517,7 +539,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })).filter((g) => g.members.length),
         selectedId: s.selectedId === id ? null : s.selectedId,
         picked: s.picked.filter((p) => p !== id),
-        reportStale: s.report !== null,
       }));
     },
 
@@ -531,7 +552,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.has(m)) })).filter((g) => g.members.length),
         selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId,
         picked: [],
-        reportStale: s.report !== null,
       }));
     },
 
@@ -547,8 +567,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
         ...e, id: `${e.source}.${e.sourceHandle}->${nid}.${e.targetHandle}`, target: nid, selected: false,
       }));
-      set((s) => ({ nodes: [...s.nodes, node], edges: [...s.edges, ...incoming], selectedId: nid, picked: [nid],
-                    reportStale: s.report !== null }));
+      set((s) => ({ nodes: [...s.nodes, node], edges: [...s.edges, ...incoming], selectedId: nid, picked: [nid] }));
       return nid;
     },
 
@@ -561,7 +580,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         .filter((g) => g.members.length);
       set({
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
-        report: null, reportStale: false, validation: null, selectedId: null, picked: [], runError: null,
+        report: null, snap: null, validation: null, selectedId: null, picked: [], runError: null,
         pinned: (doc.pinned ?? []).filter((id) => nodes.some((n) => n.id === id)), cause: null, focusGroup: null, filters: [],
         branches: (doc.branches ?? []).filter((b) => b.root in b.map),
       });
@@ -574,9 +593,10 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     setValidationError: (validationError) => set({ validationError }),
     setProcHover: (procHover) => set({ procHover }),
     setCatalogMeta: (catalogMeta) => set({ catalogMeta }),
-    startRun: (ids = null) => set({ running: true, runError: null, runningIds: ids, preview: null, cause: null }),
+    startRun: (ids = null) => set((s) => ({ running: true, runError: null, runningIds: ids, preview: null, cause: null,
+                                            runSigs: deepSigs(s.nodes, s.edges) })),
     finishRun: (report, err = null) => set((s) => {
-      if (!report) return { running: false, runningIds: null, runError: err };
+      if (!report) return { running: false, runningIds: null, runError: err, runSigs: null };
       const partial = report.partial?.targets ?? null;
       let merged = report;
       if (partial && s.report) {
@@ -586,10 +606,14 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
           .map(([id, r]) => [id, { ...r, previous: true }]));
         merged = { ...report, nodes: { ...prev, ...report.nodes } };
       }
+      // 서명: 이번에 계산한 노드는 계산을 시작할 때의 서명으로, 계산하지 않은 노드는 예전 서명 그대로(BT5 — 부분 계산 뒤에도
+      // 계산하지 않은 낡은 노드는 계속 낡은 것으로 남는다).
+      const sigs = s.runSigs ?? deepSigs(s.nodes, s.edges);
+      const fresh = Object.fromEntries(Object.keys(report.nodes).map((id) => [id, sigs[id]]));
       return {
-        running: false, runningIds: null, runError: err,
+        running: false, runningIds: null, runError: err, runSigs: null,
         report: merged,
-        reportStale: false,
+        snap: partial && s.report ? { ...(s.snap ?? {}), ...fresh } : fresh,
         runs: [record(report, partial), ...s.runs].slice(0, RUNS),
       };
     }),
@@ -655,7 +679,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const branch: GraphBranch = { id: `br_${Date.now().toString(36)}${(++seq).toString(36)}`, label: `갈래 ${letter}`,
         root: idOf.get(ofRoot)!, of_root: ofRoot, map: Object.fromEntries(scope.map((id) => [idOf.get(id)!, id])) };
       set({ nodes: [...s.nodes, ...copies], edges: [...s.edges, ...newEdges], branches: [...s.branches, branch],
-            selectedId: branch.root, picked: [branch.root], reportStale: s.report !== null, tab: "settings" });
+            selectedId: branch.root, picked: [branch.root], tab: "settings" });
       return `‘${branch.label}’를 만들었어요 — 노드 ${scope.length}개를 복제했어요. 설정을 바꾸고 계산하면 원본과 다른 값만 나란히 보여요.`;
     },
     removeBranch: (id) => {
@@ -665,8 +689,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       push();
       const ids = new Set(Object.keys(b.map));
       set({ nodes: s.nodes.filter((n) => !ids.has(n.id)), edges: s.edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
-            branches: s.branches.filter((x) => x.id !== id), reportStale: s.report !== null,
-            selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId, picked: [] });
+            branches: s.branches.filter((x) => x.id !== id), selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId, picked: [] });
     },
     promoteBranch: (id) => {
       const s = get();
@@ -684,8 +707,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       });
       set({ nodes, edges: s.edges.filter((e) => !copies.has(e.source) && !copies.has(e.target)),
             groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.has(m)) })),
-            branches: s.branches.filter((x) => x.id !== id), reportStale: s.report !== null,
-            pinned: s.pinned.filter((p) => !copies.has(p)),
+            branches: s.branches.filter((x) => x.id !== id), pinned: s.pinned.filter((p) => !copies.has(p)),
             selectedId: s.selectedId && copies.has(s.selectedId) ? null : s.selectedId, picked: [] });
       return moved
         ? `‘${b.label}’의 바꾼 설정 ${moved}개를 원본으로 옮겼어요 — 다시 계산해 주세요. 되돌리기(Ctrl+Z)로 돌아갈 수 있어요.`
@@ -713,7 +735,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
     },
     togglePin: (id) => set((s) => ({ pinned: s.pinned.includes(id) ? s.pinned.filter((x) => x !== id) : [...s.pinned, id] })),
     showCause: (id) => set((s) => {
-      if (!id || s.reportStale) return { cause: null };
+      if (!id || s.staleIds.includes(id)) return { cause: null };       // 위가 낡았으면 이 노드도 낡았다(서명 사슬)
       const { path, roots } = causePath(id, s.edges, s.report?.nodes);
       return { cause: path.length ? { from: id, path, roots } : null };
     }),
@@ -726,8 +748,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         future: [{ nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }, ...s.future].slice(0, HISTORY),
         nodes: prev.nodes, edges: prev.edges, groups: prev.groups, branches: prev.branches ?? [], picked: [],
         selectedId: prev.nodes.some((n) => n.id === s.selectedId) ? s.selectedId : null,
-        reportStale: s.report !== null,
-      };
+        };
     }),
 
     redo: () => set((s) => {
@@ -738,8 +759,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }].slice(-HISTORY),
         nodes: next.nodes, edges: next.edges, groups: next.groups, branches: next.branches ?? [], picked: [],
         selectedId: next.nodes.some((n) => n.id === s.selectedId) ? s.selectedId : null,
-        reportStale: s.report !== null,
-      };
+        };
     }),
 
     copy: () => {
@@ -774,7 +794,6 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       set({
         nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), ...nodes], edges: [...s.edges, ...edges],
         picked: nodes.map((n) => n.id), selectedId: nodes.length === 1 ? nodes[0].id : s.selectedId,
-        reportStale: s.report !== null,
         // 다음 붙여넣기는 또 한 칸 비껴 놓는다.
         clip: { nodes: s.clip.nodes.map((n) => ({ ...n, position: { x: n.position.x + 48, y: n.position.y + 48 } })),
                 edges: s.clip.edges },
@@ -856,8 +875,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         const c = { source: src.id, sourceHandle: src.handle, target: id, targetHandle: src.port };
         edges = addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, edges);
       });
-      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedId: id, picked: [id],
-            reportStale: s.report !== null });
+      set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedId: id, picked: [id] });
       return `고른 ${chk.sources.length}개를 ‘${chk.label}’에 이었어요 — 계산하면 같이 무너지는지 보여요.`;
     },
 
@@ -919,7 +937,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         const pid = pf.id;
         nodes = nodes.map((n) => (n.id === pid ? { ...n, data: { ...n.data, params: { ...n.data.params, labels } } } : n));
       }
-      set({ nodes, edges, groups, reportStale: s.report !== null, selectedId: null, picked: [] });
+      set({ nodes, edges, groups, selectedId: null, picked: [] });
       if (!output) return `‘${label}’을 넣었어요. 이 전략에는 비중을 내는 노드가 없어 포트폴리오에 잇지 않았어요.`;
       if (unwired) return `${wrapped}‘${label}’을 넣었어요. 포트폴리오 노드의 빈 자리(최대 ${PORTFOLIO_PORTS.length}개)가 없어 ${unwired}개는 잇지 못했어요.`;
       return `${wrapped}‘${label}’을 넣어 ‘전략 합치기’에 이었어요. 계산하면 전략별 몫이 보여요.`;
@@ -934,8 +952,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
       const ins = insertDoc(b, new Set(s.nodes.map((n) => n.id)), "b_", { x: minX, y: s.nodes.length ? maxY + 300 : 0 });
       const added = fromDoc({ format: GRAPH_FORMAT, version: GRAPH_VERSION, nodes: ins.nodes, edges: ins.edges }, s.catalog ?? []);
       const label = uniqueLabel(b.label, s.groups);
-      set({ nodes: [...s.nodes, ...added.nodes], edges: [...s.edges, ...added.edges], reportStale: s.report !== null,
-            groups: [...s.groups, { id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label,
+      set({ nodes: [...s.nodes, ...added.nodes], edges: [...s.edges, ...added.edges], groups: [...s.groups, { id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label,
                                     members: added.nodes.map((n) => n.id), collapsed: false }] });
       return `‘${label}’ 블록을 넣었어요 — 노드 ${added.nodes.length}개. 필요한 입력을 이어 주세요.`;
     },
@@ -950,8 +967,7 @@ export const usePortfolioGraph = create<PgState>((set, get) => {
         ? s.edges.find((x) => x.source === g.output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
       if (!e || !e.targetHandle || !label.trim()) return { groups };
       return {
-        groups, reportStale: s.report !== null,
-        nodes: s.nodes.map((n) => (n.id === e.target
+        groups, nodes: s.nodes.map((n) => (n.id === e.target
           ? { ...n, data: { ...n.data, params: { ...n.data.params,
               labels: { ...((n.data.params.labels as Record<string, string>) ?? {}), [e.targetHandle!]: label.trim().slice(0, 40) } } } }
           : n)),

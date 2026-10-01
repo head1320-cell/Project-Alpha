@@ -150,9 +150,9 @@ function DsrRows({ name, labels, curves }: { name: string; labels: string[]; cur
   );
 }
 
-export function BranchCompare({ branches, nodes, catalog, results, stale }: {
+export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
   branches: GraphBranch[]; nodes: PgNode[]; catalog: NodeCatalogEntry[];
-  results: Record<string, NodeRunResult> | null; stale: boolean;
+  results: Record<string, NodeRunResult> | null; staleIds: ReadonlySet<string>;
 }) {
   const roots = [...new Set(branches.map((b) => b.of_root))];
   if (!roots.length) return <p className="pg-empty">노드를 골라 ‘갈래 만들기’를 누르면 여기서 원본과 나란히 봐요.</p>;
@@ -165,7 +165,8 @@ export function BranchCompare({ branches, nodes, catalog, results, stale }: {
         const origIds = [...new Set(bs.flatMap((b) => Object.values(b.map)))];
         const copyOf = (b: GraphBranch, orig: string) => Object.entries(b.map).find(([, o]) => o === orig)?.[0];
         const node = (id: string | undefined) => nodes.find((n) => n.id === id);
-        const res = (id: string | undefined) => (id && results && !stale ? results[id] : undefined);
+        const res = (id: string | undefined) => (id && results && !staleIds.has(id) ? results[id] : undefined);
+        const stale = [root, ...origIds, ...bs.flatMap((b) => Object.keys(b.map))].some((id) => staleIds.has(id));
         type Row = { key: string; kind: "set" | "out"; name: string; cells: string[] };
         const rows: Row[] = [];
         for (const orig of origIds) {
@@ -232,7 +233,7 @@ export function BranchCompare({ branches, nodes, catalog, results, stale }: {
                 </tbody>
               </table>
             )}
-            {stale && <p className="pg-help">설정이 바뀌어서 결과 칸은 비워 두었어요 — 다시 계산해 주세요.</p>}
+            {stale && <p className="pg-help">설정이 바뀐 칸은 비워 두었어요 — 다시 계산해 주세요.</p>}
           </section>
         );
       })}

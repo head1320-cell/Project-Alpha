@@ -57,9 +57,9 @@ function ResultCard({ id, entry, r, onCause }: { id: string; entry: NodeCatalogE
   );
 }
 
-export function SimpleView({ nodes, edges, groups, catalog, results, stale, running, onRun, onChange, onCause }: {
+export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, running, onRun, onChange, onCause }: {
   nodes: PgNode[]; edges: Edge[]; groups: GraphGroup[]; catalog: NodeCatalogEntry[];
-  results: Record<string, NodeRunResult> | null; stale: boolean; running: boolean;
+  results: Record<string, NodeRunResult> | null; staleIds: ReadonlySet<string>; running: boolean;
   onRun: () => void; onChange: (id: string, params: Record<string, unknown>) => void; onCause: (id: string) => void;
 }) {
   const order = topoOrder(nodes.map((n) => n.id), edges);
@@ -75,7 +75,9 @@ export function SimpleView({ nodes, edges, groups, catalog, results, stale, runn
          return rest.length ? [{ key: "rest", title: "전략 밖", ids: rest }] : [];
        })()]
     : [{ key: "all", title: "이 흐름", ids: order }];
-  const live = results && !stale ? results : null;
+  // 낡은 노드(BT5)의 결과만 거둔다 — 바뀌지 않은 상류의 결과는 그대로 보인다.
+  const live = results ? Object.fromEntries(Object.entries(results).filter(([id]) => !staleIds.has(id))) : null;
+  const stale = staleIds.size > 0 && !!results;
 
   return (
     <div className="pg-simple" aria-label="간단히 보기">
@@ -88,7 +90,7 @@ export function SimpleView({ nodes, edges, groups, catalog, results, stale, runn
           {running ? <><Loader2 size={14} className="spin" /> 계산하는 중</> : "계산하기"}
         </button>
       </header>
-      {stale && <p className="pg-simple-stale">설정이 바뀌었어요 — 다시 계산하면 결과가 새로 나와요.</p>}
+      {stale && <p className="pg-simple-stale">설정이 바뀌었어요 — 바뀐 곳 {staleIds.size}개는 다시 계산하면 결과가 새로 나와요.</p>}
       {sections.map((sec) => {
         const asks = sec.ids.filter(hasQuestions);
         const outs = sec.ids.filter((id) => live?.[id] && (live[id].status !== "ok" || live[id].explain?.headline || live[id].glance));

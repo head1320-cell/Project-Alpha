@@ -12,7 +12,7 @@
  * **접은 전략은 노드 카드 한 장** — 노드와 같은 모양·같은 포트 점으로, 경계를 넘는 선은 그 포트에서 이어진다(실제 링크는 그대로).
  * 카드의 큰 숫자는 이 전략의 **포트폴리오 몫** — 이은 포트폴리오 노드 결과(`view.strategies`)의 서버 값이고, 모르면 "—" 와 이유.
  */
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { BookmarkPlus, ChevronDown, Download, GitBranch, LogIn, Play, Ungroup } from "lucide-react";
 import { fmtElapsed, type GraphBlock } from "@/entities/portfolio-graph";
@@ -66,7 +66,11 @@ function shareWhy(computed: boolean, linked: boolean | undefined): string {
 const known = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
 function GroupFrameImpl({ data }: NodeProps<GroupFrameData>) {
-  const results = usePortfolioGraph((s) => (s.reportStale ? null : s.report?.nodes ?? null));
+  // 낡은 노드(BT5)의 결과만 거둔다 — 셀렉터가 새 객체를 돌려주지 않게 둘을 따로 읽고 거른다.
+  const allResults = usePortfolioGraph((s) => s.report?.nodes ?? null);
+  const staleIds = usePortfolioGraph((s) => s.staleIds);
+  const results = useMemo(() => (allResults && staleIds.length
+    ? Object.fromEntries(Object.entries(allResults).filter(([k]) => !staleIds.includes(k))) : allResults), [allResults, staleIds]);
   const toggle = usePortfolioGraph((s) => s.toggleGroup);
   const rename = usePortfolioGraph((s) => s.renameGroup);
   const ungroup = usePortfolioGraph((s) => s.ungroup);

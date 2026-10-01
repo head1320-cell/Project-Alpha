@@ -37,9 +37,11 @@ const saveOpen = (v: boolean) => { try { localStorage.setItem(RAIL_KEY, v ? "ope
 let seenFailed = new Set<string>();
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function GateRail({ report, note = null, byGate = null, nodeLabel, onFocusNode, onApply }: {
+export function GateRail({ report, note = null, stale = false, byGate = null, nodeLabel, onFocusNode, onApply }: {
   report: GateReport | null;
   note?: string | null;
+  /** 결과가 있는 노드 중 낡은 것이 있다(BT5) — 관문은 그래프 전체 판정이라 지우지 않고 "예전 결과 기준"이라고 말한다. */
+  stale?: boolean;
   /** 관문마다 잴 수 있게 하는 한 걸음(BT2 — 서버 절차의 `by_gate`). */
   byGate?: Record<string, ProcedureSuggestion | null> | null;
   nodeLabel?: (id: string) => string;
@@ -93,11 +95,11 @@ export function GateRail({ report, note = null, byGate = null, nodeLabel, onFocu
   /** 선은 두 역 사이의 것 — 둘 다 지나왔을 때만 잇는다(건너뛴 관문은 통과한 관문이 아니다). */
   const link = (i: number) => (!report || i === 0 ? "" : passes(gates[i - 1].state) && passes(gates[i].state)
     ? " pg-stn--link-on" : " pg-stn--link-off");
-  const pillText = report ? `관문 ${report.summary.confirmed}/${report.summary.total} 확인`
+  const pillText = report ? `${stale ? "예전 결과 기준 · " : ""}관문 ${report.summary.confirmed}/${report.summary.total} 확인`
     : note ? "관문은 전체를 계산해야 봐요" : "계산하면 관문을 확인해요";
 
   return (
-    <div className="pg-rail-wrap" ref={wrap} data-open={expanded || undefined}>
+    <div className="pg-rail-wrap" ref={wrap} data-open={expanded || undefined} data-stale={(report && stale) || undefined}>
       <button type="button" className="pg-rail-pill" aria-expanded={expanded} aria-controls="pg-rail-card" aria-label={`증거 관문 — ${pillText}`}
               data-alert={alert ? "new" : undefined} title="이 결과를 어디까지 믿을 수 있을까요 — 눌러서 관문 8개 보기"
               onClick={() => toggle(!expanded)}>
@@ -115,7 +117,7 @@ export function GateRail({ report, note = null, byGate = null, nodeLabel, onFocu
             <div className="pg-rail-head">
               <strong>이 결과를 어디까지 믿을 수 있을까요</strong>
               <span className="pg-rail-summary">
-                {report ? `${report.summary.text} ${report.summary.note}`
+                {report ? `${stale ? "예전 결과 기준이에요 — 그 뒤 바뀐 곳이 있어요. 바뀐 곳을 다시 계산하면 새로 판정해요. " : ""}${report.summary.text} ${report.summary.note}`
                         : note ?? "계산하면 8개 관문 중 어디까지 확인됐는지 보여 드려요."}
               </span>
             </div>

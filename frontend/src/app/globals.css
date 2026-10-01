@@ -8382,3 +8382,18 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 .pg-port--can .pg-port-name, .pg-port--needs .pg-port-name { display: block; position: absolute; top: -9px; padding: 1px 6px; font-size: 11px;
   background: var(--pg-soft); border-radius: 4px; white-space: nowrap; z-index: 2; }
 .pg-port--can .pg-port-name { color: var(--pg-blue-ink); font-weight: 700; }
+/* BT5 — 예전 결과는 그 노드만 · 바뀐 곳만 계산 · 영향 줄 · 내는 것 = 받는 노드 */
+.pg-summary--stale { display: inline-flex; align-items: center; gap: 8px; }
+.pg-stale-run { font: inherit; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 8px; border: 0;
+  background: var(--pg-cta); color: #fff; cursor: pointer; }
+.pg-stale-run:disabled { opacity: .5; cursor: default; }
+.pg-stale-run:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-rail-wrap[data-stale] .pg-rail-pill-text { color: var(--pg-assume); }
+.pg-impact { margin: -8px 0 16px; padding: 8px 12px; border-radius: 10px; background: var(--pg-soft); font-size: 13px; color: var(--pg-body);
+  cursor: default; }
+.pg-impact:hover, .pg-impact:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 0; color: var(--pg-ink); }
+.pg-gives { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pg-gives-node { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--pg-blue-ink); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; }
+.pg-gives-node:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 1px; border-radius: 3px; }
+.pg-gives-none { color: var(--pg-mute); }

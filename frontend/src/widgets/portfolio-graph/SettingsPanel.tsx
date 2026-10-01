@@ -20,6 +20,7 @@ import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
 import { sourcesFor } from "@/entities/portfolio-graph";
+import { descendantsOf } from "./store";
 
 type Params = Record<string, unknown>;
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -485,8 +486,51 @@ function SourcePicks({ node, entry, nodes, edges, catalog, plainOf, onRewire }: 
   );
 }
 
+/**
+ * 내는 것(BT5) — 타입 이름만이 아니라 **누가 받는지**. 받는 노드 이름은 누를 수 있다. 아무도 안 받으면 그렇다고 말한다
+ * (내는 값이 어디에도 쓰이지 않는다는 것도 관계다).
+ */
+function Gives({ node, entry, edges, plainOf, onFocus }: {
+  node: PgNode; entry: NodeCatalogEntry; edges: Edge[]; plainOf: (id: string) => string; onFocus?: (id: string) => void;
+}) {
+  const out = edges.filter((e) => e.source === node.id);
+  return (
+    <ul className="pg-gives">
+      {entry.outputs.map((o) => {
+        const to = out.filter((e) => e.sourceHandle === o.name);
+        return (
+          <li key={o.name} className="pg-gives-row" data-port={o.name}>
+            <span className="pg-gives-type">{PORT_PLAIN[o.type] ?? o.name}</span>
+            {to.length ? (
+              <span className="pg-gives-to"> → {to.map((e, i) => (
+                <span key={e.id}>{i > 0 && ", "}
+                  <button type="button" className="pg-gives-node" data-node={e.target} onClick={() => onFocus?.(e.target)}>{plainOf(e.target)}</button>
+                </span>
+              ))}</span>
+            ) : <span className="pg-gives-none"> — 아직 아무 노드도 받지 않아요</span>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** 영향 줄(BT5) — 이 노드를 바꾸면 다시 계산될 노드 수(자기 + 하류). 올리거나 초점을 두면 그 노드만 또렷하다. */
+function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpact?: (ids: string[] | null) => void }) {
+  const down = descendantsOf([node.id], edges);
+  const ids = [node.id, ...down];
+  return (
+    <p className="pg-impact" data-count={ids.length} tabIndex={0}
+       onMouseEnter={() => onImpact?.(ids)} onMouseLeave={() => onImpact?.(null)}
+       onFocus={() => onImpact?.(ids)} onBlur={() => onImpact?.(null)}>
+      {down.length ? `이 노드를 바꾸면 ${ids.length}개 노드가 다시 계산돼요 — 이 노드와 그 뒤 ${down.length}개.`
+        : "이 노드를 바꾸면 이 노드만 다시 계산돼요 — 뒤에 이어진 노드가 없어요."}
+    </p>
+  );
+}
+
 export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
-  result, stale, onSave, saveFollowUp, onRewire }: {
+  result, stale, onSave, saveFollowUp, onRewire, onFocus, onImpact }: {
   node: PgNode;
   entry: NodeCatalogEntry | undefined;
   nodes: PgNode[];
@@ -504,6 +548,10 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   saveFollowUp?: { label: string; run: (savedId: string) => void } | null;
   /** 끌지 않고 잇기(BT4) — 입력마다 "어디서 받을까요". 없으면 고르기 칸을 그리지 않는다. */
   onRewire?: (port: string, source: string | null, sourceHandle: string | null) => void;
+  /** 받는 노드 이름을 누르면 그 노드로(BT5). */
+  onFocus?: (id: string) => void;
+  /** 영향 줄에 올리면 다시 계산될 노드만 또렷하게(BT5) — null 이면 풀기. */
+  onImpact?: (ids: string[] | null) => void;
 }) {
   const params = node.data.params ?? {};
   const plainOf = (id: string) => {
@@ -534,9 +582,10 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
       {entry && (
         <dl className="pg-io">
           <div><dt>받는 것</dt><dd>{receives.length ? receives.join(", ") : "없어요 — 여기서 시작해요."}</dd></div>
-          <div><dt>내는 것</dt><dd>{entry.outputs.map((o) => PORT_PLAIN[o.type] ?? o.name).join(", ") || "없어요"}</dd></div>
+          <div><dt>내는 것</dt><dd>{entry.outputs.length === 0 ? "없어요" : <Gives node={node} entry={entry} edges={edges} plainOf={plainOf} onFocus={onFocus} />}</dd></div>
         </dl>
       )}
+      {entry && <Impact node={node} edges={edges} onImpact={onImpact} />}
       {entry && onRewire && <SourcePicks node={node} entry={entry} nodes={nodes} edges={edges} catalog={catalog} plainOf={plainOf}
                                          onRewire={onRewire} />}
       {!expert && entry && (
