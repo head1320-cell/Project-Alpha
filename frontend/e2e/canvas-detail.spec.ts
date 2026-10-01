@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { contrastAudit, type AuditResult } from "./helpers";
 
 /**
  * BT7 · 노드 카드·판 다듬기 — 부품 명세 · 고치는 법 · 연습용 표시 · 가까이 포트 이름 · 렌더러 셋
@@ -156,3 +157,36 @@ test("명세 칸의 수 = 서버 explain 의 수 · 계산 전에는 그렇다�
   await expect(page.locator('.pg-passport [data-k="unmeasured"] dd')).toHaveText(`${(ex.unmeasured ?? []).length}가지`);
   await expect(page.locator('.pg-passport [data-k="stage"] dd')).toHaveText("비중 정하기");
 });
+
+// ── 대비 AA — 선 판 · 명세 · 고치는 법 (라이트/다크) ───────────────────────────────────────────────
+
+for (const theme of ["light", "dark"] as const) {
+  test(`선 판·명세·고치는 법 대비 AA (${theme})`, async ({ page }) => {
+    await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+    await openWith(page, LOOSE_OPT);
+    if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect(node(page, "optimizer").locator(".pg-node-fix")).toBeVisible();
+    let r = await page.evaluate<AuditResult>(contrastAudit(`.pg-node[data-node-id="optimizer"]`));
+    expect(r.low, `고치는 법 ${JSON.stringify(r.low)}`).toEqual([]);
+
+    await run(page);
+    // 선 판 — 수익률 → 비중 계산 선(계보 칩이 있는 선)
+    const wire = page.locator('.react-flow__edge[data-testid="rf__edge-universe.universe->returns.universe"] path.react-flow__edge-path');
+    const p = await wire.evaluate((el) => {
+      const pa = el as SVGPathElement; const q = pa.getPointAtLength(pa.getTotalLength() * 0.5); const m = pa.getScreenCTM()!;
+      return { x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f };
+    });
+    await page.mouse.click(p.x, p.y);
+    await expect(page.locator(".pg-wire-sheet")).toBeVisible();
+    r = await page.evaluate<AuditResult>(contrastAudit(".pg-wire-sheet"));
+    expect(r.checked).toBeGreaterThan(5);
+    expect(r.low, `선 판 ${JSON.stringify(r.low)}`).toEqual([]);
+
+    await node(page, "optimizer").click();
+    await page.locator('.pg-tab[data-tab="settings"]').click();
+    await expect(page.locator(".pg-passport")).toBeVisible();
+    r = await page.evaluate<AuditResult>(contrastAudit(".pg-settings"));
+    expect(r.checked).toBeGreaterThan(10);
+    expect(r.low, `설정 판 ${JSON.stringify(r.low)}`).toEqual([]);
+  });
+}
