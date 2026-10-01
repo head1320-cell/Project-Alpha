@@ -22,13 +22,12 @@ test("Landing: 모듈 갤러리에 6개 카드와 Allocation Studio 가 있다",
   expect(uniq(sink.pageErrors), "landing page errors").toEqual([]);
 });
 
-test("Dashboard: module grid shows Allocation card + a breadcrumb bar", async ({ page }) => {
+test("Dashboard: module grid shows Allocation card · 최상위 화면에는 브레드크럼이 없다(BU0)", async ({ page }) => {
   const sink = trackErrors(page);
   await page.goto("/dashboard", { waitUntil: "networkidle" });
 
-  // breadcrumb (shell-level) is present and names the module
-  await expect(page.locator(".tcrumb")).toBeVisible();
-  await expect(page.locator(".tcrumb")).toContainText("PROJECT ALPHA");
+  // BU0 — 최상위 화면은 메뉴가 "지금 어디"를 말한다. 브레드크럼은 중첩 경로에만(아래 짝 테스트).
+  await expect(page.locator(".tcrumb")).toHaveCount(0);
   // AAS module card present and links to /allocation
   const aas = page.locator(".dash-mod", { hasText: "Allocation" }).first();
   await expect(aas).toBeVisible();
@@ -39,34 +38,76 @@ test("Dashboard: module grid shows Allocation card + a breadcrumb bar", async ({
   expect(uniq(sink.pageErrors), "dashboard page errors").toEqual([]);
 });
 
-test("Breadcrumb renders with the correct module on each tool tab", async ({ page }) => {
+// ── BU0 · 셸 — 한국어 메뉴 · 지금 화면 표시 · 중첩에만 브레드크럼 ─────────────────────────────────────
+
+const MENU = ["홈", "종목 찾기", "백테스트", "경제 흐름", "기업 분석", "위험 점검", "포트폴리오 설계", "데이터 상태",
+  "파생상품 계산기", "설정"];
+
+test("메뉴(BU0): 한국어 이름 · 번호·고정폭 없음 · 화면마다 '지금 여기'는 정확히 하나이고 그 화면의 이름이다", async ({ page }) => {
+  await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+  const items = page.locator(".terminal-nav .nav-item");
+  await expect(items).toHaveCount(MENU.length);                       // 로그인 안 됨 — 관리 메뉴 없음
+  expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(MENU);
+  await expect(page.locator(".nav-number")).toHaveCount(0);
+  const font = await page.locator(".terminal-nav .nav-text").first().evaluate((e) => getComputedStyle(e).fontFamily);
+  expect(font, "메뉴 글자는 고정폭이 아니다").not.toMatch(/Mono|monospace/i);
+  await expect(page.locator(".terminal-main .corner-mark, .terminal-main .grid-overlay")).toHaveCount(0);
+
   const cases: [string, string][] = [
-    ["/screener", "Screener"], ["/backtest", "Backtester"], ["/macro", "Macro Analysis"],
-    ["/insights", "Company Analysis"], ["/risk-tools", "Risk Analysis"], ["/allocation", "Allocation Studio"],
+    ["/dashboard", "홈"], ["/screener", "종목 찾기"], ["/backtest", "백테스트"], ["/macro", "경제 흐름"],
+    ["/insights", "기업 분석"], ["/risk-tools", "위험 점검"], ["/allocation", "포트폴리오 설계"], ["/derivatives", "파생상품 계산기"],
+    ["/macro/tsfm-latent", "경제 흐름"],                                  // 중첩도 상위 메뉴가 켜진다
   ];
   for (const [path, label] of cases) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
-    const cur = page.locator(".tcrumb-cur").first();
-    await expect(cur, `crumb on ${path}`).toBeVisible();
-    await expect(cur).toContainText(label);
+    const cur = page.locator('.terminal-nav [aria-current="page"]');
+    await expect(cur, `지금 여기 on ${path}`).toHaveCount(1);
+    await expect(cur).toHaveAttribute("aria-label", label);
   }
 });
 
-// The breadcrumb must not overlap a tab's own top toolbar (Company search / Screener universe).
+test("브레드크럼(BU0): 중첩 경로에만 '상위 › 현재' — 상위는 누르면 돌아가고, 최상위에는 없다(짝)", async ({ page }) => {
+  for (const path of ["/screener", "/macro", "/insights", "/allocation", "/settings"]) {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".terminal-nav .nav-item").first()).toBeVisible();
+    await expect(page.locator(".tcrumb"), `최상위 ${path} 에는 브레드크럼이 없다`).toHaveCount(0);
+  }
+  await page.goto("/macro/tsfm-latent", { waitUntil: "domcontentloaded" });
+  const crumb = page.locator(".tcrumb");
+  await expect(crumb).toBeVisible();
+  await expect(crumb.locator(".tcrumb-up")).toHaveText("경제 흐름");
+  await expect(crumb.locator(".tcrumb-cur")).toHaveText("잠재 요인");
+  await expect(crumb.locator(".tcrumb-cur")).toHaveAttribute("aria-current", "page");
+  // 브레드크럼은 본문 첫 제목을 덮지 않는다 — 상자가 null 이면 이 비교는 공허하다, 그래서 먼저 단언한다.
+  const a = await crumb.boundingBox();
+  const h = await page.locator(".terminal-main h1").first().boundingBox();
+  expect(a, "브레드크럼 상자").not.toBeNull();
+  expect(h, "본문 제목 상자").not.toBeNull();
+  expect(intersects(a, h), "브레드크럼이 본문 제목과 겹친다").toBe(false);
+  await crumb.locator("a.tcrumb-up").click();
+  await expect(page).toHaveURL(/\/macro$/);
+  await expect(page.locator(".tcrumb")).toHaveCount(0);
+});
+
+// The breadcrumb box comparison helper (bbox 가 null 이면 false — 그래서 호출 전에 null 이 아님을 단언한다).
 const intersects = (a: { x: number; y: number; width: number; height: number } | null, b: typeof a) =>
   !!a && !!b && !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
 
-test("Breadcrumb does not overlap the tab top toolbar (Company + Screener)", async ({ page }) => {
-  for (const path of ["/insights", "/screener"]) {
-    await page.goto(path, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
-    const crumb = await page.locator(".tcrumb").boundingBox();
-    const toolbar = await page.locator(".t-toolbar").first().boundingBox();
-    expect(intersects(crumb, toolbar), `crumb/toolbar overlap on ${path}`).toBe(false);
+test("관리 메뉴(BU0): 관리자에게만 보인다 — 분석가·로그인 안 됨에는 없다(짝)", async ({ page }) => {
+  const TOKEN_KEY = "project-alpha.auth-token";
+  let role = "analyst";
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ status: 200,
+    json: { principal: { username: "누구", role }, secret_state: "configured", secret_reason: null, admin_password_state: "set" } }));
+  await page.addInitScript((k) => localStorage.setItem(k, "t-nav"), TOKEN_KEY);
+  await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('.terminal-header .pf-avatar[data-state="signed_in"]')).toBeVisible();
+  await expect(page.locator('.terminal-nav a[href="/admin/live-trading"]')).toHaveCount(0);
+  role = "admin";
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator('.terminal-header .pf-avatar[data-state="signed_in"]')).toBeVisible();
+  for (const [href, label] of [["/admin/live-trading", "실거래"], ["/admin/multi-backtest", "여러 전략 백테스트"], ["/admin/realism", "현실성 점검"]]) {
+    await expect(page.locator(`.terminal-nav a[href="${href}"]`)).toHaveAttribute("aria-label", label);
   }
-  // the Company 분석 button (in the toolbar) is visible/clickable, not covered
-  await page.goto("/insights", { waitUntil: "networkidle" });
-  await expect(page.locator(".ca-pg-go")).toBeVisible();
 });
 
 test("Shell header(BR R3): 오른쪽 슬롯은 회원 프로필 동그라미 — 국면 배지는 없다(국면은 /macro) · 모든 탭에서 같다", async ({ page }) => {
@@ -99,8 +140,8 @@ test("S1d: 셸 크롬(헤더·사이드바)의 모든 포커스 대상이 앱 �
   );
   const n = await targets.count();
   // 크롬 자체가 사라지면 0개가 되고 아래 루프가 통째로 비어 통과한다 — 그래서 먼저 센다.
-  // 브랜드 1 + 레일 토글 1 + 네비 8 = 10 이 하한(+ 프로필 동그라미 1 — BR R3).
-  expect(n, "셸 크롬의 포커스 대상 수").toBeGreaterThanOrEqual(10);
+  // 브랜드 1 + 레일 토글 1 + 메뉴 10(BU0 — 파생·설정이 메뉴에 들어왔다) = 12 가 하한(+ 프로필 동그라미 1 — BR R3).
+  expect(n, "셸 크롬의 포커스 대상 수").toBeGreaterThanOrEqual(12);
 
   const bare: string[] = [];
   for (let i = 0; i < n; i++) {

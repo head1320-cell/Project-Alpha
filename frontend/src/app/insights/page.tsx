@@ -1,6 +1,7 @@
 "use client";
 // Company Analysis — 실데이터 Cockpit. 코어 병렬 로드 + 탭별 lazy. 스크리너 핸드오프 지원.
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import CompanyCockpit, { type LazyLoaders } from "@/widgets/company/CompanyCockpit";
 import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/entities/company/data";
@@ -14,7 +15,7 @@ const QUICK = [
   { code: "035420", name: "NAVER" },
 ];
 
-export default function CompanyPage() {
+function CompanyPage() {
   const [code, setCode] = useState("005930");
   const [input, setInput] = useState("");
   const [sug, setSug] = useState<{ code: string; name: string }[]>([]);
@@ -28,6 +29,10 @@ export default function CompanyPage() {
   const error = queryError
     ? ((queryError as Error)?.message === "NOT_FOUND" ? `종목 ${code}을(를) 찾을 수 없어요.` : "데이터를 불러오지 못했어요 (백엔드 확인).")
     : null;
+
+  // 머리 줄 찾기(BU0) — `/insights?code=005930` 으로 오면 그 종목을 연다. 6자리 코드만 받는다(이름 해석은 서버 검색이 이미 했다).
+  const qCode = useSearchParams().get("code");
+  useEffect(() => { if (qCode && /^\d{6}$/.test(qCode)) setCode(qCode); }, [qCode]);
 
   // 스크리너 핸드오프 (sessionStorage)
   useEffect(() => {
@@ -110,4 +115,9 @@ export default function CompanyPage() {
       {data && !loading && <CompanyCockpit company={data} onPick={setCode} lazy={lazy} />}
     </div>
   );
+}
+
+/** useSearchParams 는 Suspense 경계 안에서만 정적 빌드가 된다(Next 14) — 경계 동안은 같은 로딩 상태를 보인다. */
+export default function CompanyPageRoute() {
+  return <Suspense fallback={<LoadingState />}><CompanyPage /></Suspense>;
 }

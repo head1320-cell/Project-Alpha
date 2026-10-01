@@ -1,55 +1,42 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// Breadcrumb — 모든 툴 탭 상단의 공통 경로 표시(셸 레벨, terminal-content 최상단).
-//   pathname → 활성 모듈 해소(가장 긴 프리픽스) + 더 깊은 세그먼트가 있으면 말단 크럼 추가.
-//   ⌂ PROJECT ALPHA › {NN} {모듈} [ › {서브} ]. 데이터 페칭 0 · 랜딩(/)엔 셸이 안 붙어 미표시.
+// Breadcrumb — 중첩 경로에만 "상위 › 현재" 한 줄 (BU0 · ADR-003).
+//   최상위 화면(홈·종목 찾기 …)은 메뉴가 이미 "지금 어디"를 말하므로 그리지 않는다(예전엔 메뉴를 되풀이했다).
+//   알려진 중첩만 이름을 붙인다 — 동적 id(실행 번호 등)는 화면에 내보내지 않는다. 데이터 페칭 0.
+//   클래스 `.tcrumb`·`.tcrumb-up`·`.tcrumb-sep`·`.tcrumb-cur` 는 E2E 계약(nav.spec).
 // ═══════════════════════════════════════════════════════════════════════════════
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// 셸 MODULES와 동일한 순서/라벨(경로 프리픽스 해소용) — 라벨은 크럼 표기에 맞춰 간결화.
-const MODULES: { n: string; label: string; href: string }[] = [
-  { n: "00", label: "Dashboard", href: "/dashboard" },
-  { n: "01", label: "Screener", href: "/screener" },
-  { n: "02", label: "Backtester", href: "/backtest" },
-  { n: "03", label: "Macro Analysis", href: "/macro" },
-  { n: "04", label: "Company Analysis", href: "/insights" },
-  { n: "05", label: "Risk Analysis", href: "/risk-tools" },
-  { n: "06", label: "Allocation Studio", href: "/allocation" },
-  { n: "07", label: "Data Infra", href: "/admin/data" },
-];
+type Crumb = { up: string; upHref: string | null; cur: string };
 
-// 말단 세그먼트 라벨 — 알려진 것만 사람이 읽는 이름으로, 그 외엔 표시 안 함(동적 id 등 노출 방지).
-const SUB_LABELS: Record<string, string> = {
-  loading: "실행 중", results: "결과", compare: "비교",
-  construct: "구성", thesis: "테제", timing: "타이밍", optimize: "최적화",
-  stress: "스트레스", explain: "설명", journal: "저널", overview: "개요",
-  execution: "실행", alphalab: "AlphaLab", data: "데이터", "live-trading": "라이브",
-  "multi-backtest": "멀티 백테스트", realism: "리얼리즘",
+const MACRO_STUDIO: Record<string, string> = {
+  "tsfm-latent": "잠재 요인", "neural-sde": "기간 구조", "causal-deepm": "인과 관계",
+  "pinn-tail": "꼬리 위험", "agentic-mcp": "뷰 만들기",
 };
+const RUN_STEP: Record<string, string> = { loading: "실행 중", results: "결과", compare: "비교" };
+const ADMIN: Record<string, string> = { "live-trading": "실거래", "multi-backtest": "여러 전략 백테스트", realism: "현실성 점검" };
+
+/** 경로 → 크럼. 알려진 중첩이 아니면 null(최상위·모르는 경로는 그리지 않는다). */
+export function crumbOf(pathname: string): Crumb | null {
+  const seg = pathname.split("/").filter(Boolean);
+  if (seg[0] === "backtest" && seg[1] === "runs" && seg.length === 4 && RUN_STEP[seg[3]])
+    return { up: "백테스트", upHref: "/backtest", cur: RUN_STEP[seg[3]] };
+  if (seg[0] === "macro" && seg.length === 2 && MACRO_STUDIO[seg[1]])
+    return { up: "경제 흐름", upHref: "/macro", cur: MACRO_STUDIO[seg[1]] };
+  if (seg[0] === "admin" && seg.length === 2 && ADMIN[seg[1]])
+    return { up: "관리", upHref: null, cur: ADMIN[seg[1]] };
+  return null;
+}
 
 export function Breadcrumb() {
-  const pathname = usePathname() || "";
-  // 가장 긴 프리픽스로 활성 모듈 해소
-  const mod = MODULES
-    .filter((m) => pathname === m.href || pathname.startsWith(m.href + "/"))
-    .sort((a, b) => b.href.length - a.href.length)[0];
-  if (!mod) return null; // 매핑 안 되는 경로(랜딩 등)엔 크럼 없음
-
-  // 모듈 프리픽스 이후 세그먼트 중 알려진 라벨만 말단 크럼으로
-  const rest = pathname.slice(mod.href.length).split("/").filter(Boolean);
-  const subKey = [...rest].reverse().find((s) => SUB_LABELS[s]);
-  const sub = subKey ? SUB_LABELS[subKey] : null;
-
+  const c = crumbOf(usePathname() || "");
+  if (!c) return null;
   return (
-    <nav className="tcrumb" aria-label="Breadcrumb">
-      <Link href="/dashboard" className="tcrumb-home" aria-label="대시보드로">⌂</Link>
-      <span className="tcrumb-brand">PROJECT ALPHA</span>
+    <nav className="tcrumb" aria-label="현재 위치">
+      {c.upHref ? <Link href={c.upHref} className="tcrumb-up">{c.up}</Link> : <span className="tcrumb-up">{c.up}</span>}
       <span className="tcrumb-sep" aria-hidden>›</span>
-      <Link href={mod.href} className="tcrumb-cur">
-        <span className="tcrumb-n">{mod.n}</span>{mod.label}
-      </Link>
-      {sub && <><span className="tcrumb-sep" aria-hidden>›</span><span className="tcrumb-sub">{sub}</span></>}
+      <span className="tcrumb-cur" aria-current="page">{c.cur}</span>
     </nav>
   );
 }

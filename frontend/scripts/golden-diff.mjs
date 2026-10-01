@@ -8,6 +8,8 @@
  *
  * 출력: 라우트 × 범위(shell·main·frame)마다 더해진 키 · 사라진 키 · 새 스타일 조합 수(+ 예시 몇 개).
  * `--expect-scope shell` 처럼 주면 그 밖의 범위에 새 조합이 하나라도 있으면 종료 코드 1 — 셸만 바꾼 커밋의 문지기.
+ * `--allow-keys <정규식>` 은 범위 밖이라도 이 키는 바뀌어도 된다고 **이름으로** 연다(BU0 — 브레드크럼 `.tcrumb*` 는 본문 안에
+ * 그려져 `main:` 키다). 열린 키는 출력에 `(허용)` 으로 따로 센다 — 조용히 빠지지 않는다.
  * ★사라진 키·조합은 실패로 세지 않는다★ — 늦게 그려진 요소(데이터 지연)는 바뀐 것이 아니다(골든 테스트와 같은 규칙).
  */
 import { execSync } from "node:child_process";
@@ -23,6 +25,7 @@ const bool = (name) => { const i = args.indexOf(name); if (i < 0) return false; 
 
 const rev = flag("--rev");
 const expectScope = flag("--expect-scope");
+const allowRe = (() => { const v = flag("--allow-keys"); return v ? new RegExp(v) : null; })();
 const unscoped = bool("--unscoped");
 const read = (f) => JSON.parse(readFileSync(f, "utf8"));
 const before = rev
@@ -31,7 +34,7 @@ const before = rev
 const after = read(args.shift() ?? DEFAULT);
 
 function usage() {
-  console.error("사용: golden-diff.mjs <이전.json> [<이후.json>] | --rev <git-rev> [<이후.json>] [--expect-scope shell] [--unscoped]");
+  console.error("사용: golden-diff.mjs <이전.json> [<이후.json>] | --rev <git-rev> [<이후.json>] [--expect-scope shell] [--allow-keys 정규식] [--unscoped]");
   process.exit(2);
 }
 const scopeOf = (k) => (/^(shell|main|frame):/.exec(k)?.[1] ?? "(범위 없음)");
@@ -49,7 +52,8 @@ for (const r of routes) {
   const a = unscoped ? unscope(before[r]) : (before[r] ?? {});
   const b = unscoped ? unscope(after[r]) : (after[r] ?? {});
   const by = {};
-  const bump = (k, field, ex) => { const s = (by[unscoped ? "(전체)" : scopeOf(k)] ??= { added: 0, removed: 0, combos: 0, ex: [] });
+  const bucket = (k) => (unscoped ? "(전체)" : scopeOf(k)) + (allowRe && scopeOf(k) !== expectScope && allowRe.test(k) ? " (허용)" : "");
+  const bump = (k, field, ex) => { const s = (by[bucket(k)] ??= { added: 0, removed: 0, combos: 0, ex: [] });
                                    s[field] += 1; if (ex && s.ex.length < 3) s.ex.push(ex); };
   for (const k of Object.keys(b)) if (!(k in a)) bump(k, "added", `+ ${k}`);
   for (const k of Object.keys(a)) if (!(k in b)) bump(k, "removed");
@@ -59,7 +63,7 @@ for (const r of routes) {
   for (const [scope, s] of lines) {
     console.log(`${r}  [${scope}] 더함 ${s.added} · 사라짐 ${s.removed} · 새 조합 ${s.combos}`);
     for (const e of s.ex) console.log(`    ${e}`);
-    if (expectScope && scope !== expectScope && (s.combos || s.added)) bad += 1;
+    if (expectScope && scope !== expectScope && !scope.endsWith(" (허용)") && (s.combos || s.added)) bad += 1;
     if (unscoped && s.combos) bad += 1;
   }
 }

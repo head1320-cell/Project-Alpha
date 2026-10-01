@@ -38,9 +38,10 @@ const MODULES: { name: string; path: string; panels: string }[] = [
 // (S1b-2 가 3.16:1 로 퇴출한 값)도 마찬가지다.
 // 고치는 것은 A12(모션 단계)의 범위 밖이라, CSS 특이성 가드의 `KNOWN_COLLISIONS` 와 같은
 // 방식으로 **기존 실패 수를 기록**한다. 새 결함은 빨개지고, 이 수는 줄어들 수만 있다.
+// BU0 — 셸 브레드크럼이 최상위 화면에서 빠져(`.tcrumb-sep` 결함이 사라짐) 일곱 모듈 모두 1씩 줄었다(실측 2회 같음).
 const KNOWN_LOW: Record<string, number> = {
-  "00 Dashboard": 1, "01 Screener": 3, "02 Backtester": 9,
-  "03 Macro": 4, "04 Company": 6, "05 Risk": 1, "07 Data Infra": 1,
+  "00 Dashboard": 0, "01 Screener": 2, "02 Backtester": 8,
+  "03 Macro": 3, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
 };
 
 /** §62 가 정의한 모션 토큰 — 초 단위. 0 은 "전이 없음"이라 항상 허용된다. */

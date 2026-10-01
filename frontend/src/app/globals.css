@@ -715,123 +715,103 @@ h6 { font-size: 1rem; }
   overflow: hidden;
 }
 
-/* Header */
+/* ── 셸 (BU0 · ADR-003) — 토스식: 흰 머리 줄 · 한국어 메뉴 + 아이콘 · 번호·고정폭·격자 무늬·모서리 표식 없음.
+   색은 --tx-* 만 쓴다(본문 모듈은 각 단계에서 옮긴다). 클래스 이름은 E2E 계약이라 그대로다. ── */
 .terminal-header {
-  height: var(--t-header-h);
-  border-bottom: 1px solid var(--t-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  z-index: 100;
-  background: var(--t-bg);
-  flex-shrink: 0;
+  height: var(--t-header-h); display: flex; align-items: center; gap: 16px; padding: 0 20px 0 10px;
+  z-index: 100; background: var(--tx-surface); border-bottom: 1px solid var(--tx-line); flex-shrink: 0;
 }
-.terminal-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--t-ink); }
-.terminal-brand .logo-box {
-  width: 24px; height: 24px; background: var(--t-accent);
-  display: flex; align-items: center; justify-content: center;
-}
-.terminal-brand .logo-box svg { width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 1.5; }
-.terminal-brand .project-name { font-weight: 600; font-size: 14px; letter-spacing: -0.02em; text-transform: uppercase; }
-.terminal-brand .version { opacity: 0.3; font-weight: 400; margin-left: 4px; }
-.header-actions { display: flex; align-items: center; gap: 24px; }
-.search-trigger {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border: 1px solid var(--t-border); border-radius: 2px;
-  color: var(--t-muted); font-size: 13px; cursor: pointer; transition: all 0.1s ease;
-}
-.search-trigger:hover { border-color: var(--t-ink); color: var(--t-ink); }
-.search-trigger .kbd {
-  font-family: var(--t-mono); font-size: 11px;
-  border: 1px solid var(--t-border); padding: 0 4px; border-radius: 2px;
-}
-.account { display: flex; align-items: center; gap: 10px; padding-left: 24px; border-left: 1px solid var(--t-border); height: 32px; }
-.account-label { font-size: 13px; font-weight: 500; }
-.account .avatar { width: 24px; height: 24px; background: #eee; border-radius: 50%; border: 1px solid var(--t-border); }
+.terminal-brand { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 8px; border-radius: 10px;
+  text-decoration: none; color: var(--tx-ink); flex-shrink: 0; }
+.terminal-brand:hover { background: var(--tx-soft); }
+.terminal-brand .logo-box { width: 28px; height: 28px; border-radius: 8px; background: var(--tx-blue);
+  display: flex; align-items: center; justify-content: center; }
+.terminal-brand .logo-box svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 1.75; }
+.terminal-brand .project-name { font-weight: 700; font-size: 17px; letter-spacing: -0.02em; white-space: nowrap; }
+.header-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+
+/* 머리 줄 찾기(`/`) — 종목·화면 */
+.tx-find { position: relative; flex: 0 1 400px; min-width: 0; display: flex; align-items: center; gap: 8px; height: 40px;
+  padding: 0 10px 0 12px; border-radius: 12px; background: var(--tx-soft); color: var(--tx-mute); }
+.tx-find:focus-within { background: var(--tx-surface); box-shadow: inset 0 0 0 2px var(--tx-blue); }
+.tx-find-i { flex-shrink: 0; }
+.tx-find-input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--tx-ink);
+  font: inherit; font-size: 15px; outline: none; }
+.tx-find-input::placeholder { color: var(--tx-mute); opacity: 1; }
+.tx-find-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.tx-find-kbd { font: inherit; font-size: 12px; font-weight: 600; min-width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 6px; background: var(--tx-surface); color: var(--tx-mute); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.tx-find:focus-within .tx-find-kbd { display: none; }
+.tx-find-pop { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 120; padding: 6px; border-radius: 16px;
+  background: var(--tx-surface); border: 1px solid var(--tx-line);
+  box-shadow: 0 2px 6px rgb(25 31 40 / 6%), 0 12px 32px rgb(25 31 40 / 12%); }
+.tx-find-list { list-style: none; margin: 0; padding: 0; }
+.tx-find-opt { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 12px;
+  border-radius: 10px; cursor: pointer; }
+.tx-find-opt--on { background: var(--tx-soft); }
+.tx-find-opt-t { font-size: 15px; font-weight: 600; color: var(--tx-ink); }
+.tx-find-opt-sub { font-size: 13px; color: var(--tx-mute); white-space: nowrap; }
+.tx-find-note { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--tx-mute); }
+.tx-find-note--err { color: var(--tx-danger); }
 
 /* Body */
 .terminal-body { flex: 1; display: flex; overflow: hidden; position: relative; }
 
-/* Sidebar — 호버/포커스 시에만 펼쳐지는 아이콘 레일 (오버레이: 본문 리플로우 없음) */
+/* 메뉴 — 접힌 아이콘 레일(56px), ≡ 로만 펼친다(본문을 밀지 않고 위에 뜬다). */
 .terminal-sidebar {
   position: absolute; left: 0; top: 0; bottom: 0; z-index: 50;
-  width: var(--t-rail-w); overflow: hidden;
-  background: var(--t-surface); border-right: 1px solid var(--t-border);
-  display: flex; flex-direction: column; padding: 24px 0;
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+  width: var(--t-rail-w); overflow-x: hidden; overflow-y: auto; scrollbar-width: none;
+  background: var(--tx-surface); border-right: 1px solid var(--tx-line);
+  display: flex; flex-direction: column; padding: 10px 0;
+  transition: width 0.26s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.26s ease;
 }
-/* 호버 확장 제거 — 상단 토글(≡) 버튼 클릭으로만 펼침/닫힘 */
-/* 터치/클릭 토글로 고정 펼침 */
-.terminal-sidebar.pinned { width: var(--t-sidebar-w); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.07); }
+.terminal-sidebar.pinned { width: var(--t-sidebar-w); box-shadow: 4px 0 24px rgb(25 31 40 / 8%); }
 .terminal-sidebar.pinned .fade-x, .terminal-sidebar.pinned .nav-meta { opacity: 1; transition-delay: 0s; }
-.sidebar-backdrop { position: absolute; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.18); }
-.rail-toggle { display: flex; align-items: center; height: 44px; width: 100%; margin-bottom: 4px;
-  padding: 0; background: none; border: none; cursor: pointer; color: var(--t-muted); }
-.rail-toggle:hover { color: var(--t-ink); }
-.rail-toggle .nav-icon { width: 18px; height: 18px; margin: 0 14px 0 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.5; fill: none; }
-/* 접힘 시 라벨/번호/푸터 텍스트 숨김 — pinned(토글 펼침)에서만 표시(.terminal-sidebar.pinned 규칙) */
-.terminal-sidebar .fade-x, .terminal-nav .nav-meta {
-  opacity: 0; transition: opacity 0.14s ease; white-space: nowrap;
-}
-.terminal-sidebar .nav-label {
-  font-family: var(--t-mono); font-size: 10px; color: var(--t-muted);
-  text-transform: uppercase; padding: 0 24px 12px 24px; letter-spacing: 0.1em;
-}
+.sidebar-backdrop { position: absolute; inset: 0; z-index: 45; background: rgb(25 31 40 / 18%); }
+/* 다크 — 생성된 밝은 막(:where(.dark) 255/0.25)을 덮는다. 펼친 메뉴 뒤는 어두운 막. */
+.dark .sidebar-backdrop { background: rgb(0 0 0 / 45%); }
+.rail-toggle { display: flex; align-items: center; flex-shrink: 0; height: 44px; width: calc(100% - 16px); margin: 0 8px 6px; padding: 0;
+  border: none; border-radius: 10px; background: none; cursor: pointer; color: var(--tx-sub); }
+.rail-toggle:hover { color: var(--tx-ink); background: var(--tx-soft); }
+.rail-toggle .nav-icon, .terminal-nav .nav-icon { width: 20px; height: 20px; margin: 0 12px 0 10px; flex-shrink: 0;
+  stroke: currentColor; stroke-width: 1.75; fill: none; }
+/* 접히면 글자는 숨는다 — 펼침(pinned)에서만 보인다. 이름은 aria-label 이 말한다(툴팁 없음 — ADR-001). */
+.terminal-sidebar .fade-x, .terminal-nav .nav-meta { opacity: 0; transition: opacity 0.12s ease; white-space: nowrap; }
 .terminal-nav { display: flex; flex-direction: column; }
 .terminal-nav .nav-item {
-  position: relative; display: flex; align-items: center; gap: 0; height: 46px; padding: 0;
-  text-decoration: none; color: var(--t-muted); font-size: 14px; font-weight: 500;
-  transition: background 0.1s ease, color 0.1s ease;
+  position: relative; display: flex; align-items: center; flex-shrink: 0; height: 44px; margin: 1px 8px; padding: 0;
+  border-radius: 10px; text-decoration: none; color: var(--tx-sub); font-size: 15px; font-weight: 600;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-.terminal-nav .nav-item:hover { color: var(--t-ink); background: rgba(18, 0, 255, 0.03); }
-.terminal-nav .nav-item.active { color: var(--t-ink); background: var(--t-bg); }   /* BR R3 — #fff 고정이던 것(다크에서 흰 칸) */
-.terminal-nav .nav-item.active::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-accent);
-}
-.terminal-nav .nav-item.active .nav-icon { stroke: var(--t-accent); }
-.terminal-nav .nav-icon { width: 18px; height: 18px; margin: 0 14px 0 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.5; fill: none; }
-.terminal-nav .nav-meta { display: flex; align-items: center; gap: 8px; }
-.terminal-nav .nav-number { font-family: var(--t-mono); font-size: 11px; opacity: 0.4; width: 16px; }
-.terminal-nav .active .nav-number { opacity: 1; color: var(--t-accent); }
+.terminal-nav .nav-item:hover { color: var(--tx-ink); background: var(--tx-soft); }
+.terminal-nav .nav-item.active { color: var(--tx-cta); background: var(--tx-blue-soft); }
+.terminal-nav .nav-meta { display: flex; align-items: center; }
+.terminal-nav .nav-sep { height: 1px; margin: 8px 16px; background: var(--tx-line); flex-shrink: 0; }
+.terminal-nav .nav-group { padding: 4px 18px; font-size: 12px; font-weight: 700; color: var(--tx-mute); }
+.terminal-header a:focus-visible, .terminal-header button:focus-visible,
+.terminal-sidebar a:focus-visible, .terminal-sidebar button:focus-visible { outline-color: var(--tx-blue); }
 
 /* Main */
 .terminal-main { flex: 1; margin-left: var(--t-rail-w); background: var(--t-bg); position: relative; padding: 40px; overflow-y: auto; }
 .terminal-content { position: relative; z-index: 1; }
 
-/* ── Breadcrumb (셸 레벨, 전 툴 탭 상단) — 정적 글래스 헤더 스트립 ── */
-/* terminal-main 의 40px 패딩을 음수 마진으로 상쇄해 상단·좌우로 블리드하는 풀폭 헤더.
-   position: static(정적) — 스크롤해도 각 탭의 상단 툴바(.t-toolbar 등)를 절대 덮지 않음. */
-.tcrumb { position: static; display: flex; align-items: center; gap: 8px;
-  margin: -40px -40px 20px; padding: 12px 40px;
-  background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px);
-  border-bottom: 1px solid var(--t-border); font-family: var(--t-mono); font-size: 11px; letter-spacing: .04em; }
-.tcrumb-home { color: var(--t-muted); text-decoration: none; font-size: 13px; line-height: 1; transition: color .15s; }
-.tcrumb-home:hover { color: var(--t-accent); }
-.tcrumb-brand { color: var(--t-muted); font-weight: 600; letter-spacing: .08em; }
-.tcrumb-sep { color: var(--t-border); }
-.tcrumb-cur { display: inline-flex; align-items: center; gap: 6px; color: var(--t-ink); font-weight: 600; text-decoration: none; position: relative; }
-.tcrumb-cur::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 1.5px; background: var(--t-accent); transform: scaleX(0); transform-origin: left; transition: transform .18s ease; }
-.tcrumb-cur:hover::after { transform: scaleX(1); }
-.tcrumb-n { color: var(--t-accent); font-weight: 700; }
-.tcrumb-sub { color: var(--t-muted); }
+/* 브레드크럼 — 중첩 경로에만 "상위 › 현재" 한 줄(BU0). 띠·유리 효과·고정폭 없이 본문 흐름 안에. */
+.tcrumb { position: static; display: flex; align-items: center; gap: 6px; margin: -16px 0 16px; padding: 0;
+  background: none; border: 0; font-size: 14px; }
+.tcrumb-up { color: var(--tx-mute); font-weight: 500; text-decoration: none; }
+a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
+.tcrumb-sep { color: var(--tx-mute); }
+.tcrumb-cur { color: var(--tx-ink); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .dash-mod, .dash-mod:hover, .dash-macro, .dash-macro:hover { transform: none !important; transition: none !important; }
-  .tcrumb-cur::after { transition: none !important; }
+  .terminal-sidebar, .terminal-nav .nav-item, .terminal-sidebar .fade-x, .terminal-nav .nav-meta { transition: none !important; }
 }
-
-/* Terminal decorations */
-.terminal-main .grid-overlay {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0.03;
-  background-image: linear-gradient(to right, var(--t-border) 1px, transparent 1px),
-                    linear-gradient(to bottom, var(--t-border) 1px, transparent 1px);
-  background-size: 100px 100px;
+@media (max-width: 640px) {
+  .terminal-header { gap: 8px; padding: 0 12px 0 6px; }
+  .terminal-brand .project-name { display: none; }
+  .tx-find { flex: 1 1 auto; }
+  .tx-find-kbd { display: none; }
 }
-.terminal-main .corner-mark { position: absolute; width: 8px; height: 8px; border: 1px solid var(--t-border); z-index: 2; }
-.terminal-main .top-left { top: 20px; left: 20px; border-right: 0; border-bottom: 0; }
-.terminal-main .top-right { top: 20px; right: 20px; border-left: 0; border-bottom: 0; }
-.terminal-main .bottom-left { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
-.terminal-main .bottom-right { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
 
 /* Terminal meta-stamp — 전 페이지에서 숨김 (REF_ID/ENGINE/AUTH 장식 제거) */
 .meta-stamp { display: none !important; }
@@ -5916,7 +5896,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .pg-page { gap: 0; }
 /* 캔버스는 셸의 40px 여백을 쓰지 않는다 — 작업 면이 화면 끝까지(목업 승인본). */
 .terminal-main:has(.pg-page) { padding: 0; overflow: hidden; overflow: clip; }   /* clip — 판 밑 노드로 초점·scrollIntoView 가 가도 화면이 옆으로 밀리지 않게(BQ Q1) */
-.terminal-main:has(.pg-page) .corner-mark, .terminal-main:has(.pg-page) .grid-overlay { display: none; }
 .pg-loading { display: flex; align-items: center; gap: 8px; padding: 24px; font-size: 13px; color: var(--muted-foreground); }
 .pg-root { display: flex; flex-direction: column; height: calc(100vh - 64px); min-height: 600px; background: var(--pg-canvas); }
 .pg-theme button { font: inherit; }
@@ -8263,8 +8242,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .dark .recharts-polar-radius-axis-tick-value { fill: var(--t-muted); }
 .dark .recharts-default-tooltip { background-color: var(--card) !important; border-color: var(--border) !important; color: var(--foreground); }
 .dark .recharts-tooltip-label { color: var(--foreground) !important; }
-/* 셸 브레드크럼 구분자 — 라이트는 테두리색(1.26:1, 기록된 기존 결함)이고 다크에서는 1.19:1 이었다. 다크만 흐린 글자로. */
-.dark .tcrumb-sep { color: var(--t-muted); }
 /* 강조색 바탕 단추의 글자는 생성기가 --on-accent 로 바꾼다. 누름 색(#0e00cc)은 짙어서 어두운 글자와 안 맞는다 — 밝은 짝으로. */
 .dark .bsc-add-btn:hover, .dark .ca-pg-go:hover { background: #9d97ff; }
 /* 글자색 바탕 단추(전략 저장) — 다크에서 글자색이 밝아져 흰 바탕 단추가 됐다. 다른 주 단추와 같은 강조색으로. */
