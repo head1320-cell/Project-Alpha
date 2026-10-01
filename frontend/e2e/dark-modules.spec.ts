@@ -7,8 +7,10 @@ import { freezeCharts, stubCompletedRun, STUB_RUN_ID } from "./helpers";
 // BS5 — 7개 모듈 다크 (설계 docs/superpowers/specs/2026-09-29-bs-br-leftovers-design.md §BS5)
 // ─────────────────────────────────────────────────────────────────────────────
 // ① ★라이트는 한 픽셀도 바뀌지 않는다★ — 다크를 입히기 **전에** 라이트 계산 스타일(글자·바탕·테두리·SVG 칠)을
-//    `golden/light-styles.json` 에 얼렸다. 요소 종류(태그+클래스)마다 본 스타일 조합의 집합이 같아야 한다.
-//    다시 얼리기: UPDATE_LIGHT_GOLDEN=1 (다크 작업 전 커밋에서만 — 그 뒤에 얼리면 증거가 아니다).
+//    `golden/light-styles.json` 에 얼렸다. 요소 종류(범위:태그+클래스)마다 본 스타일 조합의 집합이 같아야 한다.
+//    BU0a — 키는 범위로 나뉜다: `shell:`(머리 줄·메뉴) · `main:`(모듈 본문) · `frame:`(그 밖의 틀). 그래서 "셸만 바뀌었다"를
+//    키 단위로 확인할 수 있다(`scripts/golden-diff.mjs`).
+//    다시 얼리기: UPDATE_LIGHT_GOLDEN=1 — ★의도한 라이트 변경만★, 그리고 커밋 메시지에 범위별 diff(golden-diff 출력)를 싣는다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const ROUTES = ["/dashboard", "/screener", "/backtest", "/macro", "/macro/agentic-mcp", "/macro/causal-deepm",
@@ -38,7 +40,9 @@ function styleSet(page: Page): Promise<Record<string, string[]>> {
       const cs = getComputedStyle(el);
       if (cs.display === "none" || cs.visibility === "hidden") continue;
       const cls = (el.getAttribute("class") ?? "").split(/\s+/).filter(Boolean).sort().slice(0, 4).join(".");
-      const key = `${el.tagName.toLowerCase()}.${cls}`;
+      // 범위(BU0a) — 셸과 모듈에 같은 `svg.`·`path.` 키가 섞여 있어 "셸만 바뀜"을 확인할 수 없었다.
+      const scope = el.closest(".terminal-header, .terminal-sidebar") ? "shell" : el.closest(".terminal-main") ? "main" : "frame";
+      const key = `${scope}:${el.tagName.toLowerCase()}.${cls}`;
       const v = [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderBottomColor, cs.fill, cs.stroke, cs.backgroundImage === "none" ? "" : cs.backgroundImage].join("|");
       (out[key] ??= new Set()).add(v);
     }
