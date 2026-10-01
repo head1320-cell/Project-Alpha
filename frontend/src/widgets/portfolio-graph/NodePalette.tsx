@@ -7,9 +7,9 @@
  * `LEGACY_SCREENS`(BL4 — 마법사는 지웠고 옛 주소는 캔버스로 온다). 맨 아래 "빠른 시작" 은 템플릿.
  * 클릭하면 캔버스 가운데에, 끌면 놓은 자리에 놓인다.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, Download, PanelLeftClose, Search, Trash2, Upload } from "lucide-react";
-import { parseBlock, TEMPLATES, type NodeCatalogEntry, type WorkflowStage } from "@/entities/portfolio-graph";
+import { isSolo, parseBlock, TEMPLATES, type NodeCatalogEntry, type WorkflowStage } from "@/entities/portfolio-graph";
 import { downloadBlock } from "./GroupFrame";
 import { usePortfolioGraph } from "./store";
 import { legacyScreensOf } from "@/entities/portfolio-graph/legacyScreens";
@@ -22,7 +22,7 @@ export const PALETTE_KIND_PREFIX = "application/x-pg-kind.";
 export type LeftTab = "proc" | "add";
 
 export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal, hidden = false, onClose,
-                              tab = "add", onTab, procedure }: {
+                              tab = "add", onTab, procedure, next = null }: {
   catalog: NodeCatalogEntry[];
   stages: WorkflowStage[];
   /** 처음 검색어 — 옛 주소로 온 사람에게 그 화면의 일을 하는 노드를 먼저 보인다(BL4). */
@@ -38,6 +38,8 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
   tab?: LeftTab;
   onTab?: (t: LeftTab) => void;
   procedure?: ReactNode;
+  /** 지금 이을 수 있어요(BT6) — 사람이 노드를 골랐을 때만. 누르면 그 노드 뒤에 이어 붙는다(BT3 규칙). */
+  next?: { from: string; items: NodeCatalogEntry[] } | null;
 }) {
   /** 노드 종류 → 그 일을 하던 예전 화면(검색·툴팁용). */
   const legacyOf = (kind: string) => legacyScreensOf(kind);
@@ -81,6 +83,17 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
       )}
       <div id="pg-left-panel-add" role={procedure ? "tabpanel" : undefined}
            aria-labelledby={procedure ? "pg-left-tab-add" : undefined} hidden={tab !== "add"}>
+      {next && next.items.length > 0 && !needle && (
+        <section className="pg-palette-next" aria-label="지금 이을 수 있는 노드">
+          <h4 className="pg-palette-next-h">‘{next.from}’ 뒤에 이을 수 있어요</h4>
+          {next.items.map((c) => (
+            <button key={c.type} type="button" className="pg-palette-next-item" data-kind={c.type} onClick={() => onAdd(c.type)}>
+              <i style={{ background: STAGE_VAR[c.stage] ?? "var(--pg-mute)" }} aria-hidden="true" />
+              <b>{c.plain_label}</b>
+            </button>
+          ))}
+        </section>
+      )}
       {groups.map((st) => {
         const all = catalog.filter((c) => c.stage === st.key);
         const items = all.filter(match);
@@ -100,14 +113,19 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
             </h4>
             <div id={body} hidden={!open}>
               {all.length === 0 && <p className="pg-palette-soon">{st.label} 노드는 곧 추가돼요.</p>}
-              {items.map((c) => (
-                <button key={c.type} type="button" className="pg-palette-item" data-kind={c.type} draggable
+              {[...items.filter((c) => !isSolo(c)), ...items.filter(isSolo)].map((c, i, arr) => (
+                <Fragment key={c.type}>
+                {isSolo(c) && (i === 0 || !isSolo(arr[i - 1])) && (
+                  <p className="pg-palette-solo">혼자 계산하는 도구 <span>— 선 없이 설정만으로 계산해요</span></p>
+                )}
+                <button type="button" className={`pg-palette-item${isSolo(c) ? " pg-palette-item--solo" : ""}`} data-kind={c.type} draggable
                         title={`${c.label} (${c.type})${legacyOf(c.type).length ? ` · 예전 화면 ${legacyOf(c.type).map((a) => a.aliases[1] ?? a.title).join(", ")}` : ""}`}
                         onDragStart={(e) => { e.dataTransfer.setData(PALETTE_MIME, c.type); e.dataTransfer.setData(PALETTE_KIND_PREFIX + c.type, ""); e.dataTransfer.effectAllowed = "move"; }}
                         onClick={() => onAdd(c.type)}>
                   <b>{c.plain_label}</b>
                   <span>{c.plain_description}</span>
                 </button>
+                </Fragment>
               ))}
             </div>
           </section>

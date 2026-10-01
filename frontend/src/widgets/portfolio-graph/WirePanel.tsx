@@ -10,14 +10,8 @@
  * - 사이에 넣기 — 같은 타입을 받아 같은 타입을 내는 노드만. 끊기·넣기는 되돌리기 한 번.
  */
 import type { Edge } from "reactflow";
-import type { GraphError, NodeCatalogEntry, NodeRunResult, PgNode } from "@/entities/portfolio-graph";
+import { josa, type GraphError, type NodeCatalogEntry, type NodeRunResult, type PgNode } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
-
-/** 받침에 맞는 조사 — `pair` 는 [받침 있을 때, 없을 때]. */
-function josa(word: string, pair: [string, string]): string {
-  const ch = [...word].reverse().find((c) => c >= "가" && c <= "힣");
-  return word + (ch && (ch.charCodeAt(0) - 0xac00) % 28 ? pair[0] : pair[1]);
-}
 
 const LINEAGE_TEXT = {
   practice: "연습용(합성) 값이 흘러요",

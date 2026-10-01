@@ -11,7 +11,7 @@
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type NodeProps } from "reactflow";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
@@ -110,6 +110,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const validation = usePortfolioGraph((s) => s.validation);
   const result = report?.nodes[id];
   const live = result && !stale ? result : undefined;
+  // 혼자 쓰는 도구(BT6) — 입력도 출력도 없다. 포트를 지어 붙이지 않고 그렇다고 말한다.
+  const solo = !!entry && isSolo(entry);
   const running = usePortfolioGraph((s) => s.running);
   const single = usePortfolioGraph((s) => s.picked.length <= 1);
   // 도구줄 자리(BS2) — 위 가운데가 다른 카드를 덮으면 덜 덮는 자리로. 보일 때만 잰다.
@@ -194,7 +196,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   }
 
   return (
-    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}`}
+    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}${solo ? " pg-node--solo" : ""}`}
          data-node-id={id} data-kind={data.kind}
          style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
                   ["--pg-i" as string]: data.num ?? 0 }}>
@@ -236,6 +238,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
         </span>
       </div>
       <div className="pg-node-t">{summary ?? entry.plain_label}</div>
+      {solo && <div className="pg-node-solo">선 없이 혼자 계산해요</div>}
       {missing.length > 0 && (
         <div className="pg-node-need" role="note">
           {data.onNeed ? missing.map((p, i) => (

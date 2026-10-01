@@ -36,7 +36,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
+import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
   COL,
@@ -62,6 +62,7 @@ import {
   type ProcedureSuggestion,
   type ParseResult,
   type WorkflowStage,
+  euro, josa, nextKinds, swapCandidates,
 } from "@/entities/portfolio-graph";
 import { ExportButton, ImportControl, readGraphFile } from "@/features/portfolio-graph-io";
 import { AlphaSheetBody } from "./AlphaSheet";
@@ -762,6 +763,18 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
         run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.makeBranch(id)); } },
       { key: "duplicate", label: "복제 (Ctrl+D)", icon: <Copy size={14} aria-hidden="true" />,
         run: () => { usePortfolioGraph.getState().duplicateNode(id); } },
+      // BT6 — 바꿀 종류는 설정 판에서 고른다(메뉴는 그 칸으로 데려간다). 후보가 없으면 흐리게, 이유를 이름에.
+      ...(() => {
+        const none = swapCandidates(id, st.nodes, st.edges, st.catalog ?? []).length === 0;
+        return [{ key: "swap", label: none ? "다른 노드로 바꾸기 — 같은 선을 받는 다른 노드가 없어요" : "다른 노드로 바꾸기…",
+                  icon: <Replace size={14} aria-hidden="true" />, disabled: none,
+                  run: () => {
+                    const x = usePortfolioGraph.getState();
+                    x.select(id);
+                    x.setTab("settings");
+                    setTimeout(() => (document.querySelector(".pg-swap select") as HTMLSelectElement | null)?.focus(), 60);
+                  } }];
+      })(),
       ...(st.picked.length > 1 && st.picked.includes(id)
         ? [{ key: "compare", label: "고른 노드 견고성 비교", icon: <Scale size={14} aria-hidden="true" />,
              run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.comparePicked()); } }] : []),
@@ -851,7 +864,22 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       st.finishRun(null, (e as Error).message);
     }
   }, []);
+  /** 지금 이을 수 있어요(BT6) — 사람이 고른 노드가 있을 때만(추가로 자동 선택된 노드에는 잇지 않으므로 보이지 않는다). */
+  const paletteNext = useMemo(() => {
+    const sel = s.pickedByUser ? s.nodes.find((n) => n.id === s.selectedId) : undefined;
+    const entry = sel && s.catalog?.find((c) => c.type === sel.data.kind);
+    return entry && s.catalog ? { from: entry.plain_label, items: nextKinds(entry.type, s.catalog, stages.map((x) => x.key)) } : null;
+  }, [s.pickedByUser, s.selectedId, s.nodes, s.catalog, stages]);
   const runTo = useCallback((id: string) => run([id]), [run]);
+  /** 바꿔 끼우기(BT6) — 되돌리기 한 번. 설정이 기본값이 된다는 것을 토스트가 말한다. */
+  const swapTo = useCallback((id: string, kind: string) => {
+    const st = usePortfolioGraph.getState();
+    const name = (k?: string) => st.catalog?.find((c) => c.type === k)?.plain_label ?? k ?? "";
+    const from = name(st.nodes.find((n) => n.id === id)?.data.kind);
+    st.act(() => (st.swapNode(id, kind)
+      ? `${josa(`‘${from}’`, ["을", "를"])} ${euro(`‘${name(kind)}’`)} 바꿨어요 — 선과 자리는 그대로, 설정은 기본값이에요.`
+      : "바꿀 수 없어요 — 지금 선을 그대로 받을 수 없는 노드예요."));
+  }, []);
   /** 바뀐 곳만 계산(BT5) — 낡은 노드들을 목표로 하는 부분 계산("여기까지 계산" 과 같은 길). 관문은 부분 계산이라 내지 않는다(기존 사유 문구). */
   const runStale = useCallback(() => {
     const ids = usePortfolioGraph.getState().staleIds;
@@ -1183,7 +1211,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       <div className="pg-body" hidden={s.simple}>
         {s.catalog && <NodePalette catalog={s.catalog} stages={stages} initialQuery={legacy?.aliases[1] ?? ""} onAdd={(k) => addAt(k)} onTemplate={loadTemplate}
                                   onGoal={() => setGoalOpen(true)} hidden={!leftShown} onClose={() => updatePanels((p) => toggle(p, "left"))}
-                                  tab={leftTab ?? "add"} onTab={setLeftTab} procedure={procedureView} />}
+                                  tab={leftTab ?? "add"} onTab={setLeftTab} procedure={procedureView} next={paletteNext} />}
         {!leftShown && (
           <button type="button" className="pg-palette-fab" aria-label="노드 목록 열기 ([)" title="노드 추가 — 목록 열기 ([)"
                   onClick={() => updatePanels((p) => toggle(p, "left"))}><Plus size={20} aria-hidden="true" /></button>
@@ -1416,7 +1444,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                              onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
                              onDuplicate={() => s.duplicateNode(selected.id)}
                              result={selResult} stale={staleSet.has(selected.id)}
-                             onFocus={focusNode} onImpact={s.setProcHover}
+                             onFocus={focusNode} onImpact={s.setProcHover} onSwap={(k) => swapTo(selected.id, k)}
                              onRewire={(port, src, h) => {
                                const st = usePortfolioGraph.getState();
                                st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 이었어요." : "선을 뗐어요."; });

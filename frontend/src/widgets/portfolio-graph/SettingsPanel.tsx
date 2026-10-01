@@ -19,7 +19,7 @@ import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
-import { sourcesFor } from "@/entities/portfolio-graph";
+import { sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
 
 type Params = Record<string, unknown>;
@@ -515,6 +515,26 @@ function Gives({ node, entry, edges, plainOf, onFocus }: {
   );
 }
 
+/**
+ * 바꿔 끼우기(BT6) — 같은 단계에서 지금 선을 모두 그대로 받을 수 있는 종류만 보인다. 없으면 고르기 칸 대신 그 이유를 말한다.
+ * 바꾸면 설정은 새 종류의 기본값이다(이전 설정은 뜻이 다를 수 있어 옮기지 않는다) — 토스트가 그렇다고 말한다.
+ */
+function SwapPick({ node, nodes, edges, catalog, onSwap }: {
+  node: PgNode; nodes: PgNode[]; edges: Edge[]; catalog: NodeCatalogEntry[]; onSwap: (kind: string) => void;
+}) {
+  const options = swapCandidates(node.id, nodes, edges, catalog);
+  if (!options.length) return <p className="pg-swap pg-swap--none">같은 단계에서 지금 선을 그대로 받을 다른 노드가 없어요.</p>;
+  return (
+    <label className="pg-swap">
+      <span>다른 방법으로 바꾸기</span>
+      <select value="" onChange={(e) => e.target.value && onSwap(e.target.value)}>
+        <option value="">지금: {catalog.find((c) => c.type === node.data.kind)?.plain_label ?? node.data.kind}</option>
+        {options.map((c) => <option key={c.type} value={c.type}>{c.plain_label}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /** 영향 줄(BT5) — 이 노드를 바꾸면 다시 계산될 노드 수(자기 + 하류). 올리거나 초점을 두면 그 노드만 또렷하다. */
 function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpact?: (ids: string[] | null) => void }) {
   const down = descendantsOf([node.id], edges);
@@ -530,7 +550,7 @@ function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpa
 }
 
 export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
-  result, stale, onSave, saveFollowUp, onRewire, onFocus, onImpact }: {
+  result, stale, onSave, saveFollowUp, onRewire, onFocus, onImpact, onSwap }: {
   node: PgNode;
   entry: NodeCatalogEntry | undefined;
   nodes: PgNode[];
@@ -552,6 +572,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   onFocus?: (id: string) => void;
   /** 영향 줄에 올리면 다시 계산될 노드만 또렷하게(BT5) — null 이면 풀기. */
   onImpact?: (ids: string[] | null) => void;
+  /** 같은 단계의 다른 종류로 바꿔 끼우기(BT6). */
+  onSwap?: (kind: string) => void;
 }) {
   const params = node.data.params ?? {};
   const plainOf = (id: string) => {
@@ -579,6 +601,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
 
   return (
     <section className="pg-settings">
+      {entry && onSwap && <SwapPick node={node} nodes={nodes} edges={edges} catalog={catalog} onSwap={onSwap} />}
       {entry && (
         <dl className="pg-io">
           <div><dt>받는 것</dt><dd>{receives.length ? receives.join(", ") : "없어요 — 여기서 시작해요."}</dd></div>

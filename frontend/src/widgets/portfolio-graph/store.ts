@@ -71,6 +71,7 @@ import {
   type ValidateReport,
 } from "@/entities/portfolio-graph";
 import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
+import { swapPlan } from "@/entities/portfolio-graph/swap";
 
 /** 계산 기록 한 줄 — 노드마다 상태와 헤드라인만(원 결과는 두지 않는다: 가볍게, 비교에 필요한 만큼). */
 export interface RunRecord {
@@ -159,6 +160,8 @@ export interface PgState {
   connect: (c: Connection) => void;
   /** 이 입력을 받는 곳을 바꾼다(BT4 끌지 않고 잇기) — 있던 선을 떼고 새 선을 잇는다. `source` 가 null 이면 떼기만. 되돌리기 한 번. */
   rewire: (target: string, port: string, source: string | null, sourceHandle: string | null) => void;
+  /** 같은 단계의 다른 종류로 바꿔 끼운다(BT6) — 자리·선은 그대로(포트는 타입으로 다시 맞춤), 설정은 새 종류 기본값. 맞출 수 없으면 null. */
+  swapNode: (id: string, kind: string) => string | null;
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
@@ -430,6 +433,22 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       set((s) => ({
         edges: addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, s.edges),
       }));
+    },
+
+    swapNode: (id, kind) => {
+      const s = get();
+      const plan = swapPlan(id, kind, s.nodes, s.edges, s.catalog ?? []);
+      if (!plan) return null;
+      push();
+      const edges = s.edges.map((e) => {
+        if (!(e.id in plan.inputs) && !(e.id in plan.outputs)) return e;
+        const sourceHandle = plan.outputs[e.id] ?? e.sourceHandle ?? null;
+        const targetHandle = plan.inputs[e.id] ?? e.targetHandle ?? null;
+        return { ...e, sourceHandle, targetHandle, id: `${e.source}.${sourceHandle}->${e.target}.${targetHandle}` };
+      });
+      set({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, kind, params: {} } } : n)), edges,
+            selectedEdge: null });
+      return id;
     },
 
     rewire: (target, port, source, sourceHandle) => {

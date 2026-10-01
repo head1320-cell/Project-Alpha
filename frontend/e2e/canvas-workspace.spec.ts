@@ -1492,7 +1492,7 @@ test("우클릭(BN N3): 노드 메뉴 — 그림 고정·풀기·지우기(되�
   await node(page, "optimizer").click({ button: "right" });
   const menu = page.locator('.pg-ctx[aria-label="노드 메뉴"]');
   expect(await menu.locator(".pg-ctx-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-action"))))
-    .toEqual(["run-to", "branch", "duplicate", "pin", "remove"]);
+    .toEqual(["run-to", "branch", "duplicate", "swap", "pin", "remove"]);          // BT6 — 다른 노드로 바꾸기
   await expect(menu.locator('[data-action="run-to"]')).toBeFocused();
   await menu.locator('[data-action="pin"]').click();
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--pinned/);
