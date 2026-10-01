@@ -28,7 +28,7 @@ const SRC = path.join(here, "..", "src", "app", "globals.css");
 const BEGIN = "/* BS5-GEN:BEGIN */", END = "/* BS5-GEN:END */";
 
 /** 이미 다크를 설계해 둔 표면 — 손대지 않는다. */
-const SKIP = /\.dark\b|\.pg-|\.aas-|\.brun-results|\.set-|\.set\b|\.pf-|\.shad-|\.devui-|:root|^html|^body|\.cockpit|\.glass-card-dark/;
+const SKIP = /\.dark\b|\.pg-|\.tx-|\.aas-|\.brun-results|\.set-|\.set\b|\.pf-|\.shad-|\.devui-|:root|^html|^body|\.cockpit|\.glass-card-dark/;
 
 /** 다크에서 밝아지는 강조·상태 토큰 — 이것으로 채운 바탕 위 흰 글자는 --on-accent 로. */
 const ACCENT_FILL = /var\(--(t-accent|bs-primary|primary|bs-danger|bs-success|danger|success|color-bull|color-bear|accent-hover|bs-link-color)\b/;

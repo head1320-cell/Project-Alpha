@@ -1,9 +1,9 @@
 "use client";
-// 대상 경로: frontend/src/components/layout/States.tsx
+// 공용 로딩/빈/오류/측정 불가 상태 — 스타일은 globals.css 의 .tstate-* 가 담당.
 //
-// 6개 화면(대시보드+5툴) 공용 로딩/빈/오류 상태 — 인스티튜셔널 터미널 톤으로 통일.
-// 이전엔 페이지마다 제각각(인라인 [LOADING] 텍스트 · ca-pg-spin · tbt-empty)이었음.
-// 차분하게: 모노 라벨 + 통일된 스피너. 스타일은 globals.css 의 .tstate-* 가 담당.
+// BU0(ADR-003) — 글자를 해요체로 바꿨다(`[ LOADING ]`·`[ ERROR ]`·`[ N/A ]`·`◇` → 문장). 클래스·역할(role)은 그대로다.
+// 로딩은 문구 대신 뼈대(줄 셋)이고 ★400ms 안에 끝나면 보이지 않는다★ — 깜빡임을 막는 지연은 CSS 가 한다(타이머 없음).
+// 측정 불가는 글자 표지 대신 꼬리표 "지금은 못 재요" + 호박색 점선으로 빈 상태·오류와 구별한다.
 
 import type { ReactNode } from "react";
 
@@ -24,11 +24,11 @@ import type { ReactNode } from "react";
 // 타입 수준에서 강제하므로 사유 없는 unavailable 은 tsc 가 거부한다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function LoadingState({ label = "데이터를 불러오는 중", sub }: { label?: string; sub?: ReactNode }) {
+export function LoadingState({ label = "불러오는 중이에요", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-loading" role="status" aria-live="polite">
-      <span className="tstate-spinner" aria-hidden />
-      <span>[ LOADING ] {label}…</span>
+      <span className="tstate-skel" aria-hidden><i /><i /><i /></span>
+      <span className="tstate-label">{label}</span>
       {sub && <span className="tstate-sub">{sub}</span>}
     </div>
   );
@@ -37,17 +37,16 @@ export function LoadingState({ label = "데이터를 불러오는 중", sub }: {
 export function EmptyState({ label = "표시할 데이터가 없어요", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-empty">
-      <span className="tstate-glyph" aria-hidden>◇</span>
-      <span>{label}</span>
+      <span className="tstate-label">{label}</span>
       {sub && <span className="tstate-sub">{sub}</span>}
     </div>
   );
 }
 
-export function ErrorState({ label = "오류가 발생했어요", sub }: { label?: string; sub?: ReactNode }) {
+export function ErrorState({ label = "불러오지 못했어요", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-error" role="alert">
-      <span>[ ERROR ] {label}</span>
+      <span className="tstate-label">{label}</span>
       {sub && <span className="tstate-sub">{sub}</span>}
     </div>
   );
@@ -56,14 +55,15 @@ export function ErrorState({ label = "오류가 발생했어요", sub }: { label
 /**
  * 계산·조회가 성립하지 않은 상태. **사유가 필수**다.
  *
- * 빈 상태(◇)와 시각적으로 구별되어야 한다 — 같은 회색 여백으로 그리면 "0건" 과
+ * 빈 상태와 시각적으로 구별되어야 한다 — 같은 회색 여백으로 그리면 "0건" 과
  * 구분되지 않는다. 그렇다고 오류(빨강)도 아니다. 오류는 고장이지만 이것은 한계이고,
  * 한계를 고장처럼 그리면 사용자가 재시도로 해결하려 든다.
  */
-export function UnavailableState({ label = "측정 불가", reason }: { label?: string; reason: ReactNode }) {
+export function UnavailableState({ label = "지금은 잴 수 없어요", reason }: { label?: string; reason: ReactNode }) {
   return (
     <div className="tstate tstate-unavail">
-      <span className="tstate-unavail-l">[ N/A ] {label}</span>
+      <span className="tstate-unavail-tag">지금은 못 재요</span>
+      <span className="tstate-unavail-l">{label}</span>
       <span className="tstate-sub">{reason}</span>
     </div>
   );

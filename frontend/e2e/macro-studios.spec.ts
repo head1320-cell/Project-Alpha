@@ -24,8 +24,8 @@ const STUDIOS: [slug: string, n: string][] = [
   ["agentic-mcp", "05"],
 ];
 
-/** `[ N/A ]` 는 UnavailableState 의 접두사(shared/ui/States.tsx:66) — 미가용의 표지다. */
-const NA_MARK = "[ N/A ]";
+/** 미가용의 표지 — UnavailableState 의 꼬리표(`.tstate-unavail-tag`). BU0 에서 글자 `[ N/A ]` 를 이 꼬리표로 바꿨다. */
+const NA_MARK = ".tstate-unavail-tag";
 
 async function openStudio(page: Page, slug: string) {
   await page.goto(`/macro/${slug}`, { waitUntil: "networkidle" });
@@ -68,9 +68,8 @@ test("★프론티어 엔진은 미가용이고 사유를 갖는다 — 숫자 �
     await openStudio(page, slug);
     const card = page.locator(".ms-card-frontier");
     await expect(card).toBeVisible();
-    const txt = (await card.textContent()) ?? "";
     // 이 환경의 실제 상태 — 프론티어는 전부 미가용이다.
-    expect(txt, `${slug}: 프론티어 미가용 표지`).toContain(NA_MARK);
+    await expect(card.locator(NA_MARK), `${slug}: 프론티어 미가용 표지`).toHaveCount(1);
     // 사유는 **비어 있지 않은 문장**이어야 한다. 사유 없는 미가용은 만들지 않는다.
     const reason = (await card.locator(".tstate-sub").first().textContent()) ?? "";
     expect(reason.trim().length, `${slug}: 미가용 사유 길이`).toBeGreaterThan(10);
@@ -83,8 +82,7 @@ test("★04 TAIL: 대체 엔진도 미가용 — 그 카드 안에 숫자 노드
   await openStudio(page, "pinn-tail");
   const sub = page.locator(".ms-card-sub");
   await expect(sub).toBeVisible();
-  const txt = (await sub.textContent()) ?? "";
-  expect(txt, "대체 엔진 미가용 표지").toContain(NA_MARK);
+  await expect(sub.locator(NA_MARK), "대체 엔진 미가용 표지").toHaveCount(1);
   // 산출 표가 아예 없어야 한다(빈 표도 그리지 않는다).
   expect(await sub.locator(".ms-out").count(), "미가용인데 산출 표가 있다").toBe(0);
   // 그리고 사유 밖에는 숫자가 없다. 사유 문장 자체에는 "6개"·"8개" 가 들어가므로

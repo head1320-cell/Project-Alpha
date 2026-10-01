@@ -11,3 +11,4 @@ export * from "./sleeveStorage";
 export * from "./strategyStorage";
 export * from "./watchlistStorage";
 export * from "./format";
+export * from "./krFormat";

@@ -9,7 +9,7 @@ import { trackErrors, uniq } from "./helpers";
 // 지금까지는 소비 화면의 스펙이 우연히 걸러 주기를 기대하는 구조였다.
 //
 // 이 스펙은 데이터 없이 렌더되는 갤러리에서 다음 세 가지를 본다:
-//   1) shared/ui 의 컴포넌트 export 36개가 전부 표본으로 마운트되었는가(제외 없음)
+//   1) shared/ui 의 컴포넌트 export 46개(BU0 tx 10 포함)가 전부 표본으로 마운트되었는가(제외 없음)
 //   2) 각 프리미티브가 내보내는 **클래스 계약**이 그대로인가
 //   3) 순수 프레젠테이션 화면인데 uncaught error / 네트워크 호출이 없는가
 //
@@ -37,6 +37,8 @@ const SPECIMENS = [
   "Skeleton", "SkeletonText", "SkeletonCard", "SkeletonTable", "TickValue", "MetricCard", "Sparkline",
   // MiniViz (3) + SectionHead (1)
   "MiniViz", "StatGrid", "Stat", "SectionHead",
+  // tx (10) — BU0 토스식 공용 부품(ADR-003). Section·Stat·Segmented·Tabs 는 위와 이름이 겹치는 별개 구현.
+  "PageHead", "Answer", "Chips", "Section", "ListRow", "Stat", "Segmented", "Tabs", "Notice", "Unknown",
 ];
 
 test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
@@ -124,21 +126,35 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     await expect(g.locator(".tstate.tstate-unavail")).toHaveCount(3);
 
     // 하위 요소 계약
-    await expect(g.locator(".tstate-loading .tstate-spinner")).toHaveCount(3);
-    await expect(g.locator(".tstate-empty .tstate-glyph")).toHaveCount(3);
+    // BU0 — 로딩은 뼈대 줄 셋(돌아가는 원 대신). 빈 상태의 ◇ 표식은 걷었다.
+    await expect(g.locator(".tstate-loading .tstate-skel")).toHaveCount(3);
+    await expect(g.locator(".tstate-loading .tstate-skel i")).toHaveCount(9);
+    await expect(g.locator(".tstate-empty .tstate-label")).toHaveCount(3);
     await expect(g.locator(".tstate-sub")).toHaveCount(6); // sub/reason 이 있는 것만
 
     // 로딩은 role=status, 오류는 role=alert — 스크린리더 계약
     await expect(g.locator('.tstate-loading[role="status"]')).toHaveCount(3);
     await expect(g.locator('.tstate-error[role="alert"]')).toHaveCount(2);
 
-    await expect(g.locator(".tstate-loading").first()).toContainText("[ LOADING ]");
-    await expect(g.locator(".tstate-error").first()).toContainText("[ ERROR ]");
+    // BU0 — 글자 표지(`[ LOADING ]`·`[ ERROR ]`)를 해요체 문장으로 바꿨다. 문장은 바뀔 수 있으니 클래스로 보고,
+    // 표지가 다시 생기지 않는지만 짝으로 본다.
+    await expect(g.locator(".tstate-loading .tstate-label").first()).toHaveText("불러오는 중이에요");
+    await expect(g.locator(".tstate-error .tstate-label").first()).toHaveText("불러오지 못했어요");
+    expect(await g.locator(".tstate").allInnerTexts(), "대괄호 표지가 남아 있지 않다").not.toContainEqual(expect.stringMatching(/\[ (LOADING|ERROR|N\/A) \]/));
+
+    // ★뼈대는 400ms 지연 뒤에만 보인다★(깜빡임 방지) — 지연은 CSS 가 갖는다. 짝: 빈 상태에는 지연이 없다.
+    const anim = (l: string) => g.locator(l).first().evaluate((e) => {
+      const c = getComputedStyle(e); return { name: c.animationName, delay: c.animationDelay };
+    });
+    expect(await anim(".tstate-loading")).toEqual({ name: "tstate-reveal", delay: "0.4s" });
+    expect((await anim(".tstate-empty")).delay).toBe("0s");
+    await expect(g.locator(".tstate-loading").first()).toBeVisible();
 
     // ★unavailable 은 empty 와 반드시 다르게 보여야 한다★ 같은 모양이면 "없음" 이
     // "문제 없음" 으로 읽힌다. 클래스가 다르다는 것만으로는 부족하므로 실제 계산된
     // 배경색이 서로 다른지까지 본다.
-    await expect(g.locator(".tstate-unavail").first()).toContainText("[ N/A ]");
+    await expect(g.locator(".tstate-unavail .tstate-unavail-tag")).toHaveCount(3);
+    await expect(g.locator(".tstate-unavail-tag").first()).toHaveText("지금은 못 재요");
     const bg = (l: string) => g.locator(l).first().evaluate((e) => getComputedStyle(e).backgroundColor);
     expect(await bg(".tstate-unavail"), "unavailable 이 empty 와 같은 배경이면 안 된다")
       .not.toBe(await bg(".tstate-empty"));
@@ -267,8 +283,9 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     await stepper.getByRole("button", { name: "+5%" }).click();
     await expect(numbox).toHaveValue("25");
 
-    // Segmented — 3개 버튼
-    const seg = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^Segmented$/ }) });
+    // Segmented — 3개 버튼 (kit 표본 — BU0 에서 같은 이름의 tx 표본이 생겨 출처로 가른다)
+    const seg = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^Segmented$/ }) })
+      .filter({ has: page.locator(".devui-item-from", { hasText: /^kit$/ }) });
     await expect(seg.locator("button")).toHaveCount(3);
   });
 
@@ -400,4 +417,96 @@ test("★AllocationMap 이 숏을 두 번째 스트립으로 그린다 — 버�
   await expect(map.locator(".aas-legend-i")).toHaveCount(5);
   await expect(map.locator(".as-ls-neg")).toHaveCount(2);
   await expect(map.locator(".aas-legend-i", { hasText: "LG화학" })).toContainText("-25.0%");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BU0 · shared/ui/tx + shared/lib/krFormat — 클래스가 아니라 **동작**을 본다(짝으로 항상-통과를 배제).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
+  test("Tabs: 화살표·Home·End 로 고르고 초점이 따라간다 · 고른 탭은 늘 하나 · 패널이 바뀐다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const tx = page.locator(".devui-tx");
+    const tabs = tx.locator('.tx-tablist [role="tab"]');
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
+    await expect(tx.locator(".devui-tx-panel")).toHaveText("a 패널");
+    await tabs.nth(0).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(tabs.nth(1)).toBeFocused();
+    await expect(tx.locator(".devui-tx-panel")).toHaveText("b 패널");
+    await page.keyboard.press("End");
+    await expect(tabs.nth(2)).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowRight");                       // 끝에서 처음으로 돈다
+    await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
+    await expect(tx.locator('.tx-tablist [aria-selected="true"]')).toHaveCount(1);
+    // 로빙 tabindex — 고른 탭만 Tab 순서에 있다(짝: 나머지는 -1)
+    await expect(tx.locator('.tx-tablist [tabindex="0"]')).toHaveCount(1);
+    await expect(tx.locator('.tx-tablist [tabindex="-1"]')).toHaveCount(2);
+    // 패널은 고른 탭을 가리킨다
+    const labelled = await tx.locator('[role="tabpanel"]').getAttribute("aria-labelledby");
+    expect(labelled).toBe(await tabs.nth(0).getAttribute("id"));
+  });
+
+  test("Segmented: radiogroup — 화살표로 고르면 aria-checked 가 옮겨간다(짝: 하나만 켜진다)", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const seg = page.locator('.devui-tx .tx-seg[role="radiogroup"]');
+    const opts = seg.locator('[role="radio"]');
+    await expect(opts.nth(0)).toHaveAttribute("aria-checked", "true");
+    await opts.nth(0).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(opts.nth(1)).toHaveAttribute("aria-checked", "true");
+    await expect(opts.nth(0)).toHaveAttribute("aria-checked", "false");
+    await expect(seg.locator('[aria-checked="true"]')).toHaveCount(1);
+  });
+
+  test("Stat: 등락은 색 + ▲▼ + 글자 — 오름 빨강 · 내림 파랑(한국식) · 그대로·모름은 흐린 글자이고 화살표가 없다", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const d = (dir: string) => page.locator(`.devui-tx .tx-delta[data-dir="${dir}"]`).first();
+    const color = (dir: string) => d(dir).evaluate((e) => getComputedStyle(e).color);
+    expect(await color("up")).toBe("rgb(210, 42, 59)");          // --tx-up-ink #d22a3b
+    expect(await color("down")).toBe("rgb(27, 100, 218)");       // --tx-down-ink #1b64da
+    expect(await color("flat")).toBe("rgb(95, 107, 122)");       // --tx-mute
+    await expect(d("up")).toHaveText("▲ +2.1%p");
+    await expect(d("down")).toHaveText("▼ −3.0%p");
+    await expect(d("flat")).toHaveText("0.0%p");                 // ★짝★ 그대로에는 화살표가 없다
+    await expect(d("unknown")).toHaveText("몰라요");               // 미상은 0 이 아니다
+    expect(await color("unknown")).not.toBe(await color("up"));
+  });
+
+  test("Unknown 은 사유를 보이는 글자로 싣는다 · ListRow 는 누를 수 있을 때만 화살표가 있다(짝)", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const u = page.locator(".devui-tx .tx-unknown").first();
+    await expect(u.locator(".tx-unknown-v")).toHaveText("몰라요");
+    await expect(u.locator(".tx-unknown-why")).toBeVisible();
+    expect((await u.locator(".tx-unknown-why").innerText()).trim().length).toBeGreaterThan(5);
+
+    const rows = page.locator(".devui-tx .tx-row");
+    await expect(page.locator(".devui-tx a.tx-row--go .tx-row-go").first()).toBeVisible();
+    await expect(page.locator(".devui-tx button.tx-row--go .tx-row-go")).toHaveCount(1);
+    const plain = rows.filter({ hasText: "적재 행 수" });
+    await expect(plain).toHaveCount(1);
+    await expect(plain.locator(".tx-row-go")).toHaveCount(0);
+    expect(await plain.evaluate((e) => e.tagName)).toBe("DIV");
+  });
+
+  test("krFormat: 한국식 단위·부호·비율 — 미상은 '몰라요'(0·NaN 으로 그리지 않는다)", async ({ page }) => {
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    const want: [string, string, string][] = [
+      ["num", "1234.5", "1,235"], ["num", "1234.5, 1", "1,234.5"], ["num", "-0.0001", "0"],
+      ["krUnit", "3.4e11", "3,400억"], ["krUnit", "1.234e12", "1.2조"], ["krUnit", "9.9996e11", "1.0조"],
+      ["krUnit", "99995000", "1억"], ["krUnit", "56000000", "5,600만"], ["krUnit", "9999.6", "1만"],
+      ["krUnit", "-2.5e8", "−3억"], ["won", "1234", "1,234원"], ["won", "3.4e11", "3,400억원"],
+      ["pct", "0.241", "24.1%"], ["pct", "-0.03", "−3.0%"], ["signedPct", "0.241", "+24.1%"],
+      ["signedPct", "0", "0.0%"], ["signedPct", "-0.00004", "0.0%"], ["pp", "0.021", "+2.1%p"],
+      ["pp", "-0.03", "−3.0%p"], ["num", "null", "몰라요"], ["pct", "NaN", "몰라요"], ["won", "Infinity", "몰라요"],
+      ["direction", "0.1", "up"], ["direction", "-1", "down"], ["direction", "0", "flat"], ["direction", "null", "unknown"],
+    ];
+    const rows = page.locator(".devui-krfmt-table tr");
+    await expect(rows).toHaveCount(want.length);
+    const got = await rows.evaluateAll((trs) => trs.map((tr) => [tr.getAttribute("data-fn"), tr.getAttribute("data-in"),
+      tr.querySelector(".devui-krfmt-out")?.textContent ?? ""]));
+    expect(got).toEqual(want);
+  });
 });

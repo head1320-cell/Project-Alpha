@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+// BU0(ADR-003) — Pretendard 를 앱 전체로(npm, OFL — 외부 CDN 없음). 동적 서브셋이라 woff2 는 필요한 글자 범위만 받는다.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { TerminalShell } from "@/widgets/layout/TerminalShell";
 import Providers from "@/widgets/layout/Providers";
@@ -6,7 +8,7 @@ import { THEME_BOOT } from "@/shared/theme";
 
 export const metadata: Metadata = {
   title: "Project Alpha | Quant Platform",
-  description: "Institutional-grade quant tools — screening, backtesting, macro analysis, company analysis, and risk analysis",
+  description: "종목 찾기 · 백테스트 · 경제 흐름 · 기업 분석 · 위험 점검 · 포트폴리오 설계",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

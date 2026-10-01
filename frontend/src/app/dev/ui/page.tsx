@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // /dev/ui — shared/ui 프리미티브 격리 갤러리
 //
-// 목적: shared/ui 의 컴포넌트 export **36개 전부**를 데이터 없이 한 화면에서 렌더한다.
+// 목적: shared/ui 의 컴포넌트 export **46개 전부**(BU0 tx 10 포함)를 데이터 없이 한 화면에서 렌더한다.
 //   · 에이전트가 "이 프리미티브가 어떻게 생겼나"를 알려고 소비 화면을 뒤지지 않아도 된다.
 //   · Playwright(e2e/dev-ui.spec.ts)가 여기서 **클래스 계약을 회귀 검사**한다.
 //     프리미티브가 내보내는 클래스명(.pv-* · .tstate-* · .tstat-* · .skeleton …)이
@@ -59,6 +59,9 @@ import SectionHead from "@/shared/ui/SectionHead";
 // §68 롱숏 표본 — 숏이 든 비중을 화면 경로로 만들 UI 가 없어 여기서만 잴 수 있다.
 import { AllocationMap } from "@/shared/ui/AllocationMap";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
+// BU0 — 토스식 공용 부품 + 한국식 숫자 표기. 서식 표의 출력은 실제 함수의 반환값이다(손으로 적지 않는다).
+import * as Tx from "@/shared/ui/tx";
+import { direction, krUnit, num, pct, pp, signedPct, won } from "@/shared/lib/krFormat";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
@@ -183,6 +186,32 @@ const LS_ITEMS = [
   { code: "051910", name: "LG화학", weight: -25 },
   { code: "005380", name: "현대차", weight: -15 },
 ];
+function LiveTxSegmented() {
+  const [v, setV] = useState<"kr" | "us">("kr");
+  return <Tx.Segmented label="시장" options={[{ value: "kr", label: "한국" }, { value: "us", label: "미국" }]} value={v} onChange={setV} />;
+}
+
+function LiveTxTabs() {
+  const [v, setV] = useState<"a" | "b" | "c">("a");
+  return (
+    <Tx.Tabs label="표본 탭" tabs={[{ value: "a", label: "개요" }, { value: "b", label: "지표" }, { value: "c", label: "국면" }]} value={v} onChange={setV}>
+      <span className="devui-tx-panel">{v} 패널</span>
+    </Tx.Tabs>
+  );
+}
+
+/** 서식 표 — [함수 이름, 입력 표기, 실제 출력]. 출력은 함수가 낸 그대로. */
+const KR_FMT: [string, string, string][] = [
+  ["num", "1234.5", num(1234.5)], ["num", "1234.5, 1", num(1234.5, 1)], ["num", "-0.0001", num(-0.0001)],
+  ["krUnit", "3.4e11", krUnit(3.4e11)], ["krUnit", "1.234e12", krUnit(1.234e12)], ["krUnit", "9.9996e11", krUnit(9.9996e11)],
+  ["krUnit", "99995000", krUnit(99_995_000)], ["krUnit", "56000000", krUnit(56_000_000)], ["krUnit", "9999.6", krUnit(9999.6)],
+  ["krUnit", "-2.5e8", krUnit(-2.5e8)], ["won", "1234", won(1234)], ["won", "3.4e11", won(3.4e11)],
+  ["pct", "0.241", pct(0.241)], ["pct", "-0.03", pct(-0.03)], ["signedPct", "0.241", signedPct(0.241)],
+  ["signedPct", "0", signedPct(0)], ["signedPct", "-0.00004", signedPct(-0.00004)], ["pp", "0.021", pp(0.021)],
+  ["pp", "-0.03", pp(-0.03)], ["num", "null", num(null)], ["pct", "NaN", pct(NaN)], ["won", "Infinity", won(Infinity)],
+  ["direction", "0.1", direction(0.1)], ["direction", "-1", direction(-1)], ["direction", "0", direction(0)], ["direction", "null", direction(null)],
+];
+
 const LO_CONC = concentration([40, 30, 20, 10]);
 const LS_CONC = concentration(LS_ITEMS.map((x) => x.weight));
 const LS_LEGS = exposureLegs(LS_ITEMS.map((x) => x.weight));
@@ -418,6 +447,63 @@ export default function DevUiPage() {
           <Variant label="index 있음"><SectionHead label="유동성 게이트" index="01" /></Variant>
           <Variant label="index 없음"><SectionHead label="후처리" /></Variant>
         </Specimen>
+      </section>
+
+      {/* ── shared/ui/tx (BU0) — 토스식 공용 부품. 평범한 props 만 받는다(서버 응답을 문장으로 바꾸는 일은 위젯이 한다). ── */}
+      <section className="devui-group devui-tx">
+        <h2 className="devui-group-title">shared/ui/tx — 토스식 공용 부품 (BU0)</h2>
+        <p className="devui-group-note">
+          ADR-003. 답 문장은 서버 값으로만 만든다 — 아래 문장은 모양을 보이는 표본이다. 클래스 <code>.tx-*</code> 가 계약.
+        </p>
+        <Specimen name="PageHead" from="tx"><Tx.PageHead title="경제 흐름" lede="지금 경제가 어느 쪽으로 가는지 보여 드려요." /></Specimen>
+        <Specimen name="Answer" from="tx" note="문장 + 숫자 1~3 + 근거 칩 + 다음 행동 하나.">
+          <Tx.Answer sentence="(표본) 서버가 준 값을 끼운 한 문장이 여기에 와요."
+            figures={[{ label: "스트레스", value: "52/100" }, { label: "확률", value: pct(0.54, 0) }]}
+            chips={[{ label: "연습용 데이터", tone: "practice" }, { label: "가정 2개", tone: "assumed" }, { label: "재지 않은 것 1가지", tone: "unmeasured" }]}
+            action={<button type="button" className="devui-tx-act">경제 흐름 보기</button>} />
+        </Specimen>
+        <Specimen name="Chips" from="tx">
+          <Tx.Chips items={[{ label: "연습용 데이터", tone: "practice" }, { label: "가정 1개", tone: "assumed" }, { label: "몰라요 1개", tone: "unknown" },
+                            { label: "재지 않은 것", tone: "unmeasured" }, { label: "정상", tone: "ok" }, { label: "안내", tone: "info" }]} />
+        </Specimen>
+        <Specimen name="Section" from="tx">
+          <Tx.Section title="무엇을 할까요" sub="한 절은 한 가지 일만 해요.">
+            <Tx.ListRow title="종목 찾기" sub="조건으로 종목을 골라요" href="/screener" />
+          </Tx.Section>
+        </Specimen>
+        <Specimen name="ListRow" from="tx" note="href → 링크 · onClick → 단추 · 둘 다 없으면 누를 수 없는 줄(화살표 없음).">
+          <Variant label="링크"><Tx.ListRow title="삼성전자" sub="005930" right={won(71_200)} href="/insights?code=005930" /></Variant>
+          <Variant label="단추"><Tx.ListRow title="자세히 보기" onClick={() => {}} /></Variant>
+          <Variant label="그냥 줄"><Tx.ListRow title="적재 행 수" right={num(1_234_567)} /></Variant>
+        </Specimen>
+        <Specimen name="Stat" from="tx" note="등락은 색 + ▲▼ + 글자. 미상은 '몰라요'(평평함과 다르다).">
+          <Variant label="오름"><Tx.Stat label="연 수익률" value={signedPct(0.241)} delta={{ text: pp(0.021), dir: direction(0.021) }} /></Variant>
+          <Variant label="내림"><Tx.Stat label="최대 낙폭" value={pct(-0.18)} delta={{ text: pp(-0.03), dir: direction(-0.03) }} /></Variant>
+          <Variant label="그대로"><Tx.Stat label="변동성" value={pct(0.12)} delta={{ text: pp(0), dir: direction(0) }} /></Variant>
+          <Variant label="모름"><Tx.Stat label="베타" value={<Tx.Unknown reason="벤치마크 시계열이 없어요" />} delta={{ text: pp(null), dir: direction(null) }} /></Variant>
+        </Specimen>
+        <Specimen name="Segmented" from="tx" note="radiogroup · 화살표·Home·End."><LiveTxSegmented /></Specimen>
+        <Specimen name="Tabs" from="tx" note="tablist · 로빙 tabindex · 화살표로 옮기면 바로 고른다."><LiveTxTabs /></Specimen>
+        <Specimen name="Notice" from="tx">
+          <Variant label="practice"><Tx.Notice tone="practice" title="연습용 데이터예요">실제 시장 값이 아니라 합성 값으로 계산했어요.</Tx.Notice></Variant>
+          <Variant label="warn"><Tx.Notice tone="warn" title="가정이 들어 있어요" /></Variant>
+          <Variant label="danger"><Tx.Notice tone="danger" title="불러오지 못했어요">서버에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.</Tx.Notice></Variant>
+        </Specimen>
+        <Specimen name="Unknown" from="tx" note="사유가 필수다(타입). 0 이나 빈칸으로 그리지 않는다.">
+          <Tx.Unknown reason="재무 데이터가 아직 적재되지 않았어요" />
+        </Specimen>
+      </section>
+
+      {/* ── shared/lib/krFormat (BU0) — 한국식 숫자 표기. 출력 칸은 실제 함수 값이다. ── */}
+      <section className="devui-group devui-krfmt">
+        <h2 className="devui-h">shared/lib/krFormat — 한국식 숫자 표기</h2>
+        <table className="devui-krfmt-table">
+          <tbody>
+            {KR_FMT.map(([fn, input, out], i) => (
+              <tr key={i} data-fn={fn} data-in={input}><td>{fn}({input})</td><td className="devui-krfmt-out">{out}</td></tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       {/* ── S1: Card 표본 + 다크 토큰 확인 ────────────────────────────────────
