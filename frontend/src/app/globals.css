@@ -8413,3 +8413,19 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 .pg-palette-next-item i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .pg-palette-next-item:hover { box-shadow: inset 0 0 0 1px var(--pg-blue); }
 .pg-palette-next-item:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 1px; }
+/* BT7 — 가까이 확대에서는 포트 이름을 늘 보인다(Blender·Unreal 식). 보통·멀리에서는 지금처럼 점만(올리면 보인다). */
+.pg-canvas[data-zoom="near"] .pg-port-name { display: block; position: absolute; top: -9px; padding: 1px 6px; font-size: 11px;
+  color: var(--pg-body); background: var(--pg-soft); border-radius: 4px; white-space: nowrap; }
+/* BT7 — 카드의 고치는 법(서버 문장 + 단추 하나) */
+.pg-node-fix { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--pg-soft); display: flex; flex-direction: column; gap: 4px; }
+.pg-node-fix-text { font-size: 11.5px; line-height: 1.45; color: var(--pg-body); word-break: keep-all; }
+.pg-node-fix-btn { align-self: flex-start; font: inherit; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; border: 0;
+  background: var(--pg-cta); color: #fff; cursor: pointer; }
+.pg-node-fix-btn:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-canvas[data-zoom="far"] .pg-node-fix { display: none; }
+/* BT7 — 이 노드 명세: 한 줄 격자. 값은 서버가 준 것을 세기만 한다. */
+.pg-passport { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 14px; padding: 10px 12px; border-radius: 12px;
+  background: var(--pg-soft); font-size: 13px; }
+.pg-passport > div { display: flex; gap: 6px; align-items: baseline; }
+.pg-passport dt { color: var(--pg-mute); font-weight: 600; }
+.pg-passport dd { margin: 0; color: var(--pg-ink); font-variant-numeric: tabular-nums; }

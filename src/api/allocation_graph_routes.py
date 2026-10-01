@@ -83,16 +83,50 @@ def _procedure(graph: Any, kinds: dict[str, dict]) -> dict | None:
     return proc.evaluate(graph["nodes"], graph["edges"], kinds, STAGES, PORT_PLAIN)
 
 
+def _with_fixes(errors: list[dict], graph: Any, kinds: dict[str, dict]) -> list[dict]:
+    """★오류마다 고치는 법 한 줄★ (BT7) — 서버가 쓴다. 빠진 입력은 절차의 같은 판단(있는 것을 먼저 잇고, 없으면 붙인다),
+    타입이 다른 선은 받는 자리가 무엇을 받는지. 고칠 길이 없으면 `None` — 지어내지 않는다. 이미 `fix` 가 있으면 둔다."""
+    ok_doc = isinstance(graph, dict) and isinstance(graph.get("nodes"), list) and isinstance(graph.get("edges"), list)
+    miss = proc.missing_input_fixes(graph["nodes"], graph["edges"], kinds, STAGES, PORT_PLAIN) if ok_doc else {}
+    out = []
+    for e in errors:
+        if "fix" in e:
+            out.append(e)
+            continue
+        fix = None
+        if e.get("code") == "missing_input":
+            fx = miss.get(str(e.get("node_id")), {}).get(str(e.get("port")))
+            fix = fx["text"] if fx else None
+        elif e.get("code") == "type_mismatch" and ok_doc:
+            fix = _type_fix(graph, e.get("edge_id"), kinds)
+        out.append({**e, "fix": fix})
+    return out
+
+
+def _type_fix(graph: dict, edge_id: Any, kinds: dict[str, dict]) -> str | None:
+    edge = next((x for x in graph["edges"] if isinstance(x, dict) and pg._edge_id(x) == edge_id), None)
+    if not edge:
+        return None
+    src, dst = (kinds.get(str(_type_of(graph["nodes"], edge.get(k)))) for k in ("source", "target"))
+    out = next((o for o in (src or {}).get("outputs", []) if o["name"] == edge.get("source_port")), None)
+    inp = next((i for i in (dst or {}).get("inputs", []) if i["name"] == edge.get("target_port")), None)
+    if not (src and dst and out and inp):
+        return None
+    want, got = PORT_PLAIN.get(inp["type"], inp["type"]), PORT_PLAIN.get(out["type"], out["type"])
+    return (f"‘{dst['plain_label']}’의 이 자리는 {proc.quote_obj(want)} 받아요 — 이 선은 {proc.quote_obj(got)} 보내요. "
+            f"선을 끊고 {proc.quote_obj(want)} 내는 노드에서 이어 주세요.")
+
+
 @router.post("/validate")
 def graph_validate(graph: Any = Body(...)) -> dict:
-    """검증 + ★절차★(BT1) — 편집마다 불리므로 계산 전에도 절차 탭·다음 한 걸음이 보인다."""
+    """검증 + ★절차★(BT1) + ★고치는 법★(BT7) — 편집마다 불리므로 계산 전에도 절차 탭·다음 한 걸음이 보인다."""
     rep = pg.validate(graph, REGISTRY)
     kinds = _kinds()
     if isinstance(graph, dict) and not any(e.get("code") in pg.FATAL_CODES or e.get("code") == "document"
                                            for e in rep["errors"]):
         extra = _needs_errors(graph["nodes"], graph["edges"], kinds)
         rep = {"ok": rep["ok"] and not extra, "errors": rep["errors"] + extra}
-    return {**rep, "procedure": _procedure(graph, kinds)}
+    return {**rep, "errors": _with_fixes(rep["errors"], graph, kinds), "procedure": _procedure(graph, kinds)}
 
 
 @router.post("/run")

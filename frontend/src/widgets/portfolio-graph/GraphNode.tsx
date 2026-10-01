@@ -11,7 +11,7 @@
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type NodeProps } from "reactflow";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData } from "@/entities/portfolio-graph";
+import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
@@ -42,6 +42,8 @@ export type CanvasNodeData = PgNodeData & {
   onRunTo?: (id: string) => void;
   /** 빠진 입력을 이을 노드 찾기(BT3) — 그 입력에서 선을 끈 것과 같다. */
   onNeed?: (id: string, port: string, type: string) => void;
+  /** 고치는 법 단추(BT7) — 서버 절차의 이 노드 제안을 그대로 적용한다. */
+  onFix?: (sug: ProcedureSuggestion) => void;
   onPreviewRunTo?: (id: string | null) => void;
 };
 
@@ -51,7 +53,7 @@ function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: 
   if (lin?.pit === "forward_only") out.push({ cls: "assume", text: "지금 시점 전용" });
   if (lin?.overlay) out.push({ cls: "assume", text: "노출 조절됨" });
   const trust = ex?.trust ?? [];
-  if (trust.some((t) => t.state === "unknown" && t.text.includes("연습용"))) out.push({ cls: "unknown", text: "연습용 데이터" });
+  if (trust.some((t) => t.kind === "practice")) out.push({ cls: "unknown", text: "연습용 데이터" });
   else if (trust.some((t) => t.state === "unknown")) out.push({ cls: "unknown", text: "모르는 것 있음" });
   const nAssumed = trust.filter((t) => t.state === "assumed").length;
   if (nAssumed) out.push({ cls: "assume", text: nAssumed === 1 ? "가정 있음" : `가정 ${nAssumed}개` });
@@ -112,6 +114,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
   const live = result && !stale ? result : undefined;
   // 혼자 쓰는 도구(BT6) — 입력도 출력도 없다. 포트를 지어 붙이지 않고 그렇다고 말한다.
   const solo = !!entry && isSolo(entry);
+  // 고치는 법(BT7) — 서버가 쓴 문장과 제안 그대로. 빠진 입력이 없으면 서버가 내지 않는다(화면이 판단하지 않는다).
+  const fix = usePortfolioGraph((s) => s.validation?.procedure?.fixes?.[id] ?? null);
   const running = usePortfolioGraph((s) => s.running);
   const single = usePortfolioGraph((s) => s.picked.length <= 1);
   // 도구줄 자리(BS2) — 위 가운데가 다른 카드를 덮으면 덜 덮는 자리로. 보일 때만 잰다.
@@ -248,6 +252,15 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
                       onClick={(e) => { e.stopPropagation(); data.onNeed?.(id, p.name, p.type); }}>‘{PORT_PLAIN[p.type] ?? p.name}’</button>
             </span>
           )) : missing.map((p) => `‘${PORT_PLAIN[p.type] ?? p.name}’`).join(", ")}을 이어 주세요
+        </div>
+      )}
+      {fix && data.onFix && (
+        <div className="pg-node-fix" role="note">
+          <span className="pg-node-fix-text">{fix.text}</span>
+          <button type="button" className="pg-node-fix-btn nodrag" data-action={fix.action}
+                  onClick={(e) => { e.stopPropagation(); data.onFix?.(fix); }}>
+            {fix.action === "add" && fix.label ? `‘${fix.label}’ 붙이기` : "이어 주기"}
+          </button>
         </div>
       )}
       {headline && headline.value !== null && (

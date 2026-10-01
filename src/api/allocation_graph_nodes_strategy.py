@@ -22,7 +22,7 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _t
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t
 from src.api.allocation_graph_nodes import _pydantic_reason, _subset, _ui
 from src.api.stage11_routes import MultiBacktestRunRequest
 from src.api.valuation_routes import EvaluateRequest
@@ -155,7 +155,7 @@ def _explain_strategy(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, "기록하지 않고 계산만 했어요 — 실행 기록은 남지 않아요.")]
     srcs = (view.get("sources") or {}).get("strategies") or []
     if any(x.get("is_mock_data") is True for x in srcs):
-        trust.append(_t(UNKNOWN, "연습용(합성) 데이터로 등록된 전략이 있어요 — 실제 성과를 말해 주지 않아요."))
+        trust.append(_practice("연습용(합성) 데이터로 등록된 전략이 있어요 — 실제 성과를 말해 주지 않아요."))
     if not all(x.get("is_pit_verified") is True for x in srcs):
         trust.append(_t(UNKNOWN, "시점 정합이 확인되지 않은 전략이 있어요."))
     for w in view.get("warnings") or []:
@@ -324,7 +324,7 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
     if cov.get("missing"):
         trust.append(_t(UNKNOWN, f"가격이 없는 종목은 빼고 쟀어요: {', '.join(cov['missing'])}."))
     if cov.get("source") == "mock":
-        trust.append(_t(UNKNOWN, "연습용(합성) 가격이에요 — 실제 성과를 말해 주지 않아요."))
+        trust.append(_practice("연습용(합성) 가격이에요 — 실제 성과를 말해 주지 않아요."))
     return {"title": "결정을 되짚어 봤어요" if cov.get("has_expost") else "아직 되짚을 결과가 없어요",
             "headline": ({"label": "실제 수익", "value": ret["portfolio_pct"], "unit": "%",
                           "text": f"{float(ret['portfolio_pct']):+.1f}%"} if ret.get("portfolio_pct") is not None else None),

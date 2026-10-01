@@ -21,7 +21,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from src.api import screener_routes as _sr
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _signed_pct, _t
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _practice, _signed_pct, _t
 from src.api.allocation_graph_nodes import _FORBID, _pydantic_reason, _ui
 from src.api.allocation_graph_nodes_signal import _presets_filter
 from src.engine import portfolio_graph as pg
@@ -182,7 +182,7 @@ def _explain_load(view: dict, prov: dict, params: Any) -> dict:
     tr = s.get("total_return_pct")
     trust = [_t(CONFIRMED, "백그라운드에서 끝난 실행의 저장된 결과를 그대로 읽었어요.")]
     if view.get("is_mock_data") is not False:
-        trust.append(_t(UNKNOWN, "연습용(합성) 데이터로 돈 실행이거나 데이터 출처를 확인하지 못했어요 — 실제 성과가 아니에요."))
+        trust.append(_practice("연습용(합성) 데이터로 돈 실행이거나 데이터 출처를 확인하지 못했어요 — 실제 성과가 아니에요."))
     if view.get("is_pit_verified") is not True:
         trust.append(_t(UNKNOWN, "시점 정합을 확인하지 못했어요 — 그때 알 수 없던 값이 섞였을 수 있어요."))
     return {"title": f"백테스트 {view.get('run_id')}의 결과를 불러왔어요",
@@ -219,7 +219,7 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, f"실행의 월별 수익률 {r.get('months_from_run')}개월을 매크로 팩터로 나눴어요(결합 회귀).")]
     if any(x.get("collinear") for x in rows):
         trust.append(_t(UNKNOWN, "서로 비슷하게 움직이는 팩터가 있어 개별 기여는 서로 상쇄될 수 있어요 — 따로 읽지 마세요."))
-    trust += ([_t(UNKNOWN, "개발 모드라 매크로 지표가 합성(연습용)이에요.")] if prov.get("practice") else [])
+    trust += ([_practice("개발 모드라 매크로 지표가 합성(연습용)이에요.")] if prov.get("practice") else [])
     return {"title": "무엇이 이 수익을 만들었는지 나눠 봤어요",
             "facts": ([f"가장 큰 몫: {FACTOR_KO.get(top.get('factor'), top.get('factor'))} {_signed_pct(float(top.get('contribution_pct') or 0))}"] if top else [])
                      + ([f"설명력(R²) {r['diagnostics']['r_squared']:.2f}"] if (r.get("diagnostics") or {}).get("r_squared") is not None else []),

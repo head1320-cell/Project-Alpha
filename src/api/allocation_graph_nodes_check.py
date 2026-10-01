@@ -30,6 +30,7 @@ from src.api.allocation_graph_explain import (
     UNKNOWN,
     _josa,
     _pct,
+    _practice,
     _signed_pct,
     _t,
 )
@@ -138,7 +139,7 @@ def _explain_scenario(view: dict, prov: dict, params: Any) -> dict:
             facts.append(f"같은 기간 {r.get('benchmark_label')} 최대 낙폭은 {_signed_pct(float(r['benchmark_max_dd_pct']))}예요.")
         facts.append("실제 시세를 재생해서 강도 배율은 적용하지 않았어요.")
         if prov.get("source") == "hist_replay:mock":
-            trust.append(_t(UNKNOWN, "연습용 합성 시세예요 — 실제 위기 때의 성과를 말해 주지 않아요."))
+            trust.append(_practice("연습용 합성 시세예요 — 실제 위기 때의 성과를 말해 주지 않아요."))
         else:
             trust.append(_t(CONFIRMED, "그 기간의 적재 시세를 그대로 재생했어요."))
             trust.append(_t(UNKNOWN, "적재 시세의 출처 등급은 몰라요."))

@@ -81,7 +81,7 @@ export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedI
 }) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const practice = Object.entries(results ?? {}).filter(([id]) => !staleIds.has(id)).map(([, r]) => r).some((r) =>
-    (r.explain?.trust ?? []).some((t) => t.state === "unknown" && t.text.includes("연습용")));
+    (r.explain?.trust ?? []).some((t) => t.kind === "practice"));
   if (!nodes.length) {
     return <p className="pg-empty">캔버스가 비어 있어요. 왼쪽에서 노드를 끌어 오거나 ‘빠른 시작’을 눌러 보세요.</p>;
   }

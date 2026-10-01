@@ -26,7 +26,7 @@ import numpy as np
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _signed_pct, _t
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _practice, _signed_pct, _t
 from src.api.allocation_graph_nodes import _FORBID, _labels, _ui, weights_value
 from src.api.allocation_graph_nodes_check import holdings_pct
 from src.api.allocation_graph_nodes_signal import registry_expr
@@ -76,7 +76,7 @@ def macro_series_map() -> tuple[dict, dict]:
 
 
 def _macro_trust(prov: dict) -> list[dict]:
-    return [_t(UNKNOWN, _DEV_MACRO)] if prov.get("practice") else [_t(UNKNOWN, _STORE_NOTE)]
+    return [_practice(_DEV_MACRO)] if prov.get("practice") else [_t(UNKNOWN, _STORE_NOTE)]
 
 
 # ── 효율적 프런티어 ───────────────────────────────────────────────────────────

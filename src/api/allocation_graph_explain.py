@@ -44,6 +44,16 @@ def _t(state: str, text: str) -> dict:
     return {"state": state, "text": text}
 
 
+#: 믿음 줄의 표시(BT7) — 화면의 "연습용 데이터" 칩은 문구가 아니라 이 표시를 본다.
+PRACTICE = "practice"
+
+
+def _practice(text: str = _PRACTICE) -> dict:
+    """연습용(합성) 데이터라서 실제 성과·국면·가치를 말하지 못한다는 믿음 줄 — 몰라요 + 표시.
+    노드 모듈은 연습용 줄을 `_t(UNKNOWN, …)` 로 직접 만들지 않는다(`tests/test_graph_practice_kind.py` AST)."""
+    return {"state": UNKNOWN, "text": text, "kind": PRACTICE}
+
+
 def _josa(word: str, with_batchim: str, without: str) -> str:
     """받침 유무로 조사를 고른다(한글이 아니면 받침 없음으로 본다)."""
     ch = word[-1:] if word else ""
@@ -98,7 +108,7 @@ def explain_returns(view: dict, prov: dict, params: Any) -> dict:
                  "빠진 종목: " + "; ".join(f"{x['ticker']}({x['reason']})" for x in ex))
     trust = []
     if _is_practice(prov):
-        trust.append(_t(UNKNOWN, _PRACTICE))
+        trust.append(_practice())
     elif prov.get("data_grade"):
         trust.append(_t(CONFIRMED, f"데이터 등급 {prov['data_grade']}로 기록돼 있어요."))
     else:
@@ -155,7 +165,7 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
                     "text": f"{name} {_pct(w[top])}"}
     trust = [_t(CONFIRMED, "비중 계산은 문제없이 끝났어요.")]
     if _is_practice(prov):
-        trust.append(_t(UNKNOWN, _PRACTICE))
+        trust.append(_practice())
     cap = view.get("cap_missing") or []
     if model in _MARKET_PRIOR_MODELS and cap:
         trust.append(_t(ASSUMED, f"시가총액을 몰라서 {len(cap)}개 종목의 출발점을 똑같이 나눴어요."))
@@ -223,7 +233,7 @@ def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"리밸런싱을 {view['n_rebalances']}번 했어요.")
     trust = []
     if _is_practice(prov):
-        trust.append(_t(UNKNOWN, _PRACTICE))
+        trust.append(_practice())
     # 파라미터가 먼저 — 엔진이 실제로 받은 값이다. 없으면 결과의 config 를 본다.
     bps = getattr(params, "cost_bps", None)
     if bps is None:

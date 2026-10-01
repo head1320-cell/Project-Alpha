@@ -273,8 +273,11 @@ class Registry:
 # ── 검증 ─────────────────────────────────────────────────────────────────────
 
 def _err(code: str, message: str, *, node_id: str | None = None,
-         edge_id: str | None = None) -> dict:
-    return {"code": code, "message": message, "node_id": node_id, "edge_id": edge_id}
+         edge_id: str | None = None, port: str | None = None) -> dict:
+    e = {"code": code, "message": message, "node_id": node_id, "edge_id": edge_id}
+    if port is not None:                               # BT7 — 빠진 입력의 자리(고치는 법이 그 자리를 가리킨다)
+        e["port"] = port
+    return e
 
 
 def _edge_id(e: Mapping) -> str:
@@ -386,7 +389,7 @@ def _analyse(graph: Mapping, registry: Registry):
             if p.required and p.name not in incoming[nid]:
                 errors.append(_err("missing_input",
                                    f"필수 입력 {p.name}({p.type}) 이 연결되지 않았습니다.",
-                                   node_id=nid))
+                                   node_id=nid, port=p.name))
 
     order = _topo(list(nodes), adj)
     if order is None:

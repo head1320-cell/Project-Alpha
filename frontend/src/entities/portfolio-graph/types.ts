@@ -200,6 +200,8 @@ export interface Procedure {
   steps: ProcedureStep[];
   next: ProcedureSuggestion | null;
   by_gate: Record<string, ProcedureSuggestion | null>;
+  /** 노드마다 첫 빠진 입력의 고치는 법(BT7) — 카드의 "고치는 법" 줄. 고칠 길이 없는 노드는 없다. */
+  fixes?: Record<string, ProcedureSuggestion>;
   done_text: string | null;
 }
 
@@ -218,7 +220,8 @@ export interface NodeExplain {
   title: string;
   headline?: { label: string; value: number | null; unit: string; text: string } | null;
   facts?: string[];
-  trust?: { state: TrustState; text: string }[];
+  /** `kind: "practice"` — 연습용(합성) 데이터라는 줄(BT7). 화면의 연습용 칩은 문구가 아니라 이 표시를 본다. */
+  trust?: { state: TrustState; text: string; kind?: "practice" }[];
   unmeasured?: string[];
 }
 

@@ -286,6 +286,75 @@ function Current({ v }: { v: Dict }) {
   );
 }
 
+// ── BT7 — 종목 고르기 · 내 생각 · 기대 수익 설정: 원시 JSON 대신 표·목록. 서버 값만 쓴다(모르는 값은 그대로 · 지어내지 않는다).
+
+function UniverseResult({ v }: { v: Dict }) {
+  const tickers = (v.tickers as string[] | undefined) ?? [];
+  const labels = (v.labels as Record<string, string> | undefined) ?? {};
+  const weights = v.weights as Record<string, number> | null | undefined;
+  const unknown = (v.unknown_tickers as { codes?: string[]; note?: string | null } | undefined) ?? {};
+  return (
+    <>
+      <p className="pg-note">종목 {tickers.length}개{v.benchmark ? ` · 비교 기준 ${String(v.benchmark)}` : ""}</p>
+      {weights ? <WeightBars weights={weights} labels={labels} /> : (
+        <table className="pg-table pg-universe-table">
+          <tbody>
+            {tickers.map((t) => (
+              <tr key={t}><td className="pg-td-name">{labels[t] && labels[t] !== t ? `${labels[t]} ` : ""}<span className="pg-code">{t}</span></td></tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {!weights && <p className="pg-note">지금 비중은 적지 않았어요 — 비중이 필요한 노드는 이 목록만 받아요.</p>}
+      {(unknown.codes ?? []).length > 0 && (
+        <p className="pg-warn">이름을 찾지 못한 종목: {(unknown.codes ?? []).join(", ")}{unknown.note ? ` — ${unknown.note}` : ""}</p>
+      )}
+    </>
+  );
+}
+
+function ViewsResult({ v }: { v: Dict }) {
+  type View = { assets?: string[]; weights?: Record<string, number> | null; direction?: number; magnitude_pct?: number | null;
+                confidence?: number | null; label?: string | null };
+  const views = (v.views as View[] | undefined) ?? [];
+  if (!views.length) return <p className="pg-note">적은 생각이 없어요 — 비중 계산은 과거 기준으로만 해요.</p>;
+  return (
+    <ul className="pg-list pg-views-list">
+      {views.map((x, i) => (
+        <li key={i} className="pg-view-row">
+          <b>{x.label ?? (x.assets ?? []).join(" · ")}</b>
+          {" "}{x.direction == null ? "방향 모름" : x.direction > 0 ? "오를 것" : x.direction < 0 ? "내릴 것" : "그대로"}
+          {typeof x.magnitude_pct === "number" ? ` ${x.magnitude_pct > 0 ? "+" : ""}${x.magnitude_pct.toFixed(1)}%` : ""}
+          {typeof x.confidence === "number" ? ` · 확신 ${Math.round(x.confidence * 100)}%` : " · 확신 모름"}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const ESTIMATE_KEYS: Record<string, string> = {
+  conditional: "경기 국면 반영", require_verified_macro: "확인된 매크로만", regime_weighting: "국면 가중 방식",
+  regime_mode: "국면 판정 시점", rebalance: "다시 정하는 주기",
+};
+
+function EstimateResult({ v }: { v: Dict }) {
+  const settings = (v.settings as Record<string, unknown> | undefined) ?? {};
+  const show = (x: unknown) => (x === true ? "켬" : x === false ? "끔" : x == null ? "모름" : String(x));
+  return (
+    <>
+      {v.note ? <p className="pg-note">{String(v.note)}</p> : null}
+      <table className="pg-table pg-estimate-table">
+        <tbody>
+          {Object.entries(settings).map(([k, x]) => (
+            <tr key={k}><td className="pg-td-name">{ESTIMATE_KEYS[k] ?? <span className="pg-code">{k}</span>}</td>
+              <td className="pg-td-num">{typeof x === "string" ? <span className="pg-code">{x}</span> : show(x)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
@@ -298,6 +367,9 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   current_weights: ({ v }) => <Current v={v} />,
   risk: ({ v }) => <Risk v={v} />,
   backtest: ({ v }) => <Backtest v={v} />,
+  universe: ({ v }) => <UniverseResult v={v} />,
+  views: ({ v }) => <ViewsResult v={v} />,
+  estimate: ({ v }) => <EstimateResult v={v} />,
   returns: ({ v, prov }) => <Returns v={v} prov={prov} />,
   scenario_stress: ({ v, prov }) => <ScenarioStressResult v={v} prov={prov} />,
   corr_stress: ({ v }) => <CorrStressResult v={v} />,

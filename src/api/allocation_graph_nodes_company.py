@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 
 from src.api import company_routes as cr
 from src.api import screener_routes as _sr
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _t
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t
 from src.api.allocation_graph_nodes import _FORBID, _ui
 from src.api.allocation_graph_nodes_bl2 import macro_series_map
 from src.data.mock_gate import mock_allowed
@@ -90,7 +90,7 @@ def _base_trust(view: dict, prov: dict) -> list[dict]:
         out.append(_t(CONFIRMED if src == "직접 입력" else UNKNOWN,
                       f"현재가 {view.get('price'):,.0f}원 — 출처: {src}."))
     if prov.get("practice"):
-        out.append(_t(UNKNOWN, "개발 모드라 재무·가격이 합성(연습용)이에요 — 실제 기업 가치를 말해 주지 않아요."))
+        out.append(_practice("개발 모드라 재무·가격이 합성(연습용)이에요 — 실제 기업 가치를 말해 주지 않아요."))
     return out
 
 

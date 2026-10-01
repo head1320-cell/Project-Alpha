@@ -182,32 +182,62 @@ def _returns_feeding(nid: str, by_id: Mapping, incoming: Mapping, kinds: Mapping
     return src[0] if src else _first(by_id, "returns")
 
 
-def _rule_missing_input(by_id, incoming, out_adj, kinds, stage_order, port_plain) -> dict | None:
+def _fix_missing(nid: str, p: Mapping, by_id, out_adj, kinds, stage_order, port_plain) -> dict | None:
+    """빠진 입력 하나를 고치는 법 — 있는 생산자를 먼저 잇고(하류는 빼고 — 고리), 없으면 생산자를 붙여 잇는다.
+    카탈로그에 그 타입을 내는 종류가 아예 없으면 None(지어내지 않는다)."""
+    node = by_id[nid]
+    what = port_plain.get(p["type"], p["name"])
+    me = _label(kinds, str(node["type"]))
+    banned = _descendants(nid, out_adj) | {nid}
+    existing = next(((sid, o["name"]) for sid, sn in by_id.items() if sid not in banned
+                     for o in _kind(kinds, sn).get("outputs") or [] if o["type"] == p["type"]), None)
+    if existing:
+        src_label = _label(kinds, str(by_id[existing[0]]["type"]))
+        return _suggest("connect", None,
+                        f"{_subj(me)} 받을 {_obj(what)} 아직 잇지 않았어요 — {_subj(src_label)} 내는 "
+                        f"{_obj(what)} 이을까요?",
+                        [{"source": existing[0], "source_port": existing[1],
+                          "target": nid, "target_port": p["name"]}], [], kinds)
+    prod = _producer(kinds, p["type"], stage_order)
+    if prod is None:
+        return None
+    out = _out_port(kinds, prod, p["type"])
+    return _suggest("add", prod,
+                    f"{_subj(me)} 받을 {_obj(what)} 내는 노드가 없어요 — "
+                    f"{_obj(_label(kinds, prod))} 붙여 이을까요?",
+                    [{"source": NEW, "source_port": out, "target": nid, "target_port": p["name"]}],
+                    [], kinds)
+
+
+def _fixes(by_id, incoming, out_adj, kinds, stage_order, port_plain) -> dict[str, dict]:
+    """노드마다 첫 빠진 입력의 고치는 법(BT7 — 카드의 "고치는 법" 줄·`missing_input` 오류의 `fix`)."""
+    out: dict[str, dict] = {}
     for nid, node in by_id.items():
-        kind = _kind(kinds, node)
-        for p in _missing_inputs(node, kind, incoming):
-            what = port_plain.get(p["type"], p["name"])
-            me = _label(kinds, str(node["type"]))
-            banned = _descendants(nid, out_adj) | {nid}
-            existing = next(((sid, o["name"]) for sid, sn in by_id.items() if sid not in banned
-                             for o in _kind(kinds, sn).get("outputs") or [] if o["type"] == p["type"]), None)
-            if existing:
-                src_label = _label(kinds, str(by_id[existing[0]]["type"]))
-                return _suggest("connect", None,
-                                f"{_subj(me)} 받을 {_obj(what)} 아직 잇지 않았어요 — {_subj(src_label)} 내는 "
-                                f"{_obj(what)} 이을까요?",
-                                [{"source": existing[0], "source_port": existing[1],
-                                  "target": nid, "target_port": p["name"]}], [], kinds)
-            prod = _producer(kinds, p["type"], stage_order)
-            if prod is None:
-                continue
-            out = _out_port(kinds, prod, p["type"])
-            return _suggest("add", prod,
-                            f"{_subj(me)} 받을 {_obj(what)} 내는 노드가 없어요 — "
-                            f"{_obj(_label(kinds, prod))} 붙여 이을까요?",
-                            [{"source": NEW, "source_port": out, "target": nid, "target_port": p["name"]}],
-                            [], kinds)
-    return None
+        for p in _missing_inputs(node, _kind(kinds, node), incoming):
+            fx = _fix_missing(nid, p, by_id, out_adj, kinds, stage_order, port_plain)
+            if fx:
+                out[nid] = fx
+                break
+    return out
+
+
+def missing_input_fixes(nodes: Sequence[Mapping], edges: Sequence[Mapping], kinds: Mapping[str, Mapping],
+                        stages: Sequence[Mapping], port_plain: Mapping[str, str]) -> dict[str, dict[str, dict]]:
+    """빠진 입력마다(노드 → 자리 → 고치는 법). 고칠 길이 없는 자리는 빠진다(지어내지 않는다)."""
+    by_id, incoming, out_adj = _index(nodes, edges, kinds)
+    stage_order = [str(s["key"]) for s in stages]
+    out: dict[str, dict[str, dict]] = {}
+    for nid, node in by_id.items():
+        for p in _missing_inputs(node, _kind(kinds, node), incoming):
+            fx = _fix_missing(nid, p, by_id, out_adj, kinds, stage_order, port_plain)
+            if fx:
+                out.setdefault(nid, {})[str(p["name"])] = fx
+    return out
+
+
+def _rule_missing_input(fixes: Mapping[str, dict]) -> dict | None:
+    """규칙 1 — 그래프 순서로 첫 노드의 고치는 법(카드의 고치는 법과 같은 판단)."""
+    return next(iter(fixes.values()), None)
 
 
 def _add_returns(by_id, kinds) -> dict | None:
@@ -324,13 +354,14 @@ def evaluate(nodes: Sequence[Mapping], edges: Sequence[Mapping], kinds: Mapping[
 
     has_stage = {st["key"] for st in steps if st["state"] != EMPTY}
     # ★규칙 순서가 판정이다★ — 앞 규칙이 이긴다.
-    nxt = (_rule_missing_input(by_id, incoming, out_adj, kinds, stage_order, port_plain)
+    fixes = _fixes(by_id, incoming, out_adj, kinds, stage_order, port_plain)
+    nxt = (_rule_missing_input(fixes)
            or (_add_returns(by_id, kinds) if "returns" not in types else None)
            or (_add_optimizer(by_id, kinds) if "build" not in has_stage else None)
            or (_add_backtest(by_id, incoming, kinds) if "backtest" not in types else None)
            or (_add_risk(by_id, incoming, kinds) if "check" not in has_stage else None))
 
-    return {"steps": steps, "next": nxt, "by_gate": by_gate,
+    return {"steps": steps, "next": nxt, "by_gate": by_gate, "fixes": fixes,
             "done_text": None if nxt else "절차를 다 채웠어요 — 계산해 보세요."}
 
 

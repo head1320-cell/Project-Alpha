@@ -18,7 +18,7 @@ import numpy as np
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _t
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t
 from src.api.allocation_graph_nodes import _FORBID, _labels, _ui, weights_value
 from src.engine import portfolio_graph as pg
 
@@ -155,7 +155,7 @@ def _explain_rebalance(view: dict, prov: dict, params: Any) -> dict:
     if c.get("reason"):
         trust.append(_t(UNKNOWN, f"비용: {c['reason']}"))
     if (r.get("coverage") or {}).get("source") == "mock":
-        trust.append(_t(UNKNOWN, "연습용 합성 수익률로 잰 판단이에요."))
+        trust.append(_practice("연습용 합성 수익률로 잰 판단이에요."))
     trust.append(_t(CONFIRMED, "무거래 밴드는 자산마다 달라요(비용·포지션 크기·불확실성에 따라) — 고정 ±5% 가 아니에요."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["세금·체결 지연", "판단 뒤 실제 체결가"]}
 

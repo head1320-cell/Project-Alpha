@@ -19,7 +19,7 @@ import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
-import { sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
+import { fmtElapsed, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
 
 type Params = Record<string, unknown>;
@@ -516,6 +516,34 @@ function Gives({ node, entry, edges, plainOf, onFocus }: {
 }
 
 /**
+ * 이 노드 명세(BT7) — 흩어진 것을 한 줄로: 단계 · 가정 · 모르는 것 · 재지 않은 것 · 계산 시간 · 계보. ★새 값을 만들지 않는다★ —
+ * 서버 explain·elapsed·lineage 를 센다(이야기 탭과 같은 수). 계산 전·예전 결과면 그렇다고만 말한다.
+ */
+function Passport({ stage, result, stale }: { stage: string | null; result?: NodeRunResult; stale: boolean }) {
+  const live = result && !stale && result.status === "ok" ? result : null;
+  const trust = live?.explain?.trust ?? [];
+  const n = (st: string) => trust.filter((t) => t.state === st).length;
+  const lin = live?.lineage;
+  const chips = [lin?.practice && "연습용", lin?.pit === "forward_only" && "지금 시점 전용", lin?.overlay && "노출 조절"].filter(Boolean) as string[];
+  return (
+    <dl className="pg-passport">
+      {stage && <div data-k="stage"><dt>단계</dt><dd>{stage}</dd></div>}
+      {!live ? (
+        <div data-k="state"><dt>결과</dt><dd>{result && stale ? "예전 결과예요 — 다시 계산하면 나와요" : result ? "계산되지 않았어요" : "아직 계산 전이에요"}</dd></div>
+      ) : (
+        <>
+          <div data-k="assumed"><dt>가정</dt><dd>{n("assumed")}개</dd></div>
+          <div data-k="unknown"><dt>모르는 것</dt><dd>{n("unknown")}개</dd></div>
+          <div data-k="unmeasured"><dt>재지 않은 것</dt><dd>{(live.explain?.unmeasured ?? []).length}가지</dd></div>
+          {typeof live.elapsed_ms === "number" && <div data-k="elapsed"><dt>계산 시간</dt><dd>{fmtElapsed(live.elapsed_ms)}</dd></div>}
+          {chips.length > 0 && <div data-k="lineage"><dt>계보</dt><dd>{chips.join(" · ")}</dd></div>}
+        </>
+      )}
+    </dl>
+  );
+}
+
+/**
  * 바꿔 끼우기(BT6) — 같은 단계에서 지금 선을 모두 그대로 받을 수 있는 종류만 보인다. 없으면 고르기 칸 대신 그 이유를 말한다.
  * 바꾸면 설정은 새 종류의 기본값이다(이전 설정은 뜻이 다를 수 있어 옮기지 않는다) — 토스트가 그렇다고 말한다.
  */
@@ -550,7 +578,7 @@ function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpa
 }
 
 export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onExpert, onChange, onRemove, onDuplicate,
-  result, stale, onSave, saveFollowUp, onRewire, onFocus, onImpact, onSwap }: {
+  result, stale, onSave, saveFollowUp, onRewire, onFocus, onImpact, onSwap, stageLabel }: {
   node: PgNode;
   entry: NodeCatalogEntry | undefined;
   nodes: PgNode[];
@@ -574,6 +602,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   onImpact?: (ids: string[] | null) => void;
   /** 같은 단계의 다른 종류로 바꿔 끼우기(BT6). */
   onSwap?: (kind: string) => void;
+  /** 이 노드의 단계 이름(BT7 명세 칸). */
+  stageLabel?: string | null;
 }) {
   const params = node.data.params ?? {};
   const plainOf = (id: string) => {
@@ -601,6 +631,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
 
   return (
     <section className="pg-settings">
+      {entry && <Passport stage={stageLabel ?? null} result={result} stale={stale} />}
       {entry && onSwap && <SwapPick node={node} nodes={nodes} edges={edges} catalog={catalog} onSwap={onSwap} />}
       {entry && (
         <dl className="pg-io">

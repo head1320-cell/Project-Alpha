@@ -289,6 +289,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
   /** BT3 — 카드의 "‘X’을 이어 주세요" 단추: 그 입력에서 선을 끈 것과 같은 빠른 추가를 연다. */
   const needRef = useRef<(id: string, port: string, type: string) => void>(() => {});
   const onNeed = useCallback((id: string, port: string, type: string) => needRef.current(id, port, type), []);
+  /** 카드의 고치는 법 단추(BT7) — 절차 제안과 같은 길(되돌리기 한 번). 정의가 아래에 있어 ref 로 잇는다. */
+  const fixRef = useRef<(sug: ProcedureSuggestion) => void>(() => undefined);
+  const onFix = useCallback((sug: ProcedureSuggestion) => fixRef.current(sug), []);
   const focusRef = useRef<(id: string) => void>(() => {});
   const runStrategyRef = useRef<(groupId: string) => void>(() => {});
   const branchStrategyRef = useRef<(groupId: string) => void>(() => {});
@@ -442,7 +445,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                   keep && !keep.has(n.id) && "pg-dim",
                   cause && causeSet.has(n.id) && "pg-on-cause",
                   cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
-      data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed },
+      data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed, onFix },
     }));
     const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
       const ms = s.nodes.filter((n) => g.members.includes(n.id));
@@ -493,7 +496,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
     return [...frames, ...branchFrames, ...cards];
-  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed]);
+  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix]);
   /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
   const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
   const edgesStyled = useMemo(() => {
@@ -1041,6 +1044,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       return id ? `‘${sug.label}’를 붙이고 이었어요.` : "선을 이었어요.";
     });
   }, []);
+  fixRef.current = applySuggestion;
   const nodeLabel = useCallback((id: string) => {
     const n = s.nodes.find((x) => x.id === id);
     const e = s.catalog?.find((c) => c.type === n?.data.kind);
@@ -1440,6 +1444,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
             )}
             {s.tab === "settings" && selected && (
               <SettingsPanel node={selected} entry={selEntry} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []}
+                             stageLabel={stages.find((x) => x.key === selEntry?.stage)?.label ?? null}
                              expert={s.expert} onExpert={s.setExpert}
                              onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
                              onDuplicate={() => s.duplicateNode(selected.id)}
