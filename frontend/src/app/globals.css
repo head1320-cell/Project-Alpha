@@ -8990,3 +8990,137 @@ select.fp-factor2 { max-width: 220px; }
   .wg-list { max-height: 180px; }
   .wg-foot .tx-btn { flex: 1; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BU4 · 실행·결과·비교(.rs — 진행 RunMonitor · 결과 BacktestResults · 비교 BacktestCompare)
+   읽는 화면(최대 폭 1080 · 회색 바탕 위 흰 절). 대담한 곳은 답 한 문장 하나 — 숫자는 문장 안에 있다.
+   등락은 한국식(오름 --tx-up · 내림 --tx-down)이고 늘 부호와 함께. 계약 클래스(.brun-*)는 그대로 두고 여기서 덮는다.
+   여백의 주인은 하나: `.brun-card` 는 0, 머리(.rs-card-h)·몸통(.rs-card-b)이 가진다(backtest.spec S1b-2).
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.brun-shell.rs { max-width: 1080px; padding: 0 0 48px; gap: 16px; }
+.dark .brun-results.rs { background: transparent; }
+.rs .tx-head { margin-bottom: 4px; }
+.rs-id { margin-left: 8px; font-family: var(--t-mono, ui-monospace, monospace); font-size: 12px; color: var(--tx-mute); }
+.rs .brun-loading { padding: 64px 16px; font-size: 15px; color: var(--tx-sub); }
+.rs-state { align-items: stretch; padding: 24px 0; text-align: left; gap: 12px; }
+.rs-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.rs-acts .tx-btn { height: 44px; padding: 0 18px; font-size: 15px; }
+a.tx-btn, a.tx-btn:hover { text-decoration: none; }
+
+/* 답 */
+.rs-answer-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rs-answer .tx-answer-s { font-size: 24px; max-width: none; font-variant-numeric: tabular-nums; }
+.rs-answer-sub { margin: -6px 0 0; font-size: 16px; color: var(--tx-sub); font-variant-numeric: tabular-nums; }
+.rs-why { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+.rs .tx-chip.brun-badge, .dark .rs .tx-chip.brun-badge { font-size: 13px; font-weight: 600; letter-spacing: 0; padding: 7px 10px; border: 0; border-radius: 8px; }
+.rs .tx-chip.brun-badge[data-tone="ok"], .dark .rs .tx-chip.brun-badge[data-tone="ok"] { background: var(--tx-ok-soft); color: var(--tx-ok); }
+.rs .tx-chip.brun-badge[data-tone="assumed"], .dark .rs .tx-chip.brun-badge[data-tone="assumed"] { background: var(--tx-warn-soft); color: var(--tx-warn); }
+.rs .tx-chip.brun-badge[data-tone="unknown"], .dark .rs .tx-chip.brun-badge[data-tone="unknown"] { background: var(--tx-soft); color: var(--tx-sub); }
+.rs .perf-label { flex: none; }
+
+/* 절(카드) */
+.rs .brun-card, .rs.brun-results .brun-card { border: 0; border-radius: var(--tx-r-sec); background: var(--tx-surface); box-shadow: none; }
+.rs .rs-card { padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+.rs .rs-card-h { padding: 22px 24px 0; border-bottom: 0; }
+.rs .rs-card-b, .rs .brun-card > .rs-card-b { padding: 16px 24px 22px; }
+.rs .brun-card-t { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 18px; line-height: 1.35; font-weight: 700;
+  letter-spacing: -0.01em; text-transform: none; color: var(--tx-ink); }
+.rs .brun-note { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--tx-sub); }
+.rs .brun-benchrow { margin: 10px 0 0; font-size: 14px; color: var(--tx-sub); font-variant-numeric: tabular-nums; }
+
+/* 지표 */
+.rs .rs-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rs .brun-kpi { padding: 14px 16px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.rs .brun-kpi-l { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--tx-sub); }
+.rs .brun-kpi-v { margin-top: 4px; font-family: var(--tx-font); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rs .brun-kpi-tip { margin-top: 6px; font-size: 12px; color: var(--tx-sub); }
+.rs .brun-kpi-na { background: transparent; box-shadow: inset 0 0 0 1px var(--tx-line); border: 0; }
+.rs .brun-kpi-nabadge { margin-top: 6px; padding: 4px 8px; border: 0; border-radius: 6px; background: var(--tx-soft); font-family: var(--tx-font); font-size: 12px; font-weight: 600; color: var(--tx-ink); letter-spacing: 0; }
+.rs-na { margin-top: 18px; }
+.rs-sub-h { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.rs .brun-mgroup { margin-top: 18px; }
+.rs .brun-mgroup-t { margin: 0 0 8px; padding: 0; border: 0; font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--tx-ink); }
+.rs-foot { margin: 14px 0 0; }
+
+/* 펼침 줄(지표 모두 보기 · 거래 기록 · 제출한 설정) — 사람이 누를 때만 움직인다 */
+.rs-all, .rs-trades, .rs-cfg { margin-top: 18px; }
+.rs-trades, .rs-cfg { margin-top: 0; }
+.rs-more { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: var(--tx-r-row); background: var(--tx-soft);
+  list-style: none; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--tx-ink); }
+.rs-more::-webkit-details-marker { display: none; }
+.rs-more:hover { background: var(--tx-line); }
+.rs-more:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
+.rs-more-n { font-size: 13px; font-weight: 400; color: var(--tx-sub); }
+.rs-more-i { margin-left: auto; color: var(--tx-sub); transition: transform .18s ease; }
+details[open] > .rs-more .rs-more-i { transform: rotate(180deg); }
+details[open] > .rs-more { margin-bottom: 12px; }
+@media (prefers-reduced-motion: reduce) { .rs-more-i { transition: none; } }
+
+/* 표 */
+.rs .brun-table { font-size: 14px; }
+.rs .brun-table th { padding: 10px 10px; border-bottom: 1px solid var(--tx-line); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--tx-sub); }
+.rs .brun-table td { padding: 12px 10px; border-bottom: 1px solid var(--tx-line); color: var(--tx-ink); }
+.rs .brun-table td.num, .rs .brun-table .num { font-family: var(--tx-font); font-variant-numeric: tabular-nums; }
+.rs .brun-code { margin-top: 2px; font-family: var(--t-mono, ui-monospace, monospace); font-size: 12px; color: var(--tx-mute); }
+.rs .brun-reason { font-size: 13px; color: var(--tx-sub); }
+.rs .brun-trow:hover, .dark .rs .brun-trow:hover { background: var(--tx-soft); }
+.rs .brun-trow:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; }
+.rs .brun-tdetail td, .dark .rs .brun-tdetail td { background: var(--tx-soft); font-size: 13px; color: var(--tx-sub); }
+.rs .brun-cmp-diff { background: transparent; }
+.rs .brun-cmp-diff td { font-weight: 700; }
+
+/* 데이터와 한계 */
+.rs .brun-diag-list, .dark .rs .brun-diag-list { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.7; color: var(--tx-warn); }
+.rs .brun-diag-list li.brun-diag-omit, .dark .rs .brun-diag-list li.brun-diag-omit { color: var(--tx-sub); }
+
+/* 진행 화면 */
+.rs .brun-progress-wrap { gap: 10px; }
+.rs .brun-progress-top { align-items: baseline; font-size: 15px; color: var(--tx-ink); }
+.rs .brun-stage { font-size: 15px; font-weight: 700; }
+.rs .brun-pct { font-family: var(--tx-font); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rs .brun-pct em { margin-left: 6px; font-style: normal; font-size: 12px; font-weight: 600; color: var(--tx-sub); }
+.rs .brun-progress { height: 10px; border-radius: 999px; background: var(--tx-soft); }
+.rs .brun-progress i { border-radius: 999px; background: var(--tx-blue); }
+@media (prefers-reduced-motion: reduce) { .rs .brun-progress i { transition: none; } }
+.rs .brun-phases { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rs .brun-phase { padding: 6px 10px; border-radius: 8px; background: var(--tx-soft); font-size: 13px; color: var(--tx-sub); }
+.rs .brun-phase.past { color: var(--tx-ink); }
+.rs .brun-phase.on { background: var(--tx-blue-soft); color: var(--tx-cta); font-weight: 700; }
+.rs .brun-msg { font-family: var(--tx-font); font-size: 13px; color: var(--tx-sub); }
+.rs .brun-reconnect { color: var(--tx-warn); }
+.rs .brun-recheck { padding: 4px 10px; border: 0; border-radius: 8px; background: var(--tx-blue-soft); color: var(--tx-cta); font-size: 13px; font-weight: 600; }
+.rs .brun-timeline { gap: 2px; margin: 0; }
+.rs .brun-tl { min-height: 40px; gap: 10px; font-size: 15px; color: var(--tx-sub); }
+.rs .brun-tl-dot { width: 10px; height: 10px; background: var(--tx-line); }
+.rs .brun-tl.done { color: var(--tx-ink); } .rs .brun-tl.done .brun-tl-dot { background: var(--tx-ok); }
+.rs .brun-tl.active { color: var(--tx-cta); } .rs .brun-tl.active .brun-tl-dot { background: var(--tx-blue); }
+@media (prefers-reduced-motion: reduce) { .rs .brun-tl.active .brun-tl-dot { animation: none; } }
+.rs-tl-st { margin-left: auto; font-size: 13px; color: var(--tx-sub); }
+.rs .brun-cfg { font-size: 14px; }
+.rs .brun-cfg td { padding: 10px 4px; border-bottom: 1px solid var(--tx-line); color: var(--tx-ink); }
+.rs .brun-cfg td:first-child { color: var(--tx-sub); }
+.rs .brun-cfg td.num { font-family: var(--tx-font); font-variant-numeric: tabular-nums; }
+.rs .brun-err-panel { padding: 24px; border: 0; border-radius: var(--tx-r-sec); background: var(--tx-surface); gap: 10px; }
+.rs .brun-err-title { font-size: 20px; color: var(--tx-danger); }
+.rs .brun-err-msg { font-size: 15px; color: var(--tx-ink); }
+.rs .brun-err-cid { font-size: 13px; color: var(--tx-sub); }
+
+/* 비교 화면 */
+.rs-labels { display: flex; flex-wrap: wrap; gap: 6px; }
+.rs-diff { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rs-diff li { display: inline-flex; align-items: baseline; gap: 6px; padding: 10px 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 15px; color: var(--tx-sub); }
+.rs-diff li b { font-size: 20px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rs-diff li.rs-diff-na { color: var(--tx-ink); box-shadow: inset 0 0 0 1px var(--tx-line); background: transparent; }
+.rs .brun-cmp-labels { display: flex; flex-wrap: wrap; gap: 6px; }
+.rs .brun-select { height: 48px; min-width: min(420px, 100%); max-width: 100%; padding: 0 14px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); color: var(--tx-ink); font: inherit; font-size: 15px; }
+.rs .brun-select:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 0; }
+.rs-empty { margin: 0; font-size: 15px; color: var(--tx-sub); }
+
+@media (max-width: 640px) {
+  .rs .rs-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rs-answer .tx-answer-s { font-size: 20px; }
+  .rs .rs-card, .rs .rs-card-b, .rs .brun-card > .rs-card-b { padding-left: 16px; padding-right: 16px; }
+  .rs .rs-card-h { padding-left: 16px; padding-right: 16px; }
+  .rs .brun-kpi-v { font-size: 19px; }
+}
+.rs-legend { color: var(--tx-ink); }

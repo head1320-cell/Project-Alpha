@@ -216,12 +216,12 @@ test("Backtest: completed run → results workspace renders + refresh recovery (
   const groups = await page.locator(".brun-mgroup-t").allInnerTexts();
   expect(groups.length, "grouped metric sections").toBeGreaterThan(2);
   // attribution chart (from engine contribution_pct) + honest omission note
-  await expect(page.locator(".brun-card-t", { hasText: "Attribution" })).toBeVisible();
+  await expect(page.locator(".brun-card-t", { hasText: /^기여도/ })).toBeVisible();   // BU4: 한국어 제목(종목별 성과의 "기여도 순" 과 겹치지 않게 앞에서 잡는다)
   await expect(page.locator(".brun-diag-omit")).toContainText("MFE/MAE");
-  await expect(page.getByText("MOCK 데이터").first()).toBeVisible();
+  await expect(page.getByText("연습용 데이터").first()).toBeVisible();   // BU4: "MOCK 데이터" → 연습용 칩(실데이터라고 부르지 않는다)
   // 픽스처에는 `pit_evidence` 가 없다 — 판정할 자료가 없으면 '미검증'이 아니라 '판정불가'다
   // (a7b2765 의 네 상태 배지). 옛 단언은 '미검증' 이었고 그 뒤로 조용히 깨져 있었다.
-  await expect(page.getByText("PIT 판정불가").first()).toBeVisible();
+  await expect(page.getByText("시점 정합: 판정 불가").first()).toBeVisible();   // BU4 라벨
   await expect(page.locator("table").first()).toBeVisible(); // symbols / trades
   const body = await page.locator("body").innerText();
   expect(body).toContain("삼성전자");
@@ -264,8 +264,8 @@ test("Backtest: compare two completed runs → overlay + metric delta + config d
   await select.selectOption(B_ID);
 
   // overlay + metric delta + config diff all render
-  await expect(page.locator(".brun-card-t", { hasText: "정규화 자산곡선" })).toBeVisible();
-  await expect(page.locator(".brun-card-t", { hasText: "지표 델타" })).toBeVisible();
+  await expect(page.locator(".brun-card-t", { hasText: "자산곡선 (시작 = 100)" })).toBeVisible();   // BU4 제목
+  await expect(page.locator(".brun-card-t", { hasText: "지표 차이" })).toBeVisible();
   await expect(page.locator(".brun-card-t", { hasText: "설정 차이" })).toBeVisible();
   expect(await page.locator(".brun-cmp tbody tr").count(), "delta+diff rows").toBeGreaterThan(4);
   // config diff highlights the differing strategy/date rows
@@ -305,8 +305,8 @@ test("Backtest: pit_evidence 가 unverified 면 'PIT 미검증' — 판정불가
   await page.route(`**/api/v1/backtest/runs/${STUB_RUN_ID}`, (r) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(full) }));
   await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
-  await expect(page.locator(".brun-badge", { hasText: "PIT 미검증" })).toBeVisible();
-  expect(await page.locator(".brun-badge", { hasText: "PIT 판정불가" }).count()).toBe(0);
+  await expect(page.locator(".brun-badge", { hasText: "시점 정합: 확인 안 됨" })).toBeVisible();   // BU4 라벨
+  expect(await page.locator(".brun-badge", { hasText: "시점 정합: 판정 불가" }).count()).toBe(0);
   await expect(page.getByText("가격 축이 시점 정합이 아닙니다(E2E).").first()).toBeVisible();
 });
 
@@ -360,8 +360,8 @@ test("S1c: 차트 색이 토큰으로 실제 해석된다 (var() 가 SVG 에서 
   // 해석 실패 시 브라우저는 none / rgb(0,0,0) 을 준다.
   expect(stroke, "차트 선 색이 해석되지 않았다").not.toBe("none");
   expect(stroke, "차트 선이 검정으로 떨어졌다 — var() 가 죽었다").not.toBe("rgb(0, 0, 0)");
-  // 토큰이 실제로 우리 액센트여야 한다(#1200ff = rgb(18, 0, 255)).
-  expect(stroke).toBe("rgb(18, 0, 255)");
+  // 토큰이 실제로 우리 강조색이어야 한다 — BU4 부터 옛 #1200ff 가 아니라 --tx-blue(라이트 #3182f6).
+  expect(stroke).toBe("rgb(49, 130, 246)");
 });
 
 test("S1b: 지표 설명이 hover 전용이 아니다 (title= 제거)", async ({ page }) => {
@@ -435,7 +435,8 @@ test("S1b-2: Card 가 여백의 주인이다 — .brun-card 와 이중으로 쌓
     expect(s.padTop, ".brun-card 자체 패딩은 0 (Card 하위가 가진다)").toBe(0);
     expect(s.padLeft, ".brun-card 자체 패딩은 0").toBe(0);
     expect(s.titleMb, ".brun-card-t 의 margin-bottom 은 CardHeader 가 대신한다").toBe(0);
-    expect(s.contentPad, "CardContent = p-3 (root 기준 0.75rem)").toBeCloseTo(s.root * 0.75, 1);
+    // BU4: 몸통(.rs-card-b)이 위 16px 을 가진다(옛 p-3 = 12px 은 토스식 절 안에서 너무 좁았다). 주인은 여전히 하나다.
+    expect(s.contentPad, "CardContent 위 여백 = 16px").toBeCloseTo(16, 1);
   }
 });
 

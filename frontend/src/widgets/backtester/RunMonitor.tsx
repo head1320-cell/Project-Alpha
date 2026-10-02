@@ -4,13 +4,17 @@
 //   run_id 상태를 폴링(refetchInterval)하며 실 단계·진행률·경과시간·활동 타임라인·
 //   데이터 honesty 배지를 표시. completed → 결과 페이지로 replace. failed/cancelled →
 //   전체 에러 상태(안전 재시도). 서버 영속 상태라 새로고침·직접 URL·네트워크 단절 복구.
+//   BU4: 답 한 문장("돌리는 중이에요 — 지금 단계") + 단계 막대 · 제출한 설정은 접힘 · 취소/재실행 실패를 삼키지 않는다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import {
   backtestRunApi, STAGE_LABELS, STAGE_ORDER, TERMINAL, type RunStatus,
 } from "@/entities/backtest-run/api";
+import { Notice, PageHead } from "@/shared/ui/tx";
 
 const CONFIG_ROWS: [string, string][] = [
   ["universe", "유니버스"], ["strategy_name", "전략"], ["start_date", "시작일"],
@@ -29,6 +33,7 @@ export function RunMonitor({ runId }: { runId: string }) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
+  const [actErr, setActErr] = useState<{ what: string; detail: string } | null>(null);
 
   // 설정 스냅샷(1회) — 진행률은 경량 status 폴링으로 분리.
   // ★키를 ["btrun","config"]로 분리★: 예전엔 ["btrun","full"]을 staleTime:Infinity로 심어
@@ -104,13 +109,19 @@ export function RunMonitor({ runId }: { runId: string }) {
 
   // 진짜 없는 실행(첫 로드 404): 만료/잘못된 링크
   if (trulyGone) {
-    return <div className="brun-shell"><div className="brun-err">실행을 찾을 수 없어요 — 만료되었거나 잘못된 링크일 수 있어요.
-      <button className="brun-btn" onClick={() => router.push("/backtest")}>← 전략 편집기로</button></div></div>;
+    return (
+      <div className="tx-page brun-shell rs">
+        <div className="brun-err rs-state">
+          <Notice tone="warn" title="이 실행을 찾지 못했어요">만료되었거나 잘못된 링크일 수 있어요. 편집기에서 다시 실행해 주세요.</Notice>
+          <div className="rs-acts"><Link href="/backtest" className="tx-btn tx-btn--sub">편집기로 돌아가기</Link></div>
+        </div>
+      </div>
+    );
   }
   // 아직 첫 상태가 없음 — 로딩 중(또는 일시적 오류로 재시도 중, 폴링은 계속됨)
   if (!st) {
-    return <div className="brun-shell"><div className="brun-loading">
-      {statusQ.isError ? "실행 상태를 불러오는 중 — 연결이 불안정해 재시도 중이에요…" : "실행 상태 불러오는 중…"}
+    return <div className="tx-page brun-shell rs"><div className="brun-loading">
+      {statusQ.isError ? "실행 상태를 불러오는 중이에요 — 연결이 불안정해 다시 묻고 있어요" : "실행 상태를 불러오는 중이에요"}
     </div></div>;
   }
 
@@ -124,118 +135,134 @@ export function RunMonitor({ runId }: { runId: string }) {
   const pct = Number.isFinite(st?.progress_percent as number) ? (st!.progress_percent as number) : null;
 
   const failed = st.status === "failed" || st.status === "cancelled";
-  const mockBadge = st.is_mock_data === true ? "MOCK 데이터" : st.is_mock_data === false ? "실데이터" : "데이터 소스 확인 중";
+  // 데이터 출처 — ★"실데이터" 라고 부르지 않는다★ mock 이면 연습용, 아니면 말하지 않는다(결과 화면 PerfLabel 이 말한다), 모르면 모른다.
+  const dataChip = st.is_mock_data === true ? { label: "연습용 데이터", tone: "practice" }
+    : st.is_mock_data == null ? { label: "데이터 출처를 아직 몰라요", tone: "unknown" } : null;
 
   const doCancel = async () => {
-    setCancelling(true);
-    try { await backtestRunApi.cancel(runId); await statusQ.refetch(); } catch { /* ignore */ }
+    setCancelling(true); setActErr(null);
+    try { await backtestRunApi.cancel(runId); await statusQ.refetch(); }
+    catch (e) { setActErr({ what: "실행을 취소하지 못했어요", detail: (e as Error).message || "알 수 없는 오류" }); }
     setCancelling(false);
   };
   const doRetry = async () => {
-    try { const r = await backtestRunApi.retry(runId); router.replace(`/backtest/runs/${r.run_id}/loading`); } catch { /* ignore */ }
+    setActErr(null);
+    try { const r = await backtestRunApi.retry(runId); router.replace(`/backtest/runs/${r.run_id}/loading`); }
+    catch (e) { setActErr({ what: "다시 실행하지 못했어요", detail: (e as Error).message || "알 수 없는 오류" }); }
   };
+  const stageName = STAGE_LABELS[st.status] ?? st.status;
 
   return (
-    <div className="brun-shell">
-      <header className="brun-head">
-        <div>
-          <div className="brun-crumb num">BACKTEST RUN · {runId}</div>
-          <h1 className="brun-title">{st.strategy_name}</h1>
-        </div>
-        <div className="brun-head-r">
-          <span className={`brun-badge ${st.is_mock_data === false ? "real" : "mock"}`}>{mockBadge}</span>
-          <span className="brun-elapsed num">경과 {elapsedStr}</span>
-        </div>
-      </header>
+    <div className="tpage-fade tx-page brun-shell rs rs-run">
+      <PageHead title={st.strategy_name} lede={<>백테스트 실행 <span className="rs-id" aria-label="실행 번호">{runId}</span></>} />
 
       {failed ? (
         <div className="brun-err-panel">
           <div className="brun-err-title">{st.status === "cancelled" ? "실행이 취소되었어요" : "실행이 실패했어요"}</div>
           {st.error_message && <div className="brun-err-msg">{st.error_message}</div>}
-          {st.correlation_id && <div className="brun-err-cid num">추적 ID: {st.correlation_id}</div>}
-          <div className="brun-err-actions">
-            <button className="brun-btn primary" onClick={doRetry}>다시 실행</button>
-            <button className="brun-btn" onClick={() => router.push("/backtest")}>← 전략 편집기로</button>
+          {st.correlation_id && <div className="brun-err-cid">추적 번호 <span className="rs-id">{st.correlation_id}</span></div>}
+          <div className="brun-err-actions rs-acts">
+            <button type="button" className="tx-btn tx-btn--main" onClick={doRetry}>다시 실행</button>
+            <Link href="/backtest" className="tx-btn tx-btn--sub">편집기로 돌아가기</Link>
           </div>
         </div>
       ) : (
         <>
-          <div className="brun-progress-wrap">
-            <div className="brun-progress-top">
-              <span className="brun-stage">{STAGE_LABELS[st.status] ?? st.status}</span>
-              {/* ★있는 퍼센트는 지우지 않고, 없는 퍼센트는 지어내지 않는다★ (P8)
-                  이 수치는 엔진이 **실제로 끝낸 일**에서 나온다 — 시뮬레이션 완료 일수
-                  (`30 + 55*done/total`, backtest_run_routes.py:55-84). 경과 시간이나 UI
-                  단계 수에서 만든 값이 아니므로 지울 이유가 없다. 출처를 화면에 밝힌다.
-
-                  ★그런데 없을 때 0 을 적고 있었다★ progress_percent 컬럼은 nullable 인데
-                  `Math.round(null)` 은 0 이다. 그래서 엔진이 아무것도 보고하지 않은 런이
-                  "0% 진행" 으로 보였다 — 측정하지 않은 것과 0 을 같은 글자로 적는,
-                  P5 에서 고친 것과 정확히 같은 결함이다. 이제 없으면 단계 목록만 보여준다. */}
-              {pct != null && <span className="num brun-pct">{Math.round(pct)}% <em>엔진 보고</em></span>}
+          <section className="tx-answer rs-answer" aria-label="한 줄 답">
+            <p className="tx-answer-s">백테스트를 돌리는 중이에요 — {stageName}</p>
+            <ul className="tx-chips" aria-label="이 실행의 근거">
+              {dataChip && <li className="tx-chip" data-tone={dataChip.tone}>{dataChip.label}</li>}
+              <li className="tx-chip" data-tone="plain">지난 시간 {elapsedStr}</li>
+            </ul>
+            <div className="brun-progress-wrap">
+              <div className="brun-progress-top">
+                <span className="brun-stage">{stageName}</span>
+                {/* ★있는 퍼센트는 지우지 않고, 없는 퍼센트는 지어내지 않는다★ (P8)
+                    이 수치는 엔진이 **실제로 끝낸 일**에서 나온다 — 시뮬레이션 완료 일수
+                    (`30 + 55*done/total`, backtest_run_routes.py:55-84). 출처를 화면에 밝힌다.
+                    없으면(nullable) 0% 를 적지 않고 단계 목록만 보인다 — 측정 안 됨 ≠ 0% 진행. */}
+                {pct != null && <span className="num brun-pct">{Math.round(pct)}% <em>엔진 보고</em></span>}
+              </div>
+              {pct != null
+                ? <div className="brun-progress"><i style={{ width: `${Math.max(2, Math.min(100, pct))}%` }} /></div>
+                : (
+                  <ol className="brun-phases">
+                    {STAGE_ORDER.map((s) => (
+                      <li key={s} className={`brun-phase${s === st.status ? " on" : ""}${
+                        STAGE_ORDER.indexOf(s) < curIdx ? " past" : ""}`}>
+                        {STAGE_LABELS[s] ?? s}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              <div className="brun-msg">
+                {st.status_message}
+                {stalled && (
+                  <span className="brun-stalled">· 예상보다 오래 걸리고 있어요(여전히 실행 중이에요 — 취소하거나 기다릴 수 있어요)</span>
+                )}
+                {reconnecting && (
+                  <>
+                    <span className="brun-reconnect">
+                      · 상태를 불러오지 못하고 있어요 — 위 숫자는 마지막으로 받은 값이에요.
+                      서버에서는 계속 실행 중일 수 있어요.
+                      {storeCauseText && ` (${storeCauseText})`}
+                    </span>
+                    <button type="button" className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
+                  </>
+                )}
+              </div>
             </div>
-            {pct != null
-              ? <div className="brun-progress"><i style={{ width: `${Math.max(2, Math.min(100, pct))}%` }} /></div>
-              : (
-                <ol className="brun-phases">
-                  {STAGE_ORDER.map((s) => (
-                    <li key={s} className={`brun-phase${s === st.status ? " on" : ""}${
-                      STAGE_ORDER.indexOf(s) < curIdx ? " past" : ""}`}>
-                      {STAGE_LABELS[s] ?? s}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            <div className="brun-msg">
-              {st.status_message}
-              {stalled && (
-                <span className="brun-stalled">· 이 실행은 예상보다 오래 걸리고 있어요 (여전히 실행 중 — 취소/재시도 가능)</span>
-              )}
-              {reconnecting && (
-                <>
-                  <span className="brun-reconnect">
-                    · 상태를 불러오지 못하고 있어요 — 아래 숫자는 마지막으로 받은 값이에요.
-                    서버에서는 계속 실행 중일 수 있어요.
-                    {storeCauseText && ` (${storeCauseText})`}
-                  </span>
-                  <button className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
-                </>
-              )}
+            <p className="rs-why">끝나면 결과 화면으로 저절로 옮겨 가요. 이 창을 닫아도 실행은 계속돼요.</p>
+          </section>
+
+          <section className="brun-card rs-card">
+            <h2 className="brun-card-t">진행 단계</h2>
+            <ul className="brun-timeline">
+              {STAGE_ORDER.filter((s) => s !== "completed").map((s) => {
+                const i = STAGE_ORDER.indexOf(s);
+                const state = i < curIdx ? "done" : i === curIdx ? "active" : "pending";
+                return (
+                  <li key={s} className={`brun-tl ${state}`}>
+                    <span className="brun-tl-dot" />
+                    <span className="brun-tl-lab">{STAGE_LABELS[s]}</span>
+                    {state === "done" && <span className="rs-tl-st">끝났어요</span>}
+                    {state === "active" && <span className="rs-tl-st">하는 중</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="rs-acts">
+              <button type="button" className="brun-btn tx-btn tx-btn--sub" disabled={cancelling} onClick={doCancel}>{cancelling ? "취소하는 중이에요" : "실행 취소"}</button>
             </div>
-          </div>
+            {actErr && (
+              <Notice tone="danger" title={actErr.what}>
+                실행 상태는 그대로예요. 잠시 뒤 다시 눌러 주세요.
+                <details className="scr-err-detail"><summary>자세히</summary><code>{actErr.detail}</code></details>
+              </Notice>
+            )}
+          </section>
 
-          <div className="brun-grid">
-            <section className="brun-card">
-              <div className="brun-card-t">활동 타임라인</div>
-              <ul className="brun-timeline">
-                {STAGE_ORDER.filter((s) => s !== "completed").map((s) => {
-                  const i = STAGE_ORDER.indexOf(s);
-                  const state = i < curIdx ? "done" : i === curIdx ? "active" : "pending";
-                  return (
-                    <li key={s} className={`brun-tl ${state}`}>
-                      <span className="brun-tl-dot" />
-                      <span className="brun-tl-lab">{STAGE_LABELS[s]}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <button className="brun-btn" disabled={cancelling} onClick={doCancel}>{cancelling ? "취소 중…" : "실행 취소"}</button>
-            </section>
-
-            <section className="brun-card">
-              <div className="brun-card-t">제출한 설정 <span className="brun-note">재현 스냅샷</span></div>
+          <section className="brun-card rs-card">
+            <details className="rs-cfg">
+              <summary className="rs-more"><span>제출한 설정 보기</span><span className="rs-more-n">재현 스냅샷</span><ChevronDown size={18} aria-hidden className="rs-more-i" /></summary>
               <table className="brun-cfg">
                 <tbody>
                   {CONFIG_ROWS.filter(([k]) => cfg[k] != null && cfg[k] !== "").map(([k, label]) => (
                     <tr key={k}><td>{label}</td><td className="num">{fmtVal(cfg[k])}</td></tr>
                   ))}
-                  {Object.keys(cfg).length === 0 && <tr><td colSpan={2} className="brun-note">설정 로딩 중…</td></tr>}
+                  {Object.keys(cfg).length === 0 && <tr><td colSpan={2} className="brun-note">설정을 불러오는 중이에요</td></tr>}
                 </tbody>
               </table>
-              <div className="brun-note">가격·비용은 사전 추정 · 결과는 완료 후 고정 URL에서 재현 가능해요.</div>
-            </section>
-          </div>
+              <p className="brun-note">가격·비용은 실행 전에 정한 추정이에요. 결과는 끝난 뒤 고정 주소에서 다시 볼 수 있어요.</p>
+            </details>
+          </section>
         </>
+      )}
+      {failed && actErr && (
+        <Notice tone="danger" title={actErr.what}>
+          잠시 뒤 다시 눌러 주세요.
+          <details className="scr-err-detail"><summary>자세히</summary><code>{actErr.detail}</code></details>
+        </Notice>
       )}
     </div>
   );

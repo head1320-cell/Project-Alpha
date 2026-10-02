@@ -85,9 +85,10 @@ BADGES: tuple[Badge, ...] = (
     Badge(("perf-label", "<PerfLabel"), (AXIS_PERF_KIND, AXIS_DATA_SOURCE),
           "Z3 의 공용 컴포넌트. ★두 축을 한 배지 안에서 따로 그린다★ — "
           "`perf-label__kind` 와 `perf-label__data` 로 나뉘어 있어 섞이지 않는다."),
-    Badge(("brun-badge",), (AXIS_DATA_SOURCE, AXIS_PIT),
-          "백테스트 실행 화면. 같은 클래스가 두 번 쓰이는데 하나는 mock/real"
-          "(데이터), 하나는 `res.pit_evidence` 를 읽는 PIT 배지다."),
+    Badge(("brun-badge",), (AXIS_PIT,),
+          "백테스트 결과 화면의 시점 정합 칩(`res.pit_evidence`). BU4 전에는 같은 클래스가 "
+          "mock/real(데이터) 배지에도 쓰였다 — 이제 데이터 축은 그 화면의 `PerfLabel` 과 "
+          "\"연습용 데이터\" 칩이 말하고 이 클래스는 시점 정합 하나만 말한다."),
     Badge(("data-lookahead",), (AXIS_LOOKAHEAD,),
           "E 가 만든 자리. 예전에는 마법사의 `as-bt-badge ok` 가 `\"OOS · look-ahead "
           "없음\"` 을 **상수로** 단정했다 — 이제 응답의 `lookahead_evidence` 를 "
