@@ -180,3 +180,53 @@ export function contrastAudit(rootSelector: string): string {
   return { checked, bright: [...new Set(bright)], low: [...new Set(low)] };
 })()`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BU2a · 요청 기록기 — "모습만 바꿨고 서버에 가는 요청은 한 바이트도 안 바뀌었다"를 재는 도구(스크리너 · 백테스트 · 관리 화면).
+//   단계마다 `{method, path+query, body(키 정렬 JSON)}` 를 모은다. 디바운스·중단된 요청의 순서에 흔들리지 않게
+//   ★단계 안에서는 정렬한 고유 집합★으로 묶고, 마지막 요청 뒤 `quietMs` 동안 새 요청이 없을 때 단계를 닫는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 키를 정렬한 JSON — 같은 값이면 같은 글자(객체 키 순서 차이를 지운다). */
+export function stableJson(v: unknown): string {
+  const norm = (x: unknown): unknown => {
+    if (Array.isArray(x)) return x.map(norm);
+    if (x && typeof x === "object") return Object.fromEntries(Object.keys(x as object).sort().map((k) => [k, norm((x as Record<string, unknown>)[k])]));
+    return x;
+  };
+  return JSON.stringify(norm(v));
+}
+
+export interface ApiRecorder {
+  /** 지금까지 모은 요청을 이 단계 이름으로 닫는다(조용해질 때까지 기다린 뒤). */
+  step(name: string): Promise<void>;
+  /** 단계별 정렬 고유 집합. */
+  steps: Record<string, string[]>;
+}
+
+export function recordApi(page: Page, pathPrefix: string, quietMs = 1_500): ApiRecorder {
+  let pending: string[] = [];
+  let last = Date.now();
+  const steps: Record<string, string[]> = {};
+  page.on("request", (req) => {
+    const u = new URL(req.url());
+    // 화면은 런타임 프록시(`/api/backend/…`)를 거친다 — 앞부분을 떼고 API 경로로 맞춘다.
+    const p = u.pathname.replace(/^\/api\/backend(?=\/)/, "");
+    if (!p.startsWith(pathPrefix)) return;
+    let body = "";
+    const raw = req.postData();
+    if (raw) { try { body = stableJson(JSON.parse(raw)); } catch { body = raw; } }
+    pending.push(`${req.method()} ${p}${u.search} ${body}`.trim());
+    last = Date.now();
+  });
+  return {
+    steps,
+    async step(name: string) {
+      // 첫 요청이 디바운스(최대 ~0.8초) 뒤에 나갈 수 있다 — 최소 quietMs 는 기다린다.
+      const started = Date.now();
+      while (Date.now() - Math.max(last, started) < quietMs) await page.waitForTimeout(200);
+      steps[name] = [...new Set(pending)].sort();
+      pending = [];
+    },
+  };
+}

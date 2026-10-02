@@ -458,9 +458,9 @@ export default function TerminalScreener({ universe }: { universe: string }) {
         <aside className="bsc-rail">
           <div className="bsc-rail-head">
             <span className="bsc-rail-title">내 필터</span>
-            {group.conditions.length > 0 && <button className="bsc-rail-clear" onClick={clearAll}>전체 초기화</button>}
+            {group.conditions.length > 0 && <button className="bsc-rail-clear" data-act="clear" onClick={clearAll}>전체 초기화</button>}
           </div>
-          <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
+          <button className="bsc-add-btn" data-act="add-factor" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
 
           <div className="bsc-mcap">
             <div className="bsc-mcap-head">시가총액
@@ -476,7 +476,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             <div className="bsc-mcap-btns">
               <button className={`bsc-mcap-btn${!mcapActive ? " active" : ""}`} onClick={() => setMcapRange([0, 100])}>전체</button>
               {MCAP_PRESETS.map((p) => (
-                <button key={p.id} className="bsc-mcap-btn" onClick={() => setMcapRange([p.min ? mcapToSlider(p.min) : 0, p.max ? mcapToSlider(p.max) : 100])}>{p.label}</button>
+                <button key={p.id} className="bsc-mcap-btn" data-act="mcap-preset" onClick={() => setMcapRange([p.min ? mcapToSlider(p.min) : 0, p.max ? mcapToSlider(p.max) : 100])}>{p.label}</button>
               ))}
             </div>
             <div className="bsc-mcap-note">ⓘ 실데이터 연결 시 동작 (mock은 시총 미제공)</div>
@@ -494,7 +494,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                       <span className="bsc-rail-item-tag">팩터{i + 1}</span>
                       <span className="bsc-rail-item-name">{fieldLabel(c.field)}{c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}</span>
                       {chipCounts[i] != null && <span className="bsc-rail-item-count" title="이 팩터 단독 통과 종목 수">{chipCounts[i]!.toLocaleString()}</span>}
-                      <span className="bsc-rail-item-del" onClick={() => removeCondition(i)}>✕</span>
+                      <span className="bsc-rail-item-del" data-act="cond-remove" onClick={() => removeCondition(i)}>✕</span>
                     </div>
                     <div className="bsc-rail-item-edit">
                       {isRank ? (
@@ -507,10 +507,10 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                         </>
                       ) : (
                         <>
-                          <select className="bsc-chip-op" value={c.op || "gte"} onChange={(e) => updateCondition(i, { op: e.target.value as FilterConditionNode["op"] })}>
+                          <select className="bsc-chip-op" data-act="cond-op" value={c.op || "gte"} onChange={(e) => updateCondition(i, { op: e.target.value as FilterConditionNode["op"] })}>
                             <option value="gt">&gt;</option><option value="gte">≥</option><option value="lt">&lt;</option><option value="lte">≤</option><option value="eq">=</option>
                           </select>
-                          <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(i)}
+                          <input className="bsc-chip-val" data-act="cond-val" type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(i)}
                             onChange={(e) => updateCondition(i, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
                         </>
                       )}
@@ -557,13 +557,14 @@ export default function TerminalScreener({ universe }: { universe: string }) {
                 <input
                   ref={exprInputRef}
                   className={`bsc-expr-input${exprError ? " err" : ""}`}
+                  data-act="expr"
                   value={exprText}
                   placeholder="예: 팩터1 and (팩터2 or 팩터3)"
                   spellCheck={false}
                   onChange={(e) => setExprText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
                 />
-                <button className="bsc-expr-search" onClick={runSearch} title="조건식으로 검색">SEARCH</button>
+                <button className="bsc-expr-search" data-act="expr-run" onClick={runSearch} title="조건식으로 검색">SEARCH</button>
               </div>
               <div className="bsc-expr-tokens">
                 <span className="bsc-expr-hint">삽입:</span>
@@ -595,14 +596,14 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           <div className="bsc-countbar">
             <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개</span>
             <label className="bsc-gate-toggle" title="시가총액 300억↑ · 일평균 거래대금 3억↑ · 스프레드 1%↓ 종목만 포함">
-              <input type="checkbox" checked={gateOn} onChange={(e) => setGateOn(e.target.checked)} />
+              <input type="checkbox" data-act="gate" checked={gateOn} onChange={(e) => setGateOn(e.target.checked)} />
               유동성 게이트
             </label>
             {loading && <span className="bsc-spinner" />}
             <span className="bsc-countbar-spacer" />
             <button className="bsc-bt-btn" onClick={() => setShowColPicker((v) => !v)} title="표시 컬럼 추가 (필터와 별개)">⊞ 컬럼{displayCols.length ? ` (${displayCols.length})` : ""}</button>
             <button className="bsc-bt-btn" onClick={exportCsv} disabled={!sortedItems.length} title="현재 결과를 CSV로 내보내기">⤓ CSV</button>
-            <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">이 전략 백테스트 →</button>
+            <button className="bsc-bt-btn" data-act="send-backtest" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">이 전략 백테스트 →</button>
           </div>
 
           {showColPicker && (

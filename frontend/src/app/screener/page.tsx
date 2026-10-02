@@ -12,6 +12,7 @@ export default function ScreenerPage() {
       <div className="t-toolbar">
         <label className="t-toolbar-label">Universe</label>
         <select
+          data-act="universe"
           value={universe}
           onChange={(e) => setUniverse(e.target.value)}
           style={{
