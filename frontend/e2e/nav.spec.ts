@@ -22,14 +22,14 @@ test("Landing: 모듈 갤러리에 6개 카드와 Allocation Studio 가 있다",
   expect(uniq(sink.pageErrors), "landing page errors").toEqual([]);
 });
 
-test("Dashboard: module grid shows Allocation card · 최상위 화면에는 브레드크럼이 없다(BU0)", async ({ page }) => {
+test("Dashboard: 모듈 줄에 포트폴리오 설계가 있다 · 최상위 화면에는 브레드크럼이 없다(BU0)", async ({ page }) => {
   const sink = trackErrors(page);
   await page.goto("/dashboard", { waitUntil: "networkidle" });
 
   // BU0 — 최상위 화면은 메뉴가 "지금 어디"를 말한다. 브레드크럼은 중첩 경로에만(아래 짝 테스트).
   await expect(page.locator(".tcrumb")).toHaveCount(0);
-  // AAS module card present and links to /allocation
-  const aas = page.locator(".dash-mod", { hasText: "Allocation" }).first();
+  // AAS module row present and links to /allocation (BU1 — 한국어 이름 "포트폴리오 설계", 카드 → 목록 줄)
+  const aas = page.locator(".dash-mod", { hasText: "포트폴리오 설계" }).first();
   await expect(aas).toBeVisible();
   await expect(aas).toHaveAttribute("href", "/allocation");
   // data-ingestion strip still present

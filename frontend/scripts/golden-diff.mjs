@@ -10,6 +10,8 @@
  * `--expect-scope shell` 처럼 주면 그 밖의 범위에 새 조합이 하나라도 있으면 종료 코드 1 — 셸만 바꾼 커밋의 문지기.
  * `--allow-keys <정규식>` 은 범위 밖이라도 이 키는 바뀌어도 된다고 **이름으로** 연다(BU0 — 브레드크럼 `.tcrumb*` 는 본문 안에
  * 그려져 `main:` 키다). 열린 키는 출력에 `(허용)` 으로 따로 센다 — 조용히 빠지지 않는다.
+ * `--expect-routes /dashboard,/screener` 는 그 밖의 라우트에 더한 키·새 조합이 하나라도 있으면 종료 코드 1 — 모듈 한 개만 바꾼
+ * 커밋의 문지기(BU1~). `--expect-scope` 와 함께 쓰면 둘 다 지켜야 한다.
  * ★사라진 키·조합은 실패로 세지 않는다★ — 늦게 그려진 요소(데이터 지연)는 바뀐 것이 아니다(골든 테스트와 같은 규칙).
  */
 import { execSync } from "node:child_process";
@@ -25,6 +27,7 @@ const bool = (name) => { const i = args.indexOf(name); if (i < 0) return false; 
 
 const rev = flag("--rev");
 const expectScope = flag("--expect-scope");
+const expectRoutes = (() => { const v = flag("--expect-routes"); return v ? new Set(v.split(",").map((x) => x.trim()).filter(Boolean)) : null; })();
 const allowRe = (() => { const v = flag("--allow-keys"); return v ? new RegExp(v) : null; })();
 const unscoped = bool("--unscoped");
 const read = (f) => JSON.parse(readFileSync(f, "utf8"));
@@ -34,7 +37,7 @@ const before = rev
 const after = read(args.shift() ?? DEFAULT);
 
 function usage() {
-  console.error("사용: golden-diff.mjs <이전.json> [<이후.json>] | --rev <git-rev> [<이후.json>] [--expect-scope shell] [--allow-keys 정규식] [--unscoped]");
+  console.error("사용: golden-diff.mjs <이전.json> [<이후.json>] | --rev <git-rev> [<이후.json>] [--expect-scope shell] [--allow-keys 정규식] [--expect-routes /a,/b] [--unscoped]");
   process.exit(2);
 }
 const scopeOf = (k) => (/^(shell|main|frame):/.exec(k)?.[1] ?? "(범위 없음)");
@@ -65,6 +68,7 @@ for (const r of routes) {
     for (const e of s.ex) console.log(`    ${e}`);
     if (expectScope && scope !== expectScope && !scope.endsWith(" (허용)") && (s.combos || s.added)) bad += 1;
     if (unscoped && s.combos) bad += 1;
+    if (expectRoutes && !expectRoutes.has(r) && (s.combos || s.added)) bad += 1;
   }
 }
 if (bad) { console.error(`\n✗ 기대 밖 변화 ${bad}곳`); process.exit(1); }

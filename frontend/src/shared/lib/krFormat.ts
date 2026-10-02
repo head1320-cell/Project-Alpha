@@ -46,6 +46,12 @@ export function won(v: N): string {
   return `${krUnit(v)}원`;
 }
 
+/** 가격 — 원 단위 그대로(71,200원). 시세는 뭉개면 안 되므로 `won` 의 만·억 축약을 쓰지 않는다. */
+export function priceWon(v: N): string {
+  if (!ok(v)) return UNKNOWN_TEXT;
+  return `${num(v)}원`;
+}
+
 /** 비율 → 퍼센트. pct(0.241) = "24.1%" · pct(-0.03) = "−3.0%" */
 export function pct(ratio: N, digits = 1): string {
   if (!ok(ratio)) return UNKNOWN_TEXT;

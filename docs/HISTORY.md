@@ -21473,3 +21473,37 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **하지 않은 것**: 본문(`.terminal-main`) 바탕은 아직 흰색이다 — 모듈마다 바꾼다(BU1~). 대시보드 카드의 영어·번호도 BU1.
   `/admin/*` 는 여전히 메뉴 밖 권한 판정이 서버 몫이다(메뉴 숨김은 편의일 뿐). `StrategyComparison`·`CustomBacktestRunner` 의
   옛 `.terminal-breadcrumb` 글자("Modules / Backtester / …")는 BU3·BU4 에서.
+
+### BU1 · 홈 `/dashboard` — 답 한 문장 + 근거 칩, 실패·빈·모름을 가른다
+
+- **왜(감사)**: 홈이 합성(mock) 국면을 **연습용 표시 없이** 실제처럼 보였다. 점수 표는 실패를 `catch → []` 로 삼켜 "데이터 적재 후
+  표시돼요"(빈 상태)로 보였다(실패 ≠ 빈 결과). 서버 `recommended_mode` 를 영어 그대로(CAUTIOUS), 라벨은 영어 대문자
+  (STRESS INDEX·RISK-FREE·YIELD CURVE), 모듈 카드에는 순서도 아닌 01~06 번호와 세면 낡는 수("116팩터"·"체결가 13종").
+  행 클릭은 전체 새로고침. 화면 안 종목 검색은 머리 줄 찾기(BU0)와 겹쳤다.
+- **무엇**:
+  - `widgets/home/HomeView.tsx`(page 는 한 줄). 머리 "홈" → 답 절 → "무엇을 할까요"(포트폴리오 설계가 맨 위, 모듈 6줄 — `.dash-mod`
+    계약 유지) · "점수 높은 종목"(5줄) → "데이터"(`.dash-mod-stat`).
+  - **답 문장 = 서버 열거값의 번역**: `지금 경제 흐름은 ‘{보통·조심·방어}’ 단계예요`. 모르는 값이면 판단 없이 "지금 시장 스트레스는
+    n/100이에요". 숫자: 스트레스 · 한국·미국 국면 + 그 국면의 확률(`regime_probs`). 확률이 없으면 "확률 몰라요", 미국이 없으면 줄을
+    남기고 "몰라요" + 사유.
+  - **연습용 칩은 서버 게이트로만**: `GET /macro/connection-status`(`mock_allowed` = `mock_gate.mock_allowed()`, `bok_configured`) —
+    mock·한국은행 없음 → "연습용 데이터" · 실데이터 → "한국은행 실데이터" · 확인 실패 → "데이터 출처를 확인하지 못했어요". 점수 표는
+    `mock_allowed` 면 "연습용 시세" + 서버 `ingested_count/universe_size` 그대로 "재무 적재 0/130". 새 서버 필드 0.
+  - 고정 칩 "국면 확률은 축 모형 하나로 쟀어요" — 세 모형 비교(앙상블)는 경제 흐름에 있다는 사실을 숨기지 않는다.
+  - 실패는 `Notice danger`(alert) + [다시 시도] · 빈 점수는 "점수를 낼 종목이 아직 없어요" + [데이터 상태 보기] · 적재 수 실패는
+    "몰라요" + 사유. 같은 queryKey 를 쓰는 셸 prefetch·매크로 화면이 실패를 `null` 로 캐시하므로 `null` 도 실패로 그린다.
+  - 행 → `/insights?code=`(Link, 새로고침 없음). 가격은 `priceWon`(71,200원 — 만 단위로 뭉개지 않는다).
+  - 공용: `ListRow className?` · `ChipTone "plain"` · `krFormat.priceWon` · `macroApi.connectionStatus` · `.tx-page`(읽는 화면 1080 ·
+    회색 바탕은 `.terminal-main:has(.tx-page)` 에만) · `.tx-btn`. 옛 `.dash-*` 콕핏 CSS 블록은 쓰는 곳이 없어 지웠다.
+  - `golden-diff.mjs --expect-routes` — 그 밖 라우트에 변화가 있으면 종료 1(틀린 목록 `/screener` 로 1 이 나는 것도 확인).
+- **확인**: `e2e/home.spec.ts` 13 — 먼저 써서 옛 홈에서 전부 빨갛던 것을 확인한 뒤 구현. 짝: DEFENSIVE 응답 → "‘방어’" ·
+  확률 삭제 → "확률 몰라요"(0% 없음) · 실데이터 응답 → 연습용 칩 없음 · 점수 500 → alert(빈 문구 없음) vs `items:[]` → 빈 문구(alert 없음) ·
+  적재 500 → "몰라요"("0행" 없음) · 행 이동 뒤 `window.__home` 유지(새로고침 없음) · 라이트/다크 AA · 390 가로 넘침 없음.
+  변이 7(연습용 칩 빼기 · 문장 상수 · 행 이동을 `location.href` · 확률 0 · 점수 실패 삼키기 · 미국 줄 빼기 · 문장에 "검증됨"
+  → pytest) 모두 죽었다. 라이트 골든: `/dashboard` 의 `main:` 만(더함 39 · 사라짐 42 · 새 조합 2), 나머지 12 라우트 변화 없음.
+  `module-motion` 00 Dashboard 패널 선택자 `.dash-card` → `.tx-answer, .tx-sec`(카드 격자가 없어졌다), KNOWN_LOW 0 그대로.
+  `/dashboard` 첫 로드 JS 103 → 113 kB(+10 kB — ADR-001 15 kB 한도 안, 4 kB 를 넘어 원인을 적는다): 이 라우트가 `shared/ui/tx`
+  부품(lucide 아이콘 넷 포함)을 처음 싣는다. 청크별로 쪼개 재지는 않았다 — 다른 모듈이 tx 를 쓰기 시작하면 공용 청크로 옮겨 갈 수 있다.
+- **하지 않은 것**: "설계에 넣기"(`/allocation?tickers=`)는 BU2 에서(그때 홈 점수 표에도). BS5-GEN 다크 블록의 `.dash-*` 생성 줄은
+  생성물이라 BU10 재생성 때 빠진다. 셸 prefetch 의 `.catch(() => null)` 은 그대로(매크로 화면 동작 — BU5 에서 본다).
+  관찰: `module-motion` "03 Macro reduced-motion" 이 병렬 부하에서 한 번 빨갛고 단독 3회 초록 — 매크로 화면 그리기 지연(기존 관측과 같다).

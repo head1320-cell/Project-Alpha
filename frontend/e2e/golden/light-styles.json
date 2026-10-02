@@ -126,143 +126,132 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.home.tx-page": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.t-toolbar": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:header.tx-head": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-search": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.tx-head-main": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.dash-search-ic": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:h1.tx-h1": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:input.": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:p.tx-lede": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:a.dash-card.dash-macro": [
-   "rgb(17, 17, 17)|rgba(255, 255, 255, 0.72)|rgb(180, 83, 9)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:div.home-macro": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-macro-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:section.tx-answer": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.dash-macro-title": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:p.tx-answer-s": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.dash-regime": [
-   "rgb(21, 128, 61)|rgb(220, 252, 231)|rgb(134, 239, 172)|rgb(134, 239, 172)|rgb(0, 0, 0)|none|"
+  "main:dl.tx-figs": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-macro-grid": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.tx-fig": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-macro-stat": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:dt.": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-macro-k": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:dd.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-macro-v": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(180, 83, 9)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(220, 38, 38)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:ul.tx-chips": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:i.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(180, 83, 9)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(220, 38, 38)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:li.tx-chip": [
+   "rgb(161, 92, 0)|rgb(255, 244, 224)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-macro-foot": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.tx-answer-act": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:a.tx-btn.tx-btn--main": [
+   "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.home-grid": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.home-todo": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:header.tx-sec-head": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:h2.tx-sec-t": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.tx-sec-body": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:a.dash-mod.tx-row.tx-row--go": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.tx-row-main": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.tx-row-t": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.tx-row-sub": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:svg.lucide.lucide-chevron-right.tx-row-go": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
+  ],
+  "main:path.": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
+  ],
+  "main:div.home-picks": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.tx-sec-sub": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.tx-sec-aside": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:a.tx-row.tx-row--go": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.home-code": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.tx-row-right": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.home-pick-r": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.": [
-   "rgb(21, 128, 61)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.dash-arrow": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:span.home-score": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.dash-modgrid": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.home-data": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:a.dash-card.dash-mod": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-mod-top": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.dash-mod-n": [
-   "rgb(18, 0, 255)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-mod-label": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-mod-desc": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:a.dash-card.dash-mod.dash-mod-stat": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-mod-stat-l": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.dash-mod-label": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-mod-bignum": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-card.dash-picks": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.dash-picks-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:a.dash-picks-more": [
-   "rgb(18, 0, 255)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:table.dash-picks-table": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:thead.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:tr.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:th.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:th.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:tbody.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:td.dash-rank": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(241, 241, 243)|rgb(0, 0, 0)|none|"
-  ],
-  "main:td.dash-nm": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(241, 241, 243)|rgb(0, 0, 0)|none|"
-  ],
-  "main:b.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.dash-cd": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:td.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(241, 241, 243)|rgb(0, 0, 0)|none|"
-  ],
-  "main:td.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(241, 241, 243)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.dash-verdict": [
-   "rgb(21, 128, 61)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:a.dash-mod-stat.tx-row.tx-row--go": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ]
  },
  "/screener": {

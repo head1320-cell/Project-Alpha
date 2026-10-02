@@ -250,7 +250,21 @@ export interface HeatmapRow {
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
+/** `GET /macro/connection-status` — 연습용(mock) 여부는 서버 게이트(`mock_gate.mock_allowed()`)가 정한다(화면이 추측하지 않는다). */
+export interface MacroConnectionStatus {
+  mock_allowed: boolean;
+  real_mode: boolean;
+  bok_configured: boolean;
+  fred_configured: boolean;
+  note?: string;
+}
+
 export const macroApi = {
+  connectionStatus: async (): Promise<MacroConnectionStatus> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/connection-status`);
+    if (!r.ok) throw new Error(`Connection status failed: ${r.status}`);
+    return r.json();
+  },
   snapshot: async (useCache = true): Promise<MacroSnapshot> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/snapshot?use_cache=${useCache}`);
     if (!r.ok) throw new Error(`Snapshot failed: ${r.status}`);

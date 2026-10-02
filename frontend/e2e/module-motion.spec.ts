@@ -22,7 +22,8 @@ import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
 // 4개 모듈에서 실제 렌더와 달랐고, `/backtest` 는 **하나도 렌더되지 않았다**. 아래 1번의
 // "노드 수 먼저 단언"이 그 0 을 잡아 준 덕에 목록이 틀렸다는 사실이 드러났다.
 const MODULES: { name: string; path: string; panels: string }[] = [
-  { name: "00 Dashboard",  path: "/dashboard",   panels: ".dash-card" },
+  // BU1 — 홈은 토스식 절(`.tx-answer`·`.tx-sec`)로 바뀌었다. `.dash-card` 판은 없다(옛 카드 격자를 목록 줄로 대체).
+  { name: "00 Dashboard",  path: "/dashboard",   panels: ".tx-answer, .tx-sec" },
   { name: "01 Screener",   path: "/screener",    panels: ".bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap" },
   { name: "02 Backtester", path: "/backtest",    panels: ".tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel" },
   { name: "03 Macro",      path: "/macro",       panels: ".mc-card, .mv-rcard" },

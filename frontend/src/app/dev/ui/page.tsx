@@ -61,7 +61,7 @@ import { AllocationMap } from "@/shared/ui/AllocationMap";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 // BU0 — 토스식 공용 부품 + 한국식 숫자 표기. 서식 표의 출력은 실제 함수의 반환값이다(손으로 적지 않는다).
 import * as Tx from "@/shared/ui/tx";
-import { direction, krUnit, num, pct, pp, signedPct, won } from "@/shared/lib/krFormat";
+import { direction, krUnit, num, pct, pp, priceWon, signedPct, won } from "@/shared/lib/krFormat";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
@@ -209,6 +209,7 @@ const KR_FMT: [string, string, string][] = [
   ["pct", "0.241", pct(0.241)], ["pct", "-0.03", pct(-0.03)], ["signedPct", "0.241", signedPct(0.241)],
   ["signedPct", "0", signedPct(0)], ["signedPct", "-0.00004", signedPct(-0.00004)], ["pp", "0.021", pp(0.021)],
   ["pp", "-0.03", pp(-0.03)], ["num", "null", num(null)], ["pct", "NaN", pct(NaN)], ["won", "Infinity", won(Infinity)],
+  ["priceWon", "71200", priceWon(71_200)], ["priceWon", "undefined", priceWon(undefined)],
   ["direction", "0.1", direction(0.1)], ["direction", "-1", direction(-1)], ["direction", "0", direction(0)], ["direction", "null", direction(null)],
 ];
 

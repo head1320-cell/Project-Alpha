@@ -32,7 +32,8 @@ export function PageHead({ title, lede, actions }: { title: string; lede?: React
 // ── 근거 칩 ─────────────────────────────────────────────────────────────────
 
 /** 캔버스 "믿어도 되나요?" 와 같은 어휘 — practice(연습용 데이터) · assumed(가정) · unknown(모름) · unmeasured(재지 않음). */
-export type ChipTone = "practice" | "assumed" | "unknown" | "unmeasured" | "ok" | "info";
+/** plain = 판단이 아닌 사실(판정 이름·적재 수) — 중립 색. */
+export type ChipTone = "practice" | "assumed" | "unknown" | "unmeasured" | "ok" | "info" | "plain";
 export type Chip = { label: string; tone: ChipTone };
 
 export function Chips({ items, label = "이 답의 근거" }: { items: Chip[]; label?: string }) {
@@ -87,9 +88,12 @@ export function Section({ title, sub, aside, children }: {
 }
 
 /** 목록 한 줄. href 면 링크, onClick 이면 단추, 둘 다 없으면 그냥 줄(누를 수 없음 — 화살표도 없다). */
-export function ListRow({ title, sub, right, href, onClick }: {
+export function ListRow({ title, sub, right, href, onClick, className }: {
   title: ReactNode; sub?: ReactNode; right?: ReactNode; href?: string; onClick?: () => void;
+  /** 화면 계약 클래스를 더할 때(예: 홈의 `.dash-mod`). */
+  className?: string;
 }) {
+  const extra = className ? ` ${className}` : "";
   const body = (
     <>
       <span className="tx-row-main">
@@ -100,9 +104,9 @@ export function ListRow({ title, sub, right, href, onClick }: {
       {href || onClick ? <ChevronRight className="tx-row-go" size={18} aria-hidden /> : null}
     </>
   );
-  if (href) return <Link href={href} className="tx-row tx-row--go">{body}</Link>;
-  if (onClick) return <button type="button" className="tx-row tx-row--go" onClick={onClick}>{body}</button>;
-  return <div className="tx-row">{body}</div>;
+  if (href) return <Link href={href} className={`tx-row tx-row--go${extra}`}>{body}</Link>;
+  if (onClick) return <button type="button" className={`tx-row tx-row--go${extra}`} onClick={onClick}>{body}</button>;
+  return <div className={`tx-row${extra}`}>{body}</div>;
 }
 
 // ── 숫자 하나 ───────────────────────────────────────────────────────────────

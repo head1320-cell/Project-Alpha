@@ -22,7 +22,7 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   { pattern: /^\/settings\/?$/, label: "설정" },
   { pattern: /^\/login\/?$/, label: "로그인" },
   // BS5 — 레거시 모듈. 라이트는 계산 스타일 골든 그대로, 다크는 주요 상태 전부 AA(E2E dark-modules.spec.ts).
-  { pattern: /^\/dashboard\/?$/, label: "대시보드" },
+  { pattern: /^\/dashboard\/?$/, label: "홈" },
   { pattern: /^\/screener\/?$/, label: "스크리너" },
   { pattern: /^\/backtest\/?$/, label: "백테스터" },
   { pattern: /^\/backtest\/runs\/[^/]+\/(loading|compare)\/?$/, label: "백테스트 진행·비교" },

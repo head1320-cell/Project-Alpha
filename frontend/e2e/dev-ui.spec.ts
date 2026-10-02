@@ -501,6 +501,7 @@ test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
       ["pct", "0.241", "24.1%"], ["pct", "-0.03", "−3.0%"], ["signedPct", "0.241", "+24.1%"],
       ["signedPct", "0", "0.0%"], ["signedPct", "-0.00004", "0.0%"], ["pp", "0.021", "+2.1%p"],
       ["pp", "-0.03", "−3.0%p"], ["num", "null", "몰라요"], ["pct", "NaN", "몰라요"], ["won", "Infinity", "몰라요"],
+      ["priceWon", "71200", "71,200원"], ["priceWon", "undefined", "몰라요"],
       ["direction", "0.1", "up"], ["direction", "-1", "down"], ["direction", "0", "flat"], ["direction", "null", "unknown"],
     ];
     const rows = page.locator(".devui-krfmt-table tr");
