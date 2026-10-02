@@ -28,7 +28,7 @@ import type { ButlerCategory, ButlerGroup } from "@/entities/backtest/butlerFact
 import { FACTOR_FUNCTIONS, FUNCTIONS_BY_ID, INNER_FUNCTIONS, fillTemplate } from "@/entities/backtest/factorFunctions";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import { type TokenSupportMap } from "@/entities/backtest/bridgeModel";
-import { TONES, type Tone } from "@/shared/ui/kit";
+import { type Tone } from "@/shared/ui/kit";
 import { CatalogueShell, type CatalogueItem } from "@/shared/ui/CatalogueShell";
 // clsx 만 쓴다 — 공용 `cn` 은 tailwind-merge 를 함께 끌어와 이 두 라우트에 +7 kB 를 더한다.
 // 여기서는 충돌하는 유틸리티를 합칠 일이 없다(조건부로 이어붙이기만 한다).
@@ -60,13 +60,12 @@ export interface FactorPick {
 // 두 번째 피연산자를 팩터로 받을 수 있는 함수 (변화율_팩터는 팩터 필수)
 const TWO_FACTOR_IDS = new Set(["cmp", "gt", "lt", "pctf"]);
 
-const RND = "rounded-[var(--bs-border-radius)]";
+// BU3c: 모습은 `.fp-*` 클래스(globals.css 끝 BU3c 절)가 그린다 — 색은 창의 `data-tone` 이 고른 `--fp-*`.
 /** 셀렉트·텍스트 입력 공통 */
-const FIELD = `text-[13px] px-2 py-1.5 border border-[var(--border-strong)] ${RND} bg-[var(--bg-card)] text-[var(--text-primary)]`;
-/** 숫자 입력 — 고정폭 + 모노 */
-const NUMFIELD = `font-mono text-[13px] w-[90px] px-2.5 py-1.5 border border-[var(--border-strong)] ${RND} bg-[var(--bg-card)] text-[var(--text-primary)]`;
-const PLABEL = "text-[11px] text-[var(--text-secondary)]";
-const FNROW = "w-full text-left border-none cursor-pointer text-[13px] px-3 py-[5px] rounded-md";
+const FIELD = "fp-field";
+/** 숫자 입력 — 자리 맞춤 숫자 */
+const NUMFIELD = "fp-field fp-field--num";
+const PLABEL = "fp-plabel";
 
 const baseToken = (f: GpFactor) => (/^\{[^{}]+\}$/.test(f.expr) ? f.expr : `{${f.name}}`);
 // 팩터 → 백엔드 토큰(지원 판정·평가). Butler 표시명은 토큰과 다를 수 있으므로 토큰으로 판정.
@@ -204,7 +203,6 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
   const innerExpr = allowInner && innerFnId !== "base" ? fillTemplate(innerFn.preview, tk, innerParams) : tk;
   const expr = isTwoFactor ? `${fn.name}(${tk}, ${expr2})` : fillTemplate(fn.preview, innerExpr, params);
 
-  const accent = TONES[tone];
   // 두 번째 팩터 후보: 지원 토큰만 (카테고리 optgroup)
   const factor2Options = useMemo(() =>
     catalog.map((c) => ({
@@ -269,37 +267,30 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       applyDisabled={applyDisabled}
       error={catalogError != null}
       errorText={catalogError ?? undefined}
-      note="지원 여부는 백엔드 /condition-tokens 가 단일 진실 공급원이에요 — 미지원 팩터는 평가에서 무시되므로 적용할 수 없어요."
-      // ★색조는 스타일이 아니라 CSS 변수 대입이다★ `--t-accent` 를 덮으면 셸의 기존
-      // `.tfm-*` 규칙이 그대로 다시 물든다 — 새 CSS 없이 매수/매도 문맥 색을 지킨다.
-      styleVars={{
-        "--t-accent": accent.accent,
-        "--fp-accent": accent.accent,
-        "--fp-bg": accent.bg,
-        "--fp-text": accent.text,
-      } as React.CSSProperties}
+      note="쓸 수 있는지는 서버의 조건 토큰 목록이 정해요 — 미가용 팩터는 계산에서 빠지므로 넣을 수 없어요."
+      // 매수·매도 문맥 색 — 셸이 `data-tone` 으로 얹고 CSS 가 `--tx-*` 에서 고른다(BU3c).
+      tone={tone}
     >
       {/* ── 고른 팩터 상세 (옛 STEP1 우측) ── */}
       {factor && (
-        <div className="mb-3.5">
-          <div className="text-xs text-[var(--text-secondary)] mb-[5px]">선택된 팩터</div>
-          <div className={clsx("text-[17px] font-medium",
-            selInfo && !selInfo.ok ? "text-[var(--text-muted)]" : "text-[var(--fp-text)]")}>
+        <div className="fp-sel">
+          <div className="fp-plabel">고른 팩터</div>
+          <div className="fp-sel-name" data-off={selInfo && !selInfo.ok ? "1" : "0"}>
             {factor.name}
           </div>
-          <div className="font-mono text-xs text-[var(--text-secondary)]">{factor.expr}</div>
+          <div className="fp-sel-tok">{factor.expr}</div>
 
           {selInfo && !selInfo.ok && (
-            <div className={clsx("mt-[9px] text-xs leading-relaxed text-[var(--danger)] bg-[var(--danger-light)] px-[11px] py-[9px]", RND)}>
-              미지원 — {selInfo.reason}
+            <div className="fp-box fp-box--warn" role="note">
+              미가용 — {selInfo.reason}
             </div>
           )}
           {selInfo && !selInfo.ok && (support?.substitutes?.[factor.name]?.length ?? 0) > 0 && (
-            <div className="mt-[9px]">
-              <div className="text-[11px] text-[var(--text-secondary)] mb-[5px]">
-                대체 제안 — 같은 의도의 자체 팩터 (클릭해 선택)
+            <div className="fp-subs">
+              <div className="fp-plabel">
+                대신 쓸 수 있는 팩터 — 누르면 골라져요
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="fp-chips">
                 {support!.substitutes![factor.name].map((n) => {
                   // 카탈로그에 없는 대체 제안은 **누를 수 없게** 둔다. 눌러도 아무 일이
                   // 없는 버튼은 사용자가 자기 조작을 의심하게 만든다.
@@ -307,8 +298,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                   return (
                     <button key={n} type="button" disabled={!hit}
                       onClick={() => hit && setSelId(hit.id)}
-                      className={clsx("text-xs text-[var(--fp-text)] bg-[var(--fp-bg)] border border-[var(--fp-accent)] px-[9px] py-1", RND,
-                        hit ? "cursor-pointer" : "opacity-50 cursor-not-allowed")}>
+                      className="fp-chip">
                       {n}
                     </button>
                   );
@@ -317,7 +307,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
             </div>
           )}
           {selInfo?.ok && support && ["fundamental", "market", "macro", "flow", "score"].includes(selInfo.group ?? "") && (
-            <div className={clsx("mt-[9px] text-xs leading-relaxed text-[var(--text-secondary)] bg-[var(--bg-section)] px-[11px] py-[9px]", RND)}>
+            <div className="fp-box">
               {selInfo.group === "fundamental" ? support.fundamental_note
                 : selInfo.group === "market" ? support.market_note
                 : selInfo.group === "macro" ? support.macro_note
@@ -329,8 +319,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       )}
 
       {/* ── 함수 (옛 STEP2) ── */}
-      <div className="text-xs text-[var(--text-secondary)] mb-1.5">함수</div>
-      <div className={clsx("max-h-[168px] overflow-auto flex flex-col gap-px mb-2.5 border border-[var(--border)]", RND)}>
+      <div className="fp-plabel">함수</div>
+      <div className="fp-fns">
         <GroupLabel dot>자주 쓰는 함수</GroupLabel>
         {FACTOR_FUNCTIONS.filter((f) => f.group === "common").map((f) => (
           <FnRow key={f.id} name={f.name} active={f.id === fnId}
@@ -343,12 +333,12 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
         ))}
       </div>
 
-      <div className="text-[13px] text-[var(--text-secondary)] leading-relaxed mb-2.5">{fn.desc}</div>
+      <div className="fp-desc">{fn.desc}</div>
 
       {!isTwoFactor && fn.params.length > 0 && (
-        <div className="flex flex-wrap gap-2.5 mb-3.5">
+        <div className="fp-params">
           {fn.params.map((p, i) => (
-            <div key={i} className="flex flex-col gap-1">
+            <div key={i} className="fp-param">
               <span className={PLABEL}>{p.label}</span>
               {p.kind === "direction" ? (
                 <select value={params[paramKey(p.kind, i)] ?? p.default} aria-label={p.label}
@@ -367,15 +357,14 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
 
       {/* 두 번째 피연산자 — 비교/큰값/작은값: 상수|팩터 선택, 변화율_팩터: 팩터 필수 */}
       {TWO_FACTOR_IDS.has(fnId) && (
-        <div className="mb-3.5">
-          <div className="flex items-center gap-2 mb-1.5">
+        <div className="fp-block">
+          <div className="fp-row">
             <span className={PLABEL}>두 번째 피연산자</span>
             {fnId !== "pctf" && (
-              <div className={clsx("flex gap-0 border border-[var(--border-strong)] overflow-hidden", RND)}>
+              <div className="fp-seg">
                 {(["value", "factor"] as const).map((m) => (
-                  <button key={m} type="button" onClick={() => setOperand2Mode(m)}
-                    className={clsx("text-[11px] px-[9px] py-[3px] border-none cursor-pointer",
-                      operand2Mode === m ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--bg-card)] text-[var(--text-secondary)]")}>
+                  <button key={m} type="button" onClick={() => setOperand2Mode(m)} aria-pressed={operand2Mode === m}
+                    className="fp-seg-opt">
                     {m === "value" ? "상수" : "팩터"}
                   </button>
                 ))}
@@ -383,9 +372,9 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
             )}
           </div>
           {isTwoFactor && (
-            <div className="flex flex-wrap gap-2.5 items-end">
+            <div className="fp-params">
               <select value={factor2Name} onChange={(e) => setFactor2Name(e.target.value)}
-                aria-label="두 번째 팩터" className={clsx(FIELD, "fp-factor2 max-w-[220px]")}>
+                aria-label="두 번째 팩터" className={clsx(FIELD, "fp-factor2")}>
                 <option value="">팩터 선택…</option>
                 {factor2Options.map((g) => (
                   <optgroup key={g.label} label={g.label}>
@@ -399,7 +388,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
                 {INNER_FUNCTIONS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
               {inner2FnId !== "base" && inner2Fn.params.filter((p) => p.kind !== "direction").map((p, i) => (
-                <div key={i} className="flex flex-col gap-1">
+                <div key={i} className="fp-param">
                   <span className={PLABEL}>{p.label}</span>
                   <input type="number" aria-label={p.label}
                     value={inner2Params[paramKey(p.kind, i)] ?? p.default}
@@ -410,7 +399,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
             </div>
           )}
           {fnId === "pctf" && (
-            <div className="text-[11px] text-[var(--text-muted)] mt-[5px]">
+            <div className="fp-desc fp-desc--sm">
               ((F1 − F2) / |F2|) × 100 — 예: 변화율_팩터({"{당기순이익}"}, 과거값({"{당기순이익}"}, 1년)) = 전년 대비 성장률
             </div>
           )}
@@ -419,11 +408,11 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
 
       {/* 내부 지표(중첩) — 함수에 넣기 전 팩터에 먼저 적용 */}
       {allowInner && (
-        <div className="mb-3.5">
-          <div className="text-[11px] text-[var(--text-secondary)] mb-1">
+        <div className="fp-block">
+          <div className="fp-plabel">
             {isCross ? "내부 지표 (랭킹 대상 · 선택)" : "내부 지표 (먼저 적용할 함수 · 선택)"}
           </div>
-          <div className="flex flex-wrap gap-2.5 items-end">
+          <div className="fp-params">
             {/* ★`fp-inner-fn` 은 E2E 계약이다★ 중첩은 화면에서 가장 눈에 안 띄면서 수식에는
                 그대로 나타나는 출력이라, 이 지점을 지켜보지 않으면 조용히 사라진다. */}
             <select value={innerFnId} onChange={(e) => pickInnerFn(e.target.value)}
@@ -432,7 +421,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
               {INNER_FUNCTIONS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
             {innerFnId !== "base" && innerFn.params.filter((p) => p.kind !== "direction").map((p, i) => (
-              <div key={i} className="flex flex-col gap-1">
+              <div key={i} className="fp-param">
                 <span className={PLABEL}>{p.label}</span>
                 <input type="number" aria-label={p.label}
                   value={innerParams[paramKey(p.kind, i)] ?? p.default}
@@ -443,10 +432,10 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
         </div>
       )}
 
-      <div className="text-xs text-[var(--text-secondary)] mb-1.5">조건식 미리보기</div>
+      <div className="fp-plabel">조건식 미리보기</div>
       {/* `fp-preview` 는 E2E 계약이다 — 토큰 문자열({시가총액})은 목록 행·선택 상세·미리보기
           세 곳에 동시에 나타나므로, 범위를 좁히지 않으면 단정이 어느 것을 본 것인지 알 수 없다. */}
-      <div className={clsx("fp-preview font-mono text-[15px] text-[var(--text-primary)] bg-[var(--bg-section)] px-[13px] py-[11px] break-all mb-3.5", RND)}>
+      <div className="fp-preview">
         {expr}
       </div>
     </CatalogueShell>
@@ -460,9 +449,7 @@ const paramKey = (kind: string, idx: number) => (kind === "period" ? "n" : kind 
 
 function FnRow({ name, active, onClick }: { name: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
-      className={clsx(FNROW, active ? "bg-[var(--fp-bg)] text-[var(--fp-text)]"
-        : "bg-transparent text-[var(--text-secondary)]")}>
+    <button type="button" onClick={onClick} aria-pressed={active} className="fp-fn">
       {name}
     </button>
   );
@@ -470,9 +457,7 @@ function FnRow({ name, active, onClick }: { name: string; active: boolean; onCli
 
 function GroupLabel({ dot, children }: { dot?: boolean; children: React.ReactNode }) {
   return (
-    <div className={clsx("flex items-center gap-1.5 text-[13px] px-[9px] py-[7px]",
-      dot ? "text-[var(--fp-text)]" : "text-[var(--text-secondary)] border-t border-[var(--border)] mt-[3px]")}>
-      {dot && <span className="w-[5px] h-[5px] rounded-full bg-[var(--fp-accent)]" />}
+    <div className="fp-fn-group" data-first={dot ? "1" : "0"}>
       {children}
     </div>
   );

@@ -156,13 +156,12 @@ export interface CatalogueShellProps {
   };
 
   /**
-   * ── Phase 11c: 창 단위 색조 ──
-   * 대화상자 루트에 얹는 **CSS 변수 선언**이다(스타일링이 아니라 변수 대입 — shadcn 방식).
-   * 팩터 창은 매수/매도 문맥에 따라 색이 달라야 했고, 그 능력을 셸로 옮기면서 잃지 않으려면
-   * 여기가 필요하다. `--t-accent` 를 얹으면 기존 `.tfm-*` 규칙이 그대로 다시 물든다 —
-   * 새 CSS 를 만들지 않고 토큰만 지역적으로 덮는다(`:root` 는 건드리지 않는다).
+   * ── 창 단위 색조 (Phase 11c → BU3c) ──
+   * 연 자리의 문맥 색 — 매수(buy) 빨강 · 매도(sell) 파랑 · 그 밖(neutral) 중립 파랑(한국식, 사용자 결정).
+   * 예전에는 소비자가 `--t-accent` 등 CSS 변수를 인라인으로 덮었다(`styleVars`). BU3c 부터는 이름 하나를
+   * `data-tone` 으로 얹고 색은 CSS(`.tfm[data-tone]` → `--fp-*`)가 `--tx-*` 토큰에서 고른다 — 다크 짝이 따라온다.
    */
-  styleVars?: React.CSSProperties;
+  tone?: "buy" | "sell" | "neutral";
 }
 
 /** 초안과 적용본에서 **달라진 항목만** 뽑는다. 같은 값을 나열하면 무엇이 바뀌었는지 묻힌다. */
@@ -186,7 +185,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
     families, family, onFamilyChange, items, allItems,
     selectedId, onSelect, activeId, loading, error, errorText, note,
     children, applyLabel, onApply, applyDisabled,
-    previewSlot, frequencyWarningSlot, presets, comparison, styleVars,
+    previewSlot, frequencyWarningSlot, presets, comparison, tone = "neutral",
   } = props;
 
   const [q, setQ] = useState("");
@@ -246,14 +245,14 @@ export function CatalogueShell(props: CatalogueShellProps) {
 
   return createPortal(
     // .tfm-* 클래스는 그대로 유지한다 — Playwright 계약이고, 이 단계는 중복 제거가 목적이다.
-    <div className="tfm-backdrop" onClick={onClose} style={styleVars}>
-      <div className="tfm" ref={dialogRef} onClick={(e) => e.stopPropagation()}
+    <div className="tfm-backdrop" onClick={onClose}>
+      <div className="tfm" ref={dialogRef} onClick={(e) => e.stopPropagation()} data-tone={tone}
         role="dialog" aria-modal="true" aria-label={ariaLabel}>
         <div className="tfm-head">
           <div className="tfm-title">
-            {title}{subtitle && <span className="as-note-inline">{subtitle}</span>}
+            {title}{subtitle && <span className="as-note-inline tfm-sub">{subtitle}</span>}
           </div>
-          <button className="as-x" onClick={onClose} aria-label="닫기">×</button>
+          <button type="button" className="as-x" onClick={onClose} aria-label="닫기">×</button>
         </div>
 
         <div className="tfm-body">
@@ -395,7 +394,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
                   </div>
                 )}
 
-                <button className="as-fb-apply" disabled={applyDisabled} onClick={onApply}>
+                <button type="button" className="as-fb-apply tfm-apply" disabled={applyDisabled} onClick={onApply}>
                   {applyLabel}
                 </button>
               </>
