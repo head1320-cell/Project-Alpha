@@ -28,7 +28,8 @@ const MODULES: { name: string; path: string; panels: string }[] = [
   { name: "01 Screener",   path: "/screener",    panels: ".tx-answer, .tx-sec" },
   // BU3 — 편집기 아래 결과 자리(`.tbt-chart`)는 결과가 한 번도 뜨지 않는 죽은 자리라 지웠고, `.tbt-watch-panel` 은 어디서도 그려지지 않는다.
   { name: "02 Backtester", path: "/backtest",    panels: ".tbt-config-main, .tbt-right-col, .bte-step" },
-  { name: "03 Macro",      path: "/macro",       panels: ".mc-card, .mv-rcard" },
+  // BU5a — 머리의 국면 도넛 카드(`.mv-rcard`)는 답 한 문장(`.tx-answer`)으로 바뀌었다. 탭 안 `.mc-card` 는 그대로.
+  { name: "03 Macro",      path: "/macro",       panels: ".mc-card, .tx-answer" },
   { name: "04 Company",    path: "/insights",    panels: ".ca-cp-card, .ca-cp-panel" },
   { name: "05 Risk",       path: "/risk-tools",  panels: ".tstat, .trisk-table" },
   { name: "07 Data Infra", path: "/admin/data",  panels: ".t-honesty, .trisk-table" },
@@ -44,9 +45,10 @@ const MODULES: { name: string; path: string; panels: string }[] = [
 // BU0 — 셸 브레드크럼이 최상위 화면에서 빠져(`.tcrumb-sep` 결함이 사라짐) 일곱 모듈 모두 1씩 줄었다(실측 2회 같음).
 // BU3 — 백테스트 8 → 0(편집기 토스식 다시 그리기 — 옛 고정폭 흐림 글자·흰 글자 버튼이 사라졌다 · 실측 2회 같음).
 // BU2 — 종목 찾기 2 → 0(옛 레일의 `.bsc-preset-save` 1.26:1 등이 토스식 다시 그리기로 사라졌다 · 실측 2회 같음).
+// BU5a — 경제 흐름 3 → 2(머리 도넛 카드가 답 한 문장으로 바뀌었다 · 남은 둘은 탭 안 카드 — 스트레스 게이지 숫자·역전 경고, BU5b · 실측 2회 같음).
 const KNOWN_LOW: Record<string, number> = {
   "00 Dashboard": 0, "01 Screener": 0, "02 Backtester": 0,
-  "03 Macro": 3, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
+  "03 Macro": 2, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
 };
 
 /** §62 가 정의한 모션 토큰 — 초 단위. 0 은 "전이 없음"이라 항상 허용된다. */

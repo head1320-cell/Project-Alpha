@@ -64,7 +64,7 @@ test("Radix Dialog: 지표 드릴다운 창이 대화상자 계약을 지킨다"
   await page.goto("/macro", { waitUntil: "networkidle" });
   // ★히트맵은 기본 탭(overview)이 아니라 `indicators` 탭에 있다★ 기본 탭에서 찾으면
   // "트리거가 사라졌다" 가 아니라 "탭을 안 옮겼다" 인데 화면은 똑같이 비어 보인다.
-  await page.locator(".mc-tab", { hasText: "Indicators" }).click();
+  await page.locator("#mc-tab-indicators").click();   // BU5a — 탭 이름이 "지표"가 됐다 · 안정 id 로 고른다
 
   // 히트맵 셀 하나 = 지표 드릴다운 트리거(ZHeatmap, core 탭). 매크로 데이터가 도착해야
   // 셀이 그려지므로 넉넉히 기다린다 — 못 찾으면 그것 자체가 보고할 사실이다.

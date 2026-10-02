@@ -7,21 +7,18 @@
  * ★연습용 표시는 서버 게이트로만★ `GET /macro/connection-status` 의 `mock_allowed`(= mock_gate)·`bok_configured`.
  * ★실패·빈·모름을 섞지 않는다★ 실패는 alert + 다시 시도, 빈 결과는 할 일 하나, 모름은 "몰라요" + 사유.
  *
- * 함정: 셸 prefetch·매크로 화면은 같은 queryKey(`["macro","regime"]`)에 실패를 `null` 로 캐시한다 — 여기서 `null` 도 실패로 그린다.
+ * 번역표(MODE_KO·regimeFig·sourceChip)는 경제 흐름 화면과 같은 것을 쓴다(`entities/macro/regimeKo`).
+ * 함정: 같은 queryKey(`["macro","regime"]`)를 다른 화면도 쓴다 — 실패를 `null` 로 캐시하는 소비자가 다시 생겨도 여기서 `null` 은 실패로 그린다.
  */
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { macroApi, type RegimeState } from "@/entities/macro/api";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import { API_BASE } from "@/shared/api/apiBase";
-import { num, pct, priceWon } from "@/shared/lib/krFormat";
+import { num, priceWon } from "@/shared/lib/krFormat";
+import { MODE_KO, regimeFig, sourceChip, when } from "@/entities/macro/regimeKo";
 import { LoadingState } from "@/shared/ui/States";
 import { Answer, Chips, ListRow, Notice, PageHead, Section, Unknown, type Chip, type Figure } from "@/shared/ui/tx";
-
-const MODE_KO: Record<string, string> = { NORMAL: "보통", CAUTIOUS: "조심", DEFENSIVE: "방어" };
-const REGIME_KO: Record<string, string> = {
-  Goldilocks: "골디락스", Reflation: "리플레이션", Stagflation: "스태그플레이션", Disinflation: "디스인플레이션",
-};
 
 /** 하는 일 순서 — 포트폴리오 설계가 제품의 중심(BK·BL)이라 맨 위. 설명은 하는 일 한 줄(수를 세지 않는다 — 세면 낡는다). */
 const TODO = [
@@ -44,30 +41,6 @@ type SnapStatus = { persist_enabled: boolean; db_rows: number };
 
 function Retry({ onClick }: { onClick: () => void }) {
   return <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={onClick}>다시 시도</button>;
-}
-
-function when(ts: string | undefined): string | null {
-  if (!ts) return null;
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return null;
-  return `기준 ${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-/** 국면 이름 + 확률. 확률이 없으면 "확률 몰라요" — 0% 로 그리지 않는다. */
-function regimeFig(r: { regime: string; regime_probs?: Record<string, number> }): string {
-  const name = REGIME_KO[r.regime] ?? r.regime;
-  const p = r.regime_probs?.[r.regime];
-  return typeof p === "number" && Number.isFinite(p) ? `${name} ${pct(p, 0)}` : `${name} 확률 몰라요`;
-}
-
-function sourceChip(cs: { data?: { mock_allowed: boolean; bok_configured: boolean } | null; isError: boolean; isLoading: boolean }): Chip[] {
-  if (cs.isLoading) return [];
-  if (cs.isError || !cs.data) return [{ label: "데이터 출처를 확인하지 못했어요", tone: "unknown" }];
-  const { mock_allowed, bok_configured } = cs.data;
-  if (mock_allowed && !bok_configured) return [{ label: "연습용 데이터", tone: "practice" }];
-  if (bok_configured && !mock_allowed) return [{ label: "한국은행 실데이터", tone: "ok" }];
-  if (!bok_configured) return [{ label: "한국은행 연결이 없어 일부 지표를 몰라요", tone: "unknown" }];
-  return [{ label: "연습용 모드 — 키가 없는 지표는 합성값이에요", tone: "practice" }];
 }
 
 function MacroAnswer() {

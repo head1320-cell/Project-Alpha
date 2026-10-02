@@ -28,8 +28,7 @@ import {
   CorrMatrix, RollingCorrChart, AvgCorrChart, ComponentBars, TimingHistory, TrendTable, RegimeTrajectory,
 } from "./analyticsParts";
 import {
-  CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
-  RegimeDonutCard, StressModeCard,
+  CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable,
 } from "./visualParts";
 import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 import { MarketToggle } from "./MacroCockpit.tabs.strategy";

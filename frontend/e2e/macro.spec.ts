@@ -3,7 +3,8 @@ import { trackErrors, uniq } from "./helpers";
 
 // Macro Analysis regression — locks in the healthy state so a future regression (the
 // reported "Macro tab throws an error") makes CI go red. Drives all 8 sub-tabs + US toggle.
-const SUBTABS = ["Indicators", "Regime", "Valuation", "Strategies", "Recommend", "Correlations", "Timing", "Overview"];
+// BU5a — 탭 이름이 한국어가 됐다. 고르기는 이름이 아니라 안정 id(`#mc-tab-{id}`)로 한다(이름이 다시 바뀌어도 깨지지 않게).
+const SUBTABS = ["indicators", "regime", "valuation", "strategies", "recommend", "correlations", "timing", "overview"];
 
 test("Macro: all sub-tabs render with zero page/console/API errors + Korean encoding", async ({ page }) => {
   const sink = trackErrors(page);
@@ -14,16 +15,16 @@ test("Macro: all sub-tabs render with zero page/console/API errors + Korean enco
   // Overview loaded: a known Korean label is visible and correctly encoded (not mojibake).
   await expect(page.getByText("국면", { exact: false }).first()).toBeVisible();
   const banner = await page.locator("body").innerText();
-  expect(banner).toContain("STRESS");
+  expect(banner).toContain("시장 스트레스");
   expect(banner).not.toMatch(/�/); // no replacement char (encoding corruption)
 
   for (const t of SUBTABS) {
     const before = sink.pageErrors.length;
-    await page.locator(".mc-tab", { hasText: t }).first().click();
+    await page.locator(`#mc-tab-${t}`).click();
     await page.waitForTimeout(1800);
     expect(sink.pageErrors.slice(before), `sub-tab ${t} threw`).toHaveLength(0);
     // the clicked tab became active
-    await expect(page.locator(".mc-tab.on", { hasText: t }).first()).toBeVisible();
+    await expect(page.locator(`#mc-tab-${t}.on`)).toBeVisible();
   }
 
   expect(uniq(sink.api404), "macro API 404s").toEqual([]);
@@ -45,7 +46,7 @@ test("Macro: partial recommend payload → honest unavailable state, no crash", 
   );
 
   await page.goto("/macro", { waitUntil: "networkidle" });
-  await page.locator(".mc-tab", { hasText: "Recommend" }).first().click();
+  await page.locator("#mc-tab-recommend").click();
   await page.waitForTimeout(1500);
 
   await expect(page.getByText(/추천 데이터가 불완전|데이터 미가용|추천 데이터 없음/).first()).toBeVisible();

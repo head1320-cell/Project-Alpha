@@ -2466,7 +2466,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   color: var(--t-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.12s ease; }
 .mc-tab:hover { color: var(--t-ink); }
 .mc-tab.on { color: var(--t-accent); border-bottom-color: var(--t-accent); }
-.mc-tab-n { font-family: var(--t-mono); font-size: 10px; opacity: 0.6; }
 
 /* 그리드/카드 */
 .mc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -2908,12 +2907,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .mc-featured { border: 1.5px solid #1200ff !important; }
 .mc-alloc-sub { font-size: 11px; font-weight: 600; margin-bottom: 5px; }
 
-/* ── 매크로 v3 (밸리AI 흡수): 브리핑·스트립·비교·검색 ── */
-.mc-brief { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; }
-.mc-brief-txt { font-size: 12px; font-weight: 500; }
-.mc-brief-chips { display: inline-flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
-.mc-brief-chip { font-size: 11px; padding: 3px 10px; border: 1px solid var(--t-border, #e5e5e5); background: var(--t-bg, #fff); border-radius: 12px; cursor: pointer; color: var(--t-muted, #71717a); }
-.mc-brief-chip.on, .mc-brief-chip:hover { border-color: #1200ff; color: #1200ff; }
+/* ── 매크로 v3 (밸리AI 흡수): 스트립·비교·검색 (브리핑 줄은 BU5a 에서 지웠다) ── */
 .mv-strips { display: flex; flex-direction: column; gap: 4px; }
 .mv-strip-row { display: flex; align-items: center; gap: 8px; }
 .mv-strip-lbl { width: 128px; flex: none; font-size: 11px; text-align: right; }
@@ -2931,22 +2925,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 .mc-search { width: 100%; padding: 8px 12px; font-size: 12px; border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; background: var(--t-bg, #fff); }
 .mc-search:focus { outline: none; border-color: #1200ff; }
 
-/* ── 매크로 UI 개편 (Gemini): 도넛 3분할 배너 · 테이블 조건부 서식 · 탭 필 ── */
-.mc-banner3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 10px; }
-@media (max-width: 980px) { .mc-banner3 { grid-template-columns: 1fr; } }
-.mv-rcard { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--t-bg, #fff); border: 1px solid var(--t-border, #e5e5e5); border-top: 3px solid #1200ff; border-radius: 2px; box-shadow: 0 1px 4px rgba(17,17,17,.04); }
-.mv-donut { flex: none; }
-.mv-donut-big { font-size: 21px; font-weight: 800; fill: var(--t-ink, #111); font-family: var(--t-mono, monospace); }
-.mv-donut-small { font-size: 9.5px; fill: var(--t-muted, #71717a); letter-spacing: .04em; }
-.mv-rcard-r { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.mv-rcard-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--t-muted, #71717a); font-family: var(--t-mono, monospace); }
-.mv-rcard-quad { font-size: 15px; font-weight: 700; }
-.mv-rcard-pills { display: flex; gap: 5px; flex-wrap: wrap; }
-.mv-pill { display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; padding: 2px 8px; border-radius: 10px; font-family: var(--t-mono, monospace); white-space: nowrap; }
-.mv-rcard-others { display: flex; gap: 10px; font-size: 9.5px; color: var(--t-muted, #71717a); font-family: var(--t-mono, monospace); align-items: center; }
-.mv-rcard-others i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
-.mv-src-real { color: #0e7c4a; font-weight: 700; }
-.mv-src-mock { color: #b45309; font-weight: 700; }
+/* ── 매크로 UI 개편 (Gemini): 테이블 조건부 서식 · 탭 필 (도넛 3분할 배너는 BU5a 에서 답 한 문장으로 바뀌어 지웠다) ── */
 /* 테이블 v2 — 정렬·여백·조건부 서식·필 뱃지·RSI 미니 트랙 */
 .mca-trend.v2 th, .mca-trend.v2 td { padding: 8px 12px; }
 .mca-trend.v2 td.n, .mca-trend.v2 th.n { text-align: right; font-family: var(--t-mono, monospace); }
@@ -3363,8 +3342,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    ═══════════════════════════════════════════════════════════════════════════ */
 .mc-open-aas { font-weight: 600; }
 .mc-open-aas:disabled { opacity: .55; cursor: progress; }
-.mc-aas-err { margin: 6px 0 0; padding: 8px 12px; border-radius: 6px; font-size: 12px;
-  background: var(--bs-danger-bg, #f8d7da); color: #58151c; border: 1px solid rgba(220,53,69,.25); }
 
 /* 컨텍스트 스트립: 붙어 있는 스냅샷 */
 
@@ -5024,13 +5001,13 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
    "노드 수 먼저 단언"이 그 0 을 잡아냈다 — 그 단언이 없었으면 조용히 통과했을 것이다.
    00 `.dash-card`(9) · 01 `.bsc-workspace`/`-rail`/`-preset`/`-mcap` ·
    02 `.tbt-chart`(6)/`-config-main`/`-right-col`/`-watch-panel`(+ results 의 `.brun-card`) ·
-   03 `.mc-card`(7)/`.mv-rcard`(3) · 04 `.ca-cp-card`(6)/`.ca-cp-panel` ·
+   03 `.mc-card`(7)(BU5a — 머리의 `.mv-rcard` 3장은 답 한 문장으로 바뀌었다) · 04 `.ca-cp-card`(6)/`.ca-cp-panel` ·
    05 `.tstat`(4)/`.trisk-table` · 07 `.t-honesty`/`.trisk-table` */
 @media (prefers-reduced-motion: no-preference) {
   .terminal-main :is(.dash-card,
     .bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap,
     .tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel, .brun-card,
-    .mc-card, .mv-rcard,
+    .mc-card,
     .ca-cp-card, .ca-cp-panel,
     .tstat, .trisk-table, .t-honesty) {
     animation: a11-rise var(--dur-2) var(--ease-out) both;
@@ -5062,7 +5039,7 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
   .terminal-main :is(.dash-card,
     .bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap,
     .tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel, .brun-card,
-    .mc-card, .mv-rcard,
+    .mc-card,
     .ca-cp-card, .ca-cp-panel,
     .tstat, .trisk-table, .t-honesty) {
     animation: none !important;
@@ -7795,46 +7772,12 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
     background: var(--t-surface, #1b1b1e);
     border: 1px solid var(--t-border, #333338)
 }
-:where(.dark) .mc-brief {
-    background: var(--t-surface, #1b1b1e);
-    border: 1px solid var(--t-border, #333338)
-}
-:where(.dark) .mc-brief-chip {
-    border: 1px solid var(--t-border, #333338);
-    background: var(--t-bg, #18181b);
-    color: var(--t-muted, #9e9ea7)
-}
-:where(.dark) .mc-brief-chip.on, :where(.dark) .mc-brief-chip:hover {
-    color: #847aff
-}
 :where(.dark) .mv-cmp th, :where(.dark) .mv-cmp td {
     border-bottom: 1px solid var(--t-border, #333338)
 }
 :where(.dark) .mc-search {
     border: 1px solid var(--t-border, #333338);
     background: var(--t-bg, #18181b)
-}
-:where(.dark) .mv-rcard {
-    background: var(--t-bg, #18181b);
-    border: 1px solid var(--t-border, #333338)
-}
-:where(.dark) .mv-donut-big {
-    fill: var(--t-ink, #e8e8ea)
-}
-:where(.dark) .mv-donut-small {
-    fill: var(--t-muted, #9e9ea7)
-}
-:where(.dark) .mv-rcard-lbl {
-    color: var(--t-muted, #9e9ea7)
-}
-:where(.dark) .mv-rcard-others {
-    color: var(--t-muted, #9e9ea7)
-}
-:where(.dark) .mv-src-real {
-    color: #88f2c2
-}
-:where(.dark) .mv-src-mock {
-    color: #f9b581
 }
 :where(.dark) .mca-rsi-track {
     background: var(--t-surface, #1e1e22)
@@ -7930,10 +7873,6 @@ div.ca-ff2-bar.ca-ff-pbr_band { background: #7c3aad; }
 }
 :where(.dark) .brun-select {
     background: #18181b
-}
-:where(.dark) .mc-aas-err {
-    background: var(--bs-danger-bg, #381b1e);
-    color: #e5949c
 }
 :where(.dark) .tfm-freq-sel {
     background: #18181b
@@ -9124,3 +9063,38 @@ details[open] > .rs-more { margin-bottom: 12px; }
   .rs .brun-kpi-v { font-size: 19px; }
 }
 .rs-legend { color: var(--tx-ink); }
+
+/* ═══ BU5a · 경제 흐름 /macro — 머리(답 한 문장) · 탭 한국어 · 스튜디오 줄 · 실패 (계획 "BU5 상세") ═══════════════
+   `.mc` 에 `tx-page tx-page--wide` 를 붙여 바탕 회색·글꼴을 받는다(전체 폭 — 탭 안 차트가 넓다). 탭 안쪽 카드는 BU5b.
+   계약: `.mc-tab`(id `mc-tab-{id}` · 로빙 tabindex) · `.ms-nav-item`(6 · aria-current) · `.mc-open-aas` · `.mc-card`(module-motion). */
+.mc.tx-page { gap: 16px; }
+.mc-head { display: flex; flex-direction: column; gap: 12px; }
+.ms-root--home > .tx-head { margin-bottom: 16px; font-family: var(--tx-font); color: var(--tx-ink); }
+.mc-head .tx-answer-act { align-items: center; column-gap: 14px; }
+.mc-head-note { font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
+.mc-act { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.mc-err { display: flex; flex-direction: column; gap: 12px; max-width: 1080px; font-family: var(--tx-font); color: var(--tx-ink); }
+
+/* 탭 — 글자 탭 + 밑줄(토스). 번호·아이콘 없음. 좁으면 가로로 밀린다(줄바꿈 대신 — 탭 줄이 두 줄이면 어느 줄이 지금인지 흐려진다). */
+.mc .mc-tabs { gap: 2px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--tx-line); }
+.mc .mc-tabs::-webkit-scrollbar { display: none; }
+.mc .mc-tabs .mc-tab { flex: none; min-height: 48px; padding: 0 14px; gap: 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: none; font-family: var(--tx-font); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--tx-sub); }
+.mc .mc-tabs .mc-tab:hover { color: var(--tx-ink); background: none; border-color: transparent; }
+.mc .mc-tabs .mc-tab.on { color: var(--tx-ink); font-weight: 700; border-bottom-color: var(--tx-ink); background: none; }
+.mc .mc-tabs .mc-tab:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; }
+
+/* 스튜디오 줄 — 알약 목록(지금 보는 곳만 파랑 바탕). 활성 표시는 색 + 굵기 + aria-current — 색만으로 말하지 않는다. */
+.ms-nav { gap: 6px; margin-bottom: 12px; padding-bottom: 0; border-bottom: 0; }
+.ms-nav .ms-nav-item { align-items: center; min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--tx-soft);
+  font-family: var(--tx-font); font-size: 14px; font-weight: 600; color: var(--tx-sub); }
+.ms-nav .ms-nav-item:hover { color: var(--tx-ink); }
+.ms-nav .ms-nav-item.on { background: var(--tx-blue-soft); color: var(--tx-cta); font-weight: 700; }
+.ms-nav .ms-nav-l { letter-spacing: 0; }
+.ms-nav .ms-nav-item:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .mc .mc-tabs .mc-tab { padding: 0 12px; font-size: 15px; }
+  .ms-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .ms-nav .ms-nav-item { flex: none; }
+}

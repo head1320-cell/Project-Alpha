@@ -1,9 +1,11 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// MacroCockpit — Macro Allocation Cockpit (자산배분·마켓타이밍 의사결정 콕핏)
-//   고정 레짐 배너 + 6 서브탭: 01 Overview · 02 Indicators · 03 Regime ·
-//   04 Valuation · 05 Strategies(US⇄KR) · 06 Recommend(규칙+성과+AI).
-//   전부 실데이터(키 있으면) — 백엔드 mock 폴백 시 출처 배지로 정직 표기.
+// MacroCockpit — 경제 흐름 (BU5a: 머리 · 탭 · 실패를 실패로)
+//   머리 = 답 한 문장(서버 국면의 번역 — ADR-003 §2.6) + 근거 숫자·칩 + 행동 하나[포트폴리오 설계에 넣기].
+//   탭 8: 개요 · 지표 · 국면 · 가치 · 전략 · 추천 · 상관 · 타이밍 (id `mc-tab-{id}` · 로빙 tabindex 는 그대로).
+//   ★연습용 표시는 connection-status.mock_allowed 로만★ — 예전처럼 대시보드 출처(fred/bok/prices)로 추론하지 않는다(홈과 같은 규칙).
+//   ★실패는 실패로★ 코어 데이터가 실패하면 그 탭 안 alert + [다시 시도] · 한국·미국 비교·국면 궤적은 "계산 중"에 영원히 머물지 않는다.
+//   탭 안쪽 카드(영어 제목·툴팁·등락색)는 BU5b.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
@@ -14,10 +16,6 @@ const StrategyModal = dynamic(() => import("./StrategyModal"), { ssr: false });
 const DrillDownModal = dynamic(
   () => import("./DrillDownModal").then((m) => m.DrillDownModal), { ssr: false });
 import { useQuery } from "@tanstack/react-query";
-import {
-  LayoutDashboard, Activity, Target, Scale, Boxes, Sparkles,
-  TrendingUp, TrendingDown, ArrowRightLeft, Play, GitCompare, Crosshair,
-} from "lucide-react";
 import type { MacroSeries } from "@/entities/macro/api";
 import { stressColor } from "@/entities/macro/api";
 import type { CausalGraph, CbSentiment, MacroCorrelations, MacroRecommend, MacroStrategies, MacroTiming, MacroTrajectory, StrategyDetail, TacticalHolding, TacticalStrategy } from "@/entities/macro/analysisModel";
@@ -35,25 +33,47 @@ import {
 import {
   CorrMatrix, RollingCorrChart, AvgCorrChart, ComponentBars, TimingHistory, TrendTable, RegimeTrajectory,
 } from "./analyticsParts";
-import {
-  CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
-  RegimeDonutCard, StressModeCard,
-} from "./visualParts";
+import { macroApi } from "@/entities/macro/api";
+import { MODE_KO, regimeFig, regimeName, sourceChip, when } from "@/entities/macro/regimeKo";
+import { Answer, Notice, Unknown, type Chip, type Figure } from "@/shared/ui/tx";
 import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 
+/** 탭은 순서가 아니라 주제라 번호를 달지 않는다. id 는 E2E 계약(`#mc-tab-{id}`) — 이름을 바꿔도 id 는 그대로. */
 const TABS = [
-  { id: "overview", label: "Overview", n: "01", icon: LayoutDashboard },
-  { id: "indicators", label: "Indicators", n: "02", icon: Activity },
-  { id: "regime", label: "Regime", n: "03", icon: Target },
-  { id: "valuation", label: "Valuation", n: "04", icon: Scale },
-  { id: "strategies", label: "Strategies", n: "05", icon: Boxes },
-  { id: "recommend", label: "Recommend", n: "06", icon: Sparkles },
-  { id: "correlations", label: "Correlations", n: "07", icon: GitCompare },
-  { id: "timing", label: "Timing", n: "08", icon: Crosshair },
+  { id: "overview", label: "개요" },
+  { id: "indicators", label: "지표" },
+  { id: "regime", label: "국면" },
+  { id: "valuation", label: "가치" },
+  { id: "strategies", label: "전략" },
+  { id: "recommend", label: "추천" },
+  { id: "correlations", label: "상관" },
+  { id: "timing", label: "타이밍" },
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-// 사분면 명칭·색은 visualParts(RegimeDonutCard)의 통일 맵 사용 — 배너 카드화로 이 파일 로컬 맵 제거
+/** 화면이 함께 불러오는 코어 데이터 — 실패한 것만 `coreFail` 에 [다시 시도] 함수로 들어온다. */
+export type CoreKey = "dashboard" | "valuation" | "strategies" | "recommend";
+/** 이름 + 목적격 조사(받침에 따라 을/를) — 조사를 계산하지 않고 적어 둔다(넷뿐이다). */
+const CORE_KO: Record<CoreKey, string> = {
+  dashboard: "지표 대시보드를", valuation: "자산 가치를", strategies: "전략 목록을", recommend: "추천 배분을",
+};
+/** 탭이 무엇을 주 데이터로 쓰는지 — 주 데이터가 실패하면 탭 몸통 대신 실패를 말한다. 개요는 국면만으로도 그려지므로 위에 알리기만 한다. */
+const TAB_NEEDS: Partial<Record<TabId, { main?: CoreKey; also?: CoreKey[] }>> = {
+  overview: { also: ["dashboard", "recommend"] },
+  indicators: { main: "dashboard" },
+  valuation: { main: "valuation" },
+  strategies: { main: "strategies" },
+  recommend: { main: "recommend" },
+};
+
+function CoreFail({ k, retry }: { k: CoreKey; retry: () => void }) {
+  return (
+    <Notice tone="danger" title={`${CORE_KO[k]} 불러오지 못했어요`}>
+      서버에 닿지 못했거나 계산이 실패했어요. 받은 데이터로 그릴 수 있는 것만 보여 드려요.
+      <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={retry}>다시 시도</button></div>
+    </Notice>
+  );
+}
 
 export interface TransplantPayload { sid: string; name: string; market: Market }
 import { IndicatorsTab, OverviewTab, RegimeTab, ValuationTab } from "./MacroCockpit.tabs.core";
@@ -61,10 +81,12 @@ import { RecommendTab, StrategiesTab } from "./MacroCockpit.tabs.strategy";
 import { CorrelationsTab, TimingTab } from "./MacroCockpit.tabs.analytics";
 
 
-export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy, aasError }: {
-  core: MacroCore;
+export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpenInAAS, aasBusy, aasError }: {
+  core: MacroCore & { regime: NonNullable<MacroCore["regime"]> };
+  /** 실패한 코어 데이터 → 다시 묻는 함수. 비어 있으면 모두 받았다. */
+  coreFail?: Partial<Record<CoreKey, () => void>>;
   onTransplant?: (p: TransplantPayload) => void;
-  /** 현재 국면을 스냅샷으로 굳혀 Allocation Studio 로 넘긴다(서버 저장 → ?snapshot=<id>). */
+  /** 현재 국면을 스냅샷으로 굳혀 포트폴리오 설계(캔버스)로 넘긴다(서버 저장 → ?snapshot=<id>). */
   onOpenInAAS?: () => void;
   aasBusy?: boolean;
   aasError?: string | null;
@@ -79,7 +101,8 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
   // 07/08 lazy (탭 진입·시장 변경 시 로드) + 국면 궤적
   const [corr, setCorr] = useState<MacroCorrelations | null>(null);
   const [timing, setTiming] = useState<MacroTiming | null>(null);
-  const [traj, setTraj] = useState<MacroTrajectory | null>(null);
+  // undefined = 아직 · null = 실패 · 값 = 받음 (예전엔 실패도 "불러오는 중"으로 영원히 남았다)
+  const [traj, setTraj] = useState<MacroTrajectory | null | undefined>(undefined);
   const [tabLoading, setTabLoading] = useState(false);
   // v2 lazy: CB 센티먼트(Indicators) + 그레인저 인과 그래프(Correlations)
   const [cbSent, setCbSent] = useState<CbSentiment | null | undefined>(undefined);
@@ -88,10 +111,12 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
   const [strips, setStrips] = useState<CycleStrips | null | undefined>(undefined);
   const [axisHist, setAxisHist] = useState<AxisHistory | null | undefined>(undefined);
   const [aStrips, setAStrips] = useState<AssetStrips | null | undefined>(undefined);
-  // krus(overview 기본탭)는 마운트 시 항상 발화하던 유일한 호출이라 useQuery로 캐시(다른
+  // krus(개요 기본탭)는 마운트 시 항상 발화하던 유일한 호출이라 useQuery로 캐시(다른
   // 서브탭 7종은 이미 탭 클릭 시에만 발화하는 지연로딩이라 그대로 유지).
-  const { data: krusData } = useQuery({ queryKey: ["macro", "compare-krus"], queryFn: () => analysisApi.compareKrUs() });
-  const krus = krusData ?? undefined;
+  // ★실패는 null★ — 예전엔 실패가 undefined 로 남아 "비교 계산 중…"이 영원히 보였다.
+  const krusQ = useQuery({ queryKey: ["macro", "compare-krus"], queryFn: () => analysisApi.compareKrUs() });
+  const krus = krusQ.isError ? null : krusQ.data;
+  const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
   useEffect(() => {
     if (tab === "indicators" && cbSent === undefined)
       analysisApi.cbSentiment().then(setCbSent).catch(() => setCbSent(null));
@@ -120,13 +145,12 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
     return () => { ok = false; };
   }, [tab, market]);
   useEffect(() => {
-    if (tab === "regime" && !traj) loadTrajectory().then(setTraj);
+    // 실패(null)는 자동으로 다시 묻지 않는다(되풀이 요청 방지) — 화면이 실패를 말한다.
+    if (tab === "regime" && traj === undefined) loadTrajectory().then(setTraj);
   }, [tab, traj]);
 
   const regime = core.regime;
   const quad = resolveQuadrant(regime);
-  const asOf = (core.dashboard?.as_of ?? regime?.timestamp ?? "").slice(0, 16).replace("T", " ");
-  const realData = !!(core.dashboard?.sources.fred || core.dashboard?.sources.bok || core.valuation?.sources.prices);
 
   // 시장 토글 → strategies/recommend 재로드 (us는 코어 캐시 사용)
   useEffect(() => {
@@ -153,35 +177,49 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
       setStratModal((m) => (m && m.sid === sid ? { ...m, detail: d, loading: false } : m)));
   }, [market]);
 
-  if (!regime) return <div className="mc-empty">매크로 데이터를 불러올 수 없어요. 백엔드 연결을 확인하세요.</div>;
+  // ── 답 한 문장 — 서버 국면을 옮긴 것뿐(새 판단 없음). 한국 = markets.kr(없으면 최상위 = 한국 축 모형). ──
+  const kr = regime.markets?.kr ?? regime;
+  const us = regime.markets?.us;
+  const sentence = us
+    ? `한국은 ‘${regimeName(kr.regime)}’, 미국은 ‘${regimeName(us.regime)}’ 쪽이에요`
+    : `한국은 ‘${regimeName(kr.regime)}’ 쪽이에요`;
+  const figures: Figure[] = [
+    { label: "한국", value: regimeFig(kr) },
+    { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면을 받지 못했어요" /> },
+    { label: "시장 스트레스", value: Number.isFinite(regime.stress_score) ? `${Math.round(regime.stress_score)}/100` : <Unknown reason="스트레스 값을 받지 못했어요" /> },
+    { label: "권장 단계", value: MODE_KO[regime.recommended_mode] ?? regime.recommended_mode },
+    ...(typeof regime.yield_inversion === "boolean" ? [{
+      label: "수익률 곡선",
+      value: regime.yield_inversion
+        ? `역전${regime.inversion_severity != null && Number.isFinite(regime.inversion_severity) ? ` ${Math.round(regime.inversion_severity)}bp` : ""}`
+        : "역전 아님",
+    }] : []),
+  ];
+  const at = when(regime.timestamp);
+  const chips: Chip[] = [
+    ...sourceChip({ data: cs.data, isError: cs.isError, isLoading: cs.isLoading }),
+    { label: "국면 확률은 축 모형 하나로 쟀어요", tone: "info" },
+    ...(at ? [{ label: at, tone: "plain" as const }] : []),
+  ];
+  const need = TAB_NEEDS[tab];
+  const mainFail = need?.main && (tab !== "strategies" && tab !== "recommend" || market === "kr") ? coreFail[need.main] : undefined;
 
   return (
-    <div className="mc">
-      {/* ── 상단 3분할 카드 — 도넛 중심 국면 요약 (정보 위계: 결론 먼저, 서브지표 톤다운) ── */}
-      <div className="mc-banner3">
-        <RegimeDonutCard label="KR 국면" state={regime.markets?.kr ?? regime} />
-        {regime.markets?.us && <RegimeDonutCard label="US 국면" state={regime.markets.us} />}
-        <StressModeCard state={regime} realData={realData} asOf={asOf} />
-      </div>
-
-      {/* ── 한줄 브리핑 + 스토리 앵커 (밸리AI '차례로 짚어보기' UX) ── */}
-      <div className="mc-brief">
-        <span className="mc-brief-txt">{buildBriefing(regime.markets?.kr ?? regime)}</span>
-        <span className="mc-brief-chips">
-          {([["성장·물가", "regime"], ["지표·CB톤", "indicators"], ["자산 밸류", "valuation"],
-             ["상관·인과", "correlations"], ["배분 추천", "recommend"]] as const).map(([lbl, t]) => (
-            <button key={t} className={`mc-brief-chip${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>{lbl} →</button>
-          ))}
-          {/* 현재 국면을 불변 스냅샷으로 고정해 AAS 로 — 휘발성 복사가 아니라 서버 ID 전달 */}
-          {onOpenInAAS && (
-            <button className="mc-brief-chip mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}
-              title="현재 국면 판정을 스냅샷으로 저장하고 Allocation Studio 에서 열어요">
-              {aasBusy ? "스냅샷 생성 중…" : "Allocation Studio에서 열기 →"}
+    <div className="mc tx-page tx-page--wide">
+      <header className="mc-head">
+        {/* 제목(PageHead "경제 흐름")은 레이아웃이 내비 위에 단다 — 여기서는 답부터. */}
+        <Answer sentence={sentence} figures={figures} chips={chips}
+          action={onOpenInAAS ? (<>
+            {/* 현재 국면을 불변 스냅샷으로 고정해 캔버스로 — 휘발성 복사가 아니라 서버 ID 전달 */}
+            <button type="button" className="tx-btn tx-btn--main mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}>
+              {aasBusy ? "스냅샷을 저장하는 중이에요…" : "포트폴리오 설계에 넣기"}
             </button>
-          )}
-        </span>
-      </div>
-      {aasError && <div className="mc-aas-err" role="alert">{aasError}</div>}
+            <span className="mc-head-note">지금 국면을 스냅샷으로 저장해 포트폴리오 설계의 국면 노드에 넣어요.</span>
+          </>) : undefined} />
+        {aasError && (
+          <Notice tone="danger" title="포트폴리오 설계로 넘기지 못했어요">{aasError}</Notice>
+        )}
+      </header>
 
       {/* ── 서브탭 ──
           ★Radix Tabs 를 썼다가 되돌렸다 — 실측 +11 kB★
@@ -191,7 +229,7 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
           없는 단순 수평 탭 바에서는 아래 30줄로 같은 것을 얻는다 — 11 kB 를 낼 이유가 없다.
           (계획서는 "손수 만들지 말라" 고 했지만 그 근거는 비용을 재기 전 판단이었다.)
           동작은 스펙(macro-tabs.spec.ts)이 지킨다 — 구현이 무엇이든 계약은 같다. */}
-      <div className="mc-tabs" role="tablist" aria-label="매크로 콕핏 섹션"
+      <div className="mc-tabs" role="tablist" aria-label="경제 흐름 보기"
         onKeyDown={(e) => {
           const i = TABS.findIndex((t) => t.id === tab);
           const to = e.key === "ArrowRight" ? (i + 1) % TABS.length
@@ -204,25 +242,30 @@ export default function MacroCockpit({ core, onTransplant, onOpenInAAS, aasBusy,
           // 포커스도 함께 옮긴다 — 선택만 바뀌고 포커스가 남으면 키보드 사용자는 길을 잃는다.
           (e.currentTarget.children[to] as HTMLElement | undefined)?.focus();
         }}>
-        {TABS.map((t) => { const I = t.icon; const on = tab === t.id; return (
-          <button key={t.id} className={`mc-tab${on ? " on" : ""}`} onClick={() => setTab(t.id)}
+        {TABS.map((t) => { const on = tab === t.id; return (
+          <button key={t.id} type="button" className={`mc-tab${on ? " on" : ""}`} onClick={() => setTab(t.id)}
             role="tab" id={`mc-tab-${t.id}`} aria-controls={`mc-panel-${t.id}`}
             aria-selected={on} tabIndex={on ? 0 : -1}>
-            <span className="mc-tab-n">{t.n}</span><I size={14} />{t.label}
+            {t.label}
           </button>
         ); })}
       </div>
 
       {/* 패널은 활성 탭만 마운트한다(기존 동작 그대로). */}
       <div role="tabpanel" id={`mc-panel-${tab}`} aria-labelledby={`mc-tab-${tab}`}>
-        {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} krus={krus} />}
+        {/* 주 데이터가 실패한 탭은 몸통 대신 실패를 말한다(빈 카드를 "데이터 없음"처럼 두지 않는다) · 보조 데이터 실패는 위에 알린다 */}
+        {mainFail && need?.main && <CoreFail k={need.main} retry={mainFail} />}
+        {!mainFail && (need?.also ?? []).filter((k) => coreFail[k]).map((k) => <CoreFail key={k} k={k} retry={coreFail[k]!} />)}
+        {mainFail ? null : <>
+        {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} krus={krus} onRetryKrus={() => { void krusQ.refetch(); }} />}
         {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} />}
-        {tab === "regime" && <RegimeTab regime={regime} traj={traj} strips={strips} axisHist={axisHist} />}
+        {tab === "regime" && <RegimeTab regime={regime} traj={traj} onRetryTraj={() => setTraj(undefined)} strips={strips} axisHist={axisHist} />}
         {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} />}
         {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
         {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
         {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
         {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} loading={tabLoading} />}
+        </>}
       </div>
 
       {drill && <DrillDownModal series={drill.series} loading={drill.loading} onClose={() => setDrill(null)} />}

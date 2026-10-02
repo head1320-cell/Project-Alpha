@@ -62,12 +62,14 @@ function usePrefetchers() {
       qc.prefetchQuery({ queryKey: ["screener", "factor-field-map"], queryFn: () => screenerApiAdvanced.factorFieldMap() });
       qc.prefetchQuery({ queryKey: ["screener", "universes"], queryFn: () => screenerApi.universes() });
     },
+    // ★매크로 키는 실패를 null 로 감싸지 않는다★ prefetchQuery 는 실패를 던지지 않고 캐시에 실패 상태로 둔다 — 화면이 마운트되면
+    // 다시 묻는다. 예전 `.catch(() => null)` 은 실패를 "성공 null" 로 하루 동안 캐시해 화면이 실패를 몰랐다(BU5a).
     "/macro": () => {
-      qc.prefetchQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
-      qc.prefetchQuery({ queryKey: ["macro", "dashboard"], queryFn: () => analysisApi.macroDashboard().catch(() => null) });
-      qc.prefetchQuery({ queryKey: ["macro", "valuation"], queryFn: () => analysisApi.macroValuation().catch(() => null) });
-      qc.prefetchQuery({ queryKey: ["macro", "strategies", "kr"], queryFn: () => analysisApi.macroStrategies("kr").catch(() => null) });
-      qc.prefetchQuery({ queryKey: ["macro", "recommend", "kr"], queryFn: () => analysisApi.macroRecommend("kr").catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime() });
+      qc.prefetchQuery({ queryKey: ["macro", "dashboard"], queryFn: () => analysisApi.macroDashboard() });
+      qc.prefetchQuery({ queryKey: ["macro", "valuation"], queryFn: () => analysisApi.macroValuation() });
+      qc.prefetchQuery({ queryKey: ["macro", "strategies", "kr"], queryFn: () => analysisApi.macroStrategies("kr") });
+      qc.prefetchQuery({ queryKey: ["macro", "recommend", "kr"], queryFn: () => analysisApi.macroRecommend("kr") });
     },
     "/insights": () => {
       // 페이지 기본 종목(005930)과 동일 — 다른 종목으로 들어오면 그 종목만 별도 요청됨(정상)
@@ -76,7 +78,7 @@ function usePrefetchers() {
     "/allocation": () => {
       // 게이트(목표 선택) 시드 소스 + 시나리오 카탈로그를 미리 워밍 → 목표 카드 즉시 시드
       qc.prefetchQuery({ queryKey: ["allocation", "stress-catalog"], queryFn: () => allocationApi.stressCatalog().catch(() => null) });
-      qc.prefetchQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime().catch(() => null) });
+      qc.prefetchQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime() });
       qc.prefetchQuery({ queryKey: ["screener", "sectors"], queryFn: () => backtestBridgeApi.sectors().catch(() => null) });
     },
   };

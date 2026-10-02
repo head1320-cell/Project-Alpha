@@ -15,14 +15,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** 라우트 슬러그는 서버의 `Studio.id` 와 **같다**(M1-M 이 그렇게 정했다). */
-export const STUDIO_NAV: { href: string; n: string; label: string }[] = [
-  { href: "/macro",              n: "00", label: "COCKPIT" },
-  { href: "/macro/tsfm-latent",  n: "01", label: "LATENT" },
-  { href: "/macro/neural-sde",   n: "02", label: "TERM" },
-  { href: "/macro/causal-deepm", n: "03", label: "CAUSAL" },
-  { href: "/macro/pinn-tail",    n: "04", label: "TAIL" },
-  { href: "/macro/agentic-mcp",  n: "05", label: "VIEWS" },
+/** 라우트 슬러그는 서버의 `Studio.id` 와 **같다**(M1-M 이 그렇게 정했다).
+ *  이름은 경로 머리(Breadcrumb)의 스튜디오 이름과 같은 말이다 — 한 화면을 두 이름으로 부르지 않는다.
+ *  번호를 달지 않는다(BU5a): 스튜디오는 순서가 아니라 서로 다른 도구다. */
+export const STUDIO_NAV: { href: string; label: string }[] = [
+  { href: "/macro",              label: "한눈에 보기" },
+  { href: "/macro/tsfm-latent",  label: "잠재 요인" },
+  { href: "/macro/neural-sde",   label: "기간 구조" },
+  { href: "/macro/causal-deepm", label: "인과 관계" },
+  { href: "/macro/pinn-tail",    label: "꼬리 위험" },
+  { href: "/macro/agentic-mcp",  label: "뷰 만들기" },
 ];
 
 export function StudioNav() {
@@ -35,7 +37,6 @@ export function StudioNav() {
           <Link key={s.href} href={s.href}
                 className={`ms-nav-item${on ? " on" : ""}`}
                 aria-current={on ? "page" : undefined}>
-            <b className="ms-nav-n num">{s.n}</b>
             <span className="ms-nav-l">{s.label}</span>
           </Link>
         );

@@ -45,7 +45,8 @@ export default function CompanyCockpit({ company, onPick, lazy }: { company: Com
   });
   const { data: regimeRaw } = useQuery({
     queryKey: ["macro", "regime"],
-    queryFn: () => macroApi.regime().catch(() => null),
+    // 실패를 null 로 감싸 캐시하지 않는다 — 같은 키를 쓰는 경제 흐름·홈이 실패를 성공 null 로 받게 된다(BU5a). 여기선 실패면 매크로 칸이 비는 것은 같다.
+    queryFn: () => macroApi.regime(),
   });
   const macro = regimeToMacroInfo(regimeRaw);
   const [network, setNetwork] = useState<NetworkInfo | undefined>();

@@ -4,6 +4,7 @@
 // (MacroCockpit.tsx에서 분리, props만 받는 표시 컴포넌트)
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { Notice } from "@/shared/ui/tx";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Activity, Target, Scale, Boxes, Sparkles,
@@ -27,18 +28,18 @@ import {
   CorrMatrix, RollingCorrChart, AvgCorrChart, ComponentBars, TimingHistory, TrendTable, RegimeTrajectory,
 } from "./analyticsParts";
 import {
-  CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable, buildBriefing,
-  RegimeDonutCard, StressModeCard,
+  CycleStripGrid, AxisStackChart, AssetStripGrid, KrUsCompareTable,
 } from "./visualParts";
 import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 01 Overview
 // ─────────────────────────────────────────────────────────────────────────────
-export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill, krus }: {
+export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDrill, krus, onRetryKrus }: {
   core: MacroCore; regime: NonNullable<MacroCore["regime"]>; quad: string; recommend: MacroRecommend | null;
   onTransplant: (sid: string, name: string) => void; onDrill: (id: string) => void;
-  krus?: KrUsCompare | null;
+  /** undefined = 아직 · null = 실패 · 값 = 받음 */
+  krus?: KrUsCompare | null; onRetryKrus?: () => void;
 }) {
   const yc = regime.yield_curve;
   const allInd = (core.dashboard?.themes ?? []).flatMap((t) => t.indicators);
@@ -53,8 +54,13 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
       {/* 국가경제 비교 (밸리AI '국가경제 분석'의 2국 정직 버전) */}
       <div className="mc-card span2">
         <div className="mc-card-h">국가경제 비교 — KR vs US <span className="mc-card-sub">동일 변환 z 나란히</span></div>
-        {krus === undefined && <div className="mc-empty-sm">비교 계산 중…</div>}
-        {krus === null && <div className="mc-empty-sm">비교 로드 실패</div>}
+        {krus === undefined && <div className="mc-empty-sm">한국·미국 비교를 계산하는 중이에요</div>}
+        {krus === null && (
+          <Notice tone="danger" title="한국·미국 비교를 불러오지 못했어요">
+            서버에 닿지 못했거나 계산이 실패했어요.
+            {onRetryKrus && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetryKrus}>다시 시도</button></div>}
+          </Notice>
+        )}
         {krus && <KrUsCompareTable data={krus} />}
         {krus && <p className="mc-card-note">{krus.note}</p>}
       </div>
@@ -165,8 +171,9 @@ export function IndicatorsTab({ core, onDrill, cbSent }: { core: MacroCore; onDr
 // ─────────────────────────────────────────────────────────────────────────────
 // 03 Regime
 // ─────────────────────────────────────────────────────────────────────────────
-export function RegimeTab({ regime, traj, strips, axisHist }: {
-  regime: NonNullable<MacroCore["regime"]>; traj: MacroTrajectory | null;
+export function RegimeTab({ regime, traj, onRetryTraj, strips, axisHist }: {
+  /** undefined = 아직 · null = 실패 · 값 = 받음 */
+  regime: NonNullable<MacroCore["regime"]>; traj: MacroTrajectory | null | undefined; onRetryTraj?: () => void;
   strips?: CycleStrips | null; axisHist?: AxisHistory | null;
 }) {
   const sc = Object.entries(regime.stress_components ?? {});
@@ -179,7 +186,15 @@ export function RegimeTab({ regime, traj, strips, axisHist }: {
     <div className="mc-grid">
       <div className="mc-card span2">
         <div className="mc-card-h">국면 궤적 — 최근 18개월 경로 <span className="mc-card-sub">성장×물가 테마-z</span></div>
-        {traj?.path?.length ? <RegimeTrajectory path={traj.path} /> : <div className="mc-empty-sm">궤적 불러오는 중…</div>}
+        {traj === undefined ? <div className="mc-empty-sm">궤적을 불러오는 중이에요</div>
+          : traj === null ? (
+            <Notice tone="danger" title="국면 궤적을 불러오지 못했어요">
+              서버에 닿지 못했거나 계산이 실패했어요.
+              {onRetryTraj && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetryTraj}>다시 시도</button></div>}
+            </Notice>
+          )
+          : traj.path?.length ? <RegimeTrajectory path={traj.path} />
+          : <div className="mc-empty-sm">궤적을 그릴 관측이 없어요</div>}
         {!!traj?.transitions?.length && (
           <div className="mca-transitions">
             {traj.transitions.map((tr, i) => (
