@@ -250,6 +250,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     await expect(metric).toContainText("—");
   });
 
+  // BU3 — kit 에 `kit-*` 클래스가 생겼지만(모습 전용) 계약은 여전히 role·태그 구조로 본다.
   test("kit 은 클래스가 없으므로 role·태그 구조로 검증한다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");   // 셸 마크업과 격리

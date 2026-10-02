@@ -1,13 +1,14 @@
 "use client";
 // 대상 경로: frontend/src/components/backtest/panels/UniversePanel.tsx
 //
-// 매매 대상(유니버스) 화면(중립). 포함 토글 + 시총군 + 업종(테마 그룹) + 관심그룹 + 실시간 종목 수.
+// ③ 어디서 고를까 — 매매 대상(유니버스, 중립 톤). 구성 방식 + 유동성 게이트 + 포함 토글 + 시총군 + 업종 + 관심그룹 + 실시간 종목 수.
+// BU3: 인라인 style 을 걷고 kit 절·`bte-*` 클래스로 그린다. 대상 수 요청(300ms)·상태 갱신은 그대로(요청 골든이 건다).
 // matched/totalUniverse 는 mock — 실제로는 시총군/업종/그룹 변경 시 스크리너 count API 로 재계산.
 
 import React from "react";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
-import { Segmented } from "@/shared/ui/kit";
+import { Field, Section, Segmented } from "@/shared/ui/kit";
 import { universeCount } from "@/entities/backtest/universeApi";
 import type { BacktestStrategy } from "@/entities/backtest/strategy";
 import { listWatchlists, createWatchlist, deleteWatchlist } from "@/shared/lib/watchlistStorage";
@@ -30,8 +31,6 @@ export const SECTOR_THEMES = [
   { id: "s16", label: "생활·정책" }, { id: "s17", label: "기타" },
 ];
 
-const R = "var(--bs-border-radius)";
-const RL = "var(--bs-border-radius-lg)";
 const toggle = (arr: string[], id: string) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
 
 export default function UniversePanel({ s, set, live = true }: {
@@ -97,155 +96,112 @@ export default function UniversePanel({ s, set, live = true }: {
   };
 
   return (
-    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 16 }}>
-
-      {/* header + live count */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 15 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 500, color: "var(--text-primary)" }}>매매 대상 설정</span>
-          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>유니버스·업종·관심그룹</span>
+    <div className="bte-col">
+      <Section title="매매 대상" hint="어떤 종목 안에서 고를지 정해요" tone="neutral" enabled>
+        <div className="bte-uni-count" aria-live="polite">
+          <span className="bte-sm">지금 고른 종목</span>
+          <b className={counting ? "is-counting" : undefined}>{u.matched.toLocaleString("ko-KR")}</b>
+          <span className="bte-sm">/ 전체 {u.totalUniverse.toLocaleString("ko-KR")}종목{counting ? " · 다시 세는 중이에요" : ""}</span>
         </div>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)", background: "var(--bg-section)", borderRadius: R, padding: "6px 11px" }}>
-          {counting && <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", opacity: 0.7 }} />}
-          매매 대상
-          <span style={{ fontFamily: "var(--bs-font-mono)", fontSize: 15, fontWeight: 500, color: "var(--text-primary)", opacity: counting ? 0.45 : 1, transition: "opacity .15s" }}>{u.matched.toLocaleString()}</span>
-          <span style={{ color: "var(--text-muted)" }}>/ {u.totalUniverse.toLocaleString()} 종목</span>
-        </span>
-      </div>
 
-      {/* 유니버스 구성 방식 — 생존편향 보정: 시작일 당시 실제 거래 종목(상장폐지 포함) 기준.
-          가장 근본적인 "후보 종목을 어떻게 정할지" 결정이라 아래 모든 세분화 필터보다 먼저. */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>유니버스 구성 방식</span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        {/* 유니버스 구성 방식 — 생존편향 보정: 시작일 당시 실제 거래 종목(상장폐지 포함) 기준.
+            가장 근본적인 "후보 종목을 어떻게 정할지" 결정이라 아래 모든 세분화 필터보다 먼저. */}
+        <Field label="고르는 방식" width={96}>
+          <Segmented tone="neutral" act="survivorship" value={u.survivorshipMode ?? "off"}
+            onChange={(t) => patch({ survivorshipMode: t as BacktestStrategy["universe"]["survivorshipMode"] })}
+            options={[
+              { id: "off", label: "직접 고르기(기본)" },
+              { id: "all", label: "전체(생존편향 보정)" },
+              { id: "top200", label: "TOP200(생존편향 보정)" },
+            ]} />
+          <p className="bte-note">
             {(u.survivorshipMode ?? "off") === "off"
-              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 사용"
-              : "시작일 당시 실제 거래 종목 기준(상장폐지 포함) — 아래 시총군·업종·ETF·관심그룹 선택은 적용되지 않아요"}
-          </span>
-        </div>
-        <Segmented tone="neutral" act="survivorship" value={u.survivorshipMode ?? "off"}
-          onChange={(t) => patch({ survivorshipMode: t as BacktestStrategy["universe"]["survivorshipMode"] })}
-          options={[
-            { id: "off", label: "직접 선택(기본)" },
-            { id: "all", label: "전체(생존편향 보정)" },
-            { id: "top200", label: "TOP200(생존편향 보정)" },
-          ]} />
-      </div>
+              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 써요."
+              : "시작일 당시 실제로 거래된 종목(상장폐지 포함)으로 골라요. 아래 시총군·업종·ETF·관심그룹 선택은 쓰지 않아요."}
+          </p>
+        </Field>
 
-      {/* 유동성 게이트 — 전종목이면 선택한 전 종목이 백테스트에 들어감(적자·소형 포함) */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>유동성 게이트</span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            {s.liquidityGate === "off" ? "전종목 — 선택 전부 백테스트(적자·소형 포함)"
-              : s.liquidityGate === "relaxed" ? "시총 ≥ 300억 · 거래대금 ≥ 3억"
-              : "시총 ≥ 1000억 · 거래대금 ≥ 10억"}
-          </span>
-        </div>
-        <Segmented tone="neutral" act="liq-gate" value={s.liquidityGate ?? "off"}
-          onChange={(t) => set((x) => ({ ...x, liquidityGate: t as BacktestStrategy["liquidityGate"] }))}
-          options={[{ id: "off", label: "전종목" }, { id: "relaxed", label: "완화" }, { id: "standard", label: "표준" }]} />
-      </div>
+        {/* 유동성 게이트 — 전종목이면 선택한 전 종목이 백테스트에 들어감(적자·소형 포함) */}
+        <Field label="유동성 게이트" width={96}>
+          <Segmented tone="neutral" act="liq-gate" value={s.liquidityGate ?? "off"}
+            onChange={(t) => set((x) => ({ ...x, liquidityGate: t as BacktestStrategy["liquidityGate"] }))}
+            options={[{ id: "off", label: "전종목" }, { id: "relaxed", label: "완화" }, { id: "standard", label: "표준" }]} />
+          <p className="bte-note">
+            {s.liquidityGate === "off" ? "고른 종목을 모두 넣어요(적자·소형 포함)."
+              : s.liquidityGate === "relaxed" ? "시가총액 300억 이상 · 하루 거래대금 3억 이상만 남겨요."
+              : "시가총액 1,000억 이상 · 하루 거래대금 10억 이상만 남겨요."}
+          </p>
+        </Field>
 
-      {/* ETF / 관리 / 감리 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+        {/* ETF / 관리 / 감리 */}
         {([["ETF", "etf"], ["관리종목", "managed"], ["감리종목", "supervised"]] as const).map(([label, key]) => (
-          <div key={key}>
-            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 5 }}>{label}</div>
+          <Field key={key} label={label} width={96}>
             <Segmented tone="neutral" value={u[key] ? "in" : "out"} onChange={(t) => patch({ [key]: t === "in" } as Partial<BacktestStrategy["universe"]>)}
-              options={[{ id: "out", label: "미포함" }, { id: "in", label: "포함" }]} />
-          </div>
+              options={[{ id: "out", label: "빼기" }, { id: "in", label: "넣기" }]} />
+          </Field>
         ))}
-      </div>
+      </Section>
 
-      {/* 시총군 */}
-      <SubHead label="주식 유니버스" onAll={() => patch({ caps: u.caps.length === CAPS.length ? [] : CAPS.map((c) => c.id) })} allOn={u.caps.length === CAPS.length} />
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-        {CAPS.map((c) => {
-          const on = u.caps.includes(c.id);
-          return (
-            <button key={c.id} type="button" data-act="cap" onClick={() => patch({ caps: toggle(u.caps, c.id) })}
-              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer", borderRadius: 14, padding: "5px 11px",
-                border: on ? "1px solid var(--border-strong)" : "1px solid var(--border)",
-                background: on ? "var(--bg-section)" : "var(--bg-card)", color: on ? "var(--text-primary)" : "var(--text-secondary)" }}>
-              {on && <Check size={12} style={{ color: "var(--text-secondary)" }} />}{c.label}
-            </button>
-          );
-        })}
-      </div>
+      <Section title="시총군" hint="여섯 무리 중 고르기" tone="neutral" enabled>
+        <SubHead label="고른 무리" onAll={() => patch({ caps: u.caps.length === CAPS.length ? [] : CAPS.map((c) => c.id) })} allOn={u.caps.length === CAPS.length} />
+        <div className="bte-pills">
+          {CAPS.map((c) => {
+            const on = u.caps.includes(c.id);
+            return (
+              <button key={c.id} type="button" data-act="cap" aria-pressed={on} className="bte-pill"
+                onClick={() => patch({ caps: toggle(u.caps, c.id) })}>
+                {on && <Check size={14} aria-hidden />}{c.label}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* 평가 종목 상한 — 전종목 선택 시 200으로 잘리던 문제의 사용자 제어.
-          기본 200 = 조건 추가 시에도 안전한 속도(수 초). 큰 값은 사용자가 명시적으로 선택했을
-          때만(수 분 소요 가능 — 미적재 종목은 시세 수집 필요) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>평가 종목 상한</span>
-        <select value={s.evalCap ?? 200} onChange={(e) => set((x) => ({ ...x, evalCap: Number(e.target.value) }))}
-          style={{ fontSize: 12, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }}>
-          <option value={200}>200 종목 (기본, 빠름)</option>
-          <option value={500}>500 종목</option>
-          <option value={1000}>1,000 종목</option>
-          <option value={2000}>2,000 종목</option>
-          <option value={4000}>전체 (제한 없음, 대형 유니버스는 수 분 소요될 수 있음)</option>
-        </select>
-        <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-          첫 실행은 미적재 종목 시세 수집으로 수 분 걸릴 수 있음(진행률 표시) — 이후 DB에서 즉시
-        </span>
-      </div>
+        {/* 평가 종목 상한 — 전종목 선택 시 200으로 잘리던 문제의 사용자 제어.
+            기본 200 = 조건 추가 시에도 안전한 속도(수 초). 큰 값은 사용자가 명시적으로 선택했을
+            때만(수 분 소요 가능 — 미적재 종목은 시세 수집 필요) */}
+        <Field label="평가 종목 상한" width={96}>
+          <select value={s.evalCap ?? 200} className="kit-select" aria-label="평가 종목 상한"
+            onChange={(e) => set((x) => ({ ...x, evalCap: Number(e.target.value) }))}>
+            <option value={200}>200종목 (기본, 빨라요)</option>
+            <option value={500}>500종목</option>
+            <option value={1000}>1,000종목</option>
+            <option value={2000}>2,000종목</option>
+            <option value={4000}>전체 (제한 없음 — 큰 유니버스는 몇 분 걸릴 수 있어요)</option>
+          </select>
+          <p className="bte-note">처음 실행은 적재되지 않은 종목의 시세를 모으느라 몇 분 걸릴 수 있어요(진행률을 보여 드려요). 그다음부터는 바로예요.</p>
+        </Field>
+      </Section>
 
       {/* 업종 (88) — 젠포트 17그룹 → 88 세부업종 트리 */}
-      <div style={{ marginBottom: 16 }}>
+      <Section title="업종" hint="17무리 · 88 세부 업종" tone="neutral" enabled>
         <ThemeTree selected={u.sectors} onChange={(next) => patch({ sectors: next })} />
-      </div>
+      </Section>
 
       {/* 관심그룹 (watchlistStorage 연동) */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>관심그룹 · 매수 대상/제외</span>
-        <button type="button" ref={triggerRef} onClick={() => setGroupModalOpen(true)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "4px 9px", cursor: "pointer" }}>
-          <Plus size={12} /> 그룹 추가
-        </button>
-      </div>
-      {u.groups.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>관심그룹이 없어요 — "그룹 추가"로 종목을 묶어보세요.</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {u.groups.map((g, i) => (
-            <div key={g.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--border)", borderRadius: R, padding: "8px 11px" }}>
-              <span style={{ fontSize: 13, color: "var(--text-primary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name} ({g.tickers.length})</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <Section title="관심그룹" hint="묶어 둔 종목을 넣거나 빼요" tone="neutral" enabled>
+        <div className="bte-row">
+          <button type="button" ref={triggerRef} className="tx-btn tx-btn--sub bte-group-add" onClick={() => setGroupModalOpen(true)}>
+            <Plus size={16} aria-hidden /> 그룹 추가
+          </button>
+        </div>
+        {u.groups.length === 0 ? (
+          <p className="bte-note">관심그룹이 없어요. ‘그룹 추가’로 종목을 묶어 보세요.</p>
+        ) : (
+          <ul className="bte-groups">
+            {u.groups.map((g, i) => (
+              <li key={g.id} className="bte-group">
+                <span className="bte-group-n">{g.name} <span className="bte-sm">{g.tickers.length}종목</span></span>
                 <Segmented tone={g.mode === "exclude" ? "sell" : "buy"} value={g.mode}
                   onChange={(mode) => patch({ groups: u.groups.map((x, j) => (j === i ? { ...x, mode } : x)) })}
-                  options={[{ id: "none", label: "선택 안 함" }, { id: "include", label: "대상" }, { id: "exclude", label: "제외" }]} />
-                <button type="button" aria-label="그룹 삭제" onClick={() => handleDeleteGroup(g.id)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", flexShrink: 0 }}><X size={14} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 선택 현황 요약 — 매매 대상 탭 하단 채움 + 빠른 확인 */}
-      <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px dashed var(--border-strong)" }}>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 9 }}>선택 현황</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-          {([
-            ["매매 대상", `${u.matched.toLocaleString()} / ${u.totalUniverse.toLocaleString()}`],
-            ["시총군", u.caps.length >= CAPS.length ? "전체" : `${u.caps.length} / ${CAPS.length}군`],
-            ["업종", u.sectors.filter((x) => x.startsWith("theme:")).length > 0
-              ? `${u.sectors.filter((x) => x.startsWith("theme:")).length} / 88개` : "전체"],
-            ["관심그룹", `${u.groups.filter((g) => g.mode !== "none").length}개 적용`],
-          ] as const).map(([label, val]) => (
-            <div key={label} style={{ border: "1px solid var(--border)", borderRadius: R, padding: "9px 10px" }}>
-              <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
-              <div style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{val}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-          매매 대상을 확정했으면 아래 <b>백테스트 실행</b>으로 진행하세요.
-        </div>
-      </div>
+                  options={[{ id: "none", label: "쓰지 않음" }, { id: "include", label: "대상" }, { id: "exclude", label: "제외" }]} />
+                <button type="button" aria-label={`${g.name} 그룹 삭제`} className="bte-icon-btn" onClick={() => handleDeleteGroup(g.id)}>
+                  <X size={16} aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
       <WatchGroupModal open={groupModalOpen} onClose={() => { setGroupModalOpen(false); // ★언마운트 뒤에 포커스를 준다★ 같은 틱에 주면 Radix 의 포커스 가드가 아직
         // 살아 있어 도로 가져간다 — 한 프레임 뒤에야 트리거가 실제로 포커스를 받는다.
@@ -256,11 +212,9 @@ export default function UniversePanel({ s, set, live = true }: {
 
 function SubHead({ label, allOn, onAll }: { label: string; allOn: boolean; onAll: () => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-      <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{label}</span>
-      <button type="button" onClick={onAll} style={{ fontSize: 11, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}>
-        <Check size={12} /> {allOn ? "전체 해제" : "전체 선택"}
-      </button>
+    <div className="bte-row">
+      <span className="bte-sub-h">{label}</span>
+      <button type="button" className="bte-link" onClick={onAll}>{allOn ? "모두 빼기" : "모두 고르기"}</button>
     </div>
   );
 }

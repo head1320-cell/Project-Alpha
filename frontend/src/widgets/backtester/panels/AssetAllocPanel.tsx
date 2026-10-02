@@ -6,7 +6,7 @@
 import React from "react";
 import { useState } from "react";
 import { X, Plus } from "lucide-react";
-import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "@/shared/ui/kit";
+import { Section, QuickStepper, Segmented, Field, GroupedSelect } from "@/shared/ui/kit";
 import OffsetInput from "./OffsetInput";
 import dynamic from "next/dynamic";
 // 기본이 '닫힘' 인 창 — Radix Dialog 무게를 /backtest 첫 로드에서 뺀다(실측 +20 kB).
@@ -15,11 +15,6 @@ import { FILL_PRICE_GROUPS_NO_EXPR } from "@/entities/backtest/fillPrice";
 import { ASSET_PRESETS, presetBasket } from "@/entities/backtest/assetPresets";
 import type { BacktestStrategy, AssetAllocState, BasketLeg } from "@/entities/backtest/strategy";
 
-const wbox: React.CSSProperties = {
-  fontFamily: "var(--bs-font-mono)", fontSize: 13, width: 64, textAlign: "center",
-  padding: "5px 8px", border: "1px solid var(--border-strong)",
-  borderRadius: "var(--bs-border-radius)", background: "var(--bg-card)", color: "var(--text-primary)",
-};
 
 export default function AssetAllocPanel({ s, set }: {
   s: BacktestStrategy; set: React.Dispatch<React.SetStateAction<BacktestStrategy>>;
@@ -54,80 +49,71 @@ export default function AssetAllocPanel({ s, set }: {
   };
 
   return (
-    <Section title="자산배분 옵션" hint="ETF 바스켓 · 주기 리밸런싱" tone="neutral"
+    <Section title="ETF로 나눠 담기" hint="ETF 바스켓을 주식 전략과 함께 · 정한 주기마다 다시 맞춰요(자산배분)" tone="neutral"
       enabled={a.enabled} onToggle={(on) => patch({ enabled: on })}>
-      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-        전체 포트폴리오 자산의 일정 비율을 ETF로 상시 보유하도록 설정해요. 잔여는 현금.
-      </div>
+      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 늘 들고 있어요. 남는 비율은 현금이에요.</p>
 
-      <Field label="자산 배분 비중">
-        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>ETF</span>
+      <Field label="나누는 비율">
+        <span className="bte-sm">ETF</span>
         <QuickStepper value={a.etfPct} onChange={(v) => patch({ etfPct: v })} chips={[5, 10, 30]} unit="%" min={0} max={100} />
-        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>주식</span>
+        <span className="bte-sm">주식</span>
         <QuickStepper value={a.stockPct} onChange={(v) => patch({ stockPct: v })} chips={[30, 60]} unit="%" min={0} max={100} />
-        <span style={{ fontSize: 11, color: cashPct < 0 ? "var(--hx-t-dc2626)" : "var(--text-muted)" }}>
+        <span className={`bte-note${a.etfPct + a.stockPct > 100 ? " bte-note--bad" : ""}`}>
           현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘어요" : ""}
         </span>
       </Field>
 
-      <Field label="리밸런싱 주기">
+      <Field label="다시 맞추는 주기">
         <Segmented value={String(a.rebalanceMonths)} onChange={(v) => patch({ rebalanceMonths: Number(v) })}
           options={[{ id: "1", label: "1개월" }, { id: "3", label: "3개월" }, { id: "6", label: "6개월" }, { id: "12", label: "12개월" }]} />
       </Field>
 
-      <Field label="ETF 매수 기준">
+      <Field label="ETF 사는 가격">
         <GroupedSelect value={a.fillType} onChange={(id) => patch({ fillType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
         <OffsetInput value={a.offsetPct} onChange={(offsetPct) => patch({ offsetPct })} />
       </Field>
 
       {/* 자산군 프리셋 */}
-      <Field label="자산군 선택">
+      <Field label="자산군">
         <Segmented value={a.preset} onChange={(id) => applyPreset(id as AssetAllocState["preset"])}
           options={ASSET_PRESETS.map((p) => ({ id: p.id, label: p.label }))} />
       </Field>
 
       {/* 바스켓 표 */}
-      <div style={{ border: "1px solid var(--border)", borderRadius: "var(--bs-border-radius)", overflow: "hidden", marginTop: 4 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "76px 1fr 84px 32px", gap: 6, padding: "7px 10px", fontSize: 11, color: "var(--text-secondary)", background: "var(--bg-section)" }}>
-          <span>종목코드</span><span>종목명</span><span style={{ textAlign: "right" }}>배분</span><span />
+      <div className="bte-basket" role="table" aria-label="ETF 바스켓">
+        <div className="bte-basket-row bte-basket-h" role="row">
+          <span role="columnheader">종목코드</span><span role="columnheader">종목명</span><span role="columnheader" className="num">비중</span><span />
         </div>
         {a.basket.length === 0 ? (
-          <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "10px 10px" }}>
-            자산군이 없어요 — 프리셋을 선택하거나 "자산군 추가"로 ETF를 담으세요.
-          </div>
+          <p className="bte-note bte-basket-empty">담은 ETF가 없어요. 자산군을 고르거나 ‘자산군 추가’로 ETF를 담아요.</p>
         ) : a.basket.map((l, i) => (
-          <div key={l.ticker} style={{ display: "grid", gridTemplateColumns: "76px 1fr 84px 32px", gap: 6, padding: "7px 10px", alignItems: "center", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-            <span style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, color: "var(--text-secondary)" }}>{l.ticker}</span>
-            <span style={{ color: "var(--text-primary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name || "—"}</span>
-            <input type="number" value={l.weightPct} min={0} max={100}
-              onChange={(e) => setWeight(i, Number(e.target.value) || 0)} style={{ ...wbox, width: 70, justifySelf: "end" }} />
-            <button type="button" aria-label="제거" onClick={() => removeLeg(i)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", justifySelf: "center" }}><X size={14} /></button>
+          <div key={l.ticker} className="bte-basket-row" role="row">
+            <span className="scr-code" role="cell">{l.ticker}</span>
+            <span className="bte-basket-n" role="cell">{l.name || "몰라요"}</span>
+            <span role="cell" className="num">
+              <input type="number" value={l.weightPct} min={0} max={100} className="kit-num kit-num--sm" aria-label={`${l.name || l.ticker} 비중 %`}
+                onChange={(e) => setWeight(i, Number(e.target.value) || 0)} />
+            </span>
+            <button type="button" className="bte-icon-btn" aria-label={`${l.name || l.ticker} 빼기`} onClick={() => removeLeg(i)}><X size={16} aria-hidden /></button>
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 7 }}>
-        <button type="button" ref={triggerRef} onClick={() => setModalOpen(true)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", padding: "5px 10px", cursor: "pointer" }}>
-          <Plus size={13} /> 자산군 추가
+      <div className="bte-row">
+        <button type="button" ref={triggerRef} className="tx-btn tx-btn--sub bte-group-add" onClick={() => setModalOpen(true)}>
+          <Plus size={16} aria-hidden /> 자산군 추가
         </button>
         {a.basket.length > 0 && (
-          <button type="button" onClick={equalize}
-            style={{ fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", padding: "5px 10px", cursor: "pointer" }}>
-            균등 배분
-          </button>
+          <button type="button" className="kit-chip" onClick={equalize}>똑같이 나누기</button>
         )}
-        <span style={{ fontSize: 11, color: wsum !== 100 ? "var(--hx-t-d97706)" : "var(--text-muted)" }}>
-          배분 합 {wsum}%{wsum !== 100 ? " — 100%로 맞춰주세요 (실행 시 정규화)" : ""}
+        <span className={`bte-note${wsum !== 100 ? " bte-note--warn" : ""}`}>
+          비중 합 {wsum}%{wsum !== 100 ? " — 실행할 때 100%로 맞춰 계산해요" : ""}
         </span>
       </div>
 
-      <div style={{ fontSize: 11, color: "var(--hx-t-d97706)", marginTop: 9, lineHeight: 1.6 }}>
-        ⚠ ETF 사전 교육 의무 안내 — 레버리지/인버스 ETF 투자를 위해서는 기본 예탁금 충족 및 사전 교육 이수가 필요해요 (백테스트는 무관, 실거래 시 유의).
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-        ETF 슬리브는 주식 전략과 별도 보유 · 매수 기준가 미도달분은 다음 주기 재시도 (보수적)
-      </div>
+      <p className="bte-note bte-note--warn">
+        레버리지·인버스 ETF를 실제로 사려면 기본 예탁금과 사전 교육이 필요해요. 백테스트에는 상관없어요.
+      </p>
+      <p className="bte-note">ETF 몫은 주식 전략과 따로 들고 있어요. 매수 기준가에 닿지 못한 몫은 다음 주기에 다시 시도해요(보수적).</p>
 
       <WatchGroupModal open={modalOpen} etfOnly title="자산군 그룹 관리"
         onClose={() => { setModalOpen(false); // ★언마운트 뒤에 포커스를 준다★ 같은 틱에 주면 Radix 의 포커스 가드가 아직

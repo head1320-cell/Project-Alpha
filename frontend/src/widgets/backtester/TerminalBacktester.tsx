@@ -1,42 +1,57 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { backtestRunApi } from "@/entities/backtest-run/api";
-import { type BacktestStatistics, type BacktestTrade, type MonthlyReturn, type ScreenToBacktestResult, type SymbolPerf } from "@/entities/backtest/bridgeModel";
-import type { FilterGroupNode } from "@/shared/model/domain";
 import { getScreenerHandoff, clearScreenerHandoff, type ScreenerStrategyHandoff } from "@/shared/lib/screenerHandoff";
 import { getMacroHandoff, clearMacroHandoff, type MacroBacktestHandoff } from "@/entities/macro/handoff";
-import type { StrategyBacktestConfig } from "@/entities/macro/analysisModel";
-import type { Condition } from "./ConditionFormulaEditor";
-import { exportTradesCsv, exportSummaryCsv } from "@/shared/lib/strategyStorage";
 import {
   listSavedStrategies, saveBacktestStrategy, deleteSavedStrategy,
   mergeStrategy, type SavedBacktestStrategy,
 } from "@/entities/backtest/strategyLibrary";
+import type { BacktestStrategy } from "@/entities/backtest/strategy";
+import { Notice, PageHead } from "@/shared/ui/tx";
 import BuyConditionPanel from "./panels/BuyConditionPanel";
 import SellConditionPanel from "./panels/SellConditionPanel";
-import UniversePanel, { CAPS } from "./panels/UniversePanel";
-import ConditionSummary from "./panels/ConditionSummary";
-import type { BacktestStrategy, SummaryTab } from "@/entities/backtest/strategy";
-import {
-  applyMacroConfig, capsToUniverse, emptyFilter, initialStrategy, strategyToRun, today, yearsAgo,
-} from "./strategyModel";
-import {
-  BacktestProgress, DrawdownChart, EquityChart, MetricsTearsheet, MonthlyHeatmap, SymbolPerfTable,
-} from "./TerminalBacktester.ui";
+import UniversePanel from "./panels/UniversePanel";
+import CapitalPanel from "./panels/CapitalPanel";
+import ConditionSummary, { stepGroups, type StepId } from "./panels/ConditionSummary";
+import { applyMacroConfig, initialStrategy, strategyToRun } from "./strategyModel";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TerminalBacktester — Variant "Strategy Performance Engine" 스타일
-//   실제 run_backtest (screen-to-backtest 브릿지) 사용. 대형주 유니버스 자동 선정.
+// 백테스트 편집기 (BU3 · ADR-003) — 설계 순서 넷 → 고른 단계만 펼침 → 오른쪽 요약 · 실행 하나
+//   · ★요청은 한 바이트도 바꾸지 않는다★ 전략 모델·`strategyToRun`·기본값 그대로 — `e2e/backtest-requests.spec.ts` 골든이 건다.
+//     바뀐 것은 자리(돈·기간·비용을 매수에서 ④ 로)와 그리기뿐.
+//   · 실행하면 진행 화면(`/backtest/runs/{id}/loading`)으로 간다 — 이 화면 아래에 결과를 그리지 않는다. 옛 "결과가 여기에
+//     표시돼요" 자리는 결과가 한 번도 뜬 적 없는 거짓 약속이라 지웠다(BU3).
+//   · 실행 실패는 alert(무엇·어떻게) + 원문은 "자세히". 번호(1~4)는 참인 순서라서 쓴다.
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const STEPS: Array<{ id: StepId; name: string }> = [
+  { id: "buy", name: "무엇을 살까" },
+  { id: "sell", name: "언제 팔까" },
+  { id: "universe", name: "어디서 고를까" },
+  { id: "capital", name: "돈·기간·비용" },
+];
+
+/** 단계 머리의 "지금" 줄 — 사용자가 넣은 설정을 되읽는다(판단이 아니다). 오른쪽 요약과 같은 `stepGroups` 한 곳에서 꺼낸다. */
+const NOW_ROWS: Record<StepId, Array<[group: string, row: string]>> = {
+  buy: [["매수 조건", "조건식"], ["매수 조건", "우선순위"], ["매수 비중", "최대 보유"], ["매수 비중", "방식"]],
+  sell: [["목표가 / 손절가", "목표가"], ["목표가 / 손절가", "손절가"], ["조건 매도", "조건식"]],
+  universe: [["매매 대상 종목", "선택한 매매 대상"], ["유니버스", "시총군"], ["업종 선택", "포함 업종 수"]],
+  capital: [["포트 기본", "투자금"], ["포트 기본", "기간"], ["포트 기본", "수수료"], ["포트 기본", "리밸런싱"]],
+};
+function nowRows(s: BacktestStrategy, step: StepId) {
+  const groups = stepGroups(s, step);
+  return NOW_ROWS[step].map(([g, r]) => groups.find((x) => x.label === g)?.rows.find((y) => y.label === r))
+    .filter((x): x is NonNullable<typeof x> => !!x);
+}
 
 export default function TerminalBacktester() {
   const [s, setS] = useState<BacktestStrategy>(initialStrategy);
-  const [tab, setTab] = useState<SummaryTab>("buy");
-  const [result, setResult] = useState<ScreenToBacktestResult | null>(null);
+  const [step, setStep] = useState<StepId>("buy");
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState<{ phase: string; done?: number; total?: number; count?: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<ScreenerStrategyHandoff | null>(null);
   const [macroHandoff, setMacroHandoffState] = useState<MacroBacktestHandoff | null>(null);
@@ -58,12 +73,12 @@ export default function TerminalBacktester() {
   const handleSaveStrategy = () => {
     saveBacktestStrategy(s);
     setSaved(listSavedStrategies());
-    setSaveMsg(`'${s.name || "내 전략"}' 저장됨 — 새로고침·재방문 후에도 유지돼요`);
+    setSaveMsg(`‘${s.name || "내 전략"}’을 저장했어요 — 새로고침해도 남아요`);
     setTimeout(() => setSaveMsg(null), 4000);
   };
   const handleLoadStrategy = (item: SavedBacktestStrategy) => {
     setS(mergeStrategy(initialStrategy(), item.strategy));
-    setSaveMsg(`'${item.name}' 불러옴`);
+    setSaveMsg(`‘${item.name}’을 불러왔어요`);
     setTimeout(() => setSaveMsg(null), 3000);
   };
   const handleDeleteStrategy = (id: string) => {
@@ -72,10 +87,9 @@ export default function TerminalBacktester() {
   };
 
   const router = useRouter();
-  // Backtest 클릭 → durable BacktestRun 생성 → 전용 로딩 페이지로 이동(결과는 고정 URL에서).
-  // 설정 폼 아래에 결과를 렌더하지 않는다(스펙). 유효 run_id 확보 전엔 이동하지 않는다.
+  // 실행 → durable BacktestRun 생성 → 진행 화면으로 이동(결과는 고정 URL 에서). 유효 run_id 를 받기 전엔 옮겨 가지 않는다.
   const run = async () => {
-    setLoading(true); setErr(null); setResult(null); setProgress(null);
+    setLoading(true); setErr(null);
     try {
       const config = strategyToRun(s, handoff, macroHandoff?.config ?? null) as unknown as Record<string, unknown>;
       const stratName = String(config.strategy_name ?? handoff?.conditionSummary?.[0] ?? "백테스트").slice(0, 100);
@@ -87,345 +101,120 @@ export default function TerminalBacktester() {
     }
   };
 
-  const st = result?.backtest?.statistics;
-  const fmt = (v: number | undefined, suffix = "", digits = 1) =>
-    v === undefined ? "—" : `${v >= 0 && suffix === "%" ? "+" : ""}${v.toFixed(digits)}${suffix}`;
-  const posColor = (v: number | undefined) => ((v ?? 0) >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)");
+  const macroCfg = macroHandoff?.config;
+  const macroMode = macroCfg?.mode === "conditions" ? "조건식(고칠 수 있어요)"
+    : macroCfg?.mode === "asset_alloc" ? "ETF 자산배분" : "동적 엔진(최적화형)";
 
   return (
-    <div className="tpage-fade bt2">
-      {/* 스크리너 전략 전달 배너 */}
+    <div className="tpage-fade tx-page tx-page--wide bte">
+      <PageHead title="백테스트" lede="전략을 지난 데이터로 돌려 봐요. 순서대로 정하고 실행해요." />
+
       {handoff && (
-        <div className="tscreener-handoff">
-          <div className="tscreener-handoff-main">
-            <span className="tscreener-handoff-badge">스크리너 전략</span>
-            <span className="tscreener-handoff-text">
-              {handoff.conditionSummary.length}개 조건으로 검색된 종목에 백테스트
-              {handoff.resultCount > 0 && <span className="tscreener-handoff-count"> · {handoff.resultCount}종목 매칭</span>}
-            </span>
-            <div className="tscreener-handoff-conds">
-              {handoff.conditionSummary.map((c, i) => (
-                <span key={i} className="tscreener-handoff-cond">{c}</span>
-              ))}
+        <div className="bte-handoff tscreener-handoff">
+          <Notice tone="warn" title={`종목 찾기에서 넘어온 조건 ${handoff.conditionSummary.length}개로 종목을 골라요`}>
+            {handoff.resultCount > 0 ? `넘어올 때 ${handoff.resultCount.toLocaleString("ko-KR")}종목이 맞았어요.` : null}
+            <ul className="tx-chips" aria-label="넘어온 조건">
+              {handoff.conditionSummary.map((c, i) => <li key={i} className="tx-chip" data-tone="plain">{c}</li>)}
+            </ul>
+            <div className="scr-retry">
+              <button type="button" className="tx-btn tx-btn--sub tscreener-handoff-clear"
+                onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>넘어온 조건 지우기</button>
             </div>
-          </div>
-          <button className="tscreener-handoff-clear" onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>
-            ✕ 해제
-          </button>
+          </Notice>
         </div>
       )}
 
-      {/* 매크로 전략 백테스트 이식 배너 (mode별) */}
-      {macroHandoff && (() => {
-        const cfg = macroHandoff.config;
-        const modeLabel = cfg.mode === "conditions" ? "조건식 (편집 가능)"
-          : cfg.mode === "asset_alloc" ? "ETF 자산배분" : "동적 엔진 (최적화형)";
-        const uni = cfg.universe_codes?.length ?? cfg.basket?.length ?? 0;
-        return (
-          <div className="tscreener-handoff" style={{ borderColor: "var(--t-accent)" }}>
-            <div className="tscreener-handoff-main">
-              <span className="tscreener-handoff-badge" style={{ background: "var(--t-accent)" }}>매크로 전략</span>
-              <span className="tscreener-handoff-text">
-                {cfg.name} · {modeLabel} · {uni}종 → RUN으로 백테스트
-              </span>
-              <div className="tscreener-handoff-conds">
-                {cfg.mode === "conditions" && (cfg.buy_conditions || []).map((c, i) => (
-                  <span key={i} className="tscreener-handoff-cond">{c.expr} ≥ {c.rhs ?? 0}</span>
-                ))}
-                {cfg.mode === "asset_alloc" && (cfg.basket || []).map((b, i) => (
-                  <span key={i} className="tscreener-handoff-cond">{b.name} {b.weight_pct}%</span>
-                ))}
-                {cfg.mode === "engine" && <span className="tscreener-handoff-cond">{cfg.note}</span>}
-              </div>
+      {macroCfg && (
+        <div className="bte-handoff tscreener-handoff">
+          <Notice tone="warn" title={`경제 흐름에서 넘어온 전략 ‘${macroCfg.name}’ · ${macroMode}`}>
+            {`${macroCfg.universe_codes?.length ?? macroCfg.basket?.length ?? 0}종목으로 실행해요.`}
+            <ul className="tx-chips" aria-label="넘어온 설정">
+              {macroCfg.mode === "conditions" && (macroCfg.buy_conditions || []).map((c, i) => (
+                <li key={i} className="tx-chip" data-tone="plain">{c.expr} ≥ {c.rhs ?? 0}</li>))}
+              {macroCfg.mode === "asset_alloc" && (macroCfg.basket || []).map((b, i) => (
+                <li key={i} className="tx-chip" data-tone="plain">{b.name} {b.weight_pct}%</li>))}
+              {macroCfg.mode === "engine" && <li className="tx-chip" data-tone="plain">{macroCfg.note}</li>}
+            </ul>
+            <div className="scr-retry">
+              <button type="button" className="tx-btn tx-btn--sub tscreener-handoff-clear"
+                onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>넘어온 전략 지우기</button>
             </div>
-            <button className="tscreener-handoff-clear" onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>
-              ✕ 해제
-            </button>
-          </div>
-        );
-      })()}
+          </Notice>
+        </div>
+      )}
 
-      {/* 편집 영역(좌) + 조건 요약·액션(우) — 젠포트식 2컬럼 */}
-      <div className="tbt-config-row">
-        <div className="tbt-config-main">
-          {/* 매수 / 매도 / 매매 대상 탭 */}
-          <div className="tbt-mode-switch">
-            <button data-act="step-buy" className={`tbt-mode${tab === "buy" ? " active" : ""}`} onClick={() => setTab("buy")}>
-              <span className="tbt-mode-num">01</span>
-              매수 조건
-              <span className="tbt-mode-sub">Buy</span>
-            </button>
-            <button data-act="step-sell" className={`tbt-mode${tab === "sell" ? " active" : ""}`} onClick={() => setTab("sell")}>
-              <span className="tbt-mode-num">02</span>
-              매도 조건
-              <span className="tbt-mode-sub">Sell</span>
-            </button>
-            <button data-act="step-universe" className={`tbt-mode${tab === "universe" ? " active" : ""}`} onClick={() => setTab("universe")}>
-              <span className="tbt-mode-num">03</span>
-              매매 대상
-              <span className="tbt-mode-sub">Universe</span>
-            </button>
-          </div>
-
-          {/* 조건 설정 패널 */}
-          <div style={{ marginTop: 16 }}>
-            {tab === "buy" && <BuyConditionPanel s={s} set={setS} />}
-            {tab === "sell" && <SellConditionPanel s={s} set={setS} />}
-            {tab === "universe" && <UniversePanel s={s} set={setS} />}
-          </div>
+      <div className="tbt-config-row bte-grid">
+        <div className="tbt-config-main bte-steps">
+          {STEPS.map((st, i) => {
+            const open = step === st.id;
+            return (
+              <section key={st.id} className="bte-step" data-step={st.id}>
+                <button type="button" data-act={`step-${st.id}`} aria-expanded={open} aria-controls={`bte-body-${st.id}`}
+                  className={`tbt-mode${open ? " active" : ""}`} onClick={() => setStep(st.id)}>
+                  <span className="bte-step-n">{i + 1}</span>
+                  <span className="bte-step-main">
+                    <span className="bte-step-t">{st.name}</span>
+                    <span className="bte-step-now">
+                      {nowRows(s, st.id).map((r) => <span key={r.label}><b>{r.label}</b>{r.value}</span>)}
+                    </span>
+                  </span>
+                  <ChevronDown className="bte-step-go" size={20} aria-hidden />
+                </button>
+                {open && (
+                  <div className="bte-step-body" id={`bte-body-${st.id}`}>
+                    {st.id === "buy" && <BuyConditionPanel s={s} set={setS} />}
+                    {st.id === "sell" && <SellConditionPanel s={s} set={setS} />}
+                    {st.id === "universe" && <UniversePanel s={s} set={setS} />}
+                    {st.id === "capital" && <CapitalPanel s={s} set={setS} />}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
 
-        {/* 우측 컬럼: 조건 요약(스크롤) + 액션 박스(하단 고정) */}
-        <div className="tbt-right-col">
-          <ConditionSummary s={s} activeTab={tab} onTabChange={setTab} />
+        <aside className="tbt-right-col bte-side" aria-label="요약과 실행">
+          <div className="tbt-action-box bte-act">
+            <button type="button" onClick={run} disabled={loading} data-act="run" className="tbt-run tx-btn tx-btn--main">
+              {loading ? "실행을 시작하는 중이에요" : "백테스트 실행"}
+            </button>
+            <p className="bte-run-note">실행하면 진행 화면으로 옮겨 가요. 결과는 그 화면에서 볼 수 있어요.</p>
+            {err && (
+              <Notice tone="danger" title="실행을 시작하지 못했어요">
+                설정은 그대로예요. 잠시 뒤 다시 실행해 주세요.
+                <details className="scr-err-detail"><summary>자세히</summary><code>{err}</code></details>
+              </Notice>
+            )}
 
-          {/* 액션 박스 — 전략 저장 + 백테스트 실행 (현재 설정 그대로 동작) */}
-          <div className="tbt-action-box">
-            <div className="tbt-action-row">
-              <input value={s.name} onChange={(e) => setS((x) => ({ ...x, name: e.target.value }))}
-                placeholder="전략 이름" className="tbt-action-name" data-act="strategy-name" />
-              <button type="button" onClick={handleSaveStrategy} data-act="save" className="tbt-action-save"
-                title="현재 설정을 브라우저에 저장 (새로고침·재방문 후에도 유지)">
-                전략 저장
+            <div className="bte-save">
+              <input value={s.name} onChange={(e) => setS((x) => ({ ...x, name: e.target.value }))} aria-label="전략 이름"
+                placeholder="전략 이름" className="tbt-action-name bte-input" data-act="strategy-name" />
+              <button type="button" onClick={handleSaveStrategy} data-act="save" className="tbt-action-save tx-btn tx-btn--sub">
+                저장
               </button>
             </div>
-            <button type="button" onClick={run} disabled={loading} data-act="run" className="tbt-run" style={{ width: "100%" }}>
-              {loading ? "백테스트 실행 중..." : "백테스트 실행"}
-            </button>
-            {saveMsg && <div className="tbt-action-msg">{saveMsg}</div>}
-            {loading && (
-              <div style={{ fontFamily: "var(--t-mono)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                과거 시세 로드 + 전략 시뮬레이션 중... 최대 ~15초.
-              </div>
-            )}
+            {saveMsg && <p className="tbt-action-msg bte-msg" role="status">{saveMsg}</p>}
 
-            {/* 저장된 전략 — 불러오기/삭제 (영속) */}
             {saved.length > 0 && (
-              <div className="tbt-saved-list">
-                <div className="tbt-saved-head">저장된 전략 {saved.length}</div>
-                {saved.map((item) => (
-                  <div key={item.id} className="tbt-saved-item">
-                    <button type="button" data-act="load" className="tbt-saved-load"
-                      title={`불러오기 · ${new Date(item.savedAt).toLocaleString()}`}
-                      onClick={() => handleLoadStrategy(item)}>
-                      {item.name}
-                    </button>
-                    <button type="button" aria-label="삭제" className="tbt-saved-del"
-                      onClick={() => handleDeleteStrategy(item.id)}>✕</button>
-                  </div>
-                ))}
-              </div>
+              <>
+                <p className="bte-saved-h">저장한 전략 {saved.length}개</p>
+                <ul className="tbt-saved-list bte-saved">
+                  {saved.map((item) => (
+                    <li key={item.id} className="tbt-saved-item">
+                      <button type="button" data-act="load" className="tbt-saved-load"
+                        aria-label={`${item.name} 불러오기`} onClick={() => handleLoadStrategy(item)}>{item.name}</button>
+                      <button type="button" aria-label={`${item.name} 지우기`} className="tbt-saved-del"
+                        onClick={() => handleDeleteStrategy(item.id)}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
-        </div>
+
+          <ConditionSummary s={s} step={step} />
+        </aside>
       </div>
-
-        {/* 분석 뷰포트 */}
-        <div className="tbt-viewport">
-          {err && (
-            <div className="tbt-empty" style={{ color: "var(--hx-t-dc2626)" }}>
-              <div>
-                <div style={{ fontFamily: "var(--t-mono)", fontSize: 11, marginBottom: 8 }}>[ ERROR ]</div>
-                {err}
-              </div>
-            </div>
-          )}
-
-          {!result && !err && !loading && (
-            <div className="tbt-empty">
-              <div className="bt-empty-glyph" aria-hidden="true">
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 22h22" />
-                  <path d="M4 22V13l5 4 5-8 5 6 3-9" />
-                </svg>
-              </div>
-              <div className="bt-empty-kbd">[ AWAITING_SIMULATION ]</div>
-              <div className="bt-empty-title">전략을 실행할 준비가 되었어요</div>
-              <div className="bt-empty-sub">
-                좌측에서 매수·매도 조건과 매매 대상을 설정한 뒤 우측의 <b>백테스트 실행</b>을 누르면
-                자산곡선·성과지표·거래내역이 여기에 표시돼요.
-              </div>
-            </div>
-          )}
-
-          {loading && (
-            <div className="animate-fade-in">
-              <div className="tbt-progress-head">
-                <span className="tbt-spinner" />
-                <span className="tbt-progress-label">SIMULATION RUNNING</span>
-              </div>
-              <BacktestProgress progress={progress} />
-              {/* 결과 스켈레톤 미리보기 */}
-              <div className="tbt-skeleton-stats">
-                {[...Array(6)].map((_, i) => (
-                  <div className="tbt-skeleton-card" key={i} style={{ animationDelay: `${i * 0.08}s` }}>
-                    <div className="tbt-skeleton-line short" />
-                    <div className="tbt-skeleton-line" />
-                  </div>
-                ))}
-              </div>
-              <div className="tbt-skeleton-chart" />
-            </div>
-          )}
-
-          {result && st && (
-            <div className="animate-fade-in">
-              {/* 데이터 출처 배너 (Phase ① 실데이터 준비) */}
-              <div className={`tbt-prov ${result.data_source.fully_real ? "real" : "mock"}`}>
-                <span className="tbt-prov-dot" />
-                <span className="tbt-prov-main">
-                  {result.data_source.fully_real ? "실데이터 백테스트" : "Mock 데이터 백테스트"}
-                </span>
-                <span className="tbt-prov-detail">
-                  시세 <b className={result.data_source.market_data === "kis_real" ? "on" : ""}>{result.data_source.market_data === "kis_real" ? "KIS 실데이터" : "mock"}</b>
-                  <span className="tbt-prov-sep">·</span>
-                  재무 <b className={result.data_source.fundamentals === "dart_real" ? "on" : ""}>{result.data_source.fundamentals === "dart_real" ? "DART 실데이터" : "mock"}</b>
-                </span>
-                {!result.data_source.fully_real && (
-                  <span className="tbt-prov-note">결과는 합성 데이터 기준 — 실데이터는 GCP 배포 시</span>
-                )}
-              </div>
-              {/* CSV 내보내기 툴바 (Phase 5-B) */}
-              <div className="tbt-export-bar">
-                <span className="tbt-export-label">내보내기</span>
-                <button className="tbt-export-btn" onClick={() => exportTradesCsv((result.backtest.round_trips || result.backtest.trades || []) as unknown as Array<Record<string, unknown>>, s.name)}>
-                  거래내역 CSV
-                </button>
-                <button className="tbt-export-btn" onClick={() => exportSummaryCsv(st as unknown as Record<string, number>, result.backtest.monthly_returns || [], s.name)}>
-                  요약·월별 CSV
-                </button>
-              </div>
-              {/* 6개 지표 카드 */}
-              <div className="tbt-stats tbt-stats-6">
-                <div className="tbt-stat tbt-stat-hero">
-                  <div className="tbt-stat-label">Total Return</div>
-                  <div className="tbt-stat-value" style={{ color: posColor(st.total_return_pct) }}>{fmt(st.total_return_pct, "%")}</div>
-                </div>
-                <div className="tbt-stat">
-                  <div className="tbt-stat-label">CAGR</div>
-                  <div className="tbt-stat-value" style={{ color: posColor(st.cagr) }}>{fmt(st.cagr, "%")}</div>
-                </div>
-                <div className="tbt-stat">
-                  <div className="tbt-stat-label">Sharpe</div>
-                  <div className="tbt-stat-value" style={{ color: (st.sharpe_ratio ?? 0) >= 1 ? "var(--hx-t-16a34a)" : "var(--t-ink)" }}>{fmt(st.sharpe_ratio, "", 2)}</div>
-                </div>
-                <div className="tbt-stat">
-                  <div className="tbt-stat-label">Sortino</div>
-                  <div className="tbt-stat-value">{fmt(st.sortino_ratio, "", 2)}</div>
-                </div>
-                <div className="tbt-stat">
-                  <div className="tbt-stat-label">Calmar</div>
-                  <div className="tbt-stat-value" style={{ color: (st.calmar_ratio ?? 0) >= 0 ? "var(--t-ink)" : "var(--hx-t-dc2626)" }}>{fmt(st.calmar_ratio, "", 2)}</div>
-                </div>
-                <div className="tbt-stat">
-                  <div className="tbt-stat-label">Max DD</div>
-                  <div className="tbt-stat-value" style={{ color: "var(--hx-t-dc2626)" }}>-{Math.abs(st.max_drawdown_pct)}%</div>
-                </div>
-              </div>
-
-              {/* 보조 지표 바 (승률·손익비·수수료) */}
-              <div className="tbt-substats">
-                <span>승률 <b>{st.win_rate}%</b></span>
-                <span>손익비(PF) <b style={{ color: (st.profit_factor ?? 0) >= 1 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{fmt(st.profit_factor, "", 2)}</b></span>
-                <span>거래 <b>{st.num_trades}회</b></span>
-                <span>평균손익 <b style={{ color: posColor(st.avg_trade_return) }}>{fmt(st.avg_trade_return, "%", 2)}</b></span>
-                <span>수수료 <b>₩{Math.round(st.total_commission).toLocaleString()}</b></span>
-                <span>슬리피지 <b>₩{Math.round(st.total_slippage).toLocaleString()}</b></span>
-                {(st.eod_liquidated ?? 0) > 0 && (
-                  <span title="백테스트 종료일에 보유 중이던 종목을 종가로 청산해 통계에 반영">기간종료 청산 <b>{st.eod_liquidated}종목</b></span>
-                )}
-              </div>
-
-              {/* 전체 성과지표 — QuantStats 티어시트 */}
-              <MetricsTearsheet st={st} />
-
-              {/* 자산 곡선 */}
-              <div className="tbt-chart">
-                <div className="tbt-chart-head">
-                  <div className="tbt-chart-title">Equity Curve</div>
-                  <div className="tbt-chart-title">{result.backtest_config.period}</div>
-                </div>
-                {result.backtest.benchmark?.curve && result.backtest.benchmark.curve.length > 1 && (
-                  <div className="tbt-bench-legend">
-                    <span className="tbt-bench-item"><span className="tbt-bench-line strat" />전략</span>
-                    <span className="tbt-bench-item"><span className="tbt-bench-line bench" />{result.backtest.benchmark.label}</span>
-                  </div>
-                )}
-                <EquityChart curve={result.backtest.equity_curve} benchmark={result.backtest.benchmark?.curve} />
-                {result.backtest.benchmark && result.backtest.benchmark.curve?.length > 1 && (
-                  <div className="tbt-bench-metrics">
-                    <div className="tbt-bench-metric">
-                      <span className="tbt-bench-label">벤치마크 수익</span>
-                      <span className="tbt-bench-val">{result.backtest.benchmark.total_return_pct >= 0 ? "+" : ""}{result.backtest.benchmark.total_return_pct}%</span>
-                    </div>
-                    <div className="tbt-bench-metric">
-                      <span className="tbt-bench-label">초과수익 (α 원천)</span>
-                      <span className="tbt-bench-val" style={{ color: result.backtest.benchmark.excess_return_pct >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>
-                        {result.backtest.benchmark.excess_return_pct >= 0 ? "+" : ""}{result.backtest.benchmark.excess_return_pct}%
-                      </span>
-                    </div>
-                    <div className="tbt-bench-metric">
-                      <span className="tbt-bench-label">베타 (β)</span>
-                      <span className="tbt-bench-val">{result.backtest.benchmark.beta}</span>
-                    </div>
-                    <div className="tbt-bench-metric">
-                      <span className="tbt-bench-label">알파 (α, 연율)</span>
-                      <span className="tbt-bench-val">{result.backtest.benchmark.alpha_pct >= 0 ? "+" : ""}{result.backtest.benchmark.alpha_pct}%</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 낙폭 곡선 (Drawdown) */}
-              {result.backtest.drawdown_curve?.length > 0 && (
-                <div className="tbt-chart">
-                  <div className="tbt-chart-head">
-                    <div className="tbt-chart-title">Drawdown</div>
-                    <div className="tbt-chart-title" style={{ color: "var(--hx-t-dc2626)" }}>최대 -{Math.abs(st.max_drawdown_pct)}%</div>
-                  </div>
-                  <DrawdownChart curve={result.backtest.drawdown_curve} />
-                </div>
-              )}
-
-              {/* 월별 수익률 히트맵 */}
-              {result.backtest.monthly_returns?.length > 0 && (
-                <div className="tbt-chart">
-                  <div className="tbt-chart-head">
-                    <div className="tbt-chart-title">Monthly Returns</div>
-                  </div>
-                  <MonthlyHeatmap data={result.backtest.monthly_returns} />
-                </div>
-              )}
-
-              {/* 매크로 월간 리밸런싱 전략은 개별 체결 로그가 없음 — 안내 */}
-              {(result.backtest.round_trips?.length ?? 0) === 0 && result.backtest.trade_mode === "rebalance" && (
-                <div className="tbt-chart">
-                  <div className="tbt-chart-head"><div className="tbt-chart-title">거래내역</div></div>
-                  <div style={{ padding: "14px 4px", color: "var(--t-muted)", fontFamily: "var(--t-mono)", fontSize: 12, lineHeight: 1.6 }}>
-                    월간 리밸런싱 전략 — 개별 체결 로그가 없어요.<br />
-                    월 단위 성과는 위의 <strong>Monthly Returns</strong> 히트맵을 참고하세요.
-                  </div>
-                </div>
-              )}
-
-              {/* 거래내역 — 종목별 요약(구 Constituents)·전체 거래내역(구 Trade Log) 통합 뷰.
-                  둘 다 같은 round_trips/symbol_results 데이터를 공유 — 데이터 손실 없이 병합. */}
-              <div className="tbt-chart">
-                <div className="tbt-chart-head">
-                  <div className="tbt-chart-title">거래내역 ({result.screened_count})</div>
-                  <span style={{ fontFamily: "var(--t-mono)", fontSize: 10, padding: "2px 8px", borderRadius: 2, background: result.data_source.fully_real ? "var(--hx-b-dcfce7)" : "var(--hx-b-fafafa)", color: result.data_source.fully_real ? "var(--hx-t-15803d)" : "var(--t-muted)", border: "1px solid var(--t-border)" }}>
-                    {result.data_source.fully_real ? "REAL_DATA" : "MOCK_DATA"}
-                  </span>
-                </div>
-                <SymbolPerfTable
-                  rows={result.backtest.symbol_results ?? []}
-                  roundTrips={result.backtest.round_trips ?? []}
-                  screened={result.screened_tickers}
-                />
-              </div>
-            </div>
-          )}
-        </div>
     </div>
   );
 }

@@ -8,14 +8,14 @@
 // 좌변에 연산자(≥/≤/=/범위)·값을 붙여 조건(Condition)을 만들고 리스트로 관리한다.
 
 import { useState } from "react";
-import { X, Check, ArrowRight, ShieldCheck, Save, FolderOpen, Sparkles, Pencil } from "lucide-react";
+import { X, Check, ShieldCheck, Save, FolderOpen, Sparkles, Pencil } from "lucide-react";
 import FormulaBuilder, { buildExpr, buildLabel, type FormulaToken } from "./FormulaBuilder";
 import { backtestBridgeApi } from "@/entities/backtest/bridgeApi";
 import {
   listConditionSets, saveConditionSet, deleteConditionSet, cloneConditions,
   type SavedConditionSet,
 } from "@/entities/backtest/conditionSets";
-import { Segmented, TONES, type Tone } from "@/shared/ui/kit";
+import { Segmented, type Tone } from "@/shared/ui/kit";
 import type { Condition, OpId } from "@/entities/backtest/conditionTypes";
 
 // 모델은 lib/backtest/conditionTypes 에 있다(순환 방지). 기존 import 경로 호환을 위해 재수출.
@@ -30,10 +30,7 @@ const OPS: { id: OpId; label: string; word: string }[] = [
   { id: "cross_below", label: "↓돌파", word: "하향 돌파" },
 ];
 const opSym = (id: OpId) => OPS.find((o) => o.id === id)!.label;
-const opWord = (id: OpId) => OPS.find((o) => o.id === id)!.word;
 
-const R = "var(--bs-border-radius)";
-const RL = "var(--bs-border-radius-lg)";
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 export default function ConditionFormulaEditor({ tone = "neutral", conditions, onChange, logicExpr, onLogicChange, logicDefaultLabel = "모두 AND", sideKey }: {
@@ -59,7 +56,6 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
   const [nlQuery, setNlQuery] = useState("");
   const [nlBusy, setNlBusy] = useState(false);
   const [nlMsg, setNlMsg] = useState<string | null>(null);
-  const accent = TONES[tone];
 
   // 현재 좌변 산술식 / 라벨 (활성 모드 기준)
   const lhsExpr = (inputMode === "builder" ? buildExpr(formula) : directExpr).trim();
@@ -154,171 +150,145 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
     } catch { setLogicCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하세요" }); }
   };
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "228px minmax(0,1fr)", gap: 14, alignItems: "start" }}>
+  const verdict = (c: { ok: boolean; msg: string }) => (
+    <span className={`cfe-check${c.ok ? "" : " is-bad"}`} role={c.ok ? "status" : "alert"}>{c.msg}</span>
+  );
 
-      {/* 좌: 조건 리스트 */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>조건식</span>
+  return (
+    <div className="cfe" data-tone={tone}>
+
+      {/* 왼쪽: 만든 조건 목록 */}
+      <div className="cfe-list">
+        <div className="cfe-head">
+          <span className="cfe-h">조건식</span>
           {sideKey && (
-            <button type="button" onClick={toggleSets}
-              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "3px 8px", cursor: "pointer" }}>
-              <FolderOpen size={12} /> 불러오기·저장
+            <button type="button" className="cfe-ghost" aria-expanded={setsOpen} onClick={toggleSets}>
+              <FolderOpen size={14} aria-hidden /> 세트 불러오기·저장
             </button>
           )}
         </div>
         {sideKey && setsOpen && (
-          <div style={{ border: "1px solid var(--border-strong)", borderRadius: R, padding: 9, marginBottom: 9, display: "flex", flexDirection: "column", gap: 7 }}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="세트 이름"
-                style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "5px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
-              <button type="button" onClick={handleSaveSet} disabled={conditions.length === 0}
-                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: conditions.length ? "var(--on-accent)" : "var(--text-muted)", background: conditions.length ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "5px 9px", cursor: conditions.length ? "pointer" : "not-allowed", flexShrink: 0 }}>
-                <Save size={12} /> 저장
+          <div className="cfe-sets">
+            <div className="cfe-row">
+              <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="세트 이름" aria-label="세트 이름"
+                className="bte-input cfe-grow" />
+              <button type="button" className="cfe-btn" onClick={handleSaveSet} disabled={conditions.length === 0}>
+                <Save size={14} aria-hidden /> 저장
               </button>
             </div>
             {savedSets.length === 0 ? (
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>저장된 조건식 세트가 없어요</span>
+              <p className="bte-note">저장한 조건식 세트가 없어요.</p>
             ) : savedSets.map((sv) => (
-              <div key={sv.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button type="button" onClick={() => handleLoadSet(sv)} title="이 세트 불러오기"
-                  style={{ flex: 1, minWidth: 0, textAlign: "left", fontSize: 12, color: "var(--text-primary)", background: "var(--bg-section)", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 8px", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {sv.name} <span style={{ color: "var(--text-muted)" }}>({sv.conditions.length}개{sv.logicExpr ? " · 논리식" : ""})</span>
+              <div key={sv.id} className="cfe-row">
+                <button type="button" className="cfe-set" onClick={() => handleLoadSet(sv)} aria-label={`${sv.name} 세트 불러오기`}>
+                  {sv.name} <span className="bte-sm">조건 {sv.conditions.length}개{sv.logicExpr ? " · 논리식" : ""}</span>
                 </button>
-                <button type="button" onClick={() => { deleteConditionSet(sv.id); refreshSets(); }} aria-label="세트 삭제"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", flexShrink: 0 }}><X size={13} /></button>
+                <button type="button" className="bte-icon-btn" aria-label={`${sv.name} 세트 삭제`}
+                  onClick={() => { deleteConditionSet(sv.id); refreshSets(); }}><X size={14} aria-hidden /></button>
               </div>
             ))}
           </div>
         )}
         {conditions.length === 0 && (
-          <div style={{ fontSize: 12, color: "var(--text-muted)", border: "1px dashed var(--border-strong)", borderRadius: R, padding: "12px 11px", marginBottom: 7, lineHeight: 1.6 }}>
-            아직 조건이 없어요. 오른쪽에서 수식을 만들어 추가하세요.
-          </div>
+          <p className="cfe-empty">아직 조건이 없어요. 오른쪽에서 식을 만들어 더해요.</p>
         )}
         {conditions.map((c, i) => (
-          <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, background: accent.bg, border: `1px solid ${accent.accent}`, borderRadius: R, padding: "9px 11px", marginBottom: 7 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: accent.text, marginBottom: 2 }}>조건식 {String.fromCharCode(65 + i)}</div>
-              <div style={{ fontFamily: "var(--bs-font-mono)", fontSize: 13, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div key={c.id} className="cfe-cond">
+            <div className="cfe-cond-main">
+              <span className="cfe-cond-k">조건식 {String.fromCharCode(65 + i)}</span>
+              <span className="cfe-cond-v">
                 {c.label || c.expr || c.factorName} {opSym(c.op)} {c.rhs}{c.op === "between" ? `~${c.rhs2}` : ""}
-              </div>
+              </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-              <button type="button" onClick={() => editCond(c)} aria-label="수정" title="수정"
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", padding: 2 }}><Pencil size={13} /></button>
-              <button type="button" onClick={() => remove(c.id)} aria-label="삭제" title="삭제"
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex", padding: 2 }}><X size={14} /></button>
-            </div>
+            <button type="button" className="bte-icon-btn" onClick={() => editCond(c)} aria-label={`조건식 ${String.fromCharCode(65 + i)} 고치기`}><Pencil size={14} aria-hidden /></button>
+            <button type="button" className="bte-icon-btn" onClick={() => remove(c.id)} aria-label={`조건식 ${String.fromCharCode(65 + i)} 빼기`}><X size={16} aria-hidden /></button>
           </div>
         ))}
 
         {/* 논리 조건식 (젠포트 논리 레이어) — and/or/not + before/any/every */}
         {onLogicChange && conditions.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>논리 조건식</div>
-            <input value={logicExpr ?? ""} spellCheck={false}
+          <div className="cfe-logic">
+            <span className="cfe-h">조건끼리 묶기</span>
+            <input value={logicExpr ?? ""} spellCheck={false} aria-label="조건끼리 묶는 식"
+              className={`bte-input bte-input--mono cfe-full${logicCheck && !logicCheck.ok ? " is-bad" : ""}`}
               onChange={(e) => { onLogicChange(e.target.value); setLogicCheck(null); }}
-              placeholder={`예: every(A,3) and (B or C) — 비우면 ${logicDefaultLabel}`}
-              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "9px 11px", border: `1px solid ${logicCheck && !logicCheck.ok ? "var(--hx-d-dc2626)" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-              <button type="button" onClick={verifyLogic}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 9px", cursor: "pointer", flexShrink: 0 }}>
-                <ShieldCheck size={13} /> 조건식 검증
-              </button>
-              {logicCheck && (
-                <span style={{ fontSize: 11, color: logicCheck.ok ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{logicCheck.msg}</span>
-              )}
+              placeholder={`예: every(A,3) and (B or C) — 비우면 ${logicDefaultLabel}`} />
+            <div className="cfe-row">
+              <button type="button" className="cfe-ghost" onClick={verifyLogic}><ShieldCheck size={14} aria-hidden /> 식 확인</button>
+              {logicCheck && verdict(logicCheck)}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
-              and · or · not(A) · before(A,n) n일 전 성립 · any(A,n) n일 내 한번이라도 · every(A,n) n일 연속
-            </div>
+            <p className="bte-note">and · or · not(A) · before(A,n) n일 전에 맞음 · any(A,n) n일 안에 한 번이라도 · every(A,n) n일 내내</p>
           </div>
         )}
       </div>
 
-      {/* 우: 조건식 설정(드래프트) */}
-      <div style={{ background: "var(--bg-section)", borderRadius: RL, padding: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>조건식 설정</span>
+      {/* 오른쪽: 새 조건 만들기(초안) */}
+      <div className="cfe-draft">
+        <div className="cfe-head">
+          <span className="cfe-h">새 조건 만들기</span>
           <Segmented tone={tone} act="cond-mode" value={inputMode} onChange={(m) => { setInputMode(m); setExprCheck(null); }}
             options={[{ id: "builder", label: "수식 빌더" }, { id: "direct", label: "직접 입력" }]} />
         </div>
 
         {inputMode === "builder" ? (
-          <div style={{ marginBottom: 12 }}>
-            <FormulaBuilder tone={tone} tokens={formula} onChange={(f) => { setFormula(f); setExprCheck(null); }} />
-          </div>
+          <FormulaBuilder tone={tone} tokens={formula} onChange={(f) => { setFormula(f); setExprCheck(null); }} />
         ) : (
-          <div style={{ marginBottom: 12 }}>
-            <input value={directExpr} spellCheck={false} data-act="cond-expr"
+          <div className="bte-col">
+            <input value={directExpr} spellCheck={false} data-act="cond-expr" aria-label="왼쪽 식"
+              className={`bte-input bte-input--mono cfe-full${exprCheck && !exprCheck.ok ? " is-bad" : ""}`}
               onChange={(e) => { setDirectExpr(e.target.value); setExprCheck(null); }}
-              placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})"
-              style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "10px 12px", border: `1px solid ${exprCheck && !exprCheck.ok ? "var(--hx-d-dc2626)" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
-              사칙연산(+,−,×,÷)·괄호·{"{팩터}"}·함수 조합 — 기간은 {"{20일}"} 형태 · 우변은 아래 값
-            </div>
+              placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})" />
+            <p className="bte-note">사칙연산(+ − × ÷) · 괄호 · {"{팩터}"} · 함수를 섞어 써요. 기간은 {"{20일}"}처럼, 비교할 값은 아래에 적어요.</p>
           </div>
         )}
 
-        {/* 좌변 검증 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13 }}>
-          <button type="button" onClick={verifyExpr} disabled={!lhsExpr}
-            style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border-strong)", borderRadius: R, padding: "5px 9px", cursor: lhsExpr ? "pointer" : "not-allowed", opacity: lhsExpr ? 1 : 0.5, flexShrink: 0 }}>
-            <ShieldCheck size={13} /> 식 검증
+        {/* 왼쪽 식 확인 */}
+        <div className="cfe-row">
+          <button type="button" className="cfe-ghost" onClick={verifyExpr} disabled={!lhsExpr}>
+            <ShieldCheck size={14} aria-hidden /> 식 확인
           </button>
-          {exprCheck && <span style={{ fontSize: 11, color: exprCheck.ok ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>{exprCheck.msg}</span>}
+          {exprCheck && verdict(exprCheck)}
         </div>
 
-        {/* 연산자 + 값 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13, flexWrap: "wrap" }}>
+        {/* 비교 + 값 */}
+        <div className="cfe-row">
           <Segmented tone={tone} value={op} onChange={setOp} options={OPS.map((o) => ({ id: o.id, label: o.label }))} />
-          <input type="number" className="bs-numbox" data-act="cond-rhs" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값"
-            style={{ width: 104, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
-          {(op === "cross_above" || op === "cross_below") && (
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              기준선을 {op === "cross_above" ? "상향" : "하향"} 돌파한 봉만 (골든크로스: 좌변=두 MA의 차이, 값=0)
-            </span>
-          )}
+          <input type="number" className="bs-numbox kit-num" data-act="cond-rhs" aria-label="비교할 값" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값" />
           {op === "between" && (
             <>
-              <span style={{ color: "var(--text-secondary)" }}>~</span>
-              <input type="number" className="bs-numbox" value={rhs2} onChange={(e) => setRhs2(e.target.value)} placeholder="상한"
-                style={{ width: 104, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
+              <span className="bte-sm">~</span>
+              <input type="number" className="bs-numbox kit-num" aria-label="위 끝 값" value={rhs2} onChange={(e) => setRhs2(e.target.value)} placeholder="위 끝" />
             </>
           )}
         </div>
+        {(op === "cross_above" || op === "cross_below") && (
+          <p className="bte-note">기준선을 {op === "cross_above" ? "위로" : "아래로"} 뚫은 봉만 맞아요. 골든크로스라면 왼쪽 식은 두 이동평균의 차이, 값은 0이에요.</p>
+        )}
 
-        {/* NL 한 줄 */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--bg-card)", border: `1px solid ${accent.accent}`, borderRadius: R, padding: "11px 12px", marginBottom: 14 }}>
-          <ArrowRight size={15} style={{ color: accent.text, marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            {lhsExpr && rhs !== ""
-              ? <>이 조건 — <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{lhsLabel} {opSym(op)} {rhs}{op === "between" ? ` ~ ${rhs2 || "?"}` : ""}</span></>
-              : "팩터로 수식을 만들고 값을 입력하면 조건이 완성돼요."}
-          </span>
-        </div>
+        {/* 지금 만드는 조건을 한 줄로 */}
+        <p className="cfe-preview">
+          {lhsExpr && rhs !== ""
+            ? <>이 조건 <b>{lhsLabel} {opSym(op)} {rhs}{op === "between" ? ` ~ ${rhs2 || "?"}` : ""}</b></>
+            : "팩터로 식을 만들고 값을 넣으면 조건이 완성돼요."}
+        </p>
 
-        <button type="button" onClick={save} disabled={!canSave} data-act="cond-save"
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "var(--on-accent)", background: canSave ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 0", cursor: canSave ? "pointer" : "not-allowed" }}>
-          <Check size={14} /> 조건식 저장
+        <button type="button" className="cfe-save" onClick={save} disabled={!canSave} data-act="cond-save">
+          <Check size={16} aria-hidden /> 조건식 저장
         </button>
 
         {/* AI 자연어 변환 (매수 조건 전용 — 젠포트 AI 버튼) */}
         {sideKey === "buy" && (
-          <div style={{ marginTop: 12, borderTop: "1px dashed var(--border-strong)", paddingTop: 11 }}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input value={nlQuery} onChange={(e) => setNlQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") runNl(); }}
-                placeholder="자연어로 입력 — 예: PER 15 이하이고 ROE 상위 30%"
-                style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
-              <button type="button" onClick={runNl} disabled={nlBusy || !nlQuery.trim()}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, color: "var(--on-accent)", background: nlBusy || !nlQuery.trim() ? "var(--border-strong)" : accent.accent, border: "none", borderRadius: R, padding: "8px 12px", cursor: nlBusy || !nlQuery.trim() ? "not-allowed" : "pointer", flexShrink: 0 }}>
-                <Sparkles size={13} /> {nlBusy ? "변환 중…" : "AI 변환"}
+          <div className="cfe-nl">
+            <p className="cfe-h">말로 조건 만들기</p>
+            <div className="cfe-row">
+              <input value={nlQuery} onChange={(e) => setNlQuery(e.target.value)} aria-label="말로 적은 조건"
+                onKeyDown={(e) => { if (e.key === "Enter") runNl(); }} className="bte-input cfe-grow"
+                placeholder="예: PER 15 이하이고 ROE 상위 30%" />
+              <button type="button" className="cfe-btn" onClick={runNl} disabled={nlBusy || !nlQuery.trim()}>
+                <Sparkles size={14} aria-hidden /> {nlBusy ? "바꾸는 중이에요" : "AI 변환"}
               </button>
             </div>
-            {nlMsg && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 5 }}>{nlMsg}</div>}
+            {nlMsg && <p className="bte-note" role="status">{nlMsg}</p>}
           </div>
         )}
       </div>

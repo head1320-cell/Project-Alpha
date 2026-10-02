@@ -57,8 +57,6 @@ ALLOWED: dict[str, str] = {
     "src/widgets/backtester/BacktestResults.tsx":
         "기존 `brun-badge`(PIT 시점정합) 배지를 유지한다 — E2E `backtest.spec.ts` 가 "
         "`.brun-*` 를 다수 단정하므로 이 커밋에서 건드리지 않는다(ADR 001).",
-    "src/widgets/backtester/TerminalBacktester.tsx":
-        "기존 `tbt-prov`(실데이터/합성) 배지를 유지한다 — 데이터 축은 이미 말하고 있다.",
     "src/widgets/landing/HeroDeckLive.tsx":
         "랜딩 데모다. 숫자 옆에 '예시 수치' 캡션이 이미 붙어 있어 라벨보다 강하게 "
         "말하고 있다 — 같은 자리에 두 문장이 겹치면 오히려 약해진다.",

@@ -77,6 +77,8 @@ class Badge:
         return self.markers[0]
 
 
+#: BU3 에서 `tbt-prov`(터미널 백테스터 결과 자리의 출처 표시)를 뺐다 — 그 결과 자리는 `result` 가 늘 `null` 이라
+#: 한 번도 그려지지 않았고(거짓 약속), 지웠다. 결과의 데이터 출처는 결과 화면(`brun-badge`·`PerfLabel`)이 말한다.
 #: ★장식 칩은 여기 없다★ — 증거·상태를 말하는 배지만 등록한다. 모든 `*badge*`
 #: 클래스를 넣으면 목록이 스무 줄이 되고 아무도 읽지 않는다.
 BADGES: tuple[Badge, ...] = (
@@ -86,8 +88,6 @@ BADGES: tuple[Badge, ...] = (
     Badge(("brun-badge",), (AXIS_DATA_SOURCE, AXIS_PIT),
           "백테스트 실행 화면. 같은 클래스가 두 번 쓰이는데 하나는 mock/real"
           "(데이터), 하나는 `res.pit_evidence` 를 읽는 PIT 배지다."),
-    Badge(("tbt-prov",), (AXIS_DATA_SOURCE,),
-          "터미널 백테스터의 출처 표시(`result.data_source.fully_real`)."),
     Badge(("data-lookahead",), (AXIS_LOOKAHEAD,),
           "E 가 만든 자리. 예전에는 마법사의 `as-bt-badge ok` 가 `\"OOS · look-ahead "
           "없음\"` 을 **상수로** 단정했다 — 이제 응답의 `lookahead_evidence` 를 "

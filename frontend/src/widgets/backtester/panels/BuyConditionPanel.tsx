@@ -1,7 +1,7 @@
 "use client";
-// 대상 경로: frontend/src/components/backtest/panels/BuyConditionPanel.tsx
-//
-// 매수조건 화면(빨강). 포트 기본 설정 + 매수 조건 설정(조건식 에디터) + 매수 비중 설정.
+// ① 무엇을 살까 (매수 — 빨강 톤). 매수 조건(조건식 편집기) + 고급 체결 + 매수 비중 + 현금 비중 + ETF 자산배분 + 마켓타이밍.
+// BU3: 돈·기간·비용("포트 기본 설정")은 ④ `CapitalPanel` 로 옮겼다. 인라인 style 을 걷고 `bte-*`·kit 클래스로 그린다.
+// ★상태·갱신은 그대로★ — 실행 본문이 같은지는 `e2e/backtest-requests.spec.ts` 골든이 건다.
 
 import { type Dispatch, type SetStateAction } from "react";
 import { Section, SubToggle, QuickStepper, Segmented, Field, GroupedSelect } from "@/shared/ui/kit";
@@ -13,24 +13,6 @@ import type { BacktestStrategy, SortDir } from "@/entities/backtest/strategy";
 import { FILL_PRICE_GROUPS, FILL_PRICE_GROUPS_NO_EXPR } from "@/entities/backtest/fillPrice";
 import { SORT_FIELDS } from "@/entities/backtest/sortFields";
 
-const REBALANCE_PERIOD_UNIT: Record<Exclude<BacktestStrategy["rebalancePeriod"], "daily">, string> = {
-  weekly: "주", monthly: "월", quarterly: "분기", semiannual: "반기", annual: "연",
-};
-
-const selBox: React.CSSProperties = {
-  fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
-  borderRadius: "var(--bs-border-radius)", padding: "6px 9px", background: "var(--bg-card)", cursor: "pointer",
-};
-const dateBox: React.CSSProperties = {
-  fontFamily: "var(--bs-font-mono)", fontSize: 13, color: "var(--text-primary)",
-  border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)",
-  padding: "6px 9px", background: "var(--bg-card)",
-};
-const chipBtn: React.CSSProperties = {
-  fontSize: 11, color: "var(--text-secondary)", border: "1px solid var(--border-strong)",
-  borderRadius: "var(--bs-border-radius)", padding: "5px 9px", background: "var(--bg-card)", cursor: "pointer",
-};
-
 export default function BuyConditionPanel({ s, set }: {
   s: BacktestStrategy; set: Dispatch<SetStateAction<BacktestStrategy>>;
 }) {
@@ -39,153 +21,51 @@ export default function BuyConditionPanel({ s, set }: {
     set((x) => ({ ...x, marketTiming: { ...x.marketTiming, ...p } }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="bte-col">
 
-      <Section title="포트 기본 설정" hint="투자금·기간·비용" tone="neutral" enabled onToggle={() => {}}>
-        <Field label="투자 금액">
-          <QuickStepper value={s.capital} onChange={(v) => set((x) => ({ ...x, capital: v }))} chips={[1000, 5000]} unit="만원" min={0} act="capital" />
-        </Field>
-        <Field label="투자 기간">
-          <input type="date" value={s.startDate} max={s.endDate}
-            onChange={(e) => set((x) => ({ ...x, startDate: e.target.value }))} style={dateBox} />
-          <span style={{ color: "var(--text-secondary)" }}>~</span>
-          <input type="date" value={s.endDate} min={s.startDate}
-            onChange={(e) => set((x) => ({ ...x, endDate: e.target.value }))} style={dateBox} />
-          <span style={{ display: "flex", gap: 5 }}>
-            {([["1년", 1], ["3년", 3], ["5년", 5], ["전체기간", 0]] as const).map(([label, yrs]) => (
-              <button key={label} type="button" onClick={() => set((x) => {
-                const end = x.endDate || new Date().toISOString().slice(0, 10);
-                const start = yrs === 0 ? "2015-01-01"
-                  : `${Number(end.slice(0, 4)) - yrs}${end.slice(4)}`;
-                return { ...x, startDate: start, endDate: end };
-              })} style={chipBtn}>{label}</button>
-            ))}
-          </span>
-        </Field>
-        <Field label="수수료율">
-          <QuickStepper value={s.feePct} onChange={(v) => set((x) => ({ ...x, feePct: v }))} unit="%" min={0} act="fee" />
-        </Field>
-        <Field label="슬리피지">
-          <QuickStepper value={s.slippagePct} onChange={(v) => set((x) => ({ ...x, slippagePct: v }))} unit="%" min={0} />
-        </Field>
-        {/* ── 누락 비용 옵트인 셋 (AK) ★전부 기본 꺼짐★ ─────────────────
-            백테스트는 오래도록 수수료·슬리피지만 봤고 증권거래세·스프레드·
-            시장충격이 전부 0 이었다 — 주문 직전 비용을 추정하는 실행 준비실은
-            셋 다 계산하는데도. 켜면 백엔드가 `market_rules` 의 **같은 요율**을
-            쓴다. 기본을 켜지 않는 이유는 켜는 순간 저장된 실행들의 뜻이
-            바뀌기 때문이다. */}
-        <Field label="추가 비용">
-          <div className="flex w-full flex-col gap-1.5">
-            <SubToggle tone="sell" label="증권거래세" hint="매도 편도 18bp · 수수료보다 크다"
-              act="sell-tax" on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
-            <SubToggle tone="sell" label="호가 스프레드" hint="편도 2.5bp (스프레드의 절반)"
-              on={s.chargeSpread} onChange={(v) => set((x) => ({ ...x, chargeSpread: v }))} />
-            <SubToggle tone="sell" label="시장충격" hint="주문금액÷거래대금에 비례 · 거래대금 없으면 미상"
-              on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              {(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact)
-                ? "켠 비용은 실행 준비실과 같은 요율을 써요 — 결과의 비용 분해에 성분별로 실려요."
-                : "끄면 수수료·슬리피지만 봐요 — 0원이 아니라 ★안 본 것★이고, 결과가 그 사실을 적어요."}
-            </span>
-            {s.chargeMarketImpact && (
-              <span style={{ fontSize: 11, color: "var(--hx-t-d97706)" }}>
-                ⚠ 거래대금이 없는 종목·기간은 충격을 0이 아니라 <b>미상</b>으로 남겨요 — 그만큼 비용이 낮게 잡혀요.
-              </span>
-            )}
-          </div>
-        </Field>
-        <Field label="리밸런싱 주기">
-          <Segmented act="rebalance" value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
-            options={[
-              { id: "daily", label: "매일" }, { id: "weekly", label: "매주" },
-              { id: "monthly", label: "매월" }, { id: "quarterly", label: "분기" },
-              { id: "semiannual", label: "반기" }, { id: "annual", label: "연간" },
-            ]} />
-          {s.rebalancePeriod !== "daily" && (
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              순위이탈 보유종목 정리는 {REBALANCE_PERIOD_UNIT[s.rebalancePeriod]} 첫 거래일에만
-              · 빈자리 재편입·손익절은 매일 평가
-            </span>
-          )}
-        </Field>
-        <Field label="신호 기준">
-          <Segmented value={String(s.signalLag)} onChange={(v) => set((x) => ({ ...x, signalLag: v === "1" ? 1 : 0 }))}
-            options={[{ id: "0", label: "당일 종가" }, { id: "1", label: "전일 종가 기준" }]} />
-          {s.signalLag === 0 && (s.buy.fillType !== "close" || s.sell.fillType !== "close") ? (
-            <span style={{ fontSize: 11, color: "var(--hx-t-d97706)" }}>
-              ⚠ 당일 종가로 만든 신호를 시가·전일가에 체결하면 look-ahead — 전일 종가 기준 권장
-            </span>
-          ) : (
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              전일 종가 기준으로 종목 선정 → 익일 매매 (체결은 당일 가격)
-            </span>
-          )}
-        </Field>
-        <Field label="분봉 정밀 체결">
-          <Segmented value={s.intradayFill ? "on" : "off"}
-            onChange={(v) => set((x) => ({ ...x, intradayFill: v === "on" }))}
-            options={[{ id: "off", label: "일봉 모델" }, { id: "on", label: "분봉 정밀" }]} />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            적재된 (종목,일자) 분봉으로 매매 시간 윈도 내 지정가·시장가·TWAP 정밀 체결 —
-            없는 날은 일봉 폴백 (결과에 적용률 표시)
-          </span>
-        </Field>
-        {s.intradayFill && (
-          <Field label="매수 시간">
-            <input value={s.buy.timeStart} onChange={(e) => patchBuy({ timeStart: e.target.value })} style={dateBox} placeholder="09:00" />
-            <span style={{ color: "var(--text-secondary)" }}>~</span>
-            <input value={s.buy.timeEnd} onChange={(e) => patchBuy({ timeEnd: e.target.value })} style={dateBox} placeholder="15:30" />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>이 윈도 안의 분봉으로만 매수 체결</span>
-          </Field>
-        )}
-      </Section>
-
-      <Section title="매수 조건 설정" hint="팩터·함수 조건식" tone="buy"
+      <Section title="살 조건" hint="팩터·함수로 만든 조건식" tone="buy"
         enabled={s.buy.enabled} onToggle={(v) => patchBuy({ enabled: v })}>
         <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })}
           logicExpr={s.buy.logicExpr} onLogicChange={(v) => patchBuy({ logicExpr: v })} logicDefaultLabel="모두 AND" sideKey="buy" />
-        <SubToggle tone="buy" act="buy-fundamentals" label="펀더멘털 조건 평가" hint="현재 스냅샷 기준 · look-ahead 주의" on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>고급 체결 옵션</div>
-          <SubToggle tone="buy" label="분할 매수 (래더)" hint="가격변동 단계별 비중 체결"
+        <SubToggle tone="buy" act="buy-fundamentals" label="재무 조건도 평가" hint="지금 스냅샷 기준이라 과거 시점에는 미래 정보가 섞일 수 있어요"
+          on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
+        <div className="bte-col">
+          <p className="bte-sub-h">고급 체결</p>
+          <SubToggle tone="buy" label="나눠 사기 (래더)" hint="가격이 움직일 때마다 비중을 나눠 체결해요"
             on={s.buy.splitBuy}
             onChange={(v) => patchBuy({ splitBuy: v, ladder: v && s.buy.ladder.length === 0 ? [{ movePct: 0, weightPct: 50 }, { movePct: -2, weightPct: 50 }] : s.buy.ladder })} />
           {s.buy.splitBuy && (
             <LadderEditor side="buy" steps={s.buy.ladder} onChange={(ladder) => patchBuy({ ladder })} />
           )}
-          <SubToggle tone="buy" label="돌파 매수" hint="기준가 돌파 시에만 진입" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
+          <SubToggle tone="buy" label="돌파할 때만 사기" hint="기준가를 넘었을 때만 들어가요" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
           {s.buy.breakthrough && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 4 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>방향</span>
+            <div className="bte-col">
+              <div className="bte-row">
+                <span className="bte-sm">방향</span>
                 <Segmented tone="buy" value={s.buy.breakthroughDirection}
                   onChange={(d) => patchBuy({ breakthroughDirection: d })}
-                  options={[{ id: "up", label: "상방" }, { id: "both", label: "양방" }]} />
-                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>기준가</span>
+                  options={[{ id: "up", label: "위로" }, { id: "both", label: "양쪽" }]} />
+                <span className="bte-sm">기준가</span>
                 <GroupedSelect value={s.buy.breakthroughBaseType}
                   onChange={(id) => patchBuy({ breakthroughBaseType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
               </div>
               <OffsetInput value={s.buy.breakthroughOffsetPct}
                 onChange={(breakthroughOffsetPct) => patchBuy({ breakthroughOffsetPct })} />
-              <span style={{ fontSize: 11, color: "var(--hx-t-d97706)" }}>
-                ⚠ 당일 시초가 등 변동성 큰 기준은 불공정 거래 소지에 유의하세요
-              </span>
+              <p className="bte-note bte-note--warn">당일 시초가처럼 크게 흔들리는 기준은 불공정 거래 소지가 있으니 조심하세요.</p>
             </div>
           )}
-          <Field label="매수 시점">
+          <Field label="사는 때">
             <Segmented tone="buy" value={s.buy.buyTiming} onChange={(t) => patchBuy({ buyTiming: t })}
               options={[{ id: "pre_open", label: "장 시작 전" }, { id: "intraday", label: "장중 주문" }]} />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              장중 주문은 지정가류 매수에서 시가 갭 체결을 배제 (보수적)
-            </span>
+            <p className="bte-note">장중 주문은 지정가로 살 때 시가 갭으로 체결되는 경우를 빼요(보수적).</p>
           </Field>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>TWAP·VWAP 체결은 위 "체결가 유형"에서 선택</div>
+          <p className="bte-note">TWAP·VWAP 체결은 아래 ‘체결가 유형’에서 골라요.</p>
         </div>
       </Section>
 
-      <Section title="매수 비중 설정" hint="종목당 비중·보유 수" tone="buy" enabled onToggle={() => {}}>
-        <Field label="매수 우선순위">
-          <select value={s.buy.primarySort.expr} style={selBox}
+      <Section title="얼마씩 살까" hint="순서 · 종목당 비중 · 보유 수" tone="buy" enabled>
+        <Field label="사는 순서">
+          <select value={s.buy.primarySort.expr} className="kit-select" aria-label="사는 순서 기준"
             onChange={(e) => patchBuy({ primarySort: { ...s.buy.primarySort, expr: e.target.value } })}>
             {SORT_FIELDS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>
@@ -193,18 +73,17 @@ export default function BuyConditionPanel({ s, set }: {
             onChange={(dir: SortDir) => patchBuy({ primarySort: { ...s.buy.primarySort, dir } })}
             options={[{ id: "DESC", label: "높은순" }, { id: "ASC", label: "낮은순" }]} />
         </Field>
-        <SubToggle tone="buy" label="우선순위식 (일별)" hint="봉마다 식 값으로 매수 순서 결정 — 위 정렬 대신"
+        <SubToggle tone="buy" label="순서를 식으로 (매일)" hint="위 순서 대신, 매일 식 값으로 사는 순서를 정해요"
           on={s.buy.sortExpr.trim() !== ""} onChange={(on) => patchBuy({ sortExpr: on ? "{종합점수}" : "" })}>
-          <input value={s.buy.sortExpr} spellCheck={false}
+          <input value={s.buy.sortExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="순서 식"
             onChange={(e) => patchBuy({ sortExpr: e.target.value })}
-            placeholder="예: {모멘텀점수} 또는 변화율_기간({종가},{20일})"
-            style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, minWidth: 220, padding: "6px 9px", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", background: "var(--bg-card)", color: "var(--text-primary)" }} />
+            placeholder="예: {모멘텀점수} 또는 변화율_기간({종가},{20일})" />
           <Segmented tone="buy" value={s.buy.sortExprDesc ? "desc" : "asc"}
             onChange={(d) => patchBuy({ sortExprDesc: d === "desc" })}
             options={[{ id: "desc", label: "높은순" }, { id: "asc", label: "낮은순" }]} />
         </SubToggle>
-        <Field label="2차 정렬">
-          <select value={s.buy.secondarySort?.expr ?? ""} style={selBox}
+        <Field label="두 번째 순서">
+          <select value={s.buy.secondarySort?.expr ?? ""} className="kit-select" aria-label="두 번째 순서 기준"
             onChange={(e) => patchBuy({ secondarySort: e.target.value ? { expr: e.target.value, dir: s.buy.secondarySort?.dir ?? "DESC" } : undefined })}>
             <option value="">사용 안 함</option>
             {SORT_FIELDS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -217,80 +96,72 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="비중 방식">
           <Segmented tone="buy" value={s.buy.weightMode} onChange={(v) => patchBuy({ weightMode: v })}
-            options={[{ id: "equal", label: "균등 비중" }, { id: "atr", label: "ATR 비중" }]} />
+            options={[{ id: "equal", label: "똑같이" }, { id: "atr", label: "변동성(ATR)에 맞춰" }]} />
         </Field>
         <Field label="종목당 비중">
           <QuickStepper value={s.buy.weightPct} onChange={(v) => patchBuy({ weightPct: v })} chips={[1, 5, 10]} unit="%" min={0} max={100} />
         </Field>
-        <Field label="최대 보유 종목 수">
+        <Field label="최대 보유 수">
           <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} act="max-stocks" />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            동시 보유 가능한 포트폴리오 슬롯 수 — 스크리닝 후보 풀 크기는 매매대상 탭의
-            &quot;평가 종목 상한&quot;에서 별도 설정
-          </span>
+          <p className="bte-note">동시에 들고 있을 수 있는 종목 수예요. 후보를 몇 종목까지 볼지는 ③ ‘평가 종목 상한’에서 따로 정해요.</p>
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
         </Field>
         {s.buy.fillType === "expr" && (
-          <Field label="기준가 수식">
-            <input value={s.buy.fillExpr} spellCheck={false}
+          <Field label="기준가 식">
+            <input value={s.buy.fillExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="기준가 식"
               onChange={(e) => patchBuy({ fillExpr: e.target.value })}
-              placeholder="예: (과거값({고가},{1일})+과거값({저가},{1일}))/2"
-              style={{ fontFamily: "var(--bs-font-mono)", fontSize: 12, minWidth: 280, padding: "7px 10px", border: "1px solid var(--border-strong)", borderRadius: "var(--bs-border-radius)", background: "var(--bg-card)", color: "var(--text-primary)" }} />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              마지막 봉 값이 기준가 — 당일 종가 포함 식은 look-ahead, 과거값(…) 권장
-            </span>
+              placeholder="예: (과거값({고가},{1일})+과거값({저가},{1일}))/2" />
+            <p className="bte-note">마지막 봉의 값이 기준가예요. 당일 종가가 들어간 식은 미래 정보를 써요 — 과거값(…)을 권해요.</p>
           </Field>
         )}
-        <Field label="매수 가격 기준">
+        <Field label="사는 가격">
           <OffsetInput value={s.buy.fillOffsetPct} onChange={(fillOffsetPct) => patchBuy({ fillOffsetPct })} />
         </Field>
-        <SubToggle tone="buy" label="종목당 최대 매수 금액" hint="종목별 투자 한도"
+        <SubToggle tone="buy" label="종목당 최대 금액" hint="한 종목에 넣을 수 있는 한도"
           on={s.buy.maxBuyAmount > 0} onChange={(on) => patchBuy({ maxBuyAmount: on ? 1000 : 0 })}>
           <QuickStepper value={s.buy.maxBuyAmount} onChange={(v) => patchBuy({ maxBuyAmount: v })}
             chips={[1000, 3000, 5000]} unit="만원" min={100} />
         </SubToggle>
-        <SubToggle tone="buy" label="1일 최대 매수 종목 수" hint="하루 신규 진입 수 제한"
+        <SubToggle tone="buy" label="하루 최대 새 종목 수" hint="하루에 새로 들어가는 종목 수 제한"
           on={s.buy.maxBuyPerDay > 0} onChange={(on) => patchBuy({ maxBuyPerDay: on ? 1 : 0 })}>
           <QuickStepper value={s.buy.maxBuyPerDay} onChange={(v) => patchBuy({ maxBuyPerDay: v })} chips={[1, 3, 5]} unit="종목" min={1} />
         </SubToggle>
-        <Field label="재매수 방지">
+        <Field label="다시 사기까지">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>청산 후 N일(캘린더) 재매수 금지 · 0=미사용</span>
+          <p className="bte-note">판 뒤 N일(달력 기준) 동안 같은 종목을 다시 사지 않아요. 0이면 쓰지 않아요.</p>
         </Field>
       </Section>
 
       {!s.assetAlloc.enabled && (
-        <Section title="현금 비중 (단순)" hint="평가자산 대비 현금 상시 보유" tone="neutral"
+        <Section title="현금 남겨 두기" hint="평가자산 대비 현금을 늘 들고 있어요" tone="neutral"
           enabled={s.cashReservePct > 0} onToggle={(on) => set((x) => ({ ...x, cashReservePct: on ? 10 : 0 }))}>
           <Field label="현금 비중">
             <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
               chips={[10, 20, 30]} unit="%" min={0} max={90} />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              평가자산의 N%를 현금으로 상시 유지 — 매수 가용액에서 제외 (ETF 자산배분 사용 시 이 항목은 그쪽으로 통합)
-            </span>
+            <p className="bte-note">평가자산의 N%를 늘 현금으로 두고 살 돈에서 빼요. ETF 자산배분을 켜면 그쪽으로 합쳐져요.</p>
           </Field>
         </Section>
       )}
 
       <AssetAllocPanel s={s} set={set} />
 
-      <Section title="마켓타이밍" hint="지수 조건 포트폴리오 게이트" tone="neutral"
+      <Section title="시장이 나쁠 때 멈추기" hint="지수 조건으로 포트폴리오 전체를 막아요(마켓타이밍)" tone="neutral"
         enabled={s.marketTiming.on} onToggle={(on) => patchMt({ on })}>
         <Field label="기준 지수">
           <Segmented value={s.marketTiming.index} onChange={(index) => patchMt({ index })}
             options={[{ id: "KOSPI", label: "코스피" }, { id: "KOSDAQ", label: "코스닥" }]} />
         </Field>
-        <Field label="조건 위반 시">
+        <Field label="조건이 깨지면">
           <Segmented value={s.marketTiming.mode} onChange={(mode) => patchMt({ mode })}
-            options={[{ id: "block_buy", label: "신규 매수 차단" }, { id: "exit_all", label: "전량 청산" }]} />
+            options={[{ id: "block_buy", label: "새로 사지 않기" }, { id: "exit_all", label: "모두 팔기" }]} />
         </Field>
         <ConditionFormulaEditor tone="neutral" conditions={s.marketTiming.conditions}
           onChange={(c: Condition[]) => patchMt({ conditions: c })} />
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          지수 봉에 평가 (전부 충족 시 ON) — 평균모멘텀스코어·변화율_기간 등 가격 함수 권장, 평가 불가 조건은 무시
-        </div>
+        <p className="bte-note">
+          지수 봉으로 평가해요(모두 맞으면 켬). 평균모멘텀스코어·변화율_기간 같은 가격 함수를 권해요. 평가할 수 없는 조건은 빼고 봐요.
+        </p>
       </Section>
 
     </div>

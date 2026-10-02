@@ -1,80 +1,46 @@
 "use client";
-// 조건 요약 패널 (젠포트 "내가 설정한 조건 보기" 미러) — 매수/매도/매매대상 독립 탭으로
-// 현재 설정 전체를 읽기 전용 카드로 표시. buildSummary(strategy, tab)가 단일 소스.
-// 편집 패널과 같은 상태(s)를 읽으므로 설정 변경이 즉시 반영된다(라이브 미러).
+// 설정 되읽기(오른쪽) — 지금 펼친 단계의 설정 전체를 읽기 전용으로 보인다. `buildSummary(strategy, tab)` 가 단일 소스.
+// BU3: 요약 안의 탭 줄(매수/매도/매매대상)을 걷었다 — 왼쪽 단계가 이미 고르는 자리라 두 번 고르게 하지 않는다.
+// ④ 돈·기간·비용은 `buildSummary` 의 매수 쪽 "포트 기본" 묶음이고, ① 무엇을 살까에서는 그 묶음을 뺀다(같은 줄을 두 번 보이지 않게).
+// 판단이 아니라 사용자가 넣은 값이다 — 꺼진 값은 흐리게(`data-muted`) 둔다. "안 켬"과 "못 잼"을 가르는 문구는 `buildSummary` 그대로.
 
-import { useEffect, useState } from "react";
-import { buildSummary, type BacktestStrategy, type SummaryTab } from "@/entities/backtest/strategy";
-import { TONES, type Tone } from "@/shared/ui/kit";
+import { buildSummary, type BacktestStrategy } from "@/entities/backtest/strategy";
 
-const R = "var(--bs-border-radius)";
-const RL = "var(--bs-border-radius-lg)";
+export type StepId = "buy" | "sell" | "universe" | "capital";
 
-const TABS: Array<{ id: SummaryTab; label: string; tone: Tone }> = [
-  { id: "buy", label: "매수조건", tone: "buy" },
-  { id: "sell", label: "매도조건", tone: "sell" },
-  { id: "universe", label: "매매대상", tone: "neutral" },
-];
+const STEP_NAME: Record<StepId, string> = { buy: "무엇을 살까", sell: "언제 팔까", universe: "어디서 고를까", capital: "돈·기간·비용" };
+const CAPITAL_GROUP = "포트 기본";
 
-export default function ConditionSummary({ s, activeTab, onTabChange }: {
-  s: BacktestStrategy;
-  /** 편집 중인 탭 — 요약이 이를 따라간다(동기화). 없으면 독립 동작 */
-  activeTab?: SummaryTab;
-  /** 요약 탭 클릭 시 편집 탭도 전환 (단일 소스 동기화) */
-  onTabChange?: (t: SummaryTab) => void;
-}) {
-  const [tab, setTab] = useState<SummaryTab>(activeTab ?? "buy");
-  // 편집 탭이 바뀌면 요약도 따라감 (#1). 요약 탭 클릭은 onTabChange로 편집 탭까지 전환.
-  useEffect(() => {
-    if (activeTab) setTab(activeTab);
-  }, [activeTab]);
-  const handleTab = (t: SummaryTab) => {
-    setTab(t);
-    onTabChange?.(t);
-  };
-  const active = TABS.find((t) => t.id === tab) ?? TABS[0];
-  const groups = buildSummary(s, tab);
+/** ★아직 세지 않은 대상 수를 0으로 보이지 않는다★ 대상 수는 ③을 열 때 서버에 묻는다(`universe-count`) — 그 전의
+ *  `matched·totalUniverse = 0` 은 "0종목"이 아니라 "모름"이다(미상 ≠ 0). 첫 화면에서 미리 묻지 않는 것은 요청 골든을 지키려고. */
+const UNCOUNTED = "③을 열면 세어요";
+export function stepGroups(s: BacktestStrategy, step: StepId) {
+  if (step === "capital") return buildSummary(s, "buy").filter((g) => g.label === CAPITAL_GROUP);
+  if (step === "buy") return buildSummary(s, "buy").filter((g) => g.label !== CAPITAL_GROUP);
+  const groups = buildSummary(s, step);
+  if (step !== "universe" || s.universe.totalUniverse > 0) return groups;
+  return groups.map((g) => ({ ...g, rows: g.rows.map((r) =>
+    r.label === "선택한 매매 대상" || r.label === "전체 종목" ? { ...r, value: UNCOUNTED, muted: true } : r) }));
+}
 
+export default function ConditionSummary({ s, step }: { s: BacktestStrategy; step: StepId }) {
   return (
-    <aside className="tbt-summary" style={{
-      background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RL, padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>전략 요약</span>
-      </div>
-
-      {/* 매수/매도/매매대상 탭 */}
-      <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-strong)", borderRadius: R, overflow: "hidden", marginBottom: 14 }}>
-        {TABS.map((t) => (
-          <button key={t.id} type="button" onClick={() => handleTab(t.id)}
-            style={{ flex: 1, fontSize: 12, fontWeight: tab === t.id ? 600 : 400, padding: "7px 0", border: "none", cursor: "pointer",
-              background: tab === t.id ? TONES[t.tone].bg : "var(--bg-card)",
-              color: tab === t.id ? TONES[t.tone].text : "var(--text-secondary)" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 요약 카드들 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-        {groups.map((g) => (
-          <div key={g.label} style={{ border: "1px solid var(--border)", borderRadius: R, padding: "11px 12px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 9 }}>
-              <span style={{ width: 3, height: 12, borderRadius: 2, background: TONES[active.tone].accent }} />
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)" }}>{g.label}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {g.rows.map((r, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-                  <span style={{ fontSize: 11.5, color: "var(--text-secondary)", flexShrink: 0 }}>{r.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, textAlign: "right",
-                    fontFamily: "var(--bs-font-mono)", wordBreak: "keep-all",
-                    color: r.muted ? "var(--text-muted)" : "var(--text-primary)" }}>{r.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </aside>
+    <section className="tbt-summary bte-sum" aria-label="지금 설정">
+      <h2 className="bte-sum-h">지금 설정</h2>
+      <p className="bte-sum-sub">{STEP_NAME[step]}</p>
+      {stepGroups(s, step).map((g) => (
+        <div key={g.label} className="bte-sum-g">
+          <p className="bte-sum-gt">{g.label}</p>
+          <dl className="bte-sum-rows">
+            {g.rows.map((r, i) => (
+              <div key={i} className="bte-sum-row" data-muted={r.muted ? "1" : "0"}>
+                <dt>{r.label}</dt>
+                <dd>{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+    </section>
   );
 }

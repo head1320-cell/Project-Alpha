@@ -18,7 +18,7 @@ import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
 const FactorPickerModal = dynamic(
   () => import("@/features/factor-picker/FactorPickerModal"), { ssr: false });
 import { renderTermExpr, termLabel } from "@/entities/backtest/factorFunctions";
-import { TONES, type Tone } from "@/shared/ui/kit";
+import { type Tone } from "@/shared/ui/kit";
 
 export type FormulaToken =
   | { t: "factor"; expr: string; label: string }
@@ -51,13 +51,10 @@ export function buildLabel(tokens: FormulaToken[]): string {
     .join(" ");
 }
 
-const R = "var(--bs-border-radius)";
-
 export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
   tone?: Tone; tokens: FormulaToken[]; onChange: (t: FormulaToken[]) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const accent = TONES[tone];
 
   const append = (tk: FormulaToken) => onChange([...tokens, tk]);
   const removeAt = (i: number) => onChange(tokens.filter((_, idx) => idx !== i));
@@ -70,91 +67,67 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
     setPickerOpen(false);
   };
 
-  const opBtn = (v: "+" | "-" | "*" | "/") => (
-    <button key={v} type="button" onClick={() => append({ t: "op", v })} title={`연산자 ${OP_SYM[v]}`}
-      style={ctrlStyle}>{OP_SYM[v]}</button>
-  );
-
   return (
-    <div>
-      {/* 수식 칩 행 */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, minHeight: 46,
-        background: "var(--bg-card)", border: "1px solid var(--border-strong)", borderRadius: R,
-        padding: "9px 11px", marginBottom: 9,
-      }}>
+    <div className="fb" data-tone={tone}>
+      {/* 식 줄 — 눌러서 지운다 */}
+      <div className="fb-line" aria-label="만드는 식">
         {tokens.length === 0 && (
-          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            아래에서 팩터·연산자를 더해 수식을 만드세요 — 예: 종가 − 이동평균(종가, 20)
-          </span>
+          <span className="fb-empty">아래에서 팩터와 연산자를 더해 식을 만들어요. 예: 종가 − 이동평균(종가, 20)</span>
         )}
         {tokens.map((tk, i) => {
           if (tk.t === "factor") {
             return (
               // `fb-chip` 은 스타일이 아니라 **E2E 계약**이다 — 팩터 창이 실제로 무엇을
               // 넘겼는지(특히 눈에 잘 안 띄는 중첩) 확인할 수 있는 유일한 지점이 이 칩이다.
-              <span key={i} className="fb-chip" style={{
-                display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--bs-font-mono)",
-                fontSize: 13, color: accent.text, background: accent.bg, border: `1px solid ${accent.accent}`,
-                borderRadius: R, padding: "4px 7px", maxWidth: "100%",
-              }}>
-                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tk.label}</span>
-                <button type="button" onClick={() => removeAt(i)} aria-label="삭제"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: accent.text, display: "flex", flexShrink: 0 }}><X size={12} /></button>
+              <span key={i} className="fb-chip">
+                <span className="fb-chip-t">{tk.label}</span>
+                <button type="button" className="fb-x" onClick={() => removeAt(i)} aria-label={`${tk.label} 빼기`}><X size={12} aria-hidden /></button>
               </span>
             );
           }
           if (tk.t === "op") {
             return (
-              <button key={i} type="button" onClick={() => removeAt(i)} title="클릭하면 삭제"
-                style={{ fontFamily: "var(--bs-font-mono)", fontSize: 15, fontWeight: 600, color: "var(--text-primary)", background: "var(--bg-section)", border: "1px solid var(--border-strong)", borderRadius: R, padding: "2px 9px", cursor: "pointer" }}>
+              <button key={i} type="button" className="fb-tok" onClick={() => removeAt(i)} aria-label={`연산자 ${OP_SYM[tk.v]} 빼기`}>
                 {OP_SYM[tk.v]}
               </button>
             );
           }
           if (tk.t === "num") {
             return (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "var(--bg-section)", border: "1px solid var(--border-strong)", borderRadius: R, padding: "2px 5px" }}>
-                <input type="number" value={tk.v} onChange={(e) => setNumAt(i, e.target.value)} placeholder="0"
-                  style={{ width: 48, fontFamily: "var(--bs-font-mono)", fontSize: 13, textAlign: "center", border: "none", outline: "none", background: "transparent", color: "var(--text-primary)" }} />
-                <button type="button" onClick={() => removeAt(i)} aria-label="삭제"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", display: "flex" }}><X size={11} /></button>
+              <span key={i} className="fb-num">
+                <input type="number" value={tk.v} onChange={(e) => setNumAt(i, e.target.value)} placeholder="0" aria-label="상수 값" />
+                <button type="button" className="fb-x" onClick={() => removeAt(i)} aria-label="상수 빼기"><X size={11} aria-hidden /></button>
               </span>
             );
           }
           // 괄호
           return (
-            <button key={i} type="button" onClick={() => removeAt(i)} title="클릭하면 삭제"
-              style={{ fontFamily: "var(--bs-font-mono)", fontSize: 15, fontWeight: 600, color: "var(--text-secondary)", background: "none", border: "1px solid var(--border)", borderRadius: R, padding: "2px 8px", cursor: "pointer" }}>
+            <button key={i} type="button" className="fb-tok fb-tok--paren" onClick={() => removeAt(i)} aria-label={`${tk.t === "lp" ? "여는" : "닫는"} 괄호 빼기`}>
               {tk.t === "lp" ? "(" : ")"}
             </button>
           );
         })}
       </div>
 
-      {/* 도구 행 */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-        <button type="button" data-act="factor" onClick={() => setPickerOpen(true)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 500, color: "var(--on-accent)", background: accent.accent, border: "none", borderRadius: R, padding: "7px 12px", cursor: "pointer" }}>
-          <Plus size={14} /> 팩터
+      {/* 도구 줄 */}
+      <div className="fb-tools">
+        <button type="button" data-act="factor" className="fb-factor" onClick={() => setPickerOpen(true)}>
+          <Plus size={16} aria-hidden /> 팩터
         </button>
-        <span style={{ display: "inline-flex", gap: 4 }}>
-          {(["+", "-", "*", "/"] as const).map(opBtn)}
-        </span>
-        <button type="button" onClick={() => append({ t: "lp" })} title="여는 괄호" style={ctrlStyle}>(</button>
-        <button type="button" onClick={() => append({ t: "rp" })} title="닫는 괄호" style={ctrlStyle}>)</button>
-        <button type="button" onClick={() => append({ t: "num", v: "0" })} title="상수"
-          style={{ ...ctrlStyle, display: "inline-flex", alignItems: "center", gap: 3, width: "auto", padding: "0 9px" }}>
-          <Hash size={12} /> 상수
+        {(["+", "-", "*", "/"] as const).map((v) => (
+          <button key={v} type="button" className="fb-ctrl" onClick={() => append({ t: "op", v })} aria-label={`연산자 ${OP_SYM[v]} 더하기`}>{OP_SYM[v]}</button>
+        ))}
+        <button type="button" className="fb-ctrl" onClick={() => append({ t: "lp" })} aria-label="여는 괄호 더하기">(</button>
+        <button type="button" className="fb-ctrl" onClick={() => append({ t: "rp" })} aria-label="닫는 괄호 더하기">)</button>
+        <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={() => append({ t: "num", v: "0" })}>
+          <Hash size={14} aria-hidden /> 상수
         </button>
-        <span style={{ flex: 1 }} />
-        <button type="button" onClick={popLast} disabled={tokens.length === 0} title="마지막 지우기"
-          style={{ ...ctrlStyle, display: "inline-flex", alignItems: "center", gap: 3, width: "auto", padding: "0 9px", opacity: tokens.length ? 1 : 0.4, cursor: tokens.length ? "pointer" : "not-allowed" }}>
-          <Delete size={13} /> 지우기
+        <span className="fb-gap" />
+        <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={popLast} disabled={tokens.length === 0}>
+          <Delete size={14} aria-hidden /> 마지막 지우기
         </button>
         {tokens.length > 0 && (
-          <button type="button" onClick={() => onChange([])} title="전체 지우기"
-            style={{ ...ctrlStyle, width: "auto", padding: "0 9px", color: "var(--text-muted)" }}>비우기</button>
+          <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={() => onChange([])}>모두 지우기</button>
         )}
       </div>
 
@@ -162,9 +135,3 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
     </div>
   );
 }
-
-const ctrlStyle: React.CSSProperties = {
-  fontFamily: "var(--bs-font-mono)", fontSize: 14, fontWeight: 600, color: "var(--text-primary)",
-  background: "var(--bg-card)", border: "1px solid var(--border-strong)", borderRadius: R,
-  minWidth: 30, height: 30, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
-};

@@ -50,7 +50,8 @@ test("Radix Dialog: 관심그룹 창이 대화상자 계약을 지킨다", async
   const sink = trackErrors(page);
   await page.goto("/backtest", { waitUntil: "networkidle" });
   // UniversePanel 은 03 탭 뒤에 있다 — 초기 화면에는 트리거가 없다.
-  await page.locator(".tbt-mode", { hasText: "매매 대상" }).click();
+  // BU3 — 편집기 단계 이름이 "③ 어디서 고를까"(매매 대상)로 바뀌었다. `.tbt-mode` 계약은 그대로.
+  await page.locator(".tbt-mode", { hasText: "어디서 고를까" }).click();
   await page.getByRole("button", { name: /그룹 추가/ }).first().click();
   await assertDialogContract(page);
 
@@ -81,7 +82,7 @@ test("Radix Dialog: 닫으면 포커스가 창을 연 요소로 돌아온다", a
   // ★포커스 복귀는 트랩과 별개의 계약이다★ 닫은 뒤 포커스가 body 로 떨어지면
   // 키보드 사용자는 목록의 어디에 있었는지 잃는다.
   await page.goto("/backtest", { waitUntil: "networkidle" });
-  await page.locator(".tbt-mode", { hasText: "매매 대상" }).click();
+  await page.locator(".tbt-mode", { hasText: "어디서 고를까" }).click();
   const trigger = page.getByRole("button", { name: /그룹 추가/ }).first();
   await trigger.click();
   await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });

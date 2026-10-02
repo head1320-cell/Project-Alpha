@@ -51,6 +51,12 @@ async function back(page: Page) {
   await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
 }
 
+/** 돈·기간·비용 칸이 있는 단계로 — BU3 부터 ④(`step-capital`), 그 전에는 매수 단계에 있었다(골든 자료는 같다). */
+async function goCapital(page: Page) {
+  const cap = act(page, "step-capital");
+  await (await cap.count() ? cap : act(page, "step-buy")).click();
+}
+
 async function addDirectCondition(page: Page, expr: string, rhs: string) {
   await act(page, "cond-mode").first().getByRole("button", { name: "직접 입력", exact: true }).click();
   await act(page, "cond-expr").first().fill(expr);
@@ -95,7 +101,7 @@ test("백테스트 요청 골든: 단계마다 같은 실행 본문 · 같은 �
   await back(page);
 
   // ④ 돈·기간·비용 — 투자 금액 · 수수료 · 증권거래세 · 리밸런싱 매월
-  await act(page, "step-buy").click();
+  await goCapital(page);
   await act(page, "capital").fill("12000");
   await act(page, "fee").fill("0.2");
   await act(page, "sell-tax").click();
@@ -117,6 +123,7 @@ test("백테스트 요청 골든: 단계마다 같은 실행 본문 · 같은 �
 
   // 저장 → 새로고침 → 불러오기 → 실행 (저장 내용도 잰다)
   await act(page, "strategy-name").fill("골든 전략");
+  await goCapital(page);
   await act(page, "capital").fill("7000");
   await act(page, "save").click();
   const lib = await page.evaluate(() => JSON.parse(localStorage.getItem("alpha_bt_strategies_v2") ?? "[]"));
