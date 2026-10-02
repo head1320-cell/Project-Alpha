@@ -149,6 +149,13 @@ export function macroSnapshotDoc(snapshotId: string): GraphDoc {
   ]);
 }
 
+/** "설계에 넣기"(BU2) — 기본 흐름의 종목 고르기 노드에 넘겨받은 종목을 넣는다. 종목은 호출자가 stock_master 로 확인한 것만 넘긴다. */
+export function tickersDoc(tickers: string[]): GraphDoc {
+  return doc("종목 찾기에서 가져온 흐름",
+    CORE_CHAIN_TEMPLATE.nodes.map((x) => (x.type === "universe" ? { ...x, params: { ...x.params, tickers: [...tickers] } } : x)),
+    CORE_CHAIN_TEMPLATE.edges);
+}
+
 export interface GraphTemplate { key: string; name: string; description: string; doc: GraphDoc }
 
 /** 팔레트의 "빠른 시작" 목록 — 순서가 곧 권하는 순서다. */

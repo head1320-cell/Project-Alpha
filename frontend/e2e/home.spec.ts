@@ -126,6 +126,18 @@ test("점수 높은 종목: 서버 순서 그대로 5줄 · 가격은 원 단위
   expect(await page.evaluate(() => (window as unknown as { __home?: number }).__home), "새로고침 없이 옮겨 간다").toBe(1);
 });
 
+test("[이 n종목 설계에 넣기] = 보이는 행의 코드 그대로(순서 포함) → 캔버스가 그 종목으로 연다 (BU2 다리)", async ({ page }) => {
+  const run = page.waitForResponse((r) => r.url().includes("/api/v1/screener/run-advanced"));
+  await open(page);
+  const items = ((await (await run).json()) as { items: Item[] }).items.slice(0, 5);
+  const codes = items.map((i) => i.stock_code);
+  const link = page.locator(".home-picks a.home-bridge");
+  await expect(link).toHaveText(`이 ${codes.length}종목 설계에 넣기`);
+  await expect(link).toHaveAttribute("href", `/allocation?tickers=${codes.join(",")}`);
+  await link.click();
+  await expect(page.locator(".pg-file-note")).toContainText(`종목 찾기에서 가져온 ${codes.length}종목으로`, { timeout: 30_000 });
+});
+
 test("★점수 실패는 alert(빈 문구 아님)★ · 빈 결과는 빈 문구 + 데이터 상태로(alert 아님 — 짝)", async ({ page }) => {
   await page.route("**/api/v1/screener/run-advanced", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await open(page);

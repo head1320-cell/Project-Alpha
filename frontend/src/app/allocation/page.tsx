@@ -12,6 +12,8 @@ import type { GraphDoc } from "@/entities/portfolio-graph";
 // 템플릿 하나만 — 엔티티 전체(api·검증·포맷)를 첫 로드에 싣지 않는다.
 import { macroSnapshotDoc } from "@/entities/portfolio-graph/templates";
 import { LEGACY_SCREENS, isLegacyScreenKey, type LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
+// "설계에 넣기"(BU2) — 종목 찾기·홈이 넘긴 `?tickers=`. stock_master 로 확인한 종목만 싣는다(tickerBridge 가 판정).
+import { bridgeFromTickers } from "@/entities/portfolio-graph/tickerBridge";
 
 // 케이스 바는 react-query·배지를 싣는다 — 첫 로드(기준 120 kB)를 키우지 않게 따로 싣는다(BL2b).
 const CaseBar = dynamic(() => import("@/features/case-bar/CaseBar"), { ssr: false });
@@ -30,20 +32,33 @@ export default function AllocationCanvasPage() {
   const [boot, setBoot] = useState<{ doc: GraphDoc; note: string } | null | undefined>(undefined);
   const [snapshotId, setSnapshotId] = useState<string | null>(null);
   const [legacy, setLegacy] = useState<LegacyScreen | null>(null);
+  // 넘겨받은 것을 싣지 못했을 때(예: 종목 이름 확인 실패) 문서 없이 말만 전한다 — 지금 캔버스는 그대로 둔다.
+  const [bootNote, setBootNote] = useState<string | null>(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const sid = q.get("snapshot");
     const from = q.get("from");
+    const tickers = q.get("tickers");
     setSnapshotId(sid);
     // 모르는 `from` 은 무시한다 — 지어낸 안내를 띄우지 않는다.
     setLegacy(isLegacyScreenKey(from) ? LEGACY_SCREENS[from] : null);
-    setBoot(sid ? { doc: macroSnapshotDoc(sid),
-                    note: `매크로 화면에서 가져온 국면 스냅샷 ${sid}로 ‘매크로 스냅샷 반영’ 흐름을 열었어요.` } : null);
+    if (sid) {
+      setBoot({ doc: macroSnapshotDoc(sid), note: `매크로 화면에서 가져온 국면 스냅샷 ${sid}로 ‘매크로 스냅샷 반영’ 흐름을 열었어요.` });
+      return;
+    }
+    if (tickers === null) { setBoot(null); return; }
+    let alive = true;
+    void bridgeFromTickers(tickers).then((b) => {
+      if (!alive) return;
+      if (b && b.doc) setBoot({ doc: b.doc, note: b.note });
+      else { setBootNote(b?.note ?? null); setBoot(null); }
+    });
+    return () => { alive = false; };
   }, []);
 
   return (
     <div className="aas-root pg-page">
-      {boot !== undefined && <PortfolioCanvas initialDoc={boot} legacy={legacy} topExtra={
+      {boot !== undefined && <PortfolioCanvas initialDoc={boot} bootNote={bootNote} legacy={legacy} topExtra={
         // 연구 케이스 — 매크로 화면과 같은 케이스 바. 캔버스 높이를 뺏지 않게 상단 바에서 펼친다(BL2b).
         <details className="pg-casebox">
           <summary className="pg-btn pg-btn--ghost" title="연구 케이스">케이스</summary>

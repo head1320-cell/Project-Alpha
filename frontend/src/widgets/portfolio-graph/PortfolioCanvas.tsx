@@ -82,7 +82,7 @@ import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
 import { RecordsSheetBody } from "./RecordsSheet";
 import { SettingsPanel } from "./SettingsPanel";
-import { Sheet } from "./Sheet";
+import { Sheet } from "@/shared/ui/tx";
 import { StoryPanel } from "./StoryPanel";
 import { RunHistory } from "./RunHistory";
 import { SimpleView } from "./SimpleView";
@@ -201,6 +201,8 @@ export interface PortfolioCanvasProps {
   topExtra?: ReactNode;
   /** 다른 화면이 넘긴 흐름(BL2b — 매크로 스냅샷 등). 있으면 세션 복원 대신 이것을 연다. */
   initialDoc?: { doc: GraphDoc; note: string } | null;
+  /** 넘겨받은 흐름을 싣지 못했을 때의 말(BU2 — 예: 종목 이름 확인 실패). 문서는 바꾸지 않고 안내만 띄운다. */
+  bootNote?: string | null;
   /** 옛 주소(`/allocation/<화면>` → `?from=`)로 왔을 때 그 예전 화면(BL4). 배너·팔레트 검색·템플릿·서랍을 안내한다. */
   legacy?: LegacyScreen | null;
 }
@@ -249,7 +251,7 @@ const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archiv
     sub: "알파 식을 등록하고 단계를 올리거나 내려요." },
 ];
 
-export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanvasProps) {
+export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
   const rf = useRef<ReactFlowInstance | null>(null);
   const canvasEl = useRef<HTMLDivElement>(null);
@@ -358,6 +360,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
           const saved = readWip();
           const parsed = saved ? parseFile(saved) : null;
           if (st.nodes.length === 0) st.loadDoc(parsed?.doc ?? CORE_CHAIN_TEMPLATE, parsed?.problems ?? []);
+          if (bootNote) setFileNote(bootNote);
         }
         // BT2 — 고른 탭이 없으면 처음 한 번만 정한다: 빈 캔버스는 절차부터(노드를 붙여도 탭이 바뀌지 않게 저장하지 않고 고정).
         setLeftTabState((t) => t ?? (usePortfolioGraph.getState().nodes.length === 0 ? "proc" : "add"));
@@ -1195,7 +1198,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, legacy }: PortfolioCanva
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} catalog={s.catalog ?? []} commands={commands}
                       onAddNode={(k) => addAt(k)} />
       {DRAWERS.map((d) => (
-        <Sheet key={d.key} testId={d.key} open={drawer === d.key} onClose={() => setDrawer(null)} title={d.label} sub={d.sub}>
+        <Sheet key={d.key} testId={d.key} className="pg-sheet" open={drawer === d.key} onClose={() => setDrawer(null)} title={d.label} sub={d.sub}>
           <d.Body />
         </Sheet>
       ))}

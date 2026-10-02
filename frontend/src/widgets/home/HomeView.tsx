@@ -133,13 +133,23 @@ function Picks() {
               <p>점수를 낼 종목이 아직 없어요. 데이터가 적재됐는지 먼저 확인해 주세요.</p>
               <Link href="/admin/data" className="tx-btn tx-btn--sub">데이터 상태 보기</Link>
             </div>
-          ) : items.map((it) => (
-            <ListRow key={it.stock_code} href={`/insights?code=${it.stock_code}`}
-                     title={it.corp_name}
-                     sub={<><span className="home-code">{it.stock_code}</span>{it.verdict ? <> · {it.verdict}</> : null}</>}
-                     right={<span className="home-pick-r"><span>{priceWon(it.current_price)}</span>
-                       <span className="home-score">종합 {num(it.composite_score, 1)}</span></span>} />
-          ))}
+          ) : (
+            <>
+              {items.map((it) => (
+                <ListRow key={it.stock_code} href={`/insights?code=${it.stock_code}`}
+                         title={it.corp_name}
+                         sub={<><span className="home-code">{it.stock_code}</span>{it.verdict ? <> · {it.verdict}</> : null}</>}
+                         right={<span className="home-pick-r"><span>{priceWon(it.current_price)}</span>
+                           <span className="home-score">종합 {num(it.composite_score, 1)}</span></span>} />
+              ))}
+              {/* BU2 다리 — 보이는 그 종목 그대로 캔버스 종목 고르기 노드로(캔버스가 stock_master 로 다시 확인한다) */}
+              <div className="home-act">
+                <Link href={`/allocation?tickers=${items.map((it) => it.stock_code).join(",")}`} className="tx-btn tx-btn--sub home-bridge">
+                  이 {items.length}종목 설계에 넣기
+                </Link>
+              </div>
+            </>
+          )}
       </Section>
     </div>
   );

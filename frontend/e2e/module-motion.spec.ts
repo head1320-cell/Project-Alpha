@@ -24,7 +24,8 @@ import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
 const MODULES: { name: string; path: string; panels: string }[] = [
   // BU1 — 홈은 토스식 절(`.tx-answer`·`.tx-sec`)로 바뀌었다. `.dash-card` 판은 없다(옛 카드 격자를 목록 줄로 대체).
   { name: "00 Dashboard",  path: "/dashboard",   panels: ".tx-answer, .tx-sec" },
-  { name: "01 Screener",   path: "/screener",    panels: ".bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap" },
+  // BU2 — 종목 찾기도 토스식 절이다. 옛 왼쪽 레일(`.bsc-rail`·`.bsc-mcap`)은 없고, `.bsc-preset` 은 접힌 전문가 설정 안이라 판이 아니다.
+  { name: "01 Screener",   path: "/screener",    panels: ".tx-answer, .tx-sec" },
   { name: "02 Backtester", path: "/backtest",    panels: ".tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel" },
   { name: "03 Macro",      path: "/macro",       panels: ".mc-card, .mv-rcard" },
   { name: "04 Company",    path: "/insights",    panels: ".ca-cp-card, .ca-cp-panel" },
@@ -40,8 +41,9 @@ const MODULES: { name: string; path: string; panels: string }[] = [
 // 고치는 것은 A12(모션 단계)의 범위 밖이라, CSS 특이성 가드의 `KNOWN_COLLISIONS` 와 같은
 // 방식으로 **기존 실패 수를 기록**한다. 새 결함은 빨개지고, 이 수는 줄어들 수만 있다.
 // BU0 — 셸 브레드크럼이 최상위 화면에서 빠져(`.tcrumb-sep` 결함이 사라짐) 일곱 모듈 모두 1씩 줄었다(실측 2회 같음).
+// BU2 — 종목 찾기 2 → 0(옛 레일의 `.bsc-preset-save` 1.26:1 등이 토스식 다시 그리기로 사라졌다 · 실측 2회 같음).
 const KNOWN_LOW: Record<string, number> = {
-  "00 Dashboard": 0, "01 Screener": 2, "02 Backtester": 8,
+  "00 Dashboard": 0, "01 Screener": 0, "02 Backtester": 8,
   "03 Macro": 3, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
 };
 
