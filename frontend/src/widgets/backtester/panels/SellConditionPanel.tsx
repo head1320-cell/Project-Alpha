@@ -38,7 +38,7 @@ export default function SellConditionPanel({ s, set }: {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
-      <Section title="목표가 / 손절가" hint="익절·손절·트레일링" tone="sell"
+      <Section act="sell-exits" title="목표가 / 손절가" hint="익절·손절·트레일링" tone="sell"
         enabled={v.takeProfit.on || v.stopLoss.on || v.trailing.on}
         onToggle={(on) => patch({ takeProfit: { ...v.takeProfit, on }, stopLoss: { ...v.stopLoss, on }, trailing: { ...v.trailing, on: on && v.trailing.on } })}>
         <Field label="매도 주문 방법">
@@ -67,8 +67,8 @@ export default function SellConditionPanel({ s, set }: {
         <SubToggle tone="sell" label="목표가 (익절)" on={v.takeProfit.on} onChange={(on) => patch({ takeProfit: { ...v.takeProfit, on } })}>
           <QuickStepper value={v.takeProfit.pct} onChange={(pct) => patch({ takeProfit: { ...v.takeProfit, pct } })} chips={[5, 10, 20]} unit="%" min={0} />
         </SubToggle>
-        <SubToggle tone="sell" label="손절가" on={v.stopLoss.on} onChange={(on) => patch({ stopLoss: { ...v.stopLoss, on } })}>
-          <QuickStepper value={v.stopLoss.pct} onChange={(pct) => patch({ stopLoss: { ...v.stopLoss, pct } })} chips={[5, 10]} unit="%" min={0} />
+        <SubToggle tone="sell" act="stop-loss" label="손절가" on={v.stopLoss.on} onChange={(on) => patch({ stopLoss: { ...v.stopLoss, on } })}>
+          <QuickStepper value={v.stopLoss.pct} onChange={(pct) => patch({ stopLoss: { ...v.stopLoss, pct } })} chips={[5, 10]} unit="%" min={0} act="stop-loss-pct" />
         </SubToggle>
         <SubToggle tone="sell" label="드래깅 청산" hint="트레일링 스탑" on={v.trailing.on} onChange={(on) => patch({ trailing: { ...v.trailing, on } })}>
           <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>고점 대비</span>

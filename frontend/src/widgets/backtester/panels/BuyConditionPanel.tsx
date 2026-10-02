@@ -43,7 +43,7 @@ export default function BuyConditionPanel({ s, set }: {
 
       <Section title="포트 기본 설정" hint="투자금·기간·비용" tone="neutral" enabled onToggle={() => {}}>
         <Field label="투자 금액">
-          <QuickStepper value={s.capital} onChange={(v) => set((x) => ({ ...x, capital: v }))} chips={[1000, 5000]} unit="만원" min={0} />
+          <QuickStepper value={s.capital} onChange={(v) => set((x) => ({ ...x, capital: v }))} chips={[1000, 5000]} unit="만원" min={0} act="capital" />
         </Field>
         <Field label="투자 기간">
           <input type="date" value={s.startDate} max={s.endDate}
@@ -63,7 +63,7 @@ export default function BuyConditionPanel({ s, set }: {
           </span>
         </Field>
         <Field label="수수료율">
-          <QuickStepper value={s.feePct} onChange={(v) => set((x) => ({ ...x, feePct: v }))} unit="%" min={0} />
+          <QuickStepper value={s.feePct} onChange={(v) => set((x) => ({ ...x, feePct: v }))} unit="%" min={0} act="fee" />
         </Field>
         <Field label="슬리피지">
           <QuickStepper value={s.slippagePct} onChange={(v) => set((x) => ({ ...x, slippagePct: v }))} unit="%" min={0} />
@@ -77,7 +77,7 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="추가 비용">
           <div className="flex w-full flex-col gap-1.5">
             <SubToggle tone="sell" label="증권거래세" hint="매도 편도 18bp · 수수료보다 크다"
-              on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
+              act="sell-tax" on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
             <SubToggle tone="sell" label="호가 스프레드" hint="편도 2.5bp (스프레드의 절반)"
               on={s.chargeSpread} onChange={(v) => set((x) => ({ ...x, chargeSpread: v }))} />
             <SubToggle tone="sell" label="시장충격" hint="주문금액÷거래대금에 비례 · 거래대금 없으면 미상"
@@ -95,7 +95,7 @@ export default function BuyConditionPanel({ s, set }: {
           </div>
         </Field>
         <Field label="리밸런싱 주기">
-          <Segmented value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
+          <Segmented act="rebalance" value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
             options={[
               { id: "daily", label: "매일" }, { id: "weekly", label: "매주" },
               { id: "monthly", label: "매월" }, { id: "quarterly", label: "분기" },
@@ -144,7 +144,7 @@ export default function BuyConditionPanel({ s, set }: {
         enabled={s.buy.enabled} onToggle={(v) => patchBuy({ enabled: v })}>
         <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })}
           logicExpr={s.buy.logicExpr} onLogicChange={(v) => patchBuy({ logicExpr: v })} logicDefaultLabel="모두 AND" sideKey="buy" />
-        <SubToggle tone="buy" label="펀더멘털 조건 평가" hint="현재 스냅샷 기준 · look-ahead 주의" on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
+        <SubToggle tone="buy" act="buy-fundamentals" label="펀더멘털 조건 평가" hint="현재 스냅샷 기준 · look-ahead 주의" on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>고급 체결 옵션</div>
           <SubToggle tone="buy" label="분할 매수 (래더)" hint="가격변동 단계별 비중 체결"
@@ -223,7 +223,7 @@ export default function BuyConditionPanel({ s, set }: {
           <QuickStepper value={s.buy.weightPct} onChange={(v) => patchBuy({ weightPct: v })} chips={[1, 5, 10]} unit="%" min={0} max={100} />
         </Field>
         <Field label="최대 보유 종목 수">
-          <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} />
+          <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} act="max-stocks" />
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             동시 보유 가능한 포트폴리오 슬롯 수 — 스크리닝 후보 풀 크기는 매매대상 탭의
             &quot;평가 종목 상한&quot;에서 별도 설정

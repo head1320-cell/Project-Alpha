@@ -242,7 +242,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
       <div style={{ background: "var(--bg-section)", borderRadius: RL, padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>조건식 설정</span>
-          <Segmented tone={tone} value={inputMode} onChange={(m) => { setInputMode(m); setExprCheck(null); }}
+          <Segmented tone={tone} act="cond-mode" value={inputMode} onChange={(m) => { setInputMode(m); setExprCheck(null); }}
             options={[{ id: "builder", label: "수식 빌더" }, { id: "direct", label: "직접 입력" }]} />
         </div>
 
@@ -252,7 +252,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           </div>
         ) : (
           <div style={{ marginBottom: 12 }}>
-            <input value={directExpr} spellCheck={false}
+            <input value={directExpr} spellCheck={false} data-act="cond-expr"
               onChange={(e) => { setDirectExpr(e.target.value); setExprCheck(null); }}
               placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})"
               style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--bs-font-mono)", fontSize: 13, padding: "10px 12px", border: `1px solid ${exprCheck && !exprCheck.ok ? "var(--hx-d-dc2626)" : "var(--border-strong)"}`, borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
@@ -274,7 +274,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         {/* 연산자 + 값 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13, flexWrap: "wrap" }}>
           <Segmented tone={tone} value={op} onChange={setOp} options={OPS.map((o) => ({ id: o.id, label: o.label }))} />
-          <input type="number" className="bs-numbox" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값"
+          <input type="number" className="bs-numbox" data-act="cond-rhs" value={rhs} onChange={(e) => setRhs(e.target.value)} placeholder="값"
             style={{ width: 104, fontFamily: "var(--bs-font-mono)", fontSize: 15, textAlign: "center", padding: "9px 8px", border: "1px solid var(--border-strong)", borderRadius: R, background: "var(--bg-card)", color: "var(--text-primary)" }} />
           {(op === "cross_above" || op === "cross_below") && (
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -300,7 +300,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           </span>
         </div>
 
-        <button type="button" onClick={save} disabled={!canSave}
+        <button type="button" onClick={save} disabled={!canSave} data-act="cond-save"
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "var(--on-accent)", background: canSave ? accent.accent : "var(--border-strong)", border: "none", borderRadius: R, padding: "10px 0", cursor: canSave ? "pointer" : "not-allowed" }}>
           <Check size={14} /> 조건식 저장
         </button>

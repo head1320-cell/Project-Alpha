@@ -150,17 +150,17 @@ export default function TerminalBacktester() {
         <div className="tbt-config-main">
           {/* 매수 / 매도 / 매매 대상 탭 */}
           <div className="tbt-mode-switch">
-            <button className={`tbt-mode${tab === "buy" ? " active" : ""}`} onClick={() => setTab("buy")}>
+            <button data-act="step-buy" className={`tbt-mode${tab === "buy" ? " active" : ""}`} onClick={() => setTab("buy")}>
               <span className="tbt-mode-num">01</span>
               매수 조건
               <span className="tbt-mode-sub">Buy</span>
             </button>
-            <button className={`tbt-mode${tab === "sell" ? " active" : ""}`} onClick={() => setTab("sell")}>
+            <button data-act="step-sell" className={`tbt-mode${tab === "sell" ? " active" : ""}`} onClick={() => setTab("sell")}>
               <span className="tbt-mode-num">02</span>
               매도 조건
               <span className="tbt-mode-sub">Sell</span>
             </button>
-            <button className={`tbt-mode${tab === "universe" ? " active" : ""}`} onClick={() => setTab("universe")}>
+            <button data-act="step-universe" className={`tbt-mode${tab === "universe" ? " active" : ""}`} onClick={() => setTab("universe")}>
               <span className="tbt-mode-num">03</span>
               매매 대상
               <span className="tbt-mode-sub">Universe</span>
@@ -183,13 +183,13 @@ export default function TerminalBacktester() {
           <div className="tbt-action-box">
             <div className="tbt-action-row">
               <input value={s.name} onChange={(e) => setS((x) => ({ ...x, name: e.target.value }))}
-                placeholder="전략 이름" className="tbt-action-name" />
-              <button type="button" onClick={handleSaveStrategy} className="tbt-action-save"
+                placeholder="전략 이름" className="tbt-action-name" data-act="strategy-name" />
+              <button type="button" onClick={handleSaveStrategy} data-act="save" className="tbt-action-save"
                 title="현재 설정을 브라우저에 저장 (새로고침·재방문 후에도 유지)">
                 전략 저장
               </button>
             </div>
-            <button type="button" onClick={run} disabled={loading} className="tbt-run" style={{ width: "100%" }}>
+            <button type="button" onClick={run} disabled={loading} data-act="run" className="tbt-run" style={{ width: "100%" }}>
               {loading ? "백테스트 실행 중..." : "백테스트 실행"}
             </button>
             {saveMsg && <div className="tbt-action-msg">{saveMsg}</div>}
@@ -205,7 +205,7 @@ export default function TerminalBacktester() {
                 <div className="tbt-saved-head">저장된 전략 {saved.length}</div>
                 {saved.map((item) => (
                   <div key={item.id} className="tbt-saved-item">
-                    <button type="button" className="tbt-saved-load"
+                    <button type="button" data-act="load" className="tbt-saved-load"
                       title={`불러오기 · ${new Date(item.savedAt).toLocaleString()}`}
                       onClick={() => handleLoadStrategy(item)}>
                       {item.name}

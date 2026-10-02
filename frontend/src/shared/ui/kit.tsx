@@ -43,14 +43,14 @@ export function GroupedSelect({ value, onChange, groups, width = 168 }: {
 }
 
 // ── Toggle (pill switch) ──────────────────────────────────────
-export function Toggle({ on, onChange, tone = "neutral", size = "md" }: {
-  on: boolean; onChange: (v: boolean) => void; tone?: Tone; size?: "sm" | "md";
+export function Toggle({ on, onChange, tone = "neutral", size = "md", act }: {
+  on: boolean; onChange: (v: boolean) => void; tone?: Tone; size?: "sm" | "md"; act?: string;
 }) {
   const w = size === "sm" ? 32 : 34;
   const k = size === "sm" ? 13 : 14;
   return (
     <button
-      type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)}
+      type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} data-act={act}
       style={{
         width: w, height: w === 34 ? 18 : 17, borderRadius: 9, border: "none", cursor: "pointer",
         padding: 2, boxSizing: "border-box", display: "inline-flex", alignItems: "center",
@@ -68,9 +68,9 @@ export function Toggle({ on, onChange, tone = "neutral", size = "md" }: {
 // `enabled ? "var(--border)" : "var(--border)"` 였다 — 두 가지가 같은 값이라 조건이
 // 아무 일도 하지 않았다. 비활성 상태를 구별하려던 흔적으로 보이지만, 지금 코드가 하는 일은
 // "항상 같은 테두리" 이므로 그대로 유지하고 조건만 없앴다(동작 변화 0).
-export function Section({ title, hint, tone = "neutral", enabled, onToggle, children }: {
+export function Section({ title, hint, tone = "neutral", enabled, onToggle, act, children }: {
   title: string; hint?: string; tone?: Tone; enabled: boolean;
-  onToggle: (v: boolean) => void; children?: ReactNode;
+  onToggle: (v: boolean) => void; act?: string; children?: ReactNode;
 }) {
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--bs-border-radius-lg)] px-4 py-[15px]">
@@ -80,7 +80,7 @@ export function Section({ title, hint, tone = "neutral", enabled, onToggle, chil
           <span style={{ fontSize: 15, fontWeight: 500, color: enabled ? "var(--text-primary)" : "var(--text-muted)", flexShrink: 0 }}>{title}</span>
           {hint && <span style={{ fontSize: 12, color: enabled ? "var(--text-secondary)" : "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hint}</span>}
         </div>
-        <Toggle on={enabled} onChange={onToggle} tone={tone} />
+        <Toggle on={enabled} onChange={onToggle} tone={tone} act={act} />
       </div>
       {enabled && children && (
         <div className="border-t border-[var(--border)] mt-[13px] pt-3.5 flex flex-col gap-3.5">
@@ -92,8 +92,8 @@ export function Section({ title, hint, tone = "neutral", enabled, onToggle, chil
 }
 
 // ── SubToggle (advanced sub-row inside a section) ─────────────
-export function SubToggle({ label, hint, on, onChange, tone = "neutral", children }: {
-  label: string; hint?: string; on: boolean; onChange: (v: boolean) => void; tone?: Tone; children?: ReactNode;
+export function SubToggle({ label, hint, on, onChange, tone = "neutral", act, children }: {
+  label: string; hint?: string; on: boolean; onChange: (v: boolean) => void; tone?: Tone; act?: string; children?: ReactNode;
 }) {
   return (
     <div style={{ background: on ? TONES[tone].bg : "var(--bg-section)", borderRadius: R, padding: "10px 12px" }}>
@@ -102,7 +102,7 @@ export function SubToggle({ label, hint, on, onChange, tone = "neutral", childre
           <span className="text-[13px] text-[var(--text-primary)]">{label}</span>
           {hint && <span className="text-[11px] text-[var(--text-secondary)]">{hint}</span>}
         </div>
-        <Toggle on={on} onChange={onChange} tone={tone} size="sm" />
+        <Toggle on={on} onChange={onChange} tone={tone} size="sm" act={act} />
       </div>
       {on && children && <div className="mt-2.5 flex flex-wrap items-center gap-2">{children}</div>}
     </div>
@@ -126,13 +126,13 @@ const numBox: React.CSSProperties = {
 };
 
 // ── QuickStepper (number + quick +/- chips) ──────────────────
-export function QuickStepper({ value, onChange, chips = [], unit = "", min, max }: {
-  value: number; onChange: (v: number) => void; chips?: number[]; unit?: string; min?: number; max?: number;
+export function QuickStepper({ value, onChange, chips = [], unit = "", min, max, act }: {
+  value: number; onChange: (v: number) => void; chips?: number[]; unit?: string; min?: number; max?: number; act?: string;
 }) {
   const clamp = (n: number) => Math.max(min ?? -Infinity, Math.min(max ?? Infinity, n));
   return (
     <>
-      <input type="number" className="bs-numbox" value={value}
+      <input type="number" className="bs-numbox" value={value} data-act={act}
         onChange={(e) => onChange(clamp(Number(e.target.value)))} style={numBox} />
       {unit && <span className="text-[13px] text-[var(--text-secondary)]">{unit}</span>}
       <span className="flex gap-[5px]">
@@ -148,11 +148,11 @@ export function QuickStepper({ value, onChange, chips = [], unit = "", min, max 
 }
 
 // ── Segmented (selectable button group) ───────────────────────
-export function Segmented<T extends string>({ options, value, onChange, tone = "neutral" }: {
-  options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; tone?: Tone;
+export function Segmented<T extends string>({ options, value, onChange, tone = "neutral", act }: {
+  options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; tone?: Tone; act?: string;
 }) {
   return (
-    <span className="flex gap-1 bg-[var(--bg-section)] rounded-[var(--bs-border-radius)] p-[3px]">
+    <span data-act={act} className="flex gap-1 bg-[var(--bg-section)] rounded-[var(--bs-border-radius)] p-[3px]">
       {options.map((o) => {
         const on = o.id === value;
         return (

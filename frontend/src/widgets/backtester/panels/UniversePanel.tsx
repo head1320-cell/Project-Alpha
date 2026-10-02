@@ -124,7 +124,7 @@ export default function UniversePanel({ s, set, live = true }: {
               : "시작일 당시 실제 거래 종목 기준(상장폐지 포함) — 아래 시총군·업종·ETF·관심그룹 선택은 적용되지 않아요"}
           </span>
         </div>
-        <Segmented tone="neutral" value={u.survivorshipMode ?? "off"}
+        <Segmented tone="neutral" act="survivorship" value={u.survivorshipMode ?? "off"}
           onChange={(t) => patch({ survivorshipMode: t as BacktestStrategy["universe"]["survivorshipMode"] })}
           options={[
             { id: "off", label: "직접 선택(기본)" },
@@ -143,7 +143,7 @@ export default function UniversePanel({ s, set, live = true }: {
               : "시총 ≥ 1000억 · 거래대금 ≥ 10억"}
           </span>
         </div>
-        <Segmented tone="neutral" value={s.liquidityGate ?? "off"}
+        <Segmented tone="neutral" act="liq-gate" value={s.liquidityGate ?? "off"}
           onChange={(t) => set((x) => ({ ...x, liquidityGate: t as BacktestStrategy["liquidityGate"] }))}
           options={[{ id: "off", label: "전종목" }, { id: "relaxed", label: "완화" }, { id: "standard", label: "표준" }]} />
       </div>
@@ -165,7 +165,7 @@ export default function UniversePanel({ s, set, live = true }: {
         {CAPS.map((c) => {
           const on = u.caps.includes(c.id);
           return (
-            <button key={c.id} type="button" onClick={() => patch({ caps: toggle(u.caps, c.id) })}
+            <button key={c.id} type="button" data-act="cap" onClick={() => patch({ caps: toggle(u.caps, c.id) })}
               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer", borderRadius: 14, padding: "5px 11px",
                 border: on ? "1px solid var(--border-strong)" : "1px solid var(--border)",
                 background: on ? "var(--bg-section)" : "var(--bg-card)", color: on ? "var(--text-primary)" : "var(--text-secondary)" }}>
