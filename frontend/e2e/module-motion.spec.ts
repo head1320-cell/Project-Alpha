@@ -46,9 +46,10 @@ const MODULES: { name: string; path: string; panels: string }[] = [
 // BU3 — 백테스트 8 → 0(편집기 토스식 다시 그리기 — 옛 고정폭 흐림 글자·흰 글자 버튼이 사라졌다 · 실측 2회 같음).
 // BU2 — 종목 찾기 2 → 0(옛 레일의 `.bsc-preset-save` 1.26:1 등이 토스식 다시 그리기로 사라졌다 · 실측 2회 같음).
 // BU5a — 경제 흐름 3 → 2(머리 도넛 카드가 답 한 문장으로 바뀌었다 · 남은 둘은 탭 안 카드 — 스트레스 게이지 숫자·역전 경고, BU5b · 실측 2회 같음).
+// BU6a — 기업 분석 5 → 0(왼쪽 패널·영어 탭이 한 흐름으로 바뀌었다 · 흐름 전체가 패널 선택자에 들어와 팩터 묶음 머리 흐림 글자도 고침 · 실측 2회 같음).
 const KNOWN_LOW: Record<string, number> = {
   "00 Dashboard": 0, "01 Screener": 0, "02 Backtester": 0,
-  "03 Macro": 0, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
+  "03 Macro": 0, "04 Company": 0, "05 Risk": 0, "07 Data Infra": 0,
 };
 
 /** §62 가 정의한 모션 토큰 — 초 단위. 0 은 "전이 없음"이라 항상 허용된다. */

@@ -213,6 +213,16 @@ export function Notice({ tone, title, children }: { tone: "practice" | "warn" | 
   );
 }
 
+/** 서버에 닿지 못한 실패 + [다시 시도] (BU5c·BU6). ★서버가 답한 "미가용"(사유)과 다르다★ — 실패는 고장이고 다시 시도로 풀릴 수 있다. */
+export function RetryFail({ title, onRetry, children }: { title: string; onRetry: () => void; children?: ReactNode }) {
+  return (
+    <Notice tone="danger" title={title}>
+      {children ?? "서버에 닿지 못했거나 계산이 실패했어요."}
+      <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>
+    </Notice>
+  );
+}
+
 /** "몰라요" + 왜 모르는지. ★사유가 필수다★ — 0 이나 빈칸으로 그리지 않는다(미상 ≠ 0). */
 export function Unknown({ reason }: { reason: ReactNode }) {
   return (

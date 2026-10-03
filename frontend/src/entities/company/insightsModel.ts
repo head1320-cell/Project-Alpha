@@ -32,24 +32,25 @@ export interface MacroInfo { regime: string; riskFree: number | null; recommende
 export interface CompanyData {
   code: string; name: string; sector: string;
   market?: string; listingDate?: string;
-  price: number; changePct: number; mktcap: number; // 억
+  price: number; mktcap: number | null; // 억 — 모르면 null(0 으로 그리지 않는다)
+  /** 전일 대비 — ★일별 시세의 마지막 두 종가에서만★(둘 미만이면 null — 0% 를 지어내지 않는다). 옛 `changePct: 0` 상수를 대신한다(BU6a+). */
+  dayChange: { pct: number; date: string } | null;
+  /** 머리 문장(evaluate)이 연습용 재무로 계산됐는지 — 서버 `is_mock`. */
+  isMock: boolean;
   verdict: string; tone: VerdictTone;
   intrinsic: number; gapPct: number;
   models: ModelResult[];
-  summary: { per: number; pbr: number; roe: number; roa: number; debt: number; divYield: number; payout: number; eps: number; bps: number; dps: number; revenue: number; op: number; ni: number; fcf: number; equity: number };
+  /** ★null = 몰라요(0 과 다르다 — BU6)★ */
+  summary: { per: number | null; pbr: number | null; roe: number | null; roa: number | null; debt: number | null; divYield: number | null; payout: number | null; eps: number | null; bps: number | null; dps: number | null; revenue: number | null; op: number | null; ni: number | null; fcf: number | null; equity: number | null };
   years: YearFin[];
   quarters: QuarterFin[];
   price1y: PricePt[];
-  priceIsSynthetic?: boolean;          // /prices DB 비어 합성 폴백 사용
+  /** 코어 하위 요청 중 서버에 닿지 못한 것 — 화면이 "없음" 대신 실패 + 다시 시도를 말한다(BU6). 시세가 비면(실패 아님) price1y 가 빈 배열. */
+  failed: ("valuation" | "financials" | "prices")[];
   fundamentals: FactorGroup[];
   priceFactors: FactorGroup[];
   strengths: FactorVal[];
   weaknesses: FactorVal[];
-  shareholder: { divYield: number; payout: number; dps: number; shYield: number };
-  consensus: { fwdPer: number; fwdEpsChg: number; revision: number; targetPrice: number; targetUpside: number };
-  consensusReal?: boolean;             // 컨센서스 실데이터 여부(현재 mock)
-  events: { earningsDays: number; exDivDays: number };
-  eventsReal?: boolean;
   peers: Peer[];
   scenarios: Scenario[];
   score: { composite: number; gap: number; roe: number; stability: number };
@@ -62,7 +63,7 @@ export interface CompanyData {
 }
 
 // ── 포맷 헬퍼 ──
-export const won = (n: number) => `₩${Math.round(n).toLocaleString()}`;
+export const won = (n: number) => `${Math.round(n).toLocaleString()}원`;
 export const eok = (n: number) => {
   const a = Math.abs(n);
   if (a >= 10000) return `${(n / 10000).toFixed(a >= 100000 ? 0 : 1)}조`;

@@ -22,6 +22,11 @@ export const TIP_STYLE = {
   fontSize: 11, fontFamily: "var(--t-mono, monospace)",
 } as const;
 
+/** 토스식 툴팁(BU5b·BU6) — 표면색·잉크·반경 12·본문 글꼴. 옛 `TIP_STYLE` 은 아직 쓰는 화면이 있어 그대로 둔다(BU10 정리). */
+export const TX_TIP_STYLE = {
+  background: "var(--tx-surface)", border: "1px solid var(--tx-line)", borderRadius: 12, fontSize: 13, color: "var(--tx-ink)",
+} as const;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 차트 애니메이션 스위치 (A12)
 // ─────────────────────────────────────────────────────────────────────────────

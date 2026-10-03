@@ -41,6 +41,8 @@ export interface ValuationDetail {
   intrinsic_value: number;
   gap_pct: number;
   verdict: string;
+  /** 서버가 연습용(mock) 재무로 계산했는지 — 화면의 연습용 칩이 함께 본다(BU6a+). */
+  is_mock?: boolean;
   models: Array<{
     model: "RIM" | "DCF" | "DDM";
     intrinsic_value: number;

@@ -103,7 +103,8 @@ export const companyApi = {
   // 일봉 (DB 캐시 — 비어있으면 [] → 호출측 합성 폴백)
   prices: async (code: string, days = 400): Promise<PriceBar[]> => {
     const r = await fetch(`${API_BASE}/api/v1/prices/${code}?days=${days}`);
-    if (!r.ok) return [];
+    // BU6: 실패를 빈 시세로 삼키지 않는다 — 부르는 쪽이 "시세 없음"과 "불러오지 못함"을 가른다.
+    if (!r.ok) throw new Error(`prices failed: ${r.status}`);
     return (await r.json()).prices ?? [];
   },
   // 밸류체인 관계 (M4)

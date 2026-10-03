@@ -8,7 +8,6 @@
  *  · ReasonWhy — 요건 코드가 붙은 사유를 사람 말로 + ★원래 사유는 "원래 사유 보기" 안에 그대로★(지우지 않는다)
  */
 import { Fragment } from "react";
-import { Notice } from "@/shared/ui/tx";
 import { reasonKo, splitReason } from "./macroKo";
 
 export function ServerText({ text }: { text: string }) {
@@ -16,14 +15,7 @@ export function ServerText({ text }: { text: string }) {
   return <>{parts.map((p, i) => (i % 2 ? <b key={i}>{p}</b> : <Fragment key={i}>{p}</Fragment>))}</>;
 }
 
-export function RetryFail({ title, onRetry }: { title: string; onRetry: () => void }) {
-  return (
-    <Notice tone="danger" title={title}>
-      서버에 닿지 못했거나 계산이 실패했어요.
-      <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>
-    </Notice>
-  );
-}
+export { RetryFail } from "@/shared/ui/tx";
 
 export function ReasonWhy({ raw, rawClass }: { raw: string; rawClass: string }) {
   const lines = splitReason(raw).map((p) => ({ ko: reasonKo(p), raw: p.text }));

@@ -38,7 +38,7 @@ function fmtKV(key: string, v: number): { k: string; v: string } {
   if (key.endsWith("_pct")) s = `${v}%`;
   else if (key.endsWith("_억")) s = `${Math.round(v).toLocaleString()}억`;
   else if (key.endsWith("_years")) s = `${v}년`;
-  else s = `₩${Math.round(v).toLocaleString()}`;
+  else s = `${Math.round(v).toLocaleString()}원`;
   return { k: label, v: s };
 }
 function mapModel(m: ValuationDetail["models"][number]): ModelResult {
@@ -79,7 +79,7 @@ function buildFactorGroups(item: ScreenerItem, catalog: FieldsCatalog, sample: S
   return groups;
 }
 
-// 일봉 → 차트용 다운샘플 / 합성 폴백
+// 일봉 → 차트용 다운샘플. ★시세가 없으면 빈 배열 — 합성 경로를 지어 그리지 않는다(BU6, CLAUDE.md §6 mock 게이트)★
 function mapPrices(bars: { date: string; close: number }[], current: number): PricePt[] {
   if (!bars.length) return [];
   const lastClose = bars[bars.length - 1].close;
@@ -93,24 +93,6 @@ function mapPrices(bars: { date: string; close: number }[], current: number): Pr
   out[out.length - 1] = { t: out[out.length - 1].t, p: Math.round(current) };
   return out;
 }
-function synthPrices(code: string, end: number): PricePt[] {
-  let s = Number(code) || 7;
-  const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-  const n = 60;
-  const raw: number[] = [];
-  let p = end * (0.82 + rnd() * 0.12); // 시작가 = 현재가의 82~94%
-  for (let i = 0; i < n; i++) { p += (rnd() - 0.48) * end * 0.028; raw.push(p); }
-  // 끝점이 현재가에 정확히 닿도록 선형 보정(말단 꺾임 방지)
-  const corr = end - raw[n - 1];
-  const pts: PricePt[] = [];
-  for (let i = 0; i < n; i++) {
-    const v = raw[i] + corr * (i / (n - 1));
-    const mo = (i % 12) + 1, yr = 25 + Math.floor(i / 12);
-    pts.push({ t: `${yr}.${String(mo).padStart(2, "0")}`, p: Math.max(1, Math.round(v)) });
-  }
-  return pts;
-}
-
 function mapYears(hist: FinancialHistory | null): YearFin[] {
   if (!hist?.financials?.length) return [];
   const rows = hist.financials.map((f) => ({
@@ -165,29 +147,44 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const price = item.current_price;
   const mcapInput = fin(item.market_cap_억) ?? undefined;  // 발행주식수 도출용(BPS·EPS) → valuation 활성
   // wave 2
-  const [base, bull, bear, hist, quarterHist, bars, peerItems] = await Promise.all([
-    companyApi.evaluate(code, price, { market_cap: mcapInput }).catch(() => null),
+  // ★실패를 "없음"과 가른다(BU6)★ 실패는 settle 로 받아 `failed` 에 적는다 — 화면이 "재무 데이터 부족" 대신 실패 + 다시 시도를 말한다.
+  const settle = <T,>(pr: Promise<T>): Promise<{ ok: true; v: T } | { ok: false }> =>
+    pr.then((v) => ({ ok: true as const, v }), () => ({ ok: false as const }));
+  const [baseR, bull, bear, histR, quarterHist, barsR, peerItems] = await Promise.all([
+    settle(companyApi.evaluate(code, price, { market_cap: mcapInput })),
     companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.03, market_premium: 0.05 }).catch(() => null),
     companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.01, market_premium: 0.07 }).catch(() => null),
-    companyApi.financial(code, 8, "annual", price, mcapInput).catch(() => null),
+    settle(companyApi.financial(code, 8, "annual", price, mcapInput)),
     companyApi.financial(code, 8, "quarter", price, mcapInput).catch(() => null),
-    companyApi.prices(code, 400).catch(() => []),
+    companyApi.prices(code, 400).catch(() => null),
     item.sector ? companyApi.peersBySector(item.sector).catch(() => [] as ScreenerItem[]) : Promise.resolve([] as ScreenerItem[]),
   ]);
 
+  const failed: CompanyData["failed"] = [];
+  if (!baseR.ok) failed.push("valuation");
+  if (!histR.ok) failed.push("financials");
+  if (barsR === null) failed.push("prices");
+  const base = baseR.ok ? baseR.v : null;
+  const hist = histR.ok ? histR.v : null;
+  const bars = barsR ?? [];
   const fs = (base?.financial_summary ?? {}) as Record<string, number | null>;
-  const pick = (k: string, alt?: number | null): number => fin(fs[k]) ?? fin(alt) ?? 0;
+  const pick0 = (k: string, alt?: number | null): number => fin(fs[k]) ?? fin(alt) ?? 0;
+  // ★0 과 미상을 섞지 않는다(BU6)★ 화면에 숫자로 나가는 요약은 null(몰라요)을 그대로 나른다.
+  const pickN = (k: string, alt?: number | null): number | null => fin(alt) ?? fin(fs[k]);
+  // 답 문장의 근거 — evaluate(기본 가정)의 내재가치·괴리·판정을 우선, 없으면 스크리너 항목(같은 엔진 `compute_gap_pct`).
   const intrinsic = base?.intrinsic_value ?? item.intrinsic_value;
-  const tone = verdictTone(item.verdict);
+  const verdict = base?.verdict ?? item.verdict;
+  const gapPct = base ? base.gap_pct : item.gap_pct;
+  const tone = verdictTone(verdict);
 
   const models: ModelResult[] = (base?.models ?? []).filter((m) => m.available && m.intrinsic_value > 0).map(mapModel);
 
   const scen = (key: Scenario["key"], label: string, d: ValuationDetail | null, note: string): Scenario | null =>
     d && d.intrinsic_value > 0 ? { key, label, value: Math.round(d.intrinsic_value), gap: Math.round((d.intrinsic_value / price - 1) * 1000) / 10, note } : null;
   const scenarios = [
-    scen("bull", "Bull", bull, "영구성장 3% · 시장프리미엄 5% (낙관)"),
-    scen("base", "Base", base, "영구성장 2% · 시장프리미엄 6% (기준)"),
-    scen("bear", "Bear", bear, "영구성장 1% · 시장프리미엄 7% (보수)"),
+    scen("bull", "낙관", bull, "영구성장 3%, 시장프리미엄 5%"),
+    scen("base", "기준", base, "영구성장 2%, 시장프리미엄 6%"),
+    scen("bear", "보수", bear, "영구성장 1%, 시장프리미엄 7%"),
   ].filter(Boolean) as Scenario[];
 
   const fundamentals = buildFactorGroups(item, catalog, sample, FUND_CATS);
@@ -201,34 +198,34 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
 
   const years = mapYears(hist);
   const quarters = mapQuarters(quarterHist);
-  const price1y = bars.length ? mapPrices(bars, price) : synthPrices(code, price);
+  const price1y = mapPrices(bars, price);
 
-  const upside = Math.round((intrinsic / price - 1) * 1000) / 10;
-  const divYield = fin(item.dividend_yield_pct) ?? pick("dividend_yield_pct");
+  // 전일 대비 — 시세 원본의 마지막 두 종가(배율 조정 전). 둘 미만이면 모른다(null).
+  const closes = bars.filter((b) => b.close > 0);
+  const dayChange = closes.length >= 2
+    ? { pct: Math.round((closes[closes.length - 1].close / closes[closes.length - 2].close - 1) * 10000) / 100, date: closes[closes.length - 1].date }
+    : null;
+  const divYield = pickN("dividend_yield_pct", item.dividend_yield_pct);
   // 시총: 실값 우선, 없으면 가격×(자기자본/BPS)=가격×발행주식수 로 도출 (mock에서 market_cap_억=null 대응)
-  const eqV = pick("total_equity_억"), bpsV = pick("bps");
-  const mktcap = (fin(item.market_cap_억) ?? 0) || (eqV > 0 && bpsV > 0 ? Math.round((price * eqV) / bpsV) : 0);
+  const eqV = pick0("total_equity_억"), bpsV = pick0("bps");
+  const mktcap = fin(item.market_cap_억) ?? (eqV > 0 && bpsV > 0 ? Math.round((price * eqV) / bpsV) : null);
 
   return {
     code: item.stock_code, name: item.corp_name, sector: item.sector ?? "—",
-    price, changePct: 0, mktcap,
-    verdict: item.verdict, tone, intrinsic, gapPct: item.gap_pct,
+    price, mktcap, dayChange, isMock: !!base?.is_mock,
+    verdict, tone, intrinsic, gapPct,
     models,
     summary: {
       // 단일 소스: item 팩터(ffl — 실측 시총 기반) 우선, evaluate 요약은 폴백 —
       // 헤더 PER 36.99 vs 팩터 15.05 불일치(CIO 실사) 제거
-      per: fin(item.per) ?? pick("per"), pbr: fin(item.pbr) ?? pick("pbr"),
-      roe: fin(item.roe_pct) ?? pick("roe_pct"), roa: fin(item.roa_pct) ?? pick("roa_pct"),
-      debt: fin(item.debt_ratio_pct) ?? pick("debt_ratio_pct"), divYield, payout: pick("payout_ratio_pct"),
-      eps: pick("eps"), bps: pick("bps"), dps: pick("dps"),
-      revenue: pick("revenue_억"), op: pick("operating_profit_억"), ni: pick("net_income_억"), fcf: pick("fcf_억", item.fcf_억), equity: pick("total_equity_억"),
+      per: pickN("per", item.per), pbr: pickN("pbr", item.pbr),
+      roe: pickN("roe_pct", item.roe_pct), roa: pickN("roa_pct", item.roa_pct),
+      debt: pickN("debt_ratio_pct", item.debt_ratio_pct), divYield, payout: pickN("payout_ratio_pct"),
+      eps: pickN("eps"), bps: pickN("bps"), dps: pickN("dps"),
+      revenue: pickN("revenue_억"), op: pickN("operating_profit_억"), ni: pickN("net_income_억"), fcf: pickN("fcf_억", item.fcf_억), equity: pickN("total_equity_억"),
     },
-    years, quarters, price1y, priceIsSynthetic: !bars.length,
+    years, quarters, price1y, failed,
     fundamentals, priceFactors, strengths, weaknesses,
-    shareholder: { divYield, payout: pick("payout_ratio_pct"), dps: pick("dps"), shYield: fin(item["shareholder_yield"]) ?? divYield },
-    consensus: { fwdPer: pick("per", item.per), fwdEpsChg: 0, revision: 0, targetPrice: Math.round(intrinsic), targetUpside: upside },
-    consensusReal: false,
-    events: { earningsDays: 0, exDivDays: 0 }, eventsReal: false,
     peers, scenarios,
     score: { composite: Math.round(item.composite_score ?? 0), gap: Math.round(item.gap_score ?? 0), roe: Math.round(item.roe_score ?? 0), stability: Math.round(item.stability_score ?? 0) },
     signal: undefined, risk: undefined, network: undefined, narrative: undefined, macro: undefined,

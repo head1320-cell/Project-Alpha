@@ -13,7 +13,7 @@ import type { GraphDoc } from "@/entities/portfolio-graph";
 import { macroSnapshotDoc } from "@/entities/portfolio-graph/templates";
 import { LEGACY_SCREENS, isLegacyScreenKey, type LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 // "설계에 넣기"(BU2) — 종목 찾기·홈이 넘긴 `?tickers=`. stock_master 로 확인한 종목만 싣는다(tickerBridge 가 판정).
-import { bridgeFromTickers } from "@/entities/portfolio-graph/tickerBridge";
+import { bridgeFromTickers, bridgeFromCompany } from "@/entities/portfolio-graph/tickerBridge";
 
 // 케이스 바는 react-query·배지를 싣는다 — 첫 로드(기준 120 kB)를 키우지 않게 따로 싣는다(BL2b).
 const CaseBar = dynamic(() => import("@/features/case-bar/CaseBar"), { ssr: false });
@@ -27,7 +27,8 @@ const PortfolioCanvas = dynamic(() => import("@/widgets/portfolio-graph/Portfoli
 });
 
 export default function AllocationCanvasPage() {
-  // 다른 화면이 넘긴 흐름(BL2b) — `?snapshot=<id>`(매크로 화면의 국면 스냅샷) · `?from=<예전 화면>`(BL4 옛 주소).
+  // 다른 화면이 넘긴 흐름(BL2b) — `?snapshot=<id>`(매크로 화면의 국면 스냅샷) · `?from=<예전 화면>`(BL4 옛 주소) ·
+  // `?tickers=`(종목 찾기·홈·기업 분석의 설계에 넣기) · `?company=`(기업 분석의 가정형 모형 → 기업 하나 깊게, BU6a+).
   // 주소는 브라우저에서만 읽는다(정적 빌드에서 검색 파라미터를 기다리지 않게). 읽기 전(undefined)에는 캔버스를 그리지 않아 한 번만 싣는다.
   const [boot, setBoot] = useState<{ doc: GraphDoc; note: string } | null | undefined>(undefined);
   const [snapshotId, setSnapshotId] = useState<string | null>(null);
@@ -46,9 +47,11 @@ export default function AllocationCanvasPage() {
       setBoot({ doc: macroSnapshotDoc(sid), note: `매크로 화면에서 가져온 국면 스냅샷 ${sid}로 ‘매크로 스냅샷 반영’ 흐름을 열었어요.` });
       return;
     }
-    if (tickers === null) { setBoot(null); return; }
+    const company = q.get("company");
+    if (tickers === null && company === null) { setBoot(null); return; }
     let alive = true;
-    void bridgeFromTickers(tickers).then((b) => {
+    // `?company=`(기업 분석 → 기업 하나 깊게) 가 `?tickers=` 보다 먼저 — 둘 다 같은 확인 규칙(stock_master).
+    void (company !== null ? bridgeFromCompany(company) : bridgeFromTickers(tickers)).then((b) => {
       if (!alive) return;
       if (b && b.doc) setBoot({ doc: b.doc, note: b.note });
       else { setBootNote(b?.note ?? null); setBoot(null); }

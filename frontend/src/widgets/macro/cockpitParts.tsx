@@ -31,7 +31,8 @@ export function sigColor(_sig: string): string { return "var(--tx-ink)"; }
 /** 등락색 — 오름 빨강 / 내림 파랑(한국식). 0 은 잉크. */
 export const moveColor = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v) || v === 0 ? "var(--tx-ink)" : v > 0 ? "var(--tx-up-ink)" : "var(--tx-down-ink)";
-export const TIP_STYLE = { background: "var(--tx-surface)", border: "1px solid var(--tx-line)", borderRadius: 12, fontSize: 13, color: "var(--tx-ink)" };
+import { TX_TIP_STYLE as TIP_STYLE } from "@/shared/ui/chartStyle";
+export { TIP_STYLE };
 const AX = { fontSize: 12, fill: "var(--tx-sub)" } as const;
 const Q_FILL: Record<string, string> = {
   Goldilocks: "var(--mc-q-goldilocks)", Reflation: "var(--mc-q-reflation)",

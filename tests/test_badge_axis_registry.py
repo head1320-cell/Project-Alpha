@@ -94,8 +94,13 @@ BADGES: tuple[Badge, ...] = (
           "없음\"` 을 **상수로** 단정했다 — 이제 응답의 `lookahead_evidence` 를 "
           "읽는다. BL4 에서 마법사를 지워 캔버스 정책 백테스트 렌더러(`NodeResultPanel`)가 "
           "이 자리를 잇는다(데이터 축은 그 옆의 `PerfLabel`)."),
-    Badge(("ca-mockbadge",), (AXIS_DATA_SOURCE,),
-          "종목 카드의 합성 데이터 표시(`c.priceIsSynthetic`)."),
+    # BU6a: `ca-mockbadge`(종목 카드 "합성" 표시)는 지웠다 — 프런트가 합성 주가를 더는 지어
+    # 그리지 않아(시세가 비면 "시세가 아직 적재되지 않았어요") 표시할 합성 값이 없다.
+    # 연습용 여부는 답 칩 "연습용 시세·재무"(`connection-status.mock_allowed`)가 말한다 — 아래 `practice`.
+    Badge(("practice",), (AXIS_DATA_SOURCE,),
+          "연습용(mock) 데이터 표시 — 화면 답 칩·`Notice` 의 `practice` 톤(서버 `connection-status.mock_allowed` "
+          "로만 켠다, BU1~BU6) · 캔버스 계보 `practice`(연습용 수익률의 하류). ★합성값을 만든다는 뜻이 아니라 "
+          "mock 게이트가 열려 있다는 출처 표시다★."),
     Badge(("t-mode-badge",), (AXIS_RUN_MODE,),
           "관리자 패널의 `MODE: REAL/MOCK`(`st.config.kis_real`). ★데이터 축이 "
           "아니라 실행 모드다★ — 이름이 닮아 섞기 쉽다."),

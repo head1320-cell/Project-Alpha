@@ -9,6 +9,7 @@
 import { API_BASE } from "@/shared/api/apiBase";
 import type { GraphDoc } from "./types";
 import { tickersDoc } from "./templates";
+import { goalDoc } from "./goals";
 
 export const MAX_BRIDGE_TICKERS = 30;
 
@@ -55,4 +56,27 @@ export async function bridgeFromTickers(raw: string | null): Promise<BridgeBoot 
   const tail = droppedTail(codes.length - known.length, bad, over);
   if (!known.length) return { doc: null, note: `가져올 종목이 없어요.${tail}` };
   return { doc: tickersDoc(known), note: `종목 찾기에서 가져온 ${known.length}종목으로 기본 흐름을 열었어요.${tail}` };
+}
+
+/**
+ * 기업 분석 → 캔버스 다리 (BU6a+) — `/allocation?company=005930` 을 "기업 하나 깊게" 흐름(`goalDoc("company")`)으로.
+ * 가정을 넣어야 하는 모형(합산가치·의사결정 나무·실물옵션)은 캔버스에서 사람이 넣는다 — 이 다리는 그 자리까지 데려다줄 뿐 값을 채우지 않는다.
+ * ★`?tickers=` 와 같은 규칙★ — stock_master 로 이름이 확인된 코드만 싣고, 확인 요청이 실패하면 싣지 않고 말한다.
+ */
+export async function bridgeFromCompany(raw: string | null): Promise<BridgeBoot | null> {
+  if (raw === null) return null;
+  const code = raw.trim();
+  if (!/^\d{6}$/.test(code)) return { doc: null, note: "기업 코드 모양이 아니라 가져오지 않았어요." };
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/resolve-names`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codes: [code] }),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const labels = ((await r.json()) as { labels?: Record<string, string> }).labels ?? {};
+    const name = labels[code];
+    if (typeof name !== "string" || name === code) return { doc: null, note: `알 수 없는 코드 ${code}라 가져오지 않았어요.` };
+    return { doc: goalDoc("company", [code], null), note: `기업 분석에서 넘어온 ${name}(${code})로 ‘기업 하나 깊게’ 흐름을 열었어요. 가정이 필요한 모형은 노드 추가에서 고르세요.` };
+  } catch {
+    return { doc: null, note: "종목 이름을 확인하지 못해 가져오지 않았어요. 잠시 뒤 다시 넘겨 주세요." };
+  }
 }
