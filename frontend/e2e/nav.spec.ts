@@ -40,7 +40,7 @@ test("Dashboard: 모듈 줄에 포트폴리오 설계가 있다 · 최상위 화
 
 // ── BU0 · 셸 — 한국어 메뉴 · 지금 화면 표시 · 중첩에만 브레드크럼 ─────────────────────────────────────
 
-const MENU = ["홈", "종목 찾기", "백테스트", "경제 흐름", "기업 분석", "위험 점검", "포트폴리오 설계", "데이터 상태",
+const MENU = ["홈", "종목 찾기", "백테스트", "매크로 분석", "기업 분석", "위험 점검", "포트폴리오 설계", "데이터 상태",
   "파생상품 계산기", "설정"];
 
 test("메뉴(BU0): 한국어 이름 · 번호·고정폭 없음 · 화면마다 '지금 여기'는 정확히 하나이고 그 화면의 이름이다", async ({ page }) => {
@@ -54,9 +54,9 @@ test("메뉴(BU0): 한국어 이름 · 번호·고정폭 없음 · 화면마다 
   await expect(page.locator(".terminal-main .corner-mark, .terminal-main .grid-overlay")).toHaveCount(0);
 
   const cases: [string, string][] = [
-    ["/dashboard", "홈"], ["/screener", "종목 찾기"], ["/backtest", "백테스트"], ["/macro", "경제 흐름"],
+    ["/dashboard", "홈"], ["/screener", "종목 찾기"], ["/backtest", "백테스트"], ["/macro", "매크로 분석"],
     ["/insights", "기업 분석"], ["/risk-tools", "위험 점검"], ["/allocation", "포트폴리오 설계"], ["/derivatives", "파생상품 계산기"],
-    ["/macro/tsfm-latent", "경제 흐름"],                                  // 중첩도 상위 메뉴가 켜진다
+    ["/macro/tsfm-latent", "매크로 분석"],                                  // 중첩도 상위 메뉴가 켜진다
   ];
   for (const [path, label] of cases) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
@@ -75,7 +75,7 @@ test("브레드크럼(BU0): 중첩 경로에만 '상위 › 현재' — 상위�
   await page.goto("/macro/tsfm-latent", { waitUntil: "domcontentloaded" });
   const crumb = page.locator(".tcrumb");
   await expect(crumb).toBeVisible();
-  await expect(crumb.locator(".tcrumb-up")).toHaveText("경제 흐름");
+  await expect(crumb.locator(".tcrumb-up")).toHaveText("매크로 분석");
   await expect(crumb.locator(".tcrumb-cur")).toHaveText("잠재 요인");
   await expect(crumb.locator(".tcrumb-cur")).toHaveAttribute("aria-current", "page");
   // 브레드크럼은 본문 첫 제목을 덮지 않는다 — 상자가 null 이면 이 비교는 공허하다, 그래서 먼저 단언한다.

@@ -126,7 +126,7 @@ export default function TerminalBacktester() {
 
       {macroCfg && (
         <div className="bte-handoff tscreener-handoff">
-          <Notice tone="warn" title={`경제 흐름에서 넘어온 전략 ‘${macroCfg.name}’ · ${macroMode}`}>
+          <Notice tone="warn" title={`매크로 분석에서 넘어온 전략 ‘${macroCfg.name}’ · ${macroMode}`}>
             {`${macroCfg.universe_codes?.length ?? macroCfg.basket?.length ?? 0}종목으로 실행해요.`}
             <ul className="tx-chips" aria-label="넘어온 설정">
               {macroCfg.mode === "conditions" && (macroCfg.buy_conditions || []).map((c, i) => (

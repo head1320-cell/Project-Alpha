@@ -23,7 +23,7 @@ export function crumbOf(pathname: string): Crumb | null {
   if (seg[0] === "backtest" && seg[1] === "runs" && seg.length === 4 && RUN_STEP[seg[3]])
     return { up: "백테스트", upHref: "/backtest", cur: RUN_STEP[seg[3]] };
   if (seg[0] === "macro" && seg.length === 2 && MACRO_STUDIO[seg[1]])
-    return { up: "경제 흐름", upHref: "/macro", cur: MACRO_STUDIO[seg[1]] };
+    return { up: "매크로 분석", upHref: "/macro", cur: MACRO_STUDIO[seg[1]] };
   if (seg[0] === "admin" && seg.length === 2 && ADMIN[seg[1]])
     return { up: "관리", upHref: null, cur: ADMIN[seg[1]] };
   return null;

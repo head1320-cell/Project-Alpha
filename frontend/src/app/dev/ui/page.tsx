@@ -456,12 +456,12 @@ export default function DevUiPage() {
         <p className="devui-group-note">
           ADR-003. 답 문장은 서버 값으로만 만든다 — 아래 문장은 모양을 보이는 표본이다. 클래스 <code>.tx-*</code> 가 계약.
         </p>
-        <Specimen name="PageHead" from="tx"><Tx.PageHead title="경제 흐름" lede="지금 경제가 어느 쪽으로 가는지 보여 드려요." /></Specimen>
+        <Specimen name="PageHead" from="tx"><Tx.PageHead title="매크로 분석" lede="지금 경제가 어느 쪽으로 가는지 보여 드려요." /></Specimen>
         <Specimen name="Answer" from="tx" note="문장 + 숫자 1~3 + 근거 칩 + 다음 행동 하나.">
           <Tx.Answer sentence="(표본) 서버가 준 값을 끼운 한 문장이 여기에 와요."
             figures={[{ label: "스트레스", value: "52/100" }, { label: "확률", value: pct(0.54, 0) }]}
             chips={[{ label: "연습용 데이터", tone: "practice" }, { label: "가정 2개", tone: "assumed" }, { label: "재지 않은 것 1가지", tone: "unmeasured" }]}
-            action={<button type="button" className="devui-tx-act">경제 흐름 보기</button>} />
+            action={<button type="button" className="devui-tx-act">매크로 분석 보기</button>} />
         </Specimen>
         <Specimen name="Chips" from="tx">
           <Tx.Chips items={[{ label: "연습용 데이터", tone: "practice" }, { label: "가정 1개", tone: "assumed" }, { label: "몰라요 1개", tone: "unknown" },

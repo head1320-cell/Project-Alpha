@@ -9098,3 +9098,72 @@ details[open] > .rs-more { margin-bottom: 12px; }
   .ms-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .ms-nav .ms-nav-item { flex: none; }
 }
+
+/* ═══ BU5a+ · 국면 그림 — 도넛 2(네 국면) + 스트레스 반원 (`widgets/macro/RegimeVisual.tsx`) ═══════════════════════
+   국면 4 색은 범주색 — dataviz 검증기(all-pairs) 라이트 #ffffff · 다크 #1a2029 에서 통과. 빨강·파랑은 등락색이라 쓰지 않는다.
+   라이트 노랑·분홍은 바탕 대비 3:1 미만 → 모든 조각에 이름 + % 글자(범례)가 붙는다(색만으로 말하지 않는다).
+   축·구성 막대·게이지는 ★중립 단색★(수준·점수이지 오름/내림·판정이 아니다). */
+:root {
+  --mc-q-goldilocks: #008300; --mc-q-reflation: #eda100; --mc-q-stagflation: #e87ba4; --mc-q-disinflation: #4a3aa7;
+  --mc-neutral: #6b7684; --mc-gauge: #4e5968;
+}
+.dark {
+  --mc-q-goldilocks: #008300; --mc-q-reflation: #c98500; --mc-q-stagflation: #d55181; --mc-q-disinflation: #9085e9;
+  --mc-neutral: #9aa3ad; --mc-gauge: #c1c7cf;
+}
+.rv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-family: var(--tx-font); color: var(--tx-ink); }
+.rv-card { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 20px 22px; border-radius: var(--tx-r-sec); background: var(--tx-surface); }
+.rv-t { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--tx-ink); }
+.rv-row { display: flex; align-items: center; gap: 18px; min-width: 0; }
+/* 세 카드는 같은 줄 높이로 늘어난다(사용자 지시 — 도넛 카드를 스트레스 카드 높이에 맞춤). 늘어난 높이는 도넛 줄이 받아 가운데에 서고,
+   축 막대·지표 줄은 카드 아래쪽 같은 자리에 붙는다(빈 바닥을 남기지 않는다). */
+.rv-card:not(.rv-card--stress) .rv-row { flex: 1; }
+.rv-none { margin: 0; font-size: 14px; line-height: 1.5; color: var(--tx-sub); }
+.rv-note, .rv-sub { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
+
+.rv-donut { position: relative; flex: none; width: 144px; height: 144px; }
+.rv-donut svg { display: block; }
+.rv-donut-track { stroke: var(--tx-soft); }
+.rv-donut-empty { stroke: var(--tx-line); stroke-dasharray: 4 4; }
+.rv-donut-c { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
+.rv-donut-c b { max-width: 96px; font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--tx-sub); word-break: keep-all; }
+.rv-donut-c span { font-size: 20px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rv-donut-c .rv-donut-unk { font-size: 15px; font-weight: 600; color: var(--tx-sub); }
+
+.rv-leg { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.rv-leg li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 14px; color: var(--tx-sub); }
+.rv-leg li i { width: 10px; height: 10px; border-radius: 3px; }
+.rv-leg li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-leg li b { font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rv-leg li[data-now] span, .rv-leg li[data-now] b { font-weight: 700; color: var(--tx-ink); }
+
+.rv-axes { display: flex; flex-direction: column; gap: 10px; }
+.rv-axis { display: grid; grid-template-columns: 34px minmax(0, 1fr) 52px; align-items: center; column-gap: 10px; row-gap: 2px; font-size: 14px; }
+.rv-axis-l { color: var(--tx-sub); }
+.rv-axis-track { position: relative; height: 8px; border-radius: 4px; background: var(--tx-soft); }
+.rv-axis-track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--tx-mute); }
+.rv-axis-bar { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--mc-neutral); }
+.rv-axis-v { text-align: right; font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rv-axis-ends { grid-column: 2; display: flex; justify-content: space-between; font-size: 12px; color: var(--tx-mute); }
+
+.rv-gauge { position: relative; align-self: center; width: 200px; }
+.rv-gauge svg { display: block; }
+.rv-gauge-track { stroke: var(--tx-soft); }
+.rv-gauge-fill { stroke: var(--mc-gauge); }
+.rv-gauge-c { position: absolute; left: 0; right: 0; top: 46px; display: flex; align-items: baseline; justify-content: center; gap: 2px; }
+.rv-gauge-v { font-size: 32px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.rv-gauge-c span { font-size: 15px; color: var(--tx-sub); }
+.rv-gauge-ends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--tx-mute); }
+.rv-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.rv-facts dt { font-size: 13px; color: var(--tx-sub); }
+.rv-facts dd { margin: 2px 0 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); }
+.rv-sc { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.rv-sc li { display: grid; grid-template-columns: minmax(0, 1fr) 84px 28px; align-items: center; gap: 10px; font-size: 13px; color: var(--tx-sub); }
+.rv-sc-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sc-track { height: 6px; border-radius: 3px; background: var(--tx-soft); overflow: hidden; }
+.rv-sc-track i { display: block; height: 100%; border-radius: 3px; background: var(--mc-neutral); }
+.rv-sc-v { text-align: right; font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1180px) { .rv { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rv-card--stress { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .rv { grid-template-columns: minmax(0, 1fr); } .rv-card { padding: 18px 16px; } }
+@media (max-width: 520px) { .rv-row { flex-direction: column; align-items: stretch; } .rv-donut { align-self: center; } }

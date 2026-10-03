@@ -33,7 +33,7 @@ const MAIN: NavLink[] = [
   { label: "홈", href: "/dashboard", Icon: Home },
   { label: "종목 찾기", href: "/screener", Icon: ListFilter },
   { label: "백테스트", href: "/backtest", Icon: LineChart },
-  { label: "경제 흐름", href: "/macro", Icon: Globe2 },
+  { label: "매크로 분석", href: "/macro", Icon: Globe2 },
   { label: "기업 분석", href: "/insights", Icon: Building2 },
   { label: "위험 점검", href: "/risk-tools", Icon: ShieldAlert },
   { label: "포트폴리오 설계", href: "/allocation", Icon: Workflow },

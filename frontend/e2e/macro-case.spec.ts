@@ -2,15 +2,16 @@ import { test, expect, type Page } from "@playwright/test";
 import { freezeCharts } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// M1-U — 연구 케이스 컨텍스트 바 (`/macro` + `/allocation` 캔버스 양쪽 — BL4 에서 마법사 스테이지는 지웠다)
+// M1-U — 연구 케이스 컨텍스트 바 — 이제 `/allocation` 캔버스의 케이스 칸에만 있다
+// (BL4 에서 마법사 스테이지를 지웠고, BU5a+ 에서 사용자 지시로 매크로 분석 화면들의 케이스 줄을 걷었다 —
+//  같은 단언을 캔버스 케이스 칸에서 그대로 건다. 매크로 화면들에 줄이 없다는 것도 건다.)
 // ─────────────────────────────────────────────────────────────────────────────
 // ★이 스펙이 지키는 것★
 //  1. 케이스가 없으면 **없다고 말한다** — 첫 케이스를 임의로 골라 그리지 않는다.
 //  2. 능력 배지에는 **막힌 레벨과 사유**가 함께 붙는다. 배지만 있고 사유가 없으면
 //     사용자는 왜 이 레벨인지, 어떻게 올리는지 알 수 없다(M1-C 가 blocked_reason 을
 //     낸 이유가 이 한 줄이다).
-//  3. 같은 컴포넌트가 두 화면에 있다 — 그것이 "두 도구가 아니라 하나의 연구" 라는
-//     주장의 유일한 증거다.
+//  3. 케이스 고르기·만들기는 캔버스에서 할 수 있다(매크로 화면엔 없다 — 사용자 결정 2026-10-03).
 //
 // ★서버 상태를 남기지 않는다★ 케이스 생성은 `POST /api/v1/research-cases` 를
 // **스텁**한다. A4 의 Alpha Lab 스펙이 실제로 ResearchRun 을 기록해
@@ -19,6 +20,14 @@ import { freezeCharts } from "./helpers";
 
 test.beforeEach(async ({ page }) => { await freezeCharts(page); });
 
+/** 캔버스를 열고 케이스 칸을 편다 — CaseBar 가 그려질 때까지 기다린다. */
+async function openCaseBox(page: Page) {
+  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await page.locator(".pg-casebox > summary").click();
+  await expect(page.locator(".pg-casebox .as-case")).toBeVisible({ timeout: 20_000 });
+}
+
 /** localStorage 포인터를 비워 "케이스 없음" 상태에서 시작한다. */
 async function clearCasePointer(page: Page) {
   await page.addInitScript(() => {
@@ -26,9 +35,9 @@ async function clearCasePointer(page: Page) {
   });
 }
 
-test("/macro 상단에 CaseBar 가 있다 — 케이스 없으면 없다고 말한다", async ({ page }) => {
+test("캔버스 케이스 칸 — 케이스 없으면 없다고 말한다", async ({ page }) => {
   await clearCasePointer(page);
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
 
   const bar = page.locator(".as-case");
   await expect(bar).toBeVisible({ timeout: 20_000 });
@@ -45,7 +54,7 @@ test("/macro 상단에 CaseBar 가 있다 — 케이스 없으면 없다고 말�
 
 test("★능력 레벨 배지에는 막힌 레벨과 사유가 함께 붙는다★", async ({ page }) => {
   await clearCasePointer(page);
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
 
   const badge = page.locator(".as-case-capb");
   await expect(badge).toBeVisible({ timeout: 20_000 });
@@ -71,7 +80,7 @@ test("케이스 생성 폼: 질문이 비면 만들 수 없다 (서버 스텁)",
       await route.fallback();
     }
   });
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
 
   await page.locator(".as-case-new").click();
   const form = page.locator(".as-case-form");
@@ -101,7 +110,7 @@ test("케이스 저장 실패를 성공으로 위장하지 않는다", async ({ 
       await route.fallback();
     }
   });
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
 
   await page.locator(".as-case-new").click();
   await page.locator(".as-case-fi").first().fill("실패하는 케이스");
@@ -120,7 +129,7 @@ test("★고른 케이스를 못 읽은 것은 '케이스 없음' 이 아니다�
   await page.addInitScript(() => {
     try { localStorage.setItem("active_research_case", "rc_ghost_e2e_0001"); } catch { /* noop */ }
   });
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
 
   await expect(page.locator(".as-case-id")).toHaveText("rc_ghost_e2e_0001", { timeout: 20_000 });
   await expect(page.locator(".as-case-warn-missing")).toBeVisible();
@@ -141,7 +150,7 @@ test("케이스 목록이 있어도 고르지 않았으면 임의로 활성화�
           active_run_id: null, code_version: null, note: null },
       ] }) });
   });
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
 
   await expect(page.locator(".as-case-none")).toBeVisible({ timeout: 20_000 });
   expect(await page.locator(".as-case-id").count(), "고르지 않았는데 활성화했다").toBe(0);
@@ -158,14 +167,14 @@ test("목록 저장소 장애와 네트워크 오류가 서로 다른 화면이�
       body: JSON.stringify({ available: false, cases: [],
         reason: "연구 케이스 저장소를 읽을 수 없습니다 — 케이스가 없는 것과 다릅니다." }) });
   });
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
   await expect(page.locator(".as-case-warn-store")).toBeVisible({ timeout: 20_000 });
   expect(await page.locator(".as-case-warn-net").count(), "장애를 네트워크 오류로 그렸다").toBe(0);
 
   // (b) 네트워크 오류 — 응답 자체가 없다. 같은 화면으로 뭉개지면 안 된다.
   await page.unroute("**/api/v1/research-cases?**");
   await page.route("**/api/v1/research-cases?**", (route) => route.abort());
-  await page.goto("/macro", { waitUntil: "networkidle" });
+  await openCaseBox(page);
   await expect(page.locator(".as-case-warn-net")).toBeVisible({ timeout: 20_000 });
   expect(await page.locator(".as-case-warn-store").count(), "네트워크 오류를 장애로 그렸다").toBe(0);
 });
@@ -181,4 +190,15 @@ test("같은 CaseBar 가 캔버스에도 있다 — 두 화면이 한 연구다"
   expect(await page.locator(".pg-casebox .as-case-mes, .pg-casebox .as-case-na").count()).toBeGreaterThan(0);
   // 포인터는 브라우저 로컬임을 라벨이 말한다.
   await expect(page.locator(".pg-casebox .as-case-foot")).toContainText("이 브라우저에만");
+});
+
+// ── BU5a+ — 매크로 분석 화면들에는 케이스 줄이 없다(짝: 캔버스엔 있다 — 위 테스트들) ─────────────
+test("매크로 분석 화면 6 곳에 케이스 줄이 없다 — 원문 오류 덩어리도 없다", async ({ page }) => {
+  for (const path of ["/macro", "/macro/tsfm-latent", "/macro/neural-sde", "/macro/causal-deepm", "/macro/pinn-tail", "/macro/agentic-mcp"]) {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".ms-nav")).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(600);
+    await expect(page.locator(".as-case"), path).toHaveCount(0);
+    await expect(page.locator(".terminal-main"), path).not.toContainText("L0 미도달");
+  }
 });

@@ -1,6 +1,6 @@
 "use client";
 /**
- * /macro — 경제 흐름 (BU5a)
+ * /macro — 매크로 분석 (BU5a · BU5a+ 에서 이름을 "경제 흐름" → "매크로 분석")
  * ★실패를 실패로★ 예전엔 다섯 쿼리가 모두 `.catch(() => null)` 로 실패를 삼켜, 국면이 실패하면 "백엔드 연결을 확인하세요" 한 줄,
  * 다른 데이터가 실패하면 빈 카드("데이터 없음")가 됐다. 이제 react-query 의 실패 상태를 그대로 쓴다 —
  * 국면 실패는 화면 전체 alert + [다시 시도], 나머지는 그 데이터를 쓰는 탭 안에서 alert + [다시 시도].
@@ -81,12 +81,12 @@ export default function MacroPage() {
 
   return (
     <div className="tpage-fade">
-      {loading && <LoadingState label="경제 흐름을 불러오는 중이에요" />}
+      {loading && <LoadingState label="매크로 분석을 불러오는 중이에요" />}
       {bridging && <LoadingState label="전략을 백테스트 설정으로 옮기는 중이에요" />}
       {bridgeErr && <Notice tone="danger" title="백테스트로 넘기지 못했어요">{bridgeErr}</Notice>}
       {!loading && !regime && (
         <div className="mc-err tx-page tx-page--wide">
-          <Notice tone="danger" title="경제 흐름을 불러오지 못했어요">
+          <Notice tone="danger" title="매크로 분석을 불러오지 못했어요">
             국면 계산 서버에 닿지 못했거나 계산이 실패했어요. 잠시 뒤 다시 시도해 주세요.
             <div className="mc-act">
               <button type="button" className="tx-btn tx-btn--sub" onClick={() => { void regimeQ.refetch(); }}

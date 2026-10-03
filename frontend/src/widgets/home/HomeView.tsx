@@ -7,7 +7,7 @@
  * ★연습용 표시는 서버 게이트로만★ `GET /macro/connection-status` 의 `mock_allowed`(= mock_gate)·`bok_configured`.
  * ★실패·빈·모름을 섞지 않는다★ 실패는 alert + 다시 시도, 빈 결과는 할 일 하나, 모름은 "몰라요" + 사유.
  *
- * 번역표(MODE_KO·regimeFig·sourceChip)는 경제 흐름 화면과 같은 것을 쓴다(`entities/macro/regimeKo`).
+ * 번역표(MODE_KO·regimeFig·sourceChip)는 매크로 분석 화면과 같은 것을 쓴다(`entities/macro/regimeKo`).
  * 함정: 같은 queryKey(`["macro","regime"]`)를 다른 화면도 쓴다 — 실패를 `null` 로 캐시하는 소비자가 다시 생겨도 여기서 `null` 은 실패로 그린다.
  */
 import Link from "next/link";
@@ -25,7 +25,7 @@ const TODO = [
   { label: "포트폴리오 설계", href: "/allocation", sub: "종목·비중·점검을 한 화면에서 이어 설계해요" },
   { label: "종목 찾기", href: "/screener", sub: "조건을 걸어 종목을 골라요" },
   { label: "백테스트", href: "/backtest", sub: "전략을 지난 데이터로 돌려 봐요" },
-  { label: "경제 흐름", href: "/macro", sub: "경기와 물가가 어느 쪽으로 가는지 봐요" },
+  { label: "매크로 분석", href: "/macro", sub: "경기와 물가가 어느 쪽으로 가는지 봐요" },
   { label: "기업 분석", href: "/insights", sub: "한 종목의 가치와 재무를 자세히 봐요" },
   { label: "위험 점검", href: "/risk-tools", sub: "충격이 오면 얼마나 잃을지 재 봐요" },
 ];
@@ -48,11 +48,11 @@ function MacroAnswer() {
   const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
   const st: RegimeState | null | undefined = q.data;
 
-  if (q.isLoading) return <div className="home-macro"><LoadingState label="경제 흐름을 불러오는 중이에요" /></div>;
+  if (q.isLoading) return <div className="home-macro"><LoadingState label="매크로 분석을 불러오는 중이에요" /></div>;
   if (q.isError || !st) {
     return (
       <div className="home-macro">
-        <Notice tone="danger" title="경제 흐름을 불러오지 못했어요">
+        <Notice tone="danger" title="매크로 분석을 불러오지 못했어요">
           서버에 닿지 못했거나 계산이 실패했어요. 잠시 뒤 다시 시도해 주세요.
           <div className="home-act"><Retry onClick={() => { void q.refetch(); }} /></div>
         </Notice>
@@ -78,7 +78,7 @@ function MacroAnswer() {
   return (
     <div className="home-macro">
       <Answer sentence={sentence} figures={figures} chips={chips}
-              action={<Link href="/macro" className="tx-btn tx-btn--main">경제 흐름 보기</Link>} />
+              action={<Link href="/macro" className="tx-btn tx-btn--main">매크로 분석 보기</Link>} />
     </div>
   );
 }

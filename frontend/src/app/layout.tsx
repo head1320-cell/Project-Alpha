@@ -8,7 +8,7 @@ import { THEME_BOOT } from "@/shared/theme";
 
 export const metadata: Metadata = {
   title: "Project Alpha | Quant Platform",
-  description: "종목 찾기 · 백테스트 · 경제 흐름 · 기업 분석 · 위험 점검 · 포트폴리오 설계",
+  description: "종목 찾기 · 백테스트 · 매크로 분석 · 기업 분석 · 위험 점검 · 포트폴리오 설계",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

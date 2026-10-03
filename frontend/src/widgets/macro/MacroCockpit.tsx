@@ -1,6 +1,6 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// MacroCockpit — 경제 흐름 (BU5a: 머리 · 탭 · 실패를 실패로)
+// MacroCockpit — 매크로 분석 (BU5a: 머리 · 탭 · 실패를 실패로)
 //   머리 = 답 한 문장(서버 국면의 번역 — ADR-003 §2.6) + 근거 숫자·칩 + 행동 하나[포트폴리오 설계에 넣기].
 //   탭 8: 개요 · 지표 · 국면 · 가치 · 전략 · 추천 · 상관 · 타이밍 (id `mc-tab-{id}` · 로빙 tabindex 는 그대로).
 //   ★연습용 표시는 connection-status.mock_allowed 로만★ — 예전처럼 대시보드 출처(fred/bok/prices)로 추론하지 않는다(홈과 같은 규칙).
@@ -36,6 +36,7 @@ import {
 import { macroApi } from "@/entities/macro/api";
 import { MODE_KO, regimeFig, regimeName, sourceChip, when } from "@/entities/macro/regimeKo";
 import { Answer, Notice, Unknown, type Chip, type Figure } from "@/shared/ui/tx";
+import { RegimeVisual } from "./RegimeVisual";
 import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entities/macro/analysisModel";
 
 /** 탭은 순서가 아니라 주제라 번호를 달지 않는다. id 는 E2E 계약(`#mc-tab-{id}`) — 이름을 바꿔도 id 는 그대로. */
@@ -207,7 +208,7 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   return (
     <div className="mc tx-page tx-page--wide">
       <header className="mc-head">
-        {/* 제목(PageHead "경제 흐름")은 레이아웃이 내비 위에 단다 — 여기서는 답부터. */}
+        {/* 제목(PageHead "매크로 분석")은 레이아웃이 내비 위에 단다 — 여기서는 답부터. */}
         <Answer sentence={sentence} figures={figures} chips={chips}
           action={onOpenInAAS ? (<>
             {/* 현재 국면을 불변 스냅샷으로 고정해 캔버스로 — 휘발성 복사가 아니라 서버 ID 전달 */}
@@ -221,6 +222,9 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
         )}
       </header>
 
+      {/* BU5a+ — 답과 같은 서버 값을 그림으로(도넛 2 + 스트레스 반원). 옛 도넛 카드를 지운 BU5a 의 잘못을 되돌리며 더 낫게. */}
+      <RegimeVisual regime={regime} />
+
       {/* ── 서브탭 ──
           ★Radix Tabs 를 썼다가 되돌렸다 — 실측 +11 kB★
           /macro 는 243 → 254 kB 가 됐다. ADR 001 한도는 4 kB 이고, 탭 바는 늘 보이므로
@@ -229,7 +233,7 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
           없는 단순 수평 탭 바에서는 아래 30줄로 같은 것을 얻는다 — 11 kB 를 낼 이유가 없다.
           (계획서는 "손수 만들지 말라" 고 했지만 그 근거는 비용을 재기 전 판단이었다.)
           동작은 스펙(macro-tabs.spec.ts)이 지킨다 — 구현이 무엇이든 계약은 같다. */}
-      <div className="mc-tabs" role="tablist" aria-label="경제 흐름 보기"
+      <div className="mc-tabs" role="tablist" aria-label="매크로 분석 보기"
         onKeyDown={(e) => {
           const i = TABS.findIndex((t) => t.id === tab);
           const to = e.key === "ArrowRight" ? (i + 1) % TABS.length

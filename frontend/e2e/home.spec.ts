@@ -97,7 +97,7 @@ test("★국면 실패는 alert + 다시 시도★ — 풀고 누르면 문장�
   await page.route("**/api/v1/macro/regime", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await page.reload({ waitUntil: "domcontentloaded" });
   const alert = page.locator(".home-macro [role='alert']");
-  await expect(alert).toContainText("경제 흐름을 불러오지 못했어요", { timeout: 20_000 });
+  await expect(alert).toContainText("매크로 분석을 불러오지 못했어요", { timeout: 20_000 });
   await expect(answer(page)).toHaveCount(0);
   await page.unroute("**/api/v1/macro/regime");
   await page.locator(".home-macro button", { hasText: "다시 시도" }).click();
@@ -176,7 +176,7 @@ test("무엇을 할까요: 모듈 줄 6개 — 이름·주소 · 번호 표식�
   await expect(mods).toHaveCount(6);
   const got = await mods.evaluateAll((els) => els.map((e) => [e.querySelector(".tx-row-t")?.textContent, e.getAttribute("href")]));
   expect(got).toEqual([["포트폴리오 설계", "/allocation"], ["종목 찾기", "/screener"], ["백테스트", "/backtest"],
-    ["경제 흐름", "/macro"], ["기업 분석", "/insights"], ["위험 점검", "/risk-tools"]]);
+    ["매크로 분석", "/macro"], ["기업 분석", "/insights"], ["위험 점검", "/risk-tools"]]);
   await expect(page.locator(".terminal-main .dash-mod-n")).toHaveCount(0);
   await expect(page.locator(".terminal-main")).not.toContainText(/STRESS INDEX|RISK-FREE|YIELD CURVE|CAUTIOUS/);
   await expect(page.locator(".terminal-main h1")).toHaveText("홈");
