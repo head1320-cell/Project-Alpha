@@ -48,7 +48,7 @@ const MODULES: { name: string; path: string; panels: string }[] = [
 // BU5a — 경제 흐름 3 → 2(머리 도넛 카드가 답 한 문장으로 바뀌었다 · 남은 둘은 탭 안 카드 — 스트레스 게이지 숫자·역전 경고, BU5b · 실측 2회 같음).
 const KNOWN_LOW: Record<string, number> = {
   "00 Dashboard": 0, "01 Screener": 0, "02 Backtester": 0,
-  "03 Macro": 2, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
+  "03 Macro": 0, "04 Company": 5, "05 Risk": 0, "07 Data Infra": 0,
 };
 
 /** §62 가 정의한 모션 토큰 — 초 단위. 0 은 "전이 없음"이라 항상 허용된다. */

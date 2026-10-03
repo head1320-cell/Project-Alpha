@@ -15,7 +15,7 @@ import type { RegimeState } from "@/entities/macro/api";
 import { MODE_KO, regimeName } from "@/entities/macro/regimeKo";
 import { pct } from "@/shared/lib/krFormat";
 import { Unknown } from "@/shared/ui/tx";
-import { IND_KR } from "./visualParts";
+import { IND_KR, STRESS_KO } from "./macroKo";
 
 /** 사분면 순서(성장↑물가↓ → 성장↑물가↑ → 성장↓물가↑ → 성장↓물가↓) — 고리를 한 바퀴 돌면 국면이 이웃한 순서다. 색은 국면을 따른다(순위가 아니라). */
 const QUADS = ["Goldilocks", "Reflation", "Stagflation", "Disinflation"] as const;
@@ -24,12 +24,7 @@ const Q_COLOR: Record<string, string> = {
   Stagflation: "var(--mc-q-stagflation)", Disinflation: "var(--mc-q-disinflation)",
 };
 
-/** 스트레스 구성 항목 이름 — 서버 `_compute_stress` 의 키. 모르는 키는 서버 이름 그대로(지어내지 않는다). */
-const STRESS_KO: Record<string, string> = {
-  vix: "변동성 지수(VIX)", credit_spread: "신용 스프레드", fx_volatility: "환율 변동성",
-  rate_volatility: "금리 변동성", dxy_strength: "달러 강세", yield_curve: "수익률 곡선(10년−2년)", real_rate: "실질 금리",
-};
-
+/* 스트레스 구성 항목 이름표 STRESS_KO 는 `macroKo.ts` 로 옮겼다(탭 안 카드와 같은 말을 쓴다). */
 const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}`;
 
@@ -128,7 +123,7 @@ function RegimeCard({ market, label, st }: { market: "kr" | "us"; label: string;
               </li>
             ))}
           </ul>
-        ) : <p className="rv-none">국면별 확률을 받지 못했어요 — 판정 이름만 보여 드려요.</p>}
+        ) : <p className="rv-none">국면별 확률을 받지 못했어요. 판정 이름만 보여 드려요.</p>}
       </div>
       <div className="rv-axes">
         <Axis id="growth" label="성장" lo="약해요" hi="강해요" v={st.growth_axis} />
@@ -177,7 +172,7 @@ function StressCard({ st }: { st: RegimeState }) {
       </dl>
       {comps.length ? (
         <>
-          <p className="rv-sub">항목별 점수(0~100, 높을수록 불안) — 가중치를 매겨 합친 값이 위 숫자예요</p>
+          <p className="rv-sub">항목별 점수(0~100, 높을수록 불안). 가중치를 매겨 합친 값이 위 숫자예요</p>
           <ul className="rv-sc">
             {comps.map(([k, v]) => (
               <li key={k} data-key={k}>

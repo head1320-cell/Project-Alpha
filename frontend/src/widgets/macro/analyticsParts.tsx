@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import type { MacroCorrelations, MacroTiming, TimingComponent, TrajectoryPoint, TrendRow } from "@/entities/macro/analysisModel";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
+import { regimeName } from "@/entities/macro/regimeKo";
 
 const TIP = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 const PAIR_COLORS: Record<string, string> = {
@@ -203,34 +204,37 @@ export function TrendTable({ assets }: { assets: TrendRow[] }) {
 
 // ── RegimeTrajectory — 국면 궤적(경로) 산점도 ──
 export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
+  // BU5b-1: 국면 바탕 = 국면 색(`--mc-q-*`, 도넛과 같은 네 색) · 사분면 이름 한국어 · 길은 한 계열 강조색 · 지금 점은 잉크.
   const anim = useChartAnimation();
-  if (!path.length) return <div className="mc-empty-sm">궤적 데이터 없음</div>;
+  if (!path.length) return <div className="mc-empty-sm">궤적을 그릴 관측이 없어요</div>;
   const data = path.map((p) => ({ x: p.growth, y: p.inflation, t: p.t }));
   const last = data[data.length - 1];
-  // ★동적 스케일(CIO §2) — 궤적 전체가 축 안에 들어오도록. 라벨 통일 명명.
+  // 동적 스케일 — 궤적 전체가 축 안에 들어오도록.
   const lim = Math.max(1, Math.ceil(Math.max(...data.map((d) => Math.max(Math.abs(d.x), Math.abs(d.y))))));
   const ticks = [-lim, -lim / 2, 0, lim / 2, lim];
+  const AX = { fontSize: 12, fill: "var(--tx-sub)" } as const;
   return (
-    <div className="mc-scatter">
-      <span className="mc-quad tr">REFLATION<em>성장↑·물가↑</em></span>
-      <span className="mc-quad tl">STAGFLATION<em>성장↓·물가↑</em></span>
-      <span className="mc-quad br">GOLDILOCKS<em>성장↑·물가↓</em></span>
-      <span className="mc-quad bl">DISINFLATION<em>성장↓·물가↓</em></span>
+    <div className="mc-scatter" role="img" aria-label={`국면 궤적 ${data.length}개월 · 지금 성장 ${last.x.toFixed(2)}, 물가 ${last.y.toFixed(2)}`}>
+      <span className="mc-quad tr" data-regime="Reflation">{regimeName("Reflation")}<em>성장↑ 물가↑</em></span>
+      <span className="mc-quad tl" data-regime="Stagflation">{regimeName("Stagflation")}<em>성장↓ 물가↑</em></span>
+      <span className="mc-quad br" data-regime="Goldilocks">{regimeName("Goldilocks")}<em>성장↑ 물가↓</em></span>
+      <span className="mc-quad bl" data-regime="Disinflation">{regimeName("Disinflation")}<em>성장↓ 물가↓</em></span>
       <ResponsiveContainer width="100%" height={320}>
         <ScatterChart margin={{ top: 14, right: 18, bottom: 22, left: 6 }}>
-          <ReferenceArea x1={0} x2={lim} y1={-lim} y2={0} fill="rgba(22,163,74,0.06)" stroke="none" />
-          <ReferenceArea x1={0} x2={lim} y1={0} y2={lim} fill="rgba(234,88,12,0.06)" stroke="none" />
-          <ReferenceArea x1={-lim} x2={0} y1={0} y2={lim} fill="rgba(220,38,38,0.06)" stroke="none" />
-          <ReferenceArea x1={-lim} x2={0} y1={-lim} y2={0} fill="rgba(37,99,235,0.06)" stroke="none" />
-          <XAxis type="number" dataKey="x" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "성장 →", position: "insideBottom", offset: -10, fontSize: 10, fill: "var(--t-muted)" }} />
-          <YAxis type="number" dataKey="y" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "물가 →", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
-          <ReferenceLine x={0} stroke="var(--t-border)" />
-          <ReferenceLine y={0} stroke="var(--t-border)" />
-          <Tooltip contentStyle={TIP} cursor={{ strokeDasharray: "3 3" }} formatter={(v: number | string) => Number(v).toFixed(2)} />
-          <Scatter data={data} line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} lineType="joint"
-            fill="var(--t-accent)" fillOpacity={0.45} isAnimationActive={anim} />
-          <ReferenceDot x={last.x} y={last.y} r={16} fill="var(--t-accent)" fillOpacity={0.14} stroke="none" />
-          <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--t-accent)" stroke="var(--hx-b-ffffff)" strokeWidth={1.5} />
+          <ReferenceArea x1={0} x2={lim} y1={-lim} y2={0} fill="var(--mc-q-goldilocks)" fillOpacity={0.1} stroke="none" />
+          <ReferenceArea x1={0} x2={lim} y1={0} y2={lim} fill="var(--mc-q-reflation)" fillOpacity={0.1} stroke="none" />
+          <ReferenceArea x1={-lim} x2={0} y1={0} y2={lim} fill="var(--mc-q-stagflation)" fillOpacity={0.1} stroke="none" />
+          <ReferenceArea x1={-lim} x2={0} y1={-lim} y2={0} fill="var(--mc-q-disinflation)" fillOpacity={0.1} stroke="none" />
+          <XAxis type="number" dataKey="x" domain={[-lim, lim]} ticks={ticks} tick={AX} stroke="var(--tx-line)" label={{ value: "성장 →", position: "insideBottom", offset: -10, ...AX }} />
+          <YAxis type="number" dataKey="y" domain={[-lim, lim]} ticks={ticks} tick={AX} stroke="var(--tx-line)" label={{ value: "물가 →", angle: -90, position: "insideLeft", ...AX }} />
+          <ReferenceLine x={0} stroke="var(--tx-mute)" />
+          <ReferenceLine y={0} stroke="var(--tx-mute)" />
+          <Tooltip contentStyle={{ background: "var(--tx-surface)", border: "1px solid var(--tx-line)", borderRadius: 12, fontSize: 13, color: "var(--tx-ink)" }}
+            cursor={{ strokeDasharray: "3 3" }} formatter={(v: number | string, n: string) => [Number(v).toFixed(2), n === "x" ? "성장" : n === "y" ? "물가" : n]} />
+          <Scatter data={data} line={{ stroke: "var(--tx-blue)", strokeWidth: 1.5 }} lineType="joint"
+            fill="var(--tx-blue)" fillOpacity={0.5} isAnimationActive={anim} />
+          <ReferenceDot x={last.x} y={last.y} r={14} fill="var(--tx-ink)" fillOpacity={0.1} stroke="none" />
+          <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--tx-ink)" stroke="var(--tx-surface)" strokeWidth={2} />
         </ScatterChart>
       </ResponsiveContainer>
     </div>

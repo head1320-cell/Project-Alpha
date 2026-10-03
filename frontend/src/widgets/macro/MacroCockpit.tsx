@@ -98,7 +98,8 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   const [recommend, setRecommend] = useState<MacroRecommend | null>(core.recommend);
   const [mktLoading, setMktLoading] = useState(false);
   // 드릴다운
-  const [drill, setDrill] = useState<{ id: string; series: MacroSeries | null; loading: boolean } | null>(null);
+  // failed = 시계열 요청이 실패했다(빈 시계열과 구별 — 창이 실패를 말하고 다시 묻는다)
+  const [drill, setDrill] = useState<{ id: string; series: MacroSeries | null; loading: boolean; failed?: boolean } | null>(null);
   // 07/08 lazy (탭 진입·시장 변경 시 로드) + 국면 궤적
   const [corr, setCorr] = useState<MacroCorrelations | null>(null);
   const [timing, setTiming] = useState<MacroTiming | null>(null);
@@ -123,13 +124,14 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
       analysisApi.cbSentiment().then(setCbSent).catch(() => setCbSent(null));
     if (tab === "correlations" && causal === undefined)
       analysisApi.causalGraph().then(setCausal).catch(() => setCausal(null));
-    if (tab === "regime" && strips === undefined) {
+    // BU5b: 띠와 축 기록은 따로 묻는다 — 하나가 실패해 [다시 시도]하면 그것만 다시 묻는다(undefined 로 되돌리면 이 효과가 다시 돈다).
+    if (tab === "regime" && strips === undefined)
       analysisApi.cycleStrips("kr").then(setStrips).catch(() => setStrips(null));
+    if (tab === "regime" && axisHist === undefined)
       analysisApi.axisHistory("kr").then(setAxisHist).catch(() => setAxisHist(null));
-    }
     if (tab === "valuation" && aStrips === undefined)
       analysisApi.assetStrips("kr").then(setAStrips).catch(() => setAStrips(null));
-  }, [tab, cbSent, causal, strips, aStrips]);
+  }, [tab, cbSent, causal, strips, axisHist, aStrips]);
   // 전략 상세 모달
   const [stratModal, setStratModal] = useState<{ sid: string; detail: StrategyDetail | null; loading: boolean } | null>(null);
 
@@ -166,7 +168,10 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
 
   const openDrill = useCallback((id: string) => {
     setDrill({ id, series: null, loading: true });
-    loadSeries(id).then((s) => setDrill((d) => (d && d.id === id ? { ...d, series: s, loading: false } : d)));
+    macroApi.series(id).then(
+      (s) => setDrill((d) => (d && d.id === id ? { ...d, series: s, loading: false, failed: false } : d)),
+      () => setDrill((d) => (d && d.id === id ? { ...d, series: null, loading: false, failed: true } : d)),
+    );
   }, []);
 
   const transplant = (sid: string, name: string) =>
@@ -262,9 +267,10 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
         {!mainFail && (need?.also ?? []).filter((k) => coreFail[k]).map((k) => <CoreFail key={k} k={k} retry={coreFail[k]!} />)}
         {mainFail ? null : <>
         {tab === "overview" && <OverviewTab core={core} regime={regime} quad={quad} recommend={recommend} onTransplant={transplant} onDrill={openDrill} krus={krus} onRetryKrus={() => { void krusQ.refetch(); }} />}
-        {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} />}
-        {tab === "regime" && <RegimeTab regime={regime} traj={traj} onRetryTraj={() => setTraj(undefined)} strips={strips} axisHist={axisHist} />}
-        {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} />}
+        {tab === "indicators" && <IndicatorsTab core={core} onDrill={openDrill} cbSent={cbSent} onRetryCb={() => setCbSent(undefined)} />}
+        {tab === "regime" && <RegimeTab regime={regime} traj={traj} onRetryTraj={() => setTraj(undefined)}
+          strips={strips} onRetryStrips={() => setStrips(undefined)} axisHist={axisHist} onRetryAxis={() => setAxisHist(undefined)} />}
+        {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} onRetryAStrips={() => setAStrips(undefined)} />}
         {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
         {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
         {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
@@ -272,7 +278,7 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
         </>}
       </div>
 
-      {drill && <DrillDownModal series={drill.series} loading={drill.loading} onClose={() => setDrill(null)} />}
+      {drill && <DrillDownModal series={drill.series} loading={drill.loading} failed={drill.failed} onRetry={() => openDrill(drill.id)} onClose={() => setDrill(null)} />}
       {stratModal && (
         <StrategyModal
           detail={stratModal.detail} loading={stratModal.loading} currentQuad={quad} market={market}
