@@ -83,7 +83,7 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
       </div>
       <div className="mc-card">
         <div className="mc-card-h">시장 스트레스 <span className="mc-card-sub">0은 잔잔하고 100은 불안해요</span></div>
-        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} />
+        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 잔잔해요", "100 · 불안해요"]} />
       </div>
       <div className="mc-card span2">
         <div className="mc-card-h">추천 자산배분 <span className="mc-card-sub">{regimeName(quad)} 국면 기준 · 규칙·성과·AI 점수를 합쳤어요</span></div>
@@ -259,7 +259,7 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
       </div>
       <div className="mc-card">
         <div className="mc-card-h">스트레스 게이지 <span className="mc-card-sub">0은 잔잔하고 100은 불안해요</span></div>
-        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} />
+        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 잔잔해요", "100 · 불안해요"]} />
       </div>
       <div className="mc-card span2">
         <div className="mc-card-h">스트레스 구성 항목 <span className="mc-card-sub">항목마다 0~100, 높을수록 불안해요</span></div>

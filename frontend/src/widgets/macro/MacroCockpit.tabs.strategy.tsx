@@ -1,6 +1,7 @@
 "use client";
-// 매크로 콕핏 탭 — 05 Strategies · 06 Recommend (+ 시장 토글·전략 카드)
-// JSX는 한 줄도 바꾸지 않고 그대로 옮겼다 — 클래스명이 E2E 계약이므로.
+// 매크로 분석 탭 — 전략 · 추천 (+ 시장 토글·전략 카드)
+// BU5b-2: 한국어 제목 · 판단(신호·적합도)은 중립 · 12개월 성과는 등락색 · 미국 전략/추천 실패는 "데이터 없음"이 아니라 실패 + 다시 시도 ·
+//   서버가 쓴 설명은 그대로(`data-server`). 클래스명은 E2E 계약(`.mc-stratcard`·`.mc-rankrow`·`.mc-tab`).
 // (MacroCockpit.tsx에서 분리, props만 받는 표시 컴포넌트)
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -13,6 +14,9 @@ import type { MacroSeries } from "@/entities/macro/api";
 import { stressColor } from "@/entities/macro/api";
 import type { CausalGraph, CbSentiment, MacroCorrelations, MacroRecommend, MacroStrategies, MacroTiming, MacroTrajectory, StrategyDetail, TacticalHolding, TacticalStrategy } from "@/entities/macro/analysisModel";
 import { analysisApi } from "@/entities/macro/analysisApi";
+import { Notice } from "@/shared/ui/tx";
+import { regimeName } from "@/entities/macro/regimeKo";
+import { signed } from "./macroKo";
 import {
   type MacroCore, type Market, loadStrategies, loadRecommend, loadSeries, resolveQuadrant,
   loadCorrelations, loadTiming, loadTrajectory, loadStrategyDetail,
@@ -33,22 +37,34 @@ import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entit
 
 export function MarketToggle({ market, setMarket }: { market: Market; setMarket: (m: Market) => void }) {
   return (
-    <div className="mc-mkt">
-      <ArrowRightLeft size={12} />
-      <button className={market === "us" ? "on" : ""} onClick={() => setMarket("us")}>US ETF</button>
-      <button className={market === "kr" ? "on" : ""} onClick={() => setMarket("kr")}>국내 ETF</button>
+    <div className="mc-mkt" role="group" aria-label="시장 고르기">
+      <button type="button" className={market === "kr" ? "on" : ""} aria-pressed={market === "kr"} onClick={() => setMarket("kr")}>국내 ETF</button>
+      <button type="button" className={market === "us" ? "on" : ""} aria-pressed={market === "us"} onClick={() => setMarket("us")}>미국 ETF</button>
     </div>
   );
 }
 
+/** 지연 데이터 실패 — 그 자리에서 말한다(role=alert) + [다시 시도]. */
+export function TabFail({ title, onRetry }: { title: string; onRetry?: () => void }) {
+  return (
+    <Notice tone="danger" title={title}>
+      서버에 닿지 못했거나 계산이 실패했어요.
+      {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>}
+    </Notice>
+  );
+}
+const mktName = (m: Market) => (m === "kr" ? "국내 ETF" : "미국 ETF");
+
 const FAMILY_LABELS: Record<string, string> = {
-  risk: "리스크 기반 · 공분산 구동", optim: "최적화 기반", trend: "추세추종 (매니지드 퓨처스/CTA)",
-  sizing: "성장최적 사이징", momentum: "모멘텀 · 추세 타이밍", benchmark: "벤치마크",
+  risk: "위험을 고르게 나누는 전략(공분산 기반)", optim: "최적화 전략", trend: "추세 추종 전략(매니지드 퓨처스)",
+  sizing: "성장 최적 비중 전략", momentum: "모멘텀 · 추세 타이밍 전략", benchmark: "비교 기준",
 };
 const FAMILY_ORDER = ["risk", "optim", "trend", "sizing", "momentum", "benchmark"];
 
-export function StrategiesTab({ strategies, market, setMarket, loading, onTransplant, onOpen }: {
+export function StrategiesTab({ strategies, market, setMarket, loading, failed, onRetry, onTransplant, onOpen }: {
   strategies: MacroStrategies | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
+  /** 이 시장 전략 요청이 실패했다(빈 결과와 다르다) */
+  failed?: boolean; onRetry?: () => void;
   onTransplant: (sid: string, name: string) => void; onOpen: (sid: string) => void;
 }) {
   const groups = useMemo(() => {
@@ -63,41 +79,43 @@ export function StrategiesTab({ strategies, market, setMarket, loading, onTransp
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">택티컬 자산배분 {total}전략 <span className="mc-card-sub">모멘텀 + 리스크·최적화 · 현재 시점 비중·시그널</span></div>
+        <div className="mc-strat-title">전술적 자산배분 전략{total ? ` ${total}개` : ""} <span className="mc-card-sub">모멘텀·위험·최적화 규칙으로 지금 시점의 비중과 신호를 냈어요. 카드를 누르면 자세히 봐요.</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
-      {loading && <div className="mc-empty-sm">{market === "kr" ? "국내 ETF" : "US ETF"} 비중 계산 중…</div>}
-      {!loading && groups.length ? groups.map((g) => (
-        <div key={g.family} className="mc-fam">
-          <div className="mc-fam-h"><span className="mc-fam-lbl">{g.label}</span><span className="mc-fam-n">{g.items.length}</span></div>
+      {loading && <p className="mc-loading">{mktName(market)} 비중을 계산하는 중이에요</p>}
+      {!loading && failed && <TabFail title={`${mktName(market)} 전략을 불러오지 못했어요`} onRetry={onRetry} />}
+      {!loading && !failed && (groups.length ? groups.map((g) => (
+        <section key={g.family} className="mc-fam">
+          <h3 className="mc-fam-h"><span className="mc-fam-lbl">{g.label}</span><span className="mc-fam-n">{g.items.length}개</span></h3>
           <div className="mc-stratgrid">
             {g.items.map((s) => <StrategyCard key={s.id} s={s} onTransplant={onTransplant} onOpen={onOpen} />)}
           </div>
-        </div>
-      )) : !loading && <div className="mc-empty-sm">전략 데이터 없음</div>}
+        </section>
+      )) : <div className="mc-empty-sm">이 시장에는 전략이 아직 없어요</div>)}
     </div>
   );
 }
 
 export function StrategyCard({ s, onTransplant, onOpen }: { s: TacticalStrategy; onTransplant: (sid: string, name: string) => void; onOpen: (sid: string) => void }) {
-  const top = [...s.holdings].sort((a, b) => b.weight - a.weight).slice(0, 6);
+  const sorted = [...s.holdings].sort((a, b) => b.weight - a.weight);
+  const top = sorted.slice(0, 6);
   return (
-    <div className="mc-stratcard mc-stratcard-click" onClick={() => onOpen(s.id)} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter") onOpen(s.id); }}>
+    <div className="mc-stratcard mc-stratcard-click" onClick={() => onOpen(s.id)} role="button" tabIndex={0} aria-label={`${s.name} 자세히 보기`}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(s.id); } }}>
       <div className="mc-stratcard-h">
         <div><b>{s.name}</b><SignalBadge signal={s.signal} /></div>
-        <button className="mc-bt-btn sm" onClick={(e) => { e.stopPropagation(); onTransplant(s.id, s.name); }}><Play size={11} /> 백테스트</button>
+        <button type="button" className="mc-bt-btn sm tx-btn tx-btn--sub" onClick={(e) => { e.stopPropagation(); onTransplant(s.id, s.name); }}>백테스트하기</button>
       </div>
-      <p className="mc-stratcard-desc">{s.description}</p>
+      <p className="mc-stratcard-desc" data-server>{s.description}</p>
       <div className="mc-stratcard-body">
-        <HoldingsDonut holdings={s.holdings} size={104} />
+        <HoldingsDonut holdings={sorted} size={104} />
         <div className="mc-stratcard-holds">
           {top.map((h, idx) => (
             <div key={h.ticker} className="mc-hold-row">
-              <i style={{ background: donutColor(idx) }} />
+              <i style={{ background: donutColor(idx, sorted.length) }} aria-hidden />
               <span className="mc-hold-nm">{h.us_label}</span>
-              <span className="mc-hold-tk">{h.ticker}</span>
-              <div className="mc-hold-bar"><b style={{ width: `${h.weight}%`, background: donutColor(idx) }} /></div>
+              <span className="mc-hold-tk" data-mono>{h.ticker}</span>
+              <div className="mc-hold-bar" aria-hidden><b style={{ width: `${h.weight}%`, background: donutColor(idx, sorted.length) }} /></div>
               <span className="mc-hold-w">{h.weight}%</span>
             </div>
           ))}
@@ -108,100 +126,106 @@ export function StrategyCard({ s, onTransplant, onOpen }: { s: TacticalStrategy;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 06 Recommend
+// 추천
 // ─────────────────────────────────────────────────────────────────────────────
-export function RecommendTab({ recommend, market, setMarket, loading, onTransplant }: {
+export function RecommendTab({ recommend, market, setMarket, loading, failed, onRetry, onTransplant }: {
   recommend: MacroRecommend | null; market: Market; setMarket: (m: Market) => void; loading: boolean;
+  failed?: boolean; onRetry?: () => void;
   onTransplant: (sid: string, name: string) => void;
 }) {
-  if (loading) return <div className="mc-empty-sm">추천 재계산 중…</div>;
-  if (!recommend) return <div className="mc-empty-sm">추천 데이터 없음</div>;
-  // 실데이터에서 추천이 부분 계산되면(top/regime/보유목록 결측) 크래시 대신 정직한 미가용 상태.
+  const bar = (sub?: React.ReactNode) => (
+    <div className="mc-strat-bar">
+      <div className="mc-strat-title">국면 기반 추천 {sub}</div>
+      <MarketToggle market={market} setMarket={setMarket} />
+    </div>
+  );
+  if (loading) return <div className="mc-stack">{bar()}<p className="mc-loading">{mktName(market)} 추천을 다시 계산하는 중이에요</p></div>;
+  if (failed) return <div className="mc-stack">{bar()}<TabFail title={`${mktName(market)} 추천을 불러오지 못했어요`} onRetry={onRetry} /></div>;
+  if (!recommend) return <div className="mc-stack">{bar()}<div className="mc-empty-sm">추천 데이터 없음 · 이 시장의 추천이 아직 없어요</div></div>;
+  // 실데이터에서 추천이 부분 계산되면(top/regime/보유 목록 결측) 무너지는 대신 정직하게 말한다.
   if (!recommend.top || !recommend.regime || !Array.isArray(recommend.top.holdings_final)) {
     return (
-      <div className="mc-empty-sm">
-        추천 데이터가 불완전해요 — 국면·전략 계산에 필요한 값이 부족해 표시할 수 없어요 (데이터 미가용).
-        데이터 적재 후 다시 시도하세요.
+      <div className="mc-stack">{bar()}
+        <div className="mc-empty-sm">
+          추천 데이터가 불완전해요. 국면·전략 계산에 필요한 값이 부족해 보여 드릴 수 없어요(데이터 미가용). 데이터를 적재한 뒤 다시 확인해 주세요.
+        </div>
       </div>
     );
   }
   const top = recommend.top;
   const confPct = (recommend.confidence * 100).toFixed(0);
+  const ma = recommend.macro_allocation;
+  const finalSorted = top.holdings_final;
   return (
     <div className="mc-stack">
-      <div className="mc-strat-bar">
-        <div className="mc-strat-title">
-          국면 기반 추천 <span className="mc-card-sub">{recommend.regime.quadrant_kr} · Stress {recommend.regime.stress.toFixed(0)} · 신뢰도 {confPct}%</span>
-        </div>
-        <MarketToggle market={market} setMarket={setMarket} />
-      </div>
+      {bar(<span className="mc-card-sub"><span data-server>{recommend.regime.quadrant_kr}</span> · 스트레스 {recommend.regime.stress.toFixed(0)} · 신뢰도 {confPct}%</span>)}
       {recommend.low_conviction && (
-        <div className="mc-warn">
-          저확신 국면(신뢰도 {confPct}%) — 배분에 현금성 {top.cash_overlay_pct.toFixed(0)}%를 자동 편입해 방향성 오류 리스크를 낮췄어요.
-        </div>
+        <p className="mc-warn mc-warn--line">
+          확신이 낮은 국면이에요(신뢰도 {confPct}%). 방향을 잘못 짚을 위험을 줄이려고 현금성 자산을 {top.cash_overlay_pct.toFixed(0)}% 넣었어요.
+        </p>
       )}
       <div className="mc-grid">
-        {/* ★1순위: 매크로 임베딩 배분 (CIO §3) — 국면 스코어가 직접 입력. 가격 모멘텀 전략이
-            매크로 환경과 충돌하던 문제의 해소 + XAI 기여분해 + MC 신뢰구간. */}
-        {recommend.macro_allocation && (
+        {/* 1순위: 국면 점수를 바로 넣어 정한 배분 + 비중이 정해진 이유 + 몬테카를로 범위 */}
+        {ma && (
           <div className="mc-card span2 mc-featured">
-            <div className="mc-card-h">매크로 임베딩 배분 — 국면 직결 (1순위)
-              <span className="mc-card-sub">성장 {recommend.macro_allocation.inputs.growth >= 0 ? "+" : ""}{recommend.macro_allocation.inputs.growth.toFixed(2)} · 물가 {recommend.macro_allocation.inputs.inflation >= 0 ? "+" : ""}{recommend.macro_allocation.inputs.inflation.toFixed(2)} · Stress {recommend.macro_allocation.inputs.stress.toFixed(0)} → 4계절 틸트</span></div>
+            <div className="mc-card-h">국면에서 바로 정한 배분(1순위)
+              <span className="mc-card-sub">성장 {signed(ma.inputs.growth)} · 물가 {signed(ma.inputs.inflation)} · 스트레스 {ma.inputs.stress.toFixed(0)}을 네 계절 비중으로 옮겼어요</span></div>
             <div className="mc-reco">
               <div className="mc-reco-l">
-                <HoldingsDonut holdings={recommend.macro_allocation.holdings} size={150} />
+                <HoldingsDonut holdings={ma.holdings} size={150} />
                 {recommend.regime_probs && <ProbBars probs={recommend.regime_probs} compact />}
               </div>
               <div className="mc-reco-r">
-                <div className="mc-alloc-sub">Weight Attribution — 비중 결정 요인 (룰 항 정확 분해)</div>
-                <AllocAttribution rows={recommend.macro_allocation.attribution} />
-                <div className="mc-alloc-sub" style={{ marginTop: 10 }}>비중 신뢰구간 — 몬테카를로 400회</div>
-                <AllocBands bands={recommend.macro_allocation.bands} />
+                <h4 className="mc-subh">비중이 정해진 이유</h4>
+                <AllocAttribution rows={ma.attribution} />
+                <h4 className="mc-subh mc-subh--gap">비중이 흔들릴 수 있는 폭(몬테카를로 400회)</h4>
+                <AllocBands bands={ma.bands} />
               </div>
             </div>
-            <p className="mc-card-note">{recommend.macro_allocation.method} · {recommend.macro_allocation.note}</p>
+            <p className="mc-card-note"><span data-server>{ma.method}</span> · <span data-server>{ma.note}</span></p>
           </div>
         )}
         <div className="mc-card span2">
-          <div className="mc-card-h">최우선 추천 <SignalBadge signal={top.signal} /></div>
+          <div className="mc-card-h">가장 먼저 추천하는 전략 <SignalBadge signal={top.signal} /></div>
           <div className="mc-reco">
             <div className="mc-reco-l">
-              <HoldingsDonut holdings={top.holdings_final} size={150} />
-              <ArcGauge value={top.fit_score} color={sigColor(top.signal)} label="적합도" height={104} />
+              <HoldingsDonut holdings={finalSorted} size={150} />
+              <ArcGauge value={top.fit_score} label="/100" sub="국면 적합도" ends={["0", "100"]} />
             </div>
             <div className="mc-reco-r">
               <div className="mc-reco-nm">{top.name}</div>
-              <div className="mc-reco-comp">종합점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도 가중 배분(현금 {top.cash_overlay_pct.toFixed(0)}%)</div>
+              <div className="mc-reco-comp">종합 점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도에 맞춰 현금 {top.cash_overlay_pct.toFixed(0)}%를 섞었어요</div>
               <div className="mc-reco-holds">
-                {top.holdings_final.map((h, idx) => (
+                {finalSorted.map((h, idx) => (
                   <div key={h.ticker} className="mc-hold-row">
-                    <i style={{ background: donutColor(idx) }} />
+                    <i style={{ background: donutColor(idx, finalSorted.length) }} aria-hidden />
                     <span className="mc-hold-nm">{h.us_label}</span>
-                    <span className="mc-hold-tk">{h.ticker}</span>
-                    <div className="mc-hold-bar"><b style={{ width: `${h.weight}%`, background: donutColor(idx) }} /></div>
+                    <span className="mc-hold-tk" data-mono>{h.ticker}</span>
+                    <div className="mc-hold-bar" aria-hidden><b style={{ width: `${h.weight}%`, background: donutColor(idx, finalSorted.length) }} /></div>
                     <span className="mc-hold-w">{h.weight}%</span>
                   </div>
                 ))}
               </div>
-              <button className="mc-bt-btn" onClick={() => onTransplant(top.id, top.name)}><Play size={12} /> 이 전략 백테스트 →</button>
+              <button type="button" className="mc-bt-btn tx-btn tx-btn--sub" onClick={() => onTransplant(top.id, top.name)}>이 전략 백테스트하기</button>
             </div>
           </div>
         </div>
         <div className="mc-card span2">
-          <div className="mc-card-h">AI 근거 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "Claude" : "규칙 기반"}</span></div>
-          <p className="mc-narr">{recommend.narrative}</p>
-          {recommend.narrative_source === "rule" && <p className="mc-narr-note">※ ANTHROPIC_API_KEY 설정 시 Claude가 국면·성과를 종합한 서술을 생성해요.</p>}
+          <div className="mc-card-h">추천한 까닭 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "AI가 국면과 성과를 읽고 쓴 설명이에요" : "규칙으로 쓴 설명이에요 · AI 설명은 관리자가 키를 넣으면 켜져요"}</span></div>
+          <p className="mc-narr" data-server>{recommend.narrative}</p>
         </div>
         <div className="mc-card span2">
-          <div className="mc-card-h">전체 13전략 랭킹 — 적합도(62%) + 트레일링 성과(38%)</div>
-          <div className="mc-ranktbl">
-            <div className="mc-rankhead"><span>#</span><span>전략</span><span className="mc-rh-bar">종합</span><span>점수</span><span>적합</span><span>12M</span></div>
-            {recommend.ranking.map((r, idx) => (
-              <CompositeRow key={r.id} rank={idx + 1} name={r.name} composite={r.composite} fit={r.fit_score} perf={r.recent_return_12m} signal={r.signal} active={r.id === top.id} />
-            ))}
+          <div className="mc-card-h">전략 {recommend.ranking.length}개 순위 <span className="mc-card-sub">종합 점수 = 국면 적합도 62% + 지난 성과 38%</span></div>
+          <div className="mc-tablewrap">
+            <div className="mc-ranktbl">
+              <div className="mc-rankhead"><span>순위</span><span>전략</span><span className="mc-rh-bar">종합 점수</span><span>점수</span><span>적합도</span><span>12개월</span></div>
+              {recommend.ranking.map((r, idx) => (
+                <CompositeRow key={r.id} rank={idx + 1} name={r.name} composite={r.composite} fit={r.fit_score} perf={r.recent_return_12m} signal={r.signal} active={r.id === top.id} />
+              ))}
+            </div>
           </div>
-          <p className="mc-card-note">성과는 각 전략의 현재 비중을 트레일링 12개월 수익률에 적용한 추정치예요(실 ETF 시세 — 키 없으면 mock). 미래 수익을 보장하지 않아요.</p>
-          <p className="mc-card-note">{recommend.data_lag_note}</p>
+          <p className="mc-card-note">12개월 성과는 각 전략의 지금 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치예요(연습용 데이터에서는 합성 시세). 앞으로의 수익을 보장하지 않아요.</p>
+          {recommend.data_lag_note && <p className="mc-card-note" data-server>{recommend.data_lag_note}</p>}
         </div>
       </div>
     </div>

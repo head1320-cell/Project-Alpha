@@ -101,11 +101,13 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   // failed = 시계열 요청이 실패했다(빈 시계열과 구별 — 창이 실패를 말하고 다시 묻는다)
   const [drill, setDrill] = useState<{ id: string; series: MacroSeries | null; loading: boolean; failed?: boolean } | null>(null);
   // 07/08 lazy (탭 진입·시장 변경 시 로드) + 국면 궤적
-  const [corr, setCorr] = useState<MacroCorrelations | null>(null);
-  const [timing, setTiming] = useState<MacroTiming | null>(null);
+  // BU5b-2: undefined = 불러오는 중 · null = 실패 · 값. 시장을 바꾸거나 [다시 시도]하면 먼저 undefined 로 비운다(옛 시장 값을 새 값처럼 두지 않는다).
+  const [corr, setCorr] = useState<MacroCorrelations | null | undefined>(undefined);
+  const [timing, setTiming] = useState<MacroTiming | null | undefined>(undefined);
+  const [corrTry, setCorrTry] = useState(0);
+  const [timingTry, setTimingTry] = useState(0);
   // undefined = 아직 · null = 실패 · 값 = 받음 (예전엔 실패도 "불러오는 중"으로 영원히 남았다)
   const [traj, setTraj] = useState<MacroTrajectory | null | undefined>(undefined);
-  const [tabLoading, setTabLoading] = useState(false);
   // v2 lazy: CB 센티먼트(Indicators) + 그레인저 인과 그래프(Correlations)
   const [cbSent, setCbSent] = useState<CbSentiment | null | undefined>(undefined);
   const [causal, setCausal] = useState<CausalGraph | null | undefined>(undefined);
@@ -133,20 +135,20 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
       analysisApi.assetStrips("kr").then(setAStrips).catch(() => setAStrips(null));
   }, [tab, cbSent, causal, strips, axisHist, aStrips]);
   // 전략 상세 모달
-  const [stratModal, setStratModal] = useState<{ sid: string; detail: StrategyDetail | null; loading: boolean } | null>(null);
+  const [stratModal, setStratModal] = useState<{ sid: string; detail: StrategyDetail | null; loading: boolean; failed?: boolean } | null>(null);
 
   useEffect(() => {
     if (tab !== "correlations") return;
-    let ok = true; setTabLoading(true);
-    loadCorrelations(market).then((c) => { if (ok) { setCorr(c); setTabLoading(false); } });
+    let ok = true; setCorr(undefined);
+    loadCorrelations(market).then((c) => { if (ok) setCorr(c); });   // 로더는 실패를 null 로 준다
     return () => { ok = false; };
-  }, [tab, market]);
+  }, [tab, market, corrTry]);
   useEffect(() => {
     if (tab !== "timing") return;
-    let ok = true; setTabLoading(true);
-    loadTiming(market).then((t) => { if (ok) { setTiming(t); setTabLoading(false); } });
+    let ok = true; setTiming(undefined);
+    loadTiming(market).then((t) => { if (ok) setTiming(t); });
     return () => { ok = false; };
-  }, [tab, market]);
+  }, [tab, market, timingTry]);
   useEffect(() => {
     // 실패(null)는 자동으로 다시 묻지 않는다(되풀이 요청 방지) — 화면이 실패를 말한다.
     if (tab === "regime" && traj === undefined) loadTrajectory().then(setTraj);
@@ -155,16 +157,19 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   const regime = core.regime;
   const quad = resolveQuadrant(regime);
 
-  // 시장 토글 → strategies/recommend 재로드 (us는 코어 캐시 사용)
+  // 시장 토글 → strategies/recommend 다시 불러오기(국내는 코어 값). BU5b-2: 미국 요청 실패는 따로 기록 — "데이터 없음"(빈 결과)과 가른다.
+  const [mktFail, setMktFail] = useState<{ strategies: boolean; recommend: boolean }>({ strategies: false, recommend: false });
+  const [mktTry, setMktTry] = useState(0);
   useEffect(() => {
     let ok = true;
-    if (market === "kr") { setStrategies(core.strategies); setRecommend(core.recommend); return; }
+    if (market === "kr") { setStrategies(core.strategies); setRecommend(core.recommend); setMktFail({ strategies: false, recommend: false }); setMktLoading(false); return; }
     setMktLoading(true);
     Promise.all([loadStrategies(market), loadRecommend(market)]).then(([s, r]) => {
-      if (!ok) return; setStrategies(s); setRecommend(r); setMktLoading(false);
+      if (!ok) return; setStrategies(s); setRecommend(r);
+      setMktFail({ strategies: s === null, recommend: r === null }); setMktLoading(false);
     });
     return () => { ok = false; };
-  }, [market, core.strategies, core.recommend]);
+  }, [market, core.strategies, core.recommend, mktTry]);
 
   const openDrill = useCallback((id: string) => {
     setDrill({ id, series: null, loading: true });
@@ -179,8 +184,9 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
 
   const openStrategy = useCallback((sid: string) => {
     setStratModal({ sid, detail: null, loading: true });
+    // 로더는 실패를 null 로 준다 — 상세가 null 이면 실패(창이 실패를 말하고 다시 묻는다)
     loadStrategyDetail(sid, market).then((d) =>
-      setStratModal((m) => (m && m.sid === sid ? { ...m, detail: d, loading: false } : m)));
+      setStratModal((m) => (m && m.sid === sid ? { ...m, detail: d, loading: false, failed: d === null } : m)));
   }, [market]);
 
   // ── 답 한 문장 — 서버 국면을 옮긴 것뿐(새 판단 없음). 한국 = markets.kr(없으면 최상위 = 한국 축 모형). ──
@@ -271,17 +277,20 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
         {tab === "regime" && <RegimeTab regime={regime} traj={traj} onRetryTraj={() => setTraj(undefined)}
           strips={strips} onRetryStrips={() => setStrips(undefined)} axisHist={axisHist} onRetryAxis={() => setAxisHist(undefined)} />}
         {tab === "valuation" && <ValuationTab core={core} aStrips={aStrips} onRetryAStrips={() => setAStrips(undefined)} />}
-        {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} onOpen={openStrategy} />}
-        {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading} onTransplant={transplant} />}
-        {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} loading={tabLoading} causal={causal} />}
-        {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} loading={tabLoading} />}
+        {tab === "strategies" && <StrategiesTab strategies={strategies} market={market} setMarket={setMarket} loading={mktLoading}
+          failed={market !== "kr" && mktFail.strategies} onRetry={() => setMktTry((n) => n + 1)} onTransplant={transplant} onOpen={openStrategy} />}
+        {tab === "recommend" && <RecommendTab recommend={recommend} market={market} setMarket={setMarket} loading={mktLoading}
+          failed={market !== "kr" && mktFail.recommend} onRetry={() => setMktTry((n) => n + 1)} onTransplant={transplant} />}
+        {tab === "correlations" && <CorrelationsTab corr={corr} market={market} setMarket={setMarket} onRetryCorr={() => setCorrTry((n) => n + 1)}
+          causal={causal} onRetryCausal={() => setCausal(undefined)} />}
+        {tab === "timing" && <TimingTab timing={timing} market={market} setMarket={setMarket} onRetry={() => setTimingTry((n) => n + 1)} />}
         </>}
       </div>
 
       {drill && <DrillDownModal series={drill.series} loading={drill.loading} failed={drill.failed} onRetry={() => openDrill(drill.id)} onClose={() => setDrill(null)} />}
       {stratModal && (
         <StrategyModal
-          detail={stratModal.detail} loading={stratModal.loading} currentQuad={quad} market={market}
+          detail={stratModal.detail} loading={stratModal.loading} failed={stratModal.failed} onRetry={() => openStrategy(stratModal.sid)} currentQuad={quad} market={market}
           onClose={() => setStratModal(null)}
           onBacktest={(d) => { transplant(d.id, d.name); setStratModal(null); }}
         />

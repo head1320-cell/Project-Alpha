@@ -1,106 +1,102 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// StrategyModal — 전략 상세 (개념·작동방식·근거·국면적합도·보유·과거성과·레퍼런스·AI)
-//   백엔드 build_detail 병합 결과 렌더. AI 심층분석은 버튼 클릭 시 온디맨드.
+// StrategyModal — 전략 자세히 (개념 · 작동 방식 · 근거 · 국면 적합도 · 보유 · 과거 성과 · 참고 문헌 · AI 분석)
+//   백엔드 build_detail 병합 결과를 그린다. AI 분석은 단추를 눌렀을 때만.
+// BU5b-2: 상세·AI 실패는 그 자리 alert + 다시 시도(예전엔 "불러올 수 없어요" 글자뿐, AI 실패는 조용히 단추로 돌아갔다) ·
+//   적합도 막대 = 국면 식별색(판단색 아님) · 성과 = 등락색(변동성·최대 낙폭은 색 없음) · 보유 목록 색 = 도넛 조각 색(기타 접기 일치) ·
+//   서버가 쓴 설명·참고 문헌은 그대로(`data-server`) · "mock" 꼬리표 대신 PerfLabel(이미 있음)이 데이터 종류를 말한다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
-import { X, Sparkles, Play } from "lucide-react";
+import { X } from "lucide-react";
 import type { StrategyAI, StrategyDetail, TacticalHolding } from "@/entities/macro/analysisModel";
 import type { Market } from "@/entities/macro/data";
 import { loadStrategyAI } from "@/entities/macro/data";
-import { HoldingsDonut, donutColor, SignalBadge, fmtPct } from "./cockpitParts";
+import { regimeName } from "@/entities/macro/regimeKo";
+import { Notice } from "@/shared/ui/tx";
+import { HoldingsDonut, donutColor, SignalBadge, fmtPct, moveColor, TIP_STYLE } from "./cockpitParts";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
-
 import { PerfLabel } from "@/shared/ui/PerfLabel";
-const TIP = { background: "var(--hx-b-ffffff)", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
 
-function fitColor(f: number): string {
-  if (f >= 0.8) return "var(--color-bull)";
-  if (f >= 0.55) return "var(--color-caution)";
-  return "var(--color-bear)";
-}
-function perfColor(v: number | null | undefined): string {
-  return (v ?? 0) >= 0 ? "var(--color-bull)" : "var(--color-bear)";
-}
+const Q_FILL: Record<string, string> = {
+  Goldilocks: "var(--mc-q-goldilocks)", Reflation: "var(--mc-q-reflation)",
+  Stagflation: "var(--mc-q-stagflation)", Disinflation: "var(--mc-q-disinflation)",
+};
 
-export default function StrategyModal({ detail, loading, currentQuad, market, onClose, onBacktest }: {
-  detail: StrategyDetail | null; loading: boolean; currentQuad: string; market: Market;
+export default function StrategyModal({ detail, loading, failed, onRetry, currentQuad, market, onClose, onBacktest }: {
+  detail: StrategyDetail | null; loading: boolean;
+  /** 상세 요청이 실패했다(빈 상세와 다르다) */
+  failed?: boolean; onRetry?: () => void;
+  currentQuad: string; market: Market;
   onClose: () => void; onBacktest?: (d: StrategyDetail) => void;
 }) {
   const anim = useChartAnimation();
-  const [ai, setAi] = useState<StrategyAI | null>(null);
+  // undefined = 아직 안 물음 · null = 실패 · 값 = 받음
+  const [ai, setAi] = useState<StrategyAI | null | undefined>(undefined);
   const [aiLoading, setAiLoading] = useState(false);
-
   const runAi = () => {
     if (!detail) return;
     setAiLoading(true);
-    loadStrategyAI(detail.id, market).then((r) => setAi(r)).finally(() => setAiLoading(false));
+    loadStrategyAI(detail.id, market).then((r) => setAi(r)).finally(() => setAiLoading(false));   // 로더는 실패를 null 로 준다
   };
-
-  // ★Radix Dialog 로 옮겼다 (Phase A)★
-  // 이전에는 role 도 aria-modal 도 Escape 도 포커스 트랩도 **하나도** 없었다 — 키보드·스크린리더
-  // 사용자는 이 창을 닫을 수도, 빠져나올 수도 없었다. 부모가 조건부로만 마운트하므로
-  // `open` 은 항상 true 이고, 닫힘은 Radix 가 Escape·바깥클릭·닫기버튼에서 모두 알려 준다.
+  const holds = detail?.holdings ?? [];
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm-modal" aria-describedby={undefined}>
-        {/* 접근 가능한 이름 — Radix 는 Title 이 없으면 콘솔 경고를 낸다. 로딩/실패 상태에도
-            이름이 있어야 하므로 detail 유무와 무관하게 항상 렌더한다. */}
-        <DialogTitle className="sr-only">{detail?.name ?? "전략 상세"}</DialogTitle>
-        <button className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
-        {loading && <div className="mc-modal-load">전략 상세 불러오는 중…</div>}
-        {!loading && !detail && <div className="mc-modal-load">전략 상세를 불러올 수 없어요.</div>}
+        {/* 접근 가능한 이름 — 불러오는 중·실패에도 이름이 있어야 하므로 늘 그린다. */}
+        <DialogTitle className="sr-only">{detail?.name ?? "전략 자세히"}</DialogTitle>
+        <button type="button" className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
+        {loading && <div className="mc-modal-load">전략 설명을 불러오는 중이에요</div>}
+        {!loading && failed && (
+          <Notice tone="danger" title="전략 설명을 불러오지 못했어요">
+            서버에 닿지 못했거나 계산이 실패했어요.
+            {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>}
+          </Notice>
+        )}
+        {!loading && !failed && !detail && <div className="mc-modal-load">이 전략은 설명이 아직 없어요</div>}
         {!loading && detail && (
           <div className="sm-body">
-            {/* 헤더 */}
             <div className="sm-head">
               <div className="sm-head-l">
-                <div className="sm-title">{detail.name}<span className="sm-fam">{detail.archetype_kr}</span></div>
+                <div className="sm-title">{detail.name}<span className="sm-fam" data-server>{detail.archetype_kr}</span></div>
                 <SignalBadge signal={detail.signal} />
               </div>
-              {onBacktest && <button className="mc-bt-btn sm" onClick={() => onBacktest(detail)}><Play size={11} /> 백테스트</button>}
+              {onBacktest && <button type="button" className="mc-bt-btn sm tx-btn tx-btn--sub" onClick={() => onBacktest(detail)}>백테스트하기</button>}
             </div>
-
-            {/* 개념·작동·근거·국면 */}
-            <Section title="개념"><p className="sm-text">{detail.profile.concept}</p></Section>
-            <Section title="작동 방식">
-              <ol className="sm-steps">{detail.profile.mechanism.map((m, i) => <li key={i}>{m}</li>)}</ol>
+            <Section title="어떤 전략인가요"><p className="sm-text" data-server>{detail.profile.concept}</p></Section>
+            <Section title="어떻게 움직이나요">
+              <ol className="sm-steps" data-server>{detail.profile.mechanism.map((m, i) => <li key={i}>{m}</li>)}</ol>
               {!!Object.keys(detail.profile.params).length && (
                 <div className="sm-params">{Object.entries(detail.profile.params).map(([k, v]) => (
-                  <span key={k} className="sm-param"><em>{k}</em> {v}</span>
+                  <span key={k} className="sm-param" data-server><em>{k}</em> {v}</span>
                 ))}</div>
               )}
             </Section>
-            <Section title="경제적 근거"><p className="sm-text">{detail.profile.rationale}</p></Section>
-            <Section title="유리·불리 국면"><p className="sm-text">{detail.profile.regime_note}</p></Section>
-
-            {/* 국면 적합도 */}
-            <Section title="국면 적합도">
+            <Section title="왜 통한다고 보나요"><p className="sm-text" data-server>{detail.profile.rationale}</p></Section>
+            <Section title="잘 맞는 국면 · 안 맞는 국면"><p className="sm-text" data-server>{detail.profile.regime_note}</p></Section>
+            <Section title="국면 적합도(0~100)">
               <div className="sm-fits">
                 {detail.regime_fit.map((f) => {
                   const active = f.quadrant === currentQuad;
                   return (
-                    <div key={f.quadrant} className={`sm-fit${active ? " on" : ""}`}>
-                      <span className="sm-fit-lbl">{f.quadrant_kr.split("(")[0]}{active && <em>현재</em>}</span>
-                      <div className="sm-fit-track"><i style={{ width: `${f.fit * 100}%`, background: fitColor(f.fit) }} /></div>
+                    <div key={f.quadrant} className={`sm-fit${active ? " on" : ""}`} data-regime={f.quadrant}>
+                      <span className="sm-fit-lbl">{regimeName(f.quadrant)}{active && <em>지금</em>}</span>
+                      <div className="sm-fit-track" aria-hidden><i style={{ width: `${f.fit * 100}%`, background: Q_FILL[f.quadrant] ?? "var(--mc-neutral)" }} /></div>
                       <span className="sm-fit-v">{Math.round(f.fit * 100)}</span>
                     </div>
                   );
                 })}
               </div>
             </Section>
-
-            {/* 보유 + 성과 (2단) */}
             <div className="sm-grid2">
-              <Section title="현재 보유">
+              <Section title="지금 담고 있는 것">
                 <div className="sm-hold-wrap">
-                  <HoldingsDonut holdings={detail.holdings} size={130} />
+                  <HoldingsDonut holdings={holds} size={130} />
                   <div className="sm-holds">
-                    {detail.holdings.slice(0, 8).map((h: TacticalHolding, idx) => (
+                    {holds.slice(0, 8).map((h: TacticalHolding, idx) => (
                       <div key={h.ticker} className="sm-hold">
-                        <i style={{ background: donutColor(idx) }} />
+                        <i style={{ background: donutColor(idx, holds.length) }} aria-hidden />
                         <span className="sm-hold-nm">{h.us_label}</span>
                         <span className="sm-hold-w">{h.weight}%</span>
                       </div>
@@ -108,56 +104,55 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
                   </div>
                 </div>
               </Section>
-              <Section title={<>전략 백테스트 <span className="sm-badge">월 리밸런스 · 시점평가 · {detail.sources.prices ? "실시세" : "mock"}</span></>}>
+              <Section title="과거로 돌려 본 성과(월마다 비중 조정)">
                 {detail.perf.curve.length ? (
                   <>
                     <ResponsiveContainer width="100%" height={150}>
-                      <AreaChart data={detail.perf.curve} margin={{ top: 6, right: 10, bottom: 0, left: -14 }}>
-                        <defs><linearGradient id="smPerf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--t-accent)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--t-accent)" stopOpacity={0.02} /></linearGradient></defs>
-                        <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" vertical={false} />
-                        <XAxis dataKey="t" tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" minTickGap={28} />
-                        <YAxis tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" domain={["auto", "auto"]} width={38} />
-                        <Tooltip contentStyle={TIP} />
-                        <ReferenceLine y={100} stroke="var(--t-muted)" strokeDasharray="3 3" />
-                        <Area type="monotone" dataKey="v" stroke="var(--t-accent)" strokeWidth={1.6} fill="url(#smPerf)" isAnimationActive={anim} />
+                      <AreaChart data={detail.perf.curve} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
+                        <defs><linearGradient id="smPerf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--tx-blue)" stopOpacity={0.22} /><stop offset="100%" stopColor="var(--tx-blue)" stopOpacity={0.02} /></linearGradient></defs>
+                        <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
+                        <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" minTickGap={28} />
+                        <YAxis tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" domain={["auto", "auto"]} width={40} />
+                        <Tooltip contentStyle={TIP_STYLE} formatter={(v: number | string) => [Number(v).toFixed(1), "가치(처음 100)"]} />
+                        <ReferenceLine y={100} stroke="var(--tx-mute)" strokeDasharray="3 3" />
+                        <Area type="monotone" dataKey="v" stroke="var(--tx-blue)" strokeWidth={1.8} fill="url(#smPerf)" isAnimationActive={anim} />
                       </AreaChart>
                     </ResponsiveContainer>
-                    {/* ★이 총수익·CAGR 이 무엇인가★ — `/macro/strategy/{sid}` 가
-                        선언한다(Z3). 계획에 없던 화면이고 검출기가 찾아냈다. */}
+                    {/* ★이 총수익·연평균이 무엇인가★ — `/macro/strategy/{sid}` 가 선언한다(Z3). */}
                     <div className="sm-perf-label"><PerfLabel value={detail.perf.perf_label} compact /></div>
-                    <div className="sm-perf-stats">
-                      {([["총수익", detail.perf.summary.total_return_pct], ["CAGR", detail.perf.summary.cagr_pct],
-                         ["MDD", detail.perf.summary.mdd_pct], ["변동성", detail.perf.summary.vol_pct],
-                         ["최근 12M", detail.perf.summary.recent_12m_pct]] as [string, number | null][]).map(([k, v]) => (
-                        <div key={k} className="sm-perf-stat"><span>{k}</span><b style={{ color: k === "변동성" ? "var(--t-ink)" : perfColor(v) }}>{v == null ? "—" : `${fmtPct(v)}`}</b></div>
+                    <dl className="sm-perf-stats">
+                      {([["총수익률", detail.perf.summary.total_return_pct, "move"], ["연평균 수익률", detail.perf.summary.cagr_pct, "move"],
+                         ["최대 낙폭", detail.perf.summary.mdd_pct, "plain"], ["변동성", detail.perf.summary.vol_pct, "plain"],
+                         ["최근 12개월", detail.perf.summary.recent_12m_pct, "move"]] as [string, number | null, "move" | "plain"][]).map(([k, v, kind]) => (
+                        <div key={k} className="sm-perf-stat"><dt>{k}</dt><dd style={{ color: kind === "move" ? moveColor(v) : "var(--tx-ink)" }}>{fmtPct(v)}</dd></div>
                       ))}
-                    </div>
+                    </dl>
+                    <p className="sm-note">점선은 처음 값(100)이에요.</p>
                   </>
-                ) : <div className="mc-empty-sm">성과 곡선 데이터 없음</div>}
+                ) : <div className="mc-empty-sm">성과 곡선 자료가 없어요</div>}
               </Section>
             </div>
-
-            {/* 레퍼런스 */}
-            <Section title="레퍼런스">
-              <ul className="sm-refs">
+            <Section title="참고 문헌">
+              <ul className="sm-refs" data-server>
                 {detail.profile.references.map((r, i) => (
                   <li key={i}><b>{r.authors}</b> ({r.year}). <em>{r.title}</em>{r.venue ? `. ${r.venue}` : ""}.</li>
                 ))}
               </ul>
             </Section>
-
-            {/* AI 심층분석 */}
-            <Section title={<>AI 심층분석 <Sparkles size={12} style={{ verticalAlign: "middle", color: "var(--t-accent)" }} /></>}>
+            <Section title="AI 분석">
               <div className="sm-ai">
-                <button className="sm-ai-btn" onClick={runAi} disabled={aiLoading}>
-                  {aiLoading ? "생성 중…" : ai ? "다시 생성" : "AI 분석 생성"}
+                <button type="button" className="sm-ai-btn tx-btn tx-btn--sub" onClick={runAi} disabled={aiLoading}>
+                  {aiLoading ? "AI 분석을 만드는 중이에요" : ai ? "AI 분석 다시 만들기" : "AI 분석 만들기"}
                 </button>
-                {!ai && !aiLoading && <span className="sm-ai-hint">현재 국면·배분을 종합해 이 전략의 적합성을 분석해요 (ANTHROPIC_API_KEY 필요 · 토큰 비용).</span>}
-                {ai?.error && <div className="sm-ai-err">{ai.error}</div>}
+                {ai === undefined && !aiLoading && <span className="sm-ai-hint">지금 국면과 배분을 함께 읽고 이 전략이 맞는지 써 드려요. 관리자가 AI 키를 넣어야 하고, 부를 때마다 비용이 들어요.</span>}
+                {ai === null && !aiLoading && (
+                  <Notice tone="danger" title="AI 분석을 받지 못했어요">서버에 닿지 못했거나 만들기에 실패했어요. 단추를 다시 눌러 주세요.</Notice>
+                )}
+                {ai?.error && <div className="sm-ai-err" data-server>{ai.error}</div>}
                 {ai && !ai.error && ai.content && (
                   <div className="sm-ai-body">
-                    <p className="sm-text">{ai.content}</p>
-                    <div className="sm-ai-meta">{ai.tokens.toLocaleString()} 토큰 · ₩{ai.cost_krw.toFixed(1)}{ai.cached ? " · 캐시" : ""}</div>
+                    <p className="sm-text" data-server>{ai.content}</p>
+                    <div className="sm-ai-meta">{ai.tokens.toLocaleString()} 토큰 · {ai.cost_krw.toFixed(1)}원{ai.cached ? " · 저장해 둔 답" : ""}</div>
                   </div>
                 )}
               </div>
@@ -171,9 +166,9 @@ export default function StrategyModal({ detail, loading, currentQuad, market, on
 
 function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="sm-sec">
-      <div className="sm-sec-h">{title}</div>
+    <section className="sm-sec">
+      <h3 className="sm-sec-h">{title}</h3>
       {children}
-    </div>
+    </section>
   );
 }

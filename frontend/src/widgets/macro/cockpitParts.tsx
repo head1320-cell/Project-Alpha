@@ -112,7 +112,9 @@ export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: 
 // ── ArcGauge — 반원 게이지(스트레스·적합도 점수). ★판정 색 띠 없음★ 값이 달라도 같은 중립색 — 임계값은 서버가 주지 않는다.
 //   BU5b: recharts 방사형 막대 대신 머리의 스트레스 반원(`RegimeVisual`)과 같은 SVG 반원 — 숫자가 호 안쪽에 겹치던 것을 고쳤다. ──
 const AG_R = 70, AG_L = Math.PI * AG_R;
-export function ArcGauge({ value, max = 100, label, sub }: { value: number | null | undefined; max?: number; color?: string; label: string; sub?: string; height?: number }) {
+export function ArcGauge({ value, max = 100, label, sub, ends }: { value: number | null | undefined; max?: number; color?: string; label: string; sub?: string; height?: number;
+  /** 양 끝 글자 — 무엇을 재는 게이지인지에 따라 다르다(BU5b-2: 예전엔 "잔잔해요/불안해요"가 적합도·위험 선호도 게이지에도 붙었다). 없으면 끝 글자를 그리지 않는다. */
+  ends?: [string, string] }) {
   const known = value != null && Number.isFinite(value);
   const frac = known ? Math.max(0, Math.min(1, (value as number) / max)) : 0;
   const arc = `M 20 90 A ${AG_R} ${AG_R} 0 0 1 160 90`;
@@ -125,7 +127,7 @@ export function ArcGauge({ value, max = 100, label, sub }: { value: number | nul
         </svg>
         <div className="mc-gauge-c">{known ? <><b>{Math.round(value as number)}</b><span>{label}</span></> : <span>몰라요</span>}</div>
       </div>
-      <div className="mc-gauge-ends" aria-hidden><span>0 · 잔잔해요</span><span>{max} · 불안해요</span></div>
+      {ends && <div className="mc-gauge-ends" aria-hidden><span>{ends[0]}</span><span>{ends[1]}</span></div>}
       {sub && <div className="mc-gauge-sub">{sub}</div>}
     </div>
   );
@@ -359,23 +361,28 @@ export function CbGauge({ name, bank }: { name: string; bank?: { available: bool
   );
 }
 
-// AllocAttribution — 비중 결정 요인 분해 (base+성장+물가+스트레스 = 최종, 룰 항 정확 분해)
+// AllocAttribution — 비중이 정해진 이유(기본 + 성장 + 물가 + 스트레스 = 최종, 규칙 항을 정확히 나눈 값).
+//   BU5b-2: 세 항은 범주색(초록/주황/빨강 = 판단처럼 읽히던 색을 걷었다) · 음수는 막대를 0 왼쪽으로 · 값은 늘 글자로(툴팁 없음).
+const ATTR_TERMS = [["growth", "성장", "var(--mc-c-2)"], ["inflation", "물가", "var(--mc-c-1)"], ["stress", "스트레스", "var(--mc-c-6)"]] as const;
 export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label: string; base: number; growth: number; inflation: number; stress: number; final: number }> }) {
-  const TERMS = [["growth", "성장", "var(--hx-t-16a34a)"], ["inflation", "물가", "var(--hx-t-ea580c)"], ["stress", "스트레스", "var(--hx-t-dc2626)"]] as const;
   const maxAbs = Math.max(...rows.flatMap((r) => [Math.abs(r.growth), Math.abs(r.inflation), Math.abs(r.stress)]), 1);
   return (
     <div className="mc-attr">
+      <ul className="mc-legend">
+        <li><i className="mc-legend-base" aria-hidden />기본(어느 국면에서나 같은 중립 비중)</li>
+        {ATTR_TERMS.map(([k, lbl, color]) => <li key={k}><i style={{ background: color }} aria-hidden />{lbl}</li>)}
+      </ul>
       {rows.map((r) => (
         <div key={r.ticker} className="mc-attr-row">
           <span className="mc-attr-nm">{r.label}</span>
           <span className="mc-attr-base">기본 {r.base.toFixed(0)}%</span>
           <div className="mc-attr-terms">
-            {TERMS.map(([k, lbl, color]) => {
+            {ATTR_TERMS.map(([k, lbl, color]) => {
               const v = r[k];
               return (
-                <span key={k} className="mc-attr-term" title={`${lbl} ${v >= 0 ? "+" : ""}${v.toFixed(1)}%p`}>
-                  <i style={{ width: `${(Math.abs(v) / maxAbs) * 46}px`, background: color, opacity: v >= 0 ? 0.85 : 0.35 }} />
-                  <em style={{ color: v >= 0 ? color : "var(--t-muted)" }}>{v >= 0 ? "+" : ""}{v.toFixed(1)}</em>
+                <span key={k} className="mc-attr-term" aria-label={`${lbl} ${signed(v, 1)}%p`}>
+                  <span className="mc-attr-track" aria-hidden><i style={{ width: `${(Math.abs(v) / maxAbs) * 50}%`, background: color, ...(v >= 0 ? { left: "50%" } : { right: "50%" }) }} /></span>
+                  <em>{signed(v, 1)}</em>
                 </span>
               );
             })}
@@ -383,45 +390,46 @@ export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label
           <b className="mc-attr-final">{r.final.toFixed(1)}%</b>
         </div>
       ))}
-      <div className="mc-attr-legend">기본(전천후 중립) + <i style={{ background: "var(--hx-b-16a34a)" }} />성장 + <i style={{ background: "var(--hx-b-ea580c)" }} />물가 + <i style={{ background: "var(--hx-b-dc2626)" }} />스트레스 = 최종 (룰 항 정확 분해)</div>
+      <p className="mc-attr-legend">기본 + 성장 + 물가 + 스트레스 = 최종 비중이에요(규칙의 각 항을 그대로 나눈 값, %p).</p>
     </div>
   );
 }
 
-// AllocBands — MC 신뢰구간 (p10–p90 밴드 + p50 마커): 단일 점추정 대신 불확실성 제시
+// AllocBands — 비중이 흔들릴 수 있는 폭: 국면 점수의 불확실성(±표준오차) 안에서 몬테카를로(무작위 시뮬레이션) 400회. 띠 = 하위 10%~상위 10%, 표식 = 가운데값.
 export function AllocBands({ bands }: { bands: Array<{ ticker: string; label: string; p10: number; p50: number; p90: number }> }) {
   const hi = Math.max(...bands.map((b) => b.p90), 10);
   return (
     <div className="mc-bands">
       {bands.map((b) => (
-        <div key={b.ticker} className="mc-band-row" title={`${b.label} p10 ${b.p10}% · p50 ${b.p50}% · p90 ${b.p90}%`}>
+        <div key={b.ticker} className="mc-band-row" aria-label={`${b.label}: ${b.p10}%~${b.p90}%, 가운데 ${b.p50}%`}>
           <span className="mc-band-nm">{b.label}</span>
-          <div className="mc-band-track">
+          <div className="mc-band-track" aria-hidden>
             <i className="mc-band-range" style={{ left: `${(b.p10 / hi) * 100}%`, width: `${Math.max(1, ((b.p90 - b.p10) / hi) * 100)}%` }} />
             <i className="mc-band-med" style={{ left: `${(b.p50 / hi) * 100}%` }} />
           </div>
           <span className="mc-band-v">{b.p10.toFixed(0)}~{b.p90.toFixed(0)}%</span>
         </div>
       ))}
-      <div className="mc-attr-legend">국면 스코어 불확실성(±se) 하 MC 400회 — 밴드=p10~p90, 마커=중앙값</div>
+      <p className="mc-attr-legend">띠는 400번 중 가운데 80%가 들어간 범위, 진한 표식은 가운데값이에요.</p>
     </div>
   );
 }
 
-// CausalGraphView — 그레인저(예측적) 인과 그래프: 원형 배치 + 방향 엣지(화살표)
+// CausalGraphView — 그레인저(예측적) 인과: 원형 배치 + 방향 화살표. 선 굵기 = 유의확률이 낮을수록 굵게.
+//   BU5b-2: 선 안 SVG <title>(툴팁) 대신 아래 관계 목록이 모든 선을 글로 말한다(부모 카드). 색은 한 계열 강조색.
 export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; label: string }>; edges: Array<{ from: string; to: string; lag: number; p: number }> }) {
-  if (!nodes.length) return <div className="mc-empty-sm">그래프 데이터 없음 (시계열 표본 부족)</div>;
-  const R = 118, CX = 170, CY = 140;
+  if (!nodes.length) return <div className="mc-empty-sm">그래프를 그릴 지표가 없어요(시계열 표본이 부족해요)</div>;
+  const R = 112, CX = 210, CY = 160;
   const pos: Record<string, { x: number; y: number }> = {};
   nodes.forEach((n, k) => {
     const a = (k / nodes.length) * 2 * Math.PI - Math.PI / 2;
     pos[n.id] = { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) };
   });
   return (
-    <svg viewBox="0 0 340 280" className="mc-causal">
+    <svg viewBox="0 0 420 320" className="mc-causal" role="img" aria-label={`지표 ${nodes.length}개 사이 먼저 움직이는 관계 ${edges.length}개`}>
       <defs>
         <marker id="mcArrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={5} markerHeight={5} orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" fill="var(--hx-t-1200ff)" opacity={0.65} />
+          <path d="M0,0 L8,4 L0,8 z" fill="var(--tx-blue)" />
         </marker>
       </defs>
       {edges.map((e, k) => {
@@ -430,21 +438,21 @@ export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; l
         const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
         const sx = a.x + (dx / len) * 16, sy = a.y + (dy / len) * 16;
         const ex = b.x - (dx / len) * 20, ey = b.y - (dy / len) * 20;
-        const w = Math.max(0.6, 2.4 - e.p * 20);   // p 낮을수록 굵게
+        const w = Math.max(0.8, 2.6 - e.p * 20);   // p 낮을수록 굵게
+        return <line key={k} x1={sx} y1={sy} x2={ex} y2={ey} stroke="var(--tx-blue)" strokeWidth={w} strokeOpacity={0.7} markerEnd="url(#mcArrow)" />;
+      })}
+      {nodes.map((n, k) => {
+        // 이름은 원 바깥쪽으로(선과 겹치지 않게) — 왼쪽 절반은 오른쪽 맞춤, 오른쪽 절반은 왼쪽 맞춤
+        const a = (k / nodes.length) * 2 * Math.PI - Math.PI / 2;
+        const lx = CX + (R + 22) * Math.cos(a), ly = CY + (R + 22) * Math.sin(a);
+        const anchor = Math.abs(Math.cos(a)) < 0.2 ? "middle" : Math.cos(a) > 0 ? "start" : "end";
         return (
-          <g key={k}>
-            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke="var(--hx-t-1200ff)" strokeWidth={w} opacity={0.5} markerEnd="url(#mcArrow)">
-              <title>{e.from} → {e.to} · lag {e.lag}개월 · p={e.p}</title>
-            </line>
+          <g key={n.id}>
+            <circle cx={pos[n.id].x} cy={pos[n.id].y} r={13} fill="var(--tx-soft)" stroke="var(--tx-line)" />
+            <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle" className="mc-causal-l">{n.label}</text>
           </g>
         );
       })}
-      {nodes.map((n) => (
-        <g key={n.id}>
-          <circle cx={pos[n.id].x} cy={pos[n.id].y} r={13} fill="var(--t-surface, #fafafa)" stroke="var(--t-border, #d5d5d5)" />
-          <text x={pos[n.id].x} y={pos[n.id].y + 24} textAnchor="middle" fontSize={7.5} fill="var(--t-muted)">{n.label}</text>
-        </g>
-      ))}
     </svg>
   );
 }
