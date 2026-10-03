@@ -9578,3 +9578,158 @@ details[open] > .rs-more { margin-bottom: 12px; }
   .sm-modal .sm-grid2 { grid-template-columns: minmax(0, 1fr); }
   .sm-modal .sm-fit { grid-template-columns: 110px minmax(0, 1fr) 32px; }
 }
+
+/* ═══ BU5c · 매크로 분석 스튜디오 다섯 + 매크로 지능 패널 (계획 "BU5c 상세") ═══════════════════════════════════════
+   BU5b 규칙 그대로(반경 20/12 · 테두리·그림자 없음 · 대문자·고정폭 해제 — 식별자만 `[data-mono]`). 옛 `.ms-*`/`.mx-*` 규칙은 BU10 에서 지운다.
+   계약: `.ms-studio`·`.ms-card-frontier`·`.ms-card-sub`·`.ms-out`/`.ms-out-v`·`.ms-span(-trunc)`·`.ms-note`·`.ms-vbtn-run`·`.ms-vdel` · `.mx-*` 단언 클래스. */
+.ms-studio { display: flex; flex-direction: column; gap: 16px; width: 100%; min-width: 0; }
+.ms-studio .ms-head { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ms-studio .ms-h1 { margin: 0; font-family: var(--tx-font); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; text-transform: none; color: var(--tx-ink); }
+.ms-studio .ms-q { margin: 0; font-size: 15px; line-height: 1.5; color: var(--tx-sub); }
+.ms-studio .ms-inputs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 0; font-size: 13px; color: var(--tx-sub); }
+.ms-studio .ms-in-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ms-studio .ms-in-chip { padding: 4px 10px; border-radius: 999px; background: var(--tx-surface); font-size: 13px; font-weight: 600; color: var(--tx-ink); }
+.ms-studio .ms-answer { margin: 8px 0 0; padding: 16px 20px; border-radius: var(--tx-r-sec); background: var(--tx-surface);
+  font-size: 19px; font-weight: 700; line-height: 1.45; letter-spacing: -0.01em; color: var(--tx-ink); }
+.ms-studio .ms-card { margin: 0; padding: 20px 22px; border: 0; border-radius: var(--tx-r-sec); background: var(--tx-surface); min-width: 0; }
+.ms-studio .ms-card-t { margin: 0 0 6px; font-family: var(--tx-font); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; text-transform: none; color: var(--tx-ink); }
+.ms-studio .ms-card-s { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--tx-sub); }
+.ms-studio .tstate-unavail { border-radius: var(--tx-r-row); padding: 14px 16px; }
+.ms-studio .tstate-unavail-l { font-size: 15px; }
+.ms-why { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 0; font-size: 14px; line-height: 1.5; }
+.ms-why-l::before { content: ""; }
+.ms-raw, .mx-raw { margin: 8px 0 0; font-size: 13px; }
+.ms-raw summary, .mx-raw summary { cursor: pointer; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.ms-raw summary:focus-visible, .mx-raw summary:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; border-radius: 4px; }
+.ms-raw-t { display: block; margin-top: 6px; line-height: 1.5; overflow-wrap: anywhere; }
+.ms-studio .ms-span { margin: 0 0 4px; font-size: 13px; color: var(--tx-sub); }
+.ms-studio .ms-span-trunc { color: var(--st-warn-fg); font-weight: 600; }
+.ms-studio .ms-note { margin: 10px 0 0; padding: 12px 14px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft);
+  font-size: 14px; line-height: 1.55; color: var(--tx-ink); }
+.ms-studio .ms-outcome { margin-top: 4px; }
+.ms-studio .num { font-family: inherit; font-variant-numeric: tabular-nums; }
+.ms-act { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+/* 그림 */
+.ms-viz { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; margin: 16px 0 0; }
+.ms-viz-fig { margin: 0; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); min-width: 0; }
+.ms-viz-fig figcaption { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.ms-viz-note { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
+.ms-viz-empty { margin: 16px 0 0; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; color: var(--tx-sub); }
+.ms-studio .mc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--tx-ink); }
+.ms-studio .mc-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.ms-studio .mc-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.ms-load { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ms-load-row { display: grid; grid-template-columns: minmax(84px, 7.5em) minmax(0, 1fr) 4.6em; align-items: center; gap: 10px; font-size: 13px; color: var(--tx-ink); }
+.ms-load-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-load-track { position: relative; height: 12px; border-radius: 6px; background: var(--tx-surface); }
+.ms-load-track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--tx-mute); }
+.ms-load-track i { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: var(--tx-blue); }
+.ms-load-track i.pos { left: 50%; }
+.ms-load-track i.neg { right: 50%; }
+.ms-load-v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ms-studio .mc-causal { width: 100%; max-width: 520px; height: auto; display: block; margin: 0 auto; }
+.ms-studio .mc-causal-l { font-size: 11px; fill: var(--tx-ink); }
+.ms-edges { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--tx-ink); }
+.ms-view-rules { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ms-view-rule { padding: 8px 12px; border-radius: var(--tx-r-row); background: var(--tx-surface); font-size: 14px; color: var(--tx-ink); }
+/* 산출 표 */
+.ms-out-wrap { margin: 16px 0 0; overflow-x: auto; }
+.ms-out-cap { margin: 0 0 6px; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.ms-studio .ms-out { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ms-studio .ms-out-v { overflow-wrap: anywhere; }
+.ms-studio .ms-out-seq { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.ms-studio .ms-out-row { border-top: 1px solid var(--tx-line); }
+.ms-studio .ms-out-k { padding: 10px 12px 10px 0; width: 38%; font-family: inherit; font-size: 14px; font-weight: 600; text-transform: none;
+  letter-spacing: 0; color: var(--tx-sub); vertical-align: top; text-align: left; }
+.ms-studio .ms-out-v { padding: 10px 0; font-size: 14px; color: var(--tx-ink); vertical-align: top; }
+.ms-studio .ms-out-na { color: var(--tx-sub); }
+.ms-studio .ms-out-list { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.ms-studio .ms-out-kvi em { font-size: 13px; color: var(--tx-sub); }
+.ms-studio .ms-out-more summary { font-size: 14px; color: var(--tx-sub); cursor: pointer; }
+.ms-studio .ms-out-pre { font-size: 12px; color: var(--tx-ink); background: var(--tx-soft); border-radius: 8px; padding: 8px; max-height: 240px; overflow: auto; }
+.ms-studio .ms-spark { width: 110px; height: 18px; }
+.ms-studio *:not([data-mono]), .mx-panel *:not([data-mono]) { font-family: inherit; }
+.ms-studio [data-mono], .mx-panel [data-mono] { font-family: var(--t-mono); font-size: 0.92em; letter-spacing: 0; }
+/* 뷰 만들기 */
+.ms-studio .ms-views { gap: 12px; margin: 0 0 12px; }
+.ms-studio .ms-vrow { gap: 10px; }
+.ms-studio .ms-vf { font-size: 13px; font-weight: 600; color: var(--tx-sub); letter-spacing: 0; text-transform: none; gap: 4px; }
+.ms-studio .ms-vi { min-height: 40px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row); background: var(--tx-surface);
+  font-size: 15px; color: var(--tx-ink); }
+.ms-studio .ms-vi:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
+.ms-studio .ms-vdel { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0;
+  border-radius: var(--tx-r-row); background: var(--tx-soft); color: var(--tx-sub); }
+.ms-studio .ms-vdel:hover { color: var(--tx-ink); }
+.ms-studio .ms-vacts { gap: 8px; flex-wrap: wrap; }
+.ms-studio .ms-vbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: 0; border-radius: var(--tx-r-row);
+  background: var(--tx-soft); font-family: var(--tx-font); font-size: 15px; font-weight: 600; color: var(--tx-ink); cursor: pointer; }
+.ms-studio .ms-vbtn-run { background: var(--tx-cta); color: var(--tx-on-cta); }
+.ms-studio .ms-vbtn:disabled { opacity: .55; cursor: not-allowed; }
+.ms-studio .ms-vbtn:focus-visible, .ms-studio .ms-vdel:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
+
+/* ── 매크로 지능 패널 ── */
+.mx-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px; margin-top: 16px;
+  font-family: var(--tx-font); color: var(--tx-ink); }
+.mx-panel .mx-card { margin: 0; padding: 20px 22px; border: 0; border-radius: var(--tx-r-sec); background: var(--tx-surface); box-shadow: none; min-width: 0; }
+.mx-panel .mx-card-t { margin: 0 0 12px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; text-transform: none; color: var(--tx-ink); }
+.mx-panel .mx-sub { margin: 16px 0 8px; font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--tx-ink); }
+.mx-panel .mx-loading { padding: 12px 0; font-size: 14px; color: var(--tx-sub); }
+.mx-panel .mx-verdict { margin: 0 0 6px; font-size: 17px; line-height: 1.45; color: var(--tx-ink); }
+.mx-panel .mx-verdict-s { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 10px; font-size: 14px; color: var(--tx-sub); }
+.mx-panel .mx-why { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--tx-sub); }
+.mx-panel .mx-ok, .mx-panel .mx-off, .mx-panel .mx-fwd, .mx-panel .mx-split { font-size: 14px; font-weight: 600; color: var(--tx-ink); }
+.mx-panel .mx-off, .mx-panel .mx-fwd { font-weight: 400; color: var(--tx-sub); }
+.mx-panel .mx-tools { display: flex; flex-direction: column; gap: 0; margin: 4px 0 0; }
+.mx-panel .mx-tools li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 10px 0;
+  border-top: 1px solid var(--tx-line); font-size: 15px; color: var(--tx-ink); }
+.mx-panel .mx-tool-n { min-width: 0; font-size: 14px; color: var(--tx-sub); }
+.mx-panel .mx-tool-n em { font-style: normal; margin-left: 4px; color: var(--tx-sub); }
+.mx-panel .mx-stats { gap: 12px 28px; }
+.mx-panel .mx-stat-k { margin-bottom: 2px; font-size: 13px; color: var(--tx-sub); }
+.mx-panel .mx-stat-v { font-family: inherit; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--tx-ink); }
+.mx-panel .mx-stat-s { font-size: 13px; color: var(--tx-sub); }
+.mx-panel .num { font-family: inherit; font-variant-numeric: tabular-nums; }
+.mx-cov-bar { position: relative; height: 12px; margin: 16px 0 0; border-radius: 6px; background: var(--tx-soft); }
+.mx-cov-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--tx-blue); }
+.mx-cov-target { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--tx-sub); }
+.mx-cov-cap { margin: 6px 0 0; font-size: 13px; color: var(--tx-sub); }
+.mx-dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 16px; margin: 0 0 10px; }
+.mx-dl div { min-width: 0; }
+.mx-dl dt { font-size: 13px; color: var(--tx-sub); }
+.mx-dl dd { margin: 2px 0 0; font-size: 16px; color: var(--tx-ink); }
+.mx-vars { margin: 0 0 4px; font-size: 14px; color: var(--tx-sub); }
+.mx-var { color: var(--tx-ink); }
+.mx-trace { margin: 14px 0 0; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.mx-trace figcaption { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
+.mx-trace ul { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.mx-trace-row { display: grid; grid-template-columns: 7.2em minmax(0, 1fr) 2.6em; align-items: center; gap: 10px; font-size: 13px; color: var(--tx-ink); }
+.mx-trace-track { position: relative; height: 12px; border-radius: 6px; background: var(--tx-surface); }
+.mx-trace-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--tx-blue); }
+.mx-trace-crit { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--tx-sub); }
+.mx-trace-v { text-align: right; font-weight: 600; }
+.mx-panel .mx-tblwrap { margin-top: 12px; }
+.mx-panel .mx-tbl { font-size: 14px; }
+.mx-panel .mx-tbl th, .mx-panel .mx-tbl td { padding: 9px 8px; border-bottom: 1px solid var(--tx-line); color: var(--tx-ink); text-align: left; }
+.mx-panel .mx-tbl td.num { text-align: right; }
+.mx-panel .mx-tbl thead th { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--tx-sub); }
+.mx-panel .mx-bias { margin: 10px 0 0; padding: 10px 12px; border: 0; border-radius: var(--tx-r-row); background: var(--st-warn-bg);
+  font-size: 14px; line-height: 1.5; color: var(--st-warn-fg); }
+.mx-panel .mx-ladder { margin: 0 0 12px; font-size: 15px; line-height: 1.5; color: var(--tx-ink); }
+.mx-panel .mx-ladder p { margin: 0; }
+.mx-panel .mx-ladder-why { margin-top: 8px; color: var(--tx-sub); }
+.mx-panel .mx-ladder-why .mx-sub { margin: 0 0 4px; font-size: 14px; }
+.mx-panel .mx-keys { gap: 0; }
+.mx-panel .mx-keys li { padding: 10px 0; border: 0; border-top: 1px solid var(--tx-line); border-radius: 0; background: none; font-size: 14px; color: var(--tx-ink); }
+.mx-panel .mx-key-n { font-weight: 700; }
+.mx-panel .mx-key-v { font-size: 12px; color: var(--tx-sub); overflow-wrap: anywhere; }
+.mx-panel .mx-key-u { font-size: 13px; color: var(--tx-sub); }
+.mx-panel .mx-reason { padding: 12px 14px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.mx-panel .tev { font-size: 14px; }
+.mx-panel .tev-r { font-size: 14px; color: var(--tx-ink); }
+.mx-panel .tev-unavailable .tev-l { padding: 2px 8px; border: 0; border-radius: 6px; background: var(--tx-surface); color: var(--tx-ink); font-size: 13px; }
+@media (max-width: 640px) {
+  .ms-studio .ms-card, .mx-panel .mx-card { padding: 16px; }
+  .ms-studio .ms-answer { font-size: 17px; padding: 14px 16px; }
+  .ms-studio .ms-out-k { width: 42%; }
+  .ms-load-row { grid-template-columns: minmax(72px, 6em) minmax(0, 1fr) 4.2em; }
+}

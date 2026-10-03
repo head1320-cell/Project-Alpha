@@ -1,6 +1,6 @@
 "use client";
 /**
- * 05 VIEWS — 뷰 컴파일러 (M1-U)
+ * 뷰 만들기 — 뷰 컴파일러 (M1-U → BU5c)
  * ==========================================================================
  * 프론티어(CLQT: 공시문·검색 트렌드를 LLM 이 뷰로 바꾸는 것)는 이 환경에서 미가용이다
  * — LLM 키도 트렌드 API 도 없다. 그래서 여기서 짓는 것은 **사용자가 명시한 뷰**를
@@ -16,9 +16,10 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { LoadingState, ErrorState, UnavailableState } from "@/shared/ui/States";
+import { Plus, X } from "lucide-react";
+import { LoadingState, UnavailableState } from "@/shared/ui/States";
 import { studiosApi, type StudioResult, type ViewSpec } from "@/entities/macro/studios";
-import { FrontierCard, StudioOutcome } from "./StudioPanel";
+import { FrontierCard, ServerText, StudioFail, StudioHead, StudioOutcome, studioAnswer } from "./StudioPanel";
 
 const DEFAULT_ASSETS = "069500,229200,148070,132030";
 
@@ -52,35 +53,29 @@ export function ViewsStudio() {
     setDrafts((ds) => ds.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   return (
-    <div className="ms-studio tpage-fade">
-      <header className="ms-head">
-        <h1 className="ms-h1">{d?.label ?? "VIEWS"}</h1>
-        {d && <p className="ms-q">{d.question}</p>}
-      </header>
+    <div className="ms-studio tx-page tx-page--wide tpage-fade">
+      <StudioHead id="agentic-mcp" d={d} answer={res?.available ? studioAnswer("agentic-mcp", res.outputs) : null} />
 
-      {listQ.isLoading && <LoadingState label="스튜디오 계약을 불러오는 중" />}
-      {listQ.isError && (
-        <ErrorState label="스튜디오 목록에 닿지 못했어요"
-          sub="서버가 미가용이라고 답한 것과 달라요 — 응답 자체를 받지 못했어요." />
-      )}
+      {listQ.isLoading && <LoadingState label="스튜디오 정보를 불러오는 중이에요" />}
+      {listQ.isError && <StudioFail title="스튜디오 정보를 불러오지 못했어요" onRetry={() => void listQ.refetch()} />}
       {d && <FrontierCard d={d} />}
 
       <section className="ms-card ms-card-sub">
-        <h2 className="ms-card-t">대체 엔진{d ? ` — ${d.substitute.name}` : ""}</h2>
-        {d && <p className="ms-card-s">{d.substitute.summary}</p>}
+        <h2 className="ms-card-t">지금 쓰는 계산{d ? <>: <span data-server>{d.substitute.name}</span></> : ""}</h2>
+        {d && <p className="ms-card-s" data-server><ServerText text={d.substitute.summary} /></p>}
 
         <form className="ms-views" onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
           <label className="ms-vf">
-            유니버스 (쉼표 구분)
-            <input className="ms-vi ms-vi-w" value={assetsText}
+            자산 코드(쉼표로 나눠요)
+            <input className="ms-vi ms-vi-w" data-mono value={assetsText}
                    onChange={(e) => setAssetsText(e.target.value)} />
           </label>
 
           {drafts.map((x, i) => (
             <div key={i} className="ms-vrow">
               <label className="ms-vf">
-                자산
-                <input className="ms-vi" value={x.asset}
+                자산 코드
+                <input className="ms-vi" data-mono value={x.asset}
                        onChange={(e) => setDraft(i, { asset: e.target.value })} />
               </label>
               <label className="ms-vf">
@@ -92,37 +87,34 @@ export function ViewsStudio() {
                 </select>
               </label>
               <label className="ms-vf">
-                값 (소수, 예 0.02 = 2%)
+                기대수익(소수, 0.02 = 2%)
                 <input className="ms-vi num" value={x.value} inputMode="decimal"
                        onChange={(e) => setDraft(i, { value: e.target.value })} />
               </label>
               <button type="button" className="ms-vdel"
                       aria-label={`${i + 1}번 뷰 삭제`}
-                      onClick={() => setDrafts((ds) => ds.filter((_, j) => j !== i))}>×</button>
+                      onClick={() => setDrafts((ds) => ds.filter((_, j) => j !== i))}><X size={16} aria-hidden /></button>
             </div>
           ))}
 
           <div className="ms-vacts">
             <button type="button" className="ms-vbtn"
                     onClick={() => setDrafts((ds) => [...ds, { asset: "", direction: 1, value: "" }])}>
-              + 뷰 추가
+              <Plus size={16} aria-hidden /> 뷰 더하기
             </button>
             <button type="submit" className="ms-vbtn ms-vbtn-run" disabled={m.isPending || !assets.length}>
-              {m.isPending ? "컴파일 중…" : "제약으로 컴파일"}
+              {m.isPending ? "제약으로 바꾸는 중이에요" : "제약으로 바꾸기"}
             </button>
           </div>
         </form>
 
-        {m.isError && (
-          <ErrorState label="컴파일 요청에 닿지 못했어요"
-            sub="서버가 미가용이라고 답한 것과 달라요 — 응답 자체를 받지 못했어요." />
-        )}
-        {res && <StudioOutcome res={res} />}
-        {res?.available && res.outputs.feasible === null && (
+        {m.isError && <StudioFail title="뷰를 제약으로 바꾸지 못했어요" onRetry={() => m.mutate()} />}
+        {res && !m.isError && <StudioOutcome res={res} id="agentic-mcp" />}
+        {res?.available && !m.isError && res.outputs.feasible === null && (
           // 서버의 note 가 이미 같은 말을 하지만, 이 한 줄은 **검사 결과 자리**에 놓인다 —
           // 빈 자리를 남기면 "검사했고 문제없음" 으로 읽힌다.
           <UnavailableState
-            label="실현가능성 — 검사하지 않았어요"
+            label="실현가능성: 검사하지 않았어요"
             reason="시나리오를 주지 않았어요. 모순이 없다는 뜻이 아니라, 확인하지 않았다는 뜻이에요." />
         )}
       </section>

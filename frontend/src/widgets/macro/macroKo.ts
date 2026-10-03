@@ -16,6 +16,9 @@ export const IND_KR: Record<string, string> = {
   KR_10Y: "국고10년", USD_KRW: "환율", CPIAUCSL: "CPI", INDPRO: "산업생산",
   PAYEMS: "고용", UNRATE: "실업률", GDPC1: "GDP", T10YIE: "기대인플레",
   DGS10: "미국10년", VIXCLS: "VIX", BAMLH0A0HYM2: "하이일드 스프레드",
+  // BU5c — 스튜디오 입력 계열·장기관계 변수
+  KR_3Y: "국고3년", KR_BASE_RATE: "기준금리", KR_TERM_SPREAD: "장단기 금리차", KR_CREDIT_SPREAD: "신용 스프레드",
+  DGS3MO: "미국3개월", DGS2: "미국2년", DGS30: "미국30년", T10Y2Y: "미국 10년−2년", DFII10: "미국 실질금리10년", M2SL: "미국 M2",
 };
 
 /** 스트레스 구성 항목 이름 — 서버 `_compute_stress` 의 키. */
@@ -74,3 +77,45 @@ export function signed(v: number | null | undefined, d = 2): string {
   if (v == null || !Number.isFinite(v)) return "몰라요";
   return `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(d)}`;
 }
+
+// ── BU5c 스튜디오 · 매크로 지능 패널 번역표 ─────────────────────────────────────────
+
+/** 스튜디오 산출 키 → 한국어. 모르는 키는 서버 이름 그대로(`data-mono`). */
+export const STUDIO_OUT_KO: Record<string, string> = {
+  series: "쓴 계열", factors: "요인 값", loadings: "적재(요인과 함께 움직이는 정도)", latest: "지금 값",
+  k_factors: "요인 수", explained_var: "설명한 분산 비율",
+  lambda: "곡률 위치(λ)", tenors: "만기(년)", series_used: "쓴 계열", level: "수준", slope: "기울기", curvature: "곡률",
+  inverted: "역전 여부", rmse_pp: "적합 오차(%p)", term_premium_proxy: "기간프리미엄 대용(bp)", term_premium_reason: "기간프리미엄을 못 잰 이유",
+  nodes: "지표", edges: "앞서 움직이는 관계", n_series: "검사한 계열 수",
+  assets: "자산", n_views: "뷰 수", A: "제약 행렬(A)", b: "제약 한계(b)", human: "제약(사람 말)", feasible: "모순 검사 결과",
+};
+
+/** 사다리·고급 엔진 요건 코드 → 사람 말. 모르는 코드는 서버 사유 그대로. */
+export const MISSING_KO: Record<string, string> = {
+  torch: "딥러닝 도구가 이 서버에 설치되어 있지 않아요",
+  cvxpylayers: "미분 가능한 최적화 도구가 설치되어 있지 않아요",
+  trends_api: "검색 트렌드 키(네이버·구글)가 설정되지 않았어요",
+  llm: "AI 설명 키가 설정되지 않았어요",
+  frontier_sample: "이 엔진은 더 긴 기간의 자료가 필요해요",
+  statsmodels: "통계 도구가 설치되어 있지 않아요",
+  causal_sample: "검정에 쓸 표본이 짧아요",
+};
+
+/** 서버 사유 "code: 글 / code: 글" 을 조각으로. 코드가 없는 조각은 code=null. */
+export function splitReason(raw: string | null | undefined): { code: string | null; text: string }[] {
+  if (!raw) return [];
+  return raw.split(" / ").map((part) => {
+    const m = /^([a-z_]+):\s*(.*)$/.exec(part.trim());
+    return m ? { code: m[1], text: m[2] } : { code: null, text: part.trim() };
+  });
+}
+
+/** 조각 하나의 사람 말 — 아는 코드면 번역(+서버 글의 관측 수), 모르면 null(서버 글을 그대로 보인다). */
+export function reasonKo(p: { code: string | null; text: string }): string | null {
+  if (!p.code || !MISSING_KO[p.code]) return null;
+  const n = /관측 (\d+)개, 최소 (\d+)개/.exec(p.text);
+  return n ? `${MISSING_KO[p.code]}(지금 관측 ${n[1]}개, 최소 ${n[2]}개)` : MISSING_KO[p.code];
+}
+
+/** 국면 도구 이름 — 서버 `per_tool` 키. */
+export const TOOL_KO: Record<string, string> = { axis: "축 모형", markov: "마르코프 전환", cluster: "군집" };

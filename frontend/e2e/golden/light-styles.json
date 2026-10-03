@@ -1333,11 +1333,11 @@
   ],
   "main:b.": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -1346,8 +1346,8 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:li.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|",
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 232, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 232, 235)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|",
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:i.": [
@@ -1414,7 +1414,6 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.rv-sub": [
@@ -1566,24 +1565,19 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:thead.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tr.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:th.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|",
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|",
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tbody.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:td.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mc-zcell": [
@@ -1736,83 +1730,158 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|linear-gradient(90deg, rgb(79, 179, 166), rgb(151, 214, 204), rgb(198, 233, 227), rgb(236, 238, 241), rgb(251, 217, 184), rgb(248, 189, 136), rgb(239, 148, 69))"
   ],
   "main:div.mx-panel": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:section.mx-card": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:h3.mx-card-t": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.mx-verdict": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.mx-verdict-s": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-ok": [
-   "rgb(21, 128, 61)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:b.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:ul.mx-tools": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-tool-n": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.mx-why": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.mx-stats": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-stat-k": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:b.mx-stat-v.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-stat-s.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-stat-s": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.mx-cov-bar": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.mx-cov-fill": [
+   "rgb(25, 31, 40)|rgb(49, 130, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.mx-cov-target": [
+   "rgb(25, 31, 40)|rgb(78, 89, 104)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.mx-cov-cap": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:dl.mx-dl": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.mx-vars": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.mx-var": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.mx-bias": [
-   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(133, 77, 14)|rgb(254, 243, 199)|rgb(133, 77, 14)|rgb(133, 77, 14)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figure.mx-trace": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figcaption.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.mx-trace-row": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.mx-trace-h": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.mx-trace-track": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.mx-trace-bar": [
+   "rgb(25, 31, 40)|rgb(49, 130, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.mx-trace-crit": [
+   "rgb(25, 31, 40)|rgb(78, 89, 104)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.mx-trace-v": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.mx-tblwrap": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:table.mx-tbl": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:td.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.mx-ladder": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.mx-ladder": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.mx-ladder-why": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.mx-sub": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why-l": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.mx-raw": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-raw-t": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-fwd": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h4.mx-sub": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:ul.mx-keys": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-key-n": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:code.mx-key-v": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-off": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.mx-key-u": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/agentic-mcp": {
@@ -1943,7 +2012,7 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -1976,26 +2045,29 @@
   "main:a.ms-nav-item.on": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.ms-studio.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-studio.tpage-fade.tx-page.tx-page--wide": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:header.ms-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h1.ms-h1": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-q": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:section.ms-card.ms-card-frontier": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.ms-card-t": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-card-s": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.tstate.tstate-unavail": [
    "rgb(133, 77, 14)|rgb(254, 243, 199)|rgb(252, 211, 77)|rgb(252, 211, 77)|rgb(0, 0, 0)|none|"
@@ -2009,44 +2081,69 @@
   "main:span.tstate-sub": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:span.ms-why": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why-l": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.ms-raw": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-raw-t": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:section.ms-card.ms-card-sub": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:form.ms-views": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:label.ms-vf": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:input.ms-vi.ms-vi-w": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 232, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.ms-vrow": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:input.ms-vi": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 232, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:select.ms-vi": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 232, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:option.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:input.ms-vi.num": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 232, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:button.ms-vdel": [
-   "rgb(113, 113, 122)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgb(242, 244, 246)|rgb(78, 89, 104)|rgb(78, 89, 104)|rgb(0, 0, 0)|none|"
+  ],
+  "main:svg.lucide.lucide-x": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "main:path.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(25, 31, 40)|",
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:div.ms-vacts": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:button.ms-vbtn": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:svg.lucide.lucide-plus": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(25, 31, 40)|"
   ],
   "main:button.ms-vbtn.ms-vbtn-run": [
-   "rgb(18, 0, 255)|rgb(250, 250, 250)|rgb(18, 0, 255)|rgb(18, 0, 255)|rgb(0, 0, 0)|none|"
+   "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/causal-deepm": {
@@ -2177,7 +2274,7 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -2210,29 +2307,44 @@
   "main:a.ms-nav-item.on": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.ms-studio.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-studio.tpage-fade.tx-page.tx-page--wide": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:header.ms-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h1.ms-h1": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-q": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.ms-inputs.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-inputs": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-inputs-l": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.ms-in-list": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.ms-in-chip": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-answer": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:section.ms-card.ms-card-frontier": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.ms-card-t": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-card-s": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.tstate.tstate-unavail": [
    "rgb(133, 77, 14)|rgb(254, 243, 199)|rgb(252, 211, 77)|rgb(252, 211, 77)|rgb(0, 0, 0)|none|"
@@ -2246,44 +2358,62 @@
   "main:span.tstate-sub": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:span.ms-why": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why-l": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.ms-raw": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-raw-t": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:section.ms-card.ms-card-sub": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:div.ms-outcome": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:p.ms-engine": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:b.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-span": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-note": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-viz-empty": [
+   "rgb(78, 89, 104)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.ms-out-wrap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-out-cap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:table.ms-out": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tbody.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tr.ms-out-row": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 232, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:th.ms-out-k": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:td.ms-out-v": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.ms-out-na": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/neural-sde": {
@@ -2414,7 +2544,7 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -2447,29 +2577,44 @@
   "main:a.ms-nav-item.on": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.ms-studio.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-studio.tpage-fade.tx-page.tx-page--wide": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:header.ms-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h1.ms-h1": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-q": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.ms-inputs.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-inputs": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-inputs-l": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.ms-in-list": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.ms-in-chip": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-answer": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:section.ms-card.ms-card-frontier": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.ms-card-t": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-card-s": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.tstate.tstate-unavail": [
    "rgb(133, 77, 14)|rgb(254, 243, 199)|rgb(252, 211, 77)|rgb(252, 211, 77)|rgb(0, 0, 0)|none|"
@@ -2483,71 +2628,184 @@
   "main:span.tstate-sub": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:span.ms-why": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why-l": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.ms-raw": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-raw-t": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:section.ms-card.ms-card-sub": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:div.ms-outcome": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:p.ms-engine": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:b.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-span": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-note": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:b.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.ms-viz": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figure.ms-viz-curve.ms-viz-fig": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figcaption.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.recharts-responsive-container": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.recharts-wrapper": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:svg.recharts-surface": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:title.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:desc.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:defs.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:clippath.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:rect.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.recharts-cartesian-axis.recharts-layer.recharts-xAxis.xAxis": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:line.recharts-cartesian-axis-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(229, 232, 235)|"
+  ],
+  "main:g.recharts-cartesian-axis-ticks": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.recharts-cartesian-axis-tick.recharts-layer": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:line.recharts-cartesian-axis-tick-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(229, 232, 235)|"
+  ],
+  "main:text.recharts-cartesian-axis-tick-value.recharts-text": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(78, 89, 104)|none|"
+  ],
+  "main:tspan.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(78, 89, 104)|none|"
+  ],
+  "main:g.recharts-cartesian-axis.recharts-layer.recharts-yAxis.yAxis": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.recharts-layer.recharts-reference-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:line.recharts-reference-line-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
+  ],
+  "main:g.recharts-layer.recharts-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:path.recharts-curve.recharts-line-curve": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(235, 104, 52)|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(237, 161, 0)|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(27, 175, 122)|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(49, 130, 246)|"
+  ],
+  "main:g.recharts-layer": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.mc-legend": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.": [
+   "rgb(25, 31, 40)|rgb(235, 104, 52)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgb(237, 161, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgb(27, 175, 122)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figure.ms-viz-fig.ms-viz-tp": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-viz-note": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.ms-out-wrap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-out-cap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:table.ms-out": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tbody.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tr.ms-out-row": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 232, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:th.ms-out-k": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:td.ms-out-v": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:span.ms-out-list": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-out-li": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.ms-out-seq": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:svg.ms-spark": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:polyline.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(18, 0, 255)|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(49, 130, 246)|"
   ],
   "main:span.ms-out-kv": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.ms-out-kvi": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:em.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:b.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.ms-out-b": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.ms-out-na": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/pinn-tail": {
@@ -2678,7 +2936,7 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -2711,29 +2969,42 @@
   "main:a.ms-nav-item.on": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.ms-studio.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-studio.tpage-fade.tx-page.tx-page--wide": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:header.ms-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h1.ms-h1": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-q": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.ms-inputs.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-inputs": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-inputs-l": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.ms-in-list": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.ms-in-chip": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:section.ms-card.ms-card-frontier": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.ms-card-t": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-card-s": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.tstate.tstate-unavail": [
    "rgb(133, 77, 14)|rgb(254, 243, 199)|rgb(252, 211, 77)|rgb(252, 211, 77)|rgb(0, 0, 0)|none|"
@@ -2747,8 +3018,23 @@
   "main:span.tstate-sub": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:span.ms-why": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why-l": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.ms-raw": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-raw-t": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:section.ms-card.ms-card-sub": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/tsfm-latent": {
@@ -2879,7 +3165,7 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -2912,29 +3198,44 @@
   "main:a.ms-nav-item.on": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.ms-studio.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-studio.tpage-fade.tx-page.tx-page--wide": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:header.ms-head": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h1.ms-h1": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-q": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.ms-inputs.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.ms-inputs": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-inputs-l": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.ms-in-list": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.ms-in-chip": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-answer": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:section.ms-card.ms-card-frontier": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.ms-card-t": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-card-s": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.tstate.tstate-unavail": [
    "rgb(133, 77, 14)|rgb(254, 243, 199)|rgb(252, 211, 77)|rgb(252, 211, 77)|rgb(0, 0, 0)|none|"
@@ -2948,53 +3249,171 @@
   "main:span.tstate-sub": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:span.ms-why": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-why-l": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.ms-raw": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-raw-t": [
+   "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:section.ms-card.ms-card-sub": [
-   "rgb(17, 17, 17)|rgb(250, 250, 250)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:div.ms-outcome": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:p.ms-engine": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:b.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-span.ms-span-trunc": [
    "rgb(133, 77, 14)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ms-note": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:b.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.ms-viz": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figure.ms-viz-factor.ms-viz-fig": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figcaption.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.recharts-responsive-container": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.recharts-wrapper": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:svg.recharts-surface": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:title.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:desc.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:defs.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:clippath.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:rect.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.recharts-cartesian-axis.recharts-layer.recharts-xAxis.xAxis": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:line.recharts-cartesian-axis-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(229, 232, 235)|"
+  ],
+  "main:g.recharts-cartesian-axis-ticks": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.recharts-cartesian-axis-tick.recharts-layer": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:line.recharts-cartesian-axis-tick-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(229, 232, 235)|"
+  ],
+  "main:text.recharts-cartesian-axis-tick-value.recharts-text": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(78, 89, 104)|none|"
+  ],
+  "main:tspan.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(78, 89, 104)|none|"
+  ],
+  "main:g.recharts-cartesian-axis.recharts-layer.recharts-yAxis.yAxis": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.recharts-layer.recharts-reference-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:line.recharts-reference-line-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
+  ],
+  "main:g.recharts-layer.recharts-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:path.recharts-curve.recharts-line-curve": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(49, 130, 246)|"
+  ],
+  "main:g.recharts-layer": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-viz-note": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:figure.ms-viz-fig.ms-viz-load": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.ms-load": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.ms-load-row": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-load-n": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-load-track": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.pos": [
+   "rgb(25, 31, 40)|rgb(49, 130, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:b.ms-load-v": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.neg": [
+   "rgb(25, 31, 40)|rgb(49, 130, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.ms-out-wrap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.ms-out-cap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:table.ms-out": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tbody.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:tr.ms-out-row": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 232, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:th.ms-out-k": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:td.ms-out-v": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:span.ms-out-list": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ms-out-li": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:details.ms-out-more": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:summary.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:pre.ms-out-pre": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/insights": {

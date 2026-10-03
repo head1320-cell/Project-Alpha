@@ -134,7 +134,8 @@ test.describe("P4 매크로 지능 패널", () => {
     });
     await page.goto("/macro");
     await expect(page.locator(".mx-panel .mx-split")).toHaveCount(0);
-    await expect(page.locator(".mx-panel .mx-tools")).toContainText("Goldilocks");
+    // BU5c: 국면 이름은 한국어(번역표 `regimeName`) — 서버 열거값을 옮길 뿐 판단은 서버 것 그대로
+    await expect(page.locator(".mx-panel .mx-tools")).toContainText("골디락스");
   });
 
   test("모형 선택 사유와 검정 근거가 함께 보인다", async ({ page }) => {
@@ -219,5 +220,71 @@ test.describe("P4 매크로 지능 패널", () => {
         expect(res.bright, `다크인데 밝은 배경이 남아 있다`).toEqual([]);
       }
     }
+  });
+
+  // ── BU5c — 실패와 미가용을 가른다 · 그림 더함 · 글 ─────────────────────────
+  for (const [key, path] of [
+    ["consensus", "regime-consensus"], ["forecast", "regime-forecast-coverage"],
+    ["longRun", "long-run"], ["coverage", "source-coverage"],
+  ] as const) {
+    test(`BU5c 실패 — ${key} 500: 그 블록에 alert + 다시 시도 → 풀면 회복(미가용 배지가 아니다)`, async ({ page }) => {
+      await stubIntel(page);
+      await page.route(`**/api/backend/api/v1/macro/${path}**`,
+        (r) => r.fulfill({ status: 500, contentType: "application/json", body: "{}" }));
+      await page.goto("/macro");
+      const alert = page.locator(".mx-panel [role=alert]");
+      await expect(alert).toHaveCount(1, { timeout: 20_000 });
+      await page.unroute(`**/api/backend/api/v1/macro/${path}**`);
+      await stubIntel(page);
+      await alert.getByRole("button", { name: "다시 시도" }).click();
+      await expect(page.locator(".mx-panel [role=alert]")).toHaveCount(0, { timeout: 20_000 });
+    });
+  }
+
+  test("BU5c 짝 — 서버가 미가용이라고 답하면 사유 배지이고 alert 가 아니다", async ({ page }) => {
+    await stubIntel(page, { forecast: { available: false, reason: "평가 시점이 4개로 최소 20개에 못 미칩니다." } });
+    await page.goto("/macro");
+    await expect(page.locator(".mx-panel").getByText("평가 시점이 4개로")).toBeVisible();
+    await expect(page.locator(".mx-panel .mx-keys li").first()).toBeVisible();
+    expect(await page.locator(".mx-panel [role=alert]").count()).toBe(0);
+  });
+
+  test("BU5c 그림 — 공적분 통계량 막대 수 = 가설 수, 적중률 막대에 목표 눈금(표·숫자는 그대로)", async ({ page }) => {
+    await stubIntel(page);
+    await page.goto("/macro");
+    await expect(page.locator(".mx-panel .mx-trace-row")).toHaveCount(LONGRUN_VECM.evidence.trace_stat.length, { timeout: 20_000 });
+    await expect(page.locator(".mx-panel .mx-cov-bar .mx-cov-target")).toHaveCount(1);
+    await expect(page.locator(".mx-panel .mx-tbl").first()).toContainText("40.10");
+  });
+
+  test("BU5c 능력 단계: 사람 말 한 줄 + 원래 사유는 닫힌 details 안에 그대로", async ({ page }) => {
+    await stubIntel(page);
+    await page.goto("/macro");
+    const ladder = page.locator(".mx-panel .mx-ladder");
+    await expect(ladder).toContainText("레벨 L1", { timeout: 20_000 });
+    const raw = page.locator(".mx-panel details.mx-raw");
+    await expect(raw).toHaveCount(1);
+    expect(await raw.textContent()).toContain("torch 미설치");
+  });
+
+  test("BU5c 글 — em-dash 0 · 영어 꼬리표 0(국면 이름·forward-only) · 툴팁 0", async ({ page }) => {
+    await stubIntel(page);
+    await page.goto("/macro");
+    await expect(page.locator(".mx-panel .mx-keys li").first()).toBeVisible({ timeout: 20_000 });
+    const r = await page.locator(".mx-panel").evaluate((root) => {
+      const texts: string[] = [];
+      const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let n: Node | null;
+      while ((n = walk.nextNode())) {
+        const el = n.parentElement!; const s = (n.textContent ?? "").trim();
+        if (!s || !el.getClientRects().length || el.closest("[data-server]")) continue;
+        texts.push(s);
+      }
+      return { texts, titles: root.querySelectorAll("[title]").length };
+    });
+    expect(r.texts.length).toBeGreaterThan(10);
+    expect(r.texts.filter((s) => s.includes("—")), "보이는 em-dash").toEqual([]);
+    expect(r.texts.filter((s) => /\b(Goldilocks|Stagflation|forward-only|trace 통계량)\b|r ≤/.test(s)), "영어 꼬리표").toEqual([]);
+    expect(r.titles).toBe(0);
   });
 });
