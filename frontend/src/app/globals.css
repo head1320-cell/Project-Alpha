@@ -10279,3 +10279,85 @@ details[open] > .rs-more { margin-bottom: 12px; }
   .ci .ca-ff2-track { min-width: 0; }
   .ci .ca-ff2-val { width: auto; flex: 0 1 auto; white-space: normal; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BU7a — 위험 점검(`.rk`): 네 충격 한눈에 · 종목 × 충격 칸 지도 · 고른 충격 자세히.
+   색: 점수 변화(부호 있는 변화) = --tx-up/down-ink · 막대 = 중립 한 색(--tx-blue) · 판단(취약)은 글자.
+   `.tstat`·`.trisk-table`·`.tsurvival-*` 은 module-motion 05 패널·데이터 상태 화면이 같이 쓰므로 `.rk` 범위에서만 덮는다.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.rk { display: flex; flex-direction: column; gap: 12px; }
+.rk .tx-answer + .tx-sec, .rk .tx-sec + .tx-sec { margin-top: 0; }
+.rk-wait, .rk-reason { margin: 0; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; line-height: 1.55; color: var(--tx-ink); }
+.rk-dir[data-dir=up], .rk-cell-v[data-dir=up] { color: var(--tx-up-ink); }
+.rk-dir[data-dir=down], .rk-cell-v[data-dir=down] { color: var(--tx-down-ink); }
+/* 네 충격 한눈에 */
+.rk-sum-list { display: grid; gap: 8px; margin-top: 12px; }
+.rk-sum-row { display: grid; grid-template-columns: 7.5em minmax(80px, 1fr) auto auto; align-items: center; gap: 8px 16px; width: 100%; min-height: 56px;
+  padding: 10px 16px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); font-family: inherit; font-size: 14px; color: var(--tx-ink); text-align: left; cursor: pointer;
+  transition: background-color .12s ease, box-shadow .12s ease; }
+.rk-sum-row:hover { background: var(--tx-blue-soft); }
+.rk-sum-row[aria-pressed=true] { background: var(--tx-blue-soft); box-shadow: inset 0 0 0 2px var(--tx-blue); }
+.rk-sum-row:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
+.rk-sum-row--fail { grid-template-columns: 1fr; cursor: default; }
+.rk-sum-row--fail:hover { background: var(--tx-soft); }
+.rk-sum-name { font-weight: 700; }
+.rk-sum-bar { position: relative; height: 10px; border-radius: 5px; background: var(--tx-surface); overflow: hidden; }
+.rk-sum-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--tx-blue); }
+.rk-sum-n, .rk-sum-avg { font-variant-numeric: tabular-nums; color: var(--tx-sub); white-space: nowrap; }
+.rk-sum-avg b { font-weight: 700; }
+.rk-sum-wait, .rk-sum-reason { grid-column: 2 / -1; color: var(--tx-sub); }
+/* 종목 × 충격 칸 지도 */
+.rk-mapwrap { margin-top: 12px; overflow-x: auto; }
+.rk-map { width: 100%; min-width: 560px; border-collapse: separate; border-spacing: 4px; font-size: 13px; }
+.rk-map thead th { padding: 4px 8px; font-size: 12px; font-weight: 600; color: var(--tx-sub); text-align: center; }
+.rk-map thead th:first-child { text-align: left; }
+.rk-map tbody th { padding: 6px 8px; text-align: left; font-weight: 600; color: var(--tx-ink); white-space: nowrap; }
+.rk-map-name { display: block; }
+.rk-map-code { display: block; font-size: 12px; font-weight: 400; color: var(--tx-mute); }
+.rk-cell { position: relative; min-width: 92px; padding: 8px 10px 14px; border-radius: 8px; background: var(--tx-soft); text-align: right; vertical-align: top; }
+.rk-cell:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
+.rk-cell[data-weak] { box-shadow: inset 0 0 0 1.5px var(--tx-mute); }
+.rk-cell-v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rk-cell-bar { position: absolute; left: 10px; right: 10px; bottom: 6px; height: 3px; border-radius: 2px; background: var(--tx-line); overflow: hidden; }
+.rk-cell-bar i { position: absolute; inset: 0 auto 0 0; background: var(--tx-blue); }
+.rk-cell-weak { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--tx-ink); }
+.rk-cell-out { font-size: 12px; color: var(--tx-mute); }
+.rk-cell[data-out], .rk-cell[data-na] { background: transparent; box-shadow: inset 0 0 0 1px var(--tx-line); }
+.rk-map-read { min-height: 44px; margin: 10px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--tx-soft); font-size: 14px; color: var(--tx-ink); display: flex; align-items: center; }
+/* 고른 충격 자세히 */
+.rk .rk-stats { margin-top: 12px; border: 0; border-radius: 0; gap: 8px; }
+.rk .tstat { padding: 14px 16px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.rk .tstat-key { font-family: inherit; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--tx-sub); margin-bottom: 6px; }
+.rk .tstat-val { display: block; font-family: inherit; font-size: 24px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; margin-bottom: 0; }
+.rk .tstat-val.rk-dir[data-dir=up] { color: var(--tx-up-ink); }
+.rk .tstat-val.rk-dir[data-dir=down] { color: var(--tx-down-ink); }
+.rk-stat-bar { display: block; position: relative; height: 8px; margin-top: 10px; border-radius: 4px; background: var(--tx-surface); overflow: hidden; }
+.rk-stat-bar i { position: absolute; inset: 0 auto 0 0; background: var(--tx-blue); border-radius: 4px; }
+.rk-rule { margin: 10px 0 0; font-size: 13px; color: var(--tx-sub); }
+.rk-h3 { margin: 20px 0 8px; font-size: 15px; font-weight: 700; color: var(--tx-ink); }
+.rk-tablewrap { overflow-x: auto; }
+.rk .trisk-table { font-size: 14px; min-width: 520px; }
+.rk .trisk-table th { font-family: inherit; font-size: 12px; text-transform: none; color: var(--tx-sub); border-bottom-color: var(--tx-line); font-weight: 600; padding: 10px 12px; }
+.rk .trisk-table td { padding: 12px; border-bottom-color: var(--tx-line); color: var(--tx-ink); }
+.rk .trisk-table td.num { font-family: inherit; font-variant-numeric: tabular-nums; }
+.rk .trisk-table tbody tr { cursor: pointer; }
+.rk .trisk-table tbody tr:hover td { background: var(--tx-soft); }
+.rk .trisk-table tbody tr:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; }
+.rk .tsurvival-bar { background: var(--tx-soft); border-radius: 4px; }
+.rk .tsurvival-fill { background: var(--tx-blue); border-radius: 4px; }
+.rk-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0 20px; }
+.rk-chiplist { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rk-chip { min-height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--tx-soft); font-family: inherit; font-size: 13px; color: var(--tx-ink); cursor: pointer; }
+.rk-chip:hover { background: var(--tx-blue-soft); }
+.rk-chip b { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.rk-how { margin-top: 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); padding: 0 16px; font-size: 14px; line-height: 1.6; color: var(--tx-ink); }
+.rk-how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.rk-how p { margin: 0 0 10px; }
+.rk-k { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--tx-surface); font-size: 12px; font-weight: 600; }
+.rk-map tbody th { position: sticky; left: 0; z-index: 1; background: var(--tx-surface); }
+@media (max-width: 640px) {
+  .rk .rk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rk-sum-row { grid-template-columns: 1fr auto; }
+  .rk-sum-bar { grid-column: 1 / -1; grid-row: 2; }
+  .rk-sum-avg { grid-column: 1 / -1; }
+}

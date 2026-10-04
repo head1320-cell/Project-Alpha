@@ -126,11 +126,8 @@ export const analysisApi = {
     return data.items.find((it: { stock_code: string }) => it.stock_code === stockCode) ?? null;
   },
   // 리스크: 스크리너 stress_test analyzer 재사용
-  stressTest: async (universe: string, scenario: string): Promise<{
-    analyzers: { stress_test?: { survival_rate: number; n_survivors: number; n_casualties: number; avg_shock_pct: number; casualties: Array<{ stock_code: string; corp_name: string; shock_pct: number; survived: boolean }>; scenario_label?: string } };
-    data_source: { fundamentals: string; market_data: string; fully_real: boolean };
-    total_passed: number;
-  }> => {
+  // BU7a: 응답 모양을 서버(`src/engine/stress_test_analyzer.py::stress_test`) 그대로 적는다 — available:false 면 error 만 온다.
+  stressTest: async (universe: string, scenario: string): Promise<StressRun> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/run-advanced`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -149,6 +146,19 @@ export const analysisApi = {
     return r.json();
   },
 };
+
+/** 스트레스 한 종목 줄 — shock_pct = 종합점수 변화 추정(%, 가격 손실 아님) · survived = shock > −8(서버 기준). */
+export interface StressRow { stock_code: string; corp_name: string; base_score: number; shock_pct: number; stressed_score: number; survived: boolean }
+export type StressResult =
+  | { available: true; scenario: string; scenario_label: string; n_stocks: number; n_survivors: number; n_casualties: number;
+      survival_rate: number; avg_shock_pct: number; casualties: StressRow[]; survivors: StressRow[]; most_resilient: StressRow[]; note?: string }
+  | { available: false; error?: string; reason?: string };
+export interface StressRun {
+  analyzers: { stress_test?: StressResult };
+  data_source?: { fundamentals: string; market_data: string; fully_real: boolean };
+  total_passed?: number;
+  timestamp?: string;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // companyApi — Company Analysis 페이지 전용 단일종목 데이터 (실API 조립)
