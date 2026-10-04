@@ -12,12 +12,15 @@
 
 export type VerdictTone = "bull" | "bear" | "caution" | "neutral";
 
-export interface FactorVal { id: string; label: string; value: number; unit: string; pct: number; higherBetter: boolean }
+/** `pct` = 비교 표본 안 백분위(좋은 쪽이 높게 — 서버 `higher_better` 로 뒤집음). ★표본이 없거나 5개 미만이면 null(몰라요) — 50 을 지어내지 않는다(BU6b)★ */
+export interface FactorVal { id: string; label: string; value: number; unit: string; pct: number | null; higherBetter: boolean }
 export interface FactorGroup { id: string; label: string; factors: FactorVal[] }
-export interface YearFin { year: string; revenue: number; op: number; ni: number; equity: number; fcf: number; roe: number; debt: number; eps: number; bps: number; dps: number }
-export interface QuarterFin { q: string; revenue: number; op: number; ni: number; equity: number; roe: number; debt: number; eps: number; bps: number; dps: number; opMargin: number }
+/** 연도·분기 재무 — ★null = 서버가 값을 주지 않음(몰라요). 0 으로 채우지 않는다(BU6b)★ */
+type N = number | null;
+export interface YearFin { year: string; revenue: N; op: N; ni: N; equity: N; fcf: N; roe: N; debt: N; eps: N; bps: N; dps: N }
+export interface QuarterFin { q: string; revenue: N; op: N; ni: N; equity: N; roe: N; debt: N; eps: N; bps: N; dps: N; opMargin: N }
 export interface ModelResult { key: "RIM" | "DCF" | "DDM"; label: string; value: number; weight: number; assumptions: { k: string; v: string }[]; components: { k: string; v: string }[] }
-export interface Peer { code: string; name: string; price: number; per: number; pbr: number; roe: number; gap: number; mktcap: number; self?: boolean }
+export interface Peer { code: string; name: string; price: number; per: N; pbr: N; roe: N; gap: N; mktcap: N; self?: boolean }
 export interface Scenario { key: "bull" | "base" | "bear"; label: string; value: number; gap: number; note: string }
 export interface PricePt { t: string; p: number }
 
@@ -46,7 +49,9 @@ export interface CompanyData {
   quarters: QuarterFin[];
   price1y: PricePt[];
   /** 코어 하위 요청 중 서버에 닿지 못한 것 — 화면이 "없음" 대신 실패 + 다시 시도를 말한다(BU6). 시세가 비면(실패 아님) price1y 가 빈 배열. */
-  failed: ("valuation" | "financials" | "prices")[];
+  failed: ("valuation" | "financials" | "quarters" | "prices" | "factors" | "factorSample" | "peers")[];
+  /** 팩터 백분위의 비교 표본 — 몇 종목과 견줬는지(BU6b). null = 표본을 불러오지 못했다(failed 에 "factorSample"). */
+  factorBasis: { n: number; source: "db" | "kospi200" } | null;
   fundamentals: FactorGroup[];
   priceFactors: FactorGroup[];
   strengths: FactorVal[];

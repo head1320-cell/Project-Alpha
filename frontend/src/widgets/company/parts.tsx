@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React from "react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, ReferenceArea, ComposedChart, Line, AreaChart, Area,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, ComposedChart, Line, AreaChart, Area,
 } from "recharts";
 import type { CompanyData, FactorVal, FactorGroup, ModelResult, Scenario, VerdictTone } from "@/entities/company/insightsModel";
 import { won, eok, pct } from "@/entities/company/insightsModel";
@@ -126,7 +126,8 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
   );
 }
 
-export function KpiBars({ data, dataKey, xKey = "year", height = 130, fmt = eok }: { data: ReadonlyArray<CompanyData["years"][number] | CompanyData["quarters"][number]>; dataKey: string; xKey?: string; color?: string; height?: number; fmt?: (n: number) => string }) {
+/** 기간별 막대 — ★중립 한 색★(BU6b: 옛 화면은 마지막 해만 파랑이었는데 뜻이 없었다). 값이 없는 기간(null)은 막대가 비고 0 을 그리지 않는다. */
+export function KpiBars({ data, dataKey, xKey = "year", height = 130, fmt = eok }: { data: ReadonlyArray<object>; dataKey: string; xKey?: string; color?: string; height?: number; fmt?: (n: number) => string }) {
   const anim = useChartAnimation();
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -134,17 +135,16 @@ export function KpiBars({ data, dataKey, xKey = "year", height = 130, fmt = eok 
         <XAxis dataKey={xKey} tick={AXIS} tickLine={false} axisLine={{ stroke: "var(--tx-line)" }} />
         <ReferenceLine y={0} stroke="var(--tx-mute)" />
         <Tooltip formatter={(v: number) => [fmt(v), ""]} contentStyle={TIP_STYLE} cursor={{ fill: "var(--tx-soft)" }} />
-        <Bar isAnimationActive={anim} dataKey={dataKey} radius={[3, 3, 0, 0]}>
-          {data.map((_, i) => <Cell key={i} fill={i === data.length - 1 ? "var(--tx-blue)" : "var(--tx-line-strong, var(--tx-mute))"} />)}
-        </Bar>
+        <Bar isAnimationActive={anim} dataKey={dataKey} radius={[3, 3, 0, 0]} fill="var(--tx-blue)" />
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
 /** 추세 스파크라인 — ★등락색★(첫 값보다 끝 값이 크면 오름 = `--tx-up`). 방향은 `data-dir` 로도 남긴다(색만으로 말하지 않게 옆에 값이 있다). */
-export function Spark({ values, color, w = 90, h = 26 }: { values: number[]; color?: string; w?: number; h?: number }) {
-  const v = values.filter((x) => Number.isFinite(x));
+export function Spark({ values, color, w = 90, h = 26 }: { values: (number | null)[]; color?: string; w?: number; h?: number }) {
+  // 모르는 기간(null)은 건너뛴다 — 0 으로 끌어내리지 않는다(BU6b)
+  const v = values.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
   if (v.length < 2) return null;
   const min = Math.min(...v), max = Math.max(...v), span = (max - min) || 1;
   const pts = v.map((x, i) => `${(i / (v.length - 1)) * w},${h - 2 - ((x - min) / span) * (h - 4)}`).join(" ");
@@ -185,22 +185,33 @@ export function ValueBand({ price, models, intrinsic }: { price: number; models:
 }
 
 /** 팩터 한 줄 — 백분위 막대는 ★수준 색★(50 가운데 회색, 높으면 주황 쪽·낮으면 청록 쪽). 좋고 나쁨은 `higherBetter` 로 서버가 이미 뒤집어 둔 백분위다. */
+/** 팩터 값 글자 — 단위 그대로(억은 "억원"), 음수는 U+2212. */
+export function factorValue(fac: Pick<FactorVal, "value" | "unit">): string {
+  const neg = fac.value < 0 ? "−" : "";
+  const a = Math.abs(fac.value);
+  if (fac.unit === "억") return `${neg}${eok(a)}원`;
+  if (fac.unit === "원") return `${neg}${won(a)}`;
+  return `${neg}${a.toLocaleString("ko-KR")}${fac.unit}`;
+}
+/** ★백분위를 모르면(null) 막대를 채우지 않고 "몰라요"★ — 50 을 지어내지 않는다(BU6b). */
 export function FactorBar({ fac, showPct = true }: { fac: FactorVal; showPct?: boolean }) {
-  const valStr = fac.unit === "원" || fac.unit === "억" ? (fac.unit === "억" ? eok(fac.value) : won(fac.value)) : `${fac.value.toLocaleString()}${fac.unit}`;
   return (
-    <div className="ca-fbar">
+    <div className="ca-fbar" data-unknown={fac.pct == null ? "" : undefined}>
       <span className="ca-fbar-lbl" data-server>{fac.label}</span>
-      <span className="ca-fbar-val">{valStr}</span>
-      <span className="ca-fbar-track"><span className="ca-fbar-fill" style={{ width: `${fac.pct}%`, background: pctFill(fac.pct) }} /></span>
-      {showPct && <span className="ca-fbar-pct">{fac.pct}</span>}
+      <span className="ca-fbar-val">{factorValue(fac)}</span>
+      <span className="ca-fbar-track">{fac.pct != null && <span className="ca-fbar-fill" style={{ width: `${fac.pct}%`, background: pctFill(fac.pct) }} />}</span>
+      {showPct && <span className="ca-fbar-pct">{fac.pct ?? "몰라요"}</span>}
     </div>
   );
 }
 
-export function Radar({ groups, size = 240 }: { groups: FactorGroup[]; size?: number }) {
+export function Radar({ groups: all, size = 240 }: { groups: FactorGroup[]; size?: number }) {
+  // 백분위를 아는 팩터만 평균(BU6b) — 하나도 모르는 묶음은 꼭짓점에서 뺀다(0 으로 그리지 않는다).
+  const known = all.map((g) => ({ g, k: g.factors.map((f) => f.pct).filter((p): p is number => p != null) })).filter((x) => x.k.length);
+  const groups = known.map((x) => x.g);
   const n = groups.length, cx = size / 2, cy = size / 2, R = size / 2 - 34;
-  if (n < 3) return null;
-  const avg = groups.map((g) => g.factors.reduce((s, x) => s + x.pct, 0) / (g.factors.length || 1));
+  if (n < 3) return <p className="ci-note">백분위를 아는 묶음이 셋보다 적어 레이더를 그리지 않았어요.</p>;
+  const avg = known.map((x) => x.k.reduce((s, v) => s + v, 0) / x.k.length);
   const pt = (i: number, r: number) => {
     const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
     return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];

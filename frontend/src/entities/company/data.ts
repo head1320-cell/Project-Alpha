@@ -51,10 +51,11 @@ function mapModel(m: ValuationDetail["models"][number]): ModelResult {
 
 // 유니버스 표본 기반 퍼센타일 (higher_better 반영)
 function makePercentile(sample: ScreenerItem[]) {
-  return (fieldId: string, value: number, higherBetter: boolean): number => {
+  return (fieldId: string, value: number, higherBetter: boolean): number | null => {
     const vals: number[] = [];
     for (const it of sample) { const x = it[fieldId]; if (typeof x === "number" && Number.isFinite(x)) vals.push(x); }
-    if (vals.length < 5) return 50;
+    // ★표본이 5개 미만이면 백분위를 모른다(null) — 옛 코드는 50 을 지어냈다(BU6b)★
+    if (vals.length < 5) return null;
     const below = vals.filter((x) => x <= value).length;
     let p = Math.round((below / vals.length) * 100);
     if (!higherBetter) p = 100 - p;
@@ -63,6 +64,14 @@ function makePercentile(sample: ScreenerItem[]) {
 }
 const UNIT = (u: string) => (u === "×" || u === "x" || u === "배" ? "배" : u || "");
 
+/** 서버 카탈로그의 영어 묶음 이름 → 한국어(모르는 id 는 서버 이름 그대로). 번역만 하고 뜻을 더하지 않는다. */
+export const CAT_KO: Record<string, string> = { quality: "이익의 질", safety: "재무 안전", composite: "종합 지표", financials: "재무 구성", fundamental: "영업 효율", stock: "주가", ir: "기업설명회" };
+/** 영어가 섞인 팩터 이름 → 한국어(약어는 괄호로 남겨 원래 이름을 찾을 수 있게). 모르는 id 는 서버 이름 그대로. */
+export const FACTOR_KO: Record<string, string> = {
+  altman_z: "부도 위험 점수(알트만 Z)", beneish_m: "이익 조작 점검(베니시 M)", acquirers_multiple: "인수자 배수",
+  magic_formula_rank: "마법 공식 순위(그린블랫)", greenblatt_score: "그린블랫 점수", qmj_score: "품질 점수(QMJ)",
+  piotroski_f: "재무 건전성 점수(피오트로스키 F)", gp_to_assets: "총이익/자산", ev_sales: "EV/매출", sloan_accruals: "슬론 발생액",
+};
 function buildFactorGroups(item: ScreenerItem, catalog: FieldsCatalog, sample: ScreenerItem[], cats: Set<string>): FactorGroup[] {
   const pctOf = makePercentile(sample);
   const groups: FactorGroup[] = [];
@@ -72,9 +81,9 @@ function buildFactorGroups(item: ScreenerItem, catalog: FieldsCatalog, sample: S
     for (const f of cat.fields) {
       const raw = item[f.id];
       if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
-      factors.push({ id: f.id, label: f.label, value: Math.round(raw * 100) / 100, unit: UNIT(f.unit), higherBetter: f.higher_better, pct: pctOf(f.id, raw, f.higher_better) });
+      factors.push({ id: f.id, label: FACTOR_KO[f.id] ?? f.label, value: Math.round(raw * 100) / 100, unit: UNIT(f.unit), higherBetter: f.higher_better, pct: pctOf(f.id, raw, f.higher_better) });
     }
-    if (factors.length) groups.push({ id: cat.id, label: cat.label, factors });
+    if (factors.length) groups.push({ id: cat.id, label: CAT_KO[cat.id] ?? cat.label, factors });
   }
   return groups;
 }
@@ -95,10 +104,11 @@ function mapPrices(bars: { date: string; close: number }[], current: number): Pr
 }
 function mapYears(hist: FinancialHistory | null): YearFin[] {
   if (!hist?.financials?.length) return [];
+  // ★서버가 비운 값은 null(몰라요) — 0 으로 채우면 표·막대·추세가 0 을 그린다(BU6b)★
   const rows = hist.financials.map((f) => ({
-    year: f.year, revenue: f.revenue_억 ?? 0, op: f.operating_profit_억 ?? 0, ni: f.net_income_억 ?? 0,
-    equity: f.total_equity_억 ?? 0, fcf: f.fcf_억 ?? 0, roe: f.roe_pct ?? 0, debt: f.debt_ratio_pct ?? 0,
-    eps: f.eps ?? 0, bps: f.bps ?? 0, dps: f.dps ?? 0,
+    year: f.year, revenue: fin(f.revenue_억), op: fin(f.operating_profit_억), ni: fin(f.net_income_억),
+    equity: fin(f.total_equity_억), fcf: fin(f.fcf_억), roe: fin(f.roe_pct), debt: fin(f.debt_ratio_pct),
+    eps: fin(f.eps), bps: fin(f.bps), dps: fin(f.dps),
   }));
   // 시계열 차트/표는 과거→최근(오름차순)으로 — API는 내림차순으로 반환
   rows.sort((a, b) => Number(a.year) - Number(b.year));
@@ -108,13 +118,13 @@ function mapYears(hist: FinancialHistory | null): YearFin[] {
 function mapQuarters(hist: FinancialHistory | null): QuarterFin[] {
   if (!hist?.financials?.length) return [];
   const rows = hist.financials.map((f) => {
-    const rev = f.revenue_억 ?? 0;
-    const op = f.operating_profit_억 ?? 0;
+    const rev = fin(f.revenue_억);
+    const op = fin(f.operating_profit_억);
     return {
-      q: f.year, revenue: rev, op, ni: f.net_income_억 ?? 0,
-      equity: f.total_equity_억 ?? 0, roe: f.roe_pct ?? 0, debt: f.debt_ratio_pct ?? 0,
-      eps: f.eps ?? 0, bps: f.bps ?? 0, dps: f.dps ?? 0,
-      opMargin: rev ? Math.round((op / rev) * 1000) / 10 : 0,
+      q: f.year, revenue: rev, op, ni: fin(f.net_income_억),
+      equity: fin(f.total_equity_억), roe: fin(f.roe_pct), debt: fin(f.debt_ratio_pct),
+      eps: fin(f.eps), bps: fin(f.bps), dps: fin(f.dps),
+      opMargin: rev && op != null ? Math.round((op / rev) * 1000) / 10 : null,
     };
   });
   // "2025Q3" 형식 → 과거→최근 오름차순
@@ -122,48 +132,63 @@ function mapQuarters(hist: FinancialHistory | null): QuarterFin[] {
   return rows;
 }
 
+const r2 = (v: number | null, k: number) => (v == null ? null : Math.round(v * k) / k);
 function mapPeers(items: ScreenerItem[], selfCode: string): Peer[] {
   const peers = items.map((it) => ({
-    code: it.stock_code, name: it.corp_name, price: it.current_price, per: Math.round((fin(it.per) ?? 0) * 100) / 100,
-    pbr: Math.round((fin(it.pbr) ?? 0) * 100) / 100, roe: Math.round((fin(it.roe_pct) ?? 0) * 10) / 10,
-    gap: Math.round((it.gap_pct ?? 0) * 10) / 10, mktcap: fin(it.market_cap_억) ?? 0, self: it.stock_code === selfCode,
+    // ★모르면 null — 0 으로 채우면 괴리 "+0.0%" 를 지어낸다(BU6b)★
+    code: it.stock_code, name: it.corp_name, price: it.current_price, per: r2(fin(it.per), 100),
+    pbr: r2(fin(it.pbr), 100), roe: r2(fin(it.roe_pct), 10),
+    gap: r2(fin(it.gap_pct), 10), mktcap: fin(it.market_cap_억), self: it.stock_code === selfCode,
   }));
-  return peers.sort((a, b) => a.gap - b.gap).slice(0, 12);
+  // 괴리 작은 순(모르는 것은 끝으로 — 가운데에 섞지 않는다)
+  return peers.sort((a, b) => (a.gap ?? Infinity) - (b.gap ?? Infinity)).slice(0, 12);
 }
 
 export async function loadCompanyCore(code: string): Promise<CompanyData> {
   // wave 1
-  const [item, sample, catalog] = await Promise.all([
+  // ★실패를 "없음"과 가른다(BU6)★ 실패는 settle 로 받아 `failed` 에 적는다 — 화면이 "재무 데이터 부족" 대신 실패 + 다시 시도를 말한다.
+  const settle = <T,>(pr: Promise<T>): Promise<{ ok: true; v: T } | { ok: false }> =>
+    pr.then((v) => ({ ok: true as const, v }), () => ({ ok: false as const }));
+  const [item, sampleR, catalogR] = await Promise.all([
     companyApi.byTicker(code),
-    // 퍼센타일 분포: DB 적재 표본(factor_snapshot) 우선 → 비면(미적재) 라이브 kospi200 폴백.
-    (async () => {
-      const db = await companyApi.factorSample(600).catch(() => [] as ScreenerItem[]);
-      if (db.length >= 20) return db;
-      return companyApi.universeSample("kospi200").catch(() => [] as ScreenerItem[]);
+    // 퍼센타일 분포: DB 적재 표본(factor_snapshot) 우선 → 20개 미만이면 라이브 kospi200 표본.
+    // ★둘 다 실패하면 실패로 적는다(BU6b) — 빈 표본으로 삼키면 백분위가 50 으로 지어졌다★
+    (async (): Promise<{ ok: true; items: ScreenerItem[]; source: "db" | "kospi200" } | { ok: false }> => {
+      const db = await settle(companyApi.factorSample(600));
+      if (db.ok && db.v.length >= 20) return { ok: true, items: db.v, source: "db" };
+      const live = await settle(companyApi.universeSample("kospi200"));
+      if (live.ok) return { ok: true, items: live.v, source: "kospi200" };
+      if (db.ok) return { ok: true, items: db.v, source: "db" };
+      return { ok: false };
     })(),
-    companyApi.fieldsCatalog().catch(() => ({ categories: [], operators: [], rank_modes: [] } as FieldsCatalog)),
+    settle(companyApi.fieldsCatalog()),
   ]);
+  const sample = sampleR.ok ? sampleR.items : [];
+  const catalog: FieldsCatalog = catalogR.ok ? catalogR.v : { categories: [], operators: [], rank_modes: [] } as FieldsCatalog;
   if (!item) throw new Error("NOT_FOUND");
   const price = item.current_price;
   const mcapInput = fin(item.market_cap_억) ?? undefined;  // 발행주식수 도출용(BPS·EPS) → valuation 활성
   // wave 2
-  // ★실패를 "없음"과 가른다(BU6)★ 실패는 settle 로 받아 `failed` 에 적는다 — 화면이 "재무 데이터 부족" 대신 실패 + 다시 시도를 말한다.
-  const settle = <T,>(pr: Promise<T>): Promise<{ ok: true; v: T } | { ok: false }> =>
-    pr.then((v) => ({ ok: true as const, v }), () => ({ ok: false as const }));
-  const [baseR, bull, bear, histR, quarterHist, barsR, peerItems] = await Promise.all([
+  const [baseR, bull, bear, histR, quarterR, barsR, peersR] = await Promise.all([
     settle(companyApi.evaluate(code, price, { market_cap: mcapInput })),
     companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.03, market_premium: 0.05 }).catch(() => null),
     companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.01, market_premium: 0.07 }).catch(() => null),
     settle(companyApi.financial(code, 8, "annual", price, mcapInput)),
-    companyApi.financial(code, 8, "quarter", price, mcapInput).catch(() => null),
+    settle(companyApi.financial(code, 8, "quarter", price, mcapInput)),
     companyApi.prices(code, 400).catch(() => null),
-    item.sector ? companyApi.peersBySector(item.sector).catch(() => [] as ScreenerItem[]) : Promise.resolve([] as ScreenerItem[]),
+    item.sector ? settle(companyApi.peersBySector(item.sector)) : Promise.resolve({ ok: true as const, v: [] as ScreenerItem[] }),
   ]);
 
   const failed: CompanyData["failed"] = [];
   if (!baseR.ok) failed.push("valuation");
   if (!histR.ok) failed.push("financials");
   if (barsR === null) failed.push("prices");
+  if (!quarterR.ok) failed.push("quarters");
+  if (!peersR.ok) failed.push("peers");
+  if (!catalogR.ok) failed.push("factors");
+  if (!sampleR.ok) failed.push("factorSample");
+  const quarterHist = quarterR.ok ? quarterR.v : null;
+  const peerItems = peersR.ok ? peersR.v : [];
   const base = baseR.ok ? baseR.v : null;
   const hist = histR.ok ? histR.v : null;
   const bars = barsR ?? [];
@@ -190,7 +215,8 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const fundamentals = buildFactorGroups(item, catalog, sample, FUND_CATS);
   const priceFactors = buildFactorGroups(item, catalog, sample, PRICE_CATS);
   const allFactors = [...fundamentals, ...priceFactors].flatMap((g) => g.factors);
-  const ranked = [...allFactors].sort((a, b) => b.pct - a.pct);
+  // 강한/약한 점은 백분위를 아는 팩터만(모르는 것을 끝에 섞지 않는다)
+  const ranked = allFactors.filter((f) => f.pct != null).sort((a, b) => (b.pct as number) - (a.pct as number));
   const strengths = ranked.slice(0, 5);
   const weaknesses = ranked.slice(-4).reverse();
 
@@ -211,7 +237,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const mktcap = fin(item.market_cap_억) ?? (eqV > 0 && bpsV > 0 ? Math.round((price * eqV) / bpsV) : null);
 
   return {
-    code: item.stock_code, name: item.corp_name, sector: item.sector ?? "—",
+    code: item.stock_code, name: item.corp_name, sector: item.sector ?? "",
     price, mktcap, dayChange, isMock: !!base?.is_mock,
     verdict, tone, intrinsic, gapPct,
     models,
@@ -225,6 +251,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
       revenue: pickN("revenue_억"), op: pickN("operating_profit_억"), ni: pickN("net_income_억"), fcf: pickN("fcf_억", item.fcf_억), equity: pickN("total_equity_억"),
     },
     years, quarters, price1y, failed,
+    factorBasis: sampleR.ok ? { n: sample.length, source: sampleR.source } : null,
     fundamentals, priceFactors, strengths, weaknesses,
     peers, scenarios,
     score: { composite: Math.round(item.composite_score ?? 0), gap: Math.round(item.gap_score ?? 0), roe: Math.round(item.roe_score ?? 0), stability: Math.round(item.stability_score ?? 0) },
@@ -249,7 +276,8 @@ export function regimeToMacroInfo(m: RegimeState | null | undefined): MacroInfo 
 }
 
 export async function loadNetwork(code: string): Promise<NetworkInfo> {
-  const g = await companyApi.graphRelations(code).catch(() => ({ supplier: [], customer: [], competitor: [] }));
+  // BU6b: 실패는 던진다(부르는 쪽이 alert + 다시 시도) — 옛 코드는 "등록된 관계가 없어요"로 삼켰다.
+  const g = await companyApi.graphRelations(code);
   const mk = (rel: string, label: string, arr: { code: string; name: string }[]) =>
     ({ relation: rel, label, nodes: (arr ?? []).map((a) => ({ code: a.code, name: a.name, relation: rel })) });
   const groups = [
@@ -257,12 +285,13 @@ export async function loadNetwork(code: string): Promise<NetworkInfo> {
     mk("customer", "고객사", g.customer),
     mk("competitor", "경쟁사", g.competitor),
   ].filter((grp) => grp.nodes.length);
-  return { groups, note: groups.length ? undefined : "등록된 밸류체인 관계가 없어요." };
+  return { groups, note: groups.length ? undefined : "등록된 공급·고객·경쟁 관계가 없어요." };
 }
 
 export async function loadRisk(code: string): Promise<RiskInfo> {
   // 1차: 일별 시세로 직접 계산 (VaR·ES·변동성·MDD·Sharpe) — 시세만 있으면 동작, 엔진 제약 회피
-  const bars = await companyApi.prices(code, 400).catch(() => [] as PriceBar[]);
+  // BU6b: 시세 실패는 던진다(실패 ≠ "계산할 수 없음")
+  const bars: PriceBar[] = await companyApi.prices(code, 400);
   const closes = bars.map((b) => b.close).filter((c) => c > 0);
   if (closes.length >= 30) {
     const rets: number[] = [];
@@ -285,19 +314,16 @@ export async function loadRisk(code: string): Promise<RiskInfo> {
     };
   }
   // 2차: 백엔드 VaR 엔진 (DB 일봉 있으면)
-  const v = await companyApi.riskVar(code).catch(() => null);
+  const v = await companyApi.riskVar(code);
   if (v) {
     const g = v as Record<string, unknown>;
     return { varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol), sharpe: null, mdd: null };
   }
-  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: "리스크 지표를 계산할 수 없어요 — 해당 종목 일별 시세가 아직 적재되지 않았어요(시세 수집 후 활성)." };
+  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: `이 종목의 일별 시세가 ${closes.length}일뿐이라 시세로 잰 위험을 계산하지 못했어요(30일 이상 필요해요).` };
 }
 
 export async function loadNarrative(item: object, valuationDetail: object): Promise<NarrativeInfo> {
-  try {
-    const r = await companyApi.narrative(item, valuationDetail);
-    return { content: r.content, tokens: r.total_tokens, costKrw: r.cost_krw, cached: r.cached, error: r.error };
-  } catch (e) {
-    return { content: "", tokens: 0, costKrw: 0, cached: false, error: e instanceof Error ? e.message : "생성 실패" };
-  }
+  // BU6b: 요청 실패는 던진다(alert + 다시 시도) · 서버가 답한 `error`(키 없음 등)는 사유로 그대로 나른다 — 둘을 섞지 않는다.
+  const r = await companyApi.narrative(item, valuationDetail);
+  return { content: r.content, tokens: r.total_tokens, costKrw: r.cost_krw, cached: r.cached, error: r.error };
 }

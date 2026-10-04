@@ -24,10 +24,12 @@ import { macroApi } from "@/entities/macro/api";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { Answer, RetryFail, type Chip } from "@/shared/ui/tx";
 import { UNKNOWN_TEXT, priceWon } from "@/shared/lib/krFormat";
-import { KpiBars, PriceChart, ValueBand, FactorBar, Gauge, Spark, Radar, ScenarioCards, VerdictBadge, PriceValueChart, type ValueBandIn } from "./parts";
+import { PriceChart, ValueBand, FactorBar, Gauge, Spark, ScenarioCards, VerdictBadge, PriceValueChart, type ValueBandIn } from "./parts";
 import ValuationTab from "./ValuationTab";
-import FinancialsDeepTab from "./FinancialsDeepTab";
 import RiskDeepTab from "./RiskDeepTab";
+import { MoneySection } from "./MoneySection";
+import { FactorsSection } from "./FactorMap";
+import { bae, eokWon, pctSigned, pctTxt } from "./fmt";
 import { useCompanyModels } from "./useModels";
 import { ModelLadder, buildLadderRows } from "./ModelLadder";
 import { ModelsSection, MacroBlock } from "./ModelsSection";
@@ -85,7 +87,6 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   const [risk, setRisk] = useState<RiskInfo | null | undefined>();
   const [narr, setNarr] = useState<NarrativeInfo | null | undefined>();
   const [narrLoading, setNarrLoading] = useState(false);
-  const [finMode, setFinMode] = useState<"annual" | "quarter">("annual");
   const [netTry, setNetTry] = useState(0);
   const [riskTry, setRiskTry] = useState(0);
 
@@ -126,6 +127,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   }, [riskSeen, risk, lazy, riskTry]);
   const runNarrative = () => {
     setNarrLoading(true);
+    setNarr(undefined);
     lazy.narrative().then(setNarr).catch(() => setNarr(null)).finally(() => setNarrLoading(false));
   };
 
@@ -154,9 +156,30 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
     return () => { document.removeEventListener("scroll", on, { capture: true }); window.removeEventListener("resize", on); if (raf) cancelAnimationFrame(raf); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // 목차로 간 절을 잠깐(2초) 붙잡는다 — 지나가며 화면에 든 절(재무 심화·관계도)이 늦게 차올라 자리를 밀면 그 절로 다시 맞춘다(BU6b).
+  // 사용자가 직접 굴리거나 키를 누르면 바로 놓는다(스크롤을 빼앗지 않게).
+  const pin = useRef<{ id: SecId; until: number } | null>(null);
+  useEffect(() => {
+    const flow = refs[SECS[0].id].current?.parentElement;
+    if (!flow || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const p = pin.current;
+      if (!p || Date.now() > p.until) { pin.current = null; return; }
+      const el = refs[p.id].current;
+      if (el && Math.abs(el.getBoundingClientRect().top - (parseFloat(getComputedStyle(el).scrollMarginTop) || 0)) > 4) el.scrollIntoView({ block: "start" });
+    });
+    ro.observe(flow);
+    const release = () => { pin.current = null; };
+    window.addEventListener("wheel", release, { passive: true });
+    window.addEventListener("touchstart", release, { passive: true });
+    window.addEventListener("keydown", release);
+    return () => { ro.disconnect(); window.removeEventListener("wheel", release); window.removeEventListener("touchstart", release); window.removeEventListener("keydown", release); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const go = (id: SecId) => {
     setActive(id);
     clickLock.current = Date.now() + 900;
+    pin.current = { id, until: Date.now() + 2000 };
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     refs[id].current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   };
@@ -320,8 +343,8 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
               <h3 className="ci-block-h">최근 추세(연도별)</h3>
               {c.years.length ? (
                 <div className="ca-cp-kpis">
-                  {([["매출", c.years.map((y) => y.revenue), eok], ["영업이익", c.years.map((y) => y.op), eok], ["순이익", c.years.map((y) => y.ni), eok], ["ROE", c.years.map((y) => y.roe), (n: number) => `${n}%`]] as [string, number[], (n: number) => string][]).map(([k, vals, f]) => (
-                    <div key={k} className="ca-cp-kpi"><span className="ca-cp-kpi-k">{k}</span><Spark values={vals} w={84} h={28} /><span className="ca-cp-kpi-v">{f(vals.slice(-1)[0])}</span></div>
+                  {([["매출", c.years.map((y) => y.revenue), eokWon], ["영업이익", c.years.map((y) => y.op), eokWon], ["순이익", c.years.map((y) => y.ni), eokWon], ["ROE", c.years.map((y) => y.roe), (n: number | null) => pctTxt(n)]] as [string, (number | null)[], (n: number | null) => string][]).map(([k, vals, f]) => (
+                    <div key={k} className="ca-cp-kpi"><span className="ca-cp-kpi-k">{k}</span><Spark values={vals} w={84} h={28} /><span className="ca-cp-kpi-v">{f(vals.slice(-1)[0] ?? null)}</span></div>
                   ))}
                 </div>
               ) : c.failed.includes("financials")
@@ -329,7 +352,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                 : <p className="ca-cp-empty">재무 시계열 자료가 없어요.</p>}
             </div>
             <div className="ci-block ca-cp-card">
-              <h3 className="ci-block-h">강한 점과 약한 점(업종 백분위)</h3>
+              <h3 className="ci-block-h">강한 점과 약한 점(비교 표본 안 백분위)</h3>
               <div className="ca-cp-sw">
                 {c.strengths.slice(0, 3).map((fac) => <FactorBar key={fac.id} fac={fac} />)}
                 <div className="ca-cp-sw-div" />
@@ -350,48 +373,15 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
         </div>
       ))}
 
-      {/* ── 돈 버는 힘 ── (안쪽 모양은 BU6b) */}
-      {sec("money", (
-        <div className="ca-cp-pad">
-          {c.years.length ? (
-            <>
-              <div className="ca-cp-fintabs" role="group" aria-label="기간 단위">
-                <button type="button" aria-pressed={finMode === "annual"} className={finMode === "annual" ? "on" : ""} onClick={() => setFinMode("annual")}>연도</button>
-                <button type="button" aria-pressed={finMode === "quarter"} className={finMode === "quarter" ? "on" : ""} disabled={!c.quarters.length} onClick={() => c.quarters.length && setFinMode("quarter")}>분기</button>
-                {!c.quarters.length && <span className="ci-note">분기 자료가 없어요(DART 분기보고서가 적재되면 켜져요)</span>}
-              </div>
-              {finMode === "quarter" && c.quarters.length ? (
-                <>
-                  <FinTable cols={c.quarters.map((q) => q.q)} rows={([["매출액", c.quarters.map((q) => q.revenue), eok], ["영업이익", c.quarters.map((q) => q.op), eok], ["순이익", c.quarters.map((q) => q.ni), eok], ["자기자본", c.quarters.map((q) => q.equity), eok], ["ROE %", c.quarters.map((q) => q.roe), (n: number) => `${n}%`], ["부채비율 %", c.quarters.map((q) => q.debt), (n: number) => `${n}%`], ["영업이익률 %", c.quarters.map((q) => q.opMargin), (n: number) => `${n}%`], ["EPS", c.quarters.map((q) => q.eps), won], ["BPS", c.quarters.map((q) => q.bps), won], ["DPS", c.quarters.map((q) => q.dps), won]])} />
-                  <div className="ca-cp-kpibars">
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.quarters} dataKey="revenue" xKey="q" /></div>
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.quarters} dataKey="op" xKey="q" /></div>
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.quarters} dataKey="ni" xKey="q" /></div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <FinTable cols={c.years.map((y) => y.year)} rows={([["매출액", c.years.map((y) => y.revenue), eok], ["영업이익", c.years.map((y) => y.op), eok], ["순이익", c.years.map((y) => y.ni), eok], ["자기자본", c.years.map((y) => y.equity), eok], ["ROE %", c.years.map((y) => y.roe), (n: number) => `${n}%`], ["부채비율 %", c.years.map((y) => y.debt), (n: number) => `${n}%`], ["EPS", c.years.map((y) => y.eps), won], ["BPS", c.years.map((y) => y.bps), won], ["DPS", c.years.map((y) => y.dps), won]])} />
-                  <div className="ca-cp-kpibars">
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">매출액</div><KpiBars data={c.years} dataKey="revenue" /></div>
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">영업이익</div><KpiBars data={c.years} dataKey="op" /></div>
-                    <div className="ca-cp-card"><div className="ca-cp-card-h">순이익</div><KpiBars data={c.years} dataKey="ni" /></div>
-                  </div>
-                </>
-              )}
-            </>
-          ) : c.failed.includes("financials")
-            ? <RetryFail title="재무 시계열을 불러오지 못했어요" onRetry={onRetry} />
-            : <p className="ca-cp-empty">재무 시계열 자료가 없어요(DART 에 없는 종목일 수 있어요).</p>}
-          {moneySeen && <FinancialsDeepTab code={c.code} />}
-        </div>
-      ))}
+      {/* ── 돈 버는 힘 ── (BU6b: 이야기 그림 먼저 + 표는 펼침 — MoneySection) */}
+      {sec("money", <MoneySection c={c} onRetry={onRetry} seen={moneySeen} />)}
 
-      {/* ── 위험 ── (안쪽 모양은 BU6b) */}
+      {/* ── 위험 ── 매크로 민감도 → 재무로 잰 위험(RiskDeepTab) → 시세로 잰 위험 */}
       {sec("risk", (
         <div className="ca-cp-pad">
           <MacroBlock q={models.macro} />
           {riskSeen && <RiskDeepTab code={c.code} price={c.price} />}
+          <div className="ci-mrisk">
           <h3 className="ci-block-h">시세로 잰 위험</h3>
           {risk === undefined ? <p className="ca-cp-empty">위험 지표를 계산하는 중이에요</p>
             : risk === null ? <RetryFail title="위험 지표를 불러오지 못했어요" onRetry={() => { setRisk(undefined); setRiskTry((n) => n + 1); }} />
@@ -403,72 +393,66 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                   ["그보다 나쁜 날 평균 손실(ES, 1억원 기준)", risk.esAmount != null ? `−${won(Math.abs(risk.esAmount))}` : UNKNOWN_TEXT],
                   ["1년 변동성", risk.vol != null ? `${risk.vol.toFixed(1)}%` : UNKNOWN_TEXT],
                   ["샤프 지수(무위험 0)", risk.sharpe != null ? risk.sharpe.toFixed(2) : UNKNOWN_TEXT],
-                  ["최대 낙폭(MDD)", risk.mdd != null ? `${risk.mdd.toFixed(1)}%` : UNKNOWN_TEXT],
+                  ["최대 낙폭(MDD)", pctTxt(risk.mdd)],
                 ] as [string, string][]).map(([k, v]) => <div key={k} className="ca-cp-riskcard"><span>{k}</span><b>{v}</b></div>)}
               </div>
             )}
           <p className="ci-note">종목 일별 시세(최근 400거래일까지)로 직접 계산해요. 시세가 적재되지 않은 종목은 표본이 부족해 나오지 않을 수 있어요.</p>
+          </div>
         </div>
       ))}
 
-      {/* ── 같은 업종 ── */}
+      {/* ── 같은 업종 ── (BU6b: 모르면 몰라요 · 시가총액을 하나도 모르면 열 대신 사유 · 실패는 alert) */}
       {sec("peers", (
         <div className="ca-cp-pad">
-          <p className="ci-sec-lede"><span data-server>{c.sector}</span> 업종의 다른 기업이에요. 줄을 누르면 그 기업을 열어요.</p>
-          <div className="ci-tablewrap">
-            <table className="ca-cp-peertbl">
-              <thead><tr><th scope="col">종목</th><th scope="col" className="n">현재가</th><th scope="col" className="n">PER</th><th scope="col" className="n">PBR</th><th scope="col" className="n">ROE</th><th scope="col" className="n">괴리율</th><th scope="col" className="n">시가총액</th></tr></thead>
-              <tbody>{c.peers.map((p) => (
-                <tr key={p.code} data-code={p.code} className={p.self ? "self" : ""} tabIndex={p.self ? undefined : 0}
-                    onClick={() => !p.self && onPick?.(p.code)}
-                    onKeyDown={(e) => { if (!p.self && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onPick?.(p.code); } }}>
-                  <td>{p.name}{p.self && <span className="ca-cp-self">지금 보는 기업</span>}</td>
-                  <td className="n">{priceWon(p.price)}</td><td className="n">{p.per ? p.per : UNKNOWN_TEXT}</td><td className="n">{p.pbr ? p.pbr : UNKNOWN_TEXT}</td><td className="n">{p.roe ? `${p.roe}%` : UNKNOWN_TEXT}</td>
-                  <td className="n">{pct(p.gap)}</td><td className="n">{p.mktcap ? eok(p.mktcap) : UNKNOWN_TEXT}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-          <h3 className="ci-block-h">밸류체인 관계</h3>
-          {network === undefined ? <p className="ca-cp-empty">관계도를 불러오는 중이에요</p>
-            : network === null ? <RetryFail title="관계도를 불러오지 못했어요" onRetry={() => { setNetwork(undefined); setNetTry((n) => n + 1); }} />
-            : network.groups.length ? (
-              <div className="ca-cp-net">
-                {network.groups.map((grp) => (
-                  <div key={grp.relation} className="ca-cp-net-grp">
-                    <div className="ca-cp-net-h">{grp.label} <span>{grp.nodes.length}</span></div>
-                    <div className="ca-cp-net-nodes">{grp.nodes.map((nd, i) => <button type="button" key={i} className="ca-cp-net-node" onClick={() => nd.code && onPick?.(nd.code)}>{nd.name}</button>)}</div>
+          {c.failed.includes("peers") ? <RetryFail title="같은 업종 기업을 불러오지 못했어요" onRetry={onRetry} />
+            : !c.sector ? <p className="ca-cp-empty">업종을 몰라 같은 업종 기업을 찾지 못했어요.</p>
+            : (() => {
+              const capKnown = c.peers.some((p) => p.mktcap != null);
+              return (
+                <>
+                  <p className="ci-sec-lede"><span data-server>{c.sector}</span> 업종의 다른 기업이에요. 괴리가 작은 순이고, 줄을 누르면 그 기업을 열어요.</p>
+                  <div className="ci-tablewrap">
+                    <table className="ca-cp-peertbl">
+                      <thead><tr><th scope="col">종목</th><th scope="col" className="n">현재가</th><th scope="col" className="n">PER</th><th scope="col" className="n">PBR</th><th scope="col" className="n">ROE</th><th scope="col" className="n">내재가치와 괴리</th>{capKnown && <th scope="col" className="n">시가총액</th>}</tr></thead>
+                      <tbody>{c.peers.map((p) => (
+                        <tr key={p.code} data-code={p.code} className={p.self ? "self" : ""} tabIndex={p.self ? undefined : 0}
+                            onClick={() => !p.self && onPick?.(p.code)}
+                            onKeyDown={(e) => { if (!p.self && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onPick?.(p.code); } }}>
+                          <td>{p.name}{p.self && <span className="ca-cp-self">지금 보는 기업</span>}</td>
+                          <td className="n">{priceWon(p.price)}</td><td className="n">{bae(p.per)}</td><td className="n">{bae(p.pbr)}</td><td className="n">{pctTxt(p.roe)}</td>
+                          <td className="n gap">{pctSigned(p.gap)}</td>{capKnown && <td className="n">{eokWon(p.mktcap)}</td>}
+                        </tr>
+                      ))}</tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
-            ) : <p className="ca-cp-empty">{network.note ?? "등록된 관계가 없어요."}</p>}
+                  {!capKnown && <p className="ci-note ci-peer-note">같은 업종 기업의 시가총액이 아직 적재되지 않아 시가총액 열을 뺐어요.</p>}
+                  <p className="ci-note">괴리는 서버가 계산한 (현재가 − 내재가치) ÷ 내재가치예요. 크고 작음을 좋고 나쁨으로 칠하지 않았어요.</p>
+                </>
+              );
+            })()}
+          <div className="ci-net">
+            <h3 className="ci-block-h">공급·고객·경쟁 관계</h3>
+            {network === undefined ? <p className="ca-cp-empty">관계도를 불러오는 중이에요</p>
+              : network === null ? <RetryFail title="관계도를 불러오지 못했어요" onRetry={() => { setNetwork(undefined); setNetTry((n) => n + 1); }} />
+              : network.groups.length ? (
+                <div className="ca-cp-net">
+                  {network.groups.map((grp) => (
+                    <div key={grp.relation} className="ca-cp-net-grp">
+                      <div className="ca-cp-net-h">{grp.label} <span>{grp.nodes.length}곳</span></div>
+                      <div className="ca-cp-net-nodes">{grp.nodes.map((nd, i) => nd.code
+                        ? <button type="button" key={i} className="ca-cp-net-node" onClick={() => onPick?.(nd.code)}>{nd.name}</button>
+                        : <span key={i} className="ca-cp-net-node off">{nd.name}</span>)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="ca-cp-empty">{network.note ?? "등록된 관계가 없어요."}</p>}
+          </div>
         </div>
       ))}
 
-      {/* ── 팩터 ── */}
-      {sec("factors", (
-        <div className="ca-cp-pad">
-          <div className="ca-cp-factop">
-            <div className="ca-cp-card"><div className="ca-cp-card-h">카테고리별 평균 백분위</div><div className="ca-cp-radar"><Radar groups={c.fundamentals} size={260} /></div></div>
-            <div className="ca-cp-card">
-              <div className="ca-cp-card-h">팩터 백분위: 재무 {c.fundamentals.reduce((s, g) => s + g.factors.length, 0)}개, 가격·수급 {c.priceFactors.reduce((s, g) => s + g.factors.length, 0)}개</div>
-              <div className="ca-cp-catbars">
-                {[...c.fundamentals, ...c.priceFactors].map((g) => { const avg = Math.round(g.factors.reduce((s, x) => s + x.pct, 0) / (g.factors.length || 1)); return (
-                  <div key={g.id} className="ca-cp-catbar"><span data-server>{g.label}</span><i><b style={{ width: `${avg}%` }} /></i><em>{avg}</em></div>
-                ); })}
-              </div>
-            </div>
-          </div>
-          <div className="ca-cp-facgrid">
-            {[...c.fundamentals, ...c.priceFactors].map((g) => (
-              <div key={g.id} className="ca-cp-facgroup">
-                <div className="ca-cp-facgroup-h"><span data-server>{g.label}</span><span>{g.factors.length}</span></div>
-                {g.factors.map((fac) => <FactorBar key={fac.id} fac={fac} />)}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+      {/* ── 팩터 ── (BU6b: 백분위 점 지도 + 목록은 펼침 — FactorMap) */}
+      {sec("factors", <FactorsSection c={c} onRetry={onRetry} />)}
 
       {/* ── AI ── */}
       {sec("ai", (
@@ -477,15 +461,16 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
             <p className="ci-sec-lede">가치평가·재무·팩터를 모아 AI 가 설명 글을 써요. 누를 때마다 비용이 들어요.</p>
             <button type="button" className="tx-btn tx-btn--sub ca-cp-ai-btn" onClick={runNarrative} disabled={narrLoading}>{narrLoading ? "쓰는 중이에요" : narr ? "다시 쓰기" : "AI 설명 받기"}</button>
           </div>
-          {narr === null && <RetryFail title="AI 설명을 받지 못했어요" onRetry={runNarrative} />}
-          {narr?.error && <p className="ca-cp-empty">AI 설명을 쓰지 못했어요: <span data-server>{narr.error}</span></p>}
+          {narr === null && !narrLoading && <RetryFail title="AI 설명을 받지 못했어요" onRetry={runNarrative} />}
+          {narr?.error && <p className="ci-ai-reason">AI 가 설명을 쓰지 못했다고 답했어요: <span data-server>{narr.error}</span></p>}
           {narr && !narr.error && (
             <div className="ca-cp-ai-body">
               <div className="ca-cp-ai-content" data-server>{narr.content}</div>
-              <div className="ca-cp-ai-meta">{narr.tokens.toLocaleString()} 토큰, 약 {narr.costKrw.toFixed(1)}원{narr.cached ? "(저장해 둔 글)" : ""}</div>
+              <div className="ca-cp-ai-meta">AI 가 읽고 쓴 양 {narr.tokens.toLocaleString("ko-KR")}토큰, 비용 약 {narr.costKrw.toFixed(1)}원{narr.cached ? "(저장해 둔 글이라 이번엔 비용이 없어요)" : ""}</div>
             </div>
           )}
-          {narr === undefined && !narrLoading && <details className="ci-note"><summary>켜는 방법</summary>관리자가 AI 키를 넣어 두면 켜져요(환경변수 ANTHROPIC_API_KEY).</details>}
+          {narrLoading && <p className="ca-cp-empty">AI 가 설명을 쓰는 중이에요. 보통 10~30초 걸려요.</p>}
+          {narr === undefined && !narrLoading && <details className="ci-note"><summary>켜는 방법</summary>관리자가 서버 설정에 AI 키를 넣어 두면 켜져요. 키가 없으면 누른 뒤 사유를 보여 드려요.</details>}
         </div>
       ))}
       </div>
@@ -531,20 +516,4 @@ function DayChange({ c, cls }: { c: CompanyData; cls: string }) {
   if (!d) return null;
   const dir = d.pct > 0 ? "up" : d.pct < 0 ? "down" : "flat";
   return <span className={cls} data-dir={dir}>{d.pct > 0 ? "+" : d.pct < 0 ? "−" : ""}{Math.abs(d.pct).toFixed(2)}%<span className="ci-chg-k"> 전일 대비</span></span>;
-}
-
-/** 재무 표 — 항목 × 기간 + 추세 스파크라인(등락색). 0 은 0, 값이 없으면 몰라요는 BU6b 에서(지금은 서버가 0 으로 채운다). */
-function FinTable({ cols, rows }: { cols: string[]; rows: [string, number[], (n: number) => string][] }) {
-  return (
-    <div className="ci-tablewrap">
-      <table className="ca-cp-fin">
-        <thead><tr><th scope="col">항목(억원)</th>{cols.map((k) => <th key={k} scope="col">{k}</th>)}<th scope="col">추세</th></tr></thead>
-        <tbody>
-          {rows.map(([lbl, vals, fmt]) => (
-            <tr key={lbl}><td className="lbl">{lbl}</td>{vals.map((v, i) => <td key={i}>{fmt(v)}</td>)}<td className="spark"><Spark values={vals} /></td></tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }

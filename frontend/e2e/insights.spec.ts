@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "fs";
+import path from "path";
 import { contrastAudit, type AuditResult } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -307,7 +309,8 @@ test("그림 보존 — 흐름 전체(자세히 펼침)의 그림·막대 수가
   const n = await page.evaluate(() => {
     const root = document.querySelector(".ci")!;
     const svg = Array.from(root.querySelectorAll("svg")).filter((s) => !s.classList.contains("lucide") && !s.closest(".ci-toc")).length;
-    const bars = root.querySelectorAll(".ca-fbar-track, .ca-ff2-bar, .ca-fd-wf-bar, .ca-heat-c, .ca-cp-catbar i, .ca-cp-judge-row i, .ca-band-track").length;
+    // BU6b: 알트만 기여 막대는 .ca-fd-wf-bar(옛 재무 막대 클래스 재사용)에서 .ci-alt-bar 로 — 같은 막대를 이름만 바꿔 센다.
+    const bars = root.querySelectorAll(".ca-fbar-track, .ca-ff2-bar, .ca-fd-wf-bar, .ci-alt-bar, .ca-heat-c, .ca-cp-catbar i, .ca-cp-judge-row i, .ca-band-track").length;
     return { svg, bars };
   });
   expect(n.svg, `svg ${JSON.stringify(n)}`).toBeGreaterThanOrEqual(21);
@@ -315,6 +318,8 @@ test("그림 보존 — 흐름 전체(자세히 펼침)의 그림·막대 수가
   // BU6a+ 에서 더한 그림 — 하나라도 사라지면 빨강(모형 한눈에 12줄 · 분위 띠 · 히스토그램 · 층/성장률 막대 · 연도별 EVA · 배수 점 줄 · 시나리오 · 매크로 토네이도 · 레일 미니).
   const added = await page.evaluate(() => Object.fromEntries([
     ".ci-sec[data-sec=value] .ci-lad-row", ".ci-q-row", ".ci-histo-bars i", ".ci-hbar", ".ci-eva-col", ".ci-strip", ".ci-scen-row", ".ci-torn-row", ".ci-rail .ci-lad-row",
+    // BU6b 에서 더한 그림 — 이야기 그림 막대 · 요약 카드 추세 · 알트만 구간 점 · 팩터 점 지도
+    ".ci-story .recharts-bar-rectangle", ".ci-sumcard svg.ca-spark", ".ci-alt-dot", ".ci-fmap-dot",
   ].map((sel) => [sel, document.querySelectorAll(sel).length])));
   expect(added[".ci-sec[data-sec=value] .ci-lad-row"], JSON.stringify(added)).toBeGreaterThanOrEqual(12);
   for (const [sel, k] of Object.entries(added)) expect(k, `${sel} ${JSON.stringify(added)}`).toBeGreaterThan(0);
@@ -523,6 +528,392 @@ test("여러 모형·레일·미니 머리 — 글(em-dash·영어·툴팁) · �
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(600);
+  const over = await page.evaluate(() => {
+    const m = document.querySelector(".terminal-main") as HTMLElement;
+    return Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, m.scrollWidth - m.clientWidth);
+  });
+  expect(over).toBeLessThanOrEqual(0);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BU6b — 돈 버는 힘·위험·같은 업종·팩터·AI 절 안쪽 (계획 "BU6b 상세" · 사용자 결정: 이야기 그림 먼저 + 표는 펼침 · 백분위 점 지도 + 목록은 펼침)
+// ★먼저 써서 BU6a+ 화면에서 빨강을 본다★ 지키는 것: 답 문장 = 서버 값 · 실패(닿지 못함)와 없음(서버가 못 했다고 답함)을 가른다 ·
+// 0 과 미상을 섞지 않는다 · 비교 표본이 없으면 백분위를 지어내지 않는다(옛 코드는 50) · 판단은 중립, 수준은 수준 색 · 그림은 지우지 않는다
+// 재무·위험 심화는 연습용 서버에서 미적재라 `fixtures/*.json` 고정 응답으로 채운다(모양은 `src/engine/company_analytics.py` 와 같다).
+// ═══════════════════════════════════════════════════════════════════════════════
+const FX_FIN = JSON.parse(readFileSync(path.join(__dirname, "fixtures/financial-deep.json"), "utf8")) as Record<string, unknown>;
+const FX_RISK = JSON.parse(readFileSync(path.join(__dirname, "fixtures/risk-deep.json"), "utf8")) as Record<string, unknown>;
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+const sec = (page: Page, s: string) => page.locator(`.ci-sec[data-sec=${s}]`);
+async function goSec(page: Page, s: string, label: string) {
+  await page.locator(".ci-toc-item", { hasText: label }).first().click();
+  await sec(page, s).evaluate((e) => e.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(500);
+}
+async function deep(page: Page, fin: unknown = FX_FIN, risk: unknown = FX_RISK) {
+  await page.route(`${CO}/financial-deep`, (r) => r.fulfill({ json: fin }));
+  await page.route(`${CO}/risk-deep*`, (r) => r.fulfill({ json: risk }));
+}
+/** 연도 재무 응답(내림차순) 고치기 — 분기 요청은 그대로. */
+async function patchAnnual(page: Page, fn: (rows: Record<string, unknown>[]) => void) {
+  await page.route(`${API}/valuation/financial/*`, async (route) => {
+    const res = await route.fetch(); const body = await res.json();
+    if (route.request().url().includes("period=annual")) fn(body.financials ?? []);
+    await route.fulfill({ response: res, json: body });
+  });
+}
+const visibleTexts = (root: Element) => {
+  const out: string[] = [];
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n: Node | null;
+  while ((n = walk.nextNode())) {
+    const el = n.parentElement!; const s = (n.textContent ?? "").trim();
+    if (!s || !el.getClientRects().length || el.closest("[data-server]")) continue;
+    out.push(s);
+  }
+  return out;
+};
+
+// ── 돈 버는 힘 ──
+test("돈 버는 힘 — 답 문장 = 서버 첫·마지막 해 매출(고치면 따라간다) · 짝: 줄면 '줄었어요'", async ({ page }) => {
+  await patchAnnual(page, (rows) => {
+    const ys = rows.map((r) => Number(r.year)); const lo = Math.min(...ys), hi = Math.max(...ys);
+    for (const r of rows) { if (Number(r.year) === lo) r["revenue_억"] = 12345; if (Number(r.year) === hi) r["revenue_억"] = 23456; }
+  });
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  const a = sec(page, "money").locator(".ci-money-ans");
+  await expect(a).toContainText("1.2조원", { timeout: 30_000 });
+  await expect(a).toContainText("2.3조원");
+  await expect(a).toContainText("늘었어요");
+  await page.unroute(`${API}/valuation/financial/*`);
+  await patchAnnual(page, (rows) => {
+    const ys = rows.map((r) => Number(r.year)); const lo = Math.min(...ys), hi = Math.max(...ys);
+    for (const r of rows) { if (Number(r.year) === lo) r["revenue_억"] = 23456; if (Number(r.year) === hi) r["revenue_억"] = 12345; }
+  });
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  await expect(sec(page, "money").locator(".ci-money-ans")).toContainText("줄었어요", { timeout: 30_000 });
+});
+test("돈 버는 힘 — 이야기 그림(매출 막대 = 연도 수 · 이익률 선 둘 + 글자 범례) · 표는 접혀 있고 펼치면 9줄 · '항목(억원)' 거짓 단위 0", async ({ page }) => {
+  const finP = page.waitForResponse((r) => r.url().includes("/valuation/financial/") && r.url().includes("period=annual"));
+  await open(page);
+  const n = ((await (await finP).json()).financials ?? []).length as number;
+  await goSec(page, "money", "돈 버는 힘");
+  const story = sec(page, "money").locator(".ci-story");
+  await expect(story.locator(".recharts-bar-rectangle")).toHaveCount(n, { timeout: 30_000 });
+  await expect(story.locator(".recharts-line")).toHaveCount(2);
+  await expect(sec(page, "money").locator(".ci-story-key")).toContainText(["매출"]);
+  await expect(sec(page, "money").locator(".ci-story-key")).toContainText(["영업이익률"]);
+  const more = sec(page, "money").locator("details.ci-fin-more");
+  await expect(more).toHaveCount(1);
+  expect(await more.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
+  await expect(sec(page, "money").locator("table.ca-cp-fin")).toBeHidden();
+  await more.locator("summary").click();
+  await expect(sec(page, "money").locator("table.ca-cp-fin tbody tr")).toHaveCount(9);
+  await expect(sec(page, "money").locator("table.ca-cp-fin thead th").first()).toHaveText("항목");
+  expect(await sec(page, "money").innerText()).not.toContain("억원)");
+});
+test("돈 버는 힘 — 모르는 해 매출은 '몰라요'(0억 아님) · 연도 재무 500 은 alert + 다시 시도('자료가 없어요' 아님)", async ({ page }) => {
+  await patchAnnual(page, (rows) => { rows[1]["revenue_억"] = null; });
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  await sec(page, "money").locator("details.ci-fin-more summary").click();
+  const row = sec(page, "money").locator("table.ca-cp-fin tbody tr").first();
+  await expect(row.locator("td")).toContainText(["몰라요"], { timeout: 30_000 });
+  await page.unroute(`${API}/valuation/financial/*`);
+  await page.route(`${API}/valuation/financial/*`, (r) => (r.request().url().includes("period=annual") ? r.fulfill(fail500) : r.continue()));
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  await expect(sec(page, "money").locator("[role=alert]").first()).toBeVisible({ timeout: 30_000 });
+  await expect(sec(page, "money").getByRole("button", { name: "다시 시도" }).first()).toBeVisible();
+});
+test("재무 심화 — 이익의 질 두 선 + 글자 범례 · 경고는 '주의' 칩 + 서버 문장 · 자본비용 대비 이익률은 중립색 + 부호(짝: 음수도 같은 색)", async ({ page }) => {
+  const neg = clone(FX_FIN) as { roic_wacc: { spread: number; verdict: string } };
+  await deep(page);
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  const fd = sec(page, "money").locator(".ci-fd");
+  await expect(fd.locator(".ci-fd-qoe svg.ca-fd-mini polyline")).toHaveCount(2, { timeout: 30_000 });
+  await expect(fd.locator(".ci-fd-qoe .ci-fd-key")).toContainText(["순이익", "영업현금흐름"]);
+  await expect(fd.locator(".ci-fd-flag")).toHaveCount(1);
+  await expect(fd.locator(".ci-fd-flag")).toContainText("주의");
+  const sp = fd.locator(".ci-fd-spread");
+  await expect(sp).toHaveText("+1.72%p");
+  const c1 = await sp.evaluate((e) => getComputedStyle(e).color);
+  expect(c1).toBe(await probe(page, "--tx-ink"));
+  neg.roic_wacc.spread = -2.4; neg.roic_wacc.verdict = "가치 훼손 (ROIC < WACC)";
+  await page.unroute(`${CO}/financial-deep`);
+  await page.route(`${CO}/financial-deep`, (r) => r.fulfill({ json: neg }));
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  const sp2 = sec(page, "money").locator(".ci-fd-spread");
+  await expect(sp2).toHaveText("−2.40%p", { timeout: 30_000 });
+  expect(await sp2.evaluate((e) => getComputedStyle(e).color)).toBe(c1);
+});
+test("★재무 심화 500 → alert + 다시 시도 → 풀면 그림★ · 짝: 미적재(available:false)는 사람 말 사유이고 alert 0", async ({ page }) => {
+  await page.route(`${CO}/financial-deep`, (r) => r.fulfill(fail500));
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  const fd = sec(page, "money").locator(".ci-fd");
+  await expect(fd.locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
+  expect(await fd.innerText()).not.toMatch(/failed|로드 실패/);
+  await page.unroute(`${CO}/financial-deep`);
+  await page.route(`${CO}/financial-deep`, (r) => r.fulfill({ json: FX_FIN }));
+  await fd.getByRole("button", { name: "다시 시도" }).click();
+  await expect(fd.locator(".ci-fd-qoe")).toBeVisible({ timeout: 30_000 });
+  await page.unroute(`${CO}/financial-deep`);
+  await open(page);
+  await goSec(page, "money", "돈 버는 힘");
+  await expect(sec(page, "money").locator(".ci-fd .ci-fd-reason")).toContainText("적재되지 않아", { timeout: 30_000 });
+  await expect(sec(page, "money").locator(".ci-fd [role=alert]")).toHaveCount(0);
+});
+
+// ── 위험 ──
+test("부도 위험 점수(알트만 Z) — 구간 막대의 점 위치 = 서버 z · 경계 1.8·3.0 · 짝: z 를 바꾸면 점이 움직인다 · 기여 막대는 한 색", async ({ page }) => {
+  await deep(page);
+  await open(page);
+  await goSec(page, "risk", "위험");
+  const alt = sec(page, "risk").locator(".ci-alt");
+  const dot = alt.locator(".ci-alt-dot");
+  await expect(dot).toHaveAttribute("data-v", "2.09", { timeout: 30_000 });
+  const left = (await dot.evaluate((e) => (e as HTMLElement).style.left));
+  expect(parseFloat(left)).toBeCloseTo((2.09 / 5) * 100, 0);
+  await expect(alt.locator(".ci-alt-tick")).toContainText(["1.8", "3.0"]);
+  await expect(alt.locator(".ci-alt-zone[data-server]")).toHaveText("회색지대 (1.8~3.0)");
+  const bars = await alt.locator(".ci-alt-bar").evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+  expect(bars.length).toBe(5);
+  expect(new Set(bars).size).toBe(1);
+  expect(await alt.innerText()).not.toMatch(/\bX[1-5]\b/);
+  const r2 = clone(FX_RISK) as { altman: { z: number; zone: string } };
+  r2.altman.z = 3.6; r2.altman.zone = "안전 (>3.0)";
+  await page.unroute(`${CO}/risk-deep*`);
+  await page.route(`${CO}/risk-deep*`, (r) => r.fulfill({ json: r2 }));
+  await open(page);
+  await goSec(page, "risk", "위험");
+  const dot2 = sec(page, "risk").locator(".ci-alt-dot");
+  await expect(dot2).toHaveAttribute("data-v", "3.6", { timeout: 30_000 });
+  expect(parseFloat(await dot2.evaluate((e) => (e as HTMLElement).style.left))).toBeCloseTo(72, 0);
+});
+test("위험 심화 — 이익 조작 점검 8줄(근거 칩) · 금리 충격 표는 원 · 모르는 값 '몰라요'(₩·— 0) · 커버리지 범례는 글자", async ({ page }) => {
+  await deep(page);
+  await open(page);
+  await goSec(page, "risk", "위험");
+  const rd = sec(page, "risk").locator(".ci-rd");
+  await expect(rd.locator(".ci-ben tbody tr")).toHaveCount(8, { timeout: 30_000 });
+  await expect(rd.locator(".ci-ben .ci-basis")).toHaveCount(8);
+  const st = rd.locator(".ci-stress");
+  await expect(st).toContainText("20,596원");
+  await expect(st).toContainText("몰라요");
+  const t = await rd.innerText();
+  expect(t).not.toContain("₩");
+  await expect(rd.locator(".ci-cov .ci-fd-key")).toContainText(["이자보상배율", "순부채/EBITDA"]);
+  expect(t).not.toMatch(/\((검정|파랑)\)/);
+});
+test("★위험 심화 500 → alert + 다시 시도 → 회복★ · 시세 500 이면 '시세로 잰 위험'도 alert(계산할 수 없다는 사유가 아니다)", async ({ page }) => {
+  await page.route(`${CO}/risk-deep*`, (r) => r.fulfill(fail500));
+  await open(page);
+  await goSec(page, "risk", "위험");
+  const rd = sec(page, "risk").locator(".ci-rd");
+  await expect(rd.locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
+  await page.unroute(`${CO}/risk-deep*`);
+  await page.route(`${CO}/risk-deep*`, (r) => r.fulfill({ json: FX_RISK }));
+  await rd.getByRole("button", { name: "다시 시도" }).click();
+  await expect(rd.locator(".ci-alt-dot")).toBeVisible({ timeout: 30_000 });
+  await page.unroute(`${CO}/risk-deep*`);
+  await page.route(`${API}/prices/*`, (r) => r.fulfill(fail500));
+  // 시세 다음 차례(백엔드 VaR)는 "그 종목 일봉 없음"(404)으로 묶는다 — 그래야 alert 가 시세 실패에서만 나온다(변이: 시세 실패를 [] 로 삼키면 사유가 되고 alert 0).
+  await page.route("**/calculate-var", (r) => r.fulfill({ status: 404, contentType: "application/json", body: '{"detail":"no bars"}' }));
+  await open(page);
+  await goSec(page, "risk", "위험");
+  await expect(sec(page, "risk").locator(".ci-mrisk [role=alert]")).toBeVisible({ timeout: 30_000 });
+});
+
+// ── 같은 업종 ──
+test("같은 업종 — 괴리를 모르면 '몰라요'(+0.0% 아님) · 시가총액을 하나도 모르면 열 대신 사유 한 줄(짝: 있으면 열) · 업종 피어 500 → alert", async ({ page }) => {
+  await page.route(`${API}/screener/run-advanced`, async (route) => {
+    const body = route.request().postDataJSON() as { universe: string };
+    const res = await route.fetch(); const j = await res.json();
+    // 업종 피어는 sector 요청, "지금 보는 기업" 줄은 종목 요청(all_listed)에서 온다 — 시가총액은 둘 다 비우고, 괴리는 피어 줄만 본다.
+    if (String(body.universe).startsWith("sector:")) for (const it of j.items ?? []) { it.gap_pct = null; it["market_cap_억"] = null; }
+    if (body.universe === "all_listed") for (const it of j.items ?? []) it["market_cap_억"] = null;
+    await route.fulfill({ response: res, json: j });
+  });
+  await open(page);
+  await goSec(page, "peers", "같은 업종");
+  const pe = sec(page, "peers");
+  await expect(pe.locator("tr[data-code]").first()).toBeVisible({ timeout: 30_000 });
+  const gaps = await pe.locator("tr[data-code]:not(.self) td.gap").allInnerTexts();
+  expect(gaps.length).toBeGreaterThan(1);
+  for (const g of gaps) expect(g).toBe("몰라요");
+  await expect(pe.locator("thead th", { hasText: "시가총액" })).toHaveCount(0);
+  await expect(pe.locator(".ci-peer-note")).toContainText("시가총액");
+  await page.unroute(`${API}/screener/run-advanced`);
+  await open(page);
+  await goSec(page, "peers", "같은 업종");
+  await expect(sec(page, "peers").locator("tr[data-code]").first()).toBeVisible({ timeout: 30_000 });
+  // 짝은 서버 그대로 — 시가총액을 하나라도 알면 열이 있다
+  const anyCap = await sec(page, "peers").locator(".ci-peer-note").count();
+  if (anyCap === 0) await expect(sec(page, "peers").locator("thead th", { hasText: "시가총액" })).toHaveCount(1);
+  await page.route(`${API}/screener/run-advanced`, async (route) => {
+    const body = route.request().postDataJSON() as { universe: string };
+    if (String(body.universe).startsWith("sector:")) return route.fulfill(fail500);
+    return route.continue();
+  });
+  await open(page);
+  await goSec(page, "peers", "같은 업종");
+  await expect(sec(page, "peers").locator("[role=alert]").first()).toBeVisible({ timeout: 30_000 });
+});
+test("★관계도 500 → alert + 다시 시도★(옛 코드는 '등록된 관계가 없어요'로 삼켰다)", async ({ page }) => {
+  await page.route(`${API}/screener/graph-relations/*`, (r) => r.fulfill(fail500));
+  await open(page);
+  await goSec(page, "peers", "같은 업종");
+  const net = sec(page, "peers").locator(".ci-net");
+  await expect(net.locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
+  await page.unroute(`${API}/screener/graph-relations/*`);
+  await net.getByRole("button", { name: "다시 시도" }).click();
+  await expect(net.locator(".ca-cp-net-node").first()).toBeVisible({ timeout: 30_000 });
+});
+
+// ── 팩터 ──
+test("팩터 — 백분위 점 지도: 줄 = 묶음 수 · 점 = 팩터 수 · 점 위치 = 백분위 · 점 색 = 수준 색", async ({ page }) => {
+  await open(page);
+  await goSec(page, "factors", "팩터");
+  const map = sec(page, "factors").locator(".ci-fmap");
+  await expect(map.locator(".ci-fmap-dot").first()).toBeVisible({ timeout: 30_000 });
+  const rows = await map.locator(".ci-fmap-row").count();
+  const groups = await sec(page, "factors").locator(".ca-cp-facgroup").count();
+  expect(rows).toBe(groups);
+  const nBars = await sec(page, "factors").locator(".ca-fbar:not([data-unknown])").count();
+  await expect(map.locator(".ci-fmap-dot")).toHaveCount(nBars);
+  const lv = await Promise.all(["neg-3", "neg-2", "neg-1", "mid", "pos-1", "pos-2", "pos-3"].map((k) => page.evaluate((kk) => {
+    const s = document.createElement("span"); s.style.background = `var(--mc-lv-${kk})`; document.body.appendChild(s);
+    const c = getComputedStyle(s).backgroundColor; s.remove(); return c;
+  }, k)));
+  const dots = await map.locator(".ci-fmap-dot").evaluateAll((els) => els.map((e) => ({
+    p: Number(e.getAttribute("data-pct")), left: parseFloat((e as HTMLElement).style.left), bg: getComputedStyle(e).backgroundColor })));
+  for (const d of dots) { expect(d.left).toBeCloseTo(d.p, 0); expect(lv).toContain(d.bg); }
+});
+test("팩터 — 점에 초점을 두면 읽기 줄이 그 팩터 이름·값·백분위 · → 키로 다음 점(짝: 다른 글) · 툴팁 0", async ({ page }) => {
+  await open(page);
+  await goSec(page, "factors", "팩터");
+  const map = sec(page, "factors").locator(".ci-fmap");
+  const first = map.locator(".ci-fmap-dot").first();
+  await expect(first).toBeVisible({ timeout: 30_000 });
+  await first.focus();
+  const read = map.locator(".ci-fmap-read");
+  const name = await first.getAttribute("data-name");
+  const p = await first.getAttribute("data-pct");
+  await expect(read).toContainText(name!);
+  await expect(read).toContainText(`백분위 ${p}`);
+  const t1 = await read.innerText();
+  await page.keyboard.press("ArrowRight");
+  await expect(read).not.toHaveText(t1);
+  const focused = await page.evaluate(() => document.activeElement?.getAttribute("data-name"));
+  await expect(read).toContainText(focused!);
+  expect(await map.locator("[title]").count()).toBe(0);
+  await expect(read).toHaveAttribute("aria-live", "polite");
+});
+test("★비교 표본이 없으면 백분위를 지어내지 않는다★ — 표본 요청 둘 다 500 → alert, 점 0, '50' 없음 · 짝: 표본이 3개면 사유(alert 아님)", async ({ page }) => {
+  const kill = async (n: number | "fail") => {
+    await page.route(`${API}/screener/factor-sample*`, (r) => (n === "fail" ? r.fulfill(fail500) : r.fulfill({ json: { items: [] } })));
+    await page.route(`${API}/screener/run-advanced`, async (route) => {
+      const b = route.request().postDataJSON() as { universe: string; limit: number };
+      if (b.universe === "kospi200" && b.limit === 300) {
+        if (n === "fail") return route.fulfill(fail500);
+        const res = await route.fetch(); const j = await res.json(); j.items = (j.items ?? []).slice(0, n);
+        return route.fulfill({ response: res, json: j });
+      }
+      return route.continue();
+    });
+  };
+  await kill("fail");
+  await open(page);
+  await goSec(page, "factors", "팩터");
+  const fa = sec(page, "factors");
+  await expect(fa.locator("[role=alert]").first()).toBeVisible({ timeout: 30_000 });
+  await expect(fa.locator(".ci-fmap-dot")).toHaveCount(0);
+  await expect(fa.locator(".ca-fbar-pct", { hasText: /^50$/ })).toHaveCount(0);
+  await page.unroute(`${API}/screener/factor-sample*`); await page.unroute(`${API}/screener/run-advanced`);
+  await kill(3);
+  await open(page);
+  await goSec(page, "factors", "팩터");
+  await expect(sec(page, "factors").locator(".ci-fmap-reason")).toContainText("3개", { timeout: 30_000 });
+  await expect(sec(page, "factors").locator("[role=alert]")).toHaveCount(0);
+  await expect(sec(page, "factors").locator(".ci-fmap-dot")).toHaveCount(0);
+});
+test("팩터 — 카테고리 이름 한국어(quality·safety·composite 0) · 영어 팩터 이름 0 · 카테고리 평균 막대 = 수준 색 · 막대 목록은 펼침 안", async ({ page }) => {
+  await open(page);
+  await goSec(page, "factors", "팩터");
+  const fa = sec(page, "factors");
+  await expect(fa.locator(".ci-fmap-dot").first()).toBeVisible({ timeout: 30_000 });
+  await fa.locator("details.ci-fac-more summary").click();
+  const t = await fa.innerText();
+  expect(t).not.toMatch(/\b(quality|safety|composite|Score|Multiple|Formula)\b/);
+  expect(await fa.locator("details.ci-fac-more").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
+  const avg = fa.locator(".ca-cp-catbar i b").first();
+  const pctTxt = await fa.locator(".ca-cp-catbar em").first().innerText();
+  const want = await page.evaluate((p) => {
+    const t2 = (p - 50) / 50, a = Math.abs(t2); const k = a < 0.2 ? "mid" : `${t2 > 0 ? "pos" : "neg"}-${a < 0.5 ? 1 : a < 0.8 ? 2 : 3}`;
+    const s = document.createElement("span"); s.style.background = `var(--mc-lv-${k})`; document.body.appendChild(s);
+    const c = getComputedStyle(s).backgroundColor; s.remove(); return c;
+  }, Number(pctTxt));
+  expect(await avg.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(want);
+});
+test("팩터 카탈로그 500 → alert(빈 절이 아니다)", async ({ page }) => {
+  await page.route(`${API}/screener/fields`, (r) => r.fulfill(fail500));
+  await open(page);
+  await goSec(page, "factors", "팩터");
+  await expect(sec(page, "factors").locator("[role=alert]").first()).toBeVisible({ timeout: 30_000 });
+});
+
+// ── AI ──
+test("★AI 요청 500 → alert + 다시 시도★(서버 글로 위장하지 않는다) · 짝: 서버가 사유를 답하면 사유(alert 0)", async ({ page }) => {
+  await page.route(`${API}/narrative/stock`, (r) => r.fulfill(fail500));
+  await open(page);
+  await goSec(page, "ai", "AI");
+  await sec(page, "ai").locator(".ca-cp-ai-btn").click();
+  await expect(sec(page, "ai").locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
+  expect(await sec(page, "ai").innerText()).not.toContain("narrative failed");
+  await page.unroute(`${API}/narrative/stock`);
+  await page.route(`${API}/narrative/stock`, (r) => r.fulfill({ json: { content: "", total_tokens: 0, cost_krw: 0, cached: false, error: "AI 키가 설정되지 않았어요" } }));
+  await sec(page, "ai").getByRole("button", { name: "다시 시도" }).click();
+  await expect(sec(page, "ai").locator(".ci-ai-reason")).toContainText("AI 키가 설정되지 않았어요", { timeout: 30_000 });
+  await expect(sec(page, "ai").locator("[role=alert]")).toHaveCount(0);
+});
+
+// ── 다섯 절 공통: 글 · 대비 · 390 ──
+const BANNED_B = /\b(Z-Score|M-Score|QoE|NWC|OCF|CapEx|Value Creation|ANTHROPIC_API_KEY|Data Infra|quality|safety|composite)\b/;
+test("돈 버는 힘·위험·같은 업종·팩터·AI — em-dash 0 · 영어 꼬리표 0 · ₩ 0 · 툴팁 0 · 라이트/다크 AA · 390 넘침 0", async ({ page }) => {
+  await deep(page);
+  await open(page);
+  await scrollAll(page);
+  await expect(sec(page, "risk").locator(".ci-alt-dot")).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => document.querySelectorAll(".ci-sec details").forEach((d) => { (d as HTMLDetailsElement).open = true; }));
+  await page.waitForTimeout(800);
+  for (const s of ["money", "risk", "peers", "factors", "ai"]) {
+    const r = await sec(page, s).evaluate((root, fnSrc) => {
+      // eslint-disable-next-line no-new-func
+      const texts = (new Function(`return ${fnSrc}`)() as (e: Element) => string[])(root);
+      return { texts, titles: root.querySelectorAll("[title]").length + Array.from(root.querySelectorAll("svg title")).filter((e) => e.textContent?.trim()).length };
+    }, visibleTexts.toString());
+    expect(r.texts.filter((x) => x.includes("—")), `${s} em-dash`).toEqual([]);
+    expect(r.texts.filter((x) => BANNED_B.test(x) || BANNED.test(x)), `${s} 영어`).toEqual([]);
+    expect(r.texts.filter((x) => x.includes("₩")), `${s} ₩`).toEqual([]);
+    expect(r.titles, `${s} 툴팁`).toBe(0);
+  }
+  for (const s of ["money", "risk", "peers", "factors", "ai"]) {
+    const light = await page.evaluate<AuditResult>(contrastAudit(`.ci-sec[data-sec=${s}]`));
+    expect(light.low, `${s} 라이트`).toEqual([]);
+  }
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await page.waitForTimeout(300);
+  for (const s of ["money", "risk", "peers", "factors", "ai"]) {
+    const dark = await page.evaluate<AuditResult>(contrastAudit(`.ci-sec[data-sec=${s}]`));
+    expect(dark.low, `${s} 다크`).toEqual([]);
+    expect(dark.bright, `${s} 다크 밝은 판`).toEqual([]);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(800);
   const over = await page.evaluate(() => {
     const m = document.querySelector(".terminal-main") as HTMLElement;
     return Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, m.scrollWidth - m.clientWidth);

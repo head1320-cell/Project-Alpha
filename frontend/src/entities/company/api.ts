@@ -40,13 +40,13 @@ export const companyApi = {
       universe, filter_ast: { logic: "AND", conditions: [{ kind: "field", field: "per", op: "gt", value: 0 }], groups: [] },
       limit: 300, liquidity_floor: "relaxed",
     });
-    if (!r.ok) return [];
+    if (!r.ok) throw new Error(`universe sample failed: ${r.status}`);
     return (await r.json()).items ?? [];
   },
-  // 퍼센타일 분포 — factor_snapshot(DB)에서 즉시 (라이브 130종목 재계산 회피). 비면 [].
+  // 퍼센타일 분포 — factor_snapshot(DB)에서 즉시 (라이브 130종목 재계산 회피). 비면 [] · 실패는 던진다(BU6b — 빈 표본과 가른다).
   factorSample: async (limit = 600): Promise<ScreenerItem[]> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/factor-sample?limit=${limit}`);
-    if (!r.ok) return [];
+    if (!r.ok) throw new Error(`factor sample failed: ${r.status}`);
     return (await r.json()).items ?? [];
   },
   // 섹터 피어
@@ -54,7 +54,7 @@ export const companyApi = {
     const r = await postJson(`/api/v1/screener/run-advanced`, {
       universe: `sector:${sector}`, filter_ast: { logic: "AND", conditions: [], groups: [] }, limit: 24, liquidity_floor: "off",
     });
-    if (!r.ok) return [];
+    if (!r.ok) throw new Error(`sector peers failed: ${r.status}`);
     return (await r.json()).items ?? [];
   },
   // 기업분석 심화: 샌드박스+민감도+풋볼필드+Comps (1콜)
@@ -97,7 +97,8 @@ export const companyApi = {
     if (marketCap && marketCap > 0) qs.set("market_cap", String(marketCap));
     const r = await fetch(`${API_BASE}/api/v1/valuation/financial/${code}?${qs.toString()}`);
     if (r.status === 404) return null;
-    if (!r.ok) return null;
+    // BU6b: 404(그 종목 재무 없음)만 "없음" — 나머지 실패는 던져 부르는 쪽이 실패 + 다시 시도를 말한다.
+    if (!r.ok) throw new Error(`financial failed: ${r.status}`);
     return r.json();
   },
   // 일봉 (DB 캐시 — 비어있으면 [] → 호출측 합성 폴백)
@@ -110,7 +111,7 @@ export const companyApi = {
   // 밸류체인 관계 (M4)
   graphRelations: async (code: string): Promise<GraphRelations> => {
     const r = await fetch(`${API_BASE}/api/v1/screener/graph-relations/${code}`);
-    if (!r.ok) return { supplier: [], customer: [], competitor: [] };
+    if (!r.ok) throw new Error(`graph relations failed: ${r.status}`);
     return r.json();
   },
   // 기술 시그널
@@ -128,6 +129,8 @@ export const companyApi = {
   // 리스크 — VaR (DB 일봉 필요; 없으면 에러 → 호출측 graceful)
   riskVar: async (code: string): Promise<Record<string, unknown> | null> => {
     const r = await postJson(`/calculate-var`, { ticker: code, portfolio_value: 1e8, confidence_level: 0.99, holding_period: 1, use_ewma: true });
+    // 4xx = 그 종목 일봉이 없어 못 함(없음) · 5xx = 실패(던진다 — BU6b)
+    if (r.status >= 500) throw new Error(`calculate-var failed: ${r.status}`);
     if (!r.ok) return null;
     return r.json();
   },
