@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 # Data models
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class OrderPriceUnavailable(Exception):
+    """지정가를 정할 현재가가 없다 — 주문을 시장가로 바꾸지 않고 멈춘다(BV0b)."""
+
+
 @dataclass
 class OrderResult:
     success: bool
@@ -202,8 +206,12 @@ class OrderExecutor:
                 if quantity is None:
                     quantity = qty_held
 
-        # 주문 구분 결정
-        ord_dvsn, ord_unpr = self._determine_order_type(stock_code, strength, target_price)
+        # 주문 구분 결정 — 지정가를 정할 현재가가 없으면 시장가로 바꾸지 않고 주문하지 않는다(BV0b)
+        try:
+            ord_dvsn, ord_unpr = self._determine_order_type(stock_code, strength, target_price)
+        except OrderPriceUnavailable as e:
+            logger.warning(f"주문 생략 [{stock_code}]: {e}")
+            return OrderResult(False, stock_code, stock_name, action, 0, 0, message=str(e))
 
         # 수량 결정
         if quantity is None:
@@ -220,7 +228,16 @@ class OrderExecutor:
         strength: float,
         target_price: float | None,
     ) -> tuple[str, str]:
-        """시그널 강도 기반 주문 구분 — 원본 그대로."""
+        """시그널 강도 기반 주문 구분.
+
+        강한 신호(≥0.8)는 시장가, 목표가가 있으면 그 지정가, 그 밖에는 현재가를 호가단위로 내린 지정가.
+
+        ★BV0b — 조용한 시장가 대체를 없앴다★ 예전에는 현재가를 `get_current_price`(두 클라이언트 어디에도 없는
+        메서드)로 묻고 `"price"`(응답에 없는 키)를 읽은 뒤 예외를 삼켜, 이 구간 주문이 ★늘 시장가★로 나갔다.
+        이제 현재가는 `get_price()["current_price"]` 로 읽고, 받지 못하면(예외·0·없음) `OrderPriceUnavailable`
+        로 주문을 멈춘다 — 지정가를 원한 주문을 시장가로 바꾸지 않는다(CLAUDE.md §4·§6).
+        클라이언트가 없으면(`_send_order` 가 MOCK 으로 끝나는 경로) 예전처럼 시장가 표기다 — 실주문이 나가지 않는다.
+        """
         if strength >= 0.8:   # is_strong() 기준
             return ("01", "0")  # 시장가
 
@@ -228,16 +245,23 @@ class OrderExecutor:
             adjusted = self._round_to_tick(int(target_price))
             return ("00", str(adjusted))
 
-        if self._client:
-            try:
-                info = self._client.get_current_price(stock_code)
-                price = info.get("price", 0)
-                if price > 0:
-                    return ("00", str(self._round_to_tick(int(price))))
-            except Exception:
-                pass
+        if self._client is None:
+            return ("01", "0")  # 클라이언트 없음 → `_send_order` 의 MOCK 경로(실주문 없음)
 
-        return ("01", "0")  # 조회 실패 시 시장가
+        try:
+            info = self._client.get_price(stock_code)
+        except Exception as e:
+            raise OrderPriceUnavailable(
+                f"현재가 조회 실패로 지정가를 정하지 못해 주문하지 않음 ({type(e).__name__}: {e})") from e
+        raw = (info or {}).get("current_price")
+        try:
+            price = float(raw)
+        except (TypeError, ValueError):
+            price = 0.0
+        if not math.isfinite(price) or price <= 0:
+            raise OrderPriceUnavailable(
+                f"현재가를 받지 못해 지정가를 정하지 못해 주문하지 않음 (current_price={raw!r})")
+        return ("00", str(self._round_to_tick(int(price))))
 
     def _send_order(
         self,

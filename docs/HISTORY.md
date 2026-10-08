@@ -22257,3 +22257,21 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   쓴다 — 후속) · 쓰이지 않는 `ProductionMonitor.tsx`(인증 없이 이 경로들을 부름)·`tradingApi.status`(부르는 곳 0) 정리(삭제 제안만) · 인증 없는 `POST /api/v1/admin/sync`
   (시세 적재 — 계좌 아님)·`GET /api/v1/data/ingest-doctor`(KIS 싱글톤을 매번 갈아 끼움 — 데이터 적재 권한 작업 범위) · 사용자별 계좌(BV 설계).
 
+### BV0b · 지정가가 소리 없이 시장가로 바뀌던 주문 경로 고치기 (BV0 감사가 찾음)
+
+- **왜**: `src/kis_order_executor.py::OrderExecutor._determine_order_type` 은 신호 강도 0.5~0.8 이고 목표가가 없으면 현재가로 지정가를 정하려 했다. 그런데
+  부른 메서드 `get_current_price` 는 두 클라이언트(`KISClient`·`MockKISClient`) 어디에도 없고(있는 것은 `get_price`), 꺼내는 키 `"price"` 도 응답에 없으며
+  (`"current_price"`), 예외는 `except Exception: pass` 로 삼켜져 ★그 주문은 늘 시장가로 나갔다★. TradingEngine 은 목표가를 넘기지 않으므로
+  (`/trading/execute`·`/screen-to-trade` 에서 `dry_run=false` 일 때) 이 구간 실주문 전부가 그랬다. CLAUDE.md §4 침묵 폴백 금지 · §6 실거래 안전.
+- **무엇을**: 현재가는 `get_price()["current_price"]` 로 읽고 호가단위로 내린 지정가를 낸다. 받지 못하면(예외 · 0 · 없음 · 숫자 아님) 새 `OrderPriceUnavailable` 로
+  ★주문하지 않고★ `OrderResult(success=False)` 에 사유("현재가 조회 실패로 지정가를 정하지 못해 주문하지 않음 (원인)")를 남긴다 — 시장가로 바꾸지 않는다.
+  강한 신호(≥0.8)는 원래 설계대로 시장가 · 목표가가 있으면 그 지정가 · 클라이언트가 없으면(실주문 없는 MOCK 경로) 예전과 같다.
+- **동작이 바뀐 점(기록)**: 강도 0.5~0.8 신호는 이제 실제로 지정가(현재가를 호가단위로 내린 값)로 나가 체결되지 않을 수 있다 — 원 설계 의도이며, 예전의 시장가는 의도가
+  아니라 결함이었다. 현재가를 모르면 주문이 나가지 않는다.
+- **확인**: 새 `tests/test_order_type_no_silent_market.py`(가짜 클라이언트, 네트워크 0) — 지정가 71,234원 → 71,200원 LIMIT · 짝: 강한 신호는 시장가이고 현재가를 묻지 않음 ·
+  현재가 예외/0/None/없음 넷 → 주문 0 + 사유 · 사유에 원인 글자 · 목표가 지정가 · `self._client.*` 로 부르는 메서드가 두 클라이언트에 실제로 있는지(AST). 옛 코드에서 7 빨강
+  (현재가를 몰라도 MARKET 주문이 실제로 나감). 주문 경로를 쓰는 테스트 9 파일 272 통과. ★변이 5 모두 죽음★: 옛 메서드 이름 · 옛 키 · 예외에서 시장가 · 0 가드 빼기 ·
+  호출자가 거절을 삼키고 시장가로.
+- **하지 않은 것**: `dry_run` 기본값 · `_check_safety` 여섯 안전장치 · `OrderExecutor` 생성 위치(`trading_engine.py` 안 그대로) · TradingEngine 이 아는 가격을
+  목표가로 넘기기(엔진 동작 변경 — 제안만) · 수량 기본 1주 · 두 킬스위치(TradingEngine 은 DB 킬스위치를 읽지 않는다 — BV 설계에서).
+- **BV0a·BV0b 공통 게이트**(두 변경을 함께 둔 작업 트리에서 한 번): ruff 통과 · tsc 0 · eslint 0 오류(경고 7 그대로) · pytest 8069 passed / 11 skipped · E2E 746 passed / ★1 failed★ — 실패 하나는 `module-motion.spec:205`(`/insights` 차트 애니메이션 프레임 수, live 11 < 필요 12)로 이 변경이 닿지 않는 화면이다. 변경을 모두 치운 HEAD 빌드에서도 2번 중 1번 같은 값(live=11)으로 실패했다 — 이 환경에서 프레임 수가 경계에 걸려 흔들리는 것(관찰만, 테스트는 고치지 않음).
