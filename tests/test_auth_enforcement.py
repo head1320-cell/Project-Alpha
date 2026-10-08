@@ -52,6 +52,13 @@ def client(monkeypatch):
     with TestClient(create_app()) as c:
         yield c
 
+    # BV0a — 관리자 통과 테스트는 `POST /live/reconcile/periodic/start` 를 실제로 부른다.
+    # 자동 대조 스레드를 다음 테스트로 남기지 않는다.
+    from src.api import stage13_extensions as ext
+    reconciler = ext._PRODUCTION_MODULES.get("reconciler")
+    if reconciler is not None:
+        reconciler.stop_periodic_sync()
+
     dbmod.reset_session()
     try:
         os.unlink(tmp.name)

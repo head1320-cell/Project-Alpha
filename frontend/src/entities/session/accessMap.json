@@ -14,10 +14,12 @@
   "login": {
     "title": "로그인하면 열려요",
     "items": [
-      { "label": "실계좌 잔고·보유 종목", "routes": ["GET /api/v1/live/balance", "GET /api/v1/account/holdings", "GET /api/v1/account/balance"] },
+      { "label": "실계좌 잔고·보유 종목", "routes": ["GET /api/v1/live/balance", "GET /api/v1/account/holdings", "GET /api/v1/account/balance", "GET /api/v1/trading/status"] },
       { "label": "주문 이력·미체결 주문", "routes": ["GET /api/v1/live/orders", "GET /api/v1/live/orders/{client_order_id}", "GET /api/v1/live/orders/active", "GET /api/v1/live/orders/state-distribution"] },
       { "label": "감사 기록·일별 손익", "routes": ["GET /api/v1/live/audit", "GET /api/v1/live/audit/summary", "GET /api/v1/live/daily-pnl"] },
       { "label": "비상 정지 이력·준비 상태", "routes": ["GET /api/v1/live/kill-switch/events", "GET /api/v1/live/kill-switch/readiness", "GET /api/v1/live/kill-switch/kis-codes"] },
+      { "label": "증권사와 맞춰 본 기록", "routes": ["GET /api/v1/live/reconcile/status", "GET /api/v1/live/reconcile/history"] },
+      { "label": "실거래 시스템 상태", "routes": ["GET /api/v1/live/health", "GET /api/v1/live/gateway/stats", "GET /api/v1/live/notifier/stats"] },
       { "label": "내 거래 기록(본인 것만)", "routes": ["GET /trade-history/{username}"] },
       { "label": "내 비밀번호 바꾸기", "routes": ["POST /api/v1/auth/password"] }
     ]
@@ -29,6 +31,8 @@
       { "label": "주문 내기·취소", "routes": ["POST /api/v1/live/orders/submit", "DELETE /api/v1/live/orders/{client_order_id}", "POST /api/v1/live/orders/cleanup-eod", "POST /api/v1/trading/execute", "POST /api/v1/trading/screen-to-trade", "POST /api/v1/orders/execute", "POST /api/v1/orders/batch"] },
       { "label": "실행 모드·자동매매 바꾸기", "routes": ["POST /api/v1/live/mode", "POST /toggle-auto-trading"] },
       { "label": "비상 정지·해제", "routes": ["POST /api/v1/live/kill-switch/trigger", "POST /api/v1/live/kill-switch/resolve", "POST /api/v1/trading/kill-switch"] },
+      { "label": "증권사와 계좌 맞춰 보기", "routes": ["POST /api/v1/live/reconcile/sync", "POST /api/v1/live/reconcile/periodic/start", "POST /api/v1/live/reconcile/periodic/stop"] },
+      { "label": "시험 알림 보내기", "routes": ["POST /api/v1/live/notifier/test"] },
       { "label": "계정 발급·비밀번호 초기화", "routes": ["GET /api/v1/auth/users", "POST /api/v1/auth/users", "POST /api/v1/auth/users/{username}/reset-password"] },
       { "label": "실거래 기록 표 준비", "routes": ["POST /api/v1/live/init-schema"] }
     ]

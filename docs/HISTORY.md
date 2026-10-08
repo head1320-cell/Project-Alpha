@@ -22230,3 +22230,30 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   빌드: `/login` 8 kB · 첫 로드 115 kB. 전체 게이트: ruff 통과 · tsc 0 · eslint 0 오류(경고 7 그대로) · pytest 8010 passed / 11 skipped · E2E 747 passed(실패 0).
 - **하지 않은 것**: 서버 권한·역할·로그인 동작(로그인 시도 횟수 제한 없음 — 관찰만, 별도 제안) · 사용자별 증권 계좌(BV) · 가입·비밀번호 찾기 · 옛 `.login-*` CSS 삭제(BU10) ·
   실거래 관리 화면 모습(BU9 — 이번엔 로그인 링크 href 만).
+
+### BV0a · 계좌에 닿는데 로그인 없이 열려 있던 경로 10 잠그기 (BV0 읽기 전용 감사가 찾음)
+
+- **왜**: 사용자별 증권 계좌(BV) 설계 전 읽기 전용 감사(주문 경로 전수 · `get_kis_client` 소비자 · 키 읽는 곳 · 킬스위치·감사 표)가 찾았다.
+  - `GET /api/v1/trading/status` 가 ★로그인 없이★ 브로커의 예수금·평가금액·보유 종목 전체(`TradingEngine.get_account_status`)를 줬다.
+    보호 목록의 면제 사유("프로세스 로컬 설정값 — 계좌 자료가 아니다")는 이 경로가 아니라 `/trading-status` 를 설명한 글이었다(틀린 사유로 열린 문).
+  - `src/api/stage13_extensions.py`(`/api/v1/live`) 9 경로에 인증이 없었다: `POST /reconcile/sync`(브로커 잔고로 로컬 계좌 상태를 덮고, 유령·누락 보유나 연속 3회
+    심각 차이면 KIS 클라이언트로 킬스위치를 당겨 ★미체결 주문을 실제로 취소★) · `POST /reconcile/periodic/start|stop`(300초 자동 대조) · `GET /reconcile/status|history` ·
+    `POST /notifier/test`(CRITICAL 경보 발송) · `GET /notifier/stats` · `GET /gateway/stats` · `GET /health`(주문 상태 분포를 싣는다 — 같은 값의
+    `/orders/state-distribution` 은 이미 로그인).
+  - 전수 검사(`test_protected_routes` ③)가 못 본 이유: 돈 경로 검출 조각(`MONEY_PATH_MARKERS`)에 이 경로들이 걸리지 않았다.
+- **무엇을**(인증 의존성·레지스트리·지도 글만 — 동작 불변):
+  - 관리자: 대조 즉시 실행 · 자동 대조 켜기·끄기 · 시험 알림. 로그인: `/trading/status` · 대조 상태·이력 · 알림·게이트웨이 통계 · 종합 상태.
+  - `protected_routes.py`: `PROTECTED` 10 줄(사유 포함) · `/api/v1/trading/status` 면제 삭제 · `/trading-status` 사유를 혼자 읽혀도 참인 글로 · 검출 조각에
+    `"/api/v1/live/"`(실거래 표면 전체 — 앞으로 생길 /live 경로도 자동으로 사정거리) + `"reconcile"`.
+  - 로그인 화면 지도(`accessMap.json`, 서버 보호 목록과 양방향 대조): 로그인 층 "증권사와 맞춰 본 기록" · "실거래 시스템 상태" · 관리자 층 "증권사와 계좌 맞춰 보기" ·
+    "시험 알림 보내기", 잔고 항목에 `/trading/status`. 칩이 늘어 1440×900 에서 7px 넘치던 것을 `.lg-main` 바닥 여백 72→56px 로 맞췄다.
+  - 테스트 위생: 인증 전수 테스트가 관리자로 `periodic/start` 를 실제로 부르므로 고정물 정리 단계에서 자동 대조를 멈춘다.
+- **확인**: 새 `tests/test_broker_routes_locked.py`(감사 표 10 × 요구 수준 고정 · 토큰 없는 계좌 조회 401 + 본문에 계좌 자료 없음 · 짝: 로그인하면 자료 · 토큰 없는 대조는
+  대조기를 한 번도 부르지 않음 · 검출기가 `/api/v1/live/` 전체를 봄 · 짝: 연구 경로는 아님) — 옛 코드에서 13 빨강(계좌 조회 200, 대조 요청이 대조기까지 닿아 500).
+  `test_auth_enforcement` 는 PROTECTED 전수 매개변수라 401·403·관리자 통과·로그인 통과가 새 경로에 자동으로 붙었다. 관련 넷 181 통과.
+  ★변이 6 모두 죽음★: 대조 인증 빼기 · 대조를 로그인 수준으로 · `/api/v1/live/` 조각 빼기 · `/trading/status` 를 일관되게 옛 상태로(의존성·목록·지도 셋 다) ·
+  지도에서 대조 항목 빼기 · 종합 상태 인증 빼기. 로그인 화면 E2E(login·profile·settings 31) 통과 · PNG(라이트/다크·1440/390) 사용자 확인.
+- **하지 않은 것**: 대조기·킬스위치·TradingEngine·`get_kis_client`·`dry_run` 동작(§6) · `get_account_status`·`_safe_balance` 의 잔고 미상→0(소비자 셋이 0 을 계산에
+  쓴다 — 후속) · 쓰이지 않는 `ProductionMonitor.tsx`(인증 없이 이 경로들을 부름)·`tradingApi.status`(부르는 곳 0) 정리(삭제 제안만) · 인증 없는 `POST /api/v1/admin/sync`
+  (시세 적재 — 계좌 아님)·`GET /api/v1/data/ingest-doctor`(KIS 싱글톤을 매번 갈아 끼움 — 데이터 적재 권한 작업 범위) · 사용자별 계좌(BV 설계).
+

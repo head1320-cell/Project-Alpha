@@ -62,6 +62,16 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_ADMIN, "일괄 주문 — 현재 dry_run 고정이나 주문 경로다"),
     ("POST", "/toggle-auto-trading"):
         (REQUIRE_ADMIN, "자동매매 토글"),
+    # ── BV0a — 감사가 찾은, 인증 없이 열려 있던 실거래 확장 경로(stage13_extensions) ──
+    ("POST", "/api/v1/live/reconcile/sync"):
+        (REQUIRE_ADMIN, "브로커와 즉시 대조 — 로컬 계좌 상태를 덮고, 차이가 크면 킬스위치를 당겨 "
+                        "미체결 주문을 실제로 취소한다"),
+    ("POST", "/api/v1/live/reconcile/periodic/start"):
+        (REQUIRE_ADMIN, "자동 대조 켜기 — 위 동작을 300초마다 백그라운드로 돌린다"),
+    ("POST", "/api/v1/live/reconcile/periodic/stop"):
+        (REQUIRE_ADMIN, "자동 대조 끄기 — 안전 감시 하나를 멈춘다"),
+    ("POST", "/api/v1/live/notifier/test"):
+        (REQUIRE_ADMIN, "알림 발송 — CRITICAL 을 포함해 운영자에게 가는 경보를 보낸다"),
 
     # ── 남의 것을 보면 안 된다 ────────────────────────────────────────────
     ("GET", "/api/v1/live/balance"):
@@ -91,6 +101,19 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "보유 종목"),
     ("GET", "/api/v1/account/balance"):
         (REQUIRE_LOGIN, "예수금·평가금액"),
+    # ── BV0a — 감사가 찾은 열린 계좌 조회(예전 면제 사유는 다른 경로를 설명했다) ──
+    ("GET", "/api/v1/trading/status"):
+        (REQUIRE_LOGIN, "브로커의 예수금·평가금액·보유 종목 전체(TradingEngine.get_account_status)"),
+    ("GET", "/api/v1/live/reconcile/status"):
+        (REQUIRE_LOGIN, "마지막 대조 결과 — 현금·보유 차이가 실린다"),
+    ("GET", "/api/v1/live/reconcile/history"):
+        (REQUIRE_LOGIN, "대조 이력 — 현금·보유 차이가 실린다"),
+    ("GET", "/api/v1/live/notifier/stats"):
+        (REQUIRE_LOGIN, "알림 발송 통계 — 경보 횟수로 운영 상황이 드러나고, 부르면 알림 작업자가 켜진다"),
+    ("GET", "/api/v1/live/gateway/stats"):
+        (REQUIRE_LOGIN, "KIS 호출 큐 통계 — 처리량으로 활동량이 드러나고, 부르면 게이트웨이 작업자가 켜진다"),
+    ("GET", "/api/v1/live/health"):
+        (REQUIRE_LOGIN, "실거래 종합 상태 — 주문 상태 분포(/orders/state-distribution 과 같은 값)를 싣는다"),
 
     # ── 경로에 남의 이름이 들어간다 ───────────────────────────────────────
     ("GET", "/trade-history/{username}"):
@@ -114,12 +137,12 @@ OPEN_WITH_REASON: dict[tuple[str, str], str] = {
         "현재 실행 모드 표시 — 관리 화면이 로그인 전에 상태를 읽어야 하고, 값이 돈을 옮기지 않는다",
     ("GET", "/api/v1/live/kill-switch/status"):
         "정지 상태 표시 — 같은 이유. 막혀 있다는 사실은 숨길수록 위험하다",
-    ("GET", "/api/v1/trading/status"):
-        "프로세스 로컬 설정값(auto_mode·var_limit) 표시 — 계좌 자료가 아니다",
     ("GET", "/api/v1/trading/mode"):
         "mock/paper/real 라벨 표시 — 계좌 자료가 아니다",
+    # BV0a 정정: 이 사유는 예전에 `/api/v1/trading/status` 에 붙어 있었다. 그 경로는 브로커 잔고를
+    # 내므로 보호로 옮겼고, 사유가 실제로 설명하던 이 경로에 글을 옮겨 왔다.
     ("GET", "/trading-status"):
-        "위와 같은 설정값의 레거시 경로",
+        "프로세스 로컬 설정값(trading_config) 표시 — 계좌 자료가 아니다",
     ("POST", "/api/v1/portfolio/rebalance"):
         "요청 본문의 티커로 도는 리밸런싱 **시뮬레이션** — 계좌를 건드리지 않는다",
     ("POST", "/api/v1/allocation/rebalance-decision"):
@@ -180,6 +203,10 @@ MONEY_PATH_MARKERS = (
     "auto-trading",
     "trading-status",
     "/api/v1/trading/",
+    # BV0a — 실거래 표면 전체. 예전 조각들(/live/mode 등)만으로는 대조·알림·게이트웨이·종합 상태
+    # 경로가 사정거리 밖이었다. 앞으로 생길 /live 경로도 여기서 자동으로 걸린다.
+    "/api/v1/live/",
+    "reconcile",
     "/live/mode",
     "/live/balance",
     "/live/audit",

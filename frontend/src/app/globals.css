@@ -10951,7 +10951,7 @@ a.ld-step-a:hover { background: var(--tx-bg); transform: translateY(-2px); }
 .lg-logo { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--tx-blue); }
 .lg-logo svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .dark .lg-logo svg { stroke: var(--tx-on-cta); }
-.lg-main { flex: 1; display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 560px); justify-content: center; align-items: start; gap: 88px; padding: 6vh 40px 72px; }
+.lg-main { flex: 1; display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 560px); justify-content: center; align-items: start; gap: 88px; padding: 6vh 40px 56px; }
 
 /* 왼쪽 폼 */
 .lg-form { display: flex; flex-direction: column; gap: 18px; padding-top: 20px; }

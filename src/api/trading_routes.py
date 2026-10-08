@@ -17,7 +17,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.api.auth import require_admin
+from src.api.auth import require_admin, require_login
 from src.data.mock_gate import mock_allowed
 
 logger = logging.getLogger(__name__)
@@ -81,9 +81,13 @@ def _build_engine(safety_model: SafetyConfigModel):
 # 엔드포인트
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_login)])
 def trading_status():
-    """현재 계좌 상태 + 모드 (mock/paper/real)."""
+    """현재 계좌 상태 + 모드 (mock/paper/real).
+
+    ★브로커의 예수금·평가금액·보유 종목 전체★를 낸다 — `/live/balance`·`/account/balance` 와 같은 자료라
+    로그인이 필요하다(BV0a). 예전에는 열려 있었고 면제 사유가 다른 경로(`/trading-status`)를 설명했다.
+    """
     try:
         from src.engine.trading_engine import SafetyConfig, TradingEngine
         engine = TradingEngine(safety=SafetyConfig(dry_run=True))
