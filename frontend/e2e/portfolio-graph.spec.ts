@@ -1504,19 +1504,20 @@ test("파생·신용 계산기(BL3 W4): 옵션·채권·헤지·CVA·IRC · 모�
   await page.goto("/derivatives", { waitUntil: "domcontentloaded" });
   const inputs = page.locator("input.input");
   await inputs.nth(0).fill("100"); await inputs.nth(1).fill("100");
-  await inputs.nth(2).fill("0.2"); await inputs.nth(3).fill("0.05"); await inputs.nth(4).fill("1");
-  await page.getByRole("button", { name: "프라이싱 실행" }).click();
+  // BU7c — 변동성·금리 칸은 %로 넣는다(20 → 서버 0.2). 요청 본문 값은 그대로라 이론가도 같다.
+  await inputs.nth(2).fill("20"); await inputs.nth(3).fill("5"); await inputs.nth(4).fill("1");
+  await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(page.getByTestId("option-greeks")).toContainText("10.4506");
   expect(calls).toBe(1);
   // 만기 0 — 내재가치(BL3 M2: 예전엔 0 원). 행사가 90 이면 콜 내재가치 10.
   await inputs.nth(1).fill("90"); await inputs.nth(4).fill("0");
-  await page.getByRole("button", { name: "프라이싱 실행" }).click();
+  await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(page.getByTestId("option-expiry")).toBeVisible();
   await expect(page.getByTestId("option-greeks")).toContainText("10.0000");
   expect(calls).toBe(2);
   // 짝: 변동성 0 — 서버도 422 로 거절하지만 화면이 보내기 전에 막는다(요청 없음).
   await inputs.nth(2).fill("0");
-  await page.getByRole("button", { name: "프라이싱 실행" }).click();
+  await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(page.getByText("0보다 커야")).toBeVisible();
   await expect(page.getByTestId("option-greeks")).toHaveCount(0);
   expect(calls).toBe(2);

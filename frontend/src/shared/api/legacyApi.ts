@@ -2,8 +2,9 @@
 // shared/api/legacyApi — 초기 대시보드/파생상품 시절의 단일 api 객체.
 //
 // ★현황(실측)★ 외부에서 import 되는 것은 `api` 하나뿐이고, 실제로 호출되는 메서드는
-// 4개다: optionPrice(/derivatives) · dbStatus/ingest/ingestDoctor(widgets/admin).
+// 7개다: optionPrice·bondAnalytics·futuresHedge·cva(widgets/derivatives, BU7c) · dbStatus/ingest/ingestDoctor(widgets/admin).
 // 이 파일의 타입 12개는 **어디에서도 import 되지 않는다** — 파일 내부 반환형 주석 전용.
+// (BU7c 의 `BondOut`·`HedgeOut`·`CvaOut` 셋은 예외 — `widgets/derivatives` 가 import 한다.)
 //
 // 그래서 BacktestResult/Position/SymbolItem 세 이름이 entities 의 정본과 충돌해
 // grep 이 두 곳을 물어 왔다. Legacy* 접두사를 붙여 정본 쪽만 검색되게 했다
@@ -238,7 +239,28 @@ export const api = {
   // 옵션 — 백엔드 `derivatives_routes.analyze_option`(블랙-숄즈 유럽형). 예전 `/option-price`·`/price-curve` 는
   // 서버에 없는 주소였다(BL3 W4 감사) — 없는 주소를 부르는 함수를 남기지 않는다.
   optionPrice: (body: unknown) => post<unknown>("/analyze-option", body),
+  // BU7c — 서버에 있던 계산기 셋을 /derivatives 탭으로 잇는다(본문 칸 이름은 서버 스키마 `legacy_schemas` 그대로).
+  bondAnalytics: (body: { face_value: number; coupon_rate: number; ytm: number; years_to_maturity: number; freq: number }) =>
+    post<BondOut>("/analyze-bond", body),
+  futuresHedge: (body: { portfolio_value: number; current_beta: number; target_beta: number; futures_price: number; multiplier: number }) =>
+    post<HedgeOut>("/calculate-hedge", body),
+  cva: (body: Record<string, number | string>) => post<CvaOut>("/calculate-cva", body),
 };
+
+// ── 파생 계산기 응답(BU7c) — 서버 `FICCEngine.bond_analytics` · `HedgingSimulator.equity_futures_hedge` · `CVAEngine.full_cva_report` ──
+export interface BondOut { Price: number; Macaulay_Duration: number; Modified_Duration: number; Convexity: number; BPV: number; DV01: number }
+export interface HedgeOut {
+  current_beta: number; target_beta: number; contract_value: number; raw_contracts: number; contracts_to_trade: number;
+  action: string; beta_after_rounding: number; expected_var_reduction_pct: number | null; reduction_basis: string;
+  reduction_reason: string | null; hedge_notional: number;
+}
+export interface CvaOut {
+  pd_from_cds: Record<string, number>;
+  exposure_profile: { epe: number; peak_ee: number; ee_values: number[] };
+  unilateral_cva: { cva_amount: number; cva_pct_of_notional: number; cva_spread_bps: number; n_intervals: number };
+  bilateral_cva: { cva_amount: number; dva_amount: number; bcva_amount: number; interpretation: string };
+  stressed_cva: { base_cva: number; stressed_cva: number; stress_loss: number; stress_loss_pct: number; shocks_applied: { spread_shock_bps: number; exposure_shock_pct: number } };
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
