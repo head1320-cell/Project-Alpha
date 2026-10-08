@@ -10361,3 +10361,142 @@ details[open] > .rs-more { margin-bottom: 12px; }
   .rk-sum-bar { grid-column: 1 / -1; grid-row: 2; }
   .rk-sum-avg { grid-column: 1 / -1; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BU7b — 데이터 상태(`.dsx`): 답 · 원천별 연구 등급 · 연결된 원천 · 도구 준비 · 표별 적재 · 유니버스 막대 · 등록부 ·
+   매크로 토큰 · 커버리지 세기 · 적재(확인 창 `.dsx-dlg`) · 연결 진단.
+   색: 등급 칩은 칩 어휘 그대로(과거 검증 가능 = ok · 전방 전용·합성 = assumed · 못 씀 = 테두리만) — 초록/빨강 판단색 아님.
+   막대 = 중립 한 색(--tx-blue). `.t-honesty*`·`.t-mode-badge`·`.trisk-table` 은 다른 곳의 옛 규칙이 있어 `.dsx` 범위에서만 덮는다.
+   확인 창은 Radix 가 body 로 포털하므로 `.shad-content.dsx-dlg` 로 건다.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.dsx { display: flex; flex-direction: column; gap: 12px; }
+.dsx .tx-answer + .tx-sec, .dsx .tx-sec + .tx-sec, .dsx .tx-notice + .tx-sec, .dsx .tx-sec + .tx-notice { margin-top: 0; }
+.dsx-head-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsx .t-mode-badge { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: var(--tx-soft); font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--tx-sub); }
+.dsx .t-mode-badge[data-real="1"] { background: var(--tx-ok-soft); color: var(--tx-ok); }
+.dsx .t-mode-badge[data-real="0"] { background: var(--tx-warn-soft); color: var(--tx-warn); }
+.dsx-refresh { gap: 6px; }
+.dsx-wait, .dsx-reason { margin: 12px 0 0; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; line-height: 1.55; color: var(--tx-ink); }
+.dsx-mute { color: var(--tx-sub); }
+.dsx-unk { font-weight: 600; color: var(--tx-sub); }
+.dsx-note { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
+.dsx-note [data-mono] + [data-mono] { margin-left: 6px; }
+.dsx [data-mono] { font-family: var(--t-mono); font-size: 12px; }
+.dsx-raw { margin-top: 4px; font-size: 13px; color: var(--tx-sub); }
+.dsx-raw > summary { cursor: pointer; font-weight: 600; min-height: 28px; display: inline-flex; align-items: center; }
+.dsx-raw p { margin: 4px 0 0; word-break: break-all; line-height: 1.5; }
+
+/* 원천별 연구 등급 — 두 축을 칩 둘로 */
+.dsx .t-honesty { margin: 0; padding: 20px; border: 0; border-radius: var(--tx-r-sec); background: var(--tx-surface); }
+.dsx .t-honesty-h { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; text-transform: none; color: var(--tx-ink); }
+.dsx .t-honesty-list { gap: 8px; margin-top: 12px; }
+.dsx .t-honesty-row { display: grid; grid-template-columns: minmax(140px, 220px) auto 1fr; grid-template-areas: "nm chips why" "nm chips use";
+  gap: 2px 16px; align-items: start; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; }
+.dsx .t-honesty-nm { grid-area: nm; font-weight: 700; color: var(--tx-ink); }
+.dsx-hon-chips { grid-area: chips; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.dsx-hon-use { grid-area: use; color: var(--tx-ink); line-height: 1.5; }
+.dsx .t-honesty-why { grid-area: why; font-size: 14px; color: var(--tx-ink); line-height: 1.5; }
+.dsx-legend { display: grid; gap: 6px; margin: 12px 0 0; }
+.dsx-legend > div { display: grid; grid-template-columns: 7.5em 1fr; gap: 12px; align-items: baseline; font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
+.dsx-legend dt, .dsx-legend dd { margin: 0; }
+.dsx-legend-k { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.dsx-legend-k.u-backtest_eligible { background: var(--tx-ok-soft); color: var(--tx-ok); }
+.dsx-legend-k.u-forward_only { background: var(--tx-warn-soft); color: var(--tx-warn); }
+.dsx-legend-k.u-unavailable { color: var(--tx-sub); box-shadow: inset 0 0 0 1.5px var(--tx-mute); }
+.dsx :is(.t-honesty-st, .t-honesty-use) { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; background: var(--tx-surface); color: var(--tx-sub); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.dsx .t-honesty-st.s-real, .dsx .t-honesty-use.u-backtest_eligible { background: var(--tx-ok-soft); color: var(--tx-ok); box-shadow: none; }
+.dsx .t-honesty-st.s-mock, .dsx .t-honesty-use.u-forward_only { background: var(--tx-warn-soft); color: var(--tx-warn); box-shadow: none; }
+.dsx .t-honesty-st:is(.s-partial, .s-stale, .s-delayed) { background: var(--tx-surface); color: var(--tx-ink); }
+.dsx .t-honesty-st.s-unavailable, .dsx .t-honesty-use.u-unavailable { background: transparent; color: var(--tx-sub); box-shadow: inset 0 0 0 1.5px var(--tx-mute); }
+
+/* 연결된 원천 · 도구 준비 · 연결 진단 — 목록 줄 */
+.dsx-keylist, .dsx-toollist, .dsx-unilist, .dsx-inglist, .dsx-doclist { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.dsx-keylist, .dsx-toollist { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.dsx-key, .dsx-tool, .dsx-doc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 10px 16px;
+  border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; color: var(--tx-ink); }
+.dsx-key-nm { font-weight: 600; }
+.dsx-key-st, .dsx-tool-st, .dsx-doc-st { flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.dsx-key[data-on="1"] .dsx-key-st, .dsx-tool[data-ok="1"] .dsx-tool-st, .dsx-doc-row[data-ok="1"] .dsx-doc-st { color: var(--tx-ok); }
+.dsx-doc-row { display: grid; grid-template-columns: minmax(130px, auto) auto 1fr; }
+.dsx-doc-nm { font-weight: 600; }
+.dsx-doc .tx-btn { margin-top: 12px; }
+
+/* 표 — 옛 `.trisk-table` 을 `.dsx` 안에서만 다시 그린다 */
+.dsx-tablewrap { margin-top: 12px; overflow-x: auto; }
+.dsx .trisk-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; }
+.dsx .trisk-table th { padding: 10px 12px; border-bottom: 1px solid var(--tx-line); font-family: inherit; font-size: 12px; font-weight: 600;
+  letter-spacing: 0; text-transform: none; text-align: left; color: var(--tx-sub); }
+.dsx .trisk-table td { padding: 12px; border-bottom: 1px solid var(--tx-line); vertical-align: top; color: var(--tx-ink); }
+.dsx .trisk-table :is(td, th).num { text-align: right; font-family: inherit; font-variant-numeric: tabular-nums; }
+.dsx .trisk-table tbody tr:hover { background: transparent; }
+.dsx .trisk-table tbody tr:last-child td { border-bottom: 0; }
+.dsx-cellwhy { margin-top: 4px; font-size: 13px; color: var(--tx-sub); }
+.dsx-env { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.dsx-env[data-ready="1"] { color: var(--tx-ok); }
+
+/* 새 그림 — 유니버스 적재 막대(중립 한 색). 전체를 모르면 막대 없이 글자만 */
+.dsx-uni-row { display: grid; grid-template-columns: minmax(120px, 15em) minmax(80px, 1fr) auto; align-items: center; gap: 8px 16px;
+  min-height: 52px; padding: 10px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; color: var(--tx-ink); }
+.dsx-uni-nm { font-weight: 600; }
+.dsx-uni-bar { position: relative; display: block; height: 10px; border-radius: 5px; background: var(--tx-surface); overflow: hidden; }
+.dsx-uni-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--tx-blue); }
+.dsx-uni-n { font-variant-numeric: tabular-nums; color: var(--tx-sub); white-space: nowrap; }
+
+/* 커버리지 세기 — 라벨이 위에 있는 칸 */
+.dsx-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 12px; }
+.dsx-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.dsx-input { height: 44px; min-width: 160px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--tx-soft); color: var(--tx-ink); font: inherit; font-size: 15px; font-weight: 400; }
+.dsx-input:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 0; }
+.dsx-cov-go { height: 44px; }
+.dsx-cov-out { margin-top: 12px; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; line-height: 1.55; color: var(--tx-ink); }
+.dsx-cov-out p { margin: 0 0 10px; }
+.dsx-cov .tx-notice { margin-top: 12px; }
+
+/* 적재 — 줄마다 단추 하나, 결과는 그 단추 아래 */
+.dsx-ing-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 16px; padding: 12px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.dsx-ing-row--all { background: var(--tx-surface); box-shadow: inset 0 0 0 1.5px var(--tx-line); }
+.dsx-ing-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; color: var(--tx-ink); }
+.dsx-ing-nm { font-weight: 700; }
+.dsx-ing-sub { font-size: 13px; color: var(--tx-sub); }
+.dsx-ing-go { white-space: nowrap; background: var(--tx-surface); }
+.dsx-ing-go:hover:not(:disabled) { background: var(--tx-blue-soft); }
+.dsx-ing-row--all .dsx-ing-go { background: var(--tx-soft); }
+.dsx-ing-st { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-size: 13px; color: var(--tx-sub); }
+.dsx-ing-prog { font-variant-numeric: tabular-nums; }
+.dsx-ing-bar { max-width: 320px; height: 6px; }
+.dsx-ing-err { color: var(--tx-danger); }
+.dsx-ing-res { grid-column: 1 / -1; margin: 0; }
+.dsx-ing-ok { font-size: 14px; color: var(--tx-ink); }
+.dsx-dart { margin-top: 12px; font-size: 14px; color: var(--tx-ink); }
+.dsx-dart p { margin: 0 0 6px; }
+.dsx-dart .tx-notice { margin: 8px 0; }
+
+/* 확인 창(Radix — body 로 포털) */
+.shad-content.dsx-dlg { width: min(520px, calc(100vw - 32px)); padding: 24px; border: 0; border-radius: var(--tx-r-sec);
+  background: var(--tx-surface); color: var(--tx-ink); box-shadow: 0 24px 64px rgba(0, 0, 0, .22); font-family: var(--tx-font); }
+.dsx-dlg-t { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--tx-ink); word-break: keep-all; }
+.dsx-dlg-d { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--tx-sub); }
+.dsx-dlg-list { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.dsx-dlg-list li { display: grid; grid-template-columns: 4em 1fr; gap: 12px; padding: 12px 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; line-height: 1.5; }
+.dsx-dlg-list b { color: var(--tx-sub); font-weight: 600; }
+.dsx-dlg-what { display: flex; flex-direction: column; gap: 2px; }
+.dsx-dlg-act { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.dsx-dlg-act .tx-btn { height: 48px; padding: 0 20px; font-size: 15px; }
+
+@media (max-width: 640px) {
+  .dsx .t-honesty { padding: 16px; }
+  .dsx .t-honesty-row { grid-template-columns: 1fr; grid-template-areas: "nm" "chips" "why" "use"; gap: 6px; }
+  .dsx-legend > div { grid-template-columns: 1fr; gap: 4px; }
+  .dsx-uni-row { grid-template-columns: 1fr auto; }
+  .dsx-uni-row .dsx-uni-bar { grid-column: 1 / -1; grid-row: 2; }
+  .dsx-uni-n { white-space: normal; text-align: right; }
+  .dsx-ing-row { grid-template-columns: 1fr; }
+  .dsx-ing-go { justify-self: start; }
+  .dsx-doc-row { grid-template-columns: 1fr auto; }
+  .dsx-doc-row .dsx-note { grid-column: 1 / -1; }
+  .dsx-input { min-width: 0; width: 100%; }
+  .dsx-field { flex: 1 1 140px; }
+  .dsx-dlg-act .tx-btn { flex: 1; }
+}

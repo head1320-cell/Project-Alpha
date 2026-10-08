@@ -102,8 +102,8 @@ BADGES: tuple[Badge, ...] = (
           "로만 켠다, BU1~BU6) · 캔버스 계보 `practice`(연습용 수익률의 하류). ★합성값을 만든다는 뜻이 아니라 "
           "mock 게이트가 열려 있다는 출처 표시다★."),
     Badge(("t-mode-badge",), (AXIS_RUN_MODE,),
-          "관리자 패널의 `MODE: REAL/MOCK`(`st.config.kis_real`). ★데이터 축이 "
-          "아니라 실행 모드다★ — 이름이 닮아 섞기 쉽다."),
+          "관리자 패널(데이터 상태)의 실행 모드 배지(`st.config.kis_real` · BU7b 부터 모르면 '몰라요', 옛 `MODE: MOCK` 아님). "
+          "★데이터 축이 아니라 실행 모드다★ — 이름이 닮아 섞기 쉽다."),
 )
 
 _COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)

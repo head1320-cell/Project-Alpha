@@ -5140,121 +5140,282 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "main:main.terminal-main": [
-   "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(17, 17, 17)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.terminal-content": [
    "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.tpage-fade": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.dsx.tx-page": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.t-honesty": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:header.tx-head": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.t-honesty-h": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.tx-head-main": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:ul.t-honesty-list": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:h1.tx-h1": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:li.t-honesty-row": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:p.tx-lede": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.t-honesty-nm": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.tx-head-act": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.s-mock.t-honesty-st": [
-   "rgb(113, 113, 122)|color(srgb 0.443137 0.443137 0.478431 / 0.14)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.t-honesty-use.u-forward_only": [
-   "rgb(18, 0, 255)|color(srgb 0.0705882 0 1 / 0.14)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.t-honesty-why": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.s-unavailable.t-honesty-st": [
-   "rgb(220, 38, 38)|color(srgb 0.862745 0.14902 0.14902 / 0.14)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.t-honesty-use.u-unavailable": [
-   "rgb(220, 38, 38)|color(srgb 0.862745 0.14902 0.14902 / 0.14)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.t-toolbar": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:div.dsx-head-act": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:span.t-mode-badge": [
-   "rgb(161, 98, 7)|rgba(0, 0, 0, 0)|rgb(161, 98, 7)|rgb(161, 98, 7)|rgb(0, 0, 0)|none|"
+   "rgb(161, 92, 0)|rgb(255, 244, 224)|rgb(161, 92, 0)|rgb(161, 92, 0)|rgb(0, 0, 0)|none|"
   ],
-  "main:button.tchip-toggle": [
-   "rgb(113, 113, 122)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:button.dsx-refresh.tx-btn.tx-btn--sub": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.animate-fade-in": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:svg.lucide.lucide-refresh-cw": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(25, 31, 40)|"
   ],
-  "main:div.tpage-section-head": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:path.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(25, 31, 40)|"
   ],
-  "main:span.sh-label": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:section.tx-answer": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.sh-index": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:p.tx-answer-s": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:div.tscenario-bar": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:dl.tx-figs": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.tchip-toggle": [
-   "rgb(113, 113, 122)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|",
-   "rgb(220, 38, 38)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:div.tx-fig": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:table.trisk-table": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:dt.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:thead.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:dd.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:tr.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:ul.tx-chips": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:th.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:li.tx-chip": [
+   "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:th.num": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:section.t-honesty.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
-  "main:tbody.": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:h2.t-honesty-h.tx-sec-t": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:td.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|",
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:p.tx-sec-sub": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:td.num": [
-   "rgb(17, 17, 17)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
-  ],
-  "main:span.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
-   "rgb(220, 38, 38)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:dl.dsx-legend": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.tpage-intro": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:span.dsx-legend-k.u-forward_only": [
+   "rgb(161, 92, 0)|rgb(255, 244, 224)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:select.tchip-toggle": [
-   "rgb(113, 113, 122)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:span.dsx-legend-k.u-unavailable": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:option.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  "main:ul.t-honesty-list": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:input.tchip-toggle": [
-   "rgb(113, 113, 122)|rgb(255, 255, 255)|rgb(229, 229, 229)|rgb(229, 229, 229)|rgb(0, 0, 0)|none|"
+  "main:li.t-honesty-row": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:button.active.tchip-toggle": [
-   "rgb(18, 0, 255)|rgba(18, 0, 255, 0.04)|rgb(18, 0, 255)|rgb(18, 0, 255)|rgb(0, 0, 0)|none|"
+  "main:span.t-honesty-nm": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-hon-chips": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.s-mock.t-honesty-st": [
+   "rgb(161, 92, 0)|rgb(255, 244, 224)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.t-honesty-use.u-forward_only": [
+   "rgb(161, 92, 0)|rgb(255, 244, 224)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.t-honesty-why": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.s-unavailable.t-honesty-st": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.t-honesty-use.u-unavailable": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-keys.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:h2.tx-sec-t": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.dsx-keylist": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.dsx-key": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-key-nm": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-key-st": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-tools.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.dsx-toollist": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.dsx-tool": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-tool-st": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-tables.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.dsx-tablewrap": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:table.trisk-table": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:thead.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:tr.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:th.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:th.num": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:tbody.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:td.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:td.num": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-unk": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-mute": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.dsx-cellwhy": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:details.dsx-raw": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:summary.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.": [
-   "rgb(113, 113, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-uni.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.dsx-reason": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-reg.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-env": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.dsx-note": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-macro.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:b.": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-cov.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.dsx-form": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:label.dsx-field": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:select.dsx-input": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:option.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:input.dsx-input": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:button.dsx-cov-go.tx-btn.tx-btn--sub": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-ing.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:ul.dsx-inglist": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.dsx-ing-row": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.dsx-ing-main": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-ing-nm": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.dsx-ing-sub": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:button.dsx-ing-go.tx-btn.tx-btn--sub": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|",
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:li.dsx-ing-row.dsx-ing-row--all": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.dsx-dart": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.dsx-note": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-doc.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:button.tx-btn.tx-btn--sub": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ]
  },
  "/derivatives": {

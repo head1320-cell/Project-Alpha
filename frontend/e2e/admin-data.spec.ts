@@ -14,20 +14,20 @@ import { trackErrors, uniq } from "./helpers";
 // "가져올 수 있다"(data_status)와 "과거 검증에 쓸 수 있다"(research_usage)는 다른 축이다.
 // 하나로 합쳐 보여주면 사용자는 조회되는 모든 것을 백테스트에 써도 된다고 읽는다.
 //
-// 선택자 주의: 이 패널은 h1 이 없다(SectionHead 로 구성). admin.spec.ts 의 h1 기반
-// 스모크 루프를 그대로 쓸 수 없어 전용 스펙으로 둔다.
+// 선택자 주의: BU7b 부터 h1 "데이터 상태" + 절 제목(h2)으로 구성된다(옛 영어 소제목 "DATA SOURCES" 는 없다).
+// 화면 모습·확인 창·실패 상태는 `data-status.spec.ts` 가 본다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test("/admin/data: 마운트되고 페이지 에러·API 404 가 없다", async ({ page }) => {
   const sink = trackErrors(page);
 
   await page.goto("/admin/data", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("DATA SOURCES").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "원천별 연구 등급" })).toBeVisible({ timeout: 20_000 });
 
   // 클라이언트 페치가 끝난 뒤에도 살아 있는지 — "렌더되고 첫 응답에서 죽는" 경우를 잡는다.
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(1_000);
-  await expect(page.getByText("DATA SOURCES").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "원천별 연구 등급" })).toBeVisible();
 
   const body = await page.locator("body").innerText();
   expect(body, "한글이 깨지면 안 된다").not.toMatch(/�/);
