@@ -51,12 +51,9 @@ METRIC_TOKENS = (
 #: 단정하고 있었고(E), 이제 `PerfLabel` 과 `lookahead_evidence` 배지를 함께 그린다.
 #: `.mock`/`.real` 은 여전히 한 글자도 안 건드렸다(`allocation-stages2.spec.ts`).
 #:
-#: ★남은 일곱은 줄이려고 붙이지 않는다★ — 특히 `CompanyCockpit` 에 백테스트 라벨을
+#: ★남은 것은 줄이려고 붙이지 않는다★ — 특히 `CompanyCockpit` 에 백테스트 라벨을
 #: 달면 **없는 시뮬레이션을 있다고** 말하게 된다. 목록의 길이는 목표가 아니다.
 ALLOWED: dict[str, str] = {
-    "src/widgets/landing/HeroDeckLive.tsx":
-        "랜딩 데모다. 숫자 옆에 '예시 수치' 캡션이 이미 붙어 있어 라벨보다 강하게 "
-        "말하고 있다 — 같은 자리에 두 문장이 겹치면 오히려 약해진다.",
     "src/widgets/realism/RealismKPIs.tsx":
         "위젯의 요점 자체가 '백테스트 대 현실' 비교이고, 카드마다 "
         "'백테스트 과대평가 위험' 같은 자체 판정 문구를 낸다.",
@@ -69,6 +66,7 @@ ALLOWED: dict[str, str] = {
         "(VaR·ES·변동성·Sharpe·MDD)다. 여기에 '백테스트' 라벨을 붙이면 "
         "없는 시뮬레이션을 있다고 말하는 셈이다.",
     # (BL4) `src/widgets/allocation/AllocationProvider.tsx` — 마법사와 함께 지웠다. 허용 사유도 함께 사라진다.
+    # (BU8a) `src/widgets/landing/HeroDeckLive.tsx` — 예시 수치 덱을 지웠다(첫 화면 히어로는 서버가 지금 내는 답 + 실제 화면).
 }
 
 

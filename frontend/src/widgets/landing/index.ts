@@ -1,5 +1,7 @@
-// widgets/landing — Public API 배럴.
-// 이 슬라이스를 쓰는 쪽은 내부 구현 파일을 열지 말고 이 파일만 보면 됩니다.
-export { default as CountUp } from "./CountUp";
-export { default as HeroDeckLive } from "./HeroDeckLive";
-export { default as Reveal } from "./Reveal";
+// widgets/landing — 첫 화면(/) 부품. 쓰는 쪽은 이 파일만 본다.
+export { EvidencePointer } from "./EvidencePointer";
+export { HeroCanvas } from "./HeroCanvas";
+export { HeroFx } from "./HeroFx";
+export { InView } from "./InView";
+export { StudioTour } from "./StudioTour";
+export { ToolHub } from "./ToolHub";

@@ -34,13 +34,14 @@ export function PageHead({ title, lede, actions }: { title: string; lede?: React
 /** 캔버스 "믿어도 되나요?" 와 같은 어휘 — practice(연습용 데이터) · assumed(가정) · unknown(모름) · unmeasured(재지 않음). */
 /** plain = 판단이 아닌 사실(판정 이름·적재 수) — 중립 색. */
 export type ChipTone = "practice" | "assumed" | "unknown" | "unmeasured" | "ok" | "info" | "plain";
-export type Chip = { label: string; tone: ChipTone };
+/** `ev` 는 이 칩이 어떤 근거인지(출처 source · 잰 모형 model · 기준 시각 asof) — 첫 화면 '근거 짚기' 가 이 값으로 칩을 짚는다. */
+export type Chip = { label: string; tone: ChipTone; ev?: string };
 
 export function Chips({ items, label = "이 답의 근거" }: { items: Chip[]; label?: string }) {
   if (!items.length) return null;
   return (
     <ul className="tx-chips" aria-label={label}>
-      {items.map((c, i) => <li key={`${c.tone}-${i}`} className="tx-chip" data-tone={c.tone}>{c.label}</li>)}
+      {items.map((c, i) => <li key={`${c.tone}-${i}`} className="tx-chip" data-tone={c.tone} data-ev={c.ev}>{c.label}</li>)}
     </ul>
   );
 }

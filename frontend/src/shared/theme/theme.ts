@@ -31,14 +31,15 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   { pattern: /^\/risk-tools\/?$/, label: "위험" },
   { pattern: /^\/admin\/data\/?$/, label: "데이터" },
   { pattern: /^\/derivatives\/?$/, label: "파생" },
+  // BU8a — 첫 화면도 `--tx-*` 토큰만 써서 다크 짝이 있다(landing.spec 이 라이트·다크 AA 로 확인한다).
+  { pattern: /^\/$/, label: "첫 화면" },
 ];
 
 /**
  * 테마를 따르지 않는 화면(BS5) — 안내 문구가 이것만 말한다. `looks` 는 그 화면이 늘 보이는 쪽.
- * 첫 화면은 셸 밖 브랜드 밴드라 밝게만, 관리 화면 셋은 처음부터 어두운 조종석이라 늘 어둡게다.
+ * 개발 화면은 밝게만, 관리 화면 셋은 처음부터 어두운 조종석이라 늘 어둡게다. (첫 화면은 BU8a 에서 다크를 갖춰 예외에서 뺐다.)
  */
 export const DARK_EXCEPTIONS: { pattern: RegExp; label: string; looks: "light" | "dark" }[] = [
-  { pattern: /^\/$/, label: "첫 화면", looks: "light" },
   { pattern: /^\/dev(\/|$)/, label: "개발 화면", looks: "light" },
   { pattern: /^\/admin\/(live-trading|multi-backtest|realism)(\/|$)/, label: "실거래·다중 백테스트·현실성 관리 화면", looks: "dark" },
 ];

@@ -152,11 +152,15 @@ test.describe("다크 AA(BS5)", () => {
     }
   });
 
-  test("짝: 다크를 골라도 첫 화면은 밝다 · 다크를 고르지 않으면 모듈도 밝다", async ({ page }) => {
+  test("짝: 다크를 고르면 첫 화면도 다크(BU8a) · 개발 화면은 예외로 밝다 · 다크를 고르지 않으면 모듈도 밝다", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("alpha_theme", "dark"));
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".ld")).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(1_500);
-    expect(await page.evaluate(() => document.documentElement.classList.contains("dark")), "첫 화면(예외)").toBe(false);
+    expect(await page.evaluate(() => document.documentElement.classList.contains("dark")), "첫 화면도 테마를 따른다").toBe(true);
+    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1_500);
+    expect(await page.evaluate(() => document.documentElement.classList.contains("dark")), "개발 화면(예외)은 밝다").toBe(false);
     const light = await page.context().newPage();
     await light.goto("/screener", { waitUntil: "domcontentloaded" });
     await light.evaluate(() => localStorage.setItem("alpha_theme", "light"));

@@ -7,18 +7,17 @@
  * ★연습용 표시는 서버 게이트로만★ `GET /macro/connection-status` 의 `mock_allowed`(= mock_gate)·`bok_configured`.
  * ★실패·빈·모름을 섞지 않는다★ 실패는 alert + 다시 시도, 빈 결과는 할 일 하나, 모름은 "몰라요" + 사유.
  *
- * 번역표(MODE_KO·regimeFig·sourceChip)는 매크로 분석 화면과 같은 것을 쓴다(`entities/macro/regimeKo`).
- * 함정: 같은 queryKey(`["macro","regime"]`)를 다른 화면도 쓴다 — 실패를 `null` 로 캐시하는 소비자가 다시 생겨도 여기서 `null` 은 실패로 그린다.
+ * 답 문장 부품(`MacroAnswer`)은 첫 화면(BU8a)도 쓰므로 따로 뺐다 — 번역표·칩 규칙은 그 파일 머리에.
  */
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { macroApi, type RegimeState } from "@/entities/macro/api";
+import { macroApi } from "@/entities/macro/api";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import { API_BASE } from "@/shared/api/apiBase";
 import { num, priceWon } from "@/shared/lib/krFormat";
-import { MODE_KO, regimeFig, sourceChip, when } from "@/entities/macro/regimeKo";
 import { LoadingState } from "@/shared/ui/States";
-import { Answer, Chips, ListRow, Notice, PageHead, Section, Unknown, type Chip, type Figure } from "@/shared/ui/tx";
+import { Chips, ListRow, Notice, PageHead, Section, Unknown, type Chip } from "@/shared/ui/tx";
+import { MacroAnswer } from "./MacroAnswer";
 
 /** 하는 일 순서 — 포트폴리오 설계가 제품의 중심(BK·BL)이라 맨 위. 설명은 하는 일 한 줄(수를 세지 않는다 — 세면 낡는다). */
 const TODO = [
@@ -41,46 +40,6 @@ type SnapStatus = { persist_enabled: boolean; db_rows: number };
 
 function Retry({ onClick }: { onClick: () => void }) {
   return <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={onClick}>다시 시도</button>;
-}
-
-function MacroAnswer() {
-  const q = useQuery({ queryKey: ["macro", "regime"], queryFn: () => macroApi.regime() });
-  const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
-  const st: RegimeState | null | undefined = q.data;
-
-  if (q.isLoading) return <div className="home-macro"><LoadingState label="매크로 분석을 불러오는 중이에요" /></div>;
-  if (q.isError || !st) {
-    return (
-      <div className="home-macro">
-        <Notice tone="danger" title="매크로 분석을 불러오지 못했어요">
-          서버에 닿지 못했거나 계산이 실패했어요. 잠시 뒤 다시 시도해 주세요.
-          <div className="home-act"><Retry onClick={() => { void q.refetch(); }} /></div>
-        </Notice>
-      </div>
-    );
-  }
-
-  const stress = Math.round(st.stress_score);
-  const mode = MODE_KO[st.recommended_mode];
-  const sentence = mode ? `지금 경제 흐름은 ‘${mode}’ 단계예요` : `지금 시장 스트레스는 ${stress}/100이에요`;
-  const us = st.markets?.us;
-  const figures: Figure[] = [
-    { label: "시장 스트레스", value: `${stress}/100` },
-    { label: "한국", value: regimeFig(st) },
-    { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면을 받지 못했어요" /> },
-  ];
-  const at = when(st.timestamp);
-  const chips: Chip[] = [
-    ...sourceChip({ data: cs.data, isError: cs.isError, isLoading: cs.isLoading }),
-    { label: "국면 확률은 축 모형 하나로 쟀어요", tone: "info" },
-    ...(at ? [{ label: at, tone: "plain" as const }] : []),
-  ];
-  return (
-    <div className="home-macro">
-      <Answer sentence={sentence} figures={figures} chips={chips}
-              action={<Link href="/macro" className="tx-btn tx-btn--main">매크로 분석 보기</Link>} />
-    </div>
-  );
 }
 
 function Picks() {
@@ -152,7 +111,7 @@ export function HomeView() {
   return (
     <div className="tx-page home">
       <PageHead title="홈" lede="시장 흐름을 보고, 오늘 할 일을 골라요." />
-      <MacroAnswer />
+      <MacroAnswer className="home-macro" action={<Link href="/macro" className="tx-btn tx-btn--main">매크로 분석 보기</Link>} />
       <div className="home-grid">
         <div className="home-todo">
           <Section title="무엇을 할까요">
