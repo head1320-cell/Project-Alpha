@@ -10934,3 +10934,98 @@ a.ld-step-a:hover { background: var(--tx-bg); transform: translateY(-2px); }
 @media (max-width: 720px) and (prefers-reduced-motion: no-preference) {
   .ld-cv-svg { animation: ld-pan 24s ease-in-out 3s infinite alternate; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BU8b — 로그인(`.lg`, 셸 밖 단독 한 화면). 왼쪽 폼(토스식: 라벨 위 · 회색 칸 · 주 단추 하나) + 오른쪽 '로그인이 여는 것' 지도
+   (캔버스 점 바탕 판 · 세 층을 둘러보기·관문 레일과 같은 세로 선과 마디로 잇는다). 토큰은 `--tx-*` 만, 강조색 하나.
+   반경: 판 24 · 칸·단추 12 · 칩 10. 계약 클래스(`.login-field__input`·`.login-submit`·`.login-error`)는 그대로 두고 `.lg` 범위에서
+   모습만 덮는다(옛 규칙은 BU10). 움직임은 처음 한 번(폼 떠오름 → 지도 선이 그려지고 층이 차례로) · 감속 모션이면 정지.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.lg { --lg-dot: rgb(25 31 40 / 0.09); --lg-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--tx-surface); color: var(--tx-ink);
+  font-family: var(--tx-font); -webkit-font-smoothing: antialiased; }
+.dark .lg { --lg-dot: rgb(255 255 255 / 0.07); }
+.lg a:focus-visible, .lg button:focus-visible, .lg summary:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; border-radius: 10px; }
+.lg-head { display: flex; align-items: center; height: 72px; padding: 0 40px; }
+.lg-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: var(--tx-ink); text-decoration: none; }
+.lg-logo { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--tx-blue); }
+.lg-logo svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dark .lg-logo svg { stroke: var(--tx-on-cta); }
+.lg-main { flex: 1; display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 560px); justify-content: center; align-items: start; gap: 88px; padding: 6vh 40px 72px; }
+
+/* 왼쪽 폼 */
+.lg-form { display: flex; flex-direction: column; gap: 18px; padding-top: 20px; }
+.lg-h1 { margin: 0; font-size: 34px; line-height: 1.25; font-weight: 800; letter-spacing: -0.04em; }
+.lg-note { margin: -8px 0 10px; font-size: 16px; line-height: 1.6; color: var(--tx-sub); word-break: keep-all; }
+.lg-already { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--tx-blue-soft); font-size: 14px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
+.lg-already-go { font-weight: 700; color: var(--tx-cta); }
+.lg-field { display: flex; flex-direction: column; gap: 8px; }
+.lg-label { font-size: 14px; font-weight: 700; color: var(--tx-sub); }
+.lg .lg-input { width: 100%; height: 56px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--tx-soft); color: var(--tx-ink);
+  font: inherit; font-size: 17px; outline: none; box-shadow: none; transition: box-shadow .2s, background-color .2s; }
+.lg .lg-input:hover { background: var(--tx-line); }
+.lg .lg-input:focus { outline: none; background: var(--tx-soft); box-shadow: inset 0 0 0 2px var(--tx-blue); }
+.lg .lg-error { margin: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--tx-danger-soft); color: var(--tx-danger); font-size: 14px; line-height: 1.55; }
+/* 라이트에서 --tx-danger(#d22a3b)는 연한 판(#fdecee) 위 4.45:1 — 이 판 안 글자만 한 단계 진하게(AA). 다크는 토큰 그대로 통과. */
+:root:not(.dark) .lg .lg-error { color: #b42331; }
+.lg-error p { margin: 0; }
+.lg-error-say { font-weight: 700; }
+.lg-raw { margin-top: 6px; }
+.lg-raw > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.lg-raw > p { margin-top: 6px; font-size: 13px; color: var(--tx-ink); overflow-wrap: anywhere; }
+.lg .lg-submit { height: 56px; margin-top: 6px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--tx-cta); color: var(--tx-on-cta);
+  font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; transition: transform .2s var(--lg-ease), filter .2s; }
+.lg .lg-submit:hover { filter: brightness(1.06); }
+.lg .lg-submit:active { transform: scale(0.99); }
+.lg .lg-submit:disabled { opacity: .55; cursor: progress; filter: none; transform: none; }
+.lg-foot { margin: 4px 0 0; font-size: 14px; line-height: 1.6; color: var(--tx-sub); word-break: keep-all; }
+.lg-home { margin-left: 4px; font-weight: 700; color: var(--tx-ink); }
+
+/* 오른쪽 지도 — 캔버스 점 바탕 판 */
+.lg-map { padding: 30px 32px 24px; border-radius: 24px; background-color: var(--tx-bg);
+  background-image: radial-gradient(var(--lg-dot) 1px, transparent 1.25px); background-size: 18px 18px; }
+.lg-map-h { margin: 0; font-size: 20px; line-height: 1.35; font-weight: 800; letter-spacing: -0.03em; }
+.lg-srv { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; }
+.lg-srv-k { font-size: 13px; font-weight: 700; color: var(--tx-sub); }
+/* 점 바탕 위에서는 회색 칩이 판과 같은 색이라 사라진다 — 흰 칩으로 */
+.lg-srv .tx-chip[data-tone="plain"], .lg-srv .tx-chip[data-tone="unknown"] { background: var(--tx-surface); color: var(--tx-sub); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.lg-tiers { position: relative; display: flex; flex-direction: column; gap: 24px; margin: 28px 0 0; padding: 0; list-style: none; }
+.lg-tiers::before { content: ""; position: absolute; left: 15px; top: 18px; bottom: 18px; width: 2px; border-radius: 2px; background: var(--tx-line); transform-origin: top; }
+.lg-tier { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; }
+.lg-tier-n { position: relative; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--tx-surface); color: var(--tx-cta); box-shadow: inset 0 0 0 2px var(--tx-blue); }
+.lg-tier[data-tier="login"] .lg-tier-n { background: var(--tx-blue-soft); box-shadow: inset 0 0 0 2px var(--tx-blue-soft); }
+.lg-tier[data-tier="admin"] .lg-tier-n { background: var(--tx-cta); color: var(--tx-on-cta); box-shadow: none; }
+.lg-tier-b { min-width: 0; padding-top: 4px; }
+.lg-tier-t { margin: 0; font-size: 16px; line-height: 1.45; font-weight: 800; letter-spacing: -0.02em; }
+.lg-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.lg-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 12px; border-radius: 10px; background: var(--tx-surface);
+  box-shadow: inset 0 0 0 1px var(--tx-line); font-size: 14px; line-height: 1.35; color: var(--tx-ink); text-decoration: none; word-break: keep-all; }
+a.lg-chip { font-weight: 600; transition: box-shadow .2s, color .2s, transform .2s var(--lg-ease); }
+a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-blue); transform: translateY(-1px); }
+.lg-why { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: var(--tx-sub); word-break: keep-all; }
+.lg-map-cap { margin: 24px 0 0; padding-top: 14px; border-top: 1px solid var(--tx-line); font-size: 13px; line-height: 1.5; color: var(--tx-mute); }
+
+@keyframes lg-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes lg-rail { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes lg-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.1); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: no-preference) {
+  .lg-form { animation: lg-rise .7s var(--lg-ease) .05s both; }
+  .lg-map { animation: lg-rise .8s var(--lg-ease) .15s both; }
+  .lg-tiers::before { animation: lg-rail .9s cubic-bezier(0.65, 0, 0.35, 1) .45s both; }
+  .lg-tier { animation: lg-rise .6s var(--lg-ease) both; animation-delay: calc(var(--i) * 160ms + 500ms); }
+  .lg-tier-n { animation: lg-pop .5s var(--lg-ease) both; animation-delay: calc(var(--i) * 160ms + 560ms); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lg .lg-input, .lg .lg-submit, a.lg-chip { transition: none; }
+}
+@media (max-width: 1000px) {
+  .lg-main { grid-template-columns: minmax(0, 560px); gap: 40px; padding: 3vh 24px 56px; }
+}
+@media (max-width: 720px) {
+  .lg-head { height: 60px; padding: 0 16px; }
+  .lg-main { padding: 16px 16px 40px; gap: 32px; }
+  .lg-form { padding-top: 8px; }
+  .lg-h1 { font-size: 28px; }
+  .lg-map { padding: 22px 18px 18px; border-radius: 20px; }
+}

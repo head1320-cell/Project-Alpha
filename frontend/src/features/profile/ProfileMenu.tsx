@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ROLE_KO, useSession } from "@/entities/session";
+import { loginHref } from "@/shared/lib/nextPath";
 import { darkException, darkReady, THEMES, useTheme } from "@/shared/theme";
 
 function Person() {
@@ -102,7 +103,7 @@ export function ProfileMenu() {
             ) : session.kind === "unknown" ? (
               <button type="button" className="pf-retry" onClick={() => void retry()}>다시 시도</button>
             ) : session.kind === "signed_out" ? (
-              <Link href="/login" className="pf-login" onClick={() => setOpen(false)}>로그인</Link>
+              <Link href={loginHref(pathname)} className="pf-login" onClick={() => setOpen(false)}>로그인</Link>
             ) : null}
           </div>
         </div>

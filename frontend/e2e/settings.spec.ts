@@ -140,7 +140,7 @@ test("설정: 지금 비밀번호가 틀리면 서버 사유 그대로 · 분석
 test("설정: 로그인 안 됨이면 로그인으로 안내 · 모름(500)이면 토큰을 두고 다시 시도 · 프로필 카드에 '설정' 줄", async ({ page }) => {
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".set-signed-out")).toBeVisible();
-  await expect(page.locator(".set-signed-out a")).toHaveAttribute("href", "/login");
+  await expect(page.locator(".set-signed-out a")).toHaveAttribute("href", "/login?next=%2Fsettings");
   // 로그인 안 돼도 화면 테마는 고를 수 있다(이 브라우저에만 남는다).
   await expect(page.locator('.set-seg-b[data-theme="dark"]')).toBeVisible();
 

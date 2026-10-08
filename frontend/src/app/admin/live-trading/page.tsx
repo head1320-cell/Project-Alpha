@@ -9,6 +9,7 @@ import {
 
 import { getWithAuth, postJson } from "@/shared/api/apiBase";
 import { UNAUTHORIZED_MESSAGE } from "@/shared/api/authToken";
+import { loginHref } from "@/shared/lib/nextPath";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -120,7 +121,7 @@ export default function LiveTradingPage() {
           <div className="max-w-[1600px] mx-auto px-8 flex items-center gap-3">
             <Lock size={14} className="text-[#F5A623]" />
             <span className="text-[12px] text-[#F5A623]">{authError}</span>
-            <a href="/login" className="live-auth-banner__link text-[11px] underline text-[#F5A623]">
+            <a href={loginHref("/admin/live-trading")} className="live-auth-banner__link text-[11px] underline text-[#F5A623]">
               로그인
             </a>
           </div>

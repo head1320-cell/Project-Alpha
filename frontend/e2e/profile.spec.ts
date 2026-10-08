@@ -58,7 +58,7 @@ test("프로필(BR R3): 국면 배지 대신 동그라미 하나 · 토큰이 �
   await expect(card(page)).toBeVisible();
   await expect(avatar(page)).toHaveAttribute("aria-expanded", "true");
   await expect(card(page).locator(".pf-name")).toHaveText("로그인 안 됨");
-  await expect(card(page).locator(".pf-login")).toHaveAttribute("href", "/login");
+  await expect(card(page).locator(".pf-login")).toHaveAttribute("href", "/login?next=%2Fdashboard");
   await expect(card(page).locator(".pf-logout")).toHaveCount(0);
   expect(calls, "토큰이 없으면 /auth/me 를 부르지 않는다").toEqual([]);
 
@@ -110,7 +110,7 @@ test("프로필: 401 이면 토큰을 지우고 '로그인이 끝났어요' · 5
   await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — 로그인 안 됨");
   expect(await tokenNow(page), "끝난 토큰은 지운다").toBeNull();
   await avatar(page).click();
-  await expect(card(page).locator(".pf-note")).toHaveText("로그인이 끝났어요 — 다시 로그인해 주세요.");
+  await expect(card(page).locator(".pf-note")).toHaveText("로그인이 끝났어요. 다시 로그인해 주세요.");
 
   // 짝 — 서버가 답하지 못한 것은 로그아웃이 아니다.
   await page.evaluate((k) => { localStorage.setItem(k, "t-keep"); }, TOKEN_KEY);

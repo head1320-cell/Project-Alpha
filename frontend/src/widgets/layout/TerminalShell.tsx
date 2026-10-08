@@ -96,8 +96,8 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
   const admin = session.kind === "signed_in" && session.role === "admin";
   const screens = useMemo(() => [...MAIN, ...MORE, ...(admin ? ADMIN : [])].map(({ label, href }) => ({ label, href })), [admin]);
 
-  // 루트(/)는 랜딩 페이지 — 터미널 셸 없이 풀블리드 렌더 (CTA가 /dashboard로 진입)
-  if (pathname === "/") return <>{children}</>;
+  // 루트(/)는 랜딩 페이지, /login 은 메뉴 없는 단독 한 화면(BU8b) — 터미널 셸 없이 풀블리드 렌더
+  if (pathname === "/" || pathname === "/login") return <>{children}</>;
 
   const isOn = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const item = (m: NavLink) => {

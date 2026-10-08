@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { setToken } from "@/shared/api/authToken";
+import { loginHref } from "@/shared/lib/nextPath";
 import { ROLE_KO, useSession } from "@/entities/session";
 import { DARK_EXCEPTIONS, THEMES, useTheme } from "@/shared/theme";
 import { changePassword, issueAccount, listAccounts, resetAccount, type Account } from "./api";
@@ -54,8 +55,8 @@ export function SettingsView() {
       ) : session.kind === "signed_out" ? (
         <section className="set-card set-signed-out">
           <p className="set-strong">{session.note ?? "로그인하면 계정과 비밀번호를 볼 수 있어요."}</p>
-          <p className="set-sub">계정은 관리자에게 받아요 — 따로 가입하는 곳은 없어요.</p>
-          <Link href="/login" className="set-btn set-btn--primary">로그인</Link>
+          <p className="set-sub">계정은 관리자에게 받아요. 따로 가입하는 곳은 없어요.</p>
+          <Link href={loginHref("/settings")} className="set-btn set-btn--primary">로그인</Link>
         </section>
       ) : (
         <>

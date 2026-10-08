@@ -40,7 +40,7 @@ export function useSession() {
       const r = await getWithAuth("/api/v1/auth/me");
       if (r.status === 401) {
         clearToken();
-        setSession({ kind: "signed_out", note: "로그인이 끝났어요 — 다시 로그인해 주세요." });
+        setSession({ kind: "signed_out", note: "로그인이 끝났어요. 다시 로그인해 주세요." });
         return;
       }
       if (!r.ok) { setSession({ kind: "unknown", reason: `서버가 ${r.status} 오류로 답했어요.` }); return; }
