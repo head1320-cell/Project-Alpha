@@ -365,10 +365,24 @@ async function openModal(page: Page) {
 
 for (const t of TABS2) {
   test(`그림 수 보존 — ${t} (BU5b-2)`, async ({ page }) => {
+    // ★전략 탭의 보유 줄 수는 데이터다★ 서버가 그날의 (연습용) 시세로 보유 종목을 다시 고르므로
+    // 10-03 에 잰 73 은 10-08 에 68 이 됐다(화면 변경 0 — 같은 빌드로 확인). 그래서 이 탭은 고정 하한 대신
+    // 받은 응답에서 기대값을 센다: 카드마다 보유 상위 6줄(`StrategyCard` 의 `slice(0, 6)`) · 카드마다 도넛 하나.
+    const stratResp = t === "strategies"
+      ? page.waitForResponse((r) => r.url().includes("/api/v1/macro/strategies?market=kr"), { timeout: 30_000 }) : null;
     await open(page);
     await goTab2(page, t);
     const n = await vizIn(panel2(page, t));
     if (process.env.RECORD_VIZ) console.log(`VIZ2 ${t} ${JSON.stringify(n)}`);
+    if (stratResp) {
+      const body = await (await stratResp).json() as { strategies: { holdings: unknown[] }[] };
+      const rows = body.strategies.reduce((a, s) => a + Math.min(6, s.holdings.length), 0);
+      expect(body.strategies.length, "전략이 하나도 없으면 이 검사는 공허하다").toBeGreaterThan(0);
+      expect(n.cells, "보유 줄 = 서버 보유 종목(카드마다 상위 6)").toBe(rows);
+      expect(n.bars, "보유 막대 = 보유 줄").toBe(rows);
+      expect(n.svg, "카드마다 도넛 하나 이상").toBeGreaterThanOrEqual(body.strategies.length);
+      return;
+    }
     expect(n.svg).toBeGreaterThanOrEqual(VIZ_MIN2[t].svg);
     expect(n.cells).toBeGreaterThanOrEqual(VIZ_MIN2[t].cells);
     expect(n.bars).toBeGreaterThanOrEqual(VIZ_MIN2[t].bars);
