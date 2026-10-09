@@ -22411,3 +22411,16 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   `order_executor_v2.execute_signal` 재정의는 `actor` 를 받지 않는다 — 실행기는 v1 을 쓰고 v2 를 부르는 곳이 없어 손대지 않았다.
 - **하지 않은 것**: 계좌 기록·킬스위치·손익(BV6) · 위험 판정 행의 행위자 · 화면 변화 0 → PNG 없음.
 - **게이트**: ruff 통과 · pytest 8195 passed / 11 skipped · E2E admin 스펙 7 통과(응답 키만 늘어남).
+
+### MP · 가격 없는 시장가 주문이 위험 검사에서 터지지 않게 — 거절 + 사유
+
+- **왜**: BV5 테스트 중 발견. `POST /api/v1/live/orders/submit` 은 MARKET 주문에 가격을 요구하지 않는데, `RiskGateway` 가 `quantity * price` 를 `price=None` 으로 계산해
+  500(`int * NoneType`)이 났다. 실행기 직접 호출은 `KeyError: 'price'`. 신호 감사 행만 남고 판정 행이 없는 반쪽 기록이었다.
+- **무엇을**: `RiskGateway._tier1_static_checks` 에 ⓪-b — 가격이 양수 숫자가 아니면(없음·0·음수·글자·bool) "주문 기준 가격 미상 — 한도(회전·비중·집중)를 잴 수 없어 주문하지 않습니다"
+  로 Tier1 거절(뒤의 `order["price"]` 다섯 곳에 닿지 않는다). ★0 으로 가정하지 않는다★(BV0b `OrderPriceUnavailable` 와 같은 규율). 그리고 `check()` 가 Tier1 거절에도
+  `rejected_reason` 을 싣는다 — 예전에는 비어 있어 Tier1 거절(계좌 상태 미상 포함)이 호출자에게 "위험 검증 실패" 한 줄로만 갔다.
+- **확인**: 새 `tests/test_price_less_order_refused.py` 8 — 가격 없음·0·음수·글자 → 거절 + 사유 + 동적 검사 안 감 · 짝: 가격 있는 LIMIT·MARKET 은 이 사유로 거절 안 됨 · 경로: 500 아님,
+  `REJECTED` + 사유, SUBMITTED 없음, `RISK_CHECK_REJECTED` 감사 행이 남는다 · 짝: 가격 있는 LIMIT 경로 · 실행기 직접(`price` 키 없음) → 같은 거절, `KeyError` 아님.
+  빨강 6 · 짝 2 처음부터 초록. ★변이 5 모두 죽음★: 검사 빼기 · `price or 0` 가정 · 0 통과 · 거절 대신 통과 · Tier1 사유 안 실음.
+- **하지 않은 것**: 시세로 가격 채우기(소비자 없음) · 스키마에서 MARKET 가격 필수화(요청 계약 변경) · 6중 안전장치·`dry_run`·실행기 생성 규칙. 화면 0 → PNG 없음.
+- **게이트**: ruff 통과 · pytest 8203 passed / 11 skipped.

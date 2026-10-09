@@ -147,6 +147,8 @@ class RiskGateway:
         # Tier 1에서 거부되면 Tier 2 skip
         if not tier1_ok:
             result.approved = False
+            # Tier2 실패처럼 사유를 싣는다 — 예전에는 비어 있어 호출자가 "위험 검증 실패" 한 줄만 받았다.
+            result.rejected_reason = "; ".join(result.tier_failures)
             return result
 
         # Tier 2 — Dynamic
@@ -173,6 +175,15 @@ class RiskGateway:
         if state.get("equity_krw") is None:
             result.tier_failures.append(
                 f"Tier1: 계좌 상태 미상 ({state.get('state_reason') or 'unknown'})")
+            return False
+
+        # ⓪-b ★주문 기준 가격을 모르면 통과시키지 않는다★ — 아래 한도는 모두 `수량 × 가격` 이다.
+        # 예전에는 가격 없는 시장가 주문이 `int * None` 으로 터졌다(500, 판정 기록 없음). 0 으로 가정하지 않는다.
+        price = order.get("price")
+        if isinstance(price, bool) or not isinstance(price, (int, float)) or price <= 0:
+            result.tier_failures.append(
+                "Tier1: 주문 기준 가격 미상 — 한도(회전·비중·집중)를 잴 수 없어 주문하지 않습니다. "
+                "지정가로 내거나 가격을 넣어 주세요.")
             return False
 
         # ① 시장 시간
