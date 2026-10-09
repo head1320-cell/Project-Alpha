@@ -128,6 +128,16 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_ADMIN, "계정 발급 — 로그인만 하면 실계좌 잔고가 열리므로 운영자만"),
     ("POST", "/api/v1/auth/users/{username}/reset-password"):
         (REQUIRE_ADMIN, "남의 비밀번호 초기화 — 그 사람의 토큰이 모두 죽는다"),
+
+    # ── 내 증권 계좌 (BV4) — 로그인 + ★본인 계좌만★: 소유자는 토큰에서 오고, 남의 계좌는 404 ──
+    ("GET", "/api/v1/broker-accounts"):
+        (REQUIRE_LOGIN, "내 증권 계좌 목록(가림) — 소유자로 거른다"),
+    ("POST", "/api/v1/broker-accounts"):
+        (REQUIRE_LOGIN, "증권 계좌 연결 — 앱 키·시크릿·계좌번호를 받아 암호화해 둔다"),
+    ("DELETE", "/api/v1/broker-accounts/{account_id}"):
+        (REQUIRE_LOGIN, "내 증권 계좌 지우기 — 남의 계좌는 404"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/check"):
+        (REQUIRE_LOGIN, "내 증권 계좌 연결 확인 — 그 계좌 자격으로 증권사에 잔고를 한 번 묻는다. 남의 계좌는 404"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.
@@ -223,6 +233,8 @@ MONEY_PATH_MARKERS = (
     # AE4 로 전략 평가 표면이 생겼다 — 유통(P4)과 인접한 영역이라 전수 검사의
     # 사정거리 안에 둔다.
     "/strategies/",
+    # BV4 — 사용자 증권 계좌. `"/accounts/"` 는 `broker-accounts` 에 걸리지 않는다(실측).
+    "broker-account",
 )
 
 

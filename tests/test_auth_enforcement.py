@@ -26,7 +26,8 @@ from src.domain.auth_identity import ROLE_ADMIN, ROLE_ANALYST
 _SECRET = "enforcement-test-secret-0123456789abcdef"
 
 #: 경로 파라미터를 가진 라우트에 넣을 구체값.
-_PATH_FILLERS = {"{client_order_id}": "COID-TEST-1", "{username}": "alice"}
+_PATH_FILLERS = {"{client_order_id}": "COID-TEST-1", "{username}": "alice",
+                 "{account_id}": "ba_0000000000000000"}
 
 
 def _concrete(path: str) -> str:

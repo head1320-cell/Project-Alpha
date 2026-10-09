@@ -67,6 +67,7 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.glidepath_routes",
     "src.api.report_routes",
     "src.api.scorecard_routes",
+    "src.api.broker_account_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —
