@@ -63,7 +63,10 @@ LIVE_TRADING_SCHEMA_DDL = [
         error_message      TEXT,
 
         created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at         TIMESTAMP
+        updated_at         TIMESTAMP,
+
+        -- 사용자 증권 계좌(BV6). NULL = 운영자 `.env` 계좌.
+        account_id         VARCHAR(32)
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_lo_status ON live_orders(status)",
@@ -108,7 +111,8 @@ LIVE_TRADING_SCHEMA_DDL = [
         severity           VARCHAR(10) DEFAULT 'INFO',
         message            TEXT,
 
-        timestamp          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        timestamp          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        account_id         VARCHAR(32)
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_lat_event ON live_audit_trail(event_type)",
@@ -170,7 +174,8 @@ LIVE_TRADING_SCHEMA_DDL = [
 
         resolved_at        TIMESTAMP,
         resolved_by        VARCHAR(50),
-        resolution_notes   TEXT
+        resolution_notes   TEXT,
+        account_id         VARCHAR(32)
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_lke_ts ON live_kill_events(triggered_at)",
@@ -213,6 +218,17 @@ _EQUITY_SOURCE_COLS = [("equity_source", "VARCHAR(16)")]
 #: ★발동이 **무엇을 했는가**★ — 같은 이유로 기존 DB 에는 이 경로로만 붙는다(AP4).
 _KILL_ACTION_COLS = [("actions_json", "TEXT")]
 
+#: ★어느 계좌의 기록인가★(BV6) — NULL 은 운영자 `.env` 계좌. 기존 DB 에는 이 경로로만 붙는다.
+_ACCOUNT_COLS = [("account_id", "VARCHAR(32)")]
+ACCOUNT_TABLES = ("live_orders", "live_audit_trail", "live_kill_events")
+
+
+def account_scope(account_id: str | None) -> tuple[str, dict]:
+    """`(SQL 조건, 인자)` — 그 계좌의 행만. ★운영자(`None`)는 계좌 행을 보지 않는다★(BV6)."""
+    if account_id is None:
+        return "account_id IS NULL", {}
+    return "account_id = :acct", {"acct": account_id}
+
 
 def init_live_trading_schema(engine) -> int:
     """5개 live_* 테이블 생성 + ★기존 표에 빠진 칸 덧붙이기★."""
@@ -239,4 +255,10 @@ def init_live_trading_schema(engine) -> int:
     except Exception as e:                                   # noqa: BLE001
         # ★못 붙어도 발동은 성립한다★ — 조치 기록만 남지 않는다.
         logger.warning(f"actions_json 컬럼 추가 실패(그 칸 없이 동작): {e}")
+    from src.data.schema_add_columns import add_columns
+    for table in ACCOUNT_TABLES:
+        # ★실패를 삼키지 않는다★ — 이 칸이 없으면 계좌 기록과 운영자 기록이 섞인다(BV6).
+        if not add_columns(engine, table, _ACCOUNT_COLS, label="계좌 구분(BV6)"):
+            raise RuntimeError(f"{table}.account_id 를 붙이지 못했습니다 — 계좌 기록과 운영자 기록을 가를 수 없어 "
+                               "실거래 표를 쓰지 않습니다.")
     return count

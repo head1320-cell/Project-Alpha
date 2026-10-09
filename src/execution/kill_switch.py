@@ -51,6 +51,7 @@ from src.domain.kill_action import (
     observations,
     unknown_actions,
 )
+from src.execution.live_schemas import account_scope
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,15 @@ class KillSwitch:
         ks.resolve(resolved_by="admin", notes="시장 안정화 확인")
     """
 
-    def __init__(self, engine, audit_trail=None, config: KillSwitchConfig | None = None):
+    #: 운영자 계좌(`None`)가 기본 — `__init__` 을 거치지 않고 만든 인스턴스도 운영자 범위다(BV6).
+    account_id: str | None = None
+
+
+    def __init__(self, engine, audit_trail=None, config: KillSwitchConfig | None = None,
+                 account_id: str | None = None):
+        #: 사용자 증권 계좌(BV6). `None` = 운영자 계좌. ★계좌는 운영자(전역) 정지에도 막힌다★ —
+        #: 발동·해제·취소는 자기 계좌 것만 한다.
+        self.account_id = account_id
         self.engine = engine
         self.audit = audit_trail
         self.config = config or KillSwitchConfig()
@@ -174,13 +183,16 @@ class KillSwitch:
     # ─────────────────────────────────────────────────────────────────────
 
     def is_active(self) -> bool:
-        """현재 kill switch 활성 여부."""
+        """현재 kill switch 활성 여부. 계좌는 자기 정지 ★또는★ 운영자(전역) 정지에 막힌다(BV6)."""
+        scope, params = account_scope(self.account_id)
+        if self.account_id is not None:
+            scope = f"(account_id IS NULL OR {scope})"
         try:
             with self.engine.connect() as conn:
-                row = conn.execute(text("""
+                row = conn.execute(text(f"""
                     SELECT COUNT(*) AS cnt FROM live_kill_events
-                    WHERE resolved_at IS NULL
-                """)).fetchone()
+                    WHERE resolved_at IS NULL AND {scope}
+                """), params).fetchone()
                 return (row._mapping["cnt"] if row else 0) > 0
         except Exception as e:
             logger.error(f"Kill switch 상태 조회 실패: {e}")
@@ -202,14 +214,15 @@ class KillSwitch:
             logger.warning(f"조치 기록 저장 실패(발동은 유효): {e}")
 
     def active_event(self) -> dict | None:
-        """현재 미해결 kill 이벤트 (있다면)."""
+        """현재 미해결 kill 이벤트 (있다면) — ★자기 것만★(계좌가 운영자 정지를 해제하지 못하게, BV6)."""
+        scope, params = account_scope(self.account_id)
         try:
             with self.engine.connect() as conn:
-                row = conn.execute(text("""
+                row = conn.execute(text(f"""
                     SELECT * FROM live_kill_events
-                    WHERE resolved_at IS NULL
+                    WHERE resolved_at IS NULL AND {scope}
                     ORDER BY triggered_at DESC LIMIT 1
-                """)).fetchone()
+                """), params).fetchone()
                 # ★조치 기록을 함께 낸다★ — 없으면 `unknown`(AP5)
                 return decorate_event(dict(row._mapping)) if row else None
         except Exception as e:
@@ -366,9 +379,12 @@ class KillSwitch:
         Returns:
             event 정보 dict
         """
-        if self.is_active():
+        # ★자기 정지가 이미 있는가로 본다★(BV6) — 계좌가 운영자 전역 정지 중에 스스로 멈추면 그 정지도 남아야
+        # 한다(전역이 풀릴 때 계좌가 함께 풀리면 안 된다). 운영자에게는 예전과 같은 검사다.
+        existing = self.active_event()
+        if existing:
             logger.warning("Kill switch 이미 발동 중 — 중복 trigger 무시")
-            return self.active_event() or {}
+            return existing
 
         event_id = f"KILL-{uuid.uuid4().hex[:12]}"
         liq_mode = liquidation_mode or self.config.default_liquidation_mode
@@ -380,13 +396,14 @@ class KillSwitch:
                     INSERT INTO live_kill_events (
                         event_id, trigger_source, trigger_reason,
                         equity_at_trigger, dd_at_trigger, regime_at_trigger,
-                        liquidation_mode
+                        liquidation_mode, account_id
                     ) VALUES (
-                        :eid, :ts, :tr, :eq, :dd, :rg, :lm
+                        :eid, :ts, :tr, :eq, :dd, :rg, :lm, :acct
                     )
                 """), {
                     "eid": event_id, "ts": source, "tr": reason,
                     "eq": equity, "dd": dd_pct, "rg": regime, "lm": liq_mode,
+                    "acct": self.account_id,
                 })
         except Exception as e:
             logger.error(f"Kill event DB 기록 실패: {e}")
@@ -540,14 +557,15 @@ class KillSwitch:
     def _cancel_open_orders(self, kis_client) -> int:
         """모든 미체결 주문 일괄 취소."""
         cancelled = 0
+        scope, params = account_scope(self.account_id)   # ★자기 계좌 주문만★(BV6)
         try:
             with self.engine.connect() as conn:
-                rows = conn.execute(text("""
+                rows = conn.execute(text(f"""
                     SELECT client_order_id, kis_order_id, kis_order_org_no,
                            filled_quantity, quantity
                     FROM live_orders
-                    WHERE status IN ('PENDING', 'SUBMITTED', 'PARTIAL_FILL')
-                """)).fetchall()
+                    WHERE status IN ('PENDING', 'SUBMITTED', 'PARTIAL_FILL') AND {scope}
+                """), params).fetchall()
 
             for r in rows:
                 m = r._mapping

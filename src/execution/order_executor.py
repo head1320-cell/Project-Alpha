@@ -33,8 +33,9 @@ from sqlalchemy import text
 from src.domain.kis_failure import failure_label
 from src.execution.api_failure_probe import observe_into
 from src.execution.client_realism import client_is_simulated
-from src.execution.drawdown import REASON_FETCH_FAILED, drawdown_from_history
+from src.execution.drawdown import REASON_FETCH_FAILED, Drawdown, drawdown_from_history
 from src.execution.kis_client import KISCallError
+from src.execution.live_schemas import account_scope
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,10 @@ class OrderExecutor:
                            confirm_token="EXPLICIT_LIVE_CONFIRMED")
     """
 
+    #: 운영자 계좌(`None`)가 기본 — `__init__` 을 거치지 않고 만든 인스턴스도 운영자 범위다(BV6).
+    account_id: str | None = None
+
+
     def __init__(
         self,
         engine,
@@ -116,7 +121,10 @@ class OrderExecutor:
         audit_trail,
         kill_switch,
         mode: str = ExecutionMode.SHADOW,
+        account_id: str | None = None,
     ):
+        #: 사용자 증권 계좌(BV6). `None` = 운영자 `.env` 계좌. 주문을 쓰고 읽을 때 이 계좌 것만 본다.
+        self.account_id = account_id
         self.engine = engine
         self.kis = kis_client
         self.risk = risk_gateway
@@ -401,8 +409,8 @@ class OrderExecutor:
         ticker: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
-        sql = "SELECT * FROM live_orders WHERE 1=1"
-        params: dict = {}
+        scope, params = account_scope(self.account_id)
+        sql = f"SELECT * FROM live_orders WHERE {scope}"
         if status:
             sql += " AND status = :st"; params["st"] = status
         if strategy_id:
@@ -417,10 +425,11 @@ class OrderExecutor:
         return [dict(r._mapping) for r in rows]
 
     def get_order(self, client_order_id: str) -> dict | None:
+        scope, params = account_scope(self.account_id)
         with self.engine.connect() as conn:
             row = conn.execute(text(
-                "SELECT * FROM live_orders WHERE client_order_id = :coid"
-            ), {"coid": client_order_id}).fetchone()
+                "SELECT * FROM live_orders WHERE client_order_id = :coid AND " + scope
+            ), {"coid": client_order_id, **params}).fetchone()
             if not row:
                 return None
             order = dict(row._mapping)
@@ -474,14 +483,16 @@ class OrderExecutor:
         try:
             balance = self.kis.get_balance()
 
-            # 오늘 turnover
+            # 오늘 turnover — ★이 계좌 것만★(BV6)
+            scope, params = account_scope(self.account_id)
             with self.engine.connect() as conn:
-                row = conn.execute(text("""
+                row = conn.execute(text(f"""
                     SELECT COALESCE(SUM(quantity * COALESCE(avg_fill_price, price, 0)), 0) AS turnover
                     FROM live_orders
                     WHERE date(created_at) = date('now')
                       AND status IN ('FILLED', 'PARTIAL_FILL', 'SUBMITTED')
-                """)).fetchone()
+                      AND {scope}
+                """), params).fetchone()
                 daily_turnover = float(row._mapping["turnover"]) if row else 0
 
             positions = {
@@ -497,7 +508,9 @@ class OrderExecutor:
             # ★드로다운은 재거나 모르거나다★ — 예전에는 0 을 박아 두어(TODO 주석과
             # 함께) 킬스위치의 `auto_dd`/`auto_cb` 와 게이트웨이 ⑨ 서킷브레이커가
             # **구조적으로 발동할 수 없었다**. 이제 못 재면 `None` + 사유다(P1-a).
-            dd = drawdown_from_history(self.engine)
+            # 에쿼티 이력은 운영자 계좌의 것이다 — 계좌 실행기는 빌려 쓰지 않는다(BV6, 계좌별 이력은 아직 없다).
+            dd = (drawdown_from_history(self.engine) if self.account_id is None else
+                  Drawdown(None, None, "계좌별 자산 이력은 아직 기록하지 않아요 — 드로다운을 잴 수 없어요."))
             # ★`auto_api` 의 재료★(AQ) — 연속 실패 횟수는 이미 `CircuitBreaker` 가
             # 세고 있었다. 세는 로직은 0줄 바뀌지 않고, 여기서 **읽어 실을** 뿐이다.
             return observe_into({
@@ -532,11 +545,11 @@ class OrderExecutor:
                         client_order_id, strategy_id, signal_source, execution_mode,
                         ticker, side, order_type, quantity, price,
                         status, risk_check_id, expected_slippage_bps,
-                        market_impact_estimate_krw, reason_code
+                        market_impact_estimate_krw, reason_code, account_id
                     ) VALUES (
                         :coid, :sid, :src, :mode,
                         :tk, :sd, :ot, :qty, :pr,
-                        'PENDING', :rcid, :sl, :mi, :rc
+                        'PENDING', :rcid, :sl, :mi, :rc, :acct
                     )
                 """), {
                     "coid": client_order_id,
@@ -550,6 +563,7 @@ class OrderExecutor:
                     "sl":   risk_result.metadata.get("market_impact_bps"),
                     "mi":   None,
                     "rc":   "approved",
+                    "acct": self.account_id,
                 })
         except Exception as e:
             logger.error(f"PENDING 주문 INSERT 실패: {e}")
@@ -602,10 +616,10 @@ class OrderExecutor:
                     INSERT INTO live_orders (
                         client_order_id, strategy_id, execution_mode,
                         ticker, side, quantity, price,
-                        status, reason_code, error_message, risk_check_id
+                        status, reason_code, error_message, risk_check_id, account_id
                     ) VALUES (
                         :coid, :sid, :mode, :tk, :sd, :qty, :pr,
-                        'REJECTED', :rc, :em, :rcid
+                        'REJECTED', :rc, :em, :rcid, :acct
                     )
                 """), {
                     "coid": client_order_id,
@@ -615,6 +629,7 @@ class OrderExecutor:
                     "qty":  signal["quantity"], "pr": signal.get("price"),
                     "rc":   reason, "em": message,
                     "rcid": check_id,
+                    "acct": self.account_id,
                 })
         except Exception:
             pass

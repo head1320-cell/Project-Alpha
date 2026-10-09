@@ -397,6 +397,7 @@ def live_kill_events(limit: int = Query(50, le=200)):
         with get_sync_engine().connect() as conn:
             rows = conn.execute(text("""
                 SELECT * FROM live_kill_events
+                WHERE account_id IS NULL
                 ORDER BY triggered_at DESC LIMIT :lim
             """), {"lim": limit}).fetchall()
         # ★`active_event()` 와 **같은 함수**로 조치를 붙인다★ — 두 표면이 같은

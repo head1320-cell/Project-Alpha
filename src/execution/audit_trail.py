@@ -35,6 +35,8 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.execution.live_schemas import account_scope
+
 logger = logging.getLogger(__name__)
 
 
@@ -125,8 +127,14 @@ class AuditTrail:
         )
     """
 
-    def __init__(self, engine):
+    #: 운영자 계좌(`None`)가 기본 — `__init__` 을 거치지 않고 만든 인스턴스도 운영자 범위다(BV6).
+    account_id: str | None = None
+
+
+    def __init__(self, engine, account_id: str | None = None):
         self.engine = engine
+        #: 사용자 증권 계좌(BV6). `None` = 운영자 계좌. 쓰는 행에 싣고, 읽을 때 이 계좌 것만 본다.
+        self.account_id = account_id
 
     # ─────────────────────────────────────────────────────────────────────
     # 기록
@@ -170,18 +178,19 @@ class AuditTrail:
                         audit_id, event_type, event_category, severity,
                         strategy_id, client_order_id, ticker,
                         decision, risk_tier, reason_code,
-                        context_json, actor, message
+                        context_json, actor, message, account_id
                     ) VALUES (
                         :aid, :et, :ec, :sv,
                         :sid, :coid, :tk,
                         :dec, :rt, :rc,
-                        :cj, :ac, :msg
+                        :cj, :ac, :msg, :acct
                     )
                 """), {
                     "aid": audit_id, "et": event_type, "ec": category, "sv": severity,
                     "sid": strategy_id, "coid": client_order_id, "tk": ticker,
                     "dec": decision, "rt": risk_tier, "rc": reason_code,
                     "cj": context_json, "ac": actor, "msg": message,
+                    "acct": self.account_id,
                 })
 
             # 중요 이벤트는 표준 로거에도 기록
@@ -327,8 +336,8 @@ class AuditTrail:
         """조건 조회."""
         severity_levels = {"INFO": 0, "WARN": 1, "ERROR": 2, "CRITICAL": 3}
 
-        sql = "SELECT * FROM live_audit_trail WHERE 1=1"
-        params: dict = {}
+        scope, params = account_scope(self.account_id)
+        sql = f"SELECT * FROM live_audit_trail WHERE {scope}"
 
         if start:
             sql += " AND timestamp >= :start"; params["start"] = start
@@ -384,9 +393,10 @@ class AuditTrail:
         ★여기는 SQL 만 한다★ — 접는 것도 판정도 `src/domain/kis_rt_cd.py` 가
         한다. 돌려주는 행은 그 쪽이 그대로 받는 모양이다.
         """
+        scope, params = account_scope(self.account_id)
         sql = ("SELECT timestamp, context_json FROM live_audit_trail "
-               "WHERE event_type = :et AND context_json IS NOT NULL")
-        params: dict = {"et": EventType.ORDER_FAILED}
+               f"WHERE event_type = :et AND context_json IS NOT NULL AND {scope}")
+        params["et"] = EventType.ORDER_FAILED
         if start:
             sql += " AND timestamp >= :start"; params["start"] = start
         if end:
@@ -427,14 +437,15 @@ class AuditTrail:
             date = datetime.now().date().isoformat()
 
         try:
+            scope, params = account_scope(self.account_id)
             with self.engine.connect() as conn:
-                rows = conn.execute(text("""
+                rows = conn.execute(text(f"""
                     SELECT event_type, event_category, severity, COUNT(*) AS cnt
                     FROM live_audit_trail
-                    WHERE date(timestamp) = :d
+                    WHERE date(timestamp) = :d AND {scope}
                     GROUP BY event_type, event_category, severity
                     ORDER BY cnt DESC
-                """), {"d": date}).fetchall()
+                """), {"d": date, **params}).fetchall()
 
                 summary = {
                     "date": date,

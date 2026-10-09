@@ -482,12 +482,13 @@ class OrderStateMachine:
     # ─────────────────────────────────────────────────────────────────────
 
     def list_active_orders(self) -> list[dict]:
-        """체결 대기 중인 모든 주문."""
+        """체결 대기 중인 운영자 계좌 주문 — ★사용자 계좌 주문은 여기 보이지 않는다★(BV6)."""
         try:
             with self.engine.connect() as conn:
                 rows = conn.execute(text(f"""
                     SELECT * FROM live_orders
                     WHERE status IN ({','.join(repr(s) for s in OrderState.ACTIVE)})
+                      AND account_id IS NULL
                     ORDER BY created_at DESC
                 """)).fetchall()
             return [dict(r._mapping) for r in rows]
@@ -501,6 +502,7 @@ class OrderStateMachine:
             with self.engine.connect() as conn:
                 rows = conn.execute(text("""
                     SELECT status, COUNT(*) AS cnt FROM live_orders
+                    WHERE account_id IS NULL
                     GROUP BY status
                 """)).fetchall()
             return {r._mapping["status"]: r._mapping["cnt"] for r in rows}
