@@ -32,3 +32,30 @@ export const issueAccount = (username: string, role: string) =>
 
 export const resetAccount = (username: string) =>
   call<{ username: string; temporary_password: string }>(postJson(`/api/v1/auth/users/${encodeURIComponent(username)}/reset-password`, {}));
+
+// ── 내 증권 계좌 (BV8 · 서버 BV3·BV4) — 서버가 가린 값만 돌아온다(앱 키·시크릿·전체 계좌번호 0) ──
+
+export type BrokerAccount = {
+  account_id: string; label: string; is_paper: boolean; account_prdt: string;
+  app_key_last4: string; account_no_masked: string; created_at: string | null;
+};
+
+export type BrokerCheck = {
+  account_id: string; state: "practice" | "ok" | "failed"; reason: string; detail?: string; checked_at: string;
+};
+
+export type BrokerConnect = {
+  label: string; app_key: string; app_secret: string; account_no: string; is_paper: boolean; account_prdt: string;
+};
+
+const BROKER = "/api/v1/broker-accounts";
+
+export const listBrokerAccounts = () => call<{ accounts: BrokerAccount[] }>(getWithAuth(BROKER));
+
+export const connectBrokerAccount = (body: BrokerConnect) => call<BrokerAccount>(postJson(BROKER, body));
+
+export const checkBrokerAccount = (id: string) =>
+  call<BrokerCheck>(postJson(`${BROKER}/${encodeURIComponent(id)}/check`, {}));
+
+export const deleteBrokerAccount = (id: string) =>
+  call<{ deleted: string }>(getWithAuth(`${BROKER}/${encodeURIComponent(id)}`, { method: "DELETE" }));

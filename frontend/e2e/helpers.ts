@@ -230,3 +230,22 @@ export function recordApi(page: Page, pathPrefix: string, quietMs = 1_500): ApiR
     },
   };
 }
+
+/**
+ * 카드 밖으로 삐져나간 칸·단추·분할 단추 (BV8). 셸이 넘친 부분을 잘라 숨기면 "가로 스크롤 없음" 검사로는 안 보인다
+ * (실측: 설정 390 에서 입력 칸 오른쪽 끝 442px · 테마 단추 357px > 카드 334px). `page.evaluate(cardsOverflow(".set .set-card"))`.
+ */
+export function cardsOverflow(cardSelector: string): string {
+  return `(() => {
+  const out = [];
+  for (const card of Array.from(document.querySelectorAll(${JSON.stringify(cardSelector)}))) {
+    const c = card.getBoundingClientRect();
+    for (const el of Array.from(card.querySelectorAll("input, button, .set-seg"))) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && (r.right > c.right + 0.5 || r.left < c.left - 0.5))
+        out.push((el.getAttribute("name") || el.className) + " " + Math.round(r.right) + ">" + Math.round(c.right));
+    }
+  }
+  return out;
+})()`;
+}

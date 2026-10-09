@@ -1,5 +1,5 @@
 import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { cardsOverflow, contrastAudit, type AuditResult } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BS1 — 설정 · 비밀번호 바꾸기 · 관리자 계정 발급 (설계 docs/superpowers/specs/2026-09-29-bs-br-leftovers-design.md §BS1)
@@ -169,6 +169,7 @@ for (const scheme of ["light", "dark"] as const) {
       expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(scheme === "dark");
       const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(over, `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
+      expect(await page.evaluate<string[]>(cardsOverflow(".set .set-card")), `${width}px 카드 밖으로 나간 칸`).toEqual([]);
       const a = await page.evaluate<AuditResult>(contrastAudit(".set"));
       expect(a.checked).toBeGreaterThan(12);
       expect(a.low, `${scheme} ${width} 대비`).toEqual([]);

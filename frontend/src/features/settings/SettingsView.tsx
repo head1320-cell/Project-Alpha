@@ -13,6 +13,7 @@ import { loginHref } from "@/shared/lib/nextPath";
 import { ROLE_KO, useSession } from "@/entities/session";
 import { DARK_EXCEPTIONS, THEMES, useTheme } from "@/shared/theme";
 import { changePassword, issueAccount, listAccounts, resetAccount, type Account } from "./api";
+import { BrokerAccounts } from "./BrokerAccounts";
 import { passwordRules } from "./passwordRules";
 
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : null);
@@ -78,6 +79,8 @@ export function SettingsView() {
           ) : null}
           <PasswordForm formRef={pwRef} username={session.username} onChanged={() => void refresh()}
                         adminWarning={session.role === "admin" && session.adminPassword?.state === "default" ? session.adminPassword.reason : null} />
+          {/* 임시 비밀번호면 숨긴다 — 서버도 바꾸기 전에는 계좌 경로를 403 으로 막는다. */}
+          {session.mustChange ? null : <BrokerAccounts />}
         </>
       )}
 
