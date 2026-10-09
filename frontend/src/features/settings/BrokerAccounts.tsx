@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   checkBrokerAccount, connectBrokerAccount, deleteBrokerAccount, listBrokerAccounts,
   type BrokerAccount, type BrokerCheck,
-} from "./api";
+} from "@/entities/broker-account";
 
 const ACCOUNT_NO = /^\d{8}$/;
 const PRODUCT = /^\d{2}$/;
@@ -54,7 +54,7 @@ export function BrokerAccounts() {
   };
 
   return (
-    <section className="set-sec set-broker" aria-labelledby="set-broker-h">
+    <section className="set-sec set-broker" id="broker" aria-labelledby="set-broker-h">
       <h2 className="set-h" id="set-broker-h">내 증권 계좌</h2>
       <p className="set-sub set-sub--lead">
         한국투자증권 계좌를 연결해요. 키는 서버에 암호화해 두고, 화면에는 끝 네 자리만 보여요.

@@ -14,7 +14,7 @@ import { allocationApi } from "@/entities/allocation/api";
 import { useSession } from "@/entities/session";
 import { ProfileMenu, useThemeSync } from "@/features/profile";
 import {
-  Building2, Database, Gauge, Globe2, Home, Layers, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Workflow,
+  Building2, Database, Gauge, Globe2, Home, Layers, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Wallet, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
@@ -28,7 +28,7 @@ import { ShellSearch } from "./ShellSearch";
 
 type NavLink = { label: string; href: string; Icon: LucideIcon };
 
-/** 하는 일 순서 — 홈 → 찾고 → 돌려 보고 → 흐름·기업·위험을 읽고 → 설계하고 → 데이터 상태. */
+/** 하는 일 순서 — 홈 → 찾고 → 돌려 보고 → 흐름·기업·위험을 읽고 → 설계하고 → 내 계좌로 연습하고 → 데이터 상태. */
 const MAIN: NavLink[] = [
   { label: "홈", href: "/dashboard", Icon: Home },
   { label: "종목 찾기", href: "/screener", Icon: ListFilter },
@@ -37,6 +37,7 @@ const MAIN: NavLink[] = [
   { label: "기업 분석", href: "/insights", Icon: Building2 },
   { label: "위험 점검", href: "/risk-tools", Icon: ShieldAlert },
   { label: "포트폴리오 설계", href: "/allocation", Icon: Workflow },
+  { label: "내 계좌", href: "/my-account", Icon: Wallet },
   { label: "데이터 상태", href: "/admin/data", Icon: Database },
 ];
 const MORE: NavLink[] = [

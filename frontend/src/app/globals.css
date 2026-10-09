@@ -11060,3 +11060,196 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 @media (max-width: 480px) {
   .set-broker-pair { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── BV9 · 내 계좌(.ma) — 답 한 문장 → ★주문이 가는 길★ → 잔고 | 주문 내기 → 최근 주문 ─────────────────────────────
+   대담함은 '주문이 가는 길' 한 곳(서버 execute_signal 순서 네 역). 나머지는 공용 tx 부품 그대로, 색은 --tx-* 토큰만(다크 짝 자동).
+   등락색은 손익(.tx-delta)과 사기/팔기 글자에만. 위험(비상 정지)은 --tx-danger 글자 + 연한 바탕 — 큰 빨간 단추를 만들지 않는다. */
+.ma > * + * { margin-top: 12px; }
+.ma > .tx-head + * { margin-top: 0; }
+.ma-strong { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.ma-signed-out, .ma-empty, .ma-must { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.ma-signed-out .tx-sec-sub, .ma-empty .tx-sec-sub, .ma-must .tx-sec-sub { margin: 0; }
+.ma-sm { height: 32px; padding: 0 12px; font-size: 13px; }
+/* 연한 빨강 바탕 위 빨강 글자는 4.45:1 이었다(AA 미달) — 카드색 바탕 + 빨강 테두리로(라이트 5.1:1 · 다크 5.9:1). */
+.ma-btn-danger { background: var(--tx-surface); color: var(--tx-danger); box-shadow: inset 0 0 0 1px var(--tx-danger); }
+.ma-btn-danger:hover { box-shadow: inset 0 0 0 2px var(--tx-danger); }
+.ma-link { padding: 0; border: 0; background: none; color: var(--tx-cta); font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.ma-err { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--tx-danger); word-break: keep-all; }
+.ma-kill-done { margin: 0; padding: 0 4px; font-size: 14px; color: var(--tx-ink); }
+.ma-code { margin-left: 6px; font-family: var(--t-mono); font-size: 12px; font-weight: 400; color: var(--tx-mute); }
+.ma-raw summary { cursor: pointer; font-size: 13px; color: var(--tx-sub); }
+.ma-raw code { display: block; margin-top: 6px; font-size: 12px; white-space: pre-wrap; word-break: break-all; color: var(--tx-sub); }
+.ma-acct-l { display: flex; flex-direction: column; gap: 4px; }
+.ma-acct { width: auto; min-width: 200px; }
+
+/* 주문이 가는 길 — 넓으면 가로 네 역(실행 모드 역이 넓다), 좁으면 세로 레일 */
+.ma-path-l { list-style: none; margin: 12px 0 0; padding: 0; display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; }
+/* 역 표식 = 28px 원 + 역마다 아이콘(이름 글자가 늘 옆에 있다 — 아이콘은 알아보기 돕는 그림일 뿐). */
+.ma-st { position: relative; padding-top: 40px; min-width: 0; }
+.ma-st-dot { position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--tx-surface); color: var(--tx-mute); box-shadow: inset 0 0 0 1.5px var(--tx-line); --ma-pulse: var(--tx-blue); }
+.ma-st-ic { display: block; }
+.ma-st:not(:last-child)::after { content: ""; position: absolute; top: 13px; left: 36px; right: -8px; height: 2px; border-radius: 1px; background: var(--tx-line); }
+.ma-st[data-hit="pass"] .ma-st-dot { background: var(--tx-cta); color: var(--tx-on-cta); box-shadow: none; }
+.ma-st[data-hit="pass"]::after { background: var(--tx-blue); }
+.ma-st[data-hit="stop"] .ma-st-dot { background: var(--tx-cta); color: var(--tx-on-cta); box-shadow: 0 0 0 4px var(--tx-blue-soft); }
+.ma-st[data-hit="stop"] .ma-st-name { color: var(--tx-cta); }
+/* 비상 정지가 켜져 있으면 길이 거기서 막혀 있다는 것을 역에서도 보인다(글자 + 빨간 원, 색만으로 말하지 않는다). */
+.ma-st[data-blocked] .ma-st-dot { background: var(--tx-danger); color: var(--tx-surface); box-shadow: none; --ma-pulse: var(--tx-danger); }
+.ma-st[data-blocked] .ma-st-state { color: var(--tx-danger); }
+.ma-st-b { display: flex; flex-direction: column; gap: 4px; }
+.ma-st-name { margin: 0; font-size: 13px; font-weight: 600; color: var(--tx-mute); }
+.ma-st-state { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.ma-st-sub { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-mute); word-break: keep-all; }
+@media (prefers-reduced-motion: no-preference) {
+  .ma-path[data-stop] .ma-st[data-hit] .ma-st-dot { animation: ma-hit 320ms cubic-bezier(.2, .8, .2, 1) both; }
+  .ma-path[data-stop] .ma-st:nth-child(2) .ma-st-dot { animation-delay: 120ms; }
+  .ma-path[data-stop] .ma-st:nth-child(3) .ma-st-dot { animation-delay: 240ms; }
+  .ma-path[data-stop] .ma-st:nth-child(4) .ma-st-dot { animation-delay: 360ms; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* 멈춘 역에서 한 번 퍼지는 고리 — 지나간 역이 차례로 켜진 뒤(480ms) 한 번만. 감속 모션이면 없다. */
+  .ma-path[data-stop] .ma-st[data-hit="stop"] .ma-st-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+    animation: ma-pulse 900ms ease-out 480ms 1 both; }
+}
+@keyframes ma-hit { from { transform: scale(.55); opacity: .35; } to { transform: none; opacity: 1; } }
+@keyframes ma-pulse { from { box-shadow: 0 0 0 0 var(--ma-pulse); opacity: .55; } to { box-shadow: 0 0 0 14px var(--ma-pulse); opacity: 0; } }
+
+.ma-mode { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 4px 0 2px; }
+.ma-mode-b { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding: 10px 12px; border: 0; border-radius: 12px;
+  background: var(--tx-soft); color: var(--tx-ink); font: inherit; text-align: left; cursor: pointer; }
+.ma-mode-b[aria-pressed="true"] { background: var(--tx-blue-soft); box-shadow: inset 0 0 0 2px var(--tx-cta); }
+.ma-mode-b--live[aria-expanded="true"] { box-shadow: inset 0 0 0 2px var(--tx-sub); }
+.ma-mode-b:disabled { opacity: .5; cursor: not-allowed; }
+.ma-mode-t { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 700; }
+.ma-mode-d { font-size: 12px; color: var(--tx-sub); word-break: keep-all; }
+.ma-confirm { margin-top: 10px; padding: 12px 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.ma-confirm > p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
+.ma-confirm-act { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ma-stop-why { margin-top: 18px; padding: 12px 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.ma-stop-why .tx-sec-sub { color: var(--tx-sub); }
+.ma-stop-why .ma-raw { margin-top: 6px; }
+.ma-ready { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--tx-line); }
+.ma-ready-l { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ma-ready-i { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 14px; line-height: 1.5; color: var(--tx-ink); word-break: keep-all; }
+.ma-ready-ic { flex: none; margin-top: 3px; color: var(--tx-mute); }
+.ma-ready-i[data-ok="true"] .ma-ready-ic { color: var(--tx-ok); }
+
+/* 잔고 | 주문 내기 */
+/* 넓으면 왼쪽에 잔고·최근 주문(보는 것), 오른쪽에 주문 내기(하는 것) — 주문 칸은 키가 맞으면 따라온다. 좁으면 잔고 → 주문 내기 → 최근 주문. */
+.ma-grid { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); grid-template-areas: "bal form" "list form";
+  grid-template-rows: auto 1fr; gap: 12px; align-items: start; }
+.ma-grid > .tx-sec { margin-top: 0; }
+.ma-grid > .ma-bal { grid-area: bal; }
+.ma-grid > .ma-order { grid-area: form; }
+.ma-grid > .ma-orders { grid-area: list; }
+@media (min-width: 1001px) and (min-height: 860px) { .ma-grid > .ma-order { position: sticky; top: 16px; } }
+.ma-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 12px; align-items: start; }
+.ma-orders { container-type: inline-size; }
+.ma-bal .tx-sec-head, .ma-orders .tx-sec-head { flex-wrap: wrap; }
+.ma-bal .tx-sec-aside { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ma-bal-figs { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 6px 0 12px; }
+.ma-bal-figs dt { font-size: 13px; color: var(--tx-mute); }
+.ma-bal-figs dd { margin: 2px 0 0; font-size: 17px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ma-bal-failed { display: flex; flex-direction: column; gap: 6px; }
+.ma-bal-failed .tx-sec-sub { margin: 0; color: var(--tx-sub); }
+.ma-pos-l { list-style: none; margin: 0; padding: 0; }
+.ma-pos { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; }
+.ma-pos + .ma-pos { border-top: 1px solid var(--tx-line); }
+.ma-pos-n { min-width: 0; font-size: 15px; color: var(--tx-ink); }
+.ma-pos-q { font-size: 15px; font-weight: 600; color: var(--tx-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.ma-pos-p { font-size: 13px; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
+.ma-pos-pnl { text-align: right; }
+.ma-form { display: flex; flex-direction: column; gap: 14px; }
+.ma-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ma-label { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.ma-input { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ma-textarea { height: auto; padding: 10px 12px; resize: vertical; }
+.ma-hint { font-size: 12px; line-height: 1.5; color: var(--tx-mute); word-break: keep-all; }
+.ma-ticker-name { font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.ma-ticker-bad { font-size: 13px; color: var(--tx-danger); word-break: keep-all; }
+.ma-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 3px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.ma-seg-b { height: 38px; min-width: 0; border: 0; border-radius: 9px; background: transparent; color: var(--tx-sub); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ma-seg-b[aria-pressed="true"] { background: var(--tx-surface); color: var(--tx-ink); box-shadow: 0 1px 2px rgb(25 31 40 / 10%); }
+.ma-side [data-side="BUY"][aria-pressed="true"] { color: var(--tx-up-ink); }
+.ma-side [data-side="SELL"][aria-pressed="true"] { color: var(--tx-down-ink); }
+.ma-order-check { width: 100%; height: 48px; }
+/* 고르는 칩(보유 종목 · 수량 더하기 · 주문 거르기 · 자주 쓰는 사유) — 반경 10, 눌린 것은 연한 파랑 + 테두리 */
+.ma-holds, .ma-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ma-hold, .ma-chip-b { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border: 0; border-radius: 10px;
+  background: var(--tx-soft); color: var(--tx-ink); font: inherit; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  text-align: left; cursor: pointer; word-break: keep-all; }
+.ma-hold { min-height: 36px; font-size: 14px; }
+.ma-hold:hover, .ma-chip-b:hover { box-shadow: inset 0 0 0 1px var(--tx-line); }
+.ma-hold[aria-pressed="true"], .ma-chip-b[aria-pressed="true"] { background: var(--tx-blue-soft); color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-cta); }
+.ma-hold-q, .ma-chip-n { font-size: 12px; font-weight: 500; color: var(--tx-sub); }
+.ma-hold[aria-pressed="true"] .ma-hold-q, .ma-chip-b[aria-pressed="true"] .ma-chip-n { color: var(--tx-cta); }
+.ma-field .ma-chips { margin-top: 2px; }
+.ma-price-from { color: var(--tx-sub); }
+.ma-amount { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; padding: 12px 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.ma-amount-k { font-size: 13px; color: var(--tx-sub); }
+.ma-amount-v { font-size: 17px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ma-amount-r { font-size: 13px; font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ma-amount .ma-hint { flex-basis: 100%; }
+.ma-kill-presets { margin-bottom: 14px; }
+
+/* 자산 구성 — 예수금 회색 + 종목은 강조색 하나의 진하기(판단·등락 색이 아니다). 칸 사이 2px 틈으로 이웃을 가른다. */
+.ma-mix { margin: 0 0 14px; }
+.ma-mix-bar { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; }
+.ma-mix-seg { flex: 0 1 auto; min-width: 2px; height: 100%; }
+.ma-mix [data-step="0"] { background: color-mix(in srgb, var(--tx-mute) 40%, var(--tx-surface)); }
+.ma-mix [data-step="1"] { background: var(--tx-blue); }
+.ma-mix [data-step="2"] { background: color-mix(in srgb, var(--tx-blue) 78%, var(--tx-surface)); }
+.ma-mix [data-step="3"] { background: color-mix(in srgb, var(--tx-blue) 60%, var(--tx-surface)); }
+.ma-mix [data-step="4"] { background: color-mix(in srgb, var(--tx-blue) 45%, var(--tx-surface)); }
+.ma-mix [data-step="5"] { background: color-mix(in srgb, var(--tx-blue) 33%, var(--tx-surface)); }
+.ma-mix [data-step="6"] { background: color-mix(in srgb, var(--tx-blue) 24%, var(--tx-surface)); }
+.ma-mix-l { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; }
+.ma-mix-l li { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.ma-mix-key { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.ma-mix-n { color: var(--tx-sub); }
+.ma-mix-v { font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ma-order-why { margin: 0; font-size: 13px; color: var(--tx-warn); word-break: keep-all; }
+.ma-order-result { margin: 0; }
+
+/* 최근 주문 */
+.ma-ord-msg { margin: 0 0 8px; font-size: 13px; color: var(--tx-sub); }
+.ma-ord-filter { margin-bottom: 6px; }
+.ma-ord-none { margin: 10px 0 0; }
+.ma-ord-l { list-style: none; margin: 0; padding: 0; }
+.ma-ord { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto auto; align-items: center; gap: 4px 14px; padding: 12px 0; }
+.ma-ord + .ma-ord { border-top: 1px solid var(--tx-line); }
+.ma-ord-when { font-size: 13px; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
+.ma-ord-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: 14px; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ma-ord-side { color: var(--tx-sub); }
+.ma-ord-state { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.ma-ord-status { font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.ma-ord-mode { font-size: 12px; color: var(--tx-mute); }
+.ma-ord-why { grid-column: 2 / -1; font-size: 12px; color: var(--tx-mute); word-break: break-all; }
+.ma-ord-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 0; padding: 8px 10px; font-size: 13px; color: var(--tx-ink); }
+
+.dark .ma-seg-b[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--tx-line); }
+@media (max-width: 1000px) { .ma-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bal" "form" "list"; grid-template-rows: none; } }
+@media (max-width: 420px) { .ma-pair { grid-template-columns: minmax(0, 1fr); } }
+/* 최근 주문 칸이 좁으면(넓은 화면의 왼쪽 열 · 휴대폰) 줄을 두 층으로 — 시각·종목 / 상태·멈춘 곳 */
+@container (max-width: 720px) {
+  .ma-ord { grid-template-columns: minmax(0, 1fr) auto; }
+  .ma-ord-when, .ma-ord-what { grid-column: 1 / -1; }
+  .ma-ord-state { justify-content: flex-start; }
+  .ma-ord-why, .ma-ord-confirm { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .ma-path-l { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ma-st { padding: 3px 0 22px 42px; }
+  .ma-st:last-child { padding-bottom: 0; }
+  .ma-st:not(:last-child)::after { top: 34px; left: 13px; right: auto; bottom: 4px; width: 2px; height: auto; }
+  .ma-mode { grid-template-columns: minmax(0, 1fr); }
+  .ma-ord { grid-template-columns: minmax(0, 1fr) auto; }
+  .ma-ord-when { grid-column: 1 / -1; }
+  .ma-ord-what { grid-column: 1 / -1; }
+  .ma-ord-state { justify-content: flex-start; }
+  .ma-ord-why, .ma-ord-confirm { grid-column: 1 / -1; }
+  .ma-acct { min-width: 0; width: 100%; }
+}

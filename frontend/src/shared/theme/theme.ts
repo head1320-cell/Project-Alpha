@@ -21,6 +21,8 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   // BS1 — 토큰(`--t-*`·shadcn 다리)만 쓰는 화면. settings.spec 이 다크 AA 로 확인한다.
   { pattern: /^\/settings\/?$/, label: "설정" },
   { pattern: /^\/login\/?$/, label: "로그인" },
+  // BV9 — `--tx-*` 토큰만 쓰는 새 화면. my-account.spec 이 다크 AA 로 확인한다.
+  { pattern: /^\/my-account\/?$/, label: "내 계좌" },
   // BS5 — 레거시 모듈. 라이트는 계산 스타일 골든 그대로, 다크는 주요 상태 전부 AA(E2E dark-modules.spec.ts).
   { pattern: /^\/dashboard\/?$/, label: "홈" },
   { pattern: /^\/screener\/?$/, label: "스크리너" },

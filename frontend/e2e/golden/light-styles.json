@@ -110,6 +110,9 @@
   "shell:rect.": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
   "shell:svg.lucide.lucide-database.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
@@ -369,6 +372,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -778,6 +784,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -1205,6 +1214,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -1996,6 +2008,9 @@
   "shell:rect.": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
   "shell:svg.lucide.lucide-database.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
@@ -2256,6 +2271,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -2526,6 +2544,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -2920,6 +2941,9 @@
   "shell:rect.": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
   "shell:svg.lucide.lucide-database.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
@@ -3147,6 +3171,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -3525,6 +3552,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
@@ -4793,6 +4823,9 @@
   "shell:rect.": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
   "shell:svg.lucide.lucide-database.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
@@ -5119,6 +5152,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:a.active.nav-item": [
@@ -5524,6 +5560,9 @@
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-wallet.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-database.nav-icon": [
