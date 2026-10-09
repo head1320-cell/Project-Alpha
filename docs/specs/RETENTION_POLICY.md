@@ -143,13 +143,16 @@
 
 ## 5. ⑤ 계정 소유 — 이 저장소가 정할 문제가 아니다
 
-`users` · `portfolios` · `trade_log` · `user_security`
+`users` · `portfolios` · `trade_log` · `user_security` · `broker_accounts`
 
 지울지 말지는 **계정 소유자**가 정한다. 그래서 보호하지도, 재생성 가능이라고도
-하지 않는다. `users` 삭제는 나머지 셋으로 `ON DELETE CASCADE` 되도록 선언돼 있다.
+하지 않는다. `users` 삭제는 나머지 표로 `ON DELETE CASCADE` 되도록 선언돼 있다.
 
 ★`user_security` 는 계정째로만 지운다★(BS1) — 행만 지우면 토큰 판이 0 으로 돌아가
 비밀번호를 바꿔 폐기했던 옛 토큰이 다시 산다.
+
+`broker_accounts`(BV3)는 사용자가 연결한 증권 계좌 자격이다 — 앱 키·시크릿·계좌번호는 `BROKER_CRED_KEY`
+로 봉인한 암호문만 있다. 본인이 지울 수 있고 계정째로도 지워진다. 실거래 감사 기록(`live_*`)과는 다른 표다.
 
 ★`trade_log` 와 `live_fills` 를 혼동하지 말 것★ — 이름이 비슷하지만 다른 표다.
 실거래 감사 기록은 `live_*` 쪽이고 그것은 ②로 보호된다.

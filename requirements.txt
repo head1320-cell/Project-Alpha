@@ -40,6 +40,7 @@ asyncpg>=0.29.0
 # ─── 인증 / 보안 ───
 bcrypt>=4.0.0
 PyJWT>=2.8.0
+cryptography>=42          # 사용자 증권 계좌 자격 봉인(Fernet) — BV3
 python-multipart>=0.0.9
 
 # ─── 외부 데이터 소스 ───

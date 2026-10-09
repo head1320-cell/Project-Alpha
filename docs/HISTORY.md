@@ -22319,3 +22319,41 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **하지 않은 것**: 계좌별 등록부(BV3) · `ingest-doctor` 잠금 · 시세 소비자·`try_kis_client` 변경 · 토큰을 파일/DB 에 저장 · 실행기 모드·킬스위치 동작 · 진단 스크립트의 플래그 출력.
   화면·API 응답 변화 0 → PNG 없음.
 - **게이트**: ruff 통과 · tsc 0 · pytest 8118 passed / 11 skipped(새 11 포함). 화면·API 응답 변화 0 → 빌드·E2E 전체는 돌리지 않았다(실거래 화면이 닿는 E2E 셋만 위에서 확인).
+
+### BV3 · 사용자 증권 계좌 자격 금고 · 계좌 표 · 계좌별 클라이언트 등록부
+
+- **왜**: 사용자 결정(2026-10-08·09) "사용자마다 자기 KIS 계좌를 연결하고 계좌마다 모의투자/실계좌를 고른다". 그러려면 자격(앱 키·시크릿·계좌번호)을 서버에
+  ★암호화해★ 두고 계좌마다 클라이언트를 단일 경로(`get_kis_client`)로 만들어야 한다. BV0 감사: 암호화 도구 0 · 계정별 자격 표 0 · 클라이언트는 `.env` 하나뿐.
+  이 단계는 저장과 클라이언트까지다 — 경로·소유권 수준은 BV4, 화면은 BV8.
+- **무엇을**:
+  - `src/database.py` 새 곁표 `BrokerAccount`(`broker_accounts` — `UserSecurity` 와 같은 관용구, `users` 는 안 고침 · `create_all` 이 만든다 · `User.broker_accounts` cascade):
+    `account_id`(`ba_`+16 hex) · `owner_username`(FK CASCADE, index) · `label` · `is_paper`(NOT NULL, 바꾸는 길 없음) · `account_prdt` · 세 칸 Fernet 암호문 · 끝 4자리 둘 · `created_at`.
+  - 새 `src/execution/broker_accounts.py`: `connect`(입력 검사 → `BROKER_CRED_KEY` 로 봉인 → 가린 행) · `list_masked`(본인 것만, 칸 일곱 — 암호문도 밖으로 안 나감) ·
+    `delete`(본인 것만 + 계좌 클라이언트 내림) · `open_account`(내부 통로 — 소유자는 경로가 본다). ★키가 없거나 틀리면 `CredentialVaultUnavailable(사유)` 이고 아무 행도 쓰지
+    않는다(평문 대체 0)★ · 다른 키로 풀면 사유 있는 거절(빈 자격으로 삼키지 않음) · 사유에 키 값을 적지 않는다 · 푼 자격 `AccountSecrets` 의 비밀 세 칸 `repr=False` ·
+    `is_paper` 는 bool 만(돈이 걸린 선택이라 `"false"` 같은 글자를 짐작하지 않는다).
+  - `src/execution/kis_client.py`: `get_kis_client(force_reload=False, *, account_id=None)` — `account_id` 면 잠금 있는 dict 등록부에서 꺼내거나 만든다(mock 이면 계좌마다
+    새 `MockKISClient()`, 운영이면 금고 값으로 `KISClient(KISCredentials(..., is_paper=계좌 값))` — ★서버 `.env` 계좌로 대신하지 않는다★ · `KISCredentials(` 는 여전히 이 파일 안).
+    `force_reload` 와 함께 주면 `ValueError`(조용히 무시하지 않음) · `evict_account_client`. 서버 싱글턴·`get_order_client` 는 그대로.
+  - `requirements.txt` 에 `cryptography>=42`(환경엔 50.0.1 이 이미 있었고 목록에 없었다) · `.env.example` 에 `BROKER_CRED_KEY=` + 키 만드는 한 줄 ·
+    `retention.py` `USER_OWNED["broker_accounts"]` + `RETENTION_POLICY.md` ⑤ 목록·한 단락(그리고 "나머지 셋" → "나머지 표" — 세면 낡는 수).
+- **카파시 지침으로 뺀 것(옛 BV3 요약 대비)**: `broker_account_checks` 표(쓰는 곳은 BV4·BV7 → 그때) · MultiFernet 키 교체(요청 없음) · LRU 상한(근거 없음 → 잠금 있는 dict) ·
+  `MockKISClient(label=)`(인스턴스가 다르면 충분) · `broker` 열(KIS 하나) · 삭제 거절 조건(미체결·모드는 BV6 에서 생기는 개념) · 별도 `src/security/` 패키지(소비자 하나).
+- **확인**: 새 `tests/test_broker_accounts.py` 34 — ① 키 없음 → 거절 + 행 0 · 짝: 키 있음 → 저장 · 틀린 키 셋 → 사유 있는 거절, 키 값 안 적음 ② 저장 칸 ≠ 평문 · 짝: 같은 키로 풀면 원래 값 ·
+  다른 키 → 사유 있는 거절(비밀 0) · 없는 계좌 → `BrokerAccountNotFound` ③ 목록에 비밀 0 · 끝 4자리 · ★칸 정확히 일곱★ · bob 은 alice 계좌를 못 본다 · 짝: 각자 자기 것은 본다
+  ④ bob 이 alice 것 지우기 → False, 행 남음 · 짝: alice → True, 행 0, 등록부에서도 사라지고 다시 부르면 없음 ⑤ 같은 계좌 = 같은 인스턴스 · 짝: 다른 계좌 = 다른 · 서버 ≠ 계좌 ·
+  서버 `force_reload` 가 계좌 클라이언트를 안 지움 · `force_reload`+`account_id` → `ValueError` ⑥ 운영(`KIS_USE_MOCK=0`): 모의 계좌 → 모의 주소 · 실계좌 계좌 → 실 주소 · 자격 = 금고 값 ·
+  `.env` 운영자 계좌가 계좌 클라이언트에 새지 않음(네트워크 0 — `KISClient` 생성은 토큰을 받지 않는다) ⑦ 연결·열기·운영 클라이언트·삭제·틀린 키 경로 전부 `caplog`(DEBUG)에 비밀 0
+  (짝: 로그를 실제로 잡았다) · `repr(AccountSecrets)` 비밀 0, 짝: 계좌 id·`is_paper` 는 보인다 ⑧ 계좌번호 7자리·문자 섞임·상품 코드 붙임·빈 시크릿·공백 키·빈 이름·65자 이름·
+  상품 코드 1자리·`is_paper="false"` → `ValueError` + 행 0 · 짝: 앞뒤 공백은 지우고 받는다.
+  빨강은 수집 단계(모듈 없음)였다 — 테스트마다의 이빨은 변이로 확인했다. ★변이 18 모두 죽음★: 키 없으면 평문 저장 · 목록 소유 필터 빼기 · 삭제 소유 필터 빼기 · 암호화 없이 저장 ·
+  삭제 때 퇴출 빼기 · 등록부 캐시 안 함 · 가린 목록에 암호문(처음엔 살아남음 — 평문만 보던 검사를 칸 일곱 정확 비교로 조임) · 가린 목록에 푼 키 · 계좌 `is_paper` 무시 ·
+  복호 실패를 빈 자격으로 · 보존 분류 빼기(`test_retention_policy`) · `force_reload`+계좌 조용히 무시 · `AccountSecrets` repr 열기 · `is_paper` 글자 받기 · 계좌번호 검사 느슨하게 ·
+  계좌 클라이언트가 서버 `.env` 를 씀 · 로그에 앱 키 · 키 오류 사유에 키 값.
+  관련 5 파일 91 통과(`test_retention_policy` · `test_database_public_names` · `test_single_kis_construction_path` · `test_kis_client_production_gate` · 새 파일).
+- **관찰(고치지 않음)**: SQLite 엔진은 `PRAGMA foreign_keys` 를 켜지 않아 DB 수준 CASCADE 가 없다 — ORM 관계 cascade 와 PostgreSQL FK 가 맡는다. 계정을 지우는 경로는 저장소에 없다(grep 0).
+  계정이 다른 길로 지워지면 등록부에 그 계좌 클라이언트가 남을 수 있다(다음 접근 때 `open_account` 가 없음을 말한다 — 이미 만든 인스턴스는 남음). 계좌 클라이언트 생성은 잠금 하나로
+  줄을 세운다(계좌 수 = 사용자 수 규모).
+- **하지 않은 것**: 경로·소유권 수준(BV4) · 연결 확인 기록(BV4/BV7) · 키 교체 · 토큰 저장 · 계좌별 실행기·킬스위치(BV5·BV6) · LIVE(BV7). ★실제 증권사 연결은 관측하지 못했다★ —
+  이 환경에는 실키가 없어 주소·자격 값까지만 확인했다. 화면·API 변화 0 → PNG·E2E 없음.
+- **게이트**: ruff 통과 · tsc 0 · pytest 8152 passed / 11 skipped(새 34 포함). 화면·API 응답 변화 0 → 빌드·E2E 는 돌리지 않았다.

@@ -1010,6 +1010,11 @@ _kis_singleton = None
 #: (KIS 토큰 발급은 분당 1회). 이미 있으면 잠금 없이 돌려준다(이중 확인).
 _kis_singleton_lock = threading.Lock()
 
+#: 사용자 증권 계좌별 클라이언트(BV3) — `account_id` → 클라이언트. 서버 싱글턴과 따로 둔다.
+#: 계좌마다 토큰·속도 제한·회로 차단기가 하나씩이다(같은 계좌로 둘을 만들지 않는다).
+_account_clients: dict[str, object] = {}
+_account_clients_lock = threading.Lock()
+
 
 def try_kis_client(force_reload: bool = False):
     """`(client, reason)` — 열화가 **맞는** 호출부를 위한 통로.
@@ -1026,9 +1031,13 @@ def try_kis_client(force_reload: bool = False):
         return None, str(e)
 
 
-def get_kis_client(force_reload: bool = False):
+def get_kis_client(force_reload: bool = False, *, account_id: str | None = None):
     """
     .env 설정에 따라 KISClient(실) 또는 MockKISClient(가짜)를 반환.
+
+    `account_id` 를 주면 그 사용자 증권 계좌의 클라이언트(BV3 — `broker_accounts` 금고의 자격 ·
+    계좌마다 모의/실계좌). ★소유자는 여기서 보지 않는다★ — 경로가 본다. 계좌 클라이언트를 비우는 길은
+    `evict_account_client` 이고, `force_reload` 와 함께 주면 거절한다(조용히 무시하지 않는다).
 
     환경변수:
       KIS_USE_MOCK=1            → MockKISClient (외부 호출 없음)
@@ -1038,6 +1047,11 @@ def get_kis_client(force_reload: bool = False):
     데이터 조회(get_price/get_daily_ohlcv)는 모의·실계좌 모두 가능.
     싱글톤으로 토큰 재사용 (1분당 1회 발급 제한 대응).
     """
+    if account_id is not None:
+        if force_reload:
+            raise ValueError("force_reload 는 서버 클라이언트에만 씁니다 — 계좌 클라이언트는 "
+                             "evict_account_client 로 비웁니다.")
+        return _account_client(account_id)
     global _kis_singleton
     if _kis_singleton is not None and not force_reload:
         return _kis_singleton
@@ -1046,6 +1060,42 @@ def get_kis_client(force_reload: bool = False):
             return _kis_singleton
         _kis_singleton = _build_kis_client()
         return _kis_singleton
+
+
+def _account_client(account_id: str):
+    client = _account_clients.get(account_id)
+    if client is not None:
+        return client
+    with _account_clients_lock:
+        client = _account_clients.get(account_id)
+        if client is None:
+            client = _build_account_client(account_id)
+            _account_clients[account_id] = client
+        return client
+
+
+def evict_account_client(account_id: str) -> None:
+    """계좌 클라이언트를 내린다(계좌를 지웠을 때). 없으면 아무 일도 없다."""
+    with _account_clients_lock:
+        _account_clients.pop(account_id, None)
+
+
+def _build_account_client(account_id: str):
+    """금고의 자격으로 계좌 클라이언트 하나를 만든다. 없거나 풀 수 없으면 예외가 그대로 올라간다
+    (`BrokerAccountNotFound` · `CredentialVaultUnavailable`) — ★서버 `.env` 계좌로 대신하지 않는다★."""
+    from src.execution.broker_accounts import open_account
+
+    acct = open_account(account_id)
+    if mock_allowed():
+        # 계좌마다 따로 — mock 잔고·주문이 계좌끼리 섞이지 않게.
+        return MockKISClient()
+    return KISClient(KISCredentials(
+        app_key=acct.app_key,
+        app_secret=acct.app_secret,
+        account_no=acct.account_no,
+        account_prdt=acct.account_prdt,
+        is_paper=acct.is_paper,
+    ))
 
 
 def get_order_client():

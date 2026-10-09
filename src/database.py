@@ -34,6 +34,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     create_engine,
     func,
     text,
@@ -199,6 +200,8 @@ class User(Base):
                            cascade="all, delete-orphan")
     security = relationship("UserSecurity", back_populates="user", uselist=False,
                             cascade="all, delete-orphan")
+    broker_accounts = relationship("BrokerAccount", back_populates="owner",
+                                   cascade="all, delete-orphan")
 
 
 class UserSecurity(Base):
@@ -219,6 +222,33 @@ class UserSecurity(Base):
     password_changed_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="security")
+
+
+class BrokerAccount(Base):
+    """사용자가 연결한 증권 계좌 (BV3) — ★자격은 암호문으로만 둔다★.
+
+    `UserSecurity` 와 같은 곁표 관용구다(`users` 를 고치지 않는다 · `create_all` 이 만든다).
+    읽고 쓰는 길은 `src/execution/broker_accounts.py` 하나다 — 암호화·가림·본인 확인이 거기 있다.
+    `is_paper` 는 연결할 때 정하고 바꾸는 길이 없다(모의 계좌가 실계좌로 바뀌면 안 된다).
+    """
+    __tablename__ = "broker_accounts"
+
+    account_id = Column(String(32), primary_key=True)   # "ba_" + 16 hex
+    owner_username = Column(String(64), ForeignKey("users.username", ondelete="CASCADE"),
+                            index=True, nullable=False)
+    label = Column(String(64), nullable=False)
+    is_paper = Column(Boolean, nullable=False)
+    account_prdt = Column(String(2), default="01", nullable=False)
+    #: Fernet 암호문(`BROKER_CRED_KEY`). 평문은 이 표에 없다.
+    app_key_enc = Column(Text, nullable=False)
+    app_secret_enc = Column(Text, nullable=False)
+    account_no_enc = Column(Text, nullable=False)
+    #: 화면에 보일 끝 4자리 — 어느 계좌인지 알아보는 데만 쓴다.
+    app_key_last4 = Column(String(4), nullable=False)
+    account_no_last4 = Column(String(4), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    owner = relationship("User", back_populates="broker_accounts")
 
 
 class Portfolio(Base):
