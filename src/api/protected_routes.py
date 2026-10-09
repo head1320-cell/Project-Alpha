@@ -158,6 +158,8 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 계좌 비상 정지 해제 — 내가 건 정지만(운영자 정지는 못 푼다)"),
     ("GET", "/api/v1/broker-accounts/{account_id}/live-readiness"):
         (REQUIRE_LOGIN, "내 계좌 실계좌 준비 목록 — 무엇이 왜 아직 안 됐는지(읽기만). 남의 계좌는 404"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/balance"):
+        (REQUIRE_LOGIN, "내 계좌 잔고 — 예수금·평가·보유(읽기만, 증권사 원문은 싣지 않는다). 남의 계좌는 404"),
 
     # ── 실계좌 관문 (BV7) — 누구에게 무슨 근거로 실계좌를 여는지 선언·철회. 선언자는 토큰에서 ──
     ("GET", "/api/v1/admin/live-gate"):

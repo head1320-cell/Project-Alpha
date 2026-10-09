@@ -13,7 +13,7 @@
 - 연습용 모드(`KIS_USE_MOCK=1`)에서는 증권사에 묻지 않는다 → `practice` — '연결됨' 이라 말하지 않는다.
 - 운영에서는 잔고 조회 한 번 → 받아 주면 `ok`, 증권사·네트워크 실패면 `failed` + 사람 말 사유 + 원문(비밀은 가림).
 - 그 밖 예외(프로그램 오류)는 잡지 않는다 — '연결 실패' 로 꾸미지 않는다.
-- 결과(상태·사람 말 사유만)는 감사에 남긴다 — 실계좌 준비 목록이 읽는다(BV7). 잔고 숫자는 싣지 않는다(BV9).
+- 결과(상태·사람 말 사유만)는 감사에 남긴다 — 실계좌 준비 목록이 읽는다(BV7). 잔고 숫자는 싣지 않는다(잔고는 `/balance` — BV9).
 """
 from __future__ import annotations
 
@@ -105,30 +105,64 @@ def _record_check(account_id: str, actor: str, result: dict) -> dict:
     return result
 
 
-@router.post("/{account_id}/check")
-def check_account(account_id: str, p: Principal = Depends(require_login)):
-    _owned_or_404(p, account_id)   # ★소유 확인이 먼저★ — 남의 자격은 풀지도 않는다
-    out = {"account_id": account_id, "checked_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+def _open_client(account_id: str):
+    """그 계좌의 클라이언트와 가릴 비밀. ★호출 전에 소유 확인을 끝내야 한다★. 금고 실패는 503."""
     try:
         client = get_kis_client(account_id=account_id)
         acct = ba.open_account(account_id)
     except ba.CredentialVaultUnavailable as e:
         raise HTTPException(503, str(e)) from None
+    return client, (acct.app_key, acct.app_secret, acct.account_no)
+
+
+def _ask_balance(client, secrets: tuple[str, ...]) -> tuple[dict | None, dict | None]:
+    """잔고 조회 한 번 → (잔고, None) 또는 (None, 실패). 증권사·네트워크 실패만 잡는다 — 프로그램 오류는 500 으로 둔다."""
+    try:
+        return client.get_balance(), None
+    except KISCallError as e:
+        return None, {"state": "failed", "reason": _REASON_BY_KIND.get(e.kind, _REASON_OTHER),
+                      "detail": _redact(str(e), secrets)}
+    except requests.RequestException as e:
+        # `_fetch_token` 은 `requests` 예외를 감싸지 않는다(실측) — 네트워크 실패로 읽는다.
+        return None, {"state": "failed", "reason": _REASON_BY_KIND[KIND_TRANSPORT],
+                      "detail": _redact(str(e), secrets)}
+
+
+@router.post("/{account_id}/check")
+def check_account(account_id: str, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)   # ★소유 확인이 먼저★ — 남의 자격은 풀지도 않는다
+    out = {"account_id": account_id, "checked_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    client, secrets = _open_client(account_id)
     if mock_allowed():
         return _record_check(account_id, p.username, {**out, "state": "practice",
                 "reason": "연습용 모드라 증권사에 묻지 않았어요. 키가 맞는지는 아직 몰라요."})
-    secrets = (acct.app_key, acct.app_secret, acct.account_no)
-    try:
-        client.get_balance()
-    except KISCallError as e:
-        return _record_check(account_id, p.username, {**out, "state": "failed",
-                "reason": _REASON_BY_KIND.get(e.kind, _REASON_OTHER), "detail": _redact(str(e), secrets)})
-    except requests.RequestException as e:
-        # `_fetch_token` 은 `requests` 예외를 감싸지 않는다(실측) — 네트워크 실패로 읽는다.
-        return _record_check(account_id, p.username, {**out, "state": "failed",
-                "reason": _REASON_BY_KIND[KIND_TRANSPORT], "detail": _redact(str(e), secrets)})
+    _, failed = _ask_balance(client, secrets)
+    if failed:
+        return _record_check(account_id, p.username, {**out, **failed})
     return _record_check(account_id, p.username, {**out, "state": "ok",
             "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬어요."})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 내 계좌 잔고 (BV9) — 읽기만. "내 계좌" 화면이 쓴다.
+# ═══════════════════════════════════════════════════════════════════════════════
+# ★증권사 원문(`raw`)은 싣지 않는다★(계좌 정보가 들어 있을 수 있다) · 종목 이름도 싣지 않는다(이름은 stock_master 가 정한다 —
+# 화면이 `resolve-names` 로 묻는다) · 빠진 칸은 None(0 으로 메우지 않는다) · `practice` 가 이 숫자의 출처를 말한다.
+
+_POSITION_KEYS = ("ticker", "quantity", "avg_price", "current_price", "eval_amount", "pnl_pct")
+
+
+@router.get("/{account_id}/balance")
+def account_balance(account_id: str, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    out = {"account_id": account_id, "practice": mock_allowed(),
+           "as_of": dt.datetime.now(dt.timezone.utc).isoformat()}
+    client, secrets = _open_client(account_id)
+    bal, failed = _ask_balance(client, secrets)
+    if failed:
+        return {**out, **failed}
+    return {**out, "state": "ok", "cash_krw": bal.get("cash_krw"), "evaluated_total": bal.get("evaluated_total"),
+            "positions": [{k: pos.get(k) for k in _POSITION_KEYS} for pos in bal.get("positions") or []]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
