@@ -31,6 +31,9 @@ def client(monkeypatch):
 
     import src.api.stage13_routes as stage13
     monkeypatch.setattr(stage13, "_EXECUTOR", None, raising=False)
+    # BV2 — 실행기가 이제 `get_kis_client()` 의 공유 클라이언트를 쓴다. mock 잔고·보유가 앞 테스트에서 새지 않게 함께 비운다.
+    import src.execution.kis_client as kc
+    monkeypatch.setattr(kc, "_kis_singleton", None, raising=False)
 
     from src.app_factory import create_app
     # ★모듈 스코프가 아니고, `with` 도 쓰지 않는다★(AD 의 교훈)

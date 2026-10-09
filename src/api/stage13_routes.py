@@ -18,8 +18,6 @@ Stage 13 API Routes — Live Trading
 
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -51,27 +49,21 @@ def get_executor():
     if _EXECUTOR is not None:
         return _EXECUTOR
 
+    from src.data.mock_gate import mock_allowed
     from src.database import get_sync_engine
     from src.execution.audit_trail import AuditTrail
     from src.execution.kill_switch import KillSwitch, KillSwitchConfig
-    from src.execution.kis_client import KISClient, KISCredentials, MockKISClient
+    from src.execution.kis_client import get_order_client
     from src.execution.order_executor import ExecutionMode, OrderExecutor
     from src.execution.risk_gateway import RiskGateway, RiskLimits
 
-    engine = get_sync_engine()
+    # ★KIS 클라이언트는 단일 경로에서(BV2)★ — 예전에는 여기서 `KIS_USE_MOCK` 을 직접 읽고 `.env` 로
+    # `KISClient` 를 하나 더 만들었다(같은 앱 키로 토큰·속도 제한·회로 차단기가 둘). 이제 `get_kis_client()` 와
+    # 같은 인스턴스를 쓰고, 운영에서 계좌번호가 비면 실행기를 만들지 않고 사유를 낸다(`get_order_client`).
+    kis = get_order_client()
+    use_mock = mock_allowed()
 
-    # KIS client 선택
-    use_mock = os.getenv("KIS_USE_MOCK", "1") == "1"
-    if use_mock:
-        kis = MockKISClient(initial_cash=100_000_000)
-    else:
-        kis = KISClient(KISCredentials(
-            app_key=os.environ["KIS_APP_KEY"],
-            app_secret=os.environ["KIS_APP_SECRET"],
-            account_no=os.environ["KIS_ACCOUNT_NO"],
-            account_prdt=os.getenv("KIS_ACCOUNT_PRDT", "01"),
-            is_paper=os.getenv("KIS_IS_PAPER", "1") == "1",
-        ))
+    engine = get_sync_engine()
 
     audit = AuditTrail(engine)
     kill_switch = KillSwitch(engine, audit, KillSwitchConfig())

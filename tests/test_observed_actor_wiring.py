@@ -34,6 +34,9 @@ def client(monkeypatch):
     # 나가 이 파일의 검사가 **아무것도 검사하지 않게** 된다.
     import src.api.stage13_routes as stage13
     monkeypatch.setattr(stage13, "_EXECUTOR", None, raising=False)
+    # BV2 — 실행기가 이제 `get_kis_client()` 의 공유 클라이언트를 쓴다. mock 잔고·보유가 앞 테스트에서 새지 않게 함께 비운다.
+    import src.execution.kis_client as kc
+    monkeypatch.setattr(kc, "_kis_singleton", None, raising=False)
 
     from src.app_factory import create_app
     with TestClient(create_app()) as c:

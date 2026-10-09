@@ -178,10 +178,14 @@ def normalize_investor_rows(rows: list) -> list[dict]:
 
 @dataclass
 class KISCredentials:
-    """KIS API 인증 정보."""
-    app_key:        str
-    app_secret:     str
-    account_no:     str          # CANO (계좌번호 앞 8자리)
+    """KIS API 인증 정보.
+
+    ★비밀은 repr 에 나오지 않는다(BV2)★ — 앱 키·시크릿·계좌번호가 예외 메시지·로그·디버거 출력에
+    `KISCredentials(app_key='…')` 로 새지 않게 `repr=False`. 값과 동작은 그대로다.
+    """
+    app_key:        str = field(repr=False)
+    app_secret:     str = field(repr=False)
+    account_no:     str = field(repr=False)   # CANO (계좌번호 앞 8자리)
     account_prdt:   str = "01"   # ACNT_PRDT_CD (상품 코드, 기본 01)
     is_paper:       bool = False # 모의투자 여부
 
@@ -1002,6 +1006,9 @@ class KISCredentialsMissing(RuntimeError):
 
 
 _kis_singleton = None
+#: ★첫 생성은 한 번만★(BV2) — 동시 첫 호출이 클라이언트를 둘 만들면 같은 앱 키로 토큰을 두 번 받는다
+#: (KIS 토큰 발급은 분당 1회). 이미 있으면 잠금 없이 돌려준다(이중 확인).
+_kis_singleton_lock = threading.Lock()
 
 
 def try_kis_client(force_reload: bool = False):
@@ -1034,12 +1041,41 @@ def get_kis_client(force_reload: bool = False):
     global _kis_singleton
     if _kis_singleton is not None and not force_reload:
         return _kis_singleton
+    with _kis_singleton_lock:
+        if _kis_singleton is not None and not force_reload:
+            return _kis_singleton
+        _kis_singleton = _build_kis_client()
+        return _kis_singleton
 
+
+def get_order_client():
+    """주문 실행기가 쓰는 클라이언트 — ★`get_kis_client()` 와 같은 인스턴스★(BV2).
+
+    예전에는 실거래 실행기(`stage13_routes.get_executor`)가 `.env` 를 직접 읽어 `KISClient` 를 하나 더 만들었다.
+    그러면 같은 앱 키로 토큰·속도 제한·회로 차단기가 둘이 되고, 실패 관측(`api_failure_probe`)은 실행기 쪽 차단기를
+    보지 못한다. 이제 하나를 같이 쓴다.
+
+    ★주문에는 계좌번호가 필요하다★ — 시세만 쓰는 곳은 계좌번호 없이도 되므로 `get_kis_client()` 는 비어 있어도
+    만든다. 주문 실행기는 운영에서 계좌번호가 비면 만들지 않고 사유를 낸다(빈 계좌로 주문을 보내지 않는다).
+    """
+    client = get_kis_client()
+    if mock_allowed():
+        return client
+    account_no = getattr(getattr(client, "creds", None), "account_no", "")
+    if not (account_no or "").strip():
+        raise KISCredentialsMissing(
+            "KIS_ACCOUNT_NO 미설정 — 주문 실행기를 만들 수 없습니다. 운영 모드에서는 빈 계좌번호로 "
+            "주문하지 않습니다. 계좌번호를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰세요.")
+    return client
+
+
+def _build_kis_client():
+    """`.env` 로 클라이언트 하나를 만든다 — ★이 파일 밖에서 `KISClient(`·`MockKISClient(` 를 부르지 않는다★
+    (`tests/test_single_kis_construction_path.py`)."""
     use_mock = mock_allowed()
     if use_mock:
-        _kis_singleton = MockKISClient()
         logger.info("KIS: MockKISClient (KIS_USE_MOCK=1)")
-        return _kis_singleton
+        return MockKISClient()
 
     app_key = os.getenv("KIS_APP_KEY", "")
     app_secret = os.getenv("KIS_APP_SECRET", "")
@@ -1067,6 +1103,5 @@ def get_kis_client(force_reload: bool = False):
         account_prdt=os.getenv("KIS_ACCOUNT_PRDT", "01"),
         is_paper=is_paper,
     )
-    _kis_singleton = KISClient(creds)
     logger.info(f"KIS: 실연동 ({'모의투자' if is_paper else '실계좌'})")
-    return _kis_singleton
+    return KISClient(creds)

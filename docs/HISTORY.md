@@ -22294,3 +22294,28 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **하지 않은 것**: 관문을 쓰는 곳(BV7 — 선언 경로·LIVE 전환) · 계좌 연결·금고·소유권(BV2~BV6) · 적법성 판단 · KIS 약관 원문 확인(접속 불가 — 운영자가 할 일).
   화면 변화 0 · API 변화 0 이라 E2E 는 돌리지 않았다.
 - **게이트**: ruff 통과 · tsc 0 · pytest 8107 passed / 11 skipped(새 38 포함). 프런트·API 변화 0 이라 빌드·E2E 는 돌리지 않았다.
+
+### BV2 · KIS 클라이언트를 만드는 길 하나로 — 실거래 실행기 우회 제거 · 싱글톤 잠금 · 자격 repr 가림
+
+- **왜**: CLAUDE.md §6 "KIS 연동은 `get_kis_client()` 단일 경로" 인데 지키는 테스트가 없었고(`test_no_order_executor_bypass` 는 `kis_order_executor.OrderExecutor` import 만 본다),
+  BV0 감사가 위반을 찾았다. 실거래 실행기 `stage13_routes.get_executor()` 가 `KIS_USE_MOCK` 을 직접 읽고(mock 판정은 `mock_allowed()` 하나여야 한다) `.env` 로
+  `KISClient(KISCredentials(...))`·`MockKISClient(...)` 를 ★따로 만들었다★ → 운영에서 같은 앱 키로 토큰·속도 제한·회로 차단기가 둘(KIS 토큰 발급은 분당 1회)이고
+  실패 관측(`api_failure_probe`)은 실행기 쪽 차단기를 못 본다. `get_kis_client()` 싱글톤은 잠금이 없어 동시 첫 호출이 둘을 만들 수 있었고,
+  `KISCredentials` 는 기본 repr 이라 `repr(creds)` 에 앱 키·시크릿·계좌번호가 그대로 나왔다. 사용자별 계좌(BV3~)가 클라이언트를 늘리기 전에 길을 하나로 닫는다.
+- **무엇을**: `kis_client.py` — 싱글턴 첫 생성에 이중 확인 잠금 · 생성은 `_build_kis_client()` 로 분리(동작 같음) · 새 `get_order_client()`(같은 인스턴스를 돌려주되
+  ★운영에서 계좌번호가 비면 `KISCredentialsMissing`★ — 빈 계좌로 주문하지 않는다, 시세만 쓰는 곳은 그대로) · `KISCredentials` 의 앱 키·시크릿·계좌번호 `repr=False`
+  (값·동작 불변). `stage13_routes.get_executor()` — `get_order_client()` + `mock_allowed()`, 직접 생성·`os.environ`·`KIS_USE_MOCK` 읽기 삭제(안 쓰게 된 `import os` 도).
+  실행기 테스트 고정물 둘이 `_EXECUTOR` 와 함께 공유 싱글턴도 비운다.
+- **바뀐 동작(기록)**: mock 모드에서 실행기와 시세·TradingEngine·자산 기록이 같은 mock 하나를 쓴다(예전엔 실행기만 따로 1억). 운영에서 토큰·속도 제한·차단기가 하나가 된다.
+  운영에서 `KIS_ACCOUNT_NO` 가 없으면 예전엔 `KeyError`, 이제 사유 있는 `KISCredentialsMissing`. `ingest-doctor` 의 `force_reload` 가 싱글턴을 갈면 실행기는 옛 인스턴스를
+  계속 쥔다 — 관찰만(그 경로 잠금은 데이터 적재 작업 범위).
+- **계획 조정**: 계좌별 클라이언트 등록부(`get_kis_client(account=…)`)는 BV3 로 옮겼다 — 자격을 내는 금고·계좌 표가 BV3 에서 생기므로 BV2 에 두면 쓸 곳 없는 코드다(로드맵 ②).
+- **확인**: 새 `tests/test_single_kis_construction_path.py` 11 — ① `KISClient(`·`MockKISClient(`·`KISCredentials(` 는 `kis_client.py` 안에서만(src·scripts·main_api·verify_connection
+  AST 전수) · 짝: 심은 위반을 잡는다 · 짝: 공장 파일엔 생성이 있다 ② `KIS_USE_MOCK` 읽기는 mock 게이트 안에서만(앱 코드 — `scripts/`·`verify_connection.py` 는 진단 도구라 원래 값을
+  ★출력★하는 곳이 셋 있어 범위 밖, 판정이 아니다) · 짝: 읽기는 잡고 안내 문구는 안 잡는다 ③ mock 에서 실행기 kis = 싱글턴 · 다시 만들어도 같음 · 운영 계좌번호 없음 → 사유 있는 거절 +
+  실행기 반쯤 남지 않음 · 짝: 있으면 만든다(네트워크 0) ④ 스레드 8개 동시 첫 호출 → 생성 1번 ⑤ repr 에 비밀 0 · 짝: 다른 칸은 보이고 값 접근은 그대로.
+  옛 코드에서 8 빨강. ★변이 6 모두 죽음★: 실행기가 클라이언트 직접 생성 · 플래그 직접 읽기 · 잠금 빼기 · repr 되살리기 · 계좌번호 검사 빼기 · 검출기 항상 빈 목록.
+  관련 8 파일 238 통과 · 서버 다시 띄워 `GET /api/v1/live/balance`(관리자) 200 · 예수금 1억(mock) · E2E admin·profile·login 29 통과.
+- **하지 않은 것**: 계좌별 등록부(BV3) · `ingest-doctor` 잠금 · 시세 소비자·`try_kis_client` 변경 · 토큰을 파일/DB 에 저장 · 실행기 모드·킬스위치 동작 · 진단 스크립트의 플래그 출력.
+  화면·API 응답 변화 0 → PNG 없음.
+- **게이트**: ruff 통과 · tsc 0 · pytest 8118 passed / 11 skipped(새 11 포함). 화면·API 응답 변화 0 → 빌드·E2E 전체는 돌리지 않았다(실거래 화면이 닿는 E2E 셋만 위에서 확인).
