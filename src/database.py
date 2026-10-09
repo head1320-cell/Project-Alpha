@@ -251,6 +251,29 @@ class BrokerAccount(Base):
     owner = relationship("User", back_populates="broker_accounts")
 
 
+class LiveGateDeclaration(Base):
+    """실계좌(LIVE) 관문 선언 (BV7) — ★지우지 않는다★.
+
+    새 선언은 옛 선언을 철회로 닫고(누가·언제), 철회도 행을 남긴다 — "무슨 근거로 누구에게 실계좌를 열었나" 를
+    나중에 물을 수 있게. 읽고 쓰는 길은 `src/execution/live_gate_store.py` 하나다. 사용자 표에 FK 를 걸지 않는다
+    (계정이 지워져도 기록은 남아야 한다).
+    """
+    __tablename__ = "live_gate_declarations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    basis = Column(Text, nullable=False)
+    authority = Column(Text, nullable=False)
+    reference_no = Column(Text, nullable=False)
+    verified_at = Column(String(32), nullable=False)
+    scope = Column(Text, nullable=False)
+    #: JSON 이름 목록 — `*` 같은 모두 열기는 `live_gate` 가 선언 전에 거절한다.
+    allowed_users = Column(Text, nullable=False)
+    declared_by = Column(String(64), nullable=False)
+    declared_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_by = Column(String(64))
+    revoked_at = Column(DateTime(timezone=True))
+
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
 

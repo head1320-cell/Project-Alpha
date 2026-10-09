@@ -13,7 +13,7 @@
 - 연습용 모드(`KIS_USE_MOCK=1`)에서는 증권사에 묻지 않는다 → `practice` — '연결됨' 이라 말하지 않는다.
 - 운영에서는 잔고 조회 한 번 → 받아 주면 `ok`, 증권사·네트워크 실패면 `failed` + 사람 말 사유 + 원문(비밀은 가림).
 - 그 밖 예외(프로그램 오류)는 잡지 않는다 — '연결 실패' 로 꾸미지 않는다.
-- 기록은 남기지 않는다(준비 목록이 생기는 BV7 에서). 잔고 숫자도 싣지 않는다(BV9).
+- 결과(상태·사람 말 사유만)는 감사에 남긴다 — 실계좌 준비 목록이 읽는다(BV7). 잔고 숫자는 싣지 않는다(BV9).
 """
 from __future__ import annotations
 
@@ -26,10 +26,14 @@ from pydantic import BaseModel, Field, StrictBool
 from src.api.auth import require_login
 from src.api.stage13_routes import SignalRequest
 from src.data.mock_gate import mock_allowed
+from src.database import get_sync_engine
 from src.domain.auth_identity import Principal, observed_actor
 from src.domain.kis_failure import KIND_BLOCKED, KIND_BUSINESS, KIND_HTTP_STATUS, KIND_TOKEN, KIND_TRANSPORT
+from src.domain.live_gate import LIVE_ALLOWED, live_gate
 from src.execution import broker_accounts as ba
+from src.execution import live_gate_store
 from src.execution.account_executors import get_account_executor
+from src.execution.audit_trail import AuditTrail, EventType
 from src.execution.kis_client import KISCallError, get_kis_client
 
 router = APIRouter(prefix="/api/v1/broker-accounts", tags=["broker-accounts"])
@@ -94,6 +98,13 @@ def delete_account(account_id: str, p: Principal = Depends(require_login)):
     return {"deleted": account_id}
 
 
+def _record_check(account_id: str, actor: str, result: dict) -> dict:
+    """연결 확인 결과를 감사에 남긴다(BV7 준비 목록이 읽는다) — 상태와 사람 말 사유만, 원문·비밀은 싣지 않는다."""
+    AuditTrail(get_sync_engine(), account_id=account_id).log(
+        event_type=EventType.BROKER_CHECK, actor=actor, decision=result["state"], message=result["reason"])
+    return result
+
+
 @router.post("/{account_id}/check")
 def check_account(account_id: str, p: Principal = Depends(require_login)):
     _owned_or_404(p, account_id)   # ★소유 확인이 먼저★ — 남의 자격은 풀지도 않는다
@@ -104,19 +115,20 @@ def check_account(account_id: str, p: Principal = Depends(require_login)):
     except ba.CredentialVaultUnavailable as e:
         raise HTTPException(503, str(e)) from None
     if mock_allowed():
-        return {**out, "state": "practice",
-                "reason": "연습용 모드라 증권사에 묻지 않았어요. 키가 맞는지는 아직 몰라요."}
+        return _record_check(account_id, p.username, {**out, "state": "practice",
+                "reason": "연습용 모드라 증권사에 묻지 않았어요. 키가 맞는지는 아직 몰라요."})
     secrets = (acct.app_key, acct.app_secret, acct.account_no)
     try:
         client.get_balance()
     except KISCallError as e:
-        return {**out, "state": "failed", "reason": _REASON_BY_KIND.get(e.kind, _REASON_OTHER),
-                "detail": _redact(str(e), secrets)}
+        return _record_check(account_id, p.username, {**out, "state": "failed",
+                "reason": _REASON_BY_KIND.get(e.kind, _REASON_OTHER), "detail": _redact(str(e), secrets)})
     except requests.RequestException as e:
         # `_fetch_token` 은 `requests` 예외를 감싸지 않는다(실측) — 네트워크 실패로 읽는다.
-        return {**out, "state": "failed", "reason": _REASON_BY_KIND[KIND_TRANSPORT],
-                "detail": _redact(str(e), secrets)}
-    return {**out, "state": "ok", "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬어요."}
+        return _record_check(account_id, p.username, {**out, "state": "failed",
+                "reason": _REASON_BY_KIND[KIND_TRANSPORT], "detail": _redact(str(e), secrets)})
+    return _record_check(account_id, p.username, {**out, "state": "ok",
+            "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬어요."})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -219,3 +231,60 @@ def resolve_account_kill(account_id: str, req: AccountResolveRequest, p: Princip
     _owned_or_404(p, account_id)
     who = observed_actor(p, None)
     return {**_executor(account_id).kill_switch.resolve(who["actor"], req.notes), **who}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 실계좌 준비 목록 (BV7) — 읽기만. 무엇이 왜 아직 안 됐는지 항목마다 말한다.
+# ═══════════════════════════════════════════════════════════════════════════════
+# ★LIVE 로 바꾸는 길은 아직 없다★ — 계좌별 대조 감시가 없어 마지막 항목이 늘 미통과이고, 전환 경로는 그 감시와 함께 만든다
+# (사용자 결정 2026-10-09). 그래서 `ready` 는 지금 언제나 False 다.
+
+_PRACTICE_ACCEPTED = "kis_paper_endpoint"   # client_realism.REASON_KIS_PAPER — 증권사 모의 서버가 받은 주문
+
+
+def _last_check(account_id: str) -> dict | None:
+    rows = AuditTrail(get_sync_engine(), account_id=account_id).query(event_type=EventType.BROKER_CHECK, limit=1)
+    return rows[0] if rows else None
+
+
+def _broker_accepted_paper_orders(owner: str) -> int:
+    n = 0
+    for acc in ba.list_masked(owner):
+        if not acc["is_paper"]:
+            continue
+        for r in AuditTrail(get_sync_engine(), account_id=acc["account_id"]).query(event_type=EventType.ORDER_SUBMITTED):
+            if (r.get("context") or {}).get("simulated_by") == _PRACTICE_ACCEPTED:
+                n += 1
+    return n
+
+
+@router.get("/{account_id}/live-readiness")
+def live_readiness(account_id: str, p: Principal = Depends(require_login)):
+    acc = _owned_or_404(p, account_id)
+    gate = live_gate(live_gate_store.current(), p.username)
+    check = _last_check(account_id)
+    practiced = _broker_accepted_paper_orders(p.username)
+
+    if check is None:
+        conn = (False, "이 계좌로 연결 확인을 한 적이 없어요. '연결 확인'을 먼저 해 주세요.")
+    elif check["decision"] == "ok":
+        conn = (True, "증권사가 이 계좌의 잔고 조회를 받아 줬어요.")
+    elif check["decision"] == "practice":
+        conn = (False, "마지막 확인이 연습용 모드라 증권사에 묻지 않았어요. 연습용 확인은 세지 않아요.")
+    else:
+        conn = (False, f"마지막 연결 확인이 실패했어요: {check.get('message') or '사유 없음'}")
+
+    items = [
+        {"key": "gate", "ok": gate["state"] == LIVE_ALLOWED,
+         "reason": "운영자가 이 계정에 실계좌를 열었어요." if gate["state"] == LIVE_ALLOWED else gate["reason"]},
+        {"key": "real_account", "ok": not acc["is_paper"],
+         "reason": ("실계좌로 연결한 계좌예요." if not acc["is_paper"]
+                    else "모의투자 계좌예요. 실계좌 주문은 실계좌로 연결한 계좌에서만 해요.")},
+        {"key": "connection", "ok": conn[0], "reason": conn[1]},
+        {"key": "paper_practice", "ok": practiced > 0,
+         "reason": (f"내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 {practiced}건 있어요." if practiced
+                    else "내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 아직 없어요. 연습용(mock) 주문은 세지 않아요.")},
+        {"key": "reconciliation", "ok": False,
+         "reason": "이 계좌를 증권사 잔고와 맞춰 보는 대조 감시가 아직 없어요. 그래서 실계좌 전환은 열지 않아요."},
+    ]
+    return {"account_id": account_id, "ready": all(i["ok"] for i in items), "items": items}

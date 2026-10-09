@@ -77,6 +77,9 @@ class EventType:
     DAILY_RESET           = "DAILY_RESET"
     DAILY_SUMMARY         = "DAILY_SUMMARY"
 
+    # 사용자 계좌 연결 확인 결과(BV7) — `decision` 에 practice|ok|failed. 비밀은 싣지 않는다.
+    BROKER_CHECK          = "BROKER_CHECK"
+
 
 class EventCategory:
     SIGNAL    = "SIGNAL"
@@ -261,7 +264,10 @@ class AuditTrail:
             )
 
     def log_order_submitted(self, client_order_id: str, order: dict,
-                              kis_response: dict | None = None) -> str | None:
+                              kis_response: dict | None = None,
+                              simulated_by: str | None = None) -> str | None:
+        """`simulated_by` — PAPER 주문을 받은 쪽(`client_realism` 사유: mock_client|kis_paper_endpoint).
+        실계좌 준비 목록(BV7)이 "증권사 모의 서버가 받은 주문" 만 세려고 남긴다."""
         return self.log(
             event_type=EventType.ORDER_SUBMITTED,
             category=EventCategory.ORDER,
@@ -275,6 +281,7 @@ class AuditTrail:
                 "price": order.get("price"),
                 "order_type": order.get("order_type", "MARKET"),
                 "kis_response": kis_response,
+                "simulated_by": simulated_by,
             },
             message=f"주문 발주: {order['side']} {order['ticker']} {order['quantity']}주",
         )

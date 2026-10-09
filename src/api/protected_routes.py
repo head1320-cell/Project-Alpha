@@ -156,6 +156,16 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 계좌 비상 정지 — 그 계좌 미체결만 취소, 기본은 보유 그대로(hold)"),
     ("POST", "/api/v1/broker-accounts/{account_id}/kill-switch/resolve"):
         (REQUIRE_LOGIN, "내 계좌 비상 정지 해제 — 내가 건 정지만(운영자 정지는 못 푼다)"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/live-readiness"):
+        (REQUIRE_LOGIN, "내 계좌 실계좌 준비 목록 — 무엇이 왜 아직 안 됐는지(읽기만). 남의 계좌는 404"),
+
+    # ── 실계좌 관문 (BV7) — 누구에게 무슨 근거로 실계좌를 여는지 선언·철회. 선언자는 토큰에서 ──
+    ("GET", "/api/v1/admin/live-gate"):
+        (REQUIRE_ADMIN, "실계좌 관문 선언과 이력 — 누구에게 실계좌가 열렸는지 드러난다"),
+    ("POST", "/api/v1/admin/live-gate"):
+        (REQUIRE_ADMIN, "실계좌 관문 선언 — 이름을 적은 사용자에게 실계좌 주문을 연다"),
+    ("DELETE", "/api/v1/admin/live-gate"):
+        (REQUIRE_ADMIN, "실계좌 관문 철회 — LIVE 였던 운영자 실행기는 SHADOW 로"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.
@@ -253,6 +263,8 @@ MONEY_PATH_MARKERS = (
     "/strategies/",
     # BV4 — 사용자 증권 계좌. `"/accounts/"` 는 `broker-accounts` 에 걸리지 않는다(실측).
     "broker-account",
+    # BV7 — 실계좌 관문 선언·철회.
+    "live-gate",
 )
 
 

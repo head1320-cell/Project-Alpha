@@ -23,6 +23,7 @@
       { "label": "내 거래 기록(본인 것만)", "routes": ["GET /trade-history/{username}"] },
       { "label": "내 증권 계좌 연결·확인·지우기(본인 것만)", "routes": ["GET /api/v1/broker-accounts", "POST /api/v1/broker-accounts", "DELETE /api/v1/broker-accounts/{account_id}", "POST /api/v1/broker-accounts/{account_id}/check"] },
       { "label": "내 계좌로 모의 주문·실행 모드·비상 정지(본인 것만)", "routes": ["POST /api/v1/broker-accounts/{account_id}/orders", "GET /api/v1/broker-accounts/{account_id}/orders", "DELETE /api/v1/broker-accounts/{account_id}/orders/{client_order_id}", "GET /api/v1/broker-accounts/{account_id}/mode", "POST /api/v1/broker-accounts/{account_id}/mode", "GET /api/v1/broker-accounts/{account_id}/kill-switch", "POST /api/v1/broker-accounts/{account_id}/kill-switch/trigger", "POST /api/v1/broker-accounts/{account_id}/kill-switch/resolve"] },
+      { "label": "내 계좌 실계좌 준비 목록(본인 것만)", "routes": ["GET /api/v1/broker-accounts/{account_id}/live-readiness"] },
       { "label": "내 비밀번호 바꾸기", "routes": ["POST /api/v1/auth/password"] }
     ]
   },
@@ -36,7 +37,8 @@
       { "label": "증권사와 계좌 맞춰 보기", "routes": ["POST /api/v1/live/reconcile/sync", "POST /api/v1/live/reconcile/periodic/start", "POST /api/v1/live/reconcile/periodic/stop"] },
       { "label": "시험 알림 보내기", "routes": ["POST /api/v1/live/notifier/test"] },
       { "label": "계정 발급·비밀번호 초기화", "routes": ["GET /api/v1/auth/users", "POST /api/v1/auth/users", "POST /api/v1/auth/users/{username}/reset-password"] },
-      { "label": "실거래 기록 표 준비", "routes": ["POST /api/v1/live/init-schema"] }
+      { "label": "실거래 기록 표 준비", "routes": ["POST /api/v1/live/init-schema"] },
+      { "label": "실계좌 관문 열기·닫기", "routes": ["GET /api/v1/admin/live-gate", "POST /api/v1/admin/live-gate", "DELETE /api/v1/admin/live-gate"] }
     ]
   }
 }

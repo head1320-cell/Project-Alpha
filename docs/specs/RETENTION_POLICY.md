@@ -52,7 +52,8 @@
 `financials_history` · `daily_prices` · `investor_flows`
 
 **② 실거래 감사** — `live_orders` · `live_fills` · `live_daily_pnl` ·
-`live_kill_events` · `live_audit_trail` · `reconciliation_history`
+`live_kill_events` · `live_audit_trail` · `reconciliation_history` ·
+`live_gate_declarations`
 <!-- PROTECTED-LIST:END -->
 
 사유는 **코드에 한 줄씩** 있다(`KEEP_FOREVER` · `AUDIT`). 요지만 옮기면:
@@ -64,7 +65,7 @@
   유니버스를 다시 세울 수 없고 생존편향이 되돌아온다.
 - **수급** — KIS 종목별 투자자 TR 은 **최근 ~30영업일만** 준다. 그 이전은
   비공식 KRX 백필뿐이고 이 환경에서는 그 도메인이 막혀 있다(실측).
-- **실거래 기록 여섯** — ★규제·감사 요건은 이 저장소가 판단할 문제가 아니다.★
+- **실거래 기록 여섯과 실계좌 관문 선언(BV7)** — ★규제·감사 요건은 이 저장소가 판단할 문제가 아니다.★
   확인하기 전에는 영구로 둔다. 이것은 결론이 아니라 **명시된 미상**이다.
 
 ### 무엇이 이것을 지키나

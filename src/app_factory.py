@@ -38,6 +38,7 @@ ROUTER_MODULES: tuple[str, ...] = (
     # (tests/test_routes_not_shadowed.py)
     "src.api.stage13_extensions",
     "src.api.stage13_routes",
+    "src.api.live_gate_routes",
     "src.api.valuation_routes",
     "src.api.company_routes",
     "src.api.company_snapshot_routes",

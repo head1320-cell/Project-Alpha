@@ -280,7 +280,7 @@ class OrderExecutor:
             )
 
             order_audit = self.audit.log_order_submitted(
-                client_order_id, signal, kis_resp,
+                client_order_id, signal, kis_resp, simulated_by=why,
             )
             audit_ok = _append_audit(audit_ids, order_audit)
 
@@ -375,6 +375,15 @@ class OrderExecutor:
                 raise ValueError(
                     "LIVE 모드 진입은 confirm_token='EXPLICIT_LIVE_CONFIRMED' 필요"
                 )
+            # ★실계좌 관문(BV7)★ — 토큰만으로는 열리지 않는다. 운영자가 선언한 기록에 이 사람의 이름이 있어야 한다.
+            if self.account_id is not None:
+                # 사용자 계좌의 LIVE 는 계좌별 대조 감시가 생길 때 연다(경로도 먼저 거절한다 — 두 겹).
+                raise ValueError("사용자 계좌의 실계좌 주문은 아직 열리지 않았어요.")
+            from src.domain.live_gate import LIVE_ALLOWED, live_gate
+            from src.execution import live_gate_store
+            gate = live_gate(live_gate_store.current(), actor)
+            if gate["state"] != LIVE_ALLOWED:
+                raise ValueError(gate["reason"])
 
         self.state.mode = new_mode
         self.state.last_mode_change = datetime.now()

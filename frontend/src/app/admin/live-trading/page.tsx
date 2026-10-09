@@ -7,7 +7,7 @@ import {
   CircleAlert, CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 
-import { getWithAuth, postJson } from "@/shared/api/apiBase";
+import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
 import { UNAUTHORIZED_MESSAGE } from "@/shared/api/authToken";
 import { loginHref } from "@/shared/lib/nextPath";
 
@@ -30,6 +30,8 @@ export default function LiveTradingPage() {
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
   // ★401 을 빈 화면으로 접지 않는다★ — 잔고가 "없다" 와 "볼 권한이 없다" 는 다르다.
   const [authError, setAuthError] = useState<string | null>(null);
+  // ★거절을 조용히 넘기지 않는다★(BV7) — 실계좌 관문이 닫혀 있으면 서버가 사유와 함께 400 을 준다.
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   // Polling
   const refresh = useCallback(async () => {
@@ -79,10 +81,11 @@ export default function LiveTradingPage() {
   };
 
   const confirmLiveMode = async () => {
-    await postJson("/api/v1/live/mode", {
+    const res = await postJson("/api/v1/live/mode", {
       mode: "LIVE",
       confirm_token: "EXPLICIT_LIVE_CONFIRMED",
     });
+    setLiveError(res.ok ? null : extractErrorDetail(await res.json().catch(() => null), `HTTP ${res.status}`));
     setShowLiveConfirm(false);
     refresh();
   };
@@ -223,6 +226,11 @@ export default function LiveTradingPage() {
               />
             </div>
           </div>
+          {liveError && (
+            <p role="alert" className="live-mode-refused mt-3 text-center text-sm text-[#FF6B6B]">
+              실계좌 모드로 바꾸지 못했어요: <span data-server>{liveError}</span>
+            </p>
+          )}
         </div>
       </header>
 
