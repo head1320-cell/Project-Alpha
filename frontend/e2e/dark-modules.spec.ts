@@ -53,7 +53,20 @@ function styleSet(page: Page): Promise<Record<string, string[]>> {
 test.describe("라이트 계산 스타일 골든(BS5)", () => {
   for (const route of ROUTES) {
     test(`라이트 그대로: ${route}`, async ({ page }) => {
+      // /insights 의 전일 대비 칩(`.ci-chg`·`.ci-mini-chg`)은 부호에 따라 등락색을 쓴다. 개발 환경 가격 창은 오늘 날짜로 끝나
+      // 날마다 오름/내림이 바뀌므로(골든은 오른 날에 떴다), 마지막 종가만 앞 종가의 1.01배로 고정해 늘 '오른 날'로 비교한다.
+      const pinUp = route === "/insights";
+      if (pinUp) {
+        await page.route("**/api/v1/prices/**", async (r) => {
+          const res = await r.fetch();
+          const body = await res.json();
+          const p = body.prices ?? [];
+          if (p.length >= 2) p[p.length - 1].close = p[p.length - 2].close * 1.01;
+          await r.fulfill({ response: res, json: body });
+        });
+      }
       await openModule(page, route);
+      if (pinUp) await expect(page.locator(".ci-chg").first(), "가격 고정이 먹지 않았다").toHaveAttribute("data-dir", "up");
       const got = await styleSet(page);
       expect(Object.keys(got).length, "잰 요소 종류가 너무 적다").toBeGreaterThan(10);
       if (process.env.UPDATE_LIGHT_GOLDEN === "1") {
