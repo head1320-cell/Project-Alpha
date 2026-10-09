@@ -137,9 +137,14 @@ class OrderExecutor:
         signal: dict,
         account_state: dict | None = None,
         regime_state: dict | None = None,
+        *,
+        actor: str = "system",
     ) -> dict:
         """
         신호 → 위험 검증 → 모드 라우팅 → 실행 → 기록.
+
+        `actor` — 이 신호를 낸 사람(BV5). 신호 감사 행에만 적는다 — 위험 판정·제출·체결은 시스템이 한 일이다.
+        사람이 내지 않은 경로(자동)는 기본값 `"system"` 그대로.
 
         Returns:
             {
@@ -161,6 +166,7 @@ class OrderExecutor:
             context={"price": signal.get("price"),
                       "order_type": signal.get("order_type"),
                       "mode": self.state.mode},
+            actor=actor,
         )
         _append_audit(audit_ids, sig_audit)
 

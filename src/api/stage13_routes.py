@@ -123,12 +123,14 @@ class SignalRequest(BaseModel):
     source:      str = Field(default="manual")
 
 
-@router.post("/orders/submit", dependencies=[Depends(require_admin)])
-def live_submit_order(req: SignalRequest):
-    """신호 → 위험 검증 → 모드 라우팅 → 실행."""
+@router.post("/orders/submit")
+def live_submit_order(req: SignalRequest, principal: Principal = Depends(require_admin)):
+    """신호 → 위험 검증 → 모드 라우팅 → 실행. ★누가 냈는지는 토큰에서★(BV5 — 예전엔 감사 행이 'system')."""
     try:
         executor = get_executor()
-        return executor.execute_signal(req.model_dump())
+        who = observed_actor(principal, None)
+        result = executor.execute_signal(req.model_dump(), actor=who["actor"])
+        return {**result, **who} if isinstance(result, dict) else result
     except Exception as e:
         raise HTTPException(500, str(e))
 

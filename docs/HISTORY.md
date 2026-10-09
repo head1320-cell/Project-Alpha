@@ -22397,3 +22397,17 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   골든은 다시 뜨지 않았다, 다른 키 불변). 고정이 먹었는지 `.ci-chg[data-dir="up"]` 로 확인한다.
 - **확인**: 고정 → 통과 · 짝: '내린 날'(× 0.99)로 고정하면 `data-dir` 확인이 빨갛고, 그 확인을 빼도 골든 비교가 `ci-chg` 로 빨갛다(고정이 비교에 닿는다) · `dark-modules`+`insights` 89 통과 · tsc 0 · eslint 0.
 - **하지 않은 것**: `DayChange`·가격 라우트·mock 걷기(맞게 동작한다) · 골든 다시 뜨기 · 다른 라우트. 화면 변화 0 → PNG 없음.
+
+### BV5 · 주문 제출 감사에 누가 냈는지 적기 (옛 BV5 의 계좌 기록은 BV6 으로 — 사용자 결정 "BV5+BV6 합치기")
+
+- **왜**: `POST /api/v1/live/orders/submit` 이 신호 감사 행(`SIGNAL_RECEIVED`)의 `actor` 를 기본값 `'system'` 으로 남겼다 — 관리자가 손으로 낸 주문인데 누가 냈는지 기록 0.
+  취소·모드·킬스위치 발동/해제는 이미 `observed_actor`(AC5)로 토큰 이름을 적는다. 제출만 빠졌다.
+- **무엇을**: `AuditTrail.log_signal(..., actor="system")` · `OrderExecutor.execute_signal(..., *, actor="system")` 이 신호 행에만 넘긴다(위험 판정·제출·체결은 시스템이 한 일 —
+  사람 이름을 붙이면 거짓) · 제출 경로가 `observed_actor(principal)` 로 토큰 이름을 넘기고 응답에 `actor`·`actor_source` 를 싣는다. 자동 경로(인자 없음)는 `'system'` 그대로.
+- **카파시 지침으로 옮긴 것**: 옛 BV5(기록 표 account_id 열 · 계좌별 킬스위치 · 계좌별 일 손익 · 실행기 account_id)는 부르는 곳이 없어 BV6(계좌별 모의 주문)에서 소비자와 함께 만든다.
+- **확인**: `tests/test_observed_actor_wiring.py` 에 4 — admin 제출 → 신호 행 `admin` · 짝: 두 번째 관리자 `minji` → `minji`(상수 배제) · 위험 판정 행은 `system` · 실행기 직접 호출은 `system`.
+  빨강 2(앞의 둘) — 짝 둘은 처음부터 초록(지키는 동작). ★변이 5 모두 죽음★: 경로가 안 넘김 · `log_signal` 무시 · `"admin"` 상수 · 위험 판정에도 actor · 기본값 `"user"`.
+- **관찰(고치지 않음 — 별도 카드)**: 가격 없는 MARKET 주문 제출은 위험 검사에서 `int * None` 으로 500 이 난다(실행기 직접 호출은 `KeyError: 'price'`). 테스트는 가격 있는 LIMIT 로 썼다.
+  `order_executor_v2.execute_signal` 재정의는 `actor` 를 받지 않는다 — 실행기는 v1 을 쓰고 v2 를 부르는 곳이 없어 손대지 않았다.
+- **하지 않은 것**: 계좌 기록·킬스위치·손익(BV6) · 위험 판정 행의 행위자 · 화면 변화 0 → PNG 없음.
+- **게이트**: ruff 통과 · pytest 8195 passed / 11 skipped · E2E admin 스펙 7 통과(응답 키만 늘어남).

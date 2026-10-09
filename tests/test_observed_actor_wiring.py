@@ -171,3 +171,55 @@ def test_the_ast_detector_actually_detects():
                             and isinstance(sub.value, ast.Name) and sub.value.id == "req"):
                         found.append(ast.unparse(kw))
     assert found, "검출기가 명백한 위반을 놓친다"
+
+
+# ── BV5 — 주문 제출도 누가 냈는지 적는다 ───────────────────────────────────
+# 취소·모드·킬스위치는 이미 토큰 이름을 적었는데, `POST /orders/submit` 만 신호 감사 행을 기본값 'system' 으로 남겼다.
+
+_SIGNAL = {"strategy_id": 1, "ticker": "005930", "side": "BUY", "quantity": 1, "price": 71000.0, "order_type": "LIMIT"}
+
+
+def _rows(client, event_type: str) -> list[dict]:
+    body = client.get("/api/v1/live/audit", headers=_admin(client)).json()
+    rows = body.get("events") or body.get("logs") or []
+    return [r for r in rows if r.get("event_type") == event_type]
+
+
+def _login(client, username: str, password: str) -> dict[str, str]:
+    tok = client.post("/api/v1/auth/login",
+                      json={"username": username, "password": password}).json()["access_token"]
+    return {"Authorization": f"Bearer {tok}"}
+
+
+def test_a_submitted_order_records_who_submitted_it(client):
+    res = client.post("/api/v1/live/orders/submit", json=_SIGNAL, headers=_admin(client))
+    assert res.status_code == 200, res.text
+    assert res.json()["actor"] == "admin" and res.json()["actor_source"]
+    signals = _rows(client, "SIGNAL_RECEIVED")
+    assert signals, "신호 감사 행이 없다 — 검사가 공허하다"
+    assert {r["actor"] for r in signals} == {"admin"}
+
+
+def test_another_admin_is_recorded_by_their_own_name(client):
+    """★짝★ — 'admin' 상수를 적는 구현을 배제한다."""
+    dbmod.create_user("minji", "minji-pw-123", role="admin")
+    res = client.post("/api/v1/live/orders/submit", json=_SIGNAL,
+                      headers=_login(client, "minji", "minji-pw-123"))
+    assert res.status_code == 200, res.text
+    assert {r["actor"] for r in _rows(client, "SIGNAL_RECEIVED")} == {"minji"}
+
+
+def test_the_risk_decision_stays_a_system_decision(client):
+    """위험 판정은 시스템이 한 일이다 — 사람 이름을 붙이지 않는다."""
+    client.post("/api/v1/live/orders/submit", json=_SIGNAL, headers=_admin(client))
+    risk = [r for r in (_rows(client, "RISK_CHECK_APPROVED") + _rows(client, "RISK_CHECK_REJECTED")
+                        + _rows(client, "RISK_CHECK_WARNING"))]
+    assert risk, "위험 판정 행이 없다 — 검사가 공허하다"
+    assert {r["actor"] for r in risk} == {"system"}
+
+
+def test_an_automated_caller_is_still_the_system(client):
+    """★짝★ — 사람이 낸 것이 아닌 경로(실행기 직접 호출)는 'system' 그대로다."""
+    import src.api.stage13_routes as stage13
+    stage13.get_executor().execute_signal(dict(_SIGNAL))
+    assert {r["actor"] for r in _rows(client, "SIGNAL_RECEIVED")} == {"system"}

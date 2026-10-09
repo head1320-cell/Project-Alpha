@@ -201,8 +201,10 @@ class AuditTrail:
     # ─────────────────────────────────────────────────────────────────────
 
     def log_signal(self, strategy_id: int, ticker: str, side: str, quantity: int,
-                    source: str = "stage11", context: dict | None = None) -> str | None:
+                    source: str = "stage11", context: dict | None = None,
+                    actor: str = "system") -> str | None:
         return self.log(
+            actor=actor,
             event_type=EventType.SIGNAL_RECEIVED,
             category=EventCategory.SIGNAL,
             severity=Severity.INFO,
