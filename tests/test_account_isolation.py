@@ -77,11 +77,12 @@ def _account_executor(account_id: str, kis=None, mode=ExecutionMode.PAPER) -> Or
         mode=mode, account_id=account_id)
 
 
-def _tracker():
-    """`/orders/active`·`/orders/state-distribution` 의 원천. 그 두 경로는 지금 `/orders/{client_order_id}` 에 가려
-    닿지 않는다(경로 순서 — 별도 결함) — 그래서 같은 함수를 직접 부른다."""
-    from src.engine.order_tracker import OrderStateMachine
-    return OrderStateMachine(dbmod.get_sync_engine())
+def _active(client) -> str:
+    return client.get("/api/v1/live/orders/active", headers=_admin(client)).text
+
+
+def _distribution(client) -> dict:
+    return client.get("/api/v1/live/orders/state-distribution", headers=_admin(client)).json()["distribution"]
 
 
 def _operator(client):
@@ -100,8 +101,8 @@ def test_account_orders_do_not_appear_on_operator_surfaces(client):
     h = _admin(client)
     coid = out["client_order_id"]
     assert coid not in client.get("/api/v1/live/orders", headers=h).text
-    assert coid not in str(_tracker().list_active_orders())
-    assert _tracker().state_distribution() == {}
+    assert coid not in _active(client)
+    assert _distribution(client) == {}
     audit = client.get("/api/v1/live/audit", headers=h).json()["events"]
     assert not any(e.get("actor") == "alice" for e in audit), "계좌 감사가 운영자 감사에 섞였다"
 
@@ -111,8 +112,8 @@ def test_operator_orders_still_appear_on_operator_surfaces(client):
     out = _operator(client).execute_signal(dict(_SIG), actor="admin")
     h = _admin(client)
     assert out["client_order_id"] in client.get("/api/v1/live/orders", headers=h).text
-    assert out["client_order_id"] in str(_tracker().list_active_orders())
-    assert _tracker().state_distribution()
+    assert out["client_order_id"] in _active(client)
+    assert _distribution(client)
     assert any(e.get("actor") == "admin" for e in client.get("/api/v1/live/audit", headers=h).json()["events"])
 
 

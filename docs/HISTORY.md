@@ -22473,3 +22473,12 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   계좌별 잔고 경로·일 손익·자산 이력 · 계좌별 대조기·자동 정지 · TradingEngine 경유. ★실제 증권사 모의 서버로의 주문은 관측하지 못했다★(실키 없음 — mock 클라이언트로만).
 - **게이트**: ruff 통과 · tsc 0 · eslint 0 오류 · E2E `login`·`profile`·`settings` 31 통과 · pytest 8260 passed / 1 failed / 11 skipped → 실패 1 은 AP3 트립와이어
   `test_kill_trigger_callers`(발동 호출부는 `equity`·`dd_pct` 를 명시해야 한다) — 새 발동 경로가 생략했다. `equity=None, dd_pct=None` 을 명시해 고쳤고 그 파일과 새 파일을 다시 돌려 36 통과.
+
+### RS · 가려진 경로 고치기 — `/live/orders/active`·`/orders/state-distribution` 이 처음으로 닿는다
+
+- **왜**: BV6a 중 발견. 두 경로(`stage13_extensions`)는 앞에 붙은 `GET /api/v1/live/orders/{client_order_id}`(`stage13_routes`)에 잡혀 "주문 없음" 404 를 냈다 — 한 번도 응답한 적이 없었다.
+- **무엇을**: `app_factory.ROUTER_MODULES` 에서 두 모듈 순서를 바꿨다(확장이 먼저). 반대 방향으로 가려지는 경로는 0 임을 먼저 확인했다(그래서 순서만 바꾸면 된다).
+- **확인**: 새 `tests/test_routes_not_shadowed.py` — ★앱 전체에서★ 앞의 `{변수}` 경로에 삼켜지는 경로 0 · 짝: 검출기가 가짜 가림을 잡는다 · 두 경로가 200 과 제 모양을 낸다.
+  빨강: 검출기가 정확히 이 둘만 잡았고 경로는 404. BV6a 격리 테스트가 이제 같은 함수를 직접 부르지 않고 ★실제 경로★로 확인한다. 변이: 순서를 되돌리면 빨강(빨강 단계가 곧 그 변이).
+- **하지 않은 것**: 경로 이름·응답 바꾸기 · 이 경로를 부르는 `ProductionMonitor.tsx`(어디에도 붙지 않은 위젯) 손질. 화면 0.
+- **게이트**: ruff 통과 · pytest 8264 passed / 11 skipped.
