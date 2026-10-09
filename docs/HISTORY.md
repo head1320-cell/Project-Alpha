@@ -22471,5 +22471,5 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **사용자 확인**: 로그인 화면 전·후 PNG(라이트 1440 · 다크 · 390 — 390 에서 새 칩이 두 줄로 접힘)를 보이고 "이대로 푸시해" 허락.
 - **하지 않은 것**: LIVE 와 준비 목록(BV7) · 설정 화면 "내 증권 계좌"(BV8) · `/my-account` 화면(BV9) · 관리자가 남의 계좌 보기·정지(BU9 — 운영자 전역 정지가 이미 모든 계좌를 막는다) ·
   계좌별 잔고 경로·일 손익·자산 이력 · 계좌별 대조기·자동 정지 · TradingEngine 경유. ★실제 증권사 모의 서버로의 주문은 관측하지 못했다★(실키 없음 — mock 클라이언트로만).
-- **게이트**: ruff 통과 · tsc 0 · eslint 0 오류 · E2E ·· 31 통과 · pytest 8260 passed / 1 failed / 11 skipped → 실패 1 은 AP3 트립와이어
-  (발동 호출부는 · 를 명시해야 한다) — 새 발동 경로가 생략했다.  을 명시해 고쳤고 그 파일과 새 파일을 다시 돌려 36 통과.
+- **게이트**: ruff 통과 · tsc 0 · eslint 0 오류 · E2E `login`·`profile`·`settings` 31 통과 · pytest 8260 passed / 1 failed / 11 skipped → 실패 1 은 AP3 트립와이어
+  `test_kill_trigger_callers`(발동 호출부는 `equity`·`dd_pct` 를 명시해야 한다) — 새 발동 경로가 생략했다. `equity=None, dd_pct=None` 을 명시해 고쳤고 그 파일과 새 파일을 다시 돌려 36 통과.
