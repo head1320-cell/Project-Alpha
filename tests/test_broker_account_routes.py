@@ -293,7 +293,16 @@ def test_a_changed_vault_key_makes_the_check_503(client, monkeypatch):
 
 # ── ⑤ 전수 ────────────────────────────────────────────────────────────────
 
-_ACCOUNT_ROUTES = sorted(k for k in PROTECTED if "{account_id}" in k[1])
+#: BV4 의 계좌 경로. 그 아래 주문·모드·비상 정지 경로(BV6)는 본문과 실거래 표가 필요해
+#: `tests/test_account_orders_routes.py` 가 같은 방식으로 훑는다 — 둘을 합치면 `{account_id}` 경로 전부다(아래 검사).
+_ACCOUNT_ROUTES = sorted(k for k in PROTECTED if k[1] in (f"{BASE}/{{account_id}}", f"{BASE}/{{account_id}}/check"))
+
+
+def test_the_two_sweeps_cover_every_account_route():
+    """★짝★ — 두 파일의 훑기가 나눠 맡은 것이 `{account_id}` 경로 전부인지(빠진 경로가 없게)."""
+    everything = {k for k in PROTECTED if "{account_id}" in k[1]}
+    theirs = {k for k in PROTECTED if k[1].startswith(f"{BASE}/{{account_id}}/") and k[1] != f"{BASE}/{{account_id}}/check"}
+    assert everything == set(_ACCOUNT_ROUTES) | theirs
 
 
 def test_there_are_account_routes_to_check():

@@ -20,14 +20,16 @@ from __future__ import annotations
 import datetime as dt
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, StrictBool
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, StrictBool
 
 from src.api.auth import require_login
+from src.api.stage13_routes import SignalRequest
 from src.data.mock_gate import mock_allowed
-from src.domain.auth_identity import Principal
+from src.domain.auth_identity import Principal, observed_actor
 from src.domain.kis_failure import KIND_BLOCKED, KIND_BUSINESS, KIND_HTTP_STATUS, KIND_TOKEN, KIND_TRANSPORT
 from src.execution import broker_accounts as ba
+from src.execution.account_executors import get_account_executor
 from src.execution.kis_client import KISCallError, get_kis_client
 
 router = APIRouter(prefix="/api/v1/broker-accounts", tags=["broker-accounts"])
@@ -115,3 +117,105 @@ def check_account(account_id: str, p: Principal = Depends(require_login)):
         return {**out, "state": "failed", "reason": _REASON_BY_KIND[KIND_TRANSPORT],
                 "detail": _redact(str(e), secrets)}
     return {**out, "state": "ok", "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬어요."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 내 계좌로 모의 주문 · 실행 모드 · 비상 정지 (BV6)
+# ═══════════════════════════════════════════════════════════════════════════════
+# 계좌마다 Stage13 실행기 하나(`account_executors`). 기본은 SHADOW — 주문을 기록만 하고 보내지 않는다.
+# 모든 경로가 ★소유 확인을 먼저★ 한다(남의 계좌 자격으로 클라이언트를 만들지 않는다). 누가 했는지는 토큰에서.
+# LIVE 는 여기서 열지 않는다 — 실계좌 관문(BV1 `live_gate`)을 거치는 BV7 에서.
+
+_LIVE_CLOSED = "실제 돈으로 주문하는 모드는 아직 열리지 않았어요. 운영자가 실계좌 관문을 연 뒤에 쓸 수 있어요."
+_PAPER_ON_REAL = ("이 계좌는 실계좌로 연결돼 있어요. 가상으로 체결하는 모드(PAPER)는 모의투자 계좌에서만 써요. "
+                  "모의투자 계좌를 따로 연결해 주세요.")
+
+
+class AccountModeRequest(BaseModel):
+    mode: str = Field(..., pattern="^(SHADOW|PAPER|LIVE)$")
+
+
+class AccountKillRequest(BaseModel):
+    reason: str = Field(..., min_length=4)
+    #: 기본은 '그대로 둠'(hold) — 보유를 팔지 않고 새 주문과 미체결만 멈춘다.
+    liquidation_mode: str = Field(default="hold", pattern="^(hold|gradual|immediate)$")
+
+
+class AccountResolveRequest(BaseModel):
+    notes: str = Field(default="")
+
+
+def _executor(account_id: str):
+    try:
+        return get_account_executor(account_id)
+    except ba.CredentialVaultUnavailable as e:
+        raise HTTPException(503, str(e)) from None
+
+
+@router.post("/{account_id}/orders")
+def submit_account_order(account_id: str, req: SignalRequest, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    who = observed_actor(p, None)
+    return {**_executor(account_id).execute_signal(req.model_dump(), actor=who["actor"]), **who}
+
+
+@router.get("/{account_id}/orders")
+def list_account_orders(account_id: str, limit: int = Query(100, le=500), p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    orders = _executor(account_id).list_orders(limit=limit)
+    return {"count": len(orders), "orders": orders}
+
+
+@router.delete("/{account_id}/orders/{client_order_id}")
+def cancel_account_order(account_id: str, client_order_id: str, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    who = observed_actor(p, None)
+    out = _executor(account_id).cancel_order(client_order_id, who["actor"])
+    if out.get("status") == "not_found":
+        raise HTTPException(404, "그 주문이 없어요.")
+    return {**out, **who}
+
+
+@router.get("/{account_id}/mode")
+def get_account_mode(account_id: str, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    st = _executor(account_id).state
+    return {"mode": st.mode, "changed_by": st.changed_by,
+            "last_mode_change": st.last_mode_change.isoformat() if st.last_mode_change else None}
+
+
+@router.post("/{account_id}/mode")
+def set_account_mode(account_id: str, req: AccountModeRequest, p: Principal = Depends(require_login)):
+    acc = _owned_or_404(p, account_id)
+    if req.mode == "LIVE":
+        raise HTTPException(400, _LIVE_CLOSED)
+    if req.mode == "PAPER" and not acc["is_paper"]:
+        raise HTTPException(400, _PAPER_ON_REAL)
+    who = observed_actor(p, None)
+    return {**_executor(account_id).set_mode(req.mode, who["actor"]), **who}
+
+
+@router.get("/{account_id}/kill-switch")
+def get_account_kill(account_id: str, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    ks = _executor(account_id).kill_switch
+    # `active` 는 운영자 전역 정지도 센다(그때도 주문이 막힌다). `event` 는 이 계좌가 직접 건 정지만.
+    return {"active": ks.is_active(), "event": ks.active_event()}
+
+
+@router.post("/{account_id}/kill-switch/trigger")
+def trigger_account_kill(account_id: str, req: AccountKillRequest, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    ex = _executor(account_id)
+    who = observed_actor(p, None)
+    # 자산·드로다운은 싣지 않는다(None = "안 실었다") — 계좌별 자산 이력이 아직 없고, 잔고 조회 실패가 정지를 막으면 안 된다.
+    out = ex.kill_switch.trigger(source=f"manual_{who['actor']}", reason=req.reason, equity=None, dd_pct=None,
+                                 kis_client=ex.kis, liquidation_mode=req.liquidation_mode)
+    return {**out, **who}
+
+
+@router.post("/{account_id}/kill-switch/resolve")
+def resolve_account_kill(account_id: str, req: AccountResolveRequest, p: Principal = Depends(require_login)):
+    _owned_or_404(p, account_id)
+    who = observed_actor(p, None)
+    return {**_executor(account_id).kill_switch.resolve(who["actor"], req.notes), **who}

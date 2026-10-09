@@ -140,7 +140,10 @@ def delete(owner: str, account_id: str) -> bool:
         if row is None:
             return False
         s.delete(row)
+    from src.execution.account_executors import evict_account_executor  # 순환 import 를 피해 여기서
+
     evict_account_client(account_id)
+    evict_account_executor(account_id)
     logger.info("증권 계좌 삭제: %s (%s)", account_id, owner)
     return True
 

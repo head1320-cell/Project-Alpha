@@ -22,6 +22,7 @@
       { "label": "실거래 시스템 상태", "routes": ["GET /api/v1/live/health", "GET /api/v1/live/gateway/stats", "GET /api/v1/live/notifier/stats"] },
       { "label": "내 거래 기록(본인 것만)", "routes": ["GET /trade-history/{username}"] },
       { "label": "내 증권 계좌 연결·확인·지우기(본인 것만)", "routes": ["GET /api/v1/broker-accounts", "POST /api/v1/broker-accounts", "DELETE /api/v1/broker-accounts/{account_id}", "POST /api/v1/broker-accounts/{account_id}/check"] },
+      { "label": "내 계좌로 모의 주문·실행 모드·비상 정지(본인 것만)", "routes": ["POST /api/v1/broker-accounts/{account_id}/orders", "GET /api/v1/broker-accounts/{account_id}/orders", "DELETE /api/v1/broker-accounts/{account_id}/orders/{client_order_id}", "GET /api/v1/broker-accounts/{account_id}/mode", "POST /api/v1/broker-accounts/{account_id}/mode", "GET /api/v1/broker-accounts/{account_id}/kill-switch", "POST /api/v1/broker-accounts/{account_id}/kill-switch/trigger", "POST /api/v1/broker-accounts/{account_id}/kill-switch/resolve"] },
       { "label": "내 비밀번호 바꾸기", "routes": ["POST /api/v1/auth/password"] }
     ]
   },

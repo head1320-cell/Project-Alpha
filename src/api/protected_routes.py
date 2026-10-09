@@ -138,6 +138,24 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 증권 계좌 지우기 — 남의 계좌는 404"),
     ("POST", "/api/v1/broker-accounts/{account_id}/check"):
         (REQUIRE_LOGIN, "내 증권 계좌 연결 확인 — 그 계좌 자격으로 증권사에 잔고를 한 번 묻는다. 남의 계좌는 404"),
+
+    # ── 내 계좌로 모의 주문 (BV6) — 로그인 + 본인 계좌만(남의 계좌 404) · SHADOW 기본 · LIVE 는 열지 않는다 ──
+    ("POST", "/api/v1/broker-accounts/{account_id}/orders"):
+        (REQUIRE_LOGIN, "내 계좌로 주문 — SHADOW 면 기록만, PAPER(모의투자 계좌만)면 증권사 모의 서버로 보낸다"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/orders"):
+        (REQUIRE_LOGIN, "내 계좌 주문 목록 — 그 계좌 주문만"),
+    ("DELETE", "/api/v1/broker-accounts/{account_id}/orders/{client_order_id}"):
+        (REQUIRE_LOGIN, "내 계좌 주문 취소 — 그 계좌 주문만"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/mode"):
+        (REQUIRE_LOGIN, "내 계좌 실행 모드 보기"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/mode"):
+        (REQUIRE_LOGIN, "내 계좌 실행 모드 바꾸기 — SHADOW·PAPER 만, PAPER 는 모의투자 계좌만, LIVE 는 거절"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/kill-switch"):
+        (REQUIRE_LOGIN, "내 계좌 비상 정지 상태 — 운영자 전역 정지도 센다"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/kill-switch/trigger"):
+        (REQUIRE_LOGIN, "내 계좌 비상 정지 — 그 계좌 미체결만 취소, 기본은 보유 그대로(hold)"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/kill-switch/resolve"):
+        (REQUIRE_LOGIN, "내 계좌 비상 정지 해제 — 내가 건 정지만(운영자 정지는 못 푼다)"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.
