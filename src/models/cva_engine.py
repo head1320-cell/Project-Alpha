@@ -371,23 +371,31 @@ class CVAEngine:
         epe: float,
         bank_spread_bps: float,
         ene: float,
+        notional: float | None = None,
     ) -> dict:
         """
-        BCVA as a running spread:
-        BCVA_spread = −(s_cpty × EPE) + (s_bank × ENE)
+        BCVA as an annual running cost (근사): 상대방 스프레드 × EPE − 우리 스프레드 × ENE.
+
+        ★단위를 이름대로★ `s × EPE` 는 **해마다 드는 금액**이다. 예전에는 이 금액에 10⁴ 를 곱해 "bps" 라 불렀다
+        (1e10 명목에 수백억 'bp') — BL3 M1. 금액(원/년)과 명목 대비 bp 를 따로 싣는다.
         """
         s_cpty = counterparty_spread_bps / 10_000
         s_bank = bank_spread_bps / 10_000
 
-        cva_spread = s_cpty * epe
-        dva_spread = s_bank * ene
-        bcva_spread = -cva_spread + dva_spread
+        cva_run = s_cpty * epe
+        dva_run = s_bank * ene
+        bcva_run = -cva_run + dva_run
+        per_bp = (lambda x: round(x / notional * 10_000, 4)) if notional else (lambda x: None)
 
         return {
-            "cva_spread_annual": round(cva_spread * 10_000, 2),
-            "dva_spread_annual": round(dva_spread * 10_000, 2),
-            "bcva_spread_annual": round(bcva_spread * 10_000, 2),
-            "unit": "bps",
+            "cva_running_annual": round(cva_run, 2),
+            "dva_running_annual": round(dva_run, 2),
+            "bcva_running_annual": round(bcva_run, 2),
+            "cva_running_bp_of_notional": per_bp(cva_run),
+            "dva_running_bp_of_notional": per_bp(dva_run),
+            "bcva_running_bp_of_notional": per_bp(bcva_run),
+            "unit_amount": "원/년",
+            "note": "스프레드 × 평균 노출의 연간 비용 근사 — 명목 대비 bp 는 그 금액을 명목으로 나눈 값",
         }
 
     # ─── Stressed CVA ────────────────────────────────────────────────────────
@@ -492,7 +500,7 @@ class CVAEngine:
 
         # 6. BCVA Spread
         ene_avg = float(np.mean(ene_profile))
-        bcva_sprd = self.bcva_spread(cds_spread_bps, epe, bank_cds_spread_bps, ene_avg)
+        bcva_sprd = self.bcva_spread(cds_spread_bps, epe, bank_cds_spread_bps, ene_avg, notional=notional)
 
         # 7. Stressed CVA
         stress_result = self.stressed_cva(

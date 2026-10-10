@@ -51,9 +51,17 @@ class CashRateProvider:
         self._cache: dict = {}
 
     def get_rate(self, as_of_date: pd.Timestamp) -> float:
-        """as_of_date 기준 PIT-safe 무위험금리."""
+        """as_of_date 기준 PIT-safe 무위험금리. 값·의미는 예전 그대로 — 출처는 `get_rate_with_source`."""
+        return self.get_rate_with_source(as_of_date)[0]
+
+    def get_rate_with_source(self, as_of_date: pd.Timestamp) -> tuple[float, str]:
+        """`(금리, 출처)` — 출처는 찾은 계열 기호(`CD91` 등) · `default`(저장된 금리 없음) · `error`(조회 실패).
+
+        ★기본값을 관측처럼 내지 않는다★ (BL3 M7) — 예전에는 금리가 없거나 DB 가 실패하면 조용히 3.5% 를 돌려줘
+        호출자가 관측값과 구별할 수 없었다. 값은 그대로(백테스트 소비자 불변), 출처만 함께 준다.
+        """
         if not self.engine:
-            return self.default_rf
+            return self.default_rf, "default"
 
         cache_key = str(as_of_date.date()) if hasattr(as_of_date, "date") else str(as_of_date)
         if cache_key in self._cache:
@@ -62,7 +70,7 @@ class CashRateProvider:
         try:
             with self.engine.connect() as conn:
                 # CD91 또는 KORIBOR3M 또는 BASE_RATE 우선순위로 조회
-                rate = None
+                rate, source = None, "default"
                 for symbol in ["CD91", "KORIBOR3M", "BASE_RATE", "CMA_RATE", "DGS3MO"]:
                     row = conn.execute(text("""
                         SELECT value FROM macro_global
@@ -74,7 +82,7 @@ class CashRateProvider:
                         # 단위 정규화: % → decimal
                         if val > 1:
                             val = val / 100.0
-                        rate = val
+                        rate, source = val, symbol
                         break
 
                 if rate is None:
@@ -83,11 +91,11 @@ class CashRateProvider:
                 # 안전 범위 클램프
                 rate = max(RF_FLOOR, min(RF_CEILING, rate))
 
-            self._cache[cache_key] = rate
-            return rate
+            self._cache[cache_key] = (rate, source)
+            return rate, source
         except Exception as e:
             logger.warning(f"Rate fetch failed for {as_of_date}: {e}")
-            return self.default_rf
+            return self.default_rf, "error"
 
     def daily_rate(self, as_of_date: pd.Timestamp) -> float:
         """연 → 일별 단리 환산."""
@@ -143,7 +151,7 @@ class CashYieldCalculator:
         invested = max(0.0, min(1.0, invested_ratio))
         cash_ratio = max(cash_floor, 1.0 - invested)
 
-        rf_annual = self.rate_provider.get_rate(as_of_date)
+        rf_annual, rf_source = self.rate_provider.get_rate_with_source(as_of_date)
         rf_daily = rf_annual / 252
         cash_return = cash_ratio * rf_daily
 
@@ -153,6 +161,9 @@ class CashYieldCalculator:
             "rf_daily":        round(rf_daily, 8),
             "cash_return_pct": round(cash_return, 8),
             "available":       True,
+            # ★관측인지 가정인지★ (BL3 M7) — 저장된 금리가 없거나 조회가 실패하면 기본값(가정)이다.
+            "rf_source":       rf_source,
+            "rf_is_assumed":   rf_source in ("default", "error"),
         }
 
     def cumulative_yield(

@@ -35,8 +35,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-import pandas as pd
-
 logger = logging.getLogger(__name__)
 
 
@@ -61,6 +59,8 @@ class RealismConfig:
     max_weight:             float = 0.50
     min_weight:             float = 0.02
     run_name:               str | None = None
+    #: ★국면 판정 시장★ (BH3) — `BacktestConfig.regime_market` 과 같다.
+    regime_market:          str = "kr"
 
     # ─ Stage 12 신규 토글 ──────────────────────────────────────────────
     enable_market_impact:        bool = True
@@ -141,6 +141,7 @@ class RealisticBacktester:
             lookback_days=config.lookback_days,
             max_weight=config.max_weight, min_weight=config.min_weight,
             run_name=config.run_name,
+            regime_market=config.regime_market,
         )
 
         validation = self.base._validate_config(bt_config)
@@ -204,10 +205,17 @@ class RealisticBacktester:
         current_weights = {int(sid): 1.0/n_str for sid in sids}
         current_base_weights = current_weights.copy()
         current_macro_adj = {int(sid): 0.0 for sid in sids}
-        current_regime = None
-        current_systemic_risk = None
-        current_cash_buffer = 0.0    # Stage 12: 적응형 모드에서 cash buffer
-
+        # ★국면은 패널에서 — 기본 엔진과 같은 함수★ (BH3)
+        panel = data.get("regime_panel") or {}
+        regime_policy = config.rebalance_policy == "regime_change"
+        regime_state: dict = {}
+        needs_initial = regime_policy
+        # ★현금 버퍼는 변수가 아니라 **비중**으로 표현된다★ (P4 잔여)
+        # 예전에는 `current_cash_buffer` 를 네 곳에서 대입하고 **한 번도 읽지
+        # 않았다**. 경제적 효과는 이미 비중에 있다 — 아래 `invested_ratio =
+        # sum(current_weights.values())` 가 현금 이자와 미투자분을 함께 결정한다.
+        # 죽은 누산기를 남겨 두면 누군가 "배선이 빠졌네" 하고 연결하는데, 그러면
+        # 현금이 **두 번** 세어진다(비중으로 한 번, 버퍼로 또 한 번).
         daily_records = []
 
         # Stage 12 누적 통계
@@ -226,18 +234,20 @@ class RealisticBacktester:
             rebalanced_today = False
             adaptive_mode = "normal"
 
-            # ── 리밸런싱 ───────────────────────────────────────────────
-            should_rebal = (
-                date in rebalance_dates
-                or (config.rebalance_policy == "regime_change" and current_regime is None)
-            )
+            # ── 국면(관측) + 리밸런싱 — ★미상인 날은 트리거하지 않는다★ (BH3) ──
+            reg = self.base.regime_step(panel, config.regime_market, date,
+                                        config.rebalance_policy, regime_state)
+            if regime_policy:
+                should_rebal = needs_initial or reg["changed"]
+            else:
+                should_rebal = date in rebalance_dates
 
             if should_rebal and t > 0:
                 past_returns = returns_matrix.iloc[:t]
                 if len(past_returns) >= 20:
                     try:
-                        # Stage 9 risk_score 조회 (PIT-safe)
-                        risk_score = self._get_systemic_risk_pit(data["macro_df"], date)
+                        # systemic risk — ★국면 모델은 생산하지 않는다★ (BH3·D 제외)
+                        risk_score = self._systemic_risk_of(reg["call"])
 
                         # Hook ⑤: Regime-Adaptive Allocator
                         if config.enable_regime_adaptive:
@@ -258,7 +268,6 @@ class RealisticBacktester:
                                 stats["hard_cap_active_days"] += 1
                             if alloc_result.get("breakdown_detected"):
                                 stats["breakdown_detected_days"] += 1
-                            current_cash_buffer = alloc_result.get("cash_buffer_pct", 0)
                         else:
                             alloc_result = self.base.allocator.compute(
                                 returns_matrix=past_returns,
@@ -269,15 +278,13 @@ class RealisticBacktester:
                                 max_weight=config.max_weight,
                                 min_weight=config.min_weight,
                             )
-                            current_cash_buffer = 0.0
 
                         if alloc_result.get("available"):
                             current_weights = {int(k): float(v) for k, v in alloc_result["weights"].items()}
                             current_base_weights = {int(k): float(v) for k, v in alloc_result.get("base_weights", {}).items()}
                             current_macro_adj = {int(k): float(v) for k, v in alloc_result.get("macro_adjustments", {}).items()}
-                            current_regime = alloc_result.get("regime")
-                            current_systemic_risk = alloc_result.get("systemic_risk_score") or risk_score
                             rebalanced_today = True
+                            needs_initial = False
 
                             # Hook ①: Capacity Constraint
                             if config.enable_capacity_constraint:
@@ -289,7 +296,6 @@ class RealisticBacktester:
                                 )
                                 current_weights = cap_adjusted["adjusted_weights"]
                                 stats["total_capacity_reallocations"] += len(cap_adjusted["capped_strategies"])
-                                current_cash_buffer = max(current_cash_buffer, cap_adjusted["cash_buffer_pct"])
 
                             # 누락된 sid 채우기
                             for sid in sids:
@@ -322,12 +328,13 @@ class RealisticBacktester:
                 current_macro_adj.get(int(sid), 0) * day_returns.get(sid, 0)
                 for sid in sids
             )
+            # ★동일가중 기준★ (BH2) — 항등식 net = EW + alloc + cost + cash
+            baseline_ew = sum(day_returns.get(sid, 0) for sid in sids) / len(sids)
 
             # ── 거래 비용 + Hook ② Market Impact ───────────────────────
             turnover = 0.0
             cost_effect = 0.0
             impact_cost = 0.0
-            netting_savings = 0.0
 
             if rebalanced_today and t > 0:
                 prev_w = daily_records[-1].weights if daily_records else current_weights
@@ -375,10 +382,11 @@ class RealisticBacktester:
                                 current_weights[sid] = prev_w.get(sid, 0) + diff * scaling
                         stats["total_buying_power_truncations"] += 1
 
-                # Netting 효과 (기존 Stage 11)
-                if config.netting_enabled:
-                    estimated_raw = turnover * 1.5
-                    netting_savings = (estimated_raw - turnover) * total_rate * equity
+            # ── Netting 효과 — ★실제 보유로 잰다★ (BG3) ────────────────
+            # 예전 `(회전율 × 1.5 − 회전율) × 요율` 은 지어낸 수였다. 기본 엔진과
+            # 같은 헬퍼를 쓴다(구매력 절단 뒤의 가중으로). ★보고 전용★.
+            netting_savings, netting_reason = self.base._netting(
+                config, data, daily_records, current_weights, date, equity)
 
             # ── Hook ③: Cash Yield ────────────────────────────────────
             cash_yield = 0.0
@@ -403,15 +411,31 @@ class RealisticBacktester:
                 portfolio_return=net_return,
                 cumulative_return=cum_return,
                 drawdown_pct=drawdown,
-                regime=current_regime,
-                systemic_risk=current_systemic_risk,
-                allocation_effect=alloc_diff, selection_effect=0,
+                regime=reg["label"],
+                systemic_risk=self._systemic_risk_of(reg["call"]),
+                growth_signal=reg["call"].get("growth_signal"),
+                inflation_signal=reg["call"].get("inflation_signal"),
+                regimes=reg["regimes"], regime_reasons=reg["reasons"],
+                # ★상수 0 을 싣지 않는다★ (AL2) — 이 엔진은 선택 효과를 재지
+                # 않는다. `0` 은 `pd.notna` 라 커버리지가 1.0 으로 잡히고,
+                # `coverage_complete` 가 거짓으로 참이 되어 잔차가 "복리 효과" 로
+                # 오명명됐다. 재료가 `None` 이면 기존 가드가 제대로 작동한다.
+                baseline_effect=baseline_ew,
+                allocation_effect=alloc_diff, selection_effect=None,
                 macro_effect=macro_effect,
-                netting_effect=netting_savings/equity if equity > 0 else 0,
-                cost_effect=cost_effect + cash_yield,
+                netting_effect=(None if netting_savings is None
+                                else (netting_savings / equity if equity > 0 else 0)),
+                # ★현금이자는 비용이 아니다★ (AL3) — 예전에는
+                # `cost_effect + cash_yield` 였다. 부호도(비용 음수·이자 양수)
+                # 성격도(나간 돈·번 돈) 반대인 둘을 한 칸에 넣고 화면이
+                # "거래 비용" 이라 불렀다. `net_return` 은 아래에서 둘을 그대로
+                # 더하므로 ★수익률·Sharpe·드로다운은 불변★ 이다.
+                cost_effect=cost_effect,
+                cash_effect=cash_yield,
                 num_trades=int(round(turnover * len(sids))) if rebalanced_today else 0,
                 turnover_pct=turnover * 100,
-                netting_savings=netting_savings, rebalanced=rebalanced_today,
+                netting_savings=netting_savings, netting_reason=netting_reason,
+                rebalanced=rebalanced_today,
                 weights=current_weights.copy(),
                 base_weights=current_base_weights.copy(),
                 macro_adj=current_macro_adj.copy(),
@@ -437,24 +461,16 @@ class RealisticBacktester:
         return daily_records, stats
 
     # ═════════════════════════════════════════════════════════════════════
-    # PIT-safe systemic risk 조회
+    # systemic risk — ★국면 판정에서 읽는다, 지어내지 않는다★
     # ═════════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def _get_systemic_risk_pit(macro_df: pd.DataFrame, as_of_date: pd.Timestamp) -> float | None:
-        """t일 이전 매크로 데이터로 systemic risk score 계산 (PIT-safe)."""
-        if macro_df.empty:
-            return None
-        try:
-            from src.engine.regime_model import MultiRegimeModel
-            if "date" not in macro_df.columns:
-                return None
-            past = macro_df[macro_df["date"] < as_of_date]
-            if past.empty:
-                return None
-            regime_info = MultiRegimeModel.classify_at_date(past, str(as_of_date.date()))
-            if regime_info:
-                return float(regime_info.get("systemic_risk_score", 0) or 0)
-            return None
-        except Exception:
-            return None
+    def _systemic_risk_of(call: dict | None) -> float | None:
+        """그날 국면 판정의 systemic risk. ★없으면 None — 0 을 만들지 않는다★ (BH1·BH3)
+
+        예전 `_get_systemic_risk_pit` 는 `get(…, 0) or 0` 으로 점수 없는 날마다 0.0 을
+        지어낼 자리였다(BH1 에서 막음). 국면 모델(`regime_model`)은 이 점수를 생산하지
+        않으므로(킬스위치 재료 — 별도 승인) 지금은 늘 None 이다.
+        """
+        score = (call or {}).get("systemic_risk_score")
+        return None if score is None else float(score)

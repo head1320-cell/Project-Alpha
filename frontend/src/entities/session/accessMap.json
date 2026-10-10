@@ -1,0 +1,44 @@
+{
+  "_comment": "BU8b 로그인 화면의 '로그인이 여는 것' 지도. 서버 보호 목록(src/api/protected_routes.py PROTECTED)과 같은 내용이어야 한다 — tests/test_login_access_map.py 가 양방향으로 대조한다(서버가 새로 잠그면 여기에도 적어야 통과). 열린 층의 api_prefixes 로 시작하는 보호 경로는 없어야 한다.",
+  "open": {
+    "title": "로그인 없이 열려 있어요",
+    "items": [
+      { "label": "종목 찾기", "href": "/screener", "api_prefixes": ["/api/v1/screener"] },
+      { "label": "백테스트", "href": "/backtest", "api_prefixes": ["/api/v1/backtest"] },
+      { "label": "매크로 분석", "href": "/macro", "api_prefixes": ["/api/v1/macro"] },
+      { "label": "기업 분석", "href": "/insights", "api_prefixes": ["/api/v1/company", "/api/v1/valuation"] },
+      { "label": "위험 점검", "href": "/risk-tools", "api_prefixes": ["/api/v1/screener"] },
+      { "label": "포트폴리오 설계", "href": "/allocation", "api_prefixes": ["/api/v1/allocation"] }
+    ]
+  },
+  "login": {
+    "title": "로그인하면 열려요",
+    "items": [
+      { "label": "실계좌 잔고·보유 종목", "routes": ["GET /api/v1/live/balance", "GET /api/v1/account/holdings", "GET /api/v1/account/balance", "GET /api/v1/trading/status"] },
+      { "label": "주문 이력·미체결 주문", "routes": ["GET /api/v1/live/orders", "GET /api/v1/live/orders/{client_order_id}", "GET /api/v1/live/orders/active", "GET /api/v1/live/orders/state-distribution"] },
+      { "label": "감사 기록·일별 손익", "routes": ["GET /api/v1/live/audit", "GET /api/v1/live/audit/summary", "GET /api/v1/live/daily-pnl"] },
+      { "label": "비상 정지 이력·준비 상태", "routes": ["GET /api/v1/live/kill-switch/events", "GET /api/v1/live/kill-switch/readiness", "GET /api/v1/live/kill-switch/kis-codes"] },
+      { "label": "증권사와 맞춰 본 기록", "routes": ["GET /api/v1/live/reconcile/status", "GET /api/v1/live/reconcile/history"] },
+      { "label": "실거래 시스템 상태", "routes": ["GET /api/v1/live/health", "GET /api/v1/live/gateway/stats", "GET /api/v1/live/notifier/stats"] },
+      { "label": "내 거래 기록(본인 것만)", "routes": ["GET /trade-history/{username}"] },
+      { "label": "내 증권 계좌 연결·확인·지우기(본인 것만)", "routes": ["GET /api/v1/broker-accounts", "POST /api/v1/broker-accounts", "DELETE /api/v1/broker-accounts/{account_id}", "POST /api/v1/broker-accounts/{account_id}/check"] },
+      { "label": "내 계좌 잔고·모의 주문·실행 모드·비상 정지(본인 것만)", "routes": ["POST /api/v1/broker-accounts/{account_id}/orders", "GET /api/v1/broker-accounts/{account_id}/orders", "DELETE /api/v1/broker-accounts/{account_id}/orders/{client_order_id}", "GET /api/v1/broker-accounts/{account_id}/mode", "POST /api/v1/broker-accounts/{account_id}/mode", "GET /api/v1/broker-accounts/{account_id}/kill-switch", "POST /api/v1/broker-accounts/{account_id}/kill-switch/trigger", "POST /api/v1/broker-accounts/{account_id}/kill-switch/resolve", "GET /api/v1/broker-accounts/{account_id}/balance"] },
+      { "label": "내 계좌 실계좌 준비 목록(본인 것만)", "routes": ["GET /api/v1/broker-accounts/{account_id}/live-readiness"] },
+      { "label": "내 비밀번호 바꾸기", "routes": ["POST /api/v1/auth/password"] }
+    ]
+  },
+  "admin": {
+    "title": "거래 권한이 있는 계정만(관리자)",
+    "why": "이 서버에 연결된 증권 계좌 하나로 주문이 나가서, 관리자가 거래 권한을 준 계정만 해요.",
+    "items": [
+      { "label": "주문 내기·취소", "routes": ["POST /api/v1/live/orders/submit", "DELETE /api/v1/live/orders/{client_order_id}", "POST /api/v1/live/orders/cleanup-eod", "POST /api/v1/trading/execute", "POST /api/v1/trading/screen-to-trade", "POST /api/v1/orders/execute", "POST /api/v1/orders/batch"] },
+      { "label": "실행 모드·자동매매 바꾸기", "routes": ["POST /api/v1/live/mode", "POST /toggle-auto-trading"] },
+      { "label": "비상 정지·해제", "routes": ["POST /api/v1/live/kill-switch/trigger", "POST /api/v1/live/kill-switch/resolve", "POST /api/v1/trading/kill-switch"] },
+      { "label": "증권사와 계좌 맞춰 보기", "routes": ["POST /api/v1/live/reconcile/sync", "POST /api/v1/live/reconcile/periodic/start", "POST /api/v1/live/reconcile/periodic/stop"] },
+      { "label": "시험 알림 보내기", "routes": ["POST /api/v1/live/notifier/test"] },
+      { "label": "계정 발급·비밀번호 초기화", "routes": ["GET /api/v1/auth/users", "POST /api/v1/auth/users", "POST /api/v1/auth/users/{username}/reset-password"] },
+      { "label": "실거래 기록 표 준비", "routes": ["POST /api/v1/live/init-schema"] },
+      { "label": "실계좌 관문 열기·닫기", "routes": ["GET /api/v1/admin/live-gate", "POST /api/v1/admin/live-gate", "DELETE /api/v1/admin/live-gate"] }
+    ]
+  }
+}

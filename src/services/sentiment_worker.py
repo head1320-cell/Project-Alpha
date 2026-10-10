@@ -72,7 +72,19 @@ class SentimentWorker(DeterministicMockStore):
         )
 
     def _build_sentiment(self, stock_code: str) -> dict:
-        # 사전 계산 결과를 흉내 내는 결정론적 mock
+        # ★운영(KIS_USE_MOCK=0) — 합성 센티먼트 금지★
+        # 뉴스·콜 NLP 파이프라인이 아직 연결되지 않았다. 여기서 점수를 지어내면
+        # 스크리너가 **지어낸 정성 신호로 종목을 고른다.** 정직 None →
+        # `eval_sentiment` 가 매칭하지 않는다("—"). `consensus_store` 와 같은 처방.
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            out: dict = dict.fromkeys(SENTIMENT_SOURCES)
+            out["_source"] = "unavailable"
+            out["_note"] = ("뉴스·경영진 콜 NLP 소스가 연결되지 않았습니다 — "
+                            "합성 점수를 만들지 않습니다. 파이프라인을 붙이면 켜집니다.")
+            return out
+
+        # 사전 계산 결과를 흉내 내는 결정론적 mock (개발/샌드박스/CI 전용)
         news = round(self._normal(stock_code, "news", mu=0.05, sigma=0.4), 3)
         news = max(-1.0, min(1.0, news))
         call = round(self._normal(stock_code, "call", mu=0.10, sigma=0.35), 3)

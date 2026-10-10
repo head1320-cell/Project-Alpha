@@ -1,0 +1,569 @@
+"""애플리케이션 기동 시퀀스 — main_api.py에서 분리.
+
+DB 초기화 · 고아 백테스트 정리 · 스크리너 테이블 · KIS master 수집 · DART/KRX/OHLCV
+사전적재 데몬 등 11단계. 각 단계는 개별 try/except로 감싸 하나가 실패해도 기동은 계속된다.
+라우트가 아니므로 어떤 라우터 파일에도 속하지 않는다.
+"""
+
+import logging
+import os
+import threading
+
+from src.database import init_db
+
+#: 감시용 국면 입력 — ★readiness 라우트와 같은 함수★ (BH1). 정의·사유는
+#: `src/execution/risk_monitor.current_regime_state` 로 옮겼다(두 벌을 두면 갈린다).
+from src.execution.risk_monitor import current_regime_state as _monitor_regime_state
+
+logger = logging.getLogger("api.startup")
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★주기 데몬은 한 프로세스에 이름당 하나 — 그리고 명시적으로만 끈다★ (BE)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 예전에는 `run_startup` 이 부를 때마다 **끝나지 않는** 루프를 새 스레드로 띄웠다.
+# 운영(`uvicorn --workers 1`)에서는 기동이 한 번이라 드러나지 않았지만,
+# `with TestClient(create_app())` 를 쓰는 테스트 파일 15개만 돌려도 스윕·리스크
+# 데몬이 ★각각 218개★ 살아 있었다(실측 2026-09-24). 그것들이 모듈 전역 엔진을
+# 바꾼 테스트의 **단일 연결**을 다른 스레드에서 써서 SQLite 안에서 SIGSEGV 가
+# 났다(재현: 5/5, 대조군 0/3).
+
+#: 이 스위치가 **정확히** `"0"` 이면 주기 데몬을 띄우지 않는다(mock 게이트 규율).
+DAEMONS_ENV = "LIFECYCLE_DAEMONS"
+
+#: 이름 → 스레드. ★살아 있는 동안 같은 이름을 다시 띄우지 않는다★
+_DAEMONS: dict[str, threading.Thread] = {}
+_DAEMONS_LOCK = threading.Lock()
+
+
+def daemons_disabled() -> bool:
+    """`LIFECYCLE_DAEMONS` 가 정확히 `"0"` 인가. 그 밖의 값·미설정은 켜짐."""
+    return os.getenv(DAEMONS_ENV) == "0"
+
+
+def _start_daemon_once(name: str, target) -> str:
+    """주기 데몬을 **이름당 하나만** 띄운다. `started`·`already_running`·`disabled`.
+
+    ★끄면 로그로 말한다★ — 운영에서 누가 이 스위치를 켜 두면 고아 스윕·리스크
+    감시가 조용히 사라지는데, 그것은 CLAUDE.md 4절의 침묵 폴백이다.
+    """
+    if daemons_disabled():
+        logger.warning(f"주기 데몬 '{name}' 을 띄우지 않았습니다 — {DAEMONS_ENV}=0 "
+                       "(명시적으로 꺼짐). 이 프로세스에서는 이 감시가 돌지 않습니다.")
+        return "disabled"
+    with _DAEMONS_LOCK:
+        cur = _DAEMONS.get(name)
+        if cur is not None and cur.is_alive():
+            return "already_running"
+        t = threading.Thread(target=target, name=f"lifecycle:{name}", daemon=True)
+        _DAEMONS[name] = t
+        t.start()
+        return "started"
+
+async def _collect_master_bg(engine):
+    """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.kis_master_parser import collect_master_files
+        r = await collect_master_files(engine)
+        log.info(f"KIS 마스터 수집 완료: KOSPI {r.get('KOSPI')} + KOSDAQ {r.get('KOSDAQ')}")
+    except Exception as e:
+        log.warning(f"KIS 마스터 수집 실패(폴백 유지): {e}")
+
+#: 고아 백테스트 스윕 주기(초). `ORPHAN_SILENCE_SEC`(900) 보다 훨씬 짧아야
+#: 하트비트가 끊긴 실행이 **한 주기 안에** 거둬진다.
+_ORPHAN_SWEEP_SEC = 60.0
+
+
+def _orphan_sweep_bg():
+    """백그라운드(데몬): 워커가 죽어 비종료로 남은 백테스트 실행을 ★주기적으로★ 거둔다.
+
+    ★왜 기동 1회로는 부족한가★
+    예전에는 `run_startup()` 에서 한 번만 훑었다. 그래서 실행 워커가 죽으면 그 행은
+    **서버를 재시작할 때까지** 비종료로 남았고, 프런트(`RunMonitor`)는 1초마다
+    영원히 폴링했다 — 사용자에게는 "로딩이 끝나지 않는다" 로 보인다.
+
+    `backtest_run_routes._on_worker_done` 이 대부분의 사망을 즉시 잡지만 그것도
+    만능은 아니다: API 프로세스 자체가 죽거나 배포로 교체되면 그 콜백도 함께
+    사라진다. 이 루프가 마지막 그물이다.
+
+    ★죽지 않는다★ 한 번의 예외로 데몬이 끝나면 그 뒤로는 아무도 거두지 않는다.
+    """
+    import logging
+    import time as _t
+    log = logging.getLogger("api.main")
+    while True:
+        try:
+            from src.data.backtest_runs import sweep_orphaned
+            n = sweep_orphaned()
+            if n:
+                log.warning(f"고아 백테스트 {n}건 정리(주기 스윕)")
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:                  # noqa: BLE001
+            log.warning(f"고아 스윕 실패(다음 주기에 재시도): {e}")
+        _t.sleep(_ORPHAN_SWEEP_SEC)
+
+
+#: 리스크 감시 주기(초). 국면·잔고는 분 단위로 움직이므로 60초면 충분하고,
+#: 더 짧게 잡으면 브로커 조회 쿼터만 먹는다.
+_RISK_MONITOR_SEC = 60.0
+
+
+def _risk_monitor_bg():
+    """백그라운드(데몬): ★리스크를 주기적으로 재고 판정을 기록한다★ (P1-b)
+
+    ★왜 없었나★ — 탐지기(`kill_switch.should_auto_trigger`)·임계값·페일세이프는
+    전부 있었는데 **부르는 곳이 없었다**. 그 함수의 유일한 호출부는 클래스
+    docstring 의 예시였고, 주석은 *"모니터링 루프에서 호출"* 이라 적혀 있었다.
+    이 루프가 그 주석이 가리키던 자리다.
+
+    ★아무것도 막지 않는다★ — 기본은 재고·판정하고 **기록**하는 것까지다.
+    자동 발동은 `RISK_MONITOR_AUTOTRIGGER` 가 정확히 `"1"` 일 때만
+    (`risk_monitor.autotrigger_allowed()`).
+
+    ★죽지 않는다★ — 한 번의 예외로 끝나면 그 뒤로는 아무도 보지 않는다.
+    """
+    import logging
+    import time as _t
+    log = logging.getLogger("api.main")
+    last = None
+    while True:
+        try:
+            from src.database import get_engine
+            from src.execution.audit_trail import AuditTrail
+            from src.execution.kill_switch import KillSwitch
+            from src.execution.risk_monitor import run_once
+
+            engine = get_engine()
+            audit = AuditTrail(engine)
+            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오므로, 이 줄이
+            # `auto_dd`·`auto_cb` 의 **재료를 만드는 자리**다(AI). 기록 실패는
+            # 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
+            _record_equity(engine, log)
+            last = run_once(
+                kill_switch=KillSwitch(engine, audit),
+                audit=audit,
+                account_state=_monitor_account_state(),
+                regime_state=_monitor_regime_state(),
+                last=last,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:                  # noqa: BLE001
+            log.warning(f"리스크 감시 주기 실패(다음 주기에 재시도): {e}")
+        _t.sleep(_RISK_MONITOR_SEC)
+
+
+def _record_equity(engine, log) -> None:
+    """오늘의 에쿼티를 이력에 남긴다. ★출처를 함께 적는다★
+
+    ★`_monitor_account_state()` 를 쓰지 않는 이유★ — 그쪽은 `equity_krw: None` 을
+    일부러 박아 둔다(감시는 브로커를 부르지 않는다는 판단). 여기서 그 값을 채우면
+    리스크 검사 **전체**가 보는 상태가 달라지므로, 잔고 읽기를 이 함수 안에만 둔다.
+
+    ★mock 이면 `mock` 으로 적는다★ — 안 쓰는 것이 아니라 라벨해서 쓴다. 그 행이
+    드로다운 계열에 못 들어가는 것은 리더가 거르기 때문이다(`drawdown.py`).
+    """
+    try:
+        from src.execution.equity_history import current_source, record_observation
+        from src.execution.kis_client import get_kis_client
+        from src.execution.order_executor import ExecutorState
+
+        balance = get_kis_client().get_balance() or {}
+        record_observation(
+            engine,
+            account_state={"equity_krw": balance.get("evaluated_total")},
+            execution_mode=str(getattr(ExecutorState.mode, "value", ExecutorState.mode)),
+            source=current_source(),
+        )
+    except Exception as e:                      # noqa: BLE001
+        # ★감시를 멈추지 않는다★ — 기록은 부차이고 판정이 본체다.
+        log.debug(f"에쿼티 이력 기록 건너뜀: {e}")
+
+
+def _monitor_account_state() -> dict:
+    """감시용 계좌 상태. ★브로커가 없으면 0 이 아니라 `None` + 사유★
+
+    `OrderExecutor._fetch_account_state()` 는 브로커 클라이언트를 요구한다. 감시는
+    주문을 내지 않으므로 **실행기를 만들지 않고** 드로다운만 직접 읽는다 —
+    실행 경로를 우회하는 것이 아니라 **아예 들어가지 않는 것**이다.
+    """
+    from src.database import get_engine
+    from src.execution.api_failure_probe import observe_into
+    from src.execution.drawdown import drawdown_from_history
+    dd = drawdown_from_history(get_engine())
+    # ★`auto_api` 의 재료★(AQ) — `observe_into` 는 **이미 만들어진** 싱글턴만
+    # 읽는다. `get_kis_client()` 를 부르지 않으므로 위 경계가 그대로 지켜진다.
+    return observe_into({
+        "equity_krw": None,
+        "current_drawdown_pct": dd.intraday_pct,
+        "cumulative_dd_pct": dd.cumulative_pct,
+        "drawdown_reason": dd.reason,
+    })
+
+
+def _prewarm_real_data():
+    """백그라운드(데몬 스레드): corp_code 맵 준비 + 기본 유니버스 팩터를 DB에 적재.
+    이미 DB(factor_snapshot)에 적재돼 있으면 디스크/DB 캐시 히트로 빠르게 끝남."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.dart_client import _load_full_corp_map
+        n = len(_load_full_corp_map())
+        log.info(f"사전 워밍: corp_code 맵 {n}개 준비")
+    except Exception as e:
+        log.warning(f"사전 워밍 corp_code 실패: {e}")
+    try:
+        import os
+
+        from src.data.snapshot_db import ingest_universe
+        # 공통 유니버스 먼저(빠르게 준비) → 전종목 펀더멘털까지 확장(조건식이 ROE 등 펀더멘털을
+        # 써도 전종목이 DB 캐시에서 즉시). DART 호출이 크지만 재개 가능(item:CODE/디스크캐시) + 데몬.
+        unis = ["kospi200"]
+        if os.getenv("FUNDAMENTALS_PREWARM_ALL", "1") != "0":
+            unis += ["kosdaq150", "all_listed"]
+        for uni in unis:
+            r = ingest_universe(uni)  # 펀더멘털+가격 팩터 → factor_snapshot 적재(write-through)
+            log.info(f"사전 워밍[{uni}]: factor_snapshot 적재 {r}")
+    except Exception as e:
+        log.warning(f"사전 워밍 적재 실패: {e}")
+
+    # Load symbol master cache (non-blocking)
+    try:
+        from src.database import get_engine
+        from src.kis_master_parser import load_symbol_cache
+        engine = get_engine()
+        load_symbol_cache(engine)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Symbol cache load skipped: {e}")
+
+def _krx_backfill_bg():
+    """백그라운드(데몬): KRX 전종목 장기 일봉 → daily_prices 자동 백필 + 주기 증분.
+    키 없거나 KRX_AUTOBACKFILL=0이면 auto_backfill이 즉시 no-op."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.krx_ingest import auto_backfill
+        auto_backfill(loop=True)  # 초기 백필 후 주기 증분 (데몬이라 비차단)
+    except Exception as e:
+        log.warning(f"KRX 자동 백필 실패(폴백 유지): {e}")
+
+def _macro_vintage_backfill_bg():
+    """백그라운드(데몬): ALFRED 빈티지 → `macro_observations` 자동 백필 + 주기 증분.
+
+    ★이 데몬은 국면 축을 열지 않는다★ 축의 PIT 판정은 "수집 경로가 빈티지를
+    읽는가" ∧ "실제 빈티지 행이 있는가" 의 논리곱이고, 여기서 채우는 것은 뒤쪽
+    하나뿐이다. 앞쪽은 별도 승인으로 사람이 올린다.
+
+    키 없거나 MACRO_VINTAGE_AUTOBACKFILL=0 이면 즉시 no-op."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.macro_vintage_backfill import auto_vintage_backfill
+        auto_vintage_backfill(loop=True)
+    except Exception as e:
+        log.warning(f"매크로 빈티지 자동 백필 실패(폴백 유지): {e}")
+
+
+def _prewarm_ohlcv_bg():
+    """백그라운드(데몬): KIS 일봉을 daily_prices에 전종목 사전 적재 → 백테스터(조건식 포함) DB 즉시 가속.
+
+    우선순위 kospi200 → kosdaq150 → 전종목(all_listed)로 공통 유니버스를 먼저 준비.
+    prewarm_ohlcv는 병렬(스레드 안전 KIS 클라이언트)·재개 가능(이미 적재분 스킵)이며,
+    mock/키 없음이면 즉시 no-op. KRX 백필 활성 시엔 startup 게이트에서 이 데몬을 스킵."""
+    import logging
+    import os
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.ohlcv_loader import prewarm_ohlcv
+        from src.engine.screener import resolve_universe
+        days = int(os.getenv("OHLCV_PREWARM_DAYS", "3650") or 3650)  # 기본 ~10년(페이지네이션)
+        unis = ["kospi200", "kosdaq150"]
+        if os.getenv("OHLCV_PREWARM_ALL", "1") != "0":
+            unis.append("all_listed")
+        for uni in unis:
+            try:
+                tickers = resolve_universe(uni)
+            except Exception:
+                tickers = []
+            if not tickers:
+                continue
+            r = prewarm_ohlcv(tickers, days=days)
+            log.info(f"OHLCV 사전적재[{uni}]: {r}")
+    except Exception as e:
+        log.warning(f"OHLCV 사전 적재 실패(폴백 유지): {e}")
+
+def _prewarm_etf_bg():
+    """백그라운드(데몬): 크로스에셋 ETF 유니버스(US→KR 매핑)를 daily_prices에 적재.
+    ★KIS/KRX 분기와 무관히 실행★ — KRX 전종목 백필은 '주식'만 다루므로 ETF는 여기서 별도 적재.
+    매크로 전략·자산배분 백테스트(LAA 등)의 ETF 가격 원천. mock/키 없음이면 prewarm_ohlcv가 no-op."""
+    import logging
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.etf_prices import prewarm_etf_universe
+        r = prewarm_etf_universe("kr")
+        log.info(f"OHLCV 사전적재[etf_universe]: {r}")
+    except Exception as e:
+        log.warning(f"ETF 유니버스 prewarm 실패: {e}")
+
+def _dart_backfill_sleep_seconds(stats: dict) -> int:
+    """백필 1회 결과에 따른 다음 시도까지 대기(초).
+
+    부팅 시 KIS 마스터 수집과 이 백필이 동시 스레드로 시작되는데, 백필이 먼저 돌면
+    마스터 캐시가 비어 all_listed가 SEED 30종목으로 조용히 축소된다(dart_history.
+    backfill_financials의 fallback_to_seed). 이걸 '오늘은 완료'로 오판해 24시간
+    자면, 마스터가 수 초~수 분 뒤 채워져도 다음날까지 재시도를 안 해 정체된 것처럼
+    보인다(실측: last_fetch가 이틀째 정지) — 그래서 fallback이면 짧게 재시도한다."""
+    import os
+    if not isinstance(stats, dict):
+        return 24 * 3600
+    if stats.get("stopped_at_quota"):
+        return 3 * 3600                                              # 일쿼터 도달 → 리셋 대기
+    if stats.get("fallback_to_seed"):
+        return int(os.getenv("DART_HISTORY_RETRY_SEC", "300") or 300)  # 마스터캐시 경쟁 → 곧 재시도
+    return 24 * 3600                                                  # 실제 완료 → 다음날 증분
+
+def _dart_history_backfill_bg():
+    """백그라운드(데몬): 전종목 과거 재무 → financials_history 적재 (PIT 펀더멘털 백테스트 원천).
+
+    DART 일 20,000콜 한도라 max_calls로 분할하고, 쿼터 도달 시 대기 후 이어서(resume) 적재한다.
+    완료되면 하루 뒤 증분(최신 보고서) 재확인. 키 없으면 backfill_financials가 즉시 error 반환→종료."""
+    import logging
+    import os
+    import time
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.dart_history import backfill_financials
+        years = int(os.getenv("DART_HISTORY_YEARS", "10") or 10)
+        quarters = os.getenv("DART_HISTORY_QUARTERS", "0") != "0"  # 1=분기까지(4배 콜)
+        max_calls = int(os.getenv("DART_HISTORY_MAX_CALLS", "18000") or 18000)
+        while True:
+            stats = backfill_financials(all_listed=True, years=years,
+                                        include_quarters=quarters, max_calls=max_calls)
+            log.info(f"DART 재무 시계열 백필: {stats}")
+            if isinstance(stats, dict) and stats.get("error"):
+                return  # 키 없음/DB 없음 → 종료
+            time.sleep(_dart_backfill_sleep_seconds(stats))
+    except Exception as e:
+        log.warning(f"DART 재무 시계열 백필 실패(폴백 유지): {e}")
+
+def _kis_flows_sync_bg():
+    """백그라운드(데몬): KIS 투자자별 수급(최근 ~30영업일)을 investor_flows에 매일 누적.
+    수급 토큰(외국인·기관 순매수) 백테스트의 최근 구간 실데이터. mock/키 없으면 error→종료."""
+    import logging
+    import os
+    import time
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.kis_flows import sync_investor_flows
+        time.sleep(int(os.getenv("FLOWS_SYNC_DELAY_SEC", "120") or 120))  # 마스터 수집 선행 여유
+        while True:
+            stats = sync_investor_flows(all_listed=True)
+            log.info(f"KIS 수급 적재: {stats}")
+            if isinstance(stats, dict) and stats.get("error"):
+                return  # mock/키 없음/DB 없음 → 종료
+            time.sleep(24 * 3600)  # 매일 누적 (KIS는 최근 ~30일 윈도만 반환)
+    except Exception as e:
+        log.warning(f"KIS 수급 적재 실패(폴백 유지): {e}")
+
+def _krx_flows_backfill_bg():
+    """백그라운드(데몬): KRX MDC 투자자별 수급 '과거' 1회 백필(비공식) → 깊은 수급 역사 + 세부 주체.
+    마스터(ISIN)가 준비될 때까지 대기 후 1회 실행(재적재 없음). 비공식 스크래핑이라 opt-in."""
+    import logging
+    import os
+    import time
+    log = logging.getLogger("api.main")
+    try:
+        from src.data.krx_mdc import backfill_flows_krx
+        start = os.getenv("KRX_FLOWS_START", "2018-01-01")
+        for _ in range(30):  # 마스터(collect-master) 준비 대기 — 최대 ~30분
+            stats = backfill_flows_krx(start=start, all_listed=True)
+            log.info(f"KRX 수급 과거 백필: {stats}")
+            if (isinstance(stats, dict) and stats.get("error")
+                    and "마스터" in str(stats.get("message", ""))):
+                time.sleep(60)
+                continue  # 마스터 아직 미준비 → 재시도
+            return  # 완료/다른 에러 → 종료 (1회성)
+    except Exception as e:
+        log.warning(f"KRX 수급 과거 백필 실패(폴백 유지): {e}")
+
+
+async def run_startup() -> None:
+    import asyncio
+    try:
+        init_db()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"init_db failed (DB 준비 전일 수 있음): {e}")
+
+    # 고아 백테스트 실행 정리 — 워커가 죽으면(OOM·배포·크래시) 그 행이 비종료로
+    # 남고 결과 페이지가 끝나지 않는 실행을 보여준다. ★기동 1회 + 주기 데몬★ 이다:
+    # 기동 훑기는 재시작 직후를 즉시 정리하고, 데몬은 그 뒤를 계속 지킨다.
+    try:
+        from src.data.backtest_runs import sweep_orphaned
+        sweep_orphaned()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
+    try:
+        _start_daemon_once("orphan_sweep", _orphan_sweep_bg)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"고아 스윕 데몬 기동 실패: {e}")
+
+    # 리스크 상시 감시 — ★관측만★(자동 발동은 RISK_MONITOR_AUTOTRIGGER=1 일 때만).
+    try:
+        _start_daemon_once("risk_monitor", _risk_monitor_bg)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"리스크 감시 데몬 기동 실패: {e}")
+
+    # Initialize screener tables (legacy sync path)
+    try:
+        from src.database import get_engine
+        from src.screener_models import init_screener_tables
+        from src.screener_pipeline import update_market_cache_loop
+        engine = get_engine()
+        init_screener_tables(engine)
+        asyncio.create_task(update_market_cache_loop(engine))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Screener startup failed: {e}")
+
+    # Initialize KIS-backed async DB and scheduler
+    try:
+        from src.data_sync import daily_sync_scheduler
+        from src.database_async import init_async_db
+        ok = await init_async_db()
+        if ok:
+            asyncio.create_task(daily_sync_scheduler())
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KIS async DB startup failed: {e}")
+
+    # KIS 종목 마스터 자동 수집 (무료·인증불필요): 전종목 코드·실명·KOSPI200/KOSDAQ150·ETF 플래그.
+    # → 유니버스(실제 지수·시장전체·ETF 전체)와 종목명 해소의 단일 소스. 미적재 시에만.
+    try:
+        from src.data.stock_master import load_master_flags
+        if not load_master_flags():
+            from src.database import get_engine
+            asyncio.create_task(_collect_master_bg(get_engine()))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"마스터 수집 시작 실패: {e}")
+
+    # 실데이터 사전 워밍 (DART 키 있을 때만, 백그라운드 스레드):
+    #   ① corp_code 맵을 미리 로드 → 첫 스크린의 corp_code 미스("조회된 데이터 없음") 방지
+    #   ② 기본 유니버스 펀더멘털을 미리 계산 → 디스크 캐시 채움 → 사용자 첫 클릭이
+    #      44초를 기다리지 않게 함. 재시작 후엔 디스크 캐시 히트로 빠르게 재워밍.
+    try:
+        import os
+        if os.getenv("DART_API_KEY"):
+            import threading
+            threading.Thread(target=_prewarm_real_data, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"실데이터 사전 워밍 시작 실패: {e}")
+
+    # KRX 전종목 장기 일봉 자동 백필 (KRX_API_KEY 있을 때만, 데몬 스레드):
+    #   날짜기준 전종목 일봉을 daily_prices에 적재 → 백테스터(ohlcv_loader DB 1순위)가
+    #   장기 기간을 KRX 실데이터로 로딩(생존편향 보정·지수 포함). 재개 가능·비차단.
+    #   KRX_AUTOBACKFILL=0으로 비활성, KRX_BACKFILL_START로 범위 조절.
+    try:
+        import os
+        if os.getenv("KRX_API_KEY") and os.getenv("KRX_AUTOBACKFILL", "1") != "0":
+            import threading
+            threading.Thread(target=_krx_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KRX 자동 백필 시작 실패: {e}")
+
+    # ALFRED 빈티지 자동 백필 (FRED_API_KEY 있을 때만, 데몬 스레드):
+    #   ★KRX 게이트와 섞지 않는다★ 키도 다르고(FRED) 쿼터도 다르다. 처음에 KRX
+    #   블록 안에 넣었더니 KRX 키가 없는 환경에서는 영원히 안 도는 상태가 됐다 —
+    #   "만들어 놓고 부르지 않는다" 를 고치려던 작업이 같은 결함을 다시 만들었다.
+    #   ★이 데몬은 국면 축을 열지 않는다★ 축 판정은 "수집 경로가 빈티지를 읽는가"
+    #   ∧ "실제 빈티지 행이 있는가" 이고 여기서 채우는 것은 뒤쪽 하나뿐이다.
+    #   MACRO_VINTAGE_AUTOBACKFILL=0 으로 비활성.
+    try:
+        import os
+        if os.getenv("FRED_API_KEY"):
+            import threading
+            threading.Thread(target=_macro_vintage_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"매크로 빈티지 자동 백필 시작 실패: {e}")
+
+    # KIS 일봉 전종목 사전 적재 (KIS 실데이터 키 있고 + KRX 백필 비활성일 때만, 데몬 스레드):
+    #   KRX 키 없이도 daily_prices를 전종목 OHLCV로 미리 채워 백테스터(조건식 포함)를 즉시 DB-가속
+    #   (이전엔 백테스트한 종목만 reactively 적재 → 첫 콜드런이 느림). 우선순위 kospi200→kosdaq150→
+    #   전종목, 재개 가능(이미 적재분 스킵). KRX 활성 시엔 KRX가 더 깊은 역사를 담당하므로 스킵.
+    #   OHLCV_PREWARM=0 비활성 · OHLCV_PREWARM_ALL=0 공통 유니버스까지만 · OHLCV_PREWARM_DAYS 범위.
+    try:
+        import os
+
+        from src.data.mock_gate import mock_allowed
+        _kis_real = not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))
+        _krx_active = bool(os.getenv("KRX_API_KEY")) and os.getenv("KRX_AUTOBACKFILL", "1") != "0"
+        if _kis_real and not _krx_active and os.getenv("OHLCV_PREWARM", "1") != "0":
+            import threading
+            threading.Thread(target=_prewarm_ohlcv_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"OHLCV 사전 적재 시작 실패: {e}")
+
+    # 크로스에셋 ETF 유니버스 적재 (★KIS/KRX 분기 무관★ — KRX 전종목 백필은 '주식'만 다루므로
+    #   ETF는 별도 적재 필요. 매크로 전략·자산배분 백테스트(LAA 등)의 ETF 가격 원천.
+    #   실데이터 가용(KIS 실키 또는 KRX 활성) + OHLCV_PREWARM_ETF≠0일 때. mock/키 없음이면 no-op.):
+    try:
+        import os
+
+        from src.data.mock_gate import mock_allowed
+        _real_ohlcv = (not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))) \
+            or (bool(os.getenv("KRX_API_KEY")) and os.getenv("KRX_AUTOBACKFILL", "1") != "0")
+        if _real_ohlcv and os.getenv("OHLCV_PREWARM_ETF", "1") != "0":
+            import threading
+            threading.Thread(target=_prewarm_etf_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"ETF 유니버스 prewarm 시작 실패: {e}")
+
+    # 전종목 과거 재무(financials_history) 백필 (DART 키 있을 때만, 데몬 스레드):
+    #   PIT 펀더멘털 백테스트(look-ahead 없는 ROE/PER 등)의 실데이터 원천. DART 일 20,000콜 한도라
+    #   max_calls로 분할하고 매일 이어서 적재(resume). 키 없으면 즉시 no-op.
+    #   DART_HISTORY_BACKFILL=0 비활성 · DART_HISTORY_YEARS 깊이 · DART_HISTORY_QUARTERS=1 분기까지.
+    try:
+        import os
+        if os.getenv("DART_API_KEY") and os.getenv("DART_HISTORY_BACKFILL", "1") != "0":
+            _start_daemon_once("dart_history_backfill", _dart_history_backfill_bg)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"DART 재무 시계열 백필 시작 실패: {e}")
+
+    # KIS 투자자별 수급(최근 ~30영업일) 매일 적재 (KIS 실키 있을 때만, 데몬):
+    #   수급 토큰(외국인·기관 순매수) 백테스트의 최근 구간 실데이터(investor_flows). FLOWS_SYNC=0 비활성.
+    try:
+        import os
+
+        from src.data.mock_gate import mock_allowed
+        if (not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))
+                and os.getenv("FLOWS_SYNC", "1") != "0"):
+            _start_daemon_once("kis_flows_sync", _kis_flows_sync_bg)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KIS 수급 적재 시작 실패: {e}")
+
+    # KRX MDC 투자자별 수급 '과거' 1회 백필 (opt-in — 비공식 스크래핑, 깊은 역사 + 세부 주체):
+    #   KIS는 최근 ~30일만 → 깊은 수급 역사는 KRX MDC로 1회 적재. 마스터(ISIN) 준비 후 실행.
+    #   비공식 엔드포인트라 기본 OFF — KRX_FLOWS_BACKFILL=1 로 명시 활성, KRX_FLOWS_START 로 범위.
+    try:
+        import os
+        if os.getenv("KRX_FLOWS_BACKFILL", "0") == "1":
+            import threading
+            threading.Thread(target=_krx_flows_backfill_bg, daemon=True).start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"KRX 수급 과거 백필 시작 실패: {e}")

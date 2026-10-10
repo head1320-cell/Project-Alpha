@@ -14,9 +14,10 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from src.api.auth import require_admin, require_login
 from src.data.mock_gate import mock_allowed
 
 logger = logging.getLogger(__name__)
@@ -80,9 +81,13 @@ def _build_engine(safety_model: SafetyConfigModel):
 # 엔드포인트
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_login)])
 def trading_status():
-    """현재 계좌 상태 + 모드 (mock/paper/real)."""
+    """현재 계좌 상태 + 모드 (mock/paper/real).
+
+    ★브로커의 예수금·평가금액·보유 종목 전체★를 낸다 — `/live/balance`·`/account/balance` 와 같은 자료라
+    로그인이 필요하다(BV0a). 예전에는 열려 있었고 면제 사유가 다른 경로(`/trading-status`)를 설명했다.
+    """
     try:
         from src.engine.trading_engine import SafetyConfig, TradingEngine
         engine = TradingEngine(safety=SafetyConfig(dry_run=True))
@@ -107,7 +112,7 @@ def trading_mode():
             "kis_is_paper": is_paper, "has_key": has_key}
 
 
-@router.post("/execute")
+@router.post("/execute", dependencies=[Depends(require_admin)])
 def execute_signals(req: ExecuteSignalsRequest):
     """시그널 직접 실행 (안전장치 적용)."""
     try:
@@ -122,7 +127,7 @@ def execute_signals(req: ExecuteSignalsRequest):
         raise HTTPException(500, f"시그널 실행 실패: {e}")
 
 
-@router.post("/screen-to-trade")
+@router.post("/screen-to-trade", dependencies=[Depends(require_admin)])
 def screen_to_trade(req: ScreenToTradeRequest):
     """
     원클릭: 스크리닝 → 통과 종목 자동 매매.
@@ -175,7 +180,7 @@ def screen_to_trade(req: ScreenToTradeRequest):
         raise HTTPException(500, f"screen-to-trade 실패: {e}")
 
 
-@router.post("/kill-switch")
+@router.post("/kill-switch", dependencies=[Depends(require_admin)])
 def toggle_kill_switch(enable: bool = True):
     """
     Kill Switch 안내 — 실제 차단은 각 요청의 safety.kill_switch로 적용.

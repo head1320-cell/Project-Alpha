@@ -35,6 +35,8 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.execution.live_schemas import account_scope
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,6 +76,9 @@ class EventType:
     SYSTEM_STOP           = "SYSTEM_STOP"
     DAILY_RESET           = "DAILY_RESET"
     DAILY_SUMMARY         = "DAILY_SUMMARY"
+
+    # 사용자 계좌 연결 확인 결과(BV7) — `decision` 에 practice|ok|failed. 비밀은 싣지 않는다.
+    BROKER_CHECK          = "BROKER_CHECK"
 
 
 class EventCategory:
@@ -125,8 +130,14 @@ class AuditTrail:
         )
     """
 
-    def __init__(self, engine):
+    #: 운영자 계좌(`None`)가 기본 — `__init__` 을 거치지 않고 만든 인스턴스도 운영자 범위다(BV6).
+    account_id: str | None = None
+
+
+    def __init__(self, engine, account_id: str | None = None):
         self.engine = engine
+        #: 사용자 증권 계좌(BV6). `None` = 운영자 계좌. 쓰는 행에 싣고, 읽을 때 이 계좌 것만 본다.
+        self.account_id = account_id
 
     # ─────────────────────────────────────────────────────────────────────
     # 기록
@@ -146,8 +157,14 @@ class AuditTrail:
         context: dict | None = None,
         actor: str = "system",
         message: str | None = None,
-    ) -> str:
-        """단일 audit 이벤트 기록. 반환: audit_id."""
+    ) -> str | None:
+        """단일 audit 이벤트 기록. 반환: `audit_id`, ★기록 실패 시 `None`★.
+
+        예전에는 INSERT 가 실패해도 미리 만들어 둔 `audit_id` 를 그대로 돌려줬다.
+        그래서 DB 장애 중 주문 응답에 ★아무것도 가리키지 않는 감사 ID★ 가 실렸다 —
+        감사 추적이 가장 필요한 순간에 거짓말을 한 것이다(CLAUDE.md §4 침묵 폴백 금지).
+        ★기록 실패가 주문 흐름을 멈추지는 않는다★ — 다만 없는 것을 있다고 하지 않는다.
+        """
         audit_id = f"AUD-{uuid.uuid4().hex[:12]}"
 
         # context를 안전하게 JSON 직렬화
@@ -164,18 +181,19 @@ class AuditTrail:
                         audit_id, event_type, event_category, severity,
                         strategy_id, client_order_id, ticker,
                         decision, risk_tier, reason_code,
-                        context_json, actor, message
+                        context_json, actor, message, account_id
                     ) VALUES (
                         :aid, :et, :ec, :sv,
                         :sid, :coid, :tk,
                         :dec, :rt, :rc,
-                        :cj, :ac, :msg
+                        :cj, :ac, :msg, :acct
                     )
                 """), {
                     "aid": audit_id, "et": event_type, "ec": category, "sv": severity,
                     "sid": strategy_id, "coid": client_order_id, "tk": ticker,
                     "dec": decision, "rt": risk_tier, "rc": reason_code,
                     "cj": context_json, "ac": actor, "msg": message,
+                    "acct": self.account_id,
                 })
 
             # 중요 이벤트는 표준 로거에도 기록
@@ -184,7 +202,9 @@ class AuditTrail:
             elif severity == Severity.WARN:
                 logger.warning(f"[AUDIT WARN] {event_type}: {message}")
         except Exception as e:
-            logger.error(f"Audit log 실패: {e}")
+            # ★위조하지 않는다★ — 기록이 없으면 id 도 없다.
+            logger.error(f"Audit log 실패(감사 ID 없음): {e}")
+            return None
 
         return audit_id
 
@@ -193,8 +213,10 @@ class AuditTrail:
     # ─────────────────────────────────────────────────────────────────────
 
     def log_signal(self, strategy_id: int, ticker: str, side: str, quantity: int,
-                    source: str = "stage11", context: dict | None = None) -> str:
+                    source: str = "stage11", context: dict | None = None,
+                    actor: str = "system") -> str | None:
         return self.log(
+            actor=actor,
             event_type=EventType.SIGNAL_RECEIVED,
             category=EventCategory.SIGNAL,
             severity=Severity.INFO,
@@ -203,7 +225,7 @@ class AuditTrail:
             message=f"신호 수신: {side} {ticker} {quantity}주 (sid={strategy_id})",
         )
 
-    def log_risk_decision(self, check_result, order: dict) -> str:
+    def log_risk_decision(self, check_result, order: dict) -> str | None:
         """RiskCheckResult를 받아서 audit 기록."""
         if check_result.approved:
             return self.log(
@@ -242,7 +264,10 @@ class AuditTrail:
             )
 
     def log_order_submitted(self, client_order_id: str, order: dict,
-                              kis_response: dict | None = None) -> str:
+                              kis_response: dict | None = None,
+                              simulated_by: str | None = None) -> str | None:
+        """`simulated_by` — PAPER 주문을 받은 쪽(`client_realism` 사유: mock_client|kis_paper_endpoint).
+        실계좌 준비 목록(BV7)이 "증권사 모의 서버가 받은 주문" 만 세려고 남긴다."""
         return self.log(
             event_type=EventType.ORDER_SUBMITTED,
             category=EventCategory.ORDER,
@@ -256,12 +281,13 @@ class AuditTrail:
                 "price": order.get("price"),
                 "order_type": order.get("order_type", "MARKET"),
                 "kis_response": kis_response,
+                "simulated_by": simulated_by,
             },
             message=f"주문 발주: {order['side']} {order['ticker']} {order['quantity']}주",
         )
 
     def log_order_filled(self, client_order_id: str, fill_qty: int,
-                           fill_price: float, ticker: str) -> str:
+                           fill_price: float, ticker: str) -> str | None:
         return self.log(
             event_type=EventType.ORDER_FILLED,
             category=EventCategory.EXECUTION,
@@ -274,7 +300,7 @@ class AuditTrail:
         )
 
     def log_kill_switch(self, event_id: str, trigger_source: str, reason: str,
-                          equity: float, dd_pct: float) -> str:
+                          equity: float, dd_pct: float) -> str | None:
         return self.log(
             event_type=EventType.KILL_SWITCH_TRIGGERED,
             category=EventCategory.EMERGENCY,
@@ -288,7 +314,7 @@ class AuditTrail:
             message=f"🚨 Kill switch 발동: {reason}",
         )
 
-    def log_mode_change(self, old_mode: str, new_mode: str, actor: str = "user") -> str:
+    def log_mode_change(self, old_mode: str, new_mode: str, actor: str = "user") -> str | None:
         return self.log(
             event_type=EventType.MODE_CHANGED,
             category=EventCategory.SYSTEM,
@@ -317,8 +343,8 @@ class AuditTrail:
         """조건 조회."""
         severity_levels = {"INFO": 0, "WARN": 1, "ERROR": 2, "CRITICAL": 3}
 
-        sql = "SELECT * FROM live_audit_trail WHERE 1=1"
-        params: dict = {}
+        scope, params = account_scope(self.account_id)
+        sql = f"SELECT * FROM live_audit_trail WHERE {scope}"
 
         if start:
             sql += " AND timestamp >= :start"; params["start"] = start
@@ -362,6 +388,52 @@ class AuditTrail:
             logger.error(f"Audit query 실패: {e}")
             return []
 
+    def kis_code_rows(self, start: datetime | None = None,
+                      end: datetime | None = None, limit: int = 5000) -> list[dict]:
+        """KIS 업무 코드 관측의 원료 — ★새 테이블을 만들지 않는다★ (AS4)
+
+        AR 이 실패마다 `context_json` 에 종류·`rt_cd` 를 남기기 시작했고 AS1 이
+        `msg_cd` 와 실행 모드를 더했다. 그러니 이미 쌓이고 있다 — 별도 카운터를
+        두면 같은 사실이 두 곳에 있게 되고, 어긋날 때 무엇이 진실인지 정하는
+        문제가 새로 생긴다. 집계는 읽기 시점에 한다(`daily_summary` 와 같다).
+
+        ★여기는 SQL 만 한다★ — 접는 것도 판정도 `src/domain/kis_rt_cd.py` 가
+        한다. 돌려주는 행은 그 쪽이 그대로 받는 모양이다.
+        """
+        scope, params = account_scope(self.account_id)
+        sql = ("SELECT timestamp, context_json FROM live_audit_trail "
+               f"WHERE event_type = :et AND context_json IS NOT NULL AND {scope}")
+        params["et"] = EventType.ORDER_FAILED
+        if start:
+            sql += " AND timestamp >= :start"; params["start"] = start
+        if end:
+            sql += " AND timestamp <= :end"; params["end"] = end
+        sql += " ORDER BY timestamp ASC LIMIT :limit"
+        params["limit"] = limit
+
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(text(sql), params).fetchall()
+        except Exception as e:                           # noqa: BLE001
+            logger.error(f"KIS 코드 관측 조회 실패: {e}")
+            return []
+
+        out: list[dict] = []
+        for r in rows:
+            m = r._mapping
+            try:
+                ctx = json.loads(m["context_json"])
+            except Exception:                            # noqa: BLE001
+                continue                                 # 깨진 행은 관측이 아니다
+            if not isinstance(ctx, dict) or not isinstance(ctx.get("failure"), dict):
+                continue
+            out.append({
+                "timestamp": m["timestamp"],
+                "execution_mode": ctx.get("execution_mode"),
+                "failure": ctx["failure"],
+            })
+        return out
+
     # ─────────────────────────────────────────────────────────────────────
     # 통계
     # ─────────────────────────────────────────────────────────────────────
@@ -372,14 +444,15 @@ class AuditTrail:
             date = datetime.now().date().isoformat()
 
         try:
+            scope, params = account_scope(self.account_id)
             with self.engine.connect() as conn:
-                rows = conn.execute(text("""
+                rows = conn.execute(text(f"""
                     SELECT event_type, event_category, severity, COUNT(*) AS cnt
                     FROM live_audit_trail
-                    WHERE date(timestamp) = :d
+                    WHERE date(timestamp) = :d AND {scope}
                     GROUP BY event_type, event_category, severity
                     ORDER BY cnt DESC
-                """), {"d": date}).fetchall()
+                """), {"d": date, **params}).fetchall()
 
                 summary = {
                     "date": date,

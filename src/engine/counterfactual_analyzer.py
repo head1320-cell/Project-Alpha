@@ -177,6 +177,9 @@ class CounterfactualAnalyzer:
             max_weight=base_config.max_weight,
             min_weight=base_config.min_weight,
             run_name=f"{base_config.run_name or 'CF'}_{override.name}",
+            # ★시나리오가 국면 시장을 잃지 않는다★ (BH3) — 빠뜨리면 regime_change 기준이
+            # 시나리오마다 다른 시장을 따라 비교가 같은 질문이 아니게 된다.
+            regime_market=getattr(base_config, "regime_market", "kr"),
         )
 
     @staticmethod
@@ -262,12 +265,43 @@ class CounterfactualAnalyzer:
         ]
         n_days = baseline.get("n_trading_days", 252)
         n_years = max(n_days / 252, 0.1)
+        # ★같은 계산끼리의 차이는 가치가 아니다★ (BG5) — 기준 구성에 따라 어떤 비교는
+        # 두 쪽이 **같은 계산**이 되어 수익률 차이가 구조적으로 0 이다. 기준 구성을
+        # 모르면(`config_used` 없음) 판정하지 않고 예전처럼 차이를 적는다.
+        base_method = (baseline.get("config_used") or {}).get("allocation_method")
+        structural = {}
+        if base_method is not None and base_method != "hrp_macro":
+            structural["macro_overlay"] = (
+                f"매크로 오버레이는 hrp_macro 에서만 작동합니다 — 기준 구성({base_method})"
+                "에서는 켜든 끄든 같은 계산이라 수익률 차이가 구조적으로 0 이며 가치의 "
+                "측정이 아닙니다.")
+        if base_method == "inverse_vol":
+            structural["hrp_vs_inverse_vol"] = (
+                "기준 구성이 이미 inverse_vol 이라 비교 대상과 같은 계산입니다 — 차이가 "
+                "구조적으로 0 이며 HRP 의 가치를 재지 않습니다.")
 
         for key, scenario_key, description in comparisons:
             sc = by_name.get(scenario_key)
             if not sc:
                 continue
             s = sc["summary"]
+            if key in structural:
+                result[f"{key}_value_pct"] = None
+                result[f"{key}_value_reason"] = structural[key]
+                result[f"{key}_description"] = description
+                continue
+            if key == "netting":
+                # ★네팅은 보고 전용이다★ (BG3) — 수익률에 더해지지 않으므로 켠 것과
+                # 끈 것의 수익률 차이는 **구조적으로 0** 이다. 그것을 "가치 0" 이라
+                # 부르지 않는다. 잰 절감액(원화)을 따로 싣는다.
+                result["netting_value_pct"] = None
+                result["netting_value_reason"] = (
+                    "네팅은 보고 전용이라 수익률에 더하지 않습니다 — 켠 것과 끈 것의 "
+                    "수익률 차이는 구조적으로 0 이며 가치의 측정이 아닙니다. "
+                    "대신 실제 보유로 잰 절감액(netting_measured_savings)을 보세요.")
+                result["netting_measured_savings"] = b.get("netting_total_savings")
+                result["netting_description"] = description
+                continue
             alpha_pct = b["total_return_pct"] - s["total_return_pct"]
             sharpe_diff = b["sharpe_ratio"] - s["sharpe_ratio"]
             annualized_alpha = alpha_pct / n_years

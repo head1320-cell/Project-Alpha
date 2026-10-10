@@ -34,8 +34,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from src.api.auth import require_admin, require_login
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +119,7 @@ class SyncRequest(BaseModel):
     reason: str = Field(default="manual", min_length=1)
 
 
-@router.post("/reconcile/sync")
+@router.post("/reconcile/sync", dependencies=[Depends(require_admin)])
 def reconcile_sync(req: SyncRequest):
     """수동 동기화 트리거."""
     try:
@@ -139,7 +141,7 @@ def reconcile_sync(req: SyncRequest):
         raise HTTPException(500, str(e))
 
 
-@router.get("/reconcile/status")
+@router.get("/reconcile/status", dependencies=[Depends(require_login)])
 def reconcile_status():
     """마지막 sync 상태 + periodic 실행 여부."""
     try:
@@ -149,7 +151,7 @@ def reconcile_status():
         raise HTTPException(500, str(e))
 
 
-@router.get("/reconcile/history")
+@router.get("/reconcile/history", dependencies=[Depends(require_login)])
 def reconcile_history(limit: int = Query(50, le=200)):
     """최근 reconciliation 이력."""
     try:
@@ -160,7 +162,7 @@ def reconcile_history(limit: int = Query(50, le=200)):
         raise HTTPException(500, str(e))
 
 
-@router.post("/reconcile/periodic/start")
+@router.post("/reconcile/periodic/start", dependencies=[Depends(require_admin)])
 def reconcile_periodic_start():
     """주기적 sync 백그라운드 시작."""
     try:
@@ -171,7 +173,7 @@ def reconcile_periodic_start():
         raise HTTPException(500, str(e))
 
 
-@router.post("/reconcile/periodic/stop")
+@router.post("/reconcile/periodic/stop", dependencies=[Depends(require_admin)])
 def reconcile_periodic_stop():
     try:
         mods = get_production_modules()
@@ -185,7 +187,7 @@ def reconcile_periodic_stop():
 # KIS Gateway Stats
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/gateway/stats")
+@router.get("/gateway/stats", dependencies=[Depends(require_login)])
 def gateway_stats():
     """KIS API 호출 큐 + 통계."""
     try:
@@ -199,7 +201,7 @@ def gateway_stats():
 # Order State Machine
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/orders/active")
+@router.get("/orders/active", dependencies=[Depends(require_login)])
 def orders_active():
     """현재 체결 대기 중 주문 (PENDING/SUBMITTED/ACCEPTED/PARTIAL_FILL)."""
     try:
@@ -210,7 +212,7 @@ def orders_active():
         raise HTTPException(500, str(e))
 
 
-@router.get("/orders/state-distribution")
+@router.get("/orders/state-distribution", dependencies=[Depends(require_login)])
 def orders_state_distribution():
     """전체 주문의 상태 분포."""
     try:
@@ -226,7 +228,7 @@ class CleanupRequest(BaseModel):
     force:  bool = Field(default=False)
 
 
-@router.post("/orders/cleanup-eod")
+@router.post("/orders/cleanup-eod", dependencies=[Depends(require_admin)])
 def orders_cleanup_eod(req: CleanupRequest):
     """장 마감 전 미체결 정리."""
     try:
@@ -250,7 +252,7 @@ class TestNotifyRequest(BaseModel):
     message:  str = Field(default="알림 시스템 테스트 메시지")
 
 
-@router.post("/notifier/test")
+@router.post("/notifier/test", dependencies=[Depends(require_admin)])
 def notifier_test(req: TestNotifyRequest):
     """등급별 테스트 알림 발송."""
     try:
@@ -268,7 +270,7 @@ def notifier_test(req: TestNotifyRequest):
         raise HTTPException(500, str(e))
 
 
-@router.get("/notifier/stats")
+@router.get("/notifier/stats", dependencies=[Depends(require_login)])
 def notifier_stats():
     """알림 큐 + 발송 통계."""
     try:
@@ -282,7 +284,7 @@ def notifier_stats():
 # Health Check — 모든 production 모듈 상태 통합
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/health")
+@router.get("/health", dependencies=[Depends(require_login)])
 def live_health():
     """Stage 13 production 시스템 종합 상태."""
     try:

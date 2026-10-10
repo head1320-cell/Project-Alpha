@@ -1,379 +1,209 @@
-# 📈 FICC Quant Platform
+# Project Alpha
 
-> **시뮬레이션 → 현실 보정 → 실거래 → 운영 모니터링까지 단일 시스템으로 연결한 기관급 한국 주식 퀀트 플랫폼.**
+**한국 주식시장을 위한 퀀트 리서치·포트폴리오 설계 플랫폼입니다.**
+팩터 스크리닝과 백테스트, 거시 국면 판단, 포트폴리오 최적화, 모의 집행까지 하나의 흐름으로 잇고, 모든 수치에 출처와 측정 범위(무엇을 쟀고 무엇을 재지 않았는지)를 함께 표기합니다.
 
-[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791.svg)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
-[![KIS API](https://img.shields.io/badge/KIS_Open_API-Integrated-FF6B6B.svg)](https://apiportal.koreainvestment.com)
+이태호 · 개인 프로젝트 · [taeho2267@gmail.com](mailto:taeho2267@gmail.com)
+
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black) ![React Flow](https://img.shields.io/badge/React%20Flow-11-FF0072) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQLAlchemy%202.0-4169E1?logo=postgresql&logoColor=white) ![pandas](https://img.shields.io/badge/pandas-2.2-150458?logo=pandas&logoColor=white) ![SciPy](https://img.shields.io/badge/SciPy-1.13-8CAAE6?logo=scipy&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white) ![Playwright](https://img.shields.io/badge/Playwright-E2E-2EAD33?logo=playwright&logoColor=white)
+
+![포트폴리오 설계 캔버스: 왼쪽은 설계 절차, 가운데는 노드와 데이터 흐름, 오른쪽은 계산 결과의 단계별 해설](docs/images/readme/canvas.png)
+
+<sub>이 문서의 모든 화면은 API 키 없이 구동되는 연습용(합성) 데이터로 촬영했습니다. 실제 시세나 실제 계좌가 아닙니다.</sub>
 
 ---
 
-## 💡 한 줄 요약
+## 설계 목적
 
-| 구분 | 보유 기능 |
+- **리서치에서 집행까지 하나의 파이프라인.** 종목 선별, 백테스트, 국면 판단, 비중 산출, 주문이 서로 다른 도구에 흩어져 있으면 의사결정의 근거가 끊깁니다. 이 플랫폼은 각 단계의 산출물을 다음 단계의 입력으로 그대로 넘깁니다.
+- **결론보다 증거가 먼저.** 수치마다 관측값인지, 가정인지, 합성 데이터인지, 측정하지 못한 값인지를 구분해 표시합니다. 알 수 없는 값을 0으로 채우지 않으며, 합성 데이터로 얻은 Sharpe를 실제 초과성과의 근거로 제시하지 않습니다.
+- **실자금 이전에 충분한 검증.** 주문의 기본 실행 모드는 기록만 하는 SHADOW입니다. 모의 체결(PAPER)로 집행 경로를 점검한 뒤에도, 실계좌(LIVE)는 운영자가 근거와 허용 사용자를 선언해 관문을 열어야만 사용할 수 있습니다.
+
+## 리서치 워크플로우
+
+실제 사용 순서는 다음과 같습니다.
+
+1. **종목 찾기**: 유동성 게이트와 팩터 조건으로 유니버스를 좁힙니다.
+2. **백테스트**: 선별 규칙의 과거 성과를 거래비용과 함께 재현합니다.
+3. **매크로 분석**: 성장과 물가 두 축으로 현재 국면을 확인합니다.
+4. **포트폴리오 설계**: 종목, 기대수익, 국면 시각을 캔버스에 조립하고 비중을 산출합니다.
+5. **증거 관문 점검**: 시점 정합, 거래비용, 표본외 검증 등 어떤 확인을 거쳤는지 점검합니다.
+6. **내 계좌**: 모의 체결로 주문을 내고, 주문이 집행 경로의 어느 단계까지 진행됐는지 확인합니다.
+
+각 화면에는 다음 단계로 결과를 넘기는 동선이 있습니다. 종목 찾기의 "설계에 넣기", 매크로 분석의 "포트폴리오 설계에 넣기"가 그 예입니다.
+
+---
+
+## 핵심 기능: 포트폴리오 설계 캔버스
+
+캔버스는 결과를 보여 주는 화면이 아니라 **포트폴리오를 설계하는 공간**입니다. 투자 대상 선정에서 기대수익 추정, 비중 최적화, 위험 분해, 과거 검증, 집행 기록까지의 계산 경로를 노드와 링크로 구성하고, 같은 그래프를 분석가용 캔버스와 설명용 문장(이야기)으로 함께 읽습니다. 모든 계산 결과는 자신이 의존한 입력과 상류 노드를 가리키므로, 어떤 데이터와 가정에서 그 숫자가 나왔는지 사후에 재구성할 필요가 없습니다.
+
+**활용 장면**
+- 소수 종목의 편입 비중을 근거와 함께 결정할 때
+- 동일한 유니버스에서 최적화 방법만 바꿔 결과를 나란히 비교할 때
+- 어떤 검증을 거쳤고 어떤 검증이 남았는지 한눈에 파악할 때
+
+### 화면 구성
+
+| 위치 | 역할 |
 |---|---|
-| **데이터** | KRX 가격·거래량 · DART 재무제표 · 한국·미국 매크로 5종 |
-| **전략** | DAG 비주얼 빌더 · DSL · YAML · 10개 KIS 프리셋 · 80개 지표 + 63개 캔들 패턴 |
-| **백테스트** | PIT-safe · 멀티전략 통합 · 5-Factor Brinson Attribution · Counterfactual · Walk-Forward |
-| **현실 보정** | Square Root Law 시장충격 · Cash Yield · Capacity · Buying Power · Regime-Adaptive |
-| **가치평가** | RIM · DCF · DDM 통합 가중평균 · 괴리율 자동 산출 |
-| **실거래** | KIS OpenAPI · 5-layer Safety · 3-mode Router (SHADOW/PAPER/LIVE) · Kill Switch |
-| **운영** | Broker Reconciler · Priority Queue Gateway · State Machine · Slack/Discord 알림 |
-| **리스크** | VaR (Normal/EWMA/Historical) · ES · Stress Test · Greeks · 효율적 프론티어 · 팩터 회귀 |
-| **파생상품** | Black-76 · 변동성 표면 · XVA/CVA · Hull-White · SABR · Monte Carlo |
+| 왼쪽 판 | **절차** 탭(설계 단계별 충족 여부와 다음에 붙일 노드 제안) · **노드 추가** 탭(데이터·신호·시각·비중·검증·집행 단계별 노드 목록과 검색) |
+| 가운데 | 설계 캔버스. 노드를 배치하고 포트를 연결해 계산 그래프를 만듭니다. 계산 뒤에는 노드 카드에 핵심 결과가 바로 표시됩니다. |
+| 위 | 증거 관문. 데이터 무결성, 시점 정합(PIT), 신호 타당성, 거래비용, 표본외 검증 등 어떤 관문을 확인했는지 표시합니다. |
+| 오른쪽 판 | 선택한 대상에 따라 **이야기 · 설정 · 자세히 · 링크** 탭이 열립니다. |
+
+### 설계 원칙: 노드와 링크의 계약
+
+- **노드는 입력·출력 계약을 가진 계산 단위입니다.** 노드마다 받는 포트와 내는 포트의 타입, 파라미터 스키마, 쉬운 이름과 역할 설명이 서버의 노드 카탈로그 한곳에서 정의됩니다. 포트 타입에는 투자 대상(Universe), 수익률(Returns), 기대수익 시각(Belief), 사용자 시각(Views), 점수(Scores), 국면(RegimeState), 비중(Weights), 위험 보고(RiskReport), 스트레스 보고(StressReport), 거래안(Trades), 목표 버전(TargetVersion), 백테스트 결과(BacktestRun) 등이 있습니다.
+- **링크는 장식이 아니라 데이터 계약입니다.** 같은 타입의 포트끼리만 연결되고, 하나의 입력 포트에는 하나의 링크만 들어오며, 순환(A → B → C → A)은 허용하지 않습니다. 연결이 거부되면 그 사유를 바로 알려 줍니다.
+- **타입 일치는 계산 가능과 다릅니다.** 타입이 맞더라도 계산에 필요한 조건(예: 위험 분해 노드에는 공분산 정보가 함께 실린 비중이 필요)이 빠지면 계산 전에 해당 노드에 표시하고, 무엇을 연결하면 되는지 안내합니다.
+- **링크의 모양이 데이터의 출처를 말합니다.** 실선은 일반 데이터, 점선은 연습용(합성) 데이터, 가로 눈금은 현재 시점에서만 쓸 수 있어 과거 검증에 사용할 수 없는 데이터(forward-only), 끊긴 회색은 상류가 막혀 값이 흐르지 않은 경로입니다. 이 표시는 하류 노드까지 그대로 전파됩니다.
+
+### 절차와 세 가지 보기
+
+- **절차.** 왼쪽 "절차" 탭은 현재 그래프를 분석해 데이터 → 신호 → 시각 설정 → 비중 산출 → 검증 → 집행·기록 단계를 필수·권장·선택으로 구분해 보여 주고, 하단 안내 줄이 다음에 붙일 노드를 하나 제안합니다. 입력 순서를 강제하던 예전 마법사와 달리, 지금 그래프에서 빠진 단계를 되돌려 주는 방식입니다.
+- **이야기.** 노드 결과를 사람이 읽는 순서로 정리합니다. 단계마다 **이 결과를 신뢰할 수 있는가** 항목을 붙여 합성 데이터 여부, 가정, 측정하지 않은 항목을 함께 보여 줍니다.
+- **설정.** 기본 화면은 "얼마나 긴 과거를 볼까요?", "경기 국면을 반영할까요?"처럼 결정을 묻는 질문으로 시작하고, 전문가 설정에서 모델 파라미터와 제약을 직접 다룹니다.
+- **자세히.** 입력, 연결, 계보, 결과 상태와 진단을 깊이 확인합니다.
+
+### 지원하는 비중 산출 방법
+
+평균-분산(MVO), Black-Litterman, 엔트로피 풀링, 리스크 패리티, HRP(계층적 위험 균형), 최소분산, 최대분산, Min-CVaR, 강건 최적화, 위험 성향 기반 효용 최적화를 노드 설정에서 선택합니다. 사용자의 시각(view)은 별도 노드로 입력해 Black-Litterman과 엔트로피 풀링에 반영하며, 산식의 선택 자체가 노드 파라미터로 남아 비교 가능한 실험 기록이 됩니다.
+
+### 변경 관리
+
+- **예전 결과 표시.** 노드 위치 같은 화면 변경은 제외하고, 파라미터·연결·상류 변경처럼 계산 의미가 바뀐 노드와 그 하류만 "예전 결과"로 표시합니다. 설정 판 머리에서 바꾸기 전에 몇 개의 노드가 다시 계산되는지 미리 보여 줍니다.
+- **부분 계산.** 그래프 전체가 아니라 선택한 노드까지, 또는 바뀐 노드만 다시 계산할 수 있습니다. 부분 계산의 결과는 전체 검증과 구분해 표시합니다.
+- **갈래와 비교.** 노드에서 "갈래 만들기"를 실행하면 같은 입력을 공유하면서 방법·가정·제약만 바꾼 대안이 생기고, 원본을 지우지 않은 채 나란히 비교합니다. 갈래 간 비교에는 다중 검정을 반영한 Deflated Sharpe가 함께 표시됩니다.
+
+### 사용 방법
+
+1. **설계 시작.** 툴바의 "목표로 시작"에서 목적을 고르거나 템플릿을 불러옵니다. 빈 캔버스에서 노드를 하나씩 배치해도 됩니다.
+2. **연결.** 같은 색의 포트끼리 링크로 연결합니다. 노드를 선택한 채 팔레트에서 노드를 추가하면 바로 이어 붙고, 링크 사이에 노드를 끼워 넣을 수도 있습니다.
+3. **계산.** "계산하기"를 실행하면 노드별 결과가 카드에 표시되고 오른쪽 이야기 탭에 해설이 쌓입니다.
+4. **점검.** 절차 탭과 증거 관문으로 빠진 단계와 확인하지 않은 관문을 찾고, 제안된 노드를 붙여 채웁니다. 건너뛴 관문은 통과한 관문으로 간주하지 않습니다.
+5. **비교와 보존.** 갈래로 대안을 비교한 뒤, 설계를 파일로 내보내고 다시 불러올 수 있습니다.
+
+| 링크 살펴보기 | 간단히 보기 |
+|---|---|
+| ![링크 살펴보기: 흐르는 데이터, 출발과 도착, 용도, 신뢰도, 연결 해제 시 영향](docs/images/readme/canvas-wire.png) | ![간단히 보기: 노드 없이 결정할 항목과 결과만 보는 화면](docs/images/readme/canvas-simple.png) |
+| 링크를 선택하면 전달되는 데이터의 형태와 규모, 받는 노드가 그 데이터를 어디에 쓰는지, 데이터의 출처 등급, 연결을 끊을 때 계산이 멈추는 하류 노드를 보여 줍니다. | 노드 구성이 익숙하지 않다면 "간단히 보기"로 전환합니다. 결정할 항목만 질문 형식으로 묻고 결과는 문장으로 요약하며, 여기서 바꾼 값은 캔버스 설정에 그대로 반영됩니다. |
 
 ---
 
-## 🏗 아키텍처
+## 주요 도구
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Next.js 14 (Frontend) — PortfolioVisualizer 스타일 통합 인터페이스    │
-│  ─────────────────────────────────────────────────────────          │
-│  / (홈)              · Command Center — Macro/AI/Screener/Live 콕핏     │
-│  /builder            · 비주얼 빌더 + DSL + YAML + 라이브러리 + 캔버스 │
-│  /backtest           · 백테스트 + 최적화 + 포트폴리오 + 리밸런싱 + 실행 │
-│  /risk-tools         · VaR + 포트폴리오 + 프론티어 + 팩터              │
-│  /screener           · RIM·DCF·DDM 통합 스크리너 + Quick Flip 상세      │
-│  /macro              · 16지표 Heatmap + 4-Quadrant + Yield Curve         │
-│  /insights           · AI 자연어 보고서 (6 도메인 + 스트리밍)            │
-│  /derivatives        · 옵션 + 변동성 + XVA + 금리 + 몬테카를로         │
-│  /admin/multi-backtest · Stage 11 통합 백테스트                       │
-│  /admin/realism      · Stage 12 현실 보정 패널                       │
-│  /admin/live-trading · Stage 13 실거래 콕핏 + Production Monitor      │
-└────────────────────────────────────┬────────────────────────────────┘
-                                      │ FastAPI REST
-┌────────────────────────────────────▼────────────────────────────────┐
-│  FastAPI Backend — 베이스라인 + 73 신규 API endpoints                 │
-│  ────────────────────────────────────────────────────────────         │
-│  src/api/                                                              │
-│    ├─ {기존 Stage 1-10 라우터들}                                      │
-│    ├─ stage11_routes.py        (10) /api/v1/multibacktest/*           │
-│    ├─ stage12_routes.py        (8)  /api/v1/realism/*                 │
-│    ├─ stage13_routes.py        (14) /api/v1/live/*                    │
-│    ├─ stage13_extensions.py    (15) /api/v1/live/{reconcile,gateway,...}│
-│    └─ valuation_routes.py      (4)  /api/v1/valuation/*               │
-│                                                                       │
-│  src/engine/      백테스트 · 매크로 · 리스크 · 가치평가                 │
-│  src/execution/   실거래 (KIS API + 5-layer 안전장치)                  │
-│  src/data/        DART 재무제표 클라이언트                              │
-│  src/utils/       Slack/Discord 알림 시스템                            │
-└────────────────────────────────────┬────────────────────────────────┘
-                                      │ asyncpg
-                                      ▼
-                              PostgreSQL 15
-```
+### 홈
+![홈: 현재 거시 국면 요약과 작업 목록, 종합점수 상위 종목](docs/images/readme/home.png)
+
+- **기능** 현재 거시 환경을 한 문장으로 요약하고(시장 스트레스, 한국·미국 국면 확률, 권장 단계), 작업 목록과 종합점수 상위 종목을 보여 줍니다.
+- **활용** 하루의 리서치를 시작할 때 시장 분위기와 우선 작업을 정합니다.
+- **사용법** "이 5종목 설계에 넣기"를 누르면 해당 종목으로 포트폴리오 설계 캔버스가 열립니다.
+
+### 종목 찾기
+![종목 찾기: 유니버스, 시가총액, 조건을 지정하면 통과 종목 수와 결과 표](docs/images/readme/screener.png)
+
+- **기능** 코스피 200 등의 유니버스에 재무, 밸류에이션, 가격, 기술적 팩터 조건을 적용해 종목을 선별합니다. 유동성 게이트 → 팩터 필터 → 후처리 분석의 3단 구조로 동작합니다.
+- **활용** 투자 아이디어를 검증 가능한 종목 목록으로 바꿀 때 사용합니다.
+- **사용법** "조건 더하기"로 팩터와 임계값을 지정합니다. 조건식 결합, 유동성 게이트, 저장한 조건은 "전문가 설정"에 있습니다. 결과 행을 선택하면 우측 시트에서 요약을 확인하고 기업 분석이나 캔버스로 넘길 수 있으며, 결과는 CSV로 내려받을 수 있습니다.
+
+![종목 시트: 행을 선택하면 현재가, 종합점수, 판정과 다음 동작](docs/images/readme/screener-sheet.png)
+
+### 백테스트
+![백테스트 편집기: 매수 규칙, 매도 규칙, 매매 대상, 자금·기간·비용의 네 단계](docs/images/readme/backtest-editor.png)
+
+- **기능** 매수·매도 규칙을 과거 데이터에 적용해 누적 수익률, CAGR, 최대 낙폭(MDD), 변동성, Sharpe, 벤치마크 대비 초과수익과 베타·알파를 산출합니다. 수수료, 슬리피지, 세금, 생존편향, 시점 정합 여부를 함께 다룹니다.
+- **활용** 스크리닝 조건이나 매매 규칙이 과거 국면에서 어떻게 작동했는지 확인할 때 사용합니다.
+- **사용법** ① 매수 규칙 ② 매도 규칙 ③ 매매 대상 ④ 자금·기간·비용 순으로 설정합니다. 조건은 팩터와 연산자를 조합한 식으로 만들거나 "말로 조건 만들기"에 자연어로 입력합니다. 우측 "지금 설정"이 현재 설정을 요약하며, "백테스트 실행" 후 진행 화면을 거쳐 결과 화면으로 이동합니다.
+
+![백테스트 결과: 요약 문장, 벤치마크와 함께 그린 자산곡선, 낙폭, 핵심 지표](docs/images/readme/backtest-result.png)
+
+결과 화면은 "해당 기간 동안 총수익률"과 벤치마크 대비 차이를 먼저 제시하고, 데이터 종류(합성 여부)와 시점 정합 판정을 함께 표시합니다. 다른 실행과의 비교, 동일 설정 재실행을 지원합니다. 위 화면은 연습용 데이터로 실제 실행한 결과입니다.
+
+### 매크로 분석
+![매크로 분석: 한국·미국 국면 확률 도넛과 시장 스트레스 게이지](docs/images/readme/macro.png)
+
+- **기능** 성장과 물가의 두 축으로 한국과 미국의 거시 국면(골디락스, 리플레이션, 스태그플레이션, 디스인플레이션)을 확률로 판정하고, 시장 스트레스 지수와 수익률 곡선 역전 여부를 제시합니다. 잠재 요인, 기간 구조, 인과 관계, 꼬리 위험 분석과 사용자 시각 구성 도구도 포함합니다.
+- **활용** 자산 배분의 방향과 위험 노출 수준을 정할 때 사용합니다.
+- **사용법** 탭에서 지표, 국면, 전략, 상관, 타이밍을 차례로 검토합니다. "포트폴리오 설계에 넣기"를 누르면 현재 국면이 스냅샷으로 저장되어 캔버스의 국면 노드에 입력됩니다.
+
+### 기업 분석
+![기업 분석: 현재가와 추정 내재가치, 1년 주가 위에 모형별 가치 범위를 겹친 차트, 모형 비교](docs/images/readme/insights.png)
+
+- **기능** 개별 종목의 내재가치를 잔여이익모형(RIM), 현금흐름할인(DCF), 배당할인(DDM) 등 복수의 모형으로 산출하고, 1년 주가 위에 모형별 가치 범위를 겹쳐 보여 줍니다. 역DCF(내재 성장률), 몬테카를로 가치 분포, EVA, 배수 비교, 재무 품질, 부도·이익조작 위험 지표, 동종업계 비교, 팩터 백분위를 한 페이지에서 다룹니다.
+- **활용** 현재 가격이 어떤 성장 가정을 내포하는지, 모형 간 추정이 얼마나 갈리는지 확인할 때 사용합니다.
+- **사용법** 상단 검색 칸에 종목명이나 종목코드를 입력합니다. 목차에서 원하는 절로 이동하며, "설계에 넣기"로 해당 종목을 캔버스에 넘길 수 있습니다.
+
+### 위험 점검
+![위험 점검: 경제 충격 시나리오별 생존 비율과 종목별 점수 변화](docs/images/readme/risk.png)
+
+- **기능** 금리, 유가, 환율, 경기 침체 등의 충격 시나리오를 적용해 종목별 종합점수 변화와 취약 종목을 산출합니다.
+- **활용** 편입 후보가 어떤 거시 충격에 취약한지 사전에 파악할 때 사용합니다.
+- **사용법** 상단 시나리오를 선택하면 하단 상세가 해당 시나리오로 전환되고, 종목×시나리오 칸에 초점을 두면 그 종목의 점수 변화를 읽어 줍니다.
+
+### 내 계좌
+![내 계좌: 주문 집행 경로(킬 스위치, 위험 검사, 실행 모드, 전송처), 잔고, 주문 입력, 최근 주문](docs/images/readme/my-account.png)
+
+- **기능** 본인의 한국투자증권 계좌로 주문을 연습합니다. 서버가 주문을 처리하는 순서(킬 스위치 → 위험 검사 → 실행 모드 → 전송처)를 그대로 시각화해, 주문이 어느 단계에서 멈췄는지 표시합니다.
+- **활용** 설계한 포트폴리오를 실자금 없이 집행 단계까지 점검할 때 사용합니다.
+- **사용법** 먼저 **설정 → 내 증권 계좌**에서 계좌를 연결합니다(자격 증명은 서버에 암호화해 저장하며 화면에는 끝 네 자리만 표시합니다). 실행 모드는 SHADOW(기록만)가 기본이며 PAPER(모의 체결) 전환에는 확인 단계를 거칩니다. LIVE는 잠겨 있고 남은 준비 항목을 목록으로 보여 줍니다. 필요 시 "비상 정지"로 신규 주문과 미체결 주문을 즉시 중단합니다.
+
+### 기타
+- **데이터 상태** 데이터 원천별 연결 여부, 연구 활용 등급, 적재 현황을 보여 줍니다.
+- **파생상품 계산기** 옵션 가격과 그릭스, 채권 듀레이션과 볼록성, 선물 헤지 계약 수, 신용가치조정(CVA)을 계산합니다.
+- **관리 화면(관리자 전용)** 운영 계좌의 실행 모드와 킬 스위치, 실계좌 관문, 멀티 전략 백테스트, 현실성 점검(시장 충격·현금 이자 반영)을 제공합니다.
 
 ---
 
-## 🚀 빠른 시작
+## 실행 방법
 
-### 1. 사전 요구사항
-- Docker + Docker Compose
-- Python 3.11 (개발 시)
-- Node.js 20+ (Next.js dev 서버 사용 시)
+API 키 없이도 연습용 데이터로 전 화면이 동작합니다.
 
-### 2. 환경 설정
 ```bash
-git clone <repo>
-cd ficc-platform
-cp .env.example .env
-nano .env    # PG, KIS, DART, Slack 토큰 입력
-```
-
-### 3. 빌드 + 실행
-```bash
+git clone https://github.com/head1320-cell/Project-Alpha.git
+cd Project-Alpha
+cp .env.example .env          # 기본값 KIS_USE_MOCK=1, 외부 호출 없이 연습용 데이터로 동작
 docker compose up --build -d
 ```
 
-### 4. DB 초기화 (최초 1회)
+- 웹 화면 <http://localhost:3000>
+- API 문서 <http://localhost:8000/docs>
+
+Docker 없이 실행하려면 다음과 같이 합니다.
+
 ```bash
-curl -X POST http://localhost:8000/api/v1/multibacktest/init-schema
-curl -X POST http://localhost:8000/api/v1/live/init-schema
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main_api:app --reload --port 8000
+
+cd frontend && npm install && npm run dev          # 별도 터미널
 ```
 
-### 5. 헬스체크
-```bash
-curl http://localhost:8000/api/v1/live/health
-# → 전 시스템 종합 상태 (gateway / reconciler / notifier / state machine)
-```
+실데이터를 사용하려면 `.env`에 키를 입력하고 `KIS_USE_MOCK=0`으로 바꿉니다. 주요 키는 한국투자증권(`KIS_APP_KEY`·`KIS_APP_SECRET`), 전자공시(`DART_API_KEY`), 한국거래소(`KRX_API_KEY`), 한국은행·미국 연준 경제자료(`BOK_API_KEY`·`FRED_API_KEY`)입니다. 전체 목록과 설명은 [`.env.example`](./.env.example)에 있습니다. `KIS_IS_PAPER=0`은 실계좌이므로 실제 자금이 거래됩니다.
 
-### 6. 접속
-- Frontend: <http://localhost:3000>
-- Backend API: <http://localhost:8000/docs>
+검증은 `make all`(린트, 테스트, 타입 검사, 빌드. CI와 동일)로 수행하며, 화면 테스트는 `cd frontend && npx playwright test`로 실행합니다.
 
----
+## 기술 스택
 
-## 🔧 주요 기능 상세
+- **프론트엔드** Next.js 14 · React · TypeScript · React Flow(캔버스) · Recharts · TanStack Query · Pretendard
+- **백엔드** Python 3.11 · FastAPI · SQLAlchemy · PostgreSQL(미설정 시 SQLite) · NumPy · pandas · SciPy
+- **데이터** 한국투자증권 Open API · OpenDART · 한국거래소 · 한국은행 ECOS · FRED
+- **검증** pytest · Playwright · GitHub Actions · Docker Compose
 
-### 1. 전략 빌더 (`/builder`)
-**5가지 입력 방식**
+## 문서
 
-| 탭 | 방식 | 적합한 사용자 |
-|---|---|---|
-| 비주얼 빌더 | 5단계 폼 (지표 → 진입 → 청산 → 리스크 → 메타) | 처음 만드는 사용자 |
-| DSL 커스텀 | 수식 입력 + 실시간 Python 미리보기 | 수식 표현 익숙한 사용자 |
-| YAML 가져오기 | `.kis.yaml` 업로드 + 검증 | 파일로 전략 보유 |
-| 전략 라이브러리 | 10개 KIS 프리셋 카드 | 빠른 시작 |
-| 노드 캔버스 | React Flow 시각 DAG | 복잡한 다단 전략 |
+| 문서 | 내용 |
+|---|---|
+| [제품 로드맵](./docs/plans/2026-09-12-ra-product-roadmap.md) | 리서치, 포트폴리오 운용, 설명가능성, 전략 평가의 단계와 순서 |
+| [개발 이력](./docs/HISTORY.md) | 무엇을, 왜 했으며, 무엇을 하지 않았는지에 대한 기록 |
+| [채점표](./docs/specs/2026-09-12-addendum-scorecard.md) | 합격 기준별 판정과 근거 |
+| [제품 규칙](./docs/specs/2026-09-12-ra-product-rules.md) | 주장의 범위와 표현 규칙 |
+| [`CLAUDE.md`](./CLAUDE.md) | 개발을 보조하는 AI 에이전트용 작업 규칙(제품 소개 문서가 아님) |
 
-지표 라이브러리: **80개 기술지표 + 63개 캔들 패턴**
+## 책임 한계
 
-### 2. 백테스팅 (`/backtest`)
-- **전략 백테스트** — TearSheet (Sharpe / MDD / Calmar / Sortino)
-- **파라미터 최적화** — Grid Search 히트맵
-- **포트폴리오 백테스트** — 다종목 비교
-- **리밸런싱 시뮬** — Daily/Weekly/Monthly/Regime-Change 4 정책
-- **전략 실행** — 시그널 → 주문 자동 전환
+본 프로젝트는 연구와 개인 학습을 목적으로 합니다. **투자 자문이 아니며**, 백테스트 결과는 미래 수익을 보장하지 않습니다. 실계좌로 전환하면 실제 자금이 거래되므로 충분히 검증한 뒤 본인 책임 아래 사용하시기 바랍니다. API 키는 커밋하지 마십시오(`.env`는 `.gitignore`에 포함되어 있습니다). 투자자문업과 투자일임업은 인가 사항이므로, 인가 확인 전에는 전략을 제3자에게 유통하는 기능을 활성화하지 않습니다.
 
-### 3. Stage 11 통합 백테스트 (`/admin/multi-backtest`)
-**시뮬레이션 → 현실 보정 → 의사결정 가치 정량화**
+## 만든 사람
 
-- **PIT-safe Daily Simulation** — 리밸런싱일 정확히 일치, look-ahead bias 없음
-- **5-Factor Brinson Attribution**: Allocation / Selection / Macro / Netting / Cost
-- **Counterfactual Engine** — "이 결정이 없었다면?" N 시나리오 비교
-- **Regime-Conditional Alpha** — 4-Quadrant별 전략 alpha 분해
-
-### 4. Stage 12 Production Realism Engine (`/admin/realism`)
-**5가지 현실 마찰을 통합한 백테스트**
-
-| 마찰 요소 | 모델 | 효과 |
-|---|---|---|
-| ① 유동성 한계 | ADV 기반 capacity caps | 500M 주문이 mega vs small에 1,840배 다른 임팩트 |
-| ② 시장 충격 | Square Root Law (Almgren-Chriss, α=0.35~3.2) | 비선형 슬리피지 정확히 모델링 |
-| ③ Cash Yield | CD91 PIT-safe 일별 이자 | 60% 투자 시 +1.4%/yr 추가 수익 |
-| ④ Buying Power | prorata / priority / strict 3 정책 | 발주 가능 자금 정확히 추적 |
-| ⑤ Regime-Adaptive | EWMA + Hard Cap (PANIC 시 자본 50% 한도) | 위기 자동 방어 |
-
-### 5. Stage 13 Live Trading (`/admin/live-trading`)
-**5-Layer Safety + 3-Mode Router**
-
-```
-[Signal] → Layer 1: Static Risk (5 checks)
-            ↓
-          Layer 2: Dynamic Risk (5 checks)
-            ↓
-          Layer 3: Mode Router (SHADOW → PAPER → LIVE, token gate)
-            ↓
-          Layer 4: KIS Gateway (priority queue + circuit breaker)
-            ↓
-          Layer 5: Kill Switch (auto: -10% DD / -5% intraday / PANIC / API fail)
-            ↓
-          Audit Trail (모든 결정 영구 기록)
-```
-
-**LIVE 진입 안전장치:** `confirm_token="EXPLICIT_LIVE_CONFIRMED"` 명시 필수.
-
-### 6. Production Hardening
-- **Broker Reconciler** — KIS = 진실의 원천, Ghost/Missing position 자동 감지 + 자동 kill switch
-- **Priority Queue Gateway** — heapq 기반 (KILL > SELL > BUY > QUERY), Circuit Breaker 5회 실패 → 30초 차단
-- **Order State Machine** — 명시적 상태 전이 그래프, 장 마감 15:15 자동 정리
-- **Real-time Notifier** — Slack/Discord, severity routing, 60초 dedup, async background worker
-
-### 7. Valuation Engine (Phase 1) — `/api/v1/valuation/*`
-**3개 모델 통합 가중평균:**
-
-| 모델 | 공식 | 적합 |
-|---|---|---|
-| **RIM** | V = BPS + Σ(ROE-Ke)·BPS / (1+Ke)^t | 수익성 높은 기업 |
-| **DCF** | V = ΣFCF / (1+WACC)^t + TV | 안정적 현금흐름 |
-| **DDM** | V = ΣD / (1+Ke)^t + Pn | 배당주 / 금융주 |
-
-자동 산출: **적정가 → 괴리율 → 판정 (극심한 저평가 ~ 극심한 고평가 7단계)**
-
-### 8. 리스크 도구 (`/risk-tools`)
-- VaR (Normal / EWMA-Parametric / Historical) · Expected Shortfall
-- 포트폴리오 분산 + 상관관계
-- 효율적 프론티어 (Markowitz)
-- 팩터 회귀 (Fama-French)
-- **종목 스크리너** — 알파벳 조건 빌더 (A AND B), 8개 팩터
-
-### 9. 파생상품 (`/derivatives`)
-- Black-76 옵션 프라이싱 + Greeks
-- 변동성 표면 (3D surface)
-- XVA / CVA — Hull-White 단기금리, PCA
-- Hull-White / SABR 금리 모델
-- Monte Carlo (이상치 옵션, ELS, KIKO)
-
----
-
-## 📡 API Endpoints — 73개 신규 추가
-
-### Stage 11 Multi-Backtest (10)
-```
-POST   /api/v1/multibacktest/init-schema
-POST   /api/v1/multibacktest/run
-GET    /api/v1/multibacktest/runs
-GET    /api/v1/multibacktest/{run_id}
-DELETE /api/v1/multibacktest/{run_id}
-POST   /api/v1/multibacktest/attribution
-POST   /api/v1/multibacktest/counterfactual
-GET    /api/v1/multibacktest/counterfactual/scenarios
-... (+ 2개)
-```
-
-### Stage 12 Realism (8)
-```
-POST /api/v1/realism/backtest
-POST /api/v1/realism/market-impact/estimate
-GET  /api/v1/realism/market-impact/calibration
-GET  /api/v1/realism/cash-rate
-POST /api/v1/realism/cash-yield/estimate
-POST /api/v1/realism/buying-power/validate
-POST /api/v1/realism/capacity/estimate
-GET  /api/v1/realism/correlation-health
-```
-
-### Stage 13 Live Trading (14)
-```
-POST   /api/v1/live/init-schema
-POST   /api/v1/live/orders/submit
-GET    /api/v1/live/orders
-GET    /api/v1/live/orders/{coid}
-DELETE /api/v1/live/orders/{coid}
-GET    /api/v1/live/balance
-GET    /api/v1/live/mode
-POST   /api/v1/live/mode                         # LIVE: token 필수
-GET    /api/v1/live/kill-switch/status
-POST   /api/v1/live/kill-switch/trigger          # 🚨
-POST   /api/v1/live/kill-switch/resolve
-GET    /api/v1/live/kill-switch/events
-GET    /api/v1/live/audit
-GET    /api/v1/live/audit/summary
-GET    /api/v1/live/daily-pnl
-```
-
-### Stage 13+ Production Hardening (15)
-```
-POST /api/v1/live/reconcile/sync
-GET  /api/v1/live/reconcile/status
-GET  /api/v1/live/reconcile/history
-POST /api/v1/live/reconcile/periodic/start
-POST /api/v1/live/reconcile/periodic/stop
-
-GET  /api/v1/live/gateway/stats
-GET  /api/v1/live/orders/active
-GET  /api/v1/live/orders/state-distribution
-POST /api/v1/live/orders/cleanup-eod
-
-POST /api/v1/live/notifier/test
-GET  /api/v1/live/notifier/stats
-GET  /api/v1/live/health
-```
-
-### Phase 1 Valuation (4)
-```
-POST /api/v1/valuation/evaluate              # RIM + DCF + DDM 통합
-POST /api/v1/valuation/compare               # 다중 종목 비교
-GET  /api/v1/valuation/financial/{stock_code}  # 재무 N년 시계열
-GET  /api/v1/valuation/models                # 모델 카탈로그
-```
-
-### Phase 2 Screener (4)
-```
-POST /api/v1/screener/run                    # 전 종목 RIM·DCF·DDM 스캔
-GET  /api/v1/screener/universes              # Universe 카탈로그 + 필터 차원
-GET  /api/v1/screener/cache/stats            # 캐시 hit rate
-POST /api/v1/screener/cache/clear            # 캐시 비우기
-```
-
-### Phase 3 AI Narrative Intelligence (10)
-```
-POST /api/v1/narrative/stock                 # 종목 분석 (Screener + Valuation)
-POST /api/v1/narrative/portfolio             # 포트폴리오 (Backtest + Attribution)
-POST /api/v1/narrative/macro                 # 매크로 브리핑 (Regime + 5 지표)
-POST /api/v1/narrative/operations            # 운영 사건 (Kill switch + Audit)
-POST /api/v1/narrative/counterfactual        # What-If 시나리오 비교
-POST /api/v1/narrative/daily-summary         # 일일 활동 요약
-POST /api/v1/narrative/stream/{domain}       # SSE 스트리밍
-GET  /api/v1/narrative/usage                 # 토큰 + 비용 추적
-GET  /api/v1/narrative/domains               # 도메인 카탈로그
-GET  /api/v1/narrative/cache/stats           # 캐시 통계
-POST /api/v1/narrative/cache/clear
-```
-
-### 베이스라인 API (Stage 1-10)
-`/api/v1/strategies/*` · `/api/v1/backtests/*` · `/api/v1/var/*` · `/api/v1/options/*` · `/api/v1/xva/*` · `/api/v1/screener/*` · `/api/v1/regime/*` 등
-
-전체 API는 `http://localhost:8000/docs` 에서 Swagger UI로 확인.
-
----
-
-## 📂 디렉토리 구조
-
-자세한 트리와 현재 규모는 [CLAUDE.md](./CLAUDE.md)의 "아키텍처" 섹션 참조.
-
-```
-.
-├── main_api.py                          # FastAPI 단일 엔트리 (라우터 자동 등록)
-├── src/
-│   ├── engine/                          # 백테스트 + 매크로 + 리스크 + 가치평가
-│   │   └── valuation/                   # RIM + DCF + DDM
-│   ├── execution/                       # 실거래 (KIS API + 5-layer 안전장치)
-│   ├── data/                            # DART 재무제표 클라이언트
-│   ├── utils/                           # Slack/Discord 알림
-│   ├── api/                             # FastAPI 라우터 (Stage 11~13+ + Valuation)
-│   ├── kis_strategies/                  # KIS 10개 프리셋 전략
-│   ├── models/                          # SQLAlchemy 모델
-│   └── ...                              # 베이스라인 모듈들
-├── frontend/                            # Next.js 14 (PortfolioVisualizer 스타일)
-│   └── src/
-│       ├── app/                         # App Router 페이지
-│       ├── components/                  # 4 카테고리 + 멀티백테스트 + 실거래
-│       └── lib/                         # presets · constants · YAML gen
-├── tests/                               # pytest 테스트
-└── docker-compose.yml                   # PostgreSQL + Backend + Frontend
-```
-
----
-
-## 🛡 안전 우선순위 (실거래 진입 전)
-
-1. **`KIS_USE_MOCK=1`** — 1주일 이상 MockKISClient로 안정 운영
-2. **`KIS_USE_MOCK=0`, `KIS_IS_PAPER=1`** — 1주일 이상 KIS 모의투자 운영
-3. **Universe 화이트리스트** 명시적 등록 (`RiskGateway` 초기화 시 주입)
-4. **RiskLimits** 보수적 조정
-5. **Kill Switch** 수동 트리거 테스트 (cockpit + API 양쪽)
-6. **Slack/Discord webhook** 통합 (`SLACK_WEBHOOK_URL`)
-7. **`KIS_IS_PAPER=0`** — 소액 (예: 10만원)으로 첫 실거래 1주일
-
----
-
-## 🗺 진화 로드맵
-
-| Phase | 목표 | 상태 |
-|---|---|:---:|
-| Stage 1-10 (베이스라인) | 데이터·지표·백테스트·매크로·리스크·옵션·XVA·KIS API 통합 | ✅ |
-| Stage 11 | Multi-Strategy 통합 백테스트 + 5-Factor Attribution | ✅ |
-| Stage 12 | Production Realism Engine (5 hooks) | ✅ |
-| Stage 13 | Live Trading + KIS API + 5-Layer Safety | ✅ |
-| Stage 13+ | Production Hardening (Reconciler/Gateway/Notifier) | ✅ |
-| **Phase 1** | Fundamental + Valuation (RIM/DCF/DDM) | ✅ |
-| **Phase 2** | Smart Screener (재무 RIM·DCF·DDM 기반) | ✅ |
-| **Phase 3** | AI Narrative (Claude API · 6 도메인 · 스트리밍) | ✅ |
-| **Phase 4** | 한국 매크로 + 4-Quadrant + Yield Curve + Dynamic Linkage | ✅ |
-| **Phase 5** | Premium UX — Command Center + Command Palette + Regime-Aware Theme | ✅ |
-
----
-
-## 📚 문서
-
-프로젝트 컨텍스트, 아키텍처, 실데이터 연동 가이드, 개발 규칙, 전체 개발 이력은
-[CLAUDE.md](./CLAUDE.md) 하나로 통합되어 있습니다.
-
----
-
-## ⚠ 책임 한계
-
-본 시스템은 한국 주식 시장(KOSPI/KOSDAQ)을 대상으로 한 자동 매매 도구입니다. **실거래는 사용자 본인의 자금이 이동되며 모든 손익에 대한 책임은 사용자에게 있습니다.** 충분한 검증 없이 LIVE 모드로 진입하지 마세요.
-
-## 🤝 기술 스택
-
-- **Backend:** FastAPI · SQLAlchemy · asyncpg · pandas · numpy · scipy · QuantLib
-- **Frontend:** Next.js 14 (App Router) · TypeScript 5 · React 18 · Tailwind CSS · Recharts · React Flow · Zustand · Lucide
-- **Database:** PostgreSQL 15
-- **Infrastructure:** Docker Compose · GCP e2-micro
-- **External APIs:** 한국투자증권 OpenAPI · 금감원 DART OpenAPI · Slack/Discord Webhooks
+**이태호** · 개인 프로젝트 · [taeho2267@gmail.com](mailto:taeho2267@gmail.com)

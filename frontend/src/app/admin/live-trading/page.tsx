@@ -7,55 +7,18 @@ import {
   CircleAlert, CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 
-import { API_BASE } from "@/lib/apiBase";
+import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
+import { UNAUTHORIZED_MESSAGE } from "@/shared/api/authToken";
+import { loginHref } from "@/shared/lib/nextPath";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type Mode = "SHADOW" | "PAPER" | "LIVE";
-
-interface Position {
-  ticker: string;
-  name?: string;
-  quantity: number;
-  avg_price: number;
-  current_price: number;
-  eval_amount: number;
-  pnl_pct: number;
-  pnl_krw: number;
-}
-
-interface Balance {
-  cash_krw: number;
-  evaluated_total: number;
-  stock_value: number;
-  positions: Position[];
-  n_positions: number;
-}
-
-interface Order {
-  client_order_id: string;
-  ticker: string;
-  side: string;
-  quantity: number;
-  filled_quantity?: number;
-  price?: number;
-  status: string;
-  execution_mode: string;
-  strategy_id?: number;
-  reason_code?: string;
-  created_at: string;
-}
-
-interface KillStatus {
-  is_active: boolean;
-  active_event?: { event_id: string; trigger_reason: string; triggered_at: string };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Main Page
-// ═══════════════════════════════════════════════════════════════════════════════
+import type { Balance, KillStatus, Mode, Order, Position } from "@/entities/trading/liveModel";
+import {
+  ConfirmModal, EmptyState, EquityCard, ModeButton, OrderRow, Section, SpecBlock, Td, Th, fmtKrw,
+} from "@/widgets/live-trading/CockpitParts";
 
 export default function LiveTradingPage() {
   const [mode, setMode] = useState<Mode>("SHADOW");
@@ -65,22 +28,35 @@ export default function LiveTradingPage() {
   const [loading, setLoading] = useState(false);
   const [showKillConfirm, setShowKillConfirm] = useState(false);
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+  // ★401 을 빈 화면으로 접지 않는다★ — 잔고가 "없다" 와 "볼 권한이 없다" 는 다르다.
+  const [authError, setAuthError] = useState<string | null>(null);
+  // ★거절을 조용히 넘기지 않는다★(BV7) — 실계좌 관문이 닫혀 있으면 서버가 사유와 함께 400 을 준다.
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   // Polling
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
+      // 잔고·주문은 로그인이 필요하고, 모드·킬스위치 상태는 열려 있다(P-1 레지스트리).
       const [modeRes, balRes, ordRes, killRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/live/mode`).then((r) => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/v1/live/balance`).then((r) => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/v1/live/orders?limit=20`).then((r) => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/v1/live/kill-switch/status`).then((r) => r.json()).catch(() => null),
+        getWithAuth("/api/v1/live/mode"),
+        getWithAuth("/api/v1/live/balance"),
+        getWithAuth("/api/v1/live/orders?limit=20"),
+        getWithAuth("/api/v1/live/kill-switch/status"),
       ]);
 
-      if (modeRes?.mode) setMode(modeRes.mode);
-      if (balRes) setBalance(balRes);
-      if (ordRes?.orders) setOrders(ordRes.orders);
-      if (killRes) setKillStatus(killRes);
+      const needsLogin = [balRes, ordRes].some((r) => r.status === 401);
+      setAuthError(needsLogin ? UNAUTHORIZED_MESSAGE : null);
+
+      const json = async (r: Response) => (r.ok ? r.json().catch(() => null) : null);
+      const [mode_, bal, ord, kill] = await Promise.all(
+        [modeRes, balRes, ordRes, killRes].map(json),
+      );
+
+      if (mode_?.mode) setMode(mode_.mode);
+      if (bal) setBalance(bal);
+      if (ord?.orders) setOrders(ord.orders);
+      if (kill) setKillStatus(kill);
     } finally {
       setLoading(false);
     }
@@ -98,50 +74,35 @@ export default function LiveTradingPage() {
       setShowLiveConfirm(true);
       return;
     }
-    await fetch(`${API_BASE}/api/v1/live/mode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: newMode, actor: "admin" }),
-    });
+    // ★`actor` 를 보내지 않는다★ — 서버가 토큰에서 관측한다(AC5). 예전엔 화면이
+    // "admin" 이라고 **주장**했고 감사 로그가 그 주장을 그대로 기록했다.
+    await postJson("/api/v1/live/mode", { mode: newMode });
     refresh();
   };
 
   const confirmLiveMode = async () => {
-    await fetch(`${API_BASE}/api/v1/live/mode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "LIVE", actor: "admin",
-        confirm_token: "EXPLICIT_LIVE_CONFIRMED",
-      }),
+    const res = await postJson("/api/v1/live/mode", {
+      mode: "LIVE",
+      confirm_token: "EXPLICIT_LIVE_CONFIRMED",
     });
+    setLiveError(res.ok ? null : extractErrorDetail(await res.json().catch(() => null), `HTTP ${res.status}`));
     setShowLiveConfirm(false);
     refresh();
   };
 
   // Kill switch
   const triggerKill = async () => {
-    await fetch(`${API_BASE}/api/v1/live/kill-switch/trigger`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        reason: "Manual emergency stop from cockpit",
-        liquidation_mode: "hold",
-        actor: "admin",
-      }),
+    await postJson("/api/v1/live/kill-switch/trigger", {
+      reason: "Manual emergency stop from cockpit",
+      liquidation_mode: "hold",
     });
     setShowKillConfirm(false);
     refresh();
   };
 
   const resolveKill = async () => {
-    await fetch(`${API_BASE}/api/v1/live/kill-switch/resolve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        resolved_by: "admin",
-        notes: "Manual resolution from cockpit",
-      }),
+    await postJson("/api/v1/live/kill-switch/resolve", {
+      notes: "Manual resolution from cockpit",
     });
     refresh();
   };
@@ -153,6 +114,19 @@ export default function LiveTradingPage() {
         <div className="bg-gradient-to-r from-[#FF6B6B]/20 via-[#FF6B6B]/30 to-[#FF6B6B]/20 border-b border-[#FF6B6B]/40 py-1.5">
           <div className="max-w-[1600px] mx-auto px-8 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-[#FF6B6B] animate-pulse">
             ⚡ LIVE TRADING ACTIVE · REAL MONEY · EVERY ORDER COUNTS
+          </div>
+        </div>
+      )}
+
+      {/* ★인증 배너★ — 잔고가 비어 보이는 이유가 "없음" 이 아니라 "권한 없음" 일 때 */}
+      {authError && (
+        <div className="live-auth-banner bg-[#F5A623]/15 border-b border-[#F5A623]/40 py-2">
+          <div className="max-w-[1600px] mx-auto px-8 flex items-center gap-3">
+            <Lock size={14} className="text-[#F5A623]" />
+            <span className="text-[12px] text-[#F5A623]">{authError}</span>
+            <a href={loginHref("/admin/live-trading")} className="live-auth-banner__link text-[11px] underline text-[#F5A623]">
+              로그인
+            </a>
           </div>
         </div>
       )}
@@ -252,6 +226,11 @@ export default function LiveTradingPage() {
               />
             </div>
           </div>
+          {liveError && (
+            <p role="alert" className="live-mode-refused mt-3 text-center text-sm text-[#FF6B6B]">
+              실계좌 모드로 바꾸지 못했어요: <span data-server>{liveError}</span>
+            </p>
+          )}
         </div>
       </header>
 
@@ -367,7 +346,7 @@ export default function LiveTradingPage() {
         <ConfirmModal
           icon={Zap} iconColor="#FF6B6B"
           title="LIVE 모드 진입"
-          description="실거래 모드로 전환합니다. 이 시점부터 모든 주문은 실제 자금이 이동됩니다."
+          description="실거래 모드로 전환해요. 이 시점부터 모든 주문은 실제 자금이 이동돼요."
           warnings={[
             "주문 검증 통과 시 KIS API로 실제 발주",
             "Kill Switch는 모든 미체결을 즉시 취소",
@@ -385,7 +364,7 @@ export default function LiveTradingPage() {
         <ConfirmModal
           icon={Power} iconColor="#FF6B6B"
           title="Kill Switch 발동"
-          description="모든 거래를 즉시 중단합니다."
+          description="모든 거래를 즉시 중단해요."
           warnings={[
             "모든 미체결 주문 일괄 취소",
             "신규 주문 거부 (재개까지)",
@@ -405,206 +384,3 @@ export default function LiveTradingPage() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Components
 // ═══════════════════════════════════════════════════════════════════════════════
-
-function ModeButton({ value, current, onClick, icon: Icon, color, label }: any) {
-  const active = current === value;
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[11px] font-semibold uppercase tracking-wider transition-all duration-300"
-      style={{
-        background: active ? color : "transparent",
-        color: active ? "#000" : "#52525b",
-        boxShadow: active ? `0 0 24px ${color}80` : "none",
-      }}
-    >
-      <Icon size={12} />
-      {label}
-    </button>
-  );
-}
-
-function EquityCard({ label, value, icon: Icon, color, highlight }: any) {
-  return (
-    <div
-      className="relative overflow-hidden rounded-xl p-5 bg-[#111111] border border-zinc-800"
-      style={{
-        backgroundImage: highlight
-          ? `radial-gradient(circle at top right, ${color}10, transparent 60%)`
-          : undefined,
-        borderColor: highlight ? `${color}30` : undefined,
-      }}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-zinc-500">
-          {label}
-        </span>
-        <Icon size={12} color={color} />
-      </div>
-      <div className="text-2xl font-bold font-mono tabular-nums" style={{ color }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Section({ title, subtitle, children }: any) {
-  return (
-    <section>
-      <div className="mb-3">
-        <h2 className="text-sm font-bold text-white tracking-wide">{title}</h2>
-        <p className="text-[11px] text-zinc-500 font-mono mt-0.5">{subtitle}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function OrderRow({ order }: { order: Order }) {
-  const statusColors: Record<string, string> = {
-    PENDING:      "#FFC857",
-    SUBMITTED:    "#7DD3FC",
-    FILLED:       "#DEFF9A",
-    PARTIAL_FILL: "#DAFFDE",
-    CANCELLED:    "#a1a1aa",
-    REJECTED:     "#FF6B6B",
-    FAILED:       "#FF6B6B",
-    SHADOW_LOGGED:"#6b7280",
-  };
-  const modeColors: Record<string, string> = {
-    SHADOW: "#6b7280", PAPER: "#DEFF9A", LIVE: "#FF6B6B",
-  };
-  const statusColor = statusColors[order.status] || "#71717a";
-  const StatusIcon =
-    order.status === "FILLED" ? CheckCircle2 :
-    order.status === "REJECTED" || order.status === "FAILED" ? XCircle :
-    order.status === "CANCELLED" ? X :
-    Clock;
-
-  return (
-    <tr className="border-b border-zinc-900 hover:bg-zinc-900/50">
-      <Td>
-        <div className="font-mono text-[10px] text-zinc-300">{order.client_order_id.slice(0, 14)}</div>
-        {order.reason_code && (
-          <div className="text-[9px] text-zinc-600 mt-0.5">{order.reason_code}</div>
-        )}
-      </Td>
-      <Td>
-        <span
-          className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
-          style={{
-            background: `${modeColors[order.execution_mode]}15`,
-            color: modeColors[order.execution_mode] || "#a1a1aa",
-            border: `1px solid ${modeColors[order.execution_mode]}30`,
-          }}
-        >
-          {order.execution_mode}
-        </span>
-      </Td>
-      <Td mono>{order.strategy_id || "—"}</Td>
-      <Td>
-        <span className="font-bold text-white">{order.ticker}</span>
-        <span className={`ml-2 text-[10px] font-bold ${order.side === "BUY" ? "text-[#DEFF9A]" : "text-[#FF6B6B]"}`}>
-          {order.side}
-        </span>
-      </Td>
-      <Td align="right" mono>
-        {order.filled_quantity || 0} / {order.quantity}
-      </Td>
-      <Td>
-        <div className="flex items-center gap-1.5">
-          <StatusIcon size={11} color={statusColor} />
-          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>
-            {order.status}
-          </span>
-        </div>
-      </Td>
-      <Td mono>
-        <span className="text-[10px] text-zinc-500">
-          {new Date(order.created_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-        </span>
-      </Td>
-    </tr>
-  );
-}
-
-function ConfirmModal({ icon: Icon, iconColor, title, description, warnings,
-                          confirmLabel, confirmColor, onConfirm, onCancel }: any) {
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
-      <div className="bg-[#111111] border border-zinc-800 rounded-2xl p-8 max-w-md w-full">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 rounded-xl" style={{ background: `${iconColor}15` }}>
-            <Icon size={24} color={iconColor} />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold">{title}</h2>
-            <p className="text-[11px] text-zinc-500 mt-0.5">{description}</p>
-          </div>
-        </div>
-
-        <ul className="space-y-2 mb-6 mt-4">
-          {warnings.map((w: string, i: number) => (
-            <li key={i} className="flex items-start gap-2 text-[11px] text-zinc-400">
-              <CircleAlert size={11} className="text-[#FFC857] mt-0.5 flex-shrink-0" />
-              <span>{w}</span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="flex gap-3">
-          <button onClick={onCancel}
-                   className="flex-1 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
-            Cancel
-          </button>
-          <button onClick={onConfirm}
-                   className="flex-1 py-2.5 rounded-lg font-bold text-[11px] uppercase tracking-wider text-black"
-                   style={{ background: confirmColor }}>
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SpecBlock({ label, value, color }: any) {
-  return (
-    <div className="rounded-lg bg-[#0d0d0d] border border-zinc-900 p-3">
-      <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold mb-1">{label}</div>
-      <div className="text-[11px] font-mono font-bold" style={{ color }}>{value}</div>
-    </div>
-  );
-}
-
-function Th({ children, align = "left" }: any) {
-  return (
-    <th className={`px-4 py-3 text-[9px] uppercase tracking-wider text-zinc-500 font-bold text-${align}`}>
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, align = "left", mono }: any) {
-  return (
-    <td className={`px-4 py-3 text-${align} ${mono ? "font-mono tabular-nums" : ""}`}>
-      {children}
-    </td>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="rounded-xl bg-[#0d0d0d] border border-dashed border-zinc-800 p-10 text-center">
-      <div className="text-[11px] text-zinc-500 font-mono">{message}</div>
-    </div>
-  );
-}
-
-// Format helpers
-function fmtKrw(v: number): string {
-  const abs = Math.abs(v);
-  if (abs >= 100_000_000) return `${(v / 100_000_000).toFixed(2)}억`;
-  if (abs >= 10_000)      return `${(v / 10_000).toFixed(1)}만`;
-  return v.toLocaleString();
-}

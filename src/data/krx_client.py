@@ -116,6 +116,92 @@ def parse_index_row(rows: list[dict], index_name: str) -> dict | None:
     return None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 확장 엔드포인트 (M1-I) — VKOSPI · 신용잔고 · 공매도 · 대차
+# ─────────────────────────────────────────────────────────────────────────────
+# ★전부 verified_live=False 다★ (`source_registry` 참조)
+# 이 컨테이너에서는 KRX 호스트가 프록시 403 이라 **공개 API 카탈로그를 조회할 수 없다.**
+# 아래 경로와 필드명은 KRX OpenAPI 의 명명 규약(`*_bydd_trd`, `BAS_DD`, `OutBlock_1`,
+# 쉼표 포함 숫자 문자열)을 따라 쓴 것이고, **실호출로 확정되지 않았다.**
+#
+# 그래서 파서는 두 가지를 한다:
+#   1. 필드를 **후보 목록**으로 찾는다 — 규약이 조금 달라도 잡히도록.
+#   2. 하나도 못 찾으면 그 행을 **버린다**. 0 으로 채우지 않는다 — 0 은 "값이 0" 이라는
+#      뜻이고, 여기서 참인 것은 "필드를 못 찾았다" 이다.
+# 실수신 확인은 `verify_connection.py::check_krx`.
+# ═══════════════════════════════════════════════════════════════════════════════
+EXTRA_ENDPOINTS: dict[str, str] = {
+    "VKOSPI": "/idx/drvprod_dd_trd",
+    "MARGIN": "/sto/mgn_bydd_trd",
+    "SHORT": "/sto/shrt_bydd_trd",
+    "LENDING": "/sto/lend_bydd_trd",
+}
+
+# ── ★하루치 응답을 한 값으로 접는 규칙★ ──────────────────────────────────────
+# `get_extra` 는 `basDd` **하루치**이고 `parse_extra_rows` 의 결과에는 **종목
+# 식별자가 없다**. 그래서 하루에 온 행들을 한 값으로 접어야 하는데, 접는 방법이
+# 계열마다 다르고 **일부는 알 수 없다**:
+#
+#   · VKOSPI 는 지수 응답이라 **이름으로 한 행**을 고른다 — 의미가 알려져 있다.
+#   · 나머지 셋은 `/sto/*_bydd_trd` — **전종목 일별** 명명 규약이다. 하루에 여러
+#     행이 오면 시장 한 값으로 접는 정의(합계·평균·잔고)가 필요한데, ★엔드포인트
+#     자체가 미검증★ 이라 그것을 우리가 지어내는 것이 된다. 그래서 **거부**한다.
+#
+# ★이 표가 `source_registry.not_ingested_keys()` 의 유일한 진실 공급원이다★ —
+# 여기서 계열을 지우면 레지스트리가 "수집 코드가 없습니다" 로 스스로 되돌아간다.
+# 손으로 적은 목록이었다면 비우는 것만으로 그 가드가 해제됐다.
+COLLAPSE_SINGLE = "single"      # 이름으로 고른 한 행 — 정의가 알려져 있다
+COLLAPSE_UNKNOWN = "unknown"    # 여러 행이면 ★거부★ — 집계 정의 미확정
+
+#: 레지스트리 키 → (엔드포인트 종류, 접기 규칙, 이름 필터 `(필드, 값)` | None)
+#: ★이름 문자열도 미검증이다★ 틀리면 0행이 오고, 그것은 "값이 없다" 가 아니라
+#: "이름이 틀렸다" 는 뜻이다 — `verify_connection.py::check_krx` 가 확정한다.
+EXTRA_SERIES: dict[str, tuple[str, str, tuple[str, str] | None]] = {
+    "VKOSPI": ("VKOSPI", COLLAPSE_SINGLE, ("IDX_NM", "코스피 200 변동성지수")),
+    "KR_MARGIN_BALANCE": ("MARGIN", COLLAPSE_UNKNOWN, None),
+    "KR_SHORT_VOLUME": ("SHORT", COLLAPSE_UNKNOWN, None),
+    "KR_LENDING_BALANCE": ("LENDING", COLLAPSE_UNKNOWN, None),
+}
+
+# 지표별 값 필드 후보 (앞에서부터 먼저 잡히는 것을 쓴다)
+_VALUE_FIELDS: dict[str, tuple[str, ...]] = {
+    "VKOSPI": ("CLSPRC_IDX", "CLSPRC", "IDX_CLSPRC"),
+    "MARGIN": ("MGN_BAL_AMT", "LOAN_BAL_AMT", "BAL_AMT", "ACC_TRDVAL"),
+    "SHORT": ("SHRT_SELL_VOL", "CVSRTSELL_TRDVOL", "ACC_TRDVOL"),
+    "LENDING": ("LEND_BAL_QTY", "BAL_QTY", "REMND_QTY"),
+}
+
+
+def parse_extra_rows(rows: list[dict], kind: str,
+                     name_field: str | None = None,
+                     name_match: str | None = None) -> list[dict]:
+    """확장 엔드포인트 응답 → `[{date, value}]`.
+
+    ★필드를 못 찾은 행은 버린다★ 0 으로 채우면 "값이 0" 과 구분할 수 없고, 잘못된
+    필드명으로 만든 0 이 화면에서 실측치로 읽힌다.
+    """
+    fields = _VALUE_FIELDS.get(kind, ())
+    out: list[dict] = []
+    for r in rows or []:
+        if name_field and name_match:
+            if str(r.get(name_field) or "").strip() != name_match:
+                continue
+        bas = str(r.get("BAS_DD") or "").strip()
+        if len(bas) != 8:
+            continue
+        val = None
+        for f in fields:
+            if f in r:
+                val = _num(r.get(f))
+                if val is not None:
+                    break
+        if val is None:
+            continue        # ★지어내지 않는다★
+        out.append({"date": f"{bas[:4]}-{bas[4:6]}-{bas[6:]}", "value": val})
+    out.sort(key=lambda x: x["date"])
+    return out
+
+
 class KRXClient:
     """KRX OpenAPI — AUTH_KEY 헤더 + basDd 파라미터. 키 없으면 비활성."""
 
@@ -160,6 +246,21 @@ class KRXClient:
         if not path:
             return []
         return parse_stock_rows(self._get(path, _norm_date(date)), market)
+
+    def get_extra(self, kind: str, date: str, *,
+                  name_field: str | None = None,
+                  name_match: str | None = None) -> list[dict]:
+        """확장 지표(VKOSPI · 신용잔고 · 공매도 · 대차) 조회 (M1-I).
+
+        ★미검증 엔드포인트다★ 키가 없거나 호출이 실패하면 빈 리스트다 — 호출부는
+        그것을 "값 0" 이 아니라 "받지 못함" 으로 다뤄야 한다(`source_registry` 가
+        MES 지표를 `available:false` 로 유지하는 이유).
+        """
+        path = EXTRA_ENDPOINTS.get(kind)
+        if not path:
+            return []
+        return parse_extra_rows(self._get(path, _norm_date(date)), kind,
+                                name_field=name_field, name_match=name_match)
 
     def get_index_daily(self, market: str, date: str) -> dict | None:
         """해당일 대표 지수(코스피/코스닥) OHLC. 휴장·실패 시 None."""

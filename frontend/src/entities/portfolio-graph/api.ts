@@ -1,0 +1,34 @@
+/**
+ * 포트폴리오 그래프 API — ★계산은 백엔드가 한다★ (ADR 002)
+ * `/api/v1/allocation/graph/*`. 문은 불러온 파일이 틀려도 422 가 아니라 노드별 명명
+ * 오류를 200 으로 돌려준다 — 여기서 HTTP 오류는 "서버에 닿지 못했다" 뿐이다.
+ */
+import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
+import type { BranchEvidence, GraphDoc, NodeCatalog, RunReport, SaveResult, ValidateReport } from "./types";
+
+const BASE = "/api/v1/allocation/graph";
+
+async function readJson<T>(res: Response, what: string): Promise<T> {
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(`${what} 실패 (HTTP ${res.status}) — ${extractErrorDetail(body, "사유 없음")}`);
+  }
+  return body as T;
+}
+
+export const portfolioGraphApi = {
+  nodeTypes: async (): Promise<NodeCatalog> =>
+    readJson<NodeCatalog>(await getWithAuth(`${BASE}/node-types`), "노드 카탈로그 조회"),
+  validate: async (doc: GraphDoc): Promise<ValidateReport> =>
+    readJson<ValidateReport>(await postJson(`${BASE}/validate`, doc), "그래프 검증"),
+  /** `targets` 를 주면 그 노드들과 조상만 계산한다(BL1 "여기까지 계산") — 관문 판정은 없다. */
+  run: async (doc: GraphDoc, targets?: string[]): Promise<RunReport> =>
+    readJson<RunReport>(await postJson(targets?.length ? `${BASE}/run?targets=${encodeURIComponent(targets.join(","))}` : `${BASE}/run`, doc),
+                        "그래프 실행"),
+  /** 저장은 여기서만 — 서버가 다시 계산해 미리보기 해시가 같을 때만 한 번 쓴다(BK0). */
+  save: async (doc: GraphDoc, nodeId: string, previewHash: string): Promise<SaveResult> =>
+    readJson<SaveResult>(await postJson(`${BASE}/save`, { graph: doc, node_id: nodeId, preview_hash: previewHash }), "노드 저장"),
+  /** 갈래 비교의 다중 비교 보정(BO O3) — 과거 성과 곡선들 → PSR·DSR. 표시만, 저장하지 않는다. */
+  branchEvidence: async (series: { label: string; equity: number[] }[]): Promise<BranchEvidence> =>
+    readJson<BranchEvidence>(await postJson(`${BASE}/branch-evidence`, { series }), "갈래 보정 계산"),
+};

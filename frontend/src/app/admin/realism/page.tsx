@@ -1,4 +1,4 @@
-import RealismDashboard from "@/components/realism/RealismDashboard";
+import RealismDashboard from "@/widgets/realism/RealismDashboard";
 
 export const metadata = {
   title: "Realism Panel · Stage 12 Production Reality",

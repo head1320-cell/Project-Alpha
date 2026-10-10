@@ -18,6 +18,7 @@ Connection resolution order:
 """
 
 import os
+import secrets
 import time
 from contextlib import contextmanager
 
@@ -25,6 +26,7 @@ import bcrypt
 from dotenv import load_dotenv
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -32,11 +34,12 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     create_engine,
     func,
     text,
 )
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import NoSuchModuleError, OperationalError
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 load_dotenv()
@@ -67,7 +70,14 @@ def _build_sqlite_fallback_url() -> str:
 
 
 DATABASE_URL = _build_database_url()
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "frm123!")
+#: ★기본 비밀번호를 바꾸지 않는다★ — 말없이 바꾸면 배포가 조용히 잠기고,
+#: `tests/test_api.py` 가 이 값을 고정하고 있다. 대신 **쓰이고 있다는 사실을
+#: 관측 가능하게** 만든다(`admin_password_state()` → `GET /api/v1/auth/me`).
+#: 인증(P-1)이 켜진 뒤로 이 값은 **돈 라우트의 열쇠**다 — 운영에서는 반드시 설정할 것.
+DEFAULT_ADMIN_PASSWORD = "frm123!"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
+
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Engine + Session Setup
@@ -80,7 +90,15 @@ _connected_url: str = ""
 
 
 def _create_engine_with_fallback(url: str, retries: int = 2):
-    """Try connecting to the requested URL with retries; fall back to SQLite."""
+    """Try connecting to the requested URL with retries; fall back to SQLite.
+
+    ★드라이버 부재도 "PostgreSQL unavailable" 이다 (R0, 실측으로 확인)★
+    예전에는 `OperationalError` 만 잡았다. 그런데 `psycopg2` 가 설치돼 있지 않으면
+    `create_engine()` 이 `ModuleNotFoundError` 를 던지므로 폴백이 **전혀 걸리지 않고**
+    호출자에게 그대로 터졌다 — 개발/CI 컨테이너에서 가장 흔한 형태의 "DB 없음"이
+    하필 폴백을 비껴가고 있었다. 드라이버 부재는 재시도해도 달라지지 않으므로
+    기다리지 않고 곧장 SQLite 로 내려간다.
+    """
     if url.startswith("postgresql"):
         for attempt in range(retries):
             try:
@@ -92,6 +110,9 @@ def _create_engine_with_fallback(url: str, retries: int = 2):
                     conn.execute(text("SELECT 1"))
                 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
                 return engine, SessionLocal, url
+            except (ModuleNotFoundError, ImportError, NoSuchModuleError) as e:
+                print(f"[DB] PostgreSQL driver unavailable ({e}) — SQLite 로 폴백합니다")
+                break                                    # 재시도해도 모듈은 생기지 않는다
             except OperationalError as e:
                 print(f"[DB] PostgreSQL connection attempt {attempt + 1} failed: {e}")
                 time.sleep(1)
@@ -115,6 +136,18 @@ def get_engine():
     if _engine is None:
         _engine, _SessionLocal, _connected_url = _create_engine_with_fallback(DATABASE_URL)
     return _engine
+
+
+#: 동기 엔진의 다른 이름. ★18곳이 이 이름을 임포트하는데 정의가 없었다★ —
+#: `stage11`·`stage12`·`stage13`(실거래) 라우트와 `dag_runner`·`graph_runner` 가
+#: 전부 `try/except` 안에서 임포트해 `ImportError` 가 **HTTP 500 으로 조용히**
+#: 바뀌었고, 그래서 그 엔드포인트들이 통째로 죽어 있었다.
+#: 비동기 엔진은 `database_async` 가 맡으므로 "sync" 를 굳이 붙인 이름이 따로
+#: 필요했던 것이고, 여기가 그 자리다. `tests/test_database_public_names.py` 가
+#: 이제 **임포트되는 모든 이름이 실재하는지** 전수로 지킨다.
+def get_sync_engine():
+    """동기 SQLAlchemy 엔진 — `get_engine()` 과 같은 객체."""
+    return get_engine()
 
 
 def get_session_factory():
@@ -165,6 +198,80 @@ class User(Base):
                                cascade="all, delete-orphan")
     trades = relationship("TradeLog", back_populates="user",
                            cascade="all, delete-orphan")
+    security = relationship("UserSecurity", back_populates="user", uselist=False,
+                            cascade="all, delete-orphan")
+    broker_accounts = relationship("BrokerAccount", back_populates="owner",
+                                   cascade="all, delete-orphan")
+
+
+class UserSecurity(Base):
+    """계정 보안 상태 (BS1) — ★`users` 를 고치지 않고 옆에 둔다★.
+
+    `users` 에 열을 더하면 운영 DB 에 `ALTER` 가 필요하고, 실패하면 ORM 조회 전체가 깨진다
+    (`schema_add_columns` 주석의 함정). 새 테이블은 `create_all` 이 만든다. 행이 없으면
+    기본값(토큰 판 0 · 바꿀 차례 아님)이다 — 예전 계정이 그대로 로그인된다.
+    """
+    __tablename__ = "user_security"
+
+    username = Column(String(64), ForeignKey("users.username", ondelete="CASCADE"),
+                      primary_key=True)
+    #: 토큰에 실리는 판(`tv`). 비밀번호를 바꾸거나 초기화하면 1 오른다 → 옛 토큰이 죽는다.
+    token_version = Column(Integer, default=0, nullable=False)
+    #: 관리자가 발급·초기화한 임시 비밀번호 — 바꾸기 전에는 보호 라우트가 열리지 않는다.
+    must_change_password = Column(Boolean, default=False, nullable=False)
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="security")
+
+
+class BrokerAccount(Base):
+    """사용자가 연결한 증권 계좌 (BV3) — ★자격은 암호문으로만 둔다★.
+
+    `UserSecurity` 와 같은 곁표 관용구다(`users` 를 고치지 않는다 · `create_all` 이 만든다).
+    읽고 쓰는 길은 `src/execution/broker_accounts.py` 하나다 — 암호화·가림·본인 확인이 거기 있다.
+    `is_paper` 는 연결할 때 정하고 바꾸는 길이 없다(모의 계좌가 실계좌로 바뀌면 안 된다).
+    """
+    __tablename__ = "broker_accounts"
+
+    account_id = Column(String(32), primary_key=True)   # "ba_" + 16 hex
+    owner_username = Column(String(64), ForeignKey("users.username", ondelete="CASCADE"),
+                            index=True, nullable=False)
+    label = Column(String(64), nullable=False)
+    is_paper = Column(Boolean, nullable=False)
+    account_prdt = Column(String(2), default="01", nullable=False)
+    #: Fernet 암호문(`BROKER_CRED_KEY`). 평문은 이 표에 없다.
+    app_key_enc = Column(Text, nullable=False)
+    app_secret_enc = Column(Text, nullable=False)
+    account_no_enc = Column(Text, nullable=False)
+    #: 화면에 보일 끝 4자리 — 어느 계좌인지 알아보는 데만 쓴다.
+    app_key_last4 = Column(String(4), nullable=False)
+    account_no_last4 = Column(String(4), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    owner = relationship("User", back_populates="broker_accounts")
+
+
+class LiveGateDeclaration(Base):
+    """실계좌(LIVE) 관문 선언 (BV7) — ★지우지 않는다★.
+
+    새 선언은 옛 선언을 철회로 닫고(누가·언제), 철회도 행을 남긴다 — "무슨 근거로 누구에게 실계좌를 열었나" 를
+    나중에 물을 수 있게. 읽고 쓰는 길은 `src/execution/live_gate_store.py` 하나다. 사용자 표에 FK 를 걸지 않는다
+    (계정이 지워져도 기록은 남아야 한다).
+    """
+    __tablename__ = "live_gate_declarations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    basis = Column(Text, nullable=False)
+    authority = Column(Text, nullable=False)
+    reference_no = Column(Text, nullable=False)
+    verified_at = Column(String(32), nullable=False)
+    scope = Column(Text, nullable=False)
+    #: JSON 이름 목록 — `*` 같은 모두 열기는 `live_gate` 가 선언 전에 거절한다.
+    allowed_users = Column(Text, nullable=False)
+    declared_by = Column(String(64), nullable=False)
+    declared_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_by = Column(String(64))
+    revoked_at = Column(DateTime(timezone=True))
 
 
 class Portfolio(Base):
@@ -337,6 +444,147 @@ def create_user(username: str, password: str, role: str = "analyst") -> bool:
         return True
 
 
+def _unusable_hash() -> str:
+    """★아무도 모르는 비밀번호의 해시★ — 로그인 이외의 길로 생긴 계정이 알려진 값으로 열리지 않게.
+
+    예전에는 `hash_password("temp")` 였다 — 코드를 읽은 누구나 그 계정으로 로그인할 수 있었다(BS1).
+    이 계정을 쓰려면 관리자가 설정에서 비밀번호를 초기화한다.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Account Security (BS1) — 비밀번호 바꾸기 · 관리자 발급 · 옛 토큰 폐기
+# ═══════════════════════════════════════════════════════════════════════════════
+
+#: 발급·초기화 때 만드는 임시 비밀번호 길이(`token_urlsafe` 바이트 수 → 약 16자).
+_TEMP_PASSWORD_BYTES = 12
+
+
+def _security_row(s, username: str) -> "UserSecurity":
+    row = s.get(UserSecurity, username)
+    if row is None:
+        row = UserSecurity(username=username, token_version=0, must_change_password=False)
+        s.add(row)
+        s.flush()
+    return row
+
+
+def account_state(username: str) -> dict | None:
+    """토큰을 믿기 전에 보는 계정 상태. 계정이 없으면 `None`(삭제된 계정의 토큰은 죽는다).
+
+    반환: `{role, token_version, must_change_password, password_changed_at}`.
+    ★DB 에 닿지 못하면 예외가 그대로 올라간다★ — 호출자(`auth.get_current_principal`)가 503 으로 말한다.
+    """
+    with session_scope() as s:
+        user = s.get(User, username)
+        if user is None:
+            return None
+        sec = s.get(UserSecurity, username)
+        return {
+            "role": user.role,
+            "token_version": int(sec.token_version) if sec else 0,
+            "must_change_password": bool(sec.must_change_password) if sec else False,
+            "password_changed_at": sec.password_changed_at.isoformat()
+            if sec and sec.password_changed_at else None,
+        }
+
+
+def set_password(username: str, new_plain: str, *, must_change: bool) -> int | None:
+    """해시를 바꾸고 토큰 판을 올린다. 새 판을 돌려준다. 계정이 없으면 `None`."""
+    import datetime as _dt
+    with session_scope() as s:
+        user = s.get(User, username)
+        if user is None:
+            return None
+        user.password_hash = hash_password(new_plain)
+        sec = _security_row(s, username)
+        sec.token_version = int(sec.token_version or 0) + 1
+        sec.must_change_password = must_change
+        sec.password_changed_at = _dt.datetime.now(_dt.timezone.utc)
+        return int(sec.token_version)
+
+
+def issue_account(username: str, role: str) -> str | None:
+    """관리자 발급 — 임시 비밀번호를 만들어 **돌려주기만** 한다(저장은 해시). 이미 있으면 `None`."""
+    temp = secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
+    with session_scope() as s:
+        if s.get(User, username) is not None:
+            return None
+        s.add(User(username=username, password_hash=hash_password(temp), role=role))
+        s.flush()
+        s.add(UserSecurity(username=username, token_version=0, must_change_password=True))
+    return temp
+
+
+def reset_account_password(username: str) -> str | None:
+    """관리자 초기화 — 새 임시 비밀번호 · 바꿀 차례 · 옛 토큰 폐기. 계정이 없으면 `None`."""
+    temp = secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
+    return temp if set_password(username, temp, must_change=True) is not None else None
+
+
+def list_accounts() -> list[dict]:
+    """관리자 목록 — ★해시·비밀번호를 싣지 않는다★."""
+    with session_scope() as s:
+        out = []
+        for u in s.query(User).order_by(User.username).all():
+            sec = s.get(UserSecurity, u.username)
+            out.append({
+                "username": u.username,
+                "role": u.role,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "must_change_password": bool(sec.must_change_password) if sec else False,
+                "password_changed_at": sec.password_changed_at.isoformat()
+                if sec and sec.password_changed_at else None,
+            })
+        return out
+
+
+#: 해시 → 기본값을 받는가. bcrypt 비교는 비싸다(rounds 12) — 해시가 바뀌면 새로 잰다.
+_DEFAULT_CHECK: dict[str, bool] = {}
+
+
+def _admin_accepts_default() -> bool | None:
+    with session_scope() as s:
+        admin = s.get(User, "admin")
+        stored = admin.password_hash if admin else None
+    if stored is None:
+        return None
+    if stored not in _DEFAULT_CHECK:
+        _DEFAULT_CHECK.clear()
+        _DEFAULT_CHECK[stored] = verify_password(DEFAULT_ADMIN_PASSWORD, stored)
+    return _DEFAULT_CHECK[stored]
+
+
+def admin_password_state() -> str:
+    """`configured` | `default` | `unknown` — ★admin 계정이 **지금** 기본 비밀번호를 받는가★.
+
+    예전에는 환경변수 `ADMIN_PASSWORD` 가 있는지만 봤다. 그런데 그 값은 admin 행을 **처음 만들 때만**
+    쓰인다 — 나중에 설정해도 계정은 여전히 기본값을 받는데 "configured" 라고 말했고, 설정 화면에서
+    바꿔도 "default" 라고 말했다(BS1 감사). 이제 DB 의 해시를 직접 본다.
+    """
+    try:
+        accepts = _admin_accepts_default()
+    except Exception:  # noqa: BLE001 — 모름은 모름이라고 말한다
+        return "unknown"
+    if accepts is None:
+        return "unknown"
+    return "default" if accepts else "configured"
+
+
+def admin_password_reason() -> str | None:
+    """상태의 이유. `configured` 이면 `None`."""
+    state = admin_password_state()
+    if state == "configured":
+        return None
+    if state == "unknown":
+        return "admin 계정을 찾지 못했거나 DB 에 닿지 못했어요 — 기본 비밀번호인지 모릅니다."
+    if os.getenv("ADMIN_PASSWORD", "").strip():
+        return ("ADMIN_PASSWORD 가 설정돼 있지만 admin 계정은 아직 기본 비밀번호를 받아요 — "
+                "환경변수는 계정을 처음 만들 때만 쓰여요. 설정 화면에서 바꾸세요.")
+    return "admin 계정이 기본 비밀번호를 받아요 — 설정 화면에서 바꾸세요."
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Portfolio Functions
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -369,7 +617,7 @@ def update_user_portfolio(
             if not user:
                 s.add(User(
                     username=username,
-                    password_hash=hash_password("temp"),
+                    password_hash=_unusable_hash(),
                     role="analyst",
                 ))
                 s.flush()
@@ -390,7 +638,7 @@ def log_trade(username: str, ticker: str, qty: int, side: str, status: str) -> N
         if not user:
             s.add(User(
                 username=username,
-                password_hash=hash_password("temp"),
+                password_hash=_unusable_hash(),
                 role="analyst",
             ))
             s.flush()

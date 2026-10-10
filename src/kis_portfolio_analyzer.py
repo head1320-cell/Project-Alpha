@@ -189,8 +189,15 @@ class PortfolioAnalyzer:
             n = len(self.symbols)
             self.weights = pd.Series({s: 1 / n for s in self.symbols})
         else:
+            # ★gross 로 나눈다★ `w.sum()` 은 net 이라 달러중립(Σw≈0)에서 무너진다.
+            # 실측: {A: 100, B: −100} → {A: inf, B: −inf}, {A: 100, B: −99} → 1.0 으로
+            # 나눠 {100.0, −99.0}. 호출자(`/analyze`)가 `max(w, 0)` 으로 숏을 미리
+            # 지우고 있어서 드러나지 않았을 뿐이다 — 클램프가 폭발을 가리고 있었다.
+            # 롱온리에서는 `Σ|w| ≡ Σw` 이므로 값까지 그대로다.
             self.weights = pd.Series(weights)
-            self.weights = self.weights / self.weights.sum()
+            gross = float(self.weights.abs().sum())
+            self.weights = (self.weights / gross if gross > 0
+                            else pd.Series({s: 1 / len(self.symbols) for s in self.symbols}))
 
     def analyze(self) -> PortfolioMetrics:
         """전체 분석 실행 — 원본 그대로."""
@@ -208,7 +215,10 @@ class PortfolioAnalyzer:
         else:
             portfolio_sharpe = 0.0
 
-        weighted_vol = float((volatilities * self.weights.reindex(self.symbols).fillna(0)).sum())
+        # ★분산투자비율의 분자는 **개별 위험의 합**이다★ 부호대로 더하면 롱숏에서
+        # 0 에 붙어 비율이 폭발한다. 롱온리는 `|w| == w` 라 값 동일.
+        weighted_vol = float((volatilities
+                              * self.weights.reindex(self.symbols).fillna(0).abs()).sum())
         diversification_ratio = (weighted_vol / portfolio_volatility
                                   if portfolio_volatility > 0 else 1.0)
 
@@ -329,8 +339,12 @@ class PortfolioRebalancer:
     ):
         self.returns = returns.dropna()
         self.symbols = list(returns.columns)
+        # ★gross 정규화★ `PortfolioAnalyzer` 와 같은 규칙(net 은 달러중립에서 0).
+        # 참고: 이 클래스는 현재 호출자가 0 이다 — 규칙을 통일해 두는 것이지,
+        # 살아 있는 경로를 고치는 것이 아니다.
         w = pd.Series(target_weights).reindex(self.symbols).fillna(0)
-        self.target_weights = w / w.sum()
+        gross = float(w.abs().sum())
+        self.target_weights = w / gross if gross > 0 else w
         self.initial_capital = initial_capital
         self.commission_rate = commission_rate
 

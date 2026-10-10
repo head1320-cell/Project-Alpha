@@ -169,8 +169,29 @@ class FinancialStatement:
     roe:                 float | None = None
     roa:                 float | None = None
     debt_ratio:          float | None = None
-    dividend_yield:      float | None = None
+    dividend_yield:      float | None = None   # dps / **현재가** (compute_ratios 산출)
     payout_ratio:        float | None = None
+
+    # ── 공표 신원 (transaction time) ────────────────────────────────
+    # ★재무의 "언제부터 알 수 있었나"★ — `bsns_year`/`reprt_code` 가 valid time
+    # (그 수치가 설명하는 기간)이고, 접수일이 transaction time 이다. 둘을 함께
+    # 들고 있어야 as-of 조회가 성립한다(bi-temporal).
+    #
+    # ★모르면 None 이다★ 추정 접수일(기간말 + 90일)을 여기서 만들지 않는다.
+    # 그 추정은 소비자 층의 **명시적 폴백**이지 수집 층의 값이 아니다 —
+    # 수집이 추정을 내면 소비자는 그것을 실측으로 읽는다.
+    rcept_no:            str | None = None      # DART 접수번호 (정정공시마다 다르다)
+    rcept_dt:            str | None = None      # 접수일 YYYY-MM-DD
+
+    # ── 공시값 (계산이 아니라 alotMatter 가 그대로 준 것) ──────────────
+    #: 그 사업연도에 **공시된** 현금배당수익률 — ★배당 시점의 주가 기준★
+    #:
+    #: `dividend_yield` 와 **다른 값이다**. 저쪽은 `dps / 오늘 주가` 라, 과거를
+    #: 분석하면 오늘 가격이 과거로 새어 든다. 이쪽은 공시 시점 기준이라 그 오염이
+    #: 없다 — 시점 분석에는 이 값이 맞다.
+    #:
+    #: ★그래서 덮지 않고 더한다★ 기존 소비자는 계속 `dividend_yield` 를 본다.
+    disclosed_dividend_yield: float | None = None
 
     # mock 폴백으로 만들어진 값인지 (실데이터 판별용). 실 DART 파싱 시 False 유지.
     is_mock:             bool = False
@@ -343,11 +364,18 @@ class DARTClient:
         if not data or "list" not in data:
             return self._mock_financial_statement(corp_code, bsns_year)
 
+        # ★같은 응답에서 접수번호를 읽는다 — DART 호출을 더 하지 않는다★
+        # `fnlttSinglAcnt.json` 의 각 항목이 이미 `rcept_no` 를 담고 있다.
+        # 한 보고서의 항목들은 같은 접수번호를 갖는다(같은 공시에서 왔다).
+        _rcept = next((str(it.get("rcept_no")) for it in data["list"]
+                       if it.get("rcept_no")), None)
         fs = FinancialStatement(
             corp_code=corp_code,
             corp_name=data["list"][0].get("corp_name", "") if data["list"] else "",
             bsns_year=bsns_year,
             reprt_code=reprt_code,
+            rcept_no=_rcept,
+            rcept_dt=DARTClient.filing_date_of(_rcept),
         )
 
         # DART 항목 코드 → 필드 매핑
@@ -469,6 +497,11 @@ class DARTClient:
         _div = self.get_dividend_info(corp_code, bsns_year, reprt_code)
         if _div.get("dps") is not None:
             fs.dps = _div["dps"]
+        # ★공시 수익률은 받아 놓고 버리고 있었다★ `_parse_dividend_rows` 가 이미
+        # 파싱하는데 아무도 읽지 않았다. `dividend_yield`(dps/현재가)를 **덮지 않고**
+        # 별도 필드로 싣는다 — 둘은 기준 시점이 다른 값이다.
+        if _div.get("yield_pct") is not None:
+            fs.disclosed_dividend_yield = _div["yield_pct"]
 
         fs.compute_ratios()
         self._cache[cache_key] = fs
@@ -564,6 +597,29 @@ class DARTClient:
             return float(str(value).replace(",", "").replace(" ", ""))
         except (ValueError, TypeError):
             return None
+
+    @staticmethod
+    def filing_date_of(rcept_no: str | None) -> str | None:
+        """DART 접수번호 → 접수일 `YYYY-MM-DD`. 읽을 수 없으면 `None`.
+
+        접수번호 앞 8자리가 접수일(YYYYMMDD)이다 — `_parse_insider_rows` 가 내부자
+        공시에서 이미 쓰는 규칙이고, 여기서 재무에도 같은 규칙을 쓴다.
+
+        ★그럴듯한 쓰레기를 통과시키지 않는다★ 8자리 숫자여도 13월·2월 30일이면
+        접수일이 아니다. 날짜로 세워 보고 안 되면 모르는 것이다.
+
+        ★모르면 지어내지 않는다★ 여기서 추정 날짜를 만들면 소비자가 그것을 실측
+        접수일로 읽는다. 추정은 라벨과 함께 소비자 층에서 붙는다.
+        """
+        head = str(rcept_no or "").strip()[:8]
+        if len(head) != 8 or not head.isdigit():
+            return None
+        try:
+            from datetime import date
+            d = date(int(head[:4]), int(head[4:6]), int(head[6:8]))
+        except ValueError:
+            return None                      # 13월·2월 30일 등 — 접수일이 아니다
+        return d.isoformat()
 
     @staticmethod
     def _parse_insider_rows(data: dict | None) -> list[dict]:

@@ -6,19 +6,30 @@ import {
   TrendingUp, BarChart3, GitBranch,
 } from "lucide-react";
 
-import BacktestConfigPanel from "@/components/multibacktest/BacktestConfigPanel";
-import WeightTimeseriesChart from "@/components/multibacktest/WeightTimeseriesChart";
-import EquityWithRegimeBand from "@/components/multibacktest/EquityWithRegimeBand";
-import AttributionWaterfall from "@/components/multibacktest/AttributionWaterfall";
-import RegimeAttributionTable from "@/components/multibacktest/RegimeAttributionTable";
-import CounterfactualCompare from "@/components/multibacktest/CounterfactualCompare";
+import BacktestConfigPanel from "@/widgets/multibacktest/BacktestConfigPanel";
+import WeightTimeseriesChart from "@/widgets/multibacktest/WeightTimeseriesChart";
+import EquityWithRegimeBand from "@/widgets/multibacktest/EquityWithRegimeBand";
+import AttributionWaterfall from "@/widgets/multibacktest/AttributionWaterfall";
+import RegimeAttributionTable from "@/widgets/multibacktest/RegimeAttributionTable";
+import CounterfactualCompare from "@/widgets/multibacktest/CounterfactualCompare";
+import RegisterStrategyPanel from "@/widgets/multibacktest/RegisterStrategyPanel";
 
-import { API_BASE } from "@/lib/apiBase";
+import { unavailableReason } from "@/entities/realism/unavailable";
+import {
+  multibacktestApi,
+  type MultistrategyAvailability,
+  type RegisteredStrategy,
+  type SourcesBlock,
+} from "@/entities/multibacktest";
+import { API_BASE } from "@/shared/api/apiBase";
+import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 // ═══════════════════════════════════════════════════════════════════════════════
+import { KPICard, Section, btnStyle, headerStyle, loadingStyle } from "@/widgets/multibacktest/DashboardParts";
 
 export default function MultiBacktestPage() {
-  const [strategies, setStrategies] = useState<any[]>([]);
+  const [strategies, setStrategies] = useState<RegisteredStrategy[]>([]);
+  const [availability, setAvailability] = useState<MultistrategyAvailability | null>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -36,22 +47,40 @@ export default function MultiBacktestPage() {
     if (t) setScreenerTickers(t.split(",").filter(Boolean));
   }, []);
 
-  // 초기 로드
-  const loadInit = useCallback(async () => {
-    setLoading(true);
+  // ★전략은 멀티전략 레지스트리에서 온다★ (BG6) — 예전에는 그래프 전략 목록
+  // (`/api/v1/strategies`)을 읽었는데, 그 id 는 이 엔진이 모르는 id 였다.
+  const loadStrategies = useCallback(async () => {
     try {
-      const [sRes, rRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/strategies?active_only=true`).then((r) => r.json()).catch(() => ({ strategies: [] })),
+      setStrategies(await multibacktestApi.strategies(true));
+    } catch (e) {
+      // ★빈 목록으로 조용히 넘기지 않는다★ — 못 읽었다고 말한다.
+      setStrategies([]);
+      setError(`등록된 전략을 읽지 못했어요 — ${String(e)}`);
+    }
+  }, []);
+
+  // 초기 로드
+  // ★전체 화면 로딩은 첫 로드 한 번뿐이다★ (BH3) — 실행 뒤 목록 갱신이 `loading` 을
+  // 다시 켜면 설정 패널이 언마운트돼 기본값(매월·KR)으로 돌아가, 화면의 결과를 만든
+  // 설정과 폼이 어긋난다. 초기값 `true` 가 첫 로드를 덮으므로 여기서 켜지 않는다.
+  const loadInit = useCallback(async () => {
+    try {
+      const [rRes, avail] = await Promise.all([
         fetch(`${API_BASE}/api/v1/multibacktest/runs?limit=10`).then((r) => r.json()).catch(() => ({ runs: [] })),
+        multibacktestApi.availability().catch(() => null),
+        loadStrategies(),
       ]);
-      setStrategies(sRes.strategies || []);
       setRuns(rRes.runs || []);
+      setAvailability(avail);
+      // ★빈 목록으로 조용히 넘기지 않는다★ (BF) — 서브시스템이 없으면 그 사유를 보인다.
+      const why = unavailableReason(rRes) ?? (avail && !avail.available ? avail.reason : null);
+      if (why) setError(why);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadStrategies]);
 
   useEffect(() => { loadInit(); }, [loadInit]);
 
@@ -70,7 +99,7 @@ export default function MultiBacktestPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        setError(data.message || "실행 실패");
+        setError(data.message || unavailableReason(data) || "실행 실패");
         return;
       }
       setResult(data);
@@ -104,11 +133,18 @@ export default function MultiBacktestPage() {
         fetch(`${API_BASE}/api/v1/multibacktest/${runId}`).then((r) => r.json()),
         fetch(`${API_BASE}/api/v1/multibacktest/${runId}/attribution`).then((r) => r.json()),
       ]);
+      const why = unavailableReason(runRes);
+      if (why) {
+        setError(why);
+        return;
+      }
 
       // run 데이터 → result 형태로 변환
       const synthetic = {
         success: true,
         run_id: runId,
+        perf_label: runRes.perf_label,
+        sources: runRes.sources,
         summary: {
           total_return_pct: runRes.run.total_return_pct,
           annualized_return_pct: runRes.run.annualized_return_pct,
@@ -218,6 +254,12 @@ export default function MultiBacktestPage() {
         </div>
       )}
 
+      {/* 전략 등록 (BG6) */}
+      <Section title="전략 등록" icon={Database}
+                subtitle="완료된 백테스트 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 등록해요">
+        <RegisterStrategyPanel strategies={strategies} onChanged={loadStrategies} />
+      </Section>
+
       {/* 설정 패널 */}
       <Section title="백테스트 설정" icon={Layers}
                 subtitle={`등록된 전략 ${strategies.length}개 · 과거 실행 ${runs.length}개`}>
@@ -225,6 +267,7 @@ export default function MultiBacktestPage() {
           strategies={strategies}
           onRun={handleRun}
           running={running}
+          availability={availability}
         />
       </Section>
 
@@ -306,6 +349,13 @@ export default function MultiBacktestPage() {
                       color="#e040fb" />
           </div>
 
+          {/* ★이 수치가 무엇에서 나왔는가★ (BG6) — 라벨은 원천 실행들의 mock 여부로 */}
+          <ResultProvenance perfLabel={result.perf_label} sources={result.sources}
+                            netting={result.summary.netting}
+                            nettingTotal={result.summary.netting_total_savings}
+                            regimeLabels={result.summary.regime_labels}
+                            regimeRebalance={result.summary.regime_rebalance} />
+
           {/* Equity + Regime */}
           <Section title="자산 곡선 + 매크로 국면" icon={TrendingUp}
                     subtitle={`${result.summary.n_trading_days}일 시뮬레이션`}>
@@ -329,14 +379,16 @@ export default function MultiBacktestPage() {
             <>
               <Section title="5-Factor Attribution Waterfall"
                         icon={GitBranch}
-                        subtitle="베이스라인 → 각 의사결정 효과 → 최종 수익">
-                <AttributionWaterfall waterfall={attribution.waterfall || []} />
+                        subtitle="동일가중 기준 → 배분 → 비용 → 복리 → 실제 (수익률 항등식)">
+                <AttributionWaterfall waterfall={attribution.waterfall || []}
+                                      notes={attributionNotes(attribution.cumulative)} />
               </Section>
 
               <Section title="Regime-Conditional Alpha"
                         icon={Activity}
                         subtitle="매크로 국면별 알파 분해">
-                <RegimeAttributionTable rows={attribution.regime_breakdown || []} />
+                <RegimeAttributionTable rows={attribution.regime_breakdown || []}
+                                        perfLabel={attribution.perf_label} />
               </Section>
             </>
           )}
@@ -360,73 +412,108 @@ export default function MultiBacktestPage() {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function Section({ title, subtitle, icon: Icon, children }: {
-  title: string; subtitle: string; icon: any; children: React.ReactNode;
-}) {
-  return (
-    <section style={{
-      background: "#0a0e27", border: "1px solid #1e2d4a",
-      borderRadius: 10, marginBottom: 16, overflow: "hidden",
-    }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "14px 20px", borderBottom: "1px solid #1e2d4a",
-      }}>
-        <Icon size={14} color="#1200ff" />
-        <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: "#fff",
-                         margin: 0, textTransform: "uppercase",
-                         letterSpacing: "0.04em" }}>{title}</h2>
-          <p style={{ fontSize: 10, color: "#6b7fa3", margin: 0, marginTop: 2 }}>
-            {subtitle}
-          </p>
-        </div>
-      </div>
-      <div style={{ padding: "16px 20px" }}>{children}</div>
-    </section>
-  );
+function dataText(mock: boolean | null | undefined): string {
+  if (mock === true) return "mock";
+  if (mock === false) return "실데이터";
+  return "데이터 미상";
 }
 
-function KPICard({ label, value, color, highlight }: {
-  label: string; value: string; color: string; highlight?: boolean;
+/** 결과의 출처 — 원천 실행 · 데이터 축 · 네팅 근거. ★응답이 말한 것만★ 그린다. */
+interface RegimeCoverage {
+  n_known_days: number;
+  n_unknown_days: number;
+  first_unknown_reason: string | null;
+}
+
+function ResultProvenance({ perfLabel, sources, netting, nettingTotal, regimeLabels,
+                            regimeRebalance }: {
+  perfLabel?: PerfLabelValue | null;
+  sources?: SourcesBlock | null;
+  netting?: {
+    enabled: boolean; basis: string; assumptions: string[];
+    n_measured_days: number; n_unmeasured_days: number;
+    first_unmeasured_reason: string | null;
+  } | null;
+  nettingTotal?: number | null;
+  regimeLabels?: Record<string, RegimeCoverage> | null;
+  regimeRebalance?: {
+    market: string; n_known_days: number; n_unknown_days: number;
+    n_triggers: number; reason: string | null;
+  } | null;
 }) {
   return (
     <div style={{
-      padding: "12px 14px",
-      background: highlight
-        ? `linear-gradient(135deg, ${color}15, ${color}05)`
-        : "#0a0e27",
-      border: `1px solid ${highlight ? color + "40" : "#1e2d4a"}`,
-      borderRadius: 8,
+      padding: "10px 14px", marginBottom: 16, background: "#0a0e27",
+      border: "1px solid #1e2d4a", borderRadius: 6, fontSize: 11, color: "#a7c8ff",
+      display: "flex", flexDirection: "column", gap: 6,
     }}>
-      <div style={{ fontSize: 9, color: "#6b7fa3", fontWeight: 600,
-                      textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        {label}
+      <div><PerfLabel value={perfLabel} /></div>
+      <div>
+        <span style={{ color: "#6b7fa3" }}>출처 · </span>
+        {!sources ? "응답에 출처가 없어요(과거 실행일 수 있어요)."
+          : !sources.available ? sources.reason
+          : sources.strategies.map((s) => (
+            <span key={s.strategy_id} style={{ marginRight: 10 }}>
+              #{s.strategy_id}{s.name ? ` ${s.name}` : ""} ←{" "}
+              {s.registered ? `${s.source_run_id} (${dataText(s.is_mock_data)})` : (s.reason ?? "원천 미상")}
+            </span>
+          ))}
       </div>
-      <div style={{ fontSize: 18, fontWeight: 700, color, marginTop: 4,
-                      fontFamily: "'Roboto Mono', monospace" }}>
-        {value}
-      </div>
+      {netting && (
+        <div>
+          <span style={{ color: "#6b7fa3" }}>네팅 (보고 전용 · 수익률에 더하지 않음) · </span>
+          {!netting.enabled ? "꺼짐"
+            : <>
+                절감 {nettingTotal == null ? "미상" : `${Math.round(nettingTotal).toLocaleString()}원`}
+                {" · "}잰 날 {netting.n_measured_days} / 못 잰 날 {netting.n_unmeasured_days}
+                {netting.first_unmeasured_reason ? ` · ${netting.first_unmeasured_reason}` : ""}
+                <span title={netting.assumptions.join("\n")} style={{ color: "#6b7fa3" }}>
+                  {" "}· 근거 {netting.basis} (가정 {netting.assumptions.length}개)
+                </span>
+              </>}
+        </div>
+      )}
+      {regimeLabels && (
+        <div>
+          <span style={{ color: "#6b7fa3" }}>국면 (엄격 PIT · 관측) · </span>
+          {(["kr", "us"] as const).map((m) => {
+            const c = regimeLabels[m];
+            if (!c) return null;
+            const total = c.n_known_days + c.n_unknown_days;
+            return (
+              <span key={m} title={c.first_unknown_reason ?? undefined} style={{ marginRight: 10 }}>
+                {m.toUpperCase()} 판정 {c.n_known_days}/{total}일
+                {c.n_unknown_days > 0 ? " (나머지 미상)" : ""}
+              </span>
+            );
+          })}
+          {regimeRebalance && (
+            <span>
+              · regime_change({regimeRebalance.market.toUpperCase()}) 트리거 {regimeRebalance.n_triggers}회
+              {regimeRebalance.reason ? ` — ${regimeRebalance.reason}` : ""}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-const headerStyle: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between", alignItems: "center",
-  marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #1e2d4a",
-};
-
-const btnStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 6,
-  padding: "7px 14px", borderRadius: 4, fontSize: 11,
-  fontWeight: 600, cursor: "pointer",
-  background: "#0a0e27", color: "#a7c8ff",
-  border: "1px solid #1e2d4a",
-};
-
-const loadingStyle: React.CSSProperties = {
-  minHeight: "100vh", background: "#060a1a",
-  display: "flex", flexDirection: "column",
-  alignItems: "center", justifyContent: "center",
-  fontFamily: "'Inter', sans-serif",
-};
+/** 워터폴 밖에 적을 것 — ★응답이 말한 것만★ (BH2). */
+function attributionNotes(cum: any): string[] {
+  if (!cum) return [];
+  const out: string[] = [];
+  const ident = cum.identity;
+  if (ident) {
+    out.push(ident.holds
+      ? `항등식이 닫혀요 — 일별 최대 차이 ${Number(ident.max_abs_gap ?? 0).toExponential(1)} (${ident.n_rows_checked}/${ident.n_rows}일 검사).`
+      : `항등식을 확인하지 못했어요 — ${ident.reason ?? "사유 없음"}`);
+  }
+  if (cum.cash_not_modeled_reason) out.push(`현금 이자: ${cum.cash_not_modeled_reason}`);
+  const net = cum.report_only?.netting_effect;
+  if (net) {
+    const krw = cum.netting_savings_value;
+    out.push(`네팅(보고 전용 · 스텝 아님): 절감 ${krw == null ? "미상" : `${Math.round(krw).toLocaleString()}원`} — ${net.reason}`);
+  }
+  return out;
+}
