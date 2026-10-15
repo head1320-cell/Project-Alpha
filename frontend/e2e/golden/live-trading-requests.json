@@ -1,0 +1,90 @@
+{
+ "01 첫 화면": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "02 새로 고침": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "03 모의 체결로": {
+  "writes": [
+   "POST /api/v1/live/mode {\"mode\":\"PAPER\"}"
+  ],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "04 기록만으로": {
+  "writes": [
+   "POST /api/v1/live/mode {\"mode\":\"SHADOW\"}"
+  ],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "05 실계좌 취소": {
+  "writes": []
+ },
+ "06 실계좌 확인": {
+  "writes": [
+   "POST /api/v1/live/mode {\"confirm_token\":\"EXPLICIT_LIVE_CONFIRMED\",\"mode\":\"LIVE\"}"
+  ],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "07 비상 정지 취소": {
+  "writes": []
+ },
+ "08 비상 정지 걸기": {
+  "writes": [
+   "POST /api/v1/live/kill-switch/trigger {\"liquidation_mode\":\"hold\",\"reason\":\"Manual emergency stop from cockpit\"}"
+  ],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "09 비상 정지 풀기": {
+  "writes": [
+   "POST /api/v1/live/kill-switch/resolve {\"notes\":\"Manual resolution from cockpit\"}"
+  ],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ },
+ "10 10초 뒤": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/live/balance",
+   "GET /api/v1/live/kill-switch/status",
+   "GET /api/v1/live/mode",
+   "GET /api/v1/live/orders?limit=20"
+  ]
+ }
+}

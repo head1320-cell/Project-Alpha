@@ -142,6 +142,7 @@ export default function LiveTradingPage() {
               </span>
             </div>
             <button
+              data-act="resolve"
               onClick={resolveKill}
               className="text-[10px] font-bold uppercase tracking-wider text-black bg-black/20 hover:bg-black/30 px-3 py-1 rounded"
             >
@@ -171,13 +172,14 @@ export default function LiveTradingPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <button onClick={refresh}
+              <button onClick={refresh} data-act="refresh"
                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300">
                 <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
                 Refresh
               </button>
               {/* KILL SWITCH BUTTON */}
               <button
+                data-act="kill-open"
                 onClick={() => setShowKillConfirm(true)}
                 disabled={killStatus.is_active}
                 className="
@@ -203,6 +205,7 @@ export default function LiveTradingPage() {
               <ModeButton
                 value="SHADOW"
                 current={mode}
+                act="mode-shadow"
                 onClick={() => handleModeChange("SHADOW")}
                 icon={Eye}
                 color="#6b7280"
@@ -211,6 +214,7 @@ export default function LiveTradingPage() {
               <ModeButton
                 value="PAPER"
                 current={mode}
+                act="mode-paper"
                 onClick={() => handleModeChange("PAPER")}
                 icon={FlaskConical}
                 color="#DEFF9A"
@@ -219,6 +223,7 @@ export default function LiveTradingPage() {
               <ModeButton
                 value="LIVE"
                 current={mode}
+                act="mode-live"
                 onClick={() => handleModeChange("LIVE")}
                 icon={Zap}
                 color="#FF6B6B"
@@ -356,6 +361,7 @@ export default function LiveTradingPage() {
           confirmColor="#FF6B6B"
           onConfirm={confirmLiveMode}
           onCancel={() => setShowLiveConfirm(false)}
+          yesAct="live-yes" noAct="live-no"
         />
       )}
 
@@ -375,6 +381,7 @@ export default function LiveTradingPage() {
           confirmColor="#FF6B6B"
           onConfirm={triggerKill}
           onCancel={() => setShowKillConfirm(false)}
+          yesAct="kill-yes" noAct="kill-no"
         />
       )}
     </div>

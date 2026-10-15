@@ -1,0 +1,90 @@
+{
+ "01 첫 화면": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/backtest/runs",
+   "GET /api/v1/multibacktest/availability",
+   "GET /api/v1/multibacktest/runs?limit=10",
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "02 새로 고침": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/multibacktest/availability",
+   "GET /api/v1/multibacktest/runs?limit=10",
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "03 기본값으로 실행": {
+  "writes": [
+   "POST /api/v1/multibacktest/run {\"allocation_method\":\"hrp\",\"commission_rate\":0.00015,\"end_date\":\"2026-10-02\",\"initial_capital\":10000000,\"macro_overlay_enabled\":false,\"netting_enabled\":true,\"rebalance_policy\":\"monthly\",\"regime_market\":\"kr\",\"save\":true,\"slippage_rate\":0.0005,\"start_date\":\"2024-10-02\",\"strategy_ids\":[1,2]}"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/9/attribution",
+   "GET /api/v1/multibacktest/availability",
+   "GET /api/v1/multibacktest/runs?limit=10",
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "04 반사실": {
+  "writes": [
+   "POST /api/v1/multibacktest/counterfactual {\"base_allocation_method\":\"hrp\",\"base_rebalance_policy\":\"monthly\",\"commission_rate\":0.00015,\"end_date\":\"2026-10-02\",\"initial_capital\":10000000,\"regime_market\":\"kr\",\"scenarios\":[\"baseline\",\"no_macro_overlay\",\"no_netting\",\"equal_weight\",\"inverse_vol\"],\"slippage_rate\":0.0005,\"start_date\":\"2024-10-02\",\"strategy_ids\":[1,2]}"
+  ],
+  "reads": []
+ },
+ "05 설정 바꿔 실행": {
+  "writes": [
+   "POST /api/v1/multibacktest/run {\"allocation_method\":\"inverse_vol\",\"commission_rate\":0.00015,\"end_date\":\"2026-10-02\",\"initial_capital\":20000000,\"macro_overlay_enabled\":false,\"netting_enabled\":false,\"rebalance_policy\":\"weekly\",\"regime_market\":\"us\",\"save\":true,\"slippage_rate\":0.0005,\"start_date\":\"2025-01-01\",\"strategy_ids\":[1]}"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/9/attribution",
+   "GET /api/v1/multibacktest/availability",
+   "GET /api/v1/multibacktest/runs?limit=10",
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "06 반사실 다시": {
+  "writes": [
+   "POST /api/v1/multibacktest/counterfactual {\"base_allocation_method\":\"inverse_vol\",\"base_rebalance_policy\":\"weekly\",\"commission_rate\":0.00015,\"end_date\":\"2026-10-02\",\"initial_capital\":20000000,\"regime_market\":\"us\",\"scenarios\":[\"baseline\",\"no_macro_overlay\",\"no_netting\",\"equal_weight\",\"inverse_vol\"],\"slippage_rate\":0.0005,\"start_date\":\"2025-01-01\",\"strategy_ids\":[1]}"
+  ],
+  "reads": []
+ },
+ "07 지난 실행": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/multibacktest/7",
+   "GET /api/v1/multibacktest/7/attribution"
+  ]
+ },
+ "08 지난 실행으로 반사실": {
+  "writes": [
+   "POST /api/v1/multibacktest/counterfactual {\"base_allocation_method\":\"inverse_vol\",\"base_rebalance_policy\":\"quarterly\",\"commission_rate\":0.0002,\"end_date\":\"2023-12-29\",\"initial_capital\":50000000,\"regime_market\":\"us\",\"scenarios\":[\"baseline\",\"no_macro_overlay\",\"no_netting\",\"equal_weight\",\"inverse_vol\"],\"slippage_rate\":0.001,\"start_date\":\"2022-01-03\",\"strategy_ids\":[1,2]}"
+  ],
+  "reads": []
+ },
+ "09 이름 붙여 등록": {
+  "writes": [
+   "POST /api/v1/multibacktest/strategies {\"name\":\"골든\",\"run_id\":\"bt_b\"}"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "10 이름 없이 등록": {
+  "writes": [
+   "POST /api/v1/multibacktest/strategies {\"name\":null,\"run_id\":\"bt_c\"}"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "11 비활성": {
+  "writes": [
+   "DELETE /api/v1/multibacktest/strategies/2"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ }
+}

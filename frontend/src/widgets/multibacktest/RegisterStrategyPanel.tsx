@@ -122,12 +122,13 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
                 ) : (
                   <>
                     <input
+                      data-act="reg-name" data-run={r.run_id}
                       placeholder="이름(선택)"
                       value={names[r.run_id] ?? ""}
                       onChange={(e) => setNames({ ...names, [r.run_id]: e.target.value })}
                       style={inputStyle}
                     />
-                    <button onClick={() => register(r)} disabled={busy !== null}
+                    <button onClick={() => register(r)} disabled={busy !== null} data-act="reg-go" data-run={r.run_id}
                             style={btnStyle(busy === null)}>
                       {busy === r.run_id ? <Loader2 size={11} className="spin" /> : <Plus size={11} />}
                       {busy === r.run_id ? "재실행·재현 검증 중" : "등록"}
@@ -161,7 +162,7 @@ export default function RegisterStrategyPanel({ strategies, onChanged }: Props) 
                   {" · "}종목 {s.symbols?.length ?? 0}
                 </div>
               </div>
-              <button onClick={() => deactivate(s)} disabled={busy !== null}
+              <button onClick={() => deactivate(s)} disabled={busy !== null} data-act="deact" data-id={s.id}
                       style={btnStyle(busy === null)} title="비활성 — 지우지 않아요">
                 {busy === `s${s.id}` ? <Loader2 size={11} className="spin" /> : <Trash2 size={11} />}
                 비활성

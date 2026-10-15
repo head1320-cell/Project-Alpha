@@ -22657,3 +22657,33 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **원인(재현함)**: 픽스처 합성 가격의 `np.exp` 가 CPU(AVX-512 유무)에 따라 마지막 비트가 다르다. 로컬에서 `NPY_DISABLE_CPU_FEATURES=AVX512F…` 로 돌리면 CI 와 같은 `c31e…` 가 나온다. 엔진 결함이 아니다.
 - **고친 것**: 두 테스트의 픽스처 가격을 소수 넷째 자리로 반올림하고 지문을 다시 떴다(`6c57…`) — AVX-512 켬·끔 두 모드에서 같은 지문·거래 275·두 파일 9 통과 확인. 엔진 코드 변경 0.
 - **하지 않은 것**: 다른 지문 테스트 전수 점검(이번 CI 에서 갈린 것은 이 둘뿐).
+
+
+### BU9a · 관리 화면 셋 요청 골든 — 실거래 · 여러 전략 백테스트 · 현실성 점검 (보이는 변화 0)
+- **무엇**: 옛 관리 화면 셋을 다시 그리기(BU9b~d) 전에 ★서버로 가는 요청(메서드·경로·본문)과 폴링 주기★를 골든으로 얼렸다.
+  - 화면에는 조작 훅(`data-act`)만 달았다. 실거래 `refresh`·`kill-open`·`resolve`·`mode-shadow|paper|live`·`live-yes|no`·`kill-yes|no`(CockpitParts `act`/`yesAct`/`noAct` 프롭) ·
+    여러 전략 `mb-refresh`·`mb-past[data-id]`·`reg-name`·`reg-go[data-run]`·`deact[data-id]`·설정 칸(`mb-strategy[data-id]`·`mb-start|end|capital|alloc|rebal|regime`·`mb-netting|overlay`)·`mb-run`·`cf-run`·`cf-again` · 현실성 `calc`.
+  - `e2e/helpers.ts` `recordApi(page, prefix | prefix[])` — 접두를 여럿 받는다(한 개는 그대로, 하위 호환).
+  - 새 `e2e/fixtures/admin.ts`: 세션(`signIn` 관리자·분석가·임시 비밀번호) · 연습용 · 실거래 상태 기계(`routeLive` — 모드 POST 가 상태를 바꾸고 LIVE 는 BV7 관문 사유로 400, 걸기가 정지를 켜고 풀기가 끈다) ·
+    관문(`routeGate`) · 여러 전략(`routeMulti` — 목록·가용성·전략·`/backtest/runs`·실행 9·지난 실행 7 과 그 `config_json`·반사실 다섯) · 현실성(`routeRealism`). 응답 모양은 서버 코드에서 베꼈다(BU9b~d 가 다시 쓴다).
+  - 새 `e2e/admin-requests.spec.ts` 다섯 + 골든 `e2e/golden/{live-trading,multi-backtest,realism}-requests.json`(`UPDATE_REQUEST_GOLDEN=1` 은 BU9a 에서만).
+    단계마다 `writes`(GET 아님)·`reads`(GET)를 정렬 고유 집합으로. 실거래는 10초마다 읽으므로 ★취소 단계는 writes 만★. `confirmIfAsked(act)` 는 확인이 보이면 누른다 — ★골든은 확인 유무를 보지 않는다★(BU9b~d 가 확인을 더한다).
+    - 실거래(10 단계, 접두 `/api/v1/live/`): 첫 화면 GET 넷(`orders?limit=20`) · 새로 고침 · 모의 체결로 · 기록만으로 · 실계좌 취소 `[]` · 실계좌 확인 `{mode:"LIVE",confirm_token}` → 400 · 비상 정지 취소 `[]` ·
+      걸기 `{reason:"Manual emergency stop from cockpit",liquidation_mode:"hold"}` · 풀기 `{notes:"Manual resolution from cockpit"}` · 11초 뒤 GET 넷.
+    - 폴링 주기: 시계를 깔고 9초 → 새 읽기 0 · 1.5초 더 → 한 번(시계를 멈추지 않는다 — react-query 가 `setTimeout(0)` 을 쓴다).
+    - 여러 전략(11 단계, 접두 `/api/v1/multibacktest/`·`/api/v1/backtest/runs`, 날짜 고정 2026-10-02 — 기본 기간이 오늘 기준): 첫 화면 · 새로 고침 · 기본값 실행(`save:true` + `/9/attribution` + 목록) · 반사실 ·
+      설정 바꿔 실행(역변동성·주간·us·넷팅 끔·2천만·2025-01-01·전략 2 뺌) · 반사실 다시 · 지난 실행 #7 · 반사실(설정이 `config_json` 에서) · 등록(이름 "골든") · 등록(이름 없음 → `null`) · 비활성 #2.
+    - 현실성(4 단계): 첫 화면 `[]` · 계산하기(전략 0 → GET 만) · 계산하기(전략 [1,2] → GET + POST 둘: 이상 쪽 `save:false`·`initial_capital 10000000000`, 현실 쪽 `enable_*` 넷) · 다시.
+    - 짝(공허 배제): 골든의 걸기 본문 `"hold"→"immediate"`·수수료·자본을 하나씩 바꾸면 비교가 빨강 + 의미 단언(걸기 본문에 hold · 실계좌 취소 writes `[]` · 실행에 `"save":true` · 현실성 첫 화면 `[]`).
+- **왜**: 사용자 결정(2026-10-10) "요청은 그대로, 확인·실패 보이기 추가" — 다시 그린 화면이 서버에 다른 것을 보내지 않음을 바이트로 보이려면 바꾸기 전에 얼려야 한다(BU2a·BU3a 와 같은 방법).
+  ★같은 모드 단추 다시 누르기(감사에 SHADOW→SHADOW POST)는 시나리오에 넣지 않았다★ — 결정 ⑤("켜진 단추는 눌린 채로 잠금")로 BU9b 에서 사라지는 유일한 요청이다.
+  관문(`/api/v1/admin/live-gate`)·연습용·`/auth/me` 는 접두 밖이다(새 절이 새로 읽는 것 — `/api/v1/live/*` 에 새 읽기를 더하면 이 골든이 빨개진다).
+- **만들며 본 것(옛 화면의 결함 — BU9b~d 에서 고친다)**: 현실성 화면은 이상/현실 줄을 날짜가 아니라 ★순번으로★ 맞춰, 현실 쪽이 58일·이상 쪽이 60일이면 클라이언트 예외로 화면이 죽는다(픽스처는 60일로 맞췄다) ·
+  여러 전략 화면은 `completed_at` 을 초(epoch)로 받아야 하고 글자면 "RangeError: Invalid time value" 로 죽는다(서버도 초 — 픽스처를 맞췄다).
+- **확인**: 다섯 테스트가 연달아 두 번 초록(안정성). ★변이 14 모두 죽음★(빌드 여섯 — 묶음마다 세 화면에 하나씩, 서로 다른 테스트가 잡게):
+  A 주문 목록 `limit=20→50`(실거래) · 수수료 기본값(여러 전략) · 현실성 마운트에 계산 / B `confirm_token` 빼기 · `save:true` 빼기 · 자본 1e9 /
+  C 비상 정지 사유 글 · 반사실 시나리오 목록 · 이상 쪽 `save:false` 빼기 / D 걸기 뒤 다시 읽지 않음(실거래) · 이름 없으면 `""`(여러 전략) /
+  E 폴링 주기 5초(폴링 주기 테스트) · 등록 판이 `/backtest/runs` 를 안 읽음(여러 전략) / F 실행 뒤 목록을 안 읽음(여러 전략).
+  빌드마다 소스를 `touch` 하고 `.next/cache` 를 지웠다(BV9 에서 배운 캐시 함정).
+- **하지 않은 것**: 화면 모습(BU9b~d) · 확인 단계 더하기 · 서버(`src/` diff 0).
+- **게이트**: ruff 통과 · tsc 0 · eslint 오류 0(경고 7) · pytest 8326 통과·11 건너뜀 · `frontend/` 에서 E2E 전체 803 통과(54분). 사용자 PNG 허락(2026-10-15 "이대로 푸쉬해"). ★뒤 사정★: 같은 날 사용자가 여러 전략 화면을 없애기로 해서(ST2) 여러 전략 골든은 ST2 에서 함께 지운다.

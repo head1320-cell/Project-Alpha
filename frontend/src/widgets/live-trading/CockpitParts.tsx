@@ -7,10 +7,11 @@ import type { ReactNode } from "react";
 import { CheckCircle2, CircleAlert, Clock, X, XCircle } from "lucide-react";
 import type { Order } from "@/entities/trading/liveModel";
 
-export function ModeButton({ value, current, onClick, icon: Icon, color, label }: any) {
+export function ModeButton({ value, current, onClick, icon: Icon, color, label, act }: any) {
   const active = current === value;
   return (
     <button
+      data-act={act}
       onClick={onClick}
       className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[11px] font-semibold uppercase tracking-wider transition-all duration-300"
       style={{
@@ -130,7 +131,7 @@ export function OrderRow({ order }: { order: Order }) {
 }
 
 export function ConfirmModal({ icon: Icon, iconColor, title, description, warnings,
-                          confirmLabel, confirmColor, onConfirm, onCancel }: any) {
+                          confirmLabel, confirmColor, onConfirm, onCancel, yesAct, noAct }: any) {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
       <div className="bg-[#111111] border border-zinc-800 rounded-2xl p-8 max-w-md w-full">
@@ -154,11 +155,11 @@ export function ConfirmModal({ icon: Icon, iconColor, title, description, warnin
         </ul>
 
         <div className="flex gap-3">
-          <button onClick={onCancel}
+          <button onClick={onCancel} data-act={noAct}
                    className="flex-1 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
             Cancel
           </button>
-          <button onClick={onConfirm}
+          <button onClick={onConfirm} data-act={yesAct}
                    className="flex-1 py-2.5 rounded-lg font-bold text-[11px] uppercase tracking-wider text-black"
                    style={{ background: confirmColor }}>
             {confirmLabel}

@@ -226,7 +226,7 @@ export default function MultiBacktestPage() {
             HRP + Stage 9 매크로 · 일별 동적 배분 · 5-Factor 분해 · Counterfactual 분석
           </p>
         </div>
-        <button onClick={loadInit} style={btnStyle}>
+        <button onClick={loadInit} style={btnStyle} data-act="mb-refresh">
           <RefreshCw size={13} />
           새로고침
         </button>
@@ -281,7 +281,7 @@ export default function MultiBacktestPage() {
             gap: 10,
           }}>
             {runs.slice(0, 6).map((r) => (
-              <button key={r.id} onClick={() => loadRun(r.id)}
+              <button key={r.id} onClick={() => loadRun(r.id)} data-act="mb-past" data-id={r.id}
                        style={{
                          padding: 12, textAlign: "left",
                          background: "#0a0e27", border: "1px solid #1e2d4a",

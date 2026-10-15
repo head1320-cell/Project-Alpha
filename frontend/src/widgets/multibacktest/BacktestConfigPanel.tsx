@@ -110,7 +110,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
           ) : strategies.map((s) => {
             const selected = config.strategy_ids.includes(s.id);
             return (
-              <div key={s.id}
+              <div key={s.id} data-act="mb-strategy" data-id={s.id}
                     onClick={() => toggleStrategy(s.id)}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
@@ -147,10 +147,10 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
         <div>
           <Label icon={Calendar}>기간</Label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            <input type="date" value={config.start_date}
+            <input type="date" value={config.start_date} data-act="mb-start"
                     onChange={(e) => setConfig({ ...config, start_date: e.target.value })}
                     style={inputStyle} />
-            <input type="date" value={config.end_date}
+            <input type="date" value={config.end_date} data-act="mb-end"
                     onChange={(e) => setConfig({ ...config, end_date: e.target.value })}
                     style={inputStyle} />
           </div>
@@ -159,7 +159,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
         {/* Capital */}
         <div>
           <Label>초기 자본 (원)</Label>
-          <input type="number" value={config.initial_capital}
+          <input type="number" value={config.initial_capital} data-act="mb-capital"
                   onChange={(e) => setConfig({ ...config, initial_capital: Number(e.target.value) })}
                   step={1_000_000} min={100_000}
                   style={inputStyle} />
@@ -169,7 +169,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           <div>
             <Label icon={Sparkles}>배분 알고리즘</Label>
-            <select value={config.allocation_method}
+            <select value={config.allocation_method} data-act="mb-alloc"
                     onChange={(e) => setConfig({ ...config, allocation_method: e.target.value as any })}
                     style={inputStyle}>
               <option value="inverse_vol">① InverseVolatility</option>
@@ -181,7 +181,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
           </div>
           <div>
             <Label icon={Settings}>리밸런싱</Label>
-            <select value={config.rebalance_policy}
+            <select value={config.rebalance_policy} data-act="mb-rebal"
                     onChange={(e) => setConfig({ ...config, rebalance_policy: e.target.value as any })}
                     style={inputStyle}>
               <option value="daily">매일</option>
@@ -198,7 +198,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
         {/* 국면 시장 — ★엄격 PIT(그 시점 공표 빈티지만)★ (BH3) */}
         <div>
           <Label>국면 시장 (regime_change·국면 표 기준)</Label>
-          <select value={config.regime_market}
+          <select value={config.regime_market} data-act="mb-regime"
                   onChange={(e) => setConfig({ ...config, regime_market: e.target.value as "kr" | "us" })}
                   style={inputStyle}>
             <option value="kr">KR 국면 (빈티지 적재 전에는 대부분 미상)</option>
@@ -216,9 +216,9 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
 
         {/* Toggles */}
         <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-          <Toggle label="중앙 청산 (Netting)" value={config.netting_enabled}
+          <Toggle label="중앙 청산 (Netting)" value={config.netting_enabled} act="mb-netting"
                    onChange={(v) => setConfig({ ...config, netting_enabled: v })} />
-          <Toggle label="매크로 오버레이" value={config.macro_overlay_enabled}
+          <Toggle label="매크로 오버레이" value={config.macro_overlay_enabled} act="mb-overlay"
                    disabledReason={overlayWhy}
                    onChange={(v) => setConfig({ ...config, macro_overlay_enabled: v })} />
         </div>
@@ -228,7 +228,7 @@ export default function BacktestConfigPanel({ strategies, onRun, running, availa
         </div>
 
         {/* Run button */}
-        <button onClick={() => onRun(config)} disabled={!canRun}
+        <button onClick={() => onRun(config)} disabled={!canRun} data-act="mb-run"
                 style={{
                   padding: "10px 20px", marginTop: 4,
                   background: canRun
@@ -262,13 +262,13 @@ function Label({ icon: Icon, children }: { icon?: any; children: React.ReactNode
   );
 }
 
-function Toggle({ label, value, onChange, disabledReason = null }: {
+function Toggle({ label, value, onChange, disabledReason = null, act }: {
   label: string; value: boolean; onChange: (v: boolean) => void;
-  disabledReason?: string | null;
+  disabledReason?: string | null; act?: string;
 }) {
   const disabled = disabledReason !== null;
   return (
-    <div onClick={() => { if (!disabled) onChange(!value); }}
+    <div onClick={() => { if (!disabled) onChange(!value); }} data-act={act}
          title={disabledReason ?? undefined}
          aria-disabled={disabled}
          style={{

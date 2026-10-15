@@ -162,7 +162,7 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
           <div style={{ fontSize: 11, color: "#a7c8ff", marginBottom: 10 }}>
             What-If 시나리오 5개를 병렬 실행 — 매크로 끄기, 청산 끄기, 동일 가중, 역변동성 등
           </div>
-          <button onClick={runCounterfactual}
+          <button onClick={runCounterfactual} data-act="cf-run"
                   disabled={running || !baseConfig}
                   style={{
                     padding: "10px 24px",
@@ -342,7 +342,7 @@ export default function CounterfactualCompare({ baseConfig }: Props) {
             </table>
           </div>
 
-          <button onClick={() => { setResult(null); }} style={{
+          <button onClick={() => { setResult(null); }} data-act="cf-again" style={{
             padding: "6px 14px", marginTop: 4, alignSelf: "center",
             background: "transparent", color: "#a7c8ff",
             border: "1px solid #1e2d4a", borderRadius: 4,

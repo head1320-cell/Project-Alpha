@@ -204,7 +204,8 @@ export interface ApiRecorder {
   steps: Record<string, string[]>;
 }
 
-export function recordApi(page: Page, pathPrefix: string, quietMs = 1_500): ApiRecorder {
+export function recordApi(page: Page, pathPrefix: string | string[], quietMs = 1_500): ApiRecorder {
+  const prefixes = Array.isArray(pathPrefix) ? pathPrefix : [pathPrefix];
   let pending: string[] = [];
   let last = Date.now();
   const steps: Record<string, string[]> = {};
@@ -212,7 +213,7 @@ export function recordApi(page: Page, pathPrefix: string, quietMs = 1_500): ApiR
     const u = new URL(req.url());
     // 화면은 런타임 프록시(`/api/backend/…`)를 거친다 — 앞부분을 떼고 API 경로로 맞춘다.
     const p = u.pathname.replace(/^\/api\/backend(?=\/)/, "");
-    if (!p.startsWith(pathPrefix)) return;
+    if (!prefixes.some((x) => p.startsWith(x))) return;
     let body = "";
     const raw = req.postData();
     if (raw) { try { body = stableJson(JSON.parse(raw)); } catch { body = raw; } }

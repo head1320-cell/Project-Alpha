@@ -152,6 +152,7 @@ export default function RealismDashboard() {
               </div>
 
               <button
+                data-act="calc"
                 onClick={fetchLiveData}
                 disabled={loading}
                 className="
