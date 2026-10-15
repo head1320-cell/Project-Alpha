@@ -42,25 +42,3 @@ def test_the_detector_sees_a_swallowed_route():
     r.get("/x/active")(lambda: 1)
     assert _shadowed(r.routes) == [("GET", "/x/active", "/x/{id}")]
 
-
-def test_active_orders_and_state_distribution_answer(monkeypatch):
-    import tempfile
-
-    import src.database as dbmod
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    tmp.close()
-    monkeypatch.setenv("AUTH_SECRET", "routes-not-shadowed-secret-0123456789ab")
-    monkeypatch.setattr(dbmod, "DATABASE_URL", f"sqlite:///{tmp.name}", raising=False)
-    import src.data.backtest_runs as br
-    monkeypatch.setattr(br, "_inited", False)
-    dbmod.reset_session()
-    dbmod.init_db()
-    with TestClient(create_app()) as c:
-        tok = c.post("/api/v1/auth/login", json={"username": "admin", "password": "frm123!"}).json()["access_token"]
-        h = {"Authorization": f"Bearer {tok}"}
-        c.post("/api/v1/live/init-schema", headers=h)
-        a = c.get("/api/v1/live/orders/active", headers=h)
-        d = c.get("/api/v1/live/orders/state-distribution", headers=h)
-    dbmod.reset_session()
-    assert a.status_code == 200 and "orders" in a.json(), a.text
-    assert d.status_code == 200 and "distribution" in d.json(), d.text

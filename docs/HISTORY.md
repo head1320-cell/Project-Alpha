@@ -22687,3 +22687,15 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   빌드마다 소스를 `touch` 하고 `.next/cache` 를 지웠다(BV9 에서 배운 캐시 함정).
 - **하지 않은 것**: 화면 모습(BU9b~d) · 확인 단계 더하기 · 서버(`src/` diff 0).
 - **게이트**: ruff 통과 · tsc 0 · eslint 오류 0(경고 7) · pytest 8326 통과·11 건너뜀 · `frontend/` 에서 E2E 전체 803 통과(54분). 사용자 PNG 허락(2026-10-15 "이대로 푸쉬해"). ★뒤 사정★: 같은 날 사용자가 여러 전략 화면을 없애기로 해서(ST2) 여러 전략 골든은 ST2 에서 함께 지운다.
+
+## ST1 · Stage 13 운영 감시층 삭제 (2026-10-15, 사용자 "stage 11-13 은 버려진 작업 — 현 플랫폼에 융합되는 것 빼고 삭제")
+- **지운 것**: 부르는 화면이 없던 `src/api/stage13_extensions.py`(대조·자동 대조·알림·게이트웨이 통계·종합 상태·미체결·상태 분포·장 마감 정리, 12 경로) ·
+  그것만 쓰던 `engine/reconciler.py`·`engine/order_tracker.py`·`api/kis_gateway.py`·`utils/notifier.py` · 부르는 곳 0 이던 `execution/order_executor_v2.py` ·
+  어디에도 붙지 않던 `widgets/live-trading/ProductionMonitor.tsx`(+ 빈 배럴). 함께: `app_factory` 라우터 줄 · 보호 목록 12 줄 · 로그인 지도 넷 줄(PNG 허락) ·
+  보존 분류 셋(`reconciliation_history`·`local_portfolio_state`·`local_account_state` — 대조기만 만들던 표) · 관련 테스트(사라진 경로는 "없다"를 거는 테스트로, 대조기·체결 추적 테스트는 삭제).
+- **남긴 것(현 플랫폼이 쓴다)**: `order_executor`·`risk_gateway`·`kill_switch`·`audit_trail`·`live_schemas`·`account_executors`·`live_gate_*`·`risk_monitor`·`stage13_routes` 나머지.
+  ★계획과 달리 `POST /live/init-schema` 를 남겼다★ — 운영에서 `live_*` 표를 만드는 유일한 경로라 지우면 내 계좌·실거래가 깨진다.
+- **잃은 것(정직하게)**: 증권사 장부 대조가 이제 없다. 실계좌 준비 목록의 "대조 감시 없음"은 늘 미통과다 — LIVE 를 열려면 대조를 다시 만들어야 한다.
+  `live_fills` 체결 기록을 쓰던 `record_fill` 도 함께 사라졌다(부르는 곳 없었음). 중복 방지 인덱스(`ensure_fill_dedup_index`)는 남았다.
+- **확인**: ruff · 영향 테스트 240 통과 · pytest 전체(보존 분류 정정 뒤 재실행) · 로그인 화면 전·후 PNG.
+- **하지 않은 것**: Stage 11·12(ST2·ST3) · 옛 스펙 문서(`DATA_PLATFORM_SPEC.md` 의 대조 표 줄 등)는 기록으로 둔다.

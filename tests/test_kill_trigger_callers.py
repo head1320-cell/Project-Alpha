@@ -155,10 +155,10 @@ def test_every_trigger_call_site_loads_the_observations():
 def test_the_scanner_actually_finds_the_call_sites():
     """★테스트의 테스트★ — 0건이면 위 검사는 언제나 통과한다.
 
-    실측 하한: 수동(`api/stage13_routes.py`) · 대사(`engine/reconciler.py`) ·
-    자동(`execution/risk_monitor.py`) 셋이다.
+    실측 하한: 수동(`api/stage13_routes.py`) · 자동(`execution/risk_monitor.py`) 둘이다
+    (대사 `engine/reconciler.py` 는 ST1 에서 지웠다 — 부르는 곳 없는 Stage 13 운영 감시층).
     """
     calls = _trigger_calls()
-    assert len(calls) >= 3, f"발동 호출부를 찾지 못했습니다: {calls}"
+    assert len(calls) >= 2, f"발동 호출부를 찾지 못했습니다: {calls}"
     files = {pathlib.Path(p).name for p, _, _ in calls}
-    assert {"stage13_routes.py", "reconciler.py", "risk_monitor.py"} <= files
+    assert {"stage13_routes.py", "risk_monitor.py"} <= files

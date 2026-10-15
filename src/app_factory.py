@@ -34,9 +34,6 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.market_data_routes",
     "src.api.stage11_routes",
     "src.api.stage12_routes",
-    # 확장이 먼저 — `/orders/active`·`/orders/state-distribution` 이 `/orders/{client_order_id}` 에 삼켜지지 않게
-    # (tests/test_routes_not_shadowed.py)
-    "src.api.stage13_extensions",
     "src.api.stage13_routes",
     "src.api.live_gate_routes",
     "src.api.valuation_routes",

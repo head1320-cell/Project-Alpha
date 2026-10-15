@@ -3,7 +3,7 @@
 BV6 은 사용자가 자기 증권 계좌로 SHADOW/PAPER 주문을 낸다. 실행기는 Stage13 `OrderExecutor` 를 계좌마다 하나 쓰는데,
 주문·감사·킬스위치 표(`live_orders`·`live_audit_trail`·`live_kill_events`)는 하나다. 그래서:
 
-  ① 운영자 표면(로그인만 있으면 열림 — `/live/orders`·`/orders/active`·`state-distribution`·`/audit`·`/kill-switch/events`)에
+  ① 운영자 표면(로그인만 있으면 열림 — `/live/orders`·`/audit`·`/kill-switch/events`)에
      계좌 주문·감사가 보이지 않는다 — 안 그러면 alice 의 주문이 아무 로그인 사용자에게 보인다.  짝: 운영자 기록은 보인다
   ② 하루 회전(위험 한도의 재료)은 자기 계좌 것만 센다
   ③ 계좌 A 비상 정지 → A 만 막힘 · B·운영자는 아님 · ★운영자(전역) 정지는 모든 계좌를 막는다★
@@ -42,12 +42,10 @@ def client(monkeypatch):
     monkeypatch.setattr(br, "_inited", False)   # 임시 DB 에서 만든 표 메모가 뒤 테스트로 새지 않게
     dbmod.reset_session()
     dbmod.init_db()
-    import src.api.stage13_extensions as ext
     import src.api.stage13_routes as stage13
     import src.execution.kis_client as kc
     monkeypatch.setattr(stage13, "_EXECUTOR", None, raising=False)
     monkeypatch.setattr(kc, "_kis_singleton", None, raising=False)
-    monkeypatch.setattr(ext, "_PRODUCTION_MODULES", {}, raising=False)
 
     from src.app_factory import create_app
     with TestClient(create_app()) as c:
@@ -77,14 +75,6 @@ def _account_executor(account_id: str, kis=None, mode=ExecutionMode.PAPER) -> Or
         mode=mode, account_id=account_id)
 
 
-def _active(client) -> str:
-    return client.get("/api/v1/live/orders/active", headers=_admin(client)).text
-
-
-def _distribution(client) -> dict:
-    return client.get("/api/v1/live/orders/state-distribution", headers=_admin(client)).json()["distribution"]
-
-
 def _operator(client):
     import src.api.stage13_routes as stage13
     ex = stage13.get_executor()
@@ -101,8 +91,6 @@ def test_account_orders_do_not_appear_on_operator_surfaces(client):
     h = _admin(client)
     coid = out["client_order_id"]
     assert coid not in client.get("/api/v1/live/orders", headers=h).text
-    assert coid not in _active(client)
-    assert _distribution(client) == {}
     audit = client.get("/api/v1/live/audit", headers=h).json()["events"]
     assert not any(e.get("actor") == "alice" for e in audit), "계좌 감사가 운영자 감사에 섞였다"
 
@@ -112,8 +100,6 @@ def test_operator_orders_still_appear_on_operator_surfaces(client):
     out = _operator(client).execute_signal(dict(_SIG), actor="admin")
     h = _admin(client)
     assert out["client_order_id"] in client.get("/api/v1/live/orders", headers=h).text
-    assert out["client_order_id"] in _active(client)
-    assert _distribution(client)
     assert any(e.get("actor") == "admin" for e in client.get("/api/v1/live/audit", headers=h).json()["events"])
 
 

@@ -42,8 +42,6 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_ADMIN, "실주문 제출"),
     ("DELETE", "/api/v1/live/orders/{client_order_id}"):
         (REQUIRE_ADMIN, "주문 취소"),
-    ("POST", "/api/v1/live/orders/cleanup-eod"):
-        (REQUIRE_ADMIN, "장 마감 미체결 정리 — 미체결 주문을 실제로 취소한다"),
     ("POST", "/api/v1/live/kill-switch/trigger"):
         (REQUIRE_ADMIN, "비상 정지 — 청산 모드에 따라 포지션을 건드린다"),
     ("POST", "/api/v1/live/kill-switch/resolve"):
@@ -62,16 +60,6 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_ADMIN, "일괄 주문 — 현재 dry_run 고정이나 주문 경로다"),
     ("POST", "/toggle-auto-trading"):
         (REQUIRE_ADMIN, "자동매매 토글"),
-    # ── BV0a — 감사가 찾은, 인증 없이 열려 있던 실거래 확장 경로(stage13_extensions) ──
-    ("POST", "/api/v1/live/reconcile/sync"):
-        (REQUIRE_ADMIN, "브로커와 즉시 대조 — 로컬 계좌 상태를 덮고, 차이가 크면 킬스위치를 당겨 "
-                        "미체결 주문을 실제로 취소한다"),
-    ("POST", "/api/v1/live/reconcile/periodic/start"):
-        (REQUIRE_ADMIN, "자동 대조 켜기 — 위 동작을 300초마다 백그라운드로 돌린다"),
-    ("POST", "/api/v1/live/reconcile/periodic/stop"):
-        (REQUIRE_ADMIN, "자동 대조 끄기 — 안전 감시 하나를 멈춘다"),
-    ("POST", "/api/v1/live/notifier/test"):
-        (REQUIRE_ADMIN, "알림 발송 — CRITICAL 을 포함해 운영자에게 가는 경보를 보낸다"),
 
     # ── 남의 것을 보면 안 된다 ────────────────────────────────────────────
     ("GET", "/api/v1/live/balance"):
@@ -86,10 +74,6 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "주문 이력 — 무엇을 거래 중인지 드러난다"),
     ("GET", "/api/v1/live/orders/{client_order_id}"):
         (REQUIRE_LOGIN, "주문 상세"),
-    ("GET", "/api/v1/live/orders/active"):
-        (REQUIRE_LOGIN, "미체결 주문 목록"),
-    ("GET", "/api/v1/live/orders/state-distribution"):
-        (REQUIRE_LOGIN, "주문 상태 분포 — 활동량이 드러난다"),
     ("GET", "/api/v1/live/kill-switch/events"):
         (REQUIRE_LOGIN, "킬스위치 이력 — 이벤트에 당시 자기자본이 실린다"),
     ("GET", "/api/v1/live/kill-switch/readiness"):
@@ -104,16 +88,6 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     # ── BV0a — 감사가 찾은 열린 계좌 조회(예전 면제 사유는 다른 경로를 설명했다) ──
     ("GET", "/api/v1/trading/status"):
         (REQUIRE_LOGIN, "브로커의 예수금·평가금액·보유 종목 전체(TradingEngine.get_account_status)"),
-    ("GET", "/api/v1/live/reconcile/status"):
-        (REQUIRE_LOGIN, "마지막 대조 결과 — 현금·보유 차이가 실린다"),
-    ("GET", "/api/v1/live/reconcile/history"):
-        (REQUIRE_LOGIN, "대조 이력 — 현금·보유 차이가 실린다"),
-    ("GET", "/api/v1/live/notifier/stats"):
-        (REQUIRE_LOGIN, "알림 발송 통계 — 경보 횟수로 운영 상황이 드러나고, 부르면 알림 작업자가 켜진다"),
-    ("GET", "/api/v1/live/gateway/stats"):
-        (REQUIRE_LOGIN, "KIS 호출 큐 통계 — 처리량으로 활동량이 드러나고, 부르면 게이트웨이 작업자가 켜진다"),
-    ("GET", "/api/v1/live/health"):
-        (REQUIRE_LOGIN, "실거래 종합 상태 — 주문 상태 분포(/orders/state-distribution 과 같은 값)를 싣는다"),
 
     # ── 경로에 남의 이름이 들어간다 ───────────────────────────────────────
     ("GET", "/trade-history/{username}"):

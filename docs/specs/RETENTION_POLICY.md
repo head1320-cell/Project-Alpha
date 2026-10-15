@@ -52,8 +52,7 @@
 `financials_history` · `daily_prices` · `investor_flows`
 
 **② 실거래 감사** — `live_orders` · `live_fills` · `live_daily_pnl` ·
-`live_kill_events` · `live_audit_trail` · `reconciliation_history` ·
-`live_gate_declarations`
+`live_kill_events` · `live_audit_trail` · `live_gate_declarations`
 <!-- PROTECTED-LIST:END -->
 
 사유는 **코드에 한 줄씩** 있다(`KEEP_FOREVER` · `AUDIT`). 요지만 옮기면:
@@ -128,8 +127,7 @@
 ## 4. ④ 재생성 가능 — 지워도 잃는 것이 없다
 
 `factor_snapshot` · `market_snapshot_equity` · `market_snapshot_ficc` ·
-`instrument_master` · `local_portfolio_state` · `local_account_state` ·
-`stocks`
+`instrument_master` · `stocks`
 
 공통점은 **시간 축이 없다는 것**이다. 캐시이거나 오늘 상태의 사본이라 애초에
 과거를 담지 않는다(그래서 ①과 정확히 반대다).

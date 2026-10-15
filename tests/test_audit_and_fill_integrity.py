@@ -12,6 +12,9 @@
 같은 브로커 체결을 두 번 기록하면 `live_orders.filled_quantity` 가 이중계산되고
 `avg_fill_price` 가 오염된다. 브로커 재조회·재시도는 정상 운영이므로 **재생은
 일어난다**. 멱등이 아니면 장부가 틀어진다.
+
+(ST1, 2026-10-15) 체결을 기록하던 `engine/order_tracker.record_fill` 은 부르는 곳 없는 Stage 13 운영 감시층이라
+지웠다 — 남은 방어는 인덱스(`ensure_fill_dedup_index`)와 그 결과를 숨기지 않는 스키마 경로다.
 """
 from __future__ import annotations
 
@@ -117,19 +120,6 @@ def _order(eng, coid="CO-f", qty=100):
     return coid
 
 
-def _filled(eng, coid) -> tuple[int, float]:
-    with eng.connect() as c:
-        r = c.execute(text(
-            "SELECT COALESCE(filled_quantity,0), COALESCE(avg_fill_price,0) "
-            "FROM live_orders WHERE client_order_id = :c"), {"c": coid}).fetchone()
-    return int(r[0]), float(r[1])
-
-
-def _tracker(eng):
-    from src.engine.order_tracker import OrderStateMachine
-    return OrderStateMachine(eng)
-
-
 def test_the_dedup_index_is_created(engine):
     ok, reason = ensure_fill_dedup_index(engine)
     assert ok is True, reason
@@ -139,41 +129,7 @@ def test_the_dedup_index_is_created(engine):
     assert FILL_DEDUP_INDEX in names, names
 
 
-def test_replaying_the_same_broker_fill_does_not_double_count(engine):
-    ensure_fill_dedup_index(engine)
-    coid = _order(engine)
-    t = _tracker(engine)
-    t.record_fill(coid, 10, 70_000, kis_fill_id="F-1")
-    first = _filled(engine, coid)
-    again = t.record_fill(coid, 10, 70_000, kis_fill_id="F-1")
-    assert _filled(engine, coid) == first, "★같은 체결을 두 번 셌다★"
-    assert again.get("duplicate") is True, again
 
-
-def test_a_different_fill_still_accumulates(engine):
-    """★짝★ 다른 체결은 정상 누적(항상-중복 구현 배제)."""
-    ensure_fill_dedup_index(engine)
-    coid = _order(engine)
-    t = _tracker(engine)
-    t.record_fill(coid, 10, 70_000, kis_fill_id="F-1")
-    t.record_fill(coid, 20, 71_000, kis_fill_id="F-2")
-    qty, avg = _filled(engine, coid)
-    assert qty == 30
-    assert 70_000 < avg < 71_000, avg
-
-
-def test_manual_fills_without_a_broker_id_are_not_blocked(engine):
-    """★한계를 명시한다★ — `kis_fill_id` 가 `NULL` 이면 UNIQUE 가 막지 않는다.
-
-    수동 체결 입력을 막지 않기 위한 것이고, 그만큼 **수동 경로의 중복은 이 가드가
-    잡지 못한다**. 지어낸 키로 채우지 않는다.
-    """
-    ensure_fill_dedup_index(engine)
-    coid = _order(engine)
-    t = _tracker(engine)
-    t.record_fill(coid, 10, 70_000, kis_fill_id=None)
-    t.record_fill(coid, 10, 70_000, kis_fill_id=None)
-    assert _filled(engine, coid)[0] == 20
 
 
 def test_a_duplicate_row_makes_index_creation_report_not_lie(engine):
@@ -199,19 +155,3 @@ def test_the_schema_route_reports_the_dedup_index():
     assert "ensure_fill_dedup_index" in src, "★프로덕션 경로가 인덱스를 만들지 않는다★"
     assert "fill_dedup_index" in src and "fill_dedup_reason" in src
 
-
-def test_dedup_still_holds_when_the_index_could_not_be_created(engine):
-    """★인덱스가 없는 DB 에서도 재생이 이중계산되지 않는다★
-
-    현실의 degraded 상태는 이것이다 — 기존 `live_fills` 에 이미 중복이 있어
-    `ensure_fill_dedup_index` 가 **실패한** DB. 그때 유일한 방어선은 `record_fill`
-    의 사전 확인이고, 인덱스가 있으면 `IntegrityError` 경로가 가려 버려서
-    ★이 테스트가 없으면 사전 확인을 지워도 스위트가 통과한다★(변이 h 로 확인).
-    """
-    coid = _order(engine)                      # ← 인덱스를 만들지 않는다
-    t = _tracker(engine)
-    t.record_fill(coid, 10, 70_000, kis_fill_id="F-1")
-    first = _filled(engine, coid)
-    again = t.record_fill(coid, 10, 70_000, kis_fill_id="F-1")
-    assert _filled(engine, coid) == first, "★인덱스 없이는 이중계산된다★"
-    assert again.get("duplicate") is True, again

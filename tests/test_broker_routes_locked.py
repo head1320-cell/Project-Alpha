@@ -35,16 +35,24 @@ _SECRET = "broker-routes-test-secret-0123456789abcdef"
 #: ★감사가 찾은 것 그대로★ — (METHOD, 경로) → 요구 수준.
 AUDIT_2026_10_08: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/trading/status"): REQUIRE_LOGIN,
-    ("POST", "/api/v1/live/reconcile/sync"): REQUIRE_ADMIN,
-    ("POST", "/api/v1/live/reconcile/periodic/start"): REQUIRE_ADMIN,
-    ("POST", "/api/v1/live/reconcile/periodic/stop"): REQUIRE_ADMIN,
-    ("GET", "/api/v1/live/reconcile/status"): REQUIRE_LOGIN,
-    ("GET", "/api/v1/live/reconcile/history"): REQUIRE_LOGIN,
-    ("POST", "/api/v1/live/notifier/test"): REQUIRE_ADMIN,
-    ("GET", "/api/v1/live/notifier/stats"): REQUIRE_LOGIN,
-    ("GET", "/api/v1/live/gateway/stats"): REQUIRE_LOGIN,
-    ("GET", "/api/v1/live/health"): REQUIRE_LOGIN,
 }
+
+#: ST1(2026-10-15) — 감사가 찾은 나머지 아홉(대조·알림·게이트웨이·종합 상태)은 부르는 화면이 없는
+#: Stage 13 운영 감시층이라 경로째 지웠다. 잠그는 대신 ★없다★는 것을 건다.
+REMOVED_ST1: tuple[tuple[str, str], ...] = (
+    ("POST", "/api/v1/live/reconcile/sync"),
+    ("POST", "/api/v1/live/reconcile/periodic/start"),
+    ("POST", "/api/v1/live/reconcile/periodic/stop"),
+    ("GET", "/api/v1/live/reconcile/status"),
+    ("GET", "/api/v1/live/reconcile/history"),
+    ("POST", "/api/v1/live/notifier/test"),
+    ("GET", "/api/v1/live/notifier/stats"),
+    ("GET", "/api/v1/live/gateway/stats"),
+    ("GET", "/api/v1/live/health"),
+    ("GET", "/api/v1/live/orders/active"),
+    ("GET", "/api/v1/live/orders/state-distribution"),
+    ("POST", "/api/v1/live/orders/cleanup-eod"),
+)
 
 
 @pytest.fixture()
@@ -87,8 +95,19 @@ def test_routes_found_by_the_audit_are_registered_at_their_level(key, level):
 
 def test_the_audit_table_is_not_empty():
     """★짝★ — 표가 비면 ①은 언제나 통과한다."""
-    assert len(AUDIT_2026_10_08) == 10
-    assert set(AUDIT_2026_10_08.values()) == {REQUIRE_ADMIN, REQUIRE_LOGIN}
+    assert len(AUDIT_2026_10_08) == 1
+    assert set(AUDIT_2026_10_08.values()) == {REQUIRE_LOGIN}
+
+
+def test_the_removed_operator_routes_are_gone_from_app_and_registry():
+    """ST1 — 지운 경로가 앱에도 보호 목록에도 없다. 짝: 남긴 경로(`/live/orders`)는 있다."""
+    from src.app_factory import create_app
+
+    have = {(m, r.path) for r in create_app().routes for m in (getattr(r, "methods", None) or ())}
+    for key in REMOVED_ST1:
+        assert key not in have, f"{key} 가 아직 앱에 있다"
+        assert key not in PROTECTED, f"{key} 가 아직 보호 목록에 있다"
+    assert ("GET", "/api/v1/live/orders") in have
 
 
 # ── ② 동작 — 토큰 없으면 계좌 자료가 나가지 않는다, 그리고 ★짝★ ─────────────
@@ -107,17 +126,6 @@ def test_account_status_with_a_login_returns_the_account(client):
     assert "cash_krw" in res.json()
 
 
-def test_broker_sync_without_a_token_does_not_reach_the_broker(client, monkeypatch):
-    """인증 문이 대조기보다 먼저 선다 — 토큰 없는 요청은 대조기를 한 번도 부르지 않는다."""
-    import src.api.stage13_extensions as ext
-
-    calls: list[str] = []
-    monkeypatch.setattr(ext, "get_production_modules", lambda: calls.append("modules") or {})
-    res = client.post("/api/v1/live/reconcile/sync", json={})
-    assert res.status_code == 401
-    assert calls == []
-
-
 # ── ③ 검출기가 실거래 표면 전체를 본다 ─────────────────────────────────────
 
 def test_the_detector_sees_every_live_trading_route():
@@ -127,7 +135,7 @@ def test_the_detector_sees_every_live_trading_route():
         getattr(r, "path", "") for r in create_app().routes
         if getattr(r, "path", "").startswith("/api/v1/live/")
     })
-    assert len(live) >= 20, f"실거래 경로가 너무 적다 — 앱 구성이 바뀌었나: {live}"
+    assert len(live) >= 15, f"실거래 경로가 너무 적다 — 앱 구성이 바뀌었나: {live}"
     unseen = [p for p in live if not looks_like_money_route(p)]
     assert not unseen, f"검출기가 보지 못하는 실거래 경로: {unseen}"
 
