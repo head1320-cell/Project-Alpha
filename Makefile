@@ -10,7 +10,7 @@ help:  ## 명령어 목록
 
 install:  ## 의존성 설치 (백엔드 + 프론트)
 	pip install -r requirements.txt
-	pip install ruff pytest
+	pip install ruff==0.15.8 pytest
 	cd frontend && npm ci
 
 lint:  ## ruff 린트 검사

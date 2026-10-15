@@ -22635,3 +22635,10 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **하지 않은 것**: 영어판 · 다크 그림 · 기능·코드 변경 0 · 관리 화면 그림(BU9 진행 중 — 새 실거래 화면은 아직 커밋 전).
 - **게이트**: 코드 변경이 없어(README·PNG·HISTORY 만, 테스트가 README 를 읽지 않음 — grep 확인) `make all` 은 돌리지 않았다. 대신 README → HTML 미리보기(로컬 `marked`)를 찍어 확인.
 - **RM2 (같은 날, 사용자 후속)**: "설명가능성" 절을 지우고(사용자 요청), 맨 위 CI 배지를 언어·기술 스택 배지(Python 3.11 · TypeScript 5 · FastAPI 0.111 · Next.js 14.2 · React 18 · React Flow 11 · PostgreSQL/SQLAlchemy 2.0 · pandas · SciPy · Docker · Playwright — 버전은 requirements·package.json 실측)로 바꿨다. ChatGPT 가 만든 포트폴리오 PPT 를 코드와 대조해 캔버스 절을 보강: 화면 구성 · 노드·링크 계약(포트 타입 실측 · 한 입력 한 링크 · 순환 금지 · 타입 일치 ≠ 계산 가능) · 링크 모양 = 계보(`EvidenceEdge.tsx`) · 절차와 이야기·설정·자세히 · 변경 관리(깊은 서명 · 부분 계산 · 갈래). ★PPT 에서 넣지 않은 것★: DeepSeek·Kimi3·QuantEvolve 모델 활용(저장소에 없음) · 은퇴·교육 고객 목표와 PB 미팅 시나리오(유통·자문 인가 전) · 데이터/리스크 오너 승인 거버넌스(역할은 관리자·분석가 둘) · PPT 의 관문 이름(코드와 다름). ★CI 배지 사실★: 배지는 2026-09-17 PR 실행의 실패를 보였다 — CI 는 main/master/develop 에만 돌고, 버전 고정 없는 최신 ruff 가 `tests/test_account_policy.py` 의 집합 중복(B033)을 잡는다(로컬 ruff 0.15.8 은 안 잡음) → 별도 작업 카드.
+
+## CI · GitHub Actions 실패 고치기 (2026-10-15)
+- **무엇**: ① `tests/test_account_policy.py` 금지 수치 집합에서 중복 `70` 을 뺐다(`70 == 70.0`, 해시가 같아 동작 동일) + 검출기 짝 단언 "정수로 적은 `RISKY_CAP = 70` 도 잡는다" 추가
+  ② `ci.yml`·`Makefile` 의 ruff 를 `0.15.8` 로 고정 ③ CI push 트리거에 기본 가지 `claude/backtest-modern-ui-refactor-akxvbc` 추가(사용자 결정 — 지금까지 이 가지 푸시엔 CI 가 돌지 않았다).
+- **왜**: 마지막 CI 실행(2026-09-17, run 35180650679)은 버전 고정 없이 깔린 ruff 0.16.8 이 그 중복을 B033 으로 잡아 실패했다(로컬 0.15.8 은 안 잡음). 같은 실행의 옛 E2E 단언 실패는 지금 코드에선 재현되지 않는다(로컬 전체 E2E 803 통과).
+- **확인**: ruff 0.15.8·0.16.8 둘 다 통과 · `test_account_policy` 27 통과 · 변이(검출기를 float 만 보게) → 새 짝 단언이 빨강.
+- **하지 않은 것**: `ruff format --check`(이미 continue-on-error, 미포맷 파일 다수 — 관찰만) · Node 20 액션 버전 올리기 · pull_request 트리거 변경. 화면 변화 0 이라 PNG 없음.
