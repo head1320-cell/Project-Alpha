@@ -54,13 +54,6 @@ METRIC_TOKENS = (
 #: ★남은 것은 줄이려고 붙이지 않는다★ — 특히 `CompanyCockpit` 에 백테스트 라벨을
 #: 달면 **없는 시뮬레이션을 있다고** 말하게 된다. 목록의 길이는 목표가 아니다.
 ALLOWED: dict[str, str] = {
-    "src/widgets/realism/RealismKPIs.tsx":
-        "위젯의 요점 자체가 '백테스트 대 현실' 비교이고, 카드마다 "
-        "'백테스트 과대평가 위험' 같은 자체 판정 문구를 낸다.",
-    "src/widgets/realism/ComparativeEquityChart.tsx":
-        "같은 대시보드(`RealismDashboard`)가 헤더에 `Mock Data / Live Backend` 를 "
-        "상시 표시한다(데이터 축) — ★단, 종류 축은 여전히 화면 제목에만 있다★. "
-        "`RealismKPIs` 와 같은 판단을 적용해 둘을 함께 다룬다(로드맵에 남은 갭으로 적음).",
     "src/widgets/company/CompanyCockpit.tsx":
         "★전략 성과가 아니다★ — 한 종목의 가격 이력에서 잰 위험 지표"
         "(VaR·ES·변동성·Sharpe·MDD)다. 여기에 '백테스트' 라벨을 붙이면 "

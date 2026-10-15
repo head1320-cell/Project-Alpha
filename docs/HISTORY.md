@@ -22744,3 +22744,24 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **하지 않은 것**: 서버(`src/` diff 0 — 감사 조회 실패를 빈 목록으로 삼키는 것은 서버 결함이라 작업 카드로) · 일 손익 그림 · 감사 거르기 · [현실성 점검] 탭(ST3c).
   ★실제 증권사 주문·잔고는 관측하지 못했다★(실키 없음 · 응답은 스펙이 정함).
 - **게이트**: ruff 통과 · tsc 0 · eslint 오류 0 · pytest 8139 통과·11 건너뜀 · `frontend/` 에서 E2E 전체 835 통과(48분). 첫 로드 JS 는 BU9b 초안과 같은 묶음(react-query·공용 tx). 사용자 PNG 허락(2026-10-15).
+
+### ST3c · 현실성 점검을 실거래의 탭으로 + `/multibacktest/run` 경로 삭제 (사용자 결정 "탭 셋"의 셋째)
+- **무엇**: 옛 `/admin/realism`(어두운 조종석 · ★계산 전부터 MOCK 숫자를 결과처럼★ · 유동성 그림은 계산 뒤에도 늘 MOCK · 클라이언트 상수 분배 0.55/0.45 · 순번으로 맞춘 곡선)을
+  실거래 [현실성 점검] 탭(`widgets/live-trading/RealismTab.tsx`)으로 옮겼다. [계산하기] 전 요청 0 → 등록 전략 목록 → 같은 `/realism/backtest` 를 이상(현실 조건 다섯 전부 끔)·
+  현실(넷 켬)로 두 번. 그림은 옛 화면과 같은 다섯 자리: ① 답 + PerfLabel ② 이상과 현실 사이(★날짜로 맞춘★ 두 곡선 + 틈 음영 + 강조 Segmented, 한쪽에만 있는 날을 셈) ③ 원화 폭포
+  (서버가 센 시장 충격 비용·현금 이자만 세우고 나머지는 "서버가 나누지 않았어요" — 합 = 현실 끝 자산) ④ 현실 조건이 한 일(카드 넷 + 적응 모드 나눔 막대, 근거는 서버 글) ⑤ 유동성·수용량
+  (틀 + "수용량 몰라요" + 사유). 전략 0 → 계산을 보내지 않고 백테스트 결과에서 등록하는 길 · 한쪽 실패(HTTP 또는 200 + `success:false`)는 그쪽 사유만, 견주는 그림 없음.
+  `/admin/realism` 은 `/admin/live-trading?tab=realism` 으로 보낸다 · 메뉴·경로 머리에서 줄 삭제 · `widgets/realism/*`·`entities/realism/data.ts`(MOCK) 삭제 → `entities/realism/model.ts`.
+  테마: 늘 어두운 예외가 없어져 `DARK_EXCEPTIONS` 는 개발 화면(밝게만) 하나 · 프로필 카드·설정의 "늘 어둡게" 분기 삭제.
+- **서버(`src/` 한 곳)**: `POST /multibacktest/run` 경로를 지웠다(함수 `multibacktest_run` 은 캔버스 `strategy_backtest` 노드가 그대로 부른다 — 경로 데코레이터만 뺌).
+  ★먼저 확인★: `realism_engine` 의 시뮬레이션 루프는 기본 엔진을 '모방'한 별도 코드라 같다는 보장이 없었다 → 새 `tests/test_realism_ideal_equivalence.py`:
+  현실 조건 전부 끔 = `MultiStrategyBacktester.run` 일별 자산(매월·매주) · 공허 배제(비중이 실제로 움직임 — 기본 `max_weight 0.5` 면 전략 둘이 늘 50/50 이라 0.8 로) ·
+  짝(시장 충격 하나만 켜면 달라짐) · 변이(현실 엔진 슬리피지 빼기 → 빨강). 두 요청 모델의 기본값도 같음을 읽어 확인. 경로 테스트는 함수 호출로 옮기고 "경로 없음"(404)을 건다.
+- **요청 골든**: `realism-requests.json` 다시 뜸 — 현실 쪽 줄은 바이트 그대로, 이상 쪽 줄만 `/multibacktest/run {save:false}` → `/realism/backtest {enable_* 전부 false}` 로 바뀜(위 동등성이 근거).
+  의미 단언 추가(둘 다 같은 경로 · 이상 = 전부 끔 · 지운 경로 0).
+- **확인**: 새 `e2e/realism.spec.ts` 11(요청 0·MOCK 글자 0 · 전략 0 짝 · 답 짝 · 날짜 맞춤 양쪽 짝 · 폭포 합 · 카드·수용량 · 한쪽 실패 둘 · success:false · AA 라이트/다크·390) ·
+  고정물 `e2e/fixtures/realism.json` = 실제 서버를 결정적 합성 전략 둘로 찍은 응답(그래서 현실 쪽이 이상보다 높게 나온 것도 그대로 — 적응 모드가 비중을 바꾼 몫이라고 문장이 말한다).
+  ★변이 8 모두 죽음★: A 마운트에 계산 · 0.55/0.45 분배 · 한쪽 기준 순번 맞춤(처음엔 살아남아 이상 쪽을 자르는 짝을 더함) / B 실패를 다른 쪽 값으로 메움 · 답 상수 · success:false 를 성공으로 · 지어낸 수용량.
+  `test_perf_label_contract` ALLOWED 에서 realism 두 줄 삭제. PNG 가 찾은 것 고침: 좁은 화면에서 [다시 계산하기]·강조 단추 글자 줄바꿈 · 긴 서버 글이 카드 밖으로.
+- **하지 않은 것**: 수용량 계산 요청(`/realism/capacity/estimate` — 새 요청) · 현실성 엔진의 의미 · 기간·자본 고르기(옛 조리법 상수 그대로) · `/realism/correlation-health` 등 남은 현실성 경로 정리.
+- **게이트**: ruff 통과 · tsc 0 · eslint 오류 0 · pytest 8140 통과·11 건너뜀(첫 게이트는 지운 `/run` 을 부르던 `test_multistrategy_routes` 하나가 빨강 → 함수 호출로 고침) · E2E 846 중 843 통과 — 실패 셋 중 둘(insights 관계도 500 · macro-studios 뷰 대비)은 단독 재실행에서 초록, 하나(`module-motion` 애니메이션 차분, /insights)는 ★이 작업 전 커밋(233754a)에서도 똑같이 빨강★(live 9~10 < frozen+10) — 이 작업과 무관한 환경·시간 의존으로 보고 별도 작업으로 남김.

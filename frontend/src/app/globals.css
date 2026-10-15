@@ -11439,3 +11439,63 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .lvs-audit-what { grid-column: 1 / -1; }
   .lvs-audit-who { grid-column: 1 / -1; }
 }
+
+/* ── ST3c · 실거래 [현실성 점검] 탭(.rl) ──────────────────────────────────────────────────────────────
+   계산 전에는 조리법 한 줄 + [계산하기] 뿐(요청 0). 계산 뒤: 답 → 이상과 현실 사이(두 곡선 + 틈) → 원화 폭포 → 현실 조건이 한 일 → 수용량.
+   이상 = 흐린 점선, 현실 = 강조색 실선(하나의 강조색). 폭포의 등락은 원화 증감이라 등락색 + 부호. */
+.rl > * + * { margin-top: 12px; }
+.rl-empty, .rl-note, .rl-missing, .rl-fails-why { margin: 0; }
+.rl-none { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.rl-none .tx-sec-sub { margin: 0; }
+.rl-fails { display: flex; flex-direction: column; gap: 8px; }
+.rl-answer { display: flex; flex-direction: column; gap: 12px; }
+.rl-ans-s { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.45; color: var(--tx-ink); word-break: keep-all; }
+.rl-figs { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0; }
+.rl-figs dt { font-size: 13px; color: var(--tx-sub); }
+.rl-figs dd { margin: 2px 0 0; font-size: 17px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rl-chart { width: 100%; }
+.rl-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--tx-sub); }
+.rl-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.rl-sw { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--tx-blue); }
+.rl-sw--ideal { border-top: 2px dashed var(--tx-mute); }
+.rl-sw--gap { height: 10px; border: 0; border-radius: 3px; background: var(--tx-blue); opacity: .18; }
+.rl-wf { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rl-wf-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px; gap: 12px; align-items: center; font-size: 14px; color: var(--tx-ink); }
+.rl-wf-track { position: relative; height: 22px; border-radius: 6px; background: var(--tx-soft); }
+.rl-wf-bar { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: var(--tx-sub); }
+.rl-wf-row[data-dir="total"] .rl-wf-bar { background: var(--tx-blue); opacity: .55; }
+.rl-wf-row[data-dir="up"] .rl-wf-bar { background: var(--tx-up); }
+.rl-wf-row[data-dir="down"] .rl-wf-bar { background: var(--tx-down); }
+.rl-wf-v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rl-wf-row[data-dir="up"] .rl-wf-v { color: var(--tx-up-ink); }
+.rl-wf-row[data-dir="down"] .rl-wf-v { color: var(--tx-down-ink); }
+.rl-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.rl-card { padding: 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+.rl-card-t { margin: 0; font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.rl-card-v { margin: 4px 0 0; font-size: 18px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rl-card-d { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+.rl-modes { margin-top: 14px; }
+.rl-modes-bar { display: flex; height: 12px; overflow: hidden; border-radius: 6px; background: var(--tx-soft); }
+/* 모드는 범주(판단 아님) — 범주색 셋(`--mc-c-*`, 라이트/다크 짝). */
+.rl-mode, .rl-mode-sw { background: var(--mc-c-1); }
+.rl-mode[data-mode="cautious"], .rl-mode-sw[data-mode="cautious"] { background: var(--mc-c-2); }
+.rl-mode[data-mode="defensive"], .rl-mode-sw[data-mode="defensive"] { background: var(--mc-c-3); }
+.rl-modes-l { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--tx-sub); }
+.rl-modes-l li { display: inline-flex; align-items: center; gap: 6px; }
+.rl-mode-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.rl-caps { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rl-cap { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 14px; color: var(--tx-ink); }
+.rl-cap-track { height: 10px; border-radius: 5px; background: repeating-linear-gradient(90deg, var(--tx-soft) 0 6px, transparent 6px 10px); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.rl-cap-v { font-size: 13px; color: var(--tx-sub); }
+.rl-calc { white-space: nowrap; }
+.rl .tx-seg-opt { white-space: nowrap; }
+.rl-card-d { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .rl .tx-sec-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .rl .tx-sec-aside { align-self: flex-start; }
+  .rl-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .rl-wf-row { grid-template-columns: 92px minmax(0, 1fr); }
+  .rl-wf-v { grid-column: 1 / -1; text-align: left; }
+  .rl-cap { grid-template-columns: minmax(0, 1fr) auto; }
+  .rl-cap-track { display: none; }
+}

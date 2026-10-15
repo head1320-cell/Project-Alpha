@@ -159,12 +159,10 @@ test("화면 테마: 다크를 고르면 설계 화면·모듈은 어둡게(새�
   await avatar(page).click();
   await expect(card(page).locator(".pf-theme-note")).toHaveCount(0);
   await page.keyboard.press("Escape");
-  // 짝 — 늘 어두운 관리 화면(현실성 점검)은 테마와 상관없다고 말한다(밝게만이라고 하지 않는다).
+  // ST3c — 늘 어두운 화면은 이제 없다(현실성 점검은 실거래 탭). 옛 주소도 다크를 따른다.
   await page.goto("/admin/realism", { waitUntil: "domcontentloaded" });
-  await expect(avatar(page)).toBeVisible();
-  await avatar(page).click();
-  await expect(card(page).locator(".pf-theme-note")).toContainText("늘 어둡게");
-  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/tab=realism/);
+  expect(await isDark(page), "현실성 점검도 다크를 따른다").toBe(true);
   // 짝 — 다크가 없는 화면은 밝게 두고 그렇다고 말한다.
   await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toBeVisible();

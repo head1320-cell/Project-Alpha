@@ -180,8 +180,7 @@ function ThemeSection() {
         </div>
         {theme !== "light" ? (
           <p className="set-sub set-theme-note">
-            {DARK_EXCEPTIONS.filter((x) => x.looks === "light").map((x) => x.label).join("·")}은 밝게,{" "}
-            {DARK_EXCEPTIONS.filter((x) => x.looks === "dark").map((x) => x.label).join("·")}은 늘 어둡게 보여요. 나머지는 고른 테마를 따라요.
+            {DARK_EXCEPTIONS.map((x) => x.label).join("·")}은 밝게만 보여요. 나머지는 고른 테마를 따라요.
           </p>
         ) : null}
         <p className="set-sub">이 브라우저에만 남아요.</p>

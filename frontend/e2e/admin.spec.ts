@@ -21,7 +21,6 @@ import { trackErrors, uniq } from "./helpers";
 
 const ROUTES: [string, string][] = [
   ["/admin/live-trading", "실거래"],
-  ["/admin/realism", "Realism Panel"],
 ];
 
 for (const [path, heading] of ROUTES) {
@@ -52,6 +51,13 @@ for (const [path, heading] of ROUTES) {
     if (apiErrs.length) console.log(`[smoke] ${path} backend errors (not asserted):`, apiErrs);
   });
 }
+
+// ST3c — 옛 주소 /admin/realism 은 실거래 [현실성 점검] 탭으로 보낸다(북마크가 깨지지 않게).
+test("Admin: /admin/realism 은 실거래의 현실성 점검 탭으로 옮겨 간다", async ({ page }) => {
+  await page.goto("/admin/realism", { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL(/\/admin\/live-trading\?tab=realism$/, { timeout: 20_000 });
+  await expect(page.locator('.tx-tab[data-tab="realism"]')).toHaveAttribute("aria-selected", "true");
+});
 
 // BV7 의 두 테스트(관문이 닫혀 LIVE 가 거절되면 사유 · 받아들이면 문구 없음)는 BU9b 에서 관리자 로그인과 함께
 // `e2e/live-trading.spec.ts` "실계좌 시트" 테스트로 옮겼다 — 새 화면은 관리자에게만 모드 단추를 그린다.

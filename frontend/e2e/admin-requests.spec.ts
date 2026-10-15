@@ -134,7 +134,10 @@ test("현실성 요청 골든: 처음엔 요청 0 · 계산하기는 전략을 �
   const out: Record<string, Step> = {};
   const close = async (name: string) => { await rec.step(name); out[name] = split(rec.steps[name], true); };
 
-  await page.goto("/admin/realism", { waitUntil: "domcontentloaded" });
+  // ST3c — 현실성 점검은 실거래의 탭이다. 이상 쪽은 `/multibacktest/run` 대신 같은 `/realism/backtest` 를 조건 전부 끔으로.
+  await routeLive(page, liveState());
+  await routeGate(page, { current: null, history: [] });
+  await page.goto("/admin/live-trading?tab=realism", { waitUntil: "domcontentloaded" });
   await expect(act(page, "calc")).toBeVisible({ timeout: 20_000 });
   await close("01 첫 화면");
   await act(page, "calc").click();
@@ -150,6 +153,10 @@ test("현실성 요청 골든: 처음엔 요청 0 · 계산하기는 전략을 �
   expect(out["01 첫 화면"], "처음엔 아무것도 묻지 않는다").toEqual({ writes: [], reads: [] });
   expect(out["02 전략 없이 계산하기"].writes, "전략이 없으면 계산을 보내지 않는다").toEqual([]);
   expect(out["03 계산하기"].writes).toHaveLength(2);
+  expect(out["03 계산하기"].writes.every((w) => w.startsWith("POST /api/v1/realism/backtest ")), "둘 다 같은 경로(ST3c)").toBe(true);
+  expect(out["03 계산하기"].writes.filter((w) => /"enable_market_impact":false/.test(w) && /"enable_regime_adaptive":false/.test(w)),
+    "이상 쪽 = 현실 조건 전부 끔").toHaveLength(1);
+  expect(out["03 계산하기"].writes.join("\n"), "지운 경로를 부르지 않는다").not.toContain("/multibacktest/run");
   compare("realism", out);
 });
 

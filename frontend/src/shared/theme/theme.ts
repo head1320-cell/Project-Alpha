@@ -41,11 +41,11 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
 
 /**
  * 테마를 따르지 않는 화면(BS5) — 안내 문구가 이것만 말한다. `looks` 는 그 화면이 늘 보이는 쪽.
- * 개발 화면은 밝게만, 현실성 점검은 아직 어두운 조종석이라 늘 어둡게다(실거래는 ST3b 에서 테마를 따른다 — 현실성은 ST3c 에서 실거래 탭으로 옮긴다). (첫 화면은 BU8a 에서 다크를 갖춰 예외에서 뺐다.)
+ * 개발 화면만 밝게다. 늘 어두운 화면은 없다 — 관리 화면 셋은 실거래 하나로 합쳐져 테마를 따른다(ST3b·ST3c).
+ * (첫 화면은 BU8a 에서 다크를 갖춰 예외에서 뺐다.)
  */
-export const DARK_EXCEPTIONS: { pattern: RegExp; label: string; looks: "light" | "dark" }[] = [
+export const DARK_EXCEPTIONS: { pattern: RegExp; label: string; looks: "light" }[] = [
   { pattern: /^\/dev(\/|$)/, label: "개발 화면", looks: "light" },
-  { pattern: /^\/admin\/realism(\/|$)/, label: "현실성 점검 관리 화면", looks: "dark" },
 ];
 export const darkException = (path: string) => DARK_EXCEPTIONS.find((r) => r.pattern.test(path)) ?? null;
 export const darkReady = (path: string) => DARK_READY.some((r) => r.pattern.test(path));

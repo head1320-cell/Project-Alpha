@@ -64,7 +64,7 @@ export function unavailableReason(body: unknown): string | null {
   }
   if (isUnsupported(detail)) {
     const why = detail.unsupported.map((u) => u.reason).filter(Boolean).join(" / ");
-    return why ? `${detail.reason} — ${why}` : detail.reason;
+    return why ? `${detail.reason}. ${why}` : detail.reason;
   }
   return null;
 }

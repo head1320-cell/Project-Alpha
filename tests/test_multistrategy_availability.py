@@ -144,7 +144,6 @@ _BODY = {"strategy_ids": [1, 2], "start_date": "2024-01-02",
          "end_date": "2024-06-28", "allocation_method": "hrp"}
 
 GUARDED = [
-    ("post", "/api/v1/multibacktest/run", _BODY),
     ("get", "/api/v1/multibacktest/strategies", None),
     ("post", "/api/v1/multibacktest/strategies", {"run_id": "bt_x", "name": "x"}),
     ("delete", "/api/v1/multibacktest/strategies/7", None),
@@ -175,7 +174,6 @@ def test_the_guarded_routes_are_not_503_now(client, method, path, body):
 
 
 UNSUPPORTED = [
-    ("/api/v1/multibacktest/run", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
     ("/api/v1/realism/backtest", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
 ]
 
@@ -191,7 +189,6 @@ def test_r4_features_are_422_with_the_reason(client, path, body, feature):
 
 
 REGIME_CHANGE = [
-    ("/api/v1/multibacktest/run", {**_BODY, "rebalance_policy": "regime_change"}),
     ("/api/v1/realism/backtest", {**_BODY, "rebalance_policy": "regime_change"}),
 ]
 
@@ -213,3 +210,25 @@ def test_routes_that_do_not_need_the_subsystem_still_work(client, method, path):
     """★짝★ — 필요 없는 문까지 막지 않는다."""
     r = getattr(client, method)(path)
     assert r.status_code == 200, (r.status_code, r.text[:300])
+
+
+# ── ST3c — `POST /multibacktest/run` 경로는 없다. 가드는 함수(캔버스 노드가 부른다)에 그대로 ──
+
+def test_the_run_route_is_gone(client):
+    """ST3c — 경로를 지웠다(현실성 점검의 이상 쪽은 `/realism/backtest` 끔으로)."""
+    r = client.post("/api/v1/multibacktest/run", json=_BODY)
+    assert r.status_code in (404, 405), (r.status_code, r.text[:200])
+
+
+def test_the_run_function_keeps_both_guards(monkeypatch):
+    """짝 — 함수는 남아 503(코어 없음)·422(없는 기능) 가드를 그대로 건다."""
+    from fastapi import HTTPException
+
+    from src.api import stage11_routes as s11
+    with pytest.raises(HTTPException) as e:
+        s11.multibacktest_run(s11.MultiBacktestRunRequest(**{**_BODY, "allocation_method": "hrp_macro"}))
+    assert e.value.status_code == 422
+    _fake_core_missing(monkeypatch)
+    with pytest.raises(HTTPException) as e:
+        s11.multibacktest_run(s11.MultiBacktestRunRequest(**_BODY))
+    assert e.value.status_code == 503

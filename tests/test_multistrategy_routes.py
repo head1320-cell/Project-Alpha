@@ -139,10 +139,12 @@ def test_end_to_end_register_then_run_both_methods_and_read_back(client):
     ids = [client.post(f"{_S}/strategies", json={"run_id": r}).json()["id"] for r in (a, b)]
 
     for method in ("inverse_vol", "hrp"):
-        r = client.post(f"{_S}/run", json={**_RUN, "strategy_ids": ids,
-                                             "allocation_method": method, "save": True})
-        assert r.status_code == 200, r.text[:300]
-        out = r.json()
+        # ST3c — `POST /run` 경로는 지웠다. 함수(캔버스 노드가 부른다)로 같은 계산·저장을 건다.
+        from fastapi.encoders import jsonable_encoder
+
+        from src.api import stage11_routes as s11
+        out = jsonable_encoder(s11.multibacktest_run(s11.MultiBacktestRunRequest(
+            **{**_RUN, "strategy_ids": ids, "allocation_method": method, "save": True})))
         assert out["success"] is True, out.get("message")
         assert isinstance(out["run_id"], int) and out["run_id"] > 0
         assert out["summary"]["netting"]["basis"] == "measured_holdings"

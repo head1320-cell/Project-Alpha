@@ -134,9 +134,13 @@ class MultiBacktestRunRequest(BaseModel):
     regime_market:         Literal["kr", "us"] = Field(default="kr")
 
 
-@router.post("/run")
 def multibacktest_run(req: MultiBacktestRunRequest):
-    """멀티 전략 통합 백테스트 실행."""
+    """멀티 전략 통합 백테스트 실행 — ★경로 없는 함수★(ST3c, 2026-10-15).
+
+    HTTP 경로 `POST /multibacktest/run` 은 지웠다 — 부르던 화면(현실성 점검)은 이상 쪽을
+    `/realism/backtest` 현실 조건 전부 끔으로 계산한다(`tests/test_realism_ideal_equivalence.py` 가
+    두 엔진의 일별 자산이 같음을 건다). 캔버스 `strategy_backtest` 노드가 이 함수를 그대로 부른다.
+    """
     # ★코어가 없으면 503 · 없는 기능을 고르면 422★ (BF·BG4) — `try:` 앞이어야 한다.
     _guard(allocation_method=req.allocation_method, rebalance_policy=req.rebalance_policy)
     try:

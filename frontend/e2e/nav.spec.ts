@@ -105,9 +105,9 @@ test("관리 메뉴(BU0): 관리자에게만 보인다 — 분석가·로그인 
   role = "admin";
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator('.terminal-header .pf-avatar[data-state="signed_in"]')).toBeVisible();
-  for (const [href, label] of [["/admin/live-trading", "실거래"], ["/admin/realism", "현실성 점검"]]) {
-    await expect(page.locator(`.terminal-nav a[href="${href}"]`)).toHaveAttribute("aria-label", label);
-  }
+  await expect(page.locator('.terminal-nav a[href="/admin/live-trading"]')).toHaveAttribute("aria-label", "실거래");
+  // ST3c — 현실성 점검은 실거래의 탭이라 메뉴 줄이 따로 없다.
+  await expect(page.locator('.terminal-nav a[href="/admin/realism"]')).toHaveCount(0);
 });
 
 test("Shell header(BR R3): 오른쪽 슬롯은 회원 프로필 동그라미 — 국면 배지는 없다(국면은 /macro) · 모든 탭에서 같다", async ({ page }) => {

@@ -24,6 +24,14 @@ def _ids(client):
     return [client.post(f"{_S}/strategies", json={"run_id": r}).json()["id"] for r in _two_runs()]
 
 
+def _route(body):
+    """옛 `POST /multibacktest/run` 응답과 같은 것 — 경로는 지웠고(ST3c) 함수가 남았다. 경로가 하던 JSON 변환까지 그대로."""
+    from fastapi.encoders import jsonable_encoder
+
+    from src.api import stage11_routes as s11
+    return jsonable_encoder(s11.multibacktest_run(s11.MultiBacktestRunRequest(**body)))
+
+
 def _graph(**params):
     return {"format": pg.FORMAT, "version": pg.VERSION,
             "nodes": [{"id": "m", "type": "strategy_backtest", "params": params, "position": {"x": 0, "y": 0}}],
@@ -42,8 +50,8 @@ def test_the_node_equals_the_route_and_records_nothing(client, method):
     ids = _ids(client)
     m = _node(strategy_ids=ids, **{**_KNOBS, "allocation_method": method})
     assert m["status"] == "ok", m["reason"]
-    ref = client.post(f"{_S}/run", json={**_RUN, "strategy_ids": ids, "allocation_method": method,
-                                          "save": False}).json()
+    ref = _route({**_RUN, "strategy_ids": ids, "allocation_method": method,
+                                          "save": False})
     v = m["view"]
     assert v["summary"] == ref["summary"] and v["sources"] == ref["sources"]
     assert v["perf_label"] == ref["perf_label"] and v["cost_model"] == ref["cost_model"]
@@ -62,8 +70,8 @@ def test_an_empty_period_means_the_whole_common_record(client, db):
     mat = StrategyRegistry(db).load_returns_matrix(ids, drop_na_rows=True)
     first, last = str(mat.index.min().date()), str(mat.index.max().date())
     assert m["view"]["period"] == {"start": first, "end": last, "whole_record": True}
-    ref = client.post(f"{_S}/run", json={**_RUN, "strategy_ids": ids, "start_date": first, "end_date": last,
-                                          "save": False}).json()
+    ref = _route({**_RUN, "strategy_ids": ids, "start_date": first, "end_date": last,
+                                          "save": False})
     assert m["view"]["summary"] == ref["summary"]
     assert "함께 기록된 전체" in " ".join(m["explain"]["facts"])
 
@@ -117,8 +125,8 @@ def test_an_explicit_rate_stays_explicit_and_a_default_stays_default(client):
     """★노드 기본값을 '명시한 요율' 로 넘기지 않는다★ — 짝: 사용자가 정하면 문도 명시로 본다."""
     ids = _ids(client)
     m = _node(strategy_ids=ids, commission_rate=0.0003, **_KNOBS)
-    ref = client.post(f"{_S}/run", json={**_RUN, "strategy_ids": ids, "commission_rate": 0.0003,
-                                          "save": False}).json()
+    ref = _route({**_RUN, "strategy_ids": ids, "commission_rate": 0.0003,
+                                          "save": False})
     assert m["view"]["cost_model"] == ref["cost_model"]
     default = _node(strategy_ids=ids, **_KNOBS)["view"]["cost_model"]
     assert default != m["view"]["cost_model"]

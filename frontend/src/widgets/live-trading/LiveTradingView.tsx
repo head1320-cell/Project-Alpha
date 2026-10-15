@@ -24,6 +24,7 @@ import { Holdings } from "./Holdings";
 import { OperatorOrders } from "./OperatorOrders";
 import { OperatorPath } from "./OperatorPath";
 import { KillSheets, LiveSheet } from "./OperatorSheets";
+import { RealismTab } from "./RealismTab";
 import { SafetyTab } from "./SafetyTab";
 import { opSentence } from "./sentence";
 
@@ -31,8 +32,10 @@ const TITLE = "실거래";
 const LEDE = "운영 계좌로 주문이 어디로 가는지 보고, 멈추고, 실계좌 관문을 관리해요.";
 
 /** 탭 — 주소 `?tab=` 와 같이 움직인다(기본 지금). 답 문장과 [비상 정지] 는 탭 위에 늘 보인다(사용자 결정 "탭 셋"). */
-type Tab = "now" | "safety";
-const TABS: { value: Tab; label: string }[] = [{ value: "now", label: "지금" }, { value: "safety", label: "안전" }];
+type Tab = "now" | "safety" | "realism";
+const TABS: { value: Tab; label: string }[] = [
+  { value: "now", label: "지금" }, { value: "safety", label: "안전" }, { value: "realism", label: "현실성 점검" },
+];
 export const tabOf = (v: string | null): Tab => (TABS.find((t) => t.value === v)?.value ?? "now");
 export const POLL_MS = 10_000;
 
@@ -155,8 +158,10 @@ export function LiveTradingView() {
         <OperatorOrders result={r?.orders ?? null} onRetry={refetch} />
       </div>
       </div>
-      ) : (
+      ) : tab === "safety" ? (
         <SafetyTab isAdmin={isAdmin} signedIn={signedIn && !session.mustChange} gate={gate} onChanged={refetch} />
+      ) : (
+        <RealismTab />
       )}
       </Tabs>
 

@@ -14,7 +14,7 @@ import { allocationApi } from "@/entities/allocation/api";
 import { useSession } from "@/entities/session";
 import { ProfileMenu, useThemeSync } from "@/features/profile";
 import {
-  Building2, Database, Gauge, Globe2, Home, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Wallet, Workflow,
+  Building2, Database, Globe2, Home, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Wallet, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
@@ -47,7 +47,6 @@ const MORE: NavLink[] = [
 /** 관리자에게만 보인다 — 숨김은 편의일 뿐 권한이 아니다(권한은 서버가 판정한다). */
 const ADMIN: NavLink[] = [
   { label: "실거래", href: "/admin/live-trading", Icon: Radio },
-  { label: "현실성 점검", href: "/admin/realism", Icon: Gauge },
 ];
 
 // 사이드바 hover → 탭 핵심 진입 데이터 prefetch (react-query 캐시에 미리 채워둠 — 이 코드베이스
