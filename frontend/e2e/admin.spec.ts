@@ -20,7 +20,7 @@ import { trackErrors, uniq } from "./helpers";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const ROUTES: [string, string][] = [
-  ["/admin/live-trading", "Live Trading Cockpit"],
+  ["/admin/live-trading", "실거래"],
   ["/admin/realism", "Realism Panel"],
 ];
 
@@ -53,34 +53,5 @@ for (const [path, heading] of ROUTES) {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// BV7 — 실계좌 관문이 닫혀 있으면 LIVE 전환이 거절된다. ★거절을 조용히 넘기지 않는다★ — 서버 사유를 그대로 보인다.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function pressLive(page: import("@playwright/test").Page, status: number, body: unknown) {
-  await page.route("**/api/v1/live/mode", (r) =>
-    r.request().method() === "POST" ? r.fulfill({ status, json: body }) : r.fulfill({ json: { mode: "SHADOW" } }));
-  await page.goto("/admin/live-trading", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Live · Real Money/ }).click();
-  await page.getByRole("button", { name: "실거래 진입 (Confirmed)" }).click();
-}
-
-test("Admin: 관문이 닫혀 LIVE 가 거절되면 서버 사유를 보인다", async ({ page }) => {
-  const why = "실계좌 주문은 확인된 적이 없어 꺼져 있어요.";
-  await pressLive(page, 400, { detail: why });
-  const alert = page.locator(".live-mode-refused");
-  await expect(alert).toBeVisible();
-  await expect(alert).toContainText(why);
-});
-
-test("Admin: LIVE 가 받아들여지면 거절 문구가 없다", async ({ page }) => {
-  await pressLive(page, 200, { old_mode: "SHADOW", new_mode: "LIVE" });
-  await page.waitForTimeout(500);
-  await expect(page.locator(".live-mode-refused")).toHaveCount(0);
-});
-
-test("여러 전략 백테스트 화면은 없앴다 (ST2) — 주소가 없는 화면으로 열리고 메뉴에도 없다", async ({ page }) => {
-  const res = await page.goto("/admin/multi-backtest", { waitUntil: "domcontentloaded" });
-  expect(res?.status()).toBe(404);
-  await expect(page.locator('.terminal-nav a[href="/admin/multi-backtest"]')).toHaveCount(0);
-});
+// BV7 의 두 테스트(관문이 닫혀 LIVE 가 거절되면 사유 · 받아들이면 문구 없음)는 BU9b 에서 관리자 로그인과 함께
+// `e2e/live-trading.spec.ts` "실계좌 시트" 테스트로 옮겼다 — 새 화면은 관리자에게만 모드 단추를 그린다.

@@ -152,8 +152,15 @@ test("화면 테마: 다크를 고르면 설계 화면·모듈은 어둡게(새�
   await avatar(page).click();
   await expect(card(page).locator(".pf-theme-note")).toHaveCount(0);
   await page.keyboard.press("Escape");
-  // 짝 — 늘 어두운 관리 화면은 테마와 상관없다고 말한다(밝게만이라고 하지 않는다).
+  // BU9b — 실거래는 테마를 따른다(늘 어둡게가 아니다): 어둡고 안내가 없다.
   await page.goto("/admin/live-trading", { waitUntil: "domcontentloaded" });
+  await expect(avatar(page)).toBeVisible();
+  expect(await isDark(page), "실거래는 다크를 갖췄다").toBe(true);
+  await avatar(page).click();
+  await expect(card(page).locator(".pf-theme-note")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // 짝 — 늘 어두운 관리 화면(현실성 점검)은 테마와 상관없다고 말한다(밝게만이라고 하지 않는다).
+  await page.goto("/admin/realism", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toBeVisible();
   await avatar(page).click();
   await expect(card(page).locator(".pf-theme-note")).toContainText("늘 어둡게");

@@ -23,6 +23,8 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   { pattern: /^\/login\/?$/, label: "로그인" },
   // BV9 — `--tx-*` 토큰만 쓰는 새 화면. my-account.spec 이 다크 AA 로 확인한다.
   { pattern: /^\/my-account\/?$/, label: "내 계좌" },
+  // BU9b — 실거래도 `--tx-*` 토큰만 쓴다. live-trading.spec 이 다크 AA 로 확인한다.
+  { pattern: /^\/admin\/live-trading\/?$/, label: "실거래" },
   // BS5 — 레거시 모듈. 라이트는 계산 스타일 골든 그대로, 다크는 주요 상태 전부 AA(E2E dark-modules.spec.ts).
   { pattern: /^\/dashboard\/?$/, label: "홈" },
   { pattern: /^\/screener\/?$/, label: "스크리너" },
@@ -39,11 +41,11 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
 
 /**
  * 테마를 따르지 않는 화면(BS5) — 안내 문구가 이것만 말한다. `looks` 는 그 화면이 늘 보이는 쪽.
- * 개발 화면은 밝게만, 관리 화면 셋은 처음부터 어두운 조종석이라 늘 어둡게다. (첫 화면은 BU8a 에서 다크를 갖춰 예외에서 뺐다.)
+ * 개발 화면은 밝게만, 현실성 점검은 아직 어두운 조종석이라 늘 어둡게다(실거래는 ST3b 에서 테마를 따른다 — 현실성은 ST3c 에서 실거래 탭으로 옮긴다). (첫 화면은 BU8a 에서 다크를 갖춰 예외에서 뺐다.)
  */
 export const DARK_EXCEPTIONS: { pattern: RegExp; label: string; looks: "light" | "dark" }[] = [
   { pattern: /^\/dev(\/|$)/, label: "개발 화면", looks: "light" },
-  { pattern: /^\/admin\/(live-trading|realism)(\/|$)/, label: "실거래·현실성 관리 화면", looks: "dark" },
+  { pattern: /^\/admin\/realism(\/|$)/, label: "현실성 점검 관리 화면", looks: "dark" },
 ];
 export const darkException = (path: string) => DARK_EXCEPTIONS.find((r) => r.pattern.test(path)) ?? null;
 export const darkReady = (path: string) => DARK_READY.some((r) => r.pattern.test(path));

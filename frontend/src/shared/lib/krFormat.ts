@@ -74,6 +74,21 @@ export function pp(ratioDiff: N, digits = 1): string {
 }
 
 /** 등락 방향 — 색과 ▲▼ 를 고르는 데 쓴다. 미상은 "unknown"(평평함과 다르다). */
+/**
+ * 서버 시각 → "10월 9일 21:00". ★오프셋이 있으면 한국 시간으로 바꾸고, 없으면 적힌 그대로★(어느 시간대인지 모르는 값을
+ * 한국 시간이라고 우기지 않는다). 읽지 못하면 null.
+ */
+export function krDateTime(iso: string | null | undefined): string | null {
+  const m = iso?.match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/);
+  if (!m) return null;
+  if (!m[5]) return `${Number(m[1])}월 ${Number(m[2])}일 ${m[3]}:${m[4]}`;
+  const t = Date.parse(iso as string);
+  if (!Number.isFinite(t)) return null;
+  const k = new Date(t + 9 * 3_600_000);
+  const two = (v: number) => String(v).padStart(2, "0");
+  return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일 ${two(k.getUTCHours())}:${two(k.getUTCMinutes())}`;
+}
+
 export type Direction = "up" | "down" | "flat" | "unknown";
 export function direction(v: N): Direction {
   if (!ok(v)) return "unknown";

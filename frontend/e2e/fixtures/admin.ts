@@ -37,11 +37,46 @@ export type LiveState = {
   balance: Record<string, unknown> | null;
   orders: Record<string, unknown>[];
   /** 읽기 실패(상태 코드). */
-  fail: Partial<Record<"mode" | "balance" | "orders" | "kill", number>>;
+  fail: Partial<Record<"mode" | "balance" | "orders" | "kill" | SafetyKey, number>>;
+  /** ST3b [안전] 탭 읽기 다섯(+요약) — 모양은 서버 `stage13_routes` 그대로(TestClient 로 찍어 베낌). */
+  safety: Record<SafetyKey, unknown>;
   /** 쓰기 응답을 정한다(없으면 상태 기계대로). */
   modeReply: { status: number; json: unknown } | null;
   triggerReply: { status: number; json: unknown } | null;
   resolveReply: { status: number; json: unknown } | null;
+};
+
+export type SafetyKey = "events" | "readiness" | "kisCodes" | "audit" | "auditSummary" | "pnl";
+const SAFETY_PATH: Record<string, SafetyKey> = {
+  "/kill-switch/events": "events", "/kill-switch/readiness": "readiness", "/kill-switch/kis-codes": "kisCodes",
+  "/audit": "audit", "/audit/summary": "auditSummary", "/daily-pnl": "pnl",
+};
+const KILL_REC = (state: string, action: string, label: string, reason: string | null = null) => ({ action, label, state, reason, detail: null });
+export const SAFETY: Record<SafetyKey, unknown> = {
+  events: { count: 2, events: [
+    { event_id: "KILL-2", triggered_at: "2026-10-09T12:05:00", trigger_source: "manual_admin", trigger_reason: "Manual emergency stop from cockpit",
+      liquidation_mode: "hold", n_orders_cancelled: 1, resolved_at: "2026-10-09T12:30:00", resolved_by: "admin", resolution_notes: "Manual resolution from cockpit",
+      actions: { records: [KILL_REC("done", "block_new_orders", "신규 주문 차단"), KILL_REC("done", "cancel_open_orders", "미체결 주문 취소"),
+        KILL_REC("skipped", "liquidate_positions", "보유 청산", "청산 모드가 `hold` 라 포지션을 ★팔지 않았습니다★"), KILL_REC("done", "notify", "통지")],
+        summary: "건너뜀 보유 청산" } },
+    { event_id: "KILL-1", triggered_at: "2026-10-01T09:00:00", trigger_source: "auto_dd", trigger_reason: "누적 drawdown 한도 초과 (10.4% >= 10%)",
+      liquidation_mode: "hold", n_orders_cancelled: null, resolved_at: "2026-10-01T10:00:00", resolved_by: "admin", resolution_notes: "확인함",
+      actions: { records: [KILL_REC("unknown", "block_new_orders", "신규 주문 차단", "이 발동은 조치 기록이 생기기 전에 저장됐습니다")] } },
+  ] },
+  readiness: { armed: [], inoperable: [
+    { trigger: "auto_dd", reason: "누적 drawdown 미상 (no_equity_history)" }, { trigger: "auto_cb", reason: "일중 손실 미상 (no_equity_history)" },
+    { trigger: "auto_risk", reason: "국면 systemic_risk_score 미상" }, { trigger: "auto_api", reason: "KIS API 실패 횟수 미상 (mock 클라이언트에는 실패 카운터가 없습니다)" }],
+    summary: "자동 트리거 4개 중 0개 무장 · 4개 불능", is_active: false, account_state_reason: null,
+    note: "불능 트리거는 임계값 문제가 아니라 재료가 없어서 발동하지 않습니다 — 임계를 낮춰도 달라지지 않습니다." },
+  kisCodes: { observed: [], gaps: [], table: { size: 0, why_empty: "이 환경은 KIS 자격증명이 없어 공식 문서도 실계좌 응답도 얻을 수 없다." },
+    gate: { state: "blocked", reason: "업무 응답을 breaker 카운트에서 빼는 변경은 막혀 있습니다." } },
+  audit: { count: 2, events: [
+    { audit_id: "A-2", event_type: "KILL_SWITCH_TRIGGERED", event_category: "safety", severity: "CRITICAL", actor: "admin", message: "Manual emergency stop from cockpit", timestamp: "2026-10-09T12:05:00" },
+    { audit_id: "A-1", event_type: "SIGNAL_RECEIVED", event_category: "order", severity: "INFO", actor: "system", ticker: "005930", message: null, timestamp: "2026-10-09T12:01:00" }] },
+  auditSummary: { date: "2026-10-09", total_events: 2, by_severity: { INFO: 1, WARN: 0, ERROR: 0, CRITICAL: 1 }, by_category: {}, by_event_type: {} },
+  pnl: { count: 2, pnl_history: [
+    { trade_date: "2026-10-09", execution_mode: "SHADOW", ending_equity_krw: 100_046_983, daily_return_pct: 0.12, n_orders: 3 },
+    { trade_date: "2026-10-08", execution_mode: "PAPER", ending_equity_krw: 99_926_000, daily_return_pct: -0.4, n_orders: 1 }] },
 };
 
 /** BV7 — 관문이 닫혀 있으면 서버가 이 사유로 400 을 준다(`order_executor.set_mode`). */
@@ -69,7 +104,7 @@ export const LIVE_ORDERS = [
 export function liveState(o: Partial<LiveState> = {}): LiveState {
   return {
     mode: "SHADOW", kill: { is_active: false, active_event: null }, balance: LIVE_BALANCE, orders: LIVE_ORDERS,
-    fail: {}, modeReply: null, triggerReply: null, resolveReply: null, ...o,
+    fail: {}, modeReply: null, triggerReply: null, resolveReply: null, safety: { ...SAFETY }, ...o,
   };
 }
 
@@ -116,6 +151,11 @@ export async function routeLive(page: Page, st: LiveState) {
       const was = st.kill.is_active;
       st.kill = { is_active: false, active_event: null };
       return r.fulfill({ json: was ? { status: "resolved", resolved_by: "admin" } : { status: "no_active_event" } });
+    }
+    const sk = m === "GET" ? SAFETY_PATH[p] : undefined;
+    if (sk) {
+      if (st.fail[sk]) return r.fulfill({ status: st.fail[sk], json: { detail: `${sk} 를 읽지 못했어요` } });
+      return r.fulfill({ json: st.safety[sk] });
     }
     return r.fulfill({ status: 404, json: { detail: "이 스펙이 정하지 않은 경로" } });
   });
