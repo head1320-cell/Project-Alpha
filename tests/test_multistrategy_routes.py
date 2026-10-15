@@ -155,19 +155,11 @@ def test_end_to_end_register_then_run_both_methods_and_read_back(client):
         assert out["perf_label"]["data_real"] is False
         assert out["cost_model"]
 
-        got = client.get(f"{_S}/{out['run_id']}").json()
-        assert got["run"]["allocation_method"] == method
-        assert got["perf_label"]["data_real"] is False
-        assert [s["strategy_id"] for s in got["sources"]["strategies"]] == ids
+        # (ST2) 저장본 다시 읽기·귀인 경로는 여러 전략 화면과 함께 지웠다 — 저장은 엔진으로 확인한다.
 
-        attr = client.get(f"{_S}/{out['run_id']}/attribution").json()
-        assert attr["perf_label"]["data_real"] is False
-        names = {c["strategy_id"]: c["strategy_name"]
-                 for c in attr["strategy_contribution"]}
-        assert set(names) == set(ids) and all(names.values()), names
-
-    runs = client.get(f"{_S}/runs").json()["runs"]
-    assert len(runs) == 2
+    from src.database import get_sync_engine
+    from src.engine.multi_strategy_backtest import MultiStrategyBacktester
+    assert len(MultiStrategyBacktester(get_sync_engine()).list_runs(limit=10)) == 2
 
 
 def test_end_to_end_realism_carries_sources_and_the_regime_adaptive_block(client):
@@ -202,12 +194,12 @@ def test_realism_regime_adaptive_off_says_off(client):
 def test_end_to_end_counterfactual_does_not_value_structural_zeros(client):
     a, b = _two_runs()
     ids = [client.post(f"{_S}/strategies", json={"run_id": r}).json()["id"] for r in (a, b)]
-    r = client.post(f"{_S}/counterfactual", json={
-        "strategy_ids": ids, "start_date": _RUN["start_date"], "end_date": _RUN["end_date"],
-        "base_allocation_method": "hrp", "lookback_days": 60,
-        "scenarios": ["baseline", "no_macro_overlay", "no_netting", "inverse_vol"]})
-    assert r.status_code == 200, r.text[:300]
-    out = r.json()
+    # (ST2) 경로는 지웠다 — 캔버스 `counterfactual` 노드가 부르는 함수를 그대로 부른다.
+    from src.api import stage11_routes as s11
+    out = s11.multibacktest_counterfactual(s11.CounterfactualRequest(
+        strategy_ids=ids, start_date=_RUN["start_date"], end_date=_RUN["end_date"],
+        base_allocation_method="hrp", lookback_days=60,
+        scenarios=["baseline", "no_macro_overlay", "no_netting", "inverse_vol"]))
     dv = out["decision_values"]
     # 기준이 hrp 라 매크로 오버레이는 켜든 끄든 같은 계산이다 — 가치가 아니다.
     assert dv["macro_overlay_value_pct"] is None and dv["macro_overlay_value_reason"]
@@ -268,22 +260,22 @@ def test_the_saved_run_id_comes_from_returning_not_lastrowid():
 
 # ── 가용성 문 (화면이 옵션을 끄는 근거) ───────────────────────────────
 
-def test_the_availability_route_says_what_is_unsupported(client):
-    """★화면이 사유를 지어내지 않게★ — 비활성 옵션의 사유를 서버가 준다."""
-    r = client.get(f"{_S}/availability")
-    assert r.status_code == 200, r.text[:300]
-    d = r.json()
+def test_the_availability_status_says_what_is_unsupported():
+    """★가드가 사유를 지어내지 않게★ — 막는 옵션의 사유를 서버가 준다.
+    (ST2) `/availability` 경로는 여러 전략 화면과 함께 지웠다 — 가드가 읽는 `status()` 를 직접 본다."""
+    from src.engine.multistrategy_availability import status
+    d = status()
     assert d["available"] is True
     # BH3 에서 regime_change 가 풀렸다 — 남은 것은 hrp_macro 하나.
     assert {u["feature"] for u in d["unsupported_features"]} == {"hrp_macro"}
     assert all(u["reason"] for u in d["unsupported_features"])
 
 
-def test_the_availability_route_answers_even_when_the_core_is_missing(client, monkeypatch):
-    """★짝★ — 503 을 내는 대신 "없다" 를 200 으로 말한다(화면이 그걸 그린다)."""
+def test_the_availability_status_answers_even_when_the_core_is_missing(monkeypatch):
+    """★짝★ — 코어가 빠지면 "없다" 를 사유와 함께 말한다."""
     from src.engine import multistrategy_availability as ma
     fake = ma.MissingModule(module="src.engine._fake_core_for_test", needed_by=("x",),
                             role="가짜 코어 모듈", reason="코어가 빠졌을 때를 흉내 내는 항목입니다.")
     monkeypatch.setattr(ma, "MISSING", (*ma.MISSING, fake))
-    d = client.get(f"{_S}/availability").json()
+    d = ma.status()
     assert d["available"] is False and d["reason"]

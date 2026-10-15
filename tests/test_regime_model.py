@@ -251,48 +251,6 @@ def test_monthly_policy_is_unaffected_by_regimes(db, market, monkeypatch):
     assert a["summary"]["n_rebalances"] == b["summary"]["n_rebalances"]
 
 
-def test_the_attribution_speaks_the_single_vocabulary():
-    """★어휘 하나★ — 엔진·분해기 **코드**(문자열 리터럴)에 옛 대문자 사분면이 없다.
-
-    주석은 보지 않는다 — 옛 어휘를 설명하는 주석은 역사이지 동작이 아니다.
-    """
-    import ast
-    import pathlib
-    old = {"GOLDILOCKS", "REFLATION", "STAGFLATION", "DEFLATION"}
-    for f in ("src/engine/multi_strategy_backtest.py", "src/engine/attribution_decomposer.py",
-              "src/engine/realism_engine.py"):
-        tree = ast.parse(pathlib.Path(f).read_text(encoding="utf-8"))
-        lits = {n.value for n in ast.walk(tree)
-                if isinstance(n, ast.Constant) and isinstance(n.value, str)}
-        assert not (lits & old), (f, lits & old)
-
-
-def test_the_regime_breakdown_uses_the_quadrants_and_counts_unknown_days():
-    """국면별 표 — 사분면 라벨로 묶고, 미상인 날은 "미상" 한 줄로 센다."""
-    from src.engine.attribution_decomposer import AttributionDecomposer
-    df = pd.DataFrame({
-        "portfolio_return": [0.01, -0.01, 0.02, 0.0],
-        "regime": ["Goldilocks", "Goldilocks", None, "Disinflation"],
-        "systemic_risk": [None] * 4,
-        **{c: [0.0] * 4 for c in ("baseline_effect", "allocation_effect", "macro_effect",
-                                  "netting_effect", "cost_effect")},
-    })
-    rows = {r["regime"]: r for r in AttributionDecomposer._regime_breakdown(df)}
-    assert set(rows) == {"Goldilocks", "Disinflation", "미상"}
-    assert sum(r["n_days"] for r in rows.values()) == len(df)
-    assert rows["미상"]["regime_known"] is False
-
-
-def test_a_label_outside_the_vocabulary_is_not_silently_dropped():
-    """★조용히 버리지 않는다★ — 옛 대문자 라벨은 제 줄로 세고 어휘 밖이라고 말한다."""
-    from src.engine.attribution_decomposer import AttributionDecomposer
-    df = pd.DataFrame({"portfolio_return": [0.01, 0.02], "regime": ["GOLDILOCKS", "Goldilocks"],
-                       "systemic_risk": [None, None]})
-    rows = {r["regime"]: r for r in AttributionDecomposer._regime_breakdown(df)}
-    assert rows["GOLDILOCKS"]["regime_known"] is False and rows["GOLDILOCKS"]["regime_note"]
-    assert rows["Goldilocks"]["regime_known"] is True
-
-
 def test_counterfactual_scenarios_keep_the_regime_market():
     """★시나리오가 국면 시장을 잃지 않는다★ — 기준과 대안이 같은 시장의 국면을 본다."""
     from src.engine.counterfactual_analyzer import PRESET_SCENARIOS, CounterfactualAnalyzer

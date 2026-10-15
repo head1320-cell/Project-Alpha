@@ -71,15 +71,6 @@ def test_the_two_driver_sets_share_no_name():
     assert set(DRIVER_SETS) == {DRIVER_SET_STRATEGY, DRIVER_SET_HOLDING}
 
 
-def test_strategy_drivers_match_the_producer_verbatim():
-    """★`attribution_decomposer` 가 단일 출처다★ — 손으로 옮겨 적으면 낡는다.
-
-    BH2 부터 대조 대상은 수익률 항등식의 드라이버(`IDENTITY_DRIVERS`)다.
-    """
-    from src.engine.attribution_decomposer import IDENTITY_DRIVERS
-    assert tuple(STRATEGY_DRIVERS) == tuple(IDENTITY_DRIVERS)
-
-
 def test_every_driver_has_a_korean_label():
     """★이름 없는 드라이버는 문장에서 KeyError 가 된다★"""
     for name in (*STRATEGY_DRIVERS, *HOLDING_DRIVERS):
@@ -335,11 +326,10 @@ def test_the_ranked_clause_is_readable_as_a_list():
 def _user_facing_strings() -> dict[str, str]:
     """설명 계층이 사용자에게 내보내는 고정 문자열 전부."""
     import src.domain.daily_explanation as dom
-    import src.engine.daily_explain_backtest as bt
     import src.engine.daily_explain_holdings as hd
 
     out: dict[str, str] = {}
-    for mod in (dom, bt, hd):
+    for mod in (dom, hd):
         for name in dir(mod):
             if name.startswith("__"):
                 continue

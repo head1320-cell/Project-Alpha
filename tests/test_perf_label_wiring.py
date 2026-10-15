@@ -179,21 +179,6 @@ def _is_backtest_label(lb: dict) -> bool:
             and "data_real" in lb and "data_reason" in lb)
 
 
-def test_the_attribution_response_declares_its_kind(monkeypatch):
-    from src.api import stage11_routes as s11
-
-    class _Fake:
-        def __init__(self, engine): pass
-        def decompose(self, run_id, include_daily=False):
-            return {"available": True, "regime_breakdown": [{"regime": "GOLDILOCKS"}]}
-
-    monkeypatch.setattr("src.database.get_sync_engine", lambda: object())
-    monkeypatch.setattr("src.engine.attribution_decomposer.AttributionDecomposer", _Fake)
-    body = s11.multibacktest_attribution(1)
-    assert _is_backtest_label(body["perf_label"])
-    assert body["regime_breakdown"], "기존 키가 사라졌다"
-
-
 def test_the_counterfactual_response_declares_its_kind(monkeypatch):
     from src.api import stage11_routes as s11
 

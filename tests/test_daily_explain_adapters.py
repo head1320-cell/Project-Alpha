@@ -32,90 +32,7 @@ from src.domain.daily_explanation import (
     STRATEGY_DRIVERS,
     fold_price_basis,
 )
-from src.engine.daily_explain_backtest import explain_backtest_day
 from src.engine.daily_explain_holdings import explain_holdings_day
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 백테스트 어댑터 — 총변동이 독립적으로 있다
-# ═══════════════════════════════════════════════════════════════════════════
-#: ★BH2 — 드라이버는 수익률 항등식의 넷이다★ (`net = EW + alloc + cost + cash`).
-#: 예전 픽스처는 여섯 효과(선택·매크로·청산 포함)를 더해 "복리" 라 불렀다 — 하루에는
-#: 복리가 없고, 네팅은 수익률에 없다. 합이 총변동과 맞게 값을 고른다.
-_DRIVER_VALUES = {"baseline_effect": 0.36, "allocation_effect": 0.09,
-                  "cost_effect": -0.08, "cash_effect": 0.04}
-_TOTAL = sum(_DRIVER_VALUES.values())
-
-
-def _row(**over) -> dict:
-    assert set(_DRIVER_VALUES) == set(STRATEGY_DRIVERS), (
-        "픽스처가 드라이버 목록과 어긋났습니다 — 값을 채우고 이 검사를 통과시키세요")
-    base = {"date": "2026-09-11", "portfolio_return": _TOTAL,
-            **_DRIVER_VALUES,
-            # 보고 전용 — 드라이버가 아니다
-            "selection_effect": None, "macro_effect": 0.0, "netting_effect": 0.02,
-            "regime": None,
-            "identity": {"drivers": list(STRATEGY_DRIVERS), "not_modeled": [],
-                         "gap_pct": 0.0, "closes": True}}
-    base.update(over)
-    return base
-
-
-def test_a_closed_row_calls_its_residual_closed():
-    """하루에는 복리가 없다 — 항등식이 닫히면 잔차는 "닫힘"(부동소수 오차)."""
-    exp = explain_backtest_day(_row(), run_id=7)
-    assert exp.driver_set == DRIVER_SET_STRATEGY
-    assert exp.residual_kind == RESIDUAL_CLOSED
-    assert exp.residual_pct == pytest.approx(0.0, abs=1e-9)
-    assert exp.missing_drivers == {}
-    assert "netting_effect" not in exp.drivers, "네팅은 수익률 드라이버가 아니다"
-
-
-def test_an_incomplete_row_calls_its_residual_unexplained():
-    """★짝★ 드라이버가 빠지면 닫혔다고 말하지 않는다."""
-    exp = explain_backtest_day(
-        _row(allocation_effect=None,
-             identity={"drivers": list(STRATEGY_DRIVERS), "not_modeled": [],
-                       "gap_pct": None, "closes": False}), run_id=7)
-    assert exp.residual_kind == RESIDUAL_UNEXPLAINED
-    assert "allocation_effect" in exp.missing_drivers
-    assert exp.missing_drivers["allocation_effect"]
-    assert exp.residual_reason
-
-
-def test_a_row_that_does_not_close_is_unexplained():
-    """★짝★ 다 알아도 합이 안 맞으면(수익률에 무언가 더 들어 있으면) 닫힘이 아니다."""
-    exp = explain_backtest_day(
-        _row(portfolio_return=_TOTAL + 0.02,
-             identity={"drivers": list(STRATEGY_DRIVERS), "not_modeled": [],
-                       "gap_pct": 0.02, "closes": False}), run_id=7)
-    assert exp.residual_kind == RESIDUAL_UNEXPLAINED
-    assert exp.residual_pct == pytest.approx(0.02, abs=1e-9)
-
-
-def test_a_not_modeled_axis_is_neither_a_driver_nor_missing():
-    """현금 모델이 없는 엔진 — 현금은 미상이 아니라 없는 축이다."""
-    exp = explain_backtest_day(
-        _row(cash_effect=None, portfolio_return=_TOTAL - 0.04,
-             identity={"drivers": ["baseline_effect", "allocation_effect", "cost_effect"],
-                       "not_modeled": ["cash_effect"], "gap_pct": 0.0, "closes": True}),
-        run_id=7)
-    assert exp.residual_kind == RESIDUAL_CLOSED
-    assert "cash_effect" in exp.not_modeled and "cash_effect" not in exp.missing_drivers
-    assert "모델링하지 않" in exp.summary_ko
-
-
-def test_an_unknown_total_makes_the_residual_incalculable():
-    """★총변동을 모르면 잔차도 모른다★ — 0 으로 적지 않는다."""
-    exp = explain_backtest_day(_row(portfolio_return=None), run_id=7)
-    assert exp.total_change_pct is None
-    assert exp.residual_pct is None and exp.residual_reason
-
-
-def test_the_backtest_adapter_uses_only_strategy_drivers():
-    exp = explain_backtest_day(_row(), run_id=7)
-    assert set(exp.drivers) == set(STRATEGY_DRIVERS)
-    assert exp.price_basis is None, "전략 분해에 가격 기준 축은 없다"
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 보유 어댑터 — ★총변동을 독립적으로 관측하지 못한다★
@@ -266,14 +183,8 @@ def test_no_rows_means_no_source_claim(monkeypatch):
 # 재던 테스트는 그것을 놓쳤다. ★검사 대상은 생산물이다.★
 # ═══════════════════════════════════════════════════════════════════════════
 def _produced_sentences(stub_applied: bool = False) -> list[str]:
-    out = [
-        explain_backtest_day(_row(), run_id=7).summary_ko,
-        explain_backtest_day(
-            _row(macro_effect=None,
-                 coverage={"n_total": 5, "n_known": 4, "complete": False,
-                           "missing": ["macro_effect"]}), run_id=7).summary_ko,
-        explain_backtest_day(_row(portfolio_return=None), run_id=7).summary_ko,
-    ]
+    # (ST2, 2026-10-15) 백테스트 어댑터는 여러 전략 귀인과 함께 지웠다 — 보유 어댑터만 남았다.
+    out: list[str] = []
     if stub_applied:
         out += [
             explain_holdings_day({"005930": 100.0}, as_of="2026-09-11").summary_ko,
@@ -299,10 +210,6 @@ def test_produced_sentences_carry_no_markdown(stub):
 def test_produced_reasons_carry_no_markdown_either(stub):
     """★사유도 API 응답이다★ — 문장에 안 꿰여도 그대로 나간다."""
     exps = [
-        explain_backtest_day(
-            _row(macro_effect=None,
-                 coverage={"n_total": 5, "n_known": 4, "complete": False,
-                           "missing": ["macro_effect"]}), run_id=7),
         explain_holdings_day({"005930": 100.0}, as_of="2026-09-11"),
     ]
     for exp in exps:

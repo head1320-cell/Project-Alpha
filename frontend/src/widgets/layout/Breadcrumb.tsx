@@ -15,7 +15,7 @@ const MACRO_STUDIO: Record<string, string> = {
   "pinn-tail": "꼬리 위험", "agentic-mcp": "뷰 만들기",
 };
 const RUN_STEP: Record<string, string> = { loading: "실행 중", results: "결과", compare: "비교" };
-const ADMIN: Record<string, string> = { "live-trading": "실거래", "multi-backtest": "여러 전략 백테스트", realism: "현실성 점검" };
+const ADMIN: Record<string, string> = { "live-trading": "실거래", realism: "현실성 점검" };
 
 /** 경로 → 크럼. 알려진 중첩이 아니면 null(최상위·모르는 경로는 그리지 않는다). */
 export function crumbOf(pathname: string): Crumb | null {

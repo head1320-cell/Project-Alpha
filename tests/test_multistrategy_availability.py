@@ -145,11 +145,6 @@ _BODY = {"strategy_ids": [1, 2], "start_date": "2024-01-02",
 
 GUARDED = [
     ("post", "/api/v1/multibacktest/run", _BODY),
-    ("get", "/api/v1/multibacktest/runs", None),
-    ("get", "/api/v1/multibacktest/7", None),
-    ("delete", "/api/v1/multibacktest/7", None),
-    ("post", "/api/v1/multibacktest/counterfactual",
-     {**_BODY, "base_allocation_method": "hrp"}),
     ("get", "/api/v1/multibacktest/strategies", None),
     ("post", "/api/v1/multibacktest/strategies", {"run_id": "bt_x", "name": "x"}),
     ("delete", "/api/v1/multibacktest/strategies/7", None),
@@ -181,8 +176,6 @@ def test_the_guarded_routes_are_not_503_now(client, method, path, body):
 
 UNSUPPORTED = [
     ("/api/v1/multibacktest/run", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
-    ("/api/v1/multibacktest/counterfactual",
-     {**_BODY, "base_allocation_method": "hrp_macro"}, "hrp_macro"),
     ("/api/v1/realism/backtest", {**_BODY, "allocation_method": "hrp_macro"}, "hrp_macro"),
 ]
 
@@ -199,8 +192,6 @@ def test_r4_features_are_422_with_the_reason(client, path, body, feature):
 
 REGIME_CHANGE = [
     ("/api/v1/multibacktest/run", {**_BODY, "rebalance_policy": "regime_change"}),
-    ("/api/v1/multibacktest/counterfactual",
-     {**_BODY, "base_allocation_method": "hrp", "base_rebalance_policy": "regime_change"}),
     ("/api/v1/realism/backtest", {**_BODY, "rebalance_policy": "regime_change"}),
 ]
 
@@ -213,7 +204,6 @@ def test_regime_change_is_no_longer_refused(client, path, body):
 
 
 UNGUARDED = [
-    ("get", "/api/v1/multibacktest/counterfactual/scenarios"),
     ("get", "/api/v1/realism/market-impact/calibration"),
 ]
 

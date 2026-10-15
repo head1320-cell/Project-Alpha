@@ -22699,3 +22699,14 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   `live_fills` 체결 기록을 쓰던 `record_fill` 도 함께 사라졌다(부르는 곳 없었음). 중복 방지 인덱스(`ensure_fill_dedup_index`)는 남았다.
 - **확인**: ruff · 영향 테스트 240 통과 · pytest 전체(보존 분류 정정 뒤 재실행) · 로그인 화면 전·후 PNG.
 - **하지 않은 것**: Stage 11·12(ST2·ST3) · 옛 스펙 문서(`DATA_PLATFORM_SPEC.md` 의 대조 표 줄 등)는 기록으로 둔다.
+
+## ST2 · 여러 전략 백테스트 화면·API 삭제 + 전략 등록을 결과 화면으로 (2026-10-15, 사용자 "멀티 전략 백테스트는 필요 없어")
+- **지운 것**: 화면 `/admin/multi-backtest`(+ `widgets/multibacktest/*`, 메뉴·경로 머리·테마 예외 줄) · 경로 여덟(`/multibacktest` init-schema · runs · `/{id}` 읽기·지우기 · attribution · counterfactual · counterfactual/scenarios · availability) ·
+  그것만 쓰던 `engine/attribution_decomposer.py`·`engine/attribution_evidence.py`·`domain/attribution_effect.py`·`engine/daily_explain_backtest.py` 와 그 테스트(파일 여섯 + 다른 파일의 해당 테스트) ·
+  BU9a 의 여러 전략 요청 골든·고정물 · 쓰는 곳이 없어진 프런트 API(`availability`·`deactivate`·`unsupportedReason` 과 타입).
+- **남긴 것**: `/multibacktest/run`(현실성 점검이 아직 쓴다 — ST3 에서 정리) · 등록 전략 경로 셋(목록·등록·비활성 — 캔버스 전략 고르기) · `multibacktest_counterfactual` 은 경로 없이 함수로(캔버스 `counterfactual` 노드) ·
+  엔진(`multi_strategy_backtest`·`strategy_registry`·`counterfactual_analyzer`·`allocator`·`regime_model`·`order_netting` — 캔버스 계산 경로) · `multistrategy_availability`(가드가 읽는다).
+- **옮긴 것**: 전략 등록 → 백테스트 결과 화면 답 영역의 [전략으로 등록]. 요청은 옛 판과 같다(`POST /multibacktest/strategies {run_id, name}`). 열 때만 목록을 읽는다 · 이미 등록한 실행이면 다시 받지 않는다 ·
+  409 거절은 서버 사유 + 첫 불일치 날짜 · 목록 실패는 alert + 다시 시도. 새 `e2e/backtest-register.spec.ts` 넷.
+- **잃은 것**: 등록 전략을 비활성하는 화면(경로는 남음) · 저장된 여러 전략 실행을 다시 읽거나 귀인을 보는 길.
+- **확인**: ruff · tsc · eslint 0 오류 · pytest 8136 통과·11 건너뜀 · E2E 영향 44 + 캔버스·다크·모션·설정 120 통과 · 결과 화면 PNG(라이트/다크 · 1440/390) 사용자 허락.

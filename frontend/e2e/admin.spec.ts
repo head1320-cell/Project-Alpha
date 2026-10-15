@@ -21,7 +21,6 @@ import { trackErrors, uniq } from "./helpers";
 
 const ROUTES: [string, string][] = [
   ["/admin/live-trading", "Live Trading Cockpit"],
-  ["/admin/multi-backtest", "Multi-Strategy 통합 백테스트"],
   ["/admin/realism", "Realism Panel"],
 ];
 
@@ -78,4 +77,10 @@ test("Admin: LIVE 가 받아들여지면 거절 문구가 없다", async ({ page
   await pressLive(page, 200, { old_mode: "SHADOW", new_mode: "LIVE" });
   await page.waitForTimeout(500);
   await expect(page.locator(".live-mode-refused")).toHaveCount(0);
+});
+
+test("여러 전략 백테스트 화면은 없앴다 (ST2) — 주소가 없는 화면으로 열리고 메뉴에도 없다", async ({ page }) => {
+  const res = await page.goto("/admin/multi-backtest", { waitUntil: "domcontentloaded" });
+  expect(res?.status()).toBe(404);
+  await expect(page.locator('.terminal-nav a[href="/admin/multi-backtest"]')).toHaveCount(0);
 });

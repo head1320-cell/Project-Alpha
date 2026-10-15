@@ -9,7 +9,9 @@ APIRouter 모듈. 기존 main_api.py에서 다음과 같이 통합:
   app = FastAPI(...)
   app.include_router(stage11_router)
 
-이렇게 두 줄만 추가하면 Stage 11의 10개 endpoint가 자동 등록됨.
+(ST2, 2026-10-15) 여러 전략 백테스트 화면을 없애며 경로는 `/run`(현실성 점검이 아직 쓴다 — ST3 에서 정리)과
+등록 전략 셋(`/strategies` 목록·등록·비활성 — 캔버스 전략 고르기)만 남겼다. `multibacktest_counterfactual` 은
+경로 없이 캔버스 `counterfactual` 노드가 함수로 부른다.
 """
 
 from __future__ import annotations
@@ -108,36 +110,6 @@ def _attach_sources(out: dict, engine, strategy_ids) -> dict:
     return out
 
 
-def _run_strategy_ids(engine, run_id: int) -> list[int]:
-    """저장된 실행의 전략 id — 못 읽으면 빈 목록(→ 라벨 미상)."""
-    import json
-
-    from sqlalchemy import text
-    try:
-        with engine.connect() as c:
-            v = c.execute(text("SELECT strategy_ids FROM multibacktest_runs WHERE id = :r"),
-                          {"r": run_id}).scalar()
-        return [int(x) for x in json.loads(v)] if v else []
-    except Exception:                                         # noqa: BLE001
-        return []
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Schema 초기화
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@router.post("/init-schema")
-def multibacktest_init_schema():
-    """multibacktest_runs + daily + strategy_daily 테이블 생성."""
-    try:
-        from src.database import get_sync_engine
-        from src.engine.multibacktest_schema import init_multibacktest_schema
-        n = init_multibacktest_schema(get_sync_engine())
-        return {"status": "OK", "ddls_executed": n}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Run + List + Get + Delete
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -196,35 +168,10 @@ def multibacktest_run(req: MultiBacktestRunRequest):
         raise HTTPException(500, str(e))
 
 
-@router.get("/runs")
-def multibacktest_list(limit: int = Query(50, ge=1, le=200)):
-    """과거 실행 이력."""
-    # ★코어가 없으면 503★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
-    _guard()
-    try:
-        from src.database import get_sync_engine
-        from src.engine.multi_strategy_backtest import MultiStrategyBacktester
-        bt = MultiStrategyBacktester(get_sync_engine())
-        runs = bt.list_runs(limit=limit)
-        return {"count": len(runs), "runs": runs}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # 전략 레지스트리 (BG5) — ★`/{run_id}` 보다 먼저 등록한다★
 # `/{run_id}` 가 먼저면 `GET /strategies` 가 거기에 걸려 정수 파싱 422 가 된다.
 # ═══════════════════════════════════════════════════════════════════════════════
-
-@router.get("/availability")
-def multibacktest_availability():
-    """★무엇이 되고 무엇이 안 되는지★ (BG6) — 화면이 R4 옵션을 끄는 근거.
-
-    가드를 걸지 않는다: 코어가 없어도 "없다" 를 200 으로 말하는 것이 이 문의 일이다.
-    """
-    from src.engine.multistrategy_availability import status
-    return status()
-
 
 class RegisterStrategyRequest(BaseModel):
     run_id: str = Field(..., min_length=1, max_length=64)
@@ -276,66 +223,6 @@ def multibacktest_deactivate_strategy(strategy_id: int):
     return {"status": "OK", "deactivated_id": strategy_id}
 
 
-@router.get("/{run_id}")
-def multibacktest_get(run_id: int):
-    """단일 실행 상세 (daily + strategy_daily 포함)."""
-    # ★코어가 없으면 503★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
-    _guard()
-    try:
-        from src.database import get_sync_engine
-        from src.engine.multi_strategy_backtest import MultiStrategyBacktester
-        bt = MultiStrategyBacktester(get_sync_engine())
-        data = bt.load_run(run_id)
-        if not data:
-            raise HTTPException(404, f"Run {run_id} not found")
-        return _attach_sources(data, get_sync_engine(),
-                               _run_strategy_ids(get_sync_engine(), run_id))
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-@router.delete("/{run_id}")
-def multibacktest_delete(run_id: int):
-    """실행 삭제 (cascade)."""
-    # ★코어가 없으면 503★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
-    _guard()
-    try:
-        from src.database import get_sync_engine
-        from src.engine.multi_strategy_backtest import MultiStrategyBacktester
-        bt = MultiStrategyBacktester(get_sync_engine())
-        ok = bt.delete_run(run_id)
-        return {"status": "OK" if ok else "FAILED", "deleted_id": run_id}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Attribution
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@router.get("/{run_id}/attribution")
-def multibacktest_attribution(run_id: int, include_daily: bool = Query(False)):
-    """5-Factor Attribution 정밀 분해 (월별/분기별/국면별)."""
-    try:
-        from src.database import get_sync_engine
-        from src.engine.attribution_decomposer import AttributionDecomposer
-        decomposer = AttributionDecomposer(get_sync_engine())
-        result = decomposer.decompose(run_id, include_daily=include_daily)
-        if not result.get("available"):
-            raise HTTPException(404, result.get("message", "Run not found"))
-        # 국면별 알파 표(`RegimeAttributionTable`)가 이 응답을 그린다 — 라벨이 없었다.
-        # ★라벨은 원천 실행들의 mock 여부로★ (BG5).
-        _attach_sources(result, get_sync_engine(),
-                        _run_strategy_ids(get_sync_engine(), run_id))
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Counterfactual
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -356,7 +243,6 @@ class CounterfactualRequest(BaseModel):
     regime_market:         Literal["kr", "us"] = Field(default="kr")
 
 
-@router.post("/counterfactual")
 def multibacktest_counterfactual(req: CounterfactualRequest):
     """What-If 시나리오 병렬 실행 + 의사결정 가치 정량화."""
     # ★코어가 없으면 503 · 없는 기능을 고르면 422★ (BF·BG4) — 시나리오는 배분을
@@ -389,20 +275,5 @@ def multibacktest_counterfactual(req: CounterfactualRequest):
         # 그래서 블록 하나가 시나리오 전부를 말한다.
         out["cost_model"] = _cost_block(req, _DOOR_MULTIBACKTEST_COUNTERFACTUAL)
         return out
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-@router.get("/counterfactual/scenarios")
-def multibacktest_counterfactual_scenarios():
-    """사용 가능한 카운터팩추얼 시나리오 카탈로그."""
-    try:
-        from src.engine.counterfactual_analyzer import PRESET_SCENARIOS
-        return {
-            "scenarios": [
-                {"name": sc.name, "label": sc.label, "description": sc.description}
-                for sc in PRESET_SCENARIOS.values()
-            ]
-        }
     except Exception as e:
         raise HTTPException(500, str(e))

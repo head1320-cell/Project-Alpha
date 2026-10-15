@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { recordApi } from "./helpers";
 import {
-  LIVE_REFUSED, liveState, multiState, realismState, routeConnection, routeGate, routeLive, routeMulti, routeRealism, signIn,
+  LIVE_REFUSED, liveState, realismState, routeConnection, routeGate, routeLive, routeRealism, signIn,
   MB_STRATEGIES,
 } from "./fixtures/admin";
 
@@ -122,74 +122,6 @@ test("실거래 폴링 주기: 10초마다 한 번 다시 읽는다 (9초엔 아
   await expect.poll(() => modeReads, { timeout: 5_000 }).toBe(2);
 });
 
-// ── 여러 전략 백테스트 ─────────────────────────────────────────────────────
-
-test("여러 전략 요청 골든: 목록·실행(save)·반사실·지난 실행·등록·비활성의 요청이 바이트 그대로", async ({ page }) => {
-  test.setTimeout(240_000);
-  await page.clock.setFixedTime(new Date("2026-10-02T09:00:00+09:00"));
-  await signIn(page, "admin");
-  await routeConnection(page);
-  const st = multiState();
-  await routeMulti(page, st);
-  const rec = recordApi(page, ["/api/v1/multibacktest/", "/api/v1/backtest/runs"]);
-  const out: Record<string, Step> = {};
-  const close = async (name: string) => { await rec.step(name); out[name] = split(rec.steps[name], true); };
-  const cfRun = async () => {
-    if (await act(page, "cf-again").isVisible()) await act(page, "cf-again").click();
-    await act(page, "cf-run").click();
-  };
-
-  await page.goto("/admin/multi-backtest", { waitUntil: "domcontentloaded" });
-  await expect(act(page, "mb-run")).toBeVisible({ timeout: 20_000 });
-  await close("01 첫 화면");
-  await act(page, "mb-refresh").click();
-  await close("02 새로 고침");
-  await act(page, "mb-run").click();
-  await expect(act(page, "cf-run")).toBeVisible({ timeout: 20_000 });
-  await close("03 기본값으로 실행");
-  await cfRun();
-  await expect(act(page, "cf-again")).toBeVisible({ timeout: 20_000 });
-  await close("04 반사실");
-
-  await pick(page, "mb-alloc", "inverse_vol");
-  await pick(page, "mb-rebal", "weekly");
-  await pick(page, "mb-regime", "us");
-  await act(page, "mb-netting").click();
-  await act(page, "mb-capital").fill("20000000");
-  await act(page, "mb-start").fill("2025-01-01");
-  await act(page, "mb-strategy").and(page.locator('[data-id="2"]')).click();
-  await act(page, "mb-run").click();
-  await expect(act(page, "cf-run")).toBeVisible({ timeout: 20_000 });
-  await close("05 설정 바꿔 실행");
-  await cfRun();
-  await expect(act(page, "cf-again")).toBeVisible({ timeout: 20_000 });
-  await close("06 반사실 다시");
-
-  await act(page, "mb-past").and(page.locator('[data-id="7"]')).click();
-  await page.waitForTimeout(800);
-  await close("07 지난 실행");
-  await cfRun();
-  await expect(act(page, "cf-again")).toBeVisible({ timeout: 20_000 });
-  await close("08 지난 실행으로 반사실");
-
-  await act(page, "reg-name").and(page.locator('[data-run="bt_b"]')).fill("골든");
-  await act(page, "reg-go").and(page.locator('[data-run="bt_b"]')).click();
-  await close("09 이름 붙여 등록");
-  await act(page, "reg-go").and(page.locator('[data-run="bt_c"]')).click();
-  await close("10 이름 없이 등록");
-  await act(page, "deact").and(page.locator('[data-id="2"]')).click();
-  await confirmIfAsked(page, "deact-yes");
-  await close("11 비활성");
-
-  const run03 = out["03 기본값으로 실행"].writes.join("");
-  expect(run03, "실행은 저장한다").toContain('"save":true');
-  expect(run03, "기본 배분은 hrp").toContain('"allocation_method":"hrp"');
-  expect(out["10 이름 없이 등록"].writes.join(""), "이름이 없으면 null").toContain('"name":null');
-  expect(out["08 지난 실행으로 반사실"].writes.join(""), "지난 실행 뒤 반사실은 그 실행의 설정으로").toContain('"base_allocation_method":"inverse_vol"');
-  expect(st.strategies.map((s) => s.id)).not.toContain(MB_STRATEGIES[1].id);
-  compare("multi-backtest", out);
-});
-
 // ── 현실성 점검 ────────────────────────────────────────────────────────────
 
 test("현실성 요청 골든: 처음엔 요청 0 · 계산하기는 전략을 읽고 두 계산을 같은 조건으로", async ({ page }) => {
@@ -223,7 +155,7 @@ test("현실성 요청 골든: 처음엔 요청 0 · 계산하기는 전략을 �
 
 // ── 짝: 비교기는 공허하지 않다 ─────────────────────────────────────────────
 
-test("짝: 골든 본문 하나만 바꿔도 다르다고 본다 (세 화면)", async () => {
+test("짝: 골든 본문 하나만 바꿔도 다르다고 본다 (두 화면)", async () => {
   const bend = (name: string, step: string, from: RegExp, to: string) => {
     const want = JSON.parse(fs.readFileSync(G(name), "utf8")) as Record<string, Step>;
     const before = want[step].writes.join("\n");
@@ -232,6 +164,5 @@ test("짝: 골든 본문 하나만 바꿔도 다르다고 본다 (세 화면)", 
     expect(bent).not.toEqual(want);
   };
   bend("live-trading", "08 비상 정지 걸기", /"hold"/, '"immediate"');
-  bend("multi-backtest", "03 기본값으로 실행", /"commission_rate":[0-9.e-]+/, '"commission_rate":0.0002');
   bend("realism", "03 계산하기", /"initial_capital":\d+/, '"initial_capital":1000000000');
 });

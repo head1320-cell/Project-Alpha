@@ -14,7 +14,7 @@ import { allocationApi } from "@/entities/allocation/api";
 import { useSession } from "@/entities/session";
 import { ProfileMenu, useThemeSync } from "@/features/profile";
 import {
-  Building2, Database, Gauge, Globe2, Home, Layers, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Wallet, Workflow,
+  Building2, Database, Gauge, Globe2, Home, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Wallet, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
@@ -47,7 +47,6 @@ const MORE: NavLink[] = [
 /** 관리자에게만 보인다 — 숨김은 편의일 뿐 권한이 아니다(권한은 서버가 판정한다). */
 const ADMIN: NavLink[] = [
   { label: "실거래", href: "/admin/live-trading", Icon: Radio },
-  { label: "여러 전략 백테스트", href: "/admin/multi-backtest", Icon: Layers },
   { label: "현실성 점검", href: "/admin/realism", Icon: Gauge },
 ];
 

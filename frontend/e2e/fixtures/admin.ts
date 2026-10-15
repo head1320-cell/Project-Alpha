@@ -162,7 +162,7 @@ export async function routeGate(page: Page, st: GateState) {
   });
 }
 
-// ── 여러 전략 백테스트 ─────────────────────────────────────────────────────
+// ── 전략 계산 응답 모양 (현실성 점검이 쓴다) ─────────────────────────────────
 
 const QUADS = ["Goldilocks", "Goldilocks", "Reflation", "Reflation", null, "Stagflation", "Disinflation", "Goldilocks"];
 
@@ -205,21 +205,6 @@ export const MB_STRATEGIES = [
     symbols: ["005380", "051910"], registered_at: 1_760_000_100, repro: { equal: true, compared_points: 487, first_mismatch: null } },
 ];
 
-export const MB_BACKTEST_RUNS = [
-  { run_id: "bt_a", status: "completed", strategy_name: "가치 상위 20", completed_at: 1_759_276_800, is_mock_data: true },
-  { run_id: "bt_b", status: "completed", strategy_name: "저변동 30", completed_at: 1_759_363_200, is_mock_data: true },
-  { run_id: "bt_c", status: "completed", strategy_name: "배당 15", completed_at: 1_759_449_600, is_mock_data: true },
-  { run_id: "bt_q", status: "failed", strategy_name: "실패한 실행", completed_at: null, is_mock_data: null },
-];
-
-export const MB_AVAILABILITY = {
-  available: true, missing: [], data_gap: "", reason: null, since: "BG6",
-  unsupported_features: [
-    { feature: "macro_overlay", field: "allocation_method", value: "hrp_macro",
-      reason: "매크로 피드와 국면 분류기가 없어 hrp_macro 는 아직 돌리지 않아요(R4).", missing: ["macro_feed"] },
-  ],
-};
-
 const PERF = { kind: "backtest", data_source: "mock", label: "백테스트 · 연습용" };
 const SOURCES = { available: true, reason: null, strategies: MB_STRATEGIES.map((s) => ({
   strategy_id: s.id, registered: true, name: s.name, source_run_id: s.source_run_id, is_active: true,
@@ -248,155 +233,6 @@ export function mbRunResult(run_id: number | null, config: Record<string, unknow
     n_trading_days: daily.length, duration_seconds: 1.42, warnings: [], ...(run_id === null ? {} : { run_id }),
     cost_model: { commission_rate: 0.00015, slippage_rate: 0.0005, basis: "명시" }, sources: SOURCES, perf_label: PERF,
   };
-}
-
-export function mbAttribution(run_id: number) {
-  const cumulative = {
-    baseline_effect_pct: 3.1, allocation_effect_pct: 0.42, selection_effect_pct: null, macro_effect_pct: 0, netting_effect_pct: null,
-    cost_effect_pct: -0.08, cash_effect_pct: null, cash_not_modeled_reason: "이 엔진은 현금 이자를 모형에 넣지 않아요.",
-    compounding_pct: 0.05, interaction_pct: 0.0000001, unexplained_pct: null, unexplained_reason: null,
-    identity: { holds: true, max_abs_gap: 2e-12, n_rows: 60, n_rows_checked: 60, not_modeled: ["cash_effect"], reason: null, tolerance: 1e-9 },
-    report_only: { netting_effect: { value_pct: null, reason: "네팅은 보고 전용이라 수익률에 더하지 않아요." } },
-    coverage: {}, coverage_complete: true, waterfall_omitted: [], total_decomposed_pct: 3.44, actual_return_pct: 3.49, netting_savings_value: 70_800,
-  };
-  return {
-    available: true, run_id, run_name: `실행 ${run_id}`, start_date: "2024-01-02", end_date: "2024-03-01", allocation_method: "hrp",
-    n_trading_days: 60, summary: { total_return_pct: 3.49, annualized_return_pct: 14.83, sharpe_ratio: 1.214, max_drawdown_pct: -4.37 },
-    cumulative, attribution_evidence: {},
-    waterfall: [
-      { step: "baseline", label: "동일가중 기준", value: 3.1, running_total: 3.1, kind: "baseline" },
-      { step: "allocation", label: "배분 효과", value: 0.42, running_total: 3.52, kind: "positive" },
-      { step: "cost", label: "거래 비용", value: -0.08, running_total: 3.44, kind: "negative" },
-      { step: "compounding", label: "복리", value: 0.05, running_total: 3.49, kind: "interaction" },
-      { step: "total", label: "실제", value: 3.49, running_total: 3.49, kind: "total" },
-    ],
-    monthly: [], quarterly: [],
-    regime_breakdown: [
-      { regime: "Goldilocks", n_days: 24, n_days_pct: 40, annualized_return_pct: 21.4, volatility_pct: 9.8, sharpe: 2.18,
-        allocation_effect_pct: 0.21, macro_effect_pct: 0, netting_effect_pct: 0, cost_effect_pct: -0.03, cash_effect_pct: null, regime_known: true },
-      { regime: "Reflation", n_days: 16, n_days_pct: 26.7, annualized_return_pct: 8.2, volatility_pct: 11.3, sharpe: 0.73,
-        allocation_effect_pct: 0.12, macro_effect_pct: 0, netting_effect_pct: 0, cost_effect_pct: -0.02, cash_effect_pct: null, regime_known: true },
-      { regime: "미상", n_days: 8, n_days_pct: 13.3, annualized_return_pct: -3.1, volatility_pct: 12.6, sharpe: -0.25,
-        allocation_effect_pct: 0.01, macro_effect_pct: 0, netting_effect_pct: 0, cost_effect_pct: -0.01, cash_effect_pct: null,
-        regime_known: false, regime_note: "그 시점에 공표된 빈티지로 판정하지 못한 날" },
-    ],
-    strategy_contribution: [], sources: SOURCES, perf_label: PERF,
-  };
-}
-
-/** 지난 실행 #7 — 설정이 기본값과 다르다(반사실이 이 설정을 써야 한다). */
-export const MB_PAST_CONFIG = {
-  strategy_ids: [1, 2], start_date: "2022-01-03", end_date: "2023-12-29", initial_capital: 50_000_000, allocation_method: "inverse_vol",
-  rebalance_policy: "quarterly", netting_enabled: true, macro_overlay_enabled: false, commission_rate: 0.0002, slippage_rate: 0.001, regime_market: "us",
-};
-export const MB_RUN_ROWS = [
-  { id: 7, run_name: "지난 분기 점검", strategy_ids: "[1, 2]", start_date: "2022-01-03", end_date: "2023-12-29", allocation_method: "inverse_vol",
-    status: "completed", total_return_pct: 11.42, sharpe_ratio: 0.87, max_drawdown_pct: -9.1, netting_total_savings: 31_000,
-    n_trading_days: 60, created_at: "2026-10-01T09:00:00", duration_seconds: 2.1 },
-];
-
-export function mbScenarios() {
-  const names: [string, string][] = [["baseline", "기준"], ["no_macro_overlay", "매크로 끄기"], ["no_netting", "청산 끄기"],
-    ["equal_weight", "동일 가중"], ["inverse_vol", "역변동성"]];
-  const scenarios = names.map(([name, label], k) => {
-    if (name === "no_netting") return { name, label, success: false, error: "이 시나리오는 데이터가 모자라 돌리지 못했어요." };
-    const daily = dailyRecords(60).map((d) => ({ ...d, cumulative_return: d.cumulative_return * (1 - k * 0.08) }));
-    return { name, label, description: `${label} 시나리오`, summary: { ...mbSummary(daily), total_return_pct: +(3.49 * (1 - k * 0.08)).toFixed(2) },
-      equity_curve: daily.filter((_, i) => i % 5 === 0).map((d) => ({ date: d.date, equity: d.portfolio_equity,
-        cumulative_return_pct: d.cumulative_return, drawdown_pct: d.drawdown_pct, regime: d.regime })),
-      n_trading_days: 60, duration_seconds: 0.4, config_used: { allocation_method: "hrp" } };
-  });
-  const ok = scenarios.filter((s) => "summary" in s) as { name: string; label: string; summary: ReturnType<typeof mbSummary> }[];
-  const base = ok.find((s) => s.name === "baseline")!.summary;
-  return {
-    available: true, n_scenarios: scenarios.length, scenarios,
-    comparison_table: ok.map((s) => ({
-      scenario: s.name, label: s.label, total_return_pct: s.summary.total_return_pct, annualized_return_pct: s.summary.annualized_return_pct,
-      sharpe_ratio: s.summary.sharpe_ratio, max_drawdown_pct: s.summary.max_drawdown_pct, calmar_ratio: s.summary.calmar_ratio,
-      n_rebalances: s.summary.n_rebalances, total_turnover_pct: s.summary.total_turnover_pct, netting_savings: s.summary.netting_total_savings,
-      alpha_vs_baseline_pct: s.name === "baseline" ? 0 : +(s.summary.total_return_pct - base.total_return_pct).toFixed(3),
-      sharpe_diff_vs_baseline: 0, mdd_diff_vs_baseline: 0,
-    })).sort((a, b) => b.total_return_pct - a.total_return_pct),
-    decision_values: {
-      baseline_return_pct: base.total_return_pct, baseline_sharpe: base.sharpe_ratio,
-      macro_overlay_value_pct: null, macro_overlay_description: "매크로 오버레이의 가치",
-      macro_overlay_value_reason: "매크로 오버레이는 hrp_macro 에서만 작동합니다. 기준 구성(hrp)에서는 차이가 구조적으로 0 이에요.",
-      hrp_vs_inverse_vol_value_pct: 0.56, hrp_vs_inverse_vol_value_bp_per_year: 235.2, hrp_vs_inverse_vol_sharpe_diff: 0.04,
-      hrp_vs_inverse_vol_description: "HRP 클러스터링의 가치",
-      vs_equal_weight_value_pct: 0.84, vs_equal_weight_value_bp_per_year: 352.8, vs_equal_weight_sharpe_diff: 0.07,
-      vs_equal_weight_description: "전체 시스템의 가치",
-    },
-    total_duration_seconds: 2.1, sources: SOURCES, perf_label: PERF, cost_model: { basis: "명시" },
-  };
-}
-
-export type MultiState = {
-  runs: Record<string, unknown>[];
-  strategies: Record<string, unknown>[];
-  backtestRuns: Record<string, unknown>[];
-  availability: Record<string, unknown>;
-  fail: Partial<Record<"runs" | "availability" | "strategies" | "backtestRuns" | "run" | "attribution" | "past" | "counterfactual", number>>;
-  registerReply: { status: number; json: unknown } | null;
-};
-export function multiState(o: Partial<MultiState> = {}): MultiState {
-  return { runs: MB_RUN_ROWS, strategies: MB_STRATEGIES, backtestRuns: MB_BACKTEST_RUNS, availability: MB_AVAILABILITY,
-    fail: {}, registerReply: null, ...o };
-}
-
-export async function routeMulti(page: Page, st: MultiState) {
-  const fail = (r: Route, k: keyof MultiState["fail"]) => r.fulfill({ status: st.fail[k]!, json: { detail: `${k} 테스트 실패` } });
-  await page.route("**/api/v1/backtest/runs", (r) => {
-    if (r.request().method() !== "GET") return r.fallback();
-    if (st.fail.backtestRuns) return fail(r, "backtestRuns");
-    return r.fulfill({ json: { runs: st.backtestRuns } });
-  });
-  await page.route("**/api/v1/multibacktest/**", async (r) => {
-    const req = r.request();
-    const u = new URL(req.url());
-    const p = u.pathname.replace(/^.*\/api\/v1\/multibacktest/, "");
-    const m = req.method();
-    if (p === "/runs") return st.fail.runs ? fail(r, "runs") : r.fulfill({ json: { count: st.runs.length, runs: st.runs } });
-    if (p === "/availability") return st.fail.availability ? fail(r, "availability") : r.fulfill({ json: st.availability });
-    if (p === "/strategies" && m === "GET") return st.fail.strategies ? fail(r, "strategies") : r.fulfill({ json: { count: st.strategies.length, strategies: st.strategies } });
-    if (p === "/strategies" && m === "POST") {
-      if (st.registerReply) return r.fulfill({ status: st.registerReply.status, json: st.registerReply.json });
-      const body = req.postDataJSON() as { run_id: string; name: string | null };
-      const src = st.backtestRuns.find((b) => b.run_id === body.run_id) as { strategy_name?: string } | undefined;
-      const row = { ...MB_STRATEGIES[0], id: 10 + st.strategies.length, name: body.name ?? src?.strategy_name ?? body.run_id, source_run_id: body.run_id };
-      st.strategies = [...st.strategies, row];
-      return r.fulfill({ status: 201, json: row });
-    }
-    const del = p.match(/^\/strategies\/(\d+)$/);
-    if (del && m === "DELETE") {
-      const id = Number(del[1]);
-      st.strategies = st.strategies.filter((s) => s.id !== id);
-      return r.fulfill({ json: { status: "deactivated", deactivated_id: id } });
-    }
-    if (p === "/run" && m === "POST") {
-      if (st.fail.run) return fail(r, "run");
-      const body = req.postDataJSON() as Record<string, unknown>;
-      const { save: _s, ...config } = body;
-      return r.fulfill({ json: mbRunResult(body.save ? 9 : null, config) });
-    }
-    if (p === "/counterfactual" && m === "POST") return st.fail.counterfactual ? fail(r, "counterfactual") : r.fulfill({ json: mbScenarios() });
-    const att = p.match(/^\/(\d+)\/attribution$/);
-    if (att) return st.fail.attribution ? fail(r, "attribution") : r.fulfill({ json: mbAttribution(Number(att[1])) });
-    const one = p.match(/^\/(\d+)$/);
-    if (one) {
-      if (st.fail.past) return fail(r, "past");
-      const id = Number(one[1]);
-      const daily = dailyRecords(60, "2022-01-03", [1, 2], 50_000_000);
-      const row = (st.runs.find((x) => x.id === id) ?? MB_RUN_ROWS[0]) as Record<string, unknown>;
-      return r.fulfill({ json: {
-        run: { ...row, annualized_return_pct: 5.6, calmar_ratio: 0.61, total_trades: 9, n_rebalances: 3, config_json: JSON.stringify(MB_PAST_CONFIG) },
-        daily: daily.map((d) => ({ trade_date: d.date, portfolio_equity: d.portfolio_equity, portfolio_return: d.portfolio_return,
-          cumulative_return: d.cumulative_return, drawdown_pct: d.drawdown_pct, regime: d.regime, rebalanced: d.rebalanced ? 1 : 0 })),
-        strategy_daily: daily.flatMap((d) => Object.entries(d.weights).map(([sid, w]) => ({ trade_date: d.date, strategy_id: Number(sid), weight: w }))),
-        sources: SOURCES, perf_label: PERF,
-      } });
-    }
-    return r.fulfill({ status: 404, json: { detail: "이 스펙이 정하지 않은 경로" } });
-  });
 }
 
 // ── 현실성 점검 ────────────────────────────────────────────────────────────

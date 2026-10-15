@@ -43,7 +43,7 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
  */
 export const DARK_EXCEPTIONS: { pattern: RegExp; label: string; looks: "light" | "dark" }[] = [
   { pattern: /^\/dev(\/|$)/, label: "개발 화면", looks: "light" },
-  { pattern: /^\/admin\/(live-trading|multi-backtest|realism)(\/|$)/, label: "실거래·다중 백테스트·현실성 관리 화면", looks: "dark" },
+  { pattern: /^\/admin\/(live-trading|realism)(\/|$)/, label: "실거래·현실성 관리 화면", looks: "dark" },
 ];
 export const darkException = (path: string) => DARK_EXCEPTIONS.find((r) => r.pattern.test(path)) ?? null;
 export const darkReady = (path: string) => DARK_READY.some((r) => r.pattern.test(path));

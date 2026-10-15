@@ -22,6 +22,8 @@ import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import { Notice, PageHead } from "@/shared/ui/tx";
 
+import { RegisterAsStrategy } from "./RegisterAsStrategy";
+
 // ★Card 로 감싸면서 지킨 것★ `.brun-card` / `.brun-card-t`(H2) 는 같은 노드에 그대로 둔다(E2E 계약 — backtest.spec 이
 //  `.brun-card-t` 의 텍스트로 절을 찾는다). 여백의 주인은 하나: `.brun-card` 는 0, 머리·몸통(`rs-card-h`·`rs-card-b`)이 가진다.
 
@@ -477,6 +479,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           <Link href="/backtest" className="tx-btn tx-btn--main">편집기에서 고치기</Link>
           <button type="button" className="tx-btn tx-btn--sub" onClick={retry}>같은 설정으로 다시 실행</button>
           <Link href={`/backtest/runs/${runId}/compare`} className="tx-btn tx-btn--sub">다른 실행과 비교</Link>
+          <RegisterAsStrategy runId={runId} defaultName={run.strategy_name} />
         </div>
         {retryErr && (
           <Notice tone="danger" title="다시 실행하지 못했어요">

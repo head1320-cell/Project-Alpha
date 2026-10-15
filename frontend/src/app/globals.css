@@ -11253,3 +11253,14 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .ma-ord-why, .ma-ord-confirm { grid-column: 1 / -1; }
   .ma-acct { min-width: 0; width: 100%; }
 }
+
+/* ── ST2 · 결과 화면의 "전략으로 등록" — 여러 전략 화면의 등록 판을 옮겼다 ───────── */
+.rs-reg { flex-basis: 100%; display: grid; gap: 8px; margin-top: 4px; padding: 14px 16px; border-radius: var(--tx-r-row);
+  background: var(--tx-bg); }
+.rs-reg-label { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.rs-reg-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.rs-reg-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--tx-mute); word-break: keep-all; }
+.rs-reg-ok { margin: 0; font-size: 14px; line-height: 1.5; color: var(--tx-ink); word-break: keep-all; }
+.rs-reg-ok a { color: var(--tx-blue); font-weight: 600; }
+.rs-reg-retry { margin-left: 8px; }
+@media (max-width: 520px) { .rs-reg-row { grid-template-columns: minmax(0, 1fr); } }

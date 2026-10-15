@@ -49,7 +49,9 @@ def test_the_node_equals_the_route_and_records_nothing(client, method):
     assert v["perf_label"] == ref["perf_label"] and v["cost_model"] == ref["cost_model"]
     assert v["strategy_names"] == {str(k): n for k, n in ref["strategy_names"].items()}
     assert [p["equity"] for p in v["curve"]] == [r["portfolio_equity"] for r in ref["daily_records"]]
-    assert client.get(f"{_S}/runs").json()["count"] == 0               # 계산은 기록하지 않는다
+    from src.database import get_sync_engine
+    from src.engine.multi_strategy_backtest import MultiStrategyBacktester
+    assert MultiStrategyBacktester(get_sync_engine()).list_runs(limit=10) == []   # 계산은 기록하지 않는다
 
 
 def test_an_empty_period_means_the_whole_common_record(client, db):

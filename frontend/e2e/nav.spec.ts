@@ -105,7 +105,7 @@ test("관리 메뉴(BU0): 관리자에게만 보인다 — 분석가·로그인 
   role = "admin";
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator('.terminal-header .pf-avatar[data-state="signed_in"]')).toBeVisible();
-  for (const [href, label] of [["/admin/live-trading", "실거래"], ["/admin/multi-backtest", "여러 전략 백테스트"], ["/admin/realism", "현실성 점검"]]) {
+  for (const [href, label] of [["/admin/live-trading", "실거래"], ["/admin/realism", "현실성 점검"]]) {
     await expect(page.locator(`.terminal-nav a[href="${href}"]`)).toHaveAttribute("aria-label", label);
   }
 });
