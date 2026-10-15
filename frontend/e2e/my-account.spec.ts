@@ -692,7 +692,7 @@ test("BV9: 멈춘 역에서만 고리가 한 번 퍼지고, 감속 모션이면 
     await page.locator(".ma-order-send").click();
     await expect(station(page, "risk")).toHaveAttribute("data-hit", "stop");
     if (motion === "no-preference") {
-      expect(await ring("risk")).toBe("ma-pulse/1");
+      expect(await ring("risk")).toBe("tx-pulse/1");                 // 키프레임은 BU9b-0 에서 공용 이름으로
       expect(await ring("kill")).toMatch(/^none\//);                    // 지나간 역은 퍼지지 않는다
     } else {
       expect(await ring("risk")).toMatch(/^none\//);

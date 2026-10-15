@@ -56,59 +56,59 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
     : "켜면 새 주문과 미체결 주문을 멈춰요.";
 
   return (
-    <section className="tx-sec ma-path" aria-labelledby="ma-path-h" data-stop={trace ? trace.stop : undefined}>
+    <section className="tx-sec ma-path tx-path" aria-labelledby="ma-path-h" data-stop={trace ? trace.stop : undefined}>
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="ma-path-h">주문이 가는 길</h2>
           <p className="tx-sec-sub">주문은 서버에서 이 순서로 지나가요. 주문을 내면 어디서 멈췄는지 여기 표시돼요.</p>
         </div>
       </header>
-      <ol className="ma-path-l" key={trace?.reply.client_order_id ?? "idle"}>
-        <li className="ma-st" data-st="kill" data-hit={hit(0)} data-blocked={k?.active ? "true" : undefined}>
-          <span className="ma-st-dot" aria-hidden><OctagonX className="ma-st-ic" size={14} strokeWidth={2} /></span>
-          <div className="ma-st-b">
-            <p className="ma-st-name">비상 정지</p>
-            <p className="ma-st-state">{killState}</p>
-            <p className="ma-st-sub">{killSub}</p>
+      <ol className="ma-path-l tx-path-l" key={trace?.reply.client_order_id ?? "idle"}>
+        <li className="ma-st tx-st" data-st="kill" data-hit={hit(0)} data-blocked={k?.active ? "true" : undefined}>
+          <span className="ma-st-dot tx-st-dot" aria-hidden><OctagonX className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
+          <div className="ma-st-b tx-st-b">
+            <p className="ma-st-name tx-st-name">비상 정지</p>
+            <p className="ma-st-state tx-st-state">{killState}</p>
+            <p className="ma-st-sub tx-st-sub">{killSub}</p>
           </div>
         </li>
-        <li className="ma-st" data-st="risk" data-hit={hit(1)}>
-          <span className="ma-st-dot" aria-hidden><ShieldCheck className="ma-st-ic" size={14} strokeWidth={2} /></span>
-          <div className="ma-st-b">
-            <p className="ma-st-name">위험 검사</p>
-            <p className="ma-st-state">주문마다 서버가 따져요</p>
-            <p className="ma-st-sub">가격, 하루 거래 한도, 장 시간 같은 것을 봐요. 걸리면 주문하지 않아요.</p>
+        <li className="ma-st tx-st" data-st="risk" data-hit={hit(1)}>
+          <span className="ma-st-dot tx-st-dot" aria-hidden><ShieldCheck className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
+          <div className="ma-st-b tx-st-b">
+            <p className="ma-st-name tx-st-name">위험 검사</p>
+            <p className="ma-st-state tx-st-state">주문마다 서버가 따져요</p>
+            <p className="ma-st-sub tx-st-sub">가격, 하루 거래 한도, 장 시간 같은 것을 봐요. 걸리면 주문하지 않아요.</p>
           </div>
         </li>
-        <li className="ma-st ma-st--mode" data-st="mode" data-hit={hit(2)}>
-          <span className="ma-st-dot" aria-hidden><SlidersHorizontal className="ma-st-ic" size={14} strokeWidth={2} /></span>
-          <div className="ma-st-b">
-            <p className="ma-st-name">실행 모드</p>
-            <div className="ma-mode" role="group" aria-label="실행 모드">
-              <button type="button" className="ma-mode-b" data-mode="SHADOW" aria-pressed={cur === "SHADOW"}
+        <li className="ma-st tx-st ma-st--mode" data-st="mode" data-hit={hit(2)}>
+          <span className="ma-st-dot tx-st-dot" aria-hidden><SlidersHorizontal className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
+          <div className="ma-st-b tx-st-b">
+            <p className="ma-st-name tx-st-name">실행 모드</p>
+            <div className="ma-mode tx-modes" role="group" aria-label="실행 모드">
+              <button type="button" className="ma-mode-b tx-mode-b" data-mode="SHADOW" aria-pressed={cur === "SHADOW"}
                       disabled={cur === null || change.isPending} onClick={() => pick("SHADOW")}>
-                <span className="ma-mode-t">기록만</span><span className="ma-mode-d">보내지 않아요</span>
+                <span className="ma-mode-t tx-mode-t">기록만</span><span className="ma-mode-d tx-mode-d">보내지 않아요</span>
               </button>
-              <button type="button" className="ma-mode-b" data-mode="PAPER" aria-pressed={cur === "PAPER"}
+              <button type="button" className="ma-mode-b tx-mode-b" data-mode="PAPER" aria-pressed={cur === "PAPER"}
                       disabled={cur === null || change.isPending || !acc.is_paper} onClick={() => pick("PAPER")}>
-                <span className="ma-mode-t">모의 체결</span><span className="ma-mode-d">실제 돈은 안 써요</span>
+                <span className="ma-mode-t tx-mode-t">모의 체결</span><span className="ma-mode-d tx-mode-d">실제 돈은 안 써요</span>
               </button>
-              <button type="button" className="ma-mode-b ma-mode-b--live" data-mode="LIVE" aria-pressed={cur === "LIVE"}
+              <button type="button" className="ma-mode-b tx-mode-b ma-mode-b--live tx-mode-b--live" data-mode="LIVE" aria-pressed={cur === "LIVE"}
                       aria-expanded={openReady} aria-controls="ma-ready" onClick={() => setOpenReady((o) => !o)}>
-                <span className="ma-mode-t"><Lock size={14} aria-hidden /> 실계좌</span>
-                <span className="ma-mode-d">{ready.data ? `준비 ${okN}/${items.length}` : ready.isError ? "준비 몰라요" : "준비 확인 중"}</span>
+                <span className="ma-mode-t tx-mode-t"><Lock size={14} aria-hidden /> 실계좌</span>
+                <span className="ma-mode-d tx-mode-d">{ready.data ? `준비 ${okN}/${items.length}` : ready.isError ? "준비 몰라요" : "준비 확인 중"}</span>
               </button>
             </div>
             {!acc.is_paper ? (
-              <p className="ma-st-sub ma-mode-why">모의 체결은 모의투자 계좌에서만 써요. 이 계좌는 실계좌로 연결돼 있어요.</p>
+              <p className="ma-st-sub tx-st-sub ma-mode-why">모의 체결은 모의투자 계좌에서만 써요. 이 계좌는 실계좌로 연결돼 있어요.</p>
             ) : null}
-            <p className="ma-st-sub">
+            <p className="ma-st-sub tx-st-sub">
               {mode.data?.changed_by ? `${mode.data.changed_by} 님이 바꿨어요. ` : ""}서버를 다시 켜면 기록만으로 돌아가요.
             </p>
             {asking ? (
-              <div className="ma-confirm ma-mode-confirm" role="group" aria-label="모의 체결로 바꾸기 확인">
+              <div className="ma-confirm tx-confirm ma-mode-confirm" role="group" aria-label="모의 체결로 바꾸기 확인">
                 <p>모의 체결로 바꾸면 주문을 {practice === true ? "연습용 체결기로" : practice === false ? "증권사 모의 서버로" : "모의 체결로"} 보내요. 실제 돈은 쓰지 않아요.</p>
-                <div className="ma-confirm-act">
+                <div className="ma-confirm-act tx-confirm-act">
                   <button type="button" className="tx-btn tx-btn--main ma-mode-yes" disabled={change.isPending}
                           onClick={() => change.mutate("PAPER")}>바꾸기</button>
                   <button type="button" className="tx-btn tx-btn--sub ma-mode-no" onClick={() => setAsking(false)}>취소</button>
@@ -120,12 +120,12 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
             ) : null}
           </div>
         </li>
-        <li className="ma-st" data-st="broker" data-hit={hit(3)}>
-          <span className="ma-st-dot" aria-hidden><Send className="ma-st-ic" size={14} strokeWidth={2} /></span>
-          <div className="ma-st-b">
-            <p className="ma-st-name">보내는 곳</p>
-            <p className="ma-st-state">{cur === null ? "모드를 몰라서 정할 수 없어요" : destination(cur, practice)}</p>
-            <p className="ma-st-sub">{conn ? <>연결 확인: <span data-server>{conn.reason}</span></> : "연결 확인 기록을 불러오는 중이에요."}</p>
+        <li className="ma-st tx-st" data-st="broker" data-hit={hit(3)}>
+          <span className="ma-st-dot tx-st-dot" aria-hidden><Send className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
+          <div className="ma-st-b tx-st-b">
+            <p className="ma-st-name tx-st-name">보내는 곳</p>
+            <p className="ma-st-state tx-st-state">{cur === null ? "모드를 몰라서 정할 수 없어요" : destination(cur, practice)}</p>
+            <p className="ma-st-sub tx-st-sub">{conn ? <>연결 확인: <span data-server>{conn.reason}</span></> : "연결 확인 기록을 불러오는 중이에요."}</p>
           </div>
         </li>
       </ol>

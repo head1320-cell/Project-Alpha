@@ -167,9 +167,9 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
         ) : null}
         {blocked ? <p className="ma-order-why">{blocked}</p> : null}
         {asking && mode ? (
-          <div className="ma-confirm ma-order-confirm" role="group" aria-label="주문 확인">
+          <div className="ma-confirm tx-confirm ma-order-confirm" role="group" aria-label="주문 확인">
             <p>{what} 지금 모드는 {MODE_KO[mode] ?? mode}이라 {destination(mode, practice)}.</p>
-            <div className="ma-confirm-act">
+            <div className="ma-confirm-act tx-confirm-act">
               <button type="button" className="tx-btn tx-btn--main ma-order-send" disabled={send.isPending}
                       onClick={() => send.mutate(body())}>{send.isPending ? "보내는 중이에요" : "주문 내기"}</button>
               <button type="button" className="tx-btn tx-btn--sub ma-order-edit" onClick={() => setAsking(false)}>고치기</button>

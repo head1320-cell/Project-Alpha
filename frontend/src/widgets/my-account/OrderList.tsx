@@ -110,7 +110,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
                   {o.error_message ? <span className="ma-ord-why" data-server>{o.error_message}</span> : null}
                   {CANCELLABLE.has(o.status) ? (
                     asking === o.client_order_id ? (
-                      <span className="ma-confirm ma-ord-confirm" role="group" aria-label="주문 취소 확인">
+                      <span className="ma-confirm tx-confirm ma-ord-confirm" role="group" aria-label="주문 취소 확인">
                         <span>이 주문을 취소할까요?</span>
                         <button type="button" className="tx-btn tx-btn--main ma-sm ma-ord-cancel-yes" disabled={cancel.isPending}
                                 onClick={() => cancel.mutate(o.client_order_id)}>취소하기</button>

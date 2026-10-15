@@ -59,7 +59,7 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
           <span className="ma-hint">{MIN_REASON}자 이상 적어 주세요. 기록에 남아요.</span>
         </label>
         {trigger.isError ? <p className="ma-err" role="alert">비상 정지를 걸지 못했어요. <span data-server>{trigger.error.message}</span></p> : null}
-        <div className="ma-confirm-act">
+        <div className="ma-confirm-act tx-confirm-act">
           <button type="button" className="tx-btn ma-btn-danger ma-kill-go" disabled={reason.trim().length < MIN_REASON || trigger.isPending}
                   onClick={() => trigger.mutate()}>{trigger.isPending ? "거는 중이에요" : "비상 정지 걸기"}</button>
           <button type="button" className="tx-btn tx-btn--sub" onClick={onClose}>닫기</button>
@@ -73,7 +73,7 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
                     value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
         {resolve.isError ? <p className="ma-err" role="alert">비상 정지를 풀지 못했어요. <span data-server>{resolve.error.message}</span></p> : null}
-        <div className="ma-confirm-act">
+        <div className="ma-confirm-act tx-confirm-act">
           <button type="button" className="tx-btn tx-btn--main ma-kill-resolve" disabled={resolve.isPending}
                   onClick={() => resolve.mutate()}>{resolve.isPending ? "푸는 중이에요" : "다시 열기"}</button>
           <button type="button" className="tx-btn tx-btn--sub" onClick={onClose}>닫기</button>
