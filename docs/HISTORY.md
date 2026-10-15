@@ -22642,3 +22642,12 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **왜**: 마지막 CI 실행(2026-09-17, run 35180650679)은 버전 고정 없이 깔린 ruff 0.16.8 이 그 중복을 B033 으로 잡아 실패했다(로컬 0.15.8 은 안 잡음). 같은 실행의 옛 E2E 단언 실패는 지금 코드에선 재현되지 않는다(로컬 전체 E2E 803 통과).
 - **확인**: ruff 0.15.8·0.16.8 둘 다 통과 · `test_account_policy` 27 통과 · 변이(검출기를 float 만 보게) → 새 짝 단언이 빨강.
 - **하지 않은 것**: `ruff format --check`(이미 continue-on-error, 미포맷 파일 다수 — 관찰만) · Node 20 액션 버전 올리기 · pull_request 트리거 변경. 화면 변화 0 이라 PNG 없음.
+
+## CI · 13건 — 기동이 실제 증권사 마스터를 내려받던 테스트 오염 (2026-10-15)
+- **관찰**: ruff 를 고친 뒤 CI(run 38665627943) 백엔드 13건 실패 · 로컬 전부 초록. 실패는 모두 "마스터 플래그 없음"을 전제한 테스트
+  (`test_exposure_taxonomy`·`test_risky_share`·`test_glide*`·`test_liquidity_gate_honesty`·`test_lazy_date_str` 등).
+- **원인**: `run_startup` 이 마스터가 없으면 `_collect_master_bg` 로 KIS 서버에서 내려받아 `src/data/master_flags_cache.json` 을 쓴다. `with TestClient(create_app())`
+  마다 이것이 돌았고, 네트워크가 열린 CI 에서만 성공해 뒤 테스트의 전제를 바꿨다(로컬은 프록시가 막아 실패 → 초록). 데몬 스위치(`LIFECYCLE_DAEMONS=0`)는 이 수집을 막지 않았다.
+- **고친 것**: 같은 스위치가 `"0"` 이면 마스터 자동 수집도 하지 않고 그 사실을 로그로 말한다(`src/startup/lifecycle.py`). 테스트 짝: 꺼짐 → 수집 0 / 켜짐 + 마스터 없음 → 수집 1.
+  변이(관문 빼기) → 꺼짐 테스트 빨강.
+- **하지 않은 것**: 13건 테스트 각각을 고치기(원인이 하나라 거기서 막음) · 운영 기동 동작(스위치 미설정·켜짐은 그대로) · 개발 서버(`restart.sh` 는 `LIFECYCLE_DAEMONS=0` 이라 이제 마스터를 자동 수집하지 않는다 — 이 샌드박스는 원래 그 주소에 닿지 못했다).

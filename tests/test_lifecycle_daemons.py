@@ -140,3 +140,38 @@ def test_no_periodic_loop_is_started_with_a_bare_thread():
                 if kw.arg == "target" and getattr(kw.value, "id", None) in loops:
                     bare.append(kw.value.id)
     assert bare == [], bare
+
+
+# ── ★기동이 증권사 마스터를 내려받지 않는다(스위치가 꺼졌을 때)★ ─────────────
+
+def _startup_collects_master(monkeypatch, switch: str) -> list[str]:
+    import asyncio
+
+    import src.data.stock_master as sm
+    seen: list[str] = []
+
+    async def _fake_collect(engine):
+        seen.append("collect")
+
+    monkeypatch.setenv("LIFECYCLE_DAEMONS", switch)
+    monkeypatch.setattr(lifecycle, "_start_daemon_once", lambda name, target: "started")
+    monkeypatch.setattr(lifecycle, "_collect_master_bg", _fake_collect)
+    monkeypatch.setattr(sm, "load_master_flags", lambda: {})
+
+    async def _run():
+        await lifecycle.run_startup()
+        await asyncio.sleep(0)          # create_task 로 띄운 수집이 한 번 돌 틈
+
+    asyncio.run(_run())
+    return seen
+
+
+def test_daemons_off_means_no_master_download(monkeypatch):
+    """2026-10-15 CI — 네트워크가 열린 곳에서 기동마다 실제로 내려받아 `master_flags_cache.json`
+    을 써서, 뒤 테스트 13건이 '플래그 없음' 전제를 잃었다(로컬은 네트워크가 막혀 초록)."""
+    assert _startup_collects_master(monkeypatch, "0") == []
+
+
+def test_daemons_on_still_downloads_a_missing_master(monkeypatch):
+    """★짝★ — 운영(스위치 켜짐)에서는 마스터가 없으면 그대로 수집한다."""
+    assert _startup_collects_master(monkeypatch, "1") == ["collect"]

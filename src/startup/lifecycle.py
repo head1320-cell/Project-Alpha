@@ -446,9 +446,16 @@ async def run_startup() -> None:
 
     # KIS 종목 마스터 자동 수집 (무료·인증불필요): 전종목 코드·실명·KOSPI200/KOSDAQ150·ETF 플래그.
     # → 유니버스(실제 지수·시장전체·ETF 전체)와 종목명 해소의 단일 소스. 미적재 시에만.
+    # ★같은 스위치로 끈다★ — 테스트의 `TestClient` 기동마다 실제 KIS 서버에서 내려받아
+    # `master_flags_cache.json` 을 써 버리면, 네트워크가 열린 CI 에서만 뒤 테스트들이 "플래그 없음"
+    # 전제를 잃고 빨개진다(2026-10-15 CI 13건 — 로컬은 네트워크가 막혀 초록).
     try:
         from src.data.stock_master import load_master_flags
-        if not load_master_flags():
+        if daemons_disabled():
+            import logging
+            logging.getLogger(__name__).warning(
+                f"KIS 마스터 자동 수집을 하지 않았습니다 — {DAEMONS_ENV}=0 (명시적으로 꺼짐).")
+        elif not load_master_flags():
             from src.database import get_engine
             asyncio.create_task(_collect_master_bg(get_engine()))
     except Exception as e:
