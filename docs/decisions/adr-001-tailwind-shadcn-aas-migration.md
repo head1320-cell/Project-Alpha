@@ -105,7 +105,7 @@ rather than redefining them.
 | `--t-ink` | `--foreground` | |
 | `--t-surface` | `--muted`, `--card` | |
 | `--t-border` | `--border`, `--input` | |
-| `--t-accent` | `--primary`, `--ring` | institutional blue `#1200ff` |
+| `--t-accent` | `--primary`, `--ring` | institutional blue `#1200ff` (since 2026-10-16: `--tx-cta`) |
 | `--t-muted` | `--muted-foreground` | |
 | `--danger` / `--color-bear` | `--destructive` | |
 
@@ -113,6 +113,13 @@ Hard constraint: **the four existing `:root` blocks are not edited or reordered.
 incident — where splitting `globals.css` shipped a broken build and the verification compared a
 stale artifact — is the precedent. Additions go at the end of the file, and every change is
 proved with a rule-level diff of the emitted stylesheet.
+
+> **Amended 2026-10-16 (user decision, C3).** The byte-identity rule is relaxed for **value** edits inside the
+> four blocks. The legacy accent family (`--bs-primary`, `--bs-link-color`, hover/rgb/subtle) and `--t-accent`
+> now reference `--tx-cta`, and `--bs-body-font-family` references `--tx-font`. These values had already been
+> overridden at EOF (BU0, C2); the overrides are deleted, so the computed result is unchanged. Blocks are still not
+> split, reordered or removed. Any edit inside them must show **zero change** in the light computed-style golden
+> and in a before/after pixel diff, or else go through the normal visible-change approval with PNGs.
 
 ### 2.2 What "institutional, data-dense" means here
 

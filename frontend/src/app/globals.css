@@ -108,17 +108,17 @@
 
 :root {
   /* PV Primary Brand */
-  --bs-primary: #1200ff;
-  --bs-primary-hover: #0e00cc;
-  --bs-primary-rgb: 18, 0, 255;
-  --bs-primary-bg-subtle: #cfe2ff;
+  --bs-primary: var(--tx-cta);
+  --bs-primary-hover: color-mix(in srgb, var(--tx-cta) 85%, black);
+  --bs-primary-rgb: 27, 100, 218;
+  --bs-primary-bg-subtle: var(--tx-blue-soft);
   --bs-primary-text-emphasis: #07005c;
 
   /* PV Body */
   --bs-body-color: #111111;
   --bs-body-color-rgb: 17, 17, 17;
   --bs-body-bg: #fff;
-  --bs-body-font-family: 'IBM Plex Sans KR', 'IBM Plex Sans', system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --bs-body-font-family: var(--tx-font);
   --bs-font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", monospace;
   --bs-body-font-size: 0.875rem;       /* 14px */
   --bs-body-font-weight: 400;
@@ -139,8 +139,8 @@
   /* PV Text — Variant zinc scale */
   --bs-secondary-color: #71717a;
   --bs-tertiary-color: #a1a1aa;
-  --bs-link-color: #1200ff;
-  --bs-link-hover-color: #0e00cc;
+  --bs-link-color: var(--tx-cta);
+  --bs-link-hover-color: color-mix(in srgb, var(--tx-cta) 85%, black);
 
   /* PV Status colors */
   --bs-success: #198754;
@@ -498,7 +498,7 @@ h6 { font-size: 1rem; }
   --t-bg: #ffffff;
   --t-surface: #fafafa;
   --t-border: #e5e5e5;
-  --t-accent: #1200ff;
+  --t-accent: var(--tx-cta);
   --t-ink: #111111;
   --t-muted: #71717a;
   --t-sidebar-w: 260px;
@@ -2356,7 +2356,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --t-muted: #a1a1aa;
   /* 액센트 — #1200ff 는 검은 배경에서 대비가 3:1 을 넘지 못한다(어두운 청색이라
      배경과 명도가 붙는다). 같은 색상각을 유지하면서 명도만 올린 값을 쓴다. */
-  --t-accent: #7c74ff;
+  --t-accent: var(--tx-cta);
 
   --background:            var(--t-bg);
   --foreground:            var(--t-ink);
@@ -5277,9 +5277,9 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --bs-border-color: #27272a;
   --bs-secondary-color: #a1a1aa;
   --bs-tertiary-color: #8b8b94;
-  --bs-link-color: #8f88ff;
-  --bs-link-hover-color: #b1acff;
-  --bs-primary-bg-subtle: #1c1a33;
+  --bs-link-color: var(--tx-cta);
+  --bs-link-hover-color: color-mix(in srgb, var(--tx-cta) 85%, white);
+  --bs-primary-bg-subtle: var(--tx-blue-soft);
   --bs-primary-text-emphasis: #c7c3ff;
   --bs-success: #4ade80;
   --bs-success-bg: #10281f;
@@ -5296,8 +5296,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --color-bear: #f87171; --color-bear-bg: #2d1416;
   --color-caution: #fbbf24; --color-caution-bg: #2b2112;
   /* 강조색은 글자로 읽히게 밝힌다. 그 위 글자는 --on-accent(어두운 글자)가 맡는다 — 흰 글자면 2.3~3.6:1 이었다. */
-  --bs-primary: #8f88ff;
-  --bs-primary-hover: #b1acff;
+  --bs-primary: var(--tx-cta);
+  --bs-primary-hover: color-mix(in srgb, var(--tx-cta) 85%, white);
   --on-accent: #09090b;
   --kit-neutral: var(--t-accent);
   color-scheme: dark;
@@ -5864,8 +5864,6 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
   --tx-warn: #a15c00; --tx-warn-soft: #fff4e0;
   --tx-r-sec: 20px; --tx-r-row: 12px;
   --tx-font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
-  /* 본문 글꼴 — 보호된 첫 :root 의 IBM Plex 를 여기서 덮어쓴다(그 블록은 손대지 않는다). IBM Plex @import 는 BU10b 에서 뺐다(보호된 블록의 이름만 남고 내려받지 않는다). */
-  --bs-body-font-family: var(--tx-font);
 }
 .dark {
   --tx-bg: #0e131b; --tx-surface: #1a2029; --tx-soft: #212833; --tx-line: #2c3542;
@@ -9258,21 +9256,3 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .rl-cap-track { display: none; }
 }
 
-/* ── C2 · 옛 강조색을 토스 강조색으로 (2026-10-16) ─────────────────────────────
-   옛 터미널 강조색(#1200ff · 다크 #7c74ff)과 그 가족(--bs-primary·링크색·누름색)을 --tx-cta 하나로 덮는다.
-   정의는 ADR-001 이 바이트 그대로 지키는 :root 블록에 남아 있어 여기서 덮는다(C3 에서 정리).
-   --tx-cta 는 흰 바탕 위 글자·흰 글자의 바탕 모두 AA(라이트 #1b64da), 다크는 밝은 파랑(#8ab8ff) — 그 위 글자는 생성 구역의 --on-accent.
-   범주색 --cat-1 은 강조색이 아니라 차트 계열색이라 두었다(파랑 = 내림 색과 겹치지 않게). */
-:root, .dark {
-  --t-accent: var(--tx-cta);
-  --bs-primary: var(--tx-cta);
-  --bs-link-color: var(--tx-cta);
-  --bs-primary-rgb: 27, 100, 218;
-  --bs-primary-bg-subtle: var(--tx-blue-soft);
-  --bs-primary-hover: color-mix(in srgb, var(--tx-cta) 85%, black);
-  --bs-link-hover-color: color-mix(in srgb, var(--tx-cta) 85%, black);
-}
-.dark {
-  --bs-primary-hover: color-mix(in srgb, var(--tx-cta) 85%, white);
-  --bs-link-hover-color: color-mix(in srgb, var(--tx-cta) 85%, white);
-}
