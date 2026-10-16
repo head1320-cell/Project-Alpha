@@ -101,7 +101,7 @@ export function TickValue({
 
 
 export function MetricCard({
-  label, value, unit = "", delta, sublabel, color = "var(--hx-t-1200ff)", icon: Icon,
+  label, value, unit = "", delta, sublabel, color = "var(--tx-blue)", icon: Icon,
   loading = false, format = "number", digits = 2,
 }: {
   label: string;
