@@ -8,7 +8,7 @@
  * 값이 틀리면 서버 검증이 노드 위에 빨갛게 말한다. 빈 칸 = 서버 기본값(키를 지운다).
  */
 import { useState } from "react";
-import type { Edge } from "reactflow";
+import type { Edge } from "@xyflow/react";
 import { Copy, Plus, X } from "lucide-react";
 import {
   basicFieldsOf, fieldsOf, itemSchemaOf, type FieldSpec, type JsonSchema, type NodeCatalogEntry, type NodeRunResult, type PgNode,

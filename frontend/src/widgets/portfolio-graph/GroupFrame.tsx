@@ -13,7 +13,7 @@
  * 카드의 큰 숫자는 이 전략의 **포트폴리오 몫** — 이은 포트폴리오 노드 결과(`view.strategies`)의 서버 값이고, 모르면 "—" 와 이유.
  */
 import { memo, useMemo } from "react";
-import { Handle, Position, type NodeProps } from "reactflow";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { BookmarkPlus, ChevronDown, Download, GitBranch, LogIn, Play, Ungroup } from "lucide-react";
 import { fmtElapsed, type GraphBlock } from "@/entities/portfolio-graph";
 import { usePortfolioGraph } from "./store";
@@ -22,7 +22,7 @@ export const PG_GROUP_TYPE = "pgGroup";
 
 export interface ProxyPort { id: string; label: string; color: string }
 
-export interface GroupFrameData {
+export type GroupFrameData = {
   groupId: string; label: string; collapsed: boolean; members: string[]; width: number; height: number;
   kind: "group" | "strategy"; color: number;
   /** 접혔을 때 경계를 넘는 선의 대리 포트 — 들어오는 것(왼쪽)·나가는 것(오른쪽). */
@@ -65,7 +65,7 @@ function shareWhy(computed: boolean, linked: boolean | undefined): string {
 }
 const known = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
-function GroupFrameImpl({ data }: NodeProps<GroupFrameData>) {
+function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
   // 낡은 노드(BT5)의 결과만 거둔다 — 셀렉터가 새 객체를 돌려주지 않게 둘을 따로 읽고 거른다.
   const allResults = usePortfolioGraph((s) => s.report?.nodes ?? null);
   const staleIds = usePortfolioGraph((s) => s.staleIds);

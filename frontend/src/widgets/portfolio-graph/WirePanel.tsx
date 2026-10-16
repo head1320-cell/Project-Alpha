@@ -9,7 +9,7 @@
  * - 끊으면 — 받는 입력이 필수면 받는 노드부터 하류가 멈춘다. 선택 입력이면 그렇다고 말한다.
  * - 사이에 넣기 — 같은 타입을 받아 같은 타입을 내는 노드만. 끊기·넣기는 되돌리기 한 번.
  */
-import type { Edge } from "reactflow";
+import type { Edge } from "@xyflow/react";
 import { josa, type GraphError, type NodeCatalogEntry, type NodeRunResult, type PgNode } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
 

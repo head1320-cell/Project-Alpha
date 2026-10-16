@@ -6,7 +6,7 @@
  * 믿어도 되나요(trust) · 재지 않은 것. ★여기서 바꾸면 노드 설정이 바뀐다★(같은 스토어) — 캔버스로 돌아가도 그대로다.
  * 막힘·실패는 서버 사유 그대로 + "캔버스에서 원인 보기". 이야기 탭을 대신하지 않는다(그건 노드 번호 순서의 전체 설명).
  */
-import type { Edge } from "reactflow";
+import type { Edge } from "@xyflow/react";
 import { Loader2, Route } from "lucide-react";
 import {
   fieldsOf,

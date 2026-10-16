@@ -8,7 +8,7 @@
  *      없는 포트는 그 노드에 "미상 포트" 로 붙는다. 조용히 빠지면 다음에 내보낼 때
  *      사용자가 모르는 사이 그래프가 줄어든다.
  */
-import type { Edge, Node } from "reactflow";
+import type { Edge, Node } from "@xyflow/react";
 import {
   GRAPH_FORMAT,
   GRAPH_VERSION,
@@ -21,11 +21,11 @@ import {
   type NodeCatalogEntry,
 } from "./types";
 
-/** reactflow 노드 타입 — 모든 그래프 노드는 카탈로그로 그리는 범용 노드 하나다. */
+/** React Flow 노드 타입 — 모든 그래프 노드는 카탈로그로 그리는 범용 노드 하나다. */
 export const PG_NODE_TYPE = "pg";
 
-export interface PgNodeData {
-  /** 그래프 노드 타입(`optimizer` 등) — reactflow 의 `type` 과 다른 칸이다. */
+export type PgNodeData = {
+  /** 그래프 노드 타입(`optimizer` 등) — React Flow 의 `type` 과 다른 칸이다. */
   kind: string;
   params: Record<string, unknown>;
   /** 카탈로그에 없는 타입이면 사유. 원본은 `kind`·`params` 에 그대로 있다. */
@@ -164,7 +164,7 @@ export function parseFile(text: string): ParseResult {
 
 const portNames = (ps: CatalogPort[] | undefined) => new Set((ps ?? []).map((p) => p.name));
 
-/** 문서 → reactflow. 모르는 타입·포트는 표시해서 남긴다. */
+/** 문서 → React Flow. 모르는 타입·포트는 표시해서 남긴다. */
 export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: PgNode[]; edges: Edge[] } {
   const byType = new Map(catalog.map((c) => [c.type, c]));
   const extraIn = new Map<string, Set<string>>();
@@ -204,7 +204,7 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
   return { nodes, edges };
 }
 
-/** reactflow → 문서. 실행 결과는 넣지 않는다(파라미터·위치만). */
+/** React Flow → 문서. 실행 결과는 넣지 않는다(파라미터·위치만). */
 export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], groups?: GraphGroup[], branches?: GraphBranch[],
                       pinned?: string[]): GraphDoc {
   const ids = new Set(nodes.map((n) => n.id));

@@ -1,6 +1,6 @@
 "use client";
 /**
- * 포트폴리오 캔버스 상태 (BI3 → BL1) — reactflow 노드·엣지 + 카탈로그 + 검증·실행 보고.
+ * 포트폴리오 캔버스 상태 (BI3 → BL1) — React Flow 노드·엣지 + 카탈로그 + 검증·실행 보고.
  * ==========================================================================
  * ★낡은 결과를 새 그래프의 결과처럼 보이지 않는다★ — 노드·링크·파라미터가 바뀌면 **바뀐 노드와 그 하류만**
  * `staleIds` 에 들고, 화면은 그 노드에서만 "지금 그래프의 결과가 아니에요" 라고 말한다(BT5 — 예전엔 전역 불리언 하나라
@@ -26,7 +26,7 @@ import {
   type Edge,
   type EdgeChange,
   type NodeChange,
-} from "reactflow";
+} from "@xyflow/react";
 import {
   fromDoc,
   GRAPH_FORMAT,

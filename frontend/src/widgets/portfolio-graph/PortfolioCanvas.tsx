@@ -18,23 +18,24 @@
  * 명령 팔레트(Ctrl+K) · 계산 기록. ★이번 대담함은 한 곳★ — "여기까지 계산" 에 올리면 돌 경로가 먼저 밝아진다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   BackgroundVariant,
   ControlButton,
   Controls,
-  getRectOfNodes,
   MiniMap,
   NodeToolbar,
   Panel,
   Position,
   useStore,
   type Connection,
+  type Edge,
   type Node,
   type NodeChange,
   type ReactFlowInstance,
-} from "reactflow";
-import "reactflow/dist/style.css";
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
@@ -74,6 +75,7 @@ import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
+import { measuredH, measuredW } from "./toolbarPlace";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_KIND_PREFIX, PALETTE_MIME, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
@@ -133,13 +135,13 @@ function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
     const [tx, ty, zoom] = st.transform;
     let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
     for (const id of ids) {
-      const n = st.nodeInternals.get(id);
+      const n = st.nodeLookup.get(id);
       if (!n) continue;
-      const p = n.positionAbsolute ?? n.position;
+      const p = n.internals.positionAbsolute;
       top = Math.min(top, p.y * zoom + ty);
-      bottom = Math.max(bottom, (p.y + (n.height ?? 0)) * zoom + ty);
+      bottom = Math.max(bottom, (p.y + measuredH(n)) * zoom + ty);
       left = Math.min(left, p.x * zoom + tx);
-      right = Math.max(right, (p.x + (n.width ?? 0)) * zoom + tx);
+      right = Math.max(right, (p.x + measuredW(n)) * zoom + tx);
     }
     const ins = floatInsets(st.domNode ?? null);
     const mid = (left + right) / 2;
@@ -162,10 +164,11 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
   // 일부만 맞출 때(갈래·들어가기 — BO O5)도 같은 여백 — 예전 fitView 는 맨 위 노드의 도구줄을 캔버스 위 끝 밖으로 밀었다.
   const want = opts.ids ? new Set(opts.ids) : null;
   const shown = inst.getNodes().filter((n) => !n.hidden && (!want || want.has(n.id)));
-  const ns = shown.filter((n) => n.width && n.height);
+  // 크기는 내부 노드에서 읽는다 — 묶음 상자·갈래 띠는 그릴 때마다 새로 만드는 노드라 사용자 노드에는 실측이 없다(CF0, v12).
+  const ns = shown.filter((n) => { const i = inst.getInternalNode(n.id); return !!i && measuredW(i) > 0 && measuredH(i) > 0; });
   // 아직 크기를 잰 노드가 모자라면(파일을 막 불러온 직후) 맞추지 않고 "못 맞춤" 을 알린다 — 부르는 쪽이 다음 프레임에 다시.
   if (!ns.length || ns.length < shown.length) return false;
-  const b = getRectOfNodes(ns);
+  const b = inst.getNodesBounds(ns.map((n) => n.id));
   // 떠 있는 왼쪽 목록·오른쪽 창(BQ Q1)이 가리는 폭만큼 더 비운다 — 캔버스는 판 뒤까지 이어져 있다.
   const ins = floatInsets(el);
   const L = FIT_INSET.left + ins.left;
@@ -573,13 +576,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     if (!inst || !id || s.picked.length > 1 || ctx) return;
     // 창이 막 열린 뒤의 폭을 재도록 한 박자 늦게.
     const t = setTimeout(() => {
-      const n = inst.getNode(id);
+      const n = inst.getInternalNode(id);
       const el = canvasEl.current;
-      if (!n?.positionAbsolute || !el) return;
+      if (!n || !el) return;
       const vp = inst.getViewport();
-      const top = n.positionAbsolute.y * vp.zoom + vp.y;
-      const left = n.positionAbsolute.x * vp.zoom + vp.x;
-      const right = left + (n.width ?? NODE_W) * vp.zoom;
+      const top = n.internals.positionAbsolute.y * vp.zoom + vp.y;
+      const left = n.internals.positionAbsolute.x * vp.zoom + vp.x;
+      const right = left + (n.measured?.width ?? NODE_W) * vp.zoom;
       const ins = floatInsets(el);
       const need = fitTop(el) + TOOLBAR_H;
       const dy = top < need ? need - top : 0;
@@ -649,9 +652,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   }, [structureKey, s.catalog, validateTick]);
 
   // ── 연결 규칙: 타입 일치 · 입력 하나에 링크 하나 · 순환 금지 ──────────────
-  const isValidConnection = useCallback((c: Connection) => {
+  // v12 는 선 다시 꽂기에도 같은 검사를 부르며 선(Edge)을 넘길 수 있다 — 연결 모양으로 맞춰 같은 규칙에 넣는다.
+  const isValidConnection = useCallback((c: Connection | Edge) => {
     const st = usePortfolioGraph.getState();
-    return !connectionProblem(c, st.nodes, st.edges, st.catalog ?? [], st.catalogMeta?.portPlain ?? PORT_PLAIN);
+    const conn: Connection = { source: c.source, target: c.target, sourceHandle: c.sourceHandle ?? null, targetHandle: c.targetHandle ?? null };
+    return !connectionProblem(conn, st.nodes, st.edges, st.catalog ?? [], st.catalogMeta?.portPlain ?? PORT_PLAIN);
   }, []);
 
   // 클릭으로 추가하면 **보이는 캔버스의 가운데**에, 겹치지 않게 조금씩 비껴 놓는다.
@@ -1253,7 +1258,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             }}
             snapToGrid
             snapGrid={[11, 11]}
-            onInit={(inst) => { rf.current = inst; }}
+            // v12 의 인스턴스는 노드·선 타입을 제네릭으로 싣는다 — 이 파일은 일반 Node/Edge 로만 부른다.
+            onInit={(inst) => { rf.current = inst as unknown as ReactFlowInstance; }}
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
             onPaneClick={() => { s.select(null); s.selectEdge(null); if (s.cause) s.showCause(null); }}
             onEdgeMouseEnter={(_, e) => setHoverEdge(e.id)} onEdgeMouseLeave={() => setHoverEdge(null)}
@@ -1266,7 +1272,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="var(--pg-dot)" />
+            {/* CF0 — v12 는 점을 칸 가운데로 옮긴다(offset 0 = 칸 절반). v11 처럼 칸 모서리에 두려면 (점 크기 − 칸) / 2. */}
+            <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} offset={(1.5 - 22) / 2} color="var(--pg-dot)" />
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">

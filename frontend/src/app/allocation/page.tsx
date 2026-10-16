@@ -18,7 +18,7 @@ import { bridgeFromTickers, bridgeFromCompany } from "@/entities/portfolio-graph
 // 케이스 바는 react-query·배지를 싣는다 — 첫 로드(기준 120 kB)를 키우지 않게 따로 싣는다(BL2b).
 const CaseBar = dynamic(() => import("@/features/case-bar/CaseBar"), { ssr: false });
 
-// reactflow 는 무겁다 — 첫 로드에서 빼고 캔버스 청크로 싣는다(ADR 002 §2).
+// React Flow 는 무겁다 — 첫 로드에서 빼고 캔버스 청크로 싣는다(ADR 002 §2).
 const PortfolioCanvas = dynamic(() => import("@/widgets/portfolio-graph/PortfolioCanvas"), {
   ssr: false,
   loading: () => (

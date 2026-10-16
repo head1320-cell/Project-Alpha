@@ -9,7 +9,7 @@
  * 포트는 타입 색 점, 이름·타입은 마우스를 올리면(전문가용) 보인다.
  */
 import { memo } from "react";
-import { Handle, NodeToolbar, Position, useStore, type NodeProps } from "reactflow";
+import { Handle, NodeToolbar, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
 import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
 import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { Glance } from "./Glance";
@@ -66,8 +66,10 @@ function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: 
  * 선언하지 않음 — 이으면 서버가 "계산하면 실패해요"라고 말한다) · `off`(안 됨) · null(끄는 중이 아님·같은 쪽).
  */
 function useDragFit(nodeId: string | undefined, port: CatalogPort, side: "in" | "out"): "can" | "needs" | "off" | null {
-  const start = useStore((st) => (st.connectionNodeId && st.connectionHandleId
-    ? `${st.connectionNodeId}|${st.connectionHandleId}|${st.connectionHandleType}` : null));
+  const start = useStore((st) => {
+    const h = st.connection.inProgress ? st.connection.fromHandle : null;
+    return h?.nodeId && h.id ? `${h.nodeId}|${h.id}|${h.type}` : null;
+  });
   if (!start || !nodeId) return null;
   const [sn, sh, stype] = start.split("|");
   if ((stype === "source") === (side === "out")) return null;              // 같은 쪽 점은 표시하지 않는다
@@ -104,7 +106,7 @@ function Port({ port, side, index, unknown, label, missing, nodeId }: {
 const NODE_TOOLBAR_W = 190;
 const NODE_TOOLBAR_H = 36;
 
-function GraphNodeImpl({ id, data, selected }: NodeProps<CanvasNodeData>) {
+function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) {
   const entry = usePortfolioGraph((s) => s.catalog?.find((c) => c.type === data.kind));
   const report = usePortfolioGraph((s) => s.report);
   // 이 노드의 결과만 본다(BT5) — 다른 곳을 바꿔도 이 카드는 낡지 않는다(하류일 때만 낡는다).

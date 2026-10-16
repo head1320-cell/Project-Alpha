@@ -5,8 +5,12 @@
  * 뜨면 앞 열 카드를 덮었다 — Ctrl+클릭으로 그 카드를 함께 고를 수 없었다(E2E 가 찾음). 후보 자리를 차례로 보고
  * 덮는 넓이(다른 카드와 겹침 + 캔버스·떠 있는 판 밖으로 나간 넓이)가 가장 작은 자리를 고른다. 같으면 앞 후보(= 예전 자리).
  */
-import { Position, type ReactFlowState } from "reactflow";
+import { Position, type ReactFlowState } from "@xyflow/react";
 import { floatInsets } from "./panels";
+
+/** 실측 크기(CF0 — v12 는 화면에서 잰 크기를 `measured` 에 둔다. v11 은 `width`·`height` 였다). 아직 안 쟀으면 0. */
+export const measuredW = (n: { measured?: { width?: number } }) => n.measured?.width ?? 0;
+export const measuredH = (n: { measured?: { height?: number } }) => n.measured?.height ?? 0;
 
 export type ToolbarAlign = "start" | "center" | "end";
 export interface ToolbarPlace { position: Position; align: ToolbarAlign }
@@ -30,17 +34,17 @@ export function placeToolbar(st: ReactFlowState, ids: string[], w: number, h: nu
                              prefer: Position = Position.Top): string {
   const [tx, ty, zoom] = st.transform;
   const box = (id: string): Rect | null => {
-    const n = st.nodeInternals.get(id);
+    const n = st.nodeLookup.get(id);
     if (!n || n.hidden) return null;
-    const p = n.positionAbsolute ?? n.position;
-    return { l: p.x * zoom + tx, t: p.y * zoom + ty, r: (p.x + (n.width ?? 0)) * zoom + tx, b: (p.y + (n.height ?? 0)) * zoom + ty };
+    const p = n.internals.positionAbsolute;
+    return { l: p.x * zoom + tx, t: p.y * zoom + ty, r: (p.x + measuredW(n)) * zoom + tx, b: (p.y + measuredH(n)) * zoom + ty };
   };
   const mine = ids.map(box).filter((x): x is Rect => !!x);
   if (!mine.length) return `${prefer}|center`;
   const sel: Rect = { l: Math.min(...mine.map((x) => x.l)), t: Math.min(...mine.map((x) => x.t)),
                       r: Math.max(...mine.map((x) => x.r)), b: Math.max(...mine.map((x) => x.b)) };
   const others: Rect[] = [];
-  for (const [id] of st.nodeInternals) {
+  for (const [id] of st.nodeLookup) {
     if (ids.includes(id)) continue;
     const b = box(id);
     // 틀(그룹·갈래 띠)은 카드가 아니다 — 폭이 아주 넓은 것은 덮어도 누를 것을 가리지 않는다.

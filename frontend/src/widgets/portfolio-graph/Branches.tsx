@@ -10,7 +10,7 @@
  * N 은 지금 남아 있는 갈래만 센 하한이라는 서버 문장도 그대로 보인다.
  */
 import { memo, useEffect, useState } from "react";
-import type { NodeProps } from "reactflow";
+import type { Node, NodeProps } from "@xyflow/react";
 import { ArrowUpToLine, Trash2 } from "lucide-react";
 import {
   fieldsOf,
@@ -27,7 +27,7 @@ import { usePortfolioGraph } from "./store";
 
 export const PG_BRANCH_TYPE = "pgBranch";
 
-export interface BranchFrameData { branchId: string; label: string; width: number; height: number; diffs: string[]; rootName: string }
+export type BranchFrameData = { branchId: string; label: string; width: number; height: number; diffs: string[]; rootName: string };
 
 function fieldLabel(entry: NodeCatalogEntry | undefined, key: string): string {
   return fieldsOf(entry?.params_schema ?? null).find((f) => f.name === key)?.ui.label ?? key;
@@ -48,7 +48,7 @@ export function branchDiffs(b: GraphBranch, nodes: PgNode[], catalog: NodeCatalo
   return out;
 }
 
-function BranchFrameImpl({ data }: NodeProps<BranchFrameData>) {
+function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
   const remove = usePortfolioGraph((s) => s.removeBranch);
   return (
     <div className="pg-branch" data-branch-id={data.branchId} style={{ width: data.width, height: data.height }}>
