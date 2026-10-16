@@ -22779,3 +22779,16 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - **관찰(고치지 않음)**: 같은 파일의 "얼리면 정착 후 안 움직인다" 단언은 `goto` 의 고정 3초 기다림이라 작업자 6 개 부하에서 한 번 빨갛다(1 작업자 게이트에선 본 적 없음).
   "03 Macro reduced-motion" 은 뒤에서 pytest 가 돌 때 한 번 빨갛고 단독 초록.
 - **게이트**: 테스트 파일 하나만 바뀐 커밋 — tsc 0 · eslint 0 · `module-motion.spec` 전체 24 중 23 통과 + "03 Macro reduced-motion" 하나는 뒤에서 pytest 가 돌 때 빨강·단독 초록 · 위 부하 실행 24/24 · 변이 2. 제품 코드 변화 0 이라 pytest 는 이 커밋의 근거가 아니고, 전체 E2E 는 다음 커밋(R1) 게이트에서 함께 돈다.
+
+### BU10a · 죽은 코드 삭제 — app 에서 닿지 않는 프런트 파일 71 (사용자 "죽은 코드까지 삭제")
+- **어떻게 골랐나**: `src/app/**` 의 모든 코드 파일을 뿌리로 import 그래프를 따라가(`@/` 경로·상대 경로·`import()`·재수출) 닿지 않는 `src/**/*.ts(x)` 를 셌다 — 369 중 75.
+  스크립트 짝: 일부러 만든 고아 파일은 잡고 살아 있는 `krFormat` 은 잡지 않는다. E2E·스크립트가 import 하는 것은 없었다.
+- **지움(71, 약 9,100줄)**: 옛 전략 빌더 `features/strategy-builder/*`(14 · `/builder` 는 이미 `/backtest` 로 보냄) · `widgets/valuation/*` · `widgets/narrative` + `entities/narrative` ·
+  `widgets/macro/MacroRadar` · `widgets/backtester/{BuilderPanel,CustomBacktestRunner,StrategyComparison,SummaryRail}` + `charts/{EquityChart,ParameterOptimizer,TearSheet}` ·
+  `entities/{data-quality,experimental,sleeve}` · `entities/trading/{api,liveModel}`(옛 조종석) · `entities/allocation/{storage,timingFrequency}` · `entities/backtest/chartModel` · `entities/strategy/model` ·
+  `shared/lib/{format,sleeveStorage,strategyStorage}` · `shared/ui/{ArchiveDrawer,ArchiveDrawerPanel,RegimeRibbon}` · 아무도 부르지 않는 배럴 `index.ts` 32.
+  지운 파일만 쓰던 export 도 뺐다: `kit.tsx` 의 `TONES`(마지막 소비자 SummaryRail) · `entities/macro/api.ts` 의 `REGIME_COLORS`·`zScoreColor`·`trendIcon`·`trendColor`(MacroRadar 만).
+- **남김(닿지 않지만 일부러)**: `entities/kill-switch/types.ts`·`entities/glidepath/types.ts`(+ 배럴) — pytest 넷이 "★타입은 화면이 없어도 계약이다★"로 서버 응답 키를 이 파일에 대 본다(이전 결정).
+- **함께 고침**: `test_css_specificity_guard` 기준선 22건 → 0(그 주석이 바로 "도달 불가 네 파일을 지우면 옳은 이유로 0 이 된다"고 적어 두었다) · `test_auto_alpha` 주석의 사라진 소비자.
+- **하지 않은 것**: 살아 있는 파일 안의 쓰이지 않는 export(이번 삭제가 만든 것 말고 — 예: `company/parts.tsx` 의 `Metric`) · 서버 코드 · 옛 CSS(BU10b).
+- **게이트**(R1·BU10b 와 같은 트리에서 한 번): tsc 0 · eslint 오류 0 · build 통과(라우트별 첫 로드 JS 변화 0 — 지운 코드는 원래 번들에 없었다) · 라이트 골든 13/13 · `frontend/` 에서 E2E 전체 846 통과(1시간 — 처음 돌린 것은 컨테이너 재시작으로 489/846 에서 잃음, 실패 0 이었음) · ruff 통과 · pytest 8146 통과·11 건너뜀.

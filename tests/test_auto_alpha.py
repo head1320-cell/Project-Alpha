@@ -101,8 +101,8 @@ def test_catalog_honest_connected_flags():
 # ═══════════════════════════════════════════════════════════════════════════
 # AJ1 ★골든★ — `selection_bias_note` 를 `multiplicity.expected_max_z` 로
 # 위임했다. 산수는 한 곳에만 있어야 하는데, 그 이동이 **응답 계약을 건드리면
-# 안 된다**: 프런트(`entities/experimental/api.ts:26`)가 세 키를 그대로 읽고
-# `AutoAlphaLab.tsx:76` 이 `note` 를 화면에 찍는다.
+# 안 된다**. (그 세 키를 읽던 프런트 `entities/experimental/api.ts`·`AutoAlphaLab.tsx` 는 화면에서 빠진 뒤
+# BU10a 에서 도달 불가 코드로 지웠다 — 이 골든은 서버 응답 계약으로 남는다.)
 # ═══════════════════════════════════════════════════════════════════════════
 
 _BIAS_GOLDEN = {

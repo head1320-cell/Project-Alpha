@@ -142,19 +142,10 @@ def test_the_detector_does_not_cry_wolf():
 # 실제 충돌은 하나도 늘지 않았고 총계는 22로 그대로다. A12~A14 가 프론트 전용이라
 # pytest 를 돌리지 않아 세 단계 동안 조용히 빨간 채였다 — 아래 수치는 그때 밀린 값으로
 # 다시 잡은 것이다. **줄 번호가 아니라 선택자로 키를 잡는 개선은 부채로 남긴다.**
-KNOWN_COLLISIONS: frozenset[str] = frozenset({
-    "src/widgets/macro/MacroRadar.tsx:65", "src/widgets/macro/MacroRadar.tsx:74",
-    "src/widgets/macro/MacroRadar.tsx:125", "src/widgets/macro/MacroRadar.tsx:214",
-    "src/widgets/macro/MacroRadar.tsx:276", "src/widgets/macro/MacroRadar.tsx:354",
-    "src/widgets/macro/MacroRadar.tsx:438", "src/widgets/macro/MacroRadar.tsx:478",
-    "src/widgets/narrative/index.tsx:431", "src/widgets/narrative/index.tsx:438",
-    "src/widgets/valuation/ScreenerPanel.tsx:74", "src/widgets/valuation/ScreenerPanel.tsx:206",
-    "src/widgets/valuation/ScreenerPanel.tsx:213", "src/widgets/valuation/ScreenerPanel.tsx:220",
-    "src/widgets/valuation/StockDetail.tsx:60", "src/widgets/valuation/StockDetail.tsx:120",
-    "src/widgets/valuation/StockDetail.tsx:125", "src/widgets/valuation/StockDetail.tsx:178",
-    "src/widgets/valuation/StockDetail.tsx:236", "src/widgets/valuation/StockDetail.tsx:304",
-    "src/widgets/valuation/StockDetail.tsx:371", "src/widgets/valuation/StockDetail.tsx:450",
-})
+#: ★BU10a(2026-10-16): 위 주석이 말한 "올바른 정리"를 했다★ — 22건이 있던 네 파일(MacroRadar · narrative/index ·
+#: ScreenerPanel · StockDetail)을 도달 불가 코드로 지웠다. 그래서 이 기준선은 옳은 이유로 비었다.
+#: 다시 무언가를 여기 넣어야 한다면 그 이유를 위처럼 적는다.
+KNOWN_COLLISIONS: frozenset[str] = frozenset()
 
 
 def _scan() -> dict[str, list[str]]:
@@ -173,7 +164,7 @@ def _scan() -> dict[str, list[str]]:
 
 
 def test_no_new_specificity_collision_is_introduced():
-    """★새 충돌은 0건이어야 한다★ 기존 22건은 위 주석의 이유로 기준선에 잠겨 있다.
+    """★새 충돌은 0건이어야 한다★ 옛 22건은 도달 불가 파일과 함께 지웠다(BU10a) — 기준선은 비어 있다.
 
     걸리면 고르는 길은 둘이다 — 그 요소에서 유틸리티를 빼거나, 레거시 규칙에서 그 속성을
     빼거나. `@layer` 로 저장소 전체 캐스케이드를 바꾸는 것은 이 목록이 **크게 늘었을 때**

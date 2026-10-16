@@ -5,17 +5,10 @@
 // 톤: buy = 빨강(사기) · sell = 파랑(팔기) — 한국 증권 앱의 관례이자 사용자가 고른 한국식 색 축. neutral = 파랑 강조.
 // 색만으로 말하지 않는다 — 모든 토글·단추는 라벨과 함께 있다.
 // ★동작·DOM 역할은 그대로★(role=switch · aria-checked · `.bs-numbox` · button 묶음) — `/dev/ui` kit 표본 테스트가 구조로 건다.
-// `TONES` 는 팩터 고르기 창·조건식 편집기가 아직 쓴다(BU3c 에서 옮긴다) — 값은 그대로 둔다.
 
 import { type CSSProperties, type ReactNode } from "react";
 
 export type Tone = "buy" | "sell" | "neutral";
-
-export const TONES: Record<Tone, { accent: string; bg: string; text: string }> = {
-  buy: { accent: "var(--danger)", bg: "var(--danger-light)", text: "var(--danger)" },
-  sell: { accent: "var(--hx-t-1565c0)", bg: "var(--hx-b-e7f0fb)", text: "var(--hx-t-1565c0)" },
-  neutral: { accent: "var(--kit-neutral)", bg: "var(--bg-section)", text: "var(--text-primary)" },
-};
 
 // ── GroupedSelect (optgroup 드롭다운 — 체결가 유형 등) ────────
 export function GroupedSelect({ value, onChange, groups, width = 168 }: {
