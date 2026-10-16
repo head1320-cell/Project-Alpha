@@ -17,6 +17,8 @@
  * 생성 뒤 남는 대비 결함은 사람이 `globals.css` 의 "BS5 손질" 절에서 고친다(생성 파일은 손대지 않는다 — 다시 만들면 사라진다).
  *
  * 실행: node scripts/gen-dark-modules.mjs  (frontend 에서)
+ * 검사: node scripts/gen-dark-modules.mjs --check  — 파일을 쓰지 않고, 커밋된 생성 구역이 지금 다시 만든 것과 다르면 종료 1.
+ *       (같은 입력이면 늘 같은 출력이다. 다르다면 누군가 원본 규칙을 바꾸고 다시 만들지 않은 것 — CI·make 가 막는다.)
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -28,7 +30,9 @@ const SRC = path.join(here, "..", "src", "app", "globals.css");
 const BEGIN = "/* BS5-GEN:BEGIN */", END = "/* BS5-GEN:END */";
 
 /** 이미 다크를 설계해 둔 표면 — 손대지 않는다. */
-const SKIP = /\.dark\b|\.pg-|\.tx-|\.aas-|\.brun-results|\.set-|\.set\b|\.pf-|\.shad-|\.devui-|:root|^html|^body|\.cockpit|\.glass-card-dark/;
+// BU(토스식) 표면 — 처음부터 --tx-* 토큰과 다크 짝으로 설계했다. 옛 규칙처럼 명도를 뒤집으면 오히려 깨진다
+// (스위치 손잡이 흰색 → 어두운 칠이라 꺼진 길 위에서 사라짐 · 창 뒤 어두운 막 → 흰 막 · 첫 화면 띠).
+const SKIP = /\.scr-|\.kit-|\.tfm-backdrop\b|\.ld-|\.dark\b|\.pg-|\.tx-|\.aas-|\.brun-results|\.set-|\.set\b|\.pf-|\.shad-|\.devui-|:root|^html|^body|\.cockpit|\.glass-card-dark/;
 
 /** 다크에서 밝아지는 강조·상태 토큰 — 이것으로 채운 바탕 위 흰 글자는 --on-accent 로. */
 const ACCENT_FILL = /var\(--(t-accent|bs-primary|primary|bs-danger|bs-success|danger|success|color-bull|color-bear|accent-hover|bs-link-color)\b/;
@@ -189,5 +193,14 @@ if (used.size) {
 const head = `/* ★생성 구역 — 손대지 마세요★ scripts/gen-dark-modules.mjs 가 이 파일의 나머지에서 만든다(BS5).
    레거시 모듈 규칙의 글자로 적힌 색에 대한 다크 짝 — 모두 .dark 아래라 라이트에는 적용되지 않는다.
    규칙 ${rules}개 · 선언 ${decls}개 · 인라인 hex 토큰 ${used.size}개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */\n`;
-fs.writeFileSync(SRC, text.slice(0, bi) + BEGIN + "\n" + head + out.toString() + "\n" + text.slice(ei));
-console.log(`globals.css 생성 구역: rules=${rules} decls=${decls}`);
+const next = text.slice(0, bi) + BEGIN + "\n" + head + out.toString() + "\n" + text.slice(ei);
+if (process.argv.includes("--check")) {
+  if (next !== text) {
+    console.error("globals.css 생성 구역이 낡았어요 — `node scripts/gen-dark-modules.mjs` 로 다시 만들고 커밋하세요.");
+    process.exit(1);
+  }
+  console.log(`globals.css 생성 구역이 최신이에요: rules=${rules} decls=${decls}`);
+} else {
+  fs.writeFileSync(SRC, next);
+  console.log(`globals.css 생성 구역: rules=${rules} decls=${decls}`);
+}

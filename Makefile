@@ -31,6 +31,7 @@ test-fast:  ## 빠른 테스트만 (백테스트 제외)
 
 typecheck:  ## 프론트 타입체크
 	cd frontend && npx tsc --noEmit
+	cd frontend && node scripts/gen-dark-modules.mjs --check
 
 build:  ## 프론트 프로덕션 빌드
 	cd frontend && npx next build

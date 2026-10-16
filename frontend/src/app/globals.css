@@ -5306,141 +5306,25 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* BS5-GEN:BEGIN */
 /* ★생성 구역 — 손대지 마세요★ scripts/gen-dark-modules.mjs 가 이 파일의 나머지에서 만든다(BS5).
    레거시 모듈 규칙의 글자로 적힌 색에 대한 다크 짝 — 모두 .dark 아래라 라이트에는 적용되지 않는다.
-   규칙 262개 · 선언 315개 · 인라인 hex 토큰 66개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
+   규칙 107개 · 선언 136개 · 인라인 hex 토큰 8개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
 :root {
-    --hx-b-16a34a: #16a34a;
-    --hx-b-2563eb: #2563eb;
-    --hx-b-71717a: #71717a;
     --hx-b-d4d4d8: #d4d4d8;
-    --hx-b-dc2626: #dc2626;
-    --hx-b-dcfce7: #dcfce7;
-    --hx-b-dee2e6: #dee2e6;
     --hx-b-e4e4e7: #e4e4e7;
-    --hx-b-e5e5e5: #e5e5e5;
-    --hx-b-e5e7eb: #e5e7eb;
-    --hx-b-e7f0fb: #e7f0fb;
-    --hx-b-ea580c: #ea580c;
-    --hx-b-ececef: #ececef;
-    --hx-b-eeeeee: #eeeeee;
-    --hx-b-f0fdf4: #f0fdf4;
-    --hx-b-f3f4f6: #f3f4f6;
-    --hx-b-f3f4f7: #f3f4f7;
-    --hx-b-f7fee7: #f7fee7;
-    --hx-b-f8f9fa: #f8f9fa;
-    --hx-b-fafafa: #fafafa;
-    --hx-b-fef2f2: #fef2f2;
-    --hx-b-fff7ed: #fff7ed;
-    --hx-b-ffffff: #ffffff;
-    --hx-d-86efac: #86efac;
-    --hx-d-bbf7d0: #bbf7d0;
-    --hx-d-d4d4d8: #d4d4d8;
-    --hx-d-d9f99d: #d9f99d;
-    --hx-d-dc2626: #dc2626;
-    --hx-d-e5e5e5: #e5e5e5;
-    --hx-d-fecaca: #fecaca;
-    --hx-d-fed7aa: #fed7aa;
-    --hx-t-000000: #000000;
-    --hx-t-059669: #059669;
     --hx-t-0891b2: #0891b2;
-    --hx-t-0d9488: #0d9488;
-    --hx-t-0e7490: #0e7490;
-    --hx-t-0e7c4a: #0e7c4a;
-    --hx-t-10b981: #10b981;
-    --hx-t-111111: #111111;
-    --hx-t-1200ff: #1200ff;
-    --hx-t-1565c0: #1565c0;
-    --hx-t-15803d: #15803d;
     --hx-t-16a34a: #16a34a;
-    --hx-t-212529: #212529;
     --hx-t-22c55e: #22c55e;
-    --hx-t-2563eb: #2563eb;
-    --hx-t-525252: #525252;
-    --hx-t-64748b: #64748b;
-    --hx-t-65a30d: #65a30d;
-    --hx-t-71717a: #71717a;
-    --hx-t-737373: #737373;
-    --hx-t-7c3aed: #7c3aed;
     --hx-t-7f1d1d: #7f1d1d;
-    --hx-t-8b5cf6: #8b5cf6;
-    --hx-t-9ca3af: #9ca3af;
-    --hx-t-a16207: #a16207;
-    --hx-t-b0325a: #b0325a;
-    --hx-t-b45309: #b45309;
-    --hx-t-b91c1c: #b91c1c;
-    --hx-t-c026d3: #c026d3;
-    --hx-t-c7c7cf: #c7c7cf;
-    --hx-t-d97706: #d97706;
     --hx-t-dc2626: #dc2626;
-    --hx-t-e11d48: #e11d48;
-    --hx-t-ea580c: #ea580c;
     --hx-t-f97316: #f97316
 }
 .dark {
-    --hx-b-16a34a: #16a34a;
-    --hx-b-2563eb: #2563eb;
-    --hx-b-71717a: #71717a;
     --hx-b-d4d4d8: #2f2f35;
-    --hx-b-dc2626: #dc2626;
-    --hx-b-dcfce7: #1a3623;
-    --hx-b-dee2e6: #272b2f;
     --hx-b-e4e4e7: #26262b;
-    --hx-b-e5e5e5: #27272c;
-    --hx-b-e5e7eb: #25282d;
-    --hx-b-e7f0fb: #192533;
-    --hx-b-ea580c: #ea580c;
-    --hx-b-ececef: #222226;
-    --hx-b-eeeeee: #222226;
-    --hx-b-f0fdf4: #17311f;
-    --hx-b-f3f4f6: #212429;
-    --hx-b-f3f4f7: #20222a;
-    --hx-b-f7fee7: #2b3318;
-    --hx-b-f8f9fa: #1b1b1f;
-    --hx-b-fafafa: #1b1b1e;
-    --hx-b-fef2f2: #1c1c1f;
-    --hx-b-fff7ed: #312618;
-    --hx-b-ffffff: #18181b;
-    --hx-d-86efac: #86efac;
-    --hx-d-bbf7d0: #285337;
-    --hx-d-d4d4d8: #3a3a40;
-    --hx-d-d9f99d: #d9f99d;
-    --hx-d-dc2626: #dc2626;
-    --hx-d-e5e5e5: #333338;
-    --hx-d-fecaca: #532828;
-    --hx-d-fed7aa: #533f28;
-    --hx-t-000000: #f4f4f5;
-    --hx-t-059669: #7ffbd4;
     --hx-t-0891b2: #80e2f9;
-    --hx-t-0d9488: #85f4ea;
-    --hx-t-0e7490: #86dcf3;
-    --hx-t-0e7c4a: #88f2c2;
-    --hx-t-10b981: #85f4d0;
-    --hx-t-111111: #e8e8ea;
-    --hx-t-1200ff: #847aff;
-    --hx-t-1565c0: #87b9f2;
-    --hx-t-15803d: #8decb1;
     --hx-t-16a34a: #8aefaf;
-    --hx-t-212529: #d9d9dd;
     --hx-t-22c55e: #8eebb0;
-    --hx-t-2563eb: #86a8f4;
-    --hx-t-525252: #b8b8bf;
-    --hx-t-64748b: #b2bbc8;
-    --hx-t-65a30d: #c6f584;
-    --hx-t-71717a: #9e9ea7;
-    --hx-t-737373: #a0a0a9;
-    --hx-t-7c3aed: #ae86f4;
     --hx-t-7f1d1d: #e69393;
-    --hx-t-8b5cf6: #a681f8;
-    --hx-t-9ca3af: #9ca3af;
-    --hx-t-a16207: #f9c880;
-    --hx-t-b0325a: #e298af;
-    --hx-t-b45309: #f9b581;
-    --hx-t-b91c1c: #ee8c8c;
-    --hx-t-c026d3: #e18feb;
-    --hx-t-c7c7cf: #c7c7cf;
-    --hx-t-d97706: #fbc17e;
     --hx-t-dc2626: #ed8d8d;
-    --hx-t-e11d48: #f08aa0;
-    --hx-t-ea580c: #f9aa81;
     --hx-t-f97316: #fcb17e
 }
 :where(.dark) ::-webkit-scrollbar-thumb {
@@ -5466,12 +5350,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 }
 :where(.dark) .skeleton {
     background: linear-gradient(90deg, #25282d 25%, #212429 50%, #25282d 75%)
-}
-:where(.dark) .sidebar-backdrop {
-    background: rgb(255 255 255 / 0.252)
-}
-:where(.dark) .tcrumb {
-    background: rgb(24 24 27 / 0.72)
 }
 :where(.dark) .tbt-run {
     color: var(--on-accent)
@@ -5502,45 +5380,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 :where(.dark) .t-mode-badge[data-real="0"] {
     color: #f9c880;
     border-color: #f7aa3b
-}
-:where(.dark) .bsc-add-btn {
-    color: var(--on-accent)
-}
-:where(.dark) .bsc-chip-op {
-    background: #18181b
-}
-:where(.dark) .bsc-chip-val {
-    background: #18181b
-}
-:where(.dark) .bsc-expr {
-    background: #18181b
-}
-:where(.dark) .bsc-expr-input:focus {
-    background: #18181b
-}
-:where(.dark) .bsc-expr-search {
-    color: var(--on-accent)
-}
-:where(.dark) .bsc-fav.on {
-    color: #facc80
-}
-:where(.dark) .bsc-preset-confirm {
-    color: var(--on-accent)
-}
-:where(.dark) .bsc-pager button {
-    background: #18181b
-}
-:where(.dark) .bsc-pager button.on {
-    color: var(--on-accent)
-}
-:where(.dark) .bsc-range-input::-webkit-slider-thumb {
-    background: #18181b
-}
-:where(.dark) .bsc-range-input::-moz-range-thumb {
-    background: #18181b
-}
-:where(.dark) .bsc-colpicker {
-    background: #18181b
 }
 :where(.dark) .tbt-action-msg {
     color: #8aefaf

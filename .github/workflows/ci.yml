@@ -70,6 +70,10 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # globals.css 다크 생성 구역(BS5-GEN)이 원본 규칙과 맞는지 — 다시 만들지 않고 규칙을 바꾸면 여기서 막힌다.
+      - name: Dark region up to date
+        run: node scripts/gen-dark-modules.mjs --check
+
       - name: Build
         run: npx next build
 
