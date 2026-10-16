@@ -278,9 +278,9 @@ h6 { font-size: 1rem; }
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .input:focus {
-    border-color: rgba(18, 0, 255, 0.5);
+    border-color: color-mix(in srgb, var(--t-accent) 50%, transparent);
     outline: 0;
-    box-shadow: 0 0 0 0.25rem rgba(18, 0, 255, 0.15);
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--t-accent) 15%, transparent);
   }
 
   .select {
@@ -485,7 +485,7 @@ h6 { font-size: 1rem; }
 .animate-flash-bear { animation: flash-bear 0.6s ease-out; }
 @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, var(--cockpit-glow)); } 50% { box-shadow: 0 0 0 6px transparent; } }
 @keyframes fade-in-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.cockpit { background: radial-gradient(circle at 0% 0%, rgba(34,197,94,0.06) 0%, transparent 50%), radial-gradient(circle at 100% 100%, rgba(18,0,255,0.05) 0%, transparent 50%), var(--cockpit-bg); color: var(--cockpit-text); min-height: 100vh; }
+.cockpit { background: radial-gradient(circle at 0% 0%, rgba(34,197,94,0.06) 0%, transparent 50%), radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--t-accent) 5%, transparent) 0%, transparent 50%), var(--cockpit-bg); color: var(--cockpit-text); min-height: 100vh; }
 /* .regime-border-* · .cmd-palette-* 삭제 — 유일한 사용처였던 TopNav / CommandPalette 가
    도달 불가 코드여서 함께 제거했다(같은 커밋). .animate-pulse-glow 는 RegimeBadge 가
    계속 쓰므로 남긴다. */
@@ -665,7 +665,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .tscreener-handoff {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
   padding: 16px 18px; margin-bottom: 24px;
-  background: rgba(18,0,255,0.04); border: 1px solid rgba(18,0,255,0.2);
+  background: color-mix(in srgb, var(--t-accent) 4%, transparent); border: 1px solid color-mix(in srgb, var(--t-accent) 20%, transparent);
   border-radius: 2px;
 }
 .tscreener-handoff-clear {
@@ -756,7 +756,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .tbt-saved-load { flex: 1; min-width: 0; text-align: left; font-size: 12px; color: var(--text-primary);
   background: var(--bg-section); border: 1px solid var(--border-strong); border-radius: var(--bs-border-radius);
   padding: 6px 9px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tbt-saved-load:hover { border-color: var(--bs-primary, #1200ff); }
+.tbt-saved-load:hover { border-color: var(--bs-primary); }
 .tbt-saved-del { flex-shrink: 0; font-size: 12px; color: var(--text-muted); background: none; border: none; cursor: pointer; }
 .tbt-saved-del:hover { color: #dc2626; }
 @media (max-width: 1180px) {
@@ -775,18 +775,18 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .bt2 {
   --bt-shadow-1: 0 1px 2px rgba(17,17,17,0.05);
   --bt-shadow-2: 0 1px 3px rgba(17,17,17,0.07), 0 1px 2px rgba(17,17,17,0.04);
-  --bt-shadow-lift: 0 10px 26px -10px rgba(18,0,255,0.16), 0 2px 6px rgba(17,17,17,0.05);
+  --bt-shadow-lift: 0 10px 26px -10px color-mix(in srgb, var(--t-accent) 16%, transparent), 0 2px 6px rgba(17,17,17,0.05);
   --bt-radius: 4px;
   --bt-pos: #16a34a;
   --bt-neg: #dc2626;
-  --bt-accent-soft: rgba(18,0,255,0.05);
+  --bt-accent-soft: color-mix(in srgb, var(--t-accent) 5%, transparent);
 }
 
 /* ── 모드 전환기 (매수/매도/매매대상) — 부드러운 세그먼트 컨트롤 ── */
 .bt2 .tbt-mode { background: #fff; transition: color .16s ease, background .16s ease; }
 .bt2 .tbt-mode:hover { background: var(--bt-accent-soft); color: var(--t-ink); }
 .bt2 .tbt-mode.active::after {
-  height: 2px; box-shadow: 0 0 10px rgba(18,0,255,0.45);
+  height: 2px; box-shadow: 0 0 10px color-mix(in srgb, var(--t-accent) 45%, transparent);
   animation: bt-underline .22s ease;
 }
 @keyframes bt-underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -807,20 +807,20 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .bt2 .tbt-action-box { border-radius: var(--bt-radius); box-shadow: var(--bt-shadow-2); }
 .bt2 .tbt-run {
   border-radius: var(--bt-radius); padding: 13px; font-size: 12px; letter-spacing: 0.06em;
-  box-shadow: 0 2px 8px rgba(18,0,255,0.22);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--t-accent) 22%, transparent);
   transition: transform .12s ease, box-shadow .18s ease, opacity .12s ease;
 }
 .bt2 .tbt-run:hover:not(:disabled) {
   transform: translateY(-1px); opacity: 1;
-  box-shadow: 0 7px 18px rgba(18,0,255,0.3);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--t-accent) 30%, transparent);
 }
-.bt2 .tbt-run:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 8px rgba(18,0,255,0.22); }
+.bt2 .tbt-run:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 8px color-mix(in srgb, var(--t-accent) 22%, transparent); }
 
 /* ── 입력 포커스 링 (매수/매도 패널 포함) ── */
 .bt2 input:focus-visible,
 .bt2 select:focus-visible {
   outline: none; border-color: var(--t-accent);
-  box-shadow: 0 0 0 3px rgba(18,0,255,0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-accent) 12%, transparent);
 }
 
 /* ── 모던 빈 상태 ── */
@@ -844,7 +844,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 /* value band */
 .ca-band { padding: 30px 8px 6px; }
 .ca-band-track { position: relative; height: 6px; background: #ececef; border-radius: 3px; }
-.ca-band-fill { position: absolute; top: 0; bottom: 0; background: rgba(18,0,255,0.18); border-radius: 3px; }
+.ca-band-fill { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--t-accent) 18%, transparent); border-radius: 3px; }
 .ca-band-tick { position: absolute; top: 50%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; }
 .ca-band-tick-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--t-accent); }
 .ca-band-tick-lbl { position: absolute; top: 9px; font-family: var(--t-mono); font-size: 9px; color: var(--t-muted); }
@@ -934,7 +934,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .ca-cp-peertbl th:first-child, .ca-cp-peertbl td:first-child { text-align: left; }
 .ca-cp-peertbl tbody tr { cursor: pointer; }
 .ca-cp-peertbl tbody tr:hover:not(.self) { background: var(--t-surface); }
-.ca-cp-peertbl tr.self { background: rgba(18,0,255,0.04); }
+.ca-cp-peertbl tr.self { background: color-mix(in srgb, var(--t-accent) 4%, transparent); }
 .ca-cp-self { font-size: 9px; color: var(--t-accent); border: 1px solid var(--t-accent); border-radius: 2px; padding: 0 3px; margin-left: 6px; }
 @media (max-width: 1200px) {
   .ca-cp-card.span3 { grid-column: span 2; }
@@ -946,23 +946,23 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .ca-pg-sug { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40; margin: 0; padding: 4px; list-style: none;
   background: #fff; border: 1px solid var(--t-border); border-radius: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.10); max-height: 320px; overflow-y: auto; }
 .ca-pg-sug-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 9px; border-radius: 2px; cursor: pointer; }
-.ca-pg-sug-item.on, .ca-pg-sug-item:hover { background: rgba(18,0,255,0.06); }
+.ca-pg-sug-item.on, .ca-pg-sug-item:hover { background: color-mix(in srgb, var(--t-accent) 6%, transparent); }
 .ca-pg-sug-name { font-size: 13px; color: var(--t-ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ca-pg-sug-code { font-family: var(--t-mono); font-size: 11px; color: var(--t-muted); flex-shrink: 0; }
 
 /* (BU1) 옛 대시보드 `.dash-*` 콕핏 규칙은 지웠다 — 홈은 토스식(`.home-*`·`.tx-*`)이다. 계약 클래스 `.dash-mod`·`.dash-mod-stat` 은
    홈의 목록 줄이 그대로 달고 있다(nav.spec). BS5-GEN 다크 블록의 `.dash-*` 몇 줄은 생성물이라 BU10 에서 다시 생성할 때 빠진다. */
 .ca-pg-go { font-family: var(--t-mono); font-size: 12px; font-weight: 600; color: #fff; background: var(--t-accent); border: none; border-radius: 2px; padding: 8px 14px; cursor: pointer; }
-.ca-pg-go:hover { background: #0e00cc; }
+.ca-pg-go:hover { background: color-mix(in srgb, var(--t-accent) 85%, black); }
 .ca-pg-chip { font-size: 12.5px; padding: 7px 11px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; color: var(--t-ink); cursor: pointer; }
-.ca-pg-chip.on { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,0.04); }
+.ca-pg-chip.on { border-color: var(--t-accent); color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 4%, transparent); }
 @keyframes capgspin { to { transform: rotate(360deg); } }
 /* 공통 */
 .ca-cp-empty { padding: 28px 14px; text-align: center; color: var(--t-muted); font-size: 12.5px; line-height: 1.6; }
 .ca-cp-card-h.plain { background: none; border: none; padding: 10px 2px; }
 .ca-cp-fintabs { display: flex; gap: 4px; margin-bottom: 12px; }
 .ca-cp-fintabs button { font-family: var(--t-mono); font-size: 12px; padding: 5px 12px; border: 1px solid var(--t-border); background: #fff; border-radius: 2px; color: var(--t-muted); cursor: pointer; }
-.ca-cp-fintabs button.on { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,0.04); }
+.ca-cp-fintabs button.on { border-color: var(--t-accent); color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 4%, transparent); }
 .ca-cp-fintabs button:disabled { cursor: not-allowed; opacity: 0.6; }
 /* 네트워크 */
 .ca-cp-net { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
@@ -970,8 +970,8 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .ca-cp-net-h { font-family: var(--t-mono); font-size: 11px; font-weight: 600; color: var(--t-ink); margin-bottom: 9px; }
 .ca-cp-net-h span { color: var(--t-muted); font-weight: 400; }
 .ca-cp-net-nodes { display: flex; flex-wrap: wrap; gap: 6px; }
-.ca-cp-net-node { font-size: 12px; color: var(--t-accent); background: rgba(18,0,255,0.06); border: 1px solid rgba(18,0,255,0.18); border-radius: 2px; padding: 4px 9px; cursor: pointer; }
-.ca-cp-net-node:hover { background: rgba(18,0,255,0.12); }
+.ca-cp-net-node { font-size: 12px; color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 6%, transparent); border: 1px solid color-mix(in srgb, var(--t-accent) 18%, transparent); border-radius: 2px; padding: 4px 9px; cursor: pointer; }
+.ca-cp-net-node:hover { background: color-mix(in srgb, var(--t-accent) 12%, transparent); }
 /* 리스크 */
 .ca-cp-riskgrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
 .ca-cp-riskcard { border: 1px solid var(--t-border); border-radius: 2px; padding: 18px 16px; display: flex; flex-direction: column; gap: 8px; }
@@ -1069,13 +1069,13 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   transition: background .12s ease, box-shadow .12s ease;
 }
 .trisk-table tbody tr:hover {
-  background: rgba(18,0,255,.035); box-shadow: inset 2px 0 0 0 var(--t-accent);
+  background: color-mix(in srgb, var(--t-accent) 3.5%, transparent); box-shadow: inset 2px 0 0 0 var(--t-accent);
 }
 
 /* 3) 인터랙션 칩 — 호버 피드백 통일(테두리→액센트, 옅은 틴트) */
 .ca-pg-chip { transition: border-color .12s ease, color .12s ease, background .12s ease; }
 .ca-pg-chip:hover:not(.on) {
-  border-color: var(--t-accent); background: rgba(18,0,255,.03);
+  border-color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 3%, transparent);
 }
 
 /* 4) 키보드 포커스 링 — 일관된 접근성 큐(:focus-visible = 키보드 탐색에만 표시).
@@ -1287,7 +1287,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-rankhead .mc-rh-bar { padding-left: 2px; }
 .mc-rankrow { padding: 8px; background: none; border: none; border-bottom: 1px solid var(--t-border); cursor: pointer; text-align: left; transition: background 0.1s ease; }
 .mc-rankrow:hover { background: var(--t-surface); }
-.mc-rankrow.on { background: rgba(18,0,255,0.04); }
+.mc-rankrow.on { background: color-mix(in srgb, var(--t-accent) 4%, transparent); }
 .mc-rank-no { font-family: var(--t-mono); font-size: 11px; color: var(--t-muted); font-variant-numeric: tabular-nums; }
 .mc-rank-nm { font-size: 12px; color: var(--t-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-rank-bar { position: relative; height: 7px; background: var(--t-surface); border-radius: 2px; overflow: hidden; }
@@ -1434,19 +1434,19 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .ca-heat { border-collapse: collapse; font-size: 11px; font-family: var(--t-mono, monospace); }
 .ca-heat th, .ca-heat td { border: 1px solid var(--t-border, #e5e5e5); padding: 4px 8px; text-align: right; }
 .ca-heat-c.up { background: rgba(14, 124, 74, .16); }  /* 내재가치 ≥ 현재가 → 업사이드 */
-.ca-heat-c.dn { background: rgba(18, 0, 255, .08); }
+.ca-heat-c.dn { background: color-mix(in srgb, var(--t-accent) 8%, transparent); }
 .ca-heat-c.na { color: var(--t-muted, #71717a); }
 .ca-comps { border-collapse: collapse; font-size: 12px; width: 100%; }
 .ca-comps th, .ca-comps td { border-bottom: 1px solid var(--t-border, #e5e5e5); padding: 5px 8px; text-align: right; white-space: nowrap; }
 .ca-comps td:first-child, .ca-comps th:first-child { text-align: left; }
-.ca-comps tr.self { background: rgba(18, 0, 255, .06); font-weight: 600; }
+.ca-comps tr.self { background: color-mix(in srgb, var(--t-accent) 6%, transparent); font-weight: 600; }
 .ca-comps tr.median { background: var(--t-surface, #fafafa); font-weight: 600; }
 .ca-comps-implied { margin-top: 8px; font-size: 12px; }
 .ca-cp-note { font-size: 12px; color: var(--t-muted, #71717a); padding: 10px 2px; }
 /* 기업분석 심화 — Financials Deep */
 .ca-fd-mini { width: 100%; height: 76px; }
 .ca-fd-ni { stroke: #111; stroke-width: .8; }
-.ca-fd-ocf { stroke: #1200ff; stroke-width: .8; }
+.ca-fd-ocf { stroke: var(--t-accent); stroke-width: .8; }
 .ca-fd-tbl { border-collapse: collapse; font-size: 11px; width: 100%; margin-top: 8px; font-family: var(--t-mono, monospace); }
 .ca-fd-tbl th, .ca-fd-tbl td { border-bottom: 1px solid var(--t-border, #e5e5e5); padding: 3px 6px; text-align: right; white-space: nowrap; }
 .ca-fd-tbl td:first-child, .ca-fd-tbl th:first-child { text-align: left; font-family: inherit; }
@@ -1474,14 +1474,14 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .ca-rr-svg { width: 100%; height: 320px; display: block; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; }
 .ca-rr-axis { stroke: var(--t-border, #d5d5d5); stroke-width: .3; stroke-dasharray: 1.5 1; }
 .ca-rr-node { fill: #71717a; opacity: .75; }
-.ca-rr-node.self { fill: #1200ff; opacity: 1; }
-.ca-rr-name { font-size: 3px; fill: #1200ff; font-weight: 600; }
+.ca-rr-node.self { fill: var(--t-accent); opacity: 1; }
+.ca-rr-name { font-size: 3px; fill: var(--t-accent); font-weight: 600; }
 .ca-rr-qlabel { font-size: 2.6px; fill: var(--t-muted, #8a8a93); }
 .ca-rr-popup { position: absolute; right: 16px; top: 44px; z-index: 5; background: var(--t-bg, #fff); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; padding: 10px 12px; font-size: 12px; max-width: 340px; box-shadow: 0 4px 14px rgba(0,0,0,.10); }
 .ca-rr-popup button { float: right; border: none; background: none; cursor: pointer; font-size: 12px; }
 .ca-heat-toggle { margin-left: auto; display: inline-flex; gap: 4px; }
 .ca-heat-toggle button { font-size: 11px; padding: 2px 9px; border: 1px solid var(--t-border, #e5e5e5); background: var(--t-bg, #fff); border-radius: 2px; cursor: pointer; }
-.ca-heat-toggle button.on { background: var(--t-surface, #f0f0ff); border-color: #1200ff; color: #1200ff; }
+.ca-heat-toggle button.on { background: var(--t-surface, #f0f0ff); border-color: var(--t-accent); color: var(--t-accent); }
 .ca-iso-svg { width: 100%; height: 300px; display: block; }
 .ca-iso-cell { stroke: #fff; stroke-width: .25; }
 .ca-iso-cell.up { fill: #0e7c4a; opacity: .78; }
@@ -1524,13 +1524,13 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-band-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
 .mc-band-nm { width: 110px; flex: none; }
 .mc-band-track { position: relative; flex: 1; height: 12px; background: var(--t-surface, #fafafa); border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; }
-.mc-band-range { position: absolute; top: 2px; bottom: 2px; background: rgba(18, 0, 255, .22); border-radius: 1px; }
-.mc-band-med { position: absolute; top: 0; bottom: 0; width: 2px; background: #1200ff; }
+.mc-band-range { position: absolute; top: 2px; bottom: 2px; background: color-mix(in srgb, var(--t-accent) 22%, transparent); border-radius: 1px; }
+.mc-band-med { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--t-accent); }
 .mc-band-v { width: 66px; flex: none; text-align: right; font-family: var(--t-mono, monospace); font-size: 10px; }
 .mc-causal { width: 100%; max-width: 520px; height: 300px; display: block; margin: 0 auto; }
 .mc-causal-list { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 10.5px; margin-top: 6px; }
 .mc-causal-edge em { color: var(--t-muted); font-style: normal; font-family: var(--t-mono, monospace); }
-.mc-featured { border: 1.5px solid #1200ff !important; }
+.mc-featured { border: 1.5px solid var(--t-accent) !important; }
 
 /* ── 매크로 v3 (밸리AI 흡수): 스트립·비교·검색 (브리핑 줄은 BU5a 에서 지웠다) ── */
 .mv-strips { display: flex; flex-direction: column; gap: 4px; }
@@ -1546,7 +1546,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mv-cmp td:first-child, .mv-cmp th:first-child { text-align: left; }
 .mv-cmp td { font-family: var(--t-mono, monospace); }
 .mc-search { width: 100%; padding: 8px 12px; font-size: 12px; border: 1px solid var(--t-border, #e5e5e5); border-radius: 2px; background: var(--t-bg, #fff); }
-.mc-search:focus { outline: none; border-color: #1200ff; }
+.mc-search:focus { outline: none; border-color: var(--t-accent); }
 
 /* ── 매크로 UI 개편 (Gemini): 테이블 조건부 서식 · 탭 필 (도넛 3분할 배너는 BU5a 에서 답 한 문장으로 바뀌어 지웠다) ── */
 /* 테이블 v2 — 정렬·여백·조건부 서식·필 뱃지·RSI 미니 트랙 */
@@ -1561,7 +1561,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* 서브탭 — 클릭 가능 요소임이 명확한 필/탭 형태 */
 .mc-tabs .mc-tab { border: 1px solid transparent; border-radius: 2px; }
 .mc-tabs .mc-tab:hover { border-color: var(--t-border, #e5e5e5); background: var(--t-surface, #fafafa); }
-.mc-tabs .mc-tab.on { border-color: #1200ff; background: rgba(18,0,255,.05); }
+.mc-tabs .mc-tab.on { border-color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 5%, transparent); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Allocation Studio (.as-*) — 3-존 콕핏, Institutional Terminal 토큰
@@ -1661,7 +1661,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* ── 목표 선택 게이트 ── */
 
 .aas-goal { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; padding: 14px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; min-height: 108px; }
-.aas-goal:hover:not(:disabled) { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
+.aas-goal:hover:not(:disabled) { border-color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 3%, transparent); }
 .aas-goal:disabled { opacity: .5; cursor: default; }
 
 /* ── 위저드 진행 트래커 (3 페이즈 + 북엔드) ── */
@@ -1701,7 +1701,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .tfm-search:focus { outline: none; border-color: var(--t-accent); }
 .tfm-fams { display: flex; flex-wrap: wrap; gap: 4px; }
 .tfm-fams button { font-size: 10.5px; padding: 3px 8px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; color: var(--t-muted); cursor: pointer; }
-.tfm-fams button.on { border-color: var(--t-accent); color: var(--t-accent); background: rgba(18,0,255,.05); font-weight: 600; }
+.tfm-fams button.on { border-color: var(--t-accent); color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 5%, transparent); font-weight: 600; }
 /* 패밀리 토글의 지원 개수 (Phase 11c) — 0/7 처럼 전부 미가용인 묶음도 숨기지 않는다.
    토글 자체 색을 따르되 살짝 옅게: 개수는 라벨을 읽는 것을 방해하지 않아야 한다. */
 .tfm-fam-n { margin-left: 4px; font-size: 9px; opacity: .7; }
@@ -1712,8 +1712,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .tfm-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .tfm-row { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px;
   border: 1px solid var(--t-border); border-radius: 2px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
-.tfm-row:hover { border-color: var(--t-accent); background: rgba(18,0,255,.03); }
-.tfm-row.on { border-color: var(--t-accent); background: rgba(18,0,255,.06); }
+.tfm-row:hover { border-color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 3%, transparent); }
+.tfm-row.on { border-color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 6%, transparent); }
 .tfm-row-t { font-size: 12px; font-weight: 600; color: var(--t-ink); display: flex; align-items: center; gap: 6px; }
 .tfm-row-d { font-size: 10px; color: var(--t-muted); line-height: 1.45; }
 .tfm-row-p { font-family: var(--t-mono); font-size: 9px; color: var(--t-accent); opacity: .75; }
@@ -1734,7 +1734,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .as-bt-badge { font-size: 9.5px; font-weight: 600; letter-spacing: .03em; padding: 2px 7px; border-radius: 2px; border: 1px solid var(--t-border); background: var(--t-surface); color: var(--t-muted); }
 .as-bt-badge.mock { color: #b45309; background: #fffbeb; border-color: #fde68a; }
 .as-bt-badge.real { color: #16a34a; background: #dcfce7; border-color: #bbf7d0; }
-.as-bt-badge.ok { color: var(--t-accent); background: rgba(18,0,255,.05); border-color: rgba(18,0,255,.2); }
+.as-bt-badge.ok { color: var(--t-accent); background: color-mix(in srgb, var(--t-accent) 5%, transparent); border-color: color-mix(in srgb, var(--t-accent) 20%, transparent); }
 
 /* Timing (03 — 카나리·마켓타이밍) */
 
@@ -1815,7 +1815,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .brun-stalled { color: var(--t-muted); margin-left: 6px; }
 .brun-recheck { margin-left: 6px; font-size: 10.5px; padding: 2px 7px; border: 1px solid var(--t-accent);
   border-radius: 2px; background: #fff; color: var(--t-accent); cursor: pointer; }
-.brun-recheck:hover { background: rgba(18,0,255,.06); }
+.brun-recheck:hover { background: color-mix(in srgb, var(--t-accent) 6%, transparent); }
 .brun-stage { font-size: 12px; }
 .brun-card { border: 1px solid var(--t-border); border-radius: 3px; background: #fff; padding: 12px 14px; }
 .brun-card-t { font-size: 10px; letter-spacing: .06em; font-weight: 600; color: var(--t-ink); text-transform: uppercase;
@@ -1848,7 +1848,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .brun-diag-list li.brun-diag-omit { color: var(--t-muted); }
 .brun-select { font-size: 11px; padding: 5px 8px; border: 1px solid var(--t-border); border-radius: 3px; background: #fff; color: var(--t-ink); min-width: 260px; }
 .brun-cmp td:not(:first-child), .brun-cmp th:not(:first-child) { text-align: right; }
-.brun-cmp-diff { background: rgba(18,0,255,.04); }
+.brun-cmp-diff { background: color-mix(in srgb, var(--t-accent) 4%, transparent); }
 .brun-cmp-diff td:first-child { font-weight: 600; }
 .brun-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .brun-kpi { border: 1px solid var(--t-border); border-radius: 3px; background: var(--t-surface); padding: 7px 9px; }
@@ -1881,7 +1881,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .brun-code { display: block; font-size: 8.5px; color: var(--t-muted); }
 .brun-reason { font-size: 9.5px; color: var(--t-muted); }
 .brun-trow { cursor: pointer; } .brun-trow:hover { background: var(--t-surface); }
-.brun-tdetail td { background: rgba(18,0,255,.03); text-align: left; font-size: 10px; color: var(--t-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.brun-tdetail td { background: color-mix(in srgb, var(--t-accent) 3%, transparent); text-align: left; font-size: 10px; color: var(--t-muted); display: flex; gap: 16px; flex-wrap: wrap; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    30. .devui-*  —  /dev/ui  shared/ui 프리미티브 격리 갤러리 (내부 라우트)
@@ -5306,7 +5306,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* BS5-GEN:BEGIN */
 /* ★생성 구역 — 손대지 마세요★ scripts/gen-dark-modules.mjs 가 이 파일의 나머지에서 만든다(BS5).
    레거시 모듈 규칙의 글자로 적힌 색에 대한 다크 짝 — 모두 .dark 아래라 라이트에는 적용되지 않는다.
-   규칙 107개 · 선언 136개 · 인라인 hex 토큰 8개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
+   규칙 104개 · 선언 132개 · 인라인 hex 토큰 8개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
 :root {
     --hx-b-d4d4d8: #d4d4d8;
     --hx-b-e4e4e7: #e4e4e7;
@@ -5501,9 +5501,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 :where(.dark) .ca-fd-ni {
     stroke: #e8e8ea
 }
-:where(.dark) .ca-fd-ocf {
-    stroke: #847aff
-}
 :where(.dark) .ca-fd-tbl th, :where(.dark) .ca-fd-tbl td {
     border-bottom: 1px solid var(--t-border, #333338)
 }
@@ -5538,12 +5535,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 :where(.dark) .ca-rr-node {
     fill: #9e9ea7
 }
-:where(.dark) .ca-rr-node.self {
-    fill: #847aff
-}
-:where(.dark) .ca-rr-name {
-    fill: #847aff
-}
 :where(.dark) .ca-rr-qlabel {
     fill: var(--t-muted, #8c8c97)
 }
@@ -5556,8 +5547,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
     background: var(--t-bg, #18181b)
 }
 :where(.dark) .ca-heat-toggle button.on {
-    background: var(--t-surface, #1c1c20);
-    color: #847aff
+    background: var(--t-surface, #1c1c20)
 }
 :where(.dark) .ca-iso-cell.up {
     fill: #88f2c2
@@ -5689,7 +5679,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .dark .recharts-default-tooltip { background-color: var(--card) !important; border-color: var(--border) !important; color: var(--foreground); }
 .dark .recharts-tooltip-label { color: var(--foreground) !important; }
 /* 강조색 바탕 단추의 글자는 생성기가 --on-accent 로 바꾼다. 누름 색(#0e00cc)은 짙어서 어두운 글자와 안 맞는다 — 밝은 짝으로. */
-.dark .bsc-add-btn:hover, .dark .ca-pg-go:hover { background: #9d97ff; }
+.dark .bsc-add-btn:hover, .dark .ca-pg-go:hover { background: color-mix(in srgb, var(--t-accent) 85%, white); }
 /* 글자색 바탕 단추(전략 저장) — 다크에서 글자색이 밝아져 흰 바탕 단추가 됐다. 다른 주 단추와 같은 강조색으로. */
 .dark .tbt-action-save { color: var(--on-accent); background: var(--t-accent); }
 /* 비활성 글자가 테두리색이면 다크에서 거의 안 보인다 — 흐린 글자로(누를 수 없음은 커서가 말한다). */
@@ -9266,4 +9256,23 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .rl-wf-v { grid-column: 1 / -1; text-align: left; }
   .rl-cap { grid-template-columns: minmax(0, 1fr) auto; }
   .rl-cap-track { display: none; }
+}
+
+/* ── C2 · 옛 강조색을 토스 강조색으로 (2026-10-16) ─────────────────────────────
+   옛 터미널 강조색(#1200ff · 다크 #7c74ff)과 그 가족(--bs-primary·링크색·누름색)을 --tx-cta 하나로 덮는다.
+   정의는 ADR-001 이 바이트 그대로 지키는 :root 블록에 남아 있어 여기서 덮는다(C3 에서 정리).
+   --tx-cta 는 흰 바탕 위 글자·흰 글자의 바탕 모두 AA(라이트 #1b64da), 다크는 밝은 파랑(#8ab8ff) — 그 위 글자는 생성 구역의 --on-accent.
+   범주색 --cat-1 은 강조색이 아니라 차트 계열색이라 두었다(파랑 = 내림 색과 겹치지 않게). */
+:root, .dark {
+  --t-accent: var(--tx-cta);
+  --bs-primary: var(--tx-cta);
+  --bs-link-color: var(--tx-cta);
+  --bs-primary-rgb: 27, 100, 218;
+  --bs-primary-bg-subtle: var(--tx-blue-soft);
+  --bs-primary-hover: color-mix(in srgb, var(--tx-cta) 85%, black);
+  --bs-link-hover-color: color-mix(in srgb, var(--tx-cta) 85%, black);
+}
+.dark {
+  --bs-primary-hover: color-mix(in srgb, var(--tx-cta) 85%, white);
+  --bs-link-hover-color: color-mix(in srgb, var(--tx-cta) 85%, white);
 }
