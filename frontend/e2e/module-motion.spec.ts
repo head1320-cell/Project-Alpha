@@ -158,20 +158,54 @@ async function chartFrame(page: Page): Promise<string | null> {
   });
 }
 
-/** 내비게이션 직후부터 30ms 간격으로 훑어 **마운트 순간을 포함**한 서로 다른 프레임 수.
+/** 내비게이션 직후부터 ★페이지 안에서 매 프레임(requestAnimationFrame)★ 차트 지문을 뜬다. 서피스가 처음
+ *  나타난 뒤 2초 동안 안 바뀔 때까지(10초 상한) 훑고 둘을 돌려준다 — `frames`: 서로 다른 지문 수, `spanMs`: 첫 서피스부터 마지막으로
+ *  지문이 바뀐 때까지의 시간. 지문은 아래 `chartFrame` 과 같다.
  *  ★첫 프레임을 기준으로 창을 잡는다★ 처음엔 고정 4.2초를 훑었는데 **0 프레임**이 나왔다 —
  *  `/insights` 의 차트는 데이터가 도착한 뒤에야 마운트되므로 그 창이 마운트보다 빨랐다.
- *  그래서 서피스가 나타날 때까지 기다리되, 나타난 뒤 2.1초를 더 훑는다(기본 애니메이션 1.5초). */
-async function countFrames(page: Page): Promise<number> {
+ *  ★R2: 프레임 수가 아니라 바뀐 시간으로 애니메이션을 잰다★ 예전에는 30ms 마다 `page.evaluate` 왕복으로 지문을
+ *  떠 프레임 수를 셌다. 쉬는 기계에서는 live 43 · frozen 2 인데, 전체 E2E 게이트처럼 CPU 가 바쁘면 왕복이 길어져
+ *  live 9~10(작업자 6 개로 재현하면 5~6)으로 떨어졌고, 애니메이션은 켜져 있는데 `frozen + 10` 에 걸렸다.
+ *  매 프레임 샘플로 바꿔도 그 부하에서는 브라우저가 초당 5 프레임쯤만 그려 live 8~10 이 나왔다 — 프레임 수는
+ *  기계 속도를 잰다. recharts 애니메이션은 ★시간 기준★(기본 1500ms)이라 느린 기계에서도 같은 시간 동안 바뀌므로,
+ *  "얼린 것보다 얼마나 더 오래 바뀌었나"는 부하와 상관없이 애니메이션만 잰다. */
+type ChartMotion = { frames: number; spanMs: number };
+async function countFrames(page: Page): Promise<ChartMotion> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __chartMotion?: { frames: Set<string>; first: number; last: number; done: boolean } };
+    const m = { frames: new Set<string>(), first: 0, last: 0, done: false };
+    w.__chartMotion = m;
+    let prev = "";
+    const tick = (now: number) => {
+      const surfaces = document.querySelectorAll(".recharts-surface");
+      if (surfaces.length) {
+        if (!m.first) m.first = now;
+        const parts: string[] = [];
+        surfaces.forEach((s) => {
+          s.querySelectorAll("path").forEach((p) => {
+            parts.push(p.getAttribute("d") ?? "", p.getAttribute("stroke-dasharray") ?? "");
+          });
+          s.querySelectorAll("clipPath rect").forEach((r) => {
+            parts.push(r.getAttribute("x") ?? "", r.getAttribute("y") ?? "",
+                       r.getAttribute("width") ?? "", r.getAttribute("height") ?? "");
+          });
+        });
+        const f = parts.join("|");
+        if (f !== prev) { m.frames.add(f); m.last = now; prev = f; }
+      }
+      // 2초 동안 안 바뀌면 끝(10초 상한) — 고정 창이면 늦게 온 데이터가 얼린 쪽 시간만 늘리고 live 는 창에 잘린다.
+      if (m.first && (now - m.last > 2000 || now - m.first > 10_000)) { m.done = true; return; }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
   await page.goto(CHART_ROUTE, { waitUntil: "commit" });
-  const frames = new Set<string>();
-  let sampled = 0;
-  for (let i = 0; i < 500 && sampled < 70; i++) {
-    const f = await chartFrame(page);
-    if (f) { frames.add(f); sampled++; }
-    await page.waitForTimeout(30);
-  }
-  return frames.size;
+  await page.waitForFunction(() => (window as unknown as { __chartMotion?: { done: boolean } }).__chartMotion?.done === true,
+    null, { timeout: 40_000 });
+  return page.evaluate(() => {
+    const m = (window as unknown as { __chartMotion: { frames: Set<string>; first: number; last: number } }).__chartMotion;
+    return { frames: m.frames.size, spanMs: Math.round(m.last - m.first) };
+  });
 }
 
 // 3. 얼리면 정지한다 — 스크린샷 결정성의 근거.
@@ -184,7 +218,7 @@ async function countFrames(page: Page): Promise<number> {
 test("★freezeCharts 를 걸면 차트가 첫 프레임부터 최종 형태다★", async ({ page }) => {
   test.setTimeout(120_000);
   await freezeCharts(page);
-  const frozen = await countFrames(page);
+  const { frames: frozen } = await countFrames(page);
   test.info().annotations.push({ type: "frozen-frames", description: String(frozen) });
   expect(frozen, "차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것").toBeGreaterThan(0);
   // 데이터 도착으로 한두 프레임은 정당하게 늘 수 있다. 애니메이션이 켜지면 수십이 된다.
@@ -204,25 +238,26 @@ test("★freezeCharts 를 걸면 차트가 첫 프레임부터 최종 형태다�
 // 똑같이 기여하므로, 차이는 오직 차트 애니메이션에서만 나온다.
 test("★freezeCharts 없이는 차트가 실제로 애니메이션된다 (얼린 것과의 차분)★",
   async ({ browser }) => {
-    test.setTimeout(150_000);   // 두 번의 전체 로드 + 각 최대 15초 샘플링
+    test.setTimeout(150_000);   // 두 번의 전체 로드 + 각 서피스가 조용해질 때까지 샘플링(10초 상한)
     const run = async (freeze: boolean) => {
       const ctx = await browser.newContext();
       const page = await ctx.newPage();
       if (freeze) await freezeCharts(page);
-      const n = await countFrames(page);
+      const m = await countFrames(page);
       await ctx.close();
-      return n;
+      return m;
     };
     const frozen = await run(true);
     const live = await run(false);
-    test.info().annotations.push({ type: "frames", description: `frozen=${frozen} live=${live}` });
+    test.info().annotations.push({ type: "motion",
+      description: `frozen=${frozen.frames}f/${frozen.spanMs}ms live=${live.frames}f/${live.spanMs}ms` });
 
-    expect(frozen, "얼린 쪽에서 차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것")
+    expect(frozen.frames, "얼린 쪽에서 차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것")
       .toBeGreaterThan(0);
-    // 30ms 샘플링 × 1.5초 애니메이션이면 수십 프레임이 나온다. 데이터 도착이 만드는
-    // 몇 프레임과 확실히 구분되도록 여유 있게 +10 을 요구한다.
-    expect(live, `애니메이션이 켜지지 않았다 (live=${live}, frozen=${frozen})`)
-      .toBeGreaterThanOrEqual(frozen + 10);
+    // recharts 기본 애니메이션 1500ms 의 절반 이상을 얼린 쪽보다 더 오래 바뀌어야 한다. 데이터 도착은 양쪽에
+    // 똑같이 기여하므로(얼린 쪽 실측 ~80ms) 차이는 애니메이션에서만 나온다. 실측: 쉴 때 live ~1700ms.
+    expect(live.spanMs, `애니메이션이 켜지지 않았다 (live ${live.frames}f/${live.spanMs}ms, frozen ${frozen.frames}f/${frozen.spanMs}ms)`)
+      .toBeGreaterThanOrEqual(frozen.spanMs + 750);
   });
 
 // ── 5. §63 이 쓰는 키프레임은 layout 속성을 건드리지 않는다 ──────────────────
