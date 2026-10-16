@@ -8,7 +8,7 @@ import { SAFETY, liveState, routeConnection, routeGate, routeLive, signIn, type 
 //  · 답 문장·[비상 정지] 는 탭과 상관없이 늘 보인다 · 탭 = 주소 `?tab=` · 화살표로 옮긴다
 //  · ★[안전] 탭을 열기 전에는 안전 읽기 0★(지금 탭의 요청은 BU9a 골든 그대로) — 열면 여섯
 //  · 절마다 서버 값 그대로(응답을 바꾸면 화면이 따라간다 — 짝) · 모르는 열거값은 원문 · 미상 ≠ 0
-//  · 절 하나가 실패해도 그 절만 alert + 다시 시도 · 감사 0건은 "없다"고 단정하지 않는다(서버가 실패도 빈 목록으로 답한다)
+//  · 절 하나가 실패해도 그 절만 alert + 다시 시도 · 감사 0건은 진짜 0건(R1 — 서버가 읽지 못하면 500 + 사유, 빈 목록으로 숨기지 않는다)
 //  · 분석가는 관문 없이 나머지 넷 · 로그아웃은 안전 읽기 0 · AA 라이트/다크 · 390
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -144,7 +144,7 @@ test("ST3b 일 손익: 행 그대로 · 등락색 짝 · 미상은 몰라요", a
   await expect(rows.nth(2), "미상을 0 으로 쓰지 않는다").not.toContainText("0원");
 });
 
-test("ST3b 감사 기록: 줄 그대로 · 오늘 요약 · 0건은 '없다'고 단정하지 않는다 · 요약 error 는 실패로", async ({ page }) => {
+test("ST3b 감사 기록: 줄 그대로 · 오늘 요약 · 0건은 없다고 말한다 · 읽지 못하면 실패로(R1) · 요약 error 는 실패로", async ({ page }) => {
   await open(page, { url: "/admin/live-trading?tab=safety" });
   const s = sec(page, "audit");
   await expect(s.locator(".lvs-audit-row")).toHaveCount(2);
@@ -157,10 +157,20 @@ test("ST3b 감사 기록: 줄 그대로 · 오늘 요약 · 0건은 '없다'고 
   st.safety.audit = { count: 0, events: [] };
   st.safety.auditSummary = { date: "2026-10-09", error: "no such table: live_audit_trail" };
   await open(p2, { st, url: "/admin/live-trading?tab=safety" });
-  await expect(sec(p2, "audit")).toContainText("정말 기록이 없는지는 여기서 가를 수 없어요");
+  await expect(sec(p2, "audit").locator(".lvs-empty")).toHaveText("운영 계좌에 남은 감사 기록이 없어요.");
+  await expect(sec(p2, "audit"), "R1 — 이제 0 은 진짜 0 이라 얼버무리지 않는다").not.toContainText("가를 수 없어요");
   await expect(sec(p2, "audit").getByRole("alert")).toContainText("오늘 요약을 서버가 읽지 못했어요");
   await expect(sec(p2, "audit").getByRole("alert").locator("[data-server]")).toHaveText("no such table: live_audit_trail");
   await p2.close();
+
+  // 짝 — 서버가 읽지 못했다고 답하면(500 + 사유) 빈 상태가 아니라 실패다
+  const p3 = await page.context().newPage();
+  await open(p3, { st: liveState({ fail: { audit: 500 } }), url: "/admin/live-trading?tab=safety" });
+  const a3 = sec(p3, "audit");
+  await expect(a3.getByRole("alert")).toContainText("감사 기록을 불러오지 못했어요");
+  await expect(a3.getByRole("alert"), "서버 사유가 그대로").toContainText("audit 를 읽지 못했어요");
+  await expect(a3.locator(".lvs-empty"), "실패를 '기록이 없어요'로 쓰지 않는다").toHaveCount(0);
+  await p3.close();
 });
 
 test("ST3b 실패: 절 하나가 500 이면 그 절만 alert + 다시 시도로 회복 · 다른 절은 그린다", async ({ page }) => {

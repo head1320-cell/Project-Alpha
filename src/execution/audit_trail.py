@@ -339,8 +339,14 @@ class AuditTrail:
         strategy_id: int | None = None,
         client_order_id: str | None = None,
         limit: int = 200,
+        *,
+        raise_on_error: bool = False,
     ) -> list[dict]:
-        """조건 조회."""
+        """조건 조회.
+
+        읽기에 실패하면 기본은 로그 + `[]` 다(실패를 '기록 없음 = 미통과'로 읽는 소비자용).
+        `raise_on_error=True` 면 예외를 그대로 올린다 — 실패를 '0건'과 갈라야 하는 쪽(`GET /live/audit`, R1).
+        """
         severity_levels = {"INFO": 0, "WARN": 1, "ERROR": 2, "CRITICAL": 3}
 
         scope, params = account_scope(self.account_id)
@@ -386,6 +392,8 @@ class AuditTrail:
             return results
         except Exception as e:
             logger.error(f"Audit query 실패: {e}")
+            if raise_on_error:
+                raise
             return []
 
     def kis_code_rows(self, start: datetime | None = None,

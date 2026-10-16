@@ -224,9 +224,8 @@ function AuditSec() {
       {list.isError ? <RetryFail title="감사 기록을 불러오지 못했어요" onRetry={() => void list.refetch()}>{list.error.message}</RetryFail>
         : !list.data ? <Loading what="감사 기록" />
         : !list.data.events.length ? (
-          <p className="tx-sec-sub lvs-empty">
-            서버가 감사 기록을 0건으로 답했어요. 서버는 기록을 읽지 못했을 때도 빈 목록으로 답해서, 정말 기록이 없는지는 여기서 가를 수 없어요.
-          </p>
+          // 서버가 읽지 못하면 500 + 사유로 답한다(R1) — 그래서 여기 0건은 진짜 0건이다.
+          <p className="tx-sec-sub lvs-empty">운영 계좌에 남은 감사 기록이 없어요.</p>
         ) : (
           <ol className="lvs-audit">
             {list.data.events.map((a) => (

@@ -429,7 +429,7 @@ def live_audit(
             event_type=event_type, category=category,
             severity_min=severity_min,
             strategy_id=strategy_id, client_order_id=client_order_id,
-            limit=limit,
+            limit=limit, raise_on_error=True,   # 읽지 못함 ≠ 0건 (R1)
         )
         return {"count": len(events), "events": events}
     except Exception as e:
