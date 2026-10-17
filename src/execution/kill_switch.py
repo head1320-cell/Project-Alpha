@@ -29,6 +29,7 @@ Kill Switch — 비상 정지 시스템
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from dataclasses import dataclass
@@ -36,7 +37,84 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.domain.failure_streak import streak_phrase
+from src.domain.kill_action import (
+    ACTION_BLOCK_NEW_ORDERS,
+    ACTION_CANCEL_OPEN,
+    ACTION_LIQUIDATE,
+    ACTION_NOTIFY,
+    STATE_DONE,
+    STATE_FAILED,
+    STATE_SKIPPED,
+    ActionRecord,
+    action_rollup,
+    observations,
+    unknown_actions,
+)
+from src.execution.live_schemas import account_scope
+
 logger = logging.getLogger(__name__)
+
+#: ★`gradual` 은 간이 구현이다★ — 1/5 만 매도하고 나머지는 남는다. 그 사실을 값으로
+#: 들고 다니지 않으면 호출자는 청산이 끝났다고 읽는다(AF).
+_GRADUAL_PARTIAL_REASON = (
+    "gradual 모드는 1/5 만 매도하는 간이 구현입니다 — "
+    "나머지 수량은 매도되지 않았습니다."
+)
+
+#: ★시도하지 않은 것과 할 일이 없던 것을 가른다★ (AP4)
+_NO_CLIENT_CANCEL = (
+    "브로커 클라이언트 없이 발동해 미체결 주문 취소를 ★시도하지 않았습니다★ — "
+    "★미체결 주문이 남아 있을 수 있습니다.★ 자동 발동 경로"
+    "(`execution/risk_monitor.run_once`)가 이 모양입니다."
+)
+_NO_CLIENT_LIQUIDATE = (
+    "브로커 클라이언트 없이 발동해 청산을 ★시도하지 않았습니다★ — "
+    "보유는 그대로입니다."
+)
+_HOLD_LIQUIDATE = (
+    "청산 모드가 `hold` 라 포지션을 ★팔지 않았습니다★ — 발동은 이후 신규 주문을 "
+    "막을 뿐 보유를 줄이지 않습니다."
+)
+_NOTIFY_DISABLED = "통지가 꺼져 있습니다(`notification_enabled=False`)."
+_NOTIFY_FAILED = "통지 중 오류가 났습니다: {}"
+#: ★발동 즉시 구조적으로 참인 유일한 조치★ — 이벤트 행이 생기면 `is_active()` 가
+#: 참이 되고 실행기가 **두 지점**에서 막는다(검증 시점 · 발주 직전 레이스).
+_BLOCK_GUARD = ("execution/order_executor.py — 사전 검증(kill_switch_active)과 "
+                "발주 직전 재확인(kill_switch_race), 두 지점")
+_UNOBSERVED_TEXT = "미상"
+
+#: 관측이 사유를 주지 않았을 때의 기본 문구. ★사유 없는 미상은 금지★(§4)
+_API_COUNT_UNKNOWN = "연속 실패 횟수를 읽지 못했습니다."
+
+#: 조치 기록이 없는 행의 사유. ★소급해 채우지 않는다★ — 이 어휘(AP)가 생기기
+#: 전에 쓰인 행은 무엇을 했는지 **적히지 않았을** 뿐이고, 안 적힌 것을 "했다" 로
+#: 채우면 없는 관측을 만든다.
+_NO_ACTION_RECORD = (
+    "이 발동에는 조치 기록이 없습니다 — 조치를 기록하기 시작하기(AP) 전에 쓰인 "
+    "행이거나 기록에 실패했습니다. ★무엇을 했는지 알 수 없다는 뜻이고, "
+    "아무것도 안 했다는 뜻도 다 했다는 뜻도 아닙니다.★")
+_BROKEN_ACTION_RECORD = (
+    "조치 기록을 읽을 수 없습니다({}) — ★읽히지 않는 기록은 미상입니다.★")
+
+
+def decorate_event(row: dict | None) -> dict | None:
+    """저장된 발동 행 → 조치 기록을 붙인 행. ★없으면 `unknown`★ (AP5)
+
+    표면 둘(`/kill-switch/status` 의 `active_event` · `/kill-switch/events`)이
+    **같은 함수**를 쓴다 — 두 벌로 만들면 한쪽만 고쳐도 아무 테스트가 깨지지 않고,
+    화면에 따라 다른 사실이 보인다(`run_evidence.rollup` 이 세운 규율).
+    """
+    if not row:
+        return row
+    raw = row.get("actions_json")
+    if raw:
+        try:
+            return {**row, "actions": json.loads(raw)}
+        except Exception as e:                           # noqa: BLE001
+            return {**row, "actions": action_rollup(
+                unknown_actions(_BROKEN_ACTION_RECORD.format(e)))}
+    return {**row, "actions": action_rollup(unknown_actions(_NO_ACTION_RECORD))}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -86,7 +164,15 @@ class KillSwitch:
         ks.resolve(resolved_by="admin", notes="시장 안정화 확인")
     """
 
-    def __init__(self, engine, audit_trail=None, config: KillSwitchConfig | None = None):
+    #: 운영자 계좌(`None`)가 기본 — `__init__` 을 거치지 않고 만든 인스턴스도 운영자 범위다(BV6).
+    account_id: str | None = None
+
+
+    def __init__(self, engine, audit_trail=None, config: KillSwitchConfig | None = None,
+                 account_id: str | None = None):
+        #: 사용자 증권 계좌(BV6). `None` = 운영자 계좌. ★계좌는 운영자(전역) 정지에도 막힌다★ —
+        #: 발동·해제·취소는 자기 계좌 것만 한다.
+        self.account_id = account_id
         self.engine = engine
         self.audit = audit_trail
         self.config = config or KillSwitchConfig()
@@ -97,28 +183,48 @@ class KillSwitch:
     # ─────────────────────────────────────────────────────────────────────
 
     def is_active(self) -> bool:
-        """현재 kill switch 활성 여부."""
+        """현재 kill switch 활성 여부. 계좌는 자기 정지 ★또는★ 운영자(전역) 정지에 막힌다(BV6)."""
+        scope, params = account_scope(self.account_id)
+        if self.account_id is not None:
+            scope = f"(account_id IS NULL OR {scope})"
         try:
             with self.engine.connect() as conn:
-                row = conn.execute(text("""
+                row = conn.execute(text(f"""
                     SELECT COUNT(*) AS cnt FROM live_kill_events
-                    WHERE resolved_at IS NULL
-                """)).fetchone()
+                    WHERE resolved_at IS NULL AND {scope}
+                """), params).fetchone()
                 return (row._mapping["cnt"] if row else 0) > 0
         except Exception as e:
             logger.error(f"Kill switch 상태 조회 실패: {e}")
             return True   # 안전: 조회 실패 시 active 가정
 
+    def _store_actions(self, event_id: str, actions: dict) -> None:
+        """조치 기록을 이벤트 행에 남긴다. ★기록 실패가 발동을 무르지 않는다★
+
+        컬럼이 아직 없는 DB 에서도 발동 자체는 성립해야 한다 — 그래서 실패를
+        삼키되 흔적을 남긴다(`equity_history.record_observation` 과 같은 관용구).
+        """
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE live_kill_events SET actions_json = :a "
+                    "WHERE event_id = :eid"),
+                    {"a": json.dumps(actions, ensure_ascii=False), "eid": event_id})
+        except Exception as e:                           # noqa: BLE001
+            logger.warning(f"조치 기록 저장 실패(발동은 유효): {e}")
+
     def active_event(self) -> dict | None:
-        """현재 미해결 kill 이벤트 (있다면)."""
+        """현재 미해결 kill 이벤트 (있다면) — ★자기 것만★(계좌가 운영자 정지를 해제하지 못하게, BV6)."""
+        scope, params = account_scope(self.account_id)
         try:
             with self.engine.connect() as conn:
-                row = conn.execute(text("""
+                row = conn.execute(text(f"""
                     SELECT * FROM live_kill_events
-                    WHERE resolved_at IS NULL
+                    WHERE resolved_at IS NULL AND {scope}
                     ORDER BY triggered_at DESC LIMIT 1
-                """)).fetchone()
-                return dict(row._mapping) if row else None
+                """), params).fetchone()
+                # ★조치 기록을 함께 낸다★ — 없으면 `unknown`(AP5)
+                return decorate_event(dict(row._mapping)) if row else None
         except Exception as e:
             logger.error(f"Kill event 조회 실패: {e}")
             return None
@@ -138,32 +244,109 @@ class KillSwitch:
         if self.is_active():
             return None  # 이미 발동된 상태
 
+        # ★미상을 0 으로 읽지 않는다★ — 예전에는 `_fetch_account_state` 가 드로다운을
+        # 하드코딩 0 으로 주어 1·2 가 **구조적으로 발동할 수 없었다**(P1-a).
+        # 못 본 항목은 건너뛰고, 무엇을 못 봤는지는 `unverified_checks()` 가 말한다.
+
         # 1. 누적 drawdown
-        cumul_dd = abs(account_state.get("cumulative_dd_pct", 0) or 0)
-        if cumul_dd >= self.config.auto_dd_threshold:
-            return ("auto_dd",
-                     f"누적 drawdown 한도 초과 ({cumul_dd:.1%} >= {self.config.auto_dd_threshold:.0%})")
+        raw_cumul = account_state.get("cumulative_dd_pct")
+        if raw_cumul is not None:
+            cumul_dd = abs(raw_cumul)
+            if cumul_dd >= self.config.auto_dd_threshold:
+                return ("auto_dd",
+                         f"누적 drawdown 한도 초과 ({cumul_dd:.1%} >= {self.config.auto_dd_threshold:.0%})")
 
         # 2. 일중 손실
-        intraday = abs(account_state.get("current_drawdown_pct", 0) or 0)
-        if intraday >= self.config.auto_intraday_loss:
-            return ("auto_cb",
-                     f"일중 손실 한도 초과 ({intraday:.1%} >= {self.config.auto_intraday_loss:.0%})")
+        raw_intraday = account_state.get("current_drawdown_pct")
+        if raw_intraday is not None:
+            intraday = abs(raw_intraday)
+            if intraday >= self.config.auto_intraday_loss:
+                return ("auto_cb",
+                         f"일중 손실 한도 초과 ({intraday:.1%} >= {self.config.auto_intraday_loss:.0%})")
 
         # 3. Systemic risk PANIC
-        if regime_state:
-            risk_score = regime_state.get("systemic_risk_score", 0) or 0
+        # ★미상을 0 으로 읽지 않는다★ (BH1) — 예전 `get(…, 0) or 0` 은 결과는 같았지만
+        #   (0 < 85 라 불발) **없는 점수를 0 으로 만들어** 비교했다. 없으면 이 분기를
+        #   건너뛰고, 못 봤다는 사실은 `unverified_checks()` 가 말한다. 판정 불변.
+        risk_score = (regime_state or {}).get("systemic_risk_score")
+        if risk_score is not None:
             if risk_score >= self.config.auto_risk_score:
                 return ("auto_risk",
                          f"PANIC 국면 감지 (risk_score={risk_score:.0f})")
 
         # 4. API 실패율 (외부에서 주입)
-        api_failures = account_state.get("api_failure_count", 0)
-        if api_failures >= self.config.api_failure_threshold:
+        # ★미상을 0 으로 읽지 않는다★ — 위 1·2 에 적용한 P1-a 규율이 이 분기에만
+        #   빠져 있었다. `.get(…, 0)` 이면 아무도 기록하지 않는 값이 언제나 0 이 되어
+        #   `auto_api` 가 **구조적으로 발동할 수 없고**, 그 사실조차 보이지 않았다.
+        raw_api = account_state.get("api_failure_count")
+        if raw_api is not None and raw_api >= self.config.api_failure_threshold:
+            # ★그 5회가 무엇이었는지를 사유가 데리고 간다★(AT4) — 이 문자열은
+            #   `live_kill_events.trigger_reason` 에 **그대로** 저장되므로,
+            #   사건 조사를 하러 그 행을 열었을 때 구성이 남아 있다(DDL 0줄).
+            #   ★판정 조건은 한 글자도 바뀌지 않았다★ — 5회가 전부 업무 응답
+            #   이어도 여전히 발동한다. 그것을 고치는 것은 실거래 호출 경로
+            #   동작 변경이고(§6), 고치려면 먼저 이 수치가 있어야 한다.
+            obs = account_state.get("api_failure_observation") or {}
+            streak = obs.get("streak")
+            tail = streak_phrase(streak) if isinstance(streak, dict) else ""
             return ("auto_api",
-                     f"KIS API 연속 실패 ({api_failures}회)")
+                     f"KIS API 연속 실패 ({raw_api}회){tail}")
 
         return None
+
+    def unverified_checks(
+        self,
+        account_state: dict,
+        regime_state: dict | None = None,
+    ) -> tuple[str, ...]:
+        """★무엇을 보지 못했나★ — 발동하지 않은 것과 **못 본 것**은 다르다.
+
+        `should_auto_trigger()` 가 `None` 을 돌려줬을 때 그것이 *"한도 안에 있다"* 인지
+        *"잴 수 없었다"* 인지 구분할 방법이 없었다. 감시 루프가 "정상" 을 기록하려면
+        먼저 이것이 비어 있어야 한다.
+        """
+        out: list[str] = []
+        reason = account_state.get("drawdown_reason") or "unknown"
+        if account_state.get("cumulative_dd_pct") is None:
+            out.append(f"auto_dd: 누적 drawdown 미상 ({reason})")
+        if account_state.get("current_drawdown_pct") is None:
+            out.append(f"auto_cb: 일중 손실 미상 ({reason})")
+        if not regime_state or regime_state.get("systemic_risk_score") is None:
+            out.append("auto_risk: 국면 systemic_risk_score 미상")
+        if account_state.get("api_failure_count") is None:
+            # ★사유를 여기서 지어내지 않는다★(AQ) — 왜 못 쟀는지는 관측이 안다
+            # (mock 클라이언트인지 · 클라이언트가 없는지 · 읽다 실패했는지).
+            # 예전에는 "이 저장소에 기록하는 코드가 없다" 는 **고정 문구**였는데,
+            # 그 문장은 AQ 가 통로를 이으면서 거짓이 됐다.
+            obs = account_state.get("api_failure_observation") or {}
+            out.append("auto_api: KIS API 실패 횟수 미상 "
+                       f"({obs.get('reason') or _API_COUNT_UNKNOWN})")
+        return tuple(out)
+
+    #: 자동 트리거 넷. ★`should_auto_trigger` 가 내는 `source` 문자열 그대로★
+    AUTO_TRIGGERS = ("auto_dd", "auto_cb", "auto_risk", "auto_api")
+
+    def trigger_readiness(self, account_state: dict,
+                          regime_state: dict | None = None) -> dict:
+        """★무엇이 무장됐고 무엇이 왜 불능인가★
+
+        `unverified_checks()` **위에 세운다** — 같은 사실을 두 곳에서 판정하면 갈린다.
+        운영 화면이 "킬스위치: 미발동" 만 보여 주면 안전망 넷이 서 있다고 읽히는데,
+        재료가 없는 트리거는 **영원히 발동하지 않는다**. 그 차이를 값으로 낸다.
+        """
+        unverified = self.unverified_checks(account_state, regime_state)
+        reasons = {u.split(":", 1)[0]: u.split(":", 1)[1].strip() for u in unverified}
+
+        inoperable = [{"trigger": name, "reason": reasons[name]}
+                      for name in self.AUTO_TRIGGERS if name in reasons]
+        armed = [{"trigger": name, "basis": "재료가 있어 임계 검사가 실제로 돈다"}
+                 for name in self.AUTO_TRIGGERS if name not in reasons]
+        return {
+            "armed": armed,
+            "inoperable": inoperable,
+            "summary": (f"자동 트리거 {len(self.AUTO_TRIGGERS)}개 중 "
+                        f"{len(armed)}개 무장 · {len(inoperable)}개 불능"),
+        }
 
     # ─────────────────────────────────────────────────────────────────────
     # 발동
@@ -173,8 +356,8 @@ class KillSwitch:
         self,
         source: str,
         reason: str,
-        equity: float = 0,
-        dd_pct: float = 0,
+        equity: float | None = None,
+        dd_pct: float | None = None,
         regime: str | None = None,
         kis_client=None,
         liquidation_mode: str | None = None,
@@ -185,8 +368,10 @@ class KillSwitch:
         Args:
             source:           manual | auto_dd | auto_cb | auto_risk | auto_api
             reason:           발동 사유 (자유 텍스트)
-            equity:           발동 시점 자산
-            dd_pct:           발동 시점 drawdown
+            equity:           발동 시점 자산. ★`None` 은 "안 실었다" 이고 `0` 이
+                              아니다★ — 예전 기본값 `0` 이 관측 행세를 했다(AP2).
+            dd_pct:           발동 시점 drawdown. 같은 규율 — ★어느 호출부도 이
+                              값을 넘기지 않아 저장소 전체에서 언제나 `0` 이었다.★
             regime:           발동 시점 regime
             kis_client:       KIS API 클라이언트 (미체결 취소용)
             liquidation_mode: gradual | immediate | hold
@@ -194,9 +379,12 @@ class KillSwitch:
         Returns:
             event 정보 dict
         """
-        if self.is_active():
+        # ★자기 정지가 이미 있는가로 본다★(BV6) — 계좌가 운영자 전역 정지 중에 스스로 멈추면 그 정지도 남아야
+        # 한다(전역이 풀릴 때 계좌가 함께 풀리면 안 된다). 운영자에게는 예전과 같은 검사다.
+        existing = self.active_event()
+        if existing:
             logger.warning("Kill switch 이미 발동 중 — 중복 trigger 무시")
-            return self.active_event() or {}
+            return existing
 
         event_id = f"KILL-{uuid.uuid4().hex[:12]}"
         liq_mode = liquidation_mode or self.config.default_liquidation_mode
@@ -208,13 +396,14 @@ class KillSwitch:
                     INSERT INTO live_kill_events (
                         event_id, trigger_source, trigger_reason,
                         equity_at_trigger, dd_at_trigger, regime_at_trigger,
-                        liquidation_mode
+                        liquidation_mode, account_id
                     ) VALUES (
-                        :eid, :ts, :tr, :eq, :dd, :rg, :lm
+                        :eid, :ts, :tr, :eq, :dd, :rg, :lm, :acct
                     )
                 """), {
                     "eid": event_id, "ts": source, "tr": reason,
                     "eq": equity, "dd": dd_pct, "rg": regime, "lm": liq_mode,
+                    "acct": self.account_id,
                 })
         except Exception as e:
             logger.error(f"Kill event DB 기록 실패: {e}")
@@ -225,18 +414,42 @@ class KillSwitch:
 
         logger.critical(f"🚨 KILL SWITCH ACTIVATED — {source}: {reason}")
 
-        # 3. 미체결 주문 취소
-        cancelled_count = 0
+        # 3. 미체결 주문 취소 — ★시도하지 않은 것과 0 건을 가른다★
+        acts: list[ActionRecord] = [
+            ActionRecord(action=ACTION_BLOCK_NEW_ORDERS, state=STATE_DONE,
+                         detail={"guard": _BLOCK_GUARD}),
+        ]
+        cancelled_count: int | None = None
         if kis_client:
             cancelled_count = self._cancel_open_orders(kis_client)
+            acts.append(ActionRecord(action=ACTION_CANCEL_OPEN, state=STATE_DONE,
+                                     detail={"n_cancelled": cancelled_count}))
+        else:
+            acts.append(ActionRecord(action=ACTION_CANCEL_OPEN,
+                                     state=STATE_SKIPPED, reason=_NO_CLIENT_CANCEL))
 
-        # 4. 청산 (옵션)
-        positions_closed = 0
-        krw_recovered = 0
+        # 4. 청산 (옵션) — ★안 판 것을 "완료" 라고 적지 않는다★
+        positions_closed: int | None = None
+        krw_recovered: float | None = None
+        #: ★`complete: None` 은 "시도하지 않았다"★ — 예전 초기값은 `True` 였고
+        #: `hold` 모드에서 교체되지 않아, 팔지 않고도 완료라고 말했다(AP4).
+        liquidation: dict = {"closed": None, "partial": [], "failed": [],
+                             "krw_recovered": None, "mode": liq_mode,
+                             "complete": None, "note": None}
         if liq_mode in ("immediate", "gradual") and kis_client:
-            positions_closed, krw_recovered = self._liquidate_positions(
-                kis_client, mode=liq_mode,
-            )
+            liquidation = self._liquidate_positions(kis_client, mode=liq_mode)
+            # ★감사 컬럼에는 **전량 청산분만** 간다★
+            positions_closed = liquidation["closed"]
+            krw_recovered = liquidation["krw_recovered"]
+            acts.append(ActionRecord(action=ACTION_LIQUIDATE, state=STATE_DONE,
+                                     detail={k: liquidation[k] for k in
+                                             ("mode", "closed", "partial",
+                                              "failed", "complete", "note")}))
+        else:
+            acts.append(ActionRecord(
+                action=ACTION_LIQUIDATE, state=STATE_SKIPPED,
+                reason=_HOLD_LIQUIDATE if liq_mode == "hold" else _NO_CLIENT_LIQUIDATE,
+                detail={"mode": liq_mode}))
 
         # 5. 통계 업데이트
         try:
@@ -256,7 +469,18 @@ class KillSwitch:
 
         # 6. 알림 (placeholder — Slack/Email 통합 가능)
         if self.config.notification_enabled:
-            self._send_notification(event_id, source, reason, equity, dd_pct)
+            try:
+                self._send_notification(event_id, source, reason, equity, dd_pct)
+                acts.append(ActionRecord(action=ACTION_NOTIFY, state=STATE_DONE))
+            except Exception as e:                       # noqa: BLE001
+                acts.append(ActionRecord(action=ACTION_NOTIFY, state=STATE_FAILED,
+                                         reason=_NOTIFY_FAILED.format(e)))
+        else:
+            acts.append(ActionRecord(action=ACTION_NOTIFY, state=STATE_SKIPPED,
+                                     reason=_NOTIFY_DISABLED))
+
+        actions = action_rollup(acts)
+        self._store_actions(event_id, actions)
 
         return {
             "event_id":             event_id,
@@ -269,6 +493,16 @@ class KillSwitch:
             "n_orders_cancelled":   cancelled_count,
             "n_positions_closed":   positions_closed,
             "krw_recovered":        krw_recovered,
+            # ★반만 판 것을 조용히 성공으로 보이게 하지 않는다★
+            "liquidation":          liquidation,
+            # ★시도하지 않았으면 `False` 가 아니라 `None`★ (미상 ≠ 거짓)
+            "liquidation_complete": liquidation["complete"],
+            "liquidation_note":     liquidation["note"],
+            # ★발동했는가 ⟂ 무엇을 했는가★ (AP)
+            "actions":              actions,
+            # ★값과 그 값을 어떻게 알았나를 함께 낸다★
+            "observations":         observations(equity_krw=equity, dd_pct=dd_pct,
+                                                 regime=regime),
         }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -323,14 +557,15 @@ class KillSwitch:
     def _cancel_open_orders(self, kis_client) -> int:
         """모든 미체결 주문 일괄 취소."""
         cancelled = 0
+        scope, params = account_scope(self.account_id)   # ★자기 계좌 주문만★(BV6)
         try:
             with self.engine.connect() as conn:
-                rows = conn.execute(text("""
+                rows = conn.execute(text(f"""
                     SELECT client_order_id, kis_order_id, kis_order_org_no,
                            filled_quantity, quantity
                     FROM live_orders
-                    WHERE status IN ('PENDING', 'SUBMITTED', 'PARTIAL_FILL')
-                """)).fetchall()
+                    WHERE status IN ('PENDING', 'SUBMITTED', 'PARTIAL_FILL') AND {scope}
+                """), params).fetchall()
 
             for r in rows:
                 m = r._mapping
@@ -363,7 +598,7 @@ class KillSwitch:
     # Internal: 청산
     # ─────────────────────────────────────────────────────────────────────
 
-    def _liquidate_positions(self, kis_client, mode: str = "gradual") -> tuple[int, float]:
+    def _liquidate_positions(self, kis_client, mode: str = "gradual") -> dict:
         """
         보유 포지션 청산.
 
@@ -372,6 +607,9 @@ class KillSwitch:
         """
         n_closed = 0
         krw_recovered = 0.0
+        # ★청산·부분매도·실패를 가른다★ — 예전에는 셋이 전부 `n_closed` 였다.
+        partial: list[dict] = []
+        failed: list[dict] = []
 
         try:
             balance = kis_client.get_balance()
@@ -395,6 +633,8 @@ class KillSwitch:
                         logger.warning(f"비상 청산: {ticker} {qty}주 시장가 (event)")
                     except Exception as e:
                         logger.error(f"청산 실패 ({ticker}): {e}")
+                        failed.append({"ticker": ticker, "requested_qty": qty,
+                                       "reason": f"주문 실패: {e}"})
 
                 elif mode == "gradual":
                     # 5분할 — 실제 구현은 백그라운드 task로 (간이 구현: 1/5만 즉시)
@@ -404,19 +644,50 @@ class KillSwitch:
                             ticker=ticker, side="SELL", quantity=portion,
                             order_type="MARKET",
                         )
-                        n_closed += 1
+                        # ★`n_closed` 를 올리지 않는다★ — 1/5 을 판 것은 청산이
+                        #   아니다. 예전에는 여기서 올려 감사 테이블
+                        #   `live_kill_events.n_positions_closed` 까지 거짓이 갔다.
                         krw_recovered += portion * pos["current_price"]
+                        partial.append({
+                            "ticker": ticker,
+                            "sold_qty": portion,
+                            "remaining_qty": qty - portion,
+                            "reason": _GRADUAL_PARTIAL_REASON,
+                        })
                         logger.warning(
                             f"점진 청산 1/5: {ticker} {portion}/{qty}주 "
                             f"(추가 4회 분할 매도 필요)"
                         )
                     except Exception as e:
                         logger.error(f"점진 청산 실패 ({ticker}): {e}")
+                        failed.append({"ticker": ticker, "requested_qty": portion,
+                                       "reason": f"주문 실패: {e}"})
 
         except Exception as e:
             logger.error(f"청산 절차 실패: {e}")
+            failed.append({"ticker": None, "requested_qty": None,
+                           "reason": f"청산 절차 실패: {e}"})
 
-        return n_closed, krw_recovered
+        complete = not partial and not failed
+        note = None
+        if not complete:
+            bits = []
+            if partial:
+                bits.append(f"부분 매도 {len(partial)}종목(잔량 남음)")
+            if failed:
+                bits.append(f"실패 {len(failed)}건")
+            note = ("청산이 완료되지 않았습니다 — " + " · ".join(bits)
+                    + ". 남은 포지션은 매도되지 않았습니다.")
+
+        return {
+            "closed": n_closed,          # ★전량 청산된 포지션만★
+            "partial": partial,
+            "failed": failed,
+            "krw_recovered": krw_recovered,
+            "mode": mode,
+            "complete": complete,
+            "note": note,
+        }
 
     # ─────────────────────────────────────────────────────────────────────
     # Internal: 알림
@@ -424,15 +695,23 @@ class KillSwitch:
 
     @staticmethod
     def _send_notification(event_id: str, source: str, reason: str,
-                            equity: float, dd_pct: float):
-        """Slack/Email 알림 (현재는 로깅만, 추후 webhook 통합)."""
+                            equity: float | None, dd_pct: float | None):
+        """Slack/Email 알림 (현재는 로깅만, 추후 webhook 통합).
+
+        ★미상을 0 으로 찍지 않는다★ — `f"{None:,.0f}"` 는 `TypeError` 라 예전
+        서명(기본값 `0`)에서는 이 분기가 필요 없었다. 기본값을 `None` 으로
+        바꾸면서(AP2) 여기가 곧바로 터지므로, 미상은 **미상이라고 적는다.**
+        """
+        def _num(v, fmt):
+            return format(v, fmt) if isinstance(v, (int, float)) \
+                and not isinstance(v, bool) else _UNOBSERVED_TEXT
         msg = (
             f"🚨 KILL SWITCH ACTIVATED\n"
             f"Event: {event_id}\n"
             f"Source: {source}\n"
             f"Reason: {reason}\n"
-            f"Equity: {equity:,.0f}원\n"
-            f"Drawdown: {dd_pct:.2%}\n"
+            f"Equity: {_num(equity, ',.0f')}원\n"
+            f"Drawdown: {_num(dd_pct, '.2%')}\n"
             f"Time: {datetime.now().isoformat()}"
         )
         logger.critical(msg)

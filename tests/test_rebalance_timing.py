@@ -73,6 +73,14 @@ def make_cfg(**overrides) -> BacktestConfig:
         initial_capital=10_000_000,
         commission_rate=0.0,
         slippage_rate=0.0,
+        # ★이 파일의 픽스처는 "판단 봉 = 행동 봉" 을 전제로 짜였다★ — 지수가
+        # 꺾이는 봉과 청산/차단이 일어나는 봉을 같은 날로 못 박아 뒀다. 그 전제는
+        # 예전 기본값(`signal_lag=0`)에서 **암묵적**이었고 기본이 1로 바뀌자(AG)
+        # 드러났다. ★단언을 느슨하게 하는 대신 전제를 명시한다★ — 여기 주제는
+        # 리밸런싱 주기와 마켓타이밍 동작이지 신호 시차가 아니다.
+        # 시차가 마켓타이밍 판단에도 걸린다는 사실은
+        # `tests/test_signal_lag.py::test_market_timing_respects_lag` 가 건다.
+        signal_lag=0,
     )
     base.update(overrides)
     return BacktestConfig(**base)

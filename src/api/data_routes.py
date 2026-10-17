@@ -1,0 +1,697 @@
+"""데이터 적재·DB 상태·심볼 마스터·관리자 동기화 — main_api.py에서 분리(경로·동작 불변).
+"""
+
+import logging
+
+from fastapi import APIRouter, HTTPException, Query
+
+from src.state.ingest_state import INGEST_RUNNING, INGEST_STATUS, INGEST_TARGETS
+
+logger = logging.getLogger("api.data")
+router = APIRouter(tags=["data"])
+
+# 심볼 수급 백필 진행 플래그 — 이 라우터 안에서만 쓰인다(데몬 스레드에서 변경).
+_FLOWS_BACKFILL_RUNNING = {"krx": False}
+
+
+@router.get("/api/v1/data/krx-status")
+def krx_status():
+    """KRX 적재(daily_prices) 커버리지 — 자동 백필 진행상황 관측."""
+    import os
+
+    from src.data.mock_gate import mock_allowed
+    out = {
+        "krx_key": bool(os.getenv("KRX_API_KEY")),
+        "autobackfill": os.getenv("KRX_AUTOBACKFILL", "1") != "0",
+        "backfill_start": os.getenv("KRX_BACKFILL_START", "2010-01-04"),
+        # KIS 기반 전종목 OHLCV 사전 적재 활성 여부 (KRX 키 없이 daily_prices를 채우는 경로)
+        "kis_prewarm": (
+            not mock_allowed()
+            and bool(os.getenv("KIS_APP_KEY"))
+            and os.getenv("OHLCV_PREWARM", "1") != "0"
+        ),
+    }
+    try:
+        from sqlalchemy import text
+
+        from src.database import get_engine
+        engine = get_engine()
+        if engine is None:
+            return {**out, "available": False}
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                'SELECT MIN(trade_date), MAX(trade_date), '
+                'COUNT(DISTINCT ticker), COUNT(*) FROM daily_prices')).fetchone()
+            idx = conn.execute(text(
+                "SELECT COUNT(*) FROM daily_prices "
+                "WHERE ticker IN ('KOSPI','KOSDAQ')")).scalar()
+        out.update({
+            "available": True,
+            "start_date": str(row[0])[:10] if row and row[0] else None,
+            "end_date": str(row[1])[:10] if row and row[1] else None,
+            "tickers": int(row[2]) if row and row[2] else 0,
+            "rows": int(row[3]) if row and row[3] else 0,
+            "index_rows": int(idx) if idx else 0,
+        })
+    except Exception as e:
+        import logging
+        logging.getLogger("api.main").debug(f"krx-status 조회 실패: {e}")
+        out.update({"available": False})
+    return out
+
+def _vintage_stats() -> dict:
+    """재무 빈티지 적재 현황 — ★못 읽으면 `None` + 사유이지 0 이 아니다★."""
+    try:
+        from src.data.dart_history import vintage_stats
+        return vintage_stats()
+    except Exception as e:  # noqa: BLE001
+        return {"rows": None, "restated_periods": None, "skipped_no_rcept": 0,
+                "reason": f"빈티지 현황을 읽지 못했습니다: {type(e).__name__}: {e}"}
+
+
+@router.get("/api/v1/data/db-status")
+def db_status():
+    """모든 핵심 테이블 적재 현황 + 설정 + 도구별 준비상태 — 한 번에 점검(매번 SSH 불필요).
+    대용량 daily_prices가 적재 쓰기 중이어도 빠르게 응답하도록 추정치(reltuples)+statement_timeout 사용."""
+    import os
+
+    from src.data.mock_gate import mock_allowed
+    out: dict = {"available": False, "config": {}, "tables": {}, "tools": {}}
+    out["config"] = {
+        "kis_real": not mock_allowed() and bool(os.getenv("KIS_APP_KEY")),
+        "dart_key": bool(os.getenv("DART_API_KEY")),
+        "krx_key": bool(os.getenv("KRX_API_KEY")),
+        "bok_key": bool(os.getenv("BOK_API_KEY")),
+        "fred_key": bool(os.getenv("FRED_API_KEY")),
+    }
+
+    # 유니버스 적재 진행 — 마스터(전 상장) 대비 factor_snapshot 적재 수 (스크리너 유니버스 크기의 근거)
+    def _universe_progress() -> dict:
+        try:
+            from src.data.snapshot_db import enabled as _sn_en
+            from src.data.snapshot_db import ingested_codes
+            from src.data.stock_master import build_master_universe, master_composition
+            ing = set(ingested_codes()) if _sn_en() else set()
+            prog = {}
+            for k in ("kospi", "kosdaq", "etf", "all_listed"):
+                m = build_master_universe(k)
+                if m:
+                    prog[k] = {"master": len(m), "ingested": sum(1 for c in m if c in ing)}
+            # ★식별자 커버리지★ 마스터가 **어디서 왔는지**(파일/DB)와 ISIN 이
+            # 몇 개나 조회 키로 쓸 수 있는지를 함께 낸다. `malformed` 는 "없다" 가
+            # 아니라 **파서·출처 결함**이라 따로 세지 않으면 영원히 안 보인다.
+            from src.data.instrument_master_store import isin_coverage
+            return {"progress": prog, "composition": master_composition(),
+                    "isin_coverage": isin_coverage()}
+        except Exception:
+            return {"progress": {}, "composition": {}, "isin_coverage": {}}
+
+    out["universe_progress"] = _universe_progress()
+
+    # 적재 상세 상태 + DART 사용량 — "버튼 눌러도 조용함"의 원인을 화면에 노출
+    out["ingest_status"] = {k: dict(v) for k, v in INGEST_STATUS.items()}
+    try:
+        from src.data.dart_client import dart_usage
+        out["dart_usage"] = dart_usage()
+    except Exception:
+        out["dart_usage"] = None
+    try:
+        from sqlalchemy import text
+
+        from src.data.etf_prices import US_TO_KR
+        from src.data.kis_flows import flows_status
+        from src.database import get_engine
+        engine = get_engine()
+        if engine is None:
+            out["ingest_running"] = dict(INGEST_RUNNING)
+            return out
+
+        etf_codes = sorted({c for c, _ in US_TO_KR.values()})
+        ph = ",".join(f":c{i}" for i in range(len(etf_codes)))
+
+        # AUTOCOMMIT: 각 쿼리 독립 트랜잭션 → statement_timeout 컷이 다음 쿼리를 오염시키지 않음.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as c:
+            try:
+                c.execute(text("SET statement_timeout = 5000"))  # Postgres: 슬로우/락대기 5s 컷
+            except Exception:
+                pass
+
+            def q(sql: str, params: dict | None = None):
+                try:
+                    return c.execute(text(sql), params or {}).fetchone()
+                except Exception:
+                    return None
+
+            # daily_prices 행수: 대용량 → Postgres 추정치(reltuples, 즉시) 우선, 실패 시 COUNT
+            est = q("SELECT reltuples::bigint FROM pg_class WHERE relname='daily_prices'")
+            dp_rows = int(est[0]) if (est and est[0] and int(est[0]) > 0) else None
+            if dp_rows is None:
+                cnt = q("SELECT COUNT(*) FROM daily_prices")
+                dp_rows = int(cnt[0] or 0) if cnt else 0
+            # 종목 수/기간 — 848만 행에서 COUNT(DISTINCT)+MIN+MAX 결합 쿼리가 5s 타임아웃
+            # → "종목 0 · 기간 —" 오표시 + 백테스터(종목) 거짓 X이던 버그:
+            #   ① 종목 수는 pg_stats n_distinct 추정(즉시), 실패 시에만 정확 카운트
+            #   ② MIN/MAX는 개별 쿼리(인덱스 스캔, 각자 5s 컷) ③ 미확정은 None(0 금지 — 프론트 "—")
+            nd = q("SELECT n_distinct FROM pg_stats WHERE tablename='daily_prices' AND attname='ticker'")
+            dp_tickers = None
+            if nd and nd[0] is not None:
+                ndv = float(nd[0])
+                dp_tickers = int(-ndv * (dp_rows or 0)) if ndv < 0 else int(ndv)
+            if dp_tickers is None:
+                cnt = q("SELECT COUNT(DISTINCT ticker) FROM daily_prices")
+                dp_tickers = int(cnt[0]) if (cnt and cnt[0] is not None) else None
+            dmin = q("SELECT MIN(trade_date) FROM daily_prices")
+            dmax = q("SELECT MAX(trade_date) FROM daily_prices")
+            dp_exists = q("SELECT 1 FROM daily_prices LIMIT 1") is not None
+            idxr = q("SELECT COUNT(*), MIN(trade_date), MAX(trade_date) FROM daily_prices WHERE ticker IN ('KOSPI','KOSDAQ')")
+            etf = q(f"SELECT COUNT(DISTINCT ticker), MIN(trade_date), MAX(trade_date) FROM daily_prices WHERE ticker IN ({ph})",  # noqa: S608 — 코드 화이트리스트
+                    {f"c{i}": code for i, code in enumerate(etf_codes)})
+            fs = q("SELECT COUNT(*) FROM factor_snapshot")
+            fh = q("SELECT COUNT(*), MIN(bsns_year), MAX(bsns_year) FROM financials_history")
+        fl = flows_status(engine)
+
+
+        out["available"] = True
+        out["tables"] = {
+            "daily_prices": {"rows": dp_rows,
+                             "tickers": dp_tickers,
+                             "start": str(dmin[0])[:10] if (dmin and dmin[0]) else None,
+                             "end": str(dmax[0])[:10] if (dmax and dmax[0]) else None},
+            "index_kospi_kosdaq": {"rows": int(idxr[0] or 0) if idxr else 0,
+                                   "start": str(idxr[1])[:10] if (idxr and idxr[1]) else None,
+                                   "end": str(idxr[2])[:10] if (idxr and idxr[2]) else None},
+            "etf_cross_asset": {"loaded": int(etf[0] or 0) if etf else 0, "total": len(etf_codes),
+                                "start": str(etf[1])[:10] if (etf and etf[1]) else None,
+                                "end": str(etf[2])[:10] if (etf and etf[2]) else None},
+            "investor_flows": {"rows": fl.get("rows", 0), "tickers": fl.get("tickers", 0),
+                               "start": fl.get("min_date"), "end": fl.get("max_date")},
+            "factor_snapshot": {"rows": int(fs[0] or 0) if fs else 0},
+            "financials_history": {"rows": int(fh[0] or 0) if fh else 0,
+                                   "start": str(fh[1]) if (fh and fh[1]) else None,
+                                   "end": str(fh[2]) if (fh and fh[2]) else None},
+            # ★행 수가 아니라 `restated_periods` 가 답이다★ — "정정공시를 실제로
+            # 봤는가". 0 이면 "아직 본 적 없다" 이지 "정정공시가 없다" 가 아니다.
+            # ★못 읽으면 None + 사유★ — 여기서 0 으로 만들면 미상이 사라진다.
+            "financials_vintages": _vintage_stats(),
+        }
+        t = out["tables"]
+        out["tools"] = {
+            "스크리너(펀더멘털)": (t["factor_snapshot"]["rows"] or 0) > 0,
+            "백테스터(종목)": dp_exists and (dp_tickers is None or dp_tickers > 5),
+            "백테스터(매크로·ETF)": t["etf_cross_asset"]["loaded"] >= max(1, int(t["etf_cross_asset"]["total"] * 0.6)),
+            "벤치마크·국면": (t["index_kospi_kosdaq"]["rows"] or 0) > 0,
+            "수급 시그널": (t["investor_flows"]["rows"] or 0) > 0,
+            # ★추정과 실측을 한 칸에 넣지 않는다★ 예전 `"PIT 펀더멘털"` 은
+            # **추정 시차 표**(financials_history)를 근거로 *PIT* 능력을
+            # 주장했다. V4 이후 실측 접수일 경로가 따로 있으므로 가른다 —
+            # 사용자가 `measured_pct` 가 0 인 이유를 찾으러 오는 자리다.
+            "PIT 펀더멘털(추정 시차)": (t["financials_history"]["rows"] or 0) > 0,
+            # ★미상 ≠ 미준비★ 못 읽었으면 항목을 만들지 않는다. `False` 로 적으면
+            # "확인했더니 없다" 로 읽힌다. 사유는 tables.financials_vintages 가
+            # 이미 들고 있고, 값은 반드시 불리언이어야 한다 — 프런트가
+            # `Object.values(tools).filter(Boolean)` 로 센다(DbStatusPanel.tsx:114).
+            **({"PIT 펀더멘털(실측 접수일)": t["financials_vintages"]["rows"] > 0}
+               if t["financials_vintages"]["rows"] is not None else {}),
+        }
+    except Exception:
+        logger.exception("db-status 조회 실패")
+    # ★적재 대상에 없는 데이터도 상태를 말한다★
+    # 조건식의 ECOS/FRED·해외지수 토큰은 `INGEST_TARGETS` 에 없고 조회 시점의
+    # 라이브 호출이라, 위 테이블 블록에 잡히지 않는다. `config` 의 `bok_key`·
+    # `fred_key` 는 **키가 있다**는 뜻일 뿐 **시계열이 온다**는 뜻이 아니다 —
+    # 그 간극이 사용자에게 보이지 않았다.
+    try:
+        from src.kis_strategies.factor_tokens import macro_availability
+        out["macro"] = macro_availability()
+    except Exception as e:  # noqa: BLE001
+        # ★지어내지 않는다★ 못 읽으면 그렇게 적는다(빈 dict 은 '문제 없음'으로 읽힌다).
+        out["macro"] = {"ok": [], "unavailable": {},
+                        "note": f"매크로 가용성을 확인할 수 없습니다: {e}"}
+    # ★UI 가 테이블 목록을 알 필요가 없다★
+    # 예전에는 프런트가 `TABLE_LABELS` 6개와 버튼 6개를 **하드코딩**했다. 그래서
+    # 적재 대상을 추가하려면 백엔드와 프런트를 따로 고쳐야 했고, 실제로 `macro`
+    # 가 빠져 있었다. 이제 백엔드가 스스로 열거하고 UI 는 그것을 그린다.
+    try:
+        from src.data.ingest_registry import DATASETS
+        out["datasets"] = [
+            {"key": d.key, "label": d.label, "source": d.source, "table": d.table,
+             "slice_of": d.slice_of, "tools": list(d.tools),
+             "required_env": list(d.required_env),
+             # ★키가 있다 ≠ 데이터가 온다★ 그래도 "키가 없어서 못 받는다" 와
+             # "받았는데 비었다" 를 가르려면 이것이 필요하다.
+             "env_ready": all(bool(os.getenv(e)) for e in d.required_env)
+                          if d.required_env else None,
+             "triggerable": d.triggerable, "note": d.note}
+            for d in DATASETS
+        ]
+    except Exception as e:  # noqa: BLE001
+        # ★지어내지 않는다★ 못 읽으면 빈 목록이 아니라 사유를 낸다 — 빈 목록은
+        # "적재 대상이 없다" 로 읽힌다.
+        out["datasets"] = None
+        out["datasets_error"] = f"적재 레지스트리를 읽을 수 없습니다: {e}"
+    out["ingest_running"] = dict(INGEST_RUNNING)
+    return out
+
+def _ingest_run(target: str):
+    """단일 타깃 적재(동기) — 백그라운드 스레드서 호출. 키 없는 소스는 내부서 no-op(안전)."""
+    import os
+    start = os.getenv("KRX_BACKFILL_START", "2010-01-04")
+    if target == "index":
+        from src.data.krx_ingest import backfill_index
+        return backfill_index(start=start)
+    if target == "etf":
+        from src.data.etf_prices import prewarm_etf_universe
+        return prewarm_etf_universe("kr")
+    if target == "stocks":
+        from src.data.krx_ingest import backfill
+        return backfill(start=start)            # KRX 전종목 일봉(+지수) 1회 백필
+    if target == "factors":
+        from src.data.snapshot_db import ingest_universe
+        from src.engine.screener import resolve_universe
+        st = INGEST_STATUS.setdefault("factors", {})
+        out = {}
+        # 지수 유니버스 먼저(빠른 부분 가용) → all_listed는 남은 종목만.
+        # kospi200·kosdaq150 ⊂ all_listed 이므로 코드 단위 dedup으로 재평가·DART 낭비를 원천 차단.
+        # (스냅샷 캐시가 재호출 자체는 이미 막지만, dedup은 재스캔 compute까지 제거하고 의도를 명확히 함)
+        seen: set[str] = set()
+        for uni in ("kospi200", "kosdaq150", "all_listed"):
+            codes = [c for c in resolve_universe(uni) if c not in seen]
+            seen.update(codes)
+            if not codes:
+                out[uni] = {"universe": uni, "skipped": "중복 제거 — 이미 처리됨", "saved": 0}
+                continue
+
+            def _cb(done, total, saved, fails, _u=uni, _st=st):
+                _st["progress"] = {"stage": _u, "done": done, "total": total,
+                                   "saved": saved, "failures": fails}
+            r = ingest_universe(codes, progress_cb=_cb)
+            out[uni] = r
+            if r.get("aborted"):
+                st["last_error"] = r["aborted"]  # DART 한도 등 — UI에 사유 노출
+                break
+        return out
+    if target == "financials":
+        # 무한루프인 _dart_history_backfill_bg()를 그대로 재사용하면 수동 버튼이 영원히
+        # 안 끝나던 버그 — backfill_financials를 1회만 직접 호출(resume 기반이라 안전).
+        from src.data.dart_history import backfill_financials, refetch_revenue_null
+        years = int(os.getenv("DART_HISTORY_YEARS", "10") or 10)
+        quarters = os.getenv("DART_HISTORY_QUARTERS", "0") != "0"
+        max_calls = int(os.getenv("DART_HISTORY_MAX_CALLS", "18000") or 18000)
+        st = INGEST_STATUS.setdefault("financials", {})
+
+        def _cb(done, total, saved, calls, _st=st):
+            _st["progress"] = {"stage": "all_listed", "done": done, "total": total,
+                               "saved": saved, "failures": 0}
+        r1 = backfill_financials(all_listed=True, years=years, include_quarters=quarters,
+                                 max_calls=max_calls, progress_cb=_cb)
+        # 2단계: 금융업 등 revenue=NULL 행을 확장 파서(영업수익/이자수익)로 재조회.
+        # 쿼터 소진 중단이 아니면 남은 한도로 실행(멱등 — 이미 채워진 건 후보에서 빠짐).
+        r2 = None
+        if not r1.get("stopped_at_quota"):
+            remaining = max(0, max_calls - int(r1.get("calls", 0)))
+
+            def _cb2(done, total, updated, calls, _st=st):
+                _st["progress"] = {"stage": "revenue_refetch(금융업)", "done": done,
+                                   "total": total, "saved": updated, "failures": 0}
+            r2 = refetch_revenue_null(max_calls=remaining or None, progress_cb=_cb2)
+        return {"backfill": r1, "revenue_refetch": r2}
+    if target == "flows":
+        from src.data.kis_flows import sync_investor_flows
+        return sync_investor_flows(all_listed=True)
+    if target == "macro":
+        # ★기존 백필을 연결만 한다★ `lifecycle.py` 가 이미 이 함수를 주기 실행한다
+        # (`auto_vintage_backfill(loop=True)`). 여기서는 1회만 돌린다 — 수동 버튼이
+        # 영원히 안 끝나던 financials 버그와 같은 실수를 반복하지 않는다.
+        from src.data.macro_vintage_backfill import auto_vintage_backfill
+        return auto_vintage_backfill(loop=False)
+    return {"error": f"unknown target: {target}"}
+
+@router.get("/api/v1/data/coverage")
+def data_coverage(target: str, start: str, end: str):
+    """★종목별 커버리지★ — "내 유니버스의 몇 %가 이 기간을 덮는가".
+
+    `db-status` 의 전체 행 수로는 `1종목 × 40행` 과 `2,700종목 × 40행` 이 구별되지
+    않는다. 그 구별이 "백테스트가 왜 빈약한가" 에 답한다.
+
+    ★온디맨드다★ `daily_prices` 는 수백만 행이라 탭을 여는 것만으로 돌면 안 된다 —
+    호출해야 집계하고 결과는 TTL 캐시된다.
+    """
+    from src.data.coverage import ticker_coverage
+    try:
+        return ticker_coverage(target, start=start, end=end)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.post("/api/v1/data/ingest/{target}")
+def ingest_trigger(target: str):
+    """테이블별/전체 적재 백그라운드 트리거. target ∈ {index,etf,stocks,factors,financials,flows,all}.
+    키 없는 소스는 내부서 no-op. 중복 실행 가드. 진행은 db-status의 ingest_running."""
+    import threading
+    if target == "all":
+        targets = list(INGEST_TARGETS)
+    elif target in INGEST_TARGETS:
+        targets = [target]
+    else:
+        raise HTTPException(404, f"unknown target: {target}")
+
+    started = []
+    for t in targets:
+        if INGEST_RUNNING.get(t):
+            continue
+
+        def _run(tt: str):
+            from datetime import datetime as _dt
+            INGEST_RUNNING[tt] = True
+            st = INGEST_STATUS.setdefault(tt, {})
+            st.update({"running": True, "started_at": _dt.now().isoformat(timespec="seconds"),
+                       "finished_at": None, "last_error": None, "result": None, "progress": None})
+            try:
+                logger.info(f"적재(수동) 시작: {tt}")
+                r = _ingest_run(tt)
+                st["result"] = r
+                logger.info(f"적재(수동) 완료 [{tt}]: {r}")
+            except Exception as e:
+                st["last_error"] = str(e)[:300]  # UI 표면화 — "조용한 실패" 제거
+                logger.exception(f"적재(수동) 실패 [{tt}]")
+            finally:
+                st["running"] = False
+                st["finished_at"] = _dt.now().isoformat(timespec="seconds")
+                INGEST_RUNNING[tt] = False
+
+        threading.Thread(target=_run, args=(t,), daemon=True).start()
+        started.append(t)
+
+    return {"started": started, "running": dict(INGEST_RUNNING),
+            "message": (f"적재 시작: {', '.join(started)}" if started else "모두 이미 실행 중")}
+
+@router.get("/api/v1/data/ingest-doctor")
+def ingest_doctor():
+    """적재 데이터 소스(DART/KRX/KIS) 실도달 진단 — "가져오기가 되는가"를 UI에서 즉답.
+
+    각 소스에 경량 실호출 1건: DART 기업개황(삼성전자) · KRX 지수 일별시세(최근 영업일) ·
+    KIS 토큰. 키 미설정/mock은 정직하게 ok=False + 사유. DART 사용량 요약 동봉."""
+    import os
+    import time as _t
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    out: dict = {}
+
+    # DART
+    if not os.getenv("DART_API_KEY"):
+        out["dart"] = {"ok": False, "message": "DART_API_KEY 미설정"}
+    else:
+        try:
+            from src.data.dart_client import STOCK_TO_CORP, DARTClient
+            t0 = _t.time()
+            c = DARTClient()
+            data = c._get("company.json", {"corp_code": STOCK_TO_CORP.get("005930", "00126380")})
+            ms = round((_t.time() - t0) * 1000)
+            out["dart"] = ({"ok": True, "message": f"정상 (기업개황 응답 {ms}ms)", "latency_ms": ms}
+                           if data else {"ok": False, "message": "응답 실패 — 아래 dart_usage.last_error 참조", "latency_ms": ms})
+        except Exception as e:
+            out["dart"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
+
+    # KRX
+    if not os.getenv("KRX_API_KEY"):
+        out["krx"] = {"ok": False, "message": "KRX_API_KEY 미설정"}
+    else:
+        try:
+            from src.data.krx_client import KRXClient
+            kc = KRXClient()
+            t0 = _t.time()
+            day = (_dt.now() - _td(days=1))
+            while day.weekday() >= 5:  # 최근 평일
+                day -= _td(days=1)
+            rows = kc.get_daily_all("KOSPI", day.strftime("%Y%m%d"))
+            ms = round((_t.time() - t0) * 1000)
+            out["krx"] = ({"ok": True, "message": f"정상 (KOSPI {len(rows)}행, {ms}ms)", "latency_ms": ms}
+                          if rows else {"ok": False, "message": f"0행 응답 (휴장일/승인 범위 확인, {ms}ms)", "latency_ms": ms})
+        except Exception as e:
+            out["krx"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
+
+    # KIS
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed() or not os.getenv("KIS_APP_KEY"):
+        out["kis"] = {"ok": False, "message": "mock 모드 또는 KIS 키 미설정"}
+    else:
+        try:
+            from src.execution import kis_client as _kc
+            t0 = _t.time()
+            client = _kc.get_kis_client(force_reload=True)  # 팩토리(.env 분기) — KISClient()는 creds 필수
+            pw = getattr(client, "prewarm_token", None)
+            if callable(pw):
+                pw()
+            ms = round((_t.time() - t0) * 1000)
+            out["kis"] = {"ok": True, "message": f"토큰 정상 ({ms}ms)", "latency_ms": ms}
+        except Exception as e:
+            out["kis"] = {"ok": False, "message": f"예외: {str(e)[:120]}"}
+
+    try:
+        from src.data.dart_client import dart_usage
+        out["dart_usage"] = dart_usage()
+    except Exception:
+        out["dart_usage"] = None
+    return out
+
+@router.post("/api/v1/admin/sync")
+async def v1_admin_trigger_sync():
+    """Manually trigger a full KIS sync. For admin / CLI use."""
+    try:
+        from src.data_sync import run_full_sync
+        result = await run_full_sync()
+        return result
+    except Exception:
+        logger.exception("요청 처리 실패")
+        raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
+
+@router.post("/api/v1/symbols/collect-master")
+async def collect_master():
+    """KOSPI/KOSDAQ 마스터파일 다운로드 → DB Upsert (인증 불필요)."""
+    try:
+        from src.database import get_engine
+        from src.kis_master_parser import collect_master_files
+        engine = get_engine()
+        result = await collect_master_files(engine)
+        return result
+    except Exception:
+        logger.exception("요청 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+@router.get("/api/v1/symbols/search")
+async def symbol_search(
+    q: str = Query(..., min_length=1, description="종목코드 또는 종목명"),
+    market: str | None = Query(None, description="KOSPI / KOSDAQ"),
+    limit: int = Query(30, ge=1, le=100),
+):
+    """인메모리 캐시에서 종목 검색 (즉시 응답)."""
+    try:
+        from src.kis_master_parser import _symbol_cache, search_symbols
+        results = search_symbols(q, market, limit)
+
+        # 캐시 미구축 시 DB fallback
+        if not results and not _symbol_cache:
+            from src.database import get_engine
+            from src.kis_master_parser import load_symbol_cache
+            engine = get_engine()
+            load_symbol_cache(engine)
+            results = search_symbols(q, market, limit)
+
+        return {"query": q, "total": len(results), "items": results}
+    except Exception:
+        logger.exception("요청 처리 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+@router.get("/api/v1/symbols/status")
+def symbol_status():
+    """마스터파일 로드 상태 확인."""
+    from src.kis_master_parser import _last_fetched, _symbol_cache
+    total = sum(len(v) for v in _symbol_cache.values())
+    return {
+        "loaded": total > 0,
+        "total": total,
+        "markets": {k: len(v) for k, v in _symbol_cache.items()},
+        "last_fetched": _last_fetched.isoformat() if _last_fetched else None,
+    }
+
+@router.get("/api/v1/symbols/flows/status")
+def symbols_flows_status():
+    """investor_flows 수급 적재 현황 — 행수/종목수/날짜범위/세부주체 + 실행중 여부.
+
+    ★연구 등급을 1급 필드로 함께 내려보낸다★ (스펙 §6.1 · Phase 8b)
+    행수만 보면 "데이터가 많으니 백테스트에 써도 되겠다" 로 읽힌다. 실제로는 KIS TR 이
+    약 30영업일만 돌려주고 빈티지도 없어서 **과거 시뮬레이션에는 쓸 수 없다**(`forward_only`).
+    그 사실이 화면에 없으면 사용자는 알 수 없고, 알 수 없으면 쓴다.
+    """
+    from src.data.kis_flows import flows_status
+    from src.data.mock_gate import mock_allowed
+    from src.data.pit_macro import DataStatus, ResearchUsage
+    st = flows_status()
+    st["krx_backfill_running"] = _FLOWS_BACKFILL_RUNNING["krx"]
+    st["research_usage"] = ResearchUsage.FORWARD_ONLY.value
+    st["research_usage_reason"] = (
+        "KIS TR 은 약 30영업일만 제공하고 개정 이력(빈티지)이 없습니다. "
+        "전방 리서치 맥락으로만 쓰이며 과거 시뮬레이션에서는 차단됩니다. "
+        "KRX 백필로 이력을 채워도 빈티지가 생기는 것은 아닙니다."
+    )
+    st["data_status"] = (DataStatus.MOCK if mock_allowed() else DataStatus.REAL).value
+    return st
+
+
+@router.get("/api/v1/data/price-quality")
+def data_price_quality(tickers: str | None = None, start: str | None = None,
+                       end: str | None = None):
+    """수정주가 커버리지 — ★몇 %가 조정되지 않았는지가 보이지 않으면 아무도 모른다★
+
+    `daily_prices` 에 writer 가 둘이라(KRX 전종목 백필 · KIS 온디맨드) KIS 경로 행에는
+    등락률이 없고, 그 지점에서 수정주가 체인이 끊긴다. 예전에는 원주가 비율로
+    폴백해 **지우려던 분할 점프를 다시 집어넣었다** — 지금은 정직하게 비운다.
+    그 빈칸이 얼마나 되는지를 여기서 낸다.
+
+    ★`ingest-doctor`·`source-honesty` 와 같은 데이터 품질 계열이다★ — 배분 결정에
+    관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**(`ResearchUsage`)를 쓴다.
+
+    ★`basis_overlap` 은 다른 축이다★ 커버리지가 *"`adj_close` 가 채워졌는가"* 를
+    묻는 반면, 이쪽은 *"`close` 가 무엇인가"* 를 묻는다 — KRX 는 원주가를, KIS 는
+    수정주가를 같은 컬럼에 넣는다. 연속 종가의 수익률이 KRX 등락률과 맞는지 보고,
+    재지 못하면 "일치" 가 아니라 `available: false` 를 낸다.
+
+    Args:
+        tickers: 쉼표 구분. 주면 `missing`(행이 없는 티커)까지 센다.
+            안 주면 `missing` 은 잴 수 없고 `missing_measurable: false` 로 나간다.
+    """
+    from src.data.price_quality import (
+        adj_close_coverage,
+        basis_overlap_check,
+        price_usage,
+    )
+
+    wanted = [t.strip() for t in (tickers or "").split(",") if t.strip()]
+    # ★가격 정의 검증은 등급과 별개 축이다★ 조정 여부를 따지기 전에 `close` 가
+    # 무엇인지를 묻는다. 등급을 못 매기는 경우에도 이 진단은 낼 수 있다.
+    overlap = basis_overlap_check(wanted or None)
+    if wanted:
+        got = price_usage(wanted, start=start, end=end)
+        return {"coverage": got["coverage"], "research_usage": got["usage"],
+                "reason": got["reason"], "basis_overlap": overlap}
+    # 티커를 안 주면 등급을 매기지 않는다 — 무엇에 대한 등급인지 정의되지 않는다.
+    return {"coverage": adj_close_coverage(start=start, end=end),
+            "research_usage": None,
+            "reason": "티커를 지정해야 연구 등급을 판정할 수 있습니다.",
+            "basis_overlap": overlap}
+
+
+@router.get("/api/v1/data/macro-vintages")
+def data_macro_vintages(series: str | None = None, period: str | None = None):
+    """매크로 관측 스토어 — ★빈티지가 저장되고 있는가★
+
+    계보 감사 §B1 이 찾은 병목: FRED·ECOS 시계열이 **프로세스 메모리**에만 살아
+    재시작하면 사라졌다. `macro_observation_store` 가 그것을 영속화한다.
+
+    ★`ingest-doctor`·`source-honesty`·`price-quality` 와 같은 데이터 품질 계열이다★
+    — 배분 결정에 관여하지 않는다. 등급은 매크로 팩터와 **같은 어휘**를 쓴다.
+
+    Args:
+        series: 계열 id. 주면 그 계열만 센다.
+        period: `series` 와 함께 주면 그 기간의 **모든 빈티지**를 낸다 —
+            둘 이상이면 그 기간이 개정됐다는 뜻이고, 값 차이가 편향의 크기다.
+
+    `series` 만 주면 `revision` 블록이 함께 나온다 — 기간별 최초/최신 빈티지 값과
+    그 차이, 그리고 ★개정을 **관측하지 못한** 기간 수★.
+    """
+    from src.data.macro_observation_store import coverage, vintages_of
+    from src.data.macro_vintage_backfill import revision_report
+
+    body = {"coverage": coverage([series] if series else None)}
+    if series and period:
+        body["vintages"] = [o.to_dict() for o in vintages_of(series, period)]
+    if series:
+        # ★개정 리포트 — 사슬의 목적지★ 빈티지가 하나뿐인 기간은 "개정 없음" 이
+        # 아니라 "개정 관측 안 됨" 으로 나온다. 둘을 접으면 표본 부족이
+        # "안정적인 계열" 로 둔갑한다.
+        body["revision"] = revision_report(series)
+    return body
+
+
+@router.get("/api/v1/data/source-honesty")
+def data_source_honesty():
+    """데이터 출처별 연구 등급 한눈에 — 스펙 §6.1 표를 화면이 그대로 그릴 수 있게.
+
+    ★"가져올 수 있다" 와 "과거 검증에 쓸 수 있다" 는 다른 축이다★ (스펙 §3.5)
+    둘을 한 칸에 합치면 사용자는 조회되는 모든 것을 백테스트에 쓸 수 있다고 읽는다.
+    """
+    import os
+
+    from src.data.kis_flows import flows_status
+    from src.data.mock_gate import mock_allowed
+    from src.data.pit_macro import DataStatus, ResearchUsage
+
+    mock = mock_allowed()
+    fred_key = bool(os.getenv("FRED_API_KEY"))
+    fl = flows_status()
+    return {
+        "mock_mode": mock,
+        "sources": [
+            {
+                "id": "etf_prices", "label": "ETF·주가 (일봉)",
+                "data_status": (DataStatus.MOCK if mock else DataStatus.REAL).value,
+                "research_usage": (ResearchUsage.FORWARD_ONLY if mock
+                                   else ResearchUsage.BACKTEST_ELIGIBLE).value,
+                "reason": ("KIS_USE_MOCK=1 — 값이 합성일 수 있어 실데이터로 인증하지 않습니다."
+                           if mock else
+                           "일봉 OHLCV 는 매크로처럼 개정되지 않습니다."),
+            },
+            {
+                "id": "investor_flows", "label": "투자자 수급 (KIS)",
+                "data_status": (DataStatus.MOCK if mock else DataStatus.PARTIAL).value,
+                "research_usage": ResearchUsage.FORWARD_ONLY.value,
+                "reason": "KIS TR 은 약 30영업일만 제공하고 빈티지가 없습니다.",
+                "rows": fl.get("rows", 0), "max_date": fl.get("max_date"),
+            },
+            {
+                "id": "fred_macro", "label": "FRED 매크로 (ALFRED 빈티지)",
+                "data_status": (DataStatus.REAL if fred_key else DataStatus.UNAVAILABLE).value,
+                "research_usage": (ResearchUsage.BACKTEST_ELIGIBLE if fred_key
+                                   else ResearchUsage.UNAVAILABLE).value,
+                "reason": ("realtime_start/end 로 빈티지를 고정해 그 시점 값만 읽습니다."
+                           if fred_key else
+                           "FRED_API_KEY 가 없어 조회할 수 없습니다 — 0 으로 대체하지 않습니다."),
+            },
+            {
+                "id": "ecos_macro", "label": "한국은행 ECOS",
+                "data_status": (DataStatus.MOCK if mock else DataStatus.REAL).value,
+                "research_usage": ResearchUsage.FORWARD_ONLY.value,
+                "reason": "ECOS 는 공개 빈티지 API 가 없어 과거 시점 값을 재구성할 수 없습니다.",
+            },
+        ],
+    }
+
+@router.post("/api/v1/symbols/flows/backfill-krx")
+def symbols_flows_backfill_krx(start: str = "2018-01-01", all_listed: bool = True):
+    """KRX MDC 과거 수급 확정치 백필 시작(백그라운드). KIS ~30영업일 제한 보완.
+    운영(실데이터) 모드 전용 — mock 모드선 거부. 진행은 flows/status로 확인."""
+    import threading
+
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
+        return {"started": False,
+                "message": "mock 모드 — 실 KRX 백필은 실데이터 모드(KIS_USE_MOCK=0)에서만"}
+    if _FLOWS_BACKFILL_RUNNING["krx"]:
+        return {"started": False, "message": "이미 실행 중"}
+
+    def _run():
+        _FLOWS_BACKFILL_RUNNING["krx"] = True
+        try:
+            from src.data.krx_mdc import backfill_flows_krx
+            logger.info(f"KRX 수급 백필 시작 (start={start}, all_listed={all_listed})")
+            stats = backfill_flows_krx(start=start, all_listed=all_listed)
+            logger.info(f"KRX 수급 백필 완료: {stats}")
+        except Exception:
+            logger.exception("KRX 수급 백필 실패")
+        finally:
+            _FLOWS_BACKFILL_RUNNING["krx"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"started": True, "start": start, "all_listed": all_listed,
+            "message": "KRX 과거 수급 백필 시작(백그라운드). flows/status로 진행 확인."}

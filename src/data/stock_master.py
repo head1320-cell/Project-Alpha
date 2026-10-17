@@ -155,6 +155,26 @@ def get_stock_sector(stock_code: str) -> str | None:
     return STOCK_SECTOR.get(code)
 
 
+def unknown_codes(codes) -> list[str]:
+    """종목 마스터가 **모르는** 코드.
+
+    ★실측이 이 함수의 이유다★ `/analyze` 에 `["005930", "ZZZZZZ"]` 를 주면
+    `ZZZZZZ` 가 최적화에서 **89.18%** 를 가져가고 응답은 `excluded: []` 로
+    "아무것도 빠지지 않았다" 고 말한다. mock 생성기가 어떤 문자열에도 가격
+    이력을 만들어 주기 때문이다(262행). 그런데 판정 능력은 이미 여기 있었다 —
+    `get_stock_name("ZZZZZZ")` 는 `None` 을 돌려주고, **아무도 그것을 묻지
+    않았다**(라우트 전체에서 티커를 검증하는 곳이 0개였다).
+
+    ★`resolve_name` 을 쓰면 안 된다★ 그쪽은 표시용 폴백이라 모르는 코드에도
+    `'종목 ZZZZZZ'` 를 만들어 준다 — 판정에 쓰면 항상 "안다" 가 된다.
+
+    ★모른다 ≠ 잘못됐다★ `SPY` 도 여기서는 미지다. 해외 상장은 연구 대상으로
+    정당하고, 주문을 막는 것은 `target_versions.untradable()` 의 일이다.
+    이 함수는 **사실을 돌려줄 뿐 막지 않는다.**
+    """
+    return sorted({str(c) for c in codes if get_stock_name(str(c)) is None})
+
+
 def resolve_name(stock_code: str, fallback: bool = True) -> str:
     """종목명 해소 (항상 문자열 반환). Unknown Corp 박멸용."""
     name = get_stock_name(stock_code)
@@ -370,6 +390,13 @@ def _master_flags_path() -> str:
 
 _MASTER_FLAGS: dict | None = None  # {"005930": {...}} (지연 로드)
 
+#: ★어느 경로가 답했는가★ 파일인지 DB 인지 밖에서 볼 방법이 없었다 — 그러면
+#: "마스터가 스테일한가" 를 물을 수 없다. ★관측만 추가하고 순서는 그대로다.★
+ORIGIN_FILE = "file"
+ORIGIN_DB = "db"
+ORIGIN_NONE = "none"
+_MASTER_FLAGS_ORIGIN: str = ORIGIN_NONE
+
 # KRX 공식 상장 수 대응 유니버스 포함 그룹 (파생·펀드형 제외 — EF/EN/EW/SW/SR 등)
 #   ST 주권(보통·우선) · RT 리츠 · FS 외국주권 · MF 투자회사 · IF 인프라투융자 · SC 선박투자 · DR 예탁증서
 UNIVERSE_GROUP_CODES: tuple[str, ...] = ("ST", "RT", "FS", "MF", "IF", "SC", "DR")
@@ -416,16 +443,31 @@ def save_master_flags(symbols: list[dict]) -> int:
     with open(_master_flags_path(), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False)
     logger.info(f"master flags cached: {len(stocks)} symbols")
+
+    # ★DB 사본은 여기서 만들지 않는다★ 이 함수는 **캐시 writer** 이고, DB 미러링은
+    # **적재 정책**이다. 처음에는 여기에 넣었는데 그러면 테스트가 픽스처를 깔려고
+    # 이 함수를 부를 때마다 프로세스 공용 DB 에 행이 쌓이고, "마스터가 없으면
+    # 비어 있다" 를 검사하는 기존 테스트 3개가 깨졌다(실측). 저장 원시함수에
+    # 부작용을 넣은 것이 잘못이었다 — 미러링은 `kis_master_parser` 의 적재
+    # 파이프라인이 한다.
     return len(stocks)
 
 
 def load_master_flags() -> dict:
-    """캐시 파일 → {코드: 플래그 dict}. 없으면 {} (현행 동작 불변)."""
-    global _MASTER_FLAGS
+    """마스터 플래그 → `{코드: 플래그 dict}`. 없으면 `{}`.
+
+    ★읽기 순서는 **파일 → DB** 다★ 반대로 하면 스테일 DB 가 방금 받은 새 파일을
+    덮는다. 파일이 있으면 **동작이 이전과 완전히 같다** — DB 는 쳐다보지도 않는다.
+
+    DB 는 파일이 없을 때만 쓰이는 사본이다(감사 §3.3: 파일 하나가 세 기능의 단일
+    장애점이었다).
+    """
+    global _MASTER_FLAGS, _MASTER_FLAGS_ORIGIN
     if _MASTER_FLAGS is None:
         import json
         import os
         _MASTER_FLAGS = {}
+        _MASTER_FLAGS_ORIGIN = ORIGIN_NONE
         path = _master_flags_path()
         try:
             if os.path.exists(path):
@@ -433,7 +475,27 @@ def load_master_flags() -> dict:
                     _MASTER_FLAGS = json.load(f).get("stocks", {}) or {}
         except Exception as e:
             logger.warning(f"master flags cache load failed: {e}")
+        if _MASTER_FLAGS:
+            _MASTER_FLAGS_ORIGIN = ORIGIN_FILE
+        if not _MASTER_FLAGS:
+            try:
+                from src.data.instrument_master_store import load as _db_load
+                _MASTER_FLAGS = _db_load() or {}
+                if _MASTER_FLAGS:
+                    _MASTER_FLAGS_ORIGIN = ORIGIN_DB
+                    logger.info(f"master flags ← DB: {len(_MASTER_FLAGS)} symbols")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"master flags DB 조회 실패: {e}")
     return _MASTER_FLAGS
+
+
+def master_flags_origin() -> str:
+    """마스터가 **어디서** 왔는가 — `file` / `db` / `none`.
+
+    ★이것은 관측이지 정책이 아니다★ 읽기 순서는 그대로 파일 → DB 다.
+    """
+    load_master_flags()
+    return _MASTER_FLAGS_ORIGIN
 
 
 def get_market_cap(stock_code: str) -> float | None:

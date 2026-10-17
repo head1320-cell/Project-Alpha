@@ -10,7 +10,7 @@ help:  ## 명령어 목록
 
 install:  ## 의존성 설치 (백엔드 + 프론트)
 	pip install -r requirements.txt
-	pip install ruff pytest
+	pip install ruff==0.15.8 pytest
 	cd frontend && npm ci
 
 lint:  ## ruff 린트 검사
@@ -31,6 +31,7 @@ test-fast:  ## 빠른 테스트만 (백테스트 제외)
 
 typecheck:  ## 프론트 타입체크
 	cd frontend && npx tsc --noEmit
+	cd frontend && node scripts/gen-dark-modules.mjs --check
 
 build:  ## 프론트 프로덕션 빌드
 	cd frontend && npx next build
