@@ -46,6 +46,8 @@ def _t(state: str, text: str) -> dict:
 
 #: 믿음 줄의 표시(BT7) — 화면의 "연습용 데이터" 칩은 문구가 아니라 이 표시를 본다.
 PRACTICE = "practice"
+#: 믿음 줄의 표시(CF3) — 요청한 방식 대신 다른 비중이 쓰였다. 화면은 "고른 방식 대신함" 칩을 단다.
+FALLBACK = "fallback"
 
 
 def _practice(text: str = _PRACTICE) -> dict:
@@ -163,7 +165,10 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
         name = labels.get(top) or top
         headline = {"label": f"{name} 비중", "value": w[top], "unit": "%",
                     "text": f"{name} {_pct(w[top])}"}
-    trust = [_t(CONFIRMED, "비중 계산은 문제없이 끝났어요.")]
+    # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면 "문제없이" 라고 하지 않는다. 대체마다 가정 줄(`kind: fallback`).
+    used = [f for f in view.get("fallbacks") or [] if f.get("affects_weights")]
+    trust = [_t(CONFIRMED, "비중 계산은 끝났어요." if used else "비중 계산은 문제없이 끝났어요.")]
+    trust += [{"state": ASSUMED, "text": str(f.get("text") or ""), "kind": FALLBACK} for f in used]
     if _is_practice(prov):
         trust.append(_practice())
     cap = view.get("cap_missing") or []
@@ -197,7 +202,9 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, f"이어진 생각 {view['views_unused']}개는 이 계산 방식에서 쓰이지 않아요 — "
                                  "‘내 생각 반영’을 고르면 비중에 들어가요."))
     if model in _MARKET_PRIOR_MODELS:
-        facts.append("내 생각을 반영했어요." if view.get("views_applied") else "반영된 생각이 없어요.")
+        market = any(f.get("stage") == "view_applied" for f in used)
+        facts.append("기대 수익에는 생각을 넣었지만 비중은 시가총액 비중이에요." if market and view.get("views_applied")
+                     else "내 생각을 반영했어요." if view.get("views_applied") else "반영된 생각이 없어요.")
     return {"title": "비중을 이렇게 나눴어요", "headline": headline, "facts": facts, "trust": trust}
 
 
@@ -249,6 +256,8 @@ def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
         unmeasured.append(f"{lab}{_josa(lab, '은', '는')} 재지 않았어요.")
     if view.get("belief_note"):
         trust.append(_t(ASSUMED, str(view["belief_note"])))
+    # CF3 — 리밸런싱 시점마다 고른 방식을 다시 푸는데, 그때 역변동성으로 대신했는지는 세지 않는다.
+    unmeasured.append("리밸런싱마다 고른 방식이 답을 냈는지(역변동성으로 대신했는지)는 세지 않았어요.")
     return {"title": "과거에 이 규칙대로 했다면 이랬어요", "headline": headline, "facts": facts,
             "trust": trust, "unmeasured": unmeasured}
 

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
 from src.api.allocation_graph_nodes import PORT_PLAIN, PORT_TYPES, REGISTRY, STAGES
+from src.api.allocation_graph_relations import briefs_of, relations
 from src.api.allocation_graph_roles import NEED_PLAIN
 from src.domain import design_procedure as proc
 from src.domain.workflow_gates import GATES
@@ -38,7 +39,8 @@ def _kinds() -> dict[str, dict]:
     for t in REGISTRY.types():
         s = REGISTRY.get(t)
         out[t] = {"stage": s.stage, "plain_label": s.human,
-                  "inputs": [{"name": p.name, "type": p.type, "required": p.required, "needs": list(p.needs)}
+                  "inputs": [{"name": p.name, "type": p.type, "required": p.required, "needs": list(p.needs),
+                              "role": p.role or None}
                              for p in s.inputs],
                   "outputs": [{"name": p.name, "type": p.type, "gives": [g.to_dict() for g in p.gives]}
                               for p in s.outputs]}
@@ -126,7 +128,16 @@ def graph_validate(graph: Any = Body(...)) -> dict:
                                            for e in rep["errors"]):
         extra = _needs_errors(graph["nodes"], graph["edges"], kinds)
         rep = {"ok": rep["ok"] and not extra, "errors": rep["errors"] + extra}
-    return {**rep, "errors": _with_fixes(rep["errors"], graph, kinds), "procedure": _procedure(graph, kinds)}
+    return {**rep, "errors": _with_fixes(rep["errors"], graph, kinds), "procedure": _procedure(graph, kinds),
+            "relations": _relations(graph, kinds)}
+
+
+def _relations(graph: Any, kinds: dict[str, dict], briefs: dict | None = None) -> dict:
+    """관계 문장(CF3) — 선 id 는 엔진 규칙(`_edge_id`) 하나로 채워 넘긴다(두 번째 id 규칙을 두지 않는다)."""
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) or not isinstance(graph.get("edges"), list):
+        return {}
+    edges = [{**e, "id": pg._edge_id(e)} for e in graph["edges"] if isinstance(e, dict)]
+    return relations(graph["nodes"], edges, kinds, PORT_PLAIN, briefs)
 
 
 @router.post("/run")
@@ -139,6 +150,7 @@ def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_leng
     """
     ids = [t for t in (targets or "").split(",") if t] if targets is not None else None
     report = pg.run(graph, REGISTRY, targets=ids)
+    report["relations"] = _relations(graph, _kinds(), briefs_of(report.get("nodes") or {}))
     if ids is not None:
         report["gates"] = None
         report["gates_reason"] = "일부만 계산했어요 — 증거 관문은 전체를 계산할 때 판정해요."

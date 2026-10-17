@@ -207,10 +207,54 @@ export interface Procedure {
   done_text: string | null;
 }
 
+/** 관계 문장(CF3) — 선 하나가 무엇을 어디서 어디로, 무엇에 쓰이려고 나르는지(서버가 쓴다). */
+export interface EdgeRelation {
+  text: string;
+  /** 흐르는 값의 쉬운 이름(포트 타입). */
+  flows: string;
+  /** 받는 포트의 역할 — 서버가 확인하지 못했으면 `null`(문장에 둘째 문장이 없다). */
+  role: string | null;
+  required: boolean;
+  /** 선 요약 — 계산 전이면 `null`. */
+  brief: string | null;
+}
+
+/** 전달 점검의 문제 단계(CF3) — 빠짐 · 바뀜 · 구조(수학적 사실) · 쓰지 않음. */
+export type IssueLevel = "lost" | "changed" | "structural" | "unused";
+
+/** 건너간 것 하나 — 값에서 잰 것만(좋다·나쁘다 말 없음). */
+export interface EdgeFact {
+  key: string;
+  label: string;
+  text: string;
+  value?: number | string | boolean | null;
+}
+
+export interface EdgeIssue {
+  level: IssueLevel;
+  code: string;
+  text: string;
+  /** 고치는 법(글만) — 없을 수 있다. */
+  fix?: string;
+}
+
+/** 선 하나의 전달 점검(CF3). ★`issues: null` 은 점검하지 않음(사유 있음)이고, `[]` 는 점검했고 찾지 못함이다★. */
+export interface EdgeRecord {
+  source: string;
+  target: string;
+  facts: EdgeFact[] | null;
+  facts_reason: string | null;
+  checks: string[];
+  issues: EdgeIssue[] | null;
+  issues_reason: string | null;
+}
+
 export interface ValidateReport {
   ok: boolean;
   errors: GraphError[];
   procedure?: Procedure | null;
+  /** 관계 문장(CF3) — 계산 전이라 선 요약이 없다. */
+  relations?: Record<string, EdgeRelation>;
 }
 
 export type NodeStatus = "ok" | "blocked" | "failed";
@@ -222,8 +266,9 @@ export interface NodeExplain {
   title: string;
   headline?: { label: string; value: number | null; unit: string; text: string } | null;
   facts?: string[];
-  /** `kind: "practice"` — 연습용(합성) 데이터라는 줄(BT7). 화면의 연습용 칩은 문구가 아니라 이 표시를 본다. */
-  trust?: { state: TrustState; text: string; kind?: "practice" }[];
+  /** `kind: "practice"` — 연습용(합성) 데이터라는 줄(BT7). 화면의 연습용 칩은 문구가 아니라 이 표시를 본다.
+   *  `kind: "fallback"` — 고른 방식 대신 다른 비중이 쓰였다는 줄(CF3). */
+  trust?: { state: TrustState; text: string; kind?: "practice" | "fallback" }[];
   unmeasured?: string[];
 }
 
@@ -293,6 +338,8 @@ export interface RunReport extends ValidateReport {
   /** 부분 계산(BL1 "여기까지 계산") — 있으면 관문은 `null` 이고 `gates_reason` 이 이유를 말한다. */
   partial?: { targets: string[]; computed: string[] };
   gates_reason?: string;
+  /** 선마다 전달 점검(CF3) — 받아들여진 선 · 보내는 노드가 계산된 선만. */
+  edges?: Record<string, EdgeRecord>;
 }
 
 /** 갈래 비교의 다중 비교 보정(BO O3) — 서버 `/graph/branch-evidence` 응답. 못 잰 값은 null + 사유. */

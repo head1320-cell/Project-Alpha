@@ -357,6 +357,8 @@ _ALLOWED_ENGINE_IMPORTS = {
     ("src.engine", "portfolio_graph"), ("src.engine", "allocation_studio"),
     ("src.engine.allocation_studio", "optimize"), ("src.engine.entropy_views", "EPUnavailable"),
     ("src.engine.capability", "probe_all"),
+    # CF3 — 생각 다리가 유니버스 밖이라 빠졌는지 ★관측만★ 한다. BL·EP 와 같은 행 규칙의 단일 출처(계산에 쓰지 않는다).
+    ("src.engine.view_rows", "build_view_rows"),
 }
 
 

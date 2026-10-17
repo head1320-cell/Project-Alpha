@@ -346,9 +346,26 @@ def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None 
     risk_parity: ERC · hrp: 계층적 · min_var: 최소분산 ·
     mv_utility: 평균-분산 효용(위험 회피 λ = `risk_aversion`, 없으면 기본값).
     """
+    return weights_for_model_traced(model, R, mu_override, S_annual, risk_aversion)[0]
+
+
+#: 대체 사유 — 풀이가 왜 답을 못 냈는지는 `_raw_weights_for_model` 이 말하지 않는다(그 함수는 점수→비중과 함께 쓴다).
+_NO_ANSWER = "풀이가 수렴하지 않았거나 쓸 수 없는 값을 냈어요(어느 쪽인지는 기록하지 않았어요)."
+
+
+def weights_for_model_traced(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
+                             S_annual: np.ndarray | None = None,
+                             risk_aversion: float | None = None) -> tuple[np.ndarray, dict | None]:
+    """`weights_for_model` 과 같은 값 + ★대체했으면 그 기록★ (CF3 — 드러내기만, 사용자 결정 2026-10-17).
+
+    기록 `{used: "inverse_vol", model, reason}` · 풀리면 `None`. 값을 바꾸는 일은 하지 않는다.
+    """
     S = S_annual if S_annual is not None else _cov(R) * 252.0
     w = _raw_weights_for_model(model, R, mu_override, S, risk_aversion)
-    return _inverse_vol_w(R) if w is None else w
+    if w is not None:
+        return w, None
+    why = (model_availability().get(model) or {}).get("reason") or _NO_ANSWER
+    return _inverse_vol_w(R), {"used": "inverse_vol", "model": model, "reason": why}
 
 
 # ── 전체 파이프라인 (API가 호출하는 단일 진입점) ──────────────────────────────
@@ -412,6 +429,8 @@ def optimize(model: str, names: list[str], R: np.ndarray,
     mu_bl = None
     skipped_views: list[dict] = []
     w_view = w_mkt
+    #: 대체 기록(CF3) — 무엇을 무엇으로 대신했는지. 비어 있으면 응답에 키가 없다.
+    fallbacks: list[dict] = []
     if all_views:
         pi = delta * S @ w_mkt
         P, Q, omega, skipped_views = build_user_views(all_views, names, S, tau)
@@ -422,9 +441,17 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                 if wv is not None and np.all(np.isfinite(wv)) and wv.sum() > 0:
                     w_view = np.maximum(wv, 0.0)
                     w_view = w_view / w_view.sum()
+                else:
+                    # ★기록만★ (CF3) — 사후는 됐지만 비중은 시장 비중 그대로다. `views_applied` 라벨 정정은 별도 작업.
+                    fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
+                                      "reason": "생각을 넣은 기대 수익으로 비중을 풀지 못해 시장 비중을 그대로 썼어요.",
+                                      "affects_weights": model == "bl"})
             except Exception as e:  # 특이 공분산 등 — prior 폴백(정직 보고)
                 logger.warning(f"BL posterior 실패, prior 폴백: {e}")
                 mu_bl = None
+                fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
+                                  "reason": f"생각을 넣은 기대 수익을 계산하지 못했어요({type(e).__name__}).",
+                                  "affects_weights": model == "bl"})
 
     ep_report: dict | None = None
     mu_ep = None
@@ -441,13 +468,16 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         # BL 모델: 뷰 있으면 posterior max-sharpe(=w_view), 뷰 없으면 시장균형
         # (레퍼런스 s_black_litterman과 동일 — 뷰 없는 BL은 캡가중 prior 그대로)
         w_final = w_view if mu_bl is not None else w_mkt
-    elif model == "ep":
-        w_final = weights_for_model("mvo", R, mu_override=mu_ep, S_annual=S)
-    elif model == "mv_utility":
-        w_final = weights_for_model(model, R, mu_override=None, S_annual=S,
-                                    risk_aversion=risk_aversion)
     else:
-        w_final = weights_for_model(model, R, mu_override=None, S_annual=S)
+        if model == "ep":
+            w_final, fb = weights_for_model_traced("mvo", R, mu_override=mu_ep, S_annual=S)
+        elif model == "mv_utility":
+            w_final, fb = weights_for_model_traced(model, R, mu_override=None, S_annual=S,
+                                                   risk_aversion=risk_aversion)
+        else:
+            w_final, fb = weights_for_model_traced(model, R, mu_override=None, S_annual=S)
+        if fb:
+            fallbacks.append({"stage": "optimized", **fb, "model": model, "affects_weights": True})
 
     mu_used = (mu_ep if mu_ep is not None
                else (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0))
@@ -489,6 +519,8 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         out["risk_aversion"] = (
             {"value": RISK_AVERSION_DEFAULT, "source": "default"} if risk_aversion is None
             else {"value": float(risk_aversion), "source": "user"})
+    if fallbacks:
+        out["fallbacks"] = fallbacks
     return out
 
 

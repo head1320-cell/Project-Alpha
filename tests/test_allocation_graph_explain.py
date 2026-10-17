@@ -101,7 +101,10 @@ def test_the_backtest_cost_is_an_assumption_with_the_real_value(market, bps, sho
 def test_unmeasured_lookahead_axes_are_listed_not_dropped(market):
     b = _run(chain(lookback=1008, backtest={}))["nodes"]["b"]
     la = b["view"]["lookahead_evidence"]
-    assert len(b["explain"]["unmeasured"]) == len(la["unknown_axes"]) > 0
+    # CF3 — 축마다 한 줄 + 끝에 "리밸런싱마다 방식이 답을 냈는지는 세지 않았어요" 한 줄(축 줄을 지우지 않는다).
+    un = b["explain"]["unmeasured"]
+    assert len(un) == len(la["unknown_axes"]) + 1 and len(la["unknown_axes"]) > 0
+    assert "리밸런싱마다" in un[-1]
 
 
 def test_the_view_sentence_matches_black_litterman_semantics(market):

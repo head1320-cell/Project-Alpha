@@ -120,6 +120,10 @@ def _build(rs: list[dict]) -> list[dict]:
             out.append(_r(FAILED, "제약을 모두 지킬 수 없었어요 — " + str(cr.get("reason") or "")))
         else:
             out.append(_r(CONFIRMED, "비중 계산이 끝났어요."))
+        # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면(역변동성·시장 비중 대체) 그 사실을 가정으로 더한다(확인 + 가정 = 절반).
+        for f in (r.get("view") or {}).get("fallbacks") or []:
+            if f.get("affects_weights"):
+                out.append(_r(ASSUMED, str(f.get("text") or f.get("reason") or "고른 방식 대신 다른 비중을 썼어요.")))
     return out
 
 

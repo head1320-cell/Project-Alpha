@@ -33,6 +33,7 @@ import math
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -181,6 +182,25 @@ class NodeSpec:
         return next((p for p in self.outputs if p.name == name), None)
 
 
+@dataclass(frozen=True)
+class Handoff:
+    """선 하나의 전달 — 받는 쪽 점검(CF3)이 보는 것. ★읽기만 한다★(값을 바꾸면 계산이 바뀐다 — 테스트가 건다)."""
+
+    edge_id: str
+    source: str
+    source_kind: str
+    source_port: str
+    target: str
+    target_kind: str
+    target_port: str
+    port_type: str
+    value: Any
+    source_view: Any
+    view: Any
+    params: Any
+    inputs: Mapping[str, Any]
+
+
 class Registry:
     """노드 타입 레지스트리. ★포트 타입은 선언된 것만★ — 오타 난 타입은 연결이 영원히
     안 되는 노드를 조용히 만든다."""
@@ -190,6 +210,10 @@ class Registry:
         self._specs: dict[str, NodeSpec] = {}
         #: 포트 타입 → 값의 한 줄 요약(BM C1 선 위 요약). 없는 타입은 요약하지 않는다.
         self.port_briefs: dict[str, Callable[[Any], str | None]] = {}
+        #: 전달 점검(CF3) — 포트 타입 → 값에서 잰 사실 · 포트 타입 → 받는 쪽 기본 점검 · (종류, 입력 포트) → 덮어쓰는 점검.
+        self.port_facts: dict[str, Callable[[Any], list[dict]]] = {}
+        self.port_intakes: dict[str, Callable[[Handoff], dict]] = {}
+        self.intakes: dict[tuple[str, str], Callable[[Handoff], dict]] = {}
 
     def register(self, spec: NodeSpec) -> None:
         if spec.type in self._specs:
@@ -214,6 +238,25 @@ class Registry:
         if port_type not in self.port_types:
             raise ValueError(f"선언되지 않은 포트 타입: {port_type}")
         self.port_briefs[port_type] = fn
+
+    def set_port_facts(self, port_type: str, fn: Callable[[Any], list[dict]]) -> None:
+        """포트 타입에 '건너간 것' 사실 함수를 붙인다(CF3) — 값에서 잰 것만, 좋다·나쁘다 말 없이."""
+        if port_type not in self.port_types:
+            raise ValueError(f"선언되지 않은 포트 타입: {port_type}")
+        self.port_facts[port_type] = fn
+
+    def set_port_intake(self, port_type: str, fn: Callable[[Handoff], dict]) -> None:
+        """그 타입을 받는 모든 자리의 기본 점검(CF3). (종류, 포트) 점검이 있으면 그것이 먼저다."""
+        if port_type not in self.port_types:
+            raise ValueError(f"선언되지 않은 포트 타입: {port_type}")
+        self.port_intakes[port_type] = fn
+
+    def set_intake(self, type_: str, port: str, fn: Callable[[Handoff], dict]) -> None:
+        """(받는 노드 종류, 입력 포트) 점검(CF3) — 타입 기본을 덮어쓴다(기본을 함께 쓰려면 규칙이 직접 부른다)."""
+        spec = self._specs.get(type_)
+        if spec is None or spec.input(port) is None:
+            raise ValueError(f"점검을 붙일 입력이 없습니다: {type_}.{port}")
+        self.intakes[(type_, port)] = fn
 
     def set_port_meta(self, type_: str, port: str, *, role: str | None = None,
                       needs: tuple[str, ...] | None = None, gives: tuple[Gives, ...] | None = None) -> None:
@@ -532,7 +575,119 @@ def run(graph: Any, registry: Registry, targets: list[str] | None = None) -> dic
     결과에 **없다** — 이전 결과를 섞는 것은 화면의 일이고, 화면은 그것을 "이전 계산" 으로 표시한다. 보고서에
     `partial: {targets, computed}` 가 붙는다. 계산한 노드의 값은 전체 계산과 같다(같은 함수·같은 입력).
     """
-    return _execute(graph, registry, targets)[0]
+    report, values, params = _execute(graph, registry, targets)
+    if report.get("nodes"):
+        report["edges"] = _handoffs(graph, registry, report, values, params)
+    return report
+
+
+# ── 전달 점검 (CF3) ──────────────────────────────────────────────────────────
+
+ISSUE_LEVELS = ("lost", "changed", "structural", "unused")
+_FACTS_MAX, _ISSUES_MAX, _TEXT_MAX = 12, 12, 240
+_NO_RULE = "이 자리는 아직 점검 규칙이 없어요."
+_NOT_RUN = "받는 노드가 계산되지 않아 점검하지 않았어요."
+_BAD_SHAPE = "점검 결과의 모양이 맞지 않아 보이지 않아요(서버 로그를 보세요)."
+_FAILED = "점검하다 오류가 나서 보이지 않아요(서버 로그를 보세요)."
+
+
+def _short_text(x: Any) -> bool:
+    return isinstance(x, str) and 0 < len(x) <= _TEXT_MAX
+
+
+def _ok_facts(facts: Any) -> bool:
+    if not isinstance(facts, list) or len(facts) > _FACTS_MAX:
+        return False
+    for f in facts:
+        if not (isinstance(f, Mapping) and isinstance(f.get("key"), str) and _short_text(f.get("label"))
+                and _short_text(f.get("text"))):
+            return False
+        v = f.get("value")
+        if v is not None and not (isinstance(v, (int, float, str)) and
+                                  (not isinstance(v, float) or math.isfinite(v))):
+            return False
+    return True
+
+
+def _ok_intake(out: Any) -> bool:
+    if not (isinstance(out, Mapping) and isinstance(out.get("checks"), list)
+            and isinstance(out.get("issues"), list) and len(out["issues"]) <= _ISSUES_MAX):
+        return False
+    if not all(_short_text(c) for c in out["checks"]):
+        return False
+    return all(isinstance(i, Mapping) and i.get("level") in ISSUE_LEVELS and isinstance(i.get("code"), str)
+               and _short_text(i.get("text")) and (i.get("fix") is None or _short_text(i.get("fix")))
+               for i in out["issues"])
+
+
+def _handoffs(graph: Any, registry: Registry, report: dict, values: dict, params: dict) -> dict:
+    """받아들여진 선마다 건너간 것·빠지거나 바뀐 것. ★계산 결과를 바꾸지 않는다★ — `run()` 만 부른다(`save_node` 는 아님)."""
+    _, nodes, specs, _, incoming, _ = _analyse(graph, registry)
+    results = report["nodes"]
+    ids = [_edge_id(e) for e in graph["edges"] if isinstance(e, Mapping)]
+    dup = {i for i in ids if ids.count(i) > 1}
+    facts_cache: dict[tuple[str, str], tuple[list | None, str | None]] = {}
+    out: dict[str, dict] = {}
+    for e in graph["edges"]:
+        if not isinstance(e, Mapping):
+            continue
+        eid = _edge_id(e)
+        s, sp, t, tp = (str(e.get(k) or "") for k in ("source", "source_port", "target", "target_port"))
+        if eid in dup or incoming.get(t, {}).get(tp) != (s, sp):
+            continue
+        ss, ts = specs.get(s), specs.get(t)
+        if ss is None or ts is None or ss.output(sp) is None or ts.input(tp) is None:
+            continue
+        src, dst = results.get(s), results.get(t)
+        if src is None or dst is None or src.get("status") != STATUS_OK or s not in values:
+            continue
+        ptype = ss.output(sp).type
+        value = values[s].get(sp)
+        if (s, sp) not in facts_cache:
+            facts_cache[(s, sp)] = _run_facts(registry, ptype, value, f"{ss.type}.{sp}")
+        facts, facts_reason = facts_cache[(s, sp)]
+        rec = {"source": s, "target": t, "facts": facts, "facts_reason": facts_reason,
+               "checks": [], "issues": None, "issues_reason": None}
+        rule = registry.intakes.get((ts.type, tp)) or registry.port_intakes.get(ptype)
+        if dst.get("status") != STATUS_OK:
+            rec["issues_reason"] = _NOT_RUN
+        elif rule is None:
+            rec["issues_reason"] = _NO_RULE
+        else:
+            h = Handoff(edge_id=eid, source=s, source_kind=ss.type, source_port=sp, target=t, target_kind=ts.type,
+                        target_port=tp, port_type=ptype, value=value, source_view=src.get("view"),
+                        view=dst.get("view"), params=params.get(t),
+                        inputs=MappingProxyType({port: values[a].get(ap) for port, (a, ap) in incoming[t].items()
+                                                 if a in values}))
+            try:
+                got = rule(h)
+            except Exception:                         # noqa: BLE001
+                logger.warning(f"전달 점검 실패: {eid}", exc_info=True)
+                rec["issues_reason"] = _FAILED
+            else:
+                if _ok_intake(got):
+                    rec["checks"] = list(got["checks"])
+                    rec["issues"] = [dict(i) for i in got["issues"]]
+                else:
+                    logger.warning(f"전달 점검 모양 위반: {eid} — {got!r:.200}")
+                    rec["issues_reason"] = _BAD_SHAPE
+        out[eid] = rec
+    return out
+
+
+def _run_facts(registry: Registry, ptype: str, value: Any, where: str) -> tuple[list | None, str | None]:
+    fn = registry.port_facts.get(ptype)
+    if fn is None:
+        return None, "이 값은 아직 잴 항목이 없어요."
+    try:
+        facts = fn(value)
+    except Exception:                                 # noqa: BLE001
+        logger.warning(f"건너간 것을 재지 못함: {where}", exc_info=True)
+        return None, _FAILED
+    if not _ok_facts(facts):
+        logger.warning(f"건너간 것 모양 위반: {where} — {facts!r:.200}")
+        return None, _BAD_SHAPE
+    return [dict(f) for f in facts], None
 
 
 def _ms(t0: float) -> float:

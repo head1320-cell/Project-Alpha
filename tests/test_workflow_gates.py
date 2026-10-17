@@ -156,3 +156,23 @@ def test_any_build_stage_node_counts_for_the_build_gate():
     assert _gate(rep, "build")["state"] == "confirmed"
     only_signal = wg.evaluate(_nodes("alpha"), {"alpha": _ok()}, stage)
     assert _gate(only_signal, "build")["state"] == "skipped"
+
+
+# ── CF3 · 요청한 방식 대신 다른 비중이 쓰였으면 '비중 계산'은 확인이 아니다 ───────────────
+
+FB_TEXT = "‘흔들림 최소’ 방식이 답을 내지 못해 역변동성 비중으로 대신했어요 — 사유."
+
+
+def test_a_fallback_that_reached_the_weights_makes_the_build_gate_partial():
+    opt = _ok({"constraints_report": None,
+               "fallbacks": [{"stage": "optimized", "affects_weights": True, "text": FB_TEXT}]})
+    g = _gate(wg.evaluate(_nodes("optimizer"), {"optimizer": opt}, STAGE), "build")
+    assert g["state"] == "partial"
+    assert {"state": "assumed", "text": FB_TEXT} in g["reasons"]
+
+
+def test_a_fallback_that_did_not_reach_the_weights_keeps_the_gate_confirmed():
+    """짝 — 비중에 닿지 않은 대체(예: mvo 의 생각 단계)는 관문을 바꾸지 않는다."""
+    opt = _ok({"constraints_report": None,
+               "fallbacks": [{"stage": "view_applied", "affects_weights": False, "text": "생각 단계 대체"}]})
+    assert _gate(wg.evaluate(_nodes("optimizer"), {"optimizer": opt}, STAGE), "build")["state"] == "confirmed"

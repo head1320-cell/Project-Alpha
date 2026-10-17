@@ -266,6 +266,37 @@ def _estimate(inputs: dict, p) -> pg.NodeOutput:
                          view={"settings": settings, "note": note})
 
 
+def _fallback_texts(fallbacks: list[dict], model: str, constraints_report: dict | None) -> list[dict]:
+    """엔진 대체 기록 → 서버 문장(CF3). 제약을 걸어 다시 풀었으면 최종 비중이 대체를 얼마나 따랐는지 재지 않았다고 말한다."""
+    name = MODEL_PLAIN.get(model, model)
+    resolved = bool(constraints_report) and constraints_report.get("status") != "infeasible"
+    out = []
+    for f in fallbacks:
+        if f.get("stage") == "optimized":
+            text = f"‘{name}’ 방식이 답을 내지 못해 역변동성 비중으로 대신했어요. {f.get('reason')}"
+            if resolved:
+                text += " 그 뒤 제약을 걸어 다시 풀어서, 최종 비중이 이 대체를 얼마나 따랐는지는 재지 않았어요."
+        else:
+            text = str(f.get("reason") or "")
+            text += (" 그래서 비중은 시가총액 비중이에요." if f.get("affects_weights")
+                     else f" ‘{name}’ 방식은 생각을 쓰지 않아 최종 비중에는 닿지 않아요.")
+        out.append({**f, "text": text})
+    return out
+
+
+def _legs_dropped(views: list[dict], names: list[str], model: str) -> dict:
+    """BL·EP 에서 유니버스 밖 종목 때문에 다리를 잃은 생각(CF3) — 그 생각은 남되 일부만 반영된다. 없으면 키도 없다."""
+    if model not in ("bl", "ep") or not views:
+        return {}
+    from src.engine.view_rows import build_view_rows
+    out = []
+    for i, v in enumerate(views):
+        rows, _ = build_view_rows([v], names)
+        if rows and rows[0].dropped_assets:
+            out.append({"index": i, "label": v.get("label") or rows[0].label, "dropped": list(rows[0].dropped_assets)})
+    return {"view_legs_dropped": out} if out else {}
+
+
 def _optimizer(inputs: dict, p) -> pg.NodeOutput:
     r, belief_settings = inputs["returns"], inputs["belief"]
     avail = _studio.model_availability().get(p.model) or {}
@@ -331,6 +362,10 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         "company_views_used": opt.get("company_views_used"),
         "belief": {"conditional": req.conditional, "blocked": belief.blocked,
                    "blocked_reason": belief.blocked_reason},
+        # ── 관측 (CF3 — 계산 불변) ─────────────────────────────────────────────
+        **({"fallbacks": _fallback_texts(opt["fallbacks"], req.model, constraints_report)}
+           if opt.get("fallbacks") else {}),
+        **_legs_dropped(incoming, names, req.model),
     }
     provenance = {"perf_label": backtest_label(is_mock_data=mock_allowed()).to_dict(),
                   "data_source": r["coverage"].get("source"),
@@ -526,3 +561,8 @@ _glance.register(REGISTRY)
 from src.api import allocation_graph_roles as _roles  # noqa: E402
 
 _roles.register(REGISTRY)
+
+# ★전달 점검은 마지막에★ (CF3) — 선마다 건너간 것·빠지거나 바뀐 것. 계산은 바꾸지 않는다(읽기만).
+from src.api import allocation_graph_handoff as _handoff  # noqa: E402
+
+_handoff.register(REGISTRY)

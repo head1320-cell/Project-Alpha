@@ -330,6 +330,7 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
         returns = returns.iloc[-lookback_days:]
     if bench is not None:
         bench = bench.reindex(returns.index).dropna()
+    alignment = _alignment(df[keep], returns, bench, lookback_days, benchmark is not None)
     coverage = {
         "start": str(returns.index.min().date()) if len(returns) else None,
         "end": str(returns.index.max().date()) if len(returns) else None,
@@ -342,8 +343,39 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
         # `end`(관측 마지막 날)와도 다르다: 휴장일이면 절단일보다 앞선다.
         "as_of_requested": as_of,
         "as_of_effective": end.isoformat(),
+        # ── 날짜를 맞추며 잃은 것 (CF3 · 관측만) ─────────────────────────────
+        "alignment": alignment,
     }
     return returns, bench, excluded, coverage
+
+
+def _alignment(raw, returns, bench, lookback_days: int, bench_requested: bool) -> dict:
+    """종목 날짜 교집합(`dropna`)이 잃은 것 — ★`notna()` 만 읽는다★(값·창은 바꾸지 않는다, CF3).
+
+    - `shortfall_days` — 요청한 일수보다 모자란 날.
+    - `holes_in_window` — 창 안에서 어느 한 종목이라도 비어 통째로 빠진 날.
+    - `latest_start` — 가장 늦게 시작한 종목(모두 같은 날 시작하면 None) · `binding` — 그 종목이 창의 시작을 정했는지.
+    - `bench_gap_days` — 창 안에서 벤치마크가 빈 날. 벤치를 요청하지 않았으면 잴 대상이 없어 None.
+    """
+    avail = raw.notna()
+    firsts = {t: avail.index[avail[t].to_numpy()].min() for t in raw.columns if bool(avail[t].any())}
+    latest = None
+    if firsts and len(set(firsts.values())) > 1:
+        t = max(firsts, key=lambda k: (firsts[k], k))
+        latest = {"ticker": str(t), "first": str(firsts[t].date())}
+    holes = 0
+    if len(returns):
+        span = avail.loc[returns.index.min():returns.index.max()]
+        holes = int((~span.all(axis=1)).sum())
+    return {
+        "requested_days": int(lookback_days),
+        "shortfall_days": max(0, int(lookback_days) - int(len(returns))),
+        "holes_in_window": holes,
+        "latest_start": latest,
+        "binding": bool(latest and len(returns) and latest["first"] == str(returns.index.min().date())),
+        "bench_gap_days": (None if not bench_requested
+                           else int(len(returns)) - (0 if bench is None else int(len(bench)))),
+    }
 
 
 def _ep_unavailable_reason(probes: dict) -> str | None:

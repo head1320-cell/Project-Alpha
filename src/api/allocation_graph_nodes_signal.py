@@ -303,6 +303,7 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
     codes = [c for c, _ in ranked]
     r = inputs.get("returns")
     sigma = None
+    observed: dict = {}                        # CF3 — 관측만(공분산을 왜 못 보냈나 · 비중 0 이라 뺀 종목)
     if p.weighting in _RETURN_BASED:
         if r is None:
             raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’은 흔들림을 써요 — ‘수익률 불러오기’를 이어 주세요 "
@@ -320,13 +321,19 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
     else:
         pct = _ar._factor_weights(codes, dict(ranked), p.weighting, 252)
         # `/factor-portfolio` 처럼 비중이 0 으로 반올림된 종목은 담지 않는다(틸트의 꼴찌).
+        zero = [c for c in codes if pct.get(c, 0.0) <= 0]
         codes = [c for c in codes if pct.get(c, 0.0) > 0]
         w = np.array([pct[c] / 100.0 for c in codes], dtype=float)
-        if r is not None and all(c in r["returns"].columns for c in codes):
+        if zero:
+            observed["dropped_zero"] = zero
+        absent = [c for c in codes if r is not None and c not in r["returns"].columns]
+        if r is not None and not absent:
             sigma = _cov(r["returns"][codes].values) * 252.0
+        else:
+            observed["sigma_missing"] = {"reason": "no_returns" if r is None else "codes_missing", "codes": absent}
     w = w / w.sum()
     view = {"weights": {c: round(float(x) * 100, 2) for c, x in zip(codes, w)}, "labels": _ar._labels(codes),
-            "weighting": p.weighting, "scores": {c: s for c, s in ranked if c in codes}, "has_sigma": sigma is not None}
+            "weighting": p.weighting, "scores": {c: s for c, s in ranked if c in codes}, "has_sigma": sigma is not None, **observed}
     return pg.NodeOutput(values={"weights": weights_value(codes, w, sigma_annual=sigma,
                                                           sigma_source="표본(수익률 노드)" if sigma is not None else None)},
                          view=view)
@@ -337,7 +344,12 @@ def _explain_scores_to_weights(view: dict, prov: dict, params: Any) -> dict:
     top = max(w, key=lambda k: w[k]) if w else None
     trust = [_t(CONFIRMED, f"점수 상위 {len(w)}종목을 ‘{_WEIGHTING.get(view.get('weighting'), view.get('weighting'))}’ 방식으로 나눴어요.")]
     if not view.get("has_sigma"):
-        trust.append(_t(UNKNOWN, "공분산이 없어 ‘흔들림 나눠 보기’는 이 비중을 계산하지 못해요 — 수익률을 이어 주세요."))
+        miss = view.get("sigma_missing") or {}
+        if miss.get("reason") == "codes_missing":
+            trust.append(_t(UNKNOWN, "이은 수익률에 없는 종목이 있어 공분산을 함께 보내지 못해요("
+                                     + ", ".join(miss.get("codes") or []) + ") — ‘흔들림 나눠 보기’는 이 비중을 계산하지 못해요."))
+        else:
+            trust.append(_t(UNKNOWN, "공분산이 없어 ‘흔들림 나눠 보기’는 이 비중을 계산하지 못해요 — 수익률을 이어 주세요."))
     return {"title": f"점수로 {len(w)}종목의 비중을 정했어요",
             "headline": ({"label": f"가장 큰 비중 · {view['labels'].get(top, top)}", "value": w[top], "unit": "%",
                           "text": _pct(w[top])} if top else None),
