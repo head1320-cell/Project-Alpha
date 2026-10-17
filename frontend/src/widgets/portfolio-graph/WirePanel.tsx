@@ -8,9 +8,11 @@
  * - 믿을 수 있나요 — 보내는 노드의 계보(연습용 · 지금 시점 전용 · 노출 조절). ★"실데이터"라고 부르지 않는다★(BM :44).
  * - 끊으면 — 받는 입력이 필수면 받는 노드부터 하류가 멈춘다. 선택 입력이면 그렇다고 말한다.
  * - 사이에 넣기 — 같은 타입을 받아 같은 타입을 내는 노드만. 끊기·넣기는 되돌리기 한 번.
+ * - (CF3b2) 맨 위 관계 문장(서버) · 건너간 것(잰 값만) · 빠지거나 바뀐 것(전달 점검) — ★`[]` 은 "점검했고 찾지 못함", `null` 은 사유★.
  */
 import type { Edge } from "@xyflow/react";
-import { josa, type GraphError, type NodeCatalogEntry, type NodeRunResult, type PgNode } from "@/entities/portfolio-graph";
+import { josa, type EdgeRecord, type EdgeRelation, type GraphError, type IssueLevel, type NodeCatalogEntry, type NodeRunResult,
+         type PgNode } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
 
 const LINEAGE_TEXT = {
@@ -18,8 +20,10 @@ const LINEAGE_TEXT = {
   forward: "지금 시점 전용이에요 — 과거 검증에 쓸 수 없어요",
   overlay: "오늘 판단한 노출 조절이 얹힌 비중이에요",
 };
+const LEVEL_TEXT: Record<IssueLevel, string> = { lost: "빠짐", changed: "바뀜", structural: "구조", unused: "쓰지 않음" };
 
-export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors, plain, order, onFocus, onCut, onInsert }: {
+export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors, plain, order, onFocus, onCut, onInsert,
+                            relation, record, recordGap }: {
   edge: Edge;
   nodes: PgNode[];
   edges: Edge[];
@@ -32,6 +36,12 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
   onFocus: (id: string) => void;
   onCut: () => void;
   onInsert: (kind: string, inPort: string, outPort: string) => void;
+  /** 서버 관계 문장 — 계산한 뒤면 그 계산의, 아니면 검증의 것(요약 괄호 없음). */
+  relation?: EdgeRelation | null;
+  /** 이 선의 전달 점검 — 지금 그래프의 결과일 때만. */
+  record?: EdgeRecord | null;
+  /** 계산은 했는데 이 선의 기록이 없을 때 그 까닭(받는 쪽이 예전 결과 · 보내는 쪽이 계산되지 않음). */
+  recordGap?: string | null;
 }) {
   const entryOf = (id: string) => catalog.find((c) => c.type === nodes.find((n) => n.id === id)?.data.kind);
   const src = entryOf(edge.source);
@@ -52,6 +62,38 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
 
   return (
     <section className="pg-wire-sheet" aria-label="선">
+      {relation && (
+        <div className="pg-wire-row" data-row="relation">
+          <p className="pg-wire-relation">{relation.text}</p>
+        </div>
+      )}
+      {record && (
+        <div className="pg-wire-row" data-row="facts">
+          <h3>건너간 것</h3>
+          {record.facts ? (
+            <table className="pg-wire-facts"><tbody>
+              {record.facts.map((f) => <tr key={f.key} data-key={f.key}><th scope="row">{f.label}</th><td>{f.text}</td></tr>)}
+            </tbody></table>
+          ) : <p className="pg-wire-muted">{record.facts_reason ?? "건너간 값을 재지 못했어요."}</p>}
+        </div>
+      )}
+      {(record || recordGap) && (
+        <div className="pg-wire-row" data-row="issues">
+          <h3>빠지거나 바뀐 것</h3>
+          {!record ? <p className="pg-wire-muted">{recordGap}</p>
+            : record.issues === null ? <p className="pg-wire-muted">{record.issues_reason ?? "이 선은 점검하지 않았어요."}</p>
+            : record.issues.length ? (
+              <ul className="pg-wire-issues">
+                {record.issues.map((i) => (
+                  <li key={i.code} className="pg-wire-issue" data-level={i.level} data-code={i.code}>
+                    <span className="pg-wire-issue-lv">{LEVEL_TEXT[i.level]}</span>
+                    <span>{i.text}{i.fix && <span className="pg-wire-issue-fix"> {i.fix}</span>}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p>점검한 것: {record.checks.join(" · ")} — 잃거나 바뀐 것을 찾지 못했어요.</p>}
+        </div>
+      )}
       <div className="pg-wire-row" data-row="what">
         <h3>무엇이 흐르나요</h3>
         <p><b className="pg-wire-type-name">{typeName}</b>{brief ? <> · <span className="pg-wire-brief-text">{brief}</span></>

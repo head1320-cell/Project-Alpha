@@ -77,7 +77,7 @@ import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
-import { wireLook } from "./wireStyle";
+import { wireFlag, wireLook } from "./wireStyle";
 import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
@@ -575,6 +575,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     });
     return [...frames, ...branchFrames, ...cards];
   }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix, onSocket]);
+  /** 전달 점검 칩을 누르면(CF3b2) — 선을 누른 것과 같은 길(선 판) + 문제 줄로 내린다. */
+  const onFlag = useCallback((edgeId: string) => {
+    usePortfolioGraph.getState().selectEdge(edgeId);
+    updatePanels((p) => (p.right ? p : toggle(p, "right")));
+    requestAnimationFrame(() => document.querySelector('.pg-wire-row[data-row="issues"]')?.scrollIntoView({ block: "nearest" }));
+  }, [updatePanels]);
   /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
   const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
   const edgesStyled = useMemo(() => {
@@ -607,13 +613,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                  lit && "pg-edge--path", onCause && "pg-edge--cause", !kept && "pg-dim", faint && "pg-edge--faint",
                  (gs || gt) && "pg-wire--proxy"].filter(Boolean).join(" ");
     const typeLabel = out ? (s.catalogMeta?.portPlain ?? PORT_PLAIN)[out.type] ?? out.type : null;
-    return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id, flow: look.flow },
+    return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id, flow: look.flow,
+                                                         flag: wireFlag(s.report?.edges?.[e.id], staleSet.has(e.target)), onFlag },
              selected: e.id === s.selectedEdge,
              className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: look.width } };
     });
-  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire]);
+  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire]);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
   const strategySources = useMemo(() => {
     const cat = s.catalog ?? [];
@@ -1558,6 +1565,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               <WirePanel edge={selEdge} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
                          stale={staleSet.has(selEdge.source)} errors={s.validation?.errors ?? []} plain={s.catalogMeta?.portPlain ?? PORT_PLAIN}
                          order={order} onFocus={focusNode}
+                         relation={(s.report && !staleSet.has(selEdge.source) ? s.report.relations?.[selEdge.id] : null)
+                                   ?? s.validation?.relations?.[selEdge.id] ?? null}
+                         record={s.report && !staleSet.has(selEdge.target) ? s.report.edges?.[selEdge.id] ?? null : null}
+                         recordGap={!s.report ? null : staleSet.has(selEdge.target) ? "받는 노드가 예전 결과예요 — 다시 계산하면 점검해요."
+                           : s.report.nodes[selEdge.source]?.status !== "ok" ? "보내는 노드가 계산되지 않아 점검하지 않았어요."
+                           : "받는 노드를 이번에 계산하지 않아 점검하지 않았어요."}
                          onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => { st.cutEdge(selEdge.id); return "선을 끊었어요."; }); }}
                          onInsert={(k, i, o) => { const st = usePortfolioGraph.getState();
                            st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 넣었어요."; }); }} />

@@ -78,6 +78,10 @@ def facts_returns(v: dict) -> list[dict]:
     return out
 
 
+# 공분산 출처 코드 → 쉬운 말(모르는 코드는 그대로 — 지어내지 않는다).
+_SIGMA_PLAIN = {"trailing": "지난 수익률로 잰 공분산", "sample_252": "최근 252일 표본 공분산", "conditional": "국면 조건부 공분산"}
+
+
 def facts_weights(v: dict) -> list[dict]:
     w = np.asarray(v.get("weights"), dtype=float)
     names = list(v.get("names") or [])
@@ -97,7 +101,9 @@ def facts_weights(v: dict) -> list[dict]:
             neff = 1.0 / float(((w / s) ** 2).sum())
             out.append(_f("neff", "실질 종목 수(1/Σw²)", f"{neff:.1f}개", round(neff, 2)))
     sig = v.get("sigma_annual")
-    out.append(_f("sigma", "함께 보낸 공분산", str(v.get("sigma_source") or "있음") if sig is not None else "없음"))
+    src = v.get("sigma_source")
+    out.append(_f("sigma", "함께 보낸 공분산",
+                  (_SIGMA_PLAIN.get(str(src), str(src)) if src else "있음") if sig is not None else "없음"))
     if sig is not None:
         S = np.asarray(sig, dtype=float)
         if S.ndim == 2 and S.shape[0] == S.shape[1] and S.size and np.isfinite(S).all():
@@ -106,7 +112,7 @@ def facts_weights(v: dict) -> list[dict]:
                 out.append(_f("cond", "공분산 조건수", "특이(가장 작은 고유값이 0 이하)"))
             else:
                 c = float(ev[-1] / ev[0])
-                out.append(_f("cond", "공분산 조건수", f"{c:,.0f}", round(c, 2)))
+                out.append(_f("cond", "공분산 조건수", f"{c:.1f}" if c < 100 else f"{c:,.0f}", round(c, 2)))
     req = v.get("req")
     if req is not None and getattr(req, "model", None):
         from src.api.allocation_graph_explain import MODEL_PLAIN

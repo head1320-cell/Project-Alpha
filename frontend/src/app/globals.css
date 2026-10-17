@@ -4656,6 +4656,29 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 @keyframes pg-flow { to { stroke-dashoffset: -16; } }
 @media (prefers-reduced-motion: reduce) { .pg-wire-flowdots { animation: none; } }
 .pg-canvas[data-zoom="far"] .pg-wire-type { display: none; }
+/* CF3b2 · 전달 점검 표시 — 받는 쪽 끝 칸(FLAG_W 16 · size.ts). 단계 색은 근거 칩과 같은 말: 빠짐 = 실패색 · 바뀜 = 가정색 ·
+   구조 = 모름색 · 쓰지 않음 = 가장 옅게. 멀리에서는 글자 없는 점(화면 8px). */
+.pg-wire-flag { position: absolute; pointer-events: all; width: 16px; height: 16px; padding: 0; border-radius: 8px; border: 1px solid currentColor;
+  font: inherit; font-size: 10px; font-weight: 700; line-height: 14px; text-align: center; font-variant-numeric: tabular-nums; cursor: pointer;
+  color: var(--pg-fail); background: var(--pg-fail-soft); }
+.pg-wire-flag[data-level="changed"] { color: var(--pg-assume); background: var(--pg-assume-soft); }
+.pg-wire-flag[data-level="structural"] { color: var(--pg-unknown); background: var(--pg-unknown-soft); }
+.pg-wire-flag[data-level="unused"] { color: var(--pg-body); background: var(--pg-paper); border-style: dashed; }
+.pg-wire-flag:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-canvas[data-zoom="far"] .pg-wire-flag { width: calc(8px / var(--pg-z, 1)); height: calc(8px / var(--pg-z, 1)); border: 0; background: currentColor; }
+.pg-canvas[data-zoom="far"] .pg-wire-flag-n { display: none; }   /* 점에는 글자가 없다(글자를 배경색으로 남기지 않는다 — 대비 감사) */
+.pg-wire-row .pg-wire-relation { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.55; color: var(--pg-ink); }
+.pg-wire-facts { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pg-wire-facts th { padding: 4px 8px 4px 0; text-align: left; font-weight: 500; color: var(--pg-body); white-space: nowrap; }
+.pg-wire-facts td { padding: 4px 0; text-align: right; color: var(--pg-ink); word-break: keep-all; overflow-wrap: anywhere; }
+.pg-wire-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pg-wire-issue { display: flex; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.5; color: var(--pg-ink); word-break: keep-all; overflow-wrap: anywhere; }
+.pg-wire-issue-lv { flex: none; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; color: var(--pg-fail); background: var(--pg-fail-soft); }
+.pg-wire-issue[data-level="changed"] .pg-wire-issue-lv { color: var(--pg-assume); background: var(--pg-assume-soft); }
+.pg-wire-issue[data-level="structural"] .pg-wire-issue-lv { color: var(--pg-unknown); background: var(--pg-unknown-soft); }
+.pg-wire-issue[data-level="unused"] .pg-wire-issue-lv { color: var(--pg-body); background: var(--pg-soft); }
+.pg-wire-issue-fix { color: var(--pg-body); }
+.pg-tag--fallback { color: var(--pg-assume); background: var(--pg-paper); box-shadow: inset 0 0 0 1px var(--pg-assume); }
 .react-flow__edge.pg-dim { opacity: .15; }
 .react-flow__node.pg-on-cause .pg-node { border-color: var(--pg-fail); box-shadow: 0 0 0 5px rgb(217 45 60 / 14%), var(--pg-shadow); }
 .react-flow__node.pg-cause-root .pg-node { outline: 3px solid var(--pg-fail); outline-offset: 3px; }

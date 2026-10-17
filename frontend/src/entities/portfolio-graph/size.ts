@@ -44,9 +44,12 @@ export const FOOT_H = 52;
 /** 합치기 카드의 입력 줄 — 필수 둘 + 이은 전략 + 빈 자리 하나를 미리 잡는다(더 이으면 카드가 자란다). */
 export const COMBINE_ROWS = 4;
 
-/** 선 요약 라벨의 가운데 — 원천 카드 오른쪽 끝에서 틈의 가운데. */
-export const BRIEF_DX = COL_GAP / 2;
-export const BRIEF_MAX_W = COL_GAP - 16;
+/** 열 사이 틈(80)을 둘로 나눈다(CF3b2) — 보내는 쪽 반은 선 요약 칸, 받는 쪽 끝은 전달 점검 표시 칸. 둘이 같은 틈에 놓여도 겹치지 않는다.
+ *  요약: 보내는 손잡이에서 BRIEF_DX 가운데 · 폭 BRIEF_MAX_W 이하 / 표시: 받는 손잡이에서 FLAG_DX 앞 가운데 · 폭 FLAG_W. */
+export const BRIEF_DX = 30;
+export const BRIEF_MAX_W = 48;
+export const FLAG_DX = 12;
+export const FLAG_W = 16;
 
 /** 배치·카드가 함께 쓰는 카드 높이 — 확대와 무관한 한 상자. */
 export function cardHeight(kind: string, catalog: NodeCatalogEntry[] | null | undefined): number {

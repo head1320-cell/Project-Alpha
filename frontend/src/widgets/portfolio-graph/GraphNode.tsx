@@ -60,7 +60,9 @@ function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: 
   const trust = ex?.trust ?? [];
   if (trust.some((t) => t.kind === "practice")) out.push({ cls: "unknown", text: "연습용 데이터" });
   else if (trust.some((t) => t.state === "unknown")) out.push({ cls: "unknown", text: "모르는 것 있음" });
-  const nAssumed = trust.filter((t) => t.state === "assumed").length;
+  // 고른 방식이 답을 내지 못해 다른 비중을 썼다(CF3) — 가정 하나로 세면 묻히므로 따로 말한다.
+  if (trust.some((t) => t.kind === "fallback")) out.push({ cls: "fallback", text: "고른 방식 대신함" });
+  const nAssumed = trust.filter((t) => t.state === "assumed" && t.kind !== "fallback").length;
   if (nAssumed) out.push({ cls: "assume", text: nAssumed === 1 ? "가정 있음" : `가정 ${nAssumed}개` });
   if (trust.some((t) => t.state === "failed")) out.push({ cls: "fail", text: "지키지 못한 조건" });
   return out;

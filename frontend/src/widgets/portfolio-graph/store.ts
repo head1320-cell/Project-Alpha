@@ -635,7 +635,14 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
         const prev = Object.fromEntries(Object.entries(s.report.nodes)
           .filter(([id]) => !(id in report.nodes) && s.nodes.some((n) => n.id === id))
           .map(([id, r]) => [id, { ...r, previous: true }]));
-        merged = { ...report, nodes: { ...prev, ...report.nodes } };
+        // 선 기록(CF3b2)도 같다 — 이번에 다시 계산하지 않은 받는 쪽의 전달 점검·관계 문장은 예전 계산의 것을 남긴다.
+        const kept = new Set(s.edges.map((e) => e.id));
+        const prevEdges = Object.fromEntries(Object.entries(s.report.edges ?? {})
+          .filter(([id, r]) => kept.has(id) && !(r.target in report.nodes)));
+        const prevRel = Object.fromEntries(Object.entries(s.report.relations ?? {})
+          .filter(([id]) => kept.has(id) && !((s.edges.find((e) => e.id === id)?.source ?? "") in report.nodes)));
+        merged = { ...report, nodes: { ...prev, ...report.nodes }, edges: { ...prevEdges, ...(report.edges ?? {}) },
+                   relations: { ...(report.relations ?? {}), ...prevRel } };
       }
       // 서명: 이번에 계산한 노드는 계산을 시작할 때의 서명으로, 계산하지 않은 노드는 예전 서명 그대로(BT5 — 부분 계산 뒤에도
       // 계산하지 않은 낡은 노드는 계속 낡은 것으로 남는다).

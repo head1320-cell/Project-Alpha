@@ -275,6 +275,21 @@ def test_returns_and_weights_facts_are_measured(clean):
     assert abs(wf["sum"]["value"] - 100.0) < 0.01
 
 
+def test_weights_facts_speak_plainly():
+    """공분산 출처는 쉬운 말(내부 코드 "trailing" 그대로 내보내지 않는다) · 작은 조건수는 소수 한 자리(1.15 를 "1" 로 뭉개지 않는다).
+    짝: 모르는 출처 코드는 지어내지 않고 그대로 · 큰 조건수는 천 단위 정수."""
+    S = np.array([[1.0, 0.0], [0.0, 1.15]])
+    def facts(src, sig=S):
+        return {f["key"]: f for f in ho.facts_weights({"weights": np.array([0.5, 0.5]), "names": ["a", "b"],
+                                                       "sigma_annual": sig, "sigma_source": src})}
+    assert facts("trailing")["sigma"]["text"] == "지난 수익률로 잰 공분산"
+    assert facts("sample_252")["sigma"]["text"] == "최근 252일 표본 공분산"
+    assert facts("conditional")["sigma"]["text"] == "국면 조건부 공분산"
+    assert facts("weird_src")["sigma"]["text"] == "weird_src"
+    assert facts("trailing")["cond"]["text"] == "1.1"
+    assert facts("trailing", np.diag([1.0, 1234.0]))["cond"]["text"] == "1,234"
+
+
 def test_facts_without_alignment_say_unmeasured():
     R = pd.DataFrame(np.zeros((10, 2)))
     fs = ho.facts_returns({"returns": R, "coverage": {"start": "a", "end": "b"}, "universe": {}})

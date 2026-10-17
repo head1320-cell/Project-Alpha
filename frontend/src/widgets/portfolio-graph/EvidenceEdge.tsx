@@ -11,7 +11,8 @@
  */
 import { memo } from "react";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
-import { BRIEF_DX, type NodeLineage, type NodeStatus } from "@/entities/portfolio-graph";
+import { BRIEF_DX, FLAG_DX, type NodeLineage, type NodeStatus } from "@/entities/portfolio-graph";
+import type { WireFlag } from "./wireStyle";
 
 export const PG_WIRE_TYPE = "pgWire";
 
@@ -27,6 +28,9 @@ export type WireData = {
   hover?: boolean;
   /** 계산 중 — 흐르는 점(CF3b1). xyflow `animated` 는 쓰지 않는다: 그 규칙은 선 안의 모든 path 를 대시로 바꿔 눈금을 지웠다. */
   flow?: boolean;
+  /** 전달 점검(CF3b2) — 문제가 있을 때만. 받는 쪽 끝에 단추 하나, 누르면 선 판의 문제 줄로. */
+  flag?: WireFlag | null;
+  onFlag?: (edgeId: string) => void;
 }
 
 /** 원천 노드 결과 → 선 모양. 결과가 없거나 낡았으면 `null`(모양 없음). */
@@ -62,6 +66,16 @@ function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePositi
         <EdgeLabelRenderer>
           <div className="pg-wire-brief" data-edge-id={id}
                style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}>{data.brief}</div>
+        </EdgeLabelRenderer>
+      )}
+      {data?.flag && (
+        <EdgeLabelRenderer>
+          <button type="button" className="pg-wire-flag nodrag nopan" data-edge-id={id} data-level={data.flag.level} data-count={data.flag.count}
+                  aria-label={`전달 점검 ${data.flag.count}건: ${data.flag.first}`}
+                  style={{ transform: `translate(-50%, -50%) translate(${targetX - FLAG_DX}px, ${targetY}px)` }}
+                  onClick={(ev) => { ev.stopPropagation(); data.onFlag?.(id); }}>
+            <span className="pg-wire-flag-n">{data.flag.count}</span>
+          </button>
         </EdgeLabelRenderer>
       )}
       {(data?.hover || selected) && data?.typeLabel && (
