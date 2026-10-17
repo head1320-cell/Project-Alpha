@@ -151,13 +151,17 @@ export function parseFile(text: string): ParseResult {
   const pinRaw = Array.isArray(raw.pinned) ? (raw.pinned as unknown[]) : [];
   const pinned = [...new Set(pinRaw.filter((x): x is string => typeof x === "string" && seen.has(x)))];
   if (pinRaw.length > pinned.length) problems.push(`없는 노드를 가리키는 그림 고정 ${pinRaw.length - pinned.length}개는 뺐어요.`);
+  // 접기(CF1) — 고정과 같은 규칙. 없는 노드를 가리키면 빼고 말한다.
+  const foldRaw = Array.isArray(raw.folded) ? (raw.folded as unknown[]) : [];
+  const folded = [...new Set(foldRaw.filter((x): x is string => typeof x === "string" && seen.has(x)))];
+  if (foldRaw.length > folded.length) problems.push(`없는 노드를 가리키는 접기 ${foldRaw.length - folded.length}개는 뺐어요.`);
   const meta = isObj(raw.meta) ? {
     name: typeof raw.meta.name === "string" ? raw.meta.name : undefined,
     exported_at: typeof raw.meta.exported_at === "string" ? raw.meta.exported_at : undefined,
   } : undefined;
   return {
     doc: { format: GRAPH_FORMAT, version: GRAPH_VERSION, meta, nodes, edges, ...(groups.length ? { groups } : {}),
-           ...(branches.length ? { branches } : {}), ...(pinned.length ? { pinned } : {}) },
+           ...(branches.length ? { branches } : {}), ...(pinned.length ? { pinned } : {}), ...(folded.length ? { folded } : {}) },
     problems,
   };
 }
@@ -206,7 +210,7 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
 
 /** React Flow → 문서. 실행 결과는 넣지 않는다(파라미터·위치만). */
 export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], groups?: GraphGroup[], branches?: GraphBranch[],
-                      pinned?: string[]): GraphDoc {
+                      pinned?: string[], folded?: string[]): GraphDoc {
   const ids = new Set(nodes.map((n) => n.id));
   const live = pruneBranches(branches ?? [], ids);
   return {
@@ -216,6 +220,7 @@ export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], g
     ...(groups?.length ? { groups: groups.map((g) => ({ ...g, members: [...g.members] })) } : {}),
     ...(live.length ? { branches: live } : {}),
     ...(pinned?.some((id) => ids.has(id)) ? { pinned: pinned.filter((id) => ids.has(id)) } : {}),
+    ...(folded?.some((id) => ids.has(id)) ? { folded: folded.filter((id) => ids.has(id)) } : {}),
     nodes: nodes.map((n) => ({
       id: n.id,
       type: n.data.kind,

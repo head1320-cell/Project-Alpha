@@ -61,6 +61,8 @@ export interface GraphDoc {
   branches?: GraphBranch[];
   /** 그림 고정(BN N2) — 멀리서도 작은 그림을 보이는 노드 id. 화면 정보(서버는 읽지 않는다). */
   pinned?: string[];
+  /** 접은 노드(CF1) — 머리 줄만 보이고 소켓이 머리 양끝에 모인다. 화면 정보(서버는 읽지 않는다). */
+  folded?: string[];
 }
 
 // ── 카탈로그 (`GET /api/v1/allocation/graph/node-types`) ────────────────────

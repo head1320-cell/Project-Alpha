@@ -6,6 +6,7 @@ import { fmtDelta } from "../src/entities/portfolio-graph/branch";
 import { quickAddItems } from "../src/entities/portfolio-graph/quickadd";
 import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 import { PORT_COLORS, PORT_UNKNOWN_COLOR } from "../src/entities/portfolio-graph/ports";
+import { COL } from "../src/entities/portfolio-graph/size";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BM — 캔버스를 "포트폴리오 설계 작업실"로 (설계 docs/superpowers/specs/2026-09-27-canvas-workspace-design.md)
@@ -32,6 +33,9 @@ type RunBody = { nodes: Record<string, NodeRes> };
 async function openCanvas(page: Page) {
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  // 처음 열림은 보통 확대(CF1 · 사용자 결정 2026-10-17) — 흐름 전체의 노드를 다루는 테스트는 사람처럼 맞춤 단추로 전체를 본다.
+  await page.waitForTimeout(400);                                  // 처음 맞춤(카탈로그 뒤 60ms + 크기를 잴 때까지)이 끝난 뒤에
+  await page.locator(".react-flow__controls-fitview").click();
 }
 
 async function run(page: Page): Promise<RunBody> {
@@ -77,21 +81,26 @@ async function emptyPoint(page: Page): Promise<{ x: number; y: number }> {
 }
 async function clickEmpty(page: Page) { const p = await emptyPoint(page); await page.mouse.click(p.x, p.y); }
 /** 노드가 떠 있는 판·토스트 밑이면 빈 캔버스를 끌어 판 사이 가운데로 옮긴다(사람이 판을 끄는 것과 같다). */
-async function reveal(page: Page, id: string) {
+async function reveal(page: Page, id: string, pass = 0) {
   const r = await page.evaluate((nid) => {
     const n = document.querySelector(`.react-flow__node[data-id="${nid}"]`)?.getBoundingClientRect();
     if (!n) return null;
     const hit = (sel: string) => { const e = document.querySelector<HTMLElement>(sel); return e && e.offsetParent ? e.getBoundingClientRect() : null; };
     const over = (b: DOMRect | null) => !!b && n.left < b.right && b.left < n.right && n.top < b.bottom && b.top < n.bottom;
     const pl = hit(".pg-palette"), sd = hit(".pg-side"), cv = document.querySelector(".react-flow")!.getBoundingClientRect();
-    if (![pl, sd, hit(".pg-toasts")].some(over)) return null;
+    const inside = n.left >= cv.left && n.right <= cv.right && n.top >= cv.top && n.bottom <= cv.bottom;
+    if (inside && ![pl, sd, hit(".pg-toasts")].some(over)) return null;
     const left = pl ? pl.right : cv.left, right = sd ? sd.left : cv.right;
     return { dx: (left + right) / 2 - (n.left + n.width / 2), dy: (cv.top + cv.bottom) / 2 - (n.top + n.height / 2) };
   }, id);
   if (!r) return;
   const p = await emptyPoint(page);
+  // 끄는 끝은 창 안에 둔다 — 노드가 판 너머 화면 밖(CF1 큰 상자에서 흔함)이면 한 번에 못 옮기므로 몇 번 나눠 끈다.
+  const vw = page.viewportSize()!;
+  const tx = Math.max(4, Math.min(vw.width - 4, p.x + r.dx)), ty = Math.max(70, Math.min(vw.height - 4, p.y + r.dy));
   await page.mouse.move(p.x, p.y); await page.mouse.down();
-  await page.mouse.move(p.x + r.dx, p.y + r.dy, { steps: 8 }); await page.mouse.up();
+  await page.mouse.move(tx, ty, { steps: 8 }); await page.mouse.up();
+  if ((tx !== p.x + r.dx || ty !== p.y + r.dy) && pass < 3) await reveal(page, id, pass + 1);
 }
 
 async function failOneTicker(page: Page) {
@@ -190,9 +199,16 @@ test("글자 크기(BR R2): 보통은 제목 14·값 18(제목 < 값) · 멀리�
   expect(farValue, "짝 — 숫자가 이름보다 한참 크지 않다").toBeLessThanOrEqual(13.5);
 
   // 한국어는 어절(띄어쓰기)에서 꺾인다 — "수익률 불러\n오기" 처럼 음절 가운데서 꺾이지 않는다.
-  // ★공허한 검사가 아니게★ 적어도 한 이름은 실제로 두 줄이어야 한다.
+  // ★공허한 검사가 아니게★ 적어도 한 이름은 실제로 두 줄이어야 한다. CF1 에서 카드가 240 으로 넓어져 기본 흐름의 이름은 글자 상한(28px,
+  // 확대 0.39 이하)에서도 한 줄에 든다 — 긴 이름 노드("하루에 얼마나 잃을 수 있나")를 하나 더하고 그만큼 멀리 줄여서 본다.
+  await page.locator('.pg-palette-item[data-kind="var_es"]').click();
+  const longId = (await page.locator('.pg-node[data-kind="var_es"]').last().getAttribute("data-node-id"))!;
+  for (let i = 0; i < 8 && Number(await canvas(page).evaluate((el) => getComputedStyle(el).getPropertyValue("--pg-z"))) > 0.39; i++) {
+    await page.locator(".react-flow__controls-zoomout").click();
+    await page.waitForTimeout(120);
+  }
   let wrapped = 0;
-  for (const id of ["returns", "estimate"]) {
+  for (const id of ["returns", "estimate", "risk", "backtest", longId]) {
     const { text, at } = await lineBreaks(node(page, id).locator(".pg-node-far-name"));
     wrapped += at.length;
     for (const i of at) expect(text[i - 1] === " " || text[i] === " ", `${id} "${text}" 가 ${i}번째 글자에서 꺾였다`).toBe(true);
@@ -348,6 +364,8 @@ test("원인 따라가기(BM C1): 막힌 노드에서 첫 원인까지 밝히고
   expect(body.nodes.risk.status).toBe("blocked");
   // 완료 노드에는 버튼이 없다(짝).
   await expect(node(page, "views").locator(".pg-cause-btn")).toHaveCount(0);
+  await zoomTo(page, "mid");                                     // 멀리에서는 카드 안 단추가 숨는다(CF1 — 맞춰 보기가 멀리로 열릴 수 있다)
+  await reveal(page, "risk");                                    // 가운데 기준 확대는 가장자리 노드를 판 밑·화면 밖으로 민다
   await node(page, "risk").locator(".pg-cause-btn").click();
   await expect(page.locator(".pg-cause-banner")).toContainText("첫 원인");
   await expect(rfNode(page, "returns")).toHaveClass(/pg-cause-root/);
@@ -357,6 +375,7 @@ test("원인 따라가기(BM C1): 막힌 노드에서 첫 원인까지 밝히고
   await page.locator(".pg-cause-root-btn").first().click();
   await expect(node(page, "returns")).toHaveClass(/pg-node--selected/);
   await clickEmpty(page);
+  await zoomTo(page, "mid");                                     // 원인 경로 맞추기(fitView)는 멀리로 줄일 수 있다(CF1 큰 상자)
   await reveal(page, "risk");
   await node(page, "risk").locator(".pg-cause-btn").click();
   await page.keyboard.press("Escape");
@@ -383,6 +402,8 @@ for (const scheme of ["light", "dark"] as const) {
     await failOneTicker(page);
     await run(page);
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await zoomTo(page, "mid");                                   // 멀리에서는 카드 안 단추가 숨는다(CF1)
+    await reveal(page, "risk");
     await node(page, "risk").locator(".pg-cause-btn").click();
     await page.keyboard.press("Escape");
     await zoomTo(page, "near");
@@ -564,11 +585,11 @@ test("전략 지도(BM C2 → BN N1): 자동 정리 = 노드와 선만(배경 �
   expect(p2.x).toBe(p1.x);
   expect(Math.abs(p2.y - p1.y)).toBeGreaterThanOrEqual(170);
 
-  // 짝 — 전략이 없으면 예전 정리(깊이 × 230).
+  // 짝 — 전략이 없으면 예전 정리(깊이 × 열 폭 — CF1 에서 230 → 320).
   await page.locator('.pg-template[data-template="core"]').click();
   await page.locator('button[aria-label="자동 정리"]').click();
   doc = await wip(page);
-  expect(doc.nodes.find((n) => n.id === "optimizer")!.position.x % 230).toBe(0);
+  expect(doc.nodes.find((n) => n.id === "optimizer")!.position.x % COL).toBe(0);
   await expect(page.locator(".react-flow__node")).toHaveCount(doc.nodes.length);
 });
 
@@ -1108,6 +1129,8 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
 });
 
 test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리 하나만 · 이은 자리 이름 = 전략 이름 · 잇지 않은 전략 카드는 그 이유(짝)", async ({ page }) => {
+  // 전략 셋 지도는 CF1 자리 고정 상자로 약 3,300 높이 — 1280×720 에서는 가장 작게(0.2) 줄여도 세 번째 전략 머리가 캔버스 밖이다(맞춰 보기 테스트와 같은 창).
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   let doc = await wip(page);
@@ -1117,7 +1140,9 @@ test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리
   await expect(handles()).toHaveCount(3);                                   // s1·s2 + 빈 자리 하나 — 여덟 자리를 늘어놓지 않는다
   const labels = pf.params.labels as Record<string, string>;
   for (const [port, label] of Object.entries(labels)) await expect(portName(port)).toHaveText(label);
-  await expect(portName("s3")).toHaveText("전략 더 잇기");
+  // 빈 자리는 선택 입력 — 이름 뒤에 "선택"(CF2 빈 원 소켓)이 붙는다.
+  await expect(portName("s3")).toHaveText("전략 더 잇기 선택");
+  await expect(portName("s3").locator(".pg-port-opt")).toHaveText(" 선택");
   await addStrategy(page, "tpl:rebalance");
   await expect(handles()).toHaveCount(4);
 
@@ -1183,7 +1208,9 @@ test("전략째 갈래(BN N1): 상자 머리에서 — 전략 노드 전부 복�
 });
 
 test("맞춰 보기(BN N1 에서 찾은 결함): 떠 있는 판(선 범례·안내 줄)이 맨 위 상자 머리와 노드를 가리지 않는다 — 자동 정리 뒤·맞춤 버튼 뒤", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });                 // 다 담기는 크기 — 넘치는 경우는 아래에서 따로
+  // 다 담기는 크기 — 넘치는 경우는 아래에서 따로. CF1 자리 고정 상자(카드 높이 = cardHeight)로 전략 셋 지도가 약 3,300 높이가 되어
+  // 1440×900 에서는 가장 작게 줄여도(0.2) 넘친다 — 다 담기는 1920×1200 으로 본다.
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   await addStrategy(page, "tpl:rebalance");
@@ -1694,6 +1721,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.locator('[data-action="add-here"]').click();
     await page.locator(".pg-quick input").fill("흔들림");
     await page.locator('.pg-quick-item[data-kind="risk"]').click();
+    await zoomTo(page, "mid");                                   // 멀리에서는 "이어 주세요"가 숨는다(CF1)
     await expect(page.locator(".pg-node-need").first()).toBeVisible();
     await check(".pg-node-need", 1);
   });

@@ -6,12 +6,15 @@
  *   단계 색 번호 · 쉬운 이름 · 상태 점 → 짧은 요약(서버 x-ui) → 실행 뒤 **큰 숫자 하나**(서버
  *   headline) → 증거 칩(연습용 · 가정 · 실패). 막힘·실패는 서버의 쉬운 말 사유를 그대로.
  * ★낡은 결과는 흐리게 + "예전 결과예요"★ — 그래프가 바뀐 뒤의 초록불은 거짓이다.
- * 포트는 타입 색 점, 이름·타입은 마우스를 올리면(전문가용) 보인다.
+ * CF1 — 작업 노드(자리 고정): 모든 확대에서 같은 상자(`size.ts cardHeight`), 확대에 따라 안의 내용만 바뀐다.
+ *   가까이 = 머리 · 소켓 줄(이름 늘 보임) · 설정 위젯 · 결과 자리 · 상태 줄 / 중간 = 머리 · 소켓 이름 · 요약 · 큰 숫자 / 멀리 = 이름·값.
+ * CF2 — 소켓: 필수 = 타입색 채운 원 · 선택 = 빈 원 · 합치기의 전략 입력 = 네모 · 두 번 누르면 그 타입 빠른 추가.
  */
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
-import { GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { connectionProblem, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { ChevronDown, ChevronRight, GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
+import { cardFieldsOf, cardHeight, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { NodeWidgets } from "./NodeWidgets";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
@@ -45,6 +48,8 @@ export type CanvasNodeData = PgNodeData & {
   /** 고치는 법 단추(BT7) — 서버 절차의 이 노드 제안을 그대로 적용한다. */
   onFix?: (sug: ProcedureSuggestion) => void;
   onPreviewRunTo?: (id: string | null) => void;
+  /** 소켓 두 번 누르기(CF2) — 그 소켓 타입으로 빠른 추가(입력이면 보내는 노드, 출력이면 받는 노드). */
+  onSocket?: (id: string, port: string, type: string, side: "in" | "out") => void;
 };
 
 function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: string; text: string }[] {
@@ -74,29 +79,39 @@ function useDragFit(nodeId: string | undefined, port: CatalogPort, side: "in" | 
   const [sn, sh, stype] = start.split("|");
   if ((stype === "source") === (side === "out")) return null;              // 같은 쪽 점은 표시하지 않는다
   const g = usePortfolioGraph.getState();
+  // 다시 꽂는 중인 선(CF2)은 빼고 본다 — 그 선 자신 때문에 "이미 이어져 있어요"가 되지 않게.
+  const edges = g.reconnecting ? g.edges.filter((e) => e.id !== g.reconnecting) : g.edges;
   const c = side === "in" ? { source: sn, sourceHandle: sh, target: nodeId, targetHandle: port.name }
                           : { source: nodeId, sourceHandle: port.name, target: sn, targetHandle: sh };
-  if (connectionProblem(c, g.nodes, g.edges, g.catalog ?? [], g.catalogMeta?.portPlain ?? PORT_PLAIN)) return "off";
+  if (connectionProblem(c, g.nodes, edges, g.catalog ?? [], g.catalogMeta?.portPlain ?? PORT_PLAIN)) return "off";
   const kind = (id: string) => g.catalog?.find((x) => x.type === g.nodes.find((n) => n.id === id)?.data.kind);
   const out = kind(c.source)?.outputs.find((o) => o.name === c.sourceHandle);
   const inp = kind(c.target)?.inputs.find((i) => i.name === c.targetHandle);
   return needsGap(out, inp).length ? "needs" : "can";
 }
 
-function Port({ port, side, index, unknown, label, missing, nodeId }: {
+function Port({ port, side, index, unknown, label, missing, nodeId, folded, square, count, onSocket }: {
   port: CatalogPort; side: "in" | "out"; index: number; unknown?: boolean; label?: string; missing?: boolean; nodeId?: string;
+  folded?: boolean; square?: boolean; count?: number; onSocket?: CanvasNodeData["onSocket"];
 }) {
   const color = unknown ? "var(--pg-fail)" : portColor(port.type);
   const fit = useDragFit(unknown ? undefined : nodeId, port, side);
+  // 소켓 모양(CF2) — 필수는 타입색으로 채운 원, 선택은 타입색 테두리의 빈 원, 여러 전략을 받는 칸(합치기)은 네모.
+  const optional = side === "in" && port.required === false;
+  const hollow = unknown || optional;
   return (
-    <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}${missing ? " pg-port--missing" : ""}${fit ? ` pg-port--${fit}` : ""}`} style={{ top: PORT_TOP + index * PORT_GAP }}
+    <div className={`pg-port pg-port--${side}${unknown ? " pg-port--unknown" : ""}${missing ? " pg-port--missing" : ""}${fit ? ` pg-port--${fit}` : ""}${optional ? " pg-port--opt" : ""}`}
+         style={{ top: folded ? FOLD_PORT_TOP : PORT_TOP + index * PORT_GAP }}
          title={unknown ? `${port.name} — 카탈로그에 없는 포트예요(파일의 링크를 버리지 않고 남겼어요)`
-                        : `${label ? `${label} · ` : ""}${port.name} · ${port.type}${port.required === false ? " (선택)" : ""}`}>
+                        : `${label ? `${label} · ` : ""}${port.name} · ${port.type}${optional ? " (선택)" : ""}`}>
       <Handle type={side === "in" ? "target" : "source"} position={side === "in" ? Position.Left : Position.Right}
-              id={port.name} className="pg-handle"
-              style={{ background: unknown ? "transparent" : color, borderColor: unknown ? color : "var(--pg-paper)",
-                       borderStyle: unknown ? "dashed" : "solid" }} />
+              id={port.name} className={`pg-handle${square ? " pg-handle--slot" : ""}`}
+              onDoubleClick={unknown || !nodeId || !onSocket ? undefined : (e) => { e.stopPropagation(); onSocket(nodeId, port.name, port.type, side); }}
+              style={{ background: hollow ? "var(--pg-paper)" : color, borderColor: hollow ? color : "var(--pg-paper)",
+                       borderStyle: unknown ? "dashed" : "solid", borderRadius: square ? 3 : undefined }} />
       <span className="pg-port-name">{unknown ? `${port.name}(미상)` : label ?? PORT_PLAIN[port.type] ?? port.name}
+        {optional && !unknown && <span className="pg-port-opt"> 선택</span>}
+        {count !== undefined && count > 1 && <span className="pg-port-n"> {count}곳</span>}
         {fit === "needs" && <span className="pg-port-why"> · 보내는 쪽이 필요한 값을 주지 않을 수 있어요</span>}</span>
     </div>
   );
@@ -125,6 +140,11 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
     ? placeToolbar(st, [id], NODE_TOOLBAR_W, NODE_TOOLBAR_H, 8) : `${Position.Top}|center`)));
   const pinned = usePortfolioGraph((s) => s.pinned.includes(id));
   const togglePin = usePortfolioGraph((s) => s.togglePin);
+  const folded = usePortfolioGraph((s) => s.folded.includes(id));
+  const toggleFold = usePortfolioGraph((s) => s.toggleFold);
+  const catalog = usePortfolioGraph((s) => s.catalog);
+  // 나가는 선 수(CF2) — 출력 소켓마다. 같은 내용이면 다시 그리지 않게 글자로.
+  const outKey = usePortfolioGraph((s) => s.edges.filter((e) => e.source === id).map((e) => e.sourceHandle ?? "").join("|"));
   const showCause = usePortfolioGraph((s) => s.showCause);
   // 갈래(BM C3) — 이 노드가 복제본이면 원본 id. 원본 대비 Δ 는 헤드라인 이름·단위가 같을 때만.
   const origId = usePortfolioGraph((s) => s.branches.find((b) => id in b.map)?.map[id] ?? null);
@@ -170,7 +190,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
     ...(entry?.outputs ?? []).map((p) => ({ p })),
     ...(data.extraOutputs ?? []).map((name) => ({ p: { name, type: "?" }, unknown: true })),
   ];
-  const minH = PORT_TOP + Math.max(shownInputs.length, outputs.length) * PORT_GAP;
+  const rows = Math.max(shownInputs.length, outputs.length);
+  const minH = PORT_TOP + rows * PORT_GAP;
   const linkedSet = new Set(linkedIn ? linkedIn.split("|") : []);
   const missing = (entry?.inputs ?? []).filter((p) => p.required !== false && !linkedSet.has(p.name));
   const ex = live?.explain;
@@ -181,6 +202,10 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   const warns = live?.status === "ok" ? (ex?.trust ?? []).filter((t) => t.state === "failed" || t.state === "unknown") : [];
   const glance = live?.status === "ok" ? live.glance ?? null : null;
   const elapsed = typeof live?.elapsed_ms === "number" ? live.elapsed_ms : null;
+  // 작업 노드(CF1) — 카드 위젯 칸(서버 x-ui 기본 칸 중 카드에 맞는 것)과 상자 높이(모든 확대에서 같다).
+  const cw = cardFieldsOf(entry?.params_schema ?? null, data.params ?? {});
+  const boxH = cardHeight(data.kind, catalog);
+  const outCount = (name: string) => (outKey ? outKey.split("|").filter((h) => h === name).length : 0);
 
   if (unknown) {
     return (
@@ -201,11 +226,12 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
     );
   }
 
+  const slotEmpty = !live && !(stale && result) && missing.length === 0 && !fix && errors.length === 0;
   return (
-    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}${solo ? " pg-node--solo" : ""}`}
+    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}${solo ? " pg-node--solo" : ""}${folded ? " pg-node--folded" : ""}`}
          data-node-id={id} data-kind={data.kind}
-         style={{ minHeight: minH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
-                  ["--pg-i" as string]: data.num ?? 0 }}>
+         style={{ minHeight: folded ? undefined : boxH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
+                  ["--pg-i" as string]: data.num ?? 0, ["--pg-rows" as string]: rows }}>
       <NodeToolbar isVisible={selected && single} position={place.position} align={place.align} offset={8}>
         {/* 촘촘한 격자(BS2)에서 도구줄이 옆 카드를 덮지 않게 짧게 — 주 동작만 글, 나머지는 아이콘 + 이름(aria-label·title).
             예전 386px(단축키 글·세 단추 글)은 확대 0.64 에서 카드 네 장 폭이었다. 단축키는 title·aria-keyshortcuts 로. */}
@@ -234,6 +260,11 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
                 title={warns.map((t) => t.text).join("\n")}>!{warns.length}</span>
         )}
         <span className={`pg-node-dot pg-node-dot--${runningHere ? "running" : state}`} aria-hidden="true" />
+        <button type="button" className="pg-node-fold nodrag" aria-pressed={folded} aria-label={folded ? "노드 펴기" : "노드 접기"}
+                title={folded ? "펴기 — 소켓·설정·결과를 다시 보여요" : "접기 — 머리 줄만 남겨요"}
+                onClick={(e) => { e.stopPropagation(); toggleFold(id); }}>
+          {folded ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+        </button>
       </div>
       <div className="pg-node-far" aria-hidden="true">
         <span className="pg-node-far-name">{entry.plain_label}</span>
@@ -243,68 +274,77 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
             : live ? STATUS_TEXT[live.status] : stale && result ? "예전 결과" : "계산 전"}
         </span>
       </div>
-      <div className="pg-node-t">{summary ?? entry.plain_label}</div>
+      {/* 소켓 줄 자리 — 소켓(핸들·이름)은 아래 .pg-port 가 같은 높이에 그린다(포트 DOM 은 그대로 — E2E 계약). */}
+      {rows > 0 && <div className="pg-node-sockets" aria-hidden="true" />}
+      <div className={`pg-node-t${cw.fields.length ? "" : " pg-node-t--keep"}`}>{summary ?? entry.plain_label}</div>
       {solo && <div className="pg-node-solo">선 없이 혼자 계산해요</div>}
-      {missing.length > 0 && (
-        <div className="pg-node-need" role="note">
-          {data.onNeed ? missing.map((p, i) => (
-            <span key={p.name}>{i > 0 && ", "}
-              <button type="button" className="pg-node-need-btn nodrag" data-port={p.name}
-                      aria-label={`‘${PORT_PLAIN[p.type] ?? p.name}’을 낼 노드 찾기`}
-                      onClick={(e) => { e.stopPropagation(); data.onNeed?.(id, p.name, p.type); }}>‘{PORT_PLAIN[p.type] ?? p.name}’</button>
-            </span>
-          )) : missing.map((p) => `‘${PORT_PLAIN[p.type] ?? p.name}’`).join(", ")}을 이어 주세요
-        </div>
-      )}
-      {fix && data.onFix && (
-        <div className="pg-node-fix" role="note">
-          <span className="pg-node-fix-text">{fix.text}</span>
-          <button type="button" className="pg-node-fix-btn nodrag" data-action={fix.action}
-                  onClick={(e) => { e.stopPropagation(); data.onFix?.(fix); }}>
-            {fix.action === "add" && fix.label ? `‘${fix.label}’ 붙이기` : "이어 주기"}
-          </button>
-        </div>
-      )}
+      <NodeWidgets id={id} fields={cw.fields} more={cw.more} params={data.params ?? {}} schema={entry.params_schema ?? null} />
       {headline && headline.value !== null && (
         <div className="pg-node-v" title={headline.label}>
           {Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit} {headline.label.replace(/ 비중$/, "")}</small>
         </div>
       )}
-      {live && live.status !== "ok" && ex && (
-        <div className="pg-node-why">{ex.facts?.[0] ?? ex.title}</div>
-      )}
-      {live && live.status !== "ok" && (
-        <button type="button" className="pg-cause-btn nodrag" onClick={(e) => { e.stopPropagation(); showCause(id); }}
-                title="계산하지 못한 앞 단계를 따라 첫 원인까지 밝혀요">
-          <Route size={12} aria-hidden="true" /> 원인 따라가기
-        </button>
-      )}
-      {origId && live && (() => {
-        const d = headlineDelta(origResult, live);
-        return d ? <div className="pg-node-delta" title="같은 이름·단위의 헤드라인끼리 뺀 값이에요">원본 대비 <b>{fmtDelta(d)}</b></div> : null;
-      })()}
-      {combine && portBand.length > 0 && (() => {
-        const rows = (live?.status === "ok" ? (live.view?.strategies as { port: string; label: string; share_pct: unknown }[] | undefined) : undefined) ?? [];
-        const slices: DonutSlice[] = portBand.map(([port, color, name]) => {
-          const row = rows.find((r) => r.port === port);
-          const v = row?.share_pct;
-          return { port, label: row?.label ?? (name || port), share: typeof v === "number" && Number.isFinite(v) ? v : null,
-                   color: color === null ? "var(--pg-mute)" : `var(--pg-band-${color})` };
-        });
-        return <div className="pg-node-terminal"><StrategyDonut slices={slices} /></div>;
-      })()}
-      {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} /></div>}
-      {elapsed !== null && (
-        <div className="pg-node-time" title="이 노드의 계산 시간(서버)">계산 {fmtElapsed(elapsed)}</div>
-      )}
-      {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과예요.</div>}
-      {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았어요 — 이전 계산 결과예요.</div>}
-      {live?.status === "ok" && chipsOf(ex, live.lineage).length > 0 && (
-        <div className="pg-node-ev">{chipsOf(ex, live.lineage).map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
-      )}
-      {errors.length > 0 && (
-        <ul className="pg-node-errors">{errors.map((e, i) => <li key={i}>{e.message}</li>)}</ul>
-      )}
+      {/* 결과 자리 — 작은 그림 · 막힘 사유 · 고치는 법 · 예전 결과 안내가 나눠 쓴다(넘치면 그때만 카드가 자란다). */}
+      <div className="pg-node-slot">
+        {missing.length > 0 && (
+          <div className="pg-node-need" role="note">
+            {data.onNeed ? missing.map((p, i) => (
+              <span key={p.name}>{i > 0 && ", "}
+                <button type="button" className="pg-node-need-btn nodrag" data-port={p.name}
+                        aria-label={`‘${PORT_PLAIN[p.type] ?? p.name}’을 낼 노드 찾기`}
+                        onClick={(e) => { e.stopPropagation(); data.onNeed?.(id, p.name, p.type); }}>‘{PORT_PLAIN[p.type] ?? p.name}’</button>
+              </span>
+            )) : missing.map((p) => `‘${PORT_PLAIN[p.type] ?? p.name}’`).join(", ")}을 이어 주세요
+          </div>
+        )}
+        {fix && data.onFix && (
+          <div className="pg-node-fix" role="note">
+            <span className="pg-node-fix-text">{fix.text}</span>
+            <button type="button" className="pg-node-fix-btn nodrag" data-action={fix.action}
+                    onClick={(e) => { e.stopPropagation(); data.onFix?.(fix); }}>
+              {fix.action === "add" && fix.label ? `‘${fix.label}’ 붙이기` : "이어 주기"}
+            </button>
+          </div>
+        )}
+        {live && live.status !== "ok" && ex && (
+          <div className="pg-node-why">{ex.facts?.[0] ?? ex.title}</div>
+        )}
+        {live && live.status !== "ok" && (
+          <button type="button" className="pg-cause-btn nodrag" onClick={(e) => { e.stopPropagation(); showCause(id); }}
+                  title="계산하지 못한 앞 단계를 따라 첫 원인까지 밝혀요">
+            <Route size={12} aria-hidden="true" /> 원인 따라가기
+          </button>
+        )}
+        {origId && live && (() => {
+          const d = headlineDelta(origResult, live);
+          return d ? <div className="pg-node-delta" title="같은 이름·단위의 헤드라인끼리 뺀 값이에요">원본 대비 <b>{fmtDelta(d)}</b></div> : null;
+        })()}
+        {combine && portBand.length > 0 && (() => {
+          const rowsOut = (live?.status === "ok" ? (live.view?.strategies as { port: string; label: string; share_pct: unknown }[] | undefined) : undefined) ?? [];
+          const slices: DonutSlice[] = portBand.map(([port, color, name]) => {
+            const row = rowsOut.find((r) => r.port === port);
+            const v = row?.share_pct;
+            return { port, label: row?.label ?? (name || port), share: typeof v === "number" && Number.isFinite(v) ? v : null,
+                     color: color === null ? "var(--pg-mute)" : `var(--pg-band-${color})` };
+          });
+          return <div className="pg-node-terminal"><StrategyDonut slices={slices} /></div>;
+        })()}
+        {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} /></div>}
+        {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과예요.</div>}
+        {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았어요 — 이전 계산 결과예요.</div>}
+        {errors.length > 0 && (
+          <ul className="pg-node-errors">{errors.map((e, i) => <li key={i}>{e.message}</li>)}</ul>
+        )}
+        {slotEmpty && <div className="pg-node-slot-empty">계산하면 결과가 여기에 보여요</div>}
+      </div>
+      <div className="pg-node-foot">
+        {live?.status === "ok" && chipsOf(ex, live.lineage).length > 0 && (
+          <div className="pg-node-ev">{chipsOf(ex, live.lineage).map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
+        )}
+        {elapsed !== null && (
+          <div className="pg-node-time" title="이 노드의 계산 시간(서버)">계산 {fmtElapsed(elapsed)}</div>
+        )}
+      </div>
       {live && (
         <div className={`pg-node-status pg-node-status--${live.status}`} title={live.reason ?? undefined}>
           <span className="pg-node-status-k">{STATUS_TEXT[live.status]}</span>
@@ -312,8 +352,10 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         </div>
       )}
       {shownInputs.map((x, i) => <Port key={`i-${x.p.name}`} port={x.p} side="in" index={i} unknown={x.unknown} label={inLabel(x.p.name)}
-                                        missing={!x.unknown && missing.some((m) => m.name === x.p.name)} nodeId={id} />)}
-      {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} nodeId={id} />)}
+                                        missing={!x.unknown && missing.some((m) => m.name === x.p.name)} nodeId={id}
+                                        folded={folded} square={combine && !x.unknown} onSocket={data.onSocket} />)}
+      {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} nodeId={id}
+                                   folded={folded} count={outCount(x.p.name)} onSocket={data.onSocket} />)}
     </div>
   );
 }

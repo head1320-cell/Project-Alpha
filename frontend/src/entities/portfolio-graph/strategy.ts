@@ -9,7 +9,7 @@
  */
 import type { GraphDoc, GraphDocEdge, GraphDocNode, GraphGroup, NodeCatalogEntry } from "./types";
 import { topoOrder } from "./order";
-import { CARD_BODY_H, COL, COMBINE_W, NODE_W, ROW_GAP, cardHeight } from "./size";
+import { COL, COMBINE_W, NODE_W, ROW_GAP, cardHeight } from "./size";
 
 export const STRATEGY_COLORS = 6;
 export const PORTFOLIO_NODE = "portfolio_combine";
@@ -17,7 +17,7 @@ export const PORTFOLIO_PORTS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"] 
 
 /** 지도 치수 — 열은 카드 폭 + 라벨 틈(`size.ts`), 줄은 ★카드 높이 + 틈으로 쌓는다★(BS2 — 예전 고정 170).
  *  `row` 는 카드 하나짜리 줄의 높이(빈 지도·최소 높이)다. 전략 사이·포트폴리오 앞은 상자 머리가 들어갈 만큼 띄운다. */
-export const MAP = { col: COL, row: CARD_BODY_H + ROW_GAP, bandGap: 120, portfolioGap: 90 } as const;
+export const MAP = { col: COL, row: cardHeight("", null) + ROW_GAP, bandGap: 120, portfolioGap: 90 } as const;
 
 type Pos = { x: number; y: number };
 type N = { id: string; position: Pos; data: { kind: string } };

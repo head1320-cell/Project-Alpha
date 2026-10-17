@@ -21,7 +21,9 @@ const catalogOf = async (page: Page) =>
 
 async function openCanvas(page: Page) {
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });  // 처음 열림은 보통 확대(CF1 · 사용자 결정 2026-10-17) — 흐름 전체의 노드를 다루는 테스트는 사람처럼 맞춤 단추로 전체를 본다.
+  await page.waitForTimeout(400);                                  // 처음 맞춤(카탈로그 뒤 60ms + 크기를 잴 때까지)이 끝난 뒤에
+  await page.locator(".react-flow__controls-fitview").click();
 }
 async function settingsOf(page: Page, id: string) {
   await node(page, id).click();

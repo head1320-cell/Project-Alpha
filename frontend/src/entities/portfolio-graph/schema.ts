@@ -127,3 +127,51 @@ export function basicFieldsOf(schema: JsonSchema | null, params: Record<string, 
     .map((f, i) => ({ f, i })).sort((a, b) => Number(!a.f.ui.options) - Number(!b.f.ui.options) || a.i - b.i)
     .map((x) => x.f);
 }
+
+/** 값 비교 — 설정 판과 노드 카드 위젯이 같은 규칙으로 '지금 고른 것'을 판정한다. */
+export const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** 칸 하나를 바꾼 새 params — `undefined` 면 칸을 지워 서버 기본값을 쓴다(설정 판·카드 위젯 공용). */
+export function setOrClear(p: Record<string, unknown>, k: string, v: unknown): Record<string, unknown> {
+  const next = { ...p };
+  if (v === undefined) delete next[k]; else next[k] = v;
+  return next;
+}
+
+/** 노드 카드 위젯이 그리는 모양(CF1) — 한 줄 고르기 또는 슬라이더. */
+export type CardControl = "select" | "slider";
+/** 카드에 놓는 위젯 수의 상한 — 넘거나 카드에 못 그리는 칸이 있으면 "설정 더 보기"로 오른쪽 판을 연다. */
+export const CARD_WIDGETS_MAX = 4;
+
+/**
+ * 이 기본 칸을 노드 카드에 그릴 수 있나(CF1) — 고르기(선택지·프리셋·예/아니요)와 슬라이더만.
+ * 저장된 것 고르기·조건·종목·포트별 값·목록·긴 글은 카드 폭에 맞지 않아 오른쪽 판(설정)에서만 다룬다.
+ */
+export function cardControlOf(f: FieldSpec, root: JsonSchema | null): CardControl | null {
+  const w = f.ui.widget;
+  if (w === "per_port" || w === "per_port_number" || w === "text" || w === "pick" || w === "filter" || w === "tickers") return null;
+  if (f.kind === "string_list" || (f.kind === "json" && itemSchemaOf(f, root))) return null;
+  const numeric = (f.kind === "number" || f.kind === "integer") && f.min !== undefined && f.max !== undefined;
+  if (f.ui.options) return "select";
+  if (f.ui.presets && w === "slider" && numeric) return "slider";
+  if (f.ui.presets) return "select";
+  if (w === "slider" && numeric) return "slider";
+  if (f.kind === "boolean") return "select";
+  return null;
+}
+
+/** 카드에 놓을 기본 칸(보이는 것만, 설정 판과 같은 순서)과 "설정 더 보기"가 필요한지. */
+export function cardFieldsOf(schema: JsonSchema | null, params: Record<string, unknown>): { fields: FieldSpec[]; more: boolean } {
+  const basic = basicFieldsOf(schema, params);
+  const fields = basic.filter((f) => cardControlOf(f, schema)).slice(0, CARD_WIDGETS_MAX);
+  return { fields, more: basic.length > fields.length };
+}
+
+/**
+ * 카드가 미리 잡는 위젯 자리(CF1 — 자리 고정) — 조건부 칸(`show_if`)도 센다. 조건이 맞아 칸이 나타나도 상자가 커지지 않는다.
+ */
+export function cardWidgetSlots(schema: JsonSchema | null): { slots: number; more: boolean } {
+  const basic = fieldsOf(schema).filter((f) => f.ui.tier === "basic");
+  const slots = Math.min(CARD_WIDGETS_MAX, basic.filter((f) => cardControlOf(f, schema)).length);
+  return { slots, more: basic.length > slots };
+}

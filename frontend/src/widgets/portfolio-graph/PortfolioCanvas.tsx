@@ -28,8 +28,11 @@ import {
   NodeToolbar,
   Panel,
   Position,
+  getBezierPath,
   useStore,
   type Connection,
+  type ConnectionLineComponentProps,
+  type FinalConnectionState,
   type Edge,
   type Node,
   type NodeChange,
@@ -42,6 +45,7 @@ import {
   COL,
   CORE_CHAIN_TEMPLATE,
   cardHeight,
+  cardsOverlap,
   cardWidth,
   compareTargets,
   NODE_W,
@@ -57,6 +61,8 @@ import {
   topoOrder,
   stepOfNode,
   connectionProblem,
+  restackDoc,
+  type ConnTry,
   type GraphDoc,
   type NodeRunResult,
   type ProcedureSuggestion,
@@ -240,6 +246,62 @@ function readWip(): string | null {
   catch { return null; }
 }
 
+/** 같은 쪽 점끼리 이으려 할 때의 사유 — 놓은 뒤 토스트·끄는 중 사유 글·다시 꽂기가 같은 말을 쓴다. */
+const SAME_SIDE = {
+  source: "내는 점끼리는 이을 수 없어요 — 내는 점에서 받는 점으로 이어요.",
+  target: "받는 점끼리는 이을 수 없어요 — 내는 점에서 받는 점으로 이어요.",
+} as const;
+/** CF1 — 예전 크기(폭 150)로 놓인 문서를 불러왔을 때. 자동으로 옮기지 않는다(사용자의 배치를 말없이 바꾸지 않음). */
+const OVERLAP_NOTE = "예전 크기로 놓인 문서라 노드가 겹쳐요. 위 도구줄의 ‘자동 정리’를 누르면 다시 놓아요.";
+function overlapping(): boolean {
+  const st = usePortfolioGraph.getState();
+  return cardsOverlap(st.nodes, st.catalog);
+}
+/** 연결 규칙 하나(타입·한 입력 한 선·순환) — 다시 꽂는 중인 선은 빼고 본다(CF2). */
+function wireProblem(c: ConnTry): string | null {
+  const st = usePortfolioGraph.getState();
+  const edges = st.reconnecting ? st.edges.filter((e) => e.id !== st.reconnecting) : st.edges;
+  return connectionProblem(c, st.nodes, edges, st.catalog ?? [], st.catalogMeta?.portPlain ?? PORT_PLAIN);
+}
+
+/**
+ * 끄는 중 연결선(CF2) — 보내는 타입 색의 곡선. 손잡이 위에 올렸는데 이을 수 없으면 선을 회색 점선으로 바꾸고, 왜 안 되는지를
+ * 커서 옆에 ★보이는 글★로 쓴다(툴팁 아님). 글자는 확대와 상관없이 화면 12px(= 12 / 확대율). 문장은 놓은 뒤 토스트와 같다.
+ */
+function WireDragLine({ fromX, fromY, toX, toY, fromPosition, toPosition, fromHandle, toHandle, connectionStatus }: ConnectionLineComponentProps) {
+  const zoom = useStore((st) => st.transform[2]);
+  const st = usePortfolioGraph.getState();
+  const kind = st.nodes.find((n) => n.id === fromHandle.nodeId)?.data.kind;
+  const entry = st.catalog?.find((c) => c.type === kind);
+  const type = (fromHandle.type === "source" ? entry?.outputs : entry?.inputs)?.find((p) => p.name === fromHandle.id)?.type;
+  const bad = connectionStatus === "invalid";
+  let why: string | null = null;
+  if (bad && toHandle) {
+    why = toHandle.type === fromHandle.type ? SAME_SIDE[fromHandle.type]
+      : wireProblem(fromHandle.type === "source"
+          ? { source: fromHandle.nodeId, sourceHandle: fromHandle.id ?? null, target: toHandle.nodeId, targetHandle: toHandle.id ?? null }
+          : { source: toHandle.nodeId, sourceHandle: toHandle.id ?? null, target: fromHandle.nodeId, targetHandle: fromHandle.id ?? null });
+  }
+  const [d] = getBezierPath({ sourceX: fromX, sourceY: fromY, sourcePosition: fromPosition, targetX: toX, targetY: toY, targetPosition: toPosition });
+  const k = 1 / (zoom || 1);
+  // 사유 글은 끌어 온 쪽에 쓴다 — 오른쪽으로 끌면 커서 왼쪽(오른쪽 판 밑으로 잘리지 않게), 왼쪽으로 끌면 커서 오른쪽. " — " 에서 두 줄로.
+  const back = toX >= fromX;
+  const tx = toX + (back ? -14 : 14) * k;
+  const lines = why ? why.split(" — ") : [];
+  return (
+    <g className={`pg-drag-wire${bad ? " pg-drag-wire--bad" : ""}`} data-type={type ?? ""}>
+      <path d={d} fill="none" stroke={bad ? "var(--pg-mute)" : type ? portTypeColor(type) : "var(--pg-blue)"}
+            strokeWidth={2.5 * k} strokeDasharray={bad ? `${6 * k} ${4 * k}` : undefined} />
+      {why && (
+        <text className="pg-drag-why" x={tx} y={toY - (12 + 16 * (lines.length - 1)) * k} textAnchor={back ? "end" : "start"}
+              fontSize={12 * k} strokeWidth={4 * k} role="status">
+          {lines.map((l, i) => <tspan key={i} x={tx} dy={i ? 16 * k : 0}>{i ? ` — ${l}` : l}</tspan>)}
+        </text>
+      )}
+    </g>
+  );
+}
+
 const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"], ["branches", "갈래"], ["wire", "선"]] as const;
 
 
@@ -293,6 +355,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   /** BT3 — 카드의 "‘X’을 이어 주세요" 단추: 그 입력에서 선을 끈 것과 같은 빠른 추가를 연다. */
   const needRef = useRef<(id: string, port: string, type: string) => void>(() => {});
   const onNeed = useCallback((id: string, port: string, type: string) => needRef.current(id, port, type), []);
+  /** CF2 — 소켓 두 번 누르기: 받는 소켓은 "이어 주세요"와 같은 빠른 추가(왼쪽에 놓음), 내는 소켓은 그 값을 받는 노드(오른쪽에 놓음). */
+  const socketRef = useRef<(id: string, port: string, type: string, side: "in" | "out") => void>(() => {});
+  const onSocket = useCallback((id: string, port: string, type: string, side: "in" | "out") => socketRef.current(id, port, type, side), []);
   /** 카드의 고치는 법 단추(BT7) — 절차 제안과 같은 길(되돌리기 한 번). 정의가 아래에 있어 ref 로 잇는다. */
   const fixRef = useRef<(sug: ProcedureSuggestion) => void>(() => undefined);
   const onFix = useCallback((sug: ProcedureSuggestion) => fixRef.current(sug), []);
@@ -325,9 +390,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
 
   // 맞춰 보기 — 불러온 직후엔 노드 크기를 아직 모를 수 있어, 잴 수 있을 때까지 프레임마다 다시(최대 20번). 한 번만 60ms 뒤에 하던 것은
   // 크기를 재기 전이면 조용히 건너뛰어, 불러온 흐름이 떠 있는 판 밑에 남는 일이 가끔 있었다(묶음 상자 E2E 가 3번에 1번 찾음).
-  const fit = () => {
+  const fit = (opts?: { minZoom?: number }) => {
     let tries = 0;
-    const go = () => { if (!fitClear(rf.current, canvasEl.current) && tries++ < 20) requestAnimationFrame(go); };
+    const go = () => { if (!fitClear(rf.current, canvasEl.current, opts) && tries++ < 20) requestAnimationFrame(go); };
     setTimeout(go, 60);
   };
   /** 판 사이 보이는 가운데를 기준으로 확대·축소(BQ Q1). */
@@ -357,25 +422,32 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
         const st = usePortfolioGraph.getState();
         if (initialDoc) {
           // 다른 화면이 넘긴 흐름(예: 매크로 스냅샷) — 지금 캔버스가 있으면 되돌리기로 돌아갈 수 있다(loadDoc 이 기록한다).
-          st.loadDoc(initialDoc.doc);
+          st.loadDoc(restackDoc(initialDoc.doc, cat.nodes));
           setFileNote(initialDoc.note + (st.past.length ? " 이전 캔버스는 되돌리기(Ctrl+Z)로 돌아가요." : ""));
         } else {
           const saved = readWip();
           const parsed = saved ? parseFile(saved) : null;
-          if (st.nodes.length === 0) st.loadDoc(parsed?.doc ?? CORE_CHAIN_TEMPLATE, parsed?.problems ?? []);
+          if (st.nodes.length === 0) {
+            // 코드가 만든 기본 사슬만 새 카드 높이로 다시 쌓는다(CF1). 작업 중 문서는 사용자의 배치라 그대로 두고, 겹치면 말만 한다.
+            if (parsed?.doc) st.loadDoc(parsed.doc, parsed.problems);
+            else st.loadDoc(restackDoc(CORE_CHAIN_TEMPLATE, cat.nodes));
+            if (parsed?.doc && overlapping()) setFileNote(OVERLAP_NOTE);
+          }
           if (bootNote) setFileNote(bootNote);
         }
         // BT2 — 고른 탭이 없으면 처음 한 번만 정한다: 빈 캔버스는 절차부터(노드를 붙여도 탭이 바뀌지 않게 저장하지 않고 고정).
         setLeftTabState((t) => t ?? (usePortfolioGraph.getState().nodes.length === 0 ? "proc" : "add"));
-        fit();
+        // 처음 열 때만 보통 확대 이상(사용자 결정 2026-10-17) — 자리 고정 상자로 전체를 담으면 멀리(이름·값만)로 열렸다.
+        // 넘치면 fitClear 가 흐름의 시작(왼쪽 위)에 붙인다. 맞춤 단추·자동 정리는 그대로 전체를 담는다.
+        fit({ minZoom: ZOOM_FAR });
       })
       .catch((e: Error) => { if (alive) usePortfolioGraph.getState().setCatalog(null, e.message); });
     return () => { alive = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만(넘겨받은 흐름은 열 때 한 번 싣는다)
   }, []);
 
-  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches, s.pinned),
-    [s.nodes, s.edges, s.name, s.groups, s.branches, s.pinned]);
+  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches, s.pinned, s.folded),
+    [s.nodes, s.edges, s.name, s.groups, s.branches, s.pinned, s.folded]);
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
@@ -450,7 +522,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                   keep && !keep.has(n.id) && "pg-dim",
                   cause && causeSet.has(n.id) && "pg-on-cause",
                   cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
-      data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed, onFix },
+      data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed, onFix, onSocket },
     }));
     const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
       const ms = s.nodes.filter((n) => g.members.includes(n.id));
@@ -501,7 +573,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
     return [...frames, ...branchFrames, ...cards];
-  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix]);
+  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix, onSocket]);
   /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
   const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
   const edgesStyled = useMemo(() => {
@@ -542,8 +614,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     const producesWeights = (d: { nodes: { type: string }[] }) =>
       d.nodes.some((n) => cat.find((c) => c.type === n.type)?.outputs.some((o) => o.type === "Weights"));
     return [
+      // 템플릿은 코드가 만든 흐름이라 새 카드 높이로 다시 쌓아 넣는다(CF1). 내 블록은 사용자의 배치 그대로.
       ...TEMPLATES.filter((t) => producesWeights(t.doc)).map((t) => ({ key: `tpl:${t.key}`, label: t.name, sub: t.description,
-        src: { label: t.name, nodes: t.doc.nodes, edges: t.doc.edges } })),
+        src: { label: t.name, ...(({ nodes, edges }) => ({ nodes, edges }))(restackDoc(t.doc, cat)) } })),
       ...s.blocks.filter((b) => b.kind === "strategy").map((b, i) => ({ key: `blk:${i}`, label: b.label, sub: `내 블록 · 노드 ${b.nodes.length}개`,
         src: { label: b.label, nodes: b.nodes, edges: b.edges, output: b.output } })),
     ];
@@ -654,9 +727,29 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   // ── 연결 규칙: 타입 일치 · 입력 하나에 링크 하나 · 순환 금지 ──────────────
   // v12 는 선 다시 꽂기에도 같은 검사를 부르며 선(Edge)을 넘길 수 있다 — 연결 모양으로 맞춰 같은 규칙에 넣는다.
   const isValidConnection = useCallback((c: Connection | Edge) => {
-    const st = usePortfolioGraph.getState();
     const conn: Connection = { source: c.source, target: c.target, sourceHandle: c.sourceHandle ?? null, targetHandle: c.targetHandle ?? null };
-    return !connectionProblem(conn, st.nodes, st.edges, st.catalog ?? [], st.catalogMeta?.portPlain ?? PORT_PLAIN);
+    return !wireProblem(conn);
+  }, []);
+  // ── 선 끝 다시 꽂기(CF2) — 옮기는 선은 검사에서 뺀다(그 선 자신 때문에 거부되지 않게). 빈 곳에 놓으면 선은 그대로. ──
+  const onReconnectStart = useCallback((_: unknown, edge: Edge) => { usePortfolioGraph.getState().setReconnecting(edge.id); }, []);
+  const onReconnect = useCallback((old: Edge, c: Connection) => {
+    const st = usePortfolioGraph.getState();
+    if (st.reconnect(old.id, c)) st.setNote("선을 옮겨 꽂았어요.", true);
+  }, []);
+  const onReconnectEnd = useCallback((_: unknown, edge: Edge, __: unknown, fin: FinalConnectionState) => {
+    const st = usePortfolioGraph.getState();
+    const to = fin.toHandle;
+    if (to && !fin.isValid && fin.fromHandle) {
+      const from = fin.fromHandle;
+      const why = from.type === to.type
+        ? (from.type === "source" ? SAME_SIDE.source : SAME_SIDE.target)
+        : wireProblem(from.type === "source"
+            ? { source: from.nodeId, sourceHandle: from.id ?? null, target: to.nodeId, targetHandle: to.id ?? null }
+            : { source: to.nodeId, sourceHandle: to.id ?? null, target: from.nodeId, targetHandle: from.id ?? null });
+      if (why) st.setNote(`${why} 선은 그대로 두었어요.`);
+    }
+    st.setReconnecting(null);
+    void edge;
   }, []);
 
   // 클릭으로 추가하면 **보이는 캔버스의 가운데**에, 겹치지 않게 조금씩 비껴 놓는다.
@@ -703,6 +796,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const onConnectEnd = useCallback((e: MouseEvent | TouchEvent) => {
     const from = connectFrom.current;
     connectFrom.current = null;
+    if (usePortfolioGraph.getState().reconnecting) return;              // 다시 꽂기는 onReconnectEnd 가 말한다(빠른 추가도 열지 않음)
     const target = e.target as Element | null;
     // BT4 — 포트에 놓았는데 이을 수 없으면 왜 안 되는지 말한다(예전엔 조용히 거부했다).
     const handle = target?.closest?.(".react-flow__handle") as HTMLElement | null;
@@ -713,9 +807,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
         ? { source: from.node, sourceHandle: from.handle, target: other.node, targetHandle: other.handle }
         : { source: other.node, sourceHandle: other.handle, target: from.node, targetHandle: from.handle };
       const onSameSide = handle.classList.contains(from.side);
-      const why = onSameSide ? (from.side === "source" ? "내는 점끼리는 이을 수 없어요 — 내는 점에서 받는 점으로 이어요."
-                                                       : "받는 점끼리는 이을 수 없어요 — 내는 점에서 받는 점으로 이어요.")
-        : connectionProblem(c, st.nodes, st.edges, st.catalog ?? [], st.catalogMeta?.portPlain ?? PORT_PLAIN);
+      const why = onSameSide ? SAME_SIDE[from.side] : wireProblem(c);
       if (why) st.setNote(why);
       return;
     }
@@ -804,13 +896,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
       return;
     }
     usePortfolioGraph.getState().loadDoc(r.doc, r.problems);
-    setFileNote(`「${fileName}」을 불러왔어요 — 노드 ${r.doc.nodes.length}개, 링크 ${r.doc.edges.length}개.`);
+    setFileNote(`「${fileName}」을 불러왔어요 — 노드 ${r.doc.nodes.length}개, 링크 ${r.doc.edges.length}개.${overlapping() ? ` ${OVERLAP_NOTE}` : ""}`);
     fit();
   }, []);
 
   const loadTemplate = useCallback((key: string) => {
     const t = TEMPLATES.find((x) => x.key === key) ?? TEMPLATES[0];
-    usePortfolioGraph.getState().loadDoc(t.doc);
+    const st = usePortfolioGraph.getState();
+    st.loadDoc(restackDoc(t.doc, st.catalog));
     setFileNote(`‘${t.name}’을 불러왔어요. 종목·조건은 예시예요 — 노드를 눌러 바꿔 보세요.`);
     fit();
   }, []);
@@ -900,7 +993,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                                  riskAversion: number | null) => {
     const st = usePortfolioGraph.getState();
     st.act(() => {
-      st.loadDoc(goalDoc(goal, tickers, lookback, riskAversion));
+      st.loadDoc(restackDoc(goalDoc(goal, tickers, lookback, riskAversion), st.catalog));
       return "답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있어요.";
     });
     setGoalOpen(false);
@@ -917,6 +1010,15 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     const cx = Math.max(box.left + 8, r.left - COL * (rf.current?.getZoom() ?? 1));
     setQuick({ from: { node: id, handle: port, side: "target", type }, x: r.left - box.left, y: r.bottom - box.top + 6,
                clientX: cx, clientY: r.top });
+  };
+  socketRef.current = (id, port, type, side) => {
+    if (side === "in") { needRef.current(id, port, type); return; }
+    const el = canvasEl.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
+    const box = canvasEl.current?.getBoundingClientRect();
+    if (!el || !box) return;
+    const r = el.getBoundingClientRect();
+    setQuick({ from: { node: id, handle: port, side: "source", type }, x: r.right - box.left + 6, y: r.top - box.top,
+               clientX: r.left + COL * (rf.current?.getZoom() ?? 1), clientY: r.top });
   };
   runToRef.current = (id) => { if (!usePortfolioGraph.getState().running) void runTo(id); };
   // 이 전략만 계산(BN N1) — 전략 구성원 중 하류가 전략 안에 없는 노드(출력·잎)를 대상으로 부분 계산.
@@ -1028,7 +1130,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
       // 떠 있는 판 사이의 가운데로(BQ Q1) — 캔버스 가운데는 창 밑일 수 있다.
       const z = rf.current.getZoom();
       const ins = floatInsets(canvasEl.current);
-      rf.current.setCenter(n.position.x + 90 + (ins.right - ins.left) / 2 / z, n.position.y + 60 + ins.bottom / 2 / z, { zoom: z, duration: 250 });
+      // 카드 가운데(CF1 — 자리 고정 상자: 폭·높이는 카탈로그로 정한 값. 예전 +90/+60 은 폭 150 카드의 가운데였다).
+      const cx = n.position.x + cardWidth(n.data.kind) / 2, cy = n.position.y + cardHeight(n.data.kind, usePortfolioGraph.getState().catalog) / 2;
+      rf.current.setCenter(cx + (ins.right - ins.left) / 2 / z, cy + ins.bottom / 2 / z, { zoom: z, duration: 250 });
     }
     const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);
     setAnnounce(n ? `${entry?.plain_label ?? n.data.kind} 노드를 골랐어요` : "");
@@ -1147,7 +1251,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           </span>
         )}
         <MoreMenu drawers={DRAWERS} onDrawer={(k) => setDrawer(k as DrawerKey)} onImport={applyLoad} canExport={s.nodes.length > 0}
-                  getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned)} />
+                  getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)} />
         <nav className="pg-drawers" aria-label="서랍">
           {DRAWERS.map((d) => (
             <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog" title={d.sub}
@@ -1158,7 +1262,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
         </nav>
         {topExtra}
         <ImportControl onLoad={applyLoad} />
-        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned)}
+        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)}
                       disabled={s.nodes.length === 0} />
         <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
                 disabled={s.running || !s.catalog || s.nodes.length === 0}>
@@ -1244,6 +1348,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
             isValidConnection={isValidConnection}
+            connectionLineComponent={WireDragLine}
+            onReconnectStart={onReconnectStart}
+            onReconnect={onReconnect}
+            onReconnectEnd={onReconnectEnd}
             onNodeContextMenu={(e, n) => {
               e.preventDefault();
               if (n.id.startsWith("frame:") || n.id.startsWith("branch:")) return;
@@ -1469,7 +1577,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                                run: (runId) => {
                                  // 시작한 실행을 읽는 노드를 설정 노드 오른쪽에 붙이고 고른다 — 링크는 없다(읽기는 run_id 로 한다).
                                  const st = usePortfolioGraph.getState();
-                                 const id = st.addNode("backtest_load", { x: selected.position.x + 240, y: selected.position.y });
+                                 const id = st.addNode("backtest_load", { x: selected.position.x + COL, y: selected.position.y });
                                  st.updateParams(id, { run_id: runId });
                                  st.select(id);
                                },

@@ -48,7 +48,6 @@ import {
   STRATEGY_COLORS,
   strategyOutput,
   compareTargets,
-  CARD_BODY_H,
   COL,
   COMBINE_W,
   NODE_W,
@@ -132,6 +131,14 @@ export interface PgState {
   openGate: string | null;
   /** 미리보기 고정(BM C1 · TouchDesigner 뷰어 플래그) — 어떤 확대에서도 작은 그림을 보인다. 화면 정보(파일에 없다). */
   pinned: string[];
+  /** 접은 노드(CF1) — 머리 줄만. 화면 정보라 되돌리기에 넣지 않는다(그림 고정과 같다). */
+  folded: string[];
+  toggleFold: (id: string) => void;
+  /** 끝을 옮겨 다시 꽂는 중인 선(CF2) — 연결 검사에서 이 선 자신은 빼고 본다. */
+  reconnecting: string | null;
+  setReconnecting: (id: string | null) => void;
+  /** 선 끝 다시 꽂기(CF2) — 옛 선을 새 연결로 바꾼다(되돌리기 한 번). 같은 자리면 아무것도 하지 않는다. */
+  reconnect: (oldId: string, c: Connection) => boolean;
   /** 원인 경로(BM C1) — 막힘·실패 노드에서 계산 못 한 상류를 따라 첫 원인까지. 켜지면 나머지는 흐려진다. */
   cause: { from: string; path: string[]; roots: string[] } | null;
   /** 단계 순서(서버 카탈로그). */
@@ -254,6 +261,8 @@ const newId = (kind: string, taken: Set<string>) => {
 
 const STRUCTURAL = new Set(["add", "remove", "reset"]);
 const HISTORY = 50;
+/** 전략·블록을 아래에 넣을 때 위 카드 바닥에서 띄우는 틈 — 예전 "맨 위 y + 300" 이 폭 150 · 높이 ≤124 카드에서 남기던 틈(≥176)과 같다. */
+const INSERT_GAP = 176;
 const RUNS = 10;
 /** 같은 노드의 설정을 잇달아 고치면 한 단계로 묶는다(글자 하나마다 되돌리기 한 번이면 못 쓴다). */
 const COALESCE_MS = 800;
@@ -383,6 +392,8 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     expert: false,
     openGate: null,
     pinned: [],
+    folded: [],
+    reconnecting: null,
     cause: null,
     stages: [],
     focusGroup: null,
@@ -580,7 +591,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       push();
       const nid = newId(src.data.kind, new Set(get().nodes.map((n) => n.id)));
       const node: PgNode = {
-        ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + 150 },
+        ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + cardHeight(src.data.kind, get().catalog) + ROW_GAP },
         data: { ...src.data, params: structuredClone(src.data.params ?? {}) },
       };
       const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
@@ -601,6 +612,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
         nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
         report: null, snap: null, validation: null, selectedId: null, picked: [], runError: null,
         pinned: (doc.pinned ?? []).filter((id) => nodes.some((n) => n.id === id)), cause: null, focusGroup: null, filters: [],
+        folded: (doc.folded ?? []).filter((id) => nodes.some((n) => n.id === id)),
         branches: (doc.branches ?? []).filter((b) => b.root in b.map),
       });
     },
@@ -678,9 +690,10 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const src = parent ? parent : null;
       // 갈래의 갈래면 그 갈래의 설정을 이어받는다(바꾼 값 위에서 또 바꾼다).
       const from = (orig: string) => (src ? Object.entries(src.map).find(([, o]) => o === orig)?.[0] : undefined) ?? orig;
-      const ys = scope.map((id) => s.nodes.find((n) => n.id === id)!.position.y);
-      // 갈래마다 한 칸씩 아래로 — 칸 높이 = 복제 범위의 높이 + 틀 머리·여백(겹치지 않게).
-      const band = Math.max(...ys) - Math.min(...ys) + CARD_BODY_H + 56 + 2 * 28 + 60;  // 카드 · 틀 머리 · 위아래 여백 · 틈
+      const scoped = scope.map((id) => s.nodes.find((n) => n.id === id)!);
+      // 갈래마다 한 칸씩 아래로 — 칸 높이 = 복제 범위의 높이(카드 실제 높이까지) + 틀 머리·여백(겹치지 않게).
+      const band = Math.max(...scoped.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog)))
+        - Math.min(...scoped.map((n) => n.position.y)) + 56 + 2 * 28 + 60;  // 카드 · 틀 머리 · 위아래 여백 · 틈
       const dy = band * (1 + s.branches.filter((b) => b.of_root === ofRoot).length);
       const copies: PgNode[] = scope.map((id) => {
         const base = s.nodes.find((n) => n.id === from(id)) ?? s.nodes.find((n) => n.id === id)!;
@@ -753,6 +766,18 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       set({ blocks: ok ? next : cur.blocks, blocksAvailable: ok });
     },
     togglePin: (id) => set((s) => ({ pinned: s.pinned.includes(id) ? s.pinned.filter((x) => x !== id) : [...s.pinned, id] })),
+    toggleFold: (id) => set((s) => ({ folded: s.folded.includes(id) ? s.folded.filter((x) => x !== id) : [...s.folded, id] })),
+    setReconnecting: (reconnecting) => set({ reconnecting }),
+    reconnect: (oldId, c) => {
+      const s = get();
+      const old = s.edges.find((e) => e.id === oldId);
+      const id = `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}`;
+      if (!old || id === oldId) return false;
+      push();
+      set({ edges: [...s.edges.filter((e) => e.id !== oldId),
+                    { ...old, id, source: c.source, target: c.target, sourceHandle: c.sourceHandle, targetHandle: c.targetHandle, selected: false }] });
+      return true;
+    },
     showCause: (id) => set((s) => {
       if (!id || s.staleIds.includes(id)) return { cause: null };       // 위가 낡았으면 이 노드도 낡았다(서명 사슬)
       const { path, roots } = causePath(id, s.edges, s.report?.nodes);
@@ -918,11 +943,11 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
           wrapped = `지금 흐름을 ‘${label}’로 묶고, `;
         }
       }
-      // ② 새 전략을 가장 아래 노드 밑에 넣는다.
-      const maxY = nodes.length ? Math.max(...nodes.map((n) => n.position.y)) : 0;
+      // ② 새 전략을 가장 아래 카드의 ★바닥★ 밑에 넣는다(CF1 — 카드 높이가 카탈로그로 정해져 예전 "맨 위 y + 300" 은 겹쳤다).
+      const bottom = nodes.length ? Math.max(...nodes.map((n) => n.position.y + cardHeight(n.data.kind, catalog))) : 0;
       const minX = nodes.length ? Math.min(...nodes.map((n) => n.position.x)) : 0;
       const k = groups.filter((g) => g.kind === "strategy").length + 1;
-      const ins = insertDoc(src, new Set(nodes.map((n) => n.id)), `s${k}_`, { x: minX, y: nodes.length ? maxY + 300 : 0 });
+      const ins = insertDoc(src, new Set(nodes.map((n) => n.id)), `s${k}_`, { x: minX, y: nodes.length ? bottom + INSERT_GAP : 0 });
       const added = fromDoc({ format: GRAPH_FORMAT, version: GRAPH_VERSION, nodes: ins.nodes, edges: ins.edges }, catalog);
       nodes = [...nodes, ...added.nodes];
       edges = [...edges, ...added.edges];
@@ -966,9 +991,9 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       if (b.kind === "strategy") return get().addStrategy({ label: b.label, nodes: b.nodes, edges: b.edges, output: b.output });
       const s = get();
       push();
-      const maxY = s.nodes.length ? Math.max(...s.nodes.map((n) => n.position.y)) : 0;
+      const bottom = s.nodes.length ? Math.max(...s.nodes.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) : 0;
       const minX = s.nodes.length ? Math.min(...s.nodes.map((n) => n.position.x)) : 0;
-      const ins = insertDoc(b, new Set(s.nodes.map((n) => n.id)), "b_", { x: minX, y: s.nodes.length ? maxY + 300 : 0 });
+      const ins = insertDoc(b, new Set(s.nodes.map((n) => n.id)), "b_", { x: minX, y: s.nodes.length ? bottom + INSERT_GAP : 0 });
       const added = fromDoc({ format: GRAPH_FORMAT, version: GRAPH_VERSION, nodes: ins.nodes, edges: ins.edges }, s.catalog ?? []);
       const label = uniqueLabel(b.label, s.groups);
       set({ nodes: [...s.nodes, ...added.nodes], edges: [...s.edges, ...added.edges], groups: [...s.groups, { id: `grp_${Date.now().toString(36)}${(++seq).toString(36)}`, label,

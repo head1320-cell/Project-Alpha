@@ -16,12 +16,13 @@ const F = { format: "project-alpha.portfolio-graph", version: 1 };
 const TICKERS = ["005930", "000660", "035420"];
 const n = (id: string, type: string, x: number, y: number, params: Record<string, unknown> = {}) => ({ id, type, position: { x, y }, params });
 const e = (s: string, sp: string, t: string, tp: string) => ({ id: `${s}.${sp}->${t}.${tp}`, source: s, source_port: sp, target: t, target_port: tp });
-const CORE = [n("universe", "universe", 0, 140, { tickers: TICKERS }), n("returns", "returns", 230, 140),
-              n("estimate", "estimate", 460, 20), n("optimizer", "optimizer", 690, 140)];
+// 기대 수익 추정은 위 줄로 — CF1 자리 고정 상자는 길어(높이 = cardHeight) 예전 y 20 이면 수익률 → 비중 계산 선 위에 놓여 선을 누를 수 없었다.
+const CORE = [n("universe", "universe", 0, 140, { tickers: TICKERS }), n("returns", "returns", 320, 140),
+              n("estimate", "estimate", 640, -420), n("optimizer", "optimizer", 960, 140)];
 const CORE_EDGES = [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
                     e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")];
-const WITH_RISK = { ...F, nodes: [...CORE, n("risk", "risk", 920, 140)], edges: [...CORE_EDGES, e("optimizer", "weights", "risk", "weights")] };
-const RISK_LOOSE = { ...F, nodes: [...CORE, n("risk", "risk", 920, 300)], edges: CORE_EDGES };
+const WITH_RISK = { ...F, nodes: [...CORE, n("risk", "risk", 1280, 140)], edges: [...CORE_EDGES, e("optimizer", "weights", "risk", "weights")] };
+const RISK_LOOSE = { ...F, nodes: [...CORE, n("risk", "risk", 1280, 300)], edges: CORE_EDGES };
 
 type Doc = { nodes: { id: string; type: string }[]; edges: { source: string; source_port: string; target: string; target_port: string }[] };
 
@@ -39,6 +40,9 @@ async function openWith(page: Page, doc: object) {
   await expect(page.locator(".pg-palette")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".react-flow__edge")).not.toHaveCount(0);
   await expect(page.locator(".pg-node").first()).toBeVisible();
+  // 처음 열림은 보통 확대(CF1 · 사용자 결정 2026-10-17) — 흐름 전체의 노드를 다루는 테스트는 사람처럼 맞춤 단추로 전체를 본다.
+  await page.waitForTimeout(400);                                  // 처음 맞춤(카탈로그 뒤 60ms + 크기를 잴 때까지)이 끝난 뒤에
+  await page.locator(".react-flow__controls-fitview").click();
 }
 const wip = (page: Page) => page.evaluate(() => JSON.parse(sessionStorage.getItem("alpha_pg_wip") ?? "{}")) as Promise<Doc>;
 const edges = (page: Page) => page.locator(".react-flow__edge");

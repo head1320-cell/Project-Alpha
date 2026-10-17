@@ -24,12 +24,29 @@ async function alertSamples(page: Page): Promise<(string | null)[]> {
   return out;
 }
 
+/** 멀리(확대 < 0.55)에서는 카드 안 단추가 숨는다 — CF1 자리 고정 상자는 커서 맞춰 보기가 멀리로 열릴 수 있다. 단추를 누르기 전에 보통 이상으로.
+ *  `on` 을 주면 그 노드 위에서 바퀴로 확대한다(커서 자리를 중심으로 — 가운데 기준 확대 단추는 가장자리 노드를 화면 밖으로 민다). */
+async function atLeastMid(page: Page, on?: Locator) {
+  for (let i = 0; i < 12 && (await page.locator(".pg-canvas").getAttribute("data-zoom")) === "far"; i++) {
+    if (on) {
+      const b = (await on.boundingBox())!;
+      await page.mouse.move(b.x + b.width / 2, b.y + Math.min(b.height / 2, 40));
+      await page.mouse.wheel(0, -200);
+    } else await page.locator(".react-flow__controls-zoomin").click();
+    await page.waitForTimeout(150);
+  }
+  await expect(page.locator(".pg-canvas")).not.toHaveAttribute("data-zoom", "far");
+}
+
 async function openCanvas(page: Page) {
   await page.addInitScript(() => {
     try { if (!sessionStorage.getItem("pg_pill_clean")) { localStorage.removeItem("alpha_pg_panels"); localStorage.removeItem("alpha_pg_rail"); sessionStorage.setItem("pg_pill_clean", "1"); } } catch { /* */ }
   });
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  // 처음 열림은 보통 확대(CF1 · 사용자 결정 2026-10-17) — 흐름 전체의 노드를 다루는 테스트는 사람처럼 맞춤 단추로 전체를 본다.
+  await page.waitForTimeout(400);                                  // 처음 맞춤(카탈로그 뒤 60ms + 크기를 잴 때까지)이 끝난 뒤에
+  await page.locator(".react-flow__controls-fitview").click();
 }
 async function run(page: Page): Promise<Gates> {
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
@@ -164,6 +181,7 @@ test("알약과 원인 배너(BQ Q2): 원인 따라가기 배너·들어간 상�
     await tickers.fill("005930");
     await tickers.press("Enter");
     await run(page);
+    await atLeastMid(page, page.locator('.pg-node[data-node-id="risk"]'));
     await page.locator('.pg-node[data-node-id="risk"] .pg-cause-btn').click({ force: true });
     const banner = page.locator(".pg-cause-banner");
     await expect(banner).toBeVisible();

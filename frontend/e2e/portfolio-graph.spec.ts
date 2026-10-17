@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { contrastAudit, trackErrors, uniq, type AuditResult } from "./helpers";
 import { TEMPLATES } from "../src/entities/portfolio-graph/templates";
 import { LEGACY_SCREENS } from "../src/entities/portfolio-graph/legacyScreens";
+import { COL, restackDoc } from "../src/entities/portfolio-graph/size";
+import type { GraphDoc, NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AAS 노드 캔버스 (BI3·BI4 · ADR 002) — `/allocation`
@@ -30,6 +32,9 @@ const handle = (page: Page, id: string, port: string, kind: "source" | "target")
 async function openCanvas(page: Page) {
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  // 처음 열림은 보통 확대(CF1 · 사용자 결정 2026-10-17) — 흐름 전체의 노드를 다루는 테스트는 사람처럼 맞춤 단추로 전체를 본다.
+  await page.waitForTimeout(400);                                  // 처음 맞춤(카탈로그 뒤 60ms + 크기를 잴 때까지)이 끝난 뒤에
+  await page.locator(".react-flow__controls-fitview").click();
 }
 
 async function run(page: Page) {
@@ -59,6 +64,17 @@ async function exportDoc(page: Page) {
 
 async function importText(page: Page, name: string, text: string) {
   await page.locator(".pg-import-input").setInputFiles({ name, mimeType: "application/json", buffer: Buffer.from(text) });
+}
+
+// 손으로 쓴 위치(예전 카드 150×≈124 를 가정한 격자)는 CF1 의 자리 고정 카드(240 폭·카탈로그 높이)에서 서로 겹친다.
+// 사용자 파일은 불러올 때 옮기지 않으므로(겹침 안내만), 위치가 시험 대상이 아닌 고정물은 앱이 코드로 만든 흐름에 쓰는
+// 같은 다시 쌓기(`restackDoc`)로 놓는다 — x 값마다 한 열(COL 간격), 같은 열 안의 위아래 순서는 그대로.
+let CATALOG: NodeCatalogEntry[] | null = null;
+async function spread(page: Page, doc: GraphDoc): Promise<GraphDoc> {
+  CATALOG ??= (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()).nodes as NodeCatalogEntry[];
+  const xs = [...new Set(doc.nodes.map((n) => n.position.x))].sort((a, b) => a - b);
+  const cols = { ...doc, nodes: doc.nodes.map((n) => ({ ...n, position: { x: xs.indexOf(n.position.x) * COL, y: n.position.y } })) };
+  return restackDoc(cols, CATALOG);
 }
 
 const strip = (doc: { meta?: object }) => ({ ...doc, meta: undefined });
@@ -97,7 +113,8 @@ test("연결: 타입이 다르면 거부, 같으면 연결된다(짝)", async ({
   expect(newId).not.toBe("risk");
   // 새 노드를 빈 곳(캔버스 왼쪽 아래)으로 옮긴다 — 다른 노드의 포트와 겹치지 않게.
   const box = (await page.locator(".pg-canvas").boundingBox())!;
-  const head = (await added.locator(".pg-node-k").boundingBox())!;
+  // 머리 줄은 멀리 확대에서 숨는다(CF1) — 카드 자체의 왼쪽 위(포트 핸들 안쪽)를 잡는다.
+  const head = (await added.boundingBox())!;
   await page.mouse.move(head.x + 20, head.y + 8);
   await page.mouse.down();
   await page.mouse.move(box.x + 140, box.y + box.height - 90, { steps: 10 });
@@ -308,7 +325,8 @@ test("확인하기 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산
   const id = (await added.getAttribute("data-node-id"))!;
   // 빈 곳으로 옮긴 뒤 옵티마이저 비중을 잇는다.
   const box = (await page.locator(".pg-canvas").boundingBox())!;
-  const head = (await added.locator(".pg-node-k").boundingBox())!;
+  // 머리 줄은 멀리 확대에서 숨는다(CF1) — 카드 자체의 왼쪽 위(포트 핸들 안쪽)를 잡는다.
+  const head = (await added.boundingBox())!;
   await page.mouse.move(head.x + 20, head.y + 8);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width - 140, box.y + box.height - 110, { steps: 10 });
@@ -411,7 +429,7 @@ test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 
   doc.edges.push({ id: "w2", source: "optimizer", source_port: "weights", target: "tv", target_port: "weights" });
   doc.edges.push({ id: "w3", source: "tv", source_port: "target", target: "jr", target_port: "target" });
   doc.edges.push({ id: "w4", source: "q", source_port: "trades", target: "jr", target_port: "trades" });
-  await importText(page, "w4.json", JSON.stringify(doc));
+  await importText(page, "w4.json", JSON.stringify(await spread(page, doc)));
 
   // 저장 전: 계산만으로는 아무것도 쓰지 않는다 — /graph/save 요청이 없어야 한다.
   const saves: string[] = [];
@@ -462,7 +480,7 @@ test("기업·가치평가(BK W5): 기업 전망은 비중까지 가고 과거 �
   doc.edges.push({ id: "c3", source: "c", source_port: "views", target: "optimizer", target_port: "views" });
   doc.edges.push({ id: "s1", source: "universe", source_port: "universe", target: "s", target_port: "universe" });
   doc.edges.push({ id: "s2", source: "s", source_port: "scores", target: "w", target_port: "scores" });
-  await importText(page, "w5.json", JSON.stringify(doc));
+  await importText(page, "w5.json", JSON.stringify(await spread(page, doc)));
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   await page.locator(".pg-run").click();
   const body = await (await resp).json();
@@ -911,7 +929,9 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
     { id: "b8", source: "optimizer", source_port: "weights", target: "sa", target_port: "a" },
     { id: "b9", source: "o2", source_port: "weights", target: "sa", target_port: "b" },
   );
-  await importText(page, "bl2b.json", JSON.stringify(doc));
+  await importText(page, "bl2b.json", JSON.stringify(await spread(page, doc)));
+  // 파일 안내는 사람이 닫을 때까지 캔버스 아래 가운데에 떠 있다(BQ Q1) — 다섯 장이 쌓인 열의 맨 아래 카드를 가리므로 닫는다.
+  await page.getByRole("button", { name: "파일 안내 닫기" }).click();
   const body = await run(page);
   for (const id of ["fr", "en", "tw", "cs", "sa"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
   // 개발 모드의 국면은 연습용 계보다(운영은 저장된 관측만 — 백엔드 테스트가 가른다).
@@ -1141,7 +1161,7 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
     { id: "st", type: "macro_studio", params: { studio: "neural-sde" }, position: { x: 1100, y: 1040 } },
     { id: "pt", type: "macro_studio", params: { studio: "pinn-tail" }, position: { x: 1400, y: 1040 } },
   );
-  await importText(page, "bl3w2.json", JSON.stringify(doc));
+  await importText(page, "bl3w2.json", JSON.stringify(await spread(page, doc)));
   const body = await run(page);
   // 노드가 아홉 개 더 붙어 옆 패널이 열리면 일부가 화면 밖으로 밀린다 — 고르기 전에 화면에 맞춘다.
   const pick = async (id: string) => {
@@ -1278,7 +1298,7 @@ test("기업 분석 모델(BL3 W3b-C1): EVA·가치의 층·배수 PEG·영업 M
     ["bw", "company_value_layers", { code: "005930", w_asset: 0.5, w_epv: 0.5, w_full: 0.5 }],
   ];
   add.forEach(([id, type, params], i) => doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 2) * 300, y: Math.floor(i / 2) * 260 } }));
-  await importText(page, "bl3w3b.json", JSON.stringify(doc));
+  await importText(page, "bl3w3b.json", JSON.stringify(await spread(page, doc)));
   const body = await run(page);
   for (const id of ["ev", "vl", "mu", "mc"]) {
     expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
@@ -1400,7 +1420,7 @@ test("리스크 노드(BL3 W4): VaR·MC·변동성·보유기간·FRTB·롤링 �
     doc.edges.push({ id: `returns.returns->${id}.returns`, source: "returns", source_port: "returns", target: id, target_port: "returns" });
     if (withW) doc.edges.push({ id: `optimizer.weights->${id}.weights`, source: "optimizer", source_port: "weights", target: id, target_port: "weights" });
   });
-  await importText(page, "bl3w4.json", JSON.stringify(doc));
+  await importText(page, "bl3w4.json", JSON.stringify(await spread(page, doc)));
   const body = await run(page);
   for (const id of ["vr", "mc", "vm", "hv", "fr", "rs", "dc"]) {
     expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
@@ -1466,7 +1486,7 @@ test("파생·신용 계산기(BL3 W4): 옵션·채권·헤지·CVA·IRC · 모�
     ["hz", "futures_hedge", { current_beta: 0 }],
   ];
   add.forEach(([id, type, params], i) => doc.nodes.push({ id, type, params, position: { x: 1100 + (i % 2) * 300, y: Math.floor(i / 2) * 260 } }));
-  await importText(page, "bl3w4c.json", JSON.stringify(doc));
+  await importText(page, "bl3w4c.json", JSON.stringify(await spread(page, doc)));
   const body = await run(page);
   for (const [id] of add) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
   expect(body.nodes.op.view.result.Price).toBeCloseTo(10.4506, 4);
@@ -1795,7 +1815,7 @@ test("시나리오 팩 신원(BL4): 가정 충격은 '실제로 일어난 적 �
     { id: "k1e", source: "optimizer", source_port: "weights", target: "k1", target_port: "weights" },
     { id: "k2e", source: "optimizer", source_port: "weights", target: "k2", target_port: "weights" },
   );
-  await importText(page, "packs.json", JSON.stringify(doc));
+  await importText(page, "packs.json", JSON.stringify(await spread(page, doc)));
   const body = await run(page);
   expect(body.nodes.k1.status, body.nodes.k1.reason).toBe("ok");
   await detail(page, "k1");
@@ -1817,7 +1837,7 @@ test("타이밍 신호(BL4): 소스 없는 신호·목록에 없는 신호는 �
     { id: "t2", type: "timing_signal", params: { rules: [{ factor_id: "abs_mom" }, { factor_id: "no_such_factor" }] }, position: { x: 1000, y: 700 } },
     { id: "t3", type: "timing_signal", params: { rules: [{ factor_id: "abs_mom" }, { factor_id: "ma_month" }] }, position: { x: 1000, y: 840 } },
   );
-  await importText(page, "tf.json", JSON.stringify(doc));
+  await importText(page, "tf.json", JSON.stringify(await spread(page, doc)));
   const body = await run(page);
   expect(body.nodes.t1.status).toBe("failed");
   expect(body.nodes.t1.reason).toContain("대차잔고");
@@ -1840,7 +1860,7 @@ test("알파(BL4): 보유 기간별 IC 와 앞/뒤 절반을 따로 · 못 잰 I
       { id: "av", type: "alpha_validate", params: { expr: "zscore(mom_6m)", universe: "kospi50", months: 12 }, position: { x: 1000, y: 560 } },
       { id: "ap", type: "alpha_portfolio", params: { alpha_ids: [aid], universe: "kospi50" }, position: { x: 1000, y: 700 } },
     );
-    await importText(page, "alpha.json", JSON.stringify(doc));
+    await importText(page, "alpha.json", JSON.stringify(await spread(page, doc)));
     const body = await run(page);
     expect(body.nodes.av.status, body.nodes.av.reason).toBe("ok");
     const r = (body.nodes.av.view as { result: { period_end: string } }).result;

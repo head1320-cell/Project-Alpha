@@ -19,17 +19,11 @@ import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
-import { fmtElapsed, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
+import { fmtElapsed, sameValue, setOrClear, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
 
 type Params = Record<string, unknown>;
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-
-function setOrClear(p: Params, k: string, v: unknown): Params {
-  const next = { ...p };
-  if (v === undefined) delete next[k]; else next[k] = v;
-  return next;
-}
+const same = sameValue;
 
 /** 행 칸의 선택지 — 서버가 준 이름표(`x-ui.options`)가 우선, 없으면 스키마의 enum 값을 그대로. */
 function rowOptions(x: FieldSpec): Record<string, string> | null {

@@ -20,11 +20,20 @@ const e = (s: string, sp: string, t: string, tp: string) => ({ id: `${s}.${sp}->
 const EMPTY = { ...F, nodes: [], edges: [] };
 const BUILD_ONLY = {
   ...F,
-  nodes: [n("universe", "universe", 0, 140, { tickers: TICKERS }), n("returns", "returns", 230, 140),
-          n("estimate", "estimate", 460, 20), n("optimizer", "optimizer", 690, 140)],
+  nodes: [n("universe", "universe", 0, 140, { tickers: TICKERS }), n("returns", "returns", 320, 140),
+          n("estimate", "estimate", 640, 20), n("optimizer", "optimizer", 960, 140)],
   edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
           e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")],
 };
+
+/** 멀리(확대 < 0.55)에서는 카드 안 단추가 숨는다 — CF1 자리 고정 상자는 커서 맞춰 보기가 멀리로 열릴 수 있다. 단추를 누르기 전에 보통 이상으로. */
+async function atLeastMid(page: Page) {
+  for (let i = 0; i < 12 && (await page.locator(".pg-canvas").getAttribute("data-zoom")) === "far"; i++) {
+    await page.locator(".react-flow__controls-zoomin").click();
+    await page.waitForTimeout(120);
+  }
+  await expect(page.locator(".pg-canvas")).not.toHaveAttribute("data-zoom", "far");
+}
 
 async function openWith(page: Page, doc: object | null, tab: "proc" | "add" | null = null) {
   await page.addInitScript(([d, t]) => {
@@ -204,6 +213,7 @@ test("사람이 고른 노드 뒤에 붙인다 · 고르지 않았으면 잇지 
 test("‘기대 수익’을 이어 주세요 — 이름을 누르면 그 값을 내는 노드만 보이고, 고르면 잇는다", async ({ page }) => {
   const doc = { ...BUILD_ONLY, edges: BUILD_ONLY.edges.filter((x) => x.target_port !== "belief") };
   await openWith(page, doc, "add");
+  await atLeastMid(page);
   const btn = nodeOf(page, "optimizer").locator('.pg-node-need-btn[data-port="belief"]');
   await expect(btn).toHaveText("‘기대 수익’");
   await btn.click();

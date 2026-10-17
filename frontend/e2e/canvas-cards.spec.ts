@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import { cardHeight, ROW_GAP } from "../src/entities/portfolio-graph/size";
+import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BS2 — 카드 크기·배치 간격 (설계 docs/superpowers/specs/2026-09-29-bs-br-leftovers-design.md §BS2)
@@ -83,32 +85,44 @@ for (const arrange of [true, false]) test(`카드(BS2${arrange ? "" : " · 정�
   for (const c of m.cards) expect(c.over, `${c.id} 내용 넘침`).toBeLessThanOrEqual(1);
 });
 
-test("카드(BS2) 짝: 세로 간격은 내용 높이 + 틈 — 예전 170 줄보다 촘촘하고, 포트가 많은 카드는 그만큼 띄운다", async ({ page }) => {
+// CF1 에서 짝을 바꿨다 — 카드가 "자리 고정" 상자(높이 = 카탈로그로 정한 cardHeight)가 되며 예전 짝 "170 줄보다 촘촘하다"는 뜻을 잃었다
+// (카드 하나가 170 보다 높다). 지키려던 것은 그대로다: 간격이 ★고정 줄이 아니라 위 카드의 높이 + 틈★이다.
+test("카드(BS2) 짝: 세로 간격은 위 카드 높이(cardHeight) + 틈 28 — 고정 줄이 아니라 카드마다 다르다", async ({ page }) => {
   await mapAtZoomOne(page);
   const doc = await wip(page);
-  // 같은 열(x 같음)에서 위아래로 이웃한 카드 사이의 흐름 좌표 간격.
+  const cat = (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()).nodes as NodeCatalogEntry[];
+  // 같은 열(x 같음)에서 위아래로 이웃한 카드 사이의 흐름 좌표 간격 — 위 카드 높이 + 틈과 비교한다.
   const cols = new Map<number, { id: string; y: number; type: string }[]>();
   for (const n of doc.nodes) cols.set(n.position.x, [...(cols.get(n.position.x) ?? []), { id: n.id, y: n.position.y, type: n.type }]);
-  const gaps: number[] = [];
+  const pairs: { gap: number; want: number; id: string }[] = [];
   for (const col of cols.values()) {
     col.sort((a, b) => a.y - b.y);
-    for (let i = 1; i < col.length; i++) gaps.push(col[i].y - col[i - 1].y);
+    for (let i = 1; i < col.length; i++) pairs.push({ gap: col[i].y - col[i - 1].y, want: cardHeight(col[i - 1].type, cat) + ROW_GAP, id: col[i].id });
   }
-  expect(gaps.length).toBeGreaterThan(2);
-  expect(Math.min(...gaps), "가장 촘촘한 세로 간격").toBeLessThan(170);
+  expect(pairs.length).toBeGreaterThan(2);
+  for (const p of pairs) expect(p.gap, `${p.id} 위 간격`).toBeGreaterThanOrEqual(p.want - 1);
+  // 한 띠 안의 이웃은 정확히 위 카드 높이 + 틈으로 붙는다(띠 사이는 상자 머리만큼 더 띈다) — 그런 쌍이 있고, 간격은 한 값이 아니다.
+  const tight = pairs.filter((p) => Math.abs(p.gap - p.want) <= 1);
+  expect(tight.length, "위 카드 높이 + 틈으로 붙은 이웃").toBeGreaterThan(0);
+  expect(new Set(pairs.map((p) => p.gap)).size, "고정 줄이 아니다").toBeGreaterThan(1);
 });
 
 test("한 노드 도구줄(BS2): 다른 카드를 덮지 않는다 — 시작 그래프와 두 전략 지도의 모든 노드에서 · 덮지 않으면 예전 자리(위 가운데)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  // 처음 열림은 보통 확대(CF1 · 사용자 결정 2026-10-17) — 흐름 전체의 노드를 다루는 테스트는 사람처럼 맞춤 단추로 전체를 본다.
+  await page.waitForTimeout(400);                                  // 처음 맞춤(카탈로그 뒤 60ms + 크기를 잴 때까지)이 끝난 뒤에
+  await page.locator(".react-flow__controls-fitview").click();
   let atDefault = 0, moved = 0, free = 0;
   const sweep = async (tag: string) => {
     const ids = await page.locator(".react-flow__node:has(.pg-node)").evaluateAll((els) => els.map((e) => e.getAttribute("data-id")!));
     for (const id of ids) {
       const card = page.locator(`.react-flow__node[data-id="${id}"] .pg-node`);
       if (!(await card.isVisible())) continue;
-      await card.click({ position: { x: 20, y: 10 } });
+      // 카드 높이의 가운데 왼쪽 — 위아래로 붙은 카드(CF1 자리 고정 상자는 길다)에서 앞 카드의 도구줄이 머리 줄을 덮을 수 있다.
+      const hb = (await card.boundingBox())!;
+      await card.click({ position: { x: 20, y: hb.height / 2 } });
       await expect(page.locator(".react-flow__node-toolbar", { has: page.locator(".pg-run-to") })).toBeVisible();
       const m = await page.evaluate((sel) => {
         type R = { l: number; t: number; r: number; b: number };
@@ -126,7 +140,10 @@ test("한 노드 도구줄(BS2): 다른 카드를 덮지 않는다 — 시작 �
         const inView = (x: R) => x.t >= cv.top && x.b <= cv.bottom;
         const freeExists = cands.some((x) => cover(x) <= 4 && inView(x));
         const mine = cover({ l: b.left, t: b.top, r: b.right, b: b.bottom });
-        return { mine, freeExists, least: Math.min(...cands.map(cover)),
+        // 가장 덜 덮는 자리도 ★화면 안 후보 중에서★ — 빈 자리 판정(freeExists)과 같은 규칙. 화면 밖 자리는 덮지 않아도 보이지 않는다
+        // (CF1 자리 고정 상자는 길어, 열 맨 아래 카드의 아래 후보가 화면 밖으로 나갈 때가 생겼다).
+        const shown = cands.filter(inView);
+        return { mine, freeExists, least: Math.min(...(shown.length ? shown : cands).map(cover)),
                  def: b.bottom <= me.top + 1 && Math.abs((b.left + b.right) / 2 - (me.left + me.right) / 2) < 2 };
       }, id);
       // 덮지 않는 자리가 있으면 그 자리 · 없으면(아주 멀리 본 촘촘한 지도) 가장 덜 덮는 자리.

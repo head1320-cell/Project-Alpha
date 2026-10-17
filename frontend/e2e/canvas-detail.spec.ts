@@ -16,8 +16,8 @@ const n = (id: string, type: string, x: number, y: number, params: Record<string
 const e = (s: string, sp: string, t: string, tp: string) => ({ id: `${s}.${sp}->${t}.${tp}`, source: s, source_port: sp, target: t, target_port: tp });
 const LOOSE_OPT = {
   ...F,
-  nodes: [n("universe", "universe", 0, 140, { tickers: ["005930", "000660", "035420"] }), n("returns", "returns", 230, 140),
-          n("optimizer", "optimizer", 520, 140)],
+  nodes: [n("universe", "universe", 0, 140, { tickers: ["005930", "000660", "035420"] }), n("returns", "returns", 320, 140),
+          n("optimizer", "optimizer", 640, 140)],
   edges: [e("universe", "universe", "returns", "universe")],
 };
 type Trust = { state: string; text: string; kind?: string };
@@ -106,15 +106,20 @@ test("연습용 칩은 서버 표시만 본다 — 표시를 지우면 문구가
   await expect(chip(page)).toHaveCount(0);
 });
 
-test("가까이 확대에서 포트 이름이 보이고, 보통 확대에서는 숨는다(짝)", async ({ page }) => {
+// CF1 에서 계약을 바꿨다 — 자리 고정 상자에 소켓 줄이 생겨 이름을 카드 안쪽에 둘 자리가 있다. 그래서 중간 확대에서도 보이고,
+// 멀리(이름·값만)에서는 숨는다(짝). 예전 계약(BT7)은 "보통 확대에서는 숨는다"였다.
+test("가까이·보통 확대에서 포트 이름이 보이고, 멀리에서는 숨는다(짝)", async ({ page }) => {
   await openWith(page, null);
   const name = node(page, "optimizer").locator(".pg-port--in .pg-port-name").first();
   await zoomTo(page, "mid");
   await page.mouse.move(5, 5);
-  await expect(name).toBeHidden();
+  await expect(name).toBeVisible();
   await zoomTo(page, "near");
   await page.mouse.move(5, 5);
   await expect(name).toBeVisible();
+  await zoomTo(page, "far");
+  await page.mouse.move(5, 5);
+  await expect(name).toBeHidden();
 });
 
 test("종목 고르기·내 생각·기대 수익 설정: 자세히 탭에 원시 JSON 이 없고 서버 값이 표·목록으로 보인다", async ({ page }) => {
