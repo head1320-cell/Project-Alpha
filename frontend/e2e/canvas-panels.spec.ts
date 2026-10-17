@@ -368,3 +368,41 @@ test("연습용 표시(BQ Q1): 결과 요약에 '연습용 데이터' — 연습
   await expect(page.locator(".pg-summary")).toContainText("완료");
   await expect(mark).toHaveCount(0);
 });
+
+test("짧은 창(R3): 창이 664 보다 낮아도 확대 단추·맞춤·안내 줄·미니맵이 창 안에 있고 실제로 눌린다 · 아주 짧으면 페이지가 세로로 스크롤된다(짝: 큰 창은 그대로)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCanvas(page);
+  // 짝 — 큰 창은 예전과 같다: 캔버스 뿌리 = 창 높이 − 머리 줄 64, 페이지 스크롤 없음.
+  expect((await box(page.locator(".pg-root"))).height).toBe(900 - 64);
+  const scrollable = () => page.evaluate(() => { const m = document.querySelector(".terminal-main")!; return m.scrollHeight - m.clientHeight; });
+  expect(await scrollable()).toBe(0);
+  await page.locator('button[aria-label="미니맵"]').click();
+  await expect(page.locator(".pg-minimap")).toBeVisible();
+
+  const bottom = (sel: string) => page.locator(sel).first().evaluate((e) => e.getBoundingClientRect().bottom);
+  const zoom = () => page.locator(".react-flow__viewport").evaluate((e) => new DOMMatrix(getComputedStyle(e).transform).a);
+
+  // 1024×560 — 예전에는 맞춤 단추(y 622~649)가 창 밖이라 누를 수 없었다.
+  await page.setViewportSize({ width: 1024, height: 560 });
+  await page.waitForTimeout(300);
+  for (const sel of [".react-flow__controls-zoomin", ".react-flow__controls-fitview", ".pg-hint", ".pg-minimap"])
+    expect(await bottom(sel), `${sel} 가 창 안`).toBeLessThanOrEqual(560);
+  expect(await scrollable(), "560 은 줄인 캔버스로 담긴다 — 스크롤 없음").toBe(0);
+  // 안내 줄이 확대 단추를 덮지 않는다(좁은 캔버스 — 클릭은 통과해도 눈에는 가렸다).
+  const ctl = await box(page.locator(".react-flow__controls"));
+  const hintBox = await page.locator(".pg-hint").evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; });
+  expect(overlaps(ctl, hintBox), "안내 줄 × 확대 단추").toBe(false);
+  const z0 = await zoom();
+  await page.locator(".react-flow__controls-zoomin").click({ timeout: 3_000 });           // force·dispatchEvent 없이 실제 클릭
+  await expect.poll(zoom).not.toBe(z0);
+  await page.locator(".react-flow__controls-fitview").click({ timeout: 3_000 });
+
+  // 아주 짧은 창 — 캔버스는 바닥 높이에서 멈추고 페이지가 세로로 스크롤된다. 내려가면 단추를 누를 수 있다.
+  await page.setViewportSize({ width: 1024, height: 420 });
+  await page.waitForTimeout(300);
+  expect(await scrollable(), "아주 짧은 창은 스크롤할 거리가 있다").toBeGreaterThan(0);
+  await page.evaluate(() => { const m = document.querySelector(".terminal-main")!; m.scrollTop = m.scrollHeight; });
+  expect(await bottom(".react-flow__controls-fitview")).toBeLessThanOrEqual(420);
+  await page.locator(".react-flow__controls-fitview").click({ timeout: 3_000 });
+  expect(await page.evaluate(() => document.querySelector(".terminal-main")!.scrollLeft), "가로로는 밀리지 않는다").toBe(0);
+});

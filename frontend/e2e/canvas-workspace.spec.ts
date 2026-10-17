@@ -1209,9 +1209,8 @@ test("맞춰 보기(BN N1 에서 찾은 결함): 떠 있는 판(선 범례·안�
   await check("맞춤 버튼 뒤");
 
   // 짝 — 가장 작게 줄여도 넘치는 작은 창: 가운데 두지 않고 흐름의 시작에 붙인다(맨 위 머리는 여전히 판 아래·누를 수 있다).
-  // 높이 664 = 머리 줄 64 + 캔버스 최소 높이 600 — 이보다 낮으면 캔버스 크기는 같고 아래(맞춤 단추)만 창 밖으로 잘린다.
-  // 예전 560 은 Playwright 가 캔버스 상자를 스크롤해 단추를 눌렀는데, React Flow v12 는 그 스크롤을 0 으로 되돌린다(CF0).
-  await page.setViewportSize({ width: 1024, height: 664 });
+  // 560 — 캔버스가 창에 맞춰 줄어 맞춤 단추를 실제로 누를 수 있다(R3). CF0 에서는 단추가 창 밖이라 잠시 664 로 올렸었다.
+  await page.setViewportSize({ width: 1024, height: 560 });
   await page.locator(".react-flow__controls-fitview").click();
   await page.waitForTimeout(300);
   const legend = (await page.locator(".pg-wire-legend").boundingBox())!;

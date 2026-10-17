@@ -3956,9 +3956,11 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 }
 .pg-page { gap: 0; }
 /* 캔버스는 셸의 40px 여백을 쓰지 않는다 — 작업 면이 화면 끝까지(목업 승인본). */
-.terminal-main:has(.pg-page) { padding: 0; overflow: hidden; overflow: clip; }   /* clip — 판 밑 노드로 초점·scrollIntoView 가 가도 화면이 옆으로 밀리지 않게(BQ Q1) */
+.terminal-main:has(.pg-page) { padding: 0; overflow-x: hidden; overflow-x: clip; overflow-y: auto; }   /* 가로 clip — 판 밑 노드로 초점·scrollIntoView 가 가도 화면이 옆으로 밀리지 않게(BQ Q1).
+   세로 auto — 캔버스 바닥 높이(아래 420)보다 짧은 창에서만 스크롤이 생긴다. 그보다 긴 창은 캔버스 = 창이라 스크롤할 거리가 0(R3). */
 .pg-loading { display: flex; align-items: center; gap: 8px; padding: 24px; font-size: 13px; color: var(--muted-foreground); }
-.pg-root { display: flex; flex-direction: column; height: calc(100vh - 64px); min-height: 600px; background: var(--pg-canvas); }
+/* 바닥 420(R3) — 예전 600 은 창이 664 보다 낮으면 캔버스 아래(확대 단추·맞춤·안내 줄·미니맵)를 잘라 누를 수 없게 했다. */
+.pg-root { display: flex; flex-direction: column; height: calc(100vh - 64px); min-height: 420px; background: var(--pg-canvas); }
 .pg-theme button { font: inherit; }
 .pg-theme :focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 
@@ -4965,6 +4967,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-canvas .react-flow__panel.top.center, .pg-canvas .react-flow__panel.bottom.center { left: var(--pg-mid); }
 .pg-canvas .pg-hint, .pg-canvas .pg-welcome, .pg-canvas .pg-find { left: var(--pg-mid); }
 .pg-canvas .pg-hint, .pg-canvas .pg-welcome { max-width: calc(100% - var(--pg-left-inset) - var(--pg-right-inset) - 24px); }
+/* R3 — 안내 줄은 양쪽 56px(확대 단추 칸)을 비우고 가운데에 선다. 좁은 캔버스(1024)에서 축소·맞춤 단추를 덮었다 — 클릭은 통과했지만 보이지 않았다. */
+.pg-canvas .pg-hint { max-width: calc(100% - var(--pg-left-inset) - var(--pg-right-inset) - 112px); }
 .pg-canvas .pg-empty-start { left: var(--pg-left-inset); right: var(--pg-right-inset); }
 
 /* 접힌 판의 자리 — 동그란 단추 하나(왼쪽 = 노드 추가, 오른쪽 = 창 열기) */
