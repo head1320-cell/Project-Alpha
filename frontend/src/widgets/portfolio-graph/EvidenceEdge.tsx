@@ -25,6 +25,8 @@ export type WireData = {
   /** 포트 타입 쉬운 이름(BT4) — 올리거나 고르면 선 가운데에 보인다. */
   typeLabel?: string | null;
   hover?: boolean;
+  /** 계산 중 — 흐르는 점(CF3b1). xyflow `animated` 는 쓰지 않는다: 그 규칙은 선 안의 모든 path 를 대시로 바꿔 눈금을 지웠다. */
+  flow?: boolean;
 }
 
 /** 원천 노드 결과 → 선 모양. 결과가 없거나 낡았으면 `null`(모양 없음). */
@@ -55,6 +57,7 @@ function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePositi
     <>
       {data?.forward && <path d={path} className="pg-wire-ticks" fill="none" style={{ stroke: style?.stroke }} />}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
+      {data?.flow && <path d={path} className="pg-wire-flowdots" fill="none" style={{ stroke: style?.stroke }} />}
       {data?.brief && (
         <EdgeLabelRenderer>
           <div className="pg-wire-brief" data-edge-id={id}

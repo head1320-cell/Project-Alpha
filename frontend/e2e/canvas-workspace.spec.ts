@@ -1110,7 +1110,7 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   const into = page.locator(`.react-flow__edge[aria-label$=" to ${pf.id}"] .react-flow__edge-path`);
   await expect(into).toHaveCount(2);
   const styles = await into.evaluateAll((ps) => ps.map((p) => [getComputedStyle(p).strokeWidth, getComputedStyle(p).stroke]));
-  expect(new Set(styles.map((x) => x[0]))).toEqual(new Set(["2.5px"]));
+  expect(new Set(styles.map((x) => x[0]))).toEqual(new Set(["3px"]));   // 합치기 s1·s2 는 필수 입력 — 굵기 3(CF3b1)
   // 색은 테마 토큰(BQ Q3) — 비중 선 색을 같은 캔버스에서 풀어 비교한다(값을 박지 않는다).
   const weightsColor = await page.locator(".pg-canvas").evaluate((el) => {
     const i = document.createElement("i"); i.style.color = "var(--pg-port-Weights)"; el.appendChild(i);

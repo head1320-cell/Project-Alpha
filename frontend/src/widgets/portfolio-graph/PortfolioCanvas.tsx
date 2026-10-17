@@ -77,6 +77,7 @@ import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
+import { wireLook } from "./wireStyle";
 import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
@@ -582,6 +583,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     return s.edges.map((e) => {
     const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
     const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
+    const tkind = s.nodes.find((n) => n.id === e.target)?.data.kind;
+    const inp = s.catalog?.find((c) => c.type === tkind)?.inputs.find((p) => p.name === e.targetHandle);
     const lit = path.has(e.source) && path.has(e.target);
     const src = live?.[e.source];
     const portKey = `${e.source}|${e.sourceHandle}`;
@@ -597,17 +600,20 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
       : { ...(gs ? { source: `frame:${gs}`, sourceHandle: `out|${e.source}|${e.sourceHandle}` } : {}),
           ...(gt ? { target: `frame:${gt}`, targetHandle: `in|${e.target}|${e.targetHandle}` } : {}) };
     const faint = faintOthers && e.source !== faintOthers && e.target !== faintOthers;
-    const cls = ["pg-wire", wire.evidence && `pg-wire--${wire.evidence}`, wire.forward && "pg-wire--forward",
+    const look = wireLook({ required: inp?.required, lit, onCause, targetHasResult: !!s.report?.nodes[e.target],
+                            targetStale: staleSet.has(e.target), running: s.running, runningIds: s.runningIds });
+    const cls = ["pg-wire", look.required ? "pg-wire--req" : "pg-wire--opt", look.stale && "pg-wire--stale",
+                 look.flow && "pg-wire--flow", wire.evidence && `pg-wire--${wire.evidence}`, wire.forward && "pg-wire--forward",
                  lit && "pg-edge--path", onCause && "pg-edge--cause", !kept && "pg-dim", faint && "pg-edge--faint",
                  (gs || gt) && "pg-wire--proxy"].filter(Boolean).join(" ");
     const typeLabel = out ? (s.catalogMeta?.portPlain ?? PORT_PLAIN)[out.type] ?? out.type : null;
-    return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id },
-             selected: e.id === s.selectedEdge, animated: lit && s.running,
+    return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id, flow: look.flow },
+             selected: e.id === s.selectedEdge,
              className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
-                      strokeWidth: lit || onCause ? 3.5 : 2.5 } };
+                      strokeWidth: look.width } };
     });
-  }, [s.edges, s.nodes, s.catalog, path, s.running, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire]);
+  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire]);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
   const strategySources = useMemo(() => {
     const cat = s.catalog ?? [];

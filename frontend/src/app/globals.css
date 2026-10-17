@@ -4356,7 +4356,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-theme .pg-run-to:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 .react-flow__node.pg-on-path .pg-node { border-color: var(--pg-blue); box-shadow: 0 0 0 5px rgb(49 130 246 / 14%), var(--pg-shadow); transition: box-shadow .18s ease, border-color .18s ease; }
 .pg-edge--path .react-flow__edge-path { filter: drop-shadow(0 0 3px rgb(49 130 246 / 45%)); }
-@media (prefers-reduced-motion: reduce) { .react-flow__node.pg-on-path .pg-node { transition: none; } .pg-edge--path.animated .react-flow__edge-path { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .react-flow__node.pg-on-path .pg-node { transition: none; } }
 .pg-node--previous { opacity: .72; }
 .pg-node--previous .pg-node-dot { background: var(--pg-mute); }
 
@@ -4649,6 +4649,13 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-wire-key--blocked line { stroke: var(--pg-mute); stroke-dasharray: 2 5; }
 /* 원인 경로 · 흐리기 */
 .react-flow__node.pg-dim { opacity: .28; }
+/* CF3b1 · 선 모습 — 예전 결과는 선 전체를 흐리게(색은 그대로 · 흐리기 모드의 .pg-dim·faint 가 뒤에서 이긴다) ·
+   계산 중에는 같은 색 굵은 점이 받는 쪽으로 흐른다(감속 모션이면 멈춘 점) · 타입 알약은 멀리에서 숨는다. */
+.react-flow__edge.pg-wire--stale { opacity: .45; }
+.pg-wire-flowdots { stroke-width: 6px; stroke-linecap: round; stroke-dasharray: 0 16; pointer-events: none; animation: pg-flow .9s linear infinite; }
+@keyframes pg-flow { to { stroke-dashoffset: -16; } }
+@media (prefers-reduced-motion: reduce) { .pg-wire-flowdots { animation: none; } }
+.pg-canvas[data-zoom="far"] .pg-wire-type { display: none; }
 .react-flow__edge.pg-dim { opacity: .15; }
 .react-flow__node.pg-on-cause .pg-node { border-color: var(--pg-fail); box-shadow: 0 0 0 5px rgb(217 45 60 / 14%), var(--pg-shadow); }
 .react-flow__node.pg-cause-root .pg-node { outline: 3px solid var(--pg-fail); outline-offset: 3px; }
