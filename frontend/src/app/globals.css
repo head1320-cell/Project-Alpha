@@ -4420,6 +4420,15 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   font-weight: 600; color: var(--pg-ink); text-align: left; white-space: nowrap; background: none; border: 0; border-radius: 8px; cursor: pointer; }
 .pg-theme .pg-view-menu [role^="menuitem"]:hover, .pg-theme .pg-view-menu [role^="menuitem"]:focus-visible { background: var(--pg-soft); }
 .pg-view-check { display: inline-grid; place-items: center; width: 16px; color: var(--pg-blue-ink); }
+.pg-view-sep { height: 1px; margin: 4px 6px; background: var(--pg-line); }
+.pg-view-group { display: grid; }
+.pg-view-h { padding: 4px 10px 2px 34px; font-size: 12px; font-weight: 600; color: var(--pg-body); }
+/* CF4c — 경유점: 고르거나 올린 선에서만 보이고 눌린다(화면 크기는 확대와 무관하게 12px). 끌어 옮기고, 두 번 누르거나 Delete 로 지운다. */
+.pg-waypoint { position: absolute; box-sizing: border-box; width: calc(12px / var(--pg-z, 1)); height: calc(12px / var(--pg-z, 1)); padding: 0;
+  background: var(--pg-paper); border: calc(2px / var(--pg-z, 1)) solid var(--pg-blue); border-radius: 50%; opacity: 0; pointer-events: none; cursor: grab; }
+.pg-waypoint[data-show] { opacity: 1; pointer-events: all; }
+.pg-waypoint:active { cursor: grabbing; }
+.pg-waypoint:focus-visible { opacity: 1; pointer-events: all; outline: calc(2px / var(--pg-z, 1)) solid var(--pg-blue); outline-offset: calc(2px / var(--pg-z, 1)); }
 .pg-history-h { margin-top: 20px; }
 .pg-history { width: 100%; font-size: 13px; border-collapse: collapse; color: var(--pg-ink); }
 .pg-history th { padding: 4px 0; font-size: 12px; font-weight: 600; text-align: left; color: var(--pg-mute); }

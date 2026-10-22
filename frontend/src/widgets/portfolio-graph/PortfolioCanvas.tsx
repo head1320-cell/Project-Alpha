@@ -29,7 +29,6 @@ import {
   Panel,
   Position,
   ViewportPortal,
-  getBezierPath,
   useStore,
   type Connection,
   type ConnectionLineComponentProps,
@@ -69,6 +68,7 @@ import {
   type ProcedureSuggestion,
   type ParseResult,
   type WorkflowStage,
+  viaOf,
   euro, josa, nextKinds, swapCandidates,
 } from "@/entities/portfolio-graph";
 import { ExportButton, ImportControl, readGraphFile } from "@/features/portfolio-graph-io";
@@ -87,6 +87,7 @@ import { measuredH, measuredW } from "./toolbarPlace";
 import { ALIGN_ITEMS, snapToGuides, type AlignKind, type Guide } from "./guides";
 import { laneLayout } from "@/entities/portfolio-graph/lanes";
 import { readView, saveView } from "./view";
+import { WIRE_SHAPES, wirePath, type WireShape } from "./wirePath";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_KIND_PREFIX, PALETTE_MIME, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
@@ -217,8 +218,9 @@ function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void })
   );
 }
 
-/** '보기' 메뉴(CF4b) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기'. 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
-function ViewMenu({ lanes, onLanes, onFitLanes }: { lanes: boolean; onLanes: () => void; onFitLanes: () => void }) {
+/** '보기' 메뉴(CF4b·CF4c) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기' · 선 모양(곡선·직각·직선). 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
+function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire }:
+  { lanes: boolean; onLanes: () => void; onFitLanes: () => void; wire: WireShape; onWire: (w: WireShape) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useDismiss(open, useCallback(() => setOpen(false), []), ref);
@@ -237,6 +239,16 @@ function ViewMenu({ lanes, onLanes, onFitLanes }: { lanes: boolean; onLanes: () 
               <span className="pg-view-check" aria-hidden="true" />레인에 맞추기
             </button>
           )}
+          <div className="pg-view-sep" role="separator" />
+          <div role="group" aria-label="선 모양" className="pg-view-group">
+            <span className="pg-view-h" aria-hidden="true">선 모양</span>
+            {WIRE_SHAPES.map((w) => (
+              <button key={w.shape} type="button" role="menuitemradio" aria-checked={wire === w.shape} data-wire={w.shape}
+                      onClick={() => { setOpen(false); onWire(w.shape); }}>
+                <span className="pg-view-check" aria-hidden="true">{wire === w.shape && <Check size={14} />}</span>{w.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </span>
@@ -395,7 +407,8 @@ function WireDragLine({ fromX, fromY, toX, toY, fromPosition, toPosition, fromHa
           ? { source: fromHandle.nodeId, sourceHandle: fromHandle.id ?? null, target: toHandle.nodeId, targetHandle: toHandle.id ?? null }
           : { source: toHandle.nodeId, sourceHandle: toHandle.id ?? null, target: fromHandle.nodeId, targetHandle: fromHandle.id ?? null });
   }
-  const [d] = getBezierPath({ sourceX: fromX, sourceY: fromY, sourcePosition: fromPosition, targetX: toX, targetY: toY, targetPosition: toPosition });
+  const shape = usePortfolioGraph((x) => x.wireShape);
+  const { d } = wirePath(shape, { x: fromX, y: fromY }, { x: toX, y: toY }, [], { s: fromPosition, t: toPosition });
   const k = 1 / (zoom || 1);
   // 사유 글은 끌어 온 쪽에 쓴다 — 오른쪽으로 끌면 커서 왼쪽(오른쪽 판 밑으로 잘리지 않게), 왼쪽으로 끌면 커서 오른쪽. " — " 에서 두 줄로.
   const back = toX >= fromX;
@@ -484,7 +497,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const [panels, setPanels] = useState<Panels>(DEFAULT_PANELS);
   const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
   useEffect(() => { setPanels(readPanels(narrowNow(), window.innerWidth >= 1440)); }, []);
-  useEffect(() => { usePortfolioGraph.getState().setLanes(readView().lanes); }, []);
+  useEffect(() => { const v = readView(); usePortfolioGraph.getState().setLanes(v.lanes); usePortfolioGraph.getState().setWireShape(v.wire); }, []);
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
     setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
   }, []);
@@ -729,7 +742,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                  (gs || gt) && "pg-wire--proxy"].filter(Boolean).join(" ");
     const typeLabel = out ? (s.catalogMeta?.portPlain ?? PORT_PLAIN)[out.type] ?? out.type : null;
     return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id, flow: look.flow,
-                                                         flag: wireFlag(s.report?.edges?.[e.id], staleSet.has(e.target)), onFlag },
+                                                         flag: wireFlag(s.report?.edges?.[e.id], staleSet.has(e.target)), onFlag,
+                                                         waypoints: gs || gt ? [] : viaOf(e) },
              selected: e.id === s.selectedEdge,
              className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
@@ -854,8 +868,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   }, [doc, s.catalog]);
 
   // ── 구조가 바뀌면 서버 검증(위치 이동은 제외) ─────────────────────────
+  // 경유점(CF4c)은 화면 정보라 뺀다 — 점을 끌 때마다 다시 검증하지 않는다.
   const structureKey = useMemo(() => JSON.stringify({
-    n: doc.nodes.map((n) => [n.id, n.type, n.params]), e: doc.edges,
+    n: doc.nodes.map((n) => [n.id, n.type, n.params]), e: doc.edges.map((e) => [e.id, e.source, e.source_port, e.target, e.target_port]),
   }), [doc]);
   // BT2 — 빈 캔버스도 검증한다(서버가 절차의 첫 걸음을 준다). 서버에 닿지 못하면 절차를 지어내지 않고 그렇다고 말한다.
   const [validateTick, setValidateTick] = useState(0);
@@ -1228,6 +1243,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     saveView({ ...readView(), lanes: v });
   };
   const fitToLanes = () => { usePortfolioGraph.getState().fitToLanes(); fit(); };
+  // 선 모양(CF4c) — 보기만 바꾼다. 이 브라우저에 남긴다.
+  const setWire = (w: WireShape) => { usePortfolioGraph.getState().setWireShape(w); saveView({ ...readView(), wire: w }); };
 
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
@@ -1261,6 +1278,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     { id: "lanes", group: "보기", label: s.showLanes ? "단계 레인 끄기" : "단계 레인 보기", hint: "흐름 단계 여섯을 왼쪽에서 오른쪽 세로 띠로 깔아요",
       run: toggleLanes },
     ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
+    ...WIRE_SHAPES.map((w) => ({ id: `wire:${w.shape}`, group: "보기", label: `선 모양: ${w.label}`,
+                                 hint: "선을 두 번 누르면 경유점을 끼워 길을 바꿀 수 있어요", run: () => setWire(w.shape) })),
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
       run: () => usePortfolioGraph.getState().groupPicked() },
     ...(s.selectedId ? [{ id: "branch", group: "비교", label: "고른 노드에서 갈래 만들기",
@@ -1379,7 +1398,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           </span>
           <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
                   aria-label="미니맵" title="미니맵" onClick={() => s.setMinimap(!s.showMinimap)}><MapIcon size={16} /></button>
-          <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} />
+          <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} wire={s.wireShape} onWire={setWire} />
           <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
                   onClick={() => setCmdOpen(true)}><Command size={16} /></button>
         </div>

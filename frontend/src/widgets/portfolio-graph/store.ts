@@ -73,6 +73,8 @@ import {
 import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
 import { fitLanes } from "@/entities/portfolio-graph/lanes";
+import { viaOf } from "@/entities/portfolio-graph/format";
+import type { WireShape } from "./wirePath";
 import { alignRects, type AlignKind } from "./guides";
 
 /** 계산 기록 한 줄 — 노드마다 상태와 헤드라인만(원 결과는 두지 않는다: 가볍게, 비교에 필요한 만큼). */
@@ -128,6 +130,8 @@ export interface PgState {
   showMinimap: boolean;
   /** 단계 레인(CF4b) — 보기만 바꾼다(문서·계산과 무관). 켬/끔은 `view.ts` 가 이 브라우저에 남긴다. */
   showLanes: boolean;
+  /** 선 모양(CF4c) — 곡선·직각·직선. 보기만 바꾼다. */
+  wireShape: WireShape;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
   tab: "story" | "settings" | "detail" | "branches" | "wire";
   /** 오른쪽 판 "선" 탭이 보이는 선(BT4). */
@@ -200,12 +204,17 @@ export interface PgState {
   alignPicked: (kind: AlignKind) => void;
   /** 레인에 맞추기(CF4b) — 노드마다 자기 단계 띠의 하위 열로, 열 안은 지금 순서대로 실제 높이로 쌓는다. 되돌리기 한 번. */
   fitToLanes: () => void;
+  /** 경유점(CF4c) — 끼우기·옮기기·지우기. 끼우기·지우기는 되돌리기 한 번, 옮기기는 `record` 일 때(끌기 시작)만 기록한다. */
+  addWaypoint: (edgeId: string, index: number, p: { x: number; y: number }) => void;
+  moveWaypoint: (edgeId: string, index: number, p: { x: number; y: number }, record: boolean) => void;
+  removeWaypoint: (edgeId: string, index: number) => void;
   ungroup: (id: string) => void;
   toggleGroup: (id: string) => void;
   renameGroup: (id: string, label: string) => void;
   moveGroup: (id: string, dx: number, dy: number) => void;
   setMinimap: (v: boolean) => void;
   setLanes: (v: boolean) => void;
+  setWireShape: (v: WireShape) => void;
   setTab: (t: PgState["tab"]) => void;
   setExpert: (v: boolean) => void;
   setOpenGate: (k: string | null) => void;
@@ -333,6 +342,8 @@ export function causePath(id: string, edges: { source: string; target: string }[
 }
 
 const clean = (nodes: PgNode[]) => nodes.map((n) => ({ ...n, selected: false, dragging: false }));
+/** 선 복사본(복제·갈래·붙여넣기)은 경유점을 가져가지 않는다(CF4c) — 노드가 다른 자리로 가니 옛 길은 틀린 길이다. 화면 선의 `data` 는 경유점만 담는다. */
+const bare = (e: Edge): Edge => { const { data: _via, ...rest } = e; void _via; return rest; };
 /** 쌓기·맞추기에 쓰는 카드 높이(CF4a) — 화면에서 잰 높이와 카드 높이 중 큰 값(막힘 사유로 자란 카드 · 아직 안 잰 카드). */
 const boxH = (n: PgNode, catalog: NodeCatalogEntry[] | null) => Math.max(n.measured?.height ?? 0, cardHeight(n.data.kind, catalog));
 
@@ -400,6 +411,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     clip: null,
     showMinimap: false,
     showLanes: false,
+    wireShape: "curve",
     tab: "story",
     selectedEdge: null,
     expert: false,
@@ -608,7 +620,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
         data: { ...src.data, params: structuredClone(src.data.params ?? {}) },
       };
       const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
-        ...e, id: `${e.source}.${e.sourceHandle}->${nid}.${e.targetHandle}`, target: nid, selected: false,
+        ...bare(e), id: `${e.source}.${e.sourceHandle}->${nid}.${e.targetHandle}`, target: nid, selected: false,
       }));
       set((s) => ({ nodes: [...s.nodes, node], edges: [...s.edges, ...incoming], selectedId: nid, picked: [nid] }));
       return nid;
@@ -726,7 +738,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const newEdges: Edge[] = s.edges.filter((e) => inScope.has(e.target)).map((e) => {
         const source = inScope.has(e.source) ? idOf.get(e.source)! : e.source;
         const target = idOf.get(e.target)!;
-        return { ...e, id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, source, target, selected: false };
+        return { ...bare(e), id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, source, target, selected: false };
       });
       const branch: GraphBranch = { id: `br_${Date.now().toString(36)}${(++seq).toString(36)}`, label: `갈래 ${letter}`,
         root: idOf.get(ofRoot)!, of_root: ofRoot, map: Object.fromEntries(scope.map((id) => [idOf.get(id)!, id])) };
@@ -853,7 +865,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const edges = s.clip.edges.map((e) => {
         const source = remap.get(e.source)!;
         const target = remap.get(e.target)!;
-        return { ...e, source, target, id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, selected: false };
+        return { ...bare(e), source, target, id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, selected: false };
       });
       set({
         nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), ...nodes], edges: [...s.edges, ...edges],
@@ -904,6 +916,34 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       if (!to.size) return;
       push();
       set({ nodes: s.nodes.map((n) => (to.has(n.id) ? { ...n, position: to.get(n.id)! } : n)) });
+    },
+
+    addWaypoint: (edgeId, index, p) => {
+      const s = get();
+      const e = s.edges.find((x) => x.id === edgeId);
+      if (!e) return;
+      push();
+      const via = [...viaOf(e)];
+      via.splice(Math.max(0, Math.min(index, via.length)), 0, { x: p.x, y: p.y });
+      set({ edges: s.edges.map((x) => (x.id === edgeId ? { ...x, data: { ...(x.data ?? {}), waypoints: via } } : x)) });
+    },
+
+    moveWaypoint: (edgeId, index, p, record) => {
+      const s = get();
+      const e = s.edges.find((x) => x.id === edgeId);
+      if (!e || !viaOf(e)[index]) return;
+      if (record) push();
+      const via = viaOf(e).map((q, i) => (i === index ? { x: p.x, y: p.y } : q));
+      set({ edges: s.edges.map((x) => (x.id === edgeId ? { ...x, data: { ...(x.data ?? {}), waypoints: via } } : x)) });
+    },
+
+    removeWaypoint: (edgeId, index) => {
+      const s = get();
+      const e = s.edges.find((x) => x.id === edgeId);
+      if (!e || !viaOf(e)[index]) return;
+      push();
+      const via = viaOf(e).filter((_, i) => i !== index);
+      set({ edges: s.edges.map((x) => (x.id === edgeId ? { ...x, data: { ...(x.data ?? {}), waypoints: via } } : x)) });
     },
 
     fitToLanes: () => {
@@ -1068,6 +1108,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
 
     setMinimap: (showMinimap) => set({ showMinimap }),
     setLanes: (showLanes) => set({ showLanes }),
+    setWireShape: (wireShape) => set({ wireShape }),
     setTab: (tab) => set({ tab }),
     setExpert: (expert) => set({ expert }),
     setOpenGate: (openGate) => set({ openGate }),

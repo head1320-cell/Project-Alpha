@@ -22,6 +22,8 @@ export interface GraphDocEdge {
   source_port: string;
   target: string;
   target_port: string;
+  /** 경유점(CF4c) — 선이 지나는 자리(캔버스 좌표). ★계산에는 끼지 않는 화면 정보★ — 서버는 읽지 않는다. */
+  waypoints?: { x: number; y: number }[];
 }
 
 /** 묶음 상자(BL1) — ★계산에는 끼지 않는 화면 정보★. 서버는 이 칸을 읽지 않고, 파일에만 남는다. */

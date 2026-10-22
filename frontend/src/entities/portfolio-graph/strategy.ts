@@ -118,9 +118,11 @@ export function insertDoc(doc: { nodes: GraphDocNode[]; edges: GraphDocEdge[] },
   const y0 = Math.min(...doc.nodes.map((n) => n.position.y));
   const nodes = doc.nodes.map((n) => ({ ...n, id: map.get(n.id)!, params: structuredClone(n.params ?? {}),
     position: { x: n.position.x - x0 + offset.x, y: n.position.y - y0 + offset.y } }));
+  // 경유점(CF4c)은 노드와 같이 옮긴다.
   const edges = doc.edges.filter((e) => map.has(e.source) && map.has(e.target)).map((e) => ({
     ...e, source: map.get(e.source)!, target: map.get(e.target)!,
-    id: `${map.get(e.source)}.${e.source_port}->${map.get(e.target)}.${e.target_port}` }));
+    id: `${map.get(e.source)}.${e.source_port}->${map.get(e.target)}.${e.target_port}`,
+    ...(e.waypoints ? { waypoints: e.waypoints.map((p) => ({ x: p.x - x0 + offset.x, y: p.y - y0 + offset.y })) } : {}) }));
   return { nodes, edges, map };
 }
 

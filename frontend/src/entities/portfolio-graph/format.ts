@@ -45,6 +45,13 @@ export interface ParseResult {
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** 경유점(CF4c) — 점마다 유한한 x·y 가 있어야 한다. 하나라도 망가졌으면 그 선의 경유점은 통째로 버린다(지어내지 않는다). 없으면 `null`. */
+function waypointsOf(v: unknown): { ok: { x: number; y: number }[] | null; bad: boolean } {
+  if (v === undefined) return { ok: null, bad: false };
+  if (!Array.isArray(v) || !v.every((p) => isObj(p) && Number.isFinite(p.x) && Number.isFinite(p.y))) return { ok: null, bad: true };
+  return { ok: v.length ? v.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : null, bad: false };
+}
+
 /**
  * 파일 텍스트 → 문서. ★다른 포맷·버전은 불러오지 않는다★ — 이 파일이 무엇을 뜻하는지 모르면
  * 캔버스에 그리는 것 자체가 추측이다. 노드 타입이 모르는 것인지는 여기서 보지 않는다
@@ -106,11 +113,14 @@ export function parseFile(text: string): ParseResult {
       problems.push(`링크 #${i + 1} 이 없는 노드를 가리킵니다 (${e.source} → ${e.target}).`);
       continue;
     }
+    const wp = waypointsOf(e.waypoints);
+    if (wp.bad) problems.push(`링크 #${i + 1} 의 경유점이 숫자 자리가 아니라 버렸어요 — 선은 그대로 이어요.`);
     edges.push({
       id: typeof e.id === "string" && e.id ? e.id
         : `${e.source}.${e.source_port}->${e.target}.${e.target_port}`,
       source: e.source as string, source_port: e.source_port as string,
       target: e.target as string, target_port: e.target_port as string,
+      ...(wp.ok ? { waypoints: wp.ok } : {}),
     });
   }
   // 묶음 상자(BL1) — 없는 노드를 가리키는 구성원은 빼고, 비면 묶음도 뺀다(말하고).
@@ -204,6 +214,7 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
     sourceHandle: e.source_port,
     target: e.target,
     targetHandle: e.target_port,
+    ...(e.waypoints?.length ? { data: { waypoints: e.waypoints.map((p) => ({ x: p.x, y: p.y })) } } : {}),
   }));
   return { nodes, edges };
 }
@@ -227,14 +238,24 @@ export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], g
       params: { ...n.data.params },
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
     })),
-    edges: edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      source_port: e.sourceHandle ?? "",
-      target: e.target,
-      target_port: e.targetHandle ?? "",
-    })),
+    edges: edges.map((e) => {
+      const wp = viaOf(e);
+      return {
+        id: e.id,
+        source: e.source,
+        source_port: e.sourceHandle ?? "",
+        target: e.target,
+        target_port: e.targetHandle ?? "",
+        ...(wp.length ? { waypoints: wp.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) } : {}),
+      };
+    }),
   };
+}
+
+/** 선의 경유점(CF4c) — 화면 선(`Edge.data.waypoints`)에 둔다. 없으면 빈 목록. */
+export function viaOf(e: { data?: unknown }): { x: number; y: number }[] {
+  const wp = (e.data as { waypoints?: { x: number; y: number }[] } | undefined)?.waypoints;
+  return Array.isArray(wp) ? wp : [];
 }
 
 /** 지워진 노드를 가리키는 갈래 짝을 뺀다 — 뿌리가 사라진 갈래는 통째로 뺀다. */
