@@ -3924,6 +3924,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --pg-shadow: 0 1px 2px rgb(25 31 40 / 8%), 0 6px 20px rgb(25 31 40 / 9%);
   /* BQ Q3 — 바탕은 옅은 청회색, 점은 보이되 선보다 약하게, 카드는 1px 테두리로 떠 보이게. 판 위계: 바탕 < 카드 < 떠 있는 판. */
   --pg-dot: #c3ccd8; --pg-card-line: #dce2ea;
+  /* CF4a 큰 칸 선(110) — 점보다 옅게(바탕 대비 ≈1.2:1). 눈금일 뿐 내용이 아니다. */
+  --pg-grid-line: #d9dfe8;
   --pg-float-shadow: 0 2px 6px rgb(25 31 40 / 6%), 0 12px 32px rgb(25 31 40 / 10%);
   /* 선 색 — 바탕(#eef2f7)과 3:1 이상(비텍스트 대비). 모자란 색은 같은 색상에서 명도만 낮췄다. */
   --pg-wire-off: #7d8894;
@@ -3944,6 +3946,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --pg-unknown: #a3acb8; --pg-unknown-soft: #23262b; --pg-fail: #ff6b76; --pg-fail-soft: #33171b;
   --pg-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 35%);
   --pg-dot: #2a3441; --pg-card-line: #2c3542;
+  --pg-grid-line: #1b232e;
   --pg-float-shadow: 0 2px 6px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 50%);
   /* 선 색 — 바탕(#0e131b)과 3:1 이상. 모자란 색은 같은 색상에서 명도만 높였다. */
   --pg-wire-off: #707a88;
@@ -4388,6 +4391,17 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-canvas .pg-minimap { background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 12px; box-shadow: var(--pg-shadow); }
 .pg-canvas .pg-minimap .react-flow__minimap-mask { fill: color-mix(in srgb, var(--pg-canvas) 70%, transparent); }
 .pg-canvas .react-flow__background circle { fill: var(--pg-dot); }
+/* CF4a — 큰 칸 선(110 = 점 다섯 칸)은 점보다 옅게(바탕 대비 ≈1.2:1) — 눈금이지 내용이 아니다. 끌 때 안내선은 파랑 1px(확대와 무관). */
+.pg-canvas .pg-grid-lines path { stroke: var(--pg-grid-line); }
+.pg-guides { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 5; }
+.pg-guide { stroke: var(--pg-blue); stroke-width: 1; vector-effect: non-scaling-stroke; shape-rendering: crispEdges; }
+/* 정렬 메뉴 — 고른 카드 막대의 '정렬' 아래(캔버스 안에 다 들어가지 않으면 위로) 글자 항목. */
+.pg-align { position: relative; }
+.pg-align-menu { position: absolute; left: 0; z-index: 10; display: grid; min-width: 156px; padding: 4px; background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 10px; box-shadow: var(--pg-float-shadow); }
+.pg-align-menu[data-dir="down"] { top: calc(100% + 6px); }
+.pg-align-menu[data-dir="up"] { bottom: calc(100% + 6px); }
+.pg-theme .pg-align-menu [role="menuitem"] { height: 32px; padding: 0 10px; font: inherit; font-size: 13px; font-weight: 600; color: var(--pg-ink); text-align: left; white-space: nowrap; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.pg-theme .pg-align-menu [role="menuitem"]:hover, .pg-theme .pg-align-menu [role="menuitem"]:focus-visible { background: var(--pg-soft); }
 .pg-history-h { margin-top: 20px; }
 .pg-history { width: 100%; font-size: 13px; border-collapse: collapse; color: var(--pg-ink); }
 .pg-history th { padding: 4px 0; font-size: 12px; font-weight: 600; text-align: left; color: var(--pg-mute); }

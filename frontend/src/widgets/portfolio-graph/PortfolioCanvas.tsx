@@ -17,7 +17,7 @@
  * 다시하기(Ctrl+Shift+Z) · 복사(Ctrl+C)/붙여넣기(Ctrl+V) · 여러 개 지우기 · 자동 정리 · 미니맵 · 묶음 상자(Ctrl+G) ·
  * 명령 팔레트(Ctrl+K) · 계산 기록. ★이번 대담함은 한 곳★ — "여기까지 계산" 에 올리면 돌 경로가 먼저 밝아진다.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import {
   ReactFlow,
   Background,
@@ -28,6 +28,7 @@ import {
   NodeToolbar,
   Panel,
   Position,
+  ViewportPortal,
   getBezierPath,
   useStore,
   type Connection,
@@ -39,7 +40,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
+import { AlignStartVertical, Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
   COL,
@@ -83,6 +84,7 @@ import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { measuredH, measuredW } from "./toolbarPlace";
+import { ALIGN_ITEMS, snapToGuides, type AlignKind, type Guide } from "./guides";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_KIND_PREFIX, PALETTE_MIME, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
@@ -134,8 +136,10 @@ const TOOLBAR_H = 48;
 /** 고른 노드 막대의 자리(BS2) — 아래가 기본(상자 머리를 가리지 않게), 아래 공간이 모자라면 위로.
  *  캔버스 아래에는 안내 줄(약 60px)이 떠 있다 — 예전에는 아래 끝의 노드를 고르면 막대가 그 밑에 깔려 누를 수 없었다(E2E 가 찾음). */
 const SELBAR_ROOM = 14 + 44 + 64;
-/** 막대 폭(대략) — 가운데 맞춤이 떠 있는 판 밑으로 들어가는지 볼 때 쓴다. */
-const SELBAR_W = 300;
+/** 막대 폭(대략) — 가운데 맞춤이 떠 있는 판 밑으로 들어가는지 볼 때 쓴다. CF4a '정렬' 단추로 실측 255 → 321 이라 360(전과 같은 여유 약 40). */
+const SELBAR_W = 360;
+/** 끌기 격자(BN N3) — 22 점 칸의 반. */
+const SNAP = 11;
 function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
   // 가로도 — 가운데에 두면 떠 있는 오른쪽 창·왼쪽 목록 밑으로 들어가는 경우 고른 노드의 끝에 맞춘다(E2E 가 찾음).
   const place = useStore((st) => {
@@ -162,6 +166,47 @@ function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
                  className="pg-selbar">
       {children}
     </NodeToolbar>
+  );
+}
+
+/** 정렬·간격(CF4a) — 고른 카드 막대의 '정렬' 단추 하나 → 글자 항목(간격 맞추기는 셋 이상일 때만). 툴팁 없이 보이는 글. */
+function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void }) {
+  const [open, setOpen] = useState(false);
+  const [dir, setDir] = useState<"down" | "up">("down");
+  const ref = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  // 열 쪽 — 캔버스 안에 메뉴가 다 들어가는 쪽(아래 먼저). 둘 다 모자라면 넓은 쪽. 그리기 전에 정한다(깜빡임 없음).
+  useLayoutEffect(() => {
+    if (!open || !ref.current || !menu.current) return;
+    const b = ref.current.getBoundingClientRect();
+    const c = ref.current.closest(".pg-canvas")?.getBoundingClientRect();
+    if (!c) return;
+    const h = menu.current.offsetHeight + 8, below = c.bottom - b.bottom, above = b.top - c.top;
+    setDir(below >= h || below >= above ? "down" : "up");
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as HTMLElement)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <div className="pg-align" ref={ref}>
+      <button type="button" className="pg-selbar-b pg-align-open" aria-haspopup="menu" aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}>
+        <AlignStartVertical size={14} aria-hidden="true" /> 정렬
+      </button>
+      {open && (
+        <div className="pg-align-menu" role="menu" aria-label="정렬" data-dir={dir} ref={menu}>
+          {ALIGN_ITEMS.filter((i) => n >= i.min).map((i) => (
+            <button key={i.kind} type="button" role="menuitem" data-align={i.kind}
+                    onClick={() => { setOpen(false); onPick(i.kind); }}>{i.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -331,6 +376,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   /** 팔레트에서 끄는 노드를 끼울 수 있는 선(BT4) — 놓으면 그 선 사이에 들어간다. */
   const [dropWire, setDropWire] = useState<string | null>(null);
+  /** 끄는 동안의 정렬 안내선(CF4a) — 놓으면 비운다. */
+  const [guides, setGuides] = useState<Guide[]>([]);
   // BT2 — 왼쪽 판 탭. 고른 적이 없으면 노드 추가(예전 그대로)이고, 캔버스가 비어 있으면 절차를 먼저 보인다.
   const [leftTab, setLeftTabState] = useState<LeftTab | null>(() => {
     try { const v = localStorage.getItem(LEFT_TAB_KEY); return v === "proc" || v === "add" ? v : null; } catch { return null; }
@@ -700,6 +747,24 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
     const rest: NodeChange[] = [];
+    // CF4a — 카드 하나를 끄는 중이면 다른 카드의 가장자리·가운데에 붙인다(여럿·묶음 상자는 붙이지 않는다). 위치는 격자(11)에 맞춘 뒤 오므로
+    // 문턱은 화면 6px 에 격자 반 칸을 더한다 — 손이 6px 안으로 가져간 자리는 격자로 밀려도 붙는다.
+    // 놓을 때(dragging false) React Flow 는 끌기 자리를 다시 보낸다 — 그 자리도 같은 규칙으로 붙여야 놓은 뒤 격자로 되밀리지 않는다.
+    const drags = changes.filter((c) => c.type === "position" && typeof c.dragging === "boolean" && c.position && !c.id.includes(":"));
+    const c = drags.length === 1 ? drags[0] : null;
+    if (c && c.type === "position" && c.position) {
+      const at = c.position;
+      const me = st.nodes.find((x) => x.id === c.id);
+      if (me) {
+        const box = (x: typeof me) => ({ w: measuredW(x) || cardWidth(x.data.kind), h: measuredH(x) || cardHeight(x.data.kind, st.catalog) });
+        const others = st.nodes.filter((x) => x.id !== c.id).map((x) => ({ x: x.position.x, y: x.position.y, ...box(x) }));
+        const r = snapToGuides({ x: at.x, y: at.y, ...box(me) }, others, 6 / (rf.current?.getZoom() ?? 1) + SNAP / 2);
+        c.position = { x: r.x, y: r.y };
+        setGuides(c.dragging ? r.guides : []);
+      }
+    } else if (changes.some((c) => c.type === "position" && c.dragging === false)) {
+      setGuides([]);
+    }
     for (const c of changes) {
       if ("id" in c && c.id.startsWith("branch:")) continue;
       if ("id" in c && c.id.startsWith("frame:")) {
@@ -1378,7 +1443,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null });
             }}
             snapToGrid
-            snapGrid={[11, 11]}
+            snapGrid={[SNAP, SNAP]}
             // v12 의 인스턴스는 노드·선 타입을 제네릭으로 싣는다 — 이 파일은 일반 Node/Edge 로만 부른다.
             onInit={(inst) => { rf.current = inst as unknown as ReactFlowInstance; }}
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
@@ -1394,7 +1459,19 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             proOptions={{ hideAttribution: true }}
           >
             {/* CF0 — v12 는 점을 칸 가운데로 옮긴다(offset 0 = 칸 절반). v11 처럼 칸 모서리에 두려면 (점 크기 − 칸) / 2. */}
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} offset={(1.5 - 22) / 2} color="var(--pg-dot)" />
+            {/* CF4a — 격자 두 겹: 점(22)을 ★먼저★(바탕 대비 테스트가 첫 무늬를 잰다) · 큰 칸 선(110 = 점 다섯 칸, 점 자리를 지난다). */}
+            <Background id="pg-grid-dots" variant={BackgroundVariant.Dots} gap={22} size={1.5} offset={(1.5 - 22) / 2} color="var(--pg-dot)" />
+            <Background id="pg-grid-lines" variant={BackgroundVariant.Lines} gap={110} lineWidth={1} color="var(--pg-grid-line)"
+                        bgColor="transparent" className="pg-grid-lines" />
+            {guides.length > 0 && (
+              <ViewportPortal>
+                <svg className="pg-guides" aria-hidden="true">
+                  {guides.map((g, i) => (g.axis === "x"
+                    ? <line key={i} className="pg-guide" data-axis="x" x1={g.at} x2={g.at} y1={g.from - 12} y2={g.to + 12} />
+                    : <line key={i} className="pg-guide" data-axis="y" x1={g.from - 12} x2={g.to + 12} y1={g.at} y2={g.at} />))}
+                </svg>
+              </ViewportPortal>
+            )}
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">
@@ -1455,6 +1532,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             {!s.simple && s.picked.length > 1 && !pickedIsOneGroup && (
               <SelBar ids={s.picked}>
                 <span className="pg-selbar-n">{s.picked.length}개 골랐어요</span>
+                <AlignMenu n={s.picked.length} onPick={(k) => usePortfolioGraph.getState().alignPicked(k)} />
                 <button type="button" className="pg-selbar-b" onClick={() => usePortfolioGraph.getState().groupPicked()}
                         title="고른 노드를 상자로 묶어요 (Ctrl+G)">
                   <Boxes size={14} aria-hidden="true" /> 묶기

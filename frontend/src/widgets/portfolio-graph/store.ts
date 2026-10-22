@@ -53,6 +53,7 @@ import {
   NODE_W,
   ROW_GAP,
   cardHeight,
+  cardWidth,
   topoOrder,
   NEW_NODE,
   type ProcedureSuggestion,
@@ -71,6 +72,7 @@ import {
 } from "@/entities/portfolio-graph";
 import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
+import { alignRects, type AlignKind } from "./guides";
 
 /** 계산 기록 한 줄 — 노드마다 상태와 헤드라인만(원 결과는 두지 않는다: 가볍게, 비교에 필요한 만큼). */
 export interface RunRecord {
@@ -191,6 +193,8 @@ export interface PgState {
   paste: () => number;
   autoLayout: () => void;
   groupPicked: (label?: string) => string | null;
+  /** 고른 카드 정렬·간격 맞추기(CF4a) — 되돌리기 한 번. 간격은 셋 이상일 때만. */
+  alignPicked: (kind: AlignKind) => void;
   ungroup: (id: string) => void;
   toggleGroup: (id: string) => void;
   renameGroup: (id: string, label: string) => void;
@@ -323,6 +327,8 @@ export function causePath(id: string, edges: { source: string; target: string }[
 }
 
 const clean = (nodes: PgNode[]) => nodes.map((n) => ({ ...n, selected: false, dragging: false }));
+/** 쌓기·맞추기에 쓰는 카드 높이(CF4a) — 화면에서 잰 높이와 카드 높이 중 큰 값(막힘 사유로 자란 카드 · 아직 안 잰 카드). */
+const boxH = (n: PgNode, catalog: NodeCatalogEntry[] | null) => Math.max(n.measured?.height ?? 0, cardHeight(n.data.kind, catalog));
 
 function record(report: RunReport, partial: string[] | null): RunRecord {
   const nodes: RunRecord["nodes"] = {};
@@ -873,13 +879,24 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const pos = new Map<string, { x: number; y: number }>();
       for (const [d, col] of cols) {
         // 같은 깊이는 **지금의 세로 순서**를 지킨다 — 사람이 둔 위아래를 뒤섞지 않는다. 줄은 카드 높이 + 틈(BS2).
+        // CF4a — 막힘 사유가 길어 자란 카드는 실제 높이로 쌓는다(카드 높이보다 낮게는 잡지 않는다 — 접은 카드를 펴도 겹치지 않게).
         let top = 0;
         for (const n of col.sort((a, b) => a.position.y - b.position.y)) {
           pos.set(n.id, { x: d * COL, y: top });
-          top += cardHeight(n.data.kind, s.catalog) + ROW_GAP;
+          top += boxH(n, s.catalog) + ROW_GAP;
         }
       }
       set({ nodes: s.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) });
+    },
+
+    alignPicked: (kind) => {
+      const s = get();
+      const sel = s.nodes.filter((n) => s.picked.includes(n.id));
+      const to = alignRects(sel.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y,
+                                             w: n.measured?.width ?? cardWidth(n.data.kind), h: boxH(n, s.catalog) })), kind);
+      if (!to.size) return;
+      push();
+      set({ nodes: s.nodes.map((n) => (to.has(n.id) ? { ...n, position: to.get(n.id)! } : n)) });
     },
 
     groupPicked: (label) => {

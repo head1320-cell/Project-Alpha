@@ -1679,15 +1679,30 @@ test("상단 줄(BN N3): 1024px 이면 서랍·불러오기·내보내기가 '�
   expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
 });
 
-test("격자 맞춤(BN N3): 노드를 끌면 11px 격자에 선다(자동 정리 자리는 그대로)", async ({ page }) => {
+// CF4a 부터 끌 때 다른 카드의 가장자리·가운데에 안내선이 걸리면 그 축은 그 값에 정확히 붙는다(안내선이 격자를 이긴다 — 카드끼리 맞추는 게 목적).
+// 그래서 축마다 "11px 격자 위 ★또는★ 끈 카드의 왼·가운데·오른(위·가운데·아래) 중 하나가 다른 카드의 그 값과 같음"을 잰다 — 아무 데나 떨어진 자리는 둘 다 아니라 빨갛다.
+test("격자 맞춤(BN N3 · CF4a): 노드를 끌면 축마다 11px 격자에 서거나, 안내선이 걸린 축은 다른 카드 가장자리·가운데에 정확히 선다", async ({ page }) => {
   await openCanvas(page);
   const card = (await node(page, "optimizer").boundingBox())!;
   await page.mouse.move(card.x + 60, card.y + 20);
   await page.mouse.down();
   await page.mouse.move(card.x + 97, card.y + 63, { steps: 10 });
   await page.mouse.up();
-  const p = (await wip(page)).nodes.find((n) => n.id === "optimizer")!.position;
-  expect([Math.round(p.x) % 11, Math.round(p.y) % 11]).toEqual([0, 0]);
+  const doc = await wip(page);
+  const p = doc.nodes.find((n) => n.id === "optimizer")!.position;
+  const zoom = await page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  const anchors = { x: [] as number[], y: [] as number[] };
+  const me = (await node(page, "optimizer").boundingBox())!;
+  const mine = { x: [0, me.width / zoom / 2, me.width / zoom], y: [0, me.height / zoom / 2, me.height / zoom] };
+  for (const o of doc.nodes.filter((n) => n.id !== "optimizer")) {
+    const b = await page.locator(`.react-flow__node[data-id="${o.id}"]`).boundingBox();
+    if (!b) continue;
+    const w = b.width / zoom, h = b.height / zoom;
+    anchors.x.push(o.position.x, o.position.x + w / 2, o.position.x + w);
+    anchors.y.push(o.position.y, o.position.y + h / 2, o.position.y + h);
+  }
+  const ok = (v: number, axis: "x" | "y") => Math.round(v) % 11 === 0 || mine[axis].some((d) => anchors[axis].some((a) => Math.abs(a - (v + d)) <= 1));
+  expect([ok(p.x, "x"), ok(p.y, "y")], `optimizer ${p.x},${p.y}`).toEqual([true, true]);
 });
 
 for (const scheme of ["light", "dark"] as const) {
