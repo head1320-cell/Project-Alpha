@@ -5791,12 +5791,24 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
   color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
 .pg-gate-node:focus-visible, .pg-gate-fix:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 /* BT3 — 다음 한 걸음: 아래 안내 줄 자리에 서버가 고른 한 걸음 + [붙이기]·[다음에]. 누를 수 있어야 한다. */
-.pg-hint.pg-next { display: flex; align-items: center; gap: 10px; pointer-events: auto; white-space: normal; padding: 8px 8px 8px 16px;
-  max-width: min(640px, calc(100% - var(--pg-left-inset, 0px) - var(--pg-right-inset, 0px) - 24px)); color: var(--pg-ink); }
-.pg-next-text { margin: 0; flex: 1; font-size: 13px; line-height: 1.45; word-break: keep-all; }
-.pg-next-go { flex: none; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--pg-cta); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+.pg-hint.pg-next { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; pointer-events: auto; white-space: normal;
+  padding: 8px 8px 8px 16px; color: var(--pg-ink); }
+/* K4 — 이 바는 누를 수 있어서, 왼쪽 아래 확대 단추 위에 얹히면 단추를 누를 수 없었다(모든 폭). 왼쪽은 확대 단추 몫(56)을,
+   오른쪽은 실제로 있는 것만(16 · 미니맵을 켜면 그 폭) 비우고 그 사이 가운데에 선다. 사이가 좁으면 단추가 글 아래 줄로 내려간다. */
+.pg-canvas .pg-hint.pg-next { --pg-next-l: calc(var(--pg-left-inset) + 56px); --pg-next-r: calc(var(--pg-right-inset) + 16px);
+  left: calc(var(--pg-next-l) + (100% - var(--pg-next-l) - var(--pg-next-r)) / 2);
+  max-width: min(640px, calc(100% - var(--pg-next-l) - var(--pg-next-r))); }
+.pg-canvas:has(.pg-minimap) .pg-hint.pg-next { --pg-next-r: calc(var(--pg-right-inset) + 232px); }
+.pg-next-text { margin: 0; flex: 1 1 240px; font-size: 13px; line-height: 1.45; word-break: keep-all; text-align: left; }
+.pg-next-go { flex: none; margin-left: auto; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--pg-cta); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
 .pg-next-later { flex: none; height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: var(--pg-mute); font-size: 13px; cursor: pointer; }
 .pg-next-go:focus-visible, .pg-next-later:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+/* K4 — 좁은 화면: 위에 뜬 창 열기 단추가 아래 바의 폭까지 깎아 한 낱말씩 줄이 바뀌었다. 바는 캔버스 폭(양옆 16)을 쓰고
+   확대 단추(아래 15 + 높이 81) 위에 선다. 글은 한 줄 전체, 단추는 아래 줄 오른쪽. */
+@media (max-width: 640px) {
+  .pg-canvas .pg-hint.pg-next { left: 16px; right: 16px; bottom: 108px; transform: none; width: auto; max-width: none; text-align: left; }
+  .pg-next-text { flex: 1 1 100%; }
+}
 /* BT3 — "‘수익률’을 이어 주세요" 의 이름이 단추다: 누르면 그 값을 내는 노드만 보이는 빠른 추가. */
 .pg-node-need-btn { padding: 0; border: 0; background: none; font: inherit; color: inherit; font-weight: 700;
   text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }

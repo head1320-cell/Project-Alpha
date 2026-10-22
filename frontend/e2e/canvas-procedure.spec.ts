@@ -46,7 +46,8 @@ async function openWith(page: Page, doc: object | null, tab: "proc" | "add" | nu
     } catch { /* */ }
   }, [doc, tab] as const);
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".pg-palette")).toBeVisible({ timeout: 30_000 });
+  // 좁은 화면(K4)에서는 왼쪽 창이 접혀 열기 단추만 보인다.
+  await expect(page.locator(".pg-palette, .pg-palette-fab").first()).toBeVisible({ timeout: 30_000 });
 }
 const step = (page: Page, key: string) => page.locator(`.pg-proc-step[data-step="${key}"]`);
 const edges = (page: Page) => page.locator(".react-flow__edge");
@@ -227,3 +228,78 @@ test("‘기대 수익’을 이어 주세요 — 이름을 누르면 그 값을
   await expect(edges(page)).toHaveCount(before + 1);
   await expect(nodeOf(page, "optimizer").locator(".pg-node-need")).toHaveCount(0);
 });
+
+// ── K4 · '다음 한 걸음' 바 자리 (작업 카드 — CSS) ─────────────────────────────────────────────
+// 좁은 화면에서는 위에 떠 있는 둥근 단추(왼쪽·오른쪽 창 열기)가 아래 바의 폭까지 깎아 한 낱말씩 줄이 바뀌었다(390 에서 폭 198 · 높이 261).
+// 넓은 화면에서는 바가 확대 단추(왼쪽 아래) 위에 얹혀 누를 수 없었다. ★바는 캔버스 폭을 쓰되 확대 단추를 가리지 않는다★.
+type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const inside = (a: Box, b: Box) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.width <= b.x + b.width + 0.5 && a.y + a.height <= b.y + b.height + 0.5;
+const viewportScale = (page: Page) => page.locator(".react-flow__viewport").evaluate((el) => getComputedStyle(el).transform);
+
+async function zoomStillClickable(page: Page, bar: Box) {
+  const z = (await page.locator(".react-flow__controls").boundingBox())!;
+  expect(overlaps(bar, z), `바 ${JSON.stringify(bar)} · 확대 단추 ${JSON.stringify(z)}`).toBe(false);
+  const before = await viewportScale(page);
+  await page.locator(".react-flow__controls-zoomin").click();                     // 진짜 클릭(force 없음) — 가려 있으면 바가 받는다
+  await expect.poll(() => viewportScale(page)).not.toBe(before);
+}
+
+test.describe("K4 · 좁은 화면(390)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("바는 캔버스 폭을 거의 다 쓰고 · 글은 세 줄 이하 · 단추는 바 안 · 확대 단추를 가리지 않는다", async ({ page }) => {
+    await openWith(page, BUILD_ONLY, "add");
+    const bar = page.locator(".pg-next");
+    await expect(bar).toBeVisible();
+    await page.waitForTimeout(300);
+    const c = (await page.locator(".pg-canvas").boundingBox())!;
+    const b = (await bar.boundingBox())!;
+    expect(b.width).toBeGreaterThanOrEqual(c.width - 32 - 1);
+    expect(inside(b, c)).toBe(true);
+    const lines = await page.locator(".pg-next-text").evaluate((el) =>
+      Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+    expect(lines).toBeLessThanOrEqual(3);
+    for (const sel of [".pg-next-go", ".pg-next-later"]) expect(inside((await page.locator(sel).boundingBox())!, b), sel).toBe(true);
+    await zoomStillClickable(page, b);
+    await page.locator(".pg-next-later").click();
+    await expect(bar).toHaveCount(0);
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`바 대비 AA (${theme})`, async ({ page }) => {
+      await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+      await openWith(page, BUILD_ONLY, "add");
+      await expect(page.locator(".pg-next")).toBeVisible();
+      if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+      const r = await page.evaluate<AuditResult>(contrastAudit(".pg-next"));
+      expect(r.checked).toBeGreaterThan(2);
+      expect(r.low, JSON.stringify(r.low)).toEqual([]);
+    });
+  }
+});
+
+for (const [w, h] of [[1024, 768], [1440, 900]] as const) {
+  test.describe(`K4 · 넓은 화면(${w})`, () => {
+    test.use({ viewport: { width: w, height: h } });
+
+    test("바는 폭 640 이하 · 단추는 바 안 · 확대 단추를 가리지 않는다(짝) · 미니맵을 켜면 미니맵도 비켜 선다", async ({ page }) => {
+      await openWith(page, BUILD_ONLY, "add");
+      const bar = page.locator(".pg-next");
+      await expect(bar).toBeVisible();
+      await page.waitForTimeout(300);
+      const b = (await bar.boundingBox())!;
+      expect(b.width).toBeLessThanOrEqual(640);
+      expect(b.height).toBeLessThan(120);
+      for (const sel of [".pg-next-go", ".pg-next-later"]) expect(inside((await page.locator(sel).boundingBox())!, b), sel).toBe(true);
+      await zoomStillClickable(page, b);
+      await page.locator('button[aria-label="미니맵"]').click();
+      const m = page.locator(".pg-minimap");
+      await expect(m).toBeVisible();
+      await page.waitForTimeout(200);
+      const b2 = (await bar.boundingBox())!;
+      expect(overlaps(b2, (await m.boundingBox())!), `바 ${JSON.stringify(b2)}`).toBe(false);
+      for (const sel of [".pg-next-go", ".pg-next-later"]) expect(inside((await page.locator(sel).boundingBox())!, b2), sel).toBe(true);
+    });
+  });
+}
