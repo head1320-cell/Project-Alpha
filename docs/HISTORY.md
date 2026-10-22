@@ -23124,3 +23124,22 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   `DATABASE_URL` 을 폴백과 같은 SQLite 파일로 직접 주고 돌렸다) · 골든 `CF3_GOLDEN_EXACT=1` · 화면 코드 0 이라 E2E 는 돌리지 않음.
 - 하지 않음: 다른 방식(mvo 등)의 `views_applied` 뜻 바꾸기(생각을 쓰지 않는 방식은 `views_unused` 가 말한다) · 엔진 문장 수정(SHA 가드) · 베타 제약 사유를 화면에 보이기(제약 보고 `notes` 는 지금 화면이 그리지 않는다 —
   `/analyze`·연구 기록 응답에만 실린다) · 백테스트의 벤치 0 채움과 최적화의 벤치 버림이 다른 것(관찰 — 별도 카드 후보).
+
+## K2 · 백테스트가 비중 계산의 위험 회피 λ 를 받는다 (2026-10-22, CF3 작업 카드)
+
+- 왜: 정책 백테스트는 받은 비중이 아니라 '비중 계산' 규칙을 리밸런싱마다 다시 푸는데, λ(`risk_aversion`)를 넘기지 않아 λ 1.5 로 고른 위험 성향 효용(mv_utility)이
+  기본값 λ 4 로 백테스트됐다(CF3 R9 가 '바뀜'으로 드러냄). ★백테스트 수치가 바뀌는 승인된 변경★(사용자 계획 승인 2026-10-21).
+- 무엇(인자 하나 잇기 — 엔진 리팩터링 아님, 전부 선택 인자·기본 None = 지금과 같음):
+  `BacktestRequest.risk_aversion`(`/analyze` 와 같은 범위 0.5~20) → `_policy_backtest` → `walk_forward` → `plan_walk_forward` → `_weights_at` 이
+  `optimize(risk_aversion=)` 과 제약이면 `constrained_solve(risk_aversion=)` 에 넘긴다(두 함수는 이미 받았다). 그래프 백테스트 노드가 비중 계산의 λ 를 싣는다.
+  백테스트는 쓴 λ 를 `config.risk_aversion`(`{value, source}` — 위험 성향 효용일 때만, 다른 방식의 응답 모양은 그대로)으로 밝힌다.
+  선 점검 R9 는 그 값을 비중 계산의 λ 와 견준다 — 다르거나 밝히지 않았으면 여전히 '바뀜'(규칙을 죽이지 않고 실제 값으로 잰다).
+- ★회사 관점은 넘기지 않는다★ — 지금 시점 전용(forward_only)이라 과거 시뮬레이션에 넣으면 룩어헤드다(`BacktestRequest` 에 그 필드가 없는 이유 · `_backtest_admits` 가 거절 —
+  `test_allocation_graph_w5` 그대로). 경기 국면 반영(조건부)도 그대로 넘어가지 않는다(R9 가 계속 말한다).
+- 테스트: 새 `tests/test_k2_backtest_lambda.py` 12(먼저 빨강 12): λ 없음 = 지금 그대로(방식마다) · 짝: λ 1.5 ≠ 기본 곡선 · 제약 해에도 닿음 · mvo 에는 닿지 않음 ·
+  공시(사용자/기본값 · 다른 방식은 키 없음) · 노드 곡선 = 같은 λ 의 `/backtest` 라우트, 짝: ≠ 기본 λ 라우트 · 범위 거절 + `/analyze` 와 같은 범위 · R9 짝(넘어감 → 없음 / 다른 λ·밝히지 않음 → 바뀜).
+  `test_graph_handoff_rules::test_r9_lambda_is_not_carried` → `test_r9_lambda_is_carried` 로 정정. 골든 `CF3_GOLDEN_EXACT=1` 그대로(`bl_backtest` 포함 — λ 를 쓰지 않는 방식).
+- 변이 11 모두 죽음(`S/k2/muts.py`): 노드·라우트·계획·walk_forward 가 λ 안 넘김 · `_weights_at` 이 optimize·제약 해에 λ 무시 · 공시 모든 방식 · 공시 늘 기본값 · R9 비교 안 함 · R9 미공시 침묵 · 범위 검사 빼기.
+- 화면: 숫자만 바뀜 — PNG 전·후(같은 그래프에 K1 커밋·이번 서버의 실제 `/graph/run`: 연습용 데이터 연 −8.7% → −15.7%, 선 점검 '바뀜' 사라짐). 사용자 PNG 허락(2026-10-22, "게이트 통과하면 둘 다 커밋").
+- 게이트: ruff 통과 · 백테스트 관련 pytest 668 · 전체 pytest 8305 통과 / 11 건너뜀(실패 0, 28분 — `DATABASE_URL` 은 K1 과 같은 SQLite 파일).
+- 하지 않음: 회사 관점·조건부 믿음을 백테스트로(룩어헤드·별도 결정) · 백테스트 설명에 λ 문장 더하기 · 벤치 빈 날 0 채움(K1 관찰 그대로).

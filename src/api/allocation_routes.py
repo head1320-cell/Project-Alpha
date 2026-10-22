@@ -236,6 +236,9 @@ class BacktestRequest(BaseModel):
     as_of: str | None = Field(None, pattern=_AS_OF_PAT)   # P1 — 데이터 절단일 고정(선택)
     delta: float = Field(2.5, ge=0.5, le=10)
     tau: float = Field(0.05, ge=0.001, le=1.0)
+    # ── K2: 위험 회피 λ — `/analyze` 와 같은 범위. 위험 성향 효용(mv_utility)만 읽는다. 없으면 지금과 같은 기본값.
+    #   (회사 관점은 여기 없다 — 지금 시점 전용이라 과거에 쓰면 룩어헤드다. 위 `use_company_views` 주석.)
+    risk_aversion: float | None = Field(None, ge=0.5, le=20)
 
 
 # ── 팩터 기반 포트폴리오 ──────────────────────────────────────────────────────
@@ -1002,7 +1005,8 @@ def _policy_backtest(req: BacktestRequest, returns, bench, excluded, coverage) -
         names, returns.values, list(returns.index),
         model=req.model, views=views or None, constraints=cobj,
         rebalance=req.rebalance, window_days=req.window_days,
-        cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau)
+        cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau,
+        risk_aversion=req.risk_aversion)
 
     out["excluded"] = excluded
     if not out.get("error"):

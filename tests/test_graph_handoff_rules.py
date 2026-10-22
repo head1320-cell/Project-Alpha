@@ -186,10 +186,10 @@ def test_r8_complete_benchmark_clean(clean):
     assert e["r.returns->b.returns"]["issues"] == []
 
 
-def test_r9_lambda_is_not_carried(clean):
+def test_r9_lambda_is_carried(clean):
+    """K2 부터 λ 가 백테스트로 넘어간다 — 문제 없음. 규칙이 살아 있는 짝은 `test_k2_backtest_lambda`."""
     e, _ = _edges(_chain("mv_utility", opt={"risk_aversion": 1.5}, backtest={"rebalance": "Q"}))
-    lam = next(i for i in e["o.weights->b.weights"]["issues"] if i["code"] == "lambda_dropped")
-    assert "1.5" in lam["text"] and "4" in lam["text"]
+    assert "lambda_dropped" not in _codes(e["o.weights->b.weights"])
 
 
 def test_r9_same_rule_same_returns_clean(clean):

@@ -49,15 +49,17 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
                 w_prev: dict[str, float] | None,
                 bench_win: np.ndarray | None,
                 delta: float, tau: float,
-                s_override=None, extra_views: list[dict] | None = None) -> np.ndarray:
+                s_override=None, extra_views: list[dict] | None = None,
+                risk_aversion: float | None = None) -> np.ndarray:
     """한 시점의 목표 가중치 — /analyze 와 동일 경로(뷰→BL, 제약이면 constrained_solve).
 
     `s_override`/`extra_views` 는 국면 조건부 훅이 넘긴다(MS1-b0). `None` 이면
     현행과 완전히 같은 계산이다 — B0 팔이 그것이다.
+    `risk_aversion` 은 위험 성향 효용(mv_utility)만 읽는다(K2) — `None` 이면 지금과 같은 기본값.
     """
     from src.engine.allocation_studio import optimize
     opt = optimize(model, names, R_win, views=views or None, delta=delta, tau=tau,
-                   s_override=s_override, extra_views=extra_views)
+                   s_override=s_override, extra_views=extra_views, risk_aversion=risk_aversion)
     w = np.asarray(opt["weights"], dtype=float)
     if constraints is not None and getattr(constraints, "any_active", lambda: False)():
         try:
@@ -69,6 +71,7 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
                 constraints=constraints, w_current=w_prev,
                 groups_of=sector_groups_for(names),
                 bench_returns=bench_win,
+                risk_aversion=risk_aversion,
             )
             if sol.get("status") != "infeasible" and sol.get("weights") is not None:
                 w = np.asarray(sol["weights"], dtype=float)
@@ -412,6 +415,8 @@ class WalkForwardPlan:
     #: 벤치마크 정렬(비용 무관)
     bench_aligned: Any = None
     bench_curve: Any = None
+    #: 리밸런싱마다 쓴 위험 회피 λ(K2) — 위험 성향 효용만 읽는다. None = 기본값.
+    risk_aversion: float | None = None
 
 
 def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
@@ -420,7 +425,8 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
                       window_days: int | None = None,
                       min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
                       bench: np.ndarray | None = None,
-                      regime: dict | None = None) -> WalkForwardPlan | dict:
+                      regime: dict | None = None,
+                      risk_aversion: float | None = None) -> WalkForwardPlan | dict:
     """PIT 비중 경로를 만든다 — ★비용을 인자로 받지 않는다★ (P7).
 
     각 리밸런싱 시점 k 의 가중치는 **오직 k 이전 데이터**로만 계산된다(look-ahead
@@ -483,7 +489,8 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
                 try:
                     w_new = _weights_at(model, names, R_win, views, constraints,
                                         w_prev_target, bench_win, delta, tau,
-                                        s_override=s_override, extra_views=xviews)
+                                        s_override=s_override, extra_views=xviews,
+                                        risk_aversion=risk_aversion)
                 except Exception as e:                        # noqa: BLE001
                     # ★거부는 사고가 아니라 정보다★ 엔트로피 풀링은 뷰를 동시에
                     # 만족시키는 분포가 없으면 배분을 거부한다(`EPUnavailable`).
@@ -554,7 +561,15 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
         turnover=turnover_hist, rebalance_meta=rebalance_meta,
         regime_detail=regime_detail, infeasible=infeasible,
         bench_aligned=bench_aligned, bench_curve=bench_curve,
+        risk_aversion=risk_aversion,
     )
+
+
+def _lambda_used(risk_aversion: float | None) -> dict:
+    """쓴 λ 와 출처 — 주지 않았으면 관례값을 **가정**으로 밝힌다(`optimize` 의 공시와 같은 모양)."""
+    from src.engine.allocation_studio import RISK_AVERSION_DEFAULT
+    return ({"value": RISK_AVERSION_DEFAULT, "source": "default"} if risk_aversion is None
+            else {"value": float(risk_aversion), "source": "user"})
 
 
 def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
@@ -741,6 +756,8 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "model": plan.model, "rebalance": plan.rebalance,
             "window": (f"rolling {plan.window_days}d" if plan.window_days else "expanding"),
             "cost_bps": cost_bps, "n_obs": int(T),
+            # ★λ 는 쓴 방식에서만 밝힌다★(K2 — `optimize` 와 같은 규칙) 다른 방식의 응답 모양은 그대로다.
+            **({"risk_aversion": _lambda_used(plan.risk_aversion)} if plan.model == "mv_utility" else {}),
         },
     }
 
@@ -752,7 +769,8 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                  bench: np.ndarray | None = None,
                  min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
                  regime: dict | None = None,
-                 impact: ImpactAssumptions | None = None) -> dict:
+                 impact: ImpactAssumptions | None = None,
+                 risk_aversion: float | None = None) -> dict:
     """정책 walk-forward 백테스트 — ★계획 → 시뮬레이션의 얇은 합성★ (P7).
 
     R: T×N 일별 수익률 · dates: 길이 T date-like · window_days: rolling(None=expanding).
@@ -765,7 +783,8 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     plan = plan_walk_forward(names, R, dates, model=model, views=views,
                              constraints=constraints, rebalance=rebalance,
                              window_days=window_days, min_train=min_train,
-                             delta=delta, tau=tau, bench=bench, regime=regime)
+                             delta=delta, tau=tau, bench=bench, regime=regime,
+                             risk_aversion=risk_aversion)
     if isinstance(plan, dict):                     # 계획 단계의 명시적 거부
         return plan
     return simulate_walk_forward(plan, cost_bps=cost_bps, impact=impact)

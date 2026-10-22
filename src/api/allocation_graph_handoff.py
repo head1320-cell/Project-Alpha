@@ -314,12 +314,17 @@ def intake_backtest_weights(h: pg.Handoff) -> dict:
             diff.append("기준일")
         if diff:
             issues.append(_i("changed", "other_returns", f"규칙을 다른 수익률({'·'.join(diff)})로 다시 풀어요 — 받은 비중과 같은 비중이 아니에요."))
-        if req.model == "mv_utility" and req.risk_aversion is not None:
-            from src.engine.allocation_studio import RISK_AVERSION_DEFAULT
-            issues.append(_i("changed", "lambda_dropped", f"위험 회피 λ {req.risk_aversion:g}는 백테스트로 넘어가지 않아 "
-                                                          f"기본값 λ {RISK_AVERSION_DEFAULT:g}로 되돌려 봤어요."))
         if req.conditional:
             issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 백테스트로 넘어가지 않아 리밸런싱마다 과거 기준으로 풀어요."))
+    if req is not None and req.model == "mv_utility":
+        # K2 — 백테스트가 밝힌 λ(`config.risk_aversion`)를 비중 계산의 λ 와 견준다. 받지 못했거나 밝히지 않았으면 '바뀜'.
+        from src.engine.allocation_studio import RISK_AVERSION_DEFAULT
+        want = RISK_AVERSION_DEFAULT if req.risk_aversion is None else float(req.risk_aversion)
+        got = (((h.view or {}).get("config") or {}).get("risk_aversion") or {}).get("value")
+        if got is None:
+            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 어느 λ 로 풀었는지 밝히지 않았어요."))
+        elif float(got) != want:
+            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 λ {float(got):g}로 다시 풀었어요."))
     used = ((w.get("opt") or {}).get("company_views_used")) or 0
     if used:
         issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 백테스트로 넘어가지 않아요."))

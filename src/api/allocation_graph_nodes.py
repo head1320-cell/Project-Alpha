@@ -418,7 +418,7 @@ def _backtest(inputs: dict, p) -> pg.NodeOutput:
             tickers=r["universe"]["tickers"], benchmark=r["universe"]["benchmark"],
             lookback_days=r["lookback_days"], as_of=r["as_of"],
             model=req.model, views=req.views, constraints=req.constraints,
-            delta=req.delta, tau=req.tau,
+            delta=req.delta, tau=req.tau, risk_aversion=req.risk_aversion,
             rebalance=p.rebalance, window_days=p.window_days, cost_bps=p.cost_bps)
     except ValidationError as e:
         raise pg.NodeFailure(f"정책 백테스트 규칙에 맞지 않습니다(/backtest 와 같은 규칙) — "
